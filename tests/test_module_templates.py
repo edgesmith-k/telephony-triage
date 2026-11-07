@@ -227,10 +227,11 @@ def test_module_doc_status_and_neutral():
             assert word not in text, (path, word)
         assert not re.search(r"(?<![A-Za-z])S/", text), path
     sc = _skillcheck()
-    allowed = sc.dbus_allowed(sc.load_modules_yaml((TEMPLATES / "modules.yaml").read_bytes()))
+    from platforms.ofono import template as oct       # D-Bus 규칙은 oFono 고유 자료(TemplateMeta.doc_checks)
+    allowed = oct.dbus_allowed(sc.load_modules_yaml((TEMPLATES / "modules.yaml").read_bytes())["platforms"]["ofono"])
     for path in (TEMPLATES / "ofono").rglob("*.md"):
         if "evals" not in path.relative_to(TEMPLATES).parts:
-            assert sc.dbus_violations(path.read_text(encoding="utf-8"), allowed) == [], path
+            assert oct.dbus_violations(path.read_text(encoding="utf-8"), allowed) == [], path
 
 
 def test_skill_status_right_after_frontmatter():

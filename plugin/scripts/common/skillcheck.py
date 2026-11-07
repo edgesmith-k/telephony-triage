@@ -9,9 +9,9 @@
   실행 때(`strict=False`)는 filter·모듈 블록의 모르는 키를 경고로 빼고(`unknown_keys`·`strip_unknown`), PR 쪽(`strict=True`)은 오류다.
 - case 출처(`origin_problems`): 합성(`synthetic: true` + `-- [합성]`) 또는 마스킹 발췌(`synthetic: false` + `origin` 6키 + 머리 줄·
   `-- [생략]` 구분 줄·줄 수). `module_eval.load_case`·입력 생성기·`template_findings`가 같은 함수를 쓴다(H C1+D R4·R5).
-- D-Bus 이름(`dbus_allowed`·`dbus_violations`): oFono 문서만. `org.ofono.*`·`org.freedesktop.DBus.*`·modules.yaml `dbus` 합집합.
-- 템플릿 전용(`template_findings`, 저장소 `templates/module-skills`·`module_repo_check --template`): 출처 표시, 플랫폼 섞임,
-  oFono 데몬 표, case `files/` 묶음, oFono 문서 D-Bus 이름. 받을 때(`check_tree`·`check_text`)는 돌지 않는다.
+- 템플릿 전용(`template_findings(root, metas)`, 저장소 `templates/module-skills`·`module_repo_check --template`): 출처 표시,
+  case `files/` 묶음, 플랫폼 섞임과 플랫폼 고유 문서 규칙(oFono 데몬 표·D-Bus 이름 — `platforms/ofono/template.py`). 플랫폼 자료는
+  호출자가 `platforms.template_metas()`로 준다(common은 platforms를 모른다). 받을 때(`check_tree`·`check_text`)는 돌지 않는다.
 """
 
 from __future__ import annotations
@@ -636,43 +636,9 @@ def origin_problems(data, source_text: str) -> list[str]:
 
 # -- D-Bus 이름(oFono 문서, H C1+D R23) -------------------------------------------------------------
 
-DBUS_RX = re.compile(r"\b(?:org|com|net|fi|de)\.[A-Za-z0-9_]+\.[A-Za-z0-9_.]+")
-DBUS_BASE = ("org.ofono", "org.freedesktop.DBus")
-
-
-def dbus_allowed(doc) -> frozenset[str]:
-    """허용 D-Bus 이름: `org.ofono`·`org.freedesktop.DBus`와 modules.yaml `platforms.ofono.modules.*.dbus` 합집합.
-    이름은 원소와 같거나 `원소 + "."`으로 시작하면 허용이다(`dbus_violations`)."""
-    names = set(DBUS_BASE)
-    plats = doc.get("platforms") if isinstance(doc, dict) else None
-    block = plats.get("ofono") if isinstance(plats, dict) else None
-    mods = block.get("modules") if isinstance(block, dict) else None
-    for mb in (mods.values() if isinstance(mods, dict) else ()):
-        if isinstance(mb, dict) and isinstance(mb.get("dbus"), list):
-            names.update(v for v in mb["dbus"] if isinstance(v, str) and v)
-    return frozenset(names)
-
-
-def dbus_violations(text: str, allowed) -> list[tuple[int, str]]:
-    """허용 밖 D-Bus 이름 `(줄 번호, 이름)` 목록. 문장 끝 `.`은 이름에서 뺀다."""
-    out = []
-    for no, line in enumerate(text.split("\n"), 1):
-        for m in DBUS_RX.finditer(line):
-            name = m.group(0).rstrip(".")
-            if not any(name == a or name.startswith(a + ".") for a in allowed):
-                out.append((no, name))
-    return out
-
-
 # -- 템플릿 전용 점검(H C1+D R23·R41) ---------------------------------------------------------------
-
-# oFono 문서에 없어야 하는 Android 프레임워크 이름(고정 목록). oFono 로그에도 나오는 `RIL_REQUEST_*`는 뺀다
-ANDROID_NAMES = re.compile(r"\bRILJ\b|\bRilRequest\b|\bDcTracker\b|\bDataNetworkController\b|\bServiceStateTracker\b"
-                           r"|\bGsmCdmaPhone\b|\bImsPhone\w*|\bTelephonyManager\b|\bUiccController\b"
-                           r"|\bSubscriptionManager\w*|\bandroid\.hardware\.radio\b|\bcom\.android\.")
-# Android 문서에 없어야 하는 oFono 이름(S11)
-OFONO_NAMES = re.compile(r"ofonod|org\.ofono\.|\bgril\b")
-PLATFORM_MIX = {"ofono": ANDROID_NAMES, "android": OFONO_NAMES}
+# 플랫폼별 자료(섞이면 안 되는 이름, 고유 문서 규칙 — oFono D-Bus 이름·데몬 표)는 `platforms.<p>.SPEC.template`(TemplateMeta)에 있고
+# 호출자(tools·시험)가 `platforms.template_metas()`로 넘긴다. common/은 platforms를 import하지 않는다(17-platforms §1-2).
 
 
 def _doc_paths(root: Path, platform: str) -> list[Path]:
@@ -686,16 +652,15 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
-def template_findings(root) -> list[dict]:
+def template_findings(root, metas: dict) -> list[dict]:
     """저장소 템플릿 트리 점검(API 없음). finding은 `check_tree`와 같은 모양이고 파일 내용은 담지 않는다.
+    `metas` = `platforms.template_metas()`(플랫폼 이름 → TemplateMeta; common은 platforms를 import하지 않으므로 호출자가 준다).
 
     - `출처`: case마다 `origin_problems`(rule = 위반 문구).
     - `case 파일`: `files/`가 `FILES_SET[kind]`와 정확히 같다.
-    - `플랫폼 섞임`: oFono 문서에 `ANDROID_NAMES`, Android 문서에 `OFONO_NAMES`(rule = 걸린 이름).
-    - `데몬 표`: modules.yaml `platforms.ofono`의 daemons 값마다 `ofono/_common/components.md` 역할 표의 지금·구 이름 칸에
-      그 이름(rule = 이름).
-    - `D-Bus 이름`: oFono 문서의 허용 밖 이름(`dbus_violations`, rule = 이름).
-    modules.yaml을 못 읽으면 `읽기` finding 하나로 닫는다(그때 데몬 표·D-Bus 점검은 하지 않는다).
+    - `플랫폼 섞임`: 플랫폼 p의 문서에 다른 플랫폼 q의 `names`(rule = 걸린 이름). 플랫폼 이름순, 그 안에서 q 이름순.
+    - 플랫폼 고유 규칙(`TemplateMeta.doc_checks`, modules.yaml의 그 플랫폼 블록을 받는다): oFono `데몬 표`·`D-Bus 이름`.
+    modules.yaml을 못 읽으면 `읽기` finding 하나로 닫는다(그때 고유 규칙 점검은 하지 않는다).
     """
     from common import yamlio
 
@@ -717,38 +682,24 @@ def template_findings(root) -> list[dict]:
         names = {p.name for p in files_dir.iterdir()} if files_dir.is_dir() else set()
         if kind not in FILES_SET or names != FILES_SET[kind]:
             findings.append(_finding("case 파일", rel))
-    for platform, rx in PLATFORM_MIX.items():
+    names = sorted(metas)
+    for platform in names:
+        others = [metas[q].names for q in names if q != platform]
         for path in _doc_paths(root, platform):
             rel = path.relative_to(root).as_posix()
             for no, line in enumerate(_read(path).split("\n"), 1):
-                for m in rx.finditer(line):
-                    findings.append(_finding("플랫폼 섞임", rel, no, m.group(0)))
+                for rx in others:
+                    for m in rx.finditer(line):
+                        findings.append(_finding("플랫폼 섞임", rel, no, m.group(0)))
     try:
         doc = load_modules_yaml((root / "modules.yaml").read_bytes())
     except Exception:  # noqa: BLE001 - 없음·크기·UTF-8·YAML·앵커 → 닫힘
         findings.append(_finding("읽기", "modules.yaml"))
         return findings
     plats = doc.get("platforms") if isinstance(doc, dict) else None
-    block = plats.get("ofono") if isinstance(plats, dict) else None
-    if not isinstance(block, dict):
-        return findings
-    daemons = list((block.get("common") or {}).get("daemons") or [])
-    for mb in (block.get("modules") or {}).values():
-        if isinstance(mb, dict):
-            daemons.extend(mb.get("daemons") or [])
-    comp = root / "ofono" / "_common" / "components.md"
-    table = _read(comp) if comp.is_file() else ""
-    listed = set()          # 역할 표(C1D 보정 §3.1): `| 역할 | 지금 이름 | 구 이름 | 층 | 비고 |`의 둘째·셋째 칸, `, `로 나눔
-    for line in table.splitlines():
-        cells = [c.strip() for c in line.strip().strip("|").split("|")] if line.startswith("|") else []
-        for cell in cells[1:3]:
-            listed |= {n.strip().strip("`") for n in cell.split(", ")}
-    for name in dict.fromkeys(d for d in daemons if isinstance(d, str)):
-        if name not in listed:
-            findings.append(_finding("데몬 표", "ofono/_common/components.md", rule=name))
-    allowed = dbus_allowed(doc)
-    for path in _doc_paths(root, "ofono"):
-        rel = path.relative_to(root).as_posix()
-        for no, name in dbus_violations(_read(path), allowed):
-            findings.append(_finding("D-Bus 이름", rel, no, name))
+    for platform in names:
+        block = plats.get(platform) if isinstance(plats, dict) else None
+        for check in metas[platform].doc_checks:
+            for kind, rel, line, rule in check(root, block):
+                findings.append(_finding(kind, rel, line, rule))
     return findings

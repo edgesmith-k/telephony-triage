@@ -1323,7 +1323,7 @@ def test_case_cap_is_skillcheck():
 
 def test_output_spec_per_platform(env):
     ofono, android = me.OUTPUT_SPECS["ofono"], me.OUTPUT_SPECS["android"]
-    assert me.OUTPUT_SPEC == ofono and "| 원인 아님(정상 동작)> — <한 줄 이유>" in ofono
+    assert "| 원인 아님(정상 동작)> — <한 줄 이유>" in ofono      # 플랫폼별 층 어휘는 platforms.<p>.SPEC.template.layers
     assert ofono.startswith("원인 층: <관리 데몬 | D-Bus | ofonod | 벤더 RIL(<데몬>) | 모뎀·망 | 곁가지(<데몬>) | ")
     layers = re.match(r"원인 층: <(.*)> — ", android).group(1).split(" | ")
     assert layers == ["프레임워크", "RILJ", "RIL HAL", "벤더 RIL", "벤더 IMS", "모뎀·망", "곁가지(<태그>)",

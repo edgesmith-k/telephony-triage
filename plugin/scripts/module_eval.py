@@ -50,6 +50,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import platforms
 from common import exitcodes, masking, skillcheck, yamlio
 from common.claude_child import (
     COST_UNKNOWN,
@@ -119,19 +120,13 @@ ARM_PINS = {
     "android/pre/explore-rules.md": "6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8",
     "android/post/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
 }
+# 플랫폼별 자료는 레지스트리(`platforms.<p>.SPEC.template`, 17-platforms §10-3)에서 — 이 파일은 플랫폼 이름을 모른다(종합 리뷰 H①).
+_TEMPLATE_METAS = platforms.template_metas()
 # 플랫폼별 내장 문서(arm 자료 `<p>/pre|post/` 아래 상대 경로 → 자식 cwd 상대 경로). explore-rules.md는 따로 둔다.
-# without = pre, explore/with = post. Android는 log-guide 대신 내장 log-tags·ril-requests·fail-causes(DD §4.4, H C1+D S2)
-ARM_BUILTINS = {
-    "ofono": {"pre": [("platforms/ofono/log-guide.md", "builtin/platforms/ofono/log-guide.md")],
-              "post": [("platforms/ofono/log-guide.md", "builtin/platforms/ofono/log-guide.md")]},
-    "android": {"pre": [("log-tags.md", "builtin/log-tags.md"), ("ril-requests.md", "builtin/ril-requests.md"),
-                        ("fail-causes.md", "builtin/fail-causes.md")],
-                "post": []},
-}
+# without = pre, explore/with = post(Android는 log-guide 대신 내장 log-tags·ril-requests·fail-causes — DD §4.4, H C1+D S2)
+ARM_BUILTINS = {p: {k: list(m.builtin_docs.get(k, ())) for k in ("pre", "post")} for p, m in _TEMPLATE_METAS.items()}
 # pre 사본이 지금 플러그인 파일과 같은지(R26): arm 자료 pre 상대 경로 → LIVE_SKILL 상대 경로
-EQUALS_LIVE = {"ofono": [("platforms/ofono/log-guide.md", "platforms/ofono/log-guide.md")],
-               "android": [("log-tags.md", "log-tags.md"), ("ril-requests.md", "ril-requests.md"),
-                           ("fail-causes.md", "fail-causes.md")]}
+EQUALS_LIVE = {p: list(m.equals_live) for p, m in _TEMPLATE_METAS.items()}
 
 # --- case 형식 (설계 §2) ------------------------------------------------------------------------------
 CASE_KEYS = {"schema_version", "name", "kind", "synthetic", "key", "issue", "parse", "input", "run_expect", "expect"}
@@ -163,13 +158,8 @@ _EVIDENCE_SPEC = """근거:
 _RULE_SPEC = """규칙 제안:
 - [이슈 DB] add-parser-rule|update-signature … — 근거: … | - [스킬] … — 근거: … | 없음"""
 _SPEC_TAIL = _EVIDENCE_SPEC + "분석 스킬 의견: <1위와 같음 | <원인 ID> — <근거> | 해당 없음(후보 없음)>\n" + _RULE_SPEC
-# 플랫폼별 층 어휘(H C1+D R9). deep·explore 출력 형식이 같이 쓴다. 둘 다 `원인 아님(정상 동작)`을 받는다
-_LAYERS = {
-    "ofono": ("<관리 데몬 | D-Bus | ofonod | 벤더 RIL(<데몬>) | 모뎀·망 | 곁가지(<데몬>) | 그 층 로그 없음(<층>) "
-              "| 원인 아님(정상 동작)>"),
-    "android": ("<프레임워크 | RILJ | RIL HAL | 벤더 RIL | 벤더 IMS | 모뎀·망 | 곁가지(<태그>) | 그 층 로그 없음(<층>) "
-                "| 원인 아님(정상 동작)>"),
-}
+# 플랫폼별 층 어휘(H C1+D R9, `TemplateMeta.layers`). deep·explore 출력 형식이 같이 쓴다. 둘 다 `원인 아님(정상 동작)`을 받는다
+_LAYERS = {p: m.layers for p, m in _TEMPLATE_METAS.items()}
 _LAYER_DAEMON_SPEC = {p: ("원인 층: " + v + " — <한 줄 이유>\n원인 데몬: <로그에 찍힌 데몬·태그 이름 그대로(역할 이름 아님) "
                           "| 알 수 없음>\n") for p, v in _LAYERS.items()}
 # deep 출력 형식(결론 하나). 바이트가 시험으로 고정돼 있다(설계 F7 — 템플릿 시험·층 목록 대조가 이 글을 쓴다)
@@ -188,7 +178,6 @@ EXTRA_RULES = {
     "explore": ("- 가설은 서로 다른 층·데몬이어야 하고, `원인 층`에는 층 하나만 쓴다. `가장 유력`은 점수가 아니라 하나를 고른 것이다.\n"
                 "- 그럴듯하지만 로그가 직접 뒷받침하지 않는 설명(흔한 함정)은 `가장 유력`에 두지 말고 다른 가설로 남긴다.\n"),
 }
-OUTPUT_SPEC = OUTPUT_SPECS["ofono"]
 PROMPT_TEMPLATE = """너는 telephony-triage 모듈 문서 평가의 격리된 분석 실행자다. 실제 사용자는 없고 질문할 수 없다. 한 번에 답을 끝낸다.
 지금 디렉토리 안의 파일만 읽는다. 파일을 만들거나 바꾸지 않고 명령을 실행하지 않는다.
 
@@ -262,10 +251,7 @@ NOTE_MISSING, NOTE_WEAK, NOTE_S3 = "없는 파일 읽기 시도(cwd 안)", "근�
 ROW_DOCS, ROW_COST = "지정 문서 모두 읽음", "비용 기록"
 TIE_RULE = ("동률(1순위 통과 수 같음): explore run이 있으면 top1(가장 유력 = 인정) 수가 with > without이면 pass, with < without이면 tie; 같으면 with 토큰이 적으면 pass, 아니면 tie(종료 0, 경고) — B로 갈지 사용자 판단 "
             "(설계 §15 Q1 기본값, IMPL:612)")
-DEEP_BASELINE_NOTE = {
-    "ofono": "deep without arm은 지금 oFono에 분석 스킬이 없어 log-guide.md만 준 구성 기준선이다",
-    "android": "Android without = 내장 log-tags·ril-requests·fail-causes",
-}
+DEEP_BASELINE_NOTE = {p: m.deep_baseline_note for p, m in _TEMPLATE_METAS.items()}
 SINGLE_ARM_NOTE = "한 arm만 돌렸다 — 관문은 --record로 기존 기록과 합친 뒤에만 판정한다"
 
 

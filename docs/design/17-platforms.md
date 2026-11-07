@@ -23,6 +23,7 @@ parser_backends/<p>_reference/          # 그 플랫폼 BACKEND 재수출 (andro
 - `LogFormat`: `read_file(path, file_index, tz, year) -> (list[LogLine], FileStats)`, `raw_line(줄)`(줄 맨 앞이 원문 로그 줄인가, guard 규칙 10), `find_raw(문장)`(문장 안에 원문 줄이 끼었나, Jira 게시 검사), `epoch_break(LogLine)`(재부팅 등 불연속).
 - `PairProtocol`: `name`·`default_tags`·`annotate`·`pair`·`reads`(기본 `()`). 주석은 이벤트 `ril` 칸을 같이 쓰고 `name != "ril"`이면 `proto: <name>`을 단다. `pair`는 **자기 주석만** 다룬다(다른 프로토콜 주석은 짝·pid 분할에 쓰지 않는다). `reads`에 적은 프로토콜의 주석은 읽기만 하고, 레지스트리가 그 이름이 목록에서 앞에 있는지 확인한다(백엔드는 목록 순서로 `pair`를 부른다, ofono `hop`, §9-3). 태그 덮어쓰기는 ril이면 `<블록>.ril.tags`, 그 밖은 `<블록>.protocols.<name>.tags`. 코드 없이 설정으로 만드는 프로토콜은 §9-3.
 - `CaptureSpec`: `looks_like`·`extract`·`error`·`default_rules`·`sniff_line`(guard 머리 판별), `block_key`·`configure`(site-defaults 블록 검증·덮어쓰기, 레지스트리는 규칙 모양을 모른다).
+- `TemplateMeta`(`SPEC.template`, 기본 None): 모듈 스킬 템플릿 점검·모듈 eval 자료(§10-3) — `names`(이 플랫폼을 알아보는 이름 정규식, 다른 플랫폼 문서에 있으면 `플랫폼 섞임`), `layers`(module_eval 출력 형식의 층 어휘 한 줄, 바이트 고정), `builtin_docs`(arm 자료 pre/post 내장 문서), `equals_live`, `deep_baseline_note`, `doc_checks`(플랫폼 고유 문서 규칙 — ofono `platforms/ofono/template.py`의 D-Bus 이름·데몬 표). `platforms.template_metas()`가 플랫폼 이름 → 자료 표를 주고, `common/skillcheck.template_findings(root, metas)`·`module_eval`은 그 표로만 플랫폼을 안다(플랫폼 이름 리터럴 없음, `tests/test_platforms.py`).
 - 파서 백엔드(`parser_backends/base.py`): 클래스 속성 `platform`(기본 `"android"`, 기존 site 백엔드 호환), `log_format()`(기본 `SPEC.log`). 백엔드 이름 공간은 `16-existing-assets.md §16.3`.
 
 ### 1-1. 레지스트리 API
@@ -92,6 +93,7 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 7. 사용자: `/telephony-triage:setup`에서 그 플랫폼을 고르거나 `config.py init --platform <p>` → `platforms.<p>.issue_db.path` 등.
 8. 테스트: 합성 로그 fixture(손으로 쓴 것, README에 "합성·형식 가정·placeholder"), 변형 DB(`tests/helpers/make_variant_dbs.py`), 전환 검증(같은 명령이 DB에 따라 백엔드·태그·카테고리·이벤트·매칭이 바뀌고, 섞으면 `platform-mismatch`), 계층 테스트, `tools/check_boundary.py --mode external`. android 바이트 동일성(골든·`db_regress` 샘플·fixture)이 그대로인지 본다.
 9. 문서: 이 문서 §7에 결정, `14-site.md`에 TODO(SITE) 행, 사용자용 로그 수집 체크리스트(본보기 `docs/development/OFONO_LOG_COLLECTION.md`), 탐색 지식 `plugin/skills/telephony-triage/reference/platforms/<p>/*.md`(선택, placeholder + TODO(SITE), §10-2).
+10. 모듈 스킬 템플릿·모듈 eval을 쓰면 `SPEC.template = TemplateMeta(...)`(§1): `names`·`layers`·`builtin_docs`·`equals_live`·`deep_baseline_note`, 고유 문서 규칙은 `platforms/<p>/template.py`의 `doc_checks`. `templates/module-skills/<p>/`와 `tests/test_module_templates_<p>.py`를 더한다. 핵심 코드(`skillcheck`·`module_eval`)는 고치지 않는다.
 
 ## 7. 결정 기록
 

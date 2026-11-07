@@ -14,6 +14,7 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO / "plugin" / "scripts") not in sys.path:
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
+import platforms  # noqa: E402
 from common import skillcheck, yamlio  # noqa: E402
 
 ANDROID = REPO / "templates" / "module-skills" / "android"
@@ -140,8 +141,8 @@ def test_android_layers_and_skill_frontmatter():
 
 
 def test_android_no_ofono_names():
-    findings = [f for f in skillcheck.template_findings(REPO / "templates" / "module-skills")
+    findings = [f for f in skillcheck.template_findings(REPO / "templates" / "module-skills", platforms.template_metas())
                 if f.get("check") == "플랫폼 섞임" and str(f.get("path", "")).startswith("android/")]
     assert findings == []
     for path in _docs():          # template_findings와 같은 목록을 직접 한 번 더(빈 결과가 점검 누락이 아니게)
-        assert not skillcheck.OFONO_NAMES.search(path.read_text(encoding="utf-8")), path
+        assert not platforms.get("ofono").template.names.search(path.read_text(encoding="utf-8")), path

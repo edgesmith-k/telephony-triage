@@ -37,6 +37,7 @@ from platforms.base import (  # noqa: F401  (계약 타입을 `platforms.X`로�
     PlatformConfigError,
     PlatformSpec,
     SourceTree,
+    TemplateMeta,
     VendorRules,
     cfg_compile as _compile,
     cfg_list as _list,
@@ -110,6 +111,17 @@ def get(name: str) -> PlatformSpec:
 def label(name: str) -> str:
     """출력 라벨 ("Android")."""
     return get(name).label
+
+
+def template_metas() -> dict[str, TemplateMeta]:
+    """설치된 플랫폼마다 `SPEC.template`(모듈 스킬 템플릿·모듈 eval 자료, 17-platforms §10-3). 없는 플랫폼은 뺀다.
+    핵심(`common/skillcheck.template_findings`·`module_eval`)은 이 표로만 플랫폼을 안다."""
+    out = {}
+    for name in known():
+        meta = get(name).template
+        if meta is not None:
+            out[name] = meta
+    return out
 
 
 def _mapping(value, path: str, allowed: tuple[str, ...]) -> dict:

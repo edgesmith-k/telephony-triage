@@ -20,9 +20,9 @@
 
 import re
 
-from platforms.base import Component, LogFormat, PairProtocol, PhoneIdRules, PlatformSpec, SourceTree
+from platforms.base import Component, LogFormat, PairProtocol, PhoneIdRules, PlatformSpec, SourceTree, TemplateMeta
 
-from . import gril, hop, journal, msgformat, pairing
+from . import gril, hop, journal, msgformat, pairing, template
 
 SPEC = PlatformSpec(
     name="ofono",
@@ -44,4 +44,15 @@ SPEC = PlatformSpec(
     components=(Component("ofono", ("ofonod",), root_key="ofono", msg_format="file_func"),),   # TODO(SITE:S24·S25)
     msg_formats=msgformat.FORMATS,
     protocol_kinds=((pairing.KIND, pairing.build), (hop.KIND, hop.build)),
+    # 모듈 스킬 템플릿·모듈 eval 자료(17-platforms §10-3). layers는 module_eval 출력 형식의 한 줄 — 바이트가 시험으로 고정돼 있다
+    template=TemplateMeta(
+        names=re.compile(r"ofonod|org\.ofono\.|\bgril\b"),                     # Android 문서에 없어야 하는 oFono 이름(S11)
+        layers=("<관리 데몬 | D-Bus | ofonod | 벤더 RIL(<데몬>) | 모뎀·망 | 곁가지(<데몬>) | 그 층 로그 없음(<층>) "
+                "| 원인 아님(정상 동작)>"),
+        builtin_docs={"pre": (("platforms/ofono/log-guide.md", "builtin/platforms/ofono/log-guide.md"),),
+                      "post": (("platforms/ofono/log-guide.md", "builtin/platforms/ofono/log-guide.md"),)},
+        equals_live=(("platforms/ofono/log-guide.md", "platforms/ofono/log-guide.md"),),
+        deep_baseline_note="deep without arm은 지금 oFono에 분석 스킬이 없어 log-guide.md만 준 구성 기준선이다",
+        doc_checks=(template.daemon_table_check, template.dbus_check),
+    ),
 )

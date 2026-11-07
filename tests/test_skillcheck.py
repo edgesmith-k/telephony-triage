@@ -18,8 +18,12 @@ sys.path.insert(0, str(REPO / "tests" / "helpers"))
 from runner import plugin_root
 
 sys.path.insert(0, str(plugin_root() / "scripts"))
+import platforms
 from common import skillcheck as sc
 from common.skillcheck import Entry
+from platforms.ofono import template as oct
+
+METAS = platforms.template_metas()   # template_findings는 플랫폼 자료를 호출자에게 받는다(common은 platforms를 모른다)
 
 TEMPLATES = REPO / "templates" / "module-skills"
 MOCK = REPO / "tests" / "mocks" / "module-skills"
@@ -421,11 +425,12 @@ def test_dbus_allowed_union():
     doc = {"platforms": {"ofono": {"modules": {"data": {"dbus": ["org.ofono.ConnectionManager", "com.example.nmd"]},
                                                "sim": {"dbus": ["com.example.lpa"]}, "call": {}}},
                          "android": {"modules": {"x": {"dbus": ["com.example.android"]}}}}}
-    assert sc.dbus_allowed(doc) == frozenset({"org.ofono", "org.freedesktop.DBus", "org.ofono.ConnectionManager",
-                                             "com.example.nmd", "com.example.lpa"})
-    assert sc.dbus_allowed(None) == frozenset({"org.ofono", "org.freedesktop.DBus"})
+    assert oct.dbus_allowed(doc["platforms"]["ofono"]) == frozenset({"org.ofono", "org.freedesktop.DBus",
+                                                                       "org.ofono.ConnectionManager", "com.example.nmd",
+                                                                       "com.example.lpa"})
+    assert oct.dbus_allowed(None) == frozenset({"org.ofono", "org.freedesktop.DBus"})
     real = sc.load_modules_yaml((TEMPLATES / "modules.yaml").read_bytes())
-    assert "org.ofono.SimManager" in sc.dbus_allowed(real)
+    assert "org.ofono.SimManager" in oct.dbus_allowed(real["platforms"]["ofono"])
 
 
 def test_dbus_violations_prefix():
@@ -433,7 +438,7 @@ def test_dbus_violations_prefix():
     text = ("org.ofono.Modem 과 org.freedesktop.DBus.Properties.\n"
             "com.example.nmd.Profile·com.example.nmdx.Y\n"
             "net.other.Thing org.ofonox.Bad")
-    assert sc.dbus_violations(text, allowed) == [(2, "com.example.nmdx.Y"), (3, "net.other.Thing"), (3, "org.ofonox.Bad")]
+    assert oct.dbus_violations(text, allowed) == [(2, "com.example.nmdx.Y"), (3, "net.other.Thing"), (3, "org.ofonox.Bad")]
 
 
 def _template_copy(tmp_path) -> Path:
@@ -449,7 +454,7 @@ def _rows(findings) -> list[tuple]:
 
 
 def test_template_findings_repo_clean():
-    assert sc.template_findings(TEMPLATES) == []
+    assert sc.template_findings(TEMPLATES, METAS) == []
 
 
 def test_template_findings_origin(tmp_path):
@@ -457,17 +462,17 @@ def test_template_findings_origin(tmp_path):
     case = root / "ofono" / "data" / "evals" / "data-ofonod-only"
     log = case / "files" / "source.log"
     log.write_text("x\n" + log.read_text(encoding="utf-8"), encoding="utf-8")
-    assert _rows(sc.template_findings(root)) == [("출처", "ofono/data/evals/data-ofonod-only",
+    assert _rows(sc.template_findings(root, METAS)) == [("출처", "ofono/data/evals/data-ofonod-only",
                                                   "source.log 1줄은 '-- [합성]'로 시작")]
     yml = case / "case.yaml"
     yml.write_text(yml.read_text(encoding="utf-8").replace("synthetic: true", "synthetic: false"), encoding="utf-8")
-    assert _rows(sc.template_findings(root)) == [("출처", "ofono/data/evals/data-ofonod-only", "origin 필요(synthetic: false)")]
+    assert _rows(sc.template_findings(root, METAS)) == [("출처", "ofono/data/evals/data-ofonod-only", "origin 필요(synthetic: false)")]
 
 
 def test_template_findings_files_set(tmp_path):
     root = _template_copy(tmp_path)
     (root / "ofono" / "data" / "evals" / "data-ofonod-only" / "files" / "analysis.json").unlink()
-    assert _rows(sc.template_findings(root)) == [("case 파일", "ofono/data/evals/data-ofonod-only", None)]
+    assert _rows(sc.template_findings(root, METAS)) == [("case 파일", "ofono/data/evals/data-ofonod-only", None)]
 
 
 def test_template_findings_platform_mix(tmp_path):
@@ -477,19 +482,19 @@ def test_template_findings_platform_mix(tmp_path):
     andr = root / "android" / "data"
     andr.mkdir(parents=True, exist_ok=True)      # H C1+D: 템플릿에 android/data가 이미 있다 — explore.md를 덮어쓴다
     (andr / "explore.md").write_text("ok RILJ\nofonod 아님\ngril 줄·org.ofono.Modem\n", encoding="utf-8")
-    got = [(f["check"], f["path"], f.get("line"), f.get("rule")) for f in sc.template_findings(root)]
+    got = [(f["check"], f["path"], f.get("line"), f.get("rule")) for f in sc.template_findings(root, METAS)]
     n = len(p.read_text(encoding="utf-8").split("\n")) - 1
-    assert got == [("플랫폼 섞임", "ofono/data/explore.md", n, "RILJ"),
-                   ("플랫폼 섞임", "android/data/explore.md", 2, "ofonod"),
+    assert got == [("플랫폼 섞임", "android/data/explore.md", 2, "ofonod"),      # 플랫폼 이름순(android → ofono)
                    ("플랫폼 섞임", "android/data/explore.md", 3, "gril"),
-                   ("플랫폼 섞임", "android/data/explore.md", 3, "org.ofono.")]
+                   ("플랫폼 섞임", "android/data/explore.md", 3, "org.ofono."),
+                   ("플랫폼 섞임", "ofono/data/explore.md", n, "RILJ")]
 
 
 def test_template_findings_daemon_table(tmp_path):
     root = _template_copy(tmp_path)
     comp = root / "ofono" / "_common" / "components.md"
     comp.write_text(comp.read_text(encoding="utf-8").replace("| vcd |", "| VCD |"), encoding="utf-8")
-    assert _rows(sc.template_findings(root)) == [("데몬 표", "ofono/_common/components.md", "vcd")]
+    assert _rows(sc.template_findings(root, METAS)) == [("데몬 표", "ofono/_common/components.md", "vcd")]
 
 
 def test_template_findings_dbus(tmp_path):
@@ -497,10 +502,10 @@ def test_template_findings_dbus(tmp_path):
     p = root / "ofono" / "data" / "SKILL.md"
     p.write_text(p.read_text(encoding="utf-8") + "\ncom.vendorx.thing.Iface 와 org.ofono.ConnectionManager\n",
                  encoding="utf-8")
-    assert _rows(sc.template_findings(root)) == [("D-Bus 이름", "ofono/data/SKILL.md", "com.vendorx.thing.Iface")]
+    assert _rows(sc.template_findings(root, METAS)) == [("D-Bus 이름", "ofono/data/SKILL.md", "com.vendorx.thing.Iface")]
 
 
 def test_template_findings_unreadable_modules_yaml(tmp_path):
     root = _template_copy(tmp_path)
     (root / "modules.yaml").write_text("a: &x 1\nb: *x\n", encoding="utf-8")
-    assert _rows(sc.template_findings(root)) == [("읽기", "modules.yaml", None)]
+    assert _rows(sc.template_findings(root, METAS)) == [("읽기", "modules.yaml", None)]

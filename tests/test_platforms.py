@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import importlib
 import importlib.util
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -234,3 +235,41 @@ def test_core_does_not_import_platform_packages_directly():
         if bad:
             offenders[rel] = bad
     assert offenders == {}
+
+
+# -- 모듈 스킬 템플릿·모듈 eval 자료(TemplateMeta, 17-platforms §10-3 — 종합 리뷰 H①) ---------------------------------
+
+def _string_literals(path: Path) -> set[str]:
+    return {n.value for n in ast.walk(ast.parse(path.read_text(encoding="utf-8"))) if isinstance(n, ast.Constant)
+            and isinstance(n.value, str)}
+
+
+def test_template_metas_cover_every_platform():
+    import platforms
+    metas = platforms.template_metas()
+    assert set(metas) == set(platforms.known())
+    for name, meta in metas.items():
+        assert isinstance(meta, platforms.TemplateMeta) and meta.layers.endswith("| 원인 아님(정상 동작)>")
+        assert set(meta.builtin_docs) <= {"pre", "post"} and meta.deep_baseline_note
+        for other, om in metas.items():
+            if other != name:
+                assert not meta.names.search(om.layers), (name, other)     # 자기 층 어휘가 남의 이름에 걸리지 않는다
+
+
+def test_core_template_code_knows_no_platform_name():
+    """skillcheck.template_findings·module_eval은 플랫폼 이름 리터럴 없이 레지스트리 자료(TemplateMeta)로만 플랫폼을 안다."""
+    import platforms
+    names = set(platforms.known())
+    for rel in ("common/skillcheck.py", "module_eval.py"):
+        hit = names & _string_literals(SCRIPTS / rel)
+        assert hit == set(), (rel, hit)
+
+
+def test_platform_doc_checks_are_platform_local():
+    """oFono의 D-Bus·데몬 표 규칙은 platforms/ofono/template.py(표준 라이브러리만)에 있고 common/skillcheck에는 없다."""
+    import platforms
+    from platforms.ofono import template
+    sc_src = (SCRIPTS / "common" / "skillcheck.py").read_text(encoding="utf-8")
+    assert not re.search(r"def dbus_|^DBUS_|_common/components\.md|ANDROID_NAMES|OFONO_NAMES|PLATFORM_MIX", sc_src, re.MULTILINE)
+    assert platforms.get("ofono").template.doc_checks == (template.daemon_table_check, template.dbus_check)
+    assert platforms.get("android").template.doc_checks == ()
