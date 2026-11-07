@@ -1707,13 +1707,16 @@ def test_explore_safety_rows_use_candidate_parser(env, tmp_path):
     assert not rows_of(g, "safety")["지어낸 근거 0"]["passed"] and g["judgment"]["pass1"] is False
 
 
-def test_top1_is_display_only_and_old_records_read():
+def test_top1_breaks_pass1_tie_and_old_records_read():
+    """종합 리뷰 C 묶음(E①) 뒤: top1은 pass1 동률의 1차 기준이다(이전엔 표시만). deep만이면 이전과 같이 토큰으로 tie."""
     rows = [{**_row("with"), "kind": "explore", "top1": True, "cost_basis": "reported"},
             {**_row("without"), "kind": "explore", "top1": False, "cost_basis": "reported"}]
     s = me.gate_summary(rows, True)
     plain = me.gate_summary([_row("with"), _row("without")], True)
-    assert (s["verdict"], s["exit"]) == (plain["verdict"], plain["exit"]) == ("tie", 0)
-    assert s["top1_with"] == 1 and s["top1_without"] == 0 and s["explore_runs"] == 2 and "top1 with 1/without 0" in s["warning"]
+    assert (s["verdict"], s["exit"]) == ("pass", 0) and (plain["verdict"], plain["exit"]) == ("tie", 0)
+    assert s["top1_with"] == 1 and s["top1_without"] == 0 and s["explore_runs"] == 2 and s["warning"] is None
+    same = me.gate_summary([{**rows[0], "top1": False}, rows[1]], True)      # top1 같음 → 토큰(같음) → tie
+    assert same["verdict"] == "tie" and "top1 with 0/without 0" in same["warning"]
     assert {"top1_with", "top1_without"} <= set(me.GATE_KEYS)
     # F8: _run_record가 top1을 남기고, 옛 기록(top1 없음)도 읽힌다
     rec = me._run_record(rows[0])
