@@ -23,7 +23,17 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 FAKES = Path(__file__).resolve().parent / "fakes"
 TT_GUARD_JS = REPO / "opencode" / "plugins" / "tt-guard.js"
-OPENCODE_VERSION = "1.19.5"
+
+
+def _oc_version() -> str:
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("ocenv_oc_version", REPO / "plugin" / "scripts" / "common" / "oc_version.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.OPENCODE_VERSION
+
+
+OPENCODE_VERSION = _oc_version()   # 고정 버전은 plugin/scripts/common/oc_version.py 한 곳
 LOOPBACK = "127.0.0.1"   # fakes/fake_oai.py가 묶는 주소
 
 

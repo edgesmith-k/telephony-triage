@@ -159,6 +159,10 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
   hook 입력 `cwd` 해석은 고정 인터페이스(`test_hooks.py`) — I-2는 guard.py를 고치지 않는다.
 - **R40**(v1 수용) OpenCode에서 설치 스킬은 `skill-input.json`이 가리키는 `timeline`만 읽는다(에이전트의 `events.json` 금지).
   근거 원문 검사는 `events.json` 기준 그대로(B2 §6.1). MS-2에서 없어진다.
+- **바이너리 의존 한 곳**(종합 리뷰 F②): 1.19.5의 비공개 표면(고정 버전, CLI 인자, 거부·자식 환경 변수, 설정 deny 때 모델에 가는 영어 문구,
+  `run --format json` 이벤트 키, 플러그인 hook 이름)은 `plugin/scripts/common/oc_version.py`에만 있다. `oc_adapter`·`tt-oc`·`gen_opencode`·
+  e2e 헬퍼가 그 값을 읽고, `tt-guard.js`(JS)는 `tests/test_oc_version.py`가 hook 이름·내장 도구 표·버전 주석을 대조한다. 버전 갱신 = 그 파일 +
+  시험 고정값 1곳 + 파일에 적힌 실험 재확인(x3b·x4, MCP 오류 경로, 이벤트 스키마).
 
 ### 5.5 OpenCode Jira 읽기 관문(11/05 사용자 "사내 확인 뒤 설정으로 열기")
 

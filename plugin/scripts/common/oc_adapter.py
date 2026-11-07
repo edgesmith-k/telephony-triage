@@ -70,7 +70,9 @@ if __name__ == "__main__":   # 스크립트로 불릴 때: common/ 대신 script
     sys.path[:] = [p for p in sys.path if os.path.realpath(p or os.getcwd()) != _HERE]
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-OPENCODE_VERSION = "1.19.5"
+from common import oc_version   # OpenCode 바이너리 의존(버전·거부 문구·CLI·환경 변수)은 그 파일 한 곳에
+
+OPENCODE_VERSION = oc_version.OPENCODE_VERSION
 SCRIPTS = Path(__file__).resolve().parents[1]
 PLUGIN_ROOT = SCRIPTS.parent
 
@@ -93,11 +95,9 @@ BUILTINS: dict[str, tuple[str, str]] = {
 HOOK_TIMEOUT = {"Bash": 180, "mcp": 30, "file": 30}    # hooks.json의 guard timeout(초)과 같다
 BRIDGE_TIMEOUT = 30
 
-# 설정을 덮거나 지우는 환경변수(값과 무관하게 있으면 거부). 접두사는 `REFUSED_ENV_PREFIXES`
-REFUSED_ENV = ("OPENCODE_PERMISSION", "OPENCODE_CONFIG_CONTENT", "OPENCODE_CONFIG", "OPENCODE_CONFIG_DIR",
-               "OPENCODE_DISABLE_PROJECT_CONFIG", "OPENCODE_PURE", "OPENCODE_TEST_MANAGED_CONFIG_DIR",
-               "OPENCODE_TEST_HOME", "OPENCODE_ENABLE_EXA")
-REFUSED_ENV_PREFIXES = ("OPENCODE_EXPERIMENTAL",)
+# 설정을 덮거나 지우는 환경변수(값과 무관하게 있으면 거부; tt-oc는 값이 빈 것은 넘긴다). 목록은 oc_version 한 곳.
+REFUSED_ENV = oc_version.REFUSED_ENV
+REFUSED_ENV_PREFIXES = oc_version.REFUSED_ENV_PREFIX
 
 # Jira 읽기 관문: 사용자 설정 + 사내 확인 통과 기록(`common/oc_jira_gate.py`). 파일은 OpenCode가 시작할 때 한 번만 본다:
 # tt-guard.js가 플러그인을 실을 때 `gate` 모드로 판정하고, 그 결과를 이후 모든 adapter 호출의 프로세스 환경
@@ -401,7 +401,7 @@ def opencode_version(env: dict | None = None, timeout: float = 10) -> str | None
     if not exe:
         return None
     try:
-        r = subprocess.run([exe, "--version"], stdin=subprocess.DEVNULL, capture_output=True, text=True,
+        r = subprocess.run([exe, *oc_version.VERSION_ARGS], stdin=subprocess.DEVNULL, capture_output=True, text=True,
                            encoding="utf-8", errors="replace", timeout=timeout, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
@@ -932,7 +932,7 @@ def after(payload: dict, env: dict | None = None, servers: list[str] | None = No
 
 
 _STATUS_RE = re.compile(r"(?i)(?:status(?:[ _-]?code)?|http(?:/[0-9.]+)?|code|error)\W{0,4}([45][0-9]{2})(?![0-9])")
-_CLASS_WORDS = (("permission-denied", re.compile(r"prevents you from using this specific tool call|rejected permission")),  # OpenCode 설정 deny
+_CLASS_WORDS = (("permission-denied", re.compile("|".join(map(re.escape, oc_version.DENY_PHRASES)))),  # OpenCode 설정 deny 문구
                 ("not-found", re.compile(r"(?i)not[ _-]?found|does not exist|no such|존재하지 않|찾을 수 없")),
                 ("timeout", re.compile(r"(?i)time[ _-]?out|timed out|시간 초과")),
                 ("auth", re.compile(r"(?i)unauthori[sz]ed|forbidden|permission denied|access denied|권한")))

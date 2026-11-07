@@ -667,15 +667,18 @@ def test_runtime_line_only_under_opencode(tmp_path):
     markdown 대상 절의 런타임 줄. Claude Code(기본)는 키·줄이 없다(출력 그대로)."""
     ws = Workspace()
     stub = tmp_path / "opencode"
-    stub.write_text(f"#!{sys.executable}\nprint('1.19.5')\n", encoding="utf-8")
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import oc_version
+    pinned = oc_version.OPENCODE_VERSION
+    stub.write_text(f"#!{sys.executable}\nprint('{pinned}')\n", encoding="utf-8")
     stub.chmod(0o755)
     oc_env = {"TT_RUNTIME": "opencode", "TT_MODEL": "glm-x", "TT_OPENCODE": str(stub)}
     plain = ws.run("job_status.py", [KEY])
     assert plain.returncode == 0 and '"runtime"' not in plain.stdout and "런타임" not in _md(ws, KEY)
     doc = json.loads(ws.run("job_status.py", [KEY], env=oc_env).stdout)
-    assert doc["runtime"] == {"name": "opencode", "model": "glm-x", "opencode": "1.19.5", "pinned": "1.19.5"}
+    assert doc["runtime"] == {"name": "opencode", "model": "glm-x", "opencode": pinned, "pinned": pinned}
     md = ws.run("job_status.py", [KEY, "--format", "markdown"], env=oc_env).stdout
-    assert "- [현재] 런타임 opencode · 모델 glm-x · OpenCode 1.19.5(고정 1.19.5)\n" in md
+    assert f"- [현재] 런타임 opencode · 모델 glm-x · OpenCode {pinned}(고정 {pinned})\n" in md
     assert md.index("런타임 opencode") < md.index("### 단계") and len(md.encode("utf-8")) <= MD_MAX
     gone = json.loads(ws.run("job_status.py", [KEY], env={**oc_env, "TT_OPENCODE": str(tmp_path / "none")}).stdout)
     assert gone["runtime"]["opencode"] == "확인 불가"
@@ -684,4 +687,4 @@ def test_runtime_line_only_under_opencode(tmp_path):
     diag = {"plugin": {"fingerprint": "f" * 12, "dir": "p", "version": None}, "claude_code": "확인 불가",
             "python": "3.12.0", "deps": "PyYAML 6·jsonschema 4", "doctor": {"exit": 0, "counts": {}, "rows": []},
             "runtime": doc["runtime"]}
-    assert " · 런타임 opencode(OpenCode 1.19.5)\n" in job_status.diagnosis_markdown(diag)
+    assert f" · 런타임 opencode(OpenCode {pinned})\n" in job_status.diagnosis_markdown(diag)

@@ -44,20 +44,34 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-PINNED = "1.19.5"
+
+
+def _load_oc_version():
+    """OpenCode 바이너리 의존(버전·CLI 인자·환경 변수·거부 문구·이벤트 키)은 `plugin/scripts/common/oc_version.py` 한 곳에 있다.
+    이 래퍼는 표준 라이브러리만 쓰는 독립 스크립트라 레포(또는 묶음) 상대 경로로 그 파일만 읽는다(sys.path는 건드리지 않는다)."""
+    import importlib.util
+    path = Path(__file__).resolve().parents[2] / "plugin" / "scripts" / "common" / "oc_version.py"
+    if not path.is_file():
+        print(f"tt-oc: {path} 없음 — opencode/와 plugin/이 한 레포(묶음)에 있어야 한다", file=sys.stderr)
+        raise SystemExit(2)
+    spec = importlib.util.spec_from_file_location("tt_oc_version", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+OCV = _load_oc_version()
+PINNED = OCV.OPENCODE_VERSION
 AGENT = "triage"
-REFUSED_ARGS = ("--pure", "--auto", "--attach", "--port", "-i", "--interactive", "--fork", "-c", "--continue",
-                "--agent", "-m", "--model")
-REFUSED_ENV = ("OPENCODE_PERMISSION", "OPENCODE_CONFIG", "OPENCODE_CONFIG_CONTENT", "OPENCODE_CONFIG_DIR",
-               "OPENCODE_DISABLE_PROJECT_CONFIG", "OPENCODE_PURE", "OPENCODE_AUTO_SHARE", "OPENCODE_ENABLE_EXA",
-               "OPENCODE_TEST_HOME", "OPENCODE_TEST_MANAGED_CONFIG_DIR")
-REFUSED_ENV_PREFIX = ("OPENCODE_EXPERIMENTAL", "OPENCODE_ENABLE_EXPERIMENTAL")
+REFUSED_ARGS = OCV.REFUSED_ARGS
+REFUSED_ENV = OCV.REFUSED_ENV
+REFUSED_ENV_PREFIX = OCV.REFUSED_ENV_PREFIX
 # 막힌 호출 표시: tt-guard.js·oc_adapter.py의 모든 거부는 `[telephony-triage]`로 시작한다(그중 한 번만 보이는 guard 경고는 막힘이
-# 아니다 — 모델이 같은 호출을 다시 한다). 나머지는 OpenCode 설정 deny·자동 거절 문구.
-BLOCK_MARKERS = ("[telephony-triage]", "prevents you from using this specific tool call", "rejected permission",
-                 "OpenCode v1 does not run this")
+# 아니다 — 모델이 같은 호출을 다시 한다). 나머지는 OpenCode 설정 deny·자동 거절 문구(oc_version.DENY_PHRASES)와 커맨드 본문의
+# v1 거부 문구(gen_opencode.NOTE).
+BLOCK_MARKERS = ("[telephony-triage]", *OCV.DENY_PHRASES, "OpenCode v1 does not run this")
 WARN_MARKER = "[telephony-triage] guard warning"
-INSTRUCTION_FILES = ("AGENTS.md", "CONTEXT.md")   # 1.19.5가 프로젝트 폴더에서 `/`까지 자동으로 싣는 지시 파일(CLAUDE.md는 끈다)
+INSTRUCTION_FILES = OCV.INSTRUCTION_FILES   # 프로젝트 폴더에서 `/`까지 자동으로 싣는 지시 파일(CLAUDE.md는 CHILD_ENV로 끈다)
 USER_CMD = re.compile(r"run this exact command yourself:\s*(.+)", re.DOTALL)
 WRITE_CMD = re.compile(r"(db_pr\.py\s+(publish|merge|request-review)|issue_post\.py\s+approve|skill_patch\.py\b.*--apply"
                        r"|module_eval\.py|\bgit\s+push\b|\bgh\s+pr\s+(merge|create|review)\b)")
@@ -107,10 +121,9 @@ def load_project(raw: str | None) -> tuple[Path, dict]:
 
 def child_env(meta: dict) -> dict:
     env = dict(os.environ)
-    # OPENCODE_DISABLE_CLAUDE_CODE_PROMPT: 1.19.5가 ~/.claude/CLAUDE.md(와 위 폴더의 CLAUDE.md)를 에이전트 프롬프트에 붙이지
-    # 않게 한다(사용자 결정 ⑤ — 프롬프트는 triage 에이전트 하나). AGENTS.md·CONTEXT.md는 끌 수 없어 사전 점검이 본다.
-    env.update({"OPENCODE_DISABLE_AUTOUPDATE": "1", "OPENCODE_DISABLE_MODELS_FETCH": "1",
-                "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT": "1", "TT_RUNTIME": "opencode",
+    # CHILD_ENV(oc_version): 자동 갱신·모델 목록 받기 끔, ~/.claude/CLAUDE.md(와 위 폴더의 CLAUDE.md)를 에이전트 프롬프트에
+    # 붙이지 않음(사용자 결정 ⑤ — 프롬프트는 triage 에이전트 하나). AGENTS.md·CONTEXT.md는 끌 수 없어 사전 점검이 본다.
+    env.update({**OCV.CHILD_ENV, "TT_RUNTIME": "opencode",
                 "CLAUDE_PLUGIN_ROOT": meta["plugin_root"], "TT_PLUGIN_ROOT": meta["plugin_root"]})
     if meta.get("model"):
         env["TT_MODEL"] = str(meta["model"])
@@ -118,7 +131,7 @@ def child_env(meta: dict) -> dict:
 
 
 def instruction_files(proj: Path, env: dict) -> list[Path]:
-    """1.19.5가 에이전트 프롬프트에 자동으로 붙이는 지시 파일(프로젝트 폴더에서 worktree — git 밖이면 `/` — 까지의
+    """OpenCode가 에이전트 프롬프트에 자동으로 붙이는 지시 파일(프로젝트 폴더에서 worktree — git 밖이면 `/` — 까지의
     AGENTS.md·CONTEXT.md, 전역 `<XDG_CONFIG_HOME>/opencode/AGENTS.md`). `instructions: []`와 에이전트 권한으로는 막히지 않는다."""
     found = [d / n for d in (proj, *proj.parents) for n in INSTRUCTION_FILES if (d / n).is_file()]
     config = Path(env.get("XDG_CONFIG_HOME") or Path(env.get("HOME") or Path.home()) / ".config")
@@ -188,7 +201,7 @@ def config_problems(cfg: dict) -> list[str]:
 def version_row(oc: str, env: dict) -> tuple[dict, bool]:
     """(`opencode-version` 행, 실행했는지). 버전 = `PINNED`일 때만 ok. `tools/site_step.py runtime-check opencode`도 쓴다."""
     try:
-        r = _run([oc, "--version"], env=env, timeout=30)
+        r = _run([oc, *OCV.VERSION_ARGS], env=env, timeout=30)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return {"check": "opencode-version", "status": "fail", "detail": f"opencode 실행 실패: {type(exc).__name__}: {exc}"}, False
     ver = (r.stdout or "").strip().splitlines()[-1:] or [""]
@@ -221,7 +234,7 @@ def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
     if not ran:
         return rows + [{"check": "opencode-config", "status": "fail", "detail": "건너뜀(opencode 실행 실패)"}]
     try:
-        r = _run([oc, "debug", "config"], cwd=proj, env=env, timeout=60)
+        r = _run([oc, *OCV.DEBUG_CONFIG_ARGS], cwd=proj, env=env, timeout=60)
         cfg = json.loads(r.stdout) if r.returncode == 0 else None
     except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
         cfg, r = None, None
@@ -310,9 +323,10 @@ def run_opencode(cmd, *, cwd, env, timeout: float, progress=True) -> tuple[list[
                     continue
                 if isinstance(ev, dict):
                     events.append(ev)
-                    if progress and ev.get("type") == "tool_use":
-                        p = ev.get("part") or {}
-                        print(f"[tt-oc] {p.get('tool')}: {(p.get('state') or {}).get('status')}", file=sys.stderr)
+                    if progress and ev.get("type") == OCV.EV_TOOL_USE:
+                        p = ev.get(OCV.EV_PART) or {}
+                        print(f"[tt-oc] {p.get(OCV.PART_TOOL)}: {(p.get(OCV.PART_STATE) or {}).get(OCV.STATE_STATUS)}",
+                              file=sys.stderr)
 
         t = threading.Thread(target=reader, daemon=True)
         t.start()
@@ -344,44 +358,46 @@ def _kill_group(proc) -> None:
 def judge(events: list[dict], code: int | None) -> dict:
     """이벤트 → {outcome, session, final_text, blocked[{tool, message}], user_commands, errors, steps, tokens, finish}."""
     session, final, blocked, errors, cmds, warnings = None, [], [], [], [], []
-    tokens = {"input": 0, "output": 0, "reasoning": 0}
+    tokens = dict.fromkeys(OCV.TOKEN_KINDS, 0)
     steps, finish = 0, None
+    V = OCV   # 이벤트 스키마 키는 oc_version 한 곳
     for ev in events:
-        session = session or ev.get("sessionID")
-        typ, part = ev.get("type"), ev.get("part") if isinstance(ev.get("part"), dict) else {}
-        if typ == "step_start":
+        session = session or ev.get(V.EV_SESSION)
+        typ, part = ev.get("type"), ev.get(V.EV_PART) if isinstance(ev.get(V.EV_PART), dict) else {}
+        if typ == V.EV_STEP_START:
             steps += 1
             final = []
-        elif typ == "text" and part.get("text"):
-            final.append(str(part["text"]))
-        elif typ == "step_finish":
-            finish = part.get("reason")
+        elif typ == V.EV_TEXT and part.get(V.PART_TEXT):
+            final.append(str(part[V.PART_TEXT]))
+        elif typ == V.EV_STEP_FINISH:
+            finish = part.get(V.PART_REASON)
             for k in tokens:
-                v = (part.get("tokens") or {}).get(k)
+                v = (part.get(V.PART_TOKENS) or {}).get(k)
                 tokens[k] += v if isinstance(v, int) else 0
-        elif typ == "tool_use":
-            st = part.get("state") or {}
-            if st.get("status") == "error":
-                msg = str(st.get("error") or "")
+        elif typ == V.EV_TOOL_USE:
+            st = part.get(V.PART_STATE) or {}
+            if st.get(V.STATE_STATUS) == V.STATUS_ERROR:
+                msg = str(st.get(V.STATE_ERROR) or "")
+                tool = part.get(V.PART_TOOL)
                 if WARN_MARKER in msg:
-                    warnings.append(f"{part.get('tool')}: {msg}")
+                    warnings.append(f"{tool}: {msg}")
                 elif any(m in msg for m in BLOCK_MARKERS):
-                    blocked.append({"tool": part.get("tool"), "message": msg})
+                    blocked.append({"tool": tool, "message": msg})
                     m = USER_CMD.search(msg)
                     if m:
                         cmds.append(m.group(1).strip())
-                    elif part.get("tool") == "bash":
-                        cmds += _write_command(st.get("input"))
+                    elif tool == "bash":
+                        cmds += _write_command(st.get(V.STATE_INPUT))
                 else:
-                    errors.append(f"{part.get('tool')}: {msg}")
-        elif typ == "error":
+                    errors.append(f"{tool}: {msg}")
+        elif typ == V.EV_ERROR:
             errors.append("error: " + json.dumps(ev.get("error"), ensure_ascii=False)[:500])
     text = "".join(final).strip()
     if code is None:
         outcome = "timeout"
     elif code != 0 or any(e.startswith("error: ") for e in errors):
         outcome = "error"
-    elif finish != "stop" or not text:
+    elif finish != OCV.FINISH_STOP or not text:
         outcome = "no-final-text"
     elif blocked:
         outcome = "blocked"
@@ -521,7 +537,7 @@ def main(argv=None) -> int:
     if not a.message and not a.oc_command:
         print("[tt-oc] 메시지가 없다: tt-oc --project <dir> -- <메시지>", file=sys.stderr)
         return 2
-    cmd = [oc, "run", "--format", "json", "--agent", AGENT]
+    cmd = [oc, *OCV.RUN_ARGS, "--agent", AGENT]
     if a.oc_command:
         cmd += ["--command", a.oc_command]
     if a.session:
@@ -534,7 +550,7 @@ def main(argv=None) -> int:
     deleted = None
     if a.delete_session and res["session"]:
         try:
-            deleted = _run([oc, "session", "delete", res["session"]], cwd=proj, env=env, timeout=60).returncode == 0
+            deleted = _run([oc, *OCV.SESSION_DELETE_ARGS, res["session"]], cwd=proj, env=env, timeout=60).returncode == 0
         except (OSError, subprocess.TimeoutExpired):
             deleted = False
     if a.json:

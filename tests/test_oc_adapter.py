@@ -25,6 +25,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
 from common import oc_adapter as oc
+from common import oc_version
 from runner import plugin_root, run, tmp
 
 IMSI = "450081234567890"
@@ -47,7 +48,7 @@ def _map(tool: str, args: dict, directory: Path, servers=None, err=None):
 
 
 def test_builtin_table_is_explicit_and_pinned():
-    assert oc.OPENCODE_VERSION == "1.19.5"
+    assert oc.OPENCODE_VERSION == oc_version.OPENCODE_VERSION   # 고정값 자체는 tests/test_oc_version.py
     passes = {"invalid", "question", "read", "glob", "grep", "skill", "lsp", "todowrite"}
     denies = {"task", "webfetch", "websearch", "codesearch", "execute", "plan", "list_mcp_resources",
               "list_mcp_resource_templates", "read_mcp_resource"}

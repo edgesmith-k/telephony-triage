@@ -21,6 +21,8 @@ SITE_STEP = REPO / "tools" / "site_step.py"
 sys.path.insert(0, str(REPO / "tools"))
 import gen_opencode  # noqa: E402
 
+PINNED = gen_opencode.OPENCODE_VERSION   # = plugin/scripts/common/oc_version.py
+
 PROFILE_OK = {"ANTHROPIC_BASE_URL": "https://gw.invalid", "ANTHROPIC_AUTH_TOKEN": "tok-secret",
               "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "16000", "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "202000",
               "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1", "CLAUDE_CODE_EFFORT_LEVEL": "unset",
@@ -32,7 +34,7 @@ import json, os, sys
 args = sys.argv[1:]
 open(os.environ["STUB_LOG"], "a").write(json.dumps(args) + "\n")
 if args == ["--version"]:
-    print(os.environ.get("STUB_VERSION", "1.19.5")); sys.exit(0)
+    print(os.environ.get("STUB_VERSION", "__PINNED__")); sys.exit(0)
 if args[:2] == ["debug", "config"]:
     print(open(os.environ["STUB_CONFIG"]).read()); sys.exit(0)
 sys.exit(9)
@@ -139,7 +141,8 @@ def oc(tmp_path):
     bin_ = tmp_path / "bin"
     bin_.mkdir()
     stub = bin_ / "opencode"
-    stub.write_text(STUB.replace("#!/usr/bin/env python3", "#!" + sys.executable, 1), encoding="utf-8")
+    stub.write_text(STUB.replace("#!/usr/bin/env python3", "#!" + sys.executable, 1).replace("__PINNED__", PINNED),
+                    encoding="utf-8")
     stub.chmod(0o755)
     cfg = tmp_path / "debug-config.json"
     cfg.write_text(json.dumps(CONFIG_OK), encoding="utf-8")

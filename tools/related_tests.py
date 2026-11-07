@@ -100,7 +100,7 @@ CHILD_HELPER_TESTS = {SKILL_EVAL_TEST, "tests/test_module_eval.py", "tests/test_
 # (importer: module_eval·run.py·grade.py·tools/site_step.py runtime-check)
 CHILD_SOURCE = "plugin/scripts/common/claude_child.py"
 # OpenCode v1 층(계획 I): opencode/**·tests/opencode/**는 이 테스트들과 tests/opencode/ 디렉토리(분류 불가 full 대신)
-OPENCODE_PATHS = ("opencode/*", "tests/opencode/*")
+OPENCODE_PATHS = ("opencode/*", "tests/opencode/*", "plugin/scripts/common/oc_version.py")   # oc_version: 바이너리 의존 한 곳
 OPENCODE_TESTS = {"tests/test_oc_adapter.py", "tests/test_tt_oc.py", "tests/test_gen_opencode.py"}
 OPENCODE_TEST_DIR = "tests/opencode"
 SAFETY_TEST = "tests/test_safety.py"      # plugin/scripts가 바뀌면 항상 포함
