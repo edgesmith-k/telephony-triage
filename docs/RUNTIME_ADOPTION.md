@@ -95,7 +95,7 @@ c "${XK[@]}" "${BR[@]}" -d '{"model":"'"$MODEL"'","messages":[]}'   # 일부러 
 
 ### 2.4 모듈 문서를 이 모델로 재기 (상한 있음)
 
-**터미널**에서, 비용 대신 run 수로 상한을 둔다. `--max-cost`는 주지 않는다(자리 표시 단가로 일찍 멈춤). `--record`도 쓰지 않는다 — 사외 `tests/skill_evals/module_offsite_results.json`을 고쳐 다음 재반입을 막는다. 사내에서 고친 팀 모듈은 `--templates <모듈 레포 clone>`을 붙여 잰다(없으면 사외 판본).
+**터미널**에서, 비용 대신 run 수로 상한을 둔다. `--max-cost`는 주지 않는다(자리 표시 단가로 일찍 멈춤). `--record`도 쓰지 않는다 — 사외 `tests/skill_evals/module_offsite_results.json`을 고쳐 다음 재반입을 막는다. 사내 run을 지금 채점기로 다시 채점하는 `--regrade <반복 디렉토리>`는 자식을 띄우지 않아 $0이고 써도 된다(이때도 `--record`는 붙이지 않는다). 사내에서 고친 팀 모듈은 `--templates <모듈 레포 clone>`을 붙여 잰다(없으면 사외 판본).
 
 ```sh
 python3 plugin/scripts/module_eval.py --module ofono/data --model <사내 모델 이름> --no-require-cost --no-max-cost --dry-run

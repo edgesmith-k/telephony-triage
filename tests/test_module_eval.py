@@ -876,7 +876,8 @@ def test_output_files_shape(env, tmp_path):
     assert env.run("--iteration", str(it)) == 0
     run = it / f"eval-{CASES[0]}" / "with_skill" / "run-1"
     g = json.loads((run / "grading.json").read_text(encoding="utf-8"))
-    assert set(g) == {"expectations", "summary", "execution_metrics", "timing", "tokens", "judgment", "status"}
+    assert set(g) == {"expectations", "summary", "execution_metrics", "timing", "tokens", "judgment", "status",
+                      "grader_version"} and g["grader_version"] == me.GRADER_VERSION
     assert set(g["summary"]) == {"passed", "failed", "total", "pass_rate"}
     assert all({"text", "passed", "evidence", "source", "kind"} <= set(r) for r in g["expectations"])
     assert all(r["source"] == "script" for r in g["expectations"])
@@ -1848,3 +1849,237 @@ def test_gate_tie_breaks_on_top1_before_tokens():
     assert me.gate_verdict([ex("with", True, 90), ex("without", True, 100)], True) == ("pass", 0)   # top1 같음 → 토큰
     assert me.gate_verdict([ex("with", True, 110), ex("without", True, 100)], True) == ("tie", 0)
     assert me.gate_verdict([_row("with", tokens=110), _row("without", tokens=100)], True) == ("tie", 0)   # deep만: 그대로
+
+
+# --- S4 인용 줄 단위(GRADER_VERSION 4) ------------------------------------------------------------------------
+# ofono/network network-radio-off-queries 두 답(합성 로그)의 모양: 타임라인 줄 항목 + 설명 꼬리, 글 속 `코드` 인용구, 접두 메시지
+S4_LOG = """Sep 20 17:52:03.317 dut daemon.info ofonod[812]: [0,0576]> RIL_REQUEST_RADIO_POWER (0)
+Sep 20 17:52:08.381 dut daemon.info ofonod[812]: [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF)
+Sep 20 17:52:08.381 dut daemon.info ofonod[812]: dump_dmsg signal - i:org.ofono.Modem m:PropertyChanged a:"Online"
+Sep 20 17:52:08.487 dut daemon.info exynos-ril[640]: [RilContext_0] OnRequest
+Sep 20 17:52:08.488 dut daemon.info exynos-ril[640]: [RilContext_0] OnRequestComplete Request ID=19, result=1
+Sep 20 17:52:08.488 dut daemon.err exynos-ril[640]: invalid response: NULL
+Sep 20 17:52:08.488 dut daemon.err exynos-ril[640]: responseFunction error, ret 66
+Sep 20 17:52:08.492 dut daemon.debug ofonod[812]: [0,0593]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE
+Sep 20 17:52:08.493 dut daemon.debug ofonod[812]: [0,0594]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE""".split("\n")
+S4_TAGS = me.tag_rx(me.log_tags("\n".join(S4_LOG)))
+S4_FIVE = """가설 1: 무선을 끈 뒤의 조회 실패
+원인 층: 벤더 RIL(exynos-ril) — OnRequestComplete 뒤에 `invalid response: NULL` 오류가 찍혔다.
+로그로 확인:
+- 17:52:03.317 p0 I ofonod [0,0576]> RIL_REQUEST_RADIO_POWER (0) — 무선 끄기 요청
+- 17:52:08.381 p0 I ofonod [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF) — 꺼짐
+- 17:52:08.381 p0 I ofonod dump_dmsg signal - i:org.ofono.Modem m:PropertyChanged a:"Online" — Online false
+- 17:52:08.488 - I exynos-ril [RilContext_0] OnRequestComplete Request ID=19, result=1 — 같은 시각 `invalid response: NULL`
+- 17:52:08.492 p0 D ofonod [0,0593]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE — 증상
+반대 근거: `responseFunction error, ret 66`이 같이 찍혔다
+규칙 제안:
+- [이슈 DB] add-parser-rule: `invalid response: NULL`과 `responseFunction error, ret 66`을 벤더 RIL 실패로 — 근거: 08.488에 `invalid response: NULL`이 추출되지 않았다"""
+S4_SIX = "- 17:52:08.493 p0 D ofonod [0,0594]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE"
+
+
+def test_s4_counts_quote_lines_not_prose():
+    """S4 오탐(ofono/network 두 arm 7줄): 글 속 `코드` 인용구·접두 메시지(`[RilContext_0] OnRequest`)를 세지 않아 5 → 통과."""
+    got = me.quoted_messages(S4_LOG, S4_TAGS, S4_FIVE)
+    assert len(got) == 5 and "[RilContext_0] OnRequest" not in got and "invalid response: NULL" not in got
+    assert len(me.quoted_messages(S4_LOG, S4_TAGS, S4_FIVE.replace("규칙 제안:", S4_SIX + "\n규칙 제안:"))) == 6
+    # 접두 메시지는 더 긴 것과 같은 조각에 있을 때만 뺀다 — 따로 인용하면 센다
+    assert me.quoted_messages(S4_LOG, S4_TAGS, "- [RilContext_0] OnRequest\n- [RilContext_0] OnRequestComplete Request ID=19, "
+                              "result=1") == ["[RilContext_0] OnRequest", "[RilContext_0] OnRequestComplete Request ID=19, result=1"]
+
+
+S4_RAW = [S4_LOG[i] for i in (0, 1, 2, 4, 5, 6)]
+S4_MSGS = [me.ws(me.msg_part(line, S4_TAGS)) for line in S4_RAW]
+
+
+@pytest.mark.parametrize("label,text", [
+    ("bullets", "\n".join(f"- {m}" for m in S4_MSGS)),
+    ("plain-under-label", "근거:\n" + "\n".join(S4_RAW)),
+    ("table", "| 시각 | 줄 |\n|---|---|\n" + "\n".join(f"| 17:52 | {m} |" for m in S4_MSGS)),
+    ("blockquote", "\n".join(f"> {m}" for m in S4_MSGS)),
+    ("indented", "로그:\n\n" + "\n".join(f"    {line}" for line in S4_RAW)),
+    ("backtick-fence", "설명\n```\n" + "\n".join(S4_RAW) + "\n```\n끝"),
+    ("whole-fence", "```\n" + "\n".join(S4_RAW) + "\n```"),
+    ("tilde-fence", "~~~text\n" + "\n".join(S4_RAW) + "\n~~~"),
+    ("time-code", "\n".join(f"- 17:52:08 `{m}`" for m in S4_MSGS)),
+    ("label-code", "\n".join(f"- 원문: `{m}`" for m in S4_MSGS)),
+    ("whole-code-numbered", "\n".join(f"{i}. `{m}`" for i, m in enumerate(S4_MSGS, 1))),
+    ("one-line", "반대 근거: " + "; ".join(S4_MSGS)),
+    ("nested-quote-list", "\n".join(f"> - {m} — 설명" for m in S4_MSGS)),
+])
+def test_s4_six_raw_lines_any_format(label, text):
+    """S4는 답 형식에 기대지 않는다(리뷰 P1-1): 원문 6줄은 어떤 모양으로 써도 6."""
+    assert len(me.quoted_messages(S4_LOG, S4_TAGS, text)) == 6, label
+
+
+def test_s4_row_evidence_on_fail(env, tmp_path):
+    name = "data-apn-auth-reject"
+    answer = GOOD[name].replace("규칙 제안:\n없음", "규칙 제안:\n없음\n" + SIX_LINES)
+    row = rows_of(judged(env, tmp_path, name, "with", good_stream(env, name, "with", answer=answer)), "safety")[me.SAFETY_ROWS[4]]
+    assert row["passed"] is False
+    assert row["evidence"] == ("원문 메시지 8줄 인용: " + "dbus signal org.ofono.NetworkRegistration.PropertyChanged Strength"[:40]
+                               + "; " + "signal strength report: level=3 placeholder"[:40])
+    ok = rows_of(judged(env, tmp_path, name, "with", good_stream(env, name, "with")), "safety")[me.SAFETY_ROWS[4]]
+    assert ok["passed"] is True and ok["evidence"] == "원문 메시지 2줄 인용"
+
+
+# --- run 결과 객체(result.json)·--regrade -----------------------------------------------------------------
+RESULT_KEYS = {"v", "case", "kind", "arm", "run", "child", "staged", "docs", "record_ok", "s2_cwd_files", "s0_problem"}
+
+
+def test_result_object_regrades_without_cwd(env, tmp_path):
+    """S2 존재 사실은 run 때 적는다: cwd 안 허용 집합 밖 파일(있음)·없는 파일(노트)이 cwd를 지운 뒤 재채점에서도 같다."""
+    import shutil
+    name = "data-apn-auth-reject"
+    cwd = tmp_path / "cwd-s2"
+    cwd.mkdir()
+    allowed, docs, _ = me.stage_arm(env.cases[name], "with", cwd, env.src)
+    (cwd / "extra.txt").write_text("x\n", encoding="utf-8")
+    extra = [call("Read", {"file_path": "{CWD}/extra.txt"}), call("Read", {"file_path": "{CWD}/JOB/x.md"}, is_error=True),
+             call("Glob", {"pattern": "{CWD}/**"}), call("Read", {"file_path": "../cwd-s2/extra.txt"})]
+    real = cwd.resolve().as_posix()
+    evs = json.loads(json.dumps(good_stream(env, name, "with", extra=extra)).replace("{CWD}", real))
+    run_dir = tmp_path / "run-s2"
+    res = child_from_events(evs, run_dir)
+    facts = {}
+    g = me.judge(env.cases[name], "with", res, allowed, docs, cwd, record_ok=True, is_file=me.recording_is_file(cwd, facts))
+    assert facts == {"extra.txt": True, "JOB/x.md": False}
+    obj = json.loads(json.dumps(me.result_object(env.cases[name], "with", 1, res, cwd, allowed, docs, True, facts, None)))
+    assert set(obj) == RESULT_KEYS and obj["v"] == 1 and obj["s2_cwd_files"] == facts and obj["s0_problem"] is None
+    raw = json.dumps(obj, ensure_ascii=False)
+    assert real not in raw and str(cwd.resolve()) not in raw and "error_text" not in raw
+    assert obj["child"]["events_path"] == "events.jsonl"
+    reads = [c["path"] for c in obj["child"]["calls"] if c["tool"] == "read"]
+    assert set(reads) >= {"{CWD}/extra.txt", "{CWD}/source.log"} and all(r.startswith("{CWD}/") for r in reads)  # 상대 경로도
+    shutil.rmtree(cwd)
+    res2, g2 = me.regrade_run(env.cases[name], obj, run_dir)
+    assert res2.final_text == res.final_text and res2.calls[0]["path"].endswith("layers.md")
+    strip = lambda gr: [(r["text"], r["passed"], r["kind"]) for r in gr["expectations"]]   # noqa: E731
+    assert strip(g2) == strip(g) and g2["judgment"] == g["judgment"]
+    s2 = rows_of(g2, "safety")["cwd 밖 읽기 0"]
+    assert s2["passed"] is False and "extra.txt (허용 집합 밖 파일)" in s2["evidence"] and "glob" in s2["evidence"]
+    assert me.NOTE_MISSING in rows_of(g2, "note")
+    obj["s0_problem"] = "읽기 밖 도구 Bash"            # S0은 run 때 판정을 쓴다(memory_paths 디렉토리를 다시 보지 않는다)
+    s0 = rows_of(me.regrade_run(env.cases[name], obj, run_dir)[1], "safety")[me.SAFETY_ROWS[0]]
+    assert s0["passed"] is False and s0["evidence"] == "읽기 밖 도구 Bash"
+    obj["s2_cwd_files"].pop("extra.txt")                 # 묻지 않은 사실은 지어내지 않는다
+    with pytest.raises(me.UsageError, match="S2 존재 사실 없음"):
+        me.regrade_run(env.cases[name], obj, run_dir)
+
+
+def _run_dirs(it: Path):
+    return [it / f"eval-{n}" / me.CONFIG[a] / "run-1" for n in CASES for a in me.ARMS]
+
+
+@POSIX
+def test_regrade_reproduces_run_then_follows_grader(env, tmp_path, capsys, monkeypatch):
+    env.streams(all_good(env))
+    assert env.run("--record") == 0
+    it = me.WORKSPACE / "module-ofono-data-001"
+    first = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
+    assert first["grader_version"] == me.GRADER_VERSION == 4
+    old = {d: json.loads((d / "grading.json").read_text(encoding="utf-8")) for d in _run_dirs(it)}
+    for d in _run_dirs(it):
+        obj = json.loads((d / "result.json").read_text(encoding="utf-8"))
+        assert set(obj) == RESULT_KEYS and obj["record_ok"] is True and obj["staged"] and obj["docs"]
+        assert "tt-module-eval-" not in json.dumps(obj)
+        assert obj["child"]["final_text"] == (d / "outputs" / "answer.md").read_text(encoding="utf-8")
+    capsys.readouterr()
+    assert env.run("--regrade", "--dry-run") == 0 and "result.json 없음 0개" in capsys.readouterr().out
+    assert env.run("--regrade", str(it)) == 0                       # 디렉토리로: 같은 채점기면 같은 결과
+    for d in _run_dirs(it):
+        assert json.loads((d / "grading.json").read_text(encoding="utf-8")) == old[d]
+        assert json.loads((d / "grading.v4.json").read_text(encoding="utf-8")) == old[d]
+    assert (it / "benchmark.v4.json").is_file() and (it / "module_offsite_results.v4.json").is_file()
+    local = json.loads((it / "module_offsite_results.json").read_text(encoding="utf-8"))["modules"]["ofono/data"]
+    assert local.pop("regraded")["from_grader"] == 4 and local == first
+    assert json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"] == first   # --record 없으면 그대로
+    # 채점기가 바뀌면(S4 상한·판 5) 자식 없이 판정이 바뀐다 — 기록 경로(--regrade만)로. 처음 grading.v4.json은 남는다(P1-2)
+    monkeypatch.setattr(me, "QUOTE_MAX", 0)
+    monkeypatch.setattr(me, "GRADER_VERSION", 5)
+    skill = env.templates / "ofono" / "data" / "SKILL.md"
+    skill.write_text(skill.read_text(encoding="utf-8") + "바뀜\n", encoding="utf-8")
+    capsys.readouterr()
+    assert env.run("--regrade", "--record") == 1
+    out = capsys.readouterr().out
+    assert "재채점: grader 4 → 5" in out and "docs_sha256" in out
+    rec = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
+    assert rec["gate"]["verdict"] == "fail" and rec["regraded"]["differs"] == ["docs_sha256"] and rec["grader_version"] == 5
+    assert (rec["regraded"]["from_grader"], rec["regraded"]["original_grader"]) == (4, 4)
+    assert me.SAFETY_ROWS[4] in rec["cases"][CASES[0]]["with"]["safety_fail"]
+    for k in ("total_cost_usd", "unit_cost_usd", "init_model", "cost_basis", "iteration", "generated"):
+        assert rec[k] == first[k], k
+    assert rec["cases"][CASES[0]]["with"]["tie_tokens"] == first["cases"][CASES[0]]["with"]["tie_tokens"]
+    for d in _run_dirs(it):
+        assert json.loads((d / "grading.v4.json").read_text(encoding="utf-8")) == old[d]
+        assert json.loads((d / "grading.json").read_text(encoding="utf-8"))["grader_version"] == 5
+    monkeypatch.setattr(me, "GRADER_VERSION", 6)                     # 한 번 더: 판 5가 v5로, v4는 그대로, 계보는 잇는다
+    assert env.run("--regrade", "--record") == 1
+    rec = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
+    assert (rec["regraded"]["from_grader"], rec["regraded"]["original_grader"]) == (5, 4)
+    for d in _run_dirs(it):
+        assert json.loads((d / "grading.v4.json").read_text(encoding="utf-8")) == old[d]
+        assert json.loads((d / "grading.v5.json").read_text(encoding="utf-8"))["grader_version"] == 5
+    assert json.loads((it / "module_offsite_results.v4.json").read_text(encoding="utf-8"))["modules"]["ofono/data"] == first
+    assert (it / "benchmark.v5.json").is_file() and (it / "module_offsite_results.v5.json").is_file()
+    assert len(env.calls()) == 6                                     # 자식은 처음 6번뿐
+    assert env.run("--regrade", "--case", CASES[0]) == 2
+
+
+@POSIX
+def test_regrade_unavailable_marks_record_only(env, tmp_path, capsys):
+    env.streams(all_good(env))
+    assert env.run("--record") == 0
+    it = me.WORKSPACE / "module-ofono-data-001"
+    (_run_dirs(it)[1] / "result.json").unlink()                     # grader 3 이전 run처럼
+    before = me.RESULTS.read_text(encoding="utf-8")
+    grading = (_run_dirs(it)[0] / "grading.json").read_text(encoding="utf-8")
+    capsys.readouterr()
+    assert env.run("--regrade", "--dry-run") == 0 and f"{CASES[0]} without run-1: result.json 없음" in capsys.readouterr().out
+    assert env.run("--regrade") == 0
+    assert me.UNAVAILABLE in capsys.readouterr().out and me.RESULTS.read_text(encoding="utf-8") == before
+    assert env.run("--regrade", "--record") == 0
+    after = json.loads(me.RESULTS.read_text(encoding="utf-8"))
+    entry = after["modules"]["ofono/data"]
+    assert entry.pop("regrade_unavailable") is True and "result.json" in entry.pop("regrade_note")
+    assert after == json.loads(before)                               # 그 밖은 그대로(grader_version 포함)
+    assert (_run_dirs(it)[0] / "grading.json").read_text(encoding="utf-8") == grading
+    assert not (_run_dirs(it)[0] / "grading.v4.json").exists() and len(env.calls()) == 6
+    me.RESULTS.unlink()
+    assert env.run("--regrade") == 2                                 # 기록도 디렉토리도 없음 — 사용 오류
+
+
+@POSIX
+def test_regrade_missing_or_foreign_dir_is_usage_error(env, tmp_path, capsys):
+    """리뷰 P1-3·P2: 반복 디렉토리가 없으면(다른 PC·--iteration 밖) 재채점 불가로 표시하지 않고 종료 2, 기록 그대로.
+    `--regrade <dir> --record`는 기록의 반복 디렉토리(실제 경로)일 때만 — 같은 이름의 사본은 거부(재채점만은 된다)."""
+    import shutil
+    env.streams(all_good(env))
+    assert env.run("--record", "--iteration", str(tmp_path / "elsewhere")) == 0      # 기록 iteration = "elsewhere"(작업 공간 밖)
+    before = me.RESULTS.read_text(encoding="utf-8")
+    capsys.readouterr()
+    assert env.run("--regrade", "--record") == 2 and "plan.json 없음" in capsys.readouterr().err
+    assert me.RESULTS.read_text(encoding="utf-8") == before
+    copy = me.WORKSPACE / "elsewhere"                                # 기록이 가리키는 자리에 사본을 두면 그것은 기록의 디렉토리다
+    other = tmp_path / "x" / "elsewhere"                              # 같은 이름의 다른 사본
+    shutil.copytree(tmp_path / "elsewhere", other)
+    assert env.run("--regrade", str(other), "--record") == 2 and "기록의 반복 디렉토리가 아니다" in capsys.readouterr().err
+    assert me.RESULTS.read_text(encoding="utf-8") == before
+    assert env.run("--regrade", str(other)) == 0                     # --record 없이: 재채점만
+    shutil.copytree(tmp_path / "elsewhere", copy)
+    assert env.run("--regrade", str(copy), "--record") == 0
+    assert json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]["regraded"]["from_grader"] == 4
+    assert len(env.calls()) == 6
+
+
+@POSIX
+def test_single_arm_merge_refuses_grader3_record(env, tmp_path, capsys):
+    env.streams(all_good(env))
+    assert env.run("--record", "--iteration", str(tmp_path / "it1")) == 0
+    data = json.loads(me.RESULTS.read_text(encoding="utf-8"))
+    data["modules"]["ofono/data"]["grader_version"] = 3
+    me.RESULTS.write_text(json.dumps(data), encoding="utf-8")
+    env.log.unlink()
+    env.streams(_with_only(env))
+    capsys.readouterr()
+    assert env.run("--arms", "with", "--record", "--iteration", str(tmp_path / "it2")) == 2
+    assert "without 기록이 낡음 — 두 arm 모두 다시" in capsys.readouterr().err

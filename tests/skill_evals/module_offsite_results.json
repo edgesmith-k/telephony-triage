@@ -333,7 +333,9 @@
    "unit_cost_usd": 0.071074,
    "total_cost_usd": 0.852885,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)"
+   "note": "grader 3 rerun (F4 c885b94)",
+   "regrade_unavailable": true,
+   "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
   "android/data": {
    "generated": "2026-11-08T18:05:19Z",
@@ -616,7 +618,9 @@
    "unit_cost_usd": 0.093188,
    "total_cost_usd": 0.931884,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)"
+   "note": "grader 3 rerun (F4 c885b94)",
+   "regrade_unavailable": true,
+   "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
   "ofono/sim": {
    "generated": "2026-11-08T17:52:19Z",
@@ -812,7 +816,9 @@
    "unit_cost_usd": 0.084577,
    "total_cost_usd": 0.507464,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)"
+   "note": "grader 3 rerun (F4 c885b94)",
+   "regrade_unavailable": true,
+   "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
   "ofono/call": {
    "generated": "2026-11-08T17:54:47Z",
@@ -1051,7 +1057,9 @@
    "unit_cost_usd": 0.069505,
    "total_cost_usd": 0.556043,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)"
+   "note": "grader 3 rerun (F4 c885b94)",
+   "regrade_unavailable": true,
+   "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
   "android/call": {
    "generated": "2026-11-08T18:07:38Z",
@@ -1248,7 +1256,9 @@
    "unit_cost_usd": 0.088004,
    "total_cost_usd": 0.528026,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)"
+   "note": "grader 3 rerun (F4 c885b94)",
+   "regrade_unavailable": true,
+   "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
   "android/ims": {
    "generated": "2026-11-08T18:09:49Z",
@@ -1446,7 +1456,9 @@
    "unit_cost_usd": 0.088788,
    "total_cost_usd": 0.532727,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)"
+   "note": "grader 3 rerun (F4 c885b94)",
+   "regrade_unavailable": true,
+   "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
   "android/sim": {
    "generated": "2026-11-08T18:12:28Z",
@@ -1643,7 +1655,9 @@
    "unit_cost_usd": 0.094753,
    "total_cost_usd": 0.568515,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)"
+   "note": "grader 3 rerun (F4 c885b94)",
+   "regrade_unavailable": true,
+   "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
   "android/modem": {
    "generated": "2026-11-08T18:14:34Z",
@@ -1841,7 +1855,9 @@
    "unit_cost_usd": 0.087232,
    "total_cost_usd": 0.52339,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)"
+   "note": "grader 3 rerun (F4 c885b94)",
+   "regrade_unavailable": true,
+   "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
   "ofono/ims": {
    "generated": "2026-11-08T17:56:17Z",
@@ -1994,7 +2010,9 @@
    "unit_cost_usd": 0.100858,
    "total_cost_usd": 0.403432,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)"
+   "note": "grader 3 rerun (F4 c885b94)",
+   "regrade_unavailable": true,
+   "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
   "ofono/modem": {
    "generated": "2026-11-08T17:57:48Z",
@@ -2148,7 +2166,9 @@
    "unit_cost_usd": 0.080652,
    "total_cost_usd": 0.322608,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94). tie(pass1 1:1, with 토큰 +2168, top1 0:0) → 미채택(정책 A 동률 처리). 모듈 문서는 유지, 사내 실제 로그로 재평가 조건"
+   "note": "grader 3 rerun (F4 c885b94). tie(pass1 1:1, with 토큰 +2168, top1 0:0) → 미채택(정책 A 동률 처리). 모듈 문서는 유지, 사내 실제 로그로 재평가 조건",
+   "regrade_unavailable": true,
+   "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
   "ofono/sms": {
    "generated": "2026-11-08T17:59:05Z",
@@ -2301,7 +2321,9 @@
    "unit_cost_usd": 0.07652,
    "total_cost_usd": 0.306079,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)"
+   "note": "grader 3 rerun (F4 c885b94)",
+   "regrade_unavailable": true,
+   "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
   "ofono/network": {
    "generated": "2026-11-08T18:00:23Z",
@@ -2458,7 +2480,9 @@
    "unit_cost_usd": 0.08534,
    "total_cost_usd": 0.341361,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94). network-radio-off-queries 안전 위반(두 arm)은 채점기 S4 오탐 — 실제 인용 with 5·without 4줄(상한 5 안), ≥20자 메시지 조각 substring 집계가 접두(OnRequest⊂OnRequestComplete)·백틱 구절까지 세어 7. S4 수정(로그로 확인 `- ` 줄 단위·접두 중복 제거, GRADER_VERSION 4)은 사내 S-2 전 필수"
+   "note": "grader 3 rerun (F4 c885b94). network-radio-off-queries 안전 위반(두 arm)은 채점기 S4 오탐 — 실제 인용 with 5·without 4줄(상한 5 안), ≥20자 메시지 조각 substring 집계가 접두(OnRequest⊂OnRequestComplete)·백틱 구절까지 세어 7. S4 수정(로그로 확인 `- ` 줄 단위·접두 중복 제거, GRADER_VERSION 4)은 사내 S-2 전 필수",
+   "regrade_unavailable": true,
+   "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
   "android/network": {
    "generated": "2026-11-08T18:15:56Z",
@@ -2612,7 +2636,9 @@
    "unit_cost_usd": 0.085317,
    "total_cost_usd": 0.341268,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)"
+   "note": "grader 3 rerun (F4 c885b94)",
+   "regrade_unavailable": true,
+   "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
   "android/sms": {
    "generated": "2026-11-08T18:17:26Z",
@@ -2766,7 +2792,9 @@
    "unit_cost_usd": 0.092469,
    "total_cost_usd": 0.369876,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)"
+   "note": "grader 3 rerun (F4 c885b94)",
+   "regrade_unavailable": true,
+   "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   }
  }
 }

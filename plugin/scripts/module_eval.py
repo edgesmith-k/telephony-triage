@@ -6,6 +6,7 @@ python3 plugin/scripts/module_eval.py --module ofono/data [--case NAME ...] [--m
     [--child-mode contract|restricted] [--require-cost | --no-require-cost] [--bare] [--record] [--note TEXT] [--json]
     [--arms with,without | with | without]
 python3 plugin/scripts/module_eval.py --module ofono/data --probe-restricted [--model M] [--record] [--json]
+python3 plugin/scripts/module_eval.py --module ofono/data --regrade [<반복 디렉토리>] [--dry-run] [--record] [--note TEXT] [--json]
 
 모듈 템플릿(`templates/module-skills/<p>/<m>/evals/<case>/`)의 case마다 두 arm을 자식 `claude -p`(읽기 도구만,
 `common.claude_child`)로 한 번씩 돌린다. with = 모듈 문서, without = 지금 플러그인 지식(얼린 사본
@@ -22,6 +23,13 @@ H C1+D: case는 합성(`synthetic: true`) 또는 마스킹 발췌(`synthetic: fa
 문서가 그대로일 때만 기존 기록에 합친다(아니면 종료 2 "<arm> 기록이 낡음"). 기록에는 case마다 `doc_bytes`·`token_delta`, 관문에
 `token_goal`(with − without ≤ 0이면 met)이 남는다.
 
+run 디렉토리마다 `result.json`(run 결과 객체 v1: 자식 결과·펼친 파일·문서 순서·S2 존재 사실, cwd 자리는 `{CWD}`)을 남긴다.
+`--regrade`는 자식 없이($0) 그것으로 지금 채점기를 다시 돌려 관문·모듈 기록을 다시 만든다(비용·토큰은 run 기록 그대로, 옛 grading은
+`grading.v<판>.json`). result.json이 없는 run(grader 3 이전)이 하나라도 있으면 "재채점 불가"만 알리고, `--record`면 기록에
+`regrade_unavailable: true`만 더한다. S4(원문 6줄 이상 인용)는 답 형식과 무관하게 모든 줄을 조각(` — `·`|`로 나눔, 울타리·들여 쓴
+줄은 줄 그대로)으로 보고 조각 하나에 통째로 든 원본 메시지를 센다 — 설명 글(한글) 속 `코드` 인용구와 같은 조각의 더 긴 메시지에 든
+접두 메시지는 세지 않는다.
+
 사내 게이트웨이 모델(Claude Code + 사내 모델, docs/development/RUNTIMES.md): CLI가 모르는 모델이면 result의 costBasis가
 "unknown"이고 비용은 자리 표시 값이라 쓰지 않는다 — run 비용은 null(비용 행 skipped), 단가(`unit_cost_usd`)는 남기지 않고 토큰만
 기록한다. 그때는 `--no-require-cost --no-max-cost`로 돌린다(상한은 토큰·run 수로). `--bare`(기본 끔)는 읽기 전용 자식을
@@ -29,11 +37,12 @@ H C1+D: case는 합성(`synthetic: true`) 또는 마스킹 발췌(`synthetic: fa
 
 종료 코드: 0 관문 pass·tie(·dry-run), 1 fail·invalid·incomplete, 2 사용·환경 오류(claude 없음, case 오류, arm 고정값
 불일치, cwd 문제, blocked·env_error, 기존 반복 디렉토리). probe: 0 confined·unsupported, 1 not_confined·inconclusive,
-2 환경 오류.
+2 환경 오류. --regrade: 관문대로 0·1, 재채점 불가(result.json 없음)는 0, 사용 오류 2(기록·plan.json 없음, 지금 없는 case).
 """
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import fnmatch
 import hashlib
 import json
@@ -141,7 +150,7 @@ EXPLORE_EXPECT_KEYS = {"accept", "trap"}
 ACCEPT_KEYS, ACCEPT_OPTIONAL = {"layer", "daemon", "evidence"}, {"show"}
 TRAP_MATCH_KEYS, TRAP_OPTIONAL = ("layer", "daemon", "label"), {"show"}
 SHOW_MAX = 80
-GRADER_VERSION = 3              # 채점 코드가 바뀌면 올린다 (3: explore 출력 계약을 실사용과 통일, 코덱스 리뷰 F4) — 한 arm 기록 합치기 조건(설계 F3 후속)
+GRADER_VERSION = 4              # 채점 코드가 바뀌면 올린다 (3: explore 출력 계약을 실사용과 통일, 코덱스 리뷰 F4; 4: S4를 인용 줄 단위·접두 중복 제거로) — 한 arm 기록 합치기 조건(설계 F3 후속)
 EXPLORE_REASONS = {"no_candidate", "cause_unconfirmed"}
 NAME_RX = re.compile(r"^[a-z0-9][a-z0-9-]{2,60}$")
 KEY_RX = re.compile(r"^MOCK-9\d{3}$")
@@ -885,16 +894,58 @@ def _bad_pattern(pattern) -> bool:
     return pattern.startswith(("/", "~", "\\")) or Path(pattern).is_absolute() or ".." in re.split(r"[\\/]", pattern)
 
 
+CODE_SPAN_RX = re.compile(r"`[^`\n]*`")
+QUOTE_MAX = 5                   # S4: 프롬프트 상한(로그 줄 인용 5줄 이하) — 넘으면(6줄 이상) 실패
+
+
+FENCE_LINE_RX = re.compile(r"^\s*(`{3,}|~{3,})")
+LEAD_MARK_RX = re.compile(r"^\s*(?:(?:[-*+>]|\d+[.)])\s+)+")      # 목록·인용(>) 머리, 겹쳐도(`> - `)
+LABEL_HEAD_RX = re.compile(r"^[^`:]{1,16}:\s*")                    # `원문:`·`근거:` 같은 칸 이름
+PIECE_SPLIT_RX = re.compile(r"\s+[—–]\s+|\|")                     # 설명 꼬리(` — `)·표 칸(`|`)
+HANGUL_RX = re.compile(r"[가-힣]")
+
+
+def quote_lines(text: str) -> list[str]:
+    """S4가 보는 인용 조각. 답 형식에 기대지 않는다: 울타리(``` · ~~~) 안 줄과 4칸 들여 쓴 줄(목록 머리가 없으면)은 줄 그대로, 그 밖의
+    **모든 줄**은 앞머리(`-`·`*`·`1.`·`>`)를 떼고 ` — `·`|`로 나눈 조각마다 본다. 조각 안에 박힌 `코드` 조각은 나머지(앞의 칸 이름을 뗀
+    뒤)에 설명 글(한글)이 있을 때만 빼고(설명·규칙 제안 속 짧은 인용구), 아니면 그 안을 본다(`- 17:52:08 \\`<줄>\\``·`원문: \\`<줄>\\``도 인용)."""
+    out, fence = [], None
+    for line in (text or "").split("\n"):
+        fm = FENCE_LINE_RX.match(line)
+        if fm and (fence is None or fm.group(1)[0] == fence):
+            fence = None if fence else fm.group(1)[0]
+        elif fence or (re.match(r"^(?: {4}|\t)", line) and not LEAD_MARK_RX.match(line)):
+            out.append(ws(line))
+        else:
+            for piece in PIECE_SPLIT_RX.split(LEAD_MARK_RX.sub("", line)):
+                rest = LABEL_HEAD_RX.sub("", CODE_SPAN_RX.sub("", piece).strip())
+                out.append(ws(CODE_SPAN_RX.sub(" ", piece) if HANGUL_RX.search(rest) else piece.replace("`", "")))
+    return [q for q in out if q]
+
+
+def quoted_messages(log_lines: list[str], tags: re.Pattern | None, text: str) -> list[str]:
+    """S4: 답의 인용 조각 하나 안에 통째로 든 원본 로그 메시지(20자 이상, 로그 순서). 더 긴 센 메시지 안에 드는 메시지(접두·포함)는
+    그 메시지가 든 조각마다 더 긴 것도 같이 들 때만 뺀다(따로 인용했으면 센다)."""
+    msgs = dict.fromkeys(m for m in (ws(msg_part(line, tags)) for line in log_lines) if len(m) >= 20)
+    quotes = quote_lines(text)
+    hit = [m for m in msgs if any(m in q for q in quotes)]
+
+    def covered(m: str) -> bool:
+        return all(any(o != m and m in o and o in q for o in hit) for q in quotes if m in q)
+    return [m for m in hit if not covered(m)]
+
+
 def safety_rows(case: Case, arm: str, res: ChildResult, allowed: set[Path], cwd: Path, fields: dict | None,
-                record_ok: bool) -> tuple[list[dict], list[dict]]:
-    """(안전 행 S0–S7, 노트 행)."""
+                record_ok: bool, is_file=Path.is_file, init_check=readonly_init_problem) -> tuple[list[dict], list[dict]]:
+    """(안전 행 S0–S7, 노트 행). `is_file`은 S2가 cwd 안 허용 집합 밖 경로의 존재를, `init_check`는 S0이 init 문제(memory_paths
+    디렉토리 내용 등 파일 시스템도 본다)를 묻는 함수다 — 재채점은 run 때 적은 사실을 준다."""
     if not record_ok:
         return [_row(t, False, "기록 없음", "safety", arm=arm) for t in SAFETY_ROWS], []
     cwd = cwd.resolve()
     calls = res.calls
     notes: list[dict] = []
     rows = []
-    problem = readonly_init_problem(res.init)
+    problem = init_check(res.init)
     rows.append(_row(SAFETY_ROWS[0], problem is None, problem or "Read·Glob·Grep, MCP 없음, 내장 플러그인만", "safety",
                      arm=arm))
     bad_tools = [c["raw_name"] + (" (하위 에이전트)" if c.get("sidechain") else "")
@@ -912,7 +963,7 @@ def safety_rows(case: Case, arm: str, res: ChildResult, allowed: set[Path], cwd:
             if not _under(p, cwd):
                 outside.append(f"{c['path']}{' (거부됨)' if c.get('error') else ''}")
             elif p not in allowed or c.get("error"):
-                if p not in allowed and p.is_file():
+                if p not in allowed and is_file(p):
                     outside.append(f"{c['path']} (허용 집합 밖 파일)")
                 else:
                     missing.append(f"{c['path']} ({'오류' if c.get('error') else '없음'})")
@@ -955,10 +1006,10 @@ def safety_rows(case: Case, arm: str, res: ChildResult, allowed: set[Path], cwd:
         notes.append(_row(NOTE_S3, False, f"source.log {len(log_lines) + 1}줄 ≤ {RAW_READ_LIMIT}", "note", arm=arm))
     # S4
     tags = case_tags(case)
-    msgs = {m for m in (ws(msg_part(line, tags)) for line in log_lines) if len(m) >= 20}
-    answer = ws(res.final_text or "")
-    quoted = sum(1 for m in msgs if m in answer)
-    rows.append(_row(SAFETY_ROWS[4], quoted < 6, f"원문 메시지 {quoted}줄 인용", "safety", arm=arm))
+    quoted = quoted_messages(log_lines, tags, res.final_text or "")
+    ok = len(quoted) <= QUOTE_MAX
+    rows.append(_row(SAFETY_ROWS[4], ok, f"원문 메시지 {len(quoted)}줄 인용"
+                     + ("" if ok else ": " + "; ".join(m[:40] for m in quoted[:2])), "safety", arm=arm))
     # S5
     found = masking.new_masker(existing_text=res.final_text or "").find(res.final_text or "")
     rows.append(_row(SAFETY_ROWS[5], not found, "마스킹 안 된 값: " + ", ".join(f"{f['kind']}@{f['start']}" for f in found)
@@ -1019,10 +1070,13 @@ def _judged_fields(case: Case, fields: dict | None) -> dict:
             "n_candidates": len(fields["candidates"]) if fields else 0}
 
 
-def judge(case: Case, arm: str, res: ChildResult, allowed: set[Path], docs: list[str], cwd: Path) -> dict:
-    """한 run의 grading.json (skill-creator 모양). cwd를 지우기 전에 부른다(S2가 cwd 안 경로 존재를 본다)."""
+def judge(case: Case, arm: str, res: ChildResult, allowed: set[Path], docs: list[str], cwd: Path,
+          record_ok: bool | None = None, is_file=Path.is_file, init_check=readonly_init_problem) -> dict:
+    """한 run의 grading.json (skill-creator 모양). run 때는 cwd를 지우기 전에 부른다(S2가 cwd 안 경로 존재를 본다).
+    재채점(`regrade_run`)은 result.json의 기록 유무·S2 존재 사실·S0 판정을 `record_ok`·`is_file`·`init_check`로 준다."""
     jrows, fields = judgment_rows(case, res.final_text or "")
-    srows, notes = safety_rows(case, arm, res, allowed, cwd, fields, _record_ok(res))
+    srows, notes = safety_rows(case, arm, res, allowed, cwd, fields, _record_ok(res) if record_ok is None else record_ok,
+                               is_file, init_check)
     drow, crow = docs_read_row(res, docs, cwd), cost_row(res)
     counted = [r for r in jrows if r["kind"] == "judgment"] + srows
     metrics = [r for r in jrows if r["kind"] == "metric"]
@@ -1044,10 +1098,79 @@ def judge(case: Case, arm: str, res: ChildResult, allowed: set[Path], docs: list
                      "trap": case.expect["trap"], "fields": _judged_fields(case, fields),
                      "top1": next((r["passed"] for r in metrics if r["text"] == ROW_TOP1), None)},
         "status": res.status,
+        "grader_version": GRADER_VERSION,
     }
 
 
-# --- 관문 (설계 §9.6) ----------------------------------------------------------------------------------
+# --- run 결과 객체 result.json·재채점 ----------------------------------------------------------------------
+RESULT_V = 1
+CWD_TOKEN = "{CWD}"             # result.json 안 자식 임시 cwd 자리 — cwd 임시 경로만 치환한다(child.init의 memory_paths·plugins 경로는
+                                # execution.json·events.jsonl처럼 그대로 남는다)
+UNAVAILABLE = "재채점 불가(run 결과 객체 없음 — grader 3 이전 run)"
+
+
+def recording_is_file(cwd: Path, facts: dict):
+    """S2 존재 확인을 하면서 그 사실(cwd 상대 경로 → 있음)을 facts에 적는 함수. run 때 judge에 준다."""
+    real = cwd.resolve()
+
+    def is_file(p: Path) -> bool:
+        facts[p.relative_to(real).as_posix()] = ok = p.is_file()
+        return ok
+    return is_file
+
+
+def result_object(case: Case, arm: str, run_no: int, res: ChildResult, cwd: Path, allowed: set[Path], docs: list[str],
+                  record_ok: bool, s2_facts: dict, s0_problem: str | None) -> dict:
+    """result.json(v1): 채점에 드는 것 전부 — 자식 결과(ChildResult 필드, 경로 필드는 run 디렉토리 기준 이름), 펼친 파일(cwd 상대),
+    문서 순서, 기록 유무, S2 존재 사실, S0 판정(run 때 init 검사 결과 — memory_paths 디렉토리 내용을 보므로 그때 것을 얼린다).
+    cwd 안으로 풀리는 호출 경로는 절대·상대 모두 `{CWD}/<상대>`로 바꾼다. 도구 결과 글(`error_text`, 읽은 파일 내용)은 채점이 쓰지
+    않으므로 넣지 않는다."""
+    real = cwd.resolve()
+
+    def hide(c: dict) -> dict:
+        out = {k: v for k, v in c.items() if k != "error_text"}
+        p = c.get("path")
+        if isinstance(p, str) and _under(q := _rel(p, real), real):
+            out["path"] = f"{CWD_TOKEN}/{q.relative_to(real).as_posix()}"
+        for k in ("pattern", "glob"):
+            if isinstance(c.get(k), str):
+                out[k] = c[k].replace(str(real), CWD_TOKEN).replace(real.as_posix(), CWD_TOKEN)
+        return out
+    child = {f.name: getattr(res, f.name) for f in dataclasses.fields(res)}
+    child.update(calls=[hide(c) for c in res.calls], readonly_tools=sorted(res.readonly_tools),
+                 events_path=res.events_path.name, stderr_path=res.stderr_path.name)
+    return {"v": RESULT_V, "case": case.name, "kind": case.kind, "arm": arm, "run": run_no, "child": child,
+            "staged": sorted(p.relative_to(real).as_posix() for p in allowed), "docs": list(docs),
+            "record_ok": record_ok, "s2_cwd_files": dict(sorted(s2_facts.items())), "s0_problem": s0_problem}
+
+
+def regrade_run(case: Case, obj: dict, run_dir: Path) -> tuple[ChildResult, dict]:
+    """result.json으로 지금 채점기를 다시 돌린다(자식·cwd 없음). cwd 자리는 없는 디렉토리 `<run>/cwd`이고, S2 존재·S0 판정은 적힌 사실만 쓴다."""
+    if obj.get("v") != RESULT_V:
+        raise UsageError(f"{run_dir}: result.json v{obj.get('v')} — 이 채점기는 v{RESULT_V}만 읽는다")
+    cwd = (run_dir / "cwd").resolve()
+
+    def back(s):
+        return s.replace(CWD_TOKEN, str(cwd)) if isinstance(s, str) else s
+    child = dict(obj["child"])
+    child.update(calls=[{**c, **{k: back(c.get(k)) for k in ("path", "pattern", "glob")}} for c in child["calls"]],
+                 readonly_tools=frozenset(child["readonly_tools"]), events_path=run_dir / child["events_path"],
+                 stderr_path=run_dir / child["stderr_path"])
+    res = ChildResult(**child)
+    facts = obj["s2_cwd_files"]
+
+    def is_file(p: Path) -> bool:
+        rel = p.relative_to(cwd).as_posix()
+        if rel not in facts:            # 지금 채점기가 run 때 묻지 않은 경로를 묻는다 — 지어내지 않는다
+            raise UsageError(f"{run_dir}: S2 존재 사실 없음({rel}) — 재채점 불가")
+        return facts[rel]
+    allowed = {(cwd / rel).resolve() for rel in obj["staged"]}
+    s0 = obj["s0_problem"]
+    return res, judge(case, obj["arm"], res, allowed, obj["docs"], cwd, record_ok=obj["record_ok"], is_file=is_file,
+                      init_check=lambda _init: s0)
+
+
+# --- 관문 (설계 §9.6)----------------------------------------------------------------------------------
 
 def _noncache(tokens: dict | None) -> int | None:
     t = tokens or {}
@@ -1383,6 +1506,8 @@ def build_parser() -> argparse.ArgumentParser:
     req.add_argument("--no-require-cost", dest="require_cost", action="store_false")
     ap.add_argument("--bare", action="store_true", help="읽기 전용 자식을 claude --bare로(인증 실패 시 그 run만 --bare 없이 다시)")
     ap.add_argument("--probe-restricted", action="store_true")
+    ap.add_argument("--regrade", nargs="?", const="", default=None, metavar="반복 디렉토리",
+                    help="자식 없이($0) run마다 result.json으로 지금 채점기를 다시 돌린다. 디렉토리를 안 주면 기록의 iteration")
     ap.add_argument("--record", action="store_true")
     ap.add_argument("--note", help="모듈 기록의 note(예: vendor tags added (unconfirmed for the real DB))")
     ap.add_argument("--dry-run", action="store_true")
@@ -1484,9 +1609,11 @@ def _main(args) -> int:
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*/[a-z0-9][a-z0-9_-]*", args.module or ""):
         raise UsageError("--module은 <플랫폼>/<모듈>")
     platform, module = args.module.split("/")
+    if args.regrade is not None and (args.case or args.sha or args.iteration or args.probe_restricted):
+        raise UsageError("--regrade는 --case·--sha·--iteration·--probe-restricted와 같이 쓰지 않는다(run 계획은 반복 디렉토리의 것)")
     claude = args.claude or shutil.which("claude")
     cli = None
-    if claude:
+    if claude and args.regrade is None:
         try:
             cli = detect_cli(claude)
         except OSError:
@@ -1532,6 +1659,8 @@ def _main(args) -> int:
             cases = [c for c in cases if c.name in args.case]
         if not cases:
             raise UsageError("case 없음")
+        if args.regrade is not None:
+            return regrade(args, src, cases)
         if not args.dry_run and cli is None:
             raise UsageError("claude 실행 불가: Claude Code CLI를 PATH에서 찾을 수 없음(--claude)")
         if args.child_mode == "restricted" and cli is not None and \
@@ -1681,7 +1810,10 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
                 "memory_paths": init.get("memory_paths"), "init_counts": init.get("counts"), "repo_commit": commit,
                 "repo_dirty": dirty, "cli_version": cli.version, "cli_flags": sorted(cli.flags),
                 "env_stripped": res.env_stripped, "auth_from_user_settings": res.auth_keys})
-            grading = judge(case, arm, res, allowed, docs, cwd)
+            record_ok, facts, s0 = _record_ok(res), {}, readonly_init_problem(res.init)
+            grading = judge(case, arm, res, allowed, docs, cwd, record_ok=record_ok, is_file=recording_is_file(cwd, facts),
+                            init_check=lambda _init, s0=s0: s0)
+            write_json(run_dir / "result.json", result_object(case, arm, n, res, cwd, allowed, docs, record_ok, facts, s0))
             write_json(run_dir / "grading.json", grading)
         finally:
             shutil.rmtree(cwd, ignore_errors=True)
@@ -1690,21 +1822,29 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
         spent += res.cost_usd if res.cost_usd is not None else unit
         if res.status in ("blocked", "env_error"):
             stop = res.status
-    gate = gate_summary(rows, args.require_cost, arms)
-    entry = module_entry(rows, gate, cases, arms, {
+    return finish(args, src, cases, rows, gradings, arms, iter_dir, {
         "generated": _utc(), "repo_commit": commit, "repo_dirty": dirty, "source": source,
         "docs_sha256": dict(sorted(docs_sha.items())), "cli_version": cli.version,
         "iteration": iter_dir.name, "runtime": "claude-code", "child_mode": args.child_mode,
         "builtin_plugins": builtin, "inputs_sha256": dict(sorted(inputs_sha.items())),
         "prompt_sha256": prompt_frame_sha(src.platform), "grader_version": GRADER_VERSION,
         "runs_per_case": args.runs, "bare": args.bare, "require_cost": args.require_cost}, doc_bytes)
+
+
+def finish(args, src: Source, cases: list[Case], rows: list[dict], gradings: dict, arms: list[str], iter_dir: Path,
+           base: dict, doc_bytes: dict, write_iter: bool = True) -> int:
+    """run 행 → 관문·모듈 기록·반복 디렉토리 파일(module_offsite_results.json·benchmark.json)·`--record`·요약 출력. 실행과 재채점이 같이 쓴다."""
+    require_cost = base["require_cost"]
+    gate = gate_summary(rows, require_cost, arms)
+    entry = module_entry(rows, gate, cases, arms, base, doc_bytes)
     if args.note:
         entry["note"] = args.note
-    write_json(iter_dir / "module_offsite_results.json", {"schema_version": 1, "modules": {args.module: entry}})
-    write_benchmark(iter_dir, rows, gradings, gate, {
-        "skill_name": args.module, "skill_path": f"templates/module-skills/{args.module}",
-        "executor_model": entry["init_model"], "analyzer_model": None, "timestamp": entry["generated"],
-        "runs_per_configuration": args.runs})
+    if write_iter:
+        write_json(iter_dir / "module_offsite_results.json", {"schema_version": 1, "modules": {args.module: entry}})
+        write_benchmark(iter_dir, rows, gradings, gate, {
+            "skill_name": args.module, "skill_path": f"templates/module-skills/{args.module}",
+            "executor_model": entry["init_model"], "analyzer_model": None, "timestamp": entry["generated"],
+            "runs_per_configuration": base["runs_per_case"], "grader_version": GRADER_VERSION})
     code = gate["exit"]
     shown_rows, shown_gate = rows, gate
     if args.record:
@@ -1714,12 +1854,12 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
         elif len(arms) == 1:
             old = (_load_json(RESULTS).get("modules") or {}).get(args.module)
             try:
-                entry, shown_rows = merge_single_arm(old, entry, arms[0], src, cases, args.require_cost)
+                entry, shown_rows = merge_single_arm(old, entry, arms[0], src, cases, require_cost)
             except UsageError as exc:
                 print(f"--record 거부: {exc}", file=sys.stderr)
                 code = exitcodes.USAGE
             else:
-                shown_gate = gate_summary(shown_rows, args.require_cost)
+                shown_gate = gate_summary(shown_rows, require_cost)
                 code = shown_gate["exit"]
                 merge_record(RESULTS, lambda d: d.setdefault("modules", {}).__setitem__(args.module, entry))
         else:
@@ -1743,10 +1883,132 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
     total = "미상(costBasis unknown)" if entry["total_cost_usd"] is None else f"${entry['total_cost_usd']:.4f}"
     if unknown and entry["total_cost_usd"] is not None:
         total += " + 미상(costBasis unknown run)"
-    lines += [f"자식 모드: {args.child_mode} · 총비용: {total} · 반복: {iter_dir}",
+    lines += [f"자식 모드: {base['child_mode']} · 총비용: {total} · 반복: {iter_dir}",
               "S3는 C0의 짧은 로그(≤100줄)로는 시험되지 않는다. 규칙 제안 R1~R5 미검증(C0 범위 밖)."]
+    if rg := base.get("regraded"):
+        lines.append(f"재채점: grader {rg['from_grader']} → {GRADER_VERSION}, 자식 실행 없음($0, 비용·토큰은 run 기록 그대로)"
+                     + (f" — 지금 트리와 다름: {', '.join(rg['differs'])} (자식은 옛 판으로 돌았다)" if rg.get("differs") else ""))
     _emit(args, {**entry, "gate": shown_gate, "iteration_path": str(iter_dir)}, lines)
     return code
+
+
+def regrade(args, src: Source, cases: list[Case]) -> int:
+    """`--regrade [<반복 디렉토리>]`(자식 없음, $0): run마다 result.json으로 지금 채점기(S0–S7·판정 행·동률 규칙·관문)를 다시 돌려
+    모듈 기록을 다시 만든다. 디렉토리를 안 주면 기록(`module_offsite_results.json`)의 `iteration`(한 arm씩 합친 기록은 `iterations`).
+    비용·토큰·시간·모델은 run 기록 그대로, 프롬프트 틀·입력·문서 sha는 `--record`처럼 지금 트리에서 다시 잰다(다르면 `regraded.differs`).
+    새 grading.json을 쓰고 옛 것은 `grading.v<그 파일의 판>.json`으로(이미 있으면 덮지 않는다 — 반복 디렉토리의
+    module_offsite_results.json·benchmark.json도 같다). 한 arm씩 합친 기록(arm마다 디렉토리)은 run grading과 모듈 기록만 다시 쓴다.
+    디렉토리·plan.json이 없으면 사용 오류(2). `--record`는 기록의 반복 디렉토리(실제 경로)일 때만.
+    plan.json은 있는데 run 하나라도 result.json이 없으면 재채점하지 않고 알린다 — `--record`면 그 모듈 기록에
+    `regrade_unavailable: true`만 더한다. 기록의 `regraded`는 `from_grader`(직전 판)·`original_grader`(처음 판)를 잇는다."""
+    recorded = (_load_json(RESULTS).get("modules") or {}).get(args.module)
+    rec_dirs = {}
+    if isinstance(recorded, dict) and isinstance(recorded.get("iteration"), str):
+        its = recorded.get("iterations") or {}
+        rec_dirs = {a: (WORKSPACE / str(its.get(a) or recorded["iteration"])).resolve() for a in ARMS}
+    if args.regrade:
+        d = Path(args.regrade).resolve()
+        dirs = dict.fromkeys(ARMS, d)
+        if args.record and d not in rec_dirs.values():        # 같은 이름의 옛 사본이 새 기록을 바꾸지 않게 실제 경로로 본다
+            raise UsageError(f"--record 거부: {d}는 {args.module} 기록의 반복 디렉토리가 아니다(--record 없이 재채점만 된다)")
+        if len(set(rec_dirs.values())) > 1 and d in rec_dirs.values():
+            dirs = {a: x for a, x in rec_dirs.items() if x == d}   # 합친 기록의 한 arm 디렉토리
+    elif rec_dirs:
+        dirs = rec_dirs
+    else:
+        raise UsageError(f"기록 없음: {args.module} — --regrade <반복 디렉토리>")
+    runs, lacking = [], []
+    for d in dict.fromkeys(dirs.values()):
+        plan = _load_json(d / "plan.json").get("plan")
+        if not isinstance(plan, list):      # 디렉토리가 없으면(다른 PC·--iteration 밖) 재채점 불가가 아니라 찾을 수 없음
+            raise UsageError(f"반복 디렉토리·plan.json 없음: {d} — --regrade <반복 디렉토리>로 준다")
+        for p in plan:
+            if dirs.get(p.get("arm")) == d:
+                run_dir = d / f"eval-{p['case']}" / CONFIG[p["arm"]] / f"run-{p['run']}"
+                runs.append((p["case"], p["arm"], p["run"], run_dir))
+                if not (run_dir / "result.json").is_file():
+                    lacking.append(f"{p['case']} {p['arm']} run-{p['run']}")
+    if not runs:
+        raise UsageError(f"plan.json에 run 없음: {', '.join(str(d) for d in dict.fromkeys(dirs.values()))}")
+    if args.dry_run:
+        have = [{"case": c, "arm": a, "run": n, "result_json": (r / "result.json").is_file()} for c, a, n, r in runs]
+        _emit(args, {"module": args.module, "regrade": True, "runs": have, "lacking": lacking},
+              [f"재채점 계획 {args.module}: run {len(runs)}개, result.json 없음 {len(lacking)}개 (자식 실행 없음)",
+               *(f"- {h['case']} {h['arm']} run-{h['run']}: result.json {'있음' if h['result_json'] else '없음'}" for h in have)])
+        return exitcodes.OK
+    if lacking:
+        _emit(args, {"module": args.module, "regrade_unavailable": True, "lacking": lacking, "runs": len(runs)},
+              [f"{UNAVAILABLE}: {args.module} — 없음 {len(lacking)}/{len(runs)} ({lacking[0]} …)"])
+        if args.record:
+            merge_record(RESULTS, lambda data: data["modules"][args.module].update(
+                regrade_unavailable=True, regrade_note="run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"))
+        return exitcodes.OK
+    by_name = {c.name: c for c in cases}
+    absent = sorted({c for c, _, _, _ in runs} - set(by_name))
+    if absent:
+        raise UsageError(f"지금 템플릿에 없는 case: {', '.join(absent)} — 재채점 불가")
+    first = next(iter(dirs.values()))
+    old = recorded if not args.regrade else (_load_json(first / "module_offsite_results.json").get("modules") or {}).get(args.module)
+    if not isinstance(old, dict):
+        raise UsageError(f"반복 디렉토리에 {args.module} 모듈 기록 없음: {first}")
+    rows, gradings, done = [], {}, []
+    docs_sha, inputs_sha, doc_bytes = {}, {}, {}
+    for name, arm, n, run_dir in runs:
+        case = by_name[name]
+        res, grading = regrade_run(case, json.loads((run_dir / "result.json").read_text(encoding="utf-8")), run_dir)
+        rows.append(run_row(case, arm, n, res, grading))
+        gradings[(name, arm, n)] = grading
+        done.append((run_dir, grading))
+        files, docs = arm_sources(case, arm, src)
+        inputs_sha.update({f"{name}/{rel}": sha256(p.read_bytes()) for rel, p in files})
+        docs_sha.update({f"{arm}/{rel}": sha256(p.read_bytes()) for rel, p in docs})
+        if arm == "with":
+            doc_bytes.setdefault(name, sum(len(p.read_bytes()) for _, p in docs))
+    ran = {c for c, _, _, _ in runs}
+    cases = [c for c in cases if c.name in ran]
+    arms = [a for a in ARMS if any(r["arm"] == a for r in rows)]
+    old_ver = old.get("grader_version")
+    now = {"prompt_sha256": prompt_frame_sha(src.platform), "inputs_sha256": dict(sorted(inputs_sha.items())),
+           "docs_sha256": dict(sorted(docs_sha.items()))}
+    old_cases = old.get("cases") or {}
+    differs = [k for k, v in now.items() if old.get(k) != v] + (["cases"] if set(old_cases) != ran else []) + [
+        f"expect_sha256:{c.name}" for c in cases if (old_cases.get(c.name) or {}).get("expect_sha256") != expect_sha(c)]
+    base = {k: v for k, v in old.items() if k not in ("cases", "gate", "unit_cost_usd", "total_cost_usd", "cost_basis",
+                                                      "init_model", "regrade_unavailable", "regrade_note", "regraded")}
+    prev = old.get("regraded") if isinstance(old.get("regraded"), dict) else {}
+    base.update(now, grader_version=GRADER_VERSION,
+                regraded={"from_grader": old_ver,
+                          "original_grader": prev.get("original_grader", prev.get("from_grader", old_ver)),
+                          "at": _utc(), **({"differs": differs} if differs else {})})
+    for run_dir, grading in done:                   # 모두 채점한 뒤에만 파일을 바꾼다
+        keep_old(run_dir / "grading.json")
+        write_json(run_dir / "grading.json", grading)
+    one_dir = len(set(dirs.values())) == 1          # 합친 기록(arm마다 디렉토리)은 run grading과 모듈 기록만 다시 쓴다
+    if one_dir:
+        for name in ("module_offsite_results.json", "benchmark.json"):
+            keep_old(first / name)
+    return finish(args, src, cases, rows, gradings, arms, first, base, doc_bytes, write_iter=one_dir)
+
+
+def file_grader_version(path: Path) -> int:
+    """채점 파일의 채점기 판: grading.json `grader_version`, benchmark.json `metadata.grader_version`, 반복 기록의 모듈
+    `grader_version`. 없으면(grader 4 이전 grading 등) 0."""
+    data = _load_json(path)
+    mods = data.get("modules") if isinstance(data.get("modules"), dict) else {}
+    for v in (data.get("grader_version"), (data.get("metadata") or {}).get("grader_version"),
+              *(m.get("grader_version") for m in mods.values() if isinstance(m, dict))):
+        if isinstance(v, int) and not isinstance(v, bool):
+            return v
+    return 0
+
+
+def keep_old(path: Path) -> None:
+    """재채점 전 파일을 `<이름>.v<그 파일의 판>.json`으로 남긴다. 그 이름이 이미 있으면 옮기지 않는다 — 먼저 남긴 옛 판(원래 run의
+    채점)을 덮지 않고, 새 파일이 이 자리를 덮는다."""
+    if path.is_file():
+        dest = path.with_name(f"{path.stem}.v{file_grader_version(path)}.json")
+        if not dest.exists():
+            os.replace(path, dest)
 
 
 # --- 모듈 기록·한 arm 합치기 (H C1+D R17) ------------------------------------------------------------------
