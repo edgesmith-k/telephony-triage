@@ -200,7 +200,7 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 | `tracker`·`tracker_post` | Jira 도구 짝 | setup의 Jira 단계만 다시 |
 | `gh` | GHE 인증 | `gh auth login -h <GHE 호스트>` |
 | `snapshot` | 스냅샷 나이 | `/telephony-triage:sync` |
-| `retention`(site-defaults `retention_days`를 둔 팀만) | 보존 기간 넘은 작업 폴더 수 | `db_pr.py cleanup --older-than <일> --dry-run` 확인 뒤 `--yes` |
+| `retention`(site-defaults `retention_days`를 둔 팀만) | 마지막 활동(안의 파일 갱신) 뒤 보존 기간 넘은 작업 폴더 수 — `cleanup --older-than`과 같은 기준 | `db_pr.py cleanup --older-than <일> --dry-run` 확인 뒤 `--yes` |
 | `compat` | 이슈 DB 스키마 호환 | 플러그인 업데이트 |
 | `lock` | 세션 잠금 | 그 세션이 끝난 뒤에만 해제 |
 | `module_skills` | 모듈 스킬·설치 스킬 설정 | 팀 기본 값 문제면 도입 담당자 |

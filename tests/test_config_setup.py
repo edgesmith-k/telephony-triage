@@ -1200,12 +1200,27 @@ def test_doctor_retention_row_counts_old_job_dirs_without_deleting(tmp_path):
         d.mkdir(parents=True, exist_ok=True)
         (d / "plan.json").write_text("{}", encoding="utf-8")
     past = _time.time() - 40 * 86400
+    os.utime(old / "plan.json", (past, past))                   # 나이 = 마지막 활동(안의 파일까지, R4)
     os.utime(old, (past, past))
     root = plugin_root("retention-30", retention_days=30)
     rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"], root=root).stdout)["rows"]}
     assert rows["retention"]["status"] == "warn" and "1개" in rows["retention"]["detail"]
     assert "cleanup --older-than 30" in rows["retention"]["next"]
     assert old.is_dir() and fresh.is_dir()                       # 세기만 한다
+    assert "마지막 활동 뒤" in rows["retention"]["detail"]
+    # 코덱스 리뷰 R4: 폴더 mtime은 40일 전이어도 안의 trace.jsonl을 방금 갱신했으면 "최근"이다 — cleanup --older-than과 같은 정의
+    (old / "trace.jsonl").write_text("{}\n", encoding="utf-8")
+    os.utime(old, (past, past))
+    rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"], root=root).stdout)["rows"]}
+    assert rows["retention"]["status"] == "ok"
+    from common import session_lock
+    from dbpr import worktree
+    assert worktree._tree_mtime(old) == session_lock.tree_mtime(old) > past + 86400
+    os.utime(old / "trace.jsonl", (past, past))
+    (old / "wt").mkdir()                                          # git worktree는 나이에 세지 않는다
+    os.utime(old, (past, past))                                   # mkdir가 올린 폴더 mtime은 되돌린다
+    rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"], root=root).stdout)["rows"]}
+    assert rows["retention"]["status"] == "warn"
     os.utime(old, None)
     rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"], root=root).stdout)["rows"]}
     assert rows["retention"]["status"] == "ok"

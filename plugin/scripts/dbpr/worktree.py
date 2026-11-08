@@ -336,7 +336,7 @@ def _drop_pasted_steps(ctx: Ctx, job: str) -> None:
         pass    # 지우지 못해도 lock 해제는 끝낸다(남은 파일은 cleanup이 보여준다)
 
 
-from common.session_lock import JOB_MARKERS, LEGACY_JOB_FILES  # noqa: E402,F401 — job_status와 공유
+from common.session_lock import JOB_MARKERS, LEGACY_JOB_FILES, tree_mtime  # noqa: E402,F401 — job_status·doctor와 공유
 RAW_MARKERS = ("logs", "issue_raw.json", "jira_raw.json")
 RETAINED_NOTES = {      # PR 생성 실패라고 단정하지 않는다: PR은 만들어졌는데 번호만 기록되지 않았을 수 있다
     "unpublished": "미게시 계획 보존 — 재개 또는 명시적 폐기(discard) 필요",
@@ -346,18 +346,8 @@ RETAINED_NOTES = {      # PR 생성 실패라고 단정하지 않는다: PR은 �
 
 
 def _tree_mtime(job_dir: Path) -> float:
-    """폴더 자신·하위 폴더·파일 중 가장 최근 mtime(방금 만든 빈 폴더나 옛 mtime 파일을 복사한 폴더는 최근이다).
-    git worktree(`wt`·`draft`)는 건너뛴다. 훑는 도중 사라진 파일의 OSError는 무시한다."""
-    newest = job_dir.stat().st_mtime
-    for root, dirs, files in os.walk(job_dir):
-        if root == str(job_dir):
-            dirs[:] = [d for d in dirs if d not in ("wt", "draft")]
-        for name in (*dirs, *files):
-            try:
-                newest = max(newest, os.lstat(os.path.join(root, name)).st_mtime)
-            except OSError:
-                pass
-    return newest
+    """마지막 활동 시각 — doctor `retention` 행과 같은 정의(`session_lock.tree_mtime`)."""
+    return tree_mtime(job_dir)
 
 
 def cleanup(ctx: Ctx, yes: bool, older_than: int | None) -> dict:

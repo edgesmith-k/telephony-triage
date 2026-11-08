@@ -1009,14 +1009,15 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             rows.append(_row("retention", "fail", f"retention_days 값이 잘못됨({days!r})", "site-defaults retention_days는 양의 정수(일) — 관리자"))
             return
         limit = time.time() - days * 86400
+        # 나이 = 마지막 활동(폴더 안 파일·폴더의 가장 최근 mtime, wt·draft 제외) — cleanup --older-than과 같은 정의(R4)
         old = [p.name for p in work.iterdir() if p.is_dir() and not p.name.startswith((".", "_"))
                and session_lock.JOB_KEY_RE.fullmatch(p.name) and any((p / m).exists() for m in session_lock.JOB_MARKERS)
-               and p.stat().st_mtime < limit]
+               and session_lock.tree_mtime(p) < limit]
         if old:
-            rows.append(_row("retention", "warn", f"{days}일 넘은 작업 폴더 {len(old)}개(Jira 요약·마스킹 로그가 남아 있다)",
+            rows.append(_row("retention", "warn", f"마지막 활동 뒤 {days}일 넘은 작업 폴더 {len(old)}개(Jira 요약·마스킹 로그가 남아 있다)",
                              f"db_pr.py cleanup --older-than {days} --dry-run 으로 확인한 뒤 --yes (미게시 계획은 따로 알린다)"))
         else:
-            rows.append(_row("retention", "ok", f"{days}일 넘은 작업 폴더 없음"))
+            rows.append(_row("retention", "ok", f"마지막 활동 뒤 {days}일 넘은 작업 폴더 없음"))
     if retention_days is not None:
         if ok_cfg and work is not None and work.is_dir():
             guarded("retention", retention)

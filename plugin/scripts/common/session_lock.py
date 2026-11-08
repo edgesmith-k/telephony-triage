@@ -79,3 +79,23 @@ def is_job_dir(work_dir: Path, name: str) -> bool:
         return not path.is_symlink() and path.is_dir() and any((path / m).exists() for m in JOB_MARKERS)
     except OSError:
         return False
+
+
+JOB_TREE_SKIP = ("wt", "draft")      # git worktree — 폴더 나이에 세지 않는다
+
+
+def tree_mtime(job_dir: Path) -> float:
+    """작업 폴더의 **마지막 활동** 시각 = 폴더 자신·하위 폴더·파일 중 가장 최근 mtime(방금 만든 빈 폴더나 옛 mtime 파일을 복사한
+    폴더는 최근이다). 최상위 `wt`·`draft`(git worktree)는 건너뛴다. 훑는 도중 사라진 파일의 OSError는 무시한다.
+    doctor `retention` 행과 `db_pr cleanup --older-than`이 같은 정의를 쓴다(코덱스 리뷰 R4: doctor는 폴더 mtime만 봐서 trace를
+    방금 갱신한 작업을 "오래됨"으로 세고 cleanup은 최근으로 봤다)."""
+    newest = job_dir.stat().st_mtime
+    for root, dirs, files in os.walk(job_dir):
+        if root == str(job_dir):
+            dirs[:] = [d for d in dirs if d not in JOB_TREE_SKIP]
+        for name in (*dirs, *files):
+            try:
+                newest = max(newest, os.lstat(os.path.join(root, name)).st_mtime)
+            except OSError:
+                pass
+    return newest
