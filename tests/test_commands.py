@@ -336,6 +336,7 @@ def test_sync_and_setup_bodies_list_new_steps_in_order():
     assert setup.index("config.py tracker-candidates") < setup.index("config.py show") < setup.index("config.py gh-status")
     assert setup.count("config.py tracker-candidates") == 1 and "0번 결과가 없을 때만" in setup
     assert "최대 3개" in setup and "한 번만, 한 줄씩" in setup
+    assert "없으면(null) 묻는다" in setup, "음성 경로(b): login이 null(다른 호스트만 로그인)이면 GHE 아이디를 묻는다"
     skill = (REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md").read_text(encoding="utf-8")
     assert "config.py doctor --format markdown" in skill
     assert len(list(COMMANDS.glob("*.md"))) == 14

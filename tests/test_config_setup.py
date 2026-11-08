@@ -212,6 +212,18 @@ def test_inherited_team_remote_is_not_copied_and_counts_for_overlap():
     assert proc.returncode == 2 and "site-defaults는 관리자" in proc.stderr and not (bad.home / "config.yaml").exists()
 
 
+def test_init_without_site_remote_still_requires_remote():
+    """음성 경로(a): site-defaults에 issue_db.remote가 없으면(사외 초안 example 그대로) init은 전처럼 원격을 요구한다."""
+    env = Env()
+    path = env.base / "a.json"
+    path.write_text(json.dumps({"user.ghe_id": "mock-user1", "issue_db.path": str(env.base / "db"),
+                                "work_dir": str(env.base / "work")}), encoding="utf-8")
+    proc = env.run("config.py", ["init", "--answers", path])
+    assert proc.returncode == 2 and "issue_db.remote: 값이 필요합니다" in proc.stderr
+    assert not (env.home / "config.yaml").exists()
+    assert env.json("config.py", ["show", "--keys", "issue_db.remote"])["missing"] == ["issue_db.remote"]
+
+
 def test_gh_status_login_is_the_site_host_login_only():
     """setup 1 GHE 아이디 자동 감지(코덱스 리뷰 A①): `gh-status`의 `login`은 site ghe.host와 같은 호스트의 로그인만이다.
     다른 호스트 로그인이 앞에 나와도(gh ≥2.40 `account` 문구) 그것을 쓰지 않고, 그 호스트 줄이 없으면 null(setup이 묻는다)."""
