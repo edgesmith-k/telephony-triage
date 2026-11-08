@@ -8,7 +8,8 @@ telephony-triage를 이 사용자 환경에 맞게 설정한다 (`02-config.md �
 
 0. **Jira MCP 점검** — 아무것도 묻기 전에 `config.py tracker-candidates`(config 없이 돈다)로 이미 등록된 MCP 서버를 본다. stdio 서버당 최대 10초가 걸리므로
    **이 세션에서 한 번만** 돌리고 결과 JSON을 4번이 그대로 쓴다(파일로 남기지 않는다). `usable`이 비어 있으면 "사용자 범위(user scope)로 사내 Jira MCP를
-   등록해야 한다(다른 프로젝트에만 등록돼 있을 수 있음)"고 안내하고 **setup을 중단**한다(질문 전이라 남는 것이 없다).
+   등록해야 한다(다른 프로젝트에만 등록돼 있을 수 있음)"고 안내하고 **setup을 중단**한다(질문 전이라 남는 것이 없다). 단 원격 서버라 `error`가 있으면
+   먼저 4번의 `--tools-json` 방식으로 한 번 더 부르고, 그래도 `usable`이 비어 있을 때 중단한다.
    종료 코드 2가 "옛 설정 키"·플랫폼 설정 문제면 1번의 `rename-legacy` 항목을 먼저 하고 0번을 다시 한다.
    **플랫폼** — `config.py site-defaults`의 `platform.enabled`가 2개 이상일 때만 어느 플랫폼을 설정할지 묻는다(없거나 1개면 묻지 않고 지금 흐름 그대로).
    플랫폼을 고르면(android 포함) 이후 `config.py`·`db_pr.py` 호출마다 `--platform <이름>`을 붙인다(개인 기본 `platform`을 따라 단계마다 달라지지 않게). android가 아니면 1번은 그 플랫폼의 이슈 DB clone 경로와, `config.py show --platform <이름>`의 `effective`에 `issue_db.remote`가 없을 때만 원격을 묻고(작업 디렉토리는 묻지 않는다)
