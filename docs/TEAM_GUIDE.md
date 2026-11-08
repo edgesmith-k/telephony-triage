@@ -86,7 +86,7 @@ tt-oc doctor   # 사전 점검. fail이 있으면 시작하지 않는다
 ## 2. 처음 한 번 설정
 
 1. **setup**: Claude Code에서 `/telephony-triage:setup`으로 먼저 한다(OpenCode도 같은 설정을 쓴다). OpenCode의 `/tt-setup`은 그 뒤 다시 점검하거나 바꿀 때만(config가 없으면 `tt-oc`가 시작하지 않는다).
-   - GHE 아이디·clone 경로를 묻고 Jira 도구 짝·git hook·스냅샷·gh를 확인한 뒤 점검표(doctor)를 보여 준다.
+   - Jira MCP 등록을 먼저 점검하고(없으면 거기서 멈춘다), clone 경로만 묻는다(GHE 아이디는 gh 로그인에서 읽고, 원격 URL은 팀 기본값 — 못 읽거나 없을 때만 묻는다. 타임존 등 나머지는 팀 기본값을 한 줄씩 보여 주기만). 그 뒤 Jira 도구 짝·git hook·스냅샷·gh를 확인하고 점검표(doctor)를 보여 준다.
 2. **점검표**: 모든 행이 `ok`면 끝. `warn`·`fail`은 그 행의 "다음" 칸대로(7절).
    - Claude Code: `/telephony-triage:status --doctor`
    - OpenCode: `tt-oc doctor` — `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만), warn `module-skills`·`read-roots`. 점검표 행을 하나씩 보려면 `TT_RUNTIME=opencode python3 $S/config.py doctor --format markdown`(모델 호출 없음, `opencode_env`·`jira_gate` 포함).

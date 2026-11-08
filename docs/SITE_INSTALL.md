@@ -146,7 +146,7 @@ S-1에서 `SITE_PROFILE.md`에 남길 것: 설치 경위(미러·A/B·Python 버
    pytest는 필요 없다(테스트·골든 확인용). 미러에 고정 버전이 없으면 4절 표.
 2. **기본 연결**: `gh auth login -h <사내 GHE 호스트>`(이슈 DB PR용), `claude mcp list`에 Jira MCP가 사용자 범위로 보이는지.
 3. **플러그인 설치**: Claude Code에서 사내 마켓플레이스의 `telephony-triage`. 레포 clone은 필요 없다.
-4. **setup**: `claude`(venv면 `(tt)` 터미널에서) → `/telephony-triage:setup`. GHE 아이디·이슈 DB clone 경로·타임존 등을 묻고 점검 표(doctor)를 보여 준다. 모든 행 `ok`면 끝, `fail`·`warn`은 "다음" 열대로.
+4. **setup**: `claude`(venv면 `(tt)` 터미널에서) → `/telephony-triage:setup`. 먼저 Jira MCP 등록을 점검하고(없으면 여기서 멈춘다), 이슈 DB clone 경로(와 gh 로그인에서 못 읽었을 때 GHE 아이디, site-defaults에 없을 때 원격 URL)만 묻는다 — 타임존 등 나머지는 팀 기본값을 보여 주기만 한다. 끝에 점검 표(doctor)를 보여 준다. 모든 행 `ok`면 끝, `fail`·`warn`은 "다음" 열대로.
 5. **연습·평소 사용**:
    ```
    $ claude

@@ -797,11 +797,11 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
     <div class="scroll"><table class="wide">
       <thead><tr><th>번호</th><th>하는 일</th><th>내가 할 일</th></tr></thead>
       <tbody>
-        <tr><td class="num">0</td><td>플랫폼 고르기(팀이 둘 이상 켰을 때만)</td><td>설정할 플랫폼을 고른다</td></tr>
-        <tr><td class="num">1</td><td>내 설정 파일 만들기</td><td>GHE 아이디, 이슈 DB clone 경로와 원격 주소, base 브랜치(PR이 들어갈 기준 브랜치, 보통 main), GHE 호스트를 답한다. 시각의 타임존(Jira·logcat), 연도 정하는 방식, 로그 기본 폴더(선택), 작업 폴더도 답한다</td></tr>
+        <tr><td class="num">0</td><td>Jira MCP 점검, 플랫폼 고르기(팀이 둘 이상 켰을 때만)</td><td>등록된 Jira MCP가 없으면 아무것도 묻기 전에 여기서 멈춘다(사용자 범위 등록 안내). 있으면 설정할 플랫폼을 고른다</td></tr>
+        <tr><td class="num">1</td><td>내 설정 파일 만들기</td><td>이슈 DB clone 경로를 답한다(기본 제안 있음). GHE 아이디는 gh 로그인에서, 원격 주소는 팀 기본값에서 읽어 확인만 하고 못 읽을 때만 묻는다(최대 3개). base 브랜치·GHE 호스트·타임존(Jira·logcat)·연도 정하는 방식·로그 기본 폴더·작업 폴더는 묻지 않고 팀 기본값을 한 줄씩 보여 준다</td></tr>
         <tr><td class="num">2</td><td>스크립트 경로 기록</td><td>없음</td></tr>
         <tr><td class="num">3</td><td>이슈 DB clone 제안</td><td>동의하면 clone한다</td></tr>
-        <tr><td class="num">4</td><td>Jira 도구 연결</td><td>서버와 도구(이슈 읽기 필수)를 확인하고, 허용할 읽기 도구를 확인한다</td></tr>
+        <tr><td class="num">4</td><td>Jira 도구 연결</td><td>0번에서 찾은 서버와 도구(이슈 읽기 필수)를 확인하고, 허용할 읽기 도구를 확인한다(다시 찾지 않는다)</td></tr>
         <tr><td class="num">5</td><td>이슈 DB에 git hook 설치</td><td>없음</td></tr>
         <tr><td class="num">6</td><td>읽기 스냅샷 만들기</td><td>다른 작업이 lock을 잡고 있으면 그 세션이 끝났는지 답한다</td></tr>
         <tr><td class="num">7</td><td>호환성 확인</td><td>"읽기 전용" 안내가 나오면 읽고 계속한다</td></tr>

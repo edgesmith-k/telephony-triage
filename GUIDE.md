@@ -273,8 +273,8 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 1. 사내 마켓플레이스에서 `telephony-triage` 설치
 2. 이슈 DB 레포 clone
 3. `/telephony-triage:setup`
-   - GHE 아이디, 이슈 DB 경로, 로그 폴더, (선택) Android 16/17 소스 트리 프로필
-   - 이미 등록된 Jira MCP를 찾아 도구 매핑을 확인 (팀 기본값이 있으면 확인만). 팀이 GitHub Issues를 트래커로 쓰면(site-defaults `tracker.kind: github`) 그 트래커 전용 MCP 등록을 찾는다(`docs/design/18-trackers.md`)
+   - 질문 전에 Jira MCP 등록부터 점검(없으면 중단). 묻는 것은 이슈 DB clone 경로뿐이고, GHE 아이디(gh 로그인에서 읽음)·원격 URL(팀 기본값)은 못 읽거나 없을 때만 묻는다. 타임존·로그 폴더·작업 폴더 등은 팀 기본값을 보여 주기만(`config.py set`으로 바꾼다)
+   - 0번에서 찾은 Jira MCP의 도구 매핑을 확인 (팀 기본값이 있으면 확인만). 팀이 GitHub Issues를 트래커로 쓰면(site-defaults `tracker.kind: github`) 그 트래커 전용 MCP 등록을 찾는다(`docs/design/18-trackers.md`)
    - 옛 설정 키(`jira:` 등)가 남은 config는 막힌다(Jira 도구 호출 거부, doctor `tracker` 행 fail). `config.py rename-legacy --apply`로 `tracker:`로 바꾼다
    - git pre-commit hook 설치, 읽기 스냅샷 생성
 4. 연습: `/telephony-triage:analyze <샘플키> <로그> --dry-run` (아무것도 올리지 않음. gh 로그인 전에도 가능). GitHub Issues 트래커면 키 자리에 `owner/repo#N`이나 이슈 URL을 줘도 된다
