@@ -1782,6 +1782,34 @@ def test_load_case_explore_schema2(env, tmp_path):
     broken(lambda d: d["expect"]["accept"][0].__setitem__("show", "x" * 81), "80자 이하")
 
 
+def test_gate_top1_regression_never_passes_silently():
+    """코덱스 리뷰 F3: pass1 with 2 > without 1이어도 top1 with 0 < without 1이면 pass에 경고(top1_regressed)가 붙는다.
+    pass1 증가/동률/감소 × top1 증가/동률/감소 조합, deep/explore 혼합, 옛 기록(top1 없음), arm별 run 수 차이."""
+    def ex(arm, pass1, top1, case="c1", tokens=100):
+        return {**_row(arm, pass1=pass1, tokens=tokens, case=case), "kind": "explore", "top1": top1}
+    # pass1 ↑ × top1 ↓ → pass + 경고 (리뷰 반례 그대로)
+    s = me.gate_summary([ex("with", True, False), ex("with", True, False, "c2"), ex("without", True, True), ex("without", False, False, "c2")], True)
+    assert (s["verdict"], s["exit"], s["top1_regressed"]) == ("pass", 0, True)
+    assert "top1(가장 유력 = 인정 후보)은 with 0 < without 1" in s["warning"] and "사람이 판정" in s["warning"]
+    # pass1 ↑ × top1 ↑/= → pass, 경고 없음
+    for t1w, t1n in ((True, False), (True, True), (False, False)):
+        s = me.gate_summary([ex("with", True, t1w), ex("with", True, False, "c2"), ex("without", True, t1n), ex("without", False, False, "c2")], True)
+        assert (s["verdict"], s["warning"], s["top1_regressed"]) == ("pass", None, False), (t1w, t1n)
+    # pass1 = × top1 ↑ pass / = 토큰 / ↓ tie+경고(regressed)
+    assert me.gate_summary([ex("with", True, True), ex("without", True, False)], True)["verdict"] == "pass"
+    s = me.gate_summary([ex("with", True, False), ex("without", True, True)], True)
+    assert (s["verdict"], s["top1_regressed"]) == ("tie", True)
+    # pass1 ↓ → fail(top1과 무관)
+    assert me.gate_summary([ex("with", False, True), ex("without", True, False)], True)["verdict"] == "fail"
+    # deep/explore 혼합: deep 행은 top1에 안 센다, explore만으로 판단
+    s = me.gate_summary([_row("with", pass1=True), ex("with", True, False, "e"), _row("without", pass1=True), ex("without", False, True, "e")], True)
+    assert (s["verdict"], s["top1_regressed"]) == ("pass", True) and s["explore_runs"] == 2
+    # 옛 기록(top1 없음)·arm별 run 수 차이는 경고 꼬리로 표시
+    s = me.gate_summary([ex("with", True, None), ex("with", True, True, "c2"), ex("without", True, True)], True)
+    assert s["verdict"] == "pass" and s["top1_unknown"] == 1 and "옛 기록 1개" in s["warning"] and "arm마다 다르다" in s["warning"]
+    assert s["top1_regressed"] is False and "top1_regressed" in me.GATE_KEYS
+
+
 def test_gate_tie_breaks_on_top1_before_tokens():
     """종합 리뷰 E: pass1 동률이면 explore top1(가장 유력 = 인정) 수를 먼저 본다 — with가 많으면 pass, 적으면 tie(경고),
     같으면 토큰. explore run이 없으면 이전과 같다(토큰)."""

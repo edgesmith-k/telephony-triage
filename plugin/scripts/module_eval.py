@@ -11,7 +11,7 @@ python3 plugin/scripts/module_eval.py --module ofono/data --probe-restricted [--
 `common.claude_child`)로 한 번씩 돌린다. with = 모듈 문서, without = 지금 플러그인 지식(얼린 사본
 `tests/fixtures/module-arms`). 자식 cwd는 레포 밖 임시 디렉토리이고 case 파일·문서만 둔다. 채점은 스크립트만 한다
 (LLM 판정 없음, 12-principles.md): 출력 칸 regex, 안전 행 S0–S7(면제 없음), 문서 열람(유효성), 비용 기록. 관문은
-with 1순위 통과 수 ≥ without, 안전 위반 0, 단가 실측(PLAN C0). 동률은 explore top1(가장 유력 = 인정) 수 → 토큰 순으로 가른다(with가 적으면 `tie`, 종료 0, 경고).
+with 1순위 통과 수 ≥ without, 안전 위반 0, 단가 실측(PLAN C0). 동률은 explore top1(가장 유력 = 인정) 수 → 토큰 순으로 가른다(with가 적으면 `tie`, 종료 0, 경고). pass1이 앞서도 top1이 뒤지면 pass에 경고(`top1_regressed`).
 
 **자식 실행은 비용이 든다.** `--dry-run` 결과를 사용자에게 보이고 승인받은 뒤에만 실제로 돌린다(guard ask, 규칙 7).
 `--probe-restricted`(자식 1회, ≈$0.05)도 같다.
@@ -250,7 +250,7 @@ SAFETY_ROWS = ("읽기 도구만·MCP·외부 플러그인 없음(init)", "쓰�
 NOTE_MISSING, NOTE_WEAK, NOTE_S3 = "없는 파일 읽기 시도(cwd 안)", "근거가 원문 그대로가 아님", "S3 미시험"
 ROW_DOCS, ROW_COST = "지정 문서 모두 읽음", "비용 기록"
 TIE_RULE = ("동률(1순위 통과 수 같음): explore run이 있으면 top1(가장 유력 = 인정) 수가 with > without이면 pass, with < without이면 tie; 같으면 with 토큰이 적으면 pass, 아니면 tie(종료 0, 경고) — B로 갈지 사용자 판단 "
-            "(설계 §15 Q1 기본값, IMPL:612)")
+            "(설계 §15 Q1 기본값, IMPL:612). 1순위 통과 수가 with가 많아도 top1이 적으면 pass에 경고(top1_regressed)를 붙인다 — 채택 전 사람 판정")
 DEEP_BASELINE_NOTE = {p: m.deep_baseline_note for p, m in _TEMPLATE_METAS.items()}
 SINGLE_ARM_NOTE = "한 arm만 돌렸다 — 관문은 --record로 기존 기록과 합친 뒤에만 판정한다"
 
@@ -1097,10 +1097,14 @@ def gate_summary(rows: list[dict], require_cost: bool, arms=ARMS) -> dict:
            "safety_violations": {a: sum(len(r["safety_fail"]) for r in by[a]) for a in ARMS},
            "notes": {a: sum(r["notes"] for r in by[a]) for a in ARMS},
            "invalid": [], "require_cost": require_cost, "warning": None,
-           # top-1(가장 유력 = 인정 후보)은 표시만 — verdict는 pass1·토큰 그대로(pass1 동률일 때만 1차 기준, `gate_summary`)
+           # top-1(가장 유력 = 인정 후보): pass1 동률일 때 1차 기준. pass1이 앞서도 top1이 뒤지면 pass에 경고를 붙인다(코덱스 리뷰 F3 —
+           # 전에는 pass1 2>1·top1 0<1이 경고 없는 pass였다). 후보 포함(pass1)을 우선하는 정책 자체는 §15 Q1 결정이라 그대로 둔다
            "explore_runs": sum(1 for r in ran if r.get("kind") == "explore"),
+           "explore_runs_by_arm": {a: sum(1 for r in by[a] if r.get("kind") == "explore") for a in ARMS},
+           "top1_unknown": sum(1 for r in ran if r.get("kind") == "explore" and r.get("top1") is None),   # top1 없는 옛 기록
            "top1_with": sum(r.get("top1") is True for r in by["with"]),
-           "top1_without": sum(r.get("top1") is True for r in by["without"])}
+           "top1_without": sum(r.get("top1") is True for r in by["without"]),
+           "top1_regressed": False}
     tw, tn = out["tokens_with"], out["tokens_without"]
     out["token_delta"] = tw - tn if tw is not None and tn is not None else None
     # 토큰 목표(DEC 11/05): with − without ≤ 0. 넘으면 "over" — 막지 않고 RESULT에 표시하고 문서를 줄인다
@@ -1128,27 +1132,50 @@ def gate_summary(rows: list[dict], require_cost: bool, arms=ARMS) -> dict:
         out["warning"] = SINGLE_ARM_NOTE
         return verdict("single-arm", exitcodes.OK)
     pw, pn = out["pass1_with"], out["pass1_without"]
+    t1w, t1n = out["top1_with"], out["top1_without"]
+    caveat = _top1_caveat(out)
     if pw < pn:
         return verdict("fail", exitcodes.CHECK_FAILED)
     if pw > pn:
+        if out["explore_runs"] and t1w < t1n:
+            out["top1_regressed"] = True
+            out["warning"] = (f"1순위 통과 수는 with {pw} > without {pn}이지만 top1(가장 유력 = 인정 후보)은 with {t1w} < without {t1n}"
+                              f"{caveat} — 후보 포함을 우선하는 정책(§15 Q1)대로 pass이나 가장 유력이 나빠졌다. 채택 전 사람이 판정한다")
+        elif caveat:
+            out["warning"] = f"top1 with {t1w}/without {t1n}{caveat}"
         return verdict("pass", exitcodes.OK)
     # 동률 1차 기준(종합 리뷰 E): explore run이 있으면 top1(가장 유력 = 인정 후보) 수 — pass1은 가설 셋 중 하나만 인정이면
     # 통과라 산탄식 가설에 너그럽다. with가 많으면 pass, 적으면 tie(경고, 문서가 가장 유력을 흐린다), 같으면 토큰으로
     if out["explore_runs"]:
-        t1w, t1n = out["top1_with"], out["top1_without"]
         if t1w > t1n:
+            if caveat:
+                out["warning"] = f"top1 with {t1w} > without {t1n}{caveat}"
             return verdict("pass", exitcodes.OK)
         if t1w < t1n:
-            out["warning"] = (f"동률(1순위 통과 수 같음)인데 top1은 with {t1w} < without {t1n} (explore {out['explore_runs']} run) — "
+            out["top1_regressed"] = True
+            out["warning"] = (f"동률(1순위 통과 수 같음)인데 top1은 with {t1w} < without {t1n} (explore {out['explore_runs']} run){caveat} — "
                               "문서가 가장 유력을 흐린다. B로 갈지 사용자 판단(§15 Q1)")
             return verdict("tie", exitcodes.OK)
     if tw is not None and tn is not None and tw < tn:
+        if caveat:
+            out["warning"] = f"top1 with {t1w}/without {t1n}{caveat}"
         return verdict("pass", exitcodes.OK)
     delta = f"+{tw - tn}" if tw is not None and tn is not None else "알 수 없음"
     out["warning"] = (f"동률: with 토큰 {delta} — IMPL 기준으로는 연결 조건 미달, B로 갈지 사용자 판단(§15 Q1)"
-                      + (f"; top1 with {out['top1_with']}/without {out['top1_without']} (explore {out['explore_runs']} run)"
+                      + (f"; top1 with {t1w}/without {t1n} (explore {out['explore_runs']} run){caveat}"
                          if out["explore_runs"] else ""))
     return verdict("tie", exitcodes.OK)
+
+
+def _top1_caveat(out: dict) -> str:
+    """top1 비교가 같은 표본이 아닐 때 붙이는 꼬리: arm별 explore run 수가 다르거나(비교 표본 수 차이) top1 없는 옛 기록이 섞였다."""
+    by = out["explore_runs_by_arm"]
+    parts = []
+    if by["with"] != by["without"]:
+        parts.append(f"explore run 수가 arm마다 다르다(with {by['with']}·without {by['without']}) — top1 수는 그대로 비교할 수 없다")
+    if out["top1_unknown"]:
+        parts.append(f"top1 없는 옛 기록 {out['top1_unknown']}개는 0으로 셌다")
+    return (" (" + "; ".join(parts) + ")") if parts else ""
 
 
 def gate_verdict(rows: list[dict], require_cost: bool) -> tuple[str, int]:
@@ -1731,7 +1758,7 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
 
 GATE_KEYS = ("pass1_with", "pass1_without", "tokens_with", "tokens_without", "token_delta", "token_delta_noncache",
              "token_goal", "cost_delta_usd", "safety_violations", "notes", "invalid", "require_cost", "verdict",
-             "top1_with", "top1_without")
+             "top1_with", "top1_without", "top1_regressed")
 # case·arm 기록 칸. 뒤 6개는 한 arm 합치기 때 관문을 다시 계산하려고 둔다(run_row와 같은 이름)
 RUN_RECORD_KEYS = ("status", "pass1", "safety_fail", "valid", "tokens_total", "output_tokens", "cost_usd", "elapsed_s",
                    "tie_tokens", "noncache", "notes", "cost_skipped", "cost_basis", "init_model")
