@@ -411,7 +411,7 @@ class AllowPatternError(ValueError):
     """`mask.allow_patterns`의 정규식이 컴파일되지 않는다."""
 
 
-class Masker:
+class Masker:  # noqa: F811  # 위의 타입 별칭 Masker를 이 클래스가 대신한다
     """번호 대응표를 가진 마스커. `masker(text)`로 텍스트를, `mask_value(v)`로 필드 값을
     마스킹한다. 한 파일(분석 1회) 동안 같은 인스턴스를 쓴다."""
 

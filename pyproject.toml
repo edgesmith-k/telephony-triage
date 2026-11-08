@@ -1,5 +1,6 @@
 # Install runtime: python -m pip install .
 # Install the locked test environment: python -m pip install '.[test]'
+# Also run the linter (optional, tools/lint.py): python -m pip install '.[test,lint]'
 # Exact direct and transitive pins are kept here to avoid a separate lock artifact.
 [build-system]
 requires = ["setuptools==83.0.0"]
@@ -35,9 +36,102 @@ test = [
     "pytest-xdist==3.8.0",
     "execnet==2.1.2",
 ]
+lint = [
+    "ruff==0.17.4",
+]
 
 [tool.setuptools]
 py-modules = []
 
 [tool.pytest.ini_options]
 addopts = "--tb=short"
+
+# ruff 규칙 묶음 (python3 tools/lint.py). 끈 규칙과 검토 표는 docs/development/LINT_REVIEW.md
+[tool.ruff]
+target-version = "py310"   # requires-python >=3.10
+line-length = 140          # E501은 끔 — 이후 E501을 다시 켤 때의 기준
+extend-exclude = [
+    "docs/history",                         # 읽지 않는 이력
+    ".venv",
+    "tests/skill_evals/workspace",          # eval 실행 결과 (gitignore)
+    # SITE_PATHS의 사내 코드(포팅한 파서·어댑터·골든)는 이 묶음 밖
+    "plugin/scripts/parser_backends/site",
+    "plugin/scripts/adapters/site_*",
+    "tests/golden",
+    "tests/site",
+]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "B", "C4", "UP", "SIM", "PIE", "RET", "PERF", "FURB", "PL", "RUF", "BLE"]
+ignore = [
+    # 검토 표로 관리 (고치지 않고 곳마다 사유를 적는다)
+    "PLW1510",  # subprocess.run check= 없음 — 검토 표(LINT_REVIEW.md)로 관리
+    "BLE001",   # except Exception — 검토 표(LINT_REVIEW.md)로 관리
+    # 복잡도·숫자
+    "PLR0911",  # return 수 — 판정 함수는 조건마다 바로 돌려준다
+    "PLR0912",  # 분기 수 — CLI·guard 판정이 계약 표를 분기로 옮긴다
+    "PLR0913",  # 인자 수 — 키워드 인자로 받는 내부 함수
+    "PLR0915",  # 문장 수 — main·run은 단계 순서대로 한 함수에 둔다
+    "PLR0917",  # 위치 인자 수 — PLR0913과 같다
+    "PLR2004",  # 숫자 비교 — 종료 코드·바이트 상한 같은 계약 값을 그 자리에서 비교한다
+    # 한국어 문장
+    "RUF001",   # 문자열의 가운뎃점(·)·화살표·전각 문자
+    "RUF002",   # docstring의 같은 문자
+    "RUF003",   # 주석의 같은 문자
+    # import·구조
+    "E402",     # 스크립트가 sys.path를 넣은 뒤 import한다
+    "PLC0415",  # 함수 안 import — 시작 비용·순환 import 회피·sys.path 뒤 적재
+    "E501",     # 긴 한국어 메시지·표 문자열 (포매터를 쓰지 않는다)
+    "E702",     # 테스트의 한 줄 세미콜론 (짧은 준비 문)
+    "E731",     # 지역 헬퍼 lambda 대입
+    "E741",     # 좁은 범위의 짧은 이름(l 등)
+    "PLW0603",  # 모듈 전역 캐시·상태
+    "PLW2901",  # 반복 변수 정규화 재대입
+    "RUF012",   # 클래스 속성 표(상수로만 쓴다)
+    "RUF023",   # __slots__ 정렬 — __init__ 대입 순서와 맞춰 둔다
+    # 예외·반복
+    "B007",     # 쓰지 않는 반복 변수 — 풀기 이름이 뜻을 보여 준다
+    "RUF059",   # 쓰지 않는 풀기 변수 — 같은 이유
+    "B904",     # except 안의 raise — 사용자용 오류로 바꿔 올리고 원인은 메시지에 담는다
+    "B905",     # zip(strict=) — 길이가 같은 곳뿐, 지금 동작 그대로
+    "RUF043",   # pytest.raises match의 메타문자 — 정규식으로 쓴 것
+    "SIM105",   # try/except/pass — contextlib.suppress로 바꿔도 이득 없음
+    "PERF203",  # 반복문 안 try — 항목별 오류 처리
+    # 표현 스타일 (안전 자동 수정이 없거나, 고친 모양이 덜 읽힌다)
+    "SIM102",   # 중첩 if 합치기
+    "SIM108",   # if/else → 삼항
+    "SIM114",   # 몸통이 같은 분기 합치기 — 뜻이 다른 분기를 일부러 나눠 둔다
+    "SIM300",   # yoda 비교 — 대문자 이름을 상수로 보고 비교 순서를 거꾸로 바꾼다
+    "SIM905",   # 공백으로 나눈 문자열 목록 — 리스트 리터럴보다 읽기 쉽다
+    "C401",     # 생성식 → 집합 내포
+    "C402",     # 생성식 → 사전 내포
+    "C408",     # dict() 호출 → 리터럴
+    "C416",     # 그대로 옮기는 내포
+    "C419",     # any/all 안 리스트 내포
+    "PIE810",   # startswith 여러 번 → 튜플
+    "PLR1714",  # 같은 값 반복 비교 → in
+    "PLW0108",  # 감싸기만 하는 lambda
+    "FURB171",  # 한 항목 in
+    "FURB192",  # sorted()[0] → min
+    "RUF005",   # 리스트 이어 붙이기 a + [x]
+    "RUF007",   # zip(a, a[1:]) → pairwise
+    "RUF015",   # [0] 슬라이스 → next
+    "RUF046",   # int(정수) — 뜻을 밝히는 변환
+    "RET504",   # return 앞 대입 — 이름이 뜻을 보여 준다
+    "UP031",    # % 포매팅
+    "PERF102",  # items()에서 키만
+    "PERF401",  # 반복문 append → 내포 — 읽기 쉬운 쪽을 둔다
+    # noqa 주석
+    "RUF100",   # 쓰지 않는 noqa — 끈 규칙(E402·BLE001)과 다른 묶음(S110 등)의 의도 표시를 남긴다
+    "RUF102",   # 모르는 noqa 코드 — 다른 린터(WPS) 표시와 붙은 설명을 남긴다
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 한 곳뿐인 지적: 확인한 오탐·무해한 것이라 그 파일에서만 끈다 (LINT_REVIEW.md 표 4).
+# 정확성 규칙 F821(bench_scale)·F811(masking)은 파일이 아니라 그 줄의 `# noqa`로 좁혔다
+"tools/bench_scale.py" = ["SIM115"]               # 핸들 여러 개를 finally에서 닫는다
+"plugin/scripts/common/stepanchor.py" = ["PLR0124"]  # out != out은 NaN 검사
+"tests/test_platform_profile.py" = ["B005"]       # str.strip이 아닌 PhoneRules.strip
+"tests/test_partial_match.py" = ["F841"]          # 쓰지 않는 계산값(부작용 없음)
+"tests/test_safety.py" = ["F841"]                 # import_module로 적재만 한다
+"tools/site_audit.py" = ["F841"]                  # 쓰지 않는 목록(부작용 없음)

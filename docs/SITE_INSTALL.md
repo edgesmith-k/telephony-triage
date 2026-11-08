@@ -73,6 +73,7 @@ pip config --user set global.index-url https://<사내 미러>/simple   # 인증
 # 공통
 python3 -m pip install --user PyYAML==6.0.3 jsonschema==4.26.0 attrs==26.1.0 jsonschema-specifications==2025.9.1 \
   referencing==0.37.0 typing-extensions==4.15.0 pytest==9.0.3 iniconfig==2.3.0 packaging==26.2 pluggy==1.6.0 Pygments==2.20.0
+python3 -m pip install --user ruff==0.17.4   # 선택: lint까지 돌리려면 ('.[test,lint]'의 lint extra, tools/lint.py)
 # Python 3.10이면 추가
 python3 -m pip install --user rpds-py==0.30.0 exceptiongroup==1.3.1 tomli==2.5.0
 # Python 3.11 이상이면 추가
@@ -164,7 +165,7 @@ S-1에서 `SITE_PROFILE.md`에 남길 것: 설치 경위(미러·A/B·Python 버
 | pytest·eval·빈 플러그인 실험 | 한다(S-2) | 안 한다 |
 | 다시 검증할 때 | Claude Code 큰 버전 변경, 평소 모델 변경, 플러그인 새 반입(8절 끝 규칙) | — |
 
-오프라인 의존성 묶음(`tt-offline-deps-<날짜>.zip`, 사외에서 만든 wheel)은 **비상용**이다. 사내 미러로 설치되면 반입하지 않는다.
+오프라인 의존성 묶음(`tt-offline-deps-<날짜>.zip`, 사외에서 만든 wheel)은 **비상용**이다. 사내 미러로 설치되면 반입하지 않는다. 묶음의 ruff(`lint` extra)는 선택이다 — 린트(`tools/lint.py`)를 돌릴 때만 설치한다.
 
 ### 이슈 DB 경로를 바꿨을 때 (`config.py set issue_db.path`)
 

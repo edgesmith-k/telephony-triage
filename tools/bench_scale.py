@@ -171,7 +171,7 @@ def run_parse_one(spec: str, root: Path, work: Path) -> dict:
     res["coverage"], cov = _timed(lambda: backend.coverage(paths, TZ, YEAR))
     res["backend_parse"], events = _timed(lambda: backend.parse(paths, TZ, YEAR, None))
     res["postprocess"], out = _timed(lambda: parse_logcat.postprocess(
-        events, rules, masker=masker, last_ts=cov["last_ts"], timeout_ms=2000))
+        events, rules, masker=masker, last_ts=cov["last_ts"], timeout_ms=2000))  # noqa: F821  # del 앞에서 바로 부른다
     res["events"] = len(out)
     del events, out
 

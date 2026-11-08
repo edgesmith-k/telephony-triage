@@ -261,8 +261,9 @@ def test_r10_dependency_manifest_has_complete_pins(safety_root):
     manifest = REPO / "pyproject.toml"
     assert manifest.is_file(), "fresh environments need a dependency manifest"
     data = tomllib.loads(manifest.read_text(encoding="utf-8"))
-    requirements = [Requirement(value) for value in data["project"]["dependencies"]
-                    + data["project"]["optional-dependencies"]["test"]]
+    extras = data["project"]["optional-dependencies"]
+    lint = [Requirement(value) for value in extras["lint"]]     # 선택 extra: 고정은 보고, 설치는 요구하지 않는다
+    requirements = [Requirement(value) for value in data["project"]["dependencies"] + extras["test"]] + lint
     pins = {r.name.lower().replace("_", "-"): r for r in requirements}
     for name in ("pyyaml", "jsonschema", "pytest"):
         assert name in pins
@@ -270,7 +271,13 @@ def test_r10_dependency_manifest_has_complete_pins(safety_root):
         assert str(requirement.specifier).startswith("==") and "*" not in str(requirement.specifier)
         if requirement.marker and not requirement.marker.evaluate():
             continue
-        assert metadata.version(requirement.name) in requirement.specifier
+        try:
+            installed = metadata.version(requirement.name)
+        except metadata.PackageNotFoundError:
+            if requirement in lint:
+                continue
+            raise
+        assert installed in requirement.specifier
         for raw in metadata.requires(requirement.name) or []:
             child = Requirement(raw)
             if child.marker and not child.marker.evaluate({"extra": ""}):

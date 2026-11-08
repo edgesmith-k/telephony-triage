@@ -57,6 +57,7 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 ```
 - 테스트 전부 통과, `site-defaults.yaml` 없음, `.local-draft`·`.mcp.json`이 반입 묶음에 없음, 이슈 DB 뼈대 생성, `TODO(SITE:...)` 목록 정리를 확인한다.
 - 경계 검사: `python3 tools/check_boundary.py --mode external`(사외 CI에서도 돈다), `python3 tools/sync_schemas.py --check`.
+- 린트: `python3 tools/lint.py`(ruff 고정 버전, 규칙 묶음 `pyproject.toml`, 남긴 지적의 검토 표 `docs/development/LINT_REVIEW.md`).
 - 사내 문자열 검색: 실제 회사명·서버명·팀명이 없는지 (`grep -rniE '<회사명>|<사내 도메인>' .`).
 - 사내 **외부 작성 코드 반입 규정**(오픈소스 의존성 승인 포함)을 확인한 뒤 플러그인 레포 + 이슈 DB 뼈대를 반입한다.
 
@@ -111,6 +112,7 @@ mkdir -p ~/tt-draft && cd ~/tt-draft && unzip ~/telephony-triage-import-v1.zip
 sha256sum ~/telephony-triage-import-v1.zip   # 사외에서 적은 값과 같은지
 python3 -m venv .venv && . .venv/bin/activate   # python3 3.10+
 pip install '.[test]'   # 사내 미러(--no-build-isolation 금지, SITE_INSTALL §4). 고정 버전이 미러에 없으면 `test_r10_dependency_manifest_has_complete_pins` 1건 실패는 예상, `SITE_PROFILE.md`에 기록
+pip install '.[test,lint]'   # 선택: lint까지 돌리려면(ruff 고정 버전, tools/lint.py)
 python3 -m pytest -q -n 4 tests               # 사외와 같은 결과여야 한다 (4코어 약 10분 · 단일 약 30분, PC에 따라 더 걸린다)
 ```
 사외에서 통과한 테스트가 실패하면 환경 차이(파이썬·git 버전, 로케일, 경로)다. 반입 전에 원인을 잡는다.
@@ -245,6 +247,7 @@ python3 -m pytest -q tests        # 골든 포함, 그 뒤 운영 이슈 DB에 d
 git clone <사외 레포 URL> && cd telephony-triage
 python3 -m venv .venv && . .venv/bin/activate   # python3 3.10+
 pip install '.[test]'
+pip install '.[test,lint]'   # 선택: lint까지 돌리려면
 touch .local-draft            # 안 만들면 Claude Code가 모드를 묻는다 → "사외 초안"
 python3 -m pytest -q -n 4 tests    # 기준선 (4코어 약 10분 · 단일 약 30분, Windows 사외 개발 PC 단일 약 42분)
 ```
@@ -256,6 +259,7 @@ python3 -m pytest -q -n 4 tests    # 기준선 (4코어 약 10분 · 단일 약 
 git clone <사내 GHE>/<org>/telephony-triage-plugin.git && cd telephony-triage-plugin
 python3 -m venv .venv && . .venv/bin/activate   # python3 3.10+
 pip install '.[test]'
+pip install '.[test,lint]'   # 선택: lint까지 돌리려면
 python3 -m pytest -q tests    # 골든 포함, 이전 PC와 같은 결과여야 한다
 claude mcp list               # Jira MCP 사용자 범위 등록 확인
 ```

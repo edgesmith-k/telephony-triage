@@ -39,6 +39,7 @@ git config --global user.email >/dev/null || git config --global user.email "dev
 git init -q -b main && git add -A && git commit -qm "반입 (리허설)" || fail "git init/commit"
 
 step "2. 의존성 (4절, pyproject 고정값)"
+# dependencies·test만 설치한다. lint extra(ruff)는 선택이라 리허설에서 깔지 않는다.
 python3 - "$REPO/pyproject.toml" > "$WORK/requirements.txt" <<'EOF'
 import re, sys
 text = open(sys.argv[1], encoding="utf-8").read()
