@@ -31,7 +31,14 @@
   ],
   "in_range": "partial",
   "clock_anomalies": 0,
-  "events": 8
+  "events": 8,
+  "masked": {
+   "dir": "logs-masked",
+   "files": [
+    "source.log"
+   ],
+   "skipped": []
+  }
  },
  "no_candidate": {
   "search_hits": [

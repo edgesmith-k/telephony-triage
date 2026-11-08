@@ -31,6 +31,13 @@
   "in_range": "partial",
   "clock_anomalies": 0,
   "events": 23,
+  "masked": {
+   "dir": "logs-masked",
+   "files": [
+    "source.log"
+   ],
+   "skipped": []
+  },
   "uncollected_tags": [
    {
     "tag": "Telephony",
