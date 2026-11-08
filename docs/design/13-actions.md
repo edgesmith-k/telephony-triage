@@ -35,7 +35,7 @@ on:
   pull_request:
     branches: [main]
 jobs:
-  check:
+  db-check:          # 필수 검사 이름은 job 이름이다(브랜치 보호·site_checks s4a.protection_guard가 db-check를 찾는다)
     runs-on: [self-hosted, <사내 runner 라벨>]
     steps:
       - uses: actions/checkout@<사내 허용 버전>
