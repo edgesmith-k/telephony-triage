@@ -937,6 +937,7 @@ def run_mask_copy(args) -> dict:
     """로그마다 마스킹 사본(줄 수·줄 번호 그대로)을 `--out/<이름>`에 쓴다 — analyze가 원문을 받자마자 만들어 모델의 grep·sed·Read 대상으로
     안내한다(guard 규칙 10 문구·rules.md). 한 masker로 모든 파일을 가려 토큰 번호가 파일 사이에 일관되고, 갈린 덤프 조각(08-safety §8)은
     파일 전체 줄로 묶어 강제 구간을 준다(`cut`과 같다). `--max-bytes`보다 큰 파일은 건너뛰고(경고 `mask-copy-skipped`) index.json에 남긴다.
+    사본의 mtime은 원본과 같다(analyze가 사본을 파싱하므로 로그 파일 시각 기반 연도 추정이 바뀌지 않는다, 코덱스 리뷰 R1).
     출력: {out, files: [{name, path|null, source, bytes, lines|null, skipped, reason?}], replacements, warnings}."""
     paths = [Path(p) for p in args.logs]
     for p in paths:
@@ -963,6 +964,8 @@ def run_mask_copy(args) -> dict:
         masked = [masker.mask(ln, forced.get(i)) for i, ln in enumerate(lines)]
         name = _unique_name(p.name, used)
         (out / name).write_text("\n".join(masked), encoding="utf-8", newline="")
+        st = p.stat()
+        os.utime(out / name, (st.st_atime, st.st_mtime))     # 연도 추정(file-mtime)이 사본에서도 같게 — analyze는 사본을 파싱한다
         files.append({"name": name, "path": str(out / name), "source": str(p), "bytes": size,
                       "lines": len(lines) - (1 if lines and lines[-1] == "" else 0), "skipped": False})
     warnings = []

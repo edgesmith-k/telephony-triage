@@ -588,21 +588,33 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             self.out["build"] = {k: _clip(v, 120) for k, v in build.items() if isinstance(v, str)}
         if not out:
             raise Fail(USAGE, "bugreport에서 logcat 섹션을 찾지 못했다.")
-        self.mask_copy(out)
-        return out
+        return self.mask_copy(out)
 
-    def mask_copy(self, logs: list[Path]) -> None:
+    def mask_copy(self, logs: list[Path]) -> list[Path]:
         """원문을 받자마자 `<JOB>/logs-masked/`에 마스킹 사본(줄 번호 그대로)을 만든다(종합 리뷰 G① 축소판): 모델이 grep·sed·Read할 대상은
-        이쪽이다(guard 규칙 10 문구·rules.md). 상한보다 큰 파일은 스크립트가 건너뛰고 경고한다(`mask-copy-skipped` → warnings)."""
+        이쪽이다(guard 규칙 10 문구·rules.md). 상한보다 큰 파일은 스크립트가 건너뛰고 경고한다(`mask-copy-skipped` → warnings).
+
+        돌려주는 것은 **파싱 대상**: 사본이 있으면 사본, 건너뛴 파일만 원문(같은 순서 — `line_ref.file_index` 불변). 파서가 사본을
+        읽어야 events·timeline·근거 원문의 토큰 번호가 모델이 보는 사본과 같다(코덱스 리뷰 R1: 시간 창 안 이벤트만 가리면 창 밖에서
+        먼저 나온 값의 번호가 밀려 같은 값이 `<IMSI#1>`/`<IMSI#2>`로 갈렸다). `--mask`는 그대로 둔다(사본의 토큰은 보호되고 남은 것만
+        가린다). 건너뛴 파일이 섞이면 그 파일의 값은 사본과 번호가 다를 수 있어 경고한다."""
         dest = self.job / MASKED_DIR
         _, data, _ = self.run.call("3-mask", "parse_logcat.py",
                                    ["mask-copy", *logs, "--out", dest, "--rules", self.snap / "parser-rules"])
         files = (data or {}).get("files") or []
+        targets, copies = list(logs), {}
         for f in files:
             if f.get("skipped"):
                 self.warn(f"mask-copy-skipped: {f.get('name')} {f.get('reason', '')} — 원문은 grep -n·sed -n 구간으로만")
+            elif f.get("path") and f.get("source"):
+                copies[str(f["source"])] = Path(f["path"])
+        if copies:
+            targets = [copies.get(str(p), p) for p in logs]
+            if any(f.get("skipped") for f in files):
+                self.warn("mask-copy-mixed: 사본 없는 파일이 섞여 그 파일 값의 토큰 번호는 사본과 다를 수 있다")
         self.masked = {"dir": MASKED_DIR, "files": [f["name"] for f in files if not f.get("skipped")],   # JOB 상대(출력 결정성)
                        "skipped": [f["name"] for f in files if f.get("skipped")]}
+        return targets
 
     def auto_select(self) -> bool:
         """`code.auto_select`: 사용자 config > site-defaults > 기본 true (02-config.md). 유효 값은 불리언뿐이고(`type(v) is bool`),

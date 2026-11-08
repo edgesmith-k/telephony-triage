@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import sys
@@ -822,6 +823,34 @@ def test_analyze_makes_masked_log_copy_with_same_line_numbers():
     gen_log = next((out.parent.parent).glob("tt-e004-*/*.log"), None)
     if gen_log is not None:
         assert len(copy.read_text(encoding="utf-8").split("\n")) == len(gen_log.read_text(encoding="utf-8").split("\n"))
+
+
+def test_analyze_parses_masked_copy_so_tokens_match(tmp_path):
+    """코덱스 리뷰 R1: 시간 창 밖에서 먼저 나온 값(12:00 IMSI)이 사본에서는 <IMSI#1>, 창 안 둘째 값은 <IMSI#2>인데 parse --mask가
+    원문을 창 안만 가리면 둘째 값이 <IMSI#1>이 됐다. analyze는 사본을 파싱하므로 events.json·사본의 토큰이 같아야 한다."""
+    imsi_a, imsi_b = "45008" + "1234567890", "45008" + "1234567891"
+    log = tmp_path / "radio.log"
+    log.write_text("09-26 12:00:00.000  1500  1510 I RILJ    : [PHONE0] subscriber imsi=" + imsi_a + "\n"
+                   "09-26 13:00:00.000  1500  1510 I RILJ    : [PHONE0] subscriber imsi=" + imsi_b + "\n"
+                   "09-26 13:00:01.000  1500  1510 E RILJ    : [PHONE0] < SETUP_DATA_CALL error 2 failed\n", encoding="utf-8")
+    old = log.stat().st_mtime - 86400 * 400
+    os.utime(log, (old, old))
+    meta = tmp_path / "m.json"
+    meta.write_text(json.dumps({"key": "MOCK-9011", "occurred_at": "2026-09-26T13:00:00+09:00", "summary": "data"}), encoding="utf-8")
+    out = tmp_path / "job"
+    analysis = run_json("triage.py", ["run", "MOCK-9011", "--offline-db", SAMPLE, "--out", out, "--logs", log, "--issue-meta", meta,
+                                      "--tz", "Asia/Seoul", "--year", "2026"])
+    copy = out / "logs-masked" / "radio.log"
+    copy_lines = copy.read_text(encoding="utf-8").split("\n")
+    assert imsi_a not in copy_lines[0] and "<IMSI#1>" in copy_lines[0] and "<IMSI#2>" in copy_lines[1]
+    assert copy.stat().st_mtime == old                                           # 연도 추정(file-mtime)이 같다
+    events = json.loads((out / "events.json").read_text(encoding="utf-8"))
+    assert [Path(f).resolve() for f in events["input"]["files"]] == [copy.resolve()]   # 파서 입력이 사본
+    msgs = [e["msg"] for e in events["events"] if e.get("event") is None]
+    assert any("imsi=<IMSI#2>" in m for m in msgs) and not any("imsi=<IMSI#1>" in m for m in msgs)   # 창 안 둘째 값 = 사본과 같은 번호
+    assert imsi_a not in json.dumps(events) and imsi_b not in json.dumps(events) and events["masked"] is True
+    assert analysis["logs"]["masked"]["files"] == ["radio.log"] == analysis["logs"]["files"]
+    assert "mask-copy-mixed" not in json.dumps(analysis.get("warnings") or [])
 
 
 def test_uncollected_tag_of_collected_pid_is_reported_and_must_shown():

@@ -1095,6 +1095,7 @@ def test_mask_copy_masks_keeps_line_numbers_and_skips_big():
     mb = (out / "a-2.log").read_text(encoding="utf-8")
     assert ma[0].split("imsi=")[1].split()[0] in mb and IMSI_B + "" not in mb      # 한 masker: 같은 값 = 같은 토큰
     assert not (out / "big.log").exists()
+    assert (out / "a.log").stat().st_mtime == a.stat().st_mtime         # 코덱스 리뷰 R1: 사본을 파싱하므로 mtime 연도 추정이 같아야 한다
     index = json.loads((out / "index.json").read_text(encoding="utf-8"))
     assert index["version"] == 1 and [f["name"] for f in index["files"]] == ["a.log", "a-2.log", "big.log"]
     assert data["replacements"].get("IMSI", 0) >= 1
