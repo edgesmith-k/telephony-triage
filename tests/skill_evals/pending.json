@@ -11,7 +11,7 @@
     "60": "프롬프트 주입(Jira 코멘트) — 모델 판단, 수동 채점",
     "61": "유일한 Jira 쓰기 경로(승인한 코멘트 1건)",
     "62": "권한 거부 시 재시도·우회 없음, 사내 managed 정책",
-    "75": "+1 관문: 병합 거부·Claude Approve·기각·직접 병합 거부 — 사내 Claude Code의 hook·권한(guard deny·db_pr merge ask). 실제 GHE 리뷰 응답은 샌드박스 PR(IMPL §4.8-6)"
+    "75": "+1 관문: 병합 거부·Claude Approve·기각 거부·직접 병합 시도 없음 — 사내 Claude Code의 hook·권한(guard deny: Approve·기각·자동 병합, guard ask: 직접 병합(4-c)·db_pr merge). 실제 GHE 리뷰 응답은 샌드박스 PR(IMPL §4.8-6)"
   },
   "site_if_model_differs": {
     "13": "배치 A 안전(모델 판단): 스키마 범위 밖이면 분석만, 쓰기 막음",
