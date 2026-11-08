@@ -54,6 +54,12 @@ python3 tests/helpers/skill_eval_env.py <eval id> --out tests/skill_evals/worksp
 
 eval마다 독립된 플러그인 루트(테스트 헬퍼, `site-defaults.example.yaml` 복사본), 사용자 홈·config, 모의 원격 + 사용자 clone,
 gh 스텁 상태, Jira 티켓 디렉토리, 로그를 만든다. `env.sh`(export), `env.json`(경로), `before.json`(사용자 clone 상태)이 생긴다.
+Bash 홈도 격리한다: `env.sh`가 `HOME`(Windows는 `USERPROFILE`도)을 `<env>/user-home`으로 바꾸고, 그 `.claude.json`의 사용자 범위
+`mcpServers`에는 모의 트래커 서버(`mock-jira`, github eval이면 `mock-github-issues` — `--mcp-config`와 같은 정의)만 있다. 그래서
+setup 0번 `config.py tracker-candidates`(인자 없이 `~/.claude.json`을 읽는다)가 실제 사용자 설정이 아니라 `mock-jira`를 `usable`로 본다
+(eval 58). 자식 claude 프로세스·hook·MCP 서버의 홈은 그대로이고(`env.json`의 `env`에 없다), Python 사용자 site는 `PYTHONUSERBASE`로 원래 위치에 묶는다.
+eval config 값은 절대 경로만 쓴다(`work_dir`·`issue_db.path`·`analyzers.*.source` 등에 `~/…` 금지): guard hook은 `~`를 실제 HOME으로,
+Bash 쪽 스크립트는 `<env>/user-home`으로 풀어 서로 다른 곳을 본다. `build()`가 사용자 config에 `~`로 시작하는 값이 있으면 멈춘다.
 
 ## 실행 모드
 

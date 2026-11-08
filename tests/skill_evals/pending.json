@@ -6,7 +6,7 @@
     "9": "확인 화면 수정 요청 → 재적용 → 재승인",
     "39": "사내 MCP 도구 이름에서 tracker.tools 매핑(guard·jira_bridge), 토큰 기준선",
     "45": "토큰 기준선만",
-    "58": "setup 재점검: 사내 gh·Python·HOME, 토큰 기준선",
+    "58": "setup 재점검: 사내 gh·Python, 토큰 기준선 (Bash HOME은 eval 격리 홈 — 사용자 범위 MCP는 mock-jira뿐)",
     "59": "프롬프트 주입(Jira 설명) — 모델 판단, 수동 채점",
     "60": "프롬프트 주입(Jira 코멘트) — 모델 판단, 수동 채점",
     "61": "유일한 Jira 쓰기 경로(승인한 코멘트 1건)",

@@ -3876,3 +3876,33 @@ def test_trigger_real_counts_claude_failure_as_error_not_negative(tmp_path, monk
     assert [(row["errors"], row["max_turns"]) for row in result["rows"]] == [(1, 0), (0, 0), (0, 1)]
     printed = capsys.readouterr().out
     assert "- 0/1  0  1  느린 질문" in printed and "- 0/1  1 (max_turns 1)  0  긴 질문" in printed
+
+
+def test_eval_env_bash_home_lists_mock_jira_as_user_scope_server(tmp_path):
+    """eval 58: setup 0번은 아무것도 묻기 전에 `config.py tracker-candidates`(인자 없이 `~/.claude.json` 사용자 범위)를 한 번
+    돌리고 `usable`이 비면 멈춘다. 하네스는 Bash 홈(env.sh의 HOME, Windows는 USERPROFILE도)을 격리 홈으로 바꾸고 그
+    `.claude.json`에 모의 트래커 서버만 등록한다 — 실제 사용자 설정을 읽지 않고 mock-jira가 usable로 보인다.
+    자식 claude 프로세스 환경(env.json `env`)의 홈은 바꾸지 않는다."""
+    import skill_eval_env
+
+    entry = next(e for e in _entries() if e["id"] == 58)
+    info = skill_eval_env.build(entry, tmp_path / "env")
+    home = Path(info["user_home"])
+    servers = json.loads((home / ".claude.json").read_text(encoding="utf-8"))["mcpServers"]
+    assert servers == skill_eval_env.tracker_servers(info["env"]) and list(servers) == ["mock-jira"]
+    plugin = evaluation.prepare_plugin_mode(entry, info, tmp_path / "env")      # --mcp-config와 같은 정의
+    assert json.loads(Path(plugin["mcp_config"]).read_text(encoding="utf-8"))["mcpServers"]["mock-jira"] == servers["mock-jira"]
+    exports = (tmp_path / "env" / "env.sh").read_text(encoding="utf-8").splitlines()
+    assert f"export HOME='{evaluation._bash_path(str(home))}'" in exports
+    assert (f"export USERPROFILE='{home}'" in exports) is (os.name == "nt")
+    assert any(x.startswith("export PYTHONUSERBASE=") for x in exports)
+    assert not {"HOME", "USERPROFILE"} & set(info["env"])
+    # setup 0번 그대로(인자 없음): env.sh가 Bash에 주는 홈으로 실제 stdio 모의 서버를 띄워 본다
+    env = {**os.environ, **info["env"], "HOME": str(home), "USERPROFILE": str(home)}
+    proc = subprocess.run([sys.executable, str(Path(info["plugin_root"]) / "scripts" / "config.py"), "tracker-candidates"],
+                          capture_output=True, text=True, encoding="utf-8", env=env, cwd=tmp_path / "env", timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    found = json.loads(proc.stdout)
+    assert found["usable"] == ["mock-jira"], found
+    (server,) = found["servers"]
+    assert server["probe"] == "stdio" and server["suggested"]["get_issue"] == "mcp__mock-jira__jira_fetch_ticket"
