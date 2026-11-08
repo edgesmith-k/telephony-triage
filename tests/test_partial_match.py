@@ -93,6 +93,28 @@ def test_min_count_short_is_missing_with_count():
     assert (p["kind"], p["short"]) == ("missing", [1])                 # 범위엔 3건이지만 W 구간엔 1건: window가 아니다
 
 
+def test_window_width_omitted_when_min_count():
+    """한 건씩 고른 폭은 min_count ≥ 2와 맞지 않아 window kind에 `width_sec`를 내지 않는다(min_count 1은 그대로)."""
+    events = [_line(10, "Tag", "step_a", 1), _line(11, "Tag", "step_a", 2), _line(100, "Tag", "step_b", 3)]
+    p = _partial(events, {"must_match": [{**A, "min_count": 2}, B]})
+    assert p["kind"] == "window" and "width_sec" not in p and [c.id for c, _ in p["hits"]] == ["a", "b"]
+    p = _partial(events, {"must_match": [A, B]})
+    assert p["kind"] == "window" and p["width_sec"] == 89.0
+
+
+def test_unique_evidence_keeps_count_copy():
+    """같은 이벤트를 개수 없는 조건이 먼저 잡아도 dedupe 뒤 ` ×N`(count)이 남는다(자리는 앞의 것)."""
+    from triagelib.report import _unique_evidence
+
+    ref = {"file_index": 0, "line_no": 6}
+    first = {"ts": "t1", "tag": "T", "msg": "m", "line_ref": ref, "condition": "rejected"}
+    other = {"ts": "t0", "tag": "T", "msg": "o", "line_ref": {"file_index": 0, "line_no": 2}}
+    counted = {**first, "condition": "rejected-3", "count": 3}
+    assert _unique_evidence([first, other, counted]) == [counted, other]
+    assert _unique_evidence([counted, other, first]) == [counted, other]
+    assert _unique_evidence([first, other, dict(first)]) == [first, other]       # 개수 없으면 앞의 것 그대로
+
+
 def test_order_gap_violation_has_gap_sec():
     seq = {"must_match": [A, B], "sequence": ["a", "b"], "sequence_within_sec": 2}
     p = _partial([_line(10, "Tag", "step_a", 1), _line(15, "Tag", "step_b", 2)], seq)

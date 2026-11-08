@@ -147,7 +147,7 @@ analyze Step 7에서 새 원인/유형을 계획할 때 아래를 점검하고, 
 | `same_phone: true` (선택, 기본 `true`) | 시그니처의 모든 조건이 **같은 `phone_id`** 의 이벤트로 충족되어야 한다. `phone_id: null` 이벤트는 와일드카드다(어느 슬롯과도 맞음). DDS 전환처럼 슬롯을 가로지르는 원인은 `false`로 둔다. 회귀·검증 모드도 같다 (5.8 (2) 슬롯). |
 | `sequence: [id1, id2, ...]` (선택) | 순서 조건. `must_match`·`must_event` 항목에 선택 `id`를 붙이고, 여기 나열한 순서대로 각 조건의 **첫 충족 시각이 단조 증가**해야 충족이다. "설정 OFF → 이후 SETUP_DATA_CALL 없음"과 "SETUP_DATA_CALL 실패 → 이후 설정 OFF"를 구분할 때 쓴다. 없으면 순서를 보지 않는다. `must_not_match`는 넣을 수 없다. `db_lint`가 id 존재·중복을 검사한다. 시각은 재정렬된 값이므로 시계 역행 구간에서는 거짓 충족이 가능하다. 매처는 근거가 `coverage.clock_anomalies` 의심 구간에 걸치거나 같은 파일의 줄 순서가 역전되면 후보에 `clock_flags`를 달아 표시만 한다(판정 불변). |
 | `min_count: N` (선택, 기본 1) | `must_match` 객체 항목(`{id, pattern, min_count}`)과 `must_event` 항목에 둔다. 윈도우 안에 그 조건에 맞는 레코드가 **N개 이상**이어야 한다(같은 시각 레코드도 하나씩 센다). `must_not_match`에는 두지 않는다(부정은 하나라도). 근거는 지금처럼 조건마다 첫 충족 레코드 하나에 `count`(그 윈도우·슬롯 안 개수, N ≥ 2일 때만)를 더하고, 리포트 근거 줄에 ` ×N`이 붙는다. `matched_conditions`는 조건 수 그대로다. 부분 일치(5.12)에서 모자라면 `missing`이고 `desc` 앞에 `min_count N 중 k`. |
-| `sequence_within_sec: T` (선택) | `sequence`가 있을 때만, `T ≤ window_sec`(`db_lint`). `sequence` 이웃 조건의 첫 충족 레코드 시각 차가 모두 **T초 이하**여야 한다(`= T`는 충족). 없으면 윈도우 안이면 된다. 부분 일치에서 순서는 맞고 간격만 넘으면 `order`와 같은 부류에 `gap_sec`(보이는 줄은 "간격 넘음", "순서"라고 쓰지 않는다). |
+| `sequence_within_sec: T` (선택) | `sequence`가 있을 때만, `T ≤ window_sec`(`db_lint`). `sequence` 이웃 조건의 첫 충족 레코드 시각 차가 모두 **T초 이하**여야 한다(`= T`는 충족). `min_count ≥ 2`인 조건도 간격은 그 윈도우 안 **첫** 레코드로 잰다. 없으면 윈도우 안이면 된다. 부분 일치에서 순서는 맞고 간격만 넘으면 `order`와 같은 부류에 `gap_sec`(보이는 줄은 "간격 넘음", "순서"라고 쓰지 않는다). |
 | 한 원인/유형에 시그니처 여러 개 | **OR**. 하나라도 충족하면 그 원인/유형이 충족이다. |
 
 - 시그니처 종류: `symptom_signatures`(유형), `signatures`(원인 판별), `recovery_signatures`(해결 후 정상 동작), `scenario_signatures`(재현 시나리오 수행 흔적). 뒤의 두 가지는 점수에 쓰지 않고 검증에만 쓴다 (`05-verification.md`).
@@ -155,6 +155,7 @@ analyze Step 7에서 새 원인/유형을 계획할 때 아래를 점검하고, 
   - **분석 모드**(analyze Step 4): 2단계. 먼저 모든 active 유형의 S를 구하고, **S=1인 유형의 원인만** C를 평가한다. 리포트 후보는 증상이 확인된 유형 안에서만 나온다. 후보는 증상 시그니처 충족과 원인 시그니처 충족이 **결합 가능**할 때만 C=1이다: 둘 다 `same_phone`이면 근거의 `phone_id` 집합이 겹치거나 한쪽이 비어 있어야 하고(`null`은 와일드카드), 두 근거 전체의 시각 폭이 `max(두 window_sec)` 이내여야 한다(`match_signatures._compatible`). 결합 쌍이 없으면 "유형 일치, 원인 미확인"(S=1, C=0). **회귀·검증 모드는 결합을 보지 않는다**(C 독립 평가).
   - **회귀·검증 모드**(`--regress`, `db_regress`·`db_verify`): **모든 active 원인의 C를 S와 무관하게 독립 평가**한다. 그래서 다른 유형의 로그에서 원인 시그니처가 잘못 충족되는 것(S=0, C=1)을 R2(다른 원인 C=0), R3, R4가 잡는다 (아래 (4), `05-verification.md §5.12 (1)`).
 - 시그니처 `id`는 소속 유형/원인 안에서 유일하다. **전역 키는 `<유형 ID 또는 원인 ID>/<sig id>`** 이고, 피드백과 통계는 전역 키를 쓴다.
+- 시그니처·`must_match` 객체·`must_event` 항목에 위 표에 없는 키가 있으면 컴파일 오류다(`compile_signature`, 아는 키 = `type.schema.json` properties — 시험이 고정, `db_lint`는 `signature` 오류로 보인다).
 - **매처와 extractor는 항상 마스킹된 텍스트에 대해 돈다.** 분석에서도 `parse_logcat.py parse --mask`로 각 줄을 extractor 실행 전에 마스킹한다 (`07-workflow.md §Step 3`). fixture도 마스킹돼 있고 마스킹은 멱등이므로 분석과 회귀가 같은 텍스트를 본다. `match_signatures.py`는 `masked: true`가 아닌 입력을 거부한다 (종료 코드 2).
 - 그래서 시그니처와 extractor 패턴은 **마스킹된 로그 기준으로** 작성한다. 원본 식별자 패턴(15자리 숫자 IMSI, 전화번호 형식 등)은 `db_lint`가 금지한다. `<IMSI>`, `<CELL>` 같은 치환 토큰은 써도 된다.
 - `signatures_pending: true`인 원인(`03-issue-db.md §5.4 (1)`)은 판별 시그니처가 없으므로 원인 매칭 대상이 아니다 (유형은 증상 시그니처가 필수라 항상 매칭 대상이다). 매처는 후보 유형에 속한 pending 원인을 점수 없이 `pending_causes`로 함께 내고, 리포트는 "시그니처 없는 기존 원인: <ID> <title>(참고)"로 보여준다.
@@ -205,7 +206,7 @@ feedback_weight가 켜져 있고 해당 시그니처 표본 ≥ min_samples면: 
 ### 5.12 C′ 부분 일치·코드 대조 (분석 모드 표시 전용, S/C·점수 불변)
 
 #### (1) 정의 (`Evaluator.partial`, 판정 함수 `_evaluate`는 그대로)
-완전 일치도 오류(S/C=None)도 아닌 시그니처 중 하나: `missing`(같은 슬롯 W 구간 안 맞은 양성 조건 최대 m, 1 ≤ m < n, m/n ≥ 0.5) · `absent`(n=1, 범위 안 0건) · `blocked`(양성 n개 구간마다 `must_not_match` 줄) · `order`(양성 n개 구간에서 `sequence` 어긋남) · `window`(양성 n개가 범위엔 있으나 W 구간 하나에 안 듦, 가장 가까운 폭 표시).
+완전 일치도 오류(S/C=None)도 아닌 시그니처 중 하나: `missing`(같은 슬롯 W 구간 안 맞은 양성 조건 최대 m, 1 ≤ m < n, m/n ≥ 0.5) · `absent`(n=1, 범위 안 0건) · `blocked`(양성 n개 구간마다 `must_not_match` 줄) · `order`(양성 n개 구간에서 `sequence` 어긋남) · `window`(양성 n개가 범위엔 있으나 W 구간 하나에 안 듦, 가장 가까운 폭 표시 — `min_count ≥ 2` 조건이 있으면 폭 없음).
 평가 대상: (가) S=1 유형 없음 → active 유형의 증상 시그니처(`absent`는 feedback 1위 제시 수 상위 5 유형만), (나) 1위 S=1·C=0 → 그 유형의 active·비 pending 원인 시그니처. 판정 불가 유형·원인은 뺀다. 1위 C=1이면 구하지 않는다. **회귀·검증 모드(`--regress`)는 구하지 않는다**(출력 그대로).
 
 #### (2) 순위·상한

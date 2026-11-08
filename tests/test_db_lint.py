@@ -311,24 +311,20 @@ def test_skeleton_is_clean():
 
 REJECTED = "{id: rejected, event: data_evaluation_rejected, fields: {reasons: '.*DATA_DISABLED.*'}}"
 SEQUENCE = "        sequence: [setting-off, rejected]\n"
+# D①(min_count·sequence_within_sec) 직전 커밋 8b39f7dc63cb71b95560f8e004a081ee50b4a486의 plugin/schemas/type.schema.json 그대로(11,294B).
+# git 이력에 기대지 않으려고(얕은 clone·반입본은 이력이 없다) 파일로 고정했다.
+PRE_D1_SCHEMA = REPO / "tests/fixtures/schema_pre_d1/type.schema.json"
 COUNT_GAP = [(REJECTED, REJECTED[:-1] + ", min_count: 2}"), (SEQUENCE, SEQUENCE + "        sequence_within_sec: 5\n")]
 
 
-def _sig_lint(*edits, old_schema=False) -> list[tuple[str, str]]:
+def _sig_lint(*edits, old_schema: bytes | None = None) -> list[tuple[str, str]]:
     """샘플 DB 사본의 DATA-001 type.md에 `edits`를 적용해 린트하고 그 파일의 `(코드, 메시지)` 오류를 돌려준다.
-    `old_schema`: DB `schema/type.schema.json`을 D① 전 v1(새 필드 없음, `additionalProperties: false`)로 바꾼다."""
+    `old_schema`: DB `schema/type.schema.json`을 이 내용(D① 전 v1)으로 바꾼다."""
     db = runner_copy(SAMPLE)
     for old, new in edits:
         edit(db / D / "type.md", old, new)
-    if old_schema:
-        path = db / "schema/type.schema.json"
-        schema = json.loads(path.read_text(encoding="utf-8"))
-        defs = schema["$defs"]
-        del defs["mustEventItem"]["properties"]["min_count"]
-        del defs["signature"]["properties"]["sequence_within_sec"]
-        del defs["signature"]["properties"]["must_match"]["items"]["oneOf"][1]["properties"]["min_count"]
-        assert "min_count" not in json.dumps(schema) and "sequence_within_sec" not in json.dumps(schema)
-        path.write_text(json.dumps(schema, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+    if old_schema is not None:
+        (db / "schema/type.schema.json").write_bytes(old_schema)
     result = _lint(db, "--all", expect=(0, 1))
     return [(f["code"], f["message"]) for f in result["errors"] if f["file"] == f"{D}/type.md"]
 
@@ -355,9 +351,12 @@ def test_min_count_and_sequence_within_sec_format_errors():
 
 
 def test_old_schema_db_rejects_count_and_gap_fields():
-    """이슈 DB는 `schema/`를 들고 있어 db_lint가 DB 쪽 스키마로 검사한다: D① 전 v1 스키마 DB는 새 필드를 거부한다(호환 변경 §6.4)."""
-    assert _sig_lint(old_schema=True) == []
-    found = _sig_lint(*COUNT_GAP, old_schema=True)
+    """이슈 DB는 `schema/`를 들고 있어 db_lint가 DB 쪽 스키마로 검사한다: D① 전 v1 스키마 DB는 새 필드를 거부한다(호환 변경 §6.4).
+    옛 스키마는 D① 직전 커밋의 실제 파일을 fixture로 고정한 것이다(`PRE_D1_SCHEMA`)."""
+    old = PRE_D1_SCHEMA.read_bytes()
+    assert b"min_count" not in old and b"sequence_within_sec" not in old
+    assert _sig_lint(old_schema=old) == []
+    found = _sig_lint(*COUNT_GAP, old_schema=old)
     messages = " ".join(m for c, m in found if c == "schema")
     assert "'min_count' was unexpected" in messages and "'sequence_within_sec' was unexpected" in messages, found
 

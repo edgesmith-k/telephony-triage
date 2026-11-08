@@ -40,8 +40,10 @@ def _slot_number(value) -> int | None:
 def _unique_evidence(evidence: list) -> list:
     """증상·원인 시그니처가 같은 이벤트를 근거로 잡으면 리포트에 같은 줄이 두 번 나온다. 이벤트마다 한 번만 둔다
     (`line_ref`의 파일·줄 번호 — 내장·파생 이벤트는 원본 줄과 줄 위치를 공유한다. 없으면 `event_index`, 그것도 없으면
-    시각·태그·메시지). 표시용이고 match.json·점수는 그대로다."""
-    seen, out = set(), []
+    시각·태그·메시지). 표시용이고 match.json·점수는 그대로다. 같은 이벤트면 개수(`count`·`_count`, min_count ≥ 2)가 있는
+    쪽을 그 자리에 남긴다 — 앞선 조건이 개수 없이 같은 줄을 잡아도 리포트 ` ×N`이 사라지지 않게."""
+    seen: dict = {}
+    out = []
     for e in evidence:
         ref, idx = e.get("line_ref"), e.get("event_index")
         ref_pos = events.ref_key(ref)
@@ -52,8 +54,10 @@ def _unique_evidence(evidence: list) -> list:
         else:
             key = ("m", e.get("ts"), e.get("tag"), e.get("msg"))
         if key not in seen:
-            seen.add(key)
+            seen[key] = len(out)
             out.append(e)
+        elif (e.get("count") or e.get("_count")) and not (out[seen[key]].get("count") or out[seen[key]].get("_count")):
+            out[seen[key]] = e
     return out
 
 
@@ -519,6 +523,8 @@ class ReportMixin:
                 parts.append("순서 어긋남 " + " → ".join(x["order"]))
             if x.get("width_sec") is not None:
                 parts.append(f"한 구간에 안 듦(가장 가까운 폭 {x['width_sec']:g}초)")
+            elif p["kind"] == "window":     # min_count ≥ 2 조건이 있으면 한 건씩 고른 폭을 내지 않는다
+                parts.append("한 구간에 안 듦")
             body = f"{head} — {' / '.join(parts)}" if parts else head
             block = [_clip_bytes(body, 220)]
             same = memo = False

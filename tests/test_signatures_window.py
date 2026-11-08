@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import random
 import sys
 from datetime import datetime, timedelta, timezone
@@ -164,7 +165,8 @@ def test_window_bounds_are_inclusive_on_both_ends():
 
 
 def _oracle_search_window(self, sig, pos, neg, occurred, all_matches=False):
-    """`min_count`·`sequence_within_sec`까지 보는 단순 구현(구간마다 hit 전체를 훑는다). bisect 구현의 비교 기준이다."""
+    """`min_count`·`sequence_within_sec`까지 보는 단순 구현(구간마다 hit 전체를 훑는다). bisect 구현의 비교 기준이다.
+    구간 튜플 끝에 조건별 구간 안 개수를 직접 세어 붙인다 — `_evaluate`는 다섯째 칸을 근거 `count`로 쓰므로 `_counts`와 대조된다."""
     width = timedelta(seconds=sig.window_sec)
     lo, hi = self.lo, self.hi
     a_max = max(lo, hi - width)
@@ -178,12 +180,13 @@ def _oracle_search_window(self, sig, pos, neg, occurred, all_matches=False):
         b = a + width
         if any(a <= self.dts[i] <= b for i in neg):
             continue
-        firsts = []
+        firsts, counts = [], []
         for hits, cond in zip(pos, sig.positives):
             inside = sorted((self.dts[i], i) for i in hits if a <= self.dts[i] <= b)
             if len(inside) < cond.min_count:
                 break
             firsts.append(inside[0][1])
+            counts.append(len(inside))
         else:
             if sig.sequence:
                 seq = [firsts[order[s]] for s in sig.sequence]
@@ -198,9 +201,9 @@ def _oracle_search_window(self, sig, pos, neg, occurred, all_matches=False):
             else:
                 rank = (a - lo).total_seconds()
             if best is None or rank < best[0]:
-                best = (rank, firsts, a, b)
+                best = (rank, firsts, a, b, counts)
             if all_matches:
-                matches.append((rank, firsts, a, b))
+                matches.append((rank, firsts, a, b, counts))
     return matches if all_matches else best
 
 
@@ -313,3 +316,40 @@ def test_compile_rejects_bad_count_and_gap():
             continue
         raise AssertionError(raw)
     assert _sig(**SEQ, sequence_within_sec=10).sequence_within_sec == 10.0      # = window_sec는 허용
+
+
+def test_known_keys_equal_type_schema_properties():
+    """compile_signature가 아는 키 = type.schema.json properties. db_lint는 DB 쪽 스키마(additionalProperties: false)와
+    compile_signature를 둘 다 쓰므로, 둘이 어긋나면 한쪽만 통과하는 시그니처가 생긴다."""
+    defs = json.loads((plugin_root() / "schemas" / "type.schema.json").read_text(encoding="utf-8"))["$defs"]
+    obj = next(b for b in defs["signature"]["properties"]["must_match"]["items"]["oneOf"] if b.get("type") == "object")
+    assert signatures.SIGNATURE_KEYS == set(defs["signature"]["properties"])
+    assert signatures.MATCH_ITEM_KEYS == set(obj["properties"])
+    assert signatures.EVENT_ITEM_KEYS == set(defs["mustEventItem"]["properties"])
+
+
+def test_sample_db_signatures_all_compile():
+    """샘플 이슈 DB의 모든 시그니처(유형·원인, 네 종류 전부 — 비활성·pending 포함)가 모르는 키 검사를 거쳐 컴파일된다."""
+    from common import issuedb
+
+    db = issuedb.load(REPO / "tests" / "fixtures" / "issue-db-sample")
+    n = 0
+    for itype in db.types:
+        n += len(signatures.compile_list(itype.raw.get("symptom_signatures"), itype.id))
+        for cause in itype.causes:
+            for kind in ("signatures", "recovery_signatures", "scenario_signatures"):
+                n += len(signatures.compile_list(cause.raw.get(kind), cause.id))
+    assert n >= 10, n
+
+
+def test_compile_rejects_unknown_keys():
+    """모르는 키는 오류 — 새 필드를 모르는 매처가 조용히 기본값으로 읽는 길을 없앤다(예: min_count를 1로)."""
+    for raw, needle in (({**SEQ, "within_sec": 1}, "시그니처에 모르는 키 ['within_sec']"),
+                        ({"must_match": [{"id": "a", "pattern": "x", "count": 2}]}, "must_match 항목에 모르는 키 ['count']"),
+                        ({"must_event": [{"event": "e", "min": 2}]}, "must_event 항목에 모르는 키 ['min']")):
+        try:
+            _sig(**raw)
+        except signatures.SignatureError as exc:
+            assert needle in str(exc) and "OWN/s" in str(exc), exc
+            continue
+        raise AssertionError(raw)

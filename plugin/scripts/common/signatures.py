@@ -21,6 +21,7 @@
 - `sequence_within_sec: T` (`sequence`가 있을 때만, ≤ `window_sec`) — sequence 이웃 조건의 첫 충족 레코드 시각 차가
   모두 T초 이하(`= T`는 충족).
 - 패턴이 시간 상한을 넘기면(`common/patterns.py`) 그 시그니처는 `error`이고 불충족이다.
+- 시그니처·`must_match` 객체·`must_event` 항목의 모르는 키는 컴파일 오류(`SIGNATURE_KEYS` 등 = 스키마 properties).
 """
 
 from __future__ import annotations
@@ -66,6 +67,20 @@ class Signature:
     sequence_within_sec: float | None = None
 
 
+# 아는 키 (= type.schema.json `$defs`의 properties, tests/test_signatures_window.py가 고정). 모르는 키는 컴파일 오류 —
+# 새 필드(예: min_count)를 모르는 매처가 조용히 기본값으로 읽지 않게 한다.
+SIGNATURE_KEYS = frozenset({"id", "must_match", "must_event", "must_not_match", "window_sec", "same_phone", "sequence",
+                            "sequence_within_sec"})
+MATCH_ITEM_KEYS = frozenset({"id", "pattern", "min_count"})
+EVENT_ITEM_KEYS = frozenset({"id", "event", "fields", "min_count"})
+
+
+def _unknown(item: dict, allowed: frozenset, key: str, where: str) -> None:
+    extra = set(item) - allowed
+    if extra:
+        raise SignatureError(f"{key}: {where} 모르는 키 {sorted(extra)}")
+
+
 def _number(value) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
@@ -88,11 +103,13 @@ def compile_signature(raw: dict, owner_id: str) -> Signature:
     if not isinstance(raw, dict) or not raw.get("id"):
         raise SignatureError(f"{owner_id}: 시그니처에 id가 없습니다.")
     key = f"{owner_id}/{raw['id']}"
+    _unknown(raw, SIGNATURE_KEYS, key, "시그니처에")
     positives: list[Condition] = []
     for item in raw.get("must_match") or []:
         if isinstance(item, str):
             cond = Condition(id=None, kind="match", pattern=item)
         elif isinstance(item, dict) and isinstance(item.get("pattern"), str):
+            _unknown(item, MATCH_ITEM_KEYS, key, "must_match 항목에")
             cond = Condition(id=item.get("id"), kind="match", pattern=item["pattern"], min_count=_min_count(item, key))
         else:
             raise SignatureError(f"{key}: must_match 항목 형식이 잘못됐습니다: {item!r}")
@@ -101,6 +118,7 @@ def compile_signature(raw: dict, owner_id: str) -> Signature:
     for item in raw.get("must_event") or []:
         if not isinstance(item, dict) or not item.get("event"):
             raise SignatureError(f"{key}: must_event 항목에 event가 없습니다: {item!r}")
+        _unknown(item, EVENT_ITEM_KEYS, key, "must_event 항목에")
         fields = {str(k): str(v) for k, v in (item.get("fields") or {}).items()}
         for value in fields.values():
             _check_regex(value, key)
@@ -456,8 +474,11 @@ class Evaluator:
         elif blocked is not None and full_free is None:
             out.update(kind="blocked", m=n, hits=blocked[0], missing=[], blocked_by=sig.negatives[blocked[1]])
         elif full_free is None and not best_short and all(len(h) >= nk for h, nk in zip(pos, need)):
-            span, picks = self._min_span(keyed)
-            out.update(kind="window", m=n, hits=picks, missing=[], width_sec=round(span, 3))
+            if any(nk > 1 for nk in need):     # 한 건씩 고른 폭은 min_count와 맞지 않는다 — 폭을 내지 않는다
+                out.update(kind="window", m=n, hits=[ks[0][1] for ks in keyed], missing=[])
+            else:
+                span, picks = self._min_span(keyed)
+                out.update(kind="window", m=n, hits=picks, missing=[], width_sec=round(span, 3))
         elif n == 1 and best_seen == 0:
             out.update(kind="absent", m=0, hits=[], missing=[sig.positives[0]])
         elif best_m < n and 1 <= best_seen and best_seen / n >= 0.5:
