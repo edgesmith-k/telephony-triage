@@ -463,10 +463,11 @@ def literal_anchor(pattern: str) -> str | None:
 
 
 def tag_position_word(pattern: str) -> str | None:
-    """패턴이 **태그 자리**로 시작하는 것으로 보일 때 그 낱말: 앞머리 리터럴 낱말이 대문자로 시작하고 바로 뒤가 `.*`·`\\s`·공백이다
-    (`RILJ.*>\\s*SETUP_DATA_CALL` → RILJ). `낱말:`(메시지 키 모양)·`|`·끝은 메시지 낱말일 수 있어 None."""
+    """패턴이 **태그 자리**로 시작하는 것으로 보일 때 그 낱말: 앞머리 리터럴 낱말이 대문자로 시작하고 `_`가 없으며(RIL 요청·unsol 이름
+    `RIL_REQUEST_DIAL`·`IMS_UNSOL_…`은 메시지 낱말) 바로 뒤가 regex 틈(`.*`·`\\s`)이다(`RILJ.*>\\s*SETUP_DATA_CALL` → RILJ).
+    `낱말:`(메시지 키)·`낱말 다음낱말`(메시지 문구)·`|`·끝은 None — 보수적으로, 놓치는 쪽을 택한다."""
     word = literal_anchor(pattern)
-    if not word or not re.match(r"^[A-Z][A-Za-z0-9_-]*$", word):
+    if not word or "_" in word or not re.match(r"^[A-Z][A-Za-z0-9-]*$", word):
         return None
     rest = pattern[len(word):]
-    return word if re.match(r"(?:\.\*|\\s|\s)", rest) else None
+    return word if re.match(r"(?:\.\*|\\s)", rest) else None

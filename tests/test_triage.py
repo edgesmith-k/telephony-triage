@@ -781,8 +781,9 @@ def test_explore_setting_flows_from_site_defaults_and_skill_points_to_reference(
                    "explore-output.md", "check-output", "## 일반 판단 규칙", "〔script", "점수·신뢰도를 매기지 않는다",
                    "추정을 사실처럼 쓰지 않는다"):
         assert needle in ref, needle
-    # B2 §10.3: 출력 파일 + check-output·일반 판단 규칙(log-guide에서 옮김) 뒤. 그 전 5,910B(한도 없음)
-    assert len(ref.encode("utf-8")) <= 7168
+    # 코덱스 리뷰 F4: 선택 칸(원인 층·원인 데몬·가장 유력) 한 줄 뒤 7,350. 그 전 7,168 — B2 §10.3: 출력 파일 + check-output·일반 판단
+    # 규칙(log-guide에서 옮김) 뒤. 그 전 5,910B(한도 없음)
+    assert len(ref.encode("utf-8")) <= 7350
     assert ref.index("## 쓰는 것") < ref.index("## 일반 판단 규칙") < ref.index("## 다음")
     # android 밖 플랫폼 탐색 지식(17-platforms §10): `triage.py explore` 출력 refs로만 읽는다. placeholder라 작게 둔다
     guide = REPO / "plugin" / "skills" / "telephony-triage" / "reference" / "platforms" / "ofono" / "log-guide.md"
