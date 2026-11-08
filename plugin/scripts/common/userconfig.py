@@ -92,15 +92,32 @@ def from_site_defaults(defaults: dict) -> dict:
     return out
 
 
-SITE_ISSUE_DB_KEYS = ("merge_wait_seconds",)
+SITE_ISSUE_DB_KEYS = ("merge_wait_seconds", "remote")
+# 플랫폼마다 다른 키(플랫폼마다 이슈 DB가 다르다): 기본 아닌 플랫폼은 최상위(android) 값을 물려받지 않고
+# site `platforms.<p>.issue_db`에서만 받는다. 그 밖 키(merge_wait_seconds)는 최상위 → platforms.<p> 순으로 덮는다
+SITE_ISSUE_DB_PLATFORM_ONLY = ("remote",)
 # 없어진 키(+1 병합, H A2). 읽지 않고 config.py check·doctor가 경고만 한다 — legacy_problems(fail-closed)에는 넣지 않는다
 REMOVED_ISSUE_DB_KEYS = ("merge",)
 
 
-def site_issue_db(defaults: dict) -> dict:
-    """site-defaults `issue_db`의 `SITE_ISSUE_DB_KEYS`(있는 것만). 값 검사는 쓰는 쪽(`dbpr.merge`)이 한다."""
+def site_issue_db(defaults: dict, platform: str | None = None) -> dict:
+    """site-defaults `issue_db`의 `SITE_ISSUE_DB_KEYS`(있는 것만). 기본 아닌 `platform`이면 `SITE_ISSUE_DB_PLATFORM_ONLY`는
+    최상위 것을 버리고 `platforms.<p>.issue_db`의 값으로 덮는다. 값 검사는 쓰는 쪽(`dbpr.merge`·`remote_problems`)이 한다."""
     db = defaults.get("issue_db") if isinstance(defaults.get("issue_db"), dict) else {}
-    return {k: db[k] for k in SITE_ISSUE_DB_KEYS if db.get(k) is not None}
+    out = {k: db[k] for k in SITE_ISSUE_DB_KEYS if db.get(k) is not None}
+    if platform and platform != TOP_PROFILE:
+        for k in SITE_ISSUE_DB_PLATFORM_ONLY:
+            out.pop(k, None)
+        out.update(_site_platform_issue_db(defaults, platform))
+    return out
+
+
+def _site_platform_issue_db(defaults: dict, platform: str) -> dict:
+    """site-defaults `platforms.<p>.issue_db`의 `SITE_ISSUE_DB_KEYS`(있는 것만). 모양이 틀리면 빈 dict(검사는 `site_platform_problems`)."""
+    block = defaults.get("platforms") if isinstance(defaults, dict) else None
+    block = block.get(platform) if isinstance(block, dict) else None
+    db = block.get("issue_db") if isinstance(block, dict) else None
+    return {k: db[k] for k in SITE_ISSUE_DB_KEYS if db.get(k) is not None} if isinstance(db, dict) else {}
 
 
 def removed_keys(defaults: dict | None, user: dict | None) -> list[str]:
@@ -234,7 +251,7 @@ def _with_profile(out: dict, defaults: dict, platform: str, prof) -> dict:
     ghe = (defaults.get("ghe") or {}).get("host")
     if ghe:
         issue_db["ghe_host"] = ghe
-    issue_db.update(site_issue_db(defaults))
+    issue_db.update(site_issue_db(defaults, platform))
     out.update({"issue_db": issue_db, "work_dir": str(home() / f"work-{platform}"), "code_profiles": [],
                 "recent_code_roots": []})
     out.update(_site_platform(defaults, platform))
@@ -284,10 +301,17 @@ def site_platform_problems(defaults: dict | None) -> list[str]:
         elif not isinstance(entry, dict):
             out.append(f"{at}: 매핑이어야 합니다.")
         else:
+            allowed = PLATFORM_SCOPED_KEYS + ("issue_db",)
             out += [f"{at}.{key}: {MODULE_SKILLS_TOP_MSG}" if key == "module_skills" else
-                    f"{at}.{key}: 둘 수 없는 키입니다 (허용: {', '.join(PLATFORM_SCOPED_KEYS)}. 플랫폼 상수는 "
-                    f"platform.others.{name})." for key in entry if key not in PLATFORM_SCOPED_KEYS]
+                    f"{at}.{key}: 둘 수 없는 키입니다 (허용: {', '.join(allowed)}. 플랫폼 상수는 "
+                    f"platform.others.{name})." for key in entry if key not in allowed]
             out += _scoped_problems(at, entry)
+            db = entry.get("issue_db", None)
+            if db is not None and not isinstance(db, dict):
+                out.append(f"{at}.issue_db: 매핑이어야 합니다({{{', '.join(SITE_ISSUE_DB_KEYS)}}}).")
+            elif isinstance(db, dict):
+                out += [f"{at}.issue_db.{k}: 둘 수 없는 키입니다 (허용: {', '.join(SITE_ISSUE_DB_KEYS)}. 경로는 사용자 config)."
+                        for k in db if k not in SITE_ISSUE_DB_KEYS]
     return out
 
 

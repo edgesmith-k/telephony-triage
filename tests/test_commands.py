@@ -331,6 +331,10 @@ def test_sync_and_setup_bodies_list_new_steps_in_order():
     order = [setup.index(c) for c in ("config.py gh-status", "config.py doctor --format markdown", "getting-started.md")]
     assert order == sorted(order) and "그대로" in setup[order[1]:order[2]]
     assert "doctor" in setup[order[0]:order[1]], "gh 실패 경로도 doctor 표를 보인다"
+    # 코덱스 리뷰 A①②: Jira MCP 점검은 질문 전(0번)에 한 번만, 4번은 그 결과를 쓴다. 1번은 gh-status login으로 GHE 아이디를 감지
+    assert setup.index("config.py tracker-candidates") < setup.index("config.py show") < setup.index("config.py gh-status")
+    assert setup.count("config.py tracker-candidates") == 1 and "0번 결과가 없을 때만" in setup
+    assert "최대 3개" in setup and "한 번만, 한 줄씩" in setup
     skill = (REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md").read_text(encoding="utf-8")
     assert "config.py doctor --format markdown" in skill
     assert len(list(COMMANDS.glob("*.md"))) == 14

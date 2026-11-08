@@ -126,6 +126,77 @@ def test_init_saves_only_answers_so_team_default_changes_flow_through():
     assert env.json("config.py", ["show", "--keys", "explore.when"])["values"] == {"explore.when": "never"}
 
 
+def test_site_issue_db_remote_is_team_default_per_platform():
+    """setup 질문 10→3(코덱스 리뷰 A①): site-defaults `issue_db.remote`가 있으면 init이 원격을 묻지 않고 상속한다.
+    플랫폼마다 이슈 DB가 다르므로 `platforms.<p>.issue_db.remote`가 그 플랫폼 값이고 최상위 값은 물려받지 않는다
+    (merge_wait_seconds는 최상위 → platforms.<p> 순). 상속 순서를 여기서 고정한다."""
+    top = "https://ghe.mock.invalid/mock-org/telephony-issue-db.git"
+    ofono = "https://ghe.mock.invalid/mock-org/telephony-issue-db-ofono.git"
+    on = {"name": "android", "enabled": ["android", "ofono"]}
+    root = plugin_root("site-remote", issue_db={"merge_wait_seconds": 420, "remote": top}, platform=on,
+                       platforms={"ofono": {"issue_db": {"remote": ofono, "merge_wait_seconds": 60}}})
+    env = Env(root=root)
+
+    def answers(name: str, **data) -> Path:
+        path = env.base / f"{name}.json"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        return path
+
+    # android: 원격을 답하지 않아도 되고(팀 기본값), 저장하지 않는다
+    result = env.json("config.py", ["init", "--answers", answers(
+        "a", **{"user.ghe_id": "mock-user1", "issue_db.path": str(env.base / "db"), "work_dir": str(env.base / "work")})])
+    assert result["suggest_clone"] == f"git clone {top} {env.base / 'db'}"
+    assert "remote" not in env.config()["issue_db"]
+    assert env.json("config.py", ["show", "--keys", "issue_db.remote,issue_db.merge_wait_seconds"])["values"] == {
+        "issue_db.remote": top, "issue_db.merge_wait_seconds": 420}
+    # ofono 프로필: 그 플랫폼의 site 값. 빈 답("")도 상속이다
+    env.json("config.py", ["init", "--platform", "ofono", "--answers", answers(
+        "o", **{"issue_db.path": str(env.base / "db-ofono"), "issue_db.remote": "", "work_dir": str(env.base / "work-ofono")})])
+    assert "remote" not in env.config()["platforms"]["ofono"]["issue_db"]
+    assert env.json("config.py", ["show", "--platform", "ofono", "--keys", "issue_db.remote,issue_db.merge_wait_seconds"])["values"] == {
+        "issue_db.remote": ofono, "issue_db.merge_wait_seconds": 60}
+
+    # 상속 순서(merged): 사용자 config > site platforms.<p>.issue_db > site issue_db(remote는 제외) > 내장
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import userconfig
+    site = {"issue_db": {"remote": top, "merge_wait_seconds": 30},
+            "platforms": {"ofono": {"issue_db": {"remote": ofono}}, "other": {"issue_db": {"merge_wait_seconds": 60}}}}
+    assert userconfig.merged(site, {})["issue_db"] == {"base_branch": "main", "remote": top, "merge_wait_seconds": 30}
+    assert userconfig.merged(site, {}, platform="ofono")["issue_db"] == {"base_branch": "main", "remote": ofono, "merge_wait_seconds": 30}
+    assert userconfig.merged(site, {}, platform="other")["issue_db"] == {"base_branch": "main", "merge_wait_seconds": 60}   # 최상위 remote는 안 내려간다
+    user = {"issue_db": {"remote": "https://ghe.mock.invalid/me/a.git"},
+            "platforms": {"ofono": {"issue_db": {"path": "/x", "remote": "https://ghe.mock.invalid/me/o.git"}}}}
+    assert userconfig.merged(site, user)["issue_db"]["remote"] == "https://ghe.mock.invalid/me/a.git"
+    assert userconfig.merged(site, user, platform="ofono")["issue_db"]["remote"] == "https://ghe.mock.invalid/me/o.git"
+
+    # site에 그 플랫폼 remote가 없으면 init은 전처럼 원격을 요구한다(android 것을 쓰지 않는다)
+    root2 = plugin_root("site-remote-top-only", issue_db={"merge_wait_seconds": 420, "remote": top}, platform=on)
+    env2 = Env(root=root2)
+    proc = env2.run("config.py", ["init", "--platform", "ofono", "--answers", answers(
+        "o2", **{"user.ghe_id": "mock-user1", "issue_db.path": str(env2.base / "db-ofono"), "work_dir": str(env2.base / "work-ofono")})])
+    assert proc.returncode == 2 and "issue_db.remote: 값이 필요합니다" in proc.stderr
+    assert not (env2.home / "config.yaml").exists()
+
+
+def test_gh_status_login_is_the_site_host_login_only():
+    """setup 1 GHE 아이디 자동 감지(코덱스 리뷰 A①): `gh-status`의 `login`은 site ghe.host와 같은 호스트의 로그인만이다.
+    다른 호스트 로그인이 앞에 나와도(gh ≥2.40 `account` 문구) 그것을 쓰지 않고, 그 호스트 줄이 없으면 null(setup이 묻는다)."""
+    env = Env()
+    env.init(env.base / "db")
+    one = env.json("config.py", ["gh-status"])
+    assert one["ok"] is True and one["host"] == "ghe.mock.invalid" and one["login"]
+    two = env.json("config.py", ["gh-status"], env={"MOCK_GH_OTHER_LOGINS": "github.com:someone-else"})
+    assert two["login"] == one["login"] != "someone-else"
+    unauth = env.run("config.py", ["gh-status"], unauth=True)
+    assert unauth.returncode == 2 and json.loads(unauth.stdout)["login"] is None
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import ghcli
+    text = "github.com\n  ✓ Logged in to github.com account someone-else (keyring)\n  - Active account: true"
+    assert ghcli.login(text, "ghe.mock.invalid") is None and ghcli.login(text, "GitHub.com") == "someone-else"
+    assert ghcli.login("ghe.mock.invalid\n  - Logged in to ghe.mock.invalid as me (oauth_token)", "ghe.mock.invalid") == "me"
+    assert ghcli.login(text, None) is None
+
+
 def test_set_and_sync_scripts_path():
     env = Env()
     env.init(env.base / "db")

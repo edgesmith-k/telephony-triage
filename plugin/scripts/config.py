@@ -11,6 +11,7 @@
                                `{user_config, values{키: 값}, missing[]}` (점 표기, 없는 키는 missing)
   site-defaults                site-defaults.yaml 내용
   init [--answers <json>]      config 생성 (setup 1). --answers가 없으면 stdin으로 항목별로 묻는다.
+                               필수 항목도 팀 기본값이 있으면(site-defaults issue_db.remote) 비워도 된다(상속).
                                경로가 없으면 거부한다. 홈·work_dir은 권한 700.
                                답한 값만 저장(선택 항목은 팀 기본값과 다를 때만, 나머지는 site-defaults·내장 기본값 상속).
                                플랫폼은 --platform > TT_PLATFORM > site(개인 기본 `platform`은 보지 않는다).
@@ -46,7 +47,8 @@
                                → writable / push_allowed. `migrate/schema-v<N>` 브랜치는 버전을 보지 않는다.
                                warnings(없어진 키·폐지 키·설치 스킬 대신 모듈 문서·runtime.label). remote·prefer·
                                skill_dir가 있으면 deep_sources(카테고리별 5-1 출처). --roots면 read_roots[절대 경로]
-  gh-status                    gh 인증 확인 (setup 9). 실패면 로그인 안내와 종료 코드 2
+  gh-status                    gh 인증 확인 (setup 9). 실패면 로그인 안내와 종료 코드 2.
+                               login: site ghe.host의 로그인(setup 1 GHE 아이디 자동 감지, 그 호스트 줄이 없으면 null)
   doctor [--format json|markdown]
                                환경 점검 한 장(python·deps·config·clone·hook·guard 자가시험·Jira 매핑(tracker)·Jira 코멘트
                                도구(tracker_post)·gh·스냅샷·호환성·lock, 모듈 스킬 설정이 있을 때만 module_skills,
@@ -224,7 +226,9 @@ def cmd_init(args, defaults: dict) -> dict:
         errors = []
         for key, _, kind, required in fields:
             value = answers.get(key)
-            if required and value in (None, "") and not (key not in answers and has(key)):
+            # 필수 항목도 팀 기본값(site-defaults, 예: issue_db.remote)이 있으면 비워도 된다 — 저장하지 않고 상속한다
+            team_has = _default_for(key, defaults, platform) not in (None, "")
+            if required and value in (None, "") and not ((key not in answers and has(key)) or team_has):
                 errors.append(f"{key}: 값이 필요합니다")
             elif (msg := validate(kind, value)):
                 errors.append(f"{key}: {msg}")
@@ -725,7 +729,8 @@ def cmd_check(args, defaults: dict) -> tuple[dict, int]:
 
 def cmd_gh_status(args, defaults: dict) -> tuple[dict, int]:
     host, ok, message = _gh_auth(defaults)
-    result = {"host": host, "ok": ok}
+    # login: site ghe.host와 같은 호스트의 로그인만(setup 1 GHE 아이디 자동 감지). 다른 호스트뿐이면 None → setup이 묻는다
+    result = {"host": host, "ok": ok, "login": ghcli.login(message, host) if ok else None}
     if not ok:
         result["message"] = (f"쓰기 불가(gh 인증 없음). `gh auth login --hostname {host}`로 로그인한다. "
                              "읽기 설정은 끝났으므로 읽기 전용 분석과 --dry-run 연습은 된다.")

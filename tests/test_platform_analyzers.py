@@ -93,6 +93,8 @@ def test_user_platform_analyzers_allowed_and_checked():
     ({"android": {"analyzers": OFONO_AN}}, "platforms.android"),
     ({"oFono": {"analyzers": OFONO_AN}}, "platforms.oFono"),
     ({"ofono": {"tracker": {}}}, "platforms.ofono.tracker"),
+    ({"ofono": {"issue_db": "x"}}, "platforms.ofono.issue_db"),                      # 팀 이슈 DB 값은 매핑
+    ({"ofono": {"issue_db": {"path": "/x"}}}, "platforms.ofono.issue_db.path"),       # 경로는 사용자 config
     ({"ofono": {"analyzers": "x"}}, "platforms.ofono.analyzers"),
     ({"ofono": {"analyzers": {"data": ["x"]}}}, "platforms.ofono.analyzers.data"),
     ({"ofono": "x"}, "platforms.ofono"),
@@ -112,10 +114,11 @@ def test_site_platform_problems_resolve_exit_and_lenient(block, needle):
 
 
 def test_valid_site_platforms_resolve():
-    defaults = _defaults(platform=ON, platforms={"ofono": {"analyzers": OFONO_AN}})
+    remote = "https://ghe.mock.invalid/mock-org/telephony-issue-db-ofono.git"
+    defaults = _defaults(platform=ON, platforms={"ofono": {"analyzers": OFONO_AN, "issue_db": {"remote": remote}}})
     assert userconfig.site_platform_problems(defaults) == [] and userconfig.site_platform_problems(_defaults()) == []
     name, cfg = session.resolve(defaults, "ofono", {})
-    assert name == "ofono" and cfg["analyzers"] == OFONO_AN
+    assert name == "ofono" and cfg["analyzers"] == OFONO_AN and cfg["issue_db"]["remote"] == remote
 
 
 def test_analyzer_sources_union_of_all_layers_and_platforms():
