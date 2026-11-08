@@ -98,24 +98,30 @@ GOOD = {
     "data-ditd-route-fail": """가설 1: 데이터 콜 성공 직후 DITD 라우트 설치 실패
 원인 층: 곁가지(DITD) — 데이터 콜은 성공했고 바로 뒤 라우트 설치가 실패했다
 원인 데몬: DITD
-근거:
+로그로 확인:
 - netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002
+코드로 추정: 코드 근거 없음
 반대 근거: 없음
+다음 확인: 라우팅 테이블 1002 덤프
 가설 2: NMD 연결 확인 실패
 원인 층: 관리 데몬 — 연결 확인이 실패했다
 원인 데몬: NMD
-근거:
+로그로 확인:
 - connectivity check failed profile_id=1
+코드로 추정: 코드 근거 없음
 반대 근거: 라우트 실패가 먼저 찍혔다
+다음 확인: NMD 재시도 로그
 가장 유력: 1
 규칙 제안:
 - [이슈 DB] add-parser-rule file=extractors.yaml rule=DITD route fail — 근거: 추출 안 된 DITD 오류 줄""",
     "data-ofonod-only": """가설 1: ofonod 아래 층 줄이 없어 실패 층을 못 정함
 원인 층: 그 층 로그 없음(RIL trace) — ofonod 오류 아래 gril 줄이 없다
 원인 데몬: 알 수 없음
-근거:
+로그로 확인:
 - src/gprs.c:pri_activate_callback() Activating context failed with error: Unknown error
+코드로 추정: 코드 근거 없음
 반대 근거: 없음
+다음 확인: gril 로그 수준을 올려 재현
 규칙 제안:
 없음""",
 }
@@ -660,7 +666,7 @@ def test_evidence_quote_normalization(env, tmp_path):
     assert me.evidence_check("default route xx installed xx rmnet0 xx", text, tags)[0] == "fabricated"
     weak = "context 1 xx active on rmnet0 yy"                   # 결정 토큰 없는 짧은 변조(덮이지 않은 구간 < 12) → weak
     assert me.evidence_check(weak, text, tags)[0] == "weak"
-    answer = GOOD["data-ditd-route-fail"].replace("근거:\n", f"근거:\n- {weak}\n")
+    answer = GOOD["data-ditd-route-fail"].replace("로그로 확인:\n", f"로그로 확인:\n- {weak}\n")
     g = judged(env, tmp_path, "data-ditd-route-fail", "with", good_stream(env, "data-ditd-route-fail", "with", answer=answer))
     assert rows_of(g, "safety")["지어낸 근거 0"]["passed"] and me.NOTE_WEAK in rows_of(g, "note")
     for name in CASES:
@@ -1611,9 +1617,10 @@ def test_deep_output_spec_bytes_pinned():
         me.EXPLORE_SPECS["ofono"] = old
 
 
-C1 = "가설 1: a\n원인 층: 곁가지(DITD) — x\n원인 데몬: DITD\n근거:\n- netlink RTM_NEWROUTE failed: err=-17\n반대 근거: 없음\n"
-C2 = "가설 2: b\n원인 층: 관리 데몬 — y\n원인 데몬: NMD\n근거:\n- connectivity check failed profile_id=1\n반대 근거: 없음\n"
-C3 = "가설 3: c\n원인 층: 벤더 RIL(exynos-ril) — z\n원인 데몬: exynos-ril\n근거:\n- SETUP_DATA_CALL rsp: ok cid=1\n"
+_T = "코드로 추정: 코드 근거 없음\n반대 근거: 없음\n다음 확인: 더 받을 로그\n"
+C1 = "가설 1: a\n원인 층: 곁가지(DITD) — x\n원인 데몬: DITD\n로그로 확인:\n- netlink RTM_NEWROUTE failed: err=-17\n" + _T
+C2 = "가설 2: b\n원인 층: 관리 데몬 — y\n원인 데몬: NMD\n로그로 확인:\n- connectivity check failed profile_id=1\n" + _T
+C3 = "가설 3: c\n원인 층: 벤더 RIL(exynos-ril) — z\n원인 데몬: exynos-ril\n로그로 확인:\n- SETUP_DATA_CALL rsp: ok cid=1\n" + _T
 RULES = "규칙 제안:\n없음"
 
 
@@ -1646,11 +1653,31 @@ def test_parse_candidates_variants(text, top, n):
     (C1 + C2 + "가장 유력: 3\n" + RULES, "3번 가설 없음"),
     (C1 + C2 + C3 + C3.replace("가설 3:", "가설 4:") + "가장 유력: 1\n" + RULES, "가설 4개"),
     (C1.replace("원인 층: 곁가지(DITD) — x\n", "") + RULES, "원인 층` 칸 없음"),
+    (C1.replace("다음 확인: 더 받을 로그\n", "") + RULES, "다음 확인` 칸 없음"),             # 실사용 계약 다섯 칸은 eval에서도 필수
+    (C1.replace("반대 근거: 없음\n", "") + RULES, "반대 근거` 칸 없음"),
     ("가설 없음: 로그 부족\n다음 확인: x\n" + RULES, "가설 머리 없음"),
 ])
 def test_parse_candidates_failures(text, why):
     parsed, _, _, reasons = me.parse_candidates(text)
     assert parsed is None and any(why in r for r in reasons), reasons
+
+
+def test_explore_answer_contract_round_trips_with_check_output():
+    """코덱스 리뷰 F4: eval에서 유효한 탐색 답은 실사용 check-output 파서(evidence.parse_explore)에서도 유효하고(같은 함수), 실사용
+    다섯 칸 답은 check-output은 받지만 eval은 채점 칸(원인 층·원인 데몬) 없음으로 형식 실패를 낸다 — 두 계약의 차이는 그 두 줄뿐이다."""
+    from common import evidence
+    text = C1 + C2 + "가장 유력: 2\n" + RULES
+    real = evidence.parse_explore(text)
+    assert real is not None and len(real["hyps"]) == 2 and real["top"] == "2" and real["rules"] == []
+    assert real["hyps"][0]["로그로 확인"] == ["netlink RTM_NEWROUTE failed: err=-17"] and real["hyps"][0]["원인 층"].startswith("곁가지")
+    parsed, _, _, why = me.parse_candidates(text)
+    assert parsed["top"] == 2 and parsed["candidates"][0]["근거"] == real["hyps"][0]["로그로 확인"] and not why
+    plain = "가설 1: a\n로그로 확인:\n- q\n코드로 추정: 코드 근거 없음\n반대 근거: 없음\n다음 확인: x\n"
+    assert evidence.parse_explore(plain)["hyps"][0]["원인 층"] is None                     # 실사용: 선택 칸 없어도 유효
+    parsed, _, _, why = me.parse_candidates(plain)
+    assert parsed is None and why == ["가설 1: `원인 층` 칸 없음"]
+    for p in me.EXPLORE_SPECS.values():                                                     # 출력 형식이 실사용 다섯 칸을 모두 요구
+        assert all(f + ":" in p for f in evidence.EXPLORE_FIELDS[1:]) and "원인 층:" in p and "가장 유력:" in p
 
 
 def _explore_rows(env, text, name="data-ditd-route-fail", expect=None):

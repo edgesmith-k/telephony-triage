@@ -75,9 +75,14 @@ def _label_rx(name: str) -> re.Pattern:
 
 
 LABEL_RX = {f: _label_rx(f) for f in dict.fromkeys(FIELDS_DEEP + FIELDS_SKILL)}
-HYP_RX = re.compile(r"^\s*(?:[-*]\s*)?\**\s*가설\s*(\d+)?\s*\**\s*[:：]\s*\**\s*(.*)$")
+# `### 가설 1:`·`가설 1 (추정):`·`**가설 1:**`도 머리로 읽는다(모듈 eval 파서와 같은 허용 — 코덱스 리뷰 F4: 두 파서가 달랐다)
+HYP_RX = re.compile(r"^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?\**\s*가설\s*#?(\d+)?\s*(?:\([^)\n]{0,20}\))?\s*\**\s*[:：]\s*\**\s*(.*)$")
 NONE_RX = _label_rx("가설 없음")
-EXPLORE_RX = {f: _label_rx(f) for f in EXPLORE_FIELDS[1:]}
+# 탐색 출력 계약(실사용 `explore.md`) = 가설마다 EXPLORE_FIELDS 다섯 칸. 모듈 eval은 같은 계약에 **선택 칸**을 더 쓴다 — 가설 머리와
+# `로그로 확인` 사이의 `원인 층`·`원인 데몬`, 마지막 가설 뒤 꼬리 `가장 유력`·`규칙 제안`. check-output은 그 칸을 읽되 쓰지 않는다.
+EXPLORE_OPTIONAL = ("원인 층", "원인 데몬")
+EXPLORE_TAIL = ("가장 유력", "규칙 제안")
+EXPLORE_RX = {f: _label_rx(f) for f in EXPLORE_FIELDS[1:] + EXPLORE_OPTIONAL + EXPLORE_TAIL}
 
 
 def ws(text: str) -> str:
@@ -143,11 +148,13 @@ def parse_fields(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> dict | Non
     return _parse(text, fields)[0]
 
 
-def parse_explore(text: str) -> dict | None:
-    """탐색 출력 → {"none": str|None, "next": str|None, "hyps": [{가설, 로그로 확인: [...], 코드로 추정, 반대 근거, 다음 확인}]}.
+def explore_parse(text: str) -> tuple[dict | None, str | None]:
+    """탐색 출력 → ({"none", "next", "hyps": [{n, 가설, 원인 층, 원인 데몬, 로그로 확인: [...], 코드로 추정, 반대 근거, 다음 확인}],
+    "top": str|None, "rules": [...]}, None) 또는 (None, 사유).
 
-    `가설 n: …` 블록마다 다섯 칸이 순서대로 있어야 한다. 블록이 없으면 `가설 없음: <이유>`와 `다음 확인:`이 있어야 한다.
-    어느 쪽도 아니면 None. 칸 밖 줄(빈 줄·설명)은 무시한다.
+    `가설 n: …` 블록마다 다섯 칸(`EXPLORE_FIELDS`)이 순서대로 있어야 한다. `원인 층`·`원인 데몬`(가설 머리와 `로그로 확인` 사이)은
+    선택이고 없으면 None, `n`은 머리의 번호(없으면 None). 마지막 가설 뒤 `가장 유력:`·`규칙 제안:`은 꼬리(선택)다. 블록이 없으면
+    `가설 없음: <이유>`와 `다음 확인:`이 있어야 한다. 칸 밖 줄(빈 줄·설명)은 무시한다. 실사용 check-output과 모듈 eval이 같은 함수를 쓴다.
     """
     m = FENCE_RX.match(text or "")
     lines = (m.group(1) if m else (text or "")).split("\n")
@@ -155,21 +162,31 @@ def parse_explore(text: str) -> dict | None:
     if not starts:
         none_at = next((i for i, line in enumerate(lines) if NONE_RX.match(line)), None)
         if none_at is None:
-            return None
+            return None, "가설 머리 없음"
         nxt = next((EXPLORE_RX["다음 확인"].match(line).group(1).strip() for line in lines[none_at + 1:]
                     if EXPLORE_RX["다음 확인"].match(line)), None)
         if nxt is None:
-            return None
-        return {"none": NONE_RX.match(lines[none_at]).group(1).strip(), "next": nxt, "hyps": []}
+            return None, "가설 없음 뒤 `다음 확인` 칸 없음"
+        return {"none": NONE_RX.match(lines[none_at]).group(1).strip(), "next": nxt, "hyps": [], "top": None, "rules": []}, None
+    tail_at = next((i for i in range(starts[-1] + 1, len(lines)) if any(EXPLORE_RX[t].match(lines[i]) for t in EXPLORE_TAIL)),
+                   len(lines))
     hyps = []
     for k, at in enumerate(starts):
-        block = lines[at:starts[k + 1] if k + 1 < len(starts) else len(lines)]
-        hyp = {"가설": HYP_RX.match(block[0]).group(2).strip()}
-        pos = 1
+        block = lines[at:starts[k + 1] if k + 1 < len(starts) else tail_at]
+        hm = HYP_RX.match(block[0])
+        hyp = {"n": int(hm.group(1)) if hm.group(1) else None, "가설": hm.group(2).strip(), "원인 층": None, "원인 데몬": None}
+        first = next((j for j in range(1, len(block)) if EXPLORE_RX["로그로 확인"].match(block[j])), None)
+        if first is None:
+            return None, f"가설 {k + 1}: `로그로 확인` 칸 없음"
+        for f in EXPLORE_OPTIONAL:
+            j = next((j for j in range(1, first) if EXPLORE_RX[f].match(block[j])), None)
+            if j is not None:
+                hyp[f] = EXPLORE_RX[f].match(block[j]).group(1).strip()
+        pos = first
         for f in EXPLORE_FIELDS[1:]:
             hit = next((j for j in range(pos, len(block)) if EXPLORE_RX[f].match(block[j])), None)
             if hit is None:
-                return None
+                return None, f"가설 {k + 1}: `{f}` 칸 없음"
             rest = EXPLORE_RX[f].match(block[hit]).group(1).strip()
             if f == "로그로 확인":
                 end = next((j for j in range(hit + 1, len(block))
@@ -181,7 +198,19 @@ def parse_explore(text: str) -> dict | None:
                 hyp[f] = rest
                 pos = hit + 1
         hyps.append(hyp)
-    return {"none": None, "next": None, "hyps": hyps}
+    tail = lines[tail_at:]
+    top = next((EXPLORE_RX["가장 유력"].match(line).group(1).strip() for line in tail if EXPLORE_RX["가장 유력"].match(line)), None)
+    rules: list[str] = []
+    r_at = next((i for i, line in enumerate(tail) if EXPLORE_RX["규칙 제안"].match(line)), None)
+    if r_at is not None:
+        block = [EXPLORE_RX["규칙 제안"].match(tail[r_at]).group(1).strip(), *tail[r_at + 1:]]
+        rules = [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
+    return {"none": None, "next": None, "hyps": hyps, "top": top, "rules": rules}, None
+
+
+def parse_explore(text: str) -> dict | None:
+    """`explore_parse`의 결과만(사유 없이). check-output(`triagelib.output`)이 쓴다."""
+    return explore_parse(text)[0]
 
 
 # --- 근거 원문 검사 ---------------------------------------------------------------------------------------

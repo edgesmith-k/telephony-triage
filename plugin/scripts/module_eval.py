@@ -64,6 +64,7 @@ from common.claude_child import (
     readonly_init_problem,
     run_child,
 )
+from common import evidence  # noqa: E402
 from common.evidence import (  # noqa: F401  (옮긴 이름을 그대로 내보낸다: 근거 원문 검사는 check-output과 같이 쓴다)
     COVER_BLOCK,
     ELLIPSIS_RX,
@@ -140,7 +141,7 @@ EXPLORE_EXPECT_KEYS = {"accept", "trap"}
 ACCEPT_KEYS, ACCEPT_OPTIONAL = {"layer", "daemon", "evidence"}, {"show"}
 TRAP_MATCH_KEYS, TRAP_OPTIONAL = ("layer", "daemon", "label"), {"show"}
 SHOW_MAX = 80
-GRADER_VERSION = 2              # 채점 코드가 바뀌면 올린다 — 한 arm 기록 합치기 조건(설계 F3 후속)
+GRADER_VERSION = 3              # 채점 코드가 바뀌면 올린다 (3: explore 출력 계약을 실사용과 통일, 코덱스 리뷰 F4) — 한 arm 기록 합치기 조건(설계 F3 후속)
 EXPLORE_REASONS = {"no_candidate", "cause_unconfirmed"}
 NAME_RX = re.compile(r"^[a-z0-9][a-z0-9-]{2,60}$")
 KEY_RX = re.compile(r"^MOCK-9\d{3}$")
@@ -164,13 +165,19 @@ _LAYER_DAEMON_SPEC = {p: ("원인 층: " + v + " — <한 줄 이유>\n원인 �
                           "| 알 수 없음>\n") for p, v in _LAYERS.items()}
 # deep 출력 형식(결론 하나). 바이트가 시험으로 고정돼 있다(설계 F7 — 템플릿 시험·층 목록 대조가 이 글을 쓴다)
 OUTPUT_SPECS = {p: _LAYER_DAEMON_SPEC[p] + _SPEC_TAIL for p in _LAYERS}
-# explore 출력 형식(후보 목록, 모듈 eval explore 후보 채점 — 이 파일 `explore_rows`·`gate_summary` 머리말). `분석 스킬 의견`은 explore에서 늘 해당 없음이라 뺀다
-EXPLORE_SPECS = {p: ("가설 1: <원인 한 줄>\n" + _LAYER_DAEMON_SPEC[p] + _EVIDENCE_SPEC
-                     + "(가설 2·3도 같은 다섯 칸. 층·데몬이 갈리는 다른 설명이 있을 때만 쓴다. 서지 않으면 쓰지 않는다)\n"
+# explore 출력 형식 = 실사용 탐색 계약(`reference/explore.md`·`evidence.EXPLORE_FIELDS`: 가설·로그로 확인·코드로 추정·반대 근거·다음 확인)
+# + 채점에 필요한 선택 칸(`원인 층`·`원인 데몬`, 꼬리 `가장 유력`·`규칙 제안`). 코덱스 리뷰 F4: 전에는 eval 전용 칸(근거·가장 유력)만 있어
+# eval에서 유효한 답이 실사용 check-output(`evidence.parse_explore`)에서는 None이었다. 이제 한 파서(`evidence.explore_parse`)가 둘 다 읽는다.
+_EXPLORE_TAIL_SPEC = ("로그로 확인:\n- <입력 파일의 줄 그대로, 또는 그 줄의 이어진 일부(8자 이상)> [— <짧은 설명>]\n"
+                      "코드로 추정: 코드 근거 없음 (평가 입력에는 소스가 없다 — 이 글자 그대로)\n"
+                      "반대 근거: <한 줄 | 없음>\n"
+                      "다음 확인: <더 받을 로그·확인할 설정 한 줄>\n")
+EXPLORE_SPECS = {p: ("가설 1: <원인 한 줄>\n" + _LAYER_DAEMON_SPEC[p] + _EXPLORE_TAIL_SPEC
+                     + "(가설 2·3도 같은 일곱 칸. 층·데몬이 갈리는 다른 설명이 있을 때만 쓴다. 서지 않으면 쓰지 않는다)\n"
                      + "가장 유력: <가설 번호 하나>\n" + _RULE_SPEC) for p in _LAYERS}
 OUTPUT_HEAD = {
     "deep": "마지막 답은 아래 여섯 칸만, 이 순서로, 칸 이름 그대로 쓴다. 칸 밖의 글은 쓰지 않는다.",
-    "explore": "마지막 답은 아래 칸만, 이 순서로, 칸 이름 그대로 쓴다. 가설은 1~3개, 가설마다 다섯 칸이다. 칸 밖의 글은 쓰지 않는다.",
+    "explore": "마지막 답은 아래 칸만, 이 순서로, 칸 이름 그대로 쓴다. 가설은 1~3개, 가설마다 일곱 칸(실사용 탐색 출력 다섯 칸 + 원인 층·원인 데몬)이다. 칸 밖의 글은 쓰지 않는다.",
 }
 # explore만 받는 공용 규칙(두 arm이 같이 받는다 — 설계 F2: with arm 문서에는 넣지 않는다)
 EXTRA_RULES = {
@@ -684,10 +691,8 @@ def label(value: str) -> str:
     return LABEL_CUT_RX.split(clean(value), maxsplit=1)[0].strip()
 
 
-# explore 후보 목록 읽기(`parse_candidates`, F6: evidence.HYP_RX 대신 자체 regex — `### 가설 1:`·`가설 1 (추정):` 허용)
-CAND_HEAD_RX = re.compile(r"^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?\**\s*가설\s*#?(\d+)?\s*(?:\([^)\n]{0,20}\))?\s*\**\s*[:：]\s*\**\s*(.*)$")
+# explore 후보 목록 읽기 — 실사용과 같은 파서(`evidence.explore_parse`) 위에 채점용 해석만 얹는다(코덱스 리뷰 F4)
 CAND_FIELDS = ("원인 층", "원인 데몬", "근거", "반대 근거")
-CAND_RX = {f: _label_rx(f) for f in CAND_FIELDS}
 TOP_LABEL_RX = _label_rx("가장 유력")
 RULE_LABEL_RX = _label_rx("규칙 제안")
 TOP_NUM_RX = re.compile(r"^(?:가설\s*)?#?(\d+)\s*(?:번)?(?!\d)")
@@ -700,48 +705,31 @@ CAND_MAX, CAND_EVIDENCE_MAX = 3, 3
 def parse_candidates(text: str) -> tuple[dict | None, list[str], range | None, list[str]]:
     """explore 답 → (parsed | None, 줄, 규칙 제안 블록 줄 범위, 노트·실패 사유).
 
-    parsed = {"candidates": [{n, 가설, 원인 층, 원인 데몬, 근거: [...], 반대 근거}], "top": n, "근거": 평탄 목록,
-    "규칙 제안": [...]}. 최종 답은 번호 1(없으면 첫) 가설 머리 중 마지막 것부터 읽는다(초안 뒤 최종본).
+    parsed = {"candidates": [{n, 가설, 원인 층, 원인 데몬, 근거(= 로그로 확인): [...], 코드로 추정, 반대 근거, 다음 확인}], "top": n,
+    "근거": 평탄 목록, "규칙 제안": [...]}. 최종 답은 번호 1 가설 머리 중 마지막 것부터 읽는다(초안 뒤 최종본). 칸 읽기는 실사용
+    check-output과 같은 `evidence.explore_parse`이고, 채점에 필요한 `원인 층`·`원인 데몬`(가설마다)과 `가장 유력`(가설 2개 이상)은 여기서 요구한다.
     """
     m = FENCE_RX.match(text or "")
-    lines = (m.group(1) if m else (text or "")).split("\n")
-    why: list[str] = []
-    heads = [(i, hm) for i, line in enumerate(lines) if (hm := CAND_HEAD_RX.match(line))]
-    ones = [i for i, hm in heads if hm.group(1) is not None and int(hm.group(1)) == 1]
-    start = ones[-1] if ones else (heads[0][0] if heads else None)
-    after = start if start is not None else -1
-    rule_at = next((i for i, line in enumerate(lines) if i > after and RULE_LABEL_RX.match(line)), None)
+    all_lines = (m.group(1) if m else (text or "")).split("\n")
+    ones = [i for i, line in enumerate(all_lines)
+            if (hm := evidence.HYP_RX.match(line)) and not evidence.NONE_RX.match(line) and hm.group(1) and int(hm.group(1)) == 1]
+    lines = all_lines[ones[-1]:] if ones else all_lines
+    last_head = max((i for i, line in enumerate(lines) if evidence.HYP_RX.match(line) and not evidence.NONE_RX.match(line)), default=-1)
+    rule_at = next((i for i, line in enumerate(lines) if i > last_head and RULE_LABEL_RX.match(line)), None)
     rule_block = range(rule_at, len(lines)) if rule_at is not None else None
-    rules = []
-    if rule_at is not None:
-        block = [RULE_LABEL_RX.match(lines[rule_at]).group(1).strip(), *lines[rule_at + 1:]]
-        rules = [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
-    if start is None:
+    parsed, reason = evidence.explore_parse("\n".join(lines))
+    if parsed is None:
+        return None, lines, rule_block, [reason or "가설 머리 없음"]
+    if not parsed["hyps"]:
         return None, lines, rule_block, ["가설 머리 없음"]
-    top_at = next((i for i, line in enumerate(lines) if i > start and TOP_LABEL_RX.match(line)), None)
-    end = min(x for x in (top_at, rule_at, len(lines)) if x is not None)
-    starts = [i for i, _ in heads if start <= i < end]
-    label_lines = {i for i, line in enumerate(lines) if any(rx.match(line) for rx in CAND_RX.values())} | set(starts)
+    why: list[str] = []
     cands = []
-    for k, at in enumerate(starts):
-        stop = starts[k + 1] if k + 1 < len(starts) else end
-        hm = CAND_HEAD_RX.match(lines[at])
-        cand = {"n": int(hm.group(1)) if hm.group(1) else None, "가설": hm.group(2).strip()}
-        for f in CAND_FIELDS:
-            at_f = next((i for i in range(at + 1, stop) if CAND_RX[f].match(lines[i])), None)
-            if at_f is None:
-                if f == "반대 근거":
-                    cand[f] = None
-                    continue
-                return None, lines, rule_block, [f"가설 {k + 1}: `{f}` 칸 없음"]
-            rest = CAND_RX[f].match(lines[at_f]).group(1).strip()
-            if f == "근거":
-                nxt = next((j for j in sorted(label_lines) if j > at_f), stop)
-                block = [rest, *lines[at_f + 1:min(nxt, stop)]]
-                cand[f] = [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
-            else:
-                cand[f] = rest
-        cands.append(cand)
+    for k, h in enumerate(parsed["hyps"], 1):
+        for f in evidence.EXPLORE_OPTIONAL:
+            if not h.get(f):
+                return None, lines, rule_block, [f"가설 {k}: `{f}` 칸 없음"]
+        cands.append({"n": h["n"], "가설": h["가설"], "원인 층": h["원인 층"], "원인 데몬": h["원인 데몬"], "근거": list(h["로그로 확인"]),
+                      "코드로 추정": h["코드로 추정"], "반대 근거": h["반대 근거"], "다음 확인": h["다음 확인"]})
     nums = [c["n"] for c in cands]
     if None in nums or len(set(nums)) != len(nums):
         for k, c in enumerate(cands, 1):
@@ -749,20 +737,20 @@ def parse_candidates(text: str) -> tuple[dict | None, list[str], range | None, l
         why.append("번호 다시 매김")
     if len(cands) > CAND_MAX:
         return None, lines, rule_block, why + [f"가설 {len(cands)}개(>{CAND_MAX})"]
-    if top_at is None:
+    if parsed["top"] is None:
         if len(cands) != 1:
             return None, lines, rule_block, why + ["`가장 유력` 없음(가설 2개 이상)"]
         top = cands[0]["n"]
     else:
-        value = label(TOP_LABEL_RX.match(lines[top_at]).group(1))
+        value = label(parsed["top"])
         tm = TOP_NUM_RX.match(value)
         if tm is None or len(set(int(x) for x in re.findall(r"\d+", value))) != 1:
             return None, lines, rule_block, why + [f"`가장 유력` 번호 하나가 아님: {value!r}"]
         top = int(tm.group(1))
         if top not in {c["n"] for c in cands}:
             return None, lines, rule_block, why + [f"`가장 유력` {top}번 가설 없음"]
-    parsed = {"candidates": cands, "top": top, "근거": [e for c in cands for e in c["근거"]], "규칙 제안": rules}
-    return parsed, lines, rule_block, why
+    out = {"candidates": cands, "top": top, "근거": [e for c in cands for e in c["근거"]], "규칙 제안": parsed["rules"]}
+    return out, lines, rule_block, why
 
 
 def top_candidate(parsed: dict | None) -> dict | None:

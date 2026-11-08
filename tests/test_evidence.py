@@ -36,14 +36,28 @@ def test_parse_explore_blocks_and_none_form():
     text = ("가설 1: 망 거절\n로그로 확인:\n- q1\n- q2\n코드로 추정: gprs.c:10 + 분기\n반대 근거: 없음\n다음 확인: 망 로그\n\n"
             "가설 2: APN 오류\n로그로 확인: q3\n코드로 추정: 코드 근거 없음\n반대 근거: r\n다음 확인: 설정\n")
     out = evidence.parse_explore(text)
-    assert out["none"] is None and len(out["hyps"]) == 2
-    assert out["hyps"][0] == {"가설": "망 거절", "로그로 확인": ["q1", "q2"], "코드로 추정": "gprs.c:10 + 분기", "반대 근거": "없음",
-                              "다음 확인": "망 로그"}
+    assert out["none"] is None and len(out["hyps"]) == 2 and out["top"] is None and out["rules"] == []
+    assert out["hyps"][0] == {"n": 1, "가설": "망 거절", "원인 층": None, "원인 데몬": None, "로그로 확인": ["q1", "q2"],
+                              "코드로 추정": "gprs.c:10 + 분기", "반대 근거": "없음", "다음 확인": "망 로그"}
     assert out["hyps"][1]["로그로 확인"] == ["q3"]
     assert evidence.parse_explore("가설 없음: 로그 없음\n다음 확인: 30초 로그\n") == {"none": "로그 없음", "next": "30초 로그",
-                                                                                "hyps": []}
+                                                                                "hyps": [], "top": None, "rules": []}
     assert evidence.parse_explore("가설 1: x\n로그로 확인:\n- q\n다음 확인: y\n") is None    # 칸이 빠졌다
+    assert evidence.explore_parse("가설 1: x\n로그로 확인:\n- q\n다음 확인: y\n")[1] == "가설 1: `코드로 추정` 칸 없음"
     assert evidence.parse_explore("가설 없음: x\n") is None and evidence.parse_explore("그냥 글") is None
+
+
+def test_parse_explore_reads_eval_optional_fields_and_tail():
+    """코덱스 리뷰 F4: 모듈 eval이 더 쓰는 `원인 층`·`원인 데몬`(가설 머리와 로그로 확인 사이)·꼬리 `가장 유력`·`규칙 제안`을 같은
+    파서가 읽는다(check-output은 쓰지 않는다). 머리 변형(`### 가설 1:`·`가설 2 (추정):`·굵게)도 받는다."""
+    text = ("### 가설 1: a\n원인 층: 곁가지(DITD) — x\n원인 데몬: DITD\n로그로 확인:\n- q1\n코드로 추정: 코드 근거 없음\n반대 근거: 없음\n"
+            "다음 확인: x\n**가설 2 (추정):** b\n- **원인 층**： 관리 데몬 — y\n원인 데몬: NMD\n로그로 확인: q2\n코드로 추정: 코드 근거 없음\n"
+            "반대 근거: r\n다음 확인: y\n가장 유력: 2번\n규칙 제안:\n- [이슈 DB] add-parser-rule x — 근거: y\n- 없음\n")
+    out = evidence.parse_explore(text)
+    assert [h["n"] for h in out["hyps"]] == [1, 2] and out["hyps"][1]["원인 층"] == "관리 데몬 — y" and out["hyps"][1]["원인 데몬"] == "NMD"
+    assert out["hyps"][1]["로그로 확인"] == ["q2"] and out["hyps"][1]["다음 확인"] == "y"          # 꼬리 줄은 마지막 가설 칸에 섞이지 않는다
+    assert out["top"] == "2번" and out["rules"] == ["[이슈 DB] add-parser-rule x — 근거: y", "없음"]
+    assert evidence.parse_explore("가설: a\n로그로 확인:\n- q\n코드로 추정: c\n반대 근거: r\n다음 확인: n\n")["hyps"][0]["n"] is None
 
 
 TL = """# K 탐색 타임라인
