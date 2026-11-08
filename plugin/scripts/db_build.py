@@ -218,6 +218,12 @@ def _platform_label(ctx) -> str:
         return name
 
 
+def _times(item) -> str:
+    """`min_count`(2 이상)일 때만 ` ×N+`(N건 이상) — 기본 시그니처의 README 줄은 그대로다."""
+    count = item.get("min_count", 1) if isinstance(item, dict) else 1
+    return f" ×{count}+" if count > 1 else ""
+
+
 def _signature_summary(sig: dict) -> str:
     parts = []
     for item in sig.get("must_event") or []:
@@ -225,15 +231,17 @@ def _signature_summary(sig: dict) -> str:
         text = f"event `{item.get('event')}`"
         if fields:
             text += " (" + ", ".join(f"{k}=`{v}`" for k, v in sorted(fields.items())) + ")"
-        parts.append(text)
+        parts.append(text + _times(item))
     for item in sig.get("must_match") or []:
         pattern = item.get("pattern") if isinstance(item, dict) else item
-        parts.append(f"match `{md.code(pattern)}`")
+        parts.append(f"match `{md.code(pattern)}`" + _times(item))
     for pattern in sig.get("must_not_match") or []:
         parts.append(f"not `{md.code(pattern)}`")
     extra = [f"window {sig.get('window_sec')}s"]
     if sig.get("sequence"):
         extra.append("sequence " + " → ".join(sig["sequence"]))
+    if sig.get("sequence_within_sec") is not None:
+        extra.append(f"간격 ≤ {sig['sequence_within_sec']}s")
     if sig.get("same_phone") is False:
         extra.append("슬롯 무관")
     return f"`{sig.get('id')}`: " + "; ".join(parts) + " — " + ", ".join(extra)

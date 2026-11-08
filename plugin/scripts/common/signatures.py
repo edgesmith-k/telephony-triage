@@ -4,7 +4,9 @@
 
 의미
 - `must_match: [p]` — AND. 줄 레코드(`event: null`)의 `"TAG: msg"`에 `search`.
-  항목은 문자열이거나 `{id, pattern}`(sequence에서 참조할 때).
+  항목은 문자열이거나 `{id, pattern, min_count?}`(sequence에서 참조하거나 횟수를 둘 때).
+- `min_count: N` (`must_match` 객체·`must_event` 항목, 기본 1) — 구간 안에 그 조건의 레코드가 N개 이상.
+  근거는 첫 충족 레코드 하나 + `count`(구간 안 개수, N > 1일 때만).
 - `must_event: [{id?, event, fields?}]` — AND. `fields` 값은 정규식이고 필드 값 전체에
   `fullmatch`. 필드가 없는 이벤트는 맞지 않는다.
 - `must_not_match: [p]` — 같은 윈도우 안에 하나라도 있으면 불충족.
@@ -16,13 +18,15 @@
 - `sequence: [id...]` — 구간 안에서 각 조건의 **첫 충족 레코드**가 나열 순서대로
   앞선다(시각, 같으면 입력 순서). `must_not_match`는 넣을 수 없다.
   시계 이상 구간의 근거·같은 파일 줄 순서 역전은 `Result.flags`로 표시만 한다(판정 불변).
+- `sequence_within_sec: T` (`sequence`가 있을 때만, ≤ `window_sec`) — sequence 이웃 조건의 첫 충족 레코드 시각 차가
+  모두 T초 이하(`= T`는 충족).
 - 패턴이 시간 상한을 넘기면(`common/patterns.py`) 그 시그니처는 `error`이고 불충족이다.
 """
 
 from __future__ import annotations
 
 import re
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -42,6 +46,7 @@ class Condition:
     pattern: str | None = None
     event: str | None = None
     fields: dict[str, str] = field(default_factory=dict)
+    min_count: int = 1
 
     def describe(self) -> str:
         if self.kind == "match":
@@ -58,6 +63,18 @@ class Signature:
     window_sec: float
     same_phone: bool
     sequence: list[str]
+    sequence_within_sec: float | None = None
+
+
+def _number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _min_count(item: dict, key: str) -> int:
+    value = item.get("min_count", 1)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise SignatureError(f"{key}: min_count는 1 이상 정수여야 합니다: {value!r}")
+    return value
 
 
 def _check_regex(text: str, where: str) -> None:
@@ -76,7 +93,7 @@ def compile_signature(raw: dict, owner_id: str) -> Signature:
         if isinstance(item, str):
             cond = Condition(id=None, kind="match", pattern=item)
         elif isinstance(item, dict) and isinstance(item.get("pattern"), str):
-            cond = Condition(id=item.get("id"), kind="match", pattern=item["pattern"])
+            cond = Condition(id=item.get("id"), kind="match", pattern=item["pattern"], min_count=_min_count(item, key))
         else:
             raise SignatureError(f"{key}: must_match 항목 형식이 잘못됐습니다: {item!r}")
         _check_regex(cond.pattern, key)
@@ -87,7 +104,8 @@ def compile_signature(raw: dict, owner_id: str) -> Signature:
         fields = {str(k): str(v) for k, v in (item.get("fields") or {}).items()}
         for value in fields.values():
             _check_regex(value, key)
-        positives.append(Condition(id=item.get("id"), kind="event", event=item["event"], fields=fields))
+        positives.append(Condition(id=item.get("id"), kind="event", event=item["event"], fields=fields,
+                                   min_count=_min_count(item, key)))
     if not positives:
         raise SignatureError(f"{key}: must_match 또는 must_event가 필요합니다.")
     negatives = [str(p) for p in raw.get("must_not_match") or []]
@@ -103,6 +121,14 @@ def compile_signature(raw: dict, owner_id: str) -> Signature:
     window = raw.get("window_sec")
     if not isinstance(window, (int, float)) or window <= 0:
         raise SignatureError(f"{key}: window_sec가 필요합니다.")
+    gap = raw.get("sequence_within_sec")
+    if gap is not None:
+        if not _number(gap) or gap <= 0:
+            raise SignatureError(f"{key}: sequence_within_sec는 0보다 큰 수여야 합니다: {gap!r}")
+        if not sequence:
+            raise SignatureError(f"{key}: sequence_within_sec는 sequence가 있을 때만 쓴다.")
+        if gap > window:
+            raise SignatureError(f"{key}: sequence_within_sec({gap})가 window_sec({window})보다 큽니다.")
     return Signature(
         key=key,
         id=str(raw["id"]),
@@ -111,6 +137,7 @@ def compile_signature(raw: dict, owner_id: str) -> Signature:
         window_sec=float(window),
         same_phone=bool(raw.get("same_phone", True)),
         sequence=sequence,
+        sequence_within_sec=None if gap is None else float(gap),
     )
 
 
@@ -226,6 +253,7 @@ class Evaluator:
 
         best: tuple | None = None
         matches = []
+        counted = any(c.min_count > 1 for c in sig.positives)
         for slot in groups:
             ok = (lambda i: True) if slot is None else (lambda i, s=slot: phone(i) in (s, None))
             gpos = [[i for i in hits if ok(i)] for hits in pos]
@@ -233,6 +261,9 @@ class Evaluator:
                 continue
             gneg = [i for i in neg if ok(i)]
             found = self._search_window(sig, gpos, gneg, occurred, all_matches)
+            if counted and found:     # 근거 `count`: 그 구간·슬롯 안 조건별 레코드 수 (구간 튜플 끝에 붙인다)
+                found = ([f + (self._counts(gpos, f),) for f in found] if all_matches
+                         else found + (self._counts(gpos, found),))
             if all_matches:
                 matches.extend(found)
             elif found and (best is None or found[0] < best[0]):
@@ -249,7 +280,7 @@ class Evaluator:
             if indices in seen:
                 continue
             seen.add(indices)
-            evidence = self._evidence(sig, indices)
+            evidence = self._evidence(sig, indices, found[4] if len(found) > 4 else None)
             results.append(Result(sig.key, True, evidence=evidence, same_phone=sig.same_phone,
                                   window_sec=sig.window_sec, window=(found[2], found[3]),
                                   flags=self._flags(sig, indices)))
@@ -274,9 +305,13 @@ class Evaluator:
                     break
         return sorted(set(flags))
 
-    def _evidence(self, sig: Signature, indices: tuple[int, ...]) -> list[dict]:
+    def _counts(self, gpos: list[list[int]], found: tuple) -> list[int]:
+        a, b = found[2], found[3]
+        return [sum(a <= self.dts[i] <= b for i in hits) for hits in gpos]
+
+    def _evidence(self, sig: Signature, indices: tuple[int, ...], counts: list[int] | None = None) -> list[dict]:
         evidence = []
-        for cond, i in zip(sig.positives, indices):
+        for k, (cond, i) in enumerate(zip(sig.positives, indices)):
             e = self.events[i]
             evidence.append({
                 "signature": sig.key,
@@ -289,6 +324,7 @@ class Evaluator:
                 "phone_id": e.get("phone_id"),
                 "line_ref": e.get("line_ref"),
                 "event_index": self.ids[i] if self.ids is not None else i,
+                **({"count": counts[k]} if counts and cond.min_count > 1 else {}),
             })
         return evidence
 
@@ -307,6 +343,8 @@ class Evaluator:
         keyed = [sorted((self.dts[i], i) for i in hits) for hits in pos]
         key_dts = [[d for d, _ in ks] for ks in keyed]
         neg_dts = sorted(self.dts[i] for i in neg)
+        need = [c.min_count for c in sig.positives]
+        gap = None if sig.sequence_within_sec is None else timedelta(seconds=sig.sequence_within_sec)
         best = None
         matches = []
         for a in sorted(c for c in candidates if lo <= c <= a_max):
@@ -315,9 +353,9 @@ class Evaluator:
             if j < len(neg_dts) and neg_dts[j] <= b:  # 닫힌 구간 [a, b] 안의 부정 조건
                 continue
             firsts = []
-            for ks, ds in zip(keyed, key_dts):
+            for ks, ds, k in zip(keyed, key_dts, need):
                 j = bisect_left(ds, a)
-                if j == len(ds) or ds[j] > b:
+                if j + k > len(ds) or ds[j + k - 1] > b:   # 구간 안 k번째 hit (min_count, 기본 1)
                     break
                 firsts.append(ks[j][1])
             else:
@@ -325,6 +363,8 @@ class Evaluator:
                     seq = [firsts[order[s]] for s in sig.sequence]
                     keys = [(self.dts[i], i) for i in seq]
                     if any(x >= y for x, y in zip(keys, keys[1:])):
+                        continue
+                    if gap is not None and any(self.dts[y] - self.dts[x] > gap for x, y in zip(seq, seq[1:])):
                         continue
                 if occurred is not None:
                     rank = min(abs((self.dts[i] - occurred).total_seconds()) for i in firsts)
@@ -340,9 +380,10 @@ class Evaluator:
 
     def partial(self, sig: Signature, occurred: datetime | None = None) -> dict | None:
         """완전 일치가 아닌 시그니처가 얼마나 가까운지: `{kind, m, n, hits[인덱스], missing[Condition], blocked_by?,
-        order?[id, id], width_sec?, dist}` 또는 None(해당 없음·오류·범위 없음). 호출자는 완전 일치·오류가 아닌 것에만 부른다.
-        kind: missing(구간 최대 m, 1 ≤ m < n, m/n ≥ 0.5) · absent(n=1, 0건) · blocked(양성 n개 구간마다 부정 줄) ·
-        order(양성 n개 구간에서 sequence 어긋남) · window(양성 n개가 범위엔 있으나 W 구간 하나에 안 듦)."""
+        order?[id, id], gap_sec?, width_sec?, short?[개수|None], dist}` 또는 None(해당 없음·오류·범위 없음). 호출자는 완전 일치·오류가
+        아닌 것에만 부른다. kind: missing(구간 최대 m, 1 ≤ m < n, m/n ≥ 0.5; min_count 모자람은 `short`에 구간 안 개수, 그 조건도
+        한 건 있음으로 세어 0.5를 본다) · absent(n=1, 0건) · blocked(양성 n개 구간마다 부정 줄) · order(양성 n개 구간에서 sequence
+        어긋남, 순서는 맞고 이웃 간격이 sequence_within_sec를 넘으면 `gap_sec`) · window(양성 n개가 범위엔 있으나 W 구간 하나에 안 듦)."""
         try:
             pos = [self.lines(c.pattern) if c.kind == "match" else self.matching_events(c) for c in sig.positives]
             negs = [self.lines(p) for p in sig.negatives]
@@ -377,16 +418,21 @@ class Evaluator:
         key_dts = [[d for d, _ in ks] for ks in keyed]
         neg_dts = [sorted(self.dts[i] for i in h) for h in negs]
         order = {c.id: k for k, c in enumerate(sig.positives) if c.id}
-        best_m, best_firsts, full_free, blocked = 0, None, None, None
+        need = [c.min_count for c in sig.positives]
+        best_m, best_seen, best_firsts, best_short, full_free, blocked = 0, 0, None, {}, None, None
         for a in sorted(c for c in cands if lo <= c <= a_max):
             b = a + width
-            firsts = []
-            for ks, ds in zip(keyed, key_dts):
+            firsts, short = [], {}
+            for k, (ks, ds, nk) in enumerate(zip(keyed, key_dts, need)):
                 j = bisect_left(ds, a)
-                firsts.append(ks[j][1] if j < len(ds) and ds[j] <= b else None)
+                got = int(j < len(ds) and ds[j] <= b) if nk == 1 else bisect_right(ds, b, j) - j
+                firsts.append(ks[j][1] if got >= nk else None)
+                if 0 < got < nk:
+                    short[k] = got       # 횟수 모자람: missing에 `min_count N 중 got`
             m = sum(f is not None for f in firsts)
-            if m > best_m:
-                best_m, best_firsts = m, firsts
+            seen = m + len(short)        # 구간 안에 한 건이라도 있는 조건 수 (기본 min_count면 m과 같다)
+            if (m, seen) > (best_m, best_seen):
+                best_m, best_seen, best_firsts, best_short = m, seen, firsts, short
             if m == n:
                 hit_neg = [k for k, ds in enumerate(neg_dts)
                            if (j := bisect_left(ds, a)) < len(ds) and ds[j] <= b]
@@ -398,18 +444,27 @@ class Evaluator:
         if full_free is not None and sig.sequence:
             seq = [full_free[order[s]] for s in sig.sequence]
             pair = next((k for k, (x, y) in enumerate(zip(seq, seq[1:]))
-                         if (self.dts[x], x) >= (self.dts[y], y)), 0)
-            out.update(kind="order", m=n, hits=full_free, missing=[], order=sig.sequence[pair:pair + 2])
+                         if (self.dts[x], x) >= (self.dts[y], y)), None)
+            extra = {}
+            if pair is None and sig.sequence_within_sec is not None:   # 순서는 맞고 이웃 간격이 T를 넘음: order + gap_sec
+                gaps = [self.dts[y] - self.dts[x] for x, y in zip(seq, seq[1:])]
+                pair = next((k for k, g in enumerate(gaps) if g > timedelta(seconds=sig.sequence_within_sec)), None)
+                if pair is not None:
+                    extra["gap_sec"] = round(gaps[pair].total_seconds(), 3)
+            pair = pair or 0
+            out.update(kind="order", m=n, hits=full_free, missing=[], order=sig.sequence[pair:pair + 2], **extra)
         elif blocked is not None and full_free is None:
             out.update(kind="blocked", m=n, hits=blocked[0], missing=[], blocked_by=sig.negatives[blocked[1]])
-        elif full_free is None and all(pos):
+        elif full_free is None and not best_short and all(len(h) >= nk for h, nk in zip(pos, need)):
             span, picks = self._min_span(keyed)
             out.update(kind="window", m=n, hits=picks, missing=[], width_sec=round(span, 3))
-        elif n == 1 and best_m == 0:
+        elif n == 1 and best_seen == 0:
             out.update(kind="absent", m=0, hits=[], missing=[sig.positives[0]])
-        elif 1 <= best_m < n and best_m / n >= 0.5:
-            out.update(kind="missing", m=best_m, hits=best_firsts,
-                       missing=[c for c, f in zip(sig.positives, best_firsts) if f is None])
+        elif best_m < n and 1 <= best_seen and best_seen / n >= 0.5:
+            missing = [k for k, f in enumerate(best_firsts) if f is None]
+            out.update(kind="missing", m=best_m, hits=best_firsts, missing=[sig.positives[k] for k in missing])
+            if best_short:
+                out["short"] = [best_short.get(k) for k in missing]   # missing과 같은 순서, 횟수 모자람이면 구간 안 개수
         else:
             return None
         out["hits"] = [(sig.positives[k], i) for k, i in enumerate(out["hits"]) if i is not None]   # (조건, 레코드)

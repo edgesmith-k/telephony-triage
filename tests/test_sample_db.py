@@ -576,6 +576,12 @@ def test_skeleton_has_no_types_and_validates():
             assert (out / key / ".gitkeep").exists(), f"뼈대에 {key}/ 가 없습니다."
         for name in SCHEMAS:
             assert (out / "schema" / name).exists(), f"뼈대에 {name}이 없습니다."
+            # 새 DB가 받는 스키마 = 플러그인 사본 = 샘플(sync_schemas --check는 test_boundary) — 바이트까지 같다
+            assert (out / "schema" / name).read_bytes() == (REPO / "plugin" / "schemas" / name).read_bytes(), name
+        defs = json.loads((out / "schema" / "type.schema.json").read_text(encoding="utf-8"))["$defs"]
+        assert "sequence_within_sec" in defs["signature"]["properties"]          # D①: 뼈대 DB가 새 필드를 받는다
+        assert "min_count" in defs["signature"]["properties"]["must_match"]["items"]["oneOf"][1]["properties"]
+        assert "min_count" in defs["mustEventItem"]["properties"]
         for name in ("type.md", "cause.yaml", "issue.yaml"):
             assert (out / "templates" / name).exists(), f"뼈대에 템플릿 {name}이 없습니다."
         guide = (out / "docs" / "analyzer-skills.md").read_text(encoding="utf-8")     # 분석 스킬 만들기 (16-existing-assets §16.5.1)

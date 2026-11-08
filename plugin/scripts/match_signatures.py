@@ -33,14 +33,15 @@
 warnings[], ...}`. 후보 = `{type, cause, title, score, confidence, S, C, signature,
 evidence[], bonus, feedback, fix_judgement, related[], clock_flags?[clock_anomaly|line_order]}`
 (`clock_flags`는 근거가 시계 이상 구간에 걸치거나 sequence 근거의 같은 파일 줄 순서가 역전됐을 때만, 표시 전용). 근거 = `{signature, condition, ts, tag, msg, event, fields,
-phone_id, line_ref, event_index}` (`line_ref`: 이벤트의 로그 줄 위치 `{file_index, line_no}` 또는 null, `event_index`: 입력
+phone_id, line_ref, event_index, count?}` (`count`: 그 조건의 `min_count`가 2 이상일 때만 구간 안 개수, `line_ref`: 이벤트의 로그 줄 위치 `{file_index, line_no}` 또는 null, `event_index`: 입력
 `events[]` 안의 순번 — 입력 문서 순서 기준이다. 점수·판정에는 쓰지 않는다, 04-parser-matching.md §5.8 (6)). 원인 미확인 후보는 `cause: null`.
 `--top N`(기본 3)은 후보 N개와 함께 `types[]`는 S=1, `causes[]`는 C=1인 것만, `pending_causes[]`는 N개만 내고
 뺀 개수를 `omitted`에 적는다. 판정 목록 전체가 필요하면 `--top 0`.
 
 부분 일치(C′, 분석 모드만, 04-parser-matching.md §5.12): 후보 없음 또는 1위 원인 미확인이면 `partial[]`(≤ 5, 판정·점수 아님) =
 `{kind: missing|absent|order|window|blocked, type, cause, signature, matched:"m/n", hits[≤3 {condition, ts, line_ref}],
-missing[≤3 {id, desc(60자), kind, pattern|event}], blocked_by?, order?, width_sec?}`. 1위 C=1이면 키 없음. 1위 시그니처에
+missing[≤3 {id, desc(60자, min_count 모자람이면 앞에 `min_count N 중 k`), kind, pattern|event}], blocked_by?, order?,
+gap_sec?(순서는 맞고 이웃 간격이 sequence_within_sec 초과), width_sec?}`. 1위 C=1이면 키 없음. 1위 시그니처에
 `must_not_match`가 있으면 `absence_basis: {signature, pattern(40자)}`. 회귀·검증 모드는 둘 다 내지 않는다(출력 그대로).
 """
 
@@ -514,15 +515,17 @@ def _partials(evaluator: Evaluator, db, compiled: dict, candidates: list, types_
     items.sort(key=lambda x: x[0])
     out = []
     for _rank, type_id, cause_id, sig, found in items[:PARTIAL_MAX]:
+        short = found.get("short") or [None] * len(found["missing"])     # min_count 모자람: 구간 안 개수
         entry = {"kind": found["kind"], "type": type_id, "cause": cause_id, "signature": sig.key,
                  "matched": f"{found['m']}/{found['n']}",
                  "hits": [{"condition": _clip(c.id or c.describe(), PARTIAL_DESC),
                            "ts": evaluator.events[i]["ts"], "line_ref": evaluator.events[i].get("line_ref")}
                           for c, i in found["hits"][:PARTIAL_MISSING]],
-                 "missing": [{"id": c.id, "desc": _clip(c.describe(), PARTIAL_DESC), "kind": c.kind,
-                              **({"pattern": c.pattern} if c.kind == "match" else {"event": c.event})}
-                             for c in found["missing"][:PARTIAL_MISSING]]}
-        for k in ("blocked_by", "order", "width_sec"):
+                 "missing": [{"id": c.id,
+                              "desc": _clip((f"min_count {c.min_count} 중 {got} " if got else "") + c.describe(), PARTIAL_DESC),
+                              "kind": c.kind, **({"pattern": c.pattern} if c.kind == "match" else {"event": c.event})}
+                             for c, got in list(zip(found["missing"], short))[:PARTIAL_MISSING]]}
+        for k in ("blocked_by", "order", "gap_sec", "width_sec"):
             if k in found:
                 entry[k] = _clip(found[k], PARTIAL_DESC) if k == "blocked_by" else found[k]
         out.append(entry)

@@ -309,6 +309,59 @@ def test_skeleton_is_clean():
     assert _lint(skeleton, "--all", expect=0)["errors"] == []
 
 
+REJECTED = "{id: rejected, event: data_evaluation_rejected, fields: {reasons: '.*DATA_DISABLED.*'}}"
+SEQUENCE = "        sequence: [setting-off, rejected]\n"
+COUNT_GAP = [(REJECTED, REJECTED[:-1] + ", min_count: 2}"), (SEQUENCE, SEQUENCE + "        sequence_within_sec: 5\n")]
+
+
+def _sig_lint(*edits, old_schema=False) -> list[tuple[str, str]]:
+    """샘플 DB 사본의 DATA-001 type.md에 `edits`를 적용해 린트하고 그 파일의 `(코드, 메시지)` 오류를 돌려준다.
+    `old_schema`: DB `schema/type.schema.json`을 D① 전 v1(새 필드 없음, `additionalProperties: false`)로 바꾼다."""
+    db = runner_copy(SAMPLE)
+    for old, new in edits:
+        edit(db / D / "type.md", old, new)
+    if old_schema:
+        path = db / "schema/type.schema.json"
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        defs = schema["$defs"]
+        del defs["mustEventItem"]["properties"]["min_count"]
+        del defs["signature"]["properties"]["sequence_within_sec"]
+        del defs["signature"]["properties"]["must_match"]["items"]["oneOf"][1]["properties"]["min_count"]
+        assert "min_count" not in json.dumps(schema) and "sequence_within_sec" not in json.dumps(schema)
+        path.write_text(json.dumps(schema, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+    result = _lint(db, "--all", expect=(0, 1))
+    return [(f["code"], f["message"]) for f in result["errors"] if f["file"] == f"{D}/type.md"]
+
+
+def test_min_count_and_sequence_within_sec_accepted():
+    assert _sig_lint(*COUNT_GAP) == []
+
+
+def test_min_count_and_sequence_within_sec_format_errors():
+    cases = [
+        ([(REJECTED, REJECTED[:-1] + ", min_count: 0}")], "schema", "min_count"),
+        ([(REJECTED, REJECTED[:-1] + ", min_count: 1.5}")], "schema", "min_count"),
+        ([("['RILJ.*>\\s*SETUP_DATA_CALL']", "[{pattern: 'RILJ.*>\\s*SETUP_DATA_CALL', min_count: 2}]")], "schema",
+         "must_not_match"),
+        ([("      - id: roaming-disabled\n", "      - id: roaming-disabled\n        sequence_within_sec: 5\n")], "signature",
+         "sequence가 있을 때만"),
+        ([(SEQUENCE, SEQUENCE + "        sequence_within_sec: 61\n")], "signature", "window_sec(60)보다 큽니다"),
+        ([(SEQUENCE, SEQUENCE + "        sequence_within_sec: soon\n")], "schema", "sequence_within_sec"),
+        ([(SEQUENCE, SEQUENCE + "        sequence_within_sec: 0\n")], "schema", "sequence_within_sec"),
+    ]
+    for edits, code, needle in cases:
+        found = _sig_lint(*edits)
+        assert any(c == code and needle in m for c, m in found), (edits, found)
+
+
+def test_old_schema_db_rejects_count_and_gap_fields():
+    """이슈 DB는 `schema/`를 들고 있어 db_lint가 DB 쪽 스키마로 검사한다: D① 전 v1 스키마 DB는 새 필드를 거부한다(호환 변경 §6.4)."""
+    assert _sig_lint(old_schema=True) == []
+    found = _sig_lint(*COUNT_GAP, old_schema=True)
+    messages = " ".join(m for c, m in found if c == "schema")
+    assert "'min_count' was unexpected" in messages and "'sequence_within_sec' was unexpected" in messages, found
+
+
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 

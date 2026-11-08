@@ -36,7 +36,8 @@
       "properties": {
         "id": {"$ref": "#/$defs/sigId"},
         "event": {"$ref": "#/$defs/eventName"},
-        "fields": {"type": "object", "additionalProperties": {"type": "string"}, "minProperties": 1}
+        "fields": {"type": "object", "additionalProperties": {"type": "string"}, "minProperties": 1},
+        "min_count": {"description": "창 안에 이 조건의 레코드가 N개 이상 (기본 1, 04-parser-matching.md §5.11 (1))", "type": "integer", "minimum": 1}
       }
     },
     "signature": {
@@ -55,7 +56,8 @@
             "oneOf": [
               {"type": "string", "minLength": 1},
               {"type": "object", "additionalProperties": false, "required": ["id", "pattern"],
-               "properties": {"id": {"$ref": "#/$defs/sigId"}, "pattern": {"type": "string", "minLength": 1}}}
+               "properties": {"id": {"$ref": "#/$defs/sigId"}, "pattern": {"type": "string", "minLength": 1},
+                              "min_count": {"type": "integer", "minimum": 1}}}
             ]
           }
         },
@@ -63,7 +65,8 @@
         "must_not_match": {"type": "array", "items": {"type": "string", "minLength": 1}},
         "window_sec": {"type": "integer", "minimum": 1},
         "same_phone": {"type": "boolean"},
-        "sequence": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/sigId"}, "uniqueItems": true}
+        "sequence": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/sigId"}, "uniqueItems": true},
+        "sequence_within_sec": {"description": "sequence 이웃 조건의 첫 충족 시각 차 상한(초). sequence가 있을 때만, window_sec 이하 — 교차 검사는 db_lint.py", "type": "number", "exclusiveMinimum": 0}
       }
     },
     "codeRef": {

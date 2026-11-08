@@ -460,6 +460,7 @@ class ReportMixin:
             cand.pop("_cause_unjudged", None)
             for e in cand["evidence"]:
                 e.pop("_ref", None)
+                e.pop("_count", None)
         final = fit(final)
         violation = schema_violation(final)
         if violation:
@@ -477,6 +478,7 @@ class ReportMixin:
             cand.pop("_cause_unjudged", None)
             for e in cand["evidence"]:
                 e.pop("_ref", None)
+                e.pop("_count", None)
         result = final
         (self.job / "analysis.json").write_text(dumps(result) + "\n",
                                                 encoding="utf-8", newline="\n")
@@ -511,7 +513,9 @@ class ReportMixin:
                 parts.append("없음 " + ", ".join(x["missing"]))
             if p.get("blocked_by"):
                 parts.append(f"막음 must_not_match {p['blocked_by']}")
-            if x.get("order"):
+            if x.get("order") and x.get("gap_sec") is not None:     # 순서는 맞고 간격만 넘음 — "순서"라고 쓰지 않는다
+                parts.append(f"간격 넘음 {' → '.join(x['order'])} {x['gap_sec']:g}초(sequence_within_sec 초과)")
+            elif x.get("order"):
                 parts.append("순서 어긋남 " + " → ".join(x["order"]))
             if x.get("width_sec") is not None:
                 parts.append(f"한 구간에 안 듦(가장 가까운 폭 {x['width_sec']:g}초)")
@@ -642,7 +646,8 @@ class ReportMixin:
                          f"일치 수준 {label} — 진단 확신도 아님"
                          f"{'' if top['C'] else (', 유형 일치·원인 판정 불가' if top.get('_cause_unjudged') else ', 유형 일치·원인 미확인')})")
             lines.append(f"- 근거 로그 (마스킹, 슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
-            lines += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ({e['_ref']})" if e.get("_ref") else "")
+            lines += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ×{e['_count']}" if e.get("_count") else "")
+                      + (f" ({e['_ref']})" if e.get("_ref") else "")
                       for e in top["evidence"]]
             basis = (r.get("_partial") or {}).get("absence_basis")
             if basis:      # must_not_match에 기대는 시그니처: 그 줄이 빌드에서 사라져도 같은 결과(판정 불변, must_show 아님)

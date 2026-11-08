@@ -808,7 +808,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                    for h in p.get("hits") or []],
                           "missing": [(m.get("id") or f"#{k + 1}") + f" `{m['desc']}`"
                                       for k, m in enumerate(p.get("missing") or [])],
-                          "order": p.get("order"), "width_sec": p.get("width_sec"), "code": []})
+                          "order": p.get("order"), "gap_sec": p.get("gap_sec"), "width_sec": p.get("width_sec"), "code": []})
         need = [n for n, p in enumerate(items) if p["kind"] in ("missing", "absent")]
         if not need or not code or code.get("skipped"):
             return out, extra
@@ -992,7 +992,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                                                 if e.get("phone_id") is not None}),
                     "evidence": [{"ts": e.get("ts"), "tag": e.get("tag"), "msg": _clip(e.get("msg"), 140),
                                   "event": e.get("event"),
-                                  "_ref": _ref_label(e.get("line_ref"))}   # report.md 전용, analysis.json에는 안 나간다
+                                  "_ref": _ref_label(e.get("line_ref")),   # report.md 전용, analysis.json에는 안 나간다
+                                  **({"_count": e["count"]} if e.get("count") else {})}   # min_count ≥ 2 조건만(report.md `×N`)
                                  for e in _unique_evidence(c.get("evidence") or [])[:10]],
                     "fix_judgement": (c.get("fix_judgement") or {}).get("judgement"),
                     "fix_message": _clip((c.get("fix_judgement") or {}).get("message"), 100),
