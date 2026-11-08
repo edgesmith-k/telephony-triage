@@ -173,7 +173,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 
 - `issue-db.config.yaml`의 `schema_version`은 이슈 DB 파일 구조가 바뀔 때만 올린다. 필드 추가도 필수 필드면 올린다.
 - 첫 배포(반입) 전에는 v1 정의를 직접 고치고(예: Jira 기록의 선택 필드 `failed_step`, 트래커 범용화의 `jira/`→`issues/`·`platform_version(s)` 개명 — `18-trackers.md` T4), 배포 뒤 **구조 변경**(필수 필드 추가·개명·형식 변경)은 항상 버전을 올린다.
-- 배포 뒤 **호환 변경**(선택 필드·op 추가, 필수 해제 — 기존 파일·계획이 모두 그대로 유효하고 옛 플러그인도 기존 기능은 그대로 동작. 새 op가 든 계획은 새 플러그인으로 적용)은 버전을 올리지 않는다. 운영 이슈 DB의 `schema/`를 메인테이너 PR로 바꾸고, 플러그인은 그 DB의 스키마로 동작을 가른다(예: Jira 기록 `sw` 필수 해제 — `issuedb.record_required`, 계획 op `remove-parser-rule`).
+- 배포 뒤 **호환 변경**(선택 필드·op 추가, 필수 해제 — 기존 파일·계획이 모두 그대로 유효하고 옛 플러그인도 기존 기능은 그대로 동작. 새 op가 든 계획은 새 플러그인으로 적용)은 버전을 올리지 않는다. 운영 이슈 DB의 `schema/`를 메인테이너 PR로 바꾸고, 플러그인은 그 DB의 스키마로 동작을 가른다(예: Jira 기록 `sw` 필수 해제 — `issuedb.record_required`, 계획 op `remove-parser-rule`, 시그니처 선택 필드 `min_count`·`sequence_within_sec` — 옛 플러그인은 모르는 필드를 무시해 더 넓게 맞으므로 이 필드를 쓰는 시그니처는 새 플러그인 배포 뒤에 넣는다).
 - 플러그인은 `SUPPORTED_SCHEMA = (min, max)`를 가진다.
 
 | 이슈 DB 버전 | 플러그인 동작 |
