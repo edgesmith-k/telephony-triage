@@ -96,7 +96,8 @@ def test_user_platform_analyzers_allowed_and_checked():
     ({"ofono": {"issue_db": "x"}}, "platforms.ofono.issue_db"),                      # 팀 이슈 DB 값은 매핑
     ({"ofono": {"issue_db": {"path": "/x"}}}, "platforms.ofono.issue_db.path"),       # 경로는 사용자 config
     ({"ofono": {"issue_db": {"remote": "/local/db"}}}, "platforms.ofono.issue_db.remote: owner/repo"),   # 풀리는 원격만
-    ({"ofono": {"issue_db": {"remote": "https://h/o/r.git"}}, "other": {"issue_db": {"remote": "https://H/o/r/"}}},
+    ({"ofono": {"issue_db": {"remote": "https://ghe.mock.invalid/o/r.git"}},
+      "other": {"issue_db": {"remote": "https://GHE.MOCK.INVALID/o/r/"}}},
      "platforms.other.issue_db.remote: site-defaults platforms.ofono.issue_db.remote와 같은 원격"),   # 플랫폼마다 따로
     ({"ofono": {"analyzers": "x"}}, "platforms.ofono.analyzers"),
     ({"ofono": {"analyzers": {"data": ["x"]}}}, "platforms.ofono.analyzers.data"),
