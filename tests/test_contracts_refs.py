@@ -6,6 +6,8 @@
    대상은 백틱·괄호·쉼표·마침표·`·` 등에서 끝나고, 끝 낱말에 붙은 조사(`§브랜치의`)는 떼고도 본다. `§A·§B`, `§A, §B`처럼 바로 이어진 대상도 같은 파일 참조다.
    contracts.md 안의 번호 참조(`04 §5.11`, `MODULE_SKILLS_PLAN_IMPL §2.2`)는 다른 문서 절이라 이름만 본다.
    `§<절>` 같은 자리 표시는 대상이 아니다.
+   한계: 조사는 끝 낱말에서 정해 둔 것만 뗀다, 이름은 제목 앞부분 낱말 비교다, `§3.2`는 번호만 본다(뒤의 `db_pr.py` 세부
+   등은 보지 않음), `` `contracts.md`의 §… ``처럼 파일 이름과 § 사이에 글이 있거나 `` §`…` ``처럼 백틱으로 시작하는 대상은 찾지 않는다.
 2. 줄 상한: contracts.md의 모든 줄은 UTF-8 4,096B 이하다(긴 셀은 표 밖 세부 블록으로 푼다).
 """
 from __future__ import annotations
@@ -15,16 +17,22 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 CONTRACTS = REPO / "docs" / "design" / "contracts.md"
-GLOBS = ("docs/design/**/*.md", "docs/*.md", "plugin/**/*.md", "plugin/scripts/**/*.py", "tests/**/*.py",
-         "tools/*.py", "opencode/**/*.md")
+# docs/development·docs/book·docs/materials는 뺀다: 계획·리뷰 기록과 책·교육 자료(html)라 옛 절 이름을 그대로 둘 수 있다.
+GLOBS = ("docs/design/**/*.md", "docs/*.md", "plugin/**/*.md", "plugin/**/*.py", "plugin/**/*.json", "plugin/**/*.yaml",
+         "tests/**/*.py", "tests/**/*.md", "tests/**/*.yaml", "tests/**/*.json", "tools/*.py", "opencode/**/*.md",
+         "SITE_PATHS")
 EXCLUDE = ("docs/history/", "tests/skill_evals/workspace/")
 LINE_MAX = 4096
 
 DOC_BEFORE = re.compile(r"([\w.-]+\.md)`?\s*$")              # `§` 바로 앞의 문서 이름
 TARGET = re.compile(r"\d+(?:\.\d+)*|[^\s`()\[\],.·:;\"'*|<>]+(?: [^\s`()\[\],.·:;\"'*|<>]+)*")
 CHAIN = re.compile(r"`?(?:·|, )`?")                          # `§A·§B`, `§A, §B`
-PARTICLE = re.compile(r"(?:의|에서|에만|에|을|를|으로|로|와|과|은|는|이|가|도)$")
+PARTICLE = re.compile(r"(?:의|에서|에만|에|을|를|으로|로|와|과|은|는|이며|이다|이|가|도)$")
 MIN_REFS = 250                                               # 파서가 망가져 참조를 못 찾으면 통과하지 않게
+SENTINELS = {("plugin/scripts/db_add.py", "작업 계획"),           # 문서 이름 뒤
+             ("plugin/scripts/db_add.py", "renumber 참조"),       # `, §` 이어짐
+             ("docs/design/16-existing-assets.md", "브랜치"),     # `·§` 이어짐
+             ("docs/design/contracts.md", "종료 코드 표를 따른다")}  # contracts.md 안의 이름만 참조
 
 
 def _headings() -> list[str]:
@@ -72,14 +80,16 @@ def _files():
 
 def test_contracts_section_refs_resolve():
     headings = _headings()
-    bad, count = [], 0
+    bad, count, found = [], 0, set()
     for rel, path in _files():
         for n, target in _refs(rel, path.read_text(encoding="utf-8", errors="replace")):
             count += 1
+            found.add((rel, target))
             if not _resolves(target, headings):
                 bad.append(f"{rel}:{n} §{target}")
     assert not bad, "contracts.md에 없는 절 참조:\n" + "\n".join(bad)
     assert count >= MIN_REFS, count
+    assert SENTINELS <= found, SENTINELS - found                # 찾는 길(문서 이름·이어짐·안쪽 이름)마다 하나씩
 
 
 def test_contracts_lines_fit_4kb():
