@@ -9,8 +9,10 @@ cancelled(마지막 discard cancel이고 그 뒤 analyze 없음) → 보류 held
 분석만 analysis_only(분석 완료·계획 없음) → 결과 없음 no_result.
 따로 세는 것: `_`·`.` 폴더와 표식(plan·state·trace·triage-state) 없는 폴더는 빼고, analyze 기록(`0-key`)이 없고 계획 source가
 analyze·record가 아니면 other_flows, trace에 v≥2 행이 없으면(업데이트 전 작업) legacy(quick_stage별 건수만, 시간·취소·질문 미측정).
-PR까지 = 첫 `0-key` → 그 뒤 첫 `publish{action: created, gh_ok: true}`(상태 pr인 작업만), 분석까지 = 첫 `0-key` → 그 뒤 첫
-`done`(둘 다 경과 시간, 보류 포함). PR이 있는데 못 재면 pr_unmeasured(record처럼 analyze 없이 시작했거나 PR 뒤에 analyze한 작업).
+PR까지 = 첫 `0-key` → 그 뒤 첫 `publish{action: created, gh_ok: true}`(상태 pr인 작업만), 분석까지(`analysis_minutes`) = 첫 `0-key` →
+그 뒤 첫 `done` = **스크립트 분석(드라이버) 완료까지**의 경과 시간이다(보류·입력 대기 포함). 그 뒤의 탐색·심층 분석(Step 5-1/5-2)과
+사용자 확인·기록까지의 시간, 사람의 능동 작업 시간은 재지 않는다(코덱스 리뷰 F7) — 전체 조사 완료 시간의 대체 지표로 쓰지 않는다.
+PR이 있는데 못 재면 pr_unmeasured(record처럼 analyze 없이 시작했거나 PR 뒤에 analyze한 작업).
 재시도의 analyze 실행은 질문(`needs_input`) 바로 뒤의 `--answer` 재실행을 빼고 따로(answer_reruns) 센다. 시간대 없는(naive) 시각·
 목록이 아닌 `job.runs` 같은 손상 값은 없는 것으로 본다. 드라이버 질문 = `needs_input` 행(kind
 `issue` 제외), 대화 질문(AskUserQuestion)은 스크립트 신호가 없어 세지 않는다. release(Step 7) 사유는 기록이 없어 파일 상태로만
@@ -477,7 +479,7 @@ def report_lines(s: dict) -> list[str]:
             f"(--analysis-only 실행 {s['analysis_only_runs']}) · 결과 없음 {st['no_result']} · 손상 {st['unknown']}",
             f"취소 비율 {ratio} (분모: 측정 작업 − 진행 중·연습·손상)",
             f"PR까지(첫 analyze → PR 생성, 경과 시간·보류 포함) {dist(s['pr_minutes'])} · 측정 불가 {s['pr_unmeasured']}건",
-            f"분석까지(첫 analyze → 분석 완료) {dist(s['analysis_minutes'])}",
+            f"스크립트 분석까지(첫 analyze → 드라이버 done, 탐색·심층 분석·사용자 확인 제외) {dist(s['analysis_minutes'])}",
             f"드라이버 질문(issue 제외) 작업당 {per_job}개 (총 {q['total']}개: {kinds})",
             f"재시도: analyze 실행 {r['runs']}(질문 답 재실행 {r['answer_reruns']} 따로) · 오류 {r['errors']} · stage "
             f"{r['stages']}(실패 {r['stage_failed']})",
@@ -515,7 +517,7 @@ def build_parser() -> argparse.ArgumentParser:
 # --help는 요약만(종합 리뷰 A: 판정 규칙 전체가 help에 들어가 4,000자 한 단락이었다). 규칙 전문은 이 모듈 머리말(`__doc__`)과
 # contracts.md §3.2 `usage_stats.py` 행.
 HELP_SUMMARY = """파일럿 운영 지표(S-7): work_dir의 작업마다 상태 하나(PR·push만·진행 중·연습·취소·보류·분석만·결과 없음·손상)를 고르고
-분석까지/PR까지 시간(중앙값·평균), 취소 비율, 드라이버 질문 수, 재시도를 낸다. 개수·시간만 — 작업 키·내용은 내지 않는다.
+스크립트 분석까지(드라이버 done, 탐색·심층 분석 제외)/PR까지 시간(중앙값·평균), 취소 비율, 드라이버 질문 수, 재시도를 낸다. 개수·시간만 — 작업 키·내용은 내지 않는다.
 텍스트 9줄(첫 줄 집계 대상). --json이면 한 줄 JSON(format 2). --transcripts는 opt-in: Claude Code transcript의 토큰을
 단계별로 세고(읽기 전용, 숫자만), 없으면 tokens null(미측정). 모델·네트워크 호출 없음."""
 HELP_EPILOG = """기본 대상: 선택 플랫폼(--platform > TT_PLATFORM > 사용자 config platform > site)의 사용자 config work_dir.

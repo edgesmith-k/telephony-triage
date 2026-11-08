@@ -218,7 +218,7 @@ git status --short          # 바뀐 사외 파일 + .draft-manifest.json만 M. 
 
 **5. 테스트 후 병합**
 ```
-python3 -m pytest -q tests          # Ubuntu CI 약 16~20분, PC에 따라 더 걸린다
+python3 -m pytest -q -n 4 tests     # 병렬(pytest-xdist, test extras) 4코어 약 10분 · 단일 프로세스 약 30분(README), PC에 따라 더 걸린다
 git add -A && git commit -m "재반입 <새 label> (사외 <커밋>)"
 git switch main && git merge --ff-only draft-import/<새 label> && git branch -d draft-import/<새 label>
 rm -rf ~/tt-old ~/tt-new
@@ -286,7 +286,7 @@ CODEOWNERS에는 **메인테이너 경로**(`/.githooks/`·`/schema/`·`/parser-
 
 ## 10. 모듈 스킬 레포 연결과 정기 점검 (MS-1·MS-2, S-3 완료 뒤)
 
-1. **주소를 넣기 전에** 설치 분석 스킬이 연결된 카테고리에 `prefer: skill`을 적을지 정한다. 안 적으면 그 카테고리 5-1이 모듈 문서로 바뀌고, 레포에 그 모듈이 없으면 분석이 멈춘다(`config.py set analyzers.<카테고리>.prefer skill`, 플랫폼이면 `--platform <p>`).
+1. **주소를 넣기 전에** 설치 분석 스킬이 연결된 카테고리에 `prefer: skill`을 적을지 정한다. 안 적으면 그 카테고리 5-1이 모듈 문서로 바뀐다. 레포에 그 모듈이 없으면 **분석은 멈추지 않고** 그 심층 분석만 생략된다(리포트 `심층 분석: 해당 없음(레포에 <모듈> 없음 @<sha>)`, `triage.py module` 종료 1·`next`는 계속 — 탐색 5-2는 `JOB/timeline.md`로 내장 절차). `prefer: skill`인데 스킬 이름이 없으면 설정 오류(종료 2, 리포트 `심층 분석 생략: 설정 오류`)이고 역시 기본 분석은 계속한다. (`config.py set analyzers.<카테고리>.prefer skill`, 플랫폼이면 `--platform <p>`; 동작 근거 `triagelib/modulecmd.py` `_next`·`_fail_line`, `reference/module-skills.md` 5-1 5항)
 2. `python3 tools/site_step.py modules` → `modules check`: remote·push 권한·트리 = modules.yaml·데몬 ⊆ tags.yaml·prefer 규칙·보호·CI(정보). 중첩 `claude -p` 확인은 명령만 보인다(사용자가 한 번 돌리고 `--waive`).
 3. `python3 tools/site_step.py modules coverage --out docs/site/module-coverage.diff`(토큰 0, 사내 전용 출력): 사내 로그로 모듈별 줄 수·모듈에 없는 데몬·tags.yaml에 없는 태그를 보고, modules.yaml diff를 검토해 모듈 레포 PR로 보낸다. tags.yaml에 없는 태그는 이슈 DB 계획 op PR이 먼저다(사용자 확인).
 4. **정기 점검(매주, 상한 300,000 토큰/회)**: `python3 tools/site_step.py audit` — 사내 모델·출처 모름 커밋만 골라 토큰 0 검사를 먼저 돈다. 남은 것은 `docs/site/audit/<날짜>-review.md`의 목록·추정 토큰뿐이다(Claude는 부르지 않는다). 사내 Claude 리뷰(승인 뒤) → `audit --record`(넘친 항목은 이월). 14일 넘으면 ms2.audit가 사용자 필요.

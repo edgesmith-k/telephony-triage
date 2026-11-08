@@ -111,7 +111,7 @@ mkdir -p ~/tt-draft && cd ~/tt-draft && unzip ~/telephony-triage-import-v1.zip
 sha256sum ~/telephony-triage-import-v1.zip   # 사외에서 적은 값과 같은지
 python3 -m venv .venv && . .venv/bin/activate   # python3 3.10+
 pip install '.[test]'   # 사내 미러(--no-build-isolation 금지, SITE_INSTALL §4). 고정 버전이 미러에 없으면 `test_r10_dependency_manifest_has_complete_pins` 1건 실패는 예상, `SITE_PROFILE.md`에 기록
-python3 -m pytest -q tests                    # 사외와 같은 결과여야 한다 (Ubuntu CI 약 16~20분, PC에 따라 더 걸린다)
+python3 -m pytest -q -n 4 tests               # 사외와 같은 결과여야 한다 (4코어 약 10분 · 단일 약 30분, PC에 따라 더 걸린다)
 ```
 사외에서 통과한 테스트가 실패하면 환경 차이(파이썬·git 버전, 로케일, 경로)다. 반입 전에 원인을 잡는다.
 개발 중 코드를 고친 뒤에는 전체 대신 `python3 tools/related_tests.py --run`(바뀐 파일의 관련 테스트 + 경계 검사)을 돌린다. 전체 `pytest tests`는 도구가 `full: true`로 판단할 때, 반입 묶음을 만들기 직전, 요청할 때만 쓴다.
@@ -246,7 +246,7 @@ git clone <사외 레포 URL> && cd telephony-triage
 python3 -m venv .venv && . .venv/bin/activate   # python3 3.10+
 pip install '.[test]'
 touch .local-draft            # 안 만들면 Claude Code가 모드를 묻는다 → "사외 초안"
-python3 -m pytest -q tests    # 기준선 (Ubuntu CI 약 16~20분, Windows 사외 개발 PC는 약 42분)
+python3 -m pytest -q -n 4 tests    # 기준선 (4코어 약 10분 · 단일 약 30분, Windows 사외 개발 PC 단일 약 42분)
 ```
 첫 메시지: `DRAFT_NOTES.md의 "남은 일"에서 다음 할 일을 확인하고, 그 작업의 근거 문서만 읽고 시작해줘. docs/history/는 읽지 마.`
 원본 문서 zip·eval 산출물은 레포에 없어도 된다(`docs/design/`이 정본, eval은 새 iteration 경로로 다시 만든다).

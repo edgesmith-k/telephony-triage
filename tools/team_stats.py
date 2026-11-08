@@ -7,7 +7,8 @@
 내용은 들어 있지 않다(`usage_stats`가 내지 않는다). `format`이 2가 아닌 파일은 건너뛰고 `skipped`에 적는다.
 
 표 열: 작업(측정 대상 jobs) · PR(states.pr) · 분석만(states.analysis_only) · 취소율(취소 / (작업 − 진행 중 − 연습 − 손상), usage_stats와 같은
-정의) · PR까지 중앙값(분) · 분석까지 중앙값(분) · 질문/작업(questions.per_job) · 재시도(retries.runs) · 토큰(tokens.total의 입력+출력+
+정의) · PR까지 중앙값(분) · 스크립트 분석까지 중앙값(분)(`analysis_minutes` — 드라이버 done까지, 탐색·심층 분석·사용자 확인 제외) ·
+질문/작업(questions.per_job) · 재시도(retries.runs) · 토큰(tokens.total의 입력+출력+
 캐시 읽기+캐시 쓰기 — 응답 수 calls는 더하지 않는다, 미측정(`tokens` 또는 `total`이 null)이면 -).
 합계 행: 작업·PR·분석만·재시도·토큰은 합, 취소율은 취소 건수 합 / 분모 합(반올림된 개인 비율을 가중하지 않는다 — 코덱스 리뷰 N2),
 질문/작업은 전체 가중, 중앙값은 모든 사용자의 `values`를 합쳐 다시 센다. 토큰 합은 네 종류를 모두 더한 수이지 금전 비용이 아니다
@@ -26,7 +27,7 @@ import sys
 from pathlib import Path
 
 FORMAT = 2
-COLUMNS = ("사용자", "작업", "PR", "분석만", "취소율", "PR까지 중앙값(분)", "분석까지 중앙값(분)", "질문/작업", "재시도", "토큰")
+COLUMNS = ("사용자", "작업", "PR", "분석만", "취소율", "PR까지 중앙값(분)", "스크립트 분석까지 중앙값(분)", "질문/작업", "재시도", "토큰")
 
 
 def _num(value) -> float | None:
@@ -157,7 +158,7 @@ def render(rows: list[dict], total: dict, skipped: list[str]) -> str:
     widths = [max(len(row[i]) for row in table) for i in range(len(COLUMNS))]
     lines = ["  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)).rstrip() for row in table]
     lines.insert(1, "  ".join("-" * w for w in widths))
-    lines.insert(0, f"팀 지표: 사용자 {total['users']}명 · PR까지 중앙값은 측정 {total['pr_n']}건 · 분석까지 {total['analysis_n']}건"
+    lines.insert(0, f"팀 지표: 사용자 {total['users']}명 · PR까지 중앙값은 측정 {total['pr_n']}건 · 스크립트 분석까지 {total['analysis_n']}건"
                     f" · 취소율 {total['cancelled']}/{total['cancel_base']}({total['cancel_users']}명 합산)"
                     f" · 토큰(입력+출력+캐시 읽기+캐시 쓰기, 비용 아님)은 {total['tokens_users']}명만 측정")
     lines += [f"건너뜀: {s}" for s in skipped]
