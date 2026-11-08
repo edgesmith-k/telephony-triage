@@ -68,8 +68,8 @@ main 브랜치 보호 설정 (메인테이너가 GHE에서 설정하고 `docs/br
   병합한다(`db_pr merge`는 +1이 있어도 거부한다 — "승인 필요"는 publish가 남긴 병합 기록 `needs_approval`로, 메인테이너 경로는
   `git diff`로 다시 본다).
 
-guard는 `publish`·`merge`·`request-review`를 ask로, gh·MCP로 직접 머지·자동 병합·Approve·리뷰 기각은 거부로, 병합 기록
-(`merge-offer.json`) 직접 쓰기는 거부로 둔다(`08-safety.md §9` 규칙 7·11). 다른 사람이 문제를 발견하면 그때 새 PR(또는 GHE의 Revert)로 고친다.
+guard는 `publish`·`merge`·`request-review`를 ask로, gh·MCP로 직접 머지는 ask, 자동 병합 켜기·Approve·리뷰 기각은 거부로, 병합 기록
+(`merge-offer.json`) 직접 쓰기는 거부로 둔다(`08-safety.md §9` 규칙 7·11 — 병합 ask는 서버 브랜치 보호가 승인 1을 강제한다는 전제, `site_checks` `s4a.protection_guard`). 다른 사람이 문제를 발견하면 그때 새 PR(또는 GHE의 Revert)로 고친다.
 
 **서버 측 강제가 전제다.** 플러그인의 Claude hook과 이슈 DB의 git hook(`pre-commit`, `pre-push`)은 모두 로컬 장치라 우회할 수 있다(최선 노력 명령 파싱, `core.hooksPath` 변경). 그리고 `core.hooksPath=.githooks`는 main에 커밋된 스크립트를 **모든 기여자 PC에서 실행**하므로, 브랜치 보호와 메인테이너 경로(`/.githooks/` 등)의 CODEOWNERS 필수 리뷰가 서버에서 강제되지 않으면 main 쓰기 권한이 곧 팀 전체 PC의 코드 실행 권한이 된다. 브랜치 보호를 설정할 수 없는 GHE 환경이면 `.githooks/` 채택 여부를 다시 결정한다 (`14-site.md` S5, `08-safety.md §9`).
 
