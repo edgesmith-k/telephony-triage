@@ -445,3 +445,28 @@ class Evaluator:
 
 
 PARTIAL_KINDS = ("missing", "absent", "order", "window", "blocked")   # 부분 일치 순위 순 (§5.12)
+
+
+REGEX_META = set(".^$*+?{}[]\\|()")
+
+
+def literal_anchor(pattern: str) -> str | None:
+    """정규식 앞머리 리터럴의 첫 낱말(첫 메타 문자·공백·`:` 전) — 평가 글 `TAG: msg`의 태그 자리에 올 수 있는 글자. 3자 미만이면 None.
+    match_signatures(배제 조건 검증 불가 판정)와 db_lint(태그 자리 낱말이 tags.yaml에 있는지)가 같이 쓴다."""
+    lit = []
+    for ch in pattern:
+        if ch in REGEX_META:
+            break
+        lit.append(ch)
+    word = re.split(r"[\s:]", "".join(lit).strip(), maxsplit=1)[0]
+    return word if len(word) >= 3 else None
+
+
+def tag_position_word(pattern: str) -> str | None:
+    """패턴이 **태그 자리**로 시작하는 것으로 보일 때 그 낱말: 앞머리 리터럴 낱말이 대문자로 시작하고 바로 뒤가 `.*`·`\\s`·공백이다
+    (`RILJ.*>\\s*SETUP_DATA_CALL` → RILJ). `낱말:`(메시지 키 모양)·`|`·끝은 메시지 낱말일 수 있어 None."""
+    word = literal_anchor(pattern)
+    if not word or not re.match(r"^[A-Z][A-Za-z0-9_-]*$", word):
+        return None
+    rest = pattern[len(word):]
+    return word if re.match(r"(?:\.\*|\\s|\s)", rest) else None

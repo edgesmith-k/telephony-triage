@@ -60,7 +60,7 @@ from common import builds, compat, dbpath, issuedb, parser_rules, site_defaults,
 from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS  # noqa: E402
-from common.signatures import PARTIAL_KINDS, Evaluator, SignatureError  # noqa: E402
+from common.signatures import PARTIAL_KINDS, Evaluator, SignatureError, literal_anchor  # noqa: E402
 from common.logtime import BACKWARD_THRESHOLD_SEC  # noqa: E402
 
 OUTPUT_SCHEMA = 1
@@ -530,18 +530,7 @@ def _partials(evaluator: Evaluator, db, compiled: dict, candidates: list, types_
     return out
 
 
-_REGEX_META = set(".^$*+?{}[]\\|()")
-
-
-def _literal_anchor(pattern: str) -> str | None:
-    """정규식 앞머리 리터럴의 첫 낱말(첫 메타 문자·공백·`:` 전) — 평가 글 `TAG: msg`의 태그 자리에 올 수 있는 글자. 3자 미만이면 None."""
-    lit = []
-    for ch in pattern:
-        if ch in _REGEX_META:
-            break
-        lit.append(ch)
-    word = re.split(r"[\s:]", "".join(lit).strip(), maxsplit=1)[0]
-    return word if len(word) >= 3 else None
+_literal_anchor = literal_anchor      # (common.signatures로 옮김 — db_lint와 공유)
 
 
 def _collection_rules(db):

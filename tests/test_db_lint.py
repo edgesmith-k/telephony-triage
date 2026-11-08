@@ -488,3 +488,23 @@ def test_type_title_form_error_only_for_new_type():
     assert (f"{D}/type.md", False) in form and ("data/DATA-009-dns-validation/type.md", True) in form, form
     every = _lint(repo, "--all")                                             # base 없음: 경고만
     assert [f for f in every["errors"] if f["code"] == "title-form"] == []
+
+
+def test_tag_position_word_not_in_tags_yaml_is_warned():
+    """Claude 종합 리뷰 B: 시그니처 패턴이 태그 자리 낱말로 시작하는데(`RILJ.*>…`) 그 태그가 tags.yaml에 없으면(개명·누락) 있음 조건은
+    늘 거짓, 없음 조건은 공허하게 참인데 lint가 조용했다 → 경고 `tag-unknown`. 샘플 DB는 깨끗하고, 메시지 낱말(`notify…:`)·
+    RIL 이름·`.*` 시작 패턴은 대상이 아니다."""
+    from common.signatures import tag_position_word
+    assert tag_position_word(r"RILJ.*>\s*SETUP_DATA_CALL") == "RILJ" and tag_position_word(r"DNC-0 .*") == "DNC-0"
+    for p in ("notifyDataEnabledChanged: enabled=false", ".*ROAMING_DISABLED.*", "ABSENT|UNKNOWN", "403", "RILJ", "(?i)x"):
+        assert tag_position_word(p) is None, p
+    db = runner_copy(SAMPLE, "tag-unknown")
+    tags = db / "parser-rules" / "tags.yaml"
+    text = tags.read_text(encoding="utf-8")
+    assert "tag: RILJ" in text
+    tags.write_text(text.replace("tag: RILJ", "tag: RILJX"), encoding="utf-8")       # 태그 개명
+    result = _lint(db, "--all")
+    hits = [f for f in result["warnings"] if f["code"] == "tag-unknown"]
+    assert hits and all("RILJ" in f["message"] for f in hits)
+    assert {f["file"] for f in hits} >= {"data/DATA-001-no-setup-data-call/type.md"}
+    assert not [f for f in _lint(SAMPLE, "--all", expect=0)["warnings"] if f["code"] == "tag-unknown"]

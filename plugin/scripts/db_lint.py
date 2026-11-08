@@ -78,7 +78,7 @@ import trackers  # noqa: E402
 from common import compat, dbpath, gitscope, issuedb, masking, parser_rules, site_defaults, typedoc, yamlio  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE, parse_name  # noqa: E402
-from common.signatures import SignatureError, compile_signature  # noqa: E402
+from common.signatures import SignatureError, compile_signature, tag_position_word  # noqa: E402
 
 TOKEN_FIXED_RE = re.compile(r"<[A-Z][A-Z0-9]*#\d+>")
 KEBAB_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -246,6 +246,7 @@ class Linter:
         self.external_cats = set((self.config.get("external_parsers") or {}).keys())
         self._check_platform_config()
         self.builtin_events = self._builtin_events()
+        self._tag_rules = self._load_tag_rules()
         self.validators = self._validators()
         self.glossary = self._glossary()
 
@@ -739,6 +740,30 @@ class Linter:
             self._check_event_name(type_md, key, str(item.get("event", "")))
         for pattern in patterns:
             self._check_pattern(type_md, key, str(pattern))
+        for item in list(sig.get("must_match") or []) + list(sig.get("must_not_match") or []):
+            self._check_tag_word(type_md, key, str(item.get("pattern") if isinstance(item, dict) else item))
+
+    def _load_tag_rules(self):
+        """`parser-rules/`(태그 판정용). 못 읽으면 None — 규칙 오류는 `_check_rules`가 보고하고 태그 자리 검사는 건너뛴다."""
+        try:
+            return parser_rules.load(self.root / "parser-rules")
+        except Exception:    # noqa: BLE001
+            return None
+
+    def _check_tag_word(self, type_md, key, pattern: str) -> None:
+        """패턴이 태그 자리 낱말로 시작하는데(`RILJ.*>…`) 그 낱말이 tags.yaml의 어느 태그(정확한 이름·regex, `-0`·`0` 접미 포함)에도
+        맞지 않으면 경고 `tag-unknown`: 그 줄은 수집되지 않아 있음 조건은 늘 거짓, 없음 조건은 공허하게 참이 된다(태그 개명 뒤 조용히
+        소실 — Claude 종합 리뷰 B). RIL 요청·이벤트 이름(`SETUP_DATA_CALL`)·메시지 키(`word:`)는 대상이 아니다."""
+        if self._tag_rules is None:
+            return
+        word = tag_position_word(pattern)
+        if not word or word in self._rule_names()[1] or word in self.builtin_events:
+            return
+        if any(self._tag_rules.tag_category(x) for x in (word, word + "-0", word + "0")):
+            return
+        self.warn("tag-unknown", type_md, f"{key}: 패턴 {pattern!r}의 앞 낱말 '{word}'가 tags.yaml 태그에 맞지 않습니다 — 태그 자리면 "
+                                        "그 줄이 수집되지 않아 있음 조건은 늘 거짓, 없음 조건은 공허하게 참입니다(개명·누락?). "
+                                        "메시지 낱말이면 `.*`로 시작하게 쓰면 경고가 사라집니다.")
 
     def _check_event_name(self, type_md, key, name) -> None:
         if name.startswith("builtin.") and name not in self.builtin_events:
