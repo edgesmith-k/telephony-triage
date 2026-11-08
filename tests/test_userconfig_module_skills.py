@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import sys
 from pathlib import Path
 
@@ -336,3 +337,12 @@ def test_read_roots_order_and_dedup(tmp_path):
     assert uc.read_roots({}, tmp_path / "plugin") == [str(tmp_path / "plugin" / "skills" / "telephony-triage")]
     cfg["work_dir"] = "~a\x00b"     # POSIX expanduser가 ValueError — 예전에는 뒤의 설치 스킬 폴더까지 빠졌다
     assert uc.read_roots(cfg, tmp_path / "plugin")[-1] == str(skill)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX pwd lookup only")
+@pytest.mark.xfail(strict=True, raises=ValueError, reason="P2: _abs_path expanduser NUL — 다음 정리 때 고침")
+def test_path_problems_nul_in_tilde_work_dir_is_reported():
+    """`path_problems` → `_abs_path`의 `os.path.expanduser("~a\\x00b")`는 POSIX pwd 조회에서 ValueError를 낸다 — 예외가 아니라
+    work_dir 문제 줄이어야 한다(LINT_REVIEW 미해결 P2)."""
+    probs = uc.path_problems({"work_dir": "~a\x00b"})
+    assert any(p.startswith("work_dir:") for p in probs), probs

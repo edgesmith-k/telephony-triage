@@ -65,6 +65,10 @@ pyproject 주석에 한 줄씩 있다. 자동 수정은 `ruff check --fix --diff
 | `tools/make_bundle.py:584` | 검사 코드 자체의 오류를 `error`로 — 통과로 보지 않는다 |
 | `tools/make_bundle.py:685` | 예기치 못한 오류를 트레이스백 대신 종료 2 |
 
+미해결 P2(재현 시험만, `xfail(strict=True)` — 고치면 XPASS로 실패하므로 그때 표시를 지운다):
+- `tests/test_userconfig_module_skills.py::test_path_problems_nul_in_tilde_work_dir_is_reported` — `path_problems` → `_abs_path`의 `expanduser`가 `~a\x00b` work_dir에서 POSIX pwd ValueError(문제 줄이 아니라 예외)
+- `tests/test_config_setup.py::test_check_corrupt_site_defaults_is_usage_error_not_traceback` — `main()` `platform_session.resolve` → `from_site_defaults`가 손상 site-defaults(`ghe: "x"`·`tracker: [1]`)에서 AttributeError라 `config.py check`가 트레이스백(종료 1). `cmd_check`보다 앞이라 다른 서브커맨드도 같다
+
 ## 표 4. 파일 단위 예외 (`per-file-ignores`)
 
 한 곳만 걸려 확인한 것. 파일 단위로 끈 규칙은 그 파일의 같은 규칙 새 지적이 보이지 않으므로 그 파일을 바꿀 때 다시 본다.

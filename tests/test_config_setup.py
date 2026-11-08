@@ -1344,3 +1344,15 @@ def test_doctor_retention_row_counts_old_job_dirs_without_deleting(tmp_path):
     bad = plugin_root("retention-bad", retention_days="90일")
     rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"], root=bad).stdout)["rows"]}
     assert rows["retention"]["status"] == "fail"
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError,
+                   reason="P2: main() platform_session.resolve → from_site_defaults가 손상 site-defaults에서 AttributeError — 다음 정리 때 고침")
+@pytest.mark.parametrize("corrupt", [{"ghe": "x"}, {"tracker": [1]}], ids=["ghe-str", "tracker-list"])
+def test_check_corrupt_site_defaults_is_usage_error_not_traceback(corrupt):
+    """손상된 site-defaults(매핑 자리에 문자열·목록)에서 `config.py check`는 트레이스백(종료 1)이 아니라 문제 메시지와 종료 2여야 한다.
+    지금은 cmd_check 전에 main()의 platform_session.resolve → userconfig.merged(from_site_defaults)에서 AttributeError로 죽는다
+    (LINT_REVIEW 미해결 P2 — cmd_check의 merged()도 같은 길)."""
+    env = Env(root=plugin_root("corrupt-site-" + next(iter(corrupt)), **corrupt))
+    proc = env.run("config.py", ["check", "--db", SAMPLE, "--for", "dry-run"])
+    assert proc.returncode == 2 and "Traceback" not in proc.stderr and proc.stderr.strip(), proc.stderr
