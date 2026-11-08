@@ -36,12 +36,31 @@ COVER_BLOCK, UNCOVERED_MAX = 4, 12
 # 결정 토큰(종합 리뷰 P1): 바뀌면 텔레포니 결론이 달라지는 조각 — 슬롯(`[PHONE0]`·`phoneId=1`), 오류·원인·상태 코드(`error 2`·
 # `cause=AUTH(29)`·`status=FAILED`), 성공/실패 낱말. 최장 일치·덮임 검사는 12자 미만 변조(`error 2`→`error 6`, `PHONE0`→`PHONE1`,
 # `failed`→`succeeded`)를 ok로 봤다. 인용의 토큰을 뺀 가장 긴 조각(`ANCHOR_MIN`자 이상)이 든 원문 **한 줄**에 토큰이 모두 있어야 ok다.
+# 코덱스 리뷰 F1: ① 토큰 포함을 부분 문자열로 봐서 `status=1`이 `status=10`에 든다고 했다 → 토큰 경계(`_has_token`). ② `not` 삽입은
+# 토큰이 아니라 앵커에 들어가 앵커를 담은 줄이 없어 판정을 포기했다 → 부정·참/거짓 낱말도 토큰. ③ `retry=9` 같은 임의 `키=값`은
+# 토큰이 아니었다 → 인용의 모든 `키=값`·`키: 값` 조각이 토큰(값은 마스킹 토큰 `<IMSI#1>`도 받는다).
+NEGATION_WORDS = ("not", "no", "never", "cannot", "unable", "without")
 DECISION_TOKEN_RX = re.compile(
     r"\[PHONE\d+\]|\bphone[_ ]?id\s*[=:]\s*\d+|"
-    r"\b(?:error|err|errno|cause|code|reason|status|state|result|rat|fail_cause|failcause|rc|ret)\s*[=:]?\s*[-A-Za-z0-9_]+(?:\(\d+\))?|"
-    r"\b(?:failed|failure|fail|succeeded|success|rejected|reject|accepted|timeout|timed out|denied|disconnected|connected)\b",
+    r"\b(?:error|err|errno|cause|code|reason|status|state|result|rat|fail_cause|failcause|rc|ret)\b\s*[=:]?\s*[-A-Za-z0-9_]+(?:\(\d+\))?|"
+    r"\b[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?=[-A-Za-z0-9_<])[-A-Za-z0-9_.<>#]+(?:\(\d+\))?|"
+    r"\b(?:failed|failure|fail|succeeded|success|rejected|reject|accepted|timeout|timed out|denied|disconnected|connected|"
+    + "|".join(NEGATION_WORDS) + r"|true|false|enabled|disabled|null|none)\b",
     re.IGNORECASE)
+NEGATION_RX = re.compile(r"\b(?:" + "|".join(NEGATION_WORDS) + r")\b", re.IGNORECASE)
 ANCHOR_MIN = 8
+_TOKEN_EDGE = r"[a-z0-9_]"
+_KV_WS_RX = re.compile(r"\s*([=:])\s*")
+
+
+def _low(text: str) -> str:
+    """토큰 대조용 정규화: 공백 하나·소문자·`=`/`:` 둘레 공백 제거(`key = v`와 `key=v`는 같다)."""
+    return _KV_WS_RX.sub(r"\1", ws(text)).lower()
+
+
+def _has_token(low_line: str, low_token: str) -> bool:
+    """토큰이 줄에 **경계를 두고** 있는가(`status=1`은 `status=10`에 없다). 양쪽 다 `_low` 뒤."""
+    return re.search(rf"(?<!{_TOKEN_EDGE}){re.escape(low_token)}(?!{_TOKEN_EDGE})", low_line) is not None
 
 # 타임라인 행 문법(report.row_line·모듈 뷰): `시각 슬롯 레벨 태그 메시지`. 머리 글머리표(`- …`)와 `## ` 제목은 아니다
 ROW_RX = re.compile(r"^(?!- )\S+ (?:p\d+|-) [A-Z?-] \S+ ")
@@ -203,27 +222,53 @@ def _uncovered_run(part: str, files_text: str, tags=None) -> int:
     return worst
 
 
-def _decision_tokens_altered(part: str, files_text: str) -> bool:
-    """인용 조각의 결정 토큰(`DECISION_TOKEN_RX`)이 원문에서 바뀌었나. 토큰을 뺀 나머지 중 가장 긴 조각(앵커, `ANCHOR_MIN`자 이상)이
-    든 원문 줄들 가운데 **한 줄**이 토큰을 모두(대소문자 무관) 담으면 그대로다. 앵커가 없거나 앵커를 담은 줄이 없으면 판정하지
-    않는다(False — 그 경우는 최장 일치·덮임 검사가 이미 판정했다)."""
-    tokens = [m.group(0) for m in DECISION_TOKEN_RX.finditer(part)]
-    if not tokens:
-        return False
-    runs = sorted((r.strip() for r in DECISION_TOKEN_RX.sub("\0", part).split("\0")), key=len, reverse=True)
+def _reference_lines(segment: str, lines: list[str]) -> tuple[list[str], str | None]:
+    """조각의 기준 줄: 토큰을 뺀 가장 긴 조각(앵커, `ANCHOR_MIN`자 이상)이 든 줄들. 앵커가 없거나 앵커를 담은 줄이 없으면
+    (부정어 삭제처럼 변조가 앵커 안에 있을 때) 가장 긴 연속 일치가 `UNCOVERED_MAX`자 이상인 줄 하나로 대신한다."""
+    runs = sorted((r.strip() for r in DECISION_TOKEN_RX.sub("\0", segment).split("\0")), key=len, reverse=True)
     anchor = next((r for r in runs if len(r) >= ANCHOR_MIN), None)
-    if anchor is None:
+    if anchor is not None:
+        hits = [line for line in lines if anchor in line]
+        if hits:
+            return hits, anchor
+    best, size = None, 0
+    for line in lines:
+        m = difflib.SequenceMatcher(None, segment, line, autojunk=False).find_longest_match(0, len(segment), 0, len(line))
+        if m.size > size:
+            best, size = line, m.size
+    return ([best] if best is not None and size >= UNCOVERED_MAX else []), None
+
+
+def _dropped_negation(segment: str, line: str) -> bool:
+    """기준 줄에는 있는데 인용에는 없는 부정어가 인용이 덮는 구간 안에 있나(`data not registered` → `data registered`).
+    구간 = 인용과 줄의 4자 이상 일치 블록이 줄에서 차지하는 첫~끝 위치."""
+    low_seg, low_line = _low(segment), _low(line)
+    blocks = [b for b in difflib.SequenceMatcher(None, low_seg, low_line, autojunk=False).get_matching_blocks()
+              if b.size >= COVER_BLOCK]
+    if not blocks:
         return False
-    lows = [t.lower() for t in tokens]
-    seen = False
-    for line in files_text.split("\n"):
-        if anchor not in line:
+    start, end = blocks[0].b, blocks[-1].b + blocks[-1].size
+    quoted = {m.group(0).lower() for m in NEGATION_RX.finditer(low_seg)}
+    return any(m.group(0).lower() not in quoted for m in NEGATION_RX.finditer(low_line[start:end]))
+
+
+def _decision_tokens_altered(part: str, files_text: str) -> bool:
+    """인용 조각의 결정 토큰(`DECISION_TOKEN_RX`)이 원문에서 바뀌었나. 이어 붙인 조각마다: 기준 줄(`_reference_lines`) 가운데
+    **한 줄**이 토큰을 모두(대소문자 무관, 토큰 경계 `_has_token`) 담고 인용이 빠뜨린 부정어(`_dropped_negation`)가 없으면 그대로다.
+    기준 줄이 없으면 판정하지 않는다(False — 그 경우는 최장 일치·덮임 검사가 이미 판정했다). 이 검사는 인용이 원문
+    줄 그대로인지만 본다 — 인과 설명이 맞는지는 보증하지 않는다."""
+    lines = [line for line in files_text.split("\n") if line]
+    # 조각 = 인용이 허용하는 줄 잇기(화살표·한글 연결어·시각, `RUN_SPLIT_RX`)로 나눈 것 — 토큰은 조각마다 그 기준 줄에서 본다
+    for segment in (seg.strip() for seg in RUN_SPLIT_RX.split(part) if seg and seg.strip()):
+        if len(segment) < ANCHOR_MIN:
             continue
-        seen = True
-        low = ws(line).lower()
-        if all(t in low for t in lows):
-            return False
-    return seen
+        tokens = sorted({_low(m.group(0)) for m in DECISION_TOKEN_RX.finditer(segment)})
+        refs, _ = _reference_lines(segment, lines)
+        if not refs:
+            continue
+        if not any(all(_has_token(_low(line), t) for t in tokens) and not _dropped_negation(segment, line) for line in refs):
+            return True
+    return False
 
 
 def evidence_check(item: str, files_text: str, tags) -> tuple[str, list[tuple[str, int, int]]]:

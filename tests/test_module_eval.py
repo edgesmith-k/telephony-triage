@@ -656,7 +656,9 @@ def test_evidence_quote_normalization(env, tmp_path):
         assert me.evidence_check(item, text, tags)[0] == "ok", item
     for item in ("`DITD` invented text here about routes", "`DITD` 라우팅 테이블 충돌로 기본 경로 설치에 실패함"):
         assert me.evidence_check(item, text, tags)[0] == "fabricated", item
-    weak = "default route xx installed xx rmnet0 xx"          # 고친 낱말이 짧다(덮이지 않은 구간 < 12)
+    # 부정어를 지운 인용은 결정 토큰 변조라 fabricated다(코덱스 리뷰 F1 — 전에는 짧은 변조라 weak였다)
+    assert me.evidence_check("default route xx installed xx rmnet0 xx", text, tags)[0] == "fabricated"
+    weak = "context 1 xx active on rmnet0 yy"                   # 결정 토큰 없는 짧은 변조(덮이지 않은 구간 < 12) → weak
     assert me.evidence_check(weak, text, tags)[0] == "weak"
     answer = GOOD["data-ditd-route-fail"].replace("근거:\n", f"근거:\n- {weak}\n")
     g = judged(env, tmp_path, "data-ditd-route-fail", "with", good_stream(env, "data-ditd-route-fail", "with", answer=answer))

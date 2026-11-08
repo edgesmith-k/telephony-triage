@@ -130,3 +130,35 @@ def test_evidence_check_catches_decision_token_alteration():
     assert evidence._decision_tokens_altered("UNKNOWN_REQUEST_NAME error 9", source) is False
     res = evidence.check_quotes([genuine, "[PHONE1] < SETUP_DATA_CALL error 2 failed cause=AUTH(29)"], source, tags)
     assert res["fabricated"] == 1 and res["first"].startswith("[PHONE1]")
+
+
+def test_evidence_check_token_boundary_negation_and_any_key_value():
+    """코덱스 리뷰 F1 잔여 반례: `status=1`⊂`status=10`(부분 문자열), `not` 삽입(앵커에 들어가 판정 포기), `retry=9`(토큰 아님).
+    토큰 경계·부정어 토큰·임의 `키=값` 토큰·기준 줄 대체(부정어 삭제)로 잡고, 정상 인용·생략·이어 붙이기는 그대로 ok다."""
+    tl = "\n".join([
+        "10:00:00.000 p0 I DNC-0 SETUP_DATA_CALL completed status=10 retry=0 apn=internet",
+        "10:00:01.000 p0 I DNC-0 SETUP_DATA_CALL completed status=11 retry=3 apn=ims",
+        "10:00:02.000 p0 I DNC-0 SETUP_DATA_CALL completed connected",
+        "10:00:03.000 p0 I DNC-0 data not registered on slot 1 reason=NO_SERVICE",
+        "10:00:04.000 p0 I RILJ subscriber imsi=<IMSI#2> state=READY",
+        "10:00:05.000 p0 E DITD netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0",
+        "10:00:05.100 p0 W DITD default route not installed for rmnet0",
+        "10:00:06.000 p0 I DNC-0 onSetupDataCallResult: status=0x10 cid=3",
+    ])
+    source, tags = evidence.source_text(tl)
+    for genuine in ("SETUP_DATA_CALL completed status=10 retry=0",                 # 뒤 필드 생략
+                    "SETUP_DATA_CALL completed status = 10 retry=0",               # `=` 둘레 공백
+                    "data not registered on slot 1 reason=NO_SERVICE",
+                    "subscriber imsi=<IMSI#2> state=READY",
+                    "netlink RTM_NEWROUTE failed → default route not installed for rmnet0",   # 줄 잇기
+                    "onSetupDataCallResult: status=0x10 cid=3"):
+        assert evidence.evidence_check(genuine, source, tags)[0] == "ok", genuine
+    for altered in ("SETUP_DATA_CALL completed status=1 retry=0",                 # 값 경계
+                    "SETUP_DATA_CALL completed status=10 retry=9",                # 토큰 목록 밖 키=값
+                    "SETUP_DATA_CALL completed status=10 retry=3",                # 두 줄의 토큰 섞음
+                    "SETUP_DATA_CALL completed not connected",                    # 부정어 삽입
+                    "data registered on slot 1 reason=NO_SERVICE",                # 부정어 삭제
+                    "subscriber imsi=<IMSI#1> state=READY",                       # 마스킹 토큰 번호
+                    "netlink RTM_NEWROUTE failed → default route installed for rmnet0",   # 이어 붙인 둘째 조각의 부정어 삭제
+                    "onSetupDataCallResult: status=0x1 cid=3"):                   # 16진 값 경계
+        assert evidence.evidence_check(altered, source, tags)[0] == "fabricated", altered
