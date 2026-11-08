@@ -112,12 +112,6 @@ GATE_SETTING = "opencode.jira_read"         # = oc_jira_gate.SETTING (사용자 
 ASK_PREFIX = "OpenCode v1 does not run this; run this exact command yourself: "
 BRIDGE_FAILED = ("telephony-triage: OpenCode jira_bridge 처리 실패 — 원문은 표시하지 않는다. "
                  "Claude Code에서 다시 읽거나 config.py doctor로 확인한다.")
-MCP_NAME_RE = re.compile(r"[^A-Za-z0-9_-]")
-
-
-def sanitize(name: str) -> str:
-    """OpenCode 1.19.5 MCP 이름 정리(`w0`): `[^a-zA-Z0-9_-]` → `_`."""
-    return MCP_NAME_RE.sub("_", str(name))
 
 
 # -- opencode.json의 MCP 서버 이름 ---------------------------------------------------------------------
@@ -385,10 +379,6 @@ def jira_gate_state(env: dict | None = None):
     else:
         why = files.problems[0] if files.problems else f"{GATE_SETTING}이 open이 아니다"
     return oc_jira_gate.GateState(False, files.setting, files.accepted, [why], files.record)
-
-
-def jira_gate_open(env: dict | None = None) -> bool:
-    return jira_gate_state(env).open
 
 
 def opencode_version(env: dict | None = None, timeout: float = 10) -> str | None:
