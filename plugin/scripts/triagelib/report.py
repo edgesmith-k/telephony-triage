@@ -63,28 +63,55 @@ def _error_line(e: dict) -> str:
             + (f" (phone {e['phone']})" if e.get("phone") is not None else ""))
 
 
+def _row_key(e: dict) -> tuple:
+    """행 키: 줄 위치(`line_ref`의 파일 순번·줄 번호)가 있으면 그것 — 같은 원 줄에서 나온 원 줄 기록과 파생 이벤트는 줄 위치를
+    공유하고(`_unique_evidence`와 같은 기준), 다른 슬롯·다른 파일·같은 문구의 반복은 줄 위치가 다르다. 없으면
+    (시각, 태그, 메시지, 슬롯, pid)."""
+    pos = events.ref_key(e.get("line_ref"))
+    if pos is not None:
+        return ("l", *pos)
+    return ("m", e.get("ts"), e.get("tag"), e.get("msg"), e.get("phone_id"), e.get("pid"))
+
+
+def _joinable(row: dict, e: dict) -> bool:
+    """줄 위치 없는 이벤트(외부 파서 등)를 같은 (시각, 태그, 메시지)의 행에 붙여도 되나 — 슬롯·pid가 서로 모르거나 같을 때만."""
+    return all(a is None or b is None or a == b for a, b in ((row["phone"], e.get("phone_id")), (row["pid"], e.get("pid"))))
+
+
 def merge_rows(events: dict) -> list[dict]:
-    """같은 (시각, 태그, 메시지)의 원 줄과 파생 이벤트를 한 줄로 합친다(처음 본 순서, 이벤트 표시는 `marks`).
+    """같은 원 줄에서 나온 원 줄 기록과 파생 이벤트를 한 줄로 합친다(처음 본 순서, 이벤트 표시는 `marks`).
+
+    합치는 기준은 줄 위치(`_row_key`)다. 종합 리뷰 F2: 예전 키 (시각, 태그, 메시지)는 다른 SIM 슬롯·다른 pid·다른 파일의
+    같은 문구를 한 줄로 합쳐 둘째 슬롯의 장애가 타임라인·모듈 뷰·근거 원문에서 사라졌다. 줄 위치가 없는 이벤트는 같은
+    (시각, 태그, 메시지)의 행 가운데 슬롯·pid가 맞는 첫 행에 붙이고(`_joinable`), 없으면 새 행이다.
 
     그리지 않는 키도 싣는다: `idx`(합친 순서), `cat`(이벤트 없는 첫 기록의 category_hint, 없으면 처음 나온 hint),
     `ril`(그 기록의 ril 또는 None), `pid`, `line_ref`. 모듈 타임라인·후보 계산(`module`)과 근거 검사가 같은 줄을 쓴다.
     """
     rows: dict[tuple, dict] = {}
-    raw_seen: set[tuple] = set()
+    out: list[dict] = []
+    by_msg: dict[tuple, list[dict]] = {}
+    raw_seen: set[int] = set()
     for e in events.get("events") or []:
-        k = (e.get("ts"), e.get("tag"), e.get("msg"))
+        k = _row_key(e)
         row = rows.get(k)
+        if row is None and k[0] == "m":
+            row = next((r for r in by_msg.get(k[1:4], ()) if _joinable(r, e)), None)
+            if row is not None:
+                rows[k] = row
         if row is None:
             row = rows[k] = {"ts": e.get("ts"), "tag": e.get("tag"), "msg": e.get("msg"), "level": e.get("level"),
-                             "phone": e.get("phone_id"), "marks": [], "idx": len(rows), "cat": None, "ril": None,
+                             "phone": e.get("phone_id"), "marks": [], "idx": len(out), "cat": None, "ril": None,
                              "pid": e.get("pid"), "line_ref": e.get("line_ref")}
+            out.append(row)
+            by_msg.setdefault((e.get("ts"), e.get("tag"), e.get("msg")), []).append(row)
         if e.get("event"):
             fields = ",".join(f"{f}={v}" for f, v in sorted((e.get("fields") or {}).items()))
             mark = f"{e['event']}({_clip(fields, 80)})" if fields else str(e["event"])
             if mark not in row["marks"]:
                 row["marks"].append(mark)
-        elif k not in raw_seen:                    # 원 줄 기록이 이 줄의 분류·RIL·위치를 정한다
-            raw_seen.add(k)
+        elif id(row) not in raw_seen:              # 원 줄 기록이 이 줄의 분류·RIL·위치를 정한다
+            raw_seen.add(id(row))
             if e.get("category_hint") is not None:
                 row["cat"] = e.get("category_hint")
             if e.get("ril") is not None:
@@ -94,7 +121,9 @@ def merge_rows(events: dict) -> list[dict]:
             row["cat"] = e.get("category_hint")
         if row["phone"] is None:
             row["phone"] = e.get("phone_id")
-    return list(rows.values())
+        if row["pid"] is None:
+            row["pid"] = e.get("pid")
+    return out
 
 
 def select_rows(rows: list[dict], around: str | None, limit: int) -> tuple[list[dict], int]:

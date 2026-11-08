@@ -163,6 +163,54 @@ def test_merge_rows_extra_keys():
     assert rows[1]["cat"] == "data" and rows[2]["cat"] is None and rows[3]["pid"] == 103 and rows[3]["line_ref"] == "f0:L3"
 
 
+def _ev(**k):
+    base = {"ts": "2026-11-06T10:00:00.000Z", "tag": "RIL", "msg": "SETUP_DATA_CALL failed", "level": "E", "phone_id": None,
+            "pid": None, "line_ref": None, "event": None, "fields": {}, "category_hint": None, "ril": None}
+    base.update(k)
+    return base
+
+
+def test_merge_rows_keeps_other_slots_files_and_repeats_apart():
+    """종합 리뷰 F2: 같은 (시각, 태그, 메시지)라도 다른 슬롯·다른 pid·다른 파일·같은 문구의 반복은 줄 위치가 다르므로 따로 둔다."""
+    rows = report.merge_rows({"events": [_ev(phone_id=0, pid=100, line_ref={"file_index": 0, "line_no": 10}),
+                                         _ev(phone_id=1, pid=101, line_ref={"file_index": 0, "line_no": 11})]})
+    assert [(r["phone"], r["pid"], r["idx"]) for r in rows] == [(0, 100, 0), (1, 101, 1)]
+    assert len(report.merge_rows({"events": [_ev(line_ref={"file_index": 0, "line_no": 5}),
+                                             _ev(line_ref={"file_index": 1, "line_no": 5})]})) == 2      # 다른 파일
+    assert len(report.merge_rows({"events": [_ev(line_ref={"file_index": 0, "line_no": 5}),
+                                             _ev(line_ref={"file_index": 0, "line_no": 6})]})) == 2      # 같은 문구 반복
+    # 슬롯 미상(None) 원 줄과 슬롯이 있는 파생 이벤트는 같은 줄이면 합치고 슬롯을 채운다
+    rows = report.merge_rows({"events": [_ev(line_ref={"file_index": 0, "line_no": 7}),
+                                         _ev(phone_id=1, line_ref={"file_index": 0, "line_no": 7}, event="ril_error")]})
+    assert len(rows) == 1 and rows[0]["phone"] == 1 and rows[0]["marks"] == ["ril_error"]
+
+
+def test_merge_rows_same_line_derived_events_still_merge():
+    ref = {"file_index": 0, "line_no": 10}
+    rows = report.merge_rows({"events": [_ev(phone_id=0, line_ref=ref, category_hint="data", ril={"request": "SETUP_DATA_CALL"}),
+                                         _ev(phone_id=0, line_ref=ref, event="ril_error", fields={"code": "2"}, category_hint="ims"),
+                                         _ev(phone_id=0, line_ref=ref, event="data_fail")]})
+    assert len(rows) == 1
+    assert rows[0]["marks"] == ["ril_error(code=2)", "data_fail"] and rows[0]["cat"] == "data" and rows[0]["ril"] == {"request": "SETUP_DATA_CALL"}
+
+
+def test_merge_rows_events_without_line_ref_join_matching_slot():
+    """줄 위치 없는 이벤트(외부 파서)는 같은 문구의 행 가운데 슬롯·pid가 맞는 첫 행에 붙고, 맞는 행이 없으면 새 행이다."""
+    base = [_ev(phone_id=0, pid=100, line_ref={"file_index": 0, "line_no": 10}),
+            _ev(phone_id=1, pid=101, line_ref={"file_index": 0, "line_no": 11})]
+    rows = report.merge_rows({"events": base + [_ev(phone_id=1, event="ext_fail")]})
+    assert [(r["phone"], r["marks"]) for r in rows] == [(0, []), (1, ["ext_fail"])]
+    rows = report.merge_rows({"events": base + [_ev(event="ext_fail")]})                      # 슬롯 미상 → 첫 행
+    assert [(r["phone"], r["marks"]) for r in rows] == [(0, ["ext_fail"]), (1, [])]
+    rows = report.merge_rows({"events": base + [_ev(phone_id=2, event="ext_fail")]})          # 맞는 행 없음 → 새 행
+    assert [(r["phone"], r["marks"]) for r in rows] == [(0, []), (1, []), (2, ["ext_fail"])]
+    # line_ref가 전혀 없는 옛 events.json: (시각, 태그, 메시지, 슬롯, pid)로 합친다
+    rows = report.merge_rows({"events": [_ev(phone_id=0), _ev(phone_id=0, event="x"), _ev(phone_id=1)]})
+    assert [(r["phone"], r["marks"]) for r in rows] == [(0, ["x"]), (1, [])]
+    text = report.row_line(rows[1], clip=None)
+    assert text.startswith("10:00:00.000 p1 E RIL SETUP_DATA_CALL failed")
+
+
 def test_split_on_ofono_fixture():
     path = REPO / "templates" / "module-skills" / "ofono" / "data" / "evals" / "data-apn-auth-reject" / "files" / "events.json"
     ev = json.loads(path.read_text(encoding="utf-8"))
