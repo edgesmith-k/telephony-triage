@@ -8,7 +8,7 @@
 | kind | 만드는 파일 |
 |---|---|
 | deep | `events.json`(경로 정규화), `timeline.md`, `deep-input.json`(schema_version 1) |
-| explore | `timeline.md`, `explore-input.json`(run이 쓴 그대로), `analysis.json`(`generated_at`·`request_hash`·`files`·`analyzer`/`explore`의 `note` 뺌) |
+| explore | `timeline.md`, `explore-input.json`(run이 쓴 그대로), `analysis.json`(`generated_at`·`request_hash`·`files`·`analyzer`/`explore`의 `note` 뺌, `logs.masked`는 null — 평가 폴더에 사본이 없다) |
 
 `templates/module-skills/modules.yaml`에 그 플랫폼의 `common.filter`가 있으면 case `timeline.md`는 모듈 보기다
 (B2 §4.6: `common.modulefilter.build`를 같은 프로세스에서, `triage.py module`과 같은 인자로 — deep은 `match.json`
@@ -299,6 +299,8 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
         for key in ("analyzer", "explore"):     # 5-1·5-2 답 전 안내(driver.ASK_NOTE): 동의 뒤 입력이라 뺀다 — 원문 열람 낱말이
             if isinstance(analysis.get(key), dict):     # skillcheck raw-read에 걸린다
                 analysis[key].pop("note", None)
+        if isinstance(analysis.get("logs"), dict):      # 코덱스 리뷰 R5: 평가 폴더에는 마스킹 사본(logs-masked/)이 없다 — 있다고 적지 않는다
+            analysis["logs"]["masked"] = None
         out["analysis.json"] = _dump(analysis)
     for fname, text in out.items():          # 결정성: 임시 경로가 남으면 안 된다
         for marker in (str(tmp), str(REPO)):

@@ -32,13 +32,7 @@
   "in_range": "partial",
   "clock_anomalies": 0,
   "events": 25,
-  "masked": {
-   "dir": "logs-masked",
-   "files": [
-    "source.log"
-   ],
-   "skipped": []
-  }
+  "masked": null
  },
  "no_candidate": {
   "search_hits": [

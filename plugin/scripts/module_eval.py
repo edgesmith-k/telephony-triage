@@ -500,6 +500,13 @@ def load_case(case_dir) -> Case:
         fail("files/source.log는 LF 줄바꿈")
     for why in skillcheck.origin_problems(data, log):     # 합성 표식 또는 마스킹 발췌 origin(R4·R5)
         fail(f"origin {why}")
+    if kind == "explore":                                   # 코덱스 리뷰 R5: 펼친 폴더에 없는 자료를 있다고 적은 analysis.json은 거부
+        try:
+            logs = (json.loads((files_dir / "analysis.json").read_text(encoding="utf-8")) or {}).get("logs") or {}
+        except (OSError, ValueError):
+            fail("files/analysis.json은 JSON")
+        if isinstance(logs, dict) and logs.get("masked"):
+            fail("files/analysis.json logs.masked는 null — 평가 폴더에 마스킹 사본(logs-masked/)이 없다(make_module_eval_inputs --write)")
     total = sum(p.lstat().st_size for p in case_dir.rglob("*") if p.is_file() and not p.is_symlink())
     if total > CASE_MAX_BYTES:
         fail(f"case 디렉토리 {total}B > {CASE_MAX_BYTES}B")

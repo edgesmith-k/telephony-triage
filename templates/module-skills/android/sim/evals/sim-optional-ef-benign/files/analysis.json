@@ -31,13 +31,7 @@
   "in_range": "partial",
   "clock_anomalies": 0,
   "events": 20,
-  "masked": {
-   "dir": "logs-masked",
-   "files": [
-    "source.log"
-   ],
-   "skipped": []
-  },
+  "masked": null,
   "uncollected_tags": [
    {
     "tag": "IntentBroadcaster",
