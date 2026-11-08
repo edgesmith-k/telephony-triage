@@ -18,7 +18,7 @@ from __future__ import annotations
 import copy
 from pathlib import Path
 import re
-from typing import Sequence
+from collections.abc import Sequence
 
 from common import events, vendor_ipc
 from . import logcat, ril
@@ -44,14 +44,14 @@ class ReferenceBackend(ParserBackend):
     _level_unreliable = TagAttrSet(None, "level", "unreliable", LEVEL_UNRELIABLE_TAGS)
     _vendor_ipc = TagAttrSet(None, "ipc", "vendor", VENDOR_IPC_TAGS)
 
-    def configure(self, profile) -> "ReferenceBackend":
+    def configure(self, profile) -> ReferenceBackend:
         other = copy.copy(self)
         other._phone = profile.phone
         other._ril_tags = profile.ril_tags
         other._ril_vendor = profile.ril_vendor
         return other
 
-    def apply_rules(self, rules) -> "ReferenceBackend":
+    def apply_rules(self, rules) -> ReferenceBackend:
         """tags.yaml `level: unreliable`·`ipc: vendor`(04-parser-matching §5.8 (2)). 키마다 DB가 하나도 선언하지 않으면
         기본 상수(레벨 보정 없음·`VENDOR_IPC_TAGS`), 하나라도 선언하면 DB만 본다."""
         other = copy.copy(self)

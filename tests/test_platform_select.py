@@ -382,11 +382,11 @@ def test_init_rejects_invalid_new_config_without_touching_file():
     before = (it.h / "config.yaml").read_bytes()
     (it.h / "w").mkdir()
     cases = [
-        ((it.android("w/db", **{"work_dir": str(it.h / "w")}), "--force"), "clone)를 포함하거나 같습니다"),
+        ((it.android("w/db", work_dir=str(it.h / "w")), "--force"), "clone)를 포함하거나 같습니다"),
         ((it.android("dbO"), "--force"), "같은 clone"),                                  # 남긴 ofono 프로필과 겹침
         (({"issue_db.path": str(it.h / "dbA"), "issue_db.remote": "https://ghe.mock.invalid/o/x.git"},
           "--platform", "ofono", "--force"), "같은 clone"),                               # 최상위와 겹침
-        ((it.android("dbA3", **{"work_dir": "rel"}), "--force"), "절대 경로"),
+        ((it.android("dbA3", work_dir="rel"), "--force"), "절대 경로"),
     ]
     for (answers, *extra), needle in cases:
         proc = it.run(answers, *extra)

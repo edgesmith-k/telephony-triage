@@ -431,7 +431,7 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
         info.update({
             "jira_call": f"python3 \"{call.as_posix()}\" <tool> '<arguments JSON>'",
             "jira_tools_list": f"python3 \"{call.as_posix()}\" --list",
-            "analyzer_run": (f"python3 -c \"import sys; sys.exit('mock-data-analyzer: internal error (timeout)')\" --input <입력 JSON 경로>"
+            "analyzer_run": ("python3 -c \"import sys; sys.exit('mock-data-analyzer: internal error (timeout)')\" --input <입력 JSON 경로>"
                              if setup.get("analyzer_fail") else f"python3 \"{ANALYZER.as_posix()}\" --input <입력 JSON 경로>"),
         })
     (out / "env.json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -216,13 +216,12 @@ def fix_judgement(cause: issuedb.Cause, sw: str | None, rules: list[dict], jira_
             build = comparisons[0][1]
             result.update(judgement="already-fixed",
                           message=f"{build}에서 수정됨. 빌드 업데이트 후 재확인 권고")
+    elif newer:
+        result.update(judgement="fix-insufficient",
+                      message="수정 반영 빌드에서 발생. verify-fix 실패 가능성")
     else:
-        if newer:
-            result.update(judgement="fix-insufficient",
-                          message="수정 반영 빌드에서 발생. verify-fix 실패 가능성")
-        else:
-            result.update(judgement="fix-pending-build",
-                          message="수정 CL 반영 전 빌드. 업데이트 후 verify-fix 권고")
+        result.update(judgement="fix-pending-build",
+                      message="수정 CL 반영 전 빌드. 업데이트 후 verify-fix 권고")
     return result
 
 
@@ -414,7 +413,7 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
                 else:
                     matches = _all_satisfied(evaluator, compiled[cause.id], occurred, errors)
                     pair = next(((s, c) for c in matches for s in symptoms if _compatible(s, c)), None)
-                    candidate_sym, res = pair if pair else (sym, None)
+                    candidate_sym, res = pair or (sym, None)
                 C = 1 if res else (None if len(errors) > n_err else 0)
                 centry = {"type": itype.id, "cause": cause.id, "S": S, "C": C,
                           "signature": res.key if res else None}

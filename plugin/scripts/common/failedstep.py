@@ -21,7 +21,7 @@ import zipfile
 import zlib
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
 
 FAILED_STEP_MAX = 200
 TEST_STEPS_MAX = 1000

@@ -45,7 +45,7 @@ import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 TOOLS = Path(__file__).resolve().parent
 REPO = TOOLS.parent

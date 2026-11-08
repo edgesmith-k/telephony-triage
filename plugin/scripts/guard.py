@@ -420,7 +420,7 @@ def _skill_sources(sources: list[str]) -> list[str]:
     return out
 
 
-def _in_skill_source(target: str, conf: "Config") -> bool:
+def _in_skill_source(target: str, conf: Config) -> bool:
     return any(_inside(target, src) for src in conf.skill_sources)
 
 
@@ -1176,7 +1176,7 @@ def _fd_word(text: str, i: int) -> bool:
         chars.append(text[j])
         j = _back(text, j - 1)
     word = "".join(reversed(chars))
-    if not (word.isascii() and word.isdigit() or FD_NAME_RE.match(word)):
+    if not ((word.isascii() and word.isdigit()) or FD_NAME_RE.match(word)):
         return False
     while j >= 0 and text[j] in " \t":
         j = _back(text, j - 1)
@@ -1228,7 +1228,7 @@ def _tokens(command: str) -> list[str]:
             for op in OPS_RE.findall(tok):
                 op = op.replace(HD_DASH, "-")
                 fd = out[-1][:-1] if out and not prev_op and out[-1].endswith(FD_AT) else ""
-                if op[0] in "<>" and (fd.isascii() and fd.isdigit() or FD_NAME_RE.match(fd)):
+                if op[0] in "<>" and ((fd.isascii() and fd.isdigit()) or FD_NAME_RE.match(fd)):
                     out[-1] = fd + op      # `2>`·`2>&`·`0<`·`{fd}<`: 공백 없이 붙은 앞 fd(`_fd_word`)
                 else:
                     out.append(op)
@@ -1997,7 +1997,7 @@ class _Cwd:
         self.sticky = sticky
         self.exact = exact
 
-    def copy(self) -> "_Cwd":
+    def copy(self) -> _Cwd:
         return _Cwd(self.dirs, self.old, self.stack, self.sticky, self.exact)
 
     def all(self) -> tuple[Path, ...]:
@@ -2006,7 +2006,7 @@ class _Cwd:
     def stack_dirs(self) -> tuple[Path, ...]:
         return tuple(d for level in self.stack for d in level)
 
-    def settle(self) -> "_Cwd":
+    def settle(self) -> _Cwd:
         """칸을 정확히 모르는 스택(`exact` 거짓 — 다시 참이 되지 않는다)은 칸 하나로 합친다. 그 뒤 연산은 스택 칸 전체(`stack_dirs`
         — popd·`pushd ±N`·`cd ±N`의 `anywhere`)만 보므로 판정은 같고, 칸이 pushd마다 쌓여 popd마다 모두 다시 보는 비용이 pushd 수의
         세제곱으로 늘지 않는다(재리뷰 P1 성능: 없는 경로 pushd 1000개 + popd 1000개가 hook 시간 한도 180초를 넘겨 판정 없이 통과했다
@@ -2023,7 +2023,7 @@ class _Cwd:
         return self
 
     @staticmethod
-    def union(states) -> "_Cwd":
+    def union(states) -> _Cwd:
         """여러 경로 끝 상태의 합(후보 순서는 넘긴 순서 — 뒤가 최근이다). 스택이 다르면 칸을 모두 남기고 모른다고 표시한다
         (뒤 popd는 그 칸들·이전 후보·모르는 디렉토리 모두로 본다 — 회귀 수정 R1)."""
         states = list(states)
@@ -2563,7 +2563,7 @@ class _Walk:
                     continue
                 sign, num = m.group(1), m.group(2)
                 n = int(num) if num else None
-                key = ("pwd",) if n is None and sign != "-" or (n == 0 and sign != "-") else (
+                key = ("pwd",) if (n is None and sign != "-") or (n == 0 and sign != "-") else (
                     ("old",) if n is None else (sign or "+", n))
                 slots.append((i, p, e, key, sign, num))
         if not slots:
@@ -2898,11 +2898,10 @@ def _config_parse(args: list[str]) -> tuple[str | None, list[str]]:
             action = action or "list"
         elif a.startswith("-"):
             pass
+        elif not pos and action is None and a in CONFIG_SUBCOMMANDS:
+            action = a
         else:
-            if not pos and action is None and a in CONFIG_SUBCOMMANDS:
-                action = a
-            else:
-                pos.append(a)
+            pos.append(a)
         i += 1
     return action, pos
 
@@ -3053,7 +3052,7 @@ def _dump_verb_and_files(inv: Invocation) -> tuple[str, list[str]] | None:
             for k, ch in enumerate(cluster):
                 if ch in takes:
                     rest = cluster[k + 1:]
-                    val = rest if rest else (words[i] if i < len(words) else None)
+                    val = rest or (words[i] if i < len(words) else None)
                     if not rest:
                         i += 1
                     if ch == "e" and val is not None:
@@ -4411,7 +4410,7 @@ def _push_into_db(call: GitCall, conf: Config) -> bool:
     t = pos[0] if pos else ""
     if not (t == "." or t.startswith(("./", "../", "~", "file://")) or os.path.isabs(t)):
         return False
-    p = os.path.expanduser(t[len("file://"):] if t.startswith("file://") else t)
+    p = os.path.expanduser(t.removeprefix("file://"))
     return conf.profile_of_common(_common_dir(Path(p) if os.path.isabs(p) else call.cwd / p)) is not None
 
 
@@ -4445,8 +4444,8 @@ def _forges_remote_ref(call: GitCall) -> bool:
 def check_git(call: GitCall, conf: Config, dec: Decision) -> None:
     """git 규칙 3~8(clone 불변·hooksPath·커밋 검사·push). 규칙 5는 `_rule5`(ci_mode actions면 ask하고 이어 간다)."""
     check_clone_git(call, conf, dec)
-    if call.sub in REMOTE_SUBS and _forges_remote_ref(call) and conf.profile_of_common(_common_dir(call.cwd)) is not None or \
-            call.sub == "push" and _push_into_db(call, conf):
+    if (call.sub in REMOTE_SUBS and _forges_remote_ref(call) and conf.profile_of_common(_common_dir(call.cwd)) is not None) or \
+            (call.sub == "push" and _push_into_db(call, conf)):
         dec.deny.append(REMOTE_REF_MSG)
     if call.sub not in ("commit", "config", "push") and not call.overrides_hooks_path():
         return

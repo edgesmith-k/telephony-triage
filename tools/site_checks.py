@@ -619,7 +619,7 @@ def s2_offsite(ctx: Ctx) -> dict:
     differs, off_m, site_m = model_differs(ctx.root, st)
     commits = sorted({_short(r.get("repo_commit")) for i in rest for r in _offsite_latest(off["evals"].get(str(i)))})
     note = str(off.get("note") or "")
-    head = ("잠정 · " if re.search(r"provisional|잠정", note, re.I) else "") + \
+    head = ("잠정 · " if re.search(r"provisional|잠정", note, re.IGNORECASE) else "") + \
         (f"모델 다름(사외 {off_m} / 사내 {site_m}) · " if differs else "") + \
         (f"사내 모델 미정(사외 {off_m}) · " if differs is None else "") + \
         f"사외 {off.get('model')}({off.get('generated')}) 갈음 {len(rest)}개: "
@@ -1768,10 +1768,10 @@ def o2_pairs(ctx: Ctx) -> dict:
     if not logs:
         return _no_logs("o2.pairs", skipped)
     backend = parser_backends.load(platforms.backend_name(d, "ofono")).configure(prof)
-    req = {n: 0 for n in pairs}
-    paired = {n: 0 for n in pairs}
-    lower = {n: 0 for n in hops}
-    linked = {n: 0 for n in hops}
+    req = dict.fromkeys(pairs, 0)
+    paired = dict.fromkeys(pairs, 0)
+    lower = dict.fromkeys(hops, 0)
+    linked = dict.fromkeys(hops, 0)
     for p in logs:
         for rec in backend.parse([p], None, None, None):
             ann = rec.get("ril") or {}
@@ -2250,7 +2250,7 @@ def ms1_prefer(ctx: Ctx) -> dict:
                      + (f" --platform {plat}" if at else ""))
     if fails:
         return res("ms1.prefer", "fail", "5-1이 없는 모듈 문서로 바뀌어 종료 1이 된다: " + _cap_list(fails + infos), " ; ".join(fixes),
-                   ask="고치기: " + " ; ".join(fixes) + f" (팀 기본: site-defaults `analyzers.<카테고리>.prefer: skill` — 관리자)")
+                   ask="고치기: " + " ; ".join(fixes) + " (팀 기본: site-defaults `analyzers.<카테고리>.prefer: skill` — 관리자)")
     return res("ms1.prefer", "info", _cap_list(infos), cmd)
 
 
@@ -2284,7 +2284,7 @@ def ms1_protection(ctx: Ctx) -> dict:
     code, out, err = ctx.gh("api", f"repos/{owner}/{repo}/branches/{base}/protection", host=host)
     if code:
         http = re.search(r"HTTP (\d{3})", err + out)
-        return res("ms1.protection", "info", f"조회 못 함(" + (f"HTTP {http.group(1)}" if http else f"종료 {code}")
+        return res("ms1.protection", "info", "조회 못 함(" + (f"HTTP {http.group(1)}" if http else f"종료 {code}")
                    + ") — 권장은 IMPL §4.5(정보, Q15)", cmd)
     try:
         data = json.loads(out)

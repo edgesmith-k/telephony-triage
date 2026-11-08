@@ -557,7 +557,7 @@ class Linter:
             self.err("category", type_md, f"category '{data.get('category')}'가 디렉토리 '{cat_key}'와 다릅니다.")
         if not TYPE_ID_RE.fullmatch(type_id):
             self.err("id-format", type_md, f"유형 ID 형식이 아닙니다: {type_id}")
-        elif category and type_id.split("-")[0] != category.get("id_prefix"):
+        elif category and type_id.split("-", maxsplit=1)[0] != category.get("id_prefix"):
             self.err("id-prefix", type_md,
                      f"{type_id}의 접두어가 카테고리 {cat_key}의 id_prefix '{category.get('id_prefix')}'와 다릅니다.")
         dirname = type_md.parent.name

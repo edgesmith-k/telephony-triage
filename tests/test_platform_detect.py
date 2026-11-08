@@ -25,7 +25,7 @@ sys.path.insert(0, str(REPO / "tests" / "helpers"))
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
 import make_repo  # noqa: E402
-from runner import plugin_root, tmp, variant_db  # noqa: E402
+from runner import plugin_root, variant_db  # noqa: E402
 from workspace import Workspace  # noqa: E402
 
 import platforms  # noqa: E402

@@ -277,7 +277,7 @@ def run_symbol_one(spec: str, root: Path, work: Path) -> dict:
 def run_one(spec: str, root: Path) -> dict:
     work = Path(tempfile.mkdtemp(prefix="tt-bench-"))
     try:
-        kind = spec.split(":")[0]
+        kind = spec.split(":", maxsplit=1)[0]
         if kind in ("single", "split"):
             return run_parse_one(spec, root, work)
         if kind == "window":

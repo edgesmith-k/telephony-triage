@@ -531,7 +531,7 @@ def _user(root: Path) -> str:
 def _insert_progress(text: str, line: str, pattern: str) -> str:
     """'## 진행 상태' 절에 한 줄을 둔다(같은 패턴 줄이 있으면 바꾼다)."""
     core = pattern.removeprefix("(?m)")
-    rx = re.compile(core if core.endswith("$") else core + ".*$", re.M)
+    rx = re.compile(core if core.endswith("$") else core + ".*$", re.MULTILINE)
     if rx.search(text):
         return rx.sub(lambda m: line, text, count=1)
     head = "## 진행 상태\n"

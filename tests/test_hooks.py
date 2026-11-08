@@ -618,7 +618,7 @@ def test_guard_publish_any_interpreter_or_substitution_asks():
                 f"bash <<'EOF'\nset -e\npython3 {root}/db_pr.py publish wt --json\nEOF",
                 f"python3 - <<'EOF'\nimport subprocess\nsubprocess.run(['python3', '{root}/db_pr.py', 'publish', 'wt'])\nEOF",
                 # K 3차: 셸로 넘기는 글, `python3 -c` 본문
-                f'echo "python3 {root}/db_pr.py publish wt" | bash', f"printf '%s\\n' 'python3 $S/db_pr.py publish wt' | sh",
+                f'echo "python3 {root}/db_pr.py publish wt" | bash', "printf '%s\\n' 'python3 $S/db_pr.py publish wt' | sh",
                 f"python3 -c \"import subprocess; subprocess.run(['python3', '{root}/db_pr.py', 'publish', 'wt'])\""):
         out = bash(ws, cmd, ws.base)
         assert decision(out) == "ask" and "규칙 7" in out["permissionDecisionReason"], cmd
@@ -1331,7 +1331,7 @@ def test_guard_without_pyyaml_denies_mcp_and_asks_risky_bash():
                            (f"gh api repos/o/r/rulesets --input {rs.as_posix()}", "deny", "브랜치 보호"),
                            ("gh repo edit --enable-auto-merge", "deny", "브랜치 보호"),
                            (f"gh api repos/o/r/pulls/3/reviews --input {deep.as_posix()}", "deny", "guard 내부 오류"),
-                           (f"gh api -X PATCH repos/o/r -F delete_branch_on_merge=true", "deny", "브랜치 보호"),
+                           ("gh api -X PATCH repos/o/r -F delete_branch_on_merge=true", "deny", "브랜치 보호"),
                            ('gh alias set x "$(echo cHIgcmV2aWV3IC1h | base64 -d)"', "deny", "별칭"),
                            ('gh pr review 3 -b "$B" --comment', "ask", None),     # `_gh_kind`가 판정했다 — 낱말 수준은 안 쓴다
                            ("if true; then gh pr review 3 --approve; fi", "deny", "Approve"),   # 예약어 뒤도 본다(H-A1 r5)

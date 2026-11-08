@@ -534,7 +534,7 @@ def profile_key(platform: str | None, key: str) -> str:
     if not platform or platform == TOP_PROFILE:
         return key
     allowed = PROFILE_KEYS + PLATFORM_SCOPED_KEYS
-    if key.split(".")[0] not in allowed:
+    if key.split(".", maxsplit=1)[0] not in allowed:
         raise ValueError(f"{key}는 플랫폼 프로필 키가 아닙니다 (허용: {', '.join(allowed)}).")
     return f"platforms.{platform}.{key}"
 

@@ -386,9 +386,8 @@ def _preconditions(job: Path, purpose: str) -> dict:
         ana = analysis.get("analyzer")
         if not isinstance(ana, dict) or ana.get("error") or ana.get("when") == "never":
             raise _Stop(USAGE, "작업 없음", NEXT_CHECK_NA, "심층 분석 해당 없음")
-    else:
-        if _kind(job / EXPLORE_INPUT_FILE) != "file" or (analysis.get("explore") or {}).get("when") == "never":
-            raise _Stop(USAGE, "작업 없음", NEXT_CHECK_NA, "탐색 분석 해당 없음")
+    elif _kind(job / EXPLORE_INPUT_FILE) != "file" or (analysis.get("explore") or {}).get("when") == "never":
+        raise _Stop(USAGE, "작업 없음", NEXT_CHECK_NA, "탐색 분석 해당 없음")
     return analysis
 
 

@@ -224,8 +224,8 @@ def reverse_closure(edges: dict[str, set[str]], start: str) -> set[str]:
 
 # -- 테스트 검색 -----------------------------------------------------------------------------------
 
-_FROM_RE = re.compile(r"^\s*from\s+([\w.]+)\s+import\s+(\([^)]*\)|[^\n]*)", re.M)
-_IMPORT_RE = re.compile(r"^\s*import\s+([^\n#]+)", re.M)
+_FROM_RE = re.compile(r"^\s*from\s+([\w.]+)\s+import\s+(\([^)]*\)|[^\n]*)", re.MULTILINE)
+_IMPORT_RE = re.compile(r"^\s*import\s+([^\n#]+)", re.MULTILINE)
 
 
 def imported_names(text: str) -> set[str]:
@@ -418,7 +418,7 @@ def run_checks(sel: Selection) -> int:
     else:
         print("pytest: 선택된 테스트 없음, 건너뜀", flush=True)
     cmd = [sys.executable, str(REPO / "tools" / "check_boundary.py")]
-    print(f"$ python3 tools/check_boundary.py", flush=True)
+    print("$ python3 tools/check_boundary.py", flush=True)
     code = subprocess.run(cmd, cwd=REPO, stdin=subprocess.DEVNULL).returncode
     codes.append(0 if code == 0 else 2 if code == 2 else 1)
     return USAGE if USAGE in codes else FAILED if FAILED in codes else OK
@@ -435,7 +435,7 @@ def main(argv: list[str] | None = None) -> int:
     except SystemExit as exc:
         return USAGE if exc.code else OK
     try:
-        files = sorted({f[2:] if f.startswith("./") else f for f in args.files}) if args.files \
+        files = sorted({f.removeprefix("./") for f in args.files}) if args.files \
             else changed_files(args.base)
     except RuntimeError as exc:
         print(f"오류: {exc}", file=sys.stderr)

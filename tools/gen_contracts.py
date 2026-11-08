@@ -94,7 +94,7 @@ def _load_parsers() -> dict[str, argparse.ArgumentParser]:
 def cli_scripts() -> list[str]:
     """`if __name__ == "__main__":`이 있는 plugin/scripts/*.py 이름."""
     return sorted(p.stem for p in SCRIPTS_DIR.glob("*.py")
-                  if re.search(r"""^if __name__ == ["']__main__["']:""", p.read_text(encoding="utf-8"), re.M))
+                  if re.search(r"""^if __name__ == ["']__main__["']:""", p.read_text(encoding="utf-8"), re.MULTILINE))
 
 
 def _subparsers(parser: argparse.ArgumentParser):

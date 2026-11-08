@@ -157,7 +157,7 @@ def _source_tree(raw, base: str, tree: SourceTree) -> SourceTree:
             for key in ("file", "regex"):
                 if key not in item:
                     raise _err(at, f"'{key}'가 필요합니다.")
-            built.append((_rel_path(item["file"], f"{at}.file"), _compile(item["regex"], f"{at}.regex", re.M)))
+            built.append((_rel_path(item["file"], f"{at}.file"), _compile(item["regex"], f"{at}.regex", re.MULTILINE)))
         sources = tuple(built)
     return SourceTree(dirs, sources)
 
@@ -463,7 +463,7 @@ def backend_name(defaults: dict | None, name: str | None = None) -> str:
         _spec_at(key, f"parser.by_platform.{key}")
     name = base_name if name is None else name
     chosen = parser.get("backend") if name == base_name else by.get(name)
-    return chosen if chosen else get(name).default_backend
+    return chosen or get(name).default_backend
 
 
 DETECT_KEYS = ("tracker_field",)

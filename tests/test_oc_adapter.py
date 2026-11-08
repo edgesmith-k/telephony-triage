@@ -218,8 +218,8 @@ def test_mcp_servers_unreadable_is_error(text):
 
 def test_refused_env():
     assert oc.refused_env({"PATH": "/bin", "OPENCODE_DISABLE_AUTOUPDATE": "1", "OPENCODE_DISABLE_MODELS_FETCH": "1"}) == []
-    env = {k: "" for k in ("OPENCODE_PERMISSION", "OPENCODE_CONFIG_CONTENT", "OPENCODE_CONFIG", "OPENCODE_PURE",
-                           "OPENCODE_DISABLE_PROJECT_CONFIG", "OPENCODE_EXPERIMENTAL_LSP_TOOL", "OPENCODE_EXPERIMENTAL")}
+    env = dict.fromkeys(("OPENCODE_PERMISSION", "OPENCODE_CONFIG_CONTENT", "OPENCODE_CONFIG", "OPENCODE_PURE",
+                         "OPENCODE_DISABLE_PROJECT_CONFIG", "OPENCODE_EXPERIMENTAL_LSP_TOOL", "OPENCODE_EXPERIMENTAL"), "")
     assert oc.refused_env(env) == sorted(env)
     out = oc.before({"tool": "read", "args": {}, "directory": str(_dir())}, env={"OPENCODE_PERMISSION": '{"bash":"allow"}'})
     assert out["decision"] == "deny" and "OPENCODE_PERMISSION" in out["reason"]

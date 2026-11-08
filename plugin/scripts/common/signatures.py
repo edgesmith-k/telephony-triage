@@ -441,7 +441,7 @@ class Evaluator:
                 if not have[lk]:
                     del have[lk]
                 left += 1
-        return best if best else (0.0, [])
+        return best or (0.0, [])
 
 
 PARTIAL_KINDS = ("missing", "absent", "order", "window", "blocked")   # 부분 일치 순위 순 (§5.12)

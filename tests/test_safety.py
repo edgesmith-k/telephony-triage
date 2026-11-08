@@ -255,7 +255,7 @@ def _tomllib():
 
 
 def test_r10_dependency_manifest_has_complete_pins(safety_root):
-    import importlib.metadata as metadata
+    from importlib import metadata
     tomllib = _tomllib()
     from packaging.requirements import Requirement
     manifest = REPO / "pyproject.toml"

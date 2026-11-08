@@ -37,7 +37,7 @@ import tempfile
 import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from common import gitscope
 from common.exitcodes import CHECK_FAILED, NEEDS_APPROVAL, OK, USAGE

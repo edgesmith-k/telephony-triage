@@ -354,8 +354,7 @@ def _role_names(platform: str, *, old: bool = True, noise: bool = True) -> list[
 
 def _name_rx(name: str) -> str:
     """끝이 `-`·`*`면 앞 글자 일치(`ShannonNS-`, `UiccHal-*`), 아니면 낱말 경계."""
-    if name.endswith("*"):
-        name = name[:-1]
+    name = name.removesuffix("*")
     if name.endswith("-"):
         return rf"(?<![\w-]){re.escape(name)}\w*"
     return rf"(?<![\w-]){re.escape(name)}(?![\w-])"

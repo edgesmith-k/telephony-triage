@@ -650,7 +650,6 @@ def test_guard_selftest_uses_tracker_key_args(fake_trackers, monkeypatch):
 
 # -- GitHub 어댑터 (묶음 3, 설계 §3-2 github 열·§3-4) ------------------------------------------------
 
-from trackers import github as github_tracker  # noqa: E402
 
 G = trackers.get("github")
 GKEY = "mock-org.mock-issues-12"

@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 
 # -- site-defaults 블록 검증 도구 (레지스트리와 플랫폼의 `CaptureSpec.configure`가 같이 쓴다) ------------------

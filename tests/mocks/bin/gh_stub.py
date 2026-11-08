@@ -110,8 +110,7 @@ def repo_key() -> str:
     except (OSError, subprocess.CalledProcessError):
         return "unknown/unknown"
     name = Path(url).name
-    if name.endswith(".git"):
-        name = name[: -len(".git")]
+    name = name.removesuffix(".git")
     return f"mock-org/{name}"
 
 

@@ -41,7 +41,7 @@ NO_ARGS = ["setup", "sync", "preview"]
 
 def _frontmatter(name: str) -> dict:
     text = (COMMANDS / f"{name}.md").read_text(encoding="utf-8")
-    match = re.match(r"---\n(.*?)\n---\n", text, re.S)
+    match = re.match(r"---\n(.*?)\n---\n", text, re.DOTALL)
     assert match, f"{name}.md: frontmatter 없음"
     return yaml.safe_load(match.group(1))
 
@@ -53,7 +53,7 @@ def test_command_files_match_design_lists():
     files = sorted(p.stem for p in COMMANDS.glob("*.md"))
     assert files == sorted(EXPECTED) and len(files) == 14
     table = (DOCS / "09-commands.md").read_text(encoding="utf-8")
-    names = re.findall(r"^\| `([a-z-]+)[ `]", table, re.M)
+    names = re.findall(r"^\| `([a-z-]+)[ `]", table, re.MULTILINE)
     assert sorted(set(names)) == sorted(EXPECTED)
     arch = (DOCS / "01-architecture.md").read_text(encoding="utf-8")
     assert "commands/" in arch and "(14개)" in arch
@@ -99,7 +99,7 @@ def test_help_lists_commands_from_files_and_recommends_only_existing_ones():
     assert "${CLAUDE_PLUGIN_ROOT}/scripts/" not in text, "help는 스크립트를 부르지 않는다 (site-defaults 검사 제외의 근거)"
     assert "`[a-z-]+`" in text and "소문자" in text, "커맨드 이름은 소문자 [a-z-]+ 만 파일로 찾는다 (경로 이탈 방지)"
     table = text.split("## 상황별 추천", 1)[1].split("\n## ", 1)[0]
-    rows = re.findall(r"^\|[^|\n]+\| `([a-z-]+)([^`]*)`", table, re.M)
+    rows = re.findall(r"^\|[^|\n]+\| `([a-z-]+)([^`]*)`", table, re.MULTILINE)
     names = {name for name, _ in rows}
     files = {p.stem for p in COMMANDS.glob("*.md")}
     assert names and names <= files, names - files
@@ -127,7 +127,7 @@ def test_flow_a_b_wording():
     assert "흐름 B(등록)는 새 유형·원인·규칙을 만들고" in table and "리뷰어는 push 뒤 지정할지 묻는다(제안은 CODEOWNERS 기준 — 카테고리 오너를 둔 카테고리만, 파서 규칙은 메인테이너)" in table
     assert "병합은 작성자 외 1명의 +1 뒤 \"병합해줘\" 또는 GHE 웹 병합이다" in table      # A2: 바로 병합 없음(+1 관문)
     assert "아래 안내 줄과 표를 그대로 보인다" in help_text
-    assert len(re.findall(r"^\| \(A\) ", table, re.M)) >= 3 and len(re.findall(r"^\| \(B\) ", table, re.M)) >= 2
+    assert len(re.findall(r"^\| \(A\) ", table, re.MULTILINE)) >= 3 and len(re.findall(r"^\| \(B\) ", table, re.MULTILINE)) >= 2
     assert "`record <JIRA-KEY> --new-cause <유형 ID>`" in table
     skill = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
     for needle in ("**A 찾기·분석**", "**B 등록**", "`db-authoring.md` §0", "흐름은 묻지 않고(기본 analyze) A에 B를 권하지 않는다", "기록하지 않음·중간 취소",
@@ -156,7 +156,8 @@ def test_reference_calls_use_flags_the_scripts_accept():
     assert "stage <plan> --wt <wt> --branch <br> [--dry-run] --then-summary" in flow
     assert "--commit --and-discard" in flow
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
-    import db_pr, db_search
+    import db_pr
+    import db_search
     assert db_search.build_parser().parse_args(["q", "--format", "markdown"]).format == "markdown"
     assert db_pr.build_parser().parse_args(["summary", "wt", "--format", "markdown"]).format == "markdown"
     assert db_pr.build_parser().parse_args(["summary", "wt"]).format == "json"
@@ -304,7 +305,6 @@ def test_cleanup_older_than_candidates_are_tool_jobs_only_and_dry_run_equals_yes
 
 
 def test_cleanup_older_than_reports_failed_when_directory_remains(tmp_path, monkeypatch):
-    import importlib
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     sys.path.insert(0, str(REPO / "tests"))
     from test_safety import safety_ctx
@@ -341,7 +341,8 @@ def test_sync_and_setup_bodies_list_new_steps_in_order():
     assert "config.py doctor --format markdown" in skill
     assert len(list(COMMANDS.glob("*.md"))) == 14
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
-    import config, db_pr
+    import config
+    import db_pr
     assert config.build_parser().parse_args(["doctor"]).format == "json"
     assert config.build_parser().parse_args(["doctor", "--format", "markdown"]).format == "markdown"
     assert db_pr.build_parser().parse_args(["my-prs"]).cmd == "my-prs"

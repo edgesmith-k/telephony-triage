@@ -104,7 +104,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import events, masking, site_defaults, userconfig, yamlio  # noqa: E402
+from common import masking, site_defaults, userconfig, yamlio  # noqa: E402
 import platforms  # noqa: E402
 import trackers  # noqa: E402
 from platforms import session as platform_session  # noqa: E402

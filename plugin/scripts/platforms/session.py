@@ -79,7 +79,7 @@ def resolve_lenient(defaults: dict, cli: str | None = None, user: dict | None = 
     return name, cfg, problems
 
 
-def resolve_db(defaults: dict, cli: str | None, db_arg) -> tuple[str, "object"]:
+def resolve_db(defaults: dict, cli: str | None, db_arg) -> tuple[str, object]:
     """사용자 흐름의 이슈 DB 읽기(db_add similar·db_search·db_review): 선택 플랫폼(`resolve`) → DB 경로(`--db` > cwd의
     이슈 DB > 그 플랫폼 프로필의 `issue_db.path`) → DB 선언 대조(`check_db`, `--db`를 준 경우도). `(이름, 경로)`.
     오류는 `PlatformConfigError`·`dbpath.DbPathError`(호출자가 종료 코드 2)."""

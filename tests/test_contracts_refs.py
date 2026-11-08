@@ -36,7 +36,7 @@ SENTINELS = {("plugin/scripts/db_add.py", "작업 계획"),           # 문서 �
 
 
 def _headings() -> list[str]:
-    return [m.group(1).strip() for m in re.finditer(r"^#{2,6} (.+)$", CONTRACTS.read_text(encoding="utf-8"), re.M)]
+    return [m.group(1).strip() for m in re.finditer(r"^#{2,6} (.+)$", CONTRACTS.read_text(encoding="utf-8"), re.MULTILINE)]
 
 
 def _resolves(target: str, headings: list[str]) -> bool:

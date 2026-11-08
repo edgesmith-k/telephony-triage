@@ -214,7 +214,7 @@ def test_extract_bugreport_missing_file_exits_2(tmp_path):
 
 def test_code_roots_constants_come_from_platform():
     import code_roots
-    import platforms.android as android
+    from platforms import android
 
     assert code_roots.TELEPHONY_DIR is android.TELEPHONY_DIR
     assert code_roots.VERSION_SOURCES is android.VERSION_SOURCES

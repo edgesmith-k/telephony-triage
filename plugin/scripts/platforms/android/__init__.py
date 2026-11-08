@@ -20,8 +20,8 @@ REQUIRED_DIRS = (TELEPHONY_DIR,)
 # 튜플이라 `SPEC.source_tree.version_sources`와 같은 객체다.
 VERSION_SOURCES = (
     ("build/release/release_config_map.textproto", re.compile(r"RELEASE_PLATFORM_VERSION\D*(\d+)")),
-    ("build/make/core/version_defaults.mk", re.compile(r"^\s*PLATFORM_VERSION\s*:?=\s*(\d+)", re.M)),
-    ("build/core/version_defaults.mk", re.compile(r"^\s*PLATFORM_VERSION\s*:?=\s*(\d+)", re.M)),
+    ("build/make/core/version_defaults.mk", re.compile(r"^\s*PLATFORM_VERSION\s*:?=\s*(\d+)", re.MULTILINE)),
+    ("build/core/version_defaults.mk", re.compile(r"^\s*PLATFORM_VERSION\s*:?=\s*(\d+)", re.MULTILINE)),
 )
 
 SPEC = PlatformSpec(

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import platforms
 import trackers
-from common import compat, events, failedstep, masking, stepanchor, userconfig
+from common import compat, failedstep, masking, stepanchor, userconfig
 from common.exitcodes import CHECK_FAILED, USAGE
 
 from .anchor import AnchorMixin, _parse_ts

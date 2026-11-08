@@ -2265,7 +2265,7 @@ def test_screen_content_patterns_match_db_summary_renderer():
                     r"CALL-001-01: fixed → open .*verification_history 보존", r"해결책 검증 상태: CALL-001-01 — unverified",
                     r"^-\s+status: verified", r"시그니처 없음 — 매칭 불가\(나중에 보완\)", r"사용자 진술 — 검증 전\(unverified\)",
                     r"fixtures/DATA-001-02\.2\.expect\.yaml", *grader.RECORD_SKIPPED]:
-        assert re.search(pattern, text, re.M), pattern
+        assert re.search(pattern, text, re.MULTILINE), pattern
     # e42[4]: 리뷰어가 없으면(샘플 CODEOWNERS — 카테고리 오너 없음) `리뷰어(제안 — …): 없음`(A2 제안 줄). 리뷰어가 있으면 맞지 않는다
     seen = []
     class Spy:
@@ -2273,8 +2273,8 @@ def test_screen_content_patterns_match_db_summary_renderer():
             seen.extend(patterns)
             return True, ""
     grader.checks(42, Spy())[4]()
-    assert seen and not any(re.search(p, text, re.M) for p in seen)
-    assert all(re.search(p, db_summary.render_markdown({**scr, "reviewers": []}, {}, extra), re.M) for p in seen)
+    assert seen and not any(re.search(p, text, re.MULTILINE) for p in seen)
+    assert all(re.search(p, db_summary.render_markdown({**scr, "reviewers": []}, {}, extra), re.MULTILINE) for p in seen)
     # e32[4]: 시그니처 없는 새 원인은 R1~R3이 `건너뜀: 시그니처 없음(pending)`이다 — 그 행으로 렌더해 e32 판정 패턴을 맞춘다
     pending = [{"id": f"R{n}", "status": "skipped", "label": "건너뜀: 시그니처 없음(pending)", "reason": "시그니처 없음(pending)"}
                for n in (1, 2, 3)]
@@ -2282,8 +2282,8 @@ def test_screen_content_patterns_match_db_summary_renderer():
     patterns32 = [p for p in _e32_patterns()]
     assert len(patterns32) == 3
     for pattern in patterns32:
-        assert re.search(pattern, text32, re.M), pattern
-        assert not re.search(pattern, text, re.M), pattern           # `건너뜀: 해당 없음`에는 맞지 않는다
+        assert re.search(pattern, text32, re.MULTILINE), pattern
+        assert not re.search(pattern, text, re.MULTILINE), pattern           # `건너뜀: 해당 없음`에는 맞지 않는다
     verified = db_summary.render_markdown(scr, {}, {**extra, "resolution": [
         {"cause": "NEW-CAUSE-1", "state": "verified", "reason": "verify-resolution"}]})
     assert re.search(r"해결책 검증 상태: \S+ — verified", verified)
@@ -2341,7 +2341,7 @@ def test_draft_shown_reason_mentions_other_rule(tmp_path):
 
 def test_report_shown_uses_longest_report_in_window(tmp_path):
     """head·grep으로 리포트 일부만 다시 열어도 기준은 창 안에서 가장 긴 리포트다."""
-    part = REPORT.split("- 근거 로그")[0]
+    part = REPORT.split("- 근거 로그", maxsplit=1)[0]
     ctx = _report_ctx(tmp_path, "part", [_bash("t", TRIAGE_CMD, "{}"), _bash("c", "cat /w/MOCK-1/report.md", REPORT),
                                          _bash("h", "head -3 /w/MOCK-1/report.md", part),
                                          _ask("q", SHOWN_REPORT.split("* 근거 로그")[0] + "\n기록할까요?", STEP7)])
@@ -3045,7 +3045,7 @@ def test_e72_defined_and_wired(tmp_path):
     data = json.loads((EVALS / "offsite_results.json").read_text(encoding="utf-8"))
     assert "72" in data["evals"]     # run 유무는 보지 않는다(정의가 바뀌어 메인 세션이 다시 잰다)
     # 확인 화면 병합 줄 판정 정규식이 merge.SCREEN_LINE(db_summary가 찍는 줄)에 맞는다(스크립트가 기준)
-    assert re.search(grader.MERGE_LINE, dbmerge.SCREEN_LINE, re.M) and dbmerge.SCREEN_LINE in e["assertions"][0]
+    assert re.search(grader.MERGE_LINE, dbmerge.SCREEN_LINE, re.MULTILINE) and dbmerge.SCREEN_LINE in e["assertions"][0]
     assert not hasattr(grader, "MERGE_CHOICE") and not hasattr(grader, "push_only_eval")
     d = tmp_path / "e"
     fns = grader.checks(72, grader.Ctx(_synthetic_env(d), run_dir(d)))

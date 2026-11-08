@@ -40,7 +40,7 @@ sys.path.insert(0, str(SCRIPTS))
 import db_regress  # noqa: E402
 import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
-from common import dbpath, history, issuedb, quality, site_defaults, userconfig, yamlio  # noqa: E402
+from common import dbpath, history, issuedb, quality, site_defaults, yamlio  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from platforms import PlatformConfigError  # noqa: E402
 from platforms import session as platform_session  # noqa: E402

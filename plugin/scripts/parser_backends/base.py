@@ -18,7 +18,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 
 # (start, end) — tz-aware UTC datetime. None이면 파일 전체(--full).
 Window = tuple[datetime, datetime]
@@ -56,13 +56,13 @@ class ParserBackend(ABC):
     #: 이 백엔드가 해석하는 플랫폼(`platforms.<이름>`). 기본은 android(기존 site 백엔드 호환).
     platform: str = "android"
 
-    def configure(self, profile) -> "ParserBackend":
+    def configure(self, profile) -> ParserBackend:
         """`platforms.PlatformProfile`(site-defaults `platform:`)을 반영한 백엔드를 준다 (옵트인).
         기본은 자기 자신이다. `_line_record`를 직접 구현한 site 백엔드는 무시해도 된다.
         원본 객체(싱글톤)는 바꾸지 않는다."""
         return self
 
-    def apply_rules(self, rules) -> "ParserBackend":
+    def apply_rules(self, rules) -> ParserBackend:
         """이슈 DB `parser-rules`(`common.parser_rules.Rules`)의 태그 속성(`level`·`ipc`, 04-parser-matching §5.8 (2))을
         반영한 백엔드를 준다. 기본은 자기 자신이다(site 백엔드는 그대로). reference 백엔드는 키마다 DB가 하나라도
         선언하면 DB만, 아니면 백엔드 기본 상수를 본다. 원본 객체(싱글톤)는 바꾸지 않는다."""

@@ -531,7 +531,7 @@ def cmd_find_text(args, defaults) -> dict:
             entry["status"] = "no-literal"
         else:
             files = {r.rsplit(":", 1)[0] for r in it["reworded"]}
-            if it["same"] and it["reworded"] or len(files) >= 4:
+            if (it["same"] and it["reworded"]) or len(files) >= 4:
                 entry["status"], refs = "ambiguous", (it["same"][:1] + it["reworded"][:1]) if it["same"] else it["reworded"][:2]
             elif it["same"]:
                 entry["status"], refs = "same", it["same"]

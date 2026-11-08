@@ -16,7 +16,7 @@ class EntityOps:
         path = self.tree.root / "templates" / "cause.yaml"
         keys = []
         if path.is_file():
-            keys = re.findall(r"^\s*(?:-\s+)?([a-z_]+):", path.read_text(encoding="utf-8"), flags=re.M)
+            keys = re.findall(r"^\s*(?:-\s+)?([a-z_]+):", path.read_text(encoding="utf-8"), flags=re.MULTILINE)
         return keys or CAUSE_KEYS_DEFAULT
 
     def _build_cause(self, i: int, cause_id: str, body: dict) -> dict:

@@ -23,7 +23,6 @@ import re
 import statistics
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import yaml
 

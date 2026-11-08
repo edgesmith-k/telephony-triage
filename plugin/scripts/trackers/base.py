@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Callable, Mapping
+from collections.abc import Callable, Mapping
 
 
 class TrackerConfigError(Exception):
@@ -35,18 +35,18 @@ class TrackerSpec:
     default_format: str
     text_defaults: Mapping                      # `{summary|description|comments: (경로, …)}` — field_map에 없을 때
     components_default: str                     # field_map `components`가 없을 때의 경로
-    parse_key: Callable[[str], "str | None"]    # 사용자 입력 → 작업 키(경로 안전), 아니면 None
+    parse_key: Callable[[str], str | None]      # 사용자 입력 → 작업 키(경로 안전), 아니면 None
     display: Callable[[str], str]               # 작업 키 → 본문·메시지 표시
     link: Callable[[str, str], str]             # (DB `tracker.base_url`, 작업 키) → README 링크 대상
     spec_problems: Callable[[dict], list]       # raw → 키 인자 설정 문제 문구(트래커 전용: key_arg 필수·금지 등). body_arg·extra_args 공통 검사는 issuepost
     key_args: Callable[[dict, str], dict]       # (spec, 작업 키) → 쓰기 도구의 키 인자
-    key_from_args: Callable[[dict, object], "str | None"]   # (spec, 도구 입력) → 경로 안전 작업 키, 아니면 None
+    key_from_args: Callable[[dict, object], str | None]   # (spec, 도구 입력) → 경로 안전 작업 키, 아니면 None
     arg_names: Callable[[dict], set]            # spec → 승인 범위의 키 인자 이름 집합
     key_arg_id: Callable[[dict], str]           # spec → 승인 기록 `key_arg` 값
     # (도구 입력, 매핑된 논리 동작 — 비어 있지 않다) → mapped 안의 동작 또는 "unsupported". 그 밖의 값(None·mapped 밖 이름)이나
     # 예외는 core(jira_bridge.target)가 "unsupported"로 취급해 원문을 대체한다(fail-closed)
     read_action: Callable[[object, set], str]
-    key_from_read: Callable[[object, object, re.Pattern], "str | None"]   # (응답, 도구 입력, 키 정규식) → 작업 키
-    read_args: Callable[[str, str], "dict | None"]   # (논리 동작, 작업 키) → needs_input 안내 인자(없으면 None)
+    key_from_read: Callable[[object, object, re.Pattern], str | None]   # (응답, 도구 입력, 키 정규식) → 작업 키
+    read_args: Callable[[str, str], dict | None]   # (논리 동작, 작업 키) → needs_input 안내 인자(없으면 None)
     classify_extra: Callable[[str, set], set]   # (도구 이름, 후보 동작) → 보강한 후보 동작(setup)
     selftest_key: str = "SELFTEST-0"            # doctor guard 자체 시험의 가짜 작업 키(`safe_key_re`에 맞고 승인 기록이 없다)

@@ -206,7 +206,6 @@ def _use(args, defaults, name: str, source: str, implicit: str, *, unknown: int 
     args.platform_pick = {"platform": name, "source": source, "note": note, "line": f"플랫폼: {label} ({reason})"}
     if source == "answer" or answered:     # Driver가 상태 `platform_answer`로 남긴다
         args.platform_pick["answered"] = True
-    return None
 
 
 def choose(args, defaults: dict, key: str | None) -> dict | None:
