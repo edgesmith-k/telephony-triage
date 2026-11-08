@@ -347,6 +347,16 @@ def test_sync_and_setup_bodies_list_new_steps_in_order():
     assert db_pr.build_parser().parse_args(["my-prs"]).cmd == "my-prs"
 
 
+def test_setup_md_size_cap():
+    """setup.md 바이트 상한 — 커맨드 본문은 매 호출 때 모델 문맥에 통째로 들어간다. A①②(0번 Jira MCP 점검·1번 최대 3개 질문·
+    비android 분기 문구)로 7,456B → 8,924B가 됐다. 다른 문서처럼 지금 크기에 여유를 둔 상한(9,500B)으로 고정해 다음에 덧붙일 때
+    줄이는 쪽을 먼저 생각하게 한다. tt-setup.md는 gen_opencode 산출물(머리말 두 줄이 더 길다)이라 상한을 조금 더 준다."""
+    setup = (COMMANDS / "setup.md").read_bytes()
+    assert len(setup) <= 9_500, len(setup)
+    tt_setup = (REPO / "opencode" / "commands" / "tt-setup.md").read_bytes()
+    assert len(tt_setup) <= 9_600, len(tt_setup)
+
+
 def test_sync_sequence_keeps_recent_or_open_pr_workdirs():
     ws = Workspace()
     ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
