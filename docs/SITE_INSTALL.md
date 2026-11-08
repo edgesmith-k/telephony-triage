@@ -290,7 +290,7 @@ CODEOWNERS에는 **메인테이너 경로**(`/.githooks/`·`/schema/`·`/parser-
 2. `python3 tools/site_step.py modules` → `modules check`: remote·push 권한·트리 = modules.yaml·데몬 ⊆ tags.yaml·prefer 규칙·보호·CI(정보). 중첩 `claude -p` 확인은 명령만 보인다(사용자가 한 번 돌리고 `--waive`).
 3. `python3 tools/site_step.py modules coverage --out docs/site/module-coverage.diff`(토큰 0, 사내 전용 출력): 사내 로그로 모듈별 줄 수·모듈에 없는 데몬·tags.yaml에 없는 태그를 보고, modules.yaml diff를 검토해 모듈 레포 PR로 보낸다. tags.yaml에 없는 태그는 이슈 DB 계획 op PR이 먼저다(사용자 확인).
 4. **정기 점검(매주, 상한 300,000 토큰/회)**: `python3 tools/site_step.py audit` — 사내 모델·출처 모름 커밋만 골라 토큰 0 검사를 먼저 돈다. 남은 것은 `docs/site/audit/<날짜>-review.md`의 목록·추정 토큰뿐이다(Claude는 부르지 않는다). 사내 Claude 리뷰(승인 뒤) → `audit --record`(넘친 항목은 이월). 14일 넘으면 ms2.audit가 사용자 필요.
-   걸린 것이 사람 눈에 안 띄어도 남게 `audit --notify`: P0·P1 항목(시그니처 소실·걸린 기록)과 실패한 검사 행을 이슈 DB 레포(steps.yaml `ops_db_repo`·`ofono_db_repo`) Issue로 올린다. 기본은 표만 보이고, 사용자 확인 뒤 `audit --notify --create`가 만든다(제목 `[triage-audit] <id>`가 든 열린 Issue가 있으면 건너뜀). 본문은 계획에 든 표식·근거 이름·파일·Jira 키·명령뿐이다(로그 원문 없음).
+   걸린 것이 사람 눈에 안 띄어도 남게 `audit --notify`: P0·P1 항목(시그니처 소실·걸린 기록)과 실패한 검사 행을 이슈 DB 레포(steps.yaml `ops_db_repo`·`ofono_db_repo`) Issue로 올린다. 기본은 표만 보이고, 사용자 확인 뒤 `audit --notify --create`가 만든다(제목이 `[triage-audit] <id>`와 같은 열린 Issue가 있으면 건너뜀 — 제목을 고치면 표식이 깨져 다음 회차에 새로 생긴다). 본문은 계획에 든 표식·근거 이름·파일·Jira 키·명령뿐이다(로그 원문 없음).
 
 ## 11. 되돌리기·제거 (배포본 롤백, 플러그인 제거, 반입 되돌리기)
 

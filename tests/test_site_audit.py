@@ -668,6 +668,30 @@ def test_notify_dry_run_reads_only_and_create_dedups(site, fake_py, fake_gh):
         ctx.cleanup()
 
 
+def test_notify_dedup_needs_exact_title_not_prefix(site, fake_py, fake_gh):
+    """코덱스 리뷰 R2: 검색은 낱말 단위라 `…/setup`을 찾아도 `…/setup-retry`가 돌아온다. 제목이 정확히 같은 열린 Issue만 "있음"이다."""
+    p = _plan_with_flags(site, fake_py)
+    (site["root"] / sc.STEPS_FILE).write_text(f"ops_db: {site['db']}\nops_db_repo: org/ops-db\n", encoding="utf-8")
+    titles = [c["title"] for c in sa.notify_candidates(p)]
+    assert titles
+    for i, title in enumerate(titles):                                   # 접두사가 같은 **다른** ID의 열린 Issue
+        fake_gh["issues"].append({"number": 100 + i, "title": title + "-retry", "body": "", "state": "open", "repo": "org/ops-db",
+                                  "url": f"https://ghe.example/org/ops-db/issues/{100 + i}"})
+    ctx = sc.Ctx(site["root"])
+    try:
+        res = sa.notify(ctx, p)
+        assert {r["status"] for r in res["rows"]} == {"would-create"}       # 전에는 marker in title이라 전부 exists였다
+        fake_gh["issues"].append({"number": 500, "title": "  " + titles[0] + " ", "body": "", "state": "open", "repo": "org/ops-db",
+                                  "url": "https://ghe.example/org/ops-db/issues/500"})
+        res = sa.notify(ctx, p)
+        by = {r["id"]: r for r in res["rows"]}
+        first = sa.notify_candidates(p)[0]["id"]
+        assert by[first]["status"] == "exists" and by[first]["detail"] == "#500"   # 공백만 다른 같은 제목은 같다
+        assert all(r["status"] == "would-create" for k, r in by.items() if k != first)
+    finally:
+        ctx.cleanup()
+
+
 def test_notify_skips_without_repo_or_auth_and_reports_errors(site, fake_py, fake_gh):
     p = _plan_with_flags(site, fake_py)
     ctx = sc.Ctx(site["root"])                                              # steps.yaml에 ops_db_repo 없음

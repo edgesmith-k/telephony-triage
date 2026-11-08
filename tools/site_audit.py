@@ -888,7 +888,7 @@ def record(root: Path, defer: list[str] | None = None) -> str:
 # -- 알림(종합 리뷰 C①): 걸린 항목을 이슈 DB 레포의 GitHub Issue로 등록 --------------------------------------------------
 # 점검 결과는 전부 pull(파일·터미널)이었다. 사람이 안 봐도 남게, P0·P1 항목(drift·걸린 기록)과 실패한 검사 행을 이슈 DB 레포
 # (steps.yaml `<레포>_repo`)의 Issue로 올린다. 기본은 보기만(dry-run)이고 `--create`(사용자 확인 뒤)만 만든다. 중복 방지: 제목의
-# 표식 `[triage-audit] <id>`가 든 **열린** Issue가 있으면 만들지 않는다(닫힌 것은 다시 생긴 것이므로 새로 만든다). 모듈 항목(M)은
+# 제목이 표식 `[triage-audit] <id>`와 같은 **열린** Issue가 있으면 만들지 않는다(닫힌 것은 다시 생긴 것이므로 새로 만든다). 모듈 항목(M)은
 # 리뷰 대상이지 문제 보고가 아니라 뺀다. 본문에는 계획에 든 것(표식·우선·근거 이름·파일·Jira 키·명령)만 쓰고 로그 원문은 없다.
 
 ISSUE_PREFIX = "[triage-audit]"
@@ -923,7 +923,9 @@ def notify_candidates(p: dict) -> list[dict]:
 
 
 def _open_issue(ctx, slug: str, marker: str) -> tuple[dict | None, str | None]:
-    """(표식이 제목에 든 열린 Issue, 오류). `gh issue list`는 읽기다."""
+    """(제목이 표식과 **정확히 같은** 열린 Issue, 오류). `gh issue list`는 읽기다. 검색(`in:title`)은 낱말 단위라 접두사가 같은 다른 ID
+    (`…/setup`과 `…/setup-retry`)도 돌아오므로 제목 전체를 공백 정규화 뒤 비교한다(코덱스 리뷰 R2 — 전에는 `marker in title`이라
+    다른 항목을 "있음"으로 봤다). 제목을 사람이 고치면 표식이 깨져 다음 회차에 새 Issue가 생긴다(ID는 제목이 유일한 저장 위치)."""
     code, out, err = ctx.gh("issue", "list", "--repo", slug, "--state", "open", "--search", f'"{marker}" in:title',
                             "--limit", "50", "--json", "number,title,url")
     if code:
@@ -931,7 +933,8 @@ def _open_issue(ctx, slug: str, marker: str) -> tuple[dict | None, str | None]:
     rows = _json(out)
     if not isinstance(rows, list):
         return None, "gh issue list 출력을 읽지 못함"
-    hit = next((r for r in rows if isinstance(r, dict) and marker in str(r.get("title", ""))), None)
+    want = " ".join(marker.split())
+    hit = next((r for r in rows if isinstance(r, dict) and " ".join(str(r.get("title", "")).split()) == want), None)
     return hit, None
 
 
