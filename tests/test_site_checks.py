@@ -585,7 +585,7 @@ def test_s3_parse_logcat_passes_only_on_exit_0(tmp_path, monkeypatch):
     (root / "plugin").mkdir()
     (root / "plugin" / "site-defaults.yaml").write_text("tracker:\n  kind: jira\n", encoding="utf-8")
     for code, status in ((0, "pass"), (1, "fail"), (2, "fail")):
-        monkeypatch.setattr(sc.Ctx, "run", lambda self, cmd, **kw: (code, "", "x"))
+        monkeypatch.setattr(sc.Ctx, "run", lambda self, cmd, *, _code=code, **kw: (_code, "", "x"))   # 클래스에 남는다 — 값을 묶는다
         assert sc.s3_parse_logcat(sc.Ctx(root))["status"] == status, code
 
 

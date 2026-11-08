@@ -268,7 +268,7 @@ def run_symbol_one(spec: str, root: Path, work: Path) -> dict:
     res: dict = {"spec": spec, "files": files}
     for label, symbol in (("class_method", "Foo#bar"), ("function", "bar")):
         argv = ["find-symbol", symbol, "--roots", f"aosp={tree}", "--plugin-root", str(root)]
-        res[label], code = _timed(lambda: _call(code_roots.main, argv, work / "symbol.json"))
+        res[label], code = _timed(lambda: _call(code_roots.main, argv, work / "symbol.json"))  # noqa: B023 — _timed가 바로 부른다
         res[f"{label}_exit"] = code
     res["matches"] = len(json.loads((work / "symbol.json").read_text(encoding="utf-8"))["matches"])
     return res

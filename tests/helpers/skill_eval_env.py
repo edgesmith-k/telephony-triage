@@ -357,7 +357,7 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
         ws.plan(seed["job"], json.loads(text))
     for name in setup.get("main_after_pr") or []:
         holder = {}
-        ws.push_main(lambda other, n=name: holder.setdefault("msg", MAIN_EDITS[n](other, ws)), f"eval {name}")
+        ws.push_main(lambda other, n=name: holder.setdefault("msg", MAIN_EDITS[n](other, ws)), f"eval {name}")  # noqa: B023 — push_main이 바로 부른다
 
     remote_edit = setup.get("remote_after_pr")
     if remote_edit:

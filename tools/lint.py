@@ -60,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     if version != pin.group(1):
         print(f"ruff 버전 불일치: 설치 {version}, 고정 {pin.group(1)} — 규칙 결과가 달라지므로 고정 버전을 설치한다", file=sys.stderr)
         return 2
-    return subprocess.run([*ruff, "check", *args, *TARGETS], cwd=REPO).returncode
+    return subprocess.run([*ruff, "check", *args, *TARGETS], cwd=REPO, check=False).returncode
 
 
 if __name__ == "__main__":

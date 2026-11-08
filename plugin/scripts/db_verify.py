@@ -505,9 +505,9 @@ def r3(run: Run, t: Targets) -> dict:
         category = run.db.type_by_id(cause.type_id).category
         keys = [c.sig.key for c in t.cause[cid]]
         fixtures = run.fixtures(lambda i: (
-            (i["fx"].kind == "negative" and i["type"].category == category)
-            or (i["fx"].kind in POSITIVE_KINDS and i["type"].category == category and i["fx"].cause != cid)
-            or (i["fx"].kind in ("fixed", "resolved") and i["fx"].cause == cid)))
+            (i["fx"].kind == "negative" and i["type"].category == category)  # noqa: B023 — run.fixtures가 이 반복 안에서 바로 거른다
+            or (i["fx"].kind in POSITIVE_KINDS and i["type"].category == category and i["fx"].cause != cid)  # noqa: B023
+            or (i["fx"].kind in ("fixed", "resolved") and i["fx"].cause == cid)))  # noqa: B023
         if not fixtures:
             checks.append(_check(cid, "skipped", NO_NEGATIVE, kind="cause"))
             continue

@@ -152,8 +152,8 @@ def drift_items(plan: dict, base: Snapshot, onto: Snapshot) -> list[dict]:
             if section is None:
                 continue
             key = op.get("key") or ParserRuleOps._rule_key(section, op["rule"])
-            find = lambda snap: next((r for r in snap.rules.get(op["file"], {}).get(section) or []  # noqa: E731
-                                      if ParserRuleOps._rule_key(section, r) == key), None)
+            find = lambda snap: next((r for r in snap.rules.get(op["file"], {}).get(section) or []  # noqa: E731, B023 — 바로 아래 줄에서만 부른다
+                                      if ParserRuleOps._rule_key(section, r) == key), None)  # noqa: B023
             ra, rb = find(base), find(onto)
             if kind == "add-parser-rule":
                 if rb is not None and ra is None:

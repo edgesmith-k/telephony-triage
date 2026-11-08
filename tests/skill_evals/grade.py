@@ -2970,7 +2970,7 @@ def no_direct_module_access(ctx):
                 loop = _for_items(toks)
                 if loop:                # `for f in …/module-skill/a; do rm $f` — 항목을 이어 붙여 편다
                     env[loop[0]] = " ".join(loop[1])
-                seg = _VAR_REF.sub(lambda m: env.get(m.group(1) or m.group(2), m.group(0)), seg)
+                seg = _VAR_REF.sub(lambda m: env.get(m.group(1) or m.group(2), m.group(0)), seg)  # noqa: B023 — re.sub가 바로 부른다
                 if "triage.py" not in seg and _module_seg_bad(seg):
                     bad.append(seg[:120])
     return not bad, f"직접 접근={bad[:3]}"

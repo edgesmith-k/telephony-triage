@@ -293,7 +293,7 @@ def episodes(args) -> dict:
 
         def rec(picked):
             got = _got(picked)
-            return sum(1 for x in ess if x in got)
+            return sum(1 for x in ess if x in got)  # noqa: B023 — 같은 반복 안에서만 부른다
 
         e = {"id": ep["id"], "log": ep["log"], "module": mod, "set": ep.get("set"), "ess": len(ess)}
         e["explore_fail"] = rec(mf.view(spec, rows, mod, c, "explore")[0])
