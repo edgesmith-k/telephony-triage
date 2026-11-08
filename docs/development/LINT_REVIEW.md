@@ -49,19 +49,19 @@ pyproject 주석에 한 줄씩 있다. 자동 수정은 `ruff check --fix --diff
 
 `tools/lint.py`의 ruff 호출은 `check=False`를 밝혀 이 표에 넣지 않는다(종료 코드를 그대로 돌려준다).
 
-## 표 3. BLE001 (`except Exception`) 14건 — 고치지 않음
+## 표 3. BLE001 (`except Exception`) 13건 — 고치지 않음
 
 | 곳 | 사유 |
 |---|---|
 | `plugin/scripts/common/provenance.py:43` `env_info` | 기록용 런타임 정보 — 못 읽으면 `unknown`(분석·판정에 쓰지 않는다) |
 | `plugin/scripts/common/skillpath.py:123` `resolve` | degraded: 설치 스킬을 못 찾은 것으로(`path: None`·사유) — 분석 스킬 없이 이어 간다 |
-| `plugin/scripts/common/userconfig.py:658` `redact_remote` | 표시용 가림 — 실패하면 값 대신 `<원격>`(원격 URL·자격증명을 내보내지 않는 쪽) |
-| `plugin/scripts/common/userconfig.py:726` `_merged_each` | 합치기가 실패한 플랫폼 프로필은 건너뛴다(docstring 계약). 검토 메모: 그 프로필의 문제는 이 목록에 안 나온다 |
-| `plugin/scripts/common/userconfig.py:763·803·824·922` `module_skills_problems`·`analyzer_problems`·`implicit_module_switches`·`read_roots` | 계약 "예외 없음"의 문구·목록 수집기 — 손상된 값에서 모은 데까지 돌려준다. 검토 메모: 문제 목록이 덜 나올 수 있다 |
-| `plugin/scripts/common/userconfig.py:861` `deep_source_problem` | 계약 "예외 없음" — 사유를 못 만들면 None, 부르는 쪽(driver)은 "설정 오류"로 막는다 |
+| `plugin/scripts/common/userconfig.py:659` `redact_remote` | 표시용 가림 — 실패하면 값 대신 `<원격>`(원격 URL·자격증명을 내보내지 않는 쪽) |
+| `plugin/scripts/common/userconfig.py:734` `_merged_each` | 합치기가 실패한 플랫폼은 건너뛰고 `(플랫폼, at, 예외)`를 `skipped`에 넣는다 — 수집기가 그 플랫폼의 문제 줄(`<at>analyzers: 설정을 끝까지 검사하지 못했다(<예외 이름>)`)로 낸다 |
+| `plugin/scripts/common/userconfig.py:773·815·838` `module_skills_problems`·`analyzer_problems`·`implicit_module_switches` | 계약 "예외 없음"(doctor·config가 손상된 설정에 죽지 않게)의 문구 수집기 — 손상 값에서 멈추면 모은 데까지에 문제 줄(예외 이름만, 값은 넣지 않는다)을 더한다("문제 없음"으로 보이지 않게). `read_roots`는 BLE001에서 뺐다: 설정 값으로 예외가 나는 곳은 `~이름` work_dir의 NUL(POSIX pwd, ValueError)뿐이라 그 줄만 `suppress(ValueError)` |
+| `plugin/scripts/common/userconfig.py:875` `deep_source_problem` | 계약 "예외 없음" — 사유를 못 만들면 None, 부르는 쪽(driver)은 "설정 오류"로 막는다 |
 | `plugin/scripts/db_pr.py:289` | stage는 이미 성공 — summary 실패를 `summary_error`와 다시 부를 명령으로 알린다 |
 | `plugin/scripts/db_pr.py:312` | PR은 이미 만들어짐 — discard 실패를 종료 2와 다음 할 일로 알린다(publish를 다시 하지 않게) |
-| `plugin/scripts/usage_stats.py:547` | 손상된 config는 환경 오류(종료 2) |
+| `plugin/scripts/usage_stats.py:584` | 손상된 config는 환경 오류(종료 2) |
 | `tools/make_bundle.py:584` | 검사 코드 자체의 오류를 `error`로 — 통과로 보지 않는다 |
 | `tools/make_bundle.py:685` | 예기치 못한 오류를 트레이스백 대신 종료 2 |
 
@@ -77,4 +77,4 @@ pyproject 주석에 한 줄씩 있다. 자동 수정은 `ruff check --fix --diff
 | `plugin/scripts/common/masking.py:414` (줄 noqa) | F811 | 타입 별칭 `Masker = Callable[...]`를 같은 이름의 클래스가 대신한다(`from __future__ import annotations`라 주석은 글) |
 | `plugin/scripts/common/stepanchor.py` | PLR0124 | `out != out`은 NaN 검사 |
 | `tests/test_platform_profile.py` | B005 | `str.strip`이 아닌 `PhoneRules.strip` |
-| `tests/test_partial_match.py` · `tests/test_safety.py` · `tools/site_audit.py` | F841 | 쓰지 않는 계산값(`worst`)·적재만 하는 `import_module`(`parse`)·쓰지 않는 목록(`now`) — 부작용 없음 |
+| `tests/test_safety.py` | F841 | 적재만 하는 `import_module`(`parse`) — 부작용 없음 |

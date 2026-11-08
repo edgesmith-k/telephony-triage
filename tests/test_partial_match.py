@@ -197,7 +197,7 @@ def test_cause_confirmed_has_no_partial():
 
 # -- report.md 줄·analysis.json fit (triagelib/report.py) ----------------------------------------------------
 
-from triagelib.report import ReportMixin, dumps, fit  # noqa: E402
+from triagelib.report import ReportMixin, fit  # noqa: E402
 
 
 def _report_input(code_status="reworded", log_refs=("f1:L42",), skipped=False):
@@ -258,7 +258,6 @@ def test_fit_trims_partial_before_top_evidence():
     part = {"kind": "missing", "type": "T-0001", "cause": "T-0001-01", "signature": "T-0001-01/sig-long-name",
             "matched": "2/3", "missing": ["must_match '" + "y" * 47 + "'"] * 3, "at": ["f1:L100001"] * 3,
             "code": ["c:not-found", "d:reworded:aosp:frameworks/opt/telephony/src/X.java:1234", "e:limit"]}
-    worst = len(dumps([part] * 3).encode("utf-8"))
     result = {"status": "ok", "candidates": [{"type": "T", "evidence": list(ev)}], "partial": [part] * 3,
               "files": {"report": "r"}, "warnings": []}
     out = fit(result)

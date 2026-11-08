@@ -132,6 +132,4 @@ ignore = [
 "tools/bench_scale.py" = ["SIM115"]               # 핸들 여러 개를 finally에서 닫는다
 "plugin/scripts/common/stepanchor.py" = ["PLR0124"]  # out != out은 NaN 검사
 "tests/test_platform_profile.py" = ["B005"]       # str.strip이 아닌 PhoneRules.strip
-"tests/test_partial_match.py" = ["F841"]          # 쓰지 않는 계산값(부작용 없음)
 "tests/test_safety.py" = ["F841"]                 # import_module로 적재만 한다
-"tools/site_audit.py" = ["F841"]                  # 쓰지 않는 목록(부작용 없음)

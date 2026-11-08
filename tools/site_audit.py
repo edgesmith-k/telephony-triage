@@ -611,7 +611,6 @@ def plan(ctx, since: list[str] | None = None, last: bool = False, repos: list[st
             base_added = base_added or bool(extra)
         else:
             it["slot"], it["why"] = "미룸", "상한"
-    now = [i for i in items if i["slot"] == "이번"]
     later = [i for i in items if i["slot"] == "미룸"]
     last_at = last_audit(state)
     bad = [c for c in checks if c["status"] in ("fail", "skip", "needs-user")]

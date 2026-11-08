@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import os
 import re
@@ -716,16 +717,25 @@ def _platform_names(defaults, user) -> list[str]:
     return names
 
 
-def _merged_each(defaults, user):
-    """`(platform, at, merged cfg)` — merged가 실패한 플랫폼은 건너뛴다."""
+def _unchecked(what: str, exc: Exception) -> str:
+    """수집기가 손상된 값에서 예외로 멈춘 것을 문제 줄로 — 못 본 문제를 "문제 없음"으로 보이지 않게. 예외 이름만 넣는다
+    (메시지에 원격 주소·자격 증명 같은 값이 들어갈 수 있다)."""
+    return f"{what}: 설정을 끝까지 검사하지 못했다({type(exc).__name__}) — 매핑 자리에 다른 값이 있는지 본다(site-defaults면 관리자)."
+
+
+def _merged_each(defaults, user, skipped: list | None = None):
+    """`(platform, at, merged cfg)` — merged가 실패한 플랫폼은 건너뛰고, `skipped`를 주면 `(platform, at, 예외)`를 넣는다."""
     d = defaults if isinstance(defaults, dict) else {}
     u = user if isinstance(user, dict) else {}
     for name in _platform_names(d, u):
+        at = "" if name == TOP_PROFILE else f"platforms.{name}."
         try:
             cfg = merged(d, u, platform=None if name == TOP_PROFILE else name)
-        except Exception:
+        except Exception as exc:
+            if skipped is not None:
+                skipped.append((name, at, exc))
             continue
-        yield name, ("" if name == TOP_PROFILE else f"platforms.{name}."), cfg
+        yield name, at, cfg
 
 
 def module_skills_problems(defaults: dict | None, user: dict | None) -> list[str]:
@@ -760,8 +770,8 @@ def module_skills_problems(defaults: dict | None, user: dict | None) -> list[str
                     out.append(f"module_skills.remote: 이슈 DB 레포와 같다 — 모듈 스킬 레포는 따로 둔다: "
                                f"{redact_remote(ms['remote'])}")
                     break
-    except Exception:
-        pass
+    except Exception as exc:
+        out.append(_unchecked("module_skills", exc))
     return list(dict.fromkeys(out))
 
 
@@ -777,7 +787,7 @@ def skill_dir_problem(value) -> str | None:
 def analyzer_problems(defaults: dict | None, user: dict | None, platform: str | None = None) -> list[str]:
     """`analyzers.<cat>`의 `prefer`·`skill_dir` 오류. 층마다: `prefer` 값, `skill_dir` 모양. 합친 뒤(플랫폼마다): `prefer: skill`
     인데 `skill`이 없음, `skill_dir`인데 `skill`이 없음. `platform`을 주면 그 플랫폼 블록 것만(`triage.py module`). 예외 없음."""
-    found: list[tuple[str, str]] = []
+    found: list[tuple[str | None, str]] = []
     try:
         for where, at, pname, ana in _layer_blocks(defaults, user):
             for cat, entry in ana.items() if isinstance(ana, dict) else ():
@@ -789,7 +799,8 @@ def analyzer_problems(defaults: dict | None, user: dict | None, platform: str | 
                 prob = skill_dir_problem(entry["skill_dir"]) if entry.get("skill_dir") is not None else None
                 if prob:
                     found.append((pname, f"{where} {at}analyzers.{cat}.skill_dir: {prob}"))
-        for pname, at, cfg in _merged_each(defaults, user):
+        skipped: list = []
+        for pname, at, cfg in _merged_each(defaults, user, skipped):
             ana = cfg.get("analyzers") if isinstance(cfg.get("analyzers"), dict) else {}
             for cat, entry in ana.items():
                 if not isinstance(entry, dict):
@@ -800,10 +811,11 @@ def analyzer_problems(defaults: dict | None, user: dict | None, platform: str | 
                                          "skill을 적거나 prefer를 지운다."))
                 if entry.get("skill_dir") not in (None, "") and not has_skill:
                     found.append((pname, f"{at}analyzers.{cat}.skill_dir: skill(설치 스킬 이름)과 함께 쓴다."))
-    except Exception:
-        pass
+        found += [(p, _unchecked(f"{at}analyzers", exc)) for p, at, exc in skipped]
+    except Exception as exc:
+        found.append((None, _unchecked("analyzers", exc)))     # 어느 플랫폼인지 모른다 — `platform`을 줘도 보인다
     want = (platform or TOP_PROFILE) if platform is not None else None
-    return list(dict.fromkeys(m for p, m in found if want is None or p == want))
+    return list(dict.fromkeys(m for p, m in found if want is None or p in (want, None)))
 
 
 def implicit_module_switches(defaults: dict | None, user: dict | None) -> list[str]:
@@ -815,14 +827,16 @@ def implicit_module_switches(defaults: dict | None, user: dict | None) -> list[s
         u = user if isinstance(user, dict) else {}
         if not module_skills(merged(d, u)):
             return []
-        for _p, at, cfg in _merged_each(d, u):
+        skipped: list = []
+        for _p, at, cfg in _merged_each(d, u, skipped):
             ana = cfg.get("analyzers") if isinstance(cfg.get("analyzers"), dict) else {}
             for cat, entry in ana.items():
                 skill = entry.get("skill") if isinstance(entry, dict) else None
                 if isinstance(skill, str) and skill.strip() and "prefer" not in entry:
                     out.append(f"{at}analyzers.{cat}: 설치 스킬 {skill:.30} 대신 모듈 문서를 쓴다 — 계속 쓰려면 prefer: skill")
-    except Exception:
-        pass
+        out += [_unchecked(f"{at}analyzers", exc) for _p, at, exc in skipped]
+    except Exception as exc:
+        out.append(_unchecked("analyzers", exc))
     return list(dict.fromkeys(out))
 
 
@@ -905,20 +919,18 @@ def runtime_problems(defaults: dict | None) -> list[str]:
 
 def read_roots(cfg: dict, plugin_root: Path) -> list[str]:
     """OpenCode `external_directory` 허용 목록(B2-21): 플러그인 스킬 폴더, `work_dir`, 풀린 설치 스킬 `SKILL.md`의 폴더마다.
-    순서 유지·중복 제거. 예외 없음."""
-    out: list[str] = []
-    try:
-        out.append(os.path.abspath(str(Path(plugin_root) / "skills" / "telephony-triage")))
-        work = cfg.get("work_dir") if isinstance(cfg, dict) else None
-        if isinstance(work, str) and work.strip():
+    순서 유지·중복 제거. 설정 값으로는 예외 없음 — 값은 모두 모양을 보고 쓰고 `skillpath.resolve`는 예외를 사유로 바꾼다. 전체를
+    try로 감싸지 않는다(한 값의 실패에 뒤의 폴더가 말없이 빠진다)."""
+    out: list[str] = [os.path.abspath(str(Path(plugin_root) / "skills" / "telephony-triage"))]
+    work = cfg.get("work_dir") if isinstance(cfg, dict) else None
+    if isinstance(work, str) and work.strip():
+        with contextlib.suppress(ValueError):   # NUL이 든 `~이름`(POSIX pwd 조회) — 쓸 수 없는 work_dir, 그 폴더만 뺀다
             out.append(os.path.abspath(os.path.expanduser(work)))
-        from . import skillpath   # 지연 import: guard가 userconfig를 매 hook마다 import한다
-        ana = cfg.get("analyzers") if isinstance(cfg, dict) and isinstance(cfg.get("analyzers"), dict) else {}
-        for cat, entry in ana.items():
-            if isinstance(entry, dict) and isinstance(entry.get("skill"), str) and entry["skill"].strip():
-                base = skillpath.resolve(cfg, cat).get("base")
-                if base:
-                    out.append(str(base))
-    except Exception:
-        pass
+    from . import skillpath   # 지연 import: guard가 userconfig를 매 hook마다 import한다
+    ana = cfg.get("analyzers") if isinstance(cfg, dict) and isinstance(cfg.get("analyzers"), dict) else {}
+    for cat, entry in ana.items():
+        if isinstance(entry, dict) and isinstance(entry.get("skill"), str) and entry["skill"].strip():
+            base = skillpath.resolve(cfg, cat).get("base")
+            if base:
+                out.append(str(base))
     return list(dict.fromkeys(out))

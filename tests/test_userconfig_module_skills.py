@@ -146,6 +146,18 @@ def test_helpers_never_raise(bad):
     uc.read_roots(bad, Path("/p"))
 
 
+def test_corrupt_value_that_stops_merge_is_a_problem():
+    """LINT_REVIEW 표 3: 손상 값에서 합치기(merged)가 예외를 내면 수집기가 말없이 빈 목록을 냈다 — 이제 문제 줄로 보인다."""
+    d, user = {"ghe": "x"}, {"platforms": {"ofono": {}}}     # 매핑 자리에 문자열 → AttributeError
+    msg = "설정을 끝까지 검사하지 못했다(AttributeError)"
+    assert [p.split(" — ")[0] for p in uc.module_skills_problems(d, user)] == [f"module_skills: {msg}"]
+    assert [p.split(" — ")[0] for p in uc.analyzer_problems(d, user)] == [f"analyzers: {msg}",
+                                                                         f"platforms.ofono.analyzers: {msg}"]
+    assert [p.split(" — ")[0] for p in uc.analyzer_problems(d, user, platform="ofono")] == [
+        f"platforms.ofono.analyzers: {msg}"]                   # _merged_each: 실패한 플랫폼마다
+    assert [p.split(" — ")[0] for p in uc.implicit_module_switches(d, user)] == [f"analyzers: {msg}"]
+
+
 def test_platform_module_skills_messages():
     probs = uc.profile_problems({"platforms": {"ofono": {"module_skills": {"remote": REMOTE}}}})
     assert any(p.startswith("platforms.ofono.module_skills: 최상위 키입니다") for p in probs)
@@ -322,3 +334,5 @@ def test_read_roots_order_and_dedup(tmp_path):
     roots = uc.read_roots(cfg, tmp_path / "plugin")
     assert roots == [str(tmp_path / "plugin" / "skills" / "telephony-triage"), str(tmp_path / "work"), str(skill)]
     assert uc.read_roots({}, tmp_path / "plugin") == [str(tmp_path / "plugin" / "skills" / "telephony-triage")]
+    cfg["work_dir"] = "~a\x00b"     # POSIX expanduser가 ValueError — 예전에는 뒤의 설치 스킬 폴더까지 빠졌다
+    assert uc.read_roots(cfg, tmp_path / "plugin")[-1] == str(skill)
