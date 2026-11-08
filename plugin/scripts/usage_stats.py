@@ -22,7 +22,7 @@ transcript에서 플러그인 세션(플러그인 스크립트 Bash 호출 또�
 아닌 AskUserQuestion·__ask_user)·심층 분석 호출(`triage.py module … --for deep`, 그 단계에 그것이 없을 때만 플러그인 밖 Skill)·show_guard 되돌림·거부·스크립트 오류(종료 1·2)·모델·Claude Code 버전을 센다.
 단계 합 = 전체(자체 검사). 대상 세션이 없거나 usage가 없으면 미측정(0이 아니다). 숫자만 내고 내용·명령·경로·세션 ID는 내지 않는다.
 플러그인 호출은 경로 모양(`…/scripts/<이름>.py`, `$S/<이름>.py`)만 본다. 세션 파일 하나씩(그 `subagents/` 포함) 필요한 필드만 줄여
-읽고, 모양이 바뀐 줄은 `unreadable_lines`, 숫자가 아닌 usage는 `usage_missing`으로 센다.
+읽고, 모양이 바뀐 줄은 `unreadable_lines`, 숫자가 아닌 usage·빈 usage·input/output 필드 없는 usage는 `usage_missing`(미측정, 0 아님)으로 센다.
 
 CLI:
     python3 <plugin.scripts_path>/usage_stats.py [--work-dir <dir> | --platform <이름>] [--json] [--transcripts [<dir>]]
@@ -263,13 +263,20 @@ def _text(body) -> str:
     return str(body or "")
 
 
+USAGE_REQUIRED = ("input_tokens", "output_tokens")      # 둘 다 있어야 측정으로 본다. 캐시 두 필드는 모델·호스트에 따라 없을 수 있어 0
+
+
 def _usage(u) -> dict | None:
-    """usage 네 필드(음이 아닌 정수). 형식이 다르면(문자열·inf·음수·소수) None — usage 없음으로 센다."""
-    if not isinstance(u, dict):
+    """usage 네 필드(음이 아닌 정수). 측정으로 보는 조건: `input_tokens`·`output_tokens`가 **있고**(명시한 0은 실제 0) 있는 필드는
+    모두 음이 아닌 정수. `{}`·필수 필드 누락·형식이 다른 값(문자열·inf·음수·소수·불리언)은 None — usage 없음(미측정)으로 센다
+    (코덱스 리뷰 F5: 전에는 `{}`를 0토큰 4개로 세어 측정 실패가 0으로 보였다). 캐시 필드가 없으면 0(그 모델이 캐시를 안 쓴다고 본다)."""
+    if not isinstance(u, dict) or any(f not in u for f in USAGE_REQUIRED):
         return None
     out = {}
     for k, f in USAGE_KEYS:
-        v = u.get(f) or 0
+        v = u.get(f, 0)
+        if v is None and f not in USAGE_REQUIRED:
+            v = 0
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0 or v != int(v):
             return None
         out[k] = int(v)

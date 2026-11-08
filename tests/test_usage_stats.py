@@ -465,6 +465,33 @@ def test_transcripts_survive_format_drift(tmp_path):
     assert tok["sessions"] == 1 and tok["usage_missing"] == 2 and tok["total"]["calls"] == 3
 
 
+def test_empty_or_partial_usage_is_unmeasured_not_zero(tmp_path):
+    """코덱스 리뷰 F5: `usage: {}`는 0토큰이 아니라 미측정(usage_missing). input/output이 명시된 0은 실제 0. 캐시 필드 누락은 0."""
+    assert usage_stats._usage({}) is None and usage_stats._usage(None) is None
+    assert usage_stats._usage({"input_tokens": 5}) is None                                   # output 없음 → 미측정
+    assert usage_stats._usage({"input_tokens": 0, "output_tokens": 0}) == {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
+    assert usage_stats._usage({"input_tokens": 3, "output_tokens": 1, "cache_read_input_tokens": None}) == \
+        {"input": 3, "output": 1, "cache_read": 0, "cache_write": 0}                       # 모델별로 캐시 필드가 없거나 null
+    assert usage_stats._usage({"input_tokens": None, "output_tokens": 1}) is None            # 필수 필드 null은 미측정
+    assert usage_stats._usage({"input_tokens": 3, "output_tokens": 1, "cache_read_input_tokens": "x"}) is None
+    t = _T()
+    t.resp(bash(f"{S}/triage.py run K"), usage=(1, 1, 1, 1))
+    t.resp(usage=(1, 1, 1, 1))
+    t.lines[-1]["message"]["usage"] = {}                                                      # 빈 usage 객체
+    t.resp(usage=(0, 0, 0, 0))                                                                # 명시한 0
+    t.lines[-1]["message"]["usage"] = {"input_tokens": 0, "output_tokens": 0}
+    t.write(tmp_path / "p" / f"{SID}.jsonl")
+    tok = usage_stats.transcripts(tmp_path / "p")
+    assert tok["sessions"] == 1 and tok["usage_missing"] == 1 and tok["total"]["calls"] == 2
+    assert tok["total"]["input"] == 1 and tok["total"]["output"] == 1
+    only = _T()
+    only.resp(bash(f"{S}/triage.py run K"), usage=(1, 1, 1, 1))
+    only.lines[-2]["message"]["usage"] = {}                                                   # [-1]은 tool_result 줄
+    only.write(tmp_path / "q" / f"{SID}.jsonl")
+    tok = usage_stats.transcripts(tmp_path / "q")
+    assert tok["sessions"] == 1 and tok["total"] is None and tok["usage_missing"] == 1       # 전부 빈 usage → 미측정(0 아님)
+
+
 def test_plugin_session_needs_the_plugin_script_path(tmp_path):
     _T(sid="a").resp(bash("python3 config.py show"), bash("python3 tools/job_status.py")).write(tmp_path / "p" / "a.jsonl")
     assert usage_stats.transcripts(tmp_path / "p")["sessions"] == 0     # 다른 프로젝트의 같은 이름
