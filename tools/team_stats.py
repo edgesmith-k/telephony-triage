@@ -8,6 +8,7 @@
 
 표 열: 작업(측정 대상 jobs) · PR(states.pr) · 분석만(states.analysis_only) · 취소율(취소 / (작업 − 진행 중 − 연습 − 손상), usage_stats와 같은
 정의) · PR까지 중앙값(분) · 스크립트 분석까지 중앙값(분)(`analysis_minutes` — 드라이버 done까지, 탐색·심층 분석·사용자 확인 제외) ·
+전체 조사 중앙값(분)(`investigation_minutes` — done 뒤 stage·release·discard까지 경과 시간, 키가 없는 옛 파일은 -) ·
 질문/작업(questions.per_job) · 재시도(retries.runs) · 토큰(tokens.total의 입력+출력+
 캐시 읽기+캐시 쓰기 — 응답 수 calls는 더하지 않는다, 미측정(`tokens` 또는 `total`이 null)이면 -).
 합계 행: 작업·PR·분석만·재시도·토큰은 합, 취소율은 취소 건수 합 / 분모 합(반올림된 개인 비율을 가중하지 않는다 — 코덱스 리뷰 N2),
@@ -27,7 +28,8 @@ import sys
 from pathlib import Path
 
 FORMAT = 2
-COLUMNS = ("사용자", "작업", "PR", "분석만", "취소율", "PR까지 중앙값(분)", "스크립트 분석까지 중앙값(분)", "질문/작업", "재시도", "토큰")
+COLUMNS = ("사용자", "작업", "PR", "분석만", "취소율", "PR까지 중앙값(분)", "스크립트 분석까지 중앙값(분)", "전체 조사 중앙값(분)",
+           "질문/작업", "재시도", "토큰")
 
 
 def _num(value) -> float | None:
@@ -97,6 +99,7 @@ def read_one_doc(doc: dict, user: str) -> dict:
         "cancel_ratio": _ratio(cancelled, cancel_base) if cancelled is not None else _num(doc.get("cancel_ratio")),
         "pr_minutes": _values(doc.get("pr_minutes")),
         "analysis_minutes": _values(doc.get("analysis_minutes")),
+        "investigation_minutes": _values(doc.get("investigation_minutes")),
         "question_jobs": int(_num(questions.get("jobs")) or 0),
         "question_total": int(_num(questions.get("total")) or 0),
         "retries": int(_num(retries.get("runs")) or 0),
@@ -117,6 +120,7 @@ def _ratio(num: float, den: float) -> float | None:
 def summarize(rows: list[dict]) -> dict:
     pooled_pr = [v for r in rows for v in r["pr_minutes"]]
     pooled_an = [v for r in rows for v in r["analysis_minutes"]]
+    pooled_inv = [v for r in rows for v in r.get("investigation_minutes", ())]
     jobs = sum(r["jobs"] for r in rows)
     # 취소율 = 취소 건수 합 / 같은 정의의 분모 합(usage_stats: 작업 − 진행 중 − 연습 − 손상). 건수가 없는 옛 형식 파일은 제외
     with_cancel = [r for r in rows if r.get("cancelled") is not None and r.get("cancel_base") is not None]
@@ -131,6 +135,7 @@ def summarize(rows: list[dict]) -> dict:
         "cancel_users": len(with_cancel),
         "pr_median": _median(pooled_pr), "pr_n": len(pooled_pr),
         "analysis_median": _median(pooled_an), "analysis_n": len(pooled_an),
+        "investigation_median": _median(pooled_inv), "investigation_n": len(pooled_inv),
         "questions_per_job": _ratio(sum(r["question_total"] for r in rows), q_jobs),
         "retries": sum(r["retries"] for r in rows),
         "tokens": sum(detail.values()) if detail else None, "tokens_detail": detail, "tokens_users": len(with_tokens),
@@ -150,15 +155,17 @@ def render(rows: list[dict], total: dict, skipped: list[str]) -> str:
     for r in rows:
         table.append((r["user"], _cell(r["jobs"]), _cell(r["pr"]), _cell(r["analysis_only"]), _cell(r["cancel_ratio"], True),
                       _cell(_median(r["pr_minutes"])), _cell(_median(r["analysis_minutes"])),
+                      _cell(_median(r.get("investigation_minutes", []))),
                       _cell(_ratio(r["question_total"], r["question_jobs"])), _cell(r["retries"]),
                       _cell(int(r["tokens"]) if r["tokens"] is not None else None)))
     table.append(("합계", _cell(total["jobs"]), _cell(total["pr"]), _cell(total["analysis_only"]), _cell(total["cancel_ratio"], True),
-                  _cell(total["pr_median"]), _cell(total["analysis_median"]), _cell(total["questions_per_job"]),
+                  _cell(total["pr_median"]), _cell(total["analysis_median"]), _cell(total["investigation_median"]),
+                  _cell(total["questions_per_job"]),
                   _cell(total["retries"]), _cell(int(total["tokens"]) if total["tokens"] is not None else None)))
     widths = [max(len(row[i]) for row in table) for i in range(len(COLUMNS))]
     lines = ["  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)).rstrip() for row in table]
     lines.insert(1, "  ".join("-" * w for w in widths))
-    lines.insert(0, f"팀 지표: 사용자 {total['users']}명 · PR까지 중앙값은 측정 {total['pr_n']}건 · 스크립트 분석까지 {total['analysis_n']}건"
+    lines.insert(0, f"팀 지표: 사용자 {total['users']}명 · PR까지 중앙값은 측정 {total['pr_n']}건 · 스크립트 분석까지 {total['analysis_n']}건 · 전체 조사 {total['investigation_n']}건"
                     f" · 취소율 {total['cancelled']}/{total['cancel_base']}({total['cancel_users']}명 합산)"
                     f" · 토큰(입력+출력+캐시 읽기+캐시 쓰기, 비용 아님)은 {total['tokens_users']}명만 측정")
     lines += [f"건너뜀: {s}" for s in skipped]

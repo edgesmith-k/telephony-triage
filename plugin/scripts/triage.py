@@ -17,14 +17,15 @@
 - `JOB/analysis.json` (≤ 4KB, 공백 없는 compact JSON): LLM이 읽는 유일한 분석 결과. stdout에도 같은 내용을 낸다.
 - `JOB/report.md`: Step 6 리포트 초안(결정적인 칸은 채우고, 원인 설명·코드 위치는 `TODO(LLM)`로 둔다).
 - `JOB/trace.jsonl`: 호출마다 `{ts, step, script, args, exit, ms, out_bytes, stderr}` 한 줄과 사건 행(`start`(`v: 2`)·`needs_input`·
-  `done`·`stopped`·`error`). db_pr의 `stage`·`publish`·`discard` 행도 같은 파일이다(contracts.md §3.2 작업 기록, usage_stats가 센다).
+  `done`·`stopped`·`error`). db_pr의 `stage`·`publish`·`discard` 행과 explore·module·check-output의 정보 행(`explore`·`module`·
+  `checked`, `v: 2`)도 같은 파일이다(contracts.md §3.2 작업 기록, usage_stats가 센다 — 정보 행은 세지 않는다).
 - `JOB/explore-input.json`: 후보 없음·원인 미확인(1위 C=0)이고 `explore.when`이 `never`가 아닐 때만. 탐색 분석 입력(마스킹된 값만:
   발생 시각·실패 스텝·앵커 머리·줄 수 상한 `explore.timeline_max_lines`). `run`은 타임라인을 만들지 않고 이전 `timeline.md`·입력 파일을 지운다.
 - `triage.py explore <KEY> [--out <dir>]`: 사용자가 탐색 분석에 동의한 뒤(또는 `--explore`·`explore.when: always`) `JOB/explore-input.json`과
   `events.json`으로 `JOB/timeline.md`(마스킹된 요약 타임라인, 줄 수 상한 기본 200)를 만들고 `report.md`의 탐색 분석 줄을 갱신한다.
   출력 `{timeline, lines, total}`. 작업 플랫폼이 기본(android)이 아니면 `platform`과 `refs`(그 플랫폼 탐색 지식 문서, 스킬 디렉토리 기준
   `reference/platforms/<p>/*.md`, 없으면 빈 목록)를 더한다(17-platforms §10). 종료 코드 1 = 해당 없음(입력 파일 없음), 2 = 사용 오류·
-  `events.json` 없음. lock·trace는 쓰지 않는다. 타임라인은 `masking.redact`로 한 번 더 가리고, 가린 것이 있으면 `mask_warnings`
+  `events.json` 없음. lock은 쓰지 않고 trace에는 `explore` 정보 행만 덧붙인다. 타임라인은 `masking.redact`로 한 번 더 가리고, 가린 것이 있으면 `mask_warnings`
   (`{종류: 수}`)를, `module_skills.remote`가 있으면 `module_skills: true`를 더한다(없으면 출력이 이전과 같다).
 - `triage.py module <KEY> --for deep [--also] | --for explore [--module <p>/<dir> | --choose top|<dir>] [--at <ISO>] [--out <dir>]`:
   동의 뒤 5-1·5-2 모듈 스킬 문서를 관리 clone(`<work_dir>/_module-skills`)에서 받아 `JOB/module-skill/<purpose>/`·`module-skill.json`
@@ -111,7 +112,7 @@ from platforms import session as platform_session  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from triagelib.cache import State  # noqa: E402
 from triagelib.core import (ANALYSIS_MAX, EXPLORE_DONE_LINE, EXPLORE_INPUT_FILE, PLATFORM_REFS_DIR, STATE_FILE,  # noqa: E402,F401
-                            TIMELINE_FILE, Fail, NeedsInput, Runner, Stopped, _clip, _now)
+                            TIMELINE_FILE, Fail, NeedsInput, Runner, Stopped, _clip, _now, trace_event)
 from triagelib import pick  # noqa: E402
 from triagelib.driver import Driver  # noqa: E402
 from triagelib.report import _unique_evidence, dumps, fit, schema_violation, timeline  # noqa: E402,F401 — 테스트가 쓴다
@@ -221,8 +222,9 @@ def cmd_release(args, defaults: dict) -> int:
 def cmd_explore(args, defaults: dict) -> int:
     """동의 뒤 탐색 타임라인 만들기: `JOB/explore-input.json`·`events.json` → `JOB/timeline.md`, report.md의 탐색 분석 줄 갱신.
 
-    lock·trace·스냅샷은 건드리지 않는다. 종료 코드 0 = 완료, 1 = 해당 없음(입력 파일 없음: 후보 확정·`explore.when: never`·run 전),
-    2 = 사용 오류(키 형식·작업 디렉토리·`events.json` 없음·입력 파일 손상).
+    lock·스냅샷은 건드리지 않고, 작업 디렉토리가 있으면 trace에 정보 행 `explore{exit}` 하나만 덧붙인다(`trace_event`). 종료 코드
+    0 = 완료, 1 = 해당 없음(입력 파일 없음: 후보 확정·`explore.when: never`·run 전), 2 = 사용 오류(키 형식·작업 디렉토리·
+    `events.json` 없음·입력 파일 손상).
     """
     cfg = args.platform_cfg
     # --out(offline_eval JOB)이면 키는 표시용 이름이고 경로가 아니다 — 형식만 본다. 없으면 작업 키(경로)로 정규화한다
@@ -238,6 +240,12 @@ def cmd_explore(args, defaults: dict) -> int:
     if not job.is_dir():
         print(f"작업 디렉토리가 없다: {job} — 이 키로 /telephony-triage:analyze를 먼저 실행한다", file=sys.stderr)
         return USAGE
+    code = _explore(args, cfg, job)
+    trace_event(job, "explore", exit=code)
+    return code
+
+
+def _explore(args, cfg: dict, job: Path) -> int:
     input_path, events_path = job / EXPLORE_INPUT_FILE, job / "events.json"
     if not input_path.is_file():
         print(f"탐색 분석 해당 없음: {EXPLORE_INPUT_FILE}가 없다(후보 확정·explore.when: never·run 전)", file=sys.stderr)

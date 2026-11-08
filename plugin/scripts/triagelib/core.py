@@ -126,6 +126,15 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def trace_event(job: Path, step: str, **fields) -> None:
+    """`explore`·`module`·`checked` 정보 행 `{ts, step, v: 2, …}`(contracts.md §3.2 작업 기록, db_pr `trace_note`와 같은 모양).
+    analyze가 연 `JOB/trace.jsonl`이 일반 파일로 있을 때만 덧붙인다(없으면 만들지 않는다). END_STEPS·상태·기존 지표와 무관하다."""
+    path = Path(job) / "trace.jsonl"
+    if path.is_file() and not path.is_symlink():
+        from dbpr.lock import trace_note
+        trace_note(job, step, **fields)
+
+
 def _clip(text, limit: int) -> str:
     text = " ".join(str(text or "").split())
     return text if len(text) <= limit else text[: limit - 1] + "…"

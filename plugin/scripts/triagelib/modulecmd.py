@@ -10,7 +10,8 @@
   `--at`은 받은 사본으로 타임라인 중심만 다시 잡는다(받기·lock 없음).
 
 stdout은 언제나 JSON 한 줄(≤ 4,096B), 실패면 `{"reason", "next", …}`와 stderr `<reason>: <detail>` 한 줄. 원격 URL은 내지 않는다.
-리포트 줄(`- 심층 분석`/`- 탐색 분석`)은 스크립트가 고친다(성공은 늘, 실패는 `TODO(LLM)` 줄만, B2-17). 세션 lock·trace는 쓰지 않는다.
+리포트 줄(`- 심층 분석`/`- 탐색 분석`)은 스크립트가 고친다(성공은 늘, 실패는 `TODO(LLM)` 줄만, B2-17). 세션 lock은 쓰지 않고, trace에는 정보 행
+`module`(`core.trace_event`) 하나만 덧붙인다.
 """
 
 from __future__ import annotations
@@ -340,22 +341,27 @@ def _env(defaults: dict) -> dict:
 
 
 def cmd_module(args, defaults: dict) -> int:
+    seen: dict = {}         # _run이 작업 디렉토리를 확인하면 `job`을 둔다(trace `module` 행)
     try:
-        code, out, warn, rewrite = _run(args, defaults)
+        code, out, warn, rewrite = _run(args, defaults, seen)
         _emit(out)
         if warn:
             print(warn, file=sys.stderr)
         if rewrite and not _rewrite(*rewrite):
             print("경고: report.md 줄을 고치지 못했다", file=sys.stderr)
-        return code
     except Exit as exc:
+        out, code = exc.out, exc.code
         _emit(exc.out)
         print(f"{exc.out.get('reason')}: {_brief(exc.detail) or '-'}", file=sys.stderr)
         if exc.rewrite:
             job, purpose, lines, pending = exc.rewrite
             if not _rewrite(job, purpose, lines, pending):
                 print("경고: report.md 줄을 고치지 못했다", file=sys.stderr)
-        return exc.code
+    if "job" in seen:
+        name = out.get("module")
+        core.trace_event(seen["job"], "module", purpose=args.purpose, exit=code,
+                         **({"module": name} if isinstance(name, str) else {}))
+    return code
 
 
 def _emit(out: dict) -> None:
@@ -368,7 +374,7 @@ def _emit(out: dict) -> None:
     print(text)
 
 
-def _run(args, defaults: dict):
+def _run(args, defaults: dict, seen: dict):
     import platforms
     import triage as T  # _work_key·_find_job·_job_platform (triage.py가 CLI를 둔다)
     from common import yamlio
@@ -399,6 +405,7 @@ def _run(args, defaults: dict):
     job = Path(args.out).expanduser().resolve() if args.out else Path(str(userconfig.get(cfg, "work_dir"))).expanduser() / key
     if not job.is_dir():
         raise _fail(purpose, 2, "작업 없음", f"작업 디렉토리가 없다: {key}")
+    seen["job"] = job
     ctx = {"job": job}
     nojob = lambda msg: _fail(purpose, 2, "작업 없음", msg, ctx)
     inputs: dict[str, str | None] = {}

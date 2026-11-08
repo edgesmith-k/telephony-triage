@@ -441,6 +441,20 @@ def test_explore_view_redacts(env):
 # -- 실패와 종료 표 -------------------------------------------------------------------------------
 
 
+def test_trace_module_row_only_when_trace_exists(env):
+    # F7 확장: analyze가 연 trace가 있을 때만 정보 행 `module`(종료 코드·고른 모듈)을 덧붙이고, 없으면 만들지 않는다
+    job = env.make_job()
+    assert env.module()[0] == 0 and not (job / "trace.jsonl").exists()
+    (job / "trace.jsonl").write_text("", encoding="utf-8")
+    assert env.module()[0] == 0
+    env.user({})
+    assert env.module()[0] == 1
+    rows = [json.loads(x) for x in (job / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [{k: v for k, v in r.items() if k != "ts"} for r in rows] == [
+        {"step": "module", "v": 2, "purpose": "deep", "exit": 0, "module": "ofono/data"},
+        {"step": "module", "v": 2, "purpose": "deep", "exit": 1}]
+
+
 def test_no_remote_ofono_exits_1_and_writes_nothing(env):
     job = env.make_job()
     env.user({})

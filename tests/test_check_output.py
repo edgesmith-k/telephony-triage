@@ -360,6 +360,18 @@ def test_skipped_masks_and_records(tmp_path, capsys):
     assert set(rec) == {"skipped", "at", "env"}
 
 
+def test_trace_checked_row_only_when_trace_exists(tmp_path, capsys):
+    # F7 확장: trace가 있을 때만 정보 행 `checked`(purpose·skipped 여부·종료 코드). 사유 글은 싣지 않는다
+    job = make_job(tmp_path)
+    assert check(job, skipped="첫 사유", capsys=capsys)[0] == 0 and not (job / "trace.jsonl").exists()
+    (job / "trace.jsonl").write_text("", encoding="utf-8")
+    assert check(job, skipped="SECRET-REASON", capsys=capsys)[0] == 0
+    text = (job / "trace.jsonl").read_text(encoding="utf-8")
+    assert "SECRET-REASON" not in text
+    assert [{k: v for k, v in json.loads(x).items() if k != "ts"} for x in text.splitlines()] == [
+        {"step": "checked", "v": 2, "purpose": "deep", "skipped": True, "exit": 0}]
+
+
 def test_skipped_keeps_script_written_line(tmp_path, capsys):
     job = make_job(tmp_path, line=core.DEEP_FETCH_FAILED.format(reason="인증"))
     before = (job / "report.md").read_bytes()

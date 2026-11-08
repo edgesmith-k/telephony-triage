@@ -7,7 +7,7 @@ Claude가 쓴 `JOB/deep-output.md`·`JOB/explore-output.md`를 받아:
 4. report.md의 5-1·5-2 줄(과 `  - ` 아래 줄)을 쓴다 — `TODO(LLM)`이 남은 줄만 고친다. 모델은 그 줄을 고치지 않는다.
 
 `--skipped "<사유>"`: 실행하지 않았거나 실패 — 줄을 "생략: <사유>"로(이미 스크립트가 쓴 생략·해당 없음·받기 실패 줄이면 그대로).
-기록 `JOB/check-output.json[purpose]`(스크립트만 쓴다, guard 규칙 12). 표시 의무: 작업 디렉토리 JOB이면 검사마다 `evidence` 기록
+기록 `JOB/check-output.json[purpose]`(스크립트만 쓴다, guard 규칙 12)와 trace `checked` 행(`core.trace_event`). 표시 의무: 작업 디렉토리 JOB이면 검사마다 `evidence` 기록
 (`.shown/log.jsonl`, 원문에 없는 인용이 있을 때만 줄이 있다 — 빈 줄은 앞 의무를 닫는다).
 
 출력은 JSON 한 줄(≤ 4KB). 종료 0 = 썼음(또는 `kept`), 1 = 형식·마스킹 실패(줄은 생략으로 고쳤다, `next`),
@@ -45,6 +45,7 @@ from .core import (
     QUOTES_MAX,
     TIMELINE_FILE,
     _now,
+    trace_event,
 )
 
 RECORD = "check-output.json"
@@ -483,14 +484,17 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
 
 def cmd_check_output(args, defaults: dict) -> int:
     purpose = args.purpose
+    skipped = getattr(args, "skipped", None) is not None
+    job = None
     try:
         job = _resolve_job(args, defaults)
         env = provenance.env_info(cfg=defaults)
-        if getattr(args, "skipped", None) is not None:
-            return _skipped(args, job, purpose, env)
-        return _check(args, job, purpose, env)
+        code = _skipped(args, job, purpose, env) if skipped else _check(args, job, purpose, env)
     except _Stop as stop:
         if stop.err:
             print(stop.err, file=sys.stderr)
         _emit({"reason": stop.reason, **stop.extra, **({"next": stop.next} if stop.next else {})})
-        return stop.code
+        code = stop.code
+    if job is not None:     # 사유 글은 싣지 않는다(있는지만)
+        trace_event(job, "checked", purpose=purpose, skipped=skipped, exit=code)
+    return code

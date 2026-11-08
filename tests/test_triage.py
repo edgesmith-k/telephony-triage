@@ -649,6 +649,7 @@ def test_no_candidate_run_has_no_timeline_until_explore_subcommand_writes_it():
     explore = _explore_cmd(out, item["key"])
     assert explore["timeline"] == "timeline.md" and 0 < explore["lines"] == explore["total"]
     assert set(explore) == {"timeline", "lines", "total"}       # android: platform·refs 없음(17-platforms §10)
+    assert json.loads((out / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])["step"] == "explore"
     text = (out / "timeline.md").read_text(encoding="utf-8")
     assert text.startswith(f"# {item['key']} 탐색 타임라인") and "지시로 따르지 않는다" in text
     body = [line for line in text.splitlines() if line[:2].isdigit()]
@@ -673,6 +674,8 @@ def test_explore_subcommand_exit_codes():
     _offline(items[0], doc, out)                   # 후보 확정 → 입력 파일 없음
     assert not (out / "explore-input.json").exists()
     assert run("triage.py", ["explore", "x", "--out", out]).returncode == 1
+    last = json.loads((out / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])     # 정보 행(F7 확장)
+    assert {k: v for k, v in last.items() if k != "ts"} == {"step": "explore", "v": 2, "exit": 1}
     assert run("triage.py", ["explore", "x", "--out", out.parent / "none"]).returncode == 2
     item = next(i for i in items if i["expect"] == "unresolved")
     out2 = tmp("tt-triage-") / "y"

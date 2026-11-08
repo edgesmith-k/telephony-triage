@@ -70,6 +70,50 @@ def test_pr_time_from_trace_events_not_plan_mtime(tmp_path):
     assert s["analysis_minutes"]["values"] == [5.0] and s["pr_unmeasured"] == 0
 
 
+def test_investigation_minutes_after_done_to_stage_release_or_discard(tmp_path):
+    # F7 확장: 전체 조사 = 첫 0-key → 첫 done 뒤 처음 stage·end(release)·discard. 정보 행(explore·module·checked)은 끝이 아니고
+    # analysis_min(첫 done)·pr_min은 그대로. done 앞 end(분석 전용 lock 해제)는 끝으로 보지 않는다
+    info = [row("explore", 8, v=2, exit=0), row("module", 9, v=2, purpose="deep", exit=0, module="android/ims"),
+            row("checked", 12, v=2, purpose="deep", skipped=False, exit=0)]
+    _job(tmp_path, "A-1", ANALYZE, [*run(0), *info, row("stage", 40, v=2, result="ok", dry_run=False),
+                                    row("discard", 50, v=2, outcome="cancel")])
+    _job(tmp_path, "B-1", ANALYZE, [*run(0), *info, row("end", 25, script="db_pr.py", args=["lock", "release"], exit=0)])
+    _job(tmp_path, "C-1", ANALYZE, [key(0), start(0), row("end", 4, script="db_pr.py", exit=0),
+                                    row("done", 5, candidates=1, calls=9), *info])     # 분석 전용: release 없이 끝남
+    _job(tmp_path, "D-1", ANALYZE, [key(0), start(0), row("needs_input", 1, kind="time"), row("discard", 3, v=2)])  # done 없음
+    s = usage_stats.stats(tmp_path)
+    assert s["investigation_minutes"] == {"n": 2, "median": 32.5, "mean": 32.5, "values": [25.0, 40.0]}
+    assert s["investigation_unmeasured"] == 1
+    assert s["analysis_minutes"]["values"] == [5.0, 5.0, 5.0] and s["retries"]["runs"] == 4
+    assert any(ln.startswith("전체 조사(") and "중앙값 32.5분" in ln and "측정 불가 1건" in ln for ln in usage_stats.report_lines(s))
+
+
+def test_investigation_end_only_outside_a_run(tmp_path):
+    # 리뷰 P2-1: 드라이버가 실행 안에서 lock을 푼 `end`(중단·오류 앞, 분석 전용 done 앞)와 실패한 release(exit≠0)는 끝이 아니다.
+    # release는 `start` 뒤 `end`를 쓴다(`0-key` 없음 — 실행 시작이 아니다)
+    rel = lambda m, code=0: [start(m), row("end", m, script="db_pr.py", args=["lock", "release"], exit=code)]
+    in_run_end = row("end", 21, script="db_pr.py", exit=0)
+    _job(tmp_path, "A-1", ANALYZE, [*run(0), key(20), start(20), in_run_end, row("error", 22, exit=2, message="x"),
+                                    key(30), start(30), row("done", 45, candidates=1, calls=9),
+                                    row("stage", 90, v=2, result="ok", dry_run=False)])          # 재실행 오류 뒤 → stage 90
+    _job(tmp_path, "B-1", ANALYZE, [key(0), start(0), row("needs_input", 1, kind="time"), key(3), start(3),
+                                    row("done", 8, candidates=1, calls=9), *rel(60, 1), *rel(70)])  # 답 재실행 → 실패 release 넘고 70
+    _job(tmp_path, "C-1", ANALYZE, [*run(0), key(20), start(20), in_run_end, row("stopped", 22, reason="x")])   # 그 뒤 없음
+    _job(tmp_path, "D-1", ANALYZE, [*run(0), key(20), start(20), in_run_end, row("error", 22, exit=2, message="x")])
+    _job(tmp_path, "E-1", ANALYZE, [key(0), start(0), row("end", 4, script="db_pr.py", exit=0), row("done", 5, candidates=1, calls=9),
+                                    key(20), start(20), in_run_end, row("done", 22, candidates=1, calls=9)])  # 분석 전용 두 번
+    s = usage_stats.stats(tmp_path)
+    assert s["investigation_minutes"]["values"] == [70.0, 90.0] and s["investigation_unmeasured"] == 3
+
+
+def test_info_rows_do_not_turn_legacy_job_into_measured(tmp_path):
+    # 리뷰 P1: 업데이트 전 작업(v 없는 행)에 업데이트 뒤 explore·module·check-output을 해도 legacy 그대로
+    _job(tmp_path, "L-1", ANALYZE, [{"ts": at(0), "step": "0-key", "script": "jira_fields.py"}, {"ts": at(5), "step": "done"},
+                                    row("explore", 9, v=2, exit=0), row("checked", 10, v=2, purpose="explore", skipped=False, exit=0)])
+    s = usage_stats.stats(tmp_path)
+    assert s["jobs"] == 0 and s["legacy"]["jobs"] == 1 and s["analysis_minutes"]["n"] == 0
+
+
 def test_pr_creation_failure_or_missing_events_is_unmeasured(tmp_path):
     _job(tmp_path, "A-1", _pr_plan(), [*run(0), row("publish", 30, v=2, action="created", pr=None, gh_ok=False)])
     _job(tmp_path, "R-1", {**_pr_plan(2), "source": "record"}, [row("stage", 1, v=2, result="ok", dry_run=False)])
@@ -171,12 +215,12 @@ def test_json_and_text_carry_counts_only(tmp_path, capsys):
     data = json.loads(out)
     assert data["format"] == 2 and data["platform"] is None and data["tokens"] is None
     assert set(data) == {"format", "platform", "work_dir", "jobs", "states", "held_read_only", "analysis_only_runs",
-                         "cancel_ratio", "pr_minutes", "pr_unmeasured", "analysis_minutes", "questions", "retries",
-                         "legacy", "other_flows", "tokens"}
+                         "cancel_ratio", "pr_minutes", "pr_unmeasured", "analysis_minutes", "investigation_minutes",
+                         "investigation_unmeasured", "questions", "retries", "legacy", "other_flows", "tokens"}
     assert usage_stats.main(["--work-dir", str(tmp_path)]) == 0
     text = capsys.readouterr().out
     lines = text.splitlines()
-    assert len(lines) == 9 and lines[0].startswith("집계 대상:") and any("취소 비율" in ln for ln in lines)
+    assert len(lines) == 10 and lines[0].startswith("집계 대상:") and any("취소 비율" in ln for ln in lines)
     assert lines[-1] == "토큰: 미측정 (--transcripts 없음)"
     for blob in (out, text):
         assert "SECRET-KEY-1" not in blob and "secret-msg" not in blob

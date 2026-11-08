@@ -14,7 +14,7 @@ import team_stats  # noqa: E402
 
 
 def _doc(jobs, pr, analysis_only, cancel, pr_vals, an_vals, q_jobs, q_total, runs, tokens, *, cancelled=1, in_progress=0,
-         practice=0, unknown=0):
+         practice=0, unknown=0, inv_vals=None):
     """usage_stats --json(format 2) 실제 모양: states 9종, cancel_ratio = cancelled / (jobs − in_progress − practice − unknown),
     tokens = None(--transcripts 없음) 또는 {dir, sessions, …, total: {calls, input, output, cache_read, cache_write} | None}."""
     base = jobs - in_progress - practice - unknown
@@ -24,6 +24,8 @@ def _doc(jobs, pr, analysis_only, cancel, pr_vals, an_vals, q_jobs, q_total, run
             "cancel_ratio": cancel if cancel is not None else (round(cancelled / base, 3) if base > 0 else None),
             "pr_minutes": {"n": len(pr_vals), "median": None, "mean": None, "values": pr_vals},
             "analysis_minutes": {"n": len(an_vals), "median": None, "mean": None, "values": an_vals},
+            **({} if inv_vals is None else {"investigation_minutes": {"n": len(inv_vals), "median": None, "mean": None,
+                                                                      "values": inv_vals}, "investigation_unmeasured": 0}),
             "questions": {"jobs": q_jobs, "total": q_total, "per_job": None, "by_kind": {}},
             "retries": {"runs": runs, "answer_reruns": 0, "errors": 0, "stages": 0, "stage_failed": 0},
             "legacy": {"jobs": 0, "stages": {}}, "other_flows": 0,
@@ -35,7 +37,8 @@ def _doc(jobs, pr, analysis_only, cancel, pr_vals, an_vals, q_jobs, q_total, run
 
 
 def test_team_table_and_totals(tmp_path):
-    (tmp_path / "alice.json").write_text(json.dumps(_doc(10, 6, 2, None, [30, 50, 70], [10, 20], 8, 16, 3, 12000, cancelled=1)),
+    (tmp_path / "alice.json").write_text(json.dumps(_doc(10, 6, 2, None, [30, 50, 70], [10, 20], 8, 16, 3, 12000, cancelled=1,
+                                                                         inv_vals=[40, 80])),
                                          encoding="utf-8")
     (tmp_path / "bob.json").write_text(json.dumps(_doc(5, 2, 1, None, [90], [5], 5, 5, 1, None, cancelled=2)), encoding="utf-8")
     (tmp_path / "old.json").write_text(json.dumps({"format": 1, "jobs": 3}), encoding="utf-8")
@@ -49,6 +52,9 @@ def test_team_table_and_totals(tmp_path):
     total = out["total"]
     assert total["users"] == 2 and total["jobs"] == 15 and total["pr"] == 8 and total["analysis_only"] == 3
     assert total["pr_median"] == 60.0 and total["pr_n"] == 4 and total["analysis_median"] == 10.0
+    # 전체 조사: bob 파일에는 키가 없다(옛 형식) — alice 값만 합친다
+    assert total["investigation_median"] == 60.0 and total["investigation_n"] == 2
+    assert out["users"][1]["investigation_minutes"] == []
     assert total["cancel_ratio"] == round(3 / 15, 3) and (total["cancelled"], total["cancel_base"]) == (3, 15)
     assert total["questions_per_job"] == round(21 / 13, 3) and total["retries"] == 4
     # 토큰 = 입력+출력+캐시 읽기+캐시 쓰기(12000+1200+24000+0), 응답 수 calls(7)는 더하지 않는다(코덱스 리뷰 N1)
@@ -59,6 +65,10 @@ def test_team_table_and_totals(tmp_path):
                            str(tmp_path / "bob.json")], capture_output=True, text=True, encoding="utf-8").stdout
     assert text.startswith("팀 지표: 사용자 2명") and "합계" in text and "기준선" in text
     assert "alice" in text and "bob" in text and "작업 키" not in text
+    cells = {ln.split()[0]: ln.split() for ln in text.splitlines()[3:6]}     # 데이터 칸에는 띄어쓰기가 없다
+    col = team_stats.COLUMNS.index("전체 조사 중앙값(분)")
+    assert "전체 조사 중앙값(분)" in text and "전체 조사 2건" in text
+    assert (cells["alice"][col], cells["bob"][col], cells["합계"][col]) == ("60", "-", "60")
 
 
 def test_no_readable_file_is_exit_1(tmp_path):
