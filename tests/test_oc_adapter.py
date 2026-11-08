@@ -598,14 +598,15 @@ def _gh_mcp(tool: str, args: dict) -> dict:
     return cli("before", {"tool": f"github_{tool}", "args": args, "directory": str(d)})
 
 
-def test_before_mcp_repo_full_name_merge_not_allowed():
-    """규칙 11(F1): 대상 인자 이름 변형(`repo_full_name`)의 이슈 DB 병합은 OpenCode에서도 허용되지 않는다(guard deny 상속)."""
+def test_before_mcp_merge_ask_is_refused_in_opencode():
+    """규칙 11(F1): 대상 인자 이름 변형(`repo_full_name`)의 이슈 DB 병합은 OpenCode에서도 허용되지 않는다(guard는 병합 계열을
+    ask로 내고(4-c), OpenCode v1은 ask를 거부로 돌린다)."""
     out = _gh_mcp("merge_pull_request", {"repo_full_name": "mock-org/telephony-issue-db", "pull_number": 3})
     assert out["decision"] == "deny" and "머지" in out["reason"]
 
 
-def test_before_mcp_undeterminable_merge_asks():
-    """규칙 11(F1): 대상을 판별하지 못한 병합은 guard ask — OpenCode에서는 allow가 아니다."""
+def test_before_mcp_merge_without_target_is_not_allowed():
+    """규칙 11(F1): 대상 인자가 없는 병합도 guard ask(대상을 보지 않는다) — OpenCode에서는 allow가 아니다."""
     assert _gh_mcp("merge_pull_request", {"pull_number": 3})["decision"] != "allow"
     assert _gh_mcp("list_pull_requests", {})["decision"] == "allow"
 

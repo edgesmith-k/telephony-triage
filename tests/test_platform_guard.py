@@ -92,21 +92,23 @@ def test_rule11_gh_and_mcp_target_second_remote():
     p = two_profiles()
     base = p["ws"].base
     assert bash("gh pr create -R mock-org/ofono-issue-db --title t --body b", base) == "ask"
-    assert bash("gh pr merge 3 -R mock-org/ofono-issue-db", base) == "deny"
+    assert bash("gh pr merge 3 -R mock-org/ofono-issue-db", base) == "ask"      # 병합 계열은 ask(4-c)
+    assert bash("gh pr review 3 --approve -R mock-org/ofono-issue-db", base) == "deny"
     assert bash("gh pr list -R mock-org/ofono-issue-db", base) is None
-    assert bash("gh pr create -R mock-org/unrelated --title t --body b", base) is None
+    assert bash("gh pr create -R mock-org/unrelated --title t --body b", base) == "ask"   # 대상 레포를 보지 않는다(4-c)
     assert guard("mcp__github__create_pull_request", {"owner": "mock-org", "repo": "ofono-issue-db"}, base) == "ask"
 
 
-def test_git_rules_in_second_clone_use_its_base():
+def test_git_rules_in_second_clone_are_judged_as_issue_db():
     p = two_profiles()
     clone = p["clone"]
     assert bash("git checkout -b topic", clone) == "deny"                      # clone 본체 브랜치 변경
-    assert bash("git push origin HEAD:refs/heads/develop", clone) == "deny"    # 그 프로필 base
+    # base 브랜치 push도 그 밖 push와 같은 ask다(4-c — 규칙 6은 서버 브랜치 보호가 막는다). 두 clone 모두 이슈 DB로 본다
+    assert bash("git push origin HEAD:refs/heads/develop", clone) == "ask"     # 그 프로필 base
     assert bash("git push origin HEAD:refs/heads/issue/OFN-1", clone) == "ask"
-    # android clone의 base는 main 그대로: develop은 base가 아니다(ask만)
+    assert bash("git push --no-verify origin HEAD:refs/heads/issue/OFN-1", clone) == "deny"    # 규칙 5(ci_mode local)
     assert bash("git push origin HEAD:refs/heads/develop", p["ws"].clone) == "ask"
-    assert bash("git push origin HEAD:refs/heads/main", p["ws"].clone) == "deny"
+    assert bash("git push origin HEAD:refs/heads/main", p["ws"].clone) == "ask"
 
 
 def _push(clone: Path, ref: str, env: dict) -> subprocess.CompletedProcess:
@@ -307,7 +309,8 @@ def test_rule12_module_records_in_invalid_name_profile_work_dir():
 def test_rule11_gh_and_mcp_target_module_remote():
     top = {"module_skills": {"remote": "git@ghe.mock.invalid:mock-org/module-skills.git"}}
     assert _one_off(top, "Bash", {"command": "gh pr create -R mock-org/module-skills --title t --body b"}) == "ask"
-    assert _one_off(top, "Bash", {"command": "gh pr merge 3 -R mock-org/module-skills"}) == "deny"
+    assert _one_off(top, "Bash", {"command": "gh pr merge 3 -R mock-org/module-skills"}) == "ask"     # 병합 계열(4-c)
     assert _one_off(top, "Bash", {"command": "gh pr list -R mock-org/module-skills"}) is None
     assert _one_off(top, "mcp__github__create_pull_request", {"owner": "mock-org", "repo": "module-skills"}) == "ask"
-    assert _one_off(top, "Bash", {"command": "gh pr merge 3 -R mock-org/telephony-issue-db"}) == "deny"   # 이슈 DB 그대로
+    assert _one_off(top, "Bash", {"command": "gh pr review 3 --approve -R mock-org/module-skills"}) == "deny"
+    assert _one_off(top, "Bash", {"command": "gh pr merge 3 -R mock-org/telephony-issue-db"}) == "ask"    # 이슈 DB 그대로

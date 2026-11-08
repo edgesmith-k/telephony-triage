@@ -1,0 +1,1933 @@
+[
+ {
+  "name": "push main",
+  "tool": "Bash",
+  "input": {
+   "command": "git push origin main"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "rule6",
+  "expect": "ask"
+ },
+ {
+  "name": "push HEAD:refs/heads/main",
+  "tool": "Bash",
+  "input": {
+   "command": "git push origin HEAD:refs/heads/main"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "rule6",
+  "expect": "ask"
+ },
+ {
+  "name": "push --all",
+  "tool": "Bash",
+  "input": {
+   "command": "git push --all origin"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "rule6",
+  "expect": "ask"
+ },
+ {
+  "name": "push --mirror",
+  "tool": "Bash",
+  "input": {
+   "command": "git push --mirror origin"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "rule6",
+  "expect": "ask"
+ },
+ {
+  "name": "push +HEAD:main",
+  "tool": "Bash",
+  "input": {
+   "command": "git push origin +HEAD:main"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "rule6",
+  "expect": "ask"
+ },
+ {
+  "name": "push --force issue 브랜치",
+  "tool": "Bash",
+  "input": {
+   "command": "git push --force origin HEAD:refs/heads/issue/X-1"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "ask"
+ },
+ {
+  "name": "push --force-with-lease issue 브랜치",
+  "tool": "Bash",
+  "input": {
+   "command": "git push --force-with-lease origin HEAD:refs/heads/issue/X-1"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "ask"
+ },
+ {
+  "name": "push +refs issue 브랜치",
+  "tool": "Bash",
+  "input": {
+   "command": "git push origin +HEAD:refs/heads/issue/X-1"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "ask"
+ },
+ {
+  "name": "push issue 브랜치",
+  "tool": "Bash",
+  "input": {
+   "command": "git push origin HEAD:refs/heads/issue/X-1"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "ask"
+ },
+ {
+  "name": "commit --no-verify (local)",
+  "tool": "Bash",
+  "input": {
+   "command": "git commit --no-verify -m x"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "push --no-verify (local)",
+  "tool": "Bash",
+  "input": {
+   "command": "git push --no-verify origin HEAD:refs/heads/issue/X-1"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "commit -c core.hooksPath= (local)",
+  "tool": "Bash",
+  "input": {
+   "command": "git -c core.hooksPath=/dev/null commit -m x"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "config core.hooksPath (local)",
+  "tool": "Bash",
+  "input": {
+   "command": "git config core.hooksPath /dev/null"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "GIT_CONFIG_* push (local)",
+  "tool": "Bash",
+  "input": {
+   "command": "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=x git push origin HEAD:refs/heads/a"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "commit --no-verify (origin actions)",
+  "tool": "Bash",
+  "input": {
+   "command": "git commit --no-verify -m x"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "rule5-actions",
+  "setup": {
+   "origin_ci_mode": "actions"
+  },
+  "expect": "ask"
+ },
+ {
+  "name": "push --no-verify (origin actions)",
+  "tool": "Bash",
+  "input": {
+   "command": "git push --no-verify origin HEAD:refs/heads/issue/X-1"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "rule5-actions",
+  "setup": {
+   "origin_ci_mode": "actions"
+  },
+  "expect": "ask"
+ },
+ {
+  "name": "push --no-verify main (origin actions)",
+  "tool": "Bash",
+  "input": {
+   "command": "git push --no-verify origin HEAD:refs/heads/main"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "rule5-actions",
+  "setup": {
+   "origin_ci_mode": "actions"
+  },
+  "expect": "ask"
+ },
+ {
+  "name": "config core.hooksPath (origin actions)",
+  "tool": "Bash",
+  "input": {
+   "command": "git config core.hooksPath /dev/null"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "rule5-actions",
+  "setup": {
+   "origin_ci_mode": "actions"
+  },
+  "expect": "ask"
+ },
+ {
+  "name": "commit -c core.hooksPath= (origin actions)",
+  "tool": "Bash",
+  "input": {
+   "command": "git -c core.hooksPath=/dev/null commit -m x"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "rule5-actions",
+  "setup": {
+   "origin_ci_mode": "actions"
+  },
+  "expect": "ask"
+ },
+ {
+  "name": "GIT_INDEX_FILE commit (origin actions)",
+  "tool": "Bash",
+  "input": {
+   "command": "GIT_INDEX_FILE=/tmp/idx git commit -m x"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "setup": {
+   "origin_ci_mode": "actions"
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "commit --no-verify (작업 트리만 actions)",
+  "tool": "Bash",
+  "input": {
+   "command": "git commit --no-verify -m x"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "setup": {
+   "wt_ci_mode": "actions"
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "push --no-verify main (작업 트리만 actions)",
+  "tool": "Bash",
+  "input": {
+   "command": "git push --no-verify origin HEAD:refs/heads/main"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "setup": {
+   "wt_ci_mode": "actions"
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "gh pr merge",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr merge 3"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "merge",
+  "expect": "ask"
+ },
+ {
+  "name": "gh pr merge --auto (원칙 12)",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr merge 3 --auto --squash"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "gh pr merge --admin",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr merge 3 --admin"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "merge",
+  "expect": "ask"
+ },
+ {
+  "name": "REST PUT …/merge",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api -X PUT repos/mock-org/telephony-issue-db/pulls/3/merge"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "merge",
+  "expect": "ask"
+ },
+ {
+  "name": "REST POST …/merges",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api -X POST repos/mock-org/telephony-issue-db/merges -f base=main -f head=x"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "merge",
+  "expect": "ask"
+ },
+ {
+  "name": "GraphQL mergePullRequest",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "merge",
+  "expect": "ask"
+ },
+ {
+  "name": "GraphQL 자동 병합 켜기 heredoc (원칙 12)",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -f query=\"$(cat <<'EOF'\nmutation { enablePullRequestAutoMerge(input: {}) { clientMutationId } }\nEOF\n)\""
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "GraphQL enqueue --input",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql --input {plain}/enqueue.json"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "merge",
+  "files": {
+   "enqueue.json": "{\"query\": \"mutation { enqueuePullRequest(input: {}) { clientMutationId } }\"}"
+  },
+  "expect": "ask"
+ },
+ {
+  "name": "gh alias set 병합",
+  "tool": "Bash",
+  "input": {
+   "command": "gh alias set m 'pr merge --admin'"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "merge",
+  "expect": "ask"
+ },
+ {
+  "name": "pr review --approve",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr review 3 --approve"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "pr review -a",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr review 3 -a"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "pr review -a=true",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr review 3 -a=true"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "REST -f event=APPROVE",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api repos/mock-org/telephony-issue-db/pulls/3/reviews -f event=APPROVE"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "REST -F event=@file",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api repos/mock-org/telephony-issue-db/pulls/3/reviews -F event=@{plain}/ev.txt"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "files": {
+   "ev.txt": "APPROVE"
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "REST --input JSON",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api repos/mock-org/telephony-issue-db/pulls/3/reviews --input {plain}/approve.json"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "files": {
+   "approve.json": "{\"event\":\"APPROVE\"}"
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "REST --input JSON 이스케이프",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api repos/mock-org/telephony-issue-db/pulls/3/reviews --input {plain}/esc.json"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "files": {
+   "esc.json": "{\"event\":\"\\u0041PPROVE\"}"
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "GraphQL Approve 인라인",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -f query='mutation { addPullRequestReview(input: {pullRequestId: \"x\", event: APPROVE}) { clientMutationId } }'"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "GraphQL Approve @file",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -F query=@{plain}/review.graphql"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "files": {
+   "review.graphql": "mutation { addPullRequestReview(input: {pullRequestId: \"x\", event: APPROVE}) { clientMutationId } }"
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "REST event 셸 값",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api repos/mock-org/telephony-issue-db/pulls/3/reviews -f event=\"$E\""
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "gh alias set 리뷰",
+  "tool": "Bash",
+  "input": {
+   "command": "gh alias set lgtm 'pr review --approve'"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "REST dismissals",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api -X PUT repos/mock-org/telephony-issue-db/pulls/3/reviews/9/dismissals -f message=x"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "GraphQL dismissPullRequestReview",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -f query='mutation { dismissPullRequestReview(input: {}) { clientMutationId } }'"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "보호 삭제 REST",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api -X DELETE repos/mock-org/telephony-issue-db/branches/main/protection"
+  },
+  "cwd": "clone",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "ruleset 쓰기",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api repos/mock-org/telephony-issue-db/rulesets --input {plain}/rs.json"
+  },
+  "cwd": "clone",
+  "expected_change": "tighten",
+  "files": {
+   "rs.json": "{\"name\":\"x\",\"enforcement\":\"disabled\"}"
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "자동 병합 켜기",
+  "tool": "Bash",
+  "input": {
+   "command": "gh repo edit --enable-auto-merge"
+  },
+  "cwd": "clone",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "MCP merge",
+  "tool": "mcp__github__merge_pull_request",
+  "input": {
+   "owner": "mock-org",
+   "repo": "telephony-issue-db",
+   "pullNumber": 3
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "merge",
+  "expect": "ask"
+ },
+ {
+  "name": "MCP Approve",
+  "tool": "mcp__github__pull_request_review_write",
+  "input": {
+   "owner": "mock-org",
+   "repo": "telephony-issue-db",
+   "pullNumber": 3,
+   "event": "APPROVE"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "MCP dismiss",
+  "tool": "mcp__github__dismiss_pull_request_review",
+  "input": {
+   "owner": "mock-org",
+   "repo": "telephony-issue-db",
+   "reviewId": 9
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "MCP 쓰기(이슈 DB)",
+  "tool": "mcp__github__push_files",
+  "input": {
+   "owner": "mock-org",
+   "repo": "telephony-issue-db"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "ask"
+ },
+ {
+  "name": "MCP 쓰기(다른 서버)",
+  "tool": "mcp__gdrive__create_file",
+  "input": {
+   "name": "x"
+  },
+  "cwd": "clone",
+  "expected_change": "tighten",
+  "expect": "ask"
+ },
+ {
+  "name": "clone > 쓰기",
+  "tool": "Bash",
+  "input": {
+   "command": "echo x > notes.txt"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "clone tee",
+  "tool": "Bash",
+  "input": {
+   "command": "echo x | tee notes.txt"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "clone sed -i",
+  "tool": "Bash",
+  "input": {
+   "command": "sed -i s/a/b/ README.md"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "clone cp",
+  "tool": "Bash",
+  "input": {
+   "command": "cp /etc/hostname README.md"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "clone python -c open ./",
+  "tool": "Bash",
+  "input": {
+   "command": "python3 -c \"open('./README.md','w').write('x')\""
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "ask"
+ },
+ {
+  "name": "clone heredoc 인터프리터 clone 경로",
+  "tool": "Bash",
+  "input": {
+   "command": "python3 <<'EOF'\nopen('{clone}/README.md', 'w').write('x')\nEOF"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "expect": "ask"
+ },
+ {
+  "name": "인터프리터 인라인 clone 경로",
+  "tool": "Bash",
+  "input": {
+   "command": "python3 -c \"open('{clone}/README.md','w').write('x')\""
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "expect": "ask"
+ },
+ {
+  "name": "clone mv",
+  "tool": "Bash",
+  "input": {
+   "command": "mv README.md x.md"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "clone rm",
+  "tool": "Bash",
+  "input": {
+   "command": "rm README.md"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "cd clone 뒤 > 쓰기",
+  "tool": "Bash",
+  "input": {
+   "command": "cd {clone} && echo x > README.md"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "플러그인 스크립트 --out clone",
+  "tool": "Bash",
+  "input": {
+   "command": "python3 mask_pii.py safe.txt --out {clone}/CONTRIBUTING.md"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "관리 clone git commit",
+  "tool": "Bash",
+  "input": {
+   "command": "git -C {work_dir}/_module-skills/x commit -m x"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "clone gh -R pr checkout",
+  "tool": "Bash",
+  "input": {
+   "command": "gh -R o/r pr checkout 3"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "clone gh pr -b x -b y checkout",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr -b x -b y checkout 3"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "clone gh -b x -c y co",
+  "tool": "Bash",
+  "input": {
+   "command": "gh -b x -c y co 3"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "clone git checkout -b",
+  "tool": "Bash",
+  "input": {
+   "command": "git checkout -b x"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "clone gh pr checkout",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr checkout 3"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "clone gh pr list --search checkout",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr list --search checkout"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": null
+ },
+ {
+  "name": "원문 cat logs/*.txt",
+  "tool": "Bash",
+  "input": {
+   "command": "cat logs/radio.txt"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "files": {
+   "logs/radio.txt": "10-06 12:00:00.123  1000  1000 I RILJ    : [0001] line 0\n10-06 12:00:01.123  1000  1000 I RILJ    : [0001] line 1\n10-06 12:00:02.123  1000  1000 I RILJ    : [0001] line 2\n10-06 12:00:03.123  1000  1000 I RILJ    : [0001] line 3\n10-06 12:00:04.123  1000  1000 I RILJ    : [0001] line 4\n10-06 12:00:05.123  1000  1000 I RILJ    : [0001] line 5\n10-06 12:00:06.123  1000  1000 I RILJ    : [0001] line 6\n10-06 12:00:07.123  1000  1000 I RILJ    : [0001] line 7\n10-06 12:00:08.123  1000  1000 I RILJ    : [0001] line 8\n10-06 12:00:09.123  1000  1000 I RILJ    : [0001] line 9\n10-06 12:00:10.123  1000  1000 I RILJ    : [0001] line 10\n10-06 12:00:11.123  1000  1000 I RILJ    : [0001] line 11\n10-06 12:00:12.123  1000  1000 I RILJ    : [0001] line 12\n10-06 12:00:13.123  1000  1000 I RILJ    : [0001] line 13\n10-06 12:00:14.123  1000  1000 I RILJ    : [0001] line 14\n10-06 12:00:15.123  1000  1000 I RILJ    : [0001] line 15\n10-06 12:00:16.123  1000  1000 I RILJ    : [0001] line 16\n10-06 12:00:17.123  1000  1000 I RILJ    : [0001] line 17\n10-06 12:00:18.123  1000  1000 I RILJ    : [0001] line 18\n10-06 12:00:19.123  1000  1000 I RILJ    : [0001] line 19\n10-06 12:00:20.123  1000  1000 I RILJ    : [0001] line 20\n10-06 12:00:21.123  1000  1000 I RILJ    : [0001] line 21\n10-06 12:00:22.123  1000  1000 I RILJ    : [0001] line 22\n10-06 12:00:23.123  1000  1000 I RILJ    : [0001] line 23\n10-06 12:00:24.123  1000  1000 I RILJ    : [0001] line 24\n10-06 12:00:25.123  1000  1000 I RILJ    : [0001] line 25\n10-06 12:00:26.123  1000  1000 I RILJ    : [0001] line 26\n10-06 12:00:27.123  1000  1000 I RILJ    : [0001] line 27\n10-06 12:00:28.123  1000  1000 I RILJ    : [0001] line 28\n10-06 12:00:29.123  1000  1000 I RILJ    : [0001] line 29\n10-06 12:00:30.123  1000  1000 I RILJ    : [0001] line 30\n10-06 12:00:31.123  1000  1000 I RILJ    : [0001] line 31\n10-06 12:00:32.123  1000  1000 I RILJ    : [0001] line 32\n10-06 12:00:33.123  1000  1000 I RILJ    : [0001] line 33\n10-06 12:00:34.123  1000  1000 I RILJ    : [0001] line 34\n10-06 12:00:35.123  1000  1000 I RILJ    : [0001] line 35\n10-06 12:00:36.123  1000  1000 I RILJ    : [0001] line 36\n10-06 12:00:37.123  1000  1000 I RILJ    : [0001] line 37\n10-06 12:00:38.123  1000  1000 I RILJ    : [0001] line 38\n10-06 12:00:39.123  1000  1000 I RILJ    : [0001] line 39\n"
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "원문 less",
+  "tool": "Bash",
+  "input": {
+   "command": "less logs/radio.txt"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "files": {
+   "logs/radio.txt": "10-06 12:00:00.123  1000  1000 I RILJ    : [0001] line 0\n10-06 12:00:01.123  1000  1000 I RILJ    : [0001] line 1\n10-06 12:00:02.123  1000  1000 I RILJ    : [0001] line 2\n10-06 12:00:03.123  1000  1000 I RILJ    : [0001] line 3\n10-06 12:00:04.123  1000  1000 I RILJ    : [0001] line 4\n10-06 12:00:05.123  1000  1000 I RILJ    : [0001] line 5\n10-06 12:00:06.123  1000  1000 I RILJ    : [0001] line 6\n10-06 12:00:07.123  1000  1000 I RILJ    : [0001] line 7\n10-06 12:00:08.123  1000  1000 I RILJ    : [0001] line 8\n10-06 12:00:09.123  1000  1000 I RILJ    : [0001] line 9\n10-06 12:00:10.123  1000  1000 I RILJ    : [0001] line 10\n10-06 12:00:11.123  1000  1000 I RILJ    : [0001] line 11\n10-06 12:00:12.123  1000  1000 I RILJ    : [0001] line 12\n10-06 12:00:13.123  1000  1000 I RILJ    : [0001] line 13\n10-06 12:00:14.123  1000  1000 I RILJ    : [0001] line 14\n10-06 12:00:15.123  1000  1000 I RILJ    : [0001] line 15\n10-06 12:00:16.123  1000  1000 I RILJ    : [0001] line 16\n10-06 12:00:17.123  1000  1000 I RILJ    : [0001] line 17\n10-06 12:00:18.123  1000  1000 I RILJ    : [0001] line 18\n10-06 12:00:19.123  1000  1000 I RILJ    : [0001] line 19\n10-06 12:00:20.123  1000  1000 I RILJ    : [0001] line 20\n10-06 12:00:21.123  1000  1000 I RILJ    : [0001] line 21\n10-06 12:00:22.123  1000  1000 I RILJ    : [0001] line 22\n10-06 12:00:23.123  1000  1000 I RILJ    : [0001] line 23\n10-06 12:00:24.123  1000  1000 I RILJ    : [0001] line 24\n10-06 12:00:25.123  1000  1000 I RILJ    : [0001] line 25\n10-06 12:00:26.123  1000  1000 I RILJ    : [0001] line 26\n10-06 12:00:27.123  1000  1000 I RILJ    : [0001] line 27\n10-06 12:00:28.123  1000  1000 I RILJ    : [0001] line 28\n10-06 12:00:29.123  1000  1000 I RILJ    : [0001] line 29\n10-06 12:00:30.123  1000  1000 I RILJ    : [0001] line 30\n10-06 12:00:31.123  1000  1000 I RILJ    : [0001] line 31\n10-06 12:00:32.123  1000  1000 I RILJ    : [0001] line 32\n10-06 12:00:33.123  1000  1000 I RILJ    : [0001] line 33\n10-06 12:00:34.123  1000  1000 I RILJ    : [0001] line 34\n10-06 12:00:35.123  1000  1000 I RILJ    : [0001] line 35\n10-06 12:00:36.123  1000  1000 I RILJ    : [0001] line 36\n10-06 12:00:37.123  1000  1000 I RILJ    : [0001] line 37\n10-06 12:00:38.123  1000  1000 I RILJ    : [0001] line 38\n10-06 12:00:39.123  1000  1000 I RILJ    : [0001] line 39\n"
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "원문 head -c",
+  "tool": "Bash",
+  "input": {
+   "command": "head -c 4000 logs/radio.txt"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "files": {
+   "logs/radio.txt": "10-06 12:00:00.123  1000  1000 I RILJ    : [0001] line 0\n10-06 12:00:01.123  1000  1000 I RILJ    : [0001] line 1\n10-06 12:00:02.123  1000  1000 I RILJ    : [0001] line 2\n10-06 12:00:03.123  1000  1000 I RILJ    : [0001] line 3\n10-06 12:00:04.123  1000  1000 I RILJ    : [0001] line 4\n10-06 12:00:05.123  1000  1000 I RILJ    : [0001] line 5\n10-06 12:00:06.123  1000  1000 I RILJ    : [0001] line 6\n10-06 12:00:07.123  1000  1000 I RILJ    : [0001] line 7\n10-06 12:00:08.123  1000  1000 I RILJ    : [0001] line 8\n10-06 12:00:09.123  1000  1000 I RILJ    : [0001] line 9\n10-06 12:00:10.123  1000  1000 I RILJ    : [0001] line 10\n10-06 12:00:11.123  1000  1000 I RILJ    : [0001] line 11\n10-06 12:00:12.123  1000  1000 I RILJ    : [0001] line 12\n10-06 12:00:13.123  1000  1000 I RILJ    : [0001] line 13\n10-06 12:00:14.123  1000  1000 I RILJ    : [0001] line 14\n10-06 12:00:15.123  1000  1000 I RILJ    : [0001] line 15\n10-06 12:00:16.123  1000  1000 I RILJ    : [0001] line 16\n10-06 12:00:17.123  1000  1000 I RILJ    : [0001] line 17\n10-06 12:00:18.123  1000  1000 I RILJ    : [0001] line 18\n10-06 12:00:19.123  1000  1000 I RILJ    : [0001] line 19\n10-06 12:00:20.123  1000  1000 I RILJ    : [0001] line 20\n10-06 12:00:21.123  1000  1000 I RILJ    : [0001] line 21\n10-06 12:00:22.123  1000  1000 I RILJ    : [0001] line 22\n10-06 12:00:23.123  1000  1000 I RILJ    : [0001] line 23\n10-06 12:00:24.123  1000  1000 I RILJ    : [0001] line 24\n10-06 12:00:25.123  1000  1000 I RILJ    : [0001] line 25\n10-06 12:00:26.123  1000  1000 I RILJ    : [0001] line 26\n10-06 12:00:27.123  1000  1000 I RILJ    : [0001] line 27\n10-06 12:00:28.123  1000  1000 I RILJ    : [0001] line 28\n10-06 12:00:29.123  1000  1000 I RILJ    : [0001] line 29\n10-06 12:00:30.123  1000  1000 I RILJ    : [0001] line 30\n10-06 12:00:31.123  1000  1000 I RILJ    : [0001] line 31\n10-06 12:00:32.123  1000  1000 I RILJ    : [0001] line 32\n10-06 12:00:33.123  1000  1000 I RILJ    : [0001] line 33\n10-06 12:00:34.123  1000  1000 I RILJ    : [0001] line 34\n10-06 12:00:35.123  1000  1000 I RILJ    : [0001] line 35\n10-06 12:00:36.123  1000  1000 I RILJ    : [0001] line 36\n10-06 12:00:37.123  1000  1000 I RILJ    : [0001] line 37\n10-06 12:00:38.123  1000  1000 I RILJ    : [0001] line 38\n10-06 12:00:39.123  1000  1000 I RILJ    : [0001] line 39\n"
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "원문 events.json",
+  "tool": "Bash",
+  "input": {
+   "command": "cat events.json"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "files": {
+   "events.json": "{}"
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "Write clone 파일",
+  "tool": "Write",
+  "input": {
+   "file_path": "{clone}/README.md",
+   "content": "x"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "Write post.approved.json",
+  "tool": "Write",
+  "input": {
+   "file_path": "{work_dir}/MOCK-1/post.approved.json",
+   "content": "{}"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "관리 clone 쓰기",
+  "tool": "Bash",
+  "input": {
+   "command": "echo x > {work_dir}/_module-skills/a.txt"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "GraphQL deleteBranchProtectionRule",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -f query='mutation { deleteBranchProtectionRule(input: {}) { clientMutationId } }'"
+  },
+  "cwd": "clone",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "GraphQL createRepositoryRuleset",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -f query='mutation { createRepositoryRuleset(input: {}) { clientMutationId } }'"
+  },
+  "cwd": "clone",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "REST allow_auto_merge=true",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api -X PATCH repos/mock-org/telephony-issue-db -F allow_auto_merge=true"
+  },
+  "cwd": "clone",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "보호 삭제 release/v1",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api -X DELETE repos/mock-org/telephony-issue-db/branches/release/v1/protection"
+  },
+  "cwd": "clone",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 update-ref",
+  "tool": "Bash",
+  "input": {
+   "command": "git update-ref refs/remotes/origin/main HEAD"
+  },
+  "cwd": "clone",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 fetch",
+  "tool": "Bash",
+  "input": {
+   "command": "git fetch . HEAD:refs/remotes/origin/main"
+  },
+  "cwd": "clone",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 symbolic-ref",
+  "tool": "Bash",
+  "input": {
+   "command": "git symbolic-ref refs/remotes/origin/main refs/heads/main"
+  },
+  "cwd": "clone",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "gh alias set 셸 값",
+  "tool": "Bash",
+  "input": {
+   "command": "gh alias set x \"$(echo cHIgcmV2aWV3IC1h | base64 -d)\""
+  },
+  "cwd": "clone",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "GraphQL 인용 안 한 heredoc $(…)",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -f query=\"$(cat <<EOF\n$(echo bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19 | base64 -d)\nEOF\n)\""
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "GraphQL @- 인용 안 한 heredoc $(…)",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -F query=@- <<EOF\n$(echo bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19 | base64 -d)\nEOF"
+  },
+  "cwd": "clone",
+  "expected_change": "tighten",
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "REST --input 깊은 JSON",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api repos/mock-org/telephony-issue-db/pulls/3/reviews --input {plain}/deep.json"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "files": {
+   "deep.json": "{\"event\":\"COMMENT\",\"x\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}"
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "gh pr view",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr view 3"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": null
+ },
+ {
+  "name": "git status",
+  "tool": "Bash",
+  "input": {
+   "command": "git status"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": null
+ },
+ {
+  "name": "db_pr publish",
+  "tool": "Bash",
+  "input": {
+   "command": "python3 db_pr.py publish --job MOCK-1"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "expect": "ask"
+ },
+ {
+  "name": "degraded gh pr merge",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr merge 3"
+  },
+  "cwd": "clone",
+  "expected_change": "deny->ask",
+  "category": "merge",
+  "env": {
+   "no_yaml": true
+  },
+  "expect": "ask"
+ },
+ {
+  "name": "degraded pr review --approve",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr review 3 --approve"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "env": {
+   "no_yaml": true
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "degraded gh pr $ACT",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr $ACT 3"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "env": {
+   "no_yaml": true
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "degraded REST event 셸 값",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api repos/mock-org/telephony-issue-db/pulls/3/reviews -f event=\"$E\""
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "env": {
+   "no_yaml": true
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "degraded --input APPROVE",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api repos/mock-org/telephony-issue-db/pulls/3/reviews --input {plain}/approve.json"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "files": {
+   "approve.json": "{\"event\":\"APPROVE\"}"
+  },
+  "env": {
+   "no_yaml": true
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "degraded 보호 삭제",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api -X DELETE repos/mock-org/telephony-issue-db/branches/main/protection"
+  },
+  "cwd": "clone",
+  "expected_change": "tighten",
+  "env": {
+   "no_yaml": true
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "degraded clone > 쓰기",
+  "tool": "Bash",
+  "input": {
+   "command": "echo x > notes.txt"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "env": {
+   "no_yaml": true
+  },
+  "expect": "ask"
+ },
+ {
+  "name": "degraded MCP",
+  "tool": "mcp__github__push_files",
+  "input": {
+   "owner": "o",
+   "repo": "r"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "env": {
+   "no_yaml": true
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "heredoc 미끼 + <<EOF- 접두",
+  "tool": "Bash",
+  "input": {
+   "command": "Q=$(echo bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19 | base64 -d); cat <<'EOF' >/dev/null\nx\nEOF\ngh api graphql -f query=\"$(cat <<EOF-\n$Q\nEOF-\n)\""
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "heredoc 미끼 + <<'EOF'X 접두",
+  "tool": "Bash",
+  "input": {
+   "command": "Q=$(echo bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19 | base64 -d); cat <<'EOF' >/dev/null\nx\nEOF\ngh api graphql -f query=\"$(cat <<'EOF'X\n$Q\nEOFX\n)\""
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "heredoc 미끼 + <<EOF.x 접두",
+  "tool": "Bash",
+  "input": {
+   "command": "Q=$(echo bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19 | base64 -d); cat <<'EOF' >/dev/null\nx\nEOF\ngh api graphql -f query=\"$(cat <<EOF.x\n$Q\nEOF.x\n)\""
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "heredoc 미끼 + bash -c 안 <<EOF",
+  "tool": "Bash",
+  "input": {
+   "command": "Q=$(echo bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19 | base64 -d); cat <<'EOF' >/dev/null\nx\nEOF\nbash -c 'gh api graphql -f query=\"$(cat <<EOF\n$Q\nEOF\n)\"'"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "heredoc stdin <<< 셸 값 + 미끼",
+  "tool": "Bash",
+  "input": {
+   "command": "Q=$(echo bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19 | base64 -d); cat <<'EOF' >/dev/null\nx\nEOF\ngh api graphql -F query=@- <<<\"$Q\""
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "heredoc stdin < 파일 + 미끼",
+  "tool": "Bash",
+  "input": {
+   "command": "cat <<'EOF' >/dev/null\nx\nEOF\ngh api graphql -F query=@- < q.graphql"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "files": {
+   "q.graphql": "query { viewer { login } }"
+  },
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "heredoc 자기 heredoc 뒤 < 파일",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -F query=@- <<'EOF' < q.graphql\nquery{viewer{login}}\nEOF"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "files": {
+   "q.graphql": "query { viewer { login } }"
+  },
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "heredoc stdin 파이프 base64 + 미끼",
+  "tool": "Bash",
+  "input": {
+   "command": "cat <<'EOF' >/dev/null\nx\nEOF\necho bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19 | base64 -d | gh api graphql -F query=@-"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "heredoc 인용 heredoc | base64 | gh @-",
+  "tool": "Bash",
+  "input": {
+   "command": "cat <<'EOF' | base64 -d | gh api graphql -F query=@-\nbXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19\nEOF"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "heredoc 줄 이음 @- 본문",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -F query=@- <<EOF\nmut\\\nation{addPullRequestRev\\\niew(input:{pullRequestId:\"x\",event:APPR\\\nOVE}){__typename}}\nEOF"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "heredoc 줄 이음 query=$(cat <<EOF)",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -f query=\"$(cat <<EOF\nmut\\\nation{addPullRequestRev\\\niew(input:{pullRequestId:\\\"x\\\",event:APPR\\\nOVE}){__typename}}\nEOF\n)\""
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "heredoc alias import 줄 이음",
+  "tool": "Bash",
+  "input": {
+   "command": "gh alias import - <<EOF\nx: pr rev\\\niew\nEOF"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "group": "heredoc",
+  "expect": "deny"
+ },
+ {
+  "name": "heredoc alias import 파이프 base64",
+  "tool": "Bash",
+  "input": {
+   "command": "cat <<'EOF' | base64 -d | gh alias import -\neDogcHIgcmV2aWV3Cg==\nEOF"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "group": "heredoc",
+  "expect": "deny"
+ },
+ {
+  "name": "heredoc base64 변수 $Q",
+  "tool": "Bash",
+  "input": {
+   "command": "Q=$(echo bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19 | base64 -d); gh api graphql -f query=\"$Q\""
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "heredoc 인용 안 한 ${Q}",
+  "tool": "Bash",
+  "input": {
+   "command": "Q=$(echo bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19 | base64 -d); gh api graphql -f query=\"$(cat <<EOF\n${Q}\nEOF\n)\""
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "group": "heredoc",
+  "expect": "ask"
+ },
+ {
+  "name": "heredoc 대조 <<'EOF' $Q 글자",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -f query=\"$(cat <<'EOF'\n$Q\nEOF\n)\""
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "group": "heredoc",
+  "expect": null
+ },
+ {
+  "name": "heredoc 대조 <<\\EOF $Q 글자",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -f query=\"$(cat <<\\EOF\n$Q\nEOF\n)\""
+  },
+  "cwd": "plain",
+  "expected_change": "ask->none",
+  "group": "heredoc",
+  "category": "quoted-heredoc",
+  "expect": null
+ },
+ {
+  "name": "heredoc 대조 @- <<'EOF' 읽기",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -F query=@- <<'EOF'\nquery { viewer { login } }\nEOF"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "group": "heredoc",
+  "expect": null
+ },
+ {
+  "name": "heredoc 대조 인용 안 한 읽기",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -f query=\"$(cat <<EOF\nquery { viewer { login } }\nEOF\n)\""
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "group": "heredoc",
+  "expect": null
+ },
+ {
+  "name": "origin ref 위조 worktree update-ref refs/remotes",
+  "tool": "Bash",
+  "input": {
+   "command": "git update-ref refs/remotes/origin/main HEAD"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree update-ref --stdin",
+  "tool": "Bash",
+  "input": {
+   "command": "git update-ref --stdin"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree symbolic-ref refs/remotes",
+  "tool": "Bash",
+  "input": {
+   "command": "git symbolic-ref refs/remotes/origin/main refs/heads/main"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree fetch refspec dst",
+  "tool": "Bash",
+  "input": {
+   "command": "git fetch origin x:refs/remotes/origin/main"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree fetch --refmap= .",
+  "tool": "Bash",
+  "input": {
+   "command": "git fetch --refmap=+refs/heads/x:refs/remotes/origin/main . refs/heads/x"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree fetch .",
+  "tool": "Bash",
+  "input": {
+   "command": "git fetch ."
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree fetch 경로",
+  "tool": "Bash",
+  "input": {
+   "command": "git fetch /tmp/x"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree fetch URL",
+  "tool": "Bash",
+  "input": {
+   "command": "git fetch https://example.com/x.git"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree fetch 다른 원격",
+  "tool": "Bash",
+  "input": {
+   "command": "git fetch upstream"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree pull 다른 원격",
+  "tool": "Bash",
+  "input": {
+   "command": "git pull upstream main"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree fetch --all",
+  "tool": "Bash",
+  "input": {
+   "command": "git fetch --all"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree remote update",
+  "tool": "Bash",
+  "input": {
+   "command": "git remote update"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree remote set-url origin",
+  "tool": "Bash",
+  "input": {
+   "command": "git remote set-url origin /tmp/x"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree remote add origin",
+  "tool": "Bash",
+  "input": {
+   "command": "git remote add origin /tmp/x"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree remote rename origin",
+  "tool": "Bash",
+  "input": {
+   "command": "git remote rename origin old"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree remote remove origin",
+  "tool": "Bash",
+  "input": {
+   "command": "git remote remove origin"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree -c remote.origin.fetch",
+  "tool": "Bash",
+  "input": {
+   "command": "git -c remote.origin.fetch=+refs/heads/x:refs/remotes/origin/main fetch origin"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree -c remote.origin.url",
+  "tool": "Bash",
+  "input": {
+   "command": "git -c remote.origin.url=/tmp/x fetch"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree GIT_CONFIG_* fetch",
+  "tool": "Bash",
+  "input": {
+   "command": "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.url GIT_CONFIG_VALUE_0=/tmp/x git fetch origin"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree config remote.origin.fetch",
+  "tool": "Bash",
+  "input": {
+   "command": "git config remote.origin.fetch +refs/heads/x:refs/remotes/origin/main"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree config remote.origin.url",
+  "tool": "Bash",
+  "input": {
+   "command": "git config remote.origin.url /tmp/x"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree replace",
+  "tool": "Bash",
+  "input": {
+   "command": "git replace HEAD~0 HEAD"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree update-ref refs/replace",
+  "tool": "Bash",
+  "input": {
+   "command": "git update-ref refs/replace/abc HEAD"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 worktree push . refs/remotes",
+  "tool": "Bash",
+  "input": {
+   "command": "git push . HEAD:refs/remotes/origin/main"
+  },
+  "cwd": "wt",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 -C worktree update-ref",
+  "tool": "Bash",
+  "input": {
+   "command": "git -C {wt} update-ref refs/remotes/origin/main HEAD"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "origin ref 위조 --git-dir fetch .",
+  "tool": "Bash",
+  "input": {
+   "command": "git --git-dir={clone}/.git fetch ."
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "worktree .git 연결 파일 > 쓰기",
+  "tool": "Bash",
+  "input": {
+   "command": "echo gitdir: /tmp/x > {wt}/.git"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "Write worktree .git 연결 파일",
+  "tool": "Write",
+  "input": {
+   "file_path": "{wt}/.git",
+   "content": "gitdir: /tmp/x"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "Write clone .git/packed-refs",
+  "tool": "Write",
+  "input": {
+   "file_path": "{clone}/.git/packed-refs",
+   "content": "x"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "허용 worktree git fetch",
+  "tool": "Bash",
+  "input": {
+   "command": "git fetch"
+  },
+  "cwd": "wt",
+  "expected_change": "none",
+  "expect": null
+ },
+ {
+  "name": "허용 worktree git fetch origin",
+  "tool": "Bash",
+  "input": {
+   "command": "git fetch origin"
+  },
+  "cwd": "wt",
+  "expected_change": "none",
+  "expect": null
+ },
+ {
+  "name": "허용 worktree git fetch origin main",
+  "tool": "Bash",
+  "input": {
+   "command": "git fetch origin main"
+  },
+  "cwd": "wt",
+  "expected_change": "none",
+  "expect": null
+ },
+ {
+  "name": "허용 worktree git pull",
+  "tool": "Bash",
+  "input": {
+   "command": "git pull"
+  },
+  "cwd": "wt",
+  "expected_change": "none",
+  "expect": null
+ },
+ {
+  "name": "허용 worktree git pull origin",
+  "tool": "Bash",
+  "input": {
+   "command": "git pull origin"
+  },
+  "cwd": "wt",
+  "expected_change": "none",
+  "expect": null
+ },
+ {
+  "name": "허용 clone git fetch",
+  "tool": "Bash",
+  "input": {
+   "command": "git fetch"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": null
+ },
+ {
+  "name": "허용 clone git fetch origin",
+  "tool": "Bash",
+  "input": {
+   "command": "git fetch origin"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": null
+ },
+ {
+  "name": "허용 clone git fetch origin main",
+  "tool": "Bash",
+  "input": {
+   "command": "git fetch origin main"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": null
+ },
+ {
+  "name": "허용 마스킹 로그 읽기",
+  "tool": "Bash",
+  "input": {
+   "command": "cat logs-masked/x.txt"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "files": {
+   "logs-masked/x.txt": "<IMEI#1> 마스킹한 줄\n"
+  },
+  "expect": null
+ },
+ {
+  "name": "REST delete_branch_on_merge=true",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api -X PATCH repos/mock-org/telephony-issue-db -F delete_branch_on_merge=true"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "REST delete_branch_on_merge=1",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api -X PATCH repos/mock-org/telephony-issue-db -f delete_branch_on_merge=1"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "REST repositories/<id> allow_auto_merge",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api -X PATCH repositories/123 -F allow_auto_merge=true"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "gh repo edit --delete-branch-on-merge",
+  "tool": "Bash",
+  "input": {
+   "command": "gh repo edit --delete-branch-on-merge"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "GraphQL createBranchProtectionRule",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -f query='mutation { createBranchProtectionRule(input: {}) { clientMutationId } }'"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "GraphQL updateRepositoryRuleset",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api graphql -f query='mutation { updateRepositoryRuleset(input: {}) { clientMutationId } }'"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "REST --input delete_branch_on_merge JSON 이스케이프",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api -X PATCH repos/mock-org/telephony-issue-db --input {plain}/dbm.json"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "files": {
+   "dbm.json": "{\"delete_branch_on_m\\u0065rge\": true}"
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "REST delete_branch_on_merge=false",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api -X PATCH repos/mock-org/telephony-issue-db -F delete_branch_on_merge=false"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "expect": "ask"
+ },
+ {
+  "name": "gh alias set 자리 표시 $1",
+  "tool": "Bash",
+  "input": {
+   "command": "gh alias set x 'pr $1 3 -$2'"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "gh alias set --shell",
+  "tool": "Bash",
+  "input": {
+   "command": "gh alias set --shell x 'gh pr \"$@\"'"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "gh alias set !셸 별칭",
+  "tool": "Bash",
+  "input": {
+   "command": "gh alias set x '!gh pr view'"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "gh alias set --auto 병합 (원칙 12)",
+  "tool": "Bash",
+  "input": {
+   "command": "gh alias set am 'pr merge --auto'"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "gh pr merge 셸 값 옵션 (원칙 12)",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr merge 3 $OPTS"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "expect": "deny"
+ },
+ {
+  "name": "MCP 자동 병합 켜기 (원칙 12)",
+  "tool": "mcp__github__enable_pr_auto_merge",
+  "input": {
+   "owner": "mock-org",
+   "repo": "telephony-issue-db",
+   "pullNumber": 3
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "expect": "deny"
+ },
+ {
+  "name": "degraded gh pr merge --auto (원칙 12)",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr merge 3 --auto"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "env": {
+   "no_yaml": true
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "설정 손상 ls",
+  "tool": "Bash",
+  "input": {
+   "command": "ls"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "env": {
+   "broken_config": true
+  },
+  "expect": null
+ },
+ {
+  "name": "설정 손상 git status",
+  "tool": "Bash",
+  "input": {
+   "command": "git status"
+  },
+  "cwd": "clone",
+  "expected_change": "none",
+  "env": {
+   "broken_config": true
+  },
+  "expect": "ask"
+ },
+ {
+  "name": "설정 손상 Write config.yaml",
+  "tool": "Write",
+  "input": {
+   "file_path": "{broken_config}/config.yaml",
+   "content": "plugin: {}\n"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "env": {
+   "broken_config": true
+  },
+  "expect": "ask"
+ },
+ {
+  "name": "설정 손상 pr review --approve",
+  "tool": "Bash",
+  "input": {
+   "command": "gh pr review 3 --approve"
+  },
+  "cwd": "plain",
+  "expected_change": "none",
+  "env": {
+   "broken_config": true
+  },
+  "expect": "deny"
+ },
+ {
+  "name": "설정 손상 보호 삭제",
+  "tool": "Bash",
+  "input": {
+   "command": "gh api -X DELETE repos/o/r/branches/main/protection"
+  },
+  "cwd": "plain",
+  "expected_change": "tighten",
+  "env": {
+   "broken_config": true
+  },
+  "expect": "deny"
+ }
+]

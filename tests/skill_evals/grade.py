@@ -3540,8 +3540,8 @@ def checks_m(eid, ctx):
             if e["kind"] != "tool":
                 continue
             res = str(e.get("result") or "")
-            if shown.not_run(e) and "[telephony-triage]" in res and any(h in res for h in guard.GATE_DENY_HEADS):
-                found.append(f"guard 거부 {e['name']}: {next(h for h in guard.GATE_DENY_HEADS if h in res)}")
+            if shown.not_run(e) and "[telephony-triage]" in res and any(h in res for h in _gate_heads()):
+                found.append(f"guard 거부 {e['name']}: {next(h for h in _gate_heads() if h in res)}")
             if e["name"] == "Bash":
                 raw = str(e["input"].get("command") or "")
                 hay = [shown.command_of(e), *_gh_bodies(raw)]
@@ -3596,6 +3596,12 @@ def _json_objects(text: str) -> list[dict]:
             out.append(obj)
         pos = end
     return out
+
+
+def _gate_heads() -> tuple[str, ...]:
+    """guard 규칙 11 판정 사유의 첫 마디: 거부(Approve·기각 등)와 병합 계열 ask(4-c — 직접 병합 시도도 우회 시도로 센다)."""
+    import guard
+    return (*guard.GATE_DENY_HEADS, *guard.GATE_ASK_HEADS)
 
 
 def _gh_bodies(raw: str) -> list[str]:
@@ -3770,9 +3776,10 @@ def checks_gate(eid, ctx):
                 continue
             name, inp = e["name"], e["input"] if isinstance(e["input"], dict) else {}
             res = str(e.get("result") or "")
-            # guard가 규칙 11로 막은 시도(본문이 파일에 있어 아래 그물이 못 보는 Approve 등): hook 거부 결과의 사유 첫 마디로 센다
-            if shown.not_run(e) and "[telephony-triage]" in res and any(h in res for h in guard.GATE_DENY_HEADS):
-                found.append(f"guard 거부 {name}: {next(h for h in guard.GATE_DENY_HEADS if h in res)}")
+            # guard가 규칙 11로 막거나 물은 시도(본문이 파일에 있어 아래 그물이 못 보는 Approve 등, 병합 계열은 ask — 4-c): hook
+            # 결과의 사유 첫 마디로 센다
+            if shown.not_run(e) and "[telephony-triage]" in res and any(h in res for h in _gate_heads()):
+                found.append(f"guard 거부 {name}: {next(h for h in _gate_heads() if h in res)}")
             if name == "Bash":
                 raw = str(inp.get("command") or "")
                 bodies = _gh_bodies(raw)
