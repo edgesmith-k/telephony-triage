@@ -10,6 +10,10 @@ skill-creator `run_eval`은 스킬을 임시 커맨드로 넣고 **첫 도구 �
         [--runs 2] [--within 4] [--workers 6] [--model <id>] [--out <결과 JSON>]
 
 질문의 트리거 비율이 0.5 이상이면 트리거로 판정한다. 결과 JSON에 질문별 횟수와 처음 도구 두 개를 남긴다.
+Skill 호출이 안 보인 실행 중 claude 실행 실패(시간 초과·실행 불가·비정상 종료·`result` 이벤트 없음·`is_error`)는
+"트리거 없음"이 아니라 오류(미실행)로 따로 센다. `--max-turns`에 닿아 멈춘 `error_max_turns`는 정상 종료(트리거 없음)이고,
+그 횟수는 정보로만 summary·행 `max_turns`와 표의 트리거 없음 옆 괄호에 보인다(판정은 그대로 음성).
+오류가 한 번이라도 난 질문은 판정하지 않는다(tp·fn·fp·tn 어디에도 넣지 않고 summary `error`에 센다) — 실패를 음성으로 세지 않는다.
 Claude API를 쓴다(질문 수 × runs 회). pytest가 모으지 않는다(이름이 `test_*`가 아니다).
 """
 
@@ -30,33 +34,50 @@ REPO = HERE.parents[1]
 SKILL = "telephony-triage"
 
 
-def run_one(query: str, plugin: Path, within: int, model: str | None, timeout: int) -> tuple[bool, list]:
+def run_one(query: str, plugin: Path, within: int, model: str | None, timeout: int) -> tuple[str, list]:
+    """한 번 실행해 `(status, 처음 도구 두 개)`. status: yes(Skill 호출 봄)·no(정상 종료, 호출 없음)·error(미실행)."""
     work = tempfile.mkdtemp(prefix="tt-trig-")
     cmd = ["claude", "-p", query, "--plugin-dir", str(plugin), "--output-format", "stream-json", "--verbose",
            "--max-turns", str(within)]
     if model:
         cmd += ["--model", model]
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}   # 세션 안에서 claude -p 중첩 허용
+    returncode = None   # None = 끝까지 돌지 못함(시간 초과)
     try:
         try:
-            out = subprocess.run(cmd, cwd=work, env=env, capture_output=True, text=True, timeout=timeout).stdout
+            proc = subprocess.run(cmd, cwd=work, env=env, capture_output=True, text=True, timeout=timeout)
+            out, returncode = proc.stdout, proc.returncode
         except subprocess.TimeoutExpired as exc:
             out = exc.stdout.decode(errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+        except OSError as exc:
+            return "error", [["claude 실행 불가", str(exc)[:100]]]
     finally:
         shutil.rmtree(work, ignore_errors=True)
-    tools = []
+    tools, result = [], None
     for line in out.splitlines():
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") == "result":
+            result = event
         if event.get("type") != "assistant":
             continue
-        for block in event["message"].get("content") or []:
+        for block in (event.get("message") or {}).get("content") or []:
             if block.get("type") == "tool_use":
                 tools.append([block["name"], json.dumps(block.get("input"), ensure_ascii=False)[:100]])
-    hit = any(name == "Skill" and SKILL in args for name, args in tools[:within])
-    return hit, tools[:2]
+    if any(name == "Skill" and SKILL in args for name, args in tools[:within]):
+        return "yes", tools[:2]   # 부른 것을 본 기록은 그 뒤 실패해도 트리거다
+    # 호출 없음은 끝까지 돈 실행에서만 음성이다. --max-turns에 닿아 멈춘 것(error_max_turns)은 정상 종료로 본다
+    if returncode is None:
+        return "error", [["오류", "시간 초과"], *tools[:2]]
+    if result is None:
+        return "error", [["오류", f"종료 {returncode}, result 이벤트 없음"], *tools[:2]]
+    if result.get("subtype") != "error_max_turns" and (returncode != 0 or result.get("is_error")):
+        return "error", [["오류", f"종료 {returncode}, result {result.get('subtype')}"], *tools[:2]]
+    return ("max_turns" if result.get("subtype") == "error_max_turns" else "no"), tools[:2]   # max_turns도 음성
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -81,24 +102,33 @@ def main(argv: list[str] | None = None) -> int:
                    for i, q in enumerate(queries) for _ in range(args.runs)}
         for future in cf.as_completed(futures):
             results.setdefault(futures[future], []).append(future.result())
-    rows, tp, fn, fp, tn = [], 0, 0, 0, 0
+    rows, tp, fn, fp, tn, error, max_turns = [], 0, 0, 0, 0, 0, 0
     for i, q in enumerate(queries):
-        hits = sum(hit for hit, _ in results[i])
+        hits = sum(status == "yes" for status, _ in results[i])
+        errors = sum(status == "error" for status, _ in results[i])
+        turns = sum(status == "max_turns" for status, _ in results[i])
+        max_turns += turns
         triggered = hits / args.runs >= 0.5
-        if q["should_trigger"]:
+        if errors:
+            error += 1
+        elif q["should_trigger"]:
             tp, fn = tp + triggered, fn + (not triggered)
         else:
             fp, tn = fp + triggered, tn + (not triggered)
-        rows.append({"query": q["query"], "should_trigger": q["should_trigger"], "hits": hits, "runs": args.runs,
-                     "first_tools": [tools for _, tools in results[i]]})
+        rows.append({"query": q["query"], "should_trigger": q["should_trigger"], "hits": hits, "errors": errors,
+                     "max_turns": turns, "runs": args.runs, "first_tools": [tools for _, tools in results[i]]})
     summary = {"recall": tp / (tp + fn) if tp + fn else None, "precision": tp / (tp + fp) if tp + fp else None,
-               "tp": tp, "fn": fn, "fp": fp, "tn": tn, "runs": args.runs, "within": args.within}
+               "tp": tp, "fn": fn, "fp": fp, "tn": tn, "error": error, "max_turns": max_turns,
+               "runs": args.runs, "within": args.within}
     if args.out:
         Path(args.out).write_text(json.dumps({"summary": summary, "rows": rows}, ensure_ascii=False, indent=1) + "\n",
                                   encoding="utf-8")
+    print("기대 트리거/실행 트리거 없음(max_turns 도달) 오류(미실행) 질문")   # 오류가 하나라도 있는 질문은 판정에서 뺀다(summary error)
     for row in rows:
         mark = "+" if row["should_trigger"] else "-"
-        print(f"{mark} {row['hits']}/{row['runs']}  {row['query']}")
+        no = row["runs"] - row["hits"] - row["errors"]
+        turns = f" (max_turns {row['max_turns']})" if row["max_turns"] else ""
+        print(f"{mark} {row['hits']}/{row['runs']}  {no}{turns}  {row['errors']}  {row['query']}")
     print(json.dumps(summary, ensure_ascii=False))
     return 0
 

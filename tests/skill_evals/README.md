@@ -15,7 +15,7 @@
 | `plans/`, `fixtures/` | 미리 올려 둔 PR(eval 16)의 계획과 fixture(`e016-apn-cut.log`, 합성) |
 | `workspace/` | 실행 결과 (커밋하지 않음, `.gitignore`) |
 | `run.py` | 새 격리 환경을 준비하고 Claude Code로 평가 실행(기본 `--mode plugin`: 실제 플러그인·모의 Jira MCP·hook). 기존 반복 폴더는 덮어쓰지 않음 |
-| `trigger_real.py` | 실제 플러그인(`--plugin-dir`)을 불러와 `trigger_evals.json`의 트리거를 잰다. skill-creator `run_eval`(첫 도구 호출만 셈)보다 실제에 가깝다 |
+| `trigger_real.py` | 실제 플러그인(`--plugin-dir`)을 불러와 `trigger_evals.json`의 트리거를 잰다. skill-creator `run_eval`(첫 도구 호출만 셈)보다 실제에 가깝다. claude 실행 실패·시간 초과는 "트리거 없음"이 아니라 `오류(미실행)` 열로 따로 세고 판정(tp·fn·fp·tn)에서 뺀다 |
 | `grade.py` | 기계 채점과 수동 채점 보존. 미실행·API 오류를 통과로 세지 않음 |
 
 **정의 완료와 행동 평가 통과는 다르다.** 실행·수동 채점 상태는 `DRAFT_NOTES.md`(상태 파일)와 `docs/history/draft-notes-2026-09.md`의 Phase 13 기록을 따른다.

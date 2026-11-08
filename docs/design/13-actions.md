@@ -55,6 +55,9 @@ jobs:
           # 3 = needs-approval: 실패로 보지 않는다
           if [ "${rc:-0}" -ne 0 ] && [ "${rc:-0}" -ne 3 ]; then exit "$rc"; fi
       - run: python .plugin/plugin/scripts/db_build.py --db . --verify
+  # (선택) lint job — 플러그인 코드 ruff 검사(사외 CI external.yml의 lint job과 같다). 사내 미러에서 `pip install '.[lint]'`
+  #   (ruff 고정 버전)가 되면 위와 같은 두 checkout 뒤 `pip install './.plugin[lint]'` → `python .plugin/tools/lint.py`로 따로 둔다.
+  #   필수 검사(db-check)에 넣지 않는다.
 ```
 
 브랜치 보호 설정 추가:

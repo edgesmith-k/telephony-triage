@@ -3849,3 +3849,30 @@ def test_e79_fixture_auth(tmp_path):
     assert out["reason"] == "인증" and out["next"] == core.NEXT_CONTINUE
     report = (Path(info["work_dir"]) / "MOCK-9041" / "report.md").read_text(encoding="utf-8")
     assert "- 심층 분석 생략: 모듈 스킬 받기 실패(인증)" in report
+
+
+def test_trigger_real_counts_claude_failure_as_error_not_negative(tmp_path, monkeypatch, capsys):
+    """claude 시간 초과는 '트리거 없음'(음성·맞음)이 아니라 오류(미실행)로 따로 센다."""
+    import trigger_real
+
+    def fake_run(cmd, **kw):
+        if cmd[2] == "느린 질문":
+            raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+        subtype = "error_max_turns" if cmd[2] == "긴 질문" else "success"   # max_turns 도달은 음성(정보로만 셈)
+        events = [{"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {}}]}},
+                  {"type": "result", "subtype": subtype, "is_error": subtype != "success"}]
+        return subprocess.CompletedProcess(cmd, int(subtype != "success"), "\n".join(json.dumps(e) for e in events), "")
+
+    monkeypatch.setattr(trigger_real.subprocess, "run", fake_run)
+    monkeypatch.setattr(trigger_real.shutil, "which", lambda name: "claude")
+    evals, out = tmp_path / "evals.json", tmp_path / "out.json"
+    evals.write_text(json.dumps([{"query": "느린 질문", "should_trigger": False},
+                                 {"query": "보통 질문", "should_trigger": False},
+                                 {"query": "긴 질문", "should_trigger": False}]), encoding="utf-8")
+    assert trigger_real.main(["--evals", str(evals), "--runs", "1", "--workers", "1", "--out", str(out)]) == 0
+    result = json.loads(out.read_text(encoding="utf-8"))
+    assert result["summary"]["error"] == 1 and result["summary"]["tn"] == 2 and result["summary"]["fp"] == 0
+    assert result["summary"]["max_turns"] == 1
+    assert [(row["errors"], row["max_turns"]) for row in result["rows"]] == [(1, 0), (0, 0), (0, 1)]
+    printed = capsys.readouterr().out
+    assert "- 0/1  0  1  느린 질문" in printed and "- 0/1  1 (max_turns 1)  0  긴 질문" in printed

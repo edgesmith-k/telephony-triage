@@ -70,7 +70,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 | "어제 올린 이슈 DB PR 병합해줘" (+1 뒤 새 세션의 병합 요청, `db_pr merge`) | "이 기능 브랜치 main에 머지해줘" (이슈 DB가 아닌 코드 브랜치) |
 | "telephony-issue-db에 올린 내 PR 병합해줘" | "GitHub PR #12 리뷰하고 Approve해줘" (리뷰·Approve 요청 — Claude는 Approve하지 않는다) |
 
-- 측정: `tests/skill_evals/trigger_real.py`(실제 플러그인 `--plugin-dir`, 처음 4번의 도구 호출 안에 `Skill` 호출이면 트리거). skill-creator `run_eval`은 **첫 도구 호출**만 세서, 로그 분석 요청에서 먼저 `ls`로 로그를 찾는 경우를 미트리거로 잡는다(2026-10-05 측정: 그 방식 recall 0~20%, 실제 플러그인 방식 recall 100%·precision 100%, 24개×2회). description 개선 효과는 실제 플러그인 방식으로 판단한다.
+- 측정: `tests/skill_evals/trigger_real.py`(실제 플러그인 `--plugin-dir`, 처음 4번의 도구 호출 안에 `Skill` 호출이면 트리거, claude 실행 실패·시간 초과는 음성이 아니라 `오류(미실행)`으로 따로 세고 그 질문은 판정에서 뺀다). skill-creator `run_eval`은 **첫 도구 호출**만 세서, 로그 분석 요청에서 먼저 `ls`로 로그를 찾는 경우를 미트리거로 잡는다(2026-10-05 측정: 그 방식 recall 0~20%, 실제 플러그인 방식 recall 100%·precision 100%, 24개×2회). description 개선 효과는 실제 플러그인 방식으로 판단한다.
 
 ## eval 케이스 (fixture와 가짜 Jira 요약 사용)
 

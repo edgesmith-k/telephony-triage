@@ -42,10 +42,9 @@ pyproject 주석에 한 줄씩 있다. 자동 수정은 `ruff check --fix --diff
 | `tools/offline_eval.py` (100) | R2 |
 | `tools/hook_probes.py` (113) | R3 출력(결정)이 결과다 — guard가 죽으면 결정이 None으로 표에 드러나고 종료 1 |
 | `tools/site_checks.py` (2025) · `site_step.py` (115) | R3 `ls-tree`·`git` 실패면 빈 집합·빈 문자열 → 파일 없음·모름으로 보고 |
-| `tests/helpers/runner.py` (233) · `workspace.py` (40, 235) · `tests/skill_evals/run.py` (437) · `grade.py` (170, 1804, 3291) | R1 |
+| `tests/helpers/runner.py` (233) · `workspace.py` (40, 235) · `tests/skill_evals/run.py` (437) · `grade.py` (170, 1804, 3291) · `trigger_real.py` (47, 실패면 오류(미실행) — 음성으로 세지 않는다) | R1 |
 | `tests/helpers/runner.py` (151) | R2 (시험이 `returncode`를 본다) |
 | `tests/skill_evals/grade.py` (3274) | R3 `numstat` — 실패면 빈 목록 → 같은 검사의 `adds`가 비어 실패 |
-| `tests/skill_evals/trigger_real.py` (42) | R3 실측 보조 — claude가 실패하면 빈 출력(도구 호출 없음)으로 읽힌다. 검토 메모: 트리거하지 않아야 하는 사례에서는 맞음으로 셀 수 있다 |
 | 시험 래퍼·호출 (R4): `test_hooks.py` (49, 170) · `test_mocks.py` (51, 136, 166, 195, 224, 272, 281, 287, 291, 505, 516, 668) · `test_masking.py` (58) · `test_match_signatures.py` (49, 493) · `test_parse_logcat.py` (80) · `test_platform_guard.py` (115) · `test_platform_profile.py` (56) · `test_provenance_db.py` (45) · `test_site_checks.py` (41, 155) · `test_site_step.py` (29) · `test_skill_patch.py` (72, 237) · `test_import_draft.py` (45, 245) · `test_fixture_residual.py` (23) · `test_commands.py` (409) · `test_db_summary.py` (258, 609) · `test_boundary.py` (45, 72) · `test_code_roots.py` (166) · `test_context_pack.py` (42) · `test_db_build.py` (83) · `test_db_review.py` (48, 203) · `test_job_status.py` (355) · `test_make_bundle.py` (512) · `test_mask_parity.py` (41) · `test_module_coverage.py` (93) · `test_modulefilter.py` (391, 401) · `test_ofono_skeleton.py` (387, 396, 403) · `test_platforms.py` (203) · `test_reference_cli.py` (164) · `test_related_tests.py` (14, 110) · `test_s0_stats.py` (20, 58) · `test_s0_suggest.py` (59, 133) · `test_safety.py` (188, 210) · `test_show_guard.py` (746) · `test_skill_evals.py` (1001, 3788) · `test_team_stats.py` (43, 58, 66) · `test_trackers.py` (898, 910) · `test_triage.py` (803) · `test_triage_reuse.py` (300) · `test_usage_stats.py` (411, 536) | R4 |
 
 `tools/lint.py`의 ruff 호출은 `check=False`를 밝혀 이 표에 넣지 않는다(종료 코드를 그대로 돌려준다).
