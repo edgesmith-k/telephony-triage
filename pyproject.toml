@@ -32,6 +32,8 @@ test = [
     "pluggy==1.6.0",
     "Pygments==2.20.0",
     "colorama==0.4.6; sys_platform == 'win32'",
+    "pytest-xdist==3.8.0",
+    "execnet==2.1.2",
 ]
 
 [tool.setuptools]
