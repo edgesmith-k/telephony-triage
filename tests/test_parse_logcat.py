@@ -25,6 +25,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -1102,3 +1103,41 @@ def test_mask_copy_masks_keeps_line_numbers_and_skips_big():
     # 사용 오류: 없는 파일·0 이하 상한
     assert _run(["mask-copy", str(tmp / "none.log"), "--out", str(out)])[0] == 2
     assert _run(["mask-copy", str(a), "--out", str(out), "--max-bytes", "0"])[0] == 2
+
+
+def test_mask_copy_rerun_removes_only_previously_managed_copies():
+    """코덱스 리뷰 R3: 다시 실행하면 이전 index.json이 만든 사본만 지운다 — 상한 초과로 건너뛴 파일·이름이 바뀐 입력의 옛 사본이
+    남지 않고, 사용자의 무관한 파일·index 없는 폴더의 파일은 건드리지 않는다. 실패한 재실행은 옛 사본·index를 그대로 둔다."""
+    tmp = _tmp()
+    a = tmp / "input.log"
+    a.write_text("line one imsi=" + IMSI_A + "\n", encoding="utf-8")
+    out = tmp / "m"
+    assert _run(["mask-copy", str(a), "--out", str(out)])[0] == 0
+    (out / "notes.txt").write_text("mine", encoding="utf-8")                 # 무관한 파일
+    first = (out / "input.log").read_text(encoding="utf-8")
+    # 1) 내용이 바뀌고 상한을 넘어 건너뜀 → 옛 사본이 남으면 안 된다
+    a.write_text("CHANGED " * 20 + "imsi=" + IMSI_B + "\n", encoding="utf-8")
+    code, data, _ = _run(["mask-copy", str(a), "--out", str(out), "--max-bytes", "40"])
+    assert code == 0 and data["files"][0]["skipped"] is True
+    assert not (out / "input.log").exists() and (out / "notes.txt").read_text(encoding="utf-8") == "mine"
+    assert [f["name"] for f in json.loads((out / "index.json").read_text(encoding="utf-8"))["files"]] == ["input.log"]
+    # 2) 사본을 다시 만든 뒤 입력 이름이 바뀜 → 옛 이름의 사본이 남으면 안 된다
+    assert _run(["mask-copy", str(a), "--out", str(out)])[0] == 0 and (out / "input.log").is_file()
+    b = tmp / "other.log"
+    b.write_text("x imsi=" + IMSI_A + "\n", encoding="utf-8")
+    assert _run(["mask-copy", str(b), "--out", str(out)])[0] == 0
+    assert sorted(p.name for p in out.iterdir()) == ["index.json", "notes.txt", "other.log"]
+    # 3) 실패한 재실행(없는 파일)은 폴더를 바꾸지 않는다
+    before = sorted(p.name for p in out.iterdir())
+    assert _run(["mask-copy", str(tmp / "none.log"), "--out", str(out)])[0] == 2
+    assert sorted(p.name for p in out.iterdir()) == before and not list(tmp.glob(".m.tmp-*"))
+    # 4) index 없는 폴더의 파일은 모른다 → 그대로 둔다(덮어쓰는 같은 이름만 바뀐다)
+    (out / "index.json").unlink()
+    (out / "stale.log").write_text("old", encoding="utf-8")
+    assert _run(["mask-copy", str(b), "--out", str(out)])[0] == 0
+    assert (out / "stale.log").read_text(encoding="utf-8") == "old" and (out / "other.log").is_file()
+    # 5) 옛 index가 가리킨 이름이 링크면 지우지 않는다
+    (out / "other.log").unlink()
+    os.symlink(tmp / "input.log", out / "other.log")
+    assert _run(["mask-copy", str(a), "--out", str(out)])[0] == 0
+    assert (out / "other.log").is_symlink() and (tmp / "input.log").is_file() and first != (out / "input.log").read_text(encoding="utf-8")

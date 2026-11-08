@@ -40,6 +40,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import timedelta
@@ -938,6 +939,7 @@ def run_mask_copy(args) -> dict:
     안내한다(guard 규칙 10 문구·rules.md). 한 masker로 모든 파일을 가려 토큰 번호가 파일 사이에 일관되고, 갈린 덤프 조각(08-safety §8)은
     파일 전체 줄로 묶어 강제 구간을 준다(`cut`과 같다). `--max-bytes`보다 큰 파일은 건너뛰고(경고 `mask-copy-skipped`) index.json에 남긴다.
     사본의 mtime은 원본과 같다(analyze가 사본을 파싱하므로 로그 파일 시각 기반 연도 추정이 바뀌지 않는다, 코덱스 리뷰 R1).
+    다시 실행하면 이전 index.json이 관리하던 사본만 지우고 바꾼다(그 밖의 파일은 건드리지 않는다, 코덱스 리뷰 R3).
     출력: {out, files: [{name, path|null, source, bytes, lines|null, skipped, reason?}], replacements, warnings}."""
     paths = [Path(p) for p in args.logs]
     for p in paths:
@@ -957,15 +959,22 @@ def run_mask_copy(args) -> dict:
     masker = masking.new_masker("\n".join(texts.values()), allow, log_lines=True)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    # 새 사본은 임시 폴더에 먼저 쓰고, 다 되면 이전 index.json이 관리하던 사본만 지운 뒤 옮긴다(코덱스 리뷰 R3: 전에는 덮어쓰기만
+    # 해서 내용이 바뀐 뒤 상한 초과로 건너뛴 파일·이름이 바뀐 입력의 옛 사본이 index에는 없는데 폴더에 남았다). 도중에 실패하면
+    # 옛 사본·index가 그대로다. index가 없는 폴더의 파일은 누가 만들었는지 몰라 건드리지 않는다.
+    tmp = out.parent / f".{out.name}.tmp-{os.getpid()}"
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    tmp.mkdir()
     files, used = [], set()
     for p, size in todo:
         lines = texts[p].split("\n")
         forced = masking.forced_lines(masker, lines)
         masked = [masker.mask(ln, forced.get(i)) for i, ln in enumerate(lines)]
         name = _unique_name(p.name, used)
-        (out / name).write_text("\n".join(masked), encoding="utf-8", newline="")
+        (tmp / name).write_text("\n".join(masked), encoding="utf-8", newline="")
         st = p.stat()
-        os.utime(out / name, (st.st_atime, st.st_mtime))     # 연도 추정(file-mtime)이 사본에서도 같게 — analyze는 사본을 파싱한다
+        os.utime(tmp / name, (st.st_atime, st.st_mtime))     # 연도 추정(file-mtime)이 사본에서도 같게 — analyze는 사본을 파싱한다
         files.append({"name": name, "path": str(out / name), "source": str(p), "bytes": size,
                       "lines": len(lines) - (1 if lines and lines[-1] == "" else 0), "skipped": False})
     warnings = []
@@ -975,9 +984,35 @@ def run_mask_copy(args) -> dict:
         warnings.append({"code": "mask-copy-skipped",
                          "message": f"{p.name}: {size:,}B가 상한 {args.max_bytes:,}B보다 커 마스킹 사본을 만들지 않았다 — "
                                     "원문은 grep -n·sed -n 구간으로만 읽는다(규칙 10)"})
-    (out / MASK_COPY_INDEX).write_text(json.dumps({"version": 1, "files": files}, ensure_ascii=False, indent=1) + "\n",
+    (tmp / MASK_COPY_INDEX).write_text(json.dumps({"version": 1, "files": files}, ensure_ascii=False, indent=1) + "\n",
                                        encoding="utf-8")
+    for name in _managed_copies(out):
+        try:
+            (out / name).unlink()
+        except OSError:
+            pass
+    for item in sorted(tmp.iterdir()):
+        os.replace(item, out / item.name)
+    shutil.rmtree(tmp, ignore_errors=True)
     return {"out": str(out), "files": files, "replacements": dict(sorted(masker.counts.items())), "warnings": warnings}
+
+
+def _managed_copies(out: Path) -> list[str]:
+    """이전 실행의 `index.json`이 만든 사본 이름(이 폴더 바로 아래의 일반 파일만 — 경로 구분자가 든 이름·링크는 뺀다) + index 자신."""
+    index = out / MASK_COPY_INDEX
+    if index.is_symlink() or not index.is_file():
+        return []
+    try:
+        data = json.loads(index.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [MASK_COPY_INDEX]
+    names = []
+    for f in (data.get("files") if isinstance(data, dict) else None) or []:
+        name = f.get("name") if isinstance(f, dict) else None
+        if isinstance(name, str) and name and "/" not in name and "\\" not in name and name not in (".", "..") \
+                and f.get("path") is not None and (out / name).is_file() and not (out / name).is_symlink():
+            names.append(name)
+    return names + [MASK_COPY_INDEX]
 
 
 # -- cut ------------------------------------------------------------------------
