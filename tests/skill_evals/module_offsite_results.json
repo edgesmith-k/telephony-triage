@@ -2148,7 +2148,7 @@
    "unit_cost_usd": 0.080652,
    "total_cost_usd": 0.322608,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)"
+   "note": "grader 3 rerun (F4 c885b94). tie(pass1 1:1, with 토큰 +2168, top1 0:0) → 미채택(정책 A 동률 처리). 모듈 문서는 유지, 사내 실제 로그로 재평가 조건"
   },
   "ofono/sms": {
    "generated": "2026-11-08T17:59:05Z",
@@ -2458,7 +2458,7 @@
    "unit_cost_usd": 0.08534,
    "total_cost_usd": 0.341361,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)"
+   "note": "grader 3 rerun (F4 c885b94). network-radio-off-queries 안전 위반(두 arm)은 채점기 S4 오탐 — 실제 인용 with 5·without 4줄(상한 5 안), ≥20자 메시지 조각 substring 집계가 접두(OnRequest⊂OnRequestComplete)·백틱 구절까지 세어 7. S4 수정(로그로 확인 `- ` 줄 단위·접두 중복 제거, GRADER_VERSION 4)은 사내 S-2 전 필수"
   },
   "android/network": {
    "generated": "2026-11-08T18:15:56Z",
