@@ -178,6 +178,40 @@ def test_site_issue_db_remote_is_team_default_per_platform():
     assert not (env2.home / "config.yaml").exists()
 
 
+def test_inherited_team_remote_is_not_copied_and_counts_for_overlap():
+    """리뷰 후속(코덱스 리뷰 A①② 후속): (1) 대화형 init에서 원격을 Enter(팀 기본값)로 넘기면 복사해 저장하지 않는다.
+    (2) site에서 물려받은 android 원격도 프로필 원격 겹침 검사에 든다 — ofono에 같은 원격을 주면 거부한다.
+    (3) 물려받을 팀 원격이 owner/repo로 풀리지 않으면 init이 clone을 제안하지 않고 관리자에게 돌린다."""
+    top = "https://ghe.mock.invalid/mock-org/telephony-issue-db.git"
+    on = {"name": "android", "enabled": ["android", "ofono"]}
+    env = Env(root=plugin_root("site-remote-inherit", issue_db={"remote": top}, platform=on))
+    lines = ["mock-user1", str(env.base / "db"), "", "", "", "", "", "", "", str(env.base / "work")]   # 원격~log_dir Enter
+    proc = env.run("config.py", ["init"], stdin="\n".join(lines) + "\n")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["suggest_clone"] == f"git clone {top} {env.base / 'db'}"
+    assert env.config()["issue_db"] == {"path": str(env.base / "db")}       # remote는 상속(복사하지 않음)
+
+    answers = env.base / "o.json"
+    answers.write_text(json.dumps({"issue_db.path": str(env.base / "db-ofono"), "issue_db.remote": top.upper()}), encoding="utf-8")
+    proc = env.run("config.py", ["init", "--platform", "ofono", "--answers", answers])
+    assert proc.returncode == 2 and "platforms.ofono.issue_db.remote: issue_db.remote(site-defaults)와 같은 원격" in proc.stderr
+    assert "platforms" not in env.config()
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import userconfig
+    a, o = str(env.base / "a"), str(env.base / "o")
+    user = {"issue_db": {"path": a}, "platforms": {"ofono": {"issue_db": {"path": o, "remote": top}}}}
+    assert userconfig.profile_problems(user) == []                          # defaults 없이는 이전과 같다
+    assert userconfig.profile_problems(user, {"issue_db": {"remote": top}})
+    both = {"issue_db": {"remote": top}, "platforms": {"ofono": {"issue_db": {"remote": top}}}}
+    assert userconfig.profile_problems({**user, "platforms": {"ofono": {"issue_db": {"path": o}}}}, both) == []  # site 문제
+
+    bad = Env(root=plugin_root("site-remote-bad", issue_db={"remote": "/local/db"}))
+    answers = bad.base / "a.json"
+    answers.write_text(json.dumps({"user.ghe_id": "mock-user1", "issue_db.path": str(bad.base / "db")}), encoding="utf-8")
+    proc = bad.run("config.py", ["init", "--answers", answers])
+    assert proc.returncode == 2 and "site-defaults는 관리자" in proc.stderr and not (bad.home / "config.yaml").exists()
+
+
 def test_gh_status_login_is_the_site_host_login_only():
     """setup 1 GHE 아이디 자동 감지(코덱스 리뷰 A①): `gh-status`의 `login`은 site ghe.host와 같은 호스트의 로그인만이다.
     다른 호스트 로그인이 앞에 나와도(gh ≥2.40 `account` 문구) 그것을 쓰지 않고, 그 호스트 줄이 없으면 null(setup이 묻는다)."""

@@ -328,7 +328,8 @@ def test_sync_and_setup_bodies_list_new_steps_in_order():
     assert "--cache-only" not in sync, "매칭 파일 캐시는 없다 (06 §6.8)"
     assert "base_sha_changed" in sync and "sync-pr" in sync[calls[-1]:] and "안내만" in sync[calls[-1]:]
     setup = (COMMANDS / "setup.md").read_text(encoding="utf-8")
-    order = [setup.index(c) for c in ("config.py gh-status", "config.py doctor --format markdown", "getting-started.md")]
+    # gh-status는 1번(login 감지)에도 나온다 — 9번(마지막) 것이 10번 doctor 앞인지 본다
+    order = [setup.rindex("config.py gh-status")] + [setup.index(c) for c in ("config.py doctor --format markdown", "getting-started.md")]
     assert order == sorted(order) and "그대로" in setup[order[1]:order[2]]
     assert "doctor" in setup[order[0]:order[1]], "gh 실패 경로도 doctor 표를 보인다"
     # 코덱스 리뷰 A①②: Jira MCP 점검은 질문 전(0번)에 한 번만, 4번은 그 결과를 쓴다. 1번은 gh-status login으로 GHE 아이디를 감지

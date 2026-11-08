@@ -300,7 +300,7 @@ class Config:
             except Exception as exc:  # noqa: BLE001
                 self.tracker_error = f"{type(exc).__name__}: {exc}"
                 break
-        problems = userconfig.profile_problems(self.user) if self.user else []
+        problems = userconfig.profile_problems(self.user, defaults) if self.user else []
         # 원격이 있는데 owner/repo로 못 풀면 그 프로필의 규칙 11이 조용히 꺼진다: 알린다(H-A1 r6. doctor `config` 행은 fail)
         for key, remote in userconfig.remote_problems(defaults, self.user):
             self.warnings.append(f"{key}({remote})를 owner/repo로 풀 수 없어 그 이슈 DB의 원격 쓰기 확인(규칙 11)을 하지 못한다. "

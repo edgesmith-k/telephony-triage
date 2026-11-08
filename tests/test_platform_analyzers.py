@@ -95,6 +95,9 @@ def test_user_platform_analyzers_allowed_and_checked():
     ({"ofono": {"tracker": {}}}, "platforms.ofono.tracker"),
     ({"ofono": {"issue_db": "x"}}, "platforms.ofono.issue_db"),                      # 팀 이슈 DB 값은 매핑
     ({"ofono": {"issue_db": {"path": "/x"}}}, "platforms.ofono.issue_db.path"),       # 경로는 사용자 config
+    ({"ofono": {"issue_db": {"remote": "/local/db"}}}, "platforms.ofono.issue_db.remote: owner/repo"),   # 풀리는 원격만
+    ({"ofono": {"issue_db": {"remote": "https://h/o/r.git"}}, "other": {"issue_db": {"remote": "https://H/o/r/"}}},
+     "platforms.other.issue_db.remote: site-defaults platforms.ofono.issue_db.remote와 같은 원격"),   # 플랫폼마다 따로
     ({"ofono": {"analyzers": "x"}}, "platforms.ofono.analyzers"),
     ({"ofono": {"analyzers": {"data": ["x"]}}}, "platforms.ofono.analyzers.data"),
     ({"ofono": "x"}, "platforms.ofono"),
@@ -119,6 +122,21 @@ def test_valid_site_platforms_resolve():
     assert userconfig.site_platform_problems(defaults) == [] and userconfig.site_platform_problems(_defaults()) == []
     name, cfg = session.resolve(defaults, "ofono", {})
     assert name == "ofono" and cfg["analyzers"] == OFONO_AN and cfg["issue_db"]["remote"] == remote
+
+
+def test_site_top_remote_checked_and_not_shared_with_platforms():
+    """리뷰 후속: 최상위(android) 팀 원격도 owner/repo로 풀려야 하고, platforms.<p>의 팀 원격과 같으면 안 된다."""
+    top = "https://ghe.mock.invalid/mock-org/telephony-issue-db.git"
+    bad = userconfig.site_platform_problems(_defaults(issue_db={"remote": "/local/db"}))
+    assert len(bad) == 1 and "site-defaults issue_db.remote: owner/repo" in bad[0] and userconfig.SITE_ADMIN in bad[0]
+    with pytest.raises(platforms.PlatformConfigError) as exc:
+        session.resolve(_defaults(issue_db={"remote": "/local/db"}), None, {})
+    assert str(exc.value).count(userconfig.SITE_ADMIN) == 1
+    dup = _defaults(issue_db={"remote": top}, platform=ON, platforms={"ofono": {"issue_db": {"remote": top[:-4].upper()}}})
+    assert userconfig.site_platform_problems(dup) == [
+        "site-defaults platforms.ofono.issue_db.remote: site-defaults issue_db.remote와 같은 원격입니다"
+        f"(플랫폼마다 이슈 DB를 따로 둔다) {userconfig.SITE_ADMIN}"]
+    assert "issue_db" in userconfig.site_platform_problems(_defaults(platforms={"android": {}}))[0]   # 허용 키 목록 전체
 
 
 def test_analyzer_sources_union_of_all_layers_and_platforms():

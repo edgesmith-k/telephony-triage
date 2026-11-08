@@ -11,20 +11,21 @@ telephony-triage를 이 사용자 환경에 맞게 설정한다 (`02-config.md �
 0. **Jira MCP 점검** — 아무것도 묻기 전에 `config.py tracker-candidates`(config 없이 돈다)로 이미 등록된 MCP 서버를 본다. stdio 서버당 최대 10초가 걸리므로
    **이 세션에서 한 번만** 돌리고 결과 JSON을 4번이 그대로 쓴다(파일로 남기지 않는다). `usable`이 비어 있으면 "사용자 범위(user scope)로 사내 Jira MCP를
    등록해야 한다(다른 프로젝트에만 등록돼 있을 수 있음)"고 안내하고 **setup을 중단**한다(질문 전이라 남는 것이 없다).
+   종료 코드 2가 "옛 설정 키"·플랫폼 설정 문제면 1번의 `rename-legacy` 항목을 먼저 하고 0번을 다시 한다.
    **플랫폼** — `config.py site-defaults`의 `platform.enabled`가 2개 이상일 때만 어느 플랫폼을 설정할지 묻는다(없거나 1개면 묻지 않고 지금 흐름 그대로).
-   플랫폼을 고르면(android 포함) 이후 `config.py`·`db_pr.py` 호출마다 `--platform <이름>`을 붙인다(개인 기본 `platform`을 따라 단계마다 달라지지 않게). android가 아니면 1번은 그 플랫폼의 이슈 DB clone 경로·원격·작업 디렉토리만 묻고
+   플랫폼을 고르면(android 포함) 이후 `config.py`·`db_pr.py` 호출마다 `--platform <이름>`을 붙인다(개인 기본 `platform`을 따라 단계마다 달라지지 않게). android가 아니면 1번은 그 플랫폼의 이슈 DB clone 경로와, `config.py show --platform <이름>`의 `effective`에 `issue_db.remote`가 없을 때만 원격을 묻고(작업 디렉토리는 묻지 않는다)
    `config.py init --platform <이름> --answers <파일>`(기존 config에 그 프로필만 더한다. config가 없으면 공통 항목과 그 프로필만 만든다 — 따로 설치)
    또는 기존 프로필이면 `config.py set --platform <이름> <키> <값>`(여러 키면 `init --platform <이름> --force --answers <바꿀 키만 둔 파일>`). android를 골랐는데 기존 config에 android 프로필(최상위 `issue_db`·`work_dir` 등)이 없으면
-   (다른 플랫폼만 설치) 프로필 항목(clone·원격·작업 디렉토리 등)만 물어 `config.py init --answers <파일>`(`--force` 없이 그 프로필만 더한다). Jira(4)·gh(9)는 플랫폼끼리 공유하므로 이미 설정됐으면 다시 하지 않는다.
+   (다른 플랫폼만 설치) 프로필 항목(clone 경로, `effective`에 `issue_db.remote`가 없을 때만 원격. 작업 디렉토리는 묻지 않는다)만 물어 `config.py init --answers <파일>`(`--force` 없이 그 프로필만 더한다). Jira(4)·gh(9)는 플랫폼끼리 공유하므로 이미 설정됐으면 다시 하지 않는다.
    플랫폼마다 clone·작업 디렉토리가 달라야 한다(겹치면 거부·경고). 다른 플랫폼도 쓰려면 setup을 한 번 더 한다.
 1. **config 만들기** — `config.py show`로 기존 config를 확인한다.
    - 없으면 `config.py gh-status`를 먼저 부른다(여기서는 실패해도 멈추지 않는다 — 인증 안내는 9번). `show`의 `effective`(팀 기본값)와
      `gh-status`의 `login`으로 질문을 줄인다. **묻는 항목은 최대 3개**다:
-     (a) 이슈 DB 로컬 clone 경로 — `~/<원격 repo 이름>`(`effective`의 `issue_db.remote` 끝 이름. 원격을 모르면 제안 없이)을 기본으로 제안하고 Enter면 그대로.
+     (a) 이슈 DB 로컬 clone 경로 — `~/<원격 repo 이름>`(`effective`의 `issue_db.remote` 끝 이름. 그 값이 없으면 (c)를 먼저 묻고 그 답의 끝 이름)을 기본으로 제안하고 Enter면 그대로.
      (b) GHE 아이디 — `login`(site GHE 호스트의 로그인)이 있으면 "이 아이디로 기록합니다: <login>" 한 줄 확인만, 없으면(null) 묻는다.
-     (c) 이슈 DB 원격 URL — `effective`에 `issue_db.remote`(팀 기본값)가 **없을 때만** 묻는다.
-     나머지(base 브랜치, GHE 호스트, Jira·logcat 시각 타임존, 연도 결정 방식, logcat 기본 탐색 경로, 작업 디렉토리)는 묻지 않는다.
-     `effective` 값을 **한 번만, 한 줄씩** 보이고 "바꾸려면 `config.py set <키> <값>`" 한 줄만 덧붙인다(`code_profiles`도 묻지 않는다).
+     (c) 이슈 DB 원격 URL — `effective`에 `issue_db.remote`(팀 기본값)가 **없을 때만** 묻는다(이때는 (a)보다 먼저).
+     나머지(base 브랜치, GHE 호스트, Jira·logcat 시각 타임존, 연도 결정 방식, logcat 기본 탐색 경로, 작업 디렉토리, (c)를 묻지 않았으면 물려받는 이슈 DB 원격)는 묻지 않는다.
+     그 `effective` 값을 **한 번만, 한 줄씩** 보이고 "바꾸려면 `config.py set <키> <값>`" 한 줄만 덧붙인다(`code_profiles`도 묻지 않는다).
    - 답을 JSON(`{"user.ghe_id": ..., "issue_db.path": ...}` — 묻지 않은 키는 넣지 않는다. 팀 기본값은 저장되지 않고 상속된다)으로 임시 파일에 쓰고
      `config.py init --answers <파일>`을 실행한다. 경로가 없거나 절대 경로(`~` 허용)가 아니거나 다른 프로필과 겹치면 거부되므로(종료 코드 2, config는 그대로) 그 항목만 다시 묻는다.
      홈(`~/.telephony-triage/`)과 작업 디렉토리는 권한 700으로 만들어진다.

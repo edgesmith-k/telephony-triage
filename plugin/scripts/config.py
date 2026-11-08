@@ -273,8 +273,8 @@ def cmd_init(args, defaults: dict) -> dict:
             continue
         value = answers[key]
         target = profile if other and key.split(".")[0] in userconfig.PROFILE_KEYS else data
-        if value in (None, "") or (not required and value == _default_for(key, defaults, platform)):
-            _unset(target, key)   # 빈 답·팀 기본값과 같은 답은 저장하지 않는다(이후 팀 기본값 변경을 상속)
+        if value in (None, "") or value == _default_for(key, defaults, platform):
+            _unset(target, key)   # 빈 답·팀 기본값과 같은 답(필수 항목 issue_db.remote도)은 저장하지 않는다(이후 팀 기본값 변경을 상속)
             continue
         userconfig.set_value(target, key, value)
     if other and not fresh:
@@ -286,11 +286,15 @@ def cmd_init(args, defaults: dict) -> dict:
         data.setdefault("plugin", {})["scripts_path"] = str(_plugin_root(args) / "scripts")
     # 저장 전에 새 config를 검사한다(경로 규칙·프로필끼리 겹침·옛 설정 키). 문제가 있으면 config 파일은 그대로 둔다
     legacy = userconfig.legacy_problems(None, data)
-    problems = userconfig.profile_problems(data) + legacy
+    problems = userconfig.profile_problems(data, defaults) + legacy
     if problems:
         raise UsageError("config를 저장하지 않았습니다 — " + "; ".join(problems)
                          + (" — config.py rename-legacy로 바꾼다" if legacy else ""))
     effective = userconfig.merged(defaults, data, platform=platform)
+    team_remote = _default_for("issue_db.remote", defaults, platform)
+    if team_remote and userconfig.get(effective, "issue_db.remote") == team_remote and (msg := validate("remote", team_remote)):
+        # 물려받은 팀 원격도 검사한다 — 풀리지 않는 원격으로 clone을 제안하지 않는다
+        raise UsageError(f"config를 저장하지 않았습니다 — issue_db.remote(site-defaults 팀 기본값): {msg} {userconfig.SITE_ADMIN}")
     try:     # 모르는 트래커면 저장하지 않는다(다른 스크립트가 모두 종료 2)
         trackers.kind_of(effective)
     except trackers.TrackerConfigError as exc:
@@ -407,7 +411,7 @@ def cmd_set(args, defaults: dict) -> dict:
         out["hint"] = (f"옛 읽기 스냅샷 {snap}는 옛 clone의 worktree다: "
                        f"git -C {old_clone} worktree remove --force {snap} (옛 clone이 없으면 그 폴더를 지운다)")
         print("안내: " + out["hint"], file=sys.stderr)
-    problems = userconfig.profile_problems(data)
+    problems = userconfig.profile_problems(data, defaults)
     if problems:     # 저장은 한다(고치는 중일 수 있다). 남은 문제를 보인다 — 고치기 전까지 다른 스크립트는 종료 2
         out["problems"] = problems
         print("경고: 플랫폼 프로필 문제가 남았다 — " + "; ".join(problems), file=sys.stderr)
