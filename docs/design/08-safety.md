@@ -55,7 +55,7 @@
 - **재사용 캐시**(`<work_dir>/<KEY>/analysis-cache.json`)에는 마스킹된 분석 결과(후보·근거·코드 경로·마스킹된 스텝 이름)와 입력의 해시만 둔다. `triage-state.json`의 `job`에는 입력 로그의 경로·이름·sha·크기와 실행 이력만 있고, 실패 스텝·steps-file 원문은 어느 쪽에도 없다. needs_input으로 멈추면 `pending`에 질문 종류와 시각(`{kind, asked_at}`)만 남긴다(질문 문구·선택지는 다른 작업 키·경로를 담을 수 있어 쓰지 않는다) (`07-workflow.md §입력 재사용`).
 - **`runs/<n>/`**(`--more-logs`·재분석 때 덮어쓰기 전에 복사한 이전 `analysis.json`·`report.md`, 최근 5개)에는 이미 마스킹된 결과만 있다. `events.json`·`match.json`·로그 원문은 보관하지 않는다 (`07-workflow.md §추가 로그 재분석`).
 - **Jira 코멘트 본문**(`issue_post.py`, `07-workflow.md §Step 9`): 이미 마스킹된 `analysis.json`·`issue.json`·계획 값으로 결정적 칸을 채우고, LLM 칸(`post.fill.json`)은 그 본문을 기준으로 만든 마스커(기존 토큰 다음 번호)로 마스킹한 뒤 렌더한 전체 본문에 한 번 더 적용한다. 마스커 검출이 남거나, LLM 칸에 로그 원문 줄 모양이 있거나, Jira 요약·설명·코멘트와 40자 이상 같은 연속 부분이 있으면 종료 1이다. 그래도 사람 이름은 잡지 못하므로 스킬 규칙과 확인 화면(본문 그대로 표시)으로 막는다. 게시 응답 원문은 컨텍스트에 넣지 않는다(§9 9번).
-- **작업 기록**(`JOB/trace.jsonl`, `contracts.md` "작업 기록"): db_pr의 `stage`·`publish`·`discard` 행에는 결과 코드·PR 번호·사유(`after-publish`·`dry-run`·`cancel`)만 쓰고, `stage` 오류 메시지는 마스킹·URL 자격증명을 가려 120자까지만 둔다. `job_status --doctor`·`last-run-error`도 같은 가림을 거친 뒤 보인다.
+- **작업 기록**(`JOB/trace.jsonl`, `contracts.md` "작업 기록"): db_pr의 `stage`·`publish`·`discard` 행에는 결과 코드·PR 번호·사유(`after-publish`·`dry-run`·`cancel`)만, 정보 행(`explore`·`module`·`checked`)에는 종료 코드·`purpose`·불리언·모듈 이름 `<p>/<dir>`만(로그 글·PII 없음) 쓰고, `stage` 오류 메시지는 마스킹·URL 자격증명을 가려 120자까지만 둔다. `job_status --doctor`·`last-run-error`도 같은 가림을 거친 뒤 보인다.
 - `note` 초안은 스킬이 마스킹된 요약에서 한 문장으로 만들고 사용자가 확인한다. 사람 이름·고객명은 초안에 넣지 않는다.
 - `db_lint`는 `issues/*.yaml`의 `note`, 원인 본문, `cp_evidence`에 대해서도 원본 식별자 패턴(표의 항목)을 검사한다.
 
