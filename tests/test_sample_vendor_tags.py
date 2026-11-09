@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""샘플 DB의 첨부 로그 A 태그 묶음 (결정 기록 11/05 ①·②, 설계 D §3.1).
+"""샘플 DB의 벤더 RIL 태그 묶음(사내 확인 전) (결정 기록 11/05 ①·②, 설계 D §3.1).
 
 - 승인 목록 78개 중 기존 정규식이 덮지 않는 59개(보류였던 `^GsmCdmaCallTracker$`는 11/05 ① 승인대로 C1+D 보정에서
   넣음)가 정해진 카테고리로 있고, 표식 주석 아래 파일 끝에 있다. 미수집 태그 예시(eval e004·`test_triage`)는
@@ -30,7 +30,7 @@ from common import parser_rules  # noqa: E402
 from platforms.android import logcat  # noqa: E402
 
 SAMPLE_RULES = REPO / "tests" / "fixtures" / "issue-db-sample" / "parser-rules"
-MARKER = "  # --- 첨부 로그 A(11/05 승인, 결정 기록 ①)"
+MARKER = make_variant_dbs.ANDROID_VENDOR_BLOCK
 PLAIN = "issue-db-android-plain"
 
 APPROVED = {
@@ -79,7 +79,7 @@ def test_approved_block_present() -> None:
         for rx in regexes:
             assert rx in have, rx
             assert have[rx]["category"] == category, rx
-            assert have[rx]["added_for"] == "-" and str(have[rx]["reason"]).startswith("첨부 로그 A"), rx
+            assert have[rx]["added_for"] == "-" and str(have[rx]["reason"]).startswith("사내 확인 전"), rx
     rules = parser_rules.load(SAMPLE_RULES)
     assert rules.tag_category(UNCOLLECTED_EXAMPLE) is None
     assert not rules.declares("level") and not rules.declares("ipc")   # 샘플은 태그 속성을 선언하지 않는다(C-F2)
