@@ -1,6 +1,8 @@
 # 묶음 리뷰 안내 (일요일 사용자 리뷰용)
 
 범위: `77e2827`(묶음 import-20261103) → 이 브랜치 끝(`git log --oneline 77e2827..HEAD`). 다음 묶음은 토 11/7 18:00 KST.
+
+make_bundle 전에 `TT_DENY_FILE`을 레포 밖 거부 목록 경로로 설정한다. 없으면 `deny-file` 검사가 건너뜀이 되어 묶음을 만들지 않는다.
 사실의 출처는 `MODULE_SKILLS_RESULT.md`(결과 노트)·`MODULE_SKILLS_DECISIONS.md`(결정 원문)·`DRAFT_NOTES.md`·git log이다. 사람이 읽는 요약은 `CONCERNS.md`(HTML `docs/materials/21-concerns.html`).
 
 ## 읽는 법
