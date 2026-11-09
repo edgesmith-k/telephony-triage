@@ -104,6 +104,8 @@ def test_claude_child_and_opencode_layer():
 
 def test_tool_change_selects_tests_mentioning_it():
     assert "tests/test_boundary.py" in select("tools/check_boundary.py")["tests"]
+    out = select("tools/deny_scan.py")              # make_bundle deny-file 검사도 이 모듈을 쓴다
+    assert {"tests/test_deny_scan.py", "tests/test_make_bundle.py"} <= set(out["tests"]) and out["full"] is False
 
 
 def test_no_files_is_usage_error():
