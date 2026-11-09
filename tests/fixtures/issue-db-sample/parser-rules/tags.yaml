@@ -37,71 +37,71 @@ tags:
   - {tag: SmsDispatchersController, category: sms, added_for: SMS-001, added_on: 2026-09-28, reason: 초기 (SMS 전송)}
   - {tag: InboundSmsHandler, category: sms, added_for: SMS-001, added_on: 2026-09-28, reason: 초기 (SMS 수신)}
 
-  # --- 첨부 로그 A(11/05 승인, 결정 기록 ①) — 사내 DB 미확인, 사내 DB는 DB PR로 ---
+  # --- 벤더 RIL 태그(사내 확인 전, TODO(SITE:S9)) — 사내 DB는 DB PR로 ---
   # 승인 목록 78개 중 위 정규식이 이미 덮는 19개를 뺀 59개. 이 묶음은 파일 끝에 둔다(issue-db-android-plain이 여기부터 지운다).
   # common
-  - {tag_regex: '^(RIL|RILC|RILC-AIDL_SERVICE|RIL_EXTERNAL)$', category: common, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (벤더 RIL·RIL HAL)}
-  - {tag_regex: '^RilRequest$', category: common, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (RilRequest)}
-  - {tag_regex: '^VCD$', category: common, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (VCD)}
-  - {tag_regex: '^DMD$', category: common, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (DMD)}
-  - {tag_regex: '^RFSD$', category: common, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (RFSD)}
-  - {tag_regex: '^SCED$', category: common, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (SCED)}
-  - {tag_regex: '^OemRil', category: common, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (OemRil)}
-  - {tag_regex: '^PhoneCfgMgr$', category: common, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (PhoneCfgMgr)}
-  - {tag_regex: '^RadioConfig$', category: common, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (RadioConfig)}
-  - {tag_regex: '^RadioConfigResponseAidl$', category: common, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (RadioConfigResponseAidl)}
+  - {tag_regex: '^(RIL|RILC|RILC-AIDL_SERVICE|RIL_EXTERNAL)$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (벤더 RIL·RIL HAL)}
+  - {tag_regex: '^RilRequest$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (RilRequest)}
+  - {tag_regex: '^VCD$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (VCD)}
+  - {tag_regex: '^DMD$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (DMD)}
+  - {tag_regex: '^RFSD$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (RFSD)}
+  - {tag_regex: '^SCED$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (SCED)}
+  - {tag_regex: '^OemRil', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (OemRil)}
+  - {tag_regex: '^PhoneCfgMgr$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (PhoneCfgMgr)}
+  - {tag_regex: '^RadioConfig$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (RadioConfig)}
+  - {tag_regex: '^RadioConfigResponseAidl$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (RadioConfigResponseAidl)}
   # data
-  - {tag_regex: '^ADSC$', category: data, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ADSC)}
-  - {tag_regex: '^ANM-\d+$', category: data, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ANM)}
-  - {tag_regex: '^ConnectivityService$', category: data, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ConnectivityService)}
-  - {tag_regex: '^DataServiceCallback$', category: data, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (DataServiceCallback)}
-  - {tag_regex: '^PhoneSwitcher$', category: data, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (PhoneSwitcher)}
-  - {tag_regex: '^QOSCT-\d+$', category: data, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (QOSCT)}
-  - {tag_regex: '^TNA-\d+$', category: data, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (TNA)}
-  - {tag_regex: '^TNP$', category: data, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (TNP)}
-  - {tag_regex: '^ShannonDS-RM', category: data, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ShannonDS-RM)}
-  - {tag_regex: '^ShannonQNS', category: data, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ShannonQNS)}
+  - {tag_regex: '^ADSC$', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ADSC)}
+  - {tag_regex: '^ANM-\d+$', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ANM)}
+  - {tag_regex: '^ConnectivityService$', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ConnectivityService)}
+  - {tag_regex: '^DataServiceCallback$', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (DataServiceCallback)}
+  - {tag_regex: '^PhoneSwitcher$', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (PhoneSwitcher)}
+  - {tag_regex: '^QOSCT-\d+$', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (QOSCT)}
+  - {tag_regex: '^TNA-\d+$', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (TNA)}
+  - {tag_regex: '^TNP$', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (TNP)}
+  - {tag_regex: '^ShannonDS-RM', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ShannonDS-RM)}
+  - {tag_regex: '^ShannonQNS', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ShannonQNS)}
   # sim
-  - {tag_regex: '^CAT$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (CAT)}
-  - {tag_regex: '^IsimUiccRecords$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (IsimUiccRecords)}
-  - {tag_regex: '^MultiSimSettingController$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (MultiSimSettingController)}
-  - {tag_regex: '^SIMRecords$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (SIMRecords)}
-  - {tag_regex: '^SecureElement-Terminal-SIM\d$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (SecureElement-Terminal-SIM)}
-  - {tag_regex: '^UiccCard$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (UiccCard)}
-  - {tag_regex: '^UiccCardApplication( \[\d+\])?$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (UiccCardApplication)}
-  - {tag_regex: '^UiccHal-(SE|Interface)$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (UiccHal)}
-  - {tag_regex: '^UiccProfile( \[\d+\])?$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (UiccProfile)}
-  - {tag_regex: '^UiccSlot$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (UiccSlot)}
-  - {tag_regex: '^UsimFH$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (UsimFH)}
+  - {tag_regex: '^CAT$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (CAT)}
+  - {tag_regex: '^IsimUiccRecords$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (IsimUiccRecords)}
+  - {tag_regex: '^MultiSimSettingController$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (MultiSimSettingController)}
+  - {tag_regex: '^SIMRecords$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (SIMRecords)}
+  - {tag_regex: '^SecureElement-Terminal-SIM\d$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (SecureElement-Terminal-SIM)}
+  - {tag_regex: '^UiccCard$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccCard)}
+  - {tag_regex: '^UiccCardApplication( \[\d+\])?$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccCardApplication)}
+  - {tag_regex: '^UiccHal-(SE|Interface)$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccHal)}
+  - {tag_regex: '^UiccProfile( \[\d+\])?$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccProfile)}
+  - {tag_regex: '^UiccSlot$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccSlot)}
+  - {tag_regex: '^UsimFH$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UsimFH)}
   # network
-  - {tag_regex: '^CSST$', category: network, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (CSST)}
-  - {tag_regex: '^CellularNetworkService$', category: network, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (CellularNetworkService)}
-  - {tag_regex: '^DIC-\d+$', category: network, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (DIC)}
-  - {tag_regex: '^ExSST$', category: network, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ExSST)}
-  - {tag_regex: '^LocaleTracker-\d+$', category: network, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (LocaleTracker)}
-  - {tag_regex: '^NRM-[CI]-\d+$', category: network, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (NRM)}
-  - {tag_regex: '^NetworkTypeController$', category: network, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (NetworkTypeController)}
-  - {tag_regex: '^NitzStateMachineImpl$', category: network, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (NitzStateMachineImpl)}
-  - {tag_regex: '^ShannonNS-', category: network, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ShannonNS)}
+  - {tag_regex: '^CSST$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (CSST)}
+  - {tag_regex: '^CellularNetworkService$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (CellularNetworkService)}
+  - {tag_regex: '^DIC-\d+$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (DIC)}
+  - {tag_regex: '^ExSST$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ExSST)}
+  - {tag_regex: '^LocaleTracker-\d+$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (LocaleTracker)}
+  - {tag_regex: '^NRM-[CI]-\d+$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (NRM)}
+  - {tag_regex: '^NetworkTypeController$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (NetworkTypeController)}
+  - {tag_regex: '^NitzStateMachineImpl$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (NitzStateMachineImpl)}
+  - {tag_regex: '^ShannonNS-', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ShannonNS)}
   # call
-  - {tag_regex: '^GsmCdmaCallTracker$', category: call, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (GsmCdmaCallTracker)}
-  - {tag_regex: '^CallManager$', category: call, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (CallManager)}
-  - {tag_regex: '^CallNotifier$', category: call, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (CallNotifier)}
-  - {tag_regex: '^CallWaitingCtrl$', category: call, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (CallWaitingCtrl)}
-  - {tag_regex: '^ImsUt$', category: call, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ImsUt)}
-  - {tag_regex: '^MMIDialogActivity$', category: call, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (MMIDialogActivity)}
-  - {tag_regex: '^Telecom$', category: call, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (Telecom)}
+  - {tag_regex: '^GsmCdmaCallTracker$', category: call, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (GsmCdmaCallTracker)}
+  - {tag_regex: '^CallManager$', category: call, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (CallManager)}
+  - {tag_regex: '^CallNotifier$', category: call, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (CallNotifier)}
+  - {tag_regex: '^CallWaitingCtrl$', category: call, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (CallWaitingCtrl)}
+  - {tag_regex: '^ImsUt$', category: call, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsUt)}
+  - {tag_regex: '^MMIDialogActivity$', category: call, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (MMIDialogActivity)}
+  - {tag_regex: '^Telecom$', category: call, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (Telecom)}
   # sms
-  - {tag_regex: '^CellBroadcastConfigTracker-\d+$', category: sms, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (CellBroadcastConfigTracker)}
-  - {tag_regex: '^ImsSmsDispatcher( \[\d+\])?$', category: sms, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ImsSmsDispatcher)}
-  - {tag_regex: '^SMSDispatcher$', category: sms, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (SMSDispatcher)}
+  - {tag_regex: '^CellBroadcastConfigTracker-\d+$', category: sms, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (CellBroadcastConfigTracker)}
+  - {tag_regex: '^ImsSmsDispatcher( \[\d+\])?$', category: sms, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsSmsDispatcher)}
+  - {tag_regex: '^SMSDispatcher$', category: sms, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (SMSDispatcher)}
   # ims
-  - {tag_regex: '^ImsConfig$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ImsConfig)}
-  - {tag_regex: '^ImsEnablementTracker$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ImsEnablementTracker)}
-  - {tag_regex: '^ImsProvisioning', category: ims, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ImsProvisioning)}
-  - {tag_regex: '^ImsRIL$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ImsRIL)}
-  - {tag_regex: '^ImsRegCallbackHelper$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ImsRegCallbackHelper)}
-  - {tag_regex: '^ImsStateCallbackController$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ImsStateCallbackController)}
-  - {tag_regex: '^ImsStats$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ImsStats)}
-  - {tag_regex: '^SHANNON_IMS$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (SHANNON_IMS)}
-  - {tag_regex: '^ShannonVCC', category: ims, added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (ShannonVCC)}
+  - {tag_regex: '^ImsConfig$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsConfig)}
+  - {tag_regex: '^ImsEnablementTracker$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsEnablementTracker)}
+  - {tag_regex: '^ImsProvisioning', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsProvisioning)}
+  - {tag_regex: '^ImsRIL$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsRIL)}
+  - {tag_regex: '^ImsRegCallbackHelper$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsRegCallbackHelper)}
+  - {tag_regex: '^ImsStateCallbackController$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsStateCallbackController)}
+  - {tag_regex: '^ImsStats$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsStats)}
+  - {tag_regex: '^SHANNON_IMS$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (SHANNON_IMS)}
+  - {tag_regex: '^ShannonVCC', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ShannonVCC)}

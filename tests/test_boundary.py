@@ -196,19 +196,6 @@ def test_module_template_log_needs_synthetic_case(fake_repo):
     assert found == {f"{base}/notsyn/files/source.log", f"{base}/nocase/files/source.log",
                      "templates/module-skills/ofono/x.log"}
 
-EXCERPT_CASE = """schema_version: 1
-name: ex
-synthetic: false
-origin:                         # 마스킹한 실제 발췌
-  kind: masked-excerpt
-  log: O2
-  episode: E4b
-  lines: '10-12,20-21'
-  masker: 0123456789ab
-  residual: '2026-11-06'
-key: MOCK-9201
-"""
-EXCERPT_LOG = "-- [마스킹 발췌] O2 E4b 줄 10-12,20-21\na\nb\nc\n-- [생략]\nd\ne\n"
 TBASE = "templates/module-skills/ofono/sim/evals"
 
 
@@ -216,37 +203,36 @@ def _origin_findings(root: Path) -> set[str]:
     return {path for rule, path in _rules(boundary.scan(root, "external")) if rule == "fixture-origin"}
 
 
-def test_template_case_excerpt_origin_ok(fake_repo):
-    _write(fake_repo, f"{TBASE}/ex/case.yaml", EXCERPT_CASE)
-    _write(fake_repo, f"{TBASE}/ex/files/source.log", EXCERPT_LOG)
-    assert _origin_findings(fake_repo) == set()
-
-
-def test_template_case_excerpt_missing_origin_key(fake_repo):
-    _write(fake_repo, f"{TBASE}/ex/case.yaml", EXCERPT_CASE.replace("  residual: '2026-11-06'\n", ""))
-    _write(fake_repo, f"{TBASE}/ex/files/source.log", EXCERPT_LOG)
-    _write(fake_repo, f"{TBASE}/kind/case.yaml", EXCERPT_CASE.replace("masked-excerpt", "real-log"))
-    _write(fake_repo, f"{TBASE}/kind/files/source.log", EXCERPT_LOG)
-    _write(fake_repo, f"{TBASE}/none/case.yaml", "schema_version: 1\nsynthetic: false\n")
-    _write(fake_repo, f"{TBASE}/none/files/source.log", EXCERPT_LOG)
-    assert _origin_findings(fake_repo) == {f"{TBASE}/ex/files/source.log", f"{TBASE}/kind/files/source.log",
-                                           f"{TBASE}/none/files/source.log"}
-
-
-def test_template_case_excerpt_header_mismatch(fake_repo):
-    _write(fake_repo, f"{TBASE}/ex/case.yaml", EXCERPT_CASE)
-    _write(fake_repo, f"{TBASE}/ex/files/source.log", "-- [합성] 아님\n" + EXCERPT_LOG.split("\n", 1)[1])
-    assert _origin_findings(fake_repo) == {f"{TBASE}/ex/files/source.log"}
-
-
-def test_template_case_synthetic_still_ok(fake_repo):
+def test_template_case_synthetic_only(fake_repo):
+    """템플릿 case 로그는 합성만: synthetic: true + `-- [합성]`, origin 키가 있으면 위반."""
     _write(fake_repo, f"{TBASE}/syn/case.yaml", "schema_version: 1\nsynthetic: true\n")
     _write(fake_repo, f"{TBASE}/syn/files/source.log", "-- [합성] x\n")
     _write(fake_repo, f"{TBASE}/nomark/case.yaml", "schema_version: 1\nsynthetic: true\n")
     _write(fake_repo, f"{TBASE}/nomark/files/source.log", "Nov  1 10:00:00 x\n")
-    _write(fake_repo, f"{TBASE}/both/case.yaml", EXCERPT_CASE.replace("synthetic: false", "synthetic: true"))
+    _write(fake_repo, f"{TBASE}/both/case.yaml", "schema_version: 1\nsynthetic: true\norigin:\n  kind: x\n")
     _write(fake_repo, f"{TBASE}/both/files/source.log", "-- [합성] x\n")
-    assert _origin_findings(fake_repo) == {f"{TBASE}/nomark/files/source.log", f"{TBASE}/both/files/source.log"}
+    _write(fake_repo, f"{TBASE}/notsyn/case.yaml", "schema_version: 1\nsynthetic: false\norigin:\n  kind: x\n")
+    _write(fake_repo, f"{TBASE}/notsyn/files/source.log", "-- [합성] x\n")
+    assert _origin_findings(fake_repo) == {f"{TBASE}/nomark/files/source.log", f"{TBASE}/both/files/source.log",
+                                           f"{TBASE}/notsyn/files/source.log"}
+
+
+def test_trace_wording_pattern(fake_repo):
+    """`pattern:trace-wording`: 로그 출처 흔적 문구(발췌 표시·로그 id·마스커 해시·점검 날짜)는 어느 파일이든 위반.
+    시험 문자열은 이어 붙여 만든다(이 파일도 문구를 그대로 갖지 않는다)."""
+    bad = ["마스킹" + " 발췌", "masked" + "-excerpt", "-- [" + "마스킹", "masker: " + "0123456789ab",
+           "residual: '" + "2026-01-02'", "O" + "1 E14", "A-" + "E5", "E" + "3 줄 10-20",
+           "O" + "2 E4b", "A-" + "E9b", "E" + "3c 줄 1-5", 'masker: "' + '0123456789ab"', 'residual: "' + '2026-01-02"']
+    _write(fake_repo, "docs/trace.md", "\n".join(bad) + "\n")
+    # 정당한 용어(과잉 매치 없음): 잔여 식별자 도구·옵션, Jira 첨부, 리뷰 항목 id, 마스킹 전 원본 로그
+    clean = ["합성 로그, placeholder, A-E 구간 없음, E1 단계, O1 없음, residual 0건", "tools/fixture_residual.py 통과",
+             "db_lint --residual 0건", "Jira 첨부 파일은 읽기만", "리뷰 항목 O1·O2", "마스킹 전 원본 로그는 사내에만"]
+    _write(fake_repo, "docs/clean.md", "\n".join(clean) + "\n")
+    found = [f for f in boundary.scan(fake_repo, "external") if f.rule == "pattern:trace-wording"]
+    assert sorted(f.line for f in found) == list(range(1, len(bad) + 1))
+    assert {f.path for f in found} == {"docs/trace.md"}
+    rx = next(r for name, r, _ in boundary.DEFAULT_PATTERNS if name == "trace-wording")
+    assert not rx.search((TOOLS / "check_boundary.py").read_text(encoding="utf-8"))   # 자기 파일은 예외 없이 통과
 
 
 MODULES = """schema_version: 2

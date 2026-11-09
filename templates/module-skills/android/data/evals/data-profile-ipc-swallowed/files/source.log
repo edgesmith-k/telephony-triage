@@ -1,4 +1,4 @@
--- [마스킹 발췌] A A-E8 줄 23526-23560,23565-23568,23590-23600,23628-23636
+-- [합성]
 08-09 13:11:01.259  1856  2244 D RILJ    : [0272]> SET_DATA_PROFILE with data profiles :  [PHONE0]
 08-09 13:11:01.259  1856  1856 D ADSC    : OPPT switch excluded: primary phone doesn't enable the feature!
 08-09 13:11:01.259  1856  1856 E ADSC    : onEvaluateAutoDataSwitch: switch requires two active subscriptions.

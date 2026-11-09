@@ -1,4 +1,4 @@
--- [마스킹 발췌] O1 E3c 줄 32505-32553
+-- [합성]
 Feb 27 17:52:14.897 host1 daemon.debug LPA[530]: tid:62 Procedures.cpp(304):runProcedure > runProcedure(BEG)
 Feb 27 17:52:14.897 host1 daemon.debug LPA[530]: tid:62 es10c.cpp(274):getEIDProc > GetEIDProc
 Feb 27 17:52:14.897 host1 daemon.debug LPA[530]: tid:62 DBusClient.cpp(174):transmitAPDU > needRefresh: 0

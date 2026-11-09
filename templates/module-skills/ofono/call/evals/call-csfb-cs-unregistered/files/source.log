@@ -1,4 +1,4 @@
--- [합성] C1D 보정 call-csfb-cs-unregistered. 레포의 줄 모양(network-radio-off-queries 발췌의 데이터 관리 데몬 줄, C0·C1 합성 case)만 본떠 새로 썼다. LTE PS만 등록되고 CS는 거절된 채 발신. 비행기 모드·IMS 해제 없음.
+-- [합성] C1D 보정 call-csfb-cs-unregistered. 레포의 줄 모양(network-radio-off-queries case의 데이터 관리 데몬 줄, C0·C1 합성 case)만 본떠 새로 썼다. LTE PS만 등록되고 CS는 거절된 채 발신. 비행기 모드·IMS 해제 없음.
 Sep 23 10:10:00.010 dut local0.info MOSE[731]: [UI___] 000211 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
 Sep 23 10:10:00.200 dut daemon.info exynos-ril[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-95
 Sep 23 10:10:01.000 dut daemon.info exynos-ril[452]: [NetworkService_0] Data RegState=REGISTERED, RejectCause=0

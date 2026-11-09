@@ -1,4 +1,4 @@
--- [합성] C1 modem-reset-net-chain. 첨부 로그에 모뎀 재시작 에피소드가 없어 첨부 로그 줄 모양을 본떠 새로 썼다. vcd 재시작 문구와 state: UNAVAILABLE은 가정(A).
+-- [합성] C1 modem-reset-net-chain. 레포 case의 줄 모양을 본떠 새로 썼다. vcd 재시작 문구와 state: UNAVAILABLE은 가정(A).
 Sep 21 10:50:00.010 dut local0.info MOSE[731]: [UI___] 000501 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
 Sep 21 10:50:00.200 dut daemon.info exynos-ril[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() nr rsrp=-88
 Sep 21 10:50:01.000 dut daemon.info ofonod[466]: Device 0: <HEXDUMP 32B>
