@@ -25,7 +25,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 | 8 | 사용자 clone 직접 편집 차단: 대상 파일이 `issue_db.path` 안이면 거부(`work_dir` 아래는 제외) | Write/Edit/MultiEdit/NotebookEdit |
 | 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등, 플러그인 스크립트 출력 인자 `--out`·`--preview`·`--meta-out`·`mask_pii --in-place`·`jira_fields extract --consume` — `_script_out_targets`) 거부. migrate 브랜치 생성(깨끗한 트리)과 clone을 고치는 `db_build.py --write`(`--db` 값이 clone 안이거나 `--db` 없이 cwd가 clone 본체)는 ask. 인터프리터 인라인 코드(`python3 -c`·`perl -e`·`python3 - <<EOF` 본문)에 clone 안 경로 낱말이 있거나 `ln`의 원본이 clone 안이면 ask(셸 파서는 코드 안 쓰기를 보지 못한다 — `check_inline_code`. `/` 없는 상대 이름은 보지 않는다) | Bash, clone 본체 |
 | 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`issue_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관). 인터프리터 인라인 코드가 그 파일 경로를 담으면 ask(`check_inline_code`) | Bash |
-| 11 | 원격 쓰기 확인(거친 판정 — 대상 레포를 풀지 않는다: `-R`·`GH_REPO`·URL·cwd 원격을 보지 않으므로 이슈 DB가 아닌 레포의 gh 병합·쓰기도 ask): **병합 계열**(`gh pr merge`, REST `…/merge`·`…/merges`, GraphQL `mergePullRequest`·`enqueuePullRequest`·`mergeBranch`, 병합 별칭 `gh alias set|import`, MCP 단어 속 `merge`·입력 `action`·`method` merge…)는 ask(`GH_MERGE_ASK`·`MCP_MERGE_ASK` — 병합은 서버 브랜치 보호가 승인 1을 강제한다, 전제 site_checks `s4a.protection_guard`). 그 밖 gh 쓰기(`pr` 읽기 목록 밖 동작, 그룹의 읽기 목록 밖 동작, 모르는 그룹 — 이미 만든 별칭 실행 포함, `api`의 GET 아닌 메서드·필드·`--input`, GraphQL `mutation`·못 읽은 본문)와 비트래커 MCP 쓰기형 도구(`mcptools.is_write`)는 ask. **Claude Approve·리뷰 기각은 거부**(서버가 막지 못한다 — 낱말 수준, `_gh_kind`): 따옴표를 뗀 명령 글·argv·gh가 읽는 파일(`@파일`·`--input`·`$(cat 파일)`·heredoc stdin)에 `approve`·`dismiss`(상태 값 `APPROVED`·`DISMISSED`는 아니다), `gh pr review`의 `-a`·`-a=`·`--approve`·셸 값 옵션(`_gh_review_approves`), REST 리뷰 엔드포인트의 `event=@…`·셸 값·못 읽은 본문, GraphQL 리뷰 mutation의 변수 `event`와 셸 값·못 읽은 본문, MCP 단어 속 approve·dismiss와 동작 칸(`event`·`action`·`method`·`*event`). 그것일 수 있는 꼴도 거부: 셸이 정하는 그룹·`pr`·`alias` 동작·api 엔드포인트 끝 칸, 리뷰·Approve·기각 별칭과 못 읽은 별칭 파일·셸 값·자리 표시(`$1`·`$@`)·셸 별칭(`-s`·`--shell`·`!…`). heredoc 본문은 끝 표시를 인용했거나 `$`·백틱·`\\`가 없고 명령 글의 `<<` 수가 찾은 heredoc 수와 같을 때만, stdin(`-`·`@-`)은 그 호출 자신의 heredoc일 때만 읽은 것이다(`_heredoc_known`·`_gh_stdin_known`). 서버 브랜치 보호·ruleset 바꾸기(`…/branches/<b>/protection…`(브랜치에 `/`가 들어도)·`…/rulesets`의 쓰기, 레포 설정 쓰기(REST `repos/<o>/<r>`·`repositories/<id>`)의 `allow_auto_merge`·`delete_branch_on_merge` 켜기(거짓 `false`·`0` 밖 모든 값, `-f`·`-F`·`--input`·JSON 이스케이프), GraphQL `create|update|delete` + `BranchProtectionRule|RepositoryRuleset`)와 `gh repo edit --enable-auto-merge`·`--delete-branch-on-merge`도 거부(`PROTECTION_DENY` — 4-c 뒤 서버 보호가 유일한 병합 장치). PR 자동 병합 켜기(`gh pr merge --auto`·선택자 뒤 따옴표 밖 셸 값, GraphQL `enablePullRequestAutoMerge`, `--auto` 병합 별칭, MCP 단어 속 auto+merge)도 거부(`AUTO_MERGE_DENY` — 원칙 12: 병합은 +1 뒤 요청 시 `db_pr merge`로만 한다. 자동 병합은 +1이 붙는 즉시 승인 SHA 대조·메인테이너 경로 거부 없이 병합한다). approve·dismiss 낱말이 든 gh 호출은 본문·검색어라도 거부된다(`GH_WORD_NOTE`). `pr checkout`·`gh co`(그룹·`pr` 동작 자리)는 clone 본체에서 규칙 8 거부. 동작 별칭(`new`·`ls`·`co`·`remove`)은 풀어 본다. 적용 조건: issue_db.remote·module_skills.remote 원격 값이 있으면(owner/repo로 못 풀어도 — setup 전엔 보지 않는다) | Bash, `mcp__.*` |
+| 11 | 원격 쓰기 확인(거친 판정 — 대상 레포를 풀지 않는다: `-R`·`GH_REPO`·URL·cwd 원격을 보지 않으므로 이슈 DB가 아닌 레포의 gh 병합·쓰기도 ask): **병합 계열**(`gh pr merge`, REST `…/merge`·`…/merges`, GraphQL `mergePullRequest`·`enqueuePullRequest`·`mergeBranch`, 병합 별칭 `gh alias set|import`, MCP 단어 속 `merge`·입력 `action`·`method` merge…)는 ask(`GH_MERGE_ASK`·`MCP_MERGE_ASK` — 병합은 서버 브랜치 보호가 승인 1을 강제한다, 전제 site_checks `s4a.protection_guard`). 그 밖 gh 쓰기(`pr` 읽기 목록 밖 동작, 그룹의 읽기 목록 밖 동작, 모르는 그룹 — 이미 만든 별칭 실행 포함, `api`의 GET 아닌 메서드·필드·`--input`, GraphQL `mutation`·못 읽은 본문)와 비트래커 MCP 쓰기형 도구(`mcptools.is_write`)는 ask. **Claude Approve·리뷰 기각은 거부**(서버가 막지 못한다 — 낱말 수준, `_gh_kind`): 따옴표를 뗀 명령 글·argv·gh가 읽는 파일(`@파일`·`--input`·`$(cat 파일)`·heredoc stdin)에 `approve`·`dismiss`(상태 값 `APPROVED`·`DISMISSED`는 아니다), `gh pr review`의 `-a`·`-a=`·`--approve`·셸 값 옵션(`_gh_review_approves`), REST 리뷰 엔드포인트의 `event=@…`·셸 값·못 읽은 본문, GraphQL 리뷰 mutation의 변수 `event`와 셸 값·못 읽은 본문, MCP 단어 속 approve·dismiss와 동작 칸(`event`·`action`·`method`·`*event`). 그것일 수 있는 꼴도 거부: 셸이 정하는 그룹·`pr`·`alias` 동작·api 엔드포인트 끝 칸, 리뷰·Approve·기각 별칭과 못 읽은 별칭 파일·셸 값·자리 표시(`$1`·`$@`)·셸 별칭(`-s`·`--shell`·`!…`). `GH_JSON_DEPTH_MAX`(64)보다 깊이 중첩한 JSON 본문은 못 읽은 본문이다(Python 판마다 다른 RecursionError에 기대지 않는다). heredoc 본문은 끝 표시를 인용했거나 `$`·백틱·`\\`가 없고 명령 글의 `<<` 수가 찾은 heredoc 수와 같을 때만, stdin(`-`·`@-`)은 그 호출 자신의 heredoc일 때만 읽은 것이다(`_heredoc_known`·`_gh_stdin_known`). 서버 브랜치 보호·ruleset 바꾸기(`…/branches/<b>/protection…`(브랜치에 `/`가 들어도)·`…/rulesets`의 쓰기, 레포 설정 쓰기(REST `repos/<o>/<r>`·`repositories/<id>`)의 `allow_auto_merge`·`delete_branch_on_merge` 켜기(거짓 `false`·`0` 밖 모든 값, `-f`·`-F`·`--input`·JSON 이스케이프), GraphQL `create|update|delete` + `BranchProtectionRule|RepositoryRuleset`)와 `gh repo edit --enable-auto-merge`·`--delete-branch-on-merge`도 거부(`PROTECTION_DENY` — 4-c 뒤 서버 보호가 유일한 병합 장치). PR 자동 병합 켜기(`gh pr merge --auto`·선택자 뒤 따옴표 밖 셸 값, GraphQL `enablePullRequestAutoMerge`, `--auto` 병합 별칭, MCP 단어 속 auto+merge)도 거부(`AUTO_MERGE_DENY` — 원칙 12: 병합은 +1 뒤 요청 시 `db_pr merge`로만 한다. 자동 병합은 +1이 붙는 즉시 승인 SHA 대조·메인테이너 경로 거부 없이 병합한다). approve·dismiss 낱말이 든 gh 호출은 본문·검색어라도 거부된다(`GH_WORD_NOTE`). `pr checkout`·`gh co`(그룹·`pr` 동작 자리)는 clone 본체에서 규칙 8 거부. 동작 별칭(`new`·`ls`·`co`·`remove`)은 풀어 본다. 적용 조건: issue_db.remote·module_skills.remote 원격 값이 있으면(owner/repo로 못 풀어도 — setup 전엔 보지 않는다) | Bash, `mcp__.*` |
 | 12 | 모듈 스킬 관리 clone·기록 보호, 분석 스킬 소스 확인: (a) 관리 clone `<work_dir>/_module-skills/**`·lock `<work_dir>/_module-skills.lock`(경로 조각 `_module-skills`이거나 `_module-skills.`로 시작하면 설정과 무관하게 — `.lock`·`.tmp-*` 포함)과 `<work_dir>/<KEY>/skill-wt/**`(모든 프로필 work_dir — 이름이 잘못된 프로필 포함 — 과 켠 플랫폼의 기본 work_dir)를 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별 + `mv`·`ln`·`rsync --remove-source-files`의 원본)로 바꾸면 거부. 어디서 돌든 git 경로 옵션(`--output`·`-o`·`--output-directory`·config `--file`·`--git-dir`·`--work-tree`·`--separate-git-dir`)이 그 안이나 (b) 기록을 가리키면 거부. git 작업 디렉토리·`--git-dir`·`GIT_DIR`·`--work-tree` 중 하나라도 그 안이면 읽기 목록(`MODULE_GIT_READ`, `branch`·`remote`·`config`·`sparse-checkout`·`worktree`·`stash`는 읽기 꼴만)만 통과하고(`--output*`·`-O`·`--open-files-in-pager`·`--ext-diff`·`--textconv`는 읽기라도 거부) `-c` 덮어쓰기와 나머지(commit·push·stash·reset·checkout·sparse-checkout set·worktree add·fetch·remote set-url·config 쓰기 등)는 거부, 대상이 그 안인 `git clone`·`init`도 거부(이슈 DB 설정과 무관, 받기·갱신은 `triage.py module`만). (b) 스크립트 기록 `<work_dir>/<KEY>/module-skill.json`·`module-skill/**`·`deep-input.json`·`skill-input.json`·`check-output.json`(triage.py만 — `deep-output.md`·`explore-output.md`는 Claude가 쓴다)과 `skill-suggestions/<이름>.patch`·`.meta.json`(skill_patch.py만)을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(사본 `skill-suggestions/<이름>/**`는 허용). 상대 경로는 hook 입력 `cwd` 기준. `skill_patch.py --apply`(낱말 그물: 이름 `skill_patch`와 낱말 `apply`)는 `ask`. config `analyzers.<카테고리>.source`(절대 경로, site-defaults·사용자 config의 최상위와 모든 `platforms.<p>.analyzers` 것) 안을 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별)·파일을 바꾸는 git(`CLONE_GIT_SUBS`·commit·push·stash)으로 바꾸면 `ask`(적용은 `skill_patch.py --apply`로만) | Bash, Write/Edit/MultiEdit/NotebookEdit |
 
 (1번은 SessionStart의 `config.py sync-scripts-path`다.)
@@ -3225,6 +3225,9 @@ GH_REVIEW_LONG_WITH_ARG = {"--body", "--body-file", "--repo"}
 GH_REVIEW_SHORT_WITH_ARG = set("bFR")
 GH_FALSE = {"0", "f", "F", "false", "FALSE", "False"}    # strconv.ParseBool 거짓. 그 밖 값은 approve로 본다(못 읽는 값은 gh가 오류)
 GH_BODY_MAX = 65536          # --input·@파일·별칭 파일은 이만큼까지 읽는다(넘거나 못 읽으면 못 읽은 본문)
+GH_JSON_DEPTH_MAX = 64       # gh가 읽는 JSON 본문의 중첩 깊이 상한 — 넘으면 못 읽은 본문. 깊은 중첩에 `json.loads`가
+                             # RecursionError를 내는지는 Python 판마다 다르다(3.14는 스택 기반 — 25,000단도 그냥 읽는다)
+                             # 그래서 예외에 기대지 않고 글자를 세서 자른다
 # GraphQL 엔드포인트: `graphql`, `/graphql`, 경로가 `/graphql`로 끝나는 URL(gh는 URL을 그대로 쓰고 필드를 JSON 본문으로 보낸다)
 GH_GRAPHQL_RE = re.compile(r"^(?:/?|https?://[^/?#]+/(?:[^?#]*/)?)graphql/?(?:[?#].*)?$", re.IGNORECASE | re.DOTALL)
 GH_REST_MERGE_RE = re.compile(r"/pulls/[^/]+/merge/?$|/merges/?$")
@@ -3291,6 +3294,31 @@ def _gh_words(argv: list[str]) -> list[str]:
         elif not tok.startswith("-"):
             words.append(tok)
     return words
+
+
+def _json_too_deep(text: str | None, limit: int = GH_JSON_DEPTH_MAX) -> bool:
+    """JSON 글의 `[`·`{` 중첩이 `limit`보다 깊은가(문자열 안은 세지 않는다). 파싱하지 않는 한 번 훑기 — `json.loads` 앞에서
+    돌려 깊은 중첩을 Python 판과 무관하게 못 읽은 본문으로 만든다."""
+    if not text:
+        return False
+    depth, in_str, esc = 0, False, False
+    for ch in text:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        elif ch == '"':
+            in_str = True
+        elif ch in "[{":
+            depth += 1
+            if depth > limit:
+                return True
+        elif ch in "]}":
+            depth -= 1
+    return False
 
 
 def _gh_read(path: str, cwd: Path | None) -> str | None:
@@ -3381,11 +3409,13 @@ def _gh_hay(argv: list[str], cwd: Path | None, text: str | None, stdin_known: bo
     for kind, src in srcs:
         dyn = "$" in src or "`" in src or (isinstance(src, Word) and src.dyn)
         got = None if dyn else ((text or "") if stdin_known else None) if src == "-" else _gh_read(src, cwd)
+        if _json_too_deep(got):            # 너무 깊은 JSON은 못 읽은 본문(리뷰 엔드포인트면 Approve 거부, 별칭이면 거부)
+            got = None
         unread = unread or got is None
         parts.append(got or "")
         try:        # JSON 본문은 이스케이프를 푼 글도 본다(`"\u0041PPROVE"`·`\u006dergePullRequest` — gh는 그대로 보낸다)
             parts.append(json.dumps(json.loads(got), ensure_ascii=False))
-        except (TypeError, ValueError):     # JSON 아님. 깊은 중첩(RecursionError) 등은 올린다 — 판정 예외(거부, 4-c)
+        except (TypeError, ValueError):     # JSON 아님(깊은 중첩은 위에서 못 읽은 본문). 그 밖 예외는 올린다 — 판정 예외(거부, 4-c)
             pass
         if kind == "input":
             inputs.append(got)
@@ -3393,8 +3423,10 @@ def _gh_hay(argv: list[str], cwd: Path | None, text: str | None, stdin_known: bo
 
 
 def _json_obj(text: str | None) -> bool:
+    if text is None or _json_too_deep(text):
+        return False
     try:
-        return isinstance(json.loads(text), dict) if text is not None else False
+        return isinstance(json.loads(text), dict)
     except (TypeError, ValueError):     # JSON 아님: 객체로 보지 않는다(리뷰 엔드포인트면 Approve). 그 밖 예외는 판정 예외(거부)
         return False
 

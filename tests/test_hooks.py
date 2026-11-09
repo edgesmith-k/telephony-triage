@@ -1330,7 +1330,7 @@ def test_guard_without_pyyaml_denies_mcp_and_asks_risky_bash():
                            ("gh api -X DELETE repos/o/r/branches/main/protection", "deny", "브랜치 보호"),
                            (f"gh api repos/o/r/rulesets --input {rs.as_posix()}", "deny", "브랜치 보호"),
                            ("gh repo edit --enable-auto-merge", "deny", "브랜치 보호"),
-                           (f"gh api repos/o/r/pulls/3/reviews --input {deep.as_posix()}", "deny", "guard 내부 오류"),
+                           (f"gh api repos/o/r/pulls/3/reviews --input {deep.as_posix()}", "deny", "Approve"),  # 깊은 JSON = 못 읽은 본문
                            ("gh api -X PATCH repos/o/r -F delete_branch_on_merge=true", "deny", "브랜치 보호"),
                            ('gh alias set x "$(echo cHIgcmV2aWV3IC1h | base64 -d)"', "deny", "별칭"),
                            ('gh pr review 3 -b "$B" --comment', "ask", None),     # `_gh_kind`가 판정했다 — 낱말 수준은 안 쓴다
@@ -1594,9 +1594,10 @@ def test_guard_approve_dismiss_and_shell_decided_forms_denied_anywhere():
         # JSON 본문의 이스케이프(`\u0041PPROVE` — gh는 그대로 보낸다)도 푼 글로 본다(4-c 리뷰 P1)
         (f"gh api repos/{DB_SLUG}/pulls/3/reviews --input esc.json", plain, approve),
         ("gh api graphql --input esc.graphql.json", plain, approve),
-        # 깊은 중첩 JSON(RecursionError)은 판정 예외 — 거부(사유 `guard 내부 오류`, 4-c)
-        (f"gh api repos/{DB_SLUG}/pulls/3/reviews --input deep.json", plain, "guard 내부 오류"),
-        (f"gh api -X POST repos/{DB_SLUG}/pulls/3/reviews/9/events --input deep.json", plain, "guard 내부 오류"),
+        # 깊은 중첩 JSON(`GH_JSON_DEPTH_MAX` 초과)은 못 읽은 본문 — 리뷰 엔드포인트면 Approve 거부. 예전엔 `json.loads`의
+        # RecursionError(판정 예외 → `guard 내부 오류`)에 기댔는데 Python 3.14는 25,000단도 그냥 읽어 ask가 됐다(PR #82 CI)
+        (f"gh api repos/{DB_SLUG}/pulls/3/reviews --input deep.json", plain, "Approve"),
+        (f"gh api -X POST repos/{DB_SLUG}/pulls/3/reviews/9/events --input deep.json", plain, "Approve"),
         # 셸 값이 든 별칭 정의는 내용을 모른다
         ('gh alias set x "$(echo cHIgcmV2aWV3IC1h | base64 -d)"', plain, "별칭"), ("gh alias set x `cat a`", plain, "별칭"),
         # 자리 표시·셸 별칭은 실행 때 동작이 정해진다, 줄 이음·파이프로 받은 별칭 파일은 못 읽은 본문(4-c 4회차)
