@@ -24,4 +24,4 @@
 | `syn-noise-event/source.log` | 합성: 잡음 규칙에 맞지만 이벤트가 붙은 줄은 남는다 |
 | `syn-unmapped-ril/source.log` | 합성: 어느 모듈에도 없는 RIL 이름의 오류 줄도 보기에 든다 |
 | `syn-connman-no-such-element/source.log` | 합성: ConnectionManager `no_such_element`는 반복 묶음(background)이 아니다 |
-| `syn-qmi-ipc/source.log` | 합성: 엑시노스가 아닌 IPC 로그는 `ipc_re`·`ipc` 값만 바꿔 분류된다 |
+| `syn-qmi-ipc/source.log` | 합성: 다른 벤더 IPC(QMI) 형식 로그는 `ipc_re`·`ipc` 값만 바꿔 분류된다 |
