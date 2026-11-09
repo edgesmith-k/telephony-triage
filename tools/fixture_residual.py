@@ -49,7 +49,7 @@ DENY_RX = (
     ("carrier", re.compile(r"\"(?:ServiceProviderName|Name)\",\s*variant\(\"(?P<v>[^\"]{3,40})\"")),
     ("device_node", re.compile(r"/dev/(?P<v>[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*)")),
 )
-# 모양 규칙(값 거부 목록은 4자 이상만 넣으므로 2~3자리 MCC·MNC는 모양으로 본다, C1+D 보정 §1.2 ②). `make_excerpt`가
+# 모양 규칙(값 거부 목록은 4자 이상만 넣으므로 2~3자리 MCC·MNC는 모양으로 본다, C1+D 보정 §1.2 ②). 마스킹 단계가
 # `<PLMN#n>`으로 바꾸고, `check`는 `--against` 없이도 가리지 않은 값을 지적한다.
 SHAPE_RX = (
     ("plmn", re.compile(r"\"Mobile(?:Country|Network)Code\",\s*variant\(\"(?P<v>\d{2,3})\"")),
