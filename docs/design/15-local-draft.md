@@ -56,13 +56,13 @@
 
 - [ ] 전체 테스트 통과 (`pytest`, `db_regress --all`, eval 전체(`evals.json`) 준비(`--prepare-only`), `tools/offline_eval.py` 합성 라벨셋 실행(`--include-in-sample` — 합성 라벨셋은 로그가 모두 fixture라 표본내, 도구 동작 확인용) — 모두 테스트 헬퍼 플러그인 루트에서, `tools/fix_exec_bits.py --check`: 셰뱅 파일은 100755)
 - [ ] 사내 리허설 통과: 사외 CI `site-rehearsal` job(`tools/site_rehearsal.sh`) — 반입본을 Ubuntu 22.04 apt Python(3.10 / 3.11.0rc1)·git 2.34, 일반 사용자, 한국어 로케일, KST에서 사내 순서(압축 풀기·`git init`·의존성 3방식·`site_step.py`·기준선·전체 테스트)로 돌린다. 로컬은 같은 조건의 컨테이너에서 `tools/site_rehearsal.sh <zip> <user|venv|tt311>`
-- [ ] 사내 정보 없음: `python3 tools/check_boundary.py --mode external` 종료 코드 0 (사외 CI `.github/workflows/external.yml`도 같은 검사). 그래도 실제 회사명·서버명 등을 쓰지 않았는지 사람이 한 번 검색
+- [ ] 사내 정보 없음: `python3 tools/check_boundary.py --mode external` 종료 코드 0 (사외 CI `.github/workflows/external.yml`도 같은 검사). 그래도 실제 회사명·서버명 등을 쓰지 않았는지 사람이 한 번 검색. make_bundle `deny-file`이 거부 목록 0건 확인(`TT_DENY_FILE` 필수 — 없으면 `deny-file`이 건너뜀(종료 1)이고 묶음이 만들어지지 않는다).
 - [ ] `python3 tools/sync_schemas.py --check` 통과 (`plugin/schemas/` 사본 = 샘플 DB `schema/`)
 - [ ] `python3 tools/gen_contracts.py --check` 통과 (`contracts-cli.md`·db-authoring 필수 키 요약 = 코드·스키마)
 - [ ] `plugin/site-defaults.yaml`이 없고 `site-defaults.example.yaml`만 있음. `SITE_PATHS`의 다른 경로(`.draft-manifest.json` 포함)도 비어 있음
 - [ ] 레포 루트에 `.mcp.json`이 없음 (모의 MCP는 `tests/mocks/mcp.json`). `.local-draft`는 반입 묶음에 넣지 않음
 - [ ] `tools/make_db_skeleton.py`로 이슈 DB 뼈대를 만들었고, 뼈대에 유형·Jira·fixture(합성 포함)가 없음
-- [ ] 모듈 스킬 템플릿 검사 통과 (make_bundle `module-skills`, 항목 11: `module_repo_check --template`, `make_module_eval_inputs --check`, `fixture_residual`) — case는 합성 또는 마스킹 발췌 표시(origin)
+- [ ] 모듈 스킬 템플릿 검사 통과 (make_bundle `module-skills`, 항목 11: `module_repo_check --template`, `make_module_eval_inputs --check`, `fixture_residual`) — case는 합성 표시(`-- [합성]`)
 - [ ] `python3 tools/list_site_todos.py`가 오류 없이 돌고 결과를 사용자가 봤다 (목록은 문서에 두지 않는다. 상태 파일에는 개수만)
 - [ ] `DRAFT_NOTES.md`(상태 파일, ≤8KB): 진행 상태·남은 일·막힌 것·결정이 최신. 가정·모의와 실제가 다를 지점 같은 상세는 `docs/history/draft-notes-<날짜>.md`
 - [ ] `plugin/.claude-plugin/plugin.json`의 description에서 "사외 초안"을 빼고 `version`이 없음 (auto, make_bundle 맨 앞 — 실행 전에 정리 커밋)

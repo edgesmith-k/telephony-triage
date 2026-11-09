@@ -57,6 +57,7 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 ```
 - 테스트 전부 통과, `site-defaults.yaml` 없음, `.local-draft`·`.mcp.json`이 반입 묶음에 없음, 이슈 DB 뼈대 생성, `TODO(SITE:...)` 목록 정리를 확인한다.
 - 경계 검사: `python3 tools/check_boundary.py --mode external`(사외 CI에서도 돈다), `python3 tools/sync_schemas.py --check`.
+- `tools/deny_scan.py`: 레포 밖 거부 목록(`TT_DENY_FILE`)의 항목이 추적 파일 내용·경로에 있는지 센다(맞은 글자는 출력하지 않음). make_bundle `deny-file` 검사가 쓴다.
 - 린트: `python3 tools/lint.py`(ruff 고정 버전, 규칙 묶음 `pyproject.toml`, 남긴 지적의 검토 표 `docs/development/LINT_REVIEW.md`).
 - 사내 문자열 검색: 실제 회사명·서버명·팀명이 없는지 (`grep -rniE '<회사명>|<사내 도메인>' .`).
 - 사내 **외부 작성 코드 반입 규정**(오픈소스 의존성 승인 포함)을 확인한 뒤 플러그인 레포 + 이슈 DB 뼈대를 반입한다.

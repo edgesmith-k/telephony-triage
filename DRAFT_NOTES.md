@@ -17,10 +17,11 @@
 ## 진행 상태 (11/09)
 
 - 모드: **사외 초안**. Phase D0·1~13·반입 전 보강·H 완료. 지난 묶음 **import-20261103**(main `77e2827`).
-- **코덱스 종합 리뷰(요청서 `02e0ec2`) 반영 완료**: `58ae770`(F01 보강·F02·F03·F04·F05·F06·Q01)·`1554dc0`(GRADER_VERSION 5). WSL 전체 pytest 4,001 통과·26 skip·3 xfail, lint 통과, hook_probes 176개 판정 동일. 상세·11/06 원문은 `docs/history/draft-notes-2026-11.md`.
-- 다음 묶음 **import-20261109**(태그·반입은 사용자). 사내: 재반입 §8. 이번 묶음은 guard 판정이 바뀌었다(4-c: 병합 계열·규칙 5 actions deny→ask, Approve·기각·자동 병합·보호 변경·refs 위조 deny 신설; A5·A6 ask 추가) — 반입 전 `s4a.protection_guard` 통과 전제, hook_probes 176개로 판정 대조. hook·공통 판정이 바뀐 묶음이므로 SITE_INSTALL §8대로 사내 대상 eval 12개(`pending.json` `site`) 전부 다시 돌린다.
+- **코덱스 종합 리뷰 반영 완료**(`58ae770`·`1554dc0`, GRADER_VERSION 5). WSL 전체 pytest 통과, hook_probes 176개 판정 동일. 상세는 `docs/history/draft-notes-2026-11.md`.
+- 다음 묶음 **import-20261109**(태그·반입은 사용자). 사내: 재반입 §8. 이번 묶음은 guard 판정이 바뀌었다(4-c 병합 계열·규칙 5 ask 전환, Approve·기각·자동 병합·보호 변경·refs 위조 deny 신설) — 반입 전 `s4a.protection_guard` 통과 전제. SITE_INSTALL §8대로 사내 대상 eval 12개(`pending.json` `site`) 전부 다시 돌린다.
+- 11/09 표본 제거 PR-1(출처 메타·흔적 문구 제거, journal 상수 → components 설정 키, make_bundle deny-file, boundary trace-wording) 진행 — PR-2(합성 대역 로그·슬롯·복구 도구) 남음, 반입은 `stable` 브랜치에서.
 - 모델 Sonnet 5.5 기준. `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
-- 안내서: `docs/book/telephony-triage-book.html`, 목록 `docs/materials/00-index.html`
+- 안내서: `docs/book/telephony-triage-book.html`
 
 ## 남은 일 (사외 전용)
 

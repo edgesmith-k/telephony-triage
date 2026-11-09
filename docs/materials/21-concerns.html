@@ -101,10 +101,10 @@ footer { margin-top: 2.2rem; padding-top: 0.8rem; border-top: 1px solid var(--ru
       <dt>판단</dt><dd>맞다</dd>
       <dt>보완</dt><dd>모듈 레포 PR + +1 병합(E에서 자동 제안 흐름)</dd>
       <dt>상태</dt><dd class="status wip">안내 그림 반영, E 다음 묶음</dd></dl></article>
-    <article class="card"><h3><small>고민</small>첨부한 실제 로그를 최대한 써서 모듈별 필터·가설을 잘 하게</h3><dl>
-      <dt>판단</dt><dd>합성만으로는 실제 줄 모양을 못 따라간다</dd>
-      <dt>보완</dt><dd>마스킹한 실제 발췌를 사례·fixture로(남은 식별자 0 확인), 모듈 필터를 첨부 로그로 측정(필수 줄 recall 37→64% 등)</dd>
-      <dt>상태</dt><dd class="status">B2 ☑, C1+D 사례 14개 실제 발췌</dd></dl></article>
+    <article class="card"><h3><small>고민</small>공개 형식을 따른 합성 로그로 모듈별 필터·가설을 잘 하게</h3><dl>
+      <dt>판단</dt><dd>합성 줄이 실제 줄 모양을 못 따라갈 수 있다(사내에서 확인)</dd>
+      <dt>보완</dt><dd>공개 형식(oFono syslog·AOSP logcat)을 따른 합성 로그를 사례·fixture로(남은 식별자 0 확인), 모듈 필터를 합성 로그로 측정(필수 줄 recall 37→64% 등)</dd>
+      <dt>상태</dt><dd class="status">B2 ☑, C1+D 사례 14개 합성</dd></dl></article>
     <article class="card"><h3><small>고민</small>모듈 스킬로 어떻게 결과를 판단하나</h3><dl>
       <dt>판단</dt><dd>정답을 아는 사례로 스크립트 채점</dd>
       <dt>보완</dt><dd>사례마다 정답 층·데몬·근거 regex, 문서 있음/없음 비교, 안전 행, 토큰 차이. 정답 표는 사용자 확인</dd>
@@ -135,7 +135,7 @@ footer { margin-top: 2.2rem; padding-top: 0.8rem; border-top: 1px solid var(--ru
       <dt>상태</dt><dd class="status">☑ 11/06 (출력은 path:line만, 제안은 마스킹 로그 줄로만)</dd></dl></article>
     <article class="card"><h3><small>고민</small>리팩토링으로 로그가 확 바뀌거나, oFono는 개발 중이라 데몬이 생기고·사라지고·합쳐지고·대체된다</h3><dl>
       <dt>판단</dt><dd>이름·규칙은 데이터여야 한다. 이번 코드에 데몬 이름이 박힌 곳 3개 발견</dd>
-      <dt>보완</dt><dd>박힌 이름(DITD·RFSD·DMD·MOSE 레벨, exynos-ril·RIL 벤더 IPC)을 이슈 DB <code>tags.yaml</code> 속성으로(기본값 유지), 모듈 문서 데몬 이름을 공통 표 한 곳(역할 → 지금 이름·구 이름)에, 과도기에는 옛·새 이름을 같이, <code>modules coverage</code>(토큰 0)로 새·사라진 데몬 발견 → <code>modules.yaml</code> PR</dd>
+      <dt>보완</dt><dd>박힌 사내 이름(레벨 보정·벤더 IPC 대상)을 이슈 DB <code>tags.yaml</code> 속성으로(기본값 유지), 모듈 문서 데몬 이름을 공통 표 한 곳(역할 → 지금 이름·구 이름)에, 과도기에는 옛·새 이름을 같이, <code>modules coverage</code>(토큰 0)로 새·사라진 데몬 발견 → <code>modules.yaml</code> PR</dd>
       <dt>상태</dt><dd class="status">☑ 11/06 C1+D 보정</dd></dl></article>
   </section>
 
