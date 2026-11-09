@@ -542,11 +542,9 @@ GitHub는 base에 CODEOWNERS가 있으면 오너를 PR을 열 때 자동 요청�
 | 모듈 | # | 시나리오 | kind | 기대 첫 실패 층·데몬 | 근거 줄 모양 |
 |---|---|---|---|---|---|
 | data | ① | APN 인증 거절 | deep | vendor-ril(SETUP_DATA_CALL `failed`, 망 거절 사유). ofonod gprs·data 슬롯 구성요소(사내)는 증상, 확인할 것은 그 구성요소의 프로필 | gril `[p,serial]< SETUP_DATA_CALL failed` |
-| data | ② | 데이터 콜 성공·data 슬롯 구성요소(사내) 라우팅 실패 | explore | data 슬롯 구성요소(곁가지) | 성공 응답 뒤 수 ms 안 netlink 오류 |
+| data·sim·ims·modem | ②(sim ③) | 슬롯 구성요소 실패(곁가지) — 아래 RIL 응답은 성공 | explore | 그 모듈 슬롯 구성요소(곁가지) | 그 구성요소의 오류 줄 |
 | data | ③★ | ofonod 오류만, 아래 RIL 줄 없음 | explore | "그 층 로그 없음", 원인을 지어내지 않는다 | `src/gprs.c:` 오류 줄만 |
 | sim | ① | SIM_IO 실패 | deep | vendor-ril(SIM_IO failed) | gril SIM_IO 응답 |
-| sim | ② | sim 슬롯 구성요소(사내) 채널 열기 실패 | explore | sim 슬롯 구성요소(아래 RIL 응답은 성공) | 채널 오류 |
-| sim | ③ | sim 슬롯 구성요소(사내) 목록 조회 오류 | explore | sim 슬롯 구성요소 | 목록 조회 오류 |
 | network | ① | 등록 거절 | deep | vendor-ril 등록 응답의 거절 사유. ofonod netreg는 증상 | 등록 상태 응답 |
 | network | ② | RADIO_ON 없음 | explore | network 슬롯 구성요소(일어나지 않은 일 — 로그 범위가 덮는지 먼저) | RADIO_ON 부재 + 범위 |
 | call | ① | VoLTE 발신 실패 | explore | ims 슬롯 구성요소(ofonod voicecall은 증상) | 발신 오류 |
@@ -554,9 +552,7 @@ GitHub는 base에 CODEOWNERS가 있으면 오너를 PR을 열 때 자동 요청�
 | sms | ① | SEND_SMS 실패 | deep | vendor-ril | gril SEND_SMS 응답 |
 | sms | ② | IMS 문자 실패 | explore | ims 슬롯 구성요소 | 문자 오류 |
 | ims | ① | IMS 등록 실패 | deep | ims 슬롯 구성요소 | 등록 오류 |
-| ims | ② | ims 슬롯 구성요소(사내) 접속 거절 | explore | ims 슬롯 구성요소(HTTP 거절, 호스트는 `.invalid`) | 거절 응답 |
-| modem | ① | 모뎀 리셋 연쇄(증상은 data·call) | deep(`also`) | 모뎀(modem 슬롯 구성요소의 리셋 감지). 증상 모듈이 아니다 | 리셋 줄 → 연쇄 오류 |
-| modem | ② | modem 슬롯 구성요소(사내) 쓰기 실패 | explore | modem 슬롯 구성요소 | 쓰기 오류 |
+| modem | ① | 모뎀 리셋 연쇄(증상은 data·call) | deep(`also`) | 모뎀(modem 슬롯 구성요소). 증상 모듈이 아니다 | 리셋 줄 → 연쇄 오류 |
 
 ### 5.4 Android 시나리오 (초안, D 시작 전 확인 — Q9, 15개 — deep 8 · explore 7)
 

@@ -53,7 +53,7 @@
 ## C·C′(+코드 대조)·실행 중 IMSI/ICCID 마스킹·후보 방식 채점 (11/06, 설계 → 설계 검증 → 구현 → 리뷰 → 검증 → 수정)
 
 **C′ 부분 일치**(설계 `scratchpad/cc/design.md`, 설계 검증 P1 9 반영): 분석 모드에서만, 후보가 없거나 1위가 S=1·C=0일 때 부분 일치(missing·absent(한 줄 시그니처가 통째로 없음)·blocked·order·window)를 match.json 5·analysis.json 3·report.md ≤1,200B로 보인다. S/C 판정과 regress 출력은 그대로. report.md `규칙 제안 (부분 일치):` → 기존 Step 7 질문(기본 받지 않음) → update-signature(사용자 확인·PR·+1). 제안은 마스킹된 로그 줄(`log_refs`)로만 만들고 코드 문자열로는 만들지 않는다. **코드 대조** `code_roots.py find-text`: 부분 일치이고 code root를 골랐을 때만, 시그니처 regex에서 리터럴 도출(태그·oFono file:func 앞머리 제거) → 같음(±2줄 안 로그 호출일 때만)/문구 다름/못 찾음(범위: code_refs+required_dirs를 다 봤을 때만)/문자열만 있음/애매/확인 못 함/건너뜀(상한), 20초·1MiB·제외 디렉토리, 출력은 key:path:line만(코드 글 없음). **C**: `site_audit` drift — feedback `suggested[].signature` × issues(sw·platform_version)로 "이전 3회 이상 맞던 시그니처가 새 빌드 기록 2건 이상에서 0회"면 needs-user(같은 브랜치는 sw 순서만, 다른 브랜치는 platform_version 주 버전이 클 때만, 같은 원인·unresolved·new-cause만 셈), 1건은 info, 판단 못 하면 skip. Claude 안 부름.
-**마스킹**: `common/dumpjoin.py`(fixture_residual과 같은 묶기: 시각 뺀 앞머리·1초 안)로 oFono `dump_dmsg_w_re()` 조각을 이어 키 있는 IMSI/ICCID 규칙만 적용, mask_pii·parse_logcat(run_cut·fields 포함)·residual·redact. R28: 골든·mask-gate 차이 0, 합성 로그 3개 종류별 마스킹 수 변화 0(갈린 경우 0건), fixture_residual 0. 사용자에게 보임.
+**마스킹**: `common/dumpjoin.py`(fixture_residual과 같은 묶기: 시각 뺀 앞머리·1초 안)로 oFono `dump_dmsg_w_re()` 조각을 이어 키 있는 IMSI/ICCID 규칙만 적용, mask_pii·parse_logcat(run_cut·fields 포함)·residual·redact. R28: 골든·mask-gate 차이 0. 사용자에게 보임.
 **후보 방식 채점**(사용자 11/06 "이런 후보가 있을 수 있다 정도로, 결론이 아니게", 설계 `scratchpad/cand/design.md`, 설계 검증 P1 2 반영): 탐색 사례 27개는 후보 1~3개 + `가장 유력: n`, 인정 후보(`accept`)가 목록에 있고 함정(`trap`)을 가장 유력으로 두지 않으면 통과(근거는 맞힌 그 후보에), 1순위 적중은 기록만. 심층 15개는 결론 1개 그대로. 함정 규칙은 두 arm 공용 프롬프트에만(모듈 문서 안 바꿈). 기록에 case별 `expect_sha256`·`GRADER_VERSION 2` — 정답이 바뀌면 한 arm 합치기 거절. `tools/module_answers.py table|migrate`(정답표 자동 생성 — 커밋 안 함). 27개는 migrate로 1:1 변환(옛 wrong_layer → trap). 정답 표(후보 방식)는 사용자 확인 대기.
 리뷰: C·C′·마스킹 구현 리뷰(2관점 → 검증 1) 확정 P1 4 고침 — find-text가 범위를 못 보고 not-found, drift 빌드 순서 모순에 StopIteration으로 점검 전체 중단, 짧은 숫자 조각이 값 표에 들어가 다른 필드를 `<IMSI#n>`으로 가림, 시각 없는 dump 레코드가 묶음을 닫음. 통합 전체 테스트 3,855 통과(C′ 부분 일치로 탐색 생성 입력 다시 만듦 — partial 항목만). 진행 중 컨테이너 재시작 1회(메모리: 관련 테스트와 에이전트 동시) — 잃은 것 없음, 이후 전체 테스트는 단독 실행.
 
@@ -93,7 +93,7 @@ g-1: 커밋 `cc2ca81` 위, Sonnet, `-j 3`, 67개 모두 끝남(멈춤 0), $24.03
 - oFono with arm 토큰이 without보다 많다(ofono/data +5.3만, 7모듈 모두 +). Android는 모두 −.
 - Haiku 비교(약한 모델 대역, 기록 안 함 R20, 새 11 + 기존 함정·원인 아님 6사례 × 두 arm, 34회, $0.25): with 통과 6/17, without 3/17(같은 17사례에서 Sonnet은 with 11, without 5). 안전 위반은 with 1, without 3. with 토큰은 −8%다. 약한 모델에서도 문서 효과(통과 2배, 안전 위반 감소)가 보이지만 절대 통과율은 낮다. 사내 모델 확인은 반입 뒤 site eval에서 한다.
 - 시험 순서 의존: `test_module_templates.py` 뒤 `test_module_answers.py::test_table_cli_runs_on_templates`가 실패한다(수정 전에도 같음, 전체 실행 순서에서는 통과).
-- Codex 리뷰 P2(덤프 조각 사이 다른 덤프 끼어듦): 합성 oFono 로그 2개의 덤프 조각을 값 출력 없이 셌다. 현재 마스킹 뒤 남은 IMSI·ICCID는 0이다. 남은 12자리 넘는 숫자열은 USIM AID와 hex뿐이다. 사용자 관찰("줄이 길면 개행만, 끼어드는 건 못 봄")과 맞으며 P2를 유지한다.
+- Codex 리뷰 P2(덤프 조각 사이 다른 덤프 끼어듦): 골든·mask-gate 차이 0. P2를 유지한다.
 - S36(사내 GitHub MCP): 11/06 사용자에게서 도구·인자 이름을 받아 guard로 돌려 봤다. 지금 규칙 11로 충분하다(이슈 DB 대상 쓰기는 ask, 고칠 것 없음). 사내 값이므로 레포에는 넣지 않고, 사내 보완 때 SITE_PROFILE S36에 적는다.
 
 ## C1+D 보정 (11/06, 설계 → 설계 검증 → 구현 → 리뷰 → 검증 → 수정 — 사용자 11/06 "구현 전에 다시 설계하고 검증")
@@ -101,7 +101,7 @@ g-1: 커밋 `cc2ca81` 위, Sonnet, `-j 3`, 67개 모두 끝남(멈춤 0), $24.03
 설계 `scratchpad/c1d/correction-design.md`(v2, 검증 반영 §13): 사용자 결정 8개(모듈별 병렬 보정·증상별 첫 점검 표·사례 추가·대체 근거 A·데몬 역할 표·박힌 데몬 이름 → tags.yaml 속성·정답 표 확인·APN 설정 행) + 구현 보고 추가 항목. 설계 검증(2관점 리뷰 → 반박 검증): 확정 P0 2(기준 커밋, 사용자 확인 없는 견본 DB RIL 항목 분리 → 뺌)·P1 13 반영.
 구현(토큰 절약 — 사용자 11/06: 에이전트 4개): X-common(phase 0: 시험 상수·역할 표 시험·modules.yaml 네 줄·출력 형식 `원인 데몬`=로그에 찍힌 이름·analyzer 14개·기존 사례 채점 수정 3건 / `_common` 역할 표(역할 → 지금 이름·구 이름)·공통 증상·대체 근거 규칙(요청 없이 data call list에서 빠지면 모뎀·망)·짧은 지위 블록), M-ofono(7모듈 증상 표·역할 이름·대체 근거, 사례 5), M-android(7모듈, 사례 6), X-infra(tags.yaml `level: unreliable`·`ipc: vendor` — 선언 없으면 지금 상수, 출력 바이트 동일·`backend.apply_rules`·`db_lint` 검증·rulediff / `^GsmCdmaCallTracker$` 견본 DB 추가, 미수집 예시 → `GsmCdmaConnection` / 입력 경로 사업자 이름·MCC/MNC·`dump_dmsg_w_re()` 갈린 조각 / ofono_reference 0.0.4·android reference 0.1.1). 사례 42개(oFono 21·Android 21), 문서는 모두 상한 안.
 통합(메인): 생성물은 버전 줄·태그 수(74→75)만, 골든·mask-gate 차이 0, fixture_residual 0, dry-run 14개(1회차 84회 추정 $5.11), 전체 3,776 통과·1 실패(S-0 context pack 31,068B > 30KB — 04 §5.8 태그 속성 설명 줄여 29,941B) → 수정 뒤 관련 383 통과.
-구현 리뷰(2관점 → 반박 검증 1): 확정 P1 3 — 갈린 덤프 조각 묶기가 합성 로그에서 0번 동작(시각 뺀 앞머리·1초 안으로 고침 — 합성 로그 11묶음·plmn 8건 잡힘, 사례·fixture 재검사 0), Android 데몬 크래시(N10) 보기에 벤더 RIL 줄 0 → 일반 규칙과 충돌(`serviceDied`·`has died` 예외 추가), **실행 중 마스커가 `dump_dmsg_w_re()` 조각에 갈린 IMSI/ICCID 값을 안 가림**(기존 코드, 사용자 결정 대기 — masking.py는 안 바꿈).
+구현 리뷰(2관점 → 반박 검증 1): 확정 P1 3 — 갈린 덤프 조각 묶기가 동작하지 않음(시각 뺀 앞머리·1초 안으로 고침 — 골든·mask-gate 차이 0), Android 데몬 크래시(N10) 보기에 벤더 RIL 줄 0 → 일반 규칙과 충돌(`serviceDied`·`has died` 예외 추가), **실행 중 마스커가 `dump_dmsg_w_re()` 조각에 갈린 IMSI/ICCID 값을 안 가림**(기존 코드, 사용자 결정 대기 — masking.py는 안 바꿈).
 자동 결정: 증상 행 130B 초과 허용(파일 상한 안, 사용자 행 안 버림), skillcheck.py 역할 표 열 읽기 변경(X-common), call-epsfb-after-apm 생성 입력 두 줄 늘어남·N3 데몬 `사내 데몬`·N10 근거 `serviceDied|has died` 넓힘 → 정답 표에 표시.
 
 ### 나중에 할 일 (사용자 11/06 — 이번 묶음 밖, 여유 될 때)
@@ -122,14 +122,14 @@ P2: reference에 예시 "예:" 표시와 "advice를 없애려고 근거를 지�
 
 범위: `scratchpad/c1d/plan.md`(판정 R1~R45, 설계 C1D·DD)대로 G-O(oFono)·G-A(Android) 두 갈래 병렬 → 통합 I1~I3 → 4관점 리뷰 → 반박 검증 → 확정 P1 4건 수정. 워크플로는 수정 단계에서 중단(11/05 23:47 KST)됐으나 수정 커밋 4개는 남아 있었고, 메인이 b3e9956 위로 옮겨(충돌 0) 생성물 점검·전체 테스트를 다시 돌렸다 — 3,756 통과·1 실패(F 시험 `test_ms1_tree_partial_repo_is_info`가 공식 템플릿에 ofono/data만 있다고 가정 → 템플릿 사본에서 일부만 남겨 쓰게 고침, 그 파일 17 통과).
 만든 것: `templates/module-skills/{ofono,android}/` — `_common/layers.md`·`components.md`, 모듈마다 SKILL.md·analyzer.md·explore.md·references(skill-creator 지침), eval 사례 31개(oFono 16: deep 7·explore 9, 모두 합성 / Android 15: deep 7·explore 8, 모두 합성). 견본 DB 태그 58개·`UNSOL_DATA_CALL_LIST_UPDATED`(11/05 승인), Android 파서 ③b(`iccIO:` SIM_IO, 숫자 error 이름, RadioConfig 짝, `::` 태그), oFono 파서 ③a(사내 구성요소 레벨 I, vendor-ril 벤더 IPC 이벤트), `make_module_repo.py`·`module_repo_check --template`, Android arm 고정값(S12), `make_bundle` 점검 11.
-마스킹(R28 — 사용자에게 보임): `masking.py` 전체 차이 — M12 IPv6 경계에 낱말 문자 전부(C++ 범위 `X::Y`가 IP 아님), SIM_AUTHENTICATION B64 규칙만 여러 줄 글에서 그 줄 문맥(`per_line`). 합성 로그 IP 수 2453→214·783→34·2942→500, 남은 식별자 0, b64 경로 모양 0(세 번째 받아들인 예외). 골든 0 차이, mask-gate 스냅숏 그대로.
+마스킹(R28 — 사용자에게 보임): `masking.py` 전체 차이 — M12 IPv6 경계에 낱말 문자 전부(C++ 범위 `X::Y`가 IP 아님), SIM_AUTHENTICATION B64 규칙만 여러 줄 글에서 그 줄 문맥(`per_line`). 골든·mask-gate 차이 0.
 측정(토큰 0): `module_measure episodes` oFono explore 72/114·deep 95/114(기준 97, −2 한계), held-out 17/22·20/22, Android 48/88·64/88(기준 ≥43·63). dry-run 14모듈 모두 종료 0·`pins_ok`, 64회 추정 ≈ $3.77.
 리뷰: 4관점(마스킹·입력 / 문서·사례 / 기반 코드 / Android data) → 반박 검증. 확정 P1 4건 고침 — F1 접힌 SIP Digest 헤더(`nonce`·`response`·`cnonce`·`opaque`)가 여러 줄 글 경로(Jira 본문·issue_post·add-fixture·db_lint find)에서 안 가려짐(per_line을 SIM_AUTHENTICATION B64에만, 회귀 시험), F2 `원인 아님`·`그 층 로그 없음`일 때 `원인 데몬` 지시 없음 → `알 수 없음`(7개 함정 사례가 문서와 무관하게 갈리던 것), F3 한 arm 기록 합치기가 run 수·자식 모드 다른 기록을 섞어 진 비교를 pass로(같을 때만 합침), F4 threadtime 빈 태그 줄이 파싱 안 되고 원문 점검도 놓침.
 
 ### P2 — C1+D (반입 뒤 후보, 문서·사례 쪽은 보정 단계에서 함께 볼 수 있음)
 - 사례·채점: android `ims-iradioims-absent` daemon regex가 받는 `벤더 IMS`를 `wrong_layer`가 막음. Android 템플릿 `<구성요소: …>`를 베끼면 데몬 F. modem-oos-dm-drop·sms-ims-local-reject가 문서가 가르치지 않는 줄을 근거로 요구, modem 보기에 사내 구성요소 0줄·낱말 과마스킹. ofono `sms-send-no-vendor-lines` ★ 함정이 보기 밖(vendor 0줄, 두 번째 시도 창 밖 3ms). oFono network 문서가 in-sample 사례의 결정 문구(`INVALID_RESPONSE` 등)를 적음 → 일반화, in-sample 사례 with 개선폭은 상한으로 표시.
 - 문서 크기: oFono modem deep with(R8) 11,275B > 10,752B(시험이 R8 묶음을 안 셈). 한 deep run 안에서 두 단계·짝 규칙 3번 반복(250~400B), 상태 블록 350B × 5문서(≈17%, R10 판정 — 사용자 결정 필요).
-- 마스킹: M12 경계 뒤로 글자·`_`에 붙은 IPv6(`src_2001:db8::5` 등)는 안 가려짐(DD §3.0이 정한 대가, 시험에 한계 적기). deny 목록이 한 낱말 "Read"를 `<CARRIER#1>`로 과마스킹. oFono SimManager GetProperties 덤프의 사업자 이름·MCC/MNC가 마스커·deny 목록 통과(입력 범위로 피함 — 보정 X-infra에서).
+- 마스킹: M12 경계 뒤로 글자·`_`에 붙은 IPv6(`src_2001:db8::5` 등)는 안 가려짐(DD §3.0이 정한 대가, 시험에 한계 적기). deny 목록이 한 낱말 "Read"를 `<CARRIER#1>`로 과마스킹.
 - 도구: `make_module_eval_inputs._inside_repo`가 다른 worktree의 templates를 막지 않음(R16 우회), `related_tests`가 `tests/fixtures/module-arms/README.md`에 시험 0개, 플랫폼 다른 같은 이름 사례 `FileExistsError`(P3), `--report --no-view`가 `--no-view` 무시(P3).
 - 측정 기록: Android episodes 48/64는 461a8a3 파서로 저장된 events.json을 읽은 값 — HEAD 파서·견본 DB로 다시 파싱하면 45/69(기준 통과). oFono deep −2는 modules.yaml·modulefilter 변경 탓으로 보임(원인 커밋 미확인). reference 백엔드가 builtin 두 개를 내는데 문서(16-existing-assets:65·173, 15-local-draft:42, parser_backends/__init__.py:6)는 "builtin 판별 없음", 백엔드 VERSION 0.1.0·ofono_reference 0.0.3 그대로(보정 설계에서 결정).
 - 기타: `ofono_reference` VERSION, `_ask_switch` `--at` 경로 필터 없음, IMPL §5.9 "16KB" 문구, RadioError 표는 공개 enum 1·2·6·17만(googlesource 막힘).
@@ -163,8 +163,8 @@ refspec)을 써서 값 둘·바꾼 refspec·global 설정으로 심은 커밋을
 `+refs/heads/<base>:refs/remotes/origin/<base>`를 명시하고, preflight는 모든 범위에서 `remote.origin.url` 값 하나·`fetch` 기본값·
 `tagopt --no-tags`만 받으며, 받은 뒤 `origin/<base>` = `FETCH_HEAD`를 본다(doctor도 같은 preflight). ② M10 뒤집힌 ICCID가 19자리
 (EF_ICCID 채움 nibble `F`가 마지막 숫자 앞, `…54F6`)를 놓쳤다 → 마스킹 커밋에서 고침. ③ M1 덤프 줄 뒤 짧은 꼬리(` ...`·`(len n)`·
-`[SUB0]`)와 `:` 바로 뒤가 아닌 바이트 8개 이상 연속이 남았다 → 마스킹 커밋에서 고침(합성 로그 남은 8바이트 이상 연속 15·716·14
-→ 0, 다른 종류 수·db_lint 관문 그대로). ④ eval 40·41·71 채점기가 `module --for deep` 없이 Skill 도구만 불러도 통과시켰다 →
+`[SUB0]`)와 `:` 바로 뒤가 아닌 바이트 8개 이상 연속이 남았다 → 마스킹 커밋에서 고침(골든·mask-gate 차이 0,
+db_lint 관문 그대로). ④ eval 40·41·71 채점기가 `module --for deep` 없이 Skill 도구만 불러도 통과시켰다 →
 Skill 도구는 `module --for deep` 종료 1 `설치 스킬 못 찾음` 뒤에만 센다. ⑤ OpenCode 쪽 R20·R21·R22(아래 계획 I-2 절, `RUNTIMES.md
 §5.4`). 남은 것(P2): EF_IMSI hex(`08 29 …`)와 쉼표로 나뉜 ICCID 바이트는 B2 §3.2 M10 범위 밖이라 그대로 — 사내 로그에 있으면
 규칙을 더한다. guard는 `python3 -c`로 관리 clone `.git/config`를 쓰는 것을 막지 않는다(받기 쪽이 이제 그 설정을 믿지 않는다).
