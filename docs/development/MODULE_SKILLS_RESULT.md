@@ -81,7 +81,7 @@ g-1: 커밋 `cc2ca81` 위, Sonnet, `-j 3`, 67개 모두 끝남(멈춤 0), $24.03
 
 ## C1+D 모듈 eval 유료 측정 (11/06, 정답 표 사용자 답 반영 뒤)
 
-**정답 표 답(사용자 11/06)**: N2는 ofonod도 인정 후보로 넣었다(함정에서 뺌, 새 파라미터가 추가되면 데이터 관리 데몬(사내)와 oFono를 함께 고치고 APN 핵심 로직은 ofonod에 있다). oFono data explore의 APN 행도 고쳤다. N1은 주석만 넣었다(실제로는 SIM 변경 이벤트 처리가 실패할 때만 생긴다). N3은 지금 정답 유지(프레임워크 재시도는 함정), N6·N9·N10은 그대로 둔다. components.md는 크기 예산(3800B)과 7모듈 docs_sha256 때문에 손대지 않았다.
+**정답 표 답(사용자 11/06)**: N2는 ofonod도 인정 후보로 넣었다(함정에서 뺌, 새 파라미터가 추가되면 data 슬롯 구성요소(사내)와 oFono를 함께 고치고 APN 핵심 로직은 ofonod에 있다). oFono data explore의 APN 행도 고쳤다. N1은 주석만 넣었다(실제로는 SIM 변경 이벤트 처리가 실패할 때만 생긴다). N3은 지금 정답 유지(프레임워크 재시도는 함정), N6·N9·N10은 그대로 둔다. components.md는 크기 예산(3800B)과 7모듈 docs_sha256 때문에 손대지 않았다.
 **1회차(84회, $6.32)**: with 통과 25/42, without 14/42. with 실패 17건의 내역은 다음과 같다. 층·데몬은 맞고 정답 근거 줄이 일부 빠짐 14, `⇒` 꼬리만 인용(지어낸 근거) 1, 층 틀림 1, 형식 1. 층·데몬을 맞힌 것은 with 40/42, without 32/42다. 관문 결과는 pass 9·tie 1·fail 4다. android/ims는 without 안전 위반으로 fail.
 **§9.4 조건 3(with 안전 위반) 보고 → 사용자 선택 "공통 지침만"**: 두 플랫폼 `_common/layers.md`에 근거 인용 규칙 한 줄을 넣었다(cc2ca81). 규칙은 답한 층 실패 줄과 증상으로 잇는 줄(요청·응답 짝, 위 층 실패, 상태값)을 함께 인용하고, 입력 그대로 쓰며, `⇒` 꼬리만 쓰지 않는다는 것이다. 바이트 예산은 올리지 않았다. 설계·반박 검토는 `scratchpad/meval/evidence-rule-design.md`.
 **2회차(with만 42회, $2.82)**: with 통과 25 → 27/42다(오름 7, 내림 3). 오름 7건 중 6건은 규칙이 말한 줄을 더 인용해서 생겼다. with 안전 위반은 2건이다: android/sim `ril_timeout(…)` 해석을 기호만 빼고 인용(같은 실패), ofono/network 원문 7줄 인용. 7줄 중 실제 근거는 5줄이고, 나머지는 설명 칸 글과 겹쳐 셈된 것이다. 관문 결과: fail은 android/ims·android/sim·ofono/network, tie는 ofono/modem·ofono/sim·ofono/sms, 나머지는 pass다.
@@ -122,15 +122,15 @@ P2: reference에 예시 "예:" 표시와 "advice를 없애려고 근거를 지�
 ## C1+D 모듈 스킬 문서(oFono 7·Android 7)·eval 사례 31개 (11/05~06, 워크플로 wf_5bb9c084-688)
 
 범위: `scratchpad/c1d/plan.md`(판정 R1~R45, 설계 C1D·DD)대로 G-O(oFono)·G-A(Android) 두 갈래 병렬 → 통합 I1~I3 → 4관점 리뷰 → 반박 검증 → 확정 P1 4건 수정. 워크플로는 수정 단계에서 중단(11/05 23:47 KST)됐으나 수정 커밋 4개는 남아 있었고, 메인이 b3e9956 위로 옮겨(충돌 0) 생성물 점검·전체 테스트를 다시 돌렸다 — 3,756 통과·1 실패(F 시험 `test_ms1_tree_partial_repo_is_info`가 공식 템플릿에 ofono/data만 있다고 가정 → 템플릿 사본에서 일부만 남겨 쓰게 고침, 그 파일 17 통과).
-만든 것: `templates/module-skills/{ofono,android}/` — `_common/layers.md`·`components.md`, 모듈마다 SKILL.md·analyzer.md·explore.md·references(skill-creator 지침), eval 사례 31개(oFono 16: deep 7·explore 9, 모두 합성 / Android 15: deep 7·explore 8, 모두 합성). 견본 DB 태그 58개·`UNSOL_DATA_CALL_LIST_UPDATED`(11/05 승인), Android 파서 ③b(`iccIO:` SIM_IO, 숫자 error 이름, RadioConfig 짝, `::` 태그), oFono 파서 ③a(라우팅 데몬(사내)·모뎀 NV 데몬(사내)·모뎀 진단 데몬(사내)·D-Bus 도우미 데몬(사내) 레벨 I, vendor-ril 벤더 IPC 이벤트), `tools/make_excerpt.py`·`make_module_repo.py`·`module_repo_check --template`, Android arm 고정값(S12), `make_bundle` 점검 11.
+만든 것: `templates/module-skills/{ofono,android}/` — `_common/layers.md`·`components.md`, 모듈마다 SKILL.md·analyzer.md·explore.md·references(skill-creator 지침), eval 사례 31개(oFono 16: deep 7·explore 9, 모두 합성 / Android 15: deep 7·explore 8, 모두 합성). 견본 DB 태그 58개·`UNSOL_DATA_CALL_LIST_UPDATED`(11/05 승인), Android 파서 ③b(`iccIO:` SIM_IO, 숫자 error 이름, RadioConfig 짝, `::` 태그), oFono 파서 ③a(사내 구성요소 레벨 I, vendor-ril 벤더 IPC 이벤트), `tools/make_excerpt.py`·`make_module_repo.py`·`module_repo_check --template`, Android arm 고정값(S12), `make_bundle` 점검 11.
 마스킹(R28 — 사용자에게 보임): `masking.py` 전체 차이 — M12 IPv6 경계에 낱말 문자 전부(C++ 범위 `X::Y`가 IP 아님), SIM_AUTHENTICATION B64 규칙만 여러 줄 글에서 그 줄 문맥(`per_line`). 합성 로그 IP 수 2453→214·783→34·2942→500, 남은 식별자 0, b64 경로 모양 0(세 번째 받아들인 예외). 골든 0 차이, mask-gate 스냅숏 그대로.
 측정(토큰 0): `module_measure episodes` oFono explore 72/114·deep 95/114(기준 97, −2 한계), held-out 17/22·20/22, Android 48/88·64/88(기준 ≥43·63). dry-run 14모듈 모두 종료 0·`pins_ok`, 64회 추정 ≈ $3.77.
 리뷰: 4관점(마스킹·입력 / 문서·사례 / 기반 코드 / Android data) → 반박 검증. 확정 P1 4건 고침 — F1 접힌 SIP Digest 헤더(`nonce`·`response`·`cnonce`·`opaque`)가 여러 줄 글 경로(Jira 본문·issue_post·add-fixture·db_lint find)에서 안 가려짐(per_line을 SIM_AUTHENTICATION B64에만, 회귀 시험), F2 `원인 아님`·`그 층 로그 없음`일 때 `원인 데몬` 지시 없음 → `알 수 없음`(7개 함정 사례가 문서와 무관하게 갈리던 것), F3 한 arm 기록 합치기가 run 수·자식 모드 다른 기록을 섞어 진 비교를 pass로(같을 때만 합침), F4 threadtime 빈 태그 줄이 파싱 안 되고 원문 점검도 놓침. 메인 추가: `tests/test_make_excerpt.py`에 거부 목록 장치 노드 값이 있던 것(검증은 P2로 봄 — 표본 값 금지 규칙으로 고침, 원래 커밋에 합쳐 이력에도 없음).
 
 ### P2 — C1+D (반입 뒤 후보, 문서·사례 쪽은 보정 단계에서 함께 볼 수 있음)
-- 사례·채점: android `ims-iradioims-absent` daemon regex가 받는 `벤더 IMS`를 `wrong_layer`가 막음. Android 템플릿 `<구성요소: …>`를 베끼면 데몬 F. modem-oos-dm-drop·sms-ims-local-reject가 문서가 가르치지 않는 줄을 근거로 요구, modem 보기에 IMS 서비스 데몬(사내) 0줄·모뎀 진단 데몬(사내) 과마스킹. ofono `sms-send-no-vendor-lines` ★ 함정이 보기 밖(vendor 0줄, 두 번째 시도 창 밖 3ms). oFono network 문서가 in-sample 사례의 결정 문구(`INVALID_RESPONSE` 등)를 적음 → 일반화, in-sample 사례 with 개선폭은 상한으로 표시.
+- 사례·채점: android `ims-iradioims-absent` daemon regex가 받는 `벤더 IMS`를 `wrong_layer`가 막음. Android 템플릿 `<구성요소: …>`를 베끼면 데몬 F. modem-oos-dm-drop·sms-ims-local-reject가 문서가 가르치지 않는 줄을 근거로 요구, modem 보기에 사내 구성요소 0줄·낱말 과마스킹. ofono `sms-send-no-vendor-lines` ★ 함정이 보기 밖(vendor 0줄, 두 번째 시도 창 밖 3ms). oFono network 문서가 in-sample 사례의 결정 문구(`INVALID_RESPONSE` 등)를 적음 → 일반화, in-sample 사례 with 개선폭은 상한으로 표시.
 - 문서 크기: oFono modem deep with(R8) 11,275B > 10,752B(시험이 R8 묶음을 안 셈). 한 deep run 안에서 두 단계·짝 규칙 3번 반복(250~400B), 상태 블록 350B × 5문서(≈17%, R10 판정 — 사용자 결정 필요).
-- 마스킹: M12 경계 뒤로 글자·`_`에 붙은 IPv6(`src_2001:db8::5` 등)는 안 가려짐(DD §3.0이 정한 대가, 시험에 한계 적기). deny 목록이 모뎀 진단 데몬(사내) 줄 "Read"를 `<CARRIER#1>`로 과마스킹. oFono SimManager GetProperties 덤프의 사업자 이름·MCC/MNC가 마스커·deny 목록 통과(입력 범위로 피함 — 보정 X-infra에서).
+- 마스킹: M12 경계 뒤로 글자·`_`에 붙은 IPv6(`src_2001:db8::5` 등)는 안 가려짐(DD §3.0이 정한 대가, 시험에 한계 적기). deny 목록이 한 낱말 "Read"를 `<CARRIER#1>`로 과마스킹. oFono SimManager GetProperties 덤프의 사업자 이름·MCC/MNC가 마스커·deny 목록 통과(입력 범위로 피함 — 보정 X-infra에서).
 - 도구: `make_module_eval_inputs._inside_repo`가 다른 worktree의 templates를 막지 않음(R16 우회), `related_tests`가 `tests/fixtures/module-arms/README.md`에 시험 0개, 플랫폼 다른 같은 이름 사례 `FileExistsError`(P3), `--report --no-view`가 `--no-view` 무시(P3).
 - 측정 기록: Android episodes 48/64는 461a8a3 파서로 저장된 events.json을 읽은 값 — HEAD 파서·견본 DB로 다시 파싱하면 45/69(기준 통과). oFono deep −2는 modules.yaml·modulefilter 변경 탓으로 보임(원인 커밋 미확인). reference 백엔드가 builtin 두 개를 내는데 문서(16-existing-assets:65·173, 15-local-draft:42, parser_backends/__init__.py:6)는 "builtin 판별 없음", 백엔드 VERSION 0.1.0·ofono_reference 0.0.3 그대로(보정 설계에서 결정).
 - 기타: `ofono_reference` VERSION, `_ask_switch` `--at` 경로 필터 없음, IMPL §5.9 "16KB" 문구, RadioError 표는 공개 enum 1·2·6·17만(googlesource 막힘).
@@ -154,8 +154,8 @@ P2: reference에 예시 "예:" 표시와 "advice를 없애려고 근거를 지�
 
 **구간 관문(B2 §16, R16)**: `tools/module_measure.py episodes`(구간 정의 yaml은 scratch). 처음 잰
 값(oFono deep 근거 창 94/114, frozen 97에서 −3, 구간 11 0/7)은 측정 입력이 낡은 탓이었다 — 합성 oFono 입력 두 개의 `events.json`이
-entitlement 데몬(사내)를 `ims`로 둔 옛 변형 DB로 만들어져 `category_hint`가 먼저 적용되며(B2 줄 382) entitlement 데몬(사내) 53줄이 network 모듈 밖으로 갔다. 현재
-`make_variant_dbs.py`의 `issue-db-ofono-modules`(entitlement 데몬(사내) → network, 결정 기록 11/05 ①)와 현재 파서(`parse_logcat.py parse --mask`,
+사내 구성요소 한 개를 `ims`로 둔 옛 변형 DB로 만들어져 `category_hint`가 먼저 적용되며(B2 줄 382) 그 구성요소 53줄이 network 모듈 밖으로 갔다. 현재
+`make_variant_dbs.py`의 `issue-db-ofono-modules`(사내 구성요소 한 개 ims → network, 결정 기록 11/05 ①)와 현재 파서(`parse_logcat.py parse --mask`,
 같은 입력·같은 창)로 두 run을 다시 만들어 쟀다(A run은 그대로): oFono explore @분 72/114(frozen 73), deep 근거 창 97/114(97),
 held-out 17/22·20/22(17·20), Android 43·63/88 — 모두 ±2 안, 통과. 구간 11 deep 3/7. 이 run들이 C1/D 관문 기준이다.
 
@@ -329,7 +329,7 @@ B1+B2 뒤로 미룬 것: O8(`mcptools`·`config.py setup`이 opencode.json `mcp`
 
 ## C0 모듈 스킬 시범 (11/04)
 
-범위: oFono `data` 모듈 하나, case 3개(deep `data-apn-auth-reject`, explore `data-라우팅 데몬(사내)-route-fail`, explore 함정 `data-ofonod-only`). 새로 만든 것: 실행기·채점기 `plugin/scripts/module_eval.py`, 자식 공통 `common/claude_child.py`(skill eval `run.py`·`grade.py`도 여기서 다시 내보냄), 입력 생성기 `tests/helpers/make_module_eval_inputs.py`, variant DB `issue-db-ofono-modules`(`issue-db-ofono`는 바이트 동일), `templates/module-skills/ofono/{_common,data}`, 얼린 arm 자료 `tests/fixtures/module-arms`(pre·post sha 고정, 자식 stream 기록 1개). guard 규칙 7이 `module_eval.py --module`을 ask로 둔다. 범위 밖(설계대로): modules.yaml, 나머지 5 유형(C1), 모듈 레포·묶음, contracts 행(E), triage.py·플러그인 SKILL 변경(B).
+범위: oFono `data` 모듈 하나, case 3개(deep `data-apn-auth-reject`, explore `data-ditd-route-fail`, explore 함정 `data-ofonod-only`). 새로 만든 것: 실행기·채점기 `plugin/scripts/module_eval.py`, 자식 공통 `common/claude_child.py`(skill eval `run.py`·`grade.py`도 여기서 다시 내보냄), 입력 생성기 `tests/helpers/make_module_eval_inputs.py`, variant DB `issue-db-ofono-modules`(`issue-db-ofono`는 바이트 동일), `templates/module-skills/ofono/{_common,data}`, 얼린 arm 자료 `tests/fixtures/module-arms`(pre·post sha 고정, 자식 stream 기록 1개). guard 규칙 7이 `module_eval.py --module`을 ask로 둔다. 범위 밖(설계대로): modules.yaml, 나머지 5 유형(C1), 모듈 레포·묶음, contracts 행(E), triage.py·플러그인 SKILL 변경(B).
 진행: 구현 2갈래(실행기·채점 / 문서·사례)·통합 → 리뷰 2관점 1회 → 반박 검증 → 17건 중 확정 P0 1·P1 3을 한 번 수정(재리뷰 없음). 설계·리뷰·검증은 노력 높음, 구현·수정은 보통. skill-creator: 문서 구현 에이전트가 `SKILL.md`·`references/DATA-001.md`를 쓰기 전에 불렀다(작업 기록 15:05 호출 → 15:07 작성). 쓰기 지침만 썼고 eval 반복·설명 최적화는 하지 않았다. 효과 측정은 C0 유료 6회가 대신한다.
 고친 4건: P0 — argparse 줄임말(`--modu`·`--modul=`)이 guard ask(낱말 `module`)를 피해 유료 실행·probe를 시작함 → `allow_abbrev=False`(guard는 그대로, 스크립트가 시작 전에 종료 2). P1 — `--probe-restricted --dry-run`이 유료 자식을 띄움 → dry-run이면 argv만 보이고 종료 0. P1 — S6 적용 주장 regex가 분석 문장(`정책 규칙이 이미 추가됨 상태였을 수`)을 잡아 관문 전체를 fail로 → 주어를 도구 산출물(`tags.yaml`·`extractors.yaml`·`ril.yaml`·파서 규칙·시그니처·규칙 파일/문서·`규칙을`)로, 어미를 1인칭 완료형으로 좁힘(`됨`·`했을 수` 제외, 실제 쓰기는 S1이 잡음). P1 — S7이 가장 긴 일치 20자면 ok라 두 줄을 합친 줄·진짜 앞머리+지어낸 꼬리가 통과 → 로그 조각마다 가장 맞는 원문 줄에 대해 덮이지 않은 12자 이상 구간이 있으면 지어냄. S6·S7은 설계 §9.3 문구와 다르다. S7 문턱(블록 4자, 구간 12자)은 C0 case 3개로 맞췄으니 첫 실측 리포트의 근거 칸을 본다.
 구현이 설계와 다르게 한 것: `gen_contracts` `NOT_CLI = ("module_eval",)`(E에서 contracts 행과 함께 SCRIPTS로), `ARM_PINS` 키는 플랫폼 경로 포함, `docs_sha256` 키는 `<arm>/<relpath>`, tags.yaml reason 구분자 `·`(YAML 흐름 표기의 쉼표), result 이벤트 없는 run(시간 초과 포함)은 안전 행 전부 `기록 없음` → 관문 fail, `--record`는 incomplete면 거부.
@@ -343,13 +343,13 @@ probe(`--probe-restricted`, 자식 1회): `confined` — cwd 안 읽기 성공, 
 | case | 종류 | with | without | with 비용 | without 비용 |
 |---|---|---|---|---|---|
 | data-apn-auth-reject | deep | X(데몬) | O | $0.080 | $0.051 |
-| data-라우팅 데몬(사내)-route-fail | explore | O | X(층) | $0.065 | $0.041 |
+| data-ditd-route-fail | explore | O | X(층) | $0.065 | $0.041 |
 | data-ofonod-only | explore 함정 | O | X(층·로그 없음) | $0.066 | $0.042 |
 
 관문 **pass**: 1순위 통과 with 2 · without 1, 안전 위반 0/0, 무효 0, 비용 전부 기록. 총 $0.346(probe 포함 $0.358), run당 평균 $0.058(추정 $0.25의 약 1/4), with가 run당 +$0.024~0.029·토큰 +5.2K~12.8K. run당 11~15초. 메모는 deep 두 arm의 `S3 미시험`뿐.
 읽는 법(n=1, 스크립트 판정 그대로, 사후 재채점 안 함):
 - deep with 실패는 문서와 case가 어긋난 탓이다. with는 `layers.md`대로 `원인 층: 모뎀·망`(거절 사유 USER_AUTHENTICATION(29)는 모뎀·망의 결과, 요청은 벤더 RIL까지 감)·`원인 데몬: 알 수 없음`을 썼다. case ①은 층으로 `모뎀|망`을 받지만 데몬은 `vendor-ril`만 받는다(리뷰 P2로 이미 적은 불일치). 문서(`모뎀·망`이면 데몬 칸에 무엇을 쓰나)와 case(데몬 regex) 중 어느 쪽을 고칠지는 사용자 결정 — 고친 뒤 다시 재야 deep 비교가 의미 있다.
-- explore 두 건의 차이는 사실보다 층 이름에서 나왔다. without도 라우팅 데몬(사내) 실패(라우팅 데몬(사내))·RIL 줄 없음(ofonod-only)을 찾았지만 층을 `관리 데몬`·`ofonod`로 불렀다. with는 문서 어휘(`곁가지(라우팅 데몬(사내))`·`그 층 로그 없음(RIL trace)`)를 썼다. 함정 case에서 증상 데몬 층을 원인으로 두지 않은 것은 문서가 준 실제 차이다. 문서와 case를 같이 썼으므로 상한(위 해석 주의).
+- explore 두 건의 차이는 사실보다 층 이름에서 나왔다. without도 곁가지 구성요소 실패·RIL 줄 없음(ofonod-only)을 찾았지만 층을 `관리 데몬`·`ofonod`로 불렀다. with는 문서 어휘(`곁가지(<구성요소>)`·`그 층 로그 없음(RIL trace)`)를 썼다. 함정 case에서 증상 데몬 층을 원인으로 두지 않은 것은 문서가 준 실제 차이다. 문서와 case를 같이 썼으므로 상한(위 해석 주의).
 - 실측 단가로 C1 이후 추정: 모듈 하나 case 3 × 2 arm ≈ $0.35.
 
 ### C0 deep 재측정 (11/04, 사용자 결정 "문서 고치고 deep 재측정")

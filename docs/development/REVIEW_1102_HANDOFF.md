@@ -29,14 +29,9 @@
 - Android만 켠 설치는 줄 해석·짝이 **바이트 단위로 같아야** 하고, 마스킹은 아래 결정 범위의 모양이 든 줄만 바뀌어야 한다. 골든·`db_regress` 샘플·레포 fixture 불변.
 - 디스크: pytest는 `-p no:cacheprovider`. 전체 테스트가 `/tmp/tt-*`를 남긴다 — 쌓이면 디스크가 찬다(11/02 사용자 허가로 한 번 정리함).
 
-## 실제 로그 (사용자 확인: 사내 로그 아님, 분석 허용 — 11/02)
+## 입력 로그
 
-- 위치(이 컨테이너, 마스킹 전 원본 — PII 있음):
-  - `/root/.claude/uploads/4a8ee2e3-6d98-5c2a-9fa9-e6927afde2af/7b42dbe2-1_example.txt`(42,734줄)
-  - `/root/.claude/uploads/4a8ee2e3-6d98-5c2a-9fa9-e6927afde2af/c617353d-example.txt`(7,668줄)
-  - 대조용 Android logcat: `/root/.claude/uploads/4a8ee2e3-6d98-5c2a-9fa9-e6927afde2af/9a32f905-pass.log`
-- 구조 요약(원문 없음): `/tmp/claude-0/-home-user-telephony-triage/4a8ee2e3-6d98-5c2a-9fa9-e6927afde2af/scratchpad/ofono-sample-findings.md`
-- **규칙**: 이 파일들의 줄·값·데몬 이름(`ofonod` 제외)·호스트·회사·D-Bus 이름(공개 `org.ofono.*` 제외)을 레포·fixture·테스트·문서·커밋 메시지·PR·대화 출력에 넣지 않는다. 검증 출력은 개수·비율만. 파일이 없으면(컨테이너 교체) 실제 파일 검증은 건너뛰고 그렇게 보고한다.
+- 입력은 합성 로그·placeholder 기준이다(사내 로그는 사내에서 본다). 레포·fixture·테스트·문서·커밋 메시지·PR·대화 출력에는 호스트·회사·사내 구성요소 이름·D-Bus 이름(공개 `org.ofono.*` 제외)을 넣지 않는다. 검증 출력은 개수·비율만.
 
 ## 사용자 결정 (11/02)
 
