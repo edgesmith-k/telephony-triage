@@ -8,7 +8,7 @@
 페어링은 윈도우를 자르기 **전에** 파일 전체로 한다. 응답 없음·에러·지연 이벤트는
 `ril.yaml`(timeout)을 아는 `parse_logcat.py`가 이 결과로 만든다.
 
-첨부 로그 A(11/05 ③) 모양: 요청 `[n]> iccIO: SIM_IO …`, 숫자 오류 `[n]< REQ error <n>`(RadioError 이름, 같은 serial `RilRequest`
+합성 로그 모양: 요청 `[n]> iccIO: SIM_IO …`, 숫자 오류 `[n]< REQ error <n>`(RadioError 이름, 같은 serial `RilRequest`
 줄 이름이 있으면 그것), RadioConfig·RadioConfigResponseAidl 짝.
 
 RILJ 출력 형식은 placeholder다 — TODO(SITE:S9). 벤더 RIL 태그·슬롯 표기는 `platform.ril.tags`·`platform.log.phone_id`로 바꾼다.
@@ -26,7 +26,7 @@ from datetime import timedelta
 from . import logcat
 from platforms.base import DEFAULT_LINK_MS, VendorRules  # noqa: F401  (계약 타입, 기존 경로로 다시 내보낸다)
 
-# RadioConfig·RadioConfigResponseAidl: 모뎀 설정 요청·응답 짝(`[PHONE]` 없음, RILJ와 같은 pid, 첨부 로그 A).
+# RadioConfig·RadioConfigResponseAidl: 모뎀 설정 요청·응답 짝(`[PHONE]` 없음, RILJ와 같은 pid, placeholder).
 # RilRequest는 짝 태그가 아니다 — RILJ 응답을 되풀이하므로 짝지으면 짝 없는 중복 `ril_error`가 생긴다. 이름 연결만 한다(`_link_names`).
 RIL_TAGS = {"RILJ", "RadioConfig", "RadioConfigResponseAidl"}
 
@@ -38,7 +38,7 @@ ERROR_RE = re.compile(r"\berror[=:]\s*(?P<error>[A-Z][A-Z0-9_]*)")
 # AIDL RILJ 형식 `[0164]< SIM_IO error 2 [PHONE0]`: 숫자 RadioError.
 ERROR_NUM_RE = re.compile(r"^\s*error\s+(?P<code>\d+)\b")      # 응답 이름 바로 뒤만
 ERROR_NUM_LINE_RE = re.compile(r"\]<\s*[A-Z][A-Z0-9_]*\s+error\s+\d+\b")
-# AOSP `RadioError` 이름 중 첨부 로그 A에서 본 것만(공개 RadioError.aidl을 이 환경에서 열 수 없어 확인한 4개만 둔다).
+# AOSP `RadioError` 이름 중 4개만 둔다(사내 확인 TODO(SITE:S9)).
 # 그 밖의 숫자는 `RADIO_ERROR_<n>`이고, 같은 serial `RilRequest` 줄의 이름이 있으면 그것을 쓴다.
 RADIO_ERROR = {0: NO_ERROR, 1: "RADIO_NOT_AVAILABLE", 2: "GENERIC_FAILURE", 6: "REQUEST_NOT_SUPPORTED", 17: "NO_SUCH_ELEMENT"}
 # RilRequest: `[0158]< SIM_OPEN_CHANNEL error: com.android.internal.telephony.CommandException: NO_SUCH_ELEMENT …`
@@ -174,7 +174,7 @@ def _pair_segment(records: list[dict]) -> None:
 
 # -- 벤더 RIL 층 (선택). 규칙 타입 `VendorRules`·기본 `DEFAULT_LINK_MS`는 `platforms/base.py` ----------------
 
-# ponytail: 고정 창(HAL 앞 500ms·커버 ±60s·응답 토큰과 짝 있는 HAL 끝 = 짝+1s/짝 없으면 토큰 120s) — 사내 실제 로그 분포로 조정, 단말마다 다르면 설정 키로
+# ponytail: 고정 창(HAL 앞 500ms·커버 ±60s·응답 토큰과 짝 있는 HAL 끝 = 짝+1s/짝 없으면 토큰 120s) — 사내 로그 분포로 조정, 단말마다 다르면 설정 키로
 HAL_BEFORE = timedelta(milliseconds=500)
 COVER = timedelta(seconds=60)
 TOKEN_AFTER_RESP = timedelta(seconds=1)

@@ -20,7 +20,7 @@ from common import skillcheck, yamlio  # noqa: E402
 ANDROID = REPO / "templates" / "module-skills" / "android"
 MODULES = ("data", "sim", "network", "call", "sms", "ims", "modem")
 
-# 설계 D §1 표 순서 = 키 MOCK-9801…9815(R14). (모듈, 이름, kind, 마스킹 발췌?, 함정)
+# 설계 D §1 표 순서 = 키 MOCK-9801…9815(R14). (모듈, 이름, kind, 합성 아님?, 함정)
 CASES = [
     ("data", "data-disabled-user", "deep", False, None),
     ("data", "data-cfun-radio-off", "explore", True, None),

@@ -85,6 +85,6 @@
 
 121 CODE_LOCAL_NETWORK_NO_SERVICE: 단말 쪽 서비스 없음(무선 꺼짐·OOS)의 결과다. 원인은 그 앞 무선 상태에서 찾는다. 0 CODE_UNSPECIFIED.
 
-## 벤더 IPC 결과 (RCM_E_*, 첨부 로그에서 본 이름 — 사내 확인)
+## 벤더 IPC 결과 (RCM_E_*, placeholder — 사내 확인 TODO(SITE:S9))
 
 `Error(RCM_E_*)`는 모뎀이 준 결과다: SUCCESS 성공 · GENERIC_FAILURE 일반 실패 · NO_SUCH_ELEMENT 대상(AID·파일) 없음 · UNDEFINED_CMD 모뎀이 모르는 명령(미지원).
