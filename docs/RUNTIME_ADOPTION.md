@@ -213,7 +213,7 @@ python3 tools/site_step.py modules check   # remote·push 권한·트리·데몬
 python3 tools/site_step.py modules coverage --out docs/site/module-coverage.diff   # 사내 로그 → 모듈별 줄 수·빈 이름
 ```
 
-- 태그 속성: 이슈 DB `parser-rules/tags.yaml` 항목에 `level: unreliable`(그 줄 레벨은 심각도 아님)·`ipc: vendor`(벤더 IPC 결과 판별). 선언이 없으면 백엔드 기본 이름. 키마다 하나라도 선언하면 DB만 보므로 그 키의 이름을 모두(데몬이 바뀌면 옛·새 이름 둘 다) 같은 PR에. 운영 DB `schema/parser-rules.schema.json`에 두 키를 먼저 넣는다(메인테이너, 한 PR).
+- 태그 속성: 이슈 DB `parser-rules/tags.yaml` 항목에 `level: unreliable`(그 줄 레벨은 심각도 아님)·`ipc: vendor`(벤더 IPC 결과 판별). 0.0.5부터 oFono는 site-defaults 구성요소 플래그(`level_unreliable`·`vendor_ipc`)나 tags.yaml 선언이 없으면 레벨 보정·벤더 IPC builtin이 없다(사내 반입 때 설정 필요, TODO(SITE:S25)). 키마다 하나라도 선언하면 DB만 보므로 그 키의 이름을 모두(데몬이 바뀌면 옛·새 이름 둘 다) 같은 PR에. 운영 DB `schema/parser-rules.schema.json`에 두 키를 먼저 넣는다(메인테이너, 한 PR).
 - `coverage`는 토큰 0, `modules.yaml` `daemons` 추가 diff만 제안한다(지우는 제안 없음). 사용자 clone에서 적용해 **모듈 레포 PR(+1)** 로. tags.yaml에 없는 태그는 이슈 DB 계획 op PR(사용자 확인).
 - 중첩 `claude -p` 점검은 명령만 출력한다. 출력된 `module_eval.py … --probe-restricted --json`(자식 1회)을 Claude Code 세션의 Bash에서 한 번 돌리고 `--done MS-1 --waive ms1.nested_claude="<결과>"`(fail `ms1.prefer`는 출력대로 고친다).
 

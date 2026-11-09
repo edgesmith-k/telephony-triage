@@ -65,7 +65,7 @@ class ParserBackend(ABC):
     def apply_rules(self, rules) -> ParserBackend:
         """이슈 DB `parser-rules`(`common.parser_rules.Rules`)의 태그 속성(`level`·`ipc`, 04-parser-matching §5.8 (2))을
         반영한 백엔드를 준다. 기본은 자기 자신이다(site 백엔드는 그대로). reference 백엔드는 키마다 DB가 하나라도
-        선언하면 DB만, 아니면 백엔드 기본 상수를 본다. 원본 객체(싱글톤)는 바꾸지 않는다."""
+        선언하면 DB만, 아니면 백엔드 기본 집합(구성요소 설정)을 본다. 원본 객체(싱글톤)는 바꾸지 않는다."""
         return self
 
     @abstractmethod

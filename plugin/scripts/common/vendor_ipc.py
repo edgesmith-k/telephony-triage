@@ -8,7 +8,7 @@
 | `[<장치>][RX] SIT_<X>, RSP, … Error(RCM_E_<Y>)` (`RCM_E_SUCCESS`는 뺀다) | `builtin.common.vendor_ipc_error` | `ipc`, `error` |
 | `[RilContext_<n>] OnRequestComplete Request ID=<id>, result=<n≠0>` | `builtin.common.vendor_request_failed` | `request_id`, `result` |
 
-배선(어느 태그·데몬의 줄에 부르는지)은 플랫폼 백엔드가 한다(기본 oFono `exynos-ril`, Android `VENDOR_IPC_TAGS = {"RIL"}`;
+배선(어느 태그·데몬의 줄에 부르는지)은 플랫폼 백엔드가 한다(oFono는 구성요소 설정 `vendor_ipc: true`인 ident, Android `VENDOR_IPC_TAGS = {"RIL"}`;
 이슈 DB tags.yaml에 `ipc: vendor`가 하나라도 있으면 그 태그만 — 백엔드 `apply_rules`, 04-parser-matching §5.8 (2)).
 값은 글(str)이다. 이 모듈은 태그 카테고리(tags.yaml 수집 여부)에 기대지 않는다 — 태그가 수집 대상이 아니어도 같은 이벤트가 나온다.
 """

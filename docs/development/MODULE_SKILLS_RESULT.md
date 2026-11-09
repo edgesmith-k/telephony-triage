@@ -59,7 +59,6 @@
 
 ### P2 — C·C′·마스킹·후보 채점 (반입 뒤 후보)
 - C′: (나)에서 1위 유형 원인만 봄(다른 S=1·C=0 유형 원인은 다음), 원인 부분 일치 구간을 1위 증상 슬롯으로 제한 안 함, 1위가 S=1·C=0이면 다른 유형 증상 부분 일치 추가. find-text 시작 디렉토리 링크·FIFO 처리(출력은 ref뿐이라 누출 없음). 기존 `find-symbol`에 시간·크기 상한·제외 디렉토리 없음.
-- 마스킹: `make_excerpt`가 아직 줄마다 `masker.mask`(갈린 IMSI/ICCID 든 입력은 residual에서 거부 — 안전 쪽 실패).
 - C: drift는 원인 시그니처만(유형 단위는 feedback 스키마 `type_signature` 필요 — 다음 묶음), 기준 3/2는 사내 측정 뒤 조정.
 - 후보 채점: 인정 후보가 사례마다 1개(기계 변환) — 사용자 확인으로 넓힘, 층 여러 개를 한 칸에 쓰면 형식 실패 규칙·같은 후보 중복 실패(설계 F5)는 구현됨, 두 arm 모두 만점 근처라 동률 늘 것(관문 경고에 top1 with/without 표시).
 
@@ -111,7 +110,7 @@ g-1: 커밋 `cc2ca81` 위, Sonnet, `-j 3`, 67개 모두 끝남(멈춤 0), $24.03
 
 ### P2 — C1+D 보정 (반입 뒤 후보)
 - 설계 검증 P2는 설계 §13 목록. 구현 리뷰 P2: call·ims explore ④ "발신 실패"·"IMS 등록 실패"가 초안 열에서 왔는데 `(초안)` 없음, 행 바이트 상한(130/150B)을 시험이 안 봄(48행 초과, 최대 207B — 글자/바이트 기준 사용자 확인), oFono call SKILL CSFB 규칙이 N6 보기에 없는 `Data RegState=REGISTERED`를 요구, skillcheck가 components.md의 모든 표 2~3열을 데몬 이름으로 모음(역할 표 아래만 봐야 함).
-- X-infra: 기본 상수는 journal.py에 두고 backend가 import(순환 import 회피), module_measure가 기본 레벨 보정을 스스로 적용, modules.yaml `level_unreliable` 사본·일치 시험 안 넣음(C-F11).
+- X-infra: 레벨 보정 대상은 구성요소 설정 키(`level_unreliable`), module_measure는 파싱과 같은 백엔드 보정을 쓴다, modules.yaml `level_unreliable` 사본·일치 시험 안 넣음(C-F11).
 
 ## 근거 줄 소실 대응 B: 이슈 DB 작성 지침 + `db_lint --advice` (11/06, c73550f)
 
@@ -122,10 +121,10 @@ P2: reference에 예시 "예:" 표시와 "advice를 없애려고 근거를 지�
 ## C1+D 모듈 스킬 문서(oFono 7·Android 7)·eval 사례 31개 (11/05~06, 워크플로 wf_5bb9c084-688)
 
 범위: `scratchpad/c1d/plan.md`(판정 R1~R45, 설계 C1D·DD)대로 G-O(oFono)·G-A(Android) 두 갈래 병렬 → 통합 I1~I3 → 4관점 리뷰 → 반박 검증 → 확정 P1 4건 수정. 워크플로는 수정 단계에서 중단(11/05 23:47 KST)됐으나 수정 커밋 4개는 남아 있었고, 메인이 b3e9956 위로 옮겨(충돌 0) 생성물 점검·전체 테스트를 다시 돌렸다 — 3,756 통과·1 실패(F 시험 `test_ms1_tree_partial_repo_is_info`가 공식 템플릿에 ofono/data만 있다고 가정 → 템플릿 사본에서 일부만 남겨 쓰게 고침, 그 파일 17 통과).
-만든 것: `templates/module-skills/{ofono,android}/` — `_common/layers.md`·`components.md`, 모듈마다 SKILL.md·analyzer.md·explore.md·references(skill-creator 지침), eval 사례 31개(oFono 16: deep 7·explore 9, 모두 합성 / Android 15: deep 7·explore 8, 모두 합성). 견본 DB 태그 58개·`UNSOL_DATA_CALL_LIST_UPDATED`(11/05 승인), Android 파서 ③b(`iccIO:` SIM_IO, 숫자 error 이름, RadioConfig 짝, `::` 태그), oFono 파서 ③a(사내 구성요소 레벨 I, vendor-ril 벤더 IPC 이벤트), `tools/make_excerpt.py`·`make_module_repo.py`·`module_repo_check --template`, Android arm 고정값(S12), `make_bundle` 점검 11.
+만든 것: `templates/module-skills/{ofono,android}/` — `_common/layers.md`·`components.md`, 모듈마다 SKILL.md·analyzer.md·explore.md·references(skill-creator 지침), eval 사례 31개(oFono 16: deep 7·explore 9, 모두 합성 / Android 15: deep 7·explore 8, 모두 합성). 견본 DB 태그 58개·`UNSOL_DATA_CALL_LIST_UPDATED`(11/05 승인), Android 파서 ③b(`iccIO:` SIM_IO, 숫자 error 이름, RadioConfig 짝, `::` 태그), oFono 파서 ③a(사내 구성요소 레벨 I, vendor-ril 벤더 IPC 이벤트), `make_module_repo.py`·`module_repo_check --template`, Android arm 고정값(S12), `make_bundle` 점검 11.
 마스킹(R28 — 사용자에게 보임): `masking.py` 전체 차이 — M12 IPv6 경계에 낱말 문자 전부(C++ 범위 `X::Y`가 IP 아님), SIM_AUTHENTICATION B64 규칙만 여러 줄 글에서 그 줄 문맥(`per_line`). 합성 로그 IP 수 2453→214·783→34·2942→500, 남은 식별자 0, b64 경로 모양 0(세 번째 받아들인 예외). 골든 0 차이, mask-gate 스냅숏 그대로.
 측정(토큰 0): `module_measure episodes` oFono explore 72/114·deep 95/114(기준 97, −2 한계), held-out 17/22·20/22, Android 48/88·64/88(기준 ≥43·63). dry-run 14모듈 모두 종료 0·`pins_ok`, 64회 추정 ≈ $3.77.
-리뷰: 4관점(마스킹·입력 / 문서·사례 / 기반 코드 / Android data) → 반박 검증. 확정 P1 4건 고침 — F1 접힌 SIP Digest 헤더(`nonce`·`response`·`cnonce`·`opaque`)가 여러 줄 글 경로(Jira 본문·issue_post·add-fixture·db_lint find)에서 안 가려짐(per_line을 SIM_AUTHENTICATION B64에만, 회귀 시험), F2 `원인 아님`·`그 층 로그 없음`일 때 `원인 데몬` 지시 없음 → `알 수 없음`(7개 함정 사례가 문서와 무관하게 갈리던 것), F3 한 arm 기록 합치기가 run 수·자식 모드 다른 기록을 섞어 진 비교를 pass로(같을 때만 합침), F4 threadtime 빈 태그 줄이 파싱 안 되고 원문 점검도 놓침. 메인 추가: `tests/test_make_excerpt.py`에 거부 목록 장치 노드 값이 있던 것(검증은 P2로 봄 — 표본 값 금지 규칙으로 고침, 원래 커밋에 합쳐 이력에도 없음).
+리뷰: 4관점(마스킹·입력 / 문서·사례 / 기반 코드 / Android data) → 반박 검증. 확정 P1 4건 고침 — F1 접힌 SIP Digest 헤더(`nonce`·`response`·`cnonce`·`opaque`)가 여러 줄 글 경로(Jira 본문·issue_post·add-fixture·db_lint find)에서 안 가려짐(per_line을 SIM_AUTHENTICATION B64에만, 회귀 시험), F2 `원인 아님`·`그 층 로그 없음`일 때 `원인 데몬` 지시 없음 → `알 수 없음`(7개 함정 사례가 문서와 무관하게 갈리던 것), F3 한 arm 기록 합치기가 run 수·자식 모드 다른 기록을 섞어 진 비교를 pass로(같을 때만 합침), F4 threadtime 빈 태그 줄이 파싱 안 되고 원문 점검도 놓침.
 
 ### P2 — C1+D (반입 뒤 후보, 문서·사례 쪽은 보정 단계에서 함께 볼 수 있음)
 - 사례·채점: android `ims-iradioims-absent` daemon regex가 받는 `벤더 IMS`를 `wrong_layer`가 막음. Android 템플릿 `<구성요소: …>`를 베끼면 데몬 F. modem-oos-dm-drop·sms-ims-local-reject가 문서가 가르치지 않는 줄을 근거로 요구, modem 보기에 사내 구성요소 0줄·낱말 과마스킹. ofono `sms-send-no-vendor-lines` ★ 함정이 보기 밖(vendor 0줄, 두 번째 시도 창 밖 3ms). oFono network 문서가 in-sample 사례의 결정 문구(`INVALID_RESPONSE` 등)를 적음 → 일반화, in-sample 사례 with 개선폭은 상한으로 표시.
@@ -207,7 +206,7 @@ B1·B2 밖 (A1·A2·guard·C1+D·C·C′·마스킹·I-2·Jira 관문):
 | `db_lint.py`(`--advice`)·`reference/db-authoring.md` | 참고만 — 경고 수·종료 코드 그대로 | 2 | `db_lint --all` 경고 수 전후 같음 | 없음 |
 | `config.py`·`userconfig.py`·`site-defaults.example.yaml`(`issue_db.merge` 없어짐, `merge_wait_seconds` 420) | doctor에 없어진 키·폐지 키 경고 | 58 | 아래 2번 뒤 `config.py doctor` 전후 | 다르면 58만 |
 | `oc_adapter.py`·`oc_jira_gate.py`·`mcptools.py`·`job_status.py`·`claude_child.py`·`opencode/**`·`tools/{gen_opencode,oc_jira_check,site_step}.py` | OpenCode·게이트웨이 경로만 | 없음(site eval은 Claude Code + Claude) | `tt-oc doctor`·`runtime-check` | 없음 |
-| `module_eval.py`·`common/{modulefilter,moduleskills,skillcheck}.py`·`templates/module-skills/**`·`tools/{site_audit,make_module_repo,make_excerpt,module_*}.py`·eval·채점기 | site eval이 쓰지 않는다 | 없음 | pytest, `site_step.py modules check` | 없음 |
+| `module_eval.py`·`common/{modulefilter,moduleskills,skillcheck}.py`·`templates/module-skills/**`·`tools/{site_audit,make_module_repo,module_*}.py`·eval·채점기 | site eval이 쓰지 않는다 | 없음 | pytest, `site_step.py modules check` | 없음 |
 
 `b4a5b42` 이후 (Codex 리뷰 반영·정답 표 답·모듈 eval 공통 근거 규칙·G 재측정):
 

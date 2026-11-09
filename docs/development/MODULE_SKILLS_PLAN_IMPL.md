@@ -521,7 +521,7 @@ GitHub는 base에 CODEOWNERS가 있으면 오너를 PR을 열 때 자동 요청�
 - `make_bundle.py`에 API 없는 검사 `module-skills`(체크리스트 11, C1): `module_repo_check --template`(받기 규칙 + 출처 표시·플랫폼 섞임·데몬 표·D-Bus) → `make_module_eval_inputs --check`(case 형식·drift·크기·근거-타임라인) → `fixture_residual`. 첫 실패에서 멈춘다.
 - `check_boundary.py`: fixture-origin 검사를 `templates/module-skills/**/files/*.log`까지 넓힌다(합성 표시). D-Bus 규칙은 **범위를 좁힌다**: `templates/module-skills/ofono/**`와 oFono 변형 DB 정의에만, D-Bus 문맥만, `org.ofono.*`·`org.freedesktop.DBus.*` 허용. `test_boundary.py`에 범위 시험(Android 템플릿·기존 fixture `tests/fixtures/issue-db-sample/**`·`tests/fixtures/logs/*.log`·`docs/materials/*.html`은 통과).
 - 사내 allow 줄(반입 전, §4.8-2): 형식 `<규칙> <경로 glob> [<정규식>]`(check_boundary.py:189-197). 범위는 `templates/module-skills/**`와 variant 정의 경로, 정규식은 데몬 이름만(예: `vendor-ril`). 정확한 줄은 반입 노트에 적는다.
-- `tools/related_tests.py`: `templates/module-skills/**`·`tools/make_excerpt.py` 등 모듈 경로 → 모듈 시험 묶음(`test_module_templates.py`·`test_module_templates_android.py`·`test_make_module_repo.py`·`test_boundary.py`·`test_make_excerpt.py` …), `__pycache__`·`*.pyc`는 무시.
+- `tools/related_tests.py`: `templates/module-skills/**` 등 모듈 경로 → 모듈 시험 묶음(`test_module_templates.py`·`test_module_templates_android.py`·`test_make_module_repo.py`·`test_boundary.py` …), `__pycache__`·`*.pyc`는 무시.
 - `.gitignore`: `templates/module-skills/**/evals/results/`, `*-workspace/`.
 - MS-1 뒤에는 GHE 레포가 정본이다. 사외에서 템플릿을 고치면 반입 노트에 파일 목록을 적고 사내에서 모듈 레포 PR로 옮긴다.
 

@@ -79,8 +79,11 @@ def _raw_tags(logs: list[Path], args, rules) -> Counter:
         from platforms.ofono.backend import BACKEND
         from platforms.ofono.journal import read_file
 
-        # `_parse`가 같은 루트로 이미 돌았으므로 site-defaults·platform 블록 오류는 거기서 사용 오류가 됐다
-        profile = platforms.load(site_defaults.load(_root(args)), "ofono", require_enabled=False)
+        # 보통은 `_parse`가 같은 루트로 먼저 돌아 거기서 사용 오류가 되지만, 여기서도 종료 2로 바꾼다
+        try:
+            profile = platforms.load(site_defaults.load(_root(args)), "ofono", require_enabled=False)
+        except (platforms.PlatformConfigError, site_defaults.SiteDefaultsMissing) as exc:
+            raise UsageError(f"site-defaults platform 설정({_root(args)}): {exc}") from exc
         backend = BACKEND.configure(profile).apply_rules(rules)
     else:
         from platforms.android.logcat import read_file

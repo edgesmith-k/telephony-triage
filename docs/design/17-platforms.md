@@ -147,6 +147,7 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 - `MsgView(body, subtag=None)`: 형식 함수 `(msg) -> MsgView | None`의 결과. `body`는 앞머리를 뗀 본문(짝 규칙 annotate 입력), `subtag`는 모듈 등 하위 식별.
 - `PlatformSpec` 뒤쪽 기본값 필드: `components`(기본 구성요소), `msg_formats`(`(이름, 함수)`), `protocol_kinds`(`(kind, 팩토리)`, §9-3). `PlatformProfile`에 `components`·`protocols`(SPEC 것 다음 설정 것 순서).
 - opt-in: `block_keys`에 `components`가 있는 플랫폼만(ofono) site-defaults `platform.others.ofono.components.<이름>: {idents, root_key, source_tree, msg_format, split_tag, level_unreliable, vendor_ipc}`를 받는다. 쓰면 SPEC 기본을 **통째로 바꾼다**(`{}` = 구성요소 없음, `null` = 생략과 같음). 잘못된 값은 키 경로와 종료 코드 2. android에서 `components`는 지금처럼 모르는 키 오류다.
+- 구성요소 플래그(`level_unreliable`·`vendor_ipc`)는 분석 재사용 키(`compiled.environment`)에 들어가지 않는다(플랫폼 상수 규칙과 같음).
 - ofono 기본: 구성요소 `ofono`(ident `ofonod`, 루트 `ofono`, 형식 `file_func`) 하나 — 공개 upstream 값, `TODO(SITE:S24·S25)`. 사내 데몬은 코드에 넣지 않는다.
 - ofono 기본 짝·슬롯: 짝 `gril`(§9-3), 슬롯 `PhoneIdRules((), (줄 앞 `[<slot>,<serial>|UNSOL]<>` — upstream DBG 앞머리 `x.c:func() ` 뒤도,), (모뎀 경로 `/ril_<n>`,))`(`platforms/ofono/gril.py`, TODO(SITE:S29)). 데몬마다 슬롯 표기가 다르고(`[SLOT_<n>]` 등) 0·1 기준이 섞여 기본값에 넣지 않았다 — 사내 확인 뒤 site `log.phone_id`로. site `log.phone_id.msg_prefix`·`msg_suffix`를 쓰면 그 목록이 통째로 바뀌므로 gril 규칙을 함께 둔다(빠지면 gril 짝 키가 `(pid, None, serial)`).
 

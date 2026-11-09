@@ -674,7 +674,7 @@ def ofono(db: Path) -> None:
 MODULES_DEEP_LOG = (REPO / "templates" / "module-skills" / "ofono" / "data" / "evals" / "data-apn-auth-reject"
                     / "files" / "source.log")
 MODULES_TAGS = """# [합성] issue-db-ofono-modules 태그 (MODULE_SKILLS_PLAN_IMPL §1.4). 데몬 이름은 표본 데몬 이름(결정 u), 카테고리는 계획. TODO(SITE:S25)
-# 속성 level·ipc(04-parser-matching §5.8 (2))는 백엔드 기본 상수와 같은 집합 → 출력 같음(선언 경로 시험).
+# 속성 level·ipc(04-parser-matching §5.8 (2))는 구성요소 설정 대신 DB 선언으로 켠 집합 → 출력 같음(선언 경로 시험).
 tags:
   - {tag: ofonod,     category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
   - {tag: exynos-ril, category: common,  ipc: vendor, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
