@@ -1,6 +1,6 @@
 Feb 27 17:45:27.685 host1 local0.info MOSE[791]: [DBUS_] 000040 *BusHelperImpl->CallLpaServiceMethod  methodName: GetEID  mose/dbus/helper/dbus_helper_impl.go:68
-Feb 27 17:45:27.685 host1 local0.info MOSE[791]: [DBUS_] 000040 *BusHelperImpl->CallGenericMethod  dest: com.samsungds.lpa objectPath: /lpa, dbusInterface: com.samsungds.lpa, methodName GetEID, args []  mose/dbus/helper/dbus_helper_impl.go:98
-Feb 27 17:45:27.686 host1 local0.info MOSE[791]: [DBUS_] 000040 *DBusClient->Object  dest: com.samsungds.lpa, path: /lpa  mose/dbus/client/dbus_client.go:135
+Feb 27 17:45:27.685 host1 local0.info MOSE[791]: [DBUS_] 000040 *BusHelperImpl->CallGenericMethod  dest: com.vendor.lpa objectPath: /lpa, dbusInterface: com.vendor.lpa, methodName GetEID, args []  mose/dbus/helper/dbus_helper_impl.go:98
+Feb 27 17:45:27.686 host1 local0.info MOSE[791]: [DBUS_] 000040 *DBusClient->Object  dest: com.vendor.lpa, path: /lpa  mose/dbus/client/dbus_client.go:135
 Feb 27 17:45:27.687 host1 daemon.debug LPA[530]: tid:0 DBusAdaptor.cpp(160):GetEID > GetEID(BEG)
 Feb 27 17:45:27.687 host1 daemon.debug LPA[530]: tid:0 DBusLibWrapper.h(50):DBusRes > DBusRes(BEG)
 Feb 27 17:45:27.687 host1 daemon.debug LPA[530]: tid:0 DBusResponder.h(81):triggerProcedureInSeparateThread > triggerProcedureInSeparateThread(BEG)

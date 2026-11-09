@@ -14,9 +14,9 @@ Feb 27 17:45:27.724 host1 daemon.debug exynos-ril[463]: <HEXDUMP 14B>
 Feb 27 17:45:27.724 host1 local0.info MOSE[791]: [DBUS_] 000040 *BusHelperImpl->CallGenericMethod  callResult: &{org.ofono /ril_0 org.ofono.NonTerrestrialNetworks.GetProperties [] 0x7f6b5019d0 <nil> [map[Configured:false DemoMode:false Enabled:false
 Feb 27 17:45:27.724 host1 local0.info MOSE[791]:  Mtu:255 Rat:"NB_IOT_NTN" SignalStrength:"UNKNOWN" SignalStrengthStarted:false State:"OFF" Supported:true]] 347 0x7f6b4680f0 0x13da00}  mose/dbus/helper/dbus_helper_impl.go:114
 Feb 27 17:45:27.724 host1 local0.info MOSE[791]: [DBUS_] 000040 *BusHelperImpl->CallIpaServiceMethod  methodName: GetEID  mose/dbus/helper/dbus_helper_impl.go:74
-Feb 27 17:45:27.724 host1 local0.info MOSE[791]: [DBUS_] 000040 *BusHelperImpl->CallGenericMethod  dest: com.samsungds.ipa objectPath: /com/samsungds/ipa, dbusInterface: com.samsungds.ipa, methodName GetEID, args []  mose/dbus/helper/dbus_helper_imp
+Feb 27 17:45:27.724 host1 local0.info MOSE[791]: [DBUS_] 000040 *BusHelperImpl->CallGenericMethod  dest: com.vendor.ipa objectPath: /com/vendor/ipa, dbusInterface: com.vendor.ipa, methodName GetEID, args []  mose/dbus/helper/dbus_helper_imp
 Feb 27 17:45:27.724 host1 local0.info MOSE[791]: l.go:98
-Feb 27 17:45:27.724 host1 local0.info MOSE[791]: [DBUS_] 000040 *DBusClient->Object  dest: com.samsungds.ipa, path: /com/samsungds/ipa  mose/dbus/client/dbus_client.go:135
+Feb 27 17:45:27.724 host1 local0.info MOSE[791]: [DBUS_] 000040 *DBusClient->Object  dest: com.vendor.ipa, path: /com/vendor/ipa  mose/dbus/client/dbus_client.go:135
 Feb 27 17:45:27.725 host1 daemon.info ipad[534]: [I][tid=534] dbus_dump.cpp:180 ip<IP#1>logDbusCall() dbus method call   m:GetEID a:(none)
 Feb 27 17:45:27.726 host1 daemon.debug ipad[534]: [D][tid=534] procedure_executor.cpp:75 ip<IP#2>ommon::ProcedureGuar<IP#3>tryEnter() Procedure entered: GetEID
 Feb 27 17:45:27.727 host1 daemon.debug ipad[534]: [D][tid=3281] es10b_context.cpp:66 ip<IP#4>s10bContext::sendCommand() ES10b sendCommand: tag=BF3E, len=6
@@ -61,7 +61,7 @@ Feb 27 17:45:27.736 host1 daemon.err ipad[534]: [E][tid=3281] es10b_context.cpp:
 Feb 27 17:45:27.736 host1 daemon.debug exynos-ril[463]: RIL Response bytes written:4
 Feb 27 17:45:27.736 host1 daemon.err ipad[534]: [E][tid=3281] ipad_controller.cpp:769 ip<IP#1>IpadController::getEid() GetEID: no response from eUICC
 Feb 27 17:45:27.737 host1 daemon.debug exynos-ril[463]: RIL Response bytes written:28
-Feb 27 17:45:27.737 host1 daemon.info ipad[534]: [I][tid=3281] dbus_dump.cpp:198 ip<IP#1>logDbusError() dbus method error  m:GetEID e:com.samsungds.ipa.EuiccNoResponse (eUICC not responding)
+Feb 27 17:45:27.737 host1 daemon.info ipad[534]: [I][tid=3281] dbus_dump.cpp:198 ip<IP#1>logDbusError() dbus method error  m:GetEID e:com.vendor.ipa.EuiccNoResponse (eUICC not responding)
 Feb 27 17:45:27.737 host1 daemon.debug exynos-ril[463]: [RilContext_0] RemoveRequestHistory  token=0x020B
 Feb 27 17:45:27.737 host1 daemon.debug ofonod[486]: Device 0: < <HEXDUMP 16B>
 Feb 27 17:45:27.737 host1 daemon.debug ipad[534]: [D][tid=3281] procedure_executor.cpp:82 ip<IP#2>ommon::ProcedureGuar<IP#3>release() Procedure released: GetEID
@@ -73,7 +73,7 @@ Feb 27 17:45:27.737 host1 daemon.debug ofonod[486]: src/sim.c:sim_open_channel_w
 Feb 27 17:45:27.737 host1 daemon.info ofonod[486]: src/sim.c:sim_open_channel_with_p2_cb() error response : 5
 Feb 27 17:45:27.737 host1 daemon.info ofonod[486]: src/dbus.c:__ofono_error_no_such_element() dump_dmsg err return - i:org.ofono.SimManager m:OpenChannel p:/ril_0
 Feb 27 17:45:27.737 host1 daemon.err LPA[530]: tid:46 DBusClient.cpp(112):openChannel > DBusClient::openChannel: Application not found or not available on SIM
-Feb 27 17:45:27.738 host1 local0.info MOSE[791]: [DBUS_] 000040 *BusHelperImpl->CallGenericMethod  callResult: &{com.samsungds.ipa /com/samsungds/ipa com.samsungds.ipa.GetEID [] 0x7f3031e000 eUICC not responding [] 348 0x7f6b54c000 0x13da00}  mose/d
+Feb 27 17:45:27.738 host1 local0.info MOSE[791]: [DBUS_] 000040 *BusHelperImpl->CallGenericMethod  callResult: &{com.vendor.ipa /com/vendor/ipa com.vendor.ipa.GetEID [] 0x7f3031e000 eUICC not responding [] 348 0x7f6b54c000 0x13da00}  mose/d
 Feb 27 17:45:27.738 host1 daemon.warn LPA[530]: tid:46 Procedures.cpp(602):runProcedure > getEIDProc() failed! (DBusClient::openChannel: Application not found or not available on SIM)
 Feb 27 17:45:27.738 host1 local0.info MOSE[791]: bus/helper/dbus_helper_impl.go:114
 Feb 27 17:45:27.738 host1 daemon.debug LPA[530]: tid:46 ecasd_eid.cpp(29):getEidFromECASD > getEidFromECASD

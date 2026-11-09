@@ -112,9 +112,9 @@ Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: drivers/rilmodem/gprs-contex
 Feb 27 17:52:03.317 host1 daemon.info ofonod[486]: [0,0570]< RIL_REQUEST_DEACTIVATE_DATA_CALL
 Feb 27 17:52:03.317 host1 daemon.info ofonod[486]: dump_dmsg signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"Settings", variant(array[])
 Feb 27 17:52:03.317 host1 daemon.info ofonod[486]: dump_dmsg signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"IPv6.Settings", variant(array[])
-Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: src/gprs.c:pri_ifupdown() Samsung S.LSI RIL will control interface updown for rmnet1
+Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: src/gprs.c:pri_ifupdown() Vendor RIL will control interface updown for rmnet1
 Feb 27 17:52:03.317 host1 daemon.info ofonod[486]: dump_dmsg signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"Active", variant(false)
 Feb 27 17:52:03.317 host1 daemon.info ofonod[486]: src/modem.c:offline_safely_cb() step=5
-Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: plugins/ril_samsung.c:ril_samsung_set_online() setting rd->ofono_online to: 0
-Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: plugins/ril_samsung.c:ril_send_power() (online = 1, offline = 0)): 0
+Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: plugins/ril_vendor.c:ril_vendor_set_online() setting rd->ofono_online to: 0
+Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: plugins/ril_vendor.c:ril_send_power() (online = 1, offline = 0)): 0
 Feb 27 17:52:03.317 host1 daemon.info ofonod[486]: [0,0576]> RIL_REQUEST_RADIO_POWER (0)
