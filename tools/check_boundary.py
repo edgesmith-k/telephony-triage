@@ -161,8 +161,8 @@ DEFAULT_PATTERNS: list[tuple[str, re.Pattern, object]] = [
     # 로그 출처 흔적 문구(발췌 표시·로그 id·마스커 해시·점검 날짜)의 재유입. 정규식 글자는 자기 자신에 맞지 않게 쓴다
     # (`\s`·`[-]`·`\[` — 이 파일은 예외 없이 검사를 통과한다). case 로그는 합성뿐이다(`-- [합성]`).
     ("trace-wording", re.compile(
-        r"마스킹\s발췌|masked[-]excerpt|-- \[마스킹|\bmasker:\s*'?[0-9a-f]{12}\b|\bresidual:\s*'?\d{4}-\d{2}-\d{2}"
-        r"|\bO[12]\s+E\d+\b|\bA-E\d+\b|\bE\d+\s+줄\s+\d+-\d+"), None),
+        r"마스킹\s발췌|masked[-]excerpt|-- \[마스킹|\bmasker:\s*['\"]?[0-9a-f]{12}\b|\bresidual:\s*['\"]?\d{4}-\d{2}-\d{2}"
+        r"|\bO[12]\s+E\d+[a-z]?\b|\bA-E\d+[a-z]?\b|\bE\d+[a-z]?\s+줄\s+\d+-\d+"), None),
 ]
 
 

@@ -221,9 +221,13 @@ def test_trace_wording_pattern(fake_repo):
     """`pattern:trace-wording`: 로그 출처 흔적 문구(발췌 표시·로그 id·마스커 해시·점검 날짜)는 어느 파일이든 위반.
     시험 문자열은 이어 붙여 만든다(이 파일도 문구를 그대로 갖지 않는다)."""
     bad = ["마스킹" + " 발췌", "masked" + "-excerpt", "-- [" + "마스킹", "masker: " + "0123456789ab",
-           "residual: '" + "2026-01-02'", "O" + "1 E14", "A-" + "E5", "E" + "3 줄 10-20"]
+           "residual: '" + "2026-01-02'", "O" + "1 E14", "A-" + "E5", "E" + "3 줄 10-20",
+           "O" + "2 E4b", "A-" + "E9b", "E" + "3c 줄 1-5", 'masker: "' + '0123456789ab"', 'residual: "' + '2026-01-02"']
     _write(fake_repo, "docs/trace.md", "\n".join(bad) + "\n")
-    _write(fake_repo, "docs/clean.md", "합성 로그, placeholder, A-E 구간 없음, E1 단계, O1 없음, residual 0건\n")
+    # 정당한 용어(과잉 매치 없음): 잔여 식별자 도구·옵션, Jira 첨부, 리뷰 항목 id, 마스킹 전 원본 로그
+    clean = ["합성 로그, placeholder, A-E 구간 없음, E1 단계, O1 없음, residual 0건", "tools/fixture_residual.py 통과",
+             "db_lint --residual 0건", "Jira 첨부 파일은 읽기만", "리뷰 항목 O1·O2", "마스킹 전 원본 로그는 사내에만"]
+    _write(fake_repo, "docs/clean.md", "\n".join(clean) + "\n")
     found = [f for f in boundary.scan(fake_repo, "external") if f.rule == "pattern:trace-wording"]
     assert sorted(f.line for f in found) == list(range(1, len(bad) + 1))
     assert {f.path for f in found} == {"docs/trace.md"}
