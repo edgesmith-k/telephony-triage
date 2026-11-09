@@ -106,6 +106,10 @@ def test_components_override_replaces_entirely():
     assert _load(components=None).components == platforms.get("ofono").components   # null = 생략(기본 유지)
     split = _load(components={"ofono": {"idents": ["ofonod"], "msg_format": "file_func", "split_tag": True}})
     assert split.components[0].split_tag is True and split.components[0].root_key is None
+    assert not any(c.level_unreliable or c.vendor_ipc for c in prof.components)       # 기본 false
+    flags = _load(components={"daemon-a": {"idents": ["daemon-a"], "level_unreliable": True},
+                              "daemon-b": {"idents": ["daemon-b"], "vendor_ipc": True, "level_unreliable": False}})
+    assert [(c.level_unreliable, c.vendor_ipc) for c in flags.components] == [(True, False), (False, True)]
 
 
 @pytest.mark.parametrize("components,path,why", [
@@ -125,6 +129,9 @@ def test_components_override_replaces_entirely():
     ({"a": {"idents": ["x"], "msg_format": "nosuch"}}, "components.a.msg_format", "알 수 없는 형식"),
     ({"a": {"idents": ["x"], "split_tag": True}}, "components.a.split_tag", "msg_format"),
     ({"a": {"idents": ["x"], "msg_format": "file_func", "split_tag": "yes"}}, "components.a.split_tag", "true/false"),
+    ({"a": {"idents": ["x"], "level_unreliable": "yes"}}, "components.a.level_unreliable", "true/false"),
+    ({"a": {"idents": ["x"], "vendor_ipc": 1}}, "components.a.vendor_ipc", "true/false"),
+    ({"a": {"idents": ["x"], "vendor_ipc": None}}, "components.a.vendor_ipc", "true/false"),
     ({"a": {"idents": ["x"], "category": "data"}}, "components.a.category", "알 수 없는 키"),
 ])
 def test_component_errors(components, path, why):
@@ -622,7 +629,7 @@ def _parse(log: Path, rules: Path, ofono: dict | None) -> dict:
 
 def test_parse_cross_daemon_derived_events():
     out = _parse(MULTI_LOG, variant_db("issue-db-ofono") / "parser-rules", {"components": COMPONENTS, "protocols": {"ipc": IPC}})
-    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.4"}
+    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.5"}
     assert out["errors"] == [] and events.validate_events(out["events"]) == []
     derived = [(e["event"], e["tag"], e["fields"]) for e in out["events"] if e["source"] == "rules"]
     assert derived == [                                       # 응답 줄 바로 뒤(ril_error → ril_timeout), 그다음 응답 없음
