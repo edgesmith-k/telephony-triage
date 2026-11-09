@@ -12,10 +12,10 @@ Feb 27 17:48:31.383 host1 daemon.debug NMD[542]: handleMethodRspMessage 0x7f9401
 Feb 27 17:48:31.383 host1 daemon.debug NMD[542]: onGetConnectionStatusByIdRsp[./mobile/ConnectionControllerDbusEventsHandler.cxx +205]
 Feb 27 17:48:31.383 host1 daemon.info NMD[542]: MTHD_RTRN[:1.77] /nmd,GetConnectionStatusById Outgoing Parameters:({'<APN#1>': <uint32 8>, 'ApnName': <'ims'>, 'Active': <0>, 'Status': <0>, 'Interface': <''>, 'UserProfileId': <3>, 'DataCallFailCause': <uint32 0>, 'ClatEnabl
 Feb 27 17:48:31.383 host1 daemon.info NMD[542]: ed': <true>, 'IpV4Address': <''>, 'IpV6Address': <''>, 'DomainNameServers': <@as []>, 'RetryAfterMillisec': <int64 -1>, 'Mtu': <uint32 0>},)
-Feb 27 17:48:31.383 host1 daemon.info NMD[542]: MTHD_RTRN[:1.77] /nmd, com.samsungds.nmd.mobile.GetConnectionStatusById
+Feb 27 17:48:31.383 host1 daemon.info NMD[542]: MTHD_RTRN[:1.77] /nmd, com.vendor.nmd.mobile.GetConnectionStatusById
 Feb 27 17:48:31.383 host1 daemon.info NMD[542]: Returning values: ({'<APN#1>': <uint32 8>, 'ApnName': <'ims'>, 'Active': <0>, 'Status': <0>, 'Interface': <''>, 'UserProfileId': <3>, 'DataCallFailCause': <uint32 0>, 'ClatEnabled': <true>, 'IpV4Address': <''>, 'IpV6Address':
 Feb 27 17:48:31.383 host1 daemon.info NMD[542]:  <''>, 'DomainNameServers': <@as []>, 'RetryAfterMillisec': <int64 -1>, 'Mtu': <uint32 0>},)
-Feb 27 17:48:31.386 host1 local0.info MOSE[1126]: [DBUS_] 002542 *BusHelperImpl->CallGenericMethod  callResult: &{com.samsungds.nmd /nmd com.samsungds.nmd.mobile.GetConnectionStatusById [3] 0x7f3fc83e30 <nil> [map[Active:0 ApnName:"ims" <APN#1>:@u 8 
+Feb 27 17:48:31.386 host1 local0.info MOSE[1126]: [DBUS_] 002542 *BusHelperImpl->CallGenericMethod  callResult: &{com.vendor.nmd /nmd com.vendor.nmd.mobile.GetConnectionStatusById [3] 0x7f3fc83e30 <nil> [map[Active:0 ApnName:"ims" <APN#1>:@u 8 
 Feb 27 17:48:31.386 host1 local0.info MOSE[1126]: ClatEnabled:true DataCallFailCause:@u 0 DomainNameServers:@as [] Interface:"" IpV4Address:"" IpV6Address:"" Mtu:@u 0 RetryAfterMillisec:@x -1 Status:0 UserProfileId:3]] 342 0x7f3fd62000 0x13da00}  mos
 Feb 27 17:48:31.386 host1 local0.info MOSE[1126]: e/dbus/helper/dbus_helper_impl.go:114
 Feb 27 17:48:31.401 host1 daemon.debug exynos-ril[463]: [<DEVICENODE#1>][RX] SIT_IND_AIMS_REG_FAIL, IND, 10 bytes

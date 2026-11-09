@@ -41,7 +41,7 @@ platforms:
         ril: [SETUP_DATA_CALL, DEACTIVATE_DATA_CALL, DATA_CALL_LIST, SET_DATA_PROFILE, SET_INITIAL_ATTACH_APN, UNSOL_DATA_CALL_LIST_CHANGED]
         sit: [SIT_SETUP_DATA_CALL, SIT_DEACT_DATA_CALL, SIT_IND_DATA_CALL_LIST_CHANGED, SIT_GET_DATA_CALL_LIST, SIT_SET_DATA_PROFILE, SIT_SET_INITIAL_ATTACH_APN, SIT_IND_PDP_ATTACHED_APN, SIT_IND_IP_ADDR_STATUS, SIT_IND_PHYSICAL_CHANNEL_CONFIG]
         services: [PsService]
-        dbus: [org.ofono.ConnectionManager, org.ofono.ConnectionContext, org.ofono.LongTermEvolution, org.ofono.apnManager, org.ofono.AllowedAccessPoints, com.samsungds.nmd]
+        dbus: [org.ofono.ConnectionManager, org.ofono.ConnectionContext, org.ofono.LongTermEvolution, org.ofono.apnManager, org.ofono.AllowedAccessPoints, com.vendor.nmd]
         client_tags: [NMD__, CCONN_]
         keywords: ['re:\brmnet\d+', 'PdpContext', 'ConnectMobileNetworkById', 'GetConnectionStatusById', 'AddDefaultRoute', 're:NMD_[A-Z_]{4,}']
         quiet: ['^-+RTM_\w+ *-+$|^Family \[|^RTA_\w+|^\[getMtuSize\]']
@@ -54,7 +54,7 @@ platforms:
         ril: [SIM_IO, GET_SIM_STATUS, SIM_OPEN_CHANNEL, GET_SIM_PIN_PUK_RETRIES, SIM_AUTHENTICATION, UNSOL_RESPONSE_SIM_STATUS_CHANGED]
         sit: [SIT_SIM_IO, SIT_GET_SIM_STATUS, SIT_OPEN_SIM_CHANNEL_WITH_P2, SIT_IND_SIM_STATUS_CHANGED, SIT_GET_SIM_AUTH]
         services: [SimService, SimIoService, StkService]
-        dbus: [org.ofono.SimManager, org.ofono.SimToolkit, com.samsungds.lpa, com.samsungds.ipa]
+        dbus: [org.ofono.SimManager, org.ofono.SimToolkit, com.vendor.lpa, com.vendor.ipa]
         client_tags: [IPACM]
         keywords: ['re:sw1 ?[:=]', 're:BuildSim\w+', 're:\beUICC\b', 'GetEID', 'GetProfileList', 'GetEUICCInfo2']
       network:
@@ -109,7 +109,7 @@ platforms:
         path: ofono/modem
         db_category: common
         daemons: [DMD, RFSD, vcd]
-        ofonod_files: [src/modem.c, plugins/ril_samsung.c]
+        ofonod_files: [src/modem.c, plugins/ril_vendor.c]
         ril: [RADIO_POWER, UNSOL_RESPONSE_RADIO_STATE_CHANGED]
         sit: [SIT_SET_RADIO_POWER, SIT_IND_RADIO_STATE_CHANGED, SIT_PWR_*, SIT_IND_TOTAL_OOS]   # TOTAL_OOS: network와 겹침, 망 없음은 모뎀 상태로도 본다 (H C1)
         dbus: [org.ofono.Modem]
