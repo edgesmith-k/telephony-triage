@@ -364,6 +364,27 @@ def test_module_skills_check_fails_with_tail(tmp_path):
     assert mb.check_module_skills(_FakeCtx(tmp_path, {"module_repo_check.py": 2})).status == "error"
 
 
+def test_offline_eval_check_includes_in_sample(tmp_path):
+    """합성 라벨셋은 전부 표본내(aca0470) — `--include-in-sample` 없이는 평가 0건·종료 1이라 묶음이 막혔다(11/09). 종료 0·오류 0이어도
+    평가 항목이 0이면 pass가 아니다."""
+    class Ctx:
+        def __init__(self, code, summary):
+            self.repo, self.code, self.summary, self.argv = tmp_path, code, summary, None
+
+        def plugin_root(self):
+            return tmp_path / "plugin-root"
+
+        def run(self, check_id, argv, **_kw):
+            self.argv = argv
+            return self.code, json.dumps({"summary": self.summary}) if self.code == 0 else "평가 가능한 항목 없음 — 전부 오류"
+
+    ctx = Ctx(0, {"total": 8, "errors": 0, "evaluated": 7})
+    assert mb.check_offline_eval(ctx).status == "pass" and "--include-in-sample" in ctx.argv and ctx.argv[-1] == "--json"
+    assert mb.check_offline_eval(Ctx(0, {"total": 8, "errors": 0, "evaluated": 0})).status == "fail"
+    assert mb.check_offline_eval(Ctx(0, {"total": 8, "errors": 2, "evaluated": 5})).status == "fail"
+    assert mb.check_offline_eval(Ctx(1, {})).status == "fail"
+
+
 def _write_plugin_json(repo: Path, data: dict) -> None:
     path = repo / "plugin" / ".claude-plugin" / "plugin.json"
     path.parent.mkdir(parents=True, exist_ok=True)
