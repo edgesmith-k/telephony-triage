@@ -4,6 +4,8 @@
 거부 목록은 레포에 두지 않는다. 경로는 `--deny` 또는 환경 변수 `TT_DENY_FILE`로만 받는다(UTF-8, BOM 허용).
 한 줄에 항목 하나, 빈 줄·`#` 줄은 무시. 대소문자를 무시하고, 항목의 첫/끝 글자가 단어 글자(`_` 제외)면 그쪽에
 영숫자 경계를 둔다(끝이 `.`인 접두어 항목은 그쪽 경계 없음). `_`는 경계로 본다 — 식별자 안에 든 이름도 누출이다.
+경계는 ASCII 영숫자(`[A-Za-z0-9]`)만 본다: 비ASCII 항목은 더 긴 비ASCII 낱말 안에서도 맞는다(두 음절 한글 항목이
+세 음절 낱말 안에서도 맞음) — 거부 목록은 ASCII 식별자라 의도한 동작이다. 한 항목이 자기와 겹쳐 맞는 자리도 모두 가린다.
 파일 내용과 함께 **경로 문자열도** 검사한다(경로에 맞으면 파일당 1건). UTF-8로 읽히지 않는 파일은 내용을 건너뛰고 센다.
 읽을 수 없는 추적 파일(삭제됨·디렉토리 등)은 읽기 실패로 세고 CLI는 종료 2.
 **출력에는 경로(맞은 부분은 `«k»`, k = 항목 번호)와 건수만 낸다 — 맞은 글자·항목 글자는 내지 않는다.**
@@ -40,7 +42,8 @@ def load(path: Path | str) -> list[tuple[int, re.Pattern]]:
     for k, e in enumerate(entries, 1):
         head = _EDGE_HEAD if re.match(r"[^\W_]", e[0]) else ""   # `_`로 시작·끝나는 항목은 그쪽 경계 없음
         tail = _EDGE_TAIL if re.match(r"[^\W_]", e[-1]) else ""
-        out.append((k, re.compile(head + re.escape(e) + tail, re.IGNORECASE)))
+        # 너비 0 lookahead: 같은 항목이 겹쳐 맞는 자리(`-a-` in `-a-a-`)도 finditer가 모두 낸다. 구간은 그룹 1
+        out.append((k, re.compile("(?=(" + head + re.escape(e) + tail + "))", re.IGNORECASE)))
     return out
 
 
@@ -57,7 +60,7 @@ def tracked(root: Path | str) -> list[str]:
 
 def _mask(text: str, patterns, repl=None) -> tuple[str, int]:
     """원문에서 모든 항목의 일치 구간을 모아 겹친 구간은 합쳐 한 번 세고 가린다. repl 없으면 «k»(합친 구간의 가장 작은 항목 번호)."""
-    spans = sorted(((m.start(), m.end(), k) for k, rx in patterns for m in rx.finditer(text) if m.end() > m.start()),
+    spans = sorted(((*m.span(1), k) for k, rx in patterns for m in rx.finditer(text) if m.end(1) > m.start(1)),
                    key=lambda t: (t[0], -t[1]))
     merged: list[list] = []
     for start, end, k in spans:
