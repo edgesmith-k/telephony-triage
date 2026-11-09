@@ -16,7 +16,7 @@
 - 마스킹 자리가 extractor보다 앞 (`--mask`·`cut` 자체는 `tests/test_masking.py`)
 - `site-defaults.yaml` 없으면 종료 코드 2
 - 벤더 RIL 층 연결(`platform.ril.vendor`): `hal` 4값·창·coverage_tags·RILJ 짝 유지(설정 없으면 필드 없음)
-- 첨부 로그 A 모양(11/05 ③): iccIO·숫자 RadioError·RilRequest 이름·RadioConfig 짝·태그 슬롯·`::` 태그, `RIL` 벤더 IPC builtin
+- 벤더 RIL 로그 모양(합성, 11/05 ③): iccIO·숫자 RadioError·RilRequest 이름·RadioConfig 짝·태그 슬롯·`::` 태그, `RIL` 벤더 IPC builtin
 
 스냅샷 갱신: `python3 tests/test_parse_logcat.py --update`
 `pytest tests/test_parse_logcat.py`로도, 그냥 실행해도 돈다.
@@ -891,7 +891,7 @@ def test_single_file_and_empty_file_warning_wording():
     assert len(msgs) == 1 and "빈 파일" in msgs[0]
 
 
-# -- 첨부 로그 A 모양 (결정 기록 11/05 ③, 설계 D §3.2) -----------------------------------------------
+# -- 벤더 RIL 로그 모양 (합성, 결정 기록 11/05 ③, 설계 D §3.2) -------------------------------------------
 
 
 def _a_log(name: str, rows: list[str]) -> Path:
@@ -1024,7 +1024,7 @@ def test_a_shapes_vendor_ipc_builtin():
     db = _copy_db(_tmp())
     tags = db / "parser-rules" / "tags.yaml"
     text = tags.read_text(encoding="utf-8")
-    marker = "  # --- 첨부 로그 A(11/05 승인, 결정 기록 ①)"
+    marker = "  # --- 벤더 RIL 태그(사내 확인 전, TODO(SITE:S9))"
     if marker in text:
         tags.write_text(text[:text.index(marker)], encoding="utf-8")
     for rules in (RULES, db / "parser-rules"):

@@ -87,10 +87,10 @@ SHOWN_PATHS = ("tests/skill_evals/shown_infer.py", "tests/helpers/shown_records.
 SHOWN_TESTS = {SKILL_EVAL_TEST, "tests/test_shown.py", "tests/test_show_guard.py", "tests/test_db_verify.py"}
 # 모듈 스킬 템플릿·입력 생성기·기록 (MODULE_SKILLS_PLAN_IMPL §5.1). helpers/skill_evals 규칙보다 먼저 본다
 MODULE_PATHS = ("templates/module-skills/*", "tests/helpers/make_module_eval_inputs.py",
-                "tests/skill_evals/module_offsite_results.json", "tools/make_excerpt.py")
-# H C1+D R39: 템플릿을 읽는 시험(출처·D-Bus 규칙 check_boundary, 모듈 레포 만들기, 발췌 도구, Android 템플릿)도 함께
+                "tests/skill_evals/module_offsite_results.json")
+# H C1+D R39: 템플릿을 읽는 시험(출처·D-Bus 규칙 check_boundary, 모듈 레포 만들기, Android 템플릿)도 함께
 MODULE_TESTS = {"tests/test_module_templates.py", "tests/test_module_eval.py", "tests/test_make_module_repo.py",
-                "tests/test_boundary.py", "tests/test_make_excerpt.py", "tests/test_module_templates_android.py"}
+                "tests/test_boundary.py", "tests/test_module_templates_android.py"}
 # 바이트 코드 캐시는 시험 대상이 아니다(전체 실행 대상도 아님)
 IGNORED_PATHS = ("*/__pycache__/*", "__pycache__/*", "*.pyc")
 # run.py·grade.py는 common.claude_child를 다시 내보낸다 → 재수출 테스트(test_module_eval)도 돈다

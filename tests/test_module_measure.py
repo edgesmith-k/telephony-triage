@@ -98,3 +98,14 @@ def test_findings_exit_and_baseline(tmp_path, capsys):
     assert any(d.startswith("modules.sim.primary") or "바뀜" in d for d in again["baseline_diff"]) or again["baseline_diff"]
     assert module_measure.main(["coverage", "--modules", str(MODULES)]) == 2
     assert module_measure.main(["coverage", "--job", str(tmp_path / "nojob"), "--modules", str(MODULES)]) == 2
+
+
+def test_raw_tags_profile_error_is_usage_error(tmp_path):
+    """oFono 줄 읽기의 site-defaults 로드 실패(파일 없음)는 traceback이 아니라 사용 오류(종료 2)다."""
+    import argparse
+
+    import pytest
+
+    args = argparse.Namespace(platform="ofono", plugin_root=str(tmp_path), tz="UTC", year=2026)
+    with pytest.raises(module_measure.UsageError):
+        module_measure._raw_tags([], args, None)

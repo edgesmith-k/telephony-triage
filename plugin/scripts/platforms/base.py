@@ -192,13 +192,16 @@ class Component:
     """한 플랫폼 안의 구성요소(데몬) 하나 (17-platforms §9). 이름·ident·루트 키는 site가 정한다(코드에는 placeholder).
 
     site-defaults `<블록>.components.<name>`(`block_keys`에 `components`가 있는 플랫폼)으로 덮어쓰고, 키를 쓰면
-    목록이 통째로 바뀐다. 카테고리는 여기 두지 않는다(이슈 DB `tags.yaml`이 정한다)."""
+    목록이 통째로 바뀐다. 카테고리는 여기 두지 않는다(이슈 DB `tags.yaml`이 정한다).
+    `level_unreliable`·`vendor_ipc`는 이슈 DB tags.yaml이 `level`·`ipc`를 하나라도 선언하면 그 키는 DB만 본다(04-parser-matching §5.8 (2))."""
     name: str                              # ^[a-z][a-z0-9_-]*$
     idents: tuple[str, ...]                # LogLine.tag 정확한 이름, 1개 이상, 구성요소끼리 겹치지 않음
     root_key: str | None = None            # 소스 루트 키 ^[a-z][a-z0-9_]*$ (code_ref 키 형식), 구성요소끼리 겹치지 않음
     source_tree: SourceTree | None = None  # 그 루트의 required_dirs·version_sources (root_key 필요, 주 루트면 금지)
     msg_format: str | None = None          # `PlatformSpec.msg_formats` 이름
     split_tag: bool = False                # True면 이벤트 tag = f"{ident}/{subtag}" (msg_format 필요)
+    level_unreliable: bool = False         # True면 이 구성요소 줄의 syslog severity는 심각도가 아니다 → 레벨 "I"
+    vendor_ipc: bool = False               # True면 이 구성요소 줄에 `common.vendor_ipc.detect`(벤더 IPC 결과 builtin)를 부른다
 
 
 # (템플릿 루트, modules.yaml의 그 플랫폼 블록 | None) → [(점검 이름, 루트 상대 경로, 줄 | None, rule | None)]

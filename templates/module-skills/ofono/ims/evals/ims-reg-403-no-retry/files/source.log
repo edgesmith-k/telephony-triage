@@ -1,4 +1,4 @@
--- [합성] C1 ims-reg-403-no-retry. 첨부 로그에 IMS 거절 지속 에피소드가 없어 첨부 로그 줄 모양을 본떠 새로 썼다. 거절 코드 403과 재시도 문구는 가정(A).
+-- [합성] C1 ims-reg-403-no-retry. 레포 case의 줄 모양을 본떠 새로 썼다. 거절 코드 403과 재시도 문구는 가정(A).
 Sep 21 10:40:00.010 dut local0.info MOSE[731]: [UI___] 000401 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
 Sep 21 10:40:00.200 dut daemon.info exynos-ril[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-90
 Sep 21 10:40:01.000 dut daemon.info ofonod[466]: IMSD 0: <HEXDUMP 32B>

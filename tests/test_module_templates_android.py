@@ -20,29 +20,29 @@ from common import skillcheck, yamlio  # noqa: E402
 ANDROID = REPO / "templates" / "module-skills" / "android"
 MODULES = ("data", "sim", "network", "call", "sms", "ims", "modem")
 
-# 설계 D §1 표 순서 = 키 MOCK-9801…9815(R14). (모듈, 이름, kind, 마스킹 발췌?, 함정)
+# 설계 D §1 표 순서 = 키 MOCK-9801…9815(R14). (모듈, 이름, kind, 함정) — case는 모두 합성
 CASES = [
-    ("data", "data-disabled-user", "deep", False, None),
-    ("data", "data-cfun-radio-off", "explore", True, None),
-    ("data", "data-profile-ipc-swallowed", "explore", True, None),
-    ("sim", "sim-card-io-error", "deep", False, None),
-    ("sim", "sim-optional-ef-benign", "explore", True, None),
-    ("network", "network-reg-reject", "deep", False, None),
-    ("network", "network-radio-buffer-late", "explore", True, "below-layer-missing"),
-    ("call", "call-volte-ims-unregistered", "deep", False, None),
-    ("call", "call-cf-ut-no-rilj", "explore", True, None),
-    ("sms", "sms-smsc-missing", "deep", False, None),
-    ("sms", "sms-ims-local-reject", "explore", False, None),
-    ("ims", "ims-reg-403", "deep", False, None),
-    ("ims", "ims-iradioims-absent", "explore", True, None),
-    ("modem", "modem-restart-chain", "deep", False, None),
-    ("modem", "modem-vendor-lines-missing", "explore", False, "below-layer-missing"),
-    ("data", "data-apn-wrong-applied", "explore", False, None),
-    ("data", "data-dc-list-drop", "explore", False, None),
-    ("call", "call-volte-sip-invite-error", "explore", False, None),
-    ("sim", "sim-slow-recognition", "explore", False, None),
-    ("modem", "modem-ril-daemon-crash", "explore", False, None),
-    ("ims", "ims-403-vendor-lines-missing", "deep", False, None),
+    ("data", "data-disabled-user", "deep", None),
+    ("data", "data-cfun-radio-off", "explore", None),
+    ("data", "data-profile-ipc-swallowed", "explore", None),
+    ("sim", "sim-card-io-error", "deep", None),
+    ("sim", "sim-optional-ef-benign", "explore", None),
+    ("network", "network-reg-reject", "deep", None),
+    ("network", "network-radio-buffer-late", "explore", "below-layer-missing"),
+    ("call", "call-volte-ims-unregistered", "deep", None),
+    ("call", "call-cf-ut-no-rilj", "explore", None),
+    ("sms", "sms-smsc-missing", "deep", None),
+    ("sms", "sms-ims-local-reject", "explore", None),
+    ("ims", "ims-reg-403", "deep", None),
+    ("ims", "ims-iradioims-absent", "explore", None),
+    ("modem", "modem-restart-chain", "deep", None),
+    ("modem", "modem-vendor-lines-missing", "explore", "below-layer-missing"),
+    ("data", "data-apn-wrong-applied", "explore", None),
+    ("data", "data-dc-list-drop", "explore", None),
+    ("call", "call-volte-sip-invite-error", "explore", None),
+    ("sim", "sim-slow-recognition", "explore", None),
+    ("modem", "modem-ril-daemon-crash", "explore", None),
+    ("ims", "ims-403-vendor-lines-missing", "deep", None),
 ]
 
 # 문서 상한(바이트, C1D 보정 §2.2) — skillcheck.CAPS보다 좁다(R24). 경로 키가 파일 이름 키보다 먼저.
@@ -66,14 +66,11 @@ def _docs() -> list[Path]:
 def test_android_cases_present():
     found = sorted(p.parent for p in ANDROID.glob("*/evals/*/case.yaml"))
     assert {(p.parent.parent.name, p.name) for p in found} == {(m, n) for m, n, *_ in CASES}
-    for i, (module, name, kind, excerpt, trap) in enumerate(CASES, 1):
+    for i, (module, name, kind, trap) in enumerate(CASES, 1):
         data = yamlio.load(ANDROID / module / "evals" / name / "case.yaml")
         assert data["name"] == name and data["kind"] == kind, name
         assert data["key"] == f"MOCK-98{i:02d}", name
-        assert data["synthetic"] is (not excerpt), name
-        assert ("origin" in data) is excerpt, name
-        if excerpt:
-            assert data["origin"]["log"] == "A" and data["origin"]["kind"] == "masked-excerpt", name
+        assert data["synthetic"] is True and "origin" not in data, name
         if kind == "deep":
             assert data["expect"]["trap"] == trap, name
         else:   # explore schema 2: trap은 함정 목록, below-layer-missing은 accept 층 `그 층 로그 없음`으로 옮겨졌다(설계 §2.3)

@@ -20,4 +20,4 @@ unsolicited:
   - {name: UNSOL_RESPONSE_NEW_SMS,            category: sms,     added_for: SMS-001, added_on: 2026-09-28, reason: 초기}
   - {name: UNSOL_RESPONSE_NETWORK_STATE_CHANGED, category: network, added_for: NETWORK-001, added_on: 2026-09-28, reason: 초기}
   - {name: UNSOL_SIM_STATUS_CHANGED,          category: sim,     added_for: SIM-001, added_on: 2026-09-28, reason: 초기}
-  - {name: UNSOL_DATA_CALL_LIST_UPDATED,      category: data,    added_for: '-', added_on: 2026-11-05, reason: 첨부 로그 A (16·17 이름)}
+  - {name: UNSOL_DATA_CALL_LIST_UPDATED,      category: data,    added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (16·17 이름)}

@@ -1,4 +1,4 @@
--- [마스킹 발췌] O2 E21 줄 38-110
+-- [합성]
 Feb 27 17:27:50.347 host1 daemon.debug LPA[533]: tid:10 Procedures.cpp(304):runProcedure > runProcedure(BEG)
 Feb 27 17:27:50.347 host1 daemon.debug LPA[533]: tid:10 es10c.cpp(274):getEIDProc > GetEIDProc
 Feb 27 17:27:50.347 host1 daemon.debug LPA[533]: tid:10 DBusClient.cpp(174):transmitAPDU > needRefresh: 0

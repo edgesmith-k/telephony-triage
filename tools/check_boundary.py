@@ -10,7 +10,8 @@
                    Atlassian·npm/PyPI·LLM API 토큰, JWT, `Authorization` 헤더 값, URL·netrc
                    자격증명, `*token*`·`*secret*`·`*password*`·`*api_key*` 대입 — 자리표시 값
                    `<…>`·`${…}`·`xxxx`·`REDACTED`·`EXAMPLE`은 제외, 대입 값은 숫자 포함 20자
-                   이상), 공인 IP, 15자리 숫자(IMEI·IMSI), 허용 목록 밖 이메일·URL 호스트.
+                   이상), 공인 IP, 15자리 숫자(IMEI·IMSI), 허용 목록 밖 이메일·URL 호스트,
+                   로그 출처 흔적 문구(`trace-wording`: 발췌·첨부 표시·로그 id·마스커 해시·점검 날짜).
                    비밀값은 출력에서 앞부분만 보인다. 사내는 `docs/site/boundary-patterns.txt`
                    (SITE_PATHS)에 실제 회사·서버·팀 이름 패턴을 더한다(모드와 무관).
     site-import    `plugin/scripts/**`가 SITE_PATHS 모듈(`parser_backends.site`,
@@ -19,9 +20,8 @@
                    `.expect.yaml`에 `origin: synthetic`, 그 밖의 로그는 같은 디렉토리
                    README.md(또는 상위 README)나 `tests/mocks/log_fixtures.yaml`에 이름이 있어야 한다.
                    모듈 스킬 템플릿 case 로그(`templates/module-skills/**/evals/<case>/files/*.log`)는
-                   (a) case.yaml `synthetic: true` + 1줄 `-- [합성]`, 또는 (b) `synthetic: false` + `origin:`
-                   블록 6키(`kind: masked-excerpt`·log·episode·lines·masker·residual) + 1줄 `-- [마스킹 발췌] `
-                   (마스킹한 첨부 로그 발췌, H C1+D R6). 형식 전체는 `skillcheck.origin_problems`가 본다.
+                   합성만: case.yaml `synthetic: true`, `origin:` 키 없음, 1줄 `-- [합성]` (H C1+D R6).
+                   형식 전체는 `skillcheck.origin_problems`가 본다.
     dbus-name      oFono 모듈 문서(`templates/module-skills/ofono/**/*.md`, evals 제외), modules.yaml의
                    `platforms.ofono` 블록, `tests/helpers/make_variant_dbs.py`의 `OFONO_*`·`MODULES_*` 문자열
                    상수에 허용 밖 D-Bus 이름(`skillcheck.dbus_allowed`: `org.ofono.*`·`org.freedesktop.DBus.*`·
@@ -158,6 +158,11 @@ DEFAULT_PATTERNS: list[tuple[str, re.Pattern, object]] = [
      lambda m: _host_ok(m.group(1))),
     ("url-host", re.compile(r"\b(?:https?|ssh|git)://(?:[^@/\s]+@)?([A-Za-z0-9.-]+)"),
      lambda m: _host_ok(m.group(1)) or "<" in m.group(0)),
+    # 로그 출처 흔적 문구(발췌·첨부 표시·로그 id·마스커 해시·점검 날짜)의 재유입. 정규식 글자는 자기 자신에 맞지 않게 쓴다
+    # (`\s`·`[-]`·`\[` — 이 파일은 예외 없이 검사를 통과한다). case 로그는 합성뿐이다(`-- [합성]`).
+    ("trace-wording", re.compile(
+        r"마스킹\s발췌|첨부\s로그|masked[-]excerpt|-- \[마스킹|\bmasker:\s*['\"]?[0-9a-f]{12}\b|\bresidual:\s*['\"]?\d{4}-\d{2}-\d{2}"
+        r"|\bO[12]\s+E\d+[a-z]?\b|\bA-E\d+[a-z]?\b|\bE\d+[a-z]?\s+줄\s+\d+-\d+"), None),
 ]
 
 
@@ -289,7 +294,7 @@ def check_fixture_origin(root: Path, files: dict[str, Path]) -> list[Finding]:
     for rel, path in files.items():
         if rel.startswith("templates/module-skills/") and rel.endswith(".log"):
             # 모듈 스킬 템플릿 case 로그(MODULE_SKILLS_PLAN_IMPL §5.1, H C1+D R6): evals/<case>/files/ 아래,
-            # 합성(synthetic: true + `-- [합성]`) 또는 마스킹 발췌(synthetic: false + origin 6키 + `-- [마스킹 발췌] `)
+            # 합성만(synthetic: true + `-- [합성]`, origin 키 없음)
             name = rel.rsplit("/", 1)[1]
             m = re.fullmatch(r"(templates/module-skills/.+/evals/[^/]+)/files/[^/]+\.log", rel)
             case = files.get(f"{m.group(1)}/case.yaml") if m else None
@@ -297,9 +302,8 @@ def check_fixture_origin(root: Path, files: dict[str, Path]) -> list[Finding]:
             first = (_text(path) or "").split("\n", 1)[0]
             if not m or not _template_origin_ok(text, first):
                 findings.append(Finding("fixture-origin", rel, 0, name,
-                                        "모듈 템플릿 로그: evals/<case>/files/ 아래, case.yaml synthetic: true + 1줄 "
-                                        "'-- [합성]' 또는 synthetic: false + origin(kind: masked-excerpt 외 5키) + 1줄 "
-                                        "'-- [마스킹 발췌] '"))
+                                        "모듈 템플릿 로그: evals/<case>/files/ 아래, case.yaml synthetic: true(origin "
+                                        "키 없음) + 1줄 '-- [합성]'"))
             continue
         if not (rel.startswith("tests/") and rel.endswith(".log")):
             continue
@@ -329,24 +333,10 @@ def check_fixture_origin(root: Path, files: dict[str, Path]) -> list[Finding]:
     return findings
 
 
-ORIGIN_KEYS = ("kind", "log", "episode", "lines", "masker", "residual")
-
-
 def _template_origin_ok(case_text: str, first_line: str) -> bool:
-    """case.yaml 글(정규식으로만 본다)과 로그 1줄: 합성 표시 또는 마스킹 발췌 origin 표시."""
-    if re.search(r"(?m)^synthetic:\s*true\s*$", case_text):
-        return first_line.startswith("-- [합성]") and not re.search(r"(?m)^origin:", case_text)
-    if not re.search(r"(?m)^synthetic:\s*false\s*$", case_text):
-        return False
-    block = re.search(r"(?m)^origin:[ \t]*(?:#[^\n]*)?\n((?:[ \t]+[^\n]*\n?)+)", case_text)
-    if not block:
-        return False
-    keys = re.findall(r"(?m)^[ \t]+([a-z_]+):", block.group(1))
-    if sorted(keys) != sorted(ORIGIN_KEYS):
-        return False
-    if not re.search(r"(?m)^[ \t]+kind:[ \t]*['\"]?masked-excerpt['\"]?[ \t]*(?:#.*)?$", block.group(1)):
-        return False
-    return first_line.startswith("-- [마스킹 발췌] ")
+    """case.yaml 글(정규식으로만 본다)과 로그 1줄: 합성 표시(`synthetic: true`, `origin:` 없음, `-- [합성]`)."""
+    return (bool(re.search(r"(?m)^synthetic:\s*true\s*$", case_text)) and not re.search(r"(?m)^origin:", case_text)
+            and first_line.startswith("-- [합성]"))
 
 
 DBUS_DOCS = re.compile(r"templates/module-skills/ofono/(?!.*/evals/).+\.md")

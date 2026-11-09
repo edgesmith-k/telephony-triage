@@ -1,6 +1,8 @@
 # 묶음 리뷰 안내 (일요일 사용자 리뷰용)
 
 범위: `77e2827`(묶음 import-20261103) → 이 브랜치 끝(`git log --oneline 77e2827..HEAD`). 다음 묶음은 토 11/7 18:00 KST.
+
+make_bundle 전에 `TT_DENY_FILE`을 레포 밖 거부 목록 경로로 설정한다. 없으면 `deny-file` 검사가 오류(종료 2)가 되어 묶음을 만들지 않는다.
 사실의 출처는 `MODULE_SKILLS_RESULT.md`(결과 노트)·`MODULE_SKILLS_DECISIONS.md`(결정 원문)·`DRAFT_NOTES.md`·git log이다. 사람이 읽는 요약은 `CONCERNS.md`(HTML `docs/materials/21-concerns.html`).
 
 ## 읽는 법
@@ -20,12 +22,12 @@ git diff 77e2827..HEAD -- <파일>
 | guard 규칙 11 | `plugin/scripts/guard.py`·`show_guard.py` | 쉬운 P1 3개·P2 묶음 7개, 결과 노트의 "약해진 판정" 수 |
 | B1·B2 모듈 스킬 받기·5-1/5-2 | `common/moduleskills.py`·`modulefilter.py`·`triagelib/modulecmd.py`·`reference/module-skills.md`·`SKILL.md` | 관리 clone 받기·점검, `prefer: module|skill`, deep check-output 결과 줄, 답 전 원문 열람 안 함 |
 | B2 마스킹 | `common/masking.py`(로그 줄 전용 M1~M11, M12 IPv6 경계) | 결과 노트 "마스킹 관문 1 기준 미달 2건"(누출 아님) |
-| C1+D 모듈 문서·사례 | `templates/module-skills/{ofono,android}/`(`_common`, 모듈마다 SKILL·analyzer·explore) | 사례 42개(oFono 21·Android 21, 처음 31 + 보정 11), 실제 발췌 사례는 마스킹 |
+| C1+D 모듈 문서·사례 | `templates/module-skills/{ofono,android}/`(`_common`, 모듈마다 SKILL·analyzer·explore) | 사례 42개(oFono 21·Android 21, 처음 31 + 보정 11), 모두 합성 |
 | C1+D 보정 | `_common/components.md` 역할 표, 모듈 explore 증상 표, `tags.yaml` `level`·`ipc` | 증상별 첫 점검 표, 대체 근거, 데몬 역할(지금 이름·구 이름), 선언 없으면 출력 바이트 동일 |
 | B 이슈 DB 작성 지침 | `reference/db-authoring.md`·`03-issue-db §5.7`·`db_lint.py --advice` | OR 시그니처, `must_not_match` "일어났음" 줄, 플래그 없으면 출력 동일 |
 | C′ 부분 일치·코드 대조 | `match_signatures.py`·`triagelib/report.py`·`code_roots.py find-text` | 후보 없음/1위 S=1·C=0일 때만, 출력은 path:line, 제안은 마스킹 로그 줄로만 |
 | C drift 점검 | `tools/site_audit.py`(`site_step.py audit`) | "자주 맞던 시그니처 0건", 빌드 순서 모순은 skip 행 |
-| 실행 중 IMSI/ICCID 갈린 값 | `common/dumpjoin.py`·`masking.py` | 골든·mask-gate 차이 0, 첨부 로그 마스킹 수 변화 0 |
+| 실행 중 IMSI/ICCID 갈린 값 | `common/dumpjoin.py`·`masking.py` | 골든·mask-gate 차이 0, 합성 로그 마스킹 수 변화 0 |
 | 후보 방식 채점 | `module_eval.py`·`tools/module_answers.py` | 탐색 27개 후보 1~3개 + 가장 유력, accept/trap, `GRADER_VERSION 2` |
 | 계획 I OpenCode·사내 모델 | `opencode/`·`common/oc_adapter.py`·`oc_jira_gate.py`·`docs/RUNTIME_ADOPTION.md` | bash 허용 목록, guard 연결 파일 편집 거부, Jira 읽기는 `runtime-check opencode --jira` 통과 뒤 설정 |
 | F 사내 트랙 | `tools/site_step.py`(modules·modules coverage·audit) | 토큰 0, MS-1·MS-2 |

@@ -17,7 +17,7 @@ with 1순위 통과 수 ≥ without, 안전 위반 0, 단가 실측(PLAN C0). �
 **자식 실행은 비용이 든다.** `--dry-run` 결과를 사용자에게 보이고 승인받은 뒤에만 실제로 돌린다(guard ask, 규칙 7).
 `--probe-restricted`(자식 1회, ≈$0.05)도 같다.
 
-H C1+D: case는 합성(`synthetic: true`) 또는 마스킹 발췌(`synthetic: false` + `origin`, `skillcheck.origin_problems`)다. 출력 형식·arm
+H C1+D: case는 합성(`synthetic: true`, `skillcheck.origin_problems`)이다. 출력 형식·arm
 구성은 플랫폼별(`OUTPUT_SPECS`·`ARM_BUILTINS`, oFono·Android). 모뎀(`db_category: common`) deep case의 with arm은 증상 모듈 문서 +
 모뎀 SKILL(runtime `--also`와 같다). 한 arm(`--arms with`)은 관문 없이 `single-arm`이고, `--record`는 프롬프트 틀·입력·다른 arm
 문서가 그대로일 때만 기존 기록에 합친다(아니면 종료 2 "<arm> 기록이 낡음"). 기록에는 case마다 `doc_bytes`·`token_delta`, 관문에
@@ -112,7 +112,7 @@ LIVE_SKILL = REPO / "plugin" / "skills" / "telephony-triage" / "reference"
 ARMS = ("with", "without")
 CONFIG = {"with": "with_skill", "without": "without_skill"}
 DEFAULT_MAX_COST = 1.5          # IMPL:651 (6회 ≤ $1.5)
-DEFAULT_UNIT = 0.08             # RESULT C0 실측 $0.061 + 실제 로그 입력 여유(H C1+D R18). 기록 단가가 있으면 그것이 먼저다
+DEFAULT_UNIT = 0.08             # RESULT C0 실측 $0.061 + 긴 합성 로그 입력 여유(H C1+D R18). 기록 단가가 있으면 그것이 먼저다
 EPS = 1e-9
 CASE_MAX_BYTES = skillcheck.CASE_CAP     # 받을 때 점검과 같은 값 하나(H C1+D R3, 48 KiB)
 EVIDENCE_LIMIT = 200
@@ -128,7 +128,7 @@ ARM_PINS = {
     # Android(H C1+D S12, 11/05 ④ 뒤 얼림 — tests/fixtures/module-arms/README.md 표)
     "android/pre/log-tags.md": "f64baa5b4126f5288a6d7d964f3ab8f9f9d36d4a67f1ab0264bd0f16b380f5fb",
     "android/pre/ril-requests.md": "262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5",
-    "android/pre/fail-causes.md": "b7c12d9c66840723c91b17afab06278e38ad0c347b8281aadd59fa0ccb17ac5c",
+    "android/pre/fail-causes.md": "1fa3ada5678356084b1cc018cd108cf7bb274a7cad38a210fa58cf3b412e29c4",
     "android/pre/explore-rules.md": "6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8",
     "android/post/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
 }
@@ -142,7 +142,6 @@ EQUALS_LIVE = {p: list(m.equals_live) for p, m in _TEMPLATE_METAS.items()}
 
 # --- case 형식 (설계 §2) ------------------------------------------------------------------------------
 CASE_KEYS = {"schema_version", "name", "kind", "synthetic", "key", "issue", "parse", "input", "run_expect", "expect"}
-CASE_OPTIONAL = {"origin"}      # 마스킹 발췌(synthetic: false)에만, 형식은 skillcheck.origin_problems (H C1+D R4)
 ISSUE_KEYS = {"summary", "description", "occurred_at", "platform_version", "sim_slot"}
 INPUT_KEYS = {"deep": {"deep_input", "events", "timeline", "log"}, "explore": {"explore_input", "timeline", "analysis"}}
 FILES_SET = skillcheck.FILES_SET
@@ -229,7 +228,7 @@ INPUT_LISTS = {
     "deep": ("- deep-input.json — 입력 요약(마스킹됨). 안의 경로는 이 파일 기준 상대 경로다.\n"
              "- events.json — 마스킹된 이벤트.\n"
              "- timeline.md — 마스킹된 타임라인.\n"
-             "- source.log — 원본 로그(합성 또는 마스킹 발췌). 찾기(검색)나 offset·limit(100줄 이하)을 준 구간 읽기만 한다. 통째로 읽지 않는다."),
+             "- source.log — 합성 로그 원문. 찾기(검색)나 offset·limit(100줄 이하)을 준 구간 읽기만 한다. 통째로 읽지 않는다."),
     "explore": ("- explore-input.json — 타임라인 머리 정보.\n"
                 "- timeline.md — 마스킹된 타임라인.\n"
                 "- analysis.json — 분석 요약(마스킹됨)."),
@@ -417,7 +416,7 @@ def _expect_problem(kind: str, exp) -> str | None:
 
 def evidence_rxs(case_data) -> list[str]:
     """case의 근거 regex 목록. deep은 expect.evidence, explore(schema 2)는 accept 전부의 evidence 합집합(순서 유지·중복 제거).
-    `Case`나 case.yaml dict를 받는다. make_excerpt·입력 생성기·템플릿 시험은 이것만 쓴다."""
+    `Case`나 case.yaml dict를 받는다. 입력 생성기·템플릿 시험은 이것만 쓴다."""
     exp = case_data.expect if isinstance(case_data, Case) else (case_data or {}).get("expect")
     if not isinstance(exp, dict):
         return []
@@ -448,8 +447,8 @@ def load_case(case_dir) -> Case:
         data = yamlio.load(path)
     except Exception as exc:  # noqa: BLE001 — YAML 오류·인코딩 오류 모두 case 오류
         fail(f"case.yaml 읽기 실패: {exc}")
-    if not isinstance(data, dict) or not CASE_KEYS <= set(data) <= CASE_KEYS | CASE_OPTIONAL:
-        fail(f"최상위 키는 {sorted(CASE_KEYS)}(+ {sorted(CASE_OPTIONAL)})")
+    if not isinstance(data, dict) or set(data) != CASE_KEYS:
+        fail(f"최상위 키는 {sorted(CASE_KEYS)}")
     kind = data["kind"]
     if kind not in INPUT_KEYS:
         fail("kind는 deep 또는 explore")
@@ -460,8 +459,8 @@ def load_case(case_dir) -> Case:
         fail(f"{kind} schema_version은 {SCHEMA[kind]}")
     if data["name"] != name or not isinstance(name, str) or not NAME_RX.match(name):
         fail("name은 디렉토리 이름과 같고 소문자·숫자·-")
-    if data["synthetic"] not in (True, False) or not isinstance(data["synthetic"], bool):
-        fail("synthetic은 true(합성) 또는 false(마스킹 발췌, origin 필요)")
+    if data["synthetic"] is not True:
+        fail("synthetic은 true(합성)")
     if not isinstance(data["key"], str) or not KEY_RX.match(data["key"]):
         fail("key는 MOCK-9NNN")
     issue = data["issue"]
@@ -517,7 +516,7 @@ def load_case(case_dir) -> Case:
         fail("files/source.log는 UTF-8")
     if "\r" in log:
         fail("files/source.log는 LF 줄바꿈")
-    for why in skillcheck.origin_problems(data, log):     # 합성 표식 또는 마스킹 발췌 origin(R4·R5)
+    for why in skillcheck.origin_problems(data, log):     # 합성 표식(R4·R5)
         fail(f"origin {why}")
     if kind == "explore":                                   # 코덱스 리뷰 R5: 펼친 폴더에 없는 자료를 있다고 적은 analysis.json은 거부
         try:

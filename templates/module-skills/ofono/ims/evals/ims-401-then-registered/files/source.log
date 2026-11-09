@@ -1,4 +1,4 @@
--- [마스킹 발췌] O2 E16b 줄 6110-6170,6306-6312,6352-6360
+-- [합성]
 Feb 27 17:28:21.985 host1 daemon.info ofonod[464]: [0,0012]< IMS_REQUEST_SET_PDN_INFO_EXT
 Feb 27 17:28:21.985 host1 daemon.debug ofonod[464]: drivers/rilmodem/ims.c:ims_setPdnInfo_cb() set_ims_pdn_info_cb was successful
 Feb 27 17:28:22.002 host1 local0.info MOSE[753]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108

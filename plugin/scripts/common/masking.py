@@ -361,7 +361,7 @@ _BASE_RULES: tuple[Rule, ...] = (
     Rule("TMSI", re.compile(r'(?i)\b(?:p-?tmsi|m-?tmsi|s-?tmsi|tmsi)' + _SEP + r'(?P<v>(?:0x)?[0-9A-Fa-f]{4,10})\b')),
     Rule("GUTI", re.compile(r'(?i)\b(?:5g-?guti|guti)' + _SEP + r'(?P<v>[0-9A-Fa-f][0-9A-Fa-f-]{7,})\b')),
     # 셀 위치 키 (`mCid`·`CellIdentity*`의 키는 항상). 맨 `cid`는 키로 두지 않는다 — 데이터 콜 context id
-    # (`DataCallResponse`·`SetupDataCallResult`·벤더 `PdpContext{` 등)라 분석에 쓰므로 객체 안·밖 어디서나 그대로 둔다
+    # (`DataCallResponse`·`SetupDataCallResult`·벤더 `VendorDataCall{` 등)라 분석에 쓰므로 객체 안·밖 어디서나 그대로 둔다
     # (11/02 사용자 결정). `mCid`는 CellIdentity의 셀 ID 필드라 계속 가린다
     Rule("CELL", re.compile(
         r"\b(?:mCi|mPci|mTac|mLac|mCid|mNci|mCellId|ci|pci|tac|lac|nci|eci|cellId|cellIdentity)"

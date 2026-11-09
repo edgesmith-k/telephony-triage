@@ -1233,95 +1233,36 @@ def test_arm_pins_android():
         assert f"| `{rel}` |" in readme and me.ARM_PINS[rel] in readme, rel
 
 
-# --- H C1+D O2: 마스킹 발췌 case·출력 형식·모뎀 also·플랫폼 arm·한 arm 합치기·토큰 목표 ---------------------------
+# --- H C1+D O2: 합성 case 출처·출력 형식·모뎀 also·플랫폼 arm·한 arm 합치기·토큰 목표 ---------------------------
 
-ORIGIN = {"kind": "masked-excerpt", "log": "O2", "episode": "E4b", "lines": "100-107,200-204",
-          "masker": "0123456789ab", "residual": "2026-11-06"}
-
-
-def _excerpt_copy(env, tmp_path, origin=None, body_edit=None, header=None):
-    """data-apn-auth-reject를 마스킹 발췌 모양으로 바꾼 사본(13줄 = 8 + 5)."""
+def _synthetic_copy(env, tmp_path, edit=None, log=None):
+    """data-apn-auth-reject(합성) 사본. `edit(data)`로 case.yaml을, `log`로 source.log를 바꾼다."""
     import shutil
     src = env.templates / "ofono" / "data" / "evals" / "data-apn-auth-reject"
-    d = tmp_path / f"ex-{next(_IDS)}" / "data-apn-auth-reject"
+    d = tmp_path / f"syn-{next(_IDS)}" / src.name
     shutil.copytree(src, d)
-    origin = dict(ORIGIN if origin is None else origin)
-    data = yaml.safe_load((d / "case.yaml").read_text(encoding="utf-8"))
-    data["synthetic"] = False
-    data["origin"] = origin
-    (d / "case.yaml").write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
-    lines = LOGS["data-apn-auth-reject"].split("\n")
-    body = lines[:8] + ["-- [생략]"] + lines[8:]
-    if body_edit:
-        body = body_edit(body)
-    head = header if header is not None else f"-- [마스킹 발췌] {origin['log']} {origin['episode']} 줄 {origin['lines']}"
-    (d / "files" / "source.log").write_text("\n".join([head, *body]) + "\n", encoding="utf-8")
+    if edit:
+        data = yaml.safe_load((d / "case.yaml").read_text(encoding="utf-8"))
+        edit(data)
+        (d / "case.yaml").write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    if log is not None:
+        (d / "files" / "source.log").write_text(log, encoding="utf-8", newline="")
     return d
 
 
-def test_load_case_excerpt_ok(env, tmp_path):
-    case = me.load_case(_excerpt_copy(env, tmp_path))
+def test_load_case_synthetic_only(env, tmp_path):
+    """case는 합성만(R4·R5): synthetic: true, origin 키 없음, source.log 1줄 `-- [합성]`."""
+    case = me.load_case(_synthetic_copy(env, tmp_path))
     assert case.kind == "deep" and case.key == "MOCK-9101"
-
-
-def test_load_case_excerpt_needs_origin(env, tmp_path):
-    d = _excerpt_copy(env, tmp_path)
-    data = yaml.safe_load((d / "case.yaml").read_text(encoding="utf-8"))
-    del data["origin"]
-    (d / "case.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
-    with pytest.raises(me.CaseError, match=r"data-apn-auth-reject: origin origin 필요"):
-        me.load_case(d)
-    d = _excerpt_copy(env, tmp_path, origin={k: v for k, v in ORIGIN.items() if k != "masker"} | {"commit": "x"})
-    with pytest.raises(me.CaseError, match="origin 키는 정확히"):
-        me.load_case(d)
-
-
-def test_load_case_synthetic_rejects_origin(env, tmp_path):
-    d = env.templates / "ofono" / "data" / "evals" / "data-apn-auth-reject"
-    import shutil
-    c = tmp_path / "syn" / d.name
-    shutil.copytree(d, c)
-    data = yaml.safe_load((c / "case.yaml").read_text(encoding="utf-8"))
-    data["origin"] = dict(ORIGIN)
-    (c / "case.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
-    with pytest.raises(me.CaseError, match="origin은 마스킹 발췌"):
-        me.load_case(c)
-    data.pop("origin")
-    data["extra"] = 1
-    (c / "case.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(me.CaseError, match=r"synthetic은 true\(합성\)"):
+        me.load_case(_synthetic_copy(env, tmp_path, edit=lambda data: data.__setitem__("synthetic", False)))
     with pytest.raises(me.CaseError, match="최상위 키는"):
-        me.load_case(c)
-
-
-def test_load_case_excerpt_header_mismatch(env, tmp_path):
-    d = _excerpt_copy(env, tmp_path, header="-- [마스킹 발췌] 첨부 로그 O2 에피소드 E4b, 원본 줄 100-107,200-204")
-    with pytest.raises(me.CaseError, match="머리 줄과 다르다"):
-        me.load_case(d)
-    d = _excerpt_copy(env, tmp_path, header="-- [합성] x")
-    with pytest.raises(me.CaseError, match="머리 줄과 다르다"):
-        me.load_case(d)
-
-
-def test_load_case_excerpt_line_count(env, tmp_path):
-    d = _excerpt_copy(env, tmp_path, body_edit=lambda b: [x for x in b if x != "-- [생략]"])
-    with pytest.raises(me.CaseError, match="구간 줄 수"):
-        me.load_case(d)
-    d = _excerpt_copy(env, tmp_path, body_edit=lambda b: b[:-1])
-    with pytest.raises(me.CaseError, match="구간 줄 수"):
-        me.load_case(d)
-
-
-def test_load_case_excerpt_over_120(env, tmp_path):
-    d = _excerpt_copy(env, tmp_path, origin={**ORIGIN, "lines": "1-110,200-211"})
-    with pytest.raises(me.CaseError, match="120줄 초과"):
-        me.load_case(d)
-
-
-def test_load_case_excerpt_residual(env, tmp_path):
-    imsi = "45005" + "1234567890"
-    d = _excerpt_copy(env, tmp_path, body_edit=lambda b: b[:-1] + [b[-1] + f" imsi={imsi}"])
-    with pytest.raises(me.CaseError, match="남은 식별자"):
-        me.load_case(d)
+        me.load_case(_synthetic_copy(env, tmp_path, edit=lambda data: data.__setitem__("origin", {"kind": "x"})))
+    with pytest.raises(me.CaseError, match="최상위 키는"):
+        me.load_case(_synthetic_copy(env, tmp_path, edit=lambda data: data.__setitem__("extra", 1)))
+    body = LOGS["data-apn-auth-reject"]
+    with pytest.raises(me.CaseError, match=r"origin source.log 1줄은 '-- \[합성\]'로 시작"):
+        me.load_case(_synthetic_copy(env, tmp_path, log=body + "\n"))
 
 
 def test_case_cap_is_skillcheck():
@@ -1347,7 +1288,7 @@ def test_output_spec_per_platform(env):
     assert android in me.build_prompt(case, ["a.md"], "android") and ofono not in me.build_prompt(case, ["a.md"], "android")
     with pytest.raises(me.UsageError):
         me.build_prompt(case, ["a.md"], "qmi")
-    assert "원본 로그(합성 또는 마스킹 발췌)" in me.INPUT_LISTS["deep"]
+    assert "source.log — 합성 로그 원문." in me.INPUT_LISTS["deep"]
     assert me.DEEP_BASELINE_NOTE["android"] == "Android without = 내장 log-tags·ril-requests·fail-causes"
 
 

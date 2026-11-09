@@ -1,4 +1,4 @@
--- [합성] module-filter negative fixture: a non-Exynos IPC log is labeled by an ipc_re/ipc change only (expect.override). Hand-written, not a real capture.
+-- [합성] module-filter negative fixture: another vendor IPC (QMI) format log is labeled by an ipc_re/ipc change only (expect.override). Hand-written, not a real capture.
 Sep 20 15:10:00.000 dut daemon.info NMD[610]: profile select: auth=CHAP profile_id=1
 Sep 20 15:10:00.500 dut daemon.err exynos-ril[640]: [TX] QMI_WDS_START_NETWORK_INTERFACE token=0x12 failed
 Sep 20 15:10:00.900 dut daemon.err exynos-ril[640]: [RX] QMI_WDS_START_NETWORK_INTERFACE token=0x12 error=CALL_FAILED

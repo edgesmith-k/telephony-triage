@@ -119,7 +119,7 @@ def test_tree_sizes():
     assert checks([blob(f"{case}/case.yaml", 6000), blob(f"{case}/files/a.log", 13312),
                    blob(f"{case}/files/b.json", 29840)]) == []
     assert sc.CAPS["modules.yaml"] == 24576 and (sc.REFERENCE_CAP, sc.CASE_CAP) == (4096, 49152)
-    assert (sc.EXCERPT_LOG_CAP, sc.SYNTHETIC_LOG_CAP) == (13312, 6144)
+    assert sc.CASE_LOG_CAP == 13312
 
 
 def test_parse_ls_tree():
@@ -351,74 +351,18 @@ def test_module_repo_check_usage(tmp_path):
 
 # -- H C1+D O1: case 출처·D-Bus·템플릿 전용 점검 ---------------------------------------------------
 
-ORIGIN = {"kind": "masked-excerpt", "log": "O2", "episode": "E4b", "lines": "10-12,20-21",
-          "masker": "0123456789ab", "residual": "2026-11-06"}
-EXCERPT = ("-- [마스킹 발췌] O2 E4b 줄 10-12,20-21\n"
-           "Nov  1 10:00:01 <HOST#1> ofonod[812]: a\nNov  1 10:00:02 <HOST#1> ofonod[812]: b\n"
-           "Nov  1 10:00:03 <HOST#1> ofonod[812]: c\n-- [생략]\n"
-           "Nov  1 10:00:09 <HOST#1> exynos-ril[901]: d\nNov  1 10:00:10 <HOST#1> exynos-ril[901]: e\n")
-
-
-def _excerpt(**origin) -> dict:
-    return {"synthetic": False, "origin": {**ORIGIN, **origin}}
-
-
-def test_origin_problems_excerpt_ok():
-    assert sc.origin_problems(_excerpt(), EXCERPT) == []
-    import datetime
-
-    assert sc.origin_problems(_excerpt(residual=datetime.date(2026, 11, 6)), EXCERPT) == []   # YAML 날짜도 받는다
-    for ep in ("E4", "E3c", "A-E5", "A-E9+A-E4", "E1+E2b"):
-        assert sc.EPISODE_RE.fullmatch(ep), ep
-    for ep in ("e4", "A-", "E4+", "X-E1", "E4bb"):
-        assert not sc.EPISODE_RE.fullmatch(ep), ep
-
-
-def test_origin_problems_needs_origin_and_exact_keys():
-    assert sc.origin_problems({"synthetic": False}, EXCERPT) == ["origin 필요(synthetic: false)"]
-    bad = _excerpt()
-    del bad["origin"]["residual"]
-    assert sc.origin_problems(bad, EXCERPT) == [f"origin 키는 정확히 {list(sc.ORIGIN_KEYS)}"]
-    assert sc.origin_problems({**_excerpt(), "synthetic": "no"}, EXCERPT) == ["synthetic은 true(합성) 또는 false(마스킹 발췌)"]
-
-
-def test_origin_problems_field_formats():
-    assert sc.origin_problems(_excerpt(kind="real"), EXCERPT) == ["origin.kind는 masked-excerpt"]
-    assert sc.origin_problems(_excerpt(log="O3"), EXCERPT) == ["origin.log는 O1|O2|A"]
-    assert sc.origin_problems(_excerpt(episode="E4 b"), EXCERPT) == ["origin.episode 형식"]
-    assert sc.origin_problems(_excerpt(masker="4e36948"), EXCERPT) == ["origin.masker는 sha256(masking.py) 앞 12자리"]
-    assert sc.origin_problems(_excerpt(residual="2026-13-01"), EXCERPT) == ["origin.residual은 ISO 날짜"]
-    for lines in ("20-21,10-12", "10-12,12-14", "12-10", ["10-12"], 10, "0-3"):
-        assert sc.origin_problems(_excerpt(lines=lines), EXCERPT) == \
-            ["origin.lines는 'a-b,c-d' 문자열(오름차순·겹침 없음)"], lines
-    assert sc.origin_problems(_excerpt(lines="1-100,200-221"), EXCERPT) == ["origin.lines 합계 120줄 초과"]
-
-
-def test_origin_problems_header_and_line_count():
-    assert sc.origin_problems(_excerpt(), EXCERPT.replace("줄 10-12", "줄  10-12", 1)) == \
-        ["source.log 1줄이 origin 머리 줄과 다르다"]
-    assert sc.origin_problems(_excerpt(episode="E4"), EXCERPT) == ["source.log 1줄이 origin 머리 줄과 다르다"]
-    count = ["source.log 구간 줄 수가 origin.lines와 다르다(구간은 '-- [생략]' 한 줄로 나눈다)"]
-    assert sc.origin_problems(_excerpt(), EXCERPT.replace("-- [생략]\n", "")) == count
-    assert sc.origin_problems(_excerpt(), EXCERPT.replace("-- [생략]\n", "-- [생략] \n")) == count   # 정확히 같아야 구분 줄
-    assert sc.origin_problems(_excerpt(), EXCERPT + "Nov  1 10:00:11 <HOST#1> exynos-ril[901]: f\n") == count
-    # logcat 버퍼 표시 줄(`--------- beginning of …`)은 본문 줄로 센다
-    text = EXCERPT.replace("exynos-ril[901]: d", "exynos-ril[901]: d").replace(
-        "Nov  1 10:00:10 <HOST#1> exynos-ril[901]: e", "--------- beginning of radio")
-    assert sc.origin_problems(_excerpt(), text) == []
-
-
-def test_origin_problems_residual_identifier():
-    imsi = "45005" + "1234567890"
-    text = EXCERPT.replace(": e\n", f": imsi={imsi}\n")
-    assert sc.origin_problems(_excerpt(), text) == ["source.log에 남은 식별자"]
-
-
 def test_origin_problems_synthetic():
+    """case는 합성만: synthetic: true, origin 키 없음, 1줄 `-- [합성]`."""
     assert sc.origin_problems({"synthetic": True}, "-- [합성] x\nline\n") == []
-    assert sc.origin_problems({"synthetic": True, "origin": dict(ORIGIN)}, "-- [합성] x\n") == \
-        ["origin은 마스킹 발췌(synthetic: false)에만"]
-    assert sc.origin_problems({"synthetic": True}, EXCERPT) == ["source.log 1줄은 '-- [합성]'로 시작"]
+    assert sc.origin_problems({"synthetic": True}, "-- [합성]\n") == []
+    assert sc.origin_problems({"synthetic": True, "origin": {"kind": "x"}}, "-- [합성] x\n") == \
+        ["origin 키는 두지 않는다(합성 case만)"]
+    assert sc.origin_problems({"synthetic": True}, "line\n-- [합성]\n") == ["source.log 1줄은 '-- [합성]'로 시작"]
+    assert sc.origin_problems({"synthetic": True}, "") == ["source.log 1줄은 '-- [합성]'로 시작"]
+    for bad in (False, "yes", None):
+        assert sc.origin_problems({"synthetic": bad}, "-- [합성]\n") == ["synthetic은 true(합성)"], bad
+    assert sc.origin_problems({}, "-- [합성]\n") == ["synthetic은 true(합성)"]
+    assert sc.origin_problems([], "-- [합성]\n") == ["case.yaml이 매핑이 아니다"]
 
 
 def test_dbus_allowed_union():
@@ -466,7 +410,7 @@ def test_template_findings_origin(tmp_path):
                                                   "source.log 1줄은 '-- [합성]'로 시작")]
     yml = case / "case.yaml"
     yml.write_text(yml.read_text(encoding="utf-8").replace("synthetic: true", "synthetic: false"), encoding="utf-8")
-    assert _rows(sc.template_findings(root, METAS)) == [("출처", "ofono/data/evals/data-ofonod-only", "origin 필요(synthetic: false)")]
+    assert _rows(sc.template_findings(root, METAS)) == [("출처", "ofono/data/evals/data-ofonod-only", "synthetic은 true(합성)")]
 
 
 def test_template_findings_files_set(tmp_path):

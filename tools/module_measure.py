@@ -53,8 +53,12 @@ class UsageError(Exception):
 
 # -- coverage --------------------------------------------------------------------------------------------------------
 
+def _root(args) -> Path:
+    return Path(args.plugin_root) if args.plugin_root else REPO / "plugin"
+
+
 def _parse(log: Path, args) -> dict:
-    root = Path(args.plugin_root) if args.plugin_root else REPO / "plugin"
+    root = _root(args)
     cmd = [sys.executable, str(root / "scripts" / "parse_logcat.py"), "parse", str(log), "--full", "--rules", args.rules,
            "--tz", args.tz, "--mask", "--plugin-root", str(root)]
     if args.year:
@@ -65,13 +69,22 @@ def _parse(log: Path, args) -> dict:
     return json.loads(proc.stdout)
 
 
-def _raw_tags(logs: list[Path], args) -> Counter:
-    """플랫폼 줄 읽기로 (태그, 레벨) 수. 이름은 마스킹·40자."""
-    unreliable: frozenset = frozenset()
-    DEFAULT_LEVEL = "I"
+def _raw_tags(logs: list[Path], args, rules) -> Counter:
+    """플랫폼 줄 읽기로 (태그, 레벨) 수. 이름은 마스킹·40자. oFono 레벨은 파싱과 같은 백엔드 보정(`_line_record` —
+    site-defaults 구성요소 `level_unreliable`, tags.yaml `level: unreliable`이 있으면 그것)."""
+    backend = None
     if args.platform == "ofono":
-        # 레벨 보정은 줄 읽기에서 백엔드로 옮겨 갔다(C1+D 보정) — 측정 숫자를 같게 두려고 기본 이름 보정을 여기서 한다
-        from platforms.ofono.journal import DEFAULT_LEVEL, LEVEL_UNRELIABLE_IDENTS as unreliable, read_file
+        import platforms
+        from common import site_defaults
+        from platforms.ofono.backend import BACKEND
+        from platforms.ofono.journal import read_file
+
+        # 보통은 `_parse`가 같은 루트로 먼저 돌아 거기서 사용 오류가 되지만, 여기서도 종료 2로 바꾼다
+        try:
+            profile = platforms.load(site_defaults.load(_root(args)), "ofono", require_enabled=False)
+        except (platforms.PlatformConfigError, site_defaults.SiteDefaultsMissing) as exc:
+            raise UsageError(f"site-defaults platform 설정({_root(args)}): {exc}") from exc
+        backend = BACKEND.configure(profile).apply_rules(rules)
     else:
         from platforms.android.logcat import read_file
     masker = masking.new_masker(log_lines=True)
@@ -79,7 +92,7 @@ def _raw_tags(logs: list[Path], args) -> Counter:
     for i, log in enumerate(logs):
         lines, _stats = read_file(log, i, args.tz, args.year)
         for ln in lines:
-            out[(masker(ln.tag)[:40], DEFAULT_LEVEL if ln.tag in unreliable else ln.level)] += 1
+            out[(masker(ln.tag)[:40], backend._line_record(ln)["level"] if backend else ln.level)] += 1
     return out
 
 
@@ -141,7 +154,7 @@ def coverage(args) -> dict:
     rules = _rules(args.rules)
     unknown = []
     if logs and rules is not None:
-        tags = _raw_tags(logs, args)
+        tags = _raw_tags(logs, args, rules)
         agg: dict[str, list[int]] = defaultdict(lambda: [0, 0])
         for (tag, level), n in tags.items():
             if rules.tag_category(tag) is None:

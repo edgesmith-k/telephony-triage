@@ -1,6 +1,6 @@
 # modules.yaml (스키마 2, B2 §4.5). 스크립트(common/modulefilter.py·skillcheck)만 읽고 모델은 읽지 않는다.
-# 값 출처 표시: 따로 적지 않은 값은 R(첨부 로그에서 봄: O1/O2 = oFono syslog, A = Android logcat), 줄 끝 주석에
-# D(레포 문서)·A(가정, 로그에 없음)를 적는다. 사내는 modules.yaml PR로 고친다(결정 기록 11/05 "사내랑 안 맞는 것은 사내에서").
+# 값은 placeholder·공개 이름이다. 줄 끝 주석 D(레포 문서)·A(가정)를 적는다.
+# 사내는 modules.yaml PR로 고친다(결정 기록 11/05 "사내랑 안 맞는 것은 사내에서").
 # 키워드는 글자 그대로, `re:`로 시작하는 것만 정규식이다. 벤더 데몬·IPC·서비스·D-Bus 이름을 쓸 수 있다(결정 기록 11/05).
 schema_version: 2
 platforms:
@@ -73,7 +73,7 @@ platforms:
         db_category: call
         daemons: []
         ofonod_files: [src/voicecall.c, src/call-settings.c, src/call-forwarding.c, src/call-barring.c, drivers/rilmodem/voicecall.c]
-        ril: [UNSOL_OEM_EMERGENCY_NUMBER_LIST, DIAL, HANGUP, GET_CURRENT_CALLS, LAST_CALL_FAIL_CAUSE, UNSOL_RESPONSE_CALL_STATE_CHANGED]   # A: all but the first
+        ril: [UNSOL_OEM_EMERGENCY_NUMBER_LIST, DIAL, HANGUP, GET_CURRENT_CALLS, LAST_CALL_FAIL_CAUSE, UNSOL_RESPONSE_CALL_STATE_CHANGED]   # A: 첫 값 외에는 가정
         sit: [SIT_IND_EMERGENCY_CALL_LIST]
         services: [CsService]
         dbus: [org.ofono.VoiceCallManager, org.ofono.CallSettings, org.ofono.CallForwarding, org.ofono.CallBarring, org.ofono.CallVolume, org.ofono.SupplementaryServices]
@@ -85,7 +85,7 @@ platforms:
         db_category: sms
         daemons: []
         ofonod_files: [src/sms.c, src/cbs.c]
-        ril: [SEND_SMS, SMS_ACKNOWLEDGE, UNSOL_RESPONSE_NEW_SMS]   # A: none seen in the logs
+        ril: [SEND_SMS, SMS_ACKNOWLEDGE, UNSOL_RESPONSE_NEW_SMS]   # A: 합성 로그에 없음(가정)
         sit: [SIT_GET_SMSC_ADDR]
         services: [SmsService]
         dbus: [org.ofono.MessageManager, org.ofono.CellBroadcast, org.ofono.PushNotification, org.ofono.SmartMessaging, org.ofono.MessageWaiting]
@@ -187,7 +187,7 @@ platforms:
         services: [SmsService]
         sit: [SIT_*SMS*]
         keywords: ['SEND_STATUS_ERROR']
-        also: {'^SHANNON_IMS$': '\[SMS'}   # SMS over IMS 벤더 줄(`[SMS#]` 접두는 합성 모양, 첨부 로그 A에는 SMS 전송이 없다)
+        also: {'^SHANNON_IMS$': '\[SMS'}   # SMS over IMS 벤더 줄(`[SMS#]` 접두는 합성 모양, 합성 로그에는 SMS 전송이 없다, 사내에서 확인)
         neighbours: [ims]
       ims:
         path: android/ims

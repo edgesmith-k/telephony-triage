@@ -56,13 +56,13 @@
 
 - [ ] 전체 테스트 통과 (`pytest`, `db_regress --all`, eval 전체(`evals.json`) 준비(`--prepare-only`), `tools/offline_eval.py` 합성 라벨셋 실행(`--include-in-sample` — 합성 라벨셋은 로그가 모두 fixture라 표본내, 도구 동작 확인용) — 모두 테스트 헬퍼 플러그인 루트에서, `tools/fix_exec_bits.py --check`: 셰뱅 파일은 100755)
 - [ ] 사내 리허설 통과: 사외 CI `site-rehearsal` job(`tools/site_rehearsal.sh`) — 반입본을 Ubuntu 22.04 apt Python(3.10 / 3.11.0rc1)·git 2.34, 일반 사용자, 한국어 로케일, KST에서 사내 순서(압축 풀기·`git init`·의존성 3방식·`site_step.py`·기준선·전체 테스트)로 돌린다. 로컬은 같은 조건의 컨테이너에서 `tools/site_rehearsal.sh <zip> <user|venv|tt311>`
-- [ ] 사내 정보 없음: `python3 tools/check_boundary.py --mode external` 종료 코드 0 (사외 CI `.github/workflows/external.yml`도 같은 검사). 그래도 실제 회사명·서버명 등을 쓰지 않았는지 사람이 한 번 검색
+- [ ] 사내 정보 없음: `python3 tools/check_boundary.py --mode external` 종료 코드 0 (사외 CI `.github/workflows/external.yml`도 같은 검사). 그래도 실제 회사명·서버명 등을 쓰지 않았는지 사람이 한 번 검색. make_bundle `deny-file`이 거부 목록 0건 확인(`TT_DENY_FILE` 필수 — 없으면 `deny-file`이 오류(종료 2)이고 묶음이 만들어지지 않는다).
 - [ ] `python3 tools/sync_schemas.py --check` 통과 (`plugin/schemas/` 사본 = 샘플 DB `schema/`)
 - [ ] `python3 tools/gen_contracts.py --check` 통과 (`contracts-cli.md`·db-authoring 필수 키 요약 = 코드·스키마)
 - [ ] `plugin/site-defaults.yaml`이 없고 `site-defaults.example.yaml`만 있음. `SITE_PATHS`의 다른 경로(`.draft-manifest.json` 포함)도 비어 있음
 - [ ] 레포 루트에 `.mcp.json`이 없음 (모의 MCP는 `tests/mocks/mcp.json`). `.local-draft`는 반입 묶음에 넣지 않음
 - [ ] `tools/make_db_skeleton.py`로 이슈 DB 뼈대를 만들었고, 뼈대에 유형·Jira·fixture(합성 포함)가 없음
-- [ ] 모듈 스킬 템플릿 검사 통과 (make_bundle `module-skills`, 항목 11: `module_repo_check --template`, `make_module_eval_inputs --check`, `fixture_residual`) — case는 합성 또는 마스킹 발췌 표시(origin)
+- [ ] 모듈 스킬 템플릿 검사 통과 (make_bundle `module-skills`, 항목 11: `module_repo_check --template`, `make_module_eval_inputs --check`, `fixture_residual`) — case는 합성 표시(`-- [합성]`)
 - [ ] `python3 tools/list_site_todos.py`가 오류 없이 돌고 결과를 사용자가 봤다 (목록은 문서에 두지 않는다. 상태 파일에는 개수만)
 - [ ] `DRAFT_NOTES.md`(상태 파일, ≤8KB): 진행 상태·남은 일·막힌 것·결정이 최신. 가정·모의와 실제가 다를 지점 같은 상세는 `docs/history/draft-notes-<날짜>.md`
 - [ ] `plugin/.claude-plugin/plugin.json`의 description에서 "사외 초안"을 빼고 `version`이 없음 (auto, make_bundle 맨 앞 — 실행 전에 정리 커밋)
@@ -135,7 +135,7 @@ tests/site/
      - 적용은 staging → 검증 → 활성 전환 순서다: 새 파일을 대상 옆 임시 디렉토리에 복사해 해시를 대조하고, `--check-boundary`면 반입 뒤 모습에 `check_boundary.py --mode site`(사내 패턴 `docs/site/boundary-patterns.txt` 포함)를 돌린다. 위반이면 종료 코드 1이고 대상은 그대로다. 활성 전환 중 실패하면 파일·새 디렉토리·기준선을 되돌린다.
   3. `pytest`(골든 포함), `db_regress --all` 통과 확인 → main에 병합.
   4. 사외에서 설계가 바뀐 부분은 `14-site.md §14.5`대로 영향을 확인한다.
-- **경계 검사** `tools/check_boundary.py` (RF-2): 1차 장치는 `SITE_PATHS` 허용 목록이고 패턴은 보조다. 비밀값은 출력에서 앞부분만 보인다. 규칙: 사내 표식 패턴(비밀 키·비밀값(서비스 토큰·JWT·`Authorization` 헤더·URL/netrc 자격증명·`*token*`/`*secret*` 대입, 자리표시 값 제외)·공인 IP·15자리 숫자·허용 목록 밖 이메일/URL 호스트 + 사내 `docs/site/boundary-patterns.txt`), `plugin/scripts/**`의 SITE_PATHS 모듈 정적 import, 합성 표시 없는 로그 fixture, (`--mode external`) SITE_PATHS 경로 존재. 예외는 `tools/boundary-allow.txt`(사외)·`docs/site/boundary-allow.txt`(사내)에 값까지 좁게 적는다. 사외 CI와 반입 `--check-boundary`에서 돈다. `--mode`를 생략하면 자동 판별한다: `.local-draft`가 있으면 external, 없고 `.draft-manifest.json`이나 `SITE_PROFILE.md`가 있으면 site, 둘 다 없으면 external(사외 CI·`make_bundle.py`는 `--mode external` 명시).
+- **경계 검사** `tools/check_boundary.py` (RF-2): 1차 장치는 `SITE_PATHS` 허용 목록이고 패턴은 보조다. 비밀값은 출력에서 앞부분만 보인다. 규칙: 사내 표식 패턴(비밀 키·비밀값(서비스 토큰·JWT·`Authorization` 헤더·URL/netrc 자격증명·`*token*`/`*secret*` 대입, 자리표시 값 제외)·공인 IP·15자리 숫자·허용 목록 밖 이메일/URL 호스트 + 사내 `docs/site/boundary-patterns.txt`), `plugin/scripts/**`의 SITE_PATHS 모듈 정적 import, 합성 표시 없는 로그 fixture, 출처 흔적 문구(`trace-wording`), (`--mode external`) SITE_PATHS 경로 존재. 예외는 `tools/boundary-allow.txt`(사외)·`docs/site/boundary-allow.txt`(사내)에 값까지 좁게 적는다. 사외 CI와 반입 `--check-boundary`에서 돈다. `--mode`를 생략하면 자동 판별한다: `.local-draft`가 있으면 external, 없고 `.draft-manifest.json`이나 `SITE_PROFILE.md`가 있으면 site, 둘 다 없으면 external(사외 CI·`make_bundle.py`는 `--mode external` 명시).
 - 이슈 DB 스키마 사본 `plugin/schemas/`: 단일 원본은 이슈 DB `schema/`. `tools/sync_schemas.py --check [--db <이슈 DB>]`로 대조하고, 다르면 사용자에게 보고한 뒤 `--write`로 갱신한다.
 - `tools/import_draft.py`와 `SITE_PATHS`는 사외 초안(Phase D0)에서 만든다. `.gitignore`가 아니라 **목록 파일**로 관리한다(사내에서는 이 경로들을 커밋해야 하므로). `.draft-manifest.json`은 사내에서 `import_draft.py`가 쓰고 커밋한다.
 - 사내에서 발견한 설계 문제는 사내 정보를 뺀 문장으로 요약해서 사외 문서(이 문서 세트)에 반영한다.

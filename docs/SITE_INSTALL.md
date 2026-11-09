@@ -16,6 +16,8 @@
 
 ## 1. 반입 파일 확인
 
+(묶음을 만드는 사외 쪽: make_bundle 전에 `TT_DENY_FILE`을 레포 밖 거부 목록 경로로 설정한다. 없으면 `deny-file` 검사가 오류(종료 2)가 되어 묶음을 만들지 않는다.)
+
 받는 것: `telephony-triage-import-<label>.zip`, `issue-db-skeleton-import-<label>.zip`, `SHA256SUMS`.
 
 ```

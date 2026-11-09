@@ -323,13 +323,95 @@ def test_unexpected_exception_is_exit_2(repo, tmp_path, monkeypatch, capsys):
 
 def test_real_check_ids_order_and_manual_items():
     ids = [c.id for c in mb.CHECKS]
-    assert ids == ["plugin-json", "site-paths", "mcp-local", "boundary", "human-search", "schemas", "contracts",
+    assert ids == ["plugin-json", "site-paths", "mcp-local", "boundary", "deny-file", "human-search", "schemas",
+                   "contracts",
                    "exec-bits", "site-todos", "todos-seen", "draft-notes-size", "draft-notes-fresh", "skeleton",
                    "module-skills", "offline-eval", "regress", "evals-prepare", "pytest"]
     manual = [c.id for c in mb.CHECKS if c.kind == "manual"]
     assert manual == ["human-search", "todos-seen", "draft-notes-fresh"]
     assert all(c.how for c in mb.CHECKS if c.kind == "manual")
     assert {c.checklist for c in mb.CHECKS} == set(range(1, 12))
+
+
+def _deny_checks():
+    assert mb.deny_scan.DENY_ENV == "TT_DENY_FILE"   # 검사 본체는 tools/deny_scan.py
+    return [mb.Check("deny-file", 2, "auto", mb.check_deny_file), *fake_checks()]
+
+
+def test_deny_file_missing_env_is_error_without_bundle(repo, tmp_path, monkeypatch):
+    """TT_DENY_FILE이 없으면 검사 조건 오류 → 묶음 없음, 종료 2(contracts §종료 코드, deny_scan CLI와 같다)."""
+    monkeypatch.delenv("TT_DENY_FILE", raising=False)
+    out = tmp_path / "out"
+    res = mb.run(repo, LABEL, out, checks=_deny_checks())
+    row = res["checks"][0]
+    assert row["status"] == "error" and "TT_DENY_FILE" in row["detail"]
+    assert res["exit_code"] == mb.USAGE and res["bundle"] is None and not out.exists()
+    assert "TT_DENY_FILE" in mb.format_text(res)
+    monkeypatch.setenv("TT_DENY_FILE", str(tmp_path / "no-such.txt"))
+    res = mb.run(repo, LABEL, out, checks=_deny_checks())
+    assert res["checks"][0]["status"] == "error" and res["exit_code"] == mb.USAGE and not out.exists()
+
+
+def test_deny_file_unreadable_tracked_file_is_error(repo, tmp_path, monkeypatch):
+    deny = tmp_path / "deny.txt"
+    deny.write_text("zzqx\n", encoding="utf-8")
+    monkeypatch.setenv("TT_DENY_FILE", str(deny))
+    _git(repo, "update-index", "--skip-worktree", "README.md")   # 트리는 깨끗하게 둔 채
+    (repo / "README.md").unlink()                                # 추적 파일을 읽을 수 없게 한다
+    out = tmp_path / "out"
+    res = mb.run(repo, LABEL, out, checks=_deny_checks())
+    row = res["checks"][0]
+    assert row["status"] == "error" and "1개 읽기 실패" in row["detail"]
+    assert res["exit_code"] == mb.USAGE and res["bundle"] is None and not out.exists()
+
+
+def test_deny_file_hits_reported_before_read_errors(repo, tmp_path, monkeypatch):
+    deny = tmp_path / "deny.txt"
+    deny.write_text("zzqx\n", encoding="utf-8")
+    monkeypatch.setenv("TT_DENY_FILE", str(deny))
+    (repo / "hit.md").write_text("zzqx\n", encoding="utf-8")
+    _git(repo, "add", "hit.md")
+    _git(repo, "commit", "-qm", "hit")
+    _git(repo, "update-index", "--skip-worktree", "README.md")
+    (repo / "README.md").unlink()
+    out = tmp_path / "out"
+    res = mb.run(repo, LABEL, out, checks=_deny_checks())
+    row = res["checks"][0]
+    assert row["status"] == "fail" and res["exit_code"] == 1   # 일치가 있으면 읽기 실패보다 먼저 보고
+    assert "hit.md: 1건" in row["detail"] and "읽기 실패 1개" in row["detail"]
+    assert res["bundle"] is None and not out.exists()
+
+
+def test_deny_file_hit_fails_with_path_only(repo, tmp_path, monkeypatch):
+    deny = tmp_path / "deny.txt"
+    deny.write_text("zzqx\n", encoding="utf-8")
+    monkeypatch.setenv("TT_DENY_FILE", str(deny))
+    (repo / "docs").mkdir()
+    (repo / "docs" / "a.md").write_text("see ZZQX and zzqx here\n", encoding="utf-8")
+    (repo / "docs" / "zzqx_note.md").write_text("plain\n", encoding="utf-8")   # 이름이 경로에만 있다
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "a")
+    out = tmp_path / "out"
+    res = mb.run(repo, LABEL, out, checks=_deny_checks())
+    row = res["checks"][0]
+    assert row["status"] == "fail" and res["exit_code"] == 1
+    assert "docs/a.md: 2건" in row["detail"] and "docs/«1»_note.md: 1건" in row["detail"]
+    assert "총 3건, 파일 2개" in row["detail"] and "건너뜀 0개" in row["detail"]
+    text = json.dumps(res, ensure_ascii=False) + mb.format_text(res)
+    assert "zzqx" not in text.lower() and not out.exists()
+
+
+def test_deny_file_zero_hits_passes(repo, tmp_path, monkeypatch):
+    deny = tmp_path / "deny.txt"
+    deny.write_text("# c\nzzqx\n", encoding="utf-8")
+    monkeypatch.setenv("TT_DENY_FILE", str(deny))
+    res = mb.run(repo, LABEL, tmp_path / "out", checks=_deny_checks())
+    assert res["checks"][0]["status"] == "pass" and "1항목" in res["checks"][0]["detail"]
+    assert "건너뜀 0개(UTF-8 아님)" in res["checks"][0]["detail"] and res["exit_code"] == 3
+    deny.write_bytes(b"\xff\xfe\x80\n")                     # UTF-8 아님 → error(종료 2), 트레이스백 아님
+    res = mb.run(repo, LABEL, tmp_path / "out2", checks=_deny_checks())
+    assert res["checks"][0]["status"] == "error" and res["exit_code"] == mb.USAGE
+    assert "UTF-8" in res["checks"][0]["detail"] and not (tmp_path / "out2").exists()
 
 
 class _FakeCtx:
@@ -349,7 +431,7 @@ def test_module_skills_check_order(tmp_path):
     """C1D §3.5: module_repo_check --template → make_module_eval_inputs --check → fixture_residual, 모두 통과면 pass."""
     ctx = _FakeCtx(tmp_path, {})
     got = mb.check_module_skills(ctx)
-    assert got.status == "pass" and "origin" in got.detail
+    assert got.status == "pass" and "합성 표시" in got.detail
     assert ctx.calls == ["module_repo_check.py", "make_module_eval_inputs.py", "fixture_residual.py"]
     assert [a[1:] for _, a in mb.MODULE_SKILL_STEPS][0] == ["--template", "templates/module-skills"]
 

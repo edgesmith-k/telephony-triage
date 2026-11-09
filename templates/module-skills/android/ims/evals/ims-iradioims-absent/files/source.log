@@ -1,4 +1,4 @@
--- [마스킹 발췌] A A-E9+A-E4 줄 15529-15532,25054-25057,47422-47425,47656-47659,47711-47714,49078-49081,49112-49115,49350-49353,50599-50602
+-- [합성]
 08-09 13:10:57.481  1856  1856 D Telephony: Registering: Handler (com.android.internal.telephony.vendor.ExynosGsmCdmaPhone) {255ef1b}
 08-09 13:10:57.482  1856  1856 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
 08-09 13:10:57.482  1856  1856 W Telephony: registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1
