@@ -4,7 +4,7 @@
 둘뿐이다(H C1+D R12·S17): `VENDOR_IPC_TAGS`(`RIL`) 줄을 `common.vendor_ipc.detect`에 넘겨
 `builtin.common.vendor_ipc_error`·`builtin.common.vendor_request_failed`를 낸다. 태그 규칙(tags.yaml)과
 무관하게 나온다(태그 묶음이 없는 DB에서도 같다) — 단 tags.yaml에 `ipc: vendor`가 하나라도 있으면 그 태그만 본다
-(`apply_rules`, 04-parser-matching §5.8 (2)). `level: unreliable`도 받는다(기본 없음). 태그 이름·줄 모양은 첨부 로그에서 본 것이며 사내에서 조정한다
+(`apply_rules`, 04-parser-matching §5.8 (2)). `level: unreliable`도 받는다(기본 없음). 태그 이름·줄 모양은 placeholder이며 사내에서 조정한다
 (TODO(SITE:S9)). site 백엔드는 이 클래스를 상속해 `detect()`·`builtin_events()`를 바꾸면 공통 처리를 그대로
 재사용한다(벤더 이벤트도 원하면 `super().detect()`를 합친다).
 
@@ -26,7 +26,7 @@ from parser_backends.base import ParserBackend, TagAttrSet, Window
 
 VERSION = "0.1.1"
 
-# 벤더 IPC 결과 줄을 보는 태그(첨부 로그 A의 벤더 RIL 태그). TODO(SITE:S9) 사내 태그 확인
+# 벤더 IPC 결과 줄을 보는 태그(벤더 RIL 태그 placeholder). TODO(SITE:S9) 사내 태그 확인
 VENDOR_IPC_TAGS = frozenset({"RIL"})
 # 레벨을 심각도로 쓰지 않는 태그 기본값(없음). tags.yaml `level: unreliable`로만 생긴다(oFono와 대칭).
 LEVEL_UNRELIABLE_TAGS: frozenset = frozenset()

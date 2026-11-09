@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """모듈 필터 fixture의 `events.json`을 결정적으로 만든다 (B2 §4.9).
 
-`tests/fixtures/module-filter/<case>/source.log`(마스킹한 실제 발췌 또는 합성)와 `expect.yaml`의 `platform`으로
+`tests/fixtures/module-filter/<case>/source.log`(합성)와 `expect.yaml`의 `platform`으로
 `parse_logcat.py parse --full --mask`를 돌린다. 규칙: oFono는 변형 DB `issue-db-ofono-modules`, Android는 샘플 DB.
 마스킹은 저장소 로그 마스커(M1~M11 반영)다. 출력의 임시 경로는 지운다(`rules.path`·`input.files`).
 

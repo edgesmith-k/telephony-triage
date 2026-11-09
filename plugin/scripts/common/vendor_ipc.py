@@ -1,7 +1,7 @@
 """벤더 RIL IPC 결과 줄 → builtin 이벤트 (H C1+D R12, 두 플랫폼 공통·순수 함수).
 
-첨부 로그(oFono `exynos-ril`, Android `RIL` 태그)에서 본 벤더 RIL 줄 모양 둘을 이벤트로 바꾼다. 이름·모양은 첨부 로그에서
-본 것이며 사내 RIL 버전에 따라 사내에서 조정한다.
+벤더 RIL 줄 모양 둘(oFono `exynos-ril`, Android `RIL` 태그)을 이벤트로 바꾼다. 이름·모양은 placeholder이며
+사내 RIL 버전에 따라 사내에서 조정한다(TODO(SITE:S9)).
 
 | 줄 모양 | 이벤트 | fields |
 |---|---|---|
