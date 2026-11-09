@@ -3,12 +3,14 @@
 > 이 문서는 **리뷰어에게 줄 맥락**만 담는다. 작성자(Claude)의 자체 평가, "잘 된다"는 주장, 측정 결과 해석은 빼려고 했다. 남은 것이 있으면 그것도 발견으로 보고한다.
 > 이 문서의 설명도 검증 대상이다. 코드·문서와 다르면 그 차이를 발견으로 보고한다.
 > 지난 외부 리뷰(`CODEX_REVIEW_BRIEF.md`)는 이번 주 코드 변경의 결함을 봤다. 이번은 **제품·구조 전체**를 본다.
+> **재실행(2026-11-09)**: 첫 종합 리뷰(대상 d263cc0, 결과 `codex-review/codex-holistic-review-d263cc0.md`는 사외 인계 묶음에만 있음)의 발견을 반영한 뒤 다시 본다. 대상은 브랜치 HEAD **ae97883**, 바뀐 범위는 `d263cc0..ae97883`(60커밋, §1-b). 수치는 모두 ae97883 기준이다.
 
 ## 0. 붙여 넣을 요청문
 
 ```
-레포 github.com/edgesmith-k/telephony-triage 의 main(커밋 d263cc0, 다음 사내 반입 후보)을 종합 리뷰해 줘.
-맥락과 규칙은 브랜치 ccr-d022623a-2f4vdx 의 docs/development/CODEX_HOLISTIC_REVIEW_BRIEF.md 에 있다.
+레포 github.com/edgesmith-k/telephony-triage 의 브랜치 ccr-d022623a-2f4vdx(커밋 ae97883, 다음 사내 반입 후보)을 종합 리뷰해 줘.
+지난 종합 리뷰 대상은 d263cc0였고, 그 뒤 바뀐 범위는 d263cc0..ae97883 이다(브리프 §1-b). 전체를 다시 보되 바뀐 곳은 더 깊이 봐 줘.
+맥락과 규칙은 같은 브랜치의 docs/development/CODEX_HOLISTIC_REVIEW_BRIEF.md 에 있다.
 그 문서 §6 "편향 방지"를 먼저 지키고, §3의 축(사용자 편의성·관리자 유지보수·매니저 도입 가치와 이슈 관리/모니터링·
 이슈 판정 스킬·이슈 추정 스킬·런타임 호환·구조)을 모두 다뤄 줘. 결과는 §7 형식으로.
 장점과 약점을 같은 기준으로 적고, 근거가 없는 평가는 "추정"으로 표시해 줘.
@@ -41,7 +43,7 @@
   - 출력 검사: `triage.py check-output`, `common/evidence.py`(근거 원문 대조)
   - 평가기: `plugin/scripts/module_eval.py`, 사례는 `templates/module-skills/**/evals/`
 - **강제·검사 지점**(설계상 역할이며 검증 대상):
-  - hook: `guard.py`(4,848줄, d263cc0 기준), `show_guard.py`, `jira_bridge.py`
+  - hook: `guard.py`(4,610줄, `wc -l`, ae97883 기준 — d263cc0의 4,848줄에서 gh 대상 해석을 지우고 거친 판정으로 바꿈, §1-b), `show_guard.py`, `jira_bridge.py`
   - 마스킹: `common/masking.py`, `mask_pii.py`
   - 경계 검사: `tools/check_boundary.py`
 - **운영·관측 도구**:
@@ -62,6 +64,20 @@
   - 사내 확인값은 레포 밖(`SITE_PROFILE.md`·`SITE_PATHS`)에 둔다. 확인할 항목은 `docs/design/14-site.md`의 S1~S37이다.
   - 문서의 태그·로그 문구·서버 이름은 placeholder다.
 - **지원 트래커**: Jira가 기본이고, 설정으로 GitHub Issues도 쓴다(`docs/design/18-trackers.md`). 플랫폼은 Android가 기본이고, 켜면 oFono를 쓴다(`17-platforms.md`).
+- **크기**(ae97883, `git ls-files` 기준): `plugin/scripts` Python 132파일 45,915줄 · `tools/` 32파일 12,869줄 · `tests/` 69,736줄(시험 파일 121개, 시험 함수 2,796개, 수집 4,015개) · `docs/design/` 22파일(번호 문서 19개) 약 950KB.
+
+### 1-b. 지난 종합 리뷰(d263cc0) 뒤 바뀐 것 — `d263cc0..ae97883`, 60커밋 (사실만, 평가는 리뷰어가)
+
+- **첫 종합 리뷰 반영**: A 묶음 428fe94(판정 P1 3건·측정 정정·guard 우회 2종·S1 미확인 Jira 읽기 ask), B 묶음 ddb2cac(재분류 보정·reviewer.ask·리포트 결론 줄·플랫폼 누수 시험), C 묶음 aca0470(표본내 분리·top1 동률 기준·특이도 정렬·retention), H① 3a416fa(플랫폼 이름 하드코드 13건 → `PlatformSpec.template`), F② 63204df(OpenCode 바이너리 의존을 `common/oc_version.py` 한 곳으로).
+- **코드 리뷰 후속(F·R·N)**: 08bb331 타임라인 합치기 키, 618ad06·028cc18 마스킹 사본 `JOB/logs-masked/`를 모델 읽기 대상으로, f136600 근거 원문 변조 검사, 4033c54 audit 중복 판정, 40fd558 team_stats 집계, 879e4a2 usage 미측정 구분, cc2516b retention 나이 정의, 77e2620 mask-copy 재실행, 961a790 module_eval top1 경고, d356d1d, 9db5b35 db_lint tag-unknown, 6bdd7fc analysis_minutes 범위 표기, c885b94 탐색 출력 계약 통일(GRADER 3).
+- **setup 단순화**: 33c9a79·7fd6fa2·1119d99·01ee905·9eb2434·97af144·9eca1bb — 질문 10→3, Jira MCP 점검을 0번으로(usable 비면 중단), site `issue_db.remote` 플랫폼별, setup.md 바이트 상한.
+- **contracts.md §3.2 분할**: c8136ea·44ac47b — 4KB 넘는 줄을 세부 블록으로(내용 불변), 참조 시험 범위 확대.
+- **guard 정밀 판정 축소(4-c)**: 7a97ef7·ad012e6·b78784b — gh 대상 해석 ≈750줄 삭제, 병합 계열(규칙 6·11)·규칙 5(ci_mode actions)만 deny→ask, Approve·기각·자동 병합·보호 변경·refs/remotes 위조는 deny, 설정 읽기 실패는 degraded, 판정 중 예외는 deny. 전제 `site_checks s4a.protection_guard`. 고정 탐침 176개(`tools/hook_probes.py`, `tests/fixtures/hook_probes.json`)로 전후 비교.
+- **정리 패스(lint)**: bbb8229·89415b9·6c4ea33·8b39f7d·5d347fa — ruff 0.17.4 규칙 묶음 고정(`pyproject [tool.ruff]`, `tools/lint.py`, 선택 `lint` extra, CI lint job), 죽은 코드 삭제, 안전 자동 수정 145곳, B023 18건 검토, `docs/development/LINT_REVIEW.md`(검토만 하는 PLW1510·BLE001 표), trigger_real 오류(미실행) 열.
+- **시그니처 표현력(D①)**: 1bde40c·d0fc8f9·b66f02a·dbd288d — `min_count`·`sequence_within_sec`(스키마 v1 유지, 호환 변경, 기본값 바이트 동일), 모르는 시그니처 키는 compile 오류(스키마 키 집합과 시험으로 고정), 부분 일치 `gap_sec`, 14-site S37.
+- **지표(F7 확장)**: 6327e25·9800986 — `usage_stats` `investigation_minutes`(첫 analyze → 사용자 확인 뒤 stage/release/discard, 경과 시간·보류 포함, 능동 시간은 미측정), trace 정보 행 `explore`·`module`·`checked`, team_stats 열.
+- **모듈 eval**: 30858a9·ed804ce·ae97883 — grader 3 arm 재실행 기록(14모듈 84 run, 비고 포함), `result.json` 저장과 `--regrade`($0 재채점), S4(원문 인용 줄 수)를 형식 무관 조각 단위로, GRADER_VERSION 4(기존 84 run은 재채점 불가 표시).
+- **eval 하네스·P2**: feae8f4(skill eval Bash HOME 격리 — mock-jira를 사용자 범위 서버로), 90de0f6(P2 재현 xfail 2건), 01c69ab(userconfig 손상 값 예외를 문제 줄로), c2c2a34·7f125f5(설명 글·99-deferred §G·02-config·04 §5.11).
 
 ## 2. 사람과 역할 (리뷰 관점)
 
@@ -91,7 +107,7 @@
 - 이슈 DB 스키마 변경(`db_migrate.py`), 생성물, 브랜치 보호, +1 병합 같은 운영 절차의 반복 비용은?
 - 사외/사내 분리와 반입 주기가 유지보수를 돕는가, 비용을 늘리는가? 사내 확인값(S1~S37)이 늘어나는 구조인가?
 - 사외→사내 반입(`tools/make_bundle.py`, 재반입, 오프라인 설치 `docs/SITE_INSTALL.md`)·롤백·제거 절차의 반복 비용과, 실패했을 때 복구는?
-- 시험(3,900개 수집, 파라미터 포함·함수 2,707개)이 실제로 회귀를 잡는가, 유지 부담이 되는가? 깨지기 쉬운 시험(문구·바이트 상한 고정 등)의 비율은?
+- 시험(4,015개 수집 — 3,986 통과·26 건너뜀·3 xfail(WSL ae97883), 파라미터 포함·함수 2,796개·파일 121개)이 실제로 회귀를 잡는가, 유지 부담이 되는가? 깨지기 쉬운 시험(문구·바이트 상한 고정 등)의 비율은? 린트 규칙 묶음(`pyproject [tool.ruff]`, ignore 53개와 `LINT_REVIEW.md`의 검토만 하는 지적 139건)이 유지보수를 돕는가?
 - 의존성·Python 3.10~3.14 지원·외부 도구(git·gh·Claude Code·OpenCode 버전) 변화에 얼마나 민감한가?
 - 버스 팩터: 작성자 없이 다른 사람이 이어받을 수 있는가? 문서의 진입점(`CLAUDE.md`, `docs/design/README.md`)으로 충분한가?
 
@@ -130,14 +146,18 @@
 
 **H. 구조 전반**
 - 과설계나 부족한 설계가 있는가? 지울 수 있는 층이나 합칠 수 있는 모듈은?
-- 문서(`docs/design/`의 번호 문서 18개와 `99-deferred.md`·`contracts.md`·`contracts-cli.md`)와 코드가 맞는가? 계약 생성물(`tools/gen_contracts.py`)이 실제로 drift를 막는가?
+- 문서(`docs/design/`의 번호 문서 19개와 `99-deferred.md`·`contracts.md`·`contracts-cli.md`)와 코드가 맞는가? 계약 생성물(`tools/gen_contracts.py`)이 실제로 drift를 막는가?
+- §1-b의 변경이 구조를 단순하게 했는가, 층을 더했는가? 특히 guard의 거친 판정(deny→ask 확대, 브랜치 보호 전제), 시그니처 선택 필드(모르는 키 오류 + 버전 미상승), `investigation_minutes` 정의, 모듈 eval `--regrade`·S4 규칙은 각각 적절한 자리에 있는가?
 - 확장(새 플랫폼·트래커·모듈·런타임)이 설계대로 쉬운가? 확장 하나를 가정해 필요한 변경 지점을 세어 주세요.
 
 ## 4. 직접 돌려 볼 수 있는 것 (유료 모델·외부 서비스 없음)
 
 ```
-pip install '.[test]'
-python3 -m pytest -q [-n auto]                         # 전체(3,900개 수집; 단일 프로세스 약 31분 실측, -n 4 병렬 약 10분 — pytest-xdist는 test extras)
+pip install '.[test,lint]'                              # lint extra는 ruff 0.17.4(선택)
+python3 -m pytest -q [-n auto]                         # 전체(4,015개 수집; WSL Ubuntu 4코어 -n 4 약 5분 실측(ae97883), 단일 프로세스는 약 30분 — pytest-xdist는 test extras)
+python3 tools/lint.py                                  # ruff 규칙 묶음(pyproject), 지적 0이어야 한다
+python3 tools/hook_probes.py --help                    # guard 고정 탐침 176개(전후 비교 러너, tests/test_hook_probes.py가 돌린다)
+python3 plugin/scripts/module_eval.py --module ofono/network --regrade --dry-run   # 저장 run 재채점 계획(비용 없음; 기존 run은 result.json이 없어 "재채점 불가")
 python3 tests/helpers/make_plugin_root.py --out /tmp/proot
 python3 tools/offline_eval.py tests/fixtures/offline-eval-sample.yaml --plugin-root /tmp/proot --include-in-sample   # 합성 라벨셋 매칭 표(도구 동작 확인용 — 항목이 시그니처 fixture 자체라 표본내로 자동 분리되며, 이 플래그 없이는 지표에서 뺀다. EVAL-8은 대조군)
 python3 plugin/scripts/module_eval.py --module ofono/data --dry-run      # 모듈 평가 실행 계획(비용 없음)
@@ -159,7 +179,8 @@ python3 tools/site_step.py --help ; python3 plugin/scripts/usage_stats.py --help
 ## 6. 편향 방지 (먼저 지켜 주세요)
 
 - **아래 파일은 독립 평가를 마친 뒤에만 읽는다.** 작성자의 주장, 측정 해석, 소개·홍보 문구, 지난 리뷰 결과가 들어 있다. 읽은 뒤에는 중복 표시에만 쓰고, 그 주장으로 평가를 바꾸지 않는다.
-  - `docs/development/` 중 `MODULE_SKILLS_RESULT.md`, `CONCERNS.md`, `BUNDLE_REVIEW_GUIDE.md`, `*_RESULT.md`, `*REVIEW*.md`(예외: 이 문서, `CODEX_REVIEW_BRIEF.md`는 범위 구분에만 쓴다), `REIMPORT_NOTES_*.md`, `H_OFFSITE_REMEASURE.md`, `TEAM_PLUGIN_REVIEW_VERDICT_*.md`, `IMPROVEMENT_PLAN_*.md`, `*HANDOFF*.md`, `k-repro/`
+  - `docs/development/` 중 `MODULE_SKILLS_RESULT.md`, `CONCERNS.md`, `BUNDLE_REVIEW_GUIDE.md`, `*_RESULT.md`, `*REVIEW*.md`(예외: 이 문서, `CODEX_REVIEW_BRIEF.md`는 범위 구분에만 쓴다; `LINT_REVIEW.md`는 작성자의 린트 지적 판단표라 같은 취급), `REIMPORT_NOTES_*.md`, `H_OFFSITE_REMEASURE.md`, `TEAM_PLUGIN_REVIEW_VERDICT_*.md`, `IMPROVEMENT_PLAN_*.md`, `*HANDOFF*.md`, `k-repro/`
+  - 지난 종합 리뷰의 결과 파일은 레포에 없다(사외 인계 묶음). 이 브리프 §1-b의 "반영" 표현은 작성자 주장이다 — 반영 여부 자체를 검증한다.
   - 루트 `REVIEW-OPEN.md`, `docs/tasks.md`
   - `docs/history/` 전체(과거 기록, 읽지 않는다)
   - `docs/materials/*.html`, `docs/book/`(소개·교육 자료)
