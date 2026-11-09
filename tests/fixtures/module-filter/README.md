@@ -8,27 +8,20 @@
   로그 마스커, M1~M11 반영)를 돌린다.
 - `expect.yaml`: `platform`, `module`, `mode`, `center`(실패 줄 시각), `fail`·`essential`(이 `source.log`의 줄 번호),
   `not_collected`(샘플 DB 태그에 없어 이벤트가 되지 않은 필수 줄, 시험하지 않음), `override`(합성 IPC 사례의 필터 값).
-- 마스킹한 실제 발췌는 결정 기록 11/03·11/05(B2-12)에 따른다: 첨부 로그의 에피소드 구간만(≤ 120줄), 저장소 로그
-  마스커(`mask_pii.py` 치환 모드와 같음)로 가린 뒤, `tools/fixture_residual.py --against <첨부 로그 dir>`의 거부 목록
-  값(APN·PLMN·AID·사업자 이름·벤더 장치 노드)은 `<APN#n>`처럼 토큰으로 더 바꾸고, `--against` 점검 0건을 확인한 것만
-  넣었다. 원래 값과 거부 목록은 사외 메모리에만 있었다. 벤더 회사명도 가린다(11/09 사용자): D-Bus 접두어 `com.<회사>ds.` →
-  `com.vendor.`, ofonod 플러그인 `ril_<회사>.c`·그 함수 이름 → `ril_vendor`, RIL 문구의 회사명 → `Vendor RIL` (모듈 템플릿 `modules.yaml`·eval 파일도 같이).
-- 합성 사례는 첫 줄이 `-- [합성]`이다.
+- 합성 사례 중 일부는 첫 줄이 `-- [합성]`이다.
 
-## 파일과 출처
+## 파일과 시험 내용
 
-| 파일 | 출처 |
+| 파일 | 무엇을 시험하는지 |
 |---|---|
-| `e1-euicc-poll/source.log` | 마스킹 발췌: O1 E1 줄 11-130, 마스커 M 커밋(b7f3bdf 다음, B2 §3), fixture_residual 통과(2026-11-05) |
-| `e3-openchannel-busy/source.log` | 마스킹 발췌: O1 E3 줄 250-330, 마스커 M 커밋(b7f3bdf 다음, B2 §3), fixture_residual 통과(2026-11-05) |
-| `e4-sim-io/source.log` | 마스킹 발췌: O1 E4 줄 3711-3830, 마스커 M 커밋(b7f3bdf 다음, B2 §3), fixture_residual 통과(2026-11-05) |
-| `e14-apm-deact/source.log` | 마스킹 발췌: O1 E14 줄 27045-27164, 마스커 M 커밋(b7f3bdf 다음, B2 §3), fixture_residual 통과(2026-11-05) |
-| `e16-ims-401/source.log` | 마스킹 발췌: O1 E16 줄 8800-8900, 마스커 M 커밋(b7f3bdf 다음, B2 §3), fixture_residual 통과(2026-11-05) |
-| `a-e1-data-setup/source.log` | 마스킹 발췌: A A-E1 줄 48450-48569, 마스커 M 커밋(b7f3bdf 다음, B2 §3), fixture_residual 통과(2026-11-05) |
-| `a-e5-cfun-trap/source.log` | 마스킹 발췌: A A-E5 줄 58580-58660, 마스커 M 커밋(b7f3bdf 다음, B2 §3), fixture_residual 통과(2026-11-05) |
+| `e1-euicc-poll/source.log` | oFono SIM deep: 논리 채널 열기 요청(`SIM_OPEN_CHANNEL`)의 `NO_SUCH_ELEMENT` 실패 줄 둘레에서 필수 줄이 보기에 남는다 |
+| `e3-openchannel-busy/source.log` | oFono SIM deep: 논리 채널 열기가 `org.ofono.Error.InProgress`(이미 진행 중)로 실패한 줄과 앞선 요청 줄 |
+| `e4-sim-io/source.log` | oFono SIM deep: `SIM_IO` 요청의 `GENERIC_FAILURE` 실패 줄과 앞뒤 요청·응답 |
+| `e14-apm-deact/source.log` | oFono data deep: 비행기 모드 뒤 `DEACTIVATE_DATA_CALL` 요청 줄을 중심으로 데이터 해제 흐름 |
+| `e16-ims-401/source.log` | oFono IMS deep: IMS 등록 실패(401) 알림 줄과 그 뒤 등록 흐름 |
+| `a-e1-data-setup/source.log` | Android data deep: `SETUP_DATA_CALL` 응답 줄 둘레의 데이터 연결 설정 흐름 |
+| `a-e5-cfun-trap/source.log` | Android data deep: 인터넷 데이터 상태 CONNECTED → DISCONNECTED 줄(라디오 꺼짐을 사용자 조작으로 오인하기 쉬운 함정) |
 | `syn-noise-event/source.log` | 합성: 잡음 규칙에 맞지만 이벤트가 붙은 줄은 남는다 |
 | `syn-unmapped-ril/source.log` | 합성: 어느 모듈에도 없는 RIL 이름의 오류 줄도 보기에 든다 |
 | `syn-connman-no-such-element/source.log` | 합성: ConnectionManager `no_such_element`는 반복 묶음(background)이 아니다 |
 | `syn-qmi-ipc/source.log` | 합성: 엑시노스가 아닌 IPC 로그는 `ipc_re`·`ipc` 값만 바꿔 분류된다 |
-
-O1 = 첨부 oFono syslog 1, A = 첨부 Android logcat(통과 실행). 에피소드 id·줄 번호는 LM `episodes.yaml`과 같다.
