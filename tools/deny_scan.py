@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """레포 밖 거부 목록의 항목이 git 추적 파일에 있는지 센다 (15-local-draft.md §15.4, make_bundle `deny-file`).
 
-거부 목록은 레포에 두지 않는다. 경로는 `--deny` 또는 환경 변수 `TT_DENY_FILE`로만 받는다.
+거부 목록은 레포에 두지 않는다. 경로는 `--deny` 또는 환경 변수 `TT_DENY_FILE`로만 받는다(UTF-8, BOM 허용).
 한 줄에 항목 하나, 빈 줄·`#` 줄은 무시. 대소문자를 무시하고, 항목의 첫/끝 글자가 단어 글자면 그쪽에
-단어 경계를 둔다(끝이 `.`인 접두어 항목은 그쪽 경계 없음). UTF-8로 읽히지 않는 파일은 건너뛴다.
-**출력에는 경로와 건수만 낸다 — 맞은 글자·항목 글자는 내지 않는다.**
+영숫자 경계를 둔다(끝이 `.`인 접두어 항목은 그쪽 경계 없음). `_`는 경계로 본다 — 식별자 안에 든 이름도 누출이다.
+파일 내용과 함께 **경로 문자열도** 검사한다(경로에 맞으면 파일당 1건). UTF-8로 읽히지 않는 파일은 내용을 건너뛰고 센다.
+**출력에는 경로(맞은 부분은 `«k»`, k = 항목 번호)와 건수만 낸다 — 맞은 글자·항목 글자는 내지 않는다.**
 
 CLI:
     python3 tools/deny_scan.py [--root <repo>] [--deny <file>] [paths...]
@@ -13,8 +14,8 @@ CLI:
 
 종료 코드 (contracts.md §종료 코드)
     0  0건
-    1  1건 이상 (`경로: n건` 줄들 + `TOTAL n hits in m files`)
-    2  거부 목록 없음·비어 있음, git 실패
+    1  1건 이상 (`경로: n건` 줄들 + `TOTAL n hits in m files (scanned s, skipped k)`)
+    2  거부 목록 없음·UTF-8 아님·비어 있음, 스캔할 추적 파일 없음, git 실패
 """
 
 from __future__ import annotations
@@ -27,12 +28,12 @@ import sys
 from pathlib import Path
 
 DENY_ENV = "TT_DENY_FILE"
-_EDGE_HEAD, _EDGE_TAIL = r"(?<![A-Za-z0-9_])", r"(?![A-Za-z0-9_])"
+_EDGE_HEAD, _EDGE_TAIL = r"(?<![A-Za-z0-9])", r"(?![A-Za-z0-9])"
 
 
 def load(path: Path | str) -> list[tuple[int, re.Pattern]]:
-    """(항목 번호, 정규식). 항목 글자는 정규식 안에만 있다."""
-    entries = [ln.strip() for ln in Path(path).read_text(encoding="utf-8").splitlines()]
+    """(항목 번호, 정규식). 항목 글자는 정규식 안에만 있다. UTF-8이 아니면 UnicodeDecodeError."""
+    entries = [ln.strip() for ln in Path(path).read_text(encoding="utf-8-sig").splitlines()]
     entries = [e for e in entries if e and not e.startswith("#")]
     out = []
     for k, e in enumerate(entries, 1):
@@ -49,23 +50,33 @@ def tracked(root: Path | str) -> list[str]:
     return [n for n in proc.stdout.decode("utf-8").split("\0") if n]
 
 
+def _mask(text: str, patterns, repl=None) -> tuple[str, int]:
+    """항목을 차례로 지운다(맞은 자리는 다음 항목이 겹쳐 다시 세지 않는다). repl 없으면 «k»."""
+    n = 0
+    for k, rx in patterns:
+        text, c = rx.subn(repl if repl is not None else f"«{k}»", text)
+        n += c
+    return text, n
+
+
 def scan(root: Path | str, patterns: list[tuple[int, re.Pattern]], files: list[str] | None = None
-         ) -> list[tuple[str, int]]:
-    """맞은 파일만 (root 기준 경로, 건수). files가 없으면 추적 파일 전부."""
+         ) -> tuple[list[tuple[str, int]], int, int]:
+    """(맞은 파일 [(가린 경로, 건수)], 스캔한 파일 수, 내용을 건너뛴 파일 수). files가 없으면 추적 파일 전부."""
     root = Path(root)
-    hits = []
-    for rel in tracked(root) if files is None else files:
+    files = tracked(root) if files is None else files
+    hits, skipped = [], 0
+    for rel in files:
+        shown, in_path = _mask(rel, patterns)
+        n = 1 if in_path else 0
         try:
             text = (root / rel).read_bytes().decode("utf-8")
-        except (OSError, UnicodeDecodeError):   # 바이너리·읽을 수 없는 파일(삭제됨·디렉토리)은 건너뛴다
-            continue
-        n = 0
-        for _, rx in patterns:   # 맞은 자리는 지워 다음 항목이 겹쳐 다시 세지 않는다(접두어 안의 이름 등)
-            text, c = rx.subn("\0", text)
-            n += c
+        except (OSError, UnicodeDecodeError):   # 바이너리·읽을 수 없는 파일(삭제됨·디렉토리)
+            skipped += 1
+        else:
+            n += _mask(text, patterns, "\0")[1]
         if n:
-            hits.append((rel, n))
-    return hits
+            hits.append((shown, n))
+    return hits, len(files), skipped
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -75,23 +86,31 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--deny", default=None)
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args(argv)
-    deny = args.deny or os.environ.get(DENY_ENV)
+    sys.stdout.reconfigure(errors="backslashreplace")   # `«k»`를 못 내는 콘솔(cp949 등)에서도 죽지 않는다
+    deny =args.deny or os.environ.get(DENY_ENV)
     if not deny or not Path(deny).is_file():
         print(f"거부 목록이 없습니다: --deny <file> 또는 {DENY_ENV}를 줍니다", file=sys.stderr)
         return 2
-    patterns = load(deny)
+    try:
+        patterns = load(deny)
+    except (OSError, UnicodeDecodeError):
+        print("거부 목록을 UTF-8로 읽을 수 없습니다", file=sys.stderr)
+        return 2
     if not patterns:
         print("거부 목록이 비어 있습니다", file=sys.stderr)
         return 2
     try:
-        hits = scan(args.root, patterns, args.paths or None)
-    except RuntimeError as exc:
+        hits, scanned, skipped = scan(args.root, patterns, args.paths or None)
+    except (RuntimeError, OSError) as exc:
         print(str(exc), file=sys.stderr)
+        return 2
+    if not scanned:
+        print("스캔할 추적 파일 없음", file=sys.stderr)
         return 2
     for rel, n in hits:
         print(f"{rel}: {n}건")
     total = sum(n for _, n in hits)
-    print(f"TOTAL {total} hits in {len(hits)} files")
+    print(f"TOTAL {total} hits in {len(hits)} files (scanned {scanned}, skipped {skipped})")
     return 1 if total else 0
 
 

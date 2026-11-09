@@ -357,12 +357,15 @@ def test_deny_file_hit_fails_with_path_only(repo, tmp_path, monkeypatch):
     monkeypatch.setenv("TT_DENY_FILE", str(deny))
     (repo / "docs").mkdir()
     (repo / "docs" / "a.md").write_text("see ZZQX and zzqx here\n", encoding="utf-8")
+    (repo / "docs" / "zzqx_note.md").write_text("plain\n", encoding="utf-8")   # 이름이 경로에만 있다
     _git(repo, "add", "-A")
     _git(repo, "commit", "-qm", "a")
     out = tmp_path / "out"
     res = mb.run(repo, LABEL, out, checks=_deny_checks())
     row = res["checks"][0]
-    assert row["status"] == "fail" and "docs/a.md: 2건" in row["detail"] and res["exit_code"] == 1
+    assert row["status"] == "fail" and res["exit_code"] == 1
+    assert "docs/a.md: 2건" in row["detail"] and "docs/«1»_note.md: 1건" in row["detail"]
+    assert "총 3건, 파일 2개" in row["detail"] and "건너뜀 0개" in row["detail"]
     text = json.dumps(res, ensure_ascii=False) + mb.format_text(res)
     assert "zzqx" not in text.lower() and not out.exists()
 
@@ -373,7 +376,10 @@ def test_deny_file_zero_hits_passes(repo, tmp_path, monkeypatch):
     monkeypatch.setenv("TT_DENY_FILE", str(deny))
     res = mb.run(repo, LABEL, tmp_path / "out", checks=_deny_checks())
     assert res["checks"][0]["status"] == "pass" and "1항목" in res["checks"][0]["detail"]
-    assert res["exit_code"] == 3
+    assert "건너뜀 0개(바이너리)" in res["checks"][0]["detail"] and res["exit_code"] == 3
+    deny.write_bytes(b"\xff\xfe\x80\n")                     # UTF-8 아님 → skipped(종료 1), 트레이스백 아님
+    res = mb.run(repo, LABEL, tmp_path / "out2", checks=_deny_checks())
+    assert res["checks"][0]["status"] == "skipped" and res["exit_code"] == 1
 
 
 class _FakeCtx:
