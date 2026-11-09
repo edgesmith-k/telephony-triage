@@ -119,47 +119,70 @@ def test_format_c_busybox(tmp_path):
     assert lines[-1].pid == 0 and lines[-1].msg == "no pid"
 
 
-def test_format_c_level_unreliable_idents(tmp_path):
-    """H C1 ③a: DITD·RFSD·DMD·MOSE는 severity를 심각도로 쓰지 않는다 → 백엔드 레코드는 늘 I. 다른 ident는 그대로.
-    C1+D 보정: 보정은 줄 읽기(journal, severity 그대로)가 아니라 백엔드가 한다. 기본값 정본은 journal 상수."""
+def _flagged_backend(**flags):
+    """구성요소 설정 `{ident: 플래그 키}`(`level_unreliable`·`vendor_ipc`)로 configure한 백엔드. `ofonod`는 SPEC 기본 그대로."""
+    from platforms.ofono import backend
+
+    comps = {"ofono": {"idents": ["ofonod"], "root_key": "ofono", "msg_format": "file_func"}}
+    comps.update({ident: {"idents": [ident], key: True} for ident, key in flags.items()})
+    return backend.BACKEND.configure(platforms.load({"platform": {**ON, "others": {"ofono": {"components": comps}}}}, "ofono"))
+
+
+def test_format_c_level_unreliable_components(tmp_path):
+    """H C1 ③a: severity를 심각도로 쓰지 않는 구성요소(site-defaults `level_unreliable: true`) 줄 → 백엔드 레코드는 늘 I.
+    다른 ident는 그대로. 보정은 줄 읽기(journal, severity 그대로)가 아니라 백엔드가 한다. 설정 없는 기본은 보정 없음."""
     from platforms.ofono import backend
 
     path = _write(tmp_path, "unreliable.log", [
-        "Sep 20 14:32:11.001 dut daemon.crit DITD[10]: netlink dump",
-        "Sep 20 14:32:11.002 dut daemon.emerg DITD[10]: netlink dump",
-        "Sep 20 14:32:11.003 dut daemon.warn RFSD[11]: checksum : verified",
-        "Sep 20 14:32:11.004 dut daemon.err DMD[12]: placeholder",
-        "Sep 20 14:32:11.005 dut local0.warn MOSE[13]: ok",
-        "Sep 20 14:32:11.006 dut daemon.err exynos-ril[14]: placeholder",
-        "Sep 20 14:32:11.007 dut daemon.crit ditd[15]: 대소문자가 다르면 그대로",
+        "Sep 20 14:32:11.001 dut daemon.crit daemon-a[10]: netlink dump",
+        "Sep 20 14:32:11.002 dut daemon.emerg daemon-a[10]: netlink dump",
+        "Sep 20 14:32:11.003 dut daemon.warn daemon-b[11]: checksum : verified",
+        "Sep 20 14:32:11.004 dut local0.warn daemon-b[13]: ok",
+        "Sep 20 14:32:11.005 dut daemon.err ofonod[14]: placeholder",
+        "Sep 20 14:32:11.006 dut daemon.crit Daemon-a[15]: 대소문자가 다르면 그대로",
     ])
     lines, stats = journal.read_file(path, 0, "UTC", 2026)
-    assert stats.lines == 7
-    assert "".join(ln.level for ln in lines) == "FFWEWEF"            # 줄 읽기는 severity 그대로
-    out = backend.BACKEND.parse([path], "UTC", 2026, None)
-    assert "".join(r["level"] for r in out if r["event"] is None) == "IIIIIEF"
-    assert journal.LEVEL_UNRELIABLE_IDENTS == {"DITD", "RFSD", "DMD", "MOSE"}
-    assert backend.LEVEL_UNRELIABLE_IDENTS is journal.LEVEL_UNRELIABLE_IDENTS
+    assert stats.lines == 6
+    assert "".join(ln.level for ln in lines) == "FFWWEF"             # 줄 읽기는 severity 그대로
+
+    def levels(b):
+        return "".join(r["level"] for r in b.parse([path], "UTC", 2026, None) if r["event"] is None)
+
+    assert levels(backend.BACKEND) == "FFWWEF"                       # 설정 없는 기본 백엔드는 어떤 ident도 보정하지 않는다
+    assert levels(_flagged_backend(**{"daemon-a": "level_unreliable", "daemon-b": "level_unreliable"})) == "IIIIEF"
+    assert levels(_flagged_backend(**{"daemon-a": "vendor_ipc"})) == "FFWWEF"                 # 다른 플래그는 레벨과 무관
+    assert not hasattr(journal, "LEVEL_UNRELIABLE_IDENTS") and not hasattr(backend, "VENDOR_IPC_IDENTS")
 
 
 def test_backend_vendor_ipc_builtin(tmp_path):
-    """exynos-ril 줄만 벤더 IPC 결과 builtin을 낸다(태그 규칙과 무관). 성공·result=0·다른 ident는 없음."""
+    """`vendor_ipc: true` 구성요소 줄만 벤더 IPC 결과 builtin을 낸다(태그 규칙과 무관). 성공·result=0·다른 ident는 없음.
+    설정 없는 기본 백엔드는 어떤 ident도 판별하지 않는다."""
     from platforms.ofono import backend
 
     path = _write(tmp_path, "ipc.log", [
-        "Sep 20 14:32:11.001 dut daemon.debug exynos-ril[7]: [<DEV#1>][RX] SIT_GET_NR_MODE, RSP, 12 bytes, "
+        "Sep 20 14:32:11.001 dut daemon.debug daemon-b[7]: [<DEV#1>][RX] SIT_GET_NR_MODE, RSP, 12 bytes, "
         "Token(0x0101), Error(RCM_E_GENERIC_FAILURE)",
-        "Sep 20 14:32:11.002 dut daemon.debug exynos-ril[7]: [RilContext_0] OnRequestComplete Request ID=10, result=2",
-        "Sep 20 14:32:11.003 dut daemon.debug exynos-ril[7]: [<DEV#1>][RX] SIT_SIM_IO, RSP, 12 bytes, "
+        "Sep 20 14:32:11.002 dut daemon.debug daemon-b[7]: [RilContext_0] OnRequestComplete Request ID=10, result=2",
+        "Sep 20 14:32:11.003 dut daemon.debug daemon-b[7]: [<DEV#1>][RX] SIT_SIM_IO, RSP, 12 bytes, "
         "Token(0x0102), OK(RCM_E_SUCCESS)",
-        "Sep 20 14:32:11.004 dut daemon.debug exynos-ril[7]: [RilContext_0] OnRequestComplete Request ID=11, result=0",
+        "Sep 20 14:32:11.004 dut daemon.debug daemon-b[7]: [RilContext_0] OnRequestComplete Request ID=11, result=0",
         "Sep 20 14:32:11.005 dut daemon.debug ofonod[8]: [RilContext_0] OnRequestComplete Request ID=12, result=2",
+        "Sep 20 14:32:11.006 dut daemon.debug daemon-a[9]: [<DEV#1>][RX] SIT_DIAL, RSP, Error(RCM_E_GENERIC_FAILURE)",
     ])
-    out = backend.BACKEND.parse([path], "UTC", 2026, None)
-    got = [(r["event"], r["fields"]) for r in out if (r["event"] or "").startswith("builtin.")]
-    assert got == [("builtin.common.vendor_ipc_error", {"ipc": "SIT_GET_NR_MODE", "error": "RCM_E_GENERIC_FAILURE"}),
-                   ("builtin.common.vendor_request_failed", {"request_id": "10", "result": "2"})]
+
+    def builtins(b):
+        return [(r["tag"], r["event"], r["fields"]) for r in b.parse([path], "UTC", 2026, None)
+                if (r["event"] or "").startswith("builtin.")]
+
+    assert builtins(backend.BACKEND) == []
+    assert builtins(_flagged_backend(**{"daemon-a": "level_unreliable"})) == []
+    flagged = _flagged_backend(**{"daemon-b": "vendor_ipc"})
+    assert builtins(flagged) == [
+        ("daemon-b", "builtin.common.vendor_ipc_error", {"ipc": "SIT_GET_NR_MODE", "error": "RCM_E_GENERIC_FAILURE"}),
+        ("daemon-b", "builtin.common.vendor_request_failed", {"request_id": "10", "result": "2"})]
+    out = flagged.parse([path], "UTC", 2026, None)
     assert all(r["category_hint"] == "common" for r in out if (r["event"] or "").startswith("builtin."))
+    assert backend.BACKEND._default_vendor_ipc == frozenset()                       # 원본(싱글톤)은 바뀌지 않는다
 
 
 def test_format_c_rejects_unknown_facility_severity(tmp_path):
@@ -237,7 +260,7 @@ def _parse(log: Path, rules: Path, *extra: str) -> dict:
 
 def test_parse_with_ofono_db():
     out = _parse(ISO_LOG, variant_db("issue-db-ofono") / "parser-rules")
-    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.4"}
+    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.5"}
     assert out["masked"] is True and out["warnings"] == [] and out["errors"] == []
     lines = [e for e in out["events"] if e["event"] is None]
     assert {e["tag"]: e["category_hint"] for e in lines} == {"ofonod": "common", "daemon-a": "data"}
@@ -374,7 +397,7 @@ def test_backend_registration():
 
     loaded = parser_backends.load("ofono_reference")
     assert loaded is backend.BACKEND and loaded.platform == "ofono" and loaded.name == "ofono_reference"
-    assert loaded.version() == backend.VERSION == "0.0.4"
+    assert loaded.version() == backend.VERSION == "0.0.5"
     assert loaded.builtin_events() == ["builtin.common.vendor_ipc_error", "builtin.common.vendor_request_failed"]
     assert loaded.log_format() is platforms.get("ofono").log
 

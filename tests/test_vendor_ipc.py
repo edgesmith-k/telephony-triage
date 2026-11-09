@@ -1,6 +1,6 @@
 """`common/vendor_ipc.py`(벤더 RIL IPC 결과 → builtin 이벤트, H C1+D R12): 실제 모양을 본뜬 합성 줄과 반례.
 
-배선(oFono `exynos-ril`, Android `RIL`)은 각 백엔드 시험이 본다. `pytest tests/test_vendor_ipc.py`.
+배선(oFono 구성요소 `vendor_ipc: true`, Android `RIL`)은 각 백엔드 시험이 본다. `pytest tests/test_vendor_ipc.py`.
 """
 
 from __future__ import annotations

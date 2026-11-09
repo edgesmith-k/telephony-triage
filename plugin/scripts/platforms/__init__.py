@@ -48,7 +48,8 @@ from platforms.base import (  # noqa: F401  (계약 타입을 `platforms.X`로�
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 COMPONENT_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")   # 구성요소 이름 (placeholder `daemon-a`)
 ROOT_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")          # 소스 루트 키 = code_ref 키 형식 (plan.schema.json)
-COMPONENT_KEYS = ("idents", "root_key", "source_tree", "msg_format", "split_tag")
+COMPONENT_KEYS = ("idents", "root_key", "source_tree", "msg_format", "split_tag", "level_unreliable", "vendor_ipc")
+_COMPONENT_FLAGS = ("split_tag", "level_unreliable", "vendor_ipc")   # true/false 키 (기본 false)
 DEFAULT_NAME = "android"
 ENV = "TT_PLATFORM"            # 프로세스 간 선택 전달(triage → 하위 스크립트). 사람이 직접 쓰지 않는다
 _NOT_PLATFORMS = {"base"}
@@ -323,7 +324,8 @@ def _protocols(spec: PlatformSpec, block: dict, base: str, ril_tags: frozenset) 
 
 
 def _components(raw, base: str, spec: PlatformSpec) -> tuple:
-    """`<블록>.components.<이름>: {idents, root_key, source_tree, msg_format, split_tag}` → `(Component, ...)`.
+    """`<블록>.components.<이름>: {idents, root_key, source_tree, msg_format, split_tag, level_unreliable, vendor_ipc}`
+    → `(Component, ...)`.
     키를 쓰면 SPEC 기본 목록이 통째로 바뀐다(빈 매핑 = 구성요소 없음). `null`은 다른 블록 키처럼 생략과 같다(기본 유지)."""
     node = _mapping_any(raw, base)
     formats = dict(spec.msg_formats)
@@ -362,12 +364,13 @@ def _components(raw, base: str, spec: PlatformSpec) -> tuple:
         msg_format = item.get("msg_format")
         if msg_format is not None and (not isinstance(msg_format, str) or msg_format not in formats):
             raise _err(f"{at}.msg_format", f"알 수 없는 형식입니다 (허용: {', '.join(formats) or '없음'}): {msg_format!r}")
-        split = item.get("split_tag", False)
-        if not isinstance(split, bool):
-            raise _err(f"{at}.split_tag", f"true/false여야 합니다: {split!r}")
-        if split and msg_format is None:
+        flags = {key: item.get(key, False) for key in _COMPONENT_FLAGS}
+        for key, value in flags.items():
+            if not isinstance(value, bool):
+                raise _err(f"{at}.{key}", f"true/false여야 합니다: {value!r}")
+        if flags["split_tag"] and msg_format is None:
             raise _err(f"{at}.split_tag", "msg_format이 있어야 합니다.")
-        out.append(Component(name, tuple(idents), root_key, tree, msg_format, split))
+        out.append(Component(name, tuple(idents), root_key, tree, msg_format, **flags))
     return tuple(out)
 
 
