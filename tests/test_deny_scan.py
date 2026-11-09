@@ -91,6 +91,15 @@ def test_touching_entries_stay_separate(tmp_path):
     assert ds._mask("ab-cd", ds.load(deny)) == ("«1»«2»", 2)   # 맞닿은 구간은 합치지 않는다
 
 
+def test_self_overlapping_entry_is_masked_whole(tmp_path):
+    deny = tmp_path / "d.txt"
+    deny.write_text("-a-\n", encoding="utf-8")
+    pats = ds.load(deny)
+    assert ds._mask("-a-a-", pats) == ("«1»", 1)               # 같은 항목의 겹친 자리도 남기지 않는다
+    (tmp_path / "-a-a-.txt").write_text("plain\n", encoding="utf-8")
+    assert ds.scan(tmp_path, pats, ["-a-a-.txt"])[0] == [("«1».txt", 1)]
+
+
 def test_non_utf8_tracked_path_exits_2(tmp_path, deny, monkeypatch):
     monkeypatch.setattr(ds.subprocess, "run",
                         lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout=b"\xff\x00", stderr=b""))
