@@ -4,7 +4,7 @@
 둘뿐이다(H C1+D R12·S17): `VENDOR_IPC_TAGS`(`RIL`) 줄을 `common.vendor_ipc.detect`에 넘겨
 `builtin.common.vendor_ipc_error`·`builtin.common.vendor_request_failed`를 낸다. 태그 규칙(tags.yaml)과
 무관하게 나온다(태그 묶음이 없는 DB에서도 같다) — 단 tags.yaml에 `ipc: vendor`가 하나라도 있으면 그 태그만 본다
-(`apply_rules`, 04-parser-matching §5.8 (2)). `level: unreliable`도 받는다(기본 없음). 태그 이름·줄 모양은 placeholder이며 사내에서 조정한다(TODO(SITE:S9))
+(`apply_rules`, 04-parser-matching §5.8 (2)). `level: unreliable`도 받는다(기본 없음). 태그 이름·줄 모양은 placeholder이며 사내에서 조정한다
 (TODO(SITE:S9)). site 백엔드는 이 클래스를 상속해 `detect()`·`builtin_events()`를 바꾸면 공통 처리를 그대로
 재사용한다(벤더 이벤트도 원하면 `super().detect()`를 합친다).
 
