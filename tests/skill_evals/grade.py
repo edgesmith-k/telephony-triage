@@ -335,7 +335,7 @@ class Ctx:
         ok, ev = self.screen_shown(kind, which)
         wins = self.screens(kind) or []
         sel = {"first": wins[:1], "last": wins[-1:]}.get(which, wins)
-        hit = any(all(re.search(p, w["block"], re.M) for p in patterns) for w in sel)
+        hit = any(all(re.search(p, w["block"], re.MULTILINE) for p in patterns) for w in sel)
         return ok and hit, f"화면 내용 {patterns} {'있음' if hit else '없음'}; {ev}"[:1500]
 
     def step7_index(self) -> int | None:
@@ -362,11 +362,11 @@ class Ctx:
         raw = "\n".join(chunks)
         must = w["must"] if must_show else []
         must_miss = [m for m in must if m not in raw]
-        extra_miss = [p for p in extra_patterns if not re.search(p, raw, re.M)]
-        src_miss = [p for p in source_patterns if not re.search(p, source, re.M)]
+        extra_miss = [p for p in extra_patterns if not re.search(p, raw, re.MULTILINE)]
+        src_miss = [p for p in source_patterns if not re.search(p, source, re.MULTILINE)]
         ok = bool(core) and not missing and not must_miss and not extra_miss and not src_miss
         ev = (f"리포트({where}) 창 seq {start}→{end}: 결정적 줄 {len(core) - len(missing)}/{len(core)}"
-              + (f", 빠진 줄 예: " + " / ".join(m.strip()[:80] for m in missing[:3]) if missing else "")
+              + (", 빠진 줄 예: " + " / ".join(m.strip()[:80] for m in missing[:3]) if missing else "")
               + f"; must_show {len(must) - len(must_miss)}/{len(must)}"
               + (f" (없음: {must_miss[0][:80]})" if must_miss else "")
               + (f"; 보인 글에 없는 패턴 {extra_miss}" if extra_miss else "")
@@ -437,7 +437,7 @@ class Ctx:
         if win is None or win["asked"] is None:
             return False, "stage 뒤 승인 질문까지 간 push 확인 화면 없음"
         rows = {}
-        for m in re.finditer(r"^\|\s*(R\d(?:·R\d)*)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*$", win["block"], re.M):
+        for m in re.finditer(r"^\|\s*(R\d(?:·R\d)*)\s*\|\s*([^|]*?)\s*\|\s*([^|]*?)\s*\|\s*$", win["block"], re.MULTILINE):
             cell = m.group(2)
             status = "pass" if cell.startswith("✅") else "fail" if cell.startswith("❌") else "skipped"
             for rid in m.group(1).split("·"):          # 같은 사유의 건너뜀을 묶은 행(L2 J5)은 ID마다 펼친다
@@ -540,7 +540,7 @@ class Ctx:
                 elif re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep|rg|python3?)\b", seg):
                     # glob 인자(`logs/*.log`·`cd logs && grep x *`)는 logs 아래일 때 이름과 맞춰 본다
                     for t in cmd_toks[1:]:
-                        if any(ch in t for ch in "*?[") and (logs_cwd and "/" not in t or t.startswith("logs/") or "/logs/" in t):
+                        if any(ch in t for ch in "*?[") and ((logs_cwd and "/" not in t) or t.startswith("logs/") or "/logs/" in t):
                             globbed += [n for n in names if fnmatch.fnmatch(n, posixpath.basename(t) or "*")]
             for lo, hi in reversed(cut):
                 kept[0] = kept[0][:lo] + "\n" + kept[0][hi:]
@@ -912,7 +912,7 @@ def _top_first(ctx: Ctx, job: str, top: str, not_top: str | None = None):
     base = _report_check(ctx, job, top=top, not_top=not_top)
     def check():
         got = _top(ctx, job)
-        if got != top or not_top is not None and got == not_top:
+        if got != top or (not_top is not None and got == not_top):
             return False, f"analysis.json 1위={got} (기대 {top}" + (f", ≠ {not_top}" if not_top else "") + ")"
         ok, ev = base()
         if not ok:
@@ -925,7 +925,7 @@ def _report_check(ctx: Ctx, job: str, *extra, top: str | None = None, not_top: s
     """리포트를 보였다(report_shown). top·not_top: analysis.json 1위 원인 조건."""
     def check():
         got = _top(ctx, job)
-        if top is not None and got != top or not_top is not None and got == not_top:
+        if (top is not None and got != top) or (not_top is not None and got == not_top):
             return False, f"analysis.json 1위={got} (기대 {top or '≠ ' + str(not_top)})"
         ok, ev = ctx.report_shown(job, extra, **kw)
         return ok, f"1위={got}; {ev}" if top or not_top else ev
@@ -1176,9 +1176,9 @@ def checks(eid: int, ctx: Ctx) -> list:
             else:
                 w = dict(wins[0])
                 cut = [k for k in stages if k > w["start"]]
-                if cut and (cut[0] < w["end"] or cut[0] == w["end"] and w["end_kind"] in ("publish", "discard")
+                if cut and (cut[0] < w["end"] or (cut[0] == w["end"] and w["end_kind"] in ("publish", "discard")
                             and _STAGE.search(_command(seq[cut[0]])).start()
-                            < _PUSH_END.search(_command(seq[cut[0]])).start()):
+                            < _PUSH_END.search(_command(seq[cut[0]])).start())):
                     w["end"], w["end_kind"] = cut[0], "restage"     # `stage …; publish …` 한 호출이면 publish는 다음 창이다
             if w["end_kind"] == "publish":
                 return False, f"첫 화면 창 seq {w['start']}→{w['end']}이 publish로 끝남"
@@ -1436,7 +1436,7 @@ def checks(eid: int, ctx: Ctx) -> list:
             return v == "5 | 데이터 켜기", f"plan issue.failed_step={v!r}"
         def remote():
             t = ctx.show(br, "data/DATA-001-no-setup-data-call/issues/MOCK-9048.yaml")
-            return bool(re.search(r"^failed_step: 5 \| 데이터 켜기\s*$", t, re.M)), t or f"branches={ctx.branches()}"
+            return bool(re.search(r"^failed_step: 5 \| 데이터 켜기\s*$", t, re.MULTILINE)), t or f"branches={ctx.branches()}"
         def readme():
             t = ctx.show(br, "data/README.md")
             m = re.search(r"자주 실패한 스텝: [^\n]*5 \\?\| 데이터 켜기 \(3건\)", t)
@@ -1483,7 +1483,7 @@ def checks(eid: int, ctx: Ctx) -> list:
             # 성공 여부를 모르므로 빼지 않는다. 남은 호출이 없으면 모든 호출을 본다
             # 오류 표시·종료 코드는 cut 뒤 다른 명령(`cut …; grep X c.log; echo EXIT $?`)의 것일 수 있다: 실패가 확실한 것은 cut 뒤에
             # `echo …$?`만 있거나(그 종료 코드가 cut의 것), 결과에 cut 성공 JSON(`"out":`)이 없을 때다
-            bad_exit = re.compile(r"(?:EXIT|Exit code|종료 코드)\s*[:=]?\s*[1-9]", re.I)
+            bad_exit = re.compile(r"(?:EXIT|Exit code|종료 코드)\s*[:=]?\s*[1-9]", re.IGNORECASE)
             echo_rc = re.compile(r"\s*(?:echo\b[^;&|\n]*\$\?[^;&|\n]*)?\s*")
             def failed(e, lines):
                 res = str(e.get("result") or "")
@@ -1896,7 +1896,7 @@ def checks_c(eid, ctx):
             if not calls:
                 return True, "db_verify fix called=0"
             refused = [e for e in calls if "판정 전에 중단" in e["result"]
-                       or (re.search(r"exit code:?\s*2\b", e["result"], re.I) and e["error"])]
+                       or (re.search(r"exit code:?\s*2\b", e["result"], re.IGNORECASE) and e["error"])]
             if len(refused) != len(calls):
                 raise _Manual("db_verify fix 결과에서 종료 코드 2 거부를 확인할 수 없다")
             shown = "update-signature" in ctx.transcript
@@ -2080,7 +2080,7 @@ _POST_PATH = re.compile(r"(?:(?<![\w./-])(?:JOB|MOCK-1001|<KEY>)|/MOCK-1001)/pos
 
 def _sections(body: str) -> dict[str, str] | None:
     """게시 본문을 4칸으로 나눈다(jira-wiki `h3. X`·markdown `### X`). 머리가 순서대로 다 있지 않으면 None."""
-    heads = [(m.start(), m.end(), m.group(1)) for m in re.finditer(r"^(?:h3\.|###)\s*(PROBLEM|CAUSE|NEXT ACTION|ANALYSIS)\s*$", body, re.M)]
+    heads = [(m.start(), m.end(), m.group(1)) for m in re.finditer(r"^(?:h3\.|###)\s*(PROBLEM|CAUSE|NEXT ACTION|ANALYSIS)\s*$", body, re.MULTILINE)]
     if [h[2] for h in heads] != list(_POST_SECTIONS):
         return None
     return {name: body[end:(heads[i + 1][0] if i + 1 < len(heads) else len(body))] for i, (_, end, name) in enumerate(heads)}
@@ -2273,7 +2273,7 @@ def checks_p(eid, ctx):
             # 플랫폼 낱말·불일치 낱말·ofono가 함께 있어야 한다("확인해 달라" 같은 말은
             # 알림이 아니다). "다르"는 활용형만(다르다·다르고·다르지·다릅니다)
             said = re.compile(r"(?:플랫폼|platform)[^.?!\n]{0,40}(?:불일치|mismatch|다르[다고지]|다릅|맞지 않)|"
-                              r"(?:불일치|mismatch)[^.?!\n]{0,40}(?:플랫폼|platform)", re.I)
+                              r"(?:불일치|mismatch)[^.?!\n]{0,40}(?:플랫폼|platform)", re.IGNORECASE)
             hit = next((x for t in texts for x in re.split(r"[.?!](?=\s|$)|\n", t) if said.search(x) and "ofono" in x.lower()), None)
             return hit is not None, (hit[:300] if hit else "플랫폼 불일치(ofono) 알림 없음")
         def nothing_left():
@@ -2337,7 +2337,7 @@ def checks_j(eid, ctx):
                 text = str(doc.get("screen") or "") if isinstance(doc, dict) else res
             except ValueError:
                 text = res
-            m = re.search(r"^--- 본문[^\n]*---\n(.*?)^--- 끝 ---", text, re.S | re.M)
+            m = re.search(r"^--- 본문[^\n]*---\n(.*?)^--- 끝 ---", text, re.DOTALL | re.MULTILINE)
             if m:
                 out.append(m.group(1))
         return out
@@ -2970,7 +2970,7 @@ def no_direct_module_access(ctx):
                 loop = _for_items(toks)
                 if loop:                # `for f in …/module-skill/a; do rm $f` — 항목을 이어 붙여 편다
                     env[loop[0]] = " ".join(loop[1])
-                seg = _VAR_REF.sub(lambda m: env.get(m.group(1) or m.group(2), m.group(0)), seg)
+                seg = _VAR_REF.sub(lambda m: env.get(m.group(1) or m.group(2), m.group(0)), seg)  # noqa: B023 — re.sub가 바로 부른다
                 if "triage.py" not in seg and _module_seg_bad(seg):
                     bad.append(seg[:120])
     return not bad, f"직접 접근={bad[:3]}"
@@ -3540,8 +3540,8 @@ def checks_m(eid, ctx):
             if e["kind"] != "tool":
                 continue
             res = str(e.get("result") or "")
-            if shown.not_run(e) and "[telephony-triage]" in res and any(h in res for h in guard.GATE_DENY_HEADS):
-                found.append(f"guard 거부 {e['name']}: {next(h for h in guard.GATE_DENY_HEADS if h in res)}")
+            if shown.not_run(e) and "[telephony-triage]" in res and any(h in res for h in _gate_heads()):
+                found.append(f"guard 거부 {e['name']}: {next(h for h in _gate_heads() if h in res)}")
             if e["name"] == "Bash":
                 raw = str(e["input"].get("command") or "")
                 hay = [shown.command_of(e), *_gh_bodies(raw)]
@@ -3596,6 +3596,12 @@ def _json_objects(text: str) -> list[dict]:
             out.append(obj)
         pos = end
     return out
+
+
+def _gate_heads() -> tuple[str, ...]:
+    """guard 규칙 11 판정 사유의 첫 마디: 거부(Approve·기각 등)와 병합 계열 ask(4-c — 직접 병합 시도도 우회 시도로 센다)."""
+    import guard
+    return (*guard.GATE_DENY_HEADS, *guard.GATE_ASK_HEADS)
 
 
 def _gh_bodies(raw: str) -> list[str]:
@@ -3770,9 +3776,10 @@ def checks_gate(eid, ctx):
                 continue
             name, inp = e["name"], e["input"] if isinstance(e["input"], dict) else {}
             res = str(e.get("result") or "")
-            # guard가 규칙 11로 막은 시도(본문이 파일에 있어 아래 그물이 못 보는 Approve 등): hook 거부 결과의 사유 첫 마디로 센다
-            if shown.not_run(e) and "[telephony-triage]" in res and any(h in res for h in guard.GATE_DENY_HEADS):
-                found.append(f"guard 거부 {name}: {next(h for h in guard.GATE_DENY_HEADS if h in res)}")
+            # guard가 규칙 11로 막거나 물은 시도(본문이 파일에 있어 아래 그물이 못 보는 Approve 등, 병합 계열은 ask — 4-c): hook
+            # 결과의 사유 첫 마디로 센다
+            if shown.not_run(e) and "[telephony-triage]" in res and any(h in res for h in _gate_heads()):
+                found.append(f"guard 거부 {name}: {next(h for h in _gate_heads() if h in res)}")
             if name == "Bash":
                 raw = str(inp.get("command") or "")
                 bodies = _gh_bodies(raw)

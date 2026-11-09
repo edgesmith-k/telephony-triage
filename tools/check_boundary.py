@@ -363,6 +363,15 @@ def _skillcheck():
     return skillcheck
 
 
+def _ofono_template():
+    """D-Bus 이름 규칙은 oFono 고유 자료다(`platforms/ofono/template.py`, 17-platforms §10-3). 이 도구는 핵심이 아니라 플랫폼
+    모듈을 바로 불러도 된다(핵심의 금지 검사는 plugin/scripts만 본다)."""
+    _skillcheck()
+    import importlib
+
+    return importlib.import_module("platforms.ofono.template")
+
+
 def _ofono_block(text: str) -> list[tuple[int, str]]:
     """modules.yaml의 `platforms.ofono` 블록 줄(번호, 글) — 들여쓰기로 자른다."""
     out, inside, indent = [], False, 0
@@ -405,12 +414,14 @@ def check_dbus_names(files: dict[str, Path]) -> list[Finding]:
         doc = sc.load_modules_yaml(modules_text)
     except Exception as exc:  # noqa: BLE001 - 크기·UTF-8·YAML·앵커 → 닫힘
         return [Finding("dbus-name", DBUS_MODULES, 0, "", f"modules.yaml을 읽지 못해 D-Bus 허용 목록이 없다({type(exc).__name__})")]
-    allowed = sc.dbus_allowed(doc)
+    tpl = _ofono_template()
+    plats = doc.get("platforms") if isinstance(doc, dict) else None
+    allowed = tpl.dbus_allowed(plats.get("ofono") if isinstance(plats, dict) else None)
     findings = []
 
     def scan_lines(rel: str, lines) -> None:
         for no, line in lines:
-            for _, name in sc.dbus_violations(line, allowed):
+            for _, name in tpl.dbus_violations(line, allowed):
                 findings.append(Finding("dbus-name", rel, no, name, "허용 밖 D-Bus 이름(modules.yaml dbus에 없다)"))
     for rel in docs:
         text = _text(files[rel]) or ""

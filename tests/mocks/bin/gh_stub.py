@@ -15,6 +15,7 @@
 동작을 바꾸는 환경변수 (테스트용):
   MOCK_GH_STATE_DIR   상태 파일 디렉토리
   MOCK_GH_UNAUTH=1    `auth status`를 실패시킨다 (setup 9번 경로 시험)
+  MOCK_GH_OTHER_LOGINS  `auth status`에 다른 호스트의 로그인 블록을 먼저 낸다: `<host>:<login>[,…]`(gh ≥2.40 `account` 문구 — setup 1 GHE 아이디 감지 시험)
   MOCK_GH_USER        `--author @me`가 가리키는 사용자 (기본 mock-user). `pr create`가 author로 기록한다
   MOCK_GH_FAIL_LIST=1 `pr list`를 실패시킨다 (my-prs의 gh 실패 경로 시험)
   MOCK_GH_BAD_JSON=<문자열>  `pr list`가 그 문자열(1이면 html)을 stdout에 내고 0으로 끝난다 (my-prs 경고 경로 시험)
@@ -109,8 +110,7 @@ def repo_key() -> str:
     except (OSError, subprocess.CalledProcessError):
         return "unknown/unknown"
     name = Path(url).name
-    if name.endswith(".git"):
-        name = name[: -len(".git")]
+    name = name.removesuffix(".git")
     return f"mock-org/{name}"
 
 
@@ -160,6 +160,10 @@ def cmd_auth(argv: list[str]) -> int:
             file=sys.stderr,
         )
         return 1
+    for other in filter(None, os.environ.get("MOCK_GH_OTHER_LOGINS", "").split(",")):   # 다른 호스트 로그인(앞에 나온다)
+        other_host, _, other_login = other.partition(":")
+        print(other_host)
+        print(f"  ✓ Logged in to {other_host} account {other_login or 'someone-else'} (keyring)")
     print(args.hostname)
     print(f"  - Logged in to {args.hostname} as {MOCK_USER} (oauth_token)")
     return 0

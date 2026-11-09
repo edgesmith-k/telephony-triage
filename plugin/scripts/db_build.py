@@ -218,6 +218,12 @@ def _platform_label(ctx) -> str:
         return name
 
 
+def _times(item) -> str:
+    """`min_count`(2 이상)일 때만 ` ×N+`(N건 이상) — 기본 시그니처의 README 줄은 그대로다."""
+    count = item.get("min_count", 1) if isinstance(item, dict) else 1
+    return f" ×{count}+" if count > 1 else ""
+
+
 def _signature_summary(sig: dict) -> str:
     parts = []
     for item in sig.get("must_event") or []:
@@ -225,15 +231,17 @@ def _signature_summary(sig: dict) -> str:
         text = f"event `{item.get('event')}`"
         if fields:
             text += " (" + ", ".join(f"{k}=`{v}`" for k, v in sorted(fields.items())) + ")"
-        parts.append(text)
+        parts.append(text + _times(item))
     for item in sig.get("must_match") or []:
         pattern = item.get("pattern") if isinstance(item, dict) else item
-        parts.append(f"match `{md.code(pattern)}`")
+        parts.append(f"match `{md.code(pattern)}`" + _times(item))
     for pattern in sig.get("must_not_match") or []:
         parts.append(f"not `{md.code(pattern)}`")
     extra = [f"window {sig.get('window_sec')}s"]
     if sig.get("sequence"):
         extra.append("sequence " + " → ".join(sig["sequence"]))
+    if sig.get("sequence_within_sec") is not None:
+        extra.append(f"간격 ≤ {sig['sequence_within_sec']}s")
     if sig.get("same_phone") is False:
         extra.append("슬롯 무관")
     return f"`{sig.get('id')}`: " + "; ".join(parts) + " — " + ", ".join(extra)
@@ -389,7 +397,7 @@ def _kpi(ctx: Context, active_causes) -> list[str]:
     analyzed = [f for f in fb if f.get("decision") != "manual"]
     dist = Counter(f.get("decision") for f in analyzed)
     reused = dist["accepted"] + dist["chose-other"]
-    acc = issuedb.acceptance(fb).values()
+    acc = issuedb.acceptance(fb, ctx.jira).values()
     top_a, top_t = sum(a for a, _ in acc), sum(t for _, t in acc)
     unresolved = [r for r in ctx.jira if str(r.get("cause")) == "unresolved"]
     ages = [a for a in (quality.days_ago(r, ctx.base, "date") for r in unresolved) if a is not None]
@@ -411,7 +419,7 @@ def _kpi(ctx: Context, active_causes) -> list[str]:
         for m, rows in sorted(months.items(), reverse=True):
             an = [f for f in rows if f.get("decision") != "manual"]
             d = Counter(f.get("decision") for f in an)
-            acc = issuedb.acceptance(rows).values()
+            acc = issuedb.acceptance(rows, ctx.jira).values()
             a, t = sum(x for x, _ in acc), sum(y for _, y in acc)
             out.append(f"| {m} | {len(an)} | {len(rows) - len(an)} | "
                        f"{_ratio(d['accepted'] + d['chose-other'], len(an))} | {_ratio(a, t)} | {d['unresolved']} | "
@@ -506,10 +514,11 @@ def stats(ctx: Context) -> str:
     else:
         out.append("없음")
 
-    acceptance = issuedb.acceptance(ctx.db.feedback)
+    acceptance = issuedb.acceptance(ctx.db.feedback, ctx.db.jira)
     quality_rows = sorted(((k, a, t) for k, (a, t) in acceptance.items()), key=lambda x: (x[1] / x[2], x[0]))[:10]
     out += ["", "## 시그니처 품질 (수락률 하위 10개)", "",
-            "수락률 = 1위로 제시된 피드백 중 `decision: accepted` 비율. 수동 기록(`decision: manual`)은 뺀다.", ""]
+            "수락률 = 1위로 제시된 피드백 중 `decision: accepted` 비율. 수동 기록(`decision: manual`)은 뺀다. "
+            "뒤에 재분류된 Jira(현재 분류 ≠ 기록의 final)의 accepted는 수락으로 세지 않는다.", ""]
     if quality_rows:
         out += ["| 시그니처 | 1위 제시 | 수락 | 수락률 | 표본 충분 |", "|---|---|---|---|---|"]
         out += [f"| `{k}` | {t} | {a} | {_ratio(a, t)} | {'예' if t >= min_samples else '아니오'} |"

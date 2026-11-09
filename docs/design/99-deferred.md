@@ -118,6 +118,12 @@ v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 �
 - 같이 할 것(b-6): SKILL 5-1을 "report.md의 그 칸 줄을 **파일에서 바꿔 쓰고** 답변에도 보인다"로 명확히 한다(e40·e41은 답변만 채우고 `report.md`는 TODO로 남았다).
 - ~~그때까지 verify-fix는 Opus를 권장한다~~ → W3 뒤 Sonnet 기본(eval 25 Sonnet 3/3, `GUIDE.md`).
 
+## G. 설명 양식에서 SW·모델 추출 (H1, 사내 S-3 뒤)
+
+사내 S-3(10/19)에서 본 것: Jira description의 양식 구역에 SW 버전·모델이 적히지만 v1은 본문 정규식 추출이 실패 스텝(`tracker.failed_step_patterns`, `failedstep.py`)뿐이고 `model`·`sw`는 `tracker.field_map` 필드 값만 읽는다. 확인값(양식 줄 꼴·필드 유무)은 `SITE_PROFILE.md`에 둔다.
+- 후보: `failedstep.py`의 줄 단위 패턴 방식을 일반화해 `tracker.field_patterns: {model: [...], sw: [...]}`(마스킹된 설명에서 줄 순서·패턴 순서로 처음 맞는 것, `(?P<value>…)` 그룹)를 두고, `field_map` 값이 있으면 그것이 이긴다. 값이 없거나 패턴 오류면 지금처럼 없는 것으로 본다(질문·중단 없음, 정규식 오류는 경고).
+- 바꿀 곳: `02-config.md`(`tracker` 키 표·"실패 스텝(선택)" 문단 옆), `common/failedstep.py` 또는 새 `fieldpatterns.py`, `trackers/jira` 필드 읽기, `db_lint`는 무관(이슈 DB 아님), `tests/test_jira_fields.py`. 사내 양식을 보기 전에는 만들지 않는다(S-3 확인 뒤 결정).
+
 ---
 
 ## 되살릴 때 바꿀 곳

@@ -320,7 +320,7 @@ B1+B2 뒤로 미룬 것: O8(`mcptools`·`config.py setup`이 opencode.json `mcp`
 ### P2 — 계획 I-2 (반입 뒤 후보)
 
 - (닫음, c7e452c) OpenCode 1.19.5 MCP 오류 본문 — transform hook으로 숨긴다.
-- Jira 관문 통과 기록이 확인한 Jira 서버·도구와 묶여 있지 않다(서버를 바꿔도 열린 채). OpenCode 안에서 `config.py set-tracker`로 트래커를 바꾸면 Jira 판별이 달라질 수 있다(서버 이름에 jira가 있으면 그대로 걸림, 미검증).
+- (닫음, 코덱스 리뷰 02e0ec2 F03 — 기록에 `tracker_fingerprint`, 다르면 관문 닫힘) Jira 관문 통과 기록이 확인한 Jira 서버·도구와 묶여 있지 않다(서버를 바꿔도 열린 채). OpenCode 안에서 `config.py set-tracker`로 트래커를 바꾸면 Jira 판별이 달라질 수 있다(서버 이름에 jira가 있으면 그대로 걸림, 미검증).
 - Jira로 알아보지 못한 다른 MCP 서버의 쓰기형 도구는 어댑터·guard를 지나고 설정 허용 목록에만 기댄다. 거부 env 목록이 어댑터와 tt-oc에서 조금 다르고 빈 값 처리도 다르다. tt-oc가 모델이 만든 명령을 그대로 "직접 실행" 안내로 보인다(이어 붙인 꼬리 포함). 템플릿이 원본 작업 파일 `read`를 허용한다.
 - 게이트웨이 env 이어받기가 skill eval 실행기 자식 요청에도 들어간다. 게이트웨이 점검이 보조·하위 에이전트 모델 ID를 보지 않는다. RUNTIMES.md 일부가 이 패치보다 오래됐다.
 - related_tests가 `tests/opencode/*`를 고르지 않는다(guard·어댑터를 바꿔도 OpenCode 경유 테스트가 빠짐 — B1+B2 뒤 연결). 버전 고정 테스트가 env 이름 두 개를 쓴다. 생성된 `/tt-setup`에 OpenCode 안내가 없다. 일부 OpenCode 테스트는 아무 일이 없어도 통과한다.

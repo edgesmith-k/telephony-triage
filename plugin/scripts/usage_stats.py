@@ -9,8 +9,13 @@ cancelled(마지막 discard cancel이고 그 뒤 analyze 없음) → 보류 held
 분석만 analysis_only(분석 완료·계획 없음) → 결과 없음 no_result.
 따로 세는 것: `_`·`.` 폴더와 표식(plan·state·trace·triage-state) 없는 폴더는 빼고, analyze 기록(`0-key`)이 없고 계획 source가
 analyze·record가 아니면 other_flows, trace에 v≥2 행이 없으면(업데이트 전 작업) legacy(quick_stage별 건수만, 시간·취소·질문 미측정).
-PR까지 = 첫 `0-key` → 그 뒤 첫 `publish{action: created, gh_ok: true}`(상태 pr인 작업만), 분석까지 = 첫 `0-key` → 그 뒤 첫
-`done`(둘 다 경과 시간, 보류 포함). PR이 있는데 못 재면 pr_unmeasured(record처럼 analyze 없이 시작했거나 PR 뒤에 analyze한 작업).
+PR까지 = 첫 `0-key` → 그 뒤 첫 `publish{action: created, gh_ok: true}`(상태 pr인 작업만), 분석까지(`analysis_minutes`) = 첫 `0-key` →
+그 뒤 첫 `done` = **스크립트 분석(드라이버) 완료까지**의 경과 시간이다(보류·입력 대기 포함). 그 뒤의 탐색·심층 분석(Step 5-1/5-2)과
+사용자 확인·기록까지의 시간, 사람의 능동 작업 시간은 재지 않는다(코덱스 리뷰 F7) — 전체 조사 완료 시간의 대체 지표로 쓰지 않는다.
+전체 조사(`investigation_minutes`) = 첫 `0-key` → 그 첫 `done` 뒤 처음 `stage`·`discard`·실행 밖 `end{exit: 0}`(release) 행 = 탐색·심층 분석·사용자
+확인(Step 5~7)을 포함한 경과 시간(보류·대기 포함, 능동 작업 시간 아님 — transcript 시각이 없어 재지 않는다). `done`은 있는데 그런 행이
+없으면(분석만 하고 release 안 함·아직 진행 중) investigation_unmeasured. `explore`·`module`·`checked` 행은 정보용이라 어느 지표도 legacy 판정(v≥2 행)도 보지 않는다.
+PR이 있는데 못 재면 pr_unmeasured(record처럼 analyze 없이 시작했거나 PR 뒤에 analyze한 작업).
 재시도의 analyze 실행은 질문(`needs_input`) 바로 뒤의 `--answer` 재실행을 빼고 따로(answer_reruns) 센다. 시간대 없는(naive) 시각·
 목록이 아닌 `job.runs` 같은 손상 값은 없는 것으로 본다. 드라이버 질문 = `needs_input` 행(kind
 `issue` 제외), 대화 질문(AskUserQuestion)은 스크립트 신호가 없어 세지 않는다. release(Step 7) 사유는 기록이 없어 파일 상태로만
@@ -22,7 +27,7 @@ transcript에서 플러그인 세션(플러그인 스크립트 Bash 호출 또�
 아닌 AskUserQuestion·__ask_user)·심층 분석 호출(`triage.py module … --for deep`, 그 단계에 그것이 없을 때만 플러그인 밖 Skill)·show_guard 되돌림·거부·스크립트 오류(종료 1·2)·모델·Claude Code 버전을 센다.
 단계 합 = 전체(자체 검사). 대상 세션이 없거나 usage가 없으면 미측정(0이 아니다). 숫자만 내고 내용·명령·경로·세션 ID는 내지 않는다.
 플러그인 호출은 경로 모양(`…/scripts/<이름>.py`, `$S/<이름>.py`)만 본다. 세션 파일 하나씩(그 `subagents/` 포함) 필요한 필드만 줄여
-읽고, 모양이 바뀐 줄은 `unreadable_lines`, 숫자가 아닌 usage는 `usage_missing`으로 센다.
+읽고, 모양이 바뀐 줄은 `unreadable_lines`, 숫자가 아닌 usage·빈 usage·input/output 필드 없는 usage는 `usage_missing`(미측정, 0 아님)으로 센다.
 
 CLI:
     python3 <plugin.scripts_path>/usage_stats.py [--work-dir <dir> | --platform <이름>] [--json] [--transcripts [<dir>]]
@@ -30,8 +35,9 @@ CLI:
     (`plugin.scripts_path`는 사용자 config — setup·SessionStart가 설치본 scripts 경로로 맞춘다. 읽기 전용)
     (기본: 선택 플랫폼(`--platform` > TT_PLATFORM > 사용자 config platform > site)의 사용자 config work_dir.
     `--work-dir`와 `--platform`은 함께 쓸 수 없다. `--work-dir`면 site-defaults를 읽지 않는다)
-    텍스트 9줄(첫 줄 집계 대상). `--json`이면 JSON 한 줄 `{format: 2, platform, work_dir, jobs, states{…}, held_read_only,
+    텍스트 10줄(첫 줄 집계 대상). `--json`이면 JSON 한 줄 `{format: 2, platform, work_dir, jobs, states{…}, held_read_only,
     analysis_only_runs, cancel_ratio, pr_minutes{n, median, mean, values}, pr_unmeasured, analysis_minutes{…},
+    investigation_minutes{…}, investigation_unmeasured,
     questions{jobs, total, per_job, by_kind}, retries{runs, answer_reruns, errors, stages, stage_failed}, legacy{jobs, stages},
     other_flows, tokens}`
     (개수·시간만 — 작업 키·trace 메시지 없음, `--work-dir`면 `platform`은 null). `tokens`는 `--transcripts`가 없으면 null,
@@ -87,6 +93,32 @@ def _minutes(rows: list, end) -> float | None:
     return (t1 - t0).total_seconds() / 60 if t0 and t1 else None
 
 
+RUN_CLOSE = ("done", "needs_input", "stopped", "error")     # analyze 실행 하나를 닫는 행
+INFO_STEPS = ("explore", "module", "checked")     # 정보 행(F7 확장): 어느 지표·legacy 판정도 보지 않는다
+
+
+def _investigation(rows: list) -> tuple[bool, float | None]:
+    """(첫 `0-key` 뒤에 `done`이 있나, 전체 조사 분 = 첫 `0-key` → 그 첫 `done` **뒤** 처음 끝 행). 끝 행 = `stage`·`discard`, 또는
+    실행 밖(마지막 `0-key` 뒤에 닫는 행이 이미 있음)의 `end{exit: 0}`(`triage.py release`). 실행 안의 `end`(드라이버가 중단·오류·분석
+    전용 ok에서 lock을 푼 행 — 닫는 행 앞)와 실패한 release는 끝이 아니다. `release`의 `start` 행은 실행 시작이 아니다(`0-key`만)."""
+    first = next((i for i, r in enumerate(rows) if r.get("step") == "0-key"), None)
+    done = None if first is None else next((i for i in range(first + 1, len(rows)) if rows[i].get("step") == "done"), None)
+    if done is None:
+        return False, None
+    in_run, end = False, None
+    for r in rows[done + 1:]:
+        step = r.get("step")
+        if step == "0-key":
+            in_run = True
+        elif step in RUN_CLOSE:
+            in_run = False
+        elif step in ("stage", "discard") or (step == "end" and not in_run and r.get("exit") == 0):
+            end = r
+            break
+    t0, t1 = _ts(rows[first]), _ts(end)
+    return True, (t1 - t0).total_seconds() / 60 if t0 and t1 else None
+
+
 def _runs(rows: list) -> tuple[int, int]:
     """(analyze 실행, 질문 답 재실행): 바로 앞 실행이 `needs_input`으로 끝난 뒤의 `0-key`는 `--answer` 재실행으로 따로 센다."""
     fresh = reruns = 0
@@ -99,7 +131,7 @@ def _runs(rows: list) -> tuple[int, int]:
             else:
                 fresh += 1
             prev = None
-        elif step in ("done", "needs_input", "stopped", "error"):
+        elif step in RUN_CLOSE:
             prev = step
     return fresh, reruns
 
@@ -112,7 +144,7 @@ def _job(job: Path, lock: dict | None) -> dict:
     if not keys and plan.get("source") not in ("analyze", "record"):
         return {"kind": "other"}
     stage = jobstatus.quick_stage(job)
-    if not any(isinstance(r.get("v"), int) and r["v"] >= 2 for r in rows):
+    if not any(isinstance(r.get("v"), int) and r["v"] >= 2 and r.get("step") not in INFO_STEPS for r in rows):
         return {"kind": "legacy", "stage": stage}
     runs = (tstate.get("job") or {}).get("runs") if isinstance(tstate.get("job"), dict) else None
     runs = runs if isinstance(runs, list) else []           # 손상(목록 아님)은 실행 이력 없음으로
@@ -142,11 +174,13 @@ def _job(job: Path, lock: dict | None) -> dict:
     asked = [str(r.get("kind")) for r in rows if r.get("step") == "needs_input" and r.get("kind") != "issue"]
     stages = [r for r in rows if r.get("step") == "stage"]
     fresh, reruns = _runs(rows)
+    analyzed, investigation = _investigation(rows)
     return {"kind": "measured", "state": state, "read_only": state == "held" and last.get("mode") == "read-only",
             "analysis_only_runs": sum(1 for r in runs if isinstance(r, dict) and r.get("mode") == "analysis-only"),
             "pr_min": _minutes(rows, lambda r: r.get("step") == "publish" and r.get("action") == "created"
                                and r.get("gh_ok") is True),
             "analysis_min": _minutes(rows, lambda r: r.get("step") == "done"),
+            "investigation_min": investigation, "investigation_open": analyzed and investigation is None,
             "asked": asked, "runs": fresh, "answer_reruns": reruns, "errors": sum(1 for r in rows if r.get("step") == "error"),
             "stages": len(stages), "stage_failed": sum(1 for r in stages if r.get("result") not in STAGE_OK)}
 
@@ -180,6 +214,8 @@ def stats(work_dir: Path) -> dict:
             "pr_minutes": _dist([j["pr_min"] for j in measured if j["state"] == "pr" and j["pr_min"] is not None]),
             "pr_unmeasured": sum(1 for j in measured if j["state"] == "pr" and j["pr_min"] is None),
             "analysis_minutes": _dist([j["analysis_min"] for j in measured if j["analysis_min"] is not None]),
+            "investigation_minutes": _dist([j["investigation_min"] for j in measured if j["investigation_min"] is not None]),
+            "investigation_unmeasured": sum(1 for j in measured if j["investigation_open"]),
             "questions": {"jobs": len(measured), "total": len(asked),
                           "per_job": round(len(asked) / len(measured), 2) if measured else None,
                           "by_kind": {k: asked.count(k) for k in sorted(set(asked))}},
@@ -263,13 +299,20 @@ def _text(body) -> str:
     return str(body or "")
 
 
+USAGE_REQUIRED = ("input_tokens", "output_tokens")      # 둘 다 있어야 측정으로 본다. 캐시 두 필드는 모델·호스트에 따라 없을 수 있어 0
+
+
 def _usage(u) -> dict | None:
-    """usage 네 필드(음이 아닌 정수). 형식이 다르면(문자열·inf·음수·소수) None — usage 없음으로 센다."""
-    if not isinstance(u, dict):
+    """usage 네 필드(음이 아닌 정수). 측정으로 보는 조건: `input_tokens`·`output_tokens`가 **있고**(명시한 0은 실제 0) 있는 필드는
+    모두 음이 아닌 정수. `{}`·필수 필드 누락·형식이 다른 값(문자열·inf·음수·소수·불리언)은 None — usage 없음(미측정)으로 센다
+    (코덱스 리뷰 F5: 전에는 `{}`를 0토큰 4개로 세어 측정 실패가 0으로 보였다). 캐시 필드가 없으면 0(그 모델이 캐시를 안 쓴다고 본다)."""
+    if not isinstance(u, dict) or any(f not in u for f in USAGE_REQUIRED):
         return None
     out = {}
     for k, f in USAGE_KEYS:
-        v = u.get(f) or 0
+        v = u.get(f, 0)
+        if v is None and f not in USAGE_REQUIRED:
+            v = 0
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0 or v != int(v):
             return None
         out[k] = int(v)
@@ -455,7 +498,7 @@ def transcripts(root: Path) -> dict:
 
 
 def report_lines(s: dict) -> list[str]:
-    """텍스트 8줄(집계 대상 줄 뒤). "취소 비율" 낱말은 site_checks PILOT_FIELDS가 본다."""
+    """텍스트 9줄(집계 대상 줄 뒤, 출력은 모두 10줄). "취소 비율" 낱말은 site_checks PILOT_FIELDS가 본다."""
     def dist(d: dict) -> str:
         return "n/a (0건)" if not d["n"] else f"중앙값 {d['median']}분 · 평균 {d['mean']}분 ({d['n']}건)"
 
@@ -470,7 +513,9 @@ def report_lines(s: dict) -> list[str]:
             f"(--analysis-only 실행 {s['analysis_only_runs']}) · 결과 없음 {st['no_result']} · 손상 {st['unknown']}",
             f"취소 비율 {ratio} (분모: 측정 작업 − 진행 중·연습·손상)",
             f"PR까지(첫 analyze → PR 생성, 경과 시간·보류 포함) {dist(s['pr_minutes'])} · 측정 불가 {s['pr_unmeasured']}건",
-            f"분석까지(첫 analyze → 분석 완료) {dist(s['analysis_minutes'])}",
+            f"스크립트 분석까지(첫 analyze → 드라이버 done, 탐색·심층 분석·사용자 확인 제외) {dist(s['analysis_minutes'])}",
+            f"전체 조사(첫 analyze → done 뒤 stage·release·discard, 탐색·심층·사용자 확인 포함, 경과 시간·보류 포함 — 능동 작업 "
+            f"시간 아님) {dist(s['investigation_minutes'])} · 측정 불가 {s['investigation_unmeasured']}건",
             f"드라이버 질문(issue 제외) 작업당 {per_job}개 (총 {q['total']}개: {kinds})",
             f"재시도: analyze 실행 {r['runs']}(질문 답 재실행 {r['answer_reruns']} 따로) · 오류 {r['errors']} · stage "
             f"{r['stages']}(실패 {r['stage_failed']})",
@@ -492,7 +537,8 @@ def _token_line(t: dict | None) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="usage_stats.py", description=__doc__)
+    parser = argparse.ArgumentParser(prog="usage_stats.py", description=HELP_SUMMARY, epilog=HELP_EPILOG,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     target = parser.add_mutually_exclusive_group()
     target.add_argument("--work-dir", help="기본: 선택 플랫폼의 사용자 config work_dir")
     platform_session.add_arg(target)
@@ -502,6 +548,18 @@ def build_parser() -> argparse.ArgumentParser:
                              "기본 $CLAUDE_CONFIG_DIR/projects 또는 ~/.claude/projects")
     parser.add_argument("--plugin-root", default=None)
     return parser
+
+
+# --help는 요약만(종합 리뷰 A: 판정 규칙 전체가 help에 들어가 4,000자 한 단락이었다). 규칙 전문은 이 모듈 머리말(`__doc__`)과
+# contracts.md §3.2 `usage_stats.py` 행.
+HELP_SUMMARY = """파일럿 운영 지표(S-7): work_dir의 작업마다 상태 하나(PR·push만·진행 중·연습·취소·보류·분석만·결과 없음·손상)를 고르고
+스크립트 분석까지(드라이버 done, 탐색·심층 분석 제외)/전체 조사(done 뒤 stage·release·discard까지, 경과 시간)/PR까지 시간(중앙값·평균),
+취소 비율, 드라이버 질문 수, 재시도를 낸다. 개수·시간만 — 작업 키·내용은 내지 않는다.
+텍스트 10줄(첫 줄 집계 대상). --json이면 한 줄 JSON(format 2). --transcripts는 opt-in: Claude Code transcript의 토큰을
+단계별로 세고(읽기 전용, 숫자만), 없으면 tokens null(미측정). 모델·네트워크 호출 없음."""
+HELP_EPILOG = """기본 대상: 선택 플랫폼(--platform > TT_PLATFORM > 사용자 config platform > site)의 사용자 config work_dir.
+--work-dir와 --platform은 함께 쓸 수 없다. 상태 판정 규칙(위에서 처음 맞는 것)·JSON 키 전체: 모듈 머리말, contracts.md §3.2.
+팀원마다 뽑은 --json 파일을 합치는 표: python3 tools/team_stats.py <a.json> <b.json> …"""
 
 
 def main(argv: list[str] | None = None) -> int:

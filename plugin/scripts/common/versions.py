@@ -22,5 +22,5 @@ def plugin_fingerprint(root) -> str:
                    if p.is_file() and "__pycache__" not in p.relative_to(root).parts)
     h = hashlib.sha256()
     for rel, p in files:
-        h.update(f"{rel}\0{hashlib.sha256(p.read_bytes()).hexdigest()}\n".encode("utf-8"))
+        h.update(f"{rel}\0{hashlib.sha256(p.read_bytes()).hexdigest()}\n".encode())
     return h.hexdigest()[:12]

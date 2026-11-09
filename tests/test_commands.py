@@ -41,7 +41,7 @@ NO_ARGS = ["setup", "sync", "preview"]
 
 def _frontmatter(name: str) -> dict:
     text = (COMMANDS / f"{name}.md").read_text(encoding="utf-8")
-    match = re.match(r"---\n(.*?)\n---\n", text, re.S)
+    match = re.match(r"---\n(.*?)\n---\n", text, re.DOTALL)
     assert match, f"{name}.md: frontmatter 없음"
     return yaml.safe_load(match.group(1))
 
@@ -53,7 +53,7 @@ def test_command_files_match_design_lists():
     files = sorted(p.stem for p in COMMANDS.glob("*.md"))
     assert files == sorted(EXPECTED) and len(files) == 14
     table = (DOCS / "09-commands.md").read_text(encoding="utf-8")
-    names = re.findall(r"^\| `([a-z-]+)[ `]", table, re.M)
+    names = re.findall(r"^\| `([a-z-]+)[ `]", table, re.MULTILINE)
     assert sorted(set(names)) == sorted(EXPECTED)
     arch = (DOCS / "01-architecture.md").read_text(encoding="utf-8")
     assert "commands/" in arch and "(14개)" in arch
@@ -99,7 +99,7 @@ def test_help_lists_commands_from_files_and_recommends_only_existing_ones():
     assert "${CLAUDE_PLUGIN_ROOT}/scripts/" not in text, "help는 스크립트를 부르지 않는다 (site-defaults 검사 제외의 근거)"
     assert "`[a-z-]+`" in text and "소문자" in text, "커맨드 이름은 소문자 [a-z-]+ 만 파일로 찾는다 (경로 이탈 방지)"
     table = text.split("## 상황별 추천", 1)[1].split("\n## ", 1)[0]
-    rows = re.findall(r"^\|[^|\n]+\| `([a-z-]+)([^`]*)`", table, re.M)
+    rows = re.findall(r"^\|[^|\n]+\| `([a-z-]+)([^`]*)`", table, re.MULTILINE)
     names = {name for name, _ in rows}
     files = {p.stem for p in COMMANDS.glob("*.md")}
     assert names and names <= files, names - files
@@ -127,7 +127,7 @@ def test_flow_a_b_wording():
     assert "흐름 B(등록)는 새 유형·원인·규칙을 만들고" in table and "리뷰어는 push 뒤 지정할지 묻는다(제안은 CODEOWNERS 기준 — 카테고리 오너를 둔 카테고리만, 파서 규칙은 메인테이너)" in table
     assert "병합은 작성자 외 1명의 +1 뒤 \"병합해줘\" 또는 GHE 웹 병합이다" in table      # A2: 바로 병합 없음(+1 관문)
     assert "아래 안내 줄과 표를 그대로 보인다" in help_text
-    assert len(re.findall(r"^\| \(A\) ", table, re.M)) >= 3 and len(re.findall(r"^\| \(B\) ", table, re.M)) >= 2
+    assert len(re.findall(r"^\| \(A\) ", table, re.MULTILINE)) >= 3 and len(re.findall(r"^\| \(B\) ", table, re.MULTILINE)) >= 2
     assert "`record <JIRA-KEY> --new-cause <유형 ID>`" in table
     skill = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
     for needle in ("**A 찾기·분석**", "**B 등록**", "`db-authoring.md` §0", "흐름은 묻지 않고(기본 analyze) A에 B를 권하지 않는다", "기록하지 않음·중간 취소",
@@ -156,7 +156,8 @@ def test_reference_calls_use_flags_the_scripts_accept():
     assert "stage <plan> --wt <wt> --branch <br> [--dry-run] --then-summary" in flow
     assert "--commit --and-discard" in flow
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
-    import db_pr, db_search
+    import db_pr
+    import db_search
     assert db_search.build_parser().parse_args(["q", "--format", "markdown"]).format == "markdown"
     assert db_pr.build_parser().parse_args(["summary", "wt", "--format", "markdown"]).format == "markdown"
     assert db_pr.build_parser().parse_args(["summary", "wt"]).format == "json"
@@ -304,7 +305,6 @@ def test_cleanup_older_than_candidates_are_tool_jobs_only_and_dry_run_equals_yes
 
 
 def test_cleanup_older_than_reports_failed_when_directory_remains(tmp_path, monkeypatch):
-    import importlib
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     sys.path.insert(0, str(REPO / "tests"))
     from test_safety import safety_ctx
@@ -328,17 +328,34 @@ def test_sync_and_setup_bodies_list_new_steps_in_order():
     assert "--cache-only" not in sync, "매칭 파일 캐시는 없다 (06 §6.8)"
     assert "base_sha_changed" in sync and "sync-pr" in sync[calls[-1]:] and "안내만" in sync[calls[-1]:]
     setup = (COMMANDS / "setup.md").read_text(encoding="utf-8")
-    order = [setup.index(c) for c in ("config.py gh-status", "config.py doctor --format markdown", "getting-started.md")]
+    # gh-status는 1번(login 감지)에도 나온다 — 9번(마지막) 것이 10번 doctor 앞인지 본다
+    order = [setup.rindex("config.py gh-status")] + [setup.index(c) for c in ("config.py doctor --format markdown", "getting-started.md")]
     assert order == sorted(order) and "그대로" in setup[order[1]:order[2]]
     assert "doctor" in setup[order[0]:order[1]], "gh 실패 경로도 doctor 표를 보인다"
+    # 코덱스 리뷰 A①②: Jira MCP 점검은 질문 전(0번)에 한 번만, 4번은 그 결과를 쓴다. 1번은 gh-status login으로 GHE 아이디를 감지
+    assert setup.index("config.py tracker-candidates") < setup.index("config.py show") < setup.index("config.py gh-status")
+    assert setup.count("config.py tracker-candidates") == 1 and "0번 결과가 없을 때만" in setup
+    assert "최대 3개" in setup and "한 번만, 한 줄씩" in setup
+    assert "없으면(null) 묻는다" in setup, "음성 경로(b): login이 null(다른 호스트만 로그인)이면 GHE 아이디를 묻는다"
     skill = (REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md").read_text(encoding="utf-8")
     assert "config.py doctor --format markdown" in skill
     assert len(list(COMMANDS.glob("*.md"))) == 14
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
-    import config, db_pr
+    import config
+    import db_pr
     assert config.build_parser().parse_args(["doctor"]).format == "json"
     assert config.build_parser().parse_args(["doctor", "--format", "markdown"]).format == "markdown"
     assert db_pr.build_parser().parse_args(["my-prs"]).cmd == "my-prs"
+
+
+def test_setup_md_size_cap():
+    """setup.md 바이트 상한 — 커맨드 본문은 매 호출 때 모델 문맥에 통째로 들어간다. A①②(0번 Jira MCP 점검·1번 최대 3개 질문·
+    비android 분기 문구)로 7,456B → 8,924B가 됐다. 다른 문서처럼 지금 크기에 여유를 둔 상한(9,500B)으로 고정해 다음에 덧붙일 때
+    줄이는 쪽을 먼저 생각하게 한다. tt-setup.md는 gen_opencode 산출물(머리말 두 줄이 더 길다)이라 상한을 조금 더 준다."""
+    setup = (COMMANDS / "setup.md").read_bytes()
+    assert len(setup) <= 9_500, len(setup)
+    tt_setup = (REPO / "opencode" / "commands" / "tt-setup.md").read_bytes()
+    assert len(tt_setup) <= 9_600, len(tt_setup)
 
 
 def test_sync_sequence_keeps_recent_or_open_pr_workdirs():
@@ -395,17 +412,19 @@ def _offline(*args: str) -> subprocess.CompletedProcess:
 
 def test_offline_eval_prints_accuracy_table_on_synthetic_labelset():
     root = plugin_root()     # 명시 루트(SITE_PATHS 제외 복사본) — 사내 레포에서도 같은 결과
-    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json", "--plugin-root", str(root))
+    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json", "--plugin-root", str(root), "--include-in-sample")
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout)
     summary = out["summary"]
-    assert summary["total"] == 8 and summary["errors"] == 0
-    assert summary["positive"] == 7 and summary["negative"] == 1
-    assert summary["top1_accuracy"] == round(6 / 7, 4)      # EVAL-8은 일부러 틀린 라벨
-    assert summary["top3_inclusion"] == round(6 / 7, 4)
+    assert summary["total"] == 8 and summary["errors"] == 0 and summary["controls"] == 1
+    assert summary["in_sample"] == 7 and summary["include_in_sample"] is True     # 전부 fixture 자체 — 도구 동작 확인용
+    assert summary["positive"] == 6 and summary["negative"] == 1 and summary["positive_total"] == 6
+    assert summary["top1_accuracy"] == 1.0           # in-sample 자기 일치(fixture 자체) — 대조군 EVAL-8은 분모에서 뺀다
+    assert summary["top3_inclusion"] == 1.0
     assert summary["false_positive_rate"] == 0.0
     verdicts = {r["key"]: r["verdict"] for r in out["items"]}
-    assert verdicts["EVAL-1"] == "1위" and verdicts["EVAL-7"] == "정답" and verdicts["EVAL-8"] == "미스"
+    assert verdicts["EVAL-1"] == "1위" and verdicts["EVAL-7"] == "정답" and verdicts["EVAL-8"] == "대조군(미스)"
+    assert [r["control"] for r in out["items"]].count(True) == 1
     meta = out["meta"]
     assert meta["labelset_sha256"] == hashlib.sha256((REPO / "tests/fixtures/offline-eval-sample.yaml").read_bytes()).hexdigest()
     assert meta["python"] == platform.python_version() and "--json" in meta["argv"]
@@ -420,7 +439,7 @@ def test_offline_eval_prints_accuracy_table_on_synthetic_labelset():
 
 @pytest.mark.skipif((REPO / "plugin" / "site-defaults.yaml").exists(), reason="plugin/site-defaults.yaml 있음: 기본 루트가 plugin/(사내)")
 def test_offline_eval_default_root_is_temporary_helper_root_without_site_defaults():
-    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json")
+    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json", "--include-in-sample")
     assert proc.returncode == 0, proc.stderr
     meta = json.loads(proc.stdout)["meta"]
     root = Path(meta["plugin_root"]["path"])
@@ -429,11 +448,25 @@ def test_offline_eval_default_root_is_temporary_helper_root_without_site_default
 
 
 def test_offline_eval_text_table_has_the_three_metrics():
-    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"))
+    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--include-in-sample")
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.startswith("meta: ")
     for label in ("1위 정확도", "상위 3 포함률", "오탐률", "EVAL-8"):
         assert label in proc.stdout
+
+
+def test_offline_eval_excludes_in_sample_fixtures_by_default():
+    """종합 리뷰 D: 라벨셋 로그가 이슈 DB fixtures/ 자체면 자기 일치라 정확도가 아니다 — 기본은 `표본내(<판정>)`로 보이고 지표에서
+    뺀다(전부 표본내면 평가 0건, 종료 1). `--include-in-sample`일 때만 지표에 넣는다."""
+    root = plugin_root()
+    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json", "--plugin-root", str(root))
+    assert proc.returncode == 1, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["summary"]["in_sample"] == 7 and out["summary"]["evaluated"] == 0 and out["summary"]["top1_accuracy"] is None
+    verdicts = {r["key"]: r["verdict"] for r in out["items"]}
+    assert verdicts["EVAL-1"] == "표본내(1위)" and verdicts["EVAL-8"] == "대조군(미스)"
+    text = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--plugin-root", str(root)).stdout
+    assert "표본내 — 시그니처 fixture 자체 — 7건은 지표에서 뺌" in text and "평가 가능한 항목 없음" in text
 
 
 def test_offline_eval_counts_false_positive_when_unresolved_expected_but_candidate_produced(tmp_path):
@@ -443,7 +476,7 @@ def test_offline_eval_counts_false_positive_when_unresolved_expected_but_candida
         "items": [{"key": "FP-1", "occurred_at": "2026-09-20T14:32:10+09:00", "expect": "unresolved",
                    "logs": [str(SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log")]}],
     }), encoding="utf-8")
-    proc = _offline(str(labelset), "--json")
+    proc = _offline(str(labelset), "--json", "--include-in-sample")
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout)
     assert out["summary"]["false_positive_rate"] == 1.0 and out["items"][0]["verdict"] == "오탐"
@@ -483,7 +516,7 @@ def test_offline_eval_defaults_year_from_occurred_at(tmp_path):
         "items": [{"key": "EVAL-1", "occurred_at": "2026-09-20T14:32:10+09:00", "expect": "DATA-001-01",
                    "logs": [str(SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log")]}],
     }), encoding="utf-8")
-    proc = _offline(str(labelset), "--json")
+    proc = _offline(str(labelset), "--json", "--include-in-sample")
     assert proc.returncode == 0, proc.stderr
     assert json.loads(proc.stdout)["items"][0]["verdict"] == "1위"
 
@@ -496,7 +529,7 @@ def test_offline_eval_out_of_range_item_is_error_not_scored(tmp_path):
                    "expect": "DATA-001-01",
                    "logs": [str(SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log")]}],
     }), encoding="utf-8")
-    proc = _offline(str(labelset), "--json")
+    proc = _offline(str(labelset), "--json", "--include-in-sample")
     assert proc.returncode == 1, proc.stderr          # 전부 오류 = 통과 아님
     out = json.loads(proc.stdout)
     assert out["summary"]["errors"] == 1 and out["summary"]["evaluated"] == 0

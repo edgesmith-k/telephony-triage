@@ -180,7 +180,7 @@ def test_sim_slot_select_object_uses_value_and_drops_other_objects():
              "list": ('["1", "2"]', None)}
     for name, (body, want) in cases.items():
         raw = tmp / f"{name}.yaml"
-        raw.write_text(re.sub(r'(?m)^(\s*customfield_10006:).*$', lambda m: f"{m.group(1)} {body}", text), encoding="utf-8")
+        raw.write_text(re.sub(r'(?m)^(\s*customfield_10006:).*$', lambda m: f"{m.group(1)} {body}", text), encoding="utf-8")  # noqa: B023 — re.sub가 바로 부른다
         meta = tmp / f"{name}.json"
         out = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE, "--meta-out", meta], env=_home())
         assert out["sim_slot"] == want, name

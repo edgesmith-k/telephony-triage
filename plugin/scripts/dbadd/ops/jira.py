@@ -99,3 +99,5 @@ class JiraOps:
         if dest != path:
             self.tree.delete(path)
         self.tree.write(dest, yamldoc.dump_doc(record))
+        # 피드백 기록은 그대로 둔다(그때의 결정). 수락률(`issuedb.acceptance`)이 기록의 final과 Jira의 현재 분류를 대조해 재분류된
+        # accepted를 수락으로 세지 않는다(06-collaboration.md §6.5) — 피드백 스키마를 바꾸지 않으므로 DB 마이그레이션이 없다

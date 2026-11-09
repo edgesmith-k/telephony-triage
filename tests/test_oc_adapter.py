@@ -25,6 +25,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
 from common import oc_adapter as oc
+from common import oc_version
 from runner import plugin_root, run, tmp
 
 IMSI = "450081234567890"
@@ -47,7 +48,7 @@ def _map(tool: str, args: dict, directory: Path, servers=None, err=None):
 
 
 def test_builtin_table_is_explicit_and_pinned():
-    assert oc.OPENCODE_VERSION == "1.19.5"
+    assert oc.OPENCODE_VERSION == oc_version.OPENCODE_VERSION   # 고정값 자체는 tests/test_oc_version.py
     passes = {"invalid", "question", "read", "glob", "grep", "skill", "lsp", "todowrite"}
     denies = {"task", "webfetch", "websearch", "codesearch", "execute", "plan", "list_mcp_resources",
               "list_mcp_resource_templates", "read_mcp_resource"}
@@ -217,8 +218,8 @@ def test_mcp_servers_unreadable_is_error(text):
 
 def test_refused_env():
     assert oc.refused_env({"PATH": "/bin", "OPENCODE_DISABLE_AUTOUPDATE": "1", "OPENCODE_DISABLE_MODELS_FETCH": "1"}) == []
-    env = {k: "" for k in ("OPENCODE_PERMISSION", "OPENCODE_CONFIG_CONTENT", "OPENCODE_CONFIG", "OPENCODE_PURE",
-                           "OPENCODE_DISABLE_PROJECT_CONFIG", "OPENCODE_EXPERIMENTAL_LSP_TOOL", "OPENCODE_EXPERIMENTAL")}
+    env = dict.fromkeys(("OPENCODE_PERMISSION", "OPENCODE_CONFIG_CONTENT", "OPENCODE_CONFIG", "OPENCODE_PURE",
+                         "OPENCODE_DISABLE_PROJECT_CONFIG", "OPENCODE_EXPERIMENTAL_LSP_TOOL", "OPENCODE_EXPERIMENTAL"), "")
     assert oc.refused_env(env) == sorted(env)
     out = oc.before({"tool": "read", "args": {}, "directory": str(_dir())}, env={"OPENCODE_PERMISSION": '{"bash":"allow"}'})
     assert out["decision"] == "deny" and "OPENCODE_PERMISSION" in out["reason"]
@@ -597,14 +598,15 @@ def _gh_mcp(tool: str, args: dict) -> dict:
     return cli("before", {"tool": f"github_{tool}", "args": args, "directory": str(d)})
 
 
-def test_before_mcp_repo_full_name_merge_not_allowed():
-    """규칙 11(F1): 대상 인자 이름 변형(`repo_full_name`)의 이슈 DB 병합은 OpenCode에서도 허용되지 않는다(guard deny 상속)."""
+def test_before_mcp_merge_ask_is_refused_in_opencode():
+    """규칙 11(F1): 대상 인자 이름 변형(`repo_full_name`)의 이슈 DB 병합은 OpenCode에서도 허용되지 않는다(guard는 병합 계열을
+    ask로 내고(4-c), OpenCode v1은 ask를 거부로 돌린다)."""
     out = _gh_mcp("merge_pull_request", {"repo_full_name": "mock-org/telephony-issue-db", "pull_number": 3})
     assert out["decision"] == "deny" and "머지" in out["reason"]
 
 
-def test_before_mcp_undeterminable_merge_asks():
-    """규칙 11(F1): 대상을 판별하지 못한 병합은 guard ask — OpenCode에서는 allow가 아니다."""
+def test_before_mcp_merge_without_target_is_not_allowed():
+    """규칙 11(F1): 대상 인자가 없는 병합도 guard ask(대상을 보지 않는다) — OpenCode에서는 allow가 아니다."""
     assert _gh_mcp("merge_pull_request", {"pull_number": 3})["decision"] != "allow"
     assert _gh_mcp("list_pull_requests", {})["decision"] == "allow"
 

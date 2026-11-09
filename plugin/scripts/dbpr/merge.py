@@ -149,7 +149,7 @@ def parse_reviewers(arg: str) -> list[str]:
     out: list[str] = []
     for part in str(arg or "").split(","):
         name = part.strip()
-        name = name[1:] if name.startswith("@") else name
+        name = name.removeprefix("@")
         if not REVIEWER_RE.fullmatch(name):
             raise UsageError(f"리뷰어 형식이 아니다: {part.strip()!r} — 로그인 또는 <org>/<team>을 쉼표로 잇는다(예: a,b)")
         if name not in out:

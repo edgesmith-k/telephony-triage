@@ -16,7 +16,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
 from runner import SAMPLE, tmp  # noqa: E402
-from workspace import PLANS, Workspace, git  # noqa: E402
+from workspace import Workspace, git  # noqa: E402
 
 MOCK_JIRA = REPO / "tests" / "mocks" / "jira"
 LOG = SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log"

@@ -28,12 +28,12 @@ def resolve(defaults: dict, cli: str | None = None, user: dict | None = None) ->
     """`(플랫폼 이름, 그 플랫폼의 cfg)`. 오류는 `PlatformConfigError`(호출자가 종료 코드 2)."""
     given = user is not None
     user = userconfig.load_user() if user is None else user
-    problems = userconfig.profile_problems(user)
+    problems = userconfig.profile_problems(user, defaults)
     if problems:
         raise PlatformConfigError(f"사용자 config({userconfig.path()}): " + "; ".join(problems))
-    site = userconfig.site_platform_problems(defaults)
-    if site:        # 기본 아닌 플랫폼의 분석 스킬 팀 기본값(17-platforms §10)
-        raise PlatformConfigError("; ".join(site) + " (site-defaults는 관리자)")
+    site = "; ".join(userconfig.site_platform_problems(defaults))
+    if site:        # 기본 아닌 플랫폼의 분석 스킬 팀 기본값(17-platforms §10)·팀 원격
+        raise PlatformConfigError(site if site.endswith(userconfig.SITE_ADMIN) else f"{site} {userconfig.SITE_ADMIN}")
     legacy = userconfig.legacy_problems(defaults, user)
     if legacy:      # 옛 설정 키(jira: 등)는 자동 변환하지 않는다 — 고치기 전까지 멈춘다(guard는 모든 MCP 거부)
         raise PlatformConfigError("옛 설정 키: " + "; ".join(legacy) + " — config.py rename-legacy로 바꾼다"
@@ -64,7 +64,7 @@ def resolve_lenient(defaults: dict, cli: str | None = None, user: dict | None = 
     있게). 사용자 `platform`이 켜지지 않은 이름이면 site 기본으로 대신한다. `--platform`(cli)이 잘못되면 그대로 오류다."""
     given = user is not None
     user = userconfig.load_user() if user is None else user
-    problems = userconfig.profile_problems(user) + userconfig.site_platform_problems(defaults)
+    problems = userconfig.profile_problems(user, defaults) + userconfig.site_platform_problems(defaults)
     try:
         name = select(defaults, cli, userconfig.selected_hint(user))
     except PlatformConfigError as exc:
@@ -79,7 +79,7 @@ def resolve_lenient(defaults: dict, cli: str | None = None, user: dict | None = 
     return name, cfg, problems
 
 
-def resolve_db(defaults: dict, cli: str | None, db_arg) -> tuple[str, "object"]:
+def resolve_db(defaults: dict, cli: str | None, db_arg) -> tuple[str, object]:
     """사용자 흐름의 이슈 DB 읽기(db_add similar·db_search·db_review): 선택 플랫폼(`resolve`) → DB 경로(`--db` > cwd의
     이슈 DB > 그 플랫폼 프로필의 `issue_db.path`) → DB 선언 대조(`check_db`, `--db`를 준 경우도). `(이름, 경로)`.
     오류는 `PlatformConfigError`·`dbpath.DbPathError`(호출자가 종료 코드 2)."""

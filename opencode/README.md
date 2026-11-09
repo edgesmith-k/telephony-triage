@@ -10,7 +10,8 @@ v1은 **분석 전용(안 A)**: Jira 코멘트, 이슈 DB push, `db_pr publish|m
 | `managed.json.sample` | `/etc/opencode/opencode.json` 예시(관리자 배포, 다중 방어). 프로젝트 설정 뒤에 합쳐진다 |
 | `agents/triage.md` | 에이전트 프롬프트(약 2KB): 스크립트가 판정, Read ≤200줄, 화면 그대로, 쓰기는 명령 출력만 |
 | `commands/tt-*.md` | `tools/gen_opencode.py`가 `plugin/commands/*.md`에서 만든다(손으로 고치지 않는다) |
-| `bin/tt-oc` | 실행 래퍼: 확인 화면·must_show가 있는 흐름은 이것으로 |
+| `bin/tt-oc` | 실행 래퍼: 확인 화면·must_show가 있는 흐름은 이것으로. 표준 라이브러리만 쓰고 OpenCode 표면은 아래 한 파일에서 읽는다 |
+| `../plugin/scripts/common/oc_version.py` | **OpenCode 바이너리 의존 한 곳**: 고정 버전, CLI 인자, 거부·자식 환경 변수, 바이너리의 거부 문구, `run --format json` 이벤트 키, 플러그인 hook 이름. 버전을 올릴 때는 이 파일과 `tests/test_oc_version.py`의 고정값만 바꾸고, 파일에 적힌 실험을 새 버전으로 다시 한다(tt-guard.js는 시험이 대조) |
 | `plugins/tt-guard.js` | guard 플러그인: 모든 도구 호출을 `plugin/scripts/common/oc_adapter.py`로 바뀌지 않은 `guard.py`에 넘긴다(닫힘 실패). 오류로 끝난 MCP 호출의 Jira 오류 본문은 모델 요청 직전(`experimental.chat.messages.transform`)에 숨긴다. `install`이 `<dest>/.opencode/plugins/`(1.19.5가 자동으로 싣는 폴더)에 복사하며 플러그인 루트를 써 넣으므로 TUI에서도 `TT_PLUGIN_ROOT` 없이 걸린다 |
 
 ## 설치
@@ -41,7 +42,7 @@ opencode/bin/tt-oc --project <dest> -s <세션> -- 2          # 질문에 답하
 ```
 
 - `--pure`·`--auto`·`--attach`·`-i`·`--agent`·`--model`과 설정을 덮는 `OPENCODE_*` 환경 변수는 거부한다.
-- 사전 점검(버전 1.19.5, `snapshot:false`·bash 허용 목록 등 실제 설정, 설치 지문, 자동 지시 파일, `config.py doctor`)이 실패하면
+- 사전 점검(버전 = `oc_version.OPENCODE_VERSION`, `snapshot:false`·bash 허용 목록 등 실제 설정, 설치 지문, 자동 지시 파일, `config.py doctor`)이 실패하면
   시작하지 않는다.
 - bash는 분석 스크립트(`python3 "<plugin>/scripts/<이름>.py" …`, 절대 경로)와 읽기 명령(ls·cat·head·tail·grep·find·git log 등)만
   돈다(`oc_adapter.py` 허용 목록 — 셸 펼침·파일 리디렉션·대입·스크립트 파일·`python3 -c`·중첩 `opencode`/`claude`는 거부).

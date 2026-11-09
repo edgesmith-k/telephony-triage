@@ -32,6 +32,16 @@ TEMPLATE = OC / "opencode.json.template"
 MANAGED = OC / "managed.json.sample"
 AGENT = OC / "agents" / "triage.md"
 TTOC = OC / "bin" / "tt-oc"
+
+
+def _load_tt_oc():
+    import importlib.machinery
+    import importlib.util
+    loader = importlib.machinery.SourceFileLoader("tt_oc_for_gen_test", str(TTOC))
+    spec = importlib.util.spec_from_loader("tt_oc_for_gen_test", loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
 # 1.19.5 설정 스키마의 v1 최상위 키 중 이 레포가 쓰는 것(v2 키 `permissions`·`agents`·`snapshots`·`providers` 등은 쓰지 않는다)
 V1_KEYS = {"$schema", "model", "small_model", "default_agent", "autoupdate", "share", "snapshot", "instructions", "provider",
            "permission", "mcp"}
@@ -167,8 +177,11 @@ def test_agent_prompt():
 
 
 def test_pinned_versions_match():
+    """고정 버전은 oc_version.py 한 곳: tt-oc·gen_opencode는 그 값을 읽을 뿐 버전 리터럴을 두지 않는다(종합 리뷰 F②)."""
     src = TTOC.read_text(encoding="utf-8")
-    assert f'PINNED = "{gen_opencode.OPENCODE_VERSION}"' in src
+    assert not re.search(r'PINNED\s*=\s*"\d', src) and "OCV.OPENCODE_VERSION" in src
+    tt = _load_tt_oc()
+    assert tt.PINNED == gen_opencode.OPENCODE_VERSION == tt.OCV.OPENCODE_VERSION
 
 
 # -- install ------------------------------------------------------------------------------------------------------------
@@ -203,7 +216,7 @@ def test_install_renders_everything(roots):
     assert cfg["model"] == "gw/glm-x" and cfg["provider"]["gw"]["options"]["baseURL"] == "http://localhost:9/v1"
     meta = json.loads((proj / "tt-oc.json").read_text(encoding="utf-8"))
     integrity = meta.pop("integrity")
-    assert meta == {"version": 1, "opencode": "1.19.5", "plugin_root": str(roots / "plug"), "work_root": str(roots / "work"),
+    assert meta == {"version": 1, "opencode": gen_opencode.OPENCODE_VERSION, "plugin_root": str(roots / "plug"), "work_root": str(roots / "work"),
                     "issue_dbs": [str(roots / "dbA"), str(roots / "dbB")], "model": "glm-x"}
     # 설치 지문(리뷰 P1: guard 플러그인 삭제·adapter 수정을 tt-oc doctor가 찾는다): tt-oc.json 말고 설치한 모든 파일
     assert set(integrity["files"]) == {p.relative_to(proj).as_posix() for p in files if p.name != "tt-oc.json"}

@@ -14,6 +14,7 @@
     python3 tools/site_step.py modules coverage [--json] [--out F] [--min-lines N]   # 사내 로그 → 모듈별 줄 수·빈 이름·modules.yaml diff
     python3 tools/site_step.py audit [--since D|레포=sha] [--last] [--repo R] [--cap-tokens N] [--inhouse-model RX] [--jobs DIR] [--json]
     python3 tools/site_step.py audit --record [--defer ID[,ID]]     # 정기 점검: 토큰 0 검사 → Claude가 볼 것(상한 안) → 기준점 기록
+    python3 tools/site_step.py audit --notify [--create] [--json]   # 걸린 항목(P0·P1·실패 검사)을 이슈 DB 레포 Issue로(기본 보기만)
     python3 tools/site_step.py runtime-check claude-gateway         # Claude Code + 사내 모델 프로필 표(모델 호출 없음)
     python3 tools/site_step.py runtime-check opencode [--project D] # OpenCode 1.19.5·설정·관리 설정 점검 + 사내 확인 0(OpenAI 호환) curl
     python3 tools/site_step.py runtime-check opencode --project D --jira KEY [--missing-key KEY]
@@ -446,6 +447,16 @@ def audit_cmd(root: Path, args) -> tuple[str, int]:
     try:
         if args.record:
             return site_audit.record(root, args.defer), 0
+        if args.notify:
+            p = site_audit.load_plan(root)
+            ctx = sc.Ctx(root)
+            try:
+                res = site_audit.notify(ctx, p, create=args.create)
+            finally:
+                ctx.cleanup()
+            if args.json:
+                return json.dumps(res, ensure_ascii=False, indent=1), res["exit"]
+            return site_audit.render_notify(res), res["exit"]
         ctx = sc.Ctx(root)
         try:
             p = site_audit.plan(ctx, since=args.since, last=args.last, repos=args.repo, cap=args.cap_tokens,
@@ -520,7 +531,7 @@ def _user(root: Path) -> str:
 def _insert_progress(text: str, line: str, pattern: str) -> str:
     """'## 진행 상태' 절에 한 줄을 둔다(같은 패턴 줄이 있으면 바꾼다)."""
     core = pattern.removeprefix("(?m)")
-    rx = re.compile(core if core.endswith("$") else core + ".*$", re.M)
+    rx = re.compile(core if core.endswith("$") else core + ".*$", re.MULTILINE)
     if rx.search(text):
         return rx.sub(lambda m: line, text, count=1)
     head = "## 진행 상태\n"
@@ -923,14 +934,66 @@ def _scripts_on_path() -> None:
         sys.path.insert(0, p)
 
 
+GATEWAY_SCOPE = ("재는 것: 환경 변수·자격 이름, claude CLI 버전, 설치본 hooks.json, S1 기록(tracker.isolation_confirmed). "
+                 "안 재는 것: 게이트웨이 프로토콜·모델 응답·hook 실제 동작·must_show — 사내 확인 0·2·3·5가 확정한다")
+
+
+def gateway_site_rows(env: dict) -> list[dict]:
+    """토큰 0 추가 행(종합 리뷰 F: 이전에는 환경 변수 비교만이라 '종료 0 = 환경이 된다'로 읽혔다). 모두 ok·warn·info — 종료 코드에는
+    영향이 없다(전제 확정은 사내 확인). `claude --version`은 모델·네트워크를 부르지 않는다."""
+    _scripts_on_path()
+    from common import site_defaults, userconfig
+
+    rows: list[dict] = []
+    exe = shutil.which("claude", path=env.get("PATH"))
+    if not exe:
+        rows.append({"key": "claude_cli", "status": "warn", "detail": "PATH에 claude 없음 — Claude Code를 쓰는 터미널에서 다시 실행"})
+    else:
+        try:
+            proc = subprocess.run([exe, "--version"], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                                  timeout=20, env=env)
+            text = (proc.stdout or proc.stderr or "").strip().splitlines()
+            ver = text[0][:80] if text else ""
+            rows.append({"key": "claude_cli", "status": "ok" if proc.returncode == 0 and ver else "warn",
+                         "detail": ver or f"--version 종료 {proc.returncode}"})
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            rows.append({"key": "claude_cli", "status": "warn", "detail": f"--version 실행 실패({type(exc).__name__})"})
+    user = userconfig.load_user() or {}
+    scripts_path = userconfig.get(user, "plugin.scripts_path")
+    hooks = Path(str(scripts_path)).expanduser().parent / "hooks" / "hooks.json" if scripts_path else None
+    if hooks is None or not hooks.is_file():
+        rows.append({"key": "plugin_hooks", "status": "warn",
+                     "detail": "설치본 hooks.json 없음(setup 전이거나 plugin.scripts_path 불일치) — /telephony-triage:setup 뒤 다시"})
+    else:
+        try:
+            data = json.loads(hooks.read_text(encoding="utf-8"))
+            groups = data.get("hooks", data) if isinstance(data, dict) else {}
+            n = sum(len(v) for v in groups.values() if isinstance(v, list))
+            rows.append({"key": "plugin_hooks", "status": "ok" if n else "warn",
+                         "detail": f"{hooks} — 이벤트 {', '.join(groups)} (matcher {n}개). 실제 로드 여부는 사내 확인 5"})
+        except (OSError, ValueError, AttributeError) as exc:
+            rows.append({"key": "plugin_hooks", "status": "warn", "detail": f"hooks.json 읽기 실패({type(exc).__name__})"})
+    try:
+        defaults = site_defaults.load(ROOT / "plugin")
+        confirmed = userconfig.get(defaults, "tracker.isolation_confirmed")
+        rows.append({"key": "isolation_confirmed", "status": "ok" if confirmed is True else "info",
+                     "detail": "S1 기록됨 — Jira 읽기 결과 격리 확인" if confirmed is True
+                     else "미기록 — S1 확인 전에는 guard가 Jira 읽기마다 묻는다(site-defaults tracker.isolation_confirmed)"})
+    except site_defaults.SiteDefaultsMissing:
+        rows.append({"key": "isolation_confirmed", "status": "info", "detail": "plugin/site-defaults.yaml 없음(S-3 전)"})
+    return rows
+
+
 def runtime_claude_gateway(env: dict) -> tuple[str, int]:
-    """Claude Code + 사내 모델(게이트웨이) 프로필: `claude_child.gateway_profile_check` 표, missing·differs가 있으면 1."""
+    """Claude Code + 사내 모델(게이트웨이) 프로필: `claude_child.gateway_profile_check` 표 + 토큰 0 추가 행(`gateway_site_rows`),
+    missing·differs가 있으면 1."""
     _scripts_on_path()
     from common import claude_child
 
-    rows = claude_child.gateway_profile_check(env)
+    rows = claude_child.gateway_profile_check(env) + gateway_site_rows(env)
     result, code = _runtime_result(rows, "사용자 settings.json env(또는 환경 변수)를 고친 뒤 다시 실행한다")
-    title = "런타임 점검 claude-gateway — 모델 호출 없음(프로세스 환경 + 사용자 settings.json env, 비밀 값은 적지 않는다)"
+    title = ("런타임 점검 claude-gateway — 모델 호출 없음(프로세스 환경 + 사용자 settings.json env, 비밀 값은 적지 않는다). "
+             + GATEWAY_SCOPE)
     return "\n\n".join([_runtime_table(title, rows), result, check0_text()]), code
 
 
@@ -1066,6 +1129,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jobs", help="audit: 근거 원문 검사 기록을 찾을 work_dir(기본: 사용자 config work_dir)")
     ap.add_argument("--record", action="store_true", help="audit: 마지막 계획의 끝 커밋을 기준점으로 기록")
     ap.add_argument("--defer", action="append", default=[], metavar="ID[,ID]", help="audit --record: 다음 점검으로 미룰 항목")
+    ap.add_argument("--notify", action="store_true", help="audit: 마지막 계획의 P0·P1 항목·실패 검사 행을 이슈 DB 레포 Issue로(기본 보기만)")
+    ap.add_argument("--create", action="store_true", help="audit --notify: 실제로 만든다(사용자 확인 뒤). 열린 같은 표식 Issue는 건너뜀")
     ap.add_argument("--root", default=str(ROOT), help=argparse.SUPPRESS)   # 테스트용
     ap.add_argument("--managed-dir", default=None, help=argparse.SUPPRESS)  # 테스트용(기본 gen_opencode.MANAGED_DIR)
     args = ap.parse_args(argv)
@@ -1080,15 +1145,19 @@ def main(argv: list[str] | None = None) -> int:
     if (args.project or args.managed_dir) and args.cmd != "runtime-check":
         ap.error("--project는 runtime-check에서만 쓴다")
     window_opts = args.since or args.last or args.repo or args.cap_tokens is not None or args.inhouse_model or args.jobs
-    if (window_opts or args.record or args.defer) and args.cmd != "audit":
-        ap.error("--since·--last·--repo·--cap-tokens·--inhouse-model·--jobs·--record·--defer는 audit에서만 쓴다")
+    if (window_opts or args.record or args.defer or args.notify or args.create) and args.cmd != "audit":
+        ap.error("--since·--last·--repo·--cap-tokens·--inhouse-model·--jobs·--record·--defer·--notify·--create는 audit에서만 쓴다")
     if args.cmd == "audit":
         if args.step:
             ap.error("audit는 단계 인자를 받지 않는다")
         if args.defer and not args.record:
             ap.error("--defer는 --record와 함께 쓴다")
-        if args.record and window_opts:
+        if args.record and (window_opts or args.notify):
             ap.error("--record는 --defer만 함께 쓴다")
+        if args.create and not args.notify:
+            ap.error("--create는 --notify와 함께 쓴다")
+        if args.notify and (window_opts or args.defer):
+            ap.error("--notify는 --create·--json만 함께 쓴다")
         if args.cap_tokens is not None and args.cap_tokens <= 0:
             ap.error("--cap-tokens는 0보다 크다")
     if (args.out or args.min_lines is not None) and not (args.cmd == "modules" and args.step == "coverage"):

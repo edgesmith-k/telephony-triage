@@ -98,6 +98,8 @@ def test_claude_child_and_opencode_layer():
                  "tests/opencode/test_oc_e2e.py", "tests/opencode/fakes/x.py"):
         out = select(path)
         assert out["full"] is False and out["tests"] == want, path
+    out = select("plugin/scripts/common/oc_version.py")      # 바이너리 의존 한 곳(F②): common이지만 OpenCode 층
+    assert out["full"] is False and set(want) <= set(out["tests"])
 
 
 def test_tool_change_selects_tests_mentioning_it():

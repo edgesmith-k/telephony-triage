@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import importlib
 import importlib.util
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -213,7 +214,62 @@ def test_extract_bugreport_missing_file_exits_2(tmp_path):
 
 def test_code_roots_constants_come_from_platform():
     import code_roots
-    import platforms.android as android
+    from platforms import android
 
     assert code_roots.TELEPHONY_DIR is android.TELEPHONY_DIR
     assert code_roots.VERSION_SOURCES is android.VERSION_SOURCES
+
+
+def test_core_does_not_import_platform_packages_directly():
+    """17-platforms §1-2: 핵심(최상위 스크립트·common·triagelib·dbadd·dbpr·trackers)은 레지스트리(`platforms`·`platforms.base`)
+    경유로만 플랫폼을 쓴다 — `platforms.<이름>` 직접 import 없음. `parser_backends/<이름>`은 플랫폼 백엔드를 묶는 어댑터라 예외.
+    (종합 리뷰 H: `code_roots.py`가 `platforms.ofono.msgformat._FILE_FUNC`를 직접 불러 새 플랫폼마다 핵심을 고쳐야 했다.)"""
+    import platforms
+    names = set(platforms.known())
+    offenders = {}
+    for path, rel in _py_files():
+        if rel.startswith(("platforms/", "parser_backends/")):
+            continue
+        bad = {m for m in _imports(path, rel) if m.split(".")[0] == "platforms" and len(m.split(".")) > 1
+               and m.split(".")[1] in names}
+        if bad:
+            offenders[rel] = bad
+    assert offenders == {}
+
+
+# -- 모듈 스킬 템플릿·모듈 eval 자료(TemplateMeta, 17-platforms §10-3 — 종합 리뷰 H①) ---------------------------------
+
+def _string_literals(path: Path) -> set[str]:
+    return {n.value for n in ast.walk(ast.parse(path.read_text(encoding="utf-8"))) if isinstance(n, ast.Constant)
+            and isinstance(n.value, str)}
+
+
+def test_template_metas_cover_every_platform():
+    import platforms
+    metas = platforms.template_metas()
+    assert set(metas) == set(platforms.known())
+    for name, meta in metas.items():
+        assert isinstance(meta, platforms.TemplateMeta) and meta.layers.endswith("| 원인 아님(정상 동작)>")
+        assert set(meta.builtin_docs) <= {"pre", "post"} and meta.deep_baseline_note
+        for other, om in metas.items():
+            if other != name:
+                assert not meta.names.search(om.layers), (name, other)     # 자기 층 어휘가 남의 이름에 걸리지 않는다
+
+
+def test_core_template_code_knows_no_platform_name():
+    """skillcheck.template_findings·module_eval은 플랫폼 이름 리터럴 없이 레지스트리 자료(TemplateMeta)로만 플랫폼을 안다."""
+    import platforms
+    names = set(platforms.known())
+    for rel in ("common/skillcheck.py", "module_eval.py"):
+        hit = names & _string_literals(SCRIPTS / rel)
+        assert hit == set(), (rel, hit)
+
+
+def test_platform_doc_checks_are_platform_local():
+    """oFono의 D-Bus·데몬 표 규칙은 platforms/ofono/template.py(표준 라이브러리만)에 있고 common/skillcheck에는 없다."""
+    import platforms
+    from platforms.ofono import template
+    sc_src = (SCRIPTS / "common" / "skillcheck.py").read_text(encoding="utf-8")
+    assert not re.search(r"def dbus_|^DBUS_|_common/components\.md|ANDROID_NAMES|OFONO_NAMES|PLATFORM_MIX", sc_src, re.MULTILINE)
+    assert platforms.get("ofono").template.doc_checks == (template.daemon_table_check, template.dbus_check)
+    assert platforms.get("android").template.doc_checks == ()

@@ -80,7 +80,7 @@ def normalize(rest: str) -> list[str]:
 def fragments(names) -> list[tuple[str, str, str, str]]:
     out = []
     for doc in _docs():
-        text = re.sub(r"^```.*?^```", "", doc.read_text(encoding="utf-8"), flags=re.S | re.M)
+        text = re.sub(r"^```.*?^```", "", doc.read_text(encoding="utf-8"), flags=re.DOTALL | re.MULTILINE)
         for m in CODE_SPAN.finditer(text):
             frag = FRAGMENT.search(m.group(1))
             if frag and frag.group(1) in names:

@@ -42,9 +42,9 @@ PROMO_PAIR = ("docs/materials/02-marketing.html", "docs/materials/19-team-intro.
 # 공통 비교에서 빼는 절: story는 19에만, contact는 파일마다 다른 마무리. title은 비교하지 않고, 목차는 story·contact 링크를 뺀 순서만 비교한다.
 PROMO_ONLY = {"story", "contact"}
 VARIANT_RE = re.compile(r'(<p class="hero-ask">)[^\n]*?(</p>)')
-TOC_RE = re.compile(r'<details class="toc".*?</details>', re.S)
+TOC_RE = re.compile(r'<details class="toc".*?</details>', re.DOTALL)
 BLOCK_RE = re.compile(r'<style>.*?</style>|<script>.*?</script>|<header class="hero">.*?</header>|<footer>.*?</footer>'
-                      r'|<section id="([^"]+)"[^>]*>.*?</section>', re.S)
+                      r'|<section id="([^"]+)"[^>]*>.*?</section>', re.DOTALL)
 COMMAND_RE = re.compile(r"/telephony-triage:([a-z][a-z0-9-]*)")
 EXTERNAL_RE = re.compile(r"(?i)^(https?:)?//")
 CSS_EXTERNAL_RE = re.compile(r"""(?i)(@import\s+(?:url\(\s*)?|url\(\s*)['"]?((?:https?:)?//[^'")\s;]+)""")
@@ -136,7 +136,7 @@ def check_common(a: Path, b: Path, names: tuple[str, str] | None = None) -> list
     if toc[0] != toc[1]:
         return [f"{na}: common: 목차 링크 순서가 {nb}와 다름 ({' '.join(toc[0])} / {' '.join(toc[1])})"]
     for name, src in ((na, sa), (nb, sb)):
-        hero = re.search(r'<header class="hero">.*?</header>', src, re.S)
+        hero = re.search(r'<header class="hero">.*?</header>', src, re.DOTALL)
         n = len(VARIANT_RE.findall(hero.group(0))) if hero else 0
         if n != 1:
             return [f"{name}: common: hero의 hero-ask 줄이 {n}개 (정확히 1개여야 함)"]

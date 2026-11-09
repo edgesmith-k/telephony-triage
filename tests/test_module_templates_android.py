@@ -14,6 +14,7 @@ REPO = Path(__file__).resolve().parents[1]
 if str(REPO / "plugin" / "scripts") not in sys.path:
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
+import platforms  # noqa: E402
 from common import skillcheck, yamlio  # noqa: E402
 
 ANDROID = REPO / "templates" / "module-skills" / "android"
@@ -44,9 +45,10 @@ CASES = [
     ("ims", "ims-403-vendor-lines-missing", "deep", False, None),
 ]
 
-# 문서 상한(바이트, C1D 보정 §2.2) — skillcheck.CAPS보다 좁다(R24). 경로 키가 파일 이름 키보다 먼저
-DOC_CAPS = {"layers.md": 2900, "components.md": 3300, "SKILL.md": 2000, "analyzer.md": 1150, "explore.md": 2600,
-            "modem/SKILL.md": 1024, "data/explore.md": 2800}
+# 문서 상한(바이트, C1D 보정 §2.2) — skillcheck.CAPS보다 좁다(R24). 경로 키가 파일 이름 키보다 먼저.
+# explore.md는 5행 계약 문구(`가설 N:`부터, 코덱스 리뷰 02e0ec2 F05)로 +66B라 100씩 올렸다
+DOC_CAPS = {"layers.md": 2900, "components.md": 3300, "SKILL.md": 2000, "analyzer.md": 1150, "explore.md": 2700,
+            "modem/SKILL.md": 1024, "data/explore.md": 2900}
 REFERENCE_CAP = 1300
 # run별 with arm 문서 합 = 그 run이 읽는 파일 상한의 합(C1D 보정 §2.3)
 COMMON_BUDGET, DEEP_RUN_BUDGET, ALSO_RUN_BUDGET, EXPLORE_RUN_BUDGET = 6000, 10450, 11474, 8800
@@ -98,6 +100,18 @@ def test_android_doc_caps():
     assert seen == want
 
 
+def test_explore_points_to_reference_contract():
+    """explore 답의 형식은 reference/explore.md 계약(`가설 N:`부터)이다 — analyzer 칸(`원인 층:`부터)이라고 쓰지 않는다
+    (코덱스 리뷰 02e0ec2 F05). 모든 플랫폼의 explore.md를 본다."""
+    docs = sorted(ANDROID.parent.glob("*/*/explore.md"))
+    assert {p.parent.name for p in docs if p.parent.parent == ANDROID} == set(MODULES)
+    for path in docs:
+        text = path.read_text(encoding="utf-8")
+        assert "원인 층:`부터" not in text, path
+        if path.parent.parent == ANDROID:
+            assert "reference/explore.md 계약" in text, path
+
+
 def test_android_analyzer_identical():
     bodies = {}
     for module in MODULES:
@@ -140,8 +154,8 @@ def test_android_layers_and_skill_frontmatter():
 
 
 def test_android_no_ofono_names():
-    findings = [f for f in skillcheck.template_findings(REPO / "templates" / "module-skills")
+    findings = [f for f in skillcheck.template_findings(REPO / "templates" / "module-skills", platforms.template_metas())
                 if f.get("check") == "플랫폼 섞임" and str(f.get("path", "")).startswith("android/")]
     assert findings == []
     for path in _docs():          # template_findings와 같은 목록을 직접 한 번 더(빈 결과가 점검 누락이 아니게)
-        assert not skillcheck.OFONO_NAMES.search(path.read_text(encoding="utf-8")), path
+        assert not platforms.get("ofono").template.names.search(path.read_text(encoding="utf-8")), path

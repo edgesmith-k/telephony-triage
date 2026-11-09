@@ -17,7 +17,7 @@ sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
 import platforms  # noqa: E402
 from platforms import PlatformConfigError, PlatformSpec  # noqa: E402
-import platforms.android as android  # noqa: E402
+from platforms import android  # noqa: E402
 
 
 @pytest.fixture

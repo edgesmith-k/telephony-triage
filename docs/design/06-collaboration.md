@@ -68,8 +68,8 @@ main 브랜치 보호 설정 (메인테이너가 GHE에서 설정하고 `docs/br
   병합한다(`db_pr merge`는 +1이 있어도 거부한다 — "승인 필요"는 publish가 남긴 병합 기록 `needs_approval`로, 메인테이너 경로는
   `git diff`로 다시 본다).
 
-guard는 `publish`·`merge`·`request-review`를 ask로, gh·MCP로 직접 머지·자동 병합·Approve·리뷰 기각은 거부로, 병합 기록
-(`merge-offer.json`) 직접 쓰기는 거부로 둔다(`08-safety.md §9` 규칙 7·11). 다른 사람이 문제를 발견하면 그때 새 PR(또는 GHE의 Revert)로 고친다.
+guard는 `publish`·`merge`·`request-review`를 ask로, gh·MCP로 직접 머지는 ask, 자동 병합 켜기·Approve·리뷰 기각은 거부로, 병합 기록
+(`merge-offer.json`) 직접 쓰기는 거부로 둔다(`08-safety.md §9` 규칙 7·11 — 병합 ask는 서버 브랜치 보호가 승인 1을 강제한다는 전제, `site_checks` `s4a.protection_guard`). 다른 사람이 문제를 발견하면 그때 새 PR(또는 GHE의 Revert)로 고친다.
 
 **서버 측 강제가 전제다.** 플러그인의 Claude hook과 이슈 DB의 git hook(`pre-commit`, `pre-push`)은 모두 로컬 장치라 우회할 수 있다(최선 노력 명령 파싱, `core.hooksPath` 변경). 그리고 `core.hooksPath=.githooks`는 main에 커밋된 스크립트를 **모든 기여자 PC에서 실행**하므로, 브랜치 보호와 메인테이너 경로(`/.githooks/` 등)의 CODEOWNERS 필수 리뷰가 서버에서 강제되지 않으면 main 쓰기 권한이 곧 팀 전체 PC의 코드 실행 권한이 된다. 브랜치 보호를 설정할 수 없는 GHE 환경이면 `.githooks/` 채택 여부를 다시 결정한다 (`14-site.md` S5, `08-safety.md §9`).
 
@@ -173,7 +173,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 
 - `issue-db.config.yaml`의 `schema_version`은 이슈 DB 파일 구조가 바뀔 때만 올린다. 필드 추가도 필수 필드면 올린다.
 - 첫 배포(반입) 전에는 v1 정의를 직접 고치고(예: Jira 기록의 선택 필드 `failed_step`, 트래커 범용화의 `jira/`→`issues/`·`platform_version(s)` 개명 — `18-trackers.md` T4), 배포 뒤 **구조 변경**(필수 필드 추가·개명·형식 변경)은 항상 버전을 올린다.
-- 배포 뒤 **호환 변경**(선택 필드·op 추가, 필수 해제 — 기존 파일·계획이 모두 그대로 유효하고 옛 플러그인도 기존 기능은 그대로 동작. 새 op가 든 계획은 새 플러그인으로 적용)은 버전을 올리지 않는다. 운영 이슈 DB의 `schema/`를 메인테이너 PR로 바꾸고, 플러그인은 그 DB의 스키마로 동작을 가른다(예: Jira 기록 `sw` 필수 해제 — `issuedb.record_required`, 계획 op `remove-parser-rule`).
+- 배포 뒤 **호환 변경**(선택 필드·op 추가, 필수 해제 — 기존 파일·계획이 모두 그대로 유효하고 옛 플러그인도 기존 기능은 그대로 동작. 새 op가 든 계획은 새 플러그인으로 적용)은 버전을 올리지 않는다. 운영 이슈 DB의 `schema/`를 메인테이너 PR로 바꾸고, 플러그인은 그 DB의 스키마로 동작을 가른다(예: Jira 기록 `sw` 필수 해제 — `issuedb.record_required`, 계획 op `remove-parser-rule`, 시그니처 선택 필드 `min_count`·`sequence_within_sec` — 이 플러그인부터 모르는 시그니처 키는 오류로 멈춘다. 그래서 새 필드를 쓰는 시그니처는 그 필드를 아는 플러그인 배포 뒤에 넣는다. `db_build` README는 그 필드가 있을 때만 `×N+`·`간격 ≤ Ts`를 적으므로 옛 플러그인은 같은 DB에서 다른 README를 만든다(ci_mode local/actions의 생성물 검사에 걸림)).
 - 플러그인은 `SUPPORTED_SCHEMA = (min, max)`를 가진다.
 
 | 이슈 DB 버전 | 플러그인 동작 |
@@ -204,6 +204,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 - `db_build.py`는 피드백을 집계해서 시그니처(전역 키)별 제안 횟수, 수락률, 1위 제안 정확도를 STATS.md에 넣는다.
   - 수락률의 분모는 그 시그니처가 **1위로 제시된** 피드백만이다 (`04-parser-matching.md §5.11 (2)`). 이 "1위"는 스텝 기준 우선 유형 가산이 반영된 순위다(실패 스텝을 준 분석은 같은 로그라도 1위가 달라질 수 있다).
   - `decision: manual`(수동 기록) 피드백은 제시된 후보가 없으므로 수락률·1위 정확도 집계에서 **제외**한다. 분석 건수와 기여 현황에는 "수동 기록"으로 따로 센다.
+  - **재분류 보정**: 피드백 기록은 그때의 결정이라 바꾸지 않는다(스키마도 그대로 — 마이그레이션 없음). 대신 수락률 집계(`issuedb.acceptance(feedback, jira)`)가 `accepted` 기록의 `final`을 그 Jira의 **현재 분류**(`issues/<KEY>.yaml`의 `cause`)와 대조해, 뒤에 `reclassify`로 옮겨진 것은 분모에는 남기고 수락으로는 세지 않는다. 병합된 오분류를 고치면 그 시그니처의 수락률·점수 가중치도 같이 내려간다. Jira 기록이 없으면(삭제·import) 그대로 센다.
   - 옛 ID → 새 ID 매핑은 `merged-into:` 체인과 사후 재배치 커밋의 `Renumbered:` 트레일러로 만든다. 머지 전 renumber는 main에 옛 ID가 없으므로 매핑이 필요 없다 (`contracts.md §renumber 참조`).
 - 매처는 점수를 매길 때 수락률을 가중치로 쓴다 (`04-parser-matching.md §5.11 (2)`). 표본이 `min_samples` 미만이면 쓰지 않는다. 회귀·검증 모드에서는 쓰지 않는다.
 - 수락률이 `low_acceptance_rate` 미만(표본 `min_samples` 이상)인 시그니처는 리뷰 대상으로 표시한다.

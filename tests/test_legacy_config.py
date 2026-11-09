@@ -249,7 +249,7 @@ def test_removed_merge_key_in_site_defaults_only_warns_and_wait_seconds_still_fl
     assert "merge" not in top["issue_db"] and top["issue_db"]["merge_wait_seconds"] == 30      # 대기 기본값은 그대로 흐른다
     prof = userconfig.merged(defaults, {"platforms": {"ofono": {"issue_db": {"path": "/x"}}}}, platform="ofono")
     assert "merge" not in prof["issue_db"] and prof["issue_db"]["merge_wait_seconds"] == 30
-    assert userconfig.SITE_ISSUE_DB_KEYS == ("merge_wait_seconds",)
+    assert userconfig.SITE_ISSUE_DB_KEYS == ("merge_wait_seconds", "remote")
     assert userconfig.removed_keys(None, None) == [] and userconfig.removed_keys({"issue_db": "x"}, {"platforms": 1}) == []
 
 

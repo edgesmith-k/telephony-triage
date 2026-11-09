@@ -23,6 +23,7 @@ parser_backends/<p>_reference/          # 그 플랫폼 BACKEND 재수출 (andro
 - `LogFormat`: `read_file(path, file_index, tz, year) -> (list[LogLine], FileStats)`, `raw_line(줄)`(줄 맨 앞이 원문 로그 줄인가, guard 규칙 10), `find_raw(문장)`(문장 안에 원문 줄이 끼었나, Jira 게시 검사), `epoch_break(LogLine)`(재부팅 등 불연속).
 - `PairProtocol`: `name`·`default_tags`·`annotate`·`pair`·`reads`(기본 `()`). 주석은 이벤트 `ril` 칸을 같이 쓰고 `name != "ril"`이면 `proto: <name>`을 단다. `pair`는 **자기 주석만** 다룬다(다른 프로토콜 주석은 짝·pid 분할에 쓰지 않는다). `reads`에 적은 프로토콜의 주석은 읽기만 하고, 레지스트리가 그 이름이 목록에서 앞에 있는지 확인한다(백엔드는 목록 순서로 `pair`를 부른다, ofono `hop`, §9-3). 태그 덮어쓰기는 ril이면 `<블록>.ril.tags`, 그 밖은 `<블록>.protocols.<name>.tags`. 코드 없이 설정으로 만드는 프로토콜은 §9-3.
 - `CaptureSpec`: `looks_like`·`extract`·`error`·`default_rules`·`sniff_line`(guard 머리 판별), `block_key`·`configure`(site-defaults 블록 검증·덮어쓰기, 레지스트리는 규칙 모양을 모른다).
+- `TemplateMeta`(`SPEC.template`, 기본 None): 모듈 스킬 템플릿 점검·모듈 eval 자료(§10-3) — `names`(이 플랫폼을 알아보는 이름 정규식, 다른 플랫폼 문서에 있으면 `플랫폼 섞임`), `layers`(module_eval 출력 형식의 층 어휘 한 줄, 바이트 고정), `builtin_docs`(arm 자료 pre/post 내장 문서), `equals_live`, `deep_baseline_note`, `doc_checks`(플랫폼 고유 문서 규칙 — ofono `platforms/ofono/template.py`의 D-Bus 이름·데몬 표). `platforms.template_metas()`가 플랫폼 이름 → 자료 표를 주고, `common/skillcheck.template_findings(root, metas)`·`module_eval`은 그 표로만 플랫폼을 안다(플랫폼 이름 리터럴 없음, `tests/test_platforms.py`).
 - 파서 백엔드(`parser_backends/base.py`): 클래스 속성 `platform`(기본 `"android"`, 기존 site 백엔드 호환), `log_format()`(기본 `SPEC.log`). 백엔드 이름 공간은 `16-existing-assets.md §16.3`.
 
 ### 1-1. 레지스트리 API
@@ -92,6 +93,7 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 7. 사용자: `/telephony-triage:setup`에서 그 플랫폼을 고르거나 `config.py init --platform <p>` → `platforms.<p>.issue_db.path` 등.
 8. 테스트: 합성 로그 fixture(손으로 쓴 것, README에 "합성·형식 가정·placeholder"), 변형 DB(`tests/helpers/make_variant_dbs.py`), 전환 검증(같은 명령이 DB에 따라 백엔드·태그·카테고리·이벤트·매칭이 바뀌고, 섞으면 `platform-mismatch`), 계층 테스트, `tools/check_boundary.py --mode external`. android 바이트 동일성(골든·`db_regress` 샘플·fixture)이 그대로인지 본다.
 9. 문서: 이 문서 §7에 결정, `14-site.md`에 TODO(SITE) 행, 사용자용 로그 수집 체크리스트(본보기 `docs/development/OFONO_LOG_COLLECTION.md`), 탐색 지식 `plugin/skills/telephony-triage/reference/platforms/<p>/*.md`(선택, placeholder + TODO(SITE), §10-2).
+10. 모듈 스킬 템플릿·모듈 eval을 쓰면 `SPEC.template = TemplateMeta(...)`(§1): `names`·`layers`·`builtin_docs`·`equals_live`·`deep_baseline_note`, 고유 문서 규칙은 `platforms/<p>/template.py`의 `doc_checks`. `templates/module-skills/<p>/`와 `tests/test_module_templates_<p>.py`를 더한다. 핵심 코드(`skillcheck`·`module_eval`)는 고치지 않는다.
 
 ## 7. 결정 기록
 
@@ -202,7 +204,7 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 
 - 병합: android가 아닌 플랫폼의 cfg `analyzers` = site `platforms.<p>.analyzers` 위에 사용자 `platforms.<p>.analyzers`를 deep-merge한 것(`userconfig._with_profile`). 최상위(android) `analyzers`는 어느 층이든 **물려받지 않는다** — 없으면 Step 5-1 질문이 없고 리포트는 `심층 분석: 해당 없음(1위 카테고리에 분석 스킬 설정 없음)`. Driver `analyzer()`·`skill_patch` `configured_source`는 선택 플랫폼 cfg를 읽으므로 따로 바뀌지 않았다. `analysis.json` `analyzer{skill, when}` 모양 불변.
 - 키 목록 `userconfig.PLATFORM_SCOPED_KEYS = ("analyzers",)`: `PROFILE_KEYS` 밖이다(최상위 `PROFILE_KEYS`는 "android 프로필이 있다"는 뜻 — `_raw_profiles`·`config.py init`). 사용자 `platforms.<p>`에 둘 수 있고(`profile_problems`, 값은 `{카테고리: 매핑}`), `config.py set --platform <p> analyzers.<cat>.source <경로>`는 `platforms.<p>.analyzers.<cat>.source`에 쓴다(`profile_key`). `init --platform <p> --force`는 그 프로필의 `analyzers`를 유지한다. `set`을 `init`보다 먼저 하면 프로필이 생겨 뒤 `init --platform <p>`는 `--force`가 필요하다. 기본값으로 대신하는(fallback) 키(예: `platforms.<p>.tracker`, §8)가 생기면 다른 튜플로 둔다.
-- site 검증 `userconfig.site_platform_problems`: `platforms`가 매핑, 이름 `^[a-z][a-z0-9_]*$`, `platforms.android` 금지(android는 최상위 키), `PLATFORM_SCOPED_KEYS` 밖 키 금지(플랫폼 상수는 `platform.others.<p>`), 값 모양. `session.resolve`는 종료 코드 2, `resolve_lenient`(`config.py show`·`set`·`doctor`)는 문제 목록(doctor `platform` 행).
+- site 검증 `userconfig.site_platform_problems`: `platforms`가 매핑, 이름 `^[a-z][a-z0-9_]*$`, `platforms.android` 금지(android는 최상위 키), `PLATFORM_SCOPED_KEYS`·`issue_db` 밖 키 금지(플랫폼 상수는 `platform.others.<p>`), 값 모양(`issue_db`는 `SITE_ISSUE_DB_KEYS` = `remote`·`merge_wait_seconds`만 — 그 플랫폼 이슈 DB의 팀 기본값. `remote`는 최상위를 물려받지 않고 `merge_wait_seconds`는 최상위 → 여기 순, `userconfig.site_issue_db`). `session.resolve`는 종료 코드 2, `resolve_lenient`(`config.py show`·`set`·`doctor`)는 문제 목록(doctor `platform` 행).
 - 리포트 `when: never` 줄의 키 경로: android `analyzers.<cat>.when: never`(바이트 동일), 그 밖 `platforms.<p>.analyzers.<cat>.when: never`.
 - guard 규칙 12: site-defaults·사용자 config의 최상위와 **모든** `platforms.<p>.analyzers`의 `source` 합집합(`userconfig.analyzer_sources` — 이름이 잘못된 것도, 사용자 config에 그 프로필이 없어도, §5와 같은 "보호는 넓게").
 

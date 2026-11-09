@@ -120,19 +120,21 @@ def _template_permission(w) -> dict:
     return gx.render_config(tpl["permission"], vals, [])
 
 
-def test_model_cannot_forge_gate_with_script_out_under_template_permission():
+def test_model_cannot_forge_gate_with_script_out_under_template_permission(monkeypatch):
     """리뷰 P0 회귀: 모델이 쓴 JSON을 플러그인 스크립트 `--out`으로 사용자 config·통과 기록 위에 쓰면 관문이 열렸다(JSON은 YAML로도
     읽힌다). 배포 템플릿 권한 그대로 실제 opencode에서, 모든 꼴(`--out X`·`--out=X`·작업 폴더 기준 상대 경로)이 거부되고 파일과
     관문은 그대로다."""
     w = workspace()
+    monkeypatch.setenv("TELEPHONY_TRIAGE_HOME", str(w.home))                  # 지문·관문 판정(이 프로세스)이 보는 사용자 config
     proj = tmp("tt-ocj-forge-") / "proj"
     proj.mkdir()
     cfg, record = w.home / "config.yaml", w.home / "opencode-jira-check.json"
     from common import oc_jira_gate as g
     rec = {"schema": 1, "at": "2026-11-05T10:00:00+09:00", "passed": False, "opencode_version": oc.OPENCODE_VERSION,
-           "jira_server": SERVER, "tools": [OC_GET], "scripts_sha": g.scripts_digest(w.root),
+           "jira_server": SERVER, "tools": [OC_GET], "scripts_sha": g.scripts_digest(w.root), "project": str(proj),
            "checks": [{"check": "success-masking", "status": "fail", "detail": "x"},
                       {"check": "error-path", "status": "warn", "detail": "y"}]}
+    rec["tracker_fingerprint"] = g.current_fingerprint(rec)                    # 지문은 맞다 — 닫힘은 passed: false 때문
     record.write_text(json.dumps(rec), encoding="utf-8")
     import yaml
     data = yaml.safe_load(cfg.read_text(encoding="utf-8"))
@@ -157,7 +159,8 @@ def test_model_cannot_forge_gate_with_script_out_under_template_permission():
     errs = [str(x.get("error") or "") for x in states[2:6]]
     assert all("[telephony-triage]" in e and "telephony-triage 사용자 설정" in e for e in errs), errs
     assert cfg.read_bytes() == cfg_before and record.read_bytes() == rec_before
-    assert not g.state(yaml.safe_load(cfg.read_text(encoding="utf-8")), plugin_root=w.root, record_file=record).open
+    st = g.state(yaml.safe_load(cfg.read_text(encoding="utf-8")), plugin_root=w.root, record_file=record)
+    assert not st.open and not any("트래커·MCP" in p for p in st.problems), st.problems
 
 
 def _install(base: Path, w, extra: list[str] = ()) -> Path:
@@ -217,6 +220,12 @@ def test_runtime_check_records_pass_then_user_opens_and_installed_read_works():
     rec = json.loads(record.read_text(encoding="utf-8"))
     assert rec["passed"] is True and rec["opencode_version"] == oc.OPENCODE_VERSION and rec["jira_server"] == SERVER
     assert rec["tools"] == [OC_GET, OC_COMMENTS] and not leaks([json.dumps(rec, ensure_ascii=False)])
+    # 확인 쪽 지문 == 관문 쪽 `current_fingerprint(rec)`(설치 플러그인 w.root에서, 사용자 터미널 환경·다른 cwd로)
+    code = ("import json, sys; sys.path.insert(0, sys.argv[1]); from common import oc_jira_gate as g; "
+            "print(g.current_fingerprint(json.loads(sys.argv[2])))")
+    now = subprocess.run([sys.executable, "-c", code, str(w.root / "scripts"), json.dumps(rec)], env=env, cwd=REPO,
+                         capture_output=True, text=True, timeout=60, check=False)
+    assert now.returncode == 0 and rec["tracker_fingerprint"] == now.stdout.strip(), now.stderr
 
     inside = config_set("opencode.jira_read", "open", extra={"TT_RUNTIME": "opencode"})
     assert inside.returncode == 2 and "OpenCode 안에서는" in inside.stderr

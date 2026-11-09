@@ -58,7 +58,7 @@ def _next_id(old: str, pools: list[dict]) -> str:
         prefix = old.rsplit("-", 1)[0]
         nums = [_num(k) for pool in pools for k in pool if CAUSE_ID_RE.match(k) and k.rsplit("-", 1)[0] == prefix]
         return f"{prefix}-{max(nums or [0]) + 1:02d}"
-    prefix = old.split("-")[0]
+    prefix = old.split("-", maxsplit=1)[0]
     nums = [_num(k) for pool in pools for k in pool if TYPE_ID_RE.match(k) and k.split("-")[0] == prefix]
     return f"{prefix}-{max(nums or [0]) + 1:03d}"
 

@@ -347,7 +347,7 @@ def run_site(ctx, min_lines: int = MIN_LINES, top: int = TOP) -> dict:
     clone = ctx.module_clone()
     if clone is None:
         return _empty({"*": "module_skills.remote 없음"})
-    have = set((sc.modules_doc(clone).get("platforms") or {}))
+    have = set(sc.modules_doc(clone).get("platforms") or {})
     plats, skipped = [], {}
     for plat, db_key, log_key in SITE_INPUTS:
         if plat not in have:

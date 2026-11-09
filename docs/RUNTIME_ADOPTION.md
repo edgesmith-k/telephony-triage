@@ -65,6 +65,7 @@ python3 tools/site_step.py runtime-check claude-gateway
 ```
 
 - 판정은 `claude_child.gateway_profile_check`(비밀 값은 표에 없음). missing·differs면 종료 1. 끝에 사내 확인 0 curl을 보인다(실행 안 함).
+- 토큰 0 추가 행(`site_step.gateway_site_rows`, 종료 코드 무관): `claude_cli`(`claude --version`), `plugin_hooks`(사용자 config `plugin.scripts_path`의 설치본 `hooks/hooks.json`과 matcher 수 — 실제 로드는 사내 확인 5), `isolation_confirmed`(site-defaults `tracker.isolation_confirmed`, S1 기록). 이 점검이 **안 재는 것**: 게이트웨이 프로토콜·모델 응답·hook 동작·must_show — 아래 사내 확인이 확정한다.
 - 자격(`ANTHROPIC_AUTH_TOKEN` 또는 `ANTHROPIC_API_KEY`, 또는 `apiKeyHelper`)이 없으면 `credential` 행이 missing이다. 위 예시에 자격을 더한다.
 - `CLAUDE_CODE_EFFORT_LEVEL`은 없거나 비었거나 `"unset"`이면 ok(권장 값이 "두지 않음").
 
@@ -94,7 +95,7 @@ c "${XK[@]}" "${BR[@]}" -d '{"model":"'"$MODEL"'","messages":[]}'   # 일부러 
 
 ### 2.4 모듈 문서를 이 모델로 재기 (상한 있음)
 
-**터미널**에서, 비용 대신 run 수로 상한을 둔다. `--max-cost`는 주지 않는다(자리 표시 단가로 일찍 멈춤). `--record`도 쓰지 않는다 — 사외 `tests/skill_evals/module_offsite_results.json`을 고쳐 다음 재반입을 막는다. 사내에서 고친 팀 모듈은 `--templates <모듈 레포 clone>`을 붙여 잰다(없으면 사외 판본).
+**터미널**에서, 비용 대신 run 수로 상한을 둔다. `--max-cost`는 주지 않는다(자리 표시 단가로 일찍 멈춤). `--record`도 쓰지 않는다 — 사외 `tests/skill_evals/module_offsite_results.json`을 고쳐 다음 재반입을 막는다. 사내 run을 지금 채점기로 다시 채점하는 `--regrade <반복 디렉토리>`는 자식을 띄우지 않아 $0이고 써도 된다(이때도 `--record`는 붙이지 않는다). 사내에서 고친 팀 모듈은 `--templates <모듈 레포 clone>`을 붙여 잰다(없으면 사외 판본).
 
 ```sh
 python3 plugin/scripts/module_eval.py --module ofono/data --model <사내 모델 이름> --no-require-cost --no-max-cost --dry-run
@@ -111,7 +112,7 @@ python3 plugin/scripts/module_eval.py --module ofono/data --case data-apn-auth-r
 
 | go | no-go |
 |---|---|
-| `runtime-check claude-gateway` 종료 0 | missing·differs 남음 |
+| `runtime-check claude-gateway` 종료 0 — **환경 변수·자격 이름·claude CLI·설치본 hooks·S1 기록만 잰다**(모델 응답·프로토콜·hook 실제 동작은 아래 사내 확인) | missing·differs 남음 |
 | 사내 확인 0·2·3 통과 | OpenAI 모양만(0 실패) → 이 환경 보류 |
 | 사내 확인 5에서 must_show 그대로 | 되돌림 뒤에도 요약 |
 | 고른 모듈 with ≥ without, 안전 위반 0 | 안전 위반 1건이라도 |
@@ -181,7 +182,7 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
    python3 <설치된 plugin>/scripts/config.py set opencode.jira_read open --accept-error-bodies   # error-path가 pass가 아닐 때
    ```
    보내기 직전에 Jira 오류 본문을 숨긴다(`Jira 오류(본문 숨김)`, tt-guard.js transform). 확인의 `error-path` 행이 그것을 본다. pass가 아니면(warn, 또는 `--missing-key` 없이 돌려 skip) 열 때 `--accept-error-bodies`가 필요하다 — 허용 여부는 도입 담당자가 정해 `SITE_PROFILE.md`에.
-3. 통과 기록은 OpenCode 버전·플러그인 지문에 묶인다. 플러그인을 갱신하면 각자 1부터 다시. 닫기: `config.py set opencode.jira_read closed`. 상태는 `jira_gate` 행(6절).
+3. 통과 기록은 OpenCode 버전·플러그인 지문·트래커/MCP 설정 지문(Jira 도구 매핑·읽기 도구 목록·opencode.json MCP 서버 이름)에 묶인다. 플러그인을 갱신하거나 그 설정을 바꾸면 각자 1부터 다시. 닫기: `config.py set opencode.jira_read closed`. 상태는 `jira_gate` 행(6절).
 4. tt-oc에서 실제로 읽으려면 `gen_opencode.py install … --jira-read-tool <서버>_<도구> --force`(읽기 도구만 허용). `/etc/opencode`의 `"jira_*": "deny"`(`managed.json.sample`)는 관리자가 푼다 — 관리 설정이 마지막에 합쳐져 이긴다.
 
 ### 3.5 재설치
@@ -240,6 +241,7 @@ python3 plugin/scripts/config.py set analyzers.<카테고리>.prefer skill [--pl
 ```sh
 python3 tools/site_step.py audit --inhouse-model '<사내 모델 이름 정규식>'   # 토큰 0. docs/site/audit/에 계획·review.md
 # → <날짜>-review.md를 Claude Code + Claude 세션에서 리뷰(파일 쓰기·push 없음)
+python3 tools/site_step.py audit --notify  # 걸린 항목(P0·P1·실패 검사)을 이슈 DB 레포 Issue로 — 보기만. 확인 뒤 --create
 python3 tools/site_step.py audit --record   # 기준점 기록, 넘친 항목은 다음 회차
 ```
 

@@ -88,9 +88,9 @@ def expires(approved_at: datetime) -> datetime:
 # -- 형식 렌더러 -----------------------------------------------------------------------------
 
 _WIKI_SPECIAL = re.compile(r"([\\{}\[\]|!])")
-_WIKI_LINE_HEAD = re.compile(r"^(\s*)([*#-]|h[1-6]\.|bq\.)", re.M)
+_WIKI_LINE_HEAD = re.compile(r"^(\s*)([*#-]|h[1-6]\.|bq\.)", re.MULTILINE)
 _NOFORMAT = re.compile(r"(?i)\{noformat[^}]*\}")
-_MD_LINE_HEAD = re.compile(r"^(\s*)([#>*+\-=|<]|\d+[.)])", re.M)
+_MD_LINE_HEAD = re.compile(r"^(\s*)([#>*+\-=|<]|\d+[.)])", re.MULTILINE)
 _MD_FENCES = ("```", "~~~")
 _FENCE = "```"
 # 한 줄로 접을 때 공백으로 바꾸는 글자: 줄바꿈·탭·제어 문자와 제로폭 문자(칸 머리 위조·숨은 마크업 방지)

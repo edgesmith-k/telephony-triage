@@ -6,6 +6,10 @@
 - 임시 사용자 홈(`TELEPHONY_TRIAGE_HOME`)과 config, 모의 원격(bare) + 사용자 clone(`core.hooksPath .githooks`), gh 스텁 상태
 - eval용 Jira 티켓 디렉토리(`MOCK_JIRA_DIR`), 로그 파일(`<out>/logs/`), 필요하면 main에 미리 넣은 변경·이미 올린 PR
 - `<out>/env.sh`(export 목록)와 `<out>/env.json`(경로·상태), 채점용 `<out>/before.json`(사용자 clone 상태)
+- Bash용 격리 홈 `<out>/user-home`(env.sh의 `HOME`, Windows는 `USERPROFILE`도): `.claude.json`의 사용자 범위 `mcpServers`에
+  모의 트래커 서버(`tracker_servers`, run.py `--mcp-config`와 같은 정의)만 있다 — setup 0번 `config.py tracker-candidates`가
+  실제 `~/.claude.json` 대신 이것을 읽는다(eval 58). 자식 claude 프로세스·hook·MCP 서버의 홈은 그대로다(env.json `env`에 없다).
+  Python 사용자 site는 `PYTHONUSERBASE`로 원래 위치에 묶는다
 
     python3 tests/helpers/skill_eval_env.py <eval id> --out <dir> [--evals tests/skill_evals/evals.json]
 
@@ -49,6 +53,7 @@ import argparse
 import json
 import os
 import shutil
+import site
 import subprocess
 import sys
 from pathlib import Path
@@ -58,12 +63,14 @@ EVALS = REPO / "tests" / "skill_evals"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import mock_env  # noqa: E402
-from runner import fixture_db, fixture_path, github_defaults, plugin_root  # noqa: E402
+from runner import GH_SERVER, fixture_db, fixture_path, github_defaults, plugin_root  # noqa: E402
 from workspace import Workspace, git  # noqa: E402
 
 GEN = REPO / "tests" / "mocks" / "logcat_gen.py"
 CALL = REPO / "tests" / "mocks" / "jira_mcp" / "call.py"
 GH_CALL = REPO / "tests" / "mocks" / "github_issues_mcp" / "call.py"
+JIRA_MCP_PY = REPO / "tests" / "mocks" / "jira_mcp" / "server.py"
+GH_MCP_PY = REPO / "tests" / "mocks" / "github_issues_mcp" / "server.py"
 ANALYZER = REPO / "tests" / "mocks" / "skills" / "data-analyzer" / "run.py"
 MODULE_SOURCES = ("mock", "template", "missing")
 MODULE_TEMPLATES = REPO / "templates" / "module-skills"
@@ -273,6 +280,26 @@ def gh_merge_env(spec) -> dict[str, str]:
     return {GH_MERGE_KEYS[k]: str(v) for k, v in spec.items() if v not in (None, "")}
 
 
+def _tilde_keys(value, at: str = "") -> list[str]:
+    """`~`로 시작하는 문자열 값의 키 경로. eval config는 절대 경로만 쓴다 — guard hook은 실제 HOME, Bash는 격리 홈으로 `~`를 푼다."""
+    if isinstance(value, dict):
+        return [k for key, v in value.items() for k in _tilde_keys(v, f"{at}{key}.")]
+    if isinstance(value, list):
+        return [k for v in value for k in _tilde_keys(v, at)]
+    return [at.rstrip(".")] if isinstance(value, str) and value.startswith("~") else []
+
+
+def tracker_servers(env: dict) -> dict:
+    """eval의 모의 트래커 MCP 서버(`mcpServers` 항목): `mock-jira`, github eval이면 `mock-github-issues`도.
+    run.py `--mcp-config`와 격리 홈의 `.claude.json`(사용자 범위)이 같은 정의를 쓴다."""
+    out = {"mock-jira": {"command": sys.executable, "args": [JIRA_MCP_PY.as_posix()],
+                         "env": {k: env[k] for k in ("MOCK_JIRA_DIR", "MOCK_JIRA_WRITE_LOG", "PYTHONIOENCODING")}}}
+    if "MOCK_GH_ISSUES_DIR" in env:
+        out[GH_SERVER] = {"command": sys.executable, "args": [GH_MCP_PY.as_posix()],
+                          "env": {k: env[k] for k in ("MOCK_GH_ISSUES_DIR", "MOCK_GH_ISSUES_WRITE_LOG", "PYTHONIOENCODING")}}
+    return out
+
+
 def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
     """direct_tools=False(plugin 모드)면 env.json에 jira_call·jira_tools_list·analyzer_run을 쓰지 않는다 —
     실행자가 MCP·Skill 대신 그 명령을 직접 부르는 우회를 막는다."""
@@ -357,7 +384,7 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
         ws.plan(seed["job"], json.loads(text))
     for name in setup.get("main_after_pr") or []:
         holder = {}
-        ws.push_main(lambda other, n=name: holder.setdefault("msg", MAIN_EDITS[n](other, ws)), f"eval {name}")
+        ws.push_main(lambda other, n=name: holder.setdefault("msg", MAIN_EDITS[n](other, ws)), f"eval {name}")  # noqa: B023 — push_main이 바로 부른다
 
     remote_edit = setup.get("remote_after_pr")
     if remote_edit:
@@ -408,9 +435,21 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
     if setup.get("gh_unauth"):
         env["MOCK_GH_UNAUTH"] = "1"
     env.update(gh_merge_env(setup.get("gh_merge")))
+    import yaml
+    tilde = _tilde_keys(yaml.safe_load((ws.home / "config.yaml").read_text(encoding="utf-8")) or {})
+    if tilde:
+        raise SystemExit(f"eval 사용자 config는 절대 경로만(`~` 금지 — guard와 Bash의 HOME이 다르다): {tilde}")
+    # Bash 격리 홈: 사용자 범위 MCP 등록은 모의 트래커뿐(setup 0번 tracker-candidates가 읽는다). env(자식 claude 프로세스)에는 넣지 않는다
+    user_home = out / "user-home"
+    user_home.mkdir()
+    (user_home / ".claude.json").write_text(json.dumps({"mcpServers": tracker_servers(env)}, ensure_ascii=False, indent=2),
+                                            encoding="utf-8")
+    homes = {"HOME": _bash_path(str(user_home)), "PYTHONUSERBASE": site.getuserbase()}
+    if os.name == "nt":     # Windows Python의 Path.home()은 USERPROFILE을 본다
+        homes["USERPROFILE"] = str(user_home)
     path_dirs = [str(p) for p in mock_env.gh_path_dirs()]
     lines = ["# 스킬 eval 환경 — `source`로 불러온다"]
-    lines += [f"export {k}='{v}'" for k, v in env.items()]
+    lines += [f"export {k}='{v}'" for k, v in {**env, **homes}.items()]
     # env.sh는 bash(Ubuntu, 또는 Windows 개발 PC의 Git Bash)가 읽으므로 PATH는 POSIX 형식으로 쓴다.
     posix = [_bash_path(p) for p in path_dirs]
     lines.append("export PATH='" + ":".join(posix) + "':\"$PATH\"")
@@ -420,7 +459,7 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
         "plugin_root": str(root), "skill": str(root / "skills" / "telephony-triage"),
         "issue_db_clone": str(ws.clone), "remote": str(ws.remote), "work_dir": str(ws.work),
         "logs": sorted(str(p) for p in logs.iterdir()), "jira_dir": str(jira_dir),
-        "gh_state": str(ws.gh_state),
+        "gh_state": str(ws.gh_state), "user_home": str(user_home),
     }
     if gh_dir.is_dir():
         info["gh_issues_dir"] = str(gh_dir)
@@ -431,7 +470,7 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
         info.update({
             "jira_call": f"python3 \"{call.as_posix()}\" <tool> '<arguments JSON>'",
             "jira_tools_list": f"python3 \"{call.as_posix()}\" --list",
-            "analyzer_run": (f"python3 -c \"import sys; sys.exit('mock-data-analyzer: internal error (timeout)')\" --input <입력 JSON 경로>"
+            "analyzer_run": ("python3 -c \"import sys; sys.exit('mock-data-analyzer: internal error (timeout)')\" --input <입력 JSON 경로>"
                              if setup.get("analyzer_fail") else f"python3 \"{ANALYZER.as_posix()}\" --input <입력 JSON 경로>"),
         })
     (out / "env.json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")

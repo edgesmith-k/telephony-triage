@@ -96,16 +96,16 @@ trackers/
 1. 옛 설정 키가 있으면 모든 `mcp__` 거부. 2. `tracker.kind` 오류면 모든 `mcp__` 거부.
 3. 코멘트 도구(`tracker.write_tools.add_comment.tool`)면 승인 대조 → 맞으면 `ask`, 아니면 거부. 대조 항목: 인자 집합(어댑터 `arg_names` ∪ 본문 ∪ `extra_args`), 작업 키(`key_from_args` → `safe_key_re`), 도구, 승인 기록 `key_arg`(어댑터 `key_arg_id`)와 **`kind`(승인 기록의 트래커 = 지금 설정 트래커)**, 정규화 본문 sha256, `post.md` 글자 일치, 30분 만료, 1회용, 게시 이력·unknown.
 4. 설정 서버(`tracker.mcp_server` ∪ `tracker.tools` 서버 접두사)의 도구는 `tracker.read_tools`에 없으면 거부.
-5. 설정 서버가 비면 경고. 6. 이름 휴리스틱: 서버 이름에 `all_server_words()`의 단어가 들면 쓰기형 도구 거부. 7. 규칙 11(이슈 DB 대상 GitHub 쓰기 ask).
+5. 설정 서버가 비면 경고. 6. 이름 휴리스틱: 서버 이름에 `all_server_words()`의 단어가 들면 쓰기형 도구 거부. 7. 규칙 11(트래커가 아닌 MCP 쓰기형 도구는 대상과 무관하게 ask — 4-c 거친 판정).
 
 - `all_server_words()`는 설정 kind와 무관하게 **설치된 모든** 트래커 `server_words`의 합집합에 내장 `jira`·`atlassian`을 늘 더한다(트래커 하나가 깨져도 나머지는 쓰고, 레지스트리 실패에도 이전보다 약해지지 않는다). github 설치에서도 Jira·Atlassian 서버 쓰기는 거부된다(T6).
-- github에 단어를 두지 않는 이유: "github"를 넣으면 설정되지 않은 모든 GitHub MCP 쓰기가 거부되어 규칙 11(이슈 DB 대상 ask)과 충돌하고 범위가 지나치다. 설정된 github 트래커 서버는 4번이 덮는다.
+- github에 단어를 두지 않는 이유: "github"를 넣으면 설정되지 않은 모든 GitHub MCP 쓰기가 거부되어 규칙 11(쓰기형 도구 ask)과 충돌하고 범위가 지나치다. 설정된 github 트래커 서버는 4번이 덮는다.
 - jira_bridge(규칙 9): 읽기 판별은 `read_action`, 키는 `key_from_read`, 게시 결과의 키는 `key_from_args`. 매핑된 도구인데 지원하지 않는 읽기(github `method: get_labels` 등)·판별 예외는 `unsupported`로 원문을 대체한다(fail-closed). get_issue 원문은 `issue_raw.json`에 `key`를 채워 저장한다.
 - 강도 확인: 설정 서버의 비허용 도구 거부, 승인 코멘트 1종 예외, 인자·키·도구·sha·만료·1회용 대조, `post.*.json` 직접 쓰기 거부는 그대로다. 더해진 판정(legacy, kind 오류, 승인 `kind` 대조, `unsupported` 읽기)은 모두 더 엄격한 쪽이다.
 
 **전용 MCP 등록 권고 (S30)**: 4번이 규칙 11보다 먼저 돌기 때문에, GitHub 트래커 서버가 일반 GitHub MCP와 **같은 등록**이면 그 서버의 `read_tools` 밖 도구(코드 읽기·PR 생성 포함)가 모두 거부된다. 트래커용으로 issues toolset만 켠 **전용 등록**(별도 서버 이름)을 둔다. 이슈 DB PR은 `gh` CLI로 하므로 영향이 없다.
 
-**알려진 한계 (GitHub, 막지 않음 — 결정 (o))**: github는 서버 단어가 없으므로(위) 트래커로 **설정하지 않은** 다른 GitHub MCP 등록(예: 일반 `github` 서버의 `add_issue_comment`·`issue_write`)으로 트래커 레포 이슈에 쓰면 규칙 2가 잡지 않고, 규칙 11은 이슈 DB 레포만 본다 → 승인 없이 쓸 수 있다(재현: 묶음 3 리뷰 P1-1). Jira 설치에는 해당 없다(jira·atlassian 이름 휴리스틱). GitHub 트래커를 실제로 쓸 때 할 일: 설정 서버 밖의 쓰기형 도구라도 `owner`/`repo`가 DB `tracker.key_regex`의 레포를 가리키면 거부하는 대상 기반 판정을 규칙 11 앞에 둔다. 같은 이유로 eval 그레이더의 GitHub 쓰기 시도 집계도 넓힌다.
+**알려진 한계 (GitHub, 막지 않음 — 결정 (o))**: github는 서버 단어가 없으므로(위) 트래커로 **설정하지 않은** 다른 GitHub MCP 등록(예: 일반 `github` 서버의 `add_issue_comment`·`issue_write`)으로 트래커 레포 이슈에 쓰면 규칙 2가 잡지 않는다. 4-c부터 규칙 11이 트래커가 아닌 MCP 쓰기형 도구를 대상과 무관하게 ask하므로 승인 없이 쓰지는 못하지만 (재현: 묶음 3 리뷰 P1-1 — 그때는 이슈 DB 레포만 봐서 통과했다), 거부가 아니라 확인이다. Jira 설치에는 해당 없다(jira·atlassian 이름 휴리스틱). GitHub 트래커를 실제로 쓸 때 할 일: 설정 서버 밖의 쓰기형 도구라도 `owner`/`repo`가 DB `tracker.key_regex`의 레포를 가리키면 거부하는 대상 기반 판정을 규칙 11 앞에 둔다. 같은 이유로 eval 그레이더의 GitHub 쓰기 시도 집계도 넓힌다.
 
 ## 6. 새 트래커 추가 절차 (체크리스트)
 

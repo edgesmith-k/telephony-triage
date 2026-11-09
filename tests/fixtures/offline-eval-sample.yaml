@@ -34,8 +34,10 @@ items:
     logs: [issue-db-sample/data/DATA-001-no-setup-data-call/fixtures/DATA-001.none.log]
     occurred_at: "2026-09-23T09:00:30+09:00"
     expect: unresolved
-  # 일부러 틀린 라벨: 데이터 로그인데 정답을 SMS로 적어 '미스'가 표에 나오는지 본다
+  # 대조군(일부러 틀린 라벨): 데이터 로그인데 정답을 SMS로 적어 '미스'가 표에 나오는지 본다. negative_control이라 지표에서 뺀다
+  # (뺀 7건도 시그니처를 쓴 fixture 자체라 in-sample 자기 일치다 — 이 표의 수치는 도구 동작 확인용이지 정확도 측정이 아니다)
   - key: EVAL-8
     logs: [issue-db-sample/data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log]
     occurred_at: "2026-09-20T14:32:10+09:00"
     expect: SMS-001-01
+    negative_control: true

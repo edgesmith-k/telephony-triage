@@ -519,7 +519,7 @@ def test_broken_configured_tracker_keeps_file_and_bash_rules():
     approved = w.work / KEY / "post.approved.json"
     events = {"write_approved": ("Write", {"file_path": str(approved), "content": "{}"}),
               "write_clone": ("Write", {"file_path": str(w.clone / "README.md"), "content": "x"}),
-              "push_main": ("Bash", {"command": f"git -C {w.clone} push origin main"})}
+              "push_no_verify": ("Bash", {"command": f"git -C {w.clone} push --no-verify origin main"})}   # 규칙 5(ci_mode local)
     before = {name: guard(w, tool, ti) for name, (tool, ti) in events.items()}
     set_kind(w, "synbad")
     for name, (tool, ti) in events.items():
@@ -650,7 +650,6 @@ def test_guard_selftest_uses_tracker_key_args(fake_trackers, monkeypatch):
 
 # -- GitHub 어댑터 (묶음 3, 설계 §3-2 github 열·§3-4) ------------------------------------------------
 
-from trackers import github as github_tracker  # noqa: E402
 
 G = trackers.get("github")
 GKEY = "mock-org.mock-issues-12"

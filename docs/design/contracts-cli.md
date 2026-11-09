@@ -48,6 +48,7 @@
 | `markers` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--step-events]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--step-events`: 이슈 DB step_events 규칙의 로그 흔적(step_events[{rule, ts, seq, label}])을 더한다 |
 | `extract-bugreport` | `<zip\|txt> --out <dir>` |  |
 | `cut` | `<logcat>... (--evidence <match.json> \| --around <ISO 시각>) [--cause <원인 ID>] [--seconds <SECONDS>] --out <file> [--rules <RULES>] [--context <CONTEXT>] [--max-lines <MAX_LINES>] [--tz <IANA>] [--year <YYYY>]` | `--evidence`: match_signatures.py 출력 (--cause 원인 후보의 근거); `--around`: 지정 시각 (타임존 있는 ISO); `--cause`: --evidence에서 근거를 쓸 원인 (--evidence에 필수); `--seconds`: --around 앞뒤 초, 기본 30; `--rules`: <db>/parser-rules (mask.allow_patterns를 읽는다); `--context`: 기본 20; `--max-lines`: 기본 100 |
+| `mask-copy` | `<logcat>... --out <dir> [--rules <RULES>] [--max-bytes <MAX_BYTES>]` | `--out`: 사본 디렉토리(<작업 디렉토리>/logs-masked); `--rules`: <db>/parser-rules (mask.allow_patterns를 읽는다); `--max-bytes`: 이보다 큰 파일은 사본을 만들지 않는다(경고 mask-copy-skipped, 기본 67108864), 기본 67108864 |
 
 ## `mask_pii.py`
 
@@ -262,10 +263,15 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - in_range?
   - clock_anomalies?
   - events?
+  - masked?(원문 마스킹 사본(<JOB>/logs-masked/, parse_logcat.py mask-copy): {dir(JOB 상대 `logs-masked`), files[이름], skipped[이름 — 상한 초과]}. 모델이 grep·sed·Read할 대상)
+    - dir?
+    - files?
+    - skipped?
   - uncollected_tags?[≤3]({tag(≤40), lines, warn}; 후보 없음·1위 C=0일 때만, 파서 규칙에 없는 태그 힌트)
 - candidates?[≤3]
   - type
   - cause
+  - matched_conditions?(원인+증상 시그니처가 맞춘 조건 수(특이도) — 동점 3차 정렬 키·표시용, 점수 불변)
   - title?
   - category?
   - score

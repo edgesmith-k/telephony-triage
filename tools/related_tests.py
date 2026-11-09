@@ -100,7 +100,7 @@ CHILD_HELPER_TESTS = {SKILL_EVAL_TEST, "tests/test_module_eval.py", "tests/test_
 # (importer: module_eval·run.py·grade.py·tools/site_step.py runtime-check)
 CHILD_SOURCE = "plugin/scripts/common/claude_child.py"
 # OpenCode v1 층(계획 I): opencode/**·tests/opencode/**는 이 테스트들과 tests/opencode/ 디렉토리(분류 불가 full 대신)
-OPENCODE_PATHS = ("opencode/*", "tests/opencode/*")
+OPENCODE_PATHS = ("opencode/*", "tests/opencode/*", "plugin/scripts/common/oc_version.py")   # oc_version: 바이너리 의존 한 곳
 OPENCODE_TESTS = {"tests/test_oc_adapter.py", "tests/test_tt_oc.py", "tests/test_gen_opencode.py"}
 OPENCODE_TEST_DIR = "tests/opencode"
 SAFETY_TEST = "tests/test_safety.py"      # plugin/scripts가 바뀌면 항상 포함
@@ -224,8 +224,8 @@ def reverse_closure(edges: dict[str, set[str]], start: str) -> set[str]:
 
 # -- 테스트 검색 -----------------------------------------------------------------------------------
 
-_FROM_RE = re.compile(r"^\s*from\s+([\w.]+)\s+import\s+(\([^)]*\)|[^\n]*)", re.M)
-_IMPORT_RE = re.compile(r"^\s*import\s+([^\n#]+)", re.M)
+_FROM_RE = re.compile(r"^\s*from\s+([\w.]+)\s+import\s+(\([^)]*\)|[^\n]*)", re.MULTILINE)
+_IMPORT_RE = re.compile(r"^\s*import\s+([^\n#]+)", re.MULTILINE)
 
 
 def imported_names(text: str) -> set[str]:
@@ -418,7 +418,7 @@ def run_checks(sel: Selection) -> int:
     else:
         print("pytest: 선택된 테스트 없음, 건너뜀", flush=True)
     cmd = [sys.executable, str(REPO / "tools" / "check_boundary.py")]
-    print(f"$ python3 tools/check_boundary.py", flush=True)
+    print("$ python3 tools/check_boundary.py", flush=True)
     code = subprocess.run(cmd, cwd=REPO, stdin=subprocess.DEVNULL).returncode
     codes.append(0 if code == 0 else 2 if code == 2 else 1)
     return USAGE if USAGE in codes else FAILED if FAILED in codes else OK
@@ -435,7 +435,7 @@ def main(argv: list[str] | None = None) -> int:
     except SystemExit as exc:
         return USAGE if exc.code else OK
     try:
-        files = sorted({f[2:] if f.startswith("./") else f for f in args.files}) if args.files \
+        files = sorted({f.removeprefix("./") for f in args.files}) if args.files \
             else changed_files(args.base)
     except RuntimeError as exc:
         print(f"오류: {exc}", file=sys.stderr)

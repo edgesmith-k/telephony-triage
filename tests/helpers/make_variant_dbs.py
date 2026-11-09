@@ -53,7 +53,7 @@ def _edit(path: Path, old: str, new: str, count: int = 1) -> None:
 
 def _sub(path: Path, pattern: str, new: str) -> None:
     text = path.read_text(encoding="utf-8")
-    out, n = re.subn(pattern, new, text, count=1, flags=re.S)
+    out, n = re.subn(pattern, new, text, count=1, flags=re.DOTALL)
     if not n:
         raise SystemExit(f"{path}: 패턴이 없습니다: {pattern[:60]!r}")
     path.write_text(out, encoding="utf-8", newline="\n")

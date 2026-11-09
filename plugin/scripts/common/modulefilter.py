@@ -209,7 +209,10 @@ def rows_of(events: dict) -> list[dict]:
             lines[(e.get("ts"), e.get("tag"), e.get("msg"))].add(ref["line_no"])
     for r in rows:
         r["t"] = _ts(r.get("ts"))
-        r["lines"] = lines.get((r.get("ts"), r.get("tag"), r.get("msg")), set())
+        ref = r.get("line_ref") or {}
+        # 행이 줄 위치로 합쳐졌으면(종합 리뷰 F2) 그 줄 하나, 줄 위치 없는 행만 같은 문구의 줄 전부
+        r["lines"] = ({ref["line_no"]} if isinstance(ref, dict) and ref.get("line_no") is not None
+                      else lines.get((r.get("ts"), r.get("tag"), r.get("msg")), set()))
         r["tag"] = r.get("tag") or ""
         r["msg"] = r.get("msg") or ""
     return rows

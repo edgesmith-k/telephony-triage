@@ -12,6 +12,10 @@
    같다(플러그인을 갱신하면 다시 확인해야 열린다).
 4. 기록의 오류 경로 행이 `pass`가 아니면 — `warn`(오류 본문이 모델에 갔다)이거나 `skip`(`--missing-key` 없이 돌려 확인하지
    않았다, 건너뛴 확인은 통과가 아니다) — `opencode.jira_read_accept_error_bodies: true`(`set`의 `--accept-error-bodies`)도 있어야 한다.
+5. 기록의 트래커·MCP 지문(`tracker_fingerprint`)이 지금 환경과 같다: 기록의 Jira 서버·도구 이름 + 지금 config의 Jira 서버
+   접두사·코멘트 도구·읽기 허용 목록(`tracker.read_tools` ∪ `tracker.tools` 값) + 기록한 설치 폴더(`project`)에서 본
+   opencode.json MCP 서버 이름(`current_fingerprint`).
+   확인 뒤 매핑·서버 이름이 바뀌었거나 지문 없는 옛 기록이면 닫힘(다시 확인).
 
 이 판정은 OpenCode가 시작할 때 한 번만 한다(tt-guard.js → `oc_adapter.py gate` → 이후 adapter 호출 환경
 `TT_OC_JIRA_SESSION_GATE`). 세션 중에 쓰인 파일은 그 세션의 도구 호출에 쓰이지 않는다(`oc_adapter.jira_gate_state`).
@@ -103,9 +107,30 @@ def needs_accept(record: dict | None) -> bool:
     return error_row(record) != "pass"
 
 
+def tracker_fingerprint(jira_server, tools, view, mcp_servers) -> str:
+    """트래커·MCP 설정 지문(sha256 앞 12자): Jira 서버·OpenCode 도구 이름, `oc_adapter.TrackerView`의 서버 접두사·코멘트 도구·
+    읽기 도구, MCP 서버 이름. 이름만 들어간다(URL·키·자격 증명 없음). 사내 확인(`oc_jira_check`)이 쓰고 관문이 다시 계산한다."""
+    data = {"server": str(jira_server or ""), "tools": sorted({str(t) for t in tools}), "prefixes": sorted(view.prefixes),
+            "comment_tool": view.comment_tool, "read_tools": list(view.read_tools),
+            "mcp": sorted({str(s) for s in mcp_servers})}
+    return hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:12]
+
+
+def current_fingerprint(record: dict, *, directory: str | None = None, env: dict | None = None) -> str:
+    """지금 환경의 `tracker_fingerprint`: 기록의 `jira_server`·`tools` + 지금 config(`oc_adapter.tracker_view`) + MCP 서버 이름
+    (`oc_adapter.mcp_servers`). 폴더는 `directory` > 기록의 `project`(확인한 설치 폴더 — 터미널의 `config.py set`도 OpenCode 시작
+    때와 같은 파일을 보게) > 지금 폴더. 설정 파일을 읽지 못하면 RuntimeError(호출 쪽이 닫힘으로 바꾼다)."""
+    from common import oc_adapter
+    servers, err = oc_adapter.mcp_servers(directory or str(record.get("project") or "") or os.getcwd(), env)
+    if err:
+        raise RuntimeError(err)
+    return tracker_fingerprint(record.get("jira_server"), record.get("tools") or [], oc_adapter.tracker_view(), servers)
+
+
 def record_problems(record: dict | None, *, opencode_version: str | None = None,
-                    plugin_root: Path | str = PLUGIN_ROOT, digest: str | None = None) -> list[str]:
-    """통과 기록이 지금 환경에서 관문을 열 수 있는지: 문제 목록(비면 맞다)."""
+                    plugin_root: Path | str = PLUGIN_ROOT, digest: str | None = None,
+                    fingerprint: str | None = None) -> list[str]:
+    """통과 기록이 지금 환경에서 관문을 열 수 있는지: 문제 목록(비면 맞다). `fingerprint`가 없으면 `current_fingerprint`로 구한다."""
     if record is None:
         return ["사내 확인 통과 기록이 없다"]
     if opencode_version is None:
@@ -122,6 +147,14 @@ def record_problems(record: dict | None, *, opencode_version: str | None = None,
         digest = "?"
     if record.get("scripts_sha") != digest:
         out.append("플러그인 스크립트가 확인 뒤 바뀌었다(지문 불일치)")
+    if fingerprint is None:
+        try:
+            fingerprint = current_fingerprint(record)
+        except Exception as exc:  # noqa: BLE001 — 지문을 못 구하면 닫힘
+            out.append(f"트래커·MCP 설정을 읽지 못해 지문을 비교하지 못했다({type(exc).__name__})")
+            return out
+    if record.get("tracker_fingerprint") != fingerprint:
+        out.append("트래커·MCP 설정이 확인 뒤 바뀌었다(또는 지문 없는 옛 기록) — runtime-check opencode --jira 재실행")
     return out
 
 

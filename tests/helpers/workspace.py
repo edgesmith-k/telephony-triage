@@ -104,7 +104,7 @@ class Workspace:
         """계획을 `<work_dir>/<job>/plan.json`에 쓴다. `base_sha`는 기본으로 지금 origin/main.
 
         `match="auto"`(기본): analyze 계획의 `feedback.suggested`가 비어 있지 않으면 그 후보로 `<job>/match.json`을
-        써 준다(`db_pr stage`가 suggested를 match.json과 대조한다, contracts.md §stage). 테스트가 직접 둔 match.json은
+        써 준다(`db_pr stage`가 suggested를 match.json과 대조한다, contracts.md §3.2 `db_pr.py` 세부 `stage`). 테스트가 직접 둔 match.json은
         건드리지 않고, 이 헬퍼가 썼던 것만 계획에 맞게 다시 쓰거나 지운다. `match=None`이면 아무것도 안 한다."""
         if isinstance(name_or_plan, dict):
             plan = json.loads(json.dumps(name_or_plan))

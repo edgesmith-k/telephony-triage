@@ -23,7 +23,6 @@ import re
 import statistics
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import yaml
 
@@ -126,7 +125,7 @@ def tags_section(lines, all_tags, coll, rules_dir, today, min_count, ril_tags) -
     zero = []
     for it in items:
         k = it.get("tag") or it.get("tag_regex")
-        hit = (lambda t: t == it["tag"]) if "tag" in it else (lambda t, r=re.compile(it["tag_regex"]): r.search(t))
+        hit = (lambda t: t == it["tag"]) if "tag" in it else (lambda t, r=re.compile(it["tag_regex"]): r.search(t))  # noqa: B023 — 다음 줄 any가 바로 부른다
         if not any(hit(t) for t in all_tags):
             zero.append(k)
     return {"candidates": [{k: g[k] for k in ("tag", "rx", "lines", "category", "why")} for g in shown],
@@ -157,8 +156,8 @@ def slots_section(lines, tags_ok, phone, logcat, min_count) -> dict:
         if r["unmatched"] >= min_count:
             p, k = r["position"], r["shape"]
             w = re.escape(k[1:-2])
-            pat = {"tag": lambda: "^" + shape_regex(k, r"\d+"), "msg_prefix": lambda: rf"^\[{w}(\d+)\]\s?",
-                   "msg_suffix": lambda: rf"\s?\[{w}(\d+)\]$"}[p]()
+            pat = {"tag": lambda: "^" + shape_regex(k, r"\d+"), "msg_prefix": lambda: rf"^\[{w}(\d+)\]\s?",  # noqa: B023 — 골라서 바로 부른다
+                   "msg_suffix": lambda: rf"\s?\[{w}(\d+)\]$"}[p]()  # noqa: B023
             draft.setdefault(p, [x.pattern for x in {"tag": phone.tag, "msg_prefix": phone.prefix, "msg_suffix": phone.suffix}[p]])
             draft[p].append(pat + ("$" if p == "tag" else ""))
     return {"forms": rows, "draft": draft}

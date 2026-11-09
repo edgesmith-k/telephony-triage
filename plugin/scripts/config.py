@@ -11,6 +11,7 @@
                                `{user_config, values{키: 값}, missing[]}` (점 표기, 없는 키는 missing)
   site-defaults                site-defaults.yaml 내용
   init [--answers <json>]      config 생성 (setup 1). --answers가 없으면 stdin으로 항목별로 묻는다.
+                               필수 항목도 팀 기본값이 있으면(site-defaults issue_db.remote) 비워도 된다(상속).
                                경로가 없으면 거부한다. 홈·work_dir은 권한 700.
                                답한 값만 저장(선택 항목은 팀 기본값과 다를 때만, 나머지는 site-defaults·내장 기본값 상속).
                                플랫폼은 --platform > TT_PLATFORM > site(개인 기본 `platform`은 보지 않는다).
@@ -23,7 +24,7 @@
                                analyzers.<카테고리>.prefer(module|skill)·.skill_dir(절대 경로). 남은 모듈 스킬·분석 스킬
                                설정 문제는 module_problems와 stderr 경고 한 줄.
                                opencode.jira_read open|closed [--accept-error-bodies]: OpenCode Jira 읽기 관문(최상위 키).
-                               open은 같은 OpenCode 버전·플러그인 지문의 사내 확인 통과 기록(site_step.py runtime-check
+                               open은 같은 OpenCode 버전·플러그인 지문·트래커/MCP 지문의 사내 확인 통과 기록(site_step.py runtime-check
                                opencode --jira)이 있을 때만, 오류 경로 행이 warn이면 --accept-error-bodies도. OpenCode 안
                                (TT_RUNTIME=opencode)에서는 거부(사용자가 터미널에서 연다)
   sync-scripts-path            plugin.scripts_path = ${CLAUDE_PLUGIN_ROOT}/scripts (setup 2, SessionStart hook)
@@ -42,11 +43,12 @@
                                변경 목록만 보이고 `--apply`일 때만 쓴다. site-defaults의 옛 키는 안내만(관리자가 고친다)
   install-hooks [--db <path>]  git config core.hooksPath .githooks, 값이 정확히 .githooks인지 확인 (setup 5)
   check [--db <path>] [--for write|dry-run] [--roots]
-                               호환성 판정: 스키마·생성기 버전·파서 백엔드·외부 파서, (write면) gh 인증
+                               호환성 판정: 플랫폼·signature_features·스키마·생성기 버전·파서 백엔드·외부 파서, (write면) gh 인증
                                → writable / push_allowed. `migrate/schema-v<N>` 브랜치는 버전을 보지 않는다.
                                warnings(없어진 키·폐지 키·설치 스킬 대신 모듈 문서·runtime.label). remote·prefer·
                                skill_dir가 있으면 deep_sources(카테고리별 5-1 출처). --roots면 read_roots[절대 경로]
-  gh-status                    gh 인증 확인 (setup 9). 실패면 로그인 안내와 종료 코드 2
+  gh-status                    gh 인증 확인 (setup 9). 실패면 로그인 안내와 종료 코드 2.
+                               login: site ghe.host의 로그인(setup 1 GHE 아이디 자동 감지, 그 호스트 줄이 없으면 null)
   doctor [--format json|markdown]
                                환경 점검 한 장(python·deps·config·clone·hook·guard 자가시험·Jira 매핑(tracker)·Jira 코멘트
                                도구(tracker_post)·gh·스냅샷·호환성·lock, 모듈 스킬 설정이 있을 때만 module_skills,
@@ -224,7 +226,9 @@ def cmd_init(args, defaults: dict) -> dict:
         errors = []
         for key, _, kind, required in fields:
             value = answers.get(key)
-            if required and value in (None, "") and not (key not in answers and has(key)):
+            # 필수 항목도 팀 기본값(site-defaults, 예: issue_db.remote)이 있으면 비워도 된다 — 저장하지 않고 상속한다
+            team_has = _default_for(key, defaults, platform) not in (None, "")
+            if required and value in (None, "") and not ((key not in answers and has(key)) or team_has):
                 errors.append(f"{key}: 값이 필요합니다")
             elif (msg := validate(kind, value)):
                 errors.append(f"{key}: {msg}")
@@ -269,8 +273,8 @@ def cmd_init(args, defaults: dict) -> dict:
             continue
         value = answers[key]
         target = profile if other and key.split(".")[0] in userconfig.PROFILE_KEYS else data
-        if value in (None, "") or (not required and value == _default_for(key, defaults, platform)):
-            _unset(target, key)   # 빈 답·팀 기본값과 같은 답은 저장하지 않는다(이후 팀 기본값 변경을 상속)
+        if value in (None, "") or value == _default_for(key, defaults, platform):
+            _unset(target, key)   # 빈 답·팀 기본값과 같은 답(필수 항목 issue_db.remote도)은 저장하지 않는다(이후 팀 기본값 변경을 상속)
             continue
         userconfig.set_value(target, key, value)
     if other and not fresh:
@@ -282,11 +286,15 @@ def cmd_init(args, defaults: dict) -> dict:
         data.setdefault("plugin", {})["scripts_path"] = str(_plugin_root(args) / "scripts")
     # 저장 전에 새 config를 검사한다(경로 규칙·프로필끼리 겹침·옛 설정 키). 문제가 있으면 config 파일은 그대로 둔다
     legacy = userconfig.legacy_problems(None, data)
-    problems = userconfig.profile_problems(data) + legacy
+    problems = userconfig.profile_problems(data, defaults) + legacy
     if problems:
         raise UsageError("config를 저장하지 않았습니다 — " + "; ".join(problems)
                          + (" — config.py rename-legacy로 바꾼다" if legacy else ""))
     effective = userconfig.merged(defaults, data, platform=platform)
+    team_remote = _default_for("issue_db.remote", defaults, platform)
+    if team_remote and userconfig.get(effective, "issue_db.remote") == team_remote and (msg := validate("remote", team_remote)):
+        # 물려받은 팀 원격도 검사한다 — 풀리지 않는 원격으로 clone을 제안하지 않는다
+        raise UsageError(f"config를 저장하지 않았습니다 — issue_db.remote(site-defaults 팀 기본값): {msg} {userconfig.SITE_ADMIN}")
     try:     # 모르는 트래커면 저장하지 않는다(다른 스크립트가 모두 종료 2)
         trackers.kind_of(effective)
     except trackers.TrackerConfigError as exc:
@@ -322,8 +330,9 @@ def _parse_value(text: str):
 
 def _set_opencode(args, data: dict) -> dict:
     """`set opencode.jira_read open|closed [--accept-error-bodies]` — OpenCode Jira 읽기 관문(`common/oc_jira_gate.py`). 사용자가
-    터미널에서만 연다: OpenCode 안(`TT_RUNTIME=opencode`)이면 거부, open은 같은 OpenCode 버전·플러그인 지문의 사내 확인 통과 기록이
-    있을 때만, 그 기록의 오류 경로 행이 warn이면 `--accept-error-bodies`도 있어야 한다. 최상위 키다(`--platform` 없이)."""
+    터미널에서만 연다: OpenCode 안(`TT_RUNTIME=opencode`)이면 거부, open은 같은 OpenCode 버전·플러그인 지문·트래커/MCP 지문
+    (`tracker_fingerprint`)의 사내 확인 통과 기록이 있을 때만, 그 기록의 오류 경로 행이 warn이면 `--accept-error-bodies`도 있어야
+    한다. 최상위 키다(`--platform` 없이)."""
     from common import oc_jira_gate as gate
 
     command = gate.open_command(gate.PLUGIN_ROOT, getattr(args, "accept_error_bodies", False))
@@ -403,7 +412,7 @@ def cmd_set(args, defaults: dict) -> dict:
         out["hint"] = (f"옛 읽기 스냅샷 {snap}는 옛 clone의 worktree다: "
                        f"git -C {old_clone} worktree remove --force {snap} (옛 clone이 없으면 그 폴더를 지운다)")
         print("안내: " + out["hint"], file=sys.stderr)
-    problems = userconfig.profile_problems(data)
+    problems = userconfig.profile_problems(data, defaults)
     if problems:     # 저장은 한다(고치는 중일 수 있다). 남은 문제를 보인다 — 고치기 전까지 다른 스크립트는 종료 2
         out["problems"] = problems
         print("경고: 플랫폼 프로필 문제가 남았다 — " + "; ".join(problems), file=sys.stderr)
@@ -608,6 +617,7 @@ def check(db: Path, defaults: dict, for_: str, platform: str | None = None) -> d
     branch = _git_out(db, "rev-parse", "--abbrev-ref", "HEAD")
     migrate = bool(branch and MIGRATE_BRANCH_RE.match(branch))
     reasons: list[dict] = compat.check_platform(cfg, platform)     # migrate 브랜치에서도 본다
+    reasons += compat.check_features(cfg)                           # 모르는 시그니처 feature (driver는 중단)
     schema = cfg.get("schema_version")
     generator = cfg.get("generator_version")
     env = compiled_cache.environment(defaults, platform)
@@ -725,7 +735,8 @@ def cmd_check(args, defaults: dict) -> tuple[dict, int]:
 
 def cmd_gh_status(args, defaults: dict) -> tuple[dict, int]:
     host, ok, message = _gh_auth(defaults)
-    result = {"host": host, "ok": ok}
+    # login: site ghe.host와 같은 호스트의 로그인만(setup 1 GHE 아이디 자동 감지). 다른 호스트뿐이면 None → setup이 묻는다
+    result = {"host": host, "ok": ok, "login": ghcli.login(message, host) if ok else None}
     if not ok:
         result["message"] = (f"쓰기 불가(gh 인증 없음). `gh auth login --hostname {host}`로 로그인한다. "
                              "읽기 설정은 끝났으므로 읽기 전용 분석과 --dry-run 연습은 된다.")
@@ -998,6 +1009,31 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
         skip("snapshot", "work_dir 없음")
     else:
         guarded("snapshot", snapshot)
+
+    # 7b retention (site-defaults `retention_days`, 14-site S14): 팀이 보존 기간을 정했을 때만 행이 생긴다(기본 점검표·예산 불변).
+    # 기한 넘은 작업 폴더 수만 센다 — 지우지 않는다(종합 리뷰 G). site-defaults에서 직접 읽는다(merged는 알려진 키만 옮긴다)
+    retention_days = userconfig.get(defaults, "retention_days")
+
+    def retention():
+        days = retention_days
+        if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
+            rows.append(_row("retention", "fail", f"retention_days 값이 잘못됨({days!r})", "site-defaults retention_days는 양의 정수(일) — 관리자"))
+            return
+        limit = time.time() - days * 86400
+        # 나이 = 마지막 활동(폴더 안 파일·폴더의 가장 최근 mtime, wt·draft 제외) — cleanup --older-than과 같은 정의(R4)
+        old = [p.name for p in work.iterdir() if p.is_dir() and not p.name.startswith((".", "_"))
+               and session_lock.JOB_KEY_RE.fullmatch(p.name) and any((p / m).exists() for m in session_lock.JOB_MARKERS)
+               and session_lock.tree_mtime(p) < limit]
+        if old:
+            rows.append(_row("retention", "warn", f"마지막 활동 뒤 {days}일 넘은 작업 폴더 {len(old)}개(Jira 요약·마스킹 로그가 남아 있다)",
+                             f"db_pr.py cleanup --older-than {days} --dry-run 으로 확인한 뒤 --yes (미게시 계획은 따로 알린다)"))
+        else:
+            rows.append(_row("retention", "ok", f"마지막 활동 뒤 {days}일 넘은 작업 폴더 없음"))
+    if retention_days is not None:
+        if ok_cfg and work is not None and work.is_dir():
+            guarded("retention", retention)
+        else:
+            skip("retention", "config 없음" if not ok_cfg else "work_dir 없음")
 
     # 8 compat (<work_dir>/_snapshot 기준)
     if not snap_box:

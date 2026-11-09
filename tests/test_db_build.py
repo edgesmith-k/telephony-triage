@@ -249,6 +249,21 @@ def test_jira_index_equals_linear_scan():
         assert ctx.jira_of(some)
 
 
+def test_signature_summary_marks_count_and_gap_only_when_set():
+    """D①: README 시그니처 줄은 `min_count` ≥ 2·`sequence_within_sec`가 있을 때만 바뀐다(기본 시그니처는 그대로)."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import db_build
+
+    base = {"id": "s", "must_event": [{"id": "a", "event": "e"}], "must_match": [{"id": "b", "pattern": "x"}],
+            "sequence": ["a", "b"], "window_sec": 60}
+    plain = db_build._signature_summary(base)
+    assert "×" not in plain and "간격" not in plain
+    assert db_build._signature_summary({**base, "must_event": [{"id": "a", "event": "e", "min_count": 1}]}) == plain
+    marked = db_build._signature_summary({**base, "must_event": [{"id": "a", "event": "e", "min_count": 3}],
+                                          "sequence_within_sec": 5})
+    assert marked == plain.replace("event `e`", "event `e` ×3+").replace("sequence a → b", "sequence a → b, 간격 ≤ 5s")
+
+
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 

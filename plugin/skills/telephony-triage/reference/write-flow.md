@@ -115,7 +115,7 @@ drift 검사 → worktree 준비 → `config.py check --db wt` → `db_add apply
 - 종료 2 + stderr만(JSON 없음): 보고하고 멈춘다.
 - `warnings`는 글자 그대로 보인다.
 - 성공하면(`discard.discarded: true`) PR 링크(`pr.url`)를 글자 그대로, 다음 질문 전에 보인다. 계획 `pr` 기록·pending 이동은 publish가 했다.
-- **리뷰어 질문**(새 PR `pr.action: created`만, PR 링크 뒤·Step 9 등 다음 질문 전 한 번): "리뷰어를 지정할까요?" — `지정 안 함(기본 — 아무나 +1)` / `제안대로: <확인 화면 리뷰어 제안>`(`없음`이면 뺀다) / Other(로그인, 쉼표). 리뷰어를 고르면(제안대로·Other) `S/db_pr.py request-review --job <작업 키> --reviewer <a[,b]> --json` 한 번(권한 확인, lock 불필요), `failed`·`warnings`를 글자 그대로. 실패해도 PR은 그대로 — 재호출·재질문 없음. sync-pr(기존 PR)엔 안 묻는다.
+- **리뷰어 질문**(새 PR `pr.action: created`만, PR 링크 뒤·Step 9 등 다음 질문 전 한 번. config `reviewer.ask: false`면 묻지 않는다 = 지정 안 함): "리뷰어를 지정할까요?" — `지정 안 함(기본 — 아무나 +1)` / `제안대로: <확인 화면 리뷰어 제안>`(`없음`이면 뺀다) / Other(로그인, 쉼표). 리뷰어를 고르면(제안대로·Other) `S/db_pr.py request-review --job <작업 키> --reviewer <a[,b]> --json` 한 번(권한 확인, lock 불필요), `failed`·`warnings`를 글자 그대로. 실패해도 PR은 그대로 — 재호출·재질문 없음. sync-pr(기존 PR)엔 안 묻는다.
 
 ## 6. 정리
 

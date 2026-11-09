@@ -375,7 +375,7 @@ def test_equipment_skew_never_anchors_without_offset():
         assert _causes(done) == ["DATA-001-01"], value
         assert "(시계 차 +180초, 수동)" in (job / "report.md").read_text(encoding="utf-8")
         docs.append(_strip(done))
-        for path in (p for p in job.rglob("*") if p.is_file()):
+        for path in (p for p in job.rglob("*") if p.is_file() and "logs-masked" not in p.parts):   # 사본은 로그 그대로(시각 포함)
             text = path.read_text(encoding="utf-8", errors="replace")
             assert "14:30:10" not in text and "14:30:30" not in text, path.name      # 장비 시각 원문은 남기지 않는다
     assert docs[0] == docs[1] == docs[2]

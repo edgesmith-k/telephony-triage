@@ -28,6 +28,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
+import platforms  # noqa: E402
 from common import skillcheck  # noqa: E402
 
 OK, FOUND, USAGE = 0, 1, 2
@@ -84,7 +85,7 @@ def build(out: Path, templates: Path) -> tuple[str, list[str]]:
         raise Usage(f"<out>은 없거나 빈 디렉토리여야 한다: {out}")
     if _inside(out, REPO):
         raise Usage("<out>은 이 레포 밖이어야 한다")
-    found = skillcheck.check_worktree(templates) + skillcheck.template_findings(templates)
+    found = skillcheck.check_worktree(templates) + skillcheck.template_findings(templates, platforms.template_metas())
     if found:
         lines = [f"{f['path']}:{f['line']} {f['check']}" if "line" in f else f"{f['path']} {f['check']}" for f in found]
         raise LookupError("\n".join(lines))

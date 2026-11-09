@@ -15,17 +15,17 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 
 | # | 규칙 | 대상 |
 |---|---|---|
-| 2 | 트래커(Jira) 쓰기 차단: 트래커 서버(`tracker.mcp_server`와 `tracker.tools` 도구 이름의 서버 접두사, 이름 정규화) 도구 중 `tracker.read_tools`(전체 이름, 정규화 비교)에 없는 것은 거부. **예외 1종**: `tracker.write_tools.add_comment.tool`(승인 코멘트, `common/issuepost.write_spec` 조건)은 `read_tools`보다 먼저 판정해 `<work_dir>/<KEY>/post.approved.json`과 대조(인자 집합·이슈 키·도구·정규화 본문 sha256·30분 만료·1회용, 키 인자 모양은 트래커 어댑터)하고 맞으면 ask, 아니면·설정 오류·판정 예외면 거부. 설정되지 않은 서버라도 이름에 설치된 모든 트래커의 서버 단어(`trackers.all_server_words`, jira·atlassian, 레지스트리 실패 시 내장 jira·atlassian)가 들면 쓰기형 도구 거부. 옛 설정 키(`jira:` 등, `userconfig.legacy_problems`)가 남아 있거나 `tracker.kind`가 잘못됐으면(모르는 트래커) 모든 MCP 호출 거부 | `mcp__.*` |
+| 2 | 트래커(Jira) 쓰기 차단: 트래커 서버(`tracker.mcp_server`와 `tracker.tools` 도구 이름의 서버 접두사, 이름 정규화) 도구 중 `tracker.read_tools`(전체 이름, 정규화 비교)에 없는 것은 거부. **예외 1종**: `tracker.write_tools.add_comment.tool`(승인 코멘트, `common/issuepost.write_spec` 조건)은 `read_tools`보다 먼저 판정해 `<work_dir>/<KEY>/post.approved.json`과 대조(인자 집합·이슈 키·도구·정규화 본문 sha256·30분 만료·1회용, 키 인자 모양은 트래커 어댑터)하고 맞으면 ask, 아니면·설정 오류·판정 예외면 거부. 설정되지 않은 서버라도 이름에 설치된 모든 트래커의 서버 단어(`trackers.all_server_words`, jira·atlassian, 레지스트리 실패 시 내장 jira·atlassian)가 들면 쓰기형 도구 거부. 옛 설정 키(`jira:` 등, `userconfig.legacy_problems`)가 남아 있거나 `tracker.kind`가 잘못됐으면(모르는 트래커) 모든 MCP 호출 거부. **S1 확인 전**(site-defaults `tracker.isolation_confirmed`가 참이 아님)에는 read_tools 호출도 ask — 규칙 9의 원문 격리(`updatedToolOutput` 대체)가 미확인이라 원문이 모델 문맥에 남을 수 있음을 사람이 보고 허용한다(OpenCode 어댑터 `TT_OC_ADAPTER` 환경은 자체 관문·대체가 있어 묻지 않는다) | `mcp__.*` |
 | 2 | 같은 규칙: `<work_dir>/<KEY>/post.approved.json`·`post.result.json`을 파일 도구나 Bash 파일 쓰기(규칙 8과 같은 판별)로 쓰거나 지우면 거부(approve·jira_bridge만 쓴다) | Write/Edit/MultiEdit/NotebookEdit, Bash |
 | 3 | PII 검사: `git commit`이면 `mask_pii --check --staged` | Bash, 이슈 DB |
 | 4 | 생성 파일 정합성: `git commit`이면 `db_build --verify --staged`(`actions-build`면 생성 파일 staged 거부), `.cache/` staged 거부 | Bash, 이슈 DB |
-| 5 | hook 우회 차단: 커밋의 `--no-verify`·`-n`, `-c core.hooksPath=…`(모든 git 명령), 유효 `core.hooksPath`가 정확히 `.githooks`가 아니면 커밋 거부, `core.hooksPath`를 바꾸거나 해제하는 `git config` 거부(정확히 `.githooks`로 설정은 허용), `GIT_CONFIG_*`·`GIT_INDEX_FILE` 대입이 붙은 commit·push·config 거부 | Bash, 이슈 DB |
-| 6 | base 브랜치 push 차단: refspec의 대상 ref(없으면 현재 브랜치), `--all`/`--mirror`, push `--no-verify`. 관리 clone·skill-wt의 push는 규칙 12 (a)가 모두 거부 | Bash, 이슈 DB |
-| 7 | push 확인 강제: 이슈 DB `git push`와 `db_pr.py publish`는 `ask` (옵션 `--commit`·`--and-discard`와 무관: `publish` 토큰만 본다). publish는 명령 글의 낱말 그물(`word_net`: 이름 `db_pr`와 낱말 `publish`가 함께 든다, 글 명령만인 줄은 뺀다 — 아래 "명령 파싱")로 본다. 같은 그물로 `db_pr.py merge`(+1 병합 — 사용자가 병합을 요청한 뒤에만, 스크립트가 +1·승인 커밋·검사를 대조)와 `db_pr.py request-review`(리뷰어 요청 — push 뒤 리뷰어 질문에서 사용자가 고른 뒤에만, 매번)도 `ask`. 같은 그물(이름 `module_eval` + 낱말 `module`)로 `module_eval.py`(모듈 eval — 자식 `claude -p`를 띄워 비용이 든다, `--dry-run`·`--probe-restricted` 포함 모든 호출. dry-run 결과를 보이고 사용자가 실행을 승인한 뒤에만)도 `ask`. 병합 기록 `<work_dir>/<KEY>/merge-offer.json`을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(db_pr만 쓴다) | Bash |
+| 5 | hook 우회 차단: 커밋의 `--no-verify`·`-n`, push의 `--no-verify`, `-c core.hooksPath=…`(모든 git 명령), 유효 `core.hooksPath`가 정확히 `.githooks`가 아니면 커밋 거부, `core.hooksPath`를 바꾸거나 해제하는 `git config` 거부(정확히 `.githooks`로 설정은 허용), `GIT_CONFIG_*`·`GIT_INDEX_FILE` 대입이 붙은 commit·push·config 거부. 그 clone `origin/<base>`의 `issue-db.config.yaml` `ci_mode`가 `actions`로 확인되면(작업 트리 파일은 보지 않는다 — `_ci_actions`. 이슈 DB 레포(본체·worktree, `-C`·`--git-dir` 포함)에서 그 ref를 바꿀 수 있는 git은 거부 — `REMOTE_REF_MSG`: `refs/remotes/**`·`refs/replace/**`를 쓰는 `update-ref`(`--stdin`)·`symbolic-ref`, `git replace` 쓰기(`_ci_actions`는 `--no-replace-objects`), dst가 `refs/remotes/**`인 refspec·`--refmap`의 fetch·pull·push, origin 밖 원격·URL·경로(`.`)·`--all`·`--stdin`의 fetch·pull, `-c`·`GIT_CONFIG_*`로 origin URL·refspec을 바꾼 fetch·pull, origin을 바꾸는 `git remote`·`remote update`, `remote.origin.*`·`url.*`·`include*` 키를 쓰는 `git config`, 다른 레포에서 경로로 이슈 DB에 하는 push. `.git/**`·worktree `.git` 파일 쓰기도 거부 — `GIT_META_MSG`. 허용: `git fetch`·`git fetch origin [<브랜치>]`·`git pull [origin]`)(서버 CI `db-check`가 마스킹·생성 파일 검사를 다시 한다) 거부 대신 ask하고 커밋 검사(3·4)를 이어 간다 — `GIT_INDEX_FILE` 커밋만은 커밋 검사가 그 index를 보지 못하므로 늘 거부. local·없음·읽지 못함·오류면 거부(닫힌 쪽, `_rule5`) | Bash, 이슈 DB |
+| 6 | base 브랜치 push: 따로 거부하지 않는다 — 이슈 DB push는 refspec·`--all`·`--mirror`와 무관하게 규칙 7 ask. main 직접 push는 서버 브랜치 보호(필수 PR·force push·삭제 금지·관리자 포함)가 막는다(전제: site_checks `s4a.protection_guard`). 관리 clone·skill-wt의 push는 규칙 12 (a)가 모두 거부 | Bash, 이슈 DB |
+| 7 | push 확인 강제: 이슈 DB `git push`(refspec과 무관 — base 브랜치 push도, 규칙 6)와 `db_pr.py publish`는 `ask` (옵션 `--commit`·`--and-discard`와 무관: `publish` 토큰만 본다). publish는 명령 글의 낱말 그물(`word_net`: 이름 `db_pr`와 낱말 `publish`가 함께 든다, 글 명령만인 줄은 뺀다 — 아래 "명령 파싱")로 본다. 같은 그물로 `db_pr.py merge`(+1 병합 — 사용자가 병합을 요청한 뒤에만, 스크립트가 +1·승인 커밋·검사를 대조)와 `db_pr.py request-review`(리뷰어 요청 — push 뒤 리뷰어 질문에서 사용자가 고른 뒤에만, 매번)도 `ask`. 같은 그물(이름 `module_eval` + 낱말 `module`)로 `module_eval.py`(모듈 eval — 자식 `claude -p`를 띄워 비용이 든다, `--dry-run`·`--probe-restricted` 포함 모든 호출. dry-run 결과를 보이고 사용자가 실행을 승인한 뒤에만)도 `ask`. 병합 기록 `<work_dir>/<KEY>/merge-offer.json`을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(db_pr만 쓴다) | Bash |
 | 8 | 사용자 clone 직접 편집 차단: 대상 파일이 `issue_db.path` 안이면 거부(`work_dir` 아래는 제외) | Write/Edit/MultiEdit/NotebookEdit |
-| 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등, 플러그인 스크립트 출력 인자 `--out`·`--preview`·`--meta-out`·`mask_pii --in-place`·`jira_fields extract --consume` — `_script_out_targets`) 거부. migrate 브랜치 생성(깨끗한 트리)과 clone을 고치는 `db_build.py --write`(`--db` 값이 clone 안이거나 `--db` 없이 cwd가 clone 본체)는 ask | Bash, clone 본체 |
-| 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`issue_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관) | Bash |
-| 11 | 이슈 DB 원격 쓰기 확인: 대상이 이슈 DB인 `gh` 쓰기는 ask·`pr merge`·REST 병합은 거부(병합은 `db_pr.py merge`로만, 규칙 7), 비Jira MCP 쓰기형 도구도 같게(대상 후보 합집합 — slug 키·같은 층 owner×repo 키, 정규화·깊이 3, owner/repo만 비교, `check_mcp_db_write`. 판별 불가면 병합·Approve·기각 부류는 ask, 레포 단서 키가 있는 쓰기형은 ask). `pr`은 읽기 목록(list·view·status·checks·diff)만 읽기, 동작 별칭(`new`·`ls`·`co`)·`gh co`는 풀어 본다(H-A1 r5). 대상: `repo <동작> [<레포>]`·`issue transfer`의 위치 인자 레포, api 엔드포인트·PR/이슈 URL 선택자(`pr`·`issue` 동작 뒤 첫 위치 인자 — 옵션 값 자리의 URL은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다)·`-R` 모든 꼴(`-R v`·`-Rv`·`-R=v`·`--repo[=]v`·묶음 `-dR v` — 옵션 값 자리(`-b -Rother/x`)와 `gh api`의 꼴은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다)·`GH_REPO`(명시 대상은 합집합 — 하나라도 이슈 DB면 대상), 없으면 cwd. 모르는 것은 닫힌 쪽(H-A1 r4): 그룹·동작 앞 옵션(`gh -b x pr merge`·`gh -X PUT api …`)은 cobra처럼 값을 먹는 읽기·안 먹는 읽기를 다 보고 가장 센 결정(어느 읽기도 쓰기가 아니어도 대상이 이슈 DB면 ask), 병합·Approve·기각은 다른 레포 명시 대상이 cwd 판정을 끄지 않는다, 대상은 owner/repo로만 비교(host 무관·퍼센트 디코딩 — URL 선택자·엔드포인트 종류도 푼 뒤에 가린다)하고 셸이 풀 값(`$`·백틱)·명령 글의 `GH_REPO` 대입은 이슈 DB일 수 있다로 본다, 엔드포인트 한 칸만 자리표시면 남은 칸으로 비교, 값 받는 옵션 표에 없는 동작은 `=` 없는 옵션 바로 뒤 `-R…`을 그 값으로 본다. cwd는 원격 하나라도·`gh-resolved`·앞 대입 `GIT_DIR`로 보고, 모르는 cwd(셸이 풀 경로·없는 경로·`cd -`·`popd`)는 이슈 DB로 본다(r5). 셸이 정하는 그룹·`pr` 동작·`api` 엔드포인트 쓰기(끝 칸이 셸 값이거나 병합·리뷰 꼴)는 거부, `pr review`의 셸 값 옵션·리뷰 엔드포인트의 셸 값 `event`는 Approve(r5). Claude Approve(`gh pr review --approve`·`-a`·`-a=<참>`, REST `…/reviews`·`…/events`의 event=APPROVE — `@파일`·`--input`도 본다, `gh api` 옵션은 pflag 꼴로 읽는다(묶음 `-iX PUT`·`-if k=v`), MCP 단어 속 approve·입력 `event` APPROVE)·리뷰 기각(REST `…/dismissals`, MCP dismiss)·MCP 자동 병합 켜기(`enable_pr_auto_merge`·`automerge_pr` — MCP 거부 낱말은 쓰기형 판정보다 먼저 본다, r5)는 거부. GraphQL(엔드포인트 `graphql`·`/graphql`, 경로가 `/graphql`로 끝나는 URL, 셸이 푸는 엔드포인트 `"$GHE_API/graphql"`·`"$EP"`도 — r6) 병합·자동 병합·Approve·기각 mutation(`mergePullRequest`·`enablePullRequestAutoMerge`·`enqueuePullRequest`·`mergeBranch`·리뷰 APPROVE·`dismissPullRequestReview` — 본문은 인라인·`@파일`·`--input`·stdin heredoc, 64KB까지, 이름은 Bash 명령 글 전체에서도 찾는다 — 셸이 만든 본문 `query="$(cat <<EOF …)"`·`"$Q"`, r5. 읽지 못한 본문은 대상과 무관하게 ask)과 병합·리뷰 별칭을 만드는 `gh alias set`·`gh alias import`는 대상과 무관하게 거부. 이미 만든 gh 별칭의 실행은 보지 못한다. 대상: issue_db.remote와 module_skills.remote(owner/repo로 풀 때만, 사유 문구는 이슈 DB와 같다) | Bash, `mcp__.*` |
+| 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등, 플러그인 스크립트 출력 인자 `--out`·`--preview`·`--meta-out`·`mask_pii --in-place`·`jira_fields extract --consume` — `_script_out_targets`) 거부. migrate 브랜치 생성(깨끗한 트리)과 clone을 고치는 `db_build.py --write`(`--db` 값이 clone 안이거나 `--db` 없이 cwd가 clone 본체)는 ask. 인터프리터 인라인 코드(`python3 -c`·`perl -e`·`python3 - <<EOF` 본문)에 clone 안 경로 낱말이 있거나 `ln`의 원본이 clone 안이면 ask(셸 파서는 코드 안 쓰기를 보지 못한다 — `check_inline_code`. `/` 없는 상대 이름은 보지 않는다) | Bash, clone 본체 |
+| 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`issue_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관). 인터프리터 인라인 코드가 그 파일 경로를 담으면 ask(`check_inline_code`) | Bash |
+| 11 | 원격 쓰기 확인(거친 판정 — 대상 레포를 풀지 않는다: `-R`·`GH_REPO`·URL·cwd 원격을 보지 않으므로 이슈 DB가 아닌 레포의 gh 병합·쓰기도 ask): **병합 계열**(`gh pr merge`, REST `…/merge`·`…/merges`, GraphQL `mergePullRequest`·`enqueuePullRequest`·`mergeBranch`, 병합 별칭 `gh alias set|import`, MCP 단어 속 `merge`·입력 `action`·`method` merge…)는 ask(`GH_MERGE_ASK`·`MCP_MERGE_ASK` — 병합은 서버 브랜치 보호가 승인 1을 강제한다, 전제 site_checks `s4a.protection_guard`). 그 밖 gh 쓰기(`pr` 읽기 목록 밖 동작, 그룹의 읽기 목록 밖 동작, 모르는 그룹 — 이미 만든 별칭 실행 포함, `api`의 GET 아닌 메서드·필드·`--input`, GraphQL `mutation`·못 읽은 본문)와 비트래커 MCP 쓰기형 도구(`mcptools.is_write`)는 ask. **Claude Approve·리뷰 기각은 거부**(서버가 막지 못한다 — 낱말 수준, `_gh_kind`): 따옴표를 뗀 명령 글·argv·gh가 읽는 파일(`@파일`·`--input`·`$(cat 파일)`·heredoc stdin)에 `approve`·`dismiss`(상태 값 `APPROVED`·`DISMISSED`는 아니다), `gh pr review`의 `-a`·`-a=`·`--approve`·셸 값 옵션(`_gh_review_approves`), REST 리뷰 엔드포인트의 `event=@…`·셸 값·못 읽은 본문, GraphQL 리뷰 mutation의 변수 `event`와 셸 값·못 읽은 본문, MCP 단어 속 approve·dismiss와 동작 칸(`event`·`action`·`method`·`*event`). 그것일 수 있는 꼴도 거부: 셸이 정하는 그룹·`pr`·`alias` 동작·api 엔드포인트 끝 칸, 리뷰·Approve·기각 별칭과 못 읽은 별칭 파일·셸 값·자리 표시(`$1`·`$@`)·셸 별칭(`-s`·`--shell`·`!…`). `GH_JSON_DEPTH_MAX`(64)보다 깊이 중첩한 JSON 본문은 못 읽은 본문이다(Python 판마다 다른 RecursionError에 기대지 않는다). heredoc 본문은 끝 표시를 인용했거나 `$`·백틱·`\\`가 없고 명령 글의 `<<` 수가 찾은 heredoc 수와 같을 때만, stdin(`-`·`@-`)은 그 호출 자신의 heredoc일 때만 읽은 것이다(`_heredoc_known`·`_gh_stdin_known`). 서버 브랜치 보호·ruleset 바꾸기(`…/branches/<b>/protection…`(브랜치에 `/`가 들어도)·`…/rulesets`의 쓰기, 레포 설정 쓰기(REST `repos/<o>/<r>`·`repositories/<id>`)의 `allow_auto_merge`·`delete_branch_on_merge` 켜기(거짓 `false`·`0` 밖 모든 값, `-f`·`-F`·`--input`·JSON 이스케이프), GraphQL `create|update|delete` + `BranchProtectionRule|RepositoryRuleset`)와 `gh repo edit --enable-auto-merge`·`--delete-branch-on-merge`도 거부(`PROTECTION_DENY` — 4-c 뒤 서버 보호가 유일한 병합 장치). PR 자동 병합 켜기(`gh pr merge --auto`·선택자 뒤 따옴표 밖 셸 값, GraphQL `enablePullRequestAutoMerge`, `--auto` 병합 별칭, MCP 단어 속 auto+merge)도 거부(`AUTO_MERGE_DENY` — 원칙 12: 병합은 +1 뒤 요청 시 `db_pr merge`로만 한다. 자동 병합은 +1이 붙는 즉시 승인 SHA 대조·메인테이너 경로 거부 없이 병합한다). approve·dismiss 낱말이 든 gh 호출은 본문·검색어라도 거부된다(`GH_WORD_NOTE`). `pr checkout`·`gh co`(그룹·`pr` 동작 자리)는 clone 본체에서 규칙 8 거부. 동작 별칭(`new`·`ls`·`co`·`remove`)은 풀어 본다. 적용 조건: issue_db.remote·module_skills.remote 원격 값이 있으면(owner/repo로 못 풀어도 — setup 전엔 보지 않는다) | Bash, `mcp__.*` |
 | 12 | 모듈 스킬 관리 clone·기록 보호, 분석 스킬 소스 확인: (a) 관리 clone `<work_dir>/_module-skills/**`·lock `<work_dir>/_module-skills.lock`(경로 조각 `_module-skills`이거나 `_module-skills.`로 시작하면 설정과 무관하게 — `.lock`·`.tmp-*` 포함)과 `<work_dir>/<KEY>/skill-wt/**`(모든 프로필 work_dir — 이름이 잘못된 프로필 포함 — 과 켠 플랫폼의 기본 work_dir)를 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별 + `mv`·`ln`·`rsync --remove-source-files`의 원본)로 바꾸면 거부. 어디서 돌든 git 경로 옵션(`--output`·`-o`·`--output-directory`·config `--file`·`--git-dir`·`--work-tree`·`--separate-git-dir`)이 그 안이나 (b) 기록을 가리키면 거부. git 작업 디렉토리·`--git-dir`·`GIT_DIR`·`--work-tree` 중 하나라도 그 안이면 읽기 목록(`MODULE_GIT_READ`, `branch`·`remote`·`config`·`sparse-checkout`·`worktree`·`stash`는 읽기 꼴만)만 통과하고(`--output*`·`-O`·`--open-files-in-pager`·`--ext-diff`·`--textconv`는 읽기라도 거부) `-c` 덮어쓰기와 나머지(commit·push·stash·reset·checkout·sparse-checkout set·worktree add·fetch·remote set-url·config 쓰기 등)는 거부, 대상이 그 안인 `git clone`·`init`도 거부(이슈 DB 설정과 무관, 받기·갱신은 `triage.py module`만). (b) 스크립트 기록 `<work_dir>/<KEY>/module-skill.json`·`module-skill/**`·`deep-input.json`·`skill-input.json`·`check-output.json`(triage.py만 — `deep-output.md`·`explore-output.md`는 Claude가 쓴다)과 `skill-suggestions/<이름>.patch`·`.meta.json`(skill_patch.py만)을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(사본 `skill-suggestions/<이름>/**`는 허용). 상대 경로는 hook 입력 `cwd` 기준. `skill_patch.py --apply`(낱말 그물: 이름 `skill_patch`와 낱말 `apply`)는 `ask`. config `analyzers.<카테고리>.source`(절대 경로, site-defaults·사용자 config의 최상위와 모든 `platforms.<p>.analyzers` 것) 안을 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별)·파일을 바꾸는 git(`CLONE_GIT_SUBS`·commit·push·stash)으로 바꾸면 `ask`(적용은 `skill_patch.py --apply`로만) | Bash, Write/Edit/MultiEdit/NotebookEdit |
 
 (1번은 SessionStart의 `config.py sync-scripts-path`다.)
@@ -52,6 +52,7 @@ bash 범위대로 — 서브셸·`$( )`·파이프 요소·`&` 백그라운드�
 (`echo "…" | bash`) 빼지 않음). 남는 한계: 낱말을 변수로 만들어 쓴 호출(`${P}lish`·`X=db; …/${X}_pr.py`)·인코딩, 스크립트 파일 안 호출(`bash push.sh`
 — eval 채점기는 결과의 `"published": true`로도 센다), 사용자 셸 프로필의 별칭·함수. 반대로 db_pr 소스·문서를 sed·python으로
 다루는 명령에 두 낱말이 함께 들면 ask 오판이다.
+gh·MCP(규칙 11)는 cwd·대상 레포를 보지 않는 낱말 수준 판정이라 cd 따라가기와 무관하다(4-c — 병합 계열은 ask, Approve·기각은 거부).
 진짜 강제는 git hook(pre-commit·pre-push)과 GHE 브랜치 보호다(모듈 스킬 레포도 브랜치 보호 승인 1, MODULE_SKILLS_PLAN_IMPL §4.5).
 
 **설정 없음**: 사용자 config가 없거나 `issue_db.path`로 레포를 판별할 수 없으면 git·파일 규칙은 적용하지 않는다.
@@ -64,12 +65,15 @@ bash 범위대로 — 서브셸·`$( )`·파이프 요소·`&` 백그라운드�
 12번 (a)의 경로 조각 판정과 관리 clone git 판정은 사용자 config·issue_db.path가 없어도 적용한다. module_skills.remote가
 owner/repo로 풀리지 않으면(file:// 제외) 매번 경고한다.
 
-**의존성 없음·내부 오류**(`_degraded`): import 실패나 판정 중 예외면 MCP는 거부, gh Approve·리뷰 기각·병합·자동 병합·병합 별칭
-형태(규칙 11과 같은 판별, 대상 레포를 몰라도 — `_gh_unjudged_deny`)는 거부, Bash의 git·gh·`db_pr.py publish`·`merge`·
-`request-review`·`module_eval.py`·`skill_patch.py --apply`(규칙 7·12와 같은 `word_net`)와 파일 도구는 ask, 그 밖의 Bash는 통과 + 경고. 판정 중 경로·인코딩 예외
-(ValueError·OSError)는 판정 전체를 여기로 보내지 않고 그 검사만 ask로 남긴다(`_checked`, 회귀 수정 R2).
+**의존성 없음**(`_degraded`): import 실패면 MCP는 거부, gh 호출마다 `_gh_kind`(설정·PyYAML 없이 돈다)의
+거부 종류(Approve·기각·셸이 정한 동작·리뷰 별칭·보호 바꾸기 — `_gh_judged_deny`, `_gh_kind`가 예외면 `guard 내부 오류` 거부)와, 명령 걷기가 예외면 낱말 수준(따옴표를 뗀 명령 글에
+`gh`와 `approve`·`dismiss`·`review … -…a`·보호·ruleset 쓰기·`--enable-auto-merge`·`--delete-branch-on-merge`·`allow_auto_merge`·`delete_branch_on_merge`·`enablePullRequestAutoMerge`·`merge … --auto` — `_text_unjudged_deny`)은 거부, 병합 계열과 Bash의 git·gh·`db_pr.py publish`·`merge`·
+`request-review`·`module_eval.py`·`skill_patch.py --apply`(규칙 7·12와 같은 `word_net`)와 파일 도구는 ask, 그 밖의 Bash는 통과 + 경고.
 degraded에서도 경로 조각 `_module-skills`(·`_module-skills.`로 시작) 파일 도구·Bash 쓰기는 ask가 아니라 deny.
-종료 코드는 그래도 0이다(2는 설치 명령까지 모든 Bash를 막는다). 출력은 ASCII JSON이고 판정·직렬화가 실패해도 최소 ask를 낸다.
+**설정 읽기 오류**(사용자 config·site-defaults YAML 오류 — `Config`)도 의존성 없음과 같은 판정이다(설정을 고치는 Write·doctor를
+막지 않게). **판정 중 예외**(검사 하나 — `_checked`, `_gh_kind`·`_json_obj`, 명령 걷기, `judge` 자체 — `RecursionError` 포함)는 그 호출을
+거부한다(사유 `guard 내부 오류` — `INTERNAL_ERROR`, 4-c. 검사 예외면 다른 검사는 사유를 남기도록 이어 간다).
+종료 코드는 그래도 0이다(2는 설치 명령까지 모든 Bash를 막는다). 출력은 ASCII JSON이고 판정·직렬화가 실패해도 거부를 낸다.
 """
 
 from __future__ import annotations
@@ -179,8 +183,6 @@ GIT_GLOBAL_WITH_ARG = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "-
 COMMIT_LONG_WITH_ARG = {"--message", "--file", "--author", "--date", "--template", "--reuse-message",
                         "--reedit-message", "--fixup", "--squash", "--cleanup", "--trailer", "--pathspec-from-file"}
 COMMIT_SHORT_WITH_ARG = set("mFCct")
-PUSH_LONG_WITH_ARG = {"--repo", "--receive-pack", "--exec", "--push-option"}
-PUSH_SHORT_WITH_ARG = set("o")
 CONFIG_WITH_ARG = {"--file", "-f", "--blob", "--type", "--default", "--comment", "--value", "--fixed-value"}
 CONFIG_READ_ACTIONS = {"get", "get-all", "get-regexp", "get-urlmatch", "get-color", "get-colorbool", "list",
                        "name-only", "show-origin", "show-scope"}
@@ -251,7 +253,7 @@ class GuardProfile:
             self.work_dir = Path(str(userconfig.get(cfg, "work_dir"))).expanduser()
         self.base = str(userconfig.get(cfg, "issue_db.base_branch") or "main")
         remote = userconfig.get(cfg, "issue_db.remote") if has_user else None
-        self.remote_slug = _repo_slug(str(remote)) if remote else None
+        self.has_remote = bool(str(remote or "").strip())     # 규칙 11 적용 조건(값만 본다 — owner/repo로 못 풀어도, 4-c)
         self._clone_git_dir: str | None = None
 
     def is_clone_body(self, cwd: Path) -> bool:
@@ -300,11 +302,11 @@ class Config:
             except Exception as exc:  # noqa: BLE001
                 self.tracker_error = f"{type(exc).__name__}: {exc}"
                 break
-        problems = userconfig.profile_problems(self.user) if self.user else []
-        # 원격이 있는데 owner/repo로 못 풀면 그 프로필의 규칙 11이 조용히 꺼진다: 알린다(H-A1 r6. doctor `config` 행은 fail)
+        problems = userconfig.profile_problems(self.user, defaults) if self.user else []
+        # 원격이 있는데 owner/repo로 못 풀면 알린다(H-A1 r6. doctor `config` 행은 fail). 규칙 11은 원격 값만 보고 그대로 켠다(4-c)
         for key, remote in userconfig.remote_problems(defaults, self.user):
-            self.warnings.append(f"{key}({remote})를 owner/repo로 풀 수 없어 그 이슈 DB의 원격 쓰기 확인(규칙 11)을 하지 못한다. "
-                                 "`config.py doctor`로 확인한다.")
+            self.warnings.append(f"{key}({remote})를 owner/repo로 풀 수 없다(규칙 11은 원격 값이 있으면 그대로 적용한다 — setup·"
+                                 "db_pr이 그 원격을 쓰지 못할 수 있다). `config.py doctor`로 확인한다.")
         if problems:
             self.warnings.append("사용자 config 플랫폼 프로필 문제(보호는 유지, 잘못된 work_dir은 예외 근거로 쓰지 않는다): "
                                  + "; ".join(problems[:5]))
@@ -322,18 +324,17 @@ class Config:
             if _norm(w) not in mwd:
                 mwd.append(_norm(w))
         self.module_work_dirs: list[str] = mwd
-        # 규칙 11: 모듈 스킬 레포도 원격 쓰기 확인 대상(owner/repo로 풀릴 때만, 문구는 이슈 DB와 같다)
-        self.module_slugs: list = []
+        # 규칙 11 적용 조건: 모듈 스킬 원격 값이 있어도 켠다(값만 본다 — 4-c)
+        self.module_remote = False
         for r in userconfig.module_remotes(defaults, self.user):
-            s = _repo_slug(r) if not r.strip().lower().startswith("file://") else None
-            if s is not None:
-                self.module_slugs.append(s)
-            elif not r.strip().lower().startswith("file://") and not os.path.isabs(os.path.expanduser(r.strip())):
-                self.warnings.append(f"module_skills.remote({userconfig.redact_remote(r)})를 owner/repo로 풀 수 없어 모듈 스킬 "
-                                     "레포의 원격 쓰기 확인(규칙 11)을 하지 못한다. `config.py doctor`로 확인한다.")
+            self.module_remote = self.module_remote or bool(r.strip())
+            local = r.strip().lower().startswith("file://") or os.path.isabs(os.path.expanduser(r.strip()))
+            if not local and _repo_slug(r) is None:
+                self.warnings.append(f"module_skills.remote({userconfig.redact_remote(r)})를 owner/repo로 풀 수 없다(규칙 11은 "
+                                     "원격 값이 있으면 그대로 적용한다). `config.py doctor`로 확인한다.")
         top = self.profiles[0]            # 기본 플랫폼 프로필(옛 단일 프로필 속성)
         self.clone, self.clone_common, self.work_dir = top.clone, top.clone_common, top.work_dir
-        self.base, self.remote_slug = top.base, top.remote_slug
+        self.base = top.base
 
     def _raw_read(self, defaults: dict) -> tuple[set, set]:
         """규칙 10 목록: 내장 ∪ site-defaults `guard.raw_read`. 잘못된 값은 경고하고 내장만 쓴다."""
@@ -392,9 +393,10 @@ class Config:
         return [p.work_dir for p in self.profiles if p.work_dir is not None]
 
     @property
-    def remote_slugs(self) -> list[str]:
-        """규칙 11 대상: 모든 프로필의 이슈 DB 원격 + 모듈 스킬 레포 원격(B1 §7.2 — 다섯 소비처가 고치지 않고 함께 판정)."""
-        return [p.remote_slug for p in self.profiles if p.remote_slug is not None] + list(self.module_slugs)
+    def rule11_on(self) -> bool:
+        """규칙 11 적용 조건: 어느 프로필의 `issue_db.remote`나 모듈 스킬 원격 값이 있다(값만 본다 — owner/repo로 못 푸는 값도
+        켠다, 닫힌 쪽. 거친 판정이라 대상 레포를 풀지 않는다, 4-c). 사용자 config가 없어도 site의 module_skills.remote는 본다."""
+        return any(p.has_remote for p in self.profiles) or self.module_remote
 
     def is_clone_body(self, cwd: Path) -> bool:
         """cwd가 어느 프로필이든 사용자 clone 본체인가."""
@@ -405,9 +407,6 @@ class Config:
         if common is None:
             return None
         return next((p for p in self.profiles if p.clone_common is not None and p.clone_common == common), None)
-
-    def same_db_repo(self, slug) -> bool:
-        return any(_same_repo(slug, s) for s in self.remote_slugs)
 
 
 def _skill_sources(sources: list[str]) -> list[str]:
@@ -421,7 +420,7 @@ def _skill_sources(sources: list[str]) -> list[str]:
     return out
 
 
-def _in_skill_source(target: str, conf: "Config") -> bool:
+def _in_skill_source(target: str, conf: Config) -> bool:
     return any(_inside(target, src) for src in conf.skill_sources)
 
 
@@ -449,15 +448,13 @@ def _repo_slug(value: str) -> tuple[str | None, str, str] | None:
     return userconfig.repo_slug(value)
 
 
-def _same_repo(a: tuple | None, b: tuple | None) -> bool:
-    if a is None or b is None:
-        return False
-    if a[0] and b[0] and a[0] != b[0]:
-        return False
-    return a[1:] == b[1:]
-
-
 # -- Jira (2) --------------------------------------------------------------------------------
+
+OC_ADAPTER_ENV = "TT_OC_ADAPTER"      # OpenCode 어댑터(`common/oc_adapter.run_script`)가 guard를 부를 때 넣는다
+JIRA_ISOLATION_ASK = ("Jira 읽기 결과 격리(규칙 9: PostToolUse `updatedToolOutput` 대체)가 이 Claude Code에서 동작하는지 아직 "
+                      "확인되지 않았다(사내 확인 S1). 확인 전에는 {tool} 결과 원문이 모델 문맥·transcript에 남을 수 있다 — 그 위험을 "
+                      "알고 읽을 때만 허용한다. S1에서 확인되면 site-defaults.yaml `tracker.isolation_confirmed: true`로 기록한다 "
+                      "(그 뒤에는 묻지 않는다, 규칙 2).")
 
 
 def check_mcp(tool: str, tool_input: dict, conf: Config, dec: Decision) -> None:
@@ -486,6 +483,11 @@ def check_mcp(tool: str, tool_input: dict, conf: Config, dec: Decision) -> None:
         if name not in {mcptools.normalize(t) for t in read_tools}:
             dec.deny.append(f"이 플러그인은 Jira 읽기 전용이다(예외: 승인한 코멘트 추가 1종, tracker.write_tools.add_comment). "
                             f"{tool}은(는) tracker.read_tools에 없어 거부한다 (규칙 2).")
+        elif not userconfig.get(conf.cfg, "tracker.isolation_confirmed") and not os.environ.get(OC_ADAPTER_ENV):
+            # 규칙 9(원문 격리)는 PostToolUse `updatedToolOutput` 대체에 기대고 미지원이면 열린다(원문이 모델 문맥에 남는다).
+            # 사내 S1 확인 전에는 읽기마다 사람이 그 위험을 보고 허용한다. OpenCode 어댑터는 `after`가 결과를 직접 바꾸고 자체
+            # 관문(`oc_jira_gate`)이 있어 묻지 않는다
+            dec.ask.append(JIRA_ISOLATION_ASK.format(tool=tool))
         return
     if not prefixes:
         dec.warn.append("tracker.mcp_server가 비어 있어 Jira 읽기 전용 규칙을 적용하지 않았다 (setup 전).")
@@ -527,14 +529,9 @@ def check_jira_post(tool: str, tool_input: dict, spec: dict, conf: Config, dec: 
     dec.ask.append(f"승인한 Jira 코멘트 게시다({key}, 본문 sha256 {sha[:12]}). 확인 화면의 본문과 같은지 보고 허용한다 (규칙 2).")
 
 
-# 규칙 11 MCP 대상·동작 인자 (키는 `_mcp_nkey`로 정규화 — 소문자, `_`·`-` 제거). TODO(SITE:S36) 사내 GHE MCP 서버의 쓰기 도구
-# 이름과 대상·동작 인자 이름을 `tools/list`·S1 실험 hook으로 확인해 이 목록을 보강한다(사외는 github-mcp-server 관측·추정).
-MCP_SLUG_KEYS = {"repository", "repo", "fullname", "repofullname", "repositoryfullname", "namewithowner", "repourl",
-                 "repositoryurl", "url", "htmlurl", "prurl", "pullrequesturl"}
-MCP_OWNER_KEYS = {"owner", "repoowner", "repositoryowner", "org", "organization"}
-MCP_REPO_NAME_KEYS = {"repo", "reponame", "repositoryname", "repository"}   # 짝 키(`name`은 owner 키가 같은 층에 있을 때만)
+# 규칙 11 MCP 동작 인자 (키는 `_mcp_nkey`로 정규화 — 소문자, `_`·`-` 제거). TODO(SITE:S36) 사내 GHE MCP 서버의 쓰기 도구
+# 이름과 동작 인자 이름을 `tools/list`·S1 실험 hook으로 확인해 이 목록을 보강한다(사외는 github-mcp-server 관측·추정).
 MCP_ACTION_KEYS = {"event", "action", "method"}       # + 정규화 키가 `event`로 끝나는 칸(`review_event`·`reviewEvent`)
-MCP_TARGET_HINTS = ("repo", "owner", "pull")          # 판별 불가 (b): 쓰기형 도구의 이 단서 키는 ask
 
 
 def _mcp_nkey(key) -> str:
@@ -542,7 +539,7 @@ def _mcp_nkey(key) -> str:
 
 
 def _mcp_keyed(obj, depth: int = 0) -> list[list[tuple[str, object]]]:
-    """MCP 입력(깊이 3까지 dict·list)의 dict마다 `(정규화 키, 값)` 목록 — 같은 층 짝(owner×repo)을 보려고 층별로 둔다."""
+    """MCP 입력(깊이 3까지 dict·list)의 dict마다 `(정규화 키, 값)` 목록."""
     out: list[list[tuple[str, object]]] = []
     if depth > 3:
         return out
@@ -559,104 +556,35 @@ def _mcp_keyed(obj, depth: int = 0) -> list[list[tuple[str, object]]]:
     return out
 
 
-MCP_SUBPATH = {"pull", "pulls", "issues"}       # 대상 꼴 `owner/repo[/pull|pulls|issues/N]`
-
-
-def _mcp_segs(value: str) -> tuple[list[str], bool]:
-    """MCP 대상 값의 경로 단어와 대상 꼴 여부. `#…`·`?…`·scheme+host·SCP `host:`·`api/v3/`·`repos/`·`.git`을 벗긴다.
-    꼴은 `owner/repo` 또는 `owner/repo/(pull|pulls|issues)/N`만 — 그 밖은 판별 불가(F1 r2)."""
-    s = value.split("#", 1)[0].split("?", 1)[0].strip()
-    if "://" in s:
-        s = s.split("://", 1)[1].partition("/")[2]
-    elif re.match(r"^[^/:]+:[^/]", s):
-        s = s.split(":", 1)[1]
-    segs = [x[:-4] if x.endswith(".git") else x for x in s.split("/") if x]
-    if segs[:2] == ["api", "v3"]:
-        segs = segs[2:]
-    if segs[:1] == ["repos"]:
-        segs = segs[1:]
-    ok = len(segs) == 2 or (len(segs) == 4 and segs[2] in MCP_SUBPATH and segs[3].isdigit())
-    return segs, ok
-
-
-def _mcp_targets(layers: list[list[tuple[str, object]]]) -> tuple[list[list[str]], bool]:
-    """대상 후보의 `(경로 단어 목록들, 판별 불가 여부)`. 이슈 DB 판정은 이어진 두 단어가 원격 owner/repo와 같은가로 한다
-    (`api/v3/repos/o/r/pulls/3`·`o/r/pull/3`·`o/r#3`). 판별 불가: 후보 값이 대상 꼴이 아님(`"$R"`·owner 없는 repo·
-    그 밖의 경로) 또는 후보 키가 없음."""
-    cands: list[list[str]] = []
-    unresolved, seen = False, False
-    for layer in layers:
-        owners = [v.strip() for k, v in layer if k in MCP_OWNER_KEYS and isinstance(v, str) and v.strip()]
-        for k, v in layer:
-            if not isinstance(v, str) or not v.strip():
-                continue
-            v = v.strip()
-            pair = k in MCP_REPO_NAME_KEYS or (k == "name" and owners)
-            if k in MCP_SLUG_KEYS and ("/" in v or k not in MCP_REPO_NAME_KEYS):
-                seen = True
-                segs, ok = _mcp_segs(v)
-                cands.append(segs)
-                unresolved = unresolved or not ok
-            elif pair:
-                seen = True
-                got = [_mcp_segs(f"{o}/{v}") for o in owners]
-                cands += [segs for segs, _ in got]
-                unresolved = unresolved or not got or not all(ok for _, ok in got)
-    return cands, unresolved or not seen
-
-
-def _mcp_is_db(cands: list[list[str]], conf: Config) -> bool:
-    pairs = {tuple(s[1:]) for s in conf.remote_slugs if s}
-    return any(tuple(segs[i:i + 2]) in pairs for segs in cands for i in range(len(segs) - 1))
-
-
 def check_mcp_db_write(tool: str, part: str, tool_input: dict, conf: Config, dec: Decision) -> None:
-    """비Jira MCP 도구가 이슈 DB 레포를 대상으로 하면: 머지·자동 병합 켜기·Approve·리뷰 기각이면 deny, 그 밖 쓰기형 도구는 ask
-    (규칙 11). 대상 후보는 합집합(하나라도 이슈 DB면 대상): slug 키(`MCP_SLUG_KEYS` — `repo`는 `/`가 들 때만)와 같은 층의
-    owner 키 × repo 키(`name`은 owner 키가 있을 때만), 키는 정규화(소문자, `_`·`-` 제거)·깊이 3. 비교는 owner/repo만(URL 키는
-    GHE 웹 host, `issue_db.remote`는 SSH 별칭 SCP 꼴일 수 있다 — gh 경로와 같은 기준).
-    거부 낱말은 쓰기형 판정(`mcptools.is_write`)과 따로, 그보다 먼저 본다(H-A1 r5 — `pr_approve`·`automerge_pr`처럼 쓰기 낱말로
-    잡히지 않는 이름): 병합은 동사 `merge`이거나 어느 단어에든 `merge`가 들고(`automerge`·`squash_and_merge`) 동사가 `disable`이
-    아닐 때, 또는 입력 `action`·`method`가 merge…(`merge_method`는 보지 않는다). Approve는 어느 단어에든 `approve`가 들거나 입력
-    `event`·`action`·`method`·`*event`가 approve…, 기각은 어느 단어에든 `dismiss`가 들거나 그 칸이 dismiss…. 동사가 읽기
-    동사(`get_merge_status`)면 거부 낱말을 보지 않는다.
-    판별 불가(후보 값이 owner/repo로 안 풀리거나 후보 키가 없음): (a) 병합·자동 병합·Approve·기각 부류 → ask(서버 무관),
-    (b) 쓰기형이고 정규화 키에 `repo`·`owner`·`pull`이 든 칸이 있으면 ask, (c) 그 밖은 판정하지 않는다."""
-    if not conf.remote_slugs or not isinstance(tool_input, dict):
+    """비트래커 MCP 도구(규칙 11, 거친 판정 — 대상 레포를 보지 않는다): Approve·리뷰 기각·자동 병합 켜기(단어에 `auto`와
+    `merge` — `AUTO_MERGE_DENY`, 원칙 12)는 거부, 병합은 ask(`MCP_MERGE_ASK`), 그 밖 쓰기형 도구(`mcptools.is_write`)는 ask. 거부·병합 낱말은 쓰기형 판정과 따로, 그보다 먼저 본다(H-A1
+    r5 — `pr_approve`·`automerge_pr`처럼 쓰기 낱말로 잡히지 않는 이름): Approve는 어느 단어에든 `approve`가 들거나 입력의 동작 칸
+    (`event`·`action`·`method`와 정규화 키가 `event`로 끝나는 칸, 깊이 3)이 approve…, 기각은 `dismiss`가 들거나 그 칸이 dismiss….
+    병합은 동사 `merge`이거나 어느 단어에든 `merge`가 들고(`enable_pr_auto_merge`·`squash_and_merge`) 동사가 `disable`이 아닐 때,
+    또는 입력 `action`·`method`가 merge…(`merge_method`는 보지 않는다). 동사가 읽기 동사(`get_merge_status`)면 이 낱말들을 보지
+    않는다. `issue_db.remote`(·모듈 스킬 원격)가 없으면(setup 전) 보지 않는다."""
+    if not conf.rule11_on or not isinstance(tool_input, dict):
         return
     layers = _mcp_keyed(tool_input)
-    cands, unknown = _mcp_targets(layers)
-    is_db = _mcp_is_db(cands, conf)
-    if not is_db and not unknown:
-        return
     words, verb = mcptools._words(part), mcptools.verb(part)
     vals = [(k, v.strip().lower()) for layer in layers for k, v in layer
             if isinstance(v, str) and (k in MCP_ACTION_KEYS or k.endswith("event"))]
     acts = [v for _, v in vals]
     am = [v for k, v in vals if k in ("action", "method")]
     strong = verb not in mcptools.READ_VERBS
-    kind = None
-    # 단어 속 merge이고 동사가 disable이 아니면(`enable_pr_auto_merge`·`automerge_pr` — 자동 병합은 +1 관문 없이 서버 조건만으로
-    # 병합한다)
-    if strong and (verb == "merge" or (any("merge" in w for w in words) and verb != "disable")
-                   or any(v.startswith("merge") for v in am)):
-        kind = MCP_MERGE_DENY
-    elif strong and (any("approve" in w for w in words) or any(v.startswith("approve") for v in acts)):
-        kind = APPROVE_DENY
+    if strong and (any("approve" in w for w in words) or any(v.startswith("approve") for v in acts)):
+        dec.deny.append(f"{APPROVE_DENY}: {tool}).")
     elif strong and (any("dismiss" in w for w in words) or any(v.startswith("dismiss") for v in acts)):
-        kind = DISMISS_DENY
-    if is_db:
-        if kind:
-            dec.deny.append(f"{kind}: {tool}).")
-        elif mcptools.is_write(part):
-            dec.ask.append(f"이슈 DB 원격을 바꾸는 MCP 도구다({tool}). 변경·검증 결과를 보고 승인한 뒤에만 진행한다 (규칙 7).")
-        return
-    if kind:
-        dec.ask.append(f"대상 레포를 판별하지 못한 MCP 병합·Approve·기각 도구다({tool}). 이슈 DB면 병합은 db_pr.py merge로만, "
-                       "Approve·기각은 하지 않는다 — 대상을 확인한다 (규칙 11).")
-    elif mcptools.is_write(part) and any(h in k for layer in layers for k, _ in layer for h in MCP_TARGET_HINTS):
-        dec.ask.append(f"대상 레포를 판별하지 못한 MCP 쓰기 도구다({tool}). 이슈 DB 원격이면 변경·검증 결과를 보고 승인한 뒤에만 "
-                       "진행한다 (규칙 11).")
+        dec.deny.append(f"{DISMISS_DENY}: {tool}).")
+    elif strong and verb != "disable" and any("auto" in w for w in words) and any("merge" in w for w in words):
+        dec.deny.append(f"{AUTO_MERGE_DENY} ({tool})")
+    elif strong and (verb == "merge" or (any("merge" in w for w in words) and verb != "disable")
+                     or any(v.startswith("merge") for v in am)):
+        dec.ask.append(MCP_MERGE_ASK.format(tool=tool))
+    elif mcptools.is_write(part):
+        dec.ask.append(f"원격을 바꾸는 MCP 도구다({tool} — 대상 레포를 보지 않는다, 이슈 DB가 아니어도 묻는다). 이슈 DB면 "
+                       "변경·검증 결과를 보고 승인한 뒤에만 진행한다 (규칙 7·11).")
 
 
 # -- 파일 도구 (8) -------------------------------------------------------------------------
@@ -749,6 +677,20 @@ def _in_clone(target: str, conf: Config) -> bool:
     return False
 
 
+GIT_META_MSG = ("이슈 DB 레포의 git 메타데이터(`.git` — ref·packed-refs·config, worktree의 `.git` 연결 파일)는 도구가 직접 쓰지 "
+                "않는다 — 규칙 5의 ci_mode 근거 ref(origin/<base>)·원격을 바꿀 수 있다 (규칙 5·8")
+
+
+def _db_git_meta(target: str, conf: Config) -> bool:
+    """쓰기 대상(`_norm` 경로)이 이슈 DB 레포(clone·worktree·스냅샷 — git common dir로 본다)의 `.git`(파일·디렉토리) 안인가.
+    clone 본체의 `.git/**`는 규칙 8도 거부한다 — 이것은 work_dir 아래 worktree의 `.git` 파일(`<clone>/.git/worktrees/…`를 가리킨다)을
+    더한다."""
+    parts = Path(target).parts
+    if ".git" not in parts:
+        return False
+    return conf.profile_of_common(_common_dir(Path(*parts[:parts.index(".git")]))) is not None
+
+
 def check_file(tool_input: dict, cwd: Path, conf: Config, dec: Decision) -> None:
     raw = tool_input.get("file_path") or tool_input.get("notebook_path")
     if not raw:
@@ -772,6 +714,8 @@ def check_file(tool_input: dict, cwd: Path, conf: Config, dec: Decision) -> None
     if _in_clone(target, conf):
         dec.deny.append("이슈 DB clone은 도구가 직접 고치지 않는다. 직접 편집은 사용자가 한다 "
                         f"(규칙 8: {raw}). 도구 변경은 작업 계획과 db_pr stage로 작업 worktree에서 만든다.")
+    elif _db_git_meta(target, conf):
+        dec.deny.append(f"{GIT_META_MSG}: {raw}).")
     elif _in_skill_source(target, conf):
         dec.ask.append(f"{SKILL_SOURCE_ASK} ({raw})")
 
@@ -856,7 +800,7 @@ def _heredoc_scan(command: str) -> tuple[_Heredoc, ...]:
     """명령 글의 heredoc 연산자(나온 차례). bash처럼 인용(`'…'`·`"…"`·`$'…'`·`\\`) 밖·주석 밖·산술(`$(( ))`·`(( ))`) 밖의
     `<<`·`<<-`만 연산자로 본다(`<<<` here-string은 아니다). 인용 상태는 줄을 넘어 이어지고, `"$( … )"`·백틱 안은 다시 명령
     자리다. 본문은 연산자 뒤 첫 명령 줄 끝(인용 밖·줄 이음 아닌 줄바꿈) 다음 줄부터 끝 표시 줄까지다. `_strip_heredocs`·
-    `_heredocs`·`word_net`·`_stdin_text`·`_gh_subst_body`가 모두 이 탐지를 쓴다(H-A1 r6 — 인용·주석·here-string 안의 `<<WORD`와
+    `_heredocs`·`word_net`·`_gh_hay`가 모두 이 탐지를 쓴다(H-A1 r6 — 인용·주석·here-string 안의 `<<WORD`와
     끝 표시 없는 연산자가 뒤 줄을 지워 모든 Bash 규칙을 피하던 부류를 닫는다)."""
     text, n = command, len(command)
     starts = [0] + [m.end() for m in re.finditer("\n", text)]
@@ -1232,7 +1176,7 @@ def _fd_word(text: str, i: int) -> bool:
         chars.append(text[j])
         j = _back(text, j - 1)
     word = "".join(reversed(chars))
-    if not (word.isascii() and word.isdigit() or FD_NAME_RE.match(word)):
+    if not ((word.isascii() and word.isdigit()) or FD_NAME_RE.match(word)):
         return False
     while j >= 0 and text[j] in " \t":
         j = _back(text, j - 1)
@@ -1284,7 +1228,7 @@ def _tokens(command: str) -> list[str]:
             for op in OPS_RE.findall(tok):
                 op = op.replace(HD_DASH, "-")
                 fd = out[-1][:-1] if out and not prev_op and out[-1].endswith(FD_AT) else ""
-                if op[0] in "<>" and (fd.isascii() and fd.isdigit() or FD_NAME_RE.match(fd)):
+                if op[0] in "<>" and ((fd.isascii() and fd.isdigit()) or FD_NAME_RE.match(fd)):
                     out[-1] = fd + op      # `2>`·`2>&`·`0<`·`{fd}<`: 공백 없이 붙은 앞 fd(`_fd_word`)
                 else:
                     out.append(op)
@@ -1777,7 +1721,7 @@ def _feeds_shell(line: str, cwd: Path) -> bool:
     return False
 
 
-# `cd -`·`popd` 등 따라갈 수 없는 디렉토리(`$`가 있어 규칙 11은 모르는 cwd로 본다). git 규칙은 이 후보를 판정하지 못하므로 이 후보로
+# `cd -`·`popd` 등 따라갈 수 없는 디렉토리(`$`가 든 이름 — 어느 레포도 아니다). git 규칙은 이 후보를 판정하지 못하므로 이 후보로
 # 옮길 때 이전 후보를 버리지 않는다(`_Walk.cd`, 회귀 수정 R1)
 UNKNOWN_DIR = Path("$OLDPWD")
 
@@ -2007,7 +1951,7 @@ def _dedupe(dirs) -> tuple[Path, ...]:
     """중복을 뺀 cwd 후보(처음 나온 순서). `CWD_CAP`을 넘으면 처음 후보, 보호 뿌리(`_KEEP_ROOTS` — 이슈 DB clone·work_dir·스킬
     소스) 안의 후보 가장 최근 `CWD_CAP`개(그보다 많으면 나머지는 그 후보가 든 레포 꼭대기나 작업 폴더 — `_anchor_of`), 그 밖의 가장 최근 후보들을 남기고 나머지를 모르는
     디렉토리 하나로 접는다(회귀 수정 R4 — 넘침이 마지막 cd 대상을 버리던 부류, 재리뷰 — 분기·실패할 수 있는 이동이 후보를 늘려 처음
-    cwd인 clone이 접히던 부류. 접힌 후보는 규칙 11에선 모르는 디렉토리로 남는다. git 규칙이 보는 후보는 보호 뿌리 안에 있다)."""
+    cwd인 clone이 접히던 부류. 접힌 후보는 모르는 디렉토리로 남는다. git 규칙이 보는 후보는 보호 뿌리 안에 있다)."""
     dirs = tuple(x for d in dirs for x in ((d,) if len(str(d)) <= LONG_CWD else _shorten(d)))
     out = tuple(dict.fromkeys(dirs))
     if len(out) <= CWD_CAP:
@@ -2025,16 +1969,6 @@ def _dedupe(dirs) -> tuple[Path, ...]:
     rooted = [r for r in rooted if r not in keep and r != head and r not in anchors[:CWD_CAP]]
     kept = [d for d in reversed(rev) if d in keep]
     return (head, *rooted, *reversed(anchors[:CWD_CAP]), *kept, *(() if head == UNKNOWN_DIR else (UNKNOWN_DIR,)))
-
-
-def _isdir(p) -> bool:
-    """있는 디렉토리인가. stat 오류(EACCES·ENAMETOOLONG·ESTALE 등 — Python 3.13 `Path.is_dir`은 ENOENT·ENOTDIR·EBADF·ELOOP 밖의
-    OSError를 그대로 올린다)·NUL·인코딩 오류면 아니다(False): 셸의 cd도 git도 그 경로로 들어가지 못한다. 예외를 내지 않는다
-    (재리뷰 P0 — 걷기·레포 판별의 경로 예외가 판정 전체를 내부 오류로 무너뜨리던 부류)."""
-    try:
-        return os.path.isdir(p)
-    except (OSError, ValueError):
-        return False
 
 
 def _sure_dir(p: Path) -> bool:
@@ -2063,7 +1997,7 @@ class _Cwd:
         self.sticky = sticky
         self.exact = exact
 
-    def copy(self) -> "_Cwd":
+    def copy(self) -> _Cwd:
         return _Cwd(self.dirs, self.old, self.stack, self.sticky, self.exact)
 
     def all(self) -> tuple[Path, ...]:
@@ -2072,7 +2006,7 @@ class _Cwd:
     def stack_dirs(self) -> tuple[Path, ...]:
         return tuple(d for level in self.stack for d in level)
 
-    def settle(self) -> "_Cwd":
+    def settle(self) -> _Cwd:
         """칸을 정확히 모르는 스택(`exact` 거짓 — 다시 참이 되지 않는다)은 칸 하나로 합친다. 그 뒤 연산은 스택 칸 전체(`stack_dirs`
         — popd·`pushd ±N`·`cd ±N`의 `anywhere`)만 보므로 판정은 같고, 칸이 pushd마다 쌓여 popd마다 모두 다시 보는 비용이 pushd 수의
         세제곱으로 늘지 않는다(재리뷰 P1 성능: 없는 경로 pushd 1000개 + popd 1000개가 hook 시간 한도 180초를 넘겨 판정 없이 통과했다
@@ -2089,7 +2023,7 @@ class _Cwd:
         return self
 
     @staticmethod
-    def union(states) -> "_Cwd":
+    def union(states) -> _Cwd:
         """여러 경로 끝 상태의 합(후보 순서는 넘긴 순서 — 뒤가 최근이다). 스택이 다르면 칸을 모두 남기고 모른다고 표시한다
         (뒤 popd는 그 칸들·이전 후보·모르는 디렉토리 모두로 본다 — 회귀 수정 R1)."""
         states = list(states)
@@ -2464,8 +2398,8 @@ class _Walk:
         cwd 그대로, `popd`·`popd +0`은 맨 위 칸으로, `pushd`(인자 없음)는 맨 위 두 칸을 바꾼다).
         이동이 실패할 수 있거나(없는 경로·들어갈 수 없는 경로, 빈 스택 — bash는 실패하고 cwd는 그대로다) 대상을 모르면(셸이 풀 경로,
         이 글 밖에서 쌓인 스택 — Claude Code는 Bash 호출마다 새 셸이다 —, 모르는 스택의 칸, `cd -`의 처음 이전 디렉토리,
-        `popd -N`·`pushd ±N`·`cd ±N`) 이전 후보를 버리지 않는다: 모르는 디렉토리 후보는 규칙 11에선 이슈 DB일 수 있는 것이지만 git
-        규칙(3~8·12)에선 판정하지 못하는 후보라, 이전 후보를 버리면 이슈 DB에서 도는 명령을 놓친다(회귀 수정 R1). bash가 거절하거나
+        `popd -N`·`pushd ±N`·`cd ±N`) 이전 후보를 버리지 않는다: 모르는 디렉토리 후보는 git 규칙(3~8·12)에선
+        판정하지 못하는 후보라(규칙 11은 4-c부터 cwd를 보지 않는다), 이전 후보를 버리면 이슈 DB에서 도는 명령을 놓친다(회귀 수정 R1). bash가 거절하거나
         다른 셸(zsh 등)에선 뜻이 다른 꼴 — cd의 `-L`·`-P`·`-e`·`-@` 밖 옵션, pushd·popd의 `-n` 밖 옵션(`popd -q`), 남는 인자
         (`cd a b` — zsh는 경로 바꾸기) — 도 실패할 수 있는 이동이다: 이전 후보와 옵션을 무시한 대상(남는 인자면 모르는 디렉토리도)을
         모두 보고 스택을 모른다고 표시한다(재리뷰 P1). 바로 뒤가 `&&`면 실패할 때 뒤 명령이 돌지 않으므로 이전 후보는 그 목록의
@@ -2629,7 +2563,7 @@ class _Walk:
                     continue
                 sign, num = m.group(1), m.group(2)
                 n = int(num) if num else None
-                key = ("pwd",) if n is None and sign != "-" or (n == 0 and sign != "-") else (
+                key = ("pwd",) if (n is None and sign != "-") or (n == 0 and sign != "-") else (
                     ("old",) if n is None else (sign or "+", n))
                 slots.append((i, p, e, key, sign, num))
         if not slots:
@@ -2896,67 +2830,55 @@ def commit_bypass(args: list[str]) -> str | None:
     return None
 
 
-def push_targets(args: list[str]) -> tuple[list[str], dict]:
-    """(위치 인자, 플래그). 위치 인자 = [원격, refspec...]."""
-    pos, flags = [], {}
-    i = 0
-    while i < len(args):
-        a = args[i]
-        if a == "--":
-            pos += args[i + 1:]
-            break
-        if a.startswith("--"):
-            name = a.split("=", 1)[0]
-            flags[name] = True
-            if _is_no_verify(a):
-                flags["no-verify"] = True
-            if a in PUSH_LONG_WITH_ARG:
-                i += 1
-        elif a.startswith("-") and len(a) > 1:
-            for j, ch in enumerate(a[1:], 1):
-                flags["-" + ch] = True
-                if ch in PUSH_SHORT_WITH_ARG:
-                    if j == len(a) - 1:
-                        i += 1
-                    break
-        else:
-            pos.append(a)
-        i += 1
-    return pos, flags
+def _db_cfg(top: Path):
+    """이슈 DB 레포 꼭대기의 `issue-db.config.yaml`(읽지 못하면 빈 dict — 객체가 아닐 수 있다)."""
+    try:
+        from common import yamlio
+        return yamlio.safe_load((top / "issue-db.config.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, ValueError, ImportError):
+        return {}
 
 
-def _dst_of(spec: str, current: str | None) -> str | None:
-    spec = spec.lstrip("+")
-    if ":" in spec:
-        return spec.split(":", 1)[1] or None
-    if spec == "HEAD":
-        return current
-    return spec
+RULE5_ACTIONS_NOTE = (" 이 이슈 DB는 ci_mode: actions라 서버 CI(db-check)가 마스킹·생성 파일 검사를 다시 하므로 거부 대신 "
+                      "확인한다 — 사용자가 직접 요청했을 때만 허용한다.")
 
 
-def _branch_name(ref: str) -> str:
-    return ref[len("refs/heads/"):] if ref.startswith("refs/heads/") else ref
+def _ci_actions(cwd: Path, base: str | None) -> bool:
+    """규칙 5 완화 조건: `origin/<base>`(그 clone 프로필의 base 브랜치)의 `issue-db.config.yaml` `ci_mode`가 정확히 `actions`다.
+    작업 트리·index의 파일은 보지 않는다(Claude가 고칠 수 있다). 없음·못 읽음·객체가 아님·오류면 False(닫힌 쪽)."""
+    if not base:
+        return False
+    try:
+        from common import yamlio
+        got = _git(cwd, "--no-replace-objects", "show", f"refs/remotes/origin/{base}:issue-db.config.yaml")   # `git replace` 무시
+        cfg = yamlio.safe_load(got.stdout) if got.returncode == 0 else None
+        return isinstance(cfg, dict) and cfg.get("ci_mode") == "actions"
+    except Exception:  # noqa: BLE001 — 확인하지 못하면 거부
+        return False
 
 
-def check_push(call: GitCall, conf: "Config | GuardProfile", dec: Decision) -> None:
-    pos, flags = push_targets(call.args)
-    if flags.get("no-verify"):
-        dec.deny.append("git push의 --no-verify는 pre-push 검사를 건너뛰므로 금지한다 (규칙 5).")
-    current = _git(call.cwd, "symbolic-ref", "--quiet", "--short", "HEAD").stdout.strip() or None
-    if flags.get("--all") or flags.get("--mirror") or flags.get("--branches"):
-        dec.deny.append(f"--all/--mirror push는 base 브랜치({conf.base})를 포함할 수 있어 금지한다 (규칙 6).")
-    specs = pos[1:]
-    dsts = [_dst_of(s, current) for s in specs] if specs else [current]
-    if any(s.lstrip("+") == ":" for s in specs):   # `git push origin :` = 같은 이름 브랜치 전부(matching)
-        dsts.append(conf.base)
-    for dst in dsts:
-        if dst and _branch_name(dst) == conf.base:
-            dec.deny.append(f"base 브랜치({conf.base})로 직접 push하지 않는다 (규칙 6). 브랜치를 올리고 PR을 만든다.")
-    dec.ask.append("이슈 DB push다. 확인 화면(변경 파일·diff·검사 결과·커밋 메시지)을 승인한 뒤에만 진행한다 (규칙 7).")
+def _rule5(call: GitCall, dec: Decision, msg: str) -> bool:
+    """규칙 5(hook 우회) 결정. 그 clone의 `origin/<base>` `issue-db.config.yaml` `ci_mode`가 정확히 `actions`로 확인되면
+    (`_ci_actions`) ask하고 False, 아니면(local·없음·읽지 못함·객체가 아님·오류 — 닫힌 쪽) deny하고 True(호출한 쪽은 예전처럼
+    거기서 멈춘다). base는 `check_git`이 `call.db_base`에 둔다."""
+    if _ci_actions(call.cwd, getattr(call, "db_base", None)):
+        dec.ask.append(msg + RULE5_ACTIONS_NOTE)
+        return False
+    dec.deny.append(msg)
+    return True
 
 
-def check_config(call: GitCall, dec: Decision) -> None:
-    args = call.args
+def check_push(call: GitCall, dec: Decision) -> None:
+    """이슈 DB push는 ask(규칙 7). base 브랜치 push(refspec·`--all`·`--mirror` — 규칙 6)는 따로 거부하지 않는다: 서버 브랜치
+    보호(필수 PR·force push·삭제 금지·관리자 포함)가 막는다(전제: site_checks `s4a.protection_guard`). push `--no-verify`는 규칙 5."""
+    if any(a.startswith("--") and _is_no_verify(a) for a in call.args):
+        _rule5(call, dec, "git push의 --no-verify는 pre-push 검사를 건너뛰므로 금지한다 (규칙 5).")
+    dec.ask.append("이슈 DB push다. 확인 화면(변경 파일·diff·검사 결과·커밋 메시지)을 승인한 뒤에만 진행한다 (규칙 7). "
+                   "base 브랜치(main)로는 push하지 않는다 — 서버 브랜치 보호가 막는다 (규칙 6).")
+
+
+def _config_parse(args: list[str]) -> tuple[str | None, list[str]]:
+    """`git config` 인자 → (동작 — `--get`·`--unset`·`set`·`-e` 등, 없으면 None, 위치 인자)."""
     action = None
     pos: list[str] = []
     i = 0
@@ -2976,41 +2898,44 @@ def check_config(call: GitCall, dec: Decision) -> None:
             action = action or "list"
         elif a.startswith("-"):
             pass
+        elif not pos and action is None and a in CONFIG_SUBCOMMANDS:
+            action = a
         else:
-            if not pos and action is None and a in CONFIG_SUBCOMMANDS:
-                action = a
-            else:
-                pos.append(a)
+            pos.append(a)
         i += 1
+    return action, pos
+
+
+def check_config(call: GitCall, dec: Decision) -> None:
+    action, pos = _config_parse(call.args)
     if action in CONFIG_READ_ACTIONS:
         return
     if action == "edit":
-        dec.deny.append("이슈 DB에서 git config --edit는 core.hooksPath를 바꿀 수 있어 금지한다 (규칙 5).")
+        _rule5(call, dec, "이슈 DB에서 git config --edit는 core.hooksPath를 바꿀 수 있어 금지한다 (규칙 5).")
         return
     if action in ("remove-section", "rename-section"):
         if pos and pos[0].lower() == "core":
-            dec.deny.append("core 섹션을 지우거나 바꾸면 core.hooksPath가 해제된다 (규칙 5).")
+            _rule5(call, dec, "core 섹션을 지우거나 바꾸면 core.hooksPath가 해제된다 (규칙 5).")
         return
     if not pos or pos[0].lower() != HOOKS_PATH_KEY:
         return
     if action in ("unset", "unset-all"):
-        dec.deny.append("core.hooksPath 해제는 금지다 (규칙 5). git hook(pre-commit·pre-push)이 꺼진다.")
+        _rule5(call, dec, "core.hooksPath 해제는 금지다 (규칙 5). git hook(pre-commit·pre-push)이 꺼진다.")
         return
     if len(pos) < 2:
         return   # 값 없이 키만: 읽기
     if pos[1] != ".githooks":
-        dec.deny.append(f"core.hooksPath는 정확히 .githooks여야 한다 (규칙 5): '{pos[1]}'는 거부한다.")
+        _rule5(call, dec, f"core.hooksPath는 정확히 .githooks여야 한다 (규칙 5): '{pos[1]}'는 거부한다.")
 
 
 def check_commit(call: GitCall, conf: Config, dec: Decision) -> None:
+    """규칙 5(우회 플래그·hooksPath — `_rule5`: ci_mode actions면 ask하고 이어 간다)와 규칙 3·4(staged 검사)."""
     flag = commit_bypass(call.args)
-    if flag:
-        dec.deny.append(f"git commit {flag}는 pre-commit 검사를 건너뛰므로 금지한다 (규칙 5).")
+    if flag and _rule5(call, dec, f"git commit {flag}는 pre-commit 검사를 건너뛰므로 금지한다 (규칙 5)."):
         return
     hooks = _git(call.cwd, "config", "--get", "core.hooksPath").stdout.strip()
-    if hooks != ".githooks":
-        dec.deny.append(f"이 레포의 core.hooksPath가 '{hooks or '(없음)'}'다. 정확히 .githooks여야 커밋할 수 있다 "
-                        "(규칙 5). setup 5번(hook)만 다시 한다 — `config.py install-hooks`.")
+    if hooks != ".githooks" and _rule5(call, dec, f"이 레포의 core.hooksPath가 '{hooks or '(없음)'}'다. 정확히 .githooks여야 "
+                                                  "커밋할 수 있다 (규칙 5). setup 5번(hook)만 다시 한다 — `config.py install-hooks`."):
         return
     top = _git(call.cwd, "rev-parse", "--show-toplevel").stdout.strip()
     if not top:
@@ -3018,11 +2943,7 @@ def check_commit(call: GitCall, conf: Config, dec: Decision) -> None:
     staged = [p for p in _git(Path(top), "diff", "--cached", "--name-only", "-z").stdout.split("\0") if p]
     if not staged:
         return
-    try:
-        from common import yamlio
-        db_cfg = yamlio.safe_load((Path(top) / "issue-db.config.yaml").read_text(encoding="utf-8")) or {}
-    except (OSError, ValueError, ImportError):
-        db_cfg = {}
+    db_cfg = _db_cfg(Path(top))
     ci_mode = db_cfg.get("ci_mode", "local")
     branch = _git(Path(top), "rev-parse", "--abbrev-ref", "HEAD").stdout.strip() if ci_mode != "actions-build" else ""
     ctx = checks.Ctx(db=top, scope="staged", files=staged, branch=branch, ci_mode=ci_mode, db_cfg=db_cfg,
@@ -3131,7 +3052,7 @@ def _dump_verb_and_files(inv: Invocation) -> tuple[str, list[str]] | None:
             for k, ch in enumerate(cluster):
                 if ch in takes:
                     rest = cluster[k + 1:]
-                    val = rest if rest else (words[i] if i < len(words) else None)
+                    val = rest or (words[i] if i < len(words) else None)
                     if not rest:
                         i += 1
                     if ch == "e" and val is not None:
@@ -3245,7 +3166,7 @@ def _is_raw_file(path: Path, names: set, exempt: set, sniffers=()) -> bool:
 
 def check_raw_read(command: str, cwd: Path, dec: Decision, conf: Config) -> None:
     names, exempt = conf.raw_names, conf.raw_exempt
-    invs, _ = _walk_or_flat(command, cwd, keep=_keep_roots(conf))   # 걷기 예외면 대체 목록(ask·거부는 check_bash가 남긴다)
+    invs, _ = _walk_or_flat(command, cwd, keep=_keep_roots(conf))   # 걷기 예외면 대체 목록(거부는 check_bash가 남긴다)
     for inv in invs:
         verb = _raw_cmd_verb(inv)
         if verb is not None:
@@ -3273,97 +3194,93 @@ def check_raw_read(command: str, cwd: Path, dec: Decision, conf: Config) -> None
                     dec.deny.append(
                         "로그 원문·zip·events/issue_raw/match.json은 통째로 읽지 않는다(원칙 §로그 원문, "
                         f"규칙 10: {verb} {arg}). grep -n '<패턴>' <파일> 또는 sed -n '<a>,<b>p' <파일>로 필요한 "
-                        "줄만, bugreport는 parse_logcat.py extract-bugreport. Read 도구도 limit·offset으로 구간만. "
+                        "줄만 — 작업 디렉토리에 마스킹 사본 logs-masked/<이름>(analyze가 만든다, 줄 번호 같음)이 있으면 원문 대신 "
+                        "그것을 읽는다. bugreport는 parse_logcat.py extract-bugreport. Read 도구도 limit·offset으로 구간만. "
                         "탐색·심층 분석을 묻기 전·답 대기 중·탐색 중이면 grep·sed·Read로도 원문을 보지 않는다(SKILL 5-2·explore.md).")
                     return
 
 
 # -- gh (11) ---------------------------------------------------------------------------------
+# 거친 판정(4-c): 대상 레포를 풀지 않는다(-R·GH_REPO·URL·cwd 원격을 보지 않는다 — 이슈 DB가 아닌 레포의 gh 병합·쓰기도 ask다).
+# 병합 계열(`pr merge`·REST 병합 엔드포인트·GraphQL 병합·자동 병합 mutation·병합 별칭)과 그 밖 쓰기·모르는 그룹은 ask: 병합·main
+# push는 이슈 DB 서버 브랜치 보호(필수 승인 1·Dismiss stale·관리자 포함·force push·삭제 금지)가 막는다(전제: site_checks
+# `s4a.protection_guard`). 서버가 막지 못하는 Claude의 Approve·리뷰 기각과, 그것일 수 있는 꼴(셸이 정한 그룹·`pr` 동작·api 끝 칸,
+# 못 보는 리뷰 별칭)은 거부한다 — 낱말 수준(따옴표를 뗀 명령 글·argv·gh가 읽는 파일)으로 본다.
 
-GH_READ_ACTIONS = {"list", "view", "status", "download", "watch", "verify", "diff"}
-GH_ACTION_GROUPS = {"issue", "release", "label", "secret", "variable", "ruleset", "workflow", "run", "cache", "project"}
-# `pr`은 읽기 목록만 읽기다(그 밖 동작 — revert·update-branch·앞으로 생길 동작 — 은 쓰기, H-A1 r5). merge·checkout·review는 따로 본다
-GH_PR_READ = {"list", "view", "status", "checks", "diff"}
-GH_REPO_READ = {"view", "list", "clone"}
-# cobra 동작 별칭(gh 2.89 `--help`의 ALIASES): 판정 전에 원래 이름으로 바꾼다. 그룹 `co`는 gh 기본 별칭 `pr checkout`이다
+GH_READ_ACTIONS = {"list", "view", "status", "download", "watch", "verify", "diff", "checks", "check", "clone", "get", "token"}
+GH_READ_GROUPS = {"", "help", "version", "status", "search", "browse", "completion"}     # 동작과 무관하게 읽기
+# 동작이 읽기 목록이면 읽기인 그룹. 그 밖 그룹(이미 만든 별칭 `gh <별칭>` 포함)은 모르는 그룹 — 쓰기(ask)
+GH_GROUPS = {"pr", "issue", "release", "label", "secret", "variable", "ruleset", "workflow", "run", "cache", "project",
+             "repo", "auth", "config", "extension", "gist", "org", "codespace", "gpg-key", "ssh-key", "attestation",
+             "alias"}
+# cobra 동작 별칭(gh 2.89 `--help`의 ALIASES): 원래 이름으로 바꿔 본다. 그룹 `co`는 gh 기본 별칭 `pr checkout`이다
 GH_ACTION_ALIASES = {"ls": "list", "new": "create", "co": "checkout", "remove": "delete"}
 GH_API_WITH_ARG = {"-X", "--method", "-f", "-F", "--field", "--raw-field", "-H", "--header", "--input", "-q", "--jq",
                    "-t", "--template", "--hostname", "--cache", "-p", "--preview"}
 GH_API_FIELDS = {"-f", "-F", "--field", "--raw-field"}
 GH_API_SHORT_WITH_ARG = {k[1] for k in GH_API_WITH_ARG if not k.startswith("--")}
 GH_API_LONG_WITH_ARG = {k for k in GH_API_WITH_ARG if k.startswith("--")}
-# `gh pr|issue <동작>`의 값 받는 짧은 옵션(gh 2.89 `--help`, 물려받는 `-R`은 따로 더한다). 선택자·`-R` 자리를 찾을 때
-# 그 값을 건너뛴다(`_gh_scan`).
-# 표에 없는 동작은 표 전체를 합친 글자를 쓴다(값으로 더 건너뛰는 쪽 — URL을 선택자로 덜 보면 cwd 판정이 남는다)
-GH_SEL_SHORT_WITH_ARG = {"pr merge": "AbFt", "pr close": "c", "pr edit": "BbFmt", "pr review": "bF", "pr comment": "bF",
-                         "pr reopen": "c", "pr lock": "r", "pr create": "aBbFHlmprTt", "issue close": "cr",
-                         "issue comment": "bF", "issue edit": "bFmt", "issue reopen": "c", "issue lock": "r",
-                         "issue develop": "bn", "issue create": "abFlmpTt"}
-GH_SEL_SHORT_ANY = "".join(sorted(set("".join(GH_SEL_SHORT_WITH_ARG.values()))))
-# 값 받는 긴 옵션(두 그룹의 합집합). `pr review`의 `--comment`만 bool이다
-GH_SEL_LONG_WITH_ARG = {"--repo", "--author-email", "--body", "--body-file", "--match-head-commit", "--subject", "--comment",
-                        "--add-assignee", "--add-label", "--add-project", "--add-reviewer", "--base", "--milestone",
-                        "--remove-assignee", "--remove-label", "--remove-project", "--remove-reviewer", "--title",
-                        "--reason", "--assignee", "--head", "--label", "--project", "--recover", "--reviewer",
-                        "--template", "--duplicate-of", "--branch-repo", "--name"}
 # `gh pr review`의 값 받는 옵션(긴 이름과 짧은 글자). `-a`(--approve)는 bool이다
 GH_REVIEW_LONG_WITH_ARG = {"--body", "--body-file", "--repo"}
 GH_REVIEW_SHORT_WITH_ARG = set("bFR")
 GH_FALSE = {"0", "f", "F", "false", "FALSE", "False"}    # strconv.ParseBool 거짓. 그 밖 값은 approve로 본다(못 읽는 값은 gh가 오류)
-GH_BODY_MAX = 65536          # --input·@파일·별칭 파일은 이만큼까지 읽는다(넘거나 못 읽으면 모르는 본문)
-# 스킴은 대소문자 무관(gh는 url.Parse로 스킴을 소문자로 바꾼다 — `HTTPS://…`도 선택자다). 경로는 gh처럼 구분한다
-GH_URL_RE = re.compile(r"^(?i:https?)://[^/\s]+/[^/\s]+/[^/\s]+/(?:pull|pulls|issues)/\d+")
-# GraphQL 엔드포인트: `graphql`, `/graphql`(github.com은 REST 앞부분 + `graphql`이 GraphQL이다), 경로가 `/graphql`로 끝나는 URL
-# (`https://<host>/api/graphql` — gh는 URL을 그대로 쓰고 필드를 JSON 본문 `{"query": …}`로 보낸다)
+GH_BODY_MAX = 65536          # --input·@파일·별칭 파일은 이만큼까지 읽는다(넘거나 못 읽으면 못 읽은 본문)
+GH_JSON_DEPTH_MAX = 64       # gh가 읽는 JSON 본문의 중첩 깊이 상한 — 넘으면 못 읽은 본문. 깊은 중첩에 `json.loads`가
+                             # RecursionError를 내는지는 Python 판마다 다르다(3.14는 스택 기반 — 25,000단도 그냥 읽는다)
+                             # 그래서 예외에 기대지 않고 글자를 세서 자른다
+# GraphQL 엔드포인트: `graphql`, `/graphql`, 경로가 `/graphql`로 끝나는 URL(gh는 URL을 그대로 쓰고 필드를 JSON 본문으로 보낸다)
 GH_GRAPHQL_RE = re.compile(r"^(?:/?|https?://[^/?#]+/(?:[^?#]*/)?)graphql/?(?:[?#].*)?$", re.IGNORECASE | re.DOTALL)
 GH_REST_MERGE_RE = re.compile(r"/pulls/[^/]+/merge/?$|/merges/?$")
 GH_REST_REVIEW_RE = re.compile(r"(?:^|/)pulls/[^/]+/reviews(?:/[^/]+/events)?/?$")    # 리뷰 만들기·PENDING 제출
 GH_REST_DISMISS_RE = re.compile(r"(?:^|/)pulls/[^/]+/reviews/[^/]+/dismissals/?$")
-# `repositories/<id>/…`: 레포 ID 경로라 슬러그로 대상을 풀 수 없다(병합·Approve·기각은 대상과 무관하게 본다)
-GH_REST_REPO_ID_RE = re.compile(r"(?:^|/)repositories/[^/]+/")
-# GraphQL 이름(대소문자 구분). 노드 ID로 레포를 가리므로 대상과 무관하게 본다
-GQL_MERGE_RE = re.compile(r"\b(?:mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest|mergeBranch)\b")
+GQL_MERGE_RE = re.compile(r"\b(?:mergePullRequest|enqueuePullRequest|mergeBranch)\b")
+GQL_AUTOMERGE_RE = re.compile(r"\benablePullRequestAutoMerge\b")        # PR 자동 병합 켜기(거부 — 원칙 12)
+# `gh pr merge --auto`(거짓 `--auto=false` 밖) — 별칭 정의 글에서도 본다
+GH_AUTO_FLAG_RE = re.compile(r"(?<![\w-])--auto(?![\w-])(?!=(?:0|f|false)\b)", re.IGNORECASE)
 GQL_REVIEW_RE = re.compile(r"\b(?:addPullRequestReview|submitPullRequestReview)\b")
-GQL_APPROVE_RE = re.compile(r"\bAPPROVE\b")
-GQL_DISMISS_RE = re.compile(r"\bdismissPullRequestReview\b")
-ALIAS_RISKY_RE = re.compile(r"merge|review|approve|dismiss", re.IGNORECASE)
-# 그룹·동작 앞 옵션(`gh -b x pr merge`·`gh pr -b x merge`·`gh -X PUT api …`): cobra는 하위 명령을 찾을 때 그 단계에 bool로
-# 등록되지 않은 `=` 없는 `-x`·`--long`이 다음 토큰을 값으로 먹는다. guard는 단계마다 어떤 옵션이 bool인지 모르므로 먹는 읽기와
-# 안 먹는 읽기를 다 본다(`_gh_readings` — 가장 센 읽기로 판정, 닫힌 쪽)
-GH_LEAD_KEEP = {"-R", "--repo"}                 # 늘 값을 먹는다(그룹의 영속 옵션 — 루트에선 모르는 옵션이라 cobra가 값으로 먹는다)
-GH_LEAD_SAFE = {"-h", "--help", "--version"}    # 앞 옵션 ask(`GH_LEAD_ASK`)에서만 뺀다. 읽기는 그대로 다 본다
-GH_LEAD_STATES = 20000                          # 읽기 탐색 상한. 넘으면 판정 불가(거부)
-GH_RANK = {"read": 0, "local": 1, "write": 2, "alias": 3, "merge": 4, "approve": 4, "dismiss": 4, "dynamic": 4}
-# 다른 레포로 푼 명시 대상이 cwd 판정을 끄지 않는 종류(규칙 11 거부). `dynamic`: 동작·엔드포인트를 셸이 정한다(모른다 — 가장 센 읽기)
-GH_STRONG = ("merge", "approve", "dismiss", "dynamic")
-# REST 엔드포인트 끝 칸이 이것이거나 셸이 풀 값이면, 셸이 푼 엔드포인트의 쓰기는 병합·Approve·기각일 수 있다(`reviews`·`events`는
-# `_gh_api_kind`가 먼저 event로 가린다)
-GH_REST_RISKY_TAILS = {"merge", "merges", "reviews", "events", "dismissals"}
 GQL_EVENT_VAR_RE = re.compile(r"\bevent\s*:\s*\$")      # 리뷰 mutation의 event가 GraphQL 변수다
-GH_ENV_REPO_RE = re.compile(r"\bGH_REPO\b(=?)")
-GH_LEAD_ASK = ("gh 그룹·동작 앞에 옵션이 있어 동작을 정할 수 없다. 대상이 이슈 DB일 수 있어 쓰기로 보고 확인한다 (규칙 11).")
-GH_LEAD_DENY = "gh 그룹·동작 앞 옵션이 너무 많아 판정할 수 없다. 옵션을 동작 뒤로 옮겨 쓴다 (규칙 11)."
-GH_MERGE_DENY = ("이슈 DB PR을 gh로 직접 머지하지 않는다. 병합은 +1 뒤 사용자가 요청할 때 db_pr.py merge(+1·승인 커밋·PR 검사 "
-                 "대조)로만 하거나 사람이 GHE에서 한다 (규칙 7·11).")
+# 낱말 수준 Approve·기각(대소문자 무관): `--approve`·`event=APPROVE`·GraphQL `APPROVE`·`dismissals`·`dismissPullRequestReview`.
+# 읽기에 흔한 `APPROVED`·`DISMISSED`(상태 값)와 bool 거짓 `--approve=0|f|false`(`GH_FALSE`)는 아니다
+GH_APPROVE_WORD_RE = re.compile(r"approve(?!d)(?!=(?:0|f|false)\b)", re.IGNORECASE)
+GH_DISMISS_WORD_RE = re.compile(r"dismiss(?!ed)", re.IGNORECASE)
+# 리뷰 별칭은 `gh <별칭> 3 -a`를 못 본다. 자리 표시(`$1`·`$@`·`$*`)·셸 별칭(`--shell`·`!…`)은 실행 때 동작이 정해진다
+ALIAS_RISKY_RE = re.compile(r"review|approve|dismiss|\$[0-9@*]|--shell|(?:^|\s)!", re.IGNORECASE)
+GH_SUBST_FILE_RE = re.compile(r"^\s*\$\(\s*(?:cat\s+|<\s*)([^\s$`'\"()<>|;&]+)\s*\)\s*$")    # `query="$(cat f)"`·`$(< f)`
+# `query="$(cat <<'EOF' …)"` — 걷기가 토큰에서 본문을 떼 낸다(본문은 명령 글에 있다)
+GH_SUBST_HEREDOC_RE = re.compile(r"^\s*\$\(\s*cat\s+<<-?\s*\\?(['\"]?)(\w+)\1(?=\s)[\s\S]*\)\s*$")   # 끝 표시 전체(`EOF-`·`'EOF'X`는 아니다)
+# 서버 브랜치 보호·ruleset 바꾸기(4-c 뒤 병합을 막는 유일한 장치 — Approve와 같은 급, 사용자 결정)
+GH_PROTECTION_RE = re.compile(r"(?:^|/)branches/.+?/protection(?:/|$)|(?:^|/)rulesets(?:/|$)", re.IGNORECASE)
+GQL_PROTECTION_RE = re.compile(r"\b(?:create|update|delete)(?:BranchProtectionRule|RepositoryRuleset)\b")
+GH_REPO_PATH_RE = re.compile(r"(?:^|/)(?:repos/[^/]+/[^/]+|repositories/\d+)/?$")   # 레포 설정(`PATCH repos/<o>/<r>`·`repositories/<id>`)
+# 레포 설정의 자동 병합 허용·병합 뒤 브랜치 지우기 켜기(REST 필드·JSON — 거짓 `false`·`0` 밖은 켜기로 본다)
+GH_AUTO_MERGE_ON_RE = re.compile(r"(?:allow_auto_merge|delete_branch_on_merge)[\"']?"
+                                 r"\s*[:=]\s*[\"']?(?!false\b|0\b)\S", re.IGNORECASE)
+GH_RANK = {"read": 0, "local": 1, "write": 2, "merge": 3, "alias": 4, "approve": 4, "dismiss": 4, "dynamic": 4,
+           "protection": 4, "automerge": 4}
+GH_MERGE_ASK = ("PR을 gh로 직접 머지하지 않는다(병합 계열). 이슈 DB면 병합은 +1 뒤 사용자가 요청할 때 db_pr.py merge"
+                "(+1·승인 커밋·PR 검사 대조)로 하거나 사람이 GHE에서 한다 — 서버 브랜치 보호가 승인 1을 강제한다. 대상 레포를 보지 "
+                "않으므로 다른 레포여도 묻는다. 사용자가 직접 요청한 병합일 때만 허용한다 (규칙 7·11).")
+GH_WRITE_ASK = ("원격을 바꾸는 gh 명령이다(대상 레포를 보지 않는다 — 이슈 DB가 아니어도 묻는다). 이슈 DB면 변경·검증 결과를 보고 "
+                "승인한 뒤에만 진행한다 (규칙 7·11).")
 APPROVE_DENY = ("이슈 DB PR을 Claude가 Approve하지 않는다. +1(작성자 외 1명의 Approve)은 사람이 GHE에서 하고, "
                 "병합은 그 뒤 db_pr.py merge가 확인한다 (규칙 11")
 DISMISS_DENY = "리뷰를 Claude가 기각(dismiss)하지 않는다. 변경 요청은 그 리뷰어나 메인테이너가 GHE에서 푼다 (규칙 11"
-ALIAS_DENY = "gh 별칭으로 병합·리뷰 명령을 만들지 않는다(별칭 실행은 guard가 보지 못한다) (규칙 11)."
-MCP_MERGE_DENY = ("이슈 DB PR을 MCP로 직접 머지하지 않는다. 병합은 +1 뒤 사용자가 요청할 때 db_pr.py merge(+1·승인 커밋·PR 검사 "
-                  "대조)로만 하거나 사람이 GHE에서 한다 (규칙 7·11")
-DEGRADED_REVIEW_DENY = "Approve·리뷰 기각은 판정할 수 없어도 거부한다(Claude는 PR을 Approve하지 않는다, 규칙 11"
-DEGRADED_MERGE_DENY = ("병합·자동 병합과 병합·리뷰 별칭은 판정할 수 없어도 거부한다(이슈 DB PR을 gh로 직접 머지하지 않는다 — 병합은 "
-                       "db_pr.py merge로만, 규칙 7·11")
-GH_DYN_DENY = ("셸이 푸는 값(`$`·백틱)으로 gh 동작·옵션·엔드포인트를 정하지 않는다. 병합·Approve·기각일 수 있어 거부한다. "
+ALIAS_DENY = ("gh 별칭으로 리뷰·Approve·기각 명령을 만들지 않는다(별칭 실행은 guard가 보지 못한다 — 못 읽은 별칭 파일도) "
+              "(규칙 11).")
+MCP_MERGE_ASK = ("MCP로 PR을 직접 머지하지 않는다(병합 계열, {tool}). 이슈 DB면 병합은 +1 뒤 사용자가 요청할 때 "
+                 "db_pr.py merge로 하거나 사람이 GHE에서 한다. 대상 레포를 보지 않으므로 다른 레포여도 묻는다 (규칙 7·11).")
+GH_DYN_DENY = ("셸이 푸는 값(`$`·백틱)으로 gh 동작·옵션·엔드포인트를 정하지 않는다. Approve·기각일 수 있어 거부한다. "
                "글자 그대로 쓴다 (규칙 11")
-GH_GQL_UNREAD_ASK = ("GraphQL 본문을 읽지 못했다(셸이 만든 본문·파이프·없는 파일). 노드 ID라 대상 레포를 알 수 없어 확인한다. "
-                     "본문은 인라인이나 있는 파일(`-F query=@<파일>`)로 쓴다 (규칙 11).")
-GH_CWD_UNKNOWN_NOTE = (" 작업 디렉토리의 레포를 알 수 없어(`cd \"$D\"`·`cd $(…)`·없는 경로·셸이 푸는 `GIT_DIR` 등) 이슈 DB일 수 "
-                       "있다로 봤다.")
-# 규칙 11 거부 사유의 첫 마디(eval 채점기가 hook이 막은 호출의 결과에서 찾는다)
-GATE_DENY_HEADS = tuple(m.split("않는다", 1)[0] + "않는다" for m in (APPROVE_DENY, DISMISS_DENY, GH_MERGE_DENY, MCP_MERGE_DENY,
-                                                                   ALIAS_DENY, DEGRADED_REVIEW_DENY, DEGRADED_MERGE_DENY,
-                                                                   GH_DYN_DENY))
+PROTECTION_DENY = ("서버 브랜치 보호·ruleset·레포 설정(자동 병합 허용·병합 뒤 브랜치 지우기)을 Claude가 바꾸지 않는다. 4-c 뒤 서버 브랜치 보호가 유일한 병합 장치라 "
+                   "그것을 끄는 호출은 Approve와 같은 급이다 — 관리자가 GHE에서 한다 (규칙 11).")
+AUTO_MERGE_DENY = ("PR 자동 병합을 Claude가 켜지 않는다. 자동 병합은 +1이 붙는 즉시 db_pr merge의 확인(승인 커밋 SHA 대조·메인테이너 "
+                   "경로 PR 거부) 없이 병합한다 — 병합은 +1 뒤 사용자가 요청할 때 db_pr.py merge로만 한다 (원칙 12·규칙 11).")
+# 낱말 수준 Approve·기각 거부의 안내(사용자 결정: 오탐을 받아들인다)
+GH_WORD_NOTE = "approve·dismiss 낱말이 들어간 gh 호출은 본문·검색어라도 거부된다. 코멘트 본문에 그 낱말을 쓰지 않는다."
+# 규칙 11 판정 사유의 첫 마디(eval 채점기가 hook이 막거나 물은 호출의 결과에서 찾는다 — 병합 계열은 ask)
+GATE_DENY_HEADS = tuple(m.split("않는다", 1)[0] + "않는다" for m in (APPROVE_DENY, DISMISS_DENY, ALIAS_DENY, GH_DYN_DENY,
+                                                                   PROTECTION_DENY, AUTO_MERGE_DENY))
+GATE_ASK_HEADS = tuple(m.split("않는다", 1)[0] + "않는다" for m in (GH_MERGE_ASK, MCP_MERGE_ASK))
 
 
 def _gh_words(argv: list[str]) -> list[str]:
@@ -3379,79 +3296,29 @@ def _gh_words(argv: list[str]) -> list[str]:
     return words
 
 
-def _gh_readings(argv: list[str]) -> list[list[str]] | None:
-    """gh argv의 가능한 읽기 → 정규형 argv 목록 `[gh, 그룹, 동작, 그 앞의 나머지 토큰…, 동작 뒤 토큰…]`. cobra는 하위 명령
-    낱말만 빼고 남은 토큰을 순서대로 끝 명령의 pflag에 넘기므로 정규형은 끝 명령이 받는 입력과 같다. 그룹·동작 앞의 `=` 없는
-    `-x`·`--long`은 다음 토큰을 값으로 먹는 읽기와 안 먹는 읽기를 다 만든다(`-R`·`--repo`는 늘 먹는다). 빈 토큰·`-`·`--`는
-    건너뛴다(`--` 뒤도 낱말로 본다 — 닫힌 쪽). `api`는 끝 명령이라 낱말 하나다. 앞 옵션이 없으면 읽기는 원래 argv 하나다.
-    탐색이 `GH_LEAD_STATES`를 넘으면 None(판정 불가)."""
-    toks = argv[1:]
-    found: set[tuple[int, ...]] = set()
-    seen: set[tuple[int, tuple[int, ...]]] = set()
-    stack: list[tuple[int, tuple[int, ...]]] = [(0, ())]
-    while stack:
-        i, words = stack.pop()
-        if (i, words) in seen:
-            continue
-        seen.add((i, words))
-        if len(seen) > GH_LEAD_STATES:
-            return None
-        need = 1 if words and toks[words[0]] == "api" else 2
-        if len(words) >= need or i >= len(toks):
-            found.add(words)
-            continue
-        tok = toks[i]
-        if not tok.startswith("-"):
-            stack.append((i + 1, (*words, i) if tok.strip() else words))
-        elif tok in GH_LEAD_KEEP:
-            stack.append((i + 2, words))
-        else:
-            stack.append((i + 1, words))
-            if tok != "--" and "=" not in tok and (len(tok) == 2 or tok.startswith("--")):
-                stack.append((i + 2, words))     # 다음 토큰이 이 옵션의 값
-    out: list[list[str]] = []
-    for words in sorted(found):
-        if not words:
-            canon = list(argv)
-        else:
-            last = words[-1]
-            canon = [argv[0], *(toks[w] for w in words), *(t for j, t in enumerate(toks[:last]) if j not in words),
-                     *toks[last + 1:]]
-        if canon not in out:
-            out.append(canon)
-    return out
-
-
-def _gh_all_readings(argv: list[str]) -> list[list[str]] | None:
-    """`_gh_readings`를 원래 argv와 리디렉션을 뺀 argv(`_drop_redirs` — `gh 2>/dev/null pr merge 3`)에서 다 만든다(합집합).
-    어느 쪽이든 판정 불가면 None."""
-    out: list[list[str]] = []
-    for a in dict.fromkeys(map(tuple, (argv, _drop_redirs(argv)))):
-        got = _gh_readings(list(a))
-        if got is None:
-            return None
-        out += [r for r in got if r not in out]
-    return out
-
-
-def _gh_lead_opts(argv: list[str]) -> bool:
-    """그룹·동작 앞에 옵션이 있나(`-R`·`--repo` 꼴과 `GH_LEAD_SAFE`는 빼고). 옵션을 모두 bool로 읽어(`-R`·`--repo`만 값을 먹는다)
-    동작 낱말을 찾는다 — 다른 읽기의 낱말은 이보다 앞에 오지 않는다."""
-    toks = argv[1:]
-    group, count, lead, i = None, 0, False, 0
-    while i < len(toks):
-        tok = toks[i]
-        if tok in GH_LEAD_KEEP:
-            i += 2
-            continue
-        if tok.startswith("-") and tok != "-":
-            lead = lead or not (tok in GH_LEAD_SAFE or tok.startswith(("-R", "--repo=")))
-        elif tok and tok != "-":
-            group, count = group or tok, count + 1
-            if count >= (1 if group == "api" else 2):
-                break
-        i += 1
-    return lead
+def _json_too_deep(text: str | None, limit: int = GH_JSON_DEPTH_MAX) -> bool:
+    """JSON 글의 `[`·`{` 중첩이 `limit`보다 깊은가(문자열 안은 세지 않는다). 파싱하지 않는 한 번 훑기 — `json.loads` 앞에서
+    돌려 깊은 중첩을 Python 판과 무관하게 못 읽은 본문으로 만든다."""
+    if not text:
+        return False
+    depth, in_str, esc = 0, False, False
+    for ch in text:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        elif ch == '"':
+            in_str = True
+        elif ch in "[{":
+            depth += 1
+            if depth > limit:
+                return True
+        elif ch in "]}":
+            depth -= 1
+    return False
 
 
 def _gh_read(path: str, cwd: Path | None) -> str | None:
@@ -3465,11 +3332,6 @@ def _gh_read(path: str, cwd: Path | None) -> str | None:
         return target.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
-
-
-def _stdin_text(text: str | None) -> str | None:
-    """`@-`·`--input -`의 본문: Bash 명령 글에 heredoc이 있으면 그 글 전체(본문 포함), 아니면 모른다(파이프·리디렉션)."""
-    return text if text is not None and _heredoc_scan(text) else None
 
 
 def _pflag(tok: str, nxt: str | None, short, long) -> tuple[str | None, str, bool]:
@@ -3499,8 +3361,8 @@ def _pflag(tok: str, nxt: str | None, short, long) -> tuple[str | None, str, boo
 
 
 def _gh_api_parse(argv: list[str]) -> dict:
-    """`gh api` 인자 → `{endpoint, method, fields["k=v"], inputs[경로]}`. 옵션은 pflag 꼴로 읽는다(`_pflag`: `-XPUT`·`-X=PUT`·
-    `-fk=v`, bool `-i`와 묶은 `-iX PUT`·`-if k=v`). `api` 앞 토큰(`gh -X PUT api …` — cobra가 끝 명령에 넘긴다)도 읽는다."""
+    """`gh api` 인자 → `{endpoint, method, fields["k=v"], inputs[경로]}`. 옵션은 pflag 꼴로 읽는다(`_pflag`). `api` 앞 토큰
+    (`gh -X PUT api …` — cobra가 끝 명령에 넘긴다)도 읽는다."""
     at = argv.index("api") if "api" in argv else len(argv)
     args = argv[1:at] + argv[at + 1:] if at < len(argv) else []
     endpoint, method, fields, inputs = None, None, [], []
@@ -3523,159 +3385,81 @@ def _gh_api_parse(argv: list[str]) -> dict:
     return {"endpoint": endpoint, "method": method, "fields": fields, "inputs": inputs}
 
 
-GH_SUBST_HEREDOC_RE = re.compile(r"^\s*\$\(\s*cat\s*<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1\s*\)\s*$")
-GH_SUBST_FILE_RE = re.compile(r"^\s*\$\(\s*(?:cat\s+|<\s*)([^\s$`'\"()<>|;&]+)\s*\)\s*$")
+def _gh_hay(argv: list[str], cwd: Path | None, text: str | None, stdin_known: bool = False) -> tuple[str, bool, list[str]]:
+    """낱말 수준 검사의 글 `(글, 못 읽은 본문이 있나, --input 본문들)`. 글 = 따옴표·`\\`를 뗀 Bash 명령 글 전체(heredoc 본문·셸이
+    만든 값 포함) + argv + gh가 읽는 파일(`@파일`·`--input`·`$(cat 파일)`·`alias import` 파일, `GH_BODY_MAX`까지). stdin(`-`·
+    `@-`)은 그 호출 자신의 heredoc을 글자 그대로 알 때만(`stdin_known` — `_gh_kind`가 리디렉션을 빼기 전 argv로 `_gh_stdin_known`을
+    본다) 읽은 것이다(그 글은 이미 들어 있다). 셸이 풀 경로·없는 파일은 못 읽은 본문이다."""
+    toks, words = list(argv), _gh_words(_drop_redirs(list(argv)))     # `alias import - <<EOF`의 `<<EOF`는 파일이 아니다
+    srcs = []
+    for k, t in enumerate(toks):
+        if t == "--input" and k + 1 < len(toks):
+            srcs.append(("input", toks[k + 1]))
+        elif t.startswith("--input="):
+            srcs.append(("input", t[len("--input="):]))
+        elif "=@" in t:
+            srcs.append(("field", t.split("=@", 1)[1]))
+        elif (m := GH_SUBST_FILE_RE.match(t.partition("=")[2])):
+            srcs.append(("field", m.group(1)))
+    if words[:2] == ["alias", "import"]:
+        srcs.append(("field", words[2] if len(words) > 2 else "-"))
+    elif words[:2] == ["alias", "set"] and "-" in toks:
+        srcs.append(("field", "-"))
+    parts, unread, inputs = [re.sub(r"[\"'\\]", "", text or ""), " ".join(toks)], False, []
+    for kind, src in srcs:
+        dyn = "$" in src or "`" in src or (isinstance(src, Word) and src.dyn)
+        got = None if dyn else ((text or "") if stdin_known else None) if src == "-" else _gh_read(src, cwd)
+        if _json_too_deep(got):            # 너무 깊은 JSON은 못 읽은 본문(리뷰 엔드포인트면 Approve 거부, 별칭이면 거부)
+            got = None
+        unread = unread or got is None
+        parts.append(got or "")
+        try:        # JSON 본문은 이스케이프를 푼 글도 본다(`"\u0041PPROVE"`·`\u006dergePullRequest` — gh는 그대로 보낸다)
+            parts.append(json.dumps(json.loads(got), ensure_ascii=False))
+        except (TypeError, ValueError):     # JSON 아님(깊은 중첩은 위에서 못 읽은 본문). 그 밖 예외는 올린다 — 판정 예외(거부, 4-c)
+            pass
+        if kind == "input":
+            inputs.append(got)
+    return "\n".join(parts), unread, inputs
 
 
-def _gh_subst_body(value: str, cwd: Path | None, text: str | None) -> str | None:
-    """셸이 만든 `query` 값 중 글자를 알 수 있는 꼴: `$(cat <<'EOF' … EOF)`(명령 글의 그 heredoc 본문 — 끝 표시를 인용하지
-    않았으면 본문에 `$`·백틱이 없을 때만)과 `$(cat <파일>)`·`$(< <파일>)`(있는 파일, `GH_BODY_MAX`까지). 그 밖은 None(못 읽음)."""
-    m = GH_SUBST_HEREDOC_RE.match(value)
-    if m:
-        bodies = [(hd.quoted, hd.body) for hd in _heredoc_scan(text or "") if hd.found and hd.tag == m.group(2)]
-        if not bodies or any(not quote and ("$" in body or "`" in body) for quote, body in bodies):
-            return None
-        return "\n".join(body for _, body in bodies)
-    m = GH_SUBST_FILE_RE.match(value)
-    return _gh_read(m.group(1), cwd) if m else None
+def _json_obj(text: str | None) -> bool:
+    if text is None or _json_too_deep(text):
+        return False
+    try:
+        return isinstance(json.loads(text), dict)
+    except (TypeError, ValueError):     # JSON 아님: 객체로 보지 않는다(리뷰 엔드포인트면 Approve). 그 밖 예외는 판정 예외(거부)
+        return False
 
 
-def _gh_graphql_body(parsed: dict, cwd: Path | None, text: str | None) -> tuple[str, bool, bool]:
-    """GraphQL 본문 = 인라인 필드(`k=v` 그대로) + `@파일` 필드·`--input` 파일 내용 + `@-`·`--input -`면 명령 글(heredoc).
-    `(본문, 못 읽은 것이 있나, 셸이 풀 변수 필드가 있나)`. 셸이 만든 `query` 필드(`query="$(cat <<EOF …)"`·`"$Q"`)·이름이
-    셸 값인 필드·셸이 풀 `@` 경로·`--input` 경로는 못 읽은 본문이다(H-A1 r5)."""
-    parts, unread, dyn_vars = [], False, False
-    sources = []
-    for f in parsed["fields"]:
-        key, eq, value = f.partition("=")
-        got = _gh_subst_body(value, cwd, text) if _dyn(f) and eq and key.strip() == "query" else None
-        if got is not None:
-            parts.append(got)
-        elif _dyn(f) and (not eq or key.strip() == "query" or "$" in key or "`" in key):
-            unread = True
-        elif value.startswith("@"):
-            sources.append((value[1:], _dyn(f)))
-        else:
-            parts.append(f)
-            dyn_vars = dyn_vars or _dyn(f)
-    for src, dyn in sources + [(i, _dyn(i)) for i in parsed["inputs"]]:
-        got = None if dyn else _stdin_text(text) if src == "-" else _gh_read(src, cwd)
-        if got is None:
-            unread = True
-        else:
-            parts.append(got)
-    return "\n".join(parts), unread, dyn_vars
+def _heredoc_known(text: str | None, tag: str | None = None) -> bool:
+    """명령 글의 heredoc 본문(`tag`가 있으면 그 끝 표시의 것만)을 글자 그대로 아는가: 명령 글의 `<<` 수가 찾은 heredoc 수와
+    같고(인용·`bash -c` 문자열·here-string 안의 `<<`가 있으면 어느 본문이 쓰이는지 모른다), 모두 끝까지 찾았고, 끝 표시를
+    인용했거나(`<<'EOF'`·`<<"EOF"`·`<<\\EOF`) 본문에 `$`(`${` 포함)·백틱·`\\`(줄 이음)가 없다(인용하지 않은 본문은 셸이 푼다)."""
+    scan = _heredoc_scan(text or "")
+    if (text or "").count("<<") != len(scan):
+        return False
+    hds = [hd for hd in scan if tag is None or hd.tag == tag]
+    return bool(hds) and all(hd.found and (hd.quoted or not any(c in hd.body for c in "$`\\")) for hd in hds)
 
 
-def _gh_rest_approves(parsed: dict, cwd: Path | None) -> bool:
-    """REST 리뷰 엔드포인트의 `event`가 APPROVE인가. `event=@…`·셸이 풀 값(`event="$E"`)·이름이 셸 값인 필드·`--input -`·
-    못 읽은·JSON 객체가 아닌 `--input`은 approve로 본다(리뷰 엔드포인트인 것은 안다 — 닫힌 쪽)."""
-    for f in parsed["fields"]:
-        key, eq, value = f.partition("=")
-        if _dyn(f) and (not eq or key.strip() == "event" or "$" in key or "`" in key):
-            return True
-        if eq and key.strip() == "event" and (value.startswith("@") or value.strip().upper() == "APPROVE"):
-            return True
-    for path in parsed["inputs"]:
-        raw = None if path == "-" or _dyn(path) else _gh_read(path, cwd)
-        try:
-            doc = json.loads(raw) if raw is not None else None
-        except ValueError:
-            doc = None
-        if not isinstance(doc, dict):
-            return True
-        event = doc.get("event")
-        if isinstance(event, str) and event.strip().upper() == "APPROVE":
-            return True
-    return False
-
-
-def _gh_api_path(endpoint: str) -> str:
-    """REST 엔드포인트의 경로(`?` 쿼리·`#` 조각을 뗀다 — gh는 조각을 보내지 않는다). 퍼센트 인코딩은 푼다(`pulls/3/%6Derge` —
-    서버가 풀 수 있다, 닫힌 쪽)."""
-    return urllib.parse.unquote(re.split(r"[?#]", endpoint, maxsplit=1)[0])
-
-
-def _gh_api_kind(argv: list[str], cwd: Path | None = None, text: str | None = None) -> tuple[str, str, bool]:
-    """`gh api`의 `(종류, 형태, 대상 무관)`. REST는 메서드를 밝히면 GET이 아닐 때만 쓰기, 밝히지 않으면 필드·`--input`이 있을 때 쓰기
-    (gh 기본 POST). REST 병합·Approve·기각은 `repositories/<id>/…` 꼴이면 대상과 무관하게 본다(레포 ID라 대상을 풀 수 없다).
-    셸이 푼 엔드포인트(`"$EP"`·`…/pulls/3/$A`)의 쓰기는 끝 칸이 셸 값이거나 병합·기각 꼴(`GH_REST_RISKY_TAILS`)이면
-    `dynamic`(가장 센 종류), 끝 칸이 `reviews`·`events`면 `event`로 가린다(APPROVE·셸 값이면 Approve). 셸이 푼 엔드포인트에 `repos/<o>/<r>/` 칸이 없으면(`"$BASE/pulls/3/merge"`) 병합·Approve·기각·`dynamic`은
-    대상과 무관하게 본다.
-    GraphQL(`GH_GRAPHQL_RE` — 전체 URL 포함)은 본문과 Bash 명령 글 전체(heredoc 본문 포함 — 셸이 만든 본문의 글자도 본다)에서
-    병합·자동 병합·Approve·기각 mutation을 찾으면 대상과 무관하게 그 종류. 리뷰 mutation의 `event`가 GraphQL 변수이고 셸이 풀
-    변수 필드·못 읽은 본문이 있으면 Approve로 본다. 그 밖에 못 읽은 본문은 대상과 무관하게 쓰기(ask), `mutation`·`--input`이
-    있으면 쓰기.
-    셸이 푼 엔드포인트(`"$GHE_API/graphql"`·`"$EP"`)는 실행 때 GraphQL URL일 수 있다(H-A1 r6 — gh는 `://`가 든 경로를 그대로
-    쓰고 필드를 JSON 본문으로 보낸다): 위 병합·Approve·기각 mutation 검사를 먼저 해 맞으면 대상과 무관하게 그 종류다. 글자 끝
-    칸이 `graphql`이면 GraphQL 판정 전체(못 읽은 본문은 ask)와 REST 판정 중 센 것을 쓴다."""
-    parsed = _gh_api_parse(argv)
-    endpoint = parsed["endpoint"] or ""
-    graphql = bool(GH_GRAPHQL_RE.match(urllib.parse.unquote(endpoint)))    # `https://<host>/api/%67raphql`도(서버가 경로를 푼다)
-    path = _gh_api_path(endpoint)
-    gql = None
-    if graphql or _dyn(endpoint):
-        gql = _gh_graphql_kind(parsed, cwd, text)
-        if graphql or gql[0] in GH_STRONG:
-            return gql
-        if path.rstrip("/").rsplit("/", 1)[-1].lower() != "graphql":
-            gql = None
-    rest = _gh_rest_kind(parsed, endpoint, path, cwd)
-    return rest if gql is None else max(gql, rest, key=lambda r: (GH_RANK.get(r[0], 0), r[2]))
-
-
-def _gh_graphql_kind(parsed: dict, cwd: Path | None, text: str | None) -> tuple[str, str, bool]:
-    """GraphQL 요청의 `(종류, 형태, 대상 무관)` (`_gh_api_kind`)."""
-    body, unread, dyn_vars = _gh_graphql_body(parsed, cwd, text)
-    scan = body + "\n" + (text or "")
-    if GQL_MERGE_RE.search(scan):
-        return "merge", "GraphQL 병합·자동 병합 mutation", True
-    if GQL_REVIEW_RE.search(scan) and (GQL_APPROVE_RE.search(scan)
-                                       or (GQL_EVENT_VAR_RE.search(scan) and (unread or dyn_vars))):
-        return "approve", "GraphQL 리뷰 APPROVE", True
-    if GQL_DISMISS_RE.search(scan):
-        return "dismiss", "GraphQL dismissPullRequestReview", True
-    if unread:
-        return "write", "unread", True
-    return ("write" if parsed["inputs"] or "mutation" in body else "read"), "", False
-
-
-def _gh_rest_kind(parsed: dict, endpoint: str, path: str, cwd: Path | None) -> tuple[str, str, bool]:
-    """REST 요청의 `(종류, 형태, 대상 무관)` (`_gh_api_kind`)."""
-    if parsed["method"] is not None:   # 메서드를 밝히면 그것만 본다(`-X GET -f k=v`는 쿼리 문자열이다)
-        write = parsed["method"] != "GET"
-    else:
-        write = bool(parsed["fields"]) or bool(parsed["inputs"])   # gh는 필드가 있으면 POST로 보낸다
-    # 레포 ID 경로이거나, 셸이 푼 엔드포인트에 `repos/<o>/<r>/` 칸이 없으면(`"$EP"`·`"$BASE/pulls/3/merge"`) 대상을 모른다
-    anywhere = bool(GH_REST_REPO_ID_RE.search(path)) or (_dyn(endpoint) and not re.search(r"(?:^|/)repos/[^/]+/[^/]+/", path))
-    if write and GH_REST_MERGE_RE.search(path):
-        return "merge", "gh api …/merge", anywhere
-    if write and GH_REST_DISMISS_RE.search(path):
-        return "dismiss", "gh api …/reviews/<id>/dismissals", anywhere
-    if write and GH_REST_REVIEW_RE.search(path):
-        return ("approve", "gh api …/reviews event=APPROVE", anywhere) if _gh_rest_approves(parsed, cwd) else ("write", "", False)
-    if write and _dyn(endpoint):
-        tail = path.rstrip("/").rsplit("/", 1)[-1]
-        if "$" not in tail and "`" not in tail and tail.lower() in ("reviews", "events"):    # 리뷰 꼴: event로 가린다
-            return ("approve", "gh api …/reviews event=APPROVE", anywhere) if _gh_rest_approves(parsed, cwd) \
-                else ("write", "", anywhere)
-        if "$" in tail or "`" in tail or tail.lower() in GH_REST_RISKY_TAILS:
-            return "dynamic", "gh api 엔드포인트를 셸이 정한다", anywhere
-    return ("write" if write else "read"), "", False
-
-
-def _gh_api(argv: list[str], cwd: Path | None = None, text: str | None = None) -> tuple[str | None, bool]:
-    """`gh api`의 (엔드포인트, 쓰기 여부)."""
-    return _gh_api_parse(argv)["endpoint"], _gh_api_kind(argv, cwd, text)[0] != "read"
+def _gh_stdin_known(argv: list, text: str | None) -> bool:
+    """gh가 stdin(`-`·`@-`)으로 읽는 글을 아는가: 그 호출의 마지막 stdin 리디렉션(fd 0)이 `<<`·`<<-`이고 그 끝 표시의 본문을
+    글자 그대로 안다(`_heredoc_known`). 파이프·`<`·`<<<`·`<&`·리디렉션 없음은 모른다."""
+    last = None
+    for k, t in enumerate(argv):
+        m = IN_REDIR_RE.match(str(t)) if getattr(t, "op", False) else None
+        if m and str(t)[:m.start(1)] in ("", "0"):
+            last = (m.group(1), m.group(2) or (str(argv[k + 1]) if k + 1 < len(argv) else ""))
+    return bool(last) and last[0] in ("<<", "<<-") and _heredoc_known(text, last[1])
 
 
 def _gh_review_approves(argv: list[str]) -> bool:
-    """`gh pr review`가 Approve인가(순서·위치 무관): `--approve`, `--approve=<v>`·`-a=<v>`(v가 ParseBool 거짓이 아니면),
-    짧은 옵션 묶음에서 값 받는 글자(`b`·`F`·`R`) 앞의 `a`(`-a`, `-ab LGTM`, `-ra`). 값 받는 옵션의 값은 건너뛴다.
-    셸이 풀 토큰(H-A1 r5 — `--approve`가 될 수 있다)도 Approve로 본다: 옵션 자리의 셸 값(`"$FLAG"`·`$OPT`), 선택자(첫 위치
-    인자) 뒤 위치 인자의 셸 값, 따옴표 밖 확장인 옵션 값(`-b $B` — 낱말 나누기로 뒤가 옵션이 될 수 있다). 선택자(`"$N"`·`$n`)와
-    따옴표 안 셸 값인 옵션 값(`-b "$B"`)은 그대로다. argv는 정규형(`gh pr review …`, `_gh_readings`)이다."""
-    i = 3 if [str(a) for a in argv[1:3]] == ["pr", "review"] else 1
+    """`gh pr review`가 Approve인가(순서·위치 무관, `review` 뒤 토큰): `--approve`, `--approve=<v>`·`-a=<v>`(v가 ParseBool 거짓이
+    아니면), 짧은 옵션 묶음에서 값 받는 글자(`b`·`F`·`R`) 앞의 `a`(`-a`, `-ab LGTM`, `-ra`). 값 받는 옵션의 값은 건너뛴다.
+    셸이 풀 토큰(`--approve`가 될 수 있다)도 Approve로 본다: 옵션 자리의 셸 값(`"$FLAG"`·`$OPT`), 선택자(첫 위치 인자) 뒤 위치
+    인자의 셸 값, 따옴표 밖 확장인 옵션 값(`-b $B` — 낱말 나누기로 뒤가 옵션이 될 수 있다). 선택자(`"$N"`)와 따옴표 안 셸 값인
+    옵션 값(`-b "$B"`)은 그대로다."""
+    i = next((k + 1 for k, a in enumerate(argv) if str(a) == "review"), len(argv))
     positional = 0
     while i < len(argv):
         tok, i = argv[i], i + 1
@@ -3717,315 +3501,177 @@ def _gh_review_approves(argv: list[str]) -> bool:
     return False
 
 
-def _gh_alias_risky(argv: list[str], action: str, cwd: Path | None, text: str | None) -> bool:
-    """`gh alias set <이름> <확장>`·`gh alias import <파일|->`가 병합·리뷰 명령을 만드나. 확장이 stdin(`-`)이면 명령 글의 heredoc,
-    import 파일은 `GH_BODY_MAX`까지 읽는다. 못 읽으면 만드는 것으로 본다(닫힌 쪽)."""
-    try:
-        rest = argv[argv.index(action, argv.index("alias") + 1) + 1:]
-    except ValueError:
+def _gql_query_read(value: str, text: str | None) -> bool:
+    """셸이 만든 `query` 값을 읽었나: `$(cat 파일)`(`_gh_hay`가 읽었다 — 못 읽으면 따로 unread)·`$(cat <<EOF …)`(그 heredoc
+    본문을 글자 그대로 안다 — `_heredoc_known`). 그 밖(`"$Q"`, 인용하지 않은 본문의 `$(…)`·`$Q`·백틱)은 못 읽은 본문이다."""
+    if GH_SUBST_FILE_RE.match(value):
         return True
-    pos = [t for t in rest if not t.startswith("-") or t == "-"]
-    src = (pos[1] if len(pos) > 1 else None) if action == "set" else (pos[0] if pos else "-")
-    if action == "set" and src != "-":
-        return bool(ALIAS_RISKY_RE.search(" ".join(rest)))
-    got = _stdin_text(text) if src == "-" else _gh_read(src, cwd)
-    return got is None or bool(ALIAS_RISKY_RE.search(got))
+    m = GH_SUBST_HEREDOC_RE.match(value)
+    return bool(m) and _heredoc_known(text, m.group(2))
 
 
-def _gh_judge(argv: list[str], cwd: Path | None = None, text: str | None = None) -> tuple[str, str, bool]:
-    """`(종류, 형태, 대상 무관)`. 종류: `read`|`write`|`merge`|`approve`|`dismiss`|`local`|`alias`. 모르는 그룹은 read(오탐 방지).
-    `text`는 Bash 명령 글(`@-`·`--input -` 본문), `cwd`는 `@파일`·`--input` 기준."""
+def _gh_api_kind(argv: list[str], hay: str, unread: bool, inputs: list, text: str | None = None) -> str:
+    """`gh api`의 종류(대상 레포는 보지 않는다). REST는 메서드를 밝히면 GET이 아닐 때만 쓰기, 밝히지 않으면 필드·`--input`이
+    있을 때 쓰기(gh 기본 POST). GraphQL은 `mutation`·`--input`·못 읽은 본문·셸 값 필드가 있으면 쓰기. 쓰기의 REST 기각
+    엔드포인트는 dismiss, 리뷰 엔드포인트는 `event=@…`·셸 값 필드·못 읽은·JSON 객체가 아닌 본문이면 Approve(`event=APPROVE`는
+    낱말 수준이 먼저 본다), 병합 엔드포인트는 merge. 셸이 푼 엔드포인트는 끝 칸으로 가리고 끝 칸이 셸 값이면 dynamic."""
+    p = _gh_api_parse(argv)
+    ep = p["endpoint"] or ""
+    path = urllib.parse.unquote(re.split(r"[?#]", ep, maxsplit=1)[0])    # `pulls/3/%6Derge`(서버가 경로를 푼다)
+    tail = path.rstrip("/").rsplit("/", 1)[-1].lower()
+    dyn_ep, dyn_field = _dyn(ep), any(_dyn(f) for f in [*p["fields"], *p["inputs"]])
+    write = p["method"] not in (None, "GET") or (p["method"] is None and bool(p["fields"] or p["inputs"]))
+    if GQL_PROTECTION_RE.search(hay) or (write and (GH_PROTECTION_RE.search(path) or (
+            GH_REPO_PATH_RE.search(path) and GH_AUTO_MERGE_ON_RE.search(hay)))):
+        return "protection"
+    if GQL_AUTOMERGE_RE.search(hay):
+        return "automerge"
+    if GQL_MERGE_RE.search(hay):
+        return "merge"
+    if GH_GRAPHQL_RE.match(urllib.parse.unquote(ep)) or (dyn_ep and tail == "graphql"):
+        # 못 읽은 `query`(`"$Q"` — `$(cat 파일)`·`$(cat <<EOF …)` 밖 셸 값)는 쓰기. 그 밖 셸 값 변수(`-f o="$OWNER"`)는 mutation일
+        # 때만 쓰기다(mutation이면 아래에서 이미 쓰기)
+        q_unread = any(_dyn(f) and f.partition("=")[0] == "query" and not _gql_query_read(f.partition("=")[2], text)
+                       for f in p["fields"])
+        return "write" if unread or q_unread or p["inputs"] or re.search(r"\bmutation\b", hay) else "read"
+    if not (p["method"] != "GET" if p["method"] is not None else p["fields"] or p["inputs"]):
+        return "read"
+    if GH_REST_DISMISS_RE.search(path) or tail == "dismissals":
+        return "dismiss"
+    if GH_REST_REVIEW_RE.search(path) or (dyn_ep and tail in ("reviews", "events")):
+        bad = unread or dyn_field or "event=@" in " ".join(argv) or not all(map(_json_obj, inputs))
+        return "approve" if bad else "write"
+    if GH_REST_MERGE_RE.search(path) or (dyn_ep and tail in ("merge", "merges")):
+        return "merge"
+    return "dynamic" if dyn_ep and ("$" in tail or "`" in tail or not tail) else "write"
+
+
+def _gh_slot(toks: list[str], start: int) -> list[int]:
+    """`start`부터 옵션을 건너뛴 첫 위치 인자 자리의 후보(토큰 번호). `=` 없는 옵션 바로 뒤 토큰은 그 옵션의 값일 수도 있어
+    (cobra — bool로 등록됐는지 guard는 모른다) 그 다음 위치 인자도 후보다(닫힌 쪽 — `gh pr -b x -b y checkout 3`)."""
+    out, i = [], start
+    while i < len(toks):
+        t = toks[i]
+        if t.startswith("-") and len(t) > 1:
+            i += 1
+            continue
+        out.append(i)
+        prev = toks[i - 1] if i > start else ""
+        if not (prev.startswith("-") and len(prev) > 1 and "=" not in prev and prev != "--"):
+            break
+        i += 1
+    return out
+
+
+def _gh_local(argv: list[str]) -> bool:
+    """`gh pr checkout`·`gh pr co`·`gh co`(로컬 브랜치를 바꾼다 — 규칙 8). 그룹 자리와 `pr` 뒤 동작 자리만 본다(`gh pr list
+    --search checkout`은 아니다). 그 앞의 옵션은 몇 개든 건너뛴다(`_gh_slot` — 값을 먹을 수 있는 옵션 뒤는 다음 자리도)."""
+    toks = [str(t) for t in argv]
+    for g in _gh_slot(toks, 1):
+        if toks[g] == "co" or (toks[g] == "pr" and {"checkout", "co"} & {toks[a] for a in _gh_slot(toks, g + 1)}):
+            return True
+    return False
+
+
+def _gh_merge_auto(argv: list) -> bool:
+    """`gh pr merge`가 자동 병합을 켜나(원칙 12로 거부): `--auto`(거짓 `--auto=false` 밖), 선택자(첫 위치 인자) 뒤의 따옴표 밖
+    셸 값과 셸 값 옵션(낱말 나누기로 `--auto`가 될 수 있다 — `_gh_review_approves`와 같은 닫힌 쪽)."""
+    i = next((k + 1 for k, a in enumerate(argv) if str(a) == "merge"), len(argv))
+    positional = 0
+    for t in argv[i:]:
+        key, _, val = str(t).partition("=")
+        if key == "--auto" and val.lower() not in GH_FALSE:
+            return True
+        if not str(t).startswith("-"):
+            positional += 1
+        if _split(t) and (positional > 1 or str(t).startswith("-")):
+            return True
+    return False
+
+
+def _gh_kind1(argv: list[str], cwd: Path | None, text: str | None, stdin_known: bool = False) -> str:
+    hay, unread, inputs = _gh_hay(argv, cwd, text, stdin_known)
     words = _gh_words(argv)
     group = words[0] if words else ""
-    action = words[1] if len(words) > 1 else ""
-    # 셸이 정하는 그룹·동작(`gh "$G" …`·`gh pr $ACT 3`)은 모른다 — 가장 센 읽기(H-A1 r5). pr 밖 그룹의 동작은 쓰기까지다
-    if group and _dyn(group):
-        return "dynamic", "gh 그룹을 셸이 정한다", False
-    if group == "pr" and action and _dyn(action):
-        return "dynamic", "gh pr 동작을 셸이 정한다", False
-    if group == "alias" and action and _dyn(action):
-        return "alias", "gh alias <셸 값>", True
-    if action and _dyn(action) and (group in GH_ACTION_GROUPS or group == "repo"):
-        return "write", "", False
-    action = GH_ACTION_ALIASES.get(action, action)
-    if group == "api":
-        return _gh_api_kind(argv, cwd, text)
-    if group == "co":           # gh 기본 별칭 `co` = `pr checkout`
-        return "local", "", False
-    if group == "pr":
-        if action == "merge":
-            return "merge", "gh pr merge", False
-        if action == "checkout":
-            return "local", "", False
-        if action == "review":
-            if _gh_review_approves(argv):
-                return "approve", "gh pr review --approve", False
-            return "write", "", False
-        return ("read" if not action or action in GH_PR_READ else "write"), "", False
+    action = GH_ACTION_ALIASES.get(words[1], words[1]) if len(words) > 1 else ""
     if group == "alias" and action in ("set", "import"):
-        risky = _gh_alias_risky(argv, action, cwd, text)
-        return ("alias", f"gh alias {action}", True) if risky else ("read", "", False)
-    if group in GH_ACTION_GROUPS:
-        return ("read" if not action or action in GH_READ_ACTIONS else "write"), "", False
-    if group == "repo":
-        return ("read" if not action or action in GH_REPO_READ else "write"), "", False
-    return "read", "", False
+        # `gh alias set x "$(…)"` — 별칭 내용을 모른다. `-s`(셸 별칭)는 실행 때 무엇이든 돌린다
+        dyn = any(_dyn(t) for t in argv[2:]) or any(str(t) in ("-s", "--shell") for t in argv[3:])
+        if unread or dyn or ALIAS_RISKY_RE.search(hay):
+            return "alias"
+        merge = "merge" in hay.lower()
+        return ("automerge" if GH_AUTO_FLAG_RE.search(hay) or GQL_AUTOMERGE_RE.search(hay) else "merge") if merge else "read"
+    if GH_DISMISS_WORD_RE.search(hay):
+        return "dismiss"
+    if GH_APPROVE_WORD_RE.search(hay) or ("review" in words and _gh_review_approves(argv)) or (
+            GQL_REVIEW_RE.search(hay) and GQL_EVENT_VAR_RE.search(hay) and (unread or any(map(_dyn, argv)))):
+        return "approve"
+    if group == "repo" and action == "edit" and any(
+            str(t).startswith(("--enable-auto-merge", "--delete-branch-on-merge")) and
+            str(t).partition("=")[2].lower() not in GH_FALSE for t in argv):
+        return "protection"
+    if _dyn(group) or (group in ("pr", "alias") and action and _dyn(action)):
+        return "dynamic"
+    if group == "api":
+        return _gh_api_kind(argv, hay, unread, inputs, text)
+    if _gh_local(argv):
+        return "local"
+    if "pr" in words and "merge" in words[words.index("pr") + 1:]:
+        return "automerge" if _gh_merge_auto(argv) else "merge"
+    if group in GH_READ_GROUPS or (group in GH_GROUPS and (not action or action in GH_READ_ACTIONS)):
+        return "read"
+    return "write"
 
 
 def _gh_kind(argv: list[str], cwd: Path | None = None, text: str | None = None) -> str:
-    """`read`|`write`|`merge`|`approve`|`dismiss`|`dynamic`|`local`|`alias` — 가능한 읽기(`_gh_all_readings`)마다 `_gh_judge`의
-    종류 중 가장 센 것(`GH_RANK`). 판정 불가면 merge."""
-    readings = _gh_all_readings(argv)
-    if readings is None:
-        return "merge"
-    return max((_gh_judge(a, cwd, text)[0] for a in readings), key=lambda k: GH_RANK.get(k, 0))
+    """gh 호출의 종류(낱말 수준 — 대상 레포는 보지 않는다): `approve`·`dismiss`(Claude의 Approve·리뷰 기각), `dynamic`(셸이 정한
+    그룹·`pr` 동작·api 끝 칸 — 그것일 수 있다), `alias`(리뷰 별칭·못 읽은 별칭 파일), `merge`(병합 계열), `write`(그 밖 쓰기·모르는
+    그룹), `local`(`pr checkout` — 규칙 8), `read`. `text`는 Bash 명령 글(heredoc 본문), `cwd`는 `@파일`·`--input` 기준. 리디렉션을
+    뺀 argv(`gh 2>/dev/null pr merge 3`)도 보고 센 쪽을 쓴다."""
+    known = _gh_stdin_known(argv, text)
+    return max((_gh_kind1(list(a), cwd, text, known) for a in dict.fromkeys(map(tuple, (argv, _drop_redirs(argv))))),
+               key=lambda k: GH_RANK.get(k, 0))
 
 
-def _gh_action_key(words: list[str]) -> str:
-    """`그룹 동작`(동작 별칭은 원래 이름으로 — `pr new` → `pr create`). 값 받는 옵션 표의 열쇠."""
-    return " ".join([*words[:1], *(GH_ACTION_ALIASES.get(w, w) for w in words[1:2])])
+GH_DENY_KINDS = ("approve", "dismiss", "dynamic", "alias", "protection", "automerge")
 
 
-def _gh_scan(argv: list[str]) -> tuple[list[str], set[int], list[int]]:
-    """gh 인자를 pflag 꼴로 훑는다 → `(위치 인자, 옵션 자리 토큰의 번호, 위치 인자의 번호)`. 값 받는 옵션은 `GH_SEL_*` 표와
-    `-R`로 보고 그 값을 건너뛴다(`pr review --comment`는 bool, 표에 없는 동작은 표 전체를 합친 글자). `--` 뒤는 모두 위치 인자."""
-    action = _gh_action_key(_gh_words(argv))
-    short = GH_SEL_SHORT_WITH_ARG.get(action, GH_SEL_SHORT_ANY) + "R"
-    long = GH_SEL_LONG_WITH_ARG - {"--comment"} if action == "pr review" else GH_SEL_LONG_WITH_ARG
-    pos, opts, at, flags, i = [], set(), [], True, 1
-    while i < len(argv):
-        tok = argv[i]
-        if flags and tok == "--":
-            flags = False
-        elif flags and tok.startswith("-") and tok != "-":
-            opts.add(i)
-            i += _pflag(tok, argv[i + 1] if i + 1 < len(argv) else None, short, long)[2]
-        else:
-            pos.append(tok)
-            at.append(i)
-        i += 1
-    return pos, opts, at
+def _gh_deny_msg(kind: str) -> str:
+    """거부 종류(`GH_DENY_KINDS`)의 사유. Approve·기각에는 낱말 수준 오탐 안내를 붙인다."""
+    return {"approve": f"{APPROVE_DENY}: gh). {GH_WORD_NOTE}", "dismiss": f"{DISMISS_DENY}: gh). {GH_WORD_NOTE}",
+            "dynamic": f"{GH_DYN_DENY}).", "alias": ALIAS_DENY, "protection": PROTECTION_DENY, "automerge": AUTO_MERGE_DENY}[kind]
 
 
-def _gh_repo_values(argv: list[str]) -> tuple[list[str], list[str]]:
-    """`-R`·`--repo` 값 `(분명한 것, 그 밖)`. 분명한 것: 옵션 자리(`_gh_scan`)의 `-R v`, `--repo v`, `--repo=v`, `-Rv`,
-    `-R=v`(pflag 짧은 옵션). 그 밖: 묶음 `-dR v`·`-dRv`(앞 글자가 값을 받으면 R는 그 값의 일부라 모호하다), 값 받는 옵션의 값
-    자리·`--` 뒤의 같은 꼴(`-b -Rother/x`의 본문 — gh는 레포로 읽지 않는다), `gh api`의 모든 꼴(`gh api`엔 `-R`가 없다).
-    `GH_SEL_SHORT_WITH_ARG` 표에 없는 동작은 바로 앞이 `=` 없는 옵션이면 그 옵션의 값일 수 있다(`label create -d -Rx`·
-    `release create --notes '-R…'` — 어느 옵션이 bool인지 모른다)."""
-    words = _gh_words(argv)
-    opts = set() if words[:1] == ["api"] else _gh_scan(argv)[1]
-    table = _gh_action_key(words) in GH_SEL_SHORT_WITH_ARG
-    strict, loose = [], []
-    for i, tok in enumerate(argv[1:], 1):
-        nxt = argv[i + 1] if i + 1 < len(argv) else None
-        if tok in ("-R", "--repo"):
-            value, clear = nxt, True
-        elif tok.startswith("--repo="):
-            value, clear = tok.split("=", 1)[1], True
-        elif tok.startswith("-R") and len(tok) > 2:
-            value, clear = tok[2:].removeprefix("="), True
-        elif re.match(r"^-[A-Za-z]+R", tok):
-            value, clear = tok[tok.index("R") + 1:].removeprefix("=") or nxt, False
-        else:
+def _gh_judged_deny(invs, text: str, why: str = "") -> str | None:
+    """의존성 없음 판정(`_degraded`)의 규칙 11 거부: gh 호출마다 `_gh_kind`(설정·PyYAML 없이 돈다)가 거부 종류면 그 사유,
+    `_gh_kind`가 예외면 `INTERNAL_ERROR` 거부. 거부할 것이 없으면 None(병합 계열·그 밖 쓰기는 호출한 쪽이 ask). 낱말
+    수준(`_text_unjudged_deny`)은 명령 걷기 예외(`_walk_or_flat`)에서만 쓴다."""
+    for inv in invs:
+        if _base(inv.argv[0]) != "gh":
             continue
-        if value is not None:
-            slot = not table and i - 1 in opts and "=" not in argv[i - 1]
-            (strict if clear and i in opts and not slot else loose).append(value)
-    return strict, loose
-
-
-def _gh_selector(argv: list[str]) -> str | None:
-    """`gh pr|issue <동작>`의 선택자(동작 뒤 첫 위치 인자 — 번호·URL·브랜치). 옵션 값은 pflag 꼴로 건너뛴다(`_gh_scan`).
-    그 밖 그룹이거나 없으면 None."""
-    words = _gh_words(argv)
-    if len(words) < 2 or words[0] not in ("pr", "issue"):
-        return None
-    pos = _gh_scan(argv)[0]
-    return pos[2] if len(pos) > 2 else None
-
-
-def _gh_slug(value: str) -> tuple[str, str] | str | None:
-    """gh 대상 값(`-R`·`GH_REPO`·URL·엔드포인트의 `o/r`) → `(owner, repo)` 소문자. host는 보지 않는다(gh는 `www.`·`:443`을 떼고,
-    SSH 별칭 host는 guard가 풀 수 없다). 퍼센트 인코딩은 푼다(gh가 푼다). 셸이 풀 글자(`$`·백틱)가 남았거나, 푼 뒤에도 `%`가
-    남거나, owner·repo에 글롭 글자(`*?[`)가 있으면 `"?"`(이슈 DB일 수 있다). 형식 밖이면 None."""
-    v = urllib.parse.unquote(_expand(str(value)))
-    if any(c in v for c in "$`%"):
-        return "?"
-    slug = _repo_slug(v)
-    if slug is None:
-        return None
-    if any(c in part for part in slug[1:] for c in "*?["):
-        return "?"
-    return slug[1:]
-
-
-def _gh_is_db(conf: Config, slug) -> bool:
-    """`_gh_slug` 결과가 이슈 DB(어느 프로필이든 owner/repo가 같다)이거나 그럴 수 있나(`"?"`)."""
-    return slug == "?" or (slug is not None and any(s[1:] == tuple(slug) for s in conf.remote_slugs))
-
-
-def _gh_cwd_db(inv: Invocation, conf: Config) -> bool | str:
-    """작업 디렉토리가 gh가 원격으로 정하는 이슈 DB 레포인가 → True·False·`"?"`(모른다 — 닫힌 쪽으로 이슈 DB처럼 다룬다).
-    gh는 여러 원격 중 upstream > github > origin 순으로, `remote.<이름>.gh-resolved`(`gh repo set-default`)를 먼저 고르고, insteadOf를
-    풀고, 앞 대입 `GIT_DIR`·`GIT_COMMON_DIR`·`GIT_WORK_TREE`를 따른다(gh 2.89 GH_DEBUG 확인). guard는 고르는 순서를 흉내 내지 않고
-    합집합으로 본다(H-A1 r5): 이슈 DB clone·worktree·스냅샷이거나, 원격 하나라도(`git remote -v` — insteadOf를 푼 URL) 이슈 DB거나,
-    gh-resolved 값 하나라도 이슈 DB면 True. 모르는 것: 셸이 풀 경로(`cd "$D"`·`cd $(…)`)·따라갈 수 없는 디렉토리(`cd -`의 처음
-    이전 디렉토리·`popd`)·없는 경로(같은 명령에서 만들 clone), 셸이 풀거나 없는 `GIT_DIR` 등, 앞 대입 `GIT_CONFIG_*`."""
-    cwd, over, unknown = inv.cwd, {}, False
-    for key in ("GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE"):
-        if key in inv.env:
-            d = _expand(inv.env[key])
-            p = Path(d) if Path(d).is_absolute() else cwd / d
-            # 빈 값은 git이 못 쓴다(없는 경로와 같다). stat 오류도 모르는 값이다(`os.path.exists`는 예외를 내지 않는다)
-            unknown = unknown or not d or any(c in d for c in "$`") or not os.path.exists(p)
-            over[key] = str(p)
-    unknown = unknown or any(k in GIT_CONFIG_ENV or re.match(r"^GIT_CONFIG_(KEY|VALUE)_\d+$", k) for k in inv.env)
-    if unknown or any(c in str(cwd) for c in "$`") or not _isdir(cwd):
-        return "?"
-    env = {**os.environ, **over} if over else None
-
-    def git(*args: str) -> str:
-        proc = subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, encoding="utf-8",
-                              errors="replace", env=env, check=False)
-        return proc.stdout if proc.returncode == 0 else ""
-    common = git("rev-parse", "--path-format=absolute", "--git-common-dir").strip()
-    if common and conf.git_rules and conf.profile_of_common(_norm(common)):
-        return True
-    urls = [ln.split()[1] for ln in git("remote", "-v").splitlines() if len(ln.split()) >= 2]
-    resolved = [ln.split(None, 1)[1].strip() for ln in git("config", "--get-regexp", r"^remote\..*\.gh-resolved$").splitlines()
-                if len(ln.split(None, 1)) == 2]
-    return any(_gh_is_db(conf, _gh_slug(v)) for v in urls + [r for r in resolved if r != "base"])
-
-
-def _gh_env_repo(text: str | None) -> tuple[list, bool]:
-    """명령 글 전체의 `GH_REPO=<값>` 대입(앞 대입·`export`·`env`·`declare`, 위치·세그먼트 무관 — cd처럼 따라가는 대신 글 전체를
-    본다)의 `_gh_slug` 목록과, `=` 없는 언급(`export GH_REPO`·`read GH_REPO`·`$GH_REPO`)이 있나. 빈 값은 gh가 없는 것으로 본다."""
-    slugs, other = [], False
-    for m in GH_ENV_REPO_RE.finditer(text or ""):
-        if not m.group(1):
-            other = True
-            continue
-        rest = text[m.end():]
-        if not rest or rest[0] in " \t\r\n;&|()<>":
-            continue
-        lex = shlex.shlex(rest, posix=True, punctuation_chars=";&|()<>")
-        lex.whitespace_split = True
-        lex.commenters = ""
         try:
-            slugs.append(_gh_slug(lex.get_token() or ""))
-        except ValueError:      # 따옴표 불균형: 모르는 값
-            slugs.append("?")
-    return slugs, other
-
-
-def _gh_part(conf: Config, text: str, at: int) -> bool:
-    """엔드포인트 `repos/<o>/<r>`의 한 칸(`at` 1=owner, 2=repo)이 이슈 DB의 그 칸과 같거나 모르는 값인가."""
-    slug = _gh_slug(f"o/{text}")
-    return slug == "?" or (slug is not None and any(s[at] == slug[1] for s in conf.remote_slugs))
-
-
-def _gh_targets_db(inv: Invocation, conf: Config, strong: bool = False, text: str | None = None,
-                   cwd_db=None) -> bool:
-    """대상 레포가 이슈 DB인가(이거나 그럴 수 있나). 명시 대상 후보: api 엔드포인트의 `repos/<o>/<r>`, PR·이슈 URL 선택자
-    (`_gh_selector`), `-R`·`--repo`의 모든 꼴, `GH_REPO`(앞 대입과 명령 글의 `GH_REPO=` 대입). 비교는 `_gh_slug`(owner/repo만,
-    퍼센트 디코딩, 셸이 풀 값은 "?")로 한다. 후보 중 하나라도 이슈 DB거나 "?"면 대상(합집합 — gh는 URL 선택자면 cwd·`-R`과
-    무관하게 그 레포를 쓴다). 엔드포인트의 한 칸만 자리표시(`repos/{owner}/telephony-issue-db`)면 gh가 그 칸을 채운다 — 남은
-    칸이 이슈 DB의 그 칸과 같으면 대상. 둘 다 자리표시면 명시 대상이 아니다(cwd).
-    `strong`(병합·Approve·기각): 다른 레포로 푼 명시 대상도 cwd 판정을 끄지 않는다. 셸이 풀 선택자(`$`·백틱)와 명령 글의
-    `GH_REPO` 언급도 대상으로 본다. 그 밖 종류: 옵션 자리의 분명한 명시 대상(엔드포인트·URL 선택자·옵션 자리 `-R`·앞
-    `GH_REPO`)이 있고 모두 다른 레포면 대상이 아니고, 없으면 cwd(`_gh_cwd_db`). 선택자가 아닌 자리의 URL(`--body`·`-c` 등
-    옵션 값)·옵션 자리가 아닌 `-R` 꼴·명령 글의 `GH_REPO=` 대입은 이슈 DB일 때만 세고 cwd 판정을 막지 않는다.
-    위치 인자 대상(H-A1 r5): `repo <동작> [<레포>]`의 첫 위치 인자(URL 꼴 포함)는 명시 대상이다(바로 앞이 `=` 없는 옵션이면 그
-    옵션의 값일 수 있어 이슈 DB일 때만 센다). `issue transfer <이슈> <대상 레포>`의 대상은 이슈 DB일 때만 센다(옮겨 오는 레포도
-    바뀐다). 셸이 정하는 그룹(`gh "$G" …`)은 `api`로도 읽어 엔드포인트를 본다.
-    `cwd_db`는 cwd 판정을 한 번만 하려고 넘기는 함수다. 돌려주는 값은 True·False이거나 cwd를 몰라 대상으로 본 `"?"`다."""
-    argv = inv.argv
-    strict_raw, loose_raw = _gh_repo_values(argv)
-    words = _gh_words(argv)
-    maybe = False
-    if words and words[0] != "api":
-        pos, opts, at = _gh_scan(argv)
-        group, action = words[0], GH_ACTION_ALIASES.get(words[1], words[1]) if len(words) > 1 else ""
-        k = 2 if group == "repo" else 3 if (group, action) == ("issue", "transfer") else 0
-        if k and len(pos) > k:
-            ambiguous = at[k] - 1 in opts and "=" not in argv[at[k] - 1]
-            (loose_raw if group == "issue" or ambiguous else strict_raw).append(pos[k])
-    if words and (words[0] == "api" or _dyn(words[0])):
-        api_argv = argv if words[0] == "api" else [argv[0], "api", *argv[2:]]
-        m = re.search(r"(?:^|/)repos/([^/]+)/([^/]+)", _gh_api_path(_gh_api_parse(api_argv)["endpoint"] or ""))
-        if m:
-            marks = [t.startswith(("{", ":")) for t in m.groups()]
-            if not any(marks):
-                strict_raw.append(f"{m.group(1)}/{m.group(2)}")
-            elif not all(marks):        # 한 칸만 자리표시: 글자 칸이 이슈 DB 것과 같으면 이슈 DB일 수 있다
-                at = 2 if marks[0] else 1
-                maybe = _gh_part(conf, m.group(at), at)
-    sel = _gh_selector(argv)
-    urls = [t for t in argv[1:] if GH_URL_RE.match(urllib.parse.unquote(_expand(t)))]    # gh는 경로를 풀어 `/pull/N`을 찾는다
-    strict_raw += [t for t in urls if t == sel]
-    loose_raw += [t for t in urls if t != sel]
-    if inv.env.get("GH_REPO"):
-        strict_raw.append(inv.env["GH_REPO"])
-    env_slugs, env_other = _gh_env_repo(text)
-    strict = [s for s in map(_gh_slug, strict_raw) if s is not None]
-    loose = [s for s in map(_gh_slug, loose_raw) if s is not None] + env_slugs
-    if maybe or any(_gh_is_db(conf, s) for s in strict + loose):
-        return True
-    cwd_db = cwd_db or (lambda: _gh_cwd_db(inv, conf))
-    if strong:
-        unresolved_sel = sel is not None and any(c in _expand(sel) for c in "$`")
-        return unresolved_sel or env_other or cwd_db()
-    return not strict and cwd_db()
+            kind = _gh_kind(inv.argv, inv.cwd, text)
+        except Exception as exc:  # noqa: BLE001
+            return why + INTERNAL_ERROR.format(exc=type(exc).__name__, rule="규칙 11")
+        if kind in GH_DENY_KINDS:
+            return f"{why}{_gh_deny_msg(kind)}"
+    return None
 
 
 def check_gh(inv: Invocation, conf: Config, dec: Decision, text: str | None = None) -> None:
-    """규칙 11(gh). `text`는 Bash 명령 글 전체(GraphQL·별칭 본문을 stdin heredoc에서, `GH_REPO=` 대입을 글에서 읽는다).
-    가능한 읽기(`_gh_all_readings` — 그룹·동작 앞 옵션이 없으면 원래 argv와 리디렉션을 뺀 argv)를 모두 판정해 결정을 합친다(가장
-    센 것이 이긴다). 앞 옵션이 있는데 어느 읽기도 결정을 내지 않았으면, 어느 읽기든 대상이 이슈 DB(일 수 있으)면 ask다
-    (`GH_LEAD_ASK`). cwd를 몰라 대상으로 본 결정에는 그 사유(`GH_CWD_UNKNOWN_NOTE`)를 붙인다."""
-    if not conf.remote_slugs:      # 사용자 config가 없어도 site의 module_skills.remote는 본다(없으면 빈 목록 — 같은 동작)
+    """규칙 11(gh, 거친 판정 — `_gh_kind`). Approve·기각·셸이 정한 동작·리뷰 별칭은 거부, 병합 계열·그 밖 쓰기는 ask,
+    `pr checkout`·`co`는 clone 본체에서 거부(규칙 8). `issue_db.remote`(·모듈 스킬 원격)가 없으면(setup 전) 보지 않는다."""
+    if not conf.rule11_on:
         return
-    readings = _gh_all_readings(inv.argv)
-    if readings is None:
-        dec.deny.append(GH_LEAD_DENY)
-        return
-    memo: dict[str, bool | str] = {}
-
-    def cwd_db() -> bool | str:
-        if "v" not in memo:
-            memo["v"] = _gh_cwd_db(inv, conf)
-        return memo["v"]
-    marks = (len(dec.deny), len(dec.ask))
-    for argv in readings:
-        one = Invocation(inv.cwd, argv, inv.env)
-        kind, form, anywhere = _gh_judge(argv, inv.cwd, text)
-        if kind == "local":
-            if conf.is_clone_body(inv.cwd):
-                dec.deny.append(CLONE_MUTATION_MSG)
-            continue
-        if kind == "alias":     # 별칭엔 대상이 없다
-            dec.deny.append(ALIAS_DENY)
-            continue
-        hit = kind != "read" and (anywhere or _gh_targets_db(one, conf, kind in GH_STRONG, text, cwd_db))
-        if not hit:
-            continue
-        note = GH_CWD_UNKNOWN_NOTE if hit == "?" else ""
-        if kind == "merge":
-            dec.deny.append(GH_MERGE_DENY + note)
-        elif kind == "approve":
-            dec.deny.append(f"{APPROVE_DENY}: {form}).{note}")
-        elif kind == "dismiss":
-            dec.deny.append(f"{DISMISS_DENY}: {form}).{note}")
-        elif kind == "dynamic":
-            dec.deny.append(f"{GH_DYN_DENY}: {form}).{note}")
-        elif form == "unread":
-            dec.ask.append(GH_GQL_UNREAD_ASK)
-        else:
-            dec.ask.append("이슈 DB 원격을 바꾸는 gh 명령이다. 변경·검증 결과를 보고 승인한 뒤에만 진행한다 (규칙 7)." + note)
-    if (len(dec.deny), len(dec.ask)) == marks and _gh_lead_opts(inv.argv) and any(
-            _gh_targets_db(Invocation(inv.cwd, a, inv.env), conf, False, text, cwd_db) for a in readings):
-        dec.ask.append(GH_LEAD_ASK)
+    if any(map(_gh_local, (inv.argv, _drop_redirs(inv.argv)))) and conf.is_clone_body(inv.cwd):
+        dec.deny.append(CLONE_MUTATION_MSG)
+    kind = _gh_kind(inv.argv, inv.cwd, text)
+    if kind in GH_DENY_KINDS:
+        dec.deny.append(_gh_deny_msg(kind))
+    elif kind == "merge":
+        dec.ask.append(GH_MERGE_ASK)
+    elif kind == "write":
+        dec.ask.append(GH_WRITE_ASK)
 
 
 # -- 사용자 clone 불변 (8, Bash) -------------------------------------------------------------
@@ -4316,14 +3962,93 @@ def _write_targets(inv: Invocation) -> list[str]:
     return out + _script_out_targets([argv[0]] + rest if argv and not REDIRECT_RE.match(argv[0]) else [])
 
 
+# 규칙 8·10 보강(종합 리뷰 P2 — 재현된 우회): 셸 파서는 인터프리터 인라인 코드(`python3 -c …`·`perl -e …`·`python3 - <<EOF` 본문)
+# 안의 open()·쓰기를 보지 못해 clone 쓰기(규칙 8)와 원문 통독(규칙 10)이 통과했다. 코드 의미는 모르므로 거부하지 않고, 코드 글에 든
+# 경로 낱말이 사용자 clone 안이거나 로그 원문·분석 파일이면 ask로 사람이 본다. 상대 경로 낱말(`/` 없는 이름)은 보지 않는다(한계).
+INLINE_CODE_OPTS = {"python": {"-c"}, "perl": {"-e", "-E"}, "ruby": {"-e"}, "node": {"-e", "-p"}, "php": {"-r"}, "lua": {"-e"}}
+_INTERP_RE = re.compile(r"^(?:(python)(?:[23](?:\.\d+)?)?|pypy3?|(perl)5?[\d.]*|(ruby)[\d.]*|(node)(?:js)?\d*|(php)\d*|(lua)[\d.]*)$")
+PATH_WORD_RE = re.compile(r"(?:~[A-Za-z0-9_-]*|\.{1,2})?(?:/[A-Za-z0-9_.@%+-]+)+")
+
+
+def _interp_family(word: str) -> str | None:
+    m = _INTERP_RE.match(_base(word))
+    if not m:
+        return None
+    if m.group(0).startswith("pypy"):
+        return "python"
+    return next(g for g in m.groups() if g)
+
+
+def _inline_code_texts(command: str, cwd: Path, invs) -> list[tuple[str, Path]]:
+    """명령 글의 인터프리터 인라인 코드 `(코드, 그 호출의 cwd)`: 코드 옵션의 다음 토큰(`-c CODE`)·붙여 쓴 꼴(`-c'CODE'`는 토큰이
+    `-cCODE`)·인터프리터가 든 줄이 연 heredoc 본문(`python3 - <<EOF`, 끝 표시를 찾은 것만). `invs`는 check_bash가 이미 걸은
+    호출 목록이다(다시 걷지 않는다 — 걷기 비용은 큰 명령에서 지배적이다)."""
+    out: list[tuple[str, Path]] = []
+    for inv in invs:
+        fam = _interp_family(inv.argv[0]) if inv.argv else None
+        if fam is None:
+            continue
+        opts = INLINE_CODE_OPTS[fam]
+        argv = inv.argv
+        for i in range(1, len(argv)):
+            tok = argv[i]
+            if tok in opts and i + 1 < len(argv):
+                out.append((argv[i + 1], inv.cwd))
+            elif len(tok) > 2 and tok[:2] in opts and not tok.startswith("--"):
+                out.append((tok[2:], inv.cwd))
+    for unit, body in _heredocs(command):
+        try:
+            words = _tokens(unit)
+        except Exception:  # noqa: BLE001 — 토큰화 실패면 낱말로 본다(닫힌 쪽)
+            words = unit.split()
+        if any(_interp_family(w) for w in words):
+            out.append((body, cwd))
+    return out
+
+
+def check_inline_code(command: str, cwd: Path, dec: Decision, conf: Config, invs) -> None:
+    """인라인 코드의 경로 낱말이 사용자 clone 안이면 ask(규칙 8), 로그 원문·zip·`events*.json`·`issue_raw.json`·`match.json`이면
+    ask(규칙 10). 코드 하나에 한 번만 묻는다."""
+    for code, at in _inline_code_texts(command, cwd, invs):
+        for word in dict.fromkeys(m.group(0) for m in PATH_WORD_RE.finditer(code)):
+            p = _expand(word)
+            path = Path(p) if Path(p).is_absolute() else at / p
+            if conf.clones and _in_clone(_norm(path), conf):
+                dec.ask.append(f"인터프리터 인라인 코드에 사용자 clone 안 경로가 있다({word}). 코드가 그 파일을 쓰면 규칙 8 위반이다 — "
+                               "읽기만인지 확인한 뒤 허용한다 (규칙 8, 셸 파서는 코드 안 쓰기를 보지 못한다).")
+                break
+            try:
+                raw = _is_raw_file(path, conf.raw_names, conf.raw_exempt, conf.raw_sniffers)
+            except (OSError, ValueError):
+                raw = False
+            if raw:
+                dec.ask.append(f"인터프리터 인라인 코드가 로그 원문·분석 파일을 연다({word}). 통째로 읽어 출력하면 규칙 10 위반이다 — "
+                               "필요한 구간만 다루는지 확인한 뒤 허용한다 (규칙 10).")
+                break
+
+
 def check_clone_writes(inv: Invocation, conf: Config, dec: Decision) -> None:
-    """Bash 명령의 파일 쓰기 대상이 어느 프로필이든 사용자 clone 안이면 거부 (어느 `<work_dir>` 아래든 제외)."""
+    """Bash 명령의 파일 쓰기 대상이 어느 프로필이든 사용자 clone 안이면 거부 (어느 `<work_dir>` 아래든 제외). `ln`의 **원본**이
+    clone 안이면 ask — 링크를 거친 쓰기는 `_norm`(realpath)이 잡지만 같은 명령 안에서 만들고 바로 쓰는 꼴은 판정 때 링크가 없다."""
     for word in _write_targets(inv):
         p = _expand(word)
         target = _norm(Path(p) if Path(p).is_absolute() else inv.cwd / p)
         if _in_clone(target, conf):
             dec.deny.append(f"{CLONE_MUTATION_MSG}: {word}")
             return
+    for word in _write_targets(inv) + _rename_sources(inv):    # worktree의 `.git` 연결 파일 등(규칙 5 근거 ref)
+        p = _expand(word)
+        if _db_git_meta(_norm(Path(p) if Path(p).is_absolute() else inv.cwd / p), conf):
+            dec.deny.append(f"{GIT_META_MSG}: {word})")
+            return
+    if inv.argv and _base(inv.argv[0]) == "ln":
+        pos = [a for a in inv.argv[1:] if not a.startswith("-") or a == "-"]
+        for word in pos[:-1]:
+            p = _expand(word)
+            if _in_clone(_norm(Path(p) if Path(p).is_absolute() else inv.cwd / p), conf):
+                dec.ask.append(f"사용자 clone 안을 가리키는 링크를 만든다({word}). 링크를 거친 쓰기는 clone을 바꾼다 — 읽기 용도인지 "
+                               "확인한 뒤 허용한다 (규칙 8).")
+                return
     word = _db_build_write_target(inv, conf)
     if word is not None:
         dec.ask.append(f"db_build.py --write가 사용자 clone({word})의 생성 파일을 고쳐 쓴다. 메인테이너 migrate 흐름인지 확인한 "
@@ -4523,81 +4248,49 @@ def check_skill_source(inv: Invocation, conf: Config, dec: Decision) -> None:
             dec.ask.append(f"{SKILL_SOURCE_ASK}: git {call.sub}")
 
 
-CHECK_ERROR_ASK = "판정할 수 없는 값이 있어(경로·인코딩 오류 {exc}) 이 검사를 직접 확인한다 ({rule})."
+INTERNAL_ERROR = "guard 내부 오류({exc}) — 판정하지 못했으므로 거부한다 ({rule}). 같은 일을 다른 꼴로 하거나 사용자가 직접 한다."
 
 
-def _checked(dec: Decision, rule: str, fn, *args, fallback=None) -> None:
-    """검사 하나를 돌린다. 경로·인코딩 예외(ValueError — UnicodeError 포함 — ·OSError)는 그 검사만 판정하지 못한 것으로 보고
-    닫힌 쪽 결정(`fallback(dec)`, 없으면 ask)을 남긴 뒤 다른 검사를 이어 간다(회귀 수정 R2 — 예외 하나로 판정 전체가 내부 오류
-    판정(`_degraded`)으로 약해지지 않게. 그 밖의 예외는 그대로 올라가 `_degraded`가 받는다)."""
+def _checked(dec: Decision, rule: str, fn, *args) -> None:
+    """검사 하나를 돌린다. 어떤 예외든(경로·인코딩 오류·`RecursionError` 포함) 그 호출은 거부(`INTERNAL_ERROR`, 4-c)하고, 사유를
+    다 남기도록 다른 검사는 이어 간다(예외 하나가 다른 검사의 거부 사유를 지우지 않게)."""
     try:
         fn(*args)
-    except (ValueError, OSError) as exc:
-        if fallback is not None:
-            fallback(dec)
-        dec.ask.append(CHECK_ERROR_ASK.format(exc=type(exc).__name__, rule=rule))
-
-
-def _gh_fallback(inv: Invocation, text: str):
-    """규칙 11 검사가 경로·인코딩 예외로 끝났을 때: 대상 레포를 판정하지 못했으므로 병합·자동 병합·Approve·기각·셸이 정한 동작과
-    병합·리뷰 별칭은 대상과 무관하게 거부한다(`_degraded`와 같은 판단)."""
-    def apply(dec: Decision) -> None:
-        deny = _gh_unjudged_deny(inv, text)
-        if deny:
-            dec.deny.append(deny)
-    return apply
-
-
-def _gh_unjudged_deny(inv: Invocation, text: str, why: str = "") -> str | None:
-    """대상 레포를 판정할 수 없을 때(내부 오류·의존성 없음·경로 예외) 그래도 거부할 gh 형태의 거부 사유, 아니면 None:
-    앞 옵션이 너무 많은 것, Approve·기각·셸이 정한 동작(`DEGRADED_REVIEW_DENY`), 병합·자동 병합(`gh pr merge`·REST 병합
-    엔드포인트·GraphQL 병합 mutation)과 병합·리뷰 별칭(`DEGRADED_MERGE_DENY`). 내부 오류를 입력으로 일으킬 수 있으므로 대상을 몰라도
-    거부한다. guard 안 함수만 쓴다(import 없음)."""
-    if _base(inv.argv[0]) != "gh":
-        return None
-    try:
-        readings = _gh_all_readings(inv.argv)
-    except Exception:  # noqa: BLE001 — 동작을 정하지 못한다: 가장 센 쪽
-        readings = [None]
-    if readings is None:
-        return f"{why}{GH_LEAD_DENY}"
-    for argv in readings:
-        try:
-            kind, form, _ = _gh_judge(argv, inv.cwd, text)
-        except Exception:  # noqa: BLE001 — 이 읽기도 판정하지 못한다: 가장 센 쪽
-            kind, form = "dynamic", "gh 동작을 판정하지 못했다"
-        if kind in ("approve", "dismiss", "dynamic"):     # 셸이 정한 동작은 Approve일 수 있다
-            return f"{why}{DEGRADED_REVIEW_DENY}: {form})."
-        if kind in ("merge", "alias"):
-            return f"{why}{DEGRADED_MERGE_DENY}: {form or kind})."
-    return None
+    except Exception as exc:  # noqa: BLE001
+        dec.deny.append(INTERNAL_ERROR.format(exc=type(exc).__name__, rule=rule))
 
 
 GH_WORD_RE = re.compile(r"(?<![\w.-])gh(?![\w-])")
-# 명령을 풀지 못했을 때 gh와 함께 있으면 거부할 낱말: 병합·자동 병합·큐(GraphQL mutation 포함)·리뷰(`-a`도 Approve다)·Approve·기각·
-# GraphQL(본문을 못 읽는다)·별칭, 셸이 풀 글자·퍼센트 인코딩(동작·엔드포인트를 숨길 수 있다)
-TEXT_DENY_RE = re.compile(r"merge|approve|dismiss|review|enqueue|graphql|alias|[$`%]", re.IGNORECASE)
-WALK_ERROR_ASK = "명령을 풀지 못했다({exc}) — cd를 따라가지 않고 판정했으니 직접 확인한다 (명령 파싱)."
-TEXT_DENY = ("명령을 풀지 못해 gh 대상 레포·동작을 판정할 수 없다. 병합·Approve·리뷰·기각·GraphQL·별칭·셸 값이 든 gh 명령은 "
-             "거부한다(규칙 7·11")
+# 판정하지 못했을 때(걷기 예외·내부 오류·의존성 없음) gh와 함께 있으면 거부할 낱말: Approve·기각(`approve`·`APPROVE`·`--approve`·
+# `dismiss`·`dismissals`, 상태 값 `APPROVED`·`DISMISSED`는 아니다), `review` 뒤의 짧은 옵션 묶음 `-…a…`(`gh pr review -a`)와
+# 셸 값(`gh pr review 3 "$OPT"` — `--approve`일 수 있다)
+_TEXT_PROT = r"/(?:branches/\S+?/protection|rulesets)\b"
+_TEXT_WRITE = r"(?:-X\s*=?\s*|--method[=\s]+)(?:DELETE|PUT|PATCH|POST)\b|(?<![\w-])-[fF](?![\w-])|--(?:raw-)?field\b|--input\b"
+# … 보호·ruleset 바꾸기(엔드포인트와 쓰기 표시가 함께)·자동 병합 허용·병합 뒤 브랜치 지우기 켜기도 거부한다(사용자 결정, 4-c)
+TEXT_DENY_RE = re.compile(r"approve(?!d)|dismiss(?!ed)|\breview\b.*?(?:(?<![\w-])-[A-Za-z]*a|[$`])|--enable-auto-merge"
+                          r"|--delete-branch-on-merge|delete_branch_on_merge"
+                          r"|\b(?:create|update|delete)(?:BranchProtectionRule|RepositoryRuleset)\b|enablePullRequestAutoMerge"
+                          r"|\bmerge\b.*?(?<![\w-])--auto(?![\w-])"
+                          r"|allow_auto_merge"
+                          rf"|{_TEXT_PROT}.*?(?:{_TEXT_WRITE})|(?:{_TEXT_WRITE}).*?{_TEXT_PROT}", re.IGNORECASE | re.DOTALL)
+TEXT_DENY = ("gh 동작을 판정할 수 없다. Approve·리뷰 기각 낱말, 보호·ruleset 바꾸기·자동 병합 켜기가 든 gh 명령은 거부한다"
+             f"({GH_WORD_NOTE} 규칙 11")
 
 
 def _text_unjudged_deny(command: str, why: str = "") -> str | None:
-    """명령 글을 단순 명령으로 풀지 못했을 때(걷기 예외) 낱말 수준의 거부: 따옴표·`\\`를 뗀 글에 `gh`와 `TEXT_DENY_RE` 낱말이
-    함께 있으면 거부 사유. 예외를 내지 않는다(재리뷰 P0 — 걷기 예외에서도 병합·Approve 거부가 남게)."""
+    """낱말 수준의 거부: 따옴표·`\\`를 뗀 글에 `gh`와 `TEXT_DENY_RE` 낱말이 함께 있으면 거부 사유. 예외를 내지 않는다."""
     try:
         flat = re.sub(r"[\"'\\]", "", str(command or ""))
-        if GH_WORD_RE.search(flat) and TEXT_DENY_RE.search(flat):
-            return f"{why}{TEXT_DENY}: {TEXT_DENY_RE.search(flat).group()})."
-    except Exception:  # noqa: BLE001, S110 — 낱말도 못 보면 아래 ask가 남는다
-        pass
-    return None
+        hit = GH_WORD_RE.search(flat) and TEXT_DENY_RE.search(flat)
+        return f"{why}{TEXT_DENY}: {hit.group()[:40]})." if hit else None
+    except Exception:  # noqa: BLE001 — 낱말도 못 보면 아래 ask가 남는다
+        return None
 
 
 def _flat_invocations(command: str, cwd: Path, depth: int = 0) -> list[Invocation]:
     """`invocations`(걷기)가 예외로 끝났을 때의 닫힌 쪽 대체: cd를 따라가지 않고, 단순 명령마다 처음 cwd·명령 글의 cd·pushd 절대
     대상·모르는 디렉토리(`UNKNOWN_DIR`) 모두를 cwd 후보로 본다(상한 안). 셸이 읽는 heredoc 본문도 같은 후보로 본다. 예외를 내지
-    않는다(못 푼 명령은 뺀다 — 호출하는 쪽이 ask와 낱말 거부를 남긴다)."""
+    않는다(못 푼 명령은 뺀다 — 호출하는 쪽이 거부·낱말 거부를 남긴다)."""
     try:
         segs = _segments(_tokens(command))
     except Exception:  # noqa: BLE001
@@ -4633,16 +4326,14 @@ def _flat_invocations(command: str, cwd: Path, depth: int = 0) -> list[Invocatio
 
 def _walk_or_flat(command: str, cwd: Path, dec: Decision | None = None,
                   keep: tuple[str, ...] = ()) -> tuple[list[Invocation], str | None]:
-    """`invocations`(`keep` — 넘침 때 접지 않을 보호 뿌리), 예외면 `_flat_invocations`와 낱말 거부 사유(`_text_unjudged_deny`).
-    `dec`이 있으면 ask·거부를 남긴다."""
+    """`invocations`(`keep` — 넘침 때 접지 않을 보호 뿌리), 예외면 `_flat_invocations`(다른 검사가 사유를 남기도록)와 낱말 거부
+    사유(`_text_unjudged_deny` — 의존성 없음 판정이 쓴다). `dec`이 있으면 거부(`INTERNAL_ERROR`, 4-c)를 남긴다."""
     try:
         return invocations(command, cwd, keep=keep), None
-    except Exception as exc:  # noqa: BLE001 — 걷기 예외 하나로 판정 전체가 내부 오류 판정(`_degraded`)으로 약해지지 않게
+    except Exception as exc:  # noqa: BLE001
         deny = _text_unjudged_deny(command)
         if dec is not None:
-            dec.ask.append(WALK_ERROR_ASK.format(exc=type(exc).__name__))
-            if deny:
-                dec.deny.append(deny)
+            dec.deny.append(INTERNAL_ERROR.format(exc=type(exc).__name__, rule="명령 파싱"))
         global _KEEP_ROOTS
         saved, _KEEP_ROOTS = _KEEP_ROOTS, tuple(keep)
         try:
@@ -4652,8 +4343,8 @@ def _walk_or_flat(command: str, cwd: Path, dec: Decision | None = None,
 
 
 def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
-    """Bash 규칙. 검사마다 `_checked`로 돌려 경로·인코딩 예외가 다른 검사를 막지 않게 한다(회귀 수정 R2). 명령 걷기(`invocations`)가
-    예외로 끝나면 ask와 낱말 거부를 남기고 cd를 따라가지 않는 대체 목록으로 검사를 이어 간다(재리뷰 P0)."""
+    """Bash 규칙. 검사마다 `_checked`로 돌린다 — 예외면 그 호출은 거부하고 다른 검사는 사유를 위해 이어 간다(4-c). 명령 걷기
+    (`invocations`)가 예외로 끝나도 거부하고 cd를 따라가지 않는 대체 목록으로 검사를 이어 간다."""
     _checked(dec, "규칙 10", check_raw_read, command, cwd, dec, conf)
     if conf.user is not None and word_net(command):   # 규칙 7: 명령 글 전체의 낱말 그물 하나 (argv·치환·heredoc 무관)
         dec.ask.append(PUBLISH_ASK)
@@ -4666,6 +4357,7 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
     if conf.user is not None and word_net(command, "module_eval", "module"):  # 규칙 7: 모듈 eval(유료 자식 실행)
         dec.ask.append(MODULE_EVAL_ASK)
     invs, _ = _walk_or_flat(command, cwd, dec, _keep_roots(conf))
+    _checked(dec, "규칙 8·10", check_inline_code, command, cwd, dec, conf, invs)   # 인터프리터 인라인 코드의 clone·원문 경로 → ask
     for inv in invs:
         name = _base(inv.argv[0])
         if conf.work_dirs:
@@ -4677,7 +4369,7 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
         # 규칙 12 (a)(b): 사용자 config 없이도(이름 기반) — 모듈 표지 관문이 평소 Bash를 건너뛴다
         _checked(dec, "규칙 12", check_module_writes, inv, conf, dec)
         if name == "gh":
-            _checked(dec, "규칙 11", check_gh, inv, conf, dec, command, fallback=_gh_fallback(inv, command))
+            _checked(dec, "규칙 11", check_gh, inv, conf, dec, command)
             continue
         if name == "git" and _module_gate(inv):     # git 규칙 관문(git_rules = 이슈 DB clone 있음)보다 먼저
             for argv in dict.fromkeys(map(tuple, (inv.argv, _drop_redirs(inv.argv)))):
@@ -4690,26 +4382,124 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
             _checked(dec, "규칙 3~8", lambda a=argv, i=inv: check_git(GitCall(Invocation(i.cwd, list(a), i.env)), conf, dec))
 
 
+REMOTE_REF_MSG = ("이슈 DB에서 원격 추적 ref(`refs/remotes/…`)·origin 원격 설정을 바꾸거나 origin 밖에서 받지 않는다 — 규칙 5의 "
+                  "ci_mode 근거 ref(origin/<base>)를 바꿀 수 있다. 원격은 `git fetch`·`git fetch origin [<브랜치>]`·"
+                  "`git pull [origin]`으로만 받는다 (규칙 5).")
+REMOTE_SUBS = {"update-ref", "symbolic-ref", "fetch", "pull", "remote", "config", "replace", "push"}
+REMOTE_CFG_RE = re.compile(r"^\s*(?:remote\.origin(?:\.|$)|url\.|include(?:if)?(?:\.|$))", re.IGNORECASE)   # origin URL·refspec을 바꾸는 키
+REMOTE_DST_RE = re.compile(r"^[^:]*:(?:refs/)?remotes/")                 # refspec `[+]<src>:<dst>`의 dst가 원격 추적 ref
+PUSH_WITH_ARG = {"-o", "--push-option", "--receive-pack", "--exec", "--repo"}
+REMOTE_WRITE_ACTIONS = {"add", "set-url", "rename", "remove", "rm", "set-branches", "set-head", "prune"}
+# fetch·pull에서 값을 다음 토큰으로 받는 옵션(모르는 것은 값이 위치 인자로 남아 origin 밖으로 본다 — 닫힌 쪽)
+FETCH_WITH_ARG = {"--depth", "--deepen", "--shallow-since", "--shallow-exclude", "--upload-pack", "-j", "--jobs", "-o",
+                  "--server-option", "--negotiation-tip", "--filter", "--refmap", "-s", "--strategy", "-X",
+                  "--strategy-option", "--cleanup", "--recurse-submodules-default", "--submodule-prefix"}
+
+
+def _fetch_forges(call: GitCall) -> bool:
+    """fetch·pull이 origin 추적 ref를 origin의 같은 이름 밖에서 채울 수 있나: `-c`·`--config-env`의 origin URL·refspec 키,
+    `GIT_CONFIG_*` 환경(`GIT_INDEX_FILE` 밖), `--all`·`--multiple`·`--stdin`, origin 밖 원격·URL·경로(`.` 포함),
+    dst가 `refs/remotes/origin/…`인 refspec·`--refmap`. 허용: `git fetch`·`git fetch origin [<브랜치>…]`·`git pull [origin …]`."""
+    if set(call.config_env) - {"GIT_INDEX_FILE"} or any(REMOTE_CFG_RE.match(o) for o in call.config_overrides):
+        return True
+    args, pos, i = [str(a) for a in call.args], [], 0
+    while i < len(args):
+        a = args[i]
+        if a == "--":
+            pos += args[i + 1:]
+            break
+        key, eq, val = a.partition("=")
+        if key == "--refmap" and REMOTE_DST_RE.match(val if eq else (args[i + 1] if i + 1 < len(args) else "")):
+            return True
+        if a in ("--all", "--multiple", "--stdin"):
+            return True
+        if a in FETCH_WITH_ARG:
+            i += 1
+        elif not a.startswith("-"):
+            pos.append(a)
+        i += 1
+    return (bool(pos) and pos[0] != "origin") or any(REMOTE_DST_RE.match(r) for r in pos[1:])
+
+
+def _push_pos(call: GitCall) -> list[str]:
+    args, pos, i = [str(a) for a in call.args], [], 0
+    while i < len(args):
+        a = args[i]
+        if a == "--":
+            return pos + args[i + 1:]
+        if a in PUSH_WITH_ARG:
+            i += 1
+        elif not a.startswith("-"):
+            pos.append(a)
+        i += 1
+    return pos
+
+
+def _push_into_db(call: GitCall, conf: Config) -> bool:
+    """push 대상이 경로(`.`·`/…`·`./…`·`~…`·`file://…`)이고 그 레포가 이슈 DB다 — 다른 레포에서 이슈 DB의 ref(origin 추적 ref
+    포함)를 그 자리에서 덮는다."""
+    pos = _push_pos(call)
+    t = pos[0] if pos else ""
+    if not (t == "." or t.startswith(("./", "../", "~", "file://")) or os.path.isabs(t)):
+        return False
+    p = os.path.expanduser(t.removeprefix("file://"))
+    return conf.profile_of_common(_common_dir(Path(p) if os.path.isabs(p) else call.cwd / p)) is not None
+
+
+def _forges_remote_ref(call: GitCall) -> bool:
+    """규칙 5 근거 ref(origin/<base>)를 바꿀 수 있는 git: `update-ref`(`--stdin`은 대상을 모른다)·`symbolic-ref` 쓰기(인자 2개·
+    `-d`)가 `refs/remotes/…`·`refs/replace/…`를 바꾼다, `replace` 쓰기, `remote`의 origin 바꾸기(`REMOTE_WRITE_ACTIONS`)·
+    `update`(origin 밖 원격도 받는다), `config`의 origin URL·refspec 키 쓰기·`--edit`, fetch·pull(`_fetch_forges`), dst가
+    `refs/remotes/…`인 push refspec."""
+    args, sub = [str(a) for a in call.args], call.sub
+    pos = [a for a in args if not a.startswith("-")]
+    if sub == "update-ref":
+        return "--stdin" in args or any(a.startswith(("refs/remotes/", "remotes/", "refs/replace/")) for a in args)
+    if sub == "replace":        # 목록(`-l`·인자 없음)만 읽기 — `_ci_actions`는 `--no-replace-objects`로도 막는다
+        return bool(args) and not any(a in ("-l", "--list") for a in args)
+    if sub == "push":
+        return any(REMOTE_DST_RE.match(r) for r in _push_pos(call)[1:])
+    if sub == "symbolic-ref":
+        return bool(pos) and pos[0].startswith(("refs/remotes/", "remotes/")) and (
+            len(pos) >= 2 or any(a in ("-d", "--delete") for a in args))
+    if sub == "remote":
+        return (pos[:1] == ["update"] and pos[1:] != ["origin"]) or (
+            bool(pos) and pos[0] in REMOTE_WRITE_ACTIONS and "origin" in pos[1:])
+    if sub == "config":
+        action, cpos = _config_parse(args)
+        keys = cpos[:2] if action == "rename-section" else cpos[:1]
+        return action == "edit" or (action not in CONFIG_READ_ACTIONS and (action is not None or len(cpos) >= 2)
+                                    and any(REMOTE_CFG_RE.match(k) for k in keys))
+    return sub in ("fetch", "pull") and _fetch_forges(call)
+
+
 def check_git(call: GitCall, conf: Config, dec: Decision) -> None:
-    """git 규칙 3~8(clone 불변·hooksPath·커밋 검사·push)."""
+    """git 규칙 3~8(clone 불변·hooksPath·커밋 검사·push). 규칙 5는 `_rule5`(ci_mode actions면 ask하고 이어 간다)."""
     check_clone_git(call, conf, dec)
+    if (call.sub in REMOTE_SUBS and _forges_remote_ref(call) and conf.profile_of_common(_common_dir(call.cwd)) is not None) or \
+            (call.sub == "push" and _push_into_db(call, conf)):
+        dec.deny.append(REMOTE_REF_MSG)
     if call.sub not in ("commit", "config", "push") and not call.overrides_hooks_path():
         return
     prof = conf.profile_of_common(_common_dir(call.cwd))
     if prof is None:
         return   # 이슈 DB가 아니다: 어떤 git 규칙도 적용하지 않는다
-    if call.overrides_hooks_path():
-        dec.deny.append("git -c core.hooksPath=… 로 hook을 바꾸는 것은 금지다 (규칙 5).")
+    call.db_base = prof.base        # 규칙 5 완화(`_rule5`)는 origin/<이 base>의 ci_mode만 본다
+    if call.overrides_hooks_path() and _rule5(call, dec, "git -c core.hooksPath=… 로 hook을 바꾸는 것은 금지다 (규칙 5)."):
         return
-    if call.config_env and call.sub in ("commit", "push", "config"):
-        dec.deny.append(f"환경변수로 git 설정·index를 바꾸는 커밋/푸시는 금지 (규칙 5: {', '.join(call.config_env)}).")
+    env_msg = f"환경변수로 git 설정·index를 바꾸는 커밋/푸시는 금지 (규칙 5: {', '.join(call.config_env)})."
+    if call.sub == "commit" and "GIT_INDEX_FILE" in call.config_env:
+        # 다른 index의 커밋은 staged 검사(규칙 3·4 — 기본 index를 본다)를 피한다: ci_mode와 무관하게 거부
+        dec.deny.append(env_msg + " GIT_INDEX_FILE 커밋은 커밋 검사가 보지 못하므로 ci_mode와 무관하게 거부한다.")
+        return
+    if call.config_env and call.sub in ("commit", "push", "config") and _rule5(call, dec, env_msg):
         return
     if call.sub == "commit":
         check_commit(call, conf, dec)
     elif call.sub == "config":
         check_config(call, dec)
     elif call.sub == "push":
-        check_push(call, prof, dec)     # base 브랜치는 cwd가 속한 프로필의 것
+        check_push(call, dec)
 
 
 # -- 진입점 ----------------------------------------------------------------------------------
@@ -4725,7 +4515,10 @@ def judge(event: dict, plugin_root: str | None = None) -> tuple[dict | None, lis
     tool = str(event.get("tool_name") or "")
     tool_input = event.get("tool_input") or {}
     cwd = Path(str(event.get("cwd") or os.getcwd()))
-    conf = Config(plugin_root)
+    try:
+        conf = Config(plugin_root)
+    except Exception as exc:  # noqa: BLE001 — 설정 읽기 오류는 판정 예외가 아니다: degraded(4-c 리뷰)
+        return _degraded(event, f"guard 설정 읽기 오류({type(exc).__name__}: {exc})", CONFIG_HINT)
     dec = Decision()
     if tool.startswith("mcp__"):
         check_mcp(tool, tool_input, conf, dec)
@@ -4739,12 +4532,16 @@ def judge(event: dict, plugin_root: str | None = None) -> tuple[dict | None, lis
 
 
 INSTALL_HINT = "pyproject 의존성(PyYAML·jsonschema)을 설치한 뒤 `config.py doctor`로 확인한다"
+CONFIG_HINT = ("설정 파일을 읽지 못해 제한 모드입니다. config.yaml(·site-defaults.yaml)을 고치면 풀립니다 — "
+               "고친 뒤 `config.py doctor`로 확인한다")
 
 
-def _degraded(event: dict, why: str) -> tuple[dict | None, list[str]]:
-    """의존성 없음·내부 오류로 정상 판정을 못 할 때. MCP는 거부(Jira 쓰기 차단은 guard가 유일한 장치), gh Approve·리뷰 기각·
-    병합·자동 병합·병합 별칭 형태는 대상 레포와 무관하게 거부(`_gh_unjudged_deny` — 내부 오류를 입력으로 일으킬 수 있다, 회귀 수정
-    R2. 명령 걷기도 예외면 낱말 수준 거부 `_text_unjudged_deny`와 cd를 따라가지 않는 대체 목록, 재리뷰 P0), git·gh·
+def _degraded(event: dict, why: str, hint: str = INSTALL_HINT) -> tuple[dict | None, list[str]]:
+    """의존성 없음(import 실패)·설정 읽기 오류(`judge`의 `Config` — 사용자 config·site-defaults YAML 오류)로 정상 판정을 못 할 때.
+    판정 중 예외는 여기로 오지 않고 거부한다(`main`). 설정이 깨졌다고 모든 호출을 막으면 그 설정을 고치는 Write·`config.py
+    doctor`까지 막힌다(종료 2와 같은 사고). MCP는 거부(Jira 쓰기
+    차단은 guard가 유일한 장치), gh Approve·리뷰 기각(`_gh_judged_deny`, 걷기 예외면 낱말 수준 `_text_unjudged_deny`)은 거부,
+    병합 계열은 아래 ask(서버 브랜치 보호가 막는다). 명령 걷기도 예외면 cd를 따라가지 않는 대체 목록(재리뷰 P0), git·gh·
     `db_pr.py publish`·`merge`·`request-review`와 파일 도구는 레포·clone을 판별할 수 없으므로 ask, `module_eval.py`(유료 자식
     실행, 규칙 7)도 ask, 그 밖의 Bash는 통과 + 경고. 경로 조각 `_module-skills`(·`_module-skills.`로 시작)를 바꾸는 파일 도구·
     Bash 쓰기는 이름만으로 판정되므로 deny(규칙 12 (a)).
@@ -4752,29 +4549,28 @@ def _degraded(event: dict, why: str) -> tuple[dict | None, list[str]]:
     tool = str(event.get("tool_name") or "")
     tool_input = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
     if tool.startswith("mcp__"):
-        return _decision("deny", f"{why}: MCP 도구 판정 불가. {INSTALL_HINT}."), []
+        return _decision("deny", f"{why}: MCP 도구 판정 불가. {hint}."), []
     if tool in FILE_TOOLS:
         raw = tool_input.get("file_path") or tool_input.get("notebook_path")
         if raw and _module_name_part(str(raw)):     # 규칙 12 (a) 이름 기반 — 설정 없이도 판정한다
-            return _decision("deny", f"{why}: {MODULE_CLONE_MSG}: {raw}). {INSTALL_HINT}."), []
-        return _decision("ask", f"{why}: 이슈 DB clone 경로를 판별할 수 없다 — 직접 확인한다. {INSTALL_HINT}."), []
+            return _decision("deny", f"{why}: {MODULE_CLONE_MSG}: {raw}). {hint}."), []
+        return _decision("ask", f"{why}: 이슈 DB clone 경로를 판별할 수 없다 — 직접 확인한다. {hint}."), []
     if tool == "Bash":
         risky = True
         try:
             cmd = _shell_text(tool_input.get("command"))
             invs, deny = _walk_or_flat(cmd, Path(str(event.get("cwd") or os.getcwd())))
             if deny:                # 걷기 예외: 낱말 수준으로 거부 꼴을 찾았다
-                return _decision("deny", f"{why}: {deny} {INSTALL_HINT}."), []
+                return _decision("deny", f"{why}: {deny} {hint}."), []
             for inv in invs:        # 규칙 12 (a) 이름 기반: 관리 clone·lock 쓰기는 ask가 아니라 deny
                 for word in _write_targets(inv) + _rename_sources(inv):
                     p = _expand(word)
                     if _module_name_part(p if Path(p).is_absolute() else str(inv.cwd / p)):
-                        return _decision("deny", f"{why}: {MODULE_CLONE_MSG}: {word}). {INSTALL_HINT}."), []
+                        return _decision("deny", f"{why}: {MODULE_CLONE_MSG}: {word}). {hint}."), []
             names = [_base(i.argv[0]) for i in invs]
-            for inv in invs:        # 대상 레포를 몰라도 거부하는 gh 형태(guard 안 함수만 — import 없음, 앞 옵션은 모든 읽기)
-                deny = _gh_unjudged_deny(inv, cmd, f"{why}: ")
-                if deny:
-                    return _decision("deny", f"{deny} {INSTALL_HINT}."), []
+            deny = _gh_judged_deny(invs, cmd, f"{why}: ")   # gh Approve·기각·셸 값·보호 바꾸기(병합 계열은 아래 ask)
+            if deny:
+                return _decision("deny", f"{deny} {hint}."), []
             risky = any(n in ("git", "gh") for n in names) or word_net(cmd) or word_net(cmd, "db_pr", "merge") or \
                 word_net(cmd, "db_pr", "request-review") or word_net(cmd, "skill_patch", "apply") or \
                 word_net(cmd, "module_eval", "module") or any(
@@ -4782,12 +4578,12 @@ def _degraded(event: dict, why: str) -> tuple[dict | None, list[str]]:
         except Exception:  # noqa: BLE001 — 파싱도 못 하면 낱말 수준 거부를 보고 사람에게 넘긴다
             deny = _text_unjudged_deny(str(tool_input.get("command") or ""), f"{why}: ")
             if deny:
-                return _decision("deny", f"{deny} {INSTALL_HINT}."), []
+                return _decision("deny", f"{deny} {hint}."), []
         if risky:
             return _decision("ask", f"{why}: 레포 판별 불가 — git·gh·publish·파일 쓰기는 직접 확인한다. "
-                                    f"{INSTALL_HINT}."), []
-        return None, [f"{why}: Bash 규칙을 적용하지 못했다. {INSTALL_HINT}."]
-    return None, [f"{why}. {INSTALL_HINT}."]
+                                    f"{hint}."), []
+        return None, [f"{why}: Bash 규칙을 적용하지 못했다. {hint}."]
+    return None, [f"{why}. {hint}."]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -4820,23 +4616,21 @@ def main(argv: list[str] | None = None) -> int:
     if not isinstance(event, dict):
         print("[telephony-triage] guard: hook 입력이 객체가 아니다. 판정하지 않는다.", file=sys.stderr)
         return 0
-    # 판정과 출력 직렬화를 모두 try 안에서 한다: 실패해도 종료 0 + 판정(최소 ask, MCP는 deny)을 낸다. 출력은 ASCII JSON이다
-    # (ensure_ascii — 사유에 인코딩할 수 없는 글자가 들어도 출력에서 죽지 않게, 회귀 수정 R2. 종료 1·출력 없음은 Claude Code가
-    # 막지 않는다 — fail-open)
+    # 판정과 출력 직렬화를 모두 try 안에서 한다: 실패해도 종료 0 + 거부를 낸다. 출력은 ASCII JSON이다(ensure_ascii — 사유에
+    # 인코딩할 수 없는 글자가 들어도 출력에서 죽지 않게, 회귀 수정 R2. 종료 1·출력 없음은 Claude Code가 막지 않는다 — fail-open).
+    # 의존성 없음(PyYAML 등 import 실패)은 `_degraded`(낱말 수준 표), 판정 중 예외는 그 호출을 거부한다(4-c — 사유 `guard 내부 오류`).
     try:
         if IMPORT_ERROR is not None:
             out, warnings = _degraded(event, f"guard 의존성 없음({type(IMPORT_ERROR).__name__}: {IMPORT_ERROR})")
         else:
-            try:
-                out, warnings = judge(event, args.plugin_root)
-            except Exception as exc:  # noqa: BLE001 — hook이 모든 도구 호출을 막지 않게 한다
-                _warn(f"guard 내부 오류: {exc}")
-                out, warnings = _degraded(event, f"guard 내부 오류({type(exc).__name__}: {exc})")
+            out, warnings = judge(event, args.plugin_root)
         text = json.dumps(out, ensure_ascii=True) if out is not None else None
     except Exception as exc:  # noqa: BLE001
-        kind = "deny" if str(event.get("tool_name") or "").startswith("mcp__") else "ask"
-        warnings = [f"guard 판정·출력 오류({type(exc).__name__})"]
-        text = json.dumps(_decision(kind, f"guard 판정·출력 오류({type(exc).__name__}) — 직접 확인한다."), ensure_ascii=True)
+        text = json.dumps(_decision("deny", INTERNAL_ERROR.format(exc=type(exc).__name__, rule="판정")), ensure_ascii=True)
+        try:
+            warnings = [f"guard 내부 오류: {type(exc).__name__}: {exc}"]
+        except Exception:  # noqa: BLE001 — 예외 글을 못 만들어도 판정은 낸다
+            warnings = [f"guard 내부 오류: {type(exc).__name__}"]
     for w in warnings:
         _warn(w)
     if text is not None:

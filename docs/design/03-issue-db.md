@@ -153,6 +153,14 @@ causes:
         sequence: [setting-off, rejected]   # 선택. 설정 OFF가 거부보다 먼저여야 충족 (04-parser-matching.md §5.11 (1))
         same_phone: true               # 선택, 기본 true. 같은 슬롯(phone_id)의 이벤트로만 충족
         window_sec: 60
+      # 횟수·간격(선택, 04-parser-matching.md §5.11 (1)) 예: 설정 OFF 뒤 5초 안에 거부가 시작되고 윈도우 안 거부 3건 이상
+      # - id: data-disabled-repeated
+      #   must_event:
+      #     - {id: setting-off, event: data_setting_changed, fields: {enabled: 'false'}}
+      #     - {id: rejected, event: data_evaluation_rejected, fields: {reasons: '.*DATA_DISABLED.*'}, min_count: 3}
+      #   sequence: [setting-off, rejected]
+      #   sequence_within_sec: 5       # sequence 이웃 첫 충족 레코드 간격 ≤ 5초(sequence 필요, ≤ window_sec)
+      #   window_sec: 60
     recovery_signatures: []            # 해결 후 이 원인에 특정한 정상 흐름. 예: 데이터 설정 ON → SETUP_DATA_CALL 요청 (sequence). 음성 fixture 전부에 맞으면 R1 실패 (05-verification.md)
     scenario_signatures: []            # 재현 시나리오를 수행한 흔적. 예: 데이터 연결을 시도한 평가 로그 (05-verification.md §5.12 (2))
     resolution: 모바일 데이터 설정을 켠다

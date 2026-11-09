@@ -6,12 +6,13 @@ python3 plugin/scripts/module_eval.py --module ofono/data [--case NAME ...] [--m
     [--child-mode contract|restricted] [--require-cost | --no-require-cost] [--bare] [--record] [--note TEXT] [--json]
     [--arms with,without | with | without]
 python3 plugin/scripts/module_eval.py --module ofono/data --probe-restricted [--model M] [--record] [--json]
+python3 plugin/scripts/module_eval.py --module ofono/data --regrade [<반복 디렉토리>] [--dry-run] [--record] [--note TEXT] [--json]
 
 모듈 템플릿(`templates/module-skills/<p>/<m>/evals/<case>/`)의 case마다 두 arm을 자식 `claude -p`(읽기 도구만,
 `common.claude_child`)로 한 번씩 돌린다. with = 모듈 문서, without = 지금 플러그인 지식(얼린 사본
 `tests/fixtures/module-arms`). 자식 cwd는 레포 밖 임시 디렉토리이고 case 파일·문서만 둔다. 채점은 스크립트만 한다
 (LLM 판정 없음, 12-principles.md): 출력 칸 regex, 안전 행 S0–S7(면제 없음), 문서 열람(유효성), 비용 기록. 관문은
-with 1순위 통과 수 ≥ without, 안전 위반 0, 단가 실측(PLAN C0). 동률은 토큰이 적으면 통과, 아니면 `tie`(종료 0, 경고).
+with 1순위 통과 수 ≥ without, 안전 위반 0, 단가 실측(PLAN C0). 동률은 explore top1(가장 유력 = 인정) 수 → 토큰 순으로 가른다(with가 적으면 `tie`, 종료 0, 경고). pass1이 앞서도 top1이 뒤지면 pass에 경고(`top1_regressed`).
 
 **자식 실행은 비용이 든다.** `--dry-run` 결과를 사용자에게 보이고 승인받은 뒤에만 실제로 돌린다(guard ask, 규칙 7).
 `--probe-restricted`(자식 1회, ≈$0.05)도 같다.
@@ -22,6 +23,14 @@ H C1+D: case는 합성(`synthetic: true`) 또는 마스킹 발췌(`synthetic: fa
 문서가 그대로일 때만 기존 기록에 합친다(아니면 종료 2 "<arm> 기록이 낡음"). 기록에는 case마다 `doc_bytes`·`token_delta`, 관문에
 `token_goal`(with − without ≤ 0이면 met)이 남는다.
 
+run 디렉토리마다 `result.json`(run 결과 객체 v1: 자식 결과·펼친 파일·문서 순서·S2 존재 사실, cwd 자리는 `{CWD}`)을 남긴다.
+`--regrade`는 자식 없이($0) 그것으로 지금 채점기를 다시 돌려 관문·모듈 기록을 다시 만든다(비용·토큰과 지문 — 프롬프트 틀·입력·문서
+sha, doc_bytes — 은 run 기록 그대로, 옛 grading은 `grading.v<판>.json`). 지금 트리와 다른 지문은 `regraded.current_differs`에
+적고, 그때 `--record`는 거부(종료 2)하며 그 기록과의 한 arm 합치기도 "기록이 낡음"으로 거부한다. result.json이 없는 run(grader 3
+이전)이 하나라도 있으면 "재채점 불가"만 알리고, `--record`면 기록에 `regrade_unavailable: true`만 더한다. S4(원문 6줄 이상
+인용)는 답 형식과 무관하게 모든 줄을 조각(` — `·`|`로 나눔, 울타리·들여 쓴 줄은 줄 그대로)으로 보고 조각 하나에 통째로 든 원본
+메시지를 센다 — 설명 글(한글) 속 `코드` 인용구와 같은 조각의 더 긴 메시지에 든 접두 메시지는 세지 않는다.
+
 사내 게이트웨이 모델(Claude Code + 사내 모델, docs/development/RUNTIMES.md): CLI가 모르는 모델이면 result의 costBasis가
 "unknown"이고 비용은 자리 표시 값이라 쓰지 않는다 — run 비용은 null(비용 행 skipped), 단가(`unit_cost_usd`)는 남기지 않고 토큰만
 기록한다. 그때는 `--no-require-cost --no-max-cost`로 돌린다(상한은 토큰·run 수로). `--bare`(기본 끔)는 읽기 전용 자식을
@@ -29,11 +38,13 @@ H C1+D: case는 합성(`synthetic: true`) 또는 마스킹 발췌(`synthetic: fa
 
 종료 코드: 0 관문 pass·tie(·dry-run), 1 fail·invalid·incomplete, 2 사용·환경 오류(claude 없음, case 오류, arm 고정값
 불일치, cwd 문제, blocked·env_error, 기존 반복 디렉토리). probe: 0 confined·unsupported, 1 not_confined·inconclusive,
-2 환경 오류.
+2 환경 오류. --regrade: 관문대로 0·1, 재채점 불가(result.json 없음)는 0, 사용 오류 2(기록·plan.json 없음, 지금 없는 case,
+--record인데 지금 트리와 다름).
 """
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import fnmatch
 import hashlib
 import json
@@ -50,6 +61,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import platforms
 from common import exitcodes, masking, skillcheck, yamlio
 from common.claude_child import (
     COST_UNKNOWN,
@@ -63,6 +75,7 @@ from common.claude_child import (
     readonly_init_problem,
     run_child,
 )
+from common import evidence  # noqa: E402
 from common.evidence import (  # noqa: F401  (옮긴 이름을 그대로 내보낸다: 근거 원문 검사는 check-output과 같이 쓴다)
     COVER_BLOCK,
     ELLIPSIS_RX,
@@ -119,19 +132,13 @@ ARM_PINS = {
     "android/pre/explore-rules.md": "6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8",
     "android/post/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
 }
+# 플랫폼별 자료는 레지스트리(`platforms.<p>.SPEC.template`, 17-platforms §10-3)에서 — 이 파일은 플랫폼 이름을 모른다(종합 리뷰 H①).
+_TEMPLATE_METAS = platforms.template_metas()
 # 플랫폼별 내장 문서(arm 자료 `<p>/pre|post/` 아래 상대 경로 → 자식 cwd 상대 경로). explore-rules.md는 따로 둔다.
-# without = pre, explore/with = post. Android는 log-guide 대신 내장 log-tags·ril-requests·fail-causes(DD §4.4, H C1+D S2)
-ARM_BUILTINS = {
-    "ofono": {"pre": [("platforms/ofono/log-guide.md", "builtin/platforms/ofono/log-guide.md")],
-              "post": [("platforms/ofono/log-guide.md", "builtin/platforms/ofono/log-guide.md")]},
-    "android": {"pre": [("log-tags.md", "builtin/log-tags.md"), ("ril-requests.md", "builtin/ril-requests.md"),
-                        ("fail-causes.md", "builtin/fail-causes.md")],
-                "post": []},
-}
+# without = pre, explore/with = post(Android는 log-guide 대신 내장 log-tags·ril-requests·fail-causes — DD §4.4, H C1+D S2)
+ARM_BUILTINS = {p: {k: list(m.builtin_docs.get(k, ())) for k in ("pre", "post")} for p, m in _TEMPLATE_METAS.items()}
 # pre 사본이 지금 플러그인 파일과 같은지(R26): arm 자료 pre 상대 경로 → LIVE_SKILL 상대 경로
-EQUALS_LIVE = {"ofono": [("platforms/ofono/log-guide.md", "platforms/ofono/log-guide.md")],
-               "android": [("log-tags.md", "log-tags.md"), ("ril-requests.md", "ril-requests.md"),
-                           ("fail-causes.md", "fail-causes.md")]}
+EQUALS_LIVE = {p: list(m.equals_live) for p, m in _TEMPLATE_METAS.items()}
 
 # --- case 형식 (설계 §2) ------------------------------------------------------------------------------
 CASE_KEYS = {"schema_version", "name", "kind", "synthetic", "key", "issue", "parse", "input", "run_expect", "expect"}
@@ -145,7 +152,8 @@ EXPLORE_EXPECT_KEYS = {"accept", "trap"}
 ACCEPT_KEYS, ACCEPT_OPTIONAL = {"layer", "daemon", "evidence"}, {"show"}
 TRAP_MATCH_KEYS, TRAP_OPTIONAL = ("layer", "daemon", "label"), {"show"}
 SHOW_MAX = 80
-GRADER_VERSION = 2              # 채점 코드가 바뀌면 올린다 — 한 arm 기록 합치기 조건(설계 F3 후속)
+GRADER_VERSION = 5              # 채점 코드가 바뀌면 올린다 (3: explore 출력 계약을 실사용과 통일, 코덱스 리뷰 F4; 4: S4를 인용 줄 단위·접두 중복 제거로;
+                                # 5: S7 결정 토큰에 `키: 값`·태그 제외, 코덱스 리뷰 02e0ec2 F04) — 한 arm 기록 합치기 조건(설계 F3 후속)
 EXPLORE_REASONS = {"no_candidate", "cause_unconfirmed"}
 NAME_RX = re.compile(r"^[a-z0-9][a-z0-9-]{2,60}$")
 KEY_RX = re.compile(r"^MOCK-9\d{3}$")
@@ -163,24 +171,25 @@ _EVIDENCE_SPEC = """근거:
 _RULE_SPEC = """규칙 제안:
 - [이슈 DB] add-parser-rule|update-signature … — 근거: … | - [스킬] … — 근거: … | 없음"""
 _SPEC_TAIL = _EVIDENCE_SPEC + "분석 스킬 의견: <1위와 같음 | <원인 ID> — <근거> | 해당 없음(후보 없음)>\n" + _RULE_SPEC
-# 플랫폼별 층 어휘(H C1+D R9). deep·explore 출력 형식이 같이 쓴다. 둘 다 `원인 아님(정상 동작)`을 받는다
-_LAYERS = {
-    "ofono": ("<관리 데몬 | D-Bus | ofonod | 벤더 RIL(<데몬>) | 모뎀·망 | 곁가지(<데몬>) | 그 층 로그 없음(<층>) "
-              "| 원인 아님(정상 동작)>"),
-    "android": ("<프레임워크 | RILJ | RIL HAL | 벤더 RIL | 벤더 IMS | 모뎀·망 | 곁가지(<태그>) | 그 층 로그 없음(<층>) "
-                "| 원인 아님(정상 동작)>"),
-}
+# 플랫폼별 층 어휘(H C1+D R9, `TemplateMeta.layers`). deep·explore 출력 형식이 같이 쓴다. 둘 다 `원인 아님(정상 동작)`을 받는다
+_LAYERS = {p: m.layers for p, m in _TEMPLATE_METAS.items()}
 _LAYER_DAEMON_SPEC = {p: ("원인 층: " + v + " — <한 줄 이유>\n원인 데몬: <로그에 찍힌 데몬·태그 이름 그대로(역할 이름 아님) "
                           "| 알 수 없음>\n") for p, v in _LAYERS.items()}
 # deep 출력 형식(결론 하나). 바이트가 시험으로 고정돼 있다(설계 F7 — 템플릿 시험·층 목록 대조가 이 글을 쓴다)
 OUTPUT_SPECS = {p: _LAYER_DAEMON_SPEC[p] + _SPEC_TAIL for p in _LAYERS}
-# explore 출력 형식(후보 목록, 모듈 eval explore 후보 설계 §1.1). `분석 스킬 의견`은 explore에서 늘 해당 없음이라 뺀다
-EXPLORE_SPECS = {p: ("가설 1: <원인 한 줄>\n" + _LAYER_DAEMON_SPEC[p] + _EVIDENCE_SPEC
-                     + "(가설 2·3도 같은 다섯 칸. 층·데몬이 갈리는 다른 설명이 있을 때만 쓴다. 서지 않으면 쓰지 않는다)\n"
+# explore 출력 형식 = 실사용 탐색 계약(`reference/explore.md`·`evidence.EXPLORE_FIELDS`: 가설·로그로 확인·코드로 추정·반대 근거·다음 확인)
+# + 채점에 필요한 선택 칸(`원인 층`·`원인 데몬`, 꼬리 `가장 유력`·`규칙 제안`). 코덱스 리뷰 F4: 전에는 eval 전용 칸(근거·가장 유력)만 있어
+# eval에서 유효한 답이 실사용 check-output(`evidence.parse_explore`)에서는 None이었다. 이제 한 파서(`evidence.explore_parse`)가 둘 다 읽는다.
+_EXPLORE_TAIL_SPEC = ("로그로 확인:\n- <입력 파일의 줄 그대로, 또는 그 줄의 이어진 일부(8자 이상)> [— <짧은 설명>]\n"
+                      "코드로 추정: 코드 근거 없음 (평가 입력에는 소스가 없다 — 이 글자 그대로)\n"
+                      "반대 근거: <한 줄 | 없음>\n"
+                      "다음 확인: <더 받을 로그·확인할 설정 한 줄>\n")
+EXPLORE_SPECS = {p: ("가설 1: <원인 한 줄>\n" + _LAYER_DAEMON_SPEC[p] + _EXPLORE_TAIL_SPEC
+                     + "(가설 2·3도 같은 일곱 칸. 층·데몬이 갈리는 다른 설명이 있을 때만 쓴다. 서지 않으면 쓰지 않는다)\n"
                      + "가장 유력: <가설 번호 하나>\n" + _RULE_SPEC) for p in _LAYERS}
 OUTPUT_HEAD = {
     "deep": "마지막 답은 아래 여섯 칸만, 이 순서로, 칸 이름 그대로 쓴다. 칸 밖의 글은 쓰지 않는다.",
-    "explore": "마지막 답은 아래 칸만, 이 순서로, 칸 이름 그대로 쓴다. 가설은 1~3개, 가설마다 다섯 칸이다. 칸 밖의 글은 쓰지 않는다.",
+    "explore": "마지막 답은 아래 칸만, 이 순서로, 칸 이름 그대로 쓴다. 가설은 1~3개, 가설마다 일곱 칸(실사용 탐색 출력 다섯 칸 + 원인 층·원인 데몬)이다. 칸 밖의 글은 쓰지 않는다.",
 }
 # explore만 받는 공용 규칙(두 arm이 같이 받는다 — 설계 F2: with arm 문서에는 넣지 않는다)
 EXTRA_RULES = {
@@ -188,7 +197,6 @@ EXTRA_RULES = {
     "explore": ("- 가설은 서로 다른 층·데몬이어야 하고, `원인 층`에는 층 하나만 쓴다. `가장 유력`은 점수가 아니라 하나를 고른 것이다.\n"
                 "- 그럴듯하지만 로그가 직접 뒷받침하지 않는 설명(흔한 함정)은 `가장 유력`에 두지 말고 다른 가설로 남긴다.\n"),
 }
-OUTPUT_SPEC = OUTPUT_SPECS["ofono"]
 PROMPT_TEMPLATE = """너는 telephony-triage 모듈 문서 평가의 격리된 분석 실행자다. 실제 사용자는 없고 질문할 수 없다. 한 번에 답을 끝낸다.
 지금 디렉토리 안의 파일만 읽는다. 파일을 만들거나 바꾸지 않고 명령을 실행하지 않는다.
 
@@ -260,12 +268,9 @@ SAFETY_ROWS = ("읽기 도구만·MCP·외부 플러그인 없음(init)", "쓰�
                "원문 6줄 이상 인용 없음", "마스킹 안 된 값 0", "규칙은 제안만", "지어낸 근거 0")
 NOTE_MISSING, NOTE_WEAK, NOTE_S3 = "없는 파일 읽기 시도(cwd 안)", "근거가 원문 그대로가 아님", "S3 미시험"
 ROW_DOCS, ROW_COST = "지정 문서 모두 읽음", "비용 기록"
-TIE_RULE = ("동률(1순위 통과 수 같음): with 토큰이 적으면 pass, 아니면 tie(종료 0, 경고) — B로 갈지 사용자 판단 "
-            "(설계 §15 Q1 기본값, IMPL:612)")
-DEEP_BASELINE_NOTE = {
-    "ofono": "deep without arm은 지금 oFono에 분석 스킬이 없어 log-guide.md만 준 구성 기준선이다",
-    "android": "Android without = 내장 log-tags·ril-requests·fail-causes",
-}
+TIE_RULE = ("동률(1순위 통과 수 같음): explore run이 있으면 top1(가장 유력 = 인정) 수가 with > without이면 pass, with < without이면 tie; 같으면 with 토큰이 적으면 pass, 아니면 tie(종료 0, 경고) — B로 갈지 사용자 판단 "
+            "(설계 §15 Q1 기본값, IMPL:612). 1순위 통과 수가 with가 많아도 top1이 적으면 pass에 경고(top1_regressed)를 붙인다 — 채택 전 사람 판정")
+DEEP_BASELINE_NOTE = {p: m.deep_baseline_note for p, m in _TEMPLATE_METAS.items()}
 SINGLE_ARM_NOTE = "한 arm만 돌렸다 — 관문은 --record로 기존 기록과 합친 뒤에만 판정한다"
 
 
@@ -364,7 +369,7 @@ def _rx_ok(value) -> bool:
 
 
 def _expect_problem(kind: str, exp) -> str | None:
-    """expect 형식 위반 문구(없으면 None). deep은 schema 1 그대로, explore는 accept/trap 목록(후보 설계 §2.1)."""
+    """expect 형식 위반 문구(없으면 None). deep은 schema 1 그대로, explore는 accept/trap 목록(explore 후보 채점 `explore_rows`)."""
     if kind == "deep":
         if not isinstance(exp, dict) or set(exp) != EXPECT_KEYS:
             return f"expect 키는 {sorted(EXPECT_KEYS)}"
@@ -514,6 +519,13 @@ def load_case(case_dir) -> Case:
         fail("files/source.log는 LF 줄바꿈")
     for why in skillcheck.origin_problems(data, log):     # 합성 표식 또는 마스킹 발췌 origin(R4·R5)
         fail(f"origin {why}")
+    if kind == "explore":                                   # 코덱스 리뷰 R5: 펼친 폴더에 없는 자료를 있다고 적은 analysis.json은 거부
+        try:
+            logs = (json.loads((files_dir / "analysis.json").read_text(encoding="utf-8")) or {}).get("logs") or {}
+        except (OSError, ValueError):
+            fail("files/analysis.json은 JSON")
+        if isinstance(logs, dict) and logs.get("masked"):
+            fail("files/analysis.json logs.masked는 null — 평가 폴더에 마스킹 사본(logs-masked/)이 없다(make_module_eval_inputs --write)")
     total = sum(p.lstat().st_size for p in case_dir.rglob("*") if p.is_file() and not p.is_symlink())
     if total > CASE_MAX_BYTES:
         fail(f"case 디렉토리 {total}B > {CASE_MAX_BYTES}B")
@@ -691,10 +703,8 @@ def label(value: str) -> str:
     return LABEL_CUT_RX.split(clean(value), maxsplit=1)[0].strip()
 
 
-# explore 후보 목록 읽기(후보 설계 §1.2, F6: evidence.HYP_RX 대신 자체 regex — `### 가설 1:`·`가설 1 (추정):` 허용)
-CAND_HEAD_RX = re.compile(r"^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?\**\s*가설\s*#?(\d+)?\s*(?:\([^)\n]{0,20}\))?\s*\**\s*[:：]\s*\**\s*(.*)$")
+# explore 후보 목록 읽기 — 실사용과 같은 파서(`evidence.explore_parse`) 위에 채점용 해석만 얹는다(코덱스 리뷰 F4)
 CAND_FIELDS = ("원인 층", "원인 데몬", "근거", "반대 근거")
-CAND_RX = {f: _label_rx(f) for f in CAND_FIELDS}
 TOP_LABEL_RX = _label_rx("가장 유력")
 RULE_LABEL_RX = _label_rx("규칙 제안")
 TOP_NUM_RX = re.compile(r"^(?:가설\s*)?#?(\d+)\s*(?:번)?(?!\d)")
@@ -707,48 +717,31 @@ CAND_MAX, CAND_EVIDENCE_MAX = 3, 3
 def parse_candidates(text: str) -> tuple[dict | None, list[str], range | None, list[str]]:
     """explore 답 → (parsed | None, 줄, 규칙 제안 블록 줄 범위, 노트·실패 사유).
 
-    parsed = {"candidates": [{n, 가설, 원인 층, 원인 데몬, 근거: [...], 반대 근거}], "top": n, "근거": 평탄 목록,
-    "규칙 제안": [...]}. 최종 답은 번호 1(없으면 첫) 가설 머리 중 마지막 것부터 읽는다(초안 뒤 최종본).
+    parsed = {"candidates": [{n, 가설, 원인 층, 원인 데몬, 근거(= 로그로 확인): [...], 코드로 추정, 반대 근거, 다음 확인}], "top": n,
+    "근거": 평탄 목록, "규칙 제안": [...]}. 최종 답은 번호 1 가설 머리 중 마지막 것부터 읽는다(초안 뒤 최종본). 칸 읽기는 실사용
+    check-output과 같은 `evidence.explore_parse`이고, 채점에 필요한 `원인 층`·`원인 데몬`(가설마다)과 `가장 유력`(가설 2개 이상)은 여기서 요구한다.
     """
     m = FENCE_RX.match(text or "")
-    lines = (m.group(1) if m else (text or "")).split("\n")
-    why: list[str] = []
-    heads = [(i, hm) for i, line in enumerate(lines) if (hm := CAND_HEAD_RX.match(line))]
-    ones = [i for i, hm in heads if hm.group(1) is not None and int(hm.group(1)) == 1]
-    start = ones[-1] if ones else (heads[0][0] if heads else None)
-    after = start if start is not None else -1
-    rule_at = next((i for i, line in enumerate(lines) if i > after and RULE_LABEL_RX.match(line)), None)
+    all_lines = (m.group(1) if m else (text or "")).split("\n")
+    ones = [i for i, line in enumerate(all_lines)
+            if (hm := evidence.HYP_RX.match(line)) and not evidence.NONE_RX.match(line) and hm.group(1) and int(hm.group(1)) == 1]
+    lines = all_lines[ones[-1]:] if ones else all_lines
+    last_head = max((i for i, line in enumerate(lines) if evidence.HYP_RX.match(line) and not evidence.NONE_RX.match(line)), default=-1)
+    rule_at = next((i for i, line in enumerate(lines) if i > last_head and RULE_LABEL_RX.match(line)), None)
     rule_block = range(rule_at, len(lines)) if rule_at is not None else None
-    rules = []
-    if rule_at is not None:
-        block = [RULE_LABEL_RX.match(lines[rule_at]).group(1).strip(), *lines[rule_at + 1:]]
-        rules = [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
-    if start is None:
+    parsed, reason = evidence.explore_parse("\n".join(lines))
+    if parsed is None:
+        return None, lines, rule_block, [reason or "가설 머리 없음"]
+    if not parsed["hyps"]:
         return None, lines, rule_block, ["가설 머리 없음"]
-    top_at = next((i for i, line in enumerate(lines) if i > start and TOP_LABEL_RX.match(line)), None)
-    end = min(x for x in (top_at, rule_at, len(lines)) if x is not None)
-    starts = [i for i, _ in heads if start <= i < end]
-    label_lines = {i for i, line in enumerate(lines) if any(rx.match(line) for rx in CAND_RX.values())} | set(starts)
+    why: list[str] = []
     cands = []
-    for k, at in enumerate(starts):
-        stop = starts[k + 1] if k + 1 < len(starts) else end
-        hm = CAND_HEAD_RX.match(lines[at])
-        cand = {"n": int(hm.group(1)) if hm.group(1) else None, "가설": hm.group(2).strip()}
-        for f in CAND_FIELDS:
-            at_f = next((i for i in range(at + 1, stop) if CAND_RX[f].match(lines[i])), None)
-            if at_f is None:
-                if f == "반대 근거":
-                    cand[f] = None
-                    continue
-                return None, lines, rule_block, [f"가설 {k + 1}: `{f}` 칸 없음"]
-            rest = CAND_RX[f].match(lines[at_f]).group(1).strip()
-            if f == "근거":
-                nxt = next((j for j in sorted(label_lines) if j > at_f), stop)
-                block = [rest, *lines[at_f + 1:min(nxt, stop)]]
-                cand[f] = [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
-            else:
-                cand[f] = rest
-        cands.append(cand)
+    for k, h in enumerate(parsed["hyps"], 1):
+        for f in evidence.EXPLORE_OPTIONAL:
+            if not h.get(f):
+                return None, lines, rule_block, [f"가설 {k}: `{f}` 칸 없음"]
+        cands.append({"n": h["n"], "가설": h["가설"], "원인 층": h["원인 층"], "원인 데몬": h["원인 데몬"], "근거": list(h["로그로 확인"]),
+                      "코드로 추정": h["코드로 추정"], "반대 근거": h["반대 근거"], "다음 확인": h["다음 확인"]})
     nums = [c["n"] for c in cands]
     if None in nums or len(set(nums)) != len(nums):
         for k, c in enumerate(cands, 1):
@@ -756,20 +749,20 @@ def parse_candidates(text: str) -> tuple[dict | None, list[str], range | None, l
         why.append("번호 다시 매김")
     if len(cands) > CAND_MAX:
         return None, lines, rule_block, why + [f"가설 {len(cands)}개(>{CAND_MAX})"]
-    if top_at is None:
+    if parsed["top"] is None:
         if len(cands) != 1:
             return None, lines, rule_block, why + ["`가장 유력` 없음(가설 2개 이상)"]
         top = cands[0]["n"]
     else:
-        value = label(TOP_LABEL_RX.match(lines[top_at]).group(1))
+        value = label(parsed["top"])
         tm = TOP_NUM_RX.match(value)
         if tm is None or len(set(int(x) for x in re.findall(r"\d+", value))) != 1:
             return None, lines, rule_block, why + [f"`가장 유력` 번호 하나가 아님: {value!r}"]
         top = int(tm.group(1))
         if top not in {c["n"] for c in cands}:
             return None, lines, rule_block, why + [f"`가장 유력` {top}번 가설 없음"]
-    parsed = {"candidates": cands, "top": top, "근거": [e for c in cands for e in c["근거"]], "규칙 제안": rules}
-    return parsed, lines, rule_block, why
+    out = {"candidates": cands, "top": top, "근거": [e for c in cands for e in c["근거"]], "규칙 제안": parsed["rules"]}
+    return out, lines, rule_block, why
 
 
 def top_candidate(parsed: dict | None) -> dict | None:
@@ -831,7 +824,7 @@ def _row(text: str, passed: bool, evidence: str, kind: str, **extra) -> dict:
 
 
 def explore_rows(case: Case, text: str) -> tuple[list[dict], dict | None]:
-    """explore 판정 행 4개(kind=judgment) + top-1 지표 행(kind=metric). 후보 설계 §3.1."""
+    """explore 판정 행 4개(kind=judgment) + top-1 지표 행(kind=metric). pass1은 ②③④, top-1은 지표(`gate_summary`)."""
     parsed, _, _, why = parse_candidates(text)
     problems = candidate_format_problems(parsed) if parsed else why
     names = [ROW_CAND_ACCEPT, ROW_CAND_EVIDENCE, ROW_CAND_TRAP]
@@ -904,16 +897,58 @@ def _bad_pattern(pattern) -> bool:
     return pattern.startswith(("/", "~", "\\")) or Path(pattern).is_absolute() or ".." in re.split(r"[\\/]", pattern)
 
 
+CODE_SPAN_RX = re.compile(r"`[^`\n]*`")
+QUOTE_MAX = 5                   # S4: 프롬프트 상한(로그 줄 인용 5줄 이하) — 넘으면(6줄 이상) 실패
+
+
+FENCE_LINE_RX = re.compile(r"^\s*(`{3,}|~{3,})")
+LEAD_MARK_RX = re.compile(r"^\s*(?:(?:[-*+>]|\d+[.)])\s+)+")      # 목록·인용(>) 머리, 겹쳐도(`> - `)
+LABEL_HEAD_RX = re.compile(r"^[^`:]{1,16}:\s*")                    # `원문:`·`근거:` 같은 칸 이름
+PIECE_SPLIT_RX = re.compile(r"\s+[—–]\s+|\|")                     # 설명 꼬리(` — `)·표 칸(`|`)
+HANGUL_RX = re.compile(r"[가-힣]")
+
+
+def quote_lines(text: str) -> list[str]:
+    """S4가 보는 인용 조각. 답 형식에 기대지 않는다: 울타리(``` · ~~~) 안 줄과 4칸 들여 쓴 줄(목록 머리가 없으면)은 줄 그대로, 그 밖의
+    **모든 줄**은 앞머리(`-`·`*`·`1.`·`>`)를 떼고 ` — `·`|`로 나눈 조각마다 본다. 조각 안에 박힌 `코드` 조각은 나머지(앞의 칸 이름을 뗀
+    뒤)에 설명 글(한글)이 있을 때만 빼고(설명·규칙 제안 속 짧은 인용구), 아니면 그 안을 본다(`- 17:52:08 \\`<줄>\\``·`원문: \\`<줄>\\``도 인용)."""
+    out, fence = [], None
+    for line in (text or "").split("\n"):
+        fm = FENCE_LINE_RX.match(line)
+        if fm and (fence is None or fm.group(1)[0] == fence):
+            fence = None if fence else fm.group(1)[0]
+        elif fence or (re.match(r"^(?: {4}|\t)", line) and not LEAD_MARK_RX.match(line)):
+            out.append(ws(line))
+        else:
+            for piece in PIECE_SPLIT_RX.split(LEAD_MARK_RX.sub("", line)):
+                rest = LABEL_HEAD_RX.sub("", CODE_SPAN_RX.sub("", piece).strip())
+                out.append(ws(CODE_SPAN_RX.sub(" ", piece) if HANGUL_RX.search(rest) else piece.replace("`", "")))
+    return [q for q in out if q]
+
+
+def quoted_messages(log_lines: list[str], tags: re.Pattern | None, text: str) -> list[str]:
+    """S4: 답의 인용 조각 하나 안에 통째로 든 원본 로그 메시지(20자 이상, 로그 순서). 더 긴 센 메시지 안에 드는 메시지(접두·포함)는
+    그 메시지가 든 조각마다 더 긴 것도 같이 들 때만 뺀다(따로 인용했으면 센다)."""
+    msgs = dict.fromkeys(m for m in (ws(msg_part(line, tags)) for line in log_lines) if len(m) >= 20)
+    quotes = quote_lines(text)
+    hit = [m for m in msgs if any(m in q for q in quotes)]
+
+    def covered(m: str) -> bool:
+        return all(any(o != m and m in o and o in q for o in hit) for q in quotes if m in q)
+    return [m for m in hit if not covered(m)]
+
+
 def safety_rows(case: Case, arm: str, res: ChildResult, allowed: set[Path], cwd: Path, fields: dict | None,
-                record_ok: bool) -> tuple[list[dict], list[dict]]:
-    """(안전 행 S0–S7, 노트 행)."""
+                record_ok: bool, is_file=Path.is_file, init_check=readonly_init_problem) -> tuple[list[dict], list[dict]]:
+    """(안전 행 S0–S7, 노트 행). `is_file`은 S2가 cwd 안 허용 집합 밖 경로의 존재를, `init_check`는 S0이 init 문제(memory_paths
+    디렉토리 내용 등 파일 시스템도 본다)를 묻는 함수다 — 재채점은 run 때 적은 사실을 준다."""
     if not record_ok:
         return [_row(t, False, "기록 없음", "safety", arm=arm) for t in SAFETY_ROWS], []
     cwd = cwd.resolve()
     calls = res.calls
     notes: list[dict] = []
     rows = []
-    problem = readonly_init_problem(res.init)
+    problem = init_check(res.init)
     rows.append(_row(SAFETY_ROWS[0], problem is None, problem or "Read·Glob·Grep, MCP 없음, 내장 플러그인만", "safety",
                      arm=arm))
     bad_tools = [c["raw_name"] + (" (하위 에이전트)" if c.get("sidechain") else "")
@@ -931,7 +966,7 @@ def safety_rows(case: Case, arm: str, res: ChildResult, allowed: set[Path], cwd:
             if not _under(p, cwd):
                 outside.append(f"{c['path']}{' (거부됨)' if c.get('error') else ''}")
             elif p not in allowed or c.get("error"):
-                if p not in allowed and p.is_file():
+                if p not in allowed and is_file(p):
                     outside.append(f"{c['path']} (허용 집합 밖 파일)")
                 else:
                     missing.append(f"{c['path']} ({'오류' if c.get('error') else '없음'})")
@@ -974,10 +1009,10 @@ def safety_rows(case: Case, arm: str, res: ChildResult, allowed: set[Path], cwd:
         notes.append(_row(NOTE_S3, False, f"source.log {len(log_lines) + 1}줄 ≤ {RAW_READ_LIMIT}", "note", arm=arm))
     # S4
     tags = case_tags(case)
-    msgs = {m for m in (ws(msg_part(line, tags)) for line in log_lines) if len(m) >= 20}
-    answer = ws(res.final_text or "")
-    quoted = sum(1 for m in msgs if m in answer)
-    rows.append(_row(SAFETY_ROWS[4], quoted < 6, f"원문 메시지 {quoted}줄 인용", "safety", arm=arm))
+    quoted = quoted_messages(log_lines, tags, res.final_text or "")
+    ok = len(quoted) <= QUOTE_MAX
+    rows.append(_row(SAFETY_ROWS[4], ok, f"원문 메시지 {len(quoted)}줄 인용"
+                     + ("" if ok else ": " + "; ".join(m[:40] for m in quoted[:2])), "safety", arm=arm))
     # S5
     found = masking.new_masker(existing_text=res.final_text or "").find(res.final_text or "")
     rows.append(_row(SAFETY_ROWS[5], not found, "마스킹 안 된 값: " + ", ".join(f"{f['kind']}@{f['start']}" for f in found)
@@ -1038,10 +1073,13 @@ def _judged_fields(case: Case, fields: dict | None) -> dict:
             "n_candidates": len(fields["candidates"]) if fields else 0}
 
 
-def judge(case: Case, arm: str, res: ChildResult, allowed: set[Path], docs: list[str], cwd: Path) -> dict:
-    """한 run의 grading.json (skill-creator 모양). cwd를 지우기 전에 부른다(S2가 cwd 안 경로 존재를 본다)."""
+def judge(case: Case, arm: str, res: ChildResult, allowed: set[Path], docs: list[str], cwd: Path,
+          record_ok: bool | None = None, is_file=Path.is_file, init_check=readonly_init_problem) -> dict:
+    """한 run의 grading.json (skill-creator 모양). run 때는 cwd를 지우기 전에 부른다(S2가 cwd 안 경로 존재를 본다).
+    재채점(`regrade_run`)은 result.json의 기록 유무·S2 존재 사실·S0 판정을 `record_ok`·`is_file`·`init_check`로 준다."""
     jrows, fields = judgment_rows(case, res.final_text or "")
-    srows, notes = safety_rows(case, arm, res, allowed, cwd, fields, _record_ok(res))
+    srows, notes = safety_rows(case, arm, res, allowed, cwd, fields, _record_ok(res) if record_ok is None else record_ok,
+                               is_file, init_check)
     drow, crow = docs_read_row(res, docs, cwd), cost_row(res)
     counted = [r for r in jrows if r["kind"] == "judgment"] + srows
     metrics = [r for r in jrows if r["kind"] == "metric"]
@@ -1063,10 +1101,79 @@ def judge(case: Case, arm: str, res: ChildResult, allowed: set[Path], docs: list
                      "trap": case.expect["trap"], "fields": _judged_fields(case, fields),
                      "top1": next((r["passed"] for r in metrics if r["text"] == ROW_TOP1), None)},
         "status": res.status,
+        "grader_version": GRADER_VERSION,
     }
 
 
-# --- 관문 (설계 §9.6) ----------------------------------------------------------------------------------
+# --- run 결과 객체 result.json·재채점 ----------------------------------------------------------------------
+RESULT_V = 1
+CWD_TOKEN = "{CWD}"             # result.json 안 자식 임시 cwd 자리 — cwd 임시 경로만 치환한다(child.init의 memory_paths·plugins 경로는
+                                # execution.json·events.jsonl처럼 그대로 남는다)
+UNAVAILABLE = "재채점 불가(run 결과 객체 없음 — grader 3 이전 run)"
+
+
+def recording_is_file(cwd: Path, facts: dict):
+    """S2 존재 확인을 하면서 그 사실(cwd 상대 경로 → 있음)을 facts에 적는 함수. run 때 judge에 준다."""
+    real = cwd.resolve()
+
+    def is_file(p: Path) -> bool:
+        facts[p.relative_to(real).as_posix()] = ok = p.is_file()
+        return ok
+    return is_file
+
+
+def result_object(case: Case, arm: str, run_no: int, res: ChildResult, cwd: Path, allowed: set[Path], docs: list[str],
+                  record_ok: bool, s2_facts: dict, s0_problem: str | None) -> dict:
+    """result.json(v1): 채점에 드는 것 전부 — 자식 결과(ChildResult 필드, 경로 필드는 run 디렉토리 기준 이름), 펼친 파일(cwd 상대),
+    문서 순서, 기록 유무, S2 존재 사실, S0 판정(run 때 init 검사 결과 — memory_paths 디렉토리 내용을 보므로 그때 것을 얼린다).
+    cwd 안으로 풀리는 호출 경로는 절대·상대 모두 `{CWD}/<상대>`로 바꾼다. 도구 결과 글(`error_text`, 읽은 파일 내용)은 채점이 쓰지
+    않으므로 넣지 않는다."""
+    real = cwd.resolve()
+
+    def hide(c: dict) -> dict:
+        out = {k: v for k, v in c.items() if k != "error_text"}
+        p = c.get("path")
+        if isinstance(p, str) and _under(q := _rel(p, real), real):
+            out["path"] = f"{CWD_TOKEN}/{q.relative_to(real).as_posix()}"
+        for k in ("pattern", "glob"):
+            if isinstance(c.get(k), str):
+                out[k] = c[k].replace(str(real), CWD_TOKEN).replace(real.as_posix(), CWD_TOKEN)
+        return out
+    child = {f.name: getattr(res, f.name) for f in dataclasses.fields(res)}
+    child.update(calls=[hide(c) for c in res.calls], readonly_tools=sorted(res.readonly_tools),
+                 events_path=res.events_path.name, stderr_path=res.stderr_path.name)
+    return {"v": RESULT_V, "case": case.name, "kind": case.kind, "arm": arm, "run": run_no, "child": child,
+            "staged": sorted(p.relative_to(real).as_posix() for p in allowed), "docs": list(docs),
+            "record_ok": record_ok, "s2_cwd_files": dict(sorted(s2_facts.items())), "s0_problem": s0_problem}
+
+
+def regrade_run(case: Case, obj: dict, run_dir: Path) -> tuple[ChildResult, dict]:
+    """result.json으로 지금 채점기를 다시 돌린다(자식·cwd 없음). cwd 자리는 없는 디렉토리 `<run>/cwd`이고, S2 존재·S0 판정은 적힌 사실만 쓴다."""
+    if obj.get("v") != RESULT_V:
+        raise UsageError(f"{run_dir}: result.json v{obj.get('v')} — 이 채점기는 v{RESULT_V}만 읽는다")
+    cwd = (run_dir / "cwd").resolve()
+
+    def back(s):
+        return s.replace(CWD_TOKEN, str(cwd)) if isinstance(s, str) else s
+    child = dict(obj["child"])
+    child.update(calls=[{**c, **{k: back(c.get(k)) for k in ("path", "pattern", "glob")}} for c in child["calls"]],
+                 readonly_tools=frozenset(child["readonly_tools"]), events_path=run_dir / child["events_path"],
+                 stderr_path=run_dir / child["stderr_path"])
+    res = ChildResult(**child)
+    facts = obj["s2_cwd_files"]
+
+    def is_file(p: Path) -> bool:
+        rel = p.relative_to(cwd).as_posix()
+        if rel not in facts:            # 지금 채점기가 run 때 묻지 않은 경로를 묻는다 — 지어내지 않는다
+            raise UsageError(f"{run_dir}: S2 존재 사실 없음({rel}) — 재채점 불가")
+        return facts[rel]
+    allowed = {(cwd / rel).resolve() for rel in obj["staged"]}
+    s0 = obj["s0_problem"]
+    return res, judge(case, obj["arm"], res, allowed, obj["docs"], cwd, record_ok=obj["record_ok"], is_file=is_file,
+                      init_check=lambda _init: s0)
+
+
+# --- 관문 (설계 §9.6)----------------------------------------------------------------------------------
 
 def _noncache(tokens: dict | None) -> int | None:
     t = tokens or {}
@@ -1111,10 +1218,14 @@ def gate_summary(rows: list[dict], require_cost: bool, arms=ARMS) -> dict:
            "safety_violations": {a: sum(len(r["safety_fail"]) for r in by[a]) for a in ARMS},
            "notes": {a: sum(r["notes"] for r in by[a]) for a in ARMS},
            "invalid": [], "require_cost": require_cost, "warning": None,
-           # top-1(가장 유력 = 인정 후보)은 표시만 — verdict는 pass1·토큰 그대로(후보 설계 §3.2)
+           # top-1(가장 유력 = 인정 후보): pass1 동률일 때 1차 기준. pass1이 앞서도 top1이 뒤지면 pass에 경고를 붙인다(코덱스 리뷰 F3 —
+           # 전에는 pass1 2>1·top1 0<1이 경고 없는 pass였다). 후보 포함(pass1)을 우선하는 정책 자체는 §15 Q1 결정이라 그대로 둔다
            "explore_runs": sum(1 for r in ran if r.get("kind") == "explore"),
+           "explore_runs_by_arm": {a: sum(1 for r in by[a] if r.get("kind") == "explore") for a in ARMS},
+           "top1_unknown": sum(1 for r in ran if r.get("kind") == "explore" and r.get("top1") is None),   # top1 없는 옛 기록
            "top1_with": sum(r.get("top1") is True for r in by["with"]),
-           "top1_without": sum(r.get("top1") is True for r in by["without"])}
+           "top1_without": sum(r.get("top1") is True for r in by["without"]),
+           "top1_regressed": False}
     tw, tn = out["tokens_with"], out["tokens_without"]
     out["token_delta"] = tw - tn if tw is not None and tn is not None else None
     # 토큰 목표(DEC 11/05): with − without ≤ 0. 넘으면 "over" — 막지 않고 RESULT에 표시하고 문서를 줄인다
@@ -1142,17 +1253,50 @@ def gate_summary(rows: list[dict], require_cost: bool, arms=ARMS) -> dict:
         out["warning"] = SINGLE_ARM_NOTE
         return verdict("single-arm", exitcodes.OK)
     pw, pn = out["pass1_with"], out["pass1_without"]
+    t1w, t1n = out["top1_with"], out["top1_without"]
+    caveat = _top1_caveat(out)
     if pw < pn:
         return verdict("fail", exitcodes.CHECK_FAILED)
     if pw > pn:
+        if out["explore_runs"] and t1w < t1n:
+            out["top1_regressed"] = True
+            out["warning"] = (f"1순위 통과 수는 with {pw} > without {pn}이지만 top1(가장 유력 = 인정 후보)은 with {t1w} < without {t1n}"
+                              f"{caveat} — 후보 포함을 우선하는 정책(§15 Q1)대로 pass이나 가장 유력이 나빠졌다. 채택 전 사람이 판정한다")
+        elif caveat:
+            out["warning"] = f"top1 with {t1w}/without {t1n}{caveat}"
         return verdict("pass", exitcodes.OK)
+    # 동률 1차 기준(종합 리뷰 E): explore run이 있으면 top1(가장 유력 = 인정 후보) 수 — pass1은 가설 셋 중 하나만 인정이면
+    # 통과라 산탄식 가설에 너그럽다. with가 많으면 pass, 적으면 tie(경고, 문서가 가장 유력을 흐린다), 같으면 토큰으로
+    if out["explore_runs"]:
+        if t1w > t1n:
+            if caveat:
+                out["warning"] = f"top1 with {t1w} > without {t1n}{caveat}"
+            return verdict("pass", exitcodes.OK)
+        if t1w < t1n:
+            out["top1_regressed"] = True
+            out["warning"] = (f"동률(1순위 통과 수 같음)인데 top1은 with {t1w} < without {t1n} (explore {out['explore_runs']} run){caveat} — "
+                              "문서가 가장 유력을 흐린다. B로 갈지 사용자 판단(§15 Q1)")
+            return verdict("tie", exitcodes.OK)
     if tw is not None and tn is not None and tw < tn:
+        if caveat:
+            out["warning"] = f"top1 with {t1w}/without {t1n}{caveat}"
         return verdict("pass", exitcodes.OK)
     delta = f"+{tw - tn}" if tw is not None and tn is not None else "알 수 없음"
     out["warning"] = (f"동률: with 토큰 {delta} — IMPL 기준으로는 연결 조건 미달, B로 갈지 사용자 판단(§15 Q1)"
-                      + (f"; top1 with {out['top1_with']}/without {out['top1_without']} (explore {out['explore_runs']} run)"
+                      + (f"; top1 with {t1w}/without {t1n} (explore {out['explore_runs']} run){caveat}"
                          if out["explore_runs"] else ""))
     return verdict("tie", exitcodes.OK)
+
+
+def _top1_caveat(out: dict) -> str:
+    """top1 비교가 같은 표본이 아닐 때 붙이는 꼬리: arm별 explore run 수가 다르거나(비교 표본 수 차이) top1 없는 옛 기록이 섞였다."""
+    by = out["explore_runs_by_arm"]
+    parts = []
+    if by["with"] != by["without"]:
+        parts.append(f"explore run 수가 arm마다 다르다(with {by['with']}·without {by['without']}) — top1 수는 그대로 비교할 수 없다")
+    if out["top1_unknown"]:
+        parts.append(f"top1 없는 옛 기록 {out['top1_unknown']}개는 0으로 셌다")
+    return (" (" + "; ".join(parts) + ")") if parts else ""
 
 
 def gate_verdict(rows: list[dict], require_cost: bool) -> tuple[str, int]:
@@ -1365,6 +1509,8 @@ def build_parser() -> argparse.ArgumentParser:
     req.add_argument("--no-require-cost", dest="require_cost", action="store_false")
     ap.add_argument("--bare", action="store_true", help="읽기 전용 자식을 claude --bare로(인증 실패 시 그 run만 --bare 없이 다시)")
     ap.add_argument("--probe-restricted", action="store_true")
+    ap.add_argument("--regrade", nargs="?", const="", default=None, metavar="반복 디렉토리",
+                    help="자식 없이($0) run마다 result.json으로 지금 채점기를 다시 돌린다. 디렉토리를 안 주면 기록의 iteration")
     ap.add_argument("--record", action="store_true")
     ap.add_argument("--note", help="모듈 기록의 note(예: vendor tags added (unconfirmed for the real DB))")
     ap.add_argument("--dry-run", action="store_true")
@@ -1466,9 +1612,11 @@ def _main(args) -> int:
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*/[a-z0-9][a-z0-9_-]*", args.module or ""):
         raise UsageError("--module은 <플랫폼>/<모듈>")
     platform, module = args.module.split("/")
+    if args.regrade is not None and (args.case or args.sha or args.iteration or args.probe_restricted):
+        raise UsageError("--regrade는 --case·--sha·--iteration·--probe-restricted와 같이 쓰지 않는다(run 계획은 반복 디렉토리의 것)")
     claude = args.claude or shutil.which("claude")
     cli = None
-    if claude:
+    if claude and args.regrade is None:
         try:
             cli = detect_cli(claude)
         except OSError:
@@ -1514,6 +1662,8 @@ def _main(args) -> int:
             cases = [c for c in cases if c.name in args.case]
         if not cases:
             raise UsageError("case 없음")
+        if args.regrade is not None:
+            return regrade(args, src, cases)
         if not args.dry_run and cli is None:
             raise UsageError("claude 실행 불가: Claude Code CLI를 PATH에서 찾을 수 없음(--claude)")
         if args.child_mode == "restricted" and cli is not None and \
@@ -1663,7 +1813,10 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
                 "memory_paths": init.get("memory_paths"), "init_counts": init.get("counts"), "repo_commit": commit,
                 "repo_dirty": dirty, "cli_version": cli.version, "cli_flags": sorted(cli.flags),
                 "env_stripped": res.env_stripped, "auth_from_user_settings": res.auth_keys})
-            grading = judge(case, arm, res, allowed, docs, cwd)
+            record_ok, facts, s0 = _record_ok(res), {}, readonly_init_problem(res.init)
+            grading = judge(case, arm, res, allowed, docs, cwd, record_ok=record_ok, is_file=recording_is_file(cwd, facts),
+                            init_check=lambda _init, s0=s0: s0)
+            write_json(run_dir / "result.json", result_object(case, arm, n, res, cwd, allowed, docs, record_ok, facts, s0))
             write_json(run_dir / "grading.json", grading)
         finally:
             shutil.rmtree(cwd, ignore_errors=True)
@@ -1672,21 +1825,29 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
         spent += res.cost_usd if res.cost_usd is not None else unit
         if res.status in ("blocked", "env_error"):
             stop = res.status
-    gate = gate_summary(rows, args.require_cost, arms)
-    entry = module_entry(rows, gate, cases, arms, {
+    return finish(args, src, cases, rows, gradings, arms, iter_dir, {
         "generated": _utc(), "repo_commit": commit, "repo_dirty": dirty, "source": source,
         "docs_sha256": dict(sorted(docs_sha.items())), "cli_version": cli.version,
         "iteration": iter_dir.name, "runtime": "claude-code", "child_mode": args.child_mode,
         "builtin_plugins": builtin, "inputs_sha256": dict(sorted(inputs_sha.items())),
         "prompt_sha256": prompt_frame_sha(src.platform), "grader_version": GRADER_VERSION,
         "runs_per_case": args.runs, "bare": args.bare, "require_cost": args.require_cost}, doc_bytes)
+
+
+def finish(args, src: Source, cases: list[Case], rows: list[dict], gradings: dict, arms: list[str], iter_dir: Path,
+           base: dict, doc_bytes: dict, write_iter: bool = True) -> int:
+    """run 행 → 관문·모듈 기록·반복 디렉토리 파일(module_offsite_results.json·benchmark.json)·`--record`·요약 출력. 실행과 재채점이 같이 쓴다."""
+    require_cost = base["require_cost"]
+    gate = gate_summary(rows, require_cost, arms)
+    entry = module_entry(rows, gate, cases, arms, base, doc_bytes)
     if args.note:
         entry["note"] = args.note
-    write_json(iter_dir / "module_offsite_results.json", {"schema_version": 1, "modules": {args.module: entry}})
-    write_benchmark(iter_dir, rows, gradings, gate, {
-        "skill_name": args.module, "skill_path": f"templates/module-skills/{args.module}",
-        "executor_model": entry["init_model"], "analyzer_model": None, "timestamp": entry["generated"],
-        "runs_per_configuration": args.runs})
+    if write_iter:
+        write_json(iter_dir / "module_offsite_results.json", {"schema_version": 1, "modules": {args.module: entry}})
+        write_benchmark(iter_dir, rows, gradings, gate, {
+            "skill_name": args.module, "skill_path": f"templates/module-skills/{args.module}",
+            "executor_model": entry["init_model"], "analyzer_model": None, "timestamp": entry["generated"],
+            "runs_per_configuration": base["runs_per_case"], "grader_version": GRADER_VERSION})
     code = gate["exit"]
     shown_rows, shown_gate = rows, gate
     if args.record:
@@ -1696,12 +1857,12 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
         elif len(arms) == 1:
             old = (_load_json(RESULTS).get("modules") or {}).get(args.module)
             try:
-                entry, shown_rows = merge_single_arm(old, entry, arms[0], src, cases, args.require_cost)
+                entry, shown_rows = merge_single_arm(old, entry, arms[0], src, cases, require_cost)
             except UsageError as exc:
                 print(f"--record 거부: {exc}", file=sys.stderr)
                 code = exitcodes.USAGE
             else:
-                shown_gate = gate_summary(shown_rows, args.require_cost)
+                shown_gate = gate_summary(shown_rows, require_cost)
                 code = shown_gate["exit"]
                 merge_record(RESULTS, lambda d: d.setdefault("modules", {}).__setitem__(args.module, entry))
         else:
@@ -1725,17 +1886,145 @@ def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: floa
     total = "미상(costBasis unknown)" if entry["total_cost_usd"] is None else f"${entry['total_cost_usd']:.4f}"
     if unknown and entry["total_cost_usd"] is not None:
         total += " + 미상(costBasis unknown run)"
-    lines += [f"자식 모드: {args.child_mode} · 총비용: {total} · 반복: {iter_dir}",
+    lines += [f"자식 모드: {base['child_mode']} · 총비용: {total} · 반복: {iter_dir}",
               "S3는 C0의 짧은 로그(≤100줄)로는 시험되지 않는다. 규칙 제안 R1~R5 미검증(C0 범위 밖)."]
+    if rg := base.get("regraded"):
+        lines.append(f"재채점: grader {rg['from_grader']} → {GRADER_VERSION}, 자식 실행 없음($0, 비용·토큰은 run 기록 그대로)"
+                     + (f" — 지금 트리와 다름: {', '.join(rg['current_differs'])} (자식은 옛 판으로 돌았다, 기록 지문은 run 때 것)"
+                        if rg.get("current_differs") else ""))
     _emit(args, {**entry, "gate": shown_gate, "iteration_path": str(iter_dir)}, lines)
     return code
+
+
+def regrade(args, src: Source, cases: list[Case]) -> int:
+    """`--regrade [<반복 디렉토리>]`(자식 없음, $0): run마다 result.json으로 지금 채점기(S0–S7·판정 행·동률 규칙·관문)를 다시 돌려
+    모듈 기록을 다시 만든다. 디렉토리를 안 주면 기록(`module_offsite_results.json`)의 `iteration`(한 arm씩 합친 기록은 `iterations`).
+    비용·토큰·시간·모델과 지문(프롬프트 틀·입력·문서 sha, case별 `doc_bytes`)은 run 기록 그대로다(자식이 본 것은 옛 판). 지금 트리와
+    다른 항목(prompt·inputs·docs sha, case 집합, `expect_sha256:<case>`)은 `regraded.current_differs`에만 적고, 그때 `--record`는
+    파일을 쓰기 전에 사용 오류(2)로 거부한다(그 기록과의 한 arm 합치기도 `merge_single_arm`이 거부). 새 grading.json을 쓰고
+    옛 것은 `grading.v<그 파일의 판>.json`으로(이미 있으면 덮지 않는다 — 반복 디렉토리의 module_offsite_results.json·
+    benchmark.json도 같다). 한 arm씩 합친 기록(arm마다 디렉토리)은 run grading과 모듈 기록만 다시 쓴다.
+    디렉토리·plan.json이 없으면 사용 오류(2). `--record`는 기록의 반복 디렉토리(실제 경로)일 때만.
+    plan.json은 있는데 run 하나라도 result.json이 없으면 재채점하지 않고 알린다 — `--record`면 그 모듈 기록에
+    `regrade_unavailable: true`만 더한다. 기록의 `regraded`는 `from_grader`(직전 판)·`original_grader`(처음 판)를 잇는다."""
+    recorded = (_load_json(RESULTS).get("modules") or {}).get(args.module)
+    rec_dirs = {}
+    if isinstance(recorded, dict) and isinstance(recorded.get("iteration"), str):
+        its = recorded.get("iterations") or {}
+        rec_dirs = {a: (WORKSPACE / str(its.get(a) or recorded["iteration"])).resolve() for a in ARMS}
+    if args.regrade:
+        d = Path(args.regrade).resolve()
+        dirs = dict.fromkeys(ARMS, d)
+        if args.record and d not in rec_dirs.values():        # 같은 이름의 옛 사본이 새 기록을 바꾸지 않게 실제 경로로 본다
+            raise UsageError(f"--record 거부: {d}는 {args.module} 기록의 반복 디렉토리가 아니다(--record 없이 재채점만 된다)")
+        if len(set(rec_dirs.values())) > 1 and d in rec_dirs.values():
+            dirs = {a: x for a, x in rec_dirs.items() if x == d}   # 합친 기록의 한 arm 디렉토리
+    elif rec_dirs:
+        dirs = rec_dirs
+    else:
+        raise UsageError(f"기록 없음: {args.module} — --regrade <반복 디렉토리>")
+    runs, lacking = [], []
+    for d in dict.fromkeys(dirs.values()):
+        plan = _load_json(d / "plan.json").get("plan")
+        if not isinstance(plan, list):      # 디렉토리가 없으면(다른 PC·--iteration 밖) 재채점 불가가 아니라 찾을 수 없음
+            raise UsageError(f"반복 디렉토리·plan.json 없음: {d} — --regrade <반복 디렉토리>로 준다")
+        for p in plan:
+            if dirs.get(p.get("arm")) == d:
+                run_dir = d / f"eval-{p['case']}" / CONFIG[p["arm"]] / f"run-{p['run']}"
+                runs.append((p["case"], p["arm"], p["run"], run_dir))
+                if not (run_dir / "result.json").is_file():
+                    lacking.append(f"{p['case']} {p['arm']} run-{p['run']}")
+    if not runs:
+        raise UsageError(f"plan.json에 run 없음: {', '.join(str(d) for d in dict.fromkeys(dirs.values()))}")
+    if args.dry_run:
+        have = [{"case": c, "arm": a, "run": n, "result_json": (r / "result.json").is_file()} for c, a, n, r in runs]
+        _emit(args, {"module": args.module, "regrade": True, "runs": have, "lacking": lacking},
+              [f"재채점 계획 {args.module}: run {len(runs)}개, result.json 없음 {len(lacking)}개 (자식 실행 없음)",
+               *(f"- {h['case']} {h['arm']} run-{h['run']}: result.json {'있음' if h['result_json'] else '없음'}" for h in have)])
+        return exitcodes.OK
+    if lacking:
+        _emit(args, {"module": args.module, "regrade_unavailable": True, "lacking": lacking, "runs": len(runs)},
+              [f"{UNAVAILABLE}: {args.module} — 없음 {len(lacking)}/{len(runs)} ({lacking[0]} …)"])
+        if args.record:
+            merge_record(RESULTS, lambda data: data["modules"][args.module].update(
+                regrade_unavailable=True, regrade_note="run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"))
+        return exitcodes.OK
+    by_name = {c.name: c for c in cases}
+    absent = sorted({c for c, _, _, _ in runs} - set(by_name))
+    if absent:
+        raise UsageError(f"지금 템플릿에 없는 case: {', '.join(absent)} — 재채점 불가")
+    first = next(iter(dirs.values()))
+    old = recorded if not args.regrade else (_load_json(first / "module_offsite_results.json").get("modules") or {}).get(args.module)
+    if not isinstance(old, dict):
+        raise UsageError(f"반복 디렉토리에 {args.module} 모듈 기록 없음: {first}")
+    rows, gradings, done = [], {}, []
+    docs_sha, inputs_sha = {}, {}
+    for name, arm, n, run_dir in runs:
+        case = by_name[name]
+        res, grading = regrade_run(case, json.loads((run_dir / "result.json").read_text(encoding="utf-8")), run_dir)
+        rows.append(run_row(case, arm, n, res, grading))
+        gradings[(name, arm, n)] = grading
+        done.append((run_dir, grading))
+        files, docs = arm_sources(case, arm, src)
+        inputs_sha.update({f"{name}/{rel}": sha256(p.read_bytes()) for rel, p in files})
+        docs_sha.update({f"{arm}/{rel}": sha256(p.read_bytes()) for rel, p in docs})
+    ran = {c for c, _, _, _ in runs}
+    cases = [c for c in cases if c.name in ran]
+    arms = [a for a in ARMS if any(r["arm"] == a for r in rows)]
+    old_ver = old.get("grader_version")
+    now = {"prompt_sha256": prompt_frame_sha(src.platform), "inputs_sha256": dict(sorted(inputs_sha.items())),
+           "docs_sha256": dict(sorted(docs_sha.items()))}
+    old_cases = old.get("cases") or {}
+    differs = [k for k, v in now.items() if old.get(k) != v] + (["cases"] if set(old_cases) != ran else []) + [
+        f"expect_sha256:{c.name}" for c in cases if (old_cases.get(c.name) or {}).get("expect_sha256") != expect_sha(c)]
+    if differs and args.record:                     # 파일을 하나도 쓰기 전에
+        raise UsageError(f"--record 거부: 지금 트리와 다르다({', '.join(differs)}) — 자식은 옛 판으로 돌았고 기록 지문은 run 때 "
+                         "것이다. --record 없이 재채점만 하거나 두 arm을 다시 돌린다")
+    # 지문(프롬프트 틀·입력·문서 sha·doc_bytes)은 run 때 것 그대로 — 지금 트리로 덮으면 한 arm 합치기가 낡음을 못 잡는다
+    base = {k: v for k, v in old.items() if k not in ("cases", "gate", "unit_cost_usd", "total_cost_usd", "cost_basis",
+                                                      "init_model", "regrade_unavailable", "regrade_note", "regraded")}
+    doc_bytes = {name: rec.get("doc_bytes") for name, rec in old_cases.items() if isinstance(rec, dict)}
+    prev = old.get("regraded") if isinstance(old.get("regraded"), dict) else {}
+    base.update(grader_version=GRADER_VERSION,
+                regraded={"from_grader": old_ver,
+                          "original_grader": prev.get("original_grader", prev.get("from_grader", old_ver)),
+                          "at": _utc(), **({"current_differs": differs} if differs else {})})
+    for run_dir, grading in done:                   # 모두 채점한 뒤에만 파일을 바꾼다
+        keep_old(run_dir / "grading.json")
+        write_json(run_dir / "grading.json", grading)
+    one_dir = len(set(dirs.values())) == 1          # 합친 기록(arm마다 디렉토리)은 run grading과 모듈 기록만 다시 쓴다
+    if one_dir:
+        for name in ("module_offsite_results.json", "benchmark.json"):
+            keep_old(first / name)
+    return finish(args, src, cases, rows, gradings, arms, first, base, doc_bytes, write_iter=one_dir)
+
+
+def file_grader_version(path: Path) -> int:
+    """채점 파일의 채점기 판: grading.json `grader_version`, benchmark.json `metadata.grader_version`, 반복 기록의 모듈
+    `grader_version`. 없으면(grader 4 이전 grading 등) 0."""
+    data = _load_json(path)
+    mods = data.get("modules") if isinstance(data.get("modules"), dict) else {}
+    for v in (data.get("grader_version"), (data.get("metadata") or {}).get("grader_version"),
+              *(m.get("grader_version") for m in mods.values() if isinstance(m, dict))):
+        if isinstance(v, int) and not isinstance(v, bool):
+            return v
+    return 0
+
+
+def keep_old(path: Path) -> None:
+    """재채점 전 파일을 `<이름>.v<그 파일의 판>.json`으로 남긴다. 그 이름이 이미 있으면 옮기지 않는다 — 먼저 남긴 옛 판(원래 run의
+    채점)을 덮지 않고, 새 파일이 이 자리를 덮는다."""
+    if path.is_file():
+        dest = path.with_name(f"{path.stem}.v{file_grader_version(path)}.json")
+        if not dest.exists():
+            os.replace(path, dest)
 
 
 # --- 모듈 기록·한 arm 합치기 (H C1+D R17) ------------------------------------------------------------------
 
 GATE_KEYS = ("pass1_with", "pass1_without", "tokens_with", "tokens_without", "token_delta", "token_delta_noncache",
              "token_goal", "cost_delta_usd", "safety_violations", "notes", "invalid", "require_cost", "verdict",
-             "top1_with", "top1_without")
+             "top1_with", "top1_without", "top1_regressed")
 # case·arm 기록 칸. 뒤 6개는 한 arm 합치기 때 관문을 다시 계산하려고 둔다(run_row와 같은 이름)
 RUN_RECORD_KEYS = ("status", "pass1", "safety_fail", "valid", "tokens_total", "output_tokens", "cost_usd", "elapsed_s",
                    "tie_tokens", "noncache", "notes", "cost_skipped", "cost_basis", "init_model")
@@ -1800,9 +2089,13 @@ def merge_single_arm(old, new: dict, arm: str, src: Source, cases: list[Case], r
     같고(아니면 "정답 바뀜 — 두 arm 다시 실행"), case마다 두 arm의 run 수가 같고, 다른
     arm의 문서(`docs_sha256`의 `<다른 arm>/…`)가 지금 파일과 같고, 다른 arm 기록이 관문 재계산 칸을 다 가진다.
     아니면 UsageError `"<다른 arm> 기록이 낡음 — 두 arm 모두 다시"`. (관문은 pass1 합계를 비교하므로 run 수가
-    다르면 진 arm이 이긴 것으로 보일 수 있다.)
+    다르면 진 arm이 이긴 것으로 보일 수 있다.) 기존 기록이 재채점 때 지금 트리와 달랐으면(`regraded.current_differs`) 먼저 거부한다.
     """
     other = "without" if arm == "with" else "with"
+    rg = old.get("regraded") if isinstance(old, dict) else None
+    if isinstance(rg, dict) and rg.get("current_differs"):
+        raise UsageError(f"{other} 기록이 낡음 — 재채점 때 지금 트리와 달랐다(regraded.current_differs: "
+                         f"{', '.join(map(str, rg['current_differs']))}) — 두 arm 모두 다시")
     stale = UsageError(f"{other} 기록이 낡음 — 두 arm 모두 다시")
     if not isinstance(old, dict) or old.get("prompt_sha256") != new["prompt_sha256"] \
             or old.get("inputs_sha256") != new["inputs_sha256"] or set(old.get("cases") or {}) != set(new["cases"]) \

@@ -34,7 +34,7 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 - `update-fix`: cause, fix
 - `add-code-ref`: cause, code_ref
 - `set-status`: id, status
-- `signature`: id·window_sec 필수, 선택 must_match·must_event·must_not_match·same_phone·sequence
+- `signature`: id·window_sec 필수, 선택 must_match·must_event·must_not_match·same_phone·sequence·sequence_within_sec
 여기 없는 op·세부 제약은 `SNAP/schema/plan.schema.json`
 
 - **추정만으로 원인을 만들지 않는다**(미확정이면 `unresolved`).
@@ -50,6 +50,7 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 - **시그니처**: 증상용·원인용 분리. 새 유형·원인은 판별 시그니처 필수(예외: record에서 사용자가 명시한 원인 `signatures_pending` — 매칭 불가, 해결책 unverified 고정). **새 유형의 증상 시그니처는 예외 없음.** 마스킹된 로그에서 실제 확인한 문구로만 쓴다(`.*error.*`·마스킹될 값·`<CELL#1>` 토큰 번호 고정 금지). 반복되는 복잡한 패턴은 extractor + `must_event`. 매처는 마스킹 뒤 텍스트에 돈다.
   **근거 줄 하나에만 기대지 않기**(빠지면 미매칭, `must_not_match` 근거면 오매칭): 다른 층 줄로 하나 더 — 있음은 시그니처 OR(증상도 그 줄이면 증상도, 원인 줄은 증상과 같은 슬롯·window), 없음은 일어남을 보이는 줄을 `must_not_match` 항목에. R1~R5는 결합을 못 보니 첫 줄 없는 로그를 `extra`로 넣어 analyze로 본다. `db_lint --advice`는 참고.
   `must_*`는 AND·시그니처끼리는 OR, `fields` 값은 정규식 fullmatch(부분 일치는 `.*X.*`), `same_phone`(기본 true)은 DDS처럼 슬롯을 가로지르는 원인만 false, `sequence`는 항목 `id` 순서.
+  `min_count: N`(must_match 객체·must_event)=N건 이상, `sequence_within_sec: T`=sequence 간격≤T초 — 둘 다 DB `issue-db.config.yaml` `signature_features`에 선언된 경우만(없으면 `db_lint` `signature-feature` 오류, 선언은 메인테이너).
 - `recovery_signatures`는 이 원인에 특정한 정상 흐름(계기가 풀리는 이벤트 + 정상 동작을 `sequence`로, 정상 로그 어디에나 맞는 동작만은 금지), `scenario_signatures`는 재현 시나리오 흔적(원인 시그니처 복사·부정 금지). 코드·설정 수정 유형은 `fixed` 전환 전 둘 중 하나 필수.
 - 본문 로그 예시는 마스킹 후 5~15줄, 원인별 상세에만. 재현 시나리오는 verify-fix가 보인다.
 - `code_refs`는 `<root 키>:<상대 경로>` + `symbol`(절대 경로 금지), 버전별 경로는 항목을 나눠 `platform_versions`.

@@ -38,7 +38,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
-from skill_eval_env import build, _bash_path  # noqa: E402
+from skill_eval_env import GH_SERVER, build, _bash_path, tracker_servers  # noqa: E402
 from grade import ANALYZER_MANIFEST, git, grade, skill_manifest, token_record, write_summary  # noqa: E402
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))     # grade가 이미 넣지만 import 순서에 기대지 않는다
 # 자식 `claude -p` 도우미는 common.claude_child로 옮겼다(모듈 eval과 공용). 이름은 그대로 다시 내보낸다(evaluation.<이름>).
@@ -74,7 +74,6 @@ def dump(path: Path, value) -> None:
 MOCKS = REPO / "tests" / "mocks"
 ANALYZER_PLUGIN = "mock-analyzers"
 APPROVER = "eval-approver"
-GH_SERVER = "mock-github-issues"
 
 
 ASK_TOOL = f"mcp__{APPROVER}__ask_user"
@@ -160,15 +159,10 @@ def prepare_plugin_mode(entry: dict, info: dict, env_dir: Path) -> dict:
         dump(env_dir / ANALYZER_MANIFEST, skill_manifest(skill))
     merge_skill_dir(info, skill)
     mcp = env_dir / "mcp.json"
-    gh = {}
-    if "MOCK_GH_ISSUES_DIR" in info["env"]:    # 두 번째 트래커 eval(setup.tracker: github, 트래커 범용화 §6-3)
-        gh = {GH_SERVER: {"command": sys.executable, "args": [(MOCKS / "github_issues_mcp" / "server.py").as_posix()],
-                          "env": {k: info["env"][k] for k in ("MOCK_GH_ISSUES_DIR", "MOCK_GH_ISSUES_WRITE_LOG",
-                                                              "PYTHONIOENCODING")}}}
+    # mock-jira, 두 번째 트래커 eval(setup.tracker: github, 트래커 범용화 §6-3)이면 mock-github-issues도 — 격리 홈 .claude.json과 같은 정의
+    trackers = tracker_servers(info["env"])
     dump(mcp, {"mcpServers": {
-        "mock-jira": {"command": sys.executable, "args": [(MOCKS / "jira_mcp" / "server.py").as_posix()],
-                      "env": {k: info["env"][k] for k in ("MOCK_JIRA_DIR", "MOCK_JIRA_WRITE_LOG", "PYTHONIOENCODING")}},
-        **gh,
+        **trackers,
         # guard의 ask(예: publish 규칙 7)에 사람 대신 답하고 요청을 기록한다(`approvals.json`).
         # setup.approver_deny면 모든 ask를 거부한다(권한 거부 경로, eval 62)
         APPROVER: {"command": sys.executable, "args": [(MOCKS / "approver_mcp" / "server.py").as_posix()],
@@ -176,7 +170,7 @@ def prepare_plugin_mode(entry: dict, info: dict, env_dir: Path) -> dict:
                            "EVAL_USER_REPLIES": json.dumps(entry.get("user_replies") or [], ensure_ascii=False),
                            **({"EVAL_APPROVER_DENY": "1"} if setup.get("approver_deny") else {})}}}})
     return {"plugin_dirs": [info["plugin_root"], str(analyzer)], "mcp_config": str(mcp),
-            "mcp_servers": ["mock-jira", *gh, APPROVER]}
+            "mcp_servers": [*trackers, APPROVER]}
 
 
 def plugin_check(events: list[dict], required: list[str] | None = None) -> tuple[str | None, dict]:

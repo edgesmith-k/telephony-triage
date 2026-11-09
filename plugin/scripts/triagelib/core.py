@@ -37,7 +37,7 @@ TOP = 3
 # 코드 대조 리터럴 ≤ 9개(부분 일치 3 × 없는 조건 3)
 PARTIAL_ANALYSIS_MAX, PARTIAL_REPORT_MAX, FIND_TEXT_ITEMS = 3, 1200, 9
 SEARCH_LIMIT = 3
-ERROR_EVENT_RE = re.compile(r"(error|timeout|no_response|reject|fail|denied|lost)", re.I)
+ERROR_EVENT_RE = re.compile(r"(error|timeout|no_response|reject|fail|denied|lost)", re.IGNORECASE)
 # 0 값 오류 칸(`errorCode=0`·`RejectCause: 0`·`result=0`·`error(0)`)은 오류가 아니다. 오류 문구 판정(ERROR_EVENT_RE) 전에
 # 지운다 — report 타임라인 줄 고르기와 모듈 보기 hot 표시가 같이 쓴다(H C1+D R13, 두 플랫폼)
 ZERO_VALUE_RE = re.compile(r"(?i)\b(?:RejectCause|reject\s*cause|errorCode|RilErrorCode|rejectCode|error|result|"
@@ -124,6 +124,15 @@ class Stopped(Exception):
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def trace_event(job: Path, step: str, **fields) -> None:
+    """`explore`·`module`·`checked` 정보 행 `{ts, step, v: 2, …}`(contracts.md §3.2 작업 기록, db_pr `trace_note`와 같은 모양).
+    analyze가 연 `JOB/trace.jsonl`이 일반 파일로 있을 때만 덧붙인다(없으면 만들지 않는다). END_STEPS·상태·기존 지표와 무관하다."""
+    path = Path(job) / "trace.jsonl"
+    if path.is_file() and not path.is_symlink():
+        from dbpr.lock import trace_note
+        trace_note(job, step, **fields)
 
 
 def _clip(text, limit: int) -> str:

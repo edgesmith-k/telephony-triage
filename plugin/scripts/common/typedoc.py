@@ -48,7 +48,7 @@ class TypeDoc:
         self.is_new = False
 
     @classmethod
-    def new(cls, path: Path, front: dict, body: str) -> "TypeDoc":
+    def new(cls, path: Path, front: dict, body: str) -> TypeDoc:
         text = "---\n" + "".join(yamldoc.dump_key(k, v) for k, v in front.items()) + "---\n" + body
         doc = cls(path, text)
         doc.is_new = True

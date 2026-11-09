@@ -2265,7 +2265,7 @@ def test_screen_content_patterns_match_db_summary_renderer():
                     r"CALL-001-01: fixed → open .*verification_history 보존", r"해결책 검증 상태: CALL-001-01 — unverified",
                     r"^-\s+status: verified", r"시그니처 없음 — 매칭 불가\(나중에 보완\)", r"사용자 진술 — 검증 전\(unverified\)",
                     r"fixtures/DATA-001-02\.2\.expect\.yaml", *grader.RECORD_SKIPPED]:
-        assert re.search(pattern, text, re.M), pattern
+        assert re.search(pattern, text, re.MULTILINE), pattern
     # e42[4]: 리뷰어가 없으면(샘플 CODEOWNERS — 카테고리 오너 없음) `리뷰어(제안 — …): 없음`(A2 제안 줄). 리뷰어가 있으면 맞지 않는다
     seen = []
     class Spy:
@@ -2273,8 +2273,8 @@ def test_screen_content_patterns_match_db_summary_renderer():
             seen.extend(patterns)
             return True, ""
     grader.checks(42, Spy())[4]()
-    assert seen and not any(re.search(p, text, re.M) for p in seen)
-    assert all(re.search(p, db_summary.render_markdown({**scr, "reviewers": []}, {}, extra), re.M) for p in seen)
+    assert seen and not any(re.search(p, text, re.MULTILINE) for p in seen)
+    assert all(re.search(p, db_summary.render_markdown({**scr, "reviewers": []}, {}, extra), re.MULTILINE) for p in seen)
     # e32[4]: 시그니처 없는 새 원인은 R1~R3이 `건너뜀: 시그니처 없음(pending)`이다 — 그 행으로 렌더해 e32 판정 패턴을 맞춘다
     pending = [{"id": f"R{n}", "status": "skipped", "label": "건너뜀: 시그니처 없음(pending)", "reason": "시그니처 없음(pending)"}
                for n in (1, 2, 3)]
@@ -2282,8 +2282,8 @@ def test_screen_content_patterns_match_db_summary_renderer():
     patterns32 = [p for p in _e32_patterns()]
     assert len(patterns32) == 3
     for pattern in patterns32:
-        assert re.search(pattern, text32, re.M), pattern
-        assert not re.search(pattern, text, re.M), pattern           # `건너뜀: 해당 없음`에는 맞지 않는다
+        assert re.search(pattern, text32, re.MULTILINE), pattern
+        assert not re.search(pattern, text, re.MULTILINE), pattern           # `건너뜀: 해당 없음`에는 맞지 않는다
     verified = db_summary.render_markdown(scr, {}, {**extra, "resolution": [
         {"cause": "NEW-CAUSE-1", "state": "verified", "reason": "verify-resolution"}]})
     assert re.search(r"해결책 검증 상태: \S+ — verified", verified)
@@ -2341,7 +2341,7 @@ def test_draft_shown_reason_mentions_other_rule(tmp_path):
 
 def test_report_shown_uses_longest_report_in_window(tmp_path):
     """head·grep으로 리포트 일부만 다시 열어도 기준은 창 안에서 가장 긴 리포트다."""
-    part = REPORT.split("- 근거 로그")[0]
+    part = REPORT.split("- 근거 로그", maxsplit=1)[0]
     ctx = _report_ctx(tmp_path, "part", [_bash("t", TRIAGE_CMD, "{}"), _bash("c", "cat /w/MOCK-1/report.md", REPORT),
                                          _bash("h", "head -3 /w/MOCK-1/report.md", part),
                                          _ask("q", SHOWN_REPORT.split("* 근거 로그")[0] + "\n기록할까요?", STEP7)])
@@ -3045,7 +3045,7 @@ def test_e72_defined_and_wired(tmp_path):
     data = json.loads((EVALS / "offsite_results.json").read_text(encoding="utf-8"))
     assert "72" in data["evals"]     # run 유무는 보지 않는다(정의가 바뀌어 메인 세션이 다시 잰다)
     # 확인 화면 병합 줄 판정 정규식이 merge.SCREEN_LINE(db_summary가 찍는 줄)에 맞는다(스크립트가 기준)
-    assert re.search(grader.MERGE_LINE, dbmerge.SCREEN_LINE, re.M) and dbmerge.SCREEN_LINE in e["assertions"][0]
+    assert re.search(grader.MERGE_LINE, dbmerge.SCREEN_LINE, re.MULTILINE) and dbmerge.SCREEN_LINE in e["assertions"][0]
     assert not hasattr(grader, "MERGE_CHOICE") and not hasattr(grader, "push_only_eval")
     d = tmp_path / "e"
     fns = grader.checks(72, grader.Ctx(_synthetic_env(d), run_dir(d)))
@@ -3849,3 +3849,60 @@ def test_e79_fixture_auth(tmp_path):
     assert out["reason"] == "인증" and out["next"] == core.NEXT_CONTINUE
     report = (Path(info["work_dir"]) / "MOCK-9041" / "report.md").read_text(encoding="utf-8")
     assert "- 심층 분석 생략: 모듈 스킬 받기 실패(인증)" in report
+
+
+def test_trigger_real_counts_claude_failure_as_error_not_negative(tmp_path, monkeypatch, capsys):
+    """claude 시간 초과는 '트리거 없음'(음성·맞음)이 아니라 오류(미실행)로 따로 센다."""
+    import trigger_real
+
+    def fake_run(cmd, **kw):
+        if cmd[2] == "느린 질문":
+            raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+        subtype = "error_max_turns" if cmd[2] == "긴 질문" else "success"   # max_turns 도달은 음성(정보로만 셈)
+        events = [{"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {}}]}},
+                  {"type": "result", "subtype": subtype, "is_error": subtype != "success"}]
+        return subprocess.CompletedProcess(cmd, int(subtype != "success"), "\n".join(json.dumps(e) for e in events), "")
+
+    monkeypatch.setattr(trigger_real.subprocess, "run", fake_run)
+    monkeypatch.setattr(trigger_real.shutil, "which", lambda name: "claude")
+    evals, out = tmp_path / "evals.json", tmp_path / "out.json"
+    evals.write_text(json.dumps([{"query": "느린 질문", "should_trigger": False},
+                                 {"query": "보통 질문", "should_trigger": False},
+                                 {"query": "긴 질문", "should_trigger": False}]), encoding="utf-8")
+    assert trigger_real.main(["--evals", str(evals), "--runs", "1", "--workers", "1", "--out", str(out)]) == 0
+    result = json.loads(out.read_text(encoding="utf-8"))
+    assert result["summary"]["error"] == 1 and result["summary"]["tn"] == 2 and result["summary"]["fp"] == 0
+    assert result["summary"]["max_turns"] == 1
+    assert [(row["errors"], row["max_turns"]) for row in result["rows"]] == [(1, 0), (0, 0), (0, 1)]
+    printed = capsys.readouterr().out
+    assert "- 0/1  0  1  느린 질문" in printed and "- 0/1  1 (max_turns 1)  0  긴 질문" in printed
+
+
+def test_eval_env_bash_home_lists_mock_jira_as_user_scope_server(tmp_path):
+    """eval 58: setup 0번은 아무것도 묻기 전에 `config.py tracker-candidates`(인자 없이 `~/.claude.json` 사용자 범위)를 한 번
+    돌리고 `usable`이 비면 멈춘다. 하네스는 Bash 홈(env.sh의 HOME, Windows는 USERPROFILE도)을 격리 홈으로 바꾸고 그
+    `.claude.json`에 모의 트래커 서버만 등록한다 — 실제 사용자 설정을 읽지 않고 mock-jira가 usable로 보인다.
+    자식 claude 프로세스 환경(env.json `env`)의 홈은 바꾸지 않는다."""
+    import skill_eval_env
+
+    entry = next(e for e in _entries() if e["id"] == 58)
+    info = skill_eval_env.build(entry, tmp_path / "env")
+    home = Path(info["user_home"])
+    servers = json.loads((home / ".claude.json").read_text(encoding="utf-8"))["mcpServers"]
+    assert servers == skill_eval_env.tracker_servers(info["env"]) and list(servers) == ["mock-jira"]
+    plugin = evaluation.prepare_plugin_mode(entry, info, tmp_path / "env")      # --mcp-config와 같은 정의
+    assert json.loads(Path(plugin["mcp_config"]).read_text(encoding="utf-8"))["mcpServers"]["mock-jira"] == servers["mock-jira"]
+    exports = (tmp_path / "env" / "env.sh").read_text(encoding="utf-8").splitlines()
+    assert f"export HOME='{evaluation._bash_path(str(home))}'" in exports
+    assert (f"export USERPROFILE='{home}'" in exports) is (os.name == "nt")
+    assert any(x.startswith("export PYTHONUSERBASE=") for x in exports)
+    assert not {"HOME", "USERPROFILE"} & set(info["env"])
+    # setup 0번 그대로(인자 없음): env.sh가 Bash에 주는 홈으로 실제 stdio 모의 서버를 띄워 본다
+    env = {**os.environ, **info["env"], "HOME": str(home), "USERPROFILE": str(home)}
+    proc = subprocess.run([sys.executable, str(Path(info["plugin_root"]) / "scripts" / "config.py"), "tracker-candidates"],
+                          capture_output=True, text=True, encoding="utf-8", env=env, cwd=tmp_path / "env", timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    found = json.loads(proc.stdout)
+    assert found["usable"] == ["mock-jira"], found
+    (server,) = found["servers"]
+    assert server["probe"] == "stdio" and server["suggested"]["get_issue"] == "mcp__mock-jira__jira_fetch_ticket"

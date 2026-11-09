@@ -253,6 +253,21 @@ def test_explore_view_source_and_render(tmp_path, capsys):
     assert _rec(job, "explore")["source"] == "module-skill/explore/timeline.md"
 
 
+def test_explore_hypothesis_line_marks_fabricated_count(tmp_path, capsys):
+    """코덱스 리뷰 02e0ec2 Q01: 가설 줄에 그 가설의 원문에 없는 인용 수 `[근거 불일치 N]`(0이면 표기 없음). 종료·기록은 그대로."""
+    job = make_job(tmp_path, "explore", "plain")
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1]), ("모뎀 펌웨어 오류", [Q1, FAKE])]),
+                                           encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and data["fabricated"] == 1
+    text = (job / "report.md").read_text(encoding="utf-8").split("\n")
+    i = text.index(next(t for t in text if t.startswith("- 탐색 분석")))
+    assert text[i + 1].startswith("  - 가설 1: 망 인증 거절 / 로그로 확인: ")
+    assert text[i + 2].startswith("  - 가설 2 [근거 불일치 1]: 모뎀 펌웨어 오류 / 로그로 확인: ")
+    assert text[i + 3].startswith("  - 근거 원문 검사: 인용 3개 중 원문에 없음 1 (")
+    assert _rec(job, "explore")["fabricated"] == 1
+
+
 def test_explore_source_falls_back_to_job_timeline(tmp_path, capsys):
     job = make_job(tmp_path, "explore", "plain")
     (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
@@ -358,6 +373,18 @@ def test_skipped_masks_and_records(tmp_path, capsys):
     assert SUB not in (job / "report.md").read_text(encoding="utf-8")
     rec = _rec(job)
     assert set(rec) == {"skipped", "at", "env"}
+
+
+def test_trace_checked_row_only_when_trace_exists(tmp_path, capsys):
+    # F7 확장: trace가 있을 때만 정보 행 `checked`(purpose·skipped 여부·종료 코드). 사유 글은 싣지 않는다
+    job = make_job(tmp_path)
+    assert check(job, skipped="첫 사유", capsys=capsys)[0] == 0 and not (job / "trace.jsonl").exists()
+    (job / "trace.jsonl").write_text("", encoding="utf-8")
+    assert check(job, skipped="SECRET-REASON", capsys=capsys)[0] == 0
+    text = (job / "trace.jsonl").read_text(encoding="utf-8")
+    assert "SECRET-REASON" not in text
+    assert [{k: v for k, v in json.loads(x).items() if k != "ts"} for x in text.splitlines()] == [
+        {"step": "checked", "v": 2, "purpose": "deep", "skipped": True, "exit": 0}]
 
 
 def test_skipped_keeps_script_written_line(tmp_path, capsys):

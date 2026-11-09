@@ -3,6 +3,7 @@
     python3 tools/site_step.py audit [--since YYYY-MM-DD | --since <레포>=<sha> ... | --last] [--repo ops_db|ofono_db|modules ...]
                                      [--cap-tokens 300000] [--inhouse-model <정규식> ...] [--jobs <work_dir>] [--json]
     python3 tools/site_step.py audit --record [--defer <id>[,<id>]]
+    python3 tools/site_step.py audit --notify [--create] [--json]   # 걸린 항목을 이슈 DB 레포 Issue로(기본 보기만, 중복 방지)
 
 지난 점검 뒤 이슈 DB(steps.yaml `ops_db`·`ofono_db`, 사용자 clone의 마지막 fetch 시점 origin/main — 임시 clone)와 모듈 스킬 레포
 (`module_skills.remote`, 임시 clone)에 들어온 커밋 중 사내 모델이 만든 것(`Triage-Env` trailer, db_summary.env_trailer)과 출처를
@@ -16,6 +17,8 @@ module_repo_check·module_eval `--dry-run`(case 형식·크기, 실행 수)·시
 
 쓰는 것: `docs/site/audit/plan.json`·`docs/site/audit/<날짜>-review.md`(점검마다), `docs/site/audit/state.json`(`--record`만). 그 밖은
 쓰지 않는다(임시 clone은 지운다). `--record`는 계획의 끝 커밋(`to`)을 기준점으로 남긴다 — 점검 뒤에 들어온 커밋은 다음 점검에 든다.
+`--notify`(종합 리뷰 C①)는 마지막 계획의 P0·P1 항목·실패한 검사 행을 이슈 DB 레포 Issue로 올린다(`notify`, 기본 보기만, `--create`는
+사용자 확인 뒤; 제목 표식으로 중복 방지). 사람이 보지 않아도 걸린 것이 남는 유일한 push 경로다.
 """
 from __future__ import annotations
 
@@ -608,7 +611,6 @@ def plan(ctx, since: list[str] | None = None, last: bool = False, repos: list[st
             base_added = base_added or bool(extra)
         else:
             it["slot"], it["why"] = "미룸", "상한"
-    now = [i for i in items if i["slot"] == "이번"]
     later = [i for i in items if i["slot"] == "미룸"]
     last_at = last_audit(state)
     bad = [c for c in checks if c["status"] in ("fail", "skip", "needs-user")]
@@ -849,12 +851,7 @@ def _carry_repo(cid: str) -> str | None:
 
 def record(root: Path, defer: list[str] | None = None) -> str:
     root = Path(root)
-    path = root / PLAN_FILE
-    if not path.is_file():
-        raise AuditUsage(f"{PLAN_FILE}가 없다 — 먼저 `site_step.py audit`")
-    p = _json(path.read_text(encoding="utf-8"))
-    if not isinstance(p, dict) or "window" not in p:
-        raise AuditUsage(f"{PLAN_FILE}를 읽지 못함 — `site_step.py audit`를 다시 돌린다")
+    p = load_plan(root)
     state = load_state(root)
     now_points = {r: (state["points"].get(r) or {}).get("sha") for r in p["window"]}
     if p.get("recorded"):
@@ -885,3 +882,118 @@ def record(root: Path, defer: list[str] | None = None) -> str:
     anchors = ", ".join(f"{REPO_LABELS[r]} {w['to'][:7]}" for r, w in p["window"].items())   # 3.10·3.11: f-string 안 같은 따옴표 금지
     return (f"정기 점검 기록: 기준점 {anchors} · "
             f"이월 {len(state['carry'])} · 다음 점검 {(today() + timedelta(days=AUDIT_EVERY_DAYS)).isoformat()} ({STATE_FILE})")
+
+
+# -- 알림(종합 리뷰 C①): 걸린 항목을 이슈 DB 레포의 GitHub Issue로 등록 --------------------------------------------------
+# 점검 결과는 전부 pull(파일·터미널)이었다. 사람이 안 봐도 남게, P0·P1 항목(drift·걸린 기록)과 실패한 검사 행을 이슈 DB 레포
+# (steps.yaml `<레포>_repo`)의 Issue로 올린다. 기본은 보기만(dry-run)이고 `--create`(사용자 확인 뒤)만 만든다. 중복 방지: 제목의
+# 제목이 표식 `[triage-audit] <id>`와 같은 **열린** Issue가 있으면 만들지 않는다(닫힌 것은 다시 생긴 것이므로 새로 만든다). 모듈 항목(M)은
+# 리뷰 대상이지 문제 보고가 아니라 뺀다. 본문에는 계획에 든 것(표식·우선·근거 이름·파일·Jira 키·명령)만 쓰고 로그 원문은 없다.
+
+ISSUE_PREFIX = "[triage-audit]"
+NOTIFY_KINDS = ("drift", "record")
+NOTIFY_PRIORITY = ("P0", "P1")
+NOTIFY_STATUS = {"would-create": "만들 것", "created": "만듦", "exists": "있음(열림)", "skip": "건너뜀", "error": "실패"}
+
+
+def notify_candidates(p: dict) -> list[dict]:
+    """계획 → Issue 후보 [{id, repo, title, body}] (항목 순서 그대로, 그다음 실패한 검사 행). repo는 ops_db·ofono_db만."""
+    out = []
+    for it in p.get("items") or []:
+        if it.get("kind") in NOTIFY_KINDS and it.get("priority") in NOTIFY_PRIORITY and it.get("repo") in DB_PLATFORM:
+            lines = [f"{REPO_LABELS[it['repo']]} · {it['kind']} · 우선 {it['priority']} · 점검 {p.get('created', '')[:10]}", "",
+                     "근거: " + ", ".join(it.get("flags") or []), "파일: " + ", ".join(it.get("files") or [])]
+            if it.get("sha"):
+                lines.append(f"커밋: {it['sha'][:12]} ({it.get('provenance', '')})")
+            if it.get("evidence"):
+                lines.append(f"증거: {it['evidence']}")
+            lines += [f"명령: `{c}`" for c in it.get("cmds") or []]
+            if it.get("note"):
+                lines.append(f"메모: {it['note']}")
+            out.append({"id": it["id"], "repo": it["repo"], "title": f"{ISSUE_PREFIX} {it['id']}", "body": "\n".join(lines)})
+    for c in p.get("checks") or []:
+        parts = str(c.get("id", "")).split(".")
+        if c.get("status") == "fail" and len(parts) >= 3 and parts[0] == "audit" and parts[1] in DB_PLATFORM:
+            body = [f"{REPO_LABELS[parts[1]]} · 검사 실패 · 점검 {p.get('created', '')[:10]}", "", f"근거: {c.get('evidence', '')}"]
+            if c.get("cmd"):
+                body.append(f"명령: `{c['cmd']}`")
+            out.append({"id": c["id"], "repo": parts[1], "title": f"{ISSUE_PREFIX} {c['id']}", "body": "\n".join(body)})
+    return out
+
+
+def _open_issue(ctx, slug: str, marker: str) -> tuple[dict | None, str | None]:
+    """(제목이 표식과 **정확히 같은** 열린 Issue, 오류). `gh issue list`는 읽기다. 검색(`in:title`)은 낱말 단위라 접두사가 같은 다른 ID
+    (`…/setup`과 `…/setup-retry`)도 돌아오므로 제목 전체를 공백 정규화 뒤 비교한다(코덱스 리뷰 R2 — 전에는 `marker in title`이라
+    다른 항목을 "있음"으로 봤다). 제목을 사람이 고치면 표식이 깨져 다음 회차에 새 Issue가 생긴다(ID는 제목이 유일한 저장 위치)."""
+    code, out, err = ctx.gh("issue", "list", "--repo", slug, "--state", "open", "--search", f'"{marker}" in:title',
+                            "--limit", "50", "--json", "number,title,url")
+    if code:
+        return None, f"gh issue list 실패(종료 {code}): {err.strip()[:160]}"
+    rows = _json(out)
+    if not isinstance(rows, list):
+        return None, "gh issue list 출력을 읽지 못함"
+    want = " ".join(marker.split())
+    hit = next((r for r in rows if isinstance(r, dict) and " ".join(str(r.get("title", "")).split()) == want), None)
+    return hit, None
+
+
+def notify(ctx, p: dict, create: bool = False) -> dict:
+    """후보마다 {id, repo, slug, status, detail, url}. `create=False`면 읽기(`gh auth status`·`issue list`)만 한다.
+    종료: 0 = 모두 만듦·있음(또는 만들 것·후보 없음), 1 = 건너뜀·실패가 있음."""
+    rows, auth = [], None
+    for cand in notify_candidates(p):
+        slug = ctx.inputs.get(f"{cand['repo']}_repo")
+        row = {"id": cand["id"], "repo": cand["repo"], "slug": slug, "status": "skip", "detail": "", "url": None}
+        rows.append(row)
+        if not slug:
+            row["detail"] = f"steps.yaml `{cand['repo']}_repo` 없음 — `propose --set {cand['repo']}_repo=<owner/repo>`"
+            continue
+        if auth is None:
+            code, _, _ = ctx.gh("auth", "status")
+            auth = (code == 0, code)
+        if not auth[0]:
+            row["detail"] = f"gh 인증 없음·없음(종료 {auth[1]}) — `gh auth login`(S5)"
+            continue
+        hit, err = _open_issue(ctx, slug, cand["title"])
+        if err:
+            row.update(status="error", detail=err)
+            continue
+        if hit:
+            row.update(status="exists", detail=f"#{hit.get('number')}", url=hit.get("url"))
+            continue
+        if not create:
+            row.update(status="would-create", detail=cand["title"])
+            continue
+        code, out, err = ctx.gh("issue", "create", "--repo", slug, "--title", cand["title"], "--body", cand["body"])
+        if code:
+            row.update(status="error", detail=f"gh issue create 실패(종료 {code}): {err.strip()[:160]}")
+            continue
+        row.update(status="created", detail=cand["title"], url=out.strip().splitlines()[-1] if out.strip() else None)
+    bad = any(r["status"] in ("skip", "error") for r in rows)
+    return {"version": 1, "create": create, "rows": rows, "created": sum(1 for r in rows if r["status"] == "created"),
+            "exit": 1 if bad else 0}
+
+
+def render_notify(res: dict) -> str:
+    cell = lambda t: str(t).replace("|", "/")  # noqa: E731
+    head = "Issue 등록" + ("" if res["create"] else " — 보기만(만들려면 사용자 확인 뒤 `audit --notify --create`)")
+    out = [head, "", "| 항목 | 레포 | 결과 | 상세 |", "|---|---|---|---|"]
+    for r in res["rows"]:
+        detail = cell(r["detail"]) + (f" {r['url']}" if r.get("url") else "")
+        out.append(f"| {r['id']} | {r['slug'] or REPO_LABELS[r['repo']]} | {NOTIFY_STATUS[r['status']]} | {detail} |")
+    if not res["rows"]:
+        out.append("| - | 등록할 항목 없음(P0·P1 항목·실패한 검사 행 없음) | | |")
+    out.append("")
+    out.append(f"만듦 {res['created']} · 중복은 제목의 `{ISSUE_PREFIX} <id>`가 든 열린 Issue로 막는다(닫힌 것은 다시 만든다)")
+    return "\n".join(out)
+
+
+def load_plan(root: Path) -> dict:
+    root = Path(root)
+    path = root / PLAN_FILE
+    if not path.is_file():
+        raise AuditUsage(f"{PLAN_FILE}가 없다 — 먼저 `site_step.py audit`")
+    p = _json(path.read_text(encoding="utf-8"))
+    if not isinstance(p, dict) or "window" not in p:
+        raise AuditUsage(f"{PLAN_FILE}를 읽지 못함 — `site_step.py audit`를 다시 돌린다")
+    return p

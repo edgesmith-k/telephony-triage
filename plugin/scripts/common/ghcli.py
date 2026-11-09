@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 
@@ -34,3 +35,18 @@ def auth_status(host: str | None) -> tuple[bool, str]:
     args = ["auth", "status"] + (["--hostname", host] if host else [])
     proc = run(args, host=host)
     return proc.returncode == 0, (proc.stderr or proc.stdout).strip()
+
+
+# `gh auth status` 한 줄: `Logged in to <host> as <login> (…)`(옛 gh) · `Logged in to <host> account <login> (…)`(gh ≥2.40)
+LOGIN_RE = re.compile(r"Logged in to (\S+) (?:as|account) (\S+)")
+
+
+def login(message: str, host: str | None) -> str | None:
+    """`auth_status` 출력에서 **`host`의** 로그인(setup 1 GHE 아이디 자동 감지). 다른 호스트의 로그인은 쓰지 않고,
+    호스트가 없거나 그 호스트 줄이 없으면 None(setup이 묻는다)."""
+    if not host:
+        return None
+    for seen, who in LOGIN_RE.findall(message or ""):
+        if seen.casefold() == host.casefold():
+            return who
+    return None

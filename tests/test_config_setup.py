@@ -126,6 +126,123 @@ def test_init_saves_only_answers_so_team_default_changes_flow_through():
     assert env.json("config.py", ["show", "--keys", "explore.when"])["values"] == {"explore.when": "never"}
 
 
+def test_site_issue_db_remote_is_team_default_per_platform():
+    """setup 질문 10→3(코덱스 리뷰 A①): site-defaults `issue_db.remote`가 있으면 init이 원격을 묻지 않고 상속한다.
+    플랫폼마다 이슈 DB가 다르므로 `platforms.<p>.issue_db.remote`가 그 플랫폼 값이고 최상위 값은 물려받지 않는다
+    (merge_wait_seconds는 최상위 → platforms.<p> 순). 상속 순서를 여기서 고정한다."""
+    top = "https://ghe.mock.invalid/mock-org/telephony-issue-db.git"
+    ofono = "https://ghe.mock.invalid/mock-org/telephony-issue-db-ofono.git"
+    on = {"name": "android", "enabled": ["android", "ofono"]}
+    root = plugin_root("site-remote", issue_db={"merge_wait_seconds": 420, "remote": top}, platform=on,
+                       platforms={"ofono": {"issue_db": {"remote": ofono, "merge_wait_seconds": 60}}})
+    env = Env(root=root)
+
+    def answers(name: str, **data) -> Path:
+        path = env.base / f"{name}.json"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        return path
+
+    # android: 원격을 답하지 않아도 되고(팀 기본값), 저장하지 않는다
+    result = env.json("config.py", ["init", "--answers", answers(
+        "a", **{"user.ghe_id": "mock-user1", "issue_db.path": str(env.base / "db"), "work_dir": str(env.base / "work")})])
+    assert result["suggest_clone"] == f"git clone {top} {env.base / 'db'}"
+    assert "remote" not in env.config()["issue_db"]
+    assert env.json("config.py", ["show", "--keys", "issue_db.remote,issue_db.merge_wait_seconds"])["values"] == {
+        "issue_db.remote": top, "issue_db.merge_wait_seconds": 420}
+    # ofono 프로필: 그 플랫폼의 site 값. 빈 답("")도 상속이다
+    env.json("config.py", ["init", "--platform", "ofono", "--answers", answers(
+        "o", **{"issue_db.path": str(env.base / "db-ofono"), "issue_db.remote": "", "work_dir": str(env.base / "work-ofono")})])
+    assert "remote" not in env.config()["platforms"]["ofono"]["issue_db"]
+    assert env.json("config.py", ["show", "--platform", "ofono", "--keys", "issue_db.remote,issue_db.merge_wait_seconds"])["values"] == {
+        "issue_db.remote": ofono, "issue_db.merge_wait_seconds": 60}
+
+    # 상속 순서(merged): 사용자 config > site platforms.<p>.issue_db > site issue_db(remote는 제외) > 내장
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import userconfig
+    site = {"issue_db": {"remote": top, "merge_wait_seconds": 30},
+            "platforms": {"ofono": {"issue_db": {"remote": ofono}}, "other": {"issue_db": {"merge_wait_seconds": 60}}}}
+    assert userconfig.merged(site, {})["issue_db"] == {"base_branch": "main", "remote": top, "merge_wait_seconds": 30}
+    assert userconfig.merged(site, {}, platform="ofono")["issue_db"] == {"base_branch": "main", "remote": ofono, "merge_wait_seconds": 30}
+    assert userconfig.merged(site, {}, platform="other")["issue_db"] == {"base_branch": "main", "merge_wait_seconds": 60}   # 최상위 remote는 안 내려간다
+    user = {"issue_db": {"remote": "https://ghe.mock.invalid/me/a.git"},
+            "platforms": {"ofono": {"issue_db": {"path": "/x", "remote": "https://ghe.mock.invalid/me/o.git"}}}}
+    assert userconfig.merged(site, user)["issue_db"]["remote"] == "https://ghe.mock.invalid/me/a.git"
+    assert userconfig.merged(site, user, platform="ofono")["issue_db"]["remote"] == "https://ghe.mock.invalid/me/o.git"
+
+    # site에 그 플랫폼 remote가 없으면 init은 전처럼 원격을 요구한다(android 것을 쓰지 않는다)
+    root2 = plugin_root("site-remote-top-only", issue_db={"merge_wait_seconds": 420, "remote": top}, platform=on)
+    env2 = Env(root=root2)
+    proc = env2.run("config.py", ["init", "--platform", "ofono", "--answers", answers(
+        "o2", **{"user.ghe_id": "mock-user1", "issue_db.path": str(env2.base / "db-ofono"), "work_dir": str(env2.base / "work-ofono")})])
+    assert proc.returncode == 2 and "issue_db.remote: 값이 필요합니다" in proc.stderr
+    assert not (env2.home / "config.yaml").exists()
+
+
+def test_inherited_team_remote_is_not_copied_and_counts_for_overlap():
+    """리뷰 후속(코덱스 리뷰 A①② 후속): (1) 대화형 init에서 원격을 Enter(팀 기본값)로 넘기면 복사해 저장하지 않는다.
+    (2) site에서 물려받은 android 원격도 프로필 원격 겹침 검사에 든다 — ofono에 같은 원격을 주면 거부한다.
+    (3) 물려받을 팀 원격이 owner/repo로 풀리지 않으면 init이 clone을 제안하지 않고 관리자에게 돌린다."""
+    top = "https://ghe.mock.invalid/mock-org/telephony-issue-db.git"
+    on = {"name": "android", "enabled": ["android", "ofono"]}
+    env = Env(root=plugin_root("site-remote-inherit", issue_db={"remote": top}, platform=on))
+    lines = ["mock-user1", str(env.base / "db"), "", "", "", "", "", "", "", str(env.base / "work")]   # 원격~log_dir Enter
+    proc = env.run("config.py", ["init"], stdin="\n".join(lines) + "\n")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["suggest_clone"] == f"git clone {top} {env.base / 'db'}"
+    assert env.config()["issue_db"] == {"path": str(env.base / "db")}       # remote는 상속(복사하지 않음)
+
+    answers = env.base / "o.json"
+    answers.write_text(json.dumps({"issue_db.path": str(env.base / "db-ofono"), "issue_db.remote": top.upper()}), encoding="utf-8")
+    proc = env.run("config.py", ["init", "--platform", "ofono", "--answers", answers])
+    assert proc.returncode == 2 and "platforms.ofono.issue_db.remote: issue_db.remote(site-defaults)와 같은 원격" in proc.stderr
+    assert "platforms" not in env.config()
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import userconfig
+    a, o = str(env.base / "a"), str(env.base / "o")
+    user = {"issue_db": {"path": a}, "platforms": {"ofono": {"issue_db": {"path": o, "remote": top}}}}
+    assert userconfig.profile_problems(user) == []                          # defaults 없이는 이전과 같다
+    assert userconfig.profile_problems(user, {"issue_db": {"remote": top}})
+    both = {"issue_db": {"remote": top}, "platforms": {"ofono": {"issue_db": {"remote": top}}}}
+    assert userconfig.profile_problems({**user, "platforms": {"ofono": {"issue_db": {"path": o}}}}, both) == []  # site 문제
+
+    bad = Env(root=plugin_root("site-remote-bad", issue_db={"remote": "/local/db"}))
+    answers = bad.base / "a.json"
+    answers.write_text(json.dumps({"user.ghe_id": "mock-user1", "issue_db.path": str(bad.base / "db")}), encoding="utf-8")
+    proc = bad.run("config.py", ["init", "--answers", answers])
+    assert proc.returncode == 2 and "site-defaults는 관리자" in proc.stderr and not (bad.home / "config.yaml").exists()
+
+
+def test_init_without_site_remote_still_requires_remote():
+    """음성 경로(a): site-defaults에 issue_db.remote가 없으면(사외 초안 example 그대로) init은 전처럼 원격을 요구한다."""
+    env = Env()
+    path = env.base / "a.json"
+    path.write_text(json.dumps({"user.ghe_id": "mock-user1", "issue_db.path": str(env.base / "db"),
+                                "work_dir": str(env.base / "work")}), encoding="utf-8")
+    proc = env.run("config.py", ["init", "--answers", path])
+    assert proc.returncode == 2 and "issue_db.remote: 값이 필요합니다" in proc.stderr
+    assert not (env.home / "config.yaml").exists()
+    assert env.json("config.py", ["show", "--keys", "issue_db.remote"])["missing"] == ["issue_db.remote"]
+
+
+def test_gh_status_login_is_the_site_host_login_only():
+    """setup 1 GHE 아이디 자동 감지(코덱스 리뷰 A①): `gh-status`의 `login`은 site ghe.host와 같은 호스트의 로그인만이다.
+    다른 호스트 로그인이 앞에 나와도(gh ≥2.40 `account` 문구) 그것을 쓰지 않고, 그 호스트 줄이 없으면 null(setup이 묻는다)."""
+    env = Env()
+    env.init(env.base / "db")
+    one = env.json("config.py", ["gh-status"])
+    assert one["ok"] is True and one["host"] == "ghe.mock.invalid" and one["login"]
+    two = env.json("config.py", ["gh-status"], env={"MOCK_GH_OTHER_LOGINS": "github.com:someone-else"})
+    assert two["login"] == one["login"] != "someone-else"
+    unauth = env.run("config.py", ["gh-status"], unauth=True)
+    assert unauth.returncode == 2 and json.loads(unauth.stdout)["login"] is None
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import ghcli
+    text = "github.com\n  ✓ Logged in to github.com account someone-else (keyring)\n  - Active account: true"
+    assert ghcli.login(text, "ghe.mock.invalid") is None and ghcli.login(text, "GitHub.com") == "someone-else"
+    assert ghcli.login("ghe.mock.invalid\n  - Logged in to ghe.mock.invalid as me (oauth_token)", "ghe.mock.invalid") == "me"
+    assert ghcli.login(text, None) is None
+
+
 def test_set_and_sync_scripts_path():
     env = Env()
     env.init(env.base / "db")
@@ -1171,3 +1288,71 @@ if __name__ == "__main__":
             print(f"ERR {name}: {type(exc).__name__}: {exc}")
     print(f"\n{len(_all_tests()) - failures}/{len(_all_tests())} 통과")
     raise SystemExit(1 if failures else 0)
+
+
+def test_set_reviewer_ask_false_is_boolean_and_visible_to_skill():
+    """02-config §4 `reviewer.ask`(종합 리뷰 A 제안): push 뒤 리뷰어 질문을 끄는 개인 설정. 불리언으로 저장되고
+    `show --keys`로 스킬(write-flow.md 5번)이 읽는다. 기본은 없음(= 묻는다)."""
+    env = Env()
+    env.init(env.base / "db")
+    before = env.json("config.py", ["show", "--keys", "reviewer.ask"])
+    assert before["missing"] == ["reviewer.ask"]
+    env.json("config.py", ["set", "reviewer.ask", "false"])
+    assert env.config()["reviewer"]["ask"] is False
+    after = env.json("config.py", ["show", "--keys", "reviewer.ask"])
+    assert after["values"] == {"reviewer.ask": False} and after["missing"] == []
+
+
+def test_doctor_retention_row_counts_old_job_dirs_without_deleting(tmp_path):
+    """02-config `retention_days`(종합 리뷰 G, S14): 두면 `retention` 행이 생겨 기한 넘은 작업 폴더 수를 warn으로 세고 지우지 않는다.
+    없으면 행 자체가 없다. 잘못된 값은 fail."""
+    import time as _time
+    env = Env()
+    env.init(env.base / "db")
+    rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"]).stdout)["rows"]}
+    assert "retention" not in rows                                 # 기간을 정하지 않은 팀: 행 없음(점검표·예산 불변)
+    work = Path(env.config()["work_dir"]).expanduser()
+    old, fresh = work / "MOCK-9001", work / "MOCK-9002"
+    for d in (old, fresh):
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "plan.json").write_text("{}", encoding="utf-8")
+    past = _time.time() - 40 * 86400
+    os.utime(old / "plan.json", (past, past))                   # 나이 = 마지막 활동(안의 파일까지, R4)
+    os.utime(old, (past, past))
+    root = plugin_root("retention-30", retention_days=30)
+    rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"], root=root).stdout)["rows"]}
+    assert rows["retention"]["status"] == "warn" and "1개" in rows["retention"]["detail"]
+    assert "cleanup --older-than 30" in rows["retention"]["next"]
+    assert old.is_dir() and fresh.is_dir()                       # 세기만 한다
+    assert "마지막 활동 뒤" in rows["retention"]["detail"]
+    # 코덱스 리뷰 R4: 폴더 mtime은 40일 전이어도 안의 trace.jsonl을 방금 갱신했으면 "최근"이다 — cleanup --older-than과 같은 정의
+    (old / "trace.jsonl").write_text("{}\n", encoding="utf-8")
+    os.utime(old, (past, past))
+    rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"], root=root).stdout)["rows"]}
+    assert rows["retention"]["status"] == "ok"
+    from common import session_lock
+    from dbpr import worktree
+    assert worktree._tree_mtime(old) == session_lock.tree_mtime(old) > past + 86400
+    os.utime(old / "trace.jsonl", (past, past))
+    (old / "wt").mkdir()                                          # git worktree는 나이에 세지 않는다
+    os.utime(old, (past, past))                                   # mkdir가 올린 폴더 mtime은 되돌린다
+    rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"], root=root).stdout)["rows"]}
+    assert rows["retention"]["status"] == "warn"
+    os.utime(old, None)
+    rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"], root=root).stdout)["rows"]}
+    assert rows["retention"]["status"] == "ok"
+    bad = plugin_root("retention-bad", retention_days="90일")
+    rows = {r["check"]: r for r in json.loads(env.run("config.py", ["doctor"], root=bad).stdout)["rows"]}
+    assert rows["retention"]["status"] == "fail"
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError,
+                   reason="P2: main() platform_session.resolve → from_site_defaults가 손상 site-defaults에서 AttributeError — 다음 정리 때 고침")
+@pytest.mark.parametrize("corrupt", [{"ghe": "x"}, {"tracker": [1]}], ids=["ghe-str", "tracker-list"])
+def test_check_corrupt_site_defaults_is_usage_error_not_traceback(corrupt):
+    """손상된 site-defaults(매핑 자리에 문자열·목록)에서 `config.py check`는 트레이스백(종료 1)이 아니라 문제 메시지와 종료 2여야 한다.
+    지금은 cmd_check 전에 main()의 platform_session.resolve → userconfig.merged(from_site_defaults)에서 AttributeError로 죽는다
+    (LINT_REVIEW 미해결 P2 — cmd_check의 merged()도 같은 길)."""
+    env = Env(root=plugin_root("corrupt-site-" + next(iter(corrupt)), **corrupt))
+    proc = env.run("config.py", ["check", "--db", SAMPLE, "--for", "dry-run"])
+    assert proc.returncode == 2 and "Traceback" not in proc.stderr and proc.stderr.strip(), proc.stderr

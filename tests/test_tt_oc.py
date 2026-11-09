@@ -19,6 +19,18 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 TTOC = REPO / "opencode" / "bin" / "tt-oc"
 
+
+def _pinned_version() -> str:
+    """고정 OpenCode 버전은 plugin/scripts/common/oc_version.py 한 곳(시험의 고정값은 tests/test_oc_version.py)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("_oc_version", REPO / "plugin" / "scripts" / "common" / "oc_version.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.OPENCODE_VERSION
+
+
+PINNED = _pinned_version()
+
 STUB = r'''#!/usr/bin/env python3
 import json, os, sys, time
 args = sys.argv[1:]
@@ -29,7 +41,7 @@ with open(log, "a") as f:
                                                                "OPENCODE_DISABLE_AUTOUPDATE", "OPENCODE_DISABLE_MODELS_FETCH",
                                                                "OPENCODE_DISABLE_CLAUDE_CODE_PROMPT")}}) + "\n")
 if args == ["--version"]:
-    print(os.environ.get("STUB_VERSION", "1.19.5")); sys.exit(0)
+    print(os.environ.get("STUB_VERSION", "__PINNED__")); sys.exit(0)
 if args[:2] == ["debug", "config"]:
     print(open(os.environ["STUB_CONFIG"]).read()); sys.exit(0)
 if args[:2] == ["session", "delete"]:
@@ -86,7 +98,8 @@ def env(tmp_path):
     (proj / ".opencode" / "plugins" / "tt-guard.js").write_text("// guard\n", encoding="utf-8")
     write_meta(proj, plug, work)
     stub = tmp_path / "opencode"
-    stub.write_text(STUB.replace("#!/usr/bin/env python3", "#!" + sys.executable, 1), encoding="utf-8")
+    stub.write_text(STUB.replace("#!/usr/bin/env python3", "#!" + sys.executable, 1).replace("__PINNED__", PINNED),
+                    encoding="utf-8")
     stub.chmod(0o755)
     cfg = tmp_path / "config.json"
     cfg.write_text(json.dumps(CONFIG_OK), encoding="utf-8")
@@ -508,6 +521,6 @@ def test_shared_checks_for_site_step(env):
     assert mod.config_problems({**CONFIG_OK, "snapshot": True, "permission": {"*": "deny"}}) == [
         "snapshot=true(필요 false)", 'permission.task=null(필요 "deny")', 'permission.bash["*"]=null(필요 "deny")']
     row, ran = mod.version_row(str(env["stub"]), env["env"])
-    assert ran and row == {"check": "opencode-version", "status": "ok", "detail": "1.19.5 (고정 1.19.5)"}
+    assert ran and row == {"check": "opencode-version", "status": "ok", "detail": f"{PINNED} (고정 {PINNED})"}
     row, ran = mod.version_row(str(env["tmp"] / "no-opencode"), env["env"])
     assert not ran and row["status"] == "fail" and row["detail"].startswith("opencode 실행 실패")

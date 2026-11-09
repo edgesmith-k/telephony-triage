@@ -19,7 +19,8 @@ Telephony 이슈 분석 도구(Claude Code 플러그인, Android 기본 — 팀�
 ```
 python3 -m venv .venv && . .venv/bin/activate
 pip install '.[test]'
-python3 -m pytest -q tests
+python3 -m pytest -q tests            # 단일 프로세스 약 30분
+python3 -m pytest -q -n auto tests    # 병렬(pytest-xdist, test extras에 포함) — 4코어 약 10분
 ```
 
 Windows는 `PYTHONUTF8=1`.

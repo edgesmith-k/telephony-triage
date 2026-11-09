@@ -116,7 +116,7 @@ def test_new_file_and_no_trailing_newline(env, tmp_path):
     (owner / "references").mkdir()
     (owner / REL).write_text(ORIG, encoding="utf-8", newline="\n")
     assert git_apply(owner, env["patch"]).returncode == 0
-    assert (owner / "references" / "NEW.md").read_bytes() == "새 점검\n끝 줄바꿈 없음".encode("utf-8")
+    assert (owner / "references" / "NEW.md").read_bytes() == "새 점검\n끝 줄바꿈 없음".encode()
 
 
 def test_crlf_original_is_preserved(env, tmp_path):

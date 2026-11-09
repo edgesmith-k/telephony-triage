@@ -6,6 +6,9 @@
 
 불일치 처리는 호출자가 정한다: 분석(`parse_logcat`)은 경고 후 진행,
 `config.py check`는 쓰기 불가, `db_regress`는 종료 코드 2.
+
+- 시그니처 선택 필드: `issue-db.config.yaml`의 `signature_features: [<이름>...]`(04-parser-matching.md §5.11 (1)).
+  이 플러그인이 모르는 이름이 있으면 `feature-unsupported` — 플랫폼 불일치처럼 **거부**(driver는 분석을 중단한다).
 """
 
 from __future__ import annotations
@@ -13,12 +16,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from . import yamlio
+from . import signatures, yamlio
 from .userconfig import TOP_PROFILE
 
 BACKEND_MISMATCH = "parser-backend-mismatch"
 EXTERNAL_MISMATCH = "external-parser-mismatch"
 PLATFORM_MISMATCH = "platform-mismatch"
+FEATURE_UNSUPPORTED = "feature-unsupported"
 
 
 def parse_version(value) -> tuple[int, ...]:
@@ -59,6 +63,21 @@ def check_platform(db_cfg: dict, name: str) -> list[dict]:
     return [{"code": PLATFORM_MISMATCH,
              "message": (f"플랫폼 불일치 — 이슈 DB는 {declared}, 선택한 플랫폼은 {name}. `--platform {declared}`로 다시 "
                          f"실행하거나 config의 {other}issue_db.path를 확인한다")}]
+
+
+def check_features(db_cfg: dict, supported=None) -> list[dict]:
+    """이슈 DB `signature_features` 중 이 플러그인이 모르는 것이 있으면 `feature-unsupported`. 없거나 null이면 `[]`."""
+    declared = (db_cfg or {}).get("signature_features")
+    if declared is None:
+        return []
+    if not isinstance(declared, list) or not all(isinstance(f, str) for f in declared):
+        return [{"code": FEATURE_UNSUPPORTED, "message": "signature_features는 문자열 목록이어야 한다"}]
+    unknown = set(declared) - (signatures.SUPPORTED_FEATURES if supported is None else supported)
+    if not unknown:
+        return []
+    return [{"code": FEATURE_UNSUPPORTED,
+             "message": (f"이슈 DB signature_features {sorted(unknown)}를 이 플러그인이 모른다 — 분석을 중단한다"
+                         "(읽기 전용 아님). 플러그인을 업데이트한다")}]
 
 
 def check_parser_backend(db_cfg: dict, name: str, version: str) -> list[dict]:

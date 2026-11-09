@@ -17,8 +17,10 @@ get_issue·get_comments → opencode.json `mcp` 서버의 OpenCode 이름 `<서�
 - cleanup: 이 실행의 OpenCode 세션 삭제(도구 결과가 opencode.db에 남지 않게), 확인이 만든 issue_raw.json 정리(전에 있던 파일은 복원).
 
 종료 0은 성공 경로(tools-offered·success-*·comments-*)가 모두 pass일 때만이다. 통과 기록(`common/oc_jira_gate.record_path`, 사용자
-config 폴더)은 실행할 때마다 쓴다(passed·행마다 결과·OpenCode 버전·Jira 서버·도구 이름·시각·플러그인 스크립트 지문). 관문을
-여는 명령(`config.py set opencode.jira_read open`)은 출력만 한다 — 사용자가 터미널에서 직접 실행한다.
+config 폴더)은 실행할 때마다 쓴다(passed·행마다 결과·OpenCode 버전·Jira 서버·도구 이름·시각·플러그인 스크립트 지문·트래커·MCP
+지문 `tracker_fingerprint` — `record_fingerprint`: 설치 플러그인 `config.py show`의 `tracker`와 설치 폴더에서 본 MCP 서버 이름,
+관문이 같은 계산으로 비교한다. 구하지 못하면 fingerprint 행 fail). 관문을 여는 명령(`config.py set opencode.jira_read open`)은
+출력만 한다 — 사용자가 터미널에서 직접 실행한다.
 """
 
 from __future__ import annotations
@@ -207,6 +209,16 @@ def _config_show(plugin_root: Path, env: dict, keys: str) -> dict:
     return json.loads(r.stdout).get("values") or {}
 
 
+def record_fingerprint(plugin_root: Path, proj: Path, env: dict, segment: str, names: dict) -> str:
+    """통과 기록의 `tracker_fingerprint`. 관문(`oc_adapter.py gate` → `oc_jira_gate.current_fingerprint`)은 설치 플러그인에서
+    사용자 config를, 기록의 project에서 MCP 서버 이름을 본다 — 같은 곳(설치 플러그인 `config.py show`의 `tracker`, `mcp_servers`)에서."""
+    from common import oc_adapter, oc_jira_gate as gate
+
+    tracker = _config_show(plugin_root, env, "tracker").get("tracker")
+    view = oc_adapter.tracker_view({"tracker": tracker if isinstance(tracker, dict) else {}})
+    return gate.tracker_fingerprint(segment, names.values(), view, oc_adapter.mcp_servers(str(proj), env)[0])
+
+
 def oc_names(tools: dict, servers: list[str]) -> tuple[dict, str | None, str | None]:
     """`tracker.tools`(get_issue·get_comments, `mcp__<서버>__<도구>`) → ({동작: OpenCode 이름}, 서버 정규화 이름, 문제)."""
     from common import mcptools
@@ -351,7 +363,7 @@ def check(tt, project: str | None, opencode: str, key: str, missing: str | None,
     child = tt.child_env(meta)
     child.update({k: v for k, v in env.items() if k in ("PATH", "HOME", "TELEPHONY_TRIAGE_HOME")})
     try:
-        values = _config_show(plugin_root, child, "tracker.tools,work_dir")
+        values = _config_show(plugin_root, child, "tracker,work_dir")   # 관문과 같은 설치 플러그인·사용자 홈의 값
         r = subprocess.run([oc, "debug", "config"], cwd=proj, env=child, stdin=subprocess.DEVNULL, capture_output=True,
                            text=True, timeout=120, check=False)
         merged = json.loads(r.stdout) if r.returncode == 0 else None
@@ -361,7 +373,8 @@ def check(tt, project: str | None, opencode: str, key: str, missing: str | None,
         rows.append(_row("config", "fail", f"설정 읽기 실패: {exc}"))
         return done(["결과: 실패 — 설정"])
     servers = list((merged.get("mcp") or {}).keys()) if isinstance(merged.get("mcp"), dict) else []
-    names, segment, problem = oc_names(values.get("tracker.tools") or {}, servers)
+    tracker = values.get("tracker") if isinstance(values.get("tracker"), dict) else {}
+    names, segment, problem = oc_names(tracker.get("tools") or {}, servers)
     if problem:
         rows.append(_row("tracker", "fail", problem))
         return done(["결과: 실패 — Jira 도구 매핑"])
@@ -456,12 +469,18 @@ def check(tt, project: str | None, opencode: str, key: str, missing: str | None,
                 cleanup.append(f"원문 파일 정리 실패: {exc}")
     rows.append(_row("cleanup", "info", "; ".join(cleanup) or "정리할 것 없음"))
 
+    try:
+        fingerprint = record_fingerprint(plugin_root, proj, child, segment, names)
+    except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as exc:   # 지문 없는 기록 → 관문이 닫힘으로 본다
+        fingerprint = None
+        rows.append(_row("fingerprint", "fail", f"트래커·MCP 지문을 구하지 못했다: {exc}"))
     passed = all(r["status"] == "pass" for r in rows if r["check"] in SUCCESS_ROWS) and \
         any(r["check"] == "success-isolation" for r in rows) and not any(r["status"] == "fail" for r in rows)
     record = {"schema": gate.RECORD_SCHEMA, "at": gate.now_iso(), "passed": passed, "opencode_version": tt.PINNED,
               "jira_server": segment, "tools": list(dict.fromkeys(names.values())),
               "checks": [r for r in rows if r["check"] not in ("cleanup",)],
-              "scripts_sha": gate.scripts_digest(plugin_root), "plugin_root": str(plugin_root), "project": str(proj)}
+              "scripts_sha": gate.scripts_digest(plugin_root), "plugin_root": str(plugin_root), "project": str(proj),
+              "tracker_fingerprint": fingerprint}
     path = gate.write_record(record, record_path)
     extra = [f"통과 기록: {path}"]
     if not passed:

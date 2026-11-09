@@ -40,6 +40,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import timedelta
@@ -550,7 +551,9 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
             {"code": "unparsed-lines", "message": f"형식을 모르는 줄 {stats['unparsed']}개를 건너뛰었습니다."}
         )
     if not stats.get("lines"):
-        warnings.append({"code": "no-lines-parsed", "message": "해석한 logcat 줄이 없습니다 — 로그 범위 밖이 아니라 형식·인코딩 문제입니다(S7)."})
+        warnings.append({"code": "no-lines-parsed", "message": "해석한 로그 줄이 없습니다 — 로그 범위 밖이 아니라 형식·인코딩 문제입니다. "
+                                                                "지원 형식: logcat threadtime(연·월·일 또는 월·일 시각), bugreport zip, "
+                                                                "oFono syslog/journal(켠 플랫폼). 다른 형식이면 관리자에게(사내 확인 항목 S7)."})
     # 파일 단위: 0줄이거나 절반 넘게 못 읽은 파일이 있으면 그 관측은 불완전하다(complete: false).
     files = stats.get("files") or []
     for path, f in zip(paths, files):
@@ -915,6 +918,103 @@ def run_extract_bugreport(args, profile: platforms.PlatformProfile | None = None
         raise UsageError(str(exc)) from exc
 
 
+# -- mask-copy (종합 리뷰 G① 축소판) --------------------------------------------------
+
+MASK_COPY_MAX_BYTES = 64 * 1024 * 1024    # 마스킹은 약 1초/MB(사외 실측) — 이보다 크면 건너뛰고 원문 구간 읽기 규칙만 남는다
+MASK_COPY_INDEX = "index.json"
+
+
+def _unique_name(name: str, used: set) -> str:
+    base, n = name, 1
+    while name in used or name == MASK_COPY_INDEX:
+        n += 1
+        stem, dot, ext = base.rpartition(".")
+        name = f"{stem}-{n}.{ext}" if dot else f"{base}-{n}"
+    used.add(name)
+    return name
+
+
+def run_mask_copy(args) -> dict:
+    """로그마다 마스킹 사본(줄 수·줄 번호 그대로)을 `--out/<이름>`에 쓴다 — analyze가 원문을 받자마자 만들어 모델의 grep·sed·Read 대상으로
+    안내한다(guard 규칙 10 문구·rules.md). 한 masker로 모든 파일을 가려 토큰 번호가 파일 사이에 일관되고, 갈린 덤프 조각(08-safety §8)은
+    파일 전체 줄로 묶어 강제 구간을 준다(`cut`과 같다). `--max-bytes`보다 큰 파일은 건너뛰고(경고 `mask-copy-skipped`) index.json에 남긴다.
+    사본의 mtime은 원본과 같다(analyze가 사본을 파싱하므로 로그 파일 시각 기반 연도 추정이 바뀌지 않는다, 코덱스 리뷰 R1).
+    다시 실행하면 이전 index.json이 관리하던 사본만 지우고 바꾼다(그 밖의 파일은 건드리지 않는다, 코덱스 리뷰 R3).
+    출력: {out, files: [{name, path|null, source, bytes, lines|null, skipped, reason?}], replacements, warnings}."""
+    paths = [Path(p) for p in args.logs]
+    for p in paths:
+        if not p.is_file():
+            raise UsageError(f"로그 파일이 없습니다: {p}")
+    if args.max_bytes <= 0:
+        raise UsageError("--max-bytes는 0보다 크다")
+    allow = _allow_patterns(compat.load_db_config(Path(args.rules).parent)) if args.rules else []
+    todo, skipped = [], []
+    for p in paths:
+        size = p.stat().st_size
+        (todo if size <= args.max_bytes else skipped).append((p, size))
+    texts = {}
+    for p, _ in todo:
+        with logtime.open_log(p) as fh:
+            texts[p] = fh.read()
+    masker = masking.new_masker("\n".join(texts.values()), allow, log_lines=True)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    # 새 사본은 임시 폴더에 먼저 쓰고, 다 되면 이전 index.json이 관리하던 사본만 지운 뒤 옮긴다(코덱스 리뷰 R3: 전에는 덮어쓰기만
+    # 해서 내용이 바뀐 뒤 상한 초과로 건너뛴 파일·이름이 바뀐 입력의 옛 사본이 index에는 없는데 폴더에 남았다). 도중에 실패하면
+    # 옛 사본·index가 그대로다. index가 없는 폴더의 파일은 누가 만들었는지 몰라 건드리지 않는다.
+    tmp = out.parent / f".{out.name}.tmp-{os.getpid()}"
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    tmp.mkdir()
+    files, used = [], set()
+    for p, size in todo:
+        lines = texts[p].split("\n")
+        forced = masking.forced_lines(masker, lines)
+        masked = [masker.mask(ln, forced.get(i)) for i, ln in enumerate(lines)]
+        name = _unique_name(p.name, used)
+        (tmp / name).write_text("\n".join(masked), encoding="utf-8", newline="")
+        st = p.stat()
+        os.utime(tmp / name, (st.st_atime, st.st_mtime))     # 연도 추정(file-mtime)이 사본에서도 같게 — analyze는 사본을 파싱한다
+        files.append({"name": name, "path": str(out / name), "source": str(p), "bytes": size,
+                      "lines": len(lines) - (1 if lines and lines[-1] == "" else 0), "skipped": False})
+    warnings = []
+    for p, size in skipped:
+        files.append({"name": p.name, "path": None, "source": str(p), "bytes": size, "lines": None, "skipped": True,
+                      "reason": f"{size:,}B > --max-bytes {args.max_bytes:,}B"})
+        warnings.append({"code": "mask-copy-skipped",
+                         "message": f"{p.name}: {size:,}B가 상한 {args.max_bytes:,}B보다 커 마스킹 사본을 만들지 않았다 — "
+                                    "원문은 grep -n·sed -n 구간으로만 읽는다(규칙 10)"})
+    (tmp / MASK_COPY_INDEX).write_text(json.dumps({"version": 1, "files": files}, ensure_ascii=False, indent=1) + "\n",
+                                       encoding="utf-8")
+    for name in _managed_copies(out):
+        try:
+            (out / name).unlink()
+        except OSError:
+            pass
+    for item in sorted(tmp.iterdir()):
+        os.replace(item, out / item.name)
+    shutil.rmtree(tmp, ignore_errors=True)
+    return {"out": str(out), "files": files, "replacements": dict(sorted(masker.counts.items())), "warnings": warnings}
+
+
+def _managed_copies(out: Path) -> list[str]:
+    """이전 실행의 `index.json`이 만든 사본 이름(이 폴더 바로 아래의 일반 파일만 — 경로 구분자가 든 이름·링크는 뺀다) + index 자신."""
+    index = out / MASK_COPY_INDEX
+    if index.is_symlink() or not index.is_file():
+        return []
+    try:
+        data = json.loads(index.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [MASK_COPY_INDEX]
+    names = []
+    for f in (data.get("files") if isinstance(data, dict) else None) or []:
+        name = f.get("name") if isinstance(f, dict) else None
+        if isinstance(name, str) and name and "/" not in name and "\\" not in name and name not in (".", "..") \
+                and f.get("path") is not None and (out / name).is_file() and not (out / name).is_symlink():
+            names.append(name)
+    return names + [MASK_COPY_INDEX]
+
+
 # -- cut ------------------------------------------------------------------------
 
 
@@ -1129,6 +1229,12 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--max-lines", type=int, default=100)
     c.add_argument("--tz", metavar="IANA")
     c.add_argument("--year", metavar="YYYY", type=int)
+    m = sub.add_parser("mask-copy", parents=[common], help="로그 → 마스킹 사본(줄 번호 그대로; 모델이 grep·sed·Read할 대상)")
+    m.add_argument("logs", metavar="logcat", nargs="+")
+    m.add_argument("--out", metavar="dir", required=True, help="사본 디렉토리(<작업 디렉토리>/logs-masked)")
+    m.add_argument("--rules", default=None, help="<db>/parser-rules (mask.allow_patterns를 읽는다)")
+    m.add_argument("--max-bytes", type=int, default=MASK_COPY_MAX_BYTES,
+                   help=f"이보다 큰 파일은 사본을 만들지 않는다(경고 mask-copy-skipped, 기본 {MASK_COPY_MAX_BYTES})")
     return parser
 
 
@@ -1151,6 +1257,8 @@ def main(argv: list[str] | None = None) -> int:
             result = run_markers(args, defaults, profile)
         elif args.cmd == "extract-bugreport":
             result = run_extract_bugreport(args, profile)
+        elif args.cmd == "mask-copy":
+            result = run_mask_copy(args)
         else:
             result = run_cut(args, profile)
     except UsageError as exc:

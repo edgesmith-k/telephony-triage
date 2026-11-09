@@ -17,7 +17,7 @@
   시그니처가 함께 S=1**인 쌍과, 같은 카테고리에서 제목 유사도가 높은(`TITLE_SIMILARITY` 이상) 쌍이다.
   원인끼리 `related`로 이어졌거나 그 fixture의 `also_allowed`에 상대 유형 원인이 있는 동시 매칭은 이미 알려진
   연관이므로 뺀다.
-- 수락률은 `issuedb.acceptance()`(1위로 제시된 피드백만 분모, `decision: manual` 제외, §6.5).
+- 수락률은 `issuedb.acceptance(feedback, jira)`(1위로 제시된 피드백만 분모, `decision: manual` 제외, 재분류된 Jira의 accepted는 수락 아님, §6.5).
 
 출력: 기본은 Markdown 리포트(stdout). `--out`이면 그 파일에 Markdown을 쓴다. `--json`이면 stdout에 JSON
 `{db, head, branch, dirty, as_of, category, owners, thresholds, feedback, items[{key, title, criterion, action, count,
@@ -40,7 +40,7 @@ sys.path.insert(0, str(SCRIPTS))
 import db_regress  # noqa: E402
 import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
-from common import dbpath, history, issuedb, quality, site_defaults, userconfig, yamlio  # noqa: E402
+from common import dbpath, history, issuedb, quality, site_defaults, yamlio  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from platforms import PlatformConfigError  # noqa: E402
 from platforms import session as platform_session  # noqa: E402
@@ -164,7 +164,7 @@ class Review:
                  "원인 확정 또는 담당자 지정", stale_unresolved)
 
         low = []
-        for key, (acc, total) in sorted(issuedb.acceptance(self.db.feedback).items()):
+        for key, (acc, total) in sorted(issuedb.acceptance(self.db.feedback, self.db.jira).items()):
             if not self.in_scope(key) or total < int(q["min_samples"]):
                 continue
             rate = acc / total

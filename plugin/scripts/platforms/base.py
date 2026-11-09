@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 
 # -- site-defaults 블록 검증 도구 (레지스트리와 플랫폼의 `CaptureSpec.configure`가 같이 쓴다) ------------------
@@ -201,6 +201,22 @@ class Component:
     split_tag: bool = False                # True면 이벤트 tag = f"{ident}/{subtag}" (msg_format 필요)
 
 
+# (템플릿 루트, modules.yaml의 그 플랫폼 블록 | None) → [(점검 이름, 루트 상대 경로, 줄 | None, rule | None)]
+DocCheck = Callable[[Path, "dict | None"], "list[tuple[str, str, int | None, str | None]]"]
+
+
+@dataclass(frozen=True)
+class TemplateMeta:
+    """모듈 스킬 템플릿 점검(`common/skillcheck.template_findings`)과 모듈 eval(`module_eval.py`)이 쓰는 플랫폼별 자료
+    (17-platforms §10-3). 핵심은 플랫폼 이름을 모르고 레지스트리(`platforms.template_metas()`)로 모든 플랫폼의 이것을 받는다."""
+    names: re.Pattern                                   # 이 플랫폼을 알아보는 이름 — 다른 플랫폼 문서에 있으면 `플랫폼 섞임`
+    layers: str                                         # module_eval 출력 형식의 층 어휘(`<… | 원인 아님(정상 동작)>`, 바이트 고정)
+    builtin_docs: dict                                  # {"pre": ((arm 자료 상대, 자식 cwd 상대), ...), "post": (...)} 내장 문서
+    equals_live: tuple[tuple[str, str], ...]            # pre 사본 = 지금 플러그인 파일 (arm 자료 상대, 스킬 reference 상대)
+    deep_baseline_note: str                             # deep without arm이 무엇인지(관문 요약 한 줄)
+    doc_checks: tuple[DocCheck, ...] = ()               # 플랫폼 고유 문서 규칙(oFono: D-Bus 이름·데몬 표). 없으면 비움
+
+
 @dataclass(frozen=True)
 class PlatformSpec:
     name: str
@@ -220,3 +236,4 @@ class PlatformSpec:
     # (kind, factory). factory(이름, 설정 블록, 키 경로) → PairProtocol. 자기 키를 `cfg_*`로 검증한다.
     # `<블록>.protocols.<이름>: {kind: <kind>, ...}`로 site가 이름 지은 짝 규칙을 더한다(SPEC.protocols 뒤에 붙는다).
     protocol_kinds: tuple[tuple[str, Callable[[str, dict, str], PairProtocol]], ...] = ()
+    template: TemplateMeta | None = None      # 모듈 스킬 템플릿·모듈 eval 자료(§10-3). None이면 그 둘에서 빠진다

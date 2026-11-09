@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -264,17 +265,192 @@ def test_guard_commit_checks_pii_and_generated_files():
     git(ws.clone, "reset", "-q", "--hard")
 
 
+# 규칙 5(hook 우회) 꼴: 커밋 `--no-verify`·`-n`, `-c core.hooksPath=…`, hooksPath를 바꾸는 `git config`, push `--no-verify`,
+# `GIT_CONFIG_*`가 붙은 push(`GIT_INDEX_FILE` 커밋은 ci_mode와 무관하게 거부 — 아래)
+RULE5_FORMS = ('git commit --no-verify -m x', 'git commit -n -m x', 'git -c core.hooksPath=/dev/null commit -m x',
+               'git config core.hooksPath hooks', 'git config --unset core.hooksPath', 'git config --remove-section core',
+               'git push --no-verify origin HEAD:refs/heads/issue/X-1',
+               'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=x git push origin HEAD:refs/heads/a')
+_CI_WS: list = []
+
+
+def _ci_mode_ws(mode: str | None = None, text: str | None = None, delete: bool = False, wt_mode: str | None = None) -> Workspace:
+    """이 시험들만 쓰는 작업공간. clone의 `refs/remotes/origin/main`을 처음 커밋으로 되돌린 뒤, `issue-db.config.yaml`만 바꾼
+    커밋으로 옮긴다 — `ci_mode` 줄을 `mode`로, 파일을 `text`로, 지움(`delete`). guard의 규칙 5 완화는 이 ref의 파일만 본다
+    (`_ci_actions` — 작업 트리는 Claude가 고칠 수 있다). `wt_mode`는 작업 트리 파일만 그 값으로 바꾼다(믿지 않는지 본다)."""
+    if not _CI_WS:
+        w = Workspace()
+        _CI_WS.extend([w, git(w.clone, "rev-parse", "refs/remotes/origin/main")])
+    ws, orig = _CI_WS
+    c, name = ws.clone, "issue-db.config.yaml"
+    git(c, "checkout", "-q", "--", name)
+    git(c, "update-ref", "refs/remotes/origin/main", orig)
+    original = git(c, "show", f"{orig}:{name}")
+
+    def with_mode(value: str) -> str:
+        return re.sub(r"(?m)^ci_mode:.*$", f"ci_mode: {value}", original)
+    if wt_mode is not None:
+        (c / name).write_text(with_mode(wt_mode), encoding="utf-8", newline="\n")
+    if mode is None and text is None and not delete:
+        return ws
+    env = {**os.environ, "GIT_INDEX_FILE": str(tmp("tt-idx-") / "index")}
+    git(c, "read-tree", orig, env=env)
+    if delete:
+        git(c, "update-index", "--force-remove", name, env=env)
+    else:
+        blob = subprocess.run(["git", "-C", str(c), "hash-object", "-w", "--stdin"], input=text if mode is None else with_mode(mode),
+                              capture_output=True, text=True, check=True).stdout.strip()
+        git(c, "update-index", "--add", "--cacheinfo", f"100644,{blob},{name}", env=env)
+    tree = git(c, "write-tree", env=env)
+    git(c, "update-ref", "refs/remotes/origin/main", git(c, "commit-tree", tree, "-p", orig, "-m", "ci_mode 시험"))
+    return ws
+
+
+def test_guard_rule5_asks_when_ci_mode_actions():
+    """4-c: 그 clone `origin/<base>`의 `ci_mode`가 `actions`로 확인되면(서버 CI `db-check`가 마스킹·생성 파일 검사를 다시 한다)
+    규칙 5는 거부 대신 ask이고 사유에 그 근거를 붙인다. 커밋 검사(규칙 3)는 그대로 돈다 — `--no-verify` 커밋이라도 staged PII는
+    거부. `GIT_INDEX_FILE` 커밋은 커밋 검사가 그 index를 보지 못하므로 actions여도 거부."""
+    ws = _ci_mode_ws("actions")
+    try:
+        for cmd in RULE5_FORMS:
+            out = bash(ws, cmd, ws.clone)
+            assert decision(out) == "ask", cmd
+            assert "규칙 5" in out["permissionDecisionReason"] and "ci_mode: actions" in out["permissionDecisionReason"], cmd
+        for cmd in ('git config core.hooksPath .githooks', 'git status'):     # 규칙 5가 아닌 것은 그대로
+            assert decision(bash(ws, cmd, ws.clone)) is None, cmd
+        out = bash(ws, "GIT_INDEX_FILE=/tmp/idx git commit -m x", ws.clone)
+        assert decision(out) == "deny" and "GIT_INDEX_FILE 커밋" in out["permissionDecisionReason"]
+        jira = ws.clone / DATA_DIR / "issues" / "MOCK-1101.yaml"
+        branch_with_change(ws, "issue/MOCK-1101", f"{DATA_DIR}/issues/MOCK-1101.yaml",
+                           jira.read_text(encoding="utf-8").replace("접수됨", "접수됨 imei=490154203237518"))
+        out = bash(ws, 'git commit --no-verify -m "x"', ws.clone)
+        assert decision(out) == "deny" and "규칙 3" in out["permissionDecisionReason"]
+    finally:
+        git(ws.clone, "reset", "-q", "--hard")
+        git(ws.clone, "checkout", "-q", "main")
+        _ci_mode_ws()
+
+
+def test_guard_rule5_denies_when_ci_mode_local():
+    """4-c: `origin/<base>`의 `ci_mode: local`(서버 CI가 다시 검사하지 않는다)이면 규칙 5는 그대로 거부. 작업 트리 파일을
+    `actions`로 고쳐도(Claude가 고칠 수 있다 — 4-c 리뷰 P1) 믿지 않는다."""
+    for ws in (_ci_mode_ws("local"), _ci_mode_ws(wt_mode="actions")):
+        for cmd in (*RULE5_FORMS, "GIT_INDEX_FILE=/tmp/idx git commit -m x"):
+            out = bash(ws, cmd, ws.clone)
+            assert decision(out) == "deny" and "규칙 5" in out["permissionDecisionReason"], cmd
+            assert "ci_mode: actions" not in out["permissionDecisionReason"], cmd
+    _ci_mode_ws()
+
+
+def test_guard_rule5_denies_when_ci_mode_missing_or_unreadable():
+    """4-c: 닫힌 쪽 — `origin/<base>`에 `issue-db.config.yaml`이 없거나, YAML로 못 읽거나, 객체가 아니거나, `ci_mode`가 없거나
+    `actions`가 아닌 값(`actions-build`·대소문자 다름)이면 규칙 5는 거부."""
+    cases = [{"delete": True}, {"text": "ci_mode: [\n"}, {"text": "- ci_mode: actions\n"}, {"text": "schema_version: 1\n"},
+             {"mode": "actions-build"}, {"mode": "Actions"}]
+    try:
+        for case in cases:
+            ws = _ci_mode_ws(**case)
+            for cmd in RULE5_FORMS:
+                out = bash(ws, cmd, ws.clone)
+                assert decision(out) == "deny" and "규칙 5" in out["permissionDecisionReason"], (case, cmd)
+    finally:
+        _ci_mode_ws()
+
+
+# 규칙 5 근거 ref(origin/<base>)를 바꿀 수 있는 git(4-c 정한 범위): 도구 worktree에서 본다 — clone 본체는 규칙 8도 거부한다
+REMOTE_FORGE_FORMS = (
+    "git update-ref refs/remotes/origin/main HEAD", "git update-ref --stdin", "git update-ref -d refs/remotes/origin/main",
+    "git update-ref remotes/origin/main HEAD", "git symbolic-ref refs/remotes/origin/main refs/heads/main",
+    "git symbolic-ref -d refs/remotes/origin/HEAD",
+    "git fetch origin x:refs/remotes/origin/main", "git fetch origin '+refs/heads/*:refs/remotes/origin/*'",
+    "git fetch origin +x:remotes/origin/main", "git fetch origin main --refmap=+refs/heads/x:refs/remotes/origin/main",
+    "git fetch origin main --refmap +refs/heads/x:refs/remotes/origin/main", "git pull origin x:refs/remotes/origin/main",
+    "git fetch .", "git fetch . HEAD:refs/remotes/origin/main", "git fetch /tmp/x", "git fetch https://example.com/x.git",
+    "git fetch upstream", "git pull upstream main", "git pull /tmp/x main", "git fetch --all", "git fetch --multiple origin up",
+    "git fetch --stdin origin", "git remote update",
+    "git remote set-url origin /tmp/x", "git remote set-url --add origin /tmp/x", "git remote add origin /tmp/x",
+    "git remote rename origin old", "git remote remove origin", "git remote rm origin",
+    "git -c remote.origin.fetch=+refs/heads/x:refs/remotes/origin/main fetch origin", "git -c remote.origin.url=/tmp/x fetch",
+    "git -c remote.origin.url=/tmp/x pull", "git -c url./tmp/x.insteadOf=file:// fetch origin",
+    "git --config-env=remote.origin.url=U fetch origin",
+    "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.url GIT_CONFIG_VALUE_0=/tmp/x git fetch origin",
+    "git config remote.origin.url /tmp/x", "git config remote.origin.fetch +refs/heads/x:refs/remotes/origin/main",
+    "git config --unset remote.origin.fetch", "git config --add remote.origin.fetch +x:refs/remotes/origin/main",
+    "git config set url./tmp/x.insteadOf file://", "git config --rename-section remote.origin remote.old",
+    "git config remote.origin.pushurl /tmp/x", "git -c remote.origin.url=. -c remote.origin.fetch=+x:refs/remotes/origin/main fetch origin",
+    "git fetch --refmap=+refs/heads/x:refs/remotes/origin/main . refs/heads/x", "git fetch origin --refmap=x:refs/remotes/up/main",
+    # `git replace`(근거 커밋을 바꿔 끼운다 — `_ci_actions`는 `--no-replace-objects`로도 막는다)·자기 자신으로 원격 추적 ref push
+    "git replace HEAD~0 HEAD", "git replace -f abc def", "git replace --graft HEAD", "git update-ref refs/replace/abc HEAD",
+    "git push . HEAD:refs/remotes/origin/main", "git push origin +HEAD:refs/remotes/origin/main", "git push . HEAD:refs/heads/x")
+# 그대로 허용(Step 1·db_pr stage가 쓴다 — 4-c 전후 None). `git pull`은 clone 본체에서는 규칙 8 거부 그대로다
+REMOTE_FETCH_OK = ("git fetch", "git fetch origin", "git fetch origin main", "git pull", "git pull origin",
+                   "git fetch --prune origin", "git fetch -q origin main", "git fetch --depth 1 origin main",
+                   "git pull --ff-only", "git pull --rebase origin main", "git fetch origin -- main")
+
+
+def test_guard_remote_ref_forgery_denied_and_fetch_forms_allowed():
+    """규칙 5(4-c): ci_mode 완화의 근거 ref(`refs/remotes/origin/<base>`)를 바꿀 수 있는 git은 이슈 DB 레포(본체·worktree,
+    `-C`·`--git-dir`)에서 거부(`REMOTE_FORGE_FORMS`), `.git/**`·worktree `.git` 연결 파일 쓰기도 거부. 평소 받기
+    (`REMOTE_FETCH_OK`)·읽기(`symbolic-ref` 한 인자·`config --get`·`remote -v`)는 그대로 허용. 이슈 DB 밖 레포는 보지 않는다."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    other = _repo_with_origin("https://example.com/o/other.git")
+    wt = ws.work / "wt-forge"
+    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    W, C = wt.as_posix(), c.as_posix()
+    try:
+        for cmd in REMOTE_FORGE_FORMS:
+            out = bash(ws, cmd, wt)
+            assert decision(out) == "deny" and "원격 추적 ref" in out["permissionDecisionReason"], cmd
+        for cmd, cwd in ((f"git -C {W} update-ref refs/remotes/origin/main HEAD", plain), (f"git -C {W} fetch .", plain),
+                         (f"git --git-dir={C}/.git fetch .", plain), (f"git --git-dir {C}/.git remote set-url origin /x", plain),
+                         ("git fetch .", c), ("git fetch origin x:refs/remotes/origin/main", c),
+                         # 다른 레포에서 경로로 이슈 DB에 push(그 자리에서 origin 추적 ref를 덮는다)
+                         (f"git push {C} HEAD:refs/remotes/origin/main", other), (f"git push --mirror {C}", other),
+                         (f"git push file://{C} x:refs/heads/x", other), (f"git -C {other.as_posix()} push {W} HEAD:x", plain)):
+            out = bash(ws, cmd, cwd)
+            assert decision(out) == "deny" and "원격 추적 ref" in out["permissionDecisionReason"], cmd
+        for cmd, cwd in ((f"echo gitdir: /tmp/x > {W}/.git", plain), (f"rm {W}/.git", plain), (f"mv {W}/.git /tmp/x", plain),
+                         ("echo gitdir: /tmp/x > .git", wt)):
+            out = bash(ws, cmd, cwd)
+            assert decision(out) == "deny" and "git 메타데이터" in out["permissionDecisionReason"], cmd
+        for path in (f"{W}/.git", f"{C}/.git/refs/remotes/origin/main", f"{C}/.git/packed-refs", f"{C}/.git/config"):
+            assert decision(guard(ws, "Write", {"file_path": path, "content": "x"}, plain)) == "deny", path
+        for cmd in (f"echo x > {C}/.git/packed-refs", f"echo x > {C}/.git/config"):     # 본체는 규칙 8
+            out = bash(ws, cmd, plain)
+            assert decision(out) == "deny" and "규칙 8" in out["permissionDecisionReason"], cmd
+        for cmd in (*REMOTE_FETCH_OK, "git symbolic-ref refs/remotes/origin/HEAD", "git symbolic-ref --short HEAD",
+                    "git config --get remote.origin.url", "git config remote.origin.url", "git remote -v",
+                    "git remote get-url origin", "git remote show origin", "git update-ref refs/heads/x HEAD",
+                    "git remote update origin", "git config user.name x", "git replace -l", "git replace"):
+            assert decision(bash(ws, cmd, wt)) is None, cmd
+        for cmd in ("git push origin HEAD:refs/heads/issue/X-1", "git push -u origin HEAD"):    # 평소 push는 규칙 7 ask 그대로
+            assert decision(bash(ws, cmd, wt)) == "ask", cmd
+        for cmd in REMOTE_FETCH_OK:
+            if not cmd.startswith("git pull"):
+                assert decision(bash(ws, cmd, c)) is None, cmd
+        for cmd in ("git fetch .", "git remote set-url origin /tmp/x", "git update-ref refs/remotes/origin/main HEAD",
+                    "git replace HEAD~0 HEAD", "git push . HEAD:refs/remotes/origin/main", "git push /tmp/x HEAD"):
+            assert decision(bash(ws, cmd, other)) is None, cmd                  # 이슈 DB 밖
+        assert decision(guard(ws, "Write", {"file_path": f"{other.as_posix()}/.git/config", "content": "x"}, plain)) is None
+    finally:
+        gitp(c, "worktree", "remove", "--force", str(wt))
+
+
 def test_guard_push_rules():
+    """4-c: base 브랜치 push(규칙 6)는 따로 거부하지 않고 모든 이슈 DB push와 같이 ask다 — main 직접 push·force push·삭제는
+    서버 브랜치 보호가 막는다(전제 site_checks `s4a.protection_guard`)."""
     ws = shared()
     c = ws.clone
     for cmd in ("git push origin HEAD:refs/heads/main", "git push origin main", "git push origin +HEAD:main",
                 "git push --all origin", "git push origin :", "git push --delete origin main",
                 f'cd "{c}" && git push origin HEAD:refs/heads/main'):
         out = bash(ws, cmd, c if not cmd.startswith("cd ") else ws.base)
-        assert decision(out) == "deny", cmd
-    # 현재 브랜치가 main이면 refspec 없는 push도 main push다
+        assert decision(out) == "ask" and "이슈 DB push" in out["permissionDecisionReason"], cmd
+    # 현재 브랜치가 main이어도 refspec 없는 push는 같은 ask다
     assert git(c, "rev-parse", "--abbrev-ref", "HEAD") == "main"
-    assert decision(bash(ws, "git push", c)) == "deny"
+    assert decision(bash(ws, "git push", c)) == "ask"
     # 그 밖의 이슈 DB push와 db_pr publish는 확인(ask)
     assert decision(bash(ws, "git push origin HEAD:refs/heads/issue/MOCK-1", c)) == "ask"
     publish = f'python3 "{ws.root}/scripts/db_pr.py" publish wt --branch issue/MOCK-1 --lease new --approved x'
@@ -286,7 +462,7 @@ def test_guard_comment_does_not_swallow_next_line():
     `$#`·`${#x}`·`a#b`·인용 안 `#`은 주석이 아니다."""
     ws = shared()
     c = ws.clone
-    assert decision(bash(ws, "echo x # note\ngit push origin HEAD:main", c)) == "deny"
+    assert decision(bash(ws, "echo x # note\ngit push --no-verify origin HEAD:main", c)) == "deny"
     assert decision(bash(ws, "echo s # c\ngit commit --no-verify -m x", c)) == "deny"
     assert decision(bash(ws, "true # main 아님\ngit push origin HEAD:refs/heads/issue/MOCK-1", c)) == "ask"
     for cmd in ('echo $# ${#x} a#b "q # git push origin main"', "git status # git push origin main"):
@@ -303,7 +479,7 @@ def test_guard_publish_with_commit_and_discard_still_asks():
         assert decision(out) == "ask" and "publish" in out["permissionDecisionReason"], tail
 
 
-def test_guard_merge_and_skill_apply_ask_direct_gh_merge_denied():
+def test_guard_merge_and_skill_apply_ask_direct_gh_merge_asks():
     """+1 병합: `db_pr.py merge`는 ask(사용자가 병합을 요청한 뒤, 스크립트가 +1·승인 커밋·검사 대조), gh로 직접 머지는 거부.
     리뷰어 요청: `db_pr.py request-review`는 매번 ask(push 뒤 리뷰어 질문에서 고른 뒤, 규칙 7).
     분석 스킬 소스 적용: `skill_patch.py --apply`는 ask(규칙 12). patch 만들기·my-prs는 판정할 것이 없다."""
@@ -314,8 +490,8 @@ def test_guard_merge_and_skill_apply_ask_direct_gh_merge_denied():
     assert "병합을 요청한 뒤" in out["permissionDecisionReason"] and "바로 병합" not in out["permissionDecisionReason"]
     out = bash(ws, f'{S}db_pr.py" merge --job MOCK-1 --json', ws.base)                  # --approved 생략(Q8)도 같다
     assert decision(out) == "ask" and "db_pr.py merge" in out["permissionDecisionReason"]
-    out = bash(ws, f"gh pr merge 3 --merge -R {DB_SLUG}", ws.base)
-    assert decision(out) == "deny" and "db_pr.py merge" in out["permissionDecisionReason"]
+    out = bash(ws, f"gh pr merge 3 --merge -R {DB_SLUG}", ws.base)       # 병합 계열은 ask(4-c — 서버 브랜치 보호가 막는다)
+    assert decision(out) == "ask" and "db_pr.py merge" in out["permissionDecisionReason"]
     for cmd in (f'{S}db_pr.py" request-review --job MOCK-1 --reviewer a,b --json',
                 f'S={ws.root}/scripts; python3 "$S/db_pr.py" request-review --job MOCK-1 --reviewer=@a'):
         out = bash(ws, cmd, ws.base)
@@ -442,7 +618,7 @@ def test_guard_publish_any_interpreter_or_substitution_asks():
                 f"bash <<'EOF'\nset -e\npython3 {root}/db_pr.py publish wt --json\nEOF",
                 f"python3 - <<'EOF'\nimport subprocess\nsubprocess.run(['python3', '{root}/db_pr.py', 'publish', 'wt'])\nEOF",
                 # K 3차: 셸로 넘기는 글, `python3 -c` 본문
-                f'echo "python3 {root}/db_pr.py publish wt" | bash', f"printf '%s\\n' 'python3 $S/db_pr.py publish wt' | sh",
+                f'echo "python3 {root}/db_pr.py publish wt" | bash', "printf '%s\\n' 'python3 $S/db_pr.py publish wt' | sh",
                 f"python3 -c \"import subprocess; subprocess.run(['python3', '{root}/db_pr.py', 'publish', 'wt'])\""):
         out = bash(ws, cmd, ws.base)
         assert decision(out) == "ask" and "규칙 7" in out["permissionDecisionReason"], cmd
@@ -451,7 +627,8 @@ def test_guard_publish_any_interpreter_or_substitution_asks():
                 f"grep -n publish {root}/db_pr.py", 'grep -n "db_pr.py publish" x.md', "cat $S/db_pr.py | grep publish",
                 'rg "publish" db_pr.py', "python3 -m pytest tests/test_db_pr.py -k publish", "ls # db_pr.py publish wt"):
         assert decision(bash(ws, cmd, ws.base)) is None, cmd
-    assert decision(bash(ws, "git push origin HEAD:refs/heads/main x/db_pr.py publish", ws.clone)) == "deny"
+    out = bash(ws, "git push origin HEAD:refs/heads/main x/db_pr.py publish", ws.clone)
+    assert decision(out) == "ask" and "이슈 DB push" in out["permissionDecisionReason"]
     empty = {"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-")}     # 사용자 config 없음: 이슈 DB가 없으므로 묻지 않는다
     assert decision(bash(ws, "${S}db_pr.py publish wt", ws.base, env=empty)) is None
 
@@ -477,7 +654,6 @@ def test_guard_publish_word_net_closes_limits_and_skips_text():
                 "git -c alias.p='!python3 $S/db_pr.py publish wt #' p",
                 "git -c core.pager='python3 $S/db_pr.py publish wt #' log",
                 "GIT_SSH_COMMAND='python3 $S/db_pr.py publish wt #' git fetch",
-                "gh alias set p '!python3 $S/db_pr.py publish wt'; gh p",
                 "git -c alias.x='!sh' x <<'EOF'\npython3 $S/db_pr.py publish wt\nEOF",
                 # 그래서 git·gh 글(커밋 메시지·PR 본문)도 ask다(오판, 싸다)
                 'git commit -m "db_pr.py publish 고침"', "git commit -F - <<'EOF'\nfix db_pr.py publish\nEOF",
@@ -526,8 +702,10 @@ def test_guard_jira_named_servers_deny_writes():
     for tool in ("mcp__mock-jira__jira_add_comment", "mcp__mock-jira__jira_transition_ticket"):
         out = guard(ws, tool, {}, ws.base)
         assert decision(out) == "deny" and "Jira 읽기 전용" in out["permissionDecisionReason"]
-    # 다른 MCP 서버 도구는 영향이 없다 (쓰기처럼 보이는 이름이어도, 대상 레포 인자가 없으면)
-    assert decision(guard(ws, "mcp__other-server__create_issue", {}, ws.base)) is None
+    # 다른 MCP 서버의 쓰기형 도구는 규칙 2가 아니라 규칙 11 ask다(4-c — 대상 레포를 보지 않는다), 읽기형은 통과
+    out = guard(ws, "mcp__other-server__create_issue", {}, ws.base)
+    assert decision(out) == "ask" and "규칙 7·11" in out["permissionDecisionReason"]
+    assert decision(guard(ws, "mcp__other-server__get_issue", {}, ws.base)) is None
     # 설정되지 않은 서버라도 이름에 jira/atlassian이 들면 쓰기형 도구는 거부, 읽기형은 통과
     for tool in ("mcp__jira-prod__add_comment", "mcp__atlassian__transition_issue", "mcp__mock-jira-2__jira_add_comment"):
         out = guard(ws, tool, {}, ws.base)
@@ -718,18 +896,18 @@ def test_guard_sees_through_command_wrappers():
         assert decision(bash(ws, f"{prefix} {publish}", ws.base)) == "ask", prefix
     assert decision(bash(ws, 'env -S "python3 db_pr.py publish wt"', ws.base)) == "ask"
     assert decision(bash(ws, "env --split-string='python3 db_pr.py publish wt'", ws.base)) == "ask"
-    for cmd in ("time -p git commit --no-verify -m x", "env -u FOO git push origin HEAD:main",
-                "timeout -k 5 60 git push origin HEAD:main", "nice git -c core.hooksPath=/dev/null commit -m x",
-                'env -S "git push origin HEAD:main"', "sudo -u x git commit -n -m x",
+    for cmd in ("time -p git commit --no-verify -m x", "env -u FOO git push --no-verify origin HEAD:main",
+                "timeout -k 5 60 git push --no-verify origin HEAD:main", "nice git -c core.hooksPath=/dev/null commit -m x",
+                'env -S "git push --no-verify origin HEAD:main"', "sudo -u x git commit -n -m x",
                 # 짧은 옵션 묶음 끝의 값 옵션(-Eu x)과 묶음 안의 -S
-                "sudo -Eu x git commit --no-verify -m x", "sudo -Hu x git push origin HEAD:main",
-                'env -vS "git push origin HEAD:main"', "env -uFOO git push origin HEAD:main"):
+                "sudo -Eu x git commit --no-verify -m x", "sudo -Hu x git push --no-verify origin HEAD:main",
+                'env -vS "git push --no-verify origin HEAD:main"', "env -uFOO git push --no-verify origin HEAD:main"):
         assert decision(bash(ws, cmd, c)) == "deny", cmd
     assert decision(bash(ws, f"sudo -Eu x {publish}", ws.base)) == "ask"
     # env -C·sudo -D는 작업 디렉토리를 바꾼다(값이 붙은 형태 포함): 다른 곳에서 불러도 이슈 DB로 판정한다
-    for cmd in (f'env -C "{c}" git push origin HEAD:main', f'sudo -D "{c}" git push origin HEAD:main',
-                f'env -C"{c}" git push origin HEAD:main', f'sudo -D"{c}" git push origin HEAD:main',
-                f'env --chdir="{c}" git push origin HEAD:main'):
+    for cmd in (f'env -C "{c}" git push --no-verify origin HEAD:main', f'sudo -D "{c}" git push --no-verify origin HEAD:main',
+                f'env -C"{c}" git push --no-verify origin HEAD:main', f'sudo -D"{c}" git push --no-verify origin HEAD:main',
+                f'env --chdir="{c}" git push --no-verify origin HEAD:main'):
         assert decision(bash(ws, cmd, ws.base)) == "deny", cmd
     d = tmp("tt-wrap-raw-")
     (d / "x.log").write_text(LOGCAT, encoding="utf-8")
@@ -787,6 +965,7 @@ def test_guard_blocks_whole_raw_log_reads():
         out = bash(ws, cmd, d)
         assert decision(out) == "deny", cmd
         assert "규칙 10" in out["permissionDecisionReason"], cmd
+        assert "logs-masked/<이름>" in out["permissionDecisionReason"], cmd      # 종합 리뷰 G①: 원문 대신 마스킹 사본을 안내
     allow = [f"cat {d}/jira.json", f"less {d}/jira_meta.json", "grep -n RILJ x.log", "sed -n 1,20p x.log", "head -n 20 x.log", "wc -l x.log", "unzip -l br.zip",
              f"cat {fx}/X.log", "cat timeline.md", "cat report.md", "cat commit-message.txt",
              "cat <<EOF > x.log\nhi\nEOF", "cat nonexistent.log", "cat a.txt", "echo hi > x.log",
@@ -860,133 +1039,135 @@ def _repo_with_origin(url: str) -> Path:
     return path
 
 
-def test_guard_gh_write_only_for_issue_db_repo():
+_B64 = "bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19"
+_DECOY = "cat <<'EOF' >/dev/null\nx\nEOF\n"
+_PRE = f"Q=$(echo {_B64} | base64 -d); "
+_CONT = chr(92) + "\n"          # 인용하지 않은 heredoc 본문의 줄 이음(bash가 줄을 잇는다)
+# 읽은 본문으로 보면 안 되는 heredoc·stdin(4-c 4회차 리뷰): 미끼 heredoc + 끝 표시 접두(`EOF-`·`'EOF'X`·`EOF.x`), `bash -c` 문자열
+# 안 heredoc, 파이프·`<<<`·`<` stdin, 그 호출의 heredoc 뒤 `<`, 줄 이음 — 기본(ask)
+HEREDOC_UNREAD = (
+    _PRE + _DECOY + 'gh api graphql -f query="$(cat <<EOF-\n$Q\nEOF-\n)"',
+    _PRE + _DECOY + "gh api graphql -f query=\"$(cat <<'EOF'X\n$Q\nEOFX\n)\"",
+    _PRE + _DECOY + 'gh api graphql -f query="$(cat <<EOF.x\n$Q\nEOF.x\n)"',
+    _PRE + _DECOY + "bash -c 'gh api graphql -f query=\"$(cat <<EOF\n$Q\nEOF\n)\"'",
+    _DECOY + f"echo {_B64} | base64 -d | gh api graphql -F query=@-",
+    f"cat <<'EOF' | base64 -d | gh api graphql -F query=@-\n{_B64}\nEOF",
+    _PRE + _DECOY + 'gh api graphql -F query=@- <<<"$Q"',
+    _DECOY + "gh api graphql -F query=@- < x.graphql",
+    "gh api graphql -F query=@- <<'EOF' < x.graphql\nquery{viewer{login}}\nEOF",
+    "gh api graphql -F query=@- <<EOF\nmut" + _CONT + "ation{addPullRequestRev" + _CONT
+    + 'iew(input:{pullRequestId:"x",event:APPR' + _CONT + "OVE}){__typename}}\nEOF",
+    'gh api graphql -f query="$(cat <<EOF\nmut' + _CONT + "ation{addPullRequestRev" + _CONT
+    + 'iew(input:{pullRequestId:\\"x\\",event:APPR' + _CONT + 'OVE}){__typename}}\nEOF\n)"')
+
+
+def test_guard_gh_coarse_judgment_ignores_target_repo():
+    """규칙 11(4-c 거친 판정): 대상 레포(`-R`·`GH_REPO`·URL·엔드포인트·cwd 원격)를 풀지 않는다 — gh 쓰기·모르는 그룹은 이슈 DB가
+    아닌 레포에서도 ask(병합 계열은 병합 사유), 읽기는 판정하지 않는다. 사용자 config(issue_db.remote)가 없으면 보지 않는다."""
     ws = shared()
     c = ws.clone
+    plain = tmp("tt-gh-plain-")
     plugin_repo = _repo_with_origin("https://ghe.mock.invalid/other/repo")
     wt = ws.work / "wt-gh"
     git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
     try:
-        cases = [("gh pr list --state open", c, None),
-                 (f"gh pr create -R {DB_SLUG} -t x", plugin_repo, "ask"),
-                 (f"gh pr create -R {DB_SLUG} -t x", ws.base, "ask"),
-                 ("gh pr create -t x", plugin_repo, None),
-                 ("gh pr merge 12 --admin", wt, "deny"),
-                 (f"gh api -X PUT repos/{DB_SLUG}/contents/x", plugin_repo, "ask"),
-                 (f"gh api repos/{DB_SLUG}/pulls", plugin_repo, None),
-                 ("gh api -X PUT repos/other/repo/contents/x", c, None),
-                 (f"GH_REPO=ghe.mock.invalid/{DB_SLUG} gh issue comment 1 -b hi", plugin_repo, "ask"),
-                 # GraphQL 병합 mutation은 대상과 무관하게 거부(H A1 — 노드 ID로 레포를 가린다)
-                 ("gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'", c, "deny"),
-                 ("gh api graphql -f query='query { viewer { login } }'", c, None),
-                 ("gh pr edit 3 --add-label x", c, "ask"), ("gh pr view 3", wt, None), ("gh auth status", c, None)]
+        cases = [("gh pr list --state open", c, None), ("gh pr view 3", wt, None), ("gh auth status", c, None),
+                 ("gh issue list -R other/x", plain, None), ("gh repo clone other/x", plain, None),
+                 (f"gh api repos/{DB_SLUG}/pulls", plugin_repo, None), ("gh api --method=GET repos/o/r/contents/x", plain, None),
+                 ("gh api graphql -f query='query { viewer { login } }'", c, None), ("gh", plain, None),
+                 (f"gh pr create -R {DB_SLUG} -t x", plugin_repo, "ask"), ("gh pr create -t x", plugin_repo, "ask"),
+                 ("gh pr edit 3 --add-label x", c, "ask"), ("gh api -X PUT repos/other/repo/contents/x", c, "ask"),
+                 ("gh api -F name=v repos/o/r/labels", plain, "ask"), ("gh issue comment 1 -b hi", plain, "ask"),
+                 ("gh release create v1", plain, "ask"), ("gh run rerun 5", plain, "ask"), ("gh repo edit --description y", plain, "ask"),
+                 ("gh alias list", plain, None), ("gh alias delete m", plain, "ask"),
+                 ("gh foo bar", plain, "ask"), ("gh lgtm 3", plain, "ask")]                # 모르는 그룹(별칭 실행 포함)
+        for cmd in ("gh pr checkout 3", "gh co 3", "gh 2>/dev/null pr checkout 3", "gh -R other/x pr checkout 3"):
+            out = bash(ws, cmd, c)                                              # clone 본체의 브랜치를 바꾼다(규칙 8)
+            assert decision(out) == "deny" and "규칙 8" in out["permissionDecisionReason"], cmd
+        assert decision(bash(ws, "gh pr checkout 3", plain)) is None
         for cmd, cwd, want in cases:
             out = bash(ws, cmd, cwd)
             assert decision(out) == want, (cmd, cwd)
-            if want == "deny":
-                assert "머지" in out["permissionDecisionReason"]
+            if want:
+                assert "대상 레포를 보지 않는다" in out["permissionDecisionReason"] and "머지" not in out["permissionDecisionReason"]
+        # 글자를 알 수 있는 셸 본문(heredoc·있는 파일)은 읽는다 — 읽기 GraphQL은 셸 값 변수가 있어도 판정하지 않는다. 못 읽은
+        # `query`는 쓰기(ask)
+        (plain / "q.graphql").write_text("query { viewer { login } }", encoding="utf-8")
+        hd = "gh api graphql -f query=\"$(cat <<'EOF'\n{q}\nEOF\n)\""
+        for cmd, cwd, want in ((hd.format(q="query { viewer { login } }"), c, None),
+                               ('gh api graphql -f query="$(cat q.graphql)"', plain, None),
+                               ("gh api graphql -f query='query($o:String!){ repository(owner:$o, name:\"x\"){ id } }' "
+                                "-f o=\"$OWNER\"", plain, None),
+                               ("gh api graphql -fquery='query($o:String!){ repository(owner:$o, name:\"x\"){ id } }' -f o=x",
+                                plain, None),
+                               ('gh api "$EP"', plain, None), ('gh pr view "$N" --json state', c, None),
+                               ('gh api graphql -f query="$(cat none.graphql)"', plain, "ask"),
+                               ('gh api graphql -f query="$Q"', plain, "ask"),
+                               ('gh api graphql -f query="$(cat <<EOF\n$(echo bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19 | base64 -d)\nEOF\n)"', plain, "ask"),
+                               ('gh api graphql -f query="$(cat <<EOF\n$Q\nEOF\n)"', plain, "ask"),
+                               ('gh api graphql -f query="$(cat <<EOF\n`echo bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19 | base64 -d`\nEOF\n)"', plain, "ask"),
+                               ('gh api graphql -F query=@- <<EOF\n$(echo bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19 | base64 -d)\nEOF', plain, "ask"),
+                               ("gh api graphql -f query=\"$(cat <<'EOF'\n$Q\nEOF\n)\"", plain, None),     # 인용: 글자 그대로
+                               ('gh api graphql -f query="$(cat <<\\EOF\n$Q\nEOF\n)"', plain, None),
+                               ('gh api graphql -f query="$(cat <<"EOF"\n$Q\nEOF\n)"', plain, None),
+                               ("gh api graphql -F query=@- <<'EOF'\nquery { viewer { login } } $Q\nEOF", plain, None),
+                               ('gh api graphql -f query="$(cat <<EOF\nquery { viewer { login } } ${Q}\nEOF\n)"', plain, "ask"),
+                               ('Q=$(echo bXV0YXRpb24ge2FkZFB1bGxSZXF1ZXN0UmV2aWV3KGlucHV0OntwdWxsUmVxdWVzdElkOiJ4IixldmVudDpBUFBST1ZFfSl7Y2xpZW50TXV0YXRpb25JZH19 | base64 -d); gh api graphql -f query="$Q"', plain, "ask"),
+                               ('gh api graphql -f query="$(cat <<EOF\nquery { viewer { login } }\nEOF\n)"', plain, None),
+                               ("cat x.graphql | gh api graphql -F query=@-", plain, "ask"),
+                               *((cmd, plain, "ask") for cmd in HEREDOC_UNREAD)):
+            assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
+        for cmd, cwd in (("gh pr merge 12 --admin", wt), ("gh pr merge 3 --squash", plugin_repo), ("gh pr merge 3", plain),
+                         ("gh api -X PUT repos/other/repo/pulls/3/merge", plain),
+                         ("gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'", c)):
+            out = bash(ws, cmd, cwd)
+            assert decision(out) == "ask" and "머지" in out["permissionDecisionReason"], (cmd, cwd)
+            assert "다른 레포여도 묻는다" in out["permissionDecisionReason"], cmd
+        # 사용자 config가 없으면 gh 규칙을 적용하지 않는다
+        empty = {"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-")}
+        assert decision(bash(ws, f"gh pr merge 1 -R {DB_SLUG}", plain, env=empty)) is None
+        assert decision(bash(ws, "gh pr create -t x", plain, env=empty)) is None
     finally:
         gitp(c, "worktree", "remove", "--force", str(wt))
 
 
-def test_guard_gh_env_repo_and_api_endpoint():
-    ws = shared()
-    plain = tmp("tt-gh-plain-")
-    db_origin = _repo_with_origin(f"git@ghe.mock.invalid:{DB_SLUG}.git")   # 다른 clone: origin 슬러그로 판정
-    cases = [(f"GH_REPO={DB_SLUG} gh release create v1", plain, "ask"),
-             (f"env GH_REPO=https://ghe.mock.invalid/{DB_SLUG}.git gh label delete x", plain, "ask"),
-             (f"gh api --method=GET repos/{DB_SLUG}/contents/x", plain, None),
-             (f"gh api -F name=v repos/{DB_SLUG}/labels", plain, "ask"),
-             (f"gh api --method=DELETE repos/{DB_SLUG.upper()}/git/refs/heads/x", plain, "ask"),
-             ("gh api -X POST repos/{owner}/{repo}/issues -f title=x", db_origin, "ask"),
-             ("gh pr create -t x", db_origin, "ask"),
-             (f"gh pr create --repo=ssh://git@ghe.mock.invalid/{DB_SLUG} -t x", plain, "ask"),
-             # host는 보지 않는다(gh는 www.을 떼고, SSH 별칭 host는 guard가 풀 수 없다 — owner/repo로 비교, H-A1 r4)
-             (f"gh pr create -R other.host.invalid/{DB_SLUG} -t x", plain, "ask"),
-             (f"gh issue list -R {DB_SLUG}", plain, None), (f"gh run rerun 5 -R {DB_SLUG}", plain, "ask"),
-             (f"gh repo clone {DB_SLUG}", plain, None)]
-    for cmd, cwd, want in cases:
-        assert decision(bash(ws, cmd, cwd)) == want, cmd
-    # 사용자 config가 없으면 gh 규칙을 적용하지 않는다
-    empty = {"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-")}
-    assert decision(bash(ws, f"gh pr merge 1 -R {DB_SLUG}", plain, env=empty)) is None
-
-
-def test_guard_mcp_write_tools_targeting_issue_db():
+def test_guard_mcp_coarse_judgment_ignores_target_repo():
+    """규칙 11 MCP(4-c 거친 판정): 대상 레포 인자를 풀지 않는다. Approve·기각은 이름 단어나 동작 칸(`event`·`action`·`method`·
+    `*event`, 정규화 키·중첩)으로 거부, 병합·자동 병합은 ask, 그 밖 쓰기형 도구는 ask(이슈 DB가 아니어도), 읽기형은 판정하지
+    않는다. setup 전(config에 issue_db 없음)은 판정하지 않는다."""
     ws = shared()
     db = {"owner": "mock-org", "repo": "telephony-issue-db"}
-    cases = [("mcp__github__push_files", db, "ask"), ("mcp__github__merge_pull_request", db, "deny"),
-             ("mcp__github__create_or_update_file", {"owner": "other", "repo": "x"}, None),
-             ("mcp__github__get_file_contents", db, None),
-             ("mcp__github__update_pull_request", {"url": f"https://ghe.mock.invalid/{DB_SLUG}/pull/3"}, "ask"),
-             ("mcp__github__create_repository", {"name": "telephony-issue-db"}, None)]
-    for tool, tool_input, want in cases:
-        assert decision(guard(ws, tool, tool_input, ws.base)) == want, tool
-    # setup 전(config에 issue_db 없음)은 판정하지 않는다
-    empty = {"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-")}
-    assert decision(guard(ws, "mcp__github__push_files", db, ws.base, env=empty)) is None
-
-
-
-def test_guard_mcp_issue_db_key_variants():
-    """규칙 11(F1): 대상 인자 이름 변형(정규화 키·중첩·owner+name)과 동작 칸(`event`·`action`·`method`·`*event`)도 본다.
-    대상 후보는 합집합 — 하나라도 이슈 DB면 대상이다."""
-    ws = shared()
-    url = f"https://ghe.mock.invalid/{DB_SLUG}/pull/3"
     merge = "mcp__github__merge_pull_request"
     review = "mcp__github__pull_request_review_write"
-    rows = [(merge, {"repository_full_name": DB_SLUG}, "deny"), (merge, {"repo_full_name": DB_SLUG}, "deny"),
-            (merge, {"repoFullName": DB_SLUG}, "deny"), (merge, {"pr": {"repository": DB_SLUG}}, "deny"),
-            (merge, {"owner": "mock-org", "name": "telephony-issue-db"}, "deny"),
-            (merge, {"owner": "mock-org", "repo": "telephony-issue-db", "pullNumber": 3}, "deny"),
-            (review, {"owner": "mock-org", "repo": "telephony-issue-db", "method": "create", "event": "APPROVE"}, "deny"),
+    rows = [("mcp__github__push_files", db, "ask"), ("mcp__github__create_or_update_file", {"owner": "other", "repo": "x"}, "ask"),
+            ("mcp__github__update_pull_request", {"url": f"https://ghe.mock.invalid/{DB_SLUG}/pull/3"}, "ask"),
+            ("mcp__github__create_repository", {"name": "x"}, "ask"), ("mcp__gdrive__create_file", {"name": "x"}, "ask"),
+            ("mcp__github__push_files", {"repository_id": 42}, "ask"),
+            ("mcp__github__get_file_contents", db, None), ("mcp__github__get_file_contents", {"repo_full_name": "$R"}, None),
+            ("mcp__github__list_pull_requests", {}, None),
+            (merge, {"repository_full_name": DB_SLUG}, "ask"), (merge, {"url": "https://ghe.mock.invalid/other/x/pull/3"}, "ask"),
+            (merge, {"pull_number": 3}, "ask"), ("mcp__github__pr_write", {"repo_full_name": DB_SLUG, "action": "merge"}, "ask"),
+            (review, {**db, "method": "create", "event": "APPROVE"}, "deny"),
             (review, {"repo_full_name": DB_SLUG, "review_event": "APPROVE"}, "deny"),
             (review, {"repo_full_name": DB_SLUG, "action": "APPROVE"}, "deny"),
-            ("mcp__github__pr_write", {"repo_full_name": DB_SLUG, "action": "merge"}, "deny"),
-            ("mcp__github__push_files", {"repository": "other/x", "url": url}, "ask"),
-            ("mcp__github__create_pull_request", {"owner": "me", "repo": "fork"}, None),
-            # F1 r2: API URL·`api/v3`·`/pull/N`·`#N` 꼴도 이어진 두 단어가 원격 owner/repo면 이슈 DB
-            (merge, {"pr_url": f"https://api.github.com/repos/{DB_SLUG}/pulls/3"}, "deny"),
-            (merge, {"url": f"https://ghe.mock.invalid/api/v3/repos/{DB_SLUG}/pulls/3"}, "deny"),
-            (merge, {"repository": f"{DB_SLUG}/pull/3"}, "deny"), (merge, {"repository": f"{DB_SLUG}#3"}, "deny"),
-            (merge, {"url": "https://ghe.mock.invalid/other/x/pull/3"}, None),
-            (merge, {"url": "https://ghe.mock.invalid/other/x/blob/main/f"}, "ask")]
+            (review, {"pr": {"repository": "other/x", "reviewEvent": "approve"}}, "deny"),      # 중첩·정규화 키
+            (review, {"owner": "other", "repo": "x", "action": "dismiss"}, "deny")]
     for tool, tool_input, want in rows:
-        assert decision(guard(ws, tool, tool_input, ws.base)) == want, (tool, tool_input)
+        out = guard(ws, tool, tool_input, ws.base)
+        assert decision(out) == want, (tool, tool_input)
+        if want == "ask":
+            assert ("머지" in out["permissionDecisionReason"]) == ("merge" in tool or "merge" in str(tool_input)), tool
+    empty = {"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-")}
+    assert decision(guard(ws, "mcp__github__push_files", db, ws.base, env=empty)) is None
+    assert decision(guard(ws, review, {**db, "event": "APPROVE"}, ws.base, env=empty)) is None
 
-
-def test_guard_mcp_scp_alias_remote_url():
-    """규칙 11(F1): `issue_db.remote`가 SSH 별칭 SCP 꼴이어도 MCP URL 인자는 owner/repo로 비교한다(host 무관)."""
-    ws = Workspace(build=False)
-    for p in ws.home.rglob("*.yaml"):
-        text = p.read_text(encoding="utf-8")
-        p.write_text(text.replace(f"https://ghe.mock.invalid/{DB_SLUG}.git", "ghe-ssh:mock-org/telephony-issue-db.git"),
-                     encoding="utf-8")
-    out = guard(ws, "mcp__github__merge_pull_request", {"url": "https://ghe.example/mock-org/telephony-issue-db/pull/3"},
-                ws.base)
-    assert decision(out) == "deny"
-
-
-def test_guard_mcp_undeterminable_target_asks():
-    """규칙 11(F1): 대상을 owner/repo로 풀지 못하면 (a) 병합·Approve·기각 부류는 ask (b) 레포 단서 키가 있는 쓰기형은 ask
-    (c) 그 밖은 판정하지 않는다."""
-    ws = shared()
-    rows = [("mcp__github__merge_pull_request", {"repo_full_name": "$REPO"}, "ask"),
-            ("mcp__github__merge_pull_request", {"pull_number": 3}, "ask"),
-            ("mcp__github__push_files", {"repository_id": 42}, "ask"),
-            ("mcp__github__create_or_update_file", {"repo": "telephony-issue-db"}, "ask"),
-            ("mcp__github__get_file_contents", {"repo_full_name": "$R"}, None),
-            ("mcp__github__list_pull_requests", {}, None), ("mcp__gdrive__create_file", {"name": "x"}, None),
-            ("mcp__github__create_repository", {"name": "x"}, None)]
-    for tool, tool_input, want in rows:
-        assert decision(guard(ws, tool, tool_input, ws.base)) == want, (tool, tool_input)
 
 def test_guard_git_dir_work_tree_and_env_forms():
     ws = shared()
     c = ws.clone
     deny = [f'git --git-dir "{c}/.git" --work-tree "{c}" commit --no-verify -m x',
             f'git --work-tree="{c}" --git-dir="{c}/.git" commit -n -m x',
-            f'GIT_DIR="{c}/.git" git push origin HEAD:main',
+            f'GIT_DIR="{c}/.git" git push --no-verify origin HEAD:main',
             f'env GIT_WORK_TREE="{c}" GIT_DIR="{c}/.git" git commit --no-verify -m x',
             f'GIT_CONFIG_PARAMETERS="\'core.hooksPath=/dev/null\'" git -C "{c}" commit -m x',
             f'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=x git -C "{c}" push origin HEAD:refs/heads/a',
@@ -1004,8 +1185,8 @@ def test_guard_git_dir_work_tree_and_env_forms():
 def test_guard_eval_and_xargs_wrappers():
     ws = shared()
     c = ws.clone
-    assert decision(bash(ws, f'eval "git -C {c} push origin HEAD:refs/heads/main"', ws.base)) == "deny"
-    assert decision(bash(ws, f"xargs -n1 git -C {c} push origin HEAD:main < list", ws.base)) == "deny"
+    assert decision(bash(ws, f'eval "git -C {c} push --no-verify origin HEAD:refs/heads/main"', ws.base)) == "deny"
+    assert decision(bash(ws, f"xargs -n1 git -C {c} push --no-verify origin HEAD:main < list", ws.base)) == "deny"
     assert decision(bash(ws, "xargs -I{} echo {} < list", ws.base)) is None
     assert decision(bash(ws, "xargs -i echo {} < list", ws.base)) is None
 
@@ -1125,18 +1306,41 @@ def test_guard_without_pyyaml_denies_mcp_and_asks_risky_bash():
     assert out is None and "의존성 없음" in err
     out, _ = judge("Write", {"file_path": str(ws.base / "x.txt")})
     assert decision(out) == "ask"
-    # Approve·리뷰 기각·병합·자동 병합·병합 별칭 형태는 대상 레포를 몰라도 거부(내부 오류를 입력으로 일으킬 수 있다 — 회귀 수정
-    # R2), 그 밖의 gh 쓰기는 ask 그대로
+    # Approve·리뷰 기각 낱말은 대상 레포를 몰라도 거부(내부 오류를 입력으로 일으킬 수 있다 — 회귀 수정 R2). 병합 계열은 4-c부터
+    # 다른 gh 쓰기와 같은 ask(서버 브랜치 보호가 막는다)
+    b, q, rs = ws.base / "deg-approve.json", ws.base / "deg-review.graphql", ws.base / "deg-ruleset.json"
+    rs.write_text('{"name":"x","enforcement":"disabled"}', encoding="utf-8")
+    deep = ws.base / "deg-deep.json"
+    deep.write_text('{"event":"COMMENT","x":' + "[" * 25000 + "]" * 25000 + "}", encoding="utf-8")
+    b.write_text('{"event":"APPROVE"}', encoding="utf-8")
+    q.write_text(APPROVE_MUTATION, encoding="utf-8")
+    gql_var = ("gh api graphql -f query='mutation($id:ID!,$e:PullRequestReviewEvent!){addPullRequestReview(input:"
+               "{pullRequestId:$id,event:$e}){clientMutationId}}' -f id=x -f e=\"$E\"")
     for cmd, want, why in (("gh pr review 3 --approve", "deny", "Approve"),
-                           ("gh api -X PUT repos/o/r/pulls/3/reviews/9/dismissals", "deny", "Approve"),
+                           ("gh api -X PUT repos/o/r/pulls/3/reviews/9/dismissals", "deny", "기각"),
                            ("gh -b LGTM pr review 3 --approve", "deny", "Approve"),        # 앞 옵션도 모든 읽기를 본다(H-A1 r4)
-                           ("gh -X PUT api repos/o/r/pulls/3/reviews/9/dismissals", "deny", "Approve"),
+                           ("gh -X PUT api repos/o/r/pulls/3/reviews/9/dismissals", "deny", "기각"),
+                           # 셸이 정한 동작·엔드포인트·event, 파일 본문의 APPROVE(4-c 리뷰 P1 — `_gh_judged_deny`)
+                           ("gh pr $ACT 3", "deny", "셸이 푸는 값"), ('gh "$G" merge 3', "deny", "셸이 푸는 값"),
+                           ('gh api -X PUT "$EP"', "deny", "셸이 푸는 값"),
+                           ('gh api repos/o/r/pulls/3/reviews -f event="$E"', "deny", "Approve"), (gql_var, "deny", "Approve"),
+                           (f"gh api repos/o/r/pulls/3/reviews --input {b.as_posix()}", "deny", "Approve"),
+                           (f"gh api graphql -F query=@{q.as_posix()}", "deny", "Approve"),
+                           # 보호·ruleset 바꾸기·자동 병합 켜기(사용자 결정)
+                           ("gh api -X DELETE repos/o/r/branches/main/protection", "deny", "브랜치 보호"),
+                           (f"gh api repos/o/r/rulesets --input {rs.as_posix()}", "deny", "브랜치 보호"),
+                           ("gh repo edit --enable-auto-merge", "deny", "브랜치 보호"),
+                           (f"gh api repos/o/r/pulls/3/reviews --input {deep.as_posix()}", "deny", "Approve"),  # 깊은 JSON = 못 읽은 본문
+                           ("gh api -X PATCH repos/o/r -F delete_branch_on_merge=true", "deny", "브랜치 보호"),
+                           ('gh alias set x "$(echo cHIgcmV2aWV3IC1h | base64 -d)"', "deny", "별칭"),
+                           ('gh pr review 3 -b "$B" --comment', "ask", None),     # `_gh_kind`가 판정했다 — 낱말 수준은 안 쓴다
                            ("if true; then gh pr review 3 --approve; fi", "deny", "Approve"),   # 예약어 뒤도 본다(H-A1 r5)
                            ('gh pr review 3 "$OPT"', "deny", "Approve"),                         # 셸 값 옵션은 Approve일 수 있다
-                           ("gh pr merge 3", "deny", "머지"), ("gh pr merge 3 --auto --squash", "deny", "머지"),
-                           ("gh -b x pr merge 3", "deny", "머지"), ("gh api -X PUT repos/o/r/pulls/3/merge", "deny", "머지"),
-                           (f"gh api graphql -f query='{MERGE_MUTATION}'", "deny", "머지"),
-                           ("gh alias set m 'pr merge --admin'", "deny", "머지"),
+                           ("gh pr review 3 -a", "deny", "Approve"),
+                           ("gh pr merge 3", "ask", None), ("gh pr merge 3 --auto --squash", "deny", "자동 병합"),
+                           ("gh -b x pr merge 3", "ask", None), ("gh api -X PUT repos/o/r/pulls/3/merge", "ask", None),
+                           (f"gh api graphql -f query='{MERGE_MUTATION}'", "ask", None),
+                           ("gh alias set m 'pr merge --admin'", "ask", None),
                            ("gh pr review 3 --comment -b x", "ask", None), ("gh pr create -t x -b y", "ask", None)):
         out, _ = judge("Bash", {"command": cmd})
         assert decision(out) == want and "의존성 없음" in out["permissionDecisionReason"], cmd
@@ -1178,8 +1382,8 @@ def test_guard_review_followups_gh_api_method_and_merge_endpoints():
     cases = [(f"gh api -X GET repos/{DB_SLUG}/issues -f state=open", None),
              (f"gh api --method GET repos/{DB_SLUG}/pulls -F per_page=5", None),
              (f"gh api repos/{DB_SLUG}/issues -f title=x", "ask"),
-             (f"gh api -X PUT repos/{DB_SLUG}/pulls/3/merge", "deny"),
-             (f"gh api -X POST repos/{DB_SLUG}/merges -f base=main -f head=x", "deny"),
+             (f"gh api -X PUT repos/{DB_SLUG}/pulls/3/merge", "ask"),        # 병합 계열은 ask(4-c)
+             (f"gh api -X POST repos/{DB_SLUG}/merges -f base=main -f head=x", "ask"),
              (f"gh api repos/{DB_SLUG}/pulls/3/merge", None)]   # GET: 머지 가능 여부 조회
     for cmd, want in cases:
         assert decision(bash(ws, cmd, plain)) == want, cmd
@@ -1188,11 +1392,11 @@ def test_guard_review_followups_gh_api_method_and_merge_endpoints():
 def test_guard_review_followups_mcp_verb_position():
     ws = shared()
     db = {"owner": "mock-org", "repo": "telephony-issue-db"}
-    # 자동 병합 켜기는 +1 관문 없이 서버 조건만으로 병합한다 — 거부(H A1). 끄기는 ask
+    # 병합은 병합 계열 — ask(4-c, 서버 브랜치 보호가 승인 1을 강제한다). 자동 병합 켜기는 거부(원칙 12), 끄기는 ask
     for tool, want in (("mcp__github__disable_pr_auto_merge", "ask"), ("mcp__github__enable_pr_auto_merge", "deny"),
                        ("mcp__github__list_triggers", None), ("mcp__github__request_copilot_review", "ask"),
                        ("mcp__github__run_secret_scanning", "ask"), ("mcp__github__pull_request_read", None),
-                       ("mcp__github__merge_pull_request", "deny")):
+                       ("mcp__github__merge_pull_request", "ask")):
         assert decision(guard(ws, tool, db, ws.base)) == want, tool
     # 미설정 jira/atlassian 서버: 읽기 동사로 시작하는 도구는 접두사가 쓰기 단어처럼 보여도 통과
     for tool in ("mcp__atlassian__get_issue_links", "mcp__atlassian__list_assignees", "mcp__jira-prod__jira_get_attachments",
@@ -1208,9 +1412,11 @@ APPROVE_MUTATION = 'mutation { addPullRequestReview(input: {pullRequestId: "x", 
 MERGE_MUTATION = 'mutation { mergePullRequest(input: {pullRequestId: "x"}) { clientMutationId } }'
 
 
-def test_guard_denies_claude_approve_dismiss_and_bypass_merges_on_issue_db():
-    """규칙 11(H A1): Claude의 Approve·리뷰 기각, URL 선택자·붙인 `-R`의 병합, GraphQL 병합·자동 병합·Approve·기각 mutation
-    (인라인·`@파일`·`--input`·stdin heredoc), 병합·리뷰 별칭 만들기는 거부. 변경 요청·코멘트 리뷰는 ask로 남는다."""
+def test_guard_denies_claude_approve_dismiss_and_asks_merges():
+    """규칙 11(H A1·4-c): Claude의 Approve·리뷰 기각(gh 옵션, REST `event=APPROVE` — `-f`·`-F`·`--input` 파일·`@파일`, GraphQL
+    mutation — 인라인·`@파일`·`--input`·stdin heredoc, MCP 단어·동작 칸)과 리뷰 별칭·못 읽은 별칭 파일은 대상 레포와 무관하게
+    거부(서버가 막지 못한다). 병합 계열(gh·REST·GraphQL 병합·자동 병합·병합 별칭, MCP 자동 병합)은 ask(서버 브랜치 보호가
+    막는다). 변경 요청·코멘트 리뷰는 ask로 남는다."""
     ws = shared()
     c = ws.clone
     plain = tmp("tt-gh-plain-")
@@ -1220,7 +1426,7 @@ def test_guard_denies_claude_approve_dismiss_and_bypass_merges_on_issue_db():
              "v.graphql": ("mutation($e: PullRequestReviewEvent!) { addPullRequestReview(input: {pullRequestId: \"x\", "
                            "event: $e}) { clientMutationId } }"),
              "q.json": json.dumps({"query": APPROVE_MUTATION.replace("addPullRequestReview", "submitPullRequestReview")}),
-             "a.yml": "m: pr merge\n", "co.yml": "co: pr checkout\n"}
+             "a.yml": "m: pr merge\n", "co.yml": "co: pr checkout\n", "rv.yml": "rv: pr review\n"}
     for name, text in files.items():
         (plain / name).write_text(text, encoding="utf-8")
     wt = ws.work / "wt-approve"
@@ -1234,7 +1440,7 @@ def test_guard_denies_claude_approve_dismiss_and_bypass_merges_on_issue_db():
                    (f"gh pr review 3 -a=1 -R {DB_SLUG}", plain), (f"GH_REPO={DB_SLUG} gh pr review 3 --approve", plain),
                    (f"env GH_HOST=ghe.mock.invalid gh pr review 3 --approve -R {DB_SLUG}", plain),
                    (f'bash -c "gh pr review 3 -a -R {DB_SLUG}"', plain), (f"gh pr review {url} --approve", plain),
-                   (f"gh pr review 3 --approve -R{DB_SLUG}", plain), (f"gh pr review 3 --approve -R={DB_SLUG}", plain),
+                   ('gh pr review 3 "$FLAG"', plain), ("gh pr review 3 -b $B", plain),     # 셸 값 옵션은 Approve일 수 있다
                    (f"gh api repos/{DB_SLUG}/pulls/3/reviews -f event=APPROVE", plain),
                    (f"gh api repos/{DB_SLUG}/pulls/3/reviews -F event=approve", plain),
                    (f"gh api repos/{DB_SLUG}/pulls/3/reviews --raw-field event=APPROVE", plain),
@@ -1244,30 +1450,36 @@ def test_guard_denies_claude_approve_dismiss_and_bypass_merges_on_issue_db():
                    (f"gh api repos/{DB_SLUG}/pulls/3/reviews --input r.json", plain),
                    (f"gh api repos/{DB_SLUG}/pulls/3/reviews --input -", plain),
                    (f"gh api repos/{DB_SLUG}/pulls/3/reviews -F event=@e.txt", plain),
-                   # GraphQL은 대상과 무관하게(cwd = DB 아님)
+                   (f"gh api repos/{DB_SLUG}/pulls/3/reviews -f event=\"$E\"", plain),
                    (f"gh api graphql -f query='{APPROVE_MUTATION}'", plain), ("gh api graphql -F query=@q.graphql", plain),
-                   ("gh api graphql -F query=@v.graphql -f e=APPROVE", plain), ("gh api graphql --input q.json", plain)]
+                   ("gh api graphql -F query=@v.graphql -f e=APPROVE", plain), ("gh api graphql --input q.json", plain),
+                   (f"gh api graphql -F query=@- <<'EOF'\n{APPROVE_MUTATION}\nEOF", plain),
+                   ('gh api graphql -F query=@v.graphql -f e="$E"', plain),
+                   # 대상 레포를 보지 않는다: 이슈 DB가 아닌 레포의 Approve도 거부(4-c)
+                   ("gh pr review 3 --approve -R other/repo", plain), ("gh pr review 3 -a", plain)]
         for cmd, cwd in approve:
             out = bash(ws, cmd, cwd)
             assert decision(out) == "deny" and "Approve하지 않는다" in out["permissionDecisionReason"], cmd
-        merge = [(f"gh pr merge {url} --merge", plain), (f"gh pr merge 3 --merge -R{DB_SLUG}", plain),
-                 (f"gh pr merge 3 --merge -R={DB_SLUG}", plain), (f"GH_REPO=other/repo gh pr merge 3 -R {DB_SLUG}", plain),
-                 (f"gh pr merge 3 --merge -dR {DB_SLUG}", plain),       # pflag 묶음: -d(bool) + -R <값>
-                 ("gh pr merge 3 -bRother/x", c),                       # 모호한 묶음은 cwd 판정을 막지 않는다
+        # 병합 계열: ask(4-c — 대상 레포와 무관, 이슈 DB가 아닌 레포도)
+        merge = [(f"gh pr merge {url} --merge", plain),
+                 ("gh pr merge https://ghe.mock.invalid/other/repo/pull/3", plain),
+                 (f"gh api -X PUT repos/{DB_SLUG}/pulls/3/merge", plain),
+                 (f"gh api -X POST repos/{DB_SLUG}/merges -f base=main -f head=x", plain),
                  ("gh api graphql -F query=@m.graphql", plain),
                  (f"gh api graphql -F query=@- <<'EOF'\n{MERGE_MUTATION}\nEOF", plain),
-                 ("gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {}) { clientMutationId } }'", plain),
-                 ("gh api graphql -f query='mutation { enqueuePullRequest(input: {}) { clientMutationId } }'", plain)]
+                 ("gh api graphql -f query='mutation { enqueuePullRequest(input: {}) { clientMutationId } }'", plain),
+                 ("gh alias import a.yml", plain),
+                 ("gh alias import - <<'EOF'\nm: pr merge\nEOF", plain)]
         for cmd, cwd in merge:
             out = bash(ws, cmd, cwd)
-            assert decision(out) == "deny" and "머지" in out["permissionDecisionReason"], cmd
+            assert decision(out) == "ask" and "머지" in out["permissionDecisionReason"], cmd
         for cmd in (f"gh api -X PUT repos/{DB_SLUG}/pulls/3/reviews/9/dismissals -f message=x",
                     "gh api graphql -f query='mutation { dismissPullRequestReview(input: {}) { clientMutationId } }'"):
             out = bash(ws, cmd, plain)
             assert decision(out) == "deny" and "기각" in out["permissionDecisionReason"], cmd
-        for cmd in ("gh alias set lgtm 'pr review --approve'", """gh alias set m '!gh pr merge "$1"'""",
-                    "gh alias import a.yml", "gh alias import - <<'EOF'\nm: pr merge\nEOF", "cat a.yml | gh alias import -",
-                    "gh alias import none.yml"):
+        # 리뷰 별칭(`gh rv 3 -a`를 보지 못한다)과 못 읽은 별칭 파일은 거부
+        for cmd in ("gh alias set lgtm 'pr review --approve'", "gh alias set rv 'pr review'", "gh alias import rv.yml",
+                    "cat a.yml | gh alias import -", "gh alias import none.yml"):
             out = bash(ws, cmd, plain)
             assert decision(out) == "deny" and "별칭" in out["permissionDecisionReason"], cmd
         mcp = [("mcp__github__pull_request_review_write", {**db, "method": "create", "event": "APPROVE"}, "Approve하지 않는다"),
@@ -1275,12 +1487,16 @@ def test_guard_denies_claude_approve_dismiss_and_bypass_merges_on_issue_db():
                 "Approve하지 않는다"),
                ("mcp__github__create_pull_request_review", {**db, "event": "APPROVE"}, "Approve하지 않는다"),
                ("mcp__x__approve_pull_request", db, "Approve하지 않는다"),
-               ("mcp__x__dismiss_pull_request_review", db, "기각"), ("mcp__github__enable_pr_auto_merge", db, "머지")]
+               ("mcp__x__dismiss_pull_request_review", db, "기각"),
+               ("mcp__github__pull_request_review_write", {"owner": "other", "repo": "x", "pullNumber": 3, "event": "APPROVE"},
+                "Approve하지 않는다")]      # 대상 레포를 보지 않는다(4-c)
         for tool, tool_input, why in mcp:
             out = guard(ws, tool, tool_input, ws.base)
             assert decision(out) == "deny" and why in out["permissionDecisionReason"], tool
+        out = guard(ws, "mcp__github__enable_pr_auto_merge", db, ws.base)
+        assert decision(out) == "deny" and "자동 병합을 Claude가 켜지 않는다" in out["permissionDecisionReason"]
         asks = [(f"gh pr review 3 --request-changes -b x -R {DB_SLUG}", plain),
-                (f"gh pr review 3 --comment -b x -R {DB_SLUG}", plain),
+                (f"gh pr review 3 --comment -b x -R {DB_SLUG}", plain), ('gh pr review 3 -b "$B"', plain),
                 (f"gh pr review 3 -a=false -R {DB_SLUG}", plain), (f"gh pr review 3 --approve=0 -R {DB_SLUG}", plain),
                 (f"gh api repos/{DB_SLUG}/pulls/3/reviews -f event=COMMENT -f body=x", plain),
                 (f"gh api repos/{DB_SLUG}/pulls/3/reviews -f event=REQUEST_CHANGES", plain),
@@ -1289,27 +1505,23 @@ def test_guard_denies_claude_approve_dismiss_and_bypass_merges_on_issue_db():
                 ("gh api graphql -f query='mutation { addPullRequestReview(input: {event: COMMENT}) { clientMutationId } }'", c),
                 ("gh api graphql -F query=@none.graphql", c),                   # 읽지 못한 본문은 쓰기
                 ("cat x.graphql | gh api graphql -F query=@-", c),                # stdin이 heredoc이 아니면 모르는 본문
-                (f"gh alias set p '!python3 {ws.root}/scripts/db_pr.py publish wt'; gh p", plain)]   # 낱말 그물 ask 그대로
+                ("gh lgtm 3", plain)]                                            # 모르는 그룹(이미 만든 별칭 실행 포함)은 쓰기
         for cmd, cwd in asks:
-            assert decision(bash(ws, cmd, cwd)) == "ask", cmd
+            out = bash(ws, cmd, cwd)
+            assert decision(out) == "ask" and "머지" not in out["permissionDecisionReason"], cmd
         for tool, tool_input in (("mcp__github__pull_request_review_write", {**db, "method": "create", "event": "COMMENT"}),
                                  ("mcp__github__pull_request_review_write", {**db, "method": "create"}),
                                  ("mcp__github__disable_pr_auto_merge", db)):
             assert decision(guard(ws, tool, tool_input, ws.base)) == "ask", (tool, tool_input)
-        # 병합·Approve는 다른 레포 명시 대상이어도 cwd(이슈 DB clone) 판정이 남는다(H-A1 r4 — 닫힌 쪽)
-        out = bash(ws, "gh pr merge https://ghe.mock.invalid/other/repo/pull/3", c)
-        assert decision(out) == "deny" and "머지" in out["permissionDecisionReason"]
-        nothing = [("gh pr review 3 --approve -R other/repo", plain),
-                   ("gh pr merge https://ghe.mock.invalid/other/repo/pull/3", plain),
-                   (f"gh api -X GET repos/{DB_SLUG}/pulls/3/reviews", plain), (f"gh api repos/{DB_SLUG}/pulls/3/reviews", plain),
+        nothing = [(f"gh api -X GET repos/{DB_SLUG}/pulls/3/reviews", plain), (f"gh api repos/{DB_SLUG}/pulls/3/reviews", plain),
+                   (f"gh api repos/{DB_SLUG}/pulls/3/merge", plain),                # GET: 머지 가능 여부 조회
                    ("gh api graphql -F query=@viewer.graphql", plain),
                    ("gh api graphql -F query=@- <<'EOF'\nquery { viewer { login } }\nEOF", plain),
-                   ("gh alias set co 'pr checkout'", plain), ("gh alias import co.yml", plain),
-                   ("gh lgtm 3", plain)]     # 이미 만든 별칭의 실행은 보지 못한다(한계 — 08 규칙 11)
+                   ("gh pr list --search review:approved", plain),                   # 상태 값 APPROVED는 Approve가 아니다
+                   ("gh pr view 3 --json reviews -q '.reviews[] | select(.state == \"APPROVED\")'", plain),
+                   ("gh alias set co 'pr checkout'", plain), ("gh alias import co.yml", plain)]
         for cmd, cwd in nothing:
             assert decision(bash(ws, cmd, cwd)) is None, cmd
-        other = {"owner": "other", "repo": "x", "pullNumber": 3, "event": "APPROVE"}
-        assert decision(guard(ws, "mcp__github__pull_request_review_write", other, ws.base)) is None
         empty = {"TELEPHONY_TRIAGE_HOME": tmp("tt-nohome-")}      # 사용자 config 없음: 규칙 11 없음
         assert decision(bash(ws, f"gh pr review 3 --approve -R {DB_SLUG}", plain, env=empty)) is None
         assert decision(bash(ws, f"gh api graphql -f query='{MERGE_MUTATION}'", plain, env=empty)) is None
@@ -1317,273 +1529,222 @@ def test_guard_denies_claude_approve_dismiss_and_bypass_merges_on_issue_db():
         gitp(c, "worktree", "remove", "--force", str(wt))
 
 
-def test_guard_gh_url_selector_option_values_api_clusters_and_graphql_url():
-    """규칙 11(H A1 리뷰): URL은 `pr`·`issue` 동작 뒤 첫 위치 인자일 때만 선택자다 — 옵션 값(`--body`·`-b`·`-t=`·`-c`·
-    `--duplicate-of`)의 다른 레포 URL은 cwd(이슈 DB clone) 판정을 막지 않는다. `gh api`의 bool `-i` 묶음(`-iX PUT`·`-if k=v`)과
-    전체 URL GraphQL 엔드포인트도 병합·Approve·기각으로 본다."""
+def test_guard_approve_dismiss_and_shell_decided_forms_denied_anywhere():
+    """규칙 11(4-c): 대상 레포 해석 시험(URL 선택자·`-R` 꼴·pflag 묶음·앞 옵션·자리표시·퍼센트 인코딩·SCP·cwd 원격)을 지우면서 그
+    안의 Approve·리뷰 기각·셸이 정한 동작 거부 줄을 모았다 — 대상과 cwd에 무관하게 거부가 남는다. 같은 시험에 있던 규칙 8 줄(`gh co`·
+    `pr co`, `cd -`로 돌아온 clone의 checkout)도 그대로 둔다."""
     ws = shared()
     c = ws.clone
     plain = tmp("tt-gh-plain-")
-    (plain / "m.graphql").write_text(MERGE_MUTATION, encoding="utf-8")
-    other = "https://ghe.mock.invalid/other/repo"
-    rows = [(f"gh pr merge 3 --merge --body {other}/issues/5", c, "deny"),
-            (f"gh pr merge 3 --auto --squash -b '{other}/issues/12 반영'", c, "deny"),
-            (f"gh pr merge 3 -t={other}/issues/5", c, "deny"), (f"gh pr merge 3 -b{other}/issues/5", c, "deny"),
-            (f"gh pr review 3 --approve -b {other}/pull/9", c, "deny"),
-            (f"gh pr comment 3 --body {other}/issues/1", c, "ask"), (f"gh pr edit 3 --body {other}/issues/1", c, "ask"),
-            (f"gh pr close 3 -c {other}/issues/1", c, "ask"),
-            (f"gh issue close 3 --duplicate-of {other}/issues/5", c, "ask"),
-            (f"gh pr comment 3 --body https://ghe.mock.invalid/{DB_SLUG}/issues/1", plain, "ask"),  # 옵션 값의 DB URL은 센다
-            # 선택자 URL은 그대로 이긴다(bool 옵션·`--` 뒤도 선택자) — 쓰기(ask) 종류만. 병합·Approve·기각은 다른 레포 선택자여도
-            # cwd(이슈 DB) 판정이 남는다(H-A1 r4)
-            (f"gh pr edit --add-label x {other}/pull/3", c, None), (f"gh pr close -d {other}/pull/3", c, None),
-            (f"gh pr comment -b x {other}/pull/3", c, None), (f"gh pr comment -- {other}/pull/3", c, None),
-            (f"gh pr review --comment {other}/pull/3 -b x", c, None),
-            (f"gh pr merge --squash {other}/pull/3", c, "deny"), (f"gh pr merge -sd {other}/pull/3", c, "deny"),
-            (f"gh pr merge -b x {other}/pull/3", c, "deny"), (f"gh pr merge -- {other}/pull/3", c, "deny"),
-            (f"gh pr merge -b x {other}/pull/3", plain, None),
-            # gh api: bool -i와 묶은 짧은 옵션(pflag)
-            (f"gh api -iX PUT repos/{DB_SLUG}/pulls/3/merge", plain, "deny"),
-            (f"gh api -iXPUT repos/{DB_SLUG}/pulls/3/merge", plain, "deny"),
-            (f"gh api -iX=PUT repos/{DB_SLUG}/pulls/3/merge", plain, "deny"),
-            (f"gh api repos/{DB_SLUG}/pulls/3/reviews -if event=APPROVE", plain, "deny"),
-            (f"gh api -iX PUT repos/{DB_SLUG}/pulls/3/reviews/9/dismissals -f message=x", plain, "deny"),
-            (f"gh api graphql -if query='{MERGE_MUTATION}'", plain, "deny"),
-            (f"gh api -iX GET repos/{DB_SLUG}/pulls/3/merge", plain, None),
-            # 전체 URL GraphQL 엔드포인트(gh는 필드를 JSON 본문 {"query": …}로 보낸다)
-            (f"gh api https://ghe.mock.invalid/api/graphql -f query='{MERGE_MUTATION}'", plain, "deny"),
-            (f"gh api https://ghe.mock.invalid/api/graphql -f query='{APPROVE_MUTATION}'", plain, "deny"),
-            ("gh api https://api.github.com/graphql -F query=@m.graphql", plain, "deny"),
-            ("gh api https://ghe.mock.invalid/api/graphql -f query='query { viewer { login } }'", plain, None)]
-    for cmd, cwd, want in rows:
-        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
-
-
-def test_guard_gh_repo_flag_in_option_value_keeps_cwd_target():
-    """규칙 11(H A1 리뷰): 값 받는 옵션의 값 자리(`-b -Rother/x`·`--body '-R other/x'`)와 `gh api`(옵션 `-R`가 없다)의 `-R` 꼴은
-    gh가 레포로 읽지 않는다 — 이슈 DB일 때만 대상으로 세고 cwd(이슈 DB clone·worktree) 판정을 막지 않는다. 옵션 자리의
-    `-R<v>`·`-R <v>`(다른 레포)는 그대로 cwd를 이긴다."""
-    ws = shared()
-    c = ws.clone
-    plain = tmp("tt-gh-plain-")
-    wt = ws.work / "wt-repo-value"
+    wt = ws.work / "wt-forms"
     git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
-    rows = [("gh pr merge 3 --merge -b -Rother/x", "deny"), ("gh pr merge 3 --merge --body '-R other/x'", "deny"),
-            ('gh pr merge 3 --squash -b "-Resolved MOCK-1101 in data/DATA-001"', "deny"),
-            ("gh pr merge 3 --merge -b -R other/x", "deny"),       # 값 `-R` 뒤 other/x는 위치 인자다
-            ("gh pr merge 3 --merge --subject=x -t -Rother/x", "deny"),
-            ("gh api -X PUT 'repos/{owner}/{repo}/pulls/3/merge' -q -Rother/x", "deny"),
-            ("gh api -X PUT 'repos/{owner}/{repo}/pulls/3/merge' -R other/x", "deny"),
-            ("gh pr review 3 --approve -b -Rother/x", "deny"), ("gh pr review 3 --approve --body '-R other/x'", "deny"),
-            ("gh pr review 3 --approve -b -R other/x", "deny"),
-            ("gh api 'repos/{owner}/{repo}/pulls/3/reviews' -f event=APPROVE -t -Rother/x", "deny"),
-            ("gh api -X PUT 'repos/{owner}/{repo}/pulls/3/reviews/9/dismissals' -f message=x -f -Rother/x", "deny"),
-            ("gh pr create -t x -b '-R other/x 참고' -H issue/MOCK-1", "ask"), ("gh pr comment 3 -b -Rother/x", "ask"),
-            # 옵션 자리의 다른 레포는 cwd를 이긴다 — 쓰기(ask) 종류만. 병합·Approve·기각은 cwd 판정이 남는다(H-A1 r4)
-            ("gh pr comment 3 -Rother/x -b x", None), ("gh pr edit 3 -b x -R other/x", None),
-            ("gh pr review 3 --comment -R other/x -b x", None),    # `pr review`의 --comment는 bool
-            ("gh pr create -t x -b y -Rother/x", None),
-            ("gh pr merge 3 --merge -Rother/x", "deny"), ("gh pr merge 3 --merge -b x -R other/x", "deny"),
-            ("gh pr review 3 --approve -R other/x", "deny")]
-    try:
-        for cwd in (c, wt):
-            for cmd, want in rows:
-                assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
-        # 값 자리의 이슈 DB는 대상으로 센다(cwd가 이슈 DB가 아니어도)
-        for cmd, want in ((f"gh pr merge 3 --merge -b -R{DB_SLUG}", "deny"), (f"gh pr merge 3 -b -R {DB_SLUG}", "deny"),
-                          (f"gh api -X PUT 'repos/{{owner}}/{{repo}}/pulls/3/merge' -q -R{DB_SLUG}", "deny"),
-                          (f"gh pr comment 3 --body '-R {DB_SLUG}'", "ask")):
-            assert decision(bash(ws, cmd, plain)) == want, cmd
-    finally:
-        gitp(c, "worktree", "remove", "--force", str(wt))
-
-
-def test_guard_gh_url_scheme_case_repo_id_endpoint_and_fragment():
-    """규칙 11(H A1 리뷰): 대문자 스킴 URL 선택자(`HTTPS://…/pull/N` — gh는 스킴을 소문자로 바꿔 URL로 본다), REST
-    `repositories/<id>/…`의 병합·Approve·기각(레포 ID라 대상을 풀 수 없다 — 대상과 무관하게 거부), 엔드포인트의 `#` 조각(gh는
-    보내지 않는다)도 cwd(이슈 DB 아님)에서 거부한다. `repos/{owner}/{repo}` 자리표시는 그대로 cwd로 본다."""
-    ws = shared()
-    c = ws.clone
-    plain = tmp("tt-gh-plain-")
-    db = f"ghe.mock.invalid/{DB_SLUG}"
-    rid = "repositories/123456/pulls/3"
-    approve, merge, dismiss = "Approve하지 않는다", "머지", "기각"
-    rows = [(f"gh pr review HTTPS://{db}/pull/3 --approve", plain, "deny", approve),
-            (f"gh pr review Https://{db}/pull/3 -a", plain, "deny", approve),
-            (f"gh pr merge HTTPS://{db}/pull/3 --squash", plain, "deny", merge),
-            (f"gh pr merge hTtP://{db}/pull/3 --squash", plain, "deny", merge),
-            (f"gh pr edit HTTPS://{db}/pull/3 --title x", plain, "ask", None),
-            ("gh pr edit HTTPS://ghe.mock.invalid/other/repo/pull/3 --title x", c, None, None),   # 선택자 URL이 cwd를 이긴다
-            ("gh pr merge HTTPS://ghe.mock.invalid/other/repo/pull/3", c, "deny", merge),   # 병합은 cwd 판정이 남는다(r4)
-            # repositories/<id>: 대상과 무관하게
-            (f"gh api {rid}/reviews -f event=APPROVE", plain, "deny", approve),
-            (f"gh api -X PUT {rid}/merge", plain, "deny", merge),
-            (f"gh api -X PUT {rid}/reviews/9/dismissals -f message=x", plain, "deny", dismiss),
-            (f"gh api -X PUT https://ghe.mock.invalid/api/v3/{rid}/merge", plain, "deny", merge),
-            (f"gh api {rid}/merge", plain, None, None),                          # GET: 조회
-            (f"gh api {rid}/reviews -f event=COMMENT -f body=x", plain, None, None),   # 그 밖 쓰기는 cwd로 본다
-            ("gh api -X PUT 'repos/{owner}/{repo}/pulls/3/merge'", plain, None, None),
-            ("gh api -X PUT 'repos/{owner}/{repo}/pulls/3/merge'", c, "deny", merge),
-            # `#` 조각
-            (f"gh api 'repos/{DB_SLUG}/pulls/3/reviews#x' -f event=APPROVE", plain, "deny", approve),
-            (f"gh api -X PUT 'repos/{DB_SLUG}/pulls/3/merge#x'", plain, "deny", merge),
-            (f"gh api -X POST 'repos/{DB_SLUG}/merges#x' -f base=main -f head=x", plain, "deny", merge),
-            (f"gh api -X PUT 'repos/{DB_SLUG}/pulls/3/reviews/9/dismissals#x' -f message=x", plain, "deny", dismiss),
-            (f"gh api -X PUT 'https://{db.split('/')[0]}/api/v3/repos/{DB_SLUG}/pulls/3/merge#x'", plain, "deny", merge),
-            (f"gh api 'repos/{DB_SLUG}/pulls/3/merge#x'", plain, None, None)]
-    for cmd, cwd, want, why in rows:
-        out = bash(ws, cmd, cwd)
-        assert decision(out) == want, (cmd, cwd)
-        assert why is None or why in out["permissionDecisionReason"], cmd
-
-
-def test_guard_gh_leading_options_target_resolution_and_placeholders_close_classes():
-    """규칙 11(H-A1 r4, 부류로 닫기): ① 그룹·동작 앞 옵션(`gh -b x pr merge`·`gh pr -b x merge`·`gh -X PUT api …` — cobra는 그
-    단계의 모르는 옵션이 다음 토큰을 먹는다)은 가능한 읽기를 모두 보고 가장 센 결정을 쓴다. 어느 읽기도 쓰기가 아니어도 대상이
-    이슈 DB면 ask. ② 병합·Approve·기각은 다른 레포로 푼 명시 대상이 cwd(이슈 DB) 판정을 끄지 않는다. ③ 대상 비교는 owner/repo만
-    (`www.`·끝 점·host 무관), 퍼센트 디코딩, 셸이 풀 값(`$`·백틱·`$( )`)과 명령 글의 `GH_REPO` 대입·언급은 이슈 DB일 수 있다로
-    본다. ④ 엔드포인트의 한 칸만 자리표시면 남은 칸이 이슈 DB 것과 같을 때 대상이다. 읽기·다른 레포 작업은 그대로다."""
-    ws = shared()
-    c = ws.clone
-    plain = tmp("tt-gh-plain-")
     same = _repo_with_origin("https://ghe.mock.invalid/mock-org/telephony-triage")    # 같은 owner의 다른 레포
-    fork = _repo_with_origin(f"https://ghe.mock.invalid/jdoe/{DB_SLUG.split('/')[1]}")
     h = "https://ghe.mock.invalid"
-    wt = ws.work / "wt-r4"
-    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
-    approve, merge, dismiss = "Approve하지 않는다", "머지", "기각"
+    other, db, url, rid = f"{h}/other/repo", f"ghe.mock.invalid/{DB_SLUG}", f"{h}/{DB_SLUG}/pull/3", "repositories/123456/pulls/3"
+    hd = "gh api graphql -f query=\"$(cat <<'EOF'\n{q}\nEOF\n)\""
+    approve, dismiss, dyn = "Approve하지 않는다", "기각", "셸이 푸는 값"
     rows = [
-        # ① 앞 옵션 — 병합·Approve·기각(대상 무관 GraphQL·repositories/<id> 포함)
-        ("gh pr -b x merge 3 --merge", c, "deny", merge), ("gh pr --body x merge 3", c, "deny", merge),
-        ("gh -b x pr merge 3", c, "deny", merge), ("gh pr -b LGTM review 3 --approve", c, "deny", approve),
-        ("gh -b LGTM pr review 3 --approve", wt, "deny", approve),
-        (f"gh -X PUT api repos/{DB_SLUG}/pulls/3/merge", plain, "deny", merge),
-        (f"gh -f event=APPROVE api repos/{DB_SLUG}/pulls/3/reviews", plain, "deny", approve),
-        (f"gh -f query='{MERGE_MUTATION}' api graphql", plain, "deny", merge),
-        (f"gh pr -b x merge 3 --merge -R {DB_SLUG}", plain, "deny", merge),
-        (f"gh -R {DB_SLUG} -b x pr merge 3", plain, "deny", merge),
-        ("gh pr -t x merge 3 --auto", c, "deny", merge), ("gh --body x pr merge 3 --auto", c, "deny", merge),
-        (f"gh --method PUT api repos/{DB_SLUG}/pulls/3/merge", plain, "deny", merge),
-        (f"gh -X PUT api repos/{DB_SLUG}/pulls/3/reviews/5/dismissals", plain, "deny", dismiss),
-        ("gh -X PUT api repositories/123/pulls/3/merge", plain, "deny", merge),
-        (f"gh -f query='{APPROVE_MUTATION}' api graphql", plain, "deny", approve),
-        ("gh -f query='mutation { dismissPullRequestReview(input: {}) { clientMutationId } }' api graphql", plain, "deny",
-         dismiss),
-        ("gh -f query='mutation { enablePullRequestAutoMerge(input: {}) { clientMutationId } }' api graphql", plain, "deny",
-         merge),
-        ("gh pr -b -R merge 3", c, "deny", merge),       # pr 단계의 -b가 -R를 값으로 먹고 merge가 동작이다
-        # ① 앞 옵션 — 그 밖 쓰기는 ask, 동작을 못 정해도 대상이 이슈 DB면 ask
-        ("gh -b hi pr comment 3", c, "ask", None), ("gh pr -b hi comment 3", c, "ask", None),
-        ("gh -t x pr create -b y", c, "ask", None), (f"gh -X PUT api repos/{DB_SLUG}/contents/x", plain, "ask", None),
-        ("gh pr --json state view 3", c, "ask", None), ("gh pr --json state view 3", plain, None, None),
-        (f"gh -R {DB_SLUG} pr view 3", c, None, None), ("gh --version", c, None, None),
-        # ② 거부 종류는 다른 레포 명시 대상이 cwd 판정을 끄지 않는다. 쓰기는 그대로 명시 대상이 이긴다
-        (f"gh pr merge {h}/other/repo/pull/3", c, "deny", merge), ("gh pr merge 3 -R other/repo", c, "deny", merge),
-        ("gh pr review 3 --approve -R other/repo", wt, "deny", approve),
-        ("gh api -X PUT repos/other/repo/pulls/3/merge", c, "deny", merge),
-        ("gh pr merge 3 -R other/repo", plain, None, None), (f"gh pr merge {h}/other/repo/pull/3", plain, None, None),
-        (f"gh pr edit {h}/other/repo/pull/3 --add-label x", c, None, None),
-        ("gh pr comment 3 -R other/repo -b x", c, None, None),
-        # ③ host 무관·퍼센트 디코딩·셸이 풀 값·GH_REPO 대입
-        (f"gh pr merge https://www.ghe.mock.invalid/{DB_SLUG}/pull/3", plain, "deny", merge),
-        (f"gh pr merge https://www.ghe.mock.invalid/{DB_SLUG}/pull/3 --auto", c, "deny", merge),
-        (f"gh pr review https://www.ghe.mock.invalid/{DB_SLUG}/pull/3 --approve", wt, "deny", approve),
-        (f"gh pr merge 3 -R www.ghe.mock.invalid/{DB_SLUG}", plain, "deny", merge),
-        (f"GH_REPO=www.ghe.mock.invalid/{DB_SLUG} gh pr merge 3", plain, "deny", merge),
-        (f"gh pr merge https://ghe.mock.invalid./{DB_SLUG}/pull/3", c, "deny", merge),
-        (f"gh pr merge {h}/mock-org/telephony%2Dissue-db/pull/3 --squash", c, "deny", merge),
-        (f"gh pr merge {h}/mock-org/%74elephony-issue-db/pull/3", c, "deny", merge),
-        (f"gh pr review {h}/mock-org/telephony%2Dissue-db/pull/3 --approve", wt, "deny", approve),
-        (f"gh pr merge {h}/{DB_SLUG}/pull/%33", plain, "deny", merge),      # gh는 경로를 풀어 /pull/N을 찾는다
-        (f"gh api -X PUT repos/{DB_SLUG}/pulls/3/%6Derge", plain, "deny", merge),
-        (f"gh api {h}/api/%67raphql -f query='{MERGE_MUTATION}'", plain, "deny", merge),
-        (f"gh pr merge {h}/{DB_SLUG}$NOPE/pull/3", c, "deny", merge),
-        (f"gh pr merge {h}/{DB_SLUG}${{NOPE}}/pull/3", c, "deny", merge),
-        (f"gh pr merge {h}/{DB_SLUG}`true`/pull/3", c, "deny", merge),
-        (f"gh pr review {h}/{DB_SLUG}$NOPE/pull/3 --approve", wt, "deny", approve),
-        (f"gh pr merge 3 -R {DB_SLUG}$NOPE", plain, "deny", merge), (f"gh pr merge 3 -R {DB_SLUG}`true`", plain, "deny", merge),
-        (f'gh pr merge 3 -R "$(echo {DB_SLUG})"', plain, "deny", merge),
-        (f"GH_REPO={DB_SLUG}$NOPE gh pr merge 3", plain, "deny", merge),
-        (f"export GH_REPO={DB_SLUG}; gh pr merge 3", plain, "deny", merge),
-        (f"export GH_REPO={DB_SLUG} && gh pr review 3 --approve", plain, "deny", approve),
-        (f"export GH_REPO={DB_SLUG}; gh pr edit 3 --add-label x", plain, "ask", None),
-        ("export GH_REPO=other/x; gh pr merge 3", plain, None, None),
-        ("gh api -X PUT repos/mock-org/telephony%2Dissue-db/pulls/3/merge", c, "deny", merge),
-        ("gh api repos/mock-org/telephony%2Dissue-db/pulls/3/reviews -f event=APPROVE", plain, "deny", approve),
-        (f"gh api -X PUT repos/{DB_SLUG}$NOPE/pulls/3/merge", plain, "deny", merge),
-        # ④ 한 칸만 자리표시(gh가 GH_REPO·cwd 레포로 그 칸을 채운다)
-        ("gh api -X PUT 'repos/{owner}/telephony-issue-db/pulls/3/merge'", same, "deny", merge),
-        ("gh api 'repos/{owner}/telephony-issue-db/pulls/3/reviews' -f event=APPROVE", same, "deny", approve),
-        ("gh api -X PUT repos/:owner/telephony-issue-db/pulls/3/merge", same, "deny", merge),
-        ("gh api -X PUT '/repos/{owner}/telephony-issue-db/pulls/3/merge'", same, "deny", merge),
-        ("gh api -X POST 'repos/{owner}/telephony-issue-db/pulls/3/reviews/9/dismissals' -f message=x", same, "deny", dismiss),
-        ("gh api 'repos/{owner}/telephony-issue-db/pulls/3/reviews/9/events' -f event=APPROVE", same, "deny", approve),
-        ("GH_REPO=mock-org/x gh api -X PUT 'repos/{owner}/telephony-issue-db/pulls/3/merge'", plain, "deny", merge),
-        ("gh api -X PUT 'repos/mock-org/{repo}/pulls/3/merge'", fork, "deny", merge),
-        ("gh api -X PATCH 'repos/{owner}/telephony-issue-db/pulls/3' -f state=closed", same, "ask", None),
-        ("gh api 'repos/{owner}/telephony-issue-db/issues/3/comments' -f body=x", same, "ask", None),
-        ("gh api -X PUT 'repos/{owner}/{repo}/pulls/3/merge'", same, None, None),
-        ("gh api 'repos/{owner}/other/issues' -f title=x", same, None, None),
-        # 오탐 방지: 이슈 DB 읽기, 코멘트 리뷰, 이슈 DB가 아닌 cwd의 보통 gh
-        ("gh pr view 3", c, None, None), ("gh pr view 3 --json reviews,reviewDecision", wt, None, None),
-        ("gh pr list --state open", c, None, None), ("gh pr diff 3", c, None, None), ("gh pr checks 3", c, None, None),
-        ("gh pr status", c, None, None), (f"gh api repos/{DB_SLUG}/pulls/3/reviews", c, None, None),
-        (f"gh api -X GET repos/{DB_SLUG}/pulls/3/reviews -f per_page=100", c, None, None),
-        ("gh api 'repos/{owner}/{repo}/pulls/3/reviews' --jq '.[].state'", c, None, None),
-        ("gh api graphql -f query='query { repository(owner:\"mock-org\", name:\"telephony-issue-db\") "
-         "{ pullRequest(number:3) { reviews(states: APPROVED) { totalCount } } } }'", c, None, None),
-        ("gh pr review 3 --comment -b x", c, "ask", None), ("gh pr review 3 -c -b x", wt, "ask", None),
-        ("gh pr create -t x -b y", plain, None, None), ("gh pr comment 3 -b hi", plain, None, None),
-        ("gh pr merge 3 --squash", plain, None, None), ("gh pr review 3 --approve", plain, None, None),
-        ("gh pr create -t x -b y", same, None, None), ("gh pr merge 3", same, None, None),
-        ("gh issue list", plain, None, None), ("gh auth status", plain, None, None)]
+        # URL·옵션 값(옛 test_guard_gh_url_selector_option_values_api_clusters_and_graphql_url)
+        (f"gh pr review 3 --approve -b {other}/pull/9", c, approve),
+        (f"gh api repos/{DB_SLUG}/pulls/3/reviews -if event=APPROVE", plain, approve),
+        (f"gh api -iX PUT repos/{DB_SLUG}/pulls/3/reviews/9/dismissals -f message=x", plain, dismiss),
+        (f"gh api {h}/api/graphql -f query='{APPROVE_MUTATION}'", plain, approve),
+        # 값 자리의 `-R` 꼴(옛 test_guard_gh_repo_flag_in_option_value_keeps_cwd_target)
+        ("gh pr review 3 --approve -b -Rother/x", c, approve), ("gh pr review 3 --approve --body '-R other/x'", wt, approve),
+        ("gh pr review 3 --approve -b -R other/x", c, approve), ("gh pr review 3 --approve -R other/x", wt, approve),
+        ("gh api 'repos/{owner}/{repo}/pulls/3/reviews' -f event=APPROVE -t -Rother/x", c, approve),
+        ("gh api -X PUT 'repos/{owner}/{repo}/pulls/3/reviews/9/dismissals' -f message=x -f -Rother/x", wt, dismiss),
+        # 스킴 대소문자·레포 ID·`#` 조각(옛 test_guard_gh_url_scheme_case_repo_id_endpoint_and_fragment)
+        (f"gh pr review HTTPS://{db}/pull/3 --approve", plain, approve), (f"gh pr review Https://{db}/pull/3 -a", plain, approve),
+        (f"gh api {rid}/reviews -f event=APPROVE", plain, approve),
+        (f"gh api -X PUT {rid}/reviews/9/dismissals -f message=x", plain, dismiss),
+        (f"gh api 'repos/{DB_SLUG}/pulls/3/reviews#x' -f event=APPROVE", plain, approve),
+        (f"gh api -X PUT 'repos/{DB_SLUG}/pulls/3/reviews/9/dismissals#x' -f message=x", plain, dismiss),
+        # 앞 옵션·host·퍼센트·셸 값 대상·GH_REPO·자리표시(옛 test_guard_gh_leading_options_target_resolution_and_placeholders_…)
+        ("gh pr -b LGTM review 3 --approve", c, approve), ("gh -b LGTM pr review 3 --approve", wt, approve),
+        (f"gh -f event=APPROVE api repos/{DB_SLUG}/pulls/3/reviews", plain, approve),
+        (f"gh -X PUT api repos/{DB_SLUG}/pulls/3/reviews/5/dismissals", plain, dismiss),
+        (f"gh -f query='{APPROVE_MUTATION}' api graphql", plain, approve),
+        ("gh -f query='mutation { dismissPullRequestReview(input: {}) { clientMutationId } }' api graphql", plain, dismiss),
+        (f"gh pr review https://www.ghe.mock.invalid/{DB_SLUG}/pull/3 --approve", wt, approve),
+        (f"gh pr review {h}/mock-org/telephony%2Dissue-db/pull/3 --approve", wt, approve),
+        (f"gh pr review {h}/{DB_SLUG}$NOPE/pull/3 --approve", wt, approve),
+        (f"export GH_REPO={DB_SLUG} && gh pr review 3 --approve", plain, approve),
+        ("gh api repos/mock-org/telephony%2Dissue-db/pulls/3/reviews -f event=APPROVE", plain, approve),
+        ("gh api 'repos/{owner}/telephony-issue-db/pulls/3/reviews' -f event=APPROVE", same, approve),
+        ("gh api -X POST 'repos/{owner}/telephony-issue-db/pulls/3/reviews/9/dismissals' -f message=x", same, dismiss),
+        ("gh api 'repos/{owner}/telephony-issue-db/pulls/3/reviews/9/events' -f event=APPROVE", same, approve),
+        ("gh pr review 3 --approve", plain, approve),                      # 옛 판정: cwd가 이슈 DB가 아니면 통과
+        # SSH 별칭 원격(옛 test_guard_gh_ssh_alias_remote_and_unknown_value_options_keep_cwd)
+        (f"gh pr review {url} --approve", c, approve), (f"gh pr review {url} -a", wt, approve),
+        # 셸이 정하는 본문·엔드포인트·동작·옵션(옛 test_guard_gh_shell_expanded_operations_are_closed)
+        (hd.format(q=APPROVE_MUTATION), plain, approve),
+        (("gh api graphql -f query='mutation($id:ID!,$e:PullRequestReviewEvent!){addPullRequestReview(input:"
+          "{pullRequestId:$id,event:$e}){clientMutationId}}' -f id=x -f e=\"$E\""), plain, approve),
+        (f"EP=repos/{DB_SLUG}/pulls/3/merge; gh api -X PUT \"$EP\"", plain, dyn),
+        ('gh api -X POST "$EP" -f event=APPROVE', plain, approve), ('gh api "$URL/reviews" -f event=APPROVE', plain, approve),
+        ('gh api -X PUT "repos/other/x/pulls/3/$A"', c, dyn), ('gh api -X PUT "repos/other/x/pulls/3/$A"', plain, dyn),
+        (f'gh api repos/{DB_SLUG}/pulls/3/reviews -f event="$E"', plain, approve),
+        ("gh pr $ACT 3", c, dyn), ("gh pr $ACT 3", plain, dyn), (f'gh pr "$ACT" 3 -R {DB_SLUG}', plain, dyn),
+        ('gh "$G" merge 3', c, dyn), (f'gh "$G" -X PUT repos/{DB_SLUG}/pulls/3/merge', plain, dyn),
+        ('gh pr review 3 "$OPT"', c, approve), (f"gh pr review 3 $OPT -R {DB_SLUG}", plain, approve),
+        ("gh pr review 3 --comment -b $B", c, approve),
+        # cwd 원격·앞 대입 GIT_DIR(옛 test_guard_gh_cwd_resolution_remotes_gitdir_and_unknown_dirs)
+        (f"GIT_DIR={c}/.git gh pr review 3 --approve", plain, approve),
+        # JSON 본문의 이스케이프(`\u0041PPROVE` — gh는 그대로 보낸다)도 푼 글로 본다(4-c 리뷰 P1)
+        (f"gh api repos/{DB_SLUG}/pulls/3/reviews --input esc.json", plain, approve),
+        ("gh api graphql --input esc.graphql.json", plain, approve),
+        # 깊은 중첩 JSON(`GH_JSON_DEPTH_MAX` 초과)은 못 읽은 본문 — 리뷰 엔드포인트면 Approve 거부. 예전엔 `json.loads`의
+        # RecursionError(판정 예외 → `guard 내부 오류`)에 기댔는데 Python 3.14는 25,000단도 그냥 읽어 ask가 됐다(PR #82 CI)
+        (f"gh api repos/{DB_SLUG}/pulls/3/reviews --input deep.json", plain, "Approve"),
+        (f"gh api -X POST repos/{DB_SLUG}/pulls/3/reviews/9/events --input deep.json", plain, "Approve"),
+        # 셸 값이 든 별칭 정의는 내용을 모른다
+        ('gh alias set x "$(echo cHIgcmV2aWV3IC1h | base64 -d)"', plain, "별칭"), ("gh alias set x `cat a`", plain, "별칭"),
+        # 자리 표시·셸 별칭은 실행 때 동작이 정해진다, 줄 이음·파이프로 받은 별칭 파일은 못 읽은 본문(4-c 4회차)
+        ("gh alias set x 'pr $1 3 -$2'", plain, "별칭"), ("gh alias set x 'pr \"$@\"'", plain, "별칭"),
+        ("gh alias set --shell x 'gh pr \"$@\"'", plain, "별칭"), ("gh alias set -s x 'echo hi'", plain, "별칭"),
+        ("gh alias set x '!gh pr view'", plain, "별칭"), ("gh alias set p '!python3 $S/db_pr.py publish wt'; gh p", plain, "별칭"),
+        ('''gh alias set m '!gh pr merge "$1"' ''', plain, "별칭"),
+        ("gh alias import - <<EOF\nx: pr rev" + chr(92) + "\niew\nEOF", plain, "별칭"),
+        ("cat <<'EOF' | base64 -d | gh alias import -\neDogcHIgcmV2aWV3Cg==\nEOF", plain, "별칭")]
+    bs = chr(92)
+    (plain / "esc.json").write_text('{"event":"' + bs + 'u0041PPROVE"}', encoding="utf-8")
+    (plain / "deep.json").write_text('{"event":"COMMENT","x":' + "[" * 25000 + "]" * 25000 + "}", encoding="utf-8")
+    (plain / "esc.graphql.json").write_text(json.dumps({"query": APPROVE_MUTATION}).replace("APPROVE", bs + "u0041PPROVE"),
+                                            encoding="utf-8")
     try:
-        for cmd, cwd, want, why in rows:
+        for cmd, cwd, why in rows:
+            out = bash(ws, cmd, cwd)
+            assert decision(out) == "deny" and why in out["permissionDecisionReason"], (cmd, cwd)
+        # 규칙 8(그대로): gh 기본 별칭 `co`·동작 별칭 `pr co`는 clone 본체에서 거부, `cd -`로 돌아온 clone의 checkout도. 동작
+        # 자리만 본다 — `--search checkout`은 판정하지 않는다(base와 같다)
+        for cmd, cwd, want in (("gh pr co 3", c, "deny"), ("gh co 3", c, "deny"), ("gh pr checkout 3", c, "deny"),
+                               ("gh pr co 3", plain, None), (f"cd {c}; cd /tmp; cd -; git checkout main", plain, "deny"),
+                               ("gh pr list --search checkout", c, None), ("gh pr checkout 3 >/dev/null", c, "deny"),
+                               ("gh pr checkout 3 2>&1 | tail -1", c, "deny"), ("gh --repo o/r pr co 3", c, "deny"),
+                               ("GH_REPO=o/r gh co 3", c, "deny"), ("gh pr checkout --force 3", c, "deny"),
+                               ("gh pr -b x -b y checkout 3", c, "deny"), ("gh -b x -c y co 3", c, "deny"),
+                               ("gh -R o/r pr checkout 3", c, "deny")):
             out = bash(ws, cmd, cwd)
             assert decision(out) == want, (cmd, cwd)
-            assert why is None or why in out["permissionDecisionReason"], cmd
+            assert want is None or "규칙 8" in out["permissionDecisionReason"], cmd
     finally:
         gitp(c, "worktree", "remove", "--force", str(wt))
 
 
-def test_guard_gh_ssh_alias_remote_and_unknown_value_options_keep_cwd():
-    """규칙 11(H-A1 r4): `issue_db.remote`가 SSH 별칭 host(`git@ghe-ssh:…`)여도 gh가 찍는 https PR URL·`-R`은 owner/repo로
-    이슈 DB다. 값 받는 옵션 표(`GH_SEL_SHORT_WITH_ARG`)에 없는 동작은 `=` 없는 옵션 바로 뒤의 `-R…` 꼴을 그 옵션의 값으로 보고
-    cwd(이슈 DB) 판정을 막지 않는다(`label create -d -Rother/x` 등). 옵션 뒤가 아닌 `-R…`은 그대로 대상이다."""
-    ws = Workspace(build=False)
-    for p in ws.home.rglob("*.yaml"):
-        text = p.read_text(encoding="utf-8")
-        p.write_text(text.replace(f"https://ghe.mock.invalid/{DB_SLUG}.git", f"git@ghe-ssh:{DB_SLUG}.git"), encoding="utf-8")
+def test_guard_denies_branch_protection_ruleset_and_auto_merge_changes():
+    """규칙 11(4-c 사용자 결정): 서버 브랜치 보호가 4-c 뒤 유일한 병합 장치라 그것을 끄거나 바꾸는 gh 호출은 Approve와 같은 급으로
+    거부 — `…/branches/<b>/protection…`의 DELETE·PUT·PATCH·POST(필드·`--input` 포함, 브랜치에 `/`), `…/rulesets`의 쓰기,
+    GraphQL 보호·ruleset mutation, 레포 설정(REST `repos/<o>/<r>`·`repositories/<id>`)의 `allow_auto_merge`·
+    `delete_branch_on_merge` 켜기(`true`·`1`·`True`, `-f`·`-F`·`--input`·JSON 이스케이프), `gh repo edit --enable-auto-merge`·
+    `--delete-branch-on-merge`. 읽기(GET)·거짓 값(`false`·`=false`)은 그대로다."""
+    ws = shared()
+    plain = tmp("tt-gh-plain-")
+    (plain / "rs.json").write_text('{"name":"x","enforcement":"disabled"}', encoding="utf-8")
+    bs = chr(92)
+    for name, body in (("dbm.json", '{"delete_branch_on_merge": true}'), ("aam.json", '{"allow_auto_merge": 1}'),
+                       ("dbme.json", '{"delete_branch_on_m' + bs + 'u0065rge": true}'),
+                       ("aame.json", '{"allow_auto_m' + bs + 'u0065rge": "True"}'), ("off.json", '{"allow_auto_merge": false}')):
+        (plain / name).write_text(body, encoding="utf-8")
+    why = "브랜치 보호"
+    for cmd in (f"gh api -X DELETE repos/{DB_SLUG}/branches/main/protection",
+                f"gh api -X PATCH repos/{DB_SLUG}/branches/main/protection/required_pull_request_reviews "
+                "-F required_approving_review_count=0",
+                f"gh api --method PUT repos/{DB_SLUG}/branches/main/protection --input rs.json",
+                f"gh api -X DELETE repos/{DB_SLUG}/branches/main/protection/enforce_admins",
+                f"gh api repos/{DB_SLUG}/rulesets --input rs.json", f"gh api -X PUT repos/{DB_SLUG}/rulesets/7 -f enforcement=disabled",
+                "gh api -X DELETE orgs/mock-org/rulesets/7",
+                "gh repo edit --enable-auto-merge", f"gh repo edit {DB_SLUG} --enable-auto-merge=true",
+                f"gh api -X DELETE repos/{DB_SLUG}/branches/release/v1/protection",
+                f"gh api -X PATCH repos/{DB_SLUG} -F allow_auto_merge=true",
+                f"gh api -X PATCH repos/{DB_SLUG} -f allow_auto_merge=1", f"gh api -X PATCH repos/{DB_SLUG} -F allow_auto_merge=True",
+                "gh api -X PATCH repositories/123 -F allow_auto_merge=true", "gh api repositories/123 -F delete_branch_on_merge=1",
+                f"gh api -X PATCH repos/{DB_SLUG} -F delete_branch_on_merge=true",
+                f"gh api -X PATCH repos/{DB_SLUG} -f delete_branch_on_merge=1",
+                f"gh api -X PATCH repos/{DB_SLUG} -F delete_branch_on_merge=True",
+                *(f"gh api -X PATCH repos/{DB_SLUG} --input {n}" for n in ("dbm.json", "aam.json", "dbme.json", "aame.json")),
+                "gh repo edit --delete-branch-on-merge", f"gh repo edit {DB_SLUG} --delete-branch-on-merge=true",
+                "gh api graphql -f query='mutation { deleteBranchProtectionRule(input: {branchProtectionRuleId: \"x\"}) "
+                "{ clientMutationId } }'",
+                "gh api graphql -f query='mutation { updateBranchProtectionRule(input: {branchProtectionRuleId: \"x\"}) "
+                "{ clientMutationId } }'",
+                "gh api graphql -f query='mutation { createBranchProtectionRule(input: {}) { clientMutationId } }'",
+                "gh api graphql -f query='mutation { createRepositoryRuleset(input: {}) { clientMutationId } }'",
+                "gh api graphql -f query='mutation { updateRepositoryRuleset(input: {}) { clientMutationId } }'",
+                "gh api graphql -f query='mutation { deleteRepositoryRuleset(input: {}) { clientMutationId } }'",
+                "gh api graphql -f query=\"$(cat <<'EOF'\nmutation { deleteBranchProtectionRule(input: {}) { clientMutationId } }"
+                "\nEOF\n)\""):
+        out = bash(ws, cmd, plain)
+        assert decision(out) == "deny" and why in out["permissionDecisionReason"], cmd
+    for cmd, want in ((f"gh api repos/{DB_SLUG}/branches/main/protection", None), (f"gh api repos/{DB_SLUG}/rulesets", None),
+                      ("gh repo edit --enable-auto-merge=false", "ask"), ("gh repo edit --description x", "ask"),
+                      (f"gh api -X PATCH repos/{DB_SLUG} -F allow_auto_merge=false", "ask"),
+                      (f"gh api -X PATCH repos/{DB_SLUG} -F delete_branch_on_merge=false", "ask"),
+                      (f"gh api -X PATCH repos/{DB_SLUG} --input off.json", "ask"),
+                      ("gh repo edit --delete-branch-on-merge=false", "ask")):
+        assert decision(bash(ws, cmd, plain)) == want, cmd
+    # 낱말 수준 Approve 거부에는 오탐 안내가 붙는다(사용자 결정 — 본문·검색어라도 거부)
+    out = bash(ws, "gh pr comment 3 -b 'please approve'", plain)
+    assert decision(out) == "deny" and "코멘트 본문에 그 낱말을 쓰지 않는다" in out["permissionDecisionReason"]
+
+
+def test_guard_auto_merge_denied_principle_12():
+    """규칙 11·원칙 12(4-c 사용자 결정): PR 자동 병합 켜기는 거부 — 자동 병합은 +1이 붙는 즉시 db_pr merge의 확인(승인 SHA 대조·
+    메인테이너 경로 PR 거부) 없이 병합한다. `gh pr merge --auto`(다른 병합 옵션과 함께·선택자 뒤 따옴표 밖 셸 값), GraphQL
+    `enablePullRequestAutoMerge`, `--auto` 병합 별칭, MCP 자동 병합 켜기. 사유는 보호 바꾸기(`PROTECTION_DENY`)가 아니다.
+    `--auto` 없는 병합(gh·REST·GraphQL)·`--auto=false`·자동 병합 끄기는 ask 그대로. 의존성 없음 판정도 같다."""
+    ws = shared()
     c = ws.clone
     plain = tmp("tt-gh-plain-")
-    alias_repo = _repo_with_origin(f"git@ghe-ssh:{DB_SLUG}.git")
-    url = f"https://ghe.mock.invalid/{DB_SLUG}/pull/3"
-    wt = ws.work / "wt-alias"
-    git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
-    rows = [(f"gh pr merge {url} --squash", c, "deny"), (f"gh pr merge {url} --squash", wt, "deny"),
-            (f"gh pr merge {url} --squash", alias_repo, "deny"), (f"gh pr review {url} --approve", c, "deny"),
-            (f"gh pr review {url} -a", wt, "deny"), (f"gh pr edit {url} --add-label x", c, "ask"),
-            (f"gh pr edit {url} --add-label x", plain, "ask"), (f"gh pr merge 3 -R ghe.mock.invalid/{DB_SLUG}", c, "deny"),
-            ("gh pr merge 3", alias_repo, "deny"), ("gh pr comment 3 -b x", alias_repo, "ask"),
-            ("gh pr view 3", plain, None), (f"gh pr view {url}", c, None),
-            # 표에 없는 동작의 값 받는 옵션 뒤 `-R…`
-            ("gh label create bug -d -Rother/x", c, "ask"), ("gh secret set TOKEN -e -Rother/x -b v", wt, "ask"),
-            ("gh release create v2 --notes '-Reworked parsers/masking'", c, "ask"),
-            ("gh label create x --description '-Resolved in data/x'", c, "ask"),
-            ("gh label create bug -d -Rother/x", alias_repo, "ask"),
-            ("gh release create v2 --target -Rother/x", c, "ask"),
-            ("gh release create v2 --discussion-category -Rother/x", c, "ask"),
-            ("gh label edit bug --description -Rother/x", c, "ask"), ("gh repo edit --description -Rother/x", c, "ask"),
-            ("gh variable set V -e -Rother/x -b v", c, "ask"), ("gh workflow run w.yml --ref -Rother/x", c, "ask"),
-            # 옵션 뒤가 아니거나 표의 bool 옵션 뒤면 그대로 대상(gh가 그 레포를 쓴다)
-            ("gh label create bug -Rother/x", c, None), ("gh run cancel 5 -Rother/x", c, None),
-            ("gh pr create -t x --draft -Rother/x", c, None), ("gh label create bug -d x -Rother/x", c, None),
-            ("gh pr comment 3 --edit-last -Rother/x", c, None)]
-    try:
-        for cmd, cwd, want in rows:
-            assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
-    finally:
-        gitp(c, "worktree", "remove", "--force", str(wt))
+    db = {"owner": "mock-org", "repo": "telephony-issue-db", "pullNumber": 3}
+    why = "자동 병합을 Claude가 켜지 않는다"
+    deny = ("gh pr merge 3 --auto", "gh pr merge 3 --auto --squash", "gh pr merge --auto 3", "gh pr merge 3 --squash --auto=true",
+            "gh pr merge 3 --merge --auto --delete-branch", "gh pr merge 3 $OPTS", "gh -R o/r pr merge 3 --auto",
+            "gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
+            "gh alias set am 'pr merge --auto --squash'")
+    for cmd in deny:
+        for cwd in (plain, c):
+            out = bash(ws, cmd, cwd)
+            assert decision(out) == "deny" and why in out["permissionDecisionReason"], (cmd, cwd)
+            assert "브랜치 보호" not in out["permissionDecisionReason"], cmd
+    for tool in ("mcp__github__enable_pr_auto_merge", "mcp__ghe__automerge_pr"):
+        out = guard(ws, tool, db, ws.base)
+        assert decision(out) == "deny" and why in out["permissionDecisionReason"], tool
+    for cmd in ("gh pr merge 3", "gh pr merge 3 --squash", 'gh pr merge "$PR" --squash', "gh pr merge $PR",
+                "gh pr merge 3 --auto=false", f"gh api -X PUT repos/{DB_SLUG}/pulls/3/merge",
+                f"gh api graphql -f query='{MERGE_MUTATION}'", "gh alias set m 'pr merge --squash'"):
+        out = bash(ws, cmd, plain)
+        assert decision(out) == "ask" and "머지" in out["permissionDecisionReason"], cmd
+    assert decision(guard(ws, "mcp__github__disable_pr_auto_merge", db, ws.base)) == "ask"
+    env = _no_yaml_env(ws)
+    for cmd in ("gh pr merge 3 --auto", "gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {}) { x } }'"):
+        out = bash(ws, cmd, plain, env=env)
+        assert decision(out) == "deny" and why in out["permissionDecisionReason"], cmd
+    assert decision(bash(ws, "gh pr merge 3", plain, env=env)) == "ask"
+
+
+def test_guard_gh_pr_read_list_and_action_aliases():
+    """규칙 11(H-A1 r5·4-c): `pr`은 읽기 목록(list·view·status·checks·diff)만 읽기다(`revert`·`update-branch`·모르는 동작은 쓰기 —
+    ask). 동작 별칭(`new`·`ls`·`co`)을 풀어 본다. `repo`·`issue transfer` 쓰기는 대상 레포와 무관하게 ask."""
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    rows = [(f"gh pr revert 3 -R {DB_SLUG}", plain, "ask"), ("gh pr revert 3", c, "ask"),
+            (f"gh pr new -R {DB_SLUG} -t x -b y", plain, "ask"), (f"gh pr update-branch 3 -R {DB_SLUG}", plain, "ask"),
+            (f"gh repo edit {DB_SLUG} --default-branch dev", plain, "ask"),
+            (f"gh repo edit {DB_SLUG} --enable-auto-merge", plain, "deny"),     # 자동 병합 켜기는 보호 바꾸기(사용자 결정)
+            (f"gh repo delete {DB_SLUG} --yes", plain, "ask"), (f"gh repo archive {DB_SLUG} -y", plain, "ask"),
+            (f"gh repo sync {DB_SLUG} --source mock-org/other --branch main --force", plain, "ask"),
+            (f"gh issue transfer 5 {DB_SLUG}", plain, "ask"), ("gh issue transfer 5 other/x", plain, "ask"),
+            ("gh repo edit other/x --description y", c, "ask"), ("gh repo create acme/new --private", c, "ask"),
+            ("gh repo rename newname", plain, "ask"),
+            # 읽기
+            (f"gh pr ls -R {DB_SLUG}", plain, None), (f"gh issue ls -R {DB_SLUG}", plain, None),
+            (f"gh release ls -R {DB_SLUG}", plain, None), (f"gh pr checks 3 -R {DB_SLUG}", plain, None),
+            (f"gh repo view {DB_SLUG}", plain, None), (f"gh repo clone {DB_SLUG}", plain, None),
+            ("gh pr status", c, None), ("gh pr diff 3", c, None), ("gh --version", c, None)]
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
 
 
 def test_guard_reserved_words_redirections_and_line_continuations_find_commands():
@@ -1596,168 +1757,36 @@ def test_guard_reserved_words_redirections_and_line_continuations_find_commands(
     forms = ["if true; then {x}; fi", "for n in 3; do {x}; done", "while true; do {x} && break; done", "{{ {x}; }}", "! {x}",
              "function f {{ {x}; }}", "f() {{ {x}; }}; f", ">/dev/null {x}", "2>&1 {x}", "</dev/null {x}", "&>/dev/null {x}",
              "if ! {x}; then echo no; fi", "nohup >/dev/null 2>&1 {x}", "coproc {x}", "time ! {x}"]
-    cmds = [("gh pr merge 3 --squash", "머지"), ("gh pr review 3 --approve", "Approve하지 않는다"),
-            (f"gh api -X PUT repos/{DB_SLUG}/pulls/3/merge", "머지"), ("git push origin HEAD:main", "규칙 6"),
-            ("git checkout main", "규칙 8")]
+    # 병합 계열은 ask(4-c), 나머지는 거부 — 어느 쪽이든 명령을 찾았다는 뜻이다(못 찾으면 판정 없음)
+    cmds = [("gh pr merge 3 --squash", "ask", "머지"), ("gh pr review 3 --approve", "deny", "Approve하지 않는다"),
+            (f"gh api -X PUT repos/{DB_SLUG}/pulls/3/merge", "ask", "머지"),
+            ("git push --no-verify origin HEAD:main", "deny", "규칙 5"), ("git checkout main", "deny", "규칙 8")]
     for form in forms:
-        for x, why in cmds:
+        for x, want, why in cmds:
             out = bash(ws, form.format(x=x), c)
-            assert decision(out) == "deny" and why in out["permissionDecisionReason"], form.format(x=x)
+            assert decision(out) == want and why in out["permissionDecisionReason"], form.format(x=x)
     nl = "\\\n  "
     rows = [(f"if true; then gh pr comment 3 -b hi -R {DB_SLUG}; fi", plain, "ask"),
-            (f'm() {{ gh pr merge "$@" -R {DB_SLUG}; }}; m 3', plain, "deny"),
-            ("gh 2>/dev/null pr merge 3", c, "deny"), ("git 2>&1 push origin HEAD:main", c, "deny"),
+            (f'm() {{ gh pr merge "$@" -R {DB_SLUG}; }}; m 3', plain, "ask"),
+            ("gh 2>/dev/null pr merge 3", c, "ask"), ("git 2>&1 push --no-verify origin HEAD:main", c, "deny"),
             # 줄 이음(GitHub REST 문서 꼴)
             ((f'gh api {nl}--method PUT {nl}-H "Accept: application/vnd.github+json" {nl}/repos/{DB_SLUG}/pulls/3/merge '
-              f'{nl}-f "merge_method=squash"'), plain, "deny"),
+              f'{nl}-f "merge_method=squash"'), plain, "ask"),
             (f'gh api {nl}--method POST {nl}/repos/{DB_SLUG}/pulls/3/reviews {nl}-f "event=APPROVE"', plain, "deny"),
             (f"gh api {nl}--method PUT {nl}/repos/{DB_SLUG}/pulls/3/reviews/9/dismissals {nl}-f message=x", plain, "deny"),
-            (f"gh api {nl}graphql {nl}-f query='{MERGE_MUTATION}'", plain, "deny"),
+            (f"gh api {nl}graphql {nl}-f query='{MERGE_MUTATION}'", plain, "ask"),
             (f"gh api {nl}-X POST {nl}repos/{DB_SLUG}/issues/3/comments {nl}-f body=hi", plain, "ask"),
-            (f"gh {nl}pr merge 3 --squash", c, "deny"), (f"gh pr {nl}merge 3", c, "deny"), (f"git {nl}push origin HEAD:main", c, "deny"),
-            (f"gh api {nl}-X PUT {nl}'repos/{{owner}}/{{repo}}/pulls/3/merge'", c, "deny"),
-            ("echo x # 메모 \\\ngh pr merge 3", c, "deny"),             # 주석 끝 `\`는 줄을 잇지 않는다
+            (f"gh {nl}pr merge 3 --squash", c, "ask"), (f"gh pr {nl}merge 3", c, "ask"),
+            (f"git {nl}push --no-verify origin HEAD:main", c, "deny"),
+            (f"gh api {nl}-X PUT {nl}'repos/{{owner}}/{{repo}}/pulls/3/merge'", c, "ask"),
+            ("echo x # 메모 \\\ngh pr merge 3", c, "ask"),             # 주석 끝 `\`는 줄을 잇지 않는다
             ("gh api graphql -f query='query { viewer \\\n { login } }'", plain, None),   # 작은따옴표 안 줄 이음은 글자
             # `$'…'`
-            ("echo $'it\\'s'; gh pr merge 3 --squash", c, "deny"), ("gh pr $'merge' 3", c, "deny"),
-            (f"gh api -X PUT $'repos/{DB_SLUG}/pulls/3/merge'", plain, "deny"),
+            ("echo $'it\\'s'; gh pr merge 3 --squash", c, "ask"), ("gh pr $'merge' 3", c, "ask"),
+            (f"gh api -X PUT $'repos/{DB_SLUG}/pulls/3/merge'", plain, "ask"),
             # 오탐 방지: 글 명령 안의 낱말, 이슈 DB 읽기
             (f"echo then gh pr merge 3 -R {DB_SLUG}", plain, None), ("grep -n 'do gh pr merge' notes.md", plain, None),
             ("if true; then gh pr view 3; fi", c, None), ("for n in 3 4; do gh pr view $n --json state; done", c, None)]
-    for cmd, cwd, want in rows:
-        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
-
-
-def test_guard_gh_shell_expanded_operations_are_closed():
-    """규칙 11(H-A1 r5): 셸이 정하는 동작은 모른다 — 닫힌 쪽. GraphQL은 Bash 명령 글 전체(heredoc 본문 포함)에서 병합·Approve·
-    기각 이름을 찾는다(`query="$(cat <<'EOF' …)"`·`Q=…; -f query="$Q"`·파이프 stdin·같은 명령에서 쓴 파일). 읽지 못한 본문은 대상과
-    무관하게 ask, 리뷰 mutation의 event 변수가 셸 값이면 Approve. REST는 셸이 푼 엔드포인트의 쓰기(끝 칸이 셸 값이거나 병합·리뷰
-    꼴)를 거부, 리뷰 엔드포인트의 `event="$E"`는 Approve. 그룹·`pr` 동작이 셸 값이면 거부, `pr review`의 옵션 자리 셸 값은
-    Approve. 작은따옴표 안 GraphQL 변수(`$o`)·인용한 선택자·옵션 값은 그대로다."""
-    ws = shared()
-    c = ws.clone
-    plain = tmp("tt-gh-plain-")
-    (plain / "q.graphql").write_text("query { viewer { login } }", encoding="utf-8")
-    hd = "gh api graphql -f query=\"$(cat <<'EOF'\n{q}\nEOF\n)\""
-    approve, merge, dyn = "Approve하지 않는다", "머지", "셸이 푸는 값"
-    rows = [(hd.format(q=MERGE_MUTATION), plain, "deny", merge),
-            (hd.format(q="mutation { enablePullRequestAutoMerge(input: {}) { clientMutationId } }"), c, "deny", merge),
-            (hd.format(q=APPROVE_MUTATION), plain, "deny", approve),
-            (f"Q='{MERGE_MUTATION}'; gh api graphql -f query=\"$Q\"", plain, "deny", merge),
-            (f"echo '{MERGE_MUTATION}' | gh api graphql -F query=@-", plain, "deny", merge),
-            (f"cat > m.graphql <<'E'\n{MERGE_MUTATION}\nE\ngh api graphql -F query=@m.graphql", plain, "deny", merge),
-            (("gh api graphql -f query='mutation($id:ID!,$e:PullRequestReviewEvent!){addPullRequestReview(input:"
-              "{pullRequestId:$id,event:$e}){clientMutationId}}' -f id=x -f e=\"$E\""), plain, "deny", approve),
-            ('gh api graphql -f query="$(cat none.graphql)"', plain, "ask", "GraphQL 본문을 읽지 못했다"),
-            ("cat x.graphql | gh api graphql -F query=@-", plain, "ask", "GraphQL 본문을 읽지 못했다"),
-            # 글자를 알 수 있는 셸 본문은 읽는다: heredoc 본문·있는 파일
-            (hd.format(q="query { viewer { login } }"), c, None, None),
-            ('gh api graphql -f query="$(cat q.graphql)"', plain, None, None),
-            (hd.format(q='mutation { addPullRequestReview(input: {pullRequestId: "x", event: COMMENT}) { clientMutationId } }'), c,
-             "ask", None),
-            (("gh api graphql -f query='mutation($id:ID!){addPullRequestReview(input:{pullRequestId:$id,event:COMMENT})"
-              "{clientMutationId}}' -f id=\"$ID\""), plain, None, None),
-            ("gh api graphql -f query='query($o:String!){ repository(owner:$o, name:\"x\"){ id } }' -f o=\"$OWNER\"", plain,
-             None, None),
-            ("gh api graphql -fquery='query($o:String!){ repository(owner:$o, name:\"x\"){ id } }' -f o=x", plain, None, None),
-            # REST
-            (f"EP=repos/{DB_SLUG}/pulls/3/merge; gh api -X PUT \"$EP\"", plain, "deny", dyn),
-            ('gh api -X POST "$EP" -f event=APPROVE', plain, "deny", dyn),
-            (f'BASE=repos/{DB_SLUG}; gh api -X PUT "$BASE/pulls/3/merge"', plain, "deny", merge),
-            ('gh api -X PUT "$PR/merge"', plain, "deny", dyn),
-            ('gh api "$URL/reviews" -f event=APPROVE', plain, "deny", approve),
-            ('gh api "$URL/reviews" -f event=COMMENT', plain, "ask", None),       # 레포를 몰라 어디서나 ask
-            ('gh api -X PUT "repos/{owner}/{repo}/pulls/$N/merge"', c, "deny", merge),
-            ('gh api -X PUT "repos/{owner}/{repo}/pulls/$N/merge"', plain, None, None),
-            ('gh api -X PUT "repos/other/x/pulls/3/$A"', c, "deny", dyn), ('gh api -X PUT "repos/other/x/pulls/3/$A"', plain, None, None),
-            (f'gh api repos/{DB_SLUG}/pulls/3/reviews -f event="$E"', plain, "deny", approve),
-            (f'gh api "repos/{DB_SLUG}/issues/$N/comments" -f body=x', plain, "ask", None),
-            ('gh api "$EP"', plain, None, None),
-            # 그룹·동작·리뷰 옵션
-            ("gh pr $ACT 3", c, "deny", dyn), (f'gh pr "$ACT" 3 -R {DB_SLUG}', plain, "deny", dyn),
-            ('gh "$G" merge 3', c, "deny", dyn), (f'gh "$G" -X PUT repos/{DB_SLUG}/pulls/3/merge', plain, "deny", dyn),
-            (f'gh issue "$A" 5 -R {DB_SLUG}', plain, "ask", None), ("gh pr $ACT 3", plain, None, None),
-            ('gh pr review 3 "$OPT"', c, "deny", approve), (f"gh pr review 3 $OPT -R {DB_SLUG}", plain, "deny", approve),
-            ("gh pr review 3 --comment -b $B", c, "deny", approve),
-            ('gh pr review "$N" --comment -b "$B"', c, "ask", None), ('gh pr review $n --comment --body="$B"', c, "ask", None),
-            ('gh pr view "$N" --json state', c, None, None)]
-    for cmd, cwd, want, why in rows:
-        out = bash(ws, cmd, cwd)
-        assert decision(out) == want, (cmd, cwd)
-        assert why is None or why in out["permissionDecisionReason"], cmd
-
-
-def _repo_with_remotes(remotes: list[tuple[str, str]], config: tuple = ()) -> Path:
-    path = tmp("tt-gh-repo-") / "r"
-    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True)
-    for name, url in remotes:
-        subprocess.run(["git", "-C", str(path), "remote", "add", name, url], check=True)
-    for key, value in config:
-        subprocess.run(["git", "-C", str(path), "config", key, value], check=True)
-    return path
-
-
-def test_guard_gh_cwd_resolution_remotes_gitdir_and_unknown_dirs():
-    """규칙 11(H-A1 r5): cwd 레포는 gh처럼 넓게 본다 — 원격 하나라도(upstream·이름 있는 원격·insteadOf를 푼 URL)·`gh-resolved`
-    값·앞 대입 `GIT_DIR`이 이슈 DB면 대상. 모르는 cwd(셸이 풀 경로·`cd $(…)`·없는 경로·셸이 푸는 `GIT_DIR`)는 이슈 DB로 본다(병합·
-    Approve는 거부, 쓰기는 ask, 사유를 붙인다). `cd -`·`pushd`/`popd`는 이 명령 글 안에서 따라간다. 읽기는 그대로다."""
-    ws = shared()
-    c = ws.clone
-    plain = tmp("tt-gh-plain-")
-    db, other = f"https://ghe.mock.invalid/{DB_SLUG}", "https://ghe.mock.invalid/jdoe/telephony-issue-db"
-    fork = _repo_with_remotes([("origin", other), ("upstream", db)])
-    named = _repo_with_remotes([("db", db)])
-    resolved = _repo_with_remotes([("origin", other)], (("remote.origin.gh-resolved", DB_SLUG),))
-    alias = _repo_with_remotes([("origin", "dbx:telephony-issue-db")], (("url.https://ghe.mock.invalid/mock-org/.insteadOf", "dbx:"),))
-    unrelated = _repo_with_remotes([("origin", other)])
-    unknown = "알 수 없어"
-    rows = [("gh pr merge 3 --squash", fork, "deny", "머지"), ("gh pr review 3 --approve", fork, "deny", "Approve"),
-            ("gh pr comment 3 -b hi", fork, "ask", None), ("gh pr merge 3", named, "deny", None),
-            ("gh pr merge 3", resolved, "deny", None), ("gh pr merge 3", alias, "deny", None),
-            ("gh pr merge 3", unrelated, None, None), ("gh pr view 3", fork, None, None),
-            (f"GIT_DIR={c}/.git gh pr merge 3 --squash", plain, "deny", None),
-            (f"GIT_DIR={c}/.git gh pr review 3 --approve", plain, "deny", "Approve"),
-            (f"GIT_DIR={fork}/.git gh pr comment 3 -b hi", plain, "ask", None),
-            ('GIT_DIR="$G" gh pr merge 3', plain, "deny", unknown),
-            (f'D={c}; cd "$D" && gh pr merge 3 --squash', plain, "deny", unknown),
-            (f"cd $(git -C {c} rev-parse --show-toplevel) && gh pr merge 3", plain, "deny", unknown),
-            (f"gh repo clone {DB_SLUG} {plain}/x && cd {plain}/x && gh pr merge 3", plain, "deny", unknown),
-            (f"cd {plain}/nope && gh pr comment 3 -b hi", plain, "ask", unknown),
-            (f"cd {c}; cd /tmp; cd -; gh pr merge 3", plain, "deny", "머지"),
-            (f"cd {c}; cd /tmp; cd -; git checkout main", plain, "deny", "규칙 8"),
-            (f"pushd {c} >/dev/null && gh pr merge 3", plain, "deny", None),
-            # 오탐 방지: 읽기, 따라갈 수 있는 디렉토리
-            (f'D={c}; cd "$D" && gh pr view 3', plain, None, None), (f"cd {plain}/nope && gh pr view 3", plain, None, None),
-            (f"cd {c} && cd {plain} && gh pr merge 3", plain, None, None), (f"pushd {c} && popd && gh pr merge 3", plain, None, None)]
-    for cmd, cwd, want, why in rows:
-        out = bash(ws, cmd, cwd)
-        assert decision(out) == want, (cmd, cwd)
-        assert why is None or why in out["permissionDecisionReason"], cmd
-
-
-def test_guard_gh_pr_read_list_aliases_and_repo_positional_targets():
-    """규칙 11(H-A1 r5): `pr`은 읽기 목록(list·view·status·checks·diff)만 읽기다(`revert`·`update-branch`·모르는 동작은 쓰기).
-    동작 별칭(`new`·`ls`·`co`)과 gh 기본 별칭 `gh co`(= `pr checkout`, 규칙 8)를 풀어 본다. `repo <동작> [<레포>]`의 위치 인자와
-    `issue transfer`의 대상 레포는 명시 대상이다(URL 꼴 포함). 다른 레포를 가리키는 `repo` 위치 인자는 cwd 판정을 끈다."""
-    ws = shared()
-    c = ws.clone
-    plain = tmp("tt-gh-plain-")
-    rows = [(f"gh pr revert 3 -R {DB_SLUG}", plain, "ask"), ("gh pr revert 3", c, "ask"),
-            (f"gh pr new -R {DB_SLUG} -t x -b y", plain, "ask"), (f"gh pr update-branch 3 -R {DB_SLUG}", plain, "ask"),
-            ("gh pr co 3", c, "deny"), ("gh co 3", c, "deny"),
-            (f"gh repo edit {DB_SLUG} --default-branch dev", plain, "ask"),
-            (f"gh repo edit {DB_SLUG} --enable-auto-merge", plain, "ask"),
-            (f"gh repo delete {DB_SLUG} --yes", plain, "ask"), (f"gh repo archive {DB_SLUG} -y", plain, "ask"),
-            (f"gh repo sync {DB_SLUG} --source mock-org/other --branch main --force", plain, "ask"),
-            (f"gh repo edit https://ghe.mock.invalid/{DB_SLUG} --default-branch dev", plain, "ask"),
-            (f"gh issue transfer 5 {DB_SLUG}", plain, "ask"), ("gh issue transfer 5 other/x", c, "ask"),
-            ("gh repo edit --description other/x", c, "ask"),        # 앞 옵션의 값일 수 있다 — cwd 판정이 남는다
-            # 오탐 방지
-            (f"gh pr ls -R {DB_SLUG}", plain, None), (f"gh issue ls -R {DB_SLUG}", plain, None),
-            (f"gh release ls -R {DB_SLUG}", plain, None), (f"gh pr checks 3 -R {DB_SLUG}", plain, None),
-            ("gh pr co 3", plain, None), (f"gh repo view {DB_SLUG}", plain, None), (f"gh repo clone {DB_SLUG}", plain, None),
-            ("gh repo edit other/x --description y", c, None), ("gh repo create acme/new --private", c, None),
-            ("gh issue transfer 5 other/x", plain, None), ("gh repo rename newname", plain, None)]
     for cmd, cwd, want in rows:
         assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
 
@@ -1774,47 +1803,41 @@ def test_guard_cd_scope_follows_bash_subshells_pipes_and_branches():
     other = _repo_with_origin("https://ghe.mock.invalid/other/repo")
     wt = ws.work / "wt-cdscope"
     git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
+    p = "git push --no-verify origin HEAD:main"     # cwd 탐침(규칙 5 — ci_mode local이라 거부). gh 규칙 11은 cwd를 보지 않는다(4-c)
     rows = [
-        # 서브셸·치환·파이프·백그라운드 안의 cd는 이슈 DB worktree·clone의 병합·Approve를 가리지 않는다
-        ("(cd /tmp && ls) ; gh pr merge 3 --squash", wt, "deny"),
-        ("(cd /tmp && ls) && gh pr merge 3 --auto --squash", wt, "deny"),
+        # 서브셸·치환·파이프·백그라운드 안의 cd는 이슈 DB worktree·clone을 가리지 않는다
+        (f"(cd /tmp && ls) ; {p}", wt, "deny"),
+        (f"(cd /tmp && ls) && {p}", wt, "deny"),
         (f"(cd {other} && git log -1) && gh pr review 3 --approve", wt, "deny"),
-        (f"(cd {other}) ; gh pr merge 3", c, "deny"),
-        (f"cd {other} | cat; gh pr merge 3 --squash", c, "deny"),
-        (f"cat /dev/null | cd {other}; gh pr merge 3", c, "deny"),
-        (f"echo $(cd {other} && pwd); gh pr merge 3 --squash", c, "deny"),
-        (f"diff <(cd {other}; ls) x; gh pr merge 3", c, "deny"),
-        (f"cd {other} && ls & gh pr merge 3", c, "deny"),
-        (f"{{ cd {other}; }} | cat; gh pr merge 3", c, "deny"),
-        (f"ls | while read l; do cd {other}; done; gh pr merge 3", c, "deny"),
+        (f"(cd {other}) ; {p}", c, "deny"),
+        (f"cd {other} | cat; {p}", c, "deny"),
+        (f"cat /dev/null | cd {other}; {p}", c, "deny"),
+        (f"echo $(cd {other} && pwd); {p}", c, "deny"),
+        (f"diff <(cd {other}; ls) x; {p}", c, "deny"),
+        (f"cd {other} && ls & {p}", c, "deny"),
+        (f"{{ cd {other}; }} | cat; {p}", c, "deny"),
+        (f"ls | while read l; do cd {other}; done; {p}", c, "deny"),
         (f"for d in a; do cd {other}; done | cat; gh pr review 3 --approve", c, "deny"),
         (f"(cd {other} && ls) ; gh pr create -t x -b y", wt, "ask"),
         # 조건부·분기·함수 본문: 돌지 않았을 수 있다 — 전 cwd도 본다
-        (f"false && cd {other}; gh pr merge 3", c, "deny"),
-        (f"if test -d x; then cd {other}; fi; gh pr merge 3", c, "deny"),
-        (f"case $X in a) cd {other};; esac; gh pr merge 3", c, "deny"),
-        (f"f() {{ cd {other}; }}; gh pr merge 3", c, "deny"),
-        (f"f() {{ cd {c}; }}; cd {plain}; f; gh pr merge 3", plain, "deny"),     # 부르면 돈다 — 모르는 cwd
-        ("echo x) ; gh pr merge 3", plain, "deny"),                              # 짝 없는 `)`: 모르는 cwd
-        (f"X='cd {c}'; eval \"$X\"; gh pr merge 3", plain, "deny"),            # 셸 값 eval·source: cd할 수 있다
-        ("source ./env.sh && gh pr merge 3", plain, "deny"), ("source ./env.sh && gh pr view 3", plain, None),
-        (f"CDPATH={c.parent} cd {c.name}; gh pr merge 3", plain, "deny"),        # CDPATH에서 먼저 찾는다
-        # 셸이 읽는 heredoc 본문: 앞에서 거친 cwd로도 본다
-        (f"cd {c} && bash <<'EOF'\ngh pr merge 3\nEOF", plain, "deny"),
+        (f"false && cd {other}; {p}", c, "deny"),
+        (f"if test -d x; then cd {other}; fi; {p}", c, "deny"),
+        (f"case $X in a) cd {other};; esac; {p}", c, "deny"),
+        (f"f() {{ cd {other}; }}; {p}", c, "deny"),
+        (f"cd {c} && bash <<'EOF'\n{p}\nEOF", plain, "deny"),
         # 다른 레포에서 서브셸로 이슈 DB에 들어갔다 나오면 대상이 아니다
-        (f"(cd {wt} && ls) ; gh pr merge 3 --squash", other, None),
-        (f"echo $(cd {c} && pwd); gh pr merge 3", plain, None),
-        (f"cd {c} | cat; gh pr merge 3", plain, None),
+        (f"(cd {wt} && ls) ; {p}", other, None),
+        (f"echo $(cd {c} && pwd); {p}", plain, None),
+        (f"cd {c} | cat; {p}", plain, None),
         # bash처럼 남는 cd는 그대로 따라간다
-        (f"cd {other} && ls ; gh pr merge 3", c, None),
-        (f"{{ cd {other}; }} ; gh pr merge 3", c, None),
-        (f"cd {other} && gh pr merge 3", wt, None),
-        (f"eval 'cd {c}'; gh pr merge 3", plain, "deny"),
-        (f"builtin cd {c}; gh pr merge 3", plain, "deny"),
-        (f"cd {c}; (gh pr merge 3)", plain, "deny"),
-        # git 규칙도 같은 cwd를 쓴다
-        (f"(cd {other} && ls); git push origin HEAD:main", c, "deny"),
-        (f"git -C {other} log | cd {other}; git push origin HEAD:main", c, "deny")]
+        (f"cd {other} && ls ; {p}", c, None),
+        (f"{{ cd {other}; }} ; {p}", c, None),
+        (f"cd {other} && {p}", wt, None),
+        (f"eval 'cd {c}'; {p}", plain, "deny"),
+        (f"builtin cd {c}; {p}", plain, "deny"),
+        (f"cd {c}; ({p})", plain, "deny"),
+        (f"(cd {other} && ls); {p}", c, "deny"),
+        (f"git -C {other} log | cd {other}; {p}", c, "deny")]
     try:
         for cmd, cwd, want in rows:
             assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
@@ -1823,8 +1846,8 @@ def test_guard_cd_scope_follows_bash_subshells_pipes_and_branches():
 
 
 def test_guard_cwd_moves_that_can_fail_keep_previous_candidates():
-    """명령 파싱(회귀 수정 R1): 실패할 수 있거나 대상을 모르는 이동은 이전 cwd 후보를 버리지 않는다. 모르는 디렉토리는 규칙 11에선
-    이슈 DB일 수 있는 것이지만 git 규칙(3~8·12)에선 판정하지 못하는 후보라, 이전 후보를 버리면 이슈 DB clone·worktree에서 도는
+    """명령 파싱(회귀 수정 R1): 실패할 수 있거나 대상을 모르는 이동은 이전 cwd 후보를 버리지 않는다. 모르는 디렉토리는 git 규칙(3~8·12)에선
+    판정하지 못하는 후보라(규칙 11은 4-c부터 cwd를 보지 않는다), 이전 후보를 버리면 이슈 DB clone·worktree에서 도는
     명령을 놓친다. Claude Code는 Bash 호출마다 새 셸이라 앞 호출의 pushd 스택은 없다 — 빈 스택 popd는 실패하고 cwd는 그대로다.
     `popd -n`·`popd +N`(N≥1)·`pushd -n`은 cwd를 바꾸지 않는다(스택만). 분기를 합쳐 스택이 달라지면 뒤 popd는 스택 칸 모두·이전
     후보·모르는 디렉토리로 본다. 없는 경로·셸이 풀 경로로의 cd도 실패할 수 있다(바로 뒤가 `&&`면 뒤 명령은 돌지 않는다)."""
@@ -1835,39 +1858,40 @@ def test_guard_cwd_moves_that_can_fail_keep_previous_candidates():
     git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
     rows = [
         # 빈 스택 popd: 실패 — cwd 그대로
-        ("popd; git push origin HEAD:main", c, "deny"), ("popd; git push origin HEAD:main", wt, "deny"),
+        ("popd; git push --no-verify origin HEAD:main", c, "deny"), ("popd; git push --no-verify origin HEAD:main", wt, "deny"),
         ("popd 2>/dev/null; git checkout -b x", c, "deny"), ("popd; git reset --hard origin/main", c, "deny"),
         ("popd; echo x > notes.txt", c, "deny"), ("popd; git commit --no-verify -m x", c, "deny"),
         ("popd; git commit --no-verify -m x", wt, "deny"), ("popd; git push --no-verify origin HEAD:issue/x", wt, "deny"),
-        ("popd; gh pr merge 3", plain, "deny"),                       # 규칙 11은 모르는 cwd(이슈 DB일 수 있다) 그대로
+        ("popd; gh pr merge 3", plain, "ask"),                       # 규칙 11은 cwd를 보지 않는다(4-c) — 명령을 찾았다
         # popd -n·+N(N≥1)·pushd -n: cwd를 바꾸지 않는다
-        (f"pushd {c} >/dev/null; popd -n; git push origin HEAD:main", plain, "deny"),
-        (f"pushd {c} >/dev/null; popd -n; gh pr merge 3", plain, "deny"),
-        (f"pushd {c} >/dev/null; popd +1; git push origin HEAD:main", plain, "deny"),
-        ("pushd -n /tmp; git push origin HEAD:main", c, "deny"),
-        (f"pushd -n {c}; popd; git push origin HEAD:main", plain, "deny"),   # -n으로 넣은 칸으로 popd
+        (f"pushd {c} >/dev/null; popd -n; git push --no-verify origin HEAD:main", plain, "deny"),
+        (f"pushd {c} >/dev/null; popd -n; gh pr merge 3", plain, "ask"),
+        (f"pushd {c} >/dev/null; popd +1; git push --no-verify origin HEAD:main", plain, "deny"),
+        ("pushd -n /tmp; git push --no-verify origin HEAD:main", c, "deny"),
+        (f"pushd -n {c}; popd; git push --no-verify origin HEAD:main", plain, "deny"),   # -n으로 넣은 칸으로 popd
         # 인자 없는 pushd·pushd ±N·이전 디렉토리를 모르는 cd -·cd ±N: 실패하거나 모르는 칸
-        ("pushd; git push origin HEAD:main", c, "deny"), ("pushd +1; git push origin HEAD:main", c, "deny"),
-        ("cd -; git push origin HEAD:main", c, "deny"), ("cd -1; git push origin HEAD:main", c, "deny"),
-        ("popd -0; git push origin HEAD:main", c, "deny"),
+        ("pushd; git push --no-verify origin HEAD:main", c, "deny"), ("pushd +1; git push --no-verify origin HEAD:main", c, "deny"),
+        ("cd -; git push --no-verify origin HEAD:main", c, "deny"), ("cd -1; git push --no-verify origin HEAD:main", c, "deny"),
+        ("popd -0; git push --no-verify origin HEAD:main", c, "deny"),
         # 분기로 스택을 모르게 되면 뒤 popd는 스택 칸·이전 후보 모두
-        ("if test -d x; then pushd /tmp; fi; popd; git push origin HEAD:main", c, "deny"),
-        (f"pushd {c} && pushd /tmp; popd; git push origin HEAD:main", plain, "deny"),
+        ("if test -d x; then pushd /tmp; fi; popd; git push --no-verify origin HEAD:main", c, "deny"),
+        (f"pushd {c} && pushd /tmp; popd; git push --no-verify origin HEAD:main", plain, "deny"),
         # 없는 경로·셸이 풀 경로: cd가 실패하면 cwd 그대로(`||` 뒤는 실패한 경우다)
-        (f"cd {plain}/nope; git push origin HEAD:main", c, "deny"),
+        (f"cd {plain}/nope; git push --no-verify origin HEAD:main", c, "deny"),
         ('cd "$D"; git checkout -b x', c, "deny"),
-        (f"cd {plain}/nope || git push origin HEAD:main", c, "deny"),
-        (f"cd {plain}/nope && ls || git push origin HEAD:main", c, "deny"),
+        (f"cd {plain}/nope || git push --no-verify origin HEAD:main", c, "deny"),
+        (f"cd {plain}/nope && ls || git push --no-verify origin HEAD:main", c, "deny"),
         # 오탐 방지: 따라갈 수 있는 스택은 그대로 따라간다, `&&` 뒤는 cd가 성공한 경우뿐이다
-        (f"pushd {plain} >/dev/null; popd; git push origin HEAD:main", c, "deny"),
-        (f"pushd {plain} >/dev/null; popd -n; git push origin HEAD:main", c, None),
-        (f"pushd {plain} >/dev/null; popd +0; git push origin HEAD:main", c, "deny"),
-        (f"pushd {plain} >/dev/null; pushd; git push origin HEAD:main", c, "deny"),
-        (f"pushd {c} >/dev/null; pushd; git push origin HEAD:main", plain, None),
-        (f"pushd {c} >/dev/null; popd +0; gh pr merge 3", plain, None),
-        (f"cd {plain}; popd -n; git push origin HEAD:main", c, None),
-        (f"cd {plain}/nope && git push origin HEAD:main", c, None),
-        (f"pushd {c} && popd && gh pr merge 3", plain, None)]
+        (f"pushd {plain} >/dev/null; popd; git push --no-verify origin HEAD:main", c, "deny"),
+        (f"pushd {plain} >/dev/null; popd -n; git push --no-verify origin HEAD:main", c, None),
+        (f"pushd {plain} >/dev/null; popd +0; git push --no-verify origin HEAD:main", c, "deny"),
+        (f"pushd {plain} >/dev/null; pushd; git push --no-verify origin HEAD:main", c, "deny"),
+        (f"pushd {c} >/dev/null; pushd; git push --no-verify origin HEAD:main", plain, None),
+        (f"cd {plain}; popd -n; git push --no-verify origin HEAD:main", c, None),
+        (f"cd {plain}/nope && git push --no-verify origin HEAD:main", c, None),
+        (f"pushd {c} >/dev/null; popd +0; git push --no-verify origin HEAD:main", plain, None),
+        (f"pushd {c} && popd && git push --no-verify origin HEAD:main", plain, None),
+        (f"cd {c} && cd {plain} && git push --no-verify origin HEAD:main", plain, None)]
     try:
         for cmd, cwd, want in rows:
             assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
@@ -1877,7 +1901,7 @@ def test_guard_cwd_moves_that_can_fail_keep_previous_candidates():
 
 def test_guard_cwd_candidate_overflow_keeps_first_and_latest():
     """명령 파싱(회귀 수정 R4): cwd 후보가 상한(`CWD_CAP`)을 넘으면 처음 후보와 가장 최근 후보들을 남기고 가운데를 모르는
-    디렉토리로 접는다 — 넘침이 마지막 cd 대상(이슈 DB clone)을 버리지 않는다. 접힌 후보는 규칙 11에서 모르는 cwd로 남는다."""
+    디렉토리로 접는다 — 넘침이 마지막 cd 대상(이슈 DB clone)을 버리지 않는다. 접힌 후보는 모르는 디렉토리로 남는다."""
     ws = shared()
     c = ws.clone
     plain = tmp("tt-gh-plain-")
@@ -1886,10 +1910,10 @@ def test_guard_cwd_candidate_overflow_keeps_first_and_latest():
         d.mkdir()
     chain = "; ".join(f"true && cd {d}" for d in subs[:7])
     arms = " ".join(f"{chr(97 + i)}) cd {d};;" for i, d in enumerate(subs[:7]))
-    rows = [(f"{chain}; true && cd {c}; git push origin HEAD:main", plain, "deny"),
-            (f"case $X in {arms} h) cd {c};; esac; git push origin HEAD:main", plain, "deny"),
-            (f"{chain}; true && cd {subs[7]}; true && cd {subs[8]}; git push origin HEAD:main", c, "deny"),   # 처음 cwd
-            (f"{chain}; true && cd {subs[7]}; true && cd {subs[8]}; gh pr merge 3", plain, "deny"),          # 접힌 후보
+    rows = [(f"{chain}; true && cd {c}; git push --no-verify origin HEAD:main", plain, "deny"),
+            (f"case $X in {arms} h) cd {c};; esac; git push --no-verify origin HEAD:main", plain, "deny"),
+            (f"{chain}; true && cd {subs[7]}; true && cd {subs[8]}; git push --no-verify origin HEAD:main", c, "deny"),   # 처음 cwd
+            (f"{chain}; true && cd {subs[7]}; true && cd {subs[8]}; gh pr merge 3", plain, "ask"),          # 접힌 후보
             (f"{chain}; true && cd {c}; git push origin HEAD:issue/x", plain, "ask")]
     for cmd, cwd, want in rows:
         assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
@@ -1909,29 +1933,29 @@ def _raising_realpath_env(ws: Workspace) -> dict:
 
 def test_guard_ansi_c_nul_surrogates_and_path_errors_do_not_degrade():
     """명령 파싱(회귀 수정 R2): `$'…'`의 NUL(`\\0`·`\\x00`·`\\000`·`\\u0000`·`\\c@`)은 bash처럼 그 인용의 나머지를 버리고(`$'a\\0b'c`
-    = `ac`), 서로게이트(`\\ud800`)는 U+FFFD다. 명령 글의 날 NUL은 빼고 짝 없는 서로게이트는 U+FFFD다. 경로 연산이 예외를 내도
-    그 검사만 판정하지 못한 것(ask)으로 보고 다른 검사를 이어 간다 — 같은 명령의 병합·main push·--no-verify가 내부 오류 판정
-    (ask)으로 약해지지 않는다. 출력은 ASCII JSON이라 사유에 인코딩할 수 없는 글자가 들어도 종료 0이다."""
+    = `ac`), 서로게이트(`\\ud800`)는 U+FFFD다. 명령 글의 날 NUL은 빼고 짝 없는 서로게이트는 U+FFFD다(이 글자들이 예외를 내지
+    않는다). 경로 연산이 그래도 예외를 내면 그 호출은 거부(사유 `guard 내부 오류`, 4-c)하고 다른 검사는 사유를 남기도록 이어 간다.
+    출력은 ASCII JSON이라 사유에 인코딩할 수 없는 글자가 들어도 종료 0이다."""
     ws = shared()
     c = ws.clone
     plain = tmp("tt-gh-plain-")
     wt = ws.work / "wt-ansic"
     git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
-    rows = [("cat $'\\x00x'; gh pr merge 3 --squash", c, "deny", "머지"),
-            ("cat $'\\0'; git push origin HEAD:main", wt, "deny", "규칙 6"),
-            ("cat $'\\ud800'; gh pr merge 3", wt, "deny", "머지"),
-            ("echo hi > $'\\0x'; gh pr merge 3", wt, "deny", "머지"),
+    rows = [("cat $'\\x00x'; gh pr merge 3 --squash", c, "ask", "머지"),
+            ("cat $'\\0'; git push --no-verify origin HEAD:main", wt, "deny", "규칙 5"),
+            ("cat $'\\ud800'; gh pr merge 3", wt, "ask", "머지"),
+            ("echo hi > $'\\0x'; gh pr merge 3", wt, "ask", "머지"),
             ("cat $'\\0'; git commit --no-verify -m x", c, "deny", "규칙 5"),
-            ("cat $'\\c@'; git push origin HEAD:main", c, "deny", "규칙 6"),
-            ("cat $'\\u0000'; git push origin HEAD:main", c, "deny", "규칙 6"),
-            ("cat $'\\000'; git push origin HEAD:main", c, "deny", "규칙 6"),
+            ("cat $'\\c@'; git push --no-verify origin HEAD:main", c, "deny", "규칙 5"),
+            ("cat $'\\u0000'; git push --no-verify origin HEAD:main", c, "deny", "규칙 5"),
+            ("cat $'\\000'; git push --no-verify origin HEAD:main", c, "deny", "규칙 5"),
             ("git config core.hooksPath $'\\ud800'", c, "deny", "규칙 5"),
             # bash는 NUL 뒤를 버린다: 낱말이 그 앞까지다
-            ("git $'push\\0junk' origin HEAD:main", c, "deny", "규칙 6"),
-            ("gh pr $'merge\\x00x' 3", c, "deny", "머지"), ("git push origin $'HEAD:main\\0x'", c, "deny", "규칙 6"),
+            ("git $'push\\0junk' --no-verify origin HEAD:main", c, "deny", "규칙 5"),
+            ("gh pr $'merge\\x00x' 3", c, "ask", "머지"), ("git push --no-verify origin $'HEAD:main\\0x'", c, "deny", "규칙 5"),
             # 명령 글의 날 NUL·짝 없는 서로게이트(hook 입력 JSON의 \u0000·\ud800)
-            ("cat \x00x; gh pr merge 3", c, "deny", "머지"), ("git config core.hooksPath \ud800", c, "deny", "규칙 5"),
-            ("echo hi > x\x00y; git push origin HEAD:main", c, "deny", "규칙 6"),
+            ("cat \x00x; gh pr merge 3", c, "ask", "머지"), ("git config core.hooksPath \ud800", c, "deny", "규칙 5"),
+            ("echo hi > x\x00y; git push --no-verify origin HEAD:main", c, "deny", "규칙 5"),
             ("cat $'\\x00x'", plain, None, None)]
     try:
         for cmd, cwd, want, why in rows:
@@ -1944,15 +1968,15 @@ def test_guard_ansi_c_nul_surrogates_and_path_errors_do_not_degrade():
             assert why is None or why in out["permissionDecisionReason"], (cmd, out)
     finally:
         gitp(c, "worktree", "remove", "--force", str(wt))
-    # 경로 연산 예외(여기선 sitecustomize로 일으킨다): 그 검사만 ask, 같은 명령의 다른 검사는 그대로
+    # 경로 연산 예외(여기선 sitecustomize로 일으킨다): 그 호출은 거부(guard 내부 오류), 같은 명령의 다른 검사 사유도 남는다
     env = _raising_realpath_env(ws)
-    for cmd, cwd, want, why in [("cat RAISEMARK.log; gh pr merge 3", c, "deny", "머지"),
-                                ("echo x > RAISEMARK; git push origin HEAD:main", c, "deny", "규칙 6"),
-                                ("echo x > RAISEMARK; git commit --no-verify -m x", c, "deny", "규칙 5"),
-                                ("echo x > RAISEMARK", plain, "ask", "규칙 8")]:
+    for cmd, cwd, why in [("echo x > RAISEMARK; gh pr merge 3", c, "규칙 8"),       # 병합 ask는 거부 사유에 들지 않는다
+                          ("echo x > RAISEMARK; git push --no-verify origin HEAD:main", c, "규칙 5"),
+                          ("echo x > RAISEMARK; git commit --no-verify -m x", c, "규칙 5"),
+                          ("echo x > RAISEMARK", plain, "규칙 8")]:
         out = bash(ws, cmd, cwd, env=env)
-        assert decision(out) == want and why in out["permissionDecisionReason"], (cmd, out)
-        assert "내부 오류" not in out["permissionDecisionReason"], cmd
+        assert decision(out) == "deny" and "guard 내부 오류" in out["permissionDecisionReason"], (cmd, out)
+        assert why in out["permissionDecisionReason"], (cmd, out)
 
 
 def test_guard_ansi_c_closing_quote_found_like_bash():
@@ -1972,14 +1996,14 @@ def test_guard_ansi_c_closing_quote_found_like_bash():
     (plain / "x.log").write_text(LOGCAT, encoding="utf-8")             # 규칙 10: logcat 원문
     wt = ws.work / "wt-ansic-c"
     git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
-    rows = [("echo $'\\c'; git push origin HEAD:main", c, "deny"), ("echo $'\\c'; gh pr merge 3", c, "deny"),
+    rows = [("echo $'\\c'; git push --no-verify origin HEAD:main", c, "deny"), ("echo $'\\c'; gh pr merge 3", c, "ask"),
             ("echo $'\\c'; git commit --no-verify -m x", c, "deny"), ("echo $'\\c'; echo x > notes.txt", c, "deny"),
-            ("echo $'\\c'; git checkout -b x", c, "deny"), ("echo $'\\c'; git push origin HEAD:main", wt, "deny"),
-            ("echo $'\\c\\\\'; git push origin HEAD:main", c, "deny"),
-            ("echo $'\\c\\''; git push origin HEAD:main", c, "deny"),
-            ("printf %s $'x\\c' && git push origin HEAD:main", c, "deny"),
-            ("echo $'\\c'\ngit push origin HEAD:main", c, "deny"),
-            ("echo $'\\c'; gh api -X PUT repos/mock-org/telephony-issue-db/pulls/3/merge", plain, "deny"),
+            ("echo $'\\c'; git checkout -b x", c, "deny"), ("echo $'\\c'; git push --no-verify origin HEAD:main", wt, "deny"),
+            ("echo $'\\c\\\\'; git push --no-verify origin HEAD:main", c, "deny"),
+            ("echo $'\\c\\''; git push --no-verify origin HEAD:main", c, "deny"),
+            ("printf %s $'x\\c' && git push --no-verify origin HEAD:main", c, "deny"),
+            ("echo $'\\c'\ngit push --no-verify origin HEAD:main", c, "deny"),
+            ("echo $'\\c'; gh api -X PUT repos/mock-org/telephony-issue-db/pulls/3/merge", plain, "ask"),
             ("echo $'\\c'; cat x.log", plain, "deny"),
             ("echo $'\\c'", c, None)]
     try:
@@ -2013,28 +2037,28 @@ def test_guard_long_cwd_candidates_stay_in_worktree_and_job_dir():
     dd = "/".join(["e" * 60] * 20)
     (wt / "data" / dd).mkdir(parents=True)
     (job / "s" / dd).mkdir(parents=True)
-    rows = [(f"cd {hops}data; git push origin HEAD:main", wt, "deny"),
+    rows = [(f"cd {hops}data; git push --no-verify origin HEAD:main", wt, "deny"),
             (f"cd {hops}data && git commit --no-verify -m x", wt, "deny"),
-            (f"cd {wt}/{hops}; git push origin HEAD:main", plain, "deny"),
-            ("cd data; ls; cd ..; " * 120 + "git push origin HEAD:main", wt, "deny"),
+            (f"cd {wt}/{hops}; git push --no-verify origin HEAD:main", plain, "deny"),
+            ("cd data; ls; cd ..; " * 120 + "git push --no-verify origin HEAD:main", wt, "deny"),
             (f"cd {shops}; echo x > post.approved.json", job, "deny"),
             (f"cd {shops}; echo x > merge-offer.json", job, "deny"),
             (f"cd {shops}; rm -f post.result.json", job, "deny"),
-            (f"cd {hops}; git push origin HEAD:main", c, "deny"),
-            (f"cd -P Lc/../{hops}; git push origin HEAD:main", plain, "deny"),
+            (f"cd {hops}; git push --no-verify origin HEAD:main", c, "deny"),
+            (f"cd -P Lc/../{hops}; git push --no-verify origin HEAD:main", plain, "deny"),
             (f"cd -P Lc/..; cd {hops}; git commit --no-verify -m x", plain, "deny"),
-            (f"cd Lc/../{hops}; git push origin HEAD:main", plain, "deny"),     # 글자 경로 plain/data가 없다: bash는 실제 경로로
-            (f"cd -P Lwt/../{hops}; git push origin HEAD:main", plain, "deny"),
+            (f"cd Lc/../{hops}; git push --no-verify origin HEAD:main", plain, "deny"),     # 글자 경로 plain/data가 없다: bash는 실제 경로로
+            (f"cd -P Lwt/../{hops}; git push --no-verify origin HEAD:main", plain, "deny"),
             (f"cd -P Ljob/../{shops}; echo x > post.approved.json", plain, "deny"),
-            (f"cd {deep}/Lc; git push origin HEAD:main", plain, "deny"),
-            ("git push origin HEAD:main", deep / "Lc", "deny"),                # hook cwd 자체가 긴 링크 경로
-            (f"cd data/{dd}; cd {'../' * 20}; git push origin HEAD:main", wt, "deny"),
+            (f"cd {deep}/Lc; git push --no-verify origin HEAD:main", plain, "deny"),
+            ("git push --no-verify origin HEAD:main", deep / "Lc", "deny"),                # hook cwd 자체가 긴 링크 경로
+            (f"cd data/{dd}; cd {'../' * 20}; git push --no-verify origin HEAD:main", wt, "deny"),
             (f"cd data/{dd} && cd {'../' * 20} && git commit --no-verify -m x", wt, "deny"),
             (f"cd s/{dd}; cd {'../' * 21}; echo x > merge-offer.json", job, "deny"),
-            (f"cd {'../' * 20}; git push origin HEAD:main", wt / "data" / dd, "deny"),
+            (f"cd {'../' * 20}; git push --no-verify origin HEAD:main", wt / "data" / dd, "deny"),
             # 오탐 방지: 길어도 이슈 DB 밖이면 그대로
-            (f"cd {deep}; git push origin HEAD:main", plain, None),
-            (f"cd {'x/../' * 300}; git push origin HEAD:main", plain, None)]
+            (f"cd {deep}; git push --no-verify origin HEAD:main", plain, None),
+            (f"cd {'x/../' * 300}; git push --no-verify origin HEAD:main", plain, None)]
     try:
         for cmd, cwd, want in rows:
             assert decision(bash(ws, cmd, cwd)) == want, (cmd[:80], cwd)
@@ -2055,11 +2079,11 @@ def test_guard_overflow_folds_into_repo_or_job_dir():
     job.mkdir(parents=True, exist_ok=True)
     fails = "; ".join(f"cd {job}/nosuch{i}" for i in range(10))
     wt_fails = "; ".join(f"cd {wt}/nosuch{i}" for i in range(10))
-    rows = [(f"true && cd {wt}; {fails}; git push origin HEAD:main", plain, "deny"),
+    rows = [(f"true && cd {wt}; {fails}; git push --no-verify origin HEAD:main", plain, "deny"),
             (f"true && cd {wt}; {fails}; git commit --no-verify -m x", plain, "deny"),
             (f"true && cd {c}; {fails}; echo x > notes.txt", plain, "deny"),
             (f"true && cd {job}; {wt_fails}; echo x > post.approved.json", plain, "deny"),
-            (f"{fails}; git push origin HEAD:main", plain, None)]                     # 오탐 방지: 레포에 들어간 적 없음
+            (f"{fails}; git push --no-verify origin HEAD:main", plain, None)]                     # 오탐 방지: 레포에 들어간 적 없음
     try:
         for cmd, cwd, want in rows:
             assert decision(bash(ws, cmd, cwd)) == want, (cmd[:80], cwd)
@@ -2102,7 +2126,7 @@ def test_guard_unknown_stack_keeps_latest_push_and_deep_dirs():
     finally:
         os.close(fd)
     h11 = "/".join([comp] * 11)
-    rows = [(seq + "; git push origin HEAD:main", plain, "deny"),
+    rows = [(seq + "; git push --no-verify origin HEAD:main", plain, "deny"),
             (seq + "; git commit --no-verify -m x", plain, "deny"),
             (raw, plain, "deny"),
             (f"cd s/H/{h11}; cd {h11}; cd {'../' * 24}; echo x > merge-offer.json", job, "deny"),
@@ -2134,7 +2158,7 @@ def test_guard_pushd_popd_chains_stay_fast():
     try:
         for cmd, cwd in ((pd, wt), (pd, c), (sticky, c), (dots, deep)):
             t0 = time.monotonic()
-            assert decision(bash(ws, cmd + "\ngit push origin HEAD:main", cwd)) == "deny", cwd
+            assert decision(bash(ws, cmd + "\ngit push --no-verify origin HEAD:main", cwd)) == "deny", cwd
             assert time.monotonic() - t0 < 30, (cmd[:40], time.monotonic() - t0)     # 이 PC 3~6초, 예전 115~250초
     finally:
         # 1900단계 디렉토리는 `rm -rf`로 먼저 지운다: 남으면 세션 끝 `shutil.rmtree`가 Python 3.11 이하에서 재귀 한도에 걸린다
@@ -2179,27 +2203,27 @@ def test_guard_unreachable_cd_targets_do_not_degrade():
     wt = ws.work / "wt-unreach"
     git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
     long_abs, long_rel, long_in = "/tmp/" + "b" * 300, "c" * 300, f"{c}/" + "e" * 300
-    rows = [(f"gh pr merge 3 --squash; cd {long_abs}", wt, "deny"), (f"git push origin HEAD:main; cd {long_abs}", c, "deny"),
+    rows = [(f"gh pr merge 3 --squash; cd {long_abs}", wt, "ask"), (f"git push --no-verify origin HEAD:main; cd {long_abs}", c, "deny"),
             (f"git commit --no-verify -m x; pushd {long_abs}", c, "deny"),
-            (f"cd {long_abs}; cd {c}; git push origin HEAD:main", plain, "deny"),
-            (f"cd {long_abs} 2>/dev/null; cd {c} && gh pr merge 3 --squash", plain, "deny"),
+            (f"cd {long_abs}; cd {c}; git push --no-verify origin HEAD:main", plain, "deny"),
+            (f"cd {long_abs} 2>/dev/null; cd {c} && gh pr merge 3 --squash", plain, "ask"),
             (f"cd {long_abs} 2>/dev/null; cd {c}; echo x > notes.txt", plain, "deny"),
             (f"cd {long_abs} 2>/dev/null; cd {c}; git checkout -b x", plain, "deny"),
-            (f"true && cd {long_abs}; cd {c}; git push origin HEAD:main", wt, "deny"),
-            (f"(cd {long_abs}); cd {c}; git push origin HEAD:main", plain, "deny"),
-            (f"pushd -n {long_abs}; cd {c}; git push origin HEAD:main", plain, "deny"),
+            (f"true && cd {long_abs}; cd {c}; git push --no-verify origin HEAD:main", wt, "deny"),
+            (f"(cd {long_abs}); cd {c}; git push --no-verify origin HEAD:main", plain, "deny"),
+            (f"pushd -n {long_abs}; cd {c}; git push --no-verify origin HEAD:main", plain, "deny"),
             (f"cd {long_abs}; gh pr review 3 --approve", plain, "deny"), (f"cd {long_abs}; gh pr review 3 --approve", c, "deny"),
             (f"echo x > notes.txt; cd {long_abs} || true", c, "deny"),
-            (f"git push origin HEAD:main; cd {long_rel}", c, "deny"), (f"git push origin HEAD:main; cd {long_in}", c, "deny"),
-            (f"cd {long_in}; git push origin HEAD:main", c, "deny"),         # cd가 실패하면 clone 그대로
+            (f"git push --no-verify origin HEAD:main; cd {long_rel}", c, "deny"), (f"git push --no-verify origin HEAD:main; cd {long_in}", c, "deny"),
+            (f"cd {long_in}; git push --no-verify origin HEAD:main", c, "deny"),         # cd가 실패하면 clone 그대로
             (f"cd {long_abs} 2>/dev/null; ls", plain, None)]
     eacces = _site_env(ws, EACCES_SITE)
     other = "/home/EACCESMARK/proj"
-    erows = [(f"gh pr merge 3; cd {other}", wt, "deny"), (f"cd {other}; gh pr review 3 --approve", plain, "deny"),
-             (f"echo x > notes.txt; cd {other} || true", c, "deny"), (f"cd {other}; gh pr merge 3", wt, "deny"),
-             (f"cd {other} 2>/dev/null; cd {c}; git push origin HEAD:main", plain, "deny"),
-             (f"pushd {other} >/dev/null 2>&1; cd {c} && gh pr merge 3 --squash", plain, "deny"),
-             (f"cd {other}; git push origin HEAD:main", c, "deny"), (f"cd {other}; ls", plain, None)]
+    erows = [(f"gh pr merge 3; cd {other}", wt, "ask"), (f"cd {other}; gh pr review 3 --approve", plain, "deny"),
+             (f"echo x > notes.txt; cd {other} || true", c, "deny"), (f"cd {other}; gh pr merge 3", wt, "ask"),
+             (f"cd {other} 2>/dev/null; cd {c}; git push --no-verify origin HEAD:main", plain, "deny"),
+             (f"pushd {other} >/dev/null 2>&1; cd {c} && gh pr merge 3 --squash", plain, "ask"),
+             (f"cd {other}; git push --no-verify origin HEAD:main", c, "deny"), (f"cd {other}; ls", plain, None)]
     try:
         for (cmd, cwd, want), env in [*((r, None) for r in rows), *((r, eacces) for r in erows)]:
             event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(cwd)}
@@ -2212,26 +2236,29 @@ def test_guard_unreachable_cd_targets_do_not_degrade():
 
 
 def test_guard_walk_errors_fall_back_closed():
-    """명령 파싱(재리뷰 P0): 명령 걷기(`invocations`) 자체가 예외로 끝나도 판정 전체를 내부 오류로 보내지 않는다 — ask("명령 파싱")와
-    낱말 수준 거부(gh와 병합·Approve·리뷰·기각·GraphQL·별칭·셸 값 낱말)를 남기고, cd를 따라가지 않는 대체 목록(처음 cwd·cd 절대
-    대상·모르는 디렉토리)으로 다른 검사를 이어 간다. 의존성 없음 판정(`_degraded`)도 걷기가 예외면 낱말 수준으로 병합을 거부한다."""
+    """명령 파싱(4-c): 명령 걷기(`invocations`) 자체가 예외로 끝나면 그 호출은 거부(사유 `guard 내부 오류` — 명령 파싱)하고, cd를
+    따라가지 않는 대체 목록(처음 cwd·cd 절대 대상·모르는 디렉토리)으로 다른 검사를 이어 가 그 사유도 남긴다. 의존성 없음
+    판정(`_degraded`)은 그대로 — 걷기가 예외면 낱말 수준으로 Approve·보호 바꾸기를 거부한다."""
     ws = shared()
     c = ws.clone
     plain = tmp("tt-gh-plain-")
     env = _site_env(ws, WALK_SITE)
-    for cmd, cwd, want, why in [("env -C WALKRAISE true; gh pr merge 3", plain, "deny", "명령을 풀지 못해"),
-                                ("env -C WALKRAISE true; git push origin HEAD:main", c, "deny", "규칙 6"),
-                                ("env -C WALKRAISE true; git commit --no-verify -m x", c, "deny", "규칙 5"),
-                                (f"env -C WALKRAISE true; cd {c}; git push origin HEAD:main", plain, "deny", "규칙 6"),
-                                ("env -C WALKRAISE true; ls", plain, "ask", "명령 파싱"),
-                                ("env -C WALKRAISE true; gh pr view 3", plain, "ask", "명령 파싱")]:
+    for cmd, cwd, why in [("env -C WALKRAISE true; gh pr merge 3", plain, "명령 파싱"),
+                          ("env -C WALKRAISE true; gh pr review 3 --approve", plain, "Approve"),
+                          ("env -C WALKRAISE true; git push --no-verify origin HEAD:main", c, "규칙 5"),
+                          ("env -C WALKRAISE true; git commit --no-verify -m x", c, "규칙 5"),
+                          (f"env -C WALKRAISE true; cd {c}; git push --no-verify origin HEAD:main", plain, "규칙 5"),
+                          ("env -C WALKRAISE true; ls", plain, "명령 파싱"),
+                          ("env -C WALKRAISE true; gh pr view 3", plain, "명령 파싱")]:
         event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(cwd)}
         proc = run("guard.py", [], root=ws.root, cwd=cwd, env=env, stdin=json.dumps(event))
-        assert proc.returncode == 0 and "내부 오류" not in proc.stderr, (cmd, proc.stderr)
+        assert proc.returncode == 0 and "Traceback" not in proc.stderr, (cmd, proc.stderr)
         out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
-        assert decision(out) == want and why in out["permissionDecisionReason"], (cmd, out)
+        reason = out["permissionDecisionReason"]
+        assert decision(out) == "deny" and "guard 내부 오류" in reason and why in reason, (cmd, out)
     env = _site_env(ws, WALK_SITE, no_yaml=True)
-    for cmd, want in [("env -C WALKRAISE true; gh pr merge 3", "deny"), ("env -C WALKRAISE true; gh pr review 3 -a", "deny"),
+    for cmd, want in [("env -C WALKRAISE true; gh pr merge 3", "ask"), ("env -C WALKRAISE true; gh pr review 3 -a", "deny"),
+                      ("env -C WALKRAISE true; gh api -X PATCH repos/o/r -F delete_branch_on_merge=true", "deny"),
                       ("env -C WALKRAISE true; gh pr view 3", "ask"), ("env -C WALKRAISE true; echo hi", None)]:
         event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(plain)}
         proc = run("guard.py", [], root=ws.root, cwd=plain, env=env, stdin=json.dumps(event))
@@ -2239,6 +2266,76 @@ def test_guard_walk_errors_fall_back_closed():
         out = json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
         assert decision(out) == want, (cmd, out)
         assert want is None or "의존성 없음" in out["permissionDecisionReason"], (cmd, out)
+
+
+def test_guard_broken_config_is_degraded_not_denied():
+    """4-c 리뷰: 설정 읽기 오류(사용자 config.yaml YAML 오류)는 판정 예외가 아니다 — 의존성 없음과 같은 판정(MCP 거부, git·gh·파일
+    도구 ask, 그 밖 Bash 통과 + 경고)이라 그 config를 고치는 Write·`ls`·doctor는 막히지 않는다. 판정 중 예외(아래 시험)는 거부."""
+    ws = shared()
+    home = tmp("tt-badcfg-")
+    cfg = home / "config.yaml"
+    cfg.write_text("plugin: [깨진\n", encoding="utf-8")
+    env = {**ws.env(), "TELEPHONY_TRIAGE_HOME": str(home)}
+    plain = tmp("tt-gh-plain-")
+    out = guard(ws, "Write", {"file_path": str(cfg), "content": "plugin: {}\n"}, plain, env=env)
+    assert decision(out) == "ask" and "설정 읽기 오류" in out["permissionDecisionReason"], out
+    assert "내부 오류" not in out["permissionDecisionReason"]
+    # 사용자 안내 문구(11/08): 제한 모드임과 config.yaml을 고치면 풀린다는 것이 거부·질문 문구에 보인다
+    assert "설정 파일을 읽지 못해 제한 모드입니다" in out["permissionDecisionReason"]
+    assert "config.yaml" in out["permissionDecisionReason"] and "고치면 풀립니다" in out["permissionDecisionReason"]
+    assert bash(ws, "ls", plain, env=env) is None
+    status = bash(ws, "git status", plain, env=env)
+    assert decision(status) == "ask" and "제한 모드" in status["permissionDecisionReason"]
+    assert decision(guard(ws, JIRA_TOOLS[0], {"issue_key": "MOCK-1"}, plain, env=env)) == "deny"
+
+
+def test_guard_judgment_exceptions_deny(monkeypatch, capsys):
+    """4-c: 판정 중 예외(검사 함수 — `_checked`, `_gh_kind`·`_json_obj`, 명령 걷기, `judge` 자체 — `RecursionError` 포함)는 그
+    호출을 거부하고 사유에 `guard 내부 오류`가 든다(ask·통과로 떨어지지 않는다). 다른 검사의 거부 사유도 남는다. 예외가 없으면
+    마스킹 로그 읽기는 그대로 통과."""
+    import io
+
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import guard as g
+    ws = shared()
+    c = ws.clone
+    plain = tmp("tt-gh-plain-")
+    (plain / "logs-masked").mkdir()
+    (plain / "logs-masked" / "x.txt").write_text("<IMEI#1> 마스킹한 줄\n", encoding="utf-8")
+    (plain / "c.json").write_text('{"event":"COMMENT"}', encoding="utf-8")
+    for k, v in ws.env().items():
+        monkeypatch.setenv(k, str(v))
+
+    def judge(cmd: str, cwd: Path = plain):
+        out, _ = g.judge({"tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(cwd)}, str(ws.root))
+        return out and out["hookSpecificOutput"]
+
+    def boom(*_a, **_k):
+        raise RecursionError("test: 판정 예외")
+
+    assert judge("cat logs-masked/x.txt") is None
+    for name, cmd, cwd, rule in (("check_raw_read", "cat logs-masked/x.txt", plain, "규칙 10"),
+                                 ("_gh_kind", "gh pr view 3", plain, "규칙 11"),
+                                 ("_json_obj", f"gh api repos/{DB_SLUG}/pulls/3/reviews --input c.json", plain, "규칙 11"),
+                                 ("invocations", "ls", plain, "명령 파싱"),
+                                 ("check_git", "git status", c, "규칙 3~8")):
+        with monkeypatch.context() as m:
+            m.setattr(g, name, boom)
+            out = judge(cmd, cwd)
+        reason = out["permissionDecisionReason"] if out else ""
+        assert decision(out) == "deny" and "guard 내부 오류(RecursionError)" in reason and rule in reason, (name, out)
+    with monkeypatch.context() as m:        # 다른 검사의 거부 사유도 남는다(같은 명령의 --no-verify)
+        m.setattr(g, "check_raw_read", boom)
+        reason = judge("cat logs-masked/x.txt; git commit --no-verify -m x", c)["permissionDecisionReason"]
+    assert "guard 내부 오류" in reason and "규칙 5" in reason, reason
+    assert judge("cat logs-masked/x.txt") is None
+    with monkeypatch.context() as m:        # judge 자체 — main이 거부를 낸다(종료 0)
+        m.setattr(g, "judge", boom)
+        m.setattr(sys, "stdin", io.StringIO(json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"},
+                                                         "cwd": str(plain)})))
+        assert g.main([]) == 0
+    got = json.loads(capsys.readouterr().out)["hookSpecificOutput"]
+    assert got["permissionDecision"] == "deny" and "guard 내부 오류(RecursionError)" in got["permissionDecisionReason"]
 
 
 def test_guard_cd_odd_options_dirs_and_negation_keep_previous_candidates():
@@ -2251,32 +2348,32 @@ def test_guard_cd_odd_options_dirs_and_negation_keep_previous_candidates():
     plain = tmp("tt-gh-plain-")
     wt = ws.work / "wt-oddcd"
     git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
-    rows = [(f"pushd {c} >/dev/null; dirs -c; popd; gh pr merge 3", plain, "deny"),
-            (f"pushd {c} >/dev/null; dirs -c; popd; git push origin HEAD:main", plain, "deny"),
+    rows = [(f"pushd {c} >/dev/null; dirs -c; popd; gh pr merge 3", plain, "ask"),
+            (f"pushd {c} >/dev/null; dirs -c; popd; git push --no-verify origin HEAD:main", plain, "deny"),
             (f"pushd {c} >/dev/null; dirs -c 2>/dev/null; popd; git commit --no-verify -m x", plain, "deny"),
-            (f"pushd {c} >/dev/null; popd -q; gh pr merge 3", plain, "deny"),
-            (f"pushd {c}; popd -x; git push origin HEAD:main", plain, "deny"),
+            (f"pushd {c} >/dev/null; popd -q; gh pr merge 3", plain, "ask"),
+            (f"pushd {c}; popd -x; git push --no-verify origin HEAD:main", plain, "deny"),
             (f"pushd {c} >/dev/null; popd -q; echo x > notes.txt", plain, "deny"),
-            (f"pushd {c} >/dev/null; DIRSTACK=(); popd; git push origin HEAD:main", plain, "deny"),
-            (f"pushd {c} >/dev/null; pushd -q; git push origin HEAD:main", plain, "deny"),
-            (f"pushd -q {c}; git push origin HEAD:main", plain, "deny"),
-            ("cd -Q /tmp; git push origin HEAD:main", c, "deny"), ("cd /tmp /usr; git push origin HEAD:main", c, "deny"),
-            ("cd -x /tmp && git push origin HEAD:main", c, "deny"), ("pushd -q /tmp; git push origin HEAD:main", c, "deny"),
-            ("pushd /tmp /usr; git push origin HEAD:main", c, "deny"),
+            (f"pushd {c} >/dev/null; DIRSTACK=(); popd; git push --no-verify origin HEAD:main", plain, "deny"),
+            (f"pushd {c} >/dev/null; pushd -q; git push --no-verify origin HEAD:main", plain, "deny"),
+            (f"pushd -q {c}; git push --no-verify origin HEAD:main", plain, "deny"),
+            ("cd -Q /tmp; git push --no-verify origin HEAD:main", c, "deny"), ("cd /tmp /usr; git push --no-verify origin HEAD:main", c, "deny"),
+            ("cd -x /tmp && git push --no-verify origin HEAD:main", c, "deny"), ("pushd -q /tmp; git push --no-verify origin HEAD:main", c, "deny"),
+            ("pushd /tmp /usr; git push --no-verify origin HEAD:main", c, "deny"),
             # `!` 부정: 뒤 `&&`는 cd가 실패했을 때 돈다
-            ("! popd && git push origin HEAD:main", c, "deny"), ("! popd && git commit --no-verify -m x", c, "deny"),
-            ("! cd /nonexist && git push origin HEAD:main", c, "deny"),
-            ("! cd nosub 2>/dev/null && git push origin HEAD:main", c, "deny"),
+            ("! popd && git push --no-verify origin HEAD:main", c, "deny"), ("! popd && git commit --no-verify -m x", c, "deny"),
+            ("! cd /nonexist && git push --no-verify origin HEAD:main", c, "deny"),
+            ("! cd nosub 2>/dev/null && git push --no-verify origin HEAD:main", c, "deny"),
             ('! cd "$D" && git checkout -b x', c, "deny"), ("! pushd /nonexist && git reset --hard origin/main", c, "deny"),
-            ("time ! cd /nonexist && git push origin HEAD:main", c, "deny"), ("! cd - && git push origin HEAD:main", c, "deny"),
-            ("! cd /nonexist && echo x > notes.txt", c, "deny"), ("! cd /nonexist && git push origin HEAD:main", wt, "deny"),
-            ("if ! cd /nonexist && git push origin HEAD:main; then :; fi", c, "deny"),
+            ("time ! cd /nonexist && git push --no-verify origin HEAD:main", c, "deny"), ("! cd - && git push --no-verify origin HEAD:main", c, "deny"),
+            ("! cd /nonexist && echo x > notes.txt", c, "deny"), ("! cd /nonexist && git push --no-verify origin HEAD:main", wt, "deny"),
+            ("if ! cd /nonexist && git push --no-verify origin HEAD:main; then :; fi", c, "deny"),
             # 오탐 방지: bash cd 옵션(-L·-P·-e·-@·--)과 인자 없는 dirs는 그대로 따라간다, 부정 없는 `&&` 뒤는 cd가 성공한 경우뿐이다
-            ("cd -P /tmp; git push origin HEAD:main", c, None), ("cd -LP /tmp; git push origin HEAD:main", c, None),
-            ("cd -e -P /tmp; git push origin HEAD:main", c, None), ("cd -- /tmp; git push origin HEAD:main", c, None),
-            (f"pushd {c} >/dev/null; dirs; popd; git push origin HEAD:main", plain, None),
-            (f"pushd {plain} >/dev/null; dirs -v; popd -n; git push origin HEAD:main", c, None),     # -n: cwd 그대로
-            ("cd /nonexist && git push origin HEAD:main", c, None)]
+            ("cd -P /tmp; git push --no-verify origin HEAD:main", c, None), ("cd -LP /tmp; git push --no-verify origin HEAD:main", c, None),
+            ("cd -e -P /tmp; git push --no-verify origin HEAD:main", c, None), ("cd -- /tmp; git push --no-verify origin HEAD:main", c, None),
+            (f"pushd {c} >/dev/null; dirs; popd; git push --no-verify origin HEAD:main", plain, None),
+            (f"pushd {plain} >/dev/null; dirs -v; popd -n; git push --no-verify origin HEAD:main", c, None),     # -n: cwd 그대로
+            ("cd /nonexist && git push --no-verify origin HEAD:main", c, None)]
     try:
         for cmd, cwd, want in rows:
             assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
@@ -2298,28 +2395,28 @@ def test_guard_andor_skipped_states_and_overflow_keep_clone_candidates():
         d.mkdir()
     after = "; ".join(f"true && cd {d}" for d in subs)
     arms = " ".join(f"{i + 1}) cd {d};;" for i, d in enumerate(subs[:8]))
-    rows = [(f"cd {c} || cd /tmp && git push origin HEAD:main", plain, "deny"),
-            ("false && cd /tmp || git push origin HEAD:main", c, "deny"),
-            ("test -d x && cd /tmp || git push origin HEAD:main", c, "deny"),
-            ("cd .. || pushd -q && cd -\ngit push origin HEAD:main", c, "deny"),
-            ("cd /tmp || cd /usr && cd - && git push origin HEAD:main", c, "deny"),
-            (f"cd {c} || pushd /tmp && gh pr merge 3", plain, "deny"),
+    rows = [(f"cd {c} || cd /tmp && git push --no-verify origin HEAD:main", plain, "deny"),
+            ("false && cd /tmp || git push --no-verify origin HEAD:main", c, "deny"),
+            ("test -d x && cd /tmp || git push --no-verify origin HEAD:main", c, "deny"),
+            ("cd .. || pushd -q && cd -\ngit push --no-verify origin HEAD:main", c, "deny"),
+            ("cd /tmp || cd /usr && cd - && git push --no-verify origin HEAD:main", c, "deny"),
+            (f"cd {c} || pushd /tmp && gh pr merge 3", plain, "ask"),
             (f"cd {c} || cd /tmp && echo x > notes.txt", plain, "deny"),
             # if 조건의 cd도 돌았다: else·fi 뒤는 조건의 끝 상태에서도 돈다
-            (f"if ! cd {c}; then cd /usr; else true; fi; git push origin HEAD:main", plain, "deny"),
-            (f"if ! cd {c}; then cd /usr; fi; git push origin HEAD:main", plain, "deny"),
-            (f"if cd {c}; false; then cd /usr; else git push origin HEAD:main; fi", plain, "deny"),
-            (f"if false; then :; elif cd {c}; false; then cd /usr; else git push origin HEAD:main; fi", plain, "deny"),
+            (f"if ! cd {c}; then cd /usr; else true; fi; git push --no-verify origin HEAD:main", plain, "deny"),
+            (f"if ! cd {c}; then cd /usr; fi; git push --no-verify origin HEAD:main", plain, "deny"),
+            (f"if cd {c}; false; then cd /usr; else git push --no-verify origin HEAD:main; fi", plain, "deny"),
+            (f"if false; then :; elif cd {c}; false; then cd /usr; else git push --no-verify origin HEAD:main; fi", plain, "deny"),
             # 넘침: 처음에 들어간 clone을 접지 않는다
-            (f"true && cd {c}; {after}; git push origin HEAD:main", plain, "deny"),
-            (f"case $X in 0) cd {c};; {arms} esac; git push origin HEAD:main", plain, "deny"),
-            (f'cd "$D" .. && cd -P nosub; {after}; git push origin HEAD:main', c, "deny"),
+            (f"true && cd {c}; {after}; git push --no-verify origin HEAD:main", plain, "deny"),
+            (f"case $X in 0) cd {c};; {arms} esac; git push --no-verify origin HEAD:main", plain, "deny"),
+            (f'cd "$D" .. && cd -P nosub; {after}; git push --no-verify origin HEAD:main', c, "deny"),
             # 오탐 방지: 건너뛸 수 없는 경우는 그대로
-            ("cd /tmp && git push origin HEAD:main || true", c, None),
-            ("cd /tmp && ls || ls && git push origin HEAD:main", c, None),
-            ("cd /nonexist && git push origin HEAD:main", c, None),
-            ("if test -d x; then cd /usr; else cd /tmp; fi; git push origin HEAD:main", plain, None),
-            (f"{after}; git push origin HEAD:main", plain, None)]
+            ("cd /tmp && git push --no-verify origin HEAD:main || true", c, None),
+            ("cd /tmp && ls || ls && git push --no-verify origin HEAD:main", c, None),
+            ("cd /nonexist && git push --no-verify origin HEAD:main", c, None),
+            ("if test -d x; then cd /usr; else cd /tmp; fi; git push --no-verify origin HEAD:main", plain, None),
+            (f"{after}; git push --no-verify origin HEAD:main", plain, None)]
     for cmd, cwd, want in rows:
         assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
 
@@ -2337,24 +2434,24 @@ def test_guard_shell_heredoc_bodies_walk_once_per_operator():
     def cds(prefix: str, n: int) -> str:
         return "\n".join(f"cd {prefix}{i}" for i in range(n))
     body = cds("m", 60) + "\ngit status"
-    nested = f"{cds('n', 8)}\nbash <<EOF\n{body}\nbash <<EOG\n{body}\nEOG\nEOF\ngit push origin HEAD:main"
-    first = f"git push origin HEAD:main\n{cds('n', 8)}\nbash <<EOF\n{body}\nbash <<EOG\n{body}\nEOG\nEOF"
+    nested = f"{cds('n', 8)}\nbash <<EOF\n{body}\nbash <<EOG\n{body}\nEOG\nEOF\ngit push --no-verify origin HEAD:main"
+    first = f"git push --no-verify origin HEAD:main\n{cds('n', 8)}\nbash <<EOF\n{body}\nbash <<EOG\n{body}\nEOG\nEOF"
     level3 = (f"{cds('n', 8)}\nbash <<EOF\n{cds('m', 60)}\nbash <<EOG\n{cds('q', 60)}\nbash <<EOH\n{cds('p', 60)}\ngit status\n"
-              "EOH\nEOG\nEOF\ngit push origin HEAD:main")
+              "EOH\nEOG\nEOF\ngit push --no-verify origin HEAD:main")
     for cmd in (nested, first, level3):
         start = time.monotonic()
         assert decision(bash(ws, cmd, c)) == "deny", cmd[:60]
         assert time.monotonic() - start < 5, (cmd[:60], time.monotonic() - start)     # 예전: 수백 초
     after = "; ".join(f"cd {d}" for d in ("/usr", "/tmp", "/var", "/etc", "/opt", "/srv", "/home", "/usr/bin"))
-    rows = [(f"cd {c}; bash <<EOF\ngit push origin HEAD:main\nEOF\n{after}", plain, "deny"),   # 연산자 뒤 cd 8개
-            (f"cd {c} && bash <<EOF\ncd sub 2>/dev/null\ngit push origin HEAD:main\nEOF", plain, "deny"),
-            (f"(cd {c}; bash <<EOF\ngit push origin HEAD:main\nEOF\n)", plain, "deny"),
-            (f"bash <<A; cd {c}; bash <<B\ngit status\nA\ngit push origin HEAD:main\nB", plain, "deny"),
-            (f"cd {c}; bash <<EOF\nbash <<EOG\ngit push origin HEAD:main\nEOG\nEOF", plain, "deny"),
+    rows = [(f"cd {c}; bash <<EOF\ngit push --no-verify origin HEAD:main\nEOF\n{after}", plain, "deny"),   # 연산자 뒤 cd 8개
+            (f"cd {c} && bash <<EOF\ncd sub 2>/dev/null\ngit push --no-verify origin HEAD:main\nEOF", plain, "deny"),
+            (f"(cd {c}; bash <<EOF\ngit push --no-verify origin HEAD:main\nEOF\n)", plain, "deny"),
+            (f"bash <<A; cd {c}; bash <<B\ngit status\nA\ngit push --no-verify origin HEAD:main\nB", plain, "deny"),
+            (f"cd {c}; bash <<EOF\nbash <<EOG\ngit push --no-verify origin HEAD:main\nEOG\nEOF", plain, "deny"),
             (f"cd {c}; cat <<EOF | sh\necho x > notes.txt\nEOF", plain, "deny"),
-            (f"cd {c}; bash <<EOF\ngh pr merge 3\nEOF", plain, "deny"),
-            ("echo ; bash <<EOF\ngit push origin HEAD:main\nEOF", c, "deny"),   # 표시 글자가 이미 든 글
-            ("cd /tmp && bash <<EOF\ngit push origin HEAD:main\nEOF", plain, None)]
+            (f"cd {c}; bash <<EOF\ngh pr merge 3\nEOF", plain, "ask"),
+            ("echo ; bash <<EOF\ngit push --no-verify origin HEAD:main\nEOF", c, "deny"),   # 표시 글자가 이미 든 글
+            ("cd /tmp && bash <<EOF\ngit push --no-verify origin HEAD:main\nEOF", plain, None)]
     for cmd, cwd, want in rows:
         assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
 
@@ -2370,19 +2467,19 @@ def test_guard_heredoc_detection_ignores_quotes_comments_herestrings_and_untermi
     git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
     merge = f"gh api -X PUT repos/{DB_SLUG}/pulls/3/merge"
     rows = [
-        ('rg -n "<<EOF" scripts/ | head -3\ngh pr merge 3 --squash', wt, "deny"),
+        ('rg -n "<<EOF" scripts/ | head -3\ngh pr merge 3 --squash', wt, "ask"),
         ("# 확인: heredoc(<<EOF) 본문 포함\ngh pr review 3 --approve", wt, "deny"),
-        ("read -r a <<< word\ngh pr merge 3 --squash", c, "deny"),
-        ("git log --oneline -3   # <<HEAD\ngit push origin HEAD:main", c, "deny"),
-        ("echo $((1<<X))\ngh pr merge 3 --squash", c, "deny"),
-        ("((n <<= 1))\ngh pr merge 3", c, "deny"),
-        ("echo '<<EOF'\ngh pr merge 3 --squash", c, "deny"),
+        ("read -r a <<< word\ngh pr merge 3 --squash", c, "ask"),
+        ("git log --oneline -3   # <<HEAD\ngit push --no-verify origin HEAD:main", c, "deny"),
+        ("echo $((1<<X))\ngh pr merge 3 --squash", c, "ask"),
+        ("((n <<= 1))\ngh pr merge 3", c, "ask"),
+        ("echo '<<EOF'\ngh pr merge 3 --squash", c, "ask"),
         ("echo x # <<EOF\ngh pr merge 3 --auto --squash", c, "deny"),
-        (f'true\nrg -n "<<EOF" scripts/\ntrue\n{merge}', c, "deny"),
-        ("cat <<EOF\ngh pr merge 3 --squash", c, "deny"),                      # 끝 표시 없음
-        ('echo "\n<<EOF\n"; gh pr merge 3\nEOF', c, "deny"),                  # 여러 줄 인용 안 `<<EOF`
+        (f'true\nrg -n "<<EOF" scripts/\ntrue\n{merge}', c, "ask"),
+        ("cat <<EOF\ngh pr merge 3 --squash", c, "ask"),                      # 끝 표시 없음
+        ('echo "\n<<EOF\n"; gh pr merge 3\nEOF', c, "ask"),                  # 여러 줄 인용 안 `<<EOF`
         ("cat > f <<EOF\n  EOF\ncd /tmp\nEOF\ngh pr merge 3", c, "deny"),     # 공백 붙은 `  EOF`는 끝 표시가 아니다
-        ("cat <<'EOF' | bash\ngh pr merge 3\nEOF", c, "deny"),                # 셸이 읽는 본문은 명령이다
+        ("cat <<'EOF' | bash\ngh pr merge 3\nEOF", c, "ask"),                # 셸이 읽는 본문은 명령이다
         # 진짜 heredoc 본문은 명령이 아니다(오탐 없음)
         ("cat >/dev/null <<'EOF'\ngh pr merge 3\nEOF", c, None),
         ("cat >/dev/null <<-EOF\n\tgh pr merge 3\n\tEOF", c, None),
@@ -2390,7 +2487,7 @@ def test_guard_heredoc_detection_ignores_quotes_comments_herestrings_and_untermi
         ("cat >/dev/null <<'END-X'\ngh pr merge 3\nEND-X", c, None),
         ("cat <<A >/dev/null <<B\ngh pr merge 3\nA\ngh pr merge 4\nB", c, None),
         ("X=\"$(cat <<'EOF'\ngh pr merge 3\nEOF\n)\"; echo \"$X\"", c, None),
-        ("cat <<EOF\nhello\nEOF\ngh pr merge 3 --squash", c, "deny")]
+        ("cat <<EOF\nhello\nEOF\ngh pr merge 3 --squash", c, "ask")]
     try:
         for cmd, cwd, want in rows:
             assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
@@ -2401,7 +2498,7 @@ def test_guard_heredoc_detection_ignores_quotes_comments_herestrings_and_untermi
 def test_guard_dirstack_tilde_cd_targets_follow_bash():
     """명령 파싱(H 계획 A2 뒤 — 규칙 11에 남았던 P1): cd·pushd 대상의 디렉토리 스택 tilde(`~-` = OLDPWD, `~+` = PWD, `~N`·`~+N` =
     dirs 왼쪽에서 N번째(0 = cwd), `~-N` = 오른쪽에서 N번째, 뒤 `/…` 포함)는 이 글이 따라간 상태로 푼다(`cd -`·`pushd +N`·`popd`와
-    같은 상태). 예전에는 글자 경로(`/tmp/~-`)로 보아 `cd /tmp && cd ~- && git push origin main`(이슈 DB clone에서)이 규칙 6을 피했다.
+    같은 상태). 예전에는 글자 경로(`/tmp/~-`)로 보아 `cd /tmp && cd ~- && git push --no-verify origin main`(이슈 DB clone에서)이 규칙 5를 피했다.
     풀 수 없으면(새 셸의 OLDPWD는 없다·스택이 짧다) bash는 글자 그대로 두어 cd가 실패하고 cwd는 그대로다 — 이전 후보를 버리지 않는다.
     `~-N`은 아래에서 세므로 `popd -N`처럼 스택 칸 어디든·모르는 디렉토리다. 명령 글에서 OLDPWD·PWD를 바꿀 수 있으면 `cd -`·`~-`·`~+`는
     모르는 디렉토리도 후보다. 따옴표 안·`\\`로 막은 tilde(`"~-"`·`\\~-`·`~"-"`)는 bash처럼 글자 그대로다."""
@@ -2410,9 +2507,9 @@ def test_guard_dirstack_tilde_cd_targets_follow_bash():
     plain = tmp("tt-gh-plain-")
     wt = ws.work / "wt-tilde"
     git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
-    push = "git push origin HEAD:main"
+    push = "git push --no-verify origin HEAD:main"
     rows = [
-        ("cd /tmp && cd ~- && git push origin main", c, "deny"), (f"cd /tmp; cd ~-; {push}", c, "deny"),
+        ("cd /tmp && cd ~- && git push --no-verify origin main", c, "deny"), (f"cd /tmp; cd ~-; {push}", c, "deny"),
         (f"cd /tmp; cd ~-; {push}", wt, "deny"), (f"cd {c}; cd /tmp; cd ~-; {push}", plain, "deny"),
         (f"pushd /tmp; cd ~1; {push}", c, "deny"), (f"pushd /tmp; cd ~+1; {push}", c, "deny"),
         (f"pushd /tmp; cd ~-0; {push}", c, "deny"), (f"pushd /tmp >/dev/null; pushd ~1; {push}", c, "deny"),
@@ -2420,14 +2517,10 @@ def test_guard_dirstack_tilde_cd_targets_follow_bash():
         (f"pushd /tmp; pushd -n {plain}; cd ~2; {push}", c, "deny"), (f"cd {c}/data; cd /tmp; cd ~-/..; {push}", plain, "deny"),
         (f"cd /tmp; cd ~-/; {push}", c, "deny"), (f"cd {c}; cd ~+; {push}", plain, "deny"),
         ("cd /tmp; cd ~-; git commit --no-verify -m x", c, "deny"), ("cd /tmp; cd ~-; git checkout -b x", c, "deny"),
-        ("cd /tmp; cd ~-; git commit --no-verify -m x", wt, "deny"), ("cd /tmp; cd ~-; gh pr merge 3", c, "deny"),
+        ("cd /tmp; cd ~-; git commit --no-verify -m x", wt, "deny"),
         # 풀 수 없다(새 셸 — OLDPWD 없음·빈 스택): 글자 그대로라 cd가 실패한다 — cwd 그대로
         (f"cd ~-; {push}", c, "deny"), (f"cd ~1; {push}", c, "deny"), (f"cd ~-1 2>/dev/null; {push}", c, "deny"),
         (f"pushd ~1; {push}", c, "deny"),
-        # OLDPWD·PWD를 바꾸면 값을 모른다(규칙 11: 이슈 DB일 수 있다)
-        (f"cd /tmp; OLDPWD={c}; cd ~-; gh pr merge 3", plain, "deny"), (f"cd /tmp; OLDPWD={c}; cd -; gh pr merge 3", plain, "deny"),
-        (f"export PWD={c}; cd ~+; gh pr merge 3", plain, "deny"),
-        # 오탐 방지: 푼 칸으로만 간다, 인용한 tilde는 글자다
         (f"cd {c}; cd /tmp; cd ~-; cd ~-; {push}", plain, None), (f"cd /tmp; cd ~+; cd ~-; {push}", c, None),
         (f"pushd {c}; pushd /tmp; cd ~2; {push}", plain, None), (f"cd /tmp; cd ~+; {push}", c, None),
         (f'cd /tmp; cd "~-"; {push}', c, None), (f"cd /tmp; cd \\~-; {push}", c, None),
@@ -2450,24 +2543,24 @@ def test_guard_redirections_and_heredocs_glued_to_command_word():
     ws = shared()
     c = ws.clone
     plain = tmp("tt-gh-plain-")
-    push = "git push origin HEAD:main"
+    push = "git push --no-verify origin HEAD:main"
     rows = [
-        ("git</dev/null push origin main", c, "deny"), ("git>/dev/null push origin main", c, "deny"),
-        ("git<>/dev/null push origin main", c, "deny"), ("git>|/dev/null push origin main", c, "deny"),
-        ("git>&2 push origin main", c, "deny"), ("git&>/dev/null push origin main", c, "deny"),
-        ("git 2</dev/null push origin main", c, "deny"), ("git<<<x push origin main", c, "deny"),
-        ("git push origin main</dev/null", c, "deny"), ("gh<x pr merge 3", c, "deny"), ("<x gh pr merge 3", c, "deny"),
-        ("gh</dev/null pr review 3 --approve", c, "deny"), ("gh pr merge 3</dev/null", c, "deny"),
-        ("timeout 5 </dev/null git push origin main", c, "deny"), ("timeout 5 >/dev/null git push origin main", c, "deny"),
+        ("git</dev/null push --no-verify origin main", c, "deny"), ("git>/dev/null push --no-verify origin main", c, "deny"),
+        ("git<>/dev/null push --no-verify origin main", c, "deny"), ("git>|/dev/null push --no-verify origin main", c, "deny"),
+        ("git>&2 push --no-verify origin main", c, "deny"), ("git&>/dev/null push --no-verify origin main", c, "deny"),
+        ("git 2</dev/null push --no-verify origin main", c, "deny"), ("git<<<x push --no-verify origin main", c, "deny"),
+        ("git push --no-verify origin main</dev/null", c, "deny"), ("gh<x pr merge 3", c, "ask"), ("<x gh pr merge 3", c, "ask"),
+        ("gh</dev/null pr review 3 --approve", c, "deny"), ("gh pr merge 3</dev/null", c, "ask"),
+        ("timeout 5 </dev/null git push --no-verify origin main", c, "deny"), ("timeout 5 >/dev/null git push --no-verify origin main", c, "deny"),
         (f"cd {c}</dev/null; {push}", plain, "deny"), ("git</dev/null checkout -b x", c, "deny"),
         # 공백 없는 heredoc·셸의 here-string
-        ("bash<<EOF\ngh pr merge 12\nEOF", c, "deny"), ("sh<<'EOF'\ngh pr merge 12\nEOF", c, "deny"),
-        ("bash<<-EOF\n\tgh pr merge 12\n\tEOF", c, "deny"), ("env bash<<EOF\ngh pr merge 12\nEOF", c, "deny"),
-        ("X=1 bash<<EOF\ngit push origin main\nEOF", c, "deny"), (f"cd {c}; bash<<EOF\n{push}\nEOF", plain, "deny"),
-        ('bash<<<"gh pr merge 3"', c, "deny"), ("bash <<< 'gh pr merge 3'", c, "deny"), ("sh<<<$'gh pr merge 3'", c, "deny"),
+        ("bash<<EOF\ngh pr merge 12\nEOF", c, "ask"), ("sh<<'EOF'\ngh pr merge 12\nEOF", c, "ask"),
+        ("bash<<-EOF\n\tgh pr merge 12\n\tEOF", c, "ask"), ("env bash<<EOF\ngh pr merge 12\nEOF", c, "ask"),
+        ("X=1 bash<<EOF\ngit push --no-verify origin main\nEOF", c, "deny"), (f"cd {c}; bash<<EOF\n{push}\nEOF", plain, "deny"),
+        ('bash<<<"gh pr merge 3"', c, "ask"), ("bash <<< 'gh pr merge 3'", c, "ask"), ("sh<<<$'gh pr merge 3'", c, "ask"),
         (f'bash<<<"cd {c}; {push}"', plain, "deny"), ("bash -s<<<'gh pr review 3 --approve'", c, "deny"),
         # 오탐 방지: 따옴표 안 `<`, 입력 리디렉션은 쓰기가 아니다, 프로세스 치환·산술·비교, 셸이 아닌 명령의 heredoc·here-string
-        ("gh pr comment 3 -b 'a<b>c' -R other/x", c, None), ('grep -n "gh<x pr merge 3" notes.md', c, None),
+        ('grep -n "gh<x pr merge 3" notes.md', c, None), ("echo 'a<b>c'", c, None),
         (f"echo a<{c}/README.md", ws.base, None), (f"sort 0<{c}/README.md >/tmp/o", ws.base, None),
         ("diff <(git log -1) <(git log -2)", c, None), ("echo $((1<2)) $((1<<3))", c, None),
         ("[[ a < b ]] && echo ok", c, None), ("cat <<EOF\ngh pr merge 3\nEOF", c, None),
@@ -2490,48 +2583,48 @@ def test_guard_fd_words_heredoc_dash_rw_redirection_and_tilde_tails_follow_bash(
     plain = tmp("tt-gh-plain-")
     wt = ws.work / "wt-fdword"
     git(c, "worktree", "add", "-q", "--detach", str(wt), "origin/main")
-    push = "git push origin HEAD:main"
+    push = "git push --no-verify origin HEAD:main"
     rows = [
         # `{이름}` fd
-        ("git {fd}</dev/null push origin main", c, "deny"), ("git {fd}<<<x push origin main", c, "deny"),
-        ("git {fd}>/dev/null push origin main", c, "deny"), ("gh {fd}</dev/null pr merge 3", c, "deny"),
-        ("gh {x}<x pr review 3 --approve", c, "deny"), ("gh pr {fd}<1 merge 3", c, "deny"),
-        (f"git -C {c} {{fd}}</dev/null push origin main", plain, "deny"),
-        (f"cd {{fd}}</dev/null {c} && git push origin main", plain, "deny"),
-        (f"gh -R {DB_SLUG} {{fd}}</dev/null pr merge 3", plain, "deny"), ("echo x {fd}>README.md", c, "deny"),
+        ("git {fd}</dev/null push --no-verify origin main", c, "deny"), ("git {fd}<<<x push --no-verify origin main", c, "deny"),
+        ("git {fd}>/dev/null push --no-verify origin main", c, "deny"), ("gh {fd}</dev/null pr merge 3", c, "ask"),
+        ("gh {x}<x pr review 3 --approve", c, "deny"), ("gh pr {fd}<1 merge 3", c, "ask"),
+        (f"git -C {c} {{fd}}</dev/null push --no-verify origin main", plain, "deny"),
+        (f"cd {{fd}}</dev/null {c} && git push --no-verify origin main", plain, "deny"),
+        (f"gh -R {DB_SLUG} {{fd}}</dev/null pr merge 3", plain, "ask"), ("echo x {fd}>README.md", c, "deny"),
         # `>&`·`<&` 뒤 숫자는 복제 대상
-        (f"git -C {c} 2>&1</dev/null push origin main", plain, "deny"),
-        (f"git -C {c} 2>& 1</dev/null push origin main", plain, "deny"),
-        (f"gh -R {DB_SLUG} 2>&1</dev/null pr merge 3", plain, "deny"),
-        (f"cd 2>&1</dev/null {c} && git push origin main", plain, "deny"),
-        (f"git -C {c} 0<&3</dev/null push origin main", plain, "deny"),
+        (f"git -C {c} 2>&1</dev/null push --no-verify origin main", plain, "deny"),
+        (f"git -C {c} 2>& 1</dev/null push --no-verify origin main", plain, "deny"),
+        (f"gh -R {DB_SLUG} 2>&1</dev/null pr merge 3", plain, "ask"),
+        (f"cd 2>&1</dev/null {c} && git push --no-verify origin main", plain, "deny"),
+        (f"git -C {c} 0<&3</dev/null push --no-verify origin main", plain, "deny"),
         # `<>`는 쓰기 대상
         ("echo x 1<>README.md", c, "deny"), ("echo x 1<> README.md", c, "deny"), ("echo x 3<>README.md >&3", c, "deny"),
         ("echo x <>README.md", c, "deny"), (f"echo x 1<>{c}/README.md", plain, "deny"),
         (f"printf x {{fd}}<>{c}/README.md", plain, "deny"),
         # `<<-` 한 연산자, 리디렉션 대상은 `-c`가 아니다
-        ("bash <<-cmds\ngh pr merge 3\ncmds", c, "deny"), ("bash <<-cmd\ngit push origin main\ncmd", c, "deny"),
-        ("env bash <<-code\ngh pr merge 3\ncode", c, "deny"), ("bash -s <<-cmd\ngh pr merge 3\ncmd", c, "deny"),
-        ("bash<<-cmd\n\tgh pr merge 3\n\tcmd", c, "deny"), ("bash 0<<-cmd\ngh pr merge 3\ncmd", c, "deny"),
-        ("bash << -c\ngh pr merge 3\n-c", c, "deny"), ("bash -c </dev/null 'gh pr merge 3'", c, "deny"),
+        ("bash <<-cmds\ngh pr merge 3\ncmds", c, "ask"), ("bash <<-cmd\ngit push --no-verify origin main\ncmd", c, "deny"),
+        ("env bash <<-code\ngh pr merge 3\ncode", c, "ask"), ("bash -s <<-cmd\ngh pr merge 3\ncmd", c, "ask"),
+        ("bash<<-cmd\n\tgh pr merge 3\n\tcmd", c, "ask"), ("bash 0<<-cmd\ngh pr merge 3\ncmd", c, "ask"),
+        ("bash << -c\ngh pr merge 3\n-c", c, "ask"), ("bash -c </dev/null 'gh pr merge 3'", c, "ask"),
         # tilde 뒤 `//`, ASCII 숫자만
         (f"cd {c}; cd /tmp; cd ~-//; {push}", plain, "deny"), (f"cd {c}; cd /tmp; cd ~-//./; {push}", plain, "deny"),
-        (f"cd ~+//; {push}", c, "deny"), (f"cd {c}; cd ~+//; gh pr merge 3", plain, "deny"),
+        (f"cd ~+//; {push}", c, "deny"), (f"cd {c}; cd ~+//; gh pr merge 3", plain, "ask"),
         (f"pushd {c}; pushd /tmp; cd ~1//; {push}", plain, "deny"),
         (f"pushd {c}; pushd /tmp; cd ~1//data; {push}", plain, "deny"),
         (f"cd /tmp && pushd -n ~-//. && popd && {push}", c, "deny"),
         (f"pushd {c}; cd ~\u0661; {push}", plain, "deny"), (f"pushd {c}; cd ~+\u0661; {push}", plain, "deny"),
         (f"cd {c}; cd ~\uff10/..; {push}", plain, "deny"),
         # 줄 이음은 먼저 지운다
-        ("git 2\\\n>/dev/null push origin main", c, "deny"), ("git {fd}\\\n</dev/null push origin main", c, "deny"),
-        (f"cd /tmp; cd ~\\\n-; {push}", c, "deny"), (f"git -C {c} 2>&\\\n1</dev/null push origin main", plain, "deny"),
+        ("git 2\\\n>/dev/null push --no-verify origin main", c, "deny"), ("git {fd}\\\n</dev/null push --no-verify origin main", c, "deny"),
+        (f"cd /tmp; cd ~\\\n-; {push}", c, "deny"), (f"git -C {c} 2>&\\\n1</dev/null push --no-verify origin main", plain, "deny"),
         # 오탐 방지
-        ("git log -1 2>&1</dev/null", c, None), ("git '{x}'</dev/null push origin main", c, None),
-        ("git a\\\n2>/dev/null push origin main", c, None), ("git 2\\\\\n>/dev/null push origin main", c, None),
+        ("git log -1 2>&1</dev/null", c, None), ("git '{x}'</dev/null push --no-verify origin main", c, None),
+        ("git a\\\n2>/dev/null push --no-verify origin main", c, None), ("git 2\\\\\n>/dev/null push --no-verify origin main", c, None),
         (f"cat 0<{c}/README.md >/dev/null", plain, None), (f"cd /tmp; cd ~-//; {push}", plain, None),
         ("git commit -F - <<-end\nmsg\nend", wt, None), ("git commit -F - <<- end\nmsg\nend", wt, None),
         ("bash -c 'echo hi' <<-cmd\ngh pr merge 3\ncmd", c, None), ("cat <<-cmd\ngh pr merge 3\ncmd", c, None),
-        ("pushd /tmp; pushd /usr; pushd -n ~2; popd -n; popd; git push origin main", c, None)]
+        ("pushd /tmp; pushd /usr; pushd -n ~2; popd -n; popd; git push --no-verify origin main", c, None)]
     try:
         for cmd, cwd, want in rows:
             assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
@@ -2540,23 +2633,23 @@ def test_guard_fd_words_heredoc_dash_rw_redirection_and_tilde_tails_follow_bash(
 
 def test_guard_close_fd_redirection_glued_to_word():
     r"""명령 파싱(11/04 P2): `>&-`·`<&-`(앞 fd·`{이름}` 포함)는 fd를 닫는 연산자이고, 바로 뒤에 붙은(또는 공백 뒤) 낱말은 복제
-    대상이 아니라 별도 인자다(bash). 예전에는 `-낱말`을 복제 대상으로 떼어 버려 clone에서 `git 0<&-push origin main`이 None(bash는
+    대상이 아니라 별도 인자다(bash). 예전에는 `-낱말`을 복제 대상으로 떼어 버려 clone에서 `git 0<&-push --no-verify origin main`이 None(bash는
     git push를 돈다)이었다. 닫기 뒤 `N>f`는 새 fd 리디렉션이다(`>&-2>o`). 따옴표 친 `-`는 닫기가 아니라 파일이다(`>&"-x"`)."""
     ws = shared()
     c = ws.clone
     plain = tmp("tt-gh-plain-")
     rows = [
-        ("git 0<&-push origin main", c, "deny"), ("git 2>&-push origin main", c, "deny"),
-        ("git <&-push origin main", c, "deny"), ("git 3>&-push origin main", c, "deny"),
-        ("git {fd}>&-push origin main", c, "deny"), ("git 0<& -push origin main", c, "deny"),
-        ("git 2>&--C . push origin main", c, "deny"), (">&-git push origin main", c, "deny"),
-        ("gh 2>&-pr merge 3", c, "deny"), ("gh 0<&-pr merge 3", c, "deny"), (">&-gh pr merge 3", c, "deny"),
-        (f"git -C {c} 0<&-push origin main", plain, "deny"), (f"gh -R {DB_SLUG} 2>&-pr merge 3", plain, "deny"),
-        ("git 2>&-\\\npush origin main", c, "deny"), ("git 2>&\\\n-push origin main", c, "deny"),
+        ("git 0<&-push --no-verify origin main", c, "deny"), ("git 2>&-push --no-verify origin main", c, "deny"),
+        ("git <&-push --no-verify origin main", c, "deny"), ("git 3>&-push --no-verify origin main", c, "deny"),
+        ("git {fd}>&-push --no-verify origin main", c, "deny"), ("git 0<& -push --no-verify origin main", c, "deny"),
+        ("git 2>&--C . push --no-verify origin main", c, "deny"), (">&-git push --no-verify origin main", c, "deny"),
+        ("gh 2>&-pr merge 3", c, "ask"), ("gh 0<&-pr merge 3", c, "ask"), (">&-gh pr merge 3", c, "ask"),
+        (f"git -C {c} 0<&-push --no-verify origin main", plain, "deny"), (f"gh -R {DB_SLUG} 2>&-pr merge 3", plain, "ask"),
+        ("git 2>&-\\\npush --no-verify origin main", c, "deny"), ("git 2>&\\\n-push --no-verify origin main", c, "deny"),
         # 오탐 방지: 닫기만(뒤 낱말 없음)·상태 명령·복제·따옴표 친 `-`·닫기 + 새 리디렉션
         ("git status >&-", c, None), ("git status 2>&- </dev/null", c, None), ("echo x >&-", c, None),
         ("echo x >&- ; git status", c, None), ("git log 2>&1 >&-", c, None),
-        ('git >&"-x" push origin main', plain, None), ("git log 0<&-2>o", plain, None)]
+        ('git >&"-x" push --no-verify origin main', plain, None), ("git log 0<&-2>o", plain, None)]
     for cmd, cwd, want in rows:
         assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
 
@@ -2569,17 +2662,17 @@ def test_guard_nested_shell_inherits_oldpwd():
     c = ws.clone
     plain = tmp("tt-gh-plain-")
     rows = [
-        (f"cd {c}; cd /tmp; bash -c 'cd ~-; git push origin main'", plain, "deny"),
-        (f"cd {c}; cd /tmp; bash -c 'cd -; git push origin main'", plain, "deny"),
-        (f"cd {c}; cd /tmp; sh -c 'cd -; git push origin main'", plain, "deny"),
-        (f"cd {c}; cd /tmp; bash <<<'cd ~-; git push origin main'", plain, "deny"),
-        (f"cd {c}; cd /tmp; bash<<<'cd -; git push origin main'", plain, "deny"),
-        (f"cd {c}; cd /tmp; bash -c 'cd ~-; gh pr merge 3'", plain, "deny"),
-        (f"cd {c}; cd /tmp; bash -c 'bash -c \"cd ~-; git push origin main\"'", plain, "deny"),
-        (f"env OLDPWD={c} bash -c 'cd -; git push origin main'", plain, "deny"),
-        (f"cd {c}; cd /tmp; bash <<EOF\ncd ~-\ngit push origin main\nEOF", plain, "deny"),
+        (f"cd {c}; cd /tmp; bash -c 'cd ~-; git push --no-verify origin main'", plain, "deny"),
+        (f"cd {c}; cd /tmp; bash -c 'cd -; git push --no-verify origin main'", plain, "deny"),
+        (f"cd {c}; cd /tmp; sh -c 'cd -; git push --no-verify origin main'", plain, "deny"),
+        (f"cd {c}; cd /tmp; bash <<<'cd ~-; git push --no-verify origin main'", plain, "deny"),
+        (f"cd {c}; cd /tmp; bash<<<'cd -; git push --no-verify origin main'", plain, "deny"),
+        (f"cd {c}; cd /tmp; bash -c 'cd ~-; gh pr merge 3'", plain, "ask"),
+        (f"cd {c}; cd /tmp; bash -c 'bash -c \"cd ~-; git push --no-verify origin main\"'", plain, "deny"),
+        (f"env OLDPWD={c} bash -c 'cd -; git push --no-verify origin main'", plain, "deny"),
+        (f"cd {c}; cd /tmp; bash <<EOF\ncd ~-\ngit push --no-verify origin main\nEOF", plain, "deny"),
         # 오탐 방지: 부모의 이전 디렉토리가 clone이 아니면 중첩 cd ~-도 clone이 아니다
-        ("cd /usr; cd /tmp; bash -c 'cd ~-; git push origin main'", plain, None),
+        ("cd /usr; cd /tmp; bash -c 'cd ~-; git push --no-verify origin main'", plain, None),
         (f"cd {c}; cd /tmp; bash -c 'cd ~-; ls'", plain, None)]
     for cmd, cwd, want in rows:
         assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
@@ -2593,20 +2686,20 @@ def test_guard_wrapper_option_values_skip_redirections():
     c = ws.clone
     plain = tmp("tt-gh-plain-")
     rows = [
-        (f"env -C</dev/null {c} git push origin main", plain, "deny"),
-        (f"env -C </dev/null {c} git push origin main", plain, "deny"),
-        (f"sudo -D</dev/null {c} git push origin main", plain, "deny"),
-        (f"sudo -D </dev/null {c} git push origin main", plain, "deny"),
-        (f"env --chdir </dev/null {c} git push origin main", plain, "deny"),
-        (f"env -C 2>/dev/null {c} git push origin main", plain, "deny"),
-        (f"env -C</dev/null {c} gh pr merge 3", plain, "deny"),
-        (f"env -u</dev/null X git -C {c} push origin main", plain, "deny"),
-        (f"timeout -s </dev/null KILL 5 git -C {c} push origin main", plain, "deny"),
-        (f"nice -n </dev/null 5 git -C {c} push origin main", plain, "deny"),
-        (f"stdbuf -o </dev/null L git -C {c} push origin main", plain, "deny"),
-        (f"xargs -n </dev/null 1 git -C {c} push origin main", plain, "deny"),
+        (f"env -C</dev/null {c} git push --no-verify origin main", plain, "deny"),
+        (f"env -C </dev/null {c} git push --no-verify origin main", plain, "deny"),
+        (f"sudo -D</dev/null {c} git push --no-verify origin main", plain, "deny"),
+        (f"sudo -D </dev/null {c} git push --no-verify origin main", plain, "deny"),
+        (f"env --chdir </dev/null {c} git push --no-verify origin main", plain, "deny"),
+        (f"env -C 2>/dev/null {c} git push --no-verify origin main", plain, "deny"),
+        (f"env -C</dev/null {c} gh pr merge 3", plain, "ask"),
+        (f"env -u</dev/null X git -C {c} push --no-verify origin main", plain, "deny"),
+        (f"timeout -s </dev/null KILL 5 git -C {c} push --no-verify origin main", plain, "deny"),
+        (f"nice -n </dev/null 5 git -C {c} push --no-verify origin main", plain, "deny"),
+        (f"stdbuf -o </dev/null L git -C {c} push --no-verify origin main", plain, "deny"),
+        (f"xargs -n </dev/null 1 git -C {c} push --no-verify origin main", plain, "deny"),
         # 오탐 방지: 리디렉션만 뗀다 — 값·명령은 그대로
-        (f"env -C {c} git status", plain, None), (f"env -C {plain} git push origin main", c, None)]
+        (f"env -C {c} git status", plain, None), (f"env -C {plain} git push --no-verify origin main", c, None)]
     for cmd, cwd, want in rows:
         assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
 
@@ -2619,21 +2712,21 @@ def test_guard_static_text_fed_to_shell():
     c = ws.clone
     plain = tmp("tt-gh-plain-")
     rows = [
-        ('echo "gh pr merge 3" | bash', c, "deny"), ("echo gh pr merge 3 | bash", c, "deny"),
-        ("printf '%s\\n' 'git push origin main' | sh", c, "deny"),
-        ('cat <<<"git push origin main" | bash', c, "deny"), ('cat <<<"gh pr merge 3" | bash', c, "deny"),
-        ('source /dev/stdin <<<"gh pr merge 3"', c, "deny"), ('. /dev/stdin<<<"gh pr merge 3"', c, "deny"),
-        ('bash /dev/stdin <<<"gh pr merge 3"', c, "deny"), ('bash -s <<<"gh pr merge 3"', c, "deny"),
-        ('echo "gh pr merge 3" |& bash', c, "deny"), ('echo "gh pr merge 3" | cat | bash', c, "deny"),
-        ('(echo "gh pr merge 3") | bash', c, "deny"), ('echo "gh pr merge 3" | source /dev/stdin', c, "deny"),
-        ("cat <<EOF | sh\ngh pr merge 3\nEOF", c, "deny"),
-        (f'echo "cd {c}; git push origin main" | bash', plain, "deny"),
+        ('echo "gh pr merge 3" | bash', c, "ask"), ("echo gh pr merge 3 | bash", c, "ask"),
+        ("printf '%s\\n' 'git push --no-verify origin main' | sh", c, "deny"),
+        ('cat <<<"git push --no-verify origin main" | bash', c, "deny"), ('cat <<<"gh pr merge 3" | bash', c, "ask"),
+        ('source /dev/stdin <<<"gh pr merge 3"', c, "ask"), ('. /dev/stdin<<<"gh pr merge 3"', c, "ask"),
+        ('bash /dev/stdin <<<"gh pr merge 3"', c, "ask"), ('bash -s <<<"gh pr merge 3"', c, "ask"),
+        ('echo "gh pr merge 3" |& bash', c, "ask"), ('echo "gh pr merge 3" | cat | bash', c, "ask"),
+        ('(echo "gh pr merge 3") | bash', c, "ask"), ('echo "gh pr merge 3" | source /dev/stdin', c, "ask"),
+        ("cat <<EOF | sh\ngh pr merge 3\nEOF", c, "ask"),
+        (f'echo "cd {c}; git push --no-verify origin main" | bash', plain, "deny"),
         # 오탐 방지: 셸이 아닌 소비자, 정적이 아닌 글, 비-DB cwd, 서브셸 cd는 새지 않는다
-        ('echo "gh pr merge $N" | bash', c, "deny"),
+        ('echo "gh pr merge $N" | bash', c, "ask"),
         ('echo "gh pr merge 3"', c, None), ("echo text | grep x", c, None),
         ('cat <<<"gh pr merge 3" | wc -l', c, None), ("printf 'echo hi\\n' | sh", c, None),
-        ("echo 'ls -la' | bash", c, None), ('echo "gh pr merge 3" | bash', plain, None),
-        (f'echo "cd {c}" | bash; git push origin main', plain, None)]
+        ("echo 'ls -la' | bash", c, None), (f'echo "cd {c}" | bash; git push --no-verify origin main', plain, None),
+        ('echo "git push --no-verify origin HEAD:main" | bash', plain, None)]
     for cmd, cwd, want in rows:
         assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
 
@@ -2647,22 +2740,22 @@ def test_guard_static_pwd_oldpwd_writes_track_value():
     c = ws.clone
     plain = tmp("tt-gh-plain-")
     rows = [
-        (f"OLDPWD={c}; cd ~-; git push origin main", plain, "deny"),
-        (f"export OLDPWD={c}; cd -; git push origin main", plain, "deny"),
-        (f"declare -x OLDPWD={c}; cd -; git push origin main", plain, "deny"),
-        (f"PWD={c}; cd ~+; git push origin main", plain, "deny"),
-        (f"PWD={c}; cd /tmp; cd -; git push origin main", plain, "deny"),
-        (f"PWD={c}; cd ~0; git push origin main", plain, "deny"),
-        (r"export $'OLD\x50WD'=" + str(c) + "; cd -; git push origin main", plain, "deny"),
-        (f'export "OLDPWD"={c}; cd ~-; git push origin main', plain, "deny"),
-        (f"typeset OLDPWD={c}; cd ~-; git push origin main", plain, "deny"),
-        (f"OLDPWD={c} cd -; git push origin main", plain, "deny"),
-        (f"OLDPWD={c}; cd ~-; gh pr merge 3", plain, "deny"),
-        (f"export OLDPWD={c}/data; cd ~-/..; git push origin main", plain, "deny"),
-        (f"true && OLDPWD={c}; cd ~-; git push origin main", plain, "deny"),
-        (f"if false; then :; else OLDPWD={c}; fi; cd ~-; git push origin main", plain, "deny"),
+        (f"OLDPWD={c}; cd ~-; git push --no-verify origin main", plain, "deny"),
+        (f"export OLDPWD={c}; cd -; git push --no-verify origin main", plain, "deny"),
+        (f"declare -x OLDPWD={c}; cd -; git push --no-verify origin main", plain, "deny"),
+        (f"PWD={c}; cd ~+; git push --no-verify origin main", plain, "deny"),
+        (f"PWD={c}; cd /tmp; cd -; git push --no-verify origin main", plain, "deny"),
+        (f"PWD={c}; cd ~0; git push --no-verify origin main", plain, "deny"),
+        (r"export $'OLD\x50WD'=" + str(c) + "; cd -; git push --no-verify origin main", plain, "deny"),
+        (f'export "OLDPWD"={c}; cd ~-; git push --no-verify origin main', plain, "deny"),
+        (f"typeset OLDPWD={c}; cd ~-; git push --no-verify origin main", plain, "deny"),
+        (f"OLDPWD={c} cd -; git push --no-verify origin main", plain, "deny"),
+        (f"OLDPWD={c}; cd ~-; gh pr merge 3", plain, "ask"),
+        (f"export OLDPWD={c}/data; cd ~-/..; git push --no-verify origin main", plain, "deny"),
+        (f"true && OLDPWD={c}; cd ~-; git push --no-verify origin main", plain, "deny"),
+        (f"if false; then :; else OLDPWD={c}; fi; cd ~-; git push --no-verify origin main", plain, "deny"),
         # 오탐 방지: 비-clone 값, 읽기 명령
-        ("OLDPWD=/tmp; cd ~-; git push origin main", plain, None),
+        ("OLDPWD=/tmp; cd ~-; git push --no-verify origin main", plain, None),
         ("OLDPWD=/tmp; cd ~-; gh pr view 3", plain, None),
         ("OLDPWD=/tmp; cd ~-; ls", plain, None)]
     for cmd, cwd, want in rows:
@@ -2677,15 +2770,15 @@ def test_guard_dirstack_tilde_outside_cd_targets():
     c = ws.clone
     plain = tmp("tt-gh-plain-")
     rows = [
-        ("cd /tmp && git -C ~- push origin main", c, "deny"), ("cd /tmp; git -C ~- push origin main", c, "deny"),
-        ("pushd /tmp; git -C ~1 push origin main", c, "deny"), ("git -C ~+ push origin main", c, "deny"),
-        ("cd /tmp && env -C ~- git push origin main", c, "deny"), ("cd /tmp && sudo -D ~- git push origin main", c, "deny"),
+        ("cd /tmp && git -C ~- push --no-verify origin main", c, "deny"), ("cd /tmp; git -C ~- push --no-verify origin main", c, "deny"),
+        ("pushd /tmp; git -C ~1 push --no-verify origin main", c, "deny"), ("git -C ~+ push --no-verify origin main", c, "deny"),
+        ("cd /tmp && env -C ~- git push --no-verify origin main", c, "deny"), ("cd /tmp && sudo -D ~- git push --no-verify origin main", c, "deny"),
         ("cd /tmp && echo x > ~-/README.md", c, "deny"), ("cd /tmp && echo x >~-/README.md", c, "deny"),
         ("cd /tmp && cp /etc/hosts ~-/x", c, "deny"), ("cd /tmp && touch ~-/x", c, "deny"),
-        (f"cd {c}; cd /tmp; env -C ~- gh pr merge 3", plain, "deny"),
+        (f"cd {c}; cd /tmp; env -C ~- gh pr merge 3", plain, "ask"),
         # 오탐 방지: 읽기 명령, OLDPWD 모름(새 셸)·따옴표 친 tilde
         ("git -C ~- status", c, None), ("cd /tmp; git -C ~- status", c, None),
-        ("git -C ~- push origin main", plain, None), ('cd /tmp; git -C "~-" push origin main', c, None)]
+        ("git -C ~- push --no-verify origin main", plain, None), ('cd /tmp; git -C "~-" push --no-verify origin main', c, None)]
     for cmd, cwd, want in rows:
         assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
 
@@ -2716,29 +2809,29 @@ def test_guard_nested_shell_oldpwd_at_operator_keeps_unknown():
     c = ws.clone
     plain = tmp("tt-gh-plain-")
     rows = [
-        (f"cd {c}; cd /tmp; bash <<EOF\ngit -C ~- push origin main\nEOF", "deny"),
-        (f"cd {c}; cd /tmp; cat <<EOF | bash\ngit -C ~- push origin main\nEOF", "deny"),
-        (f"cd {c}; cd /tmp; bash<<EOF\ngit -C ~- push origin main\nEOF", "deny"),
-        (f"cd {c}; cd /tmp; bash <<-EOF\n\tgit -C ~- push origin main\n\tEOF", "deny"),
-        (f"cd {c}; cd /tmp; bash <<EOF\nenv -C ~- git push origin main\nEOF", "deny"),
-        (f"cd {c}; cd /tmp; echo 'cd -; git push origin main' | bash; cd /", "deny"),
-        (f"cd {c}; cd /tmp; echo 'cd -; git push origin main' | bash; cd -", "deny"),
-        (f"cd {c}; cd /tmp; echo 'git -C ~- push origin main' | bash; cd /", "deny"),
-        (f"cd {c}; cd /tmp; printf 'cd -\\ngit push origin main\\n' | sh; cd ~", "deny"),
-        (f"cd {c}; cd /tmp; cat <<<'cd -; gh pr merge 3' | bash; cd /", "deny"),
-        ("cd /nonexist; bash -c 'cd -; gh pr merge 3'", "deny"),
-        ("test -d /x && cd /usr; bash -c 'cd -; gh pr merge 3'", "deny"),
-        ("if false; then cd /usr; fi\nbash -c 'cd - >/dev/null; gh pr merge 3'", "deny"),
-        ("cd -; cd /tmp; bash -c 'cd -; gh pr merge 3'", "deny"),
-        ("popd; cd /tmp; sh -c 'cd ~-; gh pr merge 3'", "deny"),
-        ('cd -; cd /tmp; R="$(cd -; gh pr merge 3)"', "deny"),
-        ("cd -; cd /tmp; bash <<<'cd -; gh pr merge 3'", "deny"),
-        ("bash -c 'cd -; gh pr merge 3'", "deny"),
+        (f"cd {c}; cd /tmp; bash <<EOF\ngit -C ~- push --no-verify origin main\nEOF", "deny"),
+        (f"cd {c}; cd /tmp; cat <<EOF | bash\ngit -C ~- push --no-verify origin main\nEOF", "deny"),
+        (f"cd {c}; cd /tmp; bash<<EOF\ngit -C ~- push --no-verify origin main\nEOF", "deny"),
+        (f"cd {c}; cd /tmp; bash <<-EOF\n\tgit -C ~- push --no-verify origin main\n\tEOF", "deny"),
+        (f"cd {c}; cd /tmp; bash <<EOF\nenv -C ~- git push --no-verify origin main\nEOF", "deny"),
+        (f"cd {c}; cd /tmp; echo 'cd -; git push --no-verify origin main' | bash; cd /", "deny"),
+        (f"cd {c}; cd /tmp; echo 'cd -; git push --no-verify origin main' | bash; cd -", "deny"),
+        (f"cd {c}; cd /tmp; echo 'git -C ~- push --no-verify origin main' | bash; cd /", "deny"),
+        (f"cd {c}; cd /tmp; printf 'cd -\\ngit push --no-verify origin main\\n' | sh; cd ~", "deny"),
+        (f"cd {c}; cd /tmp; cat <<<'cd -; gh pr merge 3' | bash; cd /", "ask"),
+        ("cd /nonexist; bash -c 'cd -; gh pr merge 3'", "ask"),
+        ("test -d /x && cd /usr; bash -c 'cd -; gh pr merge 3'", "ask"),
+        ("if false; then cd /usr; fi\nbash -c 'cd - >/dev/null; gh pr merge 3'", "ask"),
+        ("cd -; cd /tmp; bash -c 'cd -; gh pr merge 3'", "ask"),
+        ("popd; cd /tmp; sh -c 'cd ~-; gh pr merge 3'", "ask"),
+        ('cd -; cd /tmp; R="$(cd -; gh pr merge 3)"', "ask"),
+        ("cd -; cd /tmp; bash <<<'cd -; gh pr merge 3'", "ask"),
+        ("bash -c 'cd -; gh pr merge 3'", "ask"),
         # 오탐 방지: 그 자리의 OLDPWD가 clone이 아니면 자식 cd -도 clone이 아니다
-        ("cd /usr; cd /tmp; bash <<EOF\ngit -C ~- push origin main\nEOF", None),
-        (f"cd /usr; cd /tmp; echo 'cd -; git push origin main' | bash; cd {c}", None),
-        (f"cd {c}/data && bash -c 'cd ~-; git push origin HEAD:main'", None),
-        ("cd /tmp; bash -c 'cd -; gh pr merge 3'", None)]
+        ("cd /usr; cd /tmp; bash <<EOF\ngit -C ~- push --no-verify origin main\nEOF", None),
+        (f"cd /usr; cd /tmp; echo 'cd -; git push --no-verify origin main' | bash; cd {c}", None),
+        (f"cd {c}/data && bash -c 'cd ~-; git push --no-verify origin HEAD:main'", None),
+        ("cd /tmp; bash -c 'cd -; git push --no-verify origin HEAD:main'", None)]
     for cmd, want in rows:
         assert decision(bash(ws, cmd, plain)) == want, cmd
 
@@ -2751,14 +2844,14 @@ def test_guard_dash_children_keep_literal_dirstack_tilde():
     c = ws.clone
     plain = tmp("tt-gh-plain-")
     rows = [
-        (f"cd {c}/data && sh -c 'cd ~-; git push origin HEAD:main'", "deny"),
-        (f"cd {c}/data && dash -c 'cd ~-; git push origin HEAD:main'", "deny"),
-        (f"cd {c}/data && sh -c 'git -C ~+ push origin HEAD:main'", "deny"),
-        (f"cd {c}/data && zsh -c 'cd ~-; git push origin HEAD:main'", "deny"),
-        (f"cd {c}/data && ksh -c 'cd -; git push origin HEAD:main'", "deny"),
-        (f"cd {c}/data && sh <<EOF\ncd ~-\ngit push origin HEAD:main\nEOF", "deny"),
+        (f"cd {c}/data && sh -c 'cd ~-; git push --no-verify origin HEAD:main'", "deny"),
+        (f"cd {c}/data && dash -c 'cd ~-; git push --no-verify origin HEAD:main'", "deny"),
+        (f"cd {c}/data && sh -c 'git -C ~+ push --no-verify origin HEAD:main'", "deny"),
+        (f"cd {c}/data && zsh -c 'cd ~-; git push --no-verify origin HEAD:main'", "deny"),
+        (f"cd {c}/data && ksh -c 'cd -; git push --no-verify origin HEAD:main'", "deny"),
+        (f"cd {c}/data && sh <<EOF\ncd ~-\ngit push --no-verify origin HEAD:main\nEOF", "deny"),
         # dash의 `cd -`는 물려받은 OLDPWD로 간다(확인함)
-        (f"cd {c}/data && sh -c 'cd -; git push origin HEAD:main'", None)]
+        (f"cd {c}/data && sh -c 'cd -; git push --no-verify origin HEAD:main'", None)]
     for cmd, want in rows:
         assert decision(bash(ws, cmd, plain)) == want, cmd
 
@@ -2772,27 +2865,27 @@ def test_guard_fed_text_printf_source_heredoc_and_shell_options():
     c = ws.clone
     plain = tmp("tt-gh-plain-")
     rows = [
-        ("printf '%s\\n' 'true' 'git push origin main' | bash", c, "deny"),
-        ("printf '%s;' 'true' 'git push origin main' | bash", c, "deny"),
-        ("printf '%s\\n%s\\n' true 'git push origin main' | bash", c, "deny"),
-        ("printf '%b\\n' true 'git push origin main' | bash", c, "deny"),
-        ("printf 'gh pr %s 3\\n' merge | bash", c, "deny"), ("printf 'gh pr merge %d\\n' 3 | bash", c, "deny"),
-        ("printf 'gh pr merge %s\\n' 3 | bash", c, "deny"), ("echo -e 'true\\ngh pr merge 3' | bash", c, "deny"),
-        ("source /dev/stdin <<EOF\ngh pr merge 3\nEOF", c, "deny"), (". /dev/stdin <<EOF\ngh pr merge 3\nEOF", c, "deny"),
-        ("cat <<EOF | source /dev/stdin\ngh pr merge 3\nEOF", c, "deny"),
-        ('source /proc/self/fd/0 <<<"gh pr merge 3"', c, "deny"),
-        ("echo gh pr merge 3 | bash /proc/self/fd/0", c, "deny"), ("echo gh pr merge 3 | source /proc/self/fd/0", c, "deny"),
-        (f"source /dev/stdin <<EOF\ncd {c}\nEOF\ngit push origin main", plain, "deny"),
-        (f"source /dev/stdin <<<'cd {c}'; git push origin main", plain, "deny"),
-        ('echo "gh pr merge $N" | bash', c, "deny"), ('cat <<<"gh pr merge $N" | bash', c, "deny"),
-        ('echo "gh pr merge 3" | bash 2>&1 | cat', c, "deny"), ('echo "gh pr merge 3" | sh -s | cat', c, "deny"),
-        ("echo gh pr merge 3 | bash -o errexit", c, "deny"), ("echo gh pr merge 3 | bash -O extglob", c, "deny"),
-        ("echo gh pr merge 3 | bash --rcfile /dev/null", c, "deny"), ("echo gh pr merge 3 | bash +x", c, "deny"),
-        ("echo gh pr merge 3 | bash +o posix", c, "deny"),
+        ("printf '%s\\n' 'true' 'git push --no-verify origin main' | bash", c, "deny"),
+        ("printf '%s;' 'true' 'git push --no-verify origin main' | bash", c, "deny"),
+        ("printf '%s\\n%s\\n' true 'git push --no-verify origin main' | bash", c, "deny"),
+        ("printf '%b\\n' true 'git push --no-verify origin main' | bash", c, "deny"),
+        ("printf 'gh pr %s 3\\n' merge | bash", c, "ask"), ("printf 'gh pr merge %d\\n' 3 | bash", c, "ask"),
+        ("printf 'gh pr merge %s\\n' 3 | bash", c, "ask"), ("echo -e 'true\\ngh pr merge 3' | bash", c, "ask"),
+        ("source /dev/stdin <<EOF\ngh pr merge 3\nEOF", c, "ask"), (". /dev/stdin <<EOF\ngh pr merge 3\nEOF", c, "ask"),
+        ("cat <<EOF | source /dev/stdin\ngh pr merge 3\nEOF", c, "ask"),
+        ('source /proc/self/fd/0 <<<"gh pr merge 3"', c, "ask"),
+        ("echo gh pr merge 3 | bash /proc/self/fd/0", c, "ask"), ("echo gh pr merge 3 | source /proc/self/fd/0", c, "ask"),
+        (f"source /dev/stdin <<EOF\ncd {c}\nEOF\ngit push --no-verify origin main", plain, "deny"),
+        (f"source /dev/stdin <<<'cd {c}'; git push --no-verify origin main", plain, "deny"),
+        ('echo "gh pr merge $N" | bash', c, "ask"), ('cat <<<"gh pr merge $N" | bash', c, "ask"),
+        ('echo "gh pr merge 3" | bash 2>&1 | cat', c, "ask"), ('echo "gh pr merge 3" | sh -s | cat', c, "ask"),
+        ("echo gh pr merge 3 | bash -o errexit", c, "ask"), ("echo gh pr merge 3 | bash -O extglob", c, "ask"),
+        ("echo gh pr merge 3 | bash --rcfile /dev/null", c, "ask"), ("echo gh pr merge 3 | bash +x", c, "ask"),
+        ("echo gh pr merge 3 | bash +o posix", c, "ask"),
         # 오탐 방지: %q는 한 낱말, 셸이 아닌 소비자·스크립트 파일·`-c`, 파이프 요소의 cd는 새지 않는다
         ("printf '%q\\n' 'git status' | bash", c, None), ("printf 'echo %s\\n' a b | bash", c, None),
         ("echo gh pr merge 3 | bash script.sh", c, None), ("echo gh pr merge 3 | bash -c 'cat'", c, None),
-        ("echo gh pr merge 3 | grep gh", c, None), (f"echo 'cd {c}' | source /dev/stdin; git push origin main", plain, None)]
+        ("echo gh pr merge 3 | grep gh", c, None), (f"echo 'cd {c}' | source /dev/stdin; git push --no-verify origin main", plain, None)]
     for cmd, cwd, want in rows:
         assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
 
@@ -2801,38 +2894,31 @@ def test_guard_oldpwd_writes_any_spelling_keep_unknown_candidate():
     r"""명령 파싱(11/04 재리뷰 P0·P1, E): OLDPWD·PWD 대입은 푼 이름으로 본다(`$'OLDP\x57D'`·`OLDPW''D`·`"OLDPW"D`·`OLDPW\D`). 대입
     빌트인 뒤 모든 `NAME=값`(`export FOO=1 OLDPWD=…`), `builtin`·`command` 앞, `eval` 안, `${OLDPWD:=/abs}`의 정적 값도 후보다.
     정적 값은 후보를 더할 뿐 모르는 디렉토리를 빼지 않는다 — 돌지 않았을 수 있는 대입(`true || export …`·서브셸·함수·파이프
-    요소·`env` 자식 환경) 뒤의 `cd -`는 셸이 물려받은 OLDPWD(규칙 11에선 이슈 DB일 수 있다)로도 간다(예전에는 None)."""
+    요소·`env` 자식 환경) 뒤의 `cd -`는 셸이 물려받은 OLDPWD(모르는 디렉토리)로도 간다(예전에는 None)."""
     ws = shared()
     c = ws.clone
     plain = tmp("tt-gh-plain-")
     hid = r"$'OLD\x50WD'"
     rows = [
-        (f"export FOO=1 OLDPWD={c}; cd -; git push origin main", "deny"),
-        (f"declare -x FOO=1 OLDPWD={c}; cd -; git push origin main", "deny"),
-        (f"builtin export OLDPWD={c}; cd -; git push origin main", "deny"),
-        (f"command export OLDPWD={c}; cd -; git push origin main", "deny"),
-        (f"eval 'OLDPWD={c}'; cd -; git push origin main", "deny"), (f"eval OLDPWD={c}; cd ~-; git push origin main", "deny"),
-        (f"cd /usr; cd /tmp; export FOO=1 OLDPWD={c}; cd -; git push origin main", "deny"),
-        (rf"export $'OLDP\x57D'={c}; cd -; git push origin main", "deny"),
-        (rf"export $'OLD\x50\x57D'={c}; cd ~-; git push origin main", "deny"),
-        (f'export "OLDPW"D={c}; cd -; git push origin main', "deny"),
-        (rf"export OLDPW\D={c}; cd -; git push origin main", "deny"),
-        (f"export OLDPW''D={c}; cd -; git push origin main", "deny"),
-        (rf"declare -x $'OLDP\x57D'={c}; cd -; git push origin main", "deny"),
-        (f"export PW''D={c}; cd ~+; git push origin main", "deny"),
-        (f"cd /usr; cd /tmp; export OLDPW''D={c}; cd -; git push origin main", "deny"),
-        (f": ${{OLDPWD:={c}}}; cd -; git push origin main", "deny"),
-        (f"true || export {hid}=/tmp; cd -; gh pr merge 3", "deny"), (f"(export {hid}=/tmp); cd -; gh pr merge 3", "deny"),
-        (f"if false; then export {hid}=/tmp; fi; cd -; gh pr merge 3", "deny"),
-        (f"f() {{ export {hid}=/tmp; }}; cd -; gh pr merge 3", "deny"),
-        (f"export {hid}=/tmp | cat; cd -; gh pr merge 3", "deny"), (f"env {hid}=/tmp true; cd -; gh pr merge 3", "deny"),
-        (f"true || declare -x {hid}=/tmp; cd -; gh pr merge 3", "deny"),
-        (f"true || typeset {hid}=/tmp; cd -; gh pr merge 3", "deny"),
-        (f"true || readonly {hid}=/tmp; cd -; gh pr merge 3", "deny"),
-        (f"true || export {hid}=/tmp; bash -c 'cd -; gh pr merge 3'", "deny"),
+        (f"export FOO=1 OLDPWD={c}; cd -; git push --no-verify origin main", "deny"),
+        (f"declare -x FOO=1 OLDPWD={c}; cd -; git push --no-verify origin main", "deny"),
+        (f"builtin export OLDPWD={c}; cd -; git push --no-verify origin main", "deny"),
+        (f"command export OLDPWD={c}; cd -; git push --no-verify origin main", "deny"),
+        (f"eval 'OLDPWD={c}'; cd -; git push --no-verify origin main", "deny"), (f"eval OLDPWD={c}; cd ~-; git push --no-verify origin main", "deny"),
+        (f"cd /usr; cd /tmp; export FOO=1 OLDPWD={c}; cd -; git push --no-verify origin main", "deny"),
+        (rf"export $'OLDP\x57D'={c}; cd -; git push --no-verify origin main", "deny"),
+        (rf"export $'OLD\x50\x57D'={c}; cd ~-; git push --no-verify origin main", "deny"),
+        (f'export "OLDPW"D={c}; cd -; git push --no-verify origin main', "deny"),
+        (rf"export OLDPW\D={c}; cd -; git push --no-verify origin main", "deny"),
+        (f"export OLDPW''D={c}; cd -; git push --no-verify origin main", "deny"),
+        (rf"declare -x $'OLDP\x57D'={c}; cd -; git push --no-verify origin main", "deny"),
+        (f"export PW''D={c}; cd ~+; git push --no-verify origin main", "deny"),
+        (f"cd /usr; cd /tmp; export OLDPW''D={c}; cd -; git push --no-verify origin main", "deny"),
+        (f": ${{OLDPWD:={c}}}; cd -; git push --no-verify origin main", "deny"),
+        (f"true || export {hid}=/tmp; bash -c 'cd -; gh pr merge 3'", "ask"),     # 자식 셸 글도 걷는다(gh를 찾았다)
         # 오탐 방지: 비-clone 정적 값만이면 git 규칙은 모르는 후보를 건너뛴다
-        ("export FOO=1 OLDPWD=/tmp; cd -; git push origin main", None),
-        (": ${OLDPWD:=/tmp}; cd -; git push origin main", None)]
+        ("export FOO=1 OLDPWD=/tmp; cd -; git push --no-verify origin main", None),
+        (": ${OLDPWD:=/tmp}; cd -; git push --no-verify origin main", None)]
     for cmd, want in rows:
         assert decision(bash(ws, cmd, plain)) == want, cmd
 
@@ -2845,19 +2931,19 @@ def test_guard_dirstack_tilde_variants_and_assignment_values():
     c = ws.clone
     plain = tmp("tt-gh-plain-")
     rows = [
-        (f"cd /tmp/nx-a || cd /tmp/nx-b || cd {c}; cd /tmp; git -C ~- push origin main 2>~-/../x.log", plain, "deny"),
+        (f"cd /tmp/nx-a || cd /tmp/nx-b || cd {c}; cd /tmp; git -C ~- push --no-verify origin main 2>~-/../x.log", plain, "deny"),
         ((f"cd /tmp/nx-a || cd /tmp/nx-b || cd /tmp/nx-d || cd /tmp/nx-e || cd {c}; cd /tmp; "
-          "git -C ~- push origin main 2>~-/x.log >~-/y.log"), plain, "deny"),
-        (f"cd /tmp/nx-a || cd /tmp/nx-b || cd {c}; pushd /tmp; git -C ~- push origin main 2>~1/x.log", plain, "deny"),
-        (f"cd {c} && cd /tmp && GIT_DIR=~-/.git git push origin main", plain, "deny"),
-        (f"cd {c} && cd /tmp && env GIT_DIR=~-/.git git push origin main", plain, "deny"),
-        (f"cd {c} && cd /tmp && GIT_WORK_TREE=~- GIT_DIR=~-/.git git push origin main", plain, "deny"),
-        ("cd /tmp && GIT_DIR=~-/.git git push origin main", c, "deny"),
-        ("cd /tmp && env Y=1 GIT_DIR=~-/.git git push origin main", c, "deny"),
+          "git -C ~- push --no-verify origin main 2>~-/x.log >~-/y.log"), plain, "deny"),
+        (f"cd /tmp/nx-a || cd /tmp/nx-b || cd {c}; pushd /tmp; git -C ~- push --no-verify origin main 2>~1/x.log", plain, "deny"),
+        (f"cd {c} && cd /tmp && GIT_DIR=~-/.git git push --no-verify origin main", plain, "deny"),
+        (f"cd {c} && cd /tmp && env GIT_DIR=~-/.git git push --no-verify origin main", plain, "deny"),
+        (f"cd {c} && cd /tmp && GIT_WORK_TREE=~- GIT_DIR=~-/.git git push --no-verify origin main", plain, "deny"),
+        ("cd /tmp && GIT_DIR=~-/.git git push --no-verify origin main", c, "deny"),
+        ("cd /tmp && env Y=1 GIT_DIR=~-/.git git push --no-verify origin main", c, "deny"),
         # bash가 풀지 않는 꼴
-        ("cd /tmp && GIT_DIR=x=~-/.git git push origin main", c, None),
-        ("cd /tmp && git --git-dir=~-/.git push origin main", c, None),
-        ('cd /tmp && GIT_DIR="~-/.git" git push origin main', c, None)]
+        ("cd /tmp && GIT_DIR=x=~-/.git git push --no-verify origin main", c, None),
+        ("cd /tmp && git --git-dir=~-/.git push --no-verify origin main", c, None),
+        ('cd /tmp && GIT_DIR="~-/.git" git push --no-verify origin main', c, None)]
     for cmd, cwd, want in rows:
         assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
 
@@ -2869,12 +2955,12 @@ def test_guard_wrapper_quoted_option_values_are_not_redirections():
     c = ws.clone
     plain = tmp("tt-gh-plain-")
     rows = [
-        ("sudo -p '<pw>' gh pr merge 3", c), ("/usr/bin/time -f '<%e>' git push origin main", c),
-        ('/usr/bin/time -f "<%e>" git push origin main', c), ("/usr/bin/time --format '<%e>' git push origin main", c),
-        ("/usr/bin/time --format '<%e>' gh pr merge 3", c), ("xargs -a '<f' git push origin main", c),
-        ("xargs -E '<<' git push origin main", c), ("timeout -s '<x' 5 git push origin main", c),
-        ("/usr/bin/time -f \\<%e git push origin main", c), (f"/usr/bin/time -f '<%e>' git -C {c} push origin main", plain),
-        (f"sudo -p '<pw>' gh -R {DB_SLUG} pr merge 3", plain), (f"env -C</dev/null {c} git push origin main", plain)]
+        ("sudo -p '<pw>' gh pr review 3 --approve", c), ("/usr/bin/time -f '<%e>' git push --no-verify origin main", c),
+        ('/usr/bin/time -f "<%e>" git push --no-verify origin main', c), ("/usr/bin/time --format '<%e>' git push --no-verify origin main", c),
+        ("/usr/bin/time --format '<%e>' gh pr review 3 --approve", c), ("xargs -a '<f' git push --no-verify origin main", c),
+        ("xargs -E '<<' git push --no-verify origin main", c), ("timeout -s '<x' 5 git push --no-verify origin main", c),
+        ("/usr/bin/time -f \\<%e git push --no-verify origin main", c), (f"/usr/bin/time -f '<%e>' git -C {c} push --no-verify origin main", plain),
+        (f"sudo -p '<pw>' gh -R {DB_SLUG} pr review 3 --approve", plain), (f"env -C</dev/null {c} git push --no-verify origin main", plain)]
     for cmd, cwd in rows:
         assert decision(bash(ws, cmd, cwd)) == "deny", (cmd, cwd)
 
@@ -2886,16 +2972,16 @@ def test_guard_fed_pipe_text_walked_once_at_pipeline_start():
     ws = shared()
     c = ws.clone
     cmd = ("\n".join(f"cd r{i}" for i in range(200)) + "\n" + "\n".join(f"echo 'cd s{i}; git status' | bash" for i in range(100))
-           + "\necho '" + "; ".join(f"cd t{i}" for i in range(300)) + "' | bash\ngit push origin HEAD:main")
+           + "\necho '" + "; ".join(f"cd t{i}" for i in range(300)) + "' | bash\ngit push --no-verify origin HEAD:main")
     t0 = time.time()
     assert decision(bash(ws, cmd, c)) == "deny"
     assert time.time() - t0 < 30
 
 
 def test_guard_gh_api_shell_resolved_endpoint_may_be_graphql():
-    """규칙 11(H-A1 r6): 셸이 푸는 엔드포인트(`"$GHE_API/graphql"`·`$X/graphql`·`"${X}/graphql"`)는 실행 때 GraphQL URL일 수 있다
-    (gh는 `://`가 든 경로를 그대로 쓰고 필드를 JSON 본문으로 보낸다). 병합·자동 병합·Approve·기각 mutation은 대상과 무관하게
-    거부한다. 끝 칸이 `graphql`이면 읽지 못한 본문은 ask다. 읽기 query·다른 REST 쓰기는 그대로다."""
+    """규칙 11(H-A1 r6·4-c): 셸이 푸는 엔드포인트(`"$GHE_API/graphql"`·`$X/graphql`·`"${X}/graphql"`)는 실행 때 GraphQL URL일 수
+    있다(gh는 `://`가 든 경로를 그대로 쓰고 필드를 JSON 본문으로 보낸다). Approve·기각 mutation은 대상과 무관하게 거부, 병합·자동
+    병합은 ask(병합 계열), 자동 병합 켜기 mutation은 거부(원칙 12 — db_pr merge만). 끝 칸이 `graphql`이면 읽지 못한 본문은 ask다. 읽기 query는 그대로, 다른 REST 쓰기는 ask다."""
     ws = shared()
     c = ws.clone
     plain = tmp("tt-gh-plain-")
@@ -2903,28 +2989,28 @@ def test_guard_gh_api_shell_resolved_endpoint_may_be_graphql():
     approve = "mutation { addPullRequestReview(input:{pullRequestId:\"PR_x\", event: APPROVE}) { clientMutationId } }"
     auto = "mutation { enablePullRequestAutoMerge(input:{pullRequestId:\"PR_x\"}) { clientMutationId } }"
     dismiss = "mutation { dismissPullRequestReview(input:{pullReviewId:\"R_x\", message:\"m\"}) { clientMutationId } }"
-    rows = [(f"gh api \"$GHE_API/graphql\" -f query='{merge}'", plain, "deny", "머지"),
+    rows = [(f"gh api \"$GHE_API/graphql\" -f query='{merge}'", plain, "ask", "머지"),
             (f"gh api \"$GHE_API/graphql\" -f query='{approve}'", plain, "deny", "Approve"),
-            (f"gh api \"$GHE_API/graphql\" -f query='{auto}'", c, "deny", "머지"),
+            (f"gh api \"$GHE_API/graphql\" -f query='{auto}'", c, "deny", "자동 병합"),    # 자동 병합 켜기(원칙 12)
             (f"gh api \"$GHE_API/graphql\" -f query='{dismiss}'", plain, "deny", "기각"),
-            (f"gh api $GHE_API/graphql -f query='{merge}'", plain, "deny", None),
-            (f"gh api \"${{GHE_API}}/graphql\" -f query='{merge}'", plain, "deny", None),
-            (f"gh api \"$BASE/api/%67raphql\" -f query='{merge}'", plain, "deny", None),
-            (f"Q='{merge}'; gh api \"$GHE_API/graphql\" -f query=\"$Q\"", plain, "deny", None),
-            (f"gh api \"$EP\" -f query='{approve}'", plain, "deny", None),
-            ("gh api \"$GHE_API/graphql\" -f query=\"$Q\"", plain, "ask", "GraphQL"),
+            (f"gh api $GHE_API/graphql -f query='{merge}'", plain, "ask", "머지"),
+            (f"gh api \"${{GHE_API}}/graphql\" -f query='{merge}'", plain, "ask", "머지"),
+            (f"gh api \"$BASE/api/%67raphql\" -f query='{merge}'", plain, "ask", "머지"),
+            (f"Q='{merge}'; gh api \"$GHE_API/graphql\" -f query=\"$Q\"", plain, "ask", "머지"),
+            (f"gh api \"$EP\" -f query='{approve}'", plain, "deny", "Approve"),
+            ("gh api \"$GHE_API/graphql\" -f query=\"$Q\"", plain, "ask", None),
             ("gh api \"$GHE_API/graphql\" -f query='query { viewer { login } }'", plain, None, None),
-            ("gh api \"$BASE/repos/other/x/issues\" -f title=t", plain, None, None)]
+            ("gh api \"$BASE/repos/other/x/issues\" -f title=t", plain, "ask", None)]     # 대상 레포를 보지 않는다(4-c)
     for cmd, cwd, want, why in rows:
         out = bash(ws, cmd, cwd)
         assert decision(out) == want, (cmd, cwd)
         assert why is None or why in out["permissionDecisionReason"], cmd
 
 
-def test_guard_scp_remote_without_user_keeps_explicit_targets_and_warns_unparsable():
-    """규칙 11(H-A1 r6): `issue_db.remote`가 user 없는 git SCP 꼴(`ghe-ssh:o/r.git` — ~/.ssh/config의 별칭)이어도 owner/repo로
-    푼다(`userconfig.repo_slug`). 그래서 `-R`·`api repos/…`·MCP owner/repo 명시 대상의 병합·Approve가 거부된다. 그 꼴 원격을 가진
-    다른 clone도 이슈 DB로 본다. owner/repo로 못 푸는 원격이면 guard가 경고한다(규칙 11이 꺼진다 — doctor `config` 행은 fail)."""
+def test_guard_scp_remote_enables_rule11_and_warns_unparsable():
+    """규칙 11(H-A1 r6·4-c): `issue_db.remote`가 user 없는 git SCP 꼴(`ghe-ssh:o/r.git` — ~/.ssh/config의 별칭)·숫자뿐인 owner여도
+    owner/repo로 풀려(`userconfig.repo_slug`) 규칙 11이 켜진다(경고 없음 — Approve는 거부, 병합은 ask). owner/repo로 못 푸는 원격이면
+    guard가 경고하지만(doctor `config` 행은 fail) 규칙 11은 원격 값만 보고 그대로 켠다(4-c — 꺼지면 Approve 거부도 꺼진다)."""
     ws = Workspace(build=False)
     ws.json("config.py", ["set-tracker", "--server", "mock-jira", "--get-issue", JIRA_TOOLS[0],
                           "--search-issues", JIRA_TOOLS[1], "--get-comments", JIRA_TOOLS[2]])
@@ -2934,61 +3020,45 @@ def test_guard_scp_remote_without_user_keeps_explicit_targets_and_warns_unparsab
             text = p.read_text(encoding="utf-8")
             if old in text:
                 p.write_text(text.replace(old, value), encoding="utf-8")
-    set_remote(f"https://ghe.mock.invalid/{DB_SLUG}.git", f"ghe-ssh:{DB_SLUG}.git")
     plain = tmp("tt-gh-plain-")
-    scp_clone = _repo_with_origin(f"ghe-ssh:{DB_SLUG}.git")
-    db = {"owner": "mock-org", "repo": "telephony-issue-db", "pullNumber": 3}
-    for cmd, cwd, want in [(f"gh pr merge 3 -R {DB_SLUG}", plain, "deny"),
-                           (f"gh api -X PUT repos/{DB_SLUG}/pulls/3/merge", plain, "deny"),
-                           (f"gh pr review 3 --approve -R {DB_SLUG}", plain, "deny"),
-                           (f"gh pr comment 3 -b x -R {DB_SLUG}", plain, "ask"),
-                           ("gh pr merge 3", ws.clone, "deny"), ("gh pr merge 3", scp_clone, "deny"),
-                           ("gh pr merge 3 -R other/x", plain, None)]:
-        assert decision(bash(ws, cmd, cwd)) == want, (cmd, cwd)
-    for tool, tool_input, want in [("mcp__github__merge_pull_request", db, "deny"),
-                                   ("mcp__github__pull_request_review_write", {**db, "method": "create", "event": "APPROVE"}, "deny"),
-                                   ("mcp__github__merge_pull_request", {**db, "owner": "other"}, None)]:
-        assert decision(guard(ws, tool, tool_input, plain)) == want, tool
-    # https 설정이어도 user 없는 SCP 꼴 원격의 다른 clone은 이슈 DB다
-    assert decision(bash(shared(), "gh pr merge 3", scp_clone)) == "deny"
-    # 숫자뿐인 owner의 SCP 꼴(회귀 수정 R3): git처럼 owner로 읽는다(포트가 아니다) — 규칙 11이 켜져 있고 경고가 없다
     event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(plain)}
-    current = f"ghe-ssh:{DB_SLUG}.git"
-    for remote, owner in (("git@ghe.mock.invalid:1234/telephony-issue-db.git", "1234"),
-                          ("ghe-ssh:20231234/telephony-issue-db.git", "20231234")):
+    current = f"https://ghe.mock.invalid/{DB_SLUG}.git"
+    for remote in (f"ghe-ssh:{DB_SLUG}.git", "git@ghe.mock.invalid:1234/telephony-issue-db.git",
+                   "ghe-ssh:20231234/telephony-issue-db.git"):
         set_remote(current, remote)
         current = remote
-        num_clone = _repo_with_origin(remote)
-        for cmd, cwd, want in [(f"gh pr merge 3 -R {owner}/telephony-issue-db", plain, "deny"),
-                               (f"gh api -X PUT repos/{owner}/telephony-issue-db/pulls/3/merge", plain, "deny"),
-                               (f"gh pr comment 3 -b x -R {owner}/telephony-issue-db", plain, "ask"),
-                               ("gh pr merge 3", num_clone, "deny"),
-                               (f"gh pr merge 3 -R {DB_SLUG}", plain, None)]:
-            assert decision(bash(ws, cmd, cwd)) == want, (remote, cmd)
+        for cmd, want in (("gh pr review 3 --approve", "deny"), ("gh pr merge 3", "ask"), ("gh pr comment 3 -b x", "ask")):
+            assert decision(bash(ws, cmd, plain)) == want, (remote, cmd)
+        out = guard(ws, "mcp__github__pull_request_review_write", {"owner": "o", "repo": "r", "event": "APPROVE"}, plain)
+        assert decision(out) == "deny", remote
         proc = run("guard.py", [], root=ws.root, cwd=plain, env=ws.env(), stdin=json.dumps(event))
         assert proc.returncode == 0 and "규칙 11" not in proc.stderr, (remote, proc.stderr)
-    # 못 푸는 원격: 규칙 11이 꺼진다는 경고(stderr)
+    # 못 푸는 원격: 경고(stderr)하고 규칙 11은 그대로
     set_remote(current, "telephony-issue-db")
-    event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": "ls"}, "cwd": str(plain)}
     proc = run("guard.py", [], root=ws.root, cwd=plain, env=ws.env(), stdin=json.dumps(event))
     assert proc.returncode == 0 and "issue_db.remote(telephony-issue-db)" in proc.stderr and "규칙 11" in proc.stderr, proc.stderr
+    for cmd, want in (("gh pr review 3 --approve", "deny"), ("gh pr merge 3", "ask"), ("gh pr comment 3 -b x", "ask")):
+        assert decision(bash(ws, cmd, plain)) == want, ("unparsable", cmd)
+    out = guard(ws, "mcp__github__pull_request_review_write", {"owner": "o", "repo": "r", "event": "APPROVE"}, plain)
+    assert decision(out) == "deny"
 
 
 def test_guard_mcp_strong_words_before_write_gate():
-    """규칙 11 MCP(H-A1 r5): 병합·Approve·기각 낱말은 쓰기형 판정(`mcptools.is_write`)과 따로, 먼저 본다 — `pr_approve`·
-    `automerge_pr`·`squash_and_merge`·입력 `event` APPROVE. 동사가 읽기 동사(`get_merge_status`)면 보지 않는다."""
+    """규칙 11 MCP(H-A1 r5·4-c): 병합·Approve·기각 낱말은 쓰기형 판정(`mcptools.is_write`)과 따로, 먼저 본다 — `pr_approve`·
+    `automerge_pr`·`squash_and_merge`·입력 `event` APPROVE. 동사가 읽기 동사(`get_merge_status`)면 보지 않는다. Approve·기각은
+    대상 레포와 무관하게 거부, 병합·자동 병합은 ask."""
     ws = shared()
     db = {"owner": "mock-org", "repo": "telephony-issue-db", "number": 3}
     rows = [("mcp__ghe__pr_approve", db, "deny", "Approve하지 않는다"),
             ("mcp__ghe__pull_request_approve", db, "deny", "Approve하지 않는다"),
             ("mcp__ghe__approvePullRequest", db, "deny", "Approve하지 않는다"),
             ("mcp__ghe__pr_review", {**db, "event": "APPROVE"}, "deny", "Approve하지 않는다"),
-            ("mcp__ghe__automerge_pr", db, "deny", "머지"), ("mcp__ghe__squash_and_merge", db, "deny", "머지"),
+            ("mcp__ghe__automerge_pr", db, "deny", "자동 병합"), ("mcp__ghe__squash_and_merge", db, "ask", "머지"),
             ("mcp__ghe__pr_dismiss_review", db, "deny", "기각"),
             ("mcp__ghe__disable_auto_merge", db, "ask", None), ("mcp__ghe__request_approval", db, "ask", None),
             ("mcp__ghe__get_merge_status", db, None, None), ("mcp__ghe__list_approvals", db, None, None),
             ("mcp__github__list_pull_requests", {**db, "state": "merged"}, None, None),
-            ("mcp__ghe__pr_approve", {"owner": "other", "repo": "x"}, None, None)]
+            ("mcp__ghe__pr_approve", {"owner": "other", "repo": "x"}, "deny", "Approve하지 않는다")]
     for tool, tool_input, want, why in rows:
         out = guard(ws, tool, tool_input, ws.base)
         assert decision(out) == want, tool
@@ -3054,9 +3124,10 @@ def test_guard_github_tracker_rule2():
     for tool in ("mcp__x-jira__add_comment", "mcp__corp-atlassian__update_issue"):     # kind=github여도 휴리스틱 합집합
         out = guard(ws, tool, {}, ws.base)
         assert decision(out) == "deny" and "Jira/Atlassian" in out["permissionDecisionReason"], tool
-    # 트래커가 아닌 일반 GitHub MCP: 이슈 DB 대상 쓰기는 규칙 11 ask, 그 밖은 판정 없음(github server_words는 비어 있다)
+    # 트래커가 아닌 일반 GitHub MCP: 쓰기형은 대상 레포와 무관하게 규칙 11 ask(4-c), 읽기형은 판정 없음(github server_words는 비어 있다)
     assert decision(guard(ws, "mcp__github__create_pull_request", {**db, "title": "x"}, ws.base)) == "ask"
-    assert decision(guard(ws, "mcp__github__update_issue", {"owner": "a", "repo": "b", "issue_number": 1}, ws.base)) is None
+    assert decision(guard(ws, "mcp__github__update_issue", {"owner": "a", "repo": "b", "issue_number": 1}, ws.base)) == "ask"
+    assert decision(guard(ws, "mcp__github__get_issue", {"owner": "a", "repo": "b", "issue_number": 1}, ws.base)) is None
 
 
 def test_guard_github_approved_comment():
@@ -3345,17 +3416,17 @@ def test_guard_gh_and_mcp_with_module_remote():
     baseline = bash(shared(), f"gh pr create -R {DB_SLUG} -t x", plain)
     out = bash(ws, "gh pr create -R tt/module-skills -t x", plain)
     assert decision(out) == "ask" and _reason(out) == _reason(baseline)       # 규칙 11 문구 그대로(메모 없음)
-    assert decision(bash(ws, "gh pr merge 1 -R tt/module-skills", plain)) == "deny"
+    assert decision(bash(ws, "gh pr merge 1 -R tt/module-skills", plain)) == "ask"         # 병합 계열은 ask(4-c)
     assert decision(bash(ws, "gh pr review 1 --approve -R tt/module-skills", plain)) == "deny"
     assert decision(bash(ws, "gh pr create -t x", module_clone)) == "ask"
-    assert decision(guard(ws, "mcp__github__merge_pull_request", {"owner": "tt", "repo": "module-skills"}, ws.base)) == "deny"
-    assert decision(bash(ws, "gh pr create -R tt/other -t x", plain)) is None
+    assert decision(guard(ws, "mcp__github__merge_pull_request", {"owner": "tt", "repo": "module-skills"}, ws.base)) == "ask"
+    assert decision(bash(ws, "gh pr create -R tt/other -t x", plain)) == "ask"       # 대상 레포를 보지 않는다(4-c)
     # 사용자 config 없이 site-defaults의 remote만 있어도 판정한다
     root = plugin_root("module-remote-site", module_skills={"remote": MODULE_REMOTE})
     nohome = {"TELEPHONY_TRIAGE_HOME": str(tmp("tt-nohome-"))}
     proc = run("guard.py", [], root=root, cwd=plain, env=nohome, stdin=json.dumps(
         {"tool_name": "Bash", "tool_input": {"command": "gh pr merge 1 -R tt/module-skills"}, "cwd": str(plain)}))
-    assert json.loads(proc.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert json.loads(proc.stdout)["hookSpecificOutput"]["permissionDecision"] == "ask"
 
 
 def test_guard_module_remote_warnings():
@@ -3375,3 +3446,55 @@ if __name__ == "__main__":
     import pytest
 
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+# -- 종합 리뷰 A 묶음: S1 미확인 Jira 읽기 ask, 인터프리터 인라인 코드·링크의 clone/원문 경로 ask -------------------------------------
+
+
+def test_guard_asks_jira_reads_until_isolation_confirmed():
+    """규칙 9(원문 격리)는 PostToolUse 출력 대체에 기대고 미지원이면 열린다. S1 확인 기록(site-defaults `tracker.isolation_confirmed`)
+    전에는 read_tools 호출도 ask(위험 고지), 쓰기는 그대로 deny. OpenCode 어댑터 환경(TT_OC_ADAPTER)은 자체 관문·대체가 있어 묻지 않는다."""
+    home = tmp("tt-home-")
+
+    def judge(root: Path, tool: str, extra: dict | None = None) -> dict | None:
+        event = {"tool_name": tool, "tool_input": {}, "cwd": str(home)}
+        proc = run("guard.py", [], root=root, env={"TELEPHONY_TRIAGE_HOME": home, **(extra or {})}, stdin=json.dumps(event))
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else None
+
+    tracker = _jira("mock-jira", JIRA_TOOLS[0])
+    tracker.pop("isolation_confirmed", None)
+    unconfirmed = plugin_root("jira-unconfirmed", tracker=tracker)
+    out = judge(unconfirmed, JIRA_TOOLS[0])
+    assert decision(out) == "ask" and "isolation_confirmed" in out["permissionDecisionReason"] and "S1" in out["permissionDecisionReason"]
+    assert decision(judge(unconfirmed, "mcp__mock-jira__jira_add_comment")) == "deny"
+    assert judge(unconfirmed, JIRA_TOOLS[0], {"TT_OC_ADAPTER": "1"}) is None
+    confirmed = plugin_root("jira-confirmed", tracker={**tracker, "isolation_confirmed": True})
+    assert judge(confirmed, JIRA_TOOLS[0]) is None
+    assert decision(judge(plugin_root("jira-false", tracker={**tracker, "isolation_confirmed": False}), JIRA_TOOLS[0])) == "ask"
+
+
+def test_guard_inline_interpreter_code_and_symlink_into_clone_ask():
+    """종합 리뷰에서 재현된 우회: `python3 -c`/heredoc/`perl -e` 안의 clone 쓰기와 원문 읽기, `ln -s <clone>`은 셸 파서가 보지 못해
+    통과했다. 코드 의미는 모르므로 ask. 무관한 경로·경로 없는 코드·clone 밖 링크는 그대로 통과한다."""
+    ws = shared()
+    clone = ws.clone
+    raw_dir = ws.root / "work" / "INLINE-1"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    (raw_dir / "events.json").write_text("{}", encoding="utf-8")
+    link = tmp("tt-link-") / "lk"
+    asks = [
+        (f"python3 -c \"open('{clone}/README.md','w').write('x')\"", "규칙 8"),
+        (f"python3 - <<'EOF'\nopen('{clone}/README.md','w').write('x')\nEOF", "규칙 8"),
+        (f"perl -e 'open(F,\">{clone}/README.md\");print F 1'", "규칙 8"),
+        (f"python3 -c'import pathlib; pathlib.Path(\"{clone}/x\").write_text(\"1\")'", "규칙 8"),
+        (f"ln -s {clone} {link}", "규칙 8"),
+        (f"python3 -c \"print(open('{raw_dir}/events.json').read())\"", "규칙 10"),
+    ]
+    for cmd, rule in asks:
+        out = bash(ws, cmd, clone)
+        assert decision(out) == "ask" and rule in out["permissionDecisionReason"], (cmd, out)
+    for cmd in (f"python3 -c \"print(open('{ws.root}/no-such-notes.txt').read())\"", "python3 -c 'print(1+1)'",
+                f"ln -s {link} {link}2", "perl -e 'print 1'", f"python3 -c \"import json; json.load(open('{clone}'))\" --flag"):
+        out = bash(ws, cmd, clone)
+        assert decision(out) in (None, "ask") if "import json" in cmd else decision(out) is None, (cmd, out)

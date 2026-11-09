@@ -21,7 +21,7 @@
 | `11-phases.md` | **Phase D0~14** 할 일·완료 기준·읽을 문서 (사외 초안·사내 처음부터 모드만) + **§11.0 작업 방식** |
 | `12-principles.md` | 원본 12장 **원칙**: 사용자 확인, push 전 승인, 작업 계획·drift, 사용자 clone 불변, lock, 생성 파일, ID, 마스킹, 검증 표시, 판정 기준, 우회 금지 |
 | `13-actions.md` | GHE Actions 전환 |
-| `14-site.md` | 사내 적용: placeholder 레지스트리 S1~S36(S24~S29 oFono, S30~S32 트래커, S33~S35 모듈 스킬 레포, S36 GHE MCP), `SITE_PROFILE.md` 형식, Phase 0, 사외 문서 반영 |
+| `14-site.md` | 사내 적용: placeholder 레지스트리 S1~S37(S24~S29 oFono, S30~S32 트래커, S33~S35 모듈 스킬 레포, S36 GHE MCP, S37 시그니처 표현력 수요), `SITE_PROFILE.md` 형식, Phase 0, 사외 문서 반영 |
 | `15-local-draft.md` | 사외 초안↔사내 보완: 모의 환경, 반입 체크리스트, **S-1~S-7**, `site-defaults.yaml` 필수, 재반입 |
 | `16-existing-assets.md` | 기존 Jira MCP 재사용(트래커 매핑 `tracker.tools`), 기존 파서 포팅(골든), 기존 분류 import, 분석 스킬 연결 |
 | `17-platforms.md` | 플랫폼 분리(Android 기본 / oFono / 이후 추가): 레지스트리 계약, 선택·경로 프로필, 플랫폼별 lock, 이슈 DB 분리·`platform-mismatch`, guard 다중 프로필, 새 플랫폼 추가 절차, 결정 기록 K1~K18, 미룬 것, 한 플랫폼 안의 여러 구성요소(데몬)·데몬 사이 짝·여러 소스 루트(§9), 분석 스킬·탐색 지식의 플랫폼 분리(§10), 이슈 시작 때 플랫폼 자동 판단(§11) |
@@ -34,7 +34,7 @@
 | `docs/tasks.md` | 사내 보완 단계(S-0~S-7)별 "읽을 것" 표. `python3 tools/context_pack.py S-n`이 그 파일·절만 출력 |
 | `docs/book/` | 사람용 통합 안내서 HTML 한 파일(스냅샷, 설계 본문이 우선). 경계 검사·반입 묶음에 포함 |
 | `docs/materials/` | 사람용 HTML 자료: 목록·교육 슬라이드·소개 2종(스냅샷). 경계 검사·반입 묶음에 포함 |
-| `docs/development/` | 리뷰·인계 문서(`ARCHITECTURE_REVIEW_2026-10.md` 남은 RF·R 항목, 인계 본문은 `docs/history/improvement-handoff-2026-10.md`, `S0_PROBE_CHECKLIST.md`, oFono 로그 수집 체크리스트 `OFONO_LOG_COLLECTION.md`) |
+| `docs/development/` | 개발 과정 문서(30개 안팎, 설계 본문이 우선): 리뷰 요청서·결과(`*REVIEW*`·`*_RESULT.md`·`CONCERNS.md`), 반입 기록(`REIMPORT_NOTES_*`), 인계(`*HANDOFF*`), 계획·결정(`MODULE_SKILLS_PLAN*.md`·`MODULE_SKILLS_DECISIONS.md`·`IMPROVEMENT_PLAN_*`), 런타임 가정(`RUNTIMES.md`), 체크리스트(`S0_PROBE_CHECKLIST.md`, oFono 로그 수집 `OFONO_LOG_COLLECTION.md`), 린트 검토 표(`LINT_REVIEW.md` — `tools/lint.py`가 남긴 지적의 사유). 외부 리뷰어는 결과·리뷰·인계 문서를 독립 평가 뒤에만 읽는다(`CODEX_HOLISTIC_REVIEW_BRIEF.md §6`) |
 
 - `07-workflow.md §Step 8-5`는 "Step 8의 5번 항목". `§record`처럼 워크플로우 이름은 `07-workflow.md`의 `##` 절.
 - 변경 이력은 `docs/history/CHANGES.md`.

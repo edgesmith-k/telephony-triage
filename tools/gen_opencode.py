@@ -73,7 +73,19 @@ NOTE = ("> **OpenCode v1 — 분석 전용.** 이 흐름의 다음 단계는 실
 PLACEHOLDER = re.compile(r"@@[A-Z_]+@@")
 MULTI = ("@@ISSUE_DB_ROOT@@", "@@ISSUE_DB_ROOT_REL@@")
 INSTALL_DIRS = ("agents", "commands", "plugins")
-OPENCODE_VERSION = "1.19.5"     # opencode/bin/tt-oc PINNED과 같게(테스트가 비교한다)
+
+
+def _oc_version_module():
+    """OpenCode 바이너리 의존 한 곳(`plugin/scripts/common/oc_version.py`)을 경로로 읽는다(sys.path는 건드리지 않는다)."""
+    import importlib.util
+    path = REPO / "plugin" / "scripts" / "common" / "oc_version.py"
+    spec = importlib.util.spec_from_file_location("gen_oc_version", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+OPENCODE_VERSION = _oc_version_module().OPENCODE_VERSION     # = opencode/bin/tt-oc PINNED = oc_adapter.OPENCODE_VERSION
 
 
 class UsageError(Exception):

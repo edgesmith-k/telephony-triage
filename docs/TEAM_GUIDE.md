@@ -86,7 +86,7 @@ tt-oc doctor   # 사전 점검. fail이 있으면 시작하지 않는다
 ## 2. 처음 한 번 설정
 
 1. **setup**: Claude Code에서 `/telephony-triage:setup`으로 먼저 한다(OpenCode도 같은 설정을 쓴다). OpenCode의 `/tt-setup`은 그 뒤 다시 점검하거나 바꿀 때만(config가 없으면 `tt-oc`가 시작하지 않는다).
-   - GHE 아이디·clone 경로를 묻고 Jira 도구 짝·git hook·스냅샷·gh를 확인한 뒤 점검표(doctor)를 보여 준다.
+   - Jira MCP 등록을 먼저 점검하고(없으면 거기서 멈춘다), clone 경로만 묻는다(GHE 아이디는 gh 로그인에서 읽고, 원격 URL은 팀 기본값 — 못 읽거나 없을 때만 묻는다. 타임존 등 나머지는 팀 기본값을 한 줄씩 보여 주기만). 그 뒤 Jira 도구 짝·git hook·스냅샷·gh를 확인하고 점검표(doctor)를 보여 준다.
 2. **점검표**: 모든 행이 `ok`면 끝. `warn`·`fail`은 그 행의 "다음" 칸대로(7절).
    - Claude Code: `/telephony-triage:status --doctor`
    - OpenCode: `tt-oc doctor` — `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만), warn `module-skills`·`read-roots`. 점검표 행을 하나씩 보려면 `TT_RUNTIME=opencode python3 $S/config.py doctor --format markdown`(모델 호출 없음, `opencode_env`·`jira_gate` 포함).
@@ -103,7 +103,7 @@ tt-oc doctor   # 사전 점검. fail이 있으면 시작하지 않는다
 
 ## 3. 매일 쓰는 흐름
 
-1. **분석 요청**: `/telephony-triage:analyze ABC-12345 ~/logs/radio.txt` 또는 말로 "ABC-12345 로그 분석해줘, 로그는 ~/logs/radio.txt". 연습 `--dry-run`, 결과만 `--analysis-only`.
+1. **분석 요청**: `/telephony-triage:analyze ABC-12345 ~/logs/radio.txt` 또는 말로 "ABC-12345 로그 분석해줘, 로그는 ~/logs/radio.txt". 연습 `--dry-run`, 결과만 `--analysis-only`. **처음 몇 번은 `--analysis-only`를 권한다** — 리포트만 받고(계획·PR 없음, 질문도 적다) 읽는 법에 익숙해진 뒤 기록까지 한다. 리포트의 `결론:` 한 줄이 분류와 다음 행동이다.
 2. **질문에 답하기**: 코드 경로, 심층·탐색 분석 여부(토큰이 더 든다), 어느 모듈 문서로 볼지.
 3. **리포트 읽기**
 
@@ -172,7 +172,7 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 - **근거 원문 검사 줄**: `원문에 없음` 1 이상은 입력에 없는 줄을 인용한 것(지어낸 근거일 수 있다). `약함`은 일부만 맞음. `건너뜀(…)`은 통과가 아니다.
 - **출처 기록**: 커밋 끝 `Triage-Env: runtime=…; model=…; gateway=…; label=…`와 확인 화면 `분석 환경` 줄이 자동으로 붙는다. 지우지 않는다(점검에 쓴다).
 - **의심되면**: Claude Code + Claude로 `--analysis-only` 비교. 확인 화면이 요약돼 보이면 승인 말고 전문 요청.
-- **정기 점검**: 도입 담당자가 사내 모델 기록만 골라 점검한다(`site_step.py audit` — 새 빌드 뒤 0건이 된 시그니처(drift)도 본다). 고칠 것은 PR로 온다.
+- **정기 점검**: 도입 담당자가 사내 모델 기록만 골라 점검한다(`site_step.py audit` — 새 빌드 뒤 0건이 된 시그니처(drift)도 본다). 걸린 것은 이슈 DB 레포 Issue(`[triage-audit] …`)로도 올라온다(`audit --notify --create`, 담당자 확인 뒤). 고칠 것은 PR로 온다.
 - **부분 일치**: 후보가 없거나 약하면 리포트에 `규칙 제안 (부분 일치):`가 나온다(코드 루트를 골랐으면 코드 대조 결과도). 기본은 받지 않음. 받으면 시그니처 추가 PR(+1)로 간다.
 - **토큰 아끼기**: 필요 없으면 `--no-analyzer --no-explore`.
 
@@ -200,6 +200,7 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 | `tracker`·`tracker_post` | Jira 도구 짝 | setup의 Jira 단계만 다시 |
 | `gh` | GHE 인증 | `gh auth login -h <GHE 호스트>` |
 | `snapshot` | 스냅샷 나이 | `/telephony-triage:sync` |
+| `retention`(site-defaults `retention_days`를 둔 팀만) | 마지막 활동(안의 파일 갱신) 뒤 보존 기간 넘은 작업 폴더 수 — `cleanup --older-than`과 같은 기준 | `db_pr.py cleanup --older-than <일> --dry-run` 확인 뒤 `--yes` |
 | `compat` | 이슈 DB 스키마 호환 | 플러그인 업데이트 |
 | `lock` | 세션 잠금 | 그 세션이 끝난 뒤에만 해제 |
 | `module_skills` | 모듈 스킬·설치 스킬 설정 | 팀 기본 값 문제면 도입 담당자 |
@@ -223,11 +224,21 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 
 막히면 `/telephony-triage:status --doctor`(OpenCode는 `tt-oc doctor`) 화면을 고치지 말고 그대로 도입 담당자에게 보낸다.
 
+### 누구에게 보내나 (2선 지원)
+
+| 순서 | 누구 | 무엇을 |
+|---|---|---|
+| 1선 | 도입 담당자 | doctor 화면, 막힌 명령·사유 한 줄 |
+| 2선 | 이슈 DB 메인테이너(`CODEOWNERS`의 메인테이너 경로 오너 — 도입 담당자가 자리에 없을 때) | 같은 것. 시그니처·파서 규칙·DB 스키마 문제는 처음부터 이쪽 |
+| 접수 | 팀이 정한 한 곳(권장: 이슈 DB 레포 Issue, 제목 `[support] <doctor 행 이름>`) | 메일·채팅으로 흩어지지 않게. 해결 뒤 같은 Issue에 원인·조치 한 줄(다음 사람의 답이 된다) |
+
+도입 담당자·메인테이너가 같은 사람이면 대리인을 한 명 정해 `SITE_PROFILE.md`에 적어 둔다(작성자 부재 시 열린 PR 인수는 `docs/design/06-collaboration.md §6.3`).
+
 ## 8. 플러그인을 갱신할 때
 
 1. Claude Code 마켓플레이스에서 `telephony-triage`를 업데이트한다.
 2. OpenCode면 레포 사본도 같은 태그로(`git fetch --depth 1 origin tag <새 태그> && git checkout <새 태그>`) 바꾸고 1.4의 install을 같은 인자 + `--force`로(Jira를 열었으면 4절 4도). 이번 묶음 반입 뒤에도 한 번.
-3. OpenCode Jira를 열어 두었으면 4절의 확인과 `config.py set … open`을 다시 한다(통과 기록이 플러그인 지문에 묶인다).
+3. OpenCode Jira를 열어 두었으면 4절의 확인과 `config.py set … open`을 다시 한다(통과 기록이 플러그인 지문과 트래커/MCP 설정 지문에 묶인다 — Jira 도구 매핑·MCP 서버 이름을 바꿨을 때도 같다).
 4. 사내 모델 `env`(1.3)는 그대로. 점검표를 다시 본다.
 
 근거: `SITE_INSTALL.md` 7절, `RUNTIMES.md`, `opencode/README.md`, `plugin/commands/`.

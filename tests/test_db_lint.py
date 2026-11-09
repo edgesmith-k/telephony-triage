@@ -309,6 +309,78 @@ def test_skeleton_is_clean():
     assert _lint(skeleton, "--all", expect=0)["errors"] == []
 
 
+REJECTED = "{id: rejected, event: data_evaluation_rejected, fields: {reasons: '.*DATA_DISABLED.*'}}"
+SEQUENCE = "        sequence: [setting-off, rejected]\n"
+# D①(min_count·sequence_within_sec) 직전 커밋 8b39f7dc63cb71b95560f8e004a081ee50b4a486의 plugin/schemas/type.schema.json 그대로(11,294B).
+# git 이력에 기대지 않으려고(얕은 clone·반입본은 이력이 없다) 파일로 고정했다.
+PRE_D1_SCHEMA = REPO / "tests/fixtures/schema_pre_d1/type.schema.json"
+COUNT_GAP = [(REJECTED, REJECTED[:-1] + ", min_count: 2}"), (SEQUENCE, SEQUENCE + "        sequence_within_sec: 5\n")]
+
+
+FEATURES = "[min_count, sequence_within_sec]"
+
+
+def _sig_lint(*edits, old_schema: bytes | None = None, features: str | None = FEATURES) -> list[tuple[str, str]]:
+    """샘플 DB 사본의 DATA-001 type.md에 `edits`를 적용해 린트하고 그 파일·`issue-db.config.yaml`의 `(코드, 메시지)`
+    오류를 돌려준다. `old_schema`: DB `schema/type.schema.json`을 이 내용(D① 전 v1)으로 바꾼다.
+    `features`: config 끝에 더할 `signature_features` 값(None이면 선언하지 않는다)."""
+    db = runner_copy(SAMPLE)
+    for old, new in edits:
+        edit(db / D / "type.md", old, new)
+    if old_schema is not None:
+        (db / "schema/type.schema.json").write_bytes(old_schema)
+    if features is not None:
+        with (db / "issue-db.config.yaml").open("a", encoding="utf-8", newline="\n") as fh:
+            fh.write(f"\nsignature_features: {features}\n")
+    result = _lint(db, "--all", expect=(0, 1))
+    return [(f["code"], f["message"]) for f in result["errors"] if f["file"] in (f"{D}/type.md", "issue-db.config.yaml")]
+
+
+def test_min_count_and_sequence_within_sec_accepted():
+    assert _sig_lint(*COUNT_GAP) == []
+
+
+def test_signature_features_must_be_declared():
+    """선택 필드(min_count ≥ 2·sequence_within_sec)를 쓰면 config `signature_features`에 선언해야 한다
+    (04-parser-matching.md §5.11 (1)). 선언 없이 쓰면 `signature-feature`, 모르는 이름 선언은 `config` 오류."""
+    found = _sig_lint(*COUNT_GAP, features=None)
+    msgs = [m for c, m in found if c == "signature-feature"]
+    assert len(found) == 2 and any(": min_count를" in m for m in msgs) and any(": sequence_within_sec를" in m for m in msgs), found
+    assert [c for c, _ in _sig_lint(*COUNT_GAP, features="[min_count]")] == ["signature-feature"]
+    assert _sig_lint(features=None) == [] and _sig_lint(features="[]") == []
+    bad = _sig_lint(features="[min_count, transaction_group]")
+    assert [c for c, _ in bad] == ["config"] and "transaction_group" in bad[0][1], bad
+    assert [c for c, _ in _sig_lint(features="min_count")] == ["config"]
+
+
+def test_min_count_and_sequence_within_sec_format_errors():
+    cases = [
+        ([(REJECTED, REJECTED[:-1] + ", min_count: 0}")], "schema", "min_count"),
+        ([(REJECTED, REJECTED[:-1] + ", min_count: 1.5}")], "schema", "min_count"),
+        ([("['RILJ.*>\\s*SETUP_DATA_CALL']", "[{pattern: 'RILJ.*>\\s*SETUP_DATA_CALL', min_count: 2}]")], "schema",
+         "must_not_match"),
+        ([("      - id: roaming-disabled\n", "      - id: roaming-disabled\n        sequence_within_sec: 5\n")], "signature",
+         "sequence가 있을 때만"),
+        ([(SEQUENCE, SEQUENCE + "        sequence_within_sec: 61\n")], "signature", "window_sec(60)보다 큽니다"),
+        ([(SEQUENCE, SEQUENCE + "        sequence_within_sec: soon\n")], "schema", "sequence_within_sec"),
+        ([(SEQUENCE, SEQUENCE + "        sequence_within_sec: 0\n")], "schema", "sequence_within_sec"),
+    ]
+    for edits, code, needle in cases:
+        found = _sig_lint(*edits)
+        assert any(c == code and needle in m for c, m in found), (edits, found)
+
+
+def test_old_schema_db_rejects_count_and_gap_fields():
+    """이슈 DB는 `schema/`를 들고 있어 db_lint가 DB 쪽 스키마로 검사한다: D① 전 v1 스키마 DB는 새 필드를 거부한다(호환 변경 §6.4).
+    옛 스키마는 D① 직전 커밋의 실제 파일을 fixture로 고정한 것이다(`PRE_D1_SCHEMA`)."""
+    old = PRE_D1_SCHEMA.read_bytes()
+    assert b"min_count" not in old and b"sequence_within_sec" not in old
+    assert _sig_lint(old_schema=old) == []
+    found = _sig_lint(*COUNT_GAP, old_schema=old)
+    messages = " ".join(m for c, m in found if c == "schema")
+    assert "'min_count' was unexpected" in messages and "'sequence_within_sec' was unexpected" in messages, found
+
+
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 
@@ -488,3 +560,24 @@ def test_type_title_form_error_only_for_new_type():
     assert (f"{D}/type.md", False) in form and ("data/DATA-009-dns-validation/type.md", True) in form, form
     every = _lint(repo, "--all")                                             # base 없음: 경고만
     assert [f for f in every["errors"] if f["code"] == "title-form"] == []
+
+
+def test_tag_position_word_not_in_tags_yaml_is_warned():
+    """Claude 종합 리뷰 B: 시그니처 패턴이 태그 자리 낱말로 시작하는데(`RILJ.*>…`) 그 태그가 tags.yaml에 없으면(개명·누락) 있음 조건은
+    늘 거짓, 없음 조건은 공허하게 참인데 lint가 조용했다 → 경고 `tag-unknown`. 샘플 DB는 깨끗하고, 메시지 낱말(`notify…:`)·
+    RIL 이름·`.*` 시작 패턴은 대상이 아니다."""
+    from common.signatures import tag_position_word
+    assert tag_position_word(r"RILJ.*>\s*SETUP_DATA_CALL") == "RILJ" and tag_position_word(r"DNC-0\s.*") == "DNC-0"
+    for p in ("notifyDataEnabledChanged: enabled=false", ".*ROAMING_DISABLED.*", "ABSENT|UNKNOWN", "403", "RILJ", "(?i)x",
+              "RIL_REQUEST_DIAL failed", "IMS_UNSOL_UPDATE_IMS_REG_FAIL fail_code=401", "DNC-0 .*"):   # RIL 이름·메시지 문구는 아님
+        assert tag_position_word(p) is None, p
+    db = runner_copy(SAMPLE, "tag-unknown")
+    tags = db / "parser-rules" / "tags.yaml"
+    text = tags.read_text(encoding="utf-8")
+    assert "tag: RILJ" in text
+    tags.write_text(text.replace("tag: RILJ", "tag: RILJX"), encoding="utf-8")       # 태그 개명
+    result = _lint(db, "--all")
+    hits = [f for f in result["warnings"] if f["code"] == "tag-unknown"]
+    assert hits and all("RILJ" in f["message"] for f in hits)
+    assert {f["file"] for f in hits} >= {"data/DATA-001-no-setup-data-call/type.md"}
+    assert not [f for f in _lint(SAMPLE, "--all", expect=0)["warnings"] if f["code"] == "tag-unknown"]

@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import sys
@@ -553,7 +554,7 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     skill = REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md"
     reference = skill.parent / "reference"
     text = skill.read_text(encoding="utf-8")
-    assert len(text.encode("utf-8")) <= 9107        # B2 e79: Step 5-1이 module 전에 module-skills.md를 읽게(종료 2 계속 규칙) 뒤. 그 전 9,063B — 규칙 제안 질문: 여러 개 가능·`모두`·`받지 않음(기본 — 이유)` 선택지(10/22 사용자) 뒤. 그 전 8,968B — Step 7 `[스킬]` 줄 → 담당자용 patch(`skill-patch.md`) 뒤. 그 전 8,962B — 분석 스킬 `규칙 제안:` 줄 처리(Step 5-1 괄호·Step 7 질문, 사내 문구 그대로) 뒤. 그 전 8,590B — L2 재측정 뒤: --more-logs는 --logs 대신(e52)·회귀 의심은 update-fix(e10) 명시 뒤. 그 전 8,500B — L2 ③ 리뷰: Step 7 질문 모양(고정 둘·글 거부·분석 스킬 의견 자리·후보 0개) 뒤. 그 전 8,280B — E67: Step 9 앞 PR 링크(`pr.url`)를 글로 보인다는 말 뒤. 그 전 8,256B — 전체 eval(10/14) 반영: 이어서 plan.next·mode write·거부 뒤 선택지·issue 재호출 뒤의 한도. 그 전 8,064B(흐름 A/B 한 줄 추가 뒤). 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
+    assert len(text.encode("utf-8")) <= 9180        # 종합 리뷰 A6: S1 확인 전엔 guard가 Jira 읽기마다 묻는다(우회 금지) 한 구절 뒤. 그 전 9,107B — B2 e79: Step 5-1이 module 전에 module-skills.md를 읽게(종료 2 계속 규칙) 뒤. 그 전 9,063B — 규칙 제안 질문: 여러 개 가능·`모두`·`받지 않음(기본 — 이유)` 선택지(10/22 사용자) 뒤. 그 전 8,968B — Step 7 `[스킬]` 줄 → 담당자용 patch(`skill-patch.md`) 뒤. 그 전 8,962B — 분석 스킬 `규칙 제안:` 줄 처리(Step 5-1 괄호·Step 7 질문, 사내 문구 그대로) 뒤. 그 전 8,590B — L2 재측정 뒤: --more-logs는 --logs 대신(e52)·회귀 의심은 update-fix(e10) 명시 뒤. 그 전 8,500B — L2 ③ 리뷰: Step 7 질문 모양(고정 둘·글 거부·분석 스킬 의견 자리·후보 0개) 뒤. 그 전 8,280B — E67: Step 9 앞 PR 링크(`pr.url`)를 글로 보인다는 말 뒤. 그 전 8,256B — 전체 eval(10/14) 반영: 이어서 plan.next·mode write·거부 뒤 선택지·issue 재호출 뒤의 한도. 그 전 8,064B(흐름 A/B 한 줄 추가 뒤). 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
     for needle in ("triage.py run", "needs_input", "--answer", "write-flow.md", "--commit", "reference/rules.md",
                    "steps-pasted.txt", "--dry-run --issue-file", "analyzer.skill",
                    "must_show", "triage.py explore", "triage.py module", "check-output", "module-skills.md"):
@@ -564,11 +565,11 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     assert "답 전 explore·module·원문 열람 금지" in lines[at + 1] and "Skill로" not in block
     _check_module_skills_md(reference / "module-skills.md")
     rules = (reference / "rules.md").read_text(encoding="utf-8")      # SKILL §실행 규칙이던 내용
-    assert len(rules.encode("utf-8")) <= 2516      # 병합은 +1 뒤 요청 시 `db_pr merge`만(Approve 금지, A2 11/04) 뒤. 그 전 2,496B — 머지는 `db_pr merge`만(본인 병합, 10/22) 뒤. 그 전 2,485B — `--platform`·`--json` 없이 목록에 skill_patch(10/22) 뒤의 한도. 그 전 2,460B — L2 J7 질문당 선택지 4개 줄 뒤의 한도. 그 전 2,320B — Bash·Read 출력 비가시(리포트·검증 표·확인 화면·notes·must_show, 전체 eval 10/14)·stage `next` 줄 뒤의 한도. 그 전 2,048B
+    assert len(rules.encode("utf-8")) <= 2700      # 종합 리뷰 G①: 로그는 마스킹 사본 logs-masked/를 쓴다 한 구절 뒤. 그 전 2,516B — 병합은 +1 뒤 요청 시 `db_pr merge`만(Approve 금지, A2 11/04) 뒤. 그 전 2,496B — 머지는 `db_pr merge`만(본인 병합, 10/22) 뒤. 그 전 2,485B — `--platform`·`--json` 없이 목록에 skill_patch(10/22) 뒤의 한도. 그 전 2,460B — L2 J7 질문당 선택지 4개 줄 뒤의 한도. 그 전 2,320B — Bash·Read 출력 비가시(리포트·검증 표·확인 화면·notes·must_show, 전체 eval 10/14)·stage `next` 줄 뒤의 한도. 그 전 2,048B
     for needle in ("S-3", "계획 형식 오류", "TT_LOCK_OWNER", "stage --then-summary", "모든 종료 경로에서 푼다", "사용자 확인 후"):
         assert needle in rules, needle
-    assert len((reference / "db-authoring.md").read_bytes()) <= 12288      # 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)
-    assert len((reference / "write-flow.md").read_bytes()) <= 16000     # A2 +1 병합(11/04): 바로 병합 선택지·--and-merge·병합 재시도 삭제, 리뷰어 질문(5번)·"병합해줘"(§6) 추가, stage 하는 일 압축 뒤. 그 전 15,872B — 확인 화면 선택지 push하고 바로 병합·--and-merge·병합 재시도(10/22) 뒤. 그 전 14,680B — L2 J5 확인 화면 압축(생성 파일 한 행·건너뜀 묶음·README 머리) 뒤(그 전 14,390B: E67 PR 링크를 다음 질문 전에 글자 그대로 보인다 뒤(그 전 14,344B)
+    assert len((reference / "db-authoring.md").read_bytes()) <= 12600      # 코덱스 리뷰 02e0ec2 F01: signature_features 선언 조건 한 구절 뒤(12,572B). 그 전 12,416B — D① min_count·sequence_within_sec 한 줄과 signature 선택 키 뒤(11/08 사용자). 그 전 12,288B — 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)
+    assert len((reference / "write-flow.md").read_bytes()) <= 16100     # 종합 리뷰 B2: 리뷰어 질문에 `reviewer.ask: false`면 안 묻는다 한 구절 뒤. 그 전 16,000B — A2 +1 병합(11/04): 바로 병합 선택지·--and-merge·병합 재시도 삭제, 리뷰어 질문(5번)·"병합해줘"(§6) 추가, stage 하는 일 압축 뒤. 그 전 15,872B — 확인 화면 선택지 push하고 바로 병합·--and-merge·병합 재시도(10/22) 뒤. 그 전 14,680B — L2 J5 확인 화면 압축(생성 파일 한 행·건너뜀 묶음·README 머리) 뒤(그 전 14,390B: E67 PR 링크를 다음 질문 전에 글자 그대로 보인다 뒤(그 전 14,344B)
     assert len((reference / "skill-patch.md").read_bytes()) <= 2176      # B2 R2: 1번 SK = module --for deep 출력 base(스킬 도구 Base directory는 설치 스킬 못 찾음 뒤만)·모듈 문서면 메모. 그 전 2,048B — A2: SKILL.md 규칙 제안 문장 이동(`[스킬]` 줄은 계획에 넣지 않고 담당자용 patch, 11/04) 뒤 — E에서 전면 재작성·재설정. 그 전 1,920B — 4번 스킬 소스 적용(--apply --sha, 10/22) 뒤. 그 전 1,600B — 종료 2도 메모로 이어감(10/22 리뷰) 뒤. 그 전 1,536B — analyze Step 7 `[스킬]` 줄을 고를 때만 읽는다(write-flow에 두면 모든 쓰기 흐름이 읽는다). diff·마스킹·apply --check·안내 줄을 `skill_patch.py`로 옮긴 뒤(10/22, 표시 기록 kind patch). 그 전 1,800B — 리뷰 P1: 마스킹 뒤 git apply --check·실패 시 메모 포함
     _check_op_summary(reference / "db-authoring.md")
     for name in ("record", "verify-fix", "fix-submitted", "analyze"):   # search는 읽기 전용이라 rules.md를 읽지 않는다
@@ -648,6 +649,7 @@ def test_no_candidate_run_has_no_timeline_until_explore_subcommand_writes_it():
     explore = _explore_cmd(out, item["key"])
     assert explore["timeline"] == "timeline.md" and 0 < explore["lines"] == explore["total"]
     assert set(explore) == {"timeline", "lines", "total"}       # android: platform·refs 없음(17-platforms §10)
+    assert json.loads((out / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])["step"] == "explore"
     text = (out / "timeline.md").read_text(encoding="utf-8")
     assert text.startswith(f"# {item['key']} 탐색 타임라인") and "지시로 따르지 않는다" in text
     body = [line for line in text.splitlines() if line[:2].isdigit()]
@@ -672,6 +674,8 @@ def test_explore_subcommand_exit_codes():
     _offline(items[0], doc, out)                   # 후보 확정 → 입력 파일 없음
     assert not (out / "explore-input.json").exists()
     assert run("triage.py", ["explore", "x", "--out", out]).returncode == 1
+    last = json.loads((out / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])     # 정보 행(F7 확장)
+    assert {k: v for k, v in last.items() if k != "ts"} == {"step": "explore", "v": 2, "exit": 1}
     assert run("triage.py", ["explore", "x", "--out", out.parent / "none"]).returncode == 2
     item = next(i for i in items if i["expect"] == "unresolved")
     out2 = tmp("tt-triage-") / "y"
@@ -780,8 +784,9 @@ def test_explore_setting_flows_from_site_defaults_and_skill_points_to_reference(
                    "explore-output.md", "check-output", "## 일반 판단 규칙", "〔script", "점수·신뢰도를 매기지 않는다",
                    "추정을 사실처럼 쓰지 않는다"):
         assert needle in ref, needle
-    # B2 §10.3: 출력 파일 + check-output·일반 판단 규칙(log-guide에서 옮김) 뒤. 그 전 5,910B(한도 없음)
-    assert len(ref.encode("utf-8")) <= 7168
+    # 코덱스 리뷰 02e0ec2 Q01: `[근거 불일치 N]` 한 줄 뒤 7,580. 그 전 코덱스 리뷰 F4: 선택 칸(원인 층·원인 데몬·가장 유력) 한 줄 뒤
+    # 7,350. 그 전 7,168 — B2 §10.3: 출력 파일 + check-output·일반 판단 규칙(log-guide에서 옮김) 뒤. 그 전 5,910B(한도 없음)
+    assert len(ref.encode("utf-8")) <= 7580
     assert ref.index("## 쓰는 것") < ref.index("## 일반 판단 규칙") < ref.index("## 다음")
     # android 밖 플랫폼 탐색 지식(17-platforms §10): `triage.py explore` 출력 refs로만 읽는다. placeholder라 작게 둔다
     guide = REPO / "plugin" / "skills" / "telephony-triage" / "reference" / "platforms" / "ofono" / "log-guide.md"
@@ -807,6 +812,49 @@ def _e004_offline(out: Path, *extra) -> dict:
                     encoding="utf-8")
     return run_json("triage.py", ["run", "MOCK-9004", "--offline-db", SAMPLE, "--out", out, "--logs", log, "--issue-meta", meta,
                                   "--tz", "Asia/Seoul", "--year", "2026", *extra])
+
+
+def test_analyze_makes_masked_log_copy_with_same_line_numbers():
+    """종합 리뷰 G① 축소판: 원문을 받자마자 <JOB>/logs-masked/<이름>(줄 번호 같음)을 만들고 logs.masked로 알린다."""
+    out = tmp("tt-triage-") / "x"
+    analysis = _e004_offline(out)
+    masked = analysis["logs"]["masked"]
+    assert masked["dir"] == "logs-masked" and masked["skipped"] == []          # JOB 상대 — 출력은 --out과 무관하게 같다
+    assert masked["files"] == analysis["logs"]["files"]
+    src = Path(analysis["logs"]["files"][0])
+    copy = out / "logs-masked" / src.name
+    assert copy.is_file() and (out / "logs-masked" / "index.json").is_file()
+    gen_log = next((out.parent.parent).glob("tt-e004-*/*.log"), None)
+    if gen_log is not None:
+        assert len(copy.read_text(encoding="utf-8").split("\n")) == len(gen_log.read_text(encoding="utf-8").split("\n"))
+
+
+def test_analyze_parses_masked_copy_so_tokens_match(tmp_path):
+    """코덱스 리뷰 R1: 시간 창 밖에서 먼저 나온 값(12:00 IMSI)이 사본에서는 <IMSI#1>, 창 안 둘째 값은 <IMSI#2>인데 parse --mask가
+    원문을 창 안만 가리면 둘째 값이 <IMSI#1>이 됐다. analyze는 사본을 파싱하므로 events.json·사본의 토큰이 같아야 한다."""
+    imsi_a, imsi_b = "45008" + "1234567890", "45008" + "1234567891"
+    log = tmp_path / "radio.log"
+    log.write_text("09-26 12:00:00.000  1500  1510 I RILJ    : [PHONE0] subscriber imsi=" + imsi_a + "\n"
+                   "09-26 13:00:00.000  1500  1510 I RILJ    : [PHONE0] subscriber imsi=" + imsi_b + "\n"
+                   "09-26 13:00:01.000  1500  1510 E RILJ    : [PHONE0] < SETUP_DATA_CALL error 2 failed\n", encoding="utf-8")
+    old = log.stat().st_mtime - 86400 * 400
+    os.utime(log, (old, old))
+    meta = tmp_path / "m.json"
+    meta.write_text(json.dumps({"key": "MOCK-9011", "occurred_at": "2026-09-26T13:00:00+09:00", "summary": "data"}), encoding="utf-8")
+    out = tmp_path / "job"
+    analysis = run_json("triage.py", ["run", "MOCK-9011", "--offline-db", SAMPLE, "--out", out, "--logs", log, "--issue-meta", meta,
+                                      "--tz", "Asia/Seoul", "--year", "2026"])
+    copy = out / "logs-masked" / "radio.log"
+    copy_lines = copy.read_text(encoding="utf-8").split("\n")
+    assert imsi_a not in copy_lines[0] and "<IMSI#1>" in copy_lines[0] and "<IMSI#2>" in copy_lines[1]
+    assert copy.stat().st_mtime == old                                           # 연도 추정(file-mtime)이 같다
+    events = json.loads((out / "events.json").read_text(encoding="utf-8"))
+    assert [Path(f).resolve() for f in events["input"]["files"]] == [copy.resolve()]   # 파서 입력이 사본
+    msgs = [e["msg"] for e in events["events"] if e.get("event") is None]
+    assert any("imsi=<IMSI#2>" in m for m in msgs) and not any("imsi=<IMSI#1>" in m for m in msgs)   # 창 안 둘째 값 = 사본과 같은 번호
+    assert imsi_a not in json.dumps(events) and imsi_b not in json.dumps(events) and events["masked"] is True
+    assert analysis["logs"]["masked"]["files"] == ["radio.log"] == analysis["logs"]["files"]
+    assert "mask-copy-mixed" not in json.dumps(analysis.get("warnings") or [])
 
 
 def test_uncollected_tag_of_collected_pid_is_reported_and_must_shown():
@@ -1115,6 +1163,22 @@ def test_read_only_mode_shows_update_hint_in_analysis_and_report():
     assert "플러그인을 업데이트" in (job / "report.md").read_text(encoding="utf-8")
 
 
+def test_unsupported_signature_feature_stops_analysis():
+    """DB가 선언한 `signature_features`를 플러그인이 모르면(`transaction_group` = 모르는 플러그인 흉내) 읽기 전용으로
+    계속하지 않고 분석을 중단한다(04-parser-matching.md §5.11 (1))."""
+    ws = Workspace()
+    ws.push_main(lambda c: (c / "issue-db.config.yaml").write_text(
+        (c / "issue-db.config.yaml").read_text(encoding="utf-8") + "\nsignature_features: [transaction_group]\n",
+        encoding="utf-8", newline="\n"))
+    args = ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml", "--logs", DATA_LOG,
+            "--answer", "code=skip"]
+    proc = ws.run("triage.py", args)
+    assert proc.returncode == 2, proc.stderr[-1500:]
+    assert "feature-unsupported" in proc.stderr and "분석을 중단" in proc.stderr, proc.stderr[-1500:]
+    assert "read-only" not in proc.stdout
+    assert not (ws.job_dir("MOCK-1001") / "analysis.json").exists()
+
+
 # -- W4 질문 수 줄이기: 코드 경로 자동 선택·잔여물 알림 (07-workflow.md §Step 0·§Step 2-1, 02-config.md, contracts.md) -------------
 # 표의 각 행은 문서 출처(`07 §…`, `02 §…`, `contracts §…`)를 적는다.
 
@@ -1413,6 +1477,28 @@ def _meta(out: Path, key: str, **fields) -> Path:
     return meta
 
 
+def test_report_evidence_shows_count_only_for_min_count():
+    """D①: `min_count` ≥ 2 조건의 근거 줄에만 ` ×N`(구간 안 개수). analysis.json 근거 키는 그대로(ts·tag·msg·event)."""
+    db = tmp("tt-countdb-") / "db"
+    shutil.copytree(SAMPLE, db)
+    type_md = db / "data/DATA-001-no-setup-data-call/type.md"
+    old = "{id: rejected, event: data_evaluation_rejected, fields: {reasons: '.*DATA_DISABLED.*'}}"
+    text = type_md.read_text(encoding="utf-8")
+    assert old in text
+    type_md.write_text(text.replace(old, old[:-1] + ", min_count: 3}", 1), encoding="utf-8", newline="\n")
+    out = tmp("tt-triage-") / "x"
+    meta = _meta(out, "MOCK-7411", occurred_at="2026-09-20T05:30:05.000Z")
+    analysis = run_json("triage.py", ["run", "MOCK-7411", "--offline-db", db, "--out", out, "--logs", DATA_LOG,
+                                      "--issue-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+    top = analysis["candidates"][0]
+    assert (top["cause"], top["C"]) == ("DATA-001-01", 1), top
+    assert all(set(e) <= {"ts", "tag", "msg", "event"} for e in top["evidence"])
+    lines = Path(analysis["files"]["report"]).read_text(encoding="utf-8").splitlines()
+    counted = [ln for ln in lines if " ×" in ln]
+    assert len(counted) == 1 and "Data disallowed reasons: DATA_DISABLED" in counted[0] and " ×3 (f0:L6)" in counted[0], counted
+    assert any("notifyDataEnabledChanged" in ln and " ×" not in ln for ln in lines)
+
+
 def test_matcher_timeout_is_must_shown_and_not_cached():
     db = _slow_symptom_db()
     out = tmp("tt-triage-") / "x"
@@ -1605,4 +1691,7 @@ def test_cause_unconfirmed_run_shows_partial_match_and_code_check(tmp_path):
     assert "DATA-001 > DATA-001-01/data-disabled 1/2 [missing]" in report
     assert "  - 코드 대조 setting-off: " in report
     assert "  - 없음 근거 포함: must_not_match " in report
+    # 종합 리뷰 P1: 이 합성 로그에는 RILJ(수집 태그) 줄이 없어 `RILJ.*>\s*SETUP_DATA_CALL` 없음은 확인된 것이 아니다 → must_show
+    assert "- 배제 조건 검증 불가: DATA-001/no-setup-data-call-request의 must_not_match 태그 RILJ 줄이 이 로그에 0줄" in report
+    assert any(m.startswith("배제 조건 검증 불가") for m in done.get("must_show") or []), done.get("must_show")
     ws.json("triage.py", ["release", "MOCK-1001"])

@@ -33,14 +33,15 @@
 warnings[], ...}`. 후보 = `{type, cause, title, score, confidence, S, C, signature,
 evidence[], bonus, feedback, fix_judgement, related[], clock_flags?[clock_anomaly|line_order]}`
 (`clock_flags`는 근거가 시계 이상 구간에 걸치거나 sequence 근거의 같은 파일 줄 순서가 역전됐을 때만, 표시 전용). 근거 = `{signature, condition, ts, tag, msg, event, fields,
-phone_id, line_ref, event_index}` (`line_ref`: 이벤트의 로그 줄 위치 `{file_index, line_no}` 또는 null, `event_index`: 입력
+phone_id, line_ref, event_index, count?}` (`count`: 그 조건의 `min_count`가 2 이상일 때만 구간 안 개수, `line_ref`: 이벤트의 로그 줄 위치 `{file_index, line_no}` 또는 null, `event_index`: 입력
 `events[]` 안의 순번 — 입력 문서 순서 기준이다. 점수·판정에는 쓰지 않는다, 04-parser-matching.md §5.8 (6)). 원인 미확인 후보는 `cause: null`.
 `--top N`(기본 3)은 후보 N개와 함께 `types[]`는 S=1, `causes[]`는 C=1인 것만, `pending_causes[]`는 N개만 내고
 뺀 개수를 `omitted`에 적는다. 판정 목록 전체가 필요하면 `--top 0`.
 
 부분 일치(C′, 분석 모드만, 04-parser-matching.md §5.12): 후보 없음 또는 1위 원인 미확인이면 `partial[]`(≤ 5, 판정·점수 아님) =
 `{kind: missing|absent|order|window|blocked, type, cause, signature, matched:"m/n", hits[≤3 {condition, ts, line_ref}],
-missing[≤3 {id, desc(60자), kind, pattern|event}], blocked_by?, order?, width_sec?}`. 1위 C=1이면 키 없음. 1위 시그니처에
+missing[≤3 {id, desc(60자, min_count 모자람이면 앞에 `min_count N 중 k`), kind, pattern|event}], blocked_by?, order?,
+gap_sec?(순서는 맞고 이웃 간격이 sequence_within_sec 초과), width_sec?}`. 1위 C=1이면 키 없음. 1위 시그니처에
 `must_not_match`가 있으면 `absence_basis: {signature, pattern(40자)}`. 회귀·검증 모드는 둘 다 내지 않는다(출력 그대로).
 """
 
@@ -56,11 +57,11 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import builds, compat, dbpath, issuedb, site_defaults, stepanchor  # noqa: E402
+from common import builds, compat, dbpath, issuedb, parser_rules, site_defaults, stepanchor  # noqa: E402
 from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS  # noqa: E402
-from common.signatures import PARTIAL_KINDS, Evaluator, SignatureError  # noqa: E402
+from common.signatures import PARTIAL_KINDS, Evaluator, SignatureError, literal_anchor  # noqa: E402
 from common.logtime import BACKWARD_THRESHOLD_SEC  # noqa: E402
 
 OUTPUT_SCHEMA = 1
@@ -216,13 +217,12 @@ def fix_judgement(cause: issuedb.Cause, sw: str | None, rules: list[dict], jira_
             build = comparisons[0][1]
             result.update(judgement="already-fixed",
                           message=f"{build}에서 수정됨. 빌드 업데이트 후 재확인 권고")
+    elif newer:
+        result.update(judgement="fix-insufficient",
+                      message="수정 반영 빌드에서 발생. verify-fix 실패 가능성")
     else:
-        if newer:
-            result.update(judgement="fix-insufficient",
-                          message="수정 반영 빌드에서 발생. verify-fix 실패 가능성")
-        else:
-            result.update(judgement="fix-pending-build",
-                          message="수정 CL 반영 전 빌드. 업데이트 후 verify-fix 권고")
+        result.update(judgement="fix-pending-build",
+                      message="수정 CL 반영 전 빌드. 업데이트 후 verify-fix 권고")
     return result
 
 
@@ -365,7 +365,7 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
     use_feedback = bool(scoring.get("feedback_weight")) and not regress and not no_feedback_weight
     min_samples = int((db.config.get("quality") or {}).get("min_samples", 5))
     if acceptance is None:
-        acceptance = issuedb.acceptance(db.feedback)
+        acceptance = issuedb.acceptance(db.feedback, db.jira)
     stats = acceptance if use_feedback else {}
     timeout_ms = int((db.config.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
     rules = db.config.get("build_compare") or []
@@ -414,7 +414,7 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
                 else:
                     matches = _all_satisfied(evaluator, compiled[cause.id], occurred, errors)
                     pair = next(((s, c) for c in matches for s in symptoms if _compatible(s, c)), None)
-                    candidate_sym, res = pair if pair else (sym, None)
+                    candidate_sym, res = pair or (sym, None)
                 C = 1 if res else (None if len(errors) > n_err else 0)
                 centry = {"type": itype.id, "cause": cause.id, "S": S, "C": C,
                           "signature": res.key if res else None}
@@ -462,7 +462,7 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
     }
     if partial is not None:     # 분석 모드, 후보 없음·원인 미확인일 때만 (회귀·검증 모드 출력은 그대로)
         result["partial"] = partial
-    basis = None if regress or not candidates else _absence_basis(compiled, candidates[0])
+    basis = None if regress or not candidates else _absence_basis(compiled, candidates[0], types_out, evaluator, db)
     if basis:
         result["absence_basis"] = basis
     if focus_map:
@@ -515,30 +515,69 @@ def _partials(evaluator: Evaluator, db, compiled: dict, candidates: list, types_
     items.sort(key=lambda x: x[0])
     out = []
     for _rank, type_id, cause_id, sig, found in items[:PARTIAL_MAX]:
+        short = found.get("short") or [None] * len(found["missing"])     # min_count 모자람: 구간 안 개수
         entry = {"kind": found["kind"], "type": type_id, "cause": cause_id, "signature": sig.key,
                  "matched": f"{found['m']}/{found['n']}",
                  "hits": [{"condition": _clip(c.id or c.describe(), PARTIAL_DESC),
                            "ts": evaluator.events[i]["ts"], "line_ref": evaluator.events[i].get("line_ref")}
                           for c, i in found["hits"][:PARTIAL_MISSING]],
-                 "missing": [{"id": c.id, "desc": _clip(c.describe(), PARTIAL_DESC), "kind": c.kind,
-                              **({"pattern": c.pattern} if c.kind == "match" else {"event": c.event})}
-                             for c in found["missing"][:PARTIAL_MISSING]]}
-        for k in ("blocked_by", "order", "width_sec"):
+                 "missing": [{"id": c.id,
+                              "desc": _clip((f"min_count {c.min_count} 중 {got} " if got else "") + c.describe(), PARTIAL_DESC),
+                              "kind": c.kind, **({"pattern": c.pattern} if c.kind == "match" else {"event": c.event})}
+                             for c, got in list(zip(found["missing"], short))[:PARTIAL_MISSING]]}
+        for k in ("blocked_by", "order", "gap_sec", "width_sec"):
             if k in found:
                 entry[k] = _clip(found[k], PARTIAL_DESC) if k == "blocked_by" else found[k]
         out.append(entry)
     return out
 
 
-def _absence_basis(compiled: dict, top: dict) -> dict | None:
-    """1위 후보 시그니처에 `must_not_match`가 있으면 `{signature, pattern}` (report.md "없음 근거 포함" 줄, 판정 불변)."""
-    key = top.get("signature")
-    if not key:
+_literal_anchor = literal_anchor      # (common.signatures로 옮김 — db_lint와 공유)
+
+
+def _collection_rules(db):
+    """이슈 DB의 수집 태그 규칙(`parser-rules/tags.yaml`). 못 읽으면 None — 검증 불가 판정(표시 전용)을 하지 않는다."""
+    try:
+        return parser_rules.load(Path(db.root) / "parser-rules")
+    except Exception:  # noqa: BLE001
         return None
-    sig = next((s for s in compiled.get(key.split("/", 1)[0]) or [] if s.key == key), None)
-    if sig is None or not sig.negatives:
+
+
+def _absence_basis(compiled: dict, top: dict, types_out: list | None = None, evaluator: Evaluator | None = None,
+                   db=None) -> dict | None:
+    """1위 후보의 시그니처(원인, 그리고 같은 유형의 충족된 증상 시그니처)에 `must_not_match`가 있으면 `{signature, pattern}`
+    (report.md "없음 근거 포함" 줄, 판정 불변). 배제 패턴의 앞 낱말이 **수집 태그**(tags.yaml)인데 그 태그로 시작하는 줄이 이벤트에
+    하나도 없으면 `unverifiable: [{signature, pattern, anchor}]`를 더한다 — 그 버퍼·태그가 수집되지 않아 부정 조건이 공허하게
+    참일 수 있다(종합 리뷰 P1: main 버퍼만 받은 로그에서 `RILJ.*>\\s*SETUP_DATA_CALL` 없음이 '높음'으로 보였다). 메시지 리터럴
+    배제(`notifyDataEnabledChanged: …`)는 태그가 아니라 판정하지 않는다. S/C·점수·순위는 바꾸지 않는다."""
+    keys: list[str] = []
+    for key in [top.get("signature")] + [t.get("signature") for t in types_out or [] if t.get("type") == top.get("type")]:
+        if key and key not in keys:
+            keys.append(key)
+    sigs = []
+    for key in keys:
+        sig = next((s for s in compiled.get(key.split("/", 1)[0]) or [] if s.key == key), None)
+        if sig is not None and sig.negatives:
+            sigs.append(sig)
+    if not sigs:
         return None
-    return {"signature": key, "pattern": _clip(sig.negatives[0], 40)}
+    basis = {"signature": sigs[0].key, "pattern": _clip(sigs[0].negatives[0], 40)}
+    rules = _collection_rules(db) if evaluator is not None and db is not None else None
+    if rules is None:
+        return basis
+    tags = {str(e.get("tag") or "") for e in evaluator.events}
+    unverifiable = []
+    for sig in sigs:
+        for pattern in sig.negatives:
+            anchor = _literal_anchor(pattern)
+            if not anchor or any(t.startswith(anchor) for t in tags):
+                continue
+            if not any(rules.tag_category(x) for x in (anchor, anchor + "-0", anchor + "0")):   # 정확한 이름·접두 regex 태그
+                continue
+            unverifiable.append({"signature": sig.key, "pattern": _clip(pattern, 40), "anchor": anchor})
+    if unverifiable:
+        basis["unverifiable"] = unverifiable
+    return basis
 
 
 def _error_text(err: dict) -> str:
@@ -553,7 +592,10 @@ def _rank_key(c: dict) -> tuple:
     우선 유형이 없으면 키가 `(-score, -(근접+키워드), 유형, 원인)`으로 이전과 같다."""
     b = c["bonus"]
     focus = b.get("step", 0)
-    return (-round(c["score"] + focus, 4), -round(b["proximity"] + b["keyword"] + focus, 4), c["type"], c["cause"] or "")
+    # 세 번째 키 = 일치 조건 수(특이도, `matched_conditions`): 점수가 min(1,…)로 포화해 C=1 후보가 모두 1.0일 때 조건 1개짜리와
+    # 3개 sequence가 같은 "높음"으로 ID 순이 되던 것(종합 리뷰 D)을, 더 구체적인 시그니처가 앞서게 한다. score·confidence 불변
+    return (-round(c["score"] + focus, 4), -round(b["proximity"] + b["keyword"] + focus, 4),
+            -int(c.get("matched_conditions") or 0), c["type"], c["cause"] or "")
 
 
 def _version_match(cause, jira: dict) -> bool | None:
@@ -599,6 +641,7 @@ def _candidate(db, itype, cause, S, C, sym, res, jira, occurred, half, scoring, 
         "C": C,
         "signature": signature,
         "evidence": evidence,
+        "matched_conditions": len(evidence),      # 원인+증상 시그니처가 맞춘 조건 수(특이도) — 동점 3차 정렬 키, 표시용
         "bonus": bonus,
         "feedback": feedback,
         "fix_judgement": judgement,

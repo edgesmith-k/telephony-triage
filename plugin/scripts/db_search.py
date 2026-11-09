@@ -47,7 +47,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import dbpath, glossary, history, issuedb, md, quality, site_defaults, typedoc, userconfig, yamlio  # noqa: E402
+from common import dbpath, glossary, history, issuedb, md, quality, site_defaults, typedoc, yamlio  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE  # noqa: E402
 from platforms import PlatformConfigError  # noqa: E402
@@ -65,7 +65,7 @@ STOPWORDS = frozenset("""안 못 안돼 안됨 안되 안돼요 안되요 안되
 issue issues ticket tickets similar there have has had did does do we not no number numbers""".split())
 WEIGHT_STRONG, WEIGHT_MID, WEIGHT_WEAK = 3, 2, 1
 KIND_ORDER = {"type": 0, "cause": 1, "issue": 2}
-SYMPTOM_RE = re.compile(r"^## 증상\n(.*?)(?=^## |\Z)", re.M | re.S)
+SYMPTOM_RE = re.compile(r"^## 증상\n(.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL)
 CODE_REF_FIELDS = ("ref", "symbol", "platform_versions")   # Step 5 resolve에 필요한 것만 (contracts.md §3.2)
 
 

@@ -17,13 +17,13 @@ import re
 import subprocess
 from datetime import date
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 import yaml
 
 from . import yamlio
 
-RENUMBERED_RE = re.compile(r"^Renumbered:\s*(\S+)\s*->\s*(\S+)\s*$", re.M)
+RENUMBERED_RE = re.compile(r"^Renumbered:\s*(\S+)\s*->\s*(\S+)\s*$", re.MULTILINE)
 
 
 def _git(repo: Path, *args: str) -> str | None:

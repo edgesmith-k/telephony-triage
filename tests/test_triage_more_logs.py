@@ -130,23 +130,35 @@ def _bugreport(sub: str, src: Path) -> Path:
 
 
 def _input_files(ws: Workspace) -> list[Path]:
+    """파서 입력(events.json input.files) — 코덱스 리뷰 R1 뒤로는 마스킹 사본(JOB/logs-masked/)이다."""
     return [Path(f) for f in json.loads((ws.job_dir(KEY) / "events.json").read_text(encoding="utf-8"))["input"]["files"]]
+
+
+def _source_files(ws: Workspace) -> list[Path]:
+    """사본의 원본(추출 파일) 경로 — logs-masked/index.json의 source, 입력 순서."""
+    index = json.loads((ws.job_dir(KEY) / "logs-masked" / "index.json").read_text(encoding="utf-8"))
+    return [Path(f["source"]) for f in index["files"]]
 
 
 def test_same_name_bugreports_extract_to_separate_dirs():
     ws = Workspace()
     b = LOGS / "ims-registration-failed.log"
     _first(ws, _bugreport("a", A), _bugreport("b", b))
-    files = _input_files(ws)
-    assert len({f.parent for f in files}) == 2
-    assert [f.read_text(encoding="utf-8").splitlines() for f in files] == \
+    sources = _source_files(ws)                                   # 추출 폴더는 둘(경로 해시), 파서 입력은 그 사본(한 폴더, 줄 수 같음)
+    assert len({f.parent for f in sources}) == 2
+    assert [f.read_text(encoding="utf-8").splitlines() for f in sources] == \
            [A.read_text(encoding="utf-8").splitlines(), b.read_text(encoding="utf-8").splitlines()]
+    files = _input_files(ws)
+    assert [f.parent.name for f in files] == ["logs-masked", "logs-masked"] and [f.name for f in files] == ["logcat-radio.txt", "logcat-radio-2.txt"]
+    assert [len(f.read_text(encoding="utf-8").splitlines()) for f in files] == [len(s.read_text(encoding="utf-8").splitlines()) for s in sources]
     # --more-logs로 세 번째(다른 이름)를 더해도 추출 파일 셋 모두 남아 있고 고유 디렉터리이며, 근거 줄 추출(cut --evidence)이 된다
     c = LOGS / "sms-send-failed.log"
     more = _more(ws, c)
-    assert more["logs"]["files"] == ["logcat-radio.txt", "logcat-radio.txt", c.name]     # 추출 파일 이름만(동명으로 보임, R6)
+    assert more["logs"]["files"] == ["logcat-radio.txt", "logcat-radio-2.txt", c.name]   # 사본 이름(동명은 -2 접미, R1·R6)
+    sources = _source_files(ws)
+    assert len(sources) == 3 and all(f.is_file() for f in sources) and len({f.parent for f in sources}) == 3
     files = _input_files(ws)
-    assert len(files) == 3 and all(f.is_file() for f in files) and len({f.parent for f in files}) == 3
+    assert len(files) == 3 and all(f.is_file() for f in files)
     out = tmp("tt-br-") / "cut.log"
     match = ws.job_dir(KEY) / "match.json"
     cause = next(c["cause"] for c in json.loads(match.read_text(encoding="utf-8"))["candidates"] if c.get("cause"))

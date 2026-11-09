@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import sys
 from pathlib import Path
 
@@ -144,6 +145,18 @@ def test_helpers_never_raise(bad):
     uc.module_remote_problem(bad)
     uc.runtime_problems(bad)
     uc.read_roots(bad, Path("/p"))
+
+
+def test_corrupt_value_that_stops_merge_is_a_problem():
+    """LINT_REVIEW 표 3: 손상 값에서 합치기(merged)가 예외를 내면 수집기가 말없이 빈 목록을 냈다 — 이제 문제 줄로 보인다."""
+    d, user = {"ghe": "x"}, {"platforms": {"ofono": {}}}     # 매핑 자리에 문자열 → AttributeError
+    msg = "설정을 끝까지 검사하지 못했다(AttributeError)"
+    assert [p.split(" — ")[0] for p in uc.module_skills_problems(d, user)] == [f"module_skills: {msg}"]
+    assert [p.split(" — ")[0] for p in uc.analyzer_problems(d, user)] == [f"analyzers: {msg}",
+                                                                         f"platforms.ofono.analyzers: {msg}"]
+    assert [p.split(" — ")[0] for p in uc.analyzer_problems(d, user, platform="ofono")] == [
+        f"platforms.ofono.analyzers: {msg}"]                   # _merged_each: 실패한 플랫폼마다
+    assert [p.split(" — ")[0] for p in uc.implicit_module_switches(d, user)] == [f"analyzers: {msg}"]
 
 
 def test_platform_module_skills_messages():
@@ -322,3 +335,14 @@ def test_read_roots_order_and_dedup(tmp_path):
     roots = uc.read_roots(cfg, tmp_path / "plugin")
     assert roots == [str(tmp_path / "plugin" / "skills" / "telephony-triage"), str(tmp_path / "work"), str(skill)]
     assert uc.read_roots({}, tmp_path / "plugin") == [str(tmp_path / "plugin" / "skills" / "telephony-triage")]
+    cfg["work_dir"] = "~a\x00b"     # POSIX expanduser가 ValueError — 예전에는 뒤의 설치 스킬 폴더까지 빠졌다
+    assert uc.read_roots(cfg, tmp_path / "plugin")[-1] == str(skill)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX pwd lookup only")
+@pytest.mark.xfail(strict=True, raises=ValueError, reason="P2: _abs_path expanduser NUL — 다음 정리 때 고침")
+def test_path_problems_nul_in_tilde_work_dir_is_reported():
+    """`path_problems` → `_abs_path`의 `os.path.expanduser("~a\\x00b")`는 POSIX pwd 조회에서 ValueError를 낸다 — 예외가 아니라
+    work_dir 문제 줄이어야 한다(LINT_REVIEW 미해결 P2)."""
+    probs = uc.path_problems({"work_dir": "~a\x00b"})
+    assert any(p.startswith("work_dir:") for p in probs), probs

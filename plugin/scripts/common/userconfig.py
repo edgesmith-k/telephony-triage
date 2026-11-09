@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import os
 import re
@@ -92,15 +93,33 @@ def from_site_defaults(defaults: dict) -> dict:
     return out
 
 
-SITE_ISSUE_DB_KEYS = ("merge_wait_seconds",)
+SITE_ISSUE_DB_KEYS = ("merge_wait_seconds", "remote")
+# 플랫폼마다 다른 키(플랫폼마다 이슈 DB가 다르다): 기본 아닌 플랫폼은 최상위(android) 값을 물려받지 않고
+# site `platforms.<p>.issue_db`에서만 받는다. 그 밖 키(merge_wait_seconds)는 최상위 → platforms.<p> 순으로 덮는다
+SITE_ISSUE_DB_PLATFORM_ONLY = ("remote",)
+SITE_ADMIN = "(site-defaults는 관리자)"
 # 없어진 키(+1 병합, H A2). 읽지 않고 config.py check·doctor가 경고만 한다 — legacy_problems(fail-closed)에는 넣지 않는다
 REMOVED_ISSUE_DB_KEYS = ("merge",)
 
 
-def site_issue_db(defaults: dict) -> dict:
-    """site-defaults `issue_db`의 `SITE_ISSUE_DB_KEYS`(있는 것만). 값 검사는 쓰는 쪽(`dbpr.merge`)이 한다."""
+def site_issue_db(defaults: dict, platform: str | None = None) -> dict:
+    """site-defaults `issue_db`의 `SITE_ISSUE_DB_KEYS`(있는 것만). 기본 아닌 `platform`이면 `SITE_ISSUE_DB_PLATFORM_ONLY`는
+    최상위 것을 버리고 `platforms.<p>.issue_db`의 값으로 덮는다. 값 검사는 쓰는 쪽(`dbpr.merge`·`remote_problems`)이 한다."""
     db = defaults.get("issue_db") if isinstance(defaults.get("issue_db"), dict) else {}
-    return {k: db[k] for k in SITE_ISSUE_DB_KEYS if db.get(k) is not None}
+    out = {k: db[k] for k in SITE_ISSUE_DB_KEYS if db.get(k) is not None}
+    if platform and platform != TOP_PROFILE:
+        for k in SITE_ISSUE_DB_PLATFORM_ONLY:
+            out.pop(k, None)
+        out.update(_site_platform_issue_db(defaults, platform))
+    return out
+
+
+def _site_platform_issue_db(defaults: dict, platform: str) -> dict:
+    """site-defaults `platforms.<p>.issue_db`의 `SITE_ISSUE_DB_KEYS`(있는 것만). 모양이 틀리면 빈 dict(검사는 `site_platform_problems`)."""
+    block = defaults.get("platforms") if isinstance(defaults, dict) else None
+    block = block.get(platform) if isinstance(block, dict) else None
+    db = block.get("issue_db") if isinstance(block, dict) else None
+    return {k: db[k] for k in SITE_ISSUE_DB_KEYS if db.get(k) is not None} if isinstance(db, dict) else {}
 
 
 def removed_keys(defaults: dict | None, user: dict | None) -> list[str]:
@@ -234,7 +253,7 @@ def _with_profile(out: dict, defaults: dict, platform: str, prof) -> dict:
     ghe = (defaults.get("ghe") or {}).get("host")
     if ghe:
         issue_db["ghe_host"] = ghe
-    issue_db.update(site_issue_db(defaults))
+    issue_db.update(site_issue_db(defaults, platform))
     out.update({"issue_db": issue_db, "work_dir": str(home() / f"work-{platform}"), "code_profiles": [],
                 "recent_code_roots": []})
     out.update(_site_platform(defaults, platform))
@@ -268,26 +287,47 @@ def _scoped_problems(at: str, block: dict) -> list[str]:
 
 def site_platform_problems(defaults: dict | None) -> list[str]:
     """site-defaults `platforms:`(기본 아닌 플랫폼의 사용자 수준 팀 기본값, 17-platforms §10) 오류: 매핑이 아님, 이름 형식,
-    `TOP_PROFILE`(기본 플랫폼 것은 최상위 키), `PLATFORM_SCOPED_KEYS` 밖 키, 값 모양. 예외를 내지 않는다(guard 경로)."""
-    if not isinstance(defaults, dict) or defaults.get("platforms") is None:
+    `TOP_PROFILE`(기본 플랫폼 것은 최상위 키), `PLATFORM_SCOPED_KEYS` 밖 키, 값 모양. 팀 원격(최상위 `issue_db.remote`·
+    `platforms.<p>.issue_db.remote`)은 owner/repo로 풀려야 하고 서로 같으면 안 된다. 예외를 내지 않는다(guard 경로)."""
+    if not isinstance(defaults, dict):
         return []
-    block = defaults["platforms"]
+    out: list[str] = []
+    remotes: list[tuple[str, str]] = []
+
+    def take_remote(key: str, value) -> None:
+        if value in (None, ""):
+            return
+        if repo_slug(value) is None:
+            out.append(f"{key}: owner/repo로 풀리는 원격이어야 합니다: {value} {SITE_ADMIN}")
+        remotes.append((key, _norm_remote(value)))
+
+    take_remote("site-defaults issue_db.remote", site_issue_db(defaults).get("remote"))
+    block = defaults.get("platforms")
     if not isinstance(block, dict):
-        return ["site-defaults platforms: 매핑이어야 합니다."]
-    out = []
+        return out + (["site-defaults platforms: 매핑이어야 합니다."] if block is not None else [])
+    allowed = PLATFORM_SCOPED_KEYS + ("issue_db",)
     for name, entry in block.items():
         at = f"site-defaults platforms.{name}"
         if not isinstance(name, str) or not _PLATFORM_NAME_RE.fullmatch(name):
             out.append(f"{at}: 플랫폼 이름이 아닙니다(소문자·숫자·_).")
         elif name == TOP_PROFILE:
-            out.append(f"{at}: {TOP_PROFILE} 값은 최상위 키({', '.join(PLATFORM_SCOPED_KEYS)})에 둔다.")
+            out.append(f"{at}: {TOP_PROFILE} 값은 최상위 키({', '.join(allowed)})에 둔다.")
         elif not isinstance(entry, dict):
             out.append(f"{at}: 매핑이어야 합니다.")
         else:
             out += [f"{at}.{key}: {MODULE_SKILLS_TOP_MSG}" if key == "module_skills" else
-                    f"{at}.{key}: 둘 수 없는 키입니다 (허용: {', '.join(PLATFORM_SCOPED_KEYS)}. 플랫폼 상수는 "
-                    f"platform.others.{name})." for key in entry if key not in PLATFORM_SCOPED_KEYS]
+                    f"{at}.{key}: 둘 수 없는 키입니다 (허용: {', '.join(allowed)}. 플랫폼 상수는 "
+                    f"platform.others.{name})." for key in entry if key not in allowed]
             out += _scoped_problems(at, entry)
+            db = entry.get("issue_db", None)
+            if db is not None and not isinstance(db, dict):
+                out.append(f"{at}.issue_db: 매핑이어야 합니다({{{', '.join(SITE_ISSUE_DB_KEYS)}}}).")
+            elif isinstance(db, dict):
+                out += [f"{at}.issue_db.{k}: 둘 수 없는 키입니다 (허용: {', '.join(SITE_ISSUE_DB_KEYS)}. 경로는 사용자 config)."
+                        for k in db if k not in SITE_ISSUE_DB_KEYS]
+                take_remote(f"{at}.issue_db.remote", db.get("remote"))
+    for i, (ka, va) in enumerate(remotes):
+        out += [f"{kb}: {ka}와 같은 원격입니다(플랫폼마다 이슈 DB를 따로 둔다) {SITE_ADMIN}" for kb, vb in remotes[i + 1:] if va == vb]
     return out
 
 
@@ -313,16 +353,17 @@ def analyzer_sources(defaults: dict | None, user: dict | None) -> list[str]:
     return out
 
 
-def profile_problems(user: dict | None) -> list[str]:
+def profile_problems(user: dict | None, defaults: dict | None = None) -> list[str]:
     """사용자 config의 플랫폼 키 오류: `platform`이 이름 형식이 아님, `platforms`가 매핑이 아님, 이름 형식·`TOP_PROFILE`,
-    `platforms.<p>`에 `PROFILE_KEYS`·`PLATFORM_SCOPED_KEYS` 밖 키(RF-4), 플랫폼 키 값 모양."""
+    `platforms.<p>`에 `PROFILE_KEYS`·`PLATFORM_SCOPED_KEYS` 밖 키(RF-4), 플랫폼 키 값 모양, `path_problems`(`defaults`는
+    물려받는 원격 겹침 비교용)."""
     user = user or {}
     out = []
     if "platform" in user and (not isinstance(user["platform"], str) or not _PLATFORM_NAME_RE.fullmatch(user["platform"])):
         out.append(f"platform: 플랫폼 이름이 아닙니다: {user['platform']!r}")
     profs = user.get("platforms")
     if profs is None:
-        return out + path_problems(user)
+        return out + path_problems(user, defaults)
     if not isinstance(profs, dict):
         return out + ["platforms: 매핑이어야 합니다."]
     for name, prof in profs.items():
@@ -341,7 +382,7 @@ def profile_problems(user: dict | None) -> list[str]:
                                f"(허용: {', '.join(PROFILE_KEYS + PLATFORM_SCOPED_KEYS)}. "
                                "플랫폼 상수는 site-defaults에서만 바꾼다).")
             out += _scoped_problems(f"platforms.{name}", prof)
-    return out + path_problems(user)
+    return out + path_problems(user, defaults)
 
 
 def _abs_path(value) -> str | None:
@@ -418,9 +459,19 @@ def remote_problems(defaults: dict | None, user: dict | None) -> list[tuple[str,
     return out
 
 
-def path_problems(user: dict | None) -> list[str]:
+def _norm_remote(value) -> str:
+    """원격 겹침 비교용(`path_problems`·`site_platform_problems`): 공백·끝 `/`·`.git` 제거, 소문자."""
+    return str(value).strip().rstrip("/").lower().removesuffix(".git")
+
+
+SITE_REMOTE_TAG = "(site-defaults)"
+
+
+def path_problems(user: dict | None, defaults: dict | None = None) -> list[str]:
     """프로필 경로 값 검사(guard 규칙 8의 제외 근거가 되므로): `work_dir`·`issue_db.path`는 비어 있지 않은 절대 경로(`~` 허용),
-    어떤 work_dir도 어떤 clone을 포함하거나 같으면 안 된다, 프로필끼리 work_dir·clone·원격(`issue_db.remote`)이 겹치면 안 된다."""
+    어떤 work_dir도 어떤 clone을 포함하거나 같으면 안 된다, 프로필끼리 work_dir·clone·원격(`issue_db.remote`)이 겹치면 안 된다.
+    `defaults`가 있으면 원격이 없는 프로필은 site-defaults에서 물려받는 원격(`site_issue_db`)으로 비교한다. 둘 다 물려받은
+    원격끼리의 겹침은 site 문제라 여기서 내지 않는다(`site_platform_problems`)."""
     user = user or {}
     out: list[str] = []
     works, clones, remotes = [], [], []
@@ -444,11 +495,13 @@ def path_problems(user: dict | None) -> list[str]:
             else:
                 clones.append((at + "issue_db.path", clone))
         if isinstance(db, dict) and db.get("remote"):
-            remotes.append((at + "issue_db.remote", str(db["remote"]).strip().rstrip("/").removesuffix(".git").lower()))
+            remotes.append((at + "issue_db.remote", _norm_remote(db["remote"])))
+        elif isinstance(defaults, dict) and (team := site_issue_db(defaults, name).get("remote")):
+            remotes.append((at + "issue_db.remote" + SITE_REMOTE_TAG, _norm_remote(team)))
     for kind, items in (("work_dir", works), ("clone", clones), ("원격", remotes)):
         for i, (ka, va) in enumerate(items):
             for kb, vb in items[i + 1:]:
-                if va == vb:
+                if va == vb and not (ka.endswith(SITE_REMOTE_TAG) and kb.endswith(SITE_REMOTE_TAG)):
                     out.append(f"{kb}: {ka}와 같은 {kind}입니다(플랫폼마다 따로 둔다).")
     for kw, work in works:
         for kc, clone in clones:
@@ -482,7 +535,7 @@ def profile_key(platform: str | None, key: str) -> str:
     if not platform or platform == TOP_PROFILE:
         return key
     allowed = PROFILE_KEYS + PLATFORM_SCOPED_KEYS
-    if key.split(".")[0] not in allowed:
+    if key.split(".", maxsplit=1)[0] not in allowed:
         raise ValueError(f"{key}는 플랫폼 프로필 키가 아닙니다 (허용: {', '.join(allowed)}).")
     return f"platforms.{platform}.{key}"
 
@@ -664,16 +717,25 @@ def _platform_names(defaults, user) -> list[str]:
     return names
 
 
-def _merged_each(defaults, user):
-    """`(platform, at, merged cfg)` — merged가 실패한 플랫폼은 건너뛴다."""
+def _unchecked(what: str, exc: Exception) -> str:
+    """수집기가 손상된 값에서 예외로 멈춘 것을 문제 줄로 — 못 본 문제를 "문제 없음"으로 보이지 않게. 예외 이름만 넣는다
+    (메시지에 원격 주소·자격 증명 같은 값이 들어갈 수 있다)."""
+    return f"{what}: 설정을 끝까지 검사하지 못했다({type(exc).__name__}) — 매핑 자리에 다른 값이 있는지 본다(site-defaults면 관리자)."
+
+
+def _merged_each(defaults, user, skipped: list | None = None):
+    """`(platform, at, merged cfg)` — merged가 실패한 플랫폼은 건너뛰고, `skipped`를 주면 `(platform, at, 예외)`를 넣는다."""
     d = defaults if isinstance(defaults, dict) else {}
     u = user if isinstance(user, dict) else {}
     for name in _platform_names(d, u):
+        at = "" if name == TOP_PROFILE else f"platforms.{name}."
         try:
             cfg = merged(d, u, platform=None if name == TOP_PROFILE else name)
-        except Exception:
+        except Exception as exc:
+            if skipped is not None:
+                skipped.append((name, at, exc))
             continue
-        yield name, ("" if name == TOP_PROFILE else f"platforms.{name}."), cfg
+        yield name, at, cfg
 
 
 def module_skills_problems(defaults: dict | None, user: dict | None) -> list[str]:
@@ -708,8 +770,8 @@ def module_skills_problems(defaults: dict | None, user: dict | None) -> list[str
                     out.append(f"module_skills.remote: 이슈 DB 레포와 같다 — 모듈 스킬 레포는 따로 둔다: "
                                f"{redact_remote(ms['remote'])}")
                     break
-    except Exception:
-        pass
+    except Exception as exc:
+        out.append(_unchecked("module_skills", exc))
     return list(dict.fromkeys(out))
 
 
@@ -725,7 +787,7 @@ def skill_dir_problem(value) -> str | None:
 def analyzer_problems(defaults: dict | None, user: dict | None, platform: str | None = None) -> list[str]:
     """`analyzers.<cat>`의 `prefer`·`skill_dir` 오류. 층마다: `prefer` 값, `skill_dir` 모양. 합친 뒤(플랫폼마다): `prefer: skill`
     인데 `skill`이 없음, `skill_dir`인데 `skill`이 없음. `platform`을 주면 그 플랫폼 블록 것만(`triage.py module`). 예외 없음."""
-    found: list[tuple[str, str]] = []
+    found: list[tuple[str | None, str]] = []
     try:
         for where, at, pname, ana in _layer_blocks(defaults, user):
             for cat, entry in ana.items() if isinstance(ana, dict) else ():
@@ -737,7 +799,8 @@ def analyzer_problems(defaults: dict | None, user: dict | None, platform: str | 
                 prob = skill_dir_problem(entry["skill_dir"]) if entry.get("skill_dir") is not None else None
                 if prob:
                     found.append((pname, f"{where} {at}analyzers.{cat}.skill_dir: {prob}"))
-        for pname, at, cfg in _merged_each(defaults, user):
+        skipped: list = []
+        for pname, at, cfg in _merged_each(defaults, user, skipped):
             ana = cfg.get("analyzers") if isinstance(cfg.get("analyzers"), dict) else {}
             for cat, entry in ana.items():
                 if not isinstance(entry, dict):
@@ -748,10 +811,11 @@ def analyzer_problems(defaults: dict | None, user: dict | None, platform: str | 
                                          "skill을 적거나 prefer를 지운다."))
                 if entry.get("skill_dir") not in (None, "") and not has_skill:
                     found.append((pname, f"{at}analyzers.{cat}.skill_dir: skill(설치 스킬 이름)과 함께 쓴다."))
-    except Exception:
-        pass
+        found += [(p, _unchecked(f"{at}analyzers", exc)) for p, at, exc in skipped]
+    except Exception as exc:
+        found.append((None, _unchecked("analyzers", exc)))     # 어느 플랫폼인지 모른다 — `platform`을 줘도 보인다
     want = (platform or TOP_PROFILE) if platform is not None else None
-    return list(dict.fromkeys(m for p, m in found if want is None or p == want))
+    return list(dict.fromkeys(m for p, m in found if want is None or p in (want, None)))
 
 
 def implicit_module_switches(defaults: dict | None, user: dict | None) -> list[str]:
@@ -763,14 +827,16 @@ def implicit_module_switches(defaults: dict | None, user: dict | None) -> list[s
         u = user if isinstance(user, dict) else {}
         if not module_skills(merged(d, u)):
             return []
-        for _p, at, cfg in _merged_each(d, u):
+        skipped: list = []
+        for _p, at, cfg in _merged_each(d, u, skipped):
             ana = cfg.get("analyzers") if isinstance(cfg.get("analyzers"), dict) else {}
             for cat, entry in ana.items():
                 skill = entry.get("skill") if isinstance(entry, dict) else None
                 if isinstance(skill, str) and skill.strip() and "prefer" not in entry:
                     out.append(f"{at}analyzers.{cat}: 설치 스킬 {skill:.30} 대신 모듈 문서를 쓴다 — 계속 쓰려면 prefer: skill")
-    except Exception:
-        pass
+        out += [_unchecked(f"{at}analyzers", exc) for _p, at, exc in skipped]
+    except Exception as exc:
+        out.append(_unchecked("analyzers", exc))
     return list(dict.fromkeys(out))
 
 
@@ -853,20 +919,18 @@ def runtime_problems(defaults: dict | None) -> list[str]:
 
 def read_roots(cfg: dict, plugin_root: Path) -> list[str]:
     """OpenCode `external_directory` 허용 목록(B2-21): 플러그인 스킬 폴더, `work_dir`, 풀린 설치 스킬 `SKILL.md`의 폴더마다.
-    순서 유지·중복 제거. 예외 없음."""
-    out: list[str] = []
-    try:
-        out.append(os.path.abspath(str(Path(plugin_root) / "skills" / "telephony-triage")))
-        work = cfg.get("work_dir") if isinstance(cfg, dict) else None
-        if isinstance(work, str) and work.strip():
+    순서 유지·중복 제거. 설정 값으로는 예외 없음 — 값은 모두 모양을 보고 쓰고 `skillpath.resolve`는 예외를 사유로 바꾼다. 전체를
+    try로 감싸지 않는다(한 값의 실패에 뒤의 폴더가 말없이 빠진다)."""
+    out: list[str] = [os.path.abspath(str(Path(plugin_root) / "skills" / "telephony-triage"))]
+    work = cfg.get("work_dir") if isinstance(cfg, dict) else None
+    if isinstance(work, str) and work.strip():
+        with contextlib.suppress(ValueError):   # NUL이 든 `~이름`(POSIX pwd 조회) — 쓸 수 없는 work_dir, 그 폴더만 뺀다
             out.append(os.path.abspath(os.path.expanduser(work)))
-        from . import skillpath   # 지연 import: guard가 userconfig를 매 hook마다 import한다
-        ana = cfg.get("analyzers") if isinstance(cfg, dict) and isinstance(cfg.get("analyzers"), dict) else {}
-        for cat, entry in ana.items():
-            if isinstance(entry, dict) and isinstance(entry.get("skill"), str) and entry["skill"].strip():
-                base = skillpath.resolve(cfg, cat).get("base")
-                if base:
-                    out.append(str(base))
-    except Exception:
-        pass
+    from . import skillpath   # 지연 import: guard가 userconfig를 매 hook마다 import한다
+    ana = cfg.get("analyzers") if isinstance(cfg, dict) and isinstance(cfg.get("analyzers"), dict) else {}
+    for cat, entry in ana.items():
+        if isinstance(entry, dict) and isinstance(entry.get("skill"), str) and entry["skill"].strip():
+            base = skillpath.resolve(cfg, cat).get("base")
+            if base:
+                out.append(str(base))
     return list(dict.fromkeys(out))

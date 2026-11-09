@@ -38,7 +38,7 @@ def _yaml_texts():
         if p.suffix == ".yaml":
             yield p, p.read_text(encoding="utf-8")
         elif p.suffix == ".md":
-            m = re.match(r"---\n(.*?)\n---\n", p.read_text(encoding="utf-8"), re.S)
+            m = re.match(r"---\n(.*?)\n---\n", p.read_text(encoding="utf-8"), re.DOTALL)
             if m:
                 yield p, m.group(1)
 

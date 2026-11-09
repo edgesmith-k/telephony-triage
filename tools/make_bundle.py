@@ -45,7 +45,7 @@ import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 TOOLS = Path(__file__).resolve().parent
 REPO = TOOLS.parent
@@ -302,9 +302,11 @@ def check_module_skills(ctx: Ctx) -> CheckResult:
 
 
 def check_offline_eval(ctx: Ctx) -> CheckResult:
+    """도구 동작 확인: 합성 라벨셋은 로그가 모두 샘플 DB fixture라 전부 표본내(C 묶음 aca0470 표본내 분리)다. `--include-in-sample`
+    없이는 평가 항목 0 → 종료 1이므로 넣는다(정확도 측정이 아니다). 통과 = 종료 0·오류 0·평가 항목 1 이상."""
     code, out = ctx.run("offline-eval", [sys.executable, str(ctx.repo / "tools" / "offline_eval.py"),
                                          str(ctx.repo / "tests" / "fixtures" / "offline-eval-sample.yaml"),
-                                         "--plugin-root", str(ctx.plugin_root()), "--json"])
+                                         "--plugin-root", str(ctx.plugin_root()), "--include-in-sample", "--json"])
     if code != 0:
         return from_exit(code, "", out)
     try:
@@ -313,7 +315,9 @@ def check_offline_eval(ctx: Ctx) -> CheckResult:
         return CheckResult("error", f"출력을 해석하지 못했습니다\n{tail(out)}")
     if summary.get("errors") != 0:
         return CheckResult("fail", f"offline_eval 오류 {summary.get('errors')}건", summary)
-    return CheckResult("pass", f"offline_eval 합성 라벨셋 {summary.get('total')}건, 오류 0", summary)
+    if not summary.get("evaluated"):
+        return CheckResult("fail", "offline_eval 평가 항목 0건(전부 대조군·오류)", summary)
+    return CheckResult("pass", f"offline_eval 합성 라벨셋 {summary.get('total')}건(표본내 포함 — 도구 동작 확인), 오류 0", summary)
 
 
 def check_regress(ctx: Ctx) -> CheckResult:

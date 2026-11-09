@@ -170,7 +170,7 @@ def test_no_android_module_import_outside_platforms():
             continue
         text = path.read_text(encoding="utf-8")
         if re.search(r"^\s*(from\s+platforms\.android\b|import\s+platforms\.android\b"
-                     r"|from\s+platforms\s+import\s+(?:\(\s*)?(?:[\w\s,]*,\s*)?android\b)", text, re.M) \
+                     r"|from\s+platforms\s+import\s+(?:\(\s*)?(?:[\w\s,]*,\s*)?android\b)", text, re.MULTILINE) \
                 or re.search(r"""import_module\(\s*["']platforms\.android""", text):
             offenders.append(rel)
     assert offenders == []

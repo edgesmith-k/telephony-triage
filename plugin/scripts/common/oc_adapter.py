@@ -31,7 +31,7 @@ MCP 도구로 본다. 둘 다 아니면 거부한다(모르는 도구 = 거부).
 **분석 전용(v1)**: guard `ask`는 거부로 바꾸고 "OpenCode v1 does not run this; run this exact command yourself: …"로 정확한
 명령을 보인다. guard가 묻지 않는 쓰기 흐름도 여기서 막는다(`V1_NETS`: db_pr publish·merge, skill_patch apply, issue_post approve,
 리뷰어 요청, module_eval, OpenCode 설정을 바꾸는 `config.py set opencode.*`). Jira MCP 읽기는 관문(`common/oc_jira_gate.py`:
-사용자 설정 `opencode.jira_read: open` + 같은 OpenCode 버전·플러그인 지문의 사내 확인 통과 기록)이 열려 있을 때만 guard에 넘기고,
+사용자 설정 `opencode.jira_read: open` + 같은 OpenCode 버전·플러그인 지문·트래커·MCP 지문의 사내 확인 통과 기록)이 열려 있을 때만 guard에 넘기고,
 닫혀 있으면 거부한다. 관문은 OpenCode 시작 때 tt-guard.js가 `gate` 모드로 한 번 정해 `JIRA_SESSION_ENV`로 넘긴 값만 믿는다
 (세션 중에 쓰인 파일은 그 세션에 적용되지 않는다). 코멘트 도구(`tracker.write_tools.add_comment`)는 v1에서 늘 거부한다.
 
@@ -70,7 +70,9 @@ if __name__ == "__main__":   # 스크립트로 불릴 때: common/ 대신 script
     sys.path[:] = [p for p in sys.path if os.path.realpath(p or os.getcwd()) != _HERE]
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-OPENCODE_VERSION = "1.19.5"
+from common import oc_version   # OpenCode 바이너리 의존(버전·거부 문구·CLI·환경 변수)은 그 파일 한 곳에
+
+OPENCODE_VERSION = oc_version.OPENCODE_VERSION
 SCRIPTS = Path(__file__).resolve().parents[1]
 PLUGIN_ROOT = SCRIPTS.parent
 
@@ -93,11 +95,9 @@ BUILTINS: dict[str, tuple[str, str]] = {
 HOOK_TIMEOUT = {"Bash": 180, "mcp": 30, "file": 30}    # hooks.json의 guard timeout(초)과 같다
 BRIDGE_TIMEOUT = 30
 
-# 설정을 덮거나 지우는 환경변수(값과 무관하게 있으면 거부). 접두사는 `REFUSED_ENV_PREFIXES`
-REFUSED_ENV = ("OPENCODE_PERMISSION", "OPENCODE_CONFIG_CONTENT", "OPENCODE_CONFIG", "OPENCODE_CONFIG_DIR",
-               "OPENCODE_DISABLE_PROJECT_CONFIG", "OPENCODE_PURE", "OPENCODE_TEST_MANAGED_CONFIG_DIR",
-               "OPENCODE_TEST_HOME", "OPENCODE_ENABLE_EXA")
-REFUSED_ENV_PREFIXES = ("OPENCODE_EXPERIMENTAL",)
+# 설정을 덮거나 지우는 환경변수(값과 무관하게 있으면 거부; tt-oc는 값이 빈 것은 넘긴다). 목록은 oc_version 한 곳.
+REFUSED_ENV = oc_version.REFUSED_ENV
+REFUSED_ENV_PREFIXES = oc_version.REFUSED_ENV_PREFIX
 
 # Jira 읽기 관문: 사용자 설정 + 사내 확인 통과 기록(`common/oc_jira_gate.py`). 파일은 OpenCode가 시작할 때 한 번만 본다:
 # tt-guard.js가 플러그인을 실을 때 `gate` 모드로 판정하고, 그 결과를 이후 모든 adapter 호출의 프로세스 환경
@@ -112,12 +112,6 @@ GATE_SETTING = "opencode.jira_read"         # = oc_jira_gate.SETTING (사용자 
 ASK_PREFIX = "OpenCode v1 does not run this; run this exact command yourself: "
 BRIDGE_FAILED = ("telephony-triage: OpenCode jira_bridge 처리 실패 — 원문은 표시하지 않는다. "
                  "Claude Code에서 다시 읽거나 config.py doctor로 확인한다.")
-MCP_NAME_RE = re.compile(r"[^A-Za-z0-9_-]")
-
-
-def sanitize(name: str) -> str:
-    """OpenCode 1.19.5 MCP 이름 정리(`w0`): `[^a-zA-Z0-9_-]` → `_`."""
-    return MCP_NAME_RE.sub("_", str(name))
 
 
 # -- opencode.json의 MCP 서버 이름 ---------------------------------------------------------------------
@@ -387,10 +381,6 @@ def jira_gate_state(env: dict | None = None):
     return oc_jira_gate.GateState(False, files.setting, files.accepted, [why], files.record)
 
 
-def jira_gate_open(env: dict | None = None) -> bool:
-    return jira_gate_state(env).open
-
-
 def opencode_version(env: dict | None = None, timeout: float = 10) -> str | None:
     """`opencode --version`의 마지막 줄(`TT_OPENCODE`, 없으면 PATH의 `opencode` — `tt-oc --opencode` 기본값과 같다). 바이너리가
     없거나 실패하면 None. 모델·네트워크 호출 없음(`job_status.py`의 런타임 줄, O8)."""
@@ -401,7 +391,7 @@ def opencode_version(env: dict | None = None, timeout: float = 10) -> str | None
     if not exe:
         return None
     try:
-        r = subprocess.run([exe, "--version"], stdin=subprocess.DEVNULL, capture_output=True, text=True,
+        r = subprocess.run([exe, *oc_version.VERSION_ARGS], stdin=subprocess.DEVNULL, capture_output=True, text=True,
                            encoding="utf-8", errors="replace", timeout=timeout, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
@@ -416,19 +406,26 @@ class TrackerView:
     prefixes: set[str]
     comment_tool: str | None
     words: tuple[str, ...]
+    read_tools: tuple[str, ...] = ()     # `tracker.read_tools` ∪ `tracker.tools` 값(정규화·중복 제거·정렬) — 관문 지문(`oc_jira_gate`)
 
 
-def tracker_view() -> TrackerView:
-    """guard 규칙 2와 같은 Jira 서버 판별 재료(읽기만). 예외는 호출 쪽이 받는다(모든 MCP 거부)."""
+def tracker_view(cfg: dict | None = None) -> TrackerView:
+    """guard 규칙 2와 같은 Jira 서버 판별 재료(읽기만). 예외는 호출 쪽이 받는다(모든 MCP 거부). `cfg`가 없으면 이 플러그인의
+    site-defaults와 사용자 config를 합쳐 읽는다(사내 확인 `oc_jira_check`는 설치 플러그인의 `config.py show` 값을 넘긴다)."""
     import trackers
 
-    from common import issuepost, site_defaults, userconfig
-    try:
-        defaults = site_defaults.load(PLUGIN_ROOT)
-    except site_defaults.SiteDefaultsMissing:
-        defaults = {}
-    cfg = userconfig.merged(defaults, userconfig.load_user() or {})
-    return TrackerView(issuepost.jira_prefixes(cfg), issuepost.raw_tool(cfg), trackers.all_server_words())
+    from common import issuepost, mcptools, site_defaults, userconfig
+    if cfg is None:
+        try:
+            defaults = site_defaults.load(PLUGIN_ROOT)
+        except site_defaults.SiteDefaultsMissing:
+            defaults = {}
+        cfg = userconfig.merged(defaults, userconfig.load_user() or {})
+    # 읽기 허용 목록: guard 규칙 2가 보는 `tracker.read_tools`와 jira_bridge가 다루는 `tracker.tools` 값
+    tools, listed = userconfig.get(cfg, "tracker.tools"), userconfig.get(cfg, "tracker.read_tools")
+    names = [*(tools.values() if isinstance(tools, dict) else []), *(listed if isinstance(listed, list) else [])]
+    read = sorted({mcptools.normalize(str(v)) for v in names if v})
+    return TrackerView(issuepost.jira_prefixes(cfg), issuepost.raw_tool(cfg), trackers.all_server_words(), tuple(read))
 
 
 def is_jira(name: str, view: TrackerView) -> bool:
@@ -755,6 +752,7 @@ def run_script(script: str, event: dict, timeout: float, env: dict | None = None
         return "시간 예산을 다 썼다"
     run_env = dict(os.environ if env is None else env)
     run_env["CLAUDE_PLUGIN_ROOT"] = str(PLUGIN_ROOT)
+    run_env["TT_OC_ADAPTER"] = "1"      # guard 규칙 2의 S1 미확인 ask를 건너뛴다: 여기서는 after가 결과를 직접 바꾸고 관문이 따로 있다
     cwd = event.get("cwd") if os.path.isdir(str(event.get("cwd") or "")) else None
     try:
         return subprocess.run([sys.executable, str(SCRIPTS / script)], input=json.dumps(event, ensure_ascii=False),
@@ -931,7 +929,7 @@ def after(payload: dict, env: dict | None = None, servers: list[str] | None = No
 
 
 _STATUS_RE = re.compile(r"(?i)(?:status(?:[ _-]?code)?|http(?:/[0-9.]+)?|code|error)\W{0,4}([45][0-9]{2})(?![0-9])")
-_CLASS_WORDS = (("permission-denied", re.compile(r"prevents you from using this specific tool call|rejected permission")),  # OpenCode 설정 deny
+_CLASS_WORDS = (("permission-denied", re.compile("|".join(map(re.escape, oc_version.DENY_PHRASES)))),  # OpenCode 설정 deny 문구
                 ("not-found", re.compile(r"(?i)not[ _-]?found|does not exist|no such|존재하지 않|찾을 수 없")),
                 ("timeout", re.compile(r"(?i)time[ _-]?out|timed out|시간 초과")),
                 ("auth", re.compile(r"(?i)unauthori[sz]ed|forbidden|permission denied|access denied|권한")))

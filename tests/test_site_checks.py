@@ -585,7 +585,7 @@ def test_s3_parse_logcat_passes_only_on_exit_0(tmp_path, monkeypatch):
     (root / "plugin").mkdir()
     (root / "plugin" / "site-defaults.yaml").write_text("tracker:\n  kind: jira\n", encoding="utf-8")
     for code, status in ((0, "pass"), (1, "fail"), (2, "fail")):
-        monkeypatch.setattr(sc.Ctx, "run", lambda self, cmd, **kw: (code, "", "x"))
+        monkeypatch.setattr(sc.Ctx, "run", lambda self, cmd, *, _code=code, **kw: (_code, "", "x"))   # 클래스에 남는다 — 값을 묶는다
         assert sc.s3_parse_logcat(sc.Ctx(root))["status"] == status, code
 
 
@@ -635,6 +635,77 @@ def test_s4a_protection_403_404_is_skip_and_weak_data_fails(tmp_path, monkeypatc
     monkeypatch.setattr(sc.Ctx, "run", fake((0, json.dumps({**full, "required_pull_request_reviews": {
         "required_approving_review_count": 1}}), "")))
     assert sc.s4a_protection(sc.Ctx(root))["status"] == "fail"       # CODEOWNERS 리뷰가 꺼져 있으면 그대로 실패
+
+
+GUARD_PROTECTION = {"required_pull_request_reviews": {"required_approving_review_count": 1, "dismiss_stale_reviews": True},
+                    "enforce_admins": {"enabled": True}, "allow_force_pushes": {"enabled": False},
+                    "allow_deletions": {"enabled": False}, "required_status_checks": {"strict": True, "contexts": ["db-check"]}}
+
+
+def test_s4a_protection_guard_requires_server_protection_for_guard_rules_6_11(tmp_path, monkeypatch):
+    """guard 규칙 6·11 완화 전제(4-c): 승인 ≥ 1·Dismiss stale·관리자 포함·force push 금지·삭제 금지, 운영 DB `ci_mode`가 Actions
+    이거나 모르면 필수 검사 db-check(`db-check / …` 포함)와 strict, local이면 그 둘은 해당 없음(정보 줄). 필드가 응답에 없으면
+    (예: allow_force_pushes) 실패. `s4a.protection` 기준은 그대로."""
+    root = site_root(tmp_path)
+    db = ops_db(tmp_path, synthetic=False)
+    (root / sc.STEPS_FILE).parent.mkdir(parents=True)
+    real = sc.Ctx.run
+    api = {}
+
+    def fake(self, cmd, **kw):
+        if cmd[0] != "gh":
+            return real(self, cmd, **kw)
+        return (0, "", "") if cmd[1] == "auth" else api["out"]
+
+    def check(data, ci_mode=None, steps=f"ops_db_repo: org/db\nops_db: {db}\n"):
+        if ci_mode is not None:
+            (db / "issue-db.config.yaml").write_text(f"schema_version: 1\nci_mode: {ci_mode}\n", encoding="utf-8")
+            git(db, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qam", ci_mode)
+        (root / sc.STEPS_FILE).write_text(steps, encoding="utf-8")
+        api["out"] = (0, json.dumps(data), "") if isinstance(data, dict) else data
+        return sc.s4a_protection_guard(sc.Ctx(root))
+
+    monkeypatch.setattr(sc.Ctx, "run", fake)
+    (db / "issue-db.config.yaml").write_text("schema_version: 1\n", encoding="utf-8")
+    git(db, "add", "issue-db.config.yaml")
+    r = check(GUARD_PROTECTION, "actions")
+    assert r["id"] == "s4a.protection_guard" and r["status"] == "pass" and "guard 규칙 6·11 완화 전제" in r["evidence"]
+    assert "ci_mode actions" in r["evidence"] and "필수 검사 최신(strict) True" in r["evidence"]
+    no_checks = {k: v for k, v in GUARD_PROTECTION.items() if k != "required_status_checks"}
+    r = check(no_checks)
+    assert r["status"] == "fail" and "필수 검사 db-check(검사 없음)" in r["evidence"].split("못 맞춘 것")[1] and r["ask"]
+    for sc_, want in (({"strict": True, "checks": [{"context": "db-check"}]}, "pass"),
+                      ({"strict": True, "contexts": ["db-check / db-check"]}, "pass"),     # 워크플로 이름 / job 이름
+                      ({"strict": True, "contexts": ["db-checker"]}, "fail"),
+                      ({"contexts": ["db-check"]}, "fail"), ({"strict": False, "contexts": ["db-check"]}, "fail")):
+        r = check({**no_checks, "required_status_checks": sc_})
+        assert r["status"] == want, (sc_, r)
+    assert "필수 검사 최신(strict) None" in check({**no_checks, "required_status_checks": {"contexts": ["db-check"]}})[
+        "evidence"].split("못 맞춘 것")[1]
+    reviews = GUARD_PROTECTION["required_pull_request_reviews"]
+    for broken, want in (({"required_pull_request_reviews": {**reviews, "required_approving_review_count": 0}}, "필수 승인 수 0"),
+                         ({"required_pull_request_reviews": {"dismiss_stale_reviews": True}}, "필수 승인 수 None"),
+                         ({"required_pull_request_reviews": {**reviews, "dismiss_stale_reviews": False}},
+                          "Dismiss stale approvals False"),
+                         ({"enforce_admins": {"enabled": False}}, "관리자 포함 False"),
+                         ({"allow_force_pushes": {"enabled": True}}, "force push 허용 True"),
+                         ({"allow_deletions": {"enabled": True}}, "삭제 허용 True")):
+        r = check({**GUARD_PROTECTION, **broken})
+        assert r["status"] == "fail" and want in r["evidence"].split("못 맞춘 것")[1], (broken, r)
+    for missing in ("allow_force_pushes", "allow_deletions", "enforce_admins"):     # 필드 없음 = 모름 → 실패
+        r = check({k: v for k, v in GUARD_PROTECTION.items() if k != missing})
+        assert r["status"] == "fail" and "None" in r["evidence"].split("못 맞춘 것")[1], missing
+    # ci_mode local이면 db-check·strict는 해당 없음(정보 줄). 운영 DB를 못 읽으면(경로 없음) 닫힌 쪽 — 필요, clone 경로를 묻는다
+    r = check(no_checks, "local")
+    assert r["status"] == "pass" and "db-check·strict: 해당 없음(ci_mode local)" in r["evidence"]
+    r = check(no_checks, steps="ops_db_repo: org/db\n")
+    assert r["status"] == "fail" and "ci_mode 모름" in r["evidence"] and "propose --set ops_db=" in r["ask"]
+    assert check(no_checks, "actions-build")["status"] == "fail"
+    assert check((1, "", "gh: Not Found (HTTP 404)"))["status"] == "skip"
+    # s4a.protection 통과 기준은 그대로(CODEOWNERS 리뷰) — 두 점검은 따로 본다
+    assert sc.s4a_protection(sc.Ctx(root))["status"] == "skip"
+    api["out"] = (0, json.dumps(GUARD_PROTECTION), "")
+    assert sc.s4a_protection(sc.Ctx(root))["status"] == "fail"
 
 
 def test_review_open_missing_is_needs_user(tmp_path):

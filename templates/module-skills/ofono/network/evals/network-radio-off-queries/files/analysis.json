@@ -31,7 +31,8 @@
   ],
   "in_range": "partial",
   "clock_anomalies": 0,
-  "events": 103
+  "events": 103,
+  "masked": null
  },
  "no_candidate": {
   "search_hits": [

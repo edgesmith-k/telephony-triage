@@ -619,7 +619,7 @@ def s2_offsite(ctx: Ctx) -> dict:
     differs, off_m, site_m = model_differs(ctx.root, st)
     commits = sorted({_short(r.get("repo_commit")) for i in rest for r in _offsite_latest(off["evals"].get(str(i)))})
     note = str(off.get("note") or "")
-    head = ("잠정 · " if re.search(r"provisional|잠정", note, re.I) else "") + \
+    head = ("잠정 · " if re.search(r"provisional|잠정", note, re.IGNORECASE) else "") + \
         (f"모델 다름(사외 {off_m} / 사내 {site_m}) · " if differs else "") + \
         (f"사내 모델 미정(사외 {off_m}) · " if differs is None else "") + \
         f"사외 {off.get('model')}({off.get('generated')}) 갈음 {len(rest)}개: "
@@ -894,20 +894,28 @@ def s4a_protection(ctx: Ctx) -> dict:
     return _protection(ctx, "ops_db_repo", "s4a.protection")
 
 
-def _protection(ctx: Ctx, key: str, cid: str) -> dict:
+def _protection_data(ctx: Ctx, key: str, cid: str) -> tuple[dict | None, str | None, dict | None]:
+    """`gh api repos/<repo>/branches/main/protection` → `(응답, 명령, 이른 결과)`. 조회하지 못하면 이른 결과(skip)만 있다."""
     repo, early = _gh_ready(ctx, key, cid)
     if early:
-        return early
+        return None, None, early
     cmd = f"gh api repos/{repo}/branches/main/protection"
     code, out, err = ctx.gh("api", f"repos/{repo}/branches/main/protection")
     if code:     # 403(권한)·404(보호 없음 또는 레포 없음)는 도구로 고칠 수 없다 — 사람에게 묻는다
         http = re.search(r"HTTP (\d{3})", err + out)
-        return res(cid, "skip", f"브랜치 보호 조회 종료 {code}" + (f" (HTTP {http.group(1)})" if http else ""), cmd,
-                   ask="main 브랜치 보호(PR 필수·CODEOWNERS 리뷰)를 켰는지, 조회 권한(관리자)이 있는지 확인해 주세요")
+        return None, cmd, res(cid, "skip", f"브랜치 보호 조회 종료 {code}" + (f" (HTTP {http.group(1)})" if http else ""), cmd,
+                              ask="main 브랜치 보호(PR 필수·CODEOWNERS 리뷰)를 켰는지, 조회 권한(관리자)이 있는지 확인해 주세요")
     try:
         data = json.loads(out)
     except ValueError:
-        return res(cid, "skip", "응답이 JSON 아님", cmd, ask="gh api 응답을 확인해 주세요")
+        return None, cmd, res(cid, "skip", "응답이 JSON 아님", cmd, ask="gh api 응답을 확인해 주세요")
+    return data, cmd, None
+
+
+def _protection(ctx: Ctx, key: str, cid: str) -> dict:
+    data, cmd, early = _protection_data(ctx, key, cid)
+    if early:
+        return early
     reviews = data.get("required_pull_request_reviews") or {}
     owners = bool(reviews.get("require_code_owner_reviews"))
     # 통과 기준은 PR 리뷰 필수·CODEOWNERS 리뷰 그대로(올리면 사내 S-4a·O-3 재점검이 실패한다). +1 병합 권장 항목은 정보로만 보인다
@@ -927,6 +935,55 @@ def _protection_info(data: dict) -> str:
             f"마지막 push 승인(require_last_push_approval) {bool(reviews.get('require_last_push_approval'))} · "
             f"필수 검사 최신(strict) {bool(checks.get('strict'))}({', '.join(contexts) or '검사 없음'}) · "
             f"관리자 포함(enforce_admins) {bool(admins.get('enabled'))}")
+
+
+def s4a_protection_guard(ctx: Ctx) -> dict:
+    """guard 규칙 6·11 완화(main push·병합 계열을 거부 대신 ask — `08-safety.md §9`)의 전제: 서버 브랜치 보호가 그것을 막는다.
+    통과 = 필수 승인 ≥ 1 · Dismiss stale approvals · 관리자 포함 · force push 금지 · 삭제 금지, 그리고 운영 이슈 DB `ci_mode`가
+    Actions(`actions`·`actions-build`)이거나 읽지 못하면(닫힌 쪽) 필수 검사에 `db-check`(또는 `db-check / …` — 필수 검사 이름은
+    job 이름이다, `13-actions.md` 골격의 job `db-check`)와 필수 검사 최신(strict). `local`이면 이 두 항목은 해당 없음(정보 줄).
+    응답에 없는 필드는 모르는 값이라 실패. `s4a.protection`의 통과 기준은 바꾸지 않고 같은 조회로 따로 본다."""
+    cid = "s4a.protection_guard"
+    data, cmd, early = _protection_data(ctx, "ops_db_repo", cid)
+    if early:
+        return early
+
+    def sub(name: str) -> dict:
+        return data.get(name) if isinstance(data, dict) and isinstance(data.get(name), dict) else {}
+    reviews, checks = sub("required_pull_request_reviews"), sub("required_status_checks")
+    count = reviews.get("required_approving_review_count")
+    contexts = [str(c) for c in checks.get("contexts") or []] + [
+        str(c.get("context")) for c in checks.get("checks") or [] if isinstance(c, dict)]
+    clone, no_clone = _need_clone(ctx, cid)
+    ci_mode = None
+    if clone:
+        try:
+            cfg = yaml.safe_load((clone / "issue-db.config.yaml").read_text(encoding="utf-8")) or {}
+            ci_mode = str(cfg.get("ci_mode", "local")) if isinstance(cfg, dict) else None
+        except (OSError, ValueError, yaml.YAMLError):
+            pass
+    need_check = ci_mode is None or ci_mode.startswith("actions")
+    has_check = any(c == "db-check" or c.startswith("db-check /") for c in contexts)
+    fields = [(f"필수 승인 수 {count}(1 이상)", type(count) is int and count >= 1),
+              (f"Dismiss stale approvals {reviews.get('dismiss_stale_reviews')}", reviews.get("dismiss_stale_reviews") is True),
+              (f"관리자 포함 {sub('enforce_admins').get('enabled')}", sub("enforce_admins").get("enabled") is True),
+              (f"force push 허용 {sub('allow_force_pushes').get('enabled')}", sub("allow_force_pushes").get("enabled") is False),
+              (f"삭제 허용 {sub('allow_deletions').get('enabled')}", sub("allow_deletions").get("enabled") is False),
+              *([(f"필수 검사 db-check({', '.join(contexts) or '검사 없음'})", has_check),
+                 (f"필수 검사 최신(strict) {checks.get('strict')}", checks.get("strict") is True)] if need_check else [])]
+    bad = [what for what, ok in fields if not ok]
+    ev = (f"guard 규칙 6·11 완화 전제 — {' · '.join(what for what, _ in fields)} · ci_mode "
+          f"{ci_mode or '모름(운영 DB를 못 읽음)'}" + ("" if need_check else
+                                                 f" · 필수 검사 db-check·strict: 해당 없음(ci_mode {ci_mode}) — 정보: "
+                                                 f"{', '.join(contexts) or '검사 없음'}, strict {checks.get('strict')}"))
+    if not bad:
+        return res(cid, "pass", ev, cmd)
+    ask = ("운영 이슈 DB main 브랜치 보호를 맞춰 주세요(필수 승인 1·Dismiss stale approvals·관리자 포함·force push 금지·삭제 "
+           "금지·Actions면 필수 검사 db-check와 최신(strict), 이슈 DB docs/branch-protection.md). guard는 main push·병합 계열을 "
+           "묻기만 하므로 서버 보호가 막는 장치다. 응답에 없는 항목(None)은 켜졌는지 몰라 실패로 본다")
+    if ci_mode is None and no_clone and no_clone.get("ask"):
+        ask += f". ci_mode를 읽으려면: {no_clone['ask']}"
+    return res(cid, "fail", f"{ev} — 못 맞춘 것: {', '.join(bad)}", cmd, ask=ask)
 
 
 CODEOWNERS_PATHS = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
@@ -1711,10 +1768,10 @@ def o2_pairs(ctx: Ctx) -> dict:
     if not logs:
         return _no_logs("o2.pairs", skipped)
     backend = parser_backends.load(platforms.backend_name(d, "ofono")).configure(prof)
-    req = {n: 0 for n in pairs}
-    paired = {n: 0 for n in pairs}
-    lower = {n: 0 for n in hops}
-    linked = {n: 0 for n in hops}
+    req = dict.fromkeys(pairs, 0)
+    paired = dict.fromkeys(pairs, 0)
+    lower = dict.fromkeys(hops, 0)
+    linked = dict.fromkeys(hops, 0)
     for p in logs:
         for rec in backend.parse([p], None, None, None):
             ann = rec.get("ril") or {}
@@ -2193,7 +2250,7 @@ def ms1_prefer(ctx: Ctx) -> dict:
                      + (f" --platform {plat}" if at else ""))
     if fails:
         return res("ms1.prefer", "fail", "5-1이 없는 모듈 문서로 바뀌어 종료 1이 된다: " + _cap_list(fails + infos), " ; ".join(fixes),
-                   ask="고치기: " + " ; ".join(fixes) + f" (팀 기본: site-defaults `analyzers.<카테고리>.prefer: skill` — 관리자)")
+                   ask="고치기: " + " ; ".join(fixes) + " (팀 기본: site-defaults `analyzers.<카테고리>.prefer: skill` — 관리자)")
     return res("ms1.prefer", "info", _cap_list(infos), cmd)
 
 
@@ -2227,7 +2284,7 @@ def ms1_protection(ctx: Ctx) -> dict:
     code, out, err = ctx.gh("api", f"repos/{owner}/{repo}/branches/{base}/protection", host=host)
     if code:
         http = re.search(r"HTTP (\d{3})", err + out)
-        return res("ms1.protection", "info", f"조회 못 함(" + (f"HTTP {http.group(1)}" if http else f"종료 {code}")
+        return res("ms1.protection", "info", "조회 못 함(" + (f"HTTP {http.group(1)}" if http else f"종료 {code}")
                    + ") — 권장은 IMPL §4.5(정보, Q15)", cmd)
     try:
         data = json.loads(out)
@@ -2329,7 +2386,8 @@ CHECKS = {
     "S-2": [s2_pending, s2_graded, s2_offsite, s2_safety, s2_manual, s2_summary, s2_probe, s2_s1_rows, s2_baseline],
     "S-3": [s3_site_defaults, s3_tracker_kind, s3_config_check, s3_doctor, s3_parse_logcat, s3_tracker_candidates,
             s3_jira_fields],
-    "S-4a": [s4a_protection, s4a_codeowners, s4a_golden, s4a_golden_mutation, s4a_analyzers, s4a_import_pr],
+    "S-4a": [s4a_protection, s4a_protection_guard, s4a_codeowners, s4a_golden, s4a_golden_mutation, s4a_analyzers,
+             s4a_import_pr],
     "S-4": [s4_regress, s4_verify_rules, s4_seed, s4_placeholder],
     "S-5": [s5_offline_eval, s5_sandbox_pr, s5_smoke],
     "S-6": [s6_review_open, s6_synthetic, s6_placeholder, s6_mock],

@@ -91,9 +91,40 @@ def _suggested_key(items: list) -> list:
     return out
 
 
+def _check_feedback_decision(fb: dict, suggested: list) -> None:
+    """`feedback.decision`·`final`은 LLM이 적는다(SKILL.md Step 7 표) — 1위 후보와 맞는지 stage가 대조한다(판정은 스크립트,
+    12-principles). 수락률(`issuedb.acceptance`)은 `decision == accepted`만 세어 분석 점수에 곱하므로, 1위가 아닌 원인을
+    `accepted`로 적으면 그 시그니처의 수락률이 오염된다. accepted ⇔ final이 1위 후보의 원인, chose-other ⇒ final은 1위가 아닌
+    원인 ID, new-cause·new-type ⇒ final이 1위 후보가 아님, unresolved ⇒ final unresolved. 어긋나면 종료 2(계획 형식 오류)."""
+    decision, final = fb.get("decision"), fb.get("final")
+    top = suggested[0].get("cause") if suggested and isinstance(suggested[0], dict) else None
+    detail = {"decision": decision, "final": final, "top": top}
+    if decision == "accepted":
+        if top is None:
+            raise UsageError("계획 형식 오류: feedback.decision이 accepted인데 제시된 후보(suggested)가 없다 — 1위 수락은 후보가 "
+                             "있을 때만. 기존 원인을 골랐으면 chose-other, 새것이면 new-cause", detail)
+        if final != top:
+            raise UsageError(f"계획 형식 오류: feedback.decision이 accepted인데 final({final})이 1위 후보({top})가 아니다 — "
+                             "1위를 고른 것이 아니면 decision은 chose-other(기존 원인)·new-cause", detail)
+    elif decision == "chose-other":
+        if final in (None, "unresolved"):
+            raise UsageError("계획 형식 오류: feedback.decision이 chose-other인데 final이 원인 ID가 아니다 — 원인 미확정은 "
+                             "decision unresolved", detail)
+        if top is not None and final == top:
+            raise UsageError(f"계획 형식 오류: feedback.decision이 chose-other인데 final({final})이 1위 후보와 같다 — 1위를 "
+                             "골랐으면 decision은 accepted", detail)
+    elif decision in ("new-cause", "new-type"):
+        if top is not None and final == top:
+            raise UsageError(f"계획 형식 오류: feedback.decision이 {decision}인데 final({final})이 1위 후보와 같다 — 기존 "
+                             "원인이면 accepted", detail)
+    elif decision == "unresolved" and final != "unresolved":
+        raise UsageError(f"계획 형식 오류: feedback.decision이 unresolved인데 final({final})이 unresolved가 아니다", detail)
+
+
 def _check_feedback_suggested(plan: dict, plan_path: Path, job_dir: Path) -> dict:
     """analyze 계획의 `feedback.suggested`는 `JOB/match.json` 후보(cause≠null, 순위순 {cause, signature, score})다.
-    비어 있으면 채워 계획 파일을 다시 쓰고, 다르면 거부한다(LLM이 적은 값을 그대로 쓰지 않는다). → `feedback_check`"""
+    비어 있으면 채워 계획 파일을 다시 쓰고, 다르면 거부한다(LLM이 적은 값을 그대로 쓰지 않는다). 이어서 `decision`·`final`이
+    1위 후보와 맞는지 본다(`_check_feedback_decision`). → `feedback_check`"""
     fb = plan.get("feedback")
     if not isinstance(fb, dict) or fb.get("decision") == "manual" or plan.get("source") != "analyze":
         return {"status": "n/a"}
@@ -105,6 +136,7 @@ def _check_feedback_suggested(plan: dict, plan_path: Path, job_dir: Path) -> dic
         if suggested:
             raise UsageError(f"계획 feedback.suggested 근거 없음: {match_path}이 없다 — analyze 계획의 suggested는 "
                              "stage가 match.json에서 채운다. 분석 결과가 없으면 []로 둔다", {"plan": suggested})
+        _check_feedback_decision(fb, [])
         return {"status": "no-match-json", "count": 0}
     try:
         match = json.loads(match_path.read_text(encoding="utf-8"))
@@ -118,6 +150,7 @@ def _check_feedback_suggested(plan: dict, plan_path: Path, job_dir: Path) -> dic
     expected = [{"cause": c["cause"], "signature": c.get("signature"), "score": c.get("score")}
                 for c in match.get("candidates") or [] if isinstance(c, dict) and c.get("cause") is not None]
     if not suggested:
+        _check_feedback_decision(fb, expected)     # 계획 파일을 고쳐 쓰기 전에 본다(어긋나면 계획은 그대로 둔다)
         if expected:
             fb["suggested"] = expected
             _write_json(plan_path, plan)
@@ -126,6 +159,7 @@ def _check_feedback_suggested(plan: dict, plan_path: Path, job_dir: Path) -> dic
         raise UsageError("계획 형식 오류: feedback.suggested가 JOB/match.json 후보와 다르다(이어서 하기 등 재분석 뒤) — "
                          "feedback.suggested를 []로 비우고 다시 stage하면 stage가 채운다",
                          {"plan": suggested, "match": expected})
+    _check_feedback_decision(fb, suggested)
     return {"status": "verified", "count": len(expected)}
 
 

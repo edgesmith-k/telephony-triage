@@ -51,10 +51,10 @@ def compile_markers(patterns) -> tuple[list[re.Pattern], list[str]]:
         try:
             rx = re.compile(str(p))
         except (re.error, TypeError, ValueError) as exc:
-            warnings.append(f"failed_step.marker_patterns 정규식 오류({str(p):.60}): {exc} — 건너뜀")
+            warnings.append(f"failed_step.marker_patterns 정규식 오류({p!s:.60}): {exc} — 건너뜀")
             continue
         if "step" not in rx.groupindex or "status" not in rx.groupindex:
-            warnings.append(f"failed_step.marker_patterns에 (?P<step>)·(?P<status>) 그룹이 없다({str(p):.60}) — 건너뜀")
+            warnings.append(f"failed_step.marker_patterns에 (?P<step>)·(?P<status>) 그룹이 없다({p!s:.60}) — 건너뜀")
             continue
         out.append(rx)
     return out, warnings

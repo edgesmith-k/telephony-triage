@@ -26,6 +26,8 @@
   없는 `ril` 이름, 잘못된 `dir`, `event` 없는 `fields`. 목록·`pattern`·정규식 형식 오류는 `schema`, 패턴 안전성은
   `raw-identifier`·`fixed-token`·`regex-unsafe`
 - `sequence`·`signature` 오류: sequence의 없는 id·중복 id·must_not_match 참조, 시그니처 형식
+- `signature-feature` 오류: 시그니처가 쓰는 선택 필드(`min_count` ≥ 2·`sequence_within_sec`)가 `issue-db.config.yaml`
+  `signature_features`에 선언되지 않음. 그 목록이 문자열 목록이 아니거나 플러그인이 모르는 이름이면 `config` 오류
 - `symptom-missing`·`signatures-missing` 오류, `signatures-pending` 경고, `pending-on-type`·`pending-verified` 오류
 - `builtin-event`·`ext-event` 오류: 현재 백엔드 `builtin_events()`에 없는 `builtin.*`, 이슈 DB `external_parsers`에
   없는 카테고리의 `ext.*`
@@ -78,7 +80,8 @@ import trackers  # noqa: E402
 from common import compat, dbpath, gitscope, issuedb, masking, parser_rules, site_defaults, typedoc, yamlio  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE, parse_name  # noqa: E402
-from common.signatures import SignatureError, compile_signature  # noqa: E402
+from common.signatures import (  # noqa: E402
+    SUPPORTED_FEATURES, SignatureError, compile_signature, features_used, tag_position_word)
 
 TOKEN_FIXED_RE = re.compile(r"<[A-Z][A-Z0-9]*#\d+>")
 KEBAB_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -245,7 +248,9 @@ class Linter:
         self.root_keys = set(self.config.get("code_root_keys") or [])
         self.external_cats = set((self.config.get("external_parsers") or {}).keys())
         self._check_platform_config()
+        self._check_signature_features()
         self.builtin_events = self._builtin_events()
+        self._tag_rules = self._load_tag_rules()
         self.validators = self._validators()
         self.glossary = self._glossary()
 
@@ -479,6 +484,22 @@ class Linter:
             if (tail in node if isinstance(node, dict) else False) if tail else head in self.config:
                 self.err("config", issuedb.CONFIG, f"옛 설정 키 {old}는 읽지 않는다 — {new}로 이름을 바꾼다.")
 
+    def _check_signature_features(self) -> None:
+        """`signature_features`(04-parser-matching.md §5.11 (1)): 문자열 목록이고 이 플러그인이 아는 이름만.
+        선언된 이름은 `self.declared_features` — 시그니처가 쓰는 선택 필드와 대조한다(`_check_signature`)."""
+        value = self.config.get("signature_features")
+        self.declared_features: set[str] = set()
+        if value is None:
+            return
+        if not isinstance(value, list) or not all(isinstance(f, str) for f in value):
+            self.err("config", issuedb.CONFIG, f"signature_features는 문자열 목록이어야 한다: {value!r}")
+            return
+        self.declared_features = set(value)
+        unknown = sorted(self.declared_features - SUPPORTED_FEATURES)
+        if unknown:
+            self.err("config", issuedb.CONFIG, f"signature_features에 모르는 feature {unknown} — 이 플러그인은 "
+                                               f"{sorted(SUPPORTED_FEATURES)}만 안다")
+
     def _builtin_events(self) -> set[str]:
         """이슈 DB가 선언한 플랫폼의 파서 백엔드 builtin 이벤트 (K6)."""
         try:
@@ -556,7 +577,7 @@ class Linter:
             self.err("category", type_md, f"category '{data.get('category')}'가 디렉토리 '{cat_key}'와 다릅니다.")
         if not TYPE_ID_RE.fullmatch(type_id):
             self.err("id-format", type_md, f"유형 ID 형식이 아닙니다: {type_id}")
-        elif category and type_id.split("-")[0] != category.get("id_prefix"):
+        elif category and type_id.split("-", maxsplit=1)[0] != category.get("id_prefix"):
             self.err("id-prefix", type_md,
                      f"{type_id}의 접두어가 카테고리 {cat_key}의 id_prefix '{category.get('id_prefix')}'와 다릅니다.")
         dirname = type_md.parent.name
@@ -727,6 +748,9 @@ class Linter:
                 compile_signature(sig, owner)
             except SignatureError as exc:
                 self.err("signature", type_md, str(exc))
+        for f in sorted(features_used(sig) - self.declared_features):
+            self.err("signature-feature", type_md,
+                     f"{key}: {f}를 쓰는데 issue-db.config.yaml signature_features에 선언되지 않았다")
         patterns = []
         for item in sig.get("must_match") or []:
             patterns.append(item.get("pattern") if isinstance(item, dict) else item)
@@ -739,6 +763,30 @@ class Linter:
             self._check_event_name(type_md, key, str(item.get("event", "")))
         for pattern in patterns:
             self._check_pattern(type_md, key, str(pattern))
+        for item in list(sig.get("must_match") or []) + list(sig.get("must_not_match") or []):
+            self._check_tag_word(type_md, key, str(item.get("pattern") if isinstance(item, dict) else item))
+
+    def _load_tag_rules(self):
+        """`parser-rules/`(태그 판정용). 못 읽으면 None — 규칙 오류는 `_check_rules`가 보고하고 태그 자리 검사는 건너뛴다."""
+        try:
+            return parser_rules.load(self.root / "parser-rules")
+        except Exception:    # noqa: BLE001
+            return None
+
+    def _check_tag_word(self, type_md, key, pattern: str) -> None:
+        """패턴이 태그 자리 낱말로 시작하는데(`RILJ.*>…`) 그 낱말이 tags.yaml의 어느 태그(정확한 이름·regex, `-0`·`0` 접미 포함)에도
+        맞지 않으면 경고 `tag-unknown`: 그 줄은 수집되지 않아 있음 조건은 늘 거짓, 없음 조건은 공허하게 참이 된다(태그 개명 뒤 조용히
+        소실 — Claude 종합 리뷰 B). RIL 요청·이벤트 이름(`SETUP_DATA_CALL`)·메시지 키(`word:`)는 대상이 아니다."""
+        if self._tag_rules is None:
+            return
+        word = tag_position_word(pattern)
+        if not word or word in self._rule_names()[1] or word in self.builtin_events:
+            return
+        if any(self._tag_rules.tag_category(x) for x in (word, word + "-0", word + "0")):
+            return
+        self.warn("tag-unknown", type_md, f"{key}: 패턴 {pattern!r}의 앞 낱말 '{word}'가 tags.yaml 태그에 맞지 않습니다 — 태그 자리면 "
+                                        "그 줄이 수집되지 않아 있음 조건은 늘 거짓, 없음 조건은 공허하게 참입니다(개명·누락?). "
+                                        "메시지 낱말이면 `.*`로 시작하게 쓰면 경고가 사라집니다.")
 
     def _check_event_name(self, type_md, key, name) -> None:
         if name.startswith("builtin.") and name not in self.builtin_events:

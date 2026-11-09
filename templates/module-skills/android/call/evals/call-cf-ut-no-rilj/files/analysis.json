@@ -31,6 +31,7 @@
   "in_range": "partial",
   "clock_anomalies": 0,
   "events": 27,
+  "masked": null,
   "uncollected_tags": [
    {
     "tag": "EmergencyNumberTracker",

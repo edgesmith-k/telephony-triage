@@ -30,7 +30,7 @@ from __future__ import annotations
 import copy
 import re
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 
 from common import events, logtime, vendor_ipc
 from parser_backends.base import ParserBackend, TagAttrSet, Window
@@ -63,7 +63,7 @@ class OfonoReferenceBackend(ParserBackend):
         return {ident: (comp, formats.get(comp.msg_format) if comp.msg_format else None)
                 for comp in components for ident in comp.idents}
 
-    def configure(self, profile) -> "OfonoReferenceBackend":
+    def configure(self, profile) -> OfonoReferenceBackend:
         other = copy.copy(self)
         other._phone = profile.phone
         tags = dict(profile.protocol_tags)
@@ -73,7 +73,7 @@ class OfonoReferenceBackend(ParserBackend):
         other._components = self._component_map(profile.components, spec)
         return other
 
-    def apply_rules(self, rules) -> "OfonoReferenceBackend":
+    def apply_rules(self, rules) -> OfonoReferenceBackend:
         """tags.yaml `level: unreliable`·`ipc: vendor`(04-parser-matching §5.8 (2)). 키마다 DB가 하나도 선언하지 않으면
         기본 상수(`LEVEL_UNRELIABLE_IDENTS`·`VENDOR_IPC_IDENTS`), 하나라도 선언하면 DB만 본다."""
         other = copy.copy(self)

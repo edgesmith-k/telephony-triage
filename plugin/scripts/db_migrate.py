@@ -190,7 +190,7 @@ class MigrationTree:
 
 
 def _set_config_int(text: str, key: str, value: int) -> str:
-    pattern = re.compile(rf"^({re.escape(key)}:[ \t]*)\d+", re.M)
+    pattern = re.compile(rf"^({re.escape(key)}:[ \t]*)\d+", re.MULTILINE)
     if not pattern.search(text):
         raise UsageError(f"{CONFIG}에 정수 {key}가 없습니다.")
     return pattern.sub(lambda m: f"{m.group(1)}{value}", text, count=1)

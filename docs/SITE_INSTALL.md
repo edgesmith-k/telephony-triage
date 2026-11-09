@@ -73,6 +73,7 @@ pip config --user set global.index-url https://<사내 미러>/simple   # 인증
 # 공통
 python3 -m pip install --user PyYAML==6.0.3 jsonschema==4.26.0 attrs==26.1.0 jsonschema-specifications==2025.9.1 \
   referencing==0.37.0 typing-extensions==4.15.0 pytest==9.0.3 iniconfig==2.3.0 packaging==26.2 pluggy==1.6.0 Pygments==2.20.0
+python3 -m pip install --user ruff==0.17.4   # 선택: lint까지 돌리려면 ('.[test,lint]'의 lint extra, tools/lint.py)
 # Python 3.10이면 추가
 python3 -m pip install --user rpds-py==0.30.0 exceptiongroup==1.3.1 tomli==2.5.0
 # Python 3.11 이상이면 추가
@@ -146,7 +147,7 @@ S-1에서 `SITE_PROFILE.md`에 남길 것: 설치 경위(미러·A/B·Python 버
    pytest는 필요 없다(테스트·골든 확인용). 미러에 고정 버전이 없으면 4절 표.
 2. **기본 연결**: `gh auth login -h <사내 GHE 호스트>`(이슈 DB PR용), `claude mcp list`에 Jira MCP가 사용자 범위로 보이는지.
 3. **플러그인 설치**: Claude Code에서 사내 마켓플레이스의 `telephony-triage`. 레포 clone은 필요 없다.
-4. **setup**: `claude`(venv면 `(tt)` 터미널에서) → `/telephony-triage:setup`. GHE 아이디·이슈 DB clone 경로·타임존 등을 묻고 점검 표(doctor)를 보여 준다. 모든 행 `ok`면 끝, `fail`·`warn`은 "다음" 열대로.
+4. **setup**: `claude`(venv면 `(tt)` 터미널에서) → `/telephony-triage:setup`. 먼저 Jira MCP 등록을 점검하고(없으면 여기서 멈춘다), 이슈 DB clone 경로(와 gh 로그인에서 못 읽었을 때 GHE 아이디, site-defaults에 없을 때 원격 URL)만 묻는다 — 타임존 등 나머지는 팀 기본값을 보여 주기만 한다. 끝에 점검 표(doctor)를 보여 준다. 모든 행 `ok`면 끝, `fail`·`warn`은 "다음" 열대로.
 5. **연습·평소 사용**:
    ```
    $ claude
@@ -164,7 +165,7 @@ S-1에서 `SITE_PROFILE.md`에 남길 것: 설치 경위(미러·A/B·Python 버
 | pytest·eval·빈 플러그인 실험 | 한다(S-2) | 안 한다 |
 | 다시 검증할 때 | Claude Code 큰 버전 변경, 평소 모델 변경, 플러그인 새 반입(8절 끝 규칙) | — |
 
-오프라인 의존성 묶음(`tt-offline-deps-<날짜>.zip`, 사외에서 만든 wheel)은 **비상용**이다. 사내 미러로 설치되면 반입하지 않는다.
+오프라인 의존성 묶음(`tt-offline-deps-<날짜>.zip`, 사외에서 만든 wheel)은 **비상용**이다. 사내 미러로 설치되면 반입하지 않는다. 묶음의 ruff(`lint` extra)는 선택이다 — 린트(`tools/lint.py`)를 돌릴 때만 설치한다.
 
 ### 이슈 DB 경로를 바꿨을 때 (`config.py set issue_db.path`)
 
@@ -218,14 +219,14 @@ git status --short          # 바뀐 사외 파일 + .draft-manifest.json만 M. 
 
 **5. 테스트 후 병합**
 ```
-python3 -m pytest -q tests          # Ubuntu CI 약 16~20분, PC에 따라 더 걸린다
+python3 -m pytest -q -n 4 tests     # 병렬(pytest-xdist, test extras) 4코어 약 10분 · 단일 프로세스 약 30분(README), PC에 따라 더 걸린다
 git add -A && git commit -m "재반입 <새 label> (사외 <커밋>)"
 git switch main && git merge --ff-only draft-import/<새 label> && git branch -d draft-import/<새 label>
 rm -rf ~/tt-old ~/tt-new
 ```
 실패하면 main에 합치지 않는다. `FAILED tests/…::<테스트 이름>` 줄만(사내 이름·경로는 빼고) 사외로 전달한다. 사내 레포에서는 사외 초안 전용 검사(`test_site_paths_are_absent_in_draft`, `test_check_boundary_external`, `test_site_defaults_required`)가 skip으로 나오는 것이 정상이다(import-20261014부터, 마지막 것은 그다음 묶음부터).
 
-반입한 묶음에서 **hook이나 공통 판정이 바뀌었으면**(`plugin/hooks/hooks.json`, `guard.py`, `show_guard.py`, `common/shown.py`, `jira_bridge.py`, 표시 기록을 쓰는 스크립트(`db_pr`·`issue_post`·`db_verify`·`triage`)의 기록 부분, 또는 `SKILL.md`·`reference/rules.md`의 공통 규칙) 사내 대상 eval 12개(`tests/skill_evals/pending.json` `site`)를 **모두** 다시 돌린다. 그 밖이면 바뀐 흐름의 eval만. 어느 쪽인지는 묶음과 함께 오는 `DRAFT_NOTES.md` "사내로 넘긴 것"의 재반입 노트에 적혀 있다. 생성기 버전(`generator_version`)이 올라간 묶음이면 운영 이슈 DB를 `migrate --to <현재 스키마>`로 맞춘다(`docs/design/06-collaboration.md §6.4` 버전 올림 순서, 운영 DB가 아직 없으면 뼈대 config 한 줄). 이어서 사내 단계는 `claude` → **계속**.
+반입한 묶음에서 **hook이나 공통 판정이 바뀌었으면**(`plugin/hooks/hooks.json`, `guard.py`, `show_guard.py`, `common/shown.py`, `jira_bridge.py`, 표시 기록을 쓰는 스크립트(`db_pr`·`issue_post`·`db_verify`·`triage`)의 기록 부분, 또는 `SKILL.md`·`reference/rules.md`의 공통 규칙) 사내 대상 eval 12개(`tests/skill_evals/pending.json` `site`)를 **모두** 다시 돌린다. 그 밖이면 바뀐 흐름의 eval만. 어느 쪽인지는 묶음과 함께 오는 `DRAFT_NOTES.md` "사내로 넘긴 것"의 재반입 노트에 적혀 있다. 생성기 버전(`generator_version`)이 올라간 묶음이면 운영 이슈 DB를 `migrate --to <현재 스키마>`로 맞춘다(`docs/design/06-collaboration.md §6.4` 버전 올림 순서, 운영 DB가 아직 없으면 뼈대 config 한 줄). 새 시그니처 필드(`min_count`·`sequence_within_sec`)는 S37 결과·팀 설치본 통일 뒤에만 DB에 쓴다(`issue-db.config.yaml signature_features`에 선언 — 모르는 플러그인은 분석을 중단한다). 이어서 사내 단계는 `claude` → **계속**.
 
 ### 멈췄을 때
 
@@ -286,7 +287,31 @@ CODEOWNERS에는 **메인테이너 경로**(`/.githooks/`·`/schema/`·`/parser-
 
 ## 10. 모듈 스킬 레포 연결과 정기 점검 (MS-1·MS-2, S-3 완료 뒤)
 
-1. **주소를 넣기 전에** 설치 분석 스킬이 연결된 카테고리에 `prefer: skill`을 적을지 정한다. 안 적으면 그 카테고리 5-1이 모듈 문서로 바뀌고, 레포에 그 모듈이 없으면 분석이 멈춘다(`config.py set analyzers.<카테고리>.prefer skill`, 플랫폼이면 `--platform <p>`).
+1. **주소를 넣기 전에** 설치 분석 스킬이 연결된 카테고리에 `prefer: skill`을 적을지 정한다. 안 적으면 그 카테고리 5-1이 모듈 문서로 바뀐다. 레포에 그 모듈이 없으면 **분석은 멈추지 않고** 그 심층 분석만 생략된다(리포트 `심층 분석: 해당 없음(레포에 <모듈> 없음 @<sha>)`, `triage.py module` 종료 1·`next`는 계속 — 탐색 5-2는 `JOB/timeline.md`로 내장 절차). `prefer: skill`인데 스킬 이름이 없으면 설정 오류(종료 2, 리포트 `심층 분석 생략: 설정 오류`)이고 역시 기본 분석은 계속한다. (`config.py set analyzers.<카테고리>.prefer skill`, 플랫폼이면 `--platform <p>`; 동작 근거 `triagelib/modulecmd.py` `_next`·`_fail_line`, `reference/module-skills.md` 5-1 5항)
 2. `python3 tools/site_step.py modules` → `modules check`: remote·push 권한·트리 = modules.yaml·데몬 ⊆ tags.yaml·prefer 규칙·보호·CI(정보). 중첩 `claude -p` 확인은 명령만 보인다(사용자가 한 번 돌리고 `--waive`).
 3. `python3 tools/site_step.py modules coverage --out docs/site/module-coverage.diff`(토큰 0, 사내 전용 출력): 사내 로그로 모듈별 줄 수·모듈에 없는 데몬·tags.yaml에 없는 태그를 보고, modules.yaml diff를 검토해 모듈 레포 PR로 보낸다. tags.yaml에 없는 태그는 이슈 DB 계획 op PR이 먼저다(사용자 확인).
 4. **정기 점검(매주, 상한 300,000 토큰/회)**: `python3 tools/site_step.py audit` — 사내 모델·출처 모름 커밋만 골라 토큰 0 검사를 먼저 돈다. 남은 것은 `docs/site/audit/<날짜>-review.md`의 목록·추정 토큰뿐이다(Claude는 부르지 않는다). 사내 Claude 리뷰(승인 뒤) → `audit --record`(넘친 항목은 이월). 14일 넘으면 ms2.audit가 사용자 필요.
+   걸린 것이 사람 눈에 안 띄어도 남게 `audit --notify`: P0·P1 항목(시그니처 소실·걸린 기록)과 실패한 검사 행을 이슈 DB 레포(steps.yaml `ops_db_repo`·`ofono_db_repo`) Issue로 올린다. 기본은 표만 보이고, 사용자 확인 뒤 `audit --notify --create`가 만든다(제목이 `[triage-audit] <id>`와 같은 열린 Issue가 있으면 건너뜀 — 제목을 고치면 표식이 깨져 다음 회차에 새로 생긴다). 본문은 계획에 든 표식·근거 이름·파일·Jira 키·명령뿐이다(로그 원문 없음).
+
+## 11. 되돌리기·제거 (배포본 롤백, 플러그인 제거, 반입 되돌리기)
+
+종합 리뷰에서 "배포 뒤 잘못된 버전을 되돌리는 절차와 제거 절차가 없다"가 지적됐다. 사외에서 정할 수 있는 부분만 적는다. 사내 마켓플레이스의 실제 갱신 방식(S2)은 `SITE_PROFILE.md`에 보완한다.
+
+### 11.1 배포본 되돌리기 (잘못된 묶음을 팀에 배포했을 때)
+
+- 플러그인의 "판"은 사내 마켓플레이스가 가리키는 사내 tt 레포의 **반입 태그(커밋)** 다. 되돌리기 = 마켓플레이스 정의(`.claude-plugin/`, S2)가 가리키는 태그를 직전 반입 태그로 바꾸고, 팀원이 플러그인 화면에서 업데이트(안 되면 제거 뒤 재설치)한다. `plugin/site-defaults.yaml`은 `SITE_PATHS`라 묶음에 없고 되돌려도 그대로다.
+- **이슈 DB 스키마·생성기 버전이 같이 올라간 반입**이었으면 플러그인만 되돌리면 `SUPPORTED_SCHEMA`·생성기 불일치로 커맨드가 멈춘다(`docs/design/06-collaboration.md §6.4`). 순서: 이슈 DB의 migrate PR을 **Revert PR**로 되돌려 병합(+1) → 플러그인 되돌리기. 진행 중 계획·열린 PR은 `python3 $S/job_status.py <KEY>`로 상태를 보고, 계획은 그대로 두었다가 되돌린 판에서 `sync-pr`로 재적용한다(계획 형식이 바뀐 반입이면 `migrate` 커맨드의 upgrade-plan 안내를 따른다).
+- OpenCode 설치본은 레포 사본을 직전 태그로 바꾼 뒤 `python3 tools/gen_opencode.py install --force …`(`docs/TEAM_GUIDE.md` 4절)를 다시 한다 — 지문(integrity)이 판에 묶여 있어 사본과 플러그인 판이 다르면 시작하지 않는다.
+- 되돌린 뒤 팀원은 `/telephony-triage:status --doctor`로 `compat`·`config` 행이 ok인지 본다. 되돌린 사유·버전 조합·담당자는 `SITE_PROFILE.md`에 한 줄 남긴다(S2 구체화, `15-local-draft.md` S-7 C7).
+
+### 11.2 플러그인 제거 (팀원 PC)
+
+1. 플러그인 화면에서 `telephony-triage`를 제거한다(마켓플레이스 등록도 더 쓰지 않으면 함께).
+2. 사용자 데이터를 지운다 — 작업 계획·`issue_raw.json`·마스킹 로그·pending 피드백에 **Jira 요약이 들어 있다**:
+   `~/.telephony-triage/`(config·pending-feedback·기본 work_dir `work`·`work-<플랫폼>`), config의 `work_dir`가 다른 곳이면 그 폴더, OpenCode 설치 폴더(`--dest`)와 세션(`opencode.db`, `opencode/README.md`의 `--delete-session`). Claude Code transcript(`~/.claude/projects`)의 보존은 사내 정책(S14)에 따른다.
+3. 이슈 DB clone은 공유 레포라 보통 둔다. 지우려면 열린 PR·로컬 브랜치(`git -C <clone> branch`)를 먼저 정리한다. clone의 `core.hooksPath`는 setup이 설정한 값이라 clone을 둘 때는 그대로 둔다(스크립트가 없어진 뒤 커밋하면 hook이 실패한다 — `git -C <clone> config --unset core.hooksPath`).
+4. Python 의존성(PyYAML·jsonschema)은 다른 도구가 쓸 수 있어 지우지 않는다. 설치 방법 B(venv)였으면 venv 폴더만 지운다.
+
+### 11.3 사내 레포에서 반입 되돌리기
+
+반입은 main에 ff 병합한 커밋(8절)이다. 되돌리기는 `git revert -m 1 <병합 커밋>`(ff였으면 반입 커밋 범위를 `git revert <A>..<B>`) → 커밋 → 태그. `SITE_PATHS` 파일은 반입이 건드리지 않으므로 그대로 남는다. 반입 **도중** 실패는 8절 "멈췄을 때"(도구가 되돌린다).

@@ -582,3 +582,153 @@ def test_grounding_mixed_ok_and_skipped(site, fake_py):
     g = _grounding(site, {"deep": {"quotes": 2, "fabricated": 0, "weak": 0, "source": "a.log"},
                           "quick": {"skipped": True}})
     assert g["status"] == "skip" and "ok 0" in g["evidence"] and "건너뜀/오류 1" in g["evidence"]
+
+
+# -- 알림(종합 리뷰 C①): 걸린 항목 → 이슈 DB 레포 Issue, 기본 보기만, 표식으로 중복 방지 ----------------------------------
+
+@pytest.fixture
+def fake_gh(monkeypatch):
+    """`Ctx.gh` 바꿔치기(모의 gh 러너): 받은 인자를 기록하고 issue list는 `state["issues"]`(열린 것)를, create는 번호를 준다."""
+    state = {"issues": [], "auth": 0, "calls": [], "list_fail": False}
+
+    def gh(self, *args, host=None):
+        state["calls"].append(list(args))
+        if args[:2] == ("auth", "status"):
+            return state["auth"], "", "" if state["auth"] == 0 else "not logged in"
+        if args[:2] == ("issue", "list"):
+            if state["list_fail"]:
+                return 1, "", "HTTP 500"
+            marker = args[args.index("--search") + 1].strip('"').replace('" in:title', "")
+            rows = [i for i in state["issues"] if marker in i["title"] and i["state"] == "open"]
+            return 0, json.dumps([{"number": i["number"], "title": i["title"], "url": i["url"]} for i in rows]), ""
+        if args[:2] == ("issue", "create"):
+            n = len(state["issues"]) + 1
+            repo = args[args.index("--repo") + 1]
+            title, body = args[args.index("--title") + 1], args[args.index("--body") + 1]
+            state["issues"].append({"number": n, "title": title, "body": body, "state": "open", "repo": repo,
+                                    "url": f"https://ghe.example/{repo}/issues/{n}"})
+            return 0, f"Creating issue in {repo}\nhttps://ghe.example/{repo}/issues/{n}\n", ""
+        raise AssertionError(f"뜻밖의 gh 호출: {args}")
+
+    monkeypatch.setattr(sc.Ctx, "gh", gh)
+    return state
+
+
+def _plan_with_flags(site, fake_py):
+    fake_py[0]["mask_pii.py"] = (1, {"detections": [{"path": f"{TYPE}/type.md", "line": 3, "kind": "MSISDN"}]})     # P0 기록
+    fake_py[0]["db_verify.py"] = (1, {"rules": [{"id": "R3", "status": "fail", "targets": ["DATA-001"]}]})       # P1 기록
+    fake_py[0]["db_lint.py"] = (1, {"errors": [{"code": "e1", "files": ["sim/SIM-001-x/type.md"]}], "warnings": []})  # 실패 행
+    p = plan(site, since=[f"ops_db={site['init']}"], repos=["ops_db"])
+    sa.write_plan(site["root"], p)
+    return p
+
+
+def test_notify_candidates_only_p0_p1_and_failed_checks(site, fake_py):
+    p = _plan_with_flags(site, fake_py)
+    cands = sa.notify_candidates(p)
+    ids = [c["id"] for c in cands]
+    assert any(i.startswith("rec:ops_db:") for i in ids) and "audit.ops_db.lint" in ids
+    assert all(c["title"] == f"{sa.ISSUE_PREFIX} {c['id']}" and c["repo"] == "ops_db" for c in cands)
+    rec = next(c for c in cands if c["id"].startswith("rec:"))
+    assert "근거: 마스킹 안 됨 MSISDN" in rec["body"] and "git -C" in rec["body"] and "커밋: " in rec["body"]
+    for line in (site["db"] / TYPE / "fixtures").glob("*.log"):           # 본문에 로그 원문은 없다
+        for raw in line.read_text(encoding="utf-8").splitlines()[:5]:
+            assert raw.strip() and raw not in rec["body"]
+    # 모듈 항목(M)·P2는 후보가 아니다
+    assert sa.notify_candidates({"items": [{"id": "mod:ofono/data", "kind": "module", "priority": "M", "repo": "modules"},
+                                           {"id": "rec:ops_db:abc", "kind": "record", "priority": "P2", "repo": "ops_db"}],
+                                 "checks": [{"id": "audit.ops_db.window", "status": "info"},
+                                            {"id": "audit.modules.check", "status": "fail"}]}) == []
+
+
+def test_notify_dry_run_reads_only_and_create_dedups(site, fake_py, fake_gh):
+    p = _plan_with_flags(site, fake_py)
+    (site["root"] / sc.STEPS_FILE).write_text(f"ops_db: {site['db']}\nops_db_repo: org/ops-db\n", encoding="utf-8")
+    ctx = sc.Ctx(site["root"])
+    try:
+        res = sa.notify(ctx, p)                                             # 보기만: auth·list만 부른다
+        assert res["exit"] == 0 and res["created"] == 0
+        assert {r["status"] for r in res["rows"]} == {"would-create"} and len(res["rows"]) >= 2
+        assert not any(c[:2] == ["issue", "create"] for c in fake_gh["calls"])
+        assert sum(1 for c in fake_gh["calls"] if c[:2] == ["auth", "status"]) == 1
+        text = sa.render_notify(res)
+        assert "보기만" in text and "--notify --create" in text and "만들 것" in text
+        made = sa.notify(ctx, p, create=True)                               # 만든다
+        assert made["exit"] == 0 and made["created"] == len(res["rows"])
+        assert all(r["status"] == "created" and r["url"].startswith("https://ghe.example/org/ops-db/issues/") for r in made["rows"])
+        create = next(c for c in fake_gh["calls"] if c[:2] == ["issue", "create"])
+        assert create[2:4] == ["--repo", "org/ops-db"] and create[5].startswith(sa.ISSUE_PREFIX)
+        again = sa.notify(ctx, p, create=True)                              # 같은 표식이 열려 있으면 안 만든다
+        assert again["created"] == 0 and {r["status"] for r in again["rows"]} == {"exists"}
+        assert all(r["detail"].startswith("#") for r in again["rows"])
+        for i in fake_gh["issues"]:                                          # 닫히면 다시 만든다(재발)
+            i["state"] = "closed"
+        assert sa.notify(ctx, p, create=True)["created"] == len(res["rows"])
+    finally:
+        ctx.cleanup()
+
+
+def test_notify_dedup_needs_exact_title_not_prefix(site, fake_py, fake_gh):
+    """코덱스 리뷰 R2: 검색은 낱말 단위라 `…/setup`을 찾아도 `…/setup-retry`가 돌아온다. 제목이 정확히 같은 열린 Issue만 "있음"이다."""
+    p = _plan_with_flags(site, fake_py)
+    (site["root"] / sc.STEPS_FILE).write_text(f"ops_db: {site['db']}\nops_db_repo: org/ops-db\n", encoding="utf-8")
+    titles = [c["title"] for c in sa.notify_candidates(p)]
+    assert titles
+    for i, title in enumerate(titles):                                   # 접두사가 같은 **다른** ID의 열린 Issue
+        fake_gh["issues"].append({"number": 100 + i, "title": title + "-retry", "body": "", "state": "open", "repo": "org/ops-db",
+                                  "url": f"https://ghe.example/org/ops-db/issues/{100 + i}"})
+    ctx = sc.Ctx(site["root"])
+    try:
+        res = sa.notify(ctx, p)
+        assert {r["status"] for r in res["rows"]} == {"would-create"}       # 전에는 marker in title이라 전부 exists였다
+        fake_gh["issues"].append({"number": 500, "title": "  " + titles[0] + " ", "body": "", "state": "open", "repo": "org/ops-db",
+                                  "url": "https://ghe.example/org/ops-db/issues/500"})
+        res = sa.notify(ctx, p)
+        by = {r["id"]: r for r in res["rows"]}
+        first = sa.notify_candidates(p)[0]["id"]
+        assert by[first]["status"] == "exists" and by[first]["detail"] == "#500"   # 공백만 다른 같은 제목은 같다
+        assert all(r["status"] == "would-create" for k, r in by.items() if k != first)
+    finally:
+        ctx.cleanup()
+
+
+def test_notify_skips_without_repo_or_auth_and_reports_errors(site, fake_py, fake_gh):
+    p = _plan_with_flags(site, fake_py)
+    ctx = sc.Ctx(site["root"])                                              # steps.yaml에 ops_db_repo 없음
+    try:
+        res = sa.notify(ctx, p, create=True)
+        assert res["exit"] == 1 and {r["status"] for r in res["rows"]} == {"skip"} and fake_gh["calls"] == []
+        assert "ops_db_repo" in res["rows"][0]["detail"]
+    finally:
+        ctx.cleanup()
+    (site["root"] / sc.STEPS_FILE).write_text(f"ops_db: {site['db']}\nops_db_repo: org/ops-db\n", encoding="utf-8")
+    fake_gh["auth"] = 4
+    ctx = sc.Ctx(site["root"])
+    try:
+        res = sa.notify(ctx, p, create=True)
+        assert res["exit"] == 1 and {r["status"] for r in res["rows"]} == {"skip"} and "gh auth login" in res["rows"][0]["detail"]
+        fake_gh["auth"], fake_gh["list_fail"] = 0, True
+        res = sa.notify(ctx, p, create=True)
+        assert res["exit"] == 1 and {r["status"] for r in res["rows"]} == {"error"} and fake_gh["issues"] == []
+    finally:
+        ctx.cleanup()
+
+
+def test_notify_cli_needs_plan_and_flags(site, fake_py, fake_gh, capsys):
+    root = str(site["root"])
+    assert ss.main(["--root", root, "audit", "--notify"]) == 2                          # 계획 없음
+    assert "먼저" in capsys.readouterr().err
+    _plan_with_flags(site, fake_py)
+    (site["root"] / sc.STEPS_FILE).write_text(f"ops_db: {site['db']}\nops_db_repo: org/ops-db\n", encoding="utf-8")
+    assert ss.main(["--root", root, "audit", "--notify", "--json"]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["create"] is False and doc["rows"] and all(r["status"] == "would-create" for r in doc["rows"])
+    assert ss.main(["--root", root, "audit", "--notify", "--create"]) == 0
+    out = capsys.readouterr().out
+    assert "만듦" in out and "https://ghe.example/org/ops-db/issues/1" in out
+    assert sa.notify_candidates(sa.load_plan(site["root"]))                              # 계획 파일은 그대로(쓰지 않는다)
+    for bad in (["audit", "--create"], ["audit", "--notify", "--record"], ["audit", "--notify", "--repo", "ops_db"],
+                ["check", "--notify"]):
+        with pytest.raises(SystemExit) as exc:
+            ss.main(["--root", root, *bad])
+        assert exc.value.code == 2

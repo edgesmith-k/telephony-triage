@@ -7,7 +7,6 @@ R6 checks instructions, not actual Claude behavior (reserved for I5).
 
 from __future__ import annotations
 
-import json
 import re
 import shutil
 import sys

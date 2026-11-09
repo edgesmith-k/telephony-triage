@@ -155,7 +155,7 @@ def test_codes_and_messages_cover_every_refusal():
         msg = ghreview.message({"code": c, "head": HEAD, "approvals": [{"login": "b", "commit": OLD}],
                                 "changes": [{"login": "b"}]})
         assert (msg is None) == (c == "ok"), c
-        assert c == "ok" or isinstance(msg, str) and msg and "PR:" not in msg, c
+        assert c == "ok" or (isinstance(msg, str) and msg and "PR:" not in msg), c
 
 
 def test_parse_pages_joins_paginated_arrays():

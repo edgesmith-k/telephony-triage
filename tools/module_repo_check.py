@@ -26,13 +26,14 @@ for cand in (HERE.parent / "plugin" / "scripts", HERE.parent / "scripts"):
         sys.path.insert(0, str(cand))
         break
 
+import platforms
 from common import skillcheck
 
 
 def findings(root: Path, template: bool = False) -> list[str]:
     out = []
     if template:
-        for f in skillcheck.template_findings(root):
+        for f in skillcheck.template_findings(root, platforms.template_metas()):
             where = f"{f['path']}:{f['line']}" if "line" in f else f["path"]
             out.append(f"{where} {f['check']}" + (f"({f['rule']})" if f.get("rule") else ""))
     for f in skillcheck.check_worktree(root):

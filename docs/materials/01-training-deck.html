@@ -536,7 +536,7 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
         <div><div><b>플러그인 설치</b><p class="small">사내 마켓플레이스에서 <code>telephony-triage</code> (등록은 S-7 예정)</p></div></div>
         <div><div><b>GitHub 로그인</b><p class="small"><code>gh auth login -h &lt;GHE 호스트&gt;</code><br>PR을 올릴 GHE 서버에 로그인합니다</p></div></div>
         <div><div><b>Jira 연결 확인</b><p class="small"><code>claude mcp list</code>에 사내 Jira MCP가 보이는지 봅니다</p></div></div>
-        <div><div><b><code>/telephony-triage:setup</code></b><p class="small">하나씩 묻고 마지막에 점검 표. 이슈 DB clone도 제안합니다</p></div></div>
+        <div><div><b><code>/telephony-triage:setup</code></b><p class="small">Jira MCP 점검 → clone 경로만 묻고 → 마지막에 점검 표. 이슈 DB clone도 제안합니다</p></div></div>
         <div><div><b>연습 한 번</b><p class="small"><code>/telephony-triage:analyze ABC-12345 ~/logs/radio.txt --dry-run</code><br>아무것도 올리지 않습니다</p></div></div>
       </div>
       <div class="card">
@@ -560,14 +560,15 @@ feedback/      <span class="c"># 후보 수락·거절 기록</span>
   <div class="body">
     <div class="tw"><table class="t">
       <tr><th>단계</th><th>하는 일</th><th>멈추는 경우</th></tr>
-      <tr><td>config</td><td>경로·브랜치 등을 묻고, <b>팀 기본값과 다른 답만</b> 저장</td><td>없는 경로는 그 항목만 다시 묻기</td></tr>
-      <tr><td>Jira MCP</td><td>등록된 MCP에서 <code>get_issue</code> 등 읽기 도구 후보를 고르고 확인받음</td><td><span class="warn-t">후보 없음 → setup 중단</span></td></tr>
+      <tr><td>Jira MCP 점검</td><td>질문 전에 등록된 MCP부터 확인(0번)</td><td><span class="warn-t">후보 없음 → 아무것도 묻기 전에 setup 중단</span></td></tr>
+      <tr><td>config</td><td>clone 경로만 묻고(GHE 아이디는 gh 로그인, 원격은 팀 기본값에서), <b>팀 기본값과 다른 답만</b> 저장</td><td>없는 경로는 그 항목만 다시 묻기</td></tr>
+      <tr><td>Jira MCP</td><td>0번에서 찾은 서버의 <code>get_issue</code> 등 읽기 도구 후보를 고르고 확인받음</td><td>원격 서버면 도구 이름을 받아 한 번 더</td></tr>
       <tr><td>git hook</td><td>이슈 DB clone에 <code>core.hooksPath=.githooks</code> 설치</td><td>값이 다르면 실패 보고</td></tr>
       <tr><td>스냅샷</td><td>lock을 잡고 읽기 스냅샷 생성, 버전 호환성 확인</td><td>호환 안 되면 "읽기 전용"으로 계속</td></tr>
       <tr><td>gh · doctor</td><td>gh 인증 확인 후 <code>config.py doctor</code> 점검 표를 그대로 보여줌</td><td>gh 없음 → 읽기 전용으로 끝</td></tr>
     </table></div>
   </div>
-  <aside class="notes">setup은 실제로 0~10번 단계지만 묶으면 이 다섯 덩어리입니다. 0번(플랫폼 고르기)은 팀이 켠 플랫폼이 둘 이상일 때만 나옵니다. 다른 플랫폼은 경로 프로필(clone·작업 디렉토리)만 더하고, Jira·gh 설정은 함께 씁니다. config 단계에서 묻는 것은 GHE 아이디, 이슈 DB 경로·URL, base 브랜치, GHE 호스트입니다. 이어서 타임존(Jira·logcat), 연도 정하는 방식, 로그 폴더(선택), 작업 디렉토리를 묻습니다. 중간에 멈춰도 잡은 lock은 항상 풀고 끝납니다. 팀 기본값과 같은 답은 저장하지 않으므로, 관리자가 팀 기본값을 바꾸면 내 설정도 따라갑니다. 설정을 바꿀 때는 setup을 다시 돌리면 바꿀 항목만 고칩니다. 분석마다 나오는 소스 트리·심층 분석·탐색 분석 질문을 줄이려면 <code>~/.telephony-triage/config.yaml</code>에 직접 적습니다(<code>analyzers.data.when</code>·<code>explore.when</code>을 never로, 버전이 맞는 소스 트리 프로필이 하나면 묻지 않고 고름 — <code>code.auto_select</code>). 한 번만 끄려면 <code>--code skip</code>·<code>--no-analyzer</code>·<code>--no-explore</code>. 자세한 예시는 안내서 7장 7.7.</aside>
+  <aside class="notes">setup은 실제로 0~10번 단계지만 묶으면 이 여섯 덩어리입니다. 0번은 Jira MCP 등록 점검이고(없으면 질문 전에 멈춥니다), 플랫폼 고르기는 팀이 켠 플랫폼이 둘 이상일 때만 나옵니다. 다른 플랫폼은 경로 프로필(clone·작업 디렉토리)만 더하고, Jira·gh 설정은 함께 씁니다. config 단계에서 묻는 것은 이슈 DB clone 경로뿐이고, GHE 아이디(gh 로그인에서 읽음)와 원격 URL(팀 기본값)은 못 읽을 때만 묻습니다(최대 3개). base 브랜치, GHE 호스트, 타임존(Jira·logcat), 연도 정하는 방식, 로그 폴더, 작업 디렉토리는 묻지 않고 팀 기본값을 한 줄씩 보여 줍니다. 중간에 멈춰도 잡은 lock은 항상 풀고 끝납니다. 팀 기본값과 같은 답은 저장하지 않으므로, 관리자가 팀 기본값을 바꾸면 내 설정도 따라갑니다. 설정을 바꿀 때는 setup을 다시 돌리면 바꿀 항목만 고칩니다. 분석마다 나오는 소스 트리·심층 분석·탐색 분석 질문을 줄이려면 <code>~/.telephony-triage/config.yaml</code>에 직접 적습니다(<code>analyzers.data.when</code>·<code>explore.when</code>을 never로, 버전이 맞는 소스 트리 프로필이 하나면 묻지 않고 고름 — <code>code.auto_select</code>). 한 번만 끄려면 <code>--code skip</code>·<code>--no-analyzer</code>·<code>--no-explore</code>. 자세한 예시는 안내서 7장 7.7.</aside>
 </section>
 
 <section class="slide" data-sec="3 설치와 setup">
@@ -1029,7 +1030,7 @@ bonus = 근접(근거 시각이 발생 시각에 가까울수록) + 키워드(Ji
     <div class="g4">
       <div class="card key"><h3>도구 호출 직전</h3><p class="small">PreToolUse</p>
         <ul class="pts small">
-          <li>MCP: Jira 읽기 도구와 승인한 코멘트 1건만 통과(2). 이슈 DB 대상 gh·GitHub MCP 쓰기는 승인 질문, gh·MCP로 직접 PR 머지는 거부(11)</li>
+          <li>MCP: Jira 읽기 도구와 승인한 코멘트 1건만 통과(2). gh·GitHub MCP 쓰기·직접 PR 머지는 승인 질문, Approve·리뷰 기각·자동 병합 켜기는 거부(11)</li>
           <li>Bash: 이슈 DB 커밋·push 검사(3~7), 바로 병합 <code>db_pr merge</code> 승인 질문(7), clone 변경 차단(8), 로그 통독 차단(10), 스킬 소스 적용 승인 질문(12)</li>
           <li>Write·Edit: 내 clone 파일이면 거부(8), 스킬 소스 폴더면 승인 질문(12)</li>
         </ul>

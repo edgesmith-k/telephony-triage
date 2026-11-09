@@ -114,17 +114,16 @@ def main(argv: list[str] | None = None) -> int:
     result = run(check=args.check)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
+    elif args.check:
+        for path in result["missing"]:
+            print(f"없음: {path}")
+        for path in result["mismatched"]:
+            print(f"다름: {path}")
+        if not result["missing"] and not result["mismatched"]:
+            print(f"fixture {result['count']}개가 시나리오와 일치합니다.")
     else:
-        if args.check:
-            for path in result["missing"]:
-                print(f"없음: {path}")
-            for path in result["mismatched"]:
-                print(f"다름: {path}")
-            if not result["missing"] and not result["mismatched"]:
-                print(f"fixture {result['count']}개가 시나리오와 일치합니다.")
-        else:
-            for path in result["written"]:
-                print(path)
+        for path in result["written"]:
+            print(path)
     if result["missing"] or result["mismatched"]:
         return 1
     return 0

@@ -57,6 +57,7 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 ```
 - 테스트 전부 통과, `site-defaults.yaml` 없음, `.local-draft`·`.mcp.json`이 반입 묶음에 없음, 이슈 DB 뼈대 생성, `TODO(SITE:...)` 목록 정리를 확인한다.
 - 경계 검사: `python3 tools/check_boundary.py --mode external`(사외 CI에서도 돈다), `python3 tools/sync_schemas.py --check`.
+- 린트: `python3 tools/lint.py`(ruff 고정 버전, 규칙 묶음 `pyproject.toml`, 남긴 지적의 검토 표 `docs/development/LINT_REVIEW.md`).
 - 사내 문자열 검색: 실제 회사명·서버명·팀명이 없는지 (`grep -rniE '<회사명>|<사내 도메인>' .`).
 - 사내 **외부 작성 코드 반입 규정**(오픈소스 의존성 승인 포함)을 확인한 뒤 플러그인 레포 + 이슈 DB 뼈대를 반입한다.
 
@@ -111,7 +112,8 @@ mkdir -p ~/tt-draft && cd ~/tt-draft && unzip ~/telephony-triage-import-v1.zip
 sha256sum ~/telephony-triage-import-v1.zip   # 사외에서 적은 값과 같은지
 python3 -m venv .venv && . .venv/bin/activate   # python3 3.10+
 pip install '.[test]'   # 사내 미러(--no-build-isolation 금지, SITE_INSTALL §4). 고정 버전이 미러에 없으면 `test_r10_dependency_manifest_has_complete_pins` 1건 실패는 예상, `SITE_PROFILE.md`에 기록
-python3 -m pytest -q tests                    # 사외와 같은 결과여야 한다 (Ubuntu CI 약 16~20분, PC에 따라 더 걸린다)
+pip install '.[test,lint]'   # 선택: lint까지 돌리려면(ruff 고정 버전, tools/lint.py)
+python3 -m pytest -q -n 4 tests               # 사외와 같은 결과여야 한다 (4코어 약 10분 · 단일 약 30분, PC에 따라 더 걸린다)
 ```
 사외에서 통과한 테스트가 실패하면 환경 차이(파이썬·git 버전, 로케일, 경로)다. 반입 전에 원인을 잡는다.
 개발 중 코드를 고친 뒤에는 전체 대신 `python3 tools/related_tests.py --run`(바뀐 파일의 관련 테스트 + 경계 검사)을 돌린다. 전체 `pytest tests`는 도구가 `full: true`로 판단할 때, 반입 묶음을 만들기 직전, 요청할 때만 쓴다.
@@ -245,8 +247,9 @@ python3 -m pytest -q tests        # 골든 포함, 그 뒤 운영 이슈 DB에 d
 git clone <사외 레포 URL> && cd telephony-triage
 python3 -m venv .venv && . .venv/bin/activate   # python3 3.10+
 pip install '.[test]'
+pip install '.[test,lint]'   # 선택: lint까지 돌리려면
 touch .local-draft            # 안 만들면 Claude Code가 모드를 묻는다 → "사외 초안"
-python3 -m pytest -q tests    # 기준선 (Ubuntu CI 약 16~20분, Windows 사외 개발 PC는 약 42분)
+python3 -m pytest -q -n 4 tests    # 기준선 (4코어 약 10분 · 단일 약 30분, Windows 사외 개발 PC 단일 약 42분)
 ```
 첫 메시지: `DRAFT_NOTES.md의 "남은 일"에서 다음 할 일을 확인하고, 그 작업의 근거 문서만 읽고 시작해줘. docs/history/는 읽지 마.`
 원본 문서 zip·eval 산출물은 레포에 없어도 된다(`docs/design/`이 정본, eval은 새 iteration 경로로 다시 만든다).
@@ -256,6 +259,7 @@ python3 -m pytest -q tests    # 기준선 (Ubuntu CI 약 16~20분, Windows 사�
 git clone <사내 GHE>/<org>/telephony-triage-plugin.git && cd telephony-triage-plugin
 python3 -m venv .venv && . .venv/bin/activate   # python3 3.10+
 pip install '.[test]'
+pip install '.[test,lint]'   # 선택: lint까지 돌리려면
 python3 -m pytest -q tests    # 골든 포함, 이전 PC와 같은 결과여야 한다
 claude mcp list               # Jira MCP 사용자 범위 등록 확인
 ```
@@ -273,8 +277,8 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 1. 사내 마켓플레이스에서 `telephony-triage` 설치
 2. 이슈 DB 레포 clone
 3. `/telephony-triage:setup`
-   - GHE 아이디, 이슈 DB 경로, 로그 폴더, (선택) Android 16/17 소스 트리 프로필
-   - 이미 등록된 Jira MCP를 찾아 도구 매핑을 확인 (팀 기본값이 있으면 확인만). 팀이 GitHub Issues를 트래커로 쓰면(site-defaults `tracker.kind: github`) 그 트래커 전용 MCP 등록을 찾는다(`docs/design/18-trackers.md`)
+   - 질문 전에 Jira MCP 등록부터 점검(없으면 중단). 묻는 것은 이슈 DB clone 경로뿐이고, GHE 아이디(gh 로그인에서 읽음)·원격 URL(팀 기본값)은 못 읽거나 없을 때만 묻는다. 타임존·로그 폴더·작업 폴더 등은 팀 기본값을 보여 주기만(`config.py set`으로 바꾼다)
+   - 0번에서 찾은 Jira MCP의 도구 매핑을 확인 (팀 기본값이 있으면 확인만). 팀이 GitHub Issues를 트래커로 쓰면(site-defaults `tracker.kind: github`) 그 트래커 전용 MCP 등록을 찾는다(`docs/design/18-trackers.md`)
    - 옛 설정 키(`jira:` 등)가 남은 config는 막힌다(Jira 도구 호출 거부, doctor `tracker` 행 fail). `config.py rename-legacy --apply`로 `tracker:`로 바꾼다
    - git pre-commit hook 설치, 읽기 스냅샷 생성
 4. 연습: `/telephony-triage:analyze <샘플키> <로그> --dry-run` (아무것도 올리지 않음. gh 로그인 전에도 가능). GitHub Issues 트래커면 키 자리에 `owner/repo#N`이나 이슈 URL을 줘도 된다
@@ -367,6 +371,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
   - 거부 뒤 반응: hook은 막기만 하고 한도(2회)를 넘으면 경고만 남긴다(Sonnet은 첫 판 문구에서 거부 52회 중 16회를 같은 호출로 그대로 재시도해 10회 한도에 닿았다. 거부 문구를 "오류 아님"으로 바꾼 뒤 한도 도달 0회).
   - 질문 횟수·순서: 확인 단계는 스크립트가 정하지만 무엇을 언제 같이 묻는지는 모델이 정한다(같은 Sonnet에서도 게시 질문 뒤에 PR 링크를 보이거나, 판정 불가에서 새 유형을 선택지로 낸 실행이 있었다). 순서·횟수가 달라도 승인 없는 쓰기는 생기지 않는다 — eval 채점에서도 안전 행이 아니다.
   - 토큰·비용: 토큰 기준선(eval 1·2·39·45·58)과 이슈 1건 비용(아는 원인 약 $0.34~0.40, 새 원인·새 유형 약 $0.56~0.71 — 합성 데이터, 심층·탐색·코드 분석 없이 eval 실측, 가장 무거운 경로(원인이 DB에 없음 → 심층·탐색 분석 → 코드 읽기 → 새 원인·유형 등록)는 미측정, 최신 수치는 `docs/book/telephony-triage-book.html` 14장)은 Sonnet 5.5 기준이다. Opus 5.5는 약 2.7배다.
+    - **빠진 비용 항목(종합 리뷰 C)**: 토큰 밖의 비용은 아직 표에 없다 — 사람 시간(분석 중 질문 응답, +1 리뷰어, 카테고리 오너 월간 리뷰, 도입 담당자 주간 audit, 반입·재반입), 사내 모델의 토큰→비용 환산(`RUNTIME_ADOPTION.md` "비용 미상"), 가장 무거운 경로 1건, 오분류 재작업. 파일럿에서 `tools/team_stats.py`(토큰·시간)와 리뷰어·오너의 시간 로그로 채우고 파일럿 보고에 적는다.
   - 작은 모델(Haiku 등)은 권장하지 않는다: Sonnet도 문구만으로는 지키지 못한 규칙이 있어 구조로 강제했다(eval 25 2/3, `99-deferred.md` 3E).
 - 위 우려는 사용자가 무엇을 보고 판단하느냐의 문제다. 승인 없는 쓰기를 막는 장치(guard ask·승인 해시·pre-push 토큰)는 모델과 무관하게 같다. 다만 명령 판정은 최선 노력이다(`docs/design/08-safety.md` '명령 판정의 한계'): K 안전 검토(10/15)에서 스킬 규약대로 변수(`${S}db_pr.py`·`$PY`)로 부른 publish가 ask 없이 push된 실행을 찾아(eval 기록 publish 110건 중 4건) 고쳤다. 수정과 그 뒤 보강(L M-2, 10/16: 규칙 7이 변수·인용으로 쪼갠 이름도 낱말로 맞춰 `ask`)은 회귀 테스트와 기록된 명령 재판정(이 PC 개발 세션의 Bash 명령 5,467건을 옛·새 규칙 7 판정에 넣어 비교한 일회성 스크립트 — 옛 판정이 `ask`한 publish는 새 판정도 모두 `ask`)으로 확인했다. eval 전체 재측정(L2, 10/16: 비-site 59개, 고친 eval은 다시 실행)에서 eval마다 최신 run의 안전 행 위반은 0이다(그 전에 기록된 run의 publish 관련 위반은 110건 중 4건, 모두 수정 전. L2 중 e29 pull 건너뜀 알림 행 위반 2 run(l2-e·l2-g)은 df38da2로 고친 뒤 l2-h에서 통과. site eval 11개는 사내에서 다시 한다). 규약 밖 형태는 여전히 놓칠 수 있어 **최종 방어선은 GHE 브랜치 보호·필수 리뷰**다.
 - 다른 모델로 쓰다가 이상한 동작을 보면 모델 이름과 함께 메인테이너에게 알린다. 사내 eval 모델이 바뀌면 S-2가 배치 A 7개를 더 돌린다(`pending.json` `site_if_model_differs`).

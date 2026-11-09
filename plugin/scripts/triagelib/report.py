@@ -40,8 +40,10 @@ def _slot_number(value) -> int | None:
 def _unique_evidence(evidence: list) -> list:
     """증상·원인 시그니처가 같은 이벤트를 근거로 잡으면 리포트에 같은 줄이 두 번 나온다. 이벤트마다 한 번만 둔다
     (`line_ref`의 파일·줄 번호 — 내장·파생 이벤트는 원본 줄과 줄 위치를 공유한다. 없으면 `event_index`, 그것도 없으면
-    시각·태그·메시지). 표시용이고 match.json·점수는 그대로다."""
-    seen, out = set(), []
+    시각·태그·메시지). 표시용이고 match.json·점수는 그대로다. 같은 이벤트면 개수(`count`·`_count`, min_count ≥ 2)가 있는
+    쪽을 그 자리에 남긴다 — 앞선 조건이 개수 없이 같은 줄을 잡아도 리포트 ` ×N`이 사라지지 않게."""
+    seen: dict = {}
+    out = []
     for e in evidence:
         ref, idx = e.get("line_ref"), e.get("event_index")
         ref_pos = events.ref_key(ref)
@@ -52,8 +54,10 @@ def _unique_evidence(evidence: list) -> list:
         else:
             key = ("m", e.get("ts"), e.get("tag"), e.get("msg"))
         if key not in seen:
-            seen.add(key)
+            seen[key] = len(out)
             out.append(e)
+        elif (e.get("count") or e.get("_count")) and not (out[seen[key]].get("count") or out[seen[key]].get("_count")):
+            out[seen[key]] = e
     return out
 
 
@@ -63,28 +67,55 @@ def _error_line(e: dict) -> str:
             + (f" (phone {e['phone']})" if e.get("phone") is not None else ""))
 
 
+def _row_key(e: dict) -> tuple:
+    """행 키: 줄 위치(`line_ref`의 파일 순번·줄 번호)가 있으면 그것 — 같은 원 줄에서 나온 원 줄 기록과 파생 이벤트는 줄 위치를
+    공유하고(`_unique_evidence`와 같은 기준), 다른 슬롯·다른 파일·같은 문구의 반복은 줄 위치가 다르다. 없으면
+    (시각, 태그, 메시지, 슬롯, pid)."""
+    pos = events.ref_key(e.get("line_ref"))
+    if pos is not None:
+        return ("l", *pos)
+    return ("m", e.get("ts"), e.get("tag"), e.get("msg"), e.get("phone_id"), e.get("pid"))
+
+
+def _joinable(row: dict, e: dict) -> bool:
+    """줄 위치 없는 이벤트(외부 파서 등)를 같은 (시각, 태그, 메시지)의 행에 붙여도 되나 — 슬롯·pid가 서로 모르거나 같을 때만."""
+    return all(a is None or b is None or a == b for a, b in ((row["phone"], e.get("phone_id")), (row["pid"], e.get("pid"))))
+
+
 def merge_rows(events: dict) -> list[dict]:
-    """같은 (시각, 태그, 메시지)의 원 줄과 파생 이벤트를 한 줄로 합친다(처음 본 순서, 이벤트 표시는 `marks`).
+    """같은 원 줄에서 나온 원 줄 기록과 파생 이벤트를 한 줄로 합친다(처음 본 순서, 이벤트 표시는 `marks`).
+
+    합치는 기준은 줄 위치(`_row_key`)다. 종합 리뷰 F2: 예전 키 (시각, 태그, 메시지)는 다른 SIM 슬롯·다른 pid·다른 파일의
+    같은 문구를 한 줄로 합쳐 둘째 슬롯의 장애가 타임라인·모듈 뷰·근거 원문에서 사라졌다. 줄 위치가 없는 이벤트는 같은
+    (시각, 태그, 메시지)의 행 가운데 슬롯·pid가 맞는 첫 행에 붙이고(`_joinable`), 없으면 새 행이다.
 
     그리지 않는 키도 싣는다: `idx`(합친 순서), `cat`(이벤트 없는 첫 기록의 category_hint, 없으면 처음 나온 hint),
     `ril`(그 기록의 ril 또는 None), `pid`, `line_ref`. 모듈 타임라인·후보 계산(`module`)과 근거 검사가 같은 줄을 쓴다.
     """
     rows: dict[tuple, dict] = {}
-    raw_seen: set[tuple] = set()
+    out: list[dict] = []
+    by_msg: dict[tuple, list[dict]] = {}
+    raw_seen: set[int] = set()
     for e in events.get("events") or []:
-        k = (e.get("ts"), e.get("tag"), e.get("msg"))
+        k = _row_key(e)
         row = rows.get(k)
+        if row is None and k[0] == "m":
+            row = next((r for r in by_msg.get(k[1:4], ()) if _joinable(r, e)), None)
+            if row is not None:
+                rows[k] = row
         if row is None:
             row = rows[k] = {"ts": e.get("ts"), "tag": e.get("tag"), "msg": e.get("msg"), "level": e.get("level"),
-                             "phone": e.get("phone_id"), "marks": [], "idx": len(rows), "cat": None, "ril": None,
+                             "phone": e.get("phone_id"), "marks": [], "idx": len(out), "cat": None, "ril": None,
                              "pid": e.get("pid"), "line_ref": e.get("line_ref")}
+            out.append(row)
+            by_msg.setdefault((e.get("ts"), e.get("tag"), e.get("msg")), []).append(row)
         if e.get("event"):
             fields = ",".join(f"{f}={v}" for f, v in sorted((e.get("fields") or {}).items()))
             mark = f"{e['event']}({_clip(fields, 80)})" if fields else str(e["event"])
             if mark not in row["marks"]:
                 row["marks"].append(mark)
-        elif k not in raw_seen:                    # 원 줄 기록이 이 줄의 분류·RIL·위치를 정한다
-            raw_seen.add(k)
+        elif id(row) not in raw_seen:              # 원 줄 기록이 이 줄의 분류·RIL·위치를 정한다
+            raw_seen.add(id(row))
             if e.get("category_hint") is not None:
                 row["cat"] = e.get("category_hint")
             if e.get("ril") is not None:
@@ -94,7 +125,9 @@ def merge_rows(events: dict) -> list[dict]:
             row["cat"] = e.get("category_hint")
         if row["phone"] is None:
             row["phone"] = e.get("phone_id")
-    return list(rows.values())
+        if row["pid"] is None:
+            row["pid"] = e.get("pid")
+    return out
 
 
 def select_rows(rows: list[dict], around: str | None, limit: int) -> tuple[list[dict], int]:
@@ -431,6 +464,7 @@ class ReportMixin:
             cand.pop("_cause_unjudged", None)
             for e in cand["evidence"]:
                 e.pop("_ref", None)
+                e.pop("_count", None)
         final = fit(final)
         violation = schema_violation(final)
         if violation:
@@ -448,6 +482,7 @@ class ReportMixin:
             cand.pop("_cause_unjudged", None)
             for e in cand["evidence"]:
                 e.pop("_ref", None)
+                e.pop("_count", None)
         result = final
         (self.job / "analysis.json").write_text(dumps(result) + "\n",
                                                 encoding="utf-8", newline="\n")
@@ -482,10 +517,14 @@ class ReportMixin:
                 parts.append("없음 " + ", ".join(x["missing"]))
             if p.get("blocked_by"):
                 parts.append(f"막음 must_not_match {p['blocked_by']}")
-            if x.get("order"):
+            if x.get("order") and x.get("gap_sec") is not None:     # 순서는 맞고 간격만 넘음 — "순서"라고 쓰지 않는다
+                parts.append(f"간격 넘음 {' → '.join(x['order'])} {x['gap_sec']:g}초(sequence_within_sec 초과)")
+            elif x.get("order"):
                 parts.append("순서 어긋남 " + " → ".join(x["order"]))
             if x.get("width_sec") is not None:
                 parts.append(f"한 구간에 안 듦(가장 가까운 폭 {x['width_sec']:g}초)")
+            elif p["kind"] == "window":     # min_count ≥ 2 조건이 있으면 한 건씩 고른 폭을 내지 않는다
+                parts.append("한 구간에 안 듦")
             body = f"{head} — {' / '.join(parts)}" if parts else head
             block = [_clip_bytes(body, 220)]
             same = memo = False
@@ -515,6 +554,27 @@ class ReportMixin:
                 break
             lines += text
         return lines
+
+    def _conclusion(self, cands: list, unjudged: dict) -> str:
+        """결론 한 줄(후보 줄 바로 앞): 분류 결과 한 문장과 다음 행동. 판정은 아래 줄들과 같다(새 정보 없음) — 엔지니어가 이 줄만
+        보고 다음 행동을 고르게. 규칙 일치 수준은 진단 확신이 아니다."""
+        nxt = ("기록 없음(분석 전용)" if self.analysis_only else "아래 후보를 보고 Step 7에서 분류를 확정하거나 다른 원인을 고른다")
+        if cands:
+            top = cands[0]
+            label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
+            if top["cause"]:
+                return (f"결론: {top.get('category')} > {top['type']} > {top['cause']} {top['title']} — 규칙 일치 {label}"
+                        f"(진단 확신 아님). 다음: {nxt}")
+            if top.get("_cause_unjudged"):
+                return (f"결론: 증상은 {top['type']}에 맞으나 원인 시그니처가 판정 불가(시간 초과·오류). 다음: 관리자에게 시그니처 확인을 "
+                        f"요청하고, 원인은 탐색 분석(동의 뒤)·로그 추가(--more-logs)로 찾는다")
+            return (f"결론: 증상은 {top['type']}에 맞으나 아는 원인과 맞지 않음(원인 미확인). 다음: 탐색 분석(동의 뒤) 또는 "
+                    f"로그 추가(--more-logs), 그래도 없으면 원인 미확정으로 기록")
+        if unjudged.get("count"):
+            return ("결론: 판정 불완전 — 시그니처 시간 초과·오류로 일부 유형을 판정하지 못함. 다음: 관리자에게 시그니처 확인을 요청하고 "
+                    "'후보 없음'으로 단정하지 않는다")
+        return ("결론: 아는 증상·원인과 맞는 후보 없음. 다음: 아래 설명 기반 유사 후보·오류 이벤트를 보고 탐색 분석(동의 뒤) 또는 "
+                "로그 추가(--more-logs), 새 유형이면 Step 7에서 등록")
 
     def render_report(self, r: dict, anchor: dict | None = None) -> tuple[str, list[str]]:
         """`report.md` 본문과, 사용자에게 꼭 보여야 하는 줄(`must_show`: 우선순위 순, 줄 앞 "- " 없이, 최대 `MUST_SHOW_MAX`개)을 돌려준다."""
@@ -576,6 +636,8 @@ class ReportMixin:
             lines.append("- 스텝 기준 우선 유형 (순위 참고만, 점수·S/C 불변): " + ", ".join(self.focus))
         cands = r["candidates"]
         unjudged = r.get("unjudged") or {}
+        # 한 문장 결론(종합 리뷰 A): 머리 알림(분석 전용·읽기 전용·실패 스텝·시계) 다음, 후보 줄 바로 앞. must_show 아님(새 정보 없음)
+        lines.append("- " + self._conclusion(cands, unjudged))
         if cands:
             top = cands[0]
             label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
@@ -586,14 +648,20 @@ class ReportMixin:
             else:
                 cause = "원인 미확인"
             lines.append(f"- 분류 후보: {top.get('category')} > {top['type']} > {cause} "
-                         f"(규칙 일치 점수 {top['score']}, 일치 수준 {label} — 진단 확신도 아님"
+                         f"(규칙 일치 점수 {top['score']}, 일치 조건 {top.get('matched_conditions', len(top['evidence']))}개, "
+                         f"일치 수준 {label} — 진단 확신도 아님"
                          f"{'' if top['C'] else (', 유형 일치·원인 판정 불가' if top.get('_cause_unjudged') else ', 유형 일치·원인 미확인')})")
             lines.append(f"- 근거 로그 (마스킹, 슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
-            lines += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ({e['_ref']})" if e.get("_ref") else "")
+            lines += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ×{e['_count']}" if e.get("_count") else "")
+                      + (f" ({e['_ref']})" if e.get("_ref") else "")
                       for e in top["evidence"]]
             basis = (r.get("_partial") or {}).get("absence_basis")
             if basis:      # must_not_match에 기대는 시그니처: 그 줄이 빌드에서 사라져도 같은 결과(판정 불변, must_show 아님)
-                lines.append(f"  - 없음 근거 포함: must_not_match {basis['pattern']} — 이 줄이 빌드에서 사라져도 같은 결과(03 §5.7)")
+                lines.append(f"  - 없음 근거 포함: must_not_match {basis['pattern']} — 이 줄이 빌드에서 사라져도 같은 결과")
+                for u in (basis.get("unverifiable") or [])[:2]:    # 수집 태그 줄이 0줄: 공허하게 참일 수 있다 → must_show(과신 방지)
+                    # 패턴 원문(정규식 메타 문자)은 위 줄에만 — must_show는 Jira 본문에 글자 그대로 들어가므로 wiki 마크업과 겹치지 않게
+                    lines.append(add(6, f"배제 조건 검증 불가: {u['signature']}의 must_not_match 태그 {u['anchor']} 줄이 이 로그에 0줄 — "
+                                        "그 버퍼·태그가 수집되지 않았으면 '없음'은 확인된 것이 아니다(S/C·점수 불변, 일치 수준 과신 금지)"))
             jira_slot = (r.get("issue") or {}).get("sim_slot")
             slot = _slot_number(jira_slot)
             if slot is not None and top["phones"] and slot not in top["phones"]:
@@ -609,10 +677,10 @@ class ReportMixin:
                 lines.append(f"- 순위 참고: 규칙 일치 점수 동점 후보 {n}개 — 발생 시각 근접·키워드 근거 순으로 정렬했다(원인 확정 아님)")
         else:
             if unjudged.get("count"):
-                lines.append(f"- 분류 후보: **판정 불완전** — S=1인 유형 없음, 판정 불가 유형 {unjudged['count']}개 "
+                lines.append(f"- 분류 후보: **판정 불완전** — 증상 시그니처에 맞는 유형 없음, 판정 불가 유형 {unjudged['count']}개 "
                              "(후보 없음으로 단정하지 않음)")
             else:
-                lines.append("- 분류 후보: **후보 없음** (S=1인 유형 없음)")
+                lines.append("- 분류 후보: **후보 없음** (증상 시그니처에 맞는 유형 없음)")
             hints = r.get("no_candidate") or {}
             lines.append("- 설명 기반 유사 후보: " + (", ".join(f"{h['id']} {h['title']}" for h in hints.get("search_hits") or [])
                                                  or "없음"))
@@ -631,7 +699,7 @@ class ReportMixin:
                 ids = ", ".join((unjudged.get("types") or []) + (unjudged.get("causes") or []))
                 n = f"{unjudged['count']}" + (f"·원인 {unjudged['cause_count']}" if unjudged.get("cause_count") else "")
                 lines.append(add(6, f"판정 불가 유형: {n}개" + (f" ({ids})" if ids else "") + f" — {where}. "
-                                    "후보 순위·'후보 없음'·'원인 미확인'은 불완전하다 (matcher.pattern_timeout_ms·시그니처 확인)"))
+                                    "후보 순위·'후보 없음'·'원인 미확인'은 불완전하다 (관리자: 이슈 DB matcher.pattern_timeout_ms·그 시그니처 확인)"))
             else:     # 충족된 유형의 다른 시그니처만 오류: S/C는 그대로, 근거 선택만 달라질 수 있다
                 lines.append(add(6, f"{where} — 충족된 유형의 다른 시그니처라 S/C는 그대로(근거 선택은 달라질 수 있다)"))
         if anchor and (not cands or not cands[0]["C"]):
