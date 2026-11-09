@@ -24,11 +24,12 @@ H C1+D: case는 합성(`synthetic: true`) 또는 마스킹 발췌(`synthetic: fa
 `token_goal`(with − without ≤ 0이면 met)이 남는다.
 
 run 디렉토리마다 `result.json`(run 결과 객체 v1: 자식 결과·펼친 파일·문서 순서·S2 존재 사실, cwd 자리는 `{CWD}`)을 남긴다.
-`--regrade`는 자식 없이($0) 그것으로 지금 채점기를 다시 돌려 관문·모듈 기록을 다시 만든다(비용·토큰은 run 기록 그대로, 옛 grading은
-`grading.v<판>.json`). result.json이 없는 run(grader 3 이전)이 하나라도 있으면 "재채점 불가"만 알리고, `--record`면 기록에
-`regrade_unavailable: true`만 더한다. S4(원문 6줄 이상 인용)는 답 형식과 무관하게 모든 줄을 조각(` — `·`|`로 나눔, 울타리·들여 쓴
-줄은 줄 그대로)으로 보고 조각 하나에 통째로 든 원본 메시지를 센다 — 설명 글(한글) 속 `코드` 인용구와 같은 조각의 더 긴 메시지에 든
-접두 메시지는 세지 않는다.
+`--regrade`는 자식 없이($0) 그것으로 지금 채점기를 다시 돌려 관문·모듈 기록을 다시 만든다(비용·토큰과 지문 — 프롬프트 틀·입력·문서
+sha, doc_bytes — 은 run 기록 그대로, 옛 grading은 `grading.v<판>.json`). 지금 트리와 다른 지문은 `regraded.current_differs`에
+적고, 그때 `--record`는 거부(종료 2)하며 그 기록과의 한 arm 합치기도 "기록이 낡음"으로 거부한다. result.json이 없는 run(grader 3
+이전)이 하나라도 있으면 "재채점 불가"만 알리고, `--record`면 기록에 `regrade_unavailable: true`만 더한다. S4(원문 6줄 이상
+인용)는 답 형식과 무관하게 모든 줄을 조각(` — `·`|`로 나눔, 울타리·들여 쓴 줄은 줄 그대로)으로 보고 조각 하나에 통째로 든 원본
+메시지를 센다 — 설명 글(한글) 속 `코드` 인용구와 같은 조각의 더 긴 메시지에 든 접두 메시지는 세지 않는다.
 
 사내 게이트웨이 모델(Claude Code + 사내 모델, docs/development/RUNTIMES.md): CLI가 모르는 모델이면 result의 costBasis가
 "unknown"이고 비용은 자리 표시 값이라 쓰지 않는다 — run 비용은 null(비용 행 skipped), 단가(`unit_cost_usd`)는 남기지 않고 토큰만
@@ -37,7 +38,8 @@ run 디렉토리마다 `result.json`(run 결과 객체 v1: 자식 결과·펼친
 
 종료 코드: 0 관문 pass·tie(·dry-run), 1 fail·invalid·incomplete, 2 사용·환경 오류(claude 없음, case 오류, arm 고정값
 불일치, cwd 문제, blocked·env_error, 기존 반복 디렉토리). probe: 0 confined·unsupported, 1 not_confined·inconclusive,
-2 환경 오류. --regrade: 관문대로 0·1, 재채점 불가(result.json 없음)는 0, 사용 오류 2(기록·plan.json 없음, 지금 없는 case).
+2 환경 오류. --regrade: 관문대로 0·1, 재채점 불가(result.json 없음)는 0, 사용 오류 2(기록·plan.json 없음, 지금 없는 case,
+--record인데 지금 트리와 다름).
 """
 from __future__ import annotations
 
@@ -150,7 +152,9 @@ EXPLORE_EXPECT_KEYS = {"accept", "trap"}
 ACCEPT_KEYS, ACCEPT_OPTIONAL = {"layer", "daemon", "evidence"}, {"show"}
 TRAP_MATCH_KEYS, TRAP_OPTIONAL = ("layer", "daemon", "label"), {"show"}
 SHOW_MAX = 80
-GRADER_VERSION = 4              # 채점 코드가 바뀌면 올린다 (3: explore 출력 계약을 실사용과 통일, 코덱스 리뷰 F4; 4: S4를 인용 줄 단위·접두 중복 제거로) — 한 arm 기록 합치기 조건(설계 F3 후속)
+GRADER_VERSION = 4              # 채점 코드가 바뀌면 올린다 (3: explore 출력 계약을 실사용과 통일, 코덱스 리뷰 F4; 4: S4를 인용 줄 단위·접두 중복 제거로;
+                                # 4 그대로: 코덱스 리뷰 02e0ec2 F04 S7 결정 토큰 `키: 값` — grader 4 run이 아직 없어 판을 안 올림)
+                                # — 한 arm 기록 합치기 조건(설계 F3 후속)
 EXPLORE_REASONS = {"no_candidate", "cause_unconfirmed"}
 NAME_RX = re.compile(r"^[a-z0-9][a-z0-9-]{2,60}$")
 KEY_RX = re.compile(r"^MOCK-9\d{3}$")
@@ -1887,7 +1891,8 @@ def finish(args, src: Source, cases: list[Case], rows: list[dict], gradings: dic
               "S3는 C0의 짧은 로그(≤100줄)로는 시험되지 않는다. 규칙 제안 R1~R5 미검증(C0 범위 밖)."]
     if rg := base.get("regraded"):
         lines.append(f"재채점: grader {rg['from_grader']} → {GRADER_VERSION}, 자식 실행 없음($0, 비용·토큰은 run 기록 그대로)"
-                     + (f" — 지금 트리와 다름: {', '.join(rg['differs'])} (자식은 옛 판으로 돌았다)" if rg.get("differs") else ""))
+                     + (f" — 지금 트리와 다름: {', '.join(rg['current_differs'])} (자식은 옛 판으로 돌았다, 기록 지문은 run 때 것)"
+                        if rg.get("current_differs") else ""))
     _emit(args, {**entry, "gate": shown_gate, "iteration_path": str(iter_dir)}, lines)
     return code
 
@@ -1895,9 +1900,11 @@ def finish(args, src: Source, cases: list[Case], rows: list[dict], gradings: dic
 def regrade(args, src: Source, cases: list[Case]) -> int:
     """`--regrade [<반복 디렉토리>]`(자식 없음, $0): run마다 result.json으로 지금 채점기(S0–S7·판정 행·동률 규칙·관문)를 다시 돌려
     모듈 기록을 다시 만든다. 디렉토리를 안 주면 기록(`module_offsite_results.json`)의 `iteration`(한 arm씩 합친 기록은 `iterations`).
-    비용·토큰·시간·모델은 run 기록 그대로, 프롬프트 틀·입력·문서 sha는 `--record`처럼 지금 트리에서 다시 잰다(다르면 `regraded.differs`).
-    새 grading.json을 쓰고 옛 것은 `grading.v<그 파일의 판>.json`으로(이미 있으면 덮지 않는다 — 반복 디렉토리의
-    module_offsite_results.json·benchmark.json도 같다). 한 arm씩 합친 기록(arm마다 디렉토리)은 run grading과 모듈 기록만 다시 쓴다.
+    비용·토큰·시간·모델과 지문(프롬프트 틀·입력·문서 sha, case별 `doc_bytes`)은 run 기록 그대로다(자식이 본 것은 옛 판). 지금 트리와
+    다른 항목(prompt·inputs·docs sha, case 집합, `expect_sha256:<case>`)은 `regraded.current_differs`에만 적고, 그때 `--record`는
+    파일을 쓰기 전에 사용 오류(2)로 거부한다(그 기록과의 한 arm 합치기도 `merge_single_arm`이 거부). 새 grading.json을 쓰고
+    옛 것은 `grading.v<그 파일의 판>.json`으로(이미 있으면 덮지 않는다 — 반복 디렉토리의 module_offsite_results.json·
+    benchmark.json도 같다). 한 arm씩 합친 기록(arm마다 디렉토리)은 run grading과 모듈 기록만 다시 쓴다.
     디렉토리·plan.json이 없으면 사용 오류(2). `--record`는 기록의 반복 디렉토리(실제 경로)일 때만.
     plan.json은 있는데 run 하나라도 result.json이 없으면 재채점하지 않고 알린다 — `--record`면 그 모듈 기록에
     `regrade_unavailable: true`만 더한다. 기록의 `regraded`는 `from_grader`(직전 판)·`original_grader`(처음 판)를 잇는다."""
@@ -1952,7 +1959,7 @@ def regrade(args, src: Source, cases: list[Case]) -> int:
     if not isinstance(old, dict):
         raise UsageError(f"반복 디렉토리에 {args.module} 모듈 기록 없음: {first}")
     rows, gradings, done = [], {}, []
-    docs_sha, inputs_sha, doc_bytes = {}, {}, {}
+    docs_sha, inputs_sha = {}, {}
     for name, arm, n, run_dir in runs:
         case = by_name[name]
         res, grading = regrade_run(case, json.loads((run_dir / "result.json").read_text(encoding="utf-8")), run_dir)
@@ -1962,8 +1969,6 @@ def regrade(args, src: Source, cases: list[Case]) -> int:
         files, docs = arm_sources(case, arm, src)
         inputs_sha.update({f"{name}/{rel}": sha256(p.read_bytes()) for rel, p in files})
         docs_sha.update({f"{arm}/{rel}": sha256(p.read_bytes()) for rel, p in docs})
-        if arm == "with":
-            doc_bytes.setdefault(name, sum(len(p.read_bytes()) for _, p in docs))
     ran = {c for c, _, _, _ in runs}
     cases = [c for c in cases if c.name in ran]
     arms = [a for a in ARMS if any(r["arm"] == a for r in rows)]
@@ -1973,13 +1978,18 @@ def regrade(args, src: Source, cases: list[Case]) -> int:
     old_cases = old.get("cases") or {}
     differs = [k for k, v in now.items() if old.get(k) != v] + (["cases"] if set(old_cases) != ran else []) + [
         f"expect_sha256:{c.name}" for c in cases if (old_cases.get(c.name) or {}).get("expect_sha256") != expect_sha(c)]
+    if differs and args.record:                     # 파일을 하나도 쓰기 전에
+        raise UsageError(f"--record 거부: 지금 트리와 다르다({', '.join(differs)}) — 자식은 옛 판으로 돌았고 기록 지문은 run 때 "
+                         "것이다. --record 없이 재채점만 하거나 두 arm을 다시 돌린다")
+    # 지문(프롬프트 틀·입력·문서 sha·doc_bytes)은 run 때 것 그대로 — 지금 트리로 덮으면 한 arm 합치기가 낡음을 못 잡는다
     base = {k: v for k, v in old.items() if k not in ("cases", "gate", "unit_cost_usd", "total_cost_usd", "cost_basis",
                                                       "init_model", "regrade_unavailable", "regrade_note", "regraded")}
+    doc_bytes = {name: rec.get("doc_bytes") for name, rec in old_cases.items() if isinstance(rec, dict)}
     prev = old.get("regraded") if isinstance(old.get("regraded"), dict) else {}
-    base.update(now, grader_version=GRADER_VERSION,
+    base.update(grader_version=GRADER_VERSION,
                 regraded={"from_grader": old_ver,
                           "original_grader": prev.get("original_grader", prev.get("from_grader", old_ver)),
-                          "at": _utc(), **({"differs": differs} if differs else {})})
+                          "at": _utc(), **({"current_differs": differs} if differs else {})})
     for run_dir, grading in done:                   # 모두 채점한 뒤에만 파일을 바꾼다
         keep_old(run_dir / "grading.json")
         write_json(run_dir / "grading.json", grading)
@@ -2080,9 +2090,13 @@ def merge_single_arm(old, new: dict, arm: str, src: Source, cases: list[Case], r
     같고(아니면 "정답 바뀜 — 두 arm 다시 실행"), case마다 두 arm의 run 수가 같고, 다른
     arm의 문서(`docs_sha256`의 `<다른 arm>/…`)가 지금 파일과 같고, 다른 arm 기록이 관문 재계산 칸을 다 가진다.
     아니면 UsageError `"<다른 arm> 기록이 낡음 — 두 arm 모두 다시"`. (관문은 pass1 합계를 비교하므로 run 수가
-    다르면 진 arm이 이긴 것으로 보일 수 있다.)
+    다르면 진 arm이 이긴 것으로 보일 수 있다.) 기존 기록이 재채점 때 지금 트리와 달랐으면(`regraded.current_differs`) 먼저 거부한다.
     """
     other = "without" if arm == "with" else "with"
+    rg = old.get("regraded") if isinstance(old, dict) else None
+    if isinstance(rg, dict) and rg.get("current_differs"):
+        raise UsageError(f"{other} 기록이 낡음 — 재채점 때 지금 트리와 달랐다(regraded.current_differs: "
+                         f"{', '.join(map(str, rg['current_differs']))}) — 두 arm 모두 다시")
     stale = UsageError(f"{other} 기록이 낡음 — 두 arm 모두 다시")
     if not isinstance(old, dict) or old.get("prompt_sha256") != new["prompt_sha256"] \
             or old.get("inputs_sha256") != new["inputs_sha256"] or set(old.get("cases") or {}) != set(new["cases"]) \

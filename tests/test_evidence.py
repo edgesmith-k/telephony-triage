@@ -101,6 +101,7 @@ def test_check_quotes_counts_and_script_note():
                                  "modem firmware crashed with assertion in qmi_wds handler",
                                  "〔script 반복 3번 접음〕", "raw value"], source, tags, raw_items=frozenset({3}))
     assert res["n"] == 4 and res["fabricated"] == 2 and res["raw"] == 1 and res["first"].startswith("modem firmware")
+    assert res["verdicts"] == ["ok", "fabricated", "fabricated", "raw"]          # 항목별, 입력 순서(Q01)
 
 
 def test_check_quotes_prefilter_same_verdicts_on_big_source():
@@ -176,3 +177,62 @@ def test_evidence_check_token_boundary_negation_and_any_key_value():
                     "netlink RTM_NEWROUTE failed → default route installed for rmnet0",   # 이어 붙인 둘째 조각의 부정어 삭제
                     "onSetupDataCallResult: status=0x1 cid=3"):                   # 16진 값 경계
         assert evidence.evidence_check(altered, source, tags)[0] == "fabricated", altered
+
+
+def test_evidence_check_colon_key_value_is_token():
+    """코덱스 리뷰 02e0ec2 F04: 임의 키 토큰이 `=`만 받아 `retry: 9`(원문 `retry: 0`)를 ok로 봤다. `키: 값`도 토큰이다. 값이
+    완결될 때만(뒤에 값 문자·`=`·`:`가 안 옴) 토큰이라 `onSetupDataCallResult: status`는 토큰이 아니고, 시각·태그도 아니다."""
+    tl = "\n".join([
+        "10:00:00.000 p0 I DNC SETUP_DATA_CALL completed retry: 0",
+        "10:00:01.000 p0 I RILJ subscriber imsi: <IMSI#2> state=READY",
+        "10:00:02.000 p0 I DNC-0 data call ended",
+        "10:00:03.000 p0 I DNC-0 onSetupDataCallResult: status=0x10 cid=3",
+    ])
+    source, tags = evidence.source_text(tl)
+    for genuine in ("SETUP_DATA_CALL completed retry: 0",
+                    "SETUP_DATA_CALL completed retry: 0 attempts",                # 설명 꼬리
+                    "subscriber imsi: <IMSI#2> state=READY",                      # 마스킹 토큰 값
+                    "SETUP_DATA_CALL completed retry: 0 → subscriber imsi: <IMSI#2> state=READY"):   # 줄 잇기
+        assert evidence.evidence_check(genuine, source, tags)[0] == "ok", genuine
+    for altered in ("SETUP_DATA_CALL completed retry: 9",
+                    "SETUP_DATA_CALL completed retry=9",
+                    "subscriber imsi: <IMSI#1> state=READY",
+                    "imsi: <IMSI#1>"):
+        assert evidence.evidence_check(altered, source, tags)[0] == "fabricated", altered
+    lines = tl.split("\n")
+    tokens = [[evidence._low(m.group(0)) for m in evidence.DECISION_TOKEN_RX.finditer(line)] for line in lines]
+    assert tokens[0] == ["retry:0"] and tokens[1] == ["imsi:<imsi#2>", "state=ready"]
+    assert tokens[2] == []                                       # 시각 `10:00:00`·태그 `DNC-0`는 토큰이 아니다
+    assert tokens[3] == ["status=0x10", "cid=3"]                 # `onsetupdatacallresult:status`는 토큰이 아니다(꼬리 lookahead)
+
+
+def test_evidence_check_tag_colon_and_colon_after_equals_value():
+    """F04 리뷰 회귀: ① logcat 습관 `태그: 메시지`(타임라인 행엔 태그 뒤 `:`가 없다)가 `→`·한글 연결어 뒤나 `D/RILJ:` 접두에서
+    `태그:첫낱말` 토큰이 돼 정상 인용이 fabricated였다 → 조각마다 `msg_part`, 키가 태그인 `:` 토큰은 뺀다. ② `=` 값 뒤 `:`
+    (`pcscf=<IP#1>:5060`)에서 꼬리 lookahead가 토큰을 다 없애 변조를 놓쳤다 → `=` 꼴은 뒤 `:`를 허용한다."""
+    tl = "\n".join([
+        "10:00:00.000 p0 I DNC-0 onSetupDataCallResult: status=0x10 cid=3",
+        "10:00:01.000 p0 I DataNetworkController onDataNetworkConnected apn ims interface rmnet0",
+        "10:00:02.000 p0 I RILJ SETUP_DATA_CALL completed retry: 0 cid 3",
+        "10:00:03.000 p0 I ofonod src/gprs.c:pri_activate_callback() Activating context failed",
+        "10:00:04.000 p0 I IMSS SIP REGISTER sent pcscf=<IP#1>:5060 transport udp",
+        "10:00:05.000 p0 I IMSS registration done IMSS = 3 transport udp",
+    ])
+    source, tags = evidence.source_text(tl)
+    # 태그 제외는 `태그: 낱말`만 — 키가 태그 이름이어도 `=` 꼴(`IMSS = 3`)은 토큰이라 값 변조를 잡는다(리뷰 재확인 2)
+    assert evidence.evidence_check("registration done IMSS = 3 transport udp", source, tags)[0] == "ok"
+    assert evidence.evidence_check("registration done IMSS = 4 transport udp", source, tags)[0] == "fabricated"
+    for genuine in ("onSetupDataCallResult: status=0x10 cid=3 → DataNetworkController: onDataNetworkConnected apn ims interface rmnet0",
+                    "D/RILJ: SETUP_DATA_CALL completed retry: 0 cid 3",
+                    "onSetupDataCallResult: status=0x10 cid=3 → ofonod: src/gprs.c:pri_activate_callback() Activating context failed",
+                    "SETUP_DATA_CALL completed retry: 0 cid 3 이후 DataNetworkController: onDataNetworkConnected apn ims interface rmnet0",
+                    "SIP REGISTER sent pcscf=<IP#1>:5060 transport udp"):
+        assert evidence.evidence_check(genuine, source, tags)[0] == "ok", genuine
+    for altered in ("D/RILJ: SETUP_DATA_CALL completed retry: 9 cid 3",                    # 태그 접두 뒤 `키: 값` 변조는 그대로 잡는다
+                    "SIP REGISTER sent pcscf=<IP#2>:5060 transport udp",
+                    "onSetupDataCallResult: status=0x1 cid=3 → DataNetworkController: onDataNetworkConnected apn ims interface rmnet0"):
+        assert evidence.evidence_check(altered, source, tags)[0] == "fabricated", altered
+
+    def tokens(s):
+        return [evidence._low(m.group(0)) for m in evidence.DECISION_TOKEN_RX.finditer(s)]
+    assert tokens("pcscf=<IP#1>:5060") == ["pcscf=<ip#1>"] and tokens("uri=sip:alice@example t=10:00:00") == ["uri=sip", "t=10"]

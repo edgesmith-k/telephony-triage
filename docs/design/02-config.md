@@ -131,6 +131,7 @@ platform_versions_supported: ["16", "17"]   # 지원 중인 플랫폼 버전 (06
 parser_backend:                      # 이 이슈 DB의 시그니처가 전제하는 파서 백엔드 (16-existing-assets.md §16.3)
   name: site                         # site | reference (android, 사외 초안은 reference) | <플랫폼>_reference (예: ofono_reference)
   min_version: <버전>                # 이보다 낮은 백엔드면 쓰기 차단, 분석은 경고 후 진행
+# signature_features: [min_count, sequence_within_sec]   # 시그니처가 쓰는 선택 필드 선언(04-parser-matching.md §5.11 (1)). 없으면 기본 필드만
 external_parsers: {}                 # 어댑터(외부 파서)를 쓰는 카테고리 고정. 예: {data: {adapter: site_data_existing, min_version: <버전>}}
                                      # 여기 있는 카테고리의 어댑터가 없거나 낮으면 백엔드 불일치와 같이 처리 (contracts.md §기존 자산 연결 계약)
 code_root_keys: [aosp, vendor_ril]   # code_refs에 쓸 수 있는 소스 루트 키

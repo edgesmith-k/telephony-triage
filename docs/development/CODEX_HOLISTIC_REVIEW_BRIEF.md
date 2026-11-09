@@ -70,7 +70,7 @@
 
 - **첫 종합 리뷰 반영**: A 묶음 428fe94(판정 P1 3건·측정 정정·guard 우회 2종·S1 미확인 Jira 읽기 ask), B 묶음 ddb2cac(재분류 보정·reviewer.ask·리포트 결론 줄·플랫폼 누수 시험), C 묶음 aca0470(표본내 분리·top1 동률 기준·특이도 정렬·retention), H① 3a416fa(플랫폼 이름 하드코드 13건 → `PlatformSpec.template`), F② 63204df(OpenCode 바이너리 의존을 `common/oc_version.py` 한 곳으로).
 - **코드 리뷰 후속(F·R·N)**: 08bb331 타임라인 합치기 키, 618ad06·028cc18 마스킹 사본 `JOB/logs-masked/`를 모델 읽기 대상으로, f136600 근거 원문 변조 검사, 4033c54 audit 중복 판정, 40fd558 team_stats 집계, 879e4a2 usage 미측정 구분, cc2516b retention 나이 정의, 77e2620 mask-copy 재실행, 961a790 module_eval top1 경고, d356d1d, 9db5b35 db_lint tag-unknown, 6bdd7fc analysis_minutes 범위 표기, c885b94 탐색 출력 계약 통일(GRADER 3).
-- **setup 단순화**: 33c9a79·7fd6fa2·1119d99·01ee905·9eb2434·97af144·9eca1bb — 질문 10→3, Jira MCP 점검을 0번으로(usable 비면 중단), site `issue_db.remote` 플랫폼별, setup.md 바이트 상한.
+- **setup 단순화**: 33c9a79·7fd6fa2·1119d99·01ee905·9eb2434·97af144·9eca1bb — config 질문(개인 입력 항목) 10→3, Jira MCP 점검을 0번으로(usable 비면 중단), site `issue_db.remote` 플랫폼별, setup.md 바이트 상한.
 - **contracts.md §3.2 분할**: c8136ea·44ac47b — 4KB 넘는 줄을 세부 블록으로(내용 불변), 참조 시험 범위 확대.
 - **guard 정밀 판정 축소(4-c)**: 7a97ef7·ad012e6·b78784b — gh 대상 해석 ≈750줄 삭제, 병합 계열(규칙 6·11)·규칙 5(ci_mode actions)만 deny→ask, Approve·기각·자동 병합·보호 변경·refs/remotes 위조는 deny, 설정 읽기 실패는 degraded, 판정 중 예외는 deny. 전제 `site_checks s4a.protection_guard`. 고정 탐침 176개(`tools/hook_probes.py`, `tests/fixtures/hook_probes.json`)로 전후 비교.
 - **정리 패스(lint)**: bbb8229·89415b9·6c4ea33·8b39f7d·5d347fa — ruff 0.17.4 규칙 묶음 고정(`pyproject [tool.ruff]`, `tools/lint.py`, 선택 `lint` extra, CI lint job), 죽은 코드 삭제, 안전 자동 수정 145곳, B023 18건 검토, `docs/development/LINT_REVIEW.md`(검토만 하는 PLW1510·BLE001 표), trigger_real 오류(미실행) 열.

@@ -38,12 +38,17 @@ COVER_BLOCK, UNCOVERED_MAX = 4, 12
 # `failed`→`succeeded`)를 ok로 봤다. 인용의 토큰을 뺀 가장 긴 조각(`ANCHOR_MIN`자 이상)이 든 원문 **한 줄**에 토큰이 모두 있어야 ok다.
 # 코덱스 리뷰 F1: ① 토큰 포함을 부분 문자열로 봐서 `status=1`이 `status=10`에 든다고 했다 → 토큰 경계(`_has_token`). ② `not` 삽입은
 # 토큰이 아니라 앵커에 들어가 앵커를 담은 줄이 없어 판정을 포기했다 → 부정·참/거짓 낱말도 토큰. ③ `retry=9` 같은 임의 `키=값`은
-# 토큰이 아니었다 → 인용의 모든 `키=값`·`키: 값` 조각이 토큰(값은 마스킹 토큰 `<IMSI#1>`도 받는다).
+# 토큰이 아니었다 → 인용의 모든 `키=값`·`키: 값` 조각이 토큰(값은 마스킹 토큰 `<IMSI#1>`도 받는다). 코덱스 리뷰 02e0ec2 F04: 임의
+# 키 분기가 `=`만 받아 `retry: 9`를 놓쳤다 → `키: 값` 분기를 따로 둔다. 값이 완결될 때만 토큰이다 — `=` 꼴은 뒤에 값 문자·`=`가
+# 안 올 때(`pcscf=<IP#1>:5060`·`t=10:00:00`처럼 `:`는 이어져도 된다), `:` 꼴은 `:`도 안 올 때. 아니면
+# `onSetupDataCallResult: status=0x10`의 `…Result: status`가 토큰이 돼 `status=0x1` 변조를 놓친다. 키는 글자로 시작해 시각은 아니다.
+# 로그 태그 뒤 `:`(logcat 습관 `D/RILJ: …`·`→ ofonod: …` — 타임라인 행엔 없다)는 토큰이 아니다(`_decision_tokens_altered`).
 NEGATION_WORDS = ("not", "no", "never", "cannot", "unable", "without")
 DECISION_TOKEN_RX = re.compile(
     r"\[PHONE\d+\]|\bphone[_ ]?id\s*[=:]\s*\d+|"
     r"\b(?:error|err|errno|cause|code|reason|status|state|result|rat|fail_cause|failcause|rc|ret)\b\s*[=:]?\s*[-A-Za-z0-9_]+(?:\(\d+\))?|"
-    r"\b[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?=[-A-Za-z0-9_<])[-A-Za-z0-9_.<>#]+(?:\(\d+\))?|"
+    r"\b[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?=[-A-Za-z0-9_<])[-A-Za-z0-9_.<>#]+(?:\(\d+\))?(?![-A-Za-z0-9_.<>#=])|"
+    r"\b[A-Za-z_][A-Za-z0-9_]*\s*:\s*(?=[-A-Za-z0-9_<])[-A-Za-z0-9_.<>#]+(?:\(\d+\))?(?![-A-Za-z0-9_.<>#=:])|"
     r"\b(?:failed|failure|fail|succeeded|success|rejected|reject|accepted|timeout|timed out|denied|disconnected|connected|"
     + "|".join(NEGATION_WORDS) + r"|true|false|enabled|disabled|null|none)\b",
     re.IGNORECASE)
@@ -281,17 +286,19 @@ def _dropped_negation(segment: str, line: str) -> bool:
     return any(m.group(0).lower() not in quoted for m in NEGATION_RX.finditer(low_line[start:end]))
 
 
-def _decision_tokens_altered(part: str, files_text: str) -> bool:
+def _decision_tokens_altered(part: str, files_text: str, tags: re.Pattern | None = None) -> bool:
     """인용 조각의 결정 토큰(`DECISION_TOKEN_RX`)이 원문에서 바뀌었나. 이어 붙인 조각마다: 기준 줄(`_reference_lines`) 가운데
     **한 줄**이 토큰을 모두(대소문자 무관, 토큰 경계 `_has_token`) 담고 인용이 빠뜨린 부정어(`_dropped_negation`)가 없으면 그대로다.
     기준 줄이 없으면 판정하지 않는다(False — 그 경우는 최장 일치·덮임 검사가 이미 판정했다). 이 검사는 인용이 원문
-    줄 그대로인지만 본다 — 인과 설명이 맞는지는 보증하지 않는다."""
+    줄 그대로인지만 본다 — 인과 설명이 맞는지는 보증하지 않는다. 조각마다 `msg_part`로 앞머리(시각·슬롯·레벨·태그)를 떼고,
+    키가 로그 태그인 `태그: 낱말`(`D/RILJ: …`처럼 앞머리가 아닌 자리)은 토큰으로 보지 않는다(`tags`가 None이면 태그는 그대로)."""
     lines = [line for line in files_text.split("\n") if line]
     # 조각 = 인용이 허용하는 줄 잇기(화살표·한글 연결어·시각, `RUN_SPLIT_RX`)로 나눈 것 — 토큰은 조각마다 그 기준 줄에서 본다
-    for segment in (seg.strip() for seg in RUN_SPLIT_RX.split(part) if seg and seg.strip()):
+    for segment in (msg_part(seg, tags) for seg in RUN_SPLIT_RX.split(part) if seg and seg.strip()):
         if len(segment) < ANCHOR_MIN:
             continue
-        tokens = sorted({_low(m.group(0)) for m in DECISION_TOKEN_RX.finditer(segment)})
+        tokens = sorted({_low(m.group(0)) for m in DECISION_TOKEN_RX.finditer(segment)
+                         if not (tags is not None and "=" not in m.group(0) and tags.match(m.group(0)))})   # `태그: 낱말`만 뺀다
         refs, _ = _reference_lines(segment, lines)
         if not refs:
             continue
@@ -313,7 +320,7 @@ def evidence_check(item: str, files_text: str, tags) -> tuple[str, list[tuple[st
             verdict = "ok" if (m >= 20 or m >= 0.6 * n) else "weak" if m >= 12 else "fabricated"
             if verdict != "fabricated" and _uncovered_run(part, files_text, tags) >= UNCOVERED_MAX:
                 verdict = "fabricated"
-            if verdict != "fabricated" and _decision_tokens_altered(part, files_text):
+            if verdict != "fabricated" and _decision_tokens_altered(part, files_text, tags):
                 verdict = "fabricated"
         detail.append((verdict, m, n))
         if verdict == "fabricated" or (verdict == "weak" and worst == "ok"):
@@ -354,7 +361,8 @@ def _subset(part_words: list[str], rows: list[str]) -> str:
 
 
 def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[int] = frozenset()) -> dict:
-    """인용 목록 판정 → {"n", "fabricated", "weak", "raw", "first"}.
+    """인용 목록 판정 → {"n", "fabricated", "weak", "raw", "first", "verdicts"}. `verdicts`는 항목별 판정
+    (ok | weak | fabricated | raw, 입력 순서 — check-output이 가설별로 나눈다).
 
     `〔script` 메모를 인용한 항목은 지어낸 것으로 센다. `raw_items`(check-output 마스킹이 바꾼 항목 = 원문 값이 든 인용,
     설치 스킬 모드만)는 `raw`로 세고 지어낸 것으로 세지 않는다. 원문이 256KB보다 크면 인용마다 8자 이상 낱말을 공유하는
@@ -362,12 +370,11 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
     """
     from common import masking
     rows = source.split("\n") if len(source) > BIG_SOURCE else None
-    res = {"n": len(items), "fabricated": 0, "weak": 0, "raw": 0, "first": None}
+    res = {"n": len(items), "fabricated": 0, "weak": 0, "raw": 0, "first": None, "verdicts": []}
     for i, item in enumerate(items):
         if i in raw_items:
-            res["raw"] += 1
-            continue
-        if "〔script" in item:
+            verdict = "raw"
+        elif "〔script" in item:
             verdict = "fabricated"
         else:
             text = source
@@ -375,10 +382,9 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
                 words = _WORD_RX.findall(" ".join(_quote_parts(item, tags)))
                 text = _subset(words, rows)
             verdict = evidence_check(item, text, tags)[0]
-        if verdict == "fabricated":
-            res["fabricated"] += 1
-            if res["first"] is None:
-                res["first"] = masking.mask_brief(item, 40)
-        elif verdict == "weak":
-            res["weak"] += 1
+        res["verdicts"].append(verdict)
+        if verdict != "ok":
+            res[verdict] += 1
+        if verdict == "fabricated" and res["first"] is None:
+            res["first"] = masking.mask_brief(item, 40)
     return res

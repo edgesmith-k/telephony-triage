@@ -182,7 +182,7 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
    python3 <설치된 plugin>/scripts/config.py set opencode.jira_read open --accept-error-bodies   # error-path가 pass가 아닐 때
    ```
    보내기 직전에 Jira 오류 본문을 숨긴다(`Jira 오류(본문 숨김)`, tt-guard.js transform). 확인의 `error-path` 행이 그것을 본다. pass가 아니면(warn, 또는 `--missing-key` 없이 돌려 skip) 열 때 `--accept-error-bodies`가 필요하다 — 허용 여부는 도입 담당자가 정해 `SITE_PROFILE.md`에.
-3. 통과 기록은 OpenCode 버전·플러그인 지문에 묶인다. 플러그인을 갱신하면 각자 1부터 다시. 닫기: `config.py set opencode.jira_read closed`. 상태는 `jira_gate` 행(6절).
+3. 통과 기록은 OpenCode 버전·플러그인 지문·트래커/MCP 설정 지문(Jira 도구 매핑·읽기 도구 목록·opencode.json MCP 서버 이름)에 묶인다. 플러그인을 갱신하거나 그 설정을 바꾸면 각자 1부터 다시. 닫기: `config.py set opencode.jira_read closed`. 상태는 `jira_gate` 행(6절).
 4. tt-oc에서 실제로 읽으려면 `gen_opencode.py install … --jira-read-tool <서버>_<도구> --force`(읽기 도구만 허용). `/etc/opencode`의 `"jira_*": "deny"`(`managed.json.sample`)는 관리자가 푼다 — 관리 설정이 마지막에 합쳐져 이긴다.
 
 ### 3.5 재설치

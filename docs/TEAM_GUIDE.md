@@ -238,7 +238,7 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 
 1. Claude Code 마켓플레이스에서 `telephony-triage`를 업데이트한다.
 2. OpenCode면 레포 사본도 같은 태그로(`git fetch --depth 1 origin tag <새 태그> && git checkout <새 태그>`) 바꾸고 1.4의 install을 같은 인자 + `--force`로(Jira를 열었으면 4절 4도). 이번 묶음 반입 뒤에도 한 번.
-3. OpenCode Jira를 열어 두었으면 4절의 확인과 `config.py set … open`을 다시 한다(통과 기록이 플러그인 지문에 묶인다).
+3. OpenCode Jira를 열어 두었으면 4절의 확인과 `config.py set … open`을 다시 한다(통과 기록이 플러그인 지문과 트래커/MCP 설정 지문에 묶인다 — Jira 도구 매핑·MCP 서버 이름을 바꿨을 때도 같다).
 4. 사내 모델 `env`(1.3)는 그대로. 점검표를 다시 본다.
 
 근거: `SITE_INSTALL.md` 7절, `RUNTIMES.md`, `opencode/README.md`, `plugin/commands/`.

@@ -1996,14 +1996,12 @@ def test_regrade_reproduces_run_then_follows_grader(env, tmp_path, capsys, monke
     # 채점기가 바뀌면(S4 상한·판 5) 자식 없이 판정이 바뀐다 — 기록 경로(--regrade만)로. 처음 grading.v4.json은 남는다(P1-2)
     monkeypatch.setattr(me, "QUOTE_MAX", 0)
     monkeypatch.setattr(me, "GRADER_VERSION", 5)
-    skill = env.templates / "ofono" / "data" / "SKILL.md"
-    skill.write_text(skill.read_text(encoding="utf-8") + "바뀜\n", encoding="utf-8")
     capsys.readouterr()
     assert env.run("--regrade", "--record") == 1
     out = capsys.readouterr().out
-    assert "재채점: grader 4 → 5" in out and "docs_sha256" in out
+    assert "재채점: grader 4 → 5" in out and "지금 트리와 다름" not in out
     rec = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
-    assert rec["gate"]["verdict"] == "fail" and rec["regraded"]["differs"] == ["docs_sha256"] and rec["grader_version"] == 5
+    assert rec["gate"]["verdict"] == "fail" and "current_differs" not in rec["regraded"] and rec["grader_version"] == 5
     assert (rec["regraded"]["from_grader"], rec["regraded"]["original_grader"]) == (4, 4)
     assert me.SAFETY_ROWS[4] in rec["cases"][CASES[0]]["with"]["safety_fail"]
     for k in ("total_cost_usd", "unit_cost_usd", "init_model", "cost_basis", "iteration", "generated"):
@@ -2012,6 +2010,24 @@ def test_regrade_reproduces_run_then_follows_grader(env, tmp_path, capsys, monke
     for d in _run_dirs(it):
         assert json.loads((d / "grading.v4.json").read_text(encoding="utf-8")) == old[d]
         assert json.loads((d / "grading.json").read_text(encoding="utf-8"))["grader_version"] == 5
+    # 문서가 바뀐 트리: --record는 파일을 쓰기 전에 거부, --record 없이는 run 때 지문 그대로 + current_differs(F02)
+    skill = env.templates / "ofono" / "data" / "SKILL.md"
+    skill.write_text(skill.read_text(encoding="utf-8") + "바뀜\n", encoding="utf-8")
+    before, local_before = me.RESULTS.read_text(encoding="utf-8"), (it / "module_offsite_results.json").read_text(encoding="utf-8")
+    assert env.run("--regrade", "--record") == 2
+    err = capsys.readouterr().err
+    assert "--record 거부" in err and "docs_sha256" in err and "두 arm을 다시 돌린다" in err
+    assert me.RESULTS.read_text(encoding="utf-8") == before
+    assert (it / "module_offsite_results.json").read_text(encoding="utf-8") == local_before
+    assert not any((d / "grading.v5.json").exists() for d in _run_dirs(it))
+    assert env.run("--regrade") == 1
+    assert "지금 트리와 다름: docs_sha256" in capsys.readouterr().out and me.RESULTS.read_text(encoding="utf-8") == before
+    local = json.loads((it / "module_offsite_results.json").read_text(encoding="utf-8"))["modules"]["ofono/data"]
+    assert local["regraded"]["current_differs"] == ["docs_sha256"] and "differs" not in local["regraded"]
+    for k in ("docs_sha256", "prompt_sha256", "inputs_sha256"):
+        assert local[k] == first[k], k
+    assert {n: r["doc_bytes"] for n, r in local["cases"].items()} == {n: r["doc_bytes"] for n, r in first["cases"].items()}
+    skill.write_text(skill.read_text(encoding="utf-8").removesuffix("바뀜\n"), encoding="utf-8")
     monkeypatch.setattr(me, "GRADER_VERSION", 6)                     # 한 번 더: 판 5가 v5로, v4는 그대로, 계보는 잇는다
     assert env.run("--regrade", "--record") == 1
     rec = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
@@ -2023,6 +2039,59 @@ def test_regrade_reproduces_run_then_follows_grader(env, tmp_path, capsys, monke
     assert (it / "benchmark.v5.json").is_file() and (it / "module_offsite_results.v5.json").is_file()
     assert len(env.calls()) == 6                                     # 자식은 처음 6번뿐
     assert env.run("--regrade", "--case", CASES[0]) == 2
+
+
+@POSIX
+def test_regrade_record_refused_when_tree_differs_and_merge_rejects_stale(env, tmp_path, capsys):
+    """F02: 재채점은 run 때 지문을 그대로 둔다. 문서가 바뀐 트리에서 --regrade --record는 거부하고, 거부를 피해 그 기록을
+    모듈 기록으로 넣어도 한 arm 합치기가 낡음을 잡는다 — current_differs로 명시 거부, 그 키가 없어도 옛 지문 비교로."""
+    env.streams(all_good(env))
+    assert env.run("--record") == 0
+    it = me.WORKSPACE / "module-ofono-data-001"
+    data = json.loads(me.RESULTS.read_text(encoding="utf-8"))
+    first = data["modules"]["ofono/data"]
+    skill = env.templates / "ofono" / "data" / "SKILL.md"
+    skill.write_text(skill.read_text(encoding="utf-8") + "바뀜\n", encoding="utf-8")
+    before = me.RESULTS.read_text(encoding="utf-8")
+    capsys.readouterr()
+    assert env.run("--regrade", "--record") == 2
+    err = capsys.readouterr().err
+    assert "--record 거부" in err and "docs_sha256" in err and me.RESULTS.read_text(encoding="utf-8") == before
+    assert env.run("--regrade") == 0
+    stale = json.loads((it / "module_offsite_results.json").read_text(encoding="utf-8"))["modules"]["ofono/data"]
+    assert stale["regraded"]["current_differs"] == ["docs_sha256"] and stale["docs_sha256"] == first["docs_sha256"]
+    # 거부 안 했다고 가정: 그 기록을 모듈 기록으로 넣고 with만 다시 돌려 합친다 → current_differs로 명시 거부
+    data["modules"]["ofono/data"] = stale
+    me.RESULTS.write_text(json.dumps(data), encoding="utf-8")
+    planted = me.RESULTS.read_text(encoding="utf-8")
+    env.log.unlink()
+    env.streams(_with_only(env))
+    capsys.readouterr()
+    assert env.run("--arms", "with", "--record", "--iteration", str(tmp_path / "it2")) == 2
+    err = capsys.readouterr().err
+    assert "without 기록이 낡음 — 재채점 때 지금 트리와 달랐다(regraded.current_differs: docs_sha256)" in err
+    assert me.RESULTS.read_text(encoding="utf-8") == planted
+    # current_differs를 지운 사본(지문만 run 때 것): 옛 with 지문이 바뀐 문서를 잡는다. --arms with는 다른 arm(without,
+    # 고정 자료) 문서만 비교하므로 바뀐 with 문서를 보려면 without만 다시 돌려 합친다
+    del stale["regraded"]["current_differs"]
+    me.RESULTS.write_text(json.dumps(data), encoding="utf-8")
+    planted = me.RESULTS.read_text(encoding="utf-8")
+    env.log.unlink()
+    env.streams([good_stream(env, n, "without") for n in CASES])
+    assert env.run("--arms", "without", "--record", "--iteration", str(tmp_path / "it3")) == 2
+    assert "with 기록이 낡음 — 두 arm 모두 다시" in capsys.readouterr().err
+    assert me.RESULTS.read_text(encoding="utf-8") == planted
+
+
+def test_merge_single_arm_rejects_regraded_current_differs():
+    """F02: 재채점 때 지금 트리와 달랐던 기록(regraded.current_differs)은 다른 비교 전에 낡음으로 거부한다(Windows에서도 돈다)."""
+    old = {"regraded": {"from_grader": 4, "current_differs": ["docs_sha256", "expect_sha256:x"]}}
+    with pytest.raises(me.UsageError, match=r"^without 기록이 낡음 — 재채점 때 지금 트리와 달랐다\(regraded\.current_differs: "
+                                            r"docs_sha256, expect_sha256:x\) — 두 arm 모두 다시$"):
+        me.merge_single_arm(old, {}, "with", None, [], True)
+    old["regraded"].pop("current_differs")            # 키가 없으면 지문 비교로(여기서는 prompt_sha256 없음)
+    with pytest.raises(me.UsageError, match="^with 기록이 낡음 — 두 arm 모두 다시$"):
+        me.merge_single_arm(old, {"prompt_sha256": "x"}, "without", None, [], True)
 
 
 @POSIX

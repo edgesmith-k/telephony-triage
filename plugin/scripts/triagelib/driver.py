@@ -368,6 +368,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         mismatch = [r for r in data.get("reasons") or [] if r.get("code") == compat.PLATFORM_MISMATCH]
         if mismatch:      # 다른 플랫폼 이슈 DB: 읽기 전용으로도 계속하지 않는다(K5)
             raise Fail(USAGE, str(mismatch[0].get("message")))
+        unsupported = [r for r in data.get("reasons") or [] if r.get("code") == compat.FEATURE_UNSUPPORTED]
+        if unsupported:   # 모르는 시그니처 feature: 분석 중단(읽기 전용으로 계속하지 않는다)
+            raise Fail(USAGE, f"{compat.FEATURE_UNSUPPORTED}: {unsupported[0].get('message')}")
         ok = data["push_allowed"] if for_ == "write" else data["writable"]
         self.out["mode"] = "analysis-only" if self.analysis_only else "write" if ok else "read-only"
         if not ok and not self.analysis_only:

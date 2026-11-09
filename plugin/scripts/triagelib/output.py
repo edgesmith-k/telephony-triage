@@ -5,6 +5,7 @@ Claude가 쓴 `JOB/deep-output.md`·`JOB/explore-output.md`를 받아:
 2. 고정 칸과 UTF-8 바이트 한도를 본다(한 칸 768바이트 = 한글 약 250자).
 3. 근거 원문 검사: 인용이 준 타임라인(모듈 뷰·`JOB/timeline.md`, 설치 스킬이면 events.json 전체 행)에 있는지.
 4. report.md의 5-1·5-2 줄(과 `  - ` 아래 줄)을 쓴다 — `TODO(LLM)`이 남은 줄만 고친다. 모델은 그 줄을 고치지 않는다.
+   탐색 가설 줄에는 그 가설의 원문에 없는 인용 수 `[근거 불일치 N]`(N>0일 때만).
 
 `--skipped "<사유>"`: 실행하지 않았거나 실패 — 줄을 "생략: <사유>"로(이미 스크립트가 쓴 생략·해당 없음·받기 실패 줄이면 그대로).
 기록 `JOB/check-output.json[purpose]`(스크립트만 쓴다, guard 규칙 12)와 trace `checked` 행(`core.trace_event`). 표시 의무: 작업 디렉토리 JOB이면 검사마다 `evidence` 기록
@@ -297,13 +298,16 @@ def _one(text) -> str:
     return " ".join(str(text or "").split())
 
 
-def _render(purpose: str, mode: str, head: str, fields: dict, sub: str) -> list[str]:
+def _render(purpose: str, mode: str, head: str, fields: dict, sub: str, fab_by_hyp: list[int] | None = None) -> list[str]:
+    """report 줄. `fab_by_hyp`(탐색, 가설별 원문에 없는 인용 수)가 0보다 크면 그 가설 줄에 `[근거 불일치 N]`."""
     if purpose == "explore":
         if not fields["hyps"]:
             return [f"{head}가설 없음: {_one(fields['none'])} / 다음 확인: {_one(fields['next'])}", sub]
         out = [f"{head}가설 {len(fields['hyps'])}개 — 점수·분류·검증에 쓰지 않는다"]
         for i, h in enumerate(fields["hyps"], 1):
-            out.append(f"  - 가설 {i}: {_one(h['가설'])} / 로그로 확인: {' | '.join(_one(q) for q in h['로그로 확인'])} / "
+            k = fab_by_hyp[i - 1] if fab_by_hyp else 0
+            mark = f" [근거 불일치 {k}]" if k else ""
+            out.append(f"  - 가설 {i}{mark}: {_one(h['가설'])} / 로그로 확인: {' | '.join(_one(q) for q in h['로그로 확인'])} / "
                        f"코드로 추정: {_one(h['코드로 추정'])} / 반대 근거: {_one(h['반대 근거'])} / 다음 확인: {_one(h['다음 확인'])}")
         return out + [sub]
     quotes = " | ".join(_one(q) for q in fields["근거"])
@@ -450,12 +454,15 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
         before = _quotes(purpose, _parse(purpose, mode, raw))
         if len(before) == len(quotes):
             raw_items = frozenset(i for i, (a, b) in enumerate(zip(before, quotes)) if a != b)
-    res = None
+    res = fab_by_hyp = None
     if not quotes:
         src_skip = "인용 없음"
     elif src_skip is None:
         source, tags = evidence.source_text(src_text)
         res = evidence.check_quotes(quotes, source, tags, raw_items=raw_items)
+        if purpose == "explore":        # verdicts는 `_quotes` 순서 = 가설 순서대로 `로그로 확인`을 이어 붙인 것
+            it = iter(res["verdicts"])
+            fab_by_hyp = [[next(it) for _ in h["로그로 확인"]].count("fabricated") for h in fields["hyps"]]
     sub = _evidence_sub(mode, res, src_skip)
 
     report, prefix = job / "report.md", PREFIX[purpose]
@@ -467,7 +474,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     else:
         name = (rec or {}).get("skill") or (analysis.get("analyzer") or {}).get("skill") or "-"
         default = f"{DEEP_PREFIX} ({name}): "
-    lines = _render(purpose, mode, _head(current, prefix, default), fields, sub)
+    lines = _render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp)
     _rewrite(report, prefix, lines, KEEP_SUB)
 
     counts = {k: (res or {}).get(k, 0) for k in ("fabricated", "weak", "raw")}

@@ -22,6 +22,8 @@
   모두 T초 이하(`= T`는 충족).
 - 패턴이 시간 상한을 넘기면(`common/patterns.py`) 그 시그니처는 `error`이고 불충족이다.
 - 시그니처·`must_match` 객체·`must_event` 항목의 모르는 키는 컴파일 오류(`SIGNATURE_KEYS` 등 = 스키마 properties).
+- 선택 필드(`SUPPORTED_FEATURES`)는 DB가 `issue-db.config.yaml signature_features`에 선언한다 — `features_used`가
+  시그니처 하나가 쓰는 것을 낸다(`db_lint` 대조, 모르는 선언은 `compat.check_features`).
 """
 
 from __future__ import annotations
@@ -73,6 +75,19 @@ SIGNATURE_KEYS = frozenset({"id", "must_match", "must_event", "must_not_match", 
                             "sequence_within_sec"})
 MATCH_ITEM_KEYS = frozenset({"id", "pattern", "min_count"})
 EVENT_ITEM_KEYS = frozenset({"id", "event", "fields", "min_count"})
+# 이 플러그인이 아는 선택 필드(issue-db.config.yaml `signature_features`의 이름, 04-parser-matching.md §5.11 (1)).
+SUPPORTED_FEATURES = frozenset({"min_count", "sequence_within_sec"})
+
+
+def features_used(sig: dict) -> set[str]:
+    """원시 시그니처 dict가 쓰는 선택 필드. `min_count`는 2 이상일 때만(1은 기본값과 같다)."""
+    used: set[str] = set()
+    for item in [*(sig.get("must_match") or []), *(sig.get("must_event") or [])]:
+        if isinstance(item, dict) and _number(item.get("min_count")) and item["min_count"] >= 2:
+            used.add("min_count")
+    if "sequence_within_sec" in sig:
+        used.add("sequence_within_sec")
+    return used
 
 
 def _unknown(item: dict, allowed: frozenset, key: str, where: str) -> None:

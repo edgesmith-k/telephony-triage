@@ -568,7 +568,7 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     assert len(rules.encode("utf-8")) <= 2700      # 종합 리뷰 G①: 로그는 마스킹 사본 logs-masked/를 쓴다 한 구절 뒤. 그 전 2,516B — 병합은 +1 뒤 요청 시 `db_pr merge`만(Approve 금지, A2 11/04) 뒤. 그 전 2,496B — 머지는 `db_pr merge`만(본인 병합, 10/22) 뒤. 그 전 2,485B — `--platform`·`--json` 없이 목록에 skill_patch(10/22) 뒤의 한도. 그 전 2,460B — L2 J7 질문당 선택지 4개 줄 뒤의 한도. 그 전 2,320B — Bash·Read 출력 비가시(리포트·검증 표·확인 화면·notes·must_show, 전체 eval 10/14)·stage `next` 줄 뒤의 한도. 그 전 2,048B
     for needle in ("S-3", "계획 형식 오류", "TT_LOCK_OWNER", "stage --then-summary", "모든 종료 경로에서 푼다", "사용자 확인 후"):
         assert needle in rules, needle
-    assert len((reference / "db-authoring.md").read_bytes()) <= 12416      # D① min_count·sequence_within_sec 한 줄과 signature 선택 키 뒤(11/08 사용자). 그 전 12,288B — 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)
+    assert len((reference / "db-authoring.md").read_bytes()) <= 12600      # 코덱스 리뷰 02e0ec2 F01: signature_features 선언 조건 한 구절 뒤(12,572B). 그 전 12,416B — D① min_count·sequence_within_sec 한 줄과 signature 선택 키 뒤(11/08 사용자). 그 전 12,288B — 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)
     assert len((reference / "write-flow.md").read_bytes()) <= 16100     # 종합 리뷰 B2: 리뷰어 질문에 `reviewer.ask: false`면 안 묻는다 한 구절 뒤. 그 전 16,000B — A2 +1 병합(11/04): 바로 병합 선택지·--and-merge·병합 재시도 삭제, 리뷰어 질문(5번)·"병합해줘"(§6) 추가, stage 하는 일 압축 뒤. 그 전 15,872B — 확인 화면 선택지 push하고 바로 병합·--and-merge·병합 재시도(10/22) 뒤. 그 전 14,680B — L2 J5 확인 화면 압축(생성 파일 한 행·건너뜀 묶음·README 머리) 뒤(그 전 14,390B: E67 PR 링크를 다음 질문 전에 글자 그대로 보인다 뒤(그 전 14,344B)
     assert len((reference / "skill-patch.md").read_bytes()) <= 2176      # B2 R2: 1번 SK = module --for deep 출력 base(스킬 도구 Base directory는 설치 스킬 못 찾음 뒤만)·모듈 문서면 메모. 그 전 2,048B — A2: SKILL.md 규칙 제안 문장 이동(`[스킬]` 줄은 계획에 넣지 않고 담당자용 patch, 11/04) 뒤 — E에서 전면 재작성·재설정. 그 전 1,920B — 4번 스킬 소스 적용(--apply --sha, 10/22) 뒤. 그 전 1,600B — 종료 2도 메모로 이어감(10/22 리뷰) 뒤. 그 전 1,536B — analyze Step 7 `[스킬]` 줄을 고를 때만 읽는다(write-flow에 두면 모든 쓰기 흐름이 읽는다). diff·마스킹·apply --check·안내 줄을 `skill_patch.py`로 옮긴 뒤(10/22, 표시 기록 kind patch). 그 전 1,800B — 리뷰 P1: 마스킹 뒤 git apply --check·실패 시 메모 포함
     _check_op_summary(reference / "db-authoring.md")
@@ -784,9 +784,9 @@ def test_explore_setting_flows_from_site_defaults_and_skill_points_to_reference(
                    "explore-output.md", "check-output", "## 일반 판단 규칙", "〔script", "점수·신뢰도를 매기지 않는다",
                    "추정을 사실처럼 쓰지 않는다"):
         assert needle in ref, needle
-    # 코덱스 리뷰 F4: 선택 칸(원인 층·원인 데몬·가장 유력) 한 줄 뒤 7,350. 그 전 7,168 — B2 §10.3: 출력 파일 + check-output·일반 판단
-    # 규칙(log-guide에서 옮김) 뒤. 그 전 5,910B(한도 없음)
-    assert len(ref.encode("utf-8")) <= 7350
+    # 코덱스 리뷰 02e0ec2 Q01: `[근거 불일치 N]` 한 줄 뒤 7,580. 그 전 코덱스 리뷰 F4: 선택 칸(원인 층·원인 데몬·가장 유력) 한 줄 뒤
+    # 7,350. 그 전 7,168 — B2 §10.3: 출력 파일 + check-output·일반 판단 규칙(log-guide에서 옮김) 뒤. 그 전 5,910B(한도 없음)
+    assert len(ref.encode("utf-8")) <= 7580
     assert ref.index("## 쓰는 것") < ref.index("## 일반 판단 규칙") < ref.index("## 다음")
     # android 밖 플랫폼 탐색 지식(17-platforms §10): `triage.py explore` 출력 refs로만 읽는다. placeholder라 작게 둔다
     guide = REPO / "plugin" / "skills" / "telephony-triage" / "reference" / "platforms" / "ofono" / "log-guide.md"
@@ -1161,6 +1161,22 @@ def test_read_only_mode_shows_update_hint_in_analysis_and_report():
     assert len((job / "analysis.json").read_bytes()) <= 4096
     assert "- 읽기 전용: " in (job / "report.md").read_text(encoding="utf-8")
     assert "플러그인을 업데이트" in (job / "report.md").read_text(encoding="utf-8")
+
+
+def test_unsupported_signature_feature_stops_analysis():
+    """DB가 선언한 `signature_features`를 플러그인이 모르면(`transaction_group` = 모르는 플러그인 흉내) 읽기 전용으로
+    계속하지 않고 분석을 중단한다(04-parser-matching.md §5.11 (1))."""
+    ws = Workspace()
+    ws.push_main(lambda c: (c / "issue-db.config.yaml").write_text(
+        (c / "issue-db.config.yaml").read_text(encoding="utf-8") + "\nsignature_features: [transaction_group]\n",
+        encoding="utf-8", newline="\n"))
+    args = ["run", "MOCK-1001", "--dry-run", "--issue-file", MOCK_JIRA / "MOCK-1001.yaml", "--logs", DATA_LOG,
+            "--answer", "code=skip"]
+    proc = ws.run("triage.py", args)
+    assert proc.returncode == 2, proc.stderr[-1500:]
+    assert "feature-unsupported" in proc.stderr and "분석을 중단" in proc.stderr, proc.stderr[-1500:]
+    assert "read-only" not in proc.stdout
+    assert not (ws.job_dir("MOCK-1001") / "analysis.json").exists()
 
 
 # -- W4 질문 수 줄이기: 코드 경로 자동 선택·잔여물 알림 (07-workflow.md §Step 0·§Step 2-1, 02-config.md, contracts.md) -------------

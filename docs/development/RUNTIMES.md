@@ -79,6 +79,8 @@ CLI가 모르는 모델 ID에는 자리 표시 단가($4/$20 per MTok)를 매기
 
 ### 4.2 guard 설정됨(테스트 헬퍼 작업 공간: 이슈 DB clone + 로컬 bare 원격, 사용자 config, tracker, git hook)
 
+11/05 측정, 당시 guard 판. 현행(4-c 이후)은 base 브랜치 push를 따로 deny하지 않고 ask + 서버 브랜치 보호(`08-safety.md §9` 규칙 6, `s4a.protection_guard`).
+
 | 명령(가짜 모델의 Bash) | 결과 | 판정 출처 |
 |---|---|---|
 | `cd <clone> && git push origin HEAD:refs/heads/main` | 거부: "base 브랜치(main)로 직접 push하지 않는다 (규칙 6)" | guard PreToolUse |
@@ -167,7 +169,8 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
 ### 5.5 OpenCode Jira 읽기 관문(11/05 사용자 "사내 확인 뒤 설정으로 열기")
 
 - 코드 상수(`JIRA_READ_RELEASED`)는 없앴다. 관문(`plugin/scripts/common/oc_jira_gate.py`)은 사용자 config `opencode.jira_read: open`
-  + 통과 기록(`~/.telephony-triage/opencode-jira-check.json`: 성공 경로 통과·같은 OpenCode 버전·같은 플러그인 스크립트 지문)이
+  + 통과 기록(`~/.telephony-triage/opencode-jira-check.json`: 성공 경로 통과·같은 OpenCode 버전·같은 플러그인 스크립트 지문·같은
+  트래커/MCP 지문 `tracker_fingerprint` — 트래커 매핑·MCP 서버 이름을 바꾸면 다시 확인, 코덱스 리뷰 02e0ec2 F03)이
   모두 맞을 때만 열린다. 기록의 오류 경로 행이 pass가 아니면(warn·skip) `--accept-error-bodies`도 있어야 한다. 테스트·사내 확인
   실행만 `TT_OC_JIRA_GATE=open`. 코멘트 쓰기(`tracker.write_tools.add_comment`)는 v1에서 늘 거부.
 - 사내 확인: `python3 tools/site_step.py runtime-check opencode --project <설치 폴더> --jira <있는 키> --missing-key <없는 키>`

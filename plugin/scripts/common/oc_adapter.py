@@ -31,7 +31,7 @@ MCP 도구로 본다. 둘 다 아니면 거부한다(모르는 도구 = 거부).
 **분석 전용(v1)**: guard `ask`는 거부로 바꾸고 "OpenCode v1 does not run this; run this exact command yourself: …"로 정확한
 명령을 보인다. guard가 묻지 않는 쓰기 흐름도 여기서 막는다(`V1_NETS`: db_pr publish·merge, skill_patch apply, issue_post approve,
 리뷰어 요청, module_eval, OpenCode 설정을 바꾸는 `config.py set opencode.*`). Jira MCP 읽기는 관문(`common/oc_jira_gate.py`:
-사용자 설정 `opencode.jira_read: open` + 같은 OpenCode 버전·플러그인 지문의 사내 확인 통과 기록)이 열려 있을 때만 guard에 넘기고,
+사용자 설정 `opencode.jira_read: open` + 같은 OpenCode 버전·플러그인 지문·트래커·MCP 지문의 사내 확인 통과 기록)이 열려 있을 때만 guard에 넘기고,
 닫혀 있으면 거부한다. 관문은 OpenCode 시작 때 tt-guard.js가 `gate` 모드로 한 번 정해 `JIRA_SESSION_ENV`로 넘긴 값만 믿는다
 (세션 중에 쓰인 파일은 그 세션에 적용되지 않는다). 코멘트 도구(`tracker.write_tools.add_comment`)는 v1에서 늘 거부한다.
 
@@ -406,19 +406,26 @@ class TrackerView:
     prefixes: set[str]
     comment_tool: str | None
     words: tuple[str, ...]
+    read_tools: tuple[str, ...] = ()     # `tracker.read_tools` ∪ `tracker.tools` 값(정규화·중복 제거·정렬) — 관문 지문(`oc_jira_gate`)
 
 
-def tracker_view() -> TrackerView:
-    """guard 규칙 2와 같은 Jira 서버 판별 재료(읽기만). 예외는 호출 쪽이 받는다(모든 MCP 거부)."""
+def tracker_view(cfg: dict | None = None) -> TrackerView:
+    """guard 규칙 2와 같은 Jira 서버 판별 재료(읽기만). 예외는 호출 쪽이 받는다(모든 MCP 거부). `cfg`가 없으면 이 플러그인의
+    site-defaults와 사용자 config를 합쳐 읽는다(사내 확인 `oc_jira_check`는 설치 플러그인의 `config.py show` 값을 넘긴다)."""
     import trackers
 
-    from common import issuepost, site_defaults, userconfig
-    try:
-        defaults = site_defaults.load(PLUGIN_ROOT)
-    except site_defaults.SiteDefaultsMissing:
-        defaults = {}
-    cfg = userconfig.merged(defaults, userconfig.load_user() or {})
-    return TrackerView(issuepost.jira_prefixes(cfg), issuepost.raw_tool(cfg), trackers.all_server_words())
+    from common import issuepost, mcptools, site_defaults, userconfig
+    if cfg is None:
+        try:
+            defaults = site_defaults.load(PLUGIN_ROOT)
+        except site_defaults.SiteDefaultsMissing:
+            defaults = {}
+        cfg = userconfig.merged(defaults, userconfig.load_user() or {})
+    # 읽기 허용 목록: guard 규칙 2가 보는 `tracker.read_tools`와 jira_bridge가 다루는 `tracker.tools` 값
+    tools, listed = userconfig.get(cfg, "tracker.tools"), userconfig.get(cfg, "tracker.read_tools")
+    names = [*(tools.values() if isinstance(tools, dict) else []), *(listed if isinstance(listed, list) else [])]
+    read = sorted({mcptools.normalize(str(v)) for v in names if v})
+    return TrackerView(issuepost.jira_prefixes(cfg), issuepost.raw_tool(cfg), trackers.all_server_words(), tuple(read))
 
 
 def is_jira(name: str, view: TrackerView) -> bool:

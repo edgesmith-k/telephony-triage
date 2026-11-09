@@ -253,6 +253,21 @@ def test_explore_view_source_and_render(tmp_path, capsys):
     assert _rec(job, "explore")["source"] == "module-skill/explore/timeline.md"
 
 
+def test_explore_hypothesis_line_marks_fabricated_count(tmp_path, capsys):
+    """코덱스 리뷰 02e0ec2 Q01: 가설 줄에 그 가설의 원문에 없는 인용 수 `[근거 불일치 N]`(0이면 표기 없음). 종료·기록은 그대로."""
+    job = make_job(tmp_path, "explore", "plain")
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1]), ("모뎀 펌웨어 오류", [Q1, FAKE])]),
+                                           encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and data["fabricated"] == 1
+    text = (job / "report.md").read_text(encoding="utf-8").split("\n")
+    i = text.index(next(t for t in text if t.startswith("- 탐색 분석")))
+    assert text[i + 1].startswith("  - 가설 1: 망 인증 거절 / 로그로 확인: ")
+    assert text[i + 2].startswith("  - 가설 2 [근거 불일치 1]: 모뎀 펌웨어 오류 / 로그로 확인: ")
+    assert text[i + 3].startswith("  - 근거 원문 검사: 인용 3개 중 원문에 없음 1 (")
+    assert _rec(job, "explore")["fabricated"] == 1
+
+
 def test_explore_source_falls_back_to_job_timeline(tmp_path, capsys):
     job = make_job(tmp_path, "explore", "plain")
     (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")

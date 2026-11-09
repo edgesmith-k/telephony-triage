@@ -328,6 +328,18 @@ def test_known_keys_equal_type_schema_properties():
     assert signatures.EVENT_ITEM_KEYS == set(defs["mustEventItem"]["properties"])
 
 
+def test_features_used():
+    """선택 필드 사용 = `min_count` ≥ 2(1은 기본값) 또는 `sequence_within_sec` 키. 이름은 모두 `SUPPORTED_FEATURES` 안."""
+    base = {"id": "s", "must_match": ["A"], "window_sec": 5}
+    assert signatures.features_used(base) == set()
+    assert signatures.features_used({**base, "must_match": [{"pattern": "A", "min_count": 1}]}) == set()
+    assert signatures.features_used({**base, "must_match": [{"pattern": "A", "min_count": 2}]}) == {"min_count"}
+    assert signatures.features_used({**base, "must_event": [{"event": "e", "min_count": 3}]}) == {"min_count"}
+    assert signatures.features_used({**SEQ, "sequence_within_sec": 1}) == {"sequence_within_sec"}
+    both = {**SEQ, "sequence_within_sec": 1, "must_event": [{"event": "e", "min_count": 2}]}
+    assert signatures.features_used(both) == {"min_count", "sequence_within_sec"} == signatures.SUPPORTED_FEATURES
+
+
 def test_sample_db_signatures_all_compile():
     """샘플 이슈 DB의 모든 시그니처(유형·원인, 네 종류 전부 — 비활성·pending 포함)가 모르는 키 검사를 거쳐 컴파일된다."""
     from common import issuedb

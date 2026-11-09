@@ -458,6 +458,25 @@ def test_config_check_mismatch_on_migrate_branch():
     assert [r["code"] for r in out["reasons"]] == ["platform-mismatch"]
 
 
+def test_config_check_feature_unsupported(monkeypatch):
+    """DB `signature_features`에 플러그인이 모르는 이름이 있으면 `feature-unsupported`(쓰기 불가, driver는 중단).
+    "모르는 플러그인"은 `SUPPORTED_FEATURES`를 비워 흉내 낸다 — `check_features`가 호출 시점에 읽는다."""
+    import config as config_cli
+    from common import signatures
+
+    defaults = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))
+    db = tmp("tt-feature-db-") / "db"
+    shutil.copytree(SAMPLE, db)
+    assert config_cli.check(db, defaults, "dry-run")["reasons"] == []        # 선언 없는 DB는 그대로
+    with (db / "issue-db.config.yaml").open("a", encoding="utf-8", newline="\n") as fh:
+        fh.write("\nsignature_features: [min_count]\n")
+    assert config_cli.check(db, defaults, "dry-run")["reasons"] == []        # 아는 feature
+    monkeypatch.setattr(signatures, "SUPPORTED_FEATURES", frozenset())
+    out = config_cli.check(db, defaults, "dry-run")
+    assert [r["code"] for r in out["reasons"]] == ["feature-unsupported"] and out["writable"] is False, out
+    assert "['min_count']" in out["reasons"][0]["message"] and "분석을 중단" in out["reasons"][0]["message"]
+
+
 def test_parse_logcat_db_platform_vs_env():
     root = _root_on()
     args = ["parse", DATA_LOG, "--rules", SAMPLE / "parser-rules", "--full", "--tz", "UTC", "--year", "2026"]

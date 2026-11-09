@@ -24,7 +24,7 @@
                                analyzers.<카테고리>.prefer(module|skill)·.skill_dir(절대 경로). 남은 모듈 스킬·분석 스킬
                                설정 문제는 module_problems와 stderr 경고 한 줄.
                                opencode.jira_read open|closed [--accept-error-bodies]: OpenCode Jira 읽기 관문(최상위 키).
-                               open은 같은 OpenCode 버전·플러그인 지문의 사내 확인 통과 기록(site_step.py runtime-check
+                               open은 같은 OpenCode 버전·플러그인 지문·트래커/MCP 지문의 사내 확인 통과 기록(site_step.py runtime-check
                                opencode --jira)이 있을 때만, 오류 경로 행이 warn이면 --accept-error-bodies도. OpenCode 안
                                (TT_RUNTIME=opencode)에서는 거부(사용자가 터미널에서 연다)
   sync-scripts-path            plugin.scripts_path = ${CLAUDE_PLUGIN_ROOT}/scripts (setup 2, SessionStart hook)
@@ -43,7 +43,7 @@
                                변경 목록만 보이고 `--apply`일 때만 쓴다. site-defaults의 옛 키는 안내만(관리자가 고친다)
   install-hooks [--db <path>]  git config core.hooksPath .githooks, 값이 정확히 .githooks인지 확인 (setup 5)
   check [--db <path>] [--for write|dry-run] [--roots]
-                               호환성 판정: 스키마·생성기 버전·파서 백엔드·외부 파서, (write면) gh 인증
+                               호환성 판정: 플랫폼·signature_features·스키마·생성기 버전·파서 백엔드·외부 파서, (write면) gh 인증
                                → writable / push_allowed. `migrate/schema-v<N>` 브랜치는 버전을 보지 않는다.
                                warnings(없어진 키·폐지 키·설치 스킬 대신 모듈 문서·runtime.label). remote·prefer·
                                skill_dir가 있으면 deep_sources(카테고리별 5-1 출처). --roots면 read_roots[절대 경로]
@@ -330,8 +330,9 @@ def _parse_value(text: str):
 
 def _set_opencode(args, data: dict) -> dict:
     """`set opencode.jira_read open|closed [--accept-error-bodies]` — OpenCode Jira 읽기 관문(`common/oc_jira_gate.py`). 사용자가
-    터미널에서만 연다: OpenCode 안(`TT_RUNTIME=opencode`)이면 거부, open은 같은 OpenCode 버전·플러그인 지문의 사내 확인 통과 기록이
-    있을 때만, 그 기록의 오류 경로 행이 warn이면 `--accept-error-bodies`도 있어야 한다. 최상위 키다(`--platform` 없이)."""
+    터미널에서만 연다: OpenCode 안(`TT_RUNTIME=opencode`)이면 거부, open은 같은 OpenCode 버전·플러그인 지문·트래커/MCP 지문
+    (`tracker_fingerprint`)의 사내 확인 통과 기록이 있을 때만, 그 기록의 오류 경로 행이 warn이면 `--accept-error-bodies`도 있어야
+    한다. 최상위 키다(`--platform` 없이)."""
     from common import oc_jira_gate as gate
 
     command = gate.open_command(gate.PLUGIN_ROOT, getattr(args, "accept_error_bodies", False))
@@ -616,6 +617,7 @@ def check(db: Path, defaults: dict, for_: str, platform: str | None = None) -> d
     branch = _git_out(db, "rev-parse", "--abbrev-ref", "HEAD")
     migrate = bool(branch and MIGRATE_BRANCH_RE.match(branch))
     reasons: list[dict] = compat.check_platform(cfg, platform)     # migrate 브랜치에서도 본다
+    reasons += compat.check_features(cfg)                           # 모르는 시그니처 feature (driver는 중단)
     schema = cfg.get("schema_version")
     generator = cfg.get("generator_version")
     env = compiled_cache.environment(defaults, platform)

@@ -317,20 +317,40 @@ PRE_D1_SCHEMA = REPO / "tests/fixtures/schema_pre_d1/type.schema.json"
 COUNT_GAP = [(REJECTED, REJECTED[:-1] + ", min_count: 2}"), (SEQUENCE, SEQUENCE + "        sequence_within_sec: 5\n")]
 
 
-def _sig_lint(*edits, old_schema: bytes | None = None) -> list[tuple[str, str]]:
-    """샘플 DB 사본의 DATA-001 type.md에 `edits`를 적용해 린트하고 그 파일의 `(코드, 메시지)` 오류를 돌려준다.
-    `old_schema`: DB `schema/type.schema.json`을 이 내용(D① 전 v1)으로 바꾼다."""
+FEATURES = "[min_count, sequence_within_sec]"
+
+
+def _sig_lint(*edits, old_schema: bytes | None = None, features: str | None = FEATURES) -> list[tuple[str, str]]:
+    """샘플 DB 사본의 DATA-001 type.md에 `edits`를 적용해 린트하고 그 파일·`issue-db.config.yaml`의 `(코드, 메시지)`
+    오류를 돌려준다. `old_schema`: DB `schema/type.schema.json`을 이 내용(D① 전 v1)으로 바꾼다.
+    `features`: config 끝에 더할 `signature_features` 값(None이면 선언하지 않는다)."""
     db = runner_copy(SAMPLE)
     for old, new in edits:
         edit(db / D / "type.md", old, new)
     if old_schema is not None:
         (db / "schema/type.schema.json").write_bytes(old_schema)
+    if features is not None:
+        with (db / "issue-db.config.yaml").open("a", encoding="utf-8", newline="\n") as fh:
+            fh.write(f"\nsignature_features: {features}\n")
     result = _lint(db, "--all", expect=(0, 1))
-    return [(f["code"], f["message"]) for f in result["errors"] if f["file"] == f"{D}/type.md"]
+    return [(f["code"], f["message"]) for f in result["errors"] if f["file"] in (f"{D}/type.md", "issue-db.config.yaml")]
 
 
 def test_min_count_and_sequence_within_sec_accepted():
     assert _sig_lint(*COUNT_GAP) == []
+
+
+def test_signature_features_must_be_declared():
+    """선택 필드(min_count ≥ 2·sequence_within_sec)를 쓰면 config `signature_features`에 선언해야 한다
+    (04-parser-matching.md §5.11 (1)). 선언 없이 쓰면 `signature-feature`, 모르는 이름 선언은 `config` 오류."""
+    found = _sig_lint(*COUNT_GAP, features=None)
+    msgs = [m for c, m in found if c == "signature-feature"]
+    assert len(found) == 2 and any(": min_count를" in m for m in msgs) and any(": sequence_within_sec를" in m for m in msgs), found
+    assert [c for c, _ in _sig_lint(*COUNT_GAP, features="[min_count]")] == ["signature-feature"]
+    assert _sig_lint(features=None) == [] and _sig_lint(features="[]") == []
+    bad = _sig_lint(features="[min_count, transaction_group]")
+    assert [c for c, _ in bad] == ["config"] and "transaction_group" in bad[0][1], bad
+    assert [c for c, _ in _sig_lint(features="min_count")] == ["config"]
 
 
 def test_min_count_and_sequence_within_sec_format_errors():
