@@ -365,6 +365,23 @@ def test_deny_file_unreadable_tracked_file_is_error(repo, tmp_path, monkeypatch)
     assert res["exit_code"] == mb.USAGE and res["bundle"] is None and not out.exists()
 
 
+def test_deny_file_hits_reported_before_read_errors(repo, tmp_path, monkeypatch):
+    deny = tmp_path / "deny.txt"
+    deny.write_text("zzqx\n", encoding="utf-8")
+    monkeypatch.setenv("TT_DENY_FILE", str(deny))
+    (repo / "hit.md").write_text("zzqx\n", encoding="utf-8")
+    _git(repo, "add", "hit.md")
+    _git(repo, "commit", "-qm", "hit")
+    _git(repo, "update-index", "--skip-worktree", "README.md")
+    (repo / "README.md").unlink()
+    out = tmp_path / "out"
+    res = mb.run(repo, LABEL, out, checks=_deny_checks())
+    row = res["checks"][0]
+    assert row["status"] == "fail" and res["exit_code"] == 1   # 일치가 있으면 읽기 실패보다 먼저 보고
+    assert "hit.md: 1건" in row["detail"] and "읽기 실패 1개" in row["detail"]
+    assert res["bundle"] is None and not out.exists()
+
+
 def test_deny_file_hit_fails_with_path_only(repo, tmp_path, monkeypatch):
     deny = tmp_path / "deny.txt"
     deny.write_text("zzqx\n", encoding="utf-8")

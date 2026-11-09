@@ -48,7 +48,11 @@ def tracked(root: Path | str) -> list[str]:
     proc = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], capture_output=True)
     if proc.returncode != 0:
         raise RuntimeError(f"git ls-files 실패 (종료 {proc.returncode})")   # stderr엔 경로가 들 수 있다
-    return [n for n in proc.stdout.decode("utf-8").split("\0") if n]
+    try:
+        names = proc.stdout.decode("utf-8")
+    except UnicodeDecodeError:
+        raise RuntimeError("git ls-files 출력이 UTF-8 아님") from None
+    return [n for n in names.split("\0") if n]
 
 
 def _mask(text: str, patterns, repl=None) -> tuple[str, int]:

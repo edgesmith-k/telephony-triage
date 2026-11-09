@@ -240,10 +240,10 @@ def check_deny_file(ctx: Ctx) -> CheckResult:
     hits, scanned, skipped, errors = deny_scan.scan(ctx.repo, patterns)   # 경로는 «k»로 가려져 온다
     if not scanned:
         return CheckResult("error", "스캔할 추적 파일 없음")
-    if errors:
-        return CheckResult("error", f"추적 파일 {errors}개 읽기 실패")
     total = sum(n for _, n in hits)
-    tail_line = f"추적 파일 {scanned}개, 건너뜀 {skipped}개(UTF-8 아님)"
+    if errors and not total:
+        return CheckResult("error", f"추적 파일 {errors}개 읽기 실패")
+    tail_line = f"추적 파일 {scanned}개, 건너뜀 {skipped}개(UTF-8 아님)" + (f", 읽기 실패 {errors}개" if errors else "")
     if total:
         lines = [f"{rel}: {n}건" for rel, n in sorted(hits, key=lambda h: -h[1])[:20]]
         return CheckResult("fail", "\n".join([*lines, f"총 {total}건, 파일 {len(hits)}개 — {tail_line}"]),

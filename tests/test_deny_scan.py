@@ -85,6 +85,18 @@ def test_longer_overlapping_entry_is_masked_whole(tmp_path, entries):
     assert "alpha" not in hits[0][0] and "secret" not in hits[0][0]
 
 
+def test_touching_entries_stay_separate(tmp_path):
+    deny = tmp_path / "d.txt"
+    deny.write_text("ab-\ncd\n", encoding="utf-8")
+    assert ds._mask("ab-cd", ds.load(deny)) == ("«1»«2»", 2)   # 맞닿은 구간은 합치지 않는다
+
+
+def test_non_utf8_tracked_path_exits_2(tmp_path, deny, monkeypatch):
+    monkeypatch.setattr(ds.subprocess, "run",
+                        lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout=b"\xff\x00", stderr=b""))
+    assert ds.main(["--root", str(tmp_path), "--deny", str(deny)]) == 2
+
+
 def test_explicit_paths_only(repo, deny):
     assert ds.scan(repo, ds.load(deny), ["miss.txt", "untracked.txt"]) == ([("untracked.txt", 2)], 2, 0, 0)
 
