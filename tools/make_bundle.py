@@ -314,13 +314,13 @@ MODULE_SKILL_STEPS = (   # (이름, 인자) — 싼 것부터, 처음 실패에�
 
 
 def check_module_skills(ctx: Ctx) -> CheckResult:
-    """모듈 스킬 템플릿: 받기 규칙 + 템플릿 점검(합성 또는 마스킹 발췌 표시(origin)), case 입력 drift·형식, 남은 식별자."""
+    """모듈 스킬 템플릿: 받기 규칙 + 템플릿 점검(합성 표시), case 입력 drift·형식, 남은 식별자."""
     for name, args in MODULE_SKILL_STEPS:
         code, out = ctx.run("module-skills", [sys.executable, str(ctx.repo / args[0]), *args[1:]])
         if code != 0:
             return CheckResult("fail" if code == 1 else "error", f"{name}: 종료 {code}\n{tail(out)}")
     return CheckResult("pass", "module_repo_check --template·make_module_eval_inputs --check·fixture_residual 통과 "
-                               "(case는 합성 또는 마스킹 발췌 표시(origin))")
+                               "(case는 합성 표시)")
 
 
 def check_offline_eval(ctx: Ctx) -> CheckResult:

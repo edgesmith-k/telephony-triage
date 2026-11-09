@@ -393,7 +393,7 @@ def test_module_skills_check_order(tmp_path):
     """C1D §3.5: module_repo_check --template → make_module_eval_inputs --check → fixture_residual, 모두 통과면 pass."""
     ctx = _FakeCtx(tmp_path, {})
     got = mb.check_module_skills(ctx)
-    assert got.status == "pass" and "origin" in got.detail
+    assert got.status == "pass" and "합성 표시" in got.detail
     assert ctx.calls == ["module_repo_check.py", "make_module_eval_inputs.py", "fixture_residual.py"]
     assert [a[1:] for _, a in mb.MODULE_SKILL_STEPS][0] == ["--template", "templates/module-skills"]
 
