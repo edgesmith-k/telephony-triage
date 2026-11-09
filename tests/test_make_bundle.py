@@ -323,13 +323,57 @@ def test_unexpected_exception_is_exit_2(repo, tmp_path, monkeypatch, capsys):
 
 def test_real_check_ids_order_and_manual_items():
     ids = [c.id for c in mb.CHECKS]
-    assert ids == ["plugin-json", "site-paths", "mcp-local", "boundary", "human-search", "schemas", "contracts",
+    assert ids == ["plugin-json", "site-paths", "mcp-local", "boundary", "deny-file", "human-search", "schemas",
+                   "contracts",
                    "exec-bits", "site-todos", "todos-seen", "draft-notes-size", "draft-notes-fresh", "skeleton",
                    "module-skills", "offline-eval", "regress", "evals-prepare", "pytest"]
     manual = [c.id for c in mb.CHECKS if c.kind == "manual"]
     assert manual == ["human-search", "todos-seen", "draft-notes-fresh"]
     assert all(c.how for c in mb.CHECKS if c.kind == "manual")
     assert {c.checklist for c in mb.CHECKS} == set(range(1, 12))
+
+
+def _deny_checks():
+    assert mb.deny_scan.DENY_ENV == "TT_DENY_FILE"   # 검사 본체는 tools/deny_scan.py
+    return [mb.Check("deny-file", 2, "auto", mb.check_deny_file), *fake_checks()]
+
+
+def test_deny_file_missing_env_is_skipped_without_bundle(repo, tmp_path, monkeypatch):
+    """TT_DENY_FILE이 없으면 건너뜀(통과 아님) → 묶음 없음, 종료 1(--skip과 같다)."""
+    monkeypatch.delenv("TT_DENY_FILE", raising=False)
+    out = tmp_path / "out"
+    res = mb.run(repo, LABEL, out, checks=_deny_checks())
+    row = res["checks"][0]
+    assert row["status"] == "skipped" and "TT_DENY_FILE" in row["detail"] and "통과 아님" in row["detail"]
+    assert res["exit_code"] == 1 and res["bundle"] is None and not out.exists()
+    assert "TT_DENY_FILE" in mb.format_text(res)
+    monkeypatch.setenv("TT_DENY_FILE", str(tmp_path / "no-such.txt"))
+    assert mb.run(repo, LABEL, out, checks=_deny_checks())["checks"][0]["status"] == "skipped"
+
+
+def test_deny_file_hit_fails_with_path_only(repo, tmp_path, monkeypatch):
+    deny = tmp_path / "deny.txt"
+    deny.write_text("zzqx\n", encoding="utf-8")
+    monkeypatch.setenv("TT_DENY_FILE", str(deny))
+    (repo / "docs").mkdir()
+    (repo / "docs" / "a.md").write_text("see ZZQX and zzqx here\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "a")
+    out = tmp_path / "out"
+    res = mb.run(repo, LABEL, out, checks=_deny_checks())
+    row = res["checks"][0]
+    assert row["status"] == "fail" and "docs/a.md: 2건" in row["detail"] and res["exit_code"] == 1
+    text = json.dumps(res, ensure_ascii=False) + mb.format_text(res)
+    assert "zzqx" not in text.lower() and not out.exists()
+
+
+def test_deny_file_zero_hits_passes(repo, tmp_path, monkeypatch):
+    deny = tmp_path / "deny.txt"
+    deny.write_text("# c\nzzqx\n", encoding="utf-8")
+    monkeypatch.setenv("TT_DENY_FILE", str(deny))
+    res = mb.run(repo, LABEL, tmp_path / "out", checks=_deny_checks())
+    assert res["checks"][0]["status"] == "pass" and "1항목" in res["checks"][0]["detail"]
+    assert res["exit_code"] == 3
 
 
 class _FakeCtx:

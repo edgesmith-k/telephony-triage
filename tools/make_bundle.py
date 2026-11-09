@@ -12,6 +12,8 @@ HEAD가 원격 main에 들어 있는지(`on_remote_main`)는 보고만 한다.
 통과로 세지 않고, 하나라도 건너뛰면 묶음을 만들지 않는다. 검사는 임시 디렉토리만
 쓰도록 만들었고, 끝난 뒤 추적·비추적(무시 제외) 파일 기준으로 트리를 바꾸지 않았음을
 확인한다 (`git status --porcelain`; 무시 파일은 보지 않는다).
+`deny-file`은 레포 밖 거부 목록(환경 변수 `TT_DENY_FILE`)의 항목이 추적 파일에 없는지 센다(경로·건수만 낸다).
+변수가 없으면 건너뜀(통과 아님)이라 묶음을 만들지 않는다.
 
 CLI:
     python3 tools/make_bundle.py --label LABEL [--out DIR] [--force] [--skip ID[,ID]] [--json] [--repo DIR]
@@ -23,7 +25,7 @@ CLI:
     --repo   대상 레포 루트 (기본: 이 레포)
 
 종료 코드 (contracts.md §종료 코드)
-    1  자동 검사 실패 또는 --skip (묶음 없음)
+    1  자동 검사 실패, --skip, 또는 검사가 건너뜀(skipped)을 냄 (묶음 없음)
     2  사용 오류·환경 오류 (레포 아님, 트리 더럽, 태그 불일치, 하위 도구 종료 2 포함)
     3  자동 검사 모두 통과, 묶음 생성, 사람 확인 대기 (정상 완료)
     0은 없다: 사람 확인이 남아 있으므로 이 도구는 완료를 선언하지 않는다.
@@ -51,6 +53,7 @@ TOOLS = Path(__file__).resolve().parent
 REPO = TOOLS.parent
 sys.path.insert(0, str(TOOLS))
 from import_draft import is_site_path  # noqa: E402
+import deny_scan  # noqa: E402
 
 FAILED, USAGE, NEEDS_APPROVAL = 1, 2, 3
 GUARD_ENV = "TT_MAKE_BUNDLE_INNER"
@@ -69,7 +72,7 @@ class UsageError(Exception):
 
 @dataclass
 class CheckResult:
-    status: str                      # pass | fail | error
+    status: str                      # pass | fail | error | skipped(검사 조건 없음 — 통과 아님, --skip과 같게 종료 1)
     detail: str = ""
     data: object = None
 
@@ -222,6 +225,25 @@ def check_boundary(ctx: Ctx) -> CheckResult:
     return from_exit(code, "check_boundary --mode external 위반 없음", out)
 
 
+def check_deny_file(ctx: Ctx) -> CheckResult:
+    """레포 밖 거부 목록으로 추적 파일 전체를 센다. 맞은 글자·항목 글자는 detail에 넣지 않는다."""
+    deny = ctx.env.get(deny_scan.DENY_ENV, "")
+    if not deny or not Path(deny).is_file():
+        return CheckResult("skipped", f"{deny_scan.DENY_ENV} 없음 — 거부 목록 검사를 건너뛰었다(통과 아님)")
+    patterns = deny_scan.load(deny)
+    if not patterns:
+        return CheckResult("skipped", "거부 목록이 비어 있음 — 거부 목록 검사를 건너뛰었다(통과 아님)")
+    files = deny_scan.tracked(ctx.repo)
+    hits = deny_scan.scan(ctx.repo, patterns, files)
+    total = sum(n for _, n in hits)
+    if total:
+        lines = [f"{rel}: {n}건" for rel, n in sorted(hits, key=lambda h: -h[1])[:20]]
+        return CheckResult("fail", "\n".join([*lines, f"총 {total}건, 파일 {len(hits)}개"]),
+                           {"hits": total, "files": len(hits)})
+    return CheckResult("pass", f"거부 목록 {len(patterns)}항목, 추적 파일 {len(files)}개, 0건",
+                       {"entries": len(patterns), "files": len(files)})
+
+
 def check_site_todos(ctx: Ctx) -> CheckResult:
     code, out = ctx.run("site-todos", [sys.executable, str(ctx.repo / "tools" / "list_site_todos.py"),
                                        "--root", str(ctx.repo), "--json"])
@@ -366,6 +388,7 @@ CHECKS: list[Check] = [
     Check("site-paths", 5, "auto", check_site_paths),
     Check("mcp-local", 6, "auto", check_mcp_local),
     Check("boundary", 2, "auto", check_boundary),
+    Check("deny-file", 2, "auto", check_deny_file),
     Check("human-search", 2, "manual", None,
           "실제 회사명·서버명·팀명이 없는지 사람이 한 번 검색한다: grep -rniE '<회사명>|<사내 도메인>' ."),
     Check("schemas", 3, "auto", tool_check("schemas", "sync_schemas.py", ["--check"], "sync_schemas --check 통과")),
@@ -604,7 +627,7 @@ def run(repo: Path | str, label: str, out: Path | str | None = None, checks: lis
         statuses = [r["status"] for r in results if r["kind"] == "auto"]
         auto_all_pass = bool(statuses) and all(s == "pass" for s in statuses)
         if not auto_all_pass or any_skip:
-            exit_code = FAILED if ('fail' in statuses or any_skip) else USAGE
+            exit_code = FAILED if ({"fail", "skipped"} & set(statuses) or any_skip) else USAGE
         else:
             site_patterns = load_site_paths(repo)
             skeleton = ctx.tmp / "skeleton"
@@ -645,7 +668,7 @@ def format_text(result: dict) -> str:
     lines.append(f"{'검사':<18} {'항목':<4} {'종류':<7} {'상태':<9} 시간")
     for c in result["checks"]:
         lines.append(f"{c['id']:<18} {c['checklist']:<4} {c['kind']:<7} {c['status']:<9} {c['duration_sec']}s")
-        if c["status"] in ("fail", "error"):
+        if c["status"] in ("fail", "error") or (c["status"] == "skipped" and c["detail"] != "--skip"):
             lines.extend("    " + ln for ln in str(c["detail"]).splitlines())
     lines.append("")
     if result["manual"]:
