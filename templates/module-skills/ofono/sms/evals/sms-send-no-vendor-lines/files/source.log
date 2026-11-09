@@ -1,4 +1,4 @@
--- [합성] C1 sms-send-no-vendor-lines. 첨부 로그에 문자 에피소드가 없어 첨부 로그 줄 모양을 본떠 새로 썼다. RIL 이름 밖 가정(A) 없음.
+-- [합성] C1 sms-send-no-vendor-lines. 레포 case의 줄 모양을 본떠 새로 썼다. RIL 이름 밖 가정(A) 없음.
 Sep 21 10:20:00.010 dut local0.info MOSE[731]: [UI___] 000201 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
 Sep 21 10:20:00.200 dut daemon.info exynos-ril[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-97
 Sep 21 10:20:01.000 dut daemon.info ofonod[466]: Device 0: <HEXDUMP 32B>

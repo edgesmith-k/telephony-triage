@@ -1,4 +1,4 @@
--- [합성] telephony-triage module-skills D eval log. Hand-written in the line shapes of attached log A (11/05); composed; RILJ requests with no vendor RIL rows.
+-- [합성] telephony-triage module-skills D eval log. Hand-written; composed; RILJ requests with no vendor RIL rows.
 08-28 17:00:02.000  2101 2111 D DNC-0   : Internet data state changed from DISCONNECTED to CONNECTED.
 08-28 17:00:05.000  2101 2161 I SST-0   : onServiceStateChanged: regState=HOME cellId=<CELL#1> [PHONE0]
 08-28 17:00:08.000  2101 2101 D ImsPhone: [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN

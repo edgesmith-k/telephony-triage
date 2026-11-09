@@ -1,4 +1,4 @@
--- [합성] C1D 보정 data-apn-overwritten. 레포의 줄 모양(network-radio-off-queries 발췌의 데이터 관리 데몬 줄, C0·C1 합성 case)만 본떠 새로 썼다. 두 sync 사이 ofonod·UI 쪽 APN 설정 줄은 없다.
+-- [합성] C1D 보정 data-apn-overwritten. 레포의 줄 모양(network-radio-off-queries case의 데이터 관리 데몬 줄, C0·C1 합성 case)만 본떠 새로 썼다. 두 sync 사이 ofonod·UI 쪽 APN 설정 줄은 없다.
 Sep 22 09:00:00.010 dut local0.info MOSE[731]: [UI___] 000201 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
 Sep 22 09:00:00.200 dut daemon.info exynos-ril[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-95
 Sep 22 09:00:01.000 dut daemon.debug NMD[542]: syncApnInfoWithOfono, Apn size: 2[./apn/feature/ApnManager.cxx +174]
