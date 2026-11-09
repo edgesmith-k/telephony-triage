@@ -62,7 +62,7 @@
 - [ ] `plugin/site-defaults.yaml`이 없고 `site-defaults.example.yaml`만 있음. `SITE_PATHS`의 다른 경로(`.draft-manifest.json` 포함)도 비어 있음
 - [ ] 레포 루트에 `.mcp.json`이 없음 (모의 MCP는 `tests/mocks/mcp.json`). `.local-draft`는 반입 묶음에 넣지 않음
 - [ ] `tools/make_db_skeleton.py`로 이슈 DB 뼈대를 만들었고, 뼈대에 유형·Jira·fixture(합성 포함)가 없음
-- [ ] 모듈 스킬 템플릿 검사 통과 (make_bundle `module-skills`, 항목 11: `module_repo_check --template`, `make_module_eval_inputs --check`, `fixture_residual`) — case는 합성 또는 마스킹 발췌 표시(origin)
+- [ ] 모듈 스킬 템플릿 검사 통과 (make_bundle `module-skills`, 항목 11: `module_repo_check --template`, `make_module_eval_inputs --check`, `fixture_residual`) — case는 합성 표시(`-- [합성]`)
 - [ ] `python3 tools/list_site_todos.py`가 오류 없이 돌고 결과를 사용자가 봤다 (목록은 문서에 두지 않는다. 상태 파일에는 개수만)
 - [ ] `DRAFT_NOTES.md`(상태 파일, ≤8KB): 진행 상태·남은 일·막힌 것·결정이 최신. 가정·모의와 실제가 다를 지점 같은 상세는 `docs/history/draft-notes-<날짜>.md`
 - [ ] `plugin/.claude-plugin/plugin.json`의 description에서 "사외 초안"을 빼고 `version`이 없음 (auto, make_bundle 맨 앞 — 실행 전에 정리 커밋)

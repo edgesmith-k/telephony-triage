@@ -39,7 +39,7 @@ module-skills/                       # 사외에서는 templates/module-skills/
 ├── README.md, modules.yaml          # 쓰는 법·+1·브랜치 보호 / 경로·DB 카테고리·모뎀 전용 신호
 ├── ofono/
 │   ├── _common/layers.md            # 층 사슬, 한 층씩 내려가기, "그 층 로그 없음"
-│   ├── _common/components.md        # 데몬 성격, 공통 데몬(ofonod·exynos-ril·MOSE)
+│   ├── _common/components.md        # 데몬 성격, 공통 데몬(ofonod·vendor-ril·D-Bus 도우미 데몬(사내))
 │   └── data/ sim/ network/ call/ sms/ ims/ modem/
 │       ├── explore.md               # ① 탐색 문서(≤4KB)
 │       ├── SKILL.md                 # ② 심층 분석 절차(≤6KB)
@@ -53,13 +53,13 @@ oFono 모듈 → 데몬(D10 확정):
 
 | 모듈 | 데몬 | DB 카테고리 |
 |---|---|---|
-| data | NMD, MOSE, ofonod(gprs·lte), DITD, exynos-ril | data |
-| sim | ofonod(sim), LPA, ipad, exynos-ril, MOSE | sim |
-| network | ofonod(netreg), exynos-ril, PTD, MOSE | network |
-| call | ofonod(voicecall), exynos-ril, IMSSVC, MOSE | call |
-| sms | ofonod(sms), exynos-ril, IMSSVC, MOSE | sms |
-| ims | IMSSVC, ENT, ofonod(ims), exynos-ril, MOSE | ims |
-| modem | ofonod(modem), exynos-ril, DMD, RFSD, vcd, MOSE | common(D3) |
+| data | ofonod(gprs·lte), vendor-ril, 사내 구성요소는 카테고리별 슬롯(설정) | data |
+| sim | ofonod(sim), vendor-ril, 사내 구성요소는 카테고리별 슬롯(설정) | sim |
+| network | ofonod(netreg), vendor-ril, 사내 구성요소는 카테고리별 슬롯(설정) | network |
+| call | ofonod(voicecall), vendor-ril, 사내 구성요소는 카테고리별 슬롯(설정) | call |
+| sms | ofonod(sms), vendor-ril, 사내 구성요소는 카테고리별 슬롯(설정) | sms |
+| ims | ofonod(ims), vendor-ril, 사내 구성요소는 카테고리별 슬롯(설정) | ims |
+| modem | ofonod(modem), vendor-ril, 사내 구성요소는 카테고리별 슬롯(설정) | common(D3) |
 
 - Android 층은 앱·프레임워크 → RILJ → RIL HAL → 벤더 RIL → 모뎀이다. 모듈별 태그·클래스·RIL 요청 초안은 부록 §1.5에 있다. 출처를 R(레포 자료)과 A(AOSP 개념, 미확인)로 표시했고, 16·17 버전 기준이다. D를 시작하기 전에 모듈 경계만 묻는다(Q9).
 - 레포에 넣지 않는 것: 로그 원문, 사내 값·호스트, `org.ofono.*`·`org.freedesktop.DBus.*` 밖의 D-Bus 이름, 실행 파일, `CLAUDE.md`처럼 자동으로 읽히는 이름. 받을 때와 고칠 때 스크립트가 검사한다.
@@ -95,7 +95,7 @@ A1 +1 관문 → A2 바로 병합 삭제·리뷰어 질문 → C0 파일럿(관�
 |---|---|---|---|
 | D1 | ①②를 모듈별로 둔다. oFono·Android, Android 기본 스킬은 새로 만든다 | §3, C1·D | 사내 기존 스킬 합치기: S-4a → 새 트랙 MS-2 (**Q3**) |
 | D2 | 레포 1개. `_common` + 모듈 구조, README·modules.yaml | §3 | — |
-| D3 | 디렉토리 = DB 카테고리. modem은 `common`에 연결 | `db_category: common`으로 둔다. `common` 줄은 세지 않고 모뎀 전용 데몬(DMD·RFSD·vcd) 줄로 고른다 | — (대안 `null`은 Q10) |
+| D3 | 디렉토리 = DB 카테고리. modem은 `common`에 연결 | `db_category: common`으로 둔다. `common` 줄은 세지 않고 모뎀 전용 데몬(모뎀 진단 데몬(사내)·모뎀 NV 데몬(사내)·모뎀 감시 데몬(사내)) 줄로 고른다 | — (대안 `null`은 Q10) |
 | D4 | 도구 clone, sparse, 최신 main, SHA. 개인 clone 불변 | 그대로 한다. 받은 파일은 작업 디렉토리에 복사해 읽고, 받은 내용도 점검한다 | — |
 | D5 | 5-1은 1위 카테고리, 5-2는 데몬·태그 카테고리와 Jira 요약. 둘 이상이면 묻는다 | 줄 카테고리는 이슈 DB `tags.yaml` 기준으로 센다. 둘 이상이면 묻는다 | 자동 선택 규칙 (**Q4**) |
 | D6 | log-guide에는 줄 모양만, 층·데몬은 `_common`으로 | 그대로 | 주소가 없을 때 지식이 줄어든다 (**Q6**) |
@@ -130,7 +130,7 @@ A1 +1 관문 → A2 바로 병합 삭제·리뷰어 질문 → C0 파일럿(관�
 | # | 단계 | 물을 것 | 추천 |
 |---|---|---|---|
 | Q8 | A1 | `db_pr merge --approved` 생략. 새 세션에서 "병합해줘"라고 하면 사용자는 SHA를 모른다 | 생략하면 `merge-offer.json`의 head를 쓴다. PR head가 다르면 거부한다. `sync-pr`이 head를 갱신한다 |
-| Q9 | D | Android 모듈 경계(부록 §1.5). 이름은 S9에서 사내가 확인한다 | `RADIO_POWER`와 `RADIO_STATE_CHANGED`는 둘 다 network에 둔다(oFono PTD RADIO_ON과 맞춘다). IMS PDN 실패는 ims case로 두고, 기대 원인 층을 data로 한다 |
+| Q9 | D | Android 모듈 경계(부록 §1.5). 이름은 S9에서 사내가 확인한다 | `RADIO_POWER`와 `RADIO_STATE_CHANGED`는 둘 다 network에 둔다(oFono 망 상태 데몬(사내) RADIO_ON과 맞춘다). IMS PDN 실패는 ims case로 두고, 기대 원인 층을 data로 한다 |
 
 ### 6.3 기본안으로 진행 — 이의가 있으면 말해 달라
 

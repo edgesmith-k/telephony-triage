@@ -45,7 +45,7 @@ python3 tests/helpers/make_module_eval_inputs.py --check   # 생성물 drift
 
 - gh가 필요한 시험은 레포 안의 mock(`tests/mocks/bin`)을 쓴다. 실제 GitHub·Jira·유료 모델 호출은 필요 없다.
 - `module_eval.py`는 `--dry-run`으로 비용 없이 실행 계획을 볼 수 있다.
-- 실제 첨부 로그(원문)는 레포에 없다. 레포에 있는 로그는 모두 합성이거나 마스킹된 발췌라야 한다(§4).
+- 사내 로그는 사외에서 본 적이 없고 레포에도 없다. 레포에 있는 로그는 모두 합성 로그와 placeholder라야 한다(§4).
 
 ## 4. 요구사항 — 위반 여부를 확인할 대상
 

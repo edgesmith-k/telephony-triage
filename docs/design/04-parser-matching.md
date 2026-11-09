@@ -48,7 +48,7 @@ tags:
   - {tag_regex: '^Ims(Manager|Resolver|ServiceController|Registration).*', category: ims, added_for: IMS-001, added_on: 2026-09-27, reason: 초기}
 ```
 
-**태그 속성(선택, C1+D 보정)**: tags 항목에 `level: unreliable`(그 줄 레벨은 심각도가 아님 → `I`)·`ipc: vendor`(벤더 IPC builtin 판별 대상)를 둘 수 있다(값은 스키마가 막음). 키마다 DB가 하나라도 선언하면 DB만, 아니면 백엔드 기본(oFono level {DITD, RFSD, DMD, MOSE}·ipc {exynos-ril}, Android ipc {RIL}). 데몬이 바뀌면 옛·새 이름 모두에 두고 옛 이름은 나중에 지운다. 읽기는 `backend.apply_rules(rules)`, `rulediff`는 `ipc`가 바뀌면 벤더 IPC builtin 시그니처를 대상에 넣는다. 사내 DB는 스키마 두 키를 같은 PR로 넣는다.
+**태그 속성(선택, C1+D 보정)**: tags 항목에 `level: unreliable`(그 줄 레벨은 심각도가 아님 → `I`)·`ipc: vendor`(벤더 IPC builtin 판별 대상)를 둘 수 있다(값은 스키마가 막음). 키마다 DB가 하나라도 선언하면 DB만, 아니면 백엔드 기본(oFono는 `platform.others.ofono.components.<이름>.{level_unreliable, vendor_ipc}` 설정, Android ipc {RIL}). 데몬이 바뀌면 옛·새 이름 모두에 두고 옛 이름은 나중에 지운다. 읽기는 `backend.apply_rules(rules)`, `rulediff`는 `ipc`가 바뀌면 벤더 IPC builtin 시그니처를 대상에 넣는다. 사내 DB는 스키마 두 키를 같은 PR로 넣는다.
 
 `parser-rules/ril.yaml` (예시):
 
