@@ -5,6 +5,7 @@
 한 줄에 항목 하나, 빈 줄·`#` 줄은 무시. 대소문자를 무시하고, 항목의 첫/끝 글자가 단어 글자(`_` 제외)면 그쪽에
 영숫자 경계를 둔다(끝이 `.`인 접두어 항목은 그쪽 경계 없음). `_`는 경계로 본다 — 식별자 안에 든 이름도 누출이다.
 파일 내용과 함께 **경로 문자열도** 검사한다(경로에 맞으면 파일당 1건). UTF-8로 읽히지 않는 파일은 내용을 건너뛰고 센다.
+읽을 수 없는 추적 파일(삭제됨·디렉토리 등)은 읽기 실패로 세고 CLI는 종료 2.
 **출력에는 경로(맞은 부분은 `«k»`, k = 항목 번호)와 건수만 낸다 — 맞은 글자·항목 글자는 내지 않는다.**
 
 CLI:
@@ -15,7 +16,7 @@ CLI:
 종료 코드 (contracts.md §종료 코드)
     0  0건
     1  1건 이상 (`경로: n건` 줄들 + `TOTAL n hits in m files (scanned s, skipped k)`)
-    2  거부 목록 없음·UTF-8 아님·비어 있음, 스캔할 추적 파일 없음, git 실패
+    2  거부 목록 없음·UTF-8 아님·비어 있음, 스캔할 추적 파일 없음, 읽기 실패, git 실패
 """
 
 from __future__ import annotations
@@ -46,37 +47,47 @@ def load(path: Path | str) -> list[tuple[int, re.Pattern]]:
 def tracked(root: Path | str) -> list[str]:
     proc = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], capture_output=True)
     if proc.returncode != 0:
-        raise RuntimeError(f"git ls-files 실패: {proc.stderr.decode('utf-8', 'replace').strip()}")
+        raise RuntimeError(f"git ls-files 실패 (종료 {proc.returncode})")   # stderr엔 경로가 들 수 있다
     return [n for n in proc.stdout.decode("utf-8").split("\0") if n]
 
 
 def _mask(text: str, patterns, repl=None) -> tuple[str, int]:
-    """항목을 차례로 지운다(맞은 자리는 다음 항목이 겹쳐 다시 세지 않는다). repl 없으면 «k»."""
-    n = 0
-    for k, rx in patterns:
-        text, c = rx.subn(repl if repl is not None else f"«{k}»", text)
-        n += c
-    return text, n
+    """원문에서 모든 항목의 일치 구간을 모아 겹친 구간은 합쳐 한 번 세고 가린다. repl 없으면 «k»(합친 구간의 가장 작은 항목 번호)."""
+    spans = sorted(((m.start(), m.end(), k) for k, rx in patterns for m in rx.finditer(text) if m.end() > m.start()),
+                   key=lambda t: (t[0], -t[1]))
+    merged: list[list] = []
+    for start, end, k in spans:
+        if merged and start < merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+            merged[-1][2] = min(merged[-1][2], k)
+        else:
+            merged.append([start, end, k])
+    for start, end, k in reversed(merged):
+        text = text[:start] + (repl if repl is not None else f"«{k}»") + text[end:]
+    return text, len(merged)
 
 
 def scan(root: Path | str, patterns: list[tuple[int, re.Pattern]], files: list[str] | None = None
-         ) -> tuple[list[tuple[str, int]], int, int]:
-    """(맞은 파일 [(가린 경로, 건수)], 스캔한 파일 수, 내용을 건너뛴 파일 수). files가 없으면 추적 파일 전부."""
+         ) -> tuple[list[tuple[str, int]], int, int, int]:
+    """(맞은 파일 [(가린 경로, 건수)], 스캔한 파일 수, UTF-8 아니라 내용을 건너뛴 파일 수, 읽기 실패 파일 수).
+    files가 없으면 추적 파일 전부."""
     root = Path(root)
     files = tracked(root) if files is None else files
-    hits, skipped = [], 0
+    hits, skipped, errors = [], 0, 0
     for rel in files:
         shown, in_path = _mask(rel, patterns)
         n = 1 if in_path else 0
         try:
             text = (root / rel).read_bytes().decode("utf-8")
-        except (OSError, UnicodeDecodeError):   # 바이너리·읽을 수 없는 파일(삭제됨·디렉토리)
+        except OSError:                # 읽을 수 없는 파일(삭제됨·디렉토리·권한)
+            errors += 1
+        except UnicodeDecodeError:     # 바이너리
             skipped += 1
         else:
             n += _mask(text, patterns, "\0")[1]
         if n:
             hits.append((shown, n))
-    return hits, len(files), skipped
+    return hits, len(files), skipped, errors
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -102,9 +113,9 @@ def main(argv: list[str] | None = None) -> int:
         print("거부 목록이 비어 있습니다", file=sys.stderr)
         return 2
     try:
-        hits, scanned, skipped = scan(args.root, patterns, args.paths or None)
-    except (RuntimeError, OSError) as exc:
-        print(str(exc), file=sys.stderr)
+        hits, scanned, skipped, errors = scan(args.root, patterns, args.paths or None)
+    except (RuntimeError, OSError):   # 예외 문구에는 경로가 들 수 있어 고정 문구만 낸다
+        print("추적 파일 목록을 얻지 못했습니다 (git 실패 또는 경로 오류)", file=sys.stderr)
         return 2
     if not scanned:
         print("스캔할 추적 파일 없음", file=sys.stderr)
@@ -113,6 +124,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{rel}: {n}건")
     total = sum(n for _, n in hits)
     print(f"TOTAL {total} hits in {len(hits)} files (scanned {scanned}, skipped {skipped})")
+    if errors:
+        print(f"읽기 실패 {errors}개 파일", file=sys.stderr)
+        return 2
     return 1 if total else 0
 
 

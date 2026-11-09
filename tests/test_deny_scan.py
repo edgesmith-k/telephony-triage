@@ -51,8 +51,8 @@ EXPECTED = {"hit.txt": 4, "snake.txt": 1, "dot.txt": 2, "«1»/note.txt": 1, "«
 def test_scan_counts_contents_and_paths(repo, deny):
     pats = ds.load(deny)
     assert [k for k, _ in pats] == [1, 2]                 # 주석·빈 줄은 항목이 아니다
-    hits, scanned, skipped = ds.scan(repo, pats)
-    assert dict(hits) == EXPECTED and scanned == 6 and skipped == 1
+    hits, scanned, skipped, errors = ds.scan(repo, pats)
+    assert dict(hits) == EXPECTED and scanned == 6 and skipped == 1 and errors == 0
 
 
 def test_bom_in_deny_file(repo, tmp_path):
@@ -75,8 +75,26 @@ def test_overlapping_entries_count_once(tmp_path):
     assert ds.scan(tmp_path, ds.load(deny), ["x.txt"])[0] == [("x.txt", 2)]   # 겹친 자리는 한 번만
 
 
+@pytest.mark.parametrize("entries", ["alpha\nalpha-secret\n", "alpha-secret\nalpha\n"])
+def test_longer_overlapping_entry_is_masked_whole(tmp_path, entries):
+    (tmp_path / "alpha-secret.txt").write_text("plain\n", encoding="utf-8")
+    deny = tmp_path / "d.txt"
+    deny.write_text(entries, encoding="utf-8")
+    hits = ds.scan(tmp_path, ds.load(deny), ["alpha-secret.txt"])[0]
+    assert hits == [("«1».txt", 1)]                      # 짧은 항목이 긴 항목 일부를 남기지 않는다
+    assert "alpha" not in hits[0][0] and "secret" not in hits[0][0]
+
+
 def test_explicit_paths_only(repo, deny):
-    assert ds.scan(repo, ds.load(deny), ["miss.txt", "untracked.txt"]) == ([("untracked.txt", 2)], 2, 0)
+    assert ds.scan(repo, ds.load(deny), ["miss.txt", "untracked.txt"]) == ([("untracked.txt", 2)], 2, 0, 0)
+
+
+def test_unreadable_tracked_file_is_error_not_skipped(repo, deny):
+    (repo / "miss.txt").unlink()                          # 추적되지만 지워짐 → 읽기 실패(OSError)
+    hits, scanned, skipped, errors = ds.scan(repo, ds.load(deny))
+    assert (scanned, skipped, errors) == (6, 1, 1)        # zzqx.bin은 그대로 skipped(UTF-8 아님)
+    proc = _cli("--root", str(repo), env_deny=deny)
+    assert proc.returncode == 2 and "읽기 실패 1개 파일" in proc.stderr and "Traceback" not in proc.stderr
 
 
 def _cli(*args: str, env_deny: Path | None = None):
@@ -117,4 +135,12 @@ def test_cli_usage_errors_exit_2_without_traceback(repo, tmp_path):
         proc = _cli(*args)
         assert proc.returncode == 2 and "Traceback" not in proc.stderr, args
     assert "스캔할 추적 파일 없음" in proc.stderr
+
+
+def test_cli_git_failure_message_has_no_path(tmp_path):
+    deny = tmp_path / "d.txt"
+    deny.write_text("reviewsecretqq\n", encoding="utf-8")
+    proc = _cli("--root", str(tmp_path / "ReviewSecretQQ-missing"), "--deny", str(deny))
+    assert proc.returncode == 2 and "Traceback" not in proc.stderr
+    assert "reviewsecret" not in (proc.stdout + proc.stderr).lower()
 
