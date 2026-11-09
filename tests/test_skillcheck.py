@@ -119,7 +119,7 @@ def test_tree_sizes():
     assert checks([blob(f"{case}/case.yaml", 6000), blob(f"{case}/files/a.log", 13312),
                    blob(f"{case}/files/b.json", 29840)]) == []
     assert sc.CAPS["modules.yaml"] == 24576 and (sc.REFERENCE_CAP, sc.CASE_CAP) == (4096, 49152)
-    assert (sc.EXCERPT_LOG_CAP, sc.SYNTHETIC_LOG_CAP) == (13312, 6144)
+    assert sc.CASE_LOG_CAP == 13312
 
 
 def test_parse_ls_tree():

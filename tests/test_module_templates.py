@@ -198,7 +198,7 @@ def test_origin_marker():
         log = (case / "files" / "source.log").read_text(encoding="utf-8")
         assert sc.origin_problems(data, log) == [], case.name
         assert data["synthetic"] is True and "origin" not in data, case.name
-        assert len(log.encode()) <= 13312, case.name
+        assert len(log.encode()) <= sc.CASE_LOG_CAP, case.name
 
 
 def test_case_files_masked():

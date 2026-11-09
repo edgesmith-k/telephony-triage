@@ -11,7 +11,7 @@
                    자격증명, `*token*`·`*secret*`·`*password*`·`*api_key*` 대입 — 자리표시 값
                    `<…>`·`${…}`·`xxxx`·`REDACTED`·`EXAMPLE`은 제외, 대입 값은 숫자 포함 20자
                    이상), 공인 IP, 15자리 숫자(IMEI·IMSI), 허용 목록 밖 이메일·URL 호스트,
-                   로그 출처 흔적 문구(`trace-wording`: 발췌 표시·로그 id·마스커 해시·점검 날짜).
+                   로그 출처 흔적 문구(`trace-wording`: 발췌·첨부 표시·로그 id·마스커 해시·점검 날짜).
                    비밀값은 출력에서 앞부분만 보인다. 사내는 `docs/site/boundary-patterns.txt`
                    (SITE_PATHS)에 실제 회사·서버·팀 이름 패턴을 더한다(모드와 무관).
     site-import    `plugin/scripts/**`가 SITE_PATHS 모듈(`parser_backends.site`,
@@ -158,10 +158,10 @@ DEFAULT_PATTERNS: list[tuple[str, re.Pattern, object]] = [
      lambda m: _host_ok(m.group(1))),
     ("url-host", re.compile(r"\b(?:https?|ssh|git)://(?:[^@/\s]+@)?([A-Za-z0-9.-]+)"),
      lambda m: _host_ok(m.group(1)) or "<" in m.group(0)),
-    # 로그 출처 흔적 문구(발췌 표시·로그 id·마스커 해시·점검 날짜)의 재유입. 정규식 글자는 자기 자신에 맞지 않게 쓴다
+    # 로그 출처 흔적 문구(발췌·첨부 표시·로그 id·마스커 해시·점검 날짜)의 재유입. 정규식 글자는 자기 자신에 맞지 않게 쓴다
     # (`\s`·`[-]`·`\[` — 이 파일은 예외 없이 검사를 통과한다). case 로그는 합성뿐이다(`-- [합성]`).
     ("trace-wording", re.compile(
-        r"마스킹\s발췌|masked[-]excerpt|-- \[마스킹|\bmasker:\s*['\"]?[0-9a-f]{12}\b|\bresidual:\s*['\"]?\d{4}-\d{2}-\d{2}"
+        r"마스킹\s발췌|첨부\s로그|masked[-]excerpt|-- \[마스킹|\bmasker:\s*['\"]?[0-9a-f]{12}\b|\bresidual:\s*['\"]?\d{4}-\d{2}-\d{2}"
         r"|\bO[12]\s+E\d+[a-z]?\b|\bA-E\d+[a-z]?\b|\bE\d+[a-z]?\s+줄\s+\d+-\d+"), None),
 ]
 

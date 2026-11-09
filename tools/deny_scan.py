@@ -2,7 +2,7 @@
 """레포 밖 거부 목록의 항목이 git 추적 파일에 있는지 센다 (15-local-draft.md §15.4, make_bundle `deny-file`).
 
 거부 목록은 레포에 두지 않는다. 경로는 `--deny` 또는 환경 변수 `TT_DENY_FILE`로만 받는다(UTF-8, BOM 허용).
-한 줄에 항목 하나, 빈 줄·`#` 줄은 무시. 대소문자를 무시하고, 항목의 첫/끝 글자가 단어 글자면 그쪽에
+한 줄에 항목 하나, 빈 줄·`#` 줄은 무시. 대소문자를 무시하고, 항목의 첫/끝 글자가 단어 글자(`_` 제외)면 그쪽에
 영숫자 경계를 둔다(끝이 `.`인 접두어 항목은 그쪽 경계 없음). `_`는 경계로 본다 — 식별자 안에 든 이름도 누출이다.
 파일 내용과 함께 **경로 문자열도** 검사한다(경로에 맞으면 파일당 1건). UTF-8로 읽히지 않는 파일은 내용을 건너뛰고 센다.
 **출력에는 경로(맞은 부분은 `«k»`, k = 항목 번호)와 건수만 낸다 — 맞은 글자·항목 글자는 내지 않는다.**
@@ -80,15 +80,15 @@ def scan(root: Path | str, patterns: list[tuple[int, re.Pattern]], files: list[s
 
 
 def main(argv: list[str] | None = None) -> int:
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure:
+        reconfigure(errors="backslashreplace")   # `«k»`·도움말 한글을 못 내는 콘솔(cp949 등)에서도 죽지 않는다
     parser = argparse.ArgumentParser(prog="deny_scan.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--root", default=".")
     parser.add_argument("--deny", default=None)
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args(argv)
-    reconfigure = getattr(sys.stdout, "reconfigure", None)
-    if reconfigure:
-        reconfigure(errors="backslashreplace")   # `«k»`를 못 내는 콘솔(cp949 등)에서도 죽지 않는다
     deny = args.deny or os.environ.get(DENY_ENV)
     if not deny or not Path(deny).is_file():
         print(f"거부 목록이 없습니다: --deny <file> 또는 {DENY_ENV}를 줍니다", file=sys.stderr)
