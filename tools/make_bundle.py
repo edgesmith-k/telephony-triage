@@ -242,7 +242,7 @@ def check_deny_file(ctx: Ctx) -> CheckResult:
     if not scanned:
         return CheckResult("skipped", "스캔할 추적 파일 없음 — 거부 목록 검사를 건너뛰었다(통과 아님)")
     total = sum(n for _, n in hits)
-    tail_line = f"추적 파일 {scanned}개, 건너뜀 {skipped}개(바이너리)"
+    tail_line = f"추적 파일 {scanned}개, 건너뜀 {skipped}개(바이너리·읽기 실패)"
     if total:
         lines = [f"{rel}: {n}건" for rel, n in sorted(hits, key=lambda h: -h[1])[:20]]
         return CheckResult("fail", "\n".join([*lines, f"총 {total}건, 파일 {len(hits)}개 — {tail_line}"]),

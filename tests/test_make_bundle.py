@@ -376,7 +376,7 @@ def test_deny_file_zero_hits_passes(repo, tmp_path, monkeypatch):
     monkeypatch.setenv("TT_DENY_FILE", str(deny))
     res = mb.run(repo, LABEL, tmp_path / "out", checks=_deny_checks())
     assert res["checks"][0]["status"] == "pass" and "1항목" in res["checks"][0]["detail"]
-    assert "건너뜀 0개(바이너리)" in res["checks"][0]["detail"] and res["exit_code"] == 3
+    assert "건너뜀 0개(바이너리·읽기 실패)" in res["checks"][0]["detail"] and res["exit_code"] == 3
     deny.write_bytes(b"\xff\xfe\x80\n")                     # UTF-8 아님 → skipped(종료 1), 트레이스백 아님
     res = mb.run(repo, LABEL, tmp_path / "out2", checks=_deny_checks())
     assert res["checks"][0]["status"] == "skipped" and res["exit_code"] == 1

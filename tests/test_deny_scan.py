@@ -61,6 +61,13 @@ def test_bom_in_deny_file(repo, tmp_path):
     assert ds.scan(repo, ds.load(path), ["hit.txt"])[0] == [("hit.txt", 4)]
 
 
+def test_underscore_edged_entry_has_no_boundary_on_that_side(tmp_path):
+    (tmp_path / "x.txt").write_text("ril_abc ril_abcd\n", encoding="utf-8")
+    deny = tmp_path / "d.txt"
+    deny.write_text("_abc\n", encoding="utf-8")   # 앞은 `_`라 경계 없음, 뒤는 영숫자 경계
+    assert ds.scan(tmp_path, ds.load(deny), ["x.txt"])[0] == [("x.txt", 1)]
+
+
 def test_overlapping_entries_count_once(tmp_path):
     (tmp_path / "x.txt").write_text("zzqx.a zzqx\n", encoding="utf-8")
     deny = tmp_path / "d.txt"

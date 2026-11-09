@@ -37,8 +37,8 @@ def load(path: Path | str) -> list[tuple[int, re.Pattern]]:
     entries = [e for e in entries if e and not e.startswith("#")]
     out = []
     for k, e in enumerate(entries, 1):
-        head = _EDGE_HEAD if re.match(r"\w", e[0]) else ""
-        tail = _EDGE_TAIL if re.match(r"\w", e[-1]) else ""
+        head = _EDGE_HEAD if re.match(r"[^\W_]", e[0]) else ""   # `_`로 시작·끝나는 항목은 그쪽 경계 없음
+        tail = _EDGE_TAIL if re.match(r"[^\W_]", e[-1]) else ""
         out.append((k, re.compile(head + re.escape(e) + tail, re.IGNORECASE)))
     return out
 
@@ -86,8 +86,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--deny", default=None)
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args(argv)
-    sys.stdout.reconfigure(errors="backslashreplace")   # `«k»`를 못 내는 콘솔(cp949 등)에서도 죽지 않는다
-    deny =args.deny or os.environ.get(DENY_ENV)
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure:
+        reconfigure(errors="backslashreplace")   # `«k»`를 못 내는 콘솔(cp949 등)에서도 죽지 않는다
+    deny = args.deny or os.environ.get(DENY_ENV)
     if not deny or not Path(deny).is_file():
         print(f"거부 목록이 없습니다: --deny <file> 또는 {DENY_ENV}를 줍니다", file=sys.stderr)
         return 2
