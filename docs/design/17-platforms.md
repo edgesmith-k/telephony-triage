@@ -138,15 +138,15 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 
 > 10/30 사용자 요청("oFono 외에 여러 데몬도 같이 돈다"). 사용자 답: (1) 모든 데몬을 oFono 이슈 DB 하나에 둔다(플랫폼은 `ofono` 그대로, K5 불변), (2) 로그는 한 스트림(journald/syslog)이고 줄마다 데몬 식별자(ident)가 있다, (3) 데몬마다 소스가 따로 있다, (4) 데몬 사이 요청·응답 짝이 필요하다(형식 미정 — placeholder). 결정은 §7 K12~K15. 기본 설정의 출력은 이전과 같고, 새 기능이 있어 `ofono_reference`는 0.0.2다(DB가 `min_version`으로 요구할 수 있다).
 > 11/02: 줄 형식 (c) BusyBox syslogd·내장 짝 `gril`·슬롯 규칙이 기본 출력을 바꿔 `ofono_reference`는 **0.0.3**이다((a)·(b) 형식이고 gril 줄·`/ril_<n>`이 없는 로그는 0.0.2와 같다, K19). 분석 재사용 캐시는 한 번 바뀐다.
-> C1+D 보정: (c) 형식의 레벨 보정(`LEVEL_UNRELIABLE_IDENTS`, 기본값 정본은 `journal.py`)은 줄 읽기(`journal.read_file`, severity 그대로)에서 `OfonoReferenceBackend._line_record`로 옮겼다. 벤더 IPC 판별 이름과 함께 이슈 DB tags.yaml `level: unreliable`·`ipc: vendor`로 바꿀 수 있다(`04-parser-matching.md §5.8 (2)`, 선언이 없으면 기본 상수 — 출력 같음).
-> C1+D 보정 버전: `ofono_reference` **0.0.4**(레벨 보정·벤더 IPC builtin이 0.0.3 출력을 바꿈), Android `reference` **0.1.1**(D의 벤더 IPC builtin·ril.py 해석). 버전은 분석 재사용 캐시 키(`compiled.environment` → `source_hash`)라 올리지 않으면 이전 분석이 재사용된다.
+> C1+D 보정: (c) 형식의 레벨 보정은 줄 읽기(`journal.read_file`, severity 그대로)에서 `OfonoReferenceBackend._line_record`로 옮겼다. 레벨 보정·벤더 IPC 판별 대상은 구성요소 설정 `level_unreliable`·`vendor_ipc`(§9-1, 코드 기본 없음 — TODO(SITE:S25))이고, 이슈 DB tags.yaml에 `level: unreliable`·`ipc: vendor`가 하나라도 있으면 그 키는 DB만 본다(`04-parser-matching.md §5.8 (2)`).
+> C1+D 보정 버전: `ofono_reference` **0.0.4**(레벨 보정·벤더 IPC builtin이 0.0.3 출력을 바꿈), Android `reference` **0.1.1**(D의 벤더 IPC builtin·ril.py 해석). **0.0.5**: 판별 대상이 코드 상수에서 구성요소 설정으로 — 설정도 DB 선언도 없으면 보정·판별 없음(0.0.4와 출력이 다를 수 있다). 버전은 분석 재사용 캐시 키(`compiled.environment` → `source_hash`)라 올리지 않으면 이전 분석이 재사용된다.
 
 ### 9-1. 구성요소 계약 (`platforms/base.py`)
 
-- `Component(name, idents, root_key=None, source_tree=None, msg_format=None, split_tag=False)`: 로그 ident 묶음 ↔ 소스 루트 키 ↔ 그 루트의 필수 디렉토리·버전 출처 ↔ 메시지 하위 형식. `name` `^[a-z][a-z0-9_-]*$`, `idents`는 `LogLine.tag`의 정확한 이름(1개 이상, 구성요소끼리 겹치지 않음), `root_key`는 code_ref 키 형식 `^[a-z][a-z0-9_]*$`(겹치지 않음), `source_tree`는 `root_key`가 주 루트가 아닐 때만(주 루트 것은 블록 `source_tree`), `msg_format`은 `SPEC.msg_formats`의 이름, `split_tag`는 `msg_format`이 있을 때만.
+- `Component(name, idents, root_key=None, source_tree=None, msg_format=None, split_tag=False, level_unreliable=False, vendor_ipc=False)`: 로그 ident 묶음 ↔ 소스 루트 키 ↔ 그 루트의 필수 디렉토리·버전 출처 ↔ 메시지 하위 형식. `name` `^[a-z][a-z0-9_-]*$`, `idents`는 `LogLine.tag`의 정확한 이름(1개 이상, 구성요소끼리 겹치지 않음), `root_key`는 code_ref 키 형식 `^[a-z][a-z0-9_]*$`(겹치지 않음), `source_tree`는 `root_key`가 주 루트가 아닐 때만(주 루트 것은 블록 `source_tree`), `msg_format`은 `SPEC.msg_formats`의 이름, `split_tag`는 `msg_format`이 있을 때만. `level_unreliable: true`면 그 ident 줄의 syslog severity는 심각도가 아니라 레벨 `I`, `vendor_ipc: true`면 그 ident 줄에 벤더 IPC 결과 builtin 판별(`common.vendor_ipc`)을 부른다 — 이슈 DB tags.yaml이 `level`·`ipc`를 하나라도 선언하면 그 키는 DB만 본다(`04-parser-matching.md §5.8 (2)`).
 - `MsgView(body, subtag=None)`: 형식 함수 `(msg) -> MsgView | None`의 결과. `body`는 앞머리를 뗀 본문(짝 규칙 annotate 입력), `subtag`는 모듈 등 하위 식별.
 - `PlatformSpec` 뒤쪽 기본값 필드: `components`(기본 구성요소), `msg_formats`(`(이름, 함수)`), `protocol_kinds`(`(kind, 팩토리)`, §9-3). `PlatformProfile`에 `components`·`protocols`(SPEC 것 다음 설정 것 순서).
-- opt-in: `block_keys`에 `components`가 있는 플랫폼만(ofono) site-defaults `platform.others.ofono.components.<이름>: {idents, root_key, source_tree, msg_format, split_tag}`를 받는다. 쓰면 SPEC 기본을 **통째로 바꾼다**(`{}` = 구성요소 없음, `null` = 생략과 같음). 잘못된 값은 키 경로와 종료 코드 2. android에서 `components`는 지금처럼 모르는 키 오류다.
+- opt-in: `block_keys`에 `components`가 있는 플랫폼만(ofono) site-defaults `platform.others.ofono.components.<이름>: {idents, root_key, source_tree, msg_format, split_tag, level_unreliable, vendor_ipc}`를 받는다. 쓰면 SPEC 기본을 **통째로 바꾼다**(`{}` = 구성요소 없음, `null` = 생략과 같음). 잘못된 값은 키 경로와 종료 코드 2. android에서 `components`는 지금처럼 모르는 키 오류다.
 - ofono 기본: 구성요소 `ofono`(ident `ofonod`, 루트 `ofono`, 형식 `file_func`) 하나 — 공개 upstream 값, `TODO(SITE:S24·S25)`. 사내 데몬은 코드에 넣지 않는다.
 - ofono 기본 짝·슬롯: 짝 `gril`(§9-3), 슬롯 `PhoneIdRules((), (줄 앞 `[<slot>,<serial>|UNSOL]<>` — upstream DBG 앞머리 `x.c:func() ` 뒤도,), (모뎀 경로 `/ril_<n>`,))`(`platforms/ofono/gril.py`, TODO(SITE:S29)). 데몬마다 슬롯 표기가 다르고(`[SLOT_<n>]` 등) 0·1 기준이 섞여 기본값에 넣지 않았다 — 사내 확인 뒤 site `log.phone_id`로. site `log.phone_id.msg_prefix`·`msg_suffix`를 쓰면 그 목록이 통째로 바뀌므로 gril 규칙을 함께 둔다(빠지면 gril 짝 키가 `(pid, None, serial)`).
 
@@ -180,7 +180,7 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 
 | 무엇 | 어디 |
 |---|---|
-| ident·소스 루트 키·필수 디렉토리·버전 출처·메시지 형식 | site-defaults `platform.others.ofono.components.<이름>` (S24·S25·S27) |
+| ident·소스 루트 키·필수 디렉토리·버전 출처·메시지 형식·레벨 보정(`level_unreliable`)·벤더 IPC 판별(`vendor_ipc`) | site-defaults `platform.others.ofono.components.<이름>` (S24·S25·S27) |
 | ident → 카테고리 | 이슈 DB `parser-rules/tags.yaml` (S25) |
 | code_ref 허용 키 | 이슈 DB `code_root_keys` (S27) |
 | 데몬 사이 짝 | site-defaults `platform.others.ofono.protocols.<이름>`(`kind: regex`), 내장 `gril`의 ident·끄기는 `protocols.gril.tags`, 파생 이벤트는 DB `ril.yaml` (S26) |

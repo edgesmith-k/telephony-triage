@@ -150,6 +150,8 @@ platform:
 #         daemon-a: {idents: [daemon-a], root_key: daemon_a, source_tree: {required_dirs: [src]}}
 #         daemon-b: {idents: [daemon-b], root_key: daemon_b}   # split_tag: true면 tag = <ident>/<모듈>(msg_format 필요)
 #         # msg_format: file_func(upstream DBG) · tid_file_paren · level_tid_file · slot_level_seq · src_suffix(벤더 앞머리 모양, 17-platforms §9-2)
+#         # daemon-a: {idents: [daemon-a], level_unreliable: true}   # 그 줄의 severity는 심각도가 아님 → 레벨 I(코드 기본 없음, TODO(SITE:S25))
+#         # daemon-b: {idents: [daemon-b], vendor_ipc: true}         # 벤더 IPC 결과 builtin 판별 대상(코드 기본 없음, TODO(SITE:S25)). tags.yaml level·ipc 선언이 있으면 DB만
 #       protocols:                                     # TODO(SITE:S26) 짝 규칙(17-platforms §9-3)
 #         gril: {tags: [ofonod]}                       # 내장 upstream gril RIL trace 짝(코드 기본 켜짐). tags만 받는다, []면 끈다
 #         ipc: {kind: regex, tags: [daemon-a, daemon-b], request: 'call (?P<serial>\d{1,10}) (?P<name>[A-Z_]+)', response: 'reply (?P<serial>\d{1,10}) (?P<error>\w+)'}   # 데몬 사이 짝, 이름은 site가 정한다
