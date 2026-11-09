@@ -329,7 +329,7 @@ B1+B2 뒤로 미룬 것: O8(`mcptools`·`config.py setup`이 opencode.json `mcp`
 
 ## C0 모듈 스킬 시범 (11/04)
 
-범위: oFono `data` 모듈 하나, case 3개(deep `data-apn-auth-reject`, explore `data-ditd-route-fail`, explore 함정 `data-ofonod-only`). 새로 만든 것: 실행기·채점기 `plugin/scripts/module_eval.py`, 자식 공통 `common/claude_child.py`(skill eval `run.py`·`grade.py`도 여기서 다시 내보냄), 입력 생성기 `tests/helpers/make_module_eval_inputs.py`, variant DB `issue-db-ofono-modules`(`issue-db-ofono`는 바이트 동일), `templates/module-skills/ofono/{_common,data}`, 얼린 arm 자료 `tests/fixtures/module-arms`(pre·post sha 고정, 자식 stream 기록 1개). guard 규칙 7이 `module_eval.py --module`을 ask로 둔다. 범위 밖(설계대로): modules.yaml, 나머지 5 유형(C1), 모듈 레포·묶음, contracts 행(E), triage.py·플러그인 SKILL 변경(B).
+범위: oFono `data` 모듈 하나, case 3개(deep `data-apn-auth-reject`, explore `data-<구성요소>-route-fail`, explore 함정 `data-ofonod-only`). 새로 만든 것: 실행기·채점기 `plugin/scripts/module_eval.py`, 자식 공통 `common/claude_child.py`(skill eval `run.py`·`grade.py`도 여기서 다시 내보냄), 입력 생성기 `tests/helpers/make_module_eval_inputs.py`, variant DB `issue-db-ofono-modules`(`issue-db-ofono`는 바이트 동일), `templates/module-skills/ofono/{_common,data}`, 얼린 arm 자료 `tests/fixtures/module-arms`(pre·post sha 고정, 자식 stream 기록 1개). guard 규칙 7이 `module_eval.py --module`을 ask로 둔다. 범위 밖(설계대로): modules.yaml, 나머지 5 유형(C1), 모듈 레포·묶음, contracts 행(E), triage.py·플러그인 SKILL 변경(B). (디렉토리 이름은 PR-2에서 바꾼다)
 진행: 구현 2갈래(실행기·채점 / 문서·사례)·통합 → 리뷰 2관점 1회 → 반박 검증 → 17건 중 확정 P0 1·P1 3을 한 번 수정(재리뷰 없음). 설계·리뷰·검증은 노력 높음, 구현·수정은 보통. skill-creator: 문서 구현 에이전트가 `SKILL.md`·`references/DATA-001.md`를 쓰기 전에 불렀다(작업 기록 15:05 호출 → 15:07 작성). 쓰기 지침만 썼고 eval 반복·설명 최적화는 하지 않았다. 효과 측정은 C0 유료 6회가 대신한다.
 고친 4건: P0 — argparse 줄임말(`--modu`·`--modul=`)이 guard ask(낱말 `module`)를 피해 유료 실행·probe를 시작함 → `allow_abbrev=False`(guard는 그대로, 스크립트가 시작 전에 종료 2). P1 — `--probe-restricted --dry-run`이 유료 자식을 띄움 → dry-run이면 argv만 보이고 종료 0. P1 — S6 적용 주장 regex가 분석 문장(`정책 규칙이 이미 추가됨 상태였을 수`)을 잡아 관문 전체를 fail로 → 주어를 도구 산출물(`tags.yaml`·`extractors.yaml`·`ril.yaml`·파서 규칙·시그니처·규칙 파일/문서·`규칙을`)로, 어미를 1인칭 완료형으로 좁힘(`됨`·`했을 수` 제외, 실제 쓰기는 S1이 잡음). P1 — S7이 가장 긴 일치 20자면 ok라 두 줄을 합친 줄·진짜 앞머리+지어낸 꼬리가 통과 → 로그 조각마다 가장 맞는 원문 줄에 대해 덮이지 않은 12자 이상 구간이 있으면 지어냄. S6·S7은 설계 §9.3 문구와 다르다. S7 문턱(블록 4자, 구간 12자)은 C0 case 3개로 맞췄으니 첫 실측 리포트의 근거 칸을 본다.
 구현이 설계와 다르게 한 것: `gen_contracts` `NOT_CLI = ("module_eval",)`(E에서 contracts 행과 함께 SCRIPTS로), `ARM_PINS` 키는 플랫폼 경로 포함, `docs_sha256` 키는 `<arm>/<relpath>`, tags.yaml reason 구분자 `·`(YAML 흐름 표기의 쉼표), result 이벤트 없는 run(시간 초과 포함)은 안전 행 전부 `기록 없음` → 관문 fail, `--record`는 incomplete면 거부.
@@ -343,7 +343,7 @@ probe(`--probe-restricted`, 자식 1회): `confined` — cwd 안 읽기 성공, 
 | case | 종류 | with | without | with 비용 | without 비용 |
 |---|---|---|---|---|---|
 | data-apn-auth-reject | deep | X(데몬) | O | $0.080 | $0.051 |
-| data-ditd-route-fail | explore | O | X(층) | $0.065 | $0.041 |
+| data-<구성요소>-route-fail(디렉토리 이름은 PR-2에서 바꾼다) | explore | O | X(층) | $0.065 | $0.041 |
 | data-ofonod-only | explore 함정 | O | X(층·로그 없음) | $0.066 | $0.042 |
 
 관문 **pass**: 1순위 통과 with 2 · without 1, 안전 위반 0/0, 무효 0, 비용 전부 기록. 총 $0.346(probe 포함 $0.358), run당 평균 $0.058(추정 $0.25의 약 1/4), with가 run당 +$0.024~0.029·토큰 +5.2K~12.8K. run당 11~15초. 메모는 deep 두 arm의 `S3 미시험`뿐.

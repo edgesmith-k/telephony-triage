@@ -77,7 +77,7 @@ platforms:
 
 ### 1.4 oFono 모듈 → 구성요소 (D10, 11/09 개정)
 
-모듈은 data·sim·network·call·sms·ims·modem이고 DB 카테고리는 같은 이름이다(modem은 `common`, D3). 모든 모듈의 공통 줄은 ofonod(gprs·lte / sim / netreg / voicecall / sms / ims / modem 플러그인, gril RIL trace)와 vendor-ril(벤더 RIL 데몬, RIL 소켓 아래 층)이다. 사내 구성요소의 이름·개수·역할은 레포에 없고 카테고리별 슬롯(설정)이다 — 사내가 `platform.others.ofono.components.<이름>.{idents, category, dbus, level_unreliable, vendor_ipc}`와 modules.yaml PR로 채운다(S24·S25·S26). variant DB `issue-db-ofono-modules`의 `tags.yaml`은 합성 placeholder 태그만 둔다.
+모듈은 data·sim·network·call·sms·ims·modem이고 DB 카테고리는 같은 이름이다(modem은 `common`, D3). 모든 모듈의 공통 줄은 ofonod(gprs·lte / sim / netreg / voicecall / sms / ims / modem 플러그인, gril RIL trace)와 vendor-ril(벤더 RIL 데몬, RIL 소켓 아래 층)이다. 사내 구성요소의 이름·개수·역할은 레포에 없고 카테고리별 슬롯(설정)이다 — 사내가 `platform.others.ofono.components.<이름>.{idents, category, dbus, level_unreliable, vendor_ipc}`와 modules.yaml PR로 채운다(S24·S25·S26). variant DB `issue-db-ofono-modules`의 `tags.yaml`은 합성 placeholder 태그만 둔다(PR-2 뒤).
 
 ### 1.5 Android 모듈 → 구성요소 (초안, D 시작 전 경계 확인 — Q9)
 
@@ -565,19 +565,19 @@ GitHub는 base에 CODEOWNERS가 있으면 오너를 PR을 열 때 자동 요청�
 | 모듈 | # | 시나리오 | kind | 기대 첫 실패 층 | 바탕 |
 |---|---|---|---|---|---|
 | data | ① | DNC 평가 거부(`NO_SUITABLE_DATA_PROFILE`)로 SETUP_DATA_CALL이 나가지 않음 | deep | 프레임워크(DNC·DPM). coverage 확인 | 새 |
-| data | ② | 데이터 콜 성공·data 슬롯 구성요소(사내) 라우팅 실패 | explore | data 슬롯 구성요소(곁가지) | 성공 응답 뒤 수 ms 안 netlink 오류 |
+| data | ② | SETUP_DATA_CALL 응답 cause(망 거절) | deep | RIL 응답 → 모뎀·망 | `data-setup-error` |
 | data | ③★ | DN setup 실패만, RILJ 줄 없음(radio 버퍼 미수집) | explore | "그 층 로그 없음" | 새 |
 | sim | ① | UNSOL_SIM_STATUS_CHANGED 뒤 GET_SIM_STATUS card ERROR | deep | RIL → 모뎀 | `sim-absent` |
-| sim | ② | sim 슬롯 구성요소(사내) 채널 열기 실패 | explore | sim 슬롯 구성요소(아래 RIL 응답은 성공) | 채널 오류 |
+| sim | ② | SMSVC 구독 활성화 실패(RIL 정상) | explore | 프레임워크 | 새 |
 | network | ① | VOICE/DATA_REGISTRATION_STATE 거절 사유 | deep | RIL 응답(망 거절) | `no-service` |
-| network | ② | RADIO_ON 없음 | explore | network 슬롯 구성요소(일어나지 않은 일 — 로그 범위가 덮는지 먼저) | RADIO_ON 부재 + 범위 |
-| call | ① | VoLTE 발신 실패 | explore | ims 슬롯 구성요소(ofonod voicecall은 증상) | 발신 오류 |
+| network | ② | RADIO_POWER on 응답 실패 | explore | HAL·벤더 | 새 |
+| call | ① | DIAL error | deep | RIL | 새(`call-drop` 줄 모양) |
 | call | ② | ImsPhoneCallTracker 발신 실패(IMS reason) | explore | 벤더 ImsService | 새 |
 | sms | ① | SEND_SMS error | deep | RIL | `sms-send-failed` |
-| sms | ② | IMS 문자 실패 | explore | ims 슬롯 구성요소 | 문자 오류 |
-| ims | ① | IMS 등록 실패 | deep | ims 슬롯 구성요소 | 등록 오류 |
-| ims | ② | ims 슬롯 구성요소(사내) 접속 거절 | explore | ims 슬롯 구성요소(HTTP 거절, 호스트는 `.invalid`) | 거절 응답 |
-| modem | ① | 모뎀 리셋 연쇄(증상은 data·call) | deep(`also`) | 모뎀(modem 슬롯 구성요소의 리셋 감지). 증상 모듈이 아니다 | 리셋 줄 → 연쇄 오류 |
+| sms | ② | ImsSmsDispatcher 실패 | explore | IMS 경로 | 새 |
+| ims | ① | ImsRegistration 등록 실패 | deep | 벤더 ImsService | `ims-registration-failed` |
+| ims | ② | IMS PDN 실패(DN IMS setup fail) | explore | data 층(모듈을 건너는 원인) | 새 |
+| modem | ① | 모뎀 재시작과 HAL 끊김 연쇄(증상 data) | deep(`also`) | 모뎀 | 새 |
 | modem | ②★ | RILJ 무응답 여러 개, 벤더 층 줄 없음 | explore | "벤더 층 로그 없음" | 새 |
 
 ### 5.5 시나리오 규칙·case 형식·입력
