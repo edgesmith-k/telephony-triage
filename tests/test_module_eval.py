@@ -1976,7 +1976,8 @@ def test_regrade_reproduces_run_then_follows_grader(env, tmp_path, capsys, monke
     assert env.run("--record") == 0
     it = me.WORKSPACE / "module-ofono-data-001"
     first = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
-    assert first["grader_version"] == me.GRADER_VERSION == 4
+    V = me.GRADER_VERSION
+    assert first["grader_version"] == V == 5
     old = {d: json.loads((d / "grading.json").read_text(encoding="utf-8")) for d in _run_dirs(it)}
     for d in _run_dirs(it):
         obj = json.loads((d / "result.json").read_text(encoding="utf-8"))
@@ -1988,28 +1989,28 @@ def test_regrade_reproduces_run_then_follows_grader(env, tmp_path, capsys, monke
     assert env.run("--regrade", str(it)) == 0                       # 디렉토리로: 같은 채점기면 같은 결과
     for d in _run_dirs(it):
         assert json.loads((d / "grading.json").read_text(encoding="utf-8")) == old[d]
-        assert json.loads((d / "grading.v4.json").read_text(encoding="utf-8")) == old[d]
-    assert (it / "benchmark.v4.json").is_file() and (it / "module_offsite_results.v4.json").is_file()
+        assert json.loads((d / f"grading.v{V}.json").read_text(encoding="utf-8")) == old[d]
+    assert (it / f"benchmark.v{V}.json").is_file() and (it / f"module_offsite_results.v{V}.json").is_file()
     local = json.loads((it / "module_offsite_results.json").read_text(encoding="utf-8"))["modules"]["ofono/data"]
-    assert local.pop("regraded")["from_grader"] == 4 and local == first
+    assert local.pop("regraded")["from_grader"] == V and local == first
     assert json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"] == first   # --record 없으면 그대로
-    # 채점기가 바뀌면(S4 상한·판 5) 자식 없이 판정이 바뀐다 — 기록 경로(--regrade만)로. 처음 grading.v4.json은 남는다(P1-2)
+    # 채점기가 바뀌면(S4 상한·판 V+1) 자식 없이 판정이 바뀐다 — 기록 경로(--regrade만)로. 처음 grading.v<V>.json은 남는다(P1-2)
     monkeypatch.setattr(me, "QUOTE_MAX", 0)
-    monkeypatch.setattr(me, "GRADER_VERSION", 5)
+    monkeypatch.setattr(me, "GRADER_VERSION", V + 1)
     capsys.readouterr()
     assert env.run("--regrade", "--record") == 1
     out = capsys.readouterr().out
-    assert "재채점: grader 4 → 5" in out and "지금 트리와 다름" not in out
+    assert f"재채점: grader {V} → {V + 1}" in out and "지금 트리와 다름" not in out
     rec = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
-    assert rec["gate"]["verdict"] == "fail" and "current_differs" not in rec["regraded"] and rec["grader_version"] == 5
-    assert (rec["regraded"]["from_grader"], rec["regraded"]["original_grader"]) == (4, 4)
+    assert rec["gate"]["verdict"] == "fail" and "current_differs" not in rec["regraded"] and rec["grader_version"] == V + 1
+    assert (rec["regraded"]["from_grader"], rec["regraded"]["original_grader"]) == (V, V)
     assert me.SAFETY_ROWS[4] in rec["cases"][CASES[0]]["with"]["safety_fail"]
     for k in ("total_cost_usd", "unit_cost_usd", "init_model", "cost_basis", "iteration", "generated"):
         assert rec[k] == first[k], k
     assert rec["cases"][CASES[0]]["with"]["tie_tokens"] == first["cases"][CASES[0]]["with"]["tie_tokens"]
     for d in _run_dirs(it):
-        assert json.loads((d / "grading.v4.json").read_text(encoding="utf-8")) == old[d]
-        assert json.loads((d / "grading.json").read_text(encoding="utf-8"))["grader_version"] == 5
+        assert json.loads((d / f"grading.v{V}.json").read_text(encoding="utf-8")) == old[d]
+        assert json.loads((d / "grading.json").read_text(encoding="utf-8"))["grader_version"] == V + 1
     # 문서가 바뀐 트리: --record는 파일을 쓰기 전에 거부, --record 없이는 run 때 지문 그대로 + current_differs(F02)
     skill = env.templates / "ofono" / "data" / "SKILL.md"
     skill.write_text(skill.read_text(encoding="utf-8") + "바뀜\n", encoding="utf-8")
@@ -2019,7 +2020,7 @@ def test_regrade_reproduces_run_then_follows_grader(env, tmp_path, capsys, monke
     assert "--record 거부" in err and "docs_sha256" in err and "두 arm을 다시 돌린다" in err
     assert me.RESULTS.read_text(encoding="utf-8") == before
     assert (it / "module_offsite_results.json").read_text(encoding="utf-8") == local_before
-    assert not any((d / "grading.v5.json").exists() for d in _run_dirs(it))
+    assert not any((d / f"grading.v{V + 1}.json").exists() for d in _run_dirs(it))
     assert env.run("--regrade") == 1
     assert "지금 트리와 다름: docs_sha256" in capsys.readouterr().out and me.RESULTS.read_text(encoding="utf-8") == before
     local = json.loads((it / "module_offsite_results.json").read_text(encoding="utf-8"))["modules"]["ofono/data"]
@@ -2028,15 +2029,15 @@ def test_regrade_reproduces_run_then_follows_grader(env, tmp_path, capsys, monke
         assert local[k] == first[k], k
     assert {n: r["doc_bytes"] for n, r in local["cases"].items()} == {n: r["doc_bytes"] for n, r in first["cases"].items()}
     skill.write_text(skill.read_text(encoding="utf-8").removesuffix("바뀜\n"), encoding="utf-8")
-    monkeypatch.setattr(me, "GRADER_VERSION", 6)                     # 한 번 더: 판 5가 v5로, v4는 그대로, 계보는 잇는다
+    monkeypatch.setattr(me, "GRADER_VERSION", V + 2)                 # 한 번 더: 판 V+1이 v<V+1>로, v<V>는 그대로, 계보는 잇는다
     assert env.run("--regrade", "--record") == 1
     rec = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
-    assert (rec["regraded"]["from_grader"], rec["regraded"]["original_grader"]) == (5, 4)
+    assert (rec["regraded"]["from_grader"], rec["regraded"]["original_grader"]) == (V + 1, V)
     for d in _run_dirs(it):
-        assert json.loads((d / "grading.v4.json").read_text(encoding="utf-8")) == old[d]
-        assert json.loads((d / "grading.v5.json").read_text(encoding="utf-8"))["grader_version"] == 5
-    assert json.loads((it / "module_offsite_results.v4.json").read_text(encoding="utf-8"))["modules"]["ofono/data"] == first
-    assert (it / "benchmark.v5.json").is_file() and (it / "module_offsite_results.v5.json").is_file()
+        assert json.loads((d / f"grading.v{V}.json").read_text(encoding="utf-8")) == old[d]
+        assert json.loads((d / f"grading.v{V + 1}.json").read_text(encoding="utf-8"))["grader_version"] == V + 1
+    assert json.loads((it / f"module_offsite_results.v{V}.json").read_text(encoding="utf-8"))["modules"]["ofono/data"] == first
+    assert (it / f"benchmark.v{V + 1}.json").is_file() and (it / f"module_offsite_results.v{V + 1}.json").is_file()
     assert len(env.calls()) == 6                                     # 자식은 처음 6번뿐
     assert env.run("--regrade", "--case", CASES[0]) == 2
 
@@ -2112,7 +2113,7 @@ def test_regrade_unavailable_marks_record_only(env, tmp_path, capsys):
     assert entry.pop("regrade_unavailable") is True and "result.json" in entry.pop("regrade_note")
     assert after == json.loads(before)                               # 그 밖은 그대로(grader_version 포함)
     assert (_run_dirs(it)[0] / "grading.json").read_text(encoding="utf-8") == grading
-    assert not (_run_dirs(it)[0] / "grading.v4.json").exists() and len(env.calls()) == 6
+    assert not (_run_dirs(it)[0] / f"grading.v{me.GRADER_VERSION}.json").exists() and len(env.calls()) == 6
     me.RESULTS.unlink()
     assert env.run("--regrade") == 2                                 # 기록도 디렉토리도 없음 — 사용 오류
 
@@ -2136,7 +2137,7 @@ def test_regrade_missing_or_foreign_dir_is_usage_error(env, tmp_path, capsys):
     assert env.run("--regrade", str(other)) == 0                     # --record 없이: 재채점만
     shutil.copytree(tmp_path / "elsewhere", copy)
     assert env.run("--regrade", str(copy), "--record") == 0
-    assert json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]["regraded"]["from_grader"] == 4
+    assert json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]["regraded"]["from_grader"] == me.GRADER_VERSION
     assert len(env.calls()) == 6
 
 
