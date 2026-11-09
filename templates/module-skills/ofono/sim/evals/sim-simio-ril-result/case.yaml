@@ -1,16 +1,8 @@
-# 마스킹 발췌 case (H C1, C1D §1). source.log는 tools/make_excerpt.py --write가 origin 구간으로 자른다.
-# files/의 나머지는 make_module_eval_inputs.py --write가 만든다
+# 합성 case (H C1, C1D §1). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
 schema_version: 1
 name: sim-simio-ril-result
 kind: deep
-synthetic: false
-origin:
-  kind: masked-excerpt
-  log: O2
-  episode: E4b
-  lines: '985-995,1560-1583'
-  masker: 'd8d3018538a2'
-  residual: '2026-11-05'
+synthetic: true
 key: MOCK-9201
 issue:
   summary: 'SIM 파일을 읽지 못한다는 오류가 남'

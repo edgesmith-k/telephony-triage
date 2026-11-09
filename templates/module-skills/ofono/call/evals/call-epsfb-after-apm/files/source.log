@@ -1,4 +1,4 @@
--- [마스킹 발췌] O1 E14c 줄 24700-24720,25125-25140,25505-25516
+-- [합성]
 Feb 27 17:51:48.199 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  tea.KeyMsg  mose/ui/ui.go:108
 Feb 27 17:51:48.199 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  Pressed key enter  mose/ui/ui.go:151
 Feb 27 17:51:48.232 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.CallMethodByFeatureMsg  mose/ui/ui.go:108

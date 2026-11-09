@@ -1,16 +1,8 @@
-# 마스킹 발췌 case (설계 D §1, 계획 R4·R5) — 함정 ★: radio 버퍼가 늦게 시작(첫 RILJ 줄이 응답). run_expect verify. source.log는 tools/make_excerpt.py --write가 만든다
-# (masker·residual은 그 출력값). files/의 나머지는 make_module_eval_inputs.py --write가 만든다
+# 합성 case (설계 D §1, 계획 R4·R5) — 함정 ★: radio 버퍼가 늦게 시작(첫 RILJ 줄이 응답). run_expect verify. files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
 schema_version: 2
 name: network-radio-buffer-late
 kind: explore
-synthetic: false
-origin:
-  kind: masked-excerpt
-  log: A
-  episode: A-E10
-  lines: '12505-12510,12663-12666,12704-12707,14229-14232,14320-14323,14363-14366'
-  masker: d8d3018538a2
-  residual: '2026-11-05'
+synthetic: true
 key: MOCK-9807
 issue:
   summary: 부팅 직후 망 등록이 늦음

@@ -1,16 +1,8 @@
-# 마스킹 발췌 case (H C1, C1D §1). source.log는 tools/make_excerpt.py --write가 origin 구간으로 자른다.
-# files/의 나머지는 make_module_eval_inputs.py --write가 만든다
+# 합성 case (H C1, C1D §1). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
 schema_version: 2
 name: sim-euicc-isdr-absent
 kind: explore
-synthetic: false
-origin:
-  kind: masked-excerpt
-  log: O2
-  episode: E21
-  lines: '38-110'
-  masker: 'd8d3018538a2'
-  residual: '2026-11-05'
+synthetic: true
 key: MOCK-9202
 issue:
   summary: 'eSIM EID를 읽지 못함'

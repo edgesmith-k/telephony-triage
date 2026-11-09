@@ -1,4 +1,4 @@
--- [마스킹 발췌] A A-E6 줄 14276-14279,16078-16087,17554-17557,20833-20836,23188-23191
+-- [합성]
 08-09 13:10:57.421  1856  1856 D MultiSimSettingController: Carrier config subId 4 is not loaded.
 08-09 13:10:57.421  1856  1856 D MultiSimSettingController: isReadyToReevaluate: subInfoInitialized=true, carrierConfigsLoaded=false, satelliteEnabledOrBeingEnabled=false
 08-09 13:10:57.421  1856  1856 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED READY reason null for phone: 0 sub: 4

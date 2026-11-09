@@ -1,16 +1,8 @@
-# 마스킹 발췌 case (H C1, C1D §1). source.log는 tools/make_excerpt.py --write가 origin 구간으로 자른다.
-# files/의 나머지는 make_module_eval_inputs.py --write가 만든다
+# 합성 case (H C1, C1D §1). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
 schema_version: 1
 name: ims-401-then-registered
 kind: deep
-synthetic: false
-origin:
-  kind: masked-excerpt
-  log: O2
-  episode: E16b
-  lines: '6110-6170,6306-6312,6352-6360'
-  masker: 'd8d3018538a2'
-  residual: '2026-11-05'
+synthetic: true
 key: MOCK-9601
 issue:
   summary: 'IMS 등록 실패(401) 로그가 남'

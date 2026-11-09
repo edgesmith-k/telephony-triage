@@ -1,4 +1,4 @@
--- [마스킹 발췌] O1 E19 줄 42660-42734
+-- [합성]
 Feb 27 17:54:50.969 host1 daemon.debug exynos-ril[463]: [<DEV#1>][RX] SIT_IND_TOTAL_OOS, IND, 8 bytes
 Feb 27 17:54:50.970 host1 daemon.debug exynos-ril[463]: <HEXDUMP 8B>
 Feb 27 17:54:50.970 host1 daemon.debug exynos-ril[463]: [RilContext_0] ProcessModemData 

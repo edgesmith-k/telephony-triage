@@ -68,7 +68,7 @@ def test_module_templates_and_generator_select_module_tests():
     """모듈 스킬(계획 H C0): 템플릿·입력 생성기·기록은 모듈 테스트 둘(helpers 규칙의 full보다 먼저), run.py·grade.py는
     common.claude_child 재수출 테스트(test_module_eval)도 고른다."""
     module = {t for t in ("tests/test_module_eval.py", "tests/test_module_templates.py", "tests/test_make_module_repo.py",
-                          "tests/test_boundary.py", "tests/test_make_excerpt.py", "tests/test_module_templates_android.py")
+                          "tests/test_boundary.py", "tests/test_module_templates_android.py")
               if (REPO / t).is_file()}
     assert "tests/test_module_eval.py" in module
     for path in ("templates/module-skills/ofono/data/SKILL.md", "tests/helpers/make_module_eval_inputs.py",
@@ -77,8 +77,6 @@ def test_module_templates_and_generator_select_module_tests():
         out = select(path)
         assert set(out["tests"]) == module and out["full"] is False, path
     assert "tests/test_module_eval.py" in select("tests/fixtures/module-arms/ofono/pre/explore-rules.md")["tests"]
-    out = select("tools/make_excerpt.py")                                       # R39: 발췌 도구도 모듈 경로
-    assert set(out["tests"]) == module and out["full"] is False
     for path in ("tests/skill_evals/run.py", "tests/skill_evals/grade.py"):
         out = select(path)
         assert set(out["tests"]) == {"tests/test_skill_evals.py", "tests/test_module_eval.py",
@@ -121,4 +119,4 @@ def test_pycache_ignored():
 
 def test_templates_include_make_module_repo_and_boundary():
     out = select("templates/module-skills/ofono/sim/SKILL.md")
-    assert {"tests/test_make_module_repo.py", "tests/test_boundary.py", "tests/test_make_excerpt.py"} <= set(out["tests"])
+    assert {"tests/test_make_module_repo.py", "tests/test_boundary.py"} <= set(out["tests"])

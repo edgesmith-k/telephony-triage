@@ -1,4 +1,4 @@
--- [마스킹 발췌] A A-E5 줄 57468-57472,57719-57722,57833-57836,58305-58308,58612-58623,58808-58811,59779-59782
+-- [합성]
 08-09 13:13:49.379   261   261 I exynos-pcie-rc 39950000.pcie: exynos_pcie_rc_poweroff, end of poweroff, pcie state: 0
 08-09 13:13:49.379   261   261 I cpif    : ext_poweroff_pcie: ---
 08-09 13:13:49.503  1101  1126 D VCD     : UsbAgent: AT+CFUN=0<CR>

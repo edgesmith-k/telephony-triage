@@ -1,16 +1,8 @@
-# 마스킹 발췌 case (H C1, C1D §1). source.log는 tools/make_excerpt.py --write가 origin 구간으로 자른다.
-# files/의 나머지는 make_module_eval_inputs.py --write가 만든다
+# 합성 case (H C1, C1D §1). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
 schema_version: 1
 name: network-nrmode-modem-reject
 kind: deep
-synthetic: false
-origin:
-  kind: masked-excerpt
-  log: O2
-  episode: E5b
-  lines: '1705-1737,1741-1745'
-  masker: 'd8d3018538a2'
-  residual: '2026-11-05'
+synthetic: true
 key: MOCK-9301
 issue:
   summary: '5G(NR) 모드 설정 화면이 비어 있음'

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """모듈 eval case의 마스킹된 입력 파일을 결정적으로 만든다 (MODULE_SKILLS_PLAN_IMPL §5.5, C0 설계 §5).
 
-`templates/module-skills/<p>/<m>/evals/<case>/files/source.log`(합성 로그 또는 마스킹 발췌)와 `case.yaml`에서
+`templates/module-skills/<p>/<m>/evals/<case>/files/source.log`(합성 로그)와 `case.yaml`에서
 플랫폼 DB(oFono: 변형 `issue-db-ofono-modules`, Android: 샘플 `issue-db-sample`)로 `triage.py run --offline-db`·`explore`를
 돌려 아래를 만든다.
 
@@ -106,7 +106,6 @@ def _load_case(case_dir: Path, validate: bool) -> dict:
 
 
 TOP_KEYS = {"schema_version", "name", "kind", "synthetic", "key", "issue", "parse", "input", "run_expect", "expect"}
-TOP_OPTIONAL = {"origin"}
 INPUT_KEYS = {"deep": {"deep_input", "events", "timeline", "log"}, "explore": {"explore_input", "timeline", "analysis"}}
 
 
@@ -129,13 +128,13 @@ def _validate(case_dir: Path) -> None:
 
 
 def _basic_check(case_dir: Path) -> None:
-    """load_case 규칙(C0 설계 §2.2) 중 키·출처 표시(합성/마스킹 발췌)·입력 파일 집합·근거 regex만."""
+    """load_case 규칙(C0 설계 §2.2) 중 키·합성 표시·입력 파일 집합·근거 regex만."""
     from common import skillcheck
 
     data = yamlio.load(case_dir / "case.yaml")
     name = case_dir.name
-    if not isinstance(data, dict) or not TOP_KEYS <= set(data) <= TOP_KEYS | TOP_OPTIONAL:
-        raise GenError(f"{name}: 최상위 키가 {sorted(TOP_KEYS)}(+ origin)가 아니다")
+    if not isinstance(data, dict) or set(data) != TOP_KEYS:
+        raise GenError(f"{name}: 최상위 키가 {sorted(TOP_KEYS)}가 아니다")
     if data["name"] != name or data["schema_version"] != (2 if data.get("kind") == "explore" else 1):
         raise GenError(f"{name}: name·schema_version")
     kind = data["kind"]

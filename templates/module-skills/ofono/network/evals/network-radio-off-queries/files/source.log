@@ -1,4 +1,4 @@
--- [마스킹 발췌] O1 E7 줄 27162-27166,29060-29090,30238-30296,30540-30550
+-- [합성]
 Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: plugins/ril_vendor.c:ril_vendor_set_online() setting rd->ofono_online to: 0
 Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: plugins/ril_vendor.c:ril_send_power() (online = 1, offline = 0)): 0
 Feb 27 17:52:03.317 host1 daemon.info ofonod[486]: [0,0576]> RIL_REQUEST_RADIO_POWER (0)
