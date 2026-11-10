@@ -137,6 +137,23 @@ def test_template_permission_allow_list():
         assert edit[deny] == "deny" and keys.index(deny) > keys.index("@@WORK_ROOT_REL@@/**"), deny
 
 
+def test_template_read_denies_raw_job_files():
+    """런타임 리뷰 7: 원문 작업 파일은 OpenCode read에서도 막는다(에이전트 규칙 3만으로 두지 않는다). 이름은 guard 규칙 10의
+    RAW_NAMES와 같고, 마지막 규칙이 이기므로 `"*": "allow"` 뒤에 둔다. 설치한 opencode.json에도 그대로 간다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import guard
+
+    read = _template()["permission"]["read"]
+    keys = list(read)
+    denies = {k.removeprefix("**/") for k, v in read.items() if v == "deny" and k.startswith("**/")}
+    assert denies == guard.RAW_NAMES
+    assert all(keys.index(f"**/{n}") > keys.index("*") for n in denies)
+    rendered = gen_opencode.render_config(_template(), {"@@PLUGIN_ROOT@@": "/p", "@@WORK_ROOT@@": "/w", "@@PLUGIN_ROOT_REL@@": "p",
+                                              "@@WORK_ROOT_REL@@": "w", "@@GATEWAY_BASE_URL@@": "https://g/v1",
+                                              "@@MODEL_ID@@": "m"}, [])
+    assert rendered["permission"]["read"] == read
+
+
 def test_managed_sample():
     m = json.loads(MANAGED.read_text(encoding="utf-8"))
     assert set(m) <= V1_KEYS

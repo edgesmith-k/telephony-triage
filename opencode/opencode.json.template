@@ -31,7 +31,12 @@
     "read": {
       "*": "allow",
       "*.env": "deny",
-      "*.env.*": "deny"
+      "*.env.*": "deny",
+      "**/issue_raw.json": "deny",
+      "**/events.json": "deny",
+      "**/events-full.json": "deny",
+      "**/match.json": "deny",
+      "**/jira_raw.json": "deny"
     },
     "glob": "allow",
     "grep": "allow",
