@@ -7,8 +7,8 @@
 경계는 ASCII 영숫자(`[A-Za-z0-9]`)만 본다: 비ASCII 항목은 더 긴 비ASCII 낱말 안에서도 맞는다(두 음절 한글 항목이
 세 음절 낱말 안에서도 맞음) — 거부 목록은 ASCII 식별자라 의도한 동작이다. 한 항목이 자기와 겹쳐 맞는 자리도 모두 가린다.
 파일 내용과 함께 **경로 문자열도** 검사한다(경로에 맞으면 파일당 1건). 내용은 바이트를 잃지 않고 푼다: UTF-8(잘못된
-바이트는 surrogateescape로 남기고 둘레 글자는 본다), BOM·NUL이 있으면 UTF-16 LE·BE(두 정렬)로도 — 건수는 그중 큰 값.
-압축 형식(zip·gzip·bzip2·xz·zstd·7z 머리)은 풀지 않으므로 내용을 다 보지 못한 파일(`skipped`)로 센다.
+바이트는 surrogateescape로 남기고 둘레 글자는 본다), BOM·NUL이 있으면 UTF-16 LE·BE(두 정렬)·UTF-32 LE·BE로도 — 건수는 그중 큰 값.
+압축 형식(zip·gzip·bzip2·xz·zstd·7z 머리)과 안에 압축 스트림이 있는 PDF·PNG는 풀지 않으므로 내용을 다 보지 못한 파일(`skipped`)로 센다.
 읽을 수 없는 추적 파일(삭제됨·디렉토리 등)은 읽기 실패로 센다. 둘 중 하나라도 있으면 CLI는 종료 2.
 **출력에는 경로(항목 글자가 든 부분은 경계와 상관없이 `«k»`, k = 항목 번호 — 경계 없이 맞았으면 그 항목이 든 영숫자 낱말
 전체)와 건수만 낸다 — 맞은 글자·항목 글자는
@@ -38,7 +38,8 @@ from pathlib import Path
 
 DENY_ENV = "TT_DENY_FILE"
 _EDGE_HEAD, _EDGE_TAIL = r"(?<![A-Za-z0-9])", r"(?![A-Za-z0-9])"
-_PACKED = (b"PK\x03\x04", b"PK\x05\x06", b"\x1f\x8b", b"BZh", b"\xfd7zXZ\x00", b"\x28\xb5\x2f\xfd", b"7z\xbc\xaf\x27\x1c")
+_PACKED = (b"PK\x03\x04", b"PK\x05\x06", b"\x1f\x8b", b"BZh", b"\xfd7zXZ\x00", b"\x28\xb5\x2f\xfd", b"7z\xbc\xaf\x27\x1c",
+           b"%PDF", b"\x89PNG\r\n\x1a\n")                    # PDF·PNG는 안에 압축 스트림이 있다 — 내용을 다 못 본 파일로 센다
 
 
 def load(path: Path | str) -> list[tuple[int, re.Pattern]]:
@@ -95,10 +96,12 @@ def loose(patterns) -> list[tuple[int, re.Pattern]]:
 
 
 def _texts(data: bytes) -> list[str]:
-    """내용을 글로 푼다(바이트를 잃지 않음): UTF-8 + surrogateescape, BOM·NUL이 있으면 UTF-16 LE·BE 두 정렬도."""
+    """내용을 글로 푼다(바이트를 잃지 않음): UTF-8 + surrogateescape, BOM·NUL이 있으면 UTF-16 LE·BE 두 정렬과
+    UTF-32 LE·BE(처음부터 정렬)도."""
     texts = [data.decode("utf-8", "surrogateescape")]
     if b"\0" in data or data[:2] in (b"\xff\xfe", b"\xfe\xff"):
         texts += [data[off:].decode(enc, "replace") for enc in ("utf-16-le", "utf-16-be") for off in (0, 1)]
+        texts += [data[:len(data) // 4 * 4].decode(enc, "replace") for enc in ("utf-32-le", "utf-32-be")]
     return texts
 
 

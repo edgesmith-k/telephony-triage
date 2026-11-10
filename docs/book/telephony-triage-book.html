@@ -2811,7 +2811,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
 
   <h3 id="ch21-3">21.3 반입 뒤 다시 할 확인<a class="hl" href="#ch21-3" aria-label="링크">#</a></h3>
   <p>반입한 묶음에서 hook이나 공통 판정이 바뀌었으면, 사내 대상 eval 12개를 모두 다시 실행하고 S-2 확인 항목을 다시 봅니다. 바뀌는 파일은 <code>hooks.json</code>, <code>guard.py</code>, <code>show_guard.py</code>, <code>common/shown.py</code>, <code>jira_bridge.py</code>, 스킬의 공통 규칙 등입니다.</p>
-  <p>그 밖이면 바뀐 흐름의 eval만 실행합니다. 어느 쪽인지는 묶음과 함께 오는 <code>DRAFT_NOTES.md</code> "사내로 넘긴 것"의 재반입 노트에 적혀 있습니다. Claude Code의 큰 버전을 올릴 때도 S-2 확인 17항목과 사내 대상 eval 11개를 다시 합니다.</p>
+  <p>그 밖이면 바뀐 흐름의 eval만 실행합니다. 어느 쪽인지는 묶음과 함께 오는 <code>DRAFT_NOTES.md</code> "사내로 넘긴 것"의 재반입 노트에 적혀 있습니다. Claude Code의 큰 버전을 올릴 때도 S-2 확인 17항목과 사내 대상 eval 12개를 다시 합니다.</p>
 
   <h3 id="ch21-4">21.4 플러그인과 이슈 DB의 버전<a class="hl" href="#ch21-4" aria-label="링크">#</a></h3>
   <p>이슈 DB 설정에는 두 버전이 있습니다. 스키마 버전(<code>schema_version</code>, 파일 형식)과 생성기 버전(<code>generator_version</code>, 생성 파일 형식)입니다. 지금 플러그인은 스키마 1, 생성기 2를 씁니다. 등록된 스키마 마이그레이션은 아직 없습니다.</p>
@@ -3642,7 +3642,7 @@ note: 모바일 데이터 OFF 상태에서 접수됨</pre></div>
       <tbody>
         <tr><td><code>trackers/</code></td><td>이슈 트래커 어댑터: 작업 키 형식, 키 정규식, 게시 본문 형식, 코멘트 도구 인자</td><td><code>jira.py</code>(기본), <code>github.py</code>(실험적)</td></tr>
         <tr><td><code>platforms/</code></td><td>플랫폼 상수와 계약. 플랫폼마다 이슈 DB와 lock이 따로</td><td>android(기본), ofono(가정 형식 뼈대)</td></tr>
-        <tr><td><code>parser_backends/</code></td><td>로그 형식별 파서 백엔드. 내장 이벤트는 <code>builtin.</code> 접두어</td><td><code>reference</code>(Android 참고 구현, 0.1.2), <code>ofono_reference</code>(0.0.6). 사내 <code>site</code>는 S-4a에서 포팅할 자리</td></tr>
+        <tr><td><code>parser_backends/</code></td><td>로그 형식별 파서 백엔드. 내장 이벤트는 <code>builtin.</code> 접두어</td><td><code>reference</code>(Android 참고 구현, 0.1.3), <code>ofono_reference</code>(0.0.7). 사내 <code>site</code>는 S-4a에서 포팅할 자리</td></tr>
         <tr><td><code>adapters/</code></td><td>기존 외부 파서를 그대로 실행하는 어댑터. 이벤트는 <code>ext.</code> 접두어</td><td>계약만 있음</td></tr>
         <tr><td><code>migrations/</code></td><td>이슈 DB 스키마 버전별 마이그레이션</td><td>아직 없음(스키마 v1). 버전을 올릴 때 <code>NNNN_&lt;설명&gt;.py</code>를 더함</td></tr>
       </tbody>

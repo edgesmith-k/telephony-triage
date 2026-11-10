@@ -144,7 +144,7 @@ def test_restore_vendor_ipc_needs_both_keys_and_site_values(tmp_path, monkeypatc
     root = restored(tmp_path, monkeypatch)
     path = root / "plugin" / "site-defaults.yaml"
     d = yaml.safe_load(path.read_text(encoding="utf-8"))
-    for key, placeholder in (("context", "IpcCtx_"), ("success", "VIPC_OK")):       # 다섯 키 중 하나라도 placeholder면
+    for key, placeholder in (("context", "IpcCtx_"), ("request_prefix", "VIPC_")):       # 다섯 키 중 하나라도 placeholder면
         d["platform"]["others"]["ofono"]["vendor_ipc"] = {**IPC, key: placeholder}
         path.write_text(yaml.safe_dump(d), encoding="utf-8")
         r = run(root)["restore.vendor_ipc"]

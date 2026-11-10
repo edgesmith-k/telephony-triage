@@ -104,11 +104,13 @@ def test_non_utf8_contents_are_scanned_and_packed_files_skipped(tmp_path, deny):
     """UTF-8 아님(잘못된 바이트·UTF-16 BOM/NUL)도 내용을 본다. 압축 형식은 내용을 다 보지 못한 파일(skipped) → CLI 종료 2."""
     files = {"latin.txt": b"caf\xe9 abc here\n", "u16le.txt": "x abc y\n".encode("utf-16"),
              "u16be.txt": "abc\n".encode("utf-16-be"), "odd.bin": b"\x01" + "abc".encode("utf-16-le"),
-             "packed.gz": b"\x1f\x8b\x08\x00 plain"}
+             "packed.gz": b"\x1f\x8b\x08\x00 plain", "u32.txt": "x abc y\n".encode("utf-32"),
+             "u32be.txt": "abc\n".encode("utf-32-be"), "page.pdf": b"%PDF-1.7 plain", "pic.png": b"\x89PNG\r\n\x1a\n plain"}
     for name, data in files.items():
         (tmp_path / name).write_bytes(data)
     hits, scanned, skipped, errors = ds.scan(tmp_path, ds.load(deny), list(files))
-    assert dict(hits) == {"latin.txt": 1, "u16le.txt": 1, "u16be.txt": 1, "odd.bin": 1} and (skipped, errors) == (1, 0)
+    assert dict(hits) == {"latin.txt": 1, "u16le.txt": 1, "u16be.txt": 1, "odd.bin": 1, "u32.txt": 1, "u32be.txt": 1}
+    assert (skipped, errors) == (3, 0)                     # gz·PDF·PNG는 내용을 다 못 본 파일
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "add", "packed.gz")
     proc = _cli("--root", str(tmp_path), env_deny=deny)

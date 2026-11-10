@@ -402,6 +402,8 @@ def _vendor_ipc(raw, base: str) -> _vipc.Spec:
     missing = [key for key in _vipc.KEYS if node and key not in node]
     if missing:
         raise _err(f"{base}.{missing[0]}", f"{'·'.join(_vipc.KEYS)}를 함께 적어야 합니다(빠짐: {', '.join(missing)}).")
+    if node and not node["success"].startswith(node["error_prefix"]):   # 오류 줄 값 전체와 비교 — 접미어만이면 성공마다 오류 이벤트
+        raise _err(f"{base}.success", "error_prefix로 시작하는 결과 값 전체여야 합니다(Error(<값>) 안 글자 그대로).")
     return _vipc.Spec(**node)
 
 

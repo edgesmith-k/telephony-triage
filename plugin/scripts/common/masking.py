@@ -18,8 +18,7 @@
 - **예외**: `issue-db.config.yaml`의 `mask.allow_patterns`에 전체가 맞는 값은 그대로 둔다.
   Android 자체 마스킹(`***`, `xxxxxx`)도 그대로 둔다.
 
-- **로그 줄 전용 규칙(`Rule.log_only`, M1~M11)**: 로그 표본(oFono syslog 2·Android logcat 1)에서 찾은 빈틈을
-  측정한 마스커(`mask2.py`·`mask3.py`) 그대로 옮긴 규칙 중 모양만 보는 것(hex 덤프·base64·빌드/제품 코드·15~20자리
+- **로그 줄 전용 규칙(`Rule.log_only`, M1~M11)**: 합성 fixture로 고정한 로그 줄 규칙(B2 §3.2) 중 모양만 보는 것(hex 덤프·base64·빌드/제품 코드·15~20자리
   숫자·syslog 호스트 칸)은 `log_lines=True`로 만든 마스커(로그 마스킹: parse·cut·`mask_pii` 치환/이벤트·보기·점검
   도구)에서만 돈다. `db_lint`·`mask_pii --check`·`issue_post`는 기본값(`False`)이라 그 종류의 결과가 전과 같다.
   실제 식별자 규칙(M2a·M3·M4·M5·M7·M8 payload/salt·M9·뒤집힌 ICCID)은 어디서나 돈다.
@@ -155,8 +154,8 @@ def _token_secret(value: str) -> bool:
     """`token=` 값이 비밀값인가. 짧은 숫자(10진 10자리 이하, `0x`+16진 8자리 이하 — RIL 요청 token 등)는 아니다."""
     return not _SHORT_NUM.fullmatch(value.rstrip(")]}>"))
 
-# --- M1~M11: 로그 표본으로 측정한 마스커(`logmine/bin/mask2.py` 2차·`mask3.py`)를 옮긴 규칙 (B2 §3.2) ---
-# 줄 단위로 본다(`^`는 줄 처음). 측정 마스커와 다른 점은 표의 "Deviation" 열 그대로다.
+# --- M1~M11: 합성 fixture로 고정한 로그 줄 규칙 (B2 §3.2) -----------------------------------------------
+# 줄 단위로 본다(`^`는 줄 처음).
 
 def _not_null(value: str) -> bool:
     """M3 위치 인자: 빈 값·`null`은 그대로 둔다(토큰은 이미 차지한 구간이라 여기 오지 않는다)."""

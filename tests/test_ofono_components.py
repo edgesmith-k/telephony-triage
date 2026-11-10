@@ -166,6 +166,7 @@ def test_vendor_ipc_block_both_platforms():
     two = {k: SITE_IPC[k] for k in ("context", "complete")}                          # 예전 두 키만 → 새 키 빠짐
     assert "platform.others.ofono.vendor_ipc.request_prefix" in _error(vendor_ipc=two)
     assert "빠짐: success" in _error(vendor_ipc={k: v for k, v in SITE_IPC.items() if k != "success"})
+    assert "error_prefix로 시작" in _error(vendor_ipc={**SITE_IPC, "success": "DONE"})          # 접미어만은 오류
 
 
 def test_dump_func_block_ofono_only():

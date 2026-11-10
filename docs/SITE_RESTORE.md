@@ -88,7 +88,7 @@ python3 tools/site_step.py check S-6                                     # 반�
 | `complete` | `]`와 공백 뒤의 낱말 |
 | `request_prefix` | 오류 줄 `[RX]` 뒤 IPC 메시지 이름의 공통 앞부분(끝의 `_` 포함) — 모듈 필터 IPC 이름도 이것으로 뽑는다 |
 | `error_prefix` | `Error(` 안 결과 값의 공통 앞부분(끝의 `_` 포함) |
-| `success` | 성공 결과 값 전체(이 값의 줄은 이벤트로 내지 않는다) |
+| `success` | 성공 결과 값 전체 — `error_prefix`로 시작하는 `Error(…)` 안 글자 그대로(아니면 종료 2). 이 값의 줄은 이벤트로 내지 않는다 |
 
 값은 식별자 모양 `^[A-Za-z][A-Za-z0-9_]{0,63}$`이고 다섯 키를 함께 적는다(일부만 쓰거나 키 값이 `null`이면 종료 2). 블록을 빼면(블록 전체 `null`·`{}` 포함) placeholder를 쓴다. 다른 키는 "알 수 없는 키"로 종료 2다(기준: `contracts.md` 설정 키 표). 켠 플랫폼마다 둔다 — 기본 플랫폼은 `platform.vendor_ipc`, 그 밖은 `platform.others.<p>.vendor_ipc`. **site-defaults에 이미 있는 `platform:` 블록 안에 키만 더한다** — `platform:`을 하나 더 쓰면 같은 최상위 키 중 뒤엣것만 남아 사내 값(구성요소·짝 규칙·슬롯 등)이 경고 없이 사라진다. `enabled`는 바꾸지 않는다:
 
@@ -153,7 +153,7 @@ python3 -m pytest -q tests/test_modulefilter.py tests/test_module_templates.py
 | `restore.overlay` | `make_module_repo.py <임시> --site-overlay … --json` 종료 0(덮어쓴 파일의 placeholder·표식 남음, 스냅샷에 없는 템플릿 파일의 placeholder, evals 포함은 실패) |
 | `restore.tags` | 렌더된 `modules.yaml`의 데몬·태그 ⊆ 사내 이슈 DB `tags.yaml`(빠진 이름은 이 출력에만). 한 플랫폼이라도 이슈 DB를 건너뛰면 건너뜀 |
 | `restore.vendor_ipc` | 켠 플랫폼마다 ②의 블록에 다섯 키(oFono는 `dump_func`도), 어느 값도 placeholder 아님(값은 보이지 않는다). 없거나 placeholder 값이면 사용자 필요, 플랫폼 설정을 못 읽으면(일부 키만 포함) 실패 |
-| `restore.deny` | `TT_DENY_FILE`의 항목이 SITE_PATHS 밖 추적 파일에 0건(UTF-8 아닌 파일도 본다). 압축 파일(내용 못 봄)이 있으면 실패, 변수가 없으면 사용자 필요 |
+| `restore.deny` | `TT_DENY_FILE`의 항목이 SITE_PATHS 밖 추적 파일에 0건(UTF-8 아닌 파일도 본다). 압축·PDF·PNG 파일(내용 못 봄)이 있으면 실패, 변수가 없으면 사용자 필요 |
 | `restore.label` | 지금 반입 라벨(`.draft-manifest.json`, 없으면 `import-*` 태그) = `SOURCE` label. 다르면 경고 |
 
 ⓪ 뒤 새 묶음을 반입했으면 `restore.label`이 경고인 것이 정상이다. ③까지 마쳤으면 ⑦ 2의 diff(`SOURCE` label의 반입 커밋 → 지금 HEAD)를 보고 이름 치환이 아닌 템플릿 변경을 스냅샷에 옮긴 **다음** `SOURCE`의 `label`·`date`를 지금 반입으로 고쳐 커밋한다(`sha`는 그대로). diff를 보기 전에 label을 올리면 그 구간의 템플릿 변경이 확인 없이 가려지고 경고도 사라진다.

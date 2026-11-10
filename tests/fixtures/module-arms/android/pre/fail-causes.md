@@ -87,4 +87,4 @@
 
 ## 벤더 IPC 결과 (VIPC_E_*, placeholder — 사내 확인 TODO(SITE:S9))
 
-`Error(VIPC_E_*)`는 모뎀이 준 결과다(접두어·성공 값은 site-defaults `vendor_ipc`, 성공 `VIPC_OK`는 이벤트로 내지 않는다): GENERIC_FAILURE 일반 실패 · NO_SUCH_ELEMENT 대상(AID·파일) 없음 · UNDEFINED_CMD 모뎀이 모르는 명령(미지원).
+`Error(VIPC_E_*)`는 모뎀이 준 결과다(접두어·성공 값은 site-defaults `vendor_ipc`, 성공 값은 이벤트로 내지 않는다): `VIPC_E_FAILURE` 모뎀 실패 · `VIPC_E_NO_SUCH_ELEMENT` 대상(AID·파일) 없음 · `VIPC_E_UNKNOWN_CMD` 모뎀이 모르는 명령(미지원).
