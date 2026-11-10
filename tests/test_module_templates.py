@@ -153,7 +153,7 @@ def test_case_schema(tmp_path):
     src = TEMPLATES / "ofono" / "data" / "evals" / "data-apn-auth-reject"
     bad = {
         "key": ("key: MOCK-9101", "key: MOCK-1"),
-        "synthetic": ("synthetic: true", "synthetic: false"),
+        "synthetic": ("synthetic: true", "synthetic: maybe"),          # false는 사내 case(마스킹 잔여 0)로 받는다
         "evidence": ("'USER_AUTHENTICATION']", "'NO_SUCH_LINE_IN_FILES']"),
         "run_expect": ("run_expect:\n  top_cause: DATA-001-01\n  C: 1\n", ""),
     }
