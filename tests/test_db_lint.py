@@ -400,6 +400,15 @@ def test_failed_step_is_schema_valid_and_checked_for_raw_identifiers():
     assert yaml.safe_load(path.read_text(encoding="utf-8"))["note"]
 
 
+def test_raw_identifier_glued_to_hangul_particle():
+    """note의 원본 식별자에 한글 조사가 붙어도(`010-1234-5678로`) raw-identifier다(마스커 경계가 ASCII)."""
+    db = runner_copy()
+    path = db / "data/DATA-001-no-setup-data-call/issues/MOCK-1101.yaml"
+    edit(path, "note: 모바일", "note: 고객010-1234-5678로 연락, 모바일")
+    hits = [e for e in _lint(db, "--all", expect=1)["errors"] if e["code"] == "raw-identifier"]
+    assert hits and "MOCK-1101" in hits[0]["file"], hits
+
+
 BROKEN_YAML_FILES = [
     f"{C}/issues/MOCK-2101.yaml",
     "feedback/2026-09/MOCK-1103-20260922T1830.yaml",

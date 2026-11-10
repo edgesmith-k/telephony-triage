@@ -11,6 +11,8 @@
 - **문맥 우선**: 키 이름 문맥(`imsi=`, `mCi=` 등)을 먼저 보고, 숫자 길이만으로 판정하는
   규칙(문맥 없는 15자리)은 Luhn·MCC 확인을 거친다. 빌드 번호·타임스탬프 오탐을 피하려고
   숫자 규칙은 단어 경계(`_`, `.` 포함) 안에서만 본다.
+- **ASCII 경계**: 규칙의 낱말·경계·숫자 클래스와 `(?i)`는 ASCII다(`Rule`이 `re.ASCII`로 컴파일). 값 앞뒤에 붙은 한글
+  (`010-1234-5678로`, `IMSI <15자리>에서`)은 경계다. 키·값 사이 공백과 값 끝은 `(?u:…)`로 유니코드 공백도 받는다.
 - **값 앞 제외(`Rule.before`)**: 값 바로 앞 24자가 이 패턴에 맞으면 그 값은 건너뛴다
   (`version 10.0.1.2`를 IPv4로 보지 않기). `context`(줄 전체 양성 조건)와 반대 방향의 음성 조건이다.
 - **게이트(`Rule.gate`)**: 키 이름 문맥 규칙은 소문자 줄에 그 키 부분문자열이 하나라도 있을 때만
@@ -68,6 +70,14 @@ class Rule:
     fmt: str | None = None                          # 토큰 모양. `{n}` 번호, `{b}` 덤프 바이트 수, `{h}` hex 길이/2
     per_line: bool = False                          # 여러 줄 글에서 문맥을 값이 있는 그 줄에서만 본다
 
+    def __post_init__(self):
+        # 낱말·경계·숫자(`\w`·`\b`·`\d`)는 ASCII다: 값 옆의 한글 조사(`010-1234-5678로`)·가나도 경계가 된다.
+        # 키·값 사이 공백과 값 끝은 규칙이 `(?u:\s)`로 따로 유니코드 공백(NBSP·U+3000)을 받는다
+        for name in ("regex", "context", "before"):
+            pat = getattr(self, name)
+            if pat is not None and not pat.flags & re.ASCII:
+                object.__setattr__(self, name, re.compile(pat.pattern, (pat.flags & ~re.UNICODE) | re.ASCII))
+
     def applies(self, text: str) -> bool:
         return self.context is None or bool(self.context.search(text))
 
@@ -123,8 +133,8 @@ def _alnum_mixed(value: str) -> bool:
 # IPv4 값 바로 앞이 버전 문맥이면 IP가 아니다 (`RIL version 10.1.2.3`, `app version=10.4.5.6`)
 _VERSION_BEFORE = re.compile(r"(?i)\b(?:ver(?:sion)?|build|release|rev|fw|sw|baseband|kernel|v)\s*[=:]?\s*$")
 
-# 키와 값 사이: `key=v`, `key: v`, JSON `"key":"v"`
-_SEP = r'"?\s*[=:]\s*"?'
+# 키와 값 사이: `key=v`, `key: v`, JSON `"key":"v"` (공백은 유니코드 — Jira 글의 NBSP)
+_SEP = r'"?(?u:\s)*[=:](?u:\s)*"?'
 
 _NUM_END = r"(?![\w*]|\.\w)"  # 숫자 값 뒤: 단어 문자·`*`(Android 부분 마스킹)·`.<글자>`(버전·IP의 일부)가 이어지면 안 된다. 문장 끝 `.`은 된다
 
@@ -312,12 +322,12 @@ _M_LATE: tuple[Rule, ...] = (
 # 순서가 중요하다: M11·M1·M3·M4 → 자격증명 → URI·이메일 → 문맥 있는 식별자 → 형식 → 문맥 없는 숫자 → 나머지 M.
 _BASE_RULES: tuple[Rule, ...] = (
     # --- 자격증명 ---
-    Rule("CRED", re.compile(r'(?i)\b(?:response|nonce|cnonce|opaque)\s*=\s*"?(?P<v>[^",\s]+)"?'),
+    Rule("CRED", re.compile(r'(?i)\b(?:response|nonce|cnonce|opaque)(?u:\s)*=(?u:\s)*"?(?P<v>(?u:[^",\s])+)"?'),
          context=_SIP_AUTH_CONTEXT),
     Rule("CRED", re.compile(r"\b(?:RES|AUTN|AUTS|XRES)" + _SEP + r"(?:0x)?(?P<v>[0-9A-Fa-f]{8,})\b")),
-    Rule("CRED", re.compile(r'(?i)\b(?:password|passwd|pwd|secret)' + _SEP + r'(?P<v>[^\s",;]+)')),
+    Rule("CRED", re.compile(r'(?i)\b(?:password|passwd|pwd|secret)' + _SEP + r'(?P<v>(?u:[^\s",;])+)')),
     # `token`은 짧은 숫자 값(RIL 요청 token `token=612`·`token: 0042`, `0x29`)을 빼고 본다. 긴 인증 토큰은 그대로
-    Rule("CRED", re.compile(r'(?i)\btoken' + _SEP + r'(?P<v>[^\s",;]+)'), check=_token_secret, gate=("token",)),
+    Rule("CRED", re.compile(r'(?i)\btoken' + _SEP + r'(?P<v>(?u:[^\s",;])+)'), check=_token_secret, gate=("token",)),
     Rule("CRED", re.compile(r'(?i)\b(?:api[_-]?key|key)' + _SEP + r'(?P<v>[A-Za-z0-9+/=_-]+)'),
          check=_secretish),
     # AKA 키 (대소문자 구분: 소문자 `ok=`·`ik` 섞인 문구를 피한다; Kc 64비트 = 16 hex가 하한)
@@ -327,12 +337,12 @@ _BASE_RULES: tuple[Rule, ...] = (
     # `pinState=`·`mPin1State=`·`PIN1 retry=3`은 키 바로 뒤에 `=`/`:`가 없어 맞지 않는다
     Rule("CRED", re.compile(r'(?i)\bm?(?:pin1?2?|puk1?2?|pin_?code|puk_?code)' + _SEP + r'(?P<v>\d{4,8})(?!\w)'),
          gate=("pin", "puk")),
-    Rule("CRED", re.compile(r'(?i)\b(?:pass|passcode)' + _SEP + r'(?P<v>[^\s",;)\]}]+)'), check=_pass_like, gate=("pass",)),
-    Rule("CRED", re.compile(r"(?i)\bBearer\s+(?P<v>[A-Za-z0-9._~+/=-]{16,})"), gate=("bearer",)),
+    Rule("CRED", re.compile(r'(?i)\b(?:pass|passcode)' + _SEP + r'(?P<v>(?u:[^\s",;)\]}])+)'), check=_pass_like, gate=("pass",)),
+    Rule("CRED", re.compile(r"(?i)\bBearer(?u:\s)+(?P<v>[A-Za-z0-9._~+/=-]{16,})"), gate=("bearer",)),
     Rule("CRED", re.compile(r"(?<![\w.-])(?P<v>eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]*)?)")),  # JWT
     # --- URI·주소 ---
-    Rule("IMPU", re.compile(r"\bsips?:(?P<v>[^@\s;>\"<]+)@")),
-    Rule("IMPI", re.compile(r'(?i)\b(?:username|impi)(?:\s*=|"\s*:)\s*"?(?P<v>[^@"\s,<]+)@')),
+    Rule("IMPU", re.compile(r"\bsips?:(?P<v>(?u:[^@\s;>\"<])+)@")),
+    Rule("IMPI", re.compile(r'(?i)\b(?:username|impi)(?:(?u:\s)*=|"(?u:\s)*:)(?u:\s)*"?(?P<v>(?u:[^@"\s,<])+)@')),
     Rule("MSISDN", re.compile(r"\btel:(?P<v>\+?[\d-]{6,})")),
     Rule("EMAIL", re.compile(r"(?<![\w.%+-])(?P<v>[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})\b")),
     Rule("SUPI", re.compile(r"\b(?P<v>imsi-\d{5,15})\b")),
@@ -341,12 +351,12 @@ _BASE_RULES: tuple[Rule, ...] = (
     Rule("IMSI", re.compile(r'(?i)\bimsi' + _SEP + r'(?P<v>\d{6,15})' + _NUM_END)),
     Rule("IMEI", re.compile(r'(?i)\b(?:imei|meid|device_?id)' + _SEP + r'(?P<v>[0-9A-Fa-f]{14,16})' + _NUM_END)),
     # 구분자(`-`·공백) IMEI/IMEISV, 키에 붙은 값(`IMEI4901…`). 끝 경계를 두지 않아 `…518_1`도 값 부분만 토큰
-    Rule("IMEI", re.compile(r'(?i)\bm?(?:imei|imeisv|meid|device_?id)"?\s*[=:]?\s*"?(?P<v>\d(?:[ -]?\d){13,15})'),
+    Rule("IMEI", re.compile(r'(?i)\bm?(?:imei|imeisv|meid|device_?id)"?(?u:\s)*[=:]?(?u:\s)*"?(?P<v>\d(?:[ -]?\d){13,15})'),
          check=lambda v: 14 <= len(_digits(v)) <= 16, gate=("imei", "meid", "device")),
     Rule("EID", re.compile(r'(?i)\bm?eid' + _SEP + r'(?P<v>\d{32})\b'), gate=("eid",)),
     # getprop 형식 `[ro.serialno]: [R3CN30ABCDE]`도 받는다
     Rule("SERIAL", re.compile(
-        r'(?i)\b(?:ro\.(?:boot\.)?serialno|serialno|serial_?(?:no|num|number))(?:' + _SEP + r'|\]:\s*\[)(?P<v>[A-Za-z0-9]{6,})\b'),
+        r'(?i)\b(?:ro\.(?:boot\.)?serialno|serialno|serial_?(?:no|num|number))(?:' + _SEP + r'|\]:(?u:\s)*\[)(?P<v>[A-Za-z0-9]{6,})\b'),
          gate=("serial",)),
     # `sn`·`serial`·`mSerial`은 시퀀스 번호(`SN=12345678 PDCP`)·RIL serial(`serial=0041`, `mSerial=41`)과
     # 겹치므로 영문+숫자 혼합만 (`sn` 6자, `serial` 8자 이상)
@@ -358,10 +368,10 @@ _BASE_RULES: tuple[Rule, ...] = (
          gate=("mac", "bssid", "hwaddr", "ether", "bd_addr", "bdaddr")),
     Rule("GEO", re.compile(r"(?i)\b(?:m?lat(?:itude)?|m?lon(?:g(?:itude)?)?|lng|altitude)" + _SEP + r"(?P<v>[-+]?\d{1,3}\.\d{3,})"),
          gate=("lat", "lon", "lng", "altitude")),
-    Rule("GEO", re.compile(r"(?i)\b(?:gps|fused|network|passive)\s+(?P<v>[-+]?\d{1,3}\.\d{4,},[-+]?\d{1,3}\.\d{4,})"),
+    Rule("GEO", re.compile(r"(?i)\b(?:gps|fused|network|passive)(?u:\s)+(?P<v>[-+]?\d{1,3}\.\d{4,},[-+]?\d{1,3}\.\d{4,})"),
          gate=("gps", "fused", "network", "passive")),
     # `iccid=`·`"iccid":` 외에 `ICCID(<값>)`·`iccid[<값>]`도(벤더 데몬 표기)
-    Rule("ICCID", re.compile(r'(?i)\biccid(?:' + _SEP + r'|\s*[(\[]\s*)(?P<v>[0-9A-Fa-f]{18,20})' + _NUM_END)),
+    Rule("ICCID", re.compile(r'(?i)\biccid(?:' + _SEP + r'|(?u:\s)*[(\[](?u:\s)*)(?P<v>[0-9A-Fa-f]{18,20})' + _NUM_END)),
     Rule("TMSI", re.compile(r'(?i)\b(?:p-?tmsi|m-?tmsi|s-?tmsi|tmsi)' + _SEP + r'(?P<v>(?:0x)?[0-9A-Fa-f]{4,10})\b')),
     Rule("GUTI", re.compile(r'(?i)\b(?:5g-?guti|guti)' + _SEP + r'(?P<v>[0-9A-Fa-f][0-9A-Fa-f-]{7,})\b')),
     # 셀 위치 키 (`mCid`·`CellIdentity*`의 키는 항상). 맨 `cid`는 키로 두지 않는다 — 데이터 콜 context id
@@ -388,7 +398,7 @@ _BASE_RULES: tuple[Rule, ...] = (
     Rule("IP", re.compile(r"(?<![0-9A-Za-z_:])(?P<v>" + _V6_FULL + "|" + _V6_COMP + r")(?![0-9A-Za-z_:])"),
          check=lambda v: v != "::"),
     # 위 규칙의 앞 경계(`:` 금지)에 막히는 주소 키 바로 뒤(`addr:<v6>`, `ipv6address:<v6>/64`)와 끝이 `:`인 잘린 표기
-    Rule("IP", re.compile(r'(?i)(?:addr(?:ess)?|\bip(?:v6)?|\bgw|gateway|\bdns\d?)\s*[=:]\s*"?(?P<v>' + _V6_FULL + "|"
+    Rule("IP", re.compile(r'(?i)(?:addr(?:ess)?|\bip(?:v6)?|\bgw|gateway|\bdns\d?)(?u:\s)*[=:](?u:\s)*"?(?P<v>' + _V6_FULL + "|"
                           + _V6_COMP + "|" + _V6_PART + r")(?![0-9A-Fa-f:])"),
          check=lambda v: _v6_like(v, 4), gate=("addr", "ip", "gw", "gateway", "dns")),
     # 줄 경계에서 쪼개진 주소 조각(`::` 없음, 6묶음 이상 — 시각·버전·MAC 모양은 `_v6_like`가 뺀다)
@@ -506,14 +516,13 @@ class Masker:  # noqa: F811  # 위의 타입 별칭 Masker를 이 클래스가 �
         """`_spans`에 규칙의 토큰 모양(`Rule.fmt`)을 붙인 것. `reserved` 구간(갈린 조각)은 규칙이 보지 않는다."""
         taken = [(m.start(), m.end()) for m in _PROTECTED.finditer(text)] + list(reserved)
         found: list[tuple[int, int, str, str, str | None]] = []
-        # ASCII가 아닌 줄은 게이트를 끈다: `(?i)` 정규식은 `ſ`(→s)·`İ`(→i)·`K`(켈빈)도 맞추지만
-        # 부분문자열 게이트는 못 맞춘다
-        gated, low = text.isascii(), text.lower()
+        # 규칙이 ASCII(`re.ASCII`)라 `(?i)`도 ASCII 글자만 접는다 — 한글 줄에서도 게이트가 결과를 바꾸지 않는다
+        low = text.lower()
         log_lines = self.log_lines
         for rule in RULES:
             if rule.log_only and not log_lines:
                 continue
-            if gated and rule.gate and not any(k in low for k in rule.gate):  # 키가 없는 줄은 키 규칙을 돌리지 않는다
+            if rule.gate and not any(k in low for k in rule.gate):  # 키가 없는 줄은 키 규칙을 돌리지 않는다
                 continue
             if not rule.applies(text):  # 문맥 규칙은 줄 전체를 본다
                 continue

@@ -428,10 +428,65 @@ def test_imei_spelling_variants_share_number():
     assert masker.mask_value("49-015420-323751-8") == "<IMEI#1>"
 
 
-def test_gate_off_for_non_ascii():
-    """`(?i)`는 `ſ`→s·`İ`→i도 맞추므로 ASCII 아닌 줄은 게이트를 끈다(게이트 때문에 놓치지 않는다)."""
-    assert masking.new_masker()("paſs=hunter2") == "paſs=<CRED#1>"
-    assert masking.new_masker()("PİN=1234") == "PİN=<CRED#1>"
+def test_gate_on_for_non_ascii():
+    """규칙이 ASCII(`re.ASCII`)라 `(?i)`가 `ſ`·`İ`를 `s`·`i`로 접지 않는다 — 한글 줄도 게이트를 켜고 결과는 같다
+    (`test_gate_does_not_change_result`). `paſs=`·`PİN=`은 키로 보지 않는다(알려진 한계, 08-safety §8)."""
+    assert masking.new_masker()("비번pass=hunter2로") == "비번pass=<CRED#1>"
+    assert masking.new_masker()("PİN=1234") == "PİN=1234"
+
+
+# (입력, 종류, 원본 값) — 값 바로 앞이 한글·뒤가 조사(공백 없음). 경계는 ASCII 낱말 문자로만 본다
+HANGUL_GLUED = [
+    ("고객010-1234-5678로 연락", "MSISDN", "010-1234-5678"),
+    ("발신+82-10-1234-5678로", "MSISDN", "+82-10-1234-5678"),
+    ("번호dest=01098765432로", "MSISDN", "01098765432"),
+    ("전화tel:+821012345678로", "MSISDN", "+821012345678"),
+    ("메일kim@example.com으로", "EMAIL", "kim@example.com"),
+    ("IMSI 450081234567890에서 실패", "IMSI", "450081234567890"),
+    ("가입자imsi=450081234567890로", "IMSI", "450081234567890"),
+    ("번호450081234567891에서", "IMSI", "450081234567891"),
+    ("단말490154203237518의", "IMEI", "490154203237518"),
+    ("단말imei=490154203237518로", "IMEI", "490154203237518"),
+    ("단말49-015420-323751-8로", "IMEI", "49-015420-323751-8"),
+    ("카드89823001234567890123이", "ICCID", "89823001234567890123"),
+    ("카드iccid=8982300123456789012가", "ICCID", "8982300123456789012"),
+    ("주소192.0.2.10은 사설", "IP", "192.0.2.10"),
+    ("주소2001:db8::7로", "IP", "2001:db8::7"),
+    ("맥aa:bb:cc:dd:ee:ff로", "MAC", "aa:bb:cc:dd:ee:ff"),
+    ("가입imsi-450081234567890으로", "SUPI", "imsi-450081234567890"),
+    ("셀cellId=987654로", "CELL", "987654"),
+    ("임시tmsi=0x1a2b3c4d로", "TMSI", "0x1a2b3c4d"),
+    ("장치serial=R58M12ABCDE로", "SERIAL", "R58M12ABCDE"),
+    ("칩eid=89049032004008882600012345678901로", "EID", "89049032004008882600012345678901"),
+    ("비번password=hunter2", "CRED", "hunter2"),
+    ("인증token=ab12cd34ef로", "CRED", "ab12cd34ef"),
+]
+
+
+def test_hangul_glued_values_are_masked():
+    """한글 조사가 붙은 값(`010-1234-5678로`)·한글 바로 뒤 값도 제 종류로 가린다 — 일반 마스커(`--check`·db_lint·issue_post)와
+    로그 마스커 모두. 로그 마스커가 15~20자리를 `NUM`으로만 가리던 IMSI·ICCID·IMEI도 제 종류다."""
+    for text, kind, raw in HANGUL_GLUED:
+        for log_lines in (False, True):
+            out = masking.new_masker(log_lines=log_lines)(text)
+            assert raw not in out and f"<{kind}#1>" in out, (log_lines, text, out)
+        assert [f["kind"] for f in masking.new_masker().find(text)] == [kind], text
+
+
+def test_unicode_space_between_key_and_value():
+    """키·값 사이 NBSP·U+3000(Jira 글)은 공백이고, 값 끝도 그 공백에서 멈춘다(뒤 낱말을 같이 가리지 않는다)."""
+    assert masking.new_masker()("imsi: 450081234567890") == "imsi: <IMSI#1>"
+    assert masking.new_masker()("password=　hunter2 다음") == "password=　<CRED#1> 다음"
+
+
+def test_mask_pii_check_reports_hangul_glued():
+    """`mask_pii --check`(기본 마스커)도 한글 조사가 붙은 값을 낸다(값은 내지 않는다)."""
+    raw = _write([text for text, _, _ in HANGUL_GLUED], name="glued.txt")
+    proc = _run("mask_pii.py", [str(raw), "--check"], cwd=_tmp())
+    assert proc.returncode == 1, proc.stderr
+    kinds = [d["kind"] for d in json.loads(proc.stdout)["detections"]]
+    assert kinds == [kind for _, kind, _ in HANGUL_GLUED], kinds
+    assert not [v for _, _, v in HANGUL_GLUED if v in proc.stdout]
 
 
 def test_db_lint_state_patterns_are_not_raw_identifiers():
