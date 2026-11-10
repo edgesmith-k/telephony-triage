@@ -325,6 +325,8 @@ def test_install_refuses_work_root_over_home_user_site_plugin_or_repo(roots, mon
     monkeypatch.setattr(site, "USER_BASE", str(home / ".local"))
     monkeypatch.setattr(site, "USER_SITE", str(home / ".local" / "lib" / "site-packages"))
     (roots / "link").symlink_to(home)
+    for d in (".ssh", ".claude/x", ".config", ".gnupg"):              # 6차 R5-P3-3: 홈의 키·hook·설정 폴더
+        (home / d).mkdir(parents=True)
 
     def install(work, dest):
         argv = ["install", "--dest", str(roots / dest), "--plugin-root", str(roots / "plug"), "--work-root", str(work),
@@ -334,7 +336,9 @@ def test_install_refuses_work_root_over_home_user_site_plugin_or_repo(roots, mon
 
     for i, (work, what) in enumerate(((home, "홈"), (roots, "홈"), (roots / "link", "홈"), (home / ".local", "사용자 site"),
                                       (home / ".local" / "lib", "사용자 site"), (roots / "plug", "플러그인"),
-                                      (roots / "plug" / "scripts", "플러그인"), (gen_opencode.REPO / "tests", "레포"))):
+                                      (roots / "plug" / "scripts", "플러그인"), (gen_opencode.REPO / "tests", "레포"),
+                                      (home / ".ssh", "~/.ssh"), (home / ".claude" / "x", "~/.claude"),
+                                      (home / ".config", "~/.config"), (home / ".gnupg", "~/.gnupg"))):
         code, err = install(work, f"bad{i}")
         assert code == 2 and what in err and "--work-root" in err, (work, err)
         assert not (roots / f"bad{i}").exists()

@@ -336,18 +336,31 @@ def scripts_digest(plugin_root: Path) -> str:
 def work_root_problems(work: str, plugin: str) -> list[str]:
     """`--work-root` 아래는 모델이 쓸 수 있다(edit 권한). 작업 루트가 홈·Python 사용자 site·플러그인·이 레포이거나 그것을 품으면
     (사용자 site·플러그인·레포는 그 안에 있어도) 모델이 셸 시작 파일·`.pth`·스크립트를 바꿀 수 있어 거부한다(런타임 리뷰 5차 R4-P3-3).
-    심볼릭 링크를 푼 실제 경로로 비교한다. 작업 루트가 홈 안(예: ~/tt-work)인 것은 괜찮다."""
+    홈의 `.ssh`·`.claude`·`.config`·`.gnupg`도 같다(6차 R5-P3-3 — 키·hook·설정). 심볼릭 링크를 푼 실제 경로로 비교하고, 둘 다
+    있으면 조상까지 `os.path.samefile`로도 본다(바인드 마운트·대소문자 무시 파일 시스템). 홈 안(예: ~/tt-work)은 괜찮다."""
     import site
+
+    def same(a: Path, b: Path) -> bool:
+        try:
+            return a == b or os.path.samefile(a, b)
+        except OSError:
+            return False
+
+    def within(child: Path, parent: Path) -> bool:          # child가 parent이거나 그 아래
+        return any(same(x, parent) for x in (child, *child.parents))
+
     w = Path(os.path.realpath(work))
+    home = os.path.expanduser("~")
     out = []
-    for name, raw, inner_ok in (("홈($HOME)", os.path.expanduser("~"), True),
+    for name, raw, inner_ok in (("홈($HOME)", home, True),
+                                *((f"~/{n}", os.path.join(home, n), False) for n in (".ssh", ".claude", ".config", ".gnupg")),
                                 ("Python 사용자 site", site.getuserbase(), False),
                                 ("Python 사용자 site-packages", site.getusersitepackages(), False),
                                 ("플러그인", plugin, False), ("이 레포", str(REPO), False)):
-        if not raw or raw == "~":
+        if not raw or raw.startswith("~"):
             continue
         d = Path(os.path.realpath(raw))
-        if w == d or w in d.parents or (not inner_ok and d in w.parents):
+        if within(d, w) or (not inner_ok and within(w, d)):
             out.append(f"--work-root({w})가 {name}({d})와 겹친다 — 모델이 그 아래 파일을 쓸 수 있게 된다. 따로 둔 작업 폴더를 쓴다")
     return out
 
@@ -360,7 +373,7 @@ def cmd_install(a) -> int:
     bad = work_root_problems(work, plugin)
     if bad:
         raise UsageError("; ".join(bad))
-    dbs =[_abs_dir(c, "--issue-db") for c in a.issue_db or []]
+    dbs = [_abs_dir(c, "--issue-db") for c in a.issue_db or []]
     dest = Path(_abs_dir(a.dest, "--dest", must_exist=False))
     for root in (plugin, *dbs):
         if dest == Path(root) or Path(root) in dest.parents:
