@@ -13,7 +13,7 @@
 
 ## 코드 경로
 
-- `aosp:` DataNetworkController, DataSettingsManager, DataEvaluation
+- `aosp:` DataNetworkController, DataSettingsManager, DataEvaluation, DataProfileManager, DataRetryManager
 - `vendor_ril:` 데이터 핸들러(TODO(SITE:S25))
 
 ## 흔한 오판
