@@ -130,7 +130,7 @@ ARM_PINS = {
     # Android(H C1+D S12, 11/05 ④ 뒤 얼림 — tests/fixtures/module-arms/README.md 표)
     "android/pre/log-tags.md": "f64baa5b4126f5288a6d7d964f3ab8f9f9d36d4a67f1ab0264bd0f16b380f5fb",
     "android/pre/ril-requests.md": "262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5",
-    "android/pre/fail-causes.md": "121f80ddb91f3b813f9e2fbcc38e7029a00b6aecda2d5729daef6083960747c1",
+    "android/pre/fail-causes.md": "51cd96821dfbefa48584982c040772f59ba26aaf9e597051d09d3643a6f4544c",
     "android/pre/explore-rules.md": "6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8",
     "android/post/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
 }
@@ -522,9 +522,18 @@ def load_case(case_dir) -> Case:
         for why in skillcheck.origin_problems(data, log):     # 합성 표식(R4·R5)
             fail(f"origin {why}")
     else:                                                     # 사내 case: 합성 표식 대신 마스킹 잔여 0(종류만 낸다)
-        left = masking.residual(log)
-        if left:
-            fail(f"synthetic: false는 마스킹된 로그만 — source.log에 마스킹 안 된 값: {', '.join(sorted(left))}")
+        texts = [("source.log", log)] + [(f"issue.{k}", issue.get(k)) for k in ("summary", "description")]
+        for fp in sorted(files_dir.rglob("*")):               # files/의 다른 글 파일도(생성물·손으로 넣은 것)
+            if fp.is_file() and not fp.is_symlink() and fp.name != "source.log":
+                rel = fp.relative_to(files_dir).as_posix()
+                try:
+                    texts.append((rel, fp.read_text(encoding="utf-8")))
+                except (OSError, UnicodeDecodeError):
+                    fail(f"files/{rel}는 UTF-8")
+        for where, text in texts:
+            left = masking.residual(text) if isinstance(text, str) else {}
+            if left:
+                fail(f"synthetic: false는 마스킹된 글만 — {where}에 마스킹 안 된 값: {', '.join(sorted(left))}")
     if kind == "explore":                                   # 코덱스 리뷰 R5: 펼친 폴더에 없는 자료를 있다고 적은 analysis.json은 거부
         try:
             logs = (json.loads((files_dir / "analysis.json").read_text(encoding="utf-8")) or {}).get("logs") or {}

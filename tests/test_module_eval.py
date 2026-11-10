@@ -481,12 +481,24 @@ def test_load_case_rejects_bad_copies(env, tmp_path):
         with pytest.raises(me.CaseError, match="data-apn-auth-reject: "):
             me.load_case(d)
     broken(lambda data, d: data.__setitem__("key", "MOCK-1001"))
-    broken(lambda data, d: data.__setitem__("synthetic", False))
+    broken(lambda data, d: data.__setitem__("synthetic", "no"))              # bool 아닌 값은 거부
+
+    def site_unmasked(data, d):                                             # 사내 case + 마스킹 안 된 값이 남은 로그는 거부
+        data["synthetic"] = False
+        log = d / "files" / "source.log"
+        log.write_bytes(log.read_bytes() + ("Sep 21 10:00:00 host1 ofonod[1]: imsi=" + "45005" + "1234567890\n").encode())
+    broken(site_unmasked)
     broken(lambda data, d: data["expect"].__setitem__("evidence", ["NOT_IN_FILES_XYZ"]))
     broken(lambda data, d: data.pop("run_expect"))
     broken(lambda data, d: (d / "files" / "extra.md").write_text("x", encoding="utf-8"))
     broken(lambda data, d: (d / "files" / "source.log").write_text("no marker\n", encoding="utf-8"))
     assert me.load_case(src).kind == "deep"
+    clean = tmp_path / "site-clean" / "data-apn-auth-reject"                 # 사내 case + 깨끗한 로그는 통과
+    shutil.copytree(src, clean)
+    data = yaml.safe_load((clean / "case.yaml").read_text(encoding="utf-8"))
+    data["synthetic"] = False
+    (clean / "case.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    assert me.load_case(clean).name == "data-apn-auth-reject"
 
 
 # --- 펼치기·프롬프트 --------------------------------------------------------------------------------------
@@ -1296,6 +1308,17 @@ def test_load_case_site_case_needs_masked_log(tmp_path):
         me.load_case(_repo_case_copy(tmp_path, edit=site, extra_log=f"Sep 21 10:00:00 host1 ofonod[1]: imsi={imsi}\n"))
     with pytest.raises(me.CaseError, match="최상위 키는"):
         me.load_case(_repo_case_copy(tmp_path, edit=site_origin))
+
+    def site_issue(data):                                               # 이슈 글도 본다
+        site(data)
+        data["issue"]["description"] = f"단말 imsi={imsi}에서 재현"
+    with pytest.raises(me.CaseError, match="issue.description에 마스킹 안 된 값"):
+        me.load_case(_repo_case_copy(tmp_path, edit=site_issue))
+    d = _repo_case_copy(tmp_path, edit=site)                            # files/의 다른 글 파일도 본다
+    tl = d / "files" / "timeline.md"
+    tl.write_bytes(tl.read_bytes() + f"- imsi={imsi}\n".encode())
+    with pytest.raises(me.CaseError, match="timeline.md에 마스킹 안 된 값"):
+        me.load_case(d)
     with pytest.raises(me.CaseError, match="synthetic은 true"):
         me.load_case(_repo_case_copy(tmp_path, edit=lambda data: data.__setitem__("synthetic", "yes")))
 
