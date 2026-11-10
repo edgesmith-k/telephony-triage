@@ -138,6 +138,24 @@ def _allow_common_anywhere(parser: argparse.ArgumentParser) -> None:
                 _allow_common_anywhere(sub)
 
 
+# lock owner를 보는 하위 명령(`Lock.touch`·`release`를 거친다 — tests/test_lock_recovery.py가 이 파일·dbpr/ 코드와 대조한다).
+# `lock release`(--force 없음)도 owner를 본다. tt-oc가 터미널로 넘기는 명령에 TT_LOCK_OWNER를 채울 때 쓴다(`owner_job`)
+OWNER_CMDS = ("snapshot", "stage", "summary", "publish", "discard")
+
+
+def owner_job(argv: list[str]) -> tuple[str, str] | None:
+    """이 명령 인자가 owner를 보는 하위 명령이면 `("job", <작업 키>)` 또는 `("wt", <wt 경로>)`, 아니면 None(못 읽어도 None)."""
+    try:
+        args = build_parser().parse_known_args(argv)[0]   # 셸 리디렉션 숫자(2>&1의 2) 등은 버린다
+    except SystemExit:
+        return None
+    if args.cmd == "lock":
+        return ("job", args.job) if args.lock_cmd == "release" and not args.force else None
+    if args.cmd == "snapshot":
+        return ("job", args.job)
+    return ("wt", args.wt) if args.cmd in OWNER_CMDS else None
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="db_pr.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)

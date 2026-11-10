@@ -304,35 +304,84 @@ def test_guard_ask_message_prints_exact_command(env):
     assert tail.startswith("python3 /p/scripts/db_pr.py publish --job ABC-1 --commit\n")
 
 
+def _hold_lock(work, job, owner):
+    """`<work>/session.lock`을 그 작업·owner로(db_pr lock acquire가 쓰는 모양)."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    (work / "session.lock").write_text(json.dumps({"job": job, "owner": owner, "command": "analyze", "started_at": now,
+                                                   "updated_at": now}), encoding="utf-8")
+
+
+def _state(work, job, owner):
+    (work / job).mkdir(exist_ok=True)
+    (work / job / "triage-state.json").write_text(json.dumps({"owner": owner}), encoding="utf-8")
+
+
+def _handoff(env, cmd, cwd=None):
+    msg = ("[telephony-triage] 이슈 DB push·PR(db_pr publish)는 OpenCode v1(분석 전용)에서 돌리지 않는다. "
+           f"OpenCode v1 does not run this; run this exact command yourself: {cmd}")
+    events(env, [ev("step_start"), tool("bash", "error", input={"command": cmd}, error=msg), step("tool-calls"), *final("직접")])
+    r = tt(env, "--", "x", cwd=cwd)
+    assert r.returncode == 3, r.stdout + r.stderr
+    return r.stdout.split("직접 실행 ----\n", 1)[1].split("\n---- [tt-oc] 결과", 1)[0]
+
+
 def test_terminal_handoff_fills_lock_owner_from_job_state(env):
-    """3차 R2-P2-1: 사용자가 터미널에서 돌릴 db_pr·db_verify 명령에는 그 작업의 triage-state.json owner를 TT_LOCK_OWNER=로 채운다
-    (터미널에는 OpenCode 안의 작업 상태 대체가 없다). 상태가 없거나 다른 작업이면 접두 없이 owner 위치를 한 줄로."""
+    """3·4차: 사용자가 터미널에서 돌릴 db_pr·db_verify 명령에는 그 작업의 lock owner를 TT_LOCK_OWNER=로 채운다(터미널에는 OpenCode
+    안의 작업 상태 대체가 없다). 작업 상태 owner가 지금 그 작업이 쥔 session.lock owner와 같을 때만, 줄 끝에 어느 작업인지 적는다."""
     work = env["work"]
-    (work / "ABC-1").mkdir()
-    (work / "ABC-1" / "triage-state.json").write_text(json.dumps({"owner": "0a1b2c"}), encoding="utf-8")
-
-    def handoff(cmd):
-        msg = ("[telephony-triage] 이슈 DB push·PR(db_pr publish)는 OpenCode v1(분석 전용)에서 돌리지 않는다. "
-               f"OpenCode v1 does not run this; run this exact command yourself: {cmd}")
-        events(env, [ev("step_start"), tool("bash", "error", input={"command": cmd}, error=msg), step("tool-calls"),
-                     *final("직접")])
-        r = tt(env, "--", "x")
-        assert r.returncode == 3, r.stdout
-        return r.stdout.split("직접 실행 ----\n", 1)[1].split("\n---- [tt-oc] 결과", 1)[0]
-
-    pub = f"python3 /p/scripts/db_pr.py publish {work}/ABC-1/wt --branch issue/ABC-1 --lease new --approved h --commit"
-    assert handoff(pub).strip() == f"TT_LOCK_OWNER=0a1b2c {pub}"
-    assert handoff("python3 /p/scripts/db_pr.py snapshot --job ABC-1").startswith("TT_LOCK_OWNER=0a1b2c python3 ")
-    cd = f"cd {work} && python3 /p/scripts/db_pr.py publish ABC-1/wt --commit"     # cd 뒤 상대 경로, 접두는 cd 뒤에
-    assert handoff(cd).strip() == f"cd {work} && TT_LOCK_OWNER=0a1b2c python3 /p/scripts/db_pr.py publish ABC-1/wt --commit"
-    other = pub.replace("ABC-1", "ABC-2")                      # 상태 없는 작업
-    out = handoff(other)
-    assert out.startswith(other + "\n") and "TT_LOCK_OWNER=0a1b2c" not in out
-    assert f"{work}/ABC-2/triage-state.json" in out and "lock owner 불일치" in out
-    outside = pub.replace(str(work), "/elsewhere")             # 작업 루트 밖 경로의 파일은 읽지 않는다
-    assert "TT_LOCK_OWNER=" not in handoff(outside).splitlines()[0]
+    _state(work, "ABC-1", "0a1b2c")
+    _hold_lock(work, "ABC-1", "0a1b2c")
+    args = "--branch issue/ABC-1 --lease new --approved h --commit"
+    pub = f"python3 /p/scripts/db_pr.py publish {work}/ABC-1/wt {args}"
+    line = _handoff(env, pub).strip()
+    assert line.startswith(f"TT_LOCK_OWNER=0a1b2c {pub}  #") and "작업 ABC-1" in line
+    assert _handoff(env, "python3 /p/scripts/db_pr.py snapshot --job ABC-1").startswith("TT_LOCK_OWNER=0a1b2c python3 ")
+    cd = f"cd {work} && python3 /p/scripts/db_pr.py publish ABC-1/wt {args}"      # cd 뒤 상대 경로, 접두는 cd 뒤에
+    assert _handoff(env, cd).startswith(f"cd {work} && TT_LOCK_OWNER=0a1b2c python3 /p/scripts/db_pr.py publish ABC-1/wt")
+    draft = f"python3 /p/scripts/db_verify.py rules --plan {work}/ABC-1/plan.json --draft {work}/ABC-1/draft"
+    assert _handoff(env, draft).startswith("TT_LOCK_OWNER=0a1b2c python3 /p/scripts/db_verify.py")
     given = f"TT_LOCK_OWNER=zz {pub}"                          # 이미 있으면 그대로
-    assert handoff(given).splitlines()[0] == given
+    assert _handoff(env, given).splitlines()[0] == given
+
+
+def test_terminal_handoff_only_for_the_job_holding_the_lock(env):
+    """4차 R3-P3-1: 다른 작업(상태는 있지만 lock은 다른 작업)·이어받은 뒤의 옛 owner·lock 없음·상태 없음·작업 루트 밖이면 접두 없이
+    안내 한 줄."""
+    work = env["work"]
+    args = "--branch b --lease new --approved h --commit"
+    _state(work, "ABC-1", "0a1b2c")
+    _state(work, "OTHER-9", "ffff99")
+    _hold_lock(work, "ABC-1", "0a1b2c")
+    for job in ("OTHER-9", "ABC-2"):                          # lock은 ABC-1 것 / 상태도 없음
+        cmd = f"python3 /p/scripts/db_pr.py publish {work}/{job}/wt {args}"
+        out = _handoff(env, cmd)
+        assert out.startswith(cmd + "\n") and "TT_LOCK_OWNER=" not in out.splitlines()[0]
+        assert f"{work}/{job}/triage-state.json" in out and "lock owner 불일치" in out
+    _hold_lock(work, "ABC-1", "new-owner")                    # 이어받은 뒤: 상태의 옛 owner는 채우지 않는다
+    assert "TT_LOCK_OWNER=" not in _handoff(env, f"python3 /p/scripts/db_pr.py publish {work}/ABC-1/wt {args}").splitlines()[0]
+    (work / "session.lock").unlink()
+    assert "TT_LOCK_OWNER=" not in _handoff(env, "python3 /p/scripts/db_pr.py snapshot --job ABC-1").splitlines()[0]
+    outside = f"python3 /p/scripts/db_pr.py publish /elsewhere/ABC-1/wt {args}"
+    assert "TT_LOCK_OWNER=" not in _handoff(env, outside).splitlines()[0]
+
+
+def test_terminal_handoff_skips_lock_free_subcommands_and_compound_commands(env):
+    """4차 R3-P3-2: owner를 보지 않는 하위 명령(merge·request-review 등)은 채우지도 안내하지도 않는다. db_pr가 첫 명령이 아니면
+    (여러 명령) 접두가 엉뚱한 명령에 붙지 않게 채우지 않고 안내만."""
+    work = env["work"]
+    _state(work, "ABC-1", "0a1b2c")
+    _hold_lock(work, "ABC-1", "0a1b2c")
+    for cmd in ("python3 /p/scripts/db_pr.py merge --job ABC-1", "python3 /p/scripts/db_pr.py request-review --job ABC-1 "
+                "--reviewer bob", "python3 /p/scripts/db_pr.py lock release ABC-1 --force"):
+        out = _handoff(env, cmd)
+        assert out.strip() == cmd, out
+    pub = f"python3 /p/scripts/db_pr.py publish {work}/ABC-1/wt --branch b --lease new --approved h --commit"
+    for compound in (f"git -C {work} status; {pub}", f"{pub} 2>&1 | tail -5", f"cd {work} && ls && {pub}"):
+        out = _handoff(env, compound)
+        assert out.startswith(compound + "\n") and "TT_LOCK_OWNER=0a1b2c" not in out and "여러 명령" in out, compound
+    merge = f"git -C {work} status; python3 /p/scripts/db_pr.py merge --job ABC-1"     # 여러 명령이어도 owner를 안 보면 안내 없음
+    assert _handoff(env, merge).strip() == merge
+    assert _handoff(env, "python3 /p/scripts/db_pr.py lock release ABC-1").startswith("TT_LOCK_OWNER=0a1b2c ")
 
 
 def test_terminal_handoff_lookup_ignores_modules_planted_in_cwd(env, monkeypatch):
@@ -349,18 +398,14 @@ def test_terminal_handoff_lookup_ignores_modules_planted_in_cwd(env, monkeypatch
     monkeypatch.setenv("PYTHONUSERBASE", str(env["tmp"] / "home" / ".local"))
     assert mod._lookup_env(root)["PYTHONUSERBASE"] == str(env["tmp"] / "home" / ".local")
     work = env["work"]
+    _state(work, "ABC-1", "0a1b2c")
+    _hold_lock(work, "ABC-1", "0a1b2c")
     job = work / "ABC-1"
-    job.mkdir()
-    (job / "triage-state.json").write_text(json.dumps({"owner": "0a1b2c"}), encoding="utf-8")
     marker = env["tmp"] / "PWNED"
     for name in ("pathlib.py", "json.py", "yaml.py"):
         (job / name).write_text(f"open({str(marker)!r}, 'a').write({name!r})\nraise SystemExit(0)\n", encoding="utf-8")
     pub = f"python3 /p/scripts/db_pr.py publish {job}/wt --branch b --lease new --approved h --commit"
-    msg = f"OpenCode v1 does not run this; run this exact command yourself: {pub}"
-    events(env, [ev("step_start"), tool("bash", "error", input={"command": pub}, error=msg), step("tool-calls"), *final("직접")])
-    r = tt(env, "--", "x", cwd=job)
-    assert r.returncode == 3, r.stdout + r.stderr
-    line = r.stdout.split("직접 실행 ----\n", 1)[1]
+    line = _handoff(env, pub, cwd=job)
     assert not marker.exists(), marker.read_text() if marker.exists() else ""
     assert line.startswith("TT_LOCK_OWNER=0a1b2c ")
 

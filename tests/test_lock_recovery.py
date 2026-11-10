@@ -171,6 +171,70 @@ def test_opencode_state_owner_stale_after_take_over_is_refused():
     assert ws.db_pr("lock", "release", J, env={"TT_RUNTIME": "opencode", "TT_LOCK_OWNER": new})["released"] is True
 
 
+def _calls(node) -> set[str]:
+    import ast
+    return {(c.func.attr if isinstance(c.func, ast.Attribute) else getattr(c.func, "id", ""))
+            for c in ast.walk(node) if isinstance(c, ast.Call)}
+
+
+def test_owner_cmds_are_the_db_pr_subcommands_that_touch_the_lock():
+    """런타임 리뷰 4차 R3-P3-2: tt-oc가 TT_LOCK_OWNER를 채우는 하위 명령 목록(`db_pr.OWNER_CMDS`)은 코드에서 나온다 — dbpr/의
+    `.touch`·`.release`를 부르는 함수를 부르는 `main` 분기와 같다(새 하위 명령이 lock을 보기 시작하면 여기서 깨진다)."""
+    import ast
+    scripts = REPO / "plugin" / "scripts"
+    touching = {fn.name for f in (scripts / "dbpr").glob("*.py") if f.name != "lock.py"
+                for fn in ast.parse(f.read_text(encoding="utf-8")).body
+                if isinstance(fn, ast.FunctionDef) and _calls(fn) & {"touch", "release"}}
+    assert {"snapshot", "stage", "summary", "publish", "discard"} <= touching
+    main = next(n for n in ast.parse((scripts / "db_pr.py").read_text(encoding="utf-8")).body
+                if isinstance(n, ast.FunctionDef) and n.name == "main")
+    branches = {}
+    for node in ast.walk(main):
+        if (isinstance(node, ast.If) and isinstance(node.test, ast.Compare) and isinstance(node.test.ops[0], ast.Eq)
+                and getattr(node.test.left, "attr", None) == "cmd"):
+            branches[node.test.comparators[0].value] = set().union(*(_calls(b) for b in node.body))
+    assert {"merge", "request-review", "cleanup", "my-prs", "preflight", "lock"} <= set(branches)
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import db_pr
+    import db_verify
+    assert {c for c, calls in branches.items() if c != "lock" and calls & touching} == set(db_pr.OWNER_CMDS)
+    assert "release" in branches["lock"]
+    assert db_pr.owner_job(["lock", "release", J]) == ("job", J)
+    assert db_pr.owner_job(["lock", "release", J, "--force"]) is None
+    assert db_pr.owner_job(["merge", "--job", J]) is None
+    assert db_pr.owner_job(["discard", "/w/X-1/wt", "2"]) == ("wt", "/w/X-1/wt")      # `2>&1`의 2 등은 버린다
+    # db_verify: owner를 보는 것은 make_draft의 `_check_lock` 뿐이고 make_draft는 --draft일 때만 부른다
+    tree = ast.parse((scripts / "db_verify.py").read_text(encoding="utf-8"))
+    assert {fn.name for fn in tree.body if isinstance(fn, ast.FunctionDef) and "_check_lock" in _calls(fn)} == {"make_draft"}
+    assert db_verify.owner_job(["fix", "a.log", "--plan", "p.json", "--draft", "/w/X-1/draft"]) == ("wt", "/w/X-1/draft")
+    assert db_verify.owner_job(["rules", "--plan", "p.json"]) is None
+
+
+def test_handoff_owner_only_for_the_job_holding_the_lock():
+    """4차 R3-P3-1: `handoff_owner`는 작업 상태 owner가 지금 그 작업이 쥔 session.lock owner와 같을 때만 owner를 준다."""
+    ws = Workspace(build=False)
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import db_pr
+    from dbpr.lock import handoff_owner as _owner
+
+    def handoff_owner(script, argv, work, cwd):
+        assert script == "db_pr.py"
+        return _owner(db_pr.owner_job(argv), work, cwd)
+    owner = ws.db_pr("lock", "acquire", J, "--command", "analyze")["lock"]["owner"]
+    _triage_state(ws, J, owner)
+    _triage_state(ws, "MOCK-1002", owner)
+    wt = str(ws.job_dir(J) / "wt")
+    assert handoff_owner("db_pr.py", ["discard", wt], ws.work, None)["owner"] == owner
+    assert handoff_owner("db_pr.py", ["snapshot", "--job", J], ws.work, None)["owner"] == owner
+    assert handoff_owner("db_pr.py", ["discard", "wt"], ws.work, ws.job_dir(J))["owner"] == owner     # cd 뒤 상대 경로
+    assert handoff_owner("db_pr.py", ["snapshot", "--job", "MOCK-1002"], ws.work, None)["owner"] is None
+    assert handoff_owner("db_pr.py", ["merge", "--job", J], ws.work, None) == {"checks": False}
+    assert handoff_owner("db_pr.py", ["discard", "/elsewhere/X-1/wt"], ws.work, None)["owner"] is None
+    assert handoff_owner("db_pr.py", ["discard", "wt"], ws.work, None)["owner"] is None               # 상대 경로·cd 없음
+    ws.db_pr("lock", "acquire", J, "--take-over", env={"TT_LOCK_OWNER": ""})
+    assert handoff_owner("db_pr.py", ["discard", wt], ws.work, None)["owner"] is None                  # 이어받은 뒤 옛 owner
+
+
 if __name__ == "__main__":
     test_release_force_backs_up_corrupt_lock()
     test_same_owner_reacquire_is_reentrant()
