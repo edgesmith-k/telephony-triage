@@ -23,7 +23,7 @@
 - §6.3 기본안 Q10~Q25: 이의 없음.
 - **Q2 바꿈(11/05 사용자, B1 설계 중)**: 기존 설치 스킬이 있으면 레포 주소가 있어도 **사용자 설정으로 그 스킬을 쓸 수 있게** 한다. 카테고리별로 고르는 opt-in(기본은 모듈 문서): `[platforms.<p>.]analyzers.<cat>`에 기존 `skill`과 함께 고르는 키를 둔다(형태는 B1 설계). 주소가 없으면 `skill`을 쓰는 예전 Q2 동작은 그대로. 설정만으로 정해져 캐시·출력 결정성 유지, 설정이 없으면 출력 그대로. OpenCode(I)에는 Skill 도구가 없어 이 선택은 Claude Code판에서만 — I에서 보고 방식을 정한다. (11/05 정정: OpenCode 1.19.5에는 자체 `skill` 도구가 있다. 아래 계획 I 1단계 결정대로 스크립트가 설치 스킬의 SKILL.md 경로를 풀어 모든 런타임에서 Read로 읽는다.)
 - **로그 기준(11/05 사용자)**: 모듈별 로그 필터·모듈 문서·평가 사례는 공개 oFono syslog·Android logcat 형식을 기준으로 **합성 로그와 placeholder**로 만든다. "사내랑 안 맞는 것은 사내에서 바꾼다." 그래서 공개된 이름(ofonod·ofonod 소스 파일·RIL 요청·`org.ofono.*`)은 값으로 쓰고, 사내 구성요소의 이름·역할은 자리 표시로 두며 사내에서 확인한다(TODO(SITE:S24)). 테스트 fixture·평가 사례 로그는 합성이고 호스트·일련번호·IMSI/ICCID/EID·제품 코드 등은 토큰·placeholder다 — 마스킹 안 한 줄은 쓰지 않는다(CLAUDE.md "마스킹된 로그만"). 사내 로그는 사외에서 본 적이 없다는 전제다. fixture-origin 점검 변경은 설계에서 보이고 확인받는다.
-  - **벤더 회사명은 가린다(11/09 사용자, 묶음 import-20261109 human-search)**: D-Bus 이름·ofonod 플러그인 파일·RIL 문구는 placeholder이고 회사명 부분은 `vendor`다(`com.vendor.*`, `plugins/ril_vendor.c`, `Vendor RIL`). 사내는 `modules.yaml`의 `dbus`·`ofonod_files` 값을 실제 이름으로 채운다(`tests/fixtures/module-filter/README.md`).
+  - **벤더 회사명은 placeholder로 둔다(11/09 사용자)**: D-Bus 이름·ofonod 플러그인 파일·RIL 문구는 placeholder이고 회사명 부분은 `vendor`다(`com.vendor.*`, `plugins/ril_vendor.c`, `Vendor RIL`). 사내는 `modules.yaml`의 `dbus`·`ofonod_files` 값을 실제 이름으로 채운다(`tests/fixtures/module-filter/README.md`).
 - Q8(A1 시작 때): `db_pr merge --approved` 생략 허용 — `merge-offer.json`의 head를 쓰고, PR head가 다르면 거부, `sync-pr`이 head를 갱신.
 
 ## 진행 방식 (11/04 사용자)

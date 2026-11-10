@@ -72,7 +72,7 @@ python3 tests/helpers/make_module_eval_inputs.py --check   # 생성물 drift
 | 모듈 스킬 받기·흐름 | 모듈 문서 레포를 관리 clone으로 받고, 분석 5-1(심층)·5-2(탐색)에서 동의 뒤 사용. 출력은 관문(`check-output`)을 거침 | `triagelib/modulecmd.py`, `common/modulefilter.py`, `common/skillcheck.py`, `plugin/skills/telephony-triage/SKILL.md` |
 | 모듈 문서·평가 사례 | oFono·Android 7모듈씩: 문서, 증상별 첫 점검 표, 대체 근거, 데몬 역할 표. 사례 42개 | `templates/module-skills/**`, `tests/test_module_templates*.py` |
 | 모듈 평가기 | 문서 있음/없음 두 arm 비교. 탐색 사례는 후보 1~3개 형식, 인정 후보·함정으로 채점 | `plugin/scripts/module_eval.py`, `tools/module_answers.py` |
-| 파서·태그 속성 | oFono·Android 파서 보강, 데몬 이름을 이슈 DB `tags.yaml` 속성(`level`·`ipc`)으로 지정 가능(지정 없으면 기존 상수) | `platforms/ofono/`, `platforms/android/`, `parser_backends/`, `tests/fixtures/issue-db-sample/parser-rules/` |
+| 파서·태그 속성 | oFono·Android 파서 보강, 데몬 이름을 이슈 DB `tags.yaml` 속성(`level`·`ipc`)으로 지정 가능(oFono는 0.0.5부터 지정·구성요소 설정이 없으면 판별 없음) | `platforms/ofono/`, `platforms/android/`, `parser_backends/`, `tests/fixtures/issue-db-sample/parser-rules/` |
 | 마스킹 | IPv6 경계(C++ 범위 이름 제외), 여러 줄 문맥 규칙, oFono 덤프 조각에 갈린 IMSI/ICCID | `common/masking.py`, `common/dumpjoin.py`, `mask_pii.py`, `tools/fixture_residual.py` |
 | 부분 일치·코드 대조 | 후보가 없을 때 부분 일치를 보이고, 시그니처 추가는 제안만. code root가 있으면 없는 줄 문구를 grep(path:line만 출력) | `common/signatures.py`, `match_signatures.py`, `code_roots.py`(find-text), `triagelib/report.py` |
 | 이슈 DB 작성 지침·lint | 근거 줄 하나에 기대지 않기 지침, `db_lint --advice`(참고만, 종료 코드 영향 없음) | `docs/design/03-issue-db.md`, `plugin/scripts/db_lint.py` |

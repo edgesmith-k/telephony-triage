@@ -23,7 +23,7 @@ git diff 77e2827..HEAD -- <파일>
 | B1·B2 모듈 스킬 받기·5-1/5-2 | `common/moduleskills.py`·`modulefilter.py`·`triagelib/modulecmd.py`·`reference/module-skills.md`·`SKILL.md` | 관리 clone 받기·점검, `prefer: module|skill`, deep check-output 결과 줄, 답 전 원문 열람 안 함 |
 | B2 마스킹 | `common/masking.py`(로그 줄 전용 M1~M11, M12 IPv6 경계) | 결과 노트 "마스킹 관문 1 기준 미달 2건"(누출 아님) |
 | C1+D 모듈 문서·사례 | `templates/module-skills/{ofono,android}/`(`_common`, 모듈마다 SKILL·analyzer·explore) | 사례 42개(oFono 21·Android 21, 처음 31 + 보정 11), 모두 합성 |
-| C1+D 보정 | `_common/components.md` 역할 표, 모듈 explore 증상 표, `tags.yaml` `level`·`ipc` | 증상별 첫 점검 표, 대체 근거, 데몬 역할(지금 이름·구 이름), 선언 없으면 출력 바이트 동일 |
+| C1+D 보정 | `_common/components.md` 역할 표, 모듈 explore 증상 표, `tags.yaml` `level`·`ipc` | 증상별 첫 점검 표, 대체 근거, 데몬 역할(지금 이름·구 이름), 선언 없으면 그때(0.0.4) 출력 바이트 동일 — 0.0.5부터 oFono는 구성요소 설정이 없으면 판별 없음 |
 | B 이슈 DB 작성 지침 | `reference/db-authoring.md`·`03-issue-db §5.7`·`db_lint.py --advice` | OR 시그니처, `must_not_match` "일어났음" 줄, 플래그 없으면 출력 동일 |
 | C′ 부분 일치·코드 대조 | `match_signatures.py`·`triagelib/report.py`·`code_roots.py find-text` | 후보 없음/1위 S=1·C=0일 때만, 출력은 path:line, 제안은 마스킹 로그 줄로만 |
 | C drift 점검 | `tools/site_audit.py`(`site_step.py audit`) | "자주 맞던 시그니처 0건", 빌드 순서 모순은 skip 행 |

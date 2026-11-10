@@ -19,7 +19,7 @@
 - 모드: **사외 초안**. Phase D0·1~13·반입 전 보강·H 완료. 지난 묶음 **import-20261103**(main `77e2827`).
 - **코덱스 종합 리뷰 반영 완료**(`58ae770`·`1554dc0`, GRADER_VERSION 5). WSL 전체 pytest 통과, hook_probes 176개 판정 동일. 상세는 `docs/history/draft-notes-2026-11.md`.
 - 다음 묶음 **import-20261109**(태그·반입은 사용자). 사내: 재반입 §8. 이번 묶음은 guard 판정이 바뀌었다(4-c 병합 계열·규칙 5 ask 전환, Approve·기각·자동 병합·보호 변경·refs 위조 deny 신설) — 반입 전 `s4a.protection_guard` 통과 전제. SITE_INSTALL §8대로 사내 대상 eval 12개(`pending.json` `site`) 전부 다시 돌린다.
-- 11/09 모듈 스킬·fixture를 placeholder·합성으로 전환 중(1차 머지, 2차 남음), 반입은 `stable`에서 (Android eval은 arm pin 갱신으로 두 arm 함께 재실행)
+- 템플릿·fixture는 placeholder·합성(사내 값은 SITE_PATHS, 반입 전 SITE_RESTORE ⓪), 반입은 `stable`에서 (Android eval은 arm pin 갱신으로 두 arm 함께 재실행)
 - 모델 Sonnet 5.5 기준. `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서: `docs/book/telephony-triage-book.html`
 
@@ -52,7 +52,7 @@ C 지표 자리 · 4-c 2차(guard 판정 축소 후속) · B 조건부 · F3 B/C
 ## 결정
 
 - (v) 11/09 사용자(코덱스 02e0ec2): **F01 보강** — DB가 쓰는 시그니처 feature는 `issue-db.config.yaml signature_features`에 선언, 플러그인이 모르는 feature면 **분석 중단**(읽기 전용 아님, `feature-unsupported`); 새 필드는 S37 결과·팀 설치본 통일 뒤에만. **Q01 채택 관문** — 가설 줄 `[근거 불일치 N]`, fabricated 인용이 든 가설은 시그니처 초안에 쓰지 않고 사용자가 재확인한 인용만(종료 0 유지). 채점 판정(S 행 어느 것이든)이 바뀌면 GRADER_VERSION을 올린다.
-- (u) 11/02~03 사용자: 맨 `cid`는 마스킹하지 않는다(셀 위치 키·`mCid`는 가림). 표본 데몬 이름은 레포에 넣어도 된다(그 밖 표본 값·호스트·D-Bus 이름은 금지).
+- (u) 11/02~03 사용자: 맨 `cid`는 마스킹하지 않는다(셀 위치 키·`mCid`는 가림). 데몬 이름은 카테고리별 placeholder(11/09 D10).
 - (t) oFono 확장(10/30, 사용자): `17-platforms.md` §9~11. 원문은 `docs/history/draft-notes-2026-11.md`.
 - (s) 테스트는 수정마다 관련만, 전체는 묶음 끝·eval·반입 직전(10/15).
 - (r) 고칠 범위(10/15, 사용자): 리뷰·재측정에서 **P0·P1(안전 위반·기능 결함)만** 고치고 P2는 "반입 뒤 후보"에 적는다. 질문 순서·횟수 행은 안전 행이 아니다(쓰기 순서 행은 안전 행).
