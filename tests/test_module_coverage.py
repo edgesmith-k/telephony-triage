@@ -60,7 +60,7 @@ def cov(modules, logs, rules, plug, **kw):
 
 
 def test_counts_equal_module_measure(tmp_path, rules, plug, capsys):
-    log = journal(tmp_path / "a" / "journal.log", {"NMD": 5, "LPA": 3, "DMD": 2, "PTD": 4})
+    log = journal(tmp_path / "a" / "journal.log", {"datad": 5, "simd": 3, "mgmtd": 2, "networkd": 4})
     out = cov(MOCK_MODULES, [log], rules, plug)["platforms"]["ofono"]
     module_measure.main(["coverage", "--logs", str(log), "--platform", "ofono", "--tz", "UTC", "--rules", str(rules),
                          "--modules", str(MOCK_MODULES), "--plugin-root", str(plug), "--json"])
@@ -70,16 +70,16 @@ def test_counts_equal_module_measure(tmp_path, rules, plug, capsys):
 
 
 def test_unlabelled_hot_counts_only_no_text(tmp_path, rules, plug):
-    log = journal(tmp_path / "a" / "journal.log", {"PTD": 6, "NMD": 2}, secret="SECRETVALUE-")
+    log = journal(tmp_path / "a" / "journal.log", {"networkd": 6, "datad": 2}, secret="SECRETVALUE-")
     res = cov(MOCK_MODULES, [log], rules, plug)
     hot = res["platforms"]["ofono"]["unlabelled_hot"]
-    assert hot == [{"tag": "PTD", "rows": 6, "wef": 6}]
+    assert hot == [{"tag": "networkd", "rows": 6, "wef": 6}]
     text = json.dumps(res, ensure_ascii=False) + mc.render(res)
     assert "SECRETVALUE" not in text and "step failed" not in text
 
 
 def test_unowned_known_suggests_diff_that_applies(tmp_path, rules, plug):
-    log = journal(tmp_path / "a" / "journal.log", {"NEWD": 25, "NMD": 3})
+    log = journal(tmp_path / "a" / "journal.log", {"NEWD": 25, "datad": 3})
     res = cov(MOCK_MODULES, [log], rules, plug)
     known = res["platforms"]["ofono"]["unowned"]["known"]
     assert known == [{"tag": "NEWD", "rows": 25, "hot": 25, "category": "data", "module": "data"}]
@@ -111,17 +111,17 @@ def test_unknown_tag_never_in_diff(tmp_path, rules, plug):
 
 
 def test_common_listed_not_suggested(tmp_path, rules, plug):
-    log = journal(tmp_path / "a" / "journal.log", {"COMD": 40, "PTD": 40})
+    log = journal(tmp_path / "a" / "journal.log", {"COMD": 40, "networkd": 40})
     res = cov(MOCK_MODULES, [log], rules, plug)
     common = {t["tag"]: t["why"] for t in res["platforms"]["ofono"]["unowned"]["common"]}
-    assert common == {"COMD": "common", "PTD": "모듈 없음"}                 # network 모듈이 없는 모의 레포
+    assert common == {"COMD": "common", "networkd": "모듈 없음"}                 # network 모듈이 없는 모의 레포
     assert res["suggestion"]["diff"] is None and res["suggestion"]["manual"] == []
 
 
 def test_never_seen_not_removed(tmp_path, rules, plug):
     log = journal(tmp_path / "a" / "journal.log", {"NEWD": 25})
     res = cov(MOCK_MODULES, [log], rules, plug)
-    assert "LPA" in res["platforms"]["ofono"]["never_seen"]["sim"]["daemons"]
+    assert "simd" in res["platforms"]["ofono"]["never_seen"]["sim"]["daemons"]
     new, accepted, _ = mc.suggest_text(MOCK_MODULES.read_text(encoding="utf-8"), res["suggestion"]["additions"])
     after = yaml.safe_load(new)["platforms"]["ofono"]["modules"]
     before = yaml.safe_load(MOCK_MODULES.read_text(encoding="utf-8"))["platforms"]["ofono"]["modules"]
@@ -131,10 +131,10 @@ def test_never_seen_not_removed(tmp_path, rules, plug):
 
 def test_block_style_manual_fallback(tmp_path, rules, plug):
     text = MOCK_MODULES.read_text(encoding="utf-8").replace(
-        "      data: {path: ofono/data, db_category: data, daemons: [NMD, DITD], ofonod_files: [src/gprs.c, "
+        "      data: {path: ofono/data, db_category: data, daemons: [datad, datad2], ofonod_files: [src/gprs.c, "
         "drivers/rilmodem/gprs-context.c, src/lte.c]}\n",
-        "      data:\n        path: ofono/data\n        db_category: data\n        daemons:\n          - NMD\n          - DITD\n")
-    assert "- NMD" in text
+        "      data:\n        path: ofono/data\n        db_category: data\n        daemons:\n          - datad\n          - datad2\n")
+    assert "- datad" in text
     mods = tmp_path / "modules.yaml"
     mods.write_text(text, encoding="utf-8")
     log = journal(tmp_path / "a" / "journal.log", {"NEWD": 25})
@@ -143,7 +143,7 @@ def test_block_style_manual_fallback(tmp_path, rules, plug):
     assert res["suggestion"]["manual"] == [{"platform": "ofono", "module": "data", "name": "NEWD", "rows": 25}]
     assert "손으로 고칠 것" in mc.render(res)
     # 블록 모양이라도 한 줄 흐름 목록이면 고친다
-    mods.write_text(text.replace("        daemons:\n          - NMD\n          - DITD\n", "        daemons: [NMD, DITD]\n"),
+    mods.write_text(text.replace("        daemons:\n          - datad\n          - datad2\n", "        daemons: [datad, datad2]\n"),
                     encoding="utf-8")
     assert cov(mods, [log], rules, plug)["suggestion"]["additions"]
 
@@ -151,8 +151,8 @@ def test_block_style_manual_fallback(tmp_path, rules, plug):
 def test_exit_codes(tmp_path, rules, plug, capsys):
     mods = tmp_path / "m.yaml"
     mods.write_text("schema_version: 2\nplatforms:\n  ofono:\n    common: {daemons: []}\n    modules:\n"
-                    "      data: {path: ofono/data, db_category: data, daemons: [NMD]}\n", encoding="utf-8")
-    log = journal(tmp_path / "a" / "journal.log", {"NMD": 4})
+                    "      data: {path: ofono/data, db_category: data, daemons: [datad]}\n", encoding="utf-8")
+    log = journal(tmp_path / "a" / "journal.log", {"datad": 4})
     base = ["--modules", str(mods), "--platform", "ofono", "--rules", str(rules), "--plugin-root", str(plug)]
     assert mc.main([*base, "--logs", str(log)]) == 0, capsys.readouterr()
     capsys.readouterr()
@@ -169,11 +169,11 @@ def test_exit_codes(tmp_path, rules, plug, capsys):
 @pytest.mark.skipif(sys.platform == "win32", reason="심볼릭 링크")
 def test_logs_dir_expansion_skips_symlinks(tmp_path):
     d = tmp_path / "logs"
-    journal(d / "case1" / "journal.log", {"NMD": 1})
-    journal(d / "case1" / "syslog.masked", {"NMD": 1})
+    journal(d / "case1" / "journal.log", {"datad": 1})
+    journal(d / "case1" / "syslog.masked", {"datad": 1})
     (d / "case1" / "info.txt").write_text("x", encoding="utf-8")
-    journal(d / ".hidden" / "journal.log", {"NMD": 1})
-    journal(tmp_path / "outside" / "journal.log", {"NMD": 1})
+    journal(d / ".hidden" / "journal.log", {"datad": 1})
+    journal(tmp_path / "outside" / "journal.log", {"datad": 1})
     os.symlink(tmp_path / "outside" / "journal.log", d / "case1" / "kernel.log")
     os.symlink(tmp_path / "outside", d / "linked")
     got = [p.relative_to(d).as_posix() for p in mc.expand_logs([d], "ofono")]

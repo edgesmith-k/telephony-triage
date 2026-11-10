@@ -1005,12 +1005,12 @@ def test_threadtime_blank_tag_still_parses_and_is_raw():
     assert stats.unparsed == 0 and [ln.tag for ln in lines] == ["", "RILJ"]
 
 VENDOR_ROWS = [
-    "08-09 13:24:00.100  1188  1203 I RIL     : [<DEV#1>][TX] SIT_GET_SIM_STATUS, REQ, 8 bytes, Token(0x0210) (합성)",
-    "08-09 13:24:00.180  1188  1203 E RIL     : [<DEV#1>][RX] SIT_GET_SIM_STATUS, RSP, 12 bytes, Token(0x0210), Error(RCM_E_GENERIC_FAILURE)",
-    "08-09 13:24:00.181  1188  1203 I RIL     : [<DEV#1>][RX] SIT_SET_DATA_PROFILE, RSP, 12 bytes, Token(0x0211), OK(RCM_E_SUCCESS)",
-    "08-09 13:24:00.182  1188  1203 I RIL     : [RilContext_0] OnRequestComplete Request ID=3, result=2",
-    "08-09 13:24:00.183  1188  1203 I RIL     : [RilContext_0] OnRequestComplete Request ID=4, result=0",
-    "08-09 13:24:00.184  1188  1203 E RILC    : [<DEV#1>][RX] SIT_SIM_IO, RSP, 12 bytes, Token(0x0212), Error(RCM_E_GENERIC_FAILURE)",
+    "08-09 13:24:00.100  1188  1203 I RIL     : [<DEV#1>][TX] SIT_DEMO_STATUS, REQ, 8 bytes, Token(0x0210) (합성)",
+    "08-09 13:24:00.180  1188  1203 E RIL     : [<DEV#1>][RX] SIT_DEMO_STATUS, RSP, 12 bytes, Token(0x0210), Error(RCM_E_DEMO_FAILURE)",
+    "08-09 13:24:00.181  1188  1203 I RIL     : [<DEV#1>][RX] SIT_DEMO_SET, RSP, 12 bytes, Token(0x0211), OK(RCM_E_SUCCESS)",
+    "08-09 13:24:00.182  1188  1203 I RIL     : [IpcCtx_0] OnIpcComplete Request ID=3, result=2",
+    "08-09 13:24:00.183  1188  1203 I RIL     : [IpcCtx_0] OnIpcComplete Request ID=4, result=0",
+    "08-09 13:24:00.184  1188  1203 E VRIL    : [<DEV#1>][RX] SIT_SIM_IO, RSP, 12 bytes, Token(0x0212), Error(RCM_E_DEMO_FAILURE)",
 ]
 
 
@@ -1032,12 +1032,33 @@ def test_a_shapes_vendor_ipc_builtin():
         got = [(e["event"], e["fields"], e["category_hint"], e["source"]) for e in data["events"]
                if (e["event"] or "").startswith("builtin.")]
         assert got == [
-            ("builtin.common.vendor_ipc_error", {"ipc": "SIT_GET_SIM_STATUS", "error": "RCM_E_GENERIC_FAILURE"}, "common",
+            ("builtin.common.vendor_ipc_error", {"ipc": "SIT_DEMO_STATUS", "error": "RCM_E_DEMO_FAILURE"}, "common",
              "backend:reference"),
             ("builtin.common.vendor_request_failed", {"request_id": "3", "result": "2"}, "common", "backend:reference"),
         ], rules
     plain_lines = [e for e in data["events"] if e["event"] is None and e["tag"] == "RIL"]
     assert not plain_lines, "plain DB는 RIL 줄 레코드를 버리고 builtin만 남긴다"
+
+
+def test_a_vendor_ipc_spec_from_site_defaults():
+    """site-defaults `platform.vendor_ipc`(문맥 접두어·완료 낱말)가 요청 완료 줄 판별을 바꾼다 — parse_logcat 전체 경로.
+    설정이 없으면 placeholder 기본(`IpcCtx_`·`OnIpcComplete`)만 잡는다."""
+    root = make_plugin_root.make()
+    data = yaml.safe_load((root / "site-defaults.yaml").read_text(encoding="utf-8"))
+    platform = dict(data.get("platform") or {})
+    platform["vendor_ipc"] = {"context": "SiteCtx_", "complete": "SiteDone"}
+    _set_defaults(root, platform=platform)
+    log = _a_log("site-ipc.log", [
+        "08-09 13:24:00.182  1188  1203 I RIL     : [SiteCtx_0] SiteDone Request ID=3, result=2",
+        "08-09 13:24:00.183  1188  1203 I RIL     : [IpcCtx_0] OnIpcComplete Request ID=4, result=2",
+    ])
+
+    def failed(r):
+        return [e["fields"]["request_id"] for e in _parse([log], root=r)["events"]
+                if e["event"] == "builtin.common.vendor_request_failed"]
+
+    assert failed(root) == ["3"]
+    assert failed(_root()) == ["4"]
 
 
 def _all_tests():

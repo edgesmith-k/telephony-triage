@@ -243,7 +243,7 @@ platforms:
       data:
         path: ofono/data
         db_category: data
-        dbus: [org.ofono.ConnectionManager, com.vendor.nmd]   # 합집합
+        dbus: [org.ofono.ConnectionManager, com.vendor.datad]   # 합집합
   android:
     modules:
       data: {path: android/data, db_category: data, keywords: [com.other.android.Thing]}
@@ -266,8 +266,8 @@ def test_dbus_rule_flags_unknown_vendor_name(fake_repo):
 def test_dbus_rule_allows_modules_yaml_union(fake_repo):
     _write(fake_repo, "templates/module-skills/modules.yaml", MODULES)
     _write(fake_repo, "templates/module-skills/ofono/data/SKILL.md",
-           "org.ofono.Modem · org.freedesktop.DBus.Properties · com.vendor.nmd.Profile · org.ofono.ConnectionManager.\n")
-    _write(fake_repo, "templates/module-skills/ofono/_common/components.md", "com.vendor.nmd\n")
+           "org.ofono.Modem · org.freedesktop.DBus.Properties · com.vendor.datad.Profile · org.ofono.ConnectionManager.\n")
+    _write(fake_repo, "templates/module-skills/ofono/_common/components.md", "com.vendor.datad\n")
     assert _dbus(fake_repo) == set()
     # modules.yaml의 ofono 블록 안 다른 칸에 허용 밖 이름이 있으면 잡는다(android 블록은 범위 밖)
     _write(fake_repo, "templates/module-skills/modules.yaml",

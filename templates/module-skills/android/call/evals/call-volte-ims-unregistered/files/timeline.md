@@ -9,7 +9,7 @@
 12:00:15.000 p0 W ImsRegistration onRegistrationFailed: code=403 reason=FORBIDDEN [PHONE0]  ⇒ ims_registration_failed(code=403,reason=FORBIDDEN)
 12:03:25.000 - D ImsPhoneCallTracker [0] dial: isVolteEnabled=true imsRegistered=false  ⇒ ims_dial_attempt(registered=false,volte=true)
 12:03:25.500 p0 D RILJ [0340]> DIAL clir=0 [PHONE0]
-12:03:25.504 - D RILC-AIDL_SERVICE RadioVoiceProxy::dial: serial 340
+12:03:25.504 - D VRIL-SVC RadioVoiceProxy::dial: serial 340
 12:03:26.700 p0 D RILJ [0340]< DIAL [PHONE0]
 12:03:28.700 p0 D RILJ [UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED [PHONE0]
 12:03:29.000 p0 D RILJ [0341]> LAST_CALL_FAIL_CAUSE [PHONE0]

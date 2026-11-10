@@ -18,7 +18,7 @@
 - **예외**: `issue-db.config.yaml`의 `mask.allow_patterns`에 전체가 맞는 값은 그대로 둔다.
   Android 자체 마스킹(`***`, `xxxxxx`)도 그대로 둔다.
 
-- **로그 줄 전용 규칙(`Rule.log_only`, M1~M11)**: 첨부 실제 로그(oFono syslog 2·Android logcat 1)에서 찾은 빈틈을
+- **로그 줄 전용 규칙(`Rule.log_only`, M1~M11)**: 로그 표본(oFono syslog 2·Android logcat 1)에서 찾은 빈틈을
   측정한 마스커(`mask2.py`·`mask3.py`) 그대로 옮긴 규칙 중 모양만 보는 것(hex 덤프·base64·빌드/제품 코드·15~20자리
   숫자·syslog 호스트 칸)은 `log_lines=True`로 만든 마스커(로그 마스킹: parse·cut·`mask_pii` 치환/이벤트·보기·점검
   도구)에서만 돈다. `db_lint`·`mask_pii --check`·`issue_post`는 기본값(`False`)이라 그 종류의 결과가 전과 같다.
@@ -155,7 +155,7 @@ def _token_secret(value: str) -> bool:
     """`token=` 값이 비밀값인가. 짧은 숫자(10진 10자리 이하, `0x`+16진 8자리 이하 — RIL 요청 token 등)는 아니다."""
     return not _SHORT_NUM.fullmatch(value.rstrip(")]}>"))
 
-# --- M1~M11: 첨부 실제 로그로 측정한 마스커(`logmine/bin/mask2.py` 2차·`mask3.py`)를 옮긴 규칙 (B2 §3.2) ---
+# --- M1~M11: 로그 표본으로 측정한 마스커(`logmine/bin/mask2.py` 2차·`mask3.py`)를 옮긴 규칙 (B2 §3.2) ---
 # 줄 단위로 본다(`^`는 줄 처음). 측정 마스커와 다른 점은 표의 "Deviation" 열 그대로다.
 
 def _not_null(value: str) -> bool:
@@ -253,8 +253,9 @@ _M_LATE: tuple[Rule, ...] = (
     # M6 빌드·제품 코드 (mask3.py:31-34, mask2.py:94-100)
     Rule("BUILD", re.compile(r"Build Info\s*:\s*(?!<)(?P<v>\S+)"), gate=("build info",), log_only=True),
     Rule("BUILD", re.compile(r"commit ID:\s*(?P<v>[0-9a-fA-F]{6,})"), gate=("commit id",), log_only=True),
-    Rule("PRODUCT", re.compile(r"(?<![\w])(?P<v>m\d{4})(?=[^\w]|$)"), context=re.compile(r" cpif\s*:"),
-         gate=("cpif",), log_only=True),
+    # 모뎀 모델 코드 `m<4자리>`: 문맥은 줄 어디든 ` <소문자 낱말>:`(커널/벤더 태그 꼴)이 있으면 — 벤더 태그 이름을 두지 않는다(과마스킹 허용)
+    Rule("PRODUCT", re.compile(r"(?<![\w])(?P<v>m\d{4})(?=[^\w]|$)"), context=re.compile(r" [a-z][a-z0-9_]*\s*:"),
+         log_only=True),
     Rule("PRODUCT", re.compile(r"(?<![\w])(?P<v>[A-Z]\d{4}[A-Z0-9]{2,})(?![\w])"),
          context=re.compile(r" [VDIWEF] (?:synaptics_ts|sec_input|kernel)\b"), log_only=True),
     Rule("PRODUCT", re.compile(r'(?i)"(?:Revision|Model|Manufacturer|SoftwareVersion)",\s*variant\("(?P<v>[^"]+)"'),
@@ -380,7 +381,7 @@ _BASE_RULES: tuple[Rule, ...] = (
     Rule("IP", re.compile(
         r"(?<![\w.])(?P<v>(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})(?!\w|\.\w)"),
          before=_VERSION_BEFORE),
-    # M12 앞뒤 경계에 낱말 문자 전부(`[0-9A-Za-z_:]`): C++ 범위 `MiscService_0::OnHandle`·`V2_4::RadioDataProxy`는 IP가 아니다
+    # M12 앞뒤 경계에 낱말 문자 전부(`[0-9A-Za-z_:]`): C++ 범위 `DemoService_0::OnHandle`·`V2_4::RadioDataProxy`는 IP가 아니다
     Rule("IP", re.compile(r"(?<![0-9A-Za-z_:])(?P<v>" + _V6_FULL + "|" + _V6_COMP + r")(?![0-9A-Za-z_:])"),
          check=lambda v: v != "::"),
     # 위 규칙의 앞 경계(`:` 금지)에 막히는 주소 키 바로 뒤(`addr:<v6>`, `ipv6address:<v6>/64`)와 끝이 `:`인 잘린 표기

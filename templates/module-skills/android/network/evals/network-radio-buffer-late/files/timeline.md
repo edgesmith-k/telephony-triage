@@ -6,7 +6,7 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): DATA_REGISTRATION_STATE · OPERATOR · GET_CELL_INFO_LIST · SET_ALLOWED_NETWORK_TYPES_BITMAP · IS_N1_MODE_ENABLED
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
-13:10:54.907 - V OemRil [UNSL]< RILC_UNSOL_RADIO_STATE_CHANGED [SUB1]
+13:10:54.907 - V OemRil [UNSL]< OEM_UNSOL_RADIO_STATE_CHANGED [SUB1]
 13:10:54.907 - V OemRil notifyRadioStateChanged: newState=RADIO_OFF
 13:10:54.948 - V OemRil notifyRadioStateChanged: newState=RADIO_ON
 13:10:57.425 - D CellularNetworkService No access tech specific info passes for RegStateResult

@@ -4,24 +4,24 @@
 
 ## 층 이름 (`원인 층:`에 그대로)
 
-- `관리 데몬` — 프로필·정책으로 ofonod를 부르는 데몬(NMD, LPA·ipad).
+- `관리 데몬` — 프로필·정책으로 ofonod를 부르는 데몬(mgmtd, datad, simd, `{{site:common}}`).
 - `D-Bus` — `org.ofono.*` 호출·오류.
 - `ofonod` — upstream oFono 안(`src/<파일>.c:`, rilmodem 드라이버).
 - `벤더 RIL(<데몬>)` — RIL 소켓 아래 벤더 RIL 데몬.
-- `모뎀·망` — 모뎀·카드·망이 낸 결과. `원인 데몬:`은 결과를 전한 데몬(exynos-ril, 모뎀 재시작이면 vcd).
-- `곁가지(<데몬>)` — 사슬 밖 데몬(DITD 라우팅, IMSSVC).
+- `모뎀·망` — 모뎀·카드·망이 낸 결과. `원인 데몬:`은 결과를 전한 데몬(vrild, 모뎀 재시작이면 `{{site:modem}}`).
+- `곁가지(<데몬>)` — 사슬 밖 데몬(datad2, imsd).
 - `그 층 로그 없음(<층>)` — 판단할 아래 층 줄이 없다.
 - `원인 아님(정상 동작)` — 입력 속 상태로 오류가 설명된다.
 - 위 둘이면 `원인 데몬: 알 수 없음`.
 
 ## 사슬
 
-관리 데몬 → D-Bus → ofonod(atom → `drivers/rilmodem` → gril) → RIL 소켓 → exynos-ril → IPC → 모뎀·망.
+관리 데몬 → D-Bus → ofonod(atom → `drivers/rilmodem` → gril) → RIL 소켓 → vrild → IPC → 모뎀·망.
 
 ## 줄 → 층
 
 - gril 응답 `[<slot>,<serial>]< … failed <ERR>`은 ofonod tag여도 아래 층 답이다.
-- exynos 두 단계: IPC `Error(RCM_E_*)`·카드 SW(`sw1 : <XX>`) → `모뎀·망`. IPC `OK(RCM_E_SUCCESS)` 뒤 `OnRequestComplete … result≠0` → `벤더 RIL(<데몬>)`. IPC 오류인데 gril 성공이면 벤더 RIL이 감췄다.
+- vrild 두 단계: IPC `Error(RCM_E_*)`·카드 SW(`sw1 : <XX>`) → `모뎀·망`. IPC `OK(RCM_E_SUCCESS)` 뒤 `OnIpcComplete … result≠0` → `벤더 RIL(<데몬>)`. IPC 오류인데 gril 성공이면 벤더 RIL이 감췄다.
 - `src/dbus.c:__ofono_error_<busy|failed|no_such_element>() … m:<메서드>`는 아래 실패의 증상이다.
 
 ## 판단 규칙
@@ -36,4 +36,4 @@
 
 - `RADIO_POWER (0)`·`state: OFF`·`is_apm:1`·`org.ofono.Modem` `Powered`·`Online` false 뒤 조회 실패.
 - 로그 내내 같은 모양으로 되풀이되는 오류(〔script: 같은 형태 N회〕).
-- DITD·RFSD·DMD·MOSE의 레벨은 심각도가 아니다.
+- mgmtd·datad2의 레벨은 심각도가 아니다.

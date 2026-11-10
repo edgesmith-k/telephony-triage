@@ -1,110 +1,22 @@
--- [합성]
-Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: plugins/ril_vendor.c:ril_vendor_set_online() setting rd->ofono_online to: 0
-Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: plugins/ril_vendor.c:ril_send_power() (online = 1, offline = 0)): 0
-Feb 27 17:52:03.317 host1 daemon.info ofonod[486]: [0,0576]> RIL_REQUEST_RADIO_POWER (0)
-Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: Device 0: > <HEXDUMP 16B>
-Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 4B>
--- [생략]
-Feb 27 17:52:08.381 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 16B>
-Feb 27 17:52:08.381 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 16B>
-Feb 27 17:52:08.381 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 16B>
-Feb 27 17:52:08.381 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 8B>
-Feb 27 17:52:08.381 host1 daemon.info ofonod[486]: [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF)
-Feb 27 17:52:08.381 host1 daemon.info ofonod[486]: /usr/src/debug/ofono/2.4/plugins/ril_vendor.c:ril_radio_state_changed() state: OFF rd->ofono_online: 0
-Feb 27 17:52:08.381 host1 daemon.debug ofonod[486]: src/modem.c:ofono_modem_set_radio_state() radio_state:0
-Feb 27 17:52:08.381 host1 daemon.info ofonod[486]: src/satellite.c:satellite_online_watch() online=1
-Feb 27 17:52:08.381 host1 daemon.info ofonod[486]: src/satellite.c:satellite_load_settings() loaded enabled=1
-Feb 27 17:52:08.381 host1 daemon.debug ofonod[486]: src/voicecall.c:online_changed_watch() 
-Feb 27 17:52:08.381 host1 daemon.debug ofonod[486]: drivers/rilmodem/voicecall.c:ril_online_changed() online:TRUE
-Feb 27 17:52:08.381 host1 daemon.info ofonod[486]: plugins/ril_vendor.c:ril_set_online_cb() ril_set_online_cb: set_online OK: rd->ofono_online: 0
-Feb 27 17:52:08.381 host1 daemon.info ofonod[486]: src/dbus.c:dump_dmsg_w_re() method return - i:org.ofono.Modem m:SetProperty p:/ril_0 a:no args
-Feb 27 17:52:08.381 host1 daemon.info ofonod[486]: dump_dmsg signal - i:org.ofono.Modem m:PropertyChanged p:/ril_0 a:"Online", variant(false)
-Feb 27 17:52:08.381 host1 daemon.info ofonod[486]: src/satellite.c:satellite_online_watch() online=0
-Feb 27 17:52:08.381 host1 daemon.debug ofonod[486]: src/voicecall.c:online_changed_watch() 
-Feb 27 17:52:08.381 host1 daemon.debug ofonod[486]: drivers/rilmodem/voicecall.c:ril_online_changed() online:FALSE
-Feb 27 17:52:08.381 host1 daemon.debug ofonod[486]: drivers/rilmodem/voicecall.c:clear_voicecall_data() 
-Feb 27 17:52:08.381 host1 daemon.debug ofonod[486]: drivers/rilmodem/voicecall.c:clear_dtmf_queue() 
-Feb 27 17:52:08.381 host1 daemon.debug ofonod[486]: drivers/rilmodem/voicecall.c:reset_dial_data() 
-Feb 27 17:52:08.381 host1 daemon.debug ofonod[486]: src/voicecall.c:ofono_voicecall_ecall_timer_event_notify() [eCall] T2:stopped T5:stopped T6:stopped T7:stopped T9:stopped T10:stopped
-Feb 27 17:52:08.382 host1 daemon.info ofonod[486]: dump_dmsg signal - i:org.ofono.VoiceCallManager m:OnEcallTimerState p:/ril_0 a:array[dict{"T2", variant("stopped")}, dict{"T5", variant("stopped")}, dict{"T6", variant("stopped")}, dict{"T7", 
-Feb 27 17:52:08.382 host1 daemon.info ofonod[486]: variant("stopped")}, dict{"T9", variant("stopped")}, dict{"T10", variant("stopped")}]
-Feb 27 17:52:08.382 host1 user.debug PTD[492]: 99680] [NETW] [SID_0] UNSOL {RILC_UNSOL_RADIO_STATE_CHANGED(1002)} : 23RilIndRadioStateChanged [State : RADIO_OFF] [NetworkAdaptor.cpp+152]
-Feb 27 17:52:08.382 host1 daemon.debug ofonod[486]: src/modem.c:modem_change_state() old state: 3, new state: 2
-Feb 27 17:52:08.382 host1 daemon.debug ofonod[486]: src/modem.c:flush_atoms() 
-Feb 27 17:52:08.382 host1 user.debug PTD[492]: 99680] [ADAP] Radio state changed event received : RADIO_OFF, MsgId : 1002 [RilIndRadioStateChanged.cpp+47]
-Feb 27 17:52:08.382 host1 daemon.info ofonod[486]: src/satellite.c:satellite_unregister() 
-Feb 27 17:52:08.382 host1 user.debug PTD[492]: 99680] [POWE] Radio state event, modem is available [PowerService.cpp+848]
-Feb 27 17:52:08.382 host1 daemon.info ofonod[486]: src/satellite.c:satellite_remove() 
-Feb 27 17:52:08.382 host1 daemon.debug ofonod[486]: src/lte.c:lte_remove() atom: 0x55ac6eb730
--- [생략]
-Feb 27 17:52:08.488 host1 daemon.info exynos-ril[463]: RilApplication::GetInstance
-Feb 27 17:52:08.488 host1 daemon.info exynos-ril[463]: [RilContext_0] OnRequest 
-Feb 27 17:52:08.488 host1 daemon.debug exynos-ril[463]: [RilContext_0] SendMessage RIL Request Routing : RCM ID=19 Service ID=4 Message ID=5003 delayMillis=0
-Feb 27 17:52:08.488 host1 daemon.debug exynos-ril[463]: [ServiceMgr] msg(0x7f8c011570) msgId=5003 svc=MiscService_0(4) direction=Request
-Feb 27 17:52:08.488 host1 daemon.info exynos-ril[463]: [RilContext_0] OnRequestComplete Request ID=19, result=1
-Feb 27 17:52:08.488 host1 daemon.debug exynos-ril[463]: RequestComplete, RIL_SOCKET_1
-Feb 27 17:52:08.488 host1 daemon.err exynos-ril[463]: invalid response: NULL
-Feb 27 17:52:08.488 host1 daemon.err exynos-ril[463]: responseFunction error, ret 66
-Feb 27 17:52:08.488 host1 local0.info MOSE[1126]: [DBUS_] 000053 *BusHelperImpl->CallGenericMethod  callResult: &{org.ofono /ril_0 org.ofono.ConnectionManager.GetProperties [] 0x7f3fbdfa40 Method "GetProperties" with signature "" on interface "org.of
-Feb 27 17:52:08.489 host1 local0.info MOSE[1126]: ono.ConnectionManager" doesn't exist  [] 396 0x7f3fd44460 0x13da00}  mose/dbus/helper/dbus_helper_impl.go:114
-Feb 27 17:52:08.489 host1 local0.warn MOSE[1126]: [DBUS_] 000053 *BusHelperImpl->CallGenericMethod  call error Method "GetProperties" with signature "" on interface "org.ofono.ConnectionManager" doesn't exist   mose/dbus/helper/dbus_helper_impl.go:117
-Feb 27 17:52:08.489 host1 daemon.debug exynos-ril[463]: Send Response to RIL_SOCKET_1
-Feb 27 17:52:08.489 host1 daemon.debug exynos-ril[463]: RIL Response bytes written:4
-Feb 27 17:52:08.489 host1 local0.warn MOSE[1126]: [CCONN_] 000053 *BaseCommon->loadProperties  SlotId:0, Load data failed err: Method "GetProperties" with signature "" on interface "org.ofono.ConnectionManager" doesn't exist   mose/managers/service/base/base_common.go:98
-Feb 27 17:52:08.489 host1 daemon.debug exynos-ril[463]: RIL Response bytes written:12
-Feb 27 17:52:08.489 host1 local0.info MOSE[1126]: [IMS] 000053 *BaseCommon->loadProperties  Loading properties for slot 0  mose/managers/service/base/base_common.go:88
-Feb 27 17:52:08.489 host1 local0.info MOSE[1126]: [DBUS_] 000053 *BusHelperImpl->CallGenericOfonoMethod  methodName: GetProperties  mose/dbus/helper/dbus_helper_impl.go:92
-Feb 27 17:52:08.489 host1 local0.info MOSE[1126]: [DBUS_] 000053 *BusHelperImpl->CallGenericMethod  dest: org.ofono objectPath: /ril_0, dbusInterface: org.ofono.IpMultimediaSystem, methodName GetProperties, args []  mose/dbus/helper/dbus_helper_impl.
-Feb 27 17:52:08.489 host1 local0.info MOSE[1126]: go:98
-Feb 27 17:52:08.489 host1 local0.info MOSE[1126]: [DBUS_] 000053 *DBusClient->Object  dest: org.ofono, path: /ril_0  mose/dbus/client/dbus_client.go:135
-Feb 27 17:52:08.490 host1 daemon.debug NMD[542]: syncApnInfoWithOfono, Apn size: 5[./apn/feature/ApnManager.cxx +174]
-Feb 27 17:52:08.490 host1 daemon.debug NMD[542]: addApnInfo, userProfileId : 1, apn : <APN#1>, type : internet[./apn/feature/ApnManager.cxx +874]
-Feb 27 17:52:08.491 host1 daemon.debug NMD[542]: set IaProfileId = 1[./apn/inc/Status.h +90]
-Feb 27 17:52:08.491 host1 daemon.debug NMD[542]: addApnInfo, userProfileId : 2, apn : <APN#1>, type : ss[./apn/feature/ApnManager.cxx +874]
-Feb 27 17:52:08.491 host1 daemon.debug NMD[542]: addApnInfo, userProfileId : 3, apn : ims, type : ims[./apn/feature/ApnManager.cxx +874]
-Feb 27 17:52:08.491 host1 daemon.debug NMD[542]: addApnInfo, userProfileId : 4, apn : <APN#2>, type : tethered[./apn/feature/ApnManager.cxx +874]
-Feb 27 17:52:08.491 host1 daemon.debug NMD[542]: addApnInfo, userProfileId : 5, apn : emergency, type : emergency[./apn/feature/ApnManager.cxx +874]
-Feb 27 17:52:08.491 host1 daemon.debug NMD[542]: handleGetAllApns, Apns size: 5[./apn/feature/ApnManager.cxx +591]
-Feb 27 17:52:08.491 host1 daemon.debug exynos-ril[463]: [DataRegStateResultBuilder] Build for HAL_VERSION_CODE(2,1)
-Feb 27 17:52:08.491 host1 daemon.info exynos-ril[463]: [RilContext_0] OnRequestComplete Request ID=21, result=0
-Feb 27 17:52:08.491 host1 daemon.debug exynos-ril[463]: RequestComplete, RIL_SOCKET_1
-Feb 27 17:52:08.491 host1 daemon.err exynos-ril[463]: invalid cellInfoType: 0
-Feb 27 17:52:08.491 host1 daemon.info GPS0[710]: RILC_Reader : something we got
-Feb 27 17:52:08.491 host1 daemon.debug exynos-ril[463]: Send Response to RIL_SOCKET_1
-Feb 27 17:52:08.491 host1 daemon.info GPS0[710]: [OemClient] RES (t = -1, id = 3005, res = 0, len = 28 channel = 0)
-Feb 27 17:52:08.491 host1 daemon.debug exynos-ril[463]: RIL Response bytes written:4
-Feb 27 17:52:08.491 host1 daemon.debug exynos-ril[463]: RIL Response bytes written:52
-Feb 27 17:52:08.491 host1 daemon.info GPS0[710]: SITRilClient__OnUnsolicitedResponse() [<-- 
-Feb 27 17:52:08.491 host1 daemon.debug exynos-ril[463]: [RilContext_0] RemoveRequestHistory  token=0x0283
-Feb 27 17:52:08.491 host1 daemon.info GPS0[710]: SITRilClient__OnUnsolicitedResponse() msgId(3005), data(0x0x7f60004970), length(28)
-Feb 27 17:52:08.491 host1 daemon.info GPS0[710]: SITRilClient__OnUnsolicitedResponse() Unknown msgId = 3005
-Feb 27 17:52:08.491 host1 daemon.info exynos-ril[463]: [NetworkService_0] OperatorHandler OnRequest()
-Feb 27 17:52:08.491 host1 daemon.debug exynos-ril[463]: [RilContext_0] RecordRequestHistory token=0x0284
-Feb 27 17:52:08.491 host1 daemon.info exynos-ril[463]: [RilContext_0] Send 
-Feb 27 17:52:08.491 host1 daemon.debug exynos-ril[463]: [<DEV#1>][TX] SIT_GET_OPERATOR, REQ, 12 bytes, Token(0x0284)
-Feb 27 17:52:08.491 host1 daemon.debug exynos-ril[463]: <HEXDUMP 12B>
-Feb 27 17:52:08.491 host1 daemon.debug ofonod[486]: Device 0: < <HEXDUMP 16B>
-Feb 27 17:52:08.491 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 16B>
-Feb 27 17:52:08.491 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 16B>
-Feb 27 17:52:08.491 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 16B>
-Feb 27 17:52:08.492 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 8B>
-Feb 27 17:52:08.492 host1 daemon.debug ofonod[486]: [0,0593]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE
-Feb 27 17:52:08.492 host1 daemon.info ofonod[486]: drivers/rilmodem/network-registration.c:ril_strength_cb() Failed to retrive the signal strength
-Feb 27 17:52:08.492 host1 daemon.info ofonod[486]: [0,0593]< RIL_REQUEST_SIGNAL_STRENGTH INVALID_RESPONSE 
-Feb 27 17:52:08.492 host1 daemon.info ofonod[486]: src/network.c:signal_strength_callback() Error during signal strength query
-Feb 27 17:52:08.492 host1 daemon.info ofonod[486]: drivers/rilmodem/network-registration.c:ril_dreg_cb() 
-Feb 27 17:52:08.492 host1 daemon.debug ofonod[486]: drivers/rilmodem/network-registration.c:ril_dreg_cb() Data Reg Status=0
-Feb 27 17:52:08.492 host1 daemon.debug ofonod[486]: drivers/rilmodem/network-registration.c:ril_dreg_cb() tech{0} denial_reason{0} type{0}
-Feb 27 17:52:08.492 host1 daemon.info ofonod[486]: [0,0588]< RIL_REQUEST_DATA_REGISTRATION_STATE SUCCESS status(0), tech(0), denial_reason(0), cellInfoType(0) endc(0), dcnr(0), nr_available(0), vops(0), emc(0), sateltech(0) 
--- [생략]
-Feb 27 17:52:08.521 host1 daemon.debug exynos-ril[463]: GetSimOperatorNumeric 
-Feb 27 17:52:08.521 host1 daemon.debug ofonod[486]: Device 0: < <HEXDUMP 16B>
-Feb 27 17:52:08.521 host1 daemon.debug ofonod[486]: Device 0: <HEXDUMP 16B>
-Feb 27 17:52:08.521 host1 daemon.debug ofonod[486]: drivers/rilmodem/network-registration.c:ril_cops_cb() 
-Feb 27 17:52:08.521 host1 daemon.info ofonod[486]: [0,0592]< RIL_REQUEST_OPERATOR SUCCESS (lalpha=(null), salpha=(null), numeric=(null)) 
-Feb 27 17:52:08.521 host1 daemon.info ofonod[486]: [0,0592]< RIL_REQUEST_OPERATOR 
-Feb 27 17:52:08.521 host1 daemon.debug ofonod[486]: src/network.c:current_operator_callback() 0x55ac6f3fa0, (nil)
-Feb 27 17:52:08.521 host1 daemon.err ofonod[486]: src/network.c:current_operator_callback() Error during current operator
-Feb 27 17:52:08.521 host1 daemon.info exynos-ril[463]: [DbEccInfoLoader_0] Load() Network is invalid, use SIM DB ECC ID.
-Feb 27 17:52:08.521 host1 daemon.info exynos-ril[463]: [DbEccInfoLoader_0] LoadDbEccInfo() SIM DB ECC ID: ICCID_89525, hasPresence: true , last DB ECC ID: ICCID_89525
-Feb 27 17:52:08.522 host1 daemon.info exynos-ril[463]: [DbEccInfoLoader_0] LoadDbEccInfo() NET DB ECC ID:        , hasPresence: true , last DB ECC ID: EMPTY_DB_ECC
+-- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture.
+Sep 22 10:00:16.536 dut local0.info mgmtd[734]: airplane mode on requested by user
+Sep 22 10:00:16.546 dut daemon.info ofonod[903]: [0,0631]> RIL_REQUEST_RADIO_POWER (0)
+Sep 22 10:00:16.556 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: RADIO_POWER (6 bytes)
+Sep 22 10:00:16.557 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_CONFIG_RADIO_POWER seq=0x07c3 len=8, power=0
+Sep 22 10:00:16.756 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_CONFIG_RADIO_POWER, RSP OK(RCM_E_SUCCESS) seq=0x07c3 len=8
+Sep 22 10:00:16.757 dut daemon.info ofonod[903]: [0,0631]< RIL_REQUEST_RADIO_POWER
+Sep 22 10:00:17.236 dut daemon.info chatterd[746]: position fix pending
+Sep 22 10:00:21.616 dut daemon.info ofonod[903]: [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF)
+Sep 22 10:00:21.617 dut daemon.info ofonod[903]: src/modem.c:modem_change_state() /ril_0 online false
+Sep 22 10:00:21.618 dut user.info networkd[575]: [SID_0] radio state changed: RADIO_OFF
+Sep 22 10:00:21.716 dut daemon.info ofonod[903]: [0,0632]> RIL_REQUEST_SIGNAL_STRENGTH
+Sep 22 10:00:21.717 dut daemon.info ofonod[903]: [0,0633]> RIL_REQUEST_OPERATOR
+Sep 22 10:00:21.719 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: SIGNAL_STRENGTH (6 bytes)
+Sep 22 10:00:21.721 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=86, result=1 -> chan 2 reply sent, 0 waiters, took 2 ms
+Sep 22 10:00:21.722 dut daemon.err vrild[618]: chan 2: empty reply body, nothing to encode
+Sep 22 10:00:21.723 dut daemon.debug ofonod[903]: [0,0632]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE
+Sep 22 10:00:21.724 dut daemon.debug ofonod[903]: [0,0633]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE
+Sep 22 10:00:21.725 dut daemon.info ofonod[903]: src/network.c:current_operator_callback() Error during current operator
+Sep 22 10:00:21.731 dut local0.warn mgmtd[734]: load network info failed: Load data failed err: Operation failed
+Sep 22 10:00:21.836 dut daemon.info chatterd[746]: position fix pending
+Sep 22 10:00:22.236 dut local0.info mgmtd[734]: ui tick

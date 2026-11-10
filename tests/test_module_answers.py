@@ -16,12 +16,12 @@ sys.path.insert(0, str(REPO / "tools"))
 import module_answers as ma  # noqa: E402
 import module_eval as me  # noqa: E402
 
-OLD_EXPLORE = {"layer": "곁가지|DITD|라우팅", "daemon": "DITD", "evidence": ["RTM_NEWROUTE failed"], "trap": None,
-               "wrong_layer": [r"^\s*(벤더 RIL|exynos-ril|모뎀|망|ofonod|D-Bus|관리 데몬|NMD)", r"^\s*그\s*층\s*로그\s*없음"]}
+OLD_EXPLORE = {"layer": "곁가지|datad2|라우팅", "daemon": "datad2", "evidence": ["RTM_NEWROUTE failed"], "trap": None,
+               "wrong_layer": [r"^\s*(벤더 RIL|vrild|모뎀|망|ofonod|D-Bus|관리 데몬|datad)", r"^\s*그\s*층\s*로그\s*없음"]}
 OLD_BELOW = {"layer": r"그\s*층\s*로그\s*없음", "daemon": "알 수 없음|ofonod|없음", "evidence": ["Activating context failed"],
-             "trap": "below-layer-missing", "wrong_layer": [r"^\s*(벤더 RIL|exynos-ril|모뎀|망|DITD|NMD)"]}
-DEEP = {"layer": "벤더 RIL|exynos-ril|모뎀|망", "daemon": "exynos-ril", "evidence": ["SETUP_DATA_CALL failed", "USER_AUTHENTICATION"],
-        "trap": None, "wrong_layer": [r"^\s*(ofonod|NMD|관리 데몬|D-Bus|MOSE|DITD)", r"^\s*그\s*층\s*로그\s*없음"]}
+             "trap": "below-layer-missing", "wrong_layer": [r"^\s*(벤더 RIL|vrild|모뎀|망|datad2|datad)"]}
+DEEP = {"layer": "벤더 RIL|vrild|모뎀|망", "daemon": "vrild", "evidence": ["SETUP_DATA_CALL failed", "USER_AUTHENTICATION"],
+        "trap": None, "wrong_layer": [r"^\s*(ofonod|datad|관리 데몬|D-Bus|mgmtd|datad2)", r"^\s*그\s*층\s*로그\s*없음"]}
 
 
 def _case(name, kind, expect, summary="데이터가 연결되지 않음 (합성)"):
@@ -29,51 +29,51 @@ def _case(name, kind, expect, summary="데이터가 연결되지 않음 (합성)
 
 
 def test_unfold():
-    assert ma.unfold(r"^\s*(벤더 RIL|exynos-ril|모뎀)") == "벤더 RIL 또는 exynos-ril 또는 모뎀"
+    assert ma.unfold(r"^\s*(벤더 RIL|vrild|모뎀)") == "벤더 RIL 또는 vrild 또는 모뎀"
     assert ma.unfold(r"그\s*층\s*로그\s*없음") == "그 층 로그 없음"
-    assert ma.unfold(r"곁가지\(DITD\)$") == "곁가지(DITD)"
+    assert ma.unfold(r"곁가지\(datad2\)$") == "곁가지(datad2)"
     assert ma.unfold(r"(?:a|b)\s+c") == "(a 또는 b) c"
     assert ma.unfold(r"(a)|(b)") == "(a) 또는 (b)"            # 바깥 괄호가 하나로 감싸지 않으면 그대로
 
 
 def test_table_golden():
-    explore = _case("data-ditd-route-fail", "explore", ma.migrate_expect(OLD_EXPLORE))
-    explore.expect["accept"][0]["show"] = "곁가지(DITD) — 라우팅 실패"
+    explore = _case("data-route-fail", "explore", ma.migrate_expect(OLD_EXPLORE))
+    explore.expect["accept"][0]["show"] = "곁가지(datad2) — 라우팅 실패"
     below = _case("data-ofonod-only", "explore", ma.migrate_expect(OLD_BELOW), summary="a|b")
     deep = _case("data-apn-auth-reject", "deep", DEEP)
     results = {"modules": {"ofono/data": {"cases": {
-        "data-ditd-route-fail": {"with": {"top1": True}, "without": [{"top1": False}, {"top1": True}]},
+        "data-route-fail": {"with": {"top1": True}, "without": [{"top1": False}, {"top1": True}]},
         "data-apn-auth-reject": {"with": {"top1": None}, "without": {"top1": None}}}}}}
     lines = ma.table_lines([("ofono/data", [deep, explore, below], ["x: 오류"])], results)
     assert lines[:4] == ["# 모듈 eval 정답표 — 인정 후보 / 함정", "", ma.HEAD, ""]
     assert lines[4:9] == ["## ofono/data", "", "오류: x: 오류", "",
                           "| case | 종류 | 증상 | 인정 후보 (층 / 데몬 · 근거) | 함정 (가장 유력이면 실패) | top1 |"]
-    assert lines[10] == ("| data-apn-auth-reject | deep(결론 1개) | 데이터가 연결되지 않음 (합성) | 벤더 RIL 또는 exynos-ril 또는 "
-                         "모뎀 또는 망 / exynos-ril · `SETUP_DATA_CALL failed`, `USER_AUTHENTICATION` | ofonod 또는 NMD 또는 "
-                         "관리 데몬 또는 D-Bus 또는 MOSE 또는 DITD / 그 층 로그 없음 | - |")
-    assert lines[11] == ("| data-ditd-route-fail | explore | 데이터가 연결되지 않음 (합성) | ① 곁가지(DITD) — 라우팅 실패 · "
-                         "`RTM_NEWROUTE failed` | 벤더 RIL 또는 exynos-ril 또는 모뎀 또는 망 또는 ofonod 또는 D-Bus 또는 "
-                         "관리 데몬 또는 NMD / 그 층 로그 없음 | with 1/1 · without 1/2 |")
+    assert lines[10] == ("| data-apn-auth-reject | deep(결론 1개) | 데이터가 연결되지 않음 (합성) | 벤더 RIL 또는 vrild 또는 "
+                         "모뎀 또는 망 / vrild · `SETUP_DATA_CALL failed`, `USER_AUTHENTICATION` | ofonod 또는 datad 또는 "
+                         "관리 데몬 또는 D-Bus 또는 mgmtd 또는 datad2 / 그 층 로그 없음 | - |")
+    assert lines[11] == ("| data-route-fail | explore | 데이터가 연결되지 않음 (합성) | ① 곁가지(datad2) — 라우팅 실패 · "
+                         "`RTM_NEWROUTE failed` | 벤더 RIL 또는 vrild 또는 모뎀 또는 망 또는 ofonod 또는 D-Bus 또는 "
+                         "관리 데몬 또는 datad / 그 층 로그 없음 | with 1/1 · without 1/2 |")
     assert lines[12] == ("| data-ofonod-only | explore | a\\|b | ① 그 층 로그 없음 / 알 수 없음 또는 ofonod 또는 없음 · "
-                         "`Activating context failed` (흔한 덧붙임 후보 — top1 확인) | 벤더 RIL 또는 exynos-ril 또는 모뎀 "
-                         "또는 망 또는 DITD 또는 NMD | - |")
+                         "`Activating context failed` (흔한 덧붙임 후보 — top1 확인) | 벤더 RIL 또는 vrild 또는 모뎀 "
+                         "또는 망 또는 datad2 또는 datad | - |")
     assert lines[-1] == ""
 
 
 def test_common_addon_mark():
     assert ma.is_common_addon({"layer": r"그\s*층\s*로그\s*없음"}) and ma.is_common_addon({"layer": "원인 아님|정상"})
-    assert not ma.is_common_addon({"layer": "곁가지|DITD"})
+    assert not ma.is_common_addon({"layer": "곁가지|datad2"})
 
 
 ANSWERS = [  # (원인 층, 원인 데몬, 근거)
-    ("곁가지(DITD) — 라우팅", "DITD", ["netlink RTM_NEWROUTE failed: err=-17"]),
-    ("벤더 RIL(exynos-ril) — x", "exynos-ril", ["SETUP_DATA_CALL rsp: ok"]),
-    ("관리 데몬 — x", "NMD", ["connectivity check failed"]),
-    ("곁가지(DITD) — x", "NMD", ["netlink RTM_NEWROUTE failed"]),
+    ("곁가지(datad2) — 라우팅", "datad2", ["netlink RTM_NEWROUTE failed: err=-17"]),
+    ("벤더 RIL(vrild) — x", "vrild", ["SETUP_DATA_CALL rsp: ok"]),
+    ("관리 데몬 — x", "datad", ["connectivity check failed"]),
+    ("곁가지(datad2) — x", "datad", ["netlink RTM_NEWROUTE failed"]),
     ("그 층 로그 없음(RIL trace) — x", "알 수 없음", ["Activating context failed with error"]),
-    ("그 층 로그 없음(RIL trace)", "exynos-ril", ["Activating context failed"]),
+    ("그 층 로그 없음(RIL trace)", "vrild", ["Activating context failed"]),
     ("ofonod — x", "ofonod", ["Activating context failed"]),
-    ("곁가지(MOSE)", "MOSE", ["x"]),
+    ("곁가지(mgmtd)", "mgmtd", ["x"]),
 ]
 
 
@@ -98,21 +98,21 @@ def test_migrate_judgment_equals_old(old):
 
 CASE_YAML = """# 합성 case 머리 주석
 schema_version: 1
-name: data-ditd-route-fail
+name: data-route-fail
 kind: explore
 run_expect:
   explore_reason: no_candidate
 expect:
-  layer: '곁가지|DITD|라우팅'
-  daemon: 'DITD'
+  layer: '곁가지|datad2|라우팅'
+  daemon: 'datad2'
   evidence: ['RTM_NEWROUTE failed']
   trap: null
-  wrong_layer: ['^\\s*(벤더 RIL|exynos-ril|모뎀|망|ofonod|D-Bus|관리 데몬|NMD)', '^\\s*그\\s*층\\s*로그\\s*없음']
+  wrong_layer: ['^\\s*(벤더 RIL|vrild|모뎀|망|ofonod|D-Bus|관리 데몬|datad)', '^\\s*그\\s*층\\s*로그\\s*없음']
 """
 
 
 def test_migrate_round_trip(tmp_path, capsys):
-    d = tmp_path / "data-ditd-route-fail"
+    d = tmp_path / "data-route-fail"
     d.mkdir()
     (d / "case.yaml").write_text(CASE_YAML, encoding="utf-8")
     deep = tmp_path / "deep-case"

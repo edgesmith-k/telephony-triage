@@ -20,7 +20,7 @@ run_expect:
 expect:
   accept:
     - layer: '원인\s*아님|정상'
-      daemon: '없음|알 수 없음|SHANNON_IMS|벤더 IMS'
+      daemon: '없음|알 수 없음|VRIL-IMS|벤더 IMS'
       evidence: ['service IMS is not available', 'handleImsRegistered']
   trap:
     - label: '^\s*(벤더 RIL|모뎀|망|RILJ|RIL HAL)'

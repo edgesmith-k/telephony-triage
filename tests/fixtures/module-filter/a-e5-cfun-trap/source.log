@@ -12,21 +12,21 @@
 08-09 13:13:49.643  1096  1167 V RIL     : <HEXDUMP 16B>
 08-09 13:13:49.643  1096  1167 V RIL     : <HEXDUMP 16B>
 08-09 13:13:49.643  1096  1167 V RIL     :  00 00
-08-09 13:13:49.643  1096  1167 I RIL     : [RilContext_0] ProcessModemData 
+08-09 13:13:49.643  1096  1167 I RIL     : [IpcCtx_0] ProcessIpcData 
 08-09 13:13:49.643  1096  1167 V RIL     : Send()_0 RCM Response Routing : Type=0002, RCM ID=0x070E Service ID=5 Message ID=4061
-08-09 13:13:49.643  1096  1167 V RIL     : [ServiceMgr] msg(0xb400007d1e21f9f0) msgId=4061 svc=NetworkService_0(5) direction=Response
+08-09 13:13:49.643  1096  1167 V RIL     : [MsgRouterMgr] msg(0xb400007d1e21f9f0) msgId=4061 svc=NetworkService_0(5) direction=Response
 08-09 13:13:49.643  1591  1838 D NetworkController.MobileSignalController(4): updateTelephonySignalStrength: hasService=true hasDataService=true ss=SignalStrength:{mCdma=CellSignalStrengthCdma: cdmaDbm=2147483647 cdmaEcio=2147483647 evdoDbm=2147483647 evdoEcio=2147483647 evdoSnr=2147483647 level=0,mGsm=CellSignalStrengthGsm: rssi=2147483647 ber=2147483647 mTa=2147483647 mLevel=0,mWcdma=CellSignalStrengthWcdma: ss=2147483647 ber=2147483647 rscp=2147483647 ecno=2147483647 level=0,mTdscdma=CellSignalStrengthTdscdma: rssi=2147483647 ber=2147483647 rscp=2147483647 level=0,mLte=CellSignalStrengthLte: rssi=2147483647 rsrp=2147483647 rsrq=2147483647 rssnr=2147483647 cqiTableIndex=2147483647 cqi=2147483647 ta=2147483647 level=0 parametersUseForLevel=0,mNr=CellSignalStrengthNr:{ csiRsrp = -140 csiRsrq = -20 csiCqiTableIndex = 1 csiCqiReport = [0] ssRsrp = -87 ssRsrq = -10 ssSinr = 30 level = 2 parametersUseForLevel = 0 timingAdvance = 0 },primary=CellSignalStrengthNr} displayInfo=TelephonyDisplayInfo {network=NR, overrideNetwork=NONE, isRoaming=false, isNtn=false, isSatelliteConstrainedData=false} SimState(0)=5 VoiceType=20 DataType=20 subId=4
-08-09 13:13:49.643  1096  1156 I RIL     : [NetworkService_0] NetworkStateChangedHandler OnIndication()
-08-09 13:13:49.643  1096  1156 I RIL     : [RilContext_0] OnUnsolicitedResponse Unsol Rsp ID=1002
-08-09 13:13:49.643  1096  1156 I RILC-CommandInfo: getUnsolRespInfo found {unsolResponse=1002 halVer=00}
-08-09 13:13:49.643  1096  1156 D RILC-AIDL_SERVICE: NetworkStateChangedIn<IP#1>onIndication mCb=0xb400007e9e20f388
-08-09 13:13:49.643  1096  1156 I RILC    : RIL_SOCKET_1 UNSOLICITED: UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED length:0
-08-09 13:13:49.643  1096  1156 V RIL     : RADIO_EXT::[RilExternalResponseListener] OnUnsolicitedResponse Filter out Unsolicited response=1002, channel=0
+08-09 13:13:49.643  1096  1156 I RIL     : [NetworkService_0] NetStateHandler OnIndication()
+08-09 13:13:49.643  1096  1156 I RIL     : [IpcCtx_0] OnIpcIndication Unsol Rsp ID=1002
+08-09 13:13:49.643  1096  1156 I VRIL-INFO: getUnsolRespInfo found {unsolResponse=1002 halVer=00}
+08-09 13:13:49.643  1096  1156 D VRIL-SVC: NetworkStateChangedIn<IP#1>onIndication mCb=0xb400007e9e20f388
+08-09 13:13:49.643  1096  1156 I VRIL    : VCHAN_1 UNSOLICITED: UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED length:0
+08-09 13:13:49.643  1096  1156 V RIL     : RADIO_EXT::[IpcExtResponseListener] OnIpcIndication Filter out Unsolicited response=1002, channel=0
 08-09 13:13:49.643  1856  1856 D DN-101-C: DisconnectedState: updateNetworkCapabilities: Capabilities not changed.
-08-09 13:13:49.648     0     0 I [    C0] cpif: LNK-RX(304): <HEXDUMP 24B>
+08-09 13:13:49.648     0     0 I [    C0] VRIL-LINK: LNK-RX(304): <HEXDUMP 24B>
 08-09 13:13:49.643  1856  1856 D DN-100-C: DisconnectedState: All network requests detached.
 08-09 13:13:49.643  1856  2169 D PhoneInterfaceManager: isDataEnabled: false, subId=4
-08-09 13:13:49.643  2891  2891 D SHANNON_TEST: 0137 [HELP] Unsol {UNKNOWN} received  [SLID:0  Active:true] (ImsRilHelper%onHandleUnsolicitedResponse:256)
+08-09 13:13:49.643  2891  2891 D VRIL-TEST: 0137 [HELP] Unsol {UNKNOWN} received  [SLID:0  Active:true] (ImsRilHelper%onHandleUnsolicitedResponse:256)
 08-09 13:13:49.643  1297  2265 D TelephonyRegistry: remove: binder=android.os.BinderProxy@6f6d858 r.callingPackage com.android.phone r.callback null
 08-09 13:13:49.643  1591  1838 D NetworkController.MobileSignalController(4): Change in state from: connected=true,enabled=true,level=2,inetCondition=1,iconGroup=IconGroup(DataDisabled),activityIn=false,activityOut=false,rssi=0,lastModified=08-09 13:13:49.642,dataSim=true,carrierId=-1networkName=<CARRIER#1>-<CARRIER#2>,networkNameData=<CARRIER#1>-<CARRIER#2>,dataConnected=false,roaming=false,isDefault=false,isEmergency=false,airplaneMode=false,carrierNetworkChangeMode=false,userSetup=true,dataState=0,defaultDataOff=true,imsRegistration=true,showQuickSettingsRatIcon=true,voiceServiceState=0,isInService=true,networkTypeIconCache=networkTypeResIdCache={id=0, isOverridden=false}serviceState=serviceState={state=0,isEmergencyOnly=false,roaming=false,operatorNameAlphaShort=null},signalStrength=signalStrength={isGsm=true,level=2},displayInfo=TelephonyDisplayInfo {network=NR, overrideNetwork=NONE, isRoaming=false, isNtn=false, isSatelliteConstrainedData=false}
 08-09 13:13:49.643  1591  1838 D NetworkController.MobileSignalController(4): 	to: connected=true,enabled=true,level=2,inetCondition=1,iconGroup=IconGroup(DataDisabled),activityIn=false,activityOut=false,rssi=0,lastModified=08-09 13:13:49.642,dataSim=true,carrierId=1911networkName=<CARRIER#1>-<CARRIER#2>,networkNameData=<CARRIER#1>-<CARRIER#2>,dataConnected=false,roaming=false,isDefault=false,isEmergency=false,airplaneMode=false,carrierNetworkChangeMode=false,userSetup=true,dataState=0,defaultDataOff=false,imsRegistration=true,showQuickSettingsRatIcon=true,voiceServiceState=0,isInService=true,networkTypeIconCache=networkTypeResIdCache={id=0, isOverridden=false}serviceState=serviceState={state=0,isEmergencyOnly=false,roaming=false,operatorNameAlphaShort=null},signalStrength=signalStrength={isGsm=true,level=2},displayInfo=TelephonyDisplayInfo {network=NR, overrideNetwork=NONE, isRoaming=false, isNtn=false, isSatelliteConstrainedData=false}
@@ -46,36 +46,36 @@
 08-09 13:13:49.644  1856  1856 I Telephony: updateAdhocConfCapability - changed, new value: false
 08-09 13:13:49.644  1856  1856 D Telephony: isEmergencyPreferredAccount: subId=4, activeData=4
 08-09 13:13:49.644  1856  1856 D Telephony: isEmergencyPreferredAccount: Device does not require preference.
-08-09 13:13:49.645  1096  1167 V RIL     : [<DEVICENODE#1>][RX] SIT_AIMS_DEL_PDN_INFO, RSP, 12 bytes, Token(0x01cc), OK(RCM_E_SUCCESS)
+08-09 13:13:49.645  1096  1167 V RIL     : [<DEVICENODE#1>][RX] SIT_MTEL_DEL_PDN_INFO, RSP, 12 bytes, Token(0x01cc), OK(RCM_E_SUCCESS)
 08-09 13:13:49.645  1096  1167 V RIL     : <HEXDUMP 12B>
-08-09 13:13:49.645  1096  1167 I RIL     : [RilContext_0] ProcessModemData 
-08-09 13:13:49.645  1096  1167 V RIL     : WaitList<IP#2>ind() found record : token=0x01CC SrcService ID =4 DestService ID=4 Result Id=8080
+08-09 13:13:49.645  1096  1167 I RIL     : [IpcCtx_0] ProcessIpcData 
+08-09 13:13:49.645  1096  1167 V RIL     : WaitList<IP#2>ind() found record : token=0x01CC SrcSvc ID =4 DstSvc ID=4 Result Id=8080
 08-09 13:13:49.645  1096  1167 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0D38 Service ID=4 Message ID=8080
-08-09 13:13:49.645  1096  1167 V RIL     : [ServiceMgr] msg(0xb400007d1e2232d0) msgId=8080 svc=MiscService_0(4) direction=Response
-08-09 13:13:49.645  1096  1167 V RIL     : [<DEVICENODE#1>][RX] SIT_IND_AIMS_REGISTRATION, IND, 78 bytes
+08-09 13:13:49.645  1096  1167 V RIL     : [MsgRouterMgr] msg(0xb400007d1e2232d0) msgId=8080 svc=ModemService_0(4) direction=Response
+08-09 13:13:49.645  1096  1167 V RIL     : [<DEVICENODE#1>][RX] SIT_NOTIFY_MTEL_REGISTRATION, IND, 78 bytes
 08-09 13:13:49.645  1096  1167 V RIL     : <HEXDUMP 16B>
 08-09 13:13:49.645  1096  1167 V RIL     : <HEXDUMP 16B>
 08-09 13:13:49.645  1096  1167 V RIL     : <HEXDUMP 16B>
 08-09 13:13:49.645  1096  1167 V RIL     : <HEXDUMP 16B>
 08-09 13:13:49.645  1096  1167 V RIL     : <HEXDUMP 14B>
-08-09 13:13:49.645  1096  1167 I RIL     : [RilContext_0] ProcessModemData 
+08-09 13:13:49.645  1096  1167 I RIL     : [IpcCtx_0] ProcessIpcData 
 08-09 13:13:49.645  1096  1167 V RIL     : Send()_0 RCM Response Routing : Type=0002, RCM ID=0x0D05 Service ID=8 Message ID=8138
-08-09 13:13:49.645  1096  1167 V RIL     : [ServiceMgr] msg(0xb400007d1e222b60) msgId=8138 svc=ImsService_0(8) direction=Response
-08-09 13:13:49.645  1096  1155 I RIL     : [MiscService_0] AimsDefaultHandler OnResponse()
-08-09 13:13:49.645  1096  1155 V RIL     : [MiscService_0] AIMS Response: msgId=8080 errorCode=0 parameter=0x0x0 parameter length=0
-08-09 13:13:49.645  1096  1155 I RIL     : [MiscService_0] OnRequestComplete() MSG_ID=8080
-08-09 13:13:49.645  1096  1155 I RIL     : [RilContext_0] OnRequestComplete Request ID=10336
-08-09 13:13:49.645  1096  1155 D RIL_EXTERNAL: RilExternalManager::sendRequestRawResponse: clientId=8
-08-09 13:13:49.645  1096  1155 V RIL     : [RilContext_0] RemoveRequestHistory  token=0x01CC
+08-09 13:13:49.645  1096  1167 V RIL     : [MsgRouterMgr] msg(0xb400007d1e222b60) msgId=8138 svc=ImsService_0(8) direction=Response
+08-09 13:13:49.645  1096  1155 I RIL     : [ModemService_0] MtelDefaultHandler OnResponse()
+08-09 13:13:49.645  1096  1155 V RIL     : [ModemService_0] MTEL Response: msgId=8080 errorCode=0 parameter=0x0x0 parameter length=0
+08-09 13:13:49.645  1096  1155 I RIL     : [ModemService_0] OnIpcComplete() MSG_ID=8080
+08-09 13:13:49.645  1096  1155 I RIL     : [IpcCtx_0] OnIpcComplete Request ID=10336
+08-09 13:13:49.645  1096  1155 D VRIL: IpcExtManager::sendRawResponse: clientId=8
+08-09 13:13:49.645  1096  1155 V RIL     : [IpcCtx_0] RemoveIpcHistory  token=0x01CC
 08-09 13:13:49.645  1096  1159 I RIL     : ImsService_<IP#3>OnHandleUnsolicitedResponse() [<-- 
 08-09 13:13:49.645  1096  1159 I RIL     : ImsService_<IP#3>OnHandleUnsolicitedResponse() nMsgId=8138
-08-09 13:13:49.645  1096  1159 I RIL     : ImsService_<IP#3>OnUNSOL_AIMS_REGISTRATION() [<-- 
-08-09 13:13:49.645  1096  1159 I RIL     : [RilContext_0] OnUnsolicitedResponse Unsol Rsp ID=20302
-08-09 13:13:49.645  1096  1159 V RIL     : RADIO::[RilResponseListener] OnUnsolicitedResponse Filter out Unsolicited response=20302
-08-09 13:13:49.645  1096  1159 I RIL_EXTERNAL: [isFilteredIndication] clientId=0 name=bipchmgr(1053) indication=3012 isFiltered=true
-08-09 13:13:49.645  1096  1159 I RIL_EXTERNAL: [isFilteredIndication] clientId=1 name=SeApi(907) indication=3012 isFiltered=true
-08-09 13:13:49.645  1096  1159 I RIL_EXTERNAL: [isFilteredIndication] clientId=2 name=SeApi(908) indication=3012 isFiltered=true
-08-09 13:13:49.645  1096  1159 I RIL_EXTERNAL: [isFilteredIndication] clientId=3 name=OemRil0 indication=3012 isFiltered=true
-08-09 13:13:49.645  1096  1159 I RIL_EXTERNAL: [isFilteredIndication] clientId=4 name=OemRil1 indication=3012 isFiltered=true
-08-09 13:13:49.645  1096  1159 I RIL_EXTERNAL: [isFilteredIndication] clientId=5 name=GpsApi(1077) indication=3012 isFiltered=true
-08-09 13:13:49.645  1096  1159 I RIL_EXTERNAL: [isFilteredIndication] clientId=6 name=imstestauto0 indication=3012 isFiltered=false
+08-09 13:13:49.645  1096  1159 I RIL     : ImsService_<IP#3>OnUNSOL_MTEL_REGISTRATION() [<-- 
+08-09 13:13:49.645  1096  1159 I RIL     : [IpcCtx_0] OnIpcIndication Unsol Rsp ID=20302
+08-09 13:13:49.645  1096  1159 V RIL     : RADIO::[IpcResponseListener] OnIpcIndication Filter out Unsolicited response=20302
+08-09 13:13:49.645  1096  1159 I VRIL: [checkIndicationFilter] clientId=0 name=bipchmgr(1053) indication=3012 isFiltered=true
+08-09 13:13:49.645  1096  1159 I VRIL: [checkIndicationFilter] clientId=1 name=SeApi(907) indication=3012 isFiltered=true
+08-09 13:13:49.645  1096  1159 I VRIL: [checkIndicationFilter] clientId=2 name=SeApi(908) indication=3012 isFiltered=true
+08-09 13:13:49.645  1096  1159 I VRIL: [checkIndicationFilter] clientId=3 name=OemRil0 indication=3012 isFiltered=true
+08-09 13:13:49.645  1096  1159 I VRIL: [checkIndicationFilter] clientId=4 name=OemRil1 indication=3012 isFiltered=true
+08-09 13:13:49.645  1096  1159 I VRIL: [checkIndicationFilter] clientId=5 name=GpsApi(1077) indication=3012 isFiltered=true
+08-09 13:13:49.645  1096  1159 I VRIL: [checkIndicationFilter] clientId=6 name=imstestauto0 indication=3012 isFiltered=false

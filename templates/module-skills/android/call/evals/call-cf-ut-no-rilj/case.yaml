@@ -20,7 +20,7 @@ run_expect:
 expect:
   accept:
     - layer: '원인\s*아님|정상'
-      daemon: '없음|알 수 없음|SHANNON_IMS|벤더 IMS|ImsUt'
-      evidence: ['RILC_REQ_AIMS_SET_CALL_FORWARD_STATUS', 'State=COMPLETE']
+      daemon: '없음|알 수 없음|VRIL-IMS|벤더 IMS|ImsUt'
+      evidence: ['OEM_REQ_MTEL_SET_CALL_FORWARD_STATUS', 'State=COMPLETE']
   trap:
     - label: '^\s*(그\s*층\s*로그\s*없음|RILJ|RIL HAL|모뎀|망|벤더 RIL)'

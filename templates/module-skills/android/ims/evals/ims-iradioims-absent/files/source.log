@@ -1,5 +1,5 @@
 -- [합성]
-08-09 13:10:57.481  1856  1856 D Telephony: Registering: Handler (com.android.internal.telephony.vendor.ExynosGsmCdmaPhone) {255ef1b}
+08-09 13:10:57.481  1856  1856 D Telephony: Registering: Handler (com.android.internal.telephony.GsmCdmaPhone) {255ef1b}
 08-09 13:10:57.482  1856  1856 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
 08-09 13:10:57.482  1856  1856 W Telephony: registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1
 08-09 13:10:57.482  1856  1856 D Telephony: Finished registering mSimultaneousCallingTrackerListener for phoneId = 0; subId = 4
@@ -16,28 +16,28 @@
 -- [생략]
 08-09 13:12:29.589  1856  2015 D SatelliteController: updateLastNotifiedNtnModeAndNotify: subId=4 initialized=true lastNotifiedNtnMode=false currNtnMode=false
 08-09 13:12:29.589  1856  2015 D SatelliteController: updateLastNotifiedNtnModeAndNotify: not in NTN mode, clear per plmn configs
-08-09 13:12:29.589  1096  1167 V RIL     : [<DEV#1>][RX] <unknown sit>, RSP, 12 bytes, Token(0x01a6), Error(RCM_E_UNDEFINED_CMD)
+08-09 13:12:29.589  1096  1167 V RIL     : [<DEV#1>][RX] <unknown sit>, RSP, 12 bytes, Token(0x01a6), Error(RCM_E_UNKNOWN_CMD)
 08-09 13:12:29.589  1096  1167 V RIL     : <HEXDUMP 12B>
 -- [생략]
 08-09 13:12:29.589  1591  1901 I MobileInputLog: onServiceStateChanged: subId=4 emergencyOnly=false roaming=false operator=null, serviceState={mVoiceRegState=1(OUT_OF_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=422430, duplexMode()=1, mCellBandwidths=[10000], mOperatorAlphaLong=null, mOperatorAlphaShort=null, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=0(Unknown), getRilDataRadioTechnology=20(NR_SA), mCssIndicator=unsupported, mIsEmergencyOnly=false, isUsingCarrierAggregation=false, mArfcnRsrpBoost=0, mNetworkRegistrationInfos=[NetworkRegistrationInfo{ domain=PS transportType=WLAN registrationState=NOT_REG_OR_SEARCHING networkRegistrationState=NOT_REG_OR_SEARCHING roamingType=NOT_ROAMING accessNetworkTechnology=UNKNOWN rejectCause=0 emergencyEnabled=false availableServices=[] cellIdentity=null voiceSpecificInfo=null dataSpecificInfo=null nrState=NONE rRplmn= isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL satelliteTechnology=NT_RADIO_TECHNOLOGY_UNKNOWN}, NetworkRegistrationInfo{ domain=CS transportType=WWAN registrationState=NOT_REG_OR_SEARCHING networkRegistrationState=NOT_REG_OR_SEARCHING roamingType=NOT_ROAMING accessNetworkTechnology=UNKNOWN rejectCause=0 emergencyEnabled=false availableServices=[] cellIdentity=null voiceSpecificInfo=VoiceSpecificRegistrationInfo { mCssSupported=false mRoamingIndicator=0 mSystemIsInPrl=0 mDefaultRoamingIndicator=0} dataSpecificInfo=null nrState=NONE rRplmn= isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL satelliteTechnology=NT_RADIO_TECHNOLOGY_UNKNOWN}, NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=HOME networkRegistrationState=HOME roamingType=NOT_ROAMING accessNetworkTechnology=NR rejectCause=0 emergencyEnabled=false availableServices=[DATA,MMS] cellIdentity=CellIdentityNr:{ mPci = [dYeGZDCbHhIWWwgjMVN2sNJ-T4A] mTac = [dYeGZDCbHhIWWwgjMVN2sNJ-T4A] mNrArfcn = [x-X4mFPHQIVDEmLmnW3WJtn_N8w] mBands = [1] mMcc = 001 mMnc = 01 mNci = [RYtkKxN-LHbgt0bG-kPmTD1MR_E] mAlphaLong = <CARRIER#1> mAlphaShort = <CARRIER#1> mAdditionalPlmns = {} } voiceSpecificInfo=null dataSpecificInfo=android.telephony.DataSpecificRegistrationInfo :{ maxDataCalls = 16 isDcNrRestricted = false isNrAvailable = false isEnDcAvailable = false mLteAttachResultType = 0 mLteAttachExtraInfo = 0 NrVopsSupportInfo :  mVopsSupport = 1 mEmcSupport = 1 mEmfSupport = 0 } nrState=NONE rRplmn=<CARRIER#1> isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL satelliteTechnology=NT_RADIO_TECHNOLOGY_UNKNOWN}], mNrFrequencyRange=0, mOperatorAlphaLongRaw=<CARRIER#1>, mOperatorAlphaShortRaw=<CARRIER#1>, mIsDataRoamingFromRegistration=false, mIsIwlanPreferred=false, mIsUsingNonTerrestrialNetwork=false}
-08-09 13:12:29.589  1712  2181 D ShannonNS-0: requestNetworkRegistrationInfo for domain 2
+08-09 13:12:29.589  1712  2181 D VRIL-NETWORK: requestNetworkRegistrationInfo for domain 2
 08-09 13:12:29.590  1856  1872 D RILJ    : [0352]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
 08-09 13:12:29.590  1856  1872 D RilRequest: [0352]< NOTIFY_IMS_DATA_NETWORK error: com.android.internal.telephony.CommandException: REQUEST_NOT_SUPPORTED ret= result={ when=-1m49s618ms what=12 target=com.android.internal.telephony.data.CellularDataService$CellularDataServiceProvider$1 async=false heapIndex=-1 }
 -- [생략]
-08-09 13:12:31.858  1091  1135 I RFSD    : [RfsService::File][tid=11] write request 215018 bytes from 0
-08-09 13:12:32.189     0     0 I [    C0] cpif: LNK-RX(224): <HEXDUMP 24B>
-08-09 13:12:32.185  1096  1167 V RIL     : [<DEV#1>][RX] SIT_IND_AIMS_REGISTRATION, IND, 208 bytes
+08-09 13:12:31.858  1091  1135 I VRIL-MODEM    : [NvStoreService::File][tid=11] write request 215018 bytes from 0
+08-09 13:12:32.189     0     0 I [    C0] VRIL-LINK: LNK-RX(224): <HEXDUMP 24B>
+08-09 13:12:32.185  1096  1167 V RIL     : [<DEV#1>][RX] SIT_NOTIFY_MTEL_REGISTRATION, IND, 208 bytes
 08-09 13:12:32.185  1096  1167 V RIL     : <HEXDUMP 16B>
 -- [생략]
-08-09 13:12:32.187  1096  1159 I RIL_EXTERNAL: [isFilteredIndication] clientId=9 name=IMSSVC1 indication=3012 isFiltered=false
-08-09 13:12:32.187  1096  1159 I RIL_EXTERNAL: [isFilteredIndication] clientId=10 name=QNS0 indication=3012 isFiltered=false
-08-09 13:12:32.187  1096  1159 V RIL     : [ImsService_0::OnUNSOL_AIMS_REGISTRATION] Ims Registration : TRUE
-08-09 13:12:32.188  1096  1159 I RIL     : [RilContext_0] OnUnsolicitedResponse Unsol Rsp ID=1002
+08-09 13:12:32.187  1096  1159 I VRIL: [checkIndicationFilter] clientId=9 name=IMSD1 indication=3012 isFiltered=false
+08-09 13:12:32.187  1096  1159 I VRIL: [checkIndicationFilter] clientId=10 name=QNS0 indication=3012 isFiltered=false
+08-09 13:12:32.187  1096  1159 V RIL     : [ImsService_0::OnUNSOL_MTEL_REGISTRATION] Ims Registration : TRUE
+08-09 13:12:32.188  1096  1159 I RIL     : [IpcCtx_0] OnIpcIndication Unsol Rsp ID=1002
 -- [생략]
-08-09 13:12:32.211  1096  1096 D RILC-AIDL_SERVICE: V2_0::RadioNetworkProxy::getOperator: serial 363
-08-09 13:12:32.211  1096  1096 D RILC-AIDL_SERVICE: GetOperatorCommand::onRequest: serial 363
+08-09 13:12:32.211  1096  1096 D VRIL-SVC: V2_0::RadioNetworkProxy::getOperator: serial 363
+08-09 13:12:32.211  1096  1096 D VRIL-SVC: GetOperNameCommand::onRequest: serial 363
 08-09 13:12:32.211  1856  1856 D ImsPhone: [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN
-08-09 13:12:32.211  1096  1096 I RIL     : RilApplication::GetInstance
+08-09 13:12:32.211  1096  1096 I RIL     : IpcApplication::GetInstance
 -- [생략]
 08-09 13:12:32.278  1096  1159 V RIL     : <HEXDUMP 16B>
 08-09 13:12:32.278  1096  1159 V RIL     : <HEXDUMP 15B>

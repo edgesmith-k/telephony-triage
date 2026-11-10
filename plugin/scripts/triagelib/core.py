@@ -39,8 +39,8 @@ PARTIAL_ANALYSIS_MAX, PARTIAL_REPORT_MAX, FIND_TEXT_ITEMS = 3, 1200, 9
 SEARCH_LIMIT = 3
 ERROR_EVENT_RE = re.compile(r"(error|timeout|no_response|reject|fail|denied|lost)", re.IGNORECASE)
 # 0 값 오류 칸(`errorCode=0`·`RejectCause: 0`·`result=0`·`error(0)`)은 오류가 아니다. 오류 문구 판정(ERROR_EVENT_RE) 전에
-# 지운다 — report 타임라인 줄 고르기와 모듈 보기 hot 표시가 같이 쓴다(H C1+D R13, 두 플랫폼)
-ZERO_VALUE_RE = re.compile(r"(?i)\b(?:RejectCause|reject\s*cause|errorCode|RilErrorCode|rejectCode|error|result|"
+# 지운다 — report 타임라인 줄 고르기와 모듈 보기 hot 표시가 같이 쓴다(H C1+D R13, 두 플랫폼). `<접두>ErrorCode`(벤더 접두)도 같다
+ZERO_VALUE_RE = re.compile(r"(?i)\b(?:RejectCause|reject\s*cause|\w*errorCode|rejectCode|error|result|"
                            r"fail(?:ure)?_?(?:code|cause))\s*[:=(]\s*0\b(?![.\d])")
 
 

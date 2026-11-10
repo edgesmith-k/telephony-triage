@@ -64,7 +64,7 @@
     "tag": "RIL",
     "event": "builtin.common.vendor_ipc_error",
     "phone": null,
-    "error": "RCM_E_GENERIC_FAILURE"
+    "error": "RCM_E_FAILURE"
    }
   ],
   "error_event_total": 1,

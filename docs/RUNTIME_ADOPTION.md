@@ -206,6 +206,7 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
 
 ```sh
 python3 tools/make_module_repo.py <out>   # 템플릿 → <out>에 새 git 레포·첫 커밋(원격·push 없음). <out>은 비어 있고 레포 밖
+# 사내 복구: ... <out> --site-overlay docs/site/module-skills   # 사내 스냅샷을 같은 경로로 덮어씀(evals 거부, placeholder 남으면 종료 1, docs/SITE_RESTORE.md)
 # GHE 빈 레포 만들기·push는 stderr 안내대로 사람이
 # GHE 브랜치 보호(IMPL §4.5) → site-defaults module_skills.remote(관리자)
 python3 tools/site_step.py modules   # MS 트랙 시작(S-3 완료 뒤)

@@ -10,6 +10,7 @@ site-defaults에 `platform.name`이 없을 때만 쓴다.
   `02-config.md`)을 검증해 `PlatformProfile`로 준다. 기본 플랫폼은 `platform:` 블록 자체, 그 밖 플랫폼은
   `platform.others.<name>` 블록이다. 받는 상수 키는 `SPEC.block_keys`다. `components`(구성요소, 통째로 바뀜)와
   `protocols.<이름>: {kind, ...}`(설정 정의 짝 규칙, `SPEC.protocol_kinds`)는 `PlatformProfile.components`·`protocols`.
+  `vendor_ipc: {context, complete}`(벤더 IPC 줄의 사내 토큰, 생략 = placeholder)는 `PlatformProfile.vendor_ipc`.
 - `backend_name(defaults, name)`: 그 플랫폼의 파서 백엔드 이름. `raw_line_finders(defaults)`: 켠 플랫폼의 원문 줄 판별.
 
 파일 I/O도 전역 상태도 없다(불변 `SPEC` 캐시만) — 호출한 쪽이 값을 들고 다니며(`ParserBackend.configure`,
@@ -44,6 +45,7 @@ from platforms.base import (  # noqa: F401  (계약 타입을 `platforms.X`로�
     cfg_mapping,
     config_error as _err,
 )
+from common import vendor_ipc as _vipc
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 COMPONENT_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")   # 구성요소 이름 (placeholder `daemon-a`)
@@ -68,6 +70,7 @@ class PlatformProfile:
     protocol_tags: tuple = ()                  # `((프로토콜 이름, frozenset 태그), ...)` — `protocols` 순서, ril은 `ril_tags`
     components: tuple = ()                     # `(Component, ...)` — `<블록>.components`(없으면 `SPEC.components`)
     protocols: tuple = ()                      # `(PairProtocol, ...)` — `SPEC.protocols` 다음 설정 정의(`kind`) 순서
+    vendor_ipc: _vipc.Spec = _vipc.DEFAULT     # `<블록>.vendor_ipc`(벤더 IPC 줄의 사내 토큰, 생략 키는 placeholder 기본)
 
 
 # -- 레지스트리 --------------------------------------------------------------------
@@ -374,6 +377,16 @@ def _components(raw, base: str, spec: PlatformSpec) -> tuple:
     return tuple(out)
 
 
+def _vendor_ipc(raw, base: str) -> _vipc.Spec:
+    """`<블록>.vendor_ipc: {context, complete}`(벤더 IPC 요청 완료 줄의 사내 토큰, TODO(SITE:S9)) → `vendor_ipc.Spec`.
+    값은 식별자 모양 글(`vendor_ipc.VALUE_RE`). 생략한 키는 placeholder 기본값."""
+    node = _mapping(raw, base, _vipc.KEYS)
+    for key, value in node.items():
+        if not isinstance(value, str) or not _vipc.VALUE_RE.fullmatch(value):
+            raise _err(f"{base}.{key}", f"식별자 모양 글(^[A-Za-z][A-Za-z0-9_]*$, 64자 이하)이어야 합니다: {value!r}")
+    return _vipc.Spec(**node)
+
+
 def default(name: str = DEFAULT_NAME) -> PlatformProfile:
     """코드 기본값 프로파일. 패턴은 `SPEC`의 객체 그대로다."""
     spec = get(name)
@@ -414,6 +427,8 @@ def _build(spec: PlatformSpec, name: str, block: dict, base: str) -> PlatformPro
         protocol_tags=protocol_tags,
         components=components,
         protocols=protocols,
+        vendor_ipc=_vendor_ipc(block.get("vendor_ipc"), f"{base}.vendor_ipc") if "vendor_ipc" in spec.block_keys
+        else _vipc.DEFAULT,
     )
 
 

@@ -1,27 +1,27 @@
--- [합성] C1D 보정 call-ecall-msd-lines-missing. 레포의 줄 모양(network-radio-off-queries case의 데이터 관리 데몬 줄, C0·C1 합성 case)만 본떠 새로 썼다. eCall·IVS 경로 줄은 이 로그에 없다(이름 사내 확인).
-Sep 23 10:20:00.010 dut local0.info MOSE[731]: [UI___] 000214 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Sep 23 10:20:00.200 dut daemon.info exynos-ril[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-94
-Sep 23 10:20:05.000 dut local0.info MOSE[731]: [UIMCS] 000303 *CallManager->Dial  number: <MSISDN#1> hide: default  mose/managers/call/call_manager.go:77
-Sep 23 10:20:05.002 dut local0.info MOSE[731]: [DBUS_] 000303 *BusHelperImpl->CallGenericMethod  dest: org.ofono objectPath: /ril_0, dbusInterface: org.ofono.VoiceCallManager, methodName Dial  mose/dbus/helper/dbus_helper_impl.go:98
+-- [합성] C1D 보정 call-ecall-msd-lines-missing. 레포의 줄 모양(network-radio-off-queries case의 데이터 구성요소 줄, C0·C1 합성 case)만 본떠 새로 썼다. eCall·IVS 경로 줄은 이 로그에 없다(이름 사내 확인).
+Sep 23 10:20:00.010 dut local0.info mgmtd[731]: [UI___] 000214 *UI->Update  uiMsg.TimeMsg  mgmtd/ui/ui.go:108
+Sep 23 10:20:00.200 dut daemon.info vrild[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-94
+Sep 23 10:20:05.000 dut local0.info mgmtd[731]: [UIMCS] 000303 *CallManager->Dial  number: <MSISDN#1> hide: default  mgmtd/managers/call/call_manager.go:77
+Sep 23 10:20:05.002 dut local0.info mgmtd[731]: [DBUS_] 000303 *BusHelperImpl->CallGenericMethod  dest: org.ofono objectPath: /ril_0, dbusInterface: org.ofono.VoiceCallManager, methodName Dial  mgmtd/dbus/helper/dbus_helper_impl.go:98
 Sep 23 10:20:05.004 dut daemon.info ofonod[466]: dump_dmsg method call - i:org.ofono.VoiceCallManager m:Dial p:/ril_0 a:"<MSISDN#1>", "default"
 Sep 23 10:20:05.005 dut daemon.debug ofonod[466]: src/voicecall.c:manager_dial() dialing
 Sep 23 10:20:05.006 dut daemon.info ofonod[466]: [0,0361]> RIL_REQUEST_DIAL (<MSISDN#1>,0)
-Sep 23 10:20:05.007 dut daemon.debug exynos-ril[452]: SOCKET RIL_SOCKET_1 REQUEST: DIAL length:40
-Sep 23 10:20:05.008 dut daemon.info exynos-ril[452]: [CsService_0] DialHandler OnRequest()
-Sep 23 10:20:05.008 dut daemon.debug exynos-ril[452]: [RilContext_0] RecordRequestHistory token=0x0361
-Sep 23 10:20:05.008 dut daemon.debug exynos-ril[452]: [<DEV#1>][TX] SIT_DIAL, REQ, 36 bytes, Token(0x0361)
-Sep 23 10:20:05.090 dut daemon.debug exynos-ril[452]: [<DEV#1>][RX] SIT_DIAL, RSP, 12 bytes, Token(0x0361), OK(RCM_E_SUCCESS)
-Sep 23 10:20:05.091 dut daemon.info exynos-ril[452]: [RilContext_0] OnRequestComplete Request ID=10, result=0
+Sep 23 10:20:05.007 dut daemon.debug vrild[452]: SOCKET VCHAN_1 REQUEST: DIAL length:40
+Sep 23 10:20:05.008 dut daemon.info vrild[452]: [VoiceService_0] DialHandler OnRequest()
+Sep 23 10:20:05.008 dut daemon.debug vrild[452]: [IpcCtx_0] RecordIpcHistory token=0x0361
+Sep 23 10:20:05.008 dut daemon.debug vrild[452]: [<DEV#1>][TX] SIT_DIAL, REQ, 36 bytes, Token(0x0361)
+Sep 23 10:20:05.090 dut daemon.debug vrild[452]: [<DEV#1>][RX] SIT_DIAL, RSP, 12 bytes, Token(0x0361), OK(RCM_E_SUCCESS)
+Sep 23 10:20:05.091 dut daemon.info vrild[452]: [IpcCtx_0] OnIpcComplete Request ID=10, result=0
 Sep 23 10:20:05.093 dut daemon.debug ofonod[466]: [0,0361]< RIL_REQUEST_DIAL
-Sep 23 10:20:06.400 dut daemon.debug exynos-ril[452]: [<DEV#1>][RX] SIT_IND_CALL_STATE_CHANGED, IND, 8 bytes
+Sep 23 10:20:06.400 dut daemon.debug vrild[452]: [<DEV#1>][RX] SIT_NOTIFY_CALL_STATE_CHANGED, IND, 8 bytes
 Sep 23 10:20:06.402 dut daemon.info ofonod[466]: [0,UNSOL]< RIL_UNSOL_RESPONSE_CALL_STATE_CHANGED
 Sep 23 10:20:06.404 dut daemon.info ofonod[466]: dump_dmsg signal - i:org.ofono.VoiceCall m:PropertyChanged p:/ril_0/voicecall01 a:"State", variant("active")
-Sep 23 10:20:20.010 dut local0.info MOSE[731]: [UI___] 000215 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Sep 23 10:20:30.200 dut daemon.info exynos-ril[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-95
-Sep 23 10:20:46.000 dut local0.info MOSE[731]: [UIMCS] 000304 *CallManager->HangupAll  mose/managers/call/call_manager.go:120
+Sep 23 10:20:20.010 dut local0.info mgmtd[731]: [UI___] 000215 *UI->Update  uiMsg.TimeMsg  mgmtd/ui/ui.go:108
+Sep 23 10:20:30.200 dut daemon.info vrild[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-95
+Sep 23 10:20:46.000 dut local0.info mgmtd[731]: [UIMCS] 000304 *CallManager->HangupAll  mgmtd/managers/call/call_manager.go:120
 Sep 23 10:20:46.002 dut daemon.info ofonod[466]: dump_dmsg method call - i:org.ofono.VoiceCallManager m:HangupAll p:/ril_0
 Sep 23 10:20:46.004 dut daemon.info ofonod[466]: [0,0362]> RIL_REQUEST_HANGUP 1
 Sep 23 10:20:46.090 dut daemon.debug ofonod[466]: [0,0362]< RIL_REQUEST_HANGUP
 Sep 23 10:20:46.300 dut daemon.info ofonod[466]: [0,UNSOL]< RIL_UNSOL_RESPONSE_CALL_STATE_CHANGED
 Sep 23 10:20:46.304 dut daemon.info ofonod[466]: dump_dmsg signal - i:org.ofono.VoiceCallManager m:CallRemoved p:/ril_0
-Sep 23 10:20:47.010 dut local0.info MOSE[731]: [UI___] 000216 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
+Sep 23 10:20:47.010 dut local0.info mgmtd[731]: [UI___] 000216 *UI->Update  uiMsg.TimeMsg  mgmtd/ui/ui.go:108

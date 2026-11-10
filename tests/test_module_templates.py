@@ -92,11 +92,11 @@ def _module_docs() -> list[Path]:
 
 
 OFONO_CASES = {   # C0 3 + C1 13 + 보정 5 (C1D §1 표, R21: ofono 묶음만 본다 — android는 test_module_templates_android)
-    "data": {"data-apn-auth-reject", "data-apn-overwritten", "data-ditd-route-fail", "data-nr-switch-drop", "data-ofonod-only", "data-throughput-trap"},
+    "data": {"data-apn-auth-reject", "data-apn-overwritten", "data-route-fail", "data-nr-switch-drop", "data-ofonod-only", "data-throughput-trap"},
     "sim": {"sim-euicc-isdr-absent", "sim-openchannel-busy-race", "sim-simio-ril-result"},
     "network": {"network-nrmode-modem-reject", "network-radio-off-queries"},
     "call": {"call-csfb-cs-unregistered", "call-dial-modem-reject", "call-ecall-msd-lines-missing", "call-epsfb-after-apm"},
-    "sms": {"sms-ims-svc-reject", "sms-send-no-vendor-lines"},
+    "sms": {"sms-ims-path-reject", "sms-send-no-vendor-lines"},
     "ims": {"ims-401-then-registered", "ims-reg-403-no-retry"},
     "modem": {"modem-oos-dm-drop", "modem-reset-net-chain"},
 }
@@ -174,8 +174,8 @@ def test_modules_yaml_strict_valid():
     doc = sc.load_modules_yaml((TEMPLATES / "modules.yaml").read_bytes())
     assert doc["schema_version"] == 2
     assert sc.validate_modules(doc, strict=True) == []
-    assert "ENT" in doc["platforms"]["ofono"]["modules"]["network"]["daemons"]     # 결정 기록 11/05 ①
-    assert "PTD" in doc["platforms"]["ofono"]["modules"]["network"]["daemons"]
+    assert "networkd" in doc["platforms"]["ofono"]["modules"]["network"]["daemons"]     # 결정 기록 11/05 ①
+    assert "networkd" in doc["platforms"]["ofono"]["modules"]["network"]["daemons"]
     for platform in ("ofono", "android"):
         assert doc["platforms"][platform]["common"]["filter"], platform
 
@@ -312,17 +312,20 @@ def test_gitignore_module_lines():
 # 데몬 역할 표(C1D 보정 §3.1·§3.4). 머리 줄은 글자 그대로, 역할 어휘는 고정(모듈 문서는 역할 글자로만 부른다)
 ROLE_HEAD = "| 역할 | 지금 이름 | 구 이름 | 층 | 비고 |\n|---|---|---|---|---|\n"
 ROLES = {
-    "ofono": {"oFono 코어", "벤더 RIL", "UI·시험 클라이언트", "데이터 관리 데몬", "라우팅 데몬", "eSIM 관리 데몬",
-              "eUICC 프로필 데몬", "무선 상태 데몬", "위성 entitlement 데몬", "IMS 서비스 데몬", "진단 중계 데몬",
-              "NV 파일 데몬", "모뎀 감시 데몬", "잡음"},
-    "android": {"벤더 RIL", "RIL HAL 서비스", "SIM HAL", "무선 상태 알림", "벤더 IMS", "시험 장비 AT 중계",
-                "모뎀 진단·NV", "벤더 도우미"},
+    "ofono": {"oFono 데몬(upstream)", "관리 데몬 placeholder", "벤더 RIL 데몬 placeholder", "데이터 구성요소 placeholder",
+              "데이터 구성요소 두 번째 placeholder", "SIM 구성요소 placeholder", "네트워크 구성요소 placeholder",
+              "IMS 구성요소 placeholder", "노이즈 placeholder"},
+    "android": {"벤더 RIL 데몬", "벤더 텔레포니 서비스", "벤더 IMS", "모뎀/IPC", "벤더 프레임워크 태그"},
 }
+NOISE_ROLE = "노이즈 placeholder"
+# 카테고리 힌트 행(지금 이름 칸이 `{{site:<cat>}}` 마커): 사내 스냅샷이 덮어쓸 자리. 이름 검사에서는 뺀다
+SITE_HINTS = {"ofono": {*OFONO_MODULES, "common", "noise"}, "android": set()}
 ROLE_NAME_EXEMPT = {"ofono": {"ofonod"}, "android": {"RIL"}}   # 층 이름이기도 한 이름(§3.2 예외)
 PLATFORMS = ("ofono", "android")
 
 
-def _role_rows(platform: str) -> list[list[str]]:
+def _role_rows(platform: str, *, markers: bool = False) -> list[list[str]]:
+    """역할 표 행. `markers=False`면 `{{site:` 마커 행(카테고리 힌트)을 뺀다."""
     text = (TEMPLATES / platform / "_common" / "components.md").read_text(encoding="utf-8")
     assert ROLE_HEAD in text, platform
     rows = []
@@ -330,7 +333,7 @@ def _role_rows(platform: str) -> list[list[str]]:
         if not line.startswith("|"):
             break
         rows.append([c.strip() for c in line.strip().strip("|").split("|")])
-    return rows
+    return rows if markers else [r for r in rows if "{{site:" not in r[1]]
 
 
 def _names(cell: str) -> list[str]:
@@ -340,14 +343,14 @@ def _names(cell: str) -> list[str]:
 def _role_names(platform: str, *, old: bool = True, noise: bool = True) -> list[str]:
     out = []
     for role, now, before, *_ in _role_rows(platform):
-        if role == "잡음" and not noise:
+        if role == NOISE_ROLE and not noise:
             continue
         out += _names(now) + (_names(before) if old else [])
     return out
 
 
 def _name_rx(name: str) -> str:
-    """끝이 `-`·`*`면 앞 글자 일치(`ShannonNS-`, `UiccHal-*`), 아니면 낱말 경계."""
+    """끝이 `-`·`*`면 앞 글자 일치(`VRIL-NETWORK`, `UiccHal-*`), 아니면 낱말 경계."""
     name = name.removesuffix("*")
     if name.endswith("-"):
         return rf"(?<![\w-]){re.escape(name)}\w*"
@@ -362,12 +365,16 @@ def test_components_role_table():
             assert len(row) == 5 and row[0] and _names(row[1]), (platform, row)
         assert {r[0] for r in rows} == ROLES[platform], platform
         assert len({r[0] for r in rows}) == len(rows), platform
+        hints = [r for r in _role_rows(platform, markers=True) if "{{site:" in r[1]]
+        for row in hints:
+            assert len(row) == 5 and row[1] == "{{site:%s}}" % row[0].split()[0], (platform, row)
+        assert {r[0].split()[0] for r in hints} == SITE_HINTS[platform], platform
         names = _role_names(platform)
         assert len(names) == len(set(names)), (platform, sorted(n for n in names if names.count(n) > 1))
 
 
 def test_module_docs_use_roles():
-    """`_common` 밖 모듈 문서는 데몬·벤더 태그 이름 대신 역할 글자를 쓴다(§3.2). 값 이름(`NMD_*`)은 `_`가 이어져 걸리지 않는다."""
+    """`_common` 밖 모듈 문서는 데몬·벤더 태그 이름 대신 역할 글자를 쓴다(§3.2). 값 이름(`DATAD_*`)은 `_`가 이어져 걸리지 않는다."""
     for platform in PLATFORMS:
         rxs = [(n, re.compile(_name_rx(n))) for n in _role_names(platform) if n not in ROLE_NAME_EXEMPT[platform]]
         for path in sorted((TEMPLATES / platform).rglob("*.md")):
@@ -472,7 +479,7 @@ def test_generator_modem_also_case():
     deep = json.loads((case / "files" / "deep-input.json").read_text(encoding="utf-8"))
     assert deep["module"] == "ofono/network" and deep["top_candidates"][0]["cause"] == "NETWORK-001-01"
     timeline = (case / "files" / "timeline.md").read_text(encoding="utf-8")
-    assert re.search(r"run_modem_monitor : modem (reset|state changed)", timeline)
+    assert re.search(r"RADIO_STATE_CHANGED \(state: UNAVAILABLE\)", timeline)
 
 
 def _gen(*args) -> subprocess.CompletedProcess:
@@ -519,7 +526,7 @@ def test_android_plain_variant_strips_vendor_block(tmp_path):
     assert tags.read_text(encoding="utf-8") == p_tags and ril.read_text(encoding="utf-8") == p_ril
     base_tags, base_ril = p_tags, p_ril
     tags.write_text(base_tags + "\n" + mv.ANDROID_VENDOR_BLOCK + " — 사내 DB 미확인 ---\n"
-                    "  - {tag_regex: '^VCD$', category: common, added_for: '-', added_on: 2026-11-05, reason: x}\n",
+                    "  - {tag_regex: '^VRIL-MODEM$', category: common, added_for: '-', added_on: 2026-11-05, reason: x}\n",
                     encoding="utf-8")
     ril.write_text(base_ril.replace("unsolicited:\n", "unsolicited:\n  - {name: UNSOL_DATA_CALL_LIST_UPDATED, "
                                     "category: data, added_for: '-', added_on: 2026-11-05, reason: x}\n", 1),

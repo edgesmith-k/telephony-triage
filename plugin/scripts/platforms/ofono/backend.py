@@ -18,6 +18,8 @@ android reference 백엔드(`platforms/android/backend.py`)와 같은 구조(파
   캐시 키(`compiled.environment` → `source_hash`)에 들어가므로 올린다.
 - 0.0.5: 레벨 보정·벤더 IPC 판별 대상이 코드 상수에서 구성요소 설정(`level_unreliable`·`vendor_ipc`)으로 — 설정이
   없으면 보정·판별 없음(0.0.4와 출력이 다를 수 있어 버전을 올린다).
+- 0.0.6: 벤더 IPC 요청 완료 줄의 사내 토큰이 코드 상수에서 site-defaults `vendor_ipc`(기본 placeholder)로 — 설정이
+  없으면 그 줄의 builtin이 0.0.5와 다를 수 있다.
 - builtin 판별(H C1 R12): 구성요소 `vendor_ipc: true`(site-defaults, TODO(SITE:S25))인 ident 줄에
   `common.vendor_ipc.detect`를 부른다 → `builtin.common.vendor_ipc_error`·`builtin.common.vendor_request_failed`.
   그 밖 ident 줄은 판별하지 않는다. 이슈 DB tags.yaml에 `ipc: vendor`가 하나라도 있으면 그 태그만 본다
@@ -40,7 +42,7 @@ from parser_backends.base import ParserBackend, TagAttrSet, Window
 from . import SPEC
 from .journal import DEFAULT_LEVEL
 
-VERSION = "0.0.5"
+VERSION = "0.0.6"
 # split_tag 하위 식별: 글자로 시작하는 식별자 모양만 tag에 붙인다(숫자로 시작하는 값·공백·`:`·`/`는 나누지 않음)
 SUBTAG_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
 
@@ -59,6 +61,7 @@ class OfonoReferenceBackend(ParserBackend):
     _default_vendor_ipc: frozenset = frozenset()
     _level_unreliable = TagAttrSet(None, "level", "unreliable", frozenset())
     _vendor_ipc = TagAttrSet(None, "ipc", "vendor", frozenset())
+    _ipc = vendor_ipc.DEFAULT    # `<블록>.vendor_ipc`(벤더 IPC 줄의 사내 토큰)
 
     @staticmethod
     def _component_map(components, spec) -> dict:
@@ -78,6 +81,7 @@ class OfonoReferenceBackend(ParserBackend):
         other._default_vendor_ipc = frozenset(i for c in profile.components if c.vendor_ipc for i in c.idents)
         other._level_unreliable = TagAttrSet(None, "level", "unreliable", other._default_level_unreliable)
         other._vendor_ipc = TagAttrSet(None, "ipc", "vendor", other._default_vendor_ipc)
+        other._ipc = profile.vendor_ipc
         return other
 
     def apply_rules(self, rules) -> OfonoReferenceBackend:
@@ -103,7 +107,7 @@ class OfonoReferenceBackend(ParserBackend):
         tag = record.get("tag") or ""
         if not self._vendor_ipc(tag, tag.split("/", 1)[0]):
             return []
-        return vendor_ipc.detect(record.get("msg") or "")
+        return vendor_ipc.detect(record.get("msg") or "", self._ipc)
 
     def _annotate(self, tag: str, msg: str) -> dict | None:
         for proto, tags in self._protocols:

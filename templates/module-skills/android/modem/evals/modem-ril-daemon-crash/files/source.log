@@ -5,7 +5,7 @@
 09-06 16:00:02.510  2101 2142 D RILJ    : [0350]< GET_CURRENT_CALLS error 1 [PHONE0]
 09-06 16:00:02.511  2101 2142 D RILJ    : [0351]< GET_SIGNAL_STRENGTH error 1 [PHONE0]
 09-06 16:00:02.600  1830 1910 V OemRil  : notifyRadioStateChanged: newState=RADIO_UNAVAILABLE
-09-06 16:00:04.000  1190 1190 I RIL     : RilApplication::GetInstance
-09-06 16:00:04.010  1190 1190 I RIL     : [RilContext_0] OnRequest
+09-06 16:00:04.000  1190 1190 I RIL     : IpcApplication::GetInstance
+09-06 16:00:04.010  1190 1190 I RIL     : [IpcCtx_0] OnRequest
 09-06 16:00:05.000  1830 1910 V OemRil  : notifyRadioStateChanged: newState=RADIO_ON
 09-06 16:00:06.000  1190 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009

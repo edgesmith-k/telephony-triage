@@ -289,9 +289,9 @@ def test_bare_cid_is_never_masked():
         "android.hardware.radio.data.SetupDataCallResult{cause: 0, suggestedRetryTime: -1, cid: 3, active: 2}",  # AIDL
         "SetupDataCallResult{.cause = NONE, .suggestedRetryTime = -1, .cid = 1, .active = 2}",                    # HIDL
         "DataCallResponse: { cause=NONE retry=-1 cid=1 linkStatus=2 ifname=rmnet0 ... cid=5678",          # 잘린 객체 뒤쪽
-        "PdpContext{cid=1 apn=placeholder state=ACTIVE}", "PdpContext {cid=0x2}", "## PdnInfo: cid=3", "PdnInfo cid: 6",
+        "DemoPdp{cid=1 apn=placeholder state=ACTIVE}", "DemoPdp {cid=0x2}", "## PdnInfo: cid=3", "PdnInfo cid: 6",
         "PDN_INFO_EXT cid=4 type=IPV4V6", "PDN_INFO_EXT (cid=5, state=1)", "PDN_INFO cid=7",
-        "X_PDN_INFO_EXT cid=4", "X_PDN_INFO_EXT (cid=5)", "PDN_INFO_CELL cid=12345", "mPdpContext{cid=1}",  # 접두·목록 밖 이름
+        "X_PDN_INFO_EXT cid=4", "X_PDN_INFO_EXT (cid=5)", "PDN_INFO_CELL cid=12345", "mDemoPdp{cid=1}",  # 접두·목록 밖 이름
         "data network connected: cid=1",
     ]
     for text in keep:
@@ -311,7 +311,7 @@ def test_cell_location_keys_still_masked_beside_bare_cid():
     assert masking.new_masker()("mCid=5678") == "mCid=<CELL#1>"
     assert masking.new_masker()('{"mCid":5678, "cid":1}') == '{"mCid":<CELL#1>, "cid":1}'
     assert masking.new_masker()("PdnInfo: mCid=9 cellId=8 cid=1") == "PdnInfo: mCid=<CELL#1> cellId=<CELL#2> cid=1"
-    assert masking.new_masker()("PdpContext{cid=1 apn=x} lac=1234 ci=5678") == "PdpContext{cid=1 apn=x} lac=<CELL#1> ci=<CELL#2>"
+    assert masking.new_masker()("DemoPdp{cid=1 apn=x} lac=1234 ci=5678") == "DemoPdp{cid=1 apn=x} lac=<CELL#1> ci=<CELL#2>"
     assert masking.new_masker()("cid=5 lac=7") == "cid=5 lac=<CELL#1>"
     found = masking.new_masker().find("cid=1 mCid=2")
     assert [(f["kind"], f["start"]) for f in found] == [("CELL", len("cid=1 mCid="))]
@@ -358,12 +358,12 @@ def test_sip_digest_folded_header_still_masked():
 
 def test_m12_cpp_scope_not_ip():
     """M12: 문맥 없는 IPv6 규칙의 앞뒤 경계가 낱말 문자 전부라 C++ 범위(`<이름>_<n>::<함수>`)는 IP가 아니다.
-    주소는 그대로 가린다. 마스킹한 줄에서도 모듈 필터의 `MiscService_<n>::` 잡음 정규식이 맞는다. (벤더 모양을 본뜬 합성 줄)"""
+    주소는 그대로 가린다. 마스킹한 줄에서도 모듈 필터의 `DemoService_<n>::` 잡음 정규식이 맞는다. (벤더 모양을 본뜬 합성 줄)"""
     keep = [
-        "[MiscService_0::OnHandleRequest] request done",
-        "[ImsService_1::OnUNSOL_AIMS_REGISTRATION] Ims Registration : TRUE",
+        "[DemoService_0::OnDemoRequest] request done",
+        "[ImsService_1::OnUNSOL_DEMO_REGISTRATION] Ims Registration : TRUE",
         "V2_4::RadioDataProxy::setupDataCall",
-        "SetupDataCallCommand_V2_4::onRequest",
+        "DemoCallCommand_V2_4::onRequest",
     ]
     for text in keep:
         assert masking.new_masker()(text) == text, text
@@ -372,8 +372,20 @@ def test_m12_cpp_scope_not_ip():
     for text in ("fe80::1", "2001:db8::7", "a=::1", "addr fe80::1", "[fe80::1]"):
         out = masking.new_masker()(text)
         assert "<IP#1>" in out and "::" not in out, (text, out)
-    masked = masking.new_masker(log_lines=True)("Nov  1 10:00:01 host exynos-ril[901]: [MiscService_0::OnHandle] x")
-    assert re.search(r"MiscService_\d+::", masked), masked
+    masked = masking.new_masker(log_lines=True)("Nov  1 10:00:01 host vrild[901]: [DemoService_0::OnHandle] x")
+    assert re.search(r"DemoService_\d+::", masked), masked
+
+
+def test_product_modem_code_context_is_any_lowercase_tag():
+    """M6 모뎀 모델 코드 `m<4자리>`(로그 줄 전용): 문맥은 소문자 커널/벤더 태그 줄(` <tag>:`)이고 특정 태그 이름을 두지 않는다
+    (이전 문맥 = 한 태그 이름 → 그 태그를 포함하는 넓은 문맥, 과잉 허용). 대문자 태그·`:` 없는 줄·일반 마스커는 그대로. (합성 줄)"""
+    for tag in ("modemif", "abc_drv", "x1"):
+        line = f"08-09 13:10:57.528     0     0 I {tag:<8}: modem m1234 boot"
+        assert masking.new_masker(log_lines=True)(line) == line.replace("m1234", "<PRODUCT#1>"), tag
+    assert masking.new_masker(log_lines=True)("<6>[  1.0] C1] modemif: m5678 up") == "<6>[  1.0] C1] modemif: <PRODUCT#1> up"
+    for line in ("08-09 13:10:57.528  10  10 I MODEM   : modem m1234 boot", "modem m1234 boot"):
+        assert masking.new_masker(log_lines=True)(line) == line, line
+    assert masking.new_masker()("08-09 13:10:57.528     0     0 I modemif : modem m1234 boot").endswith("m1234 boot")
 
 
 def test_pin_puk_values_need_four_digits():
@@ -852,18 +864,18 @@ def test_cut_evidence_cause_errors():
     assert proc.returncode == 2 and "--cause" in proc.stderr
 
 
-# --- M1~M11: 첨부 실제 로그 기준 로그 마스킹 규칙 (B2 §3.2~§3.4) ---------------------------------------------
+# --- M1~M11: 로그 표본 기준 로그 마스킹 규칙 (B2 §3.2~§3.4) ---------------------------------------------
 # (입력, 결과에 있어야 할 토큰, 결과에 없어야 할 원래 값, log_only 여부). 값은 모두 합성이다.
 M_IMSI = "45005" + "1234567890"          # 합성 15자리(경계 검사의 긴 숫자 패턴을 피해 나눠 쓴다)
 M_POSITIVE = [
     ("ofonod[1]: gril: Device 0: < 89 82 10 31 00 00 00 00 00 00 00 00 00 00 00 01  ................",
      "<HEXDUMP 16B>", "89 82 10", True),                                                               # M1 gril
-    ("I cpif    : IPC: RX: 0a 1b 2c 3d 4e 5f", "<HEXDUMP 6B>", "0a 1b 2c", True),                     # M1 hex 줄
+    ("I modemif : IPC: RX: 0a 1b 2c 3d 4e 5f", "<HEXDUMP 6B>", "0a 1b 2c", True),                     # M1 hex 줄
     # M1 바이트 뒤 짧은 꼬리(재리뷰 P1): 잘림 표시·길이·태그
-    ("<6>[  1.0] C1] cpif: LNK-RX(12): 45 00 00 54 12 34 40 00 40 01 f6 0a ...", "<HEXDUMP 12B>", "45 00 00 54", True),
+    ("<6>[  1.0] C1] modemif: LNK-RX(12): 45 00 00 54 12 34 40 00 40 01 f6 0a ...", "<HEXDUMP 12B>", "45 00 00 54", True),
     ("I SIM     : sim_read_cb: 98 10 32 54 76 98 10 32 54 f6 (len 10)", "<HEXDUMP 10B>", "98 10 32 54", True),
     ("I SIM     : rsp: 0a 1b 2c 3d [SUB0]", "<HEXDUMP 4B>", "0a 1b 2c", True),
-    ("I cpif    : LNK-TX(64): 60 00 00 00 00 20 06 40 \u2026", "<HEXDUMP 8B>", "60 00 00 00", True),
+    ("I modemif : LNK-TX(64): 60 00 00 00 00 20 06 40 \u2026", "<HEXDUMP 8B>", "60 00 00 00", True),
     # M1 `:` 바로 뒤가 아닌 바이트 8개 이상 연속(재리뷰 P1)
     ("I RILD    : [SLOT_1][V] 0123 1 0a 1b 2c 3d 4e 5f 60 71 82", "<HEXDUMP 9B>", "0a 1b 2c", True),
     ("I RILD    : Helper sendRequest] 0a 1b 2c 3d 4e 5f 60 71 ", "<HEXDUMP 8B>", "4e 5f 60", True),
@@ -877,7 +889,7 @@ M_POSITIVE = [
     ('I DNSRES  : {"dns_addresses": [10, 0, 0, 1]}', "[<IP#1>]", "10, 0, 0, 1", False),               # M5
     ("I MODEM   : Build Info : ABC123XYZ", "<BUILD#1>", "ABC123XYZ", True),                            # M6
     ("I MODEM   : commit ID:0a1b2c3d4e", "<BUILD#1>", "0a1b2c3d4e", True),
-    ("08-09 13:10:57.528     0     0 I cpif    : modem m1234 boot", "<PRODUCT#1>", "m1234", True),
+    ("08-09 13:10:57.528     0     0 I modemif : modem m1234 boot", "<PRODUCT#1>", "m1234", True),
     ("08-09 13:10:57.528     0     0 I kernel  : panel X1234AB ready", "<PRODUCT#1>", "X1234AB", True),
     ('ofonod[2]: "Revision", variant("REV-MOCK-01")', "<PRODUCT#1>", "REV-MOCK-01", True),
     ("I init    : [ro.product.model]: [MOCK-PHONE]", "<PRODUCT#1>", "MOCK-PHONE", True),
@@ -900,14 +912,14 @@ M_POSITIVE = [
     ("D X       : seq 1234567890123456789 done", "<NUM#1>", "1234567890123456789", True),
     ("Sep 20 14:32:11 mockhost ofonod[812]: hello", "host1", "mockhost", True),                       # M11
     ("2026-09-20T14:32:11.123+0900 mockhost ofonod[812]: hello", "host1", "mockhost", True),
-    ("Feb 27 17:28:20.119 mockhost daemon.info ofonod[464]: hello", "host1", "mockhost", True),
+    ("Sep 21 09:41:07.356 mockhost daemon.info ofonod[812]: hello", "host1", "mockhost", True),
 ]
 
 M_NEGATIVE = [
     "D Rx      : com.example.Foo$$Lambda$12/0x0000000801234567 apply",
     "D RILJ    : [0163]> SIM_IO RIL_REQUEST_SIM_IO",
     "D RILJ    : SIM_IO IccIoResult sw1 90 sw2 00",
-    "I RILC    : SIT_SET_DATA_PROFILE done",
+    "I VRIL    : SIT_DEMO_SET done",
     "I DEV     : serial short ABC12",
     "ofonod[2]: /ril_0/context1 Active=true",
     "ofonod[2]: org.ofono.ConnectionContext.PropertyChanged",
@@ -917,7 +929,7 @@ M_NEGATIVE = [
     "D UICC    : aid A0000000871002FFFFFFFFFF89060000 selected",
     "D X       : handle 0x00007f1234567890 ok",
     "Sep 20 14:32:11 dut ofonod[812]: hello",
-    "Feb 27 17:28:20.119 (none) daemon.info ofonod[464]: hello",
+    "Sep 21 09:41:07.356 (none) daemon.info ofonod[812]: hello",
     "D X       : time: 12 34 56 78 seconds left",                          # 짧은 꼬리 목록 밖 낱말은 덤프 아님
     "D X       : rsp: 0a 1b 2c 3d [not a tag]",
     "D X       : seven 0a 1b 2c 3d 4e 5f 60 only",                         # `:` 없이 바이트 7개는 덤프 아님
@@ -960,7 +972,7 @@ def test_m11_masked_lines_still_parse():
 
     for text, regex in (("Sep 20 14:32:11 mockhost ofonod[812]: hello", journal.BSD_RE),
                         ("2026-09-20T14:32:11.123+0900 mockhost ofonod[812]: hello", journal.ISO_RE),
-                        ("Feb 27 17:28:20.119 mockhost daemon.info ofonod[464]: hello", journal.BUSYBOX_RE)):
+                        ("Sep 21 09:41:07.356 mockhost daemon.info ofonod[812]: hello", journal.BUSYBOX_RE)):
         masked = masking.new_masker(log_lines=True).mask(text)
         m = regex.match(masked)
         assert m and m.group("host") == "host1" and m.group("ident") == "ofonod" and m.group("pid"), masked

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """샘플 DB의 벤더 RIL 태그 묶음(사내 확인 전) (결정 기록 11/05 ①·②, 설계 D §3.1).
 
-- 승인 목록 78개 중 기존 정규식이 덮지 않는 59개(보류였던 `^GsmCdmaCallTracker$`는 11/05 ① 승인대로 C1+D 보정에서
-  넣음)가 정해진 카테고리로 있고, 표식 주석 아래 파일 끝에 있다. 미수집 태그 예시(eval e004·`test_triage`)는
+- 기존 정규식이 덮지 않는 승인 태그(보류였던 `^GsmCdmaCallTracker$`는 11/05 ① 승인대로 C1+D 보정에서 넣음, 벤더 태그는
+  placeholder `VRIL*`)가 정해진 카테고리로 있고, 표식 주석 아래 파일 끝에 있다. 미수집 태그 예시(eval e004·`test_triage`)는
   `GsmCdmaConnection`이며 샘플 tags.yaml 어느 항목에도 걸리지 않는다.
 - `ril.yaml` unsolicited에 `UNSOL_DATA_CALL_LIST_UPDATED`(data)가 있다.
 - Android 모듈 템플릿 case 로그와 `tests/fixtures/module-filter/a-e*` 로그의 어떤 태그도
@@ -34,20 +34,20 @@ MARKER = make_variant_dbs.ANDROID_VENDOR_BLOCK
 PLAIN = "issue-db-android-plain"
 
 APPROVED = {
-    "common": [r"^(RIL|RILC|RILC-AIDL_SERVICE|RIL_EXTERNAL)$", r"^RilRequest$", r"^VCD$", r"^DMD$", r"^RFSD$",
+    "common": [r"^(RIL|VRIL|VRIL-SVC)$", r"^RilRequest$", r"^VRIL-MODEM$",
                r"^SCED$", r"^OemRil", r"^PhoneCfgMgr$", r"^RadioConfig$", r"^RadioConfigResponseAidl$"],
     "data": [r"^ADSC$", r"^ANM-\d+$", r"^ConnectivityService$", r"^DataServiceCallback$", r"^PhoneSwitcher$",
-             r"^QOSCT-\d+$", r"^TNA-\d+$", r"^TNP$", r"^ShannonDS-RM", r"^ShannonQNS"],
+             r"^QOSCT-\d+$", r"^TNA-\d+$", r"^TNP$", r"^VRIL-DATA$"],
     "sim": [r"^CAT$", r"^IsimUiccRecords$", r"^MultiSimSettingController$", r"^SIMRecords$",
             r"^SecureElement-Terminal-SIM\d$", r"^UiccCard$", r"^UiccCardApplication( \[\d+\])?$",
             r"^UiccHal-(SE|Interface)$", r"^UiccProfile( \[\d+\])?$", r"^UiccSlot$", r"^UsimFH$"],
     "network": [r"^CSST$", r"^CellularNetworkService$", r"^DIC-\d+$", r"^ExSST$", r"^LocaleTracker-\d+$",
-                r"^NRM-[CI]-\d+$", r"^NetworkTypeController$", r"^NitzStateMachineImpl$", r"^ShannonNS-"],
+                r"^NRM-[CI]-\d+$", r"^NetworkTypeController$", r"^NitzStateMachineImpl$", r"^VRIL-NETWORK$"],
     "call": [r"^GsmCdmaCallTracker$", r"^CallManager$", r"^CallNotifier$", r"^CallWaitingCtrl$", r"^ImsUt$",
              r"^MMIDialogActivity$", r"^Telecom$"],
     "sms": [r"^CellBroadcastConfigTracker-\d+$", r"^ImsSmsDispatcher( \[\d+\])?$", r"^SMSDispatcher$"],
     "ims": [r"^ImsConfig$", r"^ImsEnablementTracker$", r"^ImsProvisioning", r"^ImsRIL$", r"^ImsRegCallbackHelper$",
-            r"^ImsStateCallbackController$", r"^ImsStats$", r"^SHANNON_IMS$", r"^ShannonVCC"],
+            r"^ImsStateCallbackController$", r"^ImsStats$", r"^VRIL-IMS$"],
 }
 APPROVED_UNSOL = ("UNSOL_DATA_CALL_LIST_UPDATED", "data")
 UNCOLLECTED_EXAMPLE = "GsmCdmaConnection"  # e004·test_triage·test_parse_logcat의 미수집 태그 예 — 샘플에 없어야 한다
@@ -73,7 +73,7 @@ def _log_tags() -> set[str]:
 
 
 def test_approved_block_present() -> None:
-    assert sum(len(v) for v in APPROVED.values()) == 59
+    assert sum(len(v) for v in APPROVED.values()) == 55
     have = {e.get("tag_regex") or e.get("tag"): e for e in _entries(SAMPLE_RULES)}
     for category, regexes in APPROVED.items():
         for rx in regexes:

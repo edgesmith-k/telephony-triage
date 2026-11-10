@@ -7,7 +7,7 @@ key: MOCK-9201
 issue:
   summary: 'SIM 파일을 읽지 못한다는 오류가 남'
   description: 'SIM 파일 읽기 오류 로그가 남습니다.'
-  occurred_at: '2026-02-27T17:28:15+0000'
+  occurred_at: '2026-09-22T09:10:20+0000'
   platform_version: '2'
   sim_slot: '0'
 parse: {tz: UTC, year: 2026, minutes: 5}
@@ -20,8 +20,8 @@ run_expect:
   top_cause: SIM-001-01
   C: 1
 expect:
-  layer: '벤더 RIL|exynos-ril'
-  daemon: 'exynos-ril'
-  evidence: ['SIT_SIM_IO, RSP.*OK\(RCM_E_SUCCESS\)', 'OnRequestComplete Request ID=\d+, result=2']
+  layer: '벤더 RIL|vrild'
+  daemon: 'vrild'
+  evidence: ['SIT_SIM_IO, RSP.*OK\(RCM_E_SUCCESS\)', 'OnIpcComplete Request ID=\d+, result=2']
   trap: null
-  wrong_layer: ['^\s*(모뎀|망|ofonod|관리 데몬|D-Bus|MOSE|그\s*층|원인\s*아님)']
+  wrong_layer: ['^\s*(모뎀|망|ofonod|관리 데몬|D-Bus|mgmtd|그\s*층|원인\s*아님)']

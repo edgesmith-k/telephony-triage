@@ -21,7 +21,7 @@ run_expect:
   C: 1
 expect:
   layer: '모뎀|망'
-  daemon: 'SHANNON_IMS|벤더 IMS'
+  daemon: 'VRIL-IMS|벤더 IMS'
   evidence: ['code=403', 'status-code : 403']
   trap: null
   wrong_layer: ['^\s*(프레임워크|ImsManager|ImsRegistration|RILJ|벤더 RIL)']

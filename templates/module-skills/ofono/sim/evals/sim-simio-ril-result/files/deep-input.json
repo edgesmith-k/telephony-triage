@@ -14,7 +14,7 @@
   }
  ],
  "issue_summary": "SIM 파일을 읽지 못한다는 오류가 남",
- "occurred_at": "2026-02-27T17:28:15+00:00",
+ "occurred_at": "2026-09-22T09:10:20+00:00",
  "events": "events.json",
  "timeline": "timeline.md",
  "log_paths": [

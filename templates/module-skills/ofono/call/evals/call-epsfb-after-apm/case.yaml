@@ -7,7 +7,7 @@ key: MOCK-9402
 issue:
   summary: 'VoLTE 통화가 안 된다는 EPSFB failed 로그'
   description: 'EPSFB failed 로그가 있어 VoLTE 통화가 안 되는 것 같습니다.'
-  occurred_at: '2026-02-27T17:51:52+0000'
+  occurred_at: '2026-09-22T09:40:20+0000'
   platform_version: '2'
   sim_slot: '0'
 parse: {tz: UTC, year: 2026, minutes: 5}

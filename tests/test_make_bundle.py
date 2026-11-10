@@ -498,12 +498,41 @@ def test_push_command_uses_single_remote_name(repo, tmp_path):
     assert f"git push <remote> {LABEL}" in mb.format_text(res)
 
 
-def test_on_remote_main_false_on_feature_branch(repo, tmp_path):
-    """R-23: 기능 브랜치에서 만든 묶음은 원격 main에 없다고 보고한다 (종료 코드는 그대로)."""
+def test_on_release_branch_false_on_feature_branch(repo, tmp_path):
+    """R-23: 원격 기준 브랜치에 병합되지 않은 커밋에서 만든 묶음은 경고만 한다 (종료 코드는 그대로)."""
     _git(repo, "switch", "-q", "-c", "feature")
     res = mb.run(repo, LABEL, tmp_path / "out", checks=fake_checks())
-    assert res["exit_code"] == 3 and res["on_remote_main"] is False
-    assert "HEAD가 원격 main에 없습니다" in mb.format_text(res)
+    assert res["exit_code"] == 3 and res["on_release_branch"] is False and "on_remote_main" not in res
+    assert "fetch 뒤 `stable`(반입 기준 브랜치)에 병합된 커밋에서" in mb.format_text(res)
+
+
+def _bare_remote(repo: Path, tmp_path: Path, name: str, branch: str) -> None:
+    """`name` 원격(빈 bare)을 붙이고 HEAD를 `branch`로 push한 뒤 원격 추적 브랜치를 받는다."""
+    bare = tmp_path / f"{name}.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True, capture_output=True)
+    _git(repo, "remote", "add", name, str(bare))
+    _git(repo, "push", "-q", name, f"HEAD:refs/heads/{branch}")
+    _git(repo, "fetch", "-q", name)
+
+
+def test_on_release_branch_with_two_remotes(repo, tmp_path):
+    """make_bundle `on_release_branch`: 원격이 둘이어도 HEAD를 담은 원격 추적 브랜치 이름이 정확히 `stable`·`main`이면 참.
+    현재 로컬 브랜치 이름은 상관없고, `<remote>/x/main` 같은 이름은 세지 않는다."""
+    _bare_remote(repo, tmp_path, "dev", "feature-x")          # 기준 브랜치가 아닌 원격 브랜치만 → 거짓
+    _git(repo, "push", "-q", "dev", "HEAD:refs/heads/x/main")  # 끝만 main인 다른 브랜치 → 거짓
+    _git(repo, "fetch", "-q", "dev")
+    assert mb.on_release_branch(repo) is False
+    _bare_remote(repo, tmp_path, "telephony", "stable")
+    _git(repo, "switch", "-q", "-c", "work")                  # 로컬 브랜치가 main이 아니어도 된다
+    res = mb.run(repo, LABEL, tmp_path / "out", checks=fake_checks())
+    assert res["on_release_branch"] is True and res["remote"] == "<remote>"
+    assert "경고: HEAD가" not in mb.format_text(res)
+    (repo / "README.md").write_text("changed\n", encoding="utf-8")   # 원격에 없는 새 커밋 → 거짓
+    _git(repo, "commit", "-q", "-am", "local")
+    assert mb.on_release_branch(repo) is False
+    _git(repo, "push", "-q", "dev", "HEAD:refs/heads/main")    # 다른 원격의 main에 있으면 참
+    _git(repo, "fetch", "-q", "dev")
+    assert mb.on_release_branch(repo) is True
 
 
 def test_checks_use_target_repo_tools(repo, tmp_path, monkeypatch):

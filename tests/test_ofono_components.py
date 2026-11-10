@@ -1,6 +1,7 @@
 """oFono 다중 구성요소(데몬) 틀 (17-platforms §9). **합성·형식 가정·placeholder**만 쓴다(`daemon-a`·`daemon-b`).
 
-- 레지스트리: `components`(기본·덮어쓰기·오류), android는 `components`를 받지 않음, 설정 정의 짝 규칙(`kind: regex`)
+- 레지스트리: `components`(기본·덮어쓰기·오류), android는 `components`를 받지 않음, 설정 정의 짝 규칙(`kind: regex`),
+  `vendor_ipc` 블록(두 플랫폼, 검증)
 - `regex` kind: 데몬 사이(다른 pid·tag) 짝, `observed_until` = 수집 구간 끝, 이름 채우기, 나중 요청이 대신함
 - `msg_format`: 앞머리를 뗀 본문으로 짝 규칙을 본다(이벤트 `msg`는 원문), `split_tag` → tag `ident/subtag`,
   벤더 앞머리 모양 4개(`tid_file_paren`·`level_tid_file`·`slot_level_seq`·`src_suffix`), 마스킹본(C++ 함수 칸 토큰)도 같은 결과
@@ -142,6 +143,35 @@ def test_component_errors(components, path, why):
 def test_component_errors_checked_even_when_loading_android():
     with pytest.raises(PlatformConfigError, match="platform.others.ofono.components.a.idents"):
         platforms.load(_defaults(components={"a": {"idents": []}}))
+
+
+def test_vendor_ipc_block_both_platforms():
+    """`<블록>.vendor_ipc`(벤더 IPC 요청 완료 줄의 사내 토큰, 17-platforms §9): 두 플랫폼 모두 받고, 생략 키는 placeholder 기본."""
+    from common import vendor_ipc
+
+    assert all("vendor_ipc" in platforms.get(n).block_keys for n in ("android", "ofono"))
+    assert platforms.load({}).vendor_ipc == vendor_ipc.DEFAULT == _load().vendor_ipc
+    assert platforms.default("ofono").vendor_ipc == vendor_ipc.DEFAULT
+    assert _load(vendor_ipc=None).vendor_ipc == vendor_ipc.DEFAULT                  # null = 생략
+    full = _load(vendor_ipc={"context": "SiteCtx_", "complete": "SiteDone"}).vendor_ipc
+    assert (full.context, full.complete) == ("SiteCtx_", "SiteDone")
+    part = platforms.load({"platform": {**ON, "vendor_ipc": {"context": "SiteCtx_"}}}).vendor_ipc
+    assert (part.context, part.complete) == ("SiteCtx_", vendor_ipc.DEFAULT.complete)
+
+
+@pytest.mark.parametrize("value,path,why", [
+    ([], "vendor_ipc", "매핑"),
+    ({"error_prefix": "X_"}, "vendor_ipc.error_prefix", "알 수 없는 키"),
+    ({"context": ""}, "vendor_ipc.context", "식별자"),
+    ({"context": 3}, "vendor_ipc.context", "식별자"),
+    ({"complete": "a b"}, "vendor_ipc.complete", "식별자"),
+    ({"complete": "(.*)"}, "vendor_ipc.complete", "식별자"),
+])
+def test_vendor_ipc_block_errors(value, path, why):
+    msg = _error(vendor_ipc=value)
+    assert f"site-defaults.yaml platform.others.ofono.{path}" in msg and why in msg, msg
+    with pytest.raises(PlatformConfigError, match=f"platform.{re.escape(path)}"):
+        platforms.load({"platform": {**ON, "vendor_ipc": value}})
 
 
 # -- 계약·레지스트리: 설정 정의 짝 규칙 (protocol kinds) ------------------------------------------------
@@ -629,7 +659,7 @@ def _parse(log: Path, rules: Path, ofono: dict | None) -> dict:
 
 def test_parse_cross_daemon_derived_events():
     out = _parse(MULTI_LOG, variant_db("issue-db-ofono") / "parser-rules", {"components": COMPONENTS, "protocols": {"ipc": IPC}})
-    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.5"}
+    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.6"}
     assert out["errors"] == [] and events.validate_events(out["events"]) == []
     derived = [(e["event"], e["tag"], e["fields"]) for e in out["events"] if e["source"] == "rules"]
     assert derived == [                                       # 응답 줄 바로 뒤(ril_error → ril_timeout), 그다음 응답 없음

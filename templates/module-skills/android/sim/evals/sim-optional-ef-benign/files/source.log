@@ -4,28 +4,28 @@
 08-09 13:10:57.421  1856  1856 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED READY reason null for phone: 0 sub: 4
 08-09 13:10:57.421  1856  1856 D IntentBroadcaster: Broadcasting and adding intent for rebroadcast: android.intent.action.SIM_STATE_CHANGED READY for phoneId 0
 -- [생략]
-08-09 13:10:57.554  1096  1165 I RIL     : [RilContext_0] Send 
+08-09 13:10:57.554  1096  1165 I RIL     : [IpcCtx_0] Send 
 08-09 13:10:57.554  1096  1165 V RIL     : [<DEV#1>][TX] SIT_SIM_IO, REQ, 572 bytes, Token(0x00b6)
-08-09 13:10:57.554  1096  1165 I RIL     : SimIoService_0::DoSimIo() [--> 
+08-09 13:10:57.554  1096  1165 I RIL     : UiccFileService_0::DoSimIo() [--> 
 08-09 13:10:57.554  1856  1986 D RILJ    : [0164]< SIM_IO error 2 [PHONE0]
 08-09 13:10:57.555  1856  1986 D RilRequest: [0164]< SIM_IO error: com.android.internal.telephony.CommandException: GENERIC_FAILURE ret=IccIoResult sw1:0x0 sw2:0x0 Payload:  Error: unknown result={ when=-17s583ms what=6 obj=com.android.internal.telephony.uicc.IccFileHandler$LoadLinearFixedContext@ef4b2e1 target=com.android.internal.telephony.uicc.UsimFileHandler async=false heapIndex=-1 }
-08-09 13:10:57.558     0     0 I [    C0] cpif: LNK-RX(544): <HEXDUMP 24B>
-08-09 13:10:57.560  1165  1165 I cpif    : LNK-TX(584): <HEXDUMP 24B>
+08-09 13:10:57.558     0     0 I [    C0] VRIL-LINK: LNK-RX(544): <HEXDUMP 24B>
+08-09 13:10:57.560  1165  1165 I VRIL-LINK    : LNK-TX(584): <HEXDUMP 24B>
 08-09 13:10:57.555  1856  1856 E UsimFH  : exception caught from EVENT_GET_RECORD_SIZE
 08-09 13:10:57.556  1856  1856 D RILJ    : [0212]> iccIO: SIM_IO command = 0xc0 fileId = 0x6f17 path = 3F007FFF p1 = 0 p2 = 0 p3 = 15 data = null aid = <AID#1> [PHONE0]
 08-09 13:10:57.556  1856  1856 D SIMRecords: [SIMRecords-0] onRecordLoaded 28 requested: true
 -- [생략]
-08-09 13:10:58.775     0     0 I [    C0] cpif: LNK-RX(32): <HEXDUMP 24B>
-08-09 13:10:58.775  1165  1165 I cpif    : LNK-TX(584): <HEXDUMP 24B>
+08-09 13:10:58.775     0     0 I [    C0] VRIL-LINK: LNK-RX(32): <HEXDUMP 24B>
+08-09 13:10:58.775  1165  1165 I VRIL-LINK    : LNK-TX(584): <HEXDUMP 24B>
 08-09 13:10:58.772  1856  1856 E SIMRecords: [SIMRecords-0] Exception in fetching EF_CSP data com.android.internal.telephony.CommandException: GENERIC_FAILURE
-08-09 13:10:58.772  1096  1096 D RILC-AIDL_SERVICE: V2_1::RadioSimProxy::iccTransmitApduLogicalChannel isEs10:[0]
+08-09 13:10:58.772  1096  1096 D VRIL-SVC: V2_1::RadioSimProxy::iccTransmitApduLogicalChannel isEs10:[0]
 -- [생략]
-08-09 13:11:00.240  1096  1154 V RIL     : [RilContext_0] RemoveRequestHistory  token=0x010B
-08-09 13:11:00.240   907   907 D RILClient: [OemClient]RSP: (clientId = 1, t = 31, msgId = 301, len = 166, channel = 0, status = 0)
-08-09 13:11:00.240  1096  1167 V RIL     : [<DEV#1>][RX] SIT_SIM_IO, RSP, 12 bytes, Token(0x010c), Error(RCM_E_GENERIC_FAILURE)
-08-09 13:11:00.240  1096  1167 I RIL     : [RilContext_0] ProcessModemData 
+08-09 13:11:00.240  1096  1154 V RIL     : [IpcCtx_0] RemoveIpcHistory  token=0x010B
+08-09 13:11:00.240   907   907 D BenchProbe: [OemClient]RSP: (clientId = 1, t = 31, msgId = 301, len = 166, channel = 0, status = 0)
+08-09 13:11:00.240  1096  1167 V RIL     : [<DEV#1>][RX] SIT_SIM_IO, RSP, 12 bytes, Token(0x010c), Error(RCM_E_FAILURE)
+08-09 13:11:00.240  1096  1167 I RIL     : [IpcCtx_0] ProcessIpcData 
 -- [생략]
-08-09 13:11:01.222  1096  1156 I RIL     : [DbEccInfoLoader_0] UpdateDbEccInfo() DB ECC ID: <CARRIER#1>, isIccid: false, target MCC: 001, target MNC: 01.
-08-09 13:11:01.222  1096  1156 I RIL     : [DbEccInfoLoader_0] ReadDbEccUsingXml() filename: /data/vendor/radio/database/DbEcc_001.xml.
+08-09 13:11:01.222  1096  1156 I RIL     : [EccDbLoader_0] UpdateEccDb() DB ECC ID: <CARRIER#1>, isIccid: false, target MCC: 001, target MNC: 01.
+08-09 13:11:01.222  1096  1156 I RIL     : [EccDbLoader_0] ReadEccDbXml() filename: /data/vendor/radio/database/DbEcc_001.xml.
 08-09 13:11:01.222  1856  1856 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 4
 08-09 13:11:01.222  1856  1856 D IntentBroadcaster: Broadcasting and adding intent for rebroadcast: android.intent.action.SIM_STATE_CHANGED LOADED for phoneId 0

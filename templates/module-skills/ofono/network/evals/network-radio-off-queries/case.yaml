@@ -7,7 +7,7 @@ key: MOCK-9302
 issue:
   summary: '망 정보·신호 조회 오류가 한꺼번에 남'
   description: '망 정보와 신호 세기 조회 오류가 한꺼번에 납니다.'
-  occurred_at: '2026-02-27T17:52:08+0000'
+  occurred_at: '2026-09-22T10:00:20+0000'
   platform_version: '2'
   sim_slot: '0'
 parse: {tz: UTC, year: 2026, minutes: 5}

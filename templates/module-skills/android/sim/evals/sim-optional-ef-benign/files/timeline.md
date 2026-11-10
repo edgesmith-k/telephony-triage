@@ -10,13 +10,13 @@
 13:10:57.421 - D MultiSimSettingController isReadyToReevaluate: subInfoInitialized=true, carrierConfigsLoaded=false, satelliteEnabledOrBeingEnabled=false
 13:10:57.421 - D UiccController Broadcasting intent ACTION_SIM_STATE_CHANGED READY reason null for phone: 0 sub: 4
 13:10:57.554 - V RIL [<DEV#1>][TX] SIT_SIM_IO, REQ, 572 bytes, Token(0x00b6)
-13:10:57.554 - I RIL SimIoService_0::DoSimIo() [-->
+13:10:57.554 - I RIL UiccFileService_0::DoSimIo() [-->
 13:10:57.554 p0 D RILJ [0164]< SIM_IO error 2 [PHONE0]
 13:10:57.555 - D RilRequest [0164]< SIM_IO error: com.android.internal.telephony.CommandException: GENERIC_FAILURE ret=IccIoResult sw1:0x0 sw2:0x0 Payload: Error: unknown result={ when=-1…
 13:10:57.555 - E UsimFH exception caught from EVENT_GET_RECORD_SIZE
 13:10:57.556 p0 D RILJ [0212]> iccIO: SIM_IO command = 0xc0 fileId = 0x6f17 path = 3F007FFF p1 = 0 p2 = 0 p3 = 15 data = null aid = <AID#1> [PHONE0]
 13:10:57.556 - D SIMRecords [SIMRecords-0] onRecordLoaded 28 requested: true
 13:10:58.772 - E SIMRecords [SIMRecords-0] Exception in fetching EF_CSP data com.android.internal.telephony.CommandException: GENERIC_FAILURE
-13:10:58.772 - D RILC-AIDL_SERVICE V2_1::RadioSimProxy::iccTransmitApduLogicalChannel isEs10:[0]
-13:11:00.240 - V RIL [<DEV#1>][RX] SIT_SIM_IO, RSP, 12 bytes, Token(0x010c), Error(RCM_E_GENERIC_FAILURE)  ⇒ builtin.common.vendor_ipc_error(error=RCM_E_GENERIC_FAILURE,ipc=SIT_SIM_IO)
+13:10:58.772 - D VRIL-SVC V2_1::RadioSimProxy::iccTransmitApduLogicalChannel isEs10:[0]
+13:11:00.240 - V RIL [<DEV#1>][RX] SIT_SIM_IO, RSP, 12 bytes, Token(0x010c), Error(RCM_E_FAILURE)  ⇒ builtin.common.vendor_ipc_error(error=RCM_E_FAILURE,ipc=SIT_SIM_IO)
 13:11:01.222 - D UiccController Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 4

@@ -21,7 +21,7 @@
 | `e16-ims-401/source.log` | oFono IMS deep: IMS 등록 실패(401) 알림 줄과 그 뒤 등록 흐름 |
 | `a-e1-data-setup/source.log` | Android data deep: `SETUP_DATA_CALL` 응답 줄 둘레의 데이터 연결 설정 흐름 |
 | `a-e5-cfun-trap/source.log` | Android data deep: 인터넷 데이터 상태 CONNECTED → DISCONNECTED 줄(라디오 꺼짐을 사용자 조작으로 오인하기 쉬운 함정) |
-| `syn-noise-event/source.log` | 합성: 잡음 규칙에 맞지만 이벤트가 붙은 줄은 남는다 |
+| `syn-noise-event/source.log` | 합성: 잡음 규칙에 맞지만 이벤트가 붙은 줄은 남는다(끝 줄은 잡음 태그 placeholder `chatterd`) |
 | `syn-unmapped-ril/source.log` | 합성: 어느 모듈에도 없는 RIL 이름의 오류 줄도 보기에 든다 |
 | `syn-connman-no-such-element/source.log` | 합성: ConnectionManager `no_such_element`는 반복 묶음(background)이 아니다 |
-| `syn-qmi-ipc/source.log` | 합성: 다른 벤더 IPC(QMI) 형식 로그는 `ipc_re`·`ipc` 값만 바꿔 분류된다 |
+| `syn-vendor-ipc/source.log` | 합성: 다른 벤더 IPC(QMI) 형식 로그는 `ipc_re`·`ipc` 값만 바꿔 분류된다 |

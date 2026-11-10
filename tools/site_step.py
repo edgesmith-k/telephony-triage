@@ -15,6 +15,8 @@
     python3 tools/site_step.py audit [--since D|레포=sha] [--last] [--repo R] [--cap-tokens N] [--inhouse-model RX] [--jobs DIR] [--json]
     python3 tools/site_step.py audit --record [--defer ID[,ID]]     # 정기 점검: 토큰 0 검사 → Claude가 볼 것(상한 안) → 기준점 기록
     python3 tools/site_step.py audit --notify [--create] [--json]   # 걸린 항목(P0·P1·실패 검사)을 이슈 DB 레포 Issue로(기본 보기만)
+    python3 tools/site_step.py restore                  # 사내 스냅샷 복구(docs/SITE_RESTORE.md) 순서 ⓪~⑦ 목록
+    python3 tools/site_step.py restore check [--json]   # 복구 점검(읽기 전용, 진행 상태 없음 — site_checks.RESTORE_CHECKS)
     python3 tools/site_step.py runtime-check claude-gateway         # Claude Code + 사내 모델 프로필 표(모델 호출 없음)
     python3 tools/site_step.py runtime-check opencode [--project D] # OpenCode 1.19.5·설정·관리 설정 점검 + 사내 확인 0(OpenAI 호환) curl
     python3 tools/site_step.py runtime-check opencode --project D --jira KEY [--missing-key KEY]
@@ -38,6 +40,9 @@
   돌린다. 나머지는 사외 결과 기록(`offsite_results.json`, 점검 `s2.offsite`)으로 갈음한다.
 - 새로 만들 때 트래커는 jira다(사내 결정: S30·S31 GitHub 트래커 항목은 해당 없음, S-3에서 `tracker.kind: jira`).
 - 사외 초안 PC(`.local-draft`)에서는 SITE_PROFILE.md를 만들지 않는다(종료 2, 반입 전 경계 검사가 막는 파일이다).
+- `restore`(docs/SITE_RESTORE.md)는 S-6까지 끝낸 사내 레포에서 이름이 든 템플릿 스냅샷(`docs/site/module-skills/`)을 되살리는
+  독립 명령이다. SITE_PROFILE을 읽거나 쓰지 않고 `docs/site/steps/`에도 쓰지 않는다. `restore check`의 경고(warn)는 종료 코드에
+  영향이 없다(실패·건너뜀·사용자 필요만 1).
 - `runtime-check`(계획 I O10, docs/development/RUNTIMES.md)는 단계와 무관하게 환경마다 한 번 돌리는 점검이다(SITE_PROFILE을 읽거나
   쓰지 않는다). 판정은 기존 코드: claude-gateway는 `claude_child.gateway_profile_check`(missing·differs → 1), opencode는
   `opencode/bin/tt-oc`(버전 = PINNED, 없으면 설치 안내·설치한 opencode.json 필수 설정·opencode가 있으면 사전 점검 전체)와
@@ -47,7 +52,7 @@
 종료 코드: 0 정상(점검은 통과·정보만), 1 점검 실패·건너뜀·사용자 필요(`--done` 거부 포함, runtime-check의 missing·differs·fail 행),
 2 사용 오류(사외 PC, 모드·단계 불일치, 진행 상태 줄 없음,
 S-3 완료 전 `ofono`·`modules`, 시작 전 O-n·MS-n, runtime-check 대상이 claude-gateway·opencode가 아님, `modules` 뒤 인자가
-check·coverage가 아님, `audit`의 잘못된 --since·기록 없는 --last·계획 없는(낡은) --record).
+check·coverage가 아님, `restore` 뒤 인자가 check가 아님, `audit`의 잘못된 --since·기록 없는 --last·계획 없는(낡은) --record).
 """
 from __future__ import annotations
 
@@ -438,6 +443,33 @@ def coverage_cmd(root: Path, as_json: bool, out: str | None, min_lines: int | No
     if as_json:
         return json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True), code
     return mc.render(result) + written, code
+
+
+RESTORE_STEPS = f"""사내 스냅샷 복구 ({sc.RESTORE_DOC}, S-6까지 끝낸 사내 레포 — 진행 상태 없음, 순서대로 한 번)
+⓪ 스냅샷(새 묶음 반입 전, 스냅샷이 없을 때 한 번): 반입 전 사내 레포 HEAD에서 templates/module-skills를 꺼내 evals를 빼고
+  {sc.SNAPSHOT_DIR}/로, SOURCE 한 줄
+① 재반입(import_draft) → SITE_PATHS 생존 확인 → `site_step.py check`가 S-1..S-6 완료
+② (첫 분석 전) site-defaults `vendor_ipc`의 context·complete에 사내 로그의 요청 완료 줄에서 확인한 두 낱말을 적는다
+③ 모듈 스킬 레포: 없으면 `make_module_repo.py <out> --site-overlay {sc.SNAPSHOT_DIR}` → push, 있으면 임시 렌더 → diff → GHE PR
+④ 검사: `site_step.py restore check` · `check_boundary --mode site` · pytest 2개 · parse_logcat 한 번
+⑤ 거부 목록 운영(TT_DENY_FILE)
+⑥ (선택) 실제 로그 사례는 tests/site/module-evals
+⑦ 이어서 S-7·MS-*. 재반입 뒤 `restore check` 경고(label)면 ③ diff 갈래를 다시
+명령·설명 전체: {sc.RESTORE_DOC}"""
+
+
+def restore_cmd(root: Path, sub: str | None, as_json: bool) -> tuple[str, int]:
+    """`restore`: 복구 순서 목록(종료 0). `restore check`: `site_checks.RESTORE_CHECKS`(진행 상태를 쓰지 않는다)."""
+    _profile(root)                                     # 사외 초안 PC는 사용 오류
+    if sub is None:
+        return RESTORE_STEPS, 0
+    if sub != "check":
+        raise Usage(f"restore 뒤에는 check만 온다: {sub}")
+    results = sc.run_checks(sc.RESTORE, root)
+    code = sc.exit_code(results)
+    if as_json:
+        return json.dumps({"step": sc.RESTORE, "exit": code, "results": results}, ensure_ascii=False, indent=1), code
+    return sc.report(sc.RESTORE, results) + "\n\n" + asks(results), code
 
 
 def audit_cmd(root: Path, args) -> tuple[str, int]:
@@ -1098,13 +1130,15 @@ def runtime_check(target: str | None, project: str | None, managed_dir: Path, ji
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="site_step.py", description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", nargs="?", choices=("check", "propose", "evals", "ofono", "modules", "audit", "runtime-check"),
+    ap.add_argument("cmd", nargs="?", choices=("check", "propose", "evals", "ofono", "modules", "audit", "runtime-check",
+                                               "restore"),
                     help="없으면 시작·이어 하기. ofono: oFono 트랙(O-1~O-4) 시작·이어 하기(S-3 완료 뒤). modules: 모듈 스킬 트랙"
                          "(MS-1~MS-2, S-3 완료 뒤). audit: 정기 점검(토큰 0 검사·시그니처 소실 + Claude가 볼 것, Claude는 부르지 않는다). "
-                         "runtime-check: claude-gateway|opencode 런타임 점검(모델·네트워크 호출 없음)")
+                         "runtime-check: claude-gateway|opencode 런타임 점검(모델·네트워크 호출 없음). "
+                         "restore: 사내 스냅샷 복구 순서(docs/SITE_RESTORE.md), restore check: 복구 점검")
     ap.add_argument("step", nargs="?", metavar="S-n|O-n|MS-n",
                     help="check·propose 대상 단계(기본: 현재 단계). runtime-check면 claude-gateway|opencode, "
-                         "modules면 check|coverage")
+                         "modules면 check|coverage, restore면 check")
     ap.add_argument("--project", help="runtime-check opencode: gen_opencode.py install --dest 폴더(기본: TT_OC_PROJECT)")
     ap.add_argument("--jira", metavar="KEY", help="runtime-check opencode: Jira 읽기 사내 확인 — 있는 티켓 키(모델 토큰 0)")
     ap.add_argument("--missing-key", metavar="KEY", help="runtime-check opencode --jira: 오류 경로용 없는 티켓 키")
@@ -1140,6 +1174,10 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--waive는 --done과 함께 쓴다")
     if (args.set or args.apply) and args.cmd != "propose":
         ap.error("--set·--apply는 propose에서만 쓴다")
+    if args.cmd == "restore" and args.allow_api:
+        ap.error("restore는 --allow-api를 받지 않는다(claude를 부르는 점검이 없다)")
+    if args.cmd == "restore" and args.json and args.step != "check":
+        ap.error("restore의 --json은 restore check에서만 쓴다")
     if args.cmd == "ofono" and args.step:
         ap.error("ofono는 단계 인자를 받지 않는다(지금 oFono 단계부터)")
     if (args.project or args.managed_dir) and args.cmd != "runtime-check":
@@ -1180,6 +1218,8 @@ def main(argv: list[str] | None = None) -> int:
             out, code = ofono_cmd(root, args.allow_api)
         elif args.cmd == "modules":
             out, code = modules_cmd(root, args.step, args.allow_api, args.json, args.out, args.min_lines)
+        elif args.cmd == "restore":
+            out, code = restore_cmd(root, args.step, args.json)
         elif args.cmd == "audit":
             import site_audit
             if args.cap_tokens is None:

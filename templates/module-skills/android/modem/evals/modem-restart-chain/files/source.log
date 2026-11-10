@@ -1,8 +1,8 @@
 -- [합성] telephony-triage module-skills D eval log. Hand-written; composed modem restart chain.
 08-27 16:00:02.100  2101 2141 D RILJ    : [0307]> NOTIFY_IMS_DATA_NETWORK [PHONE0]
 08-27 16:00:03.107  1188 1258 V RIL     : [<DEV#1>][TX] <unknown sit>, REQ, 12 bytes, Token(0x0207)
-08-27 16:00:04.114  1188 1258 V RIL     : [<DEV#1>][RX] <unknown sit>, RSP, 12 bytes, Token(0x0207), Error(RCM_E_UNDEFINED_CMD)
-08-27 16:00:05.121  1188 1248 E RILC    : Calling responseFunction() for token 307
+08-27 16:00:04.114  1188 1258 V RIL     : [<DEV#1>][RX] <unknown sit>, RSP, 12 bytes, Token(0x0207), Error(RCM_E_UNKNOWN_CMD)
+08-27 16:00:05.121  1188 1248 E VRIL    : Calling responseHandler() for token 307
 08-27 16:00:06.128  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
 08-27 16:00:07.135  2101 2141 D RILJ    : [0307]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
 08-27 16:00:20.000  2101 2142 D RILJ    : [UNSL]< UNSOL_MODEM_RESTART [PHONE0]
@@ -18,9 +18,9 @@
 08-27 16:00:23.100  2101 2141 D RILJ    : [0343]> LAST_CALL_FAIL_CAUSE [PHONE0]
 08-27 16:00:23.400  2101 2142 D RILJ    : [0343]< LAST_CALL_FAIL_CAUSE causeCode=17 [PHONE0]
 08-27 16:00:23.600  2101 2113 W ImsPhoneCallTracker: [0] call ended: cause=17
-08-27 16:00:24.000  1188 1248 E RILC    : Calling responseFunction() for token 343
+08-27 16:00:24.000  1188 1248 E VRIL    : Calling responseHandler() for token 343
 08-27 16:00:32.010  1830 1910 V OemRil  : notifyRadioStateChanged: newState=RADIO_ON
 08-27 16:00:33.000  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
-08-27 16:00:50.011  1188 1248 E RILC    : Calling responseFunction() for token 430
+08-27 16:00:50.011  1188 1248 E VRIL    : Calling responseHandler() for token 430
 08-27 16:00:50.311  1188 1258 V RIL     : [<DEV#1>][RX] <HEXDUMP 16B>
 08-27 16:00:50.611  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009

@@ -119,7 +119,7 @@ def test_tree_sizes():
     assert checks([blob(f"{case}/case.yaml", 6000), blob(f"{case}/files/a.log", 13312),
                    blob(f"{case}/files/b.json", 29840)]) == []
     assert sc.CAPS["modules.yaml"] == 24576 and (sc.REFERENCE_CAP, sc.CASE_CAP) == (4096, 49152)
-    assert sc.CASE_LOG_CAP == 13312
+    assert sc.CASE_LOG_CAP == 8192
 
 
 def test_parse_ls_tree():
@@ -224,7 +224,7 @@ def test_modules_yaml_v1_and_v2_accepted():
     ({"platforms.ofono.modules.data.db_category": None}, "platforms.ofono.modules.data.db_category: 소문자 이름"),
     ({"platforms.ofono.modules.data.ofonod_files": ["gprs.c"]}, "platforms.ofono.modules.data.ofonod_files: 형식이 틀린 값"),
     ({"platforms.ofono.modules.data.daemons": ["bad name"]}, "platforms.ofono.modules.data.daemons: 형식이 틀린 값"),
-    ({"platforms.ofono.modules.data.daemons": ["NMD", "NMD"]}, "platforms.ofono.modules.data.daemons: 겹치는 값"),
+    ({"platforms.ofono.modules.data.daemons": ["datad", "datad"]}, "platforms.ofono.modules.data.daemons: 겹치는 값"),
     ({"platforms.ofono.modules.data.ril": ["setup"]}, "platforms.ofono.modules.data.ril: 형식이 틀린 값"),
     ({"platforms.ofono.modules.data.neighbours": ["call"]},
      "platforms.ofono.modules.data.neighbours: 같은 플랫폼의 다른 모듈 이름이어야 한다"),
@@ -274,7 +274,7 @@ def test_regex_subset_accepts(rx):
 
 
 def test_keywords_literal_or_re():
-    ok = mod_yaml(**{"platforms.ofono.modules.data.keywords": ["rmnet", "re:NMD_[A-Z_]{4,}", "a(b"]})
+    ok = mod_yaml(**{"platforms.ofono.modules.data.keywords": ["rmnet", "re:DATAD_[A-Z_]{4,}", "a(b"]})
     assert sc.validate_modules(ok) == []
     bad = mod_yaml(**{"platforms.ofono.modules.data.keywords": ["re:(a+)+"]})
     assert sc.validate_modules(bad)[0].startswith("platforms.ofono.modules.data.keywords[0]: 정규식이 허용 범위 밖")
@@ -366,23 +366,23 @@ def test_origin_problems_synthetic():
 
 
 def test_dbus_allowed_union():
-    doc = {"platforms": {"ofono": {"modules": {"data": {"dbus": ["org.ofono.ConnectionManager", "com.example.nmd"]},
-                                               "sim": {"dbus": ["com.example.lpa"]}, "call": {}}},
+    doc = {"platforms": {"ofono": {"modules": {"data": {"dbus": ["org.ofono.ConnectionManager", "com.example.datad"]},
+                                               "sim": {"dbus": ["com.example.simd"]}, "call": {}}},
                          "android": {"modules": {"x": {"dbus": ["com.example.android"]}}}}}
     assert oct.dbus_allowed(doc["platforms"]["ofono"]) == frozenset({"org.ofono", "org.freedesktop.DBus",
-                                                                       "org.ofono.ConnectionManager", "com.example.nmd",
-                                                                       "com.example.lpa"})
+                                                                       "org.ofono.ConnectionManager", "com.example.datad",
+                                                                       "com.example.simd"})
     assert oct.dbus_allowed(None) == frozenset({"org.ofono", "org.freedesktop.DBus"})
     real = sc.load_modules_yaml((TEMPLATES / "modules.yaml").read_bytes())
     assert "org.ofono.SimManager" in oct.dbus_allowed(real["platforms"]["ofono"])
 
 
 def test_dbus_violations_prefix():
-    allowed = frozenset({"org.ofono", "org.freedesktop.DBus", "com.example.nmd"})
+    allowed = frozenset({"org.ofono", "org.freedesktop.DBus", "com.example.datad"})
     text = ("org.ofono.Modem 과 org.freedesktop.DBus.Properties.\n"
-            "com.example.nmd.Profile·com.example.nmdx.Y\n"
+            "com.example.datad.Profile·com.example.datadx.Y\n"
             "net.other.Thing org.ofonox.Bad")
-    assert oct.dbus_violations(text, allowed) == [(2, "com.example.nmdx.Y"), (3, "net.other.Thing"), (3, "org.ofonox.Bad")]
+    assert oct.dbus_violations(text, allowed) == [(2, "com.example.datadx.Y"), (3, "net.other.Thing"), (3, "org.ofonox.Bad")]
 
 
 def _template_copy(tmp_path) -> Path:
@@ -437,8 +437,8 @@ def test_template_findings_platform_mix(tmp_path):
 def test_template_findings_daemon_table(tmp_path):
     root = _template_copy(tmp_path)
     comp = root / "ofono" / "_common" / "components.md"
-    comp.write_text(comp.read_text(encoding="utf-8").replace("| vcd |", "| VCD |"), encoding="utf-8")
-    assert _rows(sc.template_findings(root, METAS)) == [("데몬 표", "ofono/_common/components.md", "vcd")]
+    comp.write_text(comp.read_text(encoding="utf-8").replace("| mgmtd |", "| removedd |"), encoding="utf-8")
+    assert _rows(sc.template_findings(root, METAS)) == [("데몬 표", "ofono/_common/components.md", "mgmtd")]
 
 
 def test_template_findings_dbus(tmp_path):

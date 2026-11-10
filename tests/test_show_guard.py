@@ -1166,7 +1166,7 @@ def test_module_questions_do_not_block_like_explore_questions(tmp_path):
               "고른 모듈 문서의 신호가 약합니다. 다른 모듈 문서로 바꿀까요? (모듈 신호 줄 수: sim 9 · data 2)"):
         assert show_guard.EXPLORE_Q.search(q)
         assert stop(write(tmp_path, prompt("p"), run, say(q)), q) is None          # 리포트 전 질문(Step 5)은 막지 않는다
-    also = "모뎀 모듈 문서도 함께 볼까요? (모뎀 신호: RFSD 2줄)"
+    also = "모뎀 모듈 문서도 함께 볼까요? (모뎀 신호: mgmtd 2줄)"
     assert stop(write(tmp_path, prompt("p"), run, say(also), name="also.jsonl"), also) is None
     # 모듈 질문 뒤 Step 7 질문에서는 리포트를 여전히 본다
     path = write(tmp_path, prompt("p"), run, say(MODULE_Q["question"]), prompt("data"), say("요약만"), name="s7.jsonl")

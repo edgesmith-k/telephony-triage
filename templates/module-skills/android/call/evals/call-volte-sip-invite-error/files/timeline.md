@@ -7,7 +7,7 @@
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
 12:02:00.000 - D ImsPhoneCallTracker [0] dial: isVolteEnabled=true imsRegistered=true  ⇒ ims_dial_attempt(registered=true,volte=true)
-12:02:00.100 - D SHANNON_IMS 1501 [CALL] Sending INVITE to <MSISDN#1> [SLID:0 ] (CallSession%sendInvite:212)
-12:02:01.300 - I SHANNON_IMS 1502 [CALL] Received INVITE response status-code : 503 [SLID:0 ] (CallSession%onResponse:288)
+12:02:00.100 - D VRIL-IMS 1501 [CALL] Sending INVITE to <MSISDN#1> [SLID:0 ] (CallSession%sendInvite:212)
+12:02:01.300 - I VRIL-IMS 1502 [CALL] Received INVITE response status-code : 503 [SLID:0 ] (CallSession%onResponse:288)
 12:02:01.400 - W ImsPhoneCallTracker [0] onCallStartFailed reasonCode=ImsReasonInfo :: {1014 : CODE_SIP_SERVICE_UNAVAILABLE, 503, null}
 12:02:01.410 p0 W ImsPhoneCallTracker [PHONE0] call state changed: DISCONNECTED  ⇒ call_state_changed(state=DISCONNECTED)

@@ -108,9 +108,9 @@ def test_declared_same_set_is_byte_identical():
     assert _dump(oback.BACKEND.parse(OFONO_LOGS, "UTC", 2026, None)) != _dump(base)   # 설정도 선언도 없으면 보정·판별 없음
 
     text = _tags(SAMPLE)
-    old = "'^(RIL|RILC|RILC-AIDL_SERVICE|RIL_EXTERNAL)$', category: common,"
+    old = "'^(RIL|VRIL|VRIL-SVC)$', category: common,"
     assert old in text
-    text = text.replace(old, "'^(RILC|RILC-AIDL_SERVICE|RIL_EXTERNAL)$', category: common,")
+    text = text.replace(old, "'^(VRIL|VRIL-SVC)$', category: common,")
     text += "  - {tag: RIL, category: common, ipc: vendor, added_for: '-', added_on: 2026-11-06, reason: 시험}\n"
     rules = _rules_copy(SAMPLE, text)
     assert rules.declares("ipc") and not rules.declares("level")
@@ -176,7 +176,7 @@ def test_old_and_new_daemon_names(tmp_path):
     선언이 없으면 구성요소 `vendor_ipc` 설정의 ident만, 설정도 없으면 판별 없음."""
     src = variant_db("issue-db-ofono")
     rules = _with_attr(src, {"daemon-a": "ipc: vendor", "daemon-b": "ipc: vendor"})
-    line = "[RilContext_0] OnRequestComplete Request ID=10, result=2"
+    line = "[IpcCtx_0] OnIpcComplete Request ID=10, result=2"
     path = _write(tmp_path, [f"Sep 20 14:32:11.001 dut daemon.debug daemon-a[7]: {line}",
                              f"Sep 20 14:32:11.002 dut daemon.debug daemon-b[8]: {line}"])
 

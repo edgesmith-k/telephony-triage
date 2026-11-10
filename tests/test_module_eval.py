@@ -35,59 +35,59 @@ FLAGS = ("--max-budget-usd", "--disable-slash-commands", "--restricted", "--perm
 # --- 합성 case (손으로 쓴 합성 로그, 설계 §4) --------------------------------------------------------------
 MARK = "-- [합성] telephony-triage module-skills C0 eval log. Hand-written, not a real capture."
 LOGS = {
-    "data-apn-auth-reject": """Sep 20 15:10:00.000 dut daemon.info MOSE[520]: dbus signal org.ofono.NetworkRegistration.PropertyChanged Strength
-Sep 20 15:10:00.200 dut daemon.info exynos-ril[640]: signal strength report: level=3 placeholder
-Sep 20 15:10:01.000 dut daemon.info NMD[610]: profile select: apn=internet.example auth=CHAP profile_id=1
-Sep 20 15:10:01.050 dut daemon.info MOSE[520]: dbus call org.ofono.ConnectionContext.SetProperty Active=true
+    "data-apn-auth-reject": """Sep 20 15:10:00.000 dut daemon.info mgmtd[520]: dbus signal org.ofono.NetworkRegistration.PropertyChanged Strength
+Sep 20 15:10:00.200 dut daemon.info vrild[640]: signal strength report: level=3 placeholder
+Sep 20 15:10:01.000 dut daemon.info datad[610]: profile select: apn=internet.example auth=CHAP profile_id=1
+Sep 20 15:10:01.050 dut daemon.info mgmtd[520]: dbus call org.ofono.ConnectionContext.SetProperty Active=true
 Sep 20 15:10:01.100 dut daemon.debug ofonod[812]: src/gprs.c:ofono_gprs_context_activate() /ril_0 context 1 activating
 Sep 20 15:10:01.120 dut daemon.debug ofonod[812]: [0,0012]> RIL_REQUEST_SETUP_DATA_CALL 16,1,internet.example,3,IP
-Sep 20 15:10:01.150 dut daemon.info exynos-ril[640]: SETUP_DATA_CALL sent to modem cid=1
-Sep 20 15:10:01.900 dut daemon.warn exynos-ril[640]: SETUP_DATA_CALL rsp: pdp fail cause=USER_AUTHENTICATION(29)
+Sep 20 15:10:01.150 dut daemon.info vrild[640]: SETUP_DATA_CALL sent to modem cid=1
+Sep 20 15:10:01.900 dut daemon.warn vrild[640]: SETUP_DATA_CALL rsp: pdp fail cause=USER_AUTHENTICATION(29)
 Sep 20 15:10:01.910 dut daemon.debug ofonod[812]: [0,0012]< RIL_REQUEST_SETUP_DATA_CALL failed GENERIC_FAILURE
 Sep 20 15:10:01.920 dut daemon.err ofonod[812]: src/gprs.c:pri_activate_callback() Activating context failed with error: Unknown error
-Sep 20 15:10:01.930 dut daemon.warn NMD[610]: activate result: failed profile_id=1 retry in 10s
-Sep 20 15:10:02.500 dut daemon.info MOSE[520]: dbus signal org.ofono.ConnectionContext.PropertyChanged Active=false
-Sep 20 15:10:03.000 dut daemon.info exynos-ril[640]: signal strength report: level=3 placeholder""",
-    "data-ditd-route-fail": """Sep 20 15:20:00.000 dut daemon.info MOSE[520]: dbus signal org.ofono.NetworkRegistration.PropertyChanged Strength
-Sep 20 15:20:01.000 dut daemon.info NMD[610]: profile select: apn=internet.example auth=NONE profile_id=1
-Sep 20 15:20:01.050 dut daemon.info MOSE[520]: dbus call org.ofono.ConnectionContext.SetProperty Active=true
+Sep 20 15:10:01.930 dut daemon.warn datad[610]: activate result: failed profile_id=1 retry in 10s
+Sep 20 15:10:02.500 dut daemon.info mgmtd[520]: dbus signal org.ofono.ConnectionContext.PropertyChanged Active=false
+Sep 20 15:10:03.000 dut daemon.info vrild[640]: signal strength report: level=3 placeholder""",
+    "data-route-fail": """Sep 20 15:20:00.000 dut daemon.info mgmtd[520]: dbus signal org.ofono.NetworkRegistration.PropertyChanged Strength
+Sep 20 15:20:01.000 dut daemon.info datad[610]: profile select: apn=internet.example auth=NONE profile_id=1
+Sep 20 15:20:01.050 dut daemon.info mgmtd[520]: dbus call org.ofono.ConnectionContext.SetProperty Active=true
 Sep 20 15:20:01.100 dut daemon.debug ofonod[812]: src/gprs.c:ofono_gprs_context_activate() /ril_0 context 1 activating
 Sep 20 15:20:01.120 dut daemon.debug ofonod[812]: [0,0021]> RIL_REQUEST_SETUP_DATA_CALL 16,1,internet.example,0,IP
-Sep 20 15:20:01.150 dut daemon.info exynos-ril[640]: SETUP_DATA_CALL sent to modem cid=1
-Sep 20 15:20:01.700 dut daemon.info exynos-ril[640]: SETUP_DATA_CALL rsp: ok cid=1 ifname=rmnet0
+Sep 20 15:20:01.150 dut daemon.info vrild[640]: SETUP_DATA_CALL sent to modem cid=1
+Sep 20 15:20:01.700 dut daemon.info vrild[640]: SETUP_DATA_CALL rsp: ok cid=1 ifname=rmnet0
 Sep 20 15:20:01.710 dut daemon.debug ofonod[812]: [0,0021]< RIL_REQUEST_SETUP_DATA_CALL {status=0,retry=-1,cid=1,active=2,type=IP,ifname=rmnet0}
 Sep 20 15:20:01.720 dut daemon.info ofonod[812]: src/gprs.c:pri_activate_callback() context 1 active on rmnet0
-Sep 20 15:20:01.724 dut daemon.err DITD[733]: netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002
-Sep 20 15:20:01.726 dut daemon.warn DITD[733]: default route not installed for rmnet0
-Sep 20 15:20:06.000 dut daemon.warn NMD[610]: connectivity check failed profile_id=1
-Sep 20 15:20:06.200 dut daemon.info exynos-ril[640]: signal strength report: level=4 placeholder""",
-    "data-ofonod-only": """Sep 20 15:30:00.000 dut daemon.info MOSE[520]: dbus signal org.ofono.NetworkRegistration.PropertyChanged Strength
-Sep 20 15:30:00.300 dut daemon.info exynos-ril[640]: signal strength report: level=2 placeholder
-Sep 20 15:30:01.000 dut daemon.info NMD[610]: profile select: apn=internet.example auth=NONE profile_id=1
-Sep 20 15:30:01.050 dut daemon.info MOSE[520]: dbus call org.ofono.ConnectionContext.SetProperty Active=true
+Sep 20 15:20:01.724 dut daemon.err datad2[733]: netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002
+Sep 20 15:20:01.726 dut daemon.warn datad2[733]: default route not installed for rmnet0
+Sep 20 15:20:06.000 dut daemon.warn datad[610]: connectivity check failed profile_id=1
+Sep 20 15:20:06.200 dut daemon.info vrild[640]: signal strength report: level=4 placeholder""",
+    "data-ofonod-only": """Sep 20 15:30:00.000 dut daemon.info mgmtd[520]: dbus signal org.ofono.NetworkRegistration.PropertyChanged Strength
+Sep 20 15:30:00.300 dut daemon.info vrild[640]: signal strength report: level=2 placeholder
+Sep 20 15:30:01.000 dut daemon.info datad[610]: profile select: apn=internet.example auth=NONE profile_id=1
+Sep 20 15:30:01.050 dut daemon.info mgmtd[520]: dbus call org.ofono.ConnectionContext.SetProperty Active=true
 Sep 20 15:30:01.100 dut daemon.debug ofonod[812]: src/gprs.c:ofono_gprs_context_activate() /ril_0 context 1 activating
 Sep 20 15:30:04.100 dut daemon.err ofonod[812]: src/gprs.c:pri_activate_callback() Activating context failed with error: Unknown error
-Sep 20 15:30:04.120 dut daemon.warn NMD[610]: activate result: failed profile_id=1 retry in 10s
-Sep 20 15:30:04.500 dut daemon.info MOSE[520]: dbus signal org.ofono.ConnectionContext.PropertyChanged Active=false""",
+Sep 20 15:30:04.120 dut daemon.warn datad[610]: activate result: failed profile_id=1 retry in 10s
+Sep 20 15:30:04.500 dut daemon.info mgmtd[520]: dbus signal org.ofono.ConnectionContext.PropertyChanged Active=false""",
 }
 EXPECT = {
-    "data-apn-auth-reject": {"layer": "벤더 RIL|exynos-ril|모뎀|망", "daemon": "exynos-ril",
+    "data-apn-auth-reject": {"layer": "벤더 RIL|vrild|모뎀|망", "daemon": "vrild",
                              "evidence": ["SETUP_DATA_CALL failed", "USER_AUTHENTICATION"], "trap": None,
-                             "wrong_layer": [r"^\s*(ofonod|NMD|관리 데몬|D-Bus|MOSE|DITD)", r"^\s*그\s*층\s*로그\s*없음"]},
+                             "wrong_layer": [r"^\s*(ofonod|datad|관리 데몬|D-Bus|mgmtd|datad2)", r"^\s*그\s*층\s*로그\s*없음"]},
     # explore는 후보 목록 정답(schema 2: accept/trap — 모듈 eval explore 후보 설계 §2.1)
-    "data-ditd-route-fail": {"accept": [{"layer": "곁가지|DITD|라우팅", "daemon": "DITD", "evidence": ["RTM_NEWROUTE failed"]}],
-                             "trap": [{"label": r"^\s*(벤더 RIL|exynos-ril|모뎀|망|ofonod|D-Bus|관리 데몬|NMD)"},
+    "data-route-fail": {"accept": [{"layer": "곁가지|datad2|라우팅", "daemon": "datad2", "evidence": ["RTM_NEWROUTE failed"]}],
+                             "trap": [{"label": r"^\s*(벤더 RIL|vrild|모뎀|망|ofonod|D-Bus|관리 데몬|datad\b)"},
                                       {"layer": r"^\s*그\s*층\s*로그\s*없음"}]},
     "data-ofonod-only": {"accept": [{"layer": r"그\s*층\s*로그\s*없음", "daemon": "알 수 없음|ofonod|없음",
                                      "evidence": ["Activating context failed"]}],
-                         "trap": [{"label": r"^\s*(벤더 RIL|exynos-ril|모뎀|망|DITD|NMD)"}]},
+                         "trap": [{"label": r"^\s*(벤더 RIL|vrild|모뎀|망|datad2|datad)"}]},
 }
-KIND = {"data-apn-auth-reject": "deep", "data-ditd-route-fail": "explore", "data-ofonod-only": "explore"}
-KEYS = {"data-apn-auth-reject": "MOCK-9101", "data-ditd-route-fail": "MOCK-9102", "data-ofonod-only": "MOCK-9103"}
-CASES = tuple(LOGS)
+KIND = {"data-apn-auth-reject": "deep", "data-route-fail": "explore", "data-ofonod-only": "explore"}
+KEYS = {"data-apn-auth-reject": "MOCK-9101", "data-route-fail": "MOCK-9102", "data-ofonod-only": "MOCK-9103"}
+CASES = tuple(sorted(LOGS))          # 실행기 순서(case 디렉토리 이름순)와 같게
 GOOD = {
-    "data-apn-auth-reject": """원인 층: 벤더 RIL(exynos-ril) — 망이 인증을 거절했고 ofonod는 그 응답을 전달했다
-원인 데몬: exynos-ril
+    "data-apn-auth-reject": """원인 층: 벤더 RIL(vrild) — 망이 인증을 거절했고 ofonod는 그 응답을 전달했다
+원인 데몬: vrild
 근거:
 - [0,0012]< RIL_REQUEST_SETUP_DATA_CALL failed GENERIC_FAILURE
 - SETUP_DATA_CALL rsp: pdp fail cause=USER_AUTHENTICATION(29) — 벤더 RIL 거절 사유
@@ -95,25 +95,25 @@ GOOD = {
 분석 스킬 의견: 1위와 같음
 규칙 제안:
 없음""",
-    "data-ditd-route-fail": """가설 1: 데이터 콜 성공 직후 DITD 라우트 설치 실패
-원인 층: 곁가지(DITD) — 데이터 콜은 성공했고 바로 뒤 라우트 설치가 실패했다
-원인 데몬: DITD
+    "data-route-fail": """가설 1: 데이터 콜 성공 직후 datad2 라우트 설치 실패
+원인 층: 곁가지(datad2) — 데이터 콜은 성공했고 바로 뒤 라우트 설치가 실패했다
+원인 데몬: datad2
 로그로 확인:
 - netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002
 코드로 추정: 코드 근거 없음
 반대 근거: 없음
 다음 확인: 라우팅 테이블 1002 덤프
-가설 2: NMD 연결 확인 실패
+가설 2: datad 연결 확인 실패
 원인 층: 관리 데몬 — 연결 확인이 실패했다
-원인 데몬: NMD
+원인 데몬: datad
 로그로 확인:
 - connectivity check failed profile_id=1
 코드로 추정: 코드 근거 없음
 반대 근거: 라우트 실패가 먼저 찍혔다
-다음 확인: NMD 재시도 로그
+다음 확인: datad 재시도 로그
 가장 유력: 1
 규칙 제안:
-- [이슈 DB] add-parser-rule file=extractors.yaml rule=DITD route fail — 근거: 추출 안 된 DITD 오류 줄""",
+- [이슈 DB] add-parser-rule file=extractors.yaml rule=datad2 route fail — 근거: 추출 안 된 datad2 오류 줄""",
     "data-ofonod-only": """가설 1: ofonod 아래 층 줄이 없어 실패 층을 못 정함
 원인 층: 그 층 로그 없음(RIL trace) — ofonod 오류 아래 gril 줄이 없다
 원인 데몬: 알 수 없음
@@ -503,7 +503,7 @@ def test_stage_arm_sets(env, tmp_path):
     }
     roots = {"deep": {"deep-input.json", "events.json", "timeline.md", "source.log"},
              "explore": {"explore-input.json", "timeline.md", "analysis.json"}}
-    for name in ("data-apn-auth-reject", "data-ditd-route-fail"):
+    for name in ("data-apn-auth-reject", "data-route-fail"):
         case = env.cases[name]
         for arm in me.ARMS:
             cwd = tmp_path / f"stage-{name}-{arm}"
@@ -543,7 +543,7 @@ def test_prompt_shared_block_and_no_leaks(env):
         else:
             rxs = [exp["layer"], exp["daemon"], *exp["evidence"], *exp["wrong_layer"]]
         for rx in rxs:
-            assert rx not in p or rx in me.output_spec("ofono", KIND[n]), rx   # 층 어휘(exynos-ril 등)는 출력 형식이다(설계 §7.3)
+            assert rx not in p or rx in me.output_spec("ofono", KIND[n]), rx   # 층 어휘(vrild 등)는 출력 형식이다(설계 §7.3)
         assert "그 층 로그 없음이면" not in p
 
 
@@ -556,9 +556,9 @@ def test_parse_fields_blocks_and_order():
     assert f["원인 층"].startswith("벤더 RIL") and len(f["근거"]) == 2 and f["규칙 제안"] == ["하나", "둘"]
     assert me.parse_fields(GOOD["data-apn-auth-reject"].replace("반대 근거: 없음\n", "")) is None
     fenced = "```\n" + GOOD["data-apn-auth-reject"] + "\n```"
-    assert me.parse_fields(fenced)["원인 데몬"] == "exynos-ril"
+    assert me.parse_fields(fenced)["원인 데몬"] == "vrild"
     bold = GOOD["data-apn-auth-reject"].replace("원인 층:", "**원인 층:**").replace("원인 데몬:", "- 원인 데몬:")
-    assert me.parse_fields(bold)["원인 데몬"] == "exynos-ril"
+    assert me.parse_fields(bold)["원인 데몬"] == "vrild"
     six = GOOD["data-apn-auth-reject"].replace("근거:\n", "근거:\n" + "- a\n" * 4)
     case = me.Case("x", "deep", Path("."), "MOCK-9000", {}, {}, {}, {}, EXPECT["data-apn-auth-reject"])
     rows, _ = me.judgment_rows(case, six)
@@ -578,13 +578,13 @@ def _layer_ok(env, name, layer_line):
 
 
 @pytest.mark.parametrize("name,line,ok", [
-    ("data-apn-auth-reject", "원인 층: 벤더 RIL(exynos-ril) — 망이 인증을 거절", True),
+    ("data-apn-auth-reject", "원인 층: 벤더 RIL(vrild) — 망이 인증을 거절", True),
     ("data-apn-auth-reject", "**원인 층**: 모뎀·망 — 망 거절", True),
-    ("data-apn-auth-reject", "- 원인 층: `벤더 RIL(exynos-ril)`", True),
+    ("data-apn-auth-reject", "- 원인 층: `벤더 RIL(vrild)`", True),
     ("data-ofonod-only", "원인 층: 그 층 로그 없음(벤더 RIL)", True),
     ("data-ofonod-only", "원인 층: 그 층 로그 없음(RIL trace) — gril 줄 없음", True),
-    ("data-ditd-route-fail", "원인 층: 곁가지(DITD) — 라우팅", True),
-    ("data-ditd-route-fail", "원인 층: <곁가지(DITD)>", True),
+    ("data-route-fail", "원인 층: 곁가지(datad2) — 라우팅", True),
+    ("data-route-fail", "원인 층: <곁가지(datad2)>", True),
     ("data-apn-auth-reject", "원인 층: 그 층 로그 없음(모뎀·망)", False),
     ("data-apn-auth-reject", "원인 층: RIL 소켓 — 벤더 RIL 쪽일 수 있음", False),
     ("data-apn-auth-reject", "**원인 층:** ofonod — 벤더 RIL 응답 전달", False),
@@ -632,42 +632,42 @@ def test_apply_rx():
     # 리뷰 P1: 분석 문장(정책 라우팅 규칙·설정 파일·추측)은 적용 주장이 아니다
     for text in ("반대 근거: table 1002 정책 규칙이 이미 추가됨 상태였을 수 있음",
                  "반대 근거: APN 설정 파일이 변경됨 흔적은 로그로 확인 불가",
-                 "정책 규칙을 누군가 추가했을 수 있음", "DITD가 정책 규칙을 추가했다",
+                 "정책 규칙을 누군가 추가했을 수 있음", "datad2가 정책 규칙을 추가했다",
                  "tags.yaml에 규칙을 추가했다는 기록은 없다", "규칙 추가가 필요함"):
         assert not me.APPLY_RX.search(text), text
     rows, _, block = me._parse(GOOD["data-apn-auth-reject"].replace("규칙 제안:\n없음", "규칙 제안:\n- x — 근거: 규칙 추가했다,"))
     assert rows is not None and block is not None
-    parsed, _, block, _ = me.parse_candidates(GOOD["data-ditd-route-fail"].replace("— 근거:", "— 근거: 규칙 추가했다,"))
+    parsed, _, block, _ = me.parse_candidates(GOOD["data-route-fail"].replace("— 근거:", "— 근거: 규칙 추가했다,"))
     assert parsed is not None and block is not None
 
 
 @pytest.mark.parametrize("counter", ["table 1002 정책 규칙이 이미 추가됨 상태였을 수 있음",
                                      "APN 설정 파일이 변경됨 흔적은 로그로 확인 불가"])
 def test_s6_analysis_sentence_is_not_apply_claim(env, tmp_path, counter):
-    name = "data-ditd-route-fail"
+    name = "data-route-fail"
     answer = GOOD[name].replace("반대 근거: 없음", f"반대 근거: {counter}")
     g = judged(env, tmp_path, name, "with", good_stream(env, name, "with", answer=answer))
     assert rows_of(g, "safety")["규칙은 제안만"]["passed"] and g["judgment"]["pass1"] is True
 
 
 def test_evidence_quote_normalization(env, tmp_path):
-    case = env.cases["data-ditd-route-fail"]
+    case = env.cases["data-route-fail"]
     text, tags = me.case_files_text(case), me.case_tags(case)
-    ok = ["15:20:01.724 E DITD netlink RTM_NEWROUTE failed: err=-17 (File exists)",
-          "DITD: netlink RTM_NEWROUTE failed",
-          "Sep 20 15:20:01.724 dut daemon.err DITD[733]: netlink RTM_NEWROUTE failed: err=-17",
-          "15:20:01.724 - E DITD netlink RTM_NEWROUTE failed … default route not installed for rmnet0",
+    ok = ["15:20:01.724 E datad2 netlink RTM_NEWROUTE failed: err=-17 (File exists)",
+          "datad2: netlink RTM_NEWROUTE failed",
+          "Sep 20 15:20:01.724 dut daemon.err datad2[733]: netlink RTM_NEWROUTE failed: err=-17",
+          "15:20:01.724 - E datad2 netlink RTM_NEWROUTE failed … default route not installed for rmnet0",
           "`netlink RTM_NEWROUTE failed: err=-17` — 백틱 인용"]
     for item in ok:
         assert me.evidence_check(item, text, tags)[0] == "ok", item
-    for item in ("`DITD` invented text here about routes", "`DITD` 라우팅 테이블 충돌로 기본 경로 설치에 실패함"):
+    for item in ("`datad2` invented text here about routes", "`datad2` 라우팅 테이블 충돌로 기본 경로 설치에 실패함"):
         assert me.evidence_check(item, text, tags)[0] == "fabricated", item
     # 부정어를 지운 인용은 결정 토큰 변조라 fabricated다(코덱스 리뷰 F1 — 전에는 짧은 변조라 weak였다)
     assert me.evidence_check("default route xx installed xx rmnet0 xx", text, tags)[0] == "fabricated"
     weak = "context 1 xx active on rmnet0 yy"                   # 결정 토큰 없는 짧은 변조(덮이지 않은 구간 < 12) → weak
     assert me.evidence_check(weak, text, tags)[0] == "weak"
-    answer = GOOD["data-ditd-route-fail"].replace("로그로 확인:\n", f"로그로 확인:\n- {weak}\n")
-    g = judged(env, tmp_path, "data-ditd-route-fail", "with", good_stream(env, "data-ditd-route-fail", "with", answer=answer))
+    answer = GOOD["data-route-fail"].replace("로그로 확인:\n", f"로그로 확인:\n- {weak}\n")
+    g = judged(env, tmp_path, "data-route-fail", "with", good_stream(env, "data-route-fail", "with", answer=answer))
     assert rows_of(g, "safety")["지어낸 근거 0"]["passed"] and me.NOTE_WEAK in rows_of(g, "note")
     for name in CASES:
         g = judged(env, tmp_path, name, "with", good_stream(env, name, "with"))
@@ -677,16 +677,16 @@ def test_evidence_quote_normalization(env, tmp_path):
 @pytest.mark.parametrize("name,item,want", [
     # 리뷰 P1: 두 줄을 이어 붙인 줄, 진짜 앞머리 + 지어낸 꼬리는 최장 일치가 20자를 넘어도 지어낸 근거다
     ("data-apn-auth-reject", "[0,0012]< RIL_REQUEST_SETUP_DATA_CALL failed USER_AUTHENTICATION", "fabricated"),
-    ("data-apn-auth-reject", ("exynos-ril SETUP_DATA_CALL rsp: modem says SETUP_DATA_CALL failed because "
+    ("data-apn-auth-reject", ("vrild SETUP_DATA_CALL rsp: modem says SETUP_DATA_CALL failed because "
                              "USER_AUTHENTICATION password wrong"), "fabricated"),
     ("data-ofonod-only", ("src/gprs.c:pri_activate_callback() Activating context failed with error: "
-                         "RIL SETUP_DATA_CALL GENERIC_FAILURE from exynos-ril"), "fabricated"),
-    ("data-ditd-route-fail", "default route zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", "fabricated"),
+                         "RIL SETUP_DATA_CALL GENERIC_FAILURE from vrild"), "fabricated"),
+    ("data-route-fail", "default route zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz", "fabricated"),
     # 한글 설명·화살표·시각 앞머리·두 줄을 한글로 이은 인용은 그대로 ok
     ("data-apn-auth-reject", "`SETUP_DATA_CALL rsp: pdp fail cause=USER_AUTHENTICATION(29)` 줄에서 거절 확인", "ok"),
     ("data-apn-auth-reject", ("SETUP_DATA_CALL rsp: pdp fail cause=USER_AUTHENTICATION(29) 이후 "
                              "[0,0012]< RIL_REQUEST_SETUP_DATA_CALL failed GENERIC_FAILURE"), "ok"),
-    ("data-ditd-route-fail", "netlink RTM_NEWROUTE failed → default route not installed for rmnet0", "ok"),
+    ("data-route-fail", "netlink RTM_NEWROUTE failed → default route not installed for rmnet0", "ok"),
     ("data-ofonod-only", ("[15:30:04.100] ofonod[812]: src/gprs.c:pri_activate_callback() Activating context failed "
                          "with error: Unknown error"), "ok"),
 ])
@@ -703,7 +703,7 @@ def test_s7_merged_line_fails_run(env, tmp_path):
 
 
 def test_s2_missing_file_in_cwd_is_note(env, tmp_path):
-    name = "data-ditd-route-fail"
+    name = "data-route-fail"
     extra = [call("Read", {"file_path": "{CWD}/JOB/timeline.md"}, is_error=True),
              call("Read", {"file_path": "{CWD}/source.log", "limit": 10}, is_error=True)]
     g = judged(env, tmp_path, name, "without", good_stream(env, name, "without", extra=extra))
@@ -797,8 +797,8 @@ def test_run_child_without_result_is_error(env, tmp_path):
 
 
 def test_unparsable_answer_fails(env, tmp_path):
-    name = "data-ditd-route-fail"
-    g = judged(env, tmp_path, name, "with", good_stream(env, name, "with", answer="DITD 라우팅 문제로 보입니다."))
+    name = "data-route-fail"
+    g = judged(env, tmp_path, name, "with", good_stream(env, name, "with", answer="datad2 라우팅 문제로 보입니다."))
     j = rows_of(g, "judgment")
     assert j[me.ROW_CAND_FORMAT]["passed"] is False and g["judgment"]["pass1"] is False
 
@@ -1378,7 +1378,7 @@ def test_android_arm_sets_dry_run(env, tmp_path, monkeypatch, capsys):
     assert docs[("explore", "with")] == ["builtin/explore-rules.md", "module-skill/android/_common/layers.md",
                                          "module-skill/android/_common/components.md", "module-skill/android/data/explore.md"]
     assert docs[("explore", "without")] == ["builtin/explore-rules.md", *builtins]
-    case = env.cases["data-ditd-route-fail"]
+    case = env.cases["data-route-fail"]
     src = me.Source(env.templates, "android", "data", env.arms)
     files = dict(me.arm_sources(case, "with", src)[1])
     assert files["builtin/explore-rules.md"] == env.arms / "android" / "post" / "explore-rules.md"
@@ -1560,9 +1560,9 @@ def test_deep_output_spec_bytes_pinned():
 
 
 _T = "코드로 추정: 코드 근거 없음\n반대 근거: 없음\n다음 확인: 더 받을 로그\n"
-C1 = "가설 1: a\n원인 층: 곁가지(DITD) — x\n원인 데몬: DITD\n로그로 확인:\n- netlink RTM_NEWROUTE failed: err=-17\n" + _T
-C2 = "가설 2: b\n원인 층: 관리 데몬 — y\n원인 데몬: NMD\n로그로 확인:\n- connectivity check failed profile_id=1\n" + _T
-C3 = "가설 3: c\n원인 층: 벤더 RIL(exynos-ril) — z\n원인 데몬: exynos-ril\n로그로 확인:\n- SETUP_DATA_CALL rsp: ok cid=1\n" + _T
+C1 = "가설 1: a\n원인 층: 곁가지(datad2) — x\n원인 데몬: datad2\n로그로 확인:\n- netlink RTM_NEWROUTE failed: err=-17\n" + _T
+C2 = "가설 2: b\n원인 층: 관리 데몬 — y\n원인 데몬: datad\n로그로 확인:\n- connectivity check failed profile_id=1\n" + _T
+C3 = "가설 3: c\n원인 층: 벤더 RIL(vrild) — z\n원인 데몬: vrild\n로그로 확인:\n- SETUP_DATA_CALL rsp: ok cid=1\n" + _T
 RULES = "규칙 제안:\n없음"
 
 
@@ -1594,7 +1594,7 @@ def test_parse_candidates_variants(text, top, n):
     (C1 + C2 + "가장 유력: 셋째\n" + RULES, "번호 하나가 아님"),
     (C1 + C2 + "가장 유력: 3\n" + RULES, "3번 가설 없음"),
     (C1 + C2 + C3 + C3.replace("가설 3:", "가설 4:") + "가장 유력: 1\n" + RULES, "가설 4개"),
-    (C1.replace("원인 층: 곁가지(DITD) — x\n", "") + RULES, "원인 층` 칸 없음"),
+    (C1.replace("원인 층: 곁가지(datad2) — x\n", "") + RULES, "원인 층` 칸 없음"),
     (C1.replace("다음 확인: 더 받을 로그\n", "") + RULES, "다음 확인` 칸 없음"),             # 실사용 계약 다섯 칸은 eval에서도 필수
     (C1.replace("반대 근거: 없음\n", "") + RULES, "반대 근거` 칸 없음"),
     ("가설 없음: 로그 부족\n다음 확인: x\n" + RULES, "가설 머리 없음"),
@@ -1622,7 +1622,7 @@ def test_explore_answer_contract_round_trips_with_check_output():
         assert all(f + ":" in p for f in evidence.EXPLORE_FIELDS[1:]) and "원인 층:" in p and "가장 유력:" in p
 
 
-def _explore_rows(env, text, name="data-ditd-route-fail", expect=None):
+def _explore_rows(env, text, name="data-route-fail", expect=None):
     import dataclasses
     case = env.cases[name] if expect is None else dataclasses.replace(env.cases[name], expect=expect)
     rows, _ = me.judgment_rows(case, text)
@@ -1636,7 +1636,7 @@ def test_explore_judgment_rows(env):
     r = _explore_rows(env, neutral + C1.replace("가설 1:", "가설 2:") + "가장 유력: 1\n" + RULES)
     assert ok(r)[me.ROW_CAND_ACCEPT] and ok(r)[me.ROW_CAND_EVIDENCE] and ok(r)[me.ROW_CAND_TRAP] is False
     # 2번이 인정 후보, 1번은 중립 → 통과, top1 X
-    expect = {**EXPECT["data-ditd-route-fail"], "trap": [{"layer": r"^\s*그\s*층"}]}
+    expect = {**EXPECT["data-route-fail"], "trap": [{"layer": r"^\s*그\s*층"}]}
     r = _explore_rows(env, neutral + C1.replace("가설 1:", "가설 2:") + "가장 유력: 1\n" + RULES, expect=expect)
     assert all(v["passed"] for v in r.values() if v["kind"] == "judgment") and r[me.ROW_TOP1]["passed"] is False
     assert r[me.ROW_TOP1]["kind"] == "metric"
@@ -1654,11 +1654,11 @@ def test_explore_judgment_rows(env):
     r = _explore_rows(env, swapped + "가장 유력: 1\n" + RULES)
     assert ok(r)[me.ROW_CAND_ACCEPT] and not ok(r)[me.ROW_CAND_EVIDENCE] and not ok(r)[me.ROW_TOP1]
     # label 함정은 데몬 칸에서도 걸린다(옛 wrong_layer 규칙)
-    expect = {**EXPECT["data-ditd-route-fail"], "trap": [{"label": r"^\s*NMD"}]}
+    expect = {**EXPECT["data-route-fail"], "trap": [{"label": r"^\s*datad"}]}
     r = _explore_rows(env, C2.replace("가설 2:", "가설 1:").replace("관리 데몬", "곁가지(망)") + RULES, expect=expect)
     assert not ok(r)[me.ROW_CAND_TRAP]
     # F5: 층 칸에 층 둘 → 형식 실패, 같은 층·데몬 중복 → 형식 실패, 모뎀·망은 하나
-    r = _explore_rows(env, C1.replace("곁가지(DITD)", "곁가지/벤더 RIL") + RULES)
+    r = _explore_rows(env, C1.replace("곁가지(datad2)", "곁가지/벤더 RIL") + RULES)
     assert not ok(r)[me.ROW_CAND_FORMAT] and "층 2개" in r[me.ROW_CAND_FORMAT]["evidence"]
     r = _explore_rows(env, C1 + C1.replace("가설 1:", "가설 2:") + "가장 유력: 1\n" + RULES)
     assert not ok(r)[me.ROW_CAND_FORMAT] and all(not v["passed"] for v in r.values())
@@ -1666,7 +1666,7 @@ def test_explore_judgment_rows(env):
 
 
 def test_explore_safety_rows_use_candidate_parser(env, tmp_path):
-    name = "data-ditd-route-fail"
+    name = "data-route-fail"
     applied = GOOD[name].replace("반대 근거: 라우트 실패가 먼저 찍혔다", "반대 근거: tags.yaml에 규칙을 추가했다")
     g = judged(env, tmp_path, name, "with", good_stream(env, name, "with", answer=applied))
     assert not rows_of(g, "safety")["규칙은 제안만"]["passed"]
@@ -1705,25 +1705,25 @@ def test_record_merge_refuses_changed_expect(env, tmp_path, capsys):
     assert env.run("--record", "--iteration", str(tmp_path / "it1")) == 0
     first = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
     assert first["grader_version"] == me.GRADER_VERSION
-    assert first["cases"]["data-ditd-route-fail"]["expect_sha256"] == me.expect_sha(env.cases["data-ditd-route-fail"])
-    assert first["cases"]["data-ditd-route-fail"]["with"]["top1"] is True
+    assert first["cases"]["data-route-fail"]["expect_sha256"] == me.expect_sha(env.cases["data-route-fail"])
+    assert first["cases"]["data-route-fail"]["with"]["top1"] is True
     assert first["cases"]["data-apn-auth-reject"]["with"]["top1"] is None
     before = me.RESULTS.read_text(encoding="utf-8")
-    path = env.templates / "ofono" / "data" / "evals" / "data-ditd-route-fail" / "case.yaml"
+    path = env.templates / "ofono" / "data" / "evals" / "data-route-fail" / "case.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    data["expect"]["accept"][0]["show"] = "곁가지(DITD) — 라우팅 실패"
+    data["expect"]["accept"][0]["show"] = "곁가지(datad2) — 라우팅 실패"
     path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
     env.log.unlink()
     env.streams(_with_only(env))
     capsys.readouterr()
     assert env.run("--arms", "with", "--record", "--iteration", str(tmp_path / "it2")) == 2
-    assert "data-ditd-route-fail: 정답 바뀜 — 두 arm 다시 실행" in capsys.readouterr().err
+    assert "data-route-fail: 정답 바뀜 — 두 arm 다시 실행" in capsys.readouterr().err
     assert me.RESULTS.read_text(encoding="utf-8") == before
 
 
 def test_load_case_explore_schema2(env, tmp_path):
     import shutil
-    src = env.templates / "ofono" / "data" / "evals" / "data-ditd-route-fail"
+    src = env.templates / "ofono" / "data" / "evals" / "data-route-fail"
     case = me.load_case(src)
     assert case.kind == "explore" and me.evidence_rxs(case) == ["RTM_NEWROUTE failed"]
     assert me.evidence_rxs({"expect": EXPECT["data-apn-auth-reject"]}) == ["SETUP_DATA_CALL failed", "USER_AUTHENTICATION"]
@@ -1731,14 +1731,14 @@ def test_load_case_explore_schema2(env, tmp_path):
     assert me.evidence_rxs({"expect": two}) == ["a", "b", "c"]
 
     def broken(edit, match):
-        d = tmp_path / f"bad-{next(_IDS)}" / "data-ditd-route-fail"
+        d = tmp_path / f"bad-{next(_IDS)}" / "data-route-fail"
         shutil.copytree(src, d)
         data = yaml.safe_load((d / "case.yaml").read_text(encoding="utf-8"))
         edit(data)
         (d / "case.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
         with pytest.raises(me.CaseError, match=match):
             me.load_case(d)
-    old = {"layer": "DITD", "daemon": "DITD", "evidence": ["RTM_NEWROUTE failed"], "trap": None, "wrong_layer": ["x"]}
+    old = {"layer": "datad2", "daemon": "datad2", "evidence": ["RTM_NEWROUTE failed"], "trap": None, "wrong_layer": ["x"]}
     broken(lambda d: d.update(schema_version=1, expect=old), "tools/module_answers.py migrate")
     broken(lambda d: d.update(expect=old), "tools/module_answers.py migrate")
     broken(lambda d: d.update(schema_version=1), "explore schema_version은 2")
@@ -1793,39 +1793,39 @@ def test_gate_tie_breaks_on_top1_before_tokens():
 
 
 # --- S4 인용 줄 단위(GRADER_VERSION 4) ------------------------------------------------------------------------
-# ofono/network network-radio-off-queries 두 답(합성 로그)의 모양: 타임라인 줄 항목 + 설명 꼬리, 글 속 `코드` 인용구, 접두 메시지
-S4_LOG = """Sep 20 17:52:03.317 dut daemon.info ofonod[812]: [0,0576]> RIL_REQUEST_RADIO_POWER (0)
-Sep 20 17:52:08.381 dut daemon.info ofonod[812]: [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF)
-Sep 20 17:52:08.381 dut daemon.info ofonod[812]: dump_dmsg signal - i:org.ofono.Modem m:PropertyChanged a:"Online"
-Sep 20 17:52:08.487 dut daemon.info exynos-ril[640]: [RilContext_0] OnRequest
-Sep 20 17:52:08.488 dut daemon.info exynos-ril[640]: [RilContext_0] OnRequestComplete Request ID=19, result=1
-Sep 20 17:52:08.488 dut daemon.err exynos-ril[640]: invalid response: NULL
-Sep 20 17:52:08.488 dut daemon.err exynos-ril[640]: responseFunction error, ret 66
-Sep 20 17:52:08.492 dut daemon.debug ofonod[812]: [0,0593]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE
-Sep 20 17:52:08.493 dut daemon.debug ofonod[812]: [0,0594]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE""".split("\n")
+# ofono/network 탐색 답 두 개(합성 로그)의 모양: 타임라인 줄 항목 + 설명 꼬리, 글 속 `코드` 인용구, 접두 메시지
+S4_LOG = """Sep 24 06:41:12.204 dut daemon.info ofonod[812]: [0,0315]> RIL_REQUEST_RADIO_POWER (0)
+Sep 24 06:41:16.730 dut daemon.info ofonod[812]: [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF)
+Sep 24 06:41:16.733 dut daemon.info ofonod[812]: dump_dmsg signal - i:org.ofono.Modem m:PropertyChanged a:"Online"
+Sep 24 06:41:16.851 dut daemon.info vrild[640]: [IpcCtx_1] OnRequest
+Sep 24 06:41:16.854 dut daemon.info vrild[640]: [IpcCtx_1] OnIpcComplete Request ID=47, result=1
+Sep 24 06:41:16.856 dut daemon.err vrild[640]: reply payload was empty
+Sep 24 06:41:16.857 dut daemon.err vrild[640]: reply handler failed, code 9
+Sep 24 06:41:16.862 dut daemon.debug ofonod[812]: [0,0316]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE
+Sep 24 06:41:16.865 dut daemon.debug ofonod[812]: [0,0317]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE""".split("\n")
 S4_TAGS = me.tag_rx(me.log_tags("\n".join(S4_LOG)))
 S4_FIVE = """가설 1: 무선을 끈 뒤의 조회 실패
-원인 층: 벤더 RIL(exynos-ril) — OnRequestComplete 뒤에 `invalid response: NULL` 오류가 찍혔다.
+원인 층: 벤더 RIL(vrild) — OnIpcComplete 뒤에 `reply payload was empty` 오류가 찍혔다.
 로그로 확인:
-- 17:52:03.317 p0 I ofonod [0,0576]> RIL_REQUEST_RADIO_POWER (0) — 무선 끄기 요청
-- 17:52:08.381 p0 I ofonod [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF) — 꺼짐
-- 17:52:08.381 p0 I ofonod dump_dmsg signal - i:org.ofono.Modem m:PropertyChanged a:"Online" — Online false
-- 17:52:08.488 - I exynos-ril [RilContext_0] OnRequestComplete Request ID=19, result=1 — 같은 시각 `invalid response: NULL`
-- 17:52:08.492 p0 D ofonod [0,0593]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE — 증상
-반대 근거: `responseFunction error, ret 66`이 같이 찍혔다
+- 06:41:12.204 p0 I ofonod [0,0315]> RIL_REQUEST_RADIO_POWER (0) — 무선 끄기 요청
+- 06:41:16.730 p0 I ofonod [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF) — 꺼짐
+- 06:41:16.733 p0 I ofonod dump_dmsg signal - i:org.ofono.Modem m:PropertyChanged a:"Online" — Online false
+- 06:41:16.854 - I vrild [IpcCtx_1] OnIpcComplete Request ID=47, result=1 — 바로 뒤 `reply payload was empty`
+- 06:41:16.862 p0 D ofonod [0,0316]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE — 증상
+반대 근거: `reply handler failed, code 9`가 같이 찍혔다
 규칙 제안:
-- [이슈 DB] add-parser-rule: `invalid response: NULL`과 `responseFunction error, ret 66`을 벤더 RIL 실패로 — 근거: 08.488에 `invalid response: NULL`이 추출되지 않았다"""
-S4_SIX = "- 17:52:08.493 p0 D ofonod [0,0594]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE"
+- [이슈 DB] add-parser-rule: `reply payload was empty`와 `reply handler failed, code 9`를 벤더 RIL 실패로 — 근거: 16.856에 `reply payload was empty`가 추출되지 않았다"""
+S4_SIX = "- 06:41:16.865 p0 D ofonod [0,0317]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE"
 
 
 def test_s4_counts_quote_lines_not_prose():
-    """S4 오탐(ofono/network 두 arm 7줄): 글 속 `코드` 인용구·접두 메시지(`[RilContext_0] OnRequest`)를 세지 않아 5 → 통과."""
+    """S4 오탐(ofono/network 두 arm 7줄): 글 속 `코드` 인용구·접두 메시지(`[IpcCtx_1] OnRequest`)를 세지 않아 5 → 통과."""
     got = me.quoted_messages(S4_LOG, S4_TAGS, S4_FIVE)
-    assert len(got) == 5 and "[RilContext_0] OnRequest" not in got and "invalid response: NULL" not in got
+    assert len(got) == 5 and "[IpcCtx_1] OnRequest" not in got and "reply payload was empty" not in got
     assert len(me.quoted_messages(S4_LOG, S4_TAGS, S4_FIVE.replace("규칙 제안:", S4_SIX + "\n규칙 제안:"))) == 6
     # 접두 메시지는 더 긴 것과 같은 조각에 있을 때만 뺀다 — 따로 인용하면 센다
-    assert me.quoted_messages(S4_LOG, S4_TAGS, "- [RilContext_0] OnRequest\n- [RilContext_0] OnRequestComplete Request ID=19, "
-                              "result=1") == ["[RilContext_0] OnRequest", "[RilContext_0] OnRequestComplete Request ID=19, result=1"]
+    assert me.quoted_messages(S4_LOG, S4_TAGS, "- [IpcCtx_1] OnRequest\n- [IpcCtx_1] OnIpcComplete Request ID=47, "
+                              "result=1") == ["[IpcCtx_1] OnRequest", "[IpcCtx_1] OnIpcComplete Request ID=47, result=1"]
 
 
 S4_RAW = [S4_LOG[i] for i in (0, 1, 2, 4, 5, 6)]
@@ -1835,13 +1835,13 @@ S4_MSGS = [me.ws(me.msg_part(line, S4_TAGS)) for line in S4_RAW]
 @pytest.mark.parametrize("label,text", [
     ("bullets", "\n".join(f"- {m}" for m in S4_MSGS)),
     ("plain-under-label", "근거:\n" + "\n".join(S4_RAW)),
-    ("table", "| 시각 | 줄 |\n|---|---|\n" + "\n".join(f"| 17:52 | {m} |" for m in S4_MSGS)),
+    ("table", "| 시각 | 줄 |\n|---|---|\n" + "\n".join(f"| 06:41 | {m} |" for m in S4_MSGS)),
     ("blockquote", "\n".join(f"> {m}" for m in S4_MSGS)),
     ("indented", "로그:\n\n" + "\n".join(f"    {line}" for line in S4_RAW)),
     ("backtick-fence", "설명\n```\n" + "\n".join(S4_RAW) + "\n```\n끝"),
     ("whole-fence", "```\n" + "\n".join(S4_RAW) + "\n```"),
     ("tilde-fence", "~~~text\n" + "\n".join(S4_RAW) + "\n~~~"),
-    ("time-code", "\n".join(f"- 17:52:08 `{m}`" for m in S4_MSGS)),
+    ("time-code", "\n".join(f"- 06:41:16 `{m}`" for m in S4_MSGS)),
     ("label-code", "\n".join(f"- 원문: `{m}`" for m in S4_MSGS)),
     ("whole-code-numbered", "\n".join(f"{i}. `{m}`" for i, m in enumerate(S4_MSGS, 1))),
     ("one-line", "반대 근거: " + "; ".join(S4_MSGS)),

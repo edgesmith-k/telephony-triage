@@ -1,26 +1,26 @@
 -- [합성] telephony-triage module-skills D eval log. Hand-written; base sample IMS-001-01.log + vendor IMS registration chain.
 08-26 15:00:02.100  2101 2141 D RILJ    : [0306]> NOTIFY_IMS_DATA_NETWORK [PHONE0]
 08-26 15:00:03.107  1188 1258 V RIL     : [<DEV#1>][TX] <unknown sit>, REQ, 12 bytes, Token(0x0206)
-08-26 15:00:04.114  1188 1258 V RIL     : [<DEV#1>][RX] <unknown sit>, RSP, 12 bytes, Token(0x0206), Error(RCM_E_UNDEFINED_CMD)
-08-26 15:00:05.121  1188 1248 E RILC    : Calling responseFunction() for token 306
+08-26 15:00:04.114  1188 1258 V RIL     : [<DEV#1>][RX] <unknown sit>, RSP, 12 bytes, Token(0x0206), Error(RCM_E_UNKNOWN_CMD)
+08-26 15:00:05.121  1188 1248 E VRIL    : Calling responseHandler() for token 306
 08-26 15:00:06.128  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
 08-26 15:00:07.135  2101 2141 D RILJ    : [0306]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
 08-26 15:00:10.000  2101 2113 D ImsResolver: bound to mock ImsService [PHONE0]
 08-26 15:00:11.000  2101 2111 D DN-7-C  : onConnected: apn=ims, type=IMS, connected
 08-26 15:00:13.000  2101 2113 D ImsManager: register: impu=sip:<IMPU#1>@<HOST#1> [PHONE0]
-08-26 15:00:13.300  1777 2677 D SHANNON_IMS: 1373 [CONN] Sending AddPdn in 0 with PDN:SLID:0  APN_TYPE:<APN#1> STATE:IMS_REGISTERING slot:0 (StackControl%sendPdnInfo:457)
-08-26 15:00:13.400  1777 2677 I SHANNON_IMS: 1412 [HELP] #:PURP:# SOL TX{RILC_REQ_AIMS_ADD_PDN_INFO} : pdn-type : 2  ip-type : 3  ims-pdn-ip-address4 : <IP#1>  pdn-new : 1
-08-26 15:00:13.450  1777 2677 I SHANNON_IMS: 1413 [HELP] #:PURP:# SOL RX{RILC_REQ_AIMS_ADD_PDN_INFO} : STATUS_SUCCESS
+08-26 15:00:13.300  1777 2677 D VRIL-IMS: 1373 [CONN] Sending AddPdn in 0 with PDN:SLID:0  APN_TYPE:<APN#1> STATE:IMS_REGISTERING slot:0 (StackControl%sendPdnInfo:457)
+08-26 15:00:13.400  1777 2677 I VRIL-IMS: 1412 [HELP] #:PURP:# SOL TX{OEM_REQ_MTEL_ADD_PDN_INFO} : pdn-type : 2  ip-type : 3  ims-pdn-ip-address4 : <IP#1>  pdn-new : 1
+08-26 15:00:13.450  1777 2677 I VRIL-IMS: 1413 [HELP] #:PURP:# SOL RX{OEM_REQ_MTEL_ADD_PDN_INFO} : STATUS_SUCCESS
 08-26 15:00:14.000  1188 1258 V RIL     : [<DEV#1>][RX] <HEXDUMP 16B>
-08-26 15:00:15.100  1188 1258 V RIL     : [<DEV#1>][RX] SIT_IND_AIMS_REGISTRATION, IND, 208 bytes
-08-26 15:00:15.105  1777 1777 I SHANNON_IMS: 1416 [NETW] #:PURP:# UNSOL {RILC_UNSOL_AIMS_REGISTRATION} : reg-state : 0  feature : 11  feature-bitmask : 0  status-code : 403  delegate-bitmask : 0  mFeatureExt : 0  (NetworkAdaptor$AdaptorChannel%onMessage:390)
+08-26 15:00:15.100  1188 1258 V RIL     : [<DEV#1>][RX] SIT_NOTIFY_MTEL_REGISTRATION, IND, 208 bytes
+08-26 15:00:15.105  1777 1777 I VRIL-IMS: 1416 [NETW] #:PURP:# UNSOL {OEM_UNSOL_MTEL_REGISTRATION} : reg-state : 0  feature : 11  feature-bitmask : 0  status-code : 403  delegate-bitmask : 0  mFeatureExt : 0  (NetworkAdaptor$AdaptorChannel%onMessage:390)
 08-26 15:00:15.200  2101 2113 W ImsRegistration: onRegistrationFailed: code=403 reason=FORBIDDEN [PHONE0]
-08-26 15:00:16.000  1188 1248 E RILC    : Calling responseFunction() for token 306
+08-26 15:00:16.000  1188 1248 E VRIL    : Calling responseHandler() for token 306
 08-26 15:00:43.000  2101 2113 D ImsManager: register: impu=sip:<IMPU#1>@<HOST#1> [PHONE0]
-08-26 15:00:43.300  1777 2677 D SHANNON_IMS: 1373 [CONN] Sending AddPdn in 0 with PDN:SLID:0  APN_TYPE:<APN#1> STATE:IMS_REGISTERING slot:0 (StackControl%sendPdnInfo:457)
-08-26 15:00:43.400  1777 2677 I SHANNON_IMS: 1412 [HELP] #:PURP:# SOL TX{RILC_REQ_AIMS_ADD_PDN_INFO} : pdn-type : 2  ip-type : 3  ims-pdn-ip-address4 : <IP#1>  pdn-new : 1
-08-26 15:00:43.450  1777 2677 I SHANNON_IMS: 1413 [HELP] #:PURP:# SOL RX{RILC_REQ_AIMS_ADD_PDN_INFO} : STATUS_SUCCESS
-08-26 15:00:45.100  1188 1258 V RIL     : [<DEV#1>][RX] SIT_IND_AIMS_REGISTRATION, IND, 208 bytes
-08-26 15:00:45.105  1777 1777 I SHANNON_IMS: 1416 [NETW] #:PURP:# UNSOL {RILC_UNSOL_AIMS_REGISTRATION} : reg-state : 0  feature : 11  feature-bitmask : 0  status-code : 403  delegate-bitmask : 0  mFeatureExt : 0  (NetworkAdaptor$AdaptorChannel%onMessage:390)
+08-26 15:00:43.300  1777 2677 D VRIL-IMS: 1373 [CONN] Sending AddPdn in 0 with PDN:SLID:0  APN_TYPE:<APN#1> STATE:IMS_REGISTERING slot:0 (StackControl%sendPdnInfo:457)
+08-26 15:00:43.400  1777 2677 I VRIL-IMS: 1412 [HELP] #:PURP:# SOL TX{OEM_REQ_MTEL_ADD_PDN_INFO} : pdn-type : 2  ip-type : 3  ims-pdn-ip-address4 : <IP#1>  pdn-new : 1
+08-26 15:00:43.450  1777 2677 I VRIL-IMS: 1413 [HELP] #:PURP:# SOL RX{OEM_REQ_MTEL_ADD_PDN_INFO} : STATUS_SUCCESS
+08-26 15:00:45.100  1188 1258 V RIL     : [<DEV#1>][RX] SIT_NOTIFY_MTEL_REGISTRATION, IND, 208 bytes
+08-26 15:00:45.105  1777 1777 I VRIL-IMS: 1416 [NETW] #:PURP:# UNSOL {OEM_UNSOL_MTEL_REGISTRATION} : reg-state : 0  feature : 11  feature-bitmask : 0  status-code : 403  delegate-bitmask : 0  mFeatureExt : 0  (NetworkAdaptor$AdaptorChannel%onMessage:390)
 08-26 15:00:45.200  2101 2113 W ImsRegistration: onRegistrationFailed: code=403 reason=FORBIDDEN [PHONE0]
 08-26 15:00:50.000  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009

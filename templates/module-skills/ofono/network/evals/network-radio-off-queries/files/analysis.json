@@ -5,7 +5,7 @@
  "mode": "offline",
  "issue": {
   "origin": "file",
-  "occurred_at": "2026-02-27T17:52:08+00:00",
+  "occurred_at": "2026-09-22T10:00:20+00:00",
   "sw": null,
   "platform_version": "2",
   "sim_slot": "0",
@@ -22,16 +22,16 @@
    "source.log"
   ],
   "window": {
-   "start": "2026-02-27T17:47:08.000Z",
-   "end": "2026-02-27T17:57:08.000Z"
+   "start": "2026-09-22T09:55:20.000Z",
+   "end": "2026-09-22T10:05:20.000Z"
   },
   "range": [
-   "2026-02-27T17:52:03.317Z",
-   "2026-02-27T17:52:08.522Z"
+   "2026-09-22T10:00:16.536Z",
+   "2026-09-22T10:00:22.236Z"
   ],
   "in_range": "partial",
   "clock_anomalies": 0,
-  "events": 103,
+  "events": 23,
   "masked": null
  },
  "no_candidate": {
@@ -49,13 +49,13 @@
   ],
   "error_events": [
    {
-    "ts": "2026-02-27T17:52:08.488Z",
-    "tag": "exynos-ril",
+    "ts": "2026-09-22T10:00:21.721Z",
+    "tag": "vrild",
     "event": "builtin.common.vendor_request_failed",
     "phone": null
    },
    {
-    "ts": "2026-02-27T17:52:08.492Z",
+    "ts": "2026-09-22T10:00:21.723Z",
     "tag": "ofonod",
     "event": "ril_error",
     "phone": 0,
@@ -64,7 +64,7 @@
    }
   ],
   "error_event_total": 2,
-  "unextracted_warn": 4
+  "unextracted_warn": 1
  },
  "code": {
   "skipped": true
@@ -74,7 +74,7 @@
   "when": "ask"
  },
  "must_show": [
-  "로그 범위: 2026-02-27T17:52:03.317Z ~ 2026-02-27T17:52:08.522Z (일부만 포함), 시계 이상 없음"
+  "로그 범위: 2026-09-22T10:00:16.536Z ~ 2026-09-22T10:00:22.236Z (일부만 포함), 시계 이상 없음"
  ],
  "truncated": false
 }

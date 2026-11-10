@@ -48,7 +48,7 @@ SPEC = PlatformSpec(
         configure=bugreport.configure_rules,
     ),
     default_backend="reference",
-    block_keys=("source_tree", "log", "ril", "bugreport"),
+    block_keys=("source_tree", "log", "ril", "bugreport", "vendor_ipc"),
     # 모듈 스킬 템플릿·모듈 eval 자료(17-platforms §10-3). layers는 module_eval 출력 형식의 한 줄 — 바이트가 시험으로 고정돼 있다.
     # Android는 log-guide 대신 내장 log-tags·ril-requests·fail-causes(DD §4.4, H C1+D S2)
     template=TemplateMeta(

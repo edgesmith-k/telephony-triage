@@ -9,6 +9,8 @@
 재사용한다(벤더 이벤트도 원하면 `super().detect()`를 합친다).
 
 0.1.1(C1+D 보정): D에서 벤더 IPC builtin과 ril.py 해석이 0.1.0 출력을 바꿨다(분석 재사용 캐시 키 때문에 올림).
+0.1.2: 벤더 IPC 요청 완료 줄의 사내 토큰이 코드 상수에서 site-defaults `platform.vendor_ipc`(기본 placeholder)로 —
+설정이 없으면 그 줄의 builtin이 0.1.1과 다를 수 있다.
 
 구현 위치는 `platforms/android/backend.py`이고 `parser_backends/reference`는 BACKEND만 다시 내보낸다.
 """
@@ -24,7 +26,7 @@ from common import events, vendor_ipc
 from . import logcat, ril
 from parser_backends.base import ParserBackend, TagAttrSet, Window
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 
 # 벤더 IPC 결과 줄을 보는 태그(벤더 RIL 태그 placeholder). TODO(SITE:S9) 사내 태그 확인
 VENDOR_IPC_TAGS = frozenset({"RIL"})
@@ -40,6 +42,7 @@ class ReferenceBackend(ParserBackend):
     _phone = logcat.DEFAULT_PHONE_RULES
     _ril_tags = ril.RIL_TAGS
     _ril_vendor = None
+    _ipc = vendor_ipc.DEFAULT       # `platform.vendor_ipc`(벤더 IPC 줄의 사내 토큰)
     # 태그 속성 판단(`apply_rules`가 사본에 새로 만든다). 기본은 상수 집합.
     _level_unreliable = TagAttrSet(None, "level", "unreliable", LEVEL_UNRELIABLE_TAGS)
     _vendor_ipc = TagAttrSet(None, "ipc", "vendor", VENDOR_IPC_TAGS)
@@ -49,6 +52,7 @@ class ReferenceBackend(ParserBackend):
         other._phone = profile.phone
         other._ril_tags = profile.ril_tags
         other._ril_vendor = profile.ril_vendor
+        other._ipc = profile.vendor_ipc
         return other
 
     def apply_rules(self, rules) -> ReferenceBackend:
@@ -71,7 +75,7 @@ class ReferenceBackend(ParserBackend):
         결과만 본다. site 백엔드가 바꾼다."""
         if not self._vendor_ipc(record.get("tag") or ""):
             return []
-        return vendor_ipc.detect(record.get("msg") or "")
+        return vendor_ipc.detect(record.get("msg") or "", self._ipc)
 
     # -- 공통 처리 ---------------------------------------------------------
 

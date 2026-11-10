@@ -1,23 +1,23 @@
 -- [합성]
 08-09 13:10:54.906  1016  1028 I WPKTRT  : process_link_down_or_deleted: rmnet15 is deactivated
 08-09 13:10:54.907  1831  1911 D OemRil  : Unsol response received for slotId 1
-08-09 13:10:54.907  1831  1911 V OemRil  : [UNSL]< RILC_UNSOL_RADIO_STATE_CHANGED [SUB1]
+08-09 13:10:54.907  1831  1911 V OemRil  : [UNSL]< OEM_UNSOL_RADIO_STATE_CHANGED [SUB1]
 08-09 13:10:54.907  1831  1911 D DataReader: getInt=00 00 00 00 
 08-09 13:10:54.907  1831  1911 V OemRil  : notifyRadioStateChanged: newState=RADIO_OFF
-08-09 13:10:54.907   908   908 D RILClient: [OemClient]IND: (clientId = 2, msgId = 1002, dataLength = 4, channel = 1)
+08-09 13:10:54.907   908   908 D BenchProbe: [OemClient]IND: (clientId = 2, msgId = 1002, dataLength = 4, channel = 1)
 -- [생략]
-08-09 13:10:54.951  1155  1155 I cpif    : LNK-TX(40): <HEXDUMP 24B>
+08-09 13:10:54.951  1155  1155 I VRIL-LINK    : LNK-TX(40): <HEXDUMP 24B>
 08-09 13:10:54.948  1831  1911 D DataReader: getInt=0A 00 00 00 
 08-09 13:10:54.948  1831  1911 V OemRil  : notifyRadioStateChanged: newState=RADIO_ON
-08-09 13:10:54.948  2891  2891 D SHANNON_TEST: 0034 [HELP] Unsol {UNKNOWN} received  [SLID:1  Active:true] (ImsRilHelper%onHandleUnsolicitedResponse:256)
+08-09 13:10:54.948  2891  2891 D VRIL-TEST: 0034 [HELP] Unsol {UNKNOWN} received  [SLID:1  Active:true] (ImsRilHelper%onHandleUnsolicitedResponse:256)
 -- [생략]
-08-09 13:10:54.959  2891  2891 D SHANNON_TEST: 0040 [HELP] Unsol {UNKNOWN} received  [SLID:0  Active:true] (ImsRilHelper%onHandleUnsolicitedResponse:256)
-08-09 13:10:54.959  2891  2891 D SHANNON_TEST: 0041 [HELP] Unsol {UNKNOWN} received  [SLID:1  Active:true] (ImsRilHelper%onHandleUnsolicitedResponse:256)
+08-09 13:10:54.959  2891  2891 D VRIL-TEST: 0040 [HELP] Unsol {UNKNOWN} received  [SLID:0  Active:true] (ImsRilHelper%onHandleUnsolicitedResponse:256)
+08-09 13:10:54.959  2891  2891 D VRIL-TEST: 0041 [HELP] Unsol {UNKNOWN} received  [SLID:1  Active:true] (ImsRilHelper%onHandleUnsolicitedResponse:256)
 08-09 13:10:54.959  1856  2015 D SatelliteController: EVENT_RADIO_STATE_CHANGED: radioState=1
-08-09 13:10:54.959  1807  1807 I SHANNON_IMS: 0394 [ADAP] Sending StackStartReq SimStatus [0] StackType [1] [SLID:1 ] (RegistrationAdaptor%sendStackStartReq:712)
+08-09 13:10:54.959  1807  1807 I VRIL-IMS: 0394 [ADAP] Sending StackStartReq SimStatus [0] StackType [1] [SLID:1 ] (RegistrationAdaptor%sendStackStartReq:712)
 -- [생략]
 --------- beginning of radio
-08-09 13:10:57.420  1096  1167 V RIL     : [ServiceMgr] msg(0xb400007d1e21f050) msgId=4001 svc=NetworkService_0(5) direction=Response
+08-09 13:10:57.420  1096  1167 V RIL     : [MsgRouterMgr] msg(0xb400007d1e21f050) msgId=4001 svc=NetworkService_0(5) direction=Response
 08-09 13:10:57.420  1831  1831 D PhoneConfig: [0] storedSubId:4 for phoneId 0
 08-09 13:10:57.420  1831  1831 D OemMultiSimSettingController: notifySubscriptionLoaded: phoneConfig=PhoneConfig:{ mPhoneId=0 mSubId=4}
 -- [생략]

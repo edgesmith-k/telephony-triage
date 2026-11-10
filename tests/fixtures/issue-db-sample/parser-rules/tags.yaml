@@ -38,13 +38,11 @@ tags:
   - {tag: InboundSmsHandler, category: sms, added_for: SMS-001, added_on: 2026-09-28, reason: 초기 (SMS 수신)}
 
   # --- 벤더 RIL 태그(사내 확인 전, TODO(SITE:S9)) — 사내 DB는 DB PR로 ---
-  # 승인 목록 78개 중 위 정규식이 이미 덮는 19개를 뺀 59개. 이 묶음은 파일 끝에 둔다(issue-db-android-plain이 여기부터 지운다).
+  # 이 묶음은 파일 끝에 둔다(issue-db-android-plain이 여기부터 지운다).
   # common
-  - {tag_regex: '^(RIL|RILC|RILC-AIDL_SERVICE|RIL_EXTERNAL)$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (벤더 RIL·RIL HAL)}
+  - {tag_regex: '^(RIL|VRIL|VRIL-SVC)$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (벤더 RIL 데몬·벤더 텔레포니 서비스)}
   - {tag_regex: '^RilRequest$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (RilRequest)}
-  - {tag_regex: '^VCD$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (VCD)}
-  - {tag_regex: '^DMD$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (DMD)}
-  - {tag_regex: '^RFSD$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (RFSD)}
+  - {tag_regex: '^VRIL-MODEM$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (모뎀/IPC)}
   - {tag_regex: '^SCED$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (SCED)}
   - {tag_regex: '^OemRil', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (OemRil)}
   - {tag_regex: '^PhoneCfgMgr$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (PhoneCfgMgr)}
@@ -59,8 +57,7 @@ tags:
   - {tag_regex: '^QOSCT-\d+$', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (QOSCT)}
   - {tag_regex: '^TNA-\d+$', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (TNA)}
   - {tag_regex: '^TNP$', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (TNP)}
-  - {tag_regex: '^ShannonDS-RM', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ShannonDS-RM)}
-  - {tag_regex: '^ShannonQNS', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ShannonQNS)}
+  - {tag_regex: '^VRIL-DATA$', category: data, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (벤더 프레임워크 태그·data)}
   # sim
   - {tag_regex: '^CAT$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (CAT)}
   - {tag_regex: '^IsimUiccRecords$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (IsimUiccRecords)}
@@ -82,7 +79,7 @@ tags:
   - {tag_regex: '^NRM-[CI]-\d+$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (NRM)}
   - {tag_regex: '^NetworkTypeController$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (NetworkTypeController)}
   - {tag_regex: '^NitzStateMachineImpl$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (NitzStateMachineImpl)}
-  - {tag_regex: '^ShannonNS-', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ShannonNS)}
+  - {tag_regex: '^VRIL-NETWORK$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (벤더 프레임워크 태그·network)}
   # call
   - {tag_regex: '^GsmCdmaCallTracker$', category: call, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (GsmCdmaCallTracker)}
   - {tag_regex: '^CallManager$', category: call, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (CallManager)}
@@ -103,5 +100,4 @@ tags:
   - {tag_regex: '^ImsRegCallbackHelper$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsRegCallbackHelper)}
   - {tag_regex: '^ImsStateCallbackController$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsStateCallbackController)}
   - {tag_regex: '^ImsStats$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsStats)}
-  - {tag_regex: '^SHANNON_IMS$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (SHANNON_IMS)}
-  - {tag_regex: '^ShannonVCC', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ShannonVCC)}
+  - {tag_regex: '^VRIL-IMS$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (벤더 IMS)}

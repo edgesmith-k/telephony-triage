@@ -30,10 +30,10 @@ EXPLORE_PENDING = core.EXPLORE_DONE_LINE.format(lines=4, total=4)
 SUB = "  - 모듈 타임라인: 4/4줄, 잡음 0, 반복 접음 0"
 
 ROWS = [("2026-09-20T15:10:00.100Z", "ofonod", "I", "src/gprs.c:gprs_attach() attach requested apn=internet"),
-        ("2026-09-20T15:10:01.200Z", "exynos-ril", "E", "RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM"),
+        ("2026-09-20T15:10:01.200Z", "vrild", "E", "RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM"),
         ("2026-09-20T15:10:02.300Z", "ofonod", "W", "drivers/rilmodem/gprs-context.c:setup_cb() activation failed"),
-        ("2026-09-20T15:10:03.400Z", "NMD", "I", "network manager daemon state=disconnected reason=pdn_reject")]
-EXTRA_ROW = ("2026-09-20T15:20:09.000Z", "DITD", "I", "policy table refreshed for interface rmnet_data7 entries=12")
+        ("2026-09-20T15:10:03.400Z", "datad", "I", "network manager daemon state=disconnected reason=pdn_reject")]
+EXTRA_ROW = ("2026-09-20T15:20:09.000Z", "datad2", "I", "policy table refreshed for interface rmnet_data7 entries=12")
 
 
 def _events(rows=ROWS, allow=()) -> dict:
@@ -109,7 +109,7 @@ def check(job: Path, purpose: str = "deep", skipped=None, out: bool = True, defa
     return code, data, (printed.err if printed else "")
 
 
-def _deep_out(quotes, layer="벤더 RIL(exynos-ril) — 인증 거절", daemon="exynos-ril", against="없음",
+def _deep_out(quotes, layer="벤더 RIL(vrild) — 인증 거절", daemon="vrild", against="없음",
               opinion="DATA-001-01 — 1위와 같음") -> str:
     return "\n".join([f"원인 층: {layer}", f"원인 데몬: {daemon}", "근거:", *[f"- {q}" for q in quotes],
                       f"반대 근거: {against}", f"분석 스킬 의견: {opinion}", "규칙 제안:", "- 없음", ""])
@@ -136,7 +136,7 @@ def _rec(job: Path, purpose: str = "deep") -> dict:
     return json.loads((job / "check-output.json").read_text(encoding="utf-8"))[purpose]
 
 
-Q1 = "15:10:01.200 p0 E exynos-ril RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM"
+Q1 = "15:10:01.200 p0 E vrild RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM"
 Q2 = "drivers/rilmodem/gprs-context.c:setup_cb() activation failed"
 FAKE = "ofonod: modem firmware crashed with assertion in qmi_wds_start_network handler"
 
@@ -151,7 +151,7 @@ def test_deep_module_renders_lines_and_record(tmp_path, capsys):
     text = (job / "report.md").read_text(encoding="utf-8").split("\n")
     i = text.index(next(t for t in text if t.startswith("- 심층 분석")))
     head = f"- 심층 분석 (모듈 스킬 ofono/data @{SHA[:7]}): "
-    assert text[i] == head + "원인 층 벤더 RIL(exynos-ril) — 인증 거절 · 원인 데몬 exynos-ril / 분석 스킬 의견: DATA-001-01 — 1위와 같음"
+    assert text[i] == head + "원인 층 벤더 RIL(vrild) — 인증 거절 · 원인 데몬 vrild / 분석 스킬 의견: DATA-001-01 — 1위와 같음"
     assert text[i + 1] == f"  - 근거: {Q1} | {Q2}"
     assert text[i + 2] == "  - 반대 근거: 없음"
     assert text[i + 3] == "  - 근거 원문 검사: 인용 2개 중 원문에 없음 0"

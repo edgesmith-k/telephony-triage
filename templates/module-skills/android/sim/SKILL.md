@@ -15,7 +15,7 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 
 ## 판단 순서
 
-1. RILJ `GET_SIM_STATUS`·`SIM_IO` → HAL `serial` → IPC `SIT_GET_SIM_STATUS`·`SIT_SIM_IO`를 Token으로 짝짓는다.
+1. RILJ `GET_SIM_STATUS`·`SIM_IO` → HAL `serial` → IPC `SIT_QUERY_SIM_STATUS`·`SIT_SIM_IO`를 Token으로 짝짓는다.
 2. IPC `Error(RCM_E_*)` 뒤 `CARD_IO_ERROR`·`ABSENT` → 모뎀·망(카드), 원인 데몬 RIL. (없으면: UiccController `onIccCardStatusDone: error=`, RilRequest `IccIoResult sw1:… sw2:…` — `error=`·SW가 있으면 층을 정한다)
 3. IPC OK인데 `errorCode≠0` → 벤더 RIL.
 4. 같은 요청의 `[TX]`→`[RX]`가 길면(초 단위) 모뎀·망(카드), RILJ→`[TX]`가 길면 벤더 RIL. 결국 `LOADED`여도 지연은 실패다.

@@ -1,11 +1,12 @@
 platform: ofono
 module: sim
 mode: deep
-center: '2026-02-27T17:48:28.432Z'
-fail: 87
+center: '2026-09-23T11:20:10.015Z'
+fail: 36
 essential:
-- 61
-- 70
-- 87
-- 88
-- 89
+- 27
+- 32
+- 36
+- 37
+- 38
+origin: 합성

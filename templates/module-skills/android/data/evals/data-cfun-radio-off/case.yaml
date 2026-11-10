@@ -19,8 +19,8 @@ run_expect:
   explore_reason: cause_unconfirmed
 expect:
   accept:
-    - layer: '곁가지|VCD|모뎀'
-      daemon: 'VCD'
+    - layer: '곁가지|VRIL-MODEM|모뎀'
+      daemon: 'VRIL-MODEM'
       evidence: ['AT\+CFUN=0', 'Internet data state changed from CONNECTED to DISCONNECTED']
   trap:
     - label: '^\s*(프레임워크|RILJ|RIL HAL|DNC|DN-|원인 아님)'

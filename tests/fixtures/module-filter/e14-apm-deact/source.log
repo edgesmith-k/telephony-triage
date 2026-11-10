@@ -1,120 +1,41 @@
-Feb 27 17:52:01.176 host1 daemon.notice DMD[773]: [ShannonDMAgent::Run] <CARRIER#1> from usb (21)bytes 
-Feb 27 17:52:01.176 host1 daemon.notice DMD[773]: [DMModemProxy::Send] Write to modem (21)bytes
-Feb 27 17:52:01.661 host1 local0.info MOSE[791]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:52:01.871 host1 daemon.notice DMD[773]: [ShannonDMAgent::Run] <CARRIER#1> from usb (21)bytes 
-Feb 27 17:52:01.871 host1 daemon.notice DMD[773]: [DMModemProxy::Send] Write to modem (21)bytes
-Feb 27 17:52:01.998 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:52:02.187 host1 daemon.notice DMD[773]: [ShannonDMAgent::Run] <CARRIER#1> from usb (21)bytes 
-Feb 27 17:52:02.187 host1 daemon.notice DMD[773]: [DMModemProxy::Send] Write to modem (21)bytes
-Feb 27 17:52:02.668 host1 local0.info MOSE[791]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:52:02.884 host1 daemon.notice DMD[773]: [ShannonDMAgent::Run] <CARRIER#1> from usb (21)bytes 
-Feb 27 17:52:02.884 host1 daemon.notice DMD[773]: [DMModemProxy::Send] Write to modem (21)bytes
-Feb 27 17:52:03.004 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:52:03.201 host1 daemon.notice DMD[773]: [ShannonDMAgent::Run] <CARRIER#1> from usb (21)bytes 
-Feb 27 17:52:03.201 host1 daemon.notice DMD[773]: [DMModemProxy::Send] Write to modem (21)bytes
-Feb 27 17:52:03.310 host1 daemon.debug exynos-ril[463]: [<DEVICENODE#1>][RX] SIT_DEACT_DATA_CALL, RSP, 12 bytes, Token(0x0271), OK(RCM_E_SUCCESS)
-Feb 27 17:52:03.310 host1 daemon.debug exynos-ril[463]: <HEXDUMP 12B>
-Feb 27 17:52:03.310 host1 daemon.debug exynos-ril[463]: [RilContext_0] ProcessModemData 
-Feb 27 17:52:03.310 host1 daemon.debug exynos-ril[463]: WaitList<IP#1>ind() found record : token=0x0271 SrcService ID =2 DestService ID=2 Result Id=3003
-Feb 27 17:52:03.310 host1 daemon.debug exynos-ril[463]: Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0601 Service ID=2 Message ID=3003
-Feb 27 17:52:03.310 host1 daemon.debug exynos-ril[463]: [ServiceMgr] msg(0x7fa0014920) msgId=3003 svc=PsService_0(2) direction=Response
-Feb 27 17:52:03.310 host1 daemon.info exynos-ril[463]: DeactDataCallHandler: OnResponse() -->
-Feb 27 17:52:03.310 host1 daemon.info exynos-ril[463]: [PsService_0] OnDeactDataCallComplete, Deact PDP Context : CID=2
-Feb 27 17:52:03.311 host1 daemon.debug exynos-ril[463]: [<DEVICENODE#1>][RX] SIT_IND_DATA_CALL_LIST_CHANGED, IND, 301 bytes
-Feb 27 17:52:03.311 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.312 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.313 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.313 host1 daemon.debug exynos-ril[463]: <HEXDUMP 16B>
-Feb 27 17:52:03.313 host1 daemon.debug exynos-ril[463]: <HEXDUMP 13B>
-Feb 27 17:52:03.313 host1 daemon.debug exynos-ril[463]: [RilContext_0] ProcessModemData 
-Feb 27 17:52:03.313 host1 daemon.debug exynos-ril[463]: remove ipv6 addr with index(12)
-Feb 27 17:52:03.314 host1 daemon.debug exynos-ril[463]: Send()_0 RCM Response Routing : Type=0002, RCM ID=0x0604 Service ID=2 Message ID=3013
-Feb 27 17:52:03.314 host1 daemon.debug exynos-ril[463]: [ServiceMgr] msg(0x7fa00148c0) msgId=3013 svc=PsService_0(2) direction=Response
-Feb 27 17:52:03.314 host1 daemon.crit DITD[471]: ------------RTM_DELADDR-------------
-Feb 27 17:52:03.314 host1 daemon.crit DITD[471]: Family [AF_INET6] Flags [0x10014] Type [0xfd80]
-Feb 27 17:52:03.314 host1 daemon.crit DITD[471]: [clearExstingFilterset] filterset of rmnet1 deleted
-Feb 27 17:52:03.314 host1 daemon.emerg DITD[471]: [getLineCount] Failed to open /run/ditd/ditd_packet_data_rmnet1
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: [resetPacketFilter] Reset old packet filter finished (rmnet1)
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: [deleteClatInfoIfHasV4rmnet] ifname rmnet1, ifnameV4 v4-rmnet1 ifindexV4 0
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: [deleteClatInfoIfHasV4rmnet] No companion v4-rmnet interface for [#0]v4-rmnet1, nothing to delete
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: [deleteIpv6AddrInfo] ipv6Addr <IP#2> deleted
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: [deleteIfDevice] Successfully deleted interface[#12]
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: ------------RTM_DELROUTE-------------
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: Family [AF_INET6] Dst_len[128] Src_len[0] ToS[0]
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: Table [255] Protocol [2] Scope [0] Type [4] Flags[0x0]
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: ------------RTM_DELROUTE-------------
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: Family [AF_INET6] Dst_len[128] Src_len[0] ToS[0]
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: Table [255] Protocol [2] Scope [0] Type [2] Flags[0x0]
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: ------------RTM_DELROUTE-------------
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: Family [AF_INET6] Dst_len[64] Src_len[0] ToS[0]
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: Table [254] Protocol [2] Scope [0] Type [1] Flags[0x0]
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: ___________parseRouteInfo___________
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: RTA_TABLE : 254
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: RTA_DST : IPv6 Address: <IP#3>
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: RTA_PRIORITY : 256
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: RTA_OIF(Interface index) : #12
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: RTA_CACHEINFO: clntref: 0, rta_lastuse: 0, rta_expires: 0, rta_error: 0, rta_used: 0, rta_id: 0, rta_ts: 0, rta_tsage: 0
-Feb 27 17:52:03.315 host1 daemon.crit DITD[471]: RTA_PREF : 0
-Feb 27 17:52:03.315 host1 daemon.debug exynos-ril[463]: remove ipv6 addr with index(12)
-Feb 27 17:52:03.315 host1 daemon.err exynos-ril[463]: NetIpInterfaceAdaptor clear_if_addr_v6 error 99
-Feb 27 17:52:03.315 host1 daemon.info exynos-ril[463]: TearDown() for rmnet1, success ClearIfAddr
-Feb 27 17:52:03.315 host1 daemon.info exynos-ril[463]: [RilContext_0] OnRequestComplete Request ID=41, result=0
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: RequestComplete, RIL_SOCKET_1
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: Send Response to RIL_SOCKET_1
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: RIL Response bytes written:4
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: RIL Response bytes written:12
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [RilContext_0] RemoveRequestHistory  token=0x0271
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [PsService_0]********** all pdp infos *************
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [0] PdpContext{cid=1, state=DISCONNECTED, active=INACTIVE}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [1] PdpContext{cid=2, state=DISCONNECTED, active=INACTIVE}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [2] PdpContext{cid=3, state=DISCONNECTED, active=INACTIVE}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [3] PdpContext{cid=4, state=DISCONNECTED, active=INACTIVE}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [4] PdpContext{cid=5, state=DISCONNECTED, active=INACTIVE}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [5] PdpContext{cid=6, state=DISCONNECTED, active=INACTIVE}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [6] PdpContext{cid=7, state=DISCONNECTED, active=INACTIVE}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [7] PdpContext{cid=8, state=DISCONNECTED, active=INACTIVE}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [8] PdpContext{cid=9, state=DISCONNECTED, active=INACTIVE}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [9] PdpContext{cid=10, state=DISCONNECTED, active=INACTIVE}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [10] PdpContext{cid=11, state=DISCONNECTED, active=INACTIVE}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [11] PdpContext{cid=12, state=DISCONNECTED, active=INACTIVE}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [12] PdpContext{cid=13, state=DISCONNECTED, active=INACTIVE}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [13] PdpContext{cid=14, state=DISCONNECTED, active=INACTIVE}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [14] PdpContext{cid=15, state=CONNECTED, active=ACTIVE_AND_LINKUP}
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [PsService_0]**************************************
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [AMBR] CID:0, Downlink 0 kbps, Uplink 0 kbps
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: [PsService_0] NotifyAMBR to framework : CID:0, len:0
-Feb 27 17:52:03.316 host1 daemon.debug exynos-ril[463]: DataCallListResponseV2_0
-Feb 27 17:52:03.317 host1 daemon.info exynos-ril[463]: RilApplication::GetInstance
-Feb 27 17:52:03.317 host1 daemon.info exynos-ril[463]: RilApplication::GetInstance
-Feb 27 17:52:03.317 host1 daemon.debug exynos-ril[463]: dnses:<IP#4>
-Feb 27 17:52:03.317 host1 daemon.debug exynos-ril[463]: pcscf: <IP#4>
-Feb 27 17:52:03.317 host1 daemon.debug exynos-ril[463]: gateway: ::
-Feb 27 17:52:03.317 host1 daemon.debug exynos-ril[463]: [RilContext_0] OnUnsolicitedResponse Unsol Rsp ID=29003
-Feb 27 17:52:03.317 host1 daemon.debug exynos-ril[463]: RADIO::[RilResponseListener] OnUnsolicitedResponse Filter out Unsolicited response=29003
-Feb 27 17:52:03.317 host1 daemon.info exynos-ril[463]: [OemReceiver] OnUnsolicitedResponse channel=0
-Feb 27 17:52:03.317 host1 daemon.debug exynos-ril[463]: [OemReceiver] unsol oem message(29003) is translated to msgId(2021)
-Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: Device 0: < <HEXDUMP 16B>
-Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: drivers/rilmodem/gprs-context.c:ril_deactivate_data_call_cb() *gc: 0x55ac6fa510
-Feb 27 17:52:03.317 host1 daemon.info ofonod[486]: [0,0570]< RIL_REQUEST_DEACTIVATE_DATA_CALL
-Feb 27 17:52:03.317 host1 daemon.info ofonod[486]: dump_dmsg signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"Settings", variant(array[])
-Feb 27 17:52:03.317 host1 daemon.info ofonod[486]: dump_dmsg signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"IPv6.Settings", variant(array[])
-Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: src/gprs.c:pri_ifupdown() Vendor RIL will control interface updown for rmnet1
-Feb 27 17:52:03.317 host1 daemon.info ofonod[486]: dump_dmsg signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"Active", variant(false)
-Feb 27 17:52:03.317 host1 daemon.info ofonod[486]: src/modem.c:offline_safely_cb() step=5
-Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: plugins/ril_vendor.c:ril_vendor_set_online() setting rd->ofono_online to: 0
-Feb 27 17:52:03.317 host1 daemon.debug ofonod[486]: plugins/ril_vendor.c:ril_send_power() (online = 1, offline = 0)): 0
-Feb 27 17:52:03.317 host1 daemon.info ofonod[486]: [0,0576]> RIL_REQUEST_RADIO_POWER (0)
+-- [합성] module-filter fixture: data call deactivation right after airplane mode. Hand-written, not a real capture.
+Sep 23 11:30:04.752 dut local0.info mgmtd[734]: airplane mode on requested by user
+Sep 23 11:30:04.753 dut daemon.info ofonod[903]: [0,1163]> IMS_REQUEST_AIRPLANE_MODE is_apm:1
+Sep 23 11:30:04.754 dut daemon.info chatterd[746]: position fix pending
+Sep 23 11:30:04.754 dut daemon.debug ofonod[903]: src/gprs.c:gprs_deactivate_all() /ril_0 detach requested
+Sep 23 11:30:04.755 dut daemon.info ofonod[903]: [0,1164]> RIL_REQUEST_DEACTIVATE_DATA_CALL (2,2)
+Sep 23 11:30:04.755 dut daemon.debug ofonod[903]: Device 0: > <HEXDUMP 20B>
+Sep 23 11:30:04.756 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: DEACTIVATE_DATA_CALL (12 bytes)
+Sep 23 11:30:04.756 dut daemon.info vrild[618]: [TrafficService_1] teardown cid 2 begin
+Sep 23 11:30:04.757 dut daemon.debug vrild[618]: [IpcCtx_2] track seq 0x0f51 (1 in flight)
+Sep 23 11:30:04.757 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_DEACT_DATA_CALL seq=0x0f51 len=12
+Sep 23 11:30:04.757 dut daemon.debug vrild[618]: Write to modem 12B
+Sep 23 11:30:04.758 dut local0.info mgmtd[734]: ui tick
+Sep 23 11:30:04.758 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_SIGNAL_STRENGTH ind len=16
+Sep 23 11:30:04.759 dut daemon.debug vrild[618]: Read from usb 16B
+Sep 23 11:30:04.760 dut daemon.info chatterd[746]: position fix pending
+Sep 23 11:30:04.762 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_DEACT_DATA_CALL, RSP OK(RCM_E_SUCCESS) seq=0x0f51 len=8
+Sep 23 11:30:04.762 dut daemon.debug vrild[618]: Read from usb 8B
+Sep 23 11:30:04.763 dut daemon.debug vrild[618]: [IpcCtx_2] frame decoded
+Sep 23 11:30:04.763 dut daemon.info vrild[618]: [TrafficService_1] teardown cid 2 acked
+Sep 23 11:30:04.764 dut daemon.info datad[633]: link status poll: rmnet1 down
+Sep 23 11:30:04.764 dut local0.info mgmtd[734]: ui tick
+Sep 23 11:30:04.765 dut daemon.info chatterd[746]: position fix pending
+Sep 23 11:30:04.766 dut daemon.emerg datad2[641]: [route] Failed to open packet counter for rmnet1
+Sep 23 11:30:04.766 dut daemon.warn datad2[641]: [route] table 1017 flushed for rmnet1
+Sep 23 11:30:04.767 dut daemon.info vrild[618]: rmnet1: addresses removed, link going down
+Sep 23 11:30:04.767 dut daemon.err vrild[618]: interface v6 address clear error 22 on rmnet1
+Sep 23 11:30:04.767 dut daemon.debug vrild[618]: [TrafficService_1] ambr update cid 2: empty
+Sep 23 11:30:04.768 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=77, result=0 -> chan 2 reply sent, 0 waiters, took 12 ms
+Sep 23 11:30:04.768 dut daemon.debug vrild[618]: chan 2 <- reply written
+Sep 23 11:30:04.768 dut daemon.debug vrild[618]: [IpcCtx_2] untrack seq 0x0f51 (0 in flight)
+Sep 23 11:30:04.768 dut local0.info mgmtd[734]: ui tick
+Sep 23 11:30:04.769 dut daemon.debug ofonod[903]: Device 0: < <HEXDUMP 12B>
+Sep 23 11:30:04.769 dut daemon.info ofonod[903]: [0,1164]< RIL_REQUEST_DEACTIVATE_DATA_CALL
+Sep 23 11:30:04.769 dut daemon.info ofonod[903]: src/gprs.c:pri_deactivate_callback() context 2 inactive
+Sep 23 11:30:04.769 dut daemon.info ofonod[903]: [0,UNSOL]< UNSOL_DATA_CALL_LIST_CHANGED
+Sep 23 11:30:04.769 dut daemon.info chatterd[746]: position fix pending
+Sep 23 11:30:04.769 dut daemon.info ofonod[903]: [0,1170]> RIL_REQUEST_RADIO_POWER (0)
+Sep 23 11:30:04.770 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_SIGNAL_STRENGTH ind len=16
+Sep 23 11:30:04.770 dut daemon.debug vrild[618]: Read from usb 16B
+Sep 23 11:30:04.771 dut local0.info mgmtd[734]: ui tick

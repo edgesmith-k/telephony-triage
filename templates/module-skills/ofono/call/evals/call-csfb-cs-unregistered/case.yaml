@@ -20,9 +20,9 @@ run_expect:
 expect:
   accept:
     - layer: '모뎀|망'
-      daemon: 'exynos-ril'
+      daemon: 'vrild'
       evidence: ['Voice RegState=.*RejectCause=[1-9]', 'voiceOverLteCapable=0']
   trap:
-    - label: '^\s*(관리 데몬|D-Bus|ofonod|MOSE|곁가지|벤더 RIL)'
+    - label: '^\s*(관리 데몬|D-Bus|ofonod|mgmtd|곁가지|벤더 RIL)'
     - label: '^\s*그\s*층\s*로그\s*없음'
     - label: '^\s*원인\s*아님'

@@ -1,5 +1,5 @@
 # 합성 case (C1D 보정 §6.3 N2). files/의 timeline·입력·analysis는 make_module_eval_inputs.py --write가 만든다
-# 사용자 11/06: 새 파라미터 추가 때 NMD·ofonod를 함께 고침 — 두 후보 모두 인정(APN 핵심 로직은 ofonod). source.log 1행 주석대로 ofonod 쪽 APN 설정 줄은 없어 근거는 NMD 후보와 같은 두 줄
+# 사용자 11/06: 새 파라미터 추가 때 datad·ofonod를 함께 고침 — 두 후보 모두 인정(APN 핵심 로직은 ofonod). source.log 1행 주석대로 ofonod 쪽 APN 설정 줄은 없어 근거는 datad 후보와 같은 두 줄
 schema_version: 2
 name: data-apn-overwritten
 kind: explore
@@ -21,12 +21,12 @@ run_expect:
 expect:
   accept:
     - layer: '관리\s*데몬'
-      daemon: 'NMD'
+      daemon: 'datad\b'
       evidence: ['addApnInfo.*<APN#1>.*internet', 'SETUP_DATA_CALL.*<APN#1>']
     - layer: 'ofonod|oFono'
       daemon: 'ofonod|oFono|src/'
       evidence: ['addApnInfo.*<APN#1>.*internet', 'SETUP_DATA_CALL.*<APN#1>']
   trap:
-    - label: '^\s*(벤더 RIL|exynos|모뎀|망|D-Bus|MOSE|곁가지)'
+    - label: '^\s*(벤더 RIL|vrild|모뎀|망|D-Bus|mgmtd|곁가지)'
     - label: '^\s*그\s*층\s*로그\s*없음'
     - label: '^\s*원인\s*아님'

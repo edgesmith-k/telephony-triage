@@ -1,26 +1,26 @@
 -- [합성] telephony-triage module-skills D eval log. Hand-written; base sample CALL-001-01.log + vendor IMS registration before the dial.
 08-23 12:00:02.100  2101 2141 D RILJ    : [0303]> NOTIFY_IMS_DATA_NETWORK [PHONE0]
 08-23 12:00:03.107  1188 1258 V RIL     : [<DEV#1>][TX] <unknown sit>, REQ, 12 bytes, Token(0x0203)
-08-23 12:00:04.114  1188 1258 V RIL     : [<DEV#1>][RX] <unknown sit>, RSP, 12 bytes, Token(0x0203), Error(RCM_E_UNDEFINED_CMD)
-08-23 12:00:05.121  1188 1248 E RILC    : Calling responseFunction() for token 303
+08-23 12:00:04.114  1188 1258 V RIL     : [<DEV#1>][RX] <unknown sit>, RSP, 12 bytes, Token(0x0203), Error(RCM_E_UNKNOWN_CMD)
+08-23 12:00:05.121  1188 1248 E VRIL    : Calling responseHandler() for token 303
 08-23 12:00:06.128  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
 08-23 12:00:07.135  2101 2141 D RILJ    : [0303]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
 08-23 12:00:10.000  2101 2113 D ImsResolver: bound to mock ImsService [PHONE0]
-08-23 12:00:12.000  1777 1777 D SHANNON_IMS: 1302 [CONN] [<APN#1>] Registration state changed  IMS_DEREGISTERED -> IMS_REGISTERING [SLID:0  APN_TYPE:<APN#1> STATE:IMS_DEREGISTERED] (ApnEntity%setServiceState:263)
-08-23 12:00:14.900  1188 1258 V RIL     : [<DEV#1>][RX] SIT_IND_AIMS_REGISTRATION, IND, 208 bytes
+08-23 12:00:12.000  1777 1777 D VRIL-IMS: 1302 [CONN] [<APN#1>] Registration state changed  IMS_DEREGISTERED -> IMS_REGISTERING [SLID:0  APN_TYPE:<APN#1> STATE:IMS_DEREGISTERED] (ApnEntity%setServiceState:263)
+08-23 12:00:14.900  1188 1258 V RIL     : [<DEV#1>][RX] SIT_NOTIFY_MTEL_REGISTRATION, IND, 208 bytes
 08-23 12:00:14.901  1188 1258 V RIL     : [<DEV#1>][RX] <HEXDUMP 16B>
-08-23 12:00:14.905  1777 1777 I SHANNON_IMS: 1416 [NETW] #:PURP:# UNSOL {RILC_UNSOL_AIMS_REGISTRATION} : reg-state : 0  feature : 11  feature-bitmask : 0  status-code : 403  delegate-bitmask : 0  mFeatureExt : 0  (NetworkAdaptor$AdaptorChannel%onMessage:390)
+08-23 12:00:14.905  1777 1777 I VRIL-IMS: 1416 [NETW] #:PURP:# UNSOL {OEM_UNSOL_MTEL_REGISTRATION} : reg-state : 0  feature : 11  feature-bitmask : 0  status-code : 403  delegate-bitmask : 0  mFeatureExt : 0  (NetworkAdaptor$AdaptorChannel%onMessage:390)
 08-23 12:00:15.000  2101 2113 W ImsRegistration: onRegistrationFailed: code=403 reason=FORBIDDEN [PHONE0]
-08-23 12:00:16.000  1188 1248 E RILC    : Calling responseFunction() for token 303
+08-23 12:00:16.000  1188 1248 E VRIL    : Calling responseHandler() for token 303
 08-23 12:03:25.000  2101 2113 D ImsPhoneCallTracker: [0] dial: isVolteEnabled=true imsRegistered=false
 08-23 12:03:25.500  2101 2141 D RILJ    : [0340]> DIAL clir=0 [PHONE0]
-08-23 12:03:25.504  1188 1188 D RILC-AIDL_SERVICE: RadioVoiceProxy::dial: serial 340
+08-23 12:03:25.504  1188 1188 D VRIL-SVC: RadioVoiceProxy::dial: serial 340
 08-23 12:03:26.700  2101 2142 D RILJ    : [0340]< DIAL [PHONE0]
 08-23 12:03:28.700  2101 2142 D RILJ    : [UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED [PHONE0]
 08-23 12:03:29.000  2101 2141 D RILJ    : [0341]> LAST_CALL_FAIL_CAUSE [PHONE0]
 08-23 12:03:29.400  2101 2142 D RILJ    : [0341]< LAST_CALL_FAIL_CAUSE causeCode=17 [PHONE0]
 08-23 12:03:29.600  2101 2113 W ImsPhoneCallTracker: [0] call ended: cause=17
 08-23 12:03:30.000  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
-08-23 12:03:50.011  1188 1248 E RILC    : Calling responseFunction() for token 400
+08-23 12:03:50.011  1188 1248 E VRIL    : Calling responseHandler() for token 400
 08-23 12:03:50.311  1188 1258 V RIL     : [<DEV#1>][RX] <HEXDUMP 16B>
 08-23 12:03:50.611  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009

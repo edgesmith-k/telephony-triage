@@ -7,7 +7,7 @@ key: MOCK-9301
 issue:
   summary: '5G(NR) 모드 설정 화면이 비어 있음'
   description: '5G(NR) 모드 설정 값이 표시되지 않습니다.'
-  occurred_at: '2026-02-27T17:28:15+0000'
+  occurred_at: '2026-09-22T09:20:20+0000'
   platform_version: '2'
   sim_slot: '0'
 parse: {tz: UTC, year: 2026, minutes: 5}
@@ -21,7 +21,7 @@ run_expect:
   C: 1
 expect:
   layer: '모뎀|망'
-  daemon: 'exynos-ril'
-  evidence: ['SIT_GET_NR_MODE, RSP.*Error\(RCM_E_GENERIC_FAILURE\)', 'GET_NR_MODE failed GENERIC_FAILURE']
+  daemon: 'vrild'
+  evidence: ['SIT_QUERY_NR_MODE, RSP.*Error\(RCM_E_FAILURE\)', 'GET_NR_MODE failed GENERIC_FAILURE']
   trap: null
-  wrong_layer: ['^\s*(MOSE|ofonod|관리 데몬|D-Bus|벤더 RIL|그\s*층|원인\s*아님)']
+  wrong_layer: ['^\s*(mgmtd|ofonod|관리 데몬|D-Bus|벤더 RIL|그\s*층|원인\s*아님)']

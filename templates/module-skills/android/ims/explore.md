@@ -10,20 +10,20 @@ IMS 등록·해제·재등록, IMS PDN과 등록의 관계, VoLTE 가능 상태.
 
 ## ② 볼 역할과 줄
 
-- AIMS SIT: 벤더 RIL `SIT_IND_AIMS_REGISTRATION`, 벤더 IMS `SOL TX/RX{RILC_REQ_AIMS_*}`·`UNSOL {RILC_UNSOL_AIMS_REGISTRATION} … status-code`
+- MTEL SIT: 벤더 RIL `SIT_NOTIFY_MTEL_REGISTRATION`, 벤더 IMS `SOL TX/RX{OEM_REQ_MTEL_*}`·`UNSOL {OEM_UNSOL_MTEL_REGISTRATION} … status-code`
 - 벤더 IMS `[CONN]`·`[NETW]`·`Sending AddPdn`, 벤더 RIL `[ImsService_<n>::…] Ims Registration : TRUE|FALSE`
 - ImsPhone `handleImsRegistered`·`handleImsUnregistered … ImsReasonInfo`, ImsRegistration, ImsManager
 
 ## ③ 층 경로
 
-벤더 IMS `IMS_REGISTERING` → AddPdn → `RILC_REQ_AIMS_ADD_PDN_INFO` → 모뎀·망 → `SIT_IND_AIMS_REGISTRATION` → 벤더 IMS UNSOL → ImsPhone 등록 상태 → SST.
+벤더 IMS `IMS_REGISTERING` → AddPdn → `OEM_REQ_MTEL_ADD_PDN_INFO` → 모뎀·망 → `SIT_NOTIFY_MTEL_REGISTRATION` → 벤더 IMS UNSOL → ImsPhone 등록 상태 → SST.
 
 ## ④ 증상별 첫 점검
 
 | 증상 | 볼 역할·줄 | 흔한 첫 실패 → 층 | 대체 근거 · 받을 로그 |
 |---|---|---|---|
-| IMS 등록 실패 | AIMS SIT → 벤더 IMS `status-code` → ImsPhone | `status-code : 4xx` → 모뎀·망 / 401 뒤 등록은 원인 아님 | ImsRegistration `code=` / 벤더 IMS 로그 수준 |
-| IMS PDN 연결·끊김 | `RILC_REQ_AIMS_ADD_PDN_INFO`, DN `IMS` | PDN 실패 → data 규칙 / PDN이 붙었으면 data는 원인 아님 | data call list |
+| IMS 등록 실패 | MTEL SIT → 벤더 IMS `status-code` → ImsPhone | `status-code : 4xx` → 모뎀·망 / 401 뒤 등록은 원인 아님 | ImsRegistration `code=` / 벤더 IMS 로그 수준 |
+| IMS PDN 연결·끊김 | `OEM_REQ_MTEL_ADD_PDN_INFO`, DN `IMS` | PDN 실패 → data 규칙 / PDN이 붙었으면 data는 원인 아님 | data call list |
 | 재등록 안 됨 (초안) | `handleImsUnregistered … ImsReasonInfo` | 121 → 서비스 없음의 결과, 앞 무선 상태 | 해제 뒤까지 수집 |
 | VoWiFi·entitlement (초안) | — | 판단 못 함 → `그 층 로그 없음(<층>)` | Wi-Fi·entitlement 로그(사내) |
 

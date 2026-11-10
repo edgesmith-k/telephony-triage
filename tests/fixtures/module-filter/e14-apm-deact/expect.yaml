@@ -1,11 +1,12 @@
 platform: ofono
 module: data
 mode: deep
-center: '2026-02-27T17:52:03.317Z'
-fail: 112
+center: '2026-09-23T11:30:04.769Z'
+fail: 34
 essential:
-- 15
-- 50
-- 73
-- 112
-- 120
+- 17
+- 24
+- 27
+- 34
+- 38
+origin: 합성

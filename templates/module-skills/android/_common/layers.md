@@ -5,13 +5,13 @@
 ## 층 이름(`원인 층:`에 그대로)
 
 `프레임워크` · `RILJ` · `RIL HAL` · `벤더 RIL` · `벤더 IMS` · `모뎀·망` · `곁가지(<태그>)` · `그 층 로그 없음(<층>)` · `원인 아님(정상 동작)`.
-모뎀·망이면 `원인 데몬:`은 결과를 전한 벤더 태그(`RIL`·`SHANNON_IMS`).
+모뎀·망이면 `원인 데몬:`은 결과를 전한 벤더 태그(`RIL`·`VRIL-IMS`).
 `원인 아님`·`그 층 로그 없음`이면 `원인 데몬: 알 수 없음`.
 
 ## 사슬
 
-프레임워크 → RILJ `[<serial>]> <REQ>` → RIL HAL `RILC-AIDL_SERVICE … Radio<X>Proxy::<fn>: serial <n>` → 벤더 RIL `<X>Handler: OnRequest()` → `[TX] SIT_<X>, REQ, …, Token(0x…)` → 모뎀 → `[RX] SIT_<X>, RSP, …, OK(RCM_E_SUCCESS)|Error(RCM_E_<Y>)` → `[<Svc>Service_<n>] …Complete… errorCode=<n>` → RILJ `[<serial>]< <REQ>`.
-IMS: 프레임워크(ImsPhone…) ↔ 벤더 IMS(`SOL TX/RX{RILC_REQ_AIMS_*}`) ↔ RIL `SIT_AIMS_*` ↔ 모뎀.
+프레임워크 → RILJ `[<serial>]> <REQ>` → RIL HAL `VRIL-SVC … Radio<X>Proxy::<fn>: serial <n>` → 벤더 RIL `<X>Handler: OnRequest()` → `[TX] SIT_<X>, REQ, …, Token(0x…)` → 모뎀 → `[RX] SIT_<X>, RSP, …, OK(RCM_E_SUCCESS)|Error(RCM_E_<Y>)` → `[<Svc>Service_<n>] …Complete… errorCode=<n>` → RILJ `[<serial>]< <REQ>`.
+IMS: 프레임워크(ImsPhone…) ↔ 벤더 IMS(`SOL TX/RX{OEM_REQ_MTEL_*}`) ↔ RIL `SIT_MTEL_*` ↔ 모뎀.
 
 ## 판단
 
@@ -23,10 +23,10 @@ IMS: 프레임워크(ImsPhone…) ↔ 벤더 IMS(`SOL TX/RX{RILC_REQ_AIMS_*}`) �
 ## 수집 범위
 
 - 첫 RILJ 줄이 응답(`[n]<`)이면 버퍼 늦게 시작 → `그 층 로그 없음(RILJ)`.
-- RILJ 요청뿐 RIL·RILC 줄 0 → `그 층 로그 없음(벤더 RIL)`. 단 `serviceDied`·`has died`면 죽음 → `벤더 RIL`.
+- RILJ 요청뿐 RIL·VRIL 줄 0 → `그 층 로그 없음(벤더 RIL)`. 단 `serviceDied`·`has died`면 죽음 → `벤더 RIL`.
 - 없는 줄은 로그가 그 시점을 덮을 때만 근거.
 
 ## 원인 아님
 
-RILJ `RADIO_POWER`, OemRil `notifyRadioStateChanged`, VCD `UsbAgent: AT+CFUN=<n>`(외부 AT 채널 → `곁가지(VCD)`). 무선 끈 직후 실패는 결과.
+RILJ `RADIO_POWER`, OemRil `notifyRadioStateChanged`, VRIL-MODEM `UsbAgent: AT+CFUN=<n>`(외부 AT 채널 → `곁가지(VRIL-MODEM)`). 무선 끈 직후 실패는 결과.
 실패 뒤 같은 창에 회복 줄(`LOADED`, `handleImsRegistered`, `State=COMPLETE`) → `원인 아님(정상 동작)`.

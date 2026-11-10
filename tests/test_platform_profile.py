@@ -101,7 +101,7 @@ def test_default_uses_module_objects():
 
 def test_example_commented_values_equal_defaults():
     block = _example_platform_uncommented()
-    assert set(block) == {"name", "source_tree", "log", "ril", "bugreport"}
+    assert set(block) == {"name", "source_tree", "log", "ril", "bugreport", "vendor_ipc"}
     prof = platforms.load({"platform": block})
     default = platforms.default()
     assert prof.source_tree.required_dirs == default.source_tree.required_dirs
@@ -115,6 +115,7 @@ def test_example_commented_values_equal_defaults():
     assert prof.bugreport.section_re.pattern == default.bugreport.section_re.pattern
     assert prof.bugreport.boundary_re.pattern == default.bugreport.boundary_re.pattern
     assert prof.bugreport.wanted_buffers == default.bugreport.wanted_buffers
+    assert prof.vendor_ipc == default.vendor_ipc                                # placeholder 기본과 같다
     assert [t for t, _ in prof.ril_vendor.layers] == ["VRIL_HAL", "VRIL_SOCK"] and default.ril_vendor is None
 
 

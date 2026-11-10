@@ -10,13 +10,13 @@
 
 ## ② 볼 역할과 줄
 
-- AIMS SIT: 벤더 RIL `SIT_*AIMS*`, 벤더 IMS `SOL TX/RX{RILC_REQ_AIMS_*}`·통화 SIP 응답 `status-code`
+- MTEL SIT: 벤더 RIL `SIT_*MTEL*`, 벤더 IMS `SOL TX/RX{OEM_REQ_MTEL_*}`·통화 SIP 응답 `status-code`
 - ImsPhoneCallTracker `dial: … imsRegistered=`·`call state changed:`, ImsPhoneMmiCode·ImsUt
 - RILJ `DIAL`·`GET_CURRENT_CALLS`·`LAST_CALL_FAIL_CAUSE causeCode=`
 
 ## ③ 층 경로
 
-CS: RILJ `DIAL` → 벤더 RIL → 모뎀 → `LAST_CALL_FAIL_CAUSE`. VoLTE: ImsPhoneCallTracker → 벤더 IMS(SIP) → 망. UT: ImsUt → 벤더 IMS `[UT##]` → `SIT_AIMS_*` → `State=`.
+CS: RILJ `DIAL` → 벤더 RIL → 모뎀 → `LAST_CALL_FAIL_CAUSE`. VoLTE: ImsPhoneCallTracker → 벤더 IMS(SIP) → 망. UT: ImsUt → 벤더 IMS `[UT##]` → `SIT_MTEL_*` → `State=`.
 
 ## ④ 증상별 첫 점검
 
@@ -24,7 +24,7 @@ CS: RILJ `DIAL` → 벤더 RIL → 모뎀 → `LAST_CALL_FAIL_CAUSE`. VoLTE: Ims
 |---|---|---|---|
 | 발신 실패 | RILJ `DIAL`, IPC `SIT_DIAL` | IPC Error → 모뎀·망 / OK 뒤 `errorCode≠0` → 벤더 RIL | `LAST_CALL_FAIL_CAUSE` |
 | CSFB 실패 | 발신 전 `VOICE_REGISTRATION_STATE` | CS 미등록(결합 등록 실패) → 모뎀·망(network 표) | 모뎀 NAS(사내) |
-| VoLTE 호 설정 실패(SIP) | AIMS SIT, `imsRegistered=true`, 벤더 IMS SIP 응답 | SIP 4xx·5xx → 모뎀·망 / `imsRegistered=false` → ims 등록부터 | `call state changed:` |
+| VoLTE 호 설정 실패(SIP) | MTEL SIT, `imsRegistered=true`, 벤더 IMS SIP 응답 | SIP 4xx·5xx → 모뎀·망 / `imsRegistered=false` → ims 등록부터 | `call state changed:` |
 | EPS fallback·VoNR (초안) | 비행기 모드·IMS 해제 시각 | 그 뒤 fallback 실패 → 원인 아님 | — |
 | eCall(MSD 전송 실패) | eCall 줄(이름 TODO(SITE:S24)) | eCall·MSD 줄이 없으면 → `그 층 로그 없음(eCall)` | eCall·모뎀 IVS 로그(사내) |
 | 통화 끊김·착신 안 됨 (초안) | `UNSOL_RESPONSE_CALL_STATE_CHANGED`, `causeCode=` | 원인 코드를 전한 층 | — |

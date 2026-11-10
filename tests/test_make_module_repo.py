@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import stat
@@ -17,6 +18,9 @@ TEMPLATES = REPO / "templates" / "module-skills"
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
 from common import skillcheck  # noqa: E402
+
+sys.path.insert(0, str(REPO / "tools"))
+from make_module_repo import PLACEHOLDER_RE as PLACEHOLDER  # noqa: E402
 
 ENV = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 
@@ -112,3 +116,164 @@ def test_files_mode_644(src, tmp_path):
     for p in out.rglob("*"):
         if p.is_file() and ".git" not in p.relative_to(out).parts:
             assert stat.S_IMODE(p.stat().st_mode) == 0o644, p
+
+
+# -- --site-overlay (사내 스냅샷 덮어쓰기). 스냅샷은 합성(demo-x) -------------------------------------------
+
+SNAP = {
+    "README.md": "# demo-x 모듈 스킬\n\n스냅샷 덮어쓰기 시험용 합성 문서.\n",
+    "ofono/data/explore.md": "# demo-x data 탐색\n\n- demo-x 구성요소 줄을 먼저 본다.\n",
+}
+
+
+def _snapshot(root: Path, files: dict[str, str], source: str | None = "label=import-demo sha=0000000 date=2026-11-10") -> Path:
+    for rel, text in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text, encoding="utf-8")
+    if source is not None:
+        (root / "SOURCE").write_text(source + "\n", encoding="utf-8")
+    return root
+
+
+def test_overlay_replaces_files_and_reports_json(src, tmp_path):
+    snap = _snapshot(tmp_path / "snap", SNAP)
+    out = tmp_path / "repo"
+    proc = _make(src, out, "--site-overlay", snap, "--json")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    data = json.loads(proc.stdout)
+    assert data["overlay"] == sorted(SNAP) and data["source"] == "label=import-demo sha=0000000 date=2026-11-10"
+    for rel, text in SNAP.items():
+        assert (out / rel).read_text(encoding="utf-8") == text
+    tracked = set(_git(out, "ls-files").splitlines())
+    assert tracked == {p.relative_to(src).as_posix() for p in src.rglob("*") if p.is_file()}   # SOURCE는 들어가지 않는다
+    assert skillcheck.check_worktree(out) == []
+    assert not any(PLACEHOLDER.search((out / rel).read_text(encoding="utf-8")) for rel in SNAP)
+
+
+def test_overlay_adds_file_missing_from_template(src, tmp_path):
+    snap = _snapshot(tmp_path / "snap", {"ofono/modem/references/MODEM-001.md": "# demo-x modem 참고\n"}, source=None)
+    out = tmp_path / "repo"
+    proc = _make(src, out, "--site-overlay", snap, "--json")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert json.loads(proc.stdout)["source"] is None
+    assert "ofono/modem/references/MODEM-001.md" in _git(out, "ls-files").splitlines()
+
+
+def test_empty_overlay_equals_no_overlay_and_is_deterministic(src, tmp_path):
+    (tmp_path / "empty").mkdir()
+    a, b = tmp_path / "a", tmp_path / "b"
+    assert _make(src, a).returncode == 0
+    proc = _make(src, b, "--site-overlay", tmp_path / "empty", "--json")
+    assert proc.returncode == 0 and json.loads(proc.stdout)["overlay"] == []
+    assert _git(a, "rev-parse", "HEAD") == _git(b, "rev-parse", "HEAD")
+    snap = _snapshot(tmp_path / "snap", SNAP)
+    c, d = tmp_path / "c", tmp_path / "d"
+    assert _make(src, c, "--site-overlay", snap).returncode == 0 and _make(src, d, "--site-overlay", snap).returncode == 0
+    assert _git(c, "rev-parse", "HEAD") == _git(d, "rev-parse", "HEAD") != _git(a, "rev-parse", "HEAD")
+
+
+@pytest.mark.parametrize("text", ["# x\n\n- vrild 줄\n", "# x\n\n{{site:data}}\n", "# x\n\n- VRIL-IMS 태그\n",
+                                  "# x\n\n- datad2 줄\n", "# x\n\n- networkd 줄\n"])
+def test_incomplete_snapshot_creates_nothing(src, tmp_path, text):
+    snap = _snapshot(tmp_path / "snap", {**SNAP, "ofono/data/explore.md": text})
+    out = tmp_path / "repo"
+    proc = _make(src, out, "--site-overlay", snap)
+    assert proc.returncode == 1 and proc.stdout.strip() == "스냅샷이 불완전: ofono/data/explore.md", proc.stdout
+    assert not out.exists()
+
+
+def test_snapshot_with_site_todo_marker_passes(src, tmp_path):
+    """`TODO(SITE:S25)`는 사내 스냅샷 문서에도 있을 수 있는 표식이라 불완전 표시가 아니다."""
+    snap = _snapshot(tmp_path / "snap", {**SNAP, "ofono/data/explore.md": "# demo-x\n\n<!-- TODO(SITE:S25) 사내 확인 -->\n"})
+    out = tmp_path / "repo"
+    proc = _make(src, out, "--site-overlay", snap)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "TODO(SITE:S25)" in (out / "ofono/data/explore.md").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("kind", ["file", "dir"])
+def test_snapshot_symlink_is_refused(src, tmp_path, kind):
+    """링크는 따라가지 않는다(스냅샷 밖 내용 복사·디렉토리 조용히 빠짐 방지) — `<파일> 링크`로 종료 1."""
+    outside = tmp_path / "outside"
+    (outside / "sub").mkdir(parents=True)
+    (outside / "x.md").write_text("# demo-x 밖\n", encoding="utf-8")
+    snap = _snapshot(tmp_path / "snap", SNAP)
+    rel = "ofono/data/references" if kind == "dir" else "ofono/data/SKILL.md"
+    try:
+        (snap / rel).symlink_to(outside / "sub" if kind == "dir" else outside / "x.md", target_is_directory=(kind == "dir"))
+    except OSError as exc:            # Windows 권한 없음(WinError 1314) 등
+        pytest.skip(f"심볼릭 링크를 만들 수 없음: {exc}")
+    out = tmp_path / "repo"
+    proc = _make(src, out, "--site-overlay", snap)
+    assert proc.returncode == 1 and f"{rel} 링크" in proc.stdout, proc.stdout
+    assert not out.exists()
+
+
+def test_snapshot_source_not_utf8_exits_2_before_creating(src, tmp_path):
+    snap = _snapshot(tmp_path / "snap", SNAP, source=None)
+    (snap / "SOURCE").write_bytes(b"label=\xff\xfe\n")
+    out = tmp_path / "repo"
+    proc = _make(src, out, "--site-overlay", snap, "--json")
+    assert proc.returncode == 2 and "SOURCE" in proc.stderr and "Traceback" not in proc.stderr, proc.stderr
+    assert not out.exists()
+
+
+def test_snapshot_source_read_error_or_link_is_usage(tmp_path, monkeypatch):
+    """SOURCE 읽기 실패(OSError)·링크는 고정 문구의 사용 오류(종료 2). 링크를 못 만드는 환경은 그 부분만 skip."""
+    import make_module_repo as mmr
+
+    snap = _snapshot(tmp_path / "snap", SNAP)
+    real = Path.read_text
+
+    def deny(self, *a, **k):
+        if self.name == "SOURCE":
+            raise PermissionError("denied")
+        return real(self, *a, **k)
+
+    with monkeypatch.context() as m:
+        m.setattr(Path, "read_text", deny)
+        with pytest.raises(mmr.Usage, match="SOURCE를 읽지 못했다"):
+            mmr._read_source(snap)
+    assert mmr._read_source(snap).startswith("label=") and mmr._read_source(None) is None
+    linked = tmp_path / "linked"
+    linked.mkdir()
+    try:
+        (linked / "SOURCE").symlink_to(snap / "SOURCE")
+    except OSError as exc:            # Windows 권한 없음(WinError 1314) 등
+        pytest.skip(f"심볼릭 링크를 만들 수 없음: {exc}")
+    with pytest.raises(mmr.Usage, match="SOURCE가 링크다"):
+        mmr._read_source(linked)
+
+
+def test_snapshot_with_evals_is_refused(src, tmp_path):
+    snap = _snapshot(tmp_path / "snap", {**SNAP, "ofono/data/evals/demo-case/case.yaml": "synthetic: true\n"})
+    out = tmp_path / "repo"
+    proc = _make(src, out, "--site-overlay", snap)
+    assert proc.returncode == 1 and "ofono/data/evals/demo-case/case.yaml 스냅샷에 evals" in proc.stdout
+    assert not out.exists()
+
+
+def test_overlay_runs_strict_validation_and_tree_rules(src, tmp_path):
+    import yaml
+
+    doc = yaml.safe_load((src / "modules.yaml").read_text(encoding="utf-8"))
+    plat = sorted(doc["platforms"])[0]
+    first = sorted(doc["platforms"][plat]["modules"])[0]
+    doc["platforms"][plat]["modules"][first]["demo_x_key"] = []           # strict에서만 오류인 모르는 키
+    # 사내 스냅샷처럼 placeholder 이름 없이: 이름을 같은 규칙으로 바꾼 modules.yaml과 데몬 표(components.md)를 함께 덮는다
+    files = {"modules.yaml": yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)}
+    files.update({f"{p}/_common/components.md": (src / p / "_common" / "components.md").read_text(encoding="utf-8")
+                  for p in doc["platforms"]})
+    rename = lambda m: "{{demo-site:" if m.group(0) == "{{site:" else "x" + m.group(0)   # noqa: E731
+    snap = _snapshot(tmp_path / "snap", {k: PLACEHOLDER.sub(rename, v) for k, v in files.items()})
+    out = tmp_path / "repo"
+    proc = _make(src, out, "--site-overlay", snap)
+    assert proc.returncode == 1 and proc.stdout.strip() == "modules.yaml 검증(strict) 1건", proc.stdout
+    assert not out.exists()
+    snap2 = _snapshot(tmp_path / "snap2", {"ofono/data/notes.txt": "demo-x\n"})
+    proc = _make(src, tmp_path / "repo2", "--site-overlay", snap2)
+    assert proc.returncode == 1 and "ofono/data/notes.txt 허용 이름 밖" in proc.stdout
+
+
+def test_overlay_not_a_directory(src, tmp_path):
+    assert _make(src, tmp_path / "repo", "--site-overlay", tmp_path / "nosuch").returncode == 2
