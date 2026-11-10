@@ -522,3 +522,18 @@ def test_check_helper_error_row_reports_kinds_not_text():
     assert "마스킹 안 된 식별자" in leak["detail"]
     assert cj.error_row(None, None)["status"] == "warn"
     assert "내용 숨김" in cj._first_line("raw body imsi 450081234567890") and "4500" not in cj._first_line("x 4500812345")
+
+
+def test_check_run_session_matches_tt_oc_run_opencode(tmp_path, monkeypatch):
+    """런타임 리뷰 2차 P1: tt-oc `run_opencode`의 반환 모양이 바뀌어도(f21af21에서 4 → 5) 사내 확인 실행이 깨지지 않는다.
+    실제 opencode 없이: 실제 tt-oc 모듈로 JSON 한 줄을 내는 작은 명령을 돌리고, 바꿔 끼운 run_opencode로 시간 초과도 본다."""
+    import oc_jira_check as cj
+    import site_step
+
+    tt = site_step._load_tt_oc()
+    ev = {"type": "step_start", "sessionID": "ses_X", "part": {}}
+    cmd = [sys.executable, "-c", f"print({json.dumps(json.dumps(ev))})"]
+    events, code = cj.run_session(tt, cmd, tmp_path, dict(os.environ))
+    assert events == [ev] and code == 0 and cj._session_ids(events) == ["ses_X"]
+    monkeypatch.setattr(tt, "run_opencode", lambda *a, **k: ([], [], None, "tail", True))
+    assert cj.run_session(tt, ["x"], tmp_path, {}) == ([], None)

@@ -329,6 +329,13 @@ def _session_ids(events: list[dict]) -> list[str]:
     return sorted({str(ev.get("sessionID")) for ev in events if isinstance(ev, dict) and ev.get("sessionID")})
 
 
+def run_session(tt, cmd: list[str], cwd: Path, env: dict) -> tuple[list[dict], int | None]:
+    """`tt-oc` `run_opencode`로 한 번 돌린 (이벤트, 종료 코드 — 시간 초과·첫 응답 없음이면 None). 반환 튜플의 앞 셋만 쓴다
+    (tt-oc가 뒤에 값을 더해도 여기는 깨지지 않는다 — 런타임 리뷰 2차 P1)."""
+    out = tt.run_opencode(cmd, cwd=cwd, env=env, timeout=RUN_TIMEOUT, progress=False)
+    return out[0], out[2]
+
+
 def check(tt, project: str | None, opencode: str, key: str, missing: str | None, env: dict,
           record_path: Path | None = None) -> tuple[str, int]:
     """표 + 결과 + (통과면) 여는 명령. 통과 기록을 쓴다."""
@@ -424,7 +431,7 @@ def check(tt, project: str | None, opencode: str, key: str, missing: str | None,
             run_env.update({"NO_PROXY": no_proxy, "no_proxy": no_proxy})
             cmd = [oc, "run", "--format", "json", "--agent", tt.AGENT, "--",
                    "telephony-triage runtime-check: Jira 읽기 확인(가짜 모델)"]
-            events, _raw, code, tail = tt.run_opencode(cmd, cwd=tmp, env=run_env, timeout=RUN_TIMEOUT, progress=False)
+            events, code = run_session(tt, cmd, tmp, run_env)
             offered = fake.offered()
             seen = [fake.seen(i) for i in range(len(plan))]
         states = _states(events)
