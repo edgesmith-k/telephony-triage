@@ -26,7 +26,7 @@ from tests.test_site_modules import _env, make_site  # noqa: E402,F401 — autou
 IDS = ["restore.snapshot", "restore.source", "restore.overlay", "restore.tags", "restore.vendor_ipc", "restore.deny",
        "restore.label"]
 LABEL = "import-20990101"
-IPC = {"context": "SiteCtx_", "complete": "OnDone"}
+IPC = {"context": "SiteCtx_", "complete": "OnDone", "request_prefix": "SMSG_", "error_prefix": "SRES_", "success": "SRES_DONE"}
 SECRET = "demo-x-secret"
 
 
@@ -143,11 +143,12 @@ def test_restore_vendor_ipc_needs_both_keys_and_site_values(tmp_path, monkeypatc
     root = restored(tmp_path, monkeypatch)
     path = root / "plugin" / "site-defaults.yaml"
     d = yaml.safe_load(path.read_text(encoding="utf-8"))
-    d["platform"]["others"]["ofono"]["vendor_ipc"] = {"context": "IpcCtx_", "complete": "OnDone"}
-    path.write_text(yaml.safe_dump(d), encoding="utf-8")
-    r = run(root)["restore.vendor_ipc"]
-    assert r["status"] == "needs-user" and "ofono(platform.others.ofono.vendor_ipc, placeholder 값)" in r["evidence"]
-    assert "IpcCtx_" not in json.dumps(r, ensure_ascii=False)
+    for key, placeholder in (("context", "IpcCtx_"), ("success", "VIPC_OK")):       # 다섯 키 중 하나라도 placeholder면
+        d["platform"]["others"]["ofono"]["vendor_ipc"] = {**IPC, key: placeholder}
+        path.write_text(yaml.safe_dump(d), encoding="utf-8")
+        r = run(root)["restore.vendor_ipc"]
+        assert r["status"] == "needs-user" and "ofono(platform.others.ofono.vendor_ipc, placeholder 값)" in r["evidence"]
+        assert placeholder not in json.dumps(r, ensure_ascii=False) and "request_prefix" in r["ask"]
     d["platform"]["vendor_ipc"] = {"context": "SiteCtx_"}            # 키 하나만 → platforms.load 오류 → 실패
     path.write_text(yaml.safe_dump(d), encoding="utf-8")
     r = run(root)["restore.vendor_ipc"]

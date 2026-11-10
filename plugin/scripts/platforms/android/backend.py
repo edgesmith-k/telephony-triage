@@ -11,6 +11,8 @@
 0.1.1(C1+D 보정): D에서 벤더 IPC builtin과 ril.py 해석이 0.1.0 출력을 바꿨다(분석 재사용 캐시 키 때문에 올림).
 0.1.2: 벤더 IPC 요청 완료 줄의 사내 토큰이 코드 상수에서 site-defaults `platform.vendor_ipc`(기본 placeholder)로 —
 설정이 없으면 그 줄의 builtin이 0.1.1과 다를 수 있다.
+0.1.3: 벤더 IPC 오류 줄의 메시지 이름·결과 값 접두어와 성공 값도 site-defaults `platform.vendor_ipc`
+(`request_prefix`·`error_prefix`·`success`, 기본 placeholder)로 — 설정이 없으면 그 줄의 builtin이 0.1.2와 다를 수 있다.
 
 구현 위치는 `platforms/android/backend.py`이고 `parser_backends/reference`는 BACKEND만 다시 내보낸다.
 """
@@ -26,7 +28,7 @@ from common import events, vendor_ipc
 from . import logcat, ril
 from parser_backends.base import ParserBackend, TagAttrSet, Window
 
-VERSION = "0.1.2"
+VERSION = "0.1.3"
 
 # 벤더 IPC 결과 줄을 보는 태그(벤더 RIL 태그 placeholder). TODO(SITE:S9) 사내 태그 확인
 VENDOR_IPC_TAGS = frozenset({"RIL"})

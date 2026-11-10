@@ -1,14 +1,14 @@
 -- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture.
 Sep 22 09:10:21.247 dut local0.info mgmtd[734]: ui state refresh: airplane_mode=0
-Sep 22 09:10:21.297 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_SIGNAL_IND ind len=16
+Sep 22 09:10:21.297 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_SIGNAL_IND ind len=16
 Sep 22 09:10:21.357 dut daemon.debug ofonod[903]: drivers/rilmodem/sim.c:ril_sim_read_info() file 6f46, app_type 2
 Sep 22 09:10:21.358 dut daemon.info ofonod[903]: [0,0263]> RIL_REQUEST_SIM_IO (cmd=0xC0,efid=0x6F46,path=3f007fff,0,0,15,(null),pin2=(null),aid=<AID#1>)
 Sep 22 09:10:21.359 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: SIM_IO (36 bytes)
 Sep 22 09:10:21.359 dut daemon.info vrild[618]: [ExampleIccService_1] sim-io get-response for ef 6f46 queued
 Sep 22 09:10:21.360 dut daemon.debug vrild[618]: [IpcCtx_2] track seq 0x05e1 (1 in flight)
-Sep 22 09:10:21.360 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_EXAMPLE_CARD_IO seq=0x05e1 len=36
+Sep 22 09:10:21.360 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_CARD_IO seq=0x05e1 len=36
 Sep 22 09:10:21.377 dut local0.info mgmtd[734]: ui tick
-Sep 22 09:10:21.408 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_CARD_IO, RSP OK(RCM_E_SUCCESS) seq=0x05e1 len=258
+Sep 22 09:10:21.408 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_CARD_IO, RSP OK(VIPC_OK) seq=0x05e1 len=258
 Sep 22 09:10:21.409 dut daemon.info vrild[618]: [ExampleIccService_1] sim-io reply parsed, 258 bytes
 Sep 22 09:10:21.409 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=58, result=2 -> chan 2 reply sent, 0 waiters, took 49 ms
 Sep 22 09:10:21.409 dut daemon.debug vrild[618]: chan 2 <- reply written
@@ -16,5 +16,5 @@ Sep 22 09:10:21.410 dut daemon.debug vrild[618]: [IpcCtx_2] untrack seq 0x05e1 (
 Sep 22 09:10:21.411 dut daemon.debug ofonod[903]: [0,0263]< RIL_REQUEST_SIM_IO failed GENERIC_FAILURE
 Sep 22 09:10:21.411 dut daemon.info ofonod[903]: [0,0263]< RIL_REQUEST_SIM_IO (sw1=0x00,sw2=0x00,(null))
 Sep 22 09:10:21.412 dut daemon.info ofonod[903]: drivers/rilmodem/sim.c:ril_file_info_cb() Reply failure: GENERIC_FAILURE, 00, 00
-Sep 22 09:10:21.647 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_SIGNAL_IND ind len=16
+Sep 22 09:10:21.647 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_SIGNAL_IND ind len=16
 Sep 22 09:10:22.347 dut local0.info mgmtd[734]: ui tick

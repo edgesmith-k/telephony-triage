@@ -13,8 +13,8 @@
 10:10:19.421 p0 I ofonod [0,0745]> RIL_REQUEST_SIM_OPEN_CHANNEL (AID:<AID#1>) (P2:0)  〔script: 반복 ×2 10:10:19~10:10:21〕
 10:10:19.422 - D vrild client fd 9 VCHAN_2 REQUEST: SIM_OPEN_CHANNEL (20 bytes)
 10:10:19.422 - I vrild [ExampleIccService_1] open-channel start, p2 0x00
-10:10:19.423 - D vrild mux [ch1][TX] SIT_EXAMPLE_CARD_OPEN seq=0x08d4 len=20
-10:10:19.458 - D vrild mux [ch1][RX] SIT_EXAMPLE_CARD_OPEN, RSP Error(RCM_E_NO_SUCH_ELEMENT) seq=0x08d4 len=12, 35 ms  ⇒ builtin.common.vendor_ipc_error(error=RCM_E_NO_SUCH_ELEMENT,ipc=SIT_EXAMPLE_CARD_OPEN)
+10:10:19.423 - D vrild mux [ch1][TX] VIPC_EXAMPLE_CARD_OPEN seq=0x08d4 len=20
+10:10:19.458 - D vrild mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP Error(VIPC_E_NO_SUCH_ELEMENT) seq=0x08d4 len=12, 35 ms  ⇒ builtin.common.vendor_ipc_error(error=VIPC_E_NO_SUCH_ELEMENT,ipc=VIPC_EXAMPLE_CARD_OPEN)
 10:10:19.459 - I vrild [ExampleIccService_1] open-channel answer: no session, sw1 : 6A, sw2 : 82
 10:10:19.459 - I vrild [IpcCtx_2] OnIpcComplete Request ID=93, result=17 -> chan 2 reply sent, 0 waiters, took 37 ms  ⇒ builtin.common.vendor_request_failed(request_id=93,result=17)
 10:10:19.460 p0 D ofonod [0,0745]< RIL_REQUEST_SIM_OPEN_CHANNEL failed NO_SUCH_ELEMENT  ⇒ ril_error(error=NO_SUCH_ELEMENT,request=SIM_OPEN_CHANNEL,serial=745)  〔script: 반복 ×2 10:10:19~10:10:21〕
@@ -25,7 +25,7 @@
 10:10:19.468 - I mgmtd GetEID call error: Failed to get EID
 10:10:21.418 - I simd tid:36 open channel aid <AID#1> (retry)
 10:10:21.420 p0 I ofonod [0,0746]> RIL_REQUEST_SIM_OPEN_CHANNEL (AID:<AID#1>) (P2:0)  〔script: 반복 ×2 10:10:19~10:10:21〕
-10:10:21.421 - D vrild mux [ch1][TX] SIT_EXAMPLE_CARD_OPEN seq=0x08d5 len=20
-10:10:21.456 - D vrild mux [ch1][RX] SIT_EXAMPLE_CARD_OPEN, RSP Error(RCM_E_NO_SUCH_ELEMENT) seq=0x08d5 len=12, 35 ms  ⇒ builtin.common.vendor_ipc_error(error=RCM_E_NO_SUCH_ELEMENT,ipc=SIT_EXAMPLE_CARD_OPEN)
+10:10:21.421 - D vrild mux [ch1][TX] VIPC_EXAMPLE_CARD_OPEN seq=0x08d5 len=20
+10:10:21.456 - D vrild mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP Error(VIPC_E_NO_SUCH_ELEMENT) seq=0x08d5 len=12, 35 ms  ⇒ builtin.common.vendor_ipc_error(error=VIPC_E_NO_SUCH_ELEMENT,ipc=VIPC_EXAMPLE_CARD_OPEN)
 10:10:21.457 - I vrild [ExampleIccService_1] open-channel answer: no session, sw1 : 6A, sw2 : 82
 10:10:21.458 p0 D ofonod [0,0746]< RIL_REQUEST_SIM_OPEN_CHANNEL failed NO_SUCH_ELEMENT  ⇒ ril_error(error=NO_SUCH_ELEMENT,request=SIM_OPEN_CHANNEL,serial=746)  〔script: 반복 ×2 10:10:19~10:10:21〕

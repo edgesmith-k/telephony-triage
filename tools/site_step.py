@@ -453,7 +453,7 @@ RESTORE_STEPS = f"""사내 스냅샷 ({sc.RESTORE_DOC} "한눈에", S-6까지 �
   ⓪ {sc.RESTORE_DOC} ⓪의 블록을 그대로 실행 — HEAD의 templates/module-skills(evals 뺌) → {sc.SNAPSHOT_DIR}/ + SOURCE 한 줄
 반입 뒤(순서대로)
   ① SITE_INSTALL.md 8절(`tools/import_draft.py --check-boundary`) → `python3 tools/site_step.py check S-6`
-  ② plugin/site-defaults.yaml: 기존 `platform:` 블록 안 `vendor_ipc`에 context·complete 둘 다(사내 로그의 요청 완료 줄),
+  ② plugin/site-defaults.yaml: 기존 `platform:` 블록 안 `vendor_ipc`에 다섯 키 모두(사내 로그의 요청 완료 줄·IPC 오류 줄 토큰),
      oFono는 구성요소 플래그 `level_unreliable`·`vendor_ipc`도(이슈 DB tags.yaml 선언이 없을 때)
   ④ `python3 tools/site_step.py restore check` — 실패 줄의 "할 일"대로 채운다
   ③ `python3 tools/make_module_repo.py $OUT --site-overlay {sc.SNAPSHOT_DIR}` — 레포가 없으면 push, 있으면 diff → GHE PR

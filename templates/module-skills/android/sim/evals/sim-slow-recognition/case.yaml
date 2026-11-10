@@ -21,7 +21,7 @@ expect:
   accept:
     - layer: '모뎀|망'
       daemon: 'RIL$|RIL[ (]|RIL\b|모뎀|카드'
-      evidence: ['\[TX\] SIT_EXAMPLE_CARD_STATE', '\[RX\] SIT_EXAMPLE_CARD_STATE']
+      evidence: ['\[TX\] VIPC_EXAMPLE_CARD_STATE', '\[RX\] VIPC_EXAMPLE_CARD_STATE']
   trap:
     - label: '^\s*(프레임워크|UiccController|RILJ|RIL HAL|벤더 RIL|곁가지)'
     - label: '^\s*그\s*층\s*로그\s*없음'

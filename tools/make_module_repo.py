@@ -56,9 +56,9 @@ NEXT_STEPS = ("다음: GHE에 빈 모듈 레포를 만들고 이 디렉토리를
 EVALS_RE = re.compile(r"^[^/]+/[^/]+/evals/")
 # 남으면 스냅샷이 불완전한 표시: 사외 템플릿의 카테고리 힌트·placeholder 이름(PR-2 §2-0).
 # `TODO(SITE:S25)`는 넣지 않는다 — 사내 스냅샷 문서에도 있을 수 있는 표식이다
-# 데몬 이름은 대문자 꼴(`IMSD`·`DATAD_<값>`)도 본다. 벤더 IPC placeholder 두 개(`common/vendor_ipc.DEFAULT`)도 넣는다
+# 데몬 이름은 대문자 꼴(`IMSD`·`DATAD_<값>`)도 본다. 벤더 IPC placeholder(`common/vendor_ipc.DEFAULT` — `VIPC_`는 접두어 셋 모두)도 넣는다
 PLACEHOLDER_RE = re.compile(r"\{\{site:|(?i:\b(?:mgmtd|vrild|datad|imsd|simd|networkd|chatterd)\d*(?![A-Za-z0-9]))"
-                            r"|\bVRIL\b|\bIpcCtx_|\bOnIpcComplete\b")
+                            r"|\bVRIL\b|\bIpcCtx_|\bOnIpcComplete\b|\bVIPC_")
 
 
 class Usage(Exception):

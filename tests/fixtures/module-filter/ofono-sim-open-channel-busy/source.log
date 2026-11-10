@@ -1,6 +1,6 @@
 -- [합성] module-filter fixture: a second logical channel open is refused while another is in progress. Hand-written, not a real capture.
 Sep 23 11:10:09.064 dut local0.info mgmtd[734]: ui tick
-Sep 23 11:10:09.065 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_SIGNAL_IND ind len=16
+Sep 23 11:10:09.065 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_SIGNAL_IND ind len=16
 Sep 23 11:10:09.065 dut daemon.debug vrild[618]: link rx 16B
 Sep 23 11:10:09.066 dut daemon.info chatterd[746]: position fix pending
 Sep 23 11:10:09.067 dut daemon.info simd[587]: tid:42 profile list: open channel aid <AID#1>
@@ -9,7 +9,7 @@ Sep 23 11:10:09.068 dut daemon.info ofonod[903]: [0,0975]> RIL_REQUEST_SIM_OPEN_
 Sep 23 11:10:09.068 dut daemon.debug ofonod[903]: Device 0: > <HEXDUMP 20B>
 Sep 23 11:10:09.069 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: SIM_OPEN_CHANNEL (20 bytes)
 Sep 23 11:10:09.069 dut daemon.info vrild[618]: [ExampleIccService_1] open-channel start, p2 0x00
-Sep 23 11:10:09.070 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_EXAMPLE_CARD_OPEN seq=0x0d31 len=20
+Sep 23 11:10:09.070 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_CARD_OPEN seq=0x0d31 len=20
 Sep 23 11:10:09.070 dut daemon.debug vrild[618]: link tx 20B
 Sep 23 11:10:09.071 dut local0.info mgmtd[734]: ui tick
 Sep 23 11:10:09.071 dut daemon.info datad[633]: link status poll: rmnet0 up
@@ -17,21 +17,21 @@ Sep 23 11:10:09.072 dut daemon.info chatterd[746]: position fix pending
 Sep 23 11:10:09.073 dut daemon.info simd[589]: tid:9 GetEID: open channel aid <AID#2>
 Sep 23 11:10:09.073 dut daemon.debug ofonod[903]: src/sim.c:example_open_channel() /ril_0 aid <AID#2> while channel open in progress
 Sep 23 11:10:09.074 dut daemon.info ofonod[903]: src/dbus.c:__ofono_error_busy() m:ExampleOpenChannel i:org.ofono.SimManager
-Sep 23 11:10:09.074 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_EXAMPLE_OPER seq=0x0d32 len=8
+Sep 23 11:10:09.074 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_OPER seq=0x0d32 len=8
 Sep 23 11:10:09.075 dut daemon.debug vrild[618]: link tx 8B
 Sep 23 11:10:09.075 dut local0.info mgmtd[734]: ui tick
 Sep 23 11:10:09.076 dut daemon.info chatterd[746]: position fix pending
 Sep 23 11:10:09.076 dut daemon.debug ofonod[903]: Device 0: <HEXDUMP 12B>
-Sep 23 11:10:09.077 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_SIGNAL_IND ind len=16
+Sep 23 11:10:09.077 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_SIGNAL_IND ind len=16
 Sep 23 11:10:09.077 dut daemon.debug vrild[618]: link rx 16B
 Sep 23 11:10:09.078 dut daemon.err simd[589]: tid:9 Failed to open logical channel: org.ofono.Error.InProgress (Operation already in progress)
 Sep 23 11:10:09.078 dut daemon.warn simd[589]: tid:9 GetEID failed: EuiccNoResponse (eUICC not responding)
 Sep 23 11:10:09.079 dut local0.warn mgmtd[734]: GetEID call error: eUICC not responding
 Sep 23 11:10:09.080 dut daemon.info datad[633]: link status poll: rmnet0 up
-Sep 23 11:10:09.081 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_OPER, RSP OK(RCM_E_SUCCESS) seq=0x0d32 len=36
+Sep 23 11:10:09.081 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_OPER, RSP OK(VIPC_OK) seq=0x0d32 len=36
 Sep 23 11:10:09.081 dut daemon.debug vrild[618]: link rx 36B
 Sep 23 11:10:09.082 dut daemon.info chatterd[746]: position fix pending
-Sep 23 11:10:09.104 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_CARD_OPEN, RSP OK(RCM_E_SUCCESS) seq=0x0d31 len=12
+Sep 23 11:10:09.104 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP OK(VIPC_OK) seq=0x0d31 len=12
 Sep 23 11:10:09.104 dut daemon.debug vrild[618]: link rx 12B
 Sep 23 11:10:09.105 dut daemon.info vrild[618]: [ExampleIccService_1] open-channel answer: session 1, sw1 : 90, sw2 : 00
 Sep 23 11:10:09.105 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=171, result=0 -> chan 2 reply sent, 0 waiters, took 36 ms

@@ -418,6 +418,17 @@ def test_filter_timeout(env, monkeypatch):
     assert "받기 실패(modules.yaml)" in env.report_line("- 탐색 분석")
 
 
+def test_filter_gets_ipc_prefix_from_site_defaults(env, monkeypatch):
+    """모듈 필터 자식에 site-defaults `vendor_ipc.request_prefix`를 넘긴다(설정이 없으면 placeholder 기본)."""
+    import common.modulefilter as mf
+    from common import vendor_ipc
+    seen = []
+    monkeypatch.setattr(mf, "child", lambda payload, timeout=20.0: seen.append(payload) or {"error": "timeout"})
+    env.make_job(explore=True)
+    env.module("explore")
+    assert seen and seen[0]["ipc_prefix"] == vendor_ipc.DEFAULT.request_prefix
+
+
 # -- explore E0 -----------------------------------------------------------------------------------
 
 

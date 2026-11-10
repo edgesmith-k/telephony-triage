@@ -42,7 +42,7 @@
     "tag": "vrild",
     "event": "builtin.common.vendor_ipc_error",
     "phone": null,
-    "error": "RCM_E_NO_SUCH_ELEMENT"
+    "error": "VIPC_E_NO_SUCH_ELEMENT"
    },
    {
     "ts": "2026-09-22T10:10:19.459Z",
@@ -63,7 +63,7 @@
     "tag": "vrild",
     "event": "builtin.common.vendor_ipc_error",
     "phone": null,
-    "error": "RCM_E_NO_SUCH_ELEMENT"
+    "error": "VIPC_E_NO_SUCH_ELEMENT"
    },
    {
     "ts": "2026-09-22T10:10:21.458Z",

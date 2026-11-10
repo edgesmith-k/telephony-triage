@@ -14,8 +14,8 @@
 10:10:05.007 - D vrild client fd 9 VCHAN_1 REQUEST: DIAL (40 bytes)
 10:10:05.008 - I vrild [ExampleCallService_0] dial start
 10:10:05.008 - D vrild [IpcCtx_0] track seq 0x0351
-10:10:05.008 - D vrild mux [ch0][TX] SIT_EXAMPLE_CALL_START, REQ seq=0x0351 len=36
-10:10:05.090 - D vrild mux [ch0][RX] SIT_EXAMPLE_CALL_START, RSP OK(RCM_E_SUCCESS) seq=0x0351 len=12
+10:10:05.008 - D vrild mux [ch0][TX] VIPC_EXAMPLE_CALL_START, REQ seq=0x0351 len=36
+10:10:05.090 - D vrild mux [ch0][RX] VIPC_EXAMPLE_CALL_START, RSP OK(VIPC_OK) seq=0x0351 len=12
 10:10:05.091 - I vrild [IpcCtx_0] OnIpcComplete Request ID=10, result=0
 10:10:05.093 p0 D ofonod [0,0351]< RIL_REQUEST_DIAL
 10:10:05.402 p0 I ofonod [0,UNSOL]< RIL_UNSOL_RESPONSE_CALL_STATE_CHANGED

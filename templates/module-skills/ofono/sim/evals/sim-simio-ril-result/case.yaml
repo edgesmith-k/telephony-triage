@@ -22,6 +22,6 @@ run_expect:
 expect:
   layer: '벤더 RIL|vrild'
   daemon: 'vrild'
-  evidence: ['SIT_EXAMPLE_CARD_IO, RSP.*OK\(RCM_E_SUCCESS\)', 'OnIpcComplete Request ID=\d+, result=2']
+  evidence: ['VIPC_EXAMPLE_CARD_IO, RSP.*OK\(VIPC_OK\)', 'OnIpcComplete Request ID=\d+, result=2']
   trap: null
   wrong_layer: ['^\s*(모뎀|망|ofonod|관리 데몬|D-Bus|mgmtd|그\s*층|원인\s*아님)']

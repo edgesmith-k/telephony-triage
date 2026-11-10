@@ -2460,7 +2460,7 @@ def restore_vendor_ipc(ctx: Ctx) -> dict:
     """켠 플랫폼마다 site-defaults에 `vendor_ipc` 블록(기본 플랫폼 `platform.vendor_ipc`, 그 밖 `platform.others.<p>.vendor_ipc`).
     값은 보이지 않는다. 키 이름·형식은 `platforms.load`가 검증한다(실패면 fail — parse_logcat이 종료 2로 멈출 설정이다.
     `config.py check`는 `platform.*`을 보지 않는다).
-    통과는 두 키(`context`·`complete`)가 모두 있고 어느 값도 placeholder(`vendor_ipc.DEFAULT`)가 아닐 때만이다."""
+    통과는 다섯 키(`vendor_ipc.KEYS`)가 모두 있고 어느 값도 placeholder(`vendor_ipc.DEFAULT`)가 아닐 때만이다."""
     d = _site_defaults(ctx)
     if d is None:
         return _need_defaults("restore.vendor_ipc")
@@ -2486,11 +2486,11 @@ def restore_vendor_ipc(ctx: Ctx) -> dict:
     cmd = "python3 -c 'platforms.load(<site-defaults>, <켠 플랫폼>)'"
     if bad:
         return res("restore.vendor_ipc", "fail", f"플랫폼 설정 오류 {', '.join(bad)} — 키 경로는 parse_logcat.py 종료 2 메시지로(값은 보이지 않는다)",
-                   cmd, ask=f"plugin/site-defaults.yaml의 기존 platform: 블록 안 vendor_ipc에 context·complete 둘 다, 식별자 모양으로({RESTORE_DOC} ②)")
+                   cmd, ask=f"plugin/site-defaults.yaml의 기존 platform: 블록 안 vendor_ipc에 {'·'.join(vipc.KEYS)} 모두, 식별자 모양으로({RESTORE_DOC} ②)")
     if miss:
         return res("restore.vendor_ipc", "needs-user", f"없음 {', '.join(miss)}" + (f" · 있음 {', '.join(have)}" if have else ""),
-                   cmd, ask=f"plugin/site-defaults.yaml의 기존 platform: 블록 안 vendor_ipc(그 밖 플랫폼은 others.<p>.vendor_ipc)에 사내 로그 요청 "
-                       f"완료 줄의 context·complete를 적는다 — 첫 분석 전({RESTORE_DOC} ②)")
+                   cmd, ask=f"plugin/site-defaults.yaml의 기존 platform: 블록 안 vendor_ipc(그 밖 플랫폼은 others.<p>.vendor_ipc)에 사내 로그의 벤더 IPC "
+                       f"토큰 {'·'.join(vipc.KEYS)}를 적는다 — 첫 분석 전({RESTORE_DOC} ②)")
     return res("restore.vendor_ipc", "pass", f"있음 {', '.join(have)} (값은 보이지 않는다)", cmd)
 
 

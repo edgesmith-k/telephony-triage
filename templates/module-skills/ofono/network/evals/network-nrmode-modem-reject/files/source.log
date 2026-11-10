@@ -7,8 +7,8 @@ Sep 22 09:20:22.265 dut daemon.info ofonod[903]: [0,0348]> RIL_REQUEST_GET_PREFE
 Sep 22 09:20:22.266 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: GET_PREFERRED_NETWORK_TYPE (6 bytes)
 Sep 22 09:20:22.266 dut daemon.info vrild[618]: [ExampleRegService_1] begin rat-mode lookup
 Sep 22 09:20:22.267 dut daemon.debug vrild[618]: [IpcCtx_2] track seq 0x06a2 (1 in flight)
-Sep 22 09:20:22.267 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_EXAMPLE_RAT_MODE seq=0x06a2 len=8
-Sep 22 09:20:22.270 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_RAT_MODE, RSP Error(RCM_E_FAILURE) seq=0x06a2 len=8
+Sep 22 09:20:22.267 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_RAT_MODE seq=0x06a2 len=8
+Sep 22 09:20:22.270 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_RAT_MODE, RSP Error(VIPC_E_FAILURE) seq=0x06a2 len=8
 Sep 22 09:20:22.271 dut daemon.info vrild[618]: [ExampleRegService_1] rat-mode lookup returned
 Sep 22 09:20:22.271 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=71, result=2 -> chan 2 reply sent, 0 waiters, took 4 ms
 Sep 22 09:20:22.271 dut daemon.debug vrild[618]: chan 2 <- reply written
@@ -18,5 +18,5 @@ Sep 22 09:20:22.273 dut daemon.info ofonod[903]: src/radio-settings.c:radio_rat_
 Sep 22 09:20:22.274 dut daemon.info ofonod[903]: src/dbus.c:__ofono_error_failed() m:GetProperties i:org.ofono.RadioSettings
 Sep 22 09:20:22.278 dut local0.warn mgmtd[734]: dbus call error: Operation failed (GetProperties)
 Sep 22 09:20:22.279 dut local0.warn mgmtd[734]: load rat mode failed slot=0
-Sep 22 09:20:22.563 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_SIGNAL_IND ind len=16
+Sep 22 09:20:22.563 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_SIGNAL_IND ind len=16
 Sep 22 09:20:23.163 dut local0.info mgmtd[734]: ui tick

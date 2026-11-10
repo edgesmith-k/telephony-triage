@@ -8,12 +8,12 @@
 
 09:10:02.004 p0 I ofonod [0,0031]> RIL_REQUEST_SETUP_DATA_CALL 16,1,<APN#1>,0,IP
 09:10:02.005 - D vrild client fd 9 VCHAN_1 REQUEST: SETUP_DATA_CALL (120 bytes)
-09:10:02.006 - D vrild mux [ch0][TX] SIT_EXAMPLE_PDN_UP, REQ seq=0x0231 len=96
-09:10:02.610 - D vrild mux [ch0][RX] SIT_EXAMPLE_PDN_UP, RSP OK(RCM_E_SUCCESS) seq=0x0231 len=64
+09:10:02.006 - D vrild mux [ch0][TX] VIPC_EXAMPLE_PDN_UP, REQ seq=0x0231 len=96
+09:10:02.610 - D vrild mux [ch0][RX] VIPC_EXAMPLE_PDN_UP, RSP OK(VIPC_OK) seq=0x0231 len=64
 09:10:02.611 - I vrild [IpcCtx_0] OnIpcComplete Request ID=27, result=0
 09:10:02.613 p0 D ofonod [0,0031]< RIL_REQUEST_SETUP_DATA_CALL {status=0,retry=-1,cid=1,active=2,type=IP,ifname=rmnet0}
-09:10:08.300 - D vrild mux [ch0][RX] SIT_EXAMPLE_CARRIER_IND ind len=40
-09:10:08.340 - D vrild mux [ch0][RX] SIT_EXAMPLE_PDN_LIST_IND ind len=24
+09:10:08.300 - D vrild mux [ch0][RX] VIPC_EXAMPLE_CARRIER_IND ind len=40
+09:10:08.340 - D vrild mux [ch0][RX] VIPC_EXAMPLE_PDN_LIST_IND ind len=24
 09:10:08.342 p0 I ofonod [0,UNSOL]< RIL_UNSOL_DATA_CALL_LIST_CHANGED [cid=1 active=0]
 09:10:08.344 - I ofonod src/gprs.c:ofono_gprs_context_deactivated() context 1 deactivated
 09:10:08.345 p0 I ofonod dbus_trace signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"Active", variant(false)

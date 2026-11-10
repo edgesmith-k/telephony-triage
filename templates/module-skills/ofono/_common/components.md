@@ -33,7 +33,7 @@
 ## vrild
 
 - `client fd <n> VCHAN_<n> REQUEST: <이름>` → `[<Svc>Service_<n>] <자유 문구>` → `[IpcCtx_<n>] track seq 0x…`(요청 짝 값).
-- `mux [ch<n>][TX|RX] SIT_<MSG>` 줄은 REQ·RSP·IND 방향과 요청 짝 값 `seq=0x…`를 싣고, 응답이면 `OK(RCM_E_SUCCESS)`·`Error(RCM_E_<X>)`.
+- `mux [ch<n>][TX|RX] VIPC_<MSG>` 줄은 REQ·RSP·IND 방향과 요청 짝 값 `seq=0x…`를 싣고, 응답이면 `OK(VIPC_OK)`·`Error(VIPC_E_<X>)`.
 - `[IpcCtx_<n>] OnIpcComplete Request ID=<id>, result=<n>`(0이 성공). 스크립트 표시는 `⇒ builtin.common.vendor_ipc_error`·`vendor_request_failed`.
 - 슬롯: gril slot과 vrild·IPC 줄 번호의 대응은 줄에 적힌 것만 쓴다.
 - 짝(공유 serial 없음): gril ↔ vrild는 요청 이름·순서·ms 시각, vrild ↔ IPC는 같은 요청 짝 값.

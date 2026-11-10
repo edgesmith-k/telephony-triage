@@ -21,14 +21,14 @@
 ## 줄 → 층
 
 - gril 응답 `[<slot>,<serial>]< … failed <ERR>`은 ofonod tag여도 아래 층 답이다.
-- vrild 두 단계: IPC `Error(RCM_E_*)`·카드 SW(`sw1 : <XX>`) → `모뎀·망`. IPC `OK(RCM_E_SUCCESS)` 뒤 `OnIpcComplete … result≠0` → `벤더 RIL(<데몬>)`. IPC 오류인데 gril 성공이면 벤더 RIL이 감췄다.
+- vrild 두 단계: IPC `Error(VIPC_E_*)`·카드 SW(`sw1 : <XX>`) → `모뎀·망`. IPC `OK(VIPC_OK)` 뒤 `OnIpcComplete … result≠0` → `벤더 RIL(<데몬>)`. IPC 오류인데 gril 성공이면 벤더 RIL이 감췄다.
 - `src/dbus.c:__ofono_error_<busy|failed|not_found>() … m:<메서드>`는 아래 실패의 증상이다.
 
 ## 판단 규칙
 
 - 위 오류부터 한 층씩 내려간다. 처음 실패한 층이 원인, 위는 증상.
 - 근거에 둘 다: 답한 층 실패 줄 + 증상에 잇는 줄(같은 요청의 요청·응답 짝, 위 층 실패, 그 길로 보낸 상태값). 원인 아님은 오류+설명 줄, 로그 없음은 끊기기 전 마지막 요청·응답. 줄은 지어내지 않고 입력 그대로, ` ⇒ …` 꼬리만 쓰지 않는다.
-- 핵심 줄이 없으면 같은 사건을 다른 층이 본 줄(대체 근거)이 답한 층을 글자로 말할 때만(SIP·거절 코드, RejectCause, SW, RCM_E_*) 그 층으로 정하고 `반대 근거`에 "핵심 줄 없음 — 빌드·로그 수준 확인"을 적는다. 누가 냈는지 모르면 `그 층 로그 없음(<층>)`. 단, DEACTIVATE·RADIO_POWER 요청 없이 data call list에서 빠지면 아래 층이 끊었다 → `모뎀·망`.
+- 핵심 줄이 없으면 같은 사건을 다른 층이 본 줄(대체 근거)이 답한 층을 글자로 말할 때만(SIP·거절 코드, RejectCause, SW, VIPC_E_*) 그 층으로 정하고 `반대 근거`에 "핵심 줄 없음 — 빌드·로그 수준 확인"을 적는다. 누가 냈는지 모르면 `그 층 로그 없음(<층>)`. 단, DEACTIVATE·RADIO_POWER 요청 없이 data call list에서 빠지면 아래 층이 끊었다 → `모뎀·망`.
 - 아래 층 성공 직후 다른 데몬 오류면 곁가지를 본다.
 - 없는 줄은 로그가 그 시점을 덮을 때만 근거.
 

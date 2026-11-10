@@ -7,12 +7,12 @@
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
 15:00:02.100 p0 D RILJ [0306]> NOTIFY_IMS_DATA_NETWORK [PHONE0]
-15:00:04.114 - V RIL mux [ch0][RX] <unknown sit>, RSP Error(RCM_E_UNKNOWN_CMD) seq=0x0206 len=12
+15:00:04.114 - V RIL mux [ch0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0206 len=12
 15:00:07.135 p0 D RILJ [0306]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
 15:00:13.000 p0 D ImsManager register: impu=sip:<IMPU#1>@<HOST#1> [PHONE0]
 15:00:13.300 - D VRIL-IMS [pdn] add pdn apn=<APN#1> state=IMS_REGISTERING slot=0
 15:00:13.400 - I VRIL-IMS [ril] req -> OEM_REQ_IMS_ADD_PDN : type : 2 ip : 3 addr : <IP#1>
 15:00:13.450 - I VRIL-IMS [ril] rsp <- OEM_REQ_IMS_ADD_PDN : STATUS_SUCCESS
-15:00:15.100 - V RIL mux [ch0][RX] SIT_EXAMPLE_IMS_REG_IND ind len=208
+15:00:15.100 - V RIL mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=208
 15:00:15.105 - I VRIL-IMS [reg] ind <- OEM_UNSOL_IMS_REGISTRATION : state : 0 feature : 11 status-code : 403
 15:00:15.200 p0 W ImsRegistration onRegistrationFailed: code=403 reason=FORBIDDEN [PHONE0]  ⇒ ims_registration_failed(code=403,reason=FORBIDDEN)

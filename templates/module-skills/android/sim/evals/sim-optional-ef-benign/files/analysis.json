@@ -64,14 +64,14 @@
     "tag": "RIL",
     "event": "builtin.common.vendor_ipc_error",
     "phone": null,
-    "error": "RCM_E_FAILURE"
+    "error": "VIPC_E_FAILURE"
    },
    {
     "ts": "2026-10-16T08:30:15.931Z",
     "tag": "RIL",
     "event": "builtin.common.vendor_ipc_error",
     "phone": null,
-    "error": "RCM_E_FAILURE"
+    "error": "VIPC_E_FAILURE"
    }
   ],
   "error_event_total": 2,

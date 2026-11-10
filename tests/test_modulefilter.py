@@ -167,7 +167,7 @@ def test_deep_window_cap_60s():
 
 
 def test_pins_survive_noise_quiet_collapse_and_count_first():
-    noisy = "SIT_EXAMPLE_SIGNAL_IND level=3"
+    noisy = "VIPC_EXAMPLE_SIGNAL_IND level=3"
     rows_in = [(f"2026-09-20T15:10:{s:02d}.000Z", "datad", f"activate result: failed {s}", "W",
                 {"category_hint": "data"}) for s in range(30)]
     rows_in.append(("2026-09-20T15:10:40.000Z", "vrild", noisy, "I", None))
@@ -376,6 +376,21 @@ def test_build_candidates_and_also(tmp_path):
     assert mf.build({"op": "also", "modules": MODULES, "platform": "ofono", "events": path, "evidence": ev,
                      "module": "data"})["rows"] == 1
     assert mf.compile_spec(MODULES, "nope") is None
+
+
+def test_ipc_prefix_from_site_defaults_when_no_ipc_re(tmp_path):
+    """`filter.ipc_re`가 없으면 IPC 이름 접두어는 site-defaults `vendor_ipc.request_prefix`(payload `ipc_prefix`), 없으면 placeholder."""
+    doc = copy.deepcopy(MODULES)
+    doc["platforms"]["ofono"]["common"]["filter"].pop("ipc_re", None)
+    doc["platforms"]["ofono"]["modules"]["data"]["ipc"] = ["SMSG_DATA_*"]
+    site = mf.compile_spec(doc, "ofono", "SMSG_")
+    assert site.f.ipc_re.findall("[RX] SMSG_DATA_SETUP, RSP") == ["SMSG_DATA_SETUP"]
+    assert mf.compile_spec(doc, "ofono").f.ipc_re.findall("[RX] SMSG_DATA_SETUP, RSP") == []
+    assert mf.compile_spec(doc, "ofono").f.ipc_re.pattern == mf.DEFAULT_IPC_RE == mf.ipc_re_for("VIPC_")
+    path = _write_events(tmp_path, _events([("2026-09-20T15:10:00.000Z", "vrild", "[RX] SMSG_DATA_SETUP, RSP", "W", None)]))
+    payload = {"modules": doc, "platform": "ofono", "events": path}
+    assert "data" in (mf._spec_rows({**payload, "ipc_prefix": "SMSG_"})[1][0]["mods"] or ())   # build 경로도 같은 값
+    assert "data" not in (mf._spec_rows(payload)[1][0]["mods"] or ())
 
 
 def test_child_timeout_and_crash():

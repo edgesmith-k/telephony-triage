@@ -20,6 +20,8 @@ android reference 백엔드(`platforms/android/backend.py`)와 같은 구조(파
   없으면 보정·판별 없음(0.0.4와 출력이 다를 수 있어 버전을 올린다).
 - 0.0.6: 벤더 IPC 요청 완료 줄의 사내 토큰이 코드 상수에서 site-defaults `vendor_ipc`(기본 placeholder)로 — 설정이
   없으면 그 줄의 builtin이 0.0.5와 다를 수 있다.
+- 0.0.7: 벤더 IPC 오류 줄의 메시지 이름·결과 값 접두어와 성공 값도 site-defaults `vendor_ipc`(`request_prefix`·
+  `error_prefix`·`success`, 기본 placeholder)로 — 설정이 없으면 그 줄의 builtin이 0.0.6과 다를 수 있다.
 - builtin 판별(H C1 R12): 구성요소 `vendor_ipc: true`(site-defaults, TODO(SITE:S25))인 ident 줄에
   `common.vendor_ipc.detect`를 부른다 → `builtin.common.vendor_ipc_error`·`builtin.common.vendor_request_failed`.
   그 밖 ident 줄은 판별하지 않는다. 이슈 DB tags.yaml에 `ipc: vendor`가 하나라도 있으면 그 태그만 본다
@@ -42,7 +44,7 @@ from parser_backends.base import ParserBackend, TagAttrSet, Window
 from . import SPEC
 from .journal import DEFAULT_LEVEL
 
-VERSION = "0.0.6"
+VERSION = "0.0.7"
 # split_tag 하위 식별: 글자로 시작하는 식별자 모양만 tag에 붙인다(숫자로 시작하는 값·공백·`:`·`/`는 나누지 않음)
 SUBTAG_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
 

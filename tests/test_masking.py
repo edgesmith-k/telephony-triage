@@ -926,7 +926,7 @@ M_NEGATIVE = [
     "D Rx      : com.example.Foo$$Lambda$12/0x0000000801234567 apply",
     "D RILJ    : [0163]> SIM_IO RIL_REQUEST_SIM_IO",
     "D RILJ    : SIM_IO IccIoResult sw1 90 sw2 00",
-    "I VRIL    : SIT_DEMO_SET done",
+    "I VRIL    : VIPC_DEMO_SET done",
     "I DEV     : serial short ABC12",
     "ofonod[2]: /ril_0/context1 Active=true",
     "ofonod[2]: org.ofono.ConnectionContext.PropertyChanged",

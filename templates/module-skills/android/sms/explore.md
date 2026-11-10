@@ -12,11 +12,11 @@
 
 - SmsDispatchersController `sendText`·`getSmscAddress`·`sendSms failed: result=`
 - ImsSmsDispatcher `[n]` `sendSms … format=`·`onSendSmsResult … status=`
-- 벤더 IMS `[sms]`, RILJ `SEND_SMS`, 벤더 RIL `SIT_*SMS*`
+- 벤더 IMS `[sms]`, RILJ `SEND_SMS`, 벤더 RIL `VIPC_*SMS*`
 
 ## ③ 층 경로
 
-SmsDispatchersController → (IMS) `ImsSmsDispatcher [n]` → 벤더 IMS → `SIT_*SMS*` → 모뎀; (CS) RILJ `SEND_SMS` → 벤더 RIL → 모뎀.
+SmsDispatchersController → (IMS) `ImsSmsDispatcher [n]` → 벤더 IMS → `VIPC_*SMS*` → 모뎀; (CS) RILJ `SEND_SMS` → 벤더 RIL → 모뎀.
 
 ## ④ 증상별 첫 점검
 
@@ -32,5 +32,5 @@ SmsDispatchersController → (IMS) `ImsSmsDispatcher [n]` → 벤더 IMS → `SI
 ## ⑤ 함정
 
 - 뒤따른 CS `SEND_SMS` 성공이 IMS 실패를 가린다. 처음 실패를 답한다.
-- IMS 거절이 모뎀까지 가지 않았으면(`SIT_*SMS*` 없음) 벤더 IMS 안에서 막혔다.
+- IMS 거절이 모뎀까지 가지 않았으면(`VIPC_*SMS*` 없음) 벤더 IMS 안에서 막혔다.
 - `ImsSmsDispatcher [0]` 초기화 줄은 발신이 아니다.

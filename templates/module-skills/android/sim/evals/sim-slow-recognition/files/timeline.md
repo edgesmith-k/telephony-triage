@@ -8,8 +8,8 @@
 
 08:00:05.000 p0 D RILJ [0320]> GET_SIM_STATUS [PHONE0]
 08:00:05.004 - D VRIL-SVC RadioSimProxy::getIccCardStatus: serial 320
-08:00:05.008 - V RIL mux [ch0][TX] SIT_EXAMPLE_CARD_STATE, REQ seq=0x0210 len=8
-08:00:14.010 - V RIL mux [ch0][RX] SIT_EXAMPLE_CARD_STATE, RSP OK(RCM_E_SUCCESS) seq=0x0210 len=40
+08:00:05.008 - V RIL mux [ch0][TX] VIPC_EXAMPLE_CARD_STATE, REQ seq=0x0210 len=8
+08:00:14.010 - V RIL mux [ch0][RX] VIPC_EXAMPLE_CARD_STATE, RSP OK(VIPC_OK) seq=0x0210 len=40
 08:00:14.012 - I RIL [ExampleIccService_0] sim status done errorCode=0
 08:00:14.014 - D VRIL-SVC getIccCardStatus response: serial 320
 08:00:14.020 p0 D RILJ [0320]< GET_SIM_STATUS [PHONE0]  ⇒ ril_timeout(latency_ms=9020,request=GET_SIM_STATUS,serial=320,timeout_ms=5000)

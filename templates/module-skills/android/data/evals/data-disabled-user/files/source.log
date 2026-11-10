@@ -1,7 +1,7 @@
 -- [합성] telephony-triage module-skills D eval log. Hand-written; base tests/fixtures/logs/data-disabled.log.
 08-20 09:00:02.100  2101 2141 D RILJ    : [0300]> NOTIFY_IMS_DATA_NETWORK [PHONE0]
-08-20 09:00:03.107  1188 1258 V RIL     : mux [ch0][TX] <unknown sit>, REQ seq=0x0200 len=12
-08-20 09:00:04.114  1188 1258 V RIL     : mux [ch0][RX] <unknown sit>, RSP Error(RCM_E_UNKNOWN_CMD) seq=0x0200 len=12
+08-20 09:00:03.107  1188 1258 V RIL     : mux [ch0][TX] <unknown ipc>, REQ seq=0x0200 len=12
+08-20 09:00:04.114  1188 1258 V RIL     : mux [ch0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0200 len=12
 08-20 09:00:05.121  1188 1248 E VRIL    : reply to client token 300
 08-20 09:00:06.128  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
 08-20 09:00:07.135  2101 2141 D RILJ    : [0300]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]

@@ -286,8 +286,9 @@ def _parse_iso(value: str):
         return None
 
 
-def _filter(lib, payload: dict) -> dict:
-    res = lib.child(payload)
+def _filter(lib, payload: dict, args) -> dict:
+    """모듈 필터 자식 실행. IPC 이름 접두어는 site-defaults `vendor_ipc.request_prefix`(`_run`이 `args.ipc_prefix`에 둔다)."""
+    res = lib.child({**payload, "ipc_prefix": getattr(args, "ipc_prefix", None)})
     if not isinstance(res, dict):
         return {"error": "crash", "detail": "결과 형식"}
     return res
@@ -431,11 +432,12 @@ def _run(args, defaults: dict, seen: dict):
         explore = _explore_inputs(job, key, events, inputs, nojob)
         ctx.update(lines=explore["kept"], total=explore["total"])
     p = T._job_platform(job, args.platform_name)
-    if p != args.platform_name:
-        try:
+    try:
+        if p != args.platform_name:
             cfg = platform_session.resolve(defaults, p)[1]
-        except (platforms.PlatformConfigError, yamlio.YamlFileError) as exc:
-            raise _fail(purpose, 2, "설정 오류", str(exc), ctx) from None
+        args.ipc_prefix = platforms.load(defaults, p, require_enabled=False).vendor_ipc.request_prefix
+    except (platforms.PlatformConfigError, yamlio.YamlFileError) as exc:
+        raise _fail(purpose, 2, "설정 오류", str(exc), ctx) from None
     user = userconfig.load_user()
     env = _env(defaults)
     if purpose == "deep":
@@ -604,7 +606,7 @@ def _deep_module(args, job, key, p, cfg, analysis, events, candidates, state, in
         res = _view_or_fail(purpose, _filter(lib, {
             "op": "view", "mode": "deep", "events": str(job / "events.json"), "key": key, "module": fetched.module,
             "center": None, "center_source": "근거", "evidence": ev, "pins": ev, "allow": allow, "cap_rows": limit,
-            "cap_bytes": VIEW_CAPS["deep"][1], "with_modem": bool(args.also), "modules": fetched.doc, "platform": p}), ctx)
+            "cap_bytes": VIEW_CAPS["deep"][1], "with_modem": bool(args.also), "modules": fetched.doc, "platform": p}, args), ctx)
         text, stats = res["text"], res.get("stats") or {}
         kept, total, center = stats.get("kept", 0), stats.get("pool", 0), stats.get("center")
     else:
@@ -613,7 +615,7 @@ def _deep_module(args, job, key, p, cfg, analysis, events, candidates, state, in
     also, also_why, ask_also = [], [], None
     if lib is not None and not args.also and modem and modem != fetched.module and f"{p}/{modem}/SKILL.md" in fetched.tree:
         sig = _filter(lib, {"op": "also", "events": str(job / "events.json"), "evidence": ev, "module": fetched.module,
-                            "modules": fetched.doc, "platform": p})
+                            "modules": fetched.doc, "platform": p}, args)
         if not sig.get("error") and int(sig.get("rows") or 0) >= 1:
             also = [f"{p}/{modem}"]
             also_why = [_why_label(k, n) for k, n in (sig.get("why") or [])[:3]]
@@ -764,7 +766,7 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
         lib = importlib.import_module("common.modulefilter")
         res = _filter(lib, {"op": "candidates", "modules": doc, "platform": p,
                             "items": [{k: r.get(k) for k in ("tag", "msg", "cat", "ril", "level", "marks")}
-                                      for r in explore["items"]]})
+                                      for r in explore["items"]]}, args)
         if res.get("error") == "timeout":
             raise _fail(purpose, 2, "modules.yaml", "정규식 시간 초과(20초)", ctx)
         if res.get("error"):
@@ -799,7 +801,7 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
     tl_record = None
     if view:
         lib = importlib.import_module("common.modulefilter")
-        res = _view_or_fail(purpose, _filter(lib, _explore_view_payload(job, key, p, d, explore, fetched.doc)), ctx)
+        res = _view_or_fail(purpose, _filter(lib, _explore_view_payload(job, key, p, d, explore, fetched.doc), args), ctx)
         data = res["text"].encode("utf-8")
         stats = res.get("stats") or {}
         files[TIMELINE_FILE] = data
@@ -885,7 +887,7 @@ def _explore_at(args, job, key, p, events, explore, inputs, env, ctx):
     if not _has_filter(doc, p):
         raise _fail(purpose, 2, "사용 오류", "--at은 modules.yaml에 filter가 있을 때만 쓴다")
     lib = importlib.import_module("common.modulefilter")
-    res = _view_or_fail(purpose, _filter(lib, _explore_view_payload(job, key, p, d, explore, doc, args.at, "--at")), ctx)
+    res = _view_or_fail(purpose, _filter(lib, _explore_view_payload(job, key, p, d, explore, doc, args.at, "--at"), args), ctx)
     data, stats = res["text"].encode("utf-8"), res.get("stats") or {}
     files = {}
     for path in folder.rglob("*"):

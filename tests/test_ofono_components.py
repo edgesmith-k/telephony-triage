@@ -145,6 +145,9 @@ def test_component_errors_checked_even_when_loading_android():
         platforms.load(_defaults(components={"a": {"idents": []}}))
 
 
+SITE_IPC = {"context": "SiteCtx_", "complete": "SiteDone", "request_prefix": "SMSG_", "error_prefix": "SRES_", "success": "SRES_DONE"}   # 사내 값 대신 지어낸 값
+
+
 def test_vendor_ipc_block_both_platforms():
     """`<블록>.vendor_ipc`(벤더 IPC 요청 완료 줄의 사내 토큰, 17-platforms §9): 두 플랫폼 모두 받고, 생략 키는 placeholder 기본."""
     from common import vendor_ipc
@@ -153,18 +156,23 @@ def test_vendor_ipc_block_both_platforms():
     assert platforms.load({}).vendor_ipc == vendor_ipc.DEFAULT == _load().vendor_ipc
     assert platforms.default("ofono").vendor_ipc == vendor_ipc.DEFAULT
     assert _load(vendor_ipc=None).vendor_ipc == vendor_ipc.DEFAULT                  # null = 생략
-    full = _load(vendor_ipc={"context": "SiteCtx_", "complete": "SiteDone"}).vendor_ipc
-    assert (full.context, full.complete) == ("SiteCtx_", "SiteDone")
+    full = _load(vendor_ipc=SITE_IPC).vendor_ipc
+    assert full == vendor_ipc.Spec(**SITE_IPC) and full.success == "SRES_DONE"
     assert _load(vendor_ipc={}).vendor_ipc == vendor_ipc.DEFAULT                     # 빈 블록 = 생략
-    # 키 하나만 쓰면 나머지가 placeholder로 남아 판별이 조용히 0이 된다 → 빠진 키 경로로 오류
-    with pytest.raises(PlatformConfigError, match=r"platform\.vendor_ipc\.complete: .*빠짐: complete"):
+    # 일부만 쓰면 나머지가 placeholder로 남아 판별이 조용히 0이 된다 → 빠진 첫 키 경로로 오류
+    with pytest.raises(PlatformConfigError, match=r"platform\.vendor_ipc\.complete: .*빠짐: complete, request_prefix"):
         platforms.load({"platform": {**ON, "vendor_ipc": {"context": "SiteCtx_"}}})
     assert "platform.others.ofono.vendor_ipc.context" in _error(vendor_ipc={"complete": "SiteDone"})
+    two = {k: SITE_IPC[k] for k in ("context", "complete")}                          # 예전 두 키만 → 새 키 빠짐
+    assert "platform.others.ofono.vendor_ipc.request_prefix" in _error(vendor_ipc=two)
+    assert "빠짐: success" in _error(vendor_ipc={k: v for k, v in SITE_IPC.items() if k != "success"})
 
 
 @pytest.mark.parametrize("value,path,why", [
     ([], "vendor_ipc", "매핑"),
-    ({"error_prefix": "X_"}, "vendor_ipc.error_prefix", "알 수 없는 키"),
+    ({"error_code": "X_"}, "vendor_ipc.error_code", "알 수 없는 키"),
+    ({"request_prefix": "a-"}, "vendor_ipc.request_prefix", "식별자"),
+    ({"success": "1OK"}, "vendor_ipc.success", "식별자"),
     ({"context": ""}, "vendor_ipc.context", "식별자"),
     ({"context": 3}, "vendor_ipc.context", "식별자"),
     ({"complete": "a b"}, "vendor_ipc.complete", "식별자"),
@@ -662,7 +670,7 @@ def _parse(log: Path, rules: Path, ofono: dict | None) -> dict:
 
 def test_parse_cross_daemon_derived_events():
     out = _parse(MULTI_LOG, variant_db("issue-db-ofono") / "parser-rules", {"components": COMPONENTS, "protocols": {"ipc": IPC}})
-    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.6"}
+    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.7"}
     assert out["errors"] == [] and events.validate_events(out["events"]) == []
     derived = [(e["event"], e["tag"], e["fields"]) for e in out["events"] if e["source"] == "rules"]
     assert derived == [                                       # 응답 줄 바로 뒤(ril_error → ril_timeout), 그다음 응답 없음

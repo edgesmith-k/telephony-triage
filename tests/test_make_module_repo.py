@@ -127,8 +127,11 @@ SNAP = {
 
 
 def _rename(text: str) -> str:
-    """사내 스냅샷처럼 placeholder 이름을 같은 규칙으로 바꾼다(합성: `x<이름>`·`{{demo-site:`)."""
-    return PLACEHOLDER.sub(lambda m: "{{demo-site:" if m.group(0) == "{{site:" else "x" + m.group(0), text)
+    """사내 스냅샷처럼 placeholder 이름을 같은 규칙으로 바꾼다(합성: `x<이름>`·`{{demo-site:`, IPC 이름은 대문자 꼴 그대로 `X<이름>`)."""
+    def sub(m):
+        g = m.group(0)
+        return "{{demo-site:" if g == "{{site:" else ("X" if g.startswith("VIPC_") else "x") + g
+    return PLACEHOLDER.sub(sub, text)
 
 
 def _full(src: Path, files: dict[str, str] | None = None) -> dict[str, str]:
@@ -202,7 +205,8 @@ def test_overlay_is_deterministic(src, tmp_path):
 
 @pytest.mark.parametrize("text", ["# x\n\n- vrild 줄\n", "# x\n\n{{site:data}}\n", "# x\n\n- VRIL-IMS 태그\n",
                                   "# x\n\n- datad2 줄\n", "# x\n\n- networkd 줄\n", "# x\n\n- `[IpcCtx_0]` 줄\n",
-                                  "# x\n\n- OnIpcComplete 줄\n", "# x\n\n- IMSD 태그\n", "# x\n\n- DATAD_X 값\n"])
+                                  "# x\n\n- OnIpcComplete 줄\n", "# x\n\n- IMSD 태그\n", "# x\n\n- DATAD_X 값\n",
+                                  "# x\n\n- `VIPC_DIAL` 줄\n", "# x\n\n- `Error(VIPC_E_BUSY)` 줄\n"])
 def test_incomplete_snapshot_creates_nothing(src, tmp_path, text):
     snap = _snapshot(tmp_path / "snap", _full(src, {**SNAP, "ofono/data/explore.md": text}))
     out = tmp_path / "repo"

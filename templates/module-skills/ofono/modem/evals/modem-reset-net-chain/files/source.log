@@ -15,8 +15,8 @@ Sep 21 10:50:05.005 dut daemon.info ofonod[466]: [0,0511]> RIL_REQUEST_GET_PREFE
 Sep 21 10:50:05.006 dut daemon.debug vrild[452]: client fd 9 VCHAN_1 REQUEST: GET_PREFERRED_NETWORK_TYPE (8 bytes)
 Sep 21 10:50:05.006 dut daemon.info vrild[452]: [ExampleRegService_0] rat-mode query start
 Sep 21 10:50:05.006 dut daemon.debug vrild[452]: [IpcCtx_0] track seq 0x0241
-Sep 21 10:50:05.007 dut daemon.debug vrild[452]: mux [ch0][TX] SIT_EXAMPLE_RAT_MODE, REQ seq=0x0241 len=12
-Sep 21 10:50:05.020 dut daemon.debug vrild[452]: mux [ch0][RX] SIT_EXAMPLE_RAT_MODE, RSP Error(RCM_E_FAILURE) seq=0x0241 len=12
+Sep 21 10:50:05.007 dut daemon.debug vrild[452]: mux [ch0][TX] VIPC_EXAMPLE_RAT_MODE, REQ seq=0x0241 len=12
+Sep 21 10:50:05.020 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_RAT_MODE, RSP Error(VIPC_E_FAILURE) seq=0x0241 len=12
 Sep 21 10:50:05.020 dut daemon.info vrild[452]: [ExampleRegService_0] rat-mode query answer
 Sep 21 10:50:05.021 dut daemon.info vrild[452]: [IpcCtx_0] OnIpcComplete Request ID=44, result=2
 Sep 21 10:50:05.021 dut daemon.debug vrild[452]: [IpcCtx_0] untrack seq 0x0241

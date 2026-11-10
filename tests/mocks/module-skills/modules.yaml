@@ -15,4 +15,4 @@ platforms:
         level_unreliable: [VRIL-MODEM]
     modules:
       data: {path: android/data, db_category: data, dbus: [com.example.Data]}
-      sim: {path: android/sim, db_category: sim, ipc: [SIT_EXAMPLE_SIM]}
+      sim: {path: android/sim, db_category: sim, ipc: [VIPC_EXAMPLE_SIM]}

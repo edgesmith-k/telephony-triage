@@ -1,4 +1,4 @@
--- [합성] C1 call-dial-modem-reject. 레포 case의 줄 모양을 본떠 새로 썼다. SIT_EXAMPLE_CALL_START 이름은 가정(A).
+-- [합성] C1 call-dial-modem-reject. 레포 case의 줄 모양을 본떠 새로 썼다. VIPC_EXAMPLE_CALL_START 이름은 가정(A).
 Sep 21 10:10:00.010 dut local0.info mgmtd[734]: ui tick
 Sep 21 10:10:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-95
 Sep 21 10:10:01.000 dut daemon.info ofonod[466]: Device 0: <HEXDUMP 32B>
@@ -15,10 +15,10 @@ Sep 21 10:10:05.007 dut daemon.info vrild[452]: [IpcCtx_0] OnRequest
 Sep 21 10:10:05.007 dut daemon.debug vrild[452]: [IpcCtx_0] route req id=10 svc=2 msg=3001
 Sep 21 10:10:05.008 dut daemon.info vrild[452]: [ExampleCallService_0] dial start
 Sep 21 10:10:05.008 dut daemon.debug vrild[452]: [IpcCtx_0] track seq 0x0131
-Sep 21 10:10:05.008 dut daemon.debug vrild[452]: mux [ch0][TX] SIT_EXAMPLE_CALL_START, REQ seq=0x0131 len=36
+Sep 21 10:10:05.008 dut daemon.debug vrild[452]: mux [ch0][TX] VIPC_EXAMPLE_CALL_START, REQ seq=0x0131 len=36
 Sep 21 10:10:05.008 dut daemon.debug vrild[452]: <HEXDUMP 16B>
 Sep 21 10:10:05.090 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-96
-Sep 21 10:10:05.410 dut daemon.debug vrild[452]: mux [ch0][RX] SIT_EXAMPLE_CALL_START, RSP Error(RCM_E_FAILURE) seq=0x0131 len=12
+Sep 21 10:10:05.410 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_CALL_START, RSP Error(VIPC_E_FAILURE) seq=0x0131 len=12
 Sep 21 10:10:05.410 dut daemon.debug vrild[452]: <HEXDUMP 12B>
 Sep 21 10:10:05.411 dut daemon.debug vrild[452]: waitlist hit seq 0x0131 svc=2 msg=3001
 Sep 21 10:10:05.411 dut daemon.info vrild[452]: [ExampleCallService_0] dial answer

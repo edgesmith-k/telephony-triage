@@ -4,7 +4,7 @@
 
 | 역할 | 지금 이름 | 구 이름 | 층 | 비고 |
 |---|---|---|---|---|
-| 벤더 RIL 데몬 | RIL, VRIL | — | 벤더 RIL | `[<Svc>Service_<n>] <요청> request`·`… done errorCode=`, `mux [ch<n>][TX]/[RX] SIT_*`, IMS 등록 결과 `[ImsService_<n>] ims registration indication:`, `radio state changed:` |
+| 벤더 RIL 데몬 | RIL, VRIL | — | 벤더 RIL | `[<Svc>Service_<n>] <요청> request`·`… done errorCode=`, `mux [ch<n>][TX]/[RX] VIPC_*`, IMS 등록 결과 `[ImsService_<n>] ims registration indication:`, `radio state changed:` |
 | 벤더 텔레포니 서비스 | VRIL-SVC | — | RIL HAL | `Radio<X>Proxy::<fn>: serial`, `<fn> request: serial`·`<fn> response: serial` (TODO(SITE:S25) SIM HAL 태그) |
 | 벤더 IMS | VRIL-IMS | — | 벤더 IMS | `[pdn]`·`[reg]`·`[ut]`·`[sms]`, `req -> OEM_REQ_IMS_*`·`rsp <- OEM_REQ_IMS_*`·`ind <- OEM_UNSOL_IMS_*` |
 | AT 중계·모뎀 진단 | VRIL-MODEM | — | 곁가지(<태그>) | `at-in: AT…` = 시험 장비가 보낸 AT, `at-out: …` = 모뎀 답 (TODO(SITE:S25)) |
@@ -17,9 +17,9 @@ AOSP 태그는 이름 그대로 쓴다: RILJ(`[n]> REQ`, `[n]< REQ error <n>`, `
 - RILJ serial = HAL `serial <n>`. IPC REQ↔RSP는 `seq=0x…`.
 - `error <n>`의 이름: 같은 serial `RilRequest` 줄(`CommandException: <이름>`)·`⇒` 이벤트.
 
-## RCM_E_* (벤더 IPC 결과)
+## VIPC_E_* (벤더 IPC 결과)
 
-- `RCM_E_SUCCESS` 성공 · `RCM_E_FAILURE` 모뎀 실패 · `RCM_E_NO_SUCH_ELEMENT` 대상(AID·파일) 없음 · `RCM_E_UNKNOWN_CMD` 모뎀이 모르는 명령(미지원, 되풀이되면 잡음).
+- `VIPC_OK` 성공 · `VIPC_E_FAILURE` 모뎀 실패 · `VIPC_E_NO_SUCH_ELEMENT` 대상(AID·파일) 없음 · `VIPC_E_UNKNOWN_CMD` 모뎀이 모르는 명령(미지원, 되풀이되면 잡음).
 
 ## 읽는 법
 

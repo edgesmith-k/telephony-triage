@@ -16,8 +16,8 @@
 10:10:05.007 - D vrild [IpcCtx_0] route req id=10 svc=2 msg=3001
 10:10:05.008 - I vrild [ExampleCallService_0] dial start
 10:10:05.008 - D vrild [IpcCtx_0] track seq 0x0131
-10:10:05.008 - D vrild mux [ch0][TX] SIT_EXAMPLE_CALL_START, REQ seq=0x0131 len=36
-10:10:05.410 - D vrild mux [ch0][RX] SIT_EXAMPLE_CALL_START, RSP Error(RCM_E_FAILURE) seq=0x0131 len=12  ⇒ builtin.common.vendor_ipc_error(error=RCM_E_FAILURE,ipc=SIT_EXAMPLE_CALL_START)
+10:10:05.008 - D vrild mux [ch0][TX] VIPC_EXAMPLE_CALL_START, REQ seq=0x0131 len=36
+10:10:05.410 - D vrild mux [ch0][RX] VIPC_EXAMPLE_CALL_START, RSP Error(VIPC_E_FAILURE) seq=0x0131 len=12  ⇒ builtin.common.vendor_ipc_error(error=VIPC_E_FAILURE,ipc=VIPC_EXAMPLE_CALL_START)
 10:10:05.411 - I vrild [ExampleCallService_0] dial answer
 10:10:05.411 - I vrild [IpcCtx_0] OnIpcComplete Request ID=10, result=2  ⇒ builtin.common.vendor_request_failed(request_id=10,result=2)
 10:10:05.411 - D vrild reply sent to VCHAN_1

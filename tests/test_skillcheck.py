@@ -267,7 +267,7 @@ def test_regex_subset_rejects(rx):
     assert errs and "정규식이 허용 범위 밖" in errs[0]
 
 
-@pytest.mark.parametrize("rx", [r"^UiccProfile( \[\d+\])?$", r"^(?: [0-9a-f]{2}){1,16}\s*$", r"\bSIT_\w+",
+@pytest.mark.parametrize("rx", [r"^UiccProfile( \[\d+\])?$", r"^(?: [0-9a-f]{2}){1,16}\s*$", r"\bVIPC_\w+",
                                 r"(?P<req>0x[0-9a-f]+) (?P<ipc>\w+)", r"^\[(\w+)\]", r"(?=x)y", r"(ab){3}"])
 def test_regex_subset_accepts(rx):
     assert sc.regex_problem(rx) is None

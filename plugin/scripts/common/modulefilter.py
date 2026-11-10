@@ -35,7 +35,7 @@ if __package__ in (None, ""):          # `python3 modulefilter.py --child`: 스�
 
 from triagelib.core import _clip, is_error_text
 
-from common import masking
+from common import masking, vendor_ipc
 
 HOT_LEVELS = frozenset("WEFA")
 MSG_MAX = 2000                      # 필터는 메시지 앞 2,000자만 본다
@@ -56,7 +56,14 @@ DEEP_CAPS = (200, 24576)
 NAME_RX = re.compile(r"^[A-Za-z0-9._/-]{1,40}$")
 NAME_FIELDS = ("daemons", "ofonod_files", "ril", "ipc", "sit", "services", "hal", "dbus")
 DEFAULT_SOURCE_FILE = r"^((?:src|drivers|plugins)/[\w/-]+\.c):"
-DEFAULT_IPC_RE = r"\b(SIT_\w+)"
+
+
+def ipc_re_for(prefix: str) -> str:
+    """IPC 메시지 이름 뽑기 정규식(`filter.ipc_re`가 없을 때) — 접두어는 site-defaults `vendor_ipc.request_prefix`."""
+    return r"\b(" + re.escape(prefix) + r"\w+)"
+
+
+DEFAULT_IPC_RE = ipc_re_for(vendor_ipc.DEFAULT.request_prefix)
 DEFAULT_SERVICE_RE = r"\b([A-Z]\w+Service)_\d"
 NEVER = re.compile(r"(?!)")
 _TOKEN_FOLD = re.compile(r"<[A-Z][A-Z0-9_]*#\d+>|<HEXDUMP \d+B>|<REDACTED:[A-Z0-9]+>")
@@ -131,8 +138,9 @@ class Spec:
     mods: dict
 
 
-def compile_spec(doc: dict, platform: str) -> Spec | None:
-    """검사된 `modules.yaml` 문서 → Spec. 그 플랫폼 블록이 없으면 None."""
+def compile_spec(doc: dict, platform: str, ipc_prefix: str | None = None) -> Spec | None:
+    """검사된 `modules.yaml` 문서 → Spec. 그 플랫폼 블록이 없으면 None. `ipc_prefix` = site-defaults `vendor_ipc.request_prefix`
+    (`filter.ipc_re`가 없을 때 IPC 이름 접두어, 없으면 placeholder 기본)."""
     block = ((doc or {}).get("platforms") or {}).get(platform)
     if not isinstance(block, dict):
         return None
@@ -149,7 +157,7 @@ def compile_spec(doc: dict, platform: str) -> Spec | None:
         chain=_rx(fdoc.get("chain")),
         request_on_line=_rx(fdoc.get("request_on_line")),
         source_file=re.compile(fdoc.get("source_file") or DEFAULT_SOURCE_FILE),
-        ipc_re=re.compile(fdoc.get("ipc_re") or DEFAULT_IPC_RE),
+        ipc_re=re.compile(fdoc.get("ipc_re") or (ipc_re_for(ipc_prefix) if ipc_prefix else DEFAULT_IPC_RE)),
         service_re=re.compile(fdoc.get("service_re") or DEFAULT_SERVICE_RE),
         token_re=_rx(fdoc.get("token_re")),
         client_tag=_rx(fdoc.get("client_tag")),
@@ -699,7 +707,7 @@ def _load_events(payload: dict) -> dict:
 
 
 def _spec_rows(payload: dict) -> tuple[Spec, list[dict]]:
-    spec = compile_spec(payload.get("modules") or {}, payload.get("platform") or "")
+    spec = compile_spec(payload.get("modules") or {}, payload.get("platform") or "", payload.get("ipc_prefix"))
     if spec is None:
         raise ValueError("platform")
     rows = rows_of(_load_events(payload))
@@ -751,7 +759,7 @@ def build(payload: dict) -> dict:
     """op `candidates` | `view` | `also` (B2 §4.3 표)."""
     op = payload.get("op")
     if op == "candidates":
-        spec = compile_spec(payload.get("modules") or {}, payload.get("platform") or "")
+        spec = compile_spec(payload.get("modules") or {}, payload.get("platform") or "", payload.get("ipc_prefix"))
         if spec is None:
             return {"counts": {}, "unmapped": {}}
         return candidates(spec, payload.get("items") or [])

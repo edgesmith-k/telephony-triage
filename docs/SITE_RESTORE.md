@@ -19,7 +19,7 @@
 |---|---|---|
 | SITE_INSTALL.md 8절(`tools/import_draft.py --check-boundary`) | 새 묶음 반입 | SITE_INSTALL.md 8절 "멈췄을 때" |
 | `python3 tools/site_step.py check S-6` | 반입 뒤에도 S-6 통과, SITE_PATHS 그대로 | ① |
-| `plugin/site-defaults.yaml` 편집 | 기존 `platform:` 블록 안 `vendor_ipc`(두 키), oFono 구성요소 플래그 | ② |
+| `plugin/site-defaults.yaml` 편집 | 기존 `platform:` 블록 안 `vendor_ipc`(다섯 키), oFono 구성요소 플래그 | ② |
 | `python3 tools/site_step.py restore check` | 점검 7개 — 실패 줄의 "할 일"이 무엇을 어디에 채울지 말한다 | ④ 표 |
 | `python3 tools/make_module_repo.py $OUT --site-overlay docs/site/module-skills` | 모듈 스킬 레포를 사내 이름으로(없으면 새로 → push, 있으면 렌더 → diff → PR) | ③ |
 | `python3 tools/check_boundary.py --mode site` | 사내 경계 검사 | ④ |
@@ -36,6 +36,7 @@
 | `VRIL` · `VRIL-SVC` · `VRIL-IMS` · `VRIL-MODEM` · `VRIL-DATA` · `VRIL-NETWORK` | Android | 벤더 RIL · 텔레포니 서비스 · IMS · 모뎀/IPC · 프레임워크(data·network) 태그 |
 | `VRIL-LINK` · `VRIL-INFO` · `VRIL-TEST` | Android | 수집 안 함(샘플 tags.yaml에 없는 벤더 태그) |
 | `IpcCtx_<n>` · `OnIpcComplete` | — | 벤더 IPC 문맥 접두어 · 완료 낱말(②의 `vendor_ipc.context`·`complete`) |
+| `VIPC_<X>` · `VIPC_E_<Y>` · `VIPC_OK` | — | 벤더 IPC 메시지 이름 접두어 · 결과 값 접두어 · 성공 값(②의 `vendor_ipc.request_prefix`·`error_prefix`·`success`) |
 
 표식 `{{site:<cat>}}`도 사내 스냅샷이 채울 자리다. `make_module_repo.py --site-overlay`는 덮어쓴 파일에 위 이름(데몬 이름의 대문자 꼴 `IMSD`·`DATAD_…` 포함)·표식이 남아 있으면 "스냅샷이 불완전", 스냅샷에 없는 템플릿 파일(`*/*/evals/` 밖)이 그것을 담고 있으면 "스냅샷에 없음"으로 종료 1이다(아무것도 만들지 않는다).
 
@@ -78,23 +79,26 @@ python3 tools/site_step.py check S-6                                     # 반�
 
 ## ② 벤더 IPC 값·oFono 구성요소 플래그 (site-defaults, **첫 분석보다 먼저**)
 
-요청 완료 줄의 두 낱말만 설정으로 옮긴다(오류 코드·성공 토큰은 코드 상수). 값은 사내 로그의 요청 완료 줄 `[<context><n>] <complete> Request ID=<id>, result=<n>`에서 확인한 두 낱말이다. 출력은 사내 터미널에서만 본다.
+벤더 IPC 줄 두 모양의 사내 토큰 다섯을 설정으로 옮긴다. 값은 사내 로그의 요청 완료 줄 `[<context><n>] <complete> Request ID=<id>, result=<n>`과 IPC 오류 줄 `[RX] <request_prefix><X>, RSP, … Error(<error_prefix><Y>)`에서 확인한 글자다. 출력은 사내 터미널에서만 본다.
 
 | 키 | 줄에서 옮길 글자 |
 |---|---|
 | `context` | `[` 뒤, 숫자 앞의 글자(끝의 `_` 포함) |
 | `complete` | `]`와 공백 뒤의 낱말 |
+| `request_prefix` | 오류 줄 `[RX]` 뒤 IPC 메시지 이름의 공통 앞부분(끝의 `_` 포함) — 모듈 필터 IPC 이름도 이것으로 뽑는다 |
+| `error_prefix` | `Error(` 안 결과 값의 공통 앞부분(끝의 `_` 포함) |
+| `success` | 성공 결과 값 전체(이 값의 줄은 이벤트로 내지 않는다) |
 
-값은 식별자 모양 `^[A-Za-z][A-Za-z0-9_]{0,63}$`이고 두 키를 함께 적는다(하나만 쓰거나 키 값이 `null`이면 종료 2). 블록을 빼면(블록 전체 `null`·`{}` 포함) placeholder를 쓴다. 다른 키는 "알 수 없는 키"로 종료 2다(기준: `contracts.md` 설정 키 표). 켠 플랫폼마다 둔다 — 기본 플랫폼은 `platform.vendor_ipc`, 그 밖은 `platform.others.<p>.vendor_ipc`. **site-defaults에 이미 있는 `platform:` 블록 안에 키만 더한다** — `platform:`을 하나 더 쓰면 같은 최상위 키 중 뒤엣것만 남아 사내 값(구성요소·짝 규칙·슬롯 등)이 경고 없이 사라진다. `enabled`는 바꾸지 않는다:
+값은 식별자 모양 `^[A-Za-z][A-Za-z0-9_]{0,63}$`이고 다섯 키를 함께 적는다(일부만 쓰거나 키 값이 `null`이면 종료 2). 블록을 빼면(블록 전체 `null`·`{}` 포함) placeholder를 쓴다. 다른 키는 "알 수 없는 키"로 종료 2다(기준: `contracts.md` 설정 키 표). 켠 플랫폼마다 둔다 — 기본 플랫폼은 `platform.vendor_ipc`, 그 밖은 `platform.others.<p>.vendor_ipc`. **site-defaults에 이미 있는 `platform:` 블록 안에 키만 더한다** — `platform:`을 하나 더 쓰면 같은 최상위 키 중 뒤엣것만 남아 사내 값(구성요소·짝 규칙·슬롯 등)이 경고 없이 사라진다. `enabled`는 바꾸지 않는다:
 
 ```yaml
 platform:                    # 이미 있는 블록
   # …기존 키 그대로…
-  vendor_ipc: {context: "<문맥 접두어>", complete: "<완료 낱말>"}
+  vendor_ipc: {context: "<문맥 접두어>", complete: "<완료 낱말>", request_prefix: "<메시지 접두어>", error_prefix: "<결과 접두어>", success: "<성공 값>"}
   others:                    # 이미 있으면 그 안에
     ofono:
       # …기존 키 그대로…
-      vendor_ipc: {context: "…", complete: "…"}
+      vendor_ipc: {context: "…", complete: "…", request_prefix: "…", error_prefix: "…", success: "…"}
 ```
 
 **oFono 구성요소 플래그.** oFono 백엔드는 레벨 보정·벤더 IPC 판별 대상을 구성요소 플래그(또는 이슈 DB 선언)로만 정한다 — 코드 기본 구성요소에는 플래그가 없다. 사내 oFono 이슈 DB `parser-rules/tags.yaml`이 그 데몬에 `level: unreliable`·`ipc: vendor`를 선언하지 않았으면 `platform.others.ofono.components.<이름>`에 `level_unreliable: true`(줄 레벨이 심각도가 아닌 구성요소)·`vendor_ipc: true`(벤더 IPC 결과를 내는 벤더 RIL 데몬)를 둔다. 기존 구성요소 항목 안에 키를 더한다(같은 이름을 다시 적으면 앞 정의가 사라진다). `components`를 처음 쓰면 코드 기본 구성요소를 통째로 바꾸므로 기본 항목도 함께 적는다(`02-config.md`):
@@ -104,7 +108,7 @@ platform:                    # 이미 있는 블록
         <벤더 RIL 데몬>: {idents: [<ident>], root_key: …, vendor_ipc: true, level_unreliable: true}   # 기존 키에 더함
 ```
 
-확인은 ④의 `site_step.py restore check`다(`restore.vendor_ipc`가 켠 플랫폼마다 설정을 실제로 읽고, 두 키가 있고 placeholder 값이 아닌지 본다). `config.py check`는 `platform.*`을 검증하지 않는다 — 형식이 틀리면 첫 `parse_logcat.py`가 키 경로와 함께 종료 2로 멈춘다. 값이 없으면 사내 로그에서 `vendor_request_failed` 이벤트가 0개다(④에서 확인). vendor_ipc 값·구성요소 플래그는 `compiled.environment`에는 들지 않지만, 분석 재사용 키의 `config`(site-defaults 전체 해시)가 바뀌므로 ② 전에 만든 분석은 재사용되지 않는다(다시 분석한다).
+확인은 ④의 `site_step.py restore check`다(`restore.vendor_ipc`가 켠 플랫폼마다 설정을 실제로 읽고, 다섯 키가 있고 placeholder 값이 아닌지 본다). `config.py check`는 `platform.*`을 검증하지 않는다 — 형식이 틀리면 첫 `parse_logcat.py`가 키 경로와 함께 종료 2로 멈춘다. 값이 없으면 사내 로그에서 `vendor_request_failed`·`vendor_ipc_error` 이벤트가 0개다(④에서 확인). vendor_ipc 값·구성요소 플래그는 `compiled.environment`에는 들지 않지만, 분석 재사용 키의 `config`(site-defaults 전체 해시)가 바뀌므로 ② 전에 만든 분석은 재사용되지 않는다(다시 분석한다).
 
 ## ③ 모듈 스킬 레포
 
@@ -144,7 +148,7 @@ python3 -m pytest -q tests/test_modulefilter.py tests/test_module_templates.py
 | `restore.source` | `SOURCE` 한 줄 형식 |
 | `restore.overlay` | `make_module_repo.py <임시> --site-overlay … --json` 종료 0(덮어쓴 파일의 placeholder·표식 남음, 스냅샷에 없는 템플릿 파일의 placeholder, evals 포함은 실패) |
 | `restore.tags` | 렌더된 `modules.yaml`의 데몬·태그 ⊆ 사내 이슈 DB `tags.yaml`(빠진 이름은 이 출력에만). 한 플랫폼이라도 이슈 DB를 건너뛰면 건너뜀 |
-| `restore.vendor_ipc` | 켠 플랫폼마다 ②의 블록에 두 키, 어느 값도 placeholder 아님(값은 보이지 않는다). 없거나 placeholder 값이면 사용자 필요, 플랫폼 설정을 못 읽으면(한 키만 포함) 실패 |
+| `restore.vendor_ipc` | 켠 플랫폼마다 ②의 블록에 다섯 키, 어느 값도 placeholder 아님(값은 보이지 않는다). 없거나 placeholder 값이면 사용자 필요, 플랫폼 설정을 못 읽으면(일부 키만 포함) 실패 |
 | `restore.deny` | `TT_DENY_FILE`의 항목이 SITE_PATHS 밖 추적 파일에 0건(UTF-8 아닌 파일도 본다). 압축 파일(내용 못 봄)이 있으면 실패, 변수가 없으면 사용자 필요 |
 | `restore.label` | 지금 반입 라벨(`.draft-manifest.json`, 없으면 `import-*` 태그) = `SOURCE` label. 다르면 경고 |
 

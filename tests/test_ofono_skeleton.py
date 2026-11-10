@@ -160,14 +160,14 @@ def test_backend_vendor_ipc_builtin(tmp_path):
     from platforms.ofono import backend
 
     path = _write(tmp_path, "ipc.log", [
-        "Sep 20 14:32:11.001 dut daemon.debug daemon-b[7]: [<DEV#1>][RX] SIT_DEMO_QUERY, RSP, 12 bytes, "
-        "Token(0x0101), Error(RCM_E_DEMO_FAILURE)",
+        "Sep 20 14:32:11.001 dut daemon.debug daemon-b[7]: [<DEV#1>][RX] VIPC_DEMO_QUERY, RSP, 12 bytes, "
+        "Token(0x0101), Error(VIPC_E_DEMO_FAILURE)",
         "Sep 20 14:32:11.002 dut daemon.debug daemon-b[7]: [IpcCtx_0] OnIpcComplete Request ID=10, result=2",
-        "Sep 20 14:32:11.003 dut daemon.debug daemon-b[7]: [<DEV#1>][RX] SIT_SIM_IO, RSP, 12 bytes, "
-        "Token(0x0102), OK(RCM_E_SUCCESS)",
+        "Sep 20 14:32:11.003 dut daemon.debug daemon-b[7]: [<DEV#1>][RX] VIPC_SIM_IO, RSP, 12 bytes, "
+        "Token(0x0102), OK(VIPC_OK)",
         "Sep 20 14:32:11.004 dut daemon.debug daemon-b[7]: [IpcCtx_0] OnIpcComplete Request ID=11, result=0",
         "Sep 20 14:32:11.005 dut daemon.debug ofonod[8]: [IpcCtx_0] OnIpcComplete Request ID=12, result=2",
-        "Sep 20 14:32:11.006 dut daemon.debug daemon-a[9]: [<DEV#1>][RX] SIT_DIAL, RSP, Error(RCM_E_DEMO_FAILURE)",
+        "Sep 20 14:32:11.006 dut daemon.debug daemon-a[9]: [<DEV#1>][RX] VIPC_DIAL, RSP, Error(VIPC_E_DEMO_FAILURE)",
     ])
 
     def builtins(b):
@@ -178,7 +178,7 @@ def test_backend_vendor_ipc_builtin(tmp_path):
     assert builtins(_flagged_backend(**{"daemon-a": "level_unreliable"})) == []
     flagged = _flagged_backend(**{"daemon-b": "vendor_ipc"})
     assert builtins(flagged) == [
-        ("daemon-b", "builtin.common.vendor_ipc_error", {"ipc": "SIT_DEMO_QUERY", "error": "RCM_E_DEMO_FAILURE"}),
+        ("daemon-b", "builtin.common.vendor_ipc_error", {"ipc": "VIPC_DEMO_QUERY", "error": "VIPC_E_DEMO_FAILURE"}),
         ("daemon-b", "builtin.common.vendor_request_failed", {"request_id": "10", "result": "2"})]
     out = flagged.parse([path], "UTC", 2026, None)
     assert all(r["category_hint"] == "common" for r in out if (r["event"] or "").startswith("builtin."))
@@ -202,7 +202,8 @@ def test_backend_vendor_ipc_spec_from_site_defaults(tmp_path):
                 if r["event"] == "builtin.common.vendor_request_failed"]
 
     assert failed({"components": comps}) == ["11"]
-    assert failed({"components": comps, "vendor_ipc": {"context": "SiteCtx_", "complete": "SiteDone"}}) == ["10"]
+    site = {"context": "SiteCtx_", "complete": "SiteDone", "request_prefix": "SMSG_", "error_prefix": "SRES_", "success": "SRES_DONE"}
+    assert failed({"components": comps, "vendor_ipc": site}) == ["10"]
     assert backend.BACKEND._ipc == backend.vendor_ipc.DEFAULT                       # 싱글톤은 바뀌지 않는다
 
 
@@ -281,7 +282,7 @@ def _parse(log: Path, rules: Path, *extra: str) -> dict:
 
 def test_parse_with_ofono_db():
     out = _parse(ISO_LOG, variant_db("issue-db-ofono") / "parser-rules")
-    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.6"}
+    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.7"}
     assert out["masked"] is True and out["warnings"] == [] and out["errors"] == []
     lines = [e for e in out["events"] if e["event"] is None]
     assert {e["tag"]: e["category_hint"] for e in lines} == {"ofonod": "common", "daemon-a": "data"}
@@ -418,7 +419,7 @@ def test_backend_registration():
 
     loaded = parser_backends.load("ofono_reference")
     assert loaded is backend.BACKEND and loaded.platform == "ofono" and loaded.name == "ofono_reference"
-    assert loaded.version() == backend.VERSION == "0.0.6"
+    assert loaded.version() == backend.VERSION == "0.0.7"
     assert loaded.builtin_events() == ["builtin.common.vendor_ipc_error", "builtin.common.vendor_request_failed"]
     assert loaded.log_format() is platforms.get("ofono").log
 

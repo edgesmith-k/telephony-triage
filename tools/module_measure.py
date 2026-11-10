@@ -104,9 +104,25 @@ def _rules(rules_dir: str | None):
     return parser_rules.load(Path(rules_dir))
 
 
+def _ipc_prefix(args) -> str | None:
+    """site-defaults `vendor_ipc.request_prefix`(모듈 필터의 IPC 이름 접두어, `triage.py module`과 같다). 파일이 없으면 None
+    (placeholder 기본)."""
+    import platforms
+    from common import site_defaults
+
+    try:
+        defaults = site_defaults.load(_root(args))
+    except site_defaults.SiteDefaultsMissing:
+        return None
+    try:
+        return platforms.load(defaults, args.platform, require_enabled=False).vendor_ipc.request_prefix
+    except platforms.PlatformConfigError as exc:
+        raise UsageError(f"site-defaults platform 설정({_root(args)}): {exc}") from exc
+
+
 def coverage(args) -> dict:
     doc = yaml.safe_load(Path(args.modules).read_text(encoding="utf-8"))
-    spec = mf.compile_spec(doc, args.platform)
+    spec = mf.compile_spec(doc, args.platform, _ipc_prefix(args))
     if spec is None:
         raise UsageError(f"modules.yaml에 platforms.{args.platform}가 없다")
     logs = [Path(p) for p in args.logs or []]

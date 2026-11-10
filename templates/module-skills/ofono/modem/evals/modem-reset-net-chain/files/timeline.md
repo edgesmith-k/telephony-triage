@@ -15,8 +15,8 @@
 10:50:05.006 - D vrild client fd 9 VCHAN_1 REQUEST: GET_PREFERRED_NETWORK_TYPE (8 bytes)
 10:50:05.006 - I vrild [ExampleRegService_0] rat-mode query start
 10:50:05.006 - D vrild [IpcCtx_0] track seq 0x0241
-10:50:05.007 - D vrild mux [ch0][TX] SIT_EXAMPLE_RAT_MODE, REQ seq=0x0241 len=12
-10:50:05.020 - D vrild mux [ch0][RX] SIT_EXAMPLE_RAT_MODE, RSP Error(RCM_E_FAILURE) seq=0x0241 len=12  ⇒ builtin.common.vendor_ipc_error(error=RCM_E_FAILURE,ipc=SIT_EXAMPLE_RAT_MODE)
+10:50:05.007 - D vrild mux [ch0][TX] VIPC_EXAMPLE_RAT_MODE, REQ seq=0x0241 len=12
+10:50:05.020 - D vrild mux [ch0][RX] VIPC_EXAMPLE_RAT_MODE, RSP Error(VIPC_E_FAILURE) seq=0x0241 len=12  ⇒ builtin.common.vendor_ipc_error(error=VIPC_E_FAILURE,ipc=VIPC_EXAMPLE_RAT_MODE)
 10:50:05.020 - I vrild [ExampleRegService_0] rat-mode query answer
 10:50:05.021 - I vrild [IpcCtx_0] OnIpcComplete Request ID=44, result=2  ⇒ builtin.common.vendor_request_failed(request_id=44,result=2)
 10:50:05.021 - D vrild [IpcCtx_0] untrack seq 0x0241

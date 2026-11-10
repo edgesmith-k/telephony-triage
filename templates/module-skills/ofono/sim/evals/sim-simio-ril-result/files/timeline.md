@@ -11,8 +11,8 @@
 09:10:21.359 - D vrild client fd 9 VCHAN_2 REQUEST: SIM_IO (36 bytes)
 09:10:21.359 - I vrild [ExampleIccService_1] sim-io get-response for ef 6f46 queued
 09:10:21.360 - D vrild [IpcCtx_2] track seq 0x05e1 (1 in flight)
-09:10:21.360 - D vrild mux [ch1][TX] SIT_EXAMPLE_CARD_IO seq=0x05e1 len=36
-09:10:21.408 - D vrild mux [ch1][RX] SIT_EXAMPLE_CARD_IO, RSP OK(RCM_E_SUCCESS) seq=0x05e1 len=258
+09:10:21.360 - D vrild mux [ch1][TX] VIPC_EXAMPLE_CARD_IO seq=0x05e1 len=36
+09:10:21.408 - D vrild mux [ch1][RX] VIPC_EXAMPLE_CARD_IO, RSP OK(VIPC_OK) seq=0x05e1 len=258
 09:10:21.409 - I vrild [ExampleIccService_1] sim-io reply parsed, 258 bytes
 09:10:21.409 - I vrild [IpcCtx_2] OnIpcComplete Request ID=58, result=2 -> chan 2 reply sent, 0 waiters, took 49 ms  ⇒ builtin.common.vendor_request_failed(request_id=58,result=2)
 09:10:21.409 - D vrild chan 2 <- reply written

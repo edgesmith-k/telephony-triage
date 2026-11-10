@@ -12,9 +12,9 @@
 10-14 09:41:07.512  1988  2044 I VRIL-IMS: [adapter] send call forward reason=UNCONDITIONAL slot=0
 10-14 09:41:07.513  1988  2044 I VRIL-IMS: [ril] req -> OEM_REQ_IMS_SET_CALL_FORWARD : status : 3  reason : 0  class : 1  toa : 129  number : 1**  time : 0 slot=0
 10-14 09:41:07.515  1350  1410 V RIL     : [IpcCtx_0] track seq 0x0b12
-10-14 09:41:07.515  1350  1410 V RIL     : mux [ch0][TX] SIT_EXAMPLE_IMS_CF, REQ seq=0x0b12 len=64
+10-14 09:41:07.515  1350  1410 V RIL     : mux [ch0][TX] VIPC_EXAMPLE_IMS_CF, REQ seq=0x0b12 len=64
 10-14 09:41:07.516  1350  1410 V RIL     : <HEXDUMP 16B>
-10-14 09:41:09.284  1350  1415 V RIL     : mux [ch0][RX] SIT_EXAMPLE_IMS_CF, RSP OK(RCM_E_SUCCESS) seq=0x0b12 len=16
+10-14 09:41:09.284  1350  1415 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_IMS_CF, RSP OK(VIPC_OK) seq=0x0b12 len=16
 10-14 09:41:09.284  1350  1415 V RIL     : <HEXDUMP 16B>
 10-14 09:41:09.286  1350  1410 D VRIL    : ext client reply clientId=3
 10-14 09:41:09.287  1350  1410 V RIL     : [IpcCtx_0] untrack seq 0x0b12

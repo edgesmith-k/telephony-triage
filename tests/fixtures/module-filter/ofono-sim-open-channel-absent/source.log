@@ -1,11 +1,11 @@
 -- [합성] module-filter fixture: eUICC channel open fails with NO_SUCH_ELEMENT. Hand-written, not a real capture.
 Sep 23 11:00:07.447 dut local0.info mgmtd[734]: settings: GetEID requested
-Sep 23 11:00:07.448 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_SIGNAL_IND 16B
+Sep 23 11:00:07.448 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_SIGNAL_IND 16B
 Sep 23 11:00:07.448 dut daemon.debug vrild[618]: link rx 16B
 Sep 23 11:00:07.449 dut daemon.info chatterd[746]: gps idle
 Sep 23 11:00:07.449 dut local0.info mgmtd[734]: ui tick
 Sep 23 11:00:07.451 dut daemon.info datad[633]: rmnet0 link up
-Sep 23 11:00:07.451 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_EXAMPLE_OPER 0x0c11 8B
+Sep 23 11:00:07.451 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_OPER 0x0c11 8B
 Sep 23 11:00:07.451 dut daemon.debug vrild[618]: link tx 8B
 Sep 23 11:00:07.452 dut daemon.info simd[587]: tid:52 GetEID begin
 Sep 23 11:00:07.452 dut daemon.info simd[587]: tid:52 open channel aid <AID#1>
@@ -18,17 +18,17 @@ Sep 23 11:00:07.455 dut daemon.debug ofonod[903]: Device 0: <HEXDUMP 12B>
 Sep 23 11:00:07.455 dut daemon.debug vrild[618]: VCHAN_2 REQUEST: SIM_OPEN_CHANNEL (20B)
 Sep 23 11:00:07.455 dut daemon.info vrild[618]: [ExampleIccService_1] open-channel start
 Sep 23 11:00:07.456 dut daemon.debug vrild[618]: [IpcCtx_2] track 0x0c12
-Sep 23 11:00:07.456 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_EXAMPLE_CARD_OPEN 0x0c12 20B
+Sep 23 11:00:07.456 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_CARD_OPEN 0x0c12 20B
 Sep 23 11:00:07.456 dut daemon.debug vrild[618]: link tx 20B
 Sep 23 11:00:07.457 dut local0.info mgmtd[734]: ui tick
-Sep 23 11:00:07.457 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_OPER, RSP OK(RCM_E_SUCCESS) 0x0c11 36B
+Sep 23 11:00:07.457 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_OPER, RSP OK(VIPC_OK) 0x0c11 36B
 Sep 23 11:00:07.458 dut daemon.debug vrild[618]: link rx 36B
 Sep 23 11:00:07.458 dut daemon.info chatterd[746]: gps idle
 Sep 23 11:00:07.459 dut daemon.info datad[633]: rmnet0 link up
-Sep 23 11:00:07.459 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_SIGNAL_IND 16B
+Sep 23 11:00:07.459 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_SIGNAL_IND 16B
 Sep 23 11:00:07.460 dut daemon.debug vrild[618]: link rx 16B
 Sep 23 11:00:07.460 dut local0.info mgmtd[734]: ui tick
-Sep 23 11:00:07.461 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_CARD_OPEN, RSP Error(RCM_E_NO_SUCH_ELEMENT) seq=0x0c12 len=12, 5 ms
+Sep 23 11:00:07.461 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP Error(VIPC_E_NO_SUCH_ELEMENT) seq=0x0c12 len=12, 5 ms
 Sep 23 11:00:07.461 dut daemon.debug vrild[618]: link rx 12B
 Sep 23 11:00:07.462 dut daemon.debug vrild[618]: [IpcCtx_2] frame decoded
 Sep 23 11:00:07.462 dut daemon.info chatterd[746]: gps idle
@@ -46,4 +46,4 @@ Sep 23 11:00:07.466 dut daemon.info ofonod[903]: src/dbus.c:__ofono_error_not_fo
 Sep 23 11:00:07.467 dut daemon.err simd[587]: tid:52 openChannel: Application not found
 Sep 23 11:00:07.467 dut daemon.warn simd[587]: tid:52 GetEID FAILED
 Sep 23 11:00:07.468 dut local0.warn mgmtd[734]: GetEID call error: Failed to get EID
-Sep 23 11:00:07.469 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_SIGNAL_IND 16B
+Sep 23 11:00:07.469 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_SIGNAL_IND 16B

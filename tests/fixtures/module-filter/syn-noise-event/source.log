@@ -1,6 +1,6 @@
 -- [합성] module-filter negative fixture: an event-marked row whose text matches a noise rule is kept. Hand-written, not a real capture.
-Sep 20 15:10:00.000 dut daemon.info vrild[640]: SIT_EXAMPLE_SIGNAL_IND level=3
-Sep 20 15:10:00.500 dut daemon.info vrild[640]: SIT_EXAMPLE_SIGNAL_IND pdp fail cause=USER_AUTHENTICATION(29)
+Sep 20 15:10:00.000 dut daemon.info vrild[640]: VIPC_EXAMPLE_SIGNAL_IND level=3
+Sep 20 15:10:00.500 dut daemon.info vrild[640]: VIPC_EXAMPLE_SIGNAL_IND pdp fail cause=USER_AUTHENTICATION(29)
 Sep 20 15:10:01.000 dut daemon.warning datad[610]: activate result: failed profile_id=1 retry in 10s
-Sep 20 15:10:02.000 dut daemon.info vrild[640]: SIT_EXAMPLE_SIGNAL_IND level=2
+Sep 20 15:10:02.000 dut daemon.info vrild[640]: VIPC_EXAMPLE_SIGNAL_IND level=2
 Sep 20 15:10:02.500 dut daemon.info chatterd[700]: periodic status tick
