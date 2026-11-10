@@ -89,7 +89,7 @@ tt-oc doctor   # 사전 점검. fail이 있으면 시작하지 않는다
    - Jira MCP 등록을 먼저 점검하고(없으면 거기서 멈춘다), clone 경로만 묻는다(GHE 아이디는 gh 로그인에서 읽고, 원격 URL은 팀 기본값 — 못 읽거나 없을 때만 묻는다. 타임존 등 나머지는 팀 기본값을 한 줄씩 보여 주기만). 그 뒤 Jira 도구 짝·git hook·스냅샷·gh를 확인하고 점검표(doctor)를 보여 준다.
 2. **점검표**: 모든 행이 `ok`면 끝. `warn`·`fail`은 그 행의 "다음" 칸대로(7절).
    - Claude Code: `/telephony-triage:status --doctor`
-   - OpenCode: `tt-oc doctor` — `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만), warn `module-skills`·`read-roots`. 점검표 행을 하나씩 보려면 `TT_RUNTIME=opencode python3 $S/config.py doctor --format markdown`(모델 호출 없음, `opencode_env`·`jira_gate` 포함).
+   - OpenCode: `tt-oc doctor` — `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만), warn `module-skills`·`read-roots`·`gateway-key`·`gateway-url`. 점검표 행을 하나씩 보려면 `TT_RUNTIME=opencode python3 $S/config.py doctor --format markdown`(모델 호출 없음, `opencode_env`·`jira_gate` 포함).
 3. **이슈 DB clone**은 내 것이다. 도구는 그 브랜치도 파일도 바꾸지 않는다. 경로 바꾸기는 `docs/SITE_INSTALL.md` 7절.
 4. **모듈 스킬**: 팀이 모듈 스킬 레포를 켰으면 할 일이 없다. 심층·탐색 분석에 동의하면 그 분야 문서를 최신판으로 받아 읽는다(받기에 실패해도 분석은 끝난다). 모듈은 oFono·Android 각 data·sim·network·call·sms·ims·modem 7개다(팀 레포에 있는지는 MS-1 결과를 따른다). 문서는 증상별 첫 점검 표와 대체 근거(핵심 줄이 없을 때 볼 다른 층 줄)를 갖는다.
 5. **설치 스킬을 계속 쓰기(선택)**: 이미 쓰는 사내 분석 스킬을 분야별로 고른다.
@@ -153,8 +153,8 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 ```
 
 - tt-oc 옵션(`-s`·`--delete-session` 등)은 `--` 앞에 둔다. 뒤는 모델에게 가는 메시지다.
-- **분석 전용**: 쓰기(코멘트·push·PR·병합·리뷰어 요청·스킬 적용)는 "OpenCode v1에서 실행하지 않은 명령" 절에 명령으로 낸다. "스크립트 화면" 절(모델을 거치지 않은 원본)을 읽고 승인할 때만 터미널에서 실행한다.
-- **종료 코드**: 0 끝남, 1 오류, 2 거부·사전 점검 실패, 3 막힌 호출(내 차례일 수 있음), 124 시간 초과. 비용은 "미상"(`cost:0`≠0원).
+- **분석 전용**: 쓰기(코멘트·push·PR·병합·리뷰어 요청·스킬 적용)는 "OpenCode v1에서 실행하지 않은 명령" 절에 명령으로 낸다. "스크립트 화면" 절(모델을 거치지 않은 원본)을 읽고 승인할 때만 터미널에서 실행한다. 명령은 모델이 만든 그대로 `  │ ` 뒤에 나온다(tt-oc가 고치지 않는다). 최종 답도 줄마다 `  │ `가 붙으므로 답 속 코드 블록을 복사할 때는 줄 앞의 `  │ `를 지운다. 스크립트 화면은 `  ┃ ` 뒤에 나온다. `db_pr`·`db_verify` 명령에 lock owner가 필요하면 `주의:` 줄이 붙일 접두(`TT_LOCK_OWNER=<owner>`)와 작업 키를 알린다 — 명령을 복사하고 그 접두를 붙여 실행한다. owner를 확인하지 못했으면 `주의:` 줄이 owner가 있는 파일을 알린다 — 붙이지 않고 실행하면 `lock owner 불일치`로 멈춘다.
+- **종료 코드**: 0 끝남, 1 오류(`no-script-output`이면 분석 스크립트가 한 번도 돌지 않았다 — 도입 담당자에게. `length`·`step-limit`이면 출력·스텝 한도에서 끊겼다 — `-s <세션>`으로 이어가기), 2 거부·사전 점검 실패, 3 막힌 호출(내 차례일 수 있음), 124 시간 초과(`no-response`면 게이트웨이가 120초 안에 답하지 않았다 — `tt-oc doctor`). 비용은 "미상"(`cost:0`≠0원).
 - **막힘 표시**: `[telephony-triage]`로 시작하면 guard가 막은 것(`… guard warning`은 경고뿐).
 - **Jira 읽기 관문**: 기본은 닫힘(`jira_gate` 행 warn). 이슈 내용은 `--issue-file <yaml>`로(`--analysis-only`·`--dry-run`에서만) 주거나 Claude Code에서 분석한다. 열기는 내가 직접 한다(OpenCode 안의 모델은 못 연다. 코멘트는 계속 막힘):
   1. Jira MCP를 `~/.config/opencode/opencode.json`의 `mcp`에 둔다.
@@ -220,6 +220,8 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 | `opencode-version` fail | OpenCode를 1.19.5로(우회 말고 보고) |
 | `instructions` fail | 지시 파일을 치우거나 `--dest`를 옮긴다 |
 | `config-doctor` fail | 2절 2번의 `config.py doctor`로 원인(config 없으면 setup) |
+| `gateway-key`·`gateway-url` warn | 키 환경 변수(`TT_GATEWAY_API_KEY` 등)를 export했는지, 주소가 `…/v1`인지. 모르면 도입 담당자에게 |
+| `outcome: no-script-output`·`no-response` | 게이트웨이 문제일 수 있다 — 화면 그대로 도입 담당자에게 |
 | "병합해줘"가 거절됨 | 사유대로. 보통 최신 커밋 +1이 필요 |
 
 막히면 `/telephony-triage:status --doctor`(OpenCode는 `tt-oc doctor`) 화면을 고치지 말고 그대로 도입 담당자에게 보낸다.

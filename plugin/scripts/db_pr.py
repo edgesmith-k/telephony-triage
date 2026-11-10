@@ -138,6 +138,11 @@ def _allow_common_anywhere(parser: argparse.ArgumentParser) -> None:
                 _allow_common_anywhere(sub)
 
 
+# lock owner를 보는 하위 명령(`Lock.touch`·`release`를 거친다 — tests/test_lock_recovery.py가 이 파일·dbpr/ 코드와 대조한다).
+# `lock release`(--force 없음)도 owner를 본다. tt-oc가 터미널로 넘기는 명령에 owner 안내를 붙일지 가를 때 쓴다
+OWNER_CMDS = ("snapshot", "stage", "summary", "publish", "discard")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="db_pr.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)

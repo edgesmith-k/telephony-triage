@@ -83,6 +83,13 @@ def session_plugin_root(pytestconfig):
     return pytestconfig._tt_plugin_root
 
 
+@pytest.fixture(autouse=True)
+def no_host_managed_settings(monkeypatch, tmp_path_factory):
+    """Claude Code 관리 설정(`/etc/claude-code` 등)이 깔린 PC에서도 게이트웨이 프로필 시험 결과가 같게 — 없는 폴더를 가리킨다
+    (하위 프로세스도 이 환경을 물려받는다). 관리 설정을 보는 시험은 `TT_CLAUDE_MANAGED_DIR`을 다시 준다."""
+    monkeypatch.setenv("TT_CLAUDE_MANAGED_DIR", str(tmp_path_factory.getbasetemp() / "no-managed-settings"))
+
+
 @pytest.fixture(scope="session")
 def real_site_backend():
     """사내 골든 테스트(`tests/golden/test_*.py`)가 쓰는 **실제** site 백엔드. 없으면(사외) 건너뛴다.

@@ -87,6 +87,62 @@ def test_gateway_profile_check_rows(tmp_path):
     assert empty["ANTHROPIC_BASE_URL"] == "missing" and empty["credential"] == "missing"
 
 
+def test_host_managed_settings_do_not_leak_into_tests(tmp_path, monkeypatch):
+    """2차 P2-3: 개발 PC에 관리 설정이 깔려 있어도(OS 기본 폴더를 흉내) conftest의 TT_CLAUDE_MANAGED_DIR 때문에 읽지 않는다."""
+    host = tmp_path / "host"
+    host.mkdir()
+    (host / "managed-settings.json").write_text(json.dumps({"env": {"ANTHROPIC_BASE_URL": "https://gw.invalid"}}),
+                                                encoding="utf-8")
+    monkeypatch.setattr(cc, "MANAGED_SETTINGS_DIR", host)
+    assert os.environ.get(cc.MANAGED_DIR_ENV)
+    rows = {r["key"]: r["status"] for r in cc.gateway_profile_check({"CLAUDE_CONFIG_DIR": str(tmp_path / "none")})}
+    assert rows["ANTHROPIC_BASE_URL"] == "missing"
+
+
+def test_gateway_profile_models_base_url_and_managed_settings(tmp_path, monkeypatch):
+    """런타임 리뷰 5: 보조 호출 모델(ANTHROPIC_DEFAULT_*·CLAUDE_CODE_SUBAGENT_MODEL)이 ANTHROPIC_MODEL과 같은지, BASE_URL 끝 /v1,
+    관리 설정(managed-settings.json·.d)의 env도 본다 — 본 곳은 env_sources 행. 비밀 값은 행에 없다."""
+    managed = tmp_path / "managed"
+    monkeypatch.setenv(cc.MANAGED_DIR_ENV, str(managed))       # conftest가 없는 폴더로 둔 것을 이 시험만 바꾼다
+    # 2차 P2-3: 덮어쓰기가 없으면 OS 기본 폴더, 있으면 그 폴더(호출 env가 프로세스 환경보다 앞선다)
+    assert cc.managed_settings_dir({cc.MANAGED_DIR_ENV: "/x"}) == Path("/x") and cc.managed_settings_dir() == managed
+    monkeypatch.delenv(cc.MANAGED_DIR_ENV)
+    assert cc.managed_settings_dir({}) == cc.MANAGED_SETTINGS_DIR
+    plain = {r["key"]: r for r in cc.gateway_profile_check({"CLAUDE_CONFIG_DIR": str(tmp_path / "none")})}
+    assert "로 바꿈" not in plain["env_sources"]["detail"]
+    monkeypatch.setenv(cc.MANAGED_DIR_ENV, str(managed))
+    conf = tmp_path / "conf"
+    _settings(conf, {"env": {"ANTHROPIC_MODEL": "glm-x", "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-x",
+                             "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-x"}})
+    rows = {r["key"]: r for r in cc.gateway_profile_check({"CLAUDE_CONFIG_DIR": str(conf)})}
+    assert rows["ANTHROPIC_DEFAULT_OPUS_MODEL"]["status"] == "ok"
+    assert rows["ANTHROPIC_DEFAULT_SONNET_MODEL"]["status"] == "differs"
+    assert rows["ANTHROPIC_DEFAULT_HAIKU_MODEL"]["status"] == rows["CLAUDE_CODE_SUBAGENT_MODEL"]["status"] == "missing"
+    assert rows["ANTHROPIC_BASE_URL"]["status"] == "missing" and rows["credential"]["status"] == "missing"
+    src = rows["env_sources"]["detail"]
+    assert str(conf / "settings.json") in src and "managed-settings.json(.d) 없음" in src
+    # 관리 설정의 env(주소·자격·보조 모델)는 missing이 아니다. .d 조각은 이름 순서로 뒤에 얹는다
+    (managed / "managed-settings.d").mkdir(parents=True)
+    (managed / "managed-settings.json").write_text(json.dumps({"env": {
+        "ANTHROPIC_BASE_URL": "https://gw.invalid/v1/", "ANTHROPIC_AUTH_TOKEN": "tok-managed",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-x", "CLAUDE_CODE_SUBAGENT_MODEL": "glm-x"}}), encoding="utf-8")
+    (managed / "managed-settings.d" / "10-gw.json").write_text(
+        json.dumps({"env": {"ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-x"}}), encoding="utf-8")
+    rows = {r["key"]: r for r in cc.gateway_profile_check({"CLAUDE_CONFIG_DIR": str(conf)})}
+    assert all(rows[k]["status"] == "ok" for k in cc.GATEWAY_MODEL_KEYS) and rows["credential"]["status"] == "ok"
+    assert rows["ANTHROPIC_BASE_URL"]["status"] == "differs" and "/v1/v1" in rows["ANTHROPIC_BASE_URL"]["detail"]
+    assert "managed-settings.json" in rows["env_sources"]["detail"] and "10-gw.json" in rows["env_sources"]["detail"]
+    assert f"{cc.MANAGED_DIR_ENV}로 바꿈" in rows["env_sources"]["detail"]          # 3차 R2-P3-4: 덮어쓰기를 행에 보인다
+    text = json.dumps(list(rows.values()))
+    assert "tok-managed" not in text and "gw.invalid" not in text
+    # 프로세스 환경도 본다(missing으로 보지 않는다). ANTHROPIC_MODEL이 없으면 비교하지 않고 info
+    (managed / "managed-settings.json").unlink()
+    rows = {r["key"]: r for r in cc.gateway_profile_check({"CLAUDE_CONFIG_DIR": str(tmp_path / "none"),
+                                                          "ANTHROPIC_BASE_URL": "https://gw.invalid"})}
+    assert rows["ANTHROPIC_BASE_URL"]["status"] == "ok"
+    assert all(rows[k]["status"] == "info" for k in cc.GATEWAY_MODEL_KEYS)
+
+
 def test_gateway_profile_unset_accepts_absent(tmp_path):
     """권장 값이 unset인 키(CLAUDE_CODE_EFFORT_LEVEL)는 변수 없음·빈 값·글자 그대로 unset이 ok, 다른 값은 differs.
     다른 키의 없음은 그대로 missing이다(O10 거짓 실패 고침, F)."""
@@ -333,7 +389,10 @@ def test_gateway_site_rows_report_cli_hooks_and_s1_without_blocking(tmp_path, mo
     root = plugin_root()
     (home / "config.yaml").write_text(f"plugin:\n  scripts_path: {root / 'scripts'}\n", encoding="utf-8")
     rows = {r["key"]: r for r in site_step.gateway_site_rows({"PATH": str(bare), "HOME": str(tmp_path)})}
-    assert rows["claude_cli"]["status"] == "ok" and rows["claude_cli"]["detail"].startswith("9.9.9")
+    # 런타임 리뷰 6: 시험한 판(CLAUDE_CLI_TESTED)과 다르면 warn(막지 않는다)
+    assert rows["claude_cli"]["status"] == "warn" and rows["claude_cli"]["detail"].startswith("9.9.9")
+    assert f"시험한 판 {cc.CLAUDE_CLI_TESTED}" in rows["claude_cli"]["detail"]
     assert rows["plugin_hooks"]["status"] == "ok" and "PreToolUse" in rows["plugin_hooks"]["detail"] and "matcher 8개" in rows["plugin_hooks"]["detail"]
+    fake.write_text(f"#!/bin/sh\necho '{cc.CLAUDE_CLI_TESTED} (Claude Code)'\n", encoding="utf-8")
     out, code = site_step.runtime_claude_gateway({"CLAUDE_CONFIG_DIR": str(tmp_path / "none"), "PATH": str(bare)})
     assert code == 1 and "| claude_cli | ok |" in out and "재는 것:" in out and "안 재는 것:" in out

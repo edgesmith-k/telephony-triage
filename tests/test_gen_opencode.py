@@ -81,6 +81,9 @@ def test_generated_command_shape(name):
         assert "OpenCode v1에서는 실행하지 않습니다." in text
     else:
         assert "분석 전용." not in text
+    # 2차 P2-1: 스킬 글의 `TT_LOCK_OWNER=` 접두를 OpenCode에서는 쓰지 않는다고 생성 안내가 말한다
+    src = (REPO / "plugin" / "commands" / f"{name}.md").read_text(encoding="utf-8")
+    assert (gen_opencode.LOCK_NOTE in text) == (name in gen_opencode.WRITE_FLOWS or "TT_LOCK_OWNER" in src)
 
 
 def test_convert_synthetic_command():
@@ -137,6 +140,23 @@ def test_template_permission_allow_list():
         assert edit[deny] == "deny" and keys.index(deny) > keys.index("@@WORK_ROOT_REL@@/**"), deny
 
 
+def test_template_read_denies_raw_job_files():
+    """런타임 리뷰 7: 원문 작업 파일은 OpenCode read에서도 막는다(에이전트 규칙 3만으로 두지 않는다). 이름은 guard 규칙 10의
+    RAW_NAMES와 같고, 마지막 규칙이 이기므로 `"*": "allow"` 뒤에 둔다. 설치한 opencode.json에도 그대로 간다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import guard
+
+    read = _template()["permission"]["read"]
+    keys = list(read)
+    denies = {k.removeprefix("**/") for k, v in read.items() if v == "deny" and k.startswith("**/")}
+    assert denies == guard.RAW_NAMES
+    assert all(keys.index(f"**/{n}") > keys.index("*") for n in denies)
+    rendered = gen_opencode.render_config(_template(), {"@@PLUGIN_ROOT@@": "/p", "@@WORK_ROOT@@": "/w", "@@PLUGIN_ROOT_REL@@": "p",
+                                              "@@WORK_ROOT_REL@@": "w", "@@GATEWAY_BASE_URL@@": "https://gw.example.invalid/v1",
+                                              "@@MODEL_ID@@": "m"}, [])
+    assert rendered["permission"]["read"] == read
+
+
 def test_managed_sample():
     m = json.loads(MANAGED.read_text(encoding="utf-8"))
     assert set(m) <= V1_KEYS
@@ -167,7 +187,8 @@ def test_agent_prompt():
     assert all(meta["permission"][t] == "deny" for t in ("task", "webfetch", "todowrite", "skill"))
     assert len(body.encode("utf-8")) <= 2200, "에이전트 프롬프트는 약 2KB"
     for must in ("Scripts judge", "200 lines", "verbatim", "exact command", "@@PLUGIN_ROOT@@", "tt-oc -s",
-                 "db_pr.py publish|merge|request-review", "skill_patch.py --apply", "module_eval.py"):
+                 "db_pr.py publish|merge|request-review", "skill_patch.py --apply", "module_eval.py",
+                 "retry without TT_LOCK_OWNER="):          # 2차 P2-1: oc_adapter.LOCK_OWNER_RETRY 거부만 접두를 빼고 한 번 다시
         assert must in body, must
     # B2 R20: `next`가 있으면 멈추지 않고 따른다(모듈 받기 실패는 분석을 끝내지 않는다). R21: 스킬 도구 없음 → --skipped 대안
     rule2 = next(l for l in body.splitlines() if l.startswith("2. "))
@@ -292,6 +313,37 @@ def test_install_refusals(roots):
     r = run_gen("install", "--dest", str(roots / "p3"), "--plugin-root", str(roots / "plug"), "--work-root",
                 str(roots / "work"), "--gateway-url", "ftp://x", "--model", "m")
     assert r.returncode == 2
+
+
+def test_install_refuses_work_root_over_home_user_site_plugin_or_repo(roots, monkeypatch, capsys):
+    """5차 R4-P3-3: 모델이 쓸 수 있는 --work-root가 홈·사용자 site·플러그인·레포이거나 품으면(사용자 site·플러그인·레포는 그 안도)
+    거부(종료 2). 심볼릭 링크로 가려도 실제 경로로 본다. 홈 안의 따로 둔 폴더는 괜찮다."""
+    import site
+    home = roots / "home"
+    (home / ".local" / "lib").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(site, "USER_BASE", str(home / ".local"))
+    monkeypatch.setattr(site, "USER_SITE", str(home / ".local" / "lib" / "site-packages"))
+    (roots / "link").symlink_to(home)
+    for d in (".ssh", ".claude/x", ".config", ".gnupg"):              # 6차 R5-P3-3: 홈의 키·hook·설정 폴더
+        (home / d).mkdir(parents=True)
+
+    def install(work, dest):
+        argv = ["install", "--dest", str(roots / dest), "--plugin-root", str(roots / "plug"), "--work-root", str(work),
+                "--gateway-url", "http://gw.example/v1", "--model", "m"]
+        code = gen_opencode.main(argv)
+        return code, capsys.readouterr().err
+
+    for i, (work, what) in enumerate(((home, "홈"), (roots, "홈"), (roots / "link", "홈"), (home / ".local", "사용자 site"),
+                                      (home / ".local" / "lib", "사용자 site"), (roots / "plug", "플러그인"),
+                                      (roots / "plug" / "scripts", "플러그인"), (gen_opencode.REPO / "tests", "레포"),
+                                      (home / ".ssh", "~/.ssh"), (home / ".claude" / "x", "~/.claude"),
+                                      (home / ".config", "~/.config"), (home / ".gnupg", "~/.gnupg"))):
+        code, err = install(work, f"bad{i}")
+        assert code == 2 and what in err and "--work-root" in err, (work, err)
+        assert not (roots / f"bad{i}").exists()
+    (home / "tt-work").mkdir()
+    assert install(home / "tt-work", "ok")[0] == 0
 
 
 def test_render_config_multi_only_in_keys():

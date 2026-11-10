@@ -29,6 +29,7 @@ PASTED_STEPS = "steps-pasted.txt"   # 개발자가 붙여넣은 스텝 목록 �
 WORK_FILES = (STATE, STAGE, PR_FILE, REGRESS, PASTED_STEPS)
 JOB_KEY_RE = session_lock.JOB_KEY_RE
 TOOL_PREFIX = "tt/"
+TRIAGE_STATE = "triage-state.json"   # = triagelib.core.STATE_FILE: `triage.py run`이 acquire 결과 owner를 남기는 작업 상태
 
 
 class UsageError(Exception):
@@ -161,9 +162,19 @@ class Lock:
         self.write({k: held[k] for k in ("job", "owner", "command", "started_at", "updated_at", "platform") if k in held})
         return held
 
+    def owner_for(self, job: str) -> str | None:
+        """갱신·해제에 쓸 owner: `TT_LOCK_OWNER`. 없으면 OpenCode 안(`TT_RUNTIME=opencode` — bash 허용 목록이 환경변수 대입을
+        받지 않는다)에서만 **그 작업 키** 디렉토리의 `triage-state.json` owner(`triage.py run`이 acquire 결과로 남긴 값,
+        `triage.py release`와 같은 출처). 보유 owner와의 대조는 그대로라 다른 작업·이어받은 세션의 lock은 풀리지 않는다.
+        acquire 재진입에는 쓰지 않는다(이어받기 확인을 건너뛰지 않게)."""
+        if self.owner or os.environ.get("TT_RUNTIME") != "opencode":
+            return self.owner
+        return state_owner(self.work_dir, job)
+
     def check_owner(self, held: dict) -> None:
-        if not self.owner or self.owner != held.get("owner"):
-            raise UsageError("lock owner 불일치: acquire 결과 lock.owner를 TT_LOCK_OWNER로 전달한다.")
+        owner = self.owner_for(str(held.get("job") or ""))
+        if not owner or owner != held.get("owner"):
+            raise UsageError("lock owner 불일치: acquire 결과 lock.owner를 TT_LOCK_OWNER로 전달한다." + _oc_hint())
 
     @_locked
     def release(self, job: str, force: bool) -> dict:
@@ -186,12 +197,56 @@ class Lock:
         if held["job"] != job and not force:
             raise UsageError(f"lock은 풀리지 않았다 — lock 보유자는 {held['job']}입니다. 그 세션이 끝났다면 --force로 푼다.",
                              {"released": False, "holder": mask_owner(held)})
-        if not force and (not self.owner or self.owner != held.get("owner")):
+        owner = self.owner_for(job)
+        if not force and (not owner or owner != held.get("owner")):
             raise UsageError("lock owner 불일치: lock은 풀리지 않았다(session.lock 그대로). acquire 결과의 lock.owner를 "
-                             "TT_LOCK_OWNER로 주고 다시 release한다. 그 세션이 끝났다고 사용자가 확인하면 --force로 푼다.",
+                             "TT_LOCK_OWNER로 주고 다시 release한다. 그 세션이 끝났다고 사용자가 확인하면 --force로 푼다."
+                             + _oc_hint(),
                              {"released": False, "holder": mask_owner(held)})
         self.path.unlink()
         return {"released": True, "previous": mask_owner(held), "forced": held["job"] != job}
+
+
+def state_owner(work_dir: Path, job: str) -> str | None:
+    """`<work_dir>/<job>/triage-state.json`의 owner(`triage.py run`이 acquire 결과로 남긴 값). 작업 키 형식이 아니거나 일반 파일이
+    아니거나(FIFO 등에서 멈추지 않게) 없거나 깨졌으면 None. `Lock.owner_for`(OpenCode 안)와 tt-oc의 owner 안내(`handoff_owner`)가
+    같이 쓴다."""
+    if not JOB_KEY_RE.fullmatch(job):
+        return None
+    path = Path(work_dir) / job / TRIAGE_STATE
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    owner = data.get("owner") if isinstance(data, dict) else None
+    return owner if isinstance(owner, str) and owner else None
+
+
+def handoff_owner(work_dir: Path) -> dict:
+    """tt-oc가 터미널로 넘기는 명령에 붙일 lock owner(런타임 리뷰 3·6차). 모델 명령 인자가 아니라 `work_dir`의 session.lock에서 읽는다.
+
+    `{"work_dir", "job": 지금 lock을 쥔 작업(없으면 None), "owner"}`. owner는 그 작업의 `triage-state.json` owner(`state_owner`)가
+    **lock의 owner와 같을 때만** 준다(이어받은 뒤의 옛 owner·상태 없음·lock 없음·깨진 lock이면 None). session.lock이 일반 파일이
+    아니면(FIFO 등 — 읽다 멈춘다) lock 없음으로 본다(7차 R6-P3-3)."""
+    held = None
+    if (Path(work_dir) / LOCK_FILE).is_file():
+        try:
+            held = session_lock.describe(session_lock.read(work_dir))
+        except session_lock.LockError:
+            held = None
+    job = held.get("job") if held else None
+    owner = state_owner(work_dir, job) if job else None
+    return {"work_dir": str(work_dir), "job": job, "owner": owner if owner and held.get("owner") == owner else None}
+
+
+def _oc_hint() -> str:
+    """OpenCode 안에서만 붙이는 owner 안내(Claude Code 메시지는 예전 그대로)."""
+    if os.environ.get("TT_RUNTIME") != "opencode":
+        return ""
+    return (" OpenCode는 TT_LOCK_OWNER를 줄 수 없어 analyze 작업만 그 작업의 triage-state.json owner를 쓴다 — 다른 흐름은 "
+            "Claude Code·터미널에서 한다.")
 
 
 def mask_owner(held: dict | None) -> dict | None:

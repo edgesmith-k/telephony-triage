@@ -7,6 +7,7 @@
 - `/telephony-triage:<이름>` → `/tt-<이름>`(OpenCode 내장 `/review` 등과 겹치지 않게 `tt-` 접두).
 - 쓰기 흐름 커맨드(`WRITE_FLOWS`)는 본문 앞에 "분석 전용" 안내를 붙인다: 막힌 쓰기 단계에 이르면 정확한 명령을 출력하고
   실행하지 않고 턴을 끝낸다(안 A — Jira 코멘트·이슈 DB push·db_pr publish|merge·request-review·skill apply·module_eval).
+- 쓰기 흐름과 본문에 `TT_LOCK_OWNER`가 나오는 커맨드는 `LOCK_NOTE`(접두를 붙이지 않는다 — OpenCode bash는 대입을 받지 않는다)도 붙인다.
 - 모든 커맨드는 `READ_FLOWS` 또는 `WRITE_FLOWS` 중 하나에 있어야 한다(새 커맨드가 분류 없이 생기면 실패).
 
 CLI:
@@ -22,6 +23,8 @@ CLI:
         `config.py check --roots`의 `read_roots`(풀린 설치 스킬 SKILL.md 폴더 등) 중 플러그인·작업·이슈 DB 밖인 폴더는
         `external_directory`에 읽기 allow로 더한다(B2 R21 — 설정을 바꾸면 다시 설치, `tt-oc doctor`가 경고).
         `<dest>`는 git 레포 밖이어야 한다: `edit` 패턴(`@@*_REL@@` = 앞 `/`를 뗀 절대 경로)은 worktree `/` 기준이다.
+        `--work-root`(모델이 쓸 수 있는 곳)가 홈·Python 사용자 site·플러그인·이 레포이거나 그것을 품으면(사용자 site·플러그인·
+        레포는 그 안이어도) 거부한다(실제 경로로 비교, 종료 2).
         `--jira-read-tool`(OpenCode 이름 `<서버>_<도구>`, 읽기 도구만 — 쓰기로 보이는 이름은 거부)은 permission 끝에 allow로
         더한다(마지막 규칙이 이긴다). Jira 읽기 관문(`config.py set opencode.jira_read open`)을 연 뒤 tt-oc에서 실제로 읽으려면
         필요하다(관리 설정 `/etc/opencode`의 `jira_*` deny는 관리자 몫).
@@ -69,6 +72,11 @@ NOTE = ("> **OpenCode v1 — 분석 전용.** 이 흐름의 다음 단계는 실
         "정확한 명령(절대 경로, 모든 인자)을 sh 코드 블록으로 보이고 \"OpenCode v1에서는 실행하지 않습니다. 터미널이나 Claude "
         "Code에서 직접 실행하세요.\"라고 말한 뒤 턴을 끝낸다. 사용자 확인이 필요한 곳은 질문과 번호 선택지(4개 이하)로 턴을 끝낸다"
         "(답은 `tt-oc -s <세션> -- <답>`).")
+# 스킬 글(rules.md·write-flow.md)은 lock owner를 `TT_LOCK_OWNER=` 접두로 넘기라고 하지만 OpenCode bash는 대입을 받지 않는다
+# (런타임 리뷰 2차 P2-1). 쓰기 흐름과 그 접두를 말하는 커맨드에 붙인다
+LOCK_NOTE = ("> **OpenCode lock owner.** `db_pr`·`db_verify`에 `TT_LOCK_OWNER=…`를 붙이지 않는다(OpenCode bash는 환경변수 대입을 "
+             "받지 않는다). analyze 작업은 스크립트가 작업 상태에서 owner를 읽는다. 다른 흐름은 `lock owner 불일치`에서 멈추므로 "
+             "메시지를 그대로 보이고 턴을 끝낸다.")
 
 PLACEHOLDER = re.compile(r"@@[A-Z_]+@@")
 MULTI = ("@@ISSUE_DB_ROOT@@", "@@ISSUE_DB_ROOT_REL@@")
@@ -113,6 +121,8 @@ def convert(name: str, text: str) -> str:
         head += [f"인자 형식: `/{PREFIX}{name} {meta['argument-hint']}`", ""]
     if name in WRITE_FLOWS:
         head += [NOTE.format(ops=WRITE_FLOWS[name]), ""]
+    if name in WRITE_FLOWS or "TT_LOCK_OWNER" in body:
+        head += [LOCK_NOTE, ""]
     return "\n".join(head) + "\n" + body.lstrip("\n")
 
 
@@ -323,11 +333,46 @@ def scripts_digest(plugin_root: Path) -> str:
     return h.hexdigest()
 
 
+def work_root_problems(work: str, plugin: str) -> list[str]:
+    """`--work-root` 아래는 모델이 쓸 수 있다(edit 권한). 작업 루트가 홈·Python 사용자 site·플러그인·이 레포이거나 그것을 품으면
+    (사용자 site·플러그인·레포는 그 안에 있어도) 모델이 셸 시작 파일·`.pth`·스크립트를 바꿀 수 있어 거부한다(런타임 리뷰 5차 R4-P3-3).
+    홈의 `.ssh`·`.claude`·`.config`·`.gnupg`도 같다(6차 R5-P3-3 — 키·hook·설정). 심볼릭 링크를 푼 실제 경로로 비교하고, 둘 다
+    있으면 조상까지 `os.path.samefile`로도 본다(바인드 마운트·대소문자 무시 파일 시스템). 홈 안(예: ~/tt-work)은 괜찮다."""
+    import site
+
+    def same(a: Path, b: Path) -> bool:
+        try:
+            return a == b or os.path.samefile(a, b)
+        except OSError:
+            return False
+
+    def within(child: Path, parent: Path) -> bool:          # child가 parent이거나 그 아래
+        return any(same(x, parent) for x in (child, *child.parents))
+
+    w = Path(os.path.realpath(work))
+    home = os.path.expanduser("~")
+    out = []
+    for name, raw, inner_ok in (("홈($HOME)", home, True),
+                                *((f"~/{n}", os.path.join(home, n), False) for n in (".ssh", ".claude", ".config", ".gnupg")),
+                                ("Python 사용자 site", site.getuserbase(), False),
+                                ("Python 사용자 site-packages", site.getusersitepackages(), False),
+                                ("플러그인", plugin, False), ("이 레포", str(REPO), False)):
+        if not raw or raw.startswith("~"):
+            continue
+        d = Path(os.path.realpath(raw))
+        if within(d, w) or (not inner_ok and within(w, d)):
+            out.append(f"--work-root({w})가 {name}({d})와 겹친다 — 모델이 그 아래 파일을 쓸 수 있게 된다. 따로 둔 작업 폴더를 쓴다")
+    return out
+
+
 def cmd_install(a) -> int:
     plugin = _abs_dir(a.plugin_root, "--plugin-root")
     if not (Path(plugin) / "scripts" / "guard.py").is_file():
         raise UsageError(f"--plugin-root에 scripts/guard.py가 없다: {plugin}")
     work = _abs_dir(a.work_root, "--work-root")
+    bad = work_root_problems(work, plugin)
+    if bad:
+        raise UsageError("; ".join(bad))
     dbs = [_abs_dir(c, "--issue-db") for c in a.issue_db or []]
     dest = Path(_abs_dir(a.dest, "--dest", must_exist=False))
     for root in (plugin, *dbs):

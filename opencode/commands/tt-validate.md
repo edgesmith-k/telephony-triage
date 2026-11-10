@@ -8,6 +8,8 @@ agent: triage
 
 > **OpenCode v1 — 분석 전용.** 이 흐름의 다음 단계는 실행하지 않는다(guard·설정이 막는다): `--cause`의 이슈 DB push·PR(`db_pr.py publish`·`merge`·`request-review`). 그 단계에 이르면 실행할 정확한 명령(절대 경로, 모든 인자)을 sh 코드 블록으로 보이고 "OpenCode v1에서는 실행하지 않습니다. 터미널이나 Claude Code에서 직접 실행하세요."라고 말한 뒤 턴을 끝낸다. 사용자 확인이 필요한 곳은 질문과 번호 선택지(4개 이하)로 턴을 끝낸다(답은 `tt-oc -s <세션> -- <답>`).
 
+> **OpenCode lock owner.** `db_pr`·`db_verify`에 `TT_LOCK_OWNER=…`를 붙이지 않는다(OpenCode bash는 환경변수 대입을 받지 않는다). analyze 작업은 스크립트가 작업 상태에서 owner를 읽는다. 다른 흐름은 `lock owner 불일치`에서 멈추므로 메시지를 그대로 보이고 턴을 끝낸다.
+
 `$ARGUMENTS`로 두 가지 형태를 구분한다 (`07-workflow.md §validate`, `09-commands.md` validate).
 스크립트: `python3 "@@PLUGIN_ROOT@@/scripts/<이름>.py"` = `S/`(결과 JSON). 종료 코드 2면 메시지를 그대로 보이고 멈춘다(예: 사내 기본값 없음 S-3).
 플랫폼: 사용자가 플랫폼을 말했으면(`--platform <이름>`, 예: oFono) `triage`·`config`·`issue_post`·`code_roots`·`db_pr`·`db_verify`·`db_add`·`db_search`·`db_review` 호출에 `--platform <이름>`을 붙이고, 그 밖 스크립트에는 붙이지 않는다. 그 밖 스크립트의 `--db`에는 그 플랫폼의 `SNAP`(읽기, `<work_dir>/_snapshot`) 또는 clone(`issue_db.path`)을 준다(`config.py show --platform <이름> --keys work_dir,issue_db.path`).

@@ -4,6 +4,8 @@ description: "이슈 DB 읽기 스냅샷 최신화 (사후 lint, 오래된 작�
 agent: triage
 ---
 
+> **OpenCode lock owner.** `db_pr`·`db_verify`에 `TT_LOCK_OWNER=…`를 붙이지 않는다(OpenCode bash는 환경변수 대입을 받지 않는다). analyze 작업은 스크립트가 작업 상태에서 owner를 읽는다. 다른 흐름은 `lock owner 불일치`에서 멈추므로 메시지를 그대로 보이고 턴을 끝낸다.
+
 analyze Step 1만 수행한다 (`07-workflow.md §Step 1`, `09-commands.md` sync).
 스크립트: `python3 "@@PLUGIN_ROOT@@/scripts/<이름>.py"`(결과 JSON). 종료 코드 2면 메시지를 그대로 보이고 멈춘다(예: 사내 기본값 없음 S-3).
 플랫폼: 사용자가 플랫폼을 말했으면(`--platform <이름>`, 예: oFono) `triage`·`config`·`issue_post`·`code_roots`·`db_pr`·`db_verify`·`db_add`·`db_search`·`db_review` 호출에 `--platform <이름>`을 붙이고, 그 밖 스크립트에는 붙이지 않는다. 그 밖 스크립트의 `--db`에는 그 플랫폼의 `SNAP`(읽기, `<work_dir>/_snapshot`) 또는 clone(`issue_db.path`)을 준다(`config.py show --platform <이름> --keys work_dir,issue_db.path`).

@@ -53,6 +53,7 @@ PART_TOOL, PART_STATE = "tool", "state"       # tool_use: 도구 이름·상태 
 STATE_STATUS, STATE_ERROR, STATE_INPUT = "status", "error", "input"
 STATUS_ERROR = "error"                        # 거부·실패한 도구 호출의 status
 FINISH_STOP = "stop"                          # 정상 종료의 reason
+FINISH_LENGTH = "length"                      # 출력 한도에서 잘림(AI SDK finishReason 이름 — 1.19.5 실제 이벤트로는 아직 못 봄)
 
 # -- 플러그인 hook 이름(`opencode/plugins/tt-guard.js`가 구현, 시험이 대조) -------------------------------------------------
 # `tool.execute.after`는 오류로 끝난 MCP 호출에는 돌지 않는다(RUNTIMES.md §5.5) → `experimental.chat.messages.transform`.

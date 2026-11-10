@@ -894,6 +894,10 @@ RUNTIME_FAIL = ("missing", "differs", "fail")
 CHECK0_BODY = ('{"model":"\'"$MODEL"\'","max_tokens":128,"stream":true,'
                '"tools":[{"name":"get_time","description":"현재 시각","input_schema":{"type":"object","properties":{}}}],'
                '"tool_choice":{"type":"tool","name":"get_time"},"messages":[{"role":"user","content":"지금 몇 시?"}]}')
+# 자동 선택 변형(런타임 리뷰 2): 실제 실행은 tool_choice를 주지 않는다(auto). 강제만 통과하고 auto에서 도구 호출을 글로 내는 게이트웨이면
+# 에이전트는 스크립트를 돌리지 못한 채 끝난다
+AUTO_PROMPT = "get_time 도구로 지금 시각을 확인해"
+CHECK0_AUTO_BODY = CHECK0_BODY.replace('{"type":"tool","name":"get_time"}', '{"type":"auto"}').replace("지금 몇 시?", AUTO_PROMPT)
 
 
 def check0_text() -> str:
@@ -905,8 +909,13 @@ def check0_text() -> str:
         'curl -sS -N "$GW/v1/messages" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" \\',
         '  -H "x-api-key: $KEY" -H "authorization: Bearer $KEY" \\',
         f"  -d '{CHECK0_BODY}'",
+        "# 자동 선택(tool_choice auto — 실제 실행과 같은 모양)",
+        'curl -sS -N "$GW/v1/messages" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" \\',
+        '  -H "x-api-key: $KEY" -H "authorization: Bearer $KEY" \\',
+        f"  -d '{CHECK0_AUTO_BODY}'",
         "```",
-        '통과: `event: content_block_start`에 `"type":"tool_use"`, 이어서 `input_json_delta`, 끝에 `message_stop`. '
+        '통과: 두 요청 모두 `event: content_block_start`에 `"type":"tool_use"`, 이어서 `input_json_delta`, 끝에 `message_stop`. '
+        "자동 선택에서 도구 호출이 글(text 블록의 JSON)로만 나오면 실패다 — 에이전트가 스크립트를 돌리지 못한다. "
         "결과(통과/실패와 첫 오류 줄 — 키는 빼고)를 보고한다.",
     ])
 
@@ -916,6 +925,8 @@ OC_CHECK0_BODY = ('{"model":"\'"$MODEL"\'","max_tokens":64,"stream":true,'
                   '"parameters":{"type":"object","properties":{}}}}],'
                   '"tool_choice":{"type":"function","function":{"name":"get_time"}},'
                   '"messages":[{"role":"user","content":"지금 몇 시?"}]}')
+OC_CHECK0_AUTO_BODY = OC_CHECK0_BODY.replace('{"type":"function","function":{"name":"get_time"}}', '"auto"').replace(
+    "지금 몇 시?", AUTO_PROMPT)
 _SHELL_BAD = "'\"$`\\ \n"
 
 
@@ -945,14 +956,19 @@ def oc_check0_text(proj: Path | None) -> str:
         "사내 확인 0(OpenCode) — 게이트웨이 OpenAI 호환 엔드포인트 (이 도구는 실행하지 않는다, 사용자가 터미널에서 한 번):",
         "```sh",
         f"BASE='{base}'; MODEL='{model}'   # 키: export TT_GATEWAY_API_KEY=… (출력·파일에 적지 않는다)",
-        "# (a) 토큰 0: 모델 목록에 $MODEL이 있는지",
+        "# (a) 토큰 0(정보): 모델 목록에 $MODEL이 있는지 — 404여도 막지 않는다(모델 ID는 opencode.json에 고정)",
         'curl -sS "$BASE/models" -H "authorization: Bearer $TT_GATEWAY_API_KEY"',
         "# (b) 선택(토큰 소량): 스트리밍 tool_calls",
         'curl -sS -N "$BASE/chat/completions" -H "content-type: application/json" \\',
         '  -H "authorization: Bearer $TT_GATEWAY_API_KEY" \\',
         f"  -d '{OC_CHECK0_BODY}'",
+        "# (c) 선택(토큰 소량): 자동 선택(tool_choice auto — 실제 실행과 같은 모양)",
+        'curl -sS -N "$BASE/chat/completions" -H "content-type: application/json" \\',
+        '  -H "authorization: Bearer $TT_GATEWAY_API_KEY" \\',
+        f"  -d '{OC_CHECK0_AUTO_BODY}'",
         "```",
-        '통과: (a) `"data"`에 `"id":"<MODEL>"`, (b) `data:` 줄 `delta`에 `"tool_calls"`(이름 `get_time`), 끝에 `data: [DONE]`. '
+        '통과: (a) `"data"`에 `"id":"<MODEL>"`(404·목록 없음은 정보 — 판단은 (b)·(c)), (b)·(c) `data:` 줄 `delta`에 `"tool_calls"`(이름 `get_time`), 끝에 `data: [DONE]`. '
+        "(c)에서 도구 호출이 `content` 글(JSON)로만 나오면 실패다 — 에이전트가 스크립트를 돌리지 못한다. "
         "결과(통과/실패와 첫 오류 줄 — 키는 빼고)를 보고한다. Anthropic 모양(/v1/messages)은 Claude Code용이다.",
     ])
 
@@ -985,7 +1001,7 @@ def gateway_site_rows(env: dict) -> list[dict]:
     """토큰 0 추가 행(종합 리뷰 F: 이전에는 환경 변수 비교만이라 '종료 0 = 환경이 된다'로 읽혔다). 모두 ok·warn·info — 종료 코드에는
     영향이 없다(전제 확정은 사내 확인). `claude --version`은 모델·네트워크를 부르지 않는다."""
     _scripts_on_path()
-    from common import site_defaults, userconfig
+    from common import claude_child, site_defaults, userconfig
 
     rows: list[dict] = []
     exe = shutil.which("claude", path=env.get("PATH"))
@@ -997,8 +1013,11 @@ def gateway_site_rows(env: dict) -> list[dict]:
                                   timeout=20, env=env)
             text = (proc.stdout or proc.stderr or "").strip().splitlines()
             ver = text[0][:80] if text else ""
-            rows.append({"key": "claude_cli", "status": "ok" if proc.returncode == 0 and ver else "warn",
-                         "detail": ver or f"--version 종료 {proc.returncode}"})
+            tested = claude_child.CLAUDE_CLI_TESTED
+            same = (ver.split() or [""])[0] == tested
+            rows.append({"key": "claude_cli", "status": "ok" if proc.returncode == 0 and same else "warn",
+                         "detail": (ver or f"--version 종료 {proc.returncode}") + ("" if same else
+                                   f" — 시험한 판 {tested}과 다르다(막지 않음). hook·show_guard 동작은 사내 확인 5로 다시 본다")})
         except (OSError, subprocess.TimeoutExpired) as exc:
             rows.append({"key": "claude_cli", "status": "warn", "detail": f"--version 실행 실패({type(exc).__name__})"})
     user = userconfig.load_user() or {}
@@ -1035,7 +1054,7 @@ def runtime_claude_gateway(env: dict) -> tuple[str, int]:
 
     rows = claude_child.gateway_profile_check(env) + gateway_site_rows(env)
     result, code = _runtime_result(rows, "사용자 settings.json env(또는 환경 변수)를 고친 뒤 다시 실행한다")
-    title = ("런타임 점검 claude-gateway — 모델 호출 없음(프로세스 환경 + 사용자 settings.json env, 비밀 값은 적지 않는다). "
+    title = ("런타임 점검 claude-gateway — 모델 호출 없음(프로세스 환경 + 사용자 settings.json env + 관리 설정 env — env_sources 행, 비밀 값은 적지 않는다). "
              + GATEWAY_SCOPE)
     return "\n\n".join([_runtime_table(title, rows), result, check0_text()]), code
 
