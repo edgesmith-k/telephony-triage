@@ -89,7 +89,7 @@ c "${XK[@]}" -d "$B"; c "${BR[@]}" -d "$B"   # 자격 헤더 둘
 c "${XK[@]}" "${BR[@]}" -d '{"model":"'"$MODEL"'","max_tokens":2048,"thinking":{"type":"enabled","budget_tokens":1024},"messages":[{"role":"user","content":"ok"}]}'
 c "${XK[@]}" "${BR[@]}" -d '{"model":"'"$MODEL"'","messages":[]}'   # 일부러 틀린 요청
 (cd "$(mktemp -d)" && claude -p 'Bash 도구로 echo tt-check를 한 번 실행하고 그 출력만 답해' \
-   --allowedTools 'Bash(echo:*)' --output-format json)   # 빈 폴더: 레포 CLAUDE.md를 싣지 않음. 도구 호출 1회
+   --allowedTools 'Bash(echo:*)' --permission-mode default --output-format json)   # 빈 폴더: 레포 CLAUDE.md를 싣지 않음. 도구 호출 1회. 권한 모드를 명시(사내 기본 auto면 분류기가 허용 목록 Bash도 막는다 — claude_child.CHILD_PERMISSION_MODE)
 ```
 
 사내 확인 5는 대화형 `claude`(세션 기록 켬)에서 `> /telephony-triage:analyze <KEY> <마스킹된 로그> --dry-run`(아무것도 올리지 않음). `-p`에 `--no-session-persistence`를 쓰면 show_guard가 판정하지 못한다.
