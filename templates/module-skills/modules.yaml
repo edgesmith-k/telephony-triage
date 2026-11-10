@@ -136,7 +136,7 @@ platforms:
         path: android/data
         db_category: data
         tags: ['^DNC-\d+$', '^DN-\d+-[CI]$', '^DPM-\d+$', '^DRM-\d+$', '^DSMGR-\d+$', '^DSM-[CI]-\d+$', '^DCM-\d+$', '^DSRM-\d+$', '^ANM-\d+$', '^TNP$', '^TNA-\d+$', '^QOSCT-\d+$', '^DataServiceCallback$', '^ConnectivityService$', '^PhoneSwitcher$', '^ADSC$', '^VRIL-DATA$']
-        ril: [SETUP_DATA_CALL, DEACTIVATE_DATA_CALL, SET_INITIAL_ATTACH_APN, SET_DATA_PROFILE, SET_USER_DATA_ENABLED, SET_USER_DATA_ROAMING_ENABLED, UNSOL_DATA_CALL_LIST_UPDATED, GET_DATA_CALL_LIST]   # A: GET_DATA_CALL_LIST
+        ril: [SETUP_DATA_CALL, DEACTIVATE_DATA_CALL, SET_INITIAL_ATTACH_APN, SET_DATA_PROFILE, SET_USER_DATA_ENABLED, SET_USER_DATA_ROAMING_ENABLED, UNSOL_DATA_CALL_LIST_UPDATED, DATA_CALL_LIST]
         hal: [RadioDataProxy]
         services: [ExamplePdnService]
         ipc: [VIPC_EXAMPLE_PDN_UP, VIPC_EXAMPLE_PDN_DOWN, VIPC_EXAMPLE_PDN_LIST, VIPC_EXAMPLE_PROFILE, VIPC_EXAMPLE_ATTACH_PROFILE, VIPC_EXAMPLE_DATA_SWITCH, VIPC_EXAMPLE_PDN_LIST_IND, VIPC_EXAMPLE_ADDR_IND]
@@ -145,7 +145,7 @@ platforms:
       sim:
         path: android/sim
         db_category: sim
-        tags: ['^UiccController$', '^UiccSlot$', '^UiccCard$', '^UiccProfile( \[\d+\])?$', '^UiccCardApplication( \[\d+\])?$', '^SIMRecords$', '^IsimUiccRecords$', '^UsimFH$', '^SMSVC$', '^CAT$', '^MultiSimSettingController$', '^SecureElement-Terminal-SIM\d$']
+        tags: ['^UiccController$', '^UiccSlot( \[\d+\])?$', '^UiccCard$', '^UiccProfile( \[\d+\])?$', '^UiccCardApplication( \[\d+\])?$', '^SIMRecords$', '^IsimUiccRecords$', '^UsimFH$', '^SMSVC$', '^CAT$', '^MultiSimSettingController$', '^SecureElement-Terminal-SIM\d$']
         ril: [GET_SIM_STATUS, SIM_IO, SIM_OPEN_CHANNEL, SIM_CLOSE_CHANNEL, SIM_TRANSMIT_APDU_CHANNEL, STK_SEND_TERMINAL_RESPONSE, UNSOL_STK_SESSION_END, UNSOL_RESPONSE_SIM_STATUS_CHANGED]
         hal: [RadioSimProxy]
         services: [ExampleIccService, ExampleEfService, ExampleSatService]
@@ -174,12 +174,11 @@ platforms:
       sms:
         path: android/sms
         db_category: sms
-        tags: ['^SMSDispatcher$', '^ImsSmsDispatcher( \[\d+\])?$', '^CellBroadcastConfigTracker-\d+$', '^SmsDispatchersController$', '^InboundSmsHandler$']   # A: last two
+        tags: ['^SMSDispatcher$', '^ImsSmsDispatcher( \[\d+\])?$', '^CellBroadcastConfigTracker-\d+$', '^SmsDispatchersController$', '^(Gsm|Cdma)?InboundSmsHandler$']
         ril: [GSM_SET_BROADCAST_CONFIG, GSM_BROADCAST_ACTIVATION, SEND_SMS, IMS_SEND_SMS, SMS_ACKNOWLEDGE, UNSOL_RESPONSE_NEW_SMS]   # A: SEND_SMS..
         hal: [RadioMessagingProxy]
         services: [ExampleSmsService]
         ipc: [VIPC_*SMS*]
-        keywords: ['SEND_STATUS_ERROR']
         also: {'^VRIL-IMS$': '\[sms\]'}   # SMS over IMS 벤더 줄(`[sms]` 접두는 합성 모양, 사내에서 확인)
         neighbours: [ims]
       ims:
