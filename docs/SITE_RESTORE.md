@@ -116,6 +116,8 @@ platform:                    # 이미 있는 블록
 
 ## ③ 모듈 스킬 레포
 
+`modules.yaml` 모듈 키 `sit`은 `ipc`의 별칭으로 받는다(한 모듈에 둘 다 있으면 오류).
+
 **레포가 아직 없으면** — 만들고 MS-1로 연결한다(SITE_INSTALL.md 10절, `site_step.py modules`).
 
 ```

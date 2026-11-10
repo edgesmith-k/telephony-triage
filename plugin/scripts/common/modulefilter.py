@@ -54,7 +54,7 @@ PINS_EXPLORE = 5
 EXPLORE_CAPS = (150, 20480)
 DEEP_CAPS = (200, 24576)
 NAME_RX = re.compile(r"^[A-Za-z0-9._/-]{1,40}$")
-NAME_FIELDS = ("daemons", "ofonod_files", "ril", "ipc", "sit", "services", "hal", "dbus")
+NAME_FIELDS = ("daemons", "ofonod_files", "ril", "ipc", "sit", "services", "hal", "dbus")   # sit = ipc의 옛 키 이름(별칭)
 DEFAULT_SOURCE_FILE = r"^((?:src|drivers|plugins)/[\w/-]+\.c):"
 
 

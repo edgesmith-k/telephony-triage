@@ -213,6 +213,7 @@ FILTER_KEYS = {"noise_tags", "noise", "level_unreliable", "not_error", "backgrou
                "source_file", "ipc_re", "service_re", "token_re", "client_tag", "inherit_ms"}
 MODULE_KEYS = {"path", "db_category", "daemons", "tags", "also", "ril", "ofonod_files", "ipc", "sit", "services", "hal",
                "dbus", "client_tags", "keywords", "quiet", "neighbours"}
+IPC_ALIAS = "sit"        # `ipc`(IPC 메시지 이름)의 옛 키 이름 — 예전 modules.yaml을 그대로 읽는다. 둘 다 쓰면 오류
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$")
 FMT = {
     "ofonod_files": re.compile(r"^(?:src|drivers|plugins)/(?:[a-z0-9_-]+/)*[a-z0-9_-]+\.c$"),
@@ -398,6 +399,8 @@ def _module(errs: list[str], p: str, name: str, block, strict: bool, names: set[
                 errs.append(f"{at}.db_category: {seen[cat]}와 겹친다({cat})")
             else:
                 seen[cat] = name
+    if "ipc" in block and IPC_ALIAS in block:
+        errs.append(f"{at}.{IPC_ALIAS}: ipc와 같은 키(옛 이름)다 — 하나만 쓴다")
     for k, v in block.items():
         where = f"{at}.{k}"
         if k not in MODULE_KEYS:
