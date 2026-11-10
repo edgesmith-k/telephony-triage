@@ -154,7 +154,7 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 
 - tt-oc 옵션(`-s`·`--delete-session` 등)은 `--` 앞에 둔다. 뒤는 모델에게 가는 메시지다.
 - **분석 전용**: 쓰기(코멘트·push·PR·병합·리뷰어 요청·스킬 적용)는 "OpenCode v1에서 실행하지 않은 명령" 절에 명령으로 낸다. "스크립트 화면" 절(모델을 거치지 않은 원본)을 읽고 승인할 때만 터미널에서 실행한다.
-- **종료 코드**: 0 끝남, 1 오류(`no-script-output`이면 분석 스크립트가 한 번도 돌지 않았다 — 도입 담당자에게), 2 거부·사전 점검 실패, 3 막힌 호출(내 차례일 수 있음), 124 시간 초과(`no-response`면 게이트웨이가 120초 안에 답하지 않았다 — `tt-oc doctor`). 비용은 "미상"(`cost:0`≠0원).
+- **종료 코드**: 0 끝남, 1 오류(`no-script-output`이면 분석 스크립트가 한 번도 돌지 않았다 — 도입 담당자에게. `length`·`step-limit`이면 출력·스텝 한도에서 끊겼다 — `-s <세션>`으로 이어가기), 2 거부·사전 점검 실패, 3 막힌 호출(내 차례일 수 있음), 124 시간 초과(`no-response`면 게이트웨이가 120초 안에 답하지 않았다 — `tt-oc doctor`). 비용은 "미상"(`cost:0`≠0원).
 - **막힘 표시**: `[telephony-triage]`로 시작하면 guard가 막은 것(`… guard warning`은 경고뿐).
 - **Jira 읽기 관문**: 기본은 닫힘(`jira_gate` 행 warn). 이슈 내용은 `--issue-file <yaml>`로(`--analysis-only`·`--dry-run`에서만) 주거나 Claude Code에서 분석한다. 열기는 내가 직접 한다(OpenCode 안의 모델은 못 연다. 코멘트는 계속 막힘):
   1. Jira MCP를 `~/.config/opencode/opencode.json`의 `mcp`에 둔다.
@@ -220,6 +220,8 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 | `opencode-version` fail | OpenCode를 1.19.5로(우회 말고 보고) |
 | `instructions` fail | 지시 파일을 치우거나 `--dest`를 옮긴다 |
 | `config-doctor` fail | 2절 2번의 `config.py doctor`로 원인(config 없으면 setup) |
+| `gateway-key`·`gateway-url` warn | 키 환경 변수(`TT_GATEWAY_API_KEY` 등)를 export했는지, 주소가 `…/v1`인지. 모르면 도입 담당자에게 |
+| `outcome: no-script-output`·`no-response` | 게이트웨이 문제일 수 있다 — 화면 그대로 도입 담당자에게 |
 | "병합해줘"가 거절됨 | 사유대로. 보통 최신 커밋 +1이 필요 |
 
 막히면 `/telephony-triage:status --doctor`(OpenCode는 `tt-oc doctor`) 화면을 고치지 말고 그대로 도입 담당자에게 보낸다.

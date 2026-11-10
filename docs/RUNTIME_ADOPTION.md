@@ -281,7 +281,7 @@ python3 tools/site_step.py audit --record   # 기준점 기록, 넘친 항목은
 | Claude Code 400(thinking·beta) | 사내 확인 2 | `DISABLE_THINKING=1`·`DISABLE_EXPERIMENTAL_BETAS=1`, 그래도면 보고 |
 | 확인 화면을 요약만 | 세션 기록, show_guard 되돌림 문구 | 대화형으로 다시. 반복되면 확인 5 실패로 보류 |
 | `tt-oc` 종료 2 | `tt-oc doctor`의 fail 행 | `integrity` → 3.5 · `instructions` → 지시 파일 치움 · `env` → `OPENCODE_*` 뺌 · 버전 → 1.19.5(우회 금지) |
-| `tt-oc` 종료 124 `no-response` | 첫 응답 120초(`FIRST_RESPONSE_TIMEOUT`) 없음 | `tt-oc doctor`의 `gateway-key`·`gateway-url`, 3.2 사내 확인 0 curl(키·주소·프록시) |
+| `tt-oc` 종료 124 `no-response` | 첫 응답 120초(`FIRST_RESPONSE_TIMEOUT`, `--first-timeout <초>`·`TT_OC_FIRST_TIMEOUT`, 0 = 끔) 없음 | `tt-oc doctor`의 `gateway-key`·`gateway-url`, 3.2 사내 확인 0 curl(키·주소·프록시). 게이트웨이가 정상인데 긴 세션 이어가기·첫 MCP 시작이 느리면 `--first-timeout`을 늘린다. 이벤트 전에 멈춰 세션은 지우지 못한다(`opencode session list`) |
 | `tt-oc` 종료 3 | "run this exact command yourself: …" | 명령을 읽고 사용자가 터미널·Claude Code에서 실행 |
 | OpenCode에서 Jira 거부 | `TT_RUNTIME=opencode python3 <plugin>/scripts/config.py doctor`의 `jira_gate` | 3.4. 갱신 뒤면 확인부터 |
 | `설치 스킬 못 찾음` | `config.py check --roots`, `read-roots` 행 | `prefer`·`skill_dir` 확인 뒤 `install --force` |

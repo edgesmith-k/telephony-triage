@@ -10,7 +10,8 @@
   실패할 수 있음"(B2 R22), `config.py check --roots`의 `read_roots`가 설치한 external_directory 허용 밖이면 다시 설치 안내(R21),
   게이트웨이 키 환경 변수(opencode.json `apiKey`의 `{env:…}`)가 없거나 baseURL이 `…/v1`로 끝나지 않으면(`gateway-key`·`gateway-url`).
 - 실행: `opencode run --format json --agent triage [--command tt-…] [-s <세션>] -- <메시지>`를 stdin `/dev/null`·시간 제한
-  (기본 1800초, 넘으면 프로세스 그룹 종료, 종료 코드 124 — 첫 이벤트가 `FIRST_RESPONSE_TIMEOUT`(120초) 안에 없으면 그때 멈추고
+  (기본 1800초, 넘으면 프로세스 그룹 종료, 종료 코드 124 — 첫 이벤트가 `--first-timeout`(또는 `TT_OC_FIRST_TIMEOUT`, 기본
+  `FIRST_RESPONSE_TIMEOUT` 120초, 0이면 끔) 안에 없으면 그때 멈추고
   `no-response`·124, 게이트웨이 점검 안내)으로 돌리고, 결과는 종료 코드가 아니라 이벤트로 판정한다(`run`은 거부·
   자동 거절·멈춤에도 0으로 끝난다).
 - 출력: 모델의 마지막 글(그대로), 이번 실행 동안 스크립트가 남긴 표시 기록(`<work_dir>/.shown/log.jsonl`의 report 결정적 줄·
@@ -19,15 +20,16 @@
 - `--delete-session`: 끝나면 `opencode session delete <세션>`(보존 최소화, 이어가기는 못 한다).
 
 CLI:
-    tt-oc --project <dir> [--timeout 초] [-s <세션>] [--command tt-<이름>] [--work-dir <dir>]... [--delete-session] [--json]
+    tt-oc --project <dir> [--timeout 초] [--first-timeout 초] [-s <세션>] [--command tt-<이름>] [--work-dir <dir>]... [--delete-session] [--json]
           [--opencode <바이너리>] -- <메시지...>
     tt-oc --project <dir> doctor [--json]
 
 `--project`가 없으면 `TT_OC_PROJECT`. 플러그인·작업 루트는 `<project>/tt-oc.json`(install이 쓴다)에서 읽는다.
 
-종료 코드: 0 = 끝남(막힌 호출 없음), 1 = 오류·마지막 글 없음·스크립트 출력 없음(`tt-analyze`·`tt-record`인데 스크립트 실행·화면
-기록이 하나도 없음 — `no-script-output`), 2 = 사용 오류·거부·사전 점검 실패, 3 = 끝났지만 막힌 호출이 있음
-(사용자가 출력된 명령을 직접 실행할 차례일 수 있다), 124 = 시간 초과.
+종료 코드(결과 `outcome`): 0 = 끝남(`ok`), 1 = 오류(`error`)·마지막 글 없음(`no-final-text`)·출력 한도에서 잘림(`length`)·
+에이전트 스텝 한도에 닿음(`step-limit`)·스크립트 출력 없음(`no-script-output` — `tt-analyze`·`tt-record`인데 스크립트 실행·화면
+기록이 하나도 없음), 2 = 사용 오류·거부·사전 점검 실패, 3 = 끝났지만 막힌 호출이 있음(`blocked` — 사용자가 출력된 명령을 직접
+실행할 차례일 수 있다), 124 = 시간 초과(`timeout`)·첫 응답 없음(`no-response`).
 """
 
 from __future__ import annotations
@@ -377,10 +379,10 @@ def run_opencode(cmd, *, cwd, env, timeout: float, progress=True,
         t = threading.Thread(target=reader, daemon=True)
         t.start()
         try:
-            limit = start + min(first_timeout, timeout)
+            limit = start + min(first_timeout, timeout) if first_timeout > 0 else start
             while not first.is_set() and proc.poll() is None and time.monotonic() < limit:
                 first.wait(0.2)
-            if not first.is_set() and proc.poll() is None and first_timeout < timeout:
+            if 0 < first_timeout < timeout and not first.is_set() and proc.poll() is None:
                 silent = True
                 raise subprocess.TimeoutExpired(cmd, first_timeout)
             code = proc.wait(timeout=max(0.0, timeout - (time.monotonic() - start)))
@@ -586,6 +588,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--project")
     ap.add_argument("--opencode", default=os.environ.get("TT_OPENCODE") or "opencode")
     ap.add_argument("--timeout", type=float, default=1800.0)
+    ap.add_argument("--first-timeout", type=float, default=None,
+                    help=f"첫 응답 시한(초, 0 = 끔). 없으면 TT_OC_FIRST_TIMEOUT, 그것도 없으면 {FIRST_RESPONSE_TIMEOUT:.0f}")
     ap.add_argument("-s", "--session")
     ap.add_argument("--command", dest="oc_command")
     ap.add_argument("--work-dir", action="append", default=[])
@@ -613,6 +617,12 @@ def main(argv=None) -> int:
     except SystemExit as exc:
         return 0 if exc.code == 0 else 2
     a.message = message
+    try:
+        first_timeout = (a.first_timeout if a.first_timeout is not None
+                         else float(os.environ.get("TT_OC_FIRST_TIMEOUT") or FIRST_RESPONSE_TIMEOUT))
+    except ValueError:
+        print("[tt-oc] TT_OC_FIRST_TIMEOUT는 초(숫자, 0 = 끔)다", file=sys.stderr)
+        return 2
     try:
         proj, meta = load_project(a.project)
     except Refused as exc:
@@ -645,7 +655,8 @@ def main(argv=None) -> int:
         cmd += ["--session", a.session]
     cmd += ["--", *a.message]
     since = time.time() - 1.0
-    events, raw, code, tail, silent = run_opencode(cmd, cwd=proj, env=env, timeout=a.timeout, progress=not a.json)
+    events, raw, code, tail, silent = run_opencode(cmd, cwd=proj, env=env, timeout=a.timeout, progress=not a.json,
+                                                   first_timeout=first_timeout)
     res = judge(events, code, no_response=silent, step_limit=agent_step_limit(proj))
     recs, warn = shown_records(work_dirs_for(meta, a.work_dir), since)
     if res["outcome"] == "ok" and a.oc_command in SCRIPT_FLOWS and not recs and not ran_plugin_script(events):
@@ -681,7 +692,8 @@ def main(argv=None) -> int:
     if res["outcome"] == "length":
         print("오류: 모델 출력이 한도(finish=length)에서 잘렸다 — 화면·답이 끝나지 않았다. 이어가기로 계속하거나 보고한다")
     if res["outcome"] == "step-limit":
-        print(f"오류: 에이전트 스텝 한도({res['steps']}스텝)에 닿았다 — 흐름이 끝나지 않았을 수 있다. 이어가기(-s)로 계속하거나 보고한다")
+        print(f"오류: 에이전트 스텝 한도({res['steps']}스텝)에 닿았다 — 흐름이 끝나지 않았을 수 있다(한도 바로 그 스텝에서 정상으로 "
+              "끝난 것과 이벤트로는 구별하지 못한다). 마지막 글·화면을 보고 이어가기(-s)로 계속하거나 보고한다")
     for n in res["notes"]:
         print(f"주의: {n}")
     for w in warn:
@@ -691,7 +703,9 @@ def main(argv=None) -> int:
     for e in res["errors"]:
         print(f"오류: {e}")
     if res["outcome"] == "no-response":
-        print(f"오류: opencode가 {FIRST_RESPONSE_TIMEOUT:.0f}초 안에 첫 응답을 내지 않아 멈췄다 — {GATEWAY_HINT}")
+        print(f"오류: opencode가 {first_timeout:.0f}초 안에 첫 응답을 내지 않아 멈췄다 — {GATEWAY_HINT}. 게이트웨이가 정상인데 "
+              "긴 세션 이어가기·첫 MCP 시작이 느린 것이면 --first-timeout <초>(0 = 끔)로 늘린다. OpenCode가 만든 세션은 이벤트가 "
+              "없어 지우지 못했다(사용자 메시지만 든다 — `opencode session list`로 찾아 지운다)")
     if res["outcome"] == "no-script-output":
         print(f"오류: {a.oc_command}가 스크립트를 한 번도 돌리지 않고(화면 기록 없음) 끝났다 — 모델이 도구 호출을 글로 냈을 수 있다. "
               "site_step.py runtime-check opencode의 사내 확인 0 (c)(자동 선택 tool_calls)로 게이트웨이를 확인한다")

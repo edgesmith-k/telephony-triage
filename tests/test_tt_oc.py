@@ -559,6 +559,22 @@ def test_no_first_response_stops_early_with_gateway_hint(env):
     assert code == 0 and silent is False and mod.judge(evs, code)["outcome"] == "ok"
 
 
+def test_first_timeout_option_env_and_off_through_main(env):
+    """2차 P2-2: --first-timeout·TT_OC_FIRST_TIMEOUT(0 = 끔)로 시한을 바꾸고, main 출력(no-response 안내·124)을 본다."""
+    events(env, final())
+    slow = {"STUB_SLEEP": "6"}
+    t0 = time.monotonic()
+    r = tt(env, "--first-timeout", "1", "--", "x", extra_env=slow)
+    assert time.monotonic() - t0 < 5.5, "첫 응답 시한에서 멈추지 않았다"
+    assert r.returncode == 124 and "outcome: no-response" in r.stdout and "1초 안에 첫 응답" in r.stdout
+    assert "--first-timeout" in r.stdout and "gateway-key" in r.stdout and "session list" in r.stdout
+    r = tt(env, "--json", "--", "x", extra_env={**slow, "TT_OC_FIRST_TIMEOUT": "1"})
+    assert r.returncode == 124 and json.loads(r.stdout)["outcome"] == "no-response"
+    r = tt(env, "--first-timeout", "0", "--", "x", extra_env={**slow, "TT_OC_FIRST_TIMEOUT": "1"})   # 옵션이 env보다 앞, 0 = 끔
+    assert r.returncode == 0 and "outcome: ok" in r.stdout
+    assert tt(env, "--", "x", extra_env={"TT_OC_FIRST_TIMEOUT": "x"}).returncode == 2
+
+
 def test_timeout_kills_and_reports(env):
     events(env, final())
     t0 = time.monotonic()
