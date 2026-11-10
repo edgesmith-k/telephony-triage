@@ -8,7 +8,7 @@
 ## ② 볼 역할과 줄
 - 관리 데몬, 네트워크 구성요소 `RADIO_ON|OFF`.
 - `org.ofono.Modem` Powered·Online, `RadioSettings`·`NetworkRegistration`, `src/network.c`.
-- gril `GET_PREFERRED_NETWORK_TYPE`·`OPERATOR`·`*_REGISTRATION_STATE`, 벤더 RIL `[NetRegService_<n>]`, `Voice|Data RegState=…, RejectCause=<n>`.
+- gril `GET_PREFERRED_NETWORK_TYPE`·`OPERATOR`·`*_REGISTRATION_STATE`, 벤더 RIL `[ExampleRegService_<n>]`, `Voice|Data RegState=…, RejectCause=<n>`.
 
 ## ③ 층 경로
 관리 데몬 → D-Bus → ofonod → gril → 벤더 RIL → IPC → 모뎀·망.
@@ -18,7 +18,7 @@
 |---|---|---|---|
 | 등록 안 됨·서비스 없음 | `RegState=…, RejectCause=` | `RejectCause≠0` → 모뎀·망 / 긴 `RejectCause=0`은 찾는 중 | 모뎀 NAS(사내) |
 | 모뎀 꺼짐(Powered·Online) | `Modem` Powered·Online, `RADIO_POWER` | Online=false 뒤 실패 → 원인 아님 | `RADIO_STATE_CHANGED` |
-| 선호 RAT 모드 조회(세부 초안) | `GET_PREFERRED_NETWORK_TYPE`·`SIT_GET_PREFERRED_NETWORK_TYPE` | IPC Error → 모뎀·망 | 모뎀 로그 |
+| 선호 RAT 모드 조회(세부 초안) | `GET_PREFERRED_NETWORK_TYPE`·`SIT_EXAMPLE_RAT_MODE` | IPC Error → 모뎀·망 | 모뎀 로그 |
 | CSFB 결합 등록 (초안) | `Voice`·`Data RegState` | PS만 등록·CS 거절 → 모뎀·망 | 모뎀 NAS |
 | 로밍·제한 서비스 (초안) | 등록 상태 값 | 값이 말하는 그대로 | — |
 

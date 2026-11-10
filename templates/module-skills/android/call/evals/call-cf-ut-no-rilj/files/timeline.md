@@ -16,8 +16,8 @@
 09:41:06.907 - D VRIL-IMS [ut] update call forward action=3 condition=0 class=0 time=0
 09:41:06.909 - D VRIL-IMS [ut] route call forward via modem slot=0
 09:41:07.513 - I VRIL-IMS [ril] req -> OEM_REQ_IMS_SET_CALL_FORWARD : status : 3 reason : 0 class : 1 toa : 129 number : 1** time : 0 slot=0
-09:41:07.515 - V RIL mux [ch0][TX] SIT_IMS_SET_CALL_FORWARD, REQ seq=0x0b12 len=64
-09:41:09.284 - V RIL mux [ch0][RX] SIT_IMS_SET_CALL_FORWARD, RSP OK(RCM_E_SUCCESS) seq=0x0b12 len=16
+09:41:07.515 - V RIL mux [ch0][TX] SIT_EXAMPLE_IMS_CF, REQ seq=0x0b12 len=64
+09:41:09.284 - V RIL mux [ch0][RX] SIT_EXAMPLE_IMS_CF, RSP OK(RCM_E_SUCCESS) seq=0x0b12 len=16
 09:41:09.289 - I VRIL-IMS [ril] rsp <- OEM_REQ_IMS_SET_CALL_FORWARD : status : SUCCESS slot=0
 09:41:09.291 - D VRIL-IMS [ut] call forward update result received id=4021 slot=0
 09:41:09.320 - D ImsPhoneMmiCode onSetComplete: mmi=ImsPhoneMmiCode {State=COMPLETE action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}

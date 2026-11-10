@@ -13,7 +13,7 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 `timeline` 값의 파일만 보고 `events`·`log_paths`는 열지 않는다. 〔script …〕 메모는 근거가 아니다. 없는 줄은 지어내지 않고 `반대 근거`에 더 볼 로그로 적는다.
 
 ## 점검
-1. gril `SIM_IO`·`SIM_OPEN_CHANNEL` 요청·응답(같은 serial) → 이름·시각으로 벤더 RIL `client fd <n> VCHAN_<n> REQUEST: <이름>`·`[SimService_<n>] …` → `seq=0x…`로 IPC(`SIT_SIM_IO`·`SIT_SIM_OPEN_CHANNEL`).
+1. gril `SIM_IO`·`SIM_OPEN_CHANNEL` 요청·응답(같은 serial) → 이름·시각으로 벤더 RIL `client fd <n> VCHAN_<n> REQUEST: <이름>`·`[ExampleIccService_<n>] …` → `seq=0x…`로 IPC(`SIT_EXAMPLE_CARD_IO`·`SIT_EXAMPLE_CARD_OPEN`).
 2. IPC `OK(RCM_E_SUCCESS)` 뒤 `OnIpcComplete … result≠0` → `벤더 RIL(<데몬>)`. 카드는 답했다.
 3. IPC `Error(RCM_E_*)`이거나 카드 SW `6A82`("찾을 수 없음") → `모뎀·망`(카드에 애플릿 없음). `__ofono_error_not_found`는 증상이다(없으면: gril 응답 `(sw1=…,sw2=…)`·`src/dbus.c:__ofono_error_*`. SW·RCM이 있을 때만 정한다).
 4. 다른 클라이언트 채널이 열린 동안 `ExampleOpenChannel`이 `__ofono_error_busy`면 → `관리 데몬`(SIM 구성요소).

@@ -11,7 +11,7 @@
 ## 사슬
 
 프레임워크 → RILJ `[<serial>]> <REQ>` → RIL HAL `VRIL-SVC … Radio<X>Proxy::<fn>: serial <n>` → 벤더 RIL `[<Svc>Service_<n>] <요청> request` → `mux [ch<n>][TX] SIT_<X>, REQ seq=0x…` → 모뎀 → `[RX] SIT_<X>, RSP OK(RCM_E_SUCCESS)|Error(RCM_E_<Y>) seq=0x…` → `[<Svc>Service_<n>] … done errorCode=<n>` → RILJ `[<serial>]< <REQ>`.
-IMS: 프레임워크(ImsPhone…) ↔ 벤더 IMS(`req -> OEM_REQ_IMS_*`·`rsp <- OEM_REQ_IMS_*`) ↔ RIL `SIT_IMS_*` ↔ 모뎀.
+IMS: 프레임워크(ImsPhone…) ↔ 벤더 IMS(`req ->`·`rsp <- OEM_REQ_IMS_*`) ↔ RIL `SIT_EXAMPLE_IMS_*` ↔ 모뎀.
 
 ## 판단
 

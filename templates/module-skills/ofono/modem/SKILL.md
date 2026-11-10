@@ -10,6 +10,6 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 증상 모듈 SKILL 뒤에 이 점검만 더한다. 모뎀 사건이 먼저면 증상 오류는 그 결과다.
 
 1. 첫 오류 앞의 벤더 RIL 데몬 `modem monitor: modem …`(없으면: `RADIO_STATE_CHANGED (state: UNAVAILABLE)`). 재시작이 먼저면 → `모뎀·망`.
-2. `SIT_NOTIFY_OUT_OF_SERVICE`가 이어지면 망 없음 → `모뎀·망`, 원인 데몬은 그 IND를 찍은 이름.
+2. `SIT_EXAMPLE_NO_SERVICE_IND`가 이어지면 망 없음 → `모뎀·망`, 원인 데몬은 그 IND를 찍은 이름.
 3. 관리 데몬 `DM packet dropped`·`Fail to write`는 진단 호스트 문제다. IND·RSP가 오면 모뎀은 산다.
 4. 모뎀 신호가 없으면 `반대 근거`에 "모뎀 신호 없음"을 적고 증상 모듈 답을 유지한다.

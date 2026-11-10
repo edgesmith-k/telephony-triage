@@ -780,11 +780,11 @@ MODULES_TYPES = (
     ("network", "NETWORK-001-rat-mode-query-failed", "NR 모드가 조회되지 않음 (합성)",
      "    must_event:\n      - {event: ril_error, fields: {request: GET_PREFERRED_NETWORK_TYPE}}\n",
      "        must_event:\n          - {event: ril_error, fields: {request: GET_PREFERRED_NETWORK_TYPE}}\n"
-     "        must_match: ['SIT_GET_PREFERRED_NETWORK_TYPE, RSP.*Error\\(RCM_E_']\n",
+     "        must_match: ['SIT_EXAMPLE_RAT_MODE, RSP.*Error\\(RCM_E_']\n",
      "network/evals/network-nrmode-modem-reject", "2026-09-22T09:20:20+0000"),
     ("call", "CALL-001-dial-failed", "발신이 되지 않음 (합성)",
      "    must_match: ['RIL_REQUEST_DIAL failed']\n",
-     "        must_match: ['RIL_REQUEST_DIAL failed', 'SIT_DIAL, RSP.*Error\\(RCM_E_']\n",
+     "        must_match: ['RIL_REQUEST_DIAL failed', 'SIT_EXAMPLE_CALL_START, RSP.*Error\\(RCM_E_']\n",
      "call/evals/call-dial-modem-reject", "2026-09-21T10:10:05+0000"),
     ("sms", "SMS-001-send-failed", "문자가 전송되지 않음 (합성)",
      "    must_match: ['RIL_REQUEST_SEND_SMS failed']\n",

@@ -1,6 +1,6 @@
 -- [합성] C1 modem-reset-net-chain. 레포 case의 줄 모양을 본떠 새로 썼다. vrild 모뎀 감시 문구와 state: UNAVAILABLE은 가정(A).
 Sep 21 10:50:00.010 dut local0.info mgmtd[734]: ui tick
-Sep 21 10:50:00.200 dut daemon.info vrild[452]: [NetRegService_0] signal update nr rsrp=-88
+Sep 21 10:50:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update nr rsrp=-88
 Sep 21 10:50:01.000 dut daemon.info ofonod[466]: Device 0: <HEXDUMP 32B>
 Sep 21 10:50:02.000 dut daemon.info vrild[452]: modem monitor: modem state changed: CRASH
 Sep 21 10:50:02.010 dut daemon.info vrild[452]: modem monitor: modem reset start
@@ -13,11 +13,11 @@ Sep 21 10:50:05.004 dut daemon.info ofonod[466]: dbus_trace method call - i:org.
 Sep 21 10:50:05.005 dut daemon.debug ofonod[466]: drivers/rilmodem/radio-settings.c:ril_query_rat_mode()
 Sep 21 10:50:05.005 dut daemon.info ofonod[466]: [0,0511]> RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE
 Sep 21 10:50:05.006 dut daemon.debug vrild[452]: client fd 9 VCHAN_1 REQUEST: GET_PREFERRED_NETWORK_TYPE (8 bytes)
-Sep 21 10:50:05.006 dut daemon.info vrild[452]: [NetRegService_0] rat-mode query start
+Sep 21 10:50:05.006 dut daemon.info vrild[452]: [ExampleRegService_0] rat-mode query start
 Sep 21 10:50:05.006 dut daemon.debug vrild[452]: [IpcCtx_0] track seq 0x0241
-Sep 21 10:50:05.007 dut daemon.debug vrild[452]: mux [ch0][TX] SIT_GET_PREFERRED_NETWORK_TYPE, REQ seq=0x0241 len=12
-Sep 21 10:50:05.020 dut daemon.debug vrild[452]: mux [ch0][RX] SIT_GET_PREFERRED_NETWORK_TYPE, RSP Error(RCM_E_FAILURE) seq=0x0241 len=12
-Sep 21 10:50:05.020 dut daemon.info vrild[452]: [NetRegService_0] rat-mode query answer
+Sep 21 10:50:05.007 dut daemon.debug vrild[452]: mux [ch0][TX] SIT_EXAMPLE_RAT_MODE, REQ seq=0x0241 len=12
+Sep 21 10:50:05.020 dut daemon.debug vrild[452]: mux [ch0][RX] SIT_EXAMPLE_RAT_MODE, RSP Error(RCM_E_FAILURE) seq=0x0241 len=12
+Sep 21 10:50:05.020 dut daemon.info vrild[452]: [ExampleRegService_0] rat-mode query answer
 Sep 21 10:50:05.021 dut daemon.info vrild[452]: [IpcCtx_0] OnIpcComplete Request ID=44, result=2
 Sep 21 10:50:05.021 dut daemon.debug vrild[452]: [IpcCtx_0] untrack seq 0x0241
 Sep 21 10:50:05.022 dut daemon.debug ofonod[466]: [0,0511]< RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE failed GENERIC_FAILURE
@@ -27,6 +27,6 @@ Sep 21 10:50:05.025 dut local0.warn mgmtd[734]: load rat mode failed slot=0: Ope
 Sep 21 10:50:05.040 dut daemon.info vrild[452]: modem monitor: modem reset done
 Sep 21 10:50:05.100 dut daemon.info ofonod[466]: [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: ON)
 Sep 21 10:50:06.010 dut local0.info mgmtd[734]: ui tick
-Sep 21 10:50:06.200 dut daemon.info vrild[452]: [NetRegService_0] signal update nr rsrp=-89
+Sep 21 10:50:06.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update nr rsrp=-89
 Sep 21 10:50:07.000 dut daemon.info ofonod[466]: Device 0: <HEXDUMP 32B>
 Sep 21 10:50:08.010 dut local0.info mgmtd[734]: ui tick

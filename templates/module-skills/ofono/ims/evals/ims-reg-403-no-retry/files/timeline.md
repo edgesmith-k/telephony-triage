@@ -8,9 +8,9 @@
 
 10:40:02.010 - D imsd [SLOT_0][I] 5101 [ImsRegistration] triggerRegistering() SENT
 10:40:02.020 - D imsd [SID_0] req -> OEM_REQ_IMS_REGISTER len=48
-10:40:02.021 - D vrild mux [ch0][TX] SIT_IMS_REGISTER, REQ seq=0x0201 len=48
-10:40:02.090 - D vrild mux [ch0][RX] SIT_IMS_REGISTER, RSP OK(RCM_E_SUCCESS) seq=0x0201 len=12
-10:40:05.000 - D vrild mux [ch0][RX] SIT_NOTIFY_IMS_REG_FAIL ind len=40
+10:40:02.021 - D vrild mux [ch0][TX] SIT_EXAMPLE_IMS_REG_REQ, REQ seq=0x0201 len=48
+10:40:02.090 - D vrild mux [ch0][RX] SIT_EXAMPLE_IMS_REG_REQ, RSP OK(RCM_E_SUCCESS) seq=0x0201 len=12
+10:40:05.000 - D vrild mux [ch0][RX] SIT_EXAMPLE_IMS_REG_FAIL_IND ind len=40
 10:40:05.001 - D imsd [SLOT_0][V] 5110 [SID_0] ind <- OEM_UNSOL_IMS_REG_FAIL(3077) : [fail-code : 403]
 10:40:05.003 - D ofonod src/ims.c:example_reg_fail_notify() fail_code = 403
 10:40:05.004 p0 I ofonod [0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=403

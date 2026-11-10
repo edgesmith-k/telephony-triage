@@ -9,10 +9,10 @@
 10:00:04.114 - V RIL mux [ch0][RX] <unknown sit>, RSP Error(RCM_E_UNKNOWN_CMD) seq=0x0201 len=12
 10:00:20.000 p0 D RILJ [0320]> GET_SIM_STATUS [PHONE0]
 10:00:20.004 - D VRIL-SVC RadioSimProxy::getIccCardStatus: serial 320
-10:00:20.006 - I RIL [SimService_0] sim status request
-10:00:20.008 - V RIL mux [ch0][TX] SIT_GET_SIM_STATUS, REQ seq=0x0210 len=8
-10:00:21.020 - V RIL mux [ch0][RX] SIT_GET_SIM_STATUS, RSP Error(RCM_E_FAILURE) seq=0x0210 len=12  ⇒ builtin.common.vendor_ipc_error(error=RCM_E_FAILURE,ipc=SIT_GET_SIM_STATUS)
-10:00:21.022 - I RIL [SimService_0] sim status done errorCode=2
+10:00:20.006 - I RIL [ExampleIccService_0] sim status request
+10:00:20.008 - V RIL mux [ch0][TX] SIT_EXAMPLE_CARD_STATE, REQ seq=0x0210 len=8
+10:00:21.020 - V RIL mux [ch0][RX] SIT_EXAMPLE_CARD_STATE, RSP Error(RCM_E_FAILURE) seq=0x0210 len=12  ⇒ builtin.common.vendor_ipc_error(error=RCM_E_FAILURE,ipc=SIT_EXAMPLE_CARD_STATE)
+10:00:21.022 - I RIL [ExampleIccService_0] sim status done errorCode=2
 10:00:21.024 - D VRIL-SVC getIccCardStatus response: serial 320
 10:00:21.030 p0 D RILJ [0320]< GET_SIM_STATUS error 2 [PHONE0]  ⇒ ril_error(error=GENERIC_FAILURE,request=GET_SIM_STATUS,serial=320)
 10:00:21.030 - D RilRequest [0320]< GET_SIM_STATUS error: com.android.internal.telephony.CommandException: GENERIC_FAILURE ret= result={ what=3 }

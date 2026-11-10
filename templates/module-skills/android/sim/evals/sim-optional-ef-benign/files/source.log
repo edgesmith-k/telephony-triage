@@ -2,16 +2,16 @@
 10-16 08:30:14.602  2214  2214 D MultiSimSettingController: Carrier config subId 2 is not loaded.
 10-16 08:30:14.603  2214  2214 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED READY reason null for phone: 0 sub: 2
 10-16 08:30:14.604  2214  2214 D IntentBroadcaster: Broadcasting and adding intent for rebroadcast: android.intent.action.SIM_STATE_CHANGED READY for phoneId 0
-10-16 08:30:14.731  1350  1412 V RIL     : mux [ch0][TX] SIT_SIM_IO, REQ seq=0x0c40 len=40
-10-16 08:30:14.732  1350  1412 I RIL     : [SimFileService_0] sim io request
-10-16 08:30:14.760  1350  1418 V RIL     : mux [ch0][RX] SIT_SIM_IO, RSP Error(RCM_E_FAILURE) seq=0x0c40 len=12
+10-16 08:30:14.731  1350  1412 V RIL     : mux [ch0][TX] SIT_EXAMPLE_CARD_IO, REQ seq=0x0c40 len=40
+10-16 08:30:14.732  1350  1412 I RIL     : [ExampleEfService_0] sim io request
+10-16 08:30:14.760  1350  1418 V RIL     : mux [ch0][RX] SIT_EXAMPLE_CARD_IO, RSP Error(RCM_E_FAILURE) seq=0x0c40 len=12
 10-16 08:30:14.763  2214  2309 D RILJ    : [0233]< SIM_IO error 2 [PHONE0]
 10-16 08:30:14.764  2214  2309 D RilRequest: [0233]< SIM_IO error: com.android.internal.telephony.CommandException: GENERIC_FAILURE
 10-16 08:30:14.766  2214  2214 E UsimFH  : exception caught from EVENT_GET_RECORD_SIZE
 10-16 08:30:14.768  2214  2214 D RILJ    : [0234]> iccIO: SIM_IO command = 0xc0 fileId = 0x6f17 path = 3F007FFF p1 = 0 p2 = 0 p3 = 15 data = null aid = <AID#1> [PHONE0]
 10-16 08:30:14.770  2214  2214 D SIMRecords: [SIMRecords-0] onRecordLoaded 21 requested: true
-10-16 08:30:15.904  1350  1412 V RIL     : mux [ch0][TX] SIT_SIM_IO, REQ seq=0x0c47 len=40
-10-16 08:30:15.931  1350  1418 V RIL     : mux [ch0][RX] SIT_SIM_IO, RSP Error(RCM_E_FAILURE) seq=0x0c47 len=12
+10-16 08:30:15.904  1350  1412 V RIL     : mux [ch0][TX] SIT_EXAMPLE_CARD_IO, REQ seq=0x0c47 len=40
+10-16 08:30:15.931  1350  1418 V RIL     : mux [ch0][RX] SIT_EXAMPLE_CARD_IO, RSP Error(RCM_E_FAILURE) seq=0x0c47 len=12
 10-16 08:30:15.934  2214  2214 E SIMRecords: [SIMRecords-0] Exception in fetching EF_CSP data com.android.internal.telephony.CommandException: GENERIC_FAILURE
 10-16 08:30:15.937  1350  1350 D VRIL-SVC: RadioSimProxy::iccTransmitApduLogicalChannel
 10-16 08:30:17.402  1350  1412 V RIL     : [IpcCtx_0] untrack seq 0x0c47

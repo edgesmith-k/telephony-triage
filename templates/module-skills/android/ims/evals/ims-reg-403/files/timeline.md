@@ -13,6 +13,6 @@
 15:00:13.300 - D VRIL-IMS [pdn] add pdn apn=<APN#1> state=IMS_REGISTERING slot=0
 15:00:13.400 - I VRIL-IMS [ril] req -> OEM_REQ_IMS_ADD_PDN : type : 2 ip : 3 addr : <IP#1>
 15:00:13.450 - I VRIL-IMS [ril] rsp <- OEM_REQ_IMS_ADD_PDN : STATUS_SUCCESS
-15:00:15.100 - V RIL mux [ch0][RX] SIT_NOTIFY_IMS_REGISTRATION ind len=208
+15:00:15.100 - V RIL mux [ch0][RX] SIT_EXAMPLE_IMS_REG_IND ind len=208
 15:00:15.105 - I VRIL-IMS [reg] ind <- OEM_UNSOL_IMS_REGISTRATION : state : 0 feature : 11 status-code : 403
 15:00:15.200 p0 W ImsRegistration onRegistrationFailed: code=403 reason=FORBIDDEN [PHONE0]  ⇒ ims_registration_failed(code=403,reason=FORBIDDEN)

@@ -11,7 +11,7 @@ platforms:
       filter:
         noise_tags: [chatterd]
         noise:
-          - 'SIT_NOTIFY_SIGNAL_STRENGTH'
+          - 'SIT_EXAMPLE_SIGNAL_IND'
           - '^(Device|IMSD) \d+: |<HEXDUMP'
           - '^ui tick$'
           - 'link tx|link rx'
@@ -35,8 +35,8 @@ platforms:
         daemons: [datad, datad2]
         ofonod_files: [src/gprs.c, src/lte.c, drivers/rilmodem/gprs.c, drivers/rilmodem/gprs-context.c, drivers/rilmodem/lte.c]
         ril: [SETUP_DATA_CALL, DEACTIVATE_DATA_CALL, DATA_CALL_LIST, SET_DATA_PROFILE, SET_INITIAL_ATTACH_APN, UNSOL_DATA_CALL_LIST_CHANGED]
-        sit: [SIT_SETUP_DATA_CALL, SIT_DEACTIVATE_DATA_CALL, SIT_NOTIFY_DATA_CALL_LIST_CHANGED, SIT_DATA_CALL_LIST, SIT_SET_DATA_PROFILE, SIT_SET_INITIAL_ATTACH_APN, SIT_NOTIFY_ATTACH_APN, SIT_NOTIFY_LINK_ADDRESS, SIT_NOTIFY_PHYSICAL_CHANNEL_CONFIG]
-        services: [DataCallService]
+        sit: [SIT_EXAMPLE_PDN_UP, SIT_EXAMPLE_PDN_DOWN, SIT_EXAMPLE_PDN_LIST_IND, SIT_EXAMPLE_PDN_LIST, SIT_EXAMPLE_PROFILE, SIT_EXAMPLE_ATTACH_PROFILE, SIT_EXAMPLE_ATTACH_IND, SIT_EXAMPLE_ADDR_IND, SIT_EXAMPLE_CARRIER_IND]
+        services: [ExamplePdnService]
         dbus: [org.ofono.ConnectionManager, org.ofono.ConnectionContext, org.ofono.LongTermEvolution, org.ofono.AllowedAccessPoints]
         client_tags: []   # TODO(SITE:S25) data 사내 구성요소(사내 스냅샷 SITE_RESTORE ⓪, 덮어쓰기 ③)
         keywords: ['re:\brmnet\d+', 'PdnCtx']
@@ -47,8 +47,8 @@ platforms:
         daemons: [simd]
         ofonod_files: [src/sim.c, src/simfs.c, drivers/rilmodem/sim.c]   # simfs.c: D (not in logs)
         ril: [SIM_IO, GET_SIM_STATUS, SIM_OPEN_CHANNEL, GET_SIM_PIN_PUK_RETRIES, SIM_AUTHENTICATION, UNSOL_RESPONSE_SIM_STATUS_CHANGED]
-        sit: [SIT_SIM_IO, SIT_GET_SIM_STATUS, SIT_SIM_OPEN_CHANNEL, SIT_NOTIFY_SIM_STATUS_CHANGED, SIT_SIM_AUTHENTICATION]
-        services: [SimService, SimFileService, StkService]
+        sit: [SIT_EXAMPLE_CARD_IO, SIT_EXAMPLE_CARD_STATE, SIT_EXAMPLE_CARD_OPEN, SIT_EXAMPLE_CARD_IND, SIT_EXAMPLE_CARD_AUTH]
+        services: [ExampleIccService, ExampleEfService, ExampleSatService]
         dbus: [org.ofono.SimManager, org.ofono.SimToolkit]
         client_tags: []   # TODO(SITE:S25) sim 사내 구성요소(사내 스냅샷 SITE_RESTORE ⓪, 덮어쓰기 ③)
         keywords: ['re:sw1 ?[:=]', 're:\beUICC\b', 'GetEID']
@@ -58,8 +58,8 @@ platforms:
         daemons: [networkd]
         ofonod_files: [src/network.c, src/netmon.c, src/radio-settings.c, drivers/rilmodem/network-registration.c, drivers/rilmodem/netmon.c, drivers/rilmodem/radio-settings.c]
         ril: [VOICE_REGISTRATION_STATE, DATA_REGISTRATION_STATE, OPERATOR, SIGNAL_STRENGTH, GET_PREFERRED_NETWORK_TYPE, GET_ALLOWED_NETWORK_TYPES_BITMAP, SET_UNSOL_CELL_INFO_LIST_RATE, UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED, UNSOL_PHYSICAL_CHANNEL_CONFIG, UNSOL_RESTRICTED_STATE_CHANGED, UNSOL_CELL_INFO_LIST]
-        sit: [SIT_OPERATOR, SIT_DATA_REGISTRATION_STATE, SIT_VOICE_REGISTRATION_STATE, SIT_GET_PREFERRED_NETWORK_TYPE, SIT_GET_ALLOWED_NETWORK_TYPES, SIT_NOTIFY_NETWORK_STATE_CHANGED, SIT_NOTIFY_OUT_OF_SERVICE, SIT_NOTIFY_PHYSICAL_CHANNEL_CONFIG, SIT_NOTIFY_CELL_INFO_LIST, SIT_SET_CELL_INFO_LIST_RATE]
-        services: [NetRegService]
+        sit: [SIT_EXAMPLE_OPER, SIT_EXAMPLE_PS_REG, SIT_EXAMPLE_CS_REG, SIT_EXAMPLE_RAT_MODE, SIT_EXAMPLE_RAT_MASK, SIT_EXAMPLE_NET_IND, SIT_EXAMPLE_NO_SERVICE_IND, SIT_EXAMPLE_CARRIER_IND, SIT_EXAMPLE_CELL_IND, SIT_EXAMPLE_CELL_RATE]
+        services: [ExampleRegService]
         dbus: [org.ofono.NetworkRegistration, org.ofono.RadioSettings, org.ofono.NetworkMonitor, org.ofono.NetworkOperator]
         client_tags: []   # TODO(SITE:S25) network 사내 구성요소(사내 스냅샷 SITE_RESTORE ⓪, 덮어쓰기 ③)
         keywords: ['RegState=']
@@ -69,8 +69,8 @@ platforms:
         daemons: []   # TODO(SITE:S25) call 사내 구성요소(사내 스냅샷 SITE_RESTORE ⓪, 덮어쓰기 ③)
         ofonod_files: [src/voicecall.c, src/call-settings.c, src/call-forwarding.c, src/call-barring.c, drivers/rilmodem/voicecall.c]
         ril: [UNSOL_EMERGENCY_NUMBER_LIST, DIAL, HANGUP, GET_CURRENT_CALLS, LAST_CALL_FAIL_CAUSE, UNSOL_RESPONSE_CALL_STATE_CHANGED]   # A: 첫 값 외에는 가정
-        sit: [SIT_NOTIFY_EMERGENCY_NUMBER_LIST]
-        services: [CallService]
+        sit: [SIT_EXAMPLE_ECC_IND]
+        services: [ExampleCallService]
         dbus: [org.ofono.VoiceCallManager, org.ofono.CallSettings, org.ofono.CallForwarding, org.ofono.CallBarring, org.ofono.CallVolume, org.ofono.SupplementaryServices]
         client_tags: []   # TODO(SITE:S25) call 사내 구성요소(사내 스냅샷 SITE_RESTORE ⓪, 덮어쓰기 ③)
         also: {imsd: 'ImsCallManager|EPSFB|\bDial', ofonod: 'IMS_UNSOL_CAPABILITIES'}
@@ -81,11 +81,11 @@ platforms:
         daemons: []   # TODO(SITE:S25) sms 사내 구성요소(사내 스냅샷 SITE_RESTORE ⓪, 덮어쓰기 ③)
         ofonod_files: [src/sms.c, src/cbs.c]
         ril: [SEND_SMS, SMS_ACKNOWLEDGE, UNSOL_RESPONSE_NEW_SMS]   # A: 합성 로그에 없음(가정)
-        sit: [SIT_GET_SMSC_ADDRESS]
-        services: [SmsService]
+        sit: [SIT_EXAMPLE_SMSC_QUERY]
+        services: [ExampleSmsService]
         dbus: [org.ofono.MessageManager, org.ofono.CellBroadcast, org.ofono.PushNotification, org.ofono.SmartMessaging, org.ofono.MessageWaiting]
         client_tags: []   # TODO(SITE:S25) sms 사내 구성요소(사내 스냅샷 SITE_RESTORE ⓪, 덮어쓰기 ③)
-        also: {imsd: '\bSms|SMS'}
+        also: {imsd: 'SMS'}
         neighbours: [ims]
       ims:
         path: ofono/ims
@@ -93,7 +93,7 @@ platforms:
         daemons: [imsd]
         ofonod_files: [src/ims.c]
         ril: [IMS_REQUEST_SET_PDN_INFO, IMS_REQUEST_SET_OPERATOR_INFO, IMS_REQUEST_AIRPLANE_MODE, IMS_UNSOL_PDN_ACTIVATE, IMS_UNSOL_PDN_DEACTIVATE, IMS_UNSOL_OPERATOR_INFO_QUERY, IMS_UNSOL_RESPONSE_REGISTRATION_STATE_CHANGED, IMS_UNSOL_CAPABILITIES, IMS_UNSOL_REG_FAILED]
-        sit: [SIT_IMS_*, SIT_NOTIFY_IMS_*]
+        sit: [SIT_EXAMPLE_IMS_*]
         services: [ImsService]
         dbus: [org.ofono.IpMultimediaSystem]
         keywords: ['re:OEM_(REQ|UNSOL)_IMS_']
@@ -105,7 +105,7 @@ platforms:
         daemons: []   # TODO(SITE:S25) modem 사내 구성요소(사내 스냅샷 SITE_RESTORE ⓪, 덮어쓰기 ③)
         ofonod_files: [src/modem.c, plugins/ril.c]
         ril: [RADIO_POWER, UNSOL_RESPONSE_RADIO_STATE_CHANGED]
-        sit: [SIT_RADIO_POWER, SIT_NOTIFY_RADIO_STATE_CHANGED, SIT_NOTIFY_OUT_OF_SERVICE]   # OUT_OF_SERVICE: network와 겹침, 망 없음은 모뎀 상태로도 본다 (H C1)
+        sit: [SIT_EXAMPLE_POWER, SIT_EXAMPLE_POWER_IND, SIT_EXAMPLE_NO_SERVICE_IND]   # OUT_OF_SERVICE: network와 겹침, 망 없음은 모뎀 상태로도 본다 (H C1)
         dbus: [org.ofono.Modem]
   android:
     common:
@@ -138,8 +138,8 @@ platforms:
         tags: ['^DNC-\d+$', '^DN-\d+-[CI]$', '^DPM-\d+$', '^DRM-\d+$', '^DSMGR-\d+$', '^DSM-[CI]-\d+$', '^DCM-\d+$', '^DSRM-\d+$', '^ANM-\d+$', '^TNP$', '^TNA-\d+$', '^QOSCT-\d+$', '^DataServiceCallback$', '^ConnectivityService$', '^PhoneSwitcher$', '^ADSC$', '^VRIL-DATA$']
         ril: [SETUP_DATA_CALL, DEACTIVATE_DATA_CALL, SET_INITIAL_ATTACH_APN, SET_DATA_PROFILE, SET_USER_DATA_ENABLED, SET_USER_DATA_ROAMING_ENABLED, UNSOL_DATA_CALL_LIST_UPDATED, GET_DATA_CALL_LIST]   # A: GET_DATA_CALL_LIST
         hal: [RadioDataProxy]
-        services: [DataCallService]
-        sit: [SIT_SETUP_DATA_CALL, SIT_DEACTIVATE_DATA_CALL, SIT_DATA_CALL_LIST, SIT_SET_DATA_PROFILE, SIT_SET_INITIAL_ATTACH_APN, SIT_ALLOW_DATA, SIT_NOTIFY_DATA_CALL_LIST_CHANGED, SIT_NOTIFY_LINK_ADDRESS]
+        services: [ExamplePdnService]
+        sit: [SIT_EXAMPLE_PDN_UP, SIT_EXAMPLE_PDN_DOWN, SIT_EXAMPLE_PDN_LIST, SIT_EXAMPLE_PROFILE, SIT_EXAMPLE_ATTACH_PROFILE, SIT_EXAMPLE_DATA_SWITCH, SIT_EXAMPLE_PDN_LIST_IND, SIT_EXAMPLE_ADDR_IND]
         keywords: ['re:data call list|PdnCtx']
         neighbours: [network]
       sim:
@@ -148,8 +148,8 @@ platforms:
         tags: ['^UiccController$', '^UiccSlot$', '^UiccCard$', '^UiccProfile( \[\d+\])?$', '^UiccCardApplication( \[\d+\])?$', '^SIMRecords$', '^IsimUiccRecords$', '^UsimFH$', '^SMSVC$', '^CAT$', '^MultiSimSettingController$', '^SecureElement-Terminal-SIM\d$']
         ril: [GET_SIM_STATUS, SIM_IO, SIM_OPEN_CHANNEL, SIM_CLOSE_CHANNEL, SIM_TRANSMIT_APDU_CHANNEL, STK_SEND_TERMINAL_RESPONSE, UNSOL_STK_SESSION_END, UNSOL_RESPONSE_SIM_STATUS_CHANGED]
         hal: [RadioSimProxy]
-        services: [SimService, SimFileService, StkService]
-        sit: [SIT_GET_SIM_STATUS, SIT_SIM_IO, SIT_SIM_OPEN_CHANNEL*, SIT_SIM_CLOSE_CHANNEL, SIT_SIM_TRANSMIT_APDU*, SIT_NOTIFY_STK*]
+        services: [ExampleIccService, ExampleEfService, ExampleSatService]
+        sit: [SIT_EXAMPLE_CARD_STATE, SIT_EXAMPLE_CARD_IO, SIT_EXAMPLE_CARD_OPEN*, SIT_EXAMPLE_CARD_CLOSE, SIT_EXAMPLE_CARD_APDU*, SIT_EXAMPLE_TOOLKIT*]
         keywords: ['re:SIM_STATE_CHANGED (READY|LOADED|ABSENT|NOT_READY|LOCKED|CARD_IO_ERROR)']
       network:
         path: android/network
@@ -157,8 +157,8 @@ platforms:
         tags: ['^SST-\d+$', '^NRM-[CI]-\d+$', '^CellularNetworkService$', '^NetworkTypeController$', '^CSST$', '^LocaleTracker-\d+$', '^NitzStateMachineImpl$', '^DIC-\d+$', '^VRIL-NETWORK$']
         ril: [VOICE_REGISTRATION_STATE, DATA_REGISTRATION_STATE, OPERATOR, QUERY_NETWORK_SELECTION_MODE, GET_CELL_INFO_LIST, SET_ALLOWED_NETWORK_TYPES_BITMAP, IS_N1_MODE_ENABLED, SET_SIGNAL_STRENGTH_REPORTING_CRITERIA, SET_USAGE_SETTING, GET_USAGE_SETTING, SET_SATELLITE_PLMN, UNSOL_RESPONSE_NETWORK_STATE_CHANGED, UNSOL_PHYSICAL_CHANNEL_CONFIG, UNSOL_VOICE_RADIO_TECH_CHANGED]
         hal: [RadioNetworkProxy]
-        services: [NetRegService]
-        sit: [SIT_DATA_REGISTRATION_STATE, SIT_VOICE_REGISTRATION_STATE, SIT_OPERATOR, SIT_NOTIFY_NETWORK_STATE_CHANGED, SIT_NOTIFY_PHYSICAL_CHANNEL_CONFIG, SIT_GET_CELL_INFO_LIST*, SIT_SET_ALLOWED_NETWORK_TYPES*]
+        services: [ExampleRegService]
+        sit: [SIT_EXAMPLE_PS_REG, SIT_EXAMPLE_CS_REG, SIT_EXAMPLE_OPER, SIT_EXAMPLE_NET_IND, SIT_EXAMPLE_CARRIER_IND, SIT_EXAMPLE_CELL_QUERY*, SIT_EXAMPLE_RAT_MASK*]
         keywords: ['re:reg state request|net state indication']
       call:
         path: android/call
@@ -166,8 +166,8 @@ platforms:
         tags: ['^ImsPhoneCallTracker$', '^ImsPhoneMmiCode$', '^ImsUt$', '^Telecom$', '^CallManager$', '^CallNotifier$', '^CallWaitingCtrl$', '^MMIDialogActivity$', '^GsmCdmaCallTracker$']   # A: GsmCdmaCallTracker
         ril: [SET_CLIR, ENABLE_VONR, UNSOL_EMERGENCY_NUMBER_LIST, DIAL, HANGUP, GET_CURRENT_CALLS, LAST_CALL_FAIL_CAUSE]   # A: DIAL..LAST_CALL_FAIL_CAUSE
         hal: [RadioVoiceProxy]
-        services: [CallService, SuppService]
-        sit: [SIT_IMS_SET_CALL_FORWARD*, SIT_ENABLE_VONR, SIT_NOTIFY_EMERGENCY_NUMBER_LIST]
+        services: [ExampleCallService, ExampleSsService]
+        sit: [SIT_EXAMPLE_IMS_CF*, SIT_EXAMPLE_VONR_SWITCH, SIT_EXAMPLE_ECC_IND]
         keywords: ['re:\[ut\]', 'OEM_REQ_IMS_SET_CALL_FORWARD', 're:at-in: ATD']
         also: {'^ImsPhone$': 'dialInternal|MmiCode|onMMIDone|Call', '^VRIL-IMS$': '\[ut\]|OEM_REQ_IMS_SET_CALL_FORWARD|INVITE'}   # INVITE: 사내 확인
         neighbours: [ims]
@@ -177,7 +177,7 @@ platforms:
         tags: ['^SMSDispatcher$', '^ImsSmsDispatcher( \[\d+\])?$', '^CellBroadcastConfigTracker-\d+$', '^SmsDispatchersController$', '^InboundSmsHandler$']   # A: last two
         ril: [GSM_SET_BROADCAST_CONFIG, GSM_BROADCAST_ACTIVATION, SEND_SMS, IMS_SEND_SMS, SMS_ACKNOWLEDGE, UNSOL_RESPONSE_NEW_SMS]   # A: SEND_SMS..
         hal: [RadioMessagingProxy]
-        services: [SmsService]
+        services: [ExampleSmsService]
         sit: [SIT_*SMS*]
         keywords: ['SEND_STATUS_ERROR']
         also: {'^VRIL-IMS$': '\[sms\]'}   # SMS over IMS 벤더 줄(`[sms]` 접두는 합성 모양, 사내에서 확인)
@@ -188,7 +188,7 @@ platforms:
         tags: ['^ImsManager', '^ImsResolver$', '^ImsServiceController$', '^ImsProvisioning', '^ImsConfig$', '^ImsEnablementTracker$', '^ImsStateCallbackController$', '^ImsRegCallbackHelper$', '^ImsStats$', '^VRIL-IMS$']
         ril: [NOTIFY_IMS_DATA_NETWORK, UPDATE_IMS_REGISTRATION_INFO]   # A: UPDATE_IMS_REGISTRATION_INFO as a RILJ request
         services: [ImsService]
-        sit: [SIT_IMS_*, SIT_NOTIFY_IMS_*]
+        sit: [SIT_EXAMPLE_IMS_*]
         keywords: ['registerImsRegistrationCallback', 'service IMS is not available', 'ImsReasonInfo', 're:ims registration indication: (TRUE|FALSE)']   # 마지막: RIL [ImsService_<n>] 줄(태그는 common)
         also: {'^ImsPhone$': 'handleIms(Un)?[Rr]egistered|ImsRegistration'}
         neighbours: [data]
@@ -198,5 +198,5 @@ platforms:
         tags: ['^PhoneCfgMgr$', '^RadioConfig$', '^RadioConfigResponseAidl$', '^VRIL-MODEM$']
         ril: [GET_RADIO_CAPABILITY, SET_PREFERRED_DATA_MODEM, ENABLE_MODEM, BASEBAND_VERSION, UNSOL_MODEM_RESTART]   # A: last three
         hal: [RadioModemProxy, RadioConfigProxy]
-        services: [ModemService]
-        sit: [SIT_GET_RADIO_CAPABILITY]
+        services: [ExampleModemService]
+        sit: [SIT_EXAMPLE_CAPABILITY]

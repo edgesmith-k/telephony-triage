@@ -10,13 +10,13 @@ IMS 등록·해제·재등록, IMS PDN과 등록의 관계, VoLTE 가능 상태.
 
 ## ② 볼 역할과 줄
 
-- IMS IPC: 벤더 RIL `SIT_NOTIFY_IMS_REGISTRATION`, 벤더 IMS `req -> OEM_REQ_IMS_*`·`rsp <- OEM_REQ_IMS_*`·`ind <- OEM_UNSOL_IMS_REGISTRATION … status-code`
+- IMS IPC: 벤더 RIL `SIT_EXAMPLE_IMS_REG_IND`, 벤더 IMS `req -> OEM_REQ_IMS_*`·`rsp <- OEM_REQ_IMS_*`·`ind <- OEM_UNSOL_IMS_REGISTRATION … status-code`
 - 벤더 IMS `[pdn]`·`[reg]`·`add pdn`, 벤더 RIL `[ImsService_<n>] ims registration indication: TRUE|FALSE`
 - ImsPhone `handleImsRegistered`·`handleImsUnregistered … ImsReasonInfo`, ImsRegistration, ImsManager
 
 ## ③ 층 경로
 
-벤더 IMS `IMS_REGISTERING` → `add pdn` → `OEM_REQ_IMS_ADD_PDN` → 모뎀·망 → `SIT_NOTIFY_IMS_REGISTRATION` → 벤더 IMS UNSOL → ImsPhone 등록 상태 → SST.
+벤더 IMS `IMS_REGISTERING` → `add pdn` → `OEM_REQ_IMS_ADD_PDN` → 모뎀·망 → `SIT_EXAMPLE_IMS_REG_IND` → 벤더 IMS UNSOL → ImsPhone 등록 상태 → SST.
 
 ## ④ 증상별 첫 점검
 

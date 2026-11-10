@@ -1,8 +1,8 @@
 -- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture.
 Sep 22 10:00:16.546 dut daemon.info ofonod[903]: [0,0631]> RIL_REQUEST_RADIO_POWER (0)
 Sep 22 10:00:16.556 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: RADIO_POWER (6 bytes)
-Sep 22 10:00:16.557 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_RADIO_POWER seq=0x07c3 len=8, power=0
-Sep 22 10:00:16.756 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_RADIO_POWER, RSP OK(RCM_E_SUCCESS) seq=0x07c3 len=8
+Sep 22 10:00:16.557 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_EXAMPLE_POWER seq=0x07c3 len=8, power=0
+Sep 22 10:00:16.756 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_POWER, RSP OK(RCM_E_SUCCESS) seq=0x07c3 len=8
 Sep 22 10:00:16.757 dut daemon.info ofonod[903]: [0,0631]< RIL_REQUEST_RADIO_POWER
 Sep 22 10:00:17.236 dut daemon.info chatterd[746]: position fix pending
 Sep 22 10:00:21.616 dut daemon.info ofonod[903]: [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF)

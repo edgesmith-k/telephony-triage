@@ -13,7 +13,7 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 `timeline` 값의 파일만 보고 `events`·`log_paths`는 열지 않는다. 〔script …〕 메모는 근거가 아니다. 없는 줄은 지어내지 않고 `반대 근거`에 더 볼 로그로 적는다.
 
 ## 점검
-1. 관리 데몬 → `org.ofono.RadioSettings`·`NetworkRegistration` → `src/radio-settings.c`·`src/network.c` → gril(`GET_PREFERRED_NETWORK_TYPE`·`OPERATOR`·`*_REGISTRATION_STATE`) → 벤더 RIL `[NetRegService_<n>] <Name>Handler` → IPC 순서로 내려간다.
+1. 관리 데몬 → `org.ofono.RadioSettings`·`NetworkRegistration` → `src/radio-settings.c`·`src/network.c` → gril(`GET_PREFERRED_NETWORK_TYPE`·`OPERATOR`·`*_REGISTRATION_STATE`) → 벤더 RIL `[ExampleRegService_<n>] <Name>Handler` → IPC 순서로 내려간다.
 2. IPC `Error(RCM_E_*)` → `모뎀·망`. `Voice|Data RegState=…, RejectCause=<0 아닌 값>`도 `모뎀·망`이다(없으면: gril `*_REGISTRATION_STATE` 응답·`NetworkRegistration` 상태 시그널·네트워크 구성요소 `RADIO_ON|OFF`. RejectCause가 없으면 층을 정하지 않는다).
 3. 실패 앞에 `org.ofono.Modem` Online=false·`RADIO_POWER (0)`·`RADIO_STATE_CHANGED (state: OFF)`·네트워크 구성요소 `RADIO_OFF`가 있으면 그 뒤 조회 실패는 `원인 아님(정상 동작)`.
 4. `NOT_REGISTERED … RejectCause=0`이 길게 이어지면 망을 찾는 중이지 거절이 아니다.

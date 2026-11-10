@@ -11,7 +11,7 @@
 11:47:20.409 - V RIL mux [ch0][RX] <unknown sit>, RSP Error(RCM_E_UNKNOWN_CMD) seq=0x0e07 len=12
 11:47:20.411 p0 D RILJ [0527]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
 11:47:20.411 - D RilRequest [0527]< NOTIFY_IMS_DATA_NETWORK error: com.android.internal.telephony.CommandException: REQUEST_NOT_SUPPORTED
-11:47:23.051 - V RIL mux [ch0][RX] SIT_NOTIFY_IMS_REGISTRATION ind len=96
+11:47:23.051 - V RIL mux [ch0][RX] SIT_EXAMPLE_IMS_REG_IND ind len=96
 11:47:23.054 - V RIL [ImsService_0] ims registration indication: TRUE
 11:47:23.072 - D ImsPhone [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN
 11:47:23.140 p0 E RILJ Unable to complete updateImsRegistrationInfo because service IMS is not available. [PHONE0]

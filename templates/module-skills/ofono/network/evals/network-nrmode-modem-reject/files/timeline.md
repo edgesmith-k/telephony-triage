@@ -11,11 +11,11 @@
 09:20:22.265 - D ofonod drivers/rilmodem/radio-settings.c:ril_query_rat_mode()
 09:20:22.265 p0 I ofonod [0,0348]> RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE
 09:20:22.266 - D vrild client fd 9 VCHAN_2 REQUEST: GET_PREFERRED_NETWORK_TYPE (6 bytes)
-09:20:22.266 - I vrild [NetRegService_1] begin rat-mode lookup
+09:20:22.266 - I vrild [ExampleRegService_1] begin rat-mode lookup
 09:20:22.267 - D vrild [IpcCtx_2] track seq 0x06a2 (1 in flight)
-09:20:22.267 - D vrild mux [ch1][TX] SIT_GET_PREFERRED_NETWORK_TYPE seq=0x06a2 len=8
-09:20:22.270 - D vrild mux [ch1][RX] SIT_GET_PREFERRED_NETWORK_TYPE, RSP Error(RCM_E_FAILURE) seq=0x06a2 len=8  ⇒ builtin.common.vendor_ipc_error(error=RCM_E_FAILURE,ipc=SIT_GET_PREFERRED_NETWORK_TYPE)
-09:20:22.271 - I vrild [NetRegService_1] rat-mode lookup returned
+09:20:22.267 - D vrild mux [ch1][TX] SIT_EXAMPLE_RAT_MODE seq=0x06a2 len=8
+09:20:22.270 - D vrild mux [ch1][RX] SIT_EXAMPLE_RAT_MODE, RSP Error(RCM_E_FAILURE) seq=0x06a2 len=8  ⇒ builtin.common.vendor_ipc_error(error=RCM_E_FAILURE,ipc=SIT_EXAMPLE_RAT_MODE)
+09:20:22.271 - I vrild [ExampleRegService_1] rat-mode lookup returned
 09:20:22.271 - I vrild [IpcCtx_2] OnIpcComplete Request ID=71, result=2 -> chan 2 reply sent, 0 waiters, took 4 ms  ⇒ builtin.common.vendor_request_failed(request_id=71,result=2)
 09:20:22.271 - D vrild chan 2 <- reply written
 09:20:22.272 - D vrild [IpcCtx_2] untrack seq 0x06a2 (0 in flight)

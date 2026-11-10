@@ -10,9 +10,9 @@
 11:00:30.000 p0 I SST-0 onServiceStateChanged: regState=NOT_REGISTERED cellId=<CELL#1> [PHONE0]  ⇒ network_service_state(reg_state=NOT_REGISTERED)
 11:00:31.000 p0 D RILJ [0330]> DATA_REGISTRATION_STATE [PHONE0]
 11:00:31.004 - D VRIL-SVC RadioNetworkProxy::getDataRegistrationState: serial 330
-11:00:31.006 - I RIL [NetRegService_0] data reg state request
-11:00:31.008 - V RIL mux [ch0][TX] SIT_DATA_REGISTRATION_STATE, REQ seq=0x0220 len=8
-11:00:31.040 - V RIL mux [ch0][RX] SIT_DATA_REGISTRATION_STATE, RSP OK(RCM_E_SUCCESS) seq=0x0220 len=88
+11:00:31.006 - I RIL [ExampleRegService_0] data reg state request
+11:00:31.008 - V RIL mux [ch0][TX] SIT_EXAMPLE_PS_REG, REQ seq=0x0220 len=8
+11:00:31.040 - V RIL mux [ch0][RX] SIT_EXAMPLE_PS_REG, RSP OK(RCM_E_SUCCESS) seq=0x0220 len=88
 11:00:31.042 - D VRIL-SVC getDataRegistrationState response: serial 330
 11:00:31.050 p0 D RILJ [0330]< DATA_REGISTRATION_STATE RegStateResult{regState: REG_DENIED, rat: LTE, reasonForDenial: 13, cellIdentity: CellIdentityLte:{ mCi=<CELL#1> }, registeredP…
 11:00:32.000 p0 W SST-0 registration rejected: cause=13 domain=PS [PHONE0]  ⇒ network_registration_rejected(cause=13,domain=PS)

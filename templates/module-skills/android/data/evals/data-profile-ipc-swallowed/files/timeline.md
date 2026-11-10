@@ -9,16 +9,16 @@
 07:05:12.402 p0 D RILJ [0418]> SET_DATA_PROFILE with data profiles : [PHONE0]
 07:05:12.404 - D VRIL-SVC RadioDataProxy::setDataProfile: serial 418
 07:05:12.405 - D VRIL-SVC setDataProfile request: serial 418
-07:05:12.407 - I RIL [DataCallService_0] set data profile request
-07:05:12.407 - V RIL [DataCallService_0] profile 1 of 2 type=ims
-07:05:12.408 - V RIL mux [ch0][TX] SIT_SET_DATA_PROFILE, REQ seq=0x0d31 len=180
-07:05:12.409 - V RIL [DataCallService_0] profile 2 of 2 type=emergency
-07:05:12.409 - V RIL mux [ch0][TX] SIT_SET_DATA_PROFILE, REQ seq=0x0d32 len=180
+07:05:12.407 - I RIL [ExamplePdnService_0] set data profile request
+07:05:12.407 - V RIL [ExamplePdnService_0] profile 1 of 2 type=ims
+07:05:12.408 - V RIL mux [ch0][TX] SIT_EXAMPLE_PROFILE, REQ seq=0x0d31 len=180
+07:05:12.409 - V RIL [ExamplePdnService_0] profile 2 of 2 type=emergency
+07:05:12.409 - V RIL mux [ch0][TX] SIT_EXAMPLE_PROFILE, REQ seq=0x0d32 len=180
 07:05:12.410 - D VRIL-SVC setDataProfile response: serial 418
 07:05:12.412 p0 D RILJ [0418]< SET_DATA_PROFILE [PHONE0]
 07:05:12.413 p0 D DSM-C-0 onSetDataProfileComplete. resultCode = 0
 07:05:12.415 p0 D DNC-0 Data evaluation: evaluation reason:SIM_LOADED, Data disallowed reasons: NOT_IN_SERVICE NO_SUITABLE_DATA_PROFILE, candidate profile=null, time=07:05:12.415, net…  ⇒ data_evaluation_rejected(reasons=NOT_IN_SERVICE NO_SUITABLE_DATA_PROFILE)
-07:05:12.436 - V RIL mux [ch0][RX] SIT_SET_DATA_PROFILE, RSP OK(RCM_E_SUCCESS) seq=0x0d31 len=12
+07:05:12.436 - V RIL mux [ch0][RX] SIT_EXAMPLE_PROFILE, RSP OK(RCM_E_SUCCESS) seq=0x0d31 len=12
 07:05:12.437 - E RIL waitlist miss seq 0x0d31
-07:05:12.471 - V RIL mux [ch0][RX] SIT_SET_DATA_PROFILE, RSP Error(RCM_E_FAILURE) seq=0x0d32 len=12  ⇒ builtin.common.vendor_ipc_error(error=RCM_E_FAILURE,ipc=SIT_SET_DATA_PROFILE)
+07:05:12.471 - V RIL mux [ch0][RX] SIT_EXAMPLE_PROFILE, RSP Error(RCM_E_FAILURE) seq=0x0d32 len=12  ⇒ builtin.common.vendor_ipc_error(error=RCM_E_FAILURE,ipc=SIT_EXAMPLE_PROFILE)
 07:05:12.472 - E RIL waitlist miss seq 0x0d32

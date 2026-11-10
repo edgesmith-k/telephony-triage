@@ -13,11 +13,11 @@
 - RILJ `SET_INITIAL_ATTACH_APN`·`SET_DATA_PROFILE`(실린 APN), data call list `UNSOL_DATA_CALL_LIST_UPDATED`
 - RILJ `SETUP_DATA_CALL`·`DEACTIVATE_DATA_CALL`, DPM 선호 프로필, DCM `carrierId=`
 - DNC `Data evaluation`·`Internet data state changed from <A> to <B>`, DSMGR, DSM-C, DRM
-- 벤더 RIL `[DataCallService_<n>] setup data call request`·`SIT_SET_DATA_PROFILE`, `[DataCallService_<n>] …errorCode=`
+- 벤더 RIL `[ExamplePdnService_<n>] setup data call request`·`SIT_EXAMPLE_PROFILE`, `[ExamplePdnService_<n>] …errorCode=`
 
 ## ③ 층 경로
 
-DNC → DPM → RILJ 요청 → RIL HAL → 벤더 RIL IPC → `[DataCallService_0] …errorCode=` → RILJ `< SETUP_DATA_CALL … cause=` → data call list → DNC.
+DNC → DPM → RILJ 요청 → RIL HAL → 벤더 RIL IPC → `[ExamplePdnService_0] …errorCode=` → RILJ `< SETUP_DATA_CALL … cause=` → data call list → DNC.
 
 ## ④ 증상별 첫 점검
 

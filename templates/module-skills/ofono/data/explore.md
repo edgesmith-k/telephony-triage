@@ -24,7 +24,7 @@ PDN·데이터 연결, APN, 데이터 콜 설정·해제·재시도, 연결 뒤 
 | ping 안 됨·연결됐는데 안 됨 | 관리 데몬 라우팅·netconf·firewall | 라우팅 오류 → 곁가지 / 설정 실패 → 관리 데몬 | 줄 없음 → 그 층 로그 없음(관리 데몬) |
 | 쓰루풋 느림 | 연결 안정 여부만 | 판단 못 함 → 그 층 로그 없음(IP 계층), 원인 데몬 알 수 없음 | iperf·tcpdump |
 | 원치 않는 패킷 | firewall 설정 | 판단 못 함 → 같음 | tcpdump·iptables |
-| NR 전환 중 끊김(세부 초안) | `SIT_NOTIFY_PHYSICAL_CHANNEL_CONFIG` 뒤 data call list | 요청 없이 빠짐 → 모뎀·망 | 모뎀 로그 |
+| NR 전환 중 끊김(세부 초안) | `SIT_EXAMPLE_CARRIER_IND` 뒤 data call list | 요청 없이 빠짐 → 모뎀·망 | 모뎀 로그 |
 
 ## ⑤ 함정
 - `src/gprs.c` 오류뿐이고 gril 줄이 없으면 → `그 층 로그 없음(벤더 RIL)`.

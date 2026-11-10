@@ -20,7 +20,7 @@ run_expect:
 expect:
   accept:
     - layer: '벤더 RIL|모뎀'
-      daemon: 'RIL$|RIL[ (]|벤더 RIL|DataCallService'
-      evidence: ['SIT_SET_DATA_PROFILE, RSP.*Error\(RCM_E_FAILURE\)', '\[0418\]< SET_DATA_PROFILE']
+      daemon: 'RIL$|RIL[ (]|벤더 RIL|ExamplePdnService'
+      evidence: ['SIT_EXAMPLE_PROFILE, RSP.*Error\(RCM_E_FAILURE\)', '\[0418\]< SET_DATA_PROFILE']
   trap:
     - label: '^\s*(프레임워크|RILJ|RIL HAL|DNC|DPM|원인 아님)'
