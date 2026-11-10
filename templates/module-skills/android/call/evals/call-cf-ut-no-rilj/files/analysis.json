@@ -4,7 +4,7 @@
  "mode": "offline",
  "issue": {
   "origin": "file",
-  "occurred_at": "2026-08-09T13:13:03+00:00",
+  "occurred_at": "2026-10-14T09:41:07+00:00",
   "sw": null,
   "platform_version": "14",
   "sim_slot": "0",
@@ -21,24 +21,17 @@
    "source.log"
   ],
   "window": {
-   "start": "2026-08-09T13:08:03.000Z",
-   "end": "2026-08-09T13:18:03.000Z"
+   "start": "2026-10-14T09:36:07.000Z",
+   "end": "2026-10-14T09:46:07.000Z"
   },
   "range": [
-   "2026-08-09T13:13:00.233Z",
-   "2026-08-09T13:13:03.706Z"
+   "2026-10-14T09:41:06.812Z",
+   "2026-10-14T09:41:09.321Z"
   ],
   "in_range": "partial",
   "clock_anomalies": 0,
-  "events": 27,
-  "masked": null,
-  "uncollected_tags": [
-   {
-    "tag": "EmergencyNumberTracker",
-    "lines": 2,
-    "warn": 0
-   }
-  ]
+  "events": 23,
+  "masked": null
  },
  "no_candidate": {
   "search_hits": [
@@ -81,11 +74,10 @@
   "when": "ask"
  },
  "warnings": [
-  "형식을 모르는 줄 7개를 건너뛰었습니다."
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
  ],
  "must_show": [
-  "로그 범위: 2026-08-09T13:13:00.233Z ~ 2026-08-09T13:13:03.706Z (일부만 포함), 시계 이상 없음",
-  "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): EmergencyNumberTracker 2줄(W/E 0)"
+  "로그 범위: 2026-10-14T09:41:06.812Z ~ 2026-10-14T09:41:09.321Z (일부만 포함), 시계 이상 없음"
  ],
  "truncated": false
 }

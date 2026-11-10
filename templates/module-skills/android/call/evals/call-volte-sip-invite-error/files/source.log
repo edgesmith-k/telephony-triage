@@ -1,11 +1,11 @@
 -- [합성] telephony-triage module-skills C1D eval log. Line shapes of call-volte-ims-unregistered / ims-reg-403; vendor IMS INVITE lines and ImsPhoneCallTracker onCallStartFailed are 문구 가정.
 09-04 12:00:10.000  2101 2113 D ImsResolver: bound to mock ImsService [PHONE0]
-09-04 12:00:11.000  1188 1258 V RIL     : [<DEV#1>][RX] SIT_NOTIFY_MTEL_REGISTRATION, IND, 208 bytes
-09-04 12:00:11.005  1777 1777 I VRIL-IMS: 1416 [NETW] #:PURP:# UNSOL {OEM_UNSOL_MTEL_REGISTRATION} : reg-state : 1  feature : 11  feature-bitmask : 1  status-code : 200  delegate-bitmask : 0  mFeatureExt : 0  (NetworkAdaptor$AdaptorChannel%onMessage:390)
+09-04 12:00:11.000  1188 1258 V RIL     : mux [ch0][RX] SIT_EXAMPLE_IMS_REG_IND ind len=208
+09-04 12:00:11.005  1777 1777 I VRIL-IMS: [reg] ind <- OEM_UNSOL_IMS_REGISTRATION : state : 1  feature : 11  status-code : 200
 09-04 12:00:11.100  2101 2113 I ImsRegistration: [PHONE0] onRegistered: transport=LTE impu=sip:<IMPU#1>@<HOST#1>
 09-04 12:02:00.000  2101 2113 D ImsPhoneCallTracker: [0] dial: isVolteEnabled=true imsRegistered=true
-09-04 12:02:00.100  1777 2677 D VRIL-IMS: 1501 [CALL] Sending INVITE to <MSISDN#1> [SLID:0 ] (CallSession%sendInvite:212)
-09-04 12:02:01.300  1777 2677 I VRIL-IMS: 1502 [CALL] Received INVITE response status-code : 503 [SLID:0 ] (CallSession%onResponse:288)
+09-04 12:02:00.100  1777 2677 D VRIL-IMS: [call] Sending INVITE to <MSISDN#1> slot=0
+09-04 12:02:01.300  1777 2677 I VRIL-IMS: [call] Received INVITE response status-code : 503 slot=0
 09-04 12:02:01.400  2101 2113 W ImsPhoneCallTracker: [0] onCallStartFailed reasonCode=ImsReasonInfo :: {1014 : CODE_SIP_SERVICE_UNAVAILABLE, 503, null}
 09-04 12:02:01.410  2101 2113 W ImsPhoneCallTracker: [PHONE0] call state changed: DISCONNECTED
-09-04 12:02:10.000  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
+09-04 12:02:10.000  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009

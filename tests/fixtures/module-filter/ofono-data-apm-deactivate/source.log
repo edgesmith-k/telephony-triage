@@ -6,18 +6,18 @@ Sep 23 11:30:04.754 dut daemon.debug ofonod[903]: src/gprs.c:gprs_deactivate_all
 Sep 23 11:30:04.755 dut daemon.info ofonod[903]: [0,1164]> RIL_REQUEST_DEACTIVATE_DATA_CALL (2,2)
 Sep 23 11:30:04.755 dut daemon.debug ofonod[903]: Device 0: > <HEXDUMP 20B>
 Sep 23 11:30:04.756 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: DEACTIVATE_DATA_CALL (12 bytes)
-Sep 23 11:30:04.756 dut daemon.info vrild[618]: [TrafficService_1] teardown cid 2 begin
+Sep 23 11:30:04.756 dut daemon.info vrild[618]: [ExamplePdnService_1] teardown cid 2 begin
 Sep 23 11:30:04.757 dut daemon.debug vrild[618]: [IpcCtx_2] track seq 0x0f51 (1 in flight)
-Sep 23 11:30:04.757 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_DEACT_DATA_CALL seq=0x0f51 len=12
-Sep 23 11:30:04.757 dut daemon.debug vrild[618]: Write to modem 12B
+Sep 23 11:30:04.757 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_EXAMPLE_PDN_DOWN seq=0x0f51 len=12
+Sep 23 11:30:04.757 dut daemon.debug vrild[618]: link tx 12B
 Sep 23 11:30:04.758 dut local0.info mgmtd[734]: ui tick
-Sep 23 11:30:04.758 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_SIGNAL_STRENGTH ind len=16
-Sep 23 11:30:04.759 dut daemon.debug vrild[618]: Read from usb 16B
+Sep 23 11:30:04.758 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_SIGNAL_IND ind len=16
+Sep 23 11:30:04.759 dut daemon.debug vrild[618]: link rx 16B
 Sep 23 11:30:04.760 dut daemon.info chatterd[746]: position fix pending
-Sep 23 11:30:04.762 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_DEACT_DATA_CALL, RSP OK(RCM_E_SUCCESS) seq=0x0f51 len=8
-Sep 23 11:30:04.762 dut daemon.debug vrild[618]: Read from usb 8B
+Sep 23 11:30:04.762 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_PDN_DOWN, RSP OK(RCM_E_SUCCESS) seq=0x0f51 len=8
+Sep 23 11:30:04.762 dut daemon.debug vrild[618]: link rx 8B
 Sep 23 11:30:04.763 dut daemon.debug vrild[618]: [IpcCtx_2] frame decoded
-Sep 23 11:30:04.763 dut daemon.info vrild[618]: [TrafficService_1] teardown cid 2 acked
+Sep 23 11:30:04.763 dut daemon.info vrild[618]: [ExamplePdnService_1] teardown cid 2 acked
 Sep 23 11:30:04.764 dut daemon.info datad[633]: link status poll: rmnet1 down
 Sep 23 11:30:04.764 dut local0.info mgmtd[734]: ui tick
 Sep 23 11:30:04.765 dut daemon.info chatterd[746]: position fix pending
@@ -25,7 +25,7 @@ Sep 23 11:30:04.766 dut daemon.emerg datad2[641]: [route] Failed to open packet 
 Sep 23 11:30:04.766 dut daemon.warn datad2[641]: [route] table 1017 flushed for rmnet1
 Sep 23 11:30:04.767 dut daemon.info vrild[618]: rmnet1: addresses removed, link going down
 Sep 23 11:30:04.767 dut daemon.err vrild[618]: interface v6 address clear error 22 on rmnet1
-Sep 23 11:30:04.767 dut daemon.debug vrild[618]: [TrafficService_1] ambr update cid 2: empty
+Sep 23 11:30:04.767 dut daemon.debug vrild[618]: [ExamplePdnService_1] ambr update cid 2: empty
 Sep 23 11:30:04.768 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=77, result=0 -> chan 2 reply sent, 0 waiters, took 12 ms
 Sep 23 11:30:04.768 dut daemon.debug vrild[618]: chan 2 <- reply written
 Sep 23 11:30:04.768 dut daemon.debug vrild[618]: [IpcCtx_2] untrack seq 0x0f51 (0 in flight)
@@ -36,6 +36,6 @@ Sep 23 11:30:04.769 dut daemon.info ofonod[903]: src/gprs.c:pri_deactivate_callb
 Sep 23 11:30:04.769 dut daemon.info ofonod[903]: [0,UNSOL]< UNSOL_DATA_CALL_LIST_CHANGED
 Sep 23 11:30:04.769 dut daemon.info chatterd[746]: position fix pending
 Sep 23 11:30:04.769 dut daemon.info ofonod[903]: [0,1170]> RIL_REQUEST_RADIO_POWER (0)
-Sep 23 11:30:04.770 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_SIGNAL_STRENGTH ind len=16
-Sep 23 11:30:04.770 dut daemon.debug vrild[618]: Read from usb 16B
+Sep 23 11:30:04.770 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_SIGNAL_IND ind len=16
+Sep 23 11:30:04.770 dut daemon.debug vrild[618]: link rx 16B
 Sep 23 11:30:04.771 dut local0.info mgmtd[734]: ui tick

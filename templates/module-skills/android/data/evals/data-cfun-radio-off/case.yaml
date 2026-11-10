@@ -7,7 +7,7 @@ key: MOCK-9802
 issue:
   summary: 시험 중 데이터가 끊김
   description: 자동 시험 도중 데이터 연결이 끊겼습니다.
-  occurred_at: '2026-08-09T13:13:49+0000'
+  occurred_at: '2026-10-14T15:22:40+0000'
   platform_version: '14'
   sim_slot: '0'
 parse: {tz: UTC, year: 2026, minutes: 5}

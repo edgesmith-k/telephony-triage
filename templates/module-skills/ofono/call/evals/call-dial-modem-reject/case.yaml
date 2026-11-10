@@ -22,6 +22,6 @@ run_expect:
 expect:
   layer: '모뎀|망'
   daemon: 'vrild'
-  evidence: ['SIT_DIAL, RSP.*Error\(RCM_E_FAILURE\)', 'RIL_REQUEST_DIAL failed']
+  evidence: ['SIT_EXAMPLE_CALL_START, RSP.*Error\(RCM_E_FAILURE\)', 'RIL_REQUEST_DIAL failed']
   trap: null
   wrong_layer: ['^\s*(ofonod|mgmtd|관리 데몬|D-Bus|벤더 RIL|그\s*층|원인\s*아님)']

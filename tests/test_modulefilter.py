@@ -167,7 +167,7 @@ def test_deep_window_cap_60s():
 
 
 def test_pins_survive_noise_quiet_collapse_and_count_first():
-    noisy = "SIT_NOTIFY_SIGNAL_STRENGTH level=3"
+    noisy = "SIT_EXAMPLE_SIGNAL_IND level=3"
     rows_in = [(f"2026-09-20T15:10:{s:02d}.000Z", "datad", f"activate result: failed {s}", "W",
                 {"category_hint": "data"}) for s in range(30)]
     rows_in.append(("2026-09-20T15:10:40.000Z", "vrild", noisy, "I", None))
@@ -231,8 +231,8 @@ def test_zero_value_rows_not_hot():
     (`triagelib.core.is_error_text`, report 타임라인 고르기도 같다). (벤더 모양을 본뜬 합성 줄)"""
     from triagelib.core import ZERO_VALUE_RE, is_error_text
 
-    android = [("2026-09-20T15:10:00.000Z", "RIL", "[TrafficService_0] OnSetupDataCallComplete cid=1 errorCode=0", "I", None),
-               ("2026-09-20T15:10:00.100Z", "RIL", "[TrafficService_0] OnSetupDataCallComplete cid=1 errorCode=2", "I", None),
+    android = [("2026-09-20T15:10:00.000Z", "RIL", "[ExamplePdnService_0] OnSetupDataCallComplete cid=1 errorCode=0", "I", None),
+               ("2026-09-20T15:10:00.100Z", "RIL", "[ExamplePdnService_0] OnSetupDataCallComplete cid=1 errorCode=2", "I", None),
                ("2026-09-20T15:10:00.200Z", "RIL", "[IpcCtx_0] OnIpcComplete Request ID=27, result=0 error",
                 "I", None),
                ("2026-09-20T15:10:00.300Z", "RIL", "[IpcCtx_0] OnIpcComplete Request ID=27, result=0", "I", None)]
@@ -385,8 +385,8 @@ def test_child_timeout_and_crash():
 
 
 def test_view_bytes_deterministic_across_hash_seeds(tmp_path):
-    expect, _ = _case("e1-euicc-poll")
-    payload = _view_payload(str(FIXTURES / "e1-euicc-poll" / "events.json"), module="sim", center=expect["center"])
+    expect, _ = _case("ofono-sim-open-channel-absent")
+    payload = _view_payload(str(FIXTURES / "ofono-sim-open-channel-absent" / "events.json"), module="sim", center=expect["center"])
     (tmp_path / "p.json").write_text(json.dumps(payload), encoding="utf-8")
     code = ("import json,sys; sys.path.insert(0, sys.argv[1]); sys.path.insert(0, sys.argv[2]);"
             "from triagelib import report; import test_modulefilter as t;"

@@ -21,6 +21,6 @@ expect:
   accept:
     - layer: '곁가지|imsd|IMS'
       daemon: 'imsd'
-      evidence: ['TextMsgService_0::sendSms\] failed', 'smsOverLteCapable=1']
+      evidence: ['ImsSmsSender::sendSms\] failed', 'smsOverLteCapable=1']
   trap:
     - label: '^\s*(ofonod|벤더 RIL|vrild|모뎀|망|그\s*층|원인\s*아님)'

@@ -1,7 +1,7 @@
 -- [합성] telephony-triage module-skills C1D eval log. Line shapes of the repo cases (data-cfun-radio-off, data-profile-ipc-swallowed); no DEACTIVATE/RADIO_POWER/AT+CFUN above.
 09-03 11:00:01.000  2101 2101 D DNC-0   : Internet data state changed from DISCONNECTED to CONNECTED.
 09-03 11:00:20.000  1188 1156 I RIL     : [IpcCtx_0] OnIpcIndication Unsol Rsp ID=1012
-09-03 11:00:20.001  1188 1153 I RIL     : [TrafficService_0] UpdatePdpForDc BearerCtx{cid=2, state=DISCONNECTED, active=INACTIVE}
+09-03 11:00:20.001  1188 1153 I RIL     : [ExamplePdnService_0] update pdn PdnCtx{cid=2, state=DISCONNECTED, active=INACTIVE}
 09-03 11:00:20.010  2101 2169 D RILJ    : [UNSL]< UNSOL_DATA_CALL_LIST_UPDATED [SetupDataCallResult{cause: NONE, suggestedRetryTime: 0, cid: 1, active: 2, type: IPV4V6, ifname: rmnet0}] [PHONE0]
 09-03 11:00:20.020  2101 2101 D DN-101-C: ConnectedState: onDataStateChanged: PDN inactive reported by WWAN data service.
 09-03 11:00:20.021  2101 2101 D DN-101-C: DisconnectedState: Data network disconnected. mEverConnected=true
@@ -9,4 +9,4 @@
 09-03 11:00:20.031  2101 2101 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.
 09-03 11:00:20.040  2101 2111 D DRM-0   : retry scheduled in 30000ms
 09-03 11:00:25.000  2101 2101 D DNC-0   : Re-evaluating 1 unsatisfied network requests in 1 groups, [INTERNET|NOT_RESTRICTED|TRUSTED]-CELLULAR due to DATA_NETWORK_DISCONNECTED
-09-03 11:00:40.000  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
+09-03 11:00:40.000  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009

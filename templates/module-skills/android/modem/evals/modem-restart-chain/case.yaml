@@ -21,7 +21,7 @@ run_expect:
   C: 1
 expect:
   layer: '모뎀|망'
-  daemon: 'OemRil|RIL$|RIL[ (]|모뎀'
+  daemon: 'VRIL|RIL$|RIL[ (]|모뎀'
   evidence: ['UNSOL_MODEM_RESTART', 'RADIO_UNAVAILABLE']
   trap: null
   wrong_layer: ['^\s*(프레임워크|ImsPhoneCallTracker|벤더 IMS|RILJ)']

@@ -691,7 +691,7 @@ requests:
   - {name: SETUP_DATA_CALL,      category: data, timeout_ms: 30000, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval)}
   - {name: DEACTIVATE_DATA_CALL, category: data, timeout_ms: 10000, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval)}
   - {name: SIM_IO,                        category: sim,     timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 합성 (모듈 eval·결정 기록 11/05 ②)}
-  - {name: GET_NR_MODE,                   category: network, timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 합성 (모듈 eval·결정 기록 11/05 ②)}
+  - {name: GET_PREFERRED_NETWORK_TYPE, category: network, timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 합성 (모듈 eval·결정 기록 11/05 ②)}
   - {name: SIM_OPEN_CHANNEL,              category: sim,     timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 합성 (모듈 eval·결정 기록 11/05 ②)}
   - {name: SET_UNSOL_CELL_INFO_LIST_RATE, category: network, timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 합성 (모듈 eval·결정 기록 11/05 ②)}
   - {name: SIGNAL_STRENGTH,               category: network, timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 합성 (모듈 eval·결정 기록 11/05 ②)}
@@ -777,22 +777,22 @@ MODULES_TYPES = (
      "        must_event:\n          - {event: ril_error, fields: {request: SIM_IO}}\n"
      "        must_match: ['vrild: \\[IpcCtx_\\d+\\] OnIpcComplete Request ID=\\d+, result=[1-9]']\n",
      "sim/evals/sim-simio-ril-result", "2026-09-22T09:10:20+0000"),
-    ("network", "NETWORK-001-nr-mode-query-failed", "NR 모드가 조회되지 않음 (합성)",
-     "    must_event:\n      - {event: ril_error, fields: {request: GET_NR_MODE}}\n",
-     "        must_event:\n          - {event: ril_error, fields: {request: GET_NR_MODE}}\n"
-     "        must_match: ['SIT_QUERY_NR_MODE, RSP.*Error\\(RCM_E_']\n",
+    ("network", "NETWORK-001-rat-mode-query-failed", "NR 모드가 조회되지 않음 (합성)",
+     "    must_event:\n      - {event: ril_error, fields: {request: GET_PREFERRED_NETWORK_TYPE}}\n",
+     "        must_event:\n          - {event: ril_error, fields: {request: GET_PREFERRED_NETWORK_TYPE}}\n"
+     "        must_match: ['SIT_EXAMPLE_RAT_MODE, RSP.*Error\\(RCM_E_']\n",
      "network/evals/network-nrmode-modem-reject", "2026-09-22T09:20:20+0000"),
     ("call", "CALL-001-dial-failed", "발신이 되지 않음 (합성)",
      "    must_match: ['RIL_REQUEST_DIAL failed']\n",
-     "        must_match: ['RIL_REQUEST_DIAL failed', 'SIT_DIAL, RSP.*Error\\(RCM_E_']\n",
+     "        must_match: ['RIL_REQUEST_DIAL failed', 'SIT_EXAMPLE_CALL_START, RSP.*Error\\(RCM_E_']\n",
      "call/evals/call-dial-modem-reject", "2026-09-21T10:10:05+0000"),
     ("sms", "SMS-001-send-failed", "문자가 전송되지 않음 (합성)",
      "    must_match: ['RIL_REQUEST_SEND_SMS failed']\n",
      "        must_match: ['RIL_REQUEST_SEND_SMS failed GENERIC_FAILURE']\n",
      "sms/evals/sms-send-no-vendor-lines", "2026-09-21T10:20:05+0000"),
     ("ims", "IMS-001-registration-401", "IMS 등록 401 거절됨 (합성)",
-     "    must_match: ['IMS_UNSOL_UPDATE_IMS_REG_FAIL fail_code=401']\n",
-     "        must_match: ['IMS_UNSOL_UPDATE_IMS_REG_FAIL fail_code=401', 'fail-code : 401']\n",
+     "    must_match: ['IMS_UNSOL_REG_FAILED fail_code=401']\n",
+     "        must_match: ['IMS_UNSOL_REG_FAILED fail_code=401', 'fail-code : 401']\n",
      "ims/evals/ims-401-then-registered", "2026-09-22T09:30:20+0000"),
 )
 

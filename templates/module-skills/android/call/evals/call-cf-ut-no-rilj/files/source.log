@@ -1,42 +1,25 @@
--- [합성]
-08-09 13:13:00.233  3101  3101 I soc_ufs_gear_change: prev: 5, target gear = 3
-08-09 13:13:00.235  3101  3101 I soc-ufs 1a2c0000.ufs: ufs power mode change: m(1)g(3)l(2)hs-series(2)
-08-09 13:13:00.448  1101  1126 D VRIL-MODEM     : UsbAgent: ATD*21*123%23<CR>
-08-09 13:13:00.450  1096  1188 V RIL     : gsm.sim.operator.numeric [0]=<CARRIER#1> [1]=
-08-09 13:13:00.451  1096  1188 V RIL     : ================VendorStatusTracker(0)=======================
--- [생략]
-08-09 13:13:00.507  1856  1856 D EmergencyNumberTracker: [1]found sim in slotId: 0 subid: 4
-08-09 13:13:00.507  1856  1856 D EmergencyNumberTracker: [1]Search results - inRilEccList:false inEmergencyNumberDb:false inEmergencyNumberTestList: false
-08-09 13:13:00.508  1856  1856 D ImsPhone: [0] dialInternal: dialing w/ mmi 'ImsPhoneMmiCode {State=PENDING action=* sc=21 sia=123 poundString=[qhCueMgbPEqjXw3pS7-HmXzqYus]}'...
-08-09 13:13:00.508  1856  1856 D ImsPhoneMmiCode: processCode: is CF
-08-09 13:13:00.508  1856  1856 D ImsPhoneMmiCode: processCode: is CF setCallForward
-08-09 13:13:00.508  1856  1856 D ImsPhone: [0] setCallForwardingOption action=3, reason=0 serviceClass=0
-08-09 13:13:00.508  1856  1856 D ImsUt   : updateCallForward :: Ut=com.android.ims.internal.IImsUt$Stub$Proxy@8065000, action=3, condition=0, number=[QL0AFWMIX8NRZTKeof9cXsvbvu8], serviceClass=0, timeSeconds=0
-08-09 13:13:00.508  1807  3224 D VRIL-IMS: 1531 [UT##] Request to update Call forward. Action : 3, Condition : 0, ServiceClass : 0, Time : 0 (VendorImsUtImpl%updateCallForward:316)
-08-09 13:13:00.510  1807  3224 D VRIL-IMS: 1532 [UT##] Process SET_CALL_FORWARD_TYPE through CP_NETWORK [SLID:0 ] (UtOperatorProcessor%getUtProcessor:173)
-08-09 13:13:00.510  1297  1297 D CallerInfoAsyncQuery: ##### onQueryComplete() #####   query complete for token: 0
--- [생략]
-08-09 13:13:01.330   919   919 I android.hardware.power-service: Power setBoost: 1, duration: 0
-08-09 13:13:01.691  1807  3177 I VRIL-IMS: 1616 [ADAP] Sending set call forward status with reason [UNCONDITIONAL] [SLID:0 ] (UtAdaptor%sendSetCallForwardStatus:149)
-08-09 13:13:01.692  1807  3177 I VRIL-IMS: 1617 [HELP] #:PURP:# SOL TX{OEM_REQ_MTEL_SET_CALL_FORWARD_STATUS} : status : 3  reason : 0  service-class : 1  toa : 129  number-len : 3  number : 1**  timeseconds : 0[  [ start-hour : 0  start-minute : 0  end-hour : 0  end-minute : 0 ]][  [ daylight-valid : 0  year : 26  month : 8  day: 9  hour : 5  minute : 13  second : 1  time-zone : 0  daylight-adjust : 0  day-of-week : 0 ]]  [SLID:0  Active:true] (ImsRilHelper%sendRequest:407)
-08-09 13:13:01.693  1807  3177 V ImsRIL  : [ImsRIL_36]> STATUS_MAX <HEXDUMP 67B> 
--- [생략]
-08-09 13:13:01.695  1096  1159 V RIL     : [IpcCtx_0] RecordIpcHistory token=0x01C4
-08-09 13:13:01.695  1096  1159 I RIL     : [IpcCtx_0] Send 
-08-09 13:13:01.695  1096  1159 V RIL     : [<DEV#1>][TX] SIT_MTEL_SET_CALL_FORWARD_STATUS, REQ, 79 bytes, Token(0x01c4)
-08-09 13:13:01.695  1096  1159 V RIL     : <HEXDUMP 16B>
--- [생략]
-08-09 13:13:03.583   919   919 I android.hardware.power-service: Power setBoost: 1, duration: 0
-08-09 13:13:03.672     0     0 I [    C0] VRIL-LINK: LNK-RX(32): <HEXDUMP 24B>
-08-09 13:13:03.667  1096  1167 V RIL     : [<DEV#1>][RX] SIT_MTEL_SET_CALL_FORWARD_STATUS, RSP, 19 bytes, Token(0x01c4), OK(RCM_E_SUCCESS)
-08-09 13:13:03.667  1096  1167 V RIL     : <HEXDUMP 16B>
--- [생략]
-08-09 13:13:03.668  1096  1159 D VRIL: IpcExtManager::sendRawResponse: clientId=8
-08-09 13:13:03.669  1096  1159 V RIL     : [IpcCtx_0] RemoveIpcHistory  token=0x01C4
-08-09 13:13:03.670  1807  3177 I VRIL-IMS: 1618 [DATA] SOL RX{OEM_REQ_MTEL_SET_CALL_FORWARD_STATUS}  status : STATUS_SUCCESS [status : 3  reason : 0  service-class : 1  toa : 129  number-len : 3  number : 1**  timeseconds : 0[  [ start-hour : 0  start-minute : 0  end-hour : 0  end-minute : 0 ]][  [ daylight-valid : 0  year : 26  month : 8  day: 9  hour : 5  minute : 13  second : 1  time-zone : 0  daylight-adjust : 0  day-of-week : 0 ]]] (SolicitedMessage%handleMessage:71)
-08-09 13:13:03.672  1807  3177 D VRIL-IMS: 1619 [UT##] #:BLUE:# Receive update result from CP about Id 1693469021  [SLID:0 ] (UtCpProcessor$UtNetworkListener%callOnUpdated:623)
--- [생략]
-08-09 13:13:03.705  1096  1096 V RIL     : [IpcCtx_0] SendMessage RIL Request Routing : RCM ID=28 Service ID=14 Message ID=2017 delayMillis=0
-08-09 13:13:03.705  1096  1096 V RIL     : [MsgRouterMgr] msg(0xb400007d1e220fd0) msgId=2017 svc=UiccFileService_0(14) direction=Request
-08-09 13:13:03.706  1856  1856 D ImsPhoneMmiCode: onSetComplete: mmi=ImsPhoneMmiCode {State=COMPLETE action=* sc=21 sia=123 poundString=[qhCueMgbPEqjXw3pS7-HmXzqYus]}
-08-09 13:13:03.706  1856  1856 D ImsPhone: [0] onMMIDone: mmi=ImsPhoneMmiCode {State=COMPLETE action=* sc=21 sia=123 poundString=[qhCueMgbPEqjXw3pS7-HmXzqYus]}
+-- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture. AOSP 줄은 문구만, 벤더 줄은 placeholder.
+10-14 09:41:06.812  1361  1377 D VRIL-MODEM: at-in: ATD*21*123#
+10-14 09:41:06.840  1350  1402 V RIL     : ==== vendor status (0) ====
+10-14 09:41:06.902  2214  2214 D ImsPhone: [0] dialInternal: dialing w/ mmi 'ImsPhoneMmiCode {State=PENDING action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}'...
+10-14 09:41:06.903  2214  2214 D ImsPhoneMmiCode: processCode: is CF
+10-14 09:41:06.903  2214  2214 D ImsPhoneMmiCode: processCode: is CF setCallForward
+10-14 09:41:06.904  2214  2214 D ImsPhone: [0] setCallForwardingOption action=3, reason=0 serviceClass=0
+10-14 09:41:06.905  2214  2214 D ImsUt   : updateCallForward :: Ut=com.android.ims.internal.IImsUt$Stub$Proxy, action=3, condition=0, number=[Qb7nW2cY9dLe], serviceClass=0, timeSeconds=0
+10-14 09:41:06.907  1988  2031 D VRIL-IMS: [ut] update call forward action=3 condition=0 class=0 time=0
+10-14 09:41:06.909  1988  2031 D VRIL-IMS: [ut] route call forward via modem slot=0
+10-14 09:41:06.931  3120  3120 D CallerInfoAsyncQuery: ##### onQueryComplete() #####   query complete for token: 0
+10-14 09:41:07.512  1988  2044 I VRIL-IMS: [adapter] send call forward reason=UNCONDITIONAL slot=0
+10-14 09:41:07.513  1988  2044 I VRIL-IMS: [ril] req -> OEM_REQ_IMS_SET_CALL_FORWARD : status : 3  reason : 0  class : 1  toa : 129  number : 1**  time : 0 slot=0
+10-14 09:41:07.515  1350  1410 V RIL     : [IpcCtx_0] track seq 0x0b12
+10-14 09:41:07.515  1350  1410 V RIL     : mux [ch0][TX] SIT_EXAMPLE_IMS_CF, REQ seq=0x0b12 len=64
+10-14 09:41:07.516  1350  1410 V RIL     : <HEXDUMP 16B>
+10-14 09:41:09.284  1350  1415 V RIL     : mux [ch0][RX] SIT_EXAMPLE_IMS_CF, RSP OK(RCM_E_SUCCESS) seq=0x0b12 len=16
+10-14 09:41:09.284  1350  1415 V RIL     : <HEXDUMP 16B>
+10-14 09:41:09.286  1350  1410 D VRIL    : ext client reply clientId=3
+10-14 09:41:09.287  1350  1410 V RIL     : [IpcCtx_0] untrack seq 0x0b12
+10-14 09:41:09.289  1988  2044 I VRIL-IMS: [ril] rsp <- OEM_REQ_IMS_SET_CALL_FORWARD : status : SUCCESS slot=0
+10-14 09:41:09.291  1988  2044 D VRIL-IMS: [ut] call forward update result received id=4021 slot=0
+10-14 09:41:09.318  1350  1350 V RIL     : [IpcCtx_0] route req id=31 svc=6 msg=1104
+10-14 09:41:09.320  2214  2214 D ImsPhoneMmiCode: onSetComplete: mmi=ImsPhoneMmiCode {State=COMPLETE action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}
+10-14 09:41:09.321  2214  2214 D ImsPhone: [0] onMMIDone: mmi=ImsPhoneMmiCode {State=COMPLETE action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}

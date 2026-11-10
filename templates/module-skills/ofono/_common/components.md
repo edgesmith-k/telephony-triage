@@ -5,8 +5,8 @@
 | 역할 | 지금 이름 | 구 이름 | 층 | 비고 |
 |---|---|---|---|---|
 | oFono 데몬(upstream) | ofonod | — | ofonod | gril trace, `src/<파일>.c:` |
-| 관리 데몬 placeholder | mgmtd | — | 관리 데몬 | 레벨은 심각도가 아니다 |
-| 벤더 RIL 데몬 placeholder | vrild | — | 벤더 RIL(<데몬>) | 모뎀 IPC |
+| 관리 데몬 placeholder | mgmtd | — | 관리 데몬 | UI·설정 클라이언트. 레벨은 심각도가 아니다 |
+| 벤더 RIL 데몬 placeholder | vrild | — | 벤더 RIL(<데몬>) | 모뎀 IPC·모뎀 감시·진단 기록 |
 | 데이터 구성요소 placeholder | datad | — | 관리 데몬 | — |
 | 데이터 구성요소 두 번째 placeholder | datad2 | — | 곁가지(<데몬>) | 레벨은 심각도가 아니다 |
 | SIM 구성요소 placeholder | simd | — | 관리 데몬 | — |
@@ -32,8 +32,8 @@
 
 ## vrild
 
-- `… VCHAN_<n> REQUEST: <이름>` → `[<Svc>Service_<n>] …Handler …` → `[IpcCtx_<n>] …`(요청 짝 값).
-- `…[TX|RX] SIT_<MSG>` 줄은 REQ·RSP·IND 방향과 요청 짝 값(`Token(0x…)`·`seq=0x…` 등)을 싣고, 응답이면 `OK(RCM_E_SUCCESS)`·`Error(RCM_E_<X>)`.
+- `client fd <n> VCHAN_<n> REQUEST: <이름>` → `[<Svc>Service_<n>] <자유 문구>` → `[IpcCtx_<n>] track seq 0x…`(요청 짝 값).
+- `mux [ch<n>][TX|RX] SIT_<MSG>` 줄은 REQ·RSP·IND 방향과 요청 짝 값 `seq=0x…`를 싣고, 응답이면 `OK(RCM_E_SUCCESS)`·`Error(RCM_E_<X>)`.
 - `[IpcCtx_<n>] OnIpcComplete Request ID=<id>, result=<n>`(0이 성공). 스크립트 표시는 `⇒ builtin.common.vendor_ipc_error`·`vendor_request_failed`.
 - 슬롯: gril slot과 vrild·IPC 줄 번호의 대응은 줄에 적힌 것만 쓴다.
 - 짝(공유 serial 없음): gril ↔ vrild는 요청 이름·순서·ms 시각, vrild ↔ IPC는 같은 요청 짝 값.

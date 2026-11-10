@@ -8,7 +8,7 @@
 - `D-Bus` — `org.ofono.*` 호출·오류.
 - `ofonod` — upstream oFono 안(`src/<파일>.c:`, rilmodem 드라이버).
 - `벤더 RIL(<데몬>)` — RIL 소켓 아래 벤더 RIL 데몬.
-- `모뎀·망` — 모뎀·카드·망이 낸 결과. `원인 데몬:`은 결과를 전한 데몬(vrild, 모뎀 재시작이면 `{{site:modem}}`).
+- `모뎀·망` — 모뎀·카드·망이 낸 결과. `원인 데몬:`은 결과를 전한 데몬(vrild — 모뎀 재시작 알림도 vrild가 낸다, 사내 이름은 `{{site:modem}}`).
 - `곁가지(<데몬>)` — 사슬 밖 데몬(datad2, imsd).
 - `그 층 로그 없음(<층>)` — 판단할 아래 층 줄이 없다.
 - `원인 아님(정상 동작)` — 입력 속 상태로 오류가 설명된다.
@@ -22,7 +22,7 @@
 
 - gril 응답 `[<slot>,<serial>]< … failed <ERR>`은 ofonod tag여도 아래 층 답이다.
 - vrild 두 단계: IPC `Error(RCM_E_*)`·카드 SW(`sw1 : <XX>`) → `모뎀·망`. IPC `OK(RCM_E_SUCCESS)` 뒤 `OnIpcComplete … result≠0` → `벤더 RIL(<데몬>)`. IPC 오류인데 gril 성공이면 벤더 RIL이 감췄다.
-- `src/dbus.c:__ofono_error_<busy|failed|no_such_element>() … m:<메서드>`는 아래 실패의 증상이다.
+- `src/dbus.c:__ofono_error_<busy|failed|not_found>() … m:<메서드>`는 아래 실패의 증상이다.
 
 ## 판단 규칙
 

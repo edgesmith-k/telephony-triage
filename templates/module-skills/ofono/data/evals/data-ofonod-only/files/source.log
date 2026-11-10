@@ -3,7 +3,7 @@ Sep 20 15:30:00.000 dut daemon.info mgmtd[520]: dbus signal org.ofono.NetworkReg
 Sep 20 15:30:00.300 dut daemon.info vrild[640]: signal strength report: level=2 placeholder
 Sep 20 15:30:01.000 dut daemon.info datad[610]: profile select: apn=internet.example auth=NONE profile_id=1
 Sep 20 15:30:01.050 dut daemon.info mgmtd[520]: dbus call org.ofono.ConnectionContext.SetProperty Active=true
-Sep 20 15:30:01.100 dut daemon.debug ofonod[812]: src/gprs.c:ofono_gprs_context_activate() /ril_0 context 1 activating
+Sep 20 15:30:01.100 dut daemon.debug ofonod[812]: drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating
 Sep 20 15:30:04.100 dut daemon.err ofonod[812]: src/gprs.c:pri_activate_callback() Activating context failed with error: Unknown error
 Sep 20 15:30:04.120 dut daemon.warn datad[610]: activate result: failed profile_id=1 retry in 10s
 Sep 20 15:30:04.500 dut daemon.info mgmtd[520]: dbus signal org.ofono.ConnectionContext.PropertyChanged Active=false

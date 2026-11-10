@@ -1,25 +1,25 @@
 -- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture.
-Sep 22 09:50:11.153 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_TOTAL_OOS ind len=4 (no cell)
-Sep 22 09:50:11.154 dut daemon.info vrild[618]: [NetworkService_1] out-of-service flag set (oos=1)
+Sep 22 09:50:11.153 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)
+Sep 22 09:50:11.154 dut daemon.info vrild[618]: [ExampleRegService_1] out-of-service flag set (oos=1)
 Sep 22 09:50:11.155 dut daemon.info ofonod[903]: [0,UNSOL]< UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED
 Sep 22 09:50:11.156 dut daemon.info ofonod[903]: [0,0526]> RIL_REQUEST_VOICE_REGISTRATION_STATE
 Sep 22 09:50:11.163 dut daemon.info ofonod[903]: [0,0526]< RIL_REQUEST_VOICE_REGISTRATION_STATE
 Sep 22 09:50:11.164 dut daemon.info ofonod[903]: drivers/rilmodem/network-registration.c:ril_creg_cb() Voice RegState=NOT_REGISTERED, RejectCause=0
 Sep 22 09:50:12.153 dut local0.info mgmtd[734]: ui tick
-Sep 22 09:50:13.153 dut daemon.warn mgmtd[737]: DM packet dropped: host not reading, write fail
-Sep 22 09:50:13.154 dut daemon.err mgmtd[737]: Fail to write DM packet to usb
-Sep 22 09:50:15.153 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_TOTAL_OOS ind len=4 (no cell)
+Sep 22 09:50:13.153 dut daemon.warn vrild[618]: DM packet dropped: host not reading, write fail
+Sep 22 09:50:13.154 dut daemon.err vrild[618]: Fail to write DM packet to usb
+Sep 22 09:50:15.153 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)
 Sep 22 09:50:15.253 dut user.info imsd[552]: [SLOT_0] registered:0 VoPS=0 RAT:NONE
 Sep 22 09:50:16.153 dut local0.info mgmtd[734]: ui tick
-Sep 22 09:50:17.153 dut daemon.warn mgmtd[737]: DM packet dropped: host not reading, write fail
-Sep 22 09:50:19.153 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_TOTAL_OOS ind len=4 (no cell)
+Sep 22 09:50:17.153 dut daemon.warn vrild[618]: DM packet dropped: host not reading, write fail
+Sep 22 09:50:19.153 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)
 Sep 22 09:50:19.353 dut daemon.info ofonod[903]: [0,UNSOL]< UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED
 Sep 22 09:50:19.354 dut daemon.info ofonod[903]: [0,0527]> RIL_REQUEST_DATA_REGISTRATION_STATE
 Sep 22 09:50:19.363 dut daemon.info ofonod[903]: [0,0527]< RIL_REQUEST_DATA_REGISTRATION_STATE
-Sep 22 09:50:19.364 dut daemon.info ofonod[903]: drivers/rilmodem/network-registration.c:ril_data_reg_cb() Data RegState=NOT_REGISTERED, RejectCause=0
+Sep 22 09:50:19.364 dut daemon.info ofonod[903]: drivers/rilmodem/gprs.c:ril_data_reg_cb() Data RegState=NOT_REGISTERED, RejectCause=0
 Sep 22 09:50:19.453 dut daemon.info ofonod[903]: src/gprs.c:gprs_netreg_update() attached 0
-Sep 22 09:50:21.153 dut daemon.warn mgmtd[737]: DM packet dropped: host not reading, write fail
-Sep 22 09:50:21.653 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_TOTAL_OOS ind len=4 (no cell)
+Sep 22 09:50:21.153 dut daemon.warn vrild[618]: DM packet dropped: host not reading, write fail
+Sep 22 09:50:21.653 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)
 Sep 22 09:50:21.753 dut local0.warn mgmtd[734]: data and call unavailable: no service
-Sep 22 09:50:23.153 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_TOTAL_OOS ind len=4 (no cell)
+Sep 22 09:50:23.153 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)
 Sep 22 09:50:24.153 dut local0.info mgmtd[734]: ui tick

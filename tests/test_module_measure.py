@@ -22,7 +22,7 @@ import module_measure
 import test_modulefilter  # noqa: F401  (merge_rows 대체를 끼운다)
 from common import modulefilter as mf
 
-JOB = REPO / "tests" / "fixtures" / "module-filter" / "e1-euicc-poll"
+JOB = REPO / "tests" / "fixtures" / "module-filter" / "ofono-sim-open-channel-absent"
 MODULES = REPO / "templates" / "module-skills" / "modules.yaml"
 
 

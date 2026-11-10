@@ -5,7 +5,7 @@
 [합성 예시 — issue-db-ofono-modules의 NETWORK-001. 사내 유형 ID로 바꾼다]
 
 ## 점검 목록
-1. IPC `SIT_QUERY_NR_MODE` 결과 → `OnIpcComplete` → gril 응답 순서로 같은 요청을 잇는다.
+1. IPC `SIT_EXAMPLE_RAT_MODE` 결과 → `OnIpcComplete` → gril 응답 순서로 같은 요청을 잇는다.
 2. 그 시각의 무선 상태(`RADIO_STATE_CHANGED`, 모뎀 재시작)를 본다. 무선이 꺼졌거나 재시작 중이면 조회 실패는 결과다.
 3. 다른 슬롯이나 다음 조회에서도 같은 실패인지 본다.
 

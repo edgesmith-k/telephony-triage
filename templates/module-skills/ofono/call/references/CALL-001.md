@@ -7,7 +7,7 @@
 ## 점검 목록
 1. gril `DIAL` 요청·응답을 serial로 짝짓고 벤더 RIL 요청·IPC를 잇는다.
 2. IPC 결과(`Error(RCM_E_*)`면 모뎀·망) → `OnIpcComplete` result 순서로 본다.
-3. CS 길인지 IMS 길인지 정한다. IMS면 IMS 구성요소 줄과 MTEL 결과를 본다.
+3. CS 길인지 IMS 길인지 정한다. IMS면 IMS 구성요소 줄과 IMS IPC 결과를 본다.
 
 ## 코드 경로
 `ofono:src/voicecall.c`, `ofono:drivers/rilmodem/voicecall.c`.

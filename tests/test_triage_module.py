@@ -40,7 +40,7 @@ C0_KEYS = ["schema_version", "key", "platform", "module", "sha", "type_id", "top
 # -- JOB·실행 도우미 ------------------------------------------------------------------------------
 
 EVENTS = [
-    {"ts": "2026-09-20T05:32:08.000Z", "tag": "datad", "msg": "BearerCtx activate", "level": "I", "category_hint": "data"},
+    {"ts": "2026-09-20T05:32:08.000Z", "tag": "datad", "msg": "PdnCtx activate", "level": "I", "category_hint": "data"},
     {"ts": "2026-09-20T05:32:09.000Z", "tag": "ofonod", "msg": "gprs attach failed", "level": "E", "category_hint": "data",
      "event": "DATA_FAIL"},
     {"ts": "2026-09-20T05:32:10.000Z", "tag": "datad2", "msg": "route add failed", "level": "W", "category_hint": "data"},

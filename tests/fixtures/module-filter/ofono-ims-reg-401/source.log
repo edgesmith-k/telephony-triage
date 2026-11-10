@@ -2,36 +2,36 @@
 Sep 23 11:40:33.604 dut local0.info mgmtd[734]: ui tick
 Sep 23 11:40:33.605 dut daemon.info chatterd[746]: position fix pending
 Sep 23 11:40:33.606 dut daemon.info datad[633]: link status poll: rmnet0 up
-Sep 23 11:40:33.607 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_SIGNAL_STRENGTH ind len=16
-Sep 23 11:40:33.607 dut daemon.debug vrild[618]: Read from usb 16B
+Sep 23 11:40:33.607 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_SIGNAL_IND ind len=16
+Sep 23 11:40:33.607 dut daemon.debug vrild[618]: link rx 16B
 Sep 23 11:40:33.608 dut daemon.info ofonod[903]: IMSD 0: <HEXDUMP 12B>
 Sep 23 11:40:33.609 dut local0.info mgmtd[734]: dbus call datad connection status request
 Sep 23 11:40:33.610 dut daemon.info datad[633]: connection status: connected profile_id=1
 Sep 23 11:40:33.611 dut daemon.info chatterd[746]: position fix pending
-Sep 23 11:40:33.615 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_MTEL_REG_FAIL ind len=12
-Sep 23 11:40:33.615 dut daemon.debug vrild[618]: Read from usb 12B
+Sep 23 11:40:33.615 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_IMS_REG_FAIL_IND ind len=12
+Sep 23 11:40:33.615 dut daemon.debug vrild[618]: link rx 12B
 Sep 23 11:40:33.615 dut daemon.debug vrild[618]: [IpcCtx_2] frame decoded
-Sep 23 11:40:33.615 dut daemon.info vrild[618]: [ImsService_1] mtel reg ind relayed to client chan 3
+Sep 23 11:40:33.615 dut daemon.info vrild[618]: [ImsService_1] ims reg ind relayed to client chan 3
 Sep 23 11:40:33.615 dut daemon.debug vrild[618]: [IpcCtx_2] unsol id 2417 dispatched
 Sep 23 11:40:33.615 dut local0.info mgmtd[734]: ui tick
 Sep 23 11:40:33.616 dut user.debug imsd[552]: [SLOT_0] channel 0 indication received
-Sep 23 11:40:33.616 dut daemon.debug vrild[618]: Read from usb 16B
-Sep 23 11:40:33.616 dut user.debug imsd[552]: slot0: OEM_UNSOL_MTEL_REG_FAIL parsed -> [fail-code : 401] sid 0
+Sep 23 11:40:33.616 dut daemon.debug vrild[618]: link rx 16B
+Sep 23 11:40:33.616 dut user.debug imsd[552]: slot0: OEM_UNSOL_IMS_REG_FAIL parsed -> [fail-code : 401] sid 0
 Sep 23 11:40:33.616 dut user.info imsd[552]: [SLOT_0] registration fail from modem, failCode: 401
 Sep 23 11:40:33.616 dut daemon.info chatterd[746]: position fix pending
-Sep 23 11:40:33.617 dut user.debug imsd[552]: slot0 -> ofonod: IMS_UNSOL_UPDATE_IMS_REG_FAIL (14 bytes)
+Sep 23 11:40:33.617 dut user.debug imsd[552]: slot0 -> ofonod: IMS_UNSOL_REG_FAILED (14 bytes)
 Sep 23 11:40:33.617 dut daemon.info ofonod[903]: IMSD 0: <HEXDUMP 14B>
 Sep 23 11:40:33.617 dut daemon.info ofonod[903]: IMSD 0: <HEXDUMP 6B>
-Sep 23 11:40:33.618 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_UPDATE_IMS_REG_FAIL fail_code=401
-Sep 23 11:40:33.618 dut daemon.debug ofonod[903]: src/ims.c:ims_reg_fail_notify() /ril_0 fail_code 401
-Sep 23 11:40:33.618 dut daemon.info ofonod[903]: src/ims.c:ims_property_changed() i:org.ofono.IpMultimediaSystem m:PropertyChanged a:"ImsRegistrationLastFailCode"
+Sep 23 11:40:33.618 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=401
+Sep 23 11:40:33.618 dut daemon.debug ofonod[903]: src/ims.c:example_reg_fail_notify() /ril_0 fail_code 401
+Sep 23 11:40:33.618 dut daemon.info ofonod[903]: src/ims.c:ims_set_registered() i:org.ofono.IpMultimediaSystem m:PropertyChanged a:"ImsRegistrationLastFailCode"
 Sep 23 11:40:33.619 dut local0.info mgmtd[734]: ui tick
-Sep 23 11:40:33.619 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_SIGNAL_STRENGTH ind len=16
-Sep 23 11:40:33.619 dut daemon.debug vrild[618]: Read from usb 16B
+Sep 23 11:40:33.619 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_SIGNAL_IND ind len=16
+Sep 23 11:40:33.619 dut daemon.debug vrild[618]: link rx 16B
 Sep 23 11:40:33.620 dut daemon.info chatterd[746]: position fix pending
 Sep 23 11:40:33.624 dut user.info imsd[552]: [SLOT_0] SIP 401 Unauthorized, register again with credentials
 Sep 23 11:40:33.625 dut daemon.info datad[633]: link status poll: rmnet0 up
-Sep 23 11:40:34.114 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_MTEL_REGISTRATION ind len=28
+Sep 23 11:40:34.114 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_EXAMPLE_IMS_REG_IND ind len=28
 Sep 23 11:40:34.115 dut user.info imsd[552]: [SLOT_0] IMS REGISTERED SUCCEEDED
 Sep 23 11:40:34.116 dut user.info imsd[552]: [SLOT_0] registered:1 [IMS_REGISTERED] VoPS:1 RAT:NR
 Sep 23 11:40:34.117 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_RESPONSE_REGISTRATION_STATE_CHANGED

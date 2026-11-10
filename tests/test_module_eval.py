@@ -1850,7 +1850,7 @@ def test_gate_tie_breaks_on_top1_before_tokens():
 # ofono/network 탐색 답 두 개(합성 로그)의 모양: 타임라인 줄 항목 + 설명 꼬리, 글 속 `코드` 인용구, 접두 메시지
 S4_LOG = """Sep 24 06:41:12.204 dut daemon.info ofonod[812]: [0,0315]> RIL_REQUEST_RADIO_POWER (0)
 Sep 24 06:41:16.730 dut daemon.info ofonod[812]: [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF)
-Sep 24 06:41:16.733 dut daemon.info ofonod[812]: dump_dmsg signal - i:org.ofono.Modem m:PropertyChanged a:"Online"
+Sep 24 06:41:16.733 dut daemon.info ofonod[812]: dbus_trace signal - i:org.ofono.Modem m:PropertyChanged a:"Online"
 Sep 24 06:41:16.851 dut daemon.info vrild[640]: [IpcCtx_1] OnRequest
 Sep 24 06:41:16.854 dut daemon.info vrild[640]: [IpcCtx_1] OnIpcComplete Request ID=47, result=1
 Sep 24 06:41:16.856 dut daemon.err vrild[640]: reply payload was empty
@@ -1863,7 +1863,7 @@ S4_FIVE = """가설 1: 무선을 끈 뒤의 조회 실패
 로그로 확인:
 - 06:41:12.204 p0 I ofonod [0,0315]> RIL_REQUEST_RADIO_POWER (0) — 무선 끄기 요청
 - 06:41:16.730 p0 I ofonod [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF) — 꺼짐
-- 06:41:16.733 p0 I ofonod dump_dmsg signal - i:org.ofono.Modem m:PropertyChanged a:"Online" — Online false
+- 06:41:16.733 p0 I ofonod dbus_trace signal - i:org.ofono.Modem m:PropertyChanged a:"Online" — Online false
 - 06:41:16.854 - I vrild [IpcCtx_1] OnIpcComplete Request ID=47, result=1 — 바로 뒤 `reply payload was empty`
 - 06:41:16.862 p0 D ofonod [0,0316]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE — 증상
 반대 근거: `reply handler failed, code 9`가 같이 찍혔다

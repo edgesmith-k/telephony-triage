@@ -1,0 +1,47 @@
+-- [합성] module-filter fixture. Hand-written, not a real capture. AOSP 줄은 문구만, 벤더 줄은 placeholder.
+10-17 13:05:21.902  1361  1377 D VRIL-MODEM: at-in: AT+CFUN=0
+10-17 13:05:22.010  1361  1379 D VRIL-MODEM: at-out: AT+CFUN=0
+10-17 13:05:22.081  1350  1418 V RIL     : <HEXDUMP 16B>
+10-17 13:05:22.081  1350  1418 V RIL     : <HEXDUMP 16B>
+10-17 13:05:22.081  1350  1418 V RIL     : <HEXDUMP 16B>
+10-17 13:05:22.081  1350  1418 V RIL     : <HEXDUMP 16B>
+10-17 13:05:22.081  1350  1418 V RIL     : <HEXDUMP 8B>
+10-17 13:05:22.082  1350  1418 I RIL     : [IpcCtx_0] rx frame
+10-17 13:05:22.082  1350  1418 V RIL     : route rsp type=2 id=0x0412 svc=5 msg=2210
+10-17 13:05:22.082  1350  1418 V RIL     : [VrilRouter] msgId=2210 svc=ExampleRegService_0(5) dir=Response
+10-17 13:05:22.083  1350  1404 I RIL     : [ExampleRegService_0] net state indication
+10-17 13:05:22.083  1350  1404 I RIL     : [IpcCtx_0] OnIpcIndication Unsol Rsp ID=2101
+10-17 13:05:22.084  1350  1404 I VRIL    : VCHAN_1 UNSOLICITED: UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED (0 bytes)
+10-17 13:05:22.085  2214  2214 D DN-12-C : DisconnectedState: updateNetworkCapabilities: Capabilities not changed.
+10-17 13:05:22.086  2214  2214 D DN-11-C : DisconnectedState: All network requests detached.
+10-17 13:05:22.087  2214  2341 D PhoneInterfaceManager: isDataEnabled: false, subId=2
+10-17 13:05:22.090  2214  2343 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]
+10-17 13:05:22.091  2214  2214 D DNC-0   : Internet link status changed to INACTIVE
+10-17 13:05:22.091  2214  2214 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-11-C, IMS, state=null], cause=NONE(0x0)(0), tearDownReason=NONE
+10-17 13:05:22.092  2214  2214 D DNC-0   : IMS data state changed from CONNECTED to DISCONNECTED.
+10-17 13:05:22.092  2214  2377 D NRM-C-0 : onNetworkStateChanged
+10-17 13:05:22.093  2214  2214 D TNA-11  : NetworkAgent channel lost
+10-17 13:05:22.093  2214  2214 D DN-12-C : DisconnectedState: All network requests detached.
+10-17 13:05:22.094  2214  2214 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-12-C, <APN#1>, state=null], cause=NONE(0x0)(0), tearDownReason=NONE
+10-17 13:05:22.094  2214  2214 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.
+10-17 13:05:22.095  2214  2214 D DNC-0   : IMS MMTEL deregistered. Info=ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 0, null}
+10-17 13:05:22.096  2214  2214 I Telephony: updateAdhocConfCapability - changed, new value: false
+10-17 13:05:22.097  1350  1418 V RIL     : mux [ch0][RX] SIT_EXAMPLE_IMS_PDN_DEL, RSP OK(RCM_E_SUCCESS) seq=0x0e21 len=12
+10-17 13:05:22.097  1350  1418 V RIL     : <HEXDUMP 12B>
+10-17 13:05:22.097  1350  1418 I RIL     : [IpcCtx_0] rx frame
+10-17 13:05:22.098  1350  1418 V RIL     : waitlist hit seq 0x0e21 svc=4 msg=5102
+10-17 13:05:22.098  1350  1418 V RIL     : route rsp type=1 id=0x0413 svc=4 msg=5102
+10-17 13:05:22.098  1350  1418 V RIL     : [VrilRouter] msgId=5102 svc=ExampleModemService_0(4) dir=Response
+10-17 13:05:22.099  1350  1418 V RIL     : mux [ch0][RX] SIT_EXAMPLE_IMS_REG_IND ind len=64
+10-17 13:05:22.099  1350  1418 V RIL     : <HEXDUMP 16B>
+10-17 13:05:22.099  1350  1418 V RIL     : <HEXDUMP 16B>
+10-17 13:05:22.099  1350  1418 V RIL     : <HEXDUMP 16B>
+10-17 13:05:22.100  1350  1410 I RIL     : [ExampleModemService_0] ims pdn release done errorCode=0
+10-17 13:05:22.100  1350  1410 I RIL     : [IpcCtx_0] OnIpcComplete Request ID=51, result=0
+10-17 13:05:22.101  1350  1410 D VRIL    : ext client reply clientId=3
+10-17 13:05:22.101  1350  1410 V RIL     : [IpcCtx_0] untrack seq 0x0e21
+10-17 13:05:22.102  1350  1412 V RIL     : [ImsService_0] ims registration indication: FALSE
+10-17 13:05:22.102  1350  1412 I RIL     : [IpcCtx_0] OnIpcIndication Unsol Rsp ID=1042
+10-17 13:05:22.103  1350  1412 I VRIL    : [indFilter] clientId=1 indication=4410 filtered=true
+10-17 13:05:22.103  1350  1412 I VRIL    : [indFilter] clientId=2 indication=4410 filtered=true
+10-17 13:05:22.103  1350  1412 I VRIL    : [indFilter] clientId=3 indication=4410 filtered=false

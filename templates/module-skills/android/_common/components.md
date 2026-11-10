@@ -4,17 +4,17 @@
 
 | 역할 | 지금 이름 | 구 이름 | 층 | 비고 |
 |---|---|---|---|---|
-| 벤더 RIL 데몬 | RIL, VRIL, OemRil | — | 벤더 RIL | `Handler: OnRequest`, `[TX]/[RX] SIT_*`, `errorCode=`, IMS 등록 결과 `[ImsService_<n>::…]`, `notifyRadioStateChanged` |
-| 벤더 텔레포니 서비스 | VRIL-SVC, UiccHal-* | — | RIL HAL | `Proxy::<fn>: serial`, `Command::onResponse` |
-| 벤더 IMS | VRIL-IMS | — | 벤더 IMS | `[CONN]`·`[NETW]`·`[UT##]`·`[SMS#]`, `SOL TX/RX{OEM_REQ_MTEL_*}` |
-| 모뎀/IPC | VRIL-MODEM, SCED | — | 곁가지(<태그>) | `UsbAgent: AT…` = 시험 장비 입력, `From Modem::` = 모뎀 답 |
+| 벤더 RIL 데몬 | RIL, VRIL | — | 벤더 RIL | `[<Svc>Service_<n>] <요청> request`·`… done errorCode=`, `mux [ch<n>][TX]/[RX] SIT_*`, IMS 등록 결과 `[ImsService_<n>] ims registration indication:`, `radio state changed:` |
+| 벤더 텔레포니 서비스 | VRIL-SVC | — | RIL HAL | `Radio<X>Proxy::<fn>: serial`, `<fn> request: serial`·`<fn> response: serial` (TODO(SITE:S25) SIM HAL 태그) |
+| 벤더 IMS | VRIL-IMS | — | 벤더 IMS | `[pdn]`·`[reg]`·`[ut]`·`[sms]`, `req -> OEM_REQ_IMS_*`·`rsp <- OEM_REQ_IMS_*`·`ind <- OEM_UNSOL_IMS_*` |
+| AT 중계·모뎀 진단 | VRIL-MODEM | — | 곁가지(<태그>) | `at-in: AT…` = 시험 장비가 보낸 AT, `at-out: …` = 모뎀 답 (TODO(SITE:S25)) |
 | 벤더 프레임워크 태그 | VRIL-DATA, VRIL-NETWORK | — | 프레임워크 | data·network |
 
 AOSP 태그는 이름 그대로 쓴다: RILJ(`[n]> REQ`, `[n]< REQ error <n>`, `[UNSL]<`), RilRequest, RadioConfig·RadioConfigResponseAidl(모뎀 설정), DNC·DN·DPM·DRM·DSMGR·DSM·DCM·DSRM, SST·NRM, Uicc*·SIMRecords, ImsPhone*·ImsRegistration·ImsManager, SmsDispatchersController·ImsSmsDispatcher.
 
 ## 짝
 
-- RILJ serial = HAL `serial <n>`. IPC REQ↔RSP는 `Token`.
+- RILJ serial = HAL `serial <n>`. IPC REQ↔RSP는 `seq=0x…`.
 - `error <n>`의 이름: 같은 serial `RilRequest` 줄(`CommandException: <이름>`)·`⇒` 이벤트.
 
 ## RCM_E_* (벤더 IPC 결과)
@@ -23,7 +23,7 @@ AOSP 태그는 이름 그대로 쓴다: RILJ(`[n]> REQ`, `[n]< REQ error <n>`, `
 
 ## 읽는 법
 
-- 레벨은 심각도가 아니다. `Calling responseHandler() for token`은 정상 응답에도 E다.
+- 레벨은 심각도가 아니다. `reply to client token`은 정상 응답에도 E다.
 - `<HEXDUMP nB>`는 가린 내용이다. 뜻을 붙이지 않는다.
 - 태그 끝 ` [n]`·`-n`은 슬롯 번호다.
 - 쓰지 않는 것: 다른 플랫폼 이름, 줄에 없는 값, 줄이 글자로 말하지 않는 코드의 뜻.

@@ -3,8 +3,8 @@ Sep 20 15:10:00.000 dut daemon.info mgmtd[520]: dbus signal org.ofono.NetworkReg
 Sep 20 15:10:00.200 dut daemon.info vrild[640]: signal strength report: level=3 placeholder
 Sep 20 15:10:01.000 dut daemon.info datad[610]: profile select: apn=internet.example auth=CHAP profile_id=1
 Sep 20 15:10:01.050 dut daemon.info mgmtd[520]: dbus call org.ofono.ConnectionContext.SetProperty Active=true
-Sep 20 15:10:01.100 dut daemon.debug ofonod[812]: src/gprs.c:ofono_gprs_context_activate() /ril_0 context 1 activating
-Sep 20 15:10:01.120 dut daemon.debug ofonod[812]: [0,0012]> RIL_REQUEST_SETUP_DATA_CALL 16,1,internet.example,3,IP
+Sep 20 15:10:01.100 dut daemon.debug ofonod[812]: drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating
+Sep 20 15:10:01.120 dut daemon.debug ofonod[812]: [0,0012]> RIL_REQUEST_SETUP_DATA_CALL 16,1,internet.example,2,IP
 Sep 20 15:10:01.150 dut daemon.info vrild[640]: SETUP_DATA_CALL sent to modem cid=1
 Sep 20 15:10:01.900 dut daemon.warn vrild[640]: SETUP_DATA_CALL rsp: pdp fail cause=USER_AUTHENTICATION(29)
 Sep 20 15:10:01.910 dut daemon.debug ofonod[812]: [0,0012]< RIL_REQUEST_SETUP_DATA_CALL failed GENERIC_FAILURE
