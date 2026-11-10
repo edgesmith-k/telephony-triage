@@ -234,11 +234,18 @@ def test_phone_id_data_service_tag_and_ril_suffix():
     path.write_text(
         "09-20 14:30:00.000  1234  1244 D DSM-C-0: x\n"
         "09-20 14:30:00.100  1234  1244 D DN-17-C: y\n"
-        "09-20 14:30:00.200  1234  1244 D RILJ: [0041]> SETUP_DATA_CALL apn=default [PHONE1]\n",
+        "09-20 14:30:00.200  1234  1244 D RILJ: [0041]> SETUP_DATA_CALL apn=default [PHONE1]\n"
+        "09-20 14:30:00.300  1234  1244 D TNA-104: z\n"
+        "09-20 14:30:00.400  1234  1244 D QOSCT-104: z\n"
+        "09-20 14:30:00.600  1234  1244 D DNC-1: z\n",
         encoding="utf-8", newline="\n")
     data = _parse([path])
     by_tag = {e["tag"]: e["phone_id"] for e in data["events"] if e["event"] is None}
     assert by_tag["DSM-C-0"] == 0 and by_tag["DN-17-C"] is None and by_tag["RILJ"] == 1
+    # TNA-·QOSCT-·KT-<n>의 n은 netId(슬롯 아님). 같은 모양의 DNC-<n>은 슬롯이다
+    assert by_tag["TNA-104"] is None and by_tag["QOSCT-104"] is None and by_tag["DNC-1"] == 1
+    from platforms.android import logcat as alog   # KT-는 샘플 tags.yaml에 없어 이벤트가 되지 않는다
+    assert alog.DEFAULT_PHONE_RULES.phone_id("KT-3", "z") is None
 
 
 def test_ril_pairing_same_serial_two_slots():
