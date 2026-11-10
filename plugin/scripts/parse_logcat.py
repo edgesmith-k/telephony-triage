@@ -533,7 +533,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
         texts = _read_texts(paths)
         masker = masking.new_masker(texts, _allow_patterns(db_cfg), log_lines=True)
         # 시간 창 밖에 갈린 덤프 조각이 있을 수 있으면 창 없이 읽고 묶은 뒤 자른다(백엔드 인터페이스 무변경)
-        post_window = window if window and dumpjoin.DUMP_MARK in texts else None
+        post_window = window if window and dumpjoin.DUMP_RE.search(texts) else None
 
     warnings: list[dict] = []
     warnings += compat.check_parser_backend(db_cfg, backend.name, backend.version())

@@ -29,7 +29,7 @@
   - 대상 인자: mask_pii `--out`·`--in-place`, parse_logcat·db_review·triage `--out`, db_build `--preview`, jira_fields `--meta-out`·`--consume`. `=` 꼴, argparse 약어, 인터프리터 옵션도 처리한다.
   - clone 안이면 deny, `db_build --write`가 clone을 향하면 ask. OpenCode는 guard 판정을 따른다.
 - **F3** `--check`도 `forced_lines`로 조각을 묶고, 조각마다 원래 줄 번호로 알린다.
-- **F4** DUMP_MARK가 있는 입력만 창 없이 파싱해 묶은 뒤 창을 자른다. 백엔드 인터페이스는 바꾸지 않았다.
+- **F4** 덤프 조각 모양(`DUMP_RE`)이 있는 입력만 창 없이 파싱해 묶은 뒤 창을 자른다. 백엔드 인터페이스는 바꾸지 않았다.
 - **F6** 3.10에서는 `sre_parse`로 대체하고, `POSSESSIVE_REPEAT`는 있을 때만 쓴다.
 - **F8** 감사 근거 행에서 `skipped`·`error`·`fabricated` 없음·`source: null`은 미검증으로 보고 skip으로 둔다.
 
@@ -40,7 +40,7 @@
 - F5 자정·연말 조각: `dumpjoin._sec`이 날짜를 버린다. 음수 차이에 +86400을 더하는 정도면 된다.
 - F7 `modulefilter` 중복 키에 phone 추가.
 - F9 `docs_read_row`: offset·limit 합집합이 문서 줄 수를 덮을 때만 "읽음"으로 본다.
-- F4 잔여: DUMP_MARK가 있는 입력에서 `--mask`일 때만 창 비교가 ms로 잘린 `ts` 기준이 된다. 그래서 창 끝 바로 뒤(4~9자리 소수) 레코드가 더 나온다. 고치려면 창 선택은 백엔드 결과를 쓰고, 묶기에만 창 없는 파싱을 쓴다.
+- F4 잔여: 덤프 조각 모양(`DUMP_RE`)이 있는 입력에서 `--mask`일 때만 창 비교가 ms로 잘린 `ts` 기준이 된다. 그래서 창 끝 바로 뒤(4~9자리 소수) 레코드가 더 나온다. 고치려면 창 선택은 백엔드 결과를 쓰고, 묶기에만 창 없는 파싱을 쓴다.
 - 조각 사이에 같은 프로세스의 다른 덤프 레코드가 끼면 조각이 묶이지 않아 원문이 남는다(`--full`도 같음, 기존 dumpjoin 동작). 실제 oFono 덤프에서 이런 배치가 나오는지 사내 로그로 확인할 것.
 - code_roots가 `db_lint._parser_mod`를 늦게 import한다(첫 호출에 약 30ms). `common.skillcheck`의 `_sre`·`_src`로 바꿀 수 있다.
 - `tools/site_step.py`의 S-단계에 S36이 이름으로 나오지 않는다. 지금은 `TODO(SITE:S36)` 잔여 검사로만 걸린다.
@@ -53,7 +53,7 @@
 ## C·C′(+코드 대조)·실행 중 IMSI/ICCID 마스킹·후보 방식 채점 (11/06, 설계 → 설계 검증 → 구현 → 리뷰 → 검증 → 수정)
 
 **C′ 부분 일치**(설계 `scratchpad/cc/design.md`, 설계 검증 P1 9 반영): 분석 모드에서만, 후보가 없거나 1위가 S=1·C=0일 때 부분 일치(missing·absent(한 줄 시그니처가 통째로 없음)·blocked·order·window)를 match.json 5·analysis.json 3·report.md ≤1,200B로 보인다. S/C 판정과 regress 출력은 그대로. report.md `규칙 제안 (부분 일치):` → 기존 Step 7 질문(기본 받지 않음) → update-signature(사용자 확인·PR·+1). 제안은 마스킹된 로그 줄(`log_refs`)로만 만들고 코드 문자열로는 만들지 않는다. **코드 대조** `code_roots.py find-text`: 부분 일치이고 code root를 골랐을 때만, 시그니처 regex에서 리터럴 도출(태그·oFono file:func 앞머리 제거) → 같음(±2줄 안 로그 호출일 때만)/문구 다름/못 찾음(범위: code_refs+required_dirs를 다 봤을 때만)/문자열만 있음/애매/확인 못 함/건너뜀(상한), 20초·1MiB·제외 디렉토리, 출력은 key:path:line만(코드 글 없음). **C**: `site_audit` drift — feedback `suggested[].signature` × issues(sw·platform_version)로 "이전 3회 이상 맞던 시그니처가 새 빌드 기록 2건 이상에서 0회"면 needs-user(같은 브랜치는 sw 순서만, 다른 브랜치는 platform_version 주 버전이 클 때만, 같은 원인·unresolved·new-cause만 셈), 1건은 info, 판단 못 하면 skip. Claude 안 부름.
-**마스킹**: `common/dumpjoin.py`(fixture_residual과 같은 묶기: 시각 뺀 앞머리·1초 안)로 oFono `dump_dmsg_w_re()` 조각을 이어 키 있는 IMSI/ICCID 규칙만 적용, mask_pii·parse_logcat(run_cut·fields 포함)·residual·redact. R28: 골든·mask-gate 차이 0. 사용자에게 보임.
+**마스킹**: `common/dumpjoin.py`(fixture_residual과 같은 묶기: 시각 뺀 앞머리·1초 안)로 oFono 덤프 함수 조각을 이어 키 있는 IMSI/ICCID 규칙만 적용, mask_pii·parse_logcat(run_cut·fields 포함)·residual·redact. R28: 골든·mask-gate 차이 0. 사용자에게 보임.
 **후보 방식 채점**(사용자 11/06 "이런 후보가 있을 수 있다 정도로, 결론이 아니게", 설계 `scratchpad/cand/design.md`, 설계 검증 P1 2 반영): 탐색 사례 27개는 후보 1~3개 + `가장 유력: n`, 인정 후보(`accept`)가 목록에 있고 함정(`trap`)을 가장 유력으로 두지 않으면 통과(근거는 맞힌 그 후보에), 1순위 적중은 기록만. 심층 15개는 결론 1개 그대로. 함정 규칙은 두 arm 공용 프롬프트에만(모듈 문서 안 바꿈). 기록에 case별 `expect_sha256`·`GRADER_VERSION 2` — 정답이 바뀌면 한 arm 합치기 거절. `tools/module_answers.py table|migrate`(정답표 자동 생성 — 커밋 안 함). 27개는 migrate로 1:1 변환(옛 wrong_layer → trap). 정답 표(후보 방식)는 사용자 확인 대기.
 리뷰: C·C′·마스킹 구현 리뷰(2관점 → 검증 1) 확정 P1 4 고침 — find-text가 범위를 못 보고 not-found, drift 빌드 순서 모순에 StopIteration으로 점검 전체 중단, 짧은 숫자 조각이 값 표에 들어가 다른 필드를 `<IMSI#n>`으로 가림, 시각 없는 dump 레코드가 묶음을 닫음. 통합 전체 테스트 3,855 통과(C′ 부분 일치로 탐색 생성 입력 다시 만듦 — partial 항목만). 진행 중 컨테이너 재시작 1회(메모리: 관련 테스트와 에이전트 동시) — 잃은 것 없음, 이후 전체 테스트는 단독 실행.
 
@@ -99,9 +99,9 @@ g-1: 커밋 `cc2ca81` 위, Sonnet, `-j 3`, 67개 모두 끝남(멈춤 0), $24.03
 ## C1+D 보정 (11/06, 설계 → 설계 검증 → 구현 → 리뷰 → 검증 → 수정 — 사용자 11/06 "구현 전에 다시 설계하고 검증")
 
 설계 `scratchpad/c1d/correction-design.md`(v2, 검증 반영 §13): 사용자 결정 8개(모듈별 병렬 보정·증상별 첫 점검 표·사례 추가·대체 근거 A·데몬 역할 표·박힌 데몬 이름 → tags.yaml 속성·정답 표 확인·APN 설정 행) + 구현 보고 추가 항목. 설계 검증(2관점 리뷰 → 반박 검증): 확정 P0 2(기준 커밋, 사용자 확인 없는 견본 DB RIL 항목 분리 → 뺌)·P1 13 반영.
-구현(토큰 절약 — 사용자 11/06: 에이전트 4개): X-common(phase 0: 시험 상수·역할 표 시험·modules.yaml 네 줄·출력 형식 `원인 데몬`=로그에 찍힌 이름·analyzer 14개·기존 사례 채점 수정 3건 / `_common` 역할 표(역할 → 지금 이름·구 이름)·공통 증상·대체 근거 규칙(요청 없이 data call list에서 빠지면 모뎀·망)·짧은 지위 블록), M-ofono(7모듈 증상 표·역할 이름·대체 근거, 사례 5), M-android(7모듈, 사례 6), X-infra(tags.yaml `level: unreliable`·`ipc: vendor` — 선언 없으면 지금 상수, 출력 바이트 동일·`backend.apply_rules`·`db_lint` 검증·rulediff / `^GsmCdmaCallTracker$` 견본 DB 추가, 미수집 예시 → `GsmCdmaConnection` / 입력 경로 사업자 이름·MCC/MNC·`dump_dmsg_w_re()` 갈린 조각 / ofono_reference 0.0.4·android reference 0.1.1). 사례 42개(oFono 21·Android 21), 문서는 모두 상한 안.
+구현(토큰 절약 — 사용자 11/06: 에이전트 4개): X-common(phase 0: 시험 상수·역할 표 시험·modules.yaml 네 줄·출력 형식 `원인 데몬`=로그에 찍힌 이름·analyzer 14개·기존 사례 채점 수정 3건 / `_common` 역할 표(역할 → 지금 이름·구 이름)·공통 증상·대체 근거 규칙(요청 없이 data call list에서 빠지면 모뎀·망)·짧은 지위 블록), M-ofono(7모듈 증상 표·역할 이름·대체 근거, 사례 5), M-android(7모듈, 사례 6), X-infra(tags.yaml `level: unreliable`·`ipc: vendor` — 선언 없으면 지금 상수, 출력 바이트 동일·`backend.apply_rules`·`db_lint` 검증·rulediff / `^GsmCdmaCallTracker$` 견본 DB 추가, 미수집 예시 → `GsmCdmaConnection` / 입력 경로 사업자 이름·MCC/MNC·덤프 함수 갈린 조각 / ofono_reference 0.0.4·android reference 0.1.1). 사례 42개(oFono 21·Android 21), 문서는 모두 상한 안.
 통합(메인): 생성물은 버전 줄·태그 수(74→75)만, 골든·mask-gate 차이 0, fixture_residual 0, dry-run 14개(1회차 84회 추정 $5.11), 전체 3,776 통과·1 실패(S-0 context pack 31,068B > 30KB — 04 §5.8 태그 속성 설명 줄여 29,941B) → 수정 뒤 관련 383 통과.
-구현 리뷰(2관점 → 반박 검증 1): 확정 P1 3 — 갈린 덤프 조각 묶기가 동작하지 않음(시각 뺀 앞머리·1초 안으로 고침 — 골든·mask-gate 차이 0), Android 데몬 크래시(N10) 보기에 벤더 RIL 줄 0 → 일반 규칙과 충돌(`serviceDied`·`has died` 예외 추가), **실행 중 마스커가 `dump_dmsg_w_re()` 조각에 갈린 IMSI/ICCID 값을 안 가림**(기존 코드, 사용자 결정 대기 — masking.py는 안 바꿈).
+구현 리뷰(2관점 → 반박 검증 1): 확정 P1 3 — 갈린 덤프 조각 묶기가 동작하지 않음(시각 뺀 앞머리·1초 안으로 고침 — 골든·mask-gate 차이 0), Android 데몬 크래시(N10) 보기에 벤더 RIL 줄 0 → 일반 규칙과 충돌(`serviceDied`·`has died` 예외 추가), **실행 중 마스커가 덤프 함수 조각에 갈린 IMSI/ICCID 값을 안 가림**(기존 코드, 사용자 결정 대기 — masking.py는 안 바꿈).
 자동 결정: 증상 행 130B 초과 허용(파일 상한 안, 사용자 행 안 버림), skillcheck.py 역할 표 열 읽기 변경(X-common), call-epsfb-after-apm 생성 입력 두 줄 늘어남·N3 데몬 `사내 데몬`·N10 근거 `serviceDied|has died` 넓힘 → 정답 표에 표시.
 
 ### 나중에 할 일 (사용자 11/06 — 이번 묶음 밖, 여유 될 때)

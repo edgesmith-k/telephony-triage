@@ -1,4 +1,4 @@
-"""oFono `dump_dmsg_w_re()` 조각에 갈린 IMSI·ICCID 실행 중 마스킹 (08-safety.md §8, 설계 §4.3).
+"""oFono 덤프 함수(`<함수>()`, 시험은 지어낸 `example_dump()`) 조각에 갈린 IMSI·ICCID 실행 중 마스킹 (08-safety.md §8, 설계 §4.3).
 
 합성 oFono syslog 줄만 쓴다(가짜 값, 실제 값 아님). `mask_lines`·`mask_records`·`residual`·`redact`를 같이 본다.
 """
@@ -23,7 +23,7 @@ ICCID, ICCID_A, ICCID_B = "89820012345678901234", "898200123456", "78901234"
 
 
 def _dump(ts: str = "05.100", pid: int = 812, ident: str = "ofonod") -> str:
-    return f"Sep 20 15:10:{ts} dut daemon.info {ident}[{pid}]: src/dbus.c:dump_dmsg_w_re() "
+    return f"Sep 20 15:10:{ts} dut daemon.info {ident}[{pid}]: src/dbus.c:example_dump() "
 
 
 OTHER = "Sep 20 15:10:05.200 dut daemon.info connmand[9]: src/main.c:tick() state=ready"
@@ -118,6 +118,16 @@ def test_pid_or_ident_differs_not_joined():
         for out, plain in _both(lines):
             assert out == plain and IMSI_B in out[1]
         assert masking.residual("\n".join(lines)) == masking.residual(lines[0])
+
+
+def test_dump_shape_not_name():
+    """덤프 함수 이름은 코드에 없다 — 어떤 `<함수>() `든 같은 모양이면 잇고(지어낸 다른 이름도 같은 토큰), 함수가 다르면 잇지 않는다."""
+    other = [ln.replace("example_dump()", "site_dump_x()") for ln in _split(IMSI_A, IMSI_B)]
+    assert _mask(other)[0] == [ln.replace("example_dump()", "site_dump_x()") for ln in _mask(_split(IMSI_A, IMSI_B))[0]]
+    mixed = _split(IMSI_A, IMSI_B, head_b=_dump("05.350").replace("example_dump()", "other_fn()"))
+    for out, plain in _both(mixed):
+        assert out == plain and IMSI_B in out[1]
+    assert dumpjoin.groups_from_lines(["no call here", "x[1]: plain text"]) == []
 
 
 def test_same_imsi_whole_elsewhere_same_number():
@@ -284,12 +294,12 @@ def test_parse_window_no_context_leak(tmp_path):
 
 
 def test_parse_window_same_as_backend_window(tmp_path):
-    """DUMP_MARK 있는 로그: 창 뒤 자르기(마스킹) 레코드 집합이 백엔드 창 자르기(비마스킹)와 같다 — 경계 포함."""
+    """덤프 조각 모양(`DUMP_RE`)이 있는 로그: 창 뒤 자르기(마스킹) 레코드 집합이 백엔드 창 자르기(비마스킹)와 같다 — 경계 포함."""
     log = tmp_path / "ofono.log"
     first, second = _split(IMSI_A, IMSI_B)
     lines = [first, OTHER, _dump("05.300") + "start", second, _dump("05.400") + "edge", _dump("05.401") + "after"]
     log.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    assert dumpjoin.DUMP_MARK in log.read_text(encoding="utf-8")
+    assert dumpjoin.DUMP_RE.search(log.read_text(encoding="utf-8"))
 
     def key(events):
         return sorted((e["ts"], e["tag"], e.get("event")) for e in events)

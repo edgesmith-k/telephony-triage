@@ -237,7 +237,7 @@ python3 plugin/scripts/config.py set analyzers.<카테고리>.prefer skill [--pl
 | 정기 점검 | 사내 모델·출처 모름 기록만 토큰 0 검사(lint·regress·겹침·중복·마스킹·근거) → 걸린 것·바뀐 모듈만 사내 Claude로 | HEAD |
 | 시그니처 소실(drift) | 이전에 3회 이상 맞던 원인 시그니처가 새 빌드 기록 2건 이상에서 0회 → `audit.<레포>.drift` 사용자 필요(기준은 사내 측정 뒤 조정). 첫 점검은 최근 14일 | HEAD |
 | 부분 일치(C′) | 후보 없음·1위 S=1·C=0이면 report.md `규칙 제안 (부분 일치):`(마스킹된 로그 줄로만). 코드 루트가 있으면 `code_roots.py find-text`로 없는 조건 문구를 코드와 대조(same·reworded·not-found …). 받아들이면 update-signature PR(+1) | HEAD |
-| 마스킹 | oFono `dump_dmsg_w_re()` 조각으로 갈린 IMSI/ICCID 값도 실행 중 가린다 | HEAD |
+| 마스킹 | oFono 덤프 함수 조각으로 갈린 IMSI/ICCID 값도 실행 중 가린다 | HEAD |
 
 ```sh
 python3 tools/site_step.py audit --inhouse-model '<사내 모델 이름 정규식>'   # 토큰 0. docs/site/audit/에 계획·review.md

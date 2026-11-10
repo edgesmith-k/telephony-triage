@@ -1,12 +1,15 @@
-"""oFono `dump_dmsg_w_re()` 덤프 조각 묶기 (08-safety.md §8, `tools/fixture_residual.py`·`masking.py` 공용).
+"""oFono 덤프 함수 조각 묶기 (08-safety.md §8, `tools/fixture_residual.py`·`masking.py` 공용).
 
-oFono 덤프는 한 메시지를 여러 줄에 자른다(같은 ident·pid, 시각은 ms가 바뀌고 사이에 다른 줄이 낀다). 줄 단위 규칙은
-키·값이 갈린 조각을 놓치므로 이어진 조각을 이은 글에서 다시 본다.
+oFono 덤프 함수는 한 메시지를 여러 줄에 자른다(같은 ident·pid, 시각은 ms가 바뀌고 사이에 다른 줄이 낀다). 줄 단위 규칙은
+키·값이 갈린 조각을 놓치므로 이어진 조각을 이은 글에서 다시 본다. 덤프 함수 이름은 코드에 두지 않는다 — 줄 모양
+(`DUMP_RE`: 메시지 안 첫 `<함수>() `, oFono 디버그 `src/<파일>.c:<함수>() ` 꼴)만 보고, 함수 이름은 잇는 키에 든다.
 
-- 잇는 규칙: `DUMP_MARK` 뒤가 조각이다. 시각을 뺀 앞머리(`ident[pid]:` 이후)가 같고 앞 조각과 시각 차가
-  `0 ≤ Δ < DUMP_GAP`이면 잇는다. 사이의 다른 줄은 건너뛴다. 시각을 못 읽으면 앞머리 전체가 같은 다음 덤프 줄만 잇는다.
-- 입력 어댑터: 원 줄 목록 `groups_from_lines`, 파서 레코드 목록 `groups_from_records`(키 = tag·pid·msg 안 DUMP_MARK
-  앞, 시각 = 레코드 `ts`의 `HH:MM:SS.fff`, 열 = msg 안 DUMP_MARK 뒤).
+- 잇는 규칙: `DUMP_RE` 뒤가 조각이다. 시각을 뺀 앞머리(`ident[pid]:` 이후, 함수 이름까지)가 같고 앞 조각과 시각 차가
+  `0 ≤ Δ < DUMP_GAP`이면 잇는다. 사이의 다른 줄은 건너뛴다. 시각을 못 읽으면 앞머리 전체가 같은 다음 조각 줄만 잇는다.
+  같은 함수가 1초 안에 찍은 줄은 덤프가 아니어도 이어 보지만, 이은 글에서는 두 줄 이상에 걸친 맞음만 쓰므로
+  더 가리는 쪽으로만 달라진다.
+- 입력 어댑터: 원 줄 목록 `groups_from_lines`, 파서 레코드 목록 `groups_from_records`(키 = tag·pid·msg의 `DUMP_RE`
+  끝까지, 시각 = 레코드 `ts`의 `HH:MM:SS.fff`, 열 = msg 안 `DUMP_RE` 뒤).
 - 묶음은 `[(순번, 조각 시작 열), ...]`(두 줄 이상)이고 순번은 원래 순번이다.
 """
 
@@ -14,7 +17,7 @@ from __future__ import annotations
 
 import re
 
-DUMP_MARK = "dump_dmsg_w_re() "
+DUMP_RE = re.compile(r"(?<![\w(])[A-Za-z_]\w*\(\) ")    # 조각 앞 `<함수>() ` (이름 글자는 보지 않는다)
 DUMP_GAP = 1.0                                         # 같은 메시지 조각으로 볼 시각 차(초) 상한(미만)
 _DUMP_IDENT = re.compile(r"\S+\[\d+\]:")                 # ident[pid]: (앞머리에서 시각 뒤)
 _DUMP_TIME = re.compile(r"(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)")
@@ -52,15 +55,15 @@ def groups_from_lines(lines: list[str]) -> list[list[tuple[int, int]]]:
     """원 줄 목록의 이어진 조각 묶음."""
     items = []
     for i, line in enumerate(lines):
-        at = line.find(DUMP_MARK)
-        if at < 0:
+        d = DUMP_RE.search(line)
+        if d is None:
             continue
-        head = line[:at]
-        m, sec = _DUMP_IDENT.search(head), _sec(head)
+        head = line[:d.end()]
+        m, sec = _DUMP_IDENT.search(line[:d.start()]), _sec(line[:d.start()])
         if m and sec is not None:
-            items.append((i, at + len(DUMP_MARK), head[m.start():], sec))
+            items.append((i, d.end(), head[m.start():], sec))
         else:
-            items.append((i, at + len(DUMP_MARK), (UNTIMED, head), None))
+            items.append((i, d.end(), (UNTIMED, head), None))
     return _join(items)
 
 
@@ -71,12 +74,12 @@ def groups_from_records(recs: list[dict]) -> list[list[tuple[int, int]]]:
         msg = rec.get("msg") if isinstance(rec, dict) else None
         if not isinstance(msg, str):
             continue
-        at = msg.find(DUMP_MARK)
-        if at < 0:
+        d = DUMP_RE.search(msg)
+        if d is None:
             continue
-        key = ("rec", str(rec.get("tag")), str(rec.get("pid")), msg[:at])
+        key = ("rec", str(rec.get("tag")), str(rec.get("pid")), msg[:d.end()])
         sec = _sec(rec.get("ts"))
-        items.append((i, at + len(DUMP_MARK), key if sec is not None else (UNTIMED, key), sec))
+        items.append((i, d.end(), key if sec is not None else (UNTIMED, key), sec))
     return _join(items)
 
 
