@@ -167,14 +167,9 @@ class Lock:
         받지 않는다)에서만 **그 작업 키** 디렉토리의 `triage-state.json` owner(`triage.py run`이 acquire 결과로 남긴 값,
         `triage.py release`와 같은 출처). 보유 owner와의 대조는 그대로라 다른 작업·이어받은 세션의 lock은 풀리지 않는다.
         acquire 재진입에는 쓰지 않는다(이어받기 확인을 건너뛰지 않게)."""
-        if self.owner or os.environ.get("TT_RUNTIME") != "opencode" or not JOB_KEY_RE.fullmatch(job):
+        if self.owner or os.environ.get("TT_RUNTIME") != "opencode":
             return self.owner
-        try:
-            data = json.loads((self.work_dir / job / TRIAGE_STATE).read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            return None
-        owner = data.get("owner") if isinstance(data, dict) else None
-        return owner if isinstance(owner, str) and owner else None
+        return state_owner(self.work_dir, job)
 
     def check_owner(self, held: dict) -> None:
         owner = self.owner_for(str(held.get("job") or ""))
@@ -210,6 +205,19 @@ class Lock:
                              {"released": False, "holder": mask_owner(held)})
         self.path.unlink()
         return {"released": True, "previous": mask_owner(held), "forced": held["job"] != job}
+
+
+def state_owner(work_dir: Path, job: str) -> str | None:
+    """`<work_dir>/<job>/triage-state.json`의 owner(`triage.py run`이 acquire 결과로 남긴 값). 작업 키 형식이 아니거나 파일이 없거나
+    깨졌으면 None. `Lock.owner_for`(OpenCode 안)와 tt-oc가 사용자에게 줄 터미널 명령(`TT_LOCK_OWNER=` 채우기)이 같이 쓴다."""
+    if not JOB_KEY_RE.fullmatch(job):
+        return None
+    try:
+        data = json.loads((Path(work_dir) / job / TRIAGE_STATE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    owner = data.get("owner") if isinstance(data, dict) else None
+    return owner if isinstance(owner, str) and owner else None
 
 
 def _oc_hint() -> str:

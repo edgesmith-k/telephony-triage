@@ -304,6 +304,37 @@ def test_guard_ask_message_prints_exact_command(env):
     assert tail.startswith("python3 /p/scripts/db_pr.py publish --job ABC-1 --commit\n")
 
 
+def test_terminal_handoff_fills_lock_owner_from_job_state(env):
+    """3차 R2-P2-1: 사용자가 터미널에서 돌릴 db_pr·db_verify 명령에는 그 작업의 triage-state.json owner를 TT_LOCK_OWNER=로 채운다
+    (터미널에는 OpenCode 안의 작업 상태 대체가 없다). 상태가 없거나 다른 작업이면 접두 없이 owner 위치를 한 줄로."""
+    work = env["work"]
+    (work / "ABC-1").mkdir()
+    (work / "ABC-1" / "triage-state.json").write_text(json.dumps({"owner": "0a1b2c"}), encoding="utf-8")
+
+    def handoff(cmd):
+        msg = ("[telephony-triage] 이슈 DB push·PR(db_pr publish)는 OpenCode v1(분석 전용)에서 돌리지 않는다. "
+               f"OpenCode v1 does not run this; run this exact command yourself: {cmd}")
+        events(env, [ev("step_start"), tool("bash", "error", input={"command": cmd}, error=msg), step("tool-calls"),
+                     *final("직접")])
+        r = tt(env, "--", "x")
+        assert r.returncode == 3, r.stdout
+        return r.stdout.split("직접 실행 ----\n", 1)[1].split("\n---- [tt-oc] 결과", 1)[0]
+
+    pub = f"python3 /p/scripts/db_pr.py publish {work}/ABC-1/wt --branch issue/ABC-1 --lease new --approved h --commit"
+    assert handoff(pub).strip() == f"TT_LOCK_OWNER=0a1b2c {pub}"
+    assert handoff("python3 /p/scripts/db_pr.py snapshot --job ABC-1").startswith("TT_LOCK_OWNER=0a1b2c python3 ")
+    cd = f"cd {work} && python3 /p/scripts/db_pr.py publish ABC-1/wt --commit"     # cd 뒤 상대 경로, 접두는 cd 뒤에
+    assert handoff(cd).strip() == f"cd {work} && TT_LOCK_OWNER=0a1b2c python3 /p/scripts/db_pr.py publish ABC-1/wt --commit"
+    other = pub.replace("ABC-1", "ABC-2")                      # 상태 없는 작업
+    out = handoff(other)
+    assert out.startswith(other + "\n") and "TT_LOCK_OWNER=0a1b2c" not in out
+    assert f"{work}/ABC-2/triage-state.json" in out and "lock owner 불일치" in out
+    outside = pub.replace(str(work), "/elsewhere")             # 작업 루트 밖 경로의 파일은 읽지 않는다
+    assert "TT_LOCK_OWNER=" not in handoff(outside).splitlines()[0]
+    given = f"TT_LOCK_OWNER=zz {pub}"                          # 이미 있으면 그대로
+    assert handoff(given).splitlines()[0] == given
+
+
 def test_config_deny_write_command_with_workdir(env):
     deny = "The user has specified a rule which prevents you from using this specific tool call. ..."
     events(env, [ev("step_start"),
