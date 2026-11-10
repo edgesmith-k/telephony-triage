@@ -164,7 +164,7 @@ platforms:
         path: android/call
         db_category: call
         tags: ['^ImsPhoneCallTracker$', '^ImsPhoneMmiCode$', '^ImsUt$', '^Telecom$', '^CallManager$', '^CallNotifier$', '^CallWaitingCtrl$', '^MMIDialogActivity$', '^GsmCdmaCallTracker$']   # A: GsmCdmaCallTracker
-        ril: [SET_CLIR, ENABLE_VONR, UNSOL_EMERGENCY_NUMBER_LIST, DIAL, HANGUP, GET_CURRENT_CALLS, LAST_CALL_FAIL_CAUSE]   # A: DIAL..LAST_CALL_FAIL_CAUSE
+        ril: [SET_CLIR, ENABLE_VONR, UNSOL_EMERGENCY_NUMBER_LIST, DIAL, HANGUP, GET_CURRENT_CALLS, LAST_CALL_FAIL_CAUSE, UNSOL_RESPONSE_CALL_STATE_CHANGED]   # A: DIAL..LAST_CALL_FAIL_CAUSE
         hal: [RadioVoiceProxy]
         services: [ExampleCallService, ExampleSsService]
         ipc: [VIPC_EXAMPLE_IMS_CF*, VIPC_EXAMPLE_VONR_SWITCH, VIPC_EXAMPLE_ECC_IND]
@@ -174,7 +174,7 @@ platforms:
       sms:
         path: android/sms
         db_category: sms
-        tags: ['^(Gsm|Cdma)?SMSDispatcher$', '^ImsSmsDispatcher( \[\d+\])?$', '^CellBroadcastConfigTracker-\d+$', '^SmsDispatchersController$', '^(Gsm|Cdma)?InboundSmsHandler$']
+        tags: ['^(Gsm|Cdma)?SMSDispatcher$', '^ImsSmsDispatcher( \[\d+\])?$', '^CellBroadcastConfigTracker-\d+$', '^SmsDispatchersController$', '^(Gsm|Cdma)?InboundSmsHandler$', '^DomainSelectionConnection-(SMS|EmergencySMS)$']   # A: DomainSelectionConnection-*는 소스만(캡처 없음)
         ril: [GSM_SET_BROADCAST_CONFIG, GSM_BROADCAST_ACTIVATION, SEND_SMS, IMS_SEND_SMS, SMS_ACKNOWLEDGE, UNSOL_RESPONSE_NEW_SMS]   # A: SEND_SMS..
         hal: [RadioMessagingProxy]
         services: [ExampleSmsService]
@@ -188,7 +188,7 @@ platforms:
         ril: [NOTIFY_IMS_DATA_NETWORK, UPDATE_IMS_REGISTRATION_INFO]   # A: UPDATE_IMS_REGISTRATION_INFO as a RILJ request
         services: [ImsService]
         ipc: [VIPC_EXAMPLE_IMS_*]
-        keywords: ['registerImsRegistrationCallback', 'service IMS is not available', 'ImsReasonInfo', 're:ims registration indication: (TRUE|FALSE)']   # 마지막: RIL [ImsService_<n>] 줄(태그는 common)
+        keywords: ['registerImsRegistrationCallback', 'service IMS is not available', 'notifyImsDataNetwork not supported on service', 'ImsReasonInfo', 're:ims registration indication: (TRUE|FALSE)']   # 마지막: RIL [ImsService_<n>] 줄(태그는 common). A: notifyImsDataNetwork …는 소스만(캡처 없음)
         also: {'^ImsPhone$': 'handleIms(Un)?[Rr]egistered|ImsRegistration'}
         neighbours: [data]
       modem:
