@@ -18,5 +18,6 @@
 
 ## 흔한 오판
 
-- `reasonForDenial: NONE`을 거절로 읽는다.
+- DENIED가 아닌데 `reasonForDenial: NONE`을 거절로 읽는다.
+- DENIED인데 `NONE`·`rejectCause=0`이라 거절이 아니라고 읽는다.
 - 거절 숫자에 줄이 말하지 않는 뜻을 붙인다.

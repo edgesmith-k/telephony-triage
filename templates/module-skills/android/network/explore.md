@@ -31,5 +31,5 @@ SST → RILJ 등록 상태 요청 → RIL HAL → 벤더 RIL IPC → 모뎀·망
 ## ⑤ 함정
 
 - 첫 RILJ 줄이 응답(`[n]<`)이다 → radio 버퍼가 늦게 시작했다. 그 전 요청과 무선 켜짐은 RILJ에 없다 → `그 층 로그 없음(RILJ)`. 벤더 RIL 데몬 `RADIO_ON`이 더 이른 것은 벤더 줄이 먼저 남은 것뿐이다.
-- `reasonForDenial: NONE`은 거절이 아니다.
+- `reasonForDenial: NONE`·`rejectCause=0`은 사유가 없다는 뜻일 뿐이다. 거절인지는 `regState`·`registrationState`로 본다: DENIED가 아니면 거절이 아니고, DENIED면 모뎀·망(사유를 안 준 것은 벤더 RIL).
 - 셀·사업자 값은 마스킹 토큰이다.
