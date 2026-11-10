@@ -94,7 +94,7 @@ GATEWAY_HINT = "tt-oc doctor의 gateway-key·gateway-url 행과 site_step.py run
 # 게이트웨이면 에이전트가 스크립트 없이 "끝"을 낸다)
 SCRIPT_FLOWS = ("tt-analyze", "tt-record")
 # 플러그인 스크립트 실행(`[cd <dir> && ]python3 "<…>/scripts/<이름>.py" …`) — `cat …/scripts/x.py` 같은 읽기는 세지 않는다
-PLUGIN_SCRIPT = re.compile(r"""^(?:cd\s+\S+\s*&&\s*)?python3?\s+(?:"[^"]*|'[^']*|\S*)/scripts/[A-Za-z0-9_]+\.py\b""")
+PLUGIN_SCRIPT = re.compile(r"""^(?:cd\s+(?:"[^"]*"|'[^']*'|\S+)\s*&&\s*)?python3?\s+(?:"[^"]*|'[^']*|\S*)/scripts/[A-Za-z0-9_]+\.py\b""")
 
 
 class Refused(Exception):

@@ -495,7 +495,9 @@ def test_script_flow_without_script_output_is_not_ok(env):
     # 2차 P3: 스크립트 파일을 읽기만 한 것(cat·grep)은 실행이 아니다. cd … && python3 "…" 는 실행
     mod = _load("tt_oc", TTOC)
     for cmd, want in (("cat /p/scripts/triage.py", False), ("grep x /p/scripts/x.py", False),
-                      ('cd /w && python3 "/my plug/scripts/triage.py" run A', True), ("python /p/scripts/x.py", True)):
+                      ('cd /w && python3 "/my plug/scripts/triage.py" run A', True), ("python /p/scripts/x.py", True),
+                      ('cd "/dir with space" && python3 /p/scripts/triage.py run A', True),      # 3차: 따옴표 cd
+                      ('cd "/d s" && cat /p/scripts/triage.py', False)):
         assert mod.ran_plugin_script([tool("bash", input={"command": cmd})]) is want, cmd
 
 
