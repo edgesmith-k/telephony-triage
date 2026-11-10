@@ -7,7 +7,7 @@
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
 11:00:01.000 p0 D DNC-0 Internet data state changed from DISCONNECTED to CONNECTED.  ⇒ data_internet_state_changed(from=DISCONNECTED,to=CONNECTED)
-11:00:20.001 - I RIL [PsService_0] UpdatePdpOnActiveDc PdpContext{cid=2, state=DISCONNECTED, active=INACTIVE}
+11:00:20.001 - I RIL [ExamplePdnService_0] update pdn PdnCtx{cid=2, state=DISCONNECTED, active=INACTIVE}
 11:00:20.010 p0 D RILJ [UNSL]< UNSOL_DATA_CALL_LIST_UPDATED [SetupDataCallResult{cause: NONE, suggestedRetryTime: 0, cid: 1, active: 2, type: IPV4V6, ifname: rmnet0}] [PHONE0]
 11:00:20.020 - D DN-101-C ConnectedState: onDataStateChanged: PDN inactive reported by WWAN data service.
 11:00:20.021 - D DN-101-C DisconnectedState: Data network disconnected. mEverConnected=true

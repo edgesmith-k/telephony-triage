@@ -23,4 +23,4 @@ expect:
       daemon: '알\s*수\s*없음|없음'
       evidence: ['RIL_REQUEST_SETUP_DATA_CALL', 'UNSOL_DATA_CALL_LIST_CHANGED']
   trap:
-    - label: '^\s*(관리 데몬|D-Bus|ofonod|벤더 RIL|exynos|모뎀|망|곁가지|원인\s*아님)'
+    - label: '^\s*(관리 데몬|D-Bus|ofonod|벤더 RIL|vrild|모뎀|망|곁가지|원인\s*아님)'

@@ -1,12 +1,12 @@
 -- [합성] eval 78: 모듈 후보 둘(data·sim) — 형식 (c), 값·이름은 손으로 쓴 placeholder
 Sep 20 15:40:00.000 dut daemon.info ofonod[812]: src/example.c:example_cb() /ril_0 modem online: placeholder
-Sep 20 15:40:00.200 dut daemon.info LPA[930]: profile list refresh requested: placeholder
-Sep 20 15:40:00.600 dut daemon.warning ofonod[812]: drivers/rilmodem/sim.c:sim_read_cb() /ril_0 sim file read slow: placeholder
-Sep 20 15:40:00.900 dut daemon.info NMD[940]: interface state=idle: placeholder
-Sep 20 15:40:01.000 dut daemon.err ofonod[812]: drivers/rilmodem/sim.c:sim_read_cb() /ril_0 sim file read error: placeholder
-Sep 20 15:40:01.300 dut daemon.info LPA[930]: profile list refresh done: placeholder
-Sep 20 15:40:02.000 dut daemon.warning ofonod[812]: src/gprs.c:gprs_attach_cb() /ril_0 attach retry: placeholder
-Sep 20 15:40:02.400 dut daemon.err ofonod[812]: src/gprs.c:gprs_attach_cb() /ril_0 attach failed: placeholder
-Sep 20 15:40:02.800 dut daemon.info NMD[940]: interface state=disconnected: placeholder
-Sep 20 15:40:03.000 dut daemon.err ofonod[812]: src/gprs.c:gprs_context_cb() /ril_0 context activation failed: placeholder
+Sep 20 15:40:00.200 dut daemon.info simd[930]: profile list refresh requested: placeholder
+Sep 20 15:40:00.600 dut daemon.warning ofonod[812]: drivers/rilmodem/sim.c:ril_file_io_cb() /ril_0 sim file read slow: placeholder
+Sep 20 15:40:00.900 dut daemon.info datad[940]: interface state=idle: placeholder
+Sep 20 15:40:01.000 dut daemon.err ofonod[812]: drivers/rilmodem/sim.c:ril_file_io_cb() /ril_0 sim file read error: placeholder
+Sep 20 15:40:01.300 dut daemon.info simd[930]: profile list refresh done: placeholder
+Sep 20 15:40:02.000 dut daemon.warning ofonod[812]: src/gprs.c:gprs_attach_callback() /ril_0 attach retry: placeholder
+Sep 20 15:40:02.400 dut daemon.err ofonod[812]: src/gprs.c:gprs_attach_callback() /ril_0 attach failed: placeholder
+Sep 20 15:40:02.800 dut daemon.info datad[940]: interface state=disconnected: placeholder
+Sep 20 15:40:03.000 dut daemon.err ofonod[812]: drivers/rilmodem/gprs-context.c:ril_setup_data_call_cb() /ril_0 context activation failed: placeholder
 Sep 20 15:40:03.500 dut daemon.warning ofonod[812]: drivers/rilmodem/sim.c:sim_status_cb() /ril_0 sim status unknown: placeholder

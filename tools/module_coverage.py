@@ -123,7 +123,8 @@ def platform_report(modules: Path, platform: str, logs: list[Path], rules_dir: P
     if not logs:
         raise UsageError("로그 파일이 없다")
     doc = yaml.safe_load(modules.read_text(encoding="utf-8")) or {}
-    spec = mf.compile_spec(doc, platform)
+    prefix = module_measure._ipc_prefix(_ns(platform=platform, plugin_root=str(plugin_root) if plugin_root else None))
+    spec = mf.compile_spec(doc, platform, prefix)                  # site 접두어 — module_measure.coverage와 같은 표
     if spec is None:
         raise UsageError(f"modules.yaml에 platforms.{platform}가 없다")
     job = Path(tempfile.mkdtemp(prefix="tt-module-coverage-"))

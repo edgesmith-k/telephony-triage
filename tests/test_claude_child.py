@@ -306,11 +306,20 @@ def test_gateway_site_rows_report_cli_hooks_and_s1_without_blocking(tmp_path, mo
     isolation_confirmed). 전부 ok·warn·info라 종료 코드는 그대로다."""
     sys.path.insert(0, str(REPO / "tools"))
     sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import make_plugin_root
     import site_step
+    import yaml
     from runner import plugin_root
     home = tmp_path / "tt-home"
     home.mkdir()
     monkeypatch.setenv("TELEPHONY_TRIAGE_HOME", str(home))
+    # 레포의 plugin/site-defaults.yaml(사내 값)이 아니라 example로 만든 임시 루트를 읽게 한다
+    site = make_plugin_root.make(tmp_path / "repo" / "plugin")
+    monkeypatch.setattr(site_step, "ROOT", tmp_path / "repo")
+    path = site / "site-defaults.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["tracker"]["isolation_confirmed"] = False
+    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
     bare = tmp_path / "bin"
     bare.mkdir()
     rows = {r["key"]: r for r in site_step.gateway_site_rows({"PATH": str(bare)})}

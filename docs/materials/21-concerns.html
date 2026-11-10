@@ -103,8 +103,8 @@ footer { margin-top: 2.2rem; padding-top: 0.8rem; border-top: 1px solid var(--ru
       <dt>상태</dt><dd class="status wip">안내 그림 반영, E 다음 묶음</dd></dl></article>
     <article class="card"><h3><small>고민</small>공개 형식을 따른 합성 로그로 모듈별 필터·가설을 잘 하게</h3><dl>
       <dt>판단</dt><dd>합성 줄이 실제 줄 모양을 못 따라갈 수 있다(사내에서 확인)</dd>
-      <dt>보완</dt><dd>공개 형식(oFono syslog·AOSP logcat)을 따른 합성 로그를 사례·fixture로(남은 식별자 0 확인), 모듈 필터를 합성 로그로 측정(필수 줄 recall 37→64% 등)</dd>
-      <dt>상태</dt><dd class="status">B2 ☑, C1+D 사례 14개 합성</dd></dl></article>
+      <dt>보완</dt><dd>공개 형식(oFono syslog·AOSP logcat)을 따른 합성 로그를 사례·fixture로(남은 식별자 0 확인), 모듈 필터의 필수 줄 recall 37→64%는 B2 때 잰 값이다(현재 합성 case로는 다시 재지 않았다)</dd>
+      <dt>상태</dt><dd class="status">B2 ☑, C1+D 사례 42개 모두 합성</dd></dl></article>
     <article class="card"><h3><small>고민</small>모듈 스킬로 어떻게 결과를 판단하나</h3><dl>
       <dt>판단</dt><dd>정답을 아는 사례로 스크립트 채점</dd>
       <dt>보완</dt><dd>사례마다 정답 층·데몬·근거 regex, 문서 있음/없음 비교, 안전 행, 토큰 차이. 정답 표는 사용자 확인</dd>
@@ -117,6 +117,10 @@ footer { margin-top: 2.2rem; padding-top: 0.8rem; border-top: 1px solid var(--ru
       <dt>판단</dt><dd>순서대로 하면 회차가 반나절</dd>
       <dt>보완</dt><dd>모듈별 에이전트 병렬 — 회차 1시간 남짓, 최대 2회</dd>
       <dt>상태</dt><dd class="status">C1+D 보정(금)</dd></dl></article>
+    <article class="card"><h3><small>고민</small>개발 레포에는 사내 이름을 두지 않고, 사내에서 채운 값은 재반입 뒤에도 쉽게 다시 얹혀야 한다</h3><dl>
+      <dt>판단</dt><dd>이름은 사내 쪽 데이터(SITE_PATHS)로 둔다. 재반입 때마다 손으로 다시 채우게 하면 빠뜨린다</dd>
+      <dt>보완</dt><dd>템플릿·시험 로그는 공개 용어와 카테고리별 placeholder 이름만. 사내 이름이 든 템플릿은 사내 스냅샷(<code>docs/site/module-skills/</code>, SITE_PATHS)으로 두고 <code>make_module_repo.py --site-overlay</code>가 통째로 덮어씀. 벤더 IPC 토큰은 팀 설정 <code>vendor_ipc</code>. 레포 밖 거부 목록을 <code>tools/deny_scan.py</code>·make_bundle <code>deny-file</code>이 0건으로 확인. 절차는 <code>docs/SITE_RESTORE.md</code>, 점검은 <code>site_step.py restore check</code></dd>
+      <dt>상태</dt><dd class="status">☑ 11/10</dd></dl></article>
     <article class="card"><h3><small>고민</small>모듈 eval 정답을 결론 하나로 못 박으면 정답 표가 틀릴 때 측정이 흔들리고 확인 부담도 크다</h3><dl>
       <dt>판단</dt><dd>실제 탐색(5-2)도 가설 1~3개(추정)라 eval이 어긋나 있었다</dd>
       <dt>보완</dt><dd>탐색 사례는 후보 1~3개 + 가장 유력, 인정 후보가 목록에 있고 함정이 가장 유력이 아니면 통과, 1순위 적중은 따로 기록, 정답 표는 "인정 후보 / 함정"(스크립트 생성)</dd>
@@ -135,7 +139,7 @@ footer { margin-top: 2.2rem; padding-top: 0.8rem; border-top: 1px solid var(--ru
       <dt>상태</dt><dd class="status">☑ 11/06 (출력은 path:line만, 제안은 마스킹 로그 줄로만)</dd></dl></article>
     <article class="card"><h3><small>고민</small>리팩토링으로 로그가 확 바뀌거나, oFono는 개발 중이라 데몬이 생기고·사라지고·합쳐지고·대체된다</h3><dl>
       <dt>판단</dt><dd>이름·규칙은 데이터여야 한다. 이번 코드에 데몬 이름이 박힌 곳 3개 발견</dd>
-      <dt>보완</dt><dd>판별 대상 이름(레벨 보정·벤더 IPC 대상)을 이슈 DB <code>tags.yaml</code> 속성으로(기본값 유지), 모듈 문서 데몬 이름을 공통 표 한 곳(역할 → 지금 이름·구 이름)에, 과도기에는 옛·새 이름을 같이, <code>modules coverage</code>(토큰 0)로 새·사라진 데몬 발견 → <code>modules.yaml</code> PR</dd>
+      <dt>보완</dt><dd>판별 대상 이름(레벨 보정·벤더 IPC 대상)을 이슈 DB <code>tags.yaml</code> 속성으로(oFono는 0.0.5부터 구성요소 설정 <code>level_unreliable</code>·<code>vendor_ipc</code> — 코드 기본 없음, Android는 <code>RIL</code> 기본), 모듈 문서 데몬 이름을 공통 표 한 곳(역할 → 지금 이름·구 이름)에, 과도기에는 옛·새 이름을 같이, <code>modules coverage</code>(토큰 0)로 새·사라진 데몬 발견 → <code>modules.yaml</code> PR</dd>
       <dt>상태</dt><dd class="status">☑ 11/06 C1+D 보정</dd></dl></article>
   </section>
 

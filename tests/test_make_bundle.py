@@ -361,8 +361,27 @@ def test_deny_file_unreadable_tracked_file_is_error(repo, tmp_path, monkeypatch)
     out = tmp_path / "out"
     res = mb.run(repo, LABEL, out, checks=_deny_checks())
     row = res["checks"][0]
-    assert row["status"] == "error" and "1개 읽기 실패" in row["detail"]
+    assert row["status"] == "error" and "읽기 실패 1개" in row["detail"]
     assert res["exit_code"] == mb.USAGE and res["bundle"] is None and not out.exists()
+
+
+def test_deny_file_packed_file_is_error_and_non_utf8_is_scanned(repo, tmp_path, monkeypatch):
+    """압축 파일(내용 못 봄)이 있으면 0건이어도 통과가 아니다(error, 종료 2). UTF-8 아닌 파일은 건너뛰지 않고 센다."""
+    deny = tmp_path / "deny.txt"
+    deny.write_text("zzqx\n", encoding="utf-8")
+    monkeypatch.setenv("TT_DENY_FILE", str(deny))
+    (repo / "a.gz").write_bytes(b"\x1f\x8b\x08\x00 plain")
+    _git(repo, "add", "a.gz")
+    _git(repo, "commit", "-qm", "gz")
+    res = mb.run(repo, LABEL, tmp_path / "out", checks=_deny_checks())
+    row = res["checks"][0]
+    assert row["status"] == "error" and "압축 파일 1개" in row["detail"] and res["exit_code"] == mb.USAGE
+    (repo / "dev.log").write_bytes(b"caf\xe9 zzqx\n")
+    _git(repo, "add", "dev.log")
+    _git(repo, "commit", "-qm", "log")
+    res = mb.run(repo, LABEL, tmp_path / "out2", checks=_deny_checks())
+    row = res["checks"][0]
+    assert row["status"] == "fail" and "dev.log: 1건" in row["detail"] and "압축 파일 1개" in row["detail"]
 
 
 def test_deny_file_hits_reported_before_read_errors(repo, tmp_path, monkeypatch):
@@ -396,9 +415,25 @@ def test_deny_file_hit_fails_with_path_only(repo, tmp_path, monkeypatch):
     row = res["checks"][0]
     assert row["status"] == "fail" and res["exit_code"] == 1
     assert "docs/a.md: 2건" in row["detail"] and "docs/«1»_note.md: 1건" in row["detail"]
-    assert "총 3건, 파일 2개" in row["detail"] and "건너뜀 0개" in row["detail"]
+    assert "총 3건, 파일 2개" in row["detail"] and "압축 파일" not in row["detail"]
     text = json.dumps(res, ensure_ascii=False) + mb.format_text(res)
     assert "zzqx" not in text.lower() and not out.exists()
+
+
+def test_deny_file_glued_name_is_warning_line_only(repo, tmp_path, monkeypatch):
+    """경계 없이 센 건수(붙여 쓴 이름)는 판정에 쓰지 않고 경고 줄로만 낸다 — 가린 경로·건수뿐."""
+    deny = tmp_path / "deny.txt"
+    deny.write_text("zzqx\nqvtrwxy\n", encoding="utf-8")                  # 6자 이상만 경계 없이 센다
+    monkeypatch.setenv("TT_DENY_FILE", str(deny))
+    (repo / "glued.md").write_text("libzzqx.so libqvtrwxy.so QvtrwxyClient\n", encoding="utf-8")
+    _git(repo, "add", "glued.md")
+    _git(repo, "commit", "-qm", "glued")
+    res = mb.run(repo, LABEL, tmp_path / "out", checks=_deny_checks())
+    row = res["checks"][0]
+    assert row["status"] == "pass" and res["exit_code"] == 3
+    assert "경고(판정 아님): 6자 이상 항목을 경계 없이 세면 2건, 파일 1개" in row["detail"] and "glued.md" in row["detail"]
+    text = (json.dumps(res, ensure_ascii=False) + mb.format_text(res)).lower()
+    assert "zzqx" not in text and "qvtrwxy" not in text
 
 
 def test_deny_file_zero_hits_passes(repo, tmp_path, monkeypatch):
@@ -407,7 +442,7 @@ def test_deny_file_zero_hits_passes(repo, tmp_path, monkeypatch):
     monkeypatch.setenv("TT_DENY_FILE", str(deny))
     res = mb.run(repo, LABEL, tmp_path / "out", checks=_deny_checks())
     assert res["checks"][0]["status"] == "pass" and "1항목" in res["checks"][0]["detail"]
-    assert "건너뜀 0개(UTF-8 아님)" in res["checks"][0]["detail"] and res["exit_code"] == 3
+    assert res["checks"][0]["detail"].endswith(", 0건") and res["exit_code"] == 3
     deny.write_bytes(b"\xff\xfe\x80\n")                     # UTF-8 아님 → error(종료 2), 트레이스백 아님
     res = mb.run(repo, LABEL, tmp_path / "out2", checks=_deny_checks())
     assert res["checks"][0]["status"] == "error" and res["exit_code"] == mb.USAGE
@@ -498,12 +533,41 @@ def test_push_command_uses_single_remote_name(repo, tmp_path):
     assert f"git push <remote> {LABEL}" in mb.format_text(res)
 
 
-def test_on_remote_main_false_on_feature_branch(repo, tmp_path):
-    """R-23: 기능 브랜치에서 만든 묶음은 원격 main에 없다고 보고한다 (종료 코드는 그대로)."""
+def test_on_release_branch_false_on_feature_branch(repo, tmp_path):
+    """R-23: 원격 기준 브랜치에 병합되지 않은 커밋에서 만든 묶음은 경고만 한다 (종료 코드는 그대로)."""
     _git(repo, "switch", "-q", "-c", "feature")
     res = mb.run(repo, LABEL, tmp_path / "out", checks=fake_checks())
-    assert res["exit_code"] == 3 and res["on_remote_main"] is False
-    assert "HEAD가 원격 main에 없습니다" in mb.format_text(res)
+    assert res["exit_code"] == 3 and res["on_release_branch"] is False and "on_remote_main" not in res
+    assert "fetch 뒤 `stable`(반입 기준 브랜치)에 병합된 커밋에서" in mb.format_text(res)
+
+
+def _bare_remote(repo: Path, tmp_path: Path, name: str, branch: str) -> None:
+    """`name` 원격(빈 bare)을 붙이고 HEAD를 `branch`로 push한 뒤 원격 추적 브랜치를 받는다."""
+    bare = tmp_path / f"{name}.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True, capture_output=True)
+    _git(repo, "remote", "add", name, str(bare))
+    _git(repo, "push", "-q", name, f"HEAD:refs/heads/{branch}")
+    _git(repo, "fetch", "-q", name)
+
+
+def test_on_release_branch_with_two_remotes(repo, tmp_path):
+    """make_bundle `on_release_branch`: 원격이 둘이어도 HEAD를 담은 원격 추적 브랜치 이름이 정확히 `stable`·`main`이면 참.
+    현재 로컬 브랜치 이름은 상관없고, `<remote>/x/main` 같은 이름은 세지 않는다."""
+    _bare_remote(repo, tmp_path, "dev", "feature-x")          # 기준 브랜치가 아닌 원격 브랜치만 → 거짓
+    _git(repo, "push", "-q", "dev", "HEAD:refs/heads/x/main")  # 끝만 main인 다른 브랜치 → 거짓
+    _git(repo, "fetch", "-q", "dev")
+    assert mb.on_release_branch(repo) is False
+    _bare_remote(repo, tmp_path, "telephony", "stable")
+    _git(repo, "switch", "-q", "-c", "work")                  # 로컬 브랜치가 main이 아니어도 된다
+    res = mb.run(repo, LABEL, tmp_path / "out", checks=fake_checks())
+    assert res["on_release_branch"] is True and res["remote"] == "<remote>"
+    assert "경고: HEAD가" not in mb.format_text(res)
+    (repo / "README.md").write_text("changed\n", encoding="utf-8")   # 원격에 없는 새 커밋 → 거짓
+    _git(repo, "commit", "-q", "-am", "local")
+    assert mb.on_release_branch(repo) is False
+    _git(repo, "push", "-q", "dev", "HEAD:refs/heads/main")    # 다른 원격의 main에 있으면 참
+    _git(repo, "fetch", "-q", "dev")
+    assert mb.on_release_branch(repo) is True
 
 
 def test_checks_use_target_repo_tools(repo, tmp_path, monkeypatch):

@@ -9,8 +9,8 @@
 
 16:00:02.500 p0 E RILJ serviceDied: Service radio::IRadio/slot1 has died. [PHONE0]
 16:00:02.511 p0 D RILJ [0351]< GET_SIGNAL_STRENGTH error 1 [PHONE0]
-16:00:02.600 - V OemRil notifyRadioStateChanged: newState=RADIO_UNAVAILABLE
-16:00:05.000 - V OemRil notifyRadioStateChanged: newState=RADIO_ON
+16:00:02.600 - V VRIL radio state changed: newState=RADIO_UNAVAILABLE
+16:00:05.000 - V VRIL radio state changed: newState=RADIO_ON
 
 ## 다른 모듈 줄 (±15초, 경고·오류)
 16:00:02.510 p0 D RILJ [0350]< GET_CURRENT_CALLS error 1 [PHONE0]

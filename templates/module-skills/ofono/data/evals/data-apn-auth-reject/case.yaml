@@ -20,8 +20,8 @@ run_expect:
   top_cause: DATA-001-01
   C: 1
 expect:
-  layer: '벤더 RIL|exynos-ril|모뎀|망'
-  daemon: 'exynos-ril'
+  layer: '벤더 RIL|vrild|모뎀|망'
+  daemon: 'vrild'
   evidence: ['SETUP_DATA_CALL failed', 'USER_AUTHENTICATION']
   trap: null
-  wrong_layer: ['^\s*(ofonod|NMD|관리 데몬|D-Bus|MOSE|DITD)', '^\s*그\s*층\s*로그\s*없음']
+  wrong_layer: ['^\s*(ofonod|datad|관리 데몬|D-Bus|mgmtd)', '^\s*그\s*층\s*로그\s*없음']

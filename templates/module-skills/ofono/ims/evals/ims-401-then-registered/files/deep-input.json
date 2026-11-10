@@ -14,7 +14,7 @@
   }
  ],
  "issue_summary": "IMS 등록 실패(401) 로그가 남",
- "occurred_at": "2026-02-27T17:28:22+00:00",
+ "occurred_at": "2026-09-22T09:30:20+00:00",
  "events": "events.json",
  "timeline": "timeline.md",
  "log_paths": [

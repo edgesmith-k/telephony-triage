@@ -5,7 +5,7 @@
 반입 묶음(레포 zip, 이슈 DB 뼈대 zip, SHA256SUMS, 결과 JSON, 로그)을 만든다.
 사람이 확인할 항목(manual)은 판정하지 않고 목록으로 낸다. 태그는 만들지 않는다.
 출력할 `git tag … && git push …` 명령은 사용자가 직접 실행한다(remote가 하나면 그 이름).
-HEAD가 원격 main에 들어 있는지(`on_remote_main`)는 보고만 한다.
+HEAD가 원격의 반입 기준 브랜치(`*/stable` 또는 `*/main`)에 들어 있는지(`on_release_branch`)는 보고만 한다.
 실행 전 할 일: `plugin/.claude-plugin/plugin.json` description에서 '사외 초안'을 빼고 커밋한다(첫 검사).
 
 판정 기준은 각 검사 도구의 종료 코드와 이 도구의 파일 검사다. `--skip`한 검사는
@@ -13,6 +13,7 @@ HEAD가 원격 main에 들어 있는지(`on_remote_main`)는 보고만 한다.
 쓰도록 만들었고, 끝난 뒤 추적·비추적(무시 제외) 파일 기준으로 트리를 바꾸지 않았음을
 확인한다 (`git status --porcelain`; 무시 파일은 보지 않는다).
 `deny-file`은 레포 밖 거부 목록(환경 변수 `TT_DENY_FILE`)의 항목이 추적 파일에 없는지 센다(경로·건수만 낸다).
+경계 없이 센 건수(붙여 쓴 이름)가 더 많으면 경고 줄을 더한다(판정에는 쓰지 않는다).
 변수가 없으면 오류(종료 2)라 묶음을 만들지 않는다.
 
 CLI:
@@ -25,9 +26,9 @@ CLI:
     --repo   대상 레포 루트 (기본: 이 레포)
 
 종료 코드 (contracts.md §종료 코드)
-    1  자동 검사 실패 또는 --skip (묶음 없음). `deny-file`은 일치와 읽기 실패가 함께 있으면 일치를 먼저 fail로 낸다
+    1  자동 검사 실패 또는 --skip (묶음 없음). `deny-file`은 일치와 읽기 실패(압축 파일 포함)가 함께 있으면 일치를 먼저 fail로 낸다
     2  사용 오류·환경 오류 (레포 아님, 트리 더럽, 태그 불일치, 하위 도구 종료 2, 검사 조건 오류 —
-       예: `deny-file`의 거부 목록 없음·UTF-8 아님·빈 목록·추적 파일 0개·일치 0건인 읽기 실패 — 포함)
+       예: `deny-file`의 거부 목록 없음·UTF-8 아님·빈 목록·추적 파일 0개·일치 0건인 읽기 실패·압축 파일 — 포함)
     3  자동 검사 모두 통과, 묶음 생성, 사람 확인 대기 (정상 완료)
     0은 없다: 사람 확인이 남아 있으므로 이 도구는 완료를 선언하지 않는다.
 """
@@ -241,15 +242,22 @@ def check_deny_file(ctx: Ctx) -> CheckResult:
     if not scanned:
         return CheckResult("error", "스캔할 추적 파일 없음")
     total = sum(n for _, n in hits)
-    if errors and not total:
-        return CheckResult("error", f"추적 파일 {errors}개 읽기 실패")
-    tail_line = f"추적 파일 {scanned}개, 건너뜀 {skipped}개(UTF-8 아님)" + (f", 읽기 실패 {errors}개" if errors else "")
+    if (errors or skipped) and not total:   # 내용을 다 보지 못한 파일이 있으면 0건을 통과로 보지 않는다
+        return CheckResult("error", f"추적 파일 읽기 실패 {errors}개, 압축 파일 {skipped}개(내용 못 봄)")
+    tail_line = (f"추적 파일 {scanned}개" + (f", 압축 파일 {skipped}개(내용 못 봄)" if skipped else "")
+                 + (f", 읽기 실패 {errors}개" if errors else ""))
+    # 경계 없이 센 건수(붙여 쓴 이름 `lib<x>.so` 등). 일반 낱말 안 우연 일치도 있어 판정에는 쓰지 않고 경고 줄로만 낸다
+    loose_hits = deny_scan.scan(ctx.repo, deny_scan.loose(patterns, deny_scan.LOOSE_MIN))[0]   # 짧은 항목은 경계 그대로
+    loose_total = sum(n for _, n in loose_hits)
+    warn = ([f"경고(판정 아님): {deny_scan.LOOSE_MIN}자 이상 항목을 경계 없이 세면 {loose_total}건, 파일 {len(loose_hits)}개 — 붙여 쓴 이름인지 사람이 본다: "
+             + ", ".join(rel for rel, _ in sorted(loose_hits, key=lambda h: -h[1])[:10])] if loose_total > total else [])
     if total:
         lines = [f"{rel}: {n}건" for rel, n in sorted(hits, key=lambda h: -h[1])[:20]]
-        return CheckResult("fail", "\n".join([*lines, f"총 {total}건, 파일 {len(hits)}개 — {tail_line}"]),
-                           {"hits": total, "files": len(hits), "scanned": scanned, "skipped": skipped})
-    return CheckResult("pass", f"거부 목록 {len(patterns)}항목, {tail_line}, 0건",
-                       {"entries": len(patterns), "scanned": scanned, "skipped": skipped})
+        return CheckResult("fail", "\n".join([*lines, f"총 {total}건, 파일 {len(hits)}개 — {tail_line}", *warn]),
+                           {"hits": total, "files": len(hits), "scanned": scanned, "skipped": skipped,
+                            "unbounded_hits": loose_total})
+    return CheckResult("pass", "\n".join([f"거부 목록 {len(patterns)}항목, {tail_line}, 0건", *warn]),
+                       {"entries": len(patterns), "scanned": scanned, "skipped": skipped, "unbounded_hits": loose_total})
 
 
 def check_site_todos(ctx: Ctx) -> CheckResult:
@@ -560,12 +568,12 @@ def _push_remote(repo: Path) -> str:
     return remotes[0] if len(remotes) == 1 else "<remote>"
 
 
-def on_remote_main(repo: Path) -> bool:
-    """main 브랜치이고 HEAD가 upstream에 들어 있는지 (보고용, 판정하지 않는다)."""
-    if git(repo, "branch", "--show-current", check=False).strip() != "main":
-        return False
-    return subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", "HEAD", "@{u}"],
-                          capture_output=True).returncode == 0
+def on_release_branch(repo: Path) -> bool:
+    """HEAD가 원격의 반입 기준 브랜치(`<remote>/stable` 또는 `<remote>/main`)에 들어 있는지 (보고용, 판정하지 않는다).
+    원격 추적 ref(`refs/remotes/<remote>/<branch>`)를 보므로 원격이 여럿이어도 된다. 브랜치 이름이 정확히 `stable`·`main`인
+    것만 센다(`<remote>/x/main`·`<remote>/HEAD`는 아니다). 마지막 fetch 기준이다."""
+    out = git(repo, "for-each-ref", "--contains", "HEAD", "--format=%(refname)", "refs/remotes", check=False)
+    return any(len(parts) == 4 and parts[3] in ("stable", "main") for parts in (ln.split("/") for ln in out.splitlines()))
 
 
 def run(repo: Path | str, label: str, out: Path | str | None = None, checks: list[Check] | None = None,
@@ -583,7 +591,7 @@ def run(repo: Path | str, label: str, out: Path | str | None = None, checks: lis
     validate_label(label)
     out_dir = resolve_out(repo, label, out, force)
     head_sha = check_preconditions(repo, label)
-    git_info = {"remote": _push_remote(repo), "on_remote_main": on_remote_main(repo)}
+    git_info = {"remote": _push_remote(repo), "on_release_branch": on_release_branch(repo)}
 
     env = dict(os.environ)
     env[GUARD_ENV] = "1"
@@ -690,8 +698,8 @@ def format_text(result: dict) -> str:
         lines.append("")
         lines.append("사람 확인을 마친 뒤 태그를 직접 만들고 push합니다 (이 도구는 태그를 만들지 않습니다):")
         lines.append(f"  git tag {result['label']} {result['head_sha']} && git push {result['remote']} {result['label']}")
-        if not result["on_remote_main"]:
-            lines.append("경고: HEAD가 원격 main에 없습니다 — 병합 후 main에서 다시 만드세요.")
+        if not result["on_release_branch"]:
+            lines.append("경고: HEAD가 원격 stable·main 어디에도 없습니다(마지막 fetch 기준) — fetch 뒤 `stable`(반입 기준 브랜치)에 병합된 커밋에서 다시 만드세요.")
     else:
         lines.append("묶음을 만들지 않았습니다 (자동 검사 실패·건너뜀·오류).")
     return "\n".join(lines)

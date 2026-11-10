@@ -1,0 +1,26 @@
+# 합성 case (H C1, C1D §1.2). files/의 timeline·입력은 make_module_eval_inputs.py --write가 만든다
+schema_version: 2
+name: sms-ims-path-reject
+kind: explore
+synthetic: true
+key: MOCK-9502
+issue:
+  summary: 'IMS 문자 전송 실패 (합성)'
+  description: 'LTE에서 문자를 보내면 실패합니다. 합성 case.'
+  occurred_at: '2026-09-21T10:30:05+0000'
+  platform_version: '2'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  accept:
+    - layer: '곁가지|imsd|IMS'
+      daemon: 'imsd'
+      evidence: ['ImsSmsSender::sendSms\] failed', 'smsOverLteCapable=1']
+  trap:
+    - label: '^\s*(ofonod|벤더 RIL|vrild|모뎀|망|그\s*층|원인\s*아님)'

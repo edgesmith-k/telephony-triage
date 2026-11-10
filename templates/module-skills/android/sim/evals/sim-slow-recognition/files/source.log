@@ -1,14 +1,14 @@
 -- [합성] telephony-triage module-skills C1D eval log. Line shapes of sim-card-io-error; GET_SIM_STATUS modem TX to RX takes 9 s, other requests fast.
 09-05 08:00:05.000  2101 2141 D RILJ    : [0320]> GET_SIM_STATUS [PHONE0]
-09-05 08:00:05.004  1188 1188 D RILC-AIDL_SERVICE: RadioSimProxy::getIccCardStatus: serial 320
-09-05 08:00:05.006  1188 1241 I RIL     : GetSimStatusHandler: OnRequest() -->
-09-05 08:00:05.008  1188 1258 V RIL     : [<DEV#1>][TX] SIT_GET_SIM_STATUS, REQ, 8 bytes, Token(0x0210)
+09-05 08:00:05.004  1188 1188 D VRIL-SVC: RadioSimProxy::getIccCardStatus: serial 320
+09-05 08:00:05.006  1188 1241 I RIL     : [ExampleIccService_0] sim status request
+09-05 08:00:05.008  1188 1258 V RIL     : mux [ch0][TX] VIPC_EXAMPLE_CARD_STATE, REQ seq=0x0210 len=8
 09-05 08:00:05.200  2101 2141 D RILJ    : [0321]> GET_SIGNAL_STRENGTH [PHONE0]
 09-05 08:00:05.260  2101 2142 D RILJ    : [0321]< GET_SIGNAL_STRENGTH [PHONE0]
-09-05 08:00:14.010  1188 1258 V RIL     : [<DEV#1>][RX] SIT_GET_SIM_STATUS, RSP, 40 bytes, Token(0x0210), OK(RCM_E_SUCCESS)
-09-05 08:00:14.012  1188 1242 I RIL     : [SimService_0] OnGetSimStatusComplete errorCode=0
-09-05 08:00:14.014  1188 1244 D RILC-AIDL_SERVICE: GetIccCardStatusCommand::onResponse: serial 320
+09-05 08:00:14.010  1188 1258 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_CARD_STATE, RSP OK(VIPC_OK) seq=0x0210 len=40
+09-05 08:00:14.012  1188 1242 I RIL     : [ExampleIccService_0] sim status done errorCode=0
+09-05 08:00:14.014  1188 1244 D VRIL-SVC: getIccCardStatus response: serial 320
 09-05 08:00:14.020  2101 2142 D RILJ    : [0320]< GET_SIM_STATUS [PHONE0]
 09-05 08:00:14.100  2101 2101 I UiccController: [PHONE0] SIM state changed: READY
 09-05 08:00:15.500  2101 2101 I UiccController: [PHONE0] SIM state changed: LOADED
-09-05 08:00:20.000  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
+09-05 08:00:20.000  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009

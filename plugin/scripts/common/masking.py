@@ -18,8 +18,7 @@
 - **예외**: `issue-db.config.yaml`의 `mask.allow_patterns`에 전체가 맞는 값은 그대로 둔다.
   Android 자체 마스킹(`***`, `xxxxxx`)도 그대로 둔다.
 
-- **로그 줄 전용 규칙(`Rule.log_only`, M1~M11)**: 첨부 실제 로그(oFono syslog 2·Android logcat 1)에서 찾은 빈틈을
-  측정한 마스커(`mask2.py`·`mask3.py`) 그대로 옮긴 규칙 중 모양만 보는 것(hex 덤프·base64·빌드/제품 코드·15~20자리
+- **로그 줄 전용 규칙(`Rule.log_only`, M1~M11)**: 합성 fixture로 고정한 로그 줄 규칙(B2 §3.2) 중 모양만 보는 것(hex 덤프·base64·빌드/제품 코드·15~20자리
   숫자·syslog 호스트 칸)은 `log_lines=True`로 만든 마스커(로그 마스킹: parse·cut·`mask_pii` 치환/이벤트·보기·점검
   도구)에서만 돈다. `db_lint`·`mask_pii --check`·`issue_post`는 기본값(`False`)이라 그 종류의 결과가 전과 같다.
   실제 식별자 규칙(M2a·M3·M4·M5·M7·M8 payload/salt·M9·뒤집힌 ICCID)은 어디서나 돈다.
@@ -27,7 +26,7 @@
   M11 호스트는 `host<n>`(journal 형식 정규식의 호스트 칸에 그대로 맞아 마스킹한 줄도 해석된다).
 - **남은 식별자(`residual`)·가리기(`redact`)**: 로그 마스커의 `find()` 그대로(다른 탐지기 없음), 줄 단위.
   그래서 `residual(mask(x)) == {}`가 구조상 성립한다.
-- **갈린 덤프 조각(`SPLIT_KINDS`)**: oFono `dump_dmsg_w_re()`가 IMSI·ICCID 값을 두 줄에 가르면(`common.dumpjoin`으로 묶음)
+- **갈린 덤프 조각(`SPLIT_KINDS`)**: oFono 덤프 함수(site-defaults `dump_func`, `<이름>() ` 뒤가 조각)가 IMSI·ICCID 값을 두 줄에 가르면(`common.dumpjoin`으로 묶음)
   키 있는 IMSI·ICCID 규칙만 이은 글에 돌려 조각 경계를 넘는 맞음을 줄별 강제 구간(`forced`)으로 되돌린다. 토큰은 전체
   값으로 한 번 만들고(개수 1회) 조각마다 같은 토큰을 쓰며, 조각 글자도 번호 표에 그 토큰으로 넣는다(`mask_value`).
   `mask_lines`·`mask_records`가 이 경로이고 `residual`·`redact`도 같은 맞음을 센다/가린다. 키 없는 규칙(15자리·`89…`·
@@ -155,8 +154,8 @@ def _token_secret(value: str) -> bool:
     """`token=` 값이 비밀값인가. 짧은 숫자(10진 10자리 이하, `0x`+16진 8자리 이하 — RIL 요청 token 등)는 아니다."""
     return not _SHORT_NUM.fullmatch(value.rstrip(")]}>"))
 
-# --- M1~M11: 첨부 실제 로그로 측정한 마스커(`logmine/bin/mask2.py` 2차·`mask3.py`)를 옮긴 규칙 (B2 §3.2) ---
-# 줄 단위로 본다(`^`는 줄 처음). 측정 마스커와 다른 점은 표의 "Deviation" 열 그대로다.
+# --- M1~M11: 합성 fixture로 고정한 로그 줄 규칙 (B2 §3.2) -----------------------------------------------
+# 줄 단위로 본다(`^`는 줄 처음).
 
 def _not_null(value: str) -> bool:
     """M3 위치 인자: 빈 값·`null`은 그대로 둔다(토큰은 이미 차지한 구간이라 여기 오지 않는다)."""
@@ -253,8 +252,6 @@ _M_LATE: tuple[Rule, ...] = (
     # M6 빌드·제품 코드 (mask3.py:31-34, mask2.py:94-100)
     Rule("BUILD", re.compile(r"Build Info\s*:\s*(?!<)(?P<v>\S+)"), gate=("build info",), log_only=True),
     Rule("BUILD", re.compile(r"commit ID:\s*(?P<v>[0-9a-fA-F]{6,})"), gate=("commit id",), log_only=True),
-    Rule("PRODUCT", re.compile(r"(?<![\w])(?P<v>m\d{4})(?=[^\w]|$)"), context=re.compile(r" cpif\s*:"),
-         gate=("cpif",), log_only=True),
     Rule("PRODUCT", re.compile(r"(?<![\w])(?P<v>[A-Z]\d{4}[A-Z0-9]{2,})(?![\w])"),
          context=re.compile(r" [VDIWEF] (?:synaptics_ts|sec_input|kernel)\b"), log_only=True),
     Rule("PRODUCT", re.compile(r'(?i)"(?:Revision|Model|Manufacturer|SoftwareVersion)",\s*variant\("(?P<v>[^"]+)"'),
@@ -298,6 +295,13 @@ _M_LATE: tuple[Rule, ...] = (
     Rule("B64", re.compile(r"(?<![A-Za-z0-9+/=<#])(?P<v>[A-Za-z0-9+/]{16,}={0,2})(?![A-Za-z0-9+/=])"),
          check=_b64_ish, context=re.compile(r"SIM_AUTHENTICATION"), gate=("sim_authentication",), per_line=True),
     # M2b 모양만 보는 base64 (mask3.py:36, 97-101) + 경로 제외
+    Rule("B64", re.compile(r"(?<![A-Za-z0-9+/=<#])(?P<v>[A-Za-z0-9+/]{24,}={0,2})(?![A-Za-z0-9+/=])"),
+         check=_b64_shape, log_only=True),
+    # 모뎀 모델 코드 `m<4자리>`: 문맥은 줄 어디든 ` <소문자 낱말>:`(커널/벤더 태그 꼴)이 있으면 — 벤더 태그 이름을 두지 않는다(과마스킹 허용).
+    # 문맥이 넓어 값 규칙(ro.*·fingerprint·variant·username 등) 뒤에 둔다 — 앞에 두면 값 한가운데를 먼저 차지해 값이 쪼개진다
+    Rule("PRODUCT", re.compile(r"(?<![\w])(?P<v>m\d{4})(?=[^\w]|$)"), context=re.compile(r" [a-z][a-z0-9_]*\s*:"),
+         log_only=True),
+    # M2b 다시: 제품 코드가 끊어 놓은 나머지(`…/m1234/<base64>`)도 모양만 보는 base64로 — 위 M2b는 끊기 전 글을 봤다
     Rule("B64", re.compile(r"(?<![A-Za-z0-9+/=<#])(?P<v>[A-Za-z0-9+/]{24,}={0,2})(?![A-Za-z0-9+/=])"),
          check=_b64_shape, log_only=True),
     # M10 남은 15~20자리 숫자 — 맨 끝(IMEI·IMSI·ICCID 검증 규칙이 먼저 제 종류로 가린다, mask2.py:110).
@@ -380,7 +384,7 @@ _BASE_RULES: tuple[Rule, ...] = (
     Rule("IP", re.compile(
         r"(?<![\w.])(?P<v>(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})(?!\w|\.\w)"),
          before=_VERSION_BEFORE),
-    # M12 앞뒤 경계에 낱말 문자 전부(`[0-9A-Za-z_:]`): C++ 범위 `MiscService_0::OnHandle`·`V2_4::RadioDataProxy`는 IP가 아니다
+    # M12 앞뒤 경계에 낱말 문자 전부(`[0-9A-Za-z_:]`): C++ 범위 `DemoService_0::OnHandle`·`V2_4::RadioDataProxy`는 IP가 아니다
     Rule("IP", re.compile(r"(?<![0-9A-Za-z_:])(?P<v>" + _V6_FULL + "|" + _V6_COMP + r")(?![0-9A-Za-z_:])"),
          check=lambda v: v != "::"),
     # 위 규칙의 앞 경계(`:` 금지)에 막히는 주소 키 바로 뒤(`addr:<v6>`, `ipv6address:<v6>/64`)와 끝이 `:`인 잘린 표기
@@ -570,7 +574,7 @@ def new_masker(existing_text: str | None = None, allow_patterns: Iterable[str] =
     return Masker(allow_patterns=allow_patterns, existing_text=existing_text, log_lines=log_lines)
 
 
-# --- 갈린 덤프 조각 (oFono `dump_dmsg_w_re()`) -------------------------------------------------------------
+# --- 갈린 덤프 조각 (oFono 덤프 함수, 표식 `common.dumpjoin.mark()`) -----------------------------------
 
 SPLIT_KINDS = ("IMSI", "ICCID")
 

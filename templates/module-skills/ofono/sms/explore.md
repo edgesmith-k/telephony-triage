@@ -7,17 +7,17 @@
 
 ## ② 볼 역할과 줄
 - `org.ofono.MessageManager` `SendMessage`, `src/sms.c`(재시도 줄), `src/cbs.c`.
-- CS: gril `SEND_SMS`·`SMS_ACKNOWLEDGE`, `UNSOL_RESPONSE_NEW_SMS`, 벤더 RIL `SmsService_<n>`(가정, 사내 확인).
-- IMS: IMS 서비스 데몬 `SmsService_<n>::sendSms`, AIMS TX. `smsOverLteCapable=<0|1>`이 길을 고른다.
+- CS: gril `SEND_SMS`·`SMS_ACKNOWLEDGE`, `UNSOL_RESPONSE_NEW_SMS`, 벤더 RIL `ExampleSmsService_<n>`(가정, 사내 확인).
+- IMS: IMS 구성요소 `ImsSmsSender::sendSms`, IMS IPC TX. `smsOverLteCapable=<0|1>`이 길을 고른다.
 
 ## ③ 층 경로
-D-Bus → ofonod sms → gril → 벤더 RIL → 모뎀·망, 또는 ofonod IMS 길 → IMS 서비스 데몬 → AIMS → 모뎀.
+D-Bus → ofonod sms → gril → 벤더 RIL → 모뎀·망, 또는 ofonod IMS 길 → IMS 구성요소 → IMS IPC → 모뎀.
 
 ## ④ 증상별 첫 점검
 | 증상 | 볼 역할·줄 | 흔한 첫 실패 → 층 | 대체 근거 · 받을 로그 |
 |---|---|---|---|
 | 발신 실패 (초안) | gril `SEND_SMS` → 벤더 RIL·IPC | 두 단계 규칙 / 줄 없음 → 그 층 로그 없음(벤더 RIL) | `src/sms.c` 재시도 |
-| IMS 문자 (초안) | `smsOverLteCapable=1`, `sendSms` | `failed` 뒤 AIMS TX 없음 → 곁가지 | IMS 문자 로그 |
+| IMS 문자 (초안) | `smsOverLteCapable=1`, `sendSms` | `failed` 뒤 IMS IPC TX 없음 → 곁가지 | IMS 문자 로그 |
 | 수신 안 됨 (초안) | `UNSOL_RESPONSE_NEW_SMS`·`SMS_ACKNOWLEDGE` | UNSOL 없음 → 그 층 로그 없음(벤더 RIL) | 수신 시각 수집 |
 | SMSC (초안) | SMSC 토큰 | 값으로 판단하지 않음 | SMSC 설정 |
 | 셀 방송 (초안) | `src/cbs.c` | 줄이 말하는 그대로 | — |

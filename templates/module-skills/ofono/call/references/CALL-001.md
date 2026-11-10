@@ -5,9 +5,9 @@
 [합성 예시 — issue-db-ofono-modules의 CALL-001. 사내 유형 ID로 바꾼다]
 
 ## 점검 목록
-1. gril `DIAL` 요청·응답을 serial로 짝짓고 exynos 요청·IPC를 잇는다.
-2. IPC 결과(`Error(RCM_E_*)`면 모뎀·망) → `OnRequestComplete` result 순서로 본다.
-3. CS 길인지 IMS 길인지 정한다. IMS면 IMS 서비스 데몬 줄과 AIMS 결과를 본다.
+1. gril `DIAL` 요청·응답을 serial로 짝짓고 벤더 RIL 요청·IPC를 잇는다.
+2. IPC 결과(`Error(VIPC_E_*)`면 모뎀·망) → `OnIpcComplete` result 순서로 본다.
+3. CS 길인지 IMS 길인지 정한다. IMS면 IMS 구성요소 줄과 IMS IPC 결과를 본다.
 
 ## 코드 경로
 `ofono:src/voicecall.c`, `ofono:drivers/rilmodem/voicecall.c`.

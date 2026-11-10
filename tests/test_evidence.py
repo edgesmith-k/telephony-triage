@@ -50,11 +50,11 @@ def test_parse_explore_blocks_and_none_form():
 def test_parse_explore_reads_eval_optional_fields_and_tail():
     """코덱스 리뷰 F4: 모듈 eval이 더 쓰는 `원인 층`·`원인 데몬`(가설 머리와 로그로 확인 사이)·꼬리 `가장 유력`·`규칙 제안`을 같은
     파서가 읽는다(check-output은 쓰지 않는다). 머리 변형(`### 가설 1:`·`가설 2 (추정):`·굵게)도 받는다."""
-    text = ("### 가설 1: a\n원인 층: 곁가지(DITD) — x\n원인 데몬: DITD\n로그로 확인:\n- q1\n코드로 추정: 코드 근거 없음\n반대 근거: 없음\n"
-            "다음 확인: x\n**가설 2 (추정):** b\n- **원인 층**： 관리 데몬 — y\n원인 데몬: NMD\n로그로 확인: q2\n코드로 추정: 코드 근거 없음\n"
+    text = ("### 가설 1: a\n원인 층: 곁가지(datad2) — x\n원인 데몬: datad2\n로그로 확인:\n- q1\n코드로 추정: 코드 근거 없음\n반대 근거: 없음\n"
+            "다음 확인: x\n**가설 2 (추정):** b\n- **원인 층**： 관리 데몬 — y\n원인 데몬: datad\n로그로 확인: q2\n코드로 추정: 코드 근거 없음\n"
             "반대 근거: r\n다음 확인: y\n가장 유력: 2번\n규칙 제안:\n- [이슈 DB] add-parser-rule x — 근거: y\n- 없음\n")
     out = evidence.parse_explore(text)
-    assert [h["n"] for h in out["hyps"]] == [1, 2] and out["hyps"][1]["원인 층"] == "관리 데몬 — y" and out["hyps"][1]["원인 데몬"] == "NMD"
+    assert [h["n"] for h in out["hyps"]] == [1, 2] and out["hyps"][1]["원인 층"] == "관리 데몬 — y" and out["hyps"][1]["원인 데몬"] == "datad"
     assert out["hyps"][1]["로그로 확인"] == ["q2"] and out["hyps"][1]["다음 확인"] == "y"          # 꼬리 줄은 마지막 가설 칸에 섞이지 않는다
     assert out["top"] == "2번" and out["rules"] == ["[이슈 DB] add-parser-rule x — 근거: y", "없음"]
     assert evidence.parse_explore("가설: a\n로그로 확인:\n- q\n코드로 추정: c\n반대 근거: r\n다음 확인: n\n")["hyps"][0]["n"] is None
@@ -68,11 +68,11 @@ TL = """# K 탐색 타임라인
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드)
 
 15:10:00.100 p0 I ofonod src/gprs.c:gprs_attach() attach requested
-15:10:01.200 - E exynos-ril SETUP_DATA_CALL fail cause=AUTH  ⇒ data_fail(cause=AUTH) 〔script 반복 3번 접음〕
+15:10:01.200 - E vrild SETUP_DATA_CALL fail cause=AUTH  ⇒ data_fail(cause=AUTH) 〔script 반복 3번 접음〕
 
 ## 다른 모듈 줄 (±15초, 경고·오류)
 
-15:10:02.000 p0 W NMD state=disconnected
+15:10:02.000 p0 W datad state=disconnected
 """
 
 
@@ -82,7 +82,7 @@ def test_source_text_keeps_only_rows_and_strips_script_note():
     assert len(lines) == 3 and all(evidence.ROW_RX.match(x) for x in lines)
     assert "실패 스텝" not in source and "##" not in source and "〔script" not in source
     assert lines[1].endswith("⇒ data_fail(cause=AUTH)")
-    assert all(tags.match(f"{t} msg") for t in ("ofonod", "exynos-ril", "NMD")) and not tags.match("실패 msg")
+    assert all(tags.match(f"{t} msg") for t in ("ofonod", "vrild", "datad")) and not tags.match("실패 msg")
 
 
 def test_event_rows_text_is_unclipped_and_every_row():
@@ -127,7 +127,7 @@ def test_evidence_check_catches_decision_token_alteration():
     가장 긴 조각)가 든 원문 한 줄에 모두 있어야 ok다."""
     tl = "\n".join([
         "14:32:10.100 p0 E RILJ [PHONE0] < SETUP_DATA_CALL error 2 failed cause=AUTH(29)",
-        "14:32:10.200 p0 I NMD state=disconnected for rmnet0",
+        "14:32:10.200 p0 I datad state=disconnected for rmnet0",
         "14:32:11.000 p1 I RILJ [PHONE1] < GET_SIGNAL_STRENGTH error 0 succeeded",
     ])
     source, tags = evidence.source_text(tl)
@@ -156,8 +156,8 @@ def test_evidence_check_token_boundary_negation_and_any_key_value():
         "10:00:02.000 p0 I DNC-0 SETUP_DATA_CALL completed connected",
         "10:00:03.000 p0 I DNC-0 data not registered on slot 1 reason=NO_SERVICE",
         "10:00:04.000 p0 I RILJ subscriber imsi=<IMSI#2> state=READY",
-        "10:00:05.000 p0 E DITD netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0",
-        "10:00:05.100 p0 W DITD default route not installed for rmnet0",
+        "10:00:05.000 p0 E datad2 netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0",
+        "10:00:05.100 p0 W datad2 default route not installed for rmnet0",
         "10:00:06.000 p0 I DNC-0 onSetupDataCallResult: status=0x10 cid=3",
     ])
     source, tags = evidence.source_text(tl)

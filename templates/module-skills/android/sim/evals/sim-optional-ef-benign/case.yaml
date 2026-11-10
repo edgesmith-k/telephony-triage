@@ -7,7 +7,7 @@ key: MOCK-9805
 issue:
   summary: 부팅 때 SIM 오류 로그가 보임
   description: 부팅 로그에 SIM_IO 오류가 여러 번 찍힙니다. SIM 기능에 문제가 있는지 확인해 주세요.
-  occurred_at: '2026-08-09T13:10:57+0000'
+  occurred_at: '2026-10-16T08:30:14+0000'
   platform_version: '14'
   sim_slot: '0'
 parse: {tz: UTC, year: 2026, minutes: 5}

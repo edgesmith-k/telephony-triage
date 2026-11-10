@@ -22,7 +22,7 @@ import module_measure
 import test_modulefilter  # noqa: F401  (merge_rows 대체를 끼운다)
 from common import modulefilter as mf
 
-JOB = REPO / "tests" / "fixtures" / "module-filter" / "e1-euicc-poll"
+JOB = REPO / "tests" / "fixtures" / "module-filter" / "ofono-sim-open-channel-absent"
 MODULES = REPO / "templates" / "module-skills" / "modules.yaml"
 
 
@@ -85,13 +85,13 @@ def test_findings_exit_and_baseline(tmp_path, capsys):
 
     db = runner.variant_db("issue-db-ofono-modules")
     doc = yaml.safe_load(MODULES.read_text(encoding="utf-8"))
-    doc["platforms"]["ofono"]["modules"]["sim"]["daemons"] = ["LPA", "NMD"]      # NMD는 tags.yaml에서 data
+    doc["platforms"]["ofono"]["modules"]["sim"]["daemons"] = ["simd", "datad"]      # datad는 tags.yaml에서 data
     bad = tmp_path / "modules.yaml"
     bad.write_text(yaml.safe_dump(doc, allow_unicode=True), encoding="utf-8")
     code = module_measure.main(["coverage", "--job", str(JOB), "--modules", str(bad), "--rules", str(db / "parser-rules"),
                                 "--json"])
     out = json.loads(capsys.readouterr().out)
-    assert code == 1 and any("NMD" in f for f in out["findings"])
+    assert code == 1 and any("datad" in f for f in out["findings"])
     base = tmp_path / "base.json"
     base.write_text(json.dumps(out), encoding="utf-8")
     code, again = _cov(capsys, "--baseline", base)

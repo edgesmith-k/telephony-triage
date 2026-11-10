@@ -1005,17 +1005,17 @@ def test_threadtime_blank_tag_still_parses_and_is_raw():
     assert stats.unparsed == 0 and [ln.tag for ln in lines] == ["", "RILJ"]
 
 VENDOR_ROWS = [
-    "08-09 13:24:00.100  1188  1203 I RIL     : [<DEV#1>][TX] SIT_GET_SIM_STATUS, REQ, 8 bytes, Token(0x0210) (합성)",
-    "08-09 13:24:00.180  1188  1203 E RIL     : [<DEV#1>][RX] SIT_GET_SIM_STATUS, RSP, 12 bytes, Token(0x0210), Error(RCM_E_GENERIC_FAILURE)",
-    "08-09 13:24:00.181  1188  1203 I RIL     : [<DEV#1>][RX] SIT_SET_DATA_PROFILE, RSP, 12 bytes, Token(0x0211), OK(RCM_E_SUCCESS)",
-    "08-09 13:24:00.182  1188  1203 I RIL     : [RilContext_0] OnRequestComplete Request ID=3, result=2",
-    "08-09 13:24:00.183  1188  1203 I RIL     : [RilContext_0] OnRequestComplete Request ID=4, result=0",
-    "08-09 13:24:00.184  1188  1203 E RILC    : [<DEV#1>][RX] SIT_SIM_IO, RSP, 12 bytes, Token(0x0212), Error(RCM_E_GENERIC_FAILURE)",
+    "08-09 13:24:00.100  1188  1203 I RIL     : [<DEV#1>][TX] VIPC_DEMO_STATUS, REQ, 8 bytes, Token(0x0210) (합성)",
+    "08-09 13:24:00.180  1188  1203 E RIL     : [<DEV#1>][RX] VIPC_DEMO_STATUS, RSP, 12 bytes, Token(0x0210), Error(VIPC_E_DEMO_FAILURE)",
+    "08-09 13:24:00.181  1188  1203 I RIL     : [<DEV#1>][RX] VIPC_DEMO_SET, RSP, 12 bytes, Token(0x0211), OK(VIPC_OK)",
+    "08-09 13:24:00.182  1188  1203 I RIL     : [IpcCtx_0] OnIpcComplete Request ID=3, result=2",
+    "08-09 13:24:00.183  1188  1203 I RIL     : [IpcCtx_0] OnIpcComplete Request ID=4, result=0",
+    "08-09 13:24:00.184  1188  1203 E VRIL    : [<DEV#1>][RX] VIPC_SIM_IO, RSP, 12 bytes, Token(0x0212), Error(VIPC_E_DEMO_FAILURE)",
 ]
 
 
 def test_a_shapes_vendor_ipc_builtin():
-    """`RIL` 줄의 IPC `Error(RCM_E_*)`·`result≠0` → builtin.common.* (R12·S17). SUCCESS·result=0·다른 태그는 없다.
+    """`RIL` 줄의 IPC `Error(VIPC_E_*)`·`result≠0` → builtin.common.* (R12·S17). SUCCESS·result=0·다른 태그는 없다.
     `RIL`이 tags.yaml에 없는 DB(태그 묶음 없는 plain)에서도 builtin 레코드는 남는다."""
     from platforms.android import backend as aback
     assert aback.BACKEND.builtin_events() == ["builtin.common.vendor_ipc_error", "builtin.common.vendor_request_failed"]
@@ -1032,12 +1032,36 @@ def test_a_shapes_vendor_ipc_builtin():
         got = [(e["event"], e["fields"], e["category_hint"], e["source"]) for e in data["events"]
                if (e["event"] or "").startswith("builtin.")]
         assert got == [
-            ("builtin.common.vendor_ipc_error", {"ipc": "SIT_GET_SIM_STATUS", "error": "RCM_E_GENERIC_FAILURE"}, "common",
+            ("builtin.common.vendor_ipc_error", {"ipc": "VIPC_DEMO_STATUS", "error": "VIPC_E_DEMO_FAILURE"}, "common",
              "backend:reference"),
             ("builtin.common.vendor_request_failed", {"request_id": "3", "result": "2"}, "common", "backend:reference"),
         ], rules
     plain_lines = [e for e in data["events"] if e["event"] is None and e["tag"] == "RIL"]
     assert not plain_lines, "plain DB는 RIL 줄 레코드를 버리고 builtin만 남긴다"
+
+
+def test_a_vendor_ipc_spec_from_site_defaults():
+    """site-defaults `platform.vendor_ipc`(다섯 토큰)가 요청 완료 줄·IPC 오류 줄 판별을 바꾼다 — parse_logcat 전체 경로.
+    설정이 없으면 placeholder 기본(`IpcCtx_`·`OnIpcComplete`·`VIPC_`·`VIPC_E_`·`VIPC_E_OK`)만 잡는다."""
+    root = make_plugin_root.make()
+    data = yaml.safe_load((root / "site-defaults.yaml").read_text(encoding="utf-8"))
+    platform = dict(data.get("platform") or {})
+    platform["vendor_ipc"] = {"context": "SiteCtx_", "complete": "SiteDone", "request_prefix": "SMSG_", "error_prefix": "SRES_", "success": "SRES_DONE"}
+    _set_defaults(root, platform=platform)
+    log = _a_log("site-ipc.log", [
+        "08-09 13:24:00.182  1188  1203 I RIL     : [SiteCtx_0] SiteDone Request ID=3, result=2",
+        "08-09 13:24:00.183  1188  1203 I RIL     : [IpcCtx_0] OnIpcComplete Request ID=4, result=2",
+        "08-09 13:24:00.184  1188  1203 I RIL     : [<DEV#1>][RX] SMSG_DIAL, RSP, Error(SRES_BUSY)",
+        "08-09 13:24:00.185  1188  1203 I RIL     : [<DEV#1>][RX] VIPC_DIAL, RSP, Error(VIPC_E_BUSY)",
+        "08-09 13:24:00.186  1188  1203 I RIL     : [<DEV#1>][RX] SMSG_DIAL, RSP, Error(SRES_DONE)",
+    ])
+
+    def failed(r):
+        return [e["fields"].get("request_id") or e["fields"]["ipc"] for e in _parse([log], root=r)["events"]
+                if e["event"] in ("builtin.common.vendor_request_failed", "builtin.common.vendor_ipc_error")]
+
+    assert failed(root) == ["3", "SMSG_DIAL"]
+    assert failed(_root()) == ["4", "VIPC_DIAL"]
 
 
 def _all_tests():

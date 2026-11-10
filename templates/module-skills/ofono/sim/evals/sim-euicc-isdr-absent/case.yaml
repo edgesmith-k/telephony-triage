@@ -7,7 +7,7 @@ key: MOCK-9202
 issue:
   summary: 'eSIM EID를 읽지 못함'
   description: 'eSIM EID 조회가 실패합니다.'
-  occurred_at: '2026-02-27T17:27:50+0000'
+  occurred_at: '2026-09-22T10:10:20+0000'
   platform_version: '2'
   sim_slot: '0'
 parse: {tz: UTC, year: 2026, minutes: 5}
@@ -20,8 +20,8 @@ run_expect:
 expect:
   accept:
     - layer: '모뎀|망|(e)?UICC|카드'
-      daemon: 'exynos-ril'
+      daemon: 'vrild'
       evidence: ['sw1 : 6A, sw2 : 82', 'SIM_OPEN_CHANNEL failed NO_SUCH_ELEMENT']
   trap:
     - label: '^\s*(관리 데몬|D-Bus|ofonod|벤더 RIL|그\s*층|원인\s*아님)'
-    - label: '^\s*(LPA|ipad)'
+    - label: '^\s*simd'

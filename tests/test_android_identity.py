@@ -69,7 +69,7 @@ def test_spec_fields():
     assert SPEC.label == "Android"
     assert SPEC.primary_root == "aosp" and SPEC.default_root_keys == ("aosp", "vendor_ril")
     assert SPEC.default_backend == "reference"
-    assert SPEC.block_keys == ("source_tree", "log", "ril", "bugreport")
+    assert SPEC.block_keys == ("source_tree", "log", "ril", "bugreport", "vendor_ipc")
     assert SPEC.log.read_file is logcat.read_file
     assert [p.name for p in SPEC.protocols] == ["ril"]
     assert SPEC.protocols[0].annotate is ril.parse and SPEC.protocols[0].pair is ril.pair

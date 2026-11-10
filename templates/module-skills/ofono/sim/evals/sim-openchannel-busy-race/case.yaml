@@ -7,7 +7,7 @@ key: MOCK-9203
 issue:
   summary: 'eSIM 정보 조회 시 eUICC not responding 오류'
   description: 'eSIM 정보 조회 중 eUICC not responding 오류가 납니다.'
-  occurred_at: '2026-02-27T17:52:14+0000'
+  occurred_at: '2026-09-22T10:20:20+0000'
   platform_version: '2'
   sim_slot: '0'
 parse: {tz: UTC, year: 2026, minutes: 5}
@@ -20,7 +20,7 @@ run_expect:
 expect:
   accept:
     - layer: '관리 데몬|D-Bus'
-      daemon: 'LPA|ipad|MOSE'
+      daemon: 'simd|mgmtd'
       evidence: ['__ofono_error_busy\(\).*OpenChannel', 'Operation already in progress']
   trap:
-    - label: '^\s*(모뎀|망|벤더 RIL|exynos|ofonod|그\s*층|원인\s*아님)'
+    - label: '^\s*(모뎀|망|벤더 RIL|vrild|ofonod|그\s*층|원인\s*아님)'

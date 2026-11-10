@@ -20,7 +20,7 @@ run_expect:
 expect:
   accept:
     - layer: '모뎀|망'
-      daemon: 'RIL$|RIL[ (]|RIL\b|모뎀|PsService'
+      daemon: 'RIL$|RIL[ (]|RIL\b|모뎀|ExamplePdnService'
       evidence: ['UNSOL_DATA_CALL_LIST_UPDATED', 'CONNECTED to DISCONNECTED']
   trap:
     - label: '^\s*(프레임워크|DRM|DNC|RILJ|RIL HAL|곁가지)'

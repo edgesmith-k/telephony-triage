@@ -40,7 +40,7 @@ SPEC = PlatformSpec(
     default_root_keys=("ofono",),
     capture=None,
     default_backend="ofono_reference",
-    block_keys=("source_tree", "log", "protocols", "components"),
+    block_keys=("source_tree", "log", "protocols", "components", "vendor_ipc", "dump_func"),
     components=(Component("ofono", ("ofonod",), root_key="ofono", msg_format="file_func"),),   # TODO(SITE:S24·S25)
     msg_formats=msgformat.FORMATS,
     protocol_kinds=((pairing.KIND, pairing.build), (hop.KIND, hop.build)),

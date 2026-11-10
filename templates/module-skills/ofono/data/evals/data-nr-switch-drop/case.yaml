@@ -20,9 +20,9 @@ run_expect:
 expect:
   accept:
     - layer: '모뎀|망'
-      daemon: 'exynos-ril'
-      evidence: ['UNSOL_DATA_CALL_LIST_CHANGED', 'SIT_IND_PHYSICAL_CHANNEL_CONFIG']
+      daemon: 'vrild'
+      evidence: ['UNSOL_DATA_CALL_LIST_CHANGED', 'VIPC_EXAMPLE_CARRIER_IND']
   trap:
-    - label: '^\s*(관리 데몬|NMD|ofonod|D-Bus|MOSE|곁가지)'
+    - label: '^\s*(관리 데몬|datad\b|ofonod|D-Bus|mgmtd|곁가지)'
     - label: '^\s*그\s*층\s*로그\s*없음'
     - label: '^\s*원인\s*아님'

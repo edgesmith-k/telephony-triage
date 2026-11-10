@@ -109,12 +109,12 @@ def test_explore_view_recall(name):
 
 
 def test_negative_fixture_rows_reach_view():
-    for name in ("syn-noise-event", "syn-unmapped-ril", "syn-connman-no-such-element", "syn-qmi-ipc"):
+    for name in ("syn-noise-event", "syn-unmapped-ril", "syn-connman-no-such-element", "syn-vendor-ipc"):
         expect, events = _case(name)
         spec, rows = _labeled(expect, events)
         picked, _ = mf.view(spec, rows, expect["module"], expect["center"], "explore")
         assert set(expect["essential"]) <= _covered(picked), name
-    expect, events = _case("syn-qmi-ipc")
+    expect, events = _case("syn-vendor-ipc")
     plain = mf.compile_spec(MODULES, "ofono")
     rows = mf.rows_of(events)
     mf.label(plain, rows)
@@ -142,16 +142,16 @@ def test_setup_data_call_fields_masked_in_views():
 # -- 창·고정 줄·상한 ---------------------------------------------------------------------------------------------
 
 def test_deep_window_keeps_both_ends():
-    rows_in = [("2026-09-20T15:10:00.000Z", "NMD", "profile select start", "I", {"category_hint": "data"})]
-    rows_in += [(f"2026-09-20T15:10:{s:02d}.000Z", "MOSE", f"tick {s}", "I", None) for s in range(1, 15)]
-    rows_in += [("2026-09-20T15:10:15.000Z", "NMD", "activate result: failed", "W",
+    rows_in = [("2026-09-20T15:10:00.000Z", "datad", "profile select start", "I", {"category_hint": "data"})]
+    rows_in += [(f"2026-09-20T15:10:{s:02d}.000Z", "mgmtd", f"tick {s}", "I", None) for s in range(1, 15)]
+    rows_in += [("2026-09-20T15:10:15.000Z", "datad", "activate result: failed", "W",
                  {"category_hint": "data", "event": None})]
     events = _events(rows_in)
     spec = mf.compile_spec(MODULES, "ofono")
     rows = mf.rows_of(events)
     mf.label(spec, rows)
-    ev = [{"ts": rows[0]["ts"], "tag": "NMD", "msg": rows[0]["msg"], "event": None},
-          {"ts": rows[-1]["ts"], "tag": "NMD", "msg": rows[-1]["msg"], "event": "x"}]
+    ev = [{"ts": rows[0]["ts"], "tag": "datad", "msg": rows[0]["msg"], "event": None},
+          {"ts": rows[-1]["ts"], "tag": "datad", "msg": rows[-1]["msg"], "event": "x"}]
     center, (lo, hi) = mf.deep_window(ev, rows)
     assert center == "2026-09-20T15:10:15.000Z" and lo == "2026-09-20T15:09:30.000Z" and hi == "2026-09-20T15:10:20.000Z"
     picked, _ = mf.view(spec, rows, "data", center, "deep", window=(lo, hi), pins=ev)
@@ -167,24 +167,24 @@ def test_deep_window_cap_60s():
 
 
 def test_pins_survive_noise_quiet_collapse_and_count_first():
-    noisy = "SIT_IND_SIGNAL_STRENGTH level=3"
-    rows_in = [(f"2026-09-20T15:10:{s:02d}.000Z", "NMD", f"activate result: failed {s}", "W",
+    noisy = "VIPC_EXAMPLE_SIGNAL_IND level=3"
+    rows_in = [(f"2026-09-20T15:10:{s:02d}.000Z", "datad", f"activate result: failed {s}", "W",
                 {"category_hint": "data"}) for s in range(30)]
-    rows_in.append(("2026-09-20T15:10:40.000Z", "exynos-ril", noisy, "I", None))
+    rows_in.append(("2026-09-20T15:10:40.000Z", "vrild", noisy, "I", None))
     events = _events(rows_in)
     spec = mf.compile_spec(MODULES, "ofono")
     rows = mf.rows_of(events)
     mf.label(spec, rows)
     assert rows[-1]["noise"]
-    pins = [{"ts": "2026-09-20T15:10:40.000Z", "tag": "exynos-ril", "msg": noisy}]
+    pins = [{"ts": "2026-09-20T15:10:40.000Z", "tag": "vrild", "msg": noisy}]
     picked, stats = mf.view(spec, rows, "data", "2026-09-20T15:10:00.000Z", "explore", cap_rows=3, pins=pins)
     assert len(picked) == 3 and noisy in picked[-1]["line"] and stats["pinned"] == 1
 
 
 def test_same_ms_rows_keep_source_order_and_ip_tokens_differ():
-    rows_in = [("2026-09-20T15:10:00.000Z", "NMD", "route add <IP#9> failed", "W", {"category_hint": "data"}),
-               ("2026-09-20T15:10:00.000Z", "NMD", "route add <IP#10> failed", "W", {"category_hint": "data"}),
-               ("2026-09-20T15:10:00.000Z", "NMD", "a first", "W", {"category_hint": "data"})]
+    rows_in = [("2026-09-20T15:10:00.000Z", "datad", "route add <IP#9> failed", "W", {"category_hint": "data"}),
+               ("2026-09-20T15:10:00.000Z", "datad", "route add <IP#10> failed", "W", {"category_hint": "data"}),
+               ("2026-09-20T15:10:00.000Z", "datad", "a first", "W", {"category_hint": "data"})]
     spec = mf.compile_spec(MODULES, "ofono")
     rows = mf.rows_of(_events(rows_in))
     mf.label(spec, rows)
@@ -193,7 +193,7 @@ def test_same_ms_rows_keep_source_order_and_ip_tokens_differ():
 
 
 def test_exact_repeats_collapse_with_script_note():
-    rows_in = [(f"2026-09-20T15:10:00.{i:03d}Z", "NMD", "activate result: failed", "W", {"category_hint": "data"})
+    rows_in = [(f"2026-09-20T15:10:00.{i:03d}Z", "datad", "activate result: failed", "W", {"category_hint": "data"})
                for i in range(0, 500, 100)]
     spec = mf.compile_spec(MODULES, "ofono")
     rows = mf.rows_of(_events(rows_in))
@@ -215,7 +215,7 @@ def test_inheritance_follows_line_order():
 
 def test_state_rows_pinned_and_never_vote():
     rows_in = [("2026-09-20T15:10:00.000Z", "ofonod", "[0,0001]> RIL_REQUEST_RADIO_POWER on", "I", None),
-               ("2026-09-20T15:10:05.000Z", "NMD", "activate result: failed", "W", {"category_hint": "data"})]
+               ("2026-09-20T15:10:05.000Z", "datad", "activate result: failed", "W", {"category_hint": "data"})]
     spec = mf.compile_spec(MODULES, "ofono")
     rows = mf.rows_of(_events(rows_in))
     mf.label(spec, rows)
@@ -231,11 +231,11 @@ def test_zero_value_rows_not_hot():
     (`triagelib.core.is_error_text`, report 타임라인 고르기도 같다). (벤더 모양을 본뜬 합성 줄)"""
     from triagelib.core import ZERO_VALUE_RE, is_error_text
 
-    android = [("2026-09-20T15:10:00.000Z", "RIL", "[PsService_0] OnSetupDataCallComplete cid=1 errorCode=0", "I", None),
-               ("2026-09-20T15:10:00.100Z", "RIL", "[PsService_0] OnSetupDataCallComplete cid=1 errorCode=2", "I", None),
-               ("2026-09-20T15:10:00.200Z", "RIL", "[RilContext_0] OnRequestComplete Request ID=27, result=0 error",
+    android = [("2026-09-20T15:10:00.000Z", "RIL", "[ExamplePdnService_0] OnExampleSetupDone cid=1 errorCode=0", "I", None),
+               ("2026-09-20T15:10:00.100Z", "RIL", "[ExamplePdnService_0] OnExampleSetupDone cid=1 errorCode=2", "I", None),
+               ("2026-09-20T15:10:00.200Z", "RIL", "[IpcCtx_0] OnIpcComplete Request ID=27, result=0 error",
                 "I", None),
-               ("2026-09-20T15:10:00.300Z", "RIL", "[RilContext_0] OnRequestComplete Request ID=27, result=0", "I", None)]
+               ("2026-09-20T15:10:00.300Z", "RIL", "[IpcCtx_0] OnIpcComplete Request ID=27, result=0", "I", None)]
     spec = mf.compile_spec(MODULES, "android")
     rows = mf.rows_of(_events(android))
     mf.label(spec, rows)
@@ -246,10 +246,15 @@ def test_zero_value_rows_not_hot():
     rows = mf.rows_of(_events(ofono))
     mf.label(spec, rows)
     assert [r["hot"] for r in rows] == [False, True]
-    for text in ("errorCode=0", "RejectCause : 0", "error(0)", "result = 0", "rilErrorCode=0 ok", "fail_cause=0"):
+    for text in ("errorCode=0", "RejectCause : 0", "error(0)", "result = 0", "ipcErrorCode=0 ok", "fail_cause=0"):
         assert not is_error_text(text), text
     for text in ("errorCode=0x10", "errorCode=0.5 failed", "error=NONE but failed", "errorCode=00 timeout",
                  "result=0 then RIL_REQUEST_DIAL failed", "errorCode=2", "lost"):
+        assert is_error_text(text), text
+    # 접두가 붙은 `<접두>ErrorCode`(벤더 접두가 아닌 것도)는 `errorCode`와 같다: 0이면 오류 아님, 0이 아니면 오류
+    for text in ("lastErrorCode=0", "linkErrorCode: 0 done", "CallErrorCode(0)"):
+        assert not is_error_text(text), text
+    for text in ("lastErrorCode=3", "linkErrorCode: 12 done", "CallErrorCode(0x1)"):
         assert is_error_text(text), text
     assert ZERO_VALUE_RE.sub("", "a errorCode=10 b") == "a errorCode=10 b"
 
@@ -257,7 +262,7 @@ def test_zero_value_rows_not_hot():
 def test_background_family_counts_once():
     spec = mf.compile_spec(MODULES, "ofono")
     msg = "SIM_OPEN_CHANNEL failed NO_SUCH_ELEMENT"
-    items = [{"tag": "LPA", "msg": msg, "cat": "sim", "ril": None}] * 4
+    items = [{"tag": "simd", "msg": msg, "cat": "sim", "ril": None}] * 4
     assert mf.candidates(spec, items)["counts"]["sim"]["lines"] == 1
 
 
@@ -267,45 +272,46 @@ def test_chain_pulls_paired_response():
     rsp = {"ril": {"serial": 1, "dir": "resp", "request": "SETUP_DATA_CALL", "paired_ts": "2026-09-20T15:10:00.000Z"},
            "category_hint": "data"}
     rows_in = [("2026-09-20T15:10:00.000Z", "ofonod", "[0,0001]> RIL_REQUEST_SETUP_DATA_CALL", "D", req)]
-    rows_in += [(f"2026-09-20T15:10:00.{i:03d}Z", "MOSE", f"ui tick {i}", "I", None) for i in range(100, 900, 100)]
-    rows_in += [("2026-09-20T15:10:00.500Z", "exynos-ril", "RIL_SOCKET_0 REQUEST: SETUP_DATA_CALL", "I", None),
+    rows_in += [(f"2026-09-20T15:10:00.{i:03d}Z", "mgmtd", f"ui tick {i}", "I", None) for i in range(100, 900, 100)]
+    rows_in += [("2026-09-20T15:10:00.500Z", "vrild", "VCHAN_0 REQUEST: SETUP_DATA_CALL", "I", None),
                 ("2026-09-20T15:10:01.000Z", "ofonod", "[0,0001]< RIL_REQUEST_SETUP_DATA_CALL failed", "E", rsp)]
     spec = mf.compile_spec(MODULES, "ofono")
     rows = mf.rows_of(_events(rows_in))
     mf.label(spec, rows)
     picked, _ = mf.view(spec, rows, "data", "2026-09-20T15:10:01.000Z", "explore", cap_rows=3)
     msgs = [v["row"]["msg"] for v in picked]
-    assert "[0,0001]> RIL_REQUEST_SETUP_DATA_CALL" in msgs and "RIL_SOCKET_0 REQUEST: SETUP_DATA_CALL" in msgs
+    assert "[0,0001]> RIL_REQUEST_SETUP_DATA_CALL" in msgs and "VCHAN_0 REQUEST: SETUP_DATA_CALL" in msgs
 
 
 # -- 표(규칙 1~3) ------------------------------------------------------------------------------------------------
 
 def test_primary_rules():
     spec = mf.compile_spec(MODULES, "ofono")
-    assert mf.primary(spec, {"tag": "NMD", "cat": "data", "ril": None}) == ("data", "tag:NMD")
+    assert mf.primary(spec, {"tag": "datad", "cat": "data", "ril": None}) == ("data", "tag:datad")
     assert mf.primary(spec, {"tag": "ofonod", "cat": "sim", "ril": {"request": "SIM_IO"}}) == ("sim", "ril:SIM_IO")
     assert mf.primary(spec, {"tag": "X", "cat": "gnss", "ril": None}) == (None, "unmapped:gnss")
     assert mf.primary(spec, {"tag": "ofonod/gprs", "cat": "common", "msg": "src/gprs.c:f() x"}) == ("data", "file:src/gprs.c")
     assert mf.primary(spec, {"tag": "ofonod", "cat": "common", "msg": "drivers/rilmodem/sim.c:f() x"}) == \
         ("sim", "file:drivers/rilmodem/sim.c")
     assert mf.primary(spec, {"tag": "ofonod", "cat": "common", "msg": "src/simfs.c:f() x"}) == ("sim", "file:src/simfs.c")
-    assert mf.primary(spec, {"tag": "RFSD", "cat": "common", "msg": "x"}) == ("modem", "tag:RFSD")
+    assert mf.primary(spec, {"tag": "ofonod", "cat": "common", "msg": "src/modem.c:f() x"}) == ("modem", "file:src/modem.c")
+    assert mf.primary(spec, {"tag": "mgmtd", "cat": "common", "msg": "x"}) == (None, None)       # 공통 데몬은 모듈 표를 주지 않는다
     assert mf.primary(spec, {"tag": "ofonod", "cat": None, "msg": "x", "ril": {"request": "RADIO_POWER"}}) == \
         ("modem", "ril:RADIO_POWER")
-    out = mf.candidates(spec, [{"tag": "NMD", "cat": "data"}, {"tag": "NMD", "cat": "data"}, {"tag": "LPA", "cat": "sim"},
+    out = mf.candidates(spec, [{"tag": "datad", "cat": "data"}, {"tag": "datad", "cat": "data"}, {"tag": "simd", "cat": "sim"},
                                {"tag": "X", "cat": "gnss"}])
-    assert out == {"counts": {"data": {"lines": 2, "why": [["tag:NMD", 2]]}, "sim": {"lines": 1, "why": [["tag:LPA", 1]]}},
+    assert out == {"counts": {"data": {"lines": 2, "why": [["tag:datad", 2]]}, "sim": {"lines": 1, "why": [["tag:simd", 1]]}},
                    "unmapped": {"gnss": 1}}
 
 
 def test_also_signal_counts_modem_rows():
-    rows_in = [("2026-09-20T15:10:00.000Z", "RFSD", "rf calibration failed", "W", None),
-               ("2026-09-20T15:10:01.000Z", "NMD", "activate result: failed", "W", {"category_hint": "data"})]
+    rows_in = [("2026-09-20T15:10:00.000Z", "ofonod", "src/modem.c:modem_change_state() rf calibration failed", "W", None),
+               ("2026-09-20T15:10:01.000Z", "datad", "activate result: failed", "W", {"category_hint": "data"})]
     spec = mf.compile_spec(MODULES, "ofono")
     rows = mf.rows_of(_events(rows_in))
     mf.label(spec, rows)
     assert mf.also_signal(spec, rows, "2026-09-20T15:09:30.000Z", "2026-09-20T15:10:05.000Z") == \
-        {"rows": 1, "why": [["tag:RFSD", 1]]}
+        {"rows": 1, "why": [["file:src/modem.c", 1]]}
 
 
 def test_deep_evidence_from_match():
@@ -331,7 +337,7 @@ def _view_payload(path: str, **extra) -> dict:
 
 def test_view_redacts_then_asserts(tmp_path, monkeypatch):
     imsi = "45005" + "1234567890"
-    events = _events([("2026-09-20T15:10:00.000Z", "NMD", f"activate failed imsi={imsi}", "W", {"category_hint": "data"})])
+    events = _events([("2026-09-20T15:10:00.000Z", "datad", f"activate failed imsi={imsi}", "W", {"category_hint": "data"})])
     out = mf.build(_view_payload(_write_events(tmp_path, events)))
     assert imsi not in out["text"] and "<REDACTED:IMSI>" in out["text"] and out["stats"]["redacted"] == {"IMSI": 1}
     assert "- 가림(마스킹 점검): IMSI 1" in out["text"]
@@ -340,7 +346,7 @@ def test_view_redacts_then_asserts(tmp_path, monkeypatch):
 
 
 def test_view_header_and_uncollected_names_only(tmp_path):
-    events = _events([("2026-09-20T15:10:00.000Z", "NMD", "activate result: failed", "W", {"category_hint": "data"})])
+    events = _events([("2026-09-20T15:10:00.000Z", "datad", "activate result: failed", "W", {"category_hint": "data"})])
     out = mf.build(_view_payload(_write_events(tmp_path, events)))
     text, stats = out["text"], out["stats"]
     assert text.startswith("# MOCK-1 모듈 타임라인 (ofono/data, 탐색)\n")
@@ -354,22 +360,37 @@ def test_view_header_and_uncollected_names_only(tmp_path):
 
 
 def test_view_weak_signal_and_other_module_section(tmp_path):
-    events = _events([("2026-09-20T15:10:00.000Z", "LPA", "profile download failed", "E", {"category_hint": "sim"}),
-                      ("2026-09-20T15:10:01.000Z", "NMD", "profile select", "I", {"category_hint": "data"})])
+    events = _events([("2026-09-20T15:10:00.000Z", "simd", "profile download failed", "E", {"category_hint": "sim"}),
+                      ("2026-09-20T15:10:01.000Z", "datad", "profile select", "I", {"category_hint": "data"})])
     out = mf.build(_view_payload(_write_events(tmp_path, events)))
     assert out["stats"]["weak"] and "- 모듈 신호 약함:" in out["text"] and "## 다른 모듈 줄 (±15초, 경고·오류)" in out["text"]
 
 
 def test_build_candidates_and_also(tmp_path):
     res = mf.build({"op": "candidates", "modules": MODULES, "platform": "ofono",
-                    "items": [{"tag": "NMD", "msg": "x", "cat": "data", "ril": None, "level": "W", "marks": []}]})
+                    "items": [{"tag": "datad", "msg": "x", "cat": "data", "ril": None, "level": "W", "marks": []}]})
     assert res["counts"]["data"]["lines"] == 1
-    events = _events([("2026-09-20T15:10:00.000Z", "RFSD", "rf failed", "W", None)])
+    events = _events([("2026-09-20T15:10:00.000Z", "ofonod", "src/modem.c:f() rf failed", "W", None)])
     path = _write_events(tmp_path, events)
-    ev = [{"ts": "2026-09-20T15:10:00.000Z", "tag": "RFSD", "msg": "rf failed", "event": None}]
+    ev = [{"ts": "2026-09-20T15:10:00.000Z", "tag": "ofonod", "msg": "src/modem.c:f() rf failed", "event": None}]
     assert mf.build({"op": "also", "modules": MODULES, "platform": "ofono", "events": path, "evidence": ev,
                      "module": "data"})["rows"] == 1
     assert mf.compile_spec(MODULES, "nope") is None
+
+
+def test_ipc_prefix_from_site_defaults_when_no_ipc_re(tmp_path):
+    """`filter.ipc_re`가 없으면 IPC 이름 접두어는 site-defaults `vendor_ipc.request_prefix`(payload `ipc_prefix`), 없으면 placeholder."""
+    doc = copy.deepcopy(MODULES)
+    doc["platforms"]["ofono"]["common"]["filter"].pop("ipc_re", None)
+    doc["platforms"]["ofono"]["modules"]["data"]["ipc"] = ["SMSG_DATA_*"]
+    site = mf.compile_spec(doc, "ofono", "SMSG_")
+    assert site.f.ipc_re.findall("[RX] SMSG_DATA_SETUP, RSP") == ["SMSG_DATA_SETUP"]
+    assert mf.compile_spec(doc, "ofono").f.ipc_re.findall("[RX] SMSG_DATA_SETUP, RSP") == []
+    assert mf.compile_spec(doc, "ofono").f.ipc_re.pattern == mf.DEFAULT_IPC_RE == mf.ipc_re_for("VIPC_")
+    path = _write_events(tmp_path, _events([("2026-09-20T15:10:00.000Z", "vrild", "[RX] SMSG_DATA_SETUP, RSP", "W", None)]))
+    payload = {"modules": doc, "platform": "ofono", "events": path}
+    assert "data" in (mf._spec_rows({**payload, "ipc_prefix": "SMSG_"})[1][0]["mods"] or ())   # build 경로도 같은 값
+    assert "data" not in (mf._spec_rows(payload)[1][0]["mods"] or ())
 
 
 def test_child_timeout_and_crash():
@@ -379,8 +400,8 @@ def test_child_timeout_and_crash():
 
 
 def test_view_bytes_deterministic_across_hash_seeds(tmp_path):
-    expect, _ = _case("e1-euicc-poll")
-    payload = _view_payload(str(FIXTURES / "e1-euicc-poll" / "events.json"), module="sim", center=expect["center"])
+    expect, _ = _case("ofono-sim-open-channel-absent")
+    payload = _view_payload(str(FIXTURES / "ofono-sim-open-channel-absent" / "events.json"), module="sim", center=expect["center"])
     (tmp_path / "p.json").write_text(json.dumps(payload), encoding="utf-8")
     code = ("import json,sys; sys.path.insert(0, sys.argv[1]); sys.path.insert(0, sys.argv[2]);"
             "from triagelib import report; import test_modulefilter as t;"

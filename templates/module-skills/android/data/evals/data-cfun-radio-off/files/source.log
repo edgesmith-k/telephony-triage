@@ -1,44 +1,21 @@
--- [합성]
-08-09 13:13:49.379   261   261 I exynos-pcie-rc 39950000.pcie: exynos_pcie_rc_poweroff, end of poweroff, pcie state: 0
-08-09 13:13:49.379   261   261 I cpif    : ext_poweroff_pcie: ---
-08-09 13:13:49.503  1101  1126 D VCD     : UsbAgent: AT+CFUN=0<CR>
-08-09 13:13:49.509  1126  1126 I cpif    : pcie_send_ap2cp_irq: Reserve doorbell interrupt: PCI not powered on
-08-09 13:13:49.509  1126  1126 I cpif    : mif_gpio_get_value: GET GPIO CP2AP_WAKEUP = 0
--- [생략]
-08-09 13:13:49.600  1016  1028 I WPKTRT  : process_link_up: rmnet1 is activated
-08-09 13:13:49.601  2891  2891 D SHANNON_TEST: 0133 [HELP] Unsol {UNKNOWN} received  [SLID:0  Active:true] (ImsRilHelper%onHandleUnsolicitedResponse:256)
-08-09 13:13:49.601  1101  1127 D VCD     : From Modem:: AT+CFUN=0<CR>
-08-09 13:13:49.601  1016  1028 I WPKTRT  : process_link_down_or_deleted: rmnet1 is deactivated
--- [생략]
-08-09 13:13:49.609  1856  2015 V SatelliteController: satelliteConfigParser is not ready
-08-09 13:13:49.609  1856  2015 D SatelliteController: isSatelliteAttachSupportedViaConfigupdater: return null (satelliteConfig is null)
-08-09 13:13:49.609  1856  2169 D RILJ    : [UNSL]< UNSOL_DATA_CALL_LIST_UPDATED [SetupDataCallResult{cause: NONE, suggestedRetryTime: 0, cid: 2, active: 0, type: IPV4V6, ifname: rmnet1, addresses: [LinkAddress{address: <IP#1>/64, addressProperties: 0, deprecationTime: -1, expirationTime: -1}, LinkAddress{address: <IP#2>, addressProperties: 0, deprecationTime: -1, expirationTime: -1}], dnses: [<IP#3>, <IP#4>], gateways: [::, <IP#5>], pcscf: [<IP#3>, <IP#4>], mtuV4: 1500, mtuV6: 1500, defaultQos: Qos.nr(NrQos{fiveQi: 5, downlink: QosBandwidth{maxBitrateKbps: 0, guaranteedBitrateKbps: 0}, uplink: QosBandwidth{maxBitrateKbps: 0, guaranteedBitrateKbps: 0}, qfi: 2, averagingWindowMs: ��, averagingWindowMillis: 0}), qosSessions: [], handoverFailureMode: 2, pduSessionId: 5, sliceInfo: SliceInfo{sliceServiceType: 1, sliceDifferentiator: -1, mappedHplmnSst: 0, mappedHplmnSd: -1, status: 0}, trafficDescriptors: []}, SetupDataCallResult{cause: NONE, suggestedRetryTime: 0, cid: 3, active: 2, type: IPV4V6, ifname: rmnet2, addresses: [LinkAddress{address: <IP#6>/64, addressProperties: 0, deprecationTime: -1, expirationTime: -1}, LinkAddress{address: <IP#7>, addressProperties: 0, deprecationTime: -1, expirationTime: -1}], dnses: [<IP#8>, <IP#9>], gateways: [::, <IP#5>], pcscf: [], mtuV4: 1500, mtuV6: 1500, defaultQos: Qos.nr(NrQos{fiveQi: 9, downlink: QosBandwidth{maxBitrateKbps: 0, guaranteedBitrateKbps: 0}, uplink: QosBandwidth{maxBitrateKbps: 0, guaranteedBitrateKbps: 0}, qfi: 1, averagingWindowMs: ��, averagingWindowMillis: 0}), qosSessions: [], handoverFailureMode: 2, pduSessionId: 6, sliceInfo: SliceInfo{sliceServiceType: 1, sliceDifferentiator: -1, mappedHplmnSst: 0, mappedHplmnSd: -1, status: 0}, trafficDescriptors: []}] [convertToString] [PHONE0]
-08-09 13:13:49.609  1297  1503 D TelephonyRegistry: notifyServiceStateForSubscriber: callback.onSSC r={callingPackage=com.android.phone callerUid=1001 binder=android.os.BinderProxy@3c03e7d callback=com.android.internal.telephony.IPhoneStateListener$Stub$Proxy@d92e172 onSubscriptionsChangedListenererCallback=null onOpportunisticSubscriptionsChangedListenererCallback=null carrierPrivilegesCallback=null carrierConfigChangeListener=null satelliteStateChangeListener=null subId=4 phoneId=0 events=[1]} subId=4 phoneId=0 state={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=422430, duplexMode()=1, mCellBandwidths=[10000], mOperatorAlphaLong=<CARRIER#1>, mOperatorAlphaShort=<CARRIER#1>, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=20(NR_SA), getRilDataRadioTechnology=20(NR_SA), mCssIndicator=unsupported, mIsEmergencyOnly=false, isUsingCarrierAggregation=false, mArfcnRsrpBoost=0, mNetworkRegistrationInfos=[NetworkRegistrationInfo{ domain=PS transportType=WLAN registrationState=NOT_REG_OR_SEARCHING networkRegistrationState=NOT_REG_OR_SEARCHING roamingType=NOT_ROAMING accessNetworkTechnology=UNKNOWN rejectCause=0 emergencyEnabled=false availableServices=[] cellIdentity=null voiceSpecificInfo=null dataSpecificInfo=null nrState=NONE rRplmn= isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL satelliteTechnology=NT_RADIO_TECHNOLOGY_UNKNOWN}, NetworkRegistrationInfo{ domain=CS transportType=WWAN registrationState=HOME networkRegistrationState=HOME roamingType=NOT_ROAMING accessNetworkTechnology=NR rejectCause=0 emergencyEnabled=false availableServices=[VOICE,SMS,VIDEO] cellIdentity=CellIdentityNr:{ mPci = [ks_Os51X2RTtixTQ43ZD3geXrlY] mTac = [NWoZK3kTsExUV00Ywo1G5jlUKKs] mNrArfcn = [x-X4mFPHQIVDEmLmnW3WJtn_N8w] mBands = [1] mMcc = 001 mMnc = 01 mNci = [EoNRE3qcRyBsRQfc8ub77so6kHk] mAlphaLong = <CARRIER#1> mAlphaShort = <CARRIER#1> mAdditionalPlmns = {} } voiceSpecificInfo=VoiceSpecificRegistrationInfo { mCssSupported=false mRoamingIndicator=0 mSystemIsInPrl=0 mDefaultRoamingIndicator=0} dataSpecificInfo=null nrState=NONE rRplmn=<CARRIER#1> isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL satelliteTechnology=NT_RADIO_TECHNOLOGY_UNKNOWN}, NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=HOME networkRegistrationState=HOME roamingType=NOT_ROAMING accessNetworkTechnology=NR rejectCause=0 emergencyEnabled=false availableServices=[DATA,MMS] cellIdentity=CellIdentityNr:{ mPci = [ks_Os51X2RTtixTQ43ZD3geXrlY] mTac = [NWoZK3kTsExUV00Ywo1G5jlUKKs] mNrArfcn = [x-X4mFPHQIVDEmLmnW3WJtn_N8w] mBands = [1] mMcc = 001 mMnc = 01 mNci = [EoNRE3qcRyBsRQfc8ub77so6kHk] mAlphaLong = <CARRIER#1> mAlphaShort = <CARRIER#1> mAdditionalPlmns = {} } voiceSpecificInfo=null dataSpecificInfo=android.telephony.DataSpecificRegistrationInfo :{ maxDataCalls = 16 isDcNrRestricted = false isNrAvailable = false isEnDcAvailable = false mLteAttachResultType = 0 mLteAttachExtraInfo = 0 NrVopsSupportInfo :  mVopsSupport = 1 mEmcSupport = 1 mEmfSupport = 0 } nrState=NONE rRplmn=<CARRIER#1> isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL satelliteTechnology=NT_RADIO_TECHNOLOGY_UNKNOWN}], mNrFrequencyRange=2, mOperatorAlphaLongRaw=<CARRIER#1>, mOperatorAlphaShortRaw=<CARRIER#1>, mIsDataRoamingFromRegistration=false, mIsIwlanPreferred=false, mIsUsingNonTerrestrialNetwork=false}
--- [생략]
-08-09 13:13:49.628  1856  1856 D DN-100-C: ConnectedState: onDataStateChanged: DataCallResponse: { cause=NONE(0x0) retry=0 cid=2 linkStatus=0 protocolType=2 ifname=rmnet1 addresses=[<IP#1>/64, <IP#2>/32] dnses=[/<IP#3>, /<IP#4>] gateways=[/::, /<IP#5>] pcscf=[/<IP#3>, /<IP#4>] mtu=1500 mtuV4=1500 mtuV6=1500 handoverFailureMode=retry handover pduSessionId=5 defaultQos=NrQos { fiveQi=5 downlink=Bandwidth { maxBitrateKbps=0 guaranteedBitrateKbps=0} uplink=Bandwidth { maxBitrateKbps=0 guaranteedBitrateKbps=0} qosFlowId=2 averagingWindowMs=0} qosBearerSessions=[] sliceInfo=SliceInfo{mSliceServiceType=EMBB, mSliceDifferentiator=-1, mMappedHplmnSliceServiceType=NONE, mMappedHplmnSliceDifferentiator=-1, mStatus=UNKNOWN} trafficDescriptors=[] networkValidationStatus=unsupported physicalNetworkTransportType=INVALID physicalNetworkSlotIndex=-1}
-08-09 13:13:49.628  1856  1856 D DN-100-C: ConnectedState: onDataStateChanged: PDN inactive reported by WWAN data service.
-08-09 13:13:49.628  1856  1856 D DN-100-C: DisconnectedState: Data network disconnected. mEverConnected=true
-08-09 13:13:49.628  2114  2114 D CellBroadcastReceiver: onReceive Intent { act=android.intent.action.SERVICE_STATE flg=0x1000010 xflg=0x4 cmp=com.android.cellbroadcastreceiver.module/com.android.cellbroadcastreceiver.CellBroadcastReceiver (has extras) }
--- [생략]
-08-09 13:13:49.643  1856  2170 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]
-08-09 13:13:49.643  1856  1856 D DNC-0   : Internet link status changed to INACTIVE
-08-09 13:13:49.643  1856  1856 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-100-C, IMS, state=null], cause=NONE(0x0)(0), tearDownReason=NONE
-08-09 13:13:49.643  1856  1856 D DNC-0   : onPcoDataChanged: nrAdvancedPcoId = 0
-08-09 13:13:49.643  1856  1856 D DNC-0   : IMS data state changed from CONNECTED to DISCONNECTED.
-08-09 13:13:49.643  1856  2250 D NRM-C-0 : onNetworkStateChanged
-08-09 13:13:49.643  1856  1856 D TNA-100 : NetworkAgent channel lost
-08-09 13:13:49.643  1856  1856 D DN-101-C: DisconnectedState: All network requests detached.
-08-09 13:13:49.643  1297  2265 D TelephonyRegistry: remove: binder=android.os.BinderProxy@2bdc08f r.callingPackage com.android.phone r.callback null
-08-09 13:13:49.644  1856  1856 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-101-C, <APN#1>, state=null], cause=NONE(0x0)(0), tearDownReason=NONE
-08-09 13:13:49.644  1856  1856 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.
-08-09 13:13:49.644  1856  1856 D DNC-0   : onPcoDataChanged: nrAdvancedPcoId = 0
--- [생략]
-08-09 13:13:49.655  1297  1503 W Telecom : PhoneAccountRegistrar: Could not change enable state of SIM account: ComponentInfo{com.android.phone/com.android.services.telephony.TelephonyConnectionService}, 4, UserHandle{0}🔒
-08-09 13:13:49.655  1856  1856 D ImsRegCallbackHelper: updateRegistrationState: registration state from REGISTRATION_STATE_REGISTERED to REGISTRATION_STATE_NOT_REGISTERED
-08-09 13:13:49.655  1856  1856 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 1507, null}, suggestedAction=0, disconnectedRadioTech=-1, throttlingTimeSec=0
-08-09 13:13:49.655   891   937 I netd    : setNetworkAllowlist([]) <0.00ms>
--- [생략]
-08-09 13:13:49.703  1096  1156 I RIL     : [RilContext_0] OnUnsolicitedResponse Unsol Rsp ID=1102
-08-09 13:13:49.703  1096  1156 I RILC-CommandInfo: getUnsolRespInfo found {unsolResponse=1102 halVer=00}
-08-09 13:13:49.703  1101  1127 D VCD     : From Modem:: <CR><LF>OK<CR><LF>
-08-09 13:13:49.703  1096  1156 D RILC-AIDL_SERVICE: CurrentEmergencyNumberListInd::onIndication mCb=0xb400007e9e20f178
+-- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture. AOSP 줄은 문구만, 벤더 줄은 placeholder.
+10-14 15:22:40.118  1361  1377 D VRIL-MODEM: at-in: AT+CFUN=0
+10-14 15:22:40.226  1361  1379 D VRIL-MODEM: at-out: AT+CFUN=0
+10-14 15:22:40.231  2214  2290 V SatelliteController: satelliteConfigParser is not ready
+10-14 15:22:40.233  2214  2341 D RILJ    : [UNSL]< UNSOL_DATA_CALL_LIST_UPDATED [SetupDataCallResult{cause: NONE, suggestedRetryTime: 0, cid: 3, active: 0, type: IPV4V6, ifname: rmnet2, addresses: [LinkAddress{address: <IP#1>/64, addressProperties: 0, deprecationTime: -1, expirationTime: -1}], dnses: [<IP#2>], gateways: [<IP#3>], pcscf: [], mtuV4: 1500, mtuV6: 1500}] [PHONE0]
+10-14 15:22:40.252  2214  2214 D DN-7-C  : ConnectedState: onDataStateChanged: PDN inactive reported by WWAN data service.
+10-14 15:22:40.253  2214  2214 D DN-7-C  : DisconnectedState: Data network disconnected. mEverConnected=true
+10-14 15:22:40.266  2214  2342 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]
+10-14 15:22:40.267  2214  2214 D DNC-0   : Internet link status changed to INACTIVE
+10-14 15:22:40.268  2214  2214 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-7-C, IMS, state=null], cause=NONE(0x0)(0), tearDownReason=NONE
+10-14 15:22:40.268  2214  2214 D DNC-0   : IMS data state changed from CONNECTED to DISCONNECTED.
+10-14 15:22:40.269  2214  2377 D NRM-C-0 : onNetworkStateChanged
+10-14 15:22:40.270  2214  2214 D TNA-7   : NetworkAgent channel lost
+10-14 15:22:40.271  2214  2214 D DN-8-C  : DisconnectedState: All network requests detached.
+10-14 15:22:40.272  2214  2214 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-8-C, <APN#1>, state=null], cause=NONE(0x0)(0), tearDownReason=NONE
+10-14 15:22:40.272  2214  2214 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.
+10-14 15:22:40.284  2214  2214 D ImsRegCallbackHelper: updateRegistrationState: registration state from REGISTRATION_STATE_REGISTERED to REGISTRATION_STATE_NOT_REGISTERED
+10-14 15:22:40.285  2214  2214 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 0, null}, suggestedAction=0, disconnectedRadioTech=-1, throttlingTimeSec=0
+10-14 15:22:40.331  1350  1404 I RIL     : [IpcCtx_0] OnIpcIndication Unsol Rsp ID=2104
+10-14 15:22:40.332  1361  1379 D VRIL-MODEM: at-out: OK
+10-14 15:22:40.333  1350  1404 D VRIL-SVC: emergencyNumberList indication

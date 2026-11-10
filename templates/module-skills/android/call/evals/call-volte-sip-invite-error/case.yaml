@@ -20,7 +20,7 @@ run_expect:
 expect:
   accept:
     - layer: '모뎀|망'
-      daemon: 'SHANNON_IMS|벤더 IMS'
+      daemon: 'VRIL-IMS|벤더 IMS'
       evidence: ['status-code : 503', 'imsRegistered=true']
   trap:
     - label: '^\s*(프레임워크|ImsPhoneCallTracker|RILJ|RIL HAL|벤더 RIL)'

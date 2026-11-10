@@ -20,7 +20,7 @@ run_expect:
 expect:
   accept:
     - layer: '벤더 RIL|RIL HAL'
-      daemon: 'RIL$|RIL[ (]|RIL\b|RILC|rild|벤더 RIL'
+      daemon: 'RIL$|RIL[ (]|(?<![\w-])RIL\b(?!-)|VRIL(?![-\w])|rild|벤더 RIL'
       evidence: ['serviceDied|has died', 'RADIO_UNAVAILABLE']
   trap:
     - label: '^\s*(프레임워크|RILJ|모뎀|망|곁가지)'

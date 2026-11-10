@@ -16,7 +16,7 @@
 | `issue-db-step-events/` | 스텝 순서 정렬: `step_events` 규칙 10개(CP는 관측 불가, 비행기 모드 켜기·끄기는 `match`, 망 등록은 `ril`, 데이터 켜기·끄기는 `event`) |
 | `issue-db-review/` | 월간 리뷰(Phase 11): §6.6 항목마다 걸리는 경우와 걸리지 않는 경우 (`REVIEW_CASES`) |
 | `issue-db-ofono/` | oFono 플랫폼 뼈대 DB(17-platforms §5, **합성·형식 가정·placeholder**): `platform: ofono`, `ofono_reference` 백엔드, placeholder 태그(`ofonod`·`daemon-a`·`daemon-b`)·extractor 1개·요청 `PLACEHOLDER_CALL`(데몬 사이 짝 시험용, 짝 설정 없으면 효과 없음), 유형 `DATA-001`과 양성 fixture(`tests/fixtures/logs/ofono/journal-iso.log`) 하나 |
-| `issue-db-ofono-modules/` | 모듈 eval(H C0, 합성): issue-db-ofono 위에 데몬 13개 태그(MODULE_SKILLS_PLAN_IMPL §1.4, ENT는 network — 결정 기록 11/05 ①), ril.yaml data 요청과 sim·network 요청 5개(합성·placeholder 기준, 11/05 ②), exynos-ril 추출기 1개, 유형 DATA-001(SETUP_DATA_CALL 실패 + 인증 거절 원인)과 양성 fixture(모듈 템플릿 deep case 로그), H C1 합성 유형 5개(SIM-001 SIM_IO 결과·NETWORK-001 NR 모드·CALL-001 DIAL·SMS-001 SEND_SMS·IMS-001 401 — 원인은 IPC·OnRequestComplete·거절 코드 must_match, fixture는 모듈 템플릿 case `source.log`) |
+| `issue-db-ofono-modules/` | 모듈 eval(H C0, 합성): issue-db-ofono 위에 placeholder 데몬 태그(MODULE_SKILLS_PLAN_IMPL §1.4, 카테고리마다 placeholder — `_common/components.md` 역할 표), ril.yaml data 요청과 sim·network 요청 5개(합성·placeholder 기준, 11/05 ②), 벤더 RIL 데몬 추출기 1개, 유형 DATA-001(SETUP_DATA_CALL 실패 + 인증 거절 원인)과 양성 fixture(모듈 템플릿 deep case 로그), H C1 합성 유형 5개(SIM-001 SIM_IO 결과·NETWORK-001 NR 모드·CALL-001 DIAL·SMS-001 SEND_SMS·IMS-001 401 — 원인은 IPC·요청 완료 줄·거절 코드 must_match, fixture는 모듈 템플릿 case `source.log`) |
 | `issue-db-android-plain/` | Android 모듈 eval $0 대조(H C1+D S8): 샘플에서 벤더 RIL 태그 묶음(합성·placeholder 기준, `tags.yaml`의 `  # --- 벤더 RIL 태그(사내 확인 전, TODO(SITE:S9))` 줄부터 끝까지)과 `ril.yaml` `UNSOL_DATA_CALL_LIST_UPDATED` 행을 뺀 트리(빼기만, 없으면 그대로). "vendor tags added (unconfirmed for the real DB)" 표의 기준 |
 | `issue-db-github/` | 두 번째 트래커(트래커 범용화 §6-1, **합성**): `tracker {kind: github, base_url: https://ghe.mock.invalid/, key_regex: mock-org\\.mock-issues-\\d+}`, 기록·피드백·evidence의 Jira 키 `MOCK-<n>`을 GitHub 작업 키 `mock-org.mock-issues-<n>`으로(파일 이름 포함) |
 | `issue-db-unjudged/` | 원인 판정 불가(eval 68): `pattern_timeout_ms: 300`, DATA-001-01의 `data-disabled` 시그니처를 시간 초과하는 `slow-cause`(`must_match ['(a+)+$']`)로 바꾼 트리. `a`×40+`!` 줄이 있는 로그에서 `unjudged.cause_count` 1 |
@@ -673,29 +673,25 @@ def ofono(db: Path) -> None:
 
 MODULES_DEEP_LOG = (REPO / "templates" / "module-skills" / "ofono" / "data" / "evals" / "data-apn-auth-reject"
                     / "files" / "source.log")
-MODULES_TAGS = """# [합성] issue-db-ofono-modules 태그 (MODULE_SKILLS_PLAN_IMPL §1.4). 데몬 이름은 표본 데몬 이름(결정 u), 카테고리는 계획. TODO(SITE:S25)
+MODULES_TAGS = """# [합성] issue-db-ofono-modules 태그 (MODULE_SKILLS_PLAN_IMPL §1.4). 데몬 이름은 카테고리별 placeholder(`_common/components.md`). TODO(SITE:S25)
 # 속성 level·ipc(04-parser-matching §5.8 (2))는 구성요소 설정 대신 DB 선언으로 켠 집합 → 출력 같음(선언 경로 시험).
 tags:
-  - {tag: ofonod,     category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
-  - {tag: exynos-ril, category: common,  ipc: vendor, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
-  - {tag: MOSE,       category: common,  level: unreliable, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
-  - {tag: DMD,        category: common,  level: unreliable, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·modem = common·D3)}
-  - {tag: RFSD,       category: common,  level: unreliable, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·modem = common·D3)}
-  - {tag: vcd,        category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·modem = common·D3)}
-  - {tag: NMD,        category: data,    added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·data)}
-  - {tag: DITD,       category: data,    level: unreliable, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·data)}
-  - {tag: LPA,        category: sim,     added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·sim)}
-  - {tag: ipad,       category: sim,     added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·sim)}
-  - {tag: PTD,        category: network, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·network)}
-  - {tag: IMSSVC,     category: ims,     added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·ims)}
-  - {tag: ENT,        category: network, added_for: '-', added_on: 2026-11-05, reason: 합성 (모듈 eval·위성 entitlement → network·결정 기록 11/05 ①)}
+  - {tag: ofonod,   category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
+  - {tag: vrild,    category: common,  ipc: vendor, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
+  - {tag: mgmtd,    category: common,  level: unreliable, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·공통)}
+  - {tag: chatterd, category: common,  added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·잡음 태그)}
+  - {tag: datad,    category: data,    added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·data)}
+  - {tag: datad2,   category: data,    level: unreliable, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·data)}
+  - {tag: simd,     category: sim,     added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·sim)}
+  - {tag: networkd, category: network, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·network)}
+  - {tag: imsd,     category: ims,     added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval·ims)}
 """
 MODULES_RIL = """# [합성 + placeholder 요청 이름(11/05)] gril 짝 파생 이벤트용 공개 RIL 요청 이름. timeout은 placeholder. TODO(SITE:S26)
 requests:
   - {name: SETUP_DATA_CALL,      category: data, timeout_ms: 30000, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval)}
   - {name: DEACTIVATE_DATA_CALL, category: data, timeout_ms: 10000, added_for: '-', added_on: 2026-11-04, reason: 합성 (모듈 eval)}
   - {name: SIM_IO,                        category: sim,     timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 합성 (모듈 eval·결정 기록 11/05 ②)}
-  - {name: GET_NR_MODE,                   category: network, timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 합성 (모듈 eval·결정 기록 11/05 ②)}
+  - {name: GET_PREFERRED_NETWORK_TYPE, category: network, timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 합성 (모듈 eval·결정 기록 11/05 ②)}
   - {name: SIM_OPEN_CHANNEL,              category: sim,     timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 합성 (모듈 eval·결정 기록 11/05 ②)}
   - {name: SET_UNSOL_CELL_INFO_LIST_RATE, category: network, timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 합성 (모듈 eval·결정 기록 11/05 ②)}
   - {name: SIGNAL_STRENGTH,               category: network, timeout_ms: 10000, added_for: '-', added_on: 2026-11-05, reason: 합성 (모듈 eval·결정 기록 11/05 ②)}
@@ -708,7 +704,7 @@ extractors:
     added_for: DATA-001
     added_on: 2026-11-04
     reason: 합성 (벤더 RIL 데이터 콜 거절 사유)
-    tag: exynos-ril
+    tag: vrild
     patterns:
       - 'pdp fail cause=(?P<cause>[A-Z_]+)'
     event: pdp_fail_cause
@@ -757,7 +753,7 @@ tags: []
 
 
 def ofono_modules(db: Path) -> None:
-    """모듈 eval용 oFono DB(MODULE_SKILLS_PLAN_IMPL §5.5): issue-db-ofono 위에 데몬 13개 태그·data 합성 유형."""
+    """모듈 eval용 oFono DB(MODULE_SKILLS_PLAN_IMPL §5.5): issue-db-ofono 위에 placeholder 데몬 태그·data 합성 유형."""
     ofono(db)                                                     # issue-db-ofono는 그대로 두고 그 위에 덮는다
     shutil.rmtree(db / "data/DATA-001-data-connect-failed")
     _write(db / "parser-rules/tags.yaml", MODULES_TAGS)
@@ -779,25 +775,25 @@ MODULES_TYPES = (
     ("sim", "SIM-001-sim-file-read-failed", "SIM 파일이 읽히지 않음 (합성)",
      "    must_event:\n      - {event: ril_error, fields: {request: SIM_IO}}\n",
      "        must_event:\n          - {event: ril_error, fields: {request: SIM_IO}}\n"
-     "        must_match: ['exynos-ril: \\[RilContext_\\d+\\] OnRequestComplete Request ID=\\d+, result=[1-9]']\n",
-     "sim/evals/sim-simio-ril-result", "2026-02-27T17:28:15+0000"),
-    ("network", "NETWORK-001-nr-mode-query-failed", "NR 모드가 조회되지 않음 (합성)",
-     "    must_event:\n      - {event: ril_error, fields: {request: GET_NR_MODE}}\n",
-     "        must_event:\n          - {event: ril_error, fields: {request: GET_NR_MODE}}\n"
-     "        must_match: ['SIT_GET_NR_MODE, RSP.*Error\\(RCM_E_']\n",
-     "network/evals/network-nrmode-modem-reject", "2026-02-27T17:28:15+0000"),
+     "        must_match: ['vrild: \\[IpcCtx_\\d+\\] OnIpcComplete Request ID=\\d+, result=[1-9]']\n",
+     "sim/evals/sim-simio-ril-result", "2026-09-22T09:10:20+0000"),
+    ("network", "NETWORK-001-rat-mode-query-failed", "NR 모드가 조회되지 않음 (합성)",
+     "    must_event:\n      - {event: ril_error, fields: {request: GET_PREFERRED_NETWORK_TYPE}}\n",
+     "        must_event:\n          - {event: ril_error, fields: {request: GET_PREFERRED_NETWORK_TYPE}}\n"
+     "        must_match: ['VIPC_EXAMPLE_RAT_MODE, RSP.*Error\\(VIPC_E_']\n",
+     "network/evals/network-nrmode-modem-reject", "2026-09-22T09:20:20+0000"),
     ("call", "CALL-001-dial-failed", "발신이 되지 않음 (합성)",
      "    must_match: ['RIL_REQUEST_DIAL failed']\n",
-     "        must_match: ['RIL_REQUEST_DIAL failed', 'SIT_DIAL, RSP.*Error\\(RCM_E_']\n",
+     "        must_match: ['RIL_REQUEST_DIAL failed', 'VIPC_EXAMPLE_CALL_START, RSP.*Error\\(VIPC_E_']\n",
      "call/evals/call-dial-modem-reject", "2026-09-21T10:10:05+0000"),
     ("sms", "SMS-001-send-failed", "문자가 전송되지 않음 (합성)",
      "    must_match: ['RIL_REQUEST_SEND_SMS failed']\n",
      "        must_match: ['RIL_REQUEST_SEND_SMS failed GENERIC_FAILURE']\n",
      "sms/evals/sms-send-no-vendor-lines", "2026-09-21T10:20:05+0000"),
     ("ims", "IMS-001-registration-401", "IMS 등록 401 거절됨 (합성)",
-     "    must_match: ['IMS_UNSOL_UPDATE_IMS_REG_FAIL fail_code=401']\n",
-     "        must_match: ['IMS_UNSOL_UPDATE_IMS_REG_FAIL fail_code=401', 'fail-code : 401']\n",
-     "ims/evals/ims-401-then-registered", "2026-02-27T17:28:22+0000"),
+     "    must_match: ['IMS_UNSOL_REG_FAILED fail_code=401']\n",
+     "        must_match: ['IMS_UNSOL_REG_FAILED fail_code=401', 'fail-code : 401']\n",
+     "ims/evals/ims-401-then-registered", "2026-09-22T09:30:20+0000"),
 )
 
 

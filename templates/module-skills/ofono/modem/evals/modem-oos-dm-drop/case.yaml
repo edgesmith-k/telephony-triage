@@ -7,7 +7,7 @@ key: MOCK-9702
 issue:
   summary: '모뎀이 죽은 것 같음 — 데이터·통화 모두 안 됨'
   description: '데이터와 통화가 모두 안 됩니다. 모뎀이 죽은 것 같습니다.'
-  occurred_at: '2026-02-27T17:54:56+0000'
+  occurred_at: '2026-09-22T09:50:21+0000'
   platform_version: '2'
   sim_slot: '0'
 parse: {tz: UTC, year: 2026, minutes: 5}
@@ -20,8 +20,8 @@ run_expect:
 expect:
   accept:
     - layer: '모뎀|망'
-      daemon: 'exynos-ril'
-      evidence: ['SIT_IND_TOTAL_OOS', 'DM packet dropped']
+      daemon: 'vrild'
+      evidence: ['VIPC_EXAMPLE_NO_SERVICE_IND', 'DM packet dropped']
   trap:
     - label: '^\s*(곁가지|관리 데몬|D-Bus|ofonod|그\s*층|원인\s*아님)'
-    - label: '^\s*DMD'
+    - label: '^\s*mgmtd'

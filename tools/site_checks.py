@@ -1,7 +1,9 @@
 """사내 보완 S 단계·oFono 트랙 O 단계 자동 점검 (읽기 전용, `site_step.py check`가 부른다. 15-local-draft.md §15.5).
 
 - `CHECKS[S-n]`·`CHECKS[O-n]`·`MODULE_CHECKS[MS-n]`(모듈 스킬 트랙, 따로 둔 표)의 함수마다 `fn(ctx) -> {id, status, evidence, cmd, ask?, propose?}`. status는
-  pass | fail | skip(실행 못 함, 사유·ask) | needs-user(사람 정보·판단 필요) | info(판정 아님).
+  pass | fail | skip(실행 못 함, 사유·ask) | needs-user(사람 정보·판단 필요) | info(판정 아님) | warn(막지 않는 경고, 지금은
+  `RESTORE_CHECKS`만 쓴다 — 종료 코드에 영향 없음, 보고 합계에는 있을 때만).
+- `RESTORE_CHECKS`(`site_step.py restore check`, docs/SITE_RESTORE.md)는 단계 진행과 무관한 독립 점검이다(진행 상태를 쓰지 않는다).
 - 판정 근거(evidence)는 개수·종료 코드·파일:행만. 로그·Jira 원문은 넣지 않는다.
 - 쓰지 않는다: 사용자 이슈 DB clone(운영 `ops_db`, oFono `ofono_db`)은 읽기 전용 임시 clone(`git clone --no-local --no-checkout` →
   원본의 origin/main, 없으면 로컬 main)으로만 보고 fetch·브랜치 전환·lock 없음.
@@ -31,7 +33,7 @@ import yaml
 
 TOOLS = Path(__file__).resolve().parent
 REPO = TOOLS.parent
-STATUSES = ("pass", "fail", "skip", "needs-user", "info")
+STATUSES = ("pass", "fail", "skip", "needs-user", "info", "warn")
 OK_STATUSES = ("pass", "info")
 
 STEPS_FILE = "docs/site/steps.yaml"
@@ -2167,7 +2169,13 @@ def ms1_tags(ctx: Ctx) -> dict:
     clone, early = _need_module_clone(ctx, "ms1.tags")
     if early:
         return early
-    doc = modules_doc(clone)
+    return module_tags(ctx, modules_doc(clone), "ms1.tags")
+
+
+def module_tags(ctx: Ctx, doc: dict, cid: str, partial_ok: bool = True) -> dict:
+    """modules.yaml(`doc`)의 데몬·태그 ⊆ 플랫폼별 이슈 DB tags.yaml, 카테고리 일치(ms1.tags·restore.tags 공통).
+    빠진 이름은 이 사내 점검 출력에만 나온다. `partial_ok=False`(restore.tags)면 이슈 DB를 건너뛴 플랫폼이 있을 때
+    통과가 아니라 skip이다(본 플랫폼 결과는 근거에 남긴다)."""
     parser_rules = _plugin_common("parser_rules")
     import module_measure
 
@@ -2176,7 +2184,7 @@ def ms1_tags(ctx: Ctx) -> dict:
         key = MODULE_DB_KEYS.get(plat)
         if key is None:
             continue
-        db, why = _need_clone(ctx, "ms1.tags", key)
+        db, why = _need_clone(ctx, cid, key)
         if why:
             skipped.append(f"{plat}: {why['evidence']}")
             continue
@@ -2203,14 +2211,17 @@ def ms1_tags(ctx: Ctx) -> dict:
         mismatch += [f"{plat}:{f}" for f in found if "데몬 " in f and "≠" in f]
     cmd = "python3 -c 'parser_rules.load(<이슈 DB 임시 clone>/parser-rules).tag_category(<데몬>)'"
     if not seen:
-        return res("ms1.tags", "skip", "이슈 DB 입력 없음: " + ("; ".join(skipped) or "modules.yaml 플랫폼 없음"), None,
+        return res(cid, "skip", "이슈 DB 입력 없음: " + ("; ".join(skipped) or "modules.yaml 플랫폼 없음"), None,
                    ask="플랫폼별 이슈 DB clone 경로를 알려 주세요 → `propose --set ops_db=<경로>`·`ofono_db=<경로>`")
     bad = [f"tags.yaml에 없음 {x}" for x in missing] + [f"맞는 태그 없음 {x}" for x in bad_rx] + mismatch
     ev = f"플랫폼 {', '.join(seen)}" + (f" (건너뜀 {'; '.join(skipped)})" if skipped else "")
     if bad:
-        return res("ms1.tags", "fail", f"{ev} · {len(bad)}건: {_cap_list(bad)}", cmd,
+        return res(cid, "fail", f"{ev} · {len(bad)}건: {_cap_list(bad)}", cmd,
                    ask="이름마다 고른다: 이슈 DB tags.yaml에 더함(계획 op PR — 새 태그는 사용자 확인) 또는 modules.yaml에서 뺌(모듈 레포 PR)")
-    return res("ms1.tags", "pass", f"{ev} · modules.yaml 데몬·태그 ⊆ tags.yaml, 카테고리 일치", cmd)
+    if skipped and not partial_ok:
+        return res(cid, "skip", f"{ev} · 본 플랫폼은 modules.yaml 데몬·태그 ⊆ tags.yaml, 카테고리 일치", cmd,
+                   ask="건너뛴 플랫폼의 이슈 DB clone 경로를 알려 주세요 → `propose --set ops_db=<경로>`·`ofono_db=<경로>`")
+    return res(cid, "pass", f"{ev} · modules.yaml 데몬·태그 ⊆ tags.yaml, 카테고리 일치", cmd)
 
 
 def implicit_pairs(st: dict) -> list[tuple[str, str, str, str]]:
@@ -2374,6 +2385,231 @@ def ms2_module_eval(ctx: Ctx) -> dict:
                f"ls {SITE_MODULE_EVALS}")
 
 
+# --- 복구(restore, docs/SITE_RESTORE.md) — 사내 스냅샷 덮어쓰기 점검. 단계 진행과 무관(진행 상태 없음) -------------------
+
+RESTORE = "restore"
+SNAPSHOT_DIR = "docs/site/module-skills"                 # SITE_PATHS(docs/site/) — 사내 스냅샷
+SOURCE_RE = re.compile(r"label=(\S+) sha=([0-9a-f]{7,40}) date=(\d{4}-\d{2}-\d{2})")
+RESTORE_DOC = "docs/SITE_RESTORE.md"
+
+
+def _source(ctx: Ctx) -> re.Match | None:
+    """`SOURCE`가 정확히 한 줄 `label=<반입 라벨> sha=<sha> date=<yyyy-mm-dd>`이면 그 일치."""
+    p = ctx.root / SNAPSHOT_DIR / "SOURCE"
+    if not p.is_file():
+        return None
+    lines = [ln.strip() for ln in p.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    return SOURCE_RE.fullmatch(lines[0]) if len(lines) == 1 else None
+
+
+TEMPLATES = "templates/module-skills"
+NA_MODULES = f"해당 없음 — 반입 직전 커밋에 {TEMPLATES} 없음(스냅샷 없이 반입, 모듈 스킬은 MS-1에서 처음 채운다)"
+
+
+def _before_import(ctx: Ctx, path: str) -> bool | None:
+    """반입 직전 커밋(`.draft-manifest.json`을 마지막으로 바꾼 커밋 = 반입 커밋의 부모)에 path가 있었는가. 그 커밋을 모르면 None."""
+    git = ["git", "-C", str(ctx.root)]
+    code, out, _ = ctx.run(git + ["log", "-1", "--format=%H", "--", ".draft-manifest.json"], timeout=30)
+    if code or not out.strip():
+        return None
+    code, out, _ = ctx.run(git + ["rev-parse", "-q", "--verify", out.strip() + "^"], timeout=30)
+    if code or not out.strip():
+        return None
+    return ctx.run(git + ["cat-file", "-e", f"{out.strip()}:{path}"], timeout=30)[0] == 0
+
+
+def _no_module_skills(ctx: Ctx) -> bool:
+    """(가) 갈래: 스냅샷이 없고 반입 직전 커밋에 템플릿 트리가 없었다 — 떠 둘 사내 모듈 스킬이 없었다."""
+    return not (ctx.root / SNAPSHOT_DIR).exists() and _before_import(ctx, TEMPLATES) is False
+
+
+def restore_snapshot(ctx: Ctx) -> dict:
+    d = ctx.root / SNAPSHOT_DIR
+    cmd = f"ls {SNAPSHOT_DIR}"
+    if _no_module_skills(ctx):
+        return res("restore.snapshot", "info", NA_MODULES, cmd)
+    if not d.is_dir():
+        return res("restore.snapshot", "fail", f"{SNAPSHOT_DIR}/ 없음", cmd,
+                   ask=f"스냅샷을 먼저 꺼낸다({RESTORE_DOC} ⓪)")
+    plats = sorted(p.name for p in d.iterdir() if (p / "_common").is_dir())
+    evals = sorted(p.relative_to(d).as_posix() for p in d.glob("*/*/evals"))
+    bad = ([] if (d / "modules.yaml").is_file() else ["modules.yaml 없음"]) \
+        + ([] if len(plats) >= 2 else [f"_common 있는 플랫폼 {len(plats)}개(2개 이상)"]) \
+        + ([f"evals 포함(지운다) {_cap_list(evals, 5)}"] if evals else [])
+    n = sum(1 for p in d.rglob("*") if p.is_file())
+    if bad:
+        return res("restore.snapshot", "fail", "; ".join(bad), cmd, ask=f"{RESTORE_DOC} ⓪대로 스냅샷을 다시 꺼낸다")
+    return res("restore.snapshot", "pass", f"modules.yaml · _common 플랫폼 {', '.join(plats)} · 파일 {n}개", cmd)
+
+
+def restore_source(ctx: Ctx) -> dict:
+    cmd = f"cat {SNAPSHOT_DIR}/SOURCE"
+    if _no_module_skills(ctx):
+        return res("restore.source", "info", NA_MODULES, cmd)
+    m = _source(ctx)
+    if m is None:
+        return res("restore.source", "fail", "SOURCE 없음 또는 형식 다름(한 줄 `label=<반입 라벨> sha=<sha> date=<yyyy-mm-dd>`)",
+                   cmd, ask=f"SOURCE에 한 줄을 적는다 — sha = 스냅샷을 꺼낸 커밋, label·date = 스냅샷에 반영을 확인한 마지막 반입"
+                            f"({RESTORE_DOC} ⓪)")
+    return res("restore.source", "pass", f"label {m.group(1)} · sha {m.group(2)[:12]} · {m.group(3)}", cmd)
+
+
+def restore_overlay(ctx: Ctx) -> dict:
+    """`make_module_repo.py <임시> --site-overlay <스냅샷> --json`(임시 out, 레포 밖) 종료 0. 렌더 결과는 restore.tags가 본다."""
+    snap = ctx.root / SNAPSHOT_DIR
+    cmd = f"python3 tools/make_module_repo.py <임시> --site-overlay {SNAPSHOT_DIR} --json"
+    if _no_module_skills(ctx):
+        return res("restore.overlay", "info", NA_MODULES, cmd)
+    if not snap.is_dir():
+        return res("restore.overlay", "skip", "스냅샷 없음(restore.snapshot)", cmd)
+    out = ctx.tmpdir() / "module-skills"
+    code, so, se = ctx.py("tools/make_module_repo.py", str(out), "--site-overlay", str(snap), "--json", timeout=300)
+    if code:
+        lines = [ln for ln in (so + "\n" + se).splitlines() if ln.strip()]     # 경로·검사 id만 나온다(make_module_repo)
+        return res("restore.overlay", "fail", f"종료 {code}: {_cap_list(lines, 5) or '출력 없음'}", cmd,
+                   ask=f"{SNAPSHOT_DIR}/에서 고친다 — '스냅샷이 불완전'은 그 파일의 placeholder를 사내 이름으로, '스냅샷에 없음'은 "
+                       f"템플릿 파일을 스냅샷에 복사해 이름을 채운다({RESTORE_DOC} ⓪·⑦)")
+    ctx._clones["restore"] = (out, "")                 # 다른 항목과 같은 (경로, ref) 모양
+    try:
+        n = len(json.loads(so.strip().splitlines()[-1]).get("overlay") or [])
+    except (ValueError, IndexError, AttributeError):
+        n = None
+    return res("restore.overlay", "pass", "종료 0" + (f" · 덮어쓴 파일 {n}개" if n is not None else ""), cmd)
+
+
+def restore_tags(ctx: Ctx) -> dict:
+    if "restore" not in ctx._clones:
+        if _no_module_skills(ctx):
+            return res("restore.tags", "info", NA_MODULES, None)
+        return res("restore.tags", "skip", "렌더 결과 없음(restore.overlay)", None)
+    return module_tags(ctx, modules_doc(ctx._clones["restore"][0]), "restore.tags", partial_ok=False)
+
+
+VENDOR_IPC_PATH = "plugin/scripts/common/vendor_ipc.py"
+
+
+def restore_vendor_ipc(ctx: Ctx) -> dict:
+    """켠 플랫폼마다 site-defaults에 `vendor_ipc` 블록(기본 플랫폼 `platform.vendor_ipc`, 그 밖 `platform.others.<p>.vendor_ipc`).
+    값은 보이지 않는다. 키 이름·형식은 `platforms.load`가 검증한다(실패면 fail — parse_logcat이 종료 2로 멈출 설정이다.
+    `config.py check`는 `platform.*`을 보지 않는다).
+    통과는 다섯 키(`vendor_ipc.KEYS`)가 모두 있고 어느 값도 placeholder(`vendor_ipc.DEFAULT`)가 아닐 때만이다.
+    oFono를 켰으면 그 블록의 `dump_func`(덤프 함수 이름)도 있고 placeholder(`platforms.DUMP_FUNC_DEFAULT`)가 아니어야 한다."""
+    d = _site_defaults(ctx)
+    if d is None:
+        return _need_defaults("restore.vendor_ipc")
+    platforms = _plugin()[0]
+    vipc = _plugin_common("vendor_ipc")
+    node = d.get("platform") if isinstance(d.get("platform"), dict) else {}
+    base = platforms.default_name(d)
+    have, miss, bad = [], [], []
+    for p in platforms.enabled(d):
+        try:
+            platforms.load(d, p, require_enabled=False)        # 값 형식·알 수 없는 키·한 키만은 여기서(parse_logcat과 같은 검증)
+        except platforms.PlatformConfigError:
+            bad.append(p)
+        block = node if p == base else ((node.get("others") or {}).get(p) or {})
+        path = "platform.vendor_ipc" if p == base else f"platform.others.{p}.vendor_ipc"
+        v = block.get("vendor_ipc") if isinstance(block, dict) else None
+        keys = isinstance(v, dict) and set(v) == set(vipc.KEYS) and all(isinstance(v[k], str) and v[k] for k in vipc.KEYS)
+        placeholder = keys and any(v[k] == getattr(vipc.DEFAULT, k) for k in vipc.KEYS)   # 예시 값 그대로는 사내 줄을 못 잡는다
+        if keys and not placeholder:
+            have.append(f"{p}({path})")
+        else:
+            miss.append(f"{p}({path}{', placeholder 값' if placeholder else ''})")
+        if p == "ofono":
+            dpath = path.rsplit(".", 1)[0] + ".dump_func"
+            fn = block.get("dump_func") if isinstance(block, dict) else None
+            if isinstance(fn, str) and fn and fn != platforms.DUMP_FUNC_DEFAULT:
+                have.append(f"{p}({dpath})")
+            else:
+                miss.append(f"{p}({dpath}{', placeholder 값' if fn == platforms.DUMP_FUNC_DEFAULT else ''})")
+    cmd = "python3 plugin/scripts/parse_logcat.py parse <사내 로그> --rules <이슈 DB>/parser-rules --full"
+    if miss and not bad and _before_import(ctx, VENDOR_IPC_PATH) is False:   # (가): 반입 전에도 없던 기능 — 값이 없으면 반입 전과 같은 출력
+        return res("restore.vendor_ipc", "info", f"해당 없음 — 반입 직전 커밋에 {VENDOR_IPC_PATH} 없음. 꺼짐 — 켜려면 TODO(SITE:S9)"
+                   f"(없음 {', '.join(miss)})", cmd)
+    if bad:
+        return res("restore.vendor_ipc", "fail", f"플랫폼 설정 오류 {', '.join(bad)} — 키 경로는 parse_logcat.py 종료 2 메시지로(값은 보이지 않는다)",
+                   cmd, ask=f"plugin/site-defaults.yaml의 기존 platform: 블록 안 vendor_ipc에 {'·'.join(vipc.KEYS)} 모두, oFono는 dump_func도, 식별자 모양으로({RESTORE_DOC} ②)")
+    if miss:
+        return res("restore.vendor_ipc", "needs-user", f"없음 {', '.join(miss)}" + (f" · 있음 {', '.join(have)}" if have else ""),
+                   cmd, ask=f"plugin/site-defaults.yaml의 기존 platform: 블록 안 vendor_ipc(그 밖 플랫폼은 others.<p>.vendor_ipc)에 사내 로그의 벤더 IPC "
+                       f"토큰 {'·'.join(vipc.KEYS)}를, oFono 블록에는 덤프 함수 이름 dump_func를 적는다 — 첫 분석 전({RESTORE_DOC} ②)")
+    return res("restore.vendor_ipc", "pass", f"있음 {', '.join(have)} (값은 보이지 않는다)", cmd)
+
+
+def restore_deny(ctx: Ctx) -> dict:
+    """`TT_DENY_FILE`의 항목이 SITE_PATHS 밖 추적 파일에 0건(출력은 가린 경로·건수뿐, deny_scan)."""
+    import deny_scan
+    import import_draft
+
+    cmd = "python3 tools/deny_scan.py <SITE_PATHS 밖 추적 파일>"
+    deny = os.environ.get(deny_scan.DENY_ENV)
+    if not deny:
+        return res("restore.deny", "needs-user", f"{deny_scan.DENY_ENV} 없음", cmd,
+                   ask=f"레포 밖 거부 목록 경로를 {deny_scan.DENY_ENV}로 준다({RESTORE_DOC} ⑤)")
+    try:
+        patterns = deny_scan.load(deny)
+    except (OSError, UnicodeDecodeError):
+        return res("restore.deny", "fail", "거부 목록을 읽을 수 없다(없음·권한·UTF-8 아님)", cmd,
+                   ask=f"{deny_scan.DENY_ENV}가 가리키는 레포 밖 파일을 UTF-8 글(한 줄에 항목 하나)로 둔다({RESTORE_DOC} ⑤)")
+    if not patterns:
+        return res("restore.deny", "fail", "거부 목록이 비어 있다", cmd,
+                   ask=f"거부 목록에 사내 구성요소 이름·벤더 토큰을 한 줄에 하나씩 적는다({RESTORE_DOC} ⑤)")
+    site = import_draft.load_site_paths(ctx.root, ctx.root)
+    try:
+        files = [f for f in deny_scan.tracked(ctx.root) if not import_draft.is_site_path(f, site)]
+    except RuntimeError:
+        return res("restore.deny", "fail", "추적 파일 목록을 얻지 못했다(git 실패)", cmd,
+                   ask="레포 폴더에서 `git status`가 도는지 본다")
+    if not files:
+        return res("restore.deny", "fail", "SITE_PATHS 밖 추적 파일 0개(커밋 전?) — 0건을 통과로 보지 않는다", cmd,
+                   ask="반입을 커밋한 뒤 다시 점검한다")
+    hits, scanned, skipped, errors = deny_scan.scan(ctx.root, patterns, files)
+    total = sum(n for _, n in hits)
+    ev = f"SITE_PATHS 밖 추적 파일 {scanned}개"
+    if total or errors or skipped:   # 내용을 다 보지 못한 파일(압축)이 있으면 0건을 통과로 보지 않는다
+        return res("restore.deny", "fail", f"{ev} · {total}건/{len(hits)}파일" + (f" · 읽기 실패 {errors}" if errors else "")
+                   + (f" · 압축 파일 {skipped}(내용 못 봄)" if skipped else "")
+                   + (f": {_cap_list([f'{p} {n}건' for p, n in hits])}" if hits else ""), cmd,
+                   ask="사내 이름은 SITE_PATHS 경로(스냅샷·site-defaults)에만 둔다 — 공통 파일에서 빼거나 경로를 옮긴다"
+                   + (". 압축 파일은 풀어 확인하거나 SITE_PATHS로 옮긴다" if skipped else ""))
+    return res("restore.deny", "pass", f"{ev} · 0건", cmd)
+
+
+def _import_label(ctx: Ctx) -> str | None:
+    """지금 반입 라벨: `.draft-manifest.json`의 label, 없으면 HEAD에서 가장 가까운 `import-*` 태그."""
+    p = ctx.root / ".draft-manifest.json"
+    try:
+        label = json.loads(p.read_text(encoding="utf-8")).get("label") if p.is_file() else None
+    except (OSError, ValueError, AttributeError):
+        label = None
+    if label:
+        return str(label)
+    code, out, _ = ctx.run(["git", "-C", str(ctx.root), "describe", "--tags", "--abbrev=0", "--match", "import-*", "HEAD"],
+                           timeout=30)
+    return (out.strip() or None) if code == 0 else None
+
+
+def restore_label(ctx: Ctx) -> dict:
+    m = _source(ctx)
+    cmd = "python3 -c 'json.load(open(\".draft-manifest.json\"))[\"label\"]'; git describe --tags --abbrev=0 --match 'import-*'"
+    if _no_module_skills(ctx):
+        return res("restore.label", "info", NA_MODULES, cmd)
+    if m is None:
+        return res("restore.label", "skip", "SOURCE 없음(restore.source)", cmd)
+    cur = _import_label(ctx)
+    if cur is None:
+        return res("restore.label", "warn", "지금 반입 라벨을 모른다(.draft-manifest.json·import-* 태그 없음)", cmd)
+    if cur == m.group(1):
+        return res("restore.label", "pass", f"지금 반입 {cur} = 스냅샷 label", cmd)
+    return res("restore.label", "warn", f"지금 반입 {cur} ≠ 스냅샷 label {m.group(1)} — 스냅샷 뒤 사외 템플릿 변경은 덮어쓰기에 가려진다",
+               cmd, ask=f"{RESTORE_DOC} ⑦: 템플릿 변경을 보고 스냅샷을 갱신한 뒤(또는 갱신할 것 없음을 확인한 뒤) SOURCE label을 지금 반입으로")
+
+
+RESTORE_CHECKS = [restore_snapshot, restore_source, restore_overlay, restore_tags, restore_vendor_ipc, restore_deny,
+                  restore_label]
+
+
 MODULE_CHECKS = {
     "MS-1": [ms1_config, ms1_git, ms1_remote, ms1_push, ms1_tree, ms1_repo_check, ms1_tags, ms1_prefer, ms1_nested_claude,
              ms1_protection, ms1_ci, ms1_coverage],
@@ -2408,7 +2644,7 @@ def run_checks(step: str, root: Path, allow_api: bool = False) -> list[dict]:
     ctx = Ctx(Path(root), allow_api=allow_api)
     out = []
     try:
-        for fn in CHECKS.get(step) or MODULE_CHECKS[step]:
+        for fn in (CHECKS | MODULE_CHECKS | {RESTORE: RESTORE_CHECKS})[step]:
             ctx.used_clone = False
             try:
                 r = fn(ctx)
@@ -2429,7 +2665,7 @@ def exit_code(results: list[dict], waived: set[str] = frozenset()) -> int:
     return 0
 
 
-MARK = {"pass": "통과", "fail": "실패", "skip": "건너뜀", "needs-user": "사용자 필요", "info": "정보"}
+MARK = {"pass": "통과", "fail": "실패", "skip": "건너뜀", "needs-user": "사용자 필요", "info": "정보", "warn": "경고"}
 
 
 def report(step: str, results: list[dict]) -> str:
@@ -2437,7 +2673,8 @@ def report(step: str, results: list[dict]) -> str:
     for r in results:
         lines.append(f"| {r['id']} | {MARK[r['status']]} | {str(r['evidence']).replace('|', '/')} |")
     counts = {s: sum(r["status"] == s for r in results) for s in STATUSES}
-    lines.append(" · ".join(f"{MARK[s]} {counts[s]}" for s in STATUSES))
+    lines.append(" · ".join(f"{MARK[s]} {counts[s]}" for s in STATUSES if s != "warn" or counts[s]))
     if counts["skip"] or counts["needs-user"]:
-        lines.append("건너뜀·사용자 필요는 통과가 아니다(`--done`은 `--waive <점검>=\"사유\"` 없이 거부).")
+        lines.append("건너뜀·사용자 필요는 통과가 아니다" + ("." if step == RESTORE else
+                                                         "(`--done`은 `--waive <점검>=\"사유\"` 없이 거부)."))
     return "\n".join(lines)

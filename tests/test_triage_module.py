@@ -40,13 +40,14 @@ C0_KEYS = ["schema_version", "key", "platform", "module", "sha", "type_id", "top
 # -- JOB·실행 도우미 ------------------------------------------------------------------------------
 
 EVENTS = [
-    {"ts": "2026-09-20T05:32:08.000Z", "tag": "NMD", "msg": "PdpContext activate", "level": "I", "category_hint": "data"},
+    {"ts": "2026-09-20T05:32:08.000Z", "tag": "datad", "msg": "PdnCtx activate", "level": "I", "category_hint": "data"},
     {"ts": "2026-09-20T05:32:09.000Z", "tag": "ofonod", "msg": "gprs attach failed", "level": "E", "category_hint": "data",
      "event": "DATA_FAIL"},
-    {"ts": "2026-09-20T05:32:10.000Z", "tag": "DITD", "msg": "route add failed", "level": "W", "category_hint": "data"},
+    {"ts": "2026-09-20T05:32:10.000Z", "tag": "datad2", "msg": "route add failed", "level": "W", "category_hint": "data"},
 ]
-SIM_EVENT = {"ts": "2026-09-20T05:32:11.000Z", "tag": "LPA", "msg": "GetEID FAILED", "level": "E", "category_hint": "sim"}
-RFSD_EVENT = {"ts": "2026-09-20T05:32:09.500Z", "tag": "RFSD", "msg": "rf reset", "level": "W", "category_hint": "common"}
+SIM_EVENT = {"ts": "2026-09-20T05:32:11.000Z", "tag": "simd", "msg": "GetEID FAILED", "level": "E", "category_hint": "sim"}
+MODEM_EVENT = {"ts": "2026-09-20T05:32:09.500Z", "tag": "ofonod", "msg": "src/modem.c:modem_change_state() modem reset", "level": "W",
+               "category_hint": "common"}
 
 
 class Env:
@@ -239,9 +240,9 @@ def test_deep_also_signal_and_also(env):
     # 신호 구간은 1위 근거(실패 표시 줄)로 정한다(modulefilter.deep_window): 그 앞뒤에 모뎀 데몬 줄이 있으면 묻는다
     cands = [{"type": "DATA-001", "cause": "DATA-001-01", "score": 9, "confidence": "high", "category": "data",
               "evidence": [{k: EVENTS[1][k] for k in ("ts", "tag", "msg", "event")}]}]
-    job = env.make_job(events=EVENTS + [RFSD_EVENT], candidates=cands)
+    job = env.make_job(events=EVENTS + [MODEM_EVENT], candidates=cands)
     code, out, _ = env.module()
-    assert code == 0 and out["also"] == ["ofono/modem"] and out["also_why"] == ["RFSD 1줄"]
+    assert code == 0 and out["also"] == ["ofono/modem"] and out["also_why"] == ["ofonod src/modem.c 1줄"]
     assert out["ask_also"]["options"] == ["아니오(기본)", "예"] and out["ask_also"]["question"].startswith("모뎀 모듈 문서도")
     code, out, _ = env.module("deep", "--also")
     assert code == 0 and out["with"] == ["ofono/modem"] and out["read"][-1].endswith("ofono/modem/SKILL.md")
@@ -371,7 +372,7 @@ def test_explore_choose(env, choose, code, module):
 
 def test_explore_zero_candidates(env):
     # 공통 데몬 줄뿐이면 어느 모듈도 표를 받지 않는다(모뎀 데몬 줄은 ofono/modem 후보가 된다 — 실제 modulefilter)
-    common = {"ts": "2026-09-20T05:32:09.500Z", "tag": "MOSE", "msg": "dbus signal", "level": "I", "category_hint": "common"}
+    common = {"ts": "2026-09-20T05:32:09.500Z", "tag": "mgmtd", "msg": "dbus signal", "level": "I", "category_hint": "common"}
     env.make_job(events=[common], explore=True, candidates=[])
     code, out, _ = env.module("explore")
     assert (code, out["reason"], out["next"]) == (1, "모듈 후보 없음", core.NEXT_BUILTIN)
@@ -415,6 +416,17 @@ def test_filter_timeout(env, monkeypatch):
     code, out, _ = env.module("explore")
     assert (code, out["reason"], out["next"]) == (2, "modules.yaml", core.NEXT_ASK_BUILTIN)
     assert "받기 실패(modules.yaml)" in env.report_line("- 탐색 분석")
+
+
+def test_filter_gets_ipc_prefix_from_site_defaults(env, monkeypatch):
+    """모듈 필터 자식에 site-defaults `vendor_ipc.request_prefix`를 넘긴다(설정이 없으면 placeholder 기본)."""
+    import common.modulefilter as mf
+    from common import vendor_ipc
+    seen = []
+    monkeypatch.setattr(mf, "child", lambda payload, timeout=20.0: seen.append(payload) or {"error": "timeout"})
+    env.make_job(explore=True)
+    env.module("explore")
+    assert seen and seen[0]["ipc_prefix"] == vendor_ipc.DEFAULT.request_prefix
 
 
 # -- explore E0 -----------------------------------------------------------------------------------

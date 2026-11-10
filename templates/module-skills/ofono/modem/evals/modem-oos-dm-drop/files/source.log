@@ -1,76 +1,25 @@
--- [합성]
-Feb 27 17:54:50.969 host1 daemon.debug exynos-ril[463]: [<DEV#1>][RX] SIT_IND_TOTAL_OOS, IND, 8 bytes
-Feb 27 17:54:50.970 host1 daemon.debug exynos-ril[463]: <HEXDUMP 8B>
-Feb 27 17:54:50.970 host1 daemon.debug exynos-ril[463]: [RilContext_0] ProcessModemData 
-Feb 27 17:54:50.970 host1 daemon.debug exynos-ril[463]: Send()_0 RCM Response Routing : Type=0002, RCM ID=0x072C Service ID=5 Message ID=4084
-Feb 27 17:54:50.970 host1 daemon.debug exynos-ril[463]: [ServiceMgr] msg(0x7fa00057b0) msgId=4084 svc=NetworkService_0(5) direction=Response
-Feb 27 17:54:50.970 host1 daemon.info exynos-ril[463]: [NetworkService_0] TotalOostHandler OnIndication()
-Feb 27 17:54:50.970 host1 daemon.debug exynos-ril[463]: [RilContext_0] OnUnsolicitedResponse Unsol Rsp ID=20115
-Feb 27 17:54:50.970 host1 daemon.debug exynos-ril[463]: RADIO::[RilResponseListener] OnUnsolicitedResponse Filter out Unsolicited response=20115
-Feb 27 17:54:50.970 host1 daemon.info exynos-ril[463]: [OemReceiver] OnUnsolicitedResponse channel=0
-Feb 27 17:54:50.970 host1 daemon.warn exynos-ril[463]: [OemReceiver] Ignore unsupported unsolicited response 20115
-Feb 27 17:54:51.045 host1 local0.info MOSE[791]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:51.248 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:51.431 host1 daemon.notice DMD[773]: [ShannonDMAgent::Run] <CARRIER#1> from usb (21)bytes 
-Feb 27 17:54:51.431 host1 daemon.notice DMD[773]: [DMModemProxy::Send] Write to modem (21)bytes
-Feb 27 17:54:51.824 host1 daemon.notice DMD[773]: [ShannonDMAgent::Run] <CARRIER#1> from usb (21)bytes 
-Feb 27 17:54:51.824 host1 daemon.notice DMD[773]: [DMModemProxy::Send] Write to modem (21)bytes
-Feb 27 17:54:52.051 host1 local0.info MOSE[791]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:52.254 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:52.259 host1 daemon.notice DMD[773]: [ShannonDMAgent::Run] <CARRIER#1> from usb (55)bytes 
-Feb 27 17:54:52.259 host1 daemon.notice DMD[773]: [DMModemProxy::Send] Write to modem (17)bytes
-Feb 27 17:54:52.259 host1 daemon.notice DMD[773]: [DMModemProxy::Send] Write to modem (20)bytes
-Feb 27 17:54:52.259 host1 daemon.notice DMD[773]: [DMModemProxy::Send] Write to modem (18)bytes
-Feb 27 17:54:52.259 host1 daemon.notice DMD[773]: [ShannonDMAgent::Run] <CARRIER#1> from usb (20)bytes 
-Feb 27 17:54:52.259 host1 daemon.notice DMD[773]: [DMModemProxy::Send] Write to modem (20)bytes
-Feb 27 17:54:52.259 host1 daemon.notice DMD[773]: [ShannonDMAgent::Run] <CARRIER#1> from usb (41)bytes 
-Feb 27 17:54:52.259 host1 daemon.notice DMD[773]: [DMModemProxy::Send] Write to modem (17)bytes
-Feb 27 17:54:52.259 host1 daemon.notice DMD[773]: [DMModemProxy::Send] Write to modem (24)bytes
-Feb 27 17:54:53.057 host1 local0.info MOSE[791]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:53.260 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:54.063 host1 local0.info MOSE[791]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:54.131 host1 user.info IMSSVC[479]: [SLOT_0][I] 0175 [19ConnectivityRuleMgr_0::getActiveRule] Getting active rule : RULE_WORLDWIDE with mode : 0
-Feb 27 17:54:54.131 host1 user.info IMSSVC[479]: [SLOT_0][I] 0176 [16CellConnectivity::isServiceSupported] Current RAT=LTE VoPS=0 use:1 registered:0 regState:0
-Feb 27 17:54:54.131 host1 user.info IMSSVC[479]: [SLOT_0][I] 0177 [16CellConnectivity::isCellRegStateSupported] isServiceSupported:0 REGSTAT:0 isLteRoamingSupported:1 IMS_PDN:0
-Feb 27 17:54:54.131 host1 user.info IMSSVC[479]: [SLOT_0][I] 0178 [16CellConnectivity::isVocReady] isVocReady apm:0 ImsEnabled:1 simStatus:1 isRegStateSupported:0 isRegNeeded:1 isConnectionNotStopped:1
-Feb 27 17:54:54.131 host1 user.info IMSSVC[479]: [SLOT_0][I] 0179 [19RegistrationManager_0::triggerRegistering] triggerRegistering by 11 Block:0 Prefer:NULL [SLID:0]
-Feb 27 17:54:54.131 host1 user.info IMSSVC[479]: [SLOT_0][I] 0180 [19RegistrationManager_0::triggerRegistering] NOT SENT
-Feb 27 17:54:54.266 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:55.069 host1 local0.info MOSE[791]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:55.271 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:56.066 host1 daemon.debug exynos-ril[463]: [<DEV#1>][RX] SIT_IND_TOTAL_OOS, IND, 8 bytes
-Feb 27 17:54:56.066 host1 daemon.debug exynos-ril[463]: <HEXDUMP 8B>
-Feb 27 17:54:56.066 host1 daemon.debug exynos-ril[463]: [RilContext_0] ProcessModemData 
-Feb 27 17:54:56.066 host1 daemon.debug exynos-ril[463]: Send()_0 RCM Response Routing : Type=0002, RCM ID=0x072C Service ID=5 Message ID=4084
-Feb 27 17:54:56.066 host1 daemon.debug exynos-ril[463]: [ServiceMgr] msg(0x7fa0000ee0) msgId=4084 svc=NetworkService_0(5) direction=Response
-Feb 27 17:54:56.066 host1 daemon.info exynos-ril[463]: [NetworkService_0] TotalOostHandler OnIndication()
-Feb 27 17:54:56.066 host1 daemon.debug exynos-ril[463]: [RilContext_0] OnUnsolicitedResponse Unsol Rsp ID=20115
-Feb 27 17:54:56.066 host1 daemon.debug exynos-ril[463]: RADIO::[RilResponseListener] OnUnsolicitedResponse Filter out Unsolicited response=20115
-Feb 27 17:54:56.066 host1 daemon.info exynos-ril[463]: [OemReceiver] OnUnsolicitedResponse channel=0
-Feb 27 17:54:56.066 host1 daemon.warn exynos-ril[463]: [OemReceiver] Ignore unsupported unsolicited response 20115
-Feb 27 17:54:56.074 host1 local0.info MOSE[791]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:56.277 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:56.478 host1 daemon.notice DMD[773]: WriteToUsb : couldn't write to the fd=5. DM packet dropped(65 bytes)
-Feb 27 17:54:56.478 host1 daemon.notice DMD[773]: [ShannonDMAgent::ProcessResponse] Fail to write
-Feb 27 17:54:56.979 host1 daemon.notice DMD[773]: WriteToUsb : couldn't write to the fd=5. DM packet dropped(1972 bytes)
-Feb 27 17:54:56.979 host1 daemon.notice DMD[773]: [ShannonDMAgent::ProcessResponse] Fail to write
-Feb 27 17:54:57.080 host1 local0.info MOSE[791]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:57.283 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:58.085 host1 local0.info MOSE[791]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:58.288 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:59.092 host1 local0.info MOSE[791]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:54:59.294 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:55:00.097 host1 local0.info MOSE[791]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:55:00.299 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:55:01.103 host1 local0.info MOSE[791]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:55:01.165 host1 daemon.debug exynos-ril[463]: [<DEV#1>][RX] SIT_IND_TOTAL_OOS, IND, 8 bytes
-Feb 27 17:55:01.165 host1 daemon.debug exynos-ril[463]: <HEXDUMP 8B>
-Feb 27 17:55:01.165 host1 daemon.debug exynos-ril[463]: [RilContext_0] ProcessModemData 
-Feb 27 17:55:01.165 host1 daemon.debug exynos-ril[463]: Send()_0 RCM Response Routing : Type=0002, RCM ID=0x072C Service ID=5 Message ID=4084
-Feb 27 17:55:01.165 host1 daemon.debug exynos-ril[463]: [ServiceMgr] msg(0x7fa000d3f0) msgId=4084 svc=NetworkService_0(5) direction=Response
-Feb 27 17:55:01.165 host1 daemon.info exynos-ril[463]: [NetworkService_0] TotalOostHandler OnIndication()
-Feb 27 17:55:01.165 host1 daemon.debug exynos-ril[463]: [RilContext_0] OnUnsolicitedResponse Unsol Rsp ID=20115
-Feb 27 17:55:01.165 host1 daemon.debug exynos-ril[463]: RADIO::[RilResponseListener] OnUnsolicitedResponse Filter out Unsolicited response=20115
-Feb 27 17:55:01.165 host1 daemon.info exynos-ril[463]: [OemReceiver] OnUnsolicitedResponse channel=0
-Feb 27 17:55:01.165 host1 daemon.warn exynos-ril[463]: [OemReceiver] Ignore unsupported unsolicited response 20115
-Feb 27 17:55:01.304 host1 local0.info MOSE[1126]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
+-- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture.
+Sep 22 09:50:11.153 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)
+Sep 22 09:50:11.154 dut daemon.info vrild[618]: [ExampleRegService_1] out-of-service flag set (oos=1)
+Sep 22 09:50:11.155 dut daemon.info ofonod[903]: [0,UNSOL]< UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED
+Sep 22 09:50:11.156 dut daemon.info ofonod[903]: [0,0526]> RIL_REQUEST_VOICE_REGISTRATION_STATE
+Sep 22 09:50:11.163 dut daemon.info ofonod[903]: [0,0526]< RIL_REQUEST_VOICE_REGISTRATION_STATE
+Sep 22 09:50:11.164 dut daemon.info ofonod[903]: drivers/rilmodem/network-registration.c:ril_creg_cb() Voice RegState=NOT_REGISTERED, RejectCause=0
+Sep 22 09:50:12.153 dut local0.info mgmtd[734]: ui tick
+Sep 22 09:50:13.153 dut daemon.warn vrild[618]: DM packet dropped: host not reading, write fail
+Sep 22 09:50:13.154 dut daemon.err vrild[618]: Fail to write DM packet to usb
+Sep 22 09:50:15.153 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)
+Sep 22 09:50:15.253 dut user.info imsd[552]: [SLOT_0] registered:0 VoPS=0 RAT:NONE
+Sep 22 09:50:16.153 dut local0.info mgmtd[734]: ui tick
+Sep 22 09:50:17.153 dut daemon.warn vrild[618]: DM packet dropped: host not reading, write fail
+Sep 22 09:50:19.153 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)
+Sep 22 09:50:19.353 dut daemon.info ofonod[903]: [0,UNSOL]< UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED
+Sep 22 09:50:19.354 dut daemon.info ofonod[903]: [0,0527]> RIL_REQUEST_DATA_REGISTRATION_STATE
+Sep 22 09:50:19.363 dut daemon.info ofonod[903]: [0,0527]< RIL_REQUEST_DATA_REGISTRATION_STATE
+Sep 22 09:50:19.364 dut daemon.info ofonod[903]: drivers/rilmodem/gprs.c:ril_data_reg_cb() Data RegState=NOT_REGISTERED, RejectCause=0
+Sep 22 09:50:19.453 dut daemon.info ofonod[903]: src/gprs.c:gprs_netreg_update() attached 0
+Sep 22 09:50:21.153 dut daemon.warn vrild[618]: DM packet dropped: host not reading, write fail
+Sep 22 09:50:21.653 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)
+Sep 22 09:50:21.753 dut local0.warn mgmtd[734]: data and call unavailable: no service
+Sep 22 09:50:23.153 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)
+Sep 22 09:50:24.153 dut local0.info mgmtd[734]: ui tick

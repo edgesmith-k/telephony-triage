@@ -1,80 +1,25 @@
--- [합성]
-Feb 27 17:28:21.985 host1 daemon.info ofonod[464]: [0,0012]< IMS_REQUEST_SET_PDN_INFO_EXT
-Feb 27 17:28:21.985 host1 daemon.debug ofonod[464]: drivers/rilmodem/ims.c:ims_setPdnInfo_cb() set_ims_pdn_info_cb was successful
-Feb 27 17:28:22.002 host1 local0.info MOSE[753]: [UI___] 000001 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Feb 27 17:28:22.028 host1 daemon.debug exynos-ril[450]: [<DEV#1>][RX] SIT_IND_AIMS_REG_FAIL, IND, 10 bytes
-Feb 27 17:28:22.029 host1 daemon.debug exynos-ril[450]: <HEXDUMP 10B>
-Feb 27 17:28:22.029 host1 daemon.debug exynos-ril[450]: [RilContext_0] ProcessModemData 
-Feb 27 17:28:22.029 host1 daemon.debug exynos-ril[450]: Send()_0 RCM Response Routing : Type=0002, RCM ID=0x0DA3 Service ID=8 Message ID=8200
-Feb 27 17:28:22.029 host1 daemon.debug exynos-ril[450]: [ServiceMgr] msg(0x7f74001930) msgId=8200 svc=ImsService_0(8) direction=Response
-Feb 27 17:28:22.029 host1 daemon.info exynos-ril[450]: [ImsService_0] AimsDefaultHandler OnIndication()
-Feb 27 17:28:22.029 host1 daemon.debug exynos-ril[450]: [ImsService_0] AIMS Indication: msgId=8200 resultId=20359 parameter=0x0x7f74001b58 parameter length=2
-Feb 27 17:28:22.029 host1 daemon.debug exynos-ril[450]: [RilContext_0] OnUnsolicitedResponse Unsol Rsp ID=20359
-Feb 27 17:28:22.029 host1 daemon.debug exynos-ril[450]: RADIO::[RilResponseListener] OnUnsolicitedResponse Filter out Unsolicited response=20359
-Feb 27 17:28:22.029 host1 daemon.info exynos-ril[450]: [OemReceiver] OnUnsolicitedResponse channel=0
-Feb 27 17:28:22.029 host1 daemon.debug exynos-ril[450]: [OemReceiver] unsol oem message(20359) is translated to msgId(3077)
-Feb 27 17:28:22.030 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2939 [OemClient] Response received for channelId: 0; StoredChannelId: 0
-Feb 27 17:28:22.030 host1 daemon.debug exynos-ril[450]: [<DEV#1>][RX] <unknown sit>, IND, 82 bytes
-Feb 27 17:28:22.030 host1 daemon.debug exynos-ril[450]: <HEXDUMP 16B>
-Feb 27 17:28:22.030 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2940 getClientId() Found ClientId[0] for ChannelId[0]
-Feb 27 17:28:22.030 host1 daemon.debug exynos-ril[450]: <HEXDUMP 16B>
-Feb 27 17:28:22.030 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2941 SITRilClient__OnUnsolicitedResponse() msgId(3077), data(0x0x7f78000b70), length(2) channel(0) client(0)
-Feb 27 17:28:22.030 host1 daemon.debug exynos-ril[450]: <HEXDUMP 16B>
-Feb 27 17:28:22.030 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2942 SITRilClient__OnUnsolicitedResponse() RILC_UNSOL_AIMS_REG_FAIL msgId = 3077
-Feb 27 17:28:22.030 host1 daemon.debug exynos-ril[450]: <HEXDUMP 16B>
-Feb 27 17:28:22.030 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2943 SITRilClient__OnUnsolicitedResponse() Send unsol msg msgId = 3077, clientId = 0, channel = 0
-Feb 27 17:28:22.030 host1 daemon.debug exynos-ril[450]: <HEXDUMP 16B>
-Feb 27 17:28:22.030 host1 daemon.debug exynos-ril[450]:  30 7d
-Feb 27 17:28:22.030 host1 daemon.debug exynos-ril[450]: [RilContext_0] ProcessModemData 
-Feb 27 17:28:22.030 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2944 [SID_0] UNSOL {RILC_UNSOL_AIMS_REG_FAIL(3077)} : 13RilIndRegFail [fail-code : 401]
-Feb 27 17:28:22.030 host1 daemon.debug exynos-ril[450]: [RilContext_0] SendMessage Indication: no route info for Message ID=2432
-Feb 27 17:28:22.030 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2945 [13RilIndRegFail::onMessage] mFailCode : 401
-Feb 27 17:28:22.031 host1 user.info IMSSVC[461]: [SLOT_0][I] 2946 [20RegistrationListener_0::onReceiveImsRegFail] Received IMS registration fail from CP AIMS. failCode: 401
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2947 RegService_0::updateImsRegFail() [<-- 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2948 RegService_0::updateImsRegFail() ########## Update IMS Reg Fail. failCode: 401
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2949 [RegService_0] OnUnsolicitedResponse [<-- 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2950 [ImssvcContext_0] OnUnsolicitedResponse [<-- 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2951 [ImssvcContext_0] ProcessUnsolicitedResponse [<-- 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2952 [ImssvcContext_0] ProcessUnsolicitedResponse 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2953 [ImssvcContext_0] ProcessUnsolicitedResponse [--> 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2954 [ImssvcApplication] OnUnsolicitedResponse [<-- 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2955 [ImssvcApplication] OnUnsolicitedResponse [<-- 
-Feb 27 17:28:22.031 host1 user.info IMSSVC[461]: [SLOT_0][I] 2956 [ImssvcResponseListener] OnUnsolicitedResponse 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2957 [ImssvcD] IMSSVC_onUnsolicitedResponse [<-- 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2958 [UNSL]< IMS_UNSOL_UPDATE_IMS_REG_FAIL
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2959 call responseFunction for id=IMS_UNSOL_UPDATE_IMS_REG_FAIL
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2960 [ImssvcD] responseInts [<-- 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2961 [ImssvcD] responseInts [--> 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2962 IMSSVC_SOCKET_1 UNSOLICITED: IMS_UNSOL_UPDATE_IMS_REG_FAIL length:16
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2963 [respParcel] [UNSL]< IMS_UNSOL_UPDATE_IMS_REG_FAIL {401, }
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2964 Send Response to socket=IMSSVC_SOCKET_1, fd=20
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2965 IMSSVCD Response: written=4
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2966 IMSSVCD Response: written=16
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2967 [ImssvcD] IMSSVC_onUnsolicitedResponse [--> 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2968 [ImssvcApplication] OnUnsolicitedResponse [--> 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2969 [ImssvcApplication] OnUnsolicitedResponse [--> 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2970 [ImssvcContext_0] OnUnsolicitedResponse [--> 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2971 [RegService_0] OnUnsolicitedResponse [--> 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2972 RegService_0::updateImsRegFail() [--> 
-Feb 27 17:28:22.031 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2973 Unsol {3077} received
-Feb 27 17:28:22.032 host1 daemon.debug ofonod[464]: drivers/rilmodem/ims.c:ims_update_ims_reg_fail() fail_code = 401
-Feb 27 17:28:22.032 host1 daemon.info ofonod[464]: [0,UNSOL]< IMS_UNSOL_UPDATE_IMS_REG_FAIL fail_code=401
-Feb 27 17:28:22.032 host1 daemon.info ofonod[464]: src/ims.c:ofono_ims_reg_fail_notify() 
--- [생략]
-Feb 27 17:28:22.125 host1 user.debug IMSSVC[461]: [SLOT_0][V] 3065 RegService_0::setRegistrationState() [--> 
-Feb 27 17:28:22.125 host1 user.debug IMSSVC[461]: [SLOT_0][V] 3066 RegService_0::imsRegistrationStateChanged() [--> 
-Feb 27 17:28:22.125 host1 user.info IMSSVC[461]: [SLOT_0][I] 3067 [28ImsRegistrationStateCallback_0::onStateChanged] IMS REGISTERED SUCCEEDED
-Feb 27 17:28:22.125 host1 daemon.info exynos-ril[450]: [NetworkService_0] SetImsRegistrationStateHandler OnRequest()
-Feb 27 17:28:22.125 host1 user.info IMSSVC[461]: [SLOT_0][I] 3068 [20RegistrationListener_0::updateImsRegFail] IMS registration successed. Notify fail code as 0
-Feb 27 17:28:22.125 host1 user.debug IMSSVC[461]: [SLOT_0][V] 3069 RegService_0::updateImsRegFail() [<-- 
-Feb 27 17:28:22.126 host1 daemon.debug exynos-ril[450]: [NetworkService_0] SetImsRegistrationStateHandler OnRequest() regState=1, accessNetwork=1
--- [생략]
-Feb 27 17:28:22.128 host1 daemon.info ofonod[464]: [0,UNSOL]< UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED
-Feb 27 17:28:22.128 host1 user.info IMSSVC[461]: [SLOT_0][I] 3099 VoLTECalling on
-Feb 27 17:28:22.128 host1 daemon.info ofonod[464]: [0,0235]> RIL_REQUEST_DATA_REGISTRATION_STATE
-Feb 27 17:28:22.128 host1 user.info IMSSVC[461]: [SLOT_0][I] 3100 [19RegistrationManager_0::triggerRegistering] triggerRegistering by 2 Block:0 Prefer:CellConnectivity VoPS:1 EMC:0 RAT:NR 0 [SLID:0]
-Feb 27 17:28:22.128 host1 daemon.info ofonod[464]: [0,UNSOL]< UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED
-Feb 27 17:28:22.128 host1 daemon.info ofonod[464]: [0,0236]> RIL_REQUEST_OPERATOR
-Feb 27 17:28:22.128 host1 user.info IMSSVC[461]: [SLOT_0][I] 3101 [19RegistrationManager_0::triggerRegistering] [IMS_REGISTERED] [Call:0] [Current:CellConnectivity VoPS:1 EMC:0 RAT:NR 0]
-Feb 27 17:28:22.128 host1 daemon.info ofonod[464]: [0,0237]> RIL_REQUEST_VOICE_REGISTRATION_STATE
-Feb 27 17:28:22.128 host1 user.info IMSSVC[461]: [SLOT_0][I] 3102 [19RegistrationManager_0::triggerRegistering] NOT SENT
+-- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture.
+Sep 22 09:30:20.781 dut daemon.info ofonod[903]: [0,0117]> IMS_REQUEST_SET_PDN_INFO
+Sep 22 09:30:20.793 dut daemon.info ofonod[903]: [0,0117]< IMS_REQUEST_SET_PDN_INFO
+Sep 22 09:30:20.794 dut daemon.debug ofonod[903]: src/ims.c:example_pdn_info_cb() pdn info set
+Sep 22 09:30:20.981 dut local0.info mgmtd[734]: ui tick
+Sep 22 09:30:21.301 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=12
+Sep 22 09:30:21.302 dut daemon.info vrild[618]: [ImsService_1] ims reg ind relayed to client chan 3
+Sep 22 09:30:21.303 dut user.debug imsd[552]: slot0: OEM_UNSOL_IMS_REG_FAIL parsed -> [fail-code : 401] sid 0
+Sep 22 09:30:21.303 dut user.info imsd[552]: [SLOT_0] registration fail from modem, failCode: 401
+Sep 22 09:30:21.304 dut user.debug imsd[552]: slot0 -> ofonod: IMS_UNSOL_REG_FAILED (14 bytes)
+Sep 22 09:30:21.305 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=401
+Sep 22 09:30:21.305 dut daemon.info ofonod[903]: src/ims.c:example_reg_fail_notify() /ril_0 fail_code 401
+Sep 22 09:30:21.591 dut user.info imsd[552]: [SLOT_0] SIP 401 Unauthorized, register again with credentials
+Sep 22 09:30:21.981 dut local0.info mgmtd[734]: ui tick
+Sep 22 09:30:22.161 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=28
+Sep 22 09:30:22.162 dut user.debug imsd[552]: slot0: OEM_UNSOL_IMS_REGISTRATION parsed -> [state : 1] sid 0
+Sep 22 09:30:22.162 dut user.info imsd[552]: [SLOT_0] IMS REGISTERED SUCCEEDED
+Sep 22 09:30:22.163 dut user.info imsd[552]: [SLOT_0] registered:1 [IMS_REGISTERED] VoPS:1 RAT:NR
+Sep 22 09:30:22.163 dut daemon.info vrild[618]: [ExampleRegService_1] ims reg state now 1, cache updated
+Sep 22 09:30:22.164 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_RESPONSE_REGISTRATION_STATE_CHANGED
+Sep 22 09:30:22.165 dut daemon.debug ofonod[903]: src/ims.c:ofono_ims_status_notify() /ril_0 registered 1
+Sep 22 09:30:22.166 dut daemon.info ofonod[903]: [0,UNSOL]< UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED
+Sep 22 09:30:22.167 dut daemon.info ofonod[903]: [0,0118]> RIL_REQUEST_DATA_REGISTRATION_STATE
+Sep 22 09:30:22.171 dut daemon.info ofonod[903]: [0,0118]< RIL_REQUEST_DATA_REGISTRATION_STATE
+Sep 22 09:30:22.981 dut local0.info mgmtd[734]: ui tick

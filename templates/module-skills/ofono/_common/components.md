@@ -4,36 +4,39 @@
 
 | 역할 | 지금 이름 | 구 이름 | 층 | 비고 |
 |---|---|---|---|---|
-| oFono 코어 | ofonod | — | ofonod | gril trace, `src/<파일>.c:` |
-| 벤더 RIL | exynos-ril | — | 벤더 RIL(<데몬>) | 모뎀 IPC |
-| UI·시험 클라이언트 | MOSE | — | D-Bus 위(증상) | 두 인스턴스, warn은 믿지 않는다 · 끝 `mose/<경로>.go:<n>` |
-| 데이터 관리 데몬 | NMD | — | 관리 데몬 | APN·프로필, 연결 뒤 라우팅·netconf(IP·DNS)·firewall(줄 모양 TODO(SITE:S25)) · 끝 `[./<dir>/<File>.cxx +<n>]` |
-| 라우팅 데몬 | DITD | — | 곁가지(<데몬>) | netlink |
-| eSIM 관리 데몬 | LPA | — | 관리 데몬 | `tid:<n>` |
-| eUICC 프로필 데몬 | ipad | — | 관리 데몬 | `[<L>][tid=<n>] … ipa::` |
-| 무선 상태 데몬 | PTD | — | 곁가지(PTD) | `[NETW]`·`[ADAP] … [<File>.cpp+<n>]` |
-| 위성 entitlement 데몬 | ENT | — | 곁가지(<데몬>) | HTTP · `tid:<n>` |
-| IMS 서비스 데몬 | IMSSVC | — | 곁가지(<데몬>) | ims(call·sms) · `[SLOT_<n>][<L>] <seq>` |
-| 진단 중계 데몬 | DMD | — | 곁가지(<데몬>) | DM USB 중계 |
-| NV 파일 데몬 | RFSD | — | 곁가지(<데몬>) | 모뎀 NV 파일 |
-| 모뎀 감시 데몬 | vcd | — | 모뎀·망(재시작 전달) | 줄에 `[pid]`가 없다 |
-| 잡음 | GPS0, VRD | — | — | — |
+| oFono 데몬(upstream) | ofonod | — | ofonod | gril trace, `src/<파일>.c:` |
+| 관리 데몬 placeholder | mgmtd | — | 관리 데몬 | UI·설정 클라이언트. 레벨은 심각도가 아니다 |
+| 벤더 RIL 데몬 placeholder | vrild | — | 벤더 RIL(<데몬>) | 모뎀 IPC·모뎀 감시·진단 기록 |
+| 데이터 구성요소 placeholder | datad | — | 관리 데몬 | — |
+| 데이터 구성요소 두 번째 placeholder | datad2 | — | 곁가지(<데몬>) | 레벨은 심각도가 아니다 |
+| SIM 구성요소 placeholder | simd | — | 관리 데몬 | — |
+| 네트워크 구성요소 placeholder | networkd | — | 곁가지(<데몬>) | — |
+| IMS 구성요소 placeholder | imsd | — | 곁가지(<데몬>) | call·sms도 |
+| 노이즈 placeholder | chatterd | — | — | — |
+| data | {{site:data}} | — | — | PDP context·APN |
+| sim | {{site:sim}} | — | — | UICC·eUICC 프로필(SGP.22) |
+| network | {{site:network}} | — | — | 망 등록·셀 정보 |
+| call | {{site:call}} | — | — | 호 제어·CSFB |
+| sms | {{site:sms}} | — | — | SMS·SMSC |
+| ims | {{site:ims}} | — | — | IMS 등록·SIP |
+| modem | {{site:modem}} | — | — | 모뎀 전원·재시작 |
+| common | {{site:common}} | — | — | oFono D-Bus 클라이언트 |
+| noise | {{site:noise}} | — | — | — |
 
 ## gril (ofonod tag)
 
 - 요청 `[<slot>,<serial>]> <이름>`, 응답 `[<slot>,<serial>]< <이름>`(실패면 `failed <ERR>`), 비요청 `[<slot>,UNSOL]<`. serial은 4자리, slot은 타임라인 `p<n>` 칸이다.
 - `[0,<serial>]< <INVALID>`는 비요청이지 실패가 아니다.
-- `Device <n>:`·`IMSD <n>:` 덤프 줄은 통째로 가려져 있다. IMSSVC는 `IMSD` 채널과 자기 serial을 쓴다.
+- `Device <n>:`·`IMSD <n>:` 덤프 줄은 통째로 가려져 있다. imsd는 `IMSD` 채널과 자기 serial을 쓴다.
 - 짝 없는 실패·시간 초과는 타임라인에 `⇒ ril_error(…)`·`ril_timeout`.
 
-## exynos-ril
+## vrild
 
-- `SOCKET RIL_SOCKET_<n> REQUEST: <이름>` → `[<Svc>Service_<n>] <Name>Handler OnRequest()` → `[RilContext_<n>] RecordRequestHistory token=0x…`.
-- `[<장치>][TX|RX] SIT_<MSG>, REQ|RSP|IND, <n> bytes, Token(0x…)[, OK(RCM_E_SUCCESS) | Error(RCM_E_<X>)]`.
-- `[RilContext_<n>] OnRequestComplete Request ID=<id>, result=<n>`(0이 성공). 스크립트 표시는 `⇒ builtin.common.vendor_ipc_error`·`vendor_request_failed`.
-- 슬롯: gril slot 0 = `RIL_SOCKET_1` = `RilContext_0` = IMSSVC `[SLOT_0]`.
-- 짝(공유 serial 없음): gril ↔ exynos는 요청 이름·순서·ms 시각, exynos ↔ IPC는 `Token(0x…)`·`RecordRequestHistory token=`.
-- IMSSVC는 exynos 소켓이 아니라 OEM 채널(`[SID_0] SOL TX{RILC_REQ_AIMS_*}` ↔ `SIT_AIMS_*`)로 모뎀과 말한다.
+- `client fd <n> VCHAN_<n> REQUEST: <이름>` → `[<Svc>Service_<n>] <자유 문구>` → `[IpcCtx_<n>] track seq 0x…`(요청 짝 값).
+- `mux [ch<n>][TX|RX] VIPC_<MSG>` 줄은 REQ·RSP·IND 방향과 요청 짝 값 `seq=0x…`를 싣고, 응답이면 `OK(VIPC_OK)`·`Error(VIPC_E_<X>)`.
+- `[IpcCtx_<n>] OnIpcComplete Request ID=<id>, result=<n>`(0이 성공). 스크립트 표시는 `⇒ builtin.common.vendor_ipc_error`·`vendor_request_failed`.
+- 슬롯: gril slot과 vrild·IPC 줄 번호의 대응은 줄에 적힌 것만 쓴다.
+- 짝(공유 serial 없음): gril ↔ vrild는 요청 이름·순서·ms 시각, vrild ↔ IPC는 같은 요청 짝 값.
 
 ## 쓰지 않는 것
 

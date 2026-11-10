@@ -65,11 +65,11 @@ def test_against_deny_list(tmp_path):
     assert _run(fix / "source.log").returncode == 0           # 원본 없이는 마스킹된 줄로 보인다
 
 
-DUMP = "Sep 20 15:10:05.000 host1 daemon.info ofonod[1]: src/dbus.c:dump_dmsg_w_re() "
+DUMP = "Sep 20 15:10:05.000 host1 daemon.info ofonod[1]: src/dbus.c:example_dump() "
 
 
 def test_dump_split_chunks_and_shape(tmp_path):
-    """C1+D 보정 §1.2: `dump_dmsg_w_re()` 조각에 갈린 사업자 이름(거부 목록)과 MCC·MNC(모양 규칙)를 걸친 줄마다 지적.
+    """C1+D 보정 §1.2: 덤프 함수(`<함수>()`) 조각에 갈린 사업자 이름(거부 목록)과 MCC·MNC(모양 규칙)를 걸친 줄마다 지적.
     모양 규칙은 `--against` 없이도 본다. 한 줄 안의 모양 값도 지적, 앞머리(시각)가 다른 줄은 잇지 않는다."""
     raw = tmp_path / "raw"
     raw.mkdir()
@@ -86,9 +86,9 @@ def test_dump_split_chunks_and_shape(tmp_path):
         DUMP + '-CARRIER")}, dict{"MobileCountryCode", variant("45',
         DUMP + '0")}, dict{"MobileNet',
         DUMP + 'workCode", variant("05")}]',
-        "Sep 20 15:10:06.000 host1 daemon.info ofonod[1]: src/dbus.c:dump_dmsg_w_re() "
+        "Sep 20 15:10:06.000 host1 daemon.info ofonod[1]: src/dbus.c:example_dump() "
         'a:[dict{"MobileCountryCode", variant("450")}]',
-        "Sep 20 15:10:07.000 host1 daemon.info ofonod[1]: src/dbus.c:dump_dmsg_w_re() "
+        "Sep 20 15:10:07.000 host1 daemon.info ofonod[1]: src/dbus.c:example_dump() "
         'dict{"MobileCountryCode", variant("<PLMN#1>")}]',
     ]) + "\n", encoding="utf-8")
     proc = _run(fix, "--against", raw, "--json")

@@ -1,24 +1,24 @@
--- [합성] C1D 보정 data-nr-switch-drop. 레포의 줄 모양(network-radio-off-queries case의 데이터 관리 데몬 줄, C0·C1 합성 case)만 본떠 새로 썼다. SA에서 LTE로 연동하는 순간을 그렸다. 위에서 DEACTIVATE_DATA_CALL·RADIO_POWER 요청 없음.
-Sep 22 09:10:00.010 dut local0.info MOSE[731]: [UI___] 000203 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Sep 22 09:10:00.200 dut daemon.info exynos-ril[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-94
-Sep 22 09:10:02.000 dut local0.info MOSE[731]: [DBUS_] 000210 *BusHelperImpl->CallGenericMethod  dest: org.ofono objectPath: /ril_0/context1, dbusInterface: org.ofono.ConnectionContext, methodName SetProperty  mose/dbus/helper/dbus_helper_impl.go:98
-Sep 22 09:10:02.002 dut daemon.info ofonod[466]: dump_dmsg method call - i:org.ofono.ConnectionContext m:SetProperty p:/ril_0/context1 a:"Active", variant(true)
-Sep 22 09:10:02.003 dut daemon.debug ofonod[466]: src/gprs.c:ofono_gprs_context_activate() /ril_0 context 1 activating
+-- [합성] C1D 보정 data-nr-switch-drop. 레포의 줄 모양(network-radio-off-queries case의 데이터 구성요소 줄, C0·C1 합성 case)만 본떠 새로 썼다. SA에서 LTE로 연동하는 순간을 그렸다. 위에서 DEACTIVATE_DATA_CALL·RADIO_POWER 요청 없음.
+Sep 22 09:10:00.010 dut local0.info mgmtd[734]: ui tick
+Sep 22 09:10:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-94
+Sep 22 09:10:02.000 dut local0.info mgmtd[734]: dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1
+Sep 22 09:10:02.002 dut daemon.info ofonod[466]: dbus_trace method call - i:org.ofono.ConnectionContext m:SetProperty p:/ril_0/context1 a:"Active", variant(true)
+Sep 22 09:10:02.003 dut daemon.debug ofonod[466]: drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating
 Sep 22 09:10:02.004 dut daemon.info ofonod[466]: [0,0031]> RIL_REQUEST_SETUP_DATA_CALL 16,1,<APN#1>,0,IP
-Sep 22 09:10:02.005 dut daemon.debug exynos-ril[452]: SOCKET RIL_SOCKET_1 REQUEST: SETUP_DATA_CALL length:120
-Sep 22 09:10:02.006 dut daemon.debug exynos-ril[452]: [RilContext_0] RecordRequestHistory token=0x0231
-Sep 22 09:10:02.006 dut daemon.debug exynos-ril[452]: [<DEV#1>][TX] SIT_SETUP_DATA_CALL, REQ, 96 bytes, Token(0x0231)
-Sep 22 09:10:02.610 dut daemon.debug exynos-ril[452]: [<DEV#1>][RX] SIT_SETUP_DATA_CALL, RSP, 64 bytes, Token(0x0231), OK(RCM_E_SUCCESS)
-Sep 22 09:10:02.611 dut daemon.info exynos-ril[452]: [RilContext_0] OnRequestComplete Request ID=27, result=0
+Sep 22 09:10:02.005 dut daemon.debug vrild[452]: client fd 9 VCHAN_1 REQUEST: SETUP_DATA_CALL (120 bytes)
+Sep 22 09:10:02.006 dut daemon.debug vrild[452]: [IpcCtx_0] track seq 0x0231
+Sep 22 09:10:02.006 dut daemon.debug vrild[452]: mux [ch0][TX] VIPC_EXAMPLE_PDN_UP, REQ seq=0x0231 len=96
+Sep 22 09:10:02.610 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_PDN_UP, RSP OK(VIPC_OK) seq=0x0231 len=64
+Sep 22 09:10:02.611 dut daemon.info vrild[452]: [IpcCtx_0] OnIpcComplete Request ID=27, result=0
 Sep 22 09:10:02.613 dut daemon.debug ofonod[466]: [0,0031]< RIL_REQUEST_SETUP_DATA_CALL {status=0,retry=-1,cid=1,active=2,type=IP,ifname=rmnet0}
 Sep 22 09:10:02.615 dut daemon.info ofonod[466]: src/gprs.c:pri_activate_callback() context 1 active on rmnet0
-Sep 22 09:10:02.616 dut daemon.info ofonod[466]: dump_dmsg signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"Active", variant(true)
-Sep 22 09:10:04.010 dut local0.info MOSE[731]: [UI___] 000204 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Sep 22 09:10:05.200 dut daemon.info exynos-ril[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-94
-Sep 22 09:10:08.300 dut daemon.debug exynos-ril[452]: [<DEV#1>][RX] SIT_IND_PHYSICAL_CHANNEL_CONFIG, IND, 40 bytes
-Sep 22 09:10:08.340 dut daemon.debug exynos-ril[452]: [<DEV#1>][RX] SIT_IND_DATA_CALL_LIST_CHANGED, IND, 24 bytes
+Sep 22 09:10:02.616 dut daemon.info ofonod[466]: dbus_trace signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"Active", variant(true)
+Sep 22 09:10:04.010 dut local0.info mgmtd[734]: ui tick
+Sep 22 09:10:05.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-94
+Sep 22 09:10:08.300 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_CARRIER_IND ind len=40
+Sep 22 09:10:08.340 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_PDN_LIST_IND ind len=24
 Sep 22 09:10:08.342 dut daemon.info ofonod[466]: [0,UNSOL]< RIL_UNSOL_DATA_CALL_LIST_CHANGED [cid=1 active=0]
-Sep 22 09:10:08.344 dut daemon.info ofonod[466]: src/gprs.c:gprs_context_deactivated() context 1 deactivated
-Sep 22 09:10:08.345 dut daemon.info ofonod[466]: dump_dmsg signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"Active", variant(false)
-Sep 22 09:10:09.010 dut local0.info MOSE[731]: [UI___] 000205 *UI->Update  uiMsg.TimeMsg  mose/ui/ui.go:108
-Sep 22 09:10:09.200 dut daemon.info exynos-ril[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-97
+Sep 22 09:10:08.344 dut daemon.info ofonod[466]: src/gprs.c:ofono_gprs_context_deactivated() context 1 deactivated
+Sep 22 09:10:08.345 dut daemon.info ofonod[466]: dbus_trace signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"Active", variant(false)
+Sep 22 09:10:09.010 dut local0.info mgmtd[734]: ui tick
+Sep 22 09:10:09.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-97

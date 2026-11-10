@@ -1,0 +1,12 @@
+platform: ofono
+module: sim
+mode: deep
+center: '2026-09-23T11:20:10.015Z'
+fail: 36
+essential:
+- 27
+- 32
+- 36
+- 37
+- 38
+origin: 합성

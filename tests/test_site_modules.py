@@ -224,7 +224,7 @@ def test_ms1_nested_claude_prints_only(tmp_path, monkeypatch):
 def test_ms1_coverage_counts_only_in_evidence(tmp_path):
     logs = tmp_path / "ofono-logs" / "case1"
     logs.mkdir(parents=True)
-    body = ["-- [합성] ms1.coverage", *[f"Sep 20 15:10:{i:02d}.000 dut daemon.err PTD[77]: attach failed {i}" for i in range(25)],
+    body = ["-- [합성] ms1.coverage", *[f"Sep 20 15:10:{i:02d}.000 dut daemon.err networkd[77]: attach failed {i}" for i in range(25)],
             *[f"Sep 20 15:11:{i:02d}.000 dut daemon.err SECRETD[9]: oops {i}" for i in range(22)]]
     (logs / "journal.log").write_text("\n".join(body) + "\n", encoding="utf-8")
     root, _ = make_site(tmp_path, inputs=f"ofono_log_dir: {logs.parent}\n")
@@ -237,7 +237,7 @@ def test_ms1_coverage_counts_only_in_evidence(tmp_path):
     (root / "plugin" / "site-defaults.yaml").write_text(yaml.safe_dump(d, allow_unicode=True), encoding="utf-8")
     r = run_ms1(root)["ms1.coverage"]
     assert r["status"] == "needs-user", r["evidence"]
-    assert "SECRETD" not in r["evidence"] and "PTD" not in r["evidence"]      # 이름은 근거에 없다(개수만)
+    assert "SECRETD" not in r["evidence"] and "networkd" not in r["evidence"]      # 이름은 근거에 없다(개수만)
     assert "tags.yaml에 없음 " in r["evidence"]
 
 

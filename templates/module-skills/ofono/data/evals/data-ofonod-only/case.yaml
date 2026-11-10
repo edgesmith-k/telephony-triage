@@ -23,4 +23,4 @@ expect:
       daemon: '알 수 없음|ofonod|없음'
       evidence: ['Activating context failed']
   trap:
-    - label: '^\s*(벤더 RIL|exynos-ril|모뎀|망|DITD|NMD)'
+    - label: '^\s*(벤더 RIL|vrild|모뎀|망|datad)'

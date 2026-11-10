@@ -2171,15 +2171,16 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <h4>플러그인 레포</h4>
   <p>플러그인은 개발 레포에서 만들고, 사내에는 반입 묶음으로만 들어옵니다. 사내 레포에서는 공통 파일을 고치지 않고 <code>SITE_PATHS</code>에 적힌 경로에만 사내 파일을 둡니다. 그래야 다음 반입 때 충돌이 나지 않습니다.</p>
   <p class="swipe">좁은 화면에서는 그림을 옆으로 밀어 보세요.</p>
-  <div class="scroll gscroll"><svg class="gg" width="640" height="290" viewBox="0 0 640 290" role="img" aria-label="플러그인 레포의 브랜치 그림. 개발 레포에서 기능 가지 ops-metrics, book, promo가 PR로 main에 합쳐진다. 반입할 main 커밋에 import-20261017 태그를 붙이고, 묶음 zip 파일이 사내로 한 방향으로 들어간다. 사내 플러그인 레포에는 SITE_PATHS 경로의 사내 전용 커밋이 있고, draft-import/import-20261017 가지에서 반입 커밋을 만든 뒤 main에 fast-forward로 병합한다. 반입은 사내 전용 파일을 건드리지 않는다. 그 main을 사내 마켓플레이스로 배포한다."><text x="0" y="14" class="t">개발 레포</text><path d="M40 55H620" style="fill:none;stroke:var(--accent);stroke-width:3"/><text x="0" y="59" class="t">main</text><path d="M60 55C75.0 55 75.0 100 90 100" style="fill:none;stroke:var(--ma);stroke-width:3"/><path d="M90 100H130" style="fill:none;stroke:var(--ma);stroke-width:3"/><path d="M130 100C145.0 100 145.0 55 160 55" style="fill:none;stroke:var(--ma);stroke-width:3"/><circle cx="110" cy="100" r="5" style="fill:var(--ma)"/><circle cx="160" cy="55" r="5" style="fill:var(--accent)"/><text x="70" y="122" class="m">ops-metrics</text><path d="M190 55C205.0 55 205.0 100 220 100" style="fill:none;stroke:var(--ma);stroke-width:3"/><path d="M220 100H260" style="fill:none;stroke:var(--ma);stroke-width:3"/><path d="M260 100C275.0 100 275.0 55 290 55" style="fill:none;stroke:var(--ma);stroke-width:3"/><circle cx="240" cy="100" r="5" style="fill:var(--ma)"/><circle cx="290" cy="55" r="5" style="fill:var(--accent)"/><text x="200" y="122" class="m">book</text><path d="M320 55C335.0 55 335.0 100 350 100" style="fill:none;stroke:var(--ma);stroke-width:3"/><path d="M350 100H390" style="fill:none;stroke:var(--ma);stroke-width:3"/><path d="M390 100C405.0 100 405.0 55 420 55" style="fill:none;stroke:var(--ma);stroke-width:3"/><circle cx="370" cy="100" r="5" style="fill:var(--ma)"/><circle cx="420" cy="55" r="5" style="fill:var(--accent)"/><text x="330" y="122" class="m">promo</text><circle cx="40" cy="55" r="5" style="fill:var(--accent)"/><circle cx="450" cy="55" r="9" style="fill:var(--accent-ink)"/><text x="450" y="59" text-anchor="middle" class="n">1</text><path d="M450 46V20" style="stroke:var(--text);stroke-width:2"/><path d="M450 20h14l-4 5l4 5h-14z" style="fill:var(--off)"/><text x="470" y="30" class="t">import-20261017</text><path d="M450 66V236m-6 -8l6 8l6 -8" style="fill:none;stroke:var(--text);stroke-width:2;stroke-dasharray:4 4"/><text x="440" y="150" text-anchor="end" class="m">묶음 zip 파일 · 개발 레포 → 사내 한 방향</text><text x="0" y="180" class="t">사내 플러그인 레포</text><path d="M40 250H370" style="fill:none;stroke:var(--accent);stroke-width:3"/><text x="0" y="254" class="t">main</text><path d="M370 250H450" style="fill:none;stroke:var(--ma);stroke-width:3"/><circle cx="60" cy="250" r="5" style="fill:var(--accent)"/><circle cx="150" cy="250" r="9" style="fill:var(--off)"/><text x="150" y="254" text-anchor="middle" class="n">2</text><circle cx="250" cy="250" r="5" style="fill:var(--accent)"/><circle cx="370" cy="250" r="5" style="fill:var(--accent)"/><text x="110" y="276" class="m">사내 전용 (SITE_PATHS)</text><circle cx="450" cy="250" r="9" style="fill:#8a5a14"/><text x="450" y="254" text-anchor="middle" class="n">3</text><text x="462" y="232" class="m">draft-import/import-20261017</text><text x="470" y="276" class="t">④ main → ③ · 배포</text></svg></div>
+  <div class="scroll gscroll"><svg class="gg" width="640" height="290" viewBox="0 0 640 290" role="img" aria-label="플러그인 레포의 브랜치 그림. 개발 레포에서 기능 가지 ops-metrics, book, promo가 PR로 main에 합쳐진다. stable(반입 기준 브랜치)에 병합된 커밋에 import-20261017 태그를 붙이고, 묶음 zip 파일이 사내로 한 방향으로 들어간다. 사내 플러그인 레포에는 SITE_PATHS 경로의 사내 전용 커밋이 있고, draft-import/import-20261017 가지에서 반입 커밋을 만든 뒤 main에 fast-forward로 병합한다. 반입은 사내 전용 파일을 건드리지 않는다. 그 main을 사내 마켓플레이스로 배포한다."><text x="0" y="14" class="t">개발 레포</text><path d="M40 55H620" style="fill:none;stroke:var(--accent);stroke-width:3"/><text x="0" y="59" class="t">main</text><path d="M60 55C75.0 55 75.0 100 90 100" style="fill:none;stroke:var(--ma);stroke-width:3"/><path d="M90 100H130" style="fill:none;stroke:var(--ma);stroke-width:3"/><path d="M130 100C145.0 100 145.0 55 160 55" style="fill:none;stroke:var(--ma);stroke-width:3"/><circle cx="110" cy="100" r="5" style="fill:var(--ma)"/><circle cx="160" cy="55" r="5" style="fill:var(--accent)"/><text x="70" y="122" class="m">ops-metrics</text><path d="M190 55C205.0 55 205.0 100 220 100" style="fill:none;stroke:var(--ma);stroke-width:3"/><path d="M220 100H260" style="fill:none;stroke:var(--ma);stroke-width:3"/><path d="M260 100C275.0 100 275.0 55 290 55" style="fill:none;stroke:var(--ma);stroke-width:3"/><circle cx="240" cy="100" r="5" style="fill:var(--ma)"/><circle cx="290" cy="55" r="5" style="fill:var(--accent)"/><text x="200" y="122" class="m">book</text><path d="M320 55C335.0 55 335.0 100 350 100" style="fill:none;stroke:var(--ma);stroke-width:3"/><path d="M350 100H390" style="fill:none;stroke:var(--ma);stroke-width:3"/><path d="M390 100C405.0 100 405.0 55 420 55" style="fill:none;stroke:var(--ma);stroke-width:3"/><circle cx="370" cy="100" r="5" style="fill:var(--ma)"/><circle cx="420" cy="55" r="5" style="fill:var(--accent)"/><text x="330" y="122" class="m">promo</text><circle cx="40" cy="55" r="5" style="fill:var(--accent)"/><circle cx="450" cy="55" r="9" style="fill:var(--accent-ink)"/><text x="450" y="59" text-anchor="middle" class="n">1</text><path d="M450 46V20" style="stroke:var(--text);stroke-width:2"/><path d="M450 20h14l-4 5l4 5h-14z" style="fill:var(--off)"/><text x="470" y="30" class="t">import-20261017</text><path d="M450 66V236m-6 -8l6 8l6 -8" style="fill:none;stroke:var(--text);stroke-width:2;stroke-dasharray:4 4"/><text x="440" y="150" text-anchor="end" class="m">묶음 zip 파일 · 개발 레포 → 사내 한 방향</text><text x="0" y="180" class="t">사내 플러그인 레포</text><path d="M40 250H370" style="fill:none;stroke:var(--accent);stroke-width:3"/><text x="0" y="254" class="t">main</text><path d="M370 250H450" style="fill:none;stroke:var(--ma);stroke-width:3"/><circle cx="60" cy="250" r="5" style="fill:var(--accent)"/><circle cx="150" cy="250" r="9" style="fill:var(--off)"/><text x="150" y="254" text-anchor="middle" class="n">2</text><circle cx="250" cy="250" r="5" style="fill:var(--accent)"/><circle cx="370" cy="250" r="5" style="fill:var(--accent)"/><text x="110" y="276" class="m">사내 전용 (SITE_PATHS)</text><circle cx="450" cy="250" r="9" style="fill:#8a5a14"/><text x="450" y="254" text-anchor="middle" class="n">3</text><text x="462" y="232" class="m">draft-import/import-20261017</text><text x="470" y="276" class="t">④ main → ③ · 배포</text></svg></div>
   <ul class="figkey">
-    <li><b>①</b> 기능 가지는 PR로만 합칩니다. 반입할 main 커밋에 묶음과 같은 이름의 태그(<code>import-20261017</code>)를 사람이 붙입니다. 가지 이름은 이 레포에서 실제로 머지한 PR의 예입니다.</li>
+    <li><b>①</b> 기능 가지는 PR로만 합칩니다. 반입할 커밋은 <code>stable</code>(반입 기준 브랜치)에 병합된 커밋이고, 여기에 묶음과 같은 이름의 태그(<code>import-20261017</code>)를 사람이 붙입니다. 가지 이름은 이 레포에서 실제로 머지한 PR의 예입니다.</li>
     <li><b>②</b> 사내 전용 커밋입니다. <code>plugin/site-defaults.yaml</code>처럼 <code>SITE_PATHS</code>에 적힌 경로만 사내에서 씁니다.</li>
     <li><b>③</b> 반입 커밋입니다. <code>draft-import/import-20261017</code> 가지가 main 끝에서 앞서 나갑니다. <code>import_draft.py --check-boundary</code>가 공통 파일과 기준선 <code>.draft-manifest.json</code>만 바꾸고, ②의 사내 전용 파일은 그대로 둡니다. 사내에서 고친 공통 파일이 있으면 멈춥니다.</li>
     <li><b>④</b> pytest와 <code>db_regress --all</code>을 통과하면 main에 fast-forward(빨리 감기)로 병합합니다. 병합 커밋 없이 main 표시가 ③으로 옮겨집니다. 사내 마켓플레이스는 이 main의 commit SHA를 버전으로 씁니다.</li>
     <li>스키마·생성기 버전이 바뀐 묶음이면, 팀원 PC의 플러그인을 이슈 DB보다 먼저 갱신합니다(<a href="#ch21">21장</a>).</li>
   </ul>
   <p class="flow-foot">개발 레포의 main은 GitHub 보호 규칙으로 막아 둡니다. PR로만 머지되고, CI 필수 검사 7개가 모두 통과해야 합니다. 7개는 경계 검사, Python 3.10·3.11·3.14 테스트, 설치 리허설 3종입니다. 직접 push와 강제 push는 막혀 있습니다. 근거는 <code>tools/make_bundle.py</code>와 <code>tools/import_draft.py</code>입니다. <code>docs/SITE_INSTALL.md</code> 8절과 <code>15-local-draft.md</code> §15.6도 봤습니다. 사내 마켓플레이스 소스 유형과 팀원 PC의 갱신 방법은 사내에서 확인합니다(S-2·S-7).</p>
+  <p>묶음을 만들기 전 자동 검사에는 <code>deny-file</code>이 있습니다. 개발 레포 밖에 두는 거부 목록(환경 변수 <code>TT_DENY_FILE</code>)의 항목이 추적 파일의 내용이나 경로에 하나라도 있으면 묶음을 만들지 않습니다. 변수가 없어도 묶음을 만들지 않습니다(종료 2). 같은 검사는 <code>tools/deny_scan.py</code>로 따로 돌릴 수 있고, 출력은 가린 경로와 건수뿐입니다. HEAD가 원격의 <code>stable</code>(반입 기준 브랜치)이나 main에 들어 있는지(<code>on_release_branch</code>)는 보고만 하고 판정에 쓰지 않습니다.</p>
   <p>예시는 새 버전 하나를 반입하는 순서입니다. 묶음 이름은 지금까지 <code>import-&lt;날짜&gt;</code> 형식을 썼습니다(예: <code>import-20261013</code>).</p>
   <div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="c"># 개발 레포: 기능 브랜치 PR을 main에 머지한 뒤</span>
 <span class="p">$</span> python3 tools/make_bundle.py --label import-20261017
@@ -2199,7 +2200,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
 <span class="p">$</span> git add -A &amp;&amp; git commit -m "재반입 import-20261017"
 <span class="p">$</span> git switch main &amp;&amp; git merge --ff-only draft-import/import-20261017 &amp;&amp; git branch -d draft-import/import-20261017
 <span class="p">$</span> rm -rf ~/tt-new
-<span class="c">#   hook·공통 판정이 바뀐 묶음이면 사내 대상 eval 11개를 다시 돌린다</span></pre></div>
+<span class="c">#   hook·공통 판정이 바뀐 묶음이면 사내 대상 eval 12개를 다시 돌린다</span></pre></div>
   <p class="bridge">다음 장은 이렇게 만든 이슈 DB 안에 무엇이 있는지 봅니다.</p>
   <nav class="chnav" aria-label="장 이동"><a href="#contents">목차</a><a href="#ch14">← 14장 토큰·모델·비용</a><a href="#ch16">16장 이슈 DB 구조와 생성 파일 →</a></nav>
 </section>
@@ -2686,7 +2687,7 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
     </table></div>
   </div>
   <p>S-1의 도입 전 기준선은 파일럿 효과를 비교할 숫자입니다. 카테고리별로 최근 해결된 Jira 몇 건에 대해, 분석 시작부터 원인 확정까지 걸린 시간과 같은 원인을 다시 분석한 사례 수를 적습니다. 이 숫자는 <code>SITE_PROFILE.md</code>에만 두고 사내 밖으로 가져가지 않습니다.</p>
-  <p>S-2의 사내 대상 eval은 11개입니다(1·2·8·9·39·45·58·59·60·61·62). 사내에서만 확인되는 hook·권한 동작, 프롬프트 주입 판단, 외부 쓰기 승인, 사내 토큰 기준선이 여기 들어갑니다. 사내 eval 모델이 개발 단계 결과의 모델(Sonnet 5.5)과 다르면 7개(13·17·18·24·29·33·37)를 더 실행합니다. 나머지는 개발 단계 결과 기록으로 갈음합니다.</p>
+  <p>S-2의 사내 대상 eval은 12개입니다(1·2·8·9·39·45·58·59·60·61·62·75). 사내에서만 확인되는 hook·권한 동작, 프롬프트 주입 판단, 외부 쓰기 승인, 사내 토큰 기준선이 여기 들어갑니다. 사내 eval 모델이 개발 단계 결과의 모델(Sonnet 5.5)과 다르면 7개(13·17·18·24·29·33·37)를 더 실행합니다. 나머지는 개발 단계 결과 기록으로 갈음합니다.</p>
 
   <h3 id="ch20-3">20.3 S-0: 실제 로그로 미리 확인<a class="hl" href="#ch20-3" aria-label="링크">#</a></h3>
   <p>S-0은 사내 로그 형식이 파서의 가정과 얼마나 다른지 30분 안에 숫자로 보는 단계입니다. 출력에는 로그 문구가 없고 태그 이름과 개수·비율만 나옵니다. 결과는 <code>SITE_PROFILE.md</code>에만 둡니다.</p>
@@ -2809,8 +2810,8 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="p">$</span> git restore --source=$(git log -1 --format=%H -- .draft-manifest.json) -- &lt;파일&gt;</pre></div>
 
   <h3 id="ch21-3">21.3 반입 뒤 다시 할 확인<a class="hl" href="#ch21-3" aria-label="링크">#</a></h3>
-  <p>반입한 묶음에서 hook이나 공통 판정이 바뀌었으면, 사내 대상 eval 11개를 모두 다시 실행하고 S-2 확인 항목을 다시 봅니다. 바뀌는 파일은 <code>hooks.json</code>, <code>guard.py</code>, <code>show_guard.py</code>, <code>common/shown.py</code>, <code>jira_bridge.py</code>, 스킬의 공통 규칙 등입니다.</p>
-  <p>그 밖이면 바뀐 흐름의 eval만 실행합니다. 어느 쪽인지는 묶음과 함께 오는 <code>DRAFT_NOTES.md</code> "사내로 넘긴 것"의 재반입 노트에 적혀 있습니다. Claude Code의 큰 버전을 올릴 때도 S-2 확인 17항목과 사내 대상 eval 11개를 다시 합니다.</p>
+  <p>반입한 묶음에서 hook이나 공통 판정이 바뀌었으면, 사내 대상 eval 12개를 모두 다시 실행하고 S-2 확인 항목을 다시 봅니다. 바뀌는 파일은 <code>hooks.json</code>, <code>guard.py</code>, <code>show_guard.py</code>, <code>common/shown.py</code>, <code>jira_bridge.py</code>, 스킬의 공통 규칙 등입니다.</p>
+  <p>그 밖이면 바뀐 흐름의 eval만 실행합니다. 어느 쪽인지는 묶음과 함께 오는 <code>DRAFT_NOTES.md</code> "사내로 넘긴 것"의 재반입 노트에 적혀 있습니다. Claude Code의 큰 버전을 올릴 때도 S-2 확인 17항목과 사내 대상 eval 12개를 다시 합니다.</p>
 
   <h3 id="ch21-4">21.4 플러그인과 이슈 DB의 버전<a class="hl" href="#ch21-4" aria-label="링크">#</a></h3>
   <p>이슈 DB 설정에는 두 버전이 있습니다. 스키마 버전(<code>schema_version</code>, 파일 형식)과 생성기 버전(<code>generator_version</code>, 생성 파일 형식)입니다. 지금 플러그인은 스키마 1, 생성기 2를 씁니다. 등록된 스키마 마이그레이션은 아직 없습니다.</p>
@@ -2872,6 +2873,16 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
     </table></div>
   </div>
   <p>릴리스 노트에는 지원 스키마 범위와 생성기 버전을 적습니다. 그래야 관리자가 이슈 DB를 언제 맞춰야 하는지 알 수 있습니다.</p>
+
+  <h3 id="ch21-9">21.9 사내 재반입 (사내 설정 보존 · 모듈 스킬 스냅샷)<a class="hl" href="#ch21-9" aria-label="링크">#</a></h3>
+  <p>개발 레포의 모듈 스킬 템플릿(<code>templates/module-skills/</code>)과 시험 로그는 공개 용어와 placeholder 이름만 씁니다. 사내 구성요소 이름과 벤더 IPC 값은 사내 레포의 <code>SITE_PATHS</code>에만 둡니다. S-6까지 끝낸 사내 레포는 재반입 전에 갈래를 가립니다(<code>git ls-files templates/module-skills | head -1</code>). <b>(가)</b> 레포에 <code>templates/module-skills</code>가 없으면 반입 전 할 일이 없습니다. 반입 뒤 <code>check S-6</code>과 <code>restore check</code>로 사내 경로가 그대로인지 보고, 레포에 없던 기능(모듈 스킬·벤더 IPC 판별·oFono 레벨 보정·덤프 잇기)은 값이 없으면 꺼진 채라 출력이 반입 전과 같습니다. 켜려면 MS-1과 <code>TODO(SITE:S9)</code>·<code>S24</code>·<code>S25</code>에서 처음 채웁니다. <b>(나)</b> 있으면 재반입이 템플릿 파일을 사외 판으로 덮으므로, 사내에서 채운 모듈 스킬 템플릿을 반입 <b>전에</b> 스냅샷으로 떠 두고 반입 뒤 다시 얹습니다(아래 순서). 정본은 <code>docs/SITE_RESTORE.md</code>(갈래, ⓪~⑦)이고, 반입 뒤 <code>python3 tools/site_step.py restore</code>가 순서를 보여 줍니다.</p>
+  <ol class="steps">
+    <li><h4>스냅샷을 떠 둔다</h4><p>반입 전 사내 레포 HEAD(사내에서 이름을 채운 상태)에서 템플릿 트리를 <code>git archive</code>로 꺼내고, <code>*/*/evals/</code>만 빼서 <code>docs/site/module-skills/</code>에 둡니다. <code>SOURCE</code> 한 줄에 반입 라벨·커밋·날짜를 적습니다.</p></li>
+    <li><h4>벤더 IPC 값을 사이트 설정에 적는다</h4><p>벤더 IPC 요청 완료 줄 <code>[&lt;context&gt;&lt;n&gt;] &lt;complete&gt; Request ID=…, result=…</code>의 두 낱말과 IPC 오류 줄 <code>[RX] &lt;request_prefix&gt;&lt;X&gt;, RSP, … Error(&lt;error_prefix&gt;&lt;Y&gt;)</code>의 두 접두어·성공 값을 <code>site-defaults.yaml</code>의 <code>platform.vendor_ipc.{context, complete, request_prefix, error_prefix, success}</code>에 적습니다. 기본이 아닌 플랫폼은 <code>platform.others.&lt;p&gt;.vendor_ipc</code>입니다. 이미 있는 <code>platform:</code> 블록 안에 키만 더하고(블록을 하나 더 쓰면 뒤엣것만 남습니다), 다섯 키를 함께 적습니다(일부만 쓰면 종료 2). 블록을 빼면 placeholder(<code>IpcCtx_</code>·<code>OnIpcComplete</code>·<code>VIPC_</code>·<code>VIPC_E_</code>·<code>VIPC_E_OK</code>)를 쓰므로 사내 로그에서 <code>vendor_request_failed</code>·<code>vendor_ipc_error</code> 이벤트가 0개가 됩니다. oFono는 메시지를 여러 줄에 잘라 찍는 덤프 함수 이름도 oFono 블록 <code>dump_func</code>에 적습니다(생략하면 placeholder <code>example_dump</code>라 사내 로그의 갈린 IMSI·ICCID를 잇지 못합니다). oFono는 이슈 DB <code>tags.yaml</code>에 <code>level</code>·<code>ipc</code> 선언이 없으면 구성요소 플래그도 둡니다. <code>level_unreliable</code>은 레벨 칸을 심각도로 믿을 수 없는 구성요소에, <code>vendor_ipc</code>는 벤더 IPC 결과 줄을 내는 구성요소에 둡니다(대상이 다릅니다). 이 값들은 반입 전에 그 기능을 쓰고 있었을 때 같은 값으로 맞추는 것입니다.</p></li>
+    <li><h4>모듈 스킬 레포를 만들거나 맞춘다</h4><p><code>tools/make_module_repo.py &lt;out&gt; --site-overlay docs/site/module-skills</code>는 템플릿 복사본 위에 스냅샷 파일을 같은 경로로 통째로 덮어씁니다. 덮어쓴 파일에 placeholder 이름(대문자 <code>&lt;이름&gt;_</code> 꼴·벤더 IPC placeholder 포함)이나 <code>{{site:</code> 표식이 남아 있거나, 스냅샷에 없는 템플릿 파일(evals 밖)이 placeholder를 담고 있거나, 스냅샷에 evals가 있으면 아무것도 만들지 않고 종료 1입니다. 레포가 이미 있으면 임시 디렉토리에 렌더해 차이만 PR로 보냅니다.</p></li>
+    <li><h4>점검한다</h4><p><code>python3 tools/site_step.py restore check</code>가 스냅샷, <code>SOURCE</code> 형식, 덮어쓴 렌더, 사내 <code>tags.yaml</code>과의 이름 대조, vendor_ipc 설정, 거부 목록 0건, 반입 라벨을 봅니다. 반입 직전 커밋에 템플릿 트리가 없었고 스냅샷도 없으면((가)) 모듈 스킬 점검은 "해당 없음", 값이 없는 vendor_ipc는 "꺼짐"으로 나오고 종료 코드에 들지 않습니다. 진행 상태에는 쓰지 않는 독립 점검입니다.</p></li>
+  </ol>
+  <p>그 뒤 다시 반입해도 스냅샷은 <code>SITE_PATHS</code>라 그대로 남습니다. 덮어쓰기는 파일을 통째로 쓰므로 개발 레포 템플릿의 변경은 렌더 결과에 보이지 않습니다. <code>restore check</code>의 반입 라벨 경고를 보고 템플릿 diff에서 필요한 변경을 스냅샷 파일에 직접 옮긴 <b>다음</b> <code>SOURCE</code> 라벨을 올립니다. 라벨만 올려도 점검은 통과하므로 옮길 것이 남았는지는 diff로 직접 확인합니다.</p>
   <p class="bridge">4부는 데이터가 어디에 머무는지와, 이 모든 흐름을 지키는 안전장치를 다룹니다.</p>
   <nav class="chnav" aria-label="장 이동"><a href="#contents">목차</a><a href="#ch20">← 20장 사내 도입 단계와 파일럿</a><a href="#ch22">22장 데이터는 어디에 머무나 →</a></nav>
 </section>
@@ -3631,12 +3642,13 @@ note: 모바일 데이터 OFF 상태에서 접수됨</pre></div>
       <tbody>
         <tr><td><code>trackers/</code></td><td>이슈 트래커 어댑터: 작업 키 형식, 키 정규식, 게시 본문 형식, 코멘트 도구 인자</td><td><code>jira.py</code>(기본), <code>github.py</code>(실험적)</td></tr>
         <tr><td><code>platforms/</code></td><td>플랫폼 상수와 계약. 플랫폼마다 이슈 DB와 lock이 따로</td><td>android(기본), ofono(가정 형식 뼈대)</td></tr>
-        <tr><td><code>parser_backends/</code></td><td>로그 형식별 파서 백엔드. 내장 이벤트는 <code>builtin.</code> 접두어</td><td><code>reference</code>(Android 참고 구현), <code>ofono_reference</code>. 사내 <code>site</code>는 S-4a에서 포팅할 자리</td></tr>
+        <tr><td><code>parser_backends/</code></td><td>로그 형식별 파서 백엔드. 내장 이벤트는 <code>builtin.</code> 접두어</td><td><code>reference</code>(Android 참고 구현, 0.1.3), <code>ofono_reference</code>(0.0.7). 사내 <code>site</code>는 S-4a에서 포팅할 자리</td></tr>
         <tr><td><code>adapters/</code></td><td>기존 외부 파서를 그대로 실행하는 어댑터. 이벤트는 <code>ext.</code> 접두어</td><td>계약만 있음</td></tr>
         <tr><td><code>migrations/</code></td><td>이슈 DB 스키마 버전별 마이그레이션</td><td>아직 없음(스키마 v1). 버전을 올릴 때 <code>NNNN_&lt;설명&gt;.py</code>를 더함</td></tr>
       </tbody>
     </table></div>
   </div>
+  <p>백엔드 버전은 같은 로그의 파서 출력이 달라질 때 올립니다. 0.1.2·0.0.6은 벤더 IPC 요청 완료 줄의 토큰을 코드 상수에서 사이트 설정(<code>vendor_ipc.{context, complete}</code>, <a href="#ch21-9">21.9</a>)으로, 0.1.3·0.0.7은 IPC 오류 줄의 두 접두어·성공 값(<code>request_prefix</code>·<code>error_prefix</code>·<code>success</code>)도 같은 블록으로 옮기며 올린 버전입니다. 그 앞 oFono 0.0.5는 레벨 보정·벤더 IPC 판별 대상을 코드 상수에서 구성요소 설정(<code>level_unreliable</code>·<code>vendor_ipc: true</code>, 또는 이슈 DB <code>tags.yaml</code> <code>level</code>·<code>ipc</code> 선언)으로 옮겼습니다 — 둘 다 없으면 보정·판별을 하지 않습니다.</p>
   <p>새 트래커를 더하는 체크리스트는 <code>docs/design/18-trackers.md §6</code>에 있습니다. 어댑터 모듈, 사이트 설정 예시, 이슈 DB의 트래커 선언, 모의 MCP 시험을 함께 더합니다.</p>
   <p class="bridge">다음 장은 판정의 중심인 파싱과 매칭을 자세히 봅니다.</p>
   <nav class="chnav" aria-label="장 이동"><a href="#contents">목차</a><a href="#ch26">← 26장 이슈 DB에 기여하기</a><a href="#ch28">28장 파싱과 매칭 →</a></nav>
@@ -4151,10 +4163,13 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
   <h3 id="ch31-6">31.6 측정 비용<a class="hl" href="#ch31-6" aria-label="링크">#</a></h3>
   <p>아래는 eval 실행 비용입니다. 이슈 1건 처리 비용은 <a href="#ch14">14장</a>에 있습니다. eval 전체를 다시 재면 약 $22, 1.5~2시간이 듭니다(10/16 기준). 플러그인이나 Claude Code가 바뀔 때 다시 잽니다. 바꾼 흐름만 다시 재면 비용이 훨씬 작습니다. 10/17 쓰기 흐름 9개는 $3.42였습니다.</p>
 
-  <h3 id="ch31-7">31.7 아직 재지 않은 것<a class="hl" href="#ch31-7" aria-label="링크">#</a></h3>
+  <h3 id="ch31-mod">31.7 모듈 스킬 eval 사례<a class="hl" href="#ch31-mod" aria-label="링크">#</a></h3>
+  <p>모듈 스킬 템플릿에는 eval 사례가 oFono 21개, Android 21개 있습니다. 사례 로그는 모두 공개 형식(oFono syslog·AOSP logcat)을 따른 합성 로그입니다. 사내 구성요소 자리는 카테고리별 placeholder 이름을 씁니다: oFono는 upstream <code>ofonod</code>와 <code>mgmtd</code>·<code>vrild</code>(common), <code>datad</code>·<code>imsd</code>·<code>simd</code>·<code>networkd</code>(카테고리), <code>chatterd</code>(노이즈), Android 벤더 태그는 <code>VRIL</code>·<code>VRIL-&lt;구분&gt;</code>입니다. 사례 로그 하나의 크기 상한(<code>CASE_LOG_CAP</code>)은 8,192바이트입니다. 사내 실제 로그 사례는 <code>SITE_PATHS</code>의 <code>tests/site/module-evals/</code>에 두고 <code>module_eval.py --templates</code>로 돌립니다.</p>
+
+  <h3 id="ch31-7">31.8 아직 재지 않은 것<a class="hl" href="#ch31-7" aria-label="링크">#</a></h3>
   <ul class="limits">
     <li><b>실제 로그에서의 정확도.</b> 사내 S-5에서 해결된 과거 Jira 20~30건에 정답 원인을 붙여 처음 잽니다. 그 전에는 파일럿에 쓰지 않습니다.</li>
-    <li><b>사내 확인 eval 11개.</b> 사내 Claude Code와 사내 모델로만 결론이 납니다(사내 S-2).</li>
+    <li><b>사내 확인 eval 12개.</b> 사내 Claude Code와 사내 모델로만 결론이 납니다(사내 S-2).</li>
     <li><b>판정 규칙 변경의 대량 비교.</b> 반입 전에 원격 세션 기록의 Bash 명령 4,714개로 승인 질문 판정의 옛·새 비교를 다시 합니다.</li>
     <li><b>실제 로그의 비용.</b> 합성 로그보다 1.5~2배로 추정하고, S-5에서 처음 잽니다(<a href="#ch14">14장</a>).</li>
   </ul>
@@ -4398,6 +4413,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
         <tr><td>S-0~S-7</td><td>사내에 들일 때 거치는 단계. "사내 설정 시작"이라고 하면 <code>tools/site_step.py</code>가 한 단계씩 안내합니다.</td><td>S-2 사내 Claude Code 동작 확인, S-5 정확도 확인, S-7 배포와 파일럿</td><td>단계마다 확인한 뒤 넓히려고. 자세한 것은 <a href="#ch20">20장</a></td></tr>
         <tr><td><code>site-defaults.yaml</code></td><td>팀 기본값 파일(트래커, GHE, 파서 백엔드 등). 관리자가 S-3에서 올립니다.</td><td>없으면 help를 뺀 모든 커맨드가 종료 코드 2로 멈춤</td><td>팀원마다 같은 값을 따로 답하지 않게</td></tr>
         <tr><td><code>SITE_PATHS</code></td><td>사내 전용 값과 코드만 두는 경로 목록. 재반입 때 보존됩니다.</td><td>사내 파서 포팅 코드</td><td>새 버전을 다시 들여도 사내에서 고친 것이 지워지지 않게</td></tr>
+        <tr><td>거부 목록 · 사내 스냅샷</td><td>거부 목록은 개발 레포 밖에 두는 사내 이름 목록입니다(<code>TT_DENY_FILE</code>). 사내 스냅샷은 사내 이름이 든 모듈 스킬 템플릿 사본으로, 사내 레포의 <code>docs/site/module-skills/</code>(<code>SITE_PATHS</code>)에 둡니다.</td><td><code>tools/deny_scan.py</code>, make_bundle <code>deny-file</code> 0건, <code>make_module_repo.py --site-overlay</code></td><td>사내 이름은 개발 레포에 두지 않고, 사내에서 채운 값은 재반입 뒤 손으로 다시 치지 않고 얹으려고. 자세한 것은 <a href="#ch21-9">21.9</a></td></tr>
         <tr><td>placeholder 규칙</td><td>실제 로그로 확인하기 전의 예시 규칙. 파일럿 전에 실제 문구로 바꿉니다.</td><td>data 밖 카테고리의 태그·로그 문구</td><td>개발 단계에서 사내 로그 없이 흐름을 먼저 만들려고</td></tr>
         <tr><td>재사용률 · KPI</td><td>STATS.md 맨 위 요약. 재사용률 = 기존 원인으로 확정한 분석(1위 수락 + 다른 기존 원인) ÷ 분석 수입니다.</td><td>1위 수락률, 원인 미확정 Jira 수, 재발 수, 기여자 수도 함께 보임</td><td>이슈 DB가 실제로 다시 쓰이는지 숫자로 보려고</td></tr>
         <tr><td>운영 지표 (<code>usage_stats.py</code> format 2)</td><td>사용자 PC의 작업 기록으로 작업 상태 9종, PR까지 시간, 분석까지 시간, 질문 수, 재시도를 세는 것</td><td>상태: PR·push만·진행 중·연습·취소·보류·분석만·결과 없음·손상</td><td>파일럿에서 PR 시간과 취소 비율을 재려고. 연습·보류는 취소로 세지 않음</td></tr>
@@ -4417,7 +4433,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
         <tr><td>행동 eval</td><td>Claude가 스킬 지침대로 행동하는지 재는 시나리오 시험. 모의 Jira와 로그로 끝까지 돌리고 실행 기록을 채점합니다.</td><td>eval 17: 연습 모드가 내 clone을 그대로 두나</td><td>모델이나 지침이 바뀌어도 확인·승인 절차를 건너뛰지 않는지 보려고</td></tr>
         <tr><td>주입 eval</td><td>Jira 본문·코멘트 속 지시문을 따르지 않는지 보는 행동 eval</td><td>eval 59·60: 분류가 바뀌지 않고 Jira 쓰기·push를 시도하지 않음</td><td>외부 글에 숨은 지시로 도구가 움직이지 않게</td></tr>
         <tr><td>쓰기 흐름 eval</td><td>stage·publish·discard를 실제로 부르는 행동 eval 묶음</td><td>eval 48(<code>failed-step-jira-field-recorded</code>): 분석부터 PR까지 가서 Jira 기록에 실패 스텝이 남나</td><td>운영 지표가 읽는 기록이 실제 흐름에서 맞게 남는지 보려고</td></tr>
-        <tr><td>사내 대상 eval</td><td>사내 Claude Code에서 꼭 다시 돌리는 행동 eval 11개(1·2·8·9·39·45·58·59·60·61·62)</td><td>hook이 바뀐 묶음을 반입하면 모두 다시 돌림</td><td>개발 환경과 사내 환경의 차이를 확인하려고</td></tr>
+        <tr><td>사내 대상 eval</td><td>사내 Claude Code에서 꼭 다시 돌리는 행동 eval 12개(1·2·8·9·39·45·58·59·60·61·62·75)</td><td>hook이 바뀐 묶음을 반입하면 모두 다시 돌림</td><td>개발 환경과 사내 환경의 차이를 확인하려고</td></tr>
         <tr><td>S-2 확인 항목</td><td>사내 S-2에서 사내 Claude Code로 확인하는 16가지</td><td>플러그인 로드, hook 동작, MCP 도구 이름, 질문 선택지 상한</td><td>개발 단계에서 확인한 전제가 사내에서도 맞는지 보려고</td></tr>
         <tr><td>정확도 평가 · 라벨셋</td><td>해결된 과거 Jira로 매칭 정확도를 재는 S-5 단계(<code>offline_eval.py</code>). 라벨셋은 그 입력입니다.</td><td>Jira 키, 로그 경로, 발생 시각, 정답 원인 ID 또는 <code>unresolved</code></td><td>실제 로그에서 맞히는지 숫자로 확인한 뒤에만 파일럿을 하려고</td></tr>
       </tbody>
@@ -4702,7 +4718,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
         <tr><td>리뷰·기여 부담</td><td>카테고리별 시드 유형 5~10개로 시작. 파일럿에서 PR 시간과 취소 비율을 잼</td></tr>
         <tr><td>승인 없는 쓰기</td><td>PC의 승인 질문, 승인 지문, pre-push 검사. 마지막 방어선은 GHE 브랜치 보호와 필수 리뷰</td></tr>
         <tr><td>개인정보·사내 데이터</td><td>가리기를 세 번 검사(stage·publish·pre-commit). 외부 모델로 보내는 것은 보안 부서 승인 필요</td></tr>
-        <tr><td>Claude Code 업데이트</td><td>S-2 확인 17항목과 사내 대상 eval 11개를 다시 돌림</td></tr>
+        <tr><td>Claude Code 업데이트</td><td>S-2 확인 17항목과 사내 대상 eval 12개를 다시 돌림</td></tr>
         <tr><td>Windows PowerShell 도구</td><td>hook이 보지 못함. 지원 OS는 Ubuntu. S-2에서 노출 여부를 보고 막음</td></tr>
         <tr><td>Claude 밖 자동화(서버·봇·cron)</td><td>guard 보호 밖이므로 쓰기 없는 읽기 전용만 허용</td></tr>
       </tbody>

@@ -10,7 +10,7 @@
 - 디렉토리를 주면 그 아래 `.log`·`.txt`·`.json`과 case `files/*.md`를 본다(문서·`modules.yaml`의 정규식 글은 보지 않는다).
 - syslog 호스트 칸이 `dut`·`localhost`·`(none)`·`host<n>`이 아니면 `host`로 보인다(원본 없이도).
 - 모양 규칙 `SHAPE_RX`(덤프의 `MobileCountryCode`·`MobileNetworkCode` 2~3자리 값)는 원본 없이도 `plmn`으로 보인다.
-- oFono `dump_dmsg_w_re()` 덤프의 이어진 조각(시각 뺀 앞머리가 같고 1초 안, 사이 줄 건너뜀)은 이은 글에서도 거부 목록·모양 규칙을 본다
+- oFono 덤프 함수(site-defaults `dump_func`, `<이름>() ` 뒤가 조각)의 이어진 조각(시각 뺀 앞머리가 같고 1초 안, 사이 줄 건너뜀)은 이은 글에서도 거부 목록·모양 규칙을 본다
   (키·값이 두 줄에 갈린 경우, 걸친 줄마다 지적).
 
 출력은 파일·줄·종류(와 원본 줄 번호)뿐이며 맞은 글자는 내지 않는다. 마스킹된 fixture는 허용한다(LM의 원문 금지
@@ -54,9 +54,8 @@ DENY_RX = (
 SHAPE_RX = (
     ("plmn", re.compile(r"\"Mobile(?:Country|Network)Code\",\s*variant\(\"(?P<v>\d{2,3})\"")),
 )
-# oFono `dump_dmsg_w_re()` 덤프는 한 메시지가 여러 줄에 잘린다(같은 ident·pid, 시각은 ms가 바뀌고 사이에 다른 줄이 낀다). 줄 단위 규칙은 키와 값이
+# oFono 덤프 함수는 한 메시지가 여러 줄에 잘린다(같은 ident·pid, 시각은 ms가 바뀌고 사이에 다른 줄이 낀다). 줄 단위 규칙은 키와 값이
 # 갈린 조각을 놓치므로 이어진 조각을 이은 글에서 다시 본다(§1.2 ③).
-DUMP_MARK = dumpjoin.DUMP_MARK
 _IDENT = re.compile(r"[A-Za-z]*[a-z][A-Z]\w*|[a-z]+")    # CamelCase 식별자·소문자 낱말(키 이름이지 값이 아니다)
 
 
@@ -71,7 +70,7 @@ SPAN_KINDS = {"PRODUCT": "product", "BUILD": "build", "HASH": "build", "B64": "b
 
 
 def dump_groups(lines: list[str]) -> list[list[tuple[int, int]]]:
-    """이어진 `dump_dmsg_w_re()` 조각 묶음 `[[(줄 순번, 조각 시작 열), ...], ...]`(두 줄 이상). 규칙은 `common.dumpjoin`."""
+    """이어진 덤프 함수 조각 묶음 `[[(줄 순번, 조각 시작 열), ...], ...]`(두 줄 이상). 규칙은 `common.dumpjoin`."""
     return dumpjoin.groups_from_lines(lines)
 
 

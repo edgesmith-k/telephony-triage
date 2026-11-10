@@ -1,0 +1,10 @@
+platform: android
+module: data
+mode: deep
+center: '2026-10-17T13:05:22.094Z'
+fail: 26
+essential:
+- 20
+- 25
+- 26
+origin: 합성

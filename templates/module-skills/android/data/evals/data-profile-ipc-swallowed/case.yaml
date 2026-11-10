@@ -7,7 +7,7 @@ key: MOCK-9803
 issue:
   summary: APN 프로필이 모뎀에 적용되지 않은 듯함
   description: 부팅 직후 SET_DATA_PROFILE 응답은 성공인데 APN 프로필이 모뎀에 적용되지 않은 듯합니다.
-  occurred_at: '2026-08-09T13:11:01+0000'
+  occurred_at: '2026-10-15T07:05:12+0000'
   platform_version: '14'
   sim_slot: '0'
 parse: {tz: UTC, year: 2026, minutes: 5}
@@ -20,7 +20,7 @@ run_expect:
 expect:
   accept:
     - layer: '벤더 RIL|모뎀'
-      daemon: 'RIL$|RIL[ (]|벤더 RIL|PsService'
-      evidence: ['SIT_SET_DATA_PROFILE, RSP.*Error\(RCM_E_GENERIC_FAILURE\)', '\[0272\]< SET_DATA_PROFILE']
+      daemon: 'RIL$|RIL[ (]|벤더 RIL|ExamplePdnService'
+      evidence: ['VIPC_EXAMPLE_PROFILE, RSP.*Error\(VIPC_E_FAILURE\)', '\[0418\]< SET_DATA_PROFILE']
   trap:
     - label: '^\s*(프레임워크|RILJ|RIL HAL|DNC|DPM|원인 아님)'

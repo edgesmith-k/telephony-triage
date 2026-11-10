@@ -10,9 +10,9 @@
 
 ## ② 볼 역할과 줄
 
-- RILJ `[UNSL]< UNSOL_MODEM_RESTART`, `RADIO_POWER`, `serviceDied`·`has died`, 무선 상태 알림 `notifyRadioStateChanged: newState=`
+- RILJ `[UNSL]< UNSOL_MODEM_RESTART`, `RADIO_POWER`, `serviceDied`·`has died`, 벤더 RIL 데몬 `radio state changed: newState=`
 - RadioConfig `SET_PREFERRED_DATA_MODEM`, PhoneCfgMgr
-- 시험 장비 AT 중계 `UsbAgent: AT…`·`From Modem::`, 모뎀 진단·NV 줄
+- AT 중계·모뎀 진단 `at-in: AT…`·`at-out: …`
 
 ## ③ 층 경로
 

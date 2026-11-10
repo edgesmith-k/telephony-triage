@@ -1,37 +1,20 @@
--- [합성]
-Feb 27 17:28:15.073 host1 daemon.debug exynos-ril[450]: [RilContext_0] OnUnsolicitedResponse Unsol Rsp ID=20414
-Feb 27 17:28:15.073 host1 daemon.debug exynos-ril[450]: RADIO::[RilResponseListener] OnUnsolicitedResponse Filter out Unsolicited response=20414
-Feb 27 17:28:15.073 host1 daemon.info exynos-ril[450]: [OemReceiver] OnUnsolicitedResponse channel=0
-Feb 27 17:28:15.073 host1 daemon.debug ofonod[464]: drivers/rilmodem/sim.c:ril_sim_read_info() file 6f13, app_type 2
-Feb 27 17:28:15.073 host1 daemon.debug exynos-ril[450]: [OemReceiver] unsol oem message(20414) is translated to msgId(4021)
-Feb 27 17:28:15.073 host1 daemon.info ofonod[464]: [0,0198]> RIL_REQUEST_SIM_IO (cmd=0xC0,efid=0x6F13,path=3f007fff,0,0,15,(null),pin2=(null),aid=<AID#1>)
-Feb 27 17:28:15.073 host1 daemon.info ofonod[464]: src/satellite.c:satellite_all_configs_push() push stored config to CP: enabled=0, net_config=0x55953129d0
-Feb 27 17:28:15.073 host1 daemon.info ofonod[464]: drivers/rilmodem/satellite.c:ril_set_satellite_enabled() enabled: 0
-Feb 27 17:28:15.073 host1 daemon.info ofonod[464]: [0,0199]> RIL_REQUEST_SET_SATELLITE_ENABLED_FOR_CARRIER (0)
-Feb 27 17:28:15.073 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2116 [OemClient] Response received for channelId: 0; StoredChannelId: 0
-Feb 27 17:28:15.073 host1 user.debug IMSSVC[461]: [SLOT_0][V] 2117 getClientId() Found ClientId[0] for ChannelId[0]
--- [생략]
-Feb 27 17:28:15.149 host1 daemon.warn exynos-ril[450]: GetOppositeRilContext Target socket ID(0) is same as mine. Compile option could be for Single SIM solution.
-Feb 27 17:28:15.149 host1 daemon.info exynos-ril[450]: [NetworkService_0] IsDisabledESim() eSIM is disabled: false.
-Feb 27 17:28:15.149 host1 daemon.info exynos-ril[450]: [NetworkService_0] IsDisabledESim() eSIM is disabled: false.
-Feb 27 17:28:15.155 host1 local0.info MOSE[753]: [UI___] 000001 *UI->Update  uiMsg.StatePropertyChangeMsg  mose/ui/ui.go:108
-Feb 27 17:28:15.155 host1 local0.info MOSE[753]: [UI___] 000001 *UI->Update  StatePropertyChangeMsg: {0 AirplaneMode 0}  mose/ui/ui.go:250
-Feb 27 17:28:15.155 host1 local0.info MOSE[753]: [] 000001 *UIState->UpdatePropertyChangeState  State map[0:0x400012e660]  mose/ui/structs/state/state.go:208
-Feb 27 17:28:15.157 host1 daemon.debug exynos-ril[450]: [<DEV#1>][RX] SIT_SIM_IO, RSP, 528 bytes, Token(0x00da), OK(RCM_E_SUCCESS)
-Feb 27 17:28:15.157 host1 daemon.debug exynos-ril[450]: [RilContext_0] ProcessModemData 
-Feb 27 17:28:15.157 host1 daemon.debug exynos-ril[450]: WaitList::Find() found record : token=0x00DA SrcService ID =14 DestService ID=14 Result Id=2018
-Feb 27 17:28:15.157 host1 daemon.debug exynos-ril[450]: Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0208 Service ID=14 Message ID=2018
-Feb 27 17:28:15.157 host1 daemon.debug exynos-ril[450]: [ServiceMgr] msg(0x7f74001830) msgId=2018 svc=SimIoService_0(14) direction=Response
-Feb 27 17:28:15.157 host1 daemon.info exynos-ril[450]: SimIoService_0::OnSimIoDone() [<-- 
-Feb 27 17:28:15.157 host1 daemon.debug exynos-ril[450]: SimDataBuilder::BuildSimIoResponse() [<-- 
-Feb 27 17:28:15.157 host1 daemon.debug exynos-ril[450]: SimDataBuilder::BuildSimIoResponse() [--> 
-Feb 27 17:28:15.157 host1 daemon.info exynos-ril[450]: [RilContext_0] OnRequestComplete Request ID=28, result=2
-Feb 27 17:28:15.157 host1 daemon.debug exynos-ril[450]: RequestComplete, RIL_SOCKET_1
-Feb 27 17:28:15.157 host1 daemon.debug exynos-ril[450]: Send Response to RIL_SOCKET_1
-Feb 27 17:28:15.158 host1 daemon.debug exynos-ril[450]: RIL Response bytes written:4
-Feb 27 17:28:15.158 host1 daemon.debug exynos-ril[450]: RIL Response bytes written:24
-Feb 27 17:28:15.158 host1 daemon.debug exynos-ril[450]: [RilContext_0] RemoveRequestHistory  token=0x00DA
-Feb 27 17:28:15.158 host1 daemon.info exynos-ril[450]: SimIoService_0::OnSimIoDone() [--> 
-Feb 27 17:28:15.158 host1 daemon.debug ofonod[464]: [0,0198]< RIL_REQUEST_SIM_IO failed GENERIC_FAILURE
-Feb 27 17:28:15.158 host1 daemon.info ofonod[464]: [0,0198]< RIL_REQUEST_SIM_IO (sw1=0x00,sw2=0x00,(null))
-Feb 27 17:28:15.158 host1 daemon.info ofonod[464]: drivers/rilmodem/sim.c:ril_file_info_cb() ril_file_info_cb: Reply failure: GENERIC_FAILURE, 00, 00
+-- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture.
+Sep 22 09:10:21.247 dut local0.info mgmtd[734]: ui state refresh: airplane_mode=0
+Sep 22 09:10:21.297 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_SIGNAL_IND ind len=16
+Sep 22 09:10:21.357 dut daemon.debug ofonod[903]: drivers/rilmodem/sim.c:ril_sim_read_info() file 6f46, app_type 2
+Sep 22 09:10:21.358 dut daemon.info ofonod[903]: [0,0263]> RIL_REQUEST_SIM_IO (cmd=0xC0,efid=0x6F46,path=3f007fff,0,0,15,(null),pin2=(null),aid=<AID#1>)
+Sep 22 09:10:21.359 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: SIM_IO (36 bytes)
+Sep 22 09:10:21.359 dut daemon.info vrild[618]: [ExampleIccService_1] sim-io get-response for ef 6f46 queued
+Sep 22 09:10:21.360 dut daemon.debug vrild[618]: [IpcCtx_2] track seq 0x05e1 (1 in flight)
+Sep 22 09:10:21.360 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_CARD_IO seq=0x05e1 len=36
+Sep 22 09:10:21.377 dut local0.info mgmtd[734]: ui tick
+Sep 22 09:10:21.408 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_CARD_IO, RSP OK(VIPC_OK) seq=0x05e1 len=258
+Sep 22 09:10:21.409 dut daemon.info vrild[618]: [ExampleIccService_1] sim-io reply parsed, 258 bytes
+Sep 22 09:10:21.409 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=58, result=2 -> chan 2 reply sent, 0 waiters, took 49 ms
+Sep 22 09:10:21.409 dut daemon.debug vrild[618]: chan 2 <- reply written
+Sep 22 09:10:21.410 dut daemon.debug vrild[618]: [IpcCtx_2] untrack seq 0x05e1 (0 in flight)
+Sep 22 09:10:21.411 dut daemon.debug ofonod[903]: [0,0263]< RIL_REQUEST_SIM_IO failed GENERIC_FAILURE
+Sep 22 09:10:21.411 dut daemon.info ofonod[903]: [0,0263]< RIL_REQUEST_SIM_IO (sw1=0x00,sw2=0x00,(null))
+Sep 22 09:10:21.412 dut daemon.info ofonod[903]: drivers/rilmodem/sim.c:ril_file_info_cb() Reply failure: GENERIC_FAILURE, 00, 00
+Sep 22 09:10:21.647 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_SIGNAL_IND ind len=16
+Sep 22 09:10:22.347 dut local0.info mgmtd[734]: ui tick

@@ -35,7 +35,7 @@ post_lg = "\n".join(lg[0:15] + [""] + lg[25:27] + [""] + lg[33:38]) + "\n"      
 |---|---|---|---|
 | `android/pre/log-tags.md` | reference/log-tags.md 전체 | 5040 | `f64baa5b4126f5288a6d7d964f3ab8f9f9d36d4a67f1ab0264bd0f16b380f5fb` |
 | `android/pre/ril-requests.md` | reference/ril-requests.md 전체 | 4164 | `262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5` |
-| `android/pre/fail-causes.md` | reference/fail-causes.md 전체(④ 뒤; 제목 문구만 고쳤다. 내용은 ④ 사본과 같다) | 4217 | `1fa3ada5678356084b1cc018cd108cf7bb274a7cad38a210fa58cf3b412e29c4` |
+| `android/pre/fail-causes.md` | reference/fail-causes.md 전체(④ 뒤; 제목 문구와 벤더 IPC 결과 절 문장을 고쳤다) | 4316 | `51cd96821dfbefa48584982c040772f59ba26aaf9e597051d09d3643a6f4544c` |
 | `android/pre/explore-rules.md` | `ofono/pre/explore-rules.md` 사본 | 2222 | `6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8` |
 | `android/post/explore-rules.md` | `ofono/post/explore-rules.md` 사본 | 2676 | `c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80` |
 

@@ -4,7 +4,7 @@
  "mode": "offline",
  "issue": {
   "origin": "file",
-  "occurred_at": "2026-08-09T13:11:01+00:00",
+  "occurred_at": "2026-10-15T07:05:12+00:00",
   "sw": null,
   "platform_version": "14",
   "sim_slot": "0",
@@ -21,16 +21,16 @@
    "source.log"
   ],
   "window": {
-   "start": "2026-08-09T13:06:01.000Z",
-   "end": "2026-08-09T13:16:01.000Z"
+   "start": "2026-10-15T07:00:12.000Z",
+   "end": "2026-10-15T07:10:12.000Z"
   },
   "range": [
-   "2026-08-09T13:11:01.259Z",
-   "2026-08-09T13:11:01.266Z"
+   "2026-10-15T07:05:12.402Z",
+   "2026-10-15T07:05:12.472Z"
   ],
   "in_range": "partial",
   "clock_anomalies": 0,
-  "events": 60,
+  "events": 30,
   "masked": null
  },
  "candidates": [
@@ -48,9 +48,9 @@
    ],
    "evidence": [
     {
-     "ts": "2026-08-09T13:11:01.261Z",
+     "ts": "2026-10-15T07:05:12.415Z",
      "tag": "DNC-0",
-     "msg": "Data evaluation: evaluation reason:SIM_LOADED, Data disallowed reasons: NOT_IN_SERVICE SERVICE_OPTION_NOT_SUPPORTED NO_SUITABLE_DATA_PROFIL…",
+     "msg": "Data evaluation: evaluation reason:SIM_LOADED, Data disallowed reasons: NOT_IN_SERVICE NO_SUITABLE_DATA_PROFILE, candidate profile=null, ti…",
      "event": "data_evaluation_rejected"
     }
    ],
@@ -84,10 +84,10 @@
   "when": "ask"
  },
  "warnings": [
-  "형식을 모르는 줄 4개를 건너뛰었습니다."
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
  ],
  "must_show": [
-  "로그 범위: 2026-08-09T13:11:01.259Z ~ 2026-08-09T13:11:01.266Z (일부만 포함), 시계 이상 없음"
+  "로그 범위: 2026-10-15T07:05:12.402Z ~ 2026-10-15T07:05:12.472Z (일부만 포함), 시계 이상 없음"
  ],
  "truncated": false
 }

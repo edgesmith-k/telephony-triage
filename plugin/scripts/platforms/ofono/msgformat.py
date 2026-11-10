@@ -7,7 +7,7 @@
 
 - `file_func`: 공개 upstream oFono DBG 앞머리 `src/x.c:func() 본문` 가정 → 본문, 하위 식별 = 파일 이름 줄기(`x`).
 
-아래 4개는 사외 공개 표본에서 본 벤더 데몬 앞머리 **모양**이다(데몬 이름 없음 — 어느 데몬에 쓸지는 site가 정한다,
+아래 4개는 확인한 벤더 데몬 앞머리 **모양**이다(데몬 이름 없음 — 어느 데몬에 쓸지는 site가 정한다,
 TODO(SITE:S24·S25)). 하위 식별(파일 줄기)은 백엔드 `SUBTAG_RE` 모양일 때만 tag에 붙는다.
 - `tid_file_paren`: `tid:<n> <File>.cpp(<줄>):<func> > 본문` → `> ` 뒤 본문, 하위 식별 = `File`.
 - `level_tid_file`: `[<L>][tid=<n>] <file>.cpp:<줄> <ns>::<Class>::<func>() 본문`(L = V/D/I/W/E/F) → `func() ` 뒤, `file`.

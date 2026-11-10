@@ -29,7 +29,7 @@
   - 대상 인자: mask_pii `--out`·`--in-place`, parse_logcat·db_review·triage `--out`, db_build `--preview`, jira_fields `--meta-out`·`--consume`. `=` 꼴, argparse 약어, 인터프리터 옵션도 처리한다.
   - clone 안이면 deny, `db_build --write`가 clone을 향하면 ask. OpenCode는 guard 판정을 따른다.
 - **F3** `--check`도 `forced_lines`로 조각을 묶고, 조각마다 원래 줄 번호로 알린다.
-- **F4** DUMP_MARK가 있는 입력만 창 없이 파싱해 묶은 뒤 창을 자른다. 백엔드 인터페이스는 바꾸지 않았다.
+- **F4** 덤프 표식(`dumpjoin.mark()`)이 있는 입력만 창 없이 파싱해 묶은 뒤 창을 자른다. 백엔드 인터페이스는 바꾸지 않았다.
 - **F6** 3.10에서는 `sre_parse`로 대체하고, `POSSESSIVE_REPEAT`는 있을 때만 쓴다.
 - **F8** 감사 근거 행에서 `skipped`·`error`·`fabricated` 없음·`source: null`은 미검증으로 보고 skip으로 둔다.
 
@@ -40,7 +40,7 @@
 - F5 자정·연말 조각: `dumpjoin._sec`이 날짜를 버린다. 음수 차이에 +86400을 더하는 정도면 된다.
 - F7 `modulefilter` 중복 키에 phone 추가.
 - F9 `docs_read_row`: offset·limit 합집합이 문서 줄 수를 덮을 때만 "읽음"으로 본다.
-- F4 잔여: DUMP_MARK가 있는 입력에서 `--mask`일 때만 창 비교가 ms로 잘린 `ts` 기준이 된다. 그래서 창 끝 바로 뒤(4~9자리 소수) 레코드가 더 나온다. 고치려면 창 선택은 백엔드 결과를 쓰고, 묶기에만 창 없는 파싱을 쓴다.
+- F4 잔여: 덤프 표식(`dumpjoin.mark()`)이 있는 입력에서 `--mask`일 때만 창 비교가 ms로 잘린 `ts` 기준이 된다. 그래서 창 끝 바로 뒤(4~9자리 소수) 레코드가 더 나온다. 고치려면 창 선택은 백엔드 결과를 쓰고, 묶기에만 창 없는 파싱을 쓴다.
 - 조각 사이에 같은 프로세스의 다른 덤프 레코드가 끼면 조각이 묶이지 않아 원문이 남는다(`--full`도 같음, 기존 dumpjoin 동작). 실제 oFono 덤프에서 이런 배치가 나오는지 사내 로그로 확인할 것.
 - code_roots가 `db_lint._parser_mod`를 늦게 import한다(첫 호출에 약 30ms). `common.skillcheck`의 `_sre`·`_src`로 바꿀 수 있다.
 - `tools/site_step.py`의 S-단계에 S36이 이름으로 나오지 않는다. 지금은 `TODO(SITE:S36)` 잔여 검사로만 걸린다.
@@ -53,7 +53,7 @@
 ## C·C′(+코드 대조)·실행 중 IMSI/ICCID 마스킹·후보 방식 채점 (11/06, 설계 → 설계 검증 → 구현 → 리뷰 → 검증 → 수정)
 
 **C′ 부분 일치**(설계 `scratchpad/cc/design.md`, 설계 검증 P1 9 반영): 분석 모드에서만, 후보가 없거나 1위가 S=1·C=0일 때 부분 일치(missing·absent(한 줄 시그니처가 통째로 없음)·blocked·order·window)를 match.json 5·analysis.json 3·report.md ≤1,200B로 보인다. S/C 판정과 regress 출력은 그대로. report.md `규칙 제안 (부분 일치):` → 기존 Step 7 질문(기본 받지 않음) → update-signature(사용자 확인·PR·+1). 제안은 마스킹된 로그 줄(`log_refs`)로만 만들고 코드 문자열로는 만들지 않는다. **코드 대조** `code_roots.py find-text`: 부분 일치이고 code root를 골랐을 때만, 시그니처 regex에서 리터럴 도출(태그·oFono file:func 앞머리 제거) → 같음(±2줄 안 로그 호출일 때만)/문구 다름/못 찾음(범위: code_refs+required_dirs를 다 봤을 때만)/문자열만 있음/애매/확인 못 함/건너뜀(상한), 20초·1MiB·제외 디렉토리, 출력은 key:path:line만(코드 글 없음). **C**: `site_audit` drift — feedback `suggested[].signature` × issues(sw·platform_version)로 "이전 3회 이상 맞던 시그니처가 새 빌드 기록 2건 이상에서 0회"면 needs-user(같은 브랜치는 sw 순서만, 다른 브랜치는 platform_version 주 버전이 클 때만, 같은 원인·unresolved·new-cause만 셈), 1건은 info, 판단 못 하면 skip. Claude 안 부름.
-**마스킹**: `common/dumpjoin.py`(fixture_residual과 같은 묶기: 시각 뺀 앞머리·1초 안)로 oFono `dump_dmsg_w_re()` 조각을 이어 키 있는 IMSI/ICCID 규칙만 적용, mask_pii·parse_logcat(run_cut·fields 포함)·residual·redact. R28: 골든·mask-gate 차이 0. 사용자에게 보임.
+**마스킹**: `common/dumpjoin.py`(fixture_residual과 같은 묶기: 시각 뺀 앞머리·1초 안)로 oFono 덤프 함수 조각을 이어 키 있는 IMSI/ICCID 규칙만 적용, mask_pii·parse_logcat(run_cut·fields 포함)·residual·redact. R28: 골든·mask-gate 차이 0. 사용자에게 보임.
 **후보 방식 채점**(사용자 11/06 "이런 후보가 있을 수 있다 정도로, 결론이 아니게", 설계 `scratchpad/cand/design.md`, 설계 검증 P1 2 반영): 탐색 사례 27개는 후보 1~3개 + `가장 유력: n`, 인정 후보(`accept`)가 목록에 있고 함정(`trap`)을 가장 유력으로 두지 않으면 통과(근거는 맞힌 그 후보에), 1순위 적중은 기록만. 심층 15개는 결론 1개 그대로. 함정 규칙은 두 arm 공용 프롬프트에만(모듈 문서 안 바꿈). 기록에 case별 `expect_sha256`·`GRADER_VERSION 2` — 정답이 바뀌면 한 arm 합치기 거절. `tools/module_answers.py table|migrate`(정답표 자동 생성 — 커밋 안 함). 27개는 migrate로 1:1 변환(옛 wrong_layer → trap). 정답 표(후보 방식)는 사용자 확인 대기.
 리뷰: C·C′·마스킹 구현 리뷰(2관점 → 검증 1) 확정 P1 4 고침 — find-text가 범위를 못 보고 not-found, drift 빌드 순서 모순에 StopIteration으로 점검 전체 중단, 짧은 숫자 조각이 값 표에 들어가 다른 필드를 `<IMSI#n>`으로 가림, 시각 없는 dump 레코드가 묶음을 닫음. 통합 전체 테스트 3,855 통과(C′ 부분 일치로 탐색 생성 입력 다시 만듦 — partial 항목만). 진행 중 컨테이너 재시작 1회(메모리: 관련 테스트와 에이전트 동시) — 잃은 것 없음, 이후 전체 테스트는 단독 실행.
 
@@ -99,9 +99,9 @@ g-1: 커밋 `cc2ca81` 위, Sonnet, `-j 3`, 67개 모두 끝남(멈춤 0), $24.03
 ## C1+D 보정 (11/06, 설계 → 설계 검증 → 구현 → 리뷰 → 검증 → 수정 — 사용자 11/06 "구현 전에 다시 설계하고 검증")
 
 설계 `scratchpad/c1d/correction-design.md`(v2, 검증 반영 §13): 사용자 결정 8개(모듈별 병렬 보정·증상별 첫 점검 표·사례 추가·대체 근거 A·데몬 역할 표·박힌 데몬 이름 → tags.yaml 속성·정답 표 확인·APN 설정 행) + 구현 보고 추가 항목. 설계 검증(2관점 리뷰 → 반박 검증): 확정 P0 2(기준 커밋, 사용자 확인 없는 견본 DB RIL 항목 분리 → 뺌)·P1 13 반영.
-구현(토큰 절약 — 사용자 11/06: 에이전트 4개): X-common(phase 0: 시험 상수·역할 표 시험·modules.yaml 네 줄·출력 형식 `원인 데몬`=로그에 찍힌 이름·analyzer 14개·기존 사례 채점 수정 3건 / `_common` 역할 표(역할 → 지금 이름·구 이름)·공통 증상·대체 근거 규칙(요청 없이 data call list에서 빠지면 모뎀·망)·짧은 지위 블록), M-ofono(7모듈 증상 표·역할 이름·대체 근거, 사례 5), M-android(7모듈, 사례 6), X-infra(tags.yaml `level: unreliable`·`ipc: vendor` — 선언 없으면 지금 상수, 출력 바이트 동일·`backend.apply_rules`·`db_lint` 검증·rulediff / `^GsmCdmaCallTracker$` 견본 DB 추가, 미수집 예시 → `GsmCdmaConnection` / 입력 경로 사업자 이름·MCC/MNC·`dump_dmsg_w_re()` 갈린 조각 / ofono_reference 0.0.4·android reference 0.1.1). 사례 42개(oFono 21·Android 21), 문서는 모두 상한 안.
+구현(토큰 절약 — 사용자 11/06: 에이전트 4개): X-common(phase 0: 시험 상수·역할 표 시험·modules.yaml 네 줄·출력 형식 `원인 데몬`=로그에 찍힌 이름·analyzer 14개·기존 사례 채점 수정 3건 / `_common` 역할 표(역할 → 지금 이름·구 이름)·공통 증상·대체 근거 규칙(요청 없이 data call list에서 빠지면 모뎀·망)·짧은 지위 블록), M-ofono(7모듈 증상 표·역할 이름·대체 근거, 사례 5), M-android(7모듈, 사례 6), X-infra(tags.yaml `level: unreliable`·`ipc: vendor` — 선언 없으면 지금 상수, 출력 바이트 동일·`backend.apply_rules`·`db_lint` 검증·rulediff / `^GsmCdmaCallTracker$` 견본 DB 추가, 미수집 예시 → `GsmCdmaConnection` / 입력 경로 사업자 이름·MCC/MNC·덤프 함수 갈린 조각 / ofono_reference 0.0.4·android reference 0.1.1). 사례 42개(oFono 21·Android 21), 문서는 모두 상한 안.
 통합(메인): 생성물은 버전 줄·태그 수(74→75)만, 골든·mask-gate 차이 0, fixture_residual 0, dry-run 14개(1회차 84회 추정 $5.11), 전체 3,776 통과·1 실패(S-0 context pack 31,068B > 30KB — 04 §5.8 태그 속성 설명 줄여 29,941B) → 수정 뒤 관련 383 통과.
-구현 리뷰(2관점 → 반박 검증 1): 확정 P1 3 — 갈린 덤프 조각 묶기가 동작하지 않음(시각 뺀 앞머리·1초 안으로 고침 — 골든·mask-gate 차이 0), Android 데몬 크래시(N10) 보기에 벤더 RIL 줄 0 → 일반 규칙과 충돌(`serviceDied`·`has died` 예외 추가), **실행 중 마스커가 `dump_dmsg_w_re()` 조각에 갈린 IMSI/ICCID 값을 안 가림**(기존 코드, 사용자 결정 대기 — masking.py는 안 바꿈).
+구현 리뷰(2관점 → 반박 검증 1): 확정 P1 3 — 갈린 덤프 조각 묶기가 동작하지 않음(시각 뺀 앞머리·1초 안으로 고침 — 골든·mask-gate 차이 0), Android 데몬 크래시(N10) 보기에 벤더 RIL 줄 0 → 일반 규칙과 충돌(`serviceDied`·`has died` 예외 추가), **실행 중 마스커가 덤프 함수 조각에 갈린 IMSI/ICCID 값을 안 가림**(기존 코드, 사용자 결정 대기 — masking.py는 안 바꿈).
 자동 결정: 증상 행 130B 초과 허용(파일 상한 안, 사용자 행 안 버림), skillcheck.py 역할 표 열 읽기 변경(X-common), call-epsfb-after-apm 생성 입력 두 줄 늘어남·N3 데몬 `사내 데몬`·N10 근거 `serviceDied|has died` 넓힘 → 정답 표에 표시.
 
 ### 나중에 할 일 (사용자 11/06 — 이번 묶음 밖, 여유 될 때)
@@ -121,7 +121,7 @@ P2: reference에 예시 "예:" 표시와 "advice를 없애려고 근거를 지�
 ## C1+D 모듈 스킬 문서(oFono 7·Android 7)·eval 사례 31개 (11/05~06, 워크플로 wf_5bb9c084-688)
 
 범위: `scratchpad/c1d/plan.md`(판정 R1~R45, 설계 C1D·DD)대로 G-O(oFono)·G-A(Android) 두 갈래 병렬 → 통합 I1~I3 → 4관점 리뷰 → 반박 검증 → 확정 P1 4건 수정. 워크플로는 수정 단계에서 중단(11/05 23:47 KST)됐으나 수정 커밋 4개는 남아 있었고, 메인이 b3e9956 위로 옮겨(충돌 0) 생성물 점검·전체 테스트를 다시 돌렸다 — 3,756 통과·1 실패(F 시험 `test_ms1_tree_partial_repo_is_info`가 공식 템플릿에 ofono/data만 있다고 가정 → 템플릿 사본에서 일부만 남겨 쓰게 고침, 그 파일 17 통과).
-만든 것: `templates/module-skills/{ofono,android}/` — `_common/layers.md`·`components.md`, 모듈마다 SKILL.md·analyzer.md·explore.md·references(skill-creator 지침), eval 사례 31개(oFono 16: deep 7·explore 9, 모두 합성 / Android 15: deep 7·explore 8, 모두 합성). 견본 DB 태그 58개·`UNSOL_DATA_CALL_LIST_UPDATED`(11/05 승인), Android 파서 ③b(`iccIO:` SIM_IO, 숫자 error 이름, RadioConfig 짝, `::` 태그), oFono 파서 ③a(사내 구성요소 레벨 I, vendor-ril 벤더 IPC 이벤트), `make_module_repo.py`·`module_repo_check --template`, Android arm 고정값(S12), `make_bundle` 점검 11.
+만든 것: `templates/module-skills/{ofono,android}/` — `_common/layers.md`·`components.md`, 모듈마다 SKILL.md·analyzer.md·explore.md·references(skill-creator 지침), eval 사례 31개(oFono 16: deep 7·explore 9, 모두 합성 / Android 15: deep 7·explore 8, 모두 합성). 견본 DB 태그·`UNSOL_DATA_CALL_LIST_UPDATED`(11/05 승인), Android 파서 ③b(`iccIO:` SIM_IO, 숫자 error 이름, RadioConfig 짝, `::` 태그), oFono 파서 ③a(사내 구성요소 레벨 I, vendor-ril 벤더 IPC 이벤트), `make_module_repo.py`·`module_repo_check --template`, Android arm 고정값(S12), `make_bundle` 점검 11.
 마스킹(R28 — 사용자에게 보임): `masking.py` 전체 차이 — M12 IPv6 경계에 낱말 문자 전부(C++ 범위 `X::Y`가 IP 아님), SIM_AUTHENTICATION B64 규칙만 여러 줄 글에서 그 줄 문맥(`per_line`). 골든·mask-gate 차이 0.
 측정(토큰 0): `module_measure episodes` oFono explore 72/114·deep 95/114(기준 97, −2 한계), held-out 17/22·20/22, Android 48/88·64/88(기준 ≥43·63). dry-run 14모듈 모두 종료 0·`pins_ok`, 64회 추정 ≈ $3.77.
 리뷰: 4관점(마스킹·입력 / 문서·사례 / 기반 코드 / Android data) → 반박 검증. 확정 P1 4건 고침 — F1 접힌 SIP Digest 헤더(`nonce`·`response`·`cnonce`·`opaque`)가 여러 줄 글 경로(Jira 본문·issue_post·add-fixture·db_lint find)에서 안 가려짐(per_line을 SIM_AUTHENTICATION B64에만, 회귀 시험), F2 `원인 아님`·`그 층 로그 없음`일 때 `원인 데몬` 지시 없음 → `알 수 없음`(7개 함정 사례가 문서와 무관하게 갈리던 것), F3 한 arm 기록 합치기가 run 수·자식 모드 다른 기록을 섞어 진 비교를 pass로(같을 때만 합침), F4 threadtime 빈 태그 줄이 파싱 안 되고 원문 점검도 놓침.
@@ -154,7 +154,7 @@ P2: reference에 예시 "예:" 표시와 "advice를 없애려고 근거를 지�
 **구간 관문(B2 §16, R16)**: `tools/module_measure.py episodes`(구간 정의 yaml은 scratch). 처음 잰
 값(oFono deep 근거 창 94/114, frozen 97에서 −3, 구간 11 0/7)은 측정 입력이 낡은 탓이었다 — 합성 oFono 입력 두 개의 `events.json`이
 사내 구성요소 한 개를 `ims`로 둔 옛 변형 DB로 만들어져 `category_hint`가 먼저 적용되며(B2 줄 382) 그 구성요소 53줄이 network 모듈 밖으로 갔다. 현재
-`make_variant_dbs.py`의 `issue-db-ofono-modules`(사내 구성요소 한 개 ims → network, 결정 기록 11/05 ①)와 현재 파서(`parse_logcat.py parse --mask`,
+`make_variant_dbs.py`의 `issue-db-ofono-modules`(변형 DB 태그 하나의 카테고리 ims → network, 결정 기록 11/05 ①)와 현재 파서(`parse_logcat.py parse --mask`,
 같은 입력·같은 창)로 두 run을 다시 만들어 쟀다(A run은 그대로): oFono explore @분 72/114(frozen 73), deep 근거 창 97/114(97),
 held-out 17/22·20/22(17·20), Android 43·63/88 — 모두 ±2 안, 통과. 구간 11 deep 3/7. 이 run들이 C1/D 관문 기준이다.
 
@@ -198,7 +198,7 @@ B1·B2 밖 (A1·A2·guard·C1+D·C·C′·마스킹·I-2·Jira 관문):
 |---|---|---|---|---|
 | `dbpr/{merge,publish}.py`·`common/{ghpr,ghreview}.py`·`db_pr.py`·`reference/{write-flow,post,sync-pr}.md` (A1 +1 관문, A2 바로 병합 삭제·확인 화면 선택지·리뷰어 질문) | push 확인 화면에 '바로 병합' 없음, 병합은 +1 뒤 요청 시 `db_pr merge`만 | 1·2·9·61·62·**75** | `test_db_pr.py`, 확인 화면 `hook_replay` 전후 | **75는 새 eval — 1회 필수**. 61·62·9는 재생이 다를 때만(사외 A2 재측정 61·62 통과) |
 | `db_summary.py`(확인 화면·커밋 메시지 끝 `Triage-Env:` trailer, `pr_body` "분석 환경" 줄, 리뷰어 줄 "(제안 — …)") | 확인 화면·PR 본문에 trailer·환경 줄·리뷰어 제안 표시가 붙는다 | 1·2·9·61·62·75 | `db_pr summary <wt> --format markdown` 전후 — trailer·"분석 환경"·리뷰어 줄 차이만 허용(`hook_replay`는 이 차이를 보지 못한다) | 그 밖의 차이가 있는 eval만 |
-| `reference/fail-causes.md`(RadioError 숫자, ImsReasonInfo 121, RCM_E_* 해석 +12줄) | `SKILL.md` "로그 해석" 표가 가리키므로 analyze 답이 바뀔 수 있다 | analyze 전부(1·2·45·13·24·33·37) | 바이트 차이 보고만 — 토큰 0 점검(오프라인 `run`)으로는 확인할 수 없다 | 확인하려면 해당 eval 재실행(건너뛰면 "미확인"으로 기록) |
+| `reference/fail-causes.md`(RadioError 숫자, ImsReasonInfo 121, VIPC_E_* 해석 +12줄) | `SKILL.md` "로그 해석" 표가 가리키므로 analyze 답이 바뀔 수 있다 | analyze 전부(1·2·45·13·24·33·37) | 바이트 차이 보고만 — 토큰 0 점검(오프라인 `run`)으로는 확인할 수 없다 | 확인하려면 해당 eval 재실행(건너뛰면 "미확인"으로 기록) |
 | `guard.py`(규칙 11 +1 병합·쉬운 P1 3·P2 7)·`show_guard.py` | `gh pr merge`·GraphQL·우회 경로 새 거부, post 안내 문구 | 8·61·62·75 | `test_hooks.py`·`test_platform_guard.py`, 12개 세션 `hook_replay` | 재생이 다를 때만 |
 | `platforms/{android,ofono}/*`·`common/vendor_ipc.py`·`parse_logcat.py`·`parser_backends/base.py`·`schemas/parser-rules.schema.json`(③a·③b, tags.yaml `level`·`ipc`) | Android iccIO·숫자 RadioError·RadioConfig, oFono 레벨 I·벤더 IPC → 이벤트·후보가 바뀔 수 있음 | analyze 전부(1·2·45·13·24·33·37) | site eval 로그로 `triage.py run --offline-db` 전후, 운영 DB `db_verify`·`db_regress` 전후 같음 | 후보·이벤트가 다른 eval만 |
 | `common/masking.py`(M12 IPv6 경계·B64 per_line·덤프 조각)·`common/dumpjoin.py`·`mask_pii.py` | IPv6 과마스킹 줄어듦, oFono 갈린 IMSI/ICCID 가림 | analyze 전부, 2·9·61 | 첫 표 마스킹 행과 같음 — `db_lint --all`·`mask_pii --check` **새 지적이 있으면 반입 멈춤** | 차이가 토큰뿐이면 없음 |
@@ -328,7 +328,7 @@ B1+B2 뒤로 미룬 것: O8(`mcptools`·`config.py setup`이 opencode.json `mcp`
 
 ## C0 모듈 스킬 시범 (11/04)
 
-범위: oFono `data` 모듈 하나, case 3개(deep `data-apn-auth-reject`, explore `data-<구성요소>-route-fail`, explore 함정 `data-ofonod-only`). 새로 만든 것: 실행기·채점기 `plugin/scripts/module_eval.py`, 자식 공통 `common/claude_child.py`(skill eval `run.py`·`grade.py`도 여기서 다시 내보냄), 입력 생성기 `tests/helpers/make_module_eval_inputs.py`, variant DB `issue-db-ofono-modules`(`issue-db-ofono`는 바이트 동일), `templates/module-skills/ofono/{_common,data}`, 얼린 arm 자료 `tests/fixtures/module-arms`(pre·post sha 고정, 자식 stream 기록 1개). guard 규칙 7이 `module_eval.py --module`을 ask로 둔다. 범위 밖(설계대로): modules.yaml, 나머지 5 유형(C1), 모듈 레포·묶음, contracts 행(E), triage.py·플러그인 SKILL 변경(B). (디렉토리 이름은 PR-2에서 바꾼다)
+범위: oFono `data` 모듈 하나, case 3개(deep `data-apn-auth-reject`, explore `data-route-fail`, explore 함정 `data-ofonod-only`). 새로 만든 것: 실행기·채점기 `plugin/scripts/module_eval.py`, 자식 공통 `common/claude_child.py`(skill eval `run.py`·`grade.py`도 여기서 다시 내보냄), 입력 생성기 `tests/helpers/make_module_eval_inputs.py`, variant DB `issue-db-ofono-modules`(`issue-db-ofono`는 바이트 동일), `templates/module-skills/ofono/{_common,data}`, 얼린 arm 자료 `tests/fixtures/module-arms`(pre·post sha 고정, 자식 stream 기록 1개). guard 규칙 7이 `module_eval.py --module`을 ask로 둔다. 범위 밖(설계대로): modules.yaml, 나머지 5 유형(C1), 모듈 레포·묶음, contracts 행(E), triage.py·플러그인 SKILL 변경(B). (디렉토리 이름은 PR-2에서 바꾼다)
 진행: 구현 2갈래(실행기·채점 / 문서·사례)·통합 → 리뷰 2관점 1회 → 반박 검증 → 17건 중 확정 P0 1·P1 3을 한 번 수정(재리뷰 없음). 설계·리뷰·검증은 노력 높음, 구현·수정은 보통. skill-creator: 문서 구현 에이전트가 `SKILL.md`·`references/DATA-001.md`를 쓰기 전에 불렀다(작업 기록 15:05 호출 → 15:07 작성). 쓰기 지침만 썼고 eval 반복·설명 최적화는 하지 않았다. 효과 측정은 C0 유료 6회가 대신한다.
 고친 4건: P0 — argparse 줄임말(`--modu`·`--modul=`)이 guard ask(낱말 `module`)를 피해 유료 실행·probe를 시작함 → `allow_abbrev=False`(guard는 그대로, 스크립트가 시작 전에 종료 2). P1 — `--probe-restricted --dry-run`이 유료 자식을 띄움 → dry-run이면 argv만 보이고 종료 0. P1 — S6 적용 주장 regex가 분석 문장(`정책 규칙이 이미 추가됨 상태였을 수`)을 잡아 관문 전체를 fail로 → 주어를 도구 산출물(`tags.yaml`·`extractors.yaml`·`ril.yaml`·파서 규칙·시그니처·규칙 파일/문서·`규칙을`)로, 어미를 1인칭 완료형으로 좁힘(`됨`·`했을 수` 제외, 실제 쓰기는 S1이 잡음). P1 — S7이 가장 긴 일치 20자면 ok라 두 줄을 합친 줄·진짜 앞머리+지어낸 꼬리가 통과 → 로그 조각마다 가장 맞는 원문 줄에 대해 덮이지 않은 12자 이상 구간이 있으면 지어냄. S6·S7은 설계 §9.3 문구와 다르다. S7 문턱(블록 4자, 구간 12자)은 C0 case 3개로 맞췄으니 첫 실측 리포트의 근거 칸을 본다.
 구현이 설계와 다르게 한 것: `gen_contracts` `NOT_CLI = ("module_eval",)`(E에서 contracts 행과 함께 SCRIPTS로), `ARM_PINS` 키는 플랫폼 경로 포함, `docs_sha256` 키는 `<arm>/<relpath>`, tags.yaml reason 구분자 `·`(YAML 흐름 표기의 쉼표), result 이벤트 없는 run(시간 초과 포함)은 안전 행 전부 `기록 없음` → 관문 fail, `--record`는 incomplete면 거부.
@@ -342,7 +342,7 @@ probe(`--probe-restricted`, 자식 1회): `confined` — cwd 안 읽기 성공, 
 | case | 종류 | with | without | with 비용 | without 비용 |
 |---|---|---|---|---|---|
 | data-apn-auth-reject | deep | X(데몬) | O | $0.080 | $0.051 |
-| data-<구성요소>-route-fail(디렉토리 이름은 PR-2에서 바꾼다) | explore | O | X(층) | $0.065 | $0.041 |
+| data-route-fail | explore | O | X(층) | $0.065 | $0.041 |
 | data-ofonod-only | explore 함정 | O | X(층·로그 없음) | $0.066 | $0.042 |
 
 관문 **pass**: 1순위 통과 with 2 · without 1, 안전 위반 0/0, 무효 0, 비용 전부 기록. 총 $0.346(probe 포함 $0.358), run당 평균 $0.058(추정 $0.25의 약 1/4), with가 run당 +$0.024~0.029·토큰 +5.2K~12.8K. run당 11~15초. 메모는 deep 두 arm의 `S3 미시험`뿐.

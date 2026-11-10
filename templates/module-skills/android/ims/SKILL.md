@@ -15,7 +15,7 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 
 ## 판단 순서
 
-1. 먼저 AIMS SIT 사슬: 벤더 IMS `[CONN] … IMS_REGISTERING` → `SOL TX/RX{RILC_REQ_AIMS_ADD_PDN_INFO}` → 벤더 RIL `SIT_IND_AIMS_REGISTRATION` → `UNSOL {RILC_UNSOL_AIMS_REGISTRATION} … status-code` → ImsPhone `handleImsRegistered`·`handleImsUnregistered`.
+1. 먼저 IMS IPC 사슬: 벤더 IMS `[pdn] … IMS_REGISTERING` → `req -> / rsp <- OEM_REQ_IMS_ADD_PDN` → 벤더 RIL `VIPC_EXAMPLE_IMS_REG_IND` → `ind <- OEM_UNSOL_IMS_REGISTRATION … status-code` → ImsPhone `handleImsRegistered`·`handleImsUnregistered`.
 2. `status-code : 403` → 모뎀·망(IMS 망 거절), 원인 데몬은 그 벤더 IMS 태그. 프레임워크 `onRegistrationFailed`는 그 결과다. (없으면: ImsRegistration `onRegistrationFailed: code=4xx`가 SIP 거절 코드면 모뎀·망, 원인 데몬 알 수 없음, 반대 근거 "핵심 줄 없음 — 빌드·로그 수준 확인". TODO(SITE:S24) 코드 매핑)
 3. 401 뒤 등록 성공 → 정상 인증 절차.
 4. IMS PDN(DN `IMS`)이 붙어 있으면 data는 원인이 아니다.

@@ -7,7 +7,7 @@ key: MOCK-9807
 issue:
   summary: 부팅 직후 망 등록이 늦음
   description: 부팅 직후 망 등록 상태가 늦게 올라옵니다. 처음 요청이 언제 나갔는지 확인해 주세요.
-  occurred_at: '2026-08-09T13:10:57+0000'
+  occurred_at: '2026-10-16T06:12:33+0000'
   platform_version: '14'
   sim_slot: '0'
 parse: {tz: UTC, year: 2026, minutes: 5}
@@ -21,6 +21,6 @@ expect:
   accept:
     - layer: '그\s*층\s*로그\s*없음'
       daemon: '없음|알 수 없음|RILJ'
-      evidence: ['newState=RADIO_ON', '\[0201\]< VOICE_REGISTRATION_STATE']
+      evidence: ['newState=RADIO_ON', '\[0612\]< VOICE_REGISTRATION_STATE']
   trap:
     - label: '^\s*(모뎀|망|벤더|RIL HAL|프레임워크|곁가지)'

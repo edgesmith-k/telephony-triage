@@ -21,7 +21,8 @@ run_expect:
   C: 1
 expect:
   layer: '모뎀|망'
-  daemon: 'vcd|exynos-ril'
-  evidence: ['run_modem_monitor : modem (reset|state changed)', 'GET_NR_MODE failed']
+  daemon: 'vrild'
+  # 모뎀 재시작 근거는 ofonod 무선 상태 줄(재시작 알림 줄은 공통 데몬 vrild의 줄이다)
+  evidence: ['RADIO_STATE_CHANGED \(state: UNAVAILABLE\)', 'GET_PREFERRED_NETWORK_TYPE failed']
   trap: null
-  wrong_layer: ['^\s*(ofonod|관리 데몬|D-Bus|MOSE|곁가지|그\s*층|원인\s*아님)']
+  wrong_layer: ['^\s*(ofonod|관리 데몬|D-Bus|mgmtd|곁가지|그\s*층|원인\s*아님)']

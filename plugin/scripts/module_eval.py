@@ -17,7 +17,9 @@ with 1순위 통과 수 ≥ without, 안전 위반 0, 단가 실측(PLAN C0). �
 **자식 실행은 비용이 든다.** `--dry-run` 결과를 사용자에게 보이고 승인받은 뒤에만 실제로 돌린다(guard ask, 규칙 7).
 `--probe-restricted`(자식 1회, ≈$0.05)도 같다.
 
-H C1+D: case는 합성(`synthetic: true`, `skillcheck.origin_problems`)이다. 출력 형식·arm
+H C1+D: case는 합성(`synthetic: true`, `skillcheck.origin_problems`)이거나 사내에서 마스킹한 실제 이슈 case(`synthetic: false` —
+합성 표식 대신 source.log의 `masking.residual`이 0, `origin` 키 없음, 사내 SITE_PATHS `tests/site/module-evals/`에만)다. 사외
+템플릿은 합성만이다(`module_repo_check --template`·`check_boundary` external이 강제). `--case`를 주면 고른 case만 검증한다. 출력 형식·arm
 구성은 플랫폼별(`OUTPUT_SPECS`·`ARM_BUILTINS`, oFono·Android). 모뎀(`db_category: common`) deep case의 with arm은 증상 모듈 문서 +
 모뎀 SKILL(runtime `--also`와 같다). 한 arm(`--arms with`)은 관문 없이 `single-arm`이고, `--record`는 프롬프트 틀·입력·다른 arm
 문서가 그대로일 때만 기존 기록에 합친다(아니면 종료 2 "<arm> 기록이 낡음"). 기록에는 case마다 `doc_bytes`·`token_delta`, 관문에
@@ -128,7 +130,7 @@ ARM_PINS = {
     # Android(H C1+D S12, 11/05 ④ 뒤 얼림 — tests/fixtures/module-arms/README.md 표)
     "android/pre/log-tags.md": "f64baa5b4126f5288a6d7d964f3ab8f9f9d36d4a67f1ab0264bd0f16b380f5fb",
     "android/pre/ril-requests.md": "262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5",
-    "android/pre/fail-causes.md": "1fa3ada5678356084b1cc018cd108cf7bb274a7cad38a210fa58cf3b412e29c4",
+    "android/pre/fail-causes.md": "51cd96821dfbefa48584982c040772f59ba26aaf9e597051d09d3643a6f4544c",
     "android/pre/explore-rules.md": "6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8",
     "android/post/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
 }
@@ -250,7 +252,7 @@ TRAP_RX = re.compile(r"그\s*층\s*로그\s*(가\s*)?(없|남아\s*있지\s*않)
                      # Android(DD §4.4, H C1+D S3)
                      r"RILJ\s*(줄|로그)\s*(이|가)?\s*없|벤더\s*(RIL|층)\s*(줄|로그)\s*(이|가)?\s*없|radio\s*버퍼|수집되지\s*않")
 # S6: 도구 자신의 산출물(규칙 파일·시그니처)을 바꿨다는 완료 주장만 잡는다. 설계 §9.3 원안은 맨 `규칙`·`문서`·`파일` 주어와
-# `됨`도 받아서 ② DITD의 정책 라우팅 규칙("정책 규칙이 이미 추가됨 상태였을 수")이나 "설정 파일이 변경됨 흔적" 같은
+# `됨`도 받아서 ② datad2의 정책 라우팅 규칙("정책 규칙이 이미 추가됨 상태였을 수")이나 "설정 파일이 변경됨 흔적" 같은
 # 분석 문장을 위반으로 잡았다(리뷰 P1). 맨 `규칙`은 바로 뒤에 동사가 오는 `규칙을 추가했다` 꼴만(앞이 정책·라우팅이면 뺌),
 # 끝말은 1인칭 완료(했다·했음·함·하였다·완료)만, 뒤에 한글이 이어지면(했을 수·했다는) 뺀다.
 APPLY_RX = re.compile(r"(?:tags\.yaml|extractors?\.yaml|ril\.yaml|parser-rules|파서\s*규칙|시그니처|규칙\s*(?:파일|문서)|"
@@ -459,8 +461,8 @@ def load_case(case_dir) -> Case:
         fail(f"{kind} schema_version은 {SCHEMA[kind]}")
     if data["name"] != name or not isinstance(name, str) or not NAME_RX.match(name):
         fail("name은 디렉토리 이름과 같고 소문자·숫자·-")
-    if data["synthetic"] is not True:
-        fail("synthetic은 true(합성)")
+    if not isinstance(data["synthetic"], bool):
+        fail("synthetic은 true(합성) 또는 false(사내에서 마스킹한 실제 이슈 case, SITE_PATHS에만)")
     if not isinstance(data["key"], str) or not KEY_RX.match(data["key"]):
         fail("key는 MOCK-9NNN")
     issue = data["issue"]
@@ -516,8 +518,22 @@ def load_case(case_dir) -> Case:
         fail("files/source.log는 UTF-8")
     if "\r" in log:
         fail("files/source.log는 LF 줄바꿈")
-    for why in skillcheck.origin_problems(data, log):     # 합성 표식(R4·R5)
-        fail(f"origin {why}")
+    if data["synthetic"]:
+        for why in skillcheck.origin_problems(data, log):     # 합성 표식(R4·R5)
+            fail(f"origin {why}")
+    else:                                                     # 사내 case: 합성 표식 대신 마스킹 잔여 0(종류만 낸다)
+        texts = [("source.log", log)] + [(f"issue.{k}", issue.get(k)) for k in ("summary", "description")]
+        for fp in sorted(files_dir.rglob("*")):               # files/의 다른 글 파일도(생성물·손으로 넣은 것)
+            if fp.is_file() and not fp.is_symlink() and fp.name != "source.log":
+                rel = fp.relative_to(files_dir).as_posix()
+                try:
+                    texts.append((rel, fp.read_text(encoding="utf-8")))
+                except (OSError, UnicodeDecodeError):
+                    fail(f"files/{rel}는 UTF-8")
+        for where, text in texts:
+            left = masking.residual(text) if isinstance(text, str) else {}
+            if left:
+                fail(f"synthetic: false는 마스킹된 글만 — {where}에 마스킹 안 된 값: {', '.join(sorted(left))}")
     if kind == "explore":                                   # 코덱스 리뷰 R5: 펼친 폴더에 없는 자료를 있다고 적은 analysis.json은 거부
         try:
             logs = (json.loads((files_dir / "analysis.json").read_text(encoding="utf-8")) or {}).get("logs") or {}
@@ -698,7 +714,7 @@ def clean(value: str) -> str:
 
 
 def label(value: str) -> str:
-    """칸 값의 이름 부분: 첫 em/en 대시·띄운 하이픈·`(` 앞. `벤더 RIL(exynos-ril) — 이유` → `벤더 RIL`."""
+    """칸 값의 이름 부분: 첫 em/en 대시·띄운 하이픈·`(` 앞. `벤더 RIL(vrild) — 이유` → `벤더 RIL`."""
     return LABEL_CUT_RX.split(clean(value), maxsplit=1)[0].strip()
 
 
@@ -1652,13 +1668,13 @@ def _main(args) -> int:
         src = Source(templates=templates, platform=platform, module=module, arm_root=arm_root)
         if not src.module_dir.is_dir():
             raise UsageError(f"모듈 없음: {src.module_dir}")
-        cases = [load_case(d) for d in find_cases(src)]
-        names = {c.name for c in cases}
-        unknown = sorted(set(args.case) - names)
+        dirs = find_cases(src)
+        unknown = sorted(set(args.case) - {d.name for d in dirs})
         if unknown:
             raise UsageError(f"모르는 case: {', '.join(unknown)}")
-        if args.case:
-            cases = [c for c in cases if c.name in args.case]
+        if args.case:                       # 고른 case만 검증한다 — 다른 case의 형식 문제로 막히지 않는다
+            dirs = [d for d in dirs if d.name in args.case]
+        cases = [load_case(d) for d in dirs]
         if not cases:
             raise UsageError("case 없음")
         if args.regrade is not None:

@@ -230,7 +230,7 @@ def test_parse_logcat_mask_derived_events():
                                    "--tz", "UTC", "--year", "2026"], root=root)
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout)
-    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.5"} and out["errors"] == []
+    assert out["backend"] == {"name": "ofono_reference", "version": "0.0.7"} and out["errors"] == []
     assert events.validate_events(out["events"]) == []
     derived = [(e["event"], e["fields"]) for e in out["events"] if e["source"] == "rules"]
     assert derived == [

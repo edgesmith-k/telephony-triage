@@ -458,6 +458,14 @@ def _profile(defaults: dict, db_cfg: dict | None = None) -> platforms.PlatformPr
         raise UsageError(str(exc)) from exc
 
 
+def _dump_func(defaults: dict) -> str:
+    """갈린 덤프 조각 표식의 함수 이름(site-defaults oFono 블록 `dump_func`, 없으면 placeholder). 잘못되면 종료 2."""
+    try:
+        return platforms.load(defaults, "ofono", require_enabled=False).dump_func
+    except platforms.PlatformConfigError as exc:
+        raise UsageError(str(exc)) from exc
+
+
 def _load_backend(defaults: dict, profile: platforms.PlatformProfile):
     try:
         backend_name = platforms.backend_name(defaults, profile.name)
@@ -533,7 +541,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
         texts = _read_texts(paths)
         masker = masking.new_masker(texts, _allow_patterns(db_cfg), log_lines=True)
         # 시간 창 밖에 갈린 덤프 조각이 있을 수 있으면 창 없이 읽고 묶은 뒤 자른다(백엔드 인터페이스 무변경)
-        post_window = window if window and dumpjoin.DUMP_MARK in texts else None
+        post_window = window if window and dumpjoin.mark() in texts else None
 
     warnings: list[dict] = []
     warnings += compat.check_parser_backend(db_cfg, backend.name, backend.version())
@@ -1251,6 +1259,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         db_cfg = compat.load_db_config(Path(args.rules).parent) if args.cmd in ("parse", "markers") else None
         profile = _profile(defaults, db_cfg)
+        dumpjoin.configure(_dump_func(defaults))
         if args.cmd == "parse":
             result = run_parse(args, plugin_root, defaults, profile)
         elif args.cmd == "markers":

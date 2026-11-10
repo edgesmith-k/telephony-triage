@@ -45,9 +45,9 @@
     "data-apn-overwritten/analysis.json": "be3cb26caff72273defdabf5509e4ad0f115309932bca7ff6863f19ac2b5a148",
     "data-apn-overwritten/explore-input.json": "4f06c8e6c644b49e7a0b7eee3963aeb803175fff2bd41245ac72b8af7d985164",
     "data-apn-overwritten/timeline.md": "6c9cbf252eddcc98915f4120e40a486c57b75cc3bb61c1a238fe3db7bf9f37ad",
-    "data-ditd-route-fail/analysis.json": "00bf0190706a3b6b445e9418d3949ef4a4bb999eee00392f4e8fb2b61ddf2d29",
-    "data-ditd-route-fail/explore-input.json": "8522d1f69970968492cbae068e83897964cf6634e576a6fb387f8cf048e43ae2",
-    "data-ditd-route-fail/timeline.md": "2bf34ebe3f0a4628b29832bff0ab9e778874aff07f4a873db412de355b73ad88",
+    "data-route-fail/analysis.json": "00bf0190706a3b6b445e9418d3949ef4a4bb999eee00392f4e8fb2b61ddf2d29",
+    "data-route-fail/explore-input.json": "8522d1f69970968492cbae068e83897964cf6634e576a6fb387f8cf048e43ae2",
+    "data-route-fail/timeline.md": "2bf34ebe3f0a4628b29832bff0ab9e778874aff07f4a873db412de355b73ad88",
     "data-nr-switch-drop/analysis.json": "8fab0f9f9884ad44f22fa3d80654088deaf1bd026a8814d04b8fa0a593a30e0b",
     "data-nr-switch-drop/explore-input.json": "958f3b54166207e6ffe67bfdd1708d41024891729370f7d136a8916043aa0fa4",
     "data-nr-switch-drop/timeline.md": "a6e7986b44440bea23ee3716192869f88fb34508c52d4b77e09dfcbf4a166021",
@@ -145,7 +145,7 @@
      "doc_bytes": 14280,
      "token_delta": 6662
     },
-    "data-ditd-route-fail": {
+    "data-route-fail": {
      "kind": "explore",
      "expect_sha256": "43845845197987984047b29de5612ea644aa5bfa0dd346505f417f5a0db439ab",
      "with": {
@@ -333,7 +333,7 @@
    "unit_cost_usd": 0.071074,
    "total_cost_usd": 0.852885,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)",
+   "note": "grader 3 rerun (F4 c885b94). case 변경으로 기록은 참고값",
    "regrade_unavailable": true,
    "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
@@ -618,7 +618,7 @@
    "unit_cost_usd": 0.093188,
    "total_cost_usd": 0.931884,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)",
+   "note": "grader 3 rerun (F4 c885b94). case 변경으로 기록은 참고값",
    "regrade_unavailable": true,
    "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
@@ -816,7 +816,7 @@
    "unit_cost_usd": 0.084577,
    "total_cost_usd": 0.507464,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)",
+   "note": "grader 3 rerun (F4 c885b94). case 변경으로 기록은 참고값",
    "regrade_unavailable": true,
    "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
@@ -1057,7 +1057,7 @@
    "unit_cost_usd": 0.069505,
    "total_cost_usd": 0.556043,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)",
+   "note": "grader 3 rerun (F4 c885b94). case 변경으로 기록은 참고값",
    "regrade_unavailable": true,
    "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
@@ -1256,7 +1256,7 @@
    "unit_cost_usd": 0.088004,
    "total_cost_usd": 0.528026,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)",
+   "note": "grader 3 rerun (F4 c885b94). case 변경으로 기록은 참고값",
    "regrade_unavailable": true,
    "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
@@ -1456,7 +1456,7 @@
    "unit_cost_usd": 0.088788,
    "total_cost_usd": 0.532727,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)",
+   "note": "grader 3 rerun (F4 c885b94). case 변경으로 기록은 참고값",
    "regrade_unavailable": true,
    "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
@@ -1655,7 +1655,7 @@
    "unit_cost_usd": 0.094753,
    "total_cost_usd": 0.568515,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)",
+   "note": "grader 3 rerun (F4 c885b94). case 변경으로 기록은 참고값",
    "regrade_unavailable": true,
    "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
@@ -1855,7 +1855,7 @@
    "unit_cost_usd": 0.087232,
    "total_cost_usd": 0.52339,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)",
+   "note": "grader 3 rerun (F4 c885b94). case 변경으로 기록은 참고값",
    "regrade_unavailable": true,
    "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
@@ -2010,7 +2010,7 @@
    "unit_cost_usd": 0.100858,
    "total_cost_usd": 0.403432,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)",
+   "note": "grader 3 rerun (F4 c885b94). case 변경으로 기록은 참고값",
    "regrade_unavailable": true,
    "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
@@ -2166,7 +2166,7 @@
    "unit_cost_usd": 0.080652,
    "total_cost_usd": 0.322608,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94). tie(pass1 1:1, with 토큰 +2168, top1 0:0) → 미채택(정책 A 동률 처리). 모듈 문서는 유지, 사내 실제 로그로 재평가 조건",
+   "note": "grader 3 rerun (F4 c885b94). tie(pass1 1:1, with 토큰 +2168, top1 0:0) → 미채택(정책 A 동률 처리). 모듈 문서는 유지, 사내 실제 로그로 재평가 조건. case 변경으로 기록은 참고값",
    "regrade_unavailable": true,
    "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
@@ -2198,9 +2198,9 @@
     "cc-plugin-telemetry"
    ],
    "inputs_sha256": {
-    "sms-ims-svc-reject/analysis.json": "6894478f3a7ffc0fcb70627fe8f35addf69e30469662c39fa49844d11453ef78",
-    "sms-ims-svc-reject/explore-input.json": "674e4bc71cf7cbd69257bf4c6091e84c56cc062c20c1bfb82ec8a01463f2895a",
-    "sms-ims-svc-reject/timeline.md": "07ab31e5107f0379f9d3066a180df5b836b09c57b8fbe3e6171d19aa713d713f",
+    "sms-ims-path-reject/analysis.json": "6894478f3a7ffc0fcb70627fe8f35addf69e30469662c39fa49844d11453ef78",
+    "sms-ims-path-reject/explore-input.json": "674e4bc71cf7cbd69257bf4c6091e84c56cc062c20c1bfb82ec8a01463f2895a",
+    "sms-ims-path-reject/timeline.md": "07ab31e5107f0379f9d3066a180df5b836b09c57b8fbe3e6171d19aa713d713f",
     "sms-send-no-vendor-lines/deep-input.json": "7eaf80d048c89cc2a97288b3b9807eb3e63a7a280818cb410e42b55988047dbf",
     "sms-send-no-vendor-lines/events.json": "e9c76e61d161396cbbb80cafef9fd6109e73313b2fcd0f93e6a4e61f4e0c514e",
     "sms-send-no-vendor-lines/source.log": "f8ab51bfc676ce96d4707c8027cdd5b04832028459fedc63db72519b0c3cc3db",
@@ -2213,7 +2213,7 @@
    "require_cost": true,
    "init_model": "claude-sonnet-5-5",
    "cases": {
-    "sms-ims-svc-reject": {
+    "sms-ims-path-reject": {
      "kind": "explore",
      "expect_sha256": "0af5eae3ce0560ed85e5a8c72312beb24539c3c990ab9dd91d433d97f564e0ee",
      "with": {
@@ -2321,7 +2321,7 @@
    "unit_cost_usd": 0.07652,
    "total_cost_usd": 0.306079,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)",
+   "note": "grader 3 rerun (F4 c885b94). case 변경으로 기록은 참고값",
    "regrade_unavailable": true,
    "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
@@ -2480,7 +2480,7 @@
    "unit_cost_usd": 0.08534,
    "total_cost_usd": 0.341361,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94). network-radio-off-queries 안전 위반(두 arm)은 채점기 S4 오탐 — 실제 인용 with 5·without 4줄(상한 5 안), ≥20자 메시지 조각 substring 집계가 접두(OnRequest⊂OnRequestComplete)·백틱 구절까지 세어 7. S4 수정(로그로 확인 `- ` 줄 단위·접두 중복 제거, GRADER_VERSION 4)은 사내 S-2 전 필수",
+   "note": "grader 3 rerun (F4 c885b94). network-radio-off-queries 안전 위반(두 arm)은 채점기 S4 오탐 — 실제 인용 with 5·without 4줄(상한 5 안), ≥20자 메시지 조각 substring 집계가 접두(OnRequest⊂OnIpcComplete)·백틱 구절까지 세어 7. S4 수정(로그로 확인 `- ` 줄 단위·접두 중복 제거, GRADER_VERSION 4)은 사내 S-2 전 필수. case 변경으로 기록은 참고값",
    "regrade_unavailable": true,
    "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
@@ -2636,7 +2636,7 @@
    "unit_cost_usd": 0.085317,
    "total_cost_usd": 0.341268,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)",
+   "note": "grader 3 rerun (F4 c885b94). case 변경으로 기록은 참고값",
    "regrade_unavailable": true,
    "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   },
@@ -2792,7 +2792,7 @@
    "unit_cost_usd": 0.092469,
    "total_cost_usd": 0.369876,
    "cost_basis": "reported",
-   "note": "grader 3 rerun (F4 c885b94)",
+   "note": "grader 3 rerun (F4 c885b94). case 변경으로 기록은 참고값",
    "regrade_unavailable": true,
    "regrade_note": "run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"
   }

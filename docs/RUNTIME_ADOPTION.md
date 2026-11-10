@@ -206,6 +206,7 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
 
 ```sh
 python3 tools/make_module_repo.py <out>   # 템플릿 → <out>에 새 git 레포·첫 커밋(원격·push 없음). <out>은 비어 있고 레포 밖
+# 사내 스냅샷 얹기: ... <out> --site-overlay docs/site/module-skills   # 사내 스냅샷을 같은 경로로 덮어씀(evals 거부, placeholder 남으면 종료 1, docs/SITE_RESTORE.md)
 # GHE 빈 레포 만들기·push는 stderr 안내대로 사람이
 # GHE 브랜치 보호(IMPL §4.5) → site-defaults module_skills.remote(관리자)
 python3 tools/site_step.py modules   # MS 트랙 시작(S-3 완료 뒤)
@@ -236,7 +237,7 @@ python3 plugin/scripts/config.py set analyzers.<카테고리>.prefer skill [--pl
 | 정기 점검 | 사내 모델·출처 모름 기록만 토큰 0 검사(lint·regress·겹침·중복·마스킹·근거) → 걸린 것·바뀐 모듈만 사내 Claude로 | HEAD |
 | 시그니처 소실(drift) | 이전에 3회 이상 맞던 원인 시그니처가 새 빌드 기록 2건 이상에서 0회 → `audit.<레포>.drift` 사용자 필요(기준은 사내 측정 뒤 조정). 첫 점검은 최근 14일 | HEAD |
 | 부분 일치(C′) | 후보 없음·1위 S=1·C=0이면 report.md `규칙 제안 (부분 일치):`(마스킹된 로그 줄로만). 코드 루트가 있으면 `code_roots.py find-text`로 없는 조건 문구를 코드와 대조(same·reworded·not-found …). 받아들이면 update-signature PR(+1) | HEAD |
-| 마스킹 | oFono `dump_dmsg_w_re()` 조각으로 갈린 IMSI/ICCID 값도 실행 중 가린다 | HEAD |
+| 마스킹 | oFono 덤프 함수 조각으로 갈린 IMSI/ICCID 값도 실행 중 가린다 | HEAD |
 
 ```sh
 python3 tools/site_step.py audit --inhouse-model '<사내 모델 이름 정규식>'   # 토큰 0. docs/site/audit/에 계획·review.md

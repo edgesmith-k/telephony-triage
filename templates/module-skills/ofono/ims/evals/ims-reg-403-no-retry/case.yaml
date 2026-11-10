@@ -20,7 +20,7 @@ run_expect:
 expect:
   accept:
     - layer: '모뎀|망'
-      daemon: 'exynos-ril|IMSSVC'
+      daemon: 'vrild|imsd'
       evidence: ['fail-code : 403', 'fail_code=403']
   trap:
     - label: '^\s*(ofonod|관리 데몬|D-Bus|곁가지|그\s*층|원인\s*아님)'

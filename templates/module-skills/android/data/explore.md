@@ -13,11 +13,11 @@
 - RILJ `SET_INITIAL_ATTACH_APN`·`SET_DATA_PROFILE`(실린 APN), data call list `UNSOL_DATA_CALL_LIST_UPDATED`
 - RILJ `SETUP_DATA_CALL`·`DEACTIVATE_DATA_CALL`, DPM 선호 프로필, DCM `carrierId=`
 - DNC `Data evaluation`·`Internet data state changed from <A> to <B>`, DSMGR, DSM-C, DRM
-- 벤더 RIL `SetupDataCallHandler`·`SIT_SET_DATA_PROFILE`, `[PsService_<n>] …errorCode=`
+- 벤더 RIL `[ExamplePdnService_<n>] setup data call request`·`VIPC_EXAMPLE_PROFILE`, `[ExamplePdnService_<n>] …errorCode=`
 
 ## ③ 층 경로
 
-DNC → DPM → RILJ 요청 → RIL HAL → 벤더 RIL IPC → `[PsService_0] …errorCode=` → RILJ `< SETUP_DATA_CALL … cause=` → data call list → DNC.
+DNC → DPM → RILJ 요청 → RIL HAL → 벤더 RIL IPC → `[ExamplePdnService_0] …errorCode=` → RILJ `< SETUP_DATA_CALL … cause=` → data call list → DNC.
 
 ## ④ 증상별 첫 점검
 
@@ -32,7 +32,7 @@ DNC → DPM → RILJ 요청 → RIL HAL → 벤더 RIL IPC → `[PsService_0] �
 
 ## ⑤ 함정
 
-- 시험 장비 AT 중계 `UsbAgent: AT+CFUN=0` 뒤 끊김은 사용자·망처럼 보인다. RILJ `RADIO_POWER`가 없으면 프레임워크는 요청하지 않았다 → `곁가지(<태그>)`.
+- AT 중계·모뎀 진단 `at-in: AT+CFUN=0` 뒤 끊김은 사용자·망처럼 보인다. RILJ `RADIO_POWER`가 없으면 프레임워크는 요청하지 않았다 → `곁가지(<태그>)`.
 - 부팅 중 `Data disallowed reasons: NOT_IN_SERVICE …`는 흔한 초기 상태다. 증상 시각과 맞을 때만 쓴다.
-- `NOTIFY_IMS_DATA_NETWORK error 6` + `RCM_E_UNDEFINED_CMD` 되풀이는 미지원 명령 잡음이다.
+- `NOTIFY_IMS_DATA_NETWORK error 6` + `VIPC_E_UNKNOWN_CMD` 되풀이는 미지원 명령 잡음이다.
 - 응답이 `cause=NONE`이어도 실린 APN이 틀리면 실패다.

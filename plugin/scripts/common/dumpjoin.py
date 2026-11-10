@@ -1,21 +1,58 @@
-"""oFono `dump_dmsg_w_re()` 덤프 조각 묶기 (08-safety.md §8, `tools/fixture_residual.py`·`masking.py` 공용).
+"""oFono 덤프 함수 조각 묶기 (08-safety.md §8, `tools/fixture_residual.py`·`masking.py` 공용).
 
-oFono 덤프는 한 메시지를 여러 줄에 자른다(같은 ident·pid, 시각은 ms가 바뀌고 사이에 다른 줄이 낀다). 줄 단위 규칙은
-키·값이 갈린 조각을 놓치므로 이어진 조각을 이은 글에서 다시 본다.
+oFono 덤프 함수는 한 메시지를 여러 줄에 자른다(같은 ident·pid, 시각은 ms가 바뀌고 사이에 다른 줄이 낀다). 줄 단위 규칙은
+키·값이 갈린 조각을 놓치므로 이어진 조각을 이은 글에서 다시 본다. 덤프 함수 이름은 site-defaults
+`platform[.others.ofono].dump_func`(기본 placeholder `example_dump`, TODO(SITE:S24))에서 온다 — `mark()` = `<이름>() `.
 
-- 잇는 규칙: `DUMP_MARK` 뒤가 조각이다. 시각을 뺀 앞머리(`ident[pid]:` 이후)가 같고 앞 조각과 시각 차가
+- 잇는 규칙: `mark()` 뒤가 조각이다. 시각을 뺀 앞머리(`ident[pid]:` 이후)가 같고 앞 조각과 시각 차가
   `0 ≤ Δ < DUMP_GAP`이면 잇는다. 사이의 다른 줄은 건너뛴다. 시각을 못 읽으면 앞머리 전체가 같은 다음 덤프 줄만 잇는다.
-- 입력 어댑터: 원 줄 목록 `groups_from_lines`, 파서 레코드 목록 `groups_from_records`(키 = tag·pid·msg 안 DUMP_MARK
-  앞, 시각 = 레코드 `ts`의 `HH:MM:SS.fff`, 열 = msg 안 DUMP_MARK 뒤).
+- 입력 어댑터: 원 줄 목록 `groups_from_lines`, 파서 레코드 목록 `groups_from_records`(키 = tag·pid·msg 안 `mark()`
+  앞, 시각 = 레코드 `ts`의 `HH:MM:SS.fff`, 열 = msg 안 `mark()` 뒤).
 - 묶음은 `[(순번, 조각 시작 열), ...]`(두 줄 이상)이고 순번은 원래 순번이다.
+- 이름: `configure(이름)`(parse_logcat이 자기 site-defaults로 부른다)이 먼저, 없으면 처음 쓸 때 플러그인 루트의
+  site-defaults에서 한 번 읽는다(없거나 못 읽으면 기본값).
 """
 
 from __future__ import annotations
 
 import re
 
-DUMP_MARK = "dump_dmsg_w_re() "
+DEFAULT_FUNC = "example_dump"                           # placeholder — 사내 이름은 site-defaults에만
 DUMP_GAP = 1.0                                         # 같은 메시지 조각으로 볼 시각 차(초) 상한(미만)
+_mark: str | None = None
+_FUNC_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")   # platforms 검증과 같은 식별자 모양
+
+
+def configure(func: str) -> None:
+    """덤프 함수 이름(`platforms` 검증을 거친 식별자)을 정한다."""
+    global _mark
+    _mark = f"{func}() "
+
+
+def func_from(defaults) -> str:
+    """site-defaults dict의 oFono 블록 `dump_func`(oFono가 기본 플랫폼이면 `platform.dump_func`, 아니면
+    `platform.others.ofono.dump_func`). 없거나 식별자 모양이 아니면 기본값 — 검증·종료 2는 `platforms.load`가 한다
+    (common은 platforms를 import하지 않는다)."""
+    node = (defaults or {}).get("platform") if isinstance(defaults, dict) else None
+    node = node if isinstance(node, dict) else {}
+    others = node.get("others") if isinstance(node.get("others"), dict) else {}
+    block = node if node.get("name") == "ofono" else others.get("ofono")
+    func = block.get("dump_func") if isinstance(block, dict) else None
+    return func if isinstance(func, str) and _FUNC_RE.fullmatch(func) else DEFAULT_FUNC
+
+
+def mark() -> str:
+    """조각 앞 표식 `<덤프 함수>() `."""
+    if _mark is None:
+        try:
+            from . import site_defaults
+            func = func_from(site_defaults.load())
+        except Exception:  # noqa: BLE001 — 설정 오류는 parse_logcat이 종료 2로 알린다. 여기서는 기본값
+            func = DEFAULT_FUNC
+        configure(func)
+    return _mark
+
+
 _DUMP_IDENT = re.compile(r"\S+\[\d+\]:")                 # ident[pid]: (앞머리에서 시각 뒤)
 _DUMP_TIME = re.compile(r"(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)")
 
@@ -51,32 +88,34 @@ def _join(items) -> list[list[tuple[int, int]]]:
 def groups_from_lines(lines: list[str]) -> list[list[tuple[int, int]]]:
     """원 줄 목록의 이어진 조각 묶음."""
     items = []
+    dm = mark()
     for i, line in enumerate(lines):
-        at = line.find(DUMP_MARK)
+        at = line.find(dm)
         if at < 0:
             continue
         head = line[:at]
         m, sec = _DUMP_IDENT.search(head), _sec(head)
         if m and sec is not None:
-            items.append((i, at + len(DUMP_MARK), head[m.start():], sec))
+            items.append((i, at + len(dm), head[m.start():], sec))
         else:
-            items.append((i, at + len(DUMP_MARK), (UNTIMED, head), None))
+            items.append((i, at + len(dm), (UNTIMED, head), None))
     return _join(items)
 
 
 def groups_from_records(recs: list[dict]) -> list[list[tuple[int, int]]]:
     """파서 레코드 목록(`msg`·`tag`·`pid`·`ts`)의 이어진 조각 묶음. 열은 `msg` 안이다."""
     items = []
+    dm = mark()
     for i, rec in enumerate(recs):
         msg = rec.get("msg") if isinstance(rec, dict) else None
         if not isinstance(msg, str):
             continue
-        at = msg.find(DUMP_MARK)
+        at = msg.find(dm)
         if at < 0:
             continue
         key = ("rec", str(rec.get("tag")), str(rec.get("pid")), msg[:at])
         sec = _sec(rec.get("ts"))
-        items.append((i, at + len(DUMP_MARK), key if sec is not None else (UNTIMED, key), sec))
+        items.append((i, at + len(dm), key if sec is not None else (UNTIMED, key), sec))
     return _join(items)
 
 
