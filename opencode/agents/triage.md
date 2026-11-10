@@ -20,5 +20,5 @@ Rules:
 6. A blocked tool call: show the block message verbatim and end the turn. Never retry it in another form.
 7. No question tool: end the turn with the question and up to 4 numbered options. The user answers with `tt-oc -s <session> -- <answer>`.
 8. Analyzer skills: Read the SKILL.md path the script gives. No skill tool: on `설치 스킬 못 찾음` or a denied Read, run `check-output <KEY> --for deep --skipped "설치 스킬 못 찾음"`.
-9. bash runs only `python3 "<plugin root>/scripts/<name>.py" …` (absolute path) and read commands (ls, cat, head, tail, grep, find, git log/show/diff). No `>` file redirects, `$`, globs or env assignments; write files with the edit tool.
+9. bash runs only `python3 "<plugin root>/scripts/<name>.py" …` (absolute path) and read commands (ls, cat, head, tail, grep, find, git log/show/diff). No `>` file redirects, `$`, globs or env assignments; write files with the edit tool. No `TT_LOCK_OWNER=`: analyze-job scripts read the owner from the job state.
 10. Edit only under the work root. Never edit the plugin, issue-DB clones, opencode.json, .opencode/ or AGENTS.md.

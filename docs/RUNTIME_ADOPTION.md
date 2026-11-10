@@ -160,7 +160,7 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
 opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 로그> --issue-file <이슈 yaml> --analysis-only   # 선택
 ```
 
-- `--dry-run` 한 번으로 리포트와 확인 화면을 다 본다. tt-oc 옵션(`--delete-session`·`-s` 등)은 **`--` 앞에** 둔다 — 뒤에 두면 모델에게 가는 메시지가 된다.
+- `--dry-run` 한 번으로 리포트와 확인 화면을 다 본다. lock owner는 환경 변수로 줄 수 없어(허용 목록이 대입을 거부) analyze 작업의 `db_pr`·`db_verify`가 작업 상태(`triage-state.json`)에서 읽는다. analyze 밖의 쓰기 흐름(`tt-record` 등)은 OpenCode에서 lock(`lock owner 불일치`)에서 멈춘다 — Claude Code에서 한다. tt-oc 옵션(`--delete-session`·`-s` 등)은 **`--` 앞에** 둔다 — 뒤에 두면 모델에게 가는 메시지가 된다.
 
 - 종료 0(끝남)이나 3(막힌 호출 — 사용자 차례). 1·2·124면 그대로 보고한다.
 - 래퍼가 표시 기록(report·must_show·근거 검사 줄)을 그대로 출력한다.

@@ -29,6 +29,7 @@ PASTED_STEPS = "steps-pasted.txt"   # 개발자가 붙여넣은 스텝 목록 �
 WORK_FILES = (STATE, STAGE, PR_FILE, REGRESS, PASTED_STEPS)
 JOB_KEY_RE = session_lock.JOB_KEY_RE
 TOOL_PREFIX = "tt/"
+TRIAGE_STATE = "triage-state.json"   # = triagelib.core.STATE_FILE: `triage.py run`이 acquire 결과 owner를 남기는 작업 상태
 
 
 class UsageError(Exception):
@@ -161,9 +162,25 @@ class Lock:
         self.write({k: held[k] for k in ("job", "owner", "command", "started_at", "updated_at", "platform") if k in held})
         return held
 
+    def owner_for(self, job: str) -> str | None:
+        """갱신·해제에 쓸 owner: `TT_LOCK_OWNER`. 없으면 OpenCode 안(`TT_RUNTIME=opencode` — bash 허용 목록이 환경변수 대입을
+        받지 않는다)에서만 **그 작업 키** 디렉토리의 `triage-state.json` owner(`triage.py run`이 acquire 결과로 남긴 값,
+        `triage.py release`와 같은 출처). 보유 owner와의 대조는 그대로라 다른 작업·이어받은 세션의 lock은 풀리지 않는다.
+        acquire 재진입에는 쓰지 않는다(이어받기 확인을 건너뛰지 않게)."""
+        if self.owner or os.environ.get("TT_RUNTIME") != "opencode" or not JOB_KEY_RE.fullmatch(job):
+            return self.owner
+        try:
+            data = json.loads((self.work_dir / job / TRIAGE_STATE).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        owner = data.get("owner") if isinstance(data, dict) else None
+        return owner if isinstance(owner, str) and owner else None
+
     def check_owner(self, held: dict) -> None:
-        if not self.owner or self.owner != held.get("owner"):
-            raise UsageError("lock owner 불일치: acquire 결과 lock.owner를 TT_LOCK_OWNER로 전달한다.")
+        owner = self.owner_for(str(held.get("job") or ""))
+        if not owner or owner != held.get("owner"):
+            raise UsageError("lock owner 불일치: acquire 결과 lock.owner를 TT_LOCK_OWNER로 전달한다"
+                             "(OpenCode는 analyze 작업만 triage-state.json의 owner를 쓴다 — 다른 흐름은 Claude Code·터미널에서).")
 
     @_locked
     def release(self, job: str, force: bool) -> dict:
@@ -186,7 +203,8 @@ class Lock:
         if held["job"] != job and not force:
             raise UsageError(f"lock은 풀리지 않았다 — lock 보유자는 {held['job']}입니다. 그 세션이 끝났다면 --force로 푼다.",
                              {"released": False, "holder": mask_owner(held)})
-        if not force and (not self.owner or self.owner != held.get("owner")):
+        owner = self.owner_for(job)
+        if not force and (not owner or owner != held.get("owner")):
             raise UsageError("lock owner 불일치: lock은 풀리지 않았다(session.lock 그대로). acquire 결과의 lock.owner를 "
                              "TT_LOCK_OWNER로 주고 다시 release한다. 그 세션이 끝났다고 사용자가 확인하면 --force로 푼다.",
                              {"released": False, "holder": mask_owner(held)})

@@ -515,6 +515,27 @@ def test_analysis_commands_still_run():
         assert out["decision"] == "allow", (command, out)
 
 
+def test_dry_run_stage_reaches_confirmation_screen_without_env_owner():
+    """런타임 리뷰 1: OpenCode bash 허용 목록은 `TT_LOCK_OWNER=…` 대입을 받지 않는다(그대로 둔다). analyze `--dry-run`의 stage는
+    대입 없는 모양으로 허용되고, 스크립트는 그 작업 디렉토리의 triage-state.json owner로 확인 화면까지 간다(discard도)."""
+    w, s = ws(), _scripts()
+    job, oc_env = "MOCK-7001", {"TT_RUNTIME": "opencode", "TT_LOCK_OWNER": ""}
+    w.plan(job, "p7-analyze-append.plan.json")
+    owner = w.db_pr("lock", "acquire", job, "--command", "analyze", "--take-over", env={"TT_LOCK_OWNER": ""})["lock"]["owner"]
+    (w.job_dir(job) / "triage-state.json").write_text(json.dumps({"owner": owner}), encoding="utf-8")
+    argv = ["stage", w.job_dir(job) / "plan.json", "--wt", w.wt(job), "--branch", f"issue/{job}", "--dry-run",
+            "--then-summary"]
+    command = f'python3 "{s}/db_pr.py" ' + " ".join(map(str, argv))
+    assert bash(command, w.base)["decision"] == "allow"
+    out = bash(f"TT_LOCK_OWNER={owner} {command}", w.base)
+    assert out["decision"] == "deny" and "환경변수 대입" in out["reason"]
+    proc = w.run("db_pr.py", argv, env=oc_env, unauth=True)
+    assert proc.returncode in (0, 3), proc.stderr
+    assert proc.stdout.startswith("## push 전 확인"), proc.stdout[:300]
+    assert w.db_pr("discard", w.wt(job), env=oc_env)["discarded"] is True
+    assert w.db_pr("lock", "status")["held"] is False
+
+
 def test_tamper_and_nested_runtime_denied():
     """P1: guard 플러그인 삭제·adapter 수정(다음 세션에 guard 없음), 중첩 opencode/claude(플러그인·설정 deny 우회)."""
     w, s = ws(), _scripts()
