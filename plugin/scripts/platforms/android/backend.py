@@ -13,6 +13,8 @@
 설정이 없으면 그 줄의 builtin이 0.1.1과 다를 수 있다.
 0.1.3: 벤더 IPC 오류 줄의 메시지 이름·결과 값 접두어와 성공 값도 site-defaults `platform.vendor_ipc`
 (`request_prefix`·`error_prefix`·`success`, 기본 placeholder)로 — 설정이 없으면 그 줄의 builtin이 0.1.2와 다를 수 있다.
+0.1.4: 태그 `TNA-<n>`·`QOSCT-<n>`·`KT-<n>`의 n(netId)과 두 자리 이상 접미사(`Phone-2147483647` = DEFAULT_PHONE_INDEX)를
+슬롯(`phone_id`)으로 읽지 않는다 — 그 줄의 `phone_id`가 0.1.3과 다르다.
 
 구현 위치는 `platforms/android/backend.py`이고 `parser_backends/reference`는 BACKEND만 다시 내보낸다.
 """
@@ -28,7 +30,7 @@ from common import events, vendor_ipc
 from . import logcat, ril
 from parser_backends.base import ParserBackend, TagAttrSet, Window
 
-VERSION = "0.1.3"
+VERSION = "0.1.4"
 
 # 벤더 IPC 결과 줄을 보는 태그(벤더 RIL 태그 placeholder). TODO(SITE:S9) 사내 태그 확인
 VENDOR_IPC_TAGS = frozenset({"RIL"})

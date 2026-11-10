@@ -14,7 +14,7 @@
 15:22:40.267 p0 D DNC-0 Internet link status changed to INACTIVE
 15:22:40.268 p0 D DNC-0 onDataNetworkDisconnected: [DataNetwork: DN-7-C, IMS, state=null], cause=NONE(0x0)(0), tearDownReason=NONE
 15:22:40.268 p0 D DNC-0 IMS data state changed from CONNECTED to DISCONNECTED.
-15:22:40.270 p7 D TNA-7 NetworkAgent channel lost
+15:22:40.270 - D TNA-7 NetworkAgent channel lost
 15:22:40.271 - D DN-8-C DisconnectedState: All network requests detached.
 15:22:40.272 p0 D DNC-0 onDataNetworkDisconnected: [DataNetwork: DN-8-C, <APN#1>, state=null], cause=NONE(0x0)(0), tearDownReason=NONE
 15:22:40.272 p0 D DNC-0 Internet data state changed from CONNECTED to DISCONNECTED.  ⇒ data_internet_state_changed(from=CONNECTED,to=DISCONNECTED)

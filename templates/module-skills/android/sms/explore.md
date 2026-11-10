@@ -10,22 +10,22 @@
 
 ## ② 볼 역할과 줄
 
-- SmsDispatchersController `sendText`·`getSmscAddress`·`sendSms failed: result=`
-- ImsSmsDispatcher `[n]` `sendSms … format=`·`onSendSmsResult … status=`
+- SmsDispatchersController `sendTextInternal:`
+- ImsSmsDispatcher `[n]` `sendSms:  mRetryCount=…`·`onSendSmsResult … status=<n>`·`sendSms failed. Falling back to PSTN.`
 - 벤더 IMS `[sms]`, RILJ `SEND_SMS`, 벤더 RIL `VIPC_*SMS*`
 
 ## ③ 층 경로
 
-SmsDispatchersController → (IMS) `ImsSmsDispatcher [n]` → 벤더 IMS → `VIPC_*SMS*` → 모뎀; (CS) RILJ `SEND_SMS` → 벤더 RIL → 모뎀.
+SmsDispatchersController → (도메인 선택이면 `DomainSelectionConnection-SMS`) → (IMS) `ImsSmsDispatcher [n]` → 벤더 IMS → `VIPC_*SMS*` → 모뎀; (CS) RILJ `SEND_SMS` → 벤더 RIL → 모뎀.
 
 ## ④ 증상별 첫 점검
 
 | 증상 | 볼 역할·줄 | 흔한 첫 실패 → 층 | 대체 근거 · 받을 로그 |
 |---|---|---|---|
-| 발신 실패 (초안) | RILJ `SEND_SMS`, IPC | IPC Error → 모뎀·망 / 벤더 RIL 줄 0 → `그 층 로그 없음(벤더 RIL)` | `sendSms failed: result=` |
-| IMS 문자 실패 (초안) | ImsSmsDispatcher → 벤더 IMS `[sms]` | `SEND_STATUS_ERROR_FALLBACK` → 벤더 IMS(앞 `[sms]` 줄이 근거) | `onSendSmsResult … status=` |
+| 발신 실패 (초안) | RILJ `SEND_SMS`, IPC | IPC Error → 모뎀·망 / 벤더 RIL 줄 0 → `그 층 로그 없음(벤더 RIL)` | RILJ `< SEND_SMS error <n>` |
+| IMS 문자 실패 (초안) | ImsSmsDispatcher → 벤더 IMS `[sms]` | `onSendSmsResult … status=4`(FALLBACK) → 벤더 IMS(앞 `[sms]` 줄이 근거) | `sendSms failed. Falling back to PSTN.` |
 | 수신 안 됨 (초안) | `UNSOL_RESPONSE_NEW_SMS`, `SMS_ACKNOWLEDGE` | 수신 줄 없음 → 모뎀·망 쪽은 판단 못 함 | 모뎀 로그(사내) |
-| SMSC (초안) | `getSmscAddress` | `getSmscAddress: null` → 프레임워크 | SMSC 설정(마스킹) |
+| SMSC (초안) | 발신 요청 유무 | AOSP 발신 경로는 SMSC 값을 찍지 않는다. 요청이 없으면 → 프레임워크 | SMSC 설정(마스킹) |
 | 셀 방송 (초안) | CellBroadcastConfigTracker | 설정 요청 오류를 전한 층 | 채널 설정 |
 | SMS over SGs (초안) | 결합 등록 | CS 미등록 → network 표 | 모뎀 NAS(사내) |
 

@@ -6,10 +6,10 @@
 
 ## 점검 목록
 
-1. ImsPhoneCallTracker `dial: … imsRegistered=`를 본다.
-2. `false`면 그 앞 IMS 등록 실패(벤더 IMS `status-code`, ImsRegistration `code=`)를 찾는다.
-3. 등록 실패 앞에 모뎀 재시작·`RADIO_UNAVAILABLE`이 있는지 본다.
-4. `LAST_CALL_FAIL_CAUSE causeCode`는 마지막에 본다.
+1. GsmCdmaPhone `useImsForCall=`를 본다.
+2. `false`면 그 앞 IMS 등록 실패(벤더 IMS `status-code`, ImsRegistration `code=`(placeholder))를 찾는다.
+3. 등록 실패 앞에 모뎀 재시작·무선 `UNAVAILABLE`이 있는지 본다.
+4. `LAST_CALL_FAIL_CAUSE … causeCode:`는 마지막에 본다.
 
 ## 코드 경로
 
