@@ -134,9 +134,9 @@ def test_triage_state_owner_is_not_used_outside_opencode_or_for_other_jobs():
     before = lock.read_text(encoding="utf-8")
     # Claude Code(TT_RUNTIME 없음): 예전 그대로 owner 없으면 거부
     proc = ws.run("db_pr.py", ["snapshot", "--job", J], env={"TT_LOCK_OWNER": ""})
-    assert proc.returncode == 2 and "owner 불일치" in proc.stderr
+    assert proc.returncode == 2 and "owner 불일치" in proc.stderr and "triage-state.json" not in proc.stderr
     proc = ws.run("db_pr.py", ["lock", "release", J], env={"TT_LOCK_OWNER": ""})
-    assert proc.returncode == 2 and "풀리지 않았다" in proc.stderr
+    assert proc.returncode == 2 and "풀리지 않았다" in proc.stderr and "triage-state.json" not in proc.stderr
     # 다른 작업 키: 그 작업 디렉토리에 같은 owner를 둬도 lock 작업 키가 다르면 거부(작업 키 대조가 먼저)
     _triage_state(ws, "MOCK-1002", owner)
     proc = ws.run("db_pr.py", ["snapshot", "--job", "MOCK-1002"], env=OC)
@@ -165,8 +165,9 @@ def test_opencode_state_owner_stale_after_take_over_is_refused():
             _triage_state(ws, J, state)
         proc = ws.run("db_pr.py", ["snapshot", "--job", J], env=OC)
         assert proc.returncode == 2 and "owner 불일치" in proc.stderr and "Traceback" not in proc.stderr, state
+        assert "triage-state.json" in proc.stderr, state           # OpenCode 안에서만 붙는 안내
         proc = ws.run("db_pr.py", ["lock", "release", J], env=OC)
-        assert proc.returncode == 2 and "풀리지 않았다" in proc.stderr, state
+        assert proc.returncode == 2 and "풀리지 않았다" in proc.stderr and "triage-state.json" in proc.stderr, state
     assert ws.db_pr("lock", "release", J, env={"TT_RUNTIME": "opencode", "TT_LOCK_OWNER": new})["released"] is True
 
 

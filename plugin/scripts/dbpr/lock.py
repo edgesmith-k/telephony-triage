@@ -179,8 +179,7 @@ class Lock:
     def check_owner(self, held: dict) -> None:
         owner = self.owner_for(str(held.get("job") or ""))
         if not owner or owner != held.get("owner"):
-            raise UsageError("lock owner 불일치: acquire 결과 lock.owner를 TT_LOCK_OWNER로 전달한다"
-                             "(OpenCode는 analyze 작업만 triage-state.json의 owner를 쓴다 — 다른 흐름은 Claude Code·터미널에서).")
+            raise UsageError("lock owner 불일치: acquire 결과 lock.owner를 TT_LOCK_OWNER로 전달한다." + _oc_hint())
 
     @_locked
     def release(self, job: str, force: bool) -> dict:
@@ -206,10 +205,19 @@ class Lock:
         owner = self.owner_for(job)
         if not force and (not owner or owner != held.get("owner")):
             raise UsageError("lock owner 불일치: lock은 풀리지 않았다(session.lock 그대로). acquire 결과의 lock.owner를 "
-                             "TT_LOCK_OWNER로 주고 다시 release한다. 그 세션이 끝났다고 사용자가 확인하면 --force로 푼다.",
+                             "TT_LOCK_OWNER로 주고 다시 release한다. 그 세션이 끝났다고 사용자가 확인하면 --force로 푼다."
+                             + _oc_hint(),
                              {"released": False, "holder": mask_owner(held)})
         self.path.unlink()
         return {"released": True, "previous": mask_owner(held), "forced": held["job"] != job}
+
+
+def _oc_hint() -> str:
+    """OpenCode 안에서만 붙이는 owner 안내(Claude Code 메시지는 예전 그대로)."""
+    if os.environ.get("TT_RUNTIME") != "opencode":
+        return ""
+    return (" OpenCode는 TT_LOCK_OWNER를 줄 수 없어 analyze 작업만 그 작업의 triage-state.json owner를 쓴다 — 다른 흐름은 "
+            "Claude Code·터미널에서 한다.")
 
 
 def mask_owner(held: dict | None) -> dict | None:

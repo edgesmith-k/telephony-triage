@@ -6,7 +6,7 @@ v1은 **분석 전용(안 A)**: Jira 코멘트, 이슈 DB push, `db_pr publish|m
 
 | 파일 | 내용 |
 |---|---|
-| `opencode.json.template` | 프로젝트 설정(v1 키만). `snapshot:false` 필수, `autoupdate:false`, `share:"disabled"`, 한도 202000/16000, 허용 목록(`"*":"deny"` 뒤 read·glob·grep·list·bash·edit만 — read도 원문 작업 파일 `issue_raw.json`·`events.json`·`events-full.json`·`match.json`·`jira_raw.json`은 deny, bash도 `"*":"deny"` 뒤 `python3 *`·읽기 명령만), `jira_*`·`github_*`·`task` deny(Jira 읽기 도구는 `install --jira-read-tool`로만 끝에 allow), `external_directory`는 플러그인·작업 루트·clone만 |
+| `opencode.json.template` | 프로젝트 설정(v1 키만). `snapshot:false` 필수, `autoupdate:false`, `share:"disabled"`, 한도 202000/16000, 허용 목록(`"*":"deny"` 뒤 read·glob·grep·list·bash·edit만 — read 도구는 원문 작업 파일 `issue_raw.json`·`events.json`·`events-full.json`·`match.json`·`jira_raw.json`을 deny(grep 도구·site 추가 이름은 막지 않는다, 08-safety 10번의 한계), bash도 `"*":"deny"` 뒤 `python3 *`·읽기 명령만), `jira_*`·`github_*`·`task` deny(Jira 읽기 도구는 `install --jira-read-tool`로만 끝에 allow), `external_directory`는 플러그인·작업 루트·clone만 |
 | `managed.json.sample` | `/etc/opencode/opencode.json` 예시(관리자 배포, 다중 방어). 프로젝트 설정 뒤에 합쳐진다 |
 | `agents/triage.md` | 에이전트 프롬프트(약 2KB): 스크립트가 판정, Read ≤200줄, 화면 그대로, 쓰기는 명령 출력만 |
 | `commands/tt-*.md` | `tools/gen_opencode.py`가 `plugin/commands/*.md`에서 만든다(손으로 고치지 않는다) |
