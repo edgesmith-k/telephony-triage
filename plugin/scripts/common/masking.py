@@ -301,6 +301,9 @@ _M_LATE: tuple[Rule, ...] = (
     # 문맥이 넓어 값 규칙(ro.*·fingerprint·variant·username 등) 뒤에 둔다 — 앞에 두면 값 한가운데를 먼저 차지해 값이 쪼개진다
     Rule("PRODUCT", re.compile(r"(?<![\w])(?P<v>m\d{4})(?=[^\w]|$)"), context=re.compile(r" [a-z][a-z0-9_]*\s*:"),
          log_only=True),
+    # M2b 다시: 제품 코드가 끊어 놓은 나머지(`…/m1234/<base64>`)도 모양만 보는 base64로 — 위 M2b는 끊기 전 글을 봤다
+    Rule("B64", re.compile(r"(?<![A-Za-z0-9+/=<#])(?P<v>[A-Za-z0-9+/]{24,}={0,2})(?![A-Za-z0-9+/=])"),
+         check=_b64_shape, log_only=True),
     # M10 남은 15~20자리 숫자 — 맨 끝(IMEI·IMSI·ICCID 검증 규칙이 먼저 제 종류로 가린다, mask2.py:110).
     # 더한 것: `0x` 16진 값(`0x0000000801234567` 주소)과 16진 낱말의 일부는 숫자 값이 아니라 제외한다(B2 §3.4 음성 사례)
     Rule("NUM", re.compile(r"(?<![0-9])(?<!0[xX])(?P<v>\d{15,20})(?![0-9A-Fa-f])"), log_only=True),

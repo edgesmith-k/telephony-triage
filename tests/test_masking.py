@@ -871,6 +871,8 @@ M_POSITIVE = [
     ("ofonod[1]: gril: Device 0: < 89 82 10 31 00 00 00 00 00 00 00 00 00 00 00 01  ................",
      "<HEXDUMP 16B>", "89 82 10", True),                                                               # M1 gril
     ("I modemif : IPC: RX: 0a 1b 2c 3d 4e 5f", "<HEXDUMP 6B>", "0a 1b 2c", True),                     # M1 hex 줄
+    ("Sep 20 14:32:11 host app[2]: tag: Lambda/m1234/Ab+Cd3Ef5Gh7Ij9Kl1Mn3Op5Qr7", "<PRODUCT#1><B64#1>",
+     "Cd3Ef5Gh7Ij9", True),                                                         # 제품 코드가 끊은 뒤 base64(M2b 다시)
     # M1 바이트 뒤 짧은 꼬리(재리뷰 P1): 잘림 표시·길이·태그
     ("<6>[  1.0] C1] modemif: LINK-RX(12): 45 00 00 54 12 34 40 00 40 01 f6 0a ...", "<HEXDUMP 12B>", "45 00 00 54", True),
     ("I SIM     : sim_read_cb: 98 10 32 54 76 98 10 32 54 f6 (len 10)", "<HEXDUMP 10B>", "98 10 32 54", True),
