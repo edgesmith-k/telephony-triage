@@ -15,8 +15,8 @@
     python3 tools/site_step.py audit [--since D|레포=sha] [--last] [--repo R] [--cap-tokens N] [--inhouse-model RX] [--jobs DIR] [--json]
     python3 tools/site_step.py audit --record [--defer ID[,ID]]     # 정기 점검: 토큰 0 검사 → Claude가 볼 것(상한 안) → 기준점 기록
     python3 tools/site_step.py audit --notify [--create] [--json]   # 걸린 항목(P0·P1·실패 검사)을 이슈 DB 레포 Issue로(기본 보기만)
-    python3 tools/site_step.py restore                  # 사내 스냅샷 복구(docs/SITE_RESTORE.md) 순서 ⓪~⑦ 목록
-    python3 tools/site_step.py restore check [--json]   # 복구 점검(읽기 전용, 진행 상태 없음 — site_checks.RESTORE_CHECKS)
+    python3 tools/site_step.py restore                  # 사내 스냅샷(docs/SITE_RESTORE.md "한눈에") 순서 목록
+    python3 tools/site_step.py restore check [--json]   # 스냅샷 점검(읽기 전용, 진행 상태 없음 — site_checks.RESTORE_CHECKS)
     python3 tools/site_step.py runtime-check claude-gateway         # Claude Code + 사내 모델 프로필 표(모델 호출 없음)
     python3 tools/site_step.py runtime-check opencode [--project D] # OpenCode 1.19.5·설정·관리 설정 점검 + 사내 확인 0(OpenAI 호환) curl
     python3 tools/site_step.py runtime-check opencode --project D --jira KEY [--missing-key KEY]
@@ -40,8 +40,8 @@
   돌린다. 나머지는 사외 결과 기록(`offsite_results.json`, 점검 `s2.offsite`)으로 갈음한다.
 - 새로 만들 때 트래커는 jira다(사내 결정: S30·S31 GitHub 트래커 항목은 해당 없음, S-3에서 `tracker.kind: jira`).
 - 사외 초안 PC(`.local-draft`)에서는 SITE_PROFILE.md를 만들지 않는다(종료 2, 반입 전 경계 검사가 막는 파일이다).
-- `restore`(docs/SITE_RESTORE.md)는 S-6까지 끝낸 사내 레포에서 이름이 든 템플릿 스냅샷(`docs/site/module-skills/`)을 되살리는
-  독립 명령이다. SITE_PROFILE을 읽거나 쓰지 않고 `docs/site/steps/`에도 쓰지 않는다. `restore check`의 경고(warn)는 종료 코드에
+- `restore`(docs/SITE_RESTORE.md)는 S-6까지 끝낸 사내 레포에서 사내 이름을 채운 템플릿 스냅샷(`docs/site/module-skills/`)을 반입 전에
+  떠 두고 반입 뒤 다시 얹는 순서를 보이는 독립 명령이다. SITE_PROFILE을 읽거나 쓰지 않고 `docs/site/steps/`에도 쓰지 않는다. `restore check`의 경고(warn)는 종료 코드에
   영향이 없다(실패·건너뜀·사용자 필요만 1).
 - `runtime-check`(계획 I O10, docs/development/RUNTIMES.md)는 단계와 무관하게 환경마다 한 번 돌리는 점검이다(SITE_PROFILE을 읽거나
   쓰지 않는다). 판정은 기존 코드: claude-gateway는 `claude_child.gateway_profile_check`(missing·differs → 1), opencode는
@@ -447,22 +447,25 @@ def coverage_cmd(root: Path, as_json: bool, out: str | None, min_lines: int | No
     return mc.render(result) + written, code
 
 
-RESTORE_STEPS = f"""사내 스냅샷 복구 ({sc.RESTORE_DOC}, S-6까지 끝낸 사내 레포 — 진행 상태 없음, 순서대로 한 번)
-⓪ 스냅샷(새 묶음 반입 전, 스냅샷이 없을 때 한 번): 반입 전 사내 레포 HEAD에서 templates/module-skills를 꺼내 evals를 빼고
-  {sc.SNAPSHOT_DIR}/로, SOURCE 한 줄
-① 재반입(import_draft) → SITE_PATHS 생존 확인 → `site_step.py check`가 S-1..S-6 완료
-② (첫 분석 전) site-defaults의 기존 `platform:` 블록 안 `vendor_ipc`에 context·complete 둘 다(사내 로그의 요청 완료 줄에서
-  확인한 두 낱말), oFono는 구성요소 플래그 `level_unreliable`·`vendor_ipc`도(이슈 DB tags.yaml 선언이 없을 때)
-③ 모듈 스킬 레포: 없으면 `make_module_repo.py <out> --site-overlay {sc.SNAPSHOT_DIR}` → push, 있으면 임시 렌더 → diff → GHE PR
-④ 검사: `site_step.py restore check` · `check_boundary --mode site` · pytest 2개 · parse_logcat 한 번
-⑤ 거부 목록 운영(TT_DENY_FILE)
-⑥ (선택) 실제 로그 사례는 tests/site/module-evals
-⑦ 이어서 S-7·MS-*. `restore check` 경고(label)면 템플릿 diff를 스냅샷에 옮긴 뒤 ③ diff 갈래 → SOURCE label
+RESTORE_STEPS = f"""사내 스냅샷 ({sc.RESTORE_DOC} "한눈에", S-6까지 끝낸 사내 레포 — 진행 상태 없음)
+재반입은 템플릿 파일을 사외 판으로 덮는다 — 사내에서 채운 모듈 스킬 파일·설정을 반입 전에 떠 두고 반입 뒤 다시 얹는다.
+반입 전(스냅샷이 없을 때 한 번)
+  ⓪ {sc.RESTORE_DOC} ⓪의 블록을 그대로 실행 — HEAD의 templates/module-skills(evals 뺌) → {sc.SNAPSHOT_DIR}/ + SOURCE 한 줄
+반입 뒤(순서대로)
+  ① SITE_INSTALL.md 8절(`tools/import_draft.py --check-boundary`) → `python3 tools/site_step.py check S-6`
+  ② plugin/site-defaults.yaml: 기존 `platform:` 블록 안 `vendor_ipc`에 context·complete 둘 다(사내 로그의 요청 완료 줄),
+     oFono는 구성요소 플래그 `level_unreliable`·`vendor_ipc`도(이슈 DB tags.yaml 선언이 없을 때)
+  ④ `python3 tools/site_step.py restore check` — 실패 줄의 "할 일"대로 채운다
+  ③ `python3 tools/make_module_repo.py $OUT --site-overlay {sc.SNAPSHOT_DIR}` — 레포가 없으면 push, 있으면 diff → GHE PR
+  ④ `python3 tools/check_boundary.py --mode site` · `python3 -m pytest -q tests/test_modulefilter.py tests/test_module_templates.py`
+     · parse_logcat 비교(벤더 IPC 이벤트 수)
+  ⑦ 템플릿 diff(SOURCE label의 반입 커밋 → HEAD)를 스냅샷에 옮긴 뒤 SOURCE label·date 갱신
+그 밖: ⑤ 거부 목록(TT_DENY_FILE) · ⑥ (선택) 사내 실제 이슈 case(tests/site/module-evals, --case로 고른 것만)
 명령·설명 전체: {sc.RESTORE_DOC}"""
 
 
 def restore_cmd(root: Path, sub: str | None, as_json: bool) -> tuple[str, int]:
-    """`restore`: 복구 순서 목록(종료 0). `restore check`: `site_checks.RESTORE_CHECKS`(진행 상태를 쓰지 않는다)."""
+    """`restore`: 사내 스냅샷 순서 목록(종료 0). `restore check`: `site_checks.RESTORE_CHECKS`(진행 상태를 쓰지 않는다)."""
     _profile(root)                                     # 사외 초안 PC는 사용 오류
     if sub is None:
         return RESTORE_STEPS, 0
@@ -1138,7 +1141,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="없으면 시작·이어 하기. ofono: oFono 트랙(O-1~O-4) 시작·이어 하기(S-3 완료 뒤). modules: 모듈 스킬 트랙"
                          "(MS-1~MS-2, S-3 완료 뒤). audit: 정기 점검(토큰 0 검사·시그니처 소실 + Claude가 볼 것, Claude는 부르지 않는다). "
                          "runtime-check: claude-gateway|opencode 런타임 점검(모델·네트워크 호출 없음). "
-                         "restore: 사내 스냅샷 복구 순서(docs/SITE_RESTORE.md), restore check: 복구 점검")
+                         "restore: 사내 스냅샷 순서(docs/SITE_RESTORE.md), restore check: 스냅샷 점검")
     ap.add_argument("step", nargs="?", metavar="S-n|O-n|MS-n",
                     help="check·propose 대상 단계(기본: 현재 단계). runtime-check면 claude-gateway|opencode, "
                          "modules면 check|coverage, restore면 check")

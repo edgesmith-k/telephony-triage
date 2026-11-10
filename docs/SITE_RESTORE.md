@@ -1,8 +1,31 @@
-# 사내 스냅샷 복구 (모듈 스킬 템플릿·벤더 IPC 설정)
+# 사내 스냅샷 (모듈 스킬 템플릿·벤더 IPC 설정을 반입 전에 떠 두고 반입 뒤 다시 얹기)
 
 **읽는 사람**: S-6까지 끝낸 사내 레포의 담당자. `docs/site/module-skills/`가 아직 없으면 새 묶음을 반입하기 **전에** ⓪부터 한 번 하고, 이후 재반입 때는 ⑦만 본다. 요약은 `tools/site_step.py restore`, 점검은 `restore check`(진행 상태 없는 독립 명령, 토큰 0).
 
-사외 레포의 모듈 스킬 템플릿(`templates/module-skills/`)과 벤더 IPC 판별은 공개 용어와 아래 placeholder만 쓴다. 사내 구성요소 이름·값은 사내가 SITE_PATHS에 채운다: 사내 레포에서 쓰던 템플릿 트리를 **스냅샷**으로 `docs/site/module-skills/`에 두면, 모듈 스킬 레포를 만들 때 `make_module_repo.py --site-overlay`가 같은 상대 경로로 통째로 덮어쓴다. 벤더 IPC 값은 site-defaults에 둔다.
+사외 레포의 모듈 스킬 템플릿(`templates/module-skills/`)과 벤더 IPC 판별은 공개 용어와 아래 placeholder만 쓰고, 사내 구성요소 이름·값은 사내가 SITE_PATHS에 채운다. 재반입은 템플릿 파일을 사외 판으로 덮으므로, **사내에서 채운 모듈 스킬 파일과 설정을 반입 전에 떠 두었다가 반입 뒤 다시 얹는다**: 사내에서 이름을 채운 템플릿 트리를 **스냅샷**으로 `docs/site/module-skills/`(SITE_PATHS — 반입이 건드리지 않는다)에 두면, 모듈 스킬 레포를 만들 때 `make_module_repo.py --site-overlay`가 같은 상대 경로로 통째로 덮어쓴다. 벤더 IPC 값은 site-defaults(SITE_PATHS)에 둔다.
+
+## 한눈에
+
+반입 **전**(스냅샷이 없을 때 한 번):
+
+| 명령 | 하는 일 | 실패하면 |
+|---|---|---|
+| `python3 tools/site_step.py restore` | 이 순서 보기 | — |
+| ⓪의 블록(복사해 그대로) | 지금 사내 레포 HEAD의 템플릿 트리를 `docs/site/module-skills/`에 떠 두고 `SOURCE` 한 줄을 커밋 | ⓪ |
+
+반입 **뒤**(순서대로):
+
+| 명령 | 하는 일 | 실패하면 |
+|---|---|---|
+| SITE_INSTALL.md 8절(`tools/import_draft.py --check-boundary`) | 새 묶음 반입 | SITE_INSTALL.md 8절 "멈췄을 때" |
+| `python3 tools/site_step.py check S-6` | 반입 뒤에도 S-6 통과, SITE_PATHS 그대로 | ① |
+| `plugin/site-defaults.yaml` 편집 | 기존 `platform:` 블록 안 `vendor_ipc`(두 키), oFono 구성요소 플래그 | ② |
+| `python3 tools/site_step.py restore check` | 점검 7개 — 실패 줄의 "할 일"이 무엇을 어디에 채울지 말한다 | ④ 표 |
+| `python3 tools/make_module_repo.py $OUT --site-overlay docs/site/module-skills` | 모듈 스킬 레포를 사내 이름으로(없으면 새로 → push, 있으면 렌더 → diff → PR) | ③ |
+| `python3 tools/check_boundary.py --mode site` | 사내 경계 검사 | ④ |
+| `python3 -m pytest -q tests/test_modulefilter.py tests/test_module_templates.py` | 모듈 보기·템플릿 시험 | ④ |
+| ④의 `parse_logcat` 비교 블록 | 벤더 IPC 이벤트 수가 반입 전과 같은지 | ②·④ |
+| ⑦ 2의 템플릿 diff → 스냅샷 반영 → `SOURCE` label·date 갱신 | 사외 템플릿 변경을 스냅샷에 옮기고 label 경고를 끈다 | ⑦ |
 
 | placeholder | 카테고리 | 뜻 |
 |---|---|---|
@@ -20,7 +43,7 @@
 
 ## ⓪ 스냅샷 꺼내기 (새 묶음 반입 **전**)
 
-반입 전 사내 레포 HEAD(사내에서 쓰던 상태)에서 꺼낸다. 옛 clone은 필요 없다.
+반입 전 사내 레포 HEAD(사내에서 이름을 채운 상태)에서 떠 둔다.
 
 ```
 if [ -e docs/site/module-skills ]; then echo "이미 있음 — ⓪을 건너뛴다(덮어쓰지 않는다)"; else
@@ -37,7 +60,7 @@ if [ -e docs/site/module-skills ]; then echo "이미 있음 — ⓪을 건너뛴
 fi
 ```
 
-- 묶음을 이미 반입했다면 `SHA`는 반입 커밋의 부모(`git rev-parse <반입 커밋>^`)로 둔다 — 반입 뒤 HEAD면 `restore.overlay`가 "불완전"으로 실패한다.
+- 묶음을 이미 반입했다면 `SHA`는 반입 커밋의 부모(`git rev-parse <반입 커밋>^`)로 둔다 — 반입 뒤 HEAD의 템플릿은 사외 판(placeholder)이라 `restore.overlay`가 "불완전"으로 실패한다.
 - 스냅샷 범위는 템플릿 트리 전체에서 `*/*/evals/`만 뺀 것이다(`modules.yaml`, `README.md`, `<p>/_common/*`, 모듈마다 `SKILL.md`·analyzer·explore·references).
 - `.draft-manifest.json`이 없으면(첫 반입을 압축 풀기로 했으면) SITE_INSTALL.md 8절 3으로 기준선을 먼저 만든다.
 - `SOURCE`는 한 줄 `label=<반입 라벨> sha=<sha> date=<yyyy-mm-dd>`다. `sha` = 스냅샷을 꺼낸 커밋(바꾸지 않는다), `label`·`date` = 스냅샷 반영을 확인한 마지막 반입과 날짜(⑦에서 갱신).
@@ -55,7 +78,7 @@ python3 tools/site_step.py check S-6                                     # 반�
 
 ## ② 벤더 IPC 값·oFono 구성요소 플래그 (site-defaults, **첫 분석보다 먼저**)
 
-요청 완료 줄의 두 낱말만 설정으로 옮긴다(오류 코드·성공 토큰은 코드 상수). 값은 사내 로그의 요청 완료 줄 `[<context><n>] <complete> Request ID=<id>, result=<n>`에서 확인한 두 낱말이다(사내 레포 이력에 같은 값이 있으면 그것). 출력은 사내 터미널에서만 본다.
+요청 완료 줄의 두 낱말만 설정으로 옮긴다(오류 코드·성공 토큰은 코드 상수). 값은 사내 로그의 요청 완료 줄 `[<context><n>] <complete> Request ID=<id>, result=<n>`에서 확인한 두 낱말이다. 출력은 사내 터미널에서만 본다.
 
 | 키 | 줄에서 옮길 글자 |
 |---|---|

@@ -2440,7 +2440,8 @@ def restore_overlay(ctx: Ctx) -> dict:
     if code:
         lines = [ln for ln in (so + "\n" + se).splitlines() if ln.strip()]     # 경로·검사 id만 나온다(make_module_repo)
         return res("restore.overlay", "fail", f"종료 {code}: {_cap_list(lines, 5) or '출력 없음'}", cmd,
-                   ask=f"지적된 스냅샷 파일을 고친다(불완전 스냅샷이면 ⓪부터, {RESTORE_DOC})")
+                   ask=f"{SNAPSHOT_DIR}/에서 고친다 — '스냅샷이 불완전'은 그 파일의 placeholder를 사내 이름으로, '스냅샷에 없음'은 "
+                       f"템플릿 파일을 스냅샷에 복사해 이름을 채운다({RESTORE_DOC} ⓪·⑦)")
     ctx._clones["restore"] = (out, "")                 # 다른 항목과 같은 (경로, ref) 모양
     try:
         n = len(json.loads(so.strip().splitlines()[-1]).get("overlay") or [])
@@ -2485,10 +2486,11 @@ def restore_vendor_ipc(ctx: Ctx) -> dict:
     cmd = "python3 -c 'platforms.load(<site-defaults>, <켠 플랫폼>)'"
     if bad:
         return res("restore.vendor_ipc", "fail", f"플랫폼 설정 오류 {', '.join(bad)} — 키 경로는 parse_logcat.py 종료 2 메시지로(값은 보이지 않는다)",
-                   cmd, ask=f"vendor_ipc 키는 context·complete 둘 다, 값은 식별자 모양이다({RESTORE_DOC} ②)")
+                   cmd, ask=f"plugin/site-defaults.yaml의 기존 platform: 블록 안 vendor_ipc에 context·complete 둘 다, 식별자 모양으로({RESTORE_DOC} ②)")
     if miss:
         return res("restore.vendor_ipc", "needs-user", f"없음 {', '.join(miss)}" + (f" · 있음 {', '.join(have)}" if have else ""),
-                   cmd, ask=f"사내 로그의 요청 완료 줄에서 확인한 context·complete 값을 site-defaults에 적는다 — 첫 분석 전({RESTORE_DOC} ②)")
+                   cmd, ask=f"plugin/site-defaults.yaml의 기존 platform: 블록 안 vendor_ipc(그 밖 플랫폼은 others.<p>.vendor_ipc)에 사내 로그 요청 "
+                       f"완료 줄의 context·complete를 적는다 — 첫 분석 전({RESTORE_DOC} ②)")
     return res("restore.vendor_ipc", "pass", f"있음 {', '.join(have)} (값은 보이지 않는다)", cmd)
 
 
@@ -2505,16 +2507,20 @@ def restore_deny(ctx: Ctx) -> dict:
     try:
         patterns = deny_scan.load(deny)
     except (OSError, UnicodeDecodeError):
-        return res("restore.deny", "fail", "거부 목록을 읽을 수 없다(없음·권한·UTF-8 아님)", cmd)
+        return res("restore.deny", "fail", "거부 목록을 읽을 수 없다(없음·권한·UTF-8 아님)", cmd,
+                   ask=f"{deny_scan.DENY_ENV}가 가리키는 레포 밖 파일을 UTF-8 글(한 줄에 항목 하나)로 둔다({RESTORE_DOC} ⑤)")
     if not patterns:
-        return res("restore.deny", "fail", "거부 목록이 비어 있다", cmd)
+        return res("restore.deny", "fail", "거부 목록이 비어 있다", cmd,
+                   ask=f"거부 목록에 사내 구성요소 이름·벤더 토큰을 한 줄에 하나씩 적는다({RESTORE_DOC} ⑤)")
     site = import_draft.load_site_paths(ctx.root, ctx.root)
     try:
         files = [f for f in deny_scan.tracked(ctx.root) if not import_draft.is_site_path(f, site)]
     except RuntimeError:
-        return res("restore.deny", "fail", "추적 파일 목록을 얻지 못했다(git 실패)", cmd)
+        return res("restore.deny", "fail", "추적 파일 목록을 얻지 못했다(git 실패)", cmd,
+                   ask="레포 폴더에서 `git status`가 도는지 본다")
     if not files:
-        return res("restore.deny", "fail", "SITE_PATHS 밖 추적 파일 0개(커밋 전?) — 0건을 통과로 보지 않는다", cmd)
+        return res("restore.deny", "fail", "SITE_PATHS 밖 추적 파일 0개(커밋 전?) — 0건을 통과로 보지 않는다", cmd,
+                   ask="반입을 커밋한 뒤 다시 점검한다")
     hits, scanned, skipped, errors = deny_scan.scan(ctx.root, patterns, files)
     total = sum(n for _, n in hits)
     ev = f"SITE_PATHS 밖 추적 파일 {scanned}개"
@@ -2522,7 +2528,8 @@ def restore_deny(ctx: Ctx) -> dict:
         return res("restore.deny", "fail", f"{ev} · {total}건/{len(hits)}파일" + (f" · 읽기 실패 {errors}" if errors else "")
                    + (f" · 압축 파일 {skipped}(내용 못 봄)" if skipped else "")
                    + (f": {_cap_list([f'{p} {n}건' for p, n in hits])}" if hits else ""), cmd,
-                   ask="사내 이름은 SITE_PATHS 경로(스냅샷·site-defaults)에만 둔다 — 공통 파일에서 빼거나 경로를 옮긴다")
+                   ask="사내 이름은 SITE_PATHS 경로(스냅샷·site-defaults)에만 둔다 — 공통 파일에서 빼거나 경로를 옮긴다"
+                   + (". 압축 파일은 풀어 확인하거나 SITE_PATHS로 옮긴다" if skipped else ""))
     return res("restore.deny", "pass", f"{ev} · 0건", cmd)
 
 
