@@ -894,6 +894,10 @@ RUNTIME_FAIL = ("missing", "differs", "fail")
 CHECK0_BODY = ('{"model":"\'"$MODEL"\'","max_tokens":128,"stream":true,'
                '"tools":[{"name":"get_time","description":"현재 시각","input_schema":{"type":"object","properties":{}}}],'
                '"tool_choice":{"type":"tool","name":"get_time"},"messages":[{"role":"user","content":"지금 몇 시?"}]}')
+# 자동 선택 변형(런타임 리뷰 2): 실제 실행은 tool_choice를 주지 않는다(auto). 강제만 통과하고 auto에서 도구 호출을 글로 내는 게이트웨이면
+# 에이전트는 스크립트를 돌리지 못한 채 끝난다
+AUTO_PROMPT = "get_time 도구로 지금 시각을 확인해"
+CHECK0_AUTO_BODY = CHECK0_BODY.replace('{"type":"tool","name":"get_time"}', '{"type":"auto"}').replace("지금 몇 시?", AUTO_PROMPT)
 
 
 def check0_text() -> str:
@@ -905,8 +909,13 @@ def check0_text() -> str:
         'curl -sS -N "$GW/v1/messages" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" \\',
         '  -H "x-api-key: $KEY" -H "authorization: Bearer $KEY" \\',
         f"  -d '{CHECK0_BODY}'",
+        "# 자동 선택(tool_choice auto — 실제 실행과 같은 모양)",
+        'curl -sS -N "$GW/v1/messages" -H "content-type: application/json" -H "anthropic-version: 2023-06-01" \\',
+        '  -H "x-api-key: $KEY" -H "authorization: Bearer $KEY" \\',
+        f"  -d '{CHECK0_AUTO_BODY}'",
         "```",
-        '통과: `event: content_block_start`에 `"type":"tool_use"`, 이어서 `input_json_delta`, 끝에 `message_stop`. '
+        '통과: 두 요청 모두 `event: content_block_start`에 `"type":"tool_use"`, 이어서 `input_json_delta`, 끝에 `message_stop`. '
+        "자동 선택에서 도구 호출이 글(text 블록의 JSON)로만 나오면 실패다 — 에이전트가 스크립트를 돌리지 못한다. "
         "결과(통과/실패와 첫 오류 줄 — 키는 빼고)를 보고한다.",
     ])
 
@@ -916,6 +925,8 @@ OC_CHECK0_BODY = ('{"model":"\'"$MODEL"\'","max_tokens":64,"stream":true,'
                   '"parameters":{"type":"object","properties":{}}}}],'
                   '"tool_choice":{"type":"function","function":{"name":"get_time"}},'
                   '"messages":[{"role":"user","content":"지금 몇 시?"}]}')
+OC_CHECK0_AUTO_BODY = OC_CHECK0_BODY.replace('{"type":"function","function":{"name":"get_time"}}', '"auto"').replace(
+    "지금 몇 시?", AUTO_PROMPT)
 _SHELL_BAD = "'\"$`\\ \n"
 
 
@@ -951,8 +962,13 @@ def oc_check0_text(proj: Path | None) -> str:
         'curl -sS -N "$BASE/chat/completions" -H "content-type: application/json" \\',
         '  -H "authorization: Bearer $TT_GATEWAY_API_KEY" \\',
         f"  -d '{OC_CHECK0_BODY}'",
+        "# (c) 선택(토큰 소량): 자동 선택(tool_choice auto — 실제 실행과 같은 모양)",
+        'curl -sS -N "$BASE/chat/completions" -H "content-type: application/json" \\',
+        '  -H "authorization: Bearer $TT_GATEWAY_API_KEY" \\',
+        f"  -d '{OC_CHECK0_AUTO_BODY}'",
         "```",
-        '통과: (a) `"data"`에 `"id":"<MODEL>"`, (b) `data:` 줄 `delta`에 `"tool_calls"`(이름 `get_time`), 끝에 `data: [DONE]`. '
+        '통과: (a) `"data"`에 `"id":"<MODEL>"`, (b)·(c) `data:` 줄 `delta`에 `"tool_calls"`(이름 `get_time`), 끝에 `data: [DONE]`. '
+        "(c)에서 도구 호출이 `content` 글(JSON)로만 나오면 실패다 — 에이전트가 스크립트를 돌리지 못한다. "
         "결과(통과/실패와 첫 오류 줄 — 키는 빼고)를 보고한다. Anthropic 모양(/v1/messages)은 Claude Code용이다.",
     ])
 

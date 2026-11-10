@@ -441,6 +441,27 @@ def test_outcomes(env, evs, code, outcome):
         assert "stub stderr line" in out["stderr_tail"]
 
 
+def test_script_flow_without_script_output_is_not_ok(env):
+    """런타임 리뷰 2: 도구 호출을 글로 내는 게이트웨이면 tt-analyze가 스크립트 없이 '끝'을 낸다 — ok·0이 아니라 no-script-output·1."""
+    events(env, final('{"name": "bash", "arguments": {"command": "python3 /p/scripts/triage.py run ABC-1"}}'))
+    for flow in ("tt-analyze", "tt-record"):
+        r = tt(env, "--command", flow, "--", "ABC-1")
+        assert r.returncode == 1 and "outcome: no-script-output" in r.stdout and "사내 확인 0 (c)" in r.stdout, r.stdout
+    assert json.loads(tt(env, "--json", "--command", "tt-analyze", "--", "ABC-1").stdout)["outcome"] == "no-script-output"
+    assert tt(env, "--command", "tt-status", "--", "ABC-1").returncode == 0           # 화면 없는 흐름은 그대로
+    assert tt(env, "-s", "ses_PREV", "--", "2").returncode == 0                         # 이어가기(커맨드 없음)도 그대로
+    # 스크립트를 돌렸거나(막히지 않은 bash) 화면 기록이 있으면 ok
+    ran = tool("bash", input={"command": 'python3 "/p/scripts/triage.py" run ABC-1'}, output="{}")
+    events(env, [ev("step_start"), ran, step("tool-calls"), *final("질문: 1) 예 2) 아니오")])
+    assert tt(env, "--command", "tt-analyze", "--", "ABC-1").returncode == 0
+    blocked = tool("bash", "error", input={"command": "python3 /p/scripts/triage.py run ABC-1"}, error="boom")
+    events(env, [ev("step_start"), blocked, step("tool-calls"), *final()])
+    assert tt(env, "--command", "tt-analyze", "--", "ABC-1").returncode == 1
+    events(env, final("모델 요약"))
+    plat = env["work"] / "android"
+    assert tt(env, "--command", "tt-analyze", "--", "ABC-1", extra_env={"STUB_SHOWN": str(plat)}).returncode == 0
+
+
 def test_timeout_kills_and_reports(env):
     events(env, final())
     t0 = time.monotonic()

@@ -205,8 +205,8 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
 ## 6. 남은 일
 
 **사내 확인**(환경마다 짧은 스크립트 실행 1회, `MODULE_SKILLS_DECISIONS.md` "사내 토큰 최소"):
-0. 게이트웨이 프로토콜 — curl만으로 `/v1/messages` 스트리밍 `tool_use`.
-2. 호환 — `thinking`·`output_config.effort`·대화 중 `system`·베타 헤더 수용, 오류 본문 전달, 자격 변수(AUTH_TOKEN/API_KEY).
+0. 게이트웨이 프로토콜 — curl만으로 `/v1/messages` 스트리밍 `tool_use`(도구 강제와 자동 선택 `tool_choice: auto` 둘 — 실제 실행은 자동 선택이다).
+2. 호환 — `thinking`·`output_config.effort`·대화 중 `system`·베타 헤더 수용, 오류 본문 전달, 자격 변수(AUTH_TOKEN/API_KEY), 빈 폴더 `claude -p`의 Bash 1회.
 3. `usage` 토큰이 오는지(비용이 미상이라 토큰이 유일한 수치).
 5. 가장 큰 화면·must_show를 16K 출력 안에서 그대로 옮기는지.
 6. OpenCode Jira 읽기 — `site_step.py runtime-check opencode --project <설치 폴더> --jira <있는 키> --missing-key <없는 키>`

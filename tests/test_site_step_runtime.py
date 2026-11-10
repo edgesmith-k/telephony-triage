@@ -69,12 +69,16 @@ def rows_of(out: str) -> dict[str, tuple[str, str]]:
 def assert_check0_printed_only(out: str) -> None:
     assert "사내 확인 0" in out and 'curl -sS -N "$GW/v1/messages"' in out and '"stream":true' in out
     assert '"type":"tool_use"' in out and "이 도구는 실행하지 않는다" in out
+    # 런타임 리뷰 2: 강제와 자동 선택(실제 실행 모양) 둘
+    assert '"tool_choice":{"type":"tool","name":"get_time"}' in out and '"tool_choice":{"type":"auto"}' in out
+    assert out.count('curl -sS -N "$GW/v1/messages"') == 2
 
 
 def assert_oc_check0_printed_only(out: str) -> None:
     assert "사내 확인 0(OpenCode)" in out and "이 도구는 실행하지 않는다" in out
     assert 'curl -sS "$BASE/models"' in out and 'curl -sS -N "$BASE/chat/completions"' in out
     assert '"tool_choice":{"type":"function"' in out and '"stream":true' in out and "$TT_GATEWAY_API_KEY" in out
+    assert '"tool_choice":"auto"' in out and out.count('curl -sS -N "$BASE/chat/completions"') == 2
     assert "/v1/messages\"" not in out and "anthropic-version" not in out and "x-api-key" not in out
 
 

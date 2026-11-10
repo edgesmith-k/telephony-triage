@@ -23,7 +23,8 @@ CLI:
 
 `--project`가 없으면 `TT_OC_PROJECT`. 플러그인·작업 루트는 `<project>/tt-oc.json`(install이 쓴다)에서 읽는다.
 
-종료 코드: 0 = 끝남(막힌 호출 없음), 1 = 오류·마지막 글 없음, 2 = 사용 오류·거부·사전 점검 실패, 3 = 끝났지만 막힌 호출이 있음
+종료 코드: 0 = 끝남(막힌 호출 없음), 1 = 오류·마지막 글 없음·스크립트 출력 없음(`tt-analyze`·`tt-record`인데 스크립트 실행·화면
+기록이 하나도 없음 — `no-script-output`), 2 = 사용 오류·거부·사전 점검 실패, 3 = 끝났지만 막힌 호출이 있음
 (사용자가 출력된 명령을 직접 실행할 차례일 수 있다), 124 = 시간 초과.
 """
 
@@ -76,7 +77,11 @@ USER_CMD = re.compile(r"run this exact command yourself:\s*(.+)", re.DOTALL)
 WRITE_CMD = re.compile(r"(db_pr\.py\s+(publish|merge|request-review)|issue_post\.py\s+approve|skill_patch\.py\b.*--apply"
                        r"|module_eval\.py|\bgit\s+push\b|\bgh\s+pr\s+(merge|create|review)\b)")
 SHOWN_KINDS = ("report", "push", "post", "draft", "patch", "evidence")   # evidence: check-output 결과 줄(심층 첫 줄·근거 원문 검사, B2 R19, common.shown.LINE_KINDS)
-EXIT = {"ok": 0, "error": 1, "no-final-text": 1, "blocked": 3, "timeout": 124}
+EXIT = {"ok": 0, "error": 1, "no-final-text": 1, "no-script-output": 1, "blocked": 3, "timeout": 124}
+# 스크립트가 화면을 남기거나 돌아야 끝나는 커맨드(런타임 리뷰 2): 둘 다 없으면 ok가 아니라 no-script-output(도구 호출을 글로 내는
+# 게이트웨이면 에이전트가 스크립트 없이 "끝"을 낸다)
+SCRIPT_FLOWS = ("tt-analyze", "tt-record")
+PLUGIN_SCRIPT = re.compile(r"/scripts/[A-Za-z0-9_]+\.py\b")
 
 
 class Refused(Exception):
@@ -407,6 +412,19 @@ def judge(events: list[dict], code: int | None) -> dict:
             "errors": errors, "guard_warnings": warnings, "steps": steps, "tokens": tokens, "finish": finish, "exit": code}
 
 
+def ran_plugin_script(events: list[dict]) -> bool:
+    """플러그인 스크립트(`…/scripts/<이름>.py`)를 돌린 bash 호출이 하나라도 있는가(막힌·실패한 호출은 세지 않는다)."""
+    V = OCV
+    for ev in events:
+        part = ev.get(V.EV_PART) if isinstance(ev.get(V.EV_PART), dict) else {}
+        st = part.get(V.PART_STATE) if isinstance(part.get(V.PART_STATE), dict) else {}
+        inp = st.get(V.STATE_INPUT) if isinstance(st.get(V.STATE_INPUT), dict) else {}
+        if ev.get("type") == V.EV_TOOL_USE and part.get(V.PART_TOOL) == "bash" and st.get(V.STATE_STATUS) != V.STATUS_ERROR \
+                and PLUGIN_SCRIPT.search(str(inp.get("command") or "")):
+            return True
+    return False
+
+
 def _write_command(inp) -> list[str]:
     """설정 deny로 막힌 bash 호출이 안 A의 쓰기 명령(`WRITE_CMD`)이면 사용자가 직접 실행할 명령으로(workdir가 있으면 cd를 붙인다).
     그 밖의 막힌 명령(예: 로그 원문 읽기)은 사용자에게 권하지 않는다."""
@@ -547,6 +565,8 @@ def main(argv=None) -> int:
     events, raw, code, tail = run_opencode(cmd, cwd=proj, env=env, timeout=a.timeout, progress=not a.json)
     res = judge(events, code)
     recs, warn = shown_records(work_dirs_for(meta, a.work_dir), since)
+    if res["outcome"] == "ok" and a.oc_command in SCRIPT_FLOWS and not recs and not ran_plugin_script(events):
+        res["outcome"] = "no-script-output"
     deleted = None
     if a.delete_session and res["session"]:
         try:
@@ -580,6 +600,9 @@ def main(argv=None) -> int:
         print(f"guard 경고: {w}")
     for e in res["errors"]:
         print(f"오류: {e}")
+    if res["outcome"] == "no-script-output":
+        print(f"오류: {a.oc_command}가 스크립트를 한 번도 돌리지 않고(화면 기록 없음) 끝났다 — 모델이 도구 호출을 글로 냈을 수 있다. "
+              "site_step.py runtime-check opencode의 사내 확인 0 (c)(자동 선택 tool_calls)로 게이트웨이를 확인한다")
     if raw:
         print(f"JSON 아닌 출력 {len(raw)}줄(끝): {raw[-1][:300]}")
     if res["outcome"] in ("error", "timeout", "no-final-text") and tail.strip():

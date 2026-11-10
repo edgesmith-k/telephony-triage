@@ -75,8 +75,8 @@ python3 tools/site_step.py runtime-check claude-gateway
 
 | 번호 | 무엇 | 실행 | 통과 |
 |---|---|---|---|
-| 0 | 프로토콜 | 2.2 출력의 curl(`max_tokens:128`) | `content_block_start`에 `"type":"tool_use"` → `input_json_delta` → `message_stop` |
-| 2 | 호환 | 아래 curl 넷 + `claude -p` 1회 | 자격 헤더 하나 이상 200, `thinking` 수용(거부면 `DISABLE_THINKING=1`), 틀린 요청에 JSON 오류, CLI가 400 없이 끝남 |
+| 0 | 프로토콜 | 2.2 출력의 curl 둘(`max_tokens:128`, 도구 강제·자동 선택) | 둘 다 `content_block_start`에 `"type":"tool_use"` → `input_json_delta` → `message_stop`. 자동 선택에서 도구 호출이 글로만 나오면 실패(에이전트가 스크립트를 못 돌린다) |
+| 2 | 호환 | 아래 curl 넷 + `claude -p` 1회(Bash 1회 강제) | 자격 헤더 하나 이상 200, `thinking` 수용(거부면 `DISABLE_THINKING=1`), 틀린 요청에 JSON 오류, CLI가 400 없이 끝나고 `result`에 `tt-check`·`num_turns` 2 이상(도구를 실제로 불렀다) |
 | 3 | `usage` 토큰 | 같은 `claude -p` 출력 | 입력·출력 토큰 > 0. `costBasis: "unknown"`은 정상 |
 | 5 | 큰 화면 그대로 | 대화형 `--dry-run` 1건 | 리포트·must_show 줄이 글자 그대로(되돌리면 다음 답에서 전문) |
 
@@ -88,7 +88,8 @@ B='{"model":"'"$MODEL"'","max_tokens":16,"messages":[{"role":"user","content":"o
 c "${XK[@]}" -d "$B"; c "${BR[@]}" -d "$B"   # 자격 헤더 둘
 c "${XK[@]}" "${BR[@]}" -d '{"model":"'"$MODEL"'","max_tokens":2048,"thinking":{"type":"enabled","budget_tokens":1024},"messages":[{"role":"user","content":"ok"}]}'
 c "${XK[@]}" "${BR[@]}" -d '{"model":"'"$MODEL"'","messages":[]}'   # 일부러 틀린 요청
-(cd "$(mktemp -d)" && claude -p 'ok라고만 답해' --output-format json)   # 빈 폴더: 레포 CLAUDE.md를 싣지 않음
+(cd "$(mktemp -d)" && claude -p 'Bash 도구로 echo tt-check를 한 번 실행하고 그 출력만 답해' \
+   --allowedTools 'Bash(echo:*)' --output-format json)   # 빈 폴더: 레포 CLAUDE.md를 싣지 않음. 도구 호출 1회
 ```
 
 사내 확인 5는 대화형 `claude`(세션 기록 켬)에서 `> /telephony-triage:analyze <KEY> <마스킹된 로그> --dry-run`(아무것도 올리지 않음). `-p`에 `--no-session-persistence`를 쓰면 show_guard가 판정하지 못한다.
@@ -149,7 +150,7 @@ python3 tools/site_step.py runtime-check opencode --project <dest>
 
 - `tt-oc doctor` 행: `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만), warn `module-skills`·`read-roots`. fail이면 종료 2.
 - `runtime-check opencode`: 위 + 관리 설정(없으면 warn) + OpenCode용 사내 확인 0 curl(실행 안 함). fail이면 종료 1.
-- 사내 확인 0(OpenCode)은 OpenAI 호환 모양이다: (a) 토큰 0 `GET <baseURL>/models`에 모델 ID가 있는지, (b) 선택 `POST <baseURL>/chat/completions` 스트리밍 `tool_calls`. 설치한 `opencode.json`의 baseURL·모델을 채워 보이고 키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다.
+- 사내 확인 0(OpenCode)은 OpenAI 호환 모양이다: (a) 토큰 0 `GET <baseURL>/models`에 모델 ID가 있는지, (b) 선택 `POST <baseURL>/chat/completions` 스트리밍 `tool_calls`(도구 강제), (c) 같은 요청의 자동 선택(`tool_choice: "auto"` — 실제 실행 모양, 도구 호출이 `content` 글로만 나오면 실패). 설치한 `opencode.json`의 baseURL·모델을 채워 보이고 키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다.
 
 ### 3.3 에이전트 규칙 확인 (짧은 실행 1~2회)
 
@@ -162,7 +163,7 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
 
 - `--dry-run` 한 번으로 리포트와 확인 화면을 다 본다. lock owner는 환경 변수로 줄 수 없어(허용 목록이 대입을 거부) analyze 작업의 `db_pr`·`db_verify`가 작업 상태(`triage-state.json`)에서 읽는다. analyze 밖의 쓰기 흐름(`tt-record` 등)은 OpenCode에서 lock(`lock owner 불일치`)에서 멈춘다 — Claude Code에서 한다. tt-oc 옵션(`--delete-session`·`-s` 등)은 **`--` 앞에** 둔다 — 뒤에 두면 모델에게 가는 메시지가 된다.
 
-- 종료 0(끝남)이나 3(막힌 호출 — 사용자 차례). 1·2·124면 그대로 보고한다.
+- 종료 0(끝남)이나 3(막힌 호출 — 사용자 차례). 1·2·124면 그대로 보고한다. `tt-analyze`·`tt-record`가 스크립트를 한 번도 돌리지 않고(화면 기록도 없이) 끝나면 `outcome: no-script-output`·종료 1이다 — 도구 호출을 글로 내는 게이트웨이를 의심하고 3.2 사내 확인 0 (c)를 본다.
 - 래퍼가 표시 기록(report·must_show·근거 검사 줄)을 그대로 출력한다.
 - 막힌 호출은 `[telephony-triage]`·"run this exact command yourself: …"가 그대로 나오고, 모델이 다른 모양으로 재시도하지 않는다.
 - 질문은 번호 선택지로 끝난다 → `tt-oc --project <dest> -s <세션> -- <번호>`. 마지막 이어가기에 붙인다: `tt-oc --project <dest> -s <세션> --delete-session -- <번호>`(이어가기가 없으면 첫 실행의 `--` 앞에).
