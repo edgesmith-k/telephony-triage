@@ -501,6 +501,28 @@ def test_prefixed_credential_keys():
     assert masking.new_masker()("password=true") == "password=<CRED#1>"     # 접두 없는 키는 전과 같다
 
 
+def test_ril_cid_and_token_values_are_kept():
+    """RIL이 찍는 데이터 콜 `cid`(대소문자 무관, 객체 안·밖)와 요청 token(짧은 숫자, 접두 키 포함)은 분석에 쓰므로
+    ASCII 경계·접두 키를 넓힌 뒤에도 가리지 않는다(사용자 요구). 자바 객체 표기 token 값도 둔다. 긴 인증 토큰은 가린다.
+    (RILJ·벤더 RIL 모양을 본뜬 합성 줄)"""
+    keep = [
+        "cid=1", "Cid=2", "CID=3", "cid: 4", "CID: 5", '{"cid":12}', '"Cid": 7', "연결cid=2로", "데이터 콜 CID 3에서",
+        "[0605]< SETUP_DATA_CALL DataCallResponse: { cause=NONE retry=-1 cid=1 linkStatus=2 ifname=rmnet_data0 }",
+        "SetupDataCallResult{.cause = NONE, .cid = 1, .active = 2}",
+        "token=612", "token: 0042", "token=0x29", "Token=7", "TOKEN=1234", "mToken=41", "rilToken=1234", "reqToken: 0x1f",
+        "req_token=4294967295", "rilToken=0x0000002a,", "요청token=612로", "mToken=41)",
+        "[0605]> SETUP_DATA_CALL serial=605 token=605 apn=placeholder", "VRIL_SOCK: resp token=41 serial=41",
+        "EventLogger: setModeOwnerToken: android.os.Binder@1a2b3c4 -> [1000(com.android.phone)]",
+    ]
+    for text in keep:
+        for log_lines in (False, True):
+            assert masking.new_masker(log_lines=log_lines)(text) == text, (log_lines, text)
+        assert masking.new_masker().find(text) == [], text
+    auth = "authToken=" + "Ab1" * 14
+    assert masking.new_masker()(auth) == "authToken=<CRED#1>"
+    assert masking.new_masker()("인증token=ab12cd34ef로 보냄") == "인증token=<CRED#1>로 보냄"   # 값은 조사 앞까지
+
+
 def test_mask_pii_check_reports_hangul_glued():
     """`mask_pii --check`(기본 마스커)도 한글 조사가 붙은 값을 낸다(값은 내지 않는다)."""
     raw = _write([text for text, _, _ in HANGUL_GLUED] + ["mPassword=hunter2x 접두 키"], name="glued.txt")

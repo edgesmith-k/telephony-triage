@@ -332,10 +332,13 @@ _BASE_RULES: tuple[Rule, ...] = (
     # 대문자 열거형이 아닐 때만(글자뿐·숫자뿐인 값은 놓친다)
     Rule("CRED", re.compile(r'(?i)(?<=[a-z0-9_])(?:password|passwd|pwd|secret)' + _SEP + r'(?P<v>(?u:[^\s",;=])+)'),
          check=lambda v: _pass_like(v) and _alnum_mixed(v), gate=("password", "passwd", "pwd", "secret")),
-    # `token`은 짧은 숫자 값(RIL 요청 token `token=612`·`token: 0042`, `0x29`)을 빼고 본다. 긴 인증 토큰은 그대로
-    Rule("CRED", re.compile(r'(?i)\btoken' + _SEP + r'(?P<v>(?u:[^\s",;])+)'), check=_token_secret, gate=("token",)),
-    Rule("CRED", re.compile(r'(?i)(?<=[a-z0-9_])token' + _SEP + r'(?P<v>(?u:[^\s",;=])+)'),   # `authToken=` (접두 키, 위 둘과 같다)
-         check=lambda v: _token_secret(v) and _pass_like(v) and _alnum_mixed(v), gate=("token",)),
+    # `token`은 짧은 숫자 값(RIL 요청 token `token=612`·`token: 0042`, `0x29`)을 빼고 본다. 긴 인증 토큰은 그대로.
+    # 값은 ASCII까지다 — 붙은 조사(`token=612로`)를 값에 넣으면 짧은 숫자로 보지 못한다
+    Rule("CRED", re.compile(r'(?i)\btoken' + _SEP + r'(?P<v>[^\s",;\x80-\U0010ffff]+)'), check=_token_secret, gate=("token",)),
+    # `authToken=` (접두 키, 위 둘과 같다). RIL token(`mToken=41`·`reqToken: 0x1f`)은 위처럼 짧은 숫자라 둔다.
+    # 자바 객체 표기 값(AudioService `setModeOwnerToken: <클래스>@<hex>`)은 비밀값이 아니라 `@`가 든 값도 둔다
+    Rule("CRED", re.compile(r'(?i)(?<=[a-z0-9_])token' + _SEP + r'(?P<v>[^\s",;=\x80-\U0010ffff]+)'),
+         check=lambda v: _token_secret(v) and _pass_like(v) and _alnum_mixed(v) and "@" not in v, gate=("token",)),
     Rule("CRED", re.compile(r'(?i)\b(?:api[_-]?key|key)' + _SEP + r'(?P<v>[A-Za-z0-9+/=_-]+)'),
          check=_secretish),
     # AKA 키 (대소문자 구분: 소문자 `ok=`·`ik` 섞인 문구를 피한다; Kc 64비트 = 16 hex가 하한)
