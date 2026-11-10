@@ -125,10 +125,16 @@ GATEWAY_MODEL_KEYS = ("ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_
 # 프로필·서버 관리 설정은 읽지 않는다(행에 그렇게 적는다).
 MANAGED_SETTINGS_DIR = (Path("/Library/Application Support/ClaudeCode") if sys.platform == "darwin"
                         else Path(r"C:\Program Files\ClaudeCode") if os.name == "nt" else Path("/etc/claude-code"))
+MANAGED_DIR_ENV = "TT_CLAUDE_MANAGED_DIR"   # 관리 설정 폴더를 바꾼다(시험이 개발 PC의 관리 설정에 흔들리지 않게)
 
 
-def managed_settings_files() -> list[Path]:
-    base = MANAGED_SETTINGS_DIR
+def managed_settings_dir(env: dict[str, str] | None = None) -> Path:
+    raw = (env or {}).get(MANAGED_DIR_ENV) or os.environ.get(MANAGED_DIR_ENV)
+    return Path(raw) if raw else MANAGED_SETTINGS_DIR
+
+
+def managed_settings_files(env: dict[str, str] | None = None) -> list[Path]:
+    base = managed_settings_dir(env)
     return [p for p in (base / "managed-settings.json", *sorted((base / "managed-settings.d").glob("*.json"))) if p.is_file()]
 
 
@@ -136,7 +142,7 @@ def gateway_profile_check(env: dict[str, str]) -> list[dict]:
     """게이트웨이 프로필 점검 행 [{key, status, detail}] (status: ok | missing | differs | info). 프로세스 환경 위에 사용자
     settings.json env 블록, 그 위에 관리 설정 env 블록을 얹은 값을 본다(본 곳은 `env_sources` 행). 비밀 값(주소·키)은 행에 넣지 않는다."""
     top, settings_env = user_auth_settings(env)
-    managed = managed_settings_files()
+    managed = managed_settings_files(env)
     for path in managed:
         m_top, m_env = _auth_settings(path)
         top, settings_env = {**top, **m_top}, {**settings_env, **m_env}
@@ -146,7 +152,7 @@ def gateway_profile_check(env: dict[str, str]) -> list[dict]:
     def add(key, status, detail):
         rows.append({"key": key, "status": status, "detail": detail})
     add("env_sources", "info", f"프로세스 환경, {_user_settings_path(env)}, 관리 설정 "
-        + (", ".join(map(str, managed)) if managed else f"{MANAGED_SETTINGS_DIR}/managed-settings.json(.d) 없음")
+        + (", ".join(map(str, managed)) if managed else f"{managed_settings_dir(env)}/managed-settings.json(.d) 없음")
         + " (레지스트리·MDM·서버 관리 설정은 보지 않는다)")
     base_url = eff.get("ANTHROPIC_BASE_URL")
     if not base_url:

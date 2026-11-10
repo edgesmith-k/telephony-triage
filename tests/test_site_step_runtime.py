@@ -48,7 +48,8 @@ def _base_env(tmp: Path) -> dict:
     env = {k: v for k, v in os.environ.items()
            if not k.startswith(("ANTHROPIC_", "CLAUDE_CODE_", "OPENCODE_", "TT_OC", "TT_OPENCODE"))}
     (tmp / "home").mkdir(exist_ok=True)
-    env.update(HOME=str(tmp / "home"), XDG_CONFIG_HOME=str(tmp / "home" / ".config"), CLAUDE_CONFIG_DIR=str(tmp / "conf"))
+    env.update(HOME=str(tmp / "home"), XDG_CONFIG_HOME=str(tmp / "home" / ".config"), CLAUDE_CONFIG_DIR=str(tmp / "conf"),
+               TT_CLAUDE_MANAGED_DIR=str(tmp / "no-managed"))      # 개발 PC의 Claude Code 관리 설정을 읽지 않게
     return env
 
 

@@ -87,11 +87,28 @@ def test_gateway_profile_check_rows(tmp_path):
     assert empty["ANTHROPIC_BASE_URL"] == "missing" and empty["credential"] == "missing"
 
 
+def test_host_managed_settings_do_not_leak_into_tests(tmp_path, monkeypatch):
+    """2차 P2-3: 개발 PC에 관리 설정이 깔려 있어도(OS 기본 폴더를 흉내) conftest의 TT_CLAUDE_MANAGED_DIR 때문에 읽지 않는다."""
+    host = tmp_path / "host"
+    host.mkdir()
+    (host / "managed-settings.json").write_text(json.dumps({"env": {"ANTHROPIC_BASE_URL": "https://gw.invalid"}}),
+                                                encoding="utf-8")
+    monkeypatch.setattr(cc, "MANAGED_SETTINGS_DIR", host)
+    assert os.environ.get(cc.MANAGED_DIR_ENV)
+    rows = {r["key"]: r["status"] for r in cc.gateway_profile_check({"CLAUDE_CONFIG_DIR": str(tmp_path / "none")})}
+    assert rows["ANTHROPIC_BASE_URL"] == "missing"
+
+
 def test_gateway_profile_models_base_url_and_managed_settings(tmp_path, monkeypatch):
     """런타임 리뷰 5: 보조 호출 모델(ANTHROPIC_DEFAULT_*·CLAUDE_CODE_SUBAGENT_MODEL)이 ANTHROPIC_MODEL과 같은지, BASE_URL 끝 /v1,
     관리 설정(managed-settings.json·.d)의 env도 본다 — 본 곳은 env_sources 행. 비밀 값은 행에 없다."""
     managed = tmp_path / "managed"
-    monkeypatch.setattr(cc, "MANAGED_SETTINGS_DIR", managed)
+    monkeypatch.setenv(cc.MANAGED_DIR_ENV, str(managed))       # conftest가 없는 폴더로 둔 것을 이 시험만 바꾼다
+    # 2차 P2-3: 덮어쓰기가 없으면 OS 기본 폴더, 있으면 그 폴더(호출 env가 프로세스 환경보다 앞선다)
+    assert cc.managed_settings_dir({cc.MANAGED_DIR_ENV: "/x"}) == Path("/x") and cc.managed_settings_dir() == managed
+    monkeypatch.delenv(cc.MANAGED_DIR_ENV)
+    assert cc.managed_settings_dir({}) == cc.MANAGED_SETTINGS_DIR
+    monkeypatch.setenv(cc.MANAGED_DIR_ENV, str(managed))
     conf = tmp_path / "conf"
     _settings(conf, {"env": {"ANTHROPIC_MODEL": "glm-x", "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-x",
                              "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-x"}})
