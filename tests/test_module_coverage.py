@@ -181,3 +181,32 @@ def test_logs_dir_expansion_skips_symlinks(tmp_path):
     assert [p.name for p in mc.expand_logs([d], "android")] == ["info.txt", "journal.log", "syslog.masked"]
     with pytest.raises(mc.UsageError):
         mc.expand_logs([tmp_path / "nope"])
+
+
+def test_spec_uses_site_ipc_prefix(tmp_path, monkeypatch):
+    """모듈 필터 spec은 site-defaults `request_prefix`로 만든다(같은 보고서의 module_measure.coverage와 같은 표)."""
+    seen = []
+    monkeypatch.setattr(module_measure, "_ipc_prefix", lambda args, platform=None: "SMSG_")
+
+    def stop(doc, platform, prefix=None):
+        seen.append(prefix)
+        raise mc.UsageError("멈춤")
+
+    monkeypatch.setattr(mc.mf, "compile_spec", stop)
+    modules = tmp_path / "modules.yaml"
+    modules.write_text("schema_version: 2\n", encoding="utf-8")
+    with pytest.raises(mc.UsageError):
+        mc.platform_report(modules, "ofono", [tmp_path / "x.log"], tmp_path)
+    assert seen == ["SMSG_"]
+
+
+def test_ipc_prefix_bad_site_defaults_yaml_is_usage_error(tmp_path):
+    """깨진 site-defaults는 traceback 아닌 사용 오류. 플랫폼을 따로 줄 수 있다(episodes)."""
+    (tmp_path / "site-defaults.yaml").write_text("platform: [unclosed\n", encoding="utf-8")
+    with pytest.raises(module_measure.UsageError, match="site-defaults YAML"):
+        module_measure._ipc_prefix(mc._ns(platform="ofono", plugin_root=str(tmp_path)))
+    ipc = {"context": "SiteCtx_", "complete": "SiteDone", "request_prefix": "SMSG_", "error_prefix": "SRES_",
+           "success": "SRES_DONE"}
+    (tmp_path / "site-defaults.yaml").write_text(yaml.safe_dump({"platform": {"others": {"ofono": {"vendor_ipc": ipc}}}}),
+                                                 encoding="utf-8")
+    assert module_measure._ipc_prefix(mc._ns(platform="android", plugin_root=str(tmp_path)), "ofono") == "SMSG_"

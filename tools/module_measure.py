@@ -54,7 +54,8 @@ class UsageError(Exception):
 # -- coverage --------------------------------------------------------------------------------------------------------
 
 def _root(args) -> Path:
-    return Path(args.plugin_root) if args.plugin_root else REPO / "plugin"
+    root = getattr(args, "plugin_root", None)
+    return Path(root) if root else REPO / "plugin"
 
 
 def _parse(log: Path, args) -> dict:
@@ -104,9 +105,9 @@ def _rules(rules_dir: str | None):
     return parser_rules.load(Path(rules_dir))
 
 
-def _ipc_prefix(args) -> str | None:
+def _ipc_prefix(args, platform: str | None = None) -> str | None:
     """site-defaults `vendor_ipc.request_prefix`(모듈 필터의 IPC 이름 접두어, `triage.py module`과 같다). 파일이 없으면 None
-    (placeholder 기본)."""
+    (placeholder 기본). 파일이 깨졌거나 설정이 틀리면 사용 오류."""
     import platforms
     from common import site_defaults
 
@@ -114,8 +115,10 @@ def _ipc_prefix(args) -> str | None:
         defaults = site_defaults.load(_root(args))
     except site_defaults.SiteDefaultsMissing:
         return None
+    except yaml.YAMLError as exc:
+        raise UsageError(f"site-defaults YAML({_root(args)}): {type(exc).__name__}") from exc
     try:
-        return platforms.load(defaults, args.platform, require_enabled=False).vendor_ipc.request_prefix
+        return platforms.load(defaults, platform or args.platform, require_enabled=False).vendor_ipc.request_prefix
     except platforms.PlatformConfigError as exc:
         raise UsageError(f"site-defaults platform 설정({_root(args)}): {exc}") from exc
 
@@ -300,7 +303,8 @@ def episodes(args) -> dict:
         k = (log, key)
         if k not in cache:
             events = json.loads((Path(args.runs) / RUNS[log] / "job" / "events.json").read_text(encoding="utf-8"))
-            spec = mf.compile_spec(doc, "android" if log == "A" else "ofono")
+            platform = "android" if log == "A" else "ofono"
+            spec = mf.compile_spec(doc, platform, _ipc_prefix(args, platform))
             rows = mf.rows_of(events)
             mf.label(spec, rows)
             cache[k] = (spec, rows)
