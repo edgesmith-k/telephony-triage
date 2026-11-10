@@ -1090,14 +1090,6 @@ def brief_rules(result: dict) -> dict:
     return {**result, "rules": slim, "folded": FOLDED}
 
 
-def owner_job(argv: list[str]) -> tuple[str, str] | None:
-    """lock owner를 보는 호출(`--draft <dir>` — make_draft의 `_check_lock`)이면 `("wt", <draft 경로>)`, 아니면 None. 인자 오류는
-    argparse 그대로 SystemExit."""
-    args = build_parser().parse_known_args(argv)[0]
-    draft = getattr(args, "draft", None)
-    return ("wt", draft) if draft else None
-
-
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--db", default=argparse.SUPPRESS)

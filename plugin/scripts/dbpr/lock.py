@@ -220,36 +220,18 @@ def state_owner(work_dir: Path, job: str) -> str | None:
     return owner if isinstance(owner, str) and owner else None
 
 
-def handoff_owner(target: tuple[str, str] | None, work_root: Path, cwd: Path | None) -> dict:
-    """tt-oc가 사용자에게 터미널에서 돌리라고 보이는 `db_pr`·`db_verify` 명령의 lock owner(런타임 리뷰 4차).
+def handoff_owner(work_dir: Path) -> dict:
+    """tt-oc가 터미널로 넘기는 명령에 붙일 lock owner(런타임 리뷰 3·6차). 모델 명령 인자가 아니라 `work_dir`의 session.lock에서 읽는다.
 
-    `target`은 그 스크립트의 `owner_job(인자)`. `{"checks": 그 하위 명령이 owner를 보는가, "job", "work_dir", "owner"}`. owner는
-    그 작업의 `triage-state.json` owner(`state_owner`)가 **지금 그 작업이 쥔 session.lock의 owner와 같을 때만** 준다(이어받은 뒤의
-    옛 owner·다른 작업·lock 없음이면 None). 경로 인자는 `cwd`(명령의 `cd` 대상) 기준이고, work_dir는 작업 루트나 그 바로 아래만 본다.
-    db_pr·db_verify는 여기서 import하지 않는다(dbpr가 db_pr의 구현 패키지로 남게 — tools/related_tests.py)."""
-    if target is None:
-        return {"checks": False}
-    kind, value = target
-    root = Path(os.path.normpath(work_root))
-    if kind == "job":
-        work_dir, job = root, value
-    else:
-        path = Path(value)
-        if not path.is_absolute():
-            if cwd is None:
-                return {"checks": True, "job": None, "work_dir": None, "owner": None}
-            path = Path(cwd) / path
-        path = Path(os.path.normpath(path))
-        work_dir, job = path.parent.parent, path.parent.name
-    if work_dir != root and work_dir.parent != root:
-        return {"checks": True, "job": None, "work_dir": None, "owner": None}
-    owner = state_owner(work_dir, job)
+    `{"work_dir", "job": 지금 lock을 쥔 작업(없으면 None), "owner"}`. owner는 그 작업의 `triage-state.json` owner(`state_owner`)가
+    **lock의 owner와 같을 때만** 준다(이어받은 뒤의 옛 owner·상태 없음·lock 없음·깨진 lock이면 None)."""
     try:
         held = session_lock.describe(session_lock.read(work_dir))
     except session_lock.LockError:
         held = None
-    mine = bool(owner and held and held.get("job") == job and held.get("owner") == owner)
-    return {"checks": True, "job": job, "work_dir": str(work_dir), "owner": owner if mine else None}
+    job = held.get("job") if held else None
+    owner = state_owner(work_dir, job) if job else None
+    return {"work_dir": str(work_dir), "job": job, "owner": owner if owner and held.get("owner") == owner else None}
 
 
 def _oc_hint() -> str:

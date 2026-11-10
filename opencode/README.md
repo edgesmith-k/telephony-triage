@@ -53,10 +53,15 @@ opencode/bin/tt-oc --project <dest> -s <세션> -- 2          # 질문에 답하
 - 결과는 이벤트로 판정한다: 0 끝남, 1 오류·마지막 글 없음·출력 한도에서 잘림(`length`)·에이전트 스텝 한도(`step-limit`)·스크립트 출력 없음(`tt-analyze`·`tt-record`가 스크립트를 한 번도 돌리지 않음, `no-script-output`), 2 거부·점검 실패, 3 막힌 호출 있음, 124 시간 초과(첫 응답이 120초 안에 없으면 그때 멈춘다 — `no-response`, 게이트웨이 점검 안내. 시한은 `--first-timeout <초>`·`TT_OC_FIRST_TIMEOUT`, 0이면 끔).
 - 결과 줄에 끝난 이유(`finish`)를 보이고, 토큰 사용량이 0이면 주의 한 줄(게이트웨이가 스트리밍 usage를 안 줄 때).
 - 이번 실행에서 스크립트가 남긴 화면(`<work_dir>/.shown/log.jsonl`)은 모델을 거치지 않고 래퍼가 그대로 출력한다.
-- "직접 실행" 절의 `db_pr`·`db_verify` 명령에는 그 작업(`<work_dir>/<KEY>/wt|draft`, `--job <KEY>`)의 `triage-state.json` owner를 `TT_LOCK_OWNER=…`로 붙이고 줄 끝에 어느 작업의 owner인지 적는다(`dbpr.lock.handoff_owner`). 붙이는 때: owner를 보는 하위 명령(`db_pr.OWNER_CMDS`·`lock release`, `db_verify --draft`)이고, `[cd <dir> &&] python3 …/db_pr.py …` 한 명령이며, 그 owner가 지금 그 작업이 쥔 `session.lock` owner와 같을 때. 작업 루트 밖 경로는 읽지 않는다. 여러 명령이 이어졌거나 owner가 맞지 않으면 접두 없이 `주의:` 한 줄, `merge`·`request-review`처럼 owner를 보지 않는 하위 명령은 그대로. 조회 하위 프로세스는 플러그인 `scripts` 폴더에서 `PYTHONPATH`류 없이 돈다(작업 폴더에 심은 모듈을 import하지 않는다).
-  채운 줄은 모델 글이 아니라 읽은 낱말을 `shlex.quote`로 다시 싸서 만든다(검사한 그 명령, 아무것도 풀리지 않음). 다시 싸면 뜻이 바뀔
-  수 있는 글자(`$`·백틱·`\`·`!`·글롭·`~`·`#`)가 있으면 채우지 않고 안내, 인자 오류면 "사용 오류로 멈춘다" 안내. 그 밖의 명령은 모델
-  글 그대로라(다시 싸면 연산자·변수의 뜻이 바뀐다) `$`·백틱·`!`가 있으면 앞에 `# ↓ 모델이 만든 명령 — … 확인 후 실행` 줄을 둔다.
+- "직접 실행" 절의 명령은 모델이 만든 그대로다 — tt-oc는 고치거나 접두를 붙이지 않는다. 모델 글은 줄마다 `  │ ` 뒤에 내고
+  (tt-oc 자신의 줄은 이것으로 시작하지 않는다), 줄바꿈은 `⏎`, 그 밖의 제어 문자(CR·ESC·C1·줄 구분·양방향 제어)는 `\xNN`·`\uNNNN`로
+  보인다. 최종 답·막힌 호출 전문도 같다. 명령에 `$`·백틱·`!`가 있으면 그 앞에 `↓ 모델이 만든 명령 — … 확인 후 실행` 줄.
+  `--json`은 제어 문자를 모두 JSON 이스케이프한다.
+- lock owner가 필요한 명령(`db_pr.OWNER_CMDS`·`lock release`(--force 없음)·`db_verify --draft`)이 있으면 tt-oc가 자기 줄로
+  `주의: 터미널에서는 위 N번째 명령의 db_pr 앞에 TT_LOCK_OWNER=<owner> 를 붙인다 — 작업 <KEY>의 session.lock owner`를 낸다. 명령을
+  복사하고 그 접두를 붙여 실행한다. owner는 모델 명령 인자가 아니라 지금 `session.lock`을 쥔 작업에서 읽고, 그 작업의
+  `triage-state.json` owner가 lock owner와 같을 때만 알린다(`dbpr.lock.handoff_owner`). 아니면 owner가 있는 곳과 `lock owner 불일치`로
+  멈춘다는 안내. 조회 하위 프로세스는 플러그인 `scripts` 폴더에서 `PYTHONPATH`류 없이 돈다(작업 폴더에 심은 모듈을 import하지 않는다).
 - TUI(`opencode`)는 자유 탐색만 — 표시 보장이 없다.
 - 끝난 세션은 `--delete-session`으로 지운다(`~/.local/share/opencode/opencode.db`에 도구 출력이 남는다).
 

@@ -166,7 +166,7 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
 
 - 종료 0(끝남)이나 3(막힌 호출 — 사용자 차례). 1·2·124면 그대로 보고한다. `tt-analyze`·`tt-record`가 스크립트를 한 번도 돌리지 않고(화면 기록도 없이) 끝나면 `outcome: no-script-output`·종료 1이다 — 도구 호출을 글로 내는 게이트웨이를 의심하고 3.2 사내 확인 0 (c)를 본다. 결과 줄의 `finish`가 `length`면 `outcome: length`(출력 한도 16000에서 잘림), 에이전트 `steps` 한도(50)에 닿으면 `step-limit` — 둘 다 종료 1. 토큰이 0이면 `주의:` 줄(사내 확인 3).
 - 래퍼가 표시 기록(report·must_show·근거 검사 줄)을 그대로 출력한다.
-- 막힌 호출은 `[telephony-triage]`·"run this exact command yourself: …"가 그대로 나오고, 모델이 다른 모양으로 재시도하지 않는다. 터미널로 넘기는 `db_pr`·`db_verify` 명령에는 tt-oc가 그 작업의 `triage-state.json` owner를 `TT_LOCK_OWNER=…`로 채운다(터미널에는 OpenCode 안의 작업 상태 대체가 없다. 모델이 돌리는 명령에는 넣지 않는다). 그 owner가 지금 그 작업이 쥔 `session.lock` owner와 같고, owner를 보는 하위 명령이며, 한 명령일 때만 채우고 줄 끝에 작업 키를 적는다. 아니면 `주의:` 줄로 owner 위치를 알린다.
+- 막힌 호출은 `[telephony-triage]`·"run this exact command yourself: …"가 그대로 나오고, 모델이 다른 모양으로 재시도하지 않는다. 터미널로 넘기는 명령은 모델이 만든 그대로 `  │ ` 뒤에 나온다(제어 문자는 보이는 이스케이프). lock owner가 필요한 `db_pr`·`db_verify` 명령이 있으면 tt-oc가 `주의:` 줄로 붙일 `TT_LOCK_OWNER=<owner>`와 그 작업을 알린다(터미널에는 OpenCode 안의 작업 상태 대체가 없다) — 명령을 복사하고 그 접두를 붙여 실행한다. owner는 지금 `session.lock`을 쥔 작업의 것이 확인될 때만 알리고, 아니면 owner 위치를 알린다.
 - 질문은 번호 선택지로 끝난다 → `tt-oc --project <dest> -s <세션> -- <번호>`. 마지막 이어가기에 붙인다: `tt-oc --project <dest> -s <세션> --delete-session -- <번호>`(이어가기가 없으면 첫 실행의 `--` 앞에).
 
 ### 3.4 Jira 읽기 관문 열기

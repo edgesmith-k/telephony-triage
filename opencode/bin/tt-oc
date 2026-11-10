@@ -542,37 +542,28 @@ def _write_command(inp) -> list[str]:
     return [f"cd {shlex.quote(str(wd))} && {cmd}" if wd else cmd]
 
 
-# -- 터미널로 넘기는 db_pr·db_verify 명령의 lock owner (런타임 리뷰 3차 R2-P2-1) -----------------------------------------
+# -- 터미널로 넘기는 db_pr·db_verify 명령의 lock owner (런타임 리뷰 3·6차) -------------------------------------------------
 # OpenCode 안에서는 스크립트가 작업 상태에서 owner를 읽지만(TT_RUNTIME=opencode), 사용자가 터미널에서 돌리면 그 대체가 없어 `lock owner
-# 불일치`로 멈춘다. 그래서 출력하는 명령에만 `TT_LOCK_OWNER=<owner>`를 채운다(모델이 돌리는 명령에는 넣지 않는다 — 어댑터 그대로).
+# 불일치`로 멈춘다. tt-oc는 모델 명령을 고치거나 접두를 붙이지 않는다(6차 — 모델이 고른 낱말을 tt-oc가 보증하게 된다). 대신 owner가
+# 필요한 명령이 있으면 자기 줄(`주의:`)로 붙일 owner를 알린다. owner는 모델 명령 인자가 아니라 지금 session.lock을 쥔 작업에서 읽는다
+# (`dbpr.lock.handoff_owner`: 그 작업의 triage-state.json owner가 lock owner와 같을 때만). 모델 글은 owner가 필요한 하위 명령인지
+# 가르는 데만 본다(`db_pr.OWNER_CMDS` — 코드에서 나온 목록, `lock release`(--force 없음), `db_verify --draft`).
 OWNER_SCRIPTS = re.compile(r"\b(db_pr|db_verify)\.py\b")
-_CD_HEAD = re.compile(r"""^cd\s+("[^"]*"|'[^']*'|\S+)\s*&&\s*""")
-# owner 판정은 플러그인 코드(`dbpr.lock.handoff_owner` — 하위 명령 판별은 각 스크립트 `owner_job`, owner는 `state_owner`와
-# session.lock 대조). 하위 프로세스는 cwd를 플러그인 scripts 폴더로 두고 PYTHONPATH류를 뺀다: `-c`는 cwd를 import 경로 맨 앞에
-# 두는데, 사용자가 tt-oc를 모델이 쓸 수 있는 작업 폴더에서 돌리면 거기 심은 `pathlib.py` 등이 guard 밖에서 돈다(4차 R3-P1-1).
-# 인자를 argparse가 거부하면(SystemExit) {"checks": True, "usage_error": True}, `--help`(종료 0)는 owner를 보지 않는 것으로.
+# 하위 프로세스는 cwd를 플러그인 scripts 폴더로 두고 PYTHONPATH류를 뺀다: `-c`는 cwd를 import 경로 맨 앞에 두는데, 사용자가 tt-oc를
+# 모델이 쓸 수 있는 작업 폴더에서 돌리면 거기 심은 `pathlib.py` 등이 guard 밖에서 돈다(4차 R3-P1-1).
 HANDOFF_CODE = "\n".join((
-    "import contextlib, importlib, io, json, sys",
+    "import json, sys",
     "from pathlib import Path",
     "sys.path.insert(0, sys.argv[1])",
+    "from db_pr import OWNER_CMDS",
     "from dbpr.lock import handoff_owner",
-    "try:",
-    "    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):",
-    "        target = importlib.import_module(sys.argv[2]).owner_job(json.loads(sys.argv[3]))",
-    "except SystemExit as exc:",
-    "    print(json.dumps({'checks': bool(exc.code), 'usage_error': bool(exc.code)}))",
-    "else:",
-    "    print(json.dumps(handoff_owner(target, Path(sys.argv[4]), Path(sys.argv[5]) if sys.argv[5] else None)))",
+    "print(json.dumps({'owner_cmds': list(OWNER_CMDS), 'held': [handoff_owner(Path(w)) for w in sys.argv[2:]]}))",
 ))
-# 채운 줄은 읽은 낱말을 다시 따옴표로 싸서 만든다(5차 R4-P2-1). 이 글자가 있으면 다시 싸는 것이 bash와 뜻이 달라질 수 있어(`$( )`·
-# 백틱·`\`·`!`·글롭·`~`·주석) 채우지 않는다. EXPANSION은 그대로 내보내는 모델 명령 앞에 확인 표시를 붙이는 기준(명령 치환·변수·히스토리)
-FILL_UNSAFE = re.compile(r"[$`\\!*?\[\]{}~#\n]")
-EXPANSION = re.compile(r"[$`!]")
-MODEL_CMD_MARK = "# ↓ 모델이 만든 명령 — 셸 확장(`$`·백틱·`!`)이 있어 붙여 넣으면 셸이 먼저 푼다. 확인 후 실행"
 # import 경로·시작 코드·바이트코드 위치를 바꾸는 변수. owner 판정 하위 프로세스에는 넘기지 않는다
 UNSAFE_PY_ENV = ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONINSPECT", "PYTHONSAFEPATH", "PYTHONEXECUTABLE",
                  "PYTHONPYCACHEPREFIX")
-_OPERATOR = re.compile(r"[();<>|&]+")
+_OWNER_RE = re.compile(r"[A-Za-z0-9_-]+")
+_JOB_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
 
 
 def _lookup_env(root: Path) -> dict:
@@ -585,82 +576,86 @@ def _lookup_env(root: Path) -> dict:
     return env
 
 
-def _split_handoff(cmd: str) -> tuple[str | None, list[str], str, list[str], bool] | None:
-    """(cd 대상, 나머지의 셸 낱말, 스크립트 모듈 이름(db_pr|db_verify), 그 스크립트 인자, 한 명령인가). 한 명령 = `[cd <dir> &&] python3
-    <…>/db_pr.py|db_verify.py <인자…>`이고 다른 명령(`;`·`&&`·`|`·리디렉션·줄바꿈 등)이 없다. 셸 낱말로 못 읽거나 그 스크립트가 없으면 None."""
-    m = _CD_HEAD.match(cmd)
-    rest = cmd[m.end():] if m else cmd
-    try:
-        base = shlex.split(m.group(1))[0] if m else None
-        lex = shlex.shlex(rest, posix=True, punctuation_chars=True)
-        lex.whitespace_split = True
-        words = list(lex)
-    except ValueError:
-        return None
-    at = next((i for i, w in enumerate(words) if Path(w).name in ("db_pr.py", "db_verify.py")), None)
-    if at is None:
-        return None
-    end = next((i for i in range(at + 1, len(words)) if _OPERATOR.fullmatch(words[i])), len(words))
-    simple = (at == 1 and words[0] in ("python3", "python") and end == len(words) and "\n" not in rest
-              and not any(_OPERATOR.fullmatch(w) for w in words))
-    return base, words, Path(words[at]).stem, words[at + 1:end], simple
+def _owner_script(cmd: str, owner_cmds) -> str | None:
+    """명령 안 `db_pr.py`·`db_verify.py` 뒤 낱말로 owner가 필요한지만 본다(대략 — 틀리면 안내 한 줄이 더하거나 빠질 뿐, 명령은 건드리지
+    않는다). owner_cmds가 None(조회 실패)이면 두 스크립트 모두 필요한 것으로 본다."""
+    words = [w.strip("'\"") for w in cmd.split()]
+    for i, w in enumerate(words):
+        name, rest = w.rsplit("/", 1)[-1], words[i + 1:]
+        if name == "db_pr.py" and (owner_cmds is None or set(rest) & set(owner_cmds)
+                                   or ("lock" in rest and "release" in rest and not any(x.startswith("--f") for x in rest))):
+            return "db_pr"
+        if name == "db_verify.py" and (owner_cmds is None or any(x.startswith("--dr") for x in rest)):
+            return "db_verify"
+    return None
 
 
-def handoff_commands(cmds: list[str], meta: dict) -> tuple[list[str], list[str]]:
-    """(출력할 명령, 안내 줄). 사용자가 터미널에서 돌릴 `db_pr`·`db_verify` 명령에 그 작업의 lock owner를 `TT_LOCK_OWNER=`로 채운다
-    (4차): owner를 보는 하위 명령이고, 그 작업의 작업 상태 owner가 지금 그 작업이 쥔 session.lock owner와 같을 때만. 줄 끝에 어느
-    작업의 owner인지 적는다. 못 채우면 명령은 그대로 두고 한 줄 안내. owner를 보지 않는 하위 명령(merge 등)은 안내도 없다.
-    여러 명령이 이어진 것은 접두가 엉뚱한 명령에 붙지 않게 채우지 않고 안내만 한다. 채운 줄은 모델 글이 아니라 읽은 낱말을
-    따옴표로 다시 싸서 만든다(5차 R4-P2-1 — 출력이 tt-oc가 검사한 그 명령이고 아무것도 풀리지 않는다)."""
-    out, notes = [], []
+def handoff_notes(cmds: list[str], meta: dict) -> list[str]:
+    """사용자가 터미널에서 돌릴 명령 중 lock owner가 필요한 것마다 tt-oc 자신의 안내 한 줄. 지금 session.lock을 쥔 작업의 owner가 확인되면
+    `TT_LOCK_OWNER=<owner>`를 붙이라고, 아니면 owner가 있는 곳과 `lock owner 불일치`로 멈춘다는 것을 알린다. 명령은 바꾸지 않는다."""
+    if not any(OWNER_SCRIPTS.search(c) for c in cmds):
+        return []
     root = Path(os.path.normpath(meta["work_root"]))
     scripts = Path(__file__).resolve().parents[2] / "plugin" / "scripts"
-    for cmd in cmds:
-        if not OWNER_SCRIPTS.search(cmd) or "TT_LOCK_OWNER=" in cmd:
-            out.append(cmd)
+    try:
+        dirs = [root, *sorted(d for d in root.iterdir() if d.is_dir() and (d / "session.lock").is_file())]
+    except OSError:
+        dirs = [root]
+    info: dict = {}
+    try:
+        r = _run([sys.executable, "-c", HANDOFF_CODE, str(scripts), *map(str, dirs)], cwd=str(scripts),
+                 env=_lookup_env(root), timeout=60)
+        info = json.loads(r.stdout) if r.returncode == 0 else {}
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        pass
+    if not isinstance(info, dict):
+        info = {}
+    owner_cmds = info.get("owner_cmds") if isinstance(info.get("owner_cmds"), list) else None
+    held = [h for h in info.get("held") or [] if isinstance(h, dict) and _OWNER_RE.fullmatch(str(h.get("owner") or ""))
+            and _JOB_RE.fullmatch(str(h.get("job") or ""))]
+    notes = []
+    for n, cmd in enumerate(cmds, 1):
+        script = _owner_script(cmd, owner_cmds)
+        if script is None:
             continue
-        parts = _split_handoff(cmd)
-        info: dict = {"checks": True}
-        if parts is not None:
-            base, words, script, args, simple = parts
-            try:
-                r = _run([sys.executable, "-c", HANDOFF_CODE, str(scripts), script, json.dumps(args), str(root),
-                          str(base) if base else ""], cwd=str(scripts), env=_lookup_env(root), timeout=60)
-                info = json.loads(r.stdout) if r.returncode == 0 else info
-            except (OSError, subprocess.TimeoutExpired, ValueError):
-                pass
-        if not isinstance(info, dict):
-            info = {"checks": True}
-        if not info.get("checks"):              # merge·request-review 등 owner를 보지 않는 하위 명령
-            out.append(cmd)
-            continue
-        if info.get("usage_error"):
-            out.append(cmd)
-            notes.append("db_pr·db_verify 인자를 읽지 못해(인자 오류) TT_LOCK_OWNER를 채우지 않았다 — 그대로 실행하면 사용 오류로 "
-                         "멈춘다. 인자를 고친 명령이 lock을 보는 하위 명령이면 TT_LOCK_OWNER=<그 작업의 owner>를 앞에 붙인다: " + cmd[:200])
-            continue
-        if parts is None or not simple:
-            out.append(cmd)
-            notes.append("db_pr·db_verify가 여러 명령 사이에 있어 TT_LOCK_OWNER를 채우지 않았다(접두가 다른 명령에 붙는다) — "
-                         "터미널에서는 그 명령 바로 앞에 TT_LOCK_OWNER=<작업 폴더>/<작업 키>/triage-state.json의 owner를 붙인다"
-                         "(없으면 `lock owner 불일치`로 멈춘다): " + cmd[:200])
-            continue
-        owner, job = str(info.get("owner") or ""), info.get("job")
-        if re.fullmatch(r"[A-Za-z0-9_-]+", owner) and FILL_UNSAFE.search(cmd):
-            out.append(cmd)
-            notes.append("셸 확장·특수 글자(`$`·백틱·`\\`·`!`·글롭·`~`·`#`)가 있어 TT_LOCK_OWNER를 채우지 않았다 — 모델이 만든 명령이니 "
-                         "인자를 확인하고, 실행할 때 TT_LOCK_OWNER=<작업 " + str(job) + "의 owner>를 앞에 붙인다: " + cmd[:200])
-            continue
-        if re.fullmatch(r"[A-Za-z0-9_-]+", owner):
-            cd = f"cd {shlex.quote(base)} && " if base is not None else ""
-            out.append(f"{cd}TT_LOCK_OWNER={owner} {shlex.join(words)}  # owner: 작업 {job}의 session.lock(이 작업이 맞는지 확인하고 실행)")
-            continue
-        out.append(cmd)
-        where = (f"{info['work_dir']}/{job}/triage-state.json" if info.get("work_dir") and job
-                 else "<작업 폴더>/<작업 키>/triage-state.json")
-        notes.append(f"lock owner를 채우지 않았다 — {where}의 owner가 지금 그 작업이 쥔 session.lock owner와 같을 때만 채운다. "
-                     "터미널에서 그 owner를 TT_LOCK_OWNER=로 앞에 붙이지 않으면 `lock owner 불일치`로 멈춘다: " + cmd[:200])
-    return out, notes
+        if held:
+            notes += [f"터미널에서는 위 {n}번째 명령의 {script} 앞에 TT_LOCK_OWNER={h['owner']} 를 붙인다 — 작업 {h['job']}의 "
+                      f"session.lock owner(그 명령이 작업 {h['job']}의 것일 때만)" for h in held]
+        else:
+            notes.append(f"위 {n}번째 명령의 {script}는 lock owner가 필요하다 — 지금 lock을 쥔 작업의 owner를 확인하지 못했다"
+                         "(<작업 폴더>/<작업 키>/triage-state.json의 owner가 <작업 폴더>/session.lock owner와 같아야 한다). "
+                         "TT_LOCK_OWNER=<그 owner>를 앞에 붙이지 않으면 `lock owner 불일치`로 멈춘다")
+    return notes
+
+
+# -- 모델·opencode에서 온 글의 출력 (6차 R5-P2-1) ---------------------------------------------------------------------------
+# 모델 글은 tt-oc 자신의 줄로 보이면 안 된다: 제어 문자(C0·C1·DEL·줄 구분·양방향 제어)는 보이는 이스케이프로 바꾸고, 줄마다 GUTTER를
+# 앞에 둔다(tt-oc 자신의 줄은 GUTTER로 시작하지 않는다). 명령은 한 줄로(줄바꿈 → ⏎, 탭도 이스케이프).
+GUTTER = "  │ "
+_CTRL = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]")
+EXPANSION = re.compile(r"[$`!]")
+MODEL_CMD_MARK = "↓ 모델이 만든 명령 — 셸 확장(`$`·백틱·`!`)이 있어 붙여 넣으면 셸이 먼저 푼다. 확인 후 실행"
+
+
+def _esc(text: str, one_line: bool = False) -> str:
+    def rep(m: re.Match) -> str:
+        c = ord(m.group())
+        return f"\\x{c:02x}" if c < 0x100 else f"\\u{c:04x}"
+    t = _CTRL.sub(rep, str(text))
+    return t.replace("\t", "\\x09").replace("\n", "⏎") if one_line else t
+
+
+def model_lines(text: str, one_line: bool = False) -> str:
+    """모델·opencode에서 온 글을 출력용으로(제어 문자 이스케이프 + 줄마다 GUTTER)."""
+    return "\n".join(GUTTER + line for line in _esc(text, one_line).split("\n"))
+
+
+_JSON_UNSAFE = re.compile("[\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]")
+
+
+def json_out(obj) -> str:
+    """json.dumps(ensure_ascii=False)는 0x20 미만만 이스케이프한다 — DEL·C1·줄 구분·양방향 제어도 \\uXXXX로."""
+    return _JSON_UNSAFE.sub(lambda m: f"\\u{ord(m.group()):04x}", json.dumps(obj, ensure_ascii=False))
 
 
 # -- 표시 기록(job 파일) -------------------------------------------------------------------------------------------------
@@ -805,7 +800,7 @@ def main(argv=None) -> int:
     recs, warn = shown_records(work_dirs_for(meta, a.work_dir), since)
     if res["outcome"] == "ok" and a.oc_command in SCRIPT_FLOWS and not recs and not ran_plugin_script(events):
         res["outcome"] = "no-script-output"
-    res["user_commands"], res["handoff_notes"] = handoff_commands(res["user_commands"], meta)
+    res["handoff_notes"] = handoff_notes(res["user_commands"], meta)
     deleted = None
     if a.delete_session and res["session"]:
         try:
@@ -813,25 +808,24 @@ def main(argv=None) -> int:
         except (OSError, subprocess.TimeoutExpired):
             deleted = False
     if a.json:
-        print(json.dumps({**res, "screens": recs, "warnings": warn, "non_json_lines": raw[-20:],
-                          "session_deleted": deleted, "stderr_tail": tail if res["outcome"] != "ok" else ""},
-                         ensure_ascii=False))
+        print(json_out({**res, "screens": recs, "warnings": warn, "non_json_lines": raw[-20:],
+                        "session_deleted": deleted, "stderr_tail": tail if res["outcome"] != "ok" else ""}))
         return EXIT[res["outcome"]]
     if res["final_text"]:
-        print(res["final_text"])
+        print(model_lines(res["final_text"]))
     if recs:
         print("\n---- [tt-oc] 스크립트 화면(job 파일 그대로, 모델을 거치지 않음) ----")
         print("\n\n".join(render_record(r) for r in recs))
     if res["blocked"]:
         print("\n---- [tt-oc] 막힌 호출(메시지 전문) ----")
         for b in res["blocked"]:
-            print(f"[{b['tool']}] {b['message']}")
+            print(model_lines(f"[{b['tool']}] {b['message']}"))
     if res["user_commands"]:
         print("\n---- [tt-oc] OpenCode v1에서 실행하지 않은 명령 — 터미널이나 Claude Code에서 직접 실행 ----")
-        for c in res["user_commands"]:      # 모델 글 그대로인 명령은 다시 싸면 뜻이 바뀌어(연산자·변수) 표시만 붙인다
+        for c in res["user_commands"]:      # 모델 글 그대로(고치지 않는다). 셸 확장이 있으면 tt-oc 자신의 줄로 표시
             if EXPANSION.search(c):
                 print(MODEL_CMD_MARK)
-            print(c)
+            print(model_lines(c, one_line=True))
         for n in res["handoff_notes"]:
             print(f"주의: {n}")
     print("\n---- [tt-oc] 결과 ----")
@@ -849,9 +843,9 @@ def main(argv=None) -> int:
     for w in warn:
         print(f"경고: 표시 기록 {w}")
     for w in res["guard_warnings"]:
-        print(f"guard 경고: {w}")
+        print(f"guard 경고: {_esc(w, one_line=True)}")
     for e in res["errors"]:
-        print(f"오류: {e}")
+        print(f"오류: {_esc(e, one_line=True)}")
     if res["outcome"] == "no-response":
         print(f"오류: opencode가 {first_timeout:.0f}초 안에 첫 응답을 내지 않아 멈췄다 — {GATEWAY_HINT}. 게이트웨이가 정상인데 "
               "긴 세션 이어가기·첫 MCP 시작이 느린 것이면 --first-timeout <초>(0 = 끔)로 늘린다. OpenCode가 만든 세션은 이벤트가 "
@@ -860,9 +854,9 @@ def main(argv=None) -> int:
         print(f"오류: {a.oc_command}가 스크립트를 한 번도 돌리지 않고(화면 기록 없음) 끝났다 — 모델이 도구 호출을 글로 냈을 수 있다. "
               "site_step.py runtime-check opencode의 사내 확인 0 (c)(자동 선택 tool_calls)로 게이트웨이를 확인한다")
     if raw:
-        print(f"JSON 아닌 출력 {len(raw)}줄(끝): {raw[-1][:300]}")
+        print(f"JSON 아닌 출력 {len(raw)}줄(끝): {_esc(raw[-1][:300], one_line=True)}")
     if res["outcome"] in ("error", "timeout", "no-response", "no-final-text") and tail.strip():
-        print("opencode stderr(끝):\n" + tail.strip()[-1500:])
+        print("opencode stderr(끝):\n" + model_lines(tail.strip()[-1500:]))
     if deleted is not None:
         print(f"세션 삭제: {'됨' if deleted else '실패'}")
     elif res["session"]:
