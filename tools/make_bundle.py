@@ -25,9 +25,9 @@ CLI:
     --repo   대상 레포 루트 (기본: 이 레포)
 
 종료 코드 (contracts.md §종료 코드)
-    1  자동 검사 실패 또는 --skip (묶음 없음). `deny-file`은 일치와 읽기 실패가 함께 있으면 일치를 먼저 fail로 낸다
+    1  자동 검사 실패 또는 --skip (묶음 없음). `deny-file`은 일치와 읽기 실패(압축 파일 포함)가 함께 있으면 일치를 먼저 fail로 낸다
     2  사용 오류·환경 오류 (레포 아님, 트리 더럽, 태그 불일치, 하위 도구 종료 2, 검사 조건 오류 —
-       예: `deny-file`의 거부 목록 없음·UTF-8 아님·빈 목록·추적 파일 0개·일치 0건인 읽기 실패 — 포함)
+       예: `deny-file`의 거부 목록 없음·UTF-8 아님·빈 목록·추적 파일 0개·일치 0건인 읽기 실패·압축 파일 — 포함)
     3  자동 검사 모두 통과, 묶음 생성, 사람 확인 대기 (정상 완료)
     0은 없다: 사람 확인이 남아 있으므로 이 도구는 완료를 선언하지 않는다.
 """
@@ -241,9 +241,10 @@ def check_deny_file(ctx: Ctx) -> CheckResult:
     if not scanned:
         return CheckResult("error", "스캔할 추적 파일 없음")
     total = sum(n for _, n in hits)
-    if errors and not total:
-        return CheckResult("error", f"추적 파일 {errors}개 읽기 실패")
-    tail_line = f"추적 파일 {scanned}개, 건너뜀 {skipped}개(UTF-8 아님)" + (f", 읽기 실패 {errors}개" if errors else "")
+    if (errors or skipped) and not total:   # 내용을 다 보지 못한 파일이 있으면 0건을 통과로 보지 않는다
+        return CheckResult("error", f"추적 파일 읽기 실패 {errors}개, 압축 파일 {skipped}개(내용 못 봄)")
+    tail_line = (f"추적 파일 {scanned}개" + (f", 압축 파일 {skipped}개(내용 못 봄)" if skipped else "")
+                 + (f", 읽기 실패 {errors}개" if errors else ""))
     if total:
         lines = [f"{rel}: {n}건" for rel, n in sorted(hits, key=lambda h: -h[1])[:20]]
         return CheckResult("fail", "\n".join([*lines, f"총 {total}건, 파일 {len(hits)}개 — {tail_line}"]),

@@ -2172,9 +2172,10 @@ def ms1_tags(ctx: Ctx) -> dict:
     return module_tags(ctx, modules_doc(clone), "ms1.tags")
 
 
-def module_tags(ctx: Ctx, doc: dict, cid: str) -> dict:
+def module_tags(ctx: Ctx, doc: dict, cid: str, partial_ok: bool = True) -> dict:
     """modules.yaml(`doc`)의 데몬·태그 ⊆ 플랫폼별 이슈 DB tags.yaml, 카테고리 일치(ms1.tags·restore.tags 공통).
-    빠진 이름은 이 사내 점검 출력에만 나온다."""
+    빠진 이름은 이 사내 점검 출력에만 나온다. `partial_ok=False`(restore.tags)면 이슈 DB를 건너뛴 플랫폼이 있을 때
+    통과가 아니라 skip이다(본 플랫폼 결과는 근거에 남긴다)."""
     parser_rules = _plugin_common("parser_rules")
     import module_measure
 
@@ -2217,6 +2218,9 @@ def module_tags(ctx: Ctx, doc: dict, cid: str) -> dict:
     if bad:
         return res(cid, "fail", f"{ev} · {len(bad)}건: {_cap_list(bad)}", cmd,
                    ask="이름마다 고른다: 이슈 DB tags.yaml에 더함(계획 op PR — 새 태그는 사용자 확인) 또는 modules.yaml에서 뺌(모듈 레포 PR)")
+    if skipped and not partial_ok:
+        return res(cid, "skip", f"{ev} · 본 플랫폼은 modules.yaml 데몬·태그 ⊆ tags.yaml, 카테고리 일치", cmd,
+                   ask="건너뛴 플랫폼의 이슈 DB clone 경로를 알려 주세요 → `propose --set ops_db=<경로>`·`ofono_db=<경로>`")
     return res(cid, "pass", f"{ev} · modules.yaml 데몬·태그 ⊆ tags.yaml, 카테고리 일치", cmd)
 
 
@@ -2448,33 +2452,40 @@ def restore_overlay(ctx: Ctx) -> dict:
 def restore_tags(ctx: Ctx) -> dict:
     if "restore" not in ctx._clones:
         return res("restore.tags", "skip", "렌더 결과 없음(restore.overlay)", None)
-    return module_tags(ctx, modules_doc(ctx._clones["restore"][0]), "restore.tags")
+    return module_tags(ctx, modules_doc(ctx._clones["restore"][0]), "restore.tags", partial_ok=False)
 
 
 def restore_vendor_ipc(ctx: Ctx) -> dict:
     """켠 플랫폼마다 site-defaults에 `vendor_ipc` 블록(기본 플랫폼 `platform.vendor_ipc`, 그 밖 `platform.others.<p>.vendor_ipc`).
-    값은 보이지 않는다. 키 이름·형식은 `platforms.load`가 검증한다(실패면 fail, config.py check와 같다)."""
+    값은 보이지 않는다. 키 이름·형식은 `platforms.load`가 검증한다(실패면 fail — parse_logcat이 종료 2로 멈출 설정이다.
+    `config.py check`는 `platform.*`을 보지 않는다).
+    통과는 두 키(`context`·`complete`)가 모두 있고 어느 값도 placeholder(`vendor_ipc.DEFAULT`)가 아닐 때만이다."""
     d = _site_defaults(ctx)
     if d is None:
         return _need_defaults("restore.vendor_ipc")
     platforms = _plugin()[0]
+    vipc = _plugin_common("vendor_ipc")
     node = d.get("platform") if isinstance(d.get("platform"), dict) else {}
     base = platforms.default_name(d)
     have, miss, bad = [], [], []
     for p in platforms.enabled(d):
         try:
-            platforms.load(d, p, require_enabled=False)        # 값 형식·알 수 없는 키는 여기서(config.py check와 같은 검증)
+            platforms.load(d, p, require_enabled=False)        # 값 형식·알 수 없는 키·한 키만은 여기서(parse_logcat과 같은 검증)
         except platforms.PlatformConfigError:
             bad.append(p)
         block = node if p == base else ((node.get("others") or {}).get(p) or {})
         path = "platform.vendor_ipc" if p == base else f"platform.others.{p}.vendor_ipc"
         v = block.get("vendor_ipc") if isinstance(block, dict) else None
-        ok = isinstance(v, dict) and v and all(isinstance(x, str) and x for x in v.values())
-        (have if ok else miss).append(f"{p}({path})")
-    cmd = "python3 plugin/scripts/config.py check --plugin-root plugin"
+        keys = isinstance(v, dict) and set(v) == set(vipc.KEYS) and all(isinstance(v[k], str) and v[k] for k in vipc.KEYS)
+        placeholder = keys and any(v[k] == getattr(vipc.DEFAULT, k) for k in vipc.KEYS)   # 예시 값 그대로는 사내 줄을 못 잡는다
+        if keys and not placeholder:
+            have.append(f"{p}({path})")
+        else:
+            miss.append(f"{p}({path}{', placeholder 값' if placeholder else ''})")
+    cmd = "python3 -c 'platforms.load(<site-defaults>, <켠 플랫폼>)'"
     if bad:
-        return res("restore.vendor_ipc", "fail", f"플랫폼 설정 오류 {', '.join(bad)} — 내용은 config.py check로(값은 보이지 않는다)",
-                   cmd, ask=f"vendor_ipc 키는 context·complete, 값은 식별자 모양이다({RESTORE_DOC} ②)")
+        return res("restore.vendor_ipc", "fail", f"플랫폼 설정 오류 {', '.join(bad)} — 키 경로는 parse_logcat.py 종료 2 메시지로(값은 보이지 않는다)",
+                   cmd, ask=f"vendor_ipc 키는 context·complete 둘 다, 값은 식별자 모양이다({RESTORE_DOC} ②)")
     if miss:
         return res("restore.vendor_ipc", "needs-user", f"없음 {', '.join(miss)}" + (f" · 있음 {', '.join(have)}" if have else ""),
                    cmd, ask=f"사내 로그의 요청 완료 줄에서 확인한 context·complete 값을 site-defaults에 적는다 — 첫 분석 전({RESTORE_DOC} ②)")
@@ -2507,11 +2518,12 @@ def restore_deny(ctx: Ctx) -> dict:
     hits, scanned, skipped, errors = deny_scan.scan(ctx.root, patterns, files)
     total = sum(n for _, n in hits)
     ev = f"SITE_PATHS 밖 추적 파일 {scanned}개"
-    if total or errors:
+    if total or errors or skipped:   # 내용을 다 보지 못한 파일(압축)이 있으면 0건을 통과로 보지 않는다
         return res("restore.deny", "fail", f"{ev} · {total}건/{len(hits)}파일" + (f" · 읽기 실패 {errors}" if errors else "")
+                   + (f" · 압축 파일 {skipped}(내용 못 봄)" if skipped else "")
                    + (f": {_cap_list([f'{p} {n}건' for p, n in hits])}" if hits else ""), cmd,
                    ask="사내 이름은 SITE_PATHS 경로(스냅샷·site-defaults)에만 둔다 — 공통 파일에서 빼거나 경로를 옮긴다")
-    return res("restore.deny", "pass", f"{ev} · 0건" + (f" (UTF-8 아님 {skipped})" if skipped else ""), cmd)
+    return res("restore.deny", "pass", f"{ev} · 0건", cmd)
 
 
 def _import_label(ctx: Ctx) -> str | None:

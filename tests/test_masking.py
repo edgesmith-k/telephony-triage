@@ -895,6 +895,13 @@ M_POSITIVE = [
     ("I init    : [ro.product.model]: [MOCK-PHONE]", "<PRODUCT#1>", "MOCK-PHONE", True),
     ("I init    : fingerprint=mock/brand/dev:15/X/1:user/keys", "<PRODUCT#1>", "mock/brand", True),
     ('ofonod[2]: variant("MOCK1234X-1_AB12")', "<PRODUCT#1>", "MOCK1234X", True),
+    # 값 안의 `m<4자리>`: 값 규칙이 먼저 돌아 값 전체가 한 토큰이 된다(m 규칙이 값을 쪼개지 않는다)
+    ("08-09 13:10:57.528     1     1 I init    : [ro.build.fingerprint]: "
+     "[mockbrand/m1234/mockdev:13/TP1A.220624.001/9876543:user/release-keys]", "[<PRODUCT#1>]", "mockdev", True),
+    ('Sep 20 14:32:11 dut ofonod[812]: ctx map[apn:internet username:"alice.m1234" password:"x"]',
+     'username:"<CRED#1>"', "alice", False),
+    ('Sep 20 14:32:11 dut ofonod[2]: modem: "Revision", variant("REVX m1234 build7")', 'variant("<PRODUCT#1>")',
+     "build7", True),
     ("I UART    : [CP_UART] MOCK1234 EVT1.0", "<PRODUCT#1>", "MOCK1234", True),
     ("ofonod[2]: smsc=+821099998888", "<MSISDN#1>", "99998888", False),                               # M7
     (f"I EAP     : EAP_ID=0{M_IMSI}%40nai.epc.mnc005.mcc450.example", "<IMSI#1>", M_IMSI, False),

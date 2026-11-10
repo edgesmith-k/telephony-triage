@@ -155,8 +155,11 @@ def test_vendor_ipc_block_both_platforms():
     assert _load(vendor_ipc=None).vendor_ipc == vendor_ipc.DEFAULT                  # null = 생략
     full = _load(vendor_ipc={"context": "SiteCtx_", "complete": "SiteDone"}).vendor_ipc
     assert (full.context, full.complete) == ("SiteCtx_", "SiteDone")
-    part = platforms.load({"platform": {**ON, "vendor_ipc": {"context": "SiteCtx_"}}}).vendor_ipc
-    assert (part.context, part.complete) == ("SiteCtx_", vendor_ipc.DEFAULT.complete)
+    assert _load(vendor_ipc={}).vendor_ipc == vendor_ipc.DEFAULT                     # 빈 블록 = 생략
+    # 키 하나만 쓰면 나머지가 placeholder로 남아 판별이 조용히 0이 된다 → 빠진 키 경로로 오류
+    with pytest.raises(PlatformConfigError, match=r"platform\.vendor_ipc\.complete: .*빠짐: complete"):
+        platforms.load({"platform": {**ON, "vendor_ipc": {"context": "SiteCtx_"}}})
+    assert "platform.others.ofono.vendor_ipc.context" in _error(vendor_ipc={"complete": "SiteDone"})
 
 
 @pytest.mark.parametrize("value,path,why", [

@@ -191,6 +191,7 @@ rm -rf <work_dir>/_snapshot                                        # 옛 clone�
 명령은 레포 폴더에서, `claude`를 실행하는 것과 같은 Python으로(B면 `(tt)` 터미널).
 
 **0. 받은 파일 확인** — 1절과 같다(`sha256sum -c SHA256SUMS`). 이슈 DB 뼈대 zip은 해시가 지난번과 같으면 할 일이 없다.
+S-6까지 끝낸 레포에 `docs/site/module-skills/`(사내 스냅샷)가 없으면 이 반입 **전에** [SITE_RESTORE.md](SITE_RESTORE.md) ⓪을 먼저 한다.
 
 **1. 지금 상태 커밋** — 반입이 잘못돼도 이 커밋으로 돌아온다.
 ```

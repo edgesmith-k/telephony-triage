@@ -183,7 +183,7 @@ platform:
   #       - {tag: VRIL_SOCK, patterns: ['^resp token=(?P<token>\d+)']}
   #     coverage_tags: [VRIL_MODEM]  # 선택. 정규식 없이 "수집 살아 있음"만 표시(한가한 구간의 unknown 방지)
   # vendor_ipc:                      # TODO(SITE:S9) 벤더 IPC 요청 완료 줄 `[<context><n>] <complete> Request ID=…, result=…`의 사내 토큰
-  #   context: IpcCtx_               # 문맥 접두어(식별자 모양). 생략하면 이 placeholder — 사내 줄은 잡히지 않는다
+  #   context: IpcCtx_               # 문맥 접두어(식별자 모양). 두 키를 함께 적는다. 블록을 생략하면 이 placeholder — 사내 줄은 잡히지 않는다
   #   complete: OnIpcComplete        # 완료 낱말(식별자 모양). 사내 값은 사내 site-defaults에만(17-platforms §9-1)
   # bugreport:                       # TODO(SITE:S21) dumpstate 섹션 헤더
   #   wanted_buffers: [system, radio, main]          # ^[a-z]+$, 출력 파일 순서

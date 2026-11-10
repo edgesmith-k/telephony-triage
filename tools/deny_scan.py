@@ -6,9 +6,12 @@
 영숫자 경계를 둔다(끝이 `.`인 접두어 항목은 그쪽 경계 없음). `_`는 경계로 본다 — 식별자 안에 든 이름도 누출이다.
 경계는 ASCII 영숫자(`[A-Za-z0-9]`)만 본다: 비ASCII 항목은 더 긴 비ASCII 낱말 안에서도 맞는다(두 음절 한글 항목이
 세 음절 낱말 안에서도 맞음) — 거부 목록은 ASCII 식별자라 의도한 동작이다. 한 항목이 자기와 겹쳐 맞는 자리도 모두 가린다.
-파일 내용과 함께 **경로 문자열도** 검사한다(경로에 맞으면 파일당 1건). UTF-8로 읽히지 않는 파일은 내용을 건너뛰고 센다.
-읽을 수 없는 추적 파일(삭제됨·디렉토리 등)은 읽기 실패로 세고 CLI는 종료 2.
-**출력에는 경로(맞은 부분은 `«k»`, k = 항목 번호)와 건수만 낸다 — 맞은 글자·항목 글자는 내지 않는다.**
+파일 내용과 함께 **경로 문자열도** 검사한다(경로에 맞으면 파일당 1건). 내용은 바이트를 잃지 않고 푼다: UTF-8(잘못된
+바이트는 surrogateescape로 남기고 둘레 글자는 본다), BOM·NUL이 있으면 UTF-16 LE·BE(두 정렬)로도 — 건수는 그중 큰 값.
+압축 형식(zip·gzip·bzip2·xz·zstd·7z 머리)은 풀지 않으므로 내용을 다 보지 못한 파일(`skipped`)로 센다.
+읽을 수 없는 추적 파일(삭제됨·디렉토리 등)은 읽기 실패로 센다. 둘 중 하나라도 있으면 CLI는 종료 2.
+**출력에는 경로(항목 글자가 든 부분은 경계와 상관없이 `«k»`, k = 항목 번호)와 건수만 낸다 — 맞은 글자·항목 글자는
+내지 않는다.** 경로 건수는 내용과 같은 경계 규칙으로 센다(가림만 경계 없음).
 
 CLI:
     python3 tools/deny_scan.py [--root <repo>] [--deny <file>] [paths...]
@@ -18,7 +21,7 @@ CLI:
 종료 코드 (contracts.md §종료 코드)
     0  0건
     1  1건 이상 (`경로: n건` 줄들 + `TOTAL n hits in m files (scanned s, skipped k)`)
-    2  거부 목록 없음·UTF-8 아님·비어 있음, 스캔할 추적 파일 없음, 읽기 실패, git 실패
+    2  거부 목록 없음·UTF-8 아님·비어 있음, 스캔할 추적 파일 없음, 읽기 실패, 압축 파일(내용 못 봄), git 실패
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from pathlib import Path
 
 DENY_ENV = "TT_DENY_FILE"
 _EDGE_HEAD, _EDGE_TAIL = r"(?<![A-Za-z0-9])", r"(?![A-Za-z0-9])"
+_PACKED = (b"PK\x03\x04", b"PK\x05\x06", b"\x1f\x8b", b"BZh", b"\xfd7zXZ\x00", b"\x28\xb5\x2f\xfd", b"7z\xbc\xaf\x27\x1c")
 
 
 def load(path: Path | str) -> list[tuple[int, re.Pattern]]:
@@ -74,24 +78,41 @@ def _mask(text: str, patterns, repl=None) -> tuple[str, int]:
     return text, len(merged)
 
 
+def _loose(patterns) -> list[tuple[int, re.Pattern]]:
+    """경로 가림용: 같은 항목을 경계 없이(부분 일치) 찾는 정규식. 건수는 `patterns`(경계 있음)로만 센다."""
+    out = []
+    for k, rx in patterns:
+        body = rx.pattern[len("(?=("):-len("))")].removeprefix(_EDGE_HEAD).removesuffix(_EDGE_TAIL)
+        out.append((k, re.compile("(?=(" + body + "))", re.IGNORECASE)))
+    return out
+
+
+def _texts(data: bytes) -> list[str]:
+    """내용을 글로 푼다(바이트를 잃지 않음): UTF-8 + surrogateescape, BOM·NUL이 있으면 UTF-16 LE·BE 두 정렬도."""
+    texts = [data.decode("utf-8", "surrogateescape")]
+    if b"\0" in data or data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        texts += [data[off:].decode(enc, "replace") for enc in ("utf-16-le", "utf-16-be") for off in (0, 1)]
+    return texts
+
+
 def scan(root: Path | str, patterns: list[tuple[int, re.Pattern]], files: list[str] | None = None
          ) -> tuple[list[tuple[str, int]], int, int, int]:
-    """(맞은 파일 [(가린 경로, 건수)], 스캔한 파일 수, UTF-8 아니라 내용을 건너뛴 파일 수, 읽기 실패 파일 수).
+    """(맞은 파일 [(가린 경로, 건수)], 스캔한 파일 수, 압축 형식이라 내용을 다 보지 못한 파일 수, 읽기 실패 파일 수).
     files가 없으면 추적 파일 전부."""
     root = Path(root)
     files = tracked(root) if files is None else files
+    loose = _loose(patterns)
     hits, skipped, errors = [], 0, 0
     for rel in files:
-        shown, in_path = _mask(rel, patterns)
-        n = 1 if in_path else 0
+        shown = _mask(rel, loose)[0]
+        n = 1 if _mask(rel, patterns)[1] else 0
         try:
-            text = (root / rel).read_bytes().decode("utf-8")
+            data = (root / rel).read_bytes()
         except OSError:                # 읽을 수 없는 파일(삭제됨·디렉토리·권한)
             errors += 1
-        except UnicodeDecodeError:     # 바이너리
-            skipped += 1
         else:
-            n += _mask(text, patterns, "\0")[1]
+            skipped += data.startswith(_PACKED)
+            n += max(_mask(text, patterns, "\0")[1] for text in _texts(data))
         if n:
             hits.append((shown, n))
     return hits, len(files), skipped, errors
@@ -131,8 +152,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{rel}: {n}건")
     total = sum(n for _, n in hits)
     print(f"TOTAL {total} hits in {len(hits)} files (scanned {scanned}, skipped {skipped})")
-    if errors:
-        print(f"읽기 실패 {errors}개 파일", file=sys.stderr)
+    if errors or skipped:
+        print(f"읽기 실패 {errors}개 파일, 압축 파일 {skipped}개(내용 못 봄)", file=sys.stderr)
         return 2
     return 1 if total else 0
 

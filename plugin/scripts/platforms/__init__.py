@@ -379,11 +379,15 @@ def _components(raw, base: str, spec: PlatformSpec) -> tuple:
 
 def _vendor_ipc(raw, base: str) -> _vipc.Spec:
     """`<블록>.vendor_ipc: {context, complete}`(벤더 IPC 요청 완료 줄의 사내 토큰, TODO(SITE:S9)) → `vendor_ipc.Spec`.
-    값은 식별자 모양 글(`vendor_ipc.VALUE_RE`). 생략한 키는 placeholder 기본값."""
+    값은 식별자 모양 글(`vendor_ipc.VALUE_RE`). 블록을 생략하면(`null`·`{}` 포함) placeholder 기본값, 블록을 쓰면 두 키 모두
+    (하나만 쓰면 나머지가 placeholder로 남아 요청 완료 줄 판별이 조용히 0이 된다)."""
     node = _mapping(raw, base, _vipc.KEYS)
     for key, value in node.items():
         if not isinstance(value, str) or not _vipc.VALUE_RE.fullmatch(value):
             raise _err(f"{base}.{key}", f"식별자 모양 글(^[A-Za-z][A-Za-z0-9_]*$, 64자 이하)이어야 합니다: {value!r}")
+    missing = [key for key in _vipc.KEYS if node and key not in node]
+    if missing:
+        raise _err(f"{base}.{missing[0]}", f"{'·'.join(_vipc.KEYS)}를 함께 적어야 합니다(빠짐: {', '.join(missing)}).")
     return _vipc.Spec(**node)
 
 

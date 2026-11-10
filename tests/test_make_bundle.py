@@ -361,8 +361,27 @@ def test_deny_file_unreadable_tracked_file_is_error(repo, tmp_path, monkeypatch)
     out = tmp_path / "out"
     res = mb.run(repo, LABEL, out, checks=_deny_checks())
     row = res["checks"][0]
-    assert row["status"] == "error" and "1개 읽기 실패" in row["detail"]
+    assert row["status"] == "error" and "읽기 실패 1개" in row["detail"]
     assert res["exit_code"] == mb.USAGE and res["bundle"] is None and not out.exists()
+
+
+def test_deny_file_packed_file_is_error_and_non_utf8_is_scanned(repo, tmp_path, monkeypatch):
+    """압축 파일(내용 못 봄)이 있으면 0건이어도 통과가 아니다(error, 종료 2). UTF-8 아닌 파일은 건너뛰지 않고 센다."""
+    deny = tmp_path / "deny.txt"
+    deny.write_text("zzqx\n", encoding="utf-8")
+    monkeypatch.setenv("TT_DENY_FILE", str(deny))
+    (repo / "a.gz").write_bytes(b"\x1f\x8b\x08\x00 plain")
+    _git(repo, "add", "a.gz")
+    _git(repo, "commit", "-qm", "gz")
+    res = mb.run(repo, LABEL, tmp_path / "out", checks=_deny_checks())
+    row = res["checks"][0]
+    assert row["status"] == "error" and "압축 파일 1개" in row["detail"] and res["exit_code"] == mb.USAGE
+    (repo / "dev.log").write_bytes(b"caf\xe9 zzqx\n")
+    _git(repo, "add", "dev.log")
+    _git(repo, "commit", "-qm", "log")
+    res = mb.run(repo, LABEL, tmp_path / "out2", checks=_deny_checks())
+    row = res["checks"][0]
+    assert row["status"] == "fail" and "dev.log: 1건" in row["detail"] and "압축 파일 1개" in row["detail"]
 
 
 def test_deny_file_hits_reported_before_read_errors(repo, tmp_path, monkeypatch):
@@ -396,7 +415,7 @@ def test_deny_file_hit_fails_with_path_only(repo, tmp_path, monkeypatch):
     row = res["checks"][0]
     assert row["status"] == "fail" and res["exit_code"] == 1
     assert "docs/a.md: 2건" in row["detail"] and "docs/«1»_note.md: 1건" in row["detail"]
-    assert "총 3건, 파일 2개" in row["detail"] and "건너뜀 0개" in row["detail"]
+    assert "총 3건, 파일 2개" in row["detail"] and "압축 파일" not in row["detail"]
     text = json.dumps(res, ensure_ascii=False) + mb.format_text(res)
     assert "zzqx" not in text.lower() and not out.exists()
 
@@ -407,7 +426,7 @@ def test_deny_file_zero_hits_passes(repo, tmp_path, monkeypatch):
     monkeypatch.setenv("TT_DENY_FILE", str(deny))
     res = mb.run(repo, LABEL, tmp_path / "out", checks=_deny_checks())
     assert res["checks"][0]["status"] == "pass" and "1항목" in res["checks"][0]["detail"]
-    assert "건너뜀 0개(UTF-8 아님)" in res["checks"][0]["detail"] and res["exit_code"] == 3
+    assert res["checks"][0]["detail"].endswith(", 0건") and res["exit_code"] == 3
     deny.write_bytes(b"\xff\xfe\x80\n")                     # UTF-8 아님 → error(종료 2), 트레이스백 아님
     res = mb.run(repo, LABEL, tmp_path / "out2", checks=_deny_checks())
     assert res["checks"][0]["status"] == "error" and res["exit_code"] == mb.USAGE

@@ -17,8 +17,9 @@
 만들지 않는다:
 - 스냅샷에 `*/*/evals/**`가 있다(eval case는 스냅샷이 아니다) → `<파일> 스냅샷에 evals`.
 - 스냅샷에 심볼릭 링크(파일·디렉토리)가 있다 → `<파일> 링크`.
-- 덮어쓴 파일에 `{{site:`·placeholder 이름(`PLACEHOLDER_RE`)이 남아 있다 → `스냅샷이 불완전: <파일>`
-  (덮어쓰지 않은 파일 — eval 로그 등 — 은 보지 않는다. `TODO(SITE:S25)`는 사내 스냅샷 문서에도 있을 수 있는 표식이라 보지 않는다).
+- 덮어쓴 파일에 `{{site:`·placeholder 이름(`PLACEHOLDER_RE`, 대문자 꼴·벤더 IPC placeholder 포함)이 남아 있다 →
+  `스냅샷이 불완전: <파일>`. 스냅샷에 없는 템플릿 파일(`*/*/evals/**` 밖)이 placeholder를 담고 있다 → `스냅샷에 없음: <파일>`
+  (eval case는 보지 않는다. `TODO(SITE:S25)`는 사내 스냅샷 문서에도 있을 수 있는 표식이라 보지 않는다).
 - 덮어쓴 결과를 임시 디렉토리에 만들어 위 2의 점검 + `validate_modules(strict)`를 돌린다 → `경로[:줄] 점검`
   (`validate_modules`는 `modules.yaml 검증(strict) n건`만 — 자세히는 `module_repo_check.py`).
 `<dir>/SOURCE`는 `--json`과 상관없이 맨 먼저 읽는다 — 링크·읽기 실패·UTF-8 아님이면 아무것도 만들지 않고 종료 2.
@@ -55,7 +56,9 @@ NEXT_STEPS = ("다음: GHE에 빈 모듈 레포를 만들고 이 디렉토리를
 EVALS_RE = re.compile(r"^[^/]+/[^/]+/evals/")
 # 남으면 스냅샷이 불완전한 표시: 사외 템플릿의 카테고리 힌트·placeholder 이름(PR-2 §2-0).
 # `TODO(SITE:S25)`는 넣지 않는다 — 사내 스냅샷 문서에도 있을 수 있는 표식이다
-PLACEHOLDER_RE = re.compile(r"\{\{site:|\b(?:mgmtd|vrild|datad|imsd|simd|networkd|chatterd)\d*\b|\bVRIL\b")
+# 데몬 이름은 대문자 꼴(`IMSD`·`DATAD_<값>`)도 본다. 벤더 IPC placeholder 두 개(`common/vendor_ipc.DEFAULT`)도 넣는다
+PLACEHOLDER_RE = re.compile(r"\{\{site:|(?i:\b(?:mgmtd|vrild|datad|imsd|simd|networkd|chatterd)\d*(?![A-Za-z0-9]))"
+                            r"|\bVRIL\b|\bIpcCtx_|\bOnIpcComplete\b")
 
 
 class Usage(Exception):
@@ -154,12 +157,16 @@ def _findings(root: Path, strict: bool = False) -> list[str]:
     return lines
 
 
-def _overlay_problems(overlay: Path, files: list[str], links: list[str]) -> list[str]:
+def _overlay_problems(overlay: Path, files: list[str], links: list[str], template: dict[str, Path]) -> list[str]:
     evals = [f"{rel} 스냅샷에 evals" for rel in files + links if EVALS_RE.match(rel)]
     if evals or links:
         return evals + [f"{rel} 링크" for rel in links]
-    return [f"스냅샷이 불완전: {rel}" for rel in files
-            if PLACEHOLDER_RE.search((overlay / rel).read_text(encoding="utf-8", errors="replace"))]
+    def left(path: Path) -> bool:
+        return PLACEHOLDER_RE.search(path.read_text(encoding="utf-8", errors="replace")) is not None
+
+    return ([f"스냅샷이 불완전: {rel}" for rel in files if left(overlay / rel)]
+            + [f"스냅샷에 없음: {rel}" for rel in sorted(set(template) - set(files))
+               if not EVALS_RE.match(rel) and left(template[rel])])
 
 
 def _source_commit(templates: Path) -> tuple[str, str]:
@@ -185,7 +192,7 @@ def build(out: Path, templates: Path, overlay: Path | None = None) -> tuple[str,
         found = _findings(templates)
     else:
         over, links = _overlay_files(overlay)
-        found = _overlay_problems(overlay, over, links)
+        found = _overlay_problems(overlay, over, links, sources)
         sources.update({rel: overlay / rel for rel in over})
         if not found:
             with tempfile.TemporaryDirectory(prefix="tt-overlay-") as tmp:

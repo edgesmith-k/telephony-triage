@@ -26,7 +26,7 @@ from tests.test_site_modules import _env, make_site  # noqa: E402,F401 — autou
 IDS = ["restore.snapshot", "restore.source", "restore.overlay", "restore.tags", "restore.vendor_ipc", "restore.deny",
        "restore.label"]
 LABEL = "import-20990101"
-IPC = {"context": "IpcCtx_", "complete": "OnDone"}
+IPC = {"context": "SiteCtx_", "complete": "OnDone"}
 SECRET = "demo-x-secret"
 
 
@@ -132,7 +132,7 @@ def test_restore_check_pass(tmp_path, monkeypatch, overlay, capsys):
     assert "_common 플랫폼 android, ofono" in rows["restore.snapshot"]["evidence"]
     assert "덮어쓴 파일" in rows["restore.overlay"]["evidence"] and "카테고리 일치" in rows["restore.tags"]["evidence"]
     assert "platform.others.ofono.vendor_ipc" in rows["restore.vendor_ipc"]["evidence"]
-    assert "IpcCtx_" not in json.dumps(rows, ensure_ascii=False)              # 값은 보이지 않는다
+    assert "SiteCtx_" not in json.dumps(rows, ensure_ascii=False)             # 값은 보이지 않는다
     # make_module_repo 인자: <임시 out>(레포 밖) --site-overlay <스냅샷> --json
     calls, _ = overlay
     out, flag, snap, js = calls[0]
@@ -156,6 +156,31 @@ def test_restore_vendor_ipc_bad_value_fails(tmp_path, monkeypatch, overlay):
     monkeypatch.setattr(platforms, "load", bad)
     r = run(root)["restore.vendor_ipc"]
     assert r["status"] == "fail" and "android" in r["evidence"] and "1x" not in r["evidence"] and "complete" in r["ask"]
+
+
+def test_restore_vendor_ipc_needs_both_keys_and_site_values(tmp_path, monkeypatch, overlay):
+    """placeholder 값 그대로·키 하나만은 통과가 아니다(값은 보이지 않는다)."""
+    root = restored(tmp_path, monkeypatch)
+    path = root / "plugin" / "site-defaults.yaml"
+    d = yaml.safe_load(path.read_text(encoding="utf-8"))
+    d["platform"]["others"]["ofono"]["vendor_ipc"] = {"context": "IpcCtx_", "complete": "OnDone"}
+    path.write_text(yaml.safe_dump(d), encoding="utf-8")
+    r = run(root)["restore.vendor_ipc"]
+    assert r["status"] == "needs-user" and "ofono(platform.others.ofono.vendor_ipc, placeholder 값)" in r["evidence"]
+    assert "IpcCtx_" not in json.dumps(r, ensure_ascii=False)
+    d["platform"]["vendor_ipc"] = {"context": "SiteCtx_"}
+    path.write_text(yaml.safe_dump(d), encoding="utf-8")
+    assert run(root)["restore.vendor_ipc"]["status"] != "pass"
+
+
+def test_restore_tags_skipped_db_is_not_pass(tmp_path, monkeypatch, overlay):
+    """한 플랫폼의 이슈 DB를 건너뛰면 restore.tags는 skip(본 플랫폼 결과는 근거에) — ms1.tags와 달리 통과로 세지 않는다."""
+    root = restored(tmp_path, monkeypatch)
+    steps = root / sc.STEPS_FILE
+    steps.write_text("".join(ln for ln in steps.read_text(encoding="utf-8").splitlines(True)
+                             if not ln.startswith("ofono_db:")), encoding="utf-8")
+    r = run(root)["restore.tags"]
+    assert r["status"] == "skip" and "건너뜀 ofono" in r["evidence"] and "ofono_db" in r["ask"]
 
 
 def test_restore_check_needs_user(tmp_path, monkeypatch, overlay, capsys):
@@ -228,3 +253,14 @@ def test_restore_tags_and_deny_fail(tmp_path, monkeypatch, overlay):
     monkeypatch.setenv("TT_DENY_FILE", str(tmp_path / "missing.txt"))
     r = run(root)["restore.deny"]
     assert r["status"] == "fail" and "없음·권한" in r["evidence"]
+
+
+def test_restore_deny_packed_file_is_not_pass(tmp_path, monkeypatch, overlay):
+    """내용을 다 보지 못한 파일(압축)이 SITE_PATHS 밖에 있으면 0건이어도 통과가 아니다."""
+    root = restored(tmp_path, monkeypatch)
+    (root / "docs").mkdir(exist_ok=True)
+    (root / "docs" / "a.zip").write_bytes(b"PK\x03\x04 plain")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "zip")
+    r = run(root)["restore.deny"]
+    assert r["status"] == "fail" and "0건/0파일" in r["evidence"] and "압축 파일 1" in r["evidence"]

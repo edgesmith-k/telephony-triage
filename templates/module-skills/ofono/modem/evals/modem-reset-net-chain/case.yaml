@@ -21,7 +21,7 @@ run_expect:
   C: 1
 expect:
   layer: '모뎀|망'
-  daemon: 'mgmtd|vrild'
+  daemon: 'vrild'
   # 모뎀 재시작 근거는 ofonod 무선 상태 줄(재시작 알림 줄은 공통 관리 데몬 placeholder라 모뎀 보기에 들지 않는다)
   evidence: ['RADIO_STATE_CHANGED \(state: UNAVAILABLE\)', 'GET_NR_MODE failed']
   trap: null

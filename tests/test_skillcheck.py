@@ -419,6 +419,16 @@ def test_template_findings_files_set(tmp_path):
     assert _rows(sc.template_findings(root, METAS)) == [("case 파일", "ofono/data/evals/data-ofonod-only", None)]
 
 
+def test_template_findings_expect_overlap(tmp_path):
+    """deep case의 인정 층·데몬 대안이 wrong_layer에 걸리면(맞는 답이 늘 떨어짐) `case 기대`. 괄호 안 `|`는 나누지 않는다."""
+    root = _template_copy(tmp_path)
+    rel = "ofono/modem/evals/modem-reset-net-chain"
+    yml = root / rel / "case.yaml"
+    yml.write_text(yml.read_text(encoding="utf-8").replace("daemon: 'vrild'", "daemon: 'mgmtd|vrild'"), encoding="utf-8")
+    assert _rows(sc.template_findings(root, METAS)) == [("case 기대", rel, "expect.daemon 대안이 wrong_layer에 걸림")]
+    assert sc._top_alternatives(r"a|b(c|d)|[|x]|\|y") == ["a", "b(c|d)", "[|x]", r"\|y"]
+
+
 def test_template_findings_platform_mix(tmp_path):
     root = _template_copy(tmp_path)
     p = root / "ofono" / "data" / "explore.md"

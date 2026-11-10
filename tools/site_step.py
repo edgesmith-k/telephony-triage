@@ -98,6 +98,7 @@ MODULE_GUIDE = {
     "MS-1": """MS-1 모듈 스킬 레포 연결 (MODULE_SKILLS_PLAN_IMPL §6·docs/SITE_INSTALL.md §10)
 1. **주소를 넣기 전에** 설치 분석 스킬이 연결된 카테고리(예: analyzers.data.skill)에 `prefer: skill`을 적을지 정한다(ms1.prefer).
 2. `tools/make_module_repo.py`로 GHE module-skills 레포를 만들고 브랜치 보호(IMPL §4.5)를 켠다(관리자).
+   사내 스냅샷(`docs/site/module-skills/`)이 있으면 `--site-overlay docs/site/module-skills`로, 없으면 다음 반입 **전에** `site_step.py restore` ⓪.
 3. site-defaults `module_skills.remote`·`base_branch`·`boundary.patterns`(S33·S34), git ≥ 2.25.
 4. `site_step.py modules check` — remote 도달·push 권한·트리 = modules.yaml·데몬 ⊆ tags.yaml·prefer·보호/CI(정보).
 5. 세션 안 중첩 `claude -p`는 ms1.nested_claude가 보인 명령을 사용자가 한 번 돌린다(토큰, 승인 뒤).
@@ -449,12 +450,13 @@ RESTORE_STEPS = f"""사내 스냅샷 복구 ({sc.RESTORE_DOC}, S-6까지 끝낸 
 ⓪ 스냅샷(새 묶음 반입 전, 스냅샷이 없을 때 한 번): 반입 전 사내 레포 HEAD에서 templates/module-skills를 꺼내 evals를 빼고
   {sc.SNAPSHOT_DIR}/로, SOURCE 한 줄
 ① 재반입(import_draft) → SITE_PATHS 생존 확인 → `site_step.py check`가 S-1..S-6 완료
-② (첫 분석 전) site-defaults `vendor_ipc`의 context·complete에 사내 로그의 요청 완료 줄에서 확인한 두 낱말을 적는다
+② (첫 분석 전) site-defaults의 기존 `platform:` 블록 안 `vendor_ipc`에 context·complete 둘 다(사내 로그의 요청 완료 줄에서
+  확인한 두 낱말), oFono는 구성요소 플래그 `level_unreliable`·`vendor_ipc`도(이슈 DB tags.yaml 선언이 없을 때)
 ③ 모듈 스킬 레포: 없으면 `make_module_repo.py <out> --site-overlay {sc.SNAPSHOT_DIR}` → push, 있으면 임시 렌더 → diff → GHE PR
 ④ 검사: `site_step.py restore check` · `check_boundary --mode site` · pytest 2개 · parse_logcat 한 번
 ⑤ 거부 목록 운영(TT_DENY_FILE)
 ⑥ (선택) 실제 로그 사례는 tests/site/module-evals
-⑦ 이어서 S-7·MS-*. 재반입 뒤 `restore check` 경고(label)면 ③ diff 갈래를 다시
+⑦ 이어서 S-7·MS-*. `restore check` 경고(label)면 템플릿 diff를 스냅샷에 옮긴 뒤 ③ diff 갈래 → SOURCE label
 명령·설명 전체: {sc.RESTORE_DOC}"""
 
 

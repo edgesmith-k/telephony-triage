@@ -126,6 +126,18 @@ SNAP = {
 }
 
 
+def _rename(text: str) -> str:
+    """사내 스냅샷처럼 placeholder 이름을 같은 규칙으로 바꾼다(합성: `x<이름>`·`{{demo-site:`)."""
+    return PLACEHOLDER.sub(lambda m: "{{demo-site:" if m.group(0) == "{{site:" else "x" + m.group(0), text)
+
+
+def _full(src: Path, files: dict[str, str] | None = None) -> dict[str, str]:
+    """evals 밖 템플릿 파일 전부를 placeholder 없이 바꾼 스냅샷(+ files로 덮음) — 스냅샷 범위 그대로."""
+    base = {p.relative_to(src).as_posix(): _rename(p.read_text(encoding="utf-8")) for p in sorted(src.rglob("*"))
+            if p.is_file() and "evals" not in p.relative_to(src).parts}
+    return {**base, **(files or {})}
+
+
 def _snapshot(root: Path, files: dict[str, str], source: str | None = "label=import-demo sha=0000000 date=2026-11-10") -> Path:
     for rel, text in files.items():
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -136,22 +148,24 @@ def _snapshot(root: Path, files: dict[str, str], source: str | None = "label=imp
 
 
 def test_overlay_replaces_files_and_reports_json(src, tmp_path):
-    snap = _snapshot(tmp_path / "snap", SNAP)
+    full = _full(src, SNAP)
+    snap = _snapshot(tmp_path / "snap", full)
     out = tmp_path / "repo"
     proc = _make(src, out, "--site-overlay", snap, "--json")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     data = json.loads(proc.stdout)
-    assert data["overlay"] == sorted(SNAP) and data["source"] == "label=import-demo sha=0000000 date=2026-11-10"
-    for rel, text in SNAP.items():
+    assert data["overlay"] == sorted(full) and data["source"] == "label=import-demo sha=0000000 date=2026-11-10"
+    for rel, text in full.items():
         assert (out / rel).read_text(encoding="utf-8") == text
     tracked = set(_git(out, "ls-files").splitlines())
     assert tracked == {p.relative_to(src).as_posix() for p in src.rglob("*") if p.is_file()}   # SOURCE는 들어가지 않는다
     assert skillcheck.check_worktree(out) == []
-    assert not any(PLACEHOLDER.search((out / rel).read_text(encoding="utf-8")) for rel in SNAP)
+    assert not any(PLACEHOLDER.search((out / rel).read_text(encoding="utf-8")) for rel in full)
 
 
 def test_overlay_adds_file_missing_from_template(src, tmp_path):
-    snap = _snapshot(tmp_path / "snap", {"ofono/modem/references/MODEM-001.md": "# demo-x modem 참고\n"}, source=None)
+    snap = _snapshot(tmp_path / "snap", _full(src, {"ofono/modem/references/MODEM-001.md": "# demo-x modem 참고\n"}),
+                     source=None)
     out = tmp_path / "repo"
     proc = _make(src, out, "--site-overlay", snap, "--json")
     assert proc.returncode == 0, proc.stdout + proc.stderr
@@ -159,23 +173,38 @@ def test_overlay_adds_file_missing_from_template(src, tmp_path):
     assert "ofono/modem/references/MODEM-001.md" in _git(out, "ls-files").splitlines()
 
 
-def test_empty_overlay_equals_no_overlay_and_is_deterministic(src, tmp_path):
+def test_snapshot_missing_template_file_with_placeholder_creates_nothing(src, tmp_path):
+    """스냅샷에 없는 템플릿 파일(evals 밖)이 placeholder를 담으면 `스냅샷에 없음`(빈 스냅샷도 같다). placeholder 없는 파일은 빠져도 된다."""
+    full = _full(src, SNAP)
+    gone = "ofono/_common/layers.md"
+    assert PLACEHOLDER.search((src / gone).read_text(encoding="utf-8"))
+    snap = _snapshot(tmp_path / "snap", {k: v for k, v in full.items() if k != gone})
+    out = tmp_path / "repo"
+    proc = _make(src, out, "--site-overlay", snap)
+    assert proc.returncode == 1 and proc.stdout.strip() == f"스냅샷에 없음: {gone}", proc.stdout
+    assert not out.exists()
     (tmp_path / "empty").mkdir()
-    a, b = tmp_path / "a", tmp_path / "b"
+    proc = _make(src, out, "--site-overlay", tmp_path / "empty")
+    assert proc.returncode == 1 and f"스냅샷에 없음: {gone}" in proc.stdout.splitlines() and not out.exists()
+    plain = next(k for k in sorted(full) if not PLACEHOLDER.search((src / k).read_text(encoding="utf-8")))
+    snap3 = _snapshot(tmp_path / "snap3", {k: v for k, v in full.items() if k != plain})
+    assert _make(src, out, "--site-overlay", snap3).returncode == 0
+
+
+def test_overlay_is_deterministic(src, tmp_path):
+    a = tmp_path / "a"
     assert _make(src, a).returncode == 0
-    proc = _make(src, b, "--site-overlay", tmp_path / "empty", "--json")
-    assert proc.returncode == 0 and json.loads(proc.stdout)["overlay"] == []
-    assert _git(a, "rev-parse", "HEAD") == _git(b, "rev-parse", "HEAD")
-    snap = _snapshot(tmp_path / "snap", SNAP)
+    snap = _snapshot(tmp_path / "snap", _full(src, SNAP))
     c, d = tmp_path / "c", tmp_path / "d"
     assert _make(src, c, "--site-overlay", snap).returncode == 0 and _make(src, d, "--site-overlay", snap).returncode == 0
     assert _git(c, "rev-parse", "HEAD") == _git(d, "rev-parse", "HEAD") != _git(a, "rev-parse", "HEAD")
 
 
 @pytest.mark.parametrize("text", ["# x\n\n- vrild 줄\n", "# x\n\n{{site:data}}\n", "# x\n\n- VRIL-IMS 태그\n",
-                                  "# x\n\n- datad2 줄\n", "# x\n\n- networkd 줄\n"])
+                                  "# x\n\n- datad2 줄\n", "# x\n\n- networkd 줄\n", "# x\n\n- `[IpcCtx_0]` 줄\n",
+                                  "# x\n\n- OnIpcComplete 줄\n", "# x\n\n- IMSD 태그\n", "# x\n\n- DATAD_X 값\n"])
 def test_incomplete_snapshot_creates_nothing(src, tmp_path, text):
-    snap = _snapshot(tmp_path / "snap", {**SNAP, "ofono/data/explore.md": text})
+    snap = _snapshot(tmp_path / "snap", _full(src, {**SNAP, "ofono/data/explore.md": text}))
     out = tmp_path / "repo"
     proc = _make(src, out, "--site-overlay", snap)
     assert proc.returncode == 1 and proc.stdout.strip() == "스냅샷이 불완전: ofono/data/explore.md", proc.stdout
@@ -184,7 +213,8 @@ def test_incomplete_snapshot_creates_nothing(src, tmp_path, text):
 
 def test_snapshot_with_site_todo_marker_passes(src, tmp_path):
     """`TODO(SITE:S25)`는 사내 스냅샷 문서에도 있을 수 있는 표식이라 불완전 표시가 아니다."""
-    snap = _snapshot(tmp_path / "snap", {**SNAP, "ofono/data/explore.md": "# demo-x\n\n<!-- TODO(SITE:S25) 사내 확인 -->\n"})
+    snap = _snapshot(tmp_path / "snap",
+                     _full(src, {**SNAP, "ofono/data/explore.md": "# demo-x\n\n<!-- TODO(SITE:S25) 사내 확인 -->\n"}))
     out = tmp_path / "repo"
     proc = _make(src, out, "--site-overlay", snap)
     assert proc.returncode == 0, proc.stdout + proc.stderr
@@ -260,17 +290,14 @@ def test_overlay_runs_strict_validation_and_tree_rules(src, tmp_path):
     plat = sorted(doc["platforms"])[0]
     first = sorted(doc["platforms"][plat]["modules"])[0]
     doc["platforms"][plat]["modules"][first]["demo_x_key"] = []           # strict에서만 오류인 모르는 키
-    # 사내 스냅샷처럼 placeholder 이름 없이: 이름을 같은 규칙으로 바꾼 modules.yaml과 데몬 표(components.md)를 함께 덮는다
-    files = {"modules.yaml": yaml.safe_dump(doc, allow_unicode=True, sort_keys=False)}
-    files.update({f"{p}/_common/components.md": (src / p / "_common" / "components.md").read_text(encoding="utf-8")
-                  for p in doc["platforms"]})
-    rename = lambda m: "{{demo-site:" if m.group(0) == "{{site:" else "x" + m.group(0)   # noqa: E731
-    snap = _snapshot(tmp_path / "snap", {k: PLACEHOLDER.sub(rename, v) for k, v in files.items()})
+    # 사내 스냅샷처럼 placeholder 이름 없이: 이름을 같은 규칙으로 바꾼 전체 스냅샷에 modules.yaml만 다시 덮는다
+    snap = _snapshot(tmp_path / "snap", _full(src, {"modules.yaml": _rename(yaml.safe_dump(doc, allow_unicode=True,
+                                                                                         sort_keys=False))}))
     out = tmp_path / "repo"
     proc = _make(src, out, "--site-overlay", snap)
     assert proc.returncode == 1 and proc.stdout.strip() == "modules.yaml 검증(strict) 1건", proc.stdout
     assert not out.exists()
-    snap2 = _snapshot(tmp_path / "snap2", {"ofono/data/notes.txt": "demo-x\n"})
+    snap2 = _snapshot(tmp_path / "snap2", _full(src, {"ofono/data/notes.txt": "demo-x\n"}))
     proc = _make(src, tmp_path / "repo2", "--site-overlay", snap2)
     assert proc.returncode == 1 and "ofono/data/notes.txt 허용 이름 밖" in proc.stdout
 
