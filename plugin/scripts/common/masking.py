@@ -326,8 +326,16 @@ _BASE_RULES: tuple[Rule, ...] = (
          context=_SIP_AUTH_CONTEXT),
     Rule("CRED", re.compile(r"\b(?:RES|AUTN|AUTS|XRES)" + _SEP + r"(?:0x)?(?P<v>[0-9A-Fa-f]{8,})\b")),
     Rule("CRED", re.compile(r'(?i)\b(?:password|passwd|pwd|secret)' + _SEP + r'(?P<v>(?u:[^\s",;])+)')),
+    # 접두 키(`mPassword=`·`apn_password=`·`userPwd=`·`clientSecret=`): 키 낱말 바로 뒤가 구분자다(`passwordless=` 아님).
+    # 접두가 붙으면 상태 키(`hasPassword=true`)·로그 이름표(`SleepToken: tag=…`·apex `…authsecret:<버전>`)·`=`로 이은
+    # 설정 덩어리(`…_in_password=true_enable_…=…`)가 섞이므로 값은 `=` 앞까지, 영문+숫자 혼합이고 `pass=`처럼 상태 낱말·
+    # 대문자 열거형이 아닐 때만(글자뿐·숫자뿐인 값은 놓친다)
+    Rule("CRED", re.compile(r'(?i)(?<=[a-z0-9_])(?:password|passwd|pwd|secret)' + _SEP + r'(?P<v>(?u:[^\s",;=])+)'),
+         check=lambda v: _pass_like(v) and _alnum_mixed(v), gate=("password", "passwd", "pwd", "secret")),
     # `token`은 짧은 숫자 값(RIL 요청 token `token=612`·`token: 0042`, `0x29`)을 빼고 본다. 긴 인증 토큰은 그대로
     Rule("CRED", re.compile(r'(?i)\btoken' + _SEP + r'(?P<v>(?u:[^\s",;])+)'), check=_token_secret, gate=("token",)),
+    Rule("CRED", re.compile(r'(?i)(?<=[a-z0-9_])token' + _SEP + r'(?P<v>(?u:[^\s",;=])+)'),   # `authToken=` (접두 키, 위 둘과 같다)
+         check=lambda v: _token_secret(v) and _pass_like(v) and _alnum_mixed(v), gate=("token",)),
     Rule("CRED", re.compile(r'(?i)\b(?:api[_-]?key|key)' + _SEP + r'(?P<v>[A-Za-z0-9+/=_-]+)'),
          check=_secretish),
     # AKA 키 (대소문자 구분: 소문자 `ok=`·`ik` 섞인 문구를 피한다; Kc 64비트 = 16 hex가 하한)

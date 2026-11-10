@@ -477,15 +477,37 @@ def test_unicode_space_between_key_and_value():
     """키·값 사이 NBSP·U+3000(Jira 글)은 공백이고, 값 끝도 그 공백에서 멈춘다(뒤 낱말을 같이 가리지 않는다)."""
     assert masking.new_masker()("imsi: 450081234567890") == "imsi: <IMSI#1>"
     assert masking.new_masker()("password=　hunter2 다음") == "password=　<CRED#1> 다음"
+    assert masking.new_masker()("mPassword=hunter2　다음") == "mPassword=<CRED#1>　다음"
+
+
+def test_prefixed_credential_keys():
+    """접두가 붙은 비밀 키(`mPassword`·`apn_password`·`userPwd`·`clientSecret`·`authToken`)도 가린다. 키 낱말 바로 뒤가
+    구분자여야 하고, 접두 키는 영문+숫자 혼합 값만 본다 — 상태 값·대문자 열거형·짧은 token 숫자와 로그 이름표 값
+    (`SleepToken: tag=…`·apex 버전·`=`로 이은 설정 덩어리, 실제 로그 모양을 본뜬 합성 줄)은 둔다."""
+    for text, raw in (("mPassword=hunter2x", "hunter2x"), ("apn_password: abc123", "abc123"), ("userPwd=s3cret", "s3cret"),
+                      ('{"clientSecret":"xYz987"}', "xYz987"), ("authToken=abcDEF123456", "abcDEF123456"),
+                      ("mPasswd=pa55word", "pa55word"), ("refresh_token=AbC123dEf456", "AbC123dEf456"),
+                      ("APN_PASSWORD=hunter2", "hunter2"), ("clientSecret=abc123==", "abc123")):
+        out = masking.new_masker()(text)
+        assert raw not in out and "<CRED#1>" in out, (text, out)
+    assert masking.new_masker()("clientSecret=abc123==") == "clientSecret=<CRED#1>=="   # 접두 키 값은 `=` 앞까지
+    for text in ("hasPassword=true", "isPasswordSet=false", "password_required=1", "secretMode=on", "passwordless=abc123",
+                 "tokenizer=abc123", "passwordLength=8", "mPassword=null", "hasSecret=no", "mPasswordState=ENABLED",
+                 "mPassword=NOT_SET", "mPwd=12", "mToken=12", "authToken=0x1f", "hasToken=false", "sessionToken=<CRED#1>",
+                 "numTokens=3", "D WindowManager: Remove SleepToken: tag=Display-off, displayId=0",
+                 "security_level = Default, query_token = DemoCdmVersion", "/apex/com.example.authsecret:350000000,",
+                 "enable_number_row_in_password=true_pk=x1"):
+        assert masking.new_masker()(text) == text, text
+    assert masking.new_masker()("password=true") == "password=<CRED#1>"     # 접두 없는 키는 전과 같다
 
 
 def test_mask_pii_check_reports_hangul_glued():
     """`mask_pii --check`(기본 마스커)도 한글 조사가 붙은 값을 낸다(값은 내지 않는다)."""
-    raw = _write([text for text, _, _ in HANGUL_GLUED], name="glued.txt")
+    raw = _write([text for text, _, _ in HANGUL_GLUED] + ["mPassword=hunter2x 접두 키"], name="glued.txt")
     proc = _run("mask_pii.py", [str(raw), "--check"], cwd=_tmp())
     assert proc.returncode == 1, proc.stderr
     kinds = [d["kind"] for d in json.loads(proc.stdout)["detections"]]
-    assert kinds == [kind for _, kind, _ in HANGUL_GLUED], kinds
+    assert kinds == [kind for _, kind, _ in HANGUL_GLUED] + ["CRED"], kinds
     assert not [v for _, _, v in HANGUL_GLUED if v in proc.stdout]
 
 
