@@ -10,7 +10,7 @@ platforms:
     common:
       tags: ['^RILJ$']
       filter:
-        noise: ['^\[MsgRouterMgr\] msg\(']
+        noise: ['^\[ExampleRouter\] msg\(']
         state: [['^RILJ$', 'RADIO_POWER']]
         level_unreliable: [VRIL-MODEM]
     modules:

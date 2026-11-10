@@ -34,7 +34,6 @@
 | `datad` · `imsd` · `simd` · `networkd` (`datad2` 류 `<cat>d2`) | data · ims · sim · network | 카테고리 구성요소(`<cat>d2` = 같은 카테고리 두 번째) |
 | `chatterd` | noise | 노이즈 태그 |
 | `VRIL` · `VRIL-SVC` · `VRIL-IMS` · `VRIL-MODEM` · `VRIL-DATA` · `VRIL-NETWORK` | Android | 벤더 RIL · 텔레포니 서비스 · IMS · 모뎀/IPC · 프레임워크(data·network) 태그 |
-| `VRIL-LINK` · `VRIL-INFO` · `VRIL-TEST` | Android | 수집 안 함(샘플 tags.yaml에 없는 벤더 태그) |
 | `IpcCtx_<n>` · `OnIpcComplete` | — | 벤더 IPC 문맥 접두어 · 완료 낱말(②의 `vendor_ipc.context`·`complete`) |
 | `VIPC_<X>` · `VIPC_E_<Y>` · `VIPC_OK` | — | 벤더 IPC 메시지 이름 접두어 · 결과 값 접두어 · 성공 값(②의 `vendor_ipc.request_prefix`·`error_prefix`·`success`) |
 

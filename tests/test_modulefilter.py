@@ -231,8 +231,8 @@ def test_zero_value_rows_not_hot():
     (`triagelib.core.is_error_text`, report 타임라인 고르기도 같다). (벤더 모양을 본뜬 합성 줄)"""
     from triagelib.core import ZERO_VALUE_RE, is_error_text
 
-    android = [("2026-09-20T15:10:00.000Z", "RIL", "[ExamplePdnService_0] OnSetupDataCallComplete cid=1 errorCode=0", "I", None),
-               ("2026-09-20T15:10:00.100Z", "RIL", "[ExamplePdnService_0] OnSetupDataCallComplete cid=1 errorCode=2", "I", None),
+    android = [("2026-09-20T15:10:00.000Z", "RIL", "[ExamplePdnService_0] OnExampleSetupDone cid=1 errorCode=0", "I", None),
+               ("2026-09-20T15:10:00.100Z", "RIL", "[ExamplePdnService_0] OnExampleSetupDone cid=1 errorCode=2", "I", None),
                ("2026-09-20T15:10:00.200Z", "RIL", "[IpcCtx_0] OnIpcComplete Request ID=27, result=0 error",
                 "I", None),
                ("2026-09-20T15:10:00.300Z", "RIL", "[IpcCtx_0] OnIpcComplete Request ID=27, result=0", "I", None)]

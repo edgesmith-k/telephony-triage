@@ -872,10 +872,10 @@ M_POSITIVE = [
      "<HEXDUMP 16B>", "89 82 10", True),                                                               # M1 gril
     ("I modemif : IPC: RX: 0a 1b 2c 3d 4e 5f", "<HEXDUMP 6B>", "0a 1b 2c", True),                     # M1 hex 줄
     # M1 바이트 뒤 짧은 꼬리(재리뷰 P1): 잘림 표시·길이·태그
-    ("<6>[  1.0] C1] modemif: LNK-RX(12): 45 00 00 54 12 34 40 00 40 01 f6 0a ...", "<HEXDUMP 12B>", "45 00 00 54", True),
+    ("<6>[  1.0] C1] modemif: LINK-RX(12): 45 00 00 54 12 34 40 00 40 01 f6 0a ...", "<HEXDUMP 12B>", "45 00 00 54", True),
     ("I SIM     : sim_read_cb: 98 10 32 54 76 98 10 32 54 f6 (len 10)", "<HEXDUMP 10B>", "98 10 32 54", True),
     ("I SIM     : rsp: 0a 1b 2c 3d [SUB0]", "<HEXDUMP 4B>", "0a 1b 2c", True),
-    ("I modemif : LNK-TX(64): 60 00 00 00 00 20 06 40 \u2026", "<HEXDUMP 8B>", "60 00 00 00", True),
+    ("I modemif : LINK-TX(64): 60 00 00 00 00 20 06 40 \u2026", "<HEXDUMP 8B>", "60 00 00 00", True),
     # M1 `:` 바로 뒤가 아닌 바이트 8개 이상 연속(재리뷰 P1)
     ("I RILD    : [SLOT_1][V] 0123 1 0a 1b 2c 3d 4e 5f 60 71 82", "<HEXDUMP 9B>", "0a 1b 2c", True),
     ("I RILD    : Helper sendRequest] 0a 1b 2c 3d 4e 5f 60 71 ", "<HEXDUMP 8B>", "4e 5f 60", True),
