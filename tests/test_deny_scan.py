@@ -115,6 +115,16 @@ def test_non_utf8_contents_are_scanned_and_packed_files_skipped(tmp_path, deny):
     assert proc.returncode == 2 and "압축 파일 1개" in proc.stderr
 
 
+def test_no_boundary_counts_glued_names(tmp_path, deny):
+    """`--no-boundary`: 붙여 쓴 이름(`libabc.so`·`AbcClient`)도 센다(참고용). 기본은 경계 규칙 그대로 0건."""
+    (tmp_path / "x.txt").write_text("libabc.so AbcClient\n", encoding="utf-8")
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "x.txt")
+    assert _cli("--root", str(tmp_path), env_deny=deny).returncode == 0
+    proc = _cli("--root", str(tmp_path), "--no-boundary", env_deny=deny)
+    assert proc.returncode == 1 and "x.txt: 2건" in proc.stdout and "abc" not in proc.stdout.lower()
+
+
 def test_path_masks_entry_even_inside_longer_word(tmp_path, deny):
     """경로 가림은 경계 없이(부분 일치) — 건수는 경계 규칙 그대로(경로 `libabc`는 0건, 내용 1건)."""
     (tmp_path / "abc").mkdir()

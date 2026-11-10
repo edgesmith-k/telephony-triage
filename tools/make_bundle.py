@@ -13,6 +13,7 @@ HEAD가 원격의 반입 기준 브랜치(`*/stable` 또는 `*/main`)에 들어 
 쓰도록 만들었고, 끝난 뒤 추적·비추적(무시 제외) 파일 기준으로 트리를 바꾸지 않았음을
 확인한다 (`git status --porcelain`; 무시 파일은 보지 않는다).
 `deny-file`은 레포 밖 거부 목록(환경 변수 `TT_DENY_FILE`)의 항목이 추적 파일에 없는지 센다(경로·건수만 낸다).
+경계 없이 센 건수(붙여 쓴 이름)가 더 많으면 경고 줄을 더한다(판정에는 쓰지 않는다).
 변수가 없으면 오류(종료 2)라 묶음을 만들지 않는다.
 
 CLI:
@@ -245,12 +246,18 @@ def check_deny_file(ctx: Ctx) -> CheckResult:
         return CheckResult("error", f"추적 파일 읽기 실패 {errors}개, 압축 파일 {skipped}개(내용 못 봄)")
     tail_line = (f"추적 파일 {scanned}개" + (f", 압축 파일 {skipped}개(내용 못 봄)" if skipped else "")
                  + (f", 읽기 실패 {errors}개" if errors else ""))
+    # 경계 없이 센 건수(붙여 쓴 이름 `lib<x>.so` 등). 일반 낱말 안 우연 일치도 있어 판정에는 쓰지 않고 경고 줄로만 낸다
+    loose_hits = deny_scan.scan(ctx.repo, deny_scan.loose(patterns))[0]
+    loose_total = sum(n for _, n in loose_hits)
+    warn = ([f"경고(판정 아님): 경계 없이 세면 {loose_total}건, 파일 {len(loose_hits)}개 — 붙여 쓴 이름인지 사람이 본다: "
+             + ", ".join(rel for rel, _ in sorted(loose_hits, key=lambda h: -h[1])[:10])] if loose_total > total else [])
     if total:
         lines = [f"{rel}: {n}건" for rel, n in sorted(hits, key=lambda h: -h[1])[:20]]
-        return CheckResult("fail", "\n".join([*lines, f"총 {total}건, 파일 {len(hits)}개 — {tail_line}"]),
-                           {"hits": total, "files": len(hits), "scanned": scanned, "skipped": skipped})
-    return CheckResult("pass", f"거부 목록 {len(patterns)}항목, {tail_line}, 0건",
-                       {"entries": len(patterns), "scanned": scanned, "skipped": skipped})
+        return CheckResult("fail", "\n".join([*lines, f"총 {total}건, 파일 {len(hits)}개 — {tail_line}", *warn]),
+                           {"hits": total, "files": len(hits), "scanned": scanned, "skipped": skipped,
+                            "unbounded_hits": loose_total})
+    return CheckResult("pass", "\n".join([f"거부 목록 {len(patterns)}항목, {tail_line}, 0건", *warn]),
+                       {"entries": len(patterns), "scanned": scanned, "skipped": skipped, "unbounded_hits": loose_total})
 
 
 def check_site_todos(ctx: Ctx) -> CheckResult:

@@ -420,6 +420,21 @@ def test_deny_file_hit_fails_with_path_only(repo, tmp_path, monkeypatch):
     assert "zzqx" not in text.lower() and not out.exists()
 
 
+def test_deny_file_glued_name_is_warning_line_only(repo, tmp_path, monkeypatch):
+    """경계 없이 센 건수(붙여 쓴 이름)는 판정에 쓰지 않고 경고 줄로만 낸다 — 가린 경로·건수뿐."""
+    deny = tmp_path / "deny.txt"
+    deny.write_text("zzqx\n", encoding="utf-8")
+    monkeypatch.setenv("TT_DENY_FILE", str(deny))
+    (repo / "glued.md").write_text("libzzqx.so ZzqxClient\n", encoding="utf-8")
+    _git(repo, "add", "glued.md")
+    _git(repo, "commit", "-qm", "glued")
+    res = mb.run(repo, LABEL, tmp_path / "out", checks=_deny_checks())
+    row = res["checks"][0]
+    assert row["status"] == "pass" and res["exit_code"] == 3
+    assert "경고(판정 아님): 경계 없이 세면 2건, 파일 1개" in row["detail"] and "glued.md" in row["detail"]
+    assert "zzqx" not in (json.dumps(res, ensure_ascii=False) + mb.format_text(res)).lower()
+
+
 def test_deny_file_zero_hits_passes(repo, tmp_path, monkeypatch):
     deny = tmp_path / "deny.txt"
     deny.write_text("# c\nzzqx\n", encoding="utf-8")

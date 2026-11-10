@@ -12,9 +12,11 @@
 읽을 수 없는 추적 파일(삭제됨·디렉토리 등)은 읽기 실패로 센다. 둘 중 하나라도 있으면 CLI는 종료 2.
 **출력에는 경로(항목 글자가 든 부분은 경계와 상관없이 `«k»`, k = 항목 번호)와 건수만 낸다 — 맞은 글자·항목 글자는
 내지 않는다.** 경로 건수는 내용과 같은 경계 규칙으로 센다(가림만 경계 없음).
+`--no-boundary`는 경계 없이(부분 일치) 센다 — 붙여 쓴 이름(`lib<x>.so`·`<X>Client`)도 세지만 일반 낱말 안의 우연 일치도
+센다. 판정용이 아니라 참고용이다(make_bundle `deny-file`은 이 건수를 경고 줄로만 낸다).
 
 CLI:
-    python3 tools/deny_scan.py [--root <repo>] [--deny <file>] [paths...]
+    python3 tools/deny_scan.py [--root <repo>] [--deny <file>] [--no-boundary] [paths...]
 
     paths  root 기준 경로. 없으면 `git ls-files`의 추적 파일 전부.
 
@@ -78,7 +80,7 @@ def _mask(text: str, patterns, repl=None) -> tuple[str, int]:
     return text, len(merged)
 
 
-def _loose(patterns) -> list[tuple[int, re.Pattern]]:
+def loose(patterns) -> list[tuple[int, re.Pattern]]:
     """경로 가림용: 같은 항목을 경계 없이(부분 일치) 찾는 정규식. 건수는 `patterns`(경계 있음)로만 센다."""
     out = []
     for k, rx in patterns:
@@ -101,10 +103,10 @@ def scan(root: Path | str, patterns: list[tuple[int, re.Pattern]], files: list[s
     files가 없으면 추적 파일 전부."""
     root = Path(root)
     files = tracked(root) if files is None else files
-    loose = _loose(patterns)
+    shown_rx = loose(patterns)
     hits, skipped, errors = [], 0, 0
     for rel in files:
-        shown = _mask(rel, loose)[0]
+        shown = _mask(rel, shown_rx)[0]
         n = 1 if _mask(rel, patterns)[1] else 0
         try:
             data = (root / rel).read_bytes()
@@ -126,6 +128,7 @@ def main(argv: list[str] | None = None) -> int:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--root", default=".")
     parser.add_argument("--deny", default=None)
+    parser.add_argument("--no-boundary", action="store_true", help="경계 없이(부분 일치) 센다 — 참고용")
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args(argv)
     deny = args.deny or os.environ.get(DENY_ENV)
@@ -141,7 +144,8 @@ def main(argv: list[str] | None = None) -> int:
         print("거부 목록이 비어 있습니다", file=sys.stderr)
         return 2
     try:
-        hits, scanned, skipped, errors = scan(args.root, patterns, args.paths or None)
+        rx = loose(patterns) if args.no_boundary else patterns
+        hits, scanned, skipped, errors = scan(args.root, rx, args.paths or None)
     except (RuntimeError, OSError):   # 예외 문구에는 경로가 들 수 있어 고정 문구만 낸다
         print("추적 파일 목록을 얻지 못했습니다 (git 실패 또는 경로 오류)", file=sys.stderr)
         return 2
