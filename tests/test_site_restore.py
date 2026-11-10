@@ -254,3 +254,37 @@ def test_restore_deny_packed_file_is_not_pass(tmp_path, monkeypatch, overlay):
     _git(root, "commit", "-q", "-m", "zip")
     r = run(root)["restore.deny"]
     assert r["status"] == "fail" and "0건/0파일" in r["evidence"] and "압축 파일 1" in r["evidence"]
+
+
+def _reimport(root: Path, label: str = "import-20990303") -> None:
+    """새 묶음 반입 흉내: `.draft-manifest.json`을 바꿔 커밋한다(그 부모 = 반입 직전 커밋)."""
+    (root / ".draft-manifest.json").write_text(json.dumps({"schema": 1, "label": label, "files": {}}), encoding="utf-8")
+    _git(root, "commit", "-q", "-am", f"import {label}")
+
+
+def test_restore_check_without_module_skills_before_import(tmp_path, monkeypatch, overlay, capsys):
+    """(가) 반입 직전 커밋에 templates/module-skills가 없고 스냅샷도 없으면 snapshot·source·overlay·tags·label은 해당 없음(정보),
+    vendor_ipc는 반입 직전 커밋에 벤더 IPC 판별이 없었으면 값이 없어도 '꺼짐'(정보) — 종료 코드를 올리지 않는다."""
+    root = restored(tmp_path, monkeypatch, ipc=False)
+    _git(root, "rm", "-rq", sc.SNAPSHOT_DIR)
+    _git(root, "commit", "-q", "-m", "스냅샷 없던 레포")
+    _reimport(root)
+    rows = run(root)
+    na = ["restore.snapshot", "restore.source", "restore.overlay", "restore.tags", "restore.label"]
+    assert all(rows[i]["status"] == "info" and "해당 없음" in rows[i]["evidence"] for i in na), rows
+    r = rows["restore.vendor_ipc"]
+    assert r["status"] == "info" and "꺼짐" in r["evidence"] and "TODO(SITE:S9)" in r["evidence"]
+    assert rows["restore.deny"]["status"] == "pass" and overlay[0] == []
+    assert ss.main(["restore", "check", "--root", str(root)]) == 0
+    capsys.readouterr()
+    # (나) 반입 직전 커밋에 템플릿 트리가 있었는데 스냅샷이 없으면 해당 없음이 아니다(⓪을 하지 않은 것)
+    (root / sc.TEMPLATES).mkdir(parents=True)
+    (root / sc.TEMPLATES / "modules.yaml").write_text("schema_version: 2\n", encoding="utf-8")
+    (root / sc.VENDOR_IPC_PATH).parent.mkdir(parents=True)
+    (root / sc.VENDOR_IPC_PATH).write_text("# 벤더 IPC\n", encoding="utf-8")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "템플릿·벤더 IPC가 있던 레포")
+    _reimport(root, "import-20990404")
+    rows = run(root)
+    assert [rows[i]["status"] for i in IDS[:4]] == ["fail", "fail", "skip", "skip"]
+    assert rows["restore.vendor_ipc"]["status"] == "needs-user"

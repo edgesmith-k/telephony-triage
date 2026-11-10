@@ -1,31 +1,41 @@
-# 사내 스냅샷 (모듈 스킬 템플릿·벤더 IPC 설정을 반입 전에 떠 두고 반입 뒤 다시 얹기)
+# 사내 재반입 (사내 설정 보존 · 모듈 스킬 스냅샷)
 
-**읽는 사람**: S-6까지 끝낸 사내 레포의 담당자. `docs/site/module-skills/`가 아직 없으면 새 묶음을 반입하기 **전에** ⓪부터 한 번 하고, 이후 재반입 때는 ⑦만 본다. 요약은 `tools/site_step.py restore`, 점검은 `restore check`(진행 상태 없는 독립 명령, 토큰 0).
+**읽는 사람**: S-6까지 끝낸 사내 레포에서 새 묶음을 재반입하는 담당자. 반입 **전에** 사내 레포 폴더에서 갈래를 가린다:
 
-사외 레포의 모듈 스킬 템플릿(`templates/module-skills/`)과 벤더 IPC 판별은 공개 용어와 아래 placeholder만 쓰고, 사내 구성요소 이름·값은 사내가 SITE_PATHS에 채운다. 재반입은 템플릿 파일을 사외 판으로 덮으므로, **사내에서 채운 모듈 스킬 파일과 설정을 반입 전에 떠 두었다가 반입 뒤 다시 얹는다**: 사내에서 이름을 채운 템플릿 트리를 **스냅샷**으로 `docs/site/module-skills/`(SITE_PATHS — 반입이 건드리지 않는다)에 두면, 모듈 스킬 레포를 만들 때 `make_module_repo.py --site-overlay`가 같은 상대 경로로 통째로 덮어쓴다. 벤더 IPC 값은 site-defaults(SITE_PATHS)에 둔다.
+```
+git ls-files templates/module-skills | head -1      # 출력 없음 = (가), 있음 = (나)
+```
+
+- **(가) 이 레포에 `templates/module-skills`가 없다** — 반입 전 할 일이 없다. SITE_INSTALL.md 8절로 재반입하고, 반입 뒤 `site_step.py check S-6`과 `restore check`로 사내 경로가 그대로인지 본다. 이 레포에 없던 기능(모듈 스킬·벤더 IPC 판별·oFono 레벨 보정·덤프 잇기)은 값이 없으면 꺼진 채라 출력이 반입 전과 같다. 켜려면 그 기능의 사내 보완 항목에서 처음 채운다: 모듈 스킬 MS-1(`site_step.py modules`), 벤더 IPC 값 `TODO(SITE:S9)`·덤프 함수 `TODO(SITE:S24)`·oFono 구성요소 플래그 `TODO(SITE:S25)`(셋 다 ②의 자리). ⓪·③·⑦은 하지 않는다.
+- **(나) 이 레포에 `templates/module-skills`가 있다** — 사내에서 채운 모듈 스킬 파일을 반입 전에 떠 두고 반입 뒤 다시 얹는다(아래 ⓪~⑦). `docs/site/module-skills/`(스냅샷)가 아직 없으면 반입 **전에** ⓪을 한 번 하고, 이후 재반입 때는 ⑦만 본다.
+
+`restore check`(반입 뒤, 진행 상태 없는 독립 명령, 토큰 0)는 반입 직전 커밋(`.draft-manifest.json`을 마지막으로 바꾼 커밋의 부모)에 `templates/module-skills`가 없었고 스냅샷도 없으면 (가)로 보고 snapshot·source·overlay·tags·label을 "해당 없음"으로, 그 커밋에 `plugin/scripts/common/vendor_ipc.py`가 없었으면 값이 없는 vendor_ipc를 "꺼짐"으로 낸다(정보 — 종료 코드에 들지 않는다). 순서 요약 `python3 tools/site_step.py restore`도 반입 뒤 명령이다(새 묶음과 함께 들어온다).
+
+사외 레포의 모듈 스킬 템플릿(`templates/module-skills/`)과 벤더 IPC 판별은 공개 용어와 아래 placeholder만 쓰고, 사내 구성요소 이름·값은 사내가 SITE_PATHS에 채운다. 재반입은 템플릿 파일을 사외 판으로 덮으므로, (나)에서는 사내에서 이름을 채운 템플릿 트리를 **스냅샷**으로 `docs/site/module-skills/`(SITE_PATHS — 반입이 건드리지 않는다)에 두고, 모듈 스킬 레포를 만들 때 `make_module_repo.py --site-overlay`가 같은 상대 경로로 통째로 덮어쓴다. 벤더 IPC 값은 site-defaults(SITE_PATHS)에 둔다.
 
 ## 한눈에
 
-반입 **전**(스냅샷이 없을 때 한 번):
+반입 **전**:
 
-| 명령 | 하는 일 | 실패하면 |
+| 갈래 | 할 일 | 실패하면 |
 |---|---|---|
-| `python3 tools/site_step.py restore` | 이 순서 보기 | — |
-| ⓪의 블록(복사해 그대로) | 지금 사내 레포 HEAD의 템플릿 트리를 `docs/site/module-skills/`에 떠 두고 `SOURCE` 한 줄을 커밋 | ⓪ |
+| (가) | 없음 | — |
+| (나), 스냅샷 없음 | ⓪의 블록(복사해 그대로 — git·tar만 쓴다): 지금 HEAD의 템플릿 트리를 `docs/site/module-skills/`에 떠 두고 `SOURCE` 한 줄을 커밋 | ⓪ |
+| (나), 스냅샷 있음 | 없음(⑦에서 이어 간다) | — |
 
 반입 **뒤**(순서대로):
 
-| 명령 | 하는 일 | 실패하면 |
-|---|---|---|
-| SITE_INSTALL.md 8절(`tools/import_draft.py --check-boundary`) | 새 묶음 반입 | SITE_INSTALL.md 8절 "멈췄을 때" |
-| `python3 tools/site_step.py check S-6` | 반입 뒤에도 S-6 통과, SITE_PATHS 그대로 | ① |
-| `plugin/site-defaults.yaml` 편집 | 기존 `platform:` 블록 안 `vendor_ipc`(다섯 키), oFono `dump_func`·구성요소 플래그 | ② |
-| `python3 tools/site_step.py restore check` | 점검 7개 — 실패 줄의 "할 일"이 무엇을 어디에 채울지 말한다 | ④ 표 |
-| `python3 tools/make_module_repo.py $OUT --site-overlay docs/site/module-skills` | 모듈 스킬 레포를 사내 이름으로(없으면 새로 → push, 있으면 렌더 → diff → PR) | ③ |
-| `python3 tools/check_boundary.py --mode site` | 사내 경계 검사 | ④ |
-| `python3 -m pytest -q tests/test_modulefilter.py tests/test_module_templates.py` | 모듈 보기·템플릿 시험 | ④ |
-| ④의 `parse_logcat` 비교 블록 | 벤더 IPC 이벤트 수가 반입 전과 같은지 | ②·④ |
-| ⑦ 2의 템플릿 diff → 스냅샷 반영 → `SOURCE` label·date 갱신 | 사외 템플릿 변경을 스냅샷에 옮기고 label 경고를 끈다 | ⑦ |
+| 갈래 | 명령 | 하는 일 | 실패하면 |
+|---|---|---|---|
+| 둘 다 | SITE_INSTALL.md 8절(`tools/import_draft.py --check-boundary`) | 새 묶음 반입 | SITE_INSTALL.md 8절 "멈췄을 때" |
+| 둘 다 | `python3 tools/site_step.py check S-6` | 반입 뒤에도 S-6 통과, SITE_PATHS 그대로 | ① |
+| (나) · (가)는 켤 때만 | `plugin/site-defaults.yaml` 편집 | 기존 `platform:` 블록 안 `vendor_ipc`(다섯 키), oFono `dump_func`·구성요소 플래그 | ② |
+| 둘 다 | `python3 tools/site_step.py restore check` | 점검 7개 — (가)는 해당 없음·꺼짐이 정보로 나온다. 실패 줄의 "할 일"이 무엇을 어디에 채울지 말한다 | ④ 표 |
+| (나) | `python3 tools/make_module_repo.py $OUT --site-overlay docs/site/module-skills` | 모듈 스킬 레포를 사내 이름으로(없으면 새로 → push, 있으면 렌더 → diff → PR) | ③ |
+| 둘 다 | `python3 tools/check_boundary.py --mode site` | 사내 경계 검사 | ④ |
+| (나) | `python3 -m pytest -q tests/test_modulefilter.py tests/test_module_templates.py` | 모듈 보기·템플릿 시험 | ④ |
+| (나) | ④의 `parse_logcat` 비교 블록 | 벤더 IPC 이벤트 수가 반입 전과 같은지 | ②·④ |
+| (나) | ⑦ 2의 템플릿 diff → 스냅샷 반영 → `SOURCE` label·date 갱신 | 사외 템플릿 변경을 스냅샷에 옮기고 label 경고를 끈다 | ⑦ |
 
 | placeholder | 카테고리 | 뜻 |
 |---|---|---|
@@ -39,30 +49,33 @@
 | `Example<…>Service` · `ExampleOpenChannel` · `VCHAN_<n>` · `PdnCtx` | — | 벤더 서비스 이름 · 채널 열기 낱말 · 벤더 채널 · 데이터 문맥 |
 | `VIPC_<X>` · `VIPC_E_<Y>` · `VIPC_E_OK` · `VIPC_OK` | — | 벤더 IPC 메시지 이름 접두어 · 결과 값 접두어 · 성공 값(②의 `vendor_ipc.request_prefix`·`error_prefix`·`success`) · 성공 응답 줄 `OK(…)`의 값 |
 
-표식 `{{site:<cat>}}`도 사내 스냅샷이 채울 자리다. `make_module_repo.py --site-overlay`는 덮어쓴 파일에 위 이름(데몬 이름의 대문자 꼴 `IMSD`·`DATAD_…` 포함)·표식이 남아 있으면 "스냅샷이 불완전", 스냅샷에 없는 템플릿 파일(`*/*/evals/` 밖)이 그것을 담고 있으면 "스냅샷에 없음"으로 종료 1이다(아무것도 만들지 않는다).
+표식 `{{site:<cat>}}`도 사내 스냅샷이 채울 자리다. `make_module_repo.py --site-overlay`는 덮어쓴 파일에 위 이름(데몬 이름의 대문자 꼴은 `DATAD_…`처럼 뒤에 `_`가 붙은 것만 — `_` 없는 대문자 낱말은 이름이 아니다)·표식이 남아 있으면 "스냅샷이 불완전", 스냅샷에 없는 템플릿 파일(`*/*/evals/` 밖)이 그것을 담고 있으면 "스냅샷에 없음"으로 종료 1이다(아무것도 만들지 않는다).
 
 명령은 사내 레포 폴더에서, `claude`를 실행하는 것과 같은 Python으로 한다(SITE_INSTALL.md 3절).
 
-## ⓪ 스냅샷 꺼내기 (새 묶음 반입 **전**)
+## ⓪ 스냅샷 꺼내기 ((나), 새 묶음 반입 **전**)
 
-반입 전 사내 레포 HEAD(사내에서 이름을 채운 상태)에서 떠 둔다.
+반입 전 사내 레포 HEAD(사내에서 이름을 채운 상태)에서 떠 둔다. (가)이면 한 줄 안내로 끝난다(아무것도 바꾸지 않는다). 중간에 실패하면 거기서 멈추고 임시 폴더를 지운다.
 
 ```
-if [ -e docs/site/module-skills ]; then echo "이미 있음 — ⓪을 건너뛴다(덮어쓰지 않는다)"; else
-  SHA=$(git rev-parse HEAD)
+SHA=$(git rev-parse HEAD)                     # 묶음을 이미 반입했으면 <반입 커밋>^
+if [ -e docs/site/module-skills ]; then echo "이미 있음 — ⓪을 건너뛴다(덮어쓰지 않는다)"
+elif ! git cat-file -e "$SHA:templates/module-skills" 2>/dev/null; then echo "templates/module-skills 없음 — (가): ⓪·③·⑦은 하지 않는다"
+else (
+  set -e
   LABEL=$(git show $SHA:.draft-manifest.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["label"])')
   DATE=$(date +%F)
   echo "$LABEL $SHA $DATE"                      # 지금 쓰는 반입 라벨이 맞는지 본다
-  SNAP=$(mktemp -d)
-  git archive $SHA templates/module-skills | tar -x -C $SNAP
-  find $SNAP/templates/module-skills -mindepth 3 -maxdepth 3 -type d -name evals -exec rm -rf {} +   # */*/evals/ 제거
-  mkdir -p docs/site && mv $SNAP/templates/module-skills docs/site/module-skills && rm -rf $SNAP
+  SNAP=$(mktemp -d); trap 'rm -rf "$SNAP"' EXIT
+  git archive $SHA templates/module-skills | tar -x -C "$SNAP"
+  find "$SNAP/templates/module-skills" -mindepth 3 -maxdepth 3 -type d -name evals -exec rm -rf {} +   # */*/evals/ 제거
+  mkdir -p docs/site && mv "$SNAP/templates/module-skills" docs/site/module-skills
   echo "label=$LABEL sha=$SHA date=$DATE" > docs/site/module-skills/SOURCE
   git add docs/site/module-skills && git commit -m "사내 스냅샷: module-skills ($LABEL)"
-fi
+) fi
 ```
 
-- 묶음을 이미 반입했다면 `SHA`는 반입 커밋의 부모(`git rev-parse <반입 커밋>^`)로 둔다 — 반입 뒤 HEAD의 템플릿은 사외 판(placeholder)이라 `restore.overlay`가 "불완전"으로 실패한다.
+- 묶음을 이미 반입했다면 첫 줄의 `SHA`를 반입 커밋의 부모(`git rev-parse <반입 커밋>^`)로 둔다 — 반입 뒤 HEAD의 템플릿은 사외 판(placeholder)이라 `restore.overlay`가 "불완전"으로 실패한다.
 - 스냅샷 범위는 템플릿 트리 전체에서 `*/*/evals/`만 뺀 것이다(`modules.yaml`, `README.md`, `<p>/_common/*`, 모듈마다 `SKILL.md`·analyzer·explore·references).
 - `.draft-manifest.json`이 없으면(첫 반입을 압축 풀기로 했으면) SITE_INSTALL.md 8절 3으로 기준선을 먼저 만든다.
 - `SOURCE`는 한 줄 `label=<반입 라벨> sha=<sha> date=<yyyy-mm-dd>`다. `sha` = 스냅샷을 꺼낸 커밋(바꾸지 않는다), `label`·`date` = 스냅샷 반영을 확인한 마지막 반입과 날짜(⑦에서 갱신).
@@ -105,11 +118,14 @@ platform:                    # 이미 있는 블록
 
 **oFono 덤프 함수.** 한 메시지를 여러 줄에 잘라 찍는 oFono 덤프 함수의 이름(`<이름>() ` 뒤가 조각)을 oFono 블록 `dump_func`에 적는다(식별자 모양, 생략·`null`은 placeholder `example_dump`). 마스커는 이 이름의 줄만 이어 갈린 IMSI·ICCID를 가린다 — 값이 없으면 사내 로그의 갈린 값을 잇지 못한다.
 
-**oFono 구성요소 플래그.** oFono 백엔드는 레벨 보정·벤더 IPC 판별 대상을 구성요소 플래그(또는 이슈 DB 선언)로만 정한다 — 코드 기본 구성요소에는 플래그가 없다. 사내 oFono 이슈 DB `parser-rules/tags.yaml`이 그 데몬에 `level: unreliable`·`ipc: vendor`를 선언하지 않았으면 `platform.others.ofono.components.<이름>`에 `level_unreliable: true`(줄 레벨이 심각도가 아닌 구성요소)·`vendor_ipc: true`(벤더 IPC 결과를 내는 벤더 RIL 데몬)를 둔다. 기존 구성요소 항목 안에 키를 더한다(같은 이름을 다시 적으면 앞 정의가 사라진다). `components`를 처음 쓰면 코드 기본 구성요소를 통째로 바꾸므로 기본 항목도 함께 적는다(`02-config.md`):
+②의 값은 반입 전 이 레포가 그 기능을 쓰고 있었을 때(설정·이슈 DB 선언·코드에 든 값) 같은 값으로 맞추는 것이다. 쓰지 않았으면 비워 두어도 출력이 반입 전과 같고, 켤 때 그 사내 보완 항목(`TODO(SITE:S9)`·`S24`·`S25`)에서 처음 채운다.
+
+**oFono 구성요소 플래그.** oFono 백엔드는 레벨 보정·벤더 IPC 판별 대상을 구성요소 플래그(또는 이슈 DB 선언)로만 정한다 — 코드 기본 구성요소에는 플래그가 없다. 사내 oFono 이슈 DB `parser-rules/tags.yaml`이 그 데몬에 `level: unreliable`·`ipc: vendor`를 선언하지 않았으면 `platform.others.ofono.components.<이름>`에 `level_unreliable: true`(줄의 레벨 칸을 심각도로 믿을 수 없는 구성요소)·`vendor_ipc: true`(벤더 IPC 결과 줄을 내는 구성요소)를 둔다. 두 플래그는 대상이 다르다 — 각각 그 성질이 있는 구성요소에만 둔다. 기존 구성요소 항목 안에 키를 더한다(같은 이름을 다시 적으면 앞 정의가 사라진다). `components`를 처음 쓰면 코드 기본 구성요소를 통째로 바꾸므로 기본 항목도 함께 적는다(`02-config.md`):
 
 ```yaml
       components:
-        <벤더 RIL 데몬>: {idents: [<ident>], root_key: …, vendor_ipc: true, level_unreliable: true}   # 기존 키에 더함
+        <레벨 칸을 믿을 수 없는 구성요소>: {idents: [<ident>], …, level_unreliable: true}   # 기존 항목에 키만 더함
+        <벤더 IPC 결과 줄을 내는 구성요소>: {idents: [<ident>], …, vendor_ipc: true}
 ```
 
 확인은 ④의 `site_step.py restore check`다(`restore.vendor_ipc`가 켠 플랫폼마다 설정을 실제로 읽고, 다섯 키와 oFono `dump_func`가 있고 placeholder 값이 아닌지 본다). `config.py check`는 `platform.*`을 검증하지 않는다 — 형식이 틀리면 첫 `parse_logcat.py`가 키 경로와 함께 종료 2로 멈춘다. 값이 없으면 사내 로그에서 `vendor_request_failed`·`vendor_ipc_error` 이벤트가 0개다(④에서 확인). vendor_ipc 값·구성요소 플래그는 `compiled.environment`에는 들지 않지만, 분석 재사용 키의 `config`(site-defaults 전체 해시)가 바뀌므로 ② 전에 만든 분석은 재사용되지 않는다(다시 분석한다).
@@ -160,13 +176,13 @@ python3 -m pytest -q tests/test_modulefilter.py tests/test_module_templates.py
 
 ⓪ 뒤 새 묶음을 반입했으면 `restore.label`이 경고인 것이 정상이다. ③까지 마쳤으면 ⑦ 2의 diff(`SOURCE` label의 반입 커밋 → 지금 HEAD)를 보고 이름 치환이 아닌 템플릿 변경을 스냅샷에 옮긴 **다음** `SOURCE`의 `label`·`date`를 지금 반입으로 고쳐 커밋한다(`sha`는 그대로). diff를 보기 전에 label을 올리면 그 구간의 템플릿 변경이 확인 없이 가려지고 경고도 사라진다.
 
-벤더 IPC 이벤트 두 가지(`vendor_request_failed`·`vendor_ipc_error`) 수가 각각 반입 전과 같은지 O-1 폴더의 사내 oFono 로그(마스킹본) 하나로 본다. 반입 전 코드는 `SOURCE`의 `sha` worktree에서 그때 site-defaults로 돌린다. 넷째 줄(`git worktree add`)이 실패하면 멈춘다 — site-defaults가 없으면 ② 전 사본을 `~/tt-before/plugin/`에 두고 잇는다.
+(나)에서 벤더 IPC 이벤트 두 가지(`vendor_request_failed`·`vendor_ipc_error`) 수가 각각 반입 전과 같은지 O-1 폴더의 사내 oFono 로그(마스킹본) 하나로 본다. 반입 전 코드는 `SOURCE`의 `sha` worktree에서 그때 site-defaults로 돌린다. 넷째 줄(`git worktree add`)이 실패하면 멈춘다(`SOURCE`의 sha를 못 읽으면 그 줄이 실패한다) — site-defaults가 없으면 ② 전 사본을 `~/tt-before/plugin/`에 두고 잇는다.
 
 ```
 LOG=<벤더 요청 실패 줄이 있는 사내 oFono 로그>; RULES=<oFono 이슈 DB clone>/parser-rules
 n() { python3 -c 'import json,sys; e=json.load(sys.stdin)["events"]; print(*(sum(x["event"]==k for x in e) for k in ("builtin.common.vendor_request_failed","builtin.common.vendor_ipc_error")))'; }
 SHA=$(sed -n 's/.* sha=\([0-9a-f]*\) .*/\1/p' docs/site/module-skills/SOURCE)
-git worktree add --detach ~/tt-before $SHA && ls ~/tt-before/plugin/site-defaults.yaml   # 실패·없음이면 여기서 멈춘다
+git worktree add --detach ~/tt-before "${SHA:?SOURCE의 sha를 못 읽음 — 멈춘다}" && ls ~/tt-before/plugin/site-defaults.yaml   # 실패·없음이면 여기서 멈춘다
 python3 ~/tt-before/plugin/scripts/parse_logcat.py parse $LOG --full --rules $RULES --plugin-root ~/tt-before/plugin | n   # 반입 전
 python3 plugin/scripts/parse_logcat.py parse $LOG --full --rules $RULES --plugin-root plugin | n                          # 같아야 한다
 git worktree remove --force ~/tt-before
@@ -203,4 +219,4 @@ S-7·MS-*를 이어 간다(`python3 tools/site_step.py`). 이후 새 묶음을 �
    for c in $(git log --format=%H -- .draft-manifest.json); do echo "$c $(git show $c:.draft-manifest.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["label"])')"; done | head
    git diff <SOURCE label의 반입 커밋> HEAD -- templates/module-skills ':!templates/module-skills/*/*/evals/*'
    ```
-3. ③의 "이미 있으면" 갈래를 다시 돈다 → `SOURCE`의 `label`·`date`를 새 반입으로 고친다 → `restore check` 경고가 사라진다.
+3. ③의 "이미 있으면" 갈래를 다시 돈다 → `SOURCE`의 `label`·`date`를 새 반입으로 고친다 → `restore check` 경고가 사라진다. 옮긴 **뒤** label을 올린다 — label만 올려도 `restore.label`은 통과하므로 옮길 것이 남았는지는 2의 diff로 직접 확인한다.

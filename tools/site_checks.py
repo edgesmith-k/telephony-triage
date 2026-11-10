@@ -2402,9 +2402,32 @@ def _source(ctx: Ctx) -> re.Match | None:
     return SOURCE_RE.fullmatch(lines[0]) if len(lines) == 1 else None
 
 
+TEMPLATES = "templates/module-skills"
+NA_MODULES = f"해당 없음 — 반입 직전 커밋에 {TEMPLATES} 없음(스냅샷 없이 반입, 모듈 스킬은 MS-1에서 처음 채운다)"
+
+
+def _before_import(ctx: Ctx, path: str) -> bool | None:
+    """반입 직전 커밋(`.draft-manifest.json`을 마지막으로 바꾼 커밋 = 반입 커밋의 부모)에 path가 있었는가. 그 커밋을 모르면 None."""
+    git = ["git", "-C", str(ctx.root)]
+    code, out, _ = ctx.run(git + ["log", "-1", "--format=%H", "--", ".draft-manifest.json"], timeout=30)
+    if code or not out.strip():
+        return None
+    code, out, _ = ctx.run(git + ["rev-parse", "-q", "--verify", out.strip() + "^"], timeout=30)
+    if code or not out.strip():
+        return None
+    return ctx.run(git + ["cat-file", "-e", f"{out.strip()}:{path}"], timeout=30)[0] == 0
+
+
+def _no_module_skills(ctx: Ctx) -> bool:
+    """(가) 갈래: 스냅샷이 없고 반입 직전 커밋에 템플릿 트리가 없었다 — 떠 둘 사내 모듈 스킬이 없었다."""
+    return not (ctx.root / SNAPSHOT_DIR).exists() and _before_import(ctx, TEMPLATES) is False
+
+
 def restore_snapshot(ctx: Ctx) -> dict:
     d = ctx.root / SNAPSHOT_DIR
     cmd = f"ls {SNAPSHOT_DIR}"
+    if _no_module_skills(ctx):
+        return res("restore.snapshot", "info", NA_MODULES, cmd)
     if not d.is_dir():
         return res("restore.snapshot", "fail", f"{SNAPSHOT_DIR}/ 없음", cmd,
                    ask=f"스냅샷을 먼저 꺼낸다({RESTORE_DOC} ⓪)")
@@ -2421,6 +2444,8 @@ def restore_snapshot(ctx: Ctx) -> dict:
 
 def restore_source(ctx: Ctx) -> dict:
     cmd = f"cat {SNAPSHOT_DIR}/SOURCE"
+    if _no_module_skills(ctx):
+        return res("restore.source", "info", NA_MODULES, cmd)
     m = _source(ctx)
     if m is None:
         return res("restore.source", "fail", "SOURCE 없음 또는 형식 다름(한 줄 `label=<반입 라벨> sha=<sha> date=<yyyy-mm-dd>`)",
@@ -2433,6 +2458,8 @@ def restore_overlay(ctx: Ctx) -> dict:
     """`make_module_repo.py <임시> --site-overlay <스냅샷> --json`(임시 out, 레포 밖) 종료 0. 렌더 결과는 restore.tags가 본다."""
     snap = ctx.root / SNAPSHOT_DIR
     cmd = f"python3 tools/make_module_repo.py <임시> --site-overlay {SNAPSHOT_DIR} --json"
+    if _no_module_skills(ctx):
+        return res("restore.overlay", "info", NA_MODULES, cmd)
     if not snap.is_dir():
         return res("restore.overlay", "skip", "스냅샷 없음(restore.snapshot)", cmd)
     out = ctx.tmpdir() / "module-skills"
@@ -2452,8 +2479,13 @@ def restore_overlay(ctx: Ctx) -> dict:
 
 def restore_tags(ctx: Ctx) -> dict:
     if "restore" not in ctx._clones:
+        if _no_module_skills(ctx):
+            return res("restore.tags", "info", NA_MODULES, None)
         return res("restore.tags", "skip", "렌더 결과 없음(restore.overlay)", None)
     return module_tags(ctx, modules_doc(ctx._clones["restore"][0]), "restore.tags", partial_ok=False)
+
+
+VENDOR_IPC_PATH = "plugin/scripts/common/vendor_ipc.py"
 
 
 def restore_vendor_ipc(ctx: Ctx) -> dict:
@@ -2492,6 +2524,9 @@ def restore_vendor_ipc(ctx: Ctx) -> dict:
             else:
                 miss.append(f"{p}({dpath}{', placeholder 값' if fn == platforms.DUMP_FUNC_DEFAULT else ''})")
     cmd = "python3 plugin/scripts/parse_logcat.py parse <사내 로그> --rules <이슈 DB>/parser-rules --full"
+    if miss and not bad and _before_import(ctx, VENDOR_IPC_PATH) is False:   # (가): 반입 전에도 없던 기능 — 값이 없으면 반입 전과 같은 출력
+        return res("restore.vendor_ipc", "info", f"해당 없음 — 반입 직전 커밋에 {VENDOR_IPC_PATH} 없음. 꺼짐 — 켜려면 TODO(SITE:S9)"
+                   f"(없음 {', '.join(miss)})", cmd)
     if bad:
         return res("restore.vendor_ipc", "fail", f"플랫폼 설정 오류 {', '.join(bad)} — 키 경로는 parse_logcat.py 종료 2 메시지로(값은 보이지 않는다)",
                    cmd, ask=f"plugin/site-defaults.yaml의 기존 platform: 블록 안 vendor_ipc에 {'·'.join(vipc.KEYS)} 모두, oFono는 dump_func도, 식별자 모양으로({RESTORE_DOC} ②)")
@@ -2558,6 +2593,8 @@ def _import_label(ctx: Ctx) -> str | None:
 def restore_label(ctx: Ctx) -> dict:
     m = _source(ctx)
     cmd = "python3 -c 'json.load(open(\".draft-manifest.json\"))[\"label\"]'; git describe --tags --abbrev=0 --match 'import-*'"
+    if _no_module_skills(ctx):
+        return res("restore.label", "info", NA_MODULES, cmd)
     if m is None:
         return res("restore.label", "skip", "SOURCE 없음(restore.source)", cmd)
     cur = _import_label(ctx)

@@ -40,8 +40,9 @@
   돌린다. 나머지는 사외 결과 기록(`offsite_results.json`, 점검 `s2.offsite`)으로 갈음한다.
 - 새로 만들 때 트래커는 jira다(사내 결정: S30·S31 GitHub 트래커 항목은 해당 없음, S-3에서 `tracker.kind: jira`).
 - 사외 초안 PC(`.local-draft`)에서는 SITE_PROFILE.md를 만들지 않는다(종료 2, 반입 전 경계 검사가 막는 파일이다).
-- `restore`(docs/SITE_RESTORE.md)는 S-6까지 끝낸 사내 레포에서 사내 이름을 채운 템플릿 스냅샷(`docs/site/module-skills/`)을 반입 전에
-  떠 두고 반입 뒤 다시 얹는 순서를 보이는 독립 명령이다. SITE_PROFILE을 읽거나 쓰지 않고 `docs/site/steps/`에도 쓰지 않는다. `restore check`의 경고(warn)는 종료 코드에
+- `restore`(docs/SITE_RESTORE.md)는 S-6까지 끝낸 사내 레포의 재반입 순서를 보이는 독립 명령이다 — 갈래 (가) 레포에
+  `templates/module-skills`가 없으면 반입 전 할 일 없음, (나) 있으면 사내 이름을 채운 템플릿 스냅샷(`docs/site/module-skills/`)을 반입 전에
+  떠 두고 반입 뒤 다시 얹는다. SITE_PROFILE을 읽거나 쓰지 않고 `docs/site/steps/`에도 쓰지 않는다. `restore check`의 경고(warn)는 종료 코드에
   영향이 없다(실패·건너뜀·사용자 필요만 1).
 - `runtime-check`(계획 I O10, docs/development/RUNTIMES.md)는 단계와 무관하게 환경마다 한 번 돌리는 점검이다(SITE_PROFILE을 읽거나
   쓰지 않는다). 판정은 기존 코드: claude-gateway는 `claude_child.gateway_profile_check`(missing·differs → 1), opencode는
@@ -447,19 +448,23 @@ def coverage_cmd(root: Path, as_json: bool, out: str | None, min_lines: int | No
     return mc.render(result) + written, code
 
 
-RESTORE_STEPS = f"""사내 스냅샷 ({sc.RESTORE_DOC} "한눈에", S-6까지 끝낸 사내 레포 — 진행 상태 없음)
-재반입은 템플릿 파일을 사외 판으로 덮는다 — 사내에서 채운 모듈 스킬 파일·설정을 반입 전에 떠 두고 반입 뒤 다시 얹는다.
-반입 전(스냅샷이 없을 때 한 번)
-  ⓪ {sc.RESTORE_DOC} ⓪의 블록을 그대로 실행 — HEAD의 templates/module-skills(evals 뺌) → {sc.SNAPSHOT_DIR}/ + SOURCE 한 줄
+RESTORE_STEPS = f"""사내 재반입 ({sc.RESTORE_DOC} "한눈에", S-6까지 끝낸 사내 레포 — 진행 상태 없음)
+갈래(반입 전 레포에서 `git ls-files {sc.TEMPLATES} | head -1`): 출력 없음 = (가), 있음 = (나)
+  (가) 반입 전 할 일 없음 — 반입 뒤 ①·④(restore check: 모듈 스킬 점검은 해당 없음, 값 없는 vendor_ipc는 꺼짐)만.
+       새 기능은 값이 없으면 꺼진 채 반입 전과 같은 출력 — 켜려면 MS-1·TODO(SITE:S9)·S24·S25에서 처음 채운다
+  (나) 사내에서 채운 모듈 스킬 파일을 반입 전에 떠 두고 반입 뒤 다시 얹는다(아래 전부)
+반입 전((나), 스냅샷이 없을 때 한 번)
+  ⓪ {sc.RESTORE_DOC} ⓪의 블록을 그대로 실행 — HEAD의 {sc.TEMPLATES}(evals 뺌) → {sc.SNAPSHOT_DIR}/ + SOURCE 한 줄
 반입 뒤(순서대로)
   ① SITE_INSTALL.md 8절(`tools/import_draft.py --check-boundary`) → `python3 tools/site_step.py check S-6`
   ② plugin/site-defaults.yaml: 기존 `platform:` 블록 안 `vendor_ipc`에 다섯 키 모두(사내 로그의 요청 완료 줄·IPC 오류 줄 토큰),
-     oFono는 구성요소 플래그 `level_unreliable`·`vendor_ipc`도(이슈 DB tags.yaml 선언이 없을 때)
+     oFono는 `dump_func`, 구성요소 플래그 `level_unreliable`(레벨 칸을 못 믿는 구성요소)·`vendor_ipc`(벤더 IPC 줄을 내는 구성요소)도
+     (이슈 DB tags.yaml 선언이 없을 때) — 반입 전에 쓰던 값과 같게, (가)는 켤 때만
   ④ `python3 tools/site_step.py restore check` — 실패 줄의 "할 일"대로 채운다
-  ③ `python3 tools/make_module_repo.py $OUT --site-overlay {sc.SNAPSHOT_DIR}` — 레포가 없으면 push, 있으면 diff → GHE PR
-  ④ `python3 tools/check_boundary.py --mode site` · `python3 -m pytest -q tests/test_modulefilter.py tests/test_module_templates.py`
-     · parse_logcat 비교(벤더 IPC 이벤트 수)
-  ⑦ 템플릿 diff(SOURCE label의 반입 커밋 → HEAD)를 스냅샷에 옮긴 뒤 SOURCE label·date 갱신
+  ③ (나) `python3 tools/make_module_repo.py $OUT --site-overlay {sc.SNAPSHOT_DIR}` — 레포가 없으면 push, 있으면 diff → GHE PR
+  ④ `python3 tools/check_boundary.py --mode site` · (나) `python3 -m pytest -q tests/test_modulefilter.py tests/test_module_templates.py`
+     · (나) parse_logcat 비교(벤더 IPC 이벤트 수)
+  ⑦ (나) 템플릿 diff(SOURCE label의 반입 커밋 → HEAD)를 스냅샷에 옮긴 뒤 SOURCE label·date 갱신
 그 밖: ⑤ 거부 목록(TT_DENY_FILE) · ⑥ (선택) 사내 실제 이슈 case(tests/site/module-evals, --case로 고른 것만)
 명령·설명 전체: {sc.RESTORE_DOC}"""
 
