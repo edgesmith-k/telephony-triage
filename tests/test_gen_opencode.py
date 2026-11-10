@@ -149,7 +149,7 @@ def test_template_read_denies_raw_job_files():
     assert denies == guard.RAW_NAMES
     assert all(keys.index(f"**/{n}") > keys.index("*") for n in denies)
     rendered = gen_opencode.render_config(_template(), {"@@PLUGIN_ROOT@@": "/p", "@@WORK_ROOT@@": "/w", "@@PLUGIN_ROOT_REL@@": "p",
-                                              "@@WORK_ROOT_REL@@": "w", "@@GATEWAY_BASE_URL@@": "https://g/v1",
+                                              "@@WORK_ROOT_REL@@": "w", "@@GATEWAY_BASE_URL@@": "https://gw.example.invalid/v1",
                                               "@@MODEL_ID@@": "m"}, [])
     assert rendered["permission"]["read"] == read
 
