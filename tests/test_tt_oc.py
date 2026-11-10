@@ -463,6 +463,28 @@ def test_script_flow_without_script_output_is_not_ok(env):
     assert tt(env, "--command", "tt-analyze", "--", "ABC-1", extra_env={"STUB_SHOWN": str(plat)}).returncode == 0
 
 
+def test_finish_reason_length_step_limit_and_zero_tokens(env):
+    """런타임 리뷰 4: 끝난 이유를 보이고, 출력 한도(length)·에이전트 스텝 한도는 no-final-text와 다른 이름(종료 1). 토큰 0은 주의."""
+    events(env, [ev("step_start"), ev("text", text="잘린 화면"), step("length")])
+    r = tt(env, "--", "x")
+    assert r.returncode == 1 and "outcome: length" in r.stdout and "finish: length" in r.stdout and "finish=length" in r.stdout
+    agents = env["proj"] / ".opencode" / "agents"
+    agents.mkdir(parents=True)
+    (agents / "triage.md").write_text("---\ndescription: x\nmode: primary\nsteps: 3\n---\nbody\n", encoding="utf-8")
+    write_meta(env["proj"], env["plug"], env["work"])
+    events(env, [*[e for _ in range(2) for e in (ev("step_start"), tool("bash"), step("tool-calls"))], *final("최대 스텝")])
+    r = tt(env, "--json", "--", "x")
+    out = json.loads(r.stdout)
+    assert r.returncode == 1 and out["outcome"] == "step-limit" and out["steps"] == 3 and out["finish"] == "stop"
+    events(env, [ev("step_start"), tool("bash"), step("tool-calls"), *final()])           # 한도 아래는 그대로
+    r = tt(env, "--", "x")
+    assert r.returncode == 0 and "finish: stop" in r.stdout and "주의: 토큰" not in r.stdout
+    events(env, [ev("step_start"), ev("text", text="끝"), step(inp=0, out=0)])
+    r = tt(env, "--", "x")
+    assert r.returncode == 0 and "주의: 토큰 사용량이 0" in r.stdout
+    assert json.loads(tt(env, "--json", "--", "x").stdout)["notes"]
+
+
 def test_doctor_gateway_key_and_url_rows_warn_only(env):
     """런타임 리뷰 3: 키 환경 변수(opencode.json apiKey `{env:…}`)·baseURL `/v1` 모양은 warn(시작은 막지 않는다). 값은 적지 않는다."""
     def install(url, key="{env:TT_GATEWAY_API_KEY}"):

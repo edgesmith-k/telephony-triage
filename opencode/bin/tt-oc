@@ -79,7 +79,8 @@ USER_CMD = re.compile(r"run this exact command yourself:\s*(.+)", re.DOTALL)
 WRITE_CMD = re.compile(r"(db_pr\.py\s+(publish|merge|request-review)|issue_post\.py\s+approve|skill_patch\.py\b.*--apply"
                        r"|module_eval\.py|\bgit\s+push\b|\bgh\s+pr\s+(merge|create|review)\b)")
 SHOWN_KINDS = ("report", "push", "post", "draft", "patch", "evidence")   # evidence: check-output 결과 줄(심층 첫 줄·근거 원문 검사, B2 R19, common.shown.LINE_KINDS)
-EXIT = {"ok": 0, "error": 1, "no-final-text": 1, "no-script-output": 1, "blocked": 3, "timeout": 124, "no-response": 124}
+EXIT = {"ok": 0, "error": 1, "no-final-text": 1, "length": 1, "step-limit": 1, "no-script-output": 1, "blocked": 3,
+        "timeout": 124, "no-response": 124}
 # 첫 응답(이벤트) 시한(초): 게이트웨이 주소·키·프록시가 틀리면 opencode는 아무것도 내지 않고 재시도만 한다(런타임 리뷰 3)
 FIRST_RESPONSE_TIMEOUT = 120.0
 GATEWAY_HINT = "tt-oc doctor의 gateway-key·gateway-url 행과 site_step.py runtime-check opencode의 사내 확인 0 curl로 게이트웨이를 확인한다"
@@ -402,8 +403,8 @@ def _kill_group(proc) -> None:
             continue
 
 
-def judge(events: list[dict], code: int | None, no_response: bool = False) -> dict:
-    """이벤트 → {outcome, session, final_text, blocked[{tool, message}], user_commands, errors, steps, tokens, finish}."""
+def judge(events: list[dict], code: int | None, no_response: bool = False, step_limit: int | None = None) -> dict:
+    """이벤트 → {outcome, session, final_text, blocked[{tool, message}], user_commands, errors, steps, tokens, finish, notes}."""
     session, final, blocked, errors, cmds, warnings = None, [], [], [], [], []
     tokens = dict.fromkeys(OCV.TOKEN_KINDS, 0)
     steps, finish = 0, None
@@ -446,14 +447,32 @@ def judge(events: list[dict], code: int | None, no_response: bool = False) -> di
         outcome = "timeout"
     elif code != 0 or any(e.startswith("error: ") for e in errors):
         outcome = "error"
+    elif finish == OCV.FINISH_LENGTH:
+        outcome = "length"                 # 모델 출력 한도에서 잘렸다(런타임 리뷰 4)
+    elif step_limit and steps >= step_limit:
+        outcome = "step-limit"             # 에이전트 `steps` 한도에 닿았다 — 흐름이 끝나지 않았을 수 있다
     elif finish != OCV.FINISH_STOP or not text:
         outcome = "no-final-text"
     elif blocked:
         outcome = "blocked"
     else:
         outcome = "ok"
+    notes = []
+    if steps and not any(tokens.values()):
+        notes.append("토큰 사용량이 0이다 — 게이트웨이가 스트리밍 usage를 주지 않는 것 같다(토큰·한도 판단 불가, 사내 확인 3)")
     return {"outcome": outcome, "session": session, "final_text": text, "blocked": blocked, "user_commands": cmds,
-            "errors": errors, "guard_warnings": warnings, "steps": steps, "tokens": tokens, "finish": finish, "exit": code}
+            "errors": errors, "guard_warnings": warnings, "steps": steps, "tokens": tokens, "finish": finish, "exit": code,
+            "notes": notes}
+
+
+def agent_step_limit(proj: Path) -> int | None:
+    """설치한 triage 에이전트의 `steps:`(frontmatter). 없거나 읽지 못하면 None(한도 판정 안 함)."""
+    try:
+        head = (proj / ".opencode" / "agents" / f"{AGENT}.md").read_text(encoding="utf-8").split("\n---", 1)[0]
+    except OSError:
+        return None
+    m = re.search(r"^steps:\s*(\d+)\s*$", head, re.MULTILINE)
+    return int(m.group(1)) if m else None
 
 
 def ran_plugin_script(events: list[dict]) -> bool:
@@ -607,7 +626,7 @@ def main(argv=None) -> int:
     cmd += ["--", *a.message]
     since = time.time() - 1.0
     events, raw, code, tail, silent = run_opencode(cmd, cwd=proj, env=env, timeout=a.timeout, progress=not a.json)
-    res = judge(events, code, no_response=silent)
+    res = judge(events, code, no_response=silent, step_limit=agent_step_limit(proj))
     recs, warn = shown_records(work_dirs_for(meta, a.work_dir), since)
     if res["outcome"] == "ok" and a.oc_command in SCRIPT_FLOWS and not recs and not ran_plugin_script(events):
         res["outcome"] = "no-script-output"
@@ -637,7 +656,14 @@ def main(argv=None) -> int:
     print("\n---- [tt-oc] 결과 ----")
     t = res["tokens"]
     print(f"outcome: {res['outcome']} · session: {res['session'] or '없음'} · steps: {res['steps']} · "
-          f"tokens in/out/reasoning: {t['input']}/{t['output']}/{t['reasoning']} · cost: 미상(OpenCode cost 0은 0원이 아니다)")
+          f"tokens in/out/reasoning: {t['input']}/{t['output']}/{t['reasoning']} · cost: 미상(OpenCode cost 0은 0원이 아니다) · "
+          f"finish: {res['finish'] or '없음'}")
+    if res["outcome"] == "length":
+        print("오류: 모델 출력이 한도(finish=length)에서 잘렸다 — 화면·답이 끝나지 않았다. 이어가기로 계속하거나 보고한다")
+    if res["outcome"] == "step-limit":
+        print(f"오류: 에이전트 스텝 한도({res['steps']}스텝)에 닿았다 — 흐름이 끝나지 않았을 수 있다. 이어가기(-s)로 계속하거나 보고한다")
+    for n in res["notes"]:
+        print(f"주의: {n}")
     for w in warn:
         print(f"경고: 표시 기록 {w}")
     for w in res["guard_warnings"]:

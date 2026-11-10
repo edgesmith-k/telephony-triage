@@ -163,7 +163,7 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
 
 - `--dry-run` 한 번으로 리포트와 확인 화면을 다 본다. lock owner는 환경 변수로 줄 수 없어(허용 목록이 대입을 거부) analyze 작업의 `db_pr`·`db_verify`가 작업 상태(`triage-state.json`)에서 읽는다. analyze 밖의 쓰기 흐름(`tt-record` 등)은 OpenCode에서 lock(`lock owner 불일치`)에서 멈춘다 — Claude Code에서 한다. tt-oc 옵션(`--delete-session`·`-s` 등)은 **`--` 앞에** 둔다 — 뒤에 두면 모델에게 가는 메시지가 된다.
 
-- 종료 0(끝남)이나 3(막힌 호출 — 사용자 차례). 1·2·124면 그대로 보고한다. `tt-analyze`·`tt-record`가 스크립트를 한 번도 돌리지 않고(화면 기록도 없이) 끝나면 `outcome: no-script-output`·종료 1이다 — 도구 호출을 글로 내는 게이트웨이를 의심하고 3.2 사내 확인 0 (c)를 본다.
+- 종료 0(끝남)이나 3(막힌 호출 — 사용자 차례). 1·2·124면 그대로 보고한다. `tt-analyze`·`tt-record`가 스크립트를 한 번도 돌리지 않고(화면 기록도 없이) 끝나면 `outcome: no-script-output`·종료 1이다 — 도구 호출을 글로 내는 게이트웨이를 의심하고 3.2 사내 확인 0 (c)를 본다. 결과 줄의 `finish`가 `length`면 `outcome: length`(출력 한도 16000에서 잘림), 에이전트 `steps` 한도(50)에 닿으면 `step-limit` — 둘 다 종료 1. 토큰이 0이면 `주의:` 줄(사내 확인 3).
 - 래퍼가 표시 기록(report·must_show·근거 검사 줄)을 그대로 출력한다.
 - 막힌 호출은 `[telephony-triage]`·"run this exact command yourself: …"가 그대로 나오고, 모델이 다른 모양으로 재시도하지 않는다.
 - 질문은 번호 선택지로 끝난다 → `tt-oc --project <dest> -s <세션> -- <번호>`. 마지막 이어가기에 붙인다: `tt-oc --project <dest> -s <세션> --delete-session -- <번호>`(이어가기가 없으면 첫 실행의 `--` 앞에).
