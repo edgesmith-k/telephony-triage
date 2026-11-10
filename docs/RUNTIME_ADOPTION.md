@@ -148,9 +148,10 @@ opencode/bin/tt-oc --project <dest> doctor
 python3 tools/site_step.py runtime-check opencode --project <dest>
 ```
 
+- 프록시·사내 CA: `tt-oc`는 환경을 지우지 않고 opencode에 넘긴다(`HTTPS_PROXY`·`NO_PROXY`·`NODE_EXTRA_CA_CERTS` 등, 거부하는 것은 `OPENCODE_*` 설정 덮기뿐). curl과 같은 셸에서 실행한다 — opencode가 그 변수로 게이트웨이에 닿는지는 3.3 첫 실행에서 본다(닿지 않으면 `no-response`).
 - `tt-oc doctor` 행: `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만), warn `module-skills`·`read-roots`·`gateway-key`(opencode.json `apiKey`의 `{env:…}` 변수가 없거나 빔)·`gateway-url`(baseURL이 `…/v1`로 끝나지 않음, 게이트웨이 경로가 원래 다르면 무시). fail이면 종료 2.
 - `runtime-check opencode`: 위 + 관리 설정(없으면 warn) + OpenCode용 사내 확인 0 curl(실행 안 함). fail이면 종료 1.
-- 사내 확인 0(OpenCode)은 OpenAI 호환 모양이다: (a) 토큰 0 `GET <baseURL>/models`에 모델 ID가 있는지, (b) 선택 `POST <baseURL>/chat/completions` 스트리밍 `tool_calls`(도구 강제), (c) 같은 요청의 자동 선택(`tool_choice: "auto"` — 실제 실행 모양, 도구 호출이 `content` 글로만 나오면 실패). 설치한 `opencode.json`의 baseURL·모델을 채워 보이고 키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다.
+- 사내 확인 0(OpenCode)은 OpenAI 호환 모양이다: (a) 토큰 0 `GET <baseURL>/models`에 모델 ID가 있는지(정보 — 게이트웨이가 목록을 안 주면 404여도 된다. 설치 설정은 모델 ID를 `opencode.json` `models`에 고정한다), (b) 선택 `POST <baseURL>/chat/completions` 스트리밍 `tool_calls`(도구 강제), (c) 같은 요청의 자동 선택(`tool_choice: "auto"` — 실제 실행 모양, 도구 호출이 `content` 글로만 나오면 실패). 설치한 `opencode.json`의 baseURL·모델을 채워 보이고 키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다.
 
 ### 3.3 에이전트 규칙 확인 (짧은 실행 1~2회)
 
@@ -196,7 +197,7 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
 |---|---|
 | `tt-oc doctor`·`runtime-check opencode` 종료 0(관리 설정 warn은 사유 기록) | 버전 불일치·설정 우회 — 보고 |
 | 3.3 실행에서 규칙 지킴 | 막힌 호출 재시도, 화면 요약 |
-| 사내 확인 0(OpenCode, OpenAI 호환 (a)·(b)) 통과, 3.3 실행이 실제 확인 | `/models`에 모델 없음, tool_calls 안 나옴 |
+| 사내 확인 0(OpenCode, OpenAI 호환 (a)·(b)) 통과, 3.3 실행이 실제 확인 | (b)·(c)에서 tool_calls 안 나옴(글로만), 모델 ID 거부. `/models` 404만으로는 no-go가 아니다 |
 | Jira가 필요하면 3.4 통과, 아니면 "닫힘 — 이슈 본문은 `--issue-file`" 안내 | 오류 본문 위험 수용 여부 미정 |
 
 ## 4. 공통

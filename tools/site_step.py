@@ -956,7 +956,7 @@ def oc_check0_text(proj: Path | None) -> str:
         "사내 확인 0(OpenCode) — 게이트웨이 OpenAI 호환 엔드포인트 (이 도구는 실행하지 않는다, 사용자가 터미널에서 한 번):",
         "```sh",
         f"BASE='{base}'; MODEL='{model}'   # 키: export TT_GATEWAY_API_KEY=… (출력·파일에 적지 않는다)",
-        "# (a) 토큰 0: 모델 목록에 $MODEL이 있는지",
+        "# (a) 토큰 0(정보): 모델 목록에 $MODEL이 있는지 — 404여도 막지 않는다(모델 ID는 opencode.json에 고정)",
         'curl -sS "$BASE/models" -H "authorization: Bearer $TT_GATEWAY_API_KEY"',
         "# (b) 선택(토큰 소량): 스트리밍 tool_calls",
         'curl -sS -N "$BASE/chat/completions" -H "content-type: application/json" \\',
@@ -967,7 +967,7 @@ def oc_check0_text(proj: Path | None) -> str:
         '  -H "authorization: Bearer $TT_GATEWAY_API_KEY" \\',
         f"  -d '{OC_CHECK0_AUTO_BODY}'",
         "```",
-        '통과: (a) `"data"`에 `"id":"<MODEL>"`, (b)·(c) `data:` 줄 `delta`에 `"tool_calls"`(이름 `get_time`), 끝에 `data: [DONE]`. '
+        '통과: (a) `"data"`에 `"id":"<MODEL>"`(404·목록 없음은 정보 — 판단은 (b)·(c)), (b)·(c) `data:` 줄 `delta`에 `"tool_calls"`(이름 `get_time`), 끝에 `data: [DONE]`. '
         "(c)에서 도구 호출이 `content` 글(JSON)로만 나오면 실패다 — 에이전트가 스크립트를 돌리지 못한다. "
         "결과(통과/실패와 첫 오류 줄 — 키는 빼고)를 보고한다. Anthropic 모양(/v1/messages)은 Claude Code용이다.",
     ])
