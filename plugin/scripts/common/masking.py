@@ -27,7 +27,7 @@
   M11 호스트는 `host<n>`(journal 형식 정규식의 호스트 칸에 그대로 맞아 마스킹한 줄도 해석된다).
 - **남은 식별자(`residual`)·가리기(`redact`)**: 로그 마스커의 `find()` 그대로(다른 탐지기 없음), 줄 단위.
   그래서 `residual(mask(x)) == {}`가 구조상 성립한다.
-- **갈린 덤프 조각(`SPLIT_KINDS`)**: oFono 덤프 함수(`<함수>() ` 뒤가 조각인 줄 모양)가 IMSI·ICCID 값을 두 줄에 가르면(`common.dumpjoin`으로 묶음)
+- **갈린 덤프 조각(`SPLIT_KINDS`)**: oFono 덤프 함수(site-defaults `dump_func`, `<이름>() ` 뒤가 조각)가 IMSI·ICCID 값을 두 줄에 가르면(`common.dumpjoin`으로 묶음)
   키 있는 IMSI·ICCID 규칙만 이은 글에 돌려 조각 경계를 넘는 맞음을 줄별 강제 구간(`forced`)으로 되돌린다. 토큰은 전체
   값으로 한 번 만들고(개수 1회) 조각마다 같은 토큰을 쓰며, 조각 글자도 번호 표에 그 토큰으로 넣는다(`mask_value`).
   `mask_lines`·`mask_records`가 이 경로이고 `residual`·`redact`도 같은 맞음을 센다/가린다. 키 없는 규칙(15자리·`89…`·
@@ -572,7 +572,7 @@ def new_masker(existing_text: str | None = None, allow_patterns: Iterable[str] =
     return Masker(allow_patterns=allow_patterns, existing_text=existing_text, log_lines=log_lines)
 
 
-# --- 갈린 덤프 조각 (oFono 덤프 함수, 줄 모양 `common.dumpjoin.DUMP_RE`) ------------------------------
+# --- 갈린 덤프 조각 (oFono 덤프 함수, 표식 `common.dumpjoin.mark()`) -----------------------------------
 
 SPLIT_KINDS = ("IMSI", "ICCID")
 

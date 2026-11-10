@@ -120,14 +120,41 @@ def test_pid_or_ident_differs_not_joined():
         assert masking.residual("\n".join(lines)) == masking.residual(lines[0])
 
 
-def test_dump_shape_not_name():
-    """덤프 함수 이름은 코드에 없다 — 어떤 `<함수>() `든 같은 모양이면 잇고(지어낸 다른 이름도 같은 토큰), 함수가 다르면 잇지 않는다."""
-    other = [ln.replace("example_dump()", "site_dump_x()") for ln in _split(IMSI_A, IMSI_B)]
-    assert _mask(other)[0] == [ln.replace("example_dump()", "site_dump_x()") for ln in _mask(_split(IMSI_A, IMSI_B))[0]]
+def test_dump_func_from_site_defaults():
+    """덤프 함수 이름은 site-defaults `dump_func`(기본 placeholder) — 정한 이름의 줄만 잇고, 다른 함수 줄은 잇지 않는다."""
+    site = [ln.replace("example_dump()", "site_dump_x()") for ln in _split(IMSI_A, IMSI_B)]
+    want = [ln.replace("example_dump()", "site_dump_x()") for ln in _mask(_split(IMSI_A, IMSI_B))[0]]
+    try:
+        dumpjoin.configure("site_dump_x")
+        assert _mask(site)[0] == want
+        for out, plain in _both(_split(IMSI_A, IMSI_B)):                      # placeholder 이름은 이제 덤프가 아니다
+            assert out == plain and IMSI_B in out[1]
+    finally:
+        dumpjoin.configure(dumpjoin.DEFAULT_FUNC)
     mixed = _split(IMSI_A, IMSI_B, head_b=_dump("05.350").replace("example_dump()", "other_fn()"))
     for out, plain in _both(mixed):
         assert out == plain and IMSI_B in out[1]
     assert dumpjoin.groups_from_lines(["no call here", "x[1]: plain text"]) == []
+    # 다른 프로세스가 읽는 site-defaults 값: oFono 블록 위치는 기본 플랫폼에 따라, 이상한 값은 기본값(검증은 platforms)
+    assert dumpjoin.func_from({"platform": {"others": {"ofono": {"dump_func": "site_dump_x"}}}}) == "site_dump_x"
+    assert dumpjoin.func_from({"platform": {"name": "ofono", "dump_func": "site_dump_x"}}) == "site_dump_x"
+    assert dumpjoin.func_from({"platform": {"dump_func": "site_dump_x"}}) == dumpjoin.DEFAULT_FUNC == platforms.DUMP_FUNC_DEFAULT
+    assert dumpjoin.func_from({"platform": {"others": {"ofono": {"dump_func": "x() y"}}}}) == dumpjoin.DEFAULT_FUNC
+    assert dumpjoin.func_from(None) == dumpjoin.DEFAULT_FUNC
+
+
+def test_other_function_lines_do_not_weaken_masking():
+    """다른 함수 줄은 덤프 조각이 아니다: 시각 없는 덤프 조각 사이에 끼어도 묶음을 닫지 않고, 같은 함수의 보통 줄을
+    이어 다른 규칙(MAC)을 막지 않는다(리뷰 재현 입력 두 개)."""
+    untimed = ["ofonod[100]: src/dbus.c:example_dump() info imsi=45000123",
+               "ofonod[100]: src/network.c:other_fn() status ok",
+               "ofonod[100]: src/dbus.c:example_dump() 4567890 end"]
+    out = _mask(untimed)[0]
+    assert out[2].endswith("<IMSI#1> end") and "4567890" not in masking.redact("\n".join(untimed))[0]
+    timed = ["Sep 20 14:32:11.100 host ofonod[100]: src/sim.c:read_cb() iccid=8982012345678901",
+             "Sep 20 14:32:11.200 host ofonod[100]: src/sim.c:read_cb() 23:45:67:89:ab:cd"]
+    assert _mask(timed)[0][1].endswith("read_cb() <MAC#1>")
+    assert masking.residual("\n".join(timed)).get("MAC") == 1
 
 
 def test_same_imsi_whole_elsewhere_same_number():
@@ -286,6 +313,39 @@ def test_parse_window_piece_two_only(tmp_path):
         assert [e["msg"] for e in full] == [win[0]["msg"]]
 
 
+def test_parse_main_uses_site_dump_func(tmp_path):
+    """`parse_logcat.py parse --mask`는 자기 site-defaults의 `dump_func`로 조각을 잇는다(플러그인 루트별)."""
+    import subprocess
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import make_plugin_root
+    from runner import variant_db
+
+    log = tmp_path / "site.log"
+    first, second = (ln.replace("example_dump()", "site_dump_x()") for ln in _split(IMSI_A, IMSI_B))
+    log.write_text("\n".join([first, OTHER, second]) + "\n", encoding="utf-8")
+    rules = variant_db("issue-db-ofono") / "parser-rules"
+
+    def msgs(root):
+        proc = subprocess.run([sys.executable, str(root / "scripts" / "parse_logcat.py"), "parse", str(log), "--rules",
+                               str(rules), "--tz", "Asia/Seoul", "--year", "2026", "--mask", "--full", "--plugin-root",
+                               str(root)], capture_output=True, text=True, encoding="utf-8")
+        assert proc.returncode == 0, proc.stderr
+        return " ".join(e["msg"] or "" for e in json.loads(proc.stdout)["events"])
+
+    plain = make_plugin_root.make()
+    assert IMSI_B in msgs(plain)                                         # placeholder 이름이면 잇지 않는다
+    site = make_plugin_root.make()
+    path = site / "site-defaults.yaml"
+    import yaml
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data.setdefault("platform", {}).setdefault("others", {}).setdefault("ofono", {})["dump_func"] = "site_dump_x"
+    if data["platform"].get("name") == "ofono":
+        data["platform"]["dump_func"] = data["platform"]["others"].pop("ofono")["dump_func"]
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    out = msgs(site)
+    assert IMSI_B not in out and "<IMSI#1>, more}" in out
+
+
 def test_parse_window_no_context_leak(tmp_path):
     events = _parse(_split_log(tmp_path, IMSI_A, IMSI_B), "--mask", *BETWEEN)
     lo, hi = (parse_logcat.logtime.parse_ts(t) for t in BETWEEN[1:])
@@ -294,12 +354,12 @@ def test_parse_window_no_context_leak(tmp_path):
 
 
 def test_parse_window_same_as_backend_window(tmp_path):
-    """덤프 조각 모양(`DUMP_RE`)이 있는 로그: 창 뒤 자르기(마스킹) 레코드 집합이 백엔드 창 자르기(비마스킹)와 같다 — 경계 포함."""
+    """덤프 표식(`dumpjoin.mark()`)이 있는 로그: 창 뒤 자르기(마스킹) 레코드 집합이 백엔드 창 자르기(비마스킹)와 같다 — 경계 포함."""
     log = tmp_path / "ofono.log"
     first, second = _split(IMSI_A, IMSI_B)
     lines = [first, OTHER, _dump("05.300") + "start", second, _dump("05.400") + "edge", _dump("05.401") + "after"]
     log.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    assert dumpjoin.DUMP_RE.search(log.read_text(encoding="utf-8"))
+    assert dumpjoin.mark() in log.read_text(encoding="utf-8")
 
     def key(events):
         return sorted((e["ts"], e["tag"], e.get("event")) for e in events)

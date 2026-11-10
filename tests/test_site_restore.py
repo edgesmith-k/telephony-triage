@@ -60,7 +60,8 @@ def restored(tmp_path, monkeypatch, *, ipc=True, deny=True, label=LABEL) -> Path
     root, remote = make_site(tmp_path)
     d = {"module_skills": {"remote": remote}}
     if ipc:
-        d["platform"] = {"enabled": ["android", "ofono"], "vendor_ipc": dict(IPC), "others": {"ofono": {"vendor_ipc": dict(IPC)}}}
+        ofono = {"vendor_ipc": dict(IPC), "dump_func": "site_dump_x"}
+        d["platform"] = {"enabled": ["android", "ofono"], "vendor_ipc": dict(IPC), "others": {"ofono": ofono}}
     (root / "plugin" / "site-defaults.yaml").write_text(yaml.safe_dump(d), encoding="utf-8")
     snap = root / sc.SNAPSHOT_DIR
     shutil.copytree(mr.MOCK, snap)
@@ -149,6 +150,13 @@ def test_restore_vendor_ipc_needs_both_keys_and_site_values(tmp_path, monkeypatc
         r = run(root)["restore.vendor_ipc"]
         assert r["status"] == "needs-user" and "ofono(platform.others.ofono.vendor_ipc, placeholder 값)" in r["evidence"]
         assert placeholder not in json.dumps(r, ensure_ascii=False) and "request_prefix" in r["ask"]
+    d["platform"]["others"]["ofono"]["vendor_ipc"] = dict(IPC)
+    for fn in (None, "example_dump"):                                 # oFono 덤프 함수 이름: 없거나 placeholder면 통과 아님
+        d["platform"]["others"]["ofono"]["dump_func"] = fn
+        path.write_text(yaml.safe_dump(d), encoding="utf-8")
+        r = run(root)["restore.vendor_ipc"]
+        assert r["status"] == "needs-user" and "ofono(platform.others.ofono.dump_func" in r["evidence"] and "dump_func" in r["ask"]
+    d["platform"]["others"]["ofono"]["dump_func"] = "site_dump_x"
     d["platform"]["vendor_ipc"] = {"context": "SiteCtx_"}            # 키 하나만 → platforms.load 오류 → 실패
     path.write_text(yaml.safe_dump(d), encoding="utf-8")
     r = run(root)["restore.vendor_ipc"]

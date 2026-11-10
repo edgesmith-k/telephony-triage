@@ -29,7 +29,7 @@
   - 대상 인자: mask_pii `--out`·`--in-place`, parse_logcat·db_review·triage `--out`, db_build `--preview`, jira_fields `--meta-out`·`--consume`. `=` 꼴, argparse 약어, 인터프리터 옵션도 처리한다.
   - clone 안이면 deny, `db_build --write`가 clone을 향하면 ask. OpenCode는 guard 판정을 따른다.
 - **F3** `--check`도 `forced_lines`로 조각을 묶고, 조각마다 원래 줄 번호로 알린다.
-- **F4** 덤프 조각 모양(`DUMP_RE`)이 있는 입력만 창 없이 파싱해 묶은 뒤 창을 자른다. 백엔드 인터페이스는 바꾸지 않았다.
+- **F4** 덤프 표식(`dumpjoin.mark()`)이 있는 입력만 창 없이 파싱해 묶은 뒤 창을 자른다. 백엔드 인터페이스는 바꾸지 않았다.
 - **F6** 3.10에서는 `sre_parse`로 대체하고, `POSSESSIVE_REPEAT`는 있을 때만 쓴다.
 - **F8** 감사 근거 행에서 `skipped`·`error`·`fabricated` 없음·`source: null`은 미검증으로 보고 skip으로 둔다.
 
@@ -40,7 +40,7 @@
 - F5 자정·연말 조각: `dumpjoin._sec`이 날짜를 버린다. 음수 차이에 +86400을 더하는 정도면 된다.
 - F7 `modulefilter` 중복 키에 phone 추가.
 - F9 `docs_read_row`: offset·limit 합집합이 문서 줄 수를 덮을 때만 "읽음"으로 본다.
-- F4 잔여: 덤프 조각 모양(`DUMP_RE`)이 있는 입력에서 `--mask`일 때만 창 비교가 ms로 잘린 `ts` 기준이 된다. 그래서 창 끝 바로 뒤(4~9자리 소수) 레코드가 더 나온다. 고치려면 창 선택은 백엔드 결과를 쓰고, 묶기에만 창 없는 파싱을 쓴다.
+- F4 잔여: 덤프 표식(`dumpjoin.mark()`)이 있는 입력에서 `--mask`일 때만 창 비교가 ms로 잘린 `ts` 기준이 된다. 그래서 창 끝 바로 뒤(4~9자리 소수) 레코드가 더 나온다. 고치려면 창 선택은 백엔드 결과를 쓰고, 묶기에만 창 없는 파싱을 쓴다.
 - 조각 사이에 같은 프로세스의 다른 덤프 레코드가 끼면 조각이 묶이지 않아 원문이 남는다(`--full`도 같음, 기존 dumpjoin 동작). 실제 oFono 덤프에서 이런 배치가 나오는지 사내 로그로 확인할 것.
 - code_roots가 `db_lint._parser_mod`를 늦게 import한다(첫 호출에 약 30ms). `common.skillcheck`의 `_sre`·`_src`로 바꿀 수 있다.
 - `tools/site_step.py`의 S-단계에 S36이 이름으로 나오지 않는다. 지금은 `TODO(SITE:S36)` 잔여 검사로만 걸린다.

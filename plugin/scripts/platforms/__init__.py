@@ -11,7 +11,8 @@ site-defaults에 `platform.name`이 없을 때만 쓴다.
   `platform.others.<name>` 블록이다. 받는 상수 키는 `SPEC.block_keys`다. `components`(구성요소, 통째로 바뀜)와
   `protocols.<이름>: {kind, ...}`(설정 정의 짝 규칙, `SPEC.protocol_kinds`)는 `PlatformProfile.components`·`protocols`.
   `vendor_ipc: {context, complete, request_prefix, error_prefix, success}`(벤더 IPC 줄의 사내 토큰, 생략 = placeholder)는
-  `PlatformProfile.vendor_ipc`.
+  `PlatformProfile.vendor_ipc`. `dump_func`(oFono 덤프 함수 이름, 생략 = placeholder `example_dump`)는
+  `PlatformProfile.dump_func`(`common.dumpjoin`이 갈린 덤프 조각을 잇는 표식).
 - `backend_name(defaults, name)`: 그 플랫폼의 파서 백엔드 이름. `raw_line_finders(defaults)`: 켠 플랫폼의 원문 줄 판별.
 
 파일 I/O도 전역 상태도 없다(불변 `SPEC` 캐시만) — 호출한 쪽이 값을 들고 다니며(`ParserBackend.configure`,
@@ -48,6 +49,8 @@ from platforms.base import (  # noqa: F401  (계약 타입을 `platforms.X`로�
 )
 from common import vendor_ipc as _vipc
 
+DUMP_FUNC_DEFAULT = "example_dump"         # `common.dumpjoin.DEFAULT_FUNC`와 같다(placeholder)
+
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 COMPONENT_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")   # 구성요소 이름 (placeholder `daemon-a`)
 ROOT_KEY_RE = re.compile(r"^[a-z][a-z0-9_]*$")          # 소스 루트 키 = code_ref 키 형식 (plan.schema.json)
@@ -72,6 +75,7 @@ class PlatformProfile:
     components: tuple = ()                     # `(Component, ...)` — `<블록>.components`(없으면 `SPEC.components`)
     protocols: tuple = ()                      # `(PairProtocol, ...)` — `SPEC.protocols` 다음 설정 정의(`kind`) 순서
     vendor_ipc: _vipc.Spec = _vipc.DEFAULT     # `<블록>.vendor_ipc`(벤더 IPC 줄의 사내 토큰, 블록 생략은 placeholder 기본)
+    dump_func: str = DUMP_FUNC_DEFAULT          # `<블록>.dump_func`(oFono 덤프 함수 이름, 생략은 placeholder)
 
 
 # -- 레지스트리 --------------------------------------------------------------------
@@ -378,6 +382,15 @@ def _components(raw, base: str, spec: PlatformSpec) -> tuple:
     return tuple(out)
 
 
+def _dump_func(raw, base: str) -> str:
+    """`<블록>.dump_func: <이름>`(oFono 덤프 함수, TODO(SITE:S24)). 식별자 모양 글, `null`·생략은 placeholder."""
+    if raw is None:
+        return DUMP_FUNC_DEFAULT
+    if not isinstance(raw, str) or not _vipc.VALUE_RE.fullmatch(raw):
+        raise _err(base, f"식별자 모양 글(^[A-Za-z][A-Za-z0-9_]*$, 64자 이하)이어야 합니다: {raw!r}")
+    return raw
+
+
 def _vendor_ipc(raw, base: str) -> _vipc.Spec:
     """`<블록>.vendor_ipc: {context, complete, request_prefix, error_prefix, success}`(벤더 IPC 줄의 사내 토큰, TODO(SITE:S9))
     → `vendor_ipc.Spec`. 값은 식별자 모양 글(`vendor_ipc.VALUE_RE`). 블록을 생략하면(`null`·`{}` 포함) placeholder 기본값,
@@ -434,6 +447,8 @@ def _build(spec: PlatformSpec, name: str, block: dict, base: str) -> PlatformPro
         protocols=protocols,
         vendor_ipc=_vendor_ipc(block.get("vendor_ipc"), f"{base}.vendor_ipc") if "vendor_ipc" in spec.block_keys
         else _vipc.DEFAULT,
+        dump_func=_dump_func(block.get("dump_func"), f"{base}.dump_func") if "dump_func" in spec.block_keys
+        else DUMP_FUNC_DEFAULT,
     )
 
 

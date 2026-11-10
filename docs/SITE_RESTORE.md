@@ -19,7 +19,7 @@
 |---|---|---|
 | SITE_INSTALL.md 8절(`tools/import_draft.py --check-boundary`) | 새 묶음 반입 | SITE_INSTALL.md 8절 "멈췄을 때" |
 | `python3 tools/site_step.py check S-6` | 반입 뒤에도 S-6 통과, SITE_PATHS 그대로 | ① |
-| `plugin/site-defaults.yaml` 편집 | 기존 `platform:` 블록 안 `vendor_ipc`(다섯 키), oFono 구성요소 플래그 | ② |
+| `plugin/site-defaults.yaml` 편집 | 기존 `platform:` 블록 안 `vendor_ipc`(다섯 키), oFono `dump_func`·구성요소 플래그 | ② |
 | `python3 tools/site_step.py restore check` | 점검 7개 — 실패 줄의 "할 일"이 무엇을 어디에 채울지 말한다 | ④ 표 |
 | `python3 tools/make_module_repo.py $OUT --site-overlay docs/site/module-skills` | 모듈 스킬 레포를 사내 이름으로(없으면 새로 → push, 있으면 렌더 → diff → PR) | ③ |
 | `python3 tools/check_boundary.py --mode site` | 사내 경계 검사 | ④ |
@@ -35,6 +35,7 @@
 | `chatterd` | noise | 노이즈 태그 |
 | `VRIL` · `VRIL-SVC` · `VRIL-IMS` · `VRIL-MODEM` · `VRIL-DATA` · `VRIL-NETWORK` | Android | 벤더 RIL · 텔레포니 서비스 · IMS · 모뎀/IPC · 프레임워크(data·network) 태그 |
 | `IpcCtx_<n>` · `OnIpcComplete` | — | 벤더 IPC 문맥 접두어 · 완료 낱말(②의 `vendor_ipc.context`·`complete`) |
+| `example_dump()` | — | oFono 덤프 함수(②의 oFono 블록 `dump_func`) |
 | `VIPC_<X>` · `VIPC_E_<Y>` · `VIPC_OK` | — | 벤더 IPC 메시지 이름 접두어 · 결과 값 접두어 · 성공 값(②의 `vendor_ipc.request_prefix`·`error_prefix`·`success`) |
 
 표식 `{{site:<cat>}}`도 사내 스냅샷이 채울 자리다. `make_module_repo.py --site-overlay`는 덮어쓴 파일에 위 이름(데몬 이름의 대문자 꼴 `IMSD`·`DATAD_…` 포함)·표식이 남아 있으면 "스냅샷이 불완전", 스냅샷에 없는 템플릿 파일(`*/*/evals/` 밖)이 그것을 담고 있으면 "스냅샷에 없음"으로 종료 1이다(아무것도 만들지 않는다).
@@ -98,7 +99,10 @@ platform:                    # 이미 있는 블록
     ofono:
       # …기존 키 그대로…
       vendor_ipc: {context: "…", complete: "…", request_prefix: "…", error_prefix: "…", success: "…"}
+      dump_func: "<덤프 함수>"     # oFono 블록만(oFono가 기본 플랫폼이면 platform: 바로 아래)
 ```
+
+**oFono 덤프 함수.** 한 메시지를 여러 줄에 잘라 찍는 oFono 덤프 함수의 이름(`<이름>() ` 뒤가 조각)을 oFono 블록 `dump_func`에 적는다(식별자 모양, 생략·`null`은 placeholder `example_dump`). 마스커는 이 이름의 줄만 이어 갈린 IMSI·ICCID를 가린다 — 값이 없으면 사내 로그의 갈린 값을 잇지 못한다.
 
 **oFono 구성요소 플래그.** oFono 백엔드는 레벨 보정·벤더 IPC 판별 대상을 구성요소 플래그(또는 이슈 DB 선언)로만 정한다 — 코드 기본 구성요소에는 플래그가 없다. 사내 oFono 이슈 DB `parser-rules/tags.yaml`이 그 데몬에 `level: unreliable`·`ipc: vendor`를 선언하지 않았으면 `platform.others.ofono.components.<이름>`에 `level_unreliable: true`(줄 레벨이 심각도가 아닌 구성요소)·`vendor_ipc: true`(벤더 IPC 결과를 내는 벤더 RIL 데몬)를 둔다. 기존 구성요소 항목 안에 키를 더한다(같은 이름을 다시 적으면 앞 정의가 사라진다). `components`를 처음 쓰면 코드 기본 구성요소를 통째로 바꾸므로 기본 항목도 함께 적는다(`02-config.md`):
 
@@ -107,7 +111,7 @@ platform:                    # 이미 있는 블록
         <벤더 RIL 데몬>: {idents: [<ident>], root_key: …, vendor_ipc: true, level_unreliable: true}   # 기존 키에 더함
 ```
 
-확인은 ④의 `site_step.py restore check`다(`restore.vendor_ipc`가 켠 플랫폼마다 설정을 실제로 읽고, 다섯 키가 있고 placeholder 값이 아닌지 본다). `config.py check`는 `platform.*`을 검증하지 않는다 — 형식이 틀리면 첫 `parse_logcat.py`가 키 경로와 함께 종료 2로 멈춘다. 값이 없으면 사내 로그에서 `vendor_request_failed`·`vendor_ipc_error` 이벤트가 0개다(④에서 확인). vendor_ipc 값·구성요소 플래그는 `compiled.environment`에는 들지 않지만, 분석 재사용 키의 `config`(site-defaults 전체 해시)가 바뀌므로 ② 전에 만든 분석은 재사용되지 않는다(다시 분석한다).
+확인은 ④의 `site_step.py restore check`다(`restore.vendor_ipc`가 켠 플랫폼마다 설정을 실제로 읽고, 다섯 키와 oFono `dump_func`가 있고 placeholder 값이 아닌지 본다). `config.py check`는 `platform.*`을 검증하지 않는다 — 형식이 틀리면 첫 `parse_logcat.py`가 키 경로와 함께 종료 2로 멈춘다. 값이 없으면 사내 로그에서 `vendor_request_failed`·`vendor_ipc_error` 이벤트가 0개다(④에서 확인). vendor_ipc 값·구성요소 플래그는 `compiled.environment`에는 들지 않지만, 분석 재사용 키의 `config`(site-defaults 전체 해시)가 바뀌므로 ② 전에 만든 분석은 재사용되지 않는다(다시 분석한다).
 
 ## ③ 모듈 스킬 레포
 
@@ -147,17 +151,17 @@ python3 -m pytest -q tests/test_modulefilter.py tests/test_module_templates.py
 | `restore.source` | `SOURCE` 한 줄 형식 |
 | `restore.overlay` | `make_module_repo.py <임시> --site-overlay … --json` 종료 0(덮어쓴 파일의 placeholder·표식 남음, 스냅샷에 없는 템플릿 파일의 placeholder, evals 포함은 실패) |
 | `restore.tags` | 렌더된 `modules.yaml`의 데몬·태그 ⊆ 사내 이슈 DB `tags.yaml`(빠진 이름은 이 출력에만). 한 플랫폼이라도 이슈 DB를 건너뛰면 건너뜀 |
-| `restore.vendor_ipc` | 켠 플랫폼마다 ②의 블록에 다섯 키, 어느 값도 placeholder 아님(값은 보이지 않는다). 없거나 placeholder 값이면 사용자 필요, 플랫폼 설정을 못 읽으면(일부 키만 포함) 실패 |
+| `restore.vendor_ipc` | 켠 플랫폼마다 ②의 블록에 다섯 키(oFono는 `dump_func`도), 어느 값도 placeholder 아님(값은 보이지 않는다). 없거나 placeholder 값이면 사용자 필요, 플랫폼 설정을 못 읽으면(일부 키만 포함) 실패 |
 | `restore.deny` | `TT_DENY_FILE`의 항목이 SITE_PATHS 밖 추적 파일에 0건(UTF-8 아닌 파일도 본다). 압축 파일(내용 못 봄)이 있으면 실패, 변수가 없으면 사용자 필요 |
 | `restore.label` | 지금 반입 라벨(`.draft-manifest.json`, 없으면 `import-*` 태그) = `SOURCE` label. 다르면 경고 |
 
 ⓪ 뒤 새 묶음을 반입했으면 `restore.label`이 경고인 것이 정상이다. ③까지 마쳤으면 ⑦ 2의 diff(`SOURCE` label의 반입 커밋 → 지금 HEAD)를 보고 이름 치환이 아닌 템플릿 변경을 스냅샷에 옮긴 **다음** `SOURCE`의 `label`·`date`를 지금 반입으로 고쳐 커밋한다(`sha`는 그대로). diff를 보기 전에 label을 올리면 그 구간의 템플릿 변경이 확인 없이 가려지고 경고도 사라진다.
 
-`vendor_request_failed` 이벤트 수가 반입 전과 같은지(`vendor_ipc_error`는 설정과 무관) O-1 폴더의 사내 oFono 로그(마스킹본) 하나로 본다. 반입 전 코드는 `SOURCE`의 `sha` worktree에서 그때 site-defaults로 돌린다. 넷째 줄(`git worktree add`)이 실패하면 멈춘다 — site-defaults가 없으면 ② 전 사본을 `~/tt-before/plugin/`에 두고 잇는다.
+벤더 IPC 이벤트 두 가지(`vendor_request_failed`·`vendor_ipc_error`) 수가 각각 반입 전과 같은지 O-1 폴더의 사내 oFono 로그(마스킹본) 하나로 본다. 반입 전 코드는 `SOURCE`의 `sha` worktree에서 그때 site-defaults로 돌린다. 넷째 줄(`git worktree add`)이 실패하면 멈춘다 — site-defaults가 없으면 ② 전 사본을 `~/tt-before/plugin/`에 두고 잇는다.
 
 ```
 LOG=<벤더 요청 실패 줄이 있는 사내 oFono 로그>; RULES=<oFono 이슈 DB clone>/parser-rules
-n() { python3 -c 'import json,sys; e=json.load(sys.stdin)["events"]; print(sum(x["event"]=="builtin.common.vendor_request_failed" for x in e))'; }
+n() { python3 -c 'import json,sys; e=json.load(sys.stdin)["events"]; print(*(sum(x["event"]==k for x in e) for k in ("builtin.common.vendor_request_failed","builtin.common.vendor_ipc_error")))'; }
 SHA=$(sed -n 's/.* sha=\([0-9a-f]*\) .*/\1/p' docs/site/module-skills/SOURCE)
 git worktree add --detach ~/tt-before $SHA && ls ~/tt-before/plugin/site-defaults.yaml   # 실패·없음이면 여기서 멈춘다
 python3 ~/tt-before/plugin/scripts/parse_logcat.py parse $LOG --full --rules $RULES --plugin-root ~/tt-before/plugin | n   # 반입 전
@@ -165,7 +169,7 @@ python3 plugin/scripts/parse_logcat.py parse $LOG --full --rules $RULES --plugin
 git worktree remove --force ~/tt-before
 ```
 
-설정이 없으면 지금 결과는 0이다. 반입 전 결과가 0이 아닌데 지금 0이면 ②의 `vendor_ipc` 값이나 oFono 구성요소 플래그(또는 이슈 DB `ipc: vendor` 선언)가 빠졌거나 틀렸다.
+설정이 없으면 지금 결과는 `0 0`이다. 반입 전 결과가 0이 아닌데 지금 0인 칸이 있으면 ②의 `vendor_ipc` 값이나 oFono 구성요소 플래그(또는 이슈 DB `ipc: vendor` 선언)가 빠졌거나 틀렸다.
 
 ## ⑤ 거부 목록 운영
 

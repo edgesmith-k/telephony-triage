@@ -168,6 +168,16 @@ def test_vendor_ipc_block_both_platforms():
     assert "빠짐: success" in _error(vendor_ipc={k: v for k, v in SITE_IPC.items() if k != "success"})
 
 
+def test_dump_func_block_ofono_only():
+    """`<블록>.dump_func`(oFono 덤프 함수 이름): 생략·null은 placeholder, 식별자만, Android 블록은 모르는 키."""
+    assert _load().dump_func == platforms.DUMP_FUNC_DEFAULT == "example_dump" == _load(dump_func=None).dump_func
+    assert _load(dump_func="site_dump_x").dump_func == "site_dump_x"
+    for bad in ("", "a b", 3, "x()"):
+        assert "platform.others.ofono.dump_func" in _error(dump_func=bad)
+    with pytest.raises(PlatformConfigError, match="dump_func"):
+        platforms.load({"platform": {**ON, "dump_func": "site_dump_x"}})
+
+
 @pytest.mark.parametrize("value,path,why", [
     ([], "vendor_ipc", "매핑"),
     ({"error_code": "X_"}, "vendor_ipc.error_code", "알 수 없는 키"),
