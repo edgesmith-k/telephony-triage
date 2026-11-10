@@ -177,6 +177,7 @@ git worktree remove --force ~/tt-before
 - `TT_DENY_FILE`은 **레포 밖** 파일(한 줄에 하나, `#` 주석)이다. 레포·묶음·문서에 넣지 않는다.
 - 사내 구성요소 이름·벤더 토큰이 새로 생기면 한 줄 더한다. 사내 이름은 SITE_PATHS(스냅샷·site-defaults·`tests/site/`)에만 둔다 — `restore.deny`가 그 밖 0건을 본다(가린 경로·건수만, `tools/deny_scan.py`).
 - 사외에서 묶음을 만들 때(`make_bundle.py`)는 `deny-file` 검사가 0건이어야 묶음이 생긴다(SITE_INSTALL.md 1절).
+- 붙여 쓴 이름은 `python3 tools/deny_scan.py --no-boundary`로 참고만 한다 — 6자 이상 항목만 경계 없이 세고 짧은 항목은 경계를 둔다(make_bundle 경고 줄도 같다).
 
 ## ⑥ (선택) 사내 실제 이슈 case
 

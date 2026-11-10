@@ -117,14 +117,19 @@ def test_non_utf8_contents_are_scanned_and_packed_files_skipped(tmp_path, deny):
     assert proc.returncode == 2 and "압축 파일 1개" in proc.stderr
 
 
-def test_no_boundary_counts_glued_names(tmp_path, deny):
-    """`--no-boundary`: 붙여 쓴 이름(`libabc.so`·`AbcClient`)도 센다(참고용). 기본은 경계 규칙 그대로 0건."""
-    (tmp_path / "x.txt").write_text("libabc.so AbcClient\n", encoding="utf-8")
+def test_no_boundary_counts_glued_names(tmp_path):
+    """`--no-boundary`: 6자 이상 항목만 붙여 쓴 이름(`lib<x>.so`·`<X>Client`)도 센다(참고용). 짧은 항목(`abc`)은 이 모드에서도
+    경계를 둔다. 기본은 경계 규칙 그대로 0건."""
+    deny = tmp_path / "d.txt"
+    deny.write_text("abc\nqvtrwxy\n", encoding="utf-8")
+    (tmp_path / "x.txt").write_text("libabc.so AbcClient libqvtrwxy.so QvtrwxyClient\n", encoding="utf-8")
     _git(tmp_path, "init", "-q")
     _git(tmp_path, "add", "x.txt")
     assert _cli("--root", str(tmp_path), env_deny=deny).returncode == 0
     proc = _cli("--root", str(tmp_path), "--no-boundary", env_deny=deny)
-    assert proc.returncode == 1 and "x.txt: 2건" in proc.stdout and "abc" not in proc.stdout.lower()
+    assert proc.returncode == 1 and "x.txt: 2건" in proc.stdout
+    assert "abc" not in proc.stdout.lower() and "qvtrwxy" not in proc.stdout.lower()
+    assert [rx.pattern for _, rx in ds.loose(ds.load(deny), ds.LOOSE_MIN)][0] == ds.load(deny)[0][1].pattern
 
 
 def test_path_masks_entry_even_inside_longer_word(tmp_path, deny):

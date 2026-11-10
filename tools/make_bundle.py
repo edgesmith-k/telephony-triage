@@ -247,9 +247,9 @@ def check_deny_file(ctx: Ctx) -> CheckResult:
     tail_line = (f"추적 파일 {scanned}개" + (f", 압축 파일 {skipped}개(내용 못 봄)" if skipped else "")
                  + (f", 읽기 실패 {errors}개" if errors else ""))
     # 경계 없이 센 건수(붙여 쓴 이름 `lib<x>.so` 등). 일반 낱말 안 우연 일치도 있어 판정에는 쓰지 않고 경고 줄로만 낸다
-    loose_hits = deny_scan.scan(ctx.repo, deny_scan.loose(patterns))[0]
+    loose_hits = deny_scan.scan(ctx.repo, deny_scan.loose(patterns, deny_scan.LOOSE_MIN))[0]   # 짧은 항목은 경계 그대로
     loose_total = sum(n for _, n in loose_hits)
-    warn = ([f"경고(판정 아님): 경계 없이 세면 {loose_total}건, 파일 {len(loose_hits)}개 — 붙여 쓴 이름인지 사람이 본다: "
+    warn = ([f"경고(판정 아님): {deny_scan.LOOSE_MIN}자 이상 항목을 경계 없이 세면 {loose_total}건, 파일 {len(loose_hits)}개 — 붙여 쓴 이름인지 사람이 본다: "
              + ", ".join(rel for rel, _ in sorted(loose_hits, key=lambda h: -h[1])[:10])] if loose_total > total else [])
     if total:
         lines = [f"{rel}: {n}건" for rel, n in sorted(hits, key=lambda h: -h[1])[:20]]
