@@ -81,6 +81,9 @@ def test_generated_command_shape(name):
         assert "OpenCode v1에서는 실행하지 않습니다." in text
     else:
         assert "분석 전용." not in text
+    # 2차 P2-1: 스킬 글의 `TT_LOCK_OWNER=` 접두를 OpenCode에서는 쓰지 않는다고 생성 안내가 말한다
+    src = (REPO / "plugin" / "commands" / f"{name}.md").read_text(encoding="utf-8")
+    assert (gen_opencode.LOCK_NOTE in text) == (name in gen_opencode.WRITE_FLOWS or "TT_LOCK_OWNER" in src)
 
 
 def test_convert_synthetic_command():
@@ -184,7 +187,8 @@ def test_agent_prompt():
     assert all(meta["permission"][t] == "deny" for t in ("task", "webfetch", "todowrite", "skill"))
     assert len(body.encode("utf-8")) <= 2200, "에이전트 프롬프트는 약 2KB"
     for must in ("Scripts judge", "200 lines", "verbatim", "exact command", "@@PLUGIN_ROOT@@", "tt-oc -s",
-                 "db_pr.py publish|merge|request-review", "skill_patch.py --apply", "module_eval.py"):
+                 "db_pr.py publish|merge|request-review", "skill_patch.py --apply", "module_eval.py",
+                 "retry without TT_LOCK_OWNER="):          # 2차 P2-1: oc_adapter.LOCK_OWNER_RETRY 거부만 접두를 빼고 한 번 다시
         assert must in body, must
     # B2 R20: `next`가 있으면 멈추지 않고 따른다(모듈 받기 실패는 분석을 끝내지 않는다). R21: 스킬 도구 없음 → --skipped 대안
     rule2 = next(l for l in body.splitlines() if l.startswith("2. "))

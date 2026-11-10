@@ -499,6 +499,12 @@ _REDIRECT_NULL = re.compile(r"[ \t]*/dev/null(?=$|[ \t\n;&|])")
 _OP_END = " \t\n;&|"
 ALLOWLIST_HELP = ("OpenCode v1(분석 전용) bash는 분석 흐름의 스크립트(`python3 \"<plugin>/scripts/<이름>.py\" …`, 절대 경로)와 "
                   "읽기 명령(" + "·".join(sorted(BASH_READ_CMDS)) + ")만 돌린다")
+# 스킬 글은 `TT_LOCK_OWNER=…` 접두를 시키지만 OpenCode bash는 대입을 받지 않는다(거부는 그대로). 이 경우만 "접두를 빼고 같은 명령"을
+# 알려 한 번 다시 하게 한다 — tt-oc는 이 표시로 시작하는 거부를 막힌 호출로 세지 않는다(`tt-oc` RETRY_MARKER와 같은 글)
+LOCK_OWNER_RETRY = "[telephony-triage] retry without TT_LOCK_OWNER="
+LOCK_OWNER_DENY = (f"{LOCK_OWNER_RETRY}: OpenCode bash는 환경변수 대입을 받지 않는다. `TT_LOCK_OWNER=…` 접두만 빼고 같은 명령을 "
+                   "한 번 다시 실행한다(analyze 작업의 db_pr·db_verify는 작업 상태에서 lock owner를 읽는다. 다른 흐름은 "
+                   "`lock owner 불일치`에서 멈춘다 — 그때는 메시지를 그대로 보이고 턴을 끝낸다)")
 
 
 class ShellSubsetError(ValueError):
@@ -668,6 +674,8 @@ def bash_allowlist(command: str, cwd: str | None = None, directory: str | None =
     for words in segments:
         head = words[0]
         if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", head):
+            if head.startswith("TT_LOCK_OWNER="):
+                return BashVerdict(deny=LOCK_OWNER_DENY)
             return BashVerdict(deny=f"환경변수 대입(`{head.split('=')[0]}=`)은 쓰지 않는다")
         if head in BASH_PYTHON:
             why, flow = _check_python(words)
@@ -873,6 +881,8 @@ def before(payload: dict, env: dict | None = None, servers: list[str] | None = N
         if verdict.flow:
             result["reason"] = (f"{MARK} {verdict.flow}는 OpenCode v1(분석 전용)에서 돌리지 않는다. "
                                 f"{ASK_PREFIX}{mapped.command}")
+        elif verdict.deny == LOCK_OWNER_DENY:
+            result["reason"] = LOCK_OWNER_DENY
         elif verdict.deny:
             result["reason"] = (f"{MARK} bash 허용 목록: {verdict.deny}. {ALLOWLIST_HELP}. 다른 모양으로 다시 시도하지 말고 "
                                 "이 메시지를 그대로 보인 뒤 턴을 끝낸다.")

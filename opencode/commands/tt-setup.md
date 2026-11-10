@@ -4,6 +4,8 @@ description: "telephony-triage 사용자 설정 — config 생성, Jira MCP 도�
 agent: triage
 ---
 
+> **OpenCode lock owner.** `db_pr`·`db_verify`에 `TT_LOCK_OWNER=…`를 붙이지 않는다(OpenCode bash는 환경변수 대입을 받지 않는다). analyze 작업은 스크립트가 작업 상태에서 owner를 읽는다. 다른 흐름은 `lock owner 불일치`에서 멈추므로 메시지를 그대로 보이고 턴을 끝낸다.
+
 telephony-triage를 이 사용자 환경에 맞게 설정한다 (`02-config.md §4` setup 1~10).
 스크립트: `python3 "@@PLUGIN_ROOT@@/scripts/<이름>.py"`(결과 JSON). 종료 코드 2면 메시지를 그대로 보이고 멈춘다(예: 사내 기본값 없음 S-3).
 각 단계의 결과를 짧게 보여주고, **사용자 확인이 필요한 곳에서는 반드시 묻는다.**

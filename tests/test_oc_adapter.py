@@ -528,7 +528,11 @@ def test_dry_run_stage_reaches_confirmation_screen_without_env_owner():
     command = f'python3 "{s}/db_pr.py" ' + " ".join(map(str, argv))
     assert bash(command, w.base)["decision"] == "allow"
     out = bash(f"TT_LOCK_OWNER={owner} {command}", w.base)
-    assert out["decision"] == "deny" and "환경변수 대입" in out["reason"]
+    # 2차 P2-1: 거부는 그대로, 사유만 "접두를 빼고 같은 명령"(tt-oc가 막힌 호출로 세지 않는 표시로 시작)
+    assert out["decision"] == "deny" and out["reason"] == oc.LOCK_OWNER_DENY
+    assert out["reason"].startswith(oc.LOCK_OWNER_RETRY) and "접두만 빼고 같은 명령" in out["reason"]
+    other = bash(f"FOO=1 {command}", w.base)
+    assert other["decision"] == "deny" and "환경변수 대입(`FOO=`)" in other["reason"] and oc.LOCK_OWNER_RETRY not in other["reason"]
     proc = w.run("db_pr.py", argv, env=oc_env, unauth=True)
     assert proc.returncode in (0, 3), proc.stderr
     assert proc.stdout.startswith("## push 전 확인"), proc.stdout[:300]

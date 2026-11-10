@@ -7,6 +7,7 @@
 - `/telephony-triage:<이름>` → `/tt-<이름>`(OpenCode 내장 `/review` 등과 겹치지 않게 `tt-` 접두).
 - 쓰기 흐름 커맨드(`WRITE_FLOWS`)는 본문 앞에 "분석 전용" 안내를 붙인다: 막힌 쓰기 단계에 이르면 정확한 명령을 출력하고
   실행하지 않고 턴을 끝낸다(안 A — Jira 코멘트·이슈 DB push·db_pr publish|merge·request-review·skill apply·module_eval).
+- 쓰기 흐름과 본문에 `TT_LOCK_OWNER`가 나오는 커맨드는 `LOCK_NOTE`(접두를 붙이지 않는다 — OpenCode bash는 대입을 받지 않는다)도 붙인다.
 - 모든 커맨드는 `READ_FLOWS` 또는 `WRITE_FLOWS` 중 하나에 있어야 한다(새 커맨드가 분류 없이 생기면 실패).
 
 CLI:
@@ -69,6 +70,11 @@ NOTE = ("> **OpenCode v1 — 분석 전용.** 이 흐름의 다음 단계는 실
         "정확한 명령(절대 경로, 모든 인자)을 sh 코드 블록으로 보이고 \"OpenCode v1에서는 실행하지 않습니다. 터미널이나 Claude "
         "Code에서 직접 실행하세요.\"라고 말한 뒤 턴을 끝낸다. 사용자 확인이 필요한 곳은 질문과 번호 선택지(4개 이하)로 턴을 끝낸다"
         "(답은 `tt-oc -s <세션> -- <답>`).")
+# 스킬 글(rules.md·write-flow.md)은 lock owner를 `TT_LOCK_OWNER=` 접두로 넘기라고 하지만 OpenCode bash는 대입을 받지 않는다
+# (런타임 리뷰 2차 P2-1). 쓰기 흐름과 그 접두를 말하는 커맨드에 붙인다
+LOCK_NOTE = ("> **OpenCode lock owner.** `db_pr`·`db_verify`에 `TT_LOCK_OWNER=…`를 붙이지 않는다(OpenCode bash는 환경변수 대입을 "
+             "받지 않는다). analyze 작업은 스크립트가 작업 상태에서 owner를 읽는다. 다른 흐름은 `lock owner 불일치`에서 멈추므로 "
+             "메시지를 그대로 보이고 턴을 끝낸다.")
 
 PLACEHOLDER = re.compile(r"@@[A-Z_]+@@")
 MULTI = ("@@ISSUE_DB_ROOT@@", "@@ISSUE_DB_ROOT_REL@@")
@@ -113,6 +119,8 @@ def convert(name: str, text: str) -> str:
         head += [f"인자 형식: `/{PREFIX}{name} {meta['argument-hint']}`", ""]
     if name in WRITE_FLOWS:
         head += [NOTE.format(ops=WRITE_FLOWS[name]), ""]
+    if name in WRITE_FLOWS or "TT_LOCK_OWNER" in body:
+        head += [LOCK_NOTE, ""]
     return "\n".join(head) + "\n" + body.lstrip("\n")
 
 

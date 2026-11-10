@@ -461,6 +461,34 @@ def test_script_flow_without_script_output_is_not_ok(env):
     events(env, final("모델 요약"))
     plat = env["work"] / "android"
     assert tt(env, "--command", "tt-analyze", "--", "ABC-1", extra_env={"STUB_SHOWN": str(plat)}).returncode == 0
+    # 2차 P3: 스크립트 파일을 읽기만 한 것(cat·grep)은 실행이 아니다. cd … && python3 "…" 는 실행
+    mod = _load("tt_oc", TTOC)
+    for cmd, want in (("cat /p/scripts/triage.py", False), ("grep x /p/scripts/x.py", False),
+                      ('cd /w && python3 "/my plug/scripts/triage.py" run A', True), ("python /p/scripts/x.py", True)):
+        assert mod.ran_plugin_script([tool("bash", input={"command": cmd})]) is want, cmd
+
+
+def test_lock_owner_retry_is_not_a_block_when_rerun_without_prefix(env):
+    """2차 P2-1: `TT_LOCK_OWNER=` 접두 거부는 "접두를 빼고 같은 명령" — 다시 돌렸으면 막힌 호출이 아니라 경고, 안 돌렸으면 막힌 호출."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from common import oc_adapter
+
+    mod = _load("tt_oc", TTOC)
+    assert mod.RETRY_MARKER == oc_adapter.LOCK_OWNER_RETRY
+    cmd = 'python3 "/p/scripts/db_pr.py" stage /w/K/plan.json --dry-run'
+    denied = tool("bash", "error", input={"command": f"TT_LOCK_OWNER=abc {cmd}"}, error=oc_adapter.LOCK_OWNER_DENY)
+    rerun = tool("bash", input={"command": cmd}, output="## push 전 확인")
+    res = mod.judge([ev("step_start"), denied, rerun, step("tool-calls"), *final("확인 화면")], 0)
+    assert res["outcome"] == "ok" and not res["blocked"] and res["guard_warnings"]
+    res = mod.judge([ev("step_start"), denied, step("tool-calls"), *final("멈춤")], 0)
+    assert res["outcome"] == "blocked" and res["blocked"][0]["message"] == oc_adapter.LOCK_OWNER_DENY
+
+
+def test_child_env_drops_stale_lock_owner(env, monkeypatch):
+    """2차 P3: 터미널에 남은 TT_LOCK_OWNER가 OpenCode 안의 작업 상태 owner를 가리지 않게 자식 환경에서 뺀다."""
+    mod = _load("tt_oc", TTOC)
+    monkeypatch.setenv("TT_LOCK_OWNER", "stale")
+    assert "TT_LOCK_OWNER" not in mod.child_env({"plugin_root": "/p", "work_root": "/w"})
 
 
 def test_finish_reason_length_step_limit_and_zero_tokens(env):
@@ -483,6 +511,10 @@ def test_finish_reason_length_step_limit_and_zero_tokens(env):
     r = tt(env, "--", "x")
     assert r.returncode == 0 and "주의: 토큰 사용량이 0" in r.stdout
     assert json.loads(tt(env, "--json", "--", "x").stdout)["notes"]
+    # 2차 P3: step_finish 없이 오류로 끝난 실행은 토큰 0 주의를 내지 않는다(진단이 틀린다)
+    mod = _load("tt_oc", TTOC)
+    err = {"type": "error", "sessionID": "ses_TEST", "error": {"name": "APIError"}}
+    assert mod.judge([ev("step_start"), err], 0)["notes"] == []
 
 
 def test_doctor_gateway_key_and_url_rows_warn_only(env):

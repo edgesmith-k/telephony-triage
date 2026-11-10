@@ -8,6 +8,8 @@ agent: triage
 
 > **OpenCode v1 — 분석 전용.** 이 흐름의 다음 단계는 실행하지 않는다(guard·설정이 막는다): Jira 코멘트(`issue_post.py approve`)·이슈 DB push·PR(`db_pr.py publish`·`merge`·`request-review`)·스킬 적용(`skill_patch.py --apply`). 그 단계에 이르면 실행할 정확한 명령(절대 경로, 모든 인자)을 sh 코드 블록으로 보이고 "OpenCode v1에서는 실행하지 않습니다. 터미널이나 Claude Code에서 직접 실행하세요."라고 말한 뒤 턴을 끝낸다. 사용자 확인이 필요한 곳은 질문과 번호 선택지(4개 이하)로 턴을 끝낸다(답은 `tt-oc -s <세션> -- <답>`).
 
+> **OpenCode lock owner.** `db_pr`·`db_verify`에 `TT_LOCK_OWNER=…`를 붙이지 않는다(OpenCode bash는 환경변수 대입을 받지 않는다). analyze 작업은 스크립트가 작업 상태에서 owner를 읽는다. 다른 흐름은 `lock owner 불일치`에서 멈추므로 메시지를 그대로 보이고 턴을 끝낸다.
+
 `@@PLUGIN_ROOT@@/skills/telephony-triage/SKILL.md`(telephony-triage 스킬)의 analyze를 다음 인자로 실행한다: $ARGUMENTS
 스크립트: `python3 "@@PLUGIN_ROOT@@/scripts/<이름>.py"` = `S/`(이 절대 경로를 그대로 쓴다).
 실행 규칙(종료 코드 2·사내 기본값 없음 S-3이면 멈춤 등)은 `@@PLUGIN_ROOT@@/skills/telephony-triage/reference/rules.md`를 따른다.

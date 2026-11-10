@@ -74,6 +74,7 @@ REFUSED_ENV_PREFIX = OCV.REFUSED_ENV_PREFIX
 # v1 거부 문구(gen_opencode.NOTE).
 BLOCK_MARKERS = ("[telephony-triage]", *OCV.DENY_PHRASES, "OpenCode v1 does not run this")
 WARN_MARKER = "[telephony-triage] guard warning"
+RETRY_MARKER = "[telephony-triage] retry without TT_LOCK_OWNER="   # = oc_adapter.LOCK_OWNER_RETRY: 접두만 빼고 다시 하는 거부(막힘 아님)
 INSTRUCTION_FILES = OCV.INSTRUCTION_FILES   # 프로젝트 폴더에서 `/`까지 자동으로 싣는 지시 파일(CLAUDE.md는 CHILD_ENV로 끈다)
 USER_CMD = re.compile(r"run this exact command yourself:\s*(.+)", re.DOTALL)
 WRITE_CMD = re.compile(r"(db_pr\.py\s+(publish|merge|request-review)|issue_post\.py\s+approve|skill_patch\.py\b.*--apply"
@@ -87,7 +88,8 @@ GATEWAY_HINT = "tt-oc doctor의 gateway-key·gateway-url 행과 site_step.py run
 # 스크립트가 화면을 남기거나 돌아야 끝나는 커맨드(런타임 리뷰 2): 둘 다 없으면 ok가 아니라 no-script-output(도구 호출을 글로 내는
 # 게이트웨이면 에이전트가 스크립트 없이 "끝"을 낸다)
 SCRIPT_FLOWS = ("tt-analyze", "tt-record")
-PLUGIN_SCRIPT = re.compile(r"/scripts/[A-Za-z0-9_]+\.py\b")
+# 플러그인 스크립트 실행(`[cd <dir> && ]python3 "<…>/scripts/<이름>.py" …`) — `cat …/scripts/x.py` 같은 읽기는 세지 않는다
+PLUGIN_SCRIPT = re.compile(r"""^(?:cd\s+\S+\s*&&\s*)?python3?\s+(?:"[^"]*|'[^']*|\S*)/scripts/[A-Za-z0-9_]+\.py\b""")
 
 
 class Refused(Exception):
@@ -132,6 +134,8 @@ def load_project(raw: str | None) -> tuple[Path, dict]:
 
 def child_env(meta: dict) -> dict:
     env = dict(os.environ)
+    # 터미널에 남은 TT_LOCK_OWNER(예: 직접 돌린 publish)가 있으면 analyze 작업의 작업 상태 owner 대신 쓰여 stage가 막힌다
+    env.pop("TT_LOCK_OWNER", None)
     # CHILD_ENV(oc_version): 자동 갱신·모델 목록 받기 끔, ~/.claude/CLAUDE.md(와 위 폴더의 CLAUDE.md)를 에이전트 프롬프트에
     # 붙이지 않음(사용자 결정 ⑤ — 프롬프트는 triage 에이전트 하나). AGENTS.md·CONTEXT.md는 끌 수 없어 사전 점검이 본다.
     env.update({**OCV.CHILD_ENV, "TT_RUNTIME": "opencode",
@@ -407,7 +411,8 @@ def judge(events: list[dict], code: int | None, no_response: bool = False, step_
     """이벤트 → {outcome, session, final_text, blocked[{tool, message}], user_commands, errors, steps, tokens, finish, notes}."""
     session, final, blocked, errors, cmds, warnings = None, [], [], [], [], []
     tokens = dict.fromkeys(OCV.TOKEN_KINDS, 0)
-    steps, finish = 0, None
+    steps, finish, finished = 0, None, 0
+    retries, ran = [], set()   # 접두를 빼고 다시 하라는 거부(RETRY_MARKER)와 막히지 않고 돈 bash 명령
     V = OCV   # 이벤트 스키마 키는 oc_version 한 곳
     for ev in events:
         session = session or ev.get(V.EV_SESSION)
@@ -418,6 +423,7 @@ def judge(events: list[dict], code: int | None, no_response: bool = False, step_
         elif typ == V.EV_TEXT and part.get(V.PART_TEXT):
             final.append(str(part[V.PART_TEXT]))
         elif typ == V.EV_STEP_FINISH:
+            finished += 1
             finish = part.get(V.PART_REASON)
             for k in tokens:
                 v = (part.get(V.PART_TOKENS) or {}).get(k)
@@ -429,6 +435,8 @@ def judge(events: list[dict], code: int | None, no_response: bool = False, step_
                 tool = part.get(V.PART_TOOL)
                 if WARN_MARKER in msg:
                     warnings.append(f"{tool}: {msg}")
+                elif msg.startswith(RETRY_MARKER):
+                    retries.append((tool, msg, _bash_command(st.get(V.STATE_INPUT), strip_owner=True)))
                 elif any(m in msg for m in BLOCK_MARKERS):
                     blocked.append({"tool": tool, "message": msg})
                     m = USER_CMD.search(msg)
@@ -438,8 +446,15 @@ def judge(events: list[dict], code: int | None, no_response: bool = False, step_
                         cmds += _write_command(st.get(V.STATE_INPUT))
                 else:
                     errors.append(f"{tool}: {msg}")
+            elif part.get(V.PART_TOOL) == "bash":
+                ran.add(_bash_command(st.get(V.STATE_INPUT)))
         elif typ == V.EV_ERROR:
             errors.append("error: " + json.dumps(ev.get("error"), ensure_ascii=False)[:500])
+    for tool, msg, again in retries:      # 접두를 빼고 같은 명령을 다시 돌렸으면 경고, 아니면 막힌 호출
+        if again in ran:
+            warnings.append(f"{tool}: {msg}")
+        else:
+            blocked.append({"tool": tool, "message": msg})
     text = "".join(final).strip()
     if no_response:
         outcome = "no-response"
@@ -458,7 +473,7 @@ def judge(events: list[dict], code: int | None, no_response: bool = False, step_
     else:
         outcome = "ok"
     notes = []
-    if steps and not any(tokens.values()):
+    if finished and outcome not in ("error", "timeout", "no-response") and not any(tokens.values()):
         notes.append("토큰 사용량이 0이다 — 게이트웨이가 스트리밍 usage를 주지 않는 것 같다(토큰·한도 판단 불가, 사내 확인 3)")
     return {"outcome": outcome, "session": session, "final_text": text, "blocked": blocked, "user_commands": cmds,
             "errors": errors, "guard_warnings": warnings, "steps": steps, "tokens": tokens, "finish": finish, "exit": code,
@@ -475,6 +490,11 @@ def agent_step_limit(proj: Path) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def _bash_command(inp, strip_owner: bool = False) -> str:
+    cmd = str((inp or {}).get("command") or "").strip() if isinstance(inp, dict) else ""
+    return re.sub(r"^TT_LOCK_OWNER=\S*\s+", "", cmd) if strip_owner else cmd
+
+
 def ran_plugin_script(events: list[dict]) -> bool:
     """플러그인 스크립트(`…/scripts/<이름>.py`)를 돌린 bash 호출이 하나라도 있는가(막힌·실패한 호출은 세지 않는다)."""
     V = OCV
@@ -483,7 +503,7 @@ def ran_plugin_script(events: list[dict]) -> bool:
         st = part.get(V.PART_STATE) if isinstance(part.get(V.PART_STATE), dict) else {}
         inp = st.get(V.STATE_INPUT) if isinstance(st.get(V.STATE_INPUT), dict) else {}
         if ev.get("type") == V.EV_TOOL_USE and part.get(V.PART_TOOL) == "bash" and st.get(V.STATE_STATUS) != V.STATUS_ERROR \
-                and PLUGIN_SCRIPT.search(str(inp.get("command") or "")):
+                and PLUGIN_SCRIPT.search(str(inp.get("command") or "").strip()):
             return True
     return False
 
