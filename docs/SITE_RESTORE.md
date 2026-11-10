@@ -81,7 +81,7 @@ platform:                    # 이미 있는 블록
         <벤더 RIL 데몬>: {idents: [<ident>], root_key: …, vendor_ipc: true, level_unreliable: true}   # 기존 키에 더함
 ```
 
-확인은 ④의 `site_step.py restore check`다(`restore.vendor_ipc`가 켠 플랫폼마다 설정을 실제로 읽고, 두 키가 있고 placeholder 값이 아닌지 본다). `config.py check`는 `platform.*`을 검증하지 않는다 — 형식이 틀리면 첫 `parse_logcat.py`가 키 경로와 함께 종료 2로 멈춘다. 값이 없으면 사내 로그에서 `vendor_request_failed` 이벤트가 0개다(④에서 확인). vendor_ipc 값은 분석 재사용 키(`compiled.environment`)에 들지 않아 ② 전에 만든 분석 캐시는 무효화되지 않는다.
+확인은 ④의 `site_step.py restore check`다(`restore.vendor_ipc`가 켠 플랫폼마다 설정을 실제로 읽고, 두 키가 있고 placeholder 값이 아닌지 본다). `config.py check`는 `platform.*`을 검증하지 않는다 — 형식이 틀리면 첫 `parse_logcat.py`가 키 경로와 함께 종료 2로 멈춘다. 값이 없으면 사내 로그에서 `vendor_request_failed` 이벤트가 0개다(④에서 확인). vendor_ipc 값·구성요소 플래그는 `compiled.environment`에는 들지 않지만, 분석 재사용 키의 `config`(site-defaults 전체 해시)가 바뀌므로 ② 전에 만든 분석은 재사용되지 않는다(다시 분석한다).
 
 ## ③ 모듈 스킬 레포
 

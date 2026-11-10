@@ -77,27 +77,7 @@ def restored(tmp_path, monkeypatch, *, ipc=True, deny=True, label=LABEL) -> Path
         monkeypatch.setenv("TT_DENY_FILE", str(f))
     else:
         monkeypatch.delenv("TT_DENY_FILE", raising=False)
-    _tolerate_vendor_ipc(monkeypatch)
     return root
-
-
-def _tolerate_vendor_ipc(monkeypatch) -> None:
-    """`platforms.load`는 그대로 부른다. 이 플러그인이 아직 `vendor_ipc` 키를 모르면(설정 키가 들어오기 전 트리) 그 키만 빼고
-    다시 읽는다 — 키를 아는 트리에서는 실제 검증 그대로다."""
-    platforms = sc._plugin()[0]
-    real = platforms.load
-
-    def load(defaults, name=None, **kw):
-        try:
-            return real(defaults, name, **kw)
-        except platforms.PlatformConfigError:
-            d = json.loads(json.dumps(defaults))
-            node = d.get("platform") or {}
-            node.pop("vendor_ipc", None)
-            for other in (node.get("others") or {}).values():
-                other.pop("vendor_ipc", None)
-            return real(d, name, **kw)
-    monkeypatch.setattr(platforms, "load", load)
 
 
 def run(root: Path) -> dict:
@@ -168,9 +148,10 @@ def test_restore_vendor_ipc_needs_both_keys_and_site_values(tmp_path, monkeypatc
     r = run(root)["restore.vendor_ipc"]
     assert r["status"] == "needs-user" and "ofono(platform.others.ofono.vendor_ipc, placeholder 값)" in r["evidence"]
     assert "IpcCtx_" not in json.dumps(r, ensure_ascii=False)
-    d["platform"]["vendor_ipc"] = {"context": "SiteCtx_"}
+    d["platform"]["vendor_ipc"] = {"context": "SiteCtx_"}            # 키 하나만 → platforms.load 오류 → 실패
     path.write_text(yaml.safe_dump(d), encoding="utf-8")
-    assert run(root)["restore.vendor_ipc"]["status"] != "pass"
+    r = run(root)["restore.vendor_ipc"]
+    assert r["status"] == "fail" and "플랫폼 설정 오류 android" in r["evidence"] and "SiteCtx_" not in r["evidence"]
 
 
 def test_restore_tags_skipped_db_is_not_pass(tmp_path, monkeypatch, overlay):
