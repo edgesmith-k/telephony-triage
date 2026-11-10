@@ -17,6 +17,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
@@ -177,6 +179,18 @@ def _calls(node) -> set[str]:
             for c in ast.walk(node) if isinstance(c, ast.Call)}
 
 
+def _lock_calls(node) -> bool:
+    """`lock.touch|release(…)`·`<x>.lock.touch|release(…)` 호출이 있는가(`Path.touch` 등 다른 touch는 세지 않는다)."""
+    import ast
+    for c in ast.walk(node):
+        f = getattr(c, "func", None) if isinstance(c, ast.Call) else None
+        if isinstance(f, ast.Attribute) and f.attr in ("touch", "release"):
+            v = f.value
+            if (isinstance(v, ast.Name) and v.id == "lock") or (isinstance(v, ast.Attribute) and v.attr == "lock"):
+                return True
+    return False
+
+
 def test_owner_cmds_are_the_db_pr_subcommands_that_touch_the_lock():
     """런타임 리뷰 4차 R3-P3-2: tt-oc가 TT_LOCK_OWNER를 채우는 하위 명령 목록(`db_pr.OWNER_CMDS`)은 코드에서 나온다 — dbpr/의
     `.touch`·`.release`를 부르는 함수를 부르는 `main` 분기와 같다(새 하위 명령이 lock을 보기 시작하면 여기서 깨진다)."""
@@ -184,22 +198,30 @@ def test_owner_cmds_are_the_db_pr_subcommands_that_touch_the_lock():
     scripts = REPO / "plugin" / "scripts"
     touching = {fn.name for f in (scripts / "dbpr").glob("*.py") if f.name != "lock.py"
                 for fn in ast.parse(f.read_text(encoding="utf-8")).body
-                if isinstance(fn, ast.FunctionDef) and _calls(fn) & {"touch", "release"}}
+                if isinstance(fn, ast.FunctionDef) and _lock_calls(fn)}
     assert {"snapshot", "stage", "summary", "publish", "discard"} <= touching
     main = next(n for n in ast.parse((scripts / "db_pr.py").read_text(encoding="utf-8")).body
                 if isinstance(n, ast.FunctionDef) and n.name == "main")
-    branches = {}
+    branches: dict[str, set[str]] = {}      # 하위 명령 -> 그 분기가 부르는 이름(+ lock을 직접 부르면 "<lock>")
     for node in ast.walk(main):
-        if (isinstance(node, ast.If) and isinstance(node.test, ast.Compare) and isinstance(node.test.ops[0], ast.Eq)
+        if not (isinstance(node, ast.If) and isinstance(node.test, ast.Compare)
                 and getattr(node.test.left, "attr", None) == "cmd"):
-            branches[node.test.comparators[0].value] = set().union(*(_calls(b) for b in node.body))
+            continue
+        op, comp = node.test.ops[0], node.test.comparators[0]
+        names = ([comp.value] if isinstance(op, ast.Eq) else
+                 [e.value for e in comp.elts] if isinstance(op, ast.In) and isinstance(comp, ast.Tuple) else [])
+        calls = set().union(*(_calls(b) for b in node.body)) | ({"<lock>"} if any(_lock_calls(b) for b in node.body) else set())
+        for name in names:
+            branches.setdefault(name, set()).update(calls)
     assert {"merge", "request-review", "cleanup", "my-prs", "preflight", "lock"} <= set(branches)
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     import db_pr
     import db_verify
-    assert {c for c, calls in branches.items() if c != "lock" and calls & touching} == set(db_pr.OWNER_CMDS)
-    assert "release" in branches["lock"]
+    assert {c for c, calls in branches.items() if c != "lock" and calls & (touching | {"<lock>"})} == set(db_pr.OWNER_CMDS)
+    assert "<lock>" in branches["lock"]
     assert db_pr.owner_job(["lock", "release", J]) == ("job", J)
+    with pytest.raises(SystemExit):                                     # 인자 오류는 tt-oc가 "사용 오류" 안내로
+        db_pr.owner_job(["publish", "/w/X-1/wt", "--commit"])
     assert db_pr.owner_job(["lock", "release", J, "--force"]) is None
     assert db_pr.owner_job(["merge", "--job", J]) is None
     assert db_pr.owner_job(["discard", "/w/X-1/wt", "2"]) == ("wt", "/w/X-1/wt")      # `2>&1`의 2 등은 버린다
