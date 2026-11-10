@@ -208,12 +208,16 @@ class Lock:
 
 
 def state_owner(work_dir: Path, job: str) -> str | None:
-    """`<work_dir>/<job>/triage-state.json`의 owner(`triage.py run`이 acquire 결과로 남긴 값). 작업 키 형식이 아니거나 파일이 없거나
-    깨졌으면 None. `Lock.owner_for`(OpenCode 안)와 tt-oc가 사용자에게 줄 터미널 명령(`TT_LOCK_OWNER=` 채우기)이 같이 쓴다."""
+    """`<work_dir>/<job>/triage-state.json`의 owner(`triage.py run`이 acquire 결과로 남긴 값). 작업 키 형식이 아니거나 일반 파일이
+    아니거나(FIFO 등에서 멈추지 않게) 없거나 깨졌으면 None. `Lock.owner_for`(OpenCode 안)와 tt-oc의 owner 안내(`handoff_owner`)가
+    같이 쓴다."""
     if not JOB_KEY_RE.fullmatch(job):
         return None
+    path = Path(work_dir) / job / TRIAGE_STATE
+    if not path.is_file():
+        return None
     try:
-        data = json.loads((Path(work_dir) / job / TRIAGE_STATE).read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     owner = data.get("owner") if isinstance(data, dict) else None
@@ -224,11 +228,14 @@ def handoff_owner(work_dir: Path) -> dict:
     """tt-oc가 터미널로 넘기는 명령에 붙일 lock owner(런타임 리뷰 3·6차). 모델 명령 인자가 아니라 `work_dir`의 session.lock에서 읽는다.
 
     `{"work_dir", "job": 지금 lock을 쥔 작업(없으면 None), "owner"}`. owner는 그 작업의 `triage-state.json` owner(`state_owner`)가
-    **lock의 owner와 같을 때만** 준다(이어받은 뒤의 옛 owner·상태 없음·lock 없음·깨진 lock이면 None)."""
-    try:
-        held = session_lock.describe(session_lock.read(work_dir))
-    except session_lock.LockError:
-        held = None
+    **lock의 owner와 같을 때만** 준다(이어받은 뒤의 옛 owner·상태 없음·lock 없음·깨진 lock이면 None). session.lock이 일반 파일이
+    아니면(FIFO 등 — 읽다 멈춘다) lock 없음으로 본다(7차 R6-P3-3)."""
+    held = None
+    if (Path(work_dir) / LOCK_FILE).is_file():
+        try:
+            held = session_lock.describe(session_lock.read(work_dir))
+        except session_lock.LockError:
+            held = None
     job = held.get("job") if held else None
     owner = state_owner(work_dir, job) if job else None
     return {"work_dir": str(work_dir), "job": job, "owner": owner if owner and held.get("owner") == owner else None}
