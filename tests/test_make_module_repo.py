@@ -130,7 +130,7 @@ def _rename(text: str) -> str:
     """사내 스냅샷처럼 placeholder 이름을 같은 규칙으로 바꾼다(합성: `x<이름>`·`{{demo-site:`, IPC 이름은 대문자 꼴 그대로 `X<이름>`)."""
     def sub(m):
         g = m.group(0)
-        return "{{demo-site:" if g == "{{site:" else ("X" if g.startswith("VIPC_") else "x") + g
+        return "{{demo-site:" if g == "{{site:" else ("X" if g[:1].isupper() else "x") + g
     return PLACEHOLDER.sub(sub, text)
 
 
@@ -206,13 +206,20 @@ def test_overlay_is_deterministic(src, tmp_path):
 @pytest.mark.parametrize("text", ["# x\n\n- vrild 줄\n", "# x\n\n{{site:data}}\n", "# x\n\n- VRIL-IMS 태그\n",
                                   "# x\n\n- datad2 줄\n", "# x\n\n- networkd 줄\n", "# x\n\n- `[IpcCtx_0]` 줄\n",
                                   "# x\n\n- OnIpcComplete 줄\n", "# x\n\n- IMSD 태그\n", "# x\n\n- DATAD_X 값\n",
-                                  "# x\n\n- `VIPC_DIAL` 줄\n", "# x\n\n- `Error(VIPC_E_BUSY)` 줄\n"])
+                                  "# x\n\n- `VIPC_DIAL` 줄\n", "# x\n\n- `Error(VIPC_E_BUSY)` 줄\n",
+                                  "# x\n\n- `[ExamplePdnService_0]` 줄\n", "# x\n\n- `VCHAN_1 REQUEST` 줄\n",
+                                  "# x\n\n- `PdnCtx` 줄\n"])
 def test_incomplete_snapshot_creates_nothing(src, tmp_path, text):
     snap = _snapshot(tmp_path / "snap", _full(src, {**SNAP, "ofono/data/explore.md": text}))
     out = tmp_path / "repo"
     proc = _make(src, out, "--site-overlay", snap)
     assert proc.returncode == 1 and proc.stdout.strip() == "스냅샷이 불완전: ofono/data/explore.md", proc.stdout
     assert not out.exists()
+
+
+def test_public_daemon_name_with_dash_is_not_placeholder():
+    """`systemd-networkd`처럼 `-` 뒤 데몬 이름은 공개 이름이다(placeholder `networkd`가 아님)."""
+    assert not PLACEHOLDER.search("systemd-networkd 재시작") and PLACEHOLDER.search("networkd 재시작")
 
 
 def test_snapshot_with_site_todo_marker_passes(src, tmp_path):
