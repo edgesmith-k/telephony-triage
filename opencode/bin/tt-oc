@@ -649,6 +649,14 @@ _CTRL = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-
 EXPANSION = re.compile(r"[$`!;&|<>()#\n]")
 MODEL_CMD_MARK = ("↓ 모델이 만든 명령 — 셸 확장·여러 명령·리디렉션·주석·줄바꿈(`$`·백틱·`!`·`;`·`&`·`|`·`<`·`>`·`(`·`)`·`#`·⏎)이 "
                   "있어 붙여 넣으면 셸이 먼저 풀거나 다른 명령도 돈다. 확인 후 실행")
+# 표시 판정 전에 한 번만 떼는 것: bash 도구 `workdir`로 붙는 머리 `cd <낱말|'…'> && `(`_write_command`·어댑터의 shlex.quote 모양)와
+# 꼬리 `N>&M`. 그 밖의 것은 모두 표시를 부른다
+_MARK_HEAD = re.compile(r"^cd (?:[\w@%+=:,./-]+|'[^']*') && ")
+_MARK_TAIL = re.compile(r"\s+\d+>&\d+$")
+
+
+def needs_mark(cmd: str) -> bool:
+    return bool(EXPANSION.search(_MARK_TAIL.sub("", _MARK_HEAD.sub("", cmd, count=1), count=1)))
 
 
 def _esc(text: str, one_line: bool = False) -> str:
@@ -838,7 +846,7 @@ def main(argv=None) -> int:
     if res["user_commands"]:
         print("\n---- [tt-oc] OpenCode v1에서 실행하지 않은 명령 — 터미널이나 Claude Code에서 직접 실행 ----")
         for c in res["user_commands"]:      # 모델 글 그대로(고치지 않는다). 셸 확장이 있으면 tt-oc 자신의 줄로 표시
-            if EXPANSION.search(c):
+            if needs_mark(c):
                 print(MODEL_CMD_MARK)
             print(model_lines(c, one_line=True))
         for n in res["handoff_notes"]:

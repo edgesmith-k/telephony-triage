@@ -510,6 +510,13 @@ def test_terminal_handoff_marker_for_compound_and_commented_commands(env):
         lines = _handoff(env, cmd).splitlines()
         assert lines[0].startswith(MARK) and lines[1].startswith(G), lines
     assert not _handoff(env, "python3 /p/scripts/db_pr.py merge --job ABC-1").startswith(MARK)
+    # workdir 머리 `cd <낱말|'…'> && ` 하나와 꼬리 `N>&M`은 떼고 본다(표시 소음 줄이기). 그 밖은 표시
+    pub = "python3 /p/scripts/db_pr.py publish /w/ABC-1/wt --branch b --lease new --approved h"
+    for cmd in (f"cd /w/ABC-1 && {pub}", f"cd '/w/my dir' && {pub}", f"{pub} 2>&1", f"cd /w && {pub} 2>&1"):
+        assert _handoff(env, cmd).startswith(G), cmd
+    for cmd in (f'cd "$(x)" && {pub}', f"cd /w && cd /x && {pub}", f"cd /w && true; {pub}", f"cd /w && {pub} | tail",
+                f"cd /w && {pub} > out", f"cd /w && {pub} # c", f"{pub} 2>&1 > out", f'cd "/w" && {pub}'):
+        assert _handoff(env, cmd).startswith(MARK), cmd
 
 
 def test_terminal_handoff_lookup_ignores_modules_planted_in_cwd(env, monkeypatch):
