@@ -1042,7 +1042,7 @@ def test_a_shapes_vendor_ipc_builtin():
 
 def test_a_vendor_ipc_spec_from_site_defaults():
     """site-defaults `platform.vendor_ipc`(다섯 토큰)가 요청 완료 줄·IPC 오류 줄 판별을 바꾼다 — parse_logcat 전체 경로.
-    설정이 없으면 placeholder 기본(`IpcCtx_`·`OnIpcComplete`·`VIPC_`·`VIPC_E_`·`VIPC_OK`)만 잡는다."""
+    설정이 없으면 placeholder 기본(`IpcCtx_`·`OnIpcComplete`·`VIPC_`·`VIPC_E_`·`VIPC_E_OK`)만 잡는다."""
     root = make_plugin_root.make()
     data = yaml.safe_load((root / "site-defaults.yaml").read_text(encoding="utf-8"))
     platform = dict(data.get("platform") or {})

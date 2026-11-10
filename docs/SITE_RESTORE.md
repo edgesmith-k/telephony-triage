@@ -37,7 +37,7 @@
 | `IpcCtx_<n>` · `OnIpcComplete` | — | 벤더 IPC 문맥 접두어 · 완료 낱말(②의 `vendor_ipc.context`·`complete`) |
 | `example_dump()` | — | oFono 덤프 함수(②의 oFono 블록 `dump_func`) |
 | `Example<…>Service` · `ExampleOpenChannel` · `VCHAN_<n>` · `PdnCtx` | — | 벤더 서비스 이름 · 채널 열기 낱말 · 벤더 채널 · 데이터 문맥 |
-| `VIPC_<X>` · `VIPC_E_<Y>` · `VIPC_OK` | — | 벤더 IPC 메시지 이름 접두어 · 결과 값 접두어 · 성공 값(②의 `vendor_ipc.request_prefix`·`error_prefix`·`success`) |
+| `VIPC_<X>` · `VIPC_E_<Y>` · `VIPC_E_OK` · `VIPC_OK` | — | 벤더 IPC 메시지 이름 접두어 · 결과 값 접두어 · 성공 값(②의 `vendor_ipc.request_prefix`·`error_prefix`·`success`) · 성공 응답 줄 `OK(…)`의 값 |
 
 표식 `{{site:<cat>}}`도 사내 스냅샷이 채울 자리다. `make_module_repo.py --site-overlay`는 덮어쓴 파일에 위 이름(데몬 이름의 대문자 꼴 `IMSD`·`DATAD_…` 포함)·표식이 남아 있으면 "스냅샷이 불완전", 스냅샷에 없는 템플릿 파일(`*/*/evals/` 밖)이 그것을 담고 있으면 "스냅샷에 없음"으로 종료 1이다(아무것도 만들지 않는다).
 

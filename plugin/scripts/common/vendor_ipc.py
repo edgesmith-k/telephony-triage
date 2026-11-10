@@ -10,7 +10,7 @@
 
 다섯 토큰(`context`·`complete`·`request_prefix`·`error_prefix`·`success`)은 site-defaults `platform.vendor_ipc`(기본 플랫폼)·
 `platform.others.<p>.vendor_ipc`(`Spec`, 17-platforms §9-1)에서 온다. 기본은 누가 봐도 지어낸 placeholder
-(`IpcCtx_`·`OnIpcComplete`·`VIPC_`·`VIPC_E_`·`VIPC_OK`)라 사내 줄은 사내 설정이 있어야 잡힌다(TODO(SITE:S9)).
+(`IpcCtx_`·`OnIpcComplete`·`VIPC_`·`VIPC_E_`·`VIPC_E_OK`)라 사내 줄은 사내 설정이 있어야 잡힌다(TODO(SITE:S9)).
 백엔드 `configure(profile)`가 spec을 들고 `detect(msg, spec)`에 넘긴다.
 
 배선(어느 태그·데몬의 줄에 부르는지)은 플랫폼 백엔드가 한다(oFono는 구성요소 설정 `vendor_ipc: true`인 ident, Android `VENDOR_IPC_TAGS = {"RIL"}`;
@@ -40,7 +40,7 @@ class Spec:
     complete: str = "OnIpcComplete"              # 완료 낱말
     request_prefix: str = "VIPC_"                # IPC 메시지 이름 접두어(`[RX] <prefix><X>, RSP`)
     error_prefix: str = "VIPC_E_"                # 결과 값 접두어(`Error(<prefix><Y>)`)
-    success: str = "VIPC_OK"                     # 성공 결과 값(이벤트로 내지 않는다)
+    success: str = "VIPC_E_OK"                   # 성공 결과 값 전체(error_prefix로 시작, 이벤트로 내지 않는다)
 
     @cached_property
     def request_re(self) -> re.Pattern:
