@@ -1,33 +1,33 @@
 -- [합성] module-filter fixture: SIM_IO fails in the vendor RIL after the card answered. Hand-written, not a real capture.
 Sep 23 11:20:09.983 dut local0.info mgmtd[734]: ui tick
 Sep 23 11:20:09.984 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_SIGNAL_STRENGTH ind len=16
-Sep 23 11:20:09.984 dut daemon.debug vrild[618]: Read from usb 16B
+Sep 23 11:20:09.984 dut daemon.debug vrild[618]: link rx 16B
 Sep 23 11:20:09.985 dut daemon.info chatterd[746]: position fix pending
 Sep 23 11:20:09.986 dut daemon.debug ofonod[903]: drivers/rilmodem/sim.c:ril_sim_read_info() file 6fad, app_type 2
 Sep 23 11:20:09.986 dut daemon.info ofonod[903]: [0,1052]> RIL_REQUEST_SIM_IO (cmd=0xC0,efid=0x6FAD,path=3f007fff,0,0,15,(null),pin2=(null),aid=<AID#1>)
 Sep 23 11:20:09.987 dut daemon.debug ofonod[903]: Device 0: > <HEXDUMP 20B>
 Sep 23 11:20:09.987 dut daemon.debug ofonod[903]: Device 0: <HEXDUMP 12B>
 Sep 23 11:20:09.988 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: SIM_IO (36 bytes)
-Sep 23 11:20:09.988 dut daemon.info vrild[618]: [CardService_1] sim-io get-response for ef 6fad queued
+Sep 23 11:20:09.988 dut daemon.info vrild[618]: [SimService_1] sim-io get-response for ef 6fad queued
 Sep 23 11:20:09.989 dut daemon.debug vrild[618]: [IpcCtx_2] track seq 0x0e41 (1 in flight)
 Sep 23 11:20:09.989 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_SIM_IO seq=0x0e41 len=36
-Sep 23 11:20:09.989 dut daemon.debug vrild[618]: Write to modem 36B
+Sep 23 11:20:09.989 dut daemon.debug vrild[618]: link tx 36B
 Sep 23 11:20:09.990 dut local0.info mgmtd[734]: ui tick
 Sep 23 11:20:09.991 dut daemon.info datad[633]: link status poll: rmnet0 up
-Sep 23 11:20:09.991 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_QUERY_OPERATOR seq=0x0e42 len=8
-Sep 23 11:20:09.992 dut daemon.debug vrild[618]: Write to modem 8B
+Sep 23 11:20:09.991 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_OPERATOR seq=0x0e42 len=8
+Sep 23 11:20:09.992 dut daemon.debug vrild[618]: link tx 8B
 Sep 23 11:20:09.993 dut daemon.info chatterd[746]: position fix pending
-Sep 23 11:20:09.994 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_QUERY_OPERATOR, RSP OK(RCM_E_SUCCESS) seq=0x0e42 len=36
-Sep 23 11:20:09.994 dut daemon.debug vrild[618]: Read from usb 36B
+Sep 23 11:20:09.994 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_OPERATOR, RSP OK(RCM_E_SUCCESS) seq=0x0e42 len=36
+Sep 23 11:20:09.994 dut daemon.debug vrild[618]: link rx 36B
 Sep 23 11:20:09.995 dut local0.info mgmtd[734]: ui tick
 Sep 23 11:20:09.996 dut daemon.debug ofonod[903]: Device 0: <HEXDUMP 12B>
 Sep 23 11:20:09.997 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_SIGNAL_STRENGTH ind len=16
-Sep 23 11:20:09.997 dut daemon.debug vrild[618]: Read from usb 16B
+Sep 23 11:20:09.997 dut daemon.debug vrild[618]: link rx 16B
 Sep 23 11:20:09.998 dut daemon.info chatterd[746]: position fix pending
 Sep 23 11:20:10.011 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_SIM_IO, RSP OK(RCM_E_SUCCESS) seq=0x0e41 len=258
-Sep 23 11:20:10.011 dut daemon.debug vrild[618]: Read from usb 258B
+Sep 23 11:20:10.011 dut daemon.debug vrild[618]: link rx 258B
 Sep 23 11:20:10.012 dut daemon.debug vrild[618]: [IpcCtx_2] frame decoded
-Sep 23 11:20:10.012 dut daemon.info vrild[618]: [CardService_1] sim-io reply parsed, 258 bytes
+Sep 23 11:20:10.012 dut daemon.info vrild[618]: [SimService_1] sim-io reply parsed, 258 bytes
 Sep 23 11:20:10.013 dut local0.info mgmtd[734]: ui tick
 Sep 23 11:20:10.014 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=63, result=2 -> chan 2 reply sent, 0 waiters, took 26 ms
 Sep 23 11:20:10.014 dut daemon.debug vrild[618]: chan 2 <- reply written
@@ -39,5 +39,5 @@ Sep 23 11:20:10.015 dut daemon.info ofonod[903]: drivers/rilmodem/sim.c:ril_file
 Sep 23 11:20:10.016 dut daemon.info chatterd[746]: position fix pending
 Sep 23 11:20:10.017 dut daemon.info datad[633]: link status poll: rmnet0 up
 Sep 23 11:20:10.018 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_NOTIFY_SIGNAL_STRENGTH ind len=16
-Sep 23 11:20:10.018 dut daemon.debug vrild[618]: Read from usb 16B
+Sep 23 11:20:10.018 dut daemon.debug vrild[618]: link rx 16B
 Sep 23 11:20:10.019 dut local0.info mgmtd[734]: ui tick

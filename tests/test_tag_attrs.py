@@ -122,7 +122,7 @@ def test_parse_logcat_wires_rules(tmp_path):
     """parse_logcat `parse` 경로(site-defaults → `configure`, 규칙 → `apply_rules`): 속성을 선언한 DB와, 속성을 지운
     사본 + 같은 이름의 구성요소 설정(`level_unreliable`·`vendor_ipc`)의 출력이 같다."""
     src = variant_db("issue-db-ofono-modules")
-    log = next(p for p in OFONO_LOGS if p.parent.name == "e4-sim-io")
+    log = next(p for p in OFONO_LOGS if p.parent.name == "ofono-sim-io-failure")
     stripped = copy_db(src, "stripped")
     (stripped / "parser-rules" / "tags.yaml").write_text(ATTR_RX.sub("", _tags(src)), encoding="utf-8")
     rules = parser_rules.load(src / "parser-rules")
