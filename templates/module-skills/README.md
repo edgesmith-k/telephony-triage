@@ -26,7 +26,7 @@ android/                                      # 같은 모양, data sim network 
 
 루트 `README.md`·`modules.yaml`·`.github/**`, `<p>/_common/{layers,components}.md`, `<p>/<m>/{explore,SKILL,analyzer}.md`, `<p>/<m>/references/<ID>.md`, `<p>/<m>/evals/<case>/case.yaml`, `<p>/<m>/evals/<case>/files/*.{log,md,json}`. 그 밖의 이름, `CLAUDE.md`·`AGENTS.md`·`.claude/`, 심볼릭 링크, 실행 비트는 두지 않는다.
 
-문서(`.md`)에 쓸 수 있는 이름: `_common/components.md` 역할 표의 이름(placeholder), ofonod·벤더 소스 경로(줄 번호 없이), RIL·`IMS_*`·`SIT_*` 이름, `RCM_E_*`·`DATAD_*`·`__ofono_error_*` 값 이름. oFono 문서의 D-Bus 이름은 `org.ofono.*`·`org.freedesktop.DBus.*`와 `modules.yaml` `dbus` 값만 쓴다. Android 문서에는 벤더 태그, `VRIL-IMS`, `SIT_*`, `RCM_E_*`, `OEM_REQ_MTEL_*`, AOSP 클래스 이름을 쓰고 D-Bus 이름은 쓰지 않는다. 어느 문서에도 줄을 통째로 옮기지 않고, 값·호스트·제품·빌드 코드·사업자 이름·APN·PLMN·벤더 장치 경로를 넣지 않는다.
+문서(`.md`)에 쓸 수 있는 이름: `_common/components.md` 역할 표의 이름(placeholder), ofonod·벤더 소스 경로(줄 번호 없이), RIL·`IMS_*`·`SIT_*` 이름, `RCM_E_*`·`DATAD_*`·`__ofono_error_*` 값 이름(`SIT_`·`RCM_E_` 접두어는 파서 `vendor_ipc`가 기대는 placeholder). oFono 문서의 D-Bus 이름은 `org.ofono.*`·`org.freedesktop.DBus.*`와 `modules.yaml` `dbus` 값만 쓴다. Android 문서에는 `VRIL`·`VRIL-*` 태그, `SIT_*`, `RCM_E_*`, `OEM_REQ_IMS_*`, AOSP 클래스 이름을 쓰고 D-Bus 이름은 쓰지 않는다. 어느 문서에도 줄을 통째로 옮기지 않고, 값·호스트·제품·빌드 코드·사업자 이름·APN·PLMN·벤더 장치 경로를 넣지 않는다.
 
 모듈 문서(`_common` 밖)는 데몬·벤더 태그를 `_common/components.md` 역할 표의 `역할` 글자로 부른다(예외 `ofonod`·`RIL`, 값 이름 `DATAD_*`와 백틱 안 줄 모양은 그대로). `원인 데몬:`에는 로그에 찍힌 이름을 쓴다. 이름이 바뀔 때:
 

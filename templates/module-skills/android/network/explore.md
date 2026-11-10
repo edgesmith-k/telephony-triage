@@ -10,9 +10,9 @@
 
 ## ② 볼 역할과 줄
 
-- SST·ExSST `pollState`, `Poll ServiceState done: newSS=`, `hasRegistered = true`
+- SST `pollState`, `Poll ServiceState done: newSS=`, `hasRegistered = true`
 - RILJ `VOICE_REGISTRATION_STATE`·`DATA_REGISTRATION_STATE` → `RegStateResult{regState:…, reasonForDenial:…}`
-- NRM-C `onRequestNetworkRegistrationInfoComplete`, 벤더 RIL `SIT_QUERY_*_REG_STATE`, 벤더 RIL 데몬·모뎀/IPC(무선)
+- NRM-C `onRequestNetworkRegistrationInfoComplete`, 벤더 RIL `SIT_*_REGISTRATION_STATE`, 벤더 RIL 데몬·AT 중계·모뎀 진단(무선)
 
 ## ③ 층 경로
 

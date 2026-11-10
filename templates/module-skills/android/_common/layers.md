@@ -10,8 +10,8 @@
 
 ## 사슬
 
-프레임워크 → RILJ `[<serial>]> <REQ>` → RIL HAL `VRIL-SVC … Radio<X>Proxy::<fn>: serial <n>` → 벤더 RIL `<X>Handler: OnRequest()` → `[TX] SIT_<X>, REQ, …, Token(0x…)` → 모뎀 → `[RX] SIT_<X>, RSP, …, OK(RCM_E_SUCCESS)|Error(RCM_E_<Y>)` → `[<Svc>Service_<n>] …Complete… errorCode=<n>` → RILJ `[<serial>]< <REQ>`.
-IMS: 프레임워크(ImsPhone…) ↔ 벤더 IMS(`SOL TX/RX{OEM_REQ_MTEL_*}`) ↔ RIL `SIT_MTEL_*` ↔ 모뎀.
+프레임워크 → RILJ `[<serial>]> <REQ>` → RIL HAL `VRIL-SVC … Radio<X>Proxy::<fn>: serial <n>` → 벤더 RIL `[<Svc>Service_<n>] <요청> request` → `mux [ch<n>][TX] SIT_<X>, REQ seq=0x…` → 모뎀 → `[RX] SIT_<X>, RSP OK(RCM_E_SUCCESS)|Error(RCM_E_<Y>) seq=0x…` → `[<Svc>Service_<n>] … done errorCode=<n>` → RILJ `[<serial>]< <REQ>`.
+IMS: 프레임워크(ImsPhone…) ↔ 벤더 IMS(`req -> OEM_REQ_IMS_*`·`rsp <- OEM_REQ_IMS_*`) ↔ RIL `SIT_IMS_*` ↔ 모뎀.
 
 ## 판단
 
@@ -28,5 +28,5 @@ IMS: 프레임워크(ImsPhone…) ↔ 벤더 IMS(`SOL TX/RX{OEM_REQ_MTEL_*}`) �
 
 ## 원인 아님
 
-RILJ `RADIO_POWER`, OemRil `notifyRadioStateChanged`, VRIL-MODEM `UsbAgent: AT+CFUN=<n>`(외부 AT 채널 → `곁가지(VRIL-MODEM)`). 무선 끈 직후 실패는 결과.
+RILJ `RADIO_POWER`, VRIL `radio state changed:`, VRIL-MODEM `at-in: AT+CFUN=<n>`(외부 AT 채널 → `곁가지(VRIL-MODEM)`). 무선 끈 직후 실패는 결과.
 실패 뒤 같은 창에 회복 줄(`LOADED`, `handleImsRegistered`, `State=COMPLETE`) → `원인 아님(정상 동작)`.

@@ -42,9 +42,7 @@ tags:
   # common
   - {tag_regex: '^(RIL|VRIL|VRIL-SVC)$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (벤더 RIL 데몬·벤더 텔레포니 서비스)}
   - {tag_regex: '^RilRequest$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (RilRequest)}
-  - {tag_regex: '^VRIL-MODEM$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (모뎀/IPC)}
-  - {tag_regex: '^SCED$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (SCED)}
-  - {tag_regex: '^OemRil', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (OemRil)}
+  - {tag_regex: '^VRIL-MODEM$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (시험 장비 AT 중계·모뎀 진단)}
   - {tag_regex: '^PhoneCfgMgr$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (PhoneCfgMgr)}
   - {tag_regex: '^RadioConfig$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (RadioConfig)}
   - {tag_regex: '^RadioConfigResponseAidl$', category: common, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (RadioConfigResponseAidl)}
@@ -66,7 +64,6 @@ tags:
   - {tag_regex: '^SecureElement-Terminal-SIM\d$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (SecureElement-Terminal-SIM)}
   - {tag_regex: '^UiccCard$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccCard)}
   - {tag_regex: '^UiccCardApplication( \[\d+\])?$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccCardApplication)}
-  - {tag_regex: '^UiccHal-(SE|Interface)$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccHal)}
   - {tag_regex: '^UiccProfile( \[\d+\])?$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccProfile)}
   - {tag_regex: '^UiccSlot$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccSlot)}
   - {tag_regex: '^UsimFH$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UsimFH)}
@@ -74,7 +71,6 @@ tags:
   - {tag_regex: '^CSST$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (CSST)}
   - {tag_regex: '^CellularNetworkService$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (CellularNetworkService)}
   - {tag_regex: '^DIC-\d+$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (DIC)}
-  - {tag_regex: '^ExSST$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ExSST)}
   - {tag_regex: '^LocaleTracker-\d+$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (LocaleTracker)}
   - {tag_regex: '^NRM-[CI]-\d+$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (NRM)}
   - {tag_regex: '^NetworkTypeController$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (NetworkTypeController)}
@@ -96,7 +92,6 @@ tags:
   - {tag_regex: '^ImsConfig$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsConfig)}
   - {tag_regex: '^ImsEnablementTracker$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsEnablementTracker)}
   - {tag_regex: '^ImsProvisioning', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsProvisioning)}
-  - {tag_regex: '^ImsRIL$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsRIL)}
   - {tag_regex: '^ImsRegCallbackHelper$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsRegCallbackHelper)}
   - {tag_regex: '^ImsStateCallbackController$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsStateCallbackController)}
   - {tag_regex: '^ImsStats$', category: ims, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (ImsStats)}

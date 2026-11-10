@@ -7,18 +7,18 @@ SIM 인식·파일 읽기, eSIM(EID·프로필·채널), PIN. IMS 인증은 `ims
 
 ## ② 볼 역할과 줄
 - SIM 구성요소, 관리 데몬 `GetEID`.
-- `org.ofono.SimManager` Present·`OpenChannel`, `src/sim.c`·`drivers/rilmodem/sim.c`.
-- gril `SIM_IO`·`SIM_OPEN_CHANNEL`, 벤더 RIL `UiccFileService_<n>`·`… sw1 : <XX>, sw2 : <XX>`.
+- `org.ofono.SimManager` Present·`ExampleOpenChannel`(placeholder 메서드), `src/sim.c`·`drivers/rilmodem/sim.c`.
+- gril `SIM_IO`·`SIM_OPEN_CHANNEL`, 벤더 RIL `[SimService_<n>] …`·`… sw1 : <XX>, sw2 : <XX>`.
 
 ## ③ 층 경로
-클라이언트 → SimManager → ofonod sim → gril → 벤더 RIL → IPC `SIT_SIM_IO`·`SIT_OPEN_SIM_CHANNEL_WITH_P2` → 카드.
+클라이언트 → SimManager → ofonod sim → gril → 벤더 RIL → IPC `SIT_SIM_IO`·`SIT_SIM_OPEN_CHANNEL` → 카드.
 
 ## ④ 증상별 첫 점검
 | 증상 | 볼 역할·줄 | 흔한 첫 실패 → 층 | 대체 근거 · 받을 로그 |
 |---|---|---|---|
 | SIM 인식 안 됨 | Present·`SIM_IO`, eSIM은 SIM 구성요소 enable | IPC Error·SW → 모뎀·망 / OK 뒤 `result≠0` → 벤더 RIL | gril `(sw1=…)` |
 | 인식 느림 | gril → IPC TX → RX 시각 | TX↔RX 길면 모뎀·망 / gril↔TX 길면 벤더 RIL | 부팅부터 수집 |
-| eSIM(프로필·EID·채널) | SIM 구성요소 → `OpenChannel` | 열린 채널 중 busy → 관리 데몬 / `6A82` → 모뎀·망 | 채널을 연 쪽 |
+| eSIM(프로필·EID·채널) | SIM 구성요소 → `ExampleOpenChannel` | 열린 채널 중 busy → 관리 데몬 / `6A82` → 모뎀·망 | 채널을 연 쪽 |
 | SIM 파일 읽기 실패 (초안) | `SIM_IO` `efid=` | 하나만 실패 → 벤더 RIL | SW 로그 수준 |
 
 ## ⑤ 함정

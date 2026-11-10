@@ -315,7 +315,7 @@ ROLES = {
     "ofono": {"oFono 데몬(upstream)", "관리 데몬 placeholder", "벤더 RIL 데몬 placeholder", "데이터 구성요소 placeholder",
               "데이터 구성요소 두 번째 placeholder", "SIM 구성요소 placeholder", "네트워크 구성요소 placeholder",
               "IMS 구성요소 placeholder", "노이즈 placeholder"},
-    "android": {"벤더 RIL 데몬", "벤더 텔레포니 서비스", "벤더 IMS", "모뎀/IPC", "벤더 프레임워크 태그"},
+    "android": {"벤더 RIL 데몬", "벤더 텔레포니 서비스", "벤더 IMS", "AT 중계·모뎀 진단", "벤더 프레임워크 태그"},
 }
 NOISE_ROLE = "노이즈 placeholder"
 # 카테고리 힌트 행(지금 이름 칸이 `{{site:<cat>}}` 마커): 사내 스냅샷이 덮어쓸 자리. 이름 검사에서는 뺀다
@@ -350,7 +350,7 @@ def _role_names(platform: str, *, old: bool = True, noise: bool = True) -> list[
 
 
 def _name_rx(name: str) -> str:
-    """끝이 `-`·`*`면 앞 글자 일치(`VRIL-NETWORK`, `UiccHal-*`), 아니면 낱말 경계."""
+    """끝이 `-`·`*`면 앞 글자 일치(`VRIL-NETWORK`, `VRIL-*`), 아니면 낱말 경계."""
     name = name.removesuffix("*")
     if name.endswith("-"):
         return rf"(?<![\w-]){re.escape(name)}\w*"

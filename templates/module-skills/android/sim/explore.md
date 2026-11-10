@@ -12,7 +12,7 @@ SIM 인식·카드 상태·파일 읽기(SIM_IO)·응용(AID)·채널·eSIM. 가
 
 - UiccController·UiccProfile·UiccCardApplication·SIMRecords·UsimFH·IsimUiccRecords
 - RILJ `GET_SIM_STATUS`, `iccIO: SIM_IO command=… fileId=…`, `< SIM_IO error <n>`, `SIM_OPEN_CHANNEL`
-- RilRequest `IccIoResult sw1:… sw2:…`, 벤더 RIL `SIT_SIM_IO`·`SIT_QUERY_SIM_STATUS`, `[CardService_<n>]`
+- RilRequest `IccIoResult sw1:… sw2:…`, 벤더 RIL `SIT_SIM_IO`·`SIT_GET_SIM_STATUS`, `[SimService_<n>]`
 
 ## ③ 층 경로
 

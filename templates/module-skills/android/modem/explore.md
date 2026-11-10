@@ -12,7 +12,7 @@
 
 - RILJ `[UNSL]< UNSOL_MODEM_RESTART`, `RADIO_POWER`, `serviceDied`·`has died`, 벤더 RIL 데몬 `notifyRadioStateChanged: newState=`
 - RadioConfig `SET_PREFERRED_DATA_MODEM`, PhoneCfgMgr
-- 모뎀/IPC `UsbAgent: AT…`·`From Modem::`, 모뎀/IPC 줄
+- AT 중계·모뎀 진단 `at-in: AT…`·`at-out: …`
 
 ## ③ 층 경로
 
