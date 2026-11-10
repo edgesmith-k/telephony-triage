@@ -133,10 +133,10 @@ def events(e, evs):
     Path(e["env"]["STUB_EVENTS"]).write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in evs), encoding="utf-8")
 
 
-def tt(e, *args, extra_env=None, timeout=60):
+def tt(e, *args, extra_env=None, timeout=60, cwd=None):
     env = {**e["env"], **(extra_env or {})}
     return subprocess.run([sys.executable, str(TTOC), "--opencode", str(e["stub"]), "--project", str(e["proj"]), *args],
-                          env=env, capture_output=True, text=True, timeout=timeout, check=False)
+                          env=env, capture_output=True, text=True, timeout=timeout, check=False, cwd=cwd)
 
 
 def calls(e):
@@ -333,6 +333,36 @@ def test_terminal_handoff_fills_lock_owner_from_job_state(env):
     assert "TT_LOCK_OWNER=" not in handoff(outside).splitlines()[0]
     given = f"TT_LOCK_OWNER=zz {pub}"                          # 이미 있으면 그대로
     assert handoff(given).splitlines()[0] == given
+
+
+def test_terminal_handoff_lookup_ignores_modules_planted_in_cwd(env, monkeypatch):
+    """4차 R3-P1-1: owner 판정 하위 프로세스(`python -c`)는 cwd를 import 경로 맨 앞에 둔다. 모델이 쓸 수 있는 작업 폴더에서
+    tt-oc를 돌려도 거기 심은 pathlib.py·json.py·yaml.py가 실행되지 않는다(표시 파일이 생기지 않고 채우기는 된다). 하위 프로세스
+    환경에는 PYTHONPATH류가 없고, 작업 루트 안을 가리키는 PYTHONUSERBASE도 없다."""
+    mod = _load("tt_oc", TTOC)
+    root = env["work"]
+    for key in mod.UNSAFE_PY_ENV:
+        monkeypatch.setenv(key, str(root / "ABC-1"))
+    monkeypatch.setenv("PYTHONUSERBASE", str(root / "ABC-1" / "u"))
+    lookup = mod._lookup_env(root)
+    assert not set(mod.UNSAFE_PY_ENV) & set(lookup) and "PYTHONUSERBASE" not in lookup
+    monkeypatch.setenv("PYTHONUSERBASE", str(env["tmp"] / "home" / ".local"))
+    assert mod._lookup_env(root)["PYTHONUSERBASE"] == str(env["tmp"] / "home" / ".local")
+    work = env["work"]
+    job = work / "ABC-1"
+    job.mkdir()
+    (job / "triage-state.json").write_text(json.dumps({"owner": "0a1b2c"}), encoding="utf-8")
+    marker = env["tmp"] / "PWNED"
+    for name in ("pathlib.py", "json.py", "yaml.py"):
+        (job / name).write_text(f"open({str(marker)!r}, 'a').write({name!r})\nraise SystemExit(0)\n", encoding="utf-8")
+    pub = f"python3 /p/scripts/db_pr.py publish {job}/wt --branch b --lease new --approved h --commit"
+    msg = f"OpenCode v1 does not run this; run this exact command yourself: {pub}"
+    events(env, [ev("step_start"), tool("bash", "error", input={"command": pub}, error=msg), step("tool-calls"), *final("직접")])
+    r = tt(env, "--", "x", cwd=job)
+    assert r.returncode == 3, r.stdout + r.stderr
+    line = r.stdout.split("직접 실행 ----\n", 1)[1]
+    assert not marker.exists(), marker.read_text() if marker.exists() else ""
+    assert line.startswith("TT_LOCK_OWNER=0a1b2c ")
 
 
 def test_config_deny_write_command_with_workdir(env):

@@ -547,8 +547,24 @@ def _write_command(inp) -> list[str]:
 # 불일치`로 멈춘다. 그래서 출력하는 명령에만 `TT_LOCK_OWNER=<owner>`를 채운다(모델이 돌리는 명령에는 넣지 않는다 — 어댑터 그대로).
 OWNER_SCRIPTS = re.compile(r"\b(db_pr|db_verify)\.py\b")
 _CD_HEAD = re.compile(r"""^cd\s+("[^"]*"|'[^']*'|\S+)\s*&&\s*""")
+# 하위 프로세스는 cwd를 플러그인 scripts 폴더로 두고 PYTHONPATH류를 뺀다: `-c`는 cwd를 import 경로 맨 앞에 두는데, 사용자가 tt-oc를
+# 모델이 쓸 수 있는 작업 폴더에서 돌리면 거기 심은 `pathlib.py` 등이 guard 밖에서 돈다(4차 R3-P1-1).
 STATE_OWNER_CODE = ("import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); from dbpr.lock import state_owner; "
                     "print(state_owner(Path(sys.argv[2]), sys.argv[3]) or '')")
+
+# import 경로·시작 코드·바이트코드 위치를 바꾸는 변수. owner 판정 하위 프로세스에는 넘기지 않는다
+UNSAFE_PY_ENV = ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONINSPECT", "PYTHONSAFEPATH", "PYTHONEXECUTABLE",
+                 "PYTHONPYCACHEPREFIX")
+
+
+def _lookup_env(root: Path) -> dict:
+    """owner 판정 하위 프로세스 환경: UNSAFE_PY_ENV를 빼고, 작업 루트 안을 가리키는 PYTHONUSERBASE도 뺀다(밖이면 둔다 — yaml이
+    사용자 site에 있을 수 있다)."""
+    env = {k: v for k, v in os.environ.items() if k not in UNSAFE_PY_ENV}
+    base = env.get("PYTHONUSERBASE")
+    if base and (Path(os.path.normpath(base)) == root or root in Path(os.path.normpath(base)).parents):
+        env.pop("PYTHONUSERBASE")
+    return env
 
 
 def _command_job(cmd: str, work_root: Path) -> tuple[Path, str] | None:
@@ -588,7 +604,8 @@ def handoff_commands(cmds: list[str], meta: dict) -> tuple[list[str], list[str]]
         target, owner = _command_job(cmd, root), ""
         if target:
             try:
-                r = _run([sys.executable, "-c", STATE_OWNER_CODE, str(scripts), str(target[0]), target[1]], timeout=30)
+                r = _run([sys.executable, "-c", STATE_OWNER_CODE, str(scripts), str(target[0]), target[1]],
+                         cwd=str(scripts), env=_lookup_env(root), timeout=30)
                 owner = r.stdout.strip() if r.returncode == 0 else ""
             except (OSError, subprocess.TimeoutExpired):
                 owner = ""
