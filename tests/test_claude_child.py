@@ -108,6 +108,8 @@ def test_gateway_profile_models_base_url_and_managed_settings(tmp_path, monkeypa
     assert cc.managed_settings_dir({cc.MANAGED_DIR_ENV: "/x"}) == Path("/x") and cc.managed_settings_dir() == managed
     monkeypatch.delenv(cc.MANAGED_DIR_ENV)
     assert cc.managed_settings_dir({}) == cc.MANAGED_SETTINGS_DIR
+    plain = {r["key"]: r for r in cc.gateway_profile_check({"CLAUDE_CONFIG_DIR": str(tmp_path / "none")})}
+    assert "로 바꿈" not in plain["env_sources"]["detail"]
     monkeypatch.setenv(cc.MANAGED_DIR_ENV, str(managed))
     conf = tmp_path / "conf"
     _settings(conf, {"env": {"ANTHROPIC_MODEL": "glm-x", "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-x",
@@ -130,6 +132,7 @@ def test_gateway_profile_models_base_url_and_managed_settings(tmp_path, monkeypa
     assert all(rows[k]["status"] == "ok" for k in cc.GATEWAY_MODEL_KEYS) and rows["credential"]["status"] == "ok"
     assert rows["ANTHROPIC_BASE_URL"]["status"] == "differs" and "/v1/v1" in rows["ANTHROPIC_BASE_URL"]["detail"]
     assert "managed-settings.json" in rows["env_sources"]["detail"] and "10-gw.json" in rows["env_sources"]["detail"]
+    assert f"{cc.MANAGED_DIR_ENV}로 바꿈" in rows["env_sources"]["detail"]          # 3차 R2-P3-4: 덮어쓰기를 행에 보인다
     text = json.dumps(list(rows.values()))
     assert "tok-managed" not in text and "gw.invalid" not in text
     # 프로세스 환경도 본다(missing으로 보지 않는다). ANTHROPIC_MODEL이 없으면 비교하지 않고 info

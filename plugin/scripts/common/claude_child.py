@@ -153,7 +153,9 @@ def gateway_profile_check(env: dict[str, str]) -> list[dict]:
         rows.append({"key": key, "status": status, "detail": detail})
     add("env_sources", "info", f"프로세스 환경, {_user_settings_path(env)}, 관리 설정 "
         + (", ".join(map(str, managed)) if managed else f"{managed_settings_dir(env)}/managed-settings.json(.d) 없음")
-        + " (레지스트리·MDM·서버 관리 설정은 보지 않는다)")
+        + " (레지스트리·MDM·서버 관리 설정은 보지 않는다)"
+        + (f" ({MANAGED_DIR_ENV}로 바꿈 — OS 관리 설정 폴더 {MANAGED_SETTINGS_DIR}를 보지 않았다)"
+           if managed_settings_dir(env) != MANAGED_SETTINGS_DIR else ""))
     base_url = eff.get("ANTHROPIC_BASE_URL")
     if not base_url:
         add("ANTHROPIC_BASE_URL", "missing", "게이트웨이 주소 없음 — 기본 Anthropic API로 간다")
