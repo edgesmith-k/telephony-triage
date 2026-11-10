@@ -6,8 +6,8 @@
 PDN·데이터 연결, APN, 데이터 콜 설정·해제·재시도, 연결 뒤 IP. IMS PDN은 `ims`다.
 
 ## ② 볼 역할과 줄
-- 1순위: gril `SET_INITIAL_ATTACH_APN`(IA)·`SET_DATA_PROFILE`, 데이터 구성요소 `set IaProfileId`, data call list(`UNSOL_DATA_CALL_LIST_CHANGED`).
-- 데이터 구성요소: `syncApnInfoWithOfono`·`addApnInfo`, 연결 결과·재시도, `DATAD_<상태>`.
+- 1순위: gril `SET_INITIAL_ATTACH_APN`(IA)·`SET_DATA_PROFILE`, 데이터 구성요소 `set ia profile id`, data call list(`UNSOL_DATA_CALL_LIST_CHANGED`).
+- 데이터 구성요소: `sync apn list`·`add apn entry`, 연결 결과·재시도, `DATAD_<상태>`.
 - `ConnectionManager`·`ConnectionContext`(Active), ofonod `src/gprs.c`.
 - gril `SETUP_DATA_CALL`·`DEACTIVATE_DATA_CALL`, 데이터 곁가지 netlink.
 
@@ -18,7 +18,7 @@ PDN·데이터 연결, APN, 데이터 콜 설정·해제·재시도, 연결 뒤 
 | 증상 | 볼 역할·줄 | 흔한 첫 실패 → 층 | 대체 근거 · 받을 로그 |
 |---|---|---|---|
 | 연결 안 됨 | IA·프로필 → `SETUP_DATA_CALL` | `failed`·`VIPC_E_*` → 벤더 RIL·모뎀·망 / `DATAD_MOBILE_GPRS_NOT_ATTACHED` → 관리 데몬 | data call list |
-| APN이 다름(B여야 하는데 A) | `addApnInfo … internet` 순서, 요청 인자 | APN 로직 → ofonod (관리 데몬은 거의 전달만, 둘 다 봄) | APN 토큰 비교 / 프로필 덤프 |
+| APN이 다름(B여야 하는데 A) | `add apn entry … internet` 순서, 요청 인자 | APN 로직 → ofonod (관리 데몬은 거의 전달만, 둘 다 봄) | APN 토큰 비교 / 프로필 덤프 |
 | 끊김 | data call list, `DEACTIVATE_DATA_CALL` | 요청 없이 빠짐 → 모뎀·망 / DEACTIVATE 먼저 → 보낸 층 | 전후 수집 |
 | 재시도 안 됨 | 재시도 줄, 다음 `SETUP_DATA_CALL` | 시점이 로그 밖 → 그 층 로그 없음(관리 데몬) | 간격을 덮는 수집 |
 | ping 안 됨·연결됐는데 안 됨 | 관리 데몬 라우팅·netconf·firewall | 라우팅 오류 → 곁가지 / 설정 실패 → 관리 데몬 | 줄 없음 → 그 층 로그 없음(관리 데몬) |

@@ -29,6 +29,6 @@ IMS 등록·해제·재등록, IMS PDN과 등록의 관계, VoLTE 가능 상태.
 
 ## ⑤ 함정
 
-- RILJ `service IMS is not available`과 `NOTIFY_IMS_DATA_NETWORK error 6`이 되풀이돼도 등록 줄(`Ims Registration : TRUE`, `handleImsRegistered`)이 있으면 → `원인 아님(정상 동작)`.
+- RILJ `service IMS is not available`과 `NOTIFY_IMS_DATA_NETWORK error 6`이 되풀이돼도 등록 줄(`[ImsService_<n>] ims registration indication: TRUE`, `handleImsRegistered`)이 있으면 → `원인 아님(정상 동작)`.
 - 벤더 IMS 줄이 없어도 `onRegistrationFailed: code=4xx`가 거절 코드면 망의 답이다. `그 층 로그 없음`으로만 답하지 않는다.
 - IMS PDN은 data다.

@@ -136,7 +136,7 @@ def test_format_c_level_unreliable_components(tmp_path):
     path = _write(tmp_path, "unreliable.log", [
         "Sep 20 14:32:11.001 dut daemon.crit daemon-a[10]: netlink dump",
         "Sep 20 14:32:11.002 dut daemon.emerg daemon-a[10]: netlink dump",
-        "Sep 20 14:32:11.003 dut daemon.warn daemon-b[11]: checksum : verified",
+        "Sep 20 14:32:11.003 dut daemon.warn daemon-b[11]: self check : ok",
         "Sep 20 14:32:11.004 dut local0.warn daemon-b[13]: ok",
         "Sep 20 14:32:11.005 dut daemon.err ofonod[14]: placeholder",
         "Sep 20 14:32:11.006 dut daemon.crit Daemon-a[15]: 대소문자가 다르면 그대로",

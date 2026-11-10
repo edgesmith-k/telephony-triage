@@ -23,4 +23,4 @@ IMS 구성요소 `IMS_UNSOL_PDN_ACTIVATE` → ofonod `SETUP_DATA_CALL (…ims…
 
 ## ⑤ 함정
 - 401 뒤 약 1초 안에 `[IMS_REGISTERED]`면 인증 요청 뒤 등록이다 → `원인 아님(정상 동작)`.
-- 시작 때 `ctxOperatorInfo is NULL`, 비행기 모드 뒤 "no ApnEntity for IMS"는 순서 문제다.
+- 시작 때 `operator info is NULL`, 비행기 모드 뒤 "no APN entry for IMS"는 순서 문제다.

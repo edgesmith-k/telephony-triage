@@ -6,12 +6,12 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): datad2 · src/lte.c · drivers/rilmodem/gprs.c · drivers/rilmodem/lte.c · DEACTIVATE_DATA_CALL
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
-09:00:01.000 - D datad syncApnInfoWithOfono, Apn size: 2[./svc/session.cxx +42]  〔script: 같은 줄 ×2〕
-09:00:01.001 - D datad addApnInfo, userProfileId : 1, apn : <APN#2>, type : internet[./svc/session.cxx +42]
-09:00:01.001 - D datad set IaProfileId = 1[./svc/state.cxx +10]  〔script: 같은 줄 ×2〕
-09:00:01.002 - D datad addApnInfo, userProfileId : 2, apn : ims, type : ims[./svc/session.cxx +42]  〔script: 같은 줄 ×2〕
-09:00:01.002 - D datad handleGetAllApns, Apns size: 2[./svc/session.cxx +42]  〔script: 같은 줄 ×2〕
-09:00:01.451 - D datad addApnInfo, userProfileId : 1, apn : <APN#1>, type : internet[./svc/session.cxx +42]
+09:00:01.000 - D datad sync apn list, size: 2[./svc/session.cxx +42]  〔script: 같은 줄 ×2〕
+09:00:01.001 - D datad add apn entry, profile id : 1, apn : <APN#2>, type : internet[./svc/session.cxx +42]
+09:00:01.001 - D datad set ia profile id = 1[./svc/state.cxx +10]  〔script: 같은 줄 ×2〕
+09:00:01.002 - D datad add apn entry, profile id : 2, apn : ims, type : ims[./svc/session.cxx +42]  〔script: 같은 줄 ×2〕
+09:00:01.002 - D datad apn list loaded, size: 2[./svc/session.cxx +42]  〔script: 같은 줄 ×2〕
+09:00:01.451 - D datad add apn entry, profile id : 1, apn : <APN#1>, type : internet[./svc/session.cxx +42]
 09:00:02.000 p0 I mgmtd dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1
 09:00:02.002 p0 I ofonod dbus_trace method call - i:org.ofono.ConnectionContext m:SetProperty p:/ril_0/context1 a:"Active", variant(true)
 09:00:02.003 p0 D ofonod drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating

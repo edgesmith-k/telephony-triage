@@ -361,7 +361,7 @@ def test_m12_cpp_scope_not_ip():
     주소는 그대로 가린다. 마스킹한 줄에서도 모듈 필터의 `DemoService_<n>::` 잡음 정규식이 맞는다. (벤더 모양을 본뜬 합성 줄)"""
     keep = [
         "[DemoService_0::OnDemoRequest] request done",
-        "[ImsService_1::OnUNSOL_DEMO_REGISTRATION] Ims Registration : TRUE",
+        "[ExampleImsService_1::OnDemoRegistration] ims registration indication: TRUE",
         "V2_4::RadioDataProxy::setupDataCall",
         "DemoCallCommand_V2_4::onRequest",
     ]

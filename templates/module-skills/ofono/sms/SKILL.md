@@ -14,7 +14,7 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 
 ## 점검
 1. `org.ofono.MessageManager` `SendMessage` → `src/sms.c` → gril `SEND_SMS`(CS) 또는 IMS 구성요소 문자(IMS). `smsOverLteCapable=<0|1>`이 길을 고른다.
-2. gril `failed`면 실패는 ofonod 아래다. 벤더 RIL에서 그 요청의 `SOCKET … REQUEST: SEND_SMS`·IPC·`OnIpcComplete`를 찾아 두 단계 규칙으로 본다(없으면: gril `SEND_SMS` 응답·`src/sms.c` 재시도 줄. 층은 정하지 않는다).
+2. gril `failed`면 실패는 ofonod 아래다. 벤더 RIL에서 그 요청의 `client fd … VCHAN_<n> REQUEST: SEND_SMS`·IPC·`OnIpcComplete`를 찾아 두 단계 규칙으로 본다(없으면: gril `SEND_SMS` 응답·`src/sms.c` 재시도 줄. 층은 정하지 않는다).
 3. 그 요청의 벤더 RIL 줄이 하나도 없으면 → `그 층 로그 없음(벤더 RIL)`. 신호 세기 같은 잡음 줄은 그 요청이 기록됐다는 증거가 아니다.
 4. IMS 길: IMS 구성요소 `ImsSmsSender::sendSms] failed`가 IMS IPC TX 없이 나오면 → `곁가지(<데몬>)`.
 5. 재시도 횟수·간격은 참고만 한다. SMSC는 토큰이라 값으로 판단하지 않는다.
