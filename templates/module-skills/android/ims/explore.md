@@ -12,7 +12,7 @@ IMS 등록·해제·재등록, IMS PDN과 등록의 관계, VoLTE 가능 상태.
 
 - IMS IPC: 벤더 RIL `VIPC_EXAMPLE_IMS_REG_IND`, 벤더 IMS `req -> OEM_REQ_IMS_*`·`rsp <- OEM_REQ_IMS_*`·`ind <- OEM_UNSOL_IMS_REGISTRATION … status-code`
 - 벤더 IMS `[pdn]`·`[reg]`·`add pdn`, 벤더 RIL `[ImsService_<n>] ims registration indication: TRUE|FALSE`
-- ImsPhone `handleImsRegistered`·`handleImsUnregistered … ImsReasonInfo`, ImsRegistration, ImsManager
+- ImsPhone `handleImsRegistered`·`handleImsUnregistered … ImsReasonInfo`, ImsRegistration(placeholder), ImsManager
 
 ## ③ 층 경로
 
@@ -29,6 +29,6 @@ IMS 등록·해제·재등록, IMS PDN과 등록의 관계, VoLTE 가능 상태.
 
 ## ⑤ 함정
 
-- RILJ `service IMS is not available`과 `NOTIFY_IMS_DATA_NETWORK error 6`이 되풀이돼도 등록 줄(`[ImsService_<n>] ims registration indication: TRUE`, `handleImsRegistered`)이 있으면 → `원인 아님(정상 동작)`.
+- RILJ `service IMS is not available`·`notifyImsDataNetwork not supported on service DATA`·`NOTIFY_IMS_DATA_NETWORK error 6`이 되풀이돼도 등록 줄(`[ImsService_<n>] ims registration indication: TRUE`, `handleImsRegistered`)이 있으면 → `원인 아님(정상 동작)`.
 - 벤더 IMS 줄이 없어도 `onRegistrationFailed: code=4xx`가 거절 코드면 망의 답이다. `그 층 로그 없음`으로만 답하지 않는다.
 - IMS PDN은 data다.
