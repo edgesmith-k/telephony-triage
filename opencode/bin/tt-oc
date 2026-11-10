@@ -550,10 +550,25 @@ _CD_HEAD = re.compile(r"""^cd\s+("[^"]*"|'[^']*'|\S+)\s*&&\s*""")
 # owner 판정은 플러그인 코드(`dbpr.lock.handoff_owner` — 하위 명령 판별은 각 스크립트 `owner_job`, owner는 `state_owner`와
 # session.lock 대조). 하위 프로세스는 cwd를 플러그인 scripts 폴더로 두고 PYTHONPATH류를 뺀다: `-c`는 cwd를 import 경로 맨 앞에
 # 두는데, 사용자가 tt-oc를 모델이 쓸 수 있는 작업 폴더에서 돌리면 거기 심은 `pathlib.py` 등이 guard 밖에서 돈다(4차 R3-P1-1).
-HANDOFF_CODE = ("import importlib, json, sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); "
-                "from dbpr.lock import handoff_owner; "
-                "target = importlib.import_module(sys.argv[2]).owner_job(json.loads(sys.argv[3])); "
-                "print(json.dumps(handoff_owner(target, Path(sys.argv[4]), Path(sys.argv[5]) if sys.argv[5] else None)))")
+# 인자를 argparse가 거부하면(SystemExit) {"checks": True, "usage_error": True}, `--help`(종료 0)는 owner를 보지 않는 것으로.
+HANDOFF_CODE = "\n".join((
+    "import contextlib, importlib, io, json, sys",
+    "from pathlib import Path",
+    "sys.path.insert(0, sys.argv[1])",
+    "from dbpr.lock import handoff_owner",
+    "try:",
+    "    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):",
+    "        target = importlib.import_module(sys.argv[2]).owner_job(json.loads(sys.argv[3]))",
+    "except SystemExit as exc:",
+    "    print(json.dumps({'checks': bool(exc.code), 'usage_error': bool(exc.code)}))",
+    "else:",
+    "    print(json.dumps(handoff_owner(target, Path(sys.argv[4]), Path(sys.argv[5]) if sys.argv[5] else None)))",
+))
+# 채운 줄은 읽은 낱말을 다시 따옴표로 싸서 만든다(5차 R4-P2-1). 이 글자가 있으면 다시 싸는 것이 bash와 뜻이 달라질 수 있어(`$( )`·
+# 백틱·`\`·`!`·글롭·`~`·주석) 채우지 않는다. EXPANSION은 그대로 내보내는 모델 명령 앞에 확인 표시를 붙이는 기준(명령 치환·변수·히스토리)
+FILL_UNSAFE = re.compile(r"[$`\\!*?\[\]{}~#\n]")
+EXPANSION = re.compile(r"[$`!]")
+MODEL_CMD_MARK = "# ↓ 모델이 만든 명령 — 셸 확장(`$`·백틱·`!`)이 있어 붙여 넣으면 셸이 먼저 푼다. 확인 후 실행"
 # import 경로·시작 코드·바이트코드 위치를 바꾸는 변수. owner 판정 하위 프로세스에는 넘기지 않는다
 UNSAFE_PY_ENV = ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONINSPECT", "PYTHONSAFEPATH", "PYTHONEXECUTABLE",
                  "PYTHONPYCACHEPREFIX")
@@ -570,13 +585,13 @@ def _lookup_env(root: Path) -> dict:
     return env
 
 
-def _split_handoff(cmd: str) -> tuple[str, str, Path | None, str, list[str], bool] | None:
-    """(cd 머리, 나머지, cd 대상, 스크립트 모듈 이름(db_pr|db_verify), 그 스크립트 인자, 한 명령인가). 한 명령 = `[cd <dir> &&] python3 <…>/db_pr.py|
-    db_verify.py <인자…>`이고 다른 명령(`;`·`&&`·`|`·리디렉션·줄바꿈 등)이 없다. 셸 낱말로 못 읽거나 그 스크립트가 없으면 None."""
+def _split_handoff(cmd: str) -> tuple[str | None, list[str], str, list[str], bool] | None:
+    """(cd 대상, 나머지의 셸 낱말, 스크립트 모듈 이름(db_pr|db_verify), 그 스크립트 인자, 한 명령인가). 한 명령 = `[cd <dir> &&] python3
+    <…>/db_pr.py|db_verify.py <인자…>`이고 다른 명령(`;`·`&&`·`|`·리디렉션·줄바꿈 등)이 없다. 셸 낱말로 못 읽거나 그 스크립트가 없으면 None."""
     m = _CD_HEAD.match(cmd)
-    head, rest = (cmd[:m.end()], cmd[m.end():]) if m else ("", cmd)
+    rest = cmd[m.end():] if m else cmd
     try:
-        base = Path(shlex.split(m.group(1))[0]) if m else None
+        base = shlex.split(m.group(1))[0] if m else None
         lex = shlex.shlex(rest, posix=True, punctuation_chars=True)
         lex.whitespace_split = True
         words = list(lex)
@@ -588,14 +603,15 @@ def _split_handoff(cmd: str) -> tuple[str, str, Path | None, str, list[str], boo
     end = next((i for i in range(at + 1, len(words)) if _OPERATOR.fullmatch(words[i])), len(words))
     simple = (at == 1 and words[0] in ("python3", "python") and end == len(words) and "\n" not in rest
               and not any(_OPERATOR.fullmatch(w) for w in words))
-    return head, rest, base, Path(words[at]).stem, words[at + 1:end], simple
+    return base, words, Path(words[at]).stem, words[at + 1:end], simple
 
 
 def handoff_commands(cmds: list[str], meta: dict) -> tuple[list[str], list[str]]:
     """(출력할 명령, 안내 줄). 사용자가 터미널에서 돌릴 `db_pr`·`db_verify` 명령에 그 작업의 lock owner를 `TT_LOCK_OWNER=`로 채운다
     (4차): owner를 보는 하위 명령이고, 그 작업의 작업 상태 owner가 지금 그 작업이 쥔 session.lock owner와 같을 때만. 줄 끝에 어느
     작업의 owner인지 적는다. 못 채우면 명령은 그대로 두고 한 줄 안내. owner를 보지 않는 하위 명령(merge 등)은 안내도 없다.
-    여러 명령이 이어진 것은 접두가 엉뚱한 명령에 붙지 않게 채우지 않고 안내만 한다."""
+    여러 명령이 이어진 것은 접두가 엉뚱한 명령에 붙지 않게 채우지 않고 안내만 한다. 채운 줄은 모델 글이 아니라 읽은 낱말을
+    따옴표로 다시 싸서 만든다(5차 R4-P2-1 — 출력이 tt-oc가 검사한 그 명령이고 아무것도 풀리지 않는다)."""
     out, notes = [], []
     root = Path(os.path.normpath(meta["work_root"]))
     scripts = Path(__file__).resolve().parents[2] / "plugin" / "scripts"
@@ -606,7 +622,7 @@ def handoff_commands(cmds: list[str], meta: dict) -> tuple[list[str], list[str]]
         parts = _split_handoff(cmd)
         info: dict = {"checks": True}
         if parts is not None:
-            head, rest, base, script, args, simple = parts
+            base, words, script, args, simple = parts
             try:
                 r = _run([sys.executable, "-c", HANDOFF_CODE, str(scripts), script, json.dumps(args), str(root),
                           str(base) if base else ""], cwd=str(scripts), env=_lookup_env(root), timeout=60)
@@ -618,6 +634,11 @@ def handoff_commands(cmds: list[str], meta: dict) -> tuple[list[str], list[str]]
         if not info.get("checks"):              # merge·request-review 등 owner를 보지 않는 하위 명령
             out.append(cmd)
             continue
+        if info.get("usage_error"):
+            out.append(cmd)
+            notes.append("db_pr·db_verify 인자를 읽지 못해(인자 오류) TT_LOCK_OWNER를 채우지 않았다 — 그대로 실행하면 사용 오류로 "
+                         "멈춘다. 인자를 고친 명령이 lock을 보는 하위 명령이면 TT_LOCK_OWNER=<그 작업의 owner>를 앞에 붙인다: " + cmd[:200])
+            continue
         if parts is None or not simple:
             out.append(cmd)
             notes.append("db_pr·db_verify가 여러 명령 사이에 있어 TT_LOCK_OWNER를 채우지 않았다(접두가 다른 명령에 붙는다) — "
@@ -625,8 +646,14 @@ def handoff_commands(cmds: list[str], meta: dict) -> tuple[list[str], list[str]]
                          "(없으면 `lock owner 불일치`로 멈춘다): " + cmd[:200])
             continue
         owner, job = str(info.get("owner") or ""), info.get("job")
+        if re.fullmatch(r"[A-Za-z0-9_-]+", owner) and FILL_UNSAFE.search(cmd):
+            out.append(cmd)
+            notes.append("셸 확장·특수 글자(`$`·백틱·`\\`·`!`·글롭·`~`·`#`)가 있어 TT_LOCK_OWNER를 채우지 않았다 — 모델이 만든 명령이니 "
+                         "인자를 확인하고, 실행할 때 TT_LOCK_OWNER=<작업 " + str(job) + "의 owner>를 앞에 붙인다: " + cmd[:200])
+            continue
         if re.fullmatch(r"[A-Za-z0-9_-]+", owner):
-            out.append(f"{head}TT_LOCK_OWNER={owner} {rest}  # owner: 작업 {job}의 session.lock(이 작업이 맞는지 확인하고 실행)")
+            cd = f"cd {shlex.quote(base)} && " if base is not None else ""
+            out.append(f"{cd}TT_LOCK_OWNER={owner} {shlex.join(words)}  # owner: 작업 {job}의 session.lock(이 작업이 맞는지 확인하고 실행)")
             continue
         out.append(cmd)
         where = (f"{info['work_dir']}/{job}/triage-state.json" if info.get("work_dir") and job
@@ -801,7 +828,10 @@ def main(argv=None) -> int:
             print(f"[{b['tool']}] {b['message']}")
     if res["user_commands"]:
         print("\n---- [tt-oc] OpenCode v1에서 실행하지 않은 명령 — 터미널이나 Claude Code에서 직접 실행 ----")
-        print("\n".join(res["user_commands"]))
+        for c in res["user_commands"]:      # 모델 글 그대로인 명령은 다시 싸면 뜻이 바뀌어(연산자·변수) 표시만 붙인다
+            if EXPANSION.search(c):
+                print(MODEL_CMD_MARK)
+            print(c)
         for n in res["handoff_notes"]:
             print(f"주의: {n}")
     print("\n---- [tt-oc] 결과 ----")

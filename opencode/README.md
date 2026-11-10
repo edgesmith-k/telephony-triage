@@ -51,6 +51,9 @@ opencode/bin/tt-oc --project <dest> -s <세션> -- 2          # 질문에 답하
 - 결과 줄에 끝난 이유(`finish`)를 보이고, 토큰 사용량이 0이면 주의 한 줄(게이트웨이가 스트리밍 usage를 안 줄 때).
 - 이번 실행에서 스크립트가 남긴 화면(`<work_dir>/.shown/log.jsonl`)은 모델을 거치지 않고 래퍼가 그대로 출력한다.
 - "직접 실행" 절의 `db_pr`·`db_verify` 명령에는 그 작업(`<work_dir>/<KEY>/wt|draft`, `--job <KEY>`)의 `triage-state.json` owner를 `TT_LOCK_OWNER=…`로 붙이고 줄 끝에 어느 작업의 owner인지 적는다(`dbpr.lock.handoff_owner`). 붙이는 때: owner를 보는 하위 명령(`db_pr.OWNER_CMDS`·`lock release`, `db_verify --draft`)이고, `[cd <dir> &&] python3 …/db_pr.py …` 한 명령이며, 그 owner가 지금 그 작업이 쥔 `session.lock` owner와 같을 때. 작업 루트 밖 경로는 읽지 않는다. 여러 명령이 이어졌거나 owner가 맞지 않으면 접두 없이 `주의:` 한 줄, `merge`·`request-review`처럼 owner를 보지 않는 하위 명령은 그대로. 조회 하위 프로세스는 플러그인 `scripts` 폴더에서 `PYTHONPATH`류 없이 돈다(작업 폴더에 심은 모듈을 import하지 않는다).
+  채운 줄은 모델 글이 아니라 읽은 낱말을 `shlex.quote`로 다시 싸서 만든다(검사한 그 명령, 아무것도 풀리지 않음). 다시 싸면 뜻이 바뀔
+  수 있는 글자(`$`·백틱·`\`·`!`·글롭·`~`·`#`)가 있으면 채우지 않고 안내, 인자 오류면 "사용 오류로 멈춘다" 안내. 그 밖의 명령은 모델
+  글 그대로라(다시 싸면 연산자·변수의 뜻이 바뀐다) `$`·백틱·`!`가 있으면 앞에 `# ↓ 모델이 만든 명령 — … 확인 후 실행` 줄을 둔다.
 - TUI(`opencode`)는 자유 탐색만 — 표시 보장이 없다.
 - 끝난 세션은 `--delete-session`으로 지운다(`~/.local/share/opencode/opencode.db`에 도구 출력이 남는다).
 

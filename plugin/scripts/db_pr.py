@@ -144,11 +144,9 @@ OWNER_CMDS = ("snapshot", "stage", "summary", "publish", "discard")
 
 
 def owner_job(argv: list[str]) -> tuple[str, str] | None:
-    """이 명령 인자가 owner를 보는 하위 명령이면 `("job", <작업 키>)` 또는 `("wt", <wt 경로>)`, 아니면 None(못 읽어도 None)."""
-    try:
-        args = build_parser().parse_known_args(argv)[0]   # 셸 리디렉션 숫자(2>&1의 2) 등은 버린다
-    except SystemExit:
-        return None
+    """이 명령 인자가 owner를 보는 하위 명령이면 `("job", <작업 키>)` 또는 `("wt", <wt 경로>)`, 아니면 None. 인자 오류는 argparse
+    그대로 SystemExit(tt-oc가 "사용 오류로 멈춘다"로 알린다)."""
+    args = build_parser().parse_known_args(argv)[0]   # 셸 리디렉션 숫자(2>&1의 2) 등은 버린다
     if args.cmd == "lock":
         return ("job", args.job) if args.lock_cmd == "release" and not args.force else None
     if args.cmd == "snapshot":
