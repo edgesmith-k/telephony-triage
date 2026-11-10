@@ -105,7 +105,8 @@ MODULE_GUIDE = {
 6. `site_step.py modules coverage` — 사내 로그로 빈 이름을 찾아 modules.yaml diff(모듈 레포 PR)·tags.yaml(계획 op PR, 사용자 확인).""",
     "MS-2": """MS-2 사내 스킬 합치기(선택)·정기 점검 (MODULE_SKILLS_PLAN_IMPL §6, 결정 기록 11/05 ③)
 1. (선택) 사내 Android 분석 스킬을 `android/<m>/`에 합친다(텍스트 절차만). 합치기 전에는 `prefer: skill`로 그대로 쓴다.
-2. (선택) `module_eval.py`를 S-5 라벨셋(마스킹, tests/site/module-evals/)에 소수로 — 비용 승인 뒤.
+2. (선택) `module_eval.py`를 S-5 라벨셋(마스킹, tests/site/module-evals/)에 소수로 — 비용 승인 뒤. case는 `synthetic: false`·`origin` 없음·
+   source.log 마스킹 잔여 0, 렌더 트리에 넣고 `--case <이름>`으로 고른 case만(docs/SITE_RESTORE.md ⑥).
 3. 정기 점검(매주, 상한 300,000 토큰): `site_step.py audit` → 사내 Claude 리뷰(review.md) → `audit --record`.""",
 }
 EVAL_BATCH = 5

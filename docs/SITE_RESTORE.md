@@ -103,7 +103,7 @@ CUR=$(mktemp -d)/cur && git clone -q <module_skills.remote> $CUR
 diff -rq -x .git -x evals $CUR $OUT            # 출력 없음이 정상
 ```
 
-- evals 차이는 보내지 않는다(모듈 레포의 evals를 그대로 둔다). `Only in $CUR`(레포에만 있는 사내 파일)도 그대로 둔다.
+- evals 차이는 보내지 않는다(모듈 레포의 evals를 그대로 둔다). `Only in $CUR`(레포에만 있는 사내 파일)도 그대로 둔다. 모듈 레포 evals의 사내 case(`synthetic: false`)에 `origin` 키가 있으면 `module_eval.py`가 그 case를 읽지 않는다 — 키를 빼고 source.log의 마스킹 잔여가 0인지 본다(⑥).
 - 다른 파일 `<f>`마다: `git -C $CUR log --format=%h --invert-grep --grep='^restore: ' -- <f> | wc -l`(이 절차의 커밋은 뺀다)이 1보다 크면 모듈 레포에서 사내가 고친 것이다 → `cp $CUR/<f> docs/site/module-skills/<f>`로 스냅샷에 반영하고 커밋한 뒤 렌더·diff를 다시 한다. 1이면 렌더본이 보낼 변경이다. ⑦에서 방금 스냅샷을 고친 파일은 렌더본이 맞다.
 - 보낼 파일만 `$CUR`에 복사 → `git -C $CUR switch -c restore/<label>` → `git -C $CUR commit -am "restore: <label>"`(새 파일은 add) → push → GHE PR(+1 뒤 병합, 스쿼시면 제목도 `restore: <label>`).
 
@@ -147,9 +147,17 @@ git worktree remove --force ~/tt-before
 - 사내 구성요소 이름·벤더 토큰이 새로 생기면 한 줄 더한다. 사내 이름은 SITE_PATHS(스냅샷·site-defaults·`tests/site/`)에만 둔다 — `restore.deny`가 그 밖 0건을 본다(가린 경로·건수만, `tools/deny_scan.py`).
 - 사외에서 묶음을 만들 때(`make_bundle.py`)는 `deny-file` 검사가 0건이어야 묶음이 생긴다(SITE_INSTALL.md 1절).
 
-## ⑥ (선택) 실제 로그 사례
+## ⑥ (선택) 사내 실제 이슈 case
 
-기존 절차대로 `tests/site/module-evals/`(SITE_PATHS)에 둔다: `plugin/scripts/parse_logcat.py cut --around`로 마스킹된 구간만 자르고 `plugin/scripts/module_eval.py --templates`로 돈다(비용 승인 뒤, MS-2 2항).
+사내에서 마스킹한 실제 이슈 case는 `tests/site/module-evals/<case>/`(SITE_PATHS)에 둔다. 형식은 템플릿 case와 같고 `synthetic: false`, `origin` 키 없음, `key`는 `MOCK-9NNN` 꼴이다. `files/source.log`는 `plugin/scripts/parse_logcat.py cut --around`로 자른 마스킹 구간이다 — 마스킹 잔여(`masking.residual`)가 하나라도 있으면 `module_eval.py`가 종료 2다(종류만 낸다). 나머지 `files/`(deep: `events.json`·`timeline.md`·`deep-input.json`, explore: `timeline.md`·`explore-input.json`·`analysis.json`)는 그 마스킹된 source.log로 돌린 `triage.py` 결과에서 만든다(템플릿 case 생성기 `tests/helpers/make_module_eval_inputs.py`는 레포 시험 DB·합성 case 전용이라 사내 case에는 쓰지 않는다). 돌릴 때는 ③처럼 렌더한 트리에 넣고 **고른 case만** 돈다(`--case`를 주면 그 case만 검증한다 — 다른 case의 형식 문제로 막히지 않는다):
+
+```
+OUT=$(mktemp -d)/render && python3 tools/make_module_repo.py $OUT --site-overlay docs/site/module-skills
+cp -r tests/site/module-evals/<case> $OUT/<p>/<m>/evals/
+python3 plugin/scripts/module_eval.py --module <p>/<m> --templates $OUT --case <case> --dry-run   # 비용을 보이고 승인 뒤 --dry-run 없이(MS-2 2항)
+```
+
+사외 템플릿(`templates/module-skills/`)에는 합성 case만 둔다(`module_repo_check --template`·`check_boundary --mode external`이 합성 표시를 요구한다).
 
 ## ⑦ 이어서
 

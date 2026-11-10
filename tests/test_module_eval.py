@@ -12,6 +12,7 @@ import importlib.util
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -1251,11 +1252,11 @@ def _synthetic_copy(env, tmp_path, edit=None, log=None):
 
 
 def test_load_case_synthetic_only(env, tmp_path):
-    """case는 합성만(R4·R5): synthetic: true, origin 키 없음, source.log 1줄 `-- [합성]`."""
+    """합성 case(R4·R5): synthetic: true, origin 키 없음, source.log 1줄 `-- [합성]`. bool 아닌 synthetic은 오류(false는 사내 case)."""
     case = me.load_case(_synthetic_copy(env, tmp_path))
     assert case.kind == "deep" and case.key == "MOCK-9101"
-    with pytest.raises(me.CaseError, match=r"synthetic은 true\(합성\)"):
-        me.load_case(_synthetic_copy(env, tmp_path, edit=lambda data: data.__setitem__("synthetic", False)))
+    with pytest.raises(me.CaseError, match=r"synthetic은 true\(합성\) 또는 false"):
+        me.load_case(_synthetic_copy(env, tmp_path, edit=lambda data: data.__setitem__("synthetic", None)))
     with pytest.raises(me.CaseError, match="최상위 키는"):
         me.load_case(_synthetic_copy(env, tmp_path, edit=lambda data: data.__setitem__("origin", {"kind": "x"})))
     with pytest.raises(me.CaseError, match="최상위 키는"):
@@ -1263,6 +1264,59 @@ def test_load_case_synthetic_only(env, tmp_path):
     body = LOGS["data-apn-auth-reject"]
     with pytest.raises(me.CaseError, match=r"origin source.log 1줄은 '-- \[합성\]'로 시작"):
         me.load_case(_synthetic_copy(env, tmp_path, log=body + "\n"))
+
+
+def _repo_case_copy(tmp_path, edit=None, extra_log=""):
+    """레포 템플릿 data-apn-auth-reject를 바이트 그대로 복사(Env 없이). `edit(data)`·`extra_log`로 바꾼다."""
+    import shutil
+    d = tmp_path / f"rc-{next(_IDS)}" / "data-apn-auth-reject"
+    shutil.copytree(REPO / "templates" / "module-skills" / "ofono" / "data" / "evals" / d.name, d)
+    if edit:
+        data = yaml.safe_load((d / "case.yaml").read_text(encoding="utf-8"))
+        edit(data)
+        (d / "case.yaml").write_bytes(yaml.safe_dump(data, allow_unicode=True, sort_keys=False).encode("utf-8"))
+    if extra_log:
+        log = d / "files" / "source.log"
+        log.write_bytes(log.read_bytes() + extra_log.encode("utf-8"))
+    return d
+
+
+def test_load_case_site_case_needs_masked_log(tmp_path):
+    """사내 case(`synthetic: false`): 합성 표식 대신 마스킹 잔여 0. origin 키는 여전히 없음, bool 아닌 값은 오류."""
+    def site(data):
+        data["synthetic"] = False
+
+    def site_origin(data):
+        site(data)
+        data["origin"] = {}
+
+    assert me.load_case(_repo_case_copy(tmp_path, edit=site)).name == "data-apn-auth-reject"
+    imsi = "45005" + "1234567890"                                      # 합성 15자리
+    with pytest.raises(me.CaseError, match=r"마스킹 안 된 값: .*IMSI"):
+        me.load_case(_repo_case_copy(tmp_path, edit=site, extra_log=f"Sep 21 10:00:00 host1 ofonod[1]: imsi={imsi}\n"))
+    with pytest.raises(me.CaseError, match="최상위 키는"):
+        me.load_case(_repo_case_copy(tmp_path, edit=site_origin))
+    with pytest.raises(me.CaseError, match="synthetic은 true"):
+        me.load_case(_repo_case_copy(tmp_path, edit=lambda data: data.__setitem__("synthetic", "yes")))
+
+
+def test_case_option_validates_only_chosen_cases(tmp_path):
+    """`--case`를 주면 고른 case만 검증한다 — 다른 case의 형식 문제로 막히지 않는다. 안 주면 전부 검증(종료 2)."""
+    import shutil
+    t = tmp_path / "t"
+    shutil.copytree(REPO / "templates" / "module-skills", t, ignore=shutil.ignore_patterns("results", "__pycache__"))
+    bad = t / "ofono" / "data" / "evals" / "data-route-fail" / "case.yaml"
+    bad.write_bytes(bad.read_bytes().replace(b"synthetic: true", b"synthetic: 3"))
+    cmd = [sys.executable, str(REPO / "plugin" / "scripts" / "module_eval.py"), "--module", "ofono/data",
+           "--templates", str(t), "--dry-run"]
+
+    def run(*a):
+        return subprocess.run([*cmd, *a], capture_output=True, text=True, encoding="utf-8", check=False)
+
+    ok = run("--case", "data-apn-auth-reject")
+    assert ok.returncode == 0, ok.stderr
+    whole = run()
+    assert whole.returncode == 2 and "data-route-fail" in whole.stderr
 
 
 def test_case_cap_is_skillcheck():

@@ -17,7 +17,9 @@ with 1순위 통과 수 ≥ without, 안전 위반 0, 단가 실측(PLAN C0). �
 **자식 실행은 비용이 든다.** `--dry-run` 결과를 사용자에게 보이고 승인받은 뒤에만 실제로 돌린다(guard ask, 규칙 7).
 `--probe-restricted`(자식 1회, ≈$0.05)도 같다.
 
-H C1+D: case는 합성(`synthetic: true`, `skillcheck.origin_problems`)이다. 출력 형식·arm
+H C1+D: case는 합성(`synthetic: true`, `skillcheck.origin_problems`)이거나 사내에서 마스킹한 실제 이슈 case(`synthetic: false` —
+합성 표식 대신 source.log의 `masking.residual`이 0, `origin` 키 없음, 사내 SITE_PATHS `tests/site/module-evals/`에만)다. 사외
+템플릿은 합성만이다(`module_repo_check --template`·`check_boundary` external이 강제). `--case`를 주면 고른 case만 검증한다. 출력 형식·arm
 구성은 플랫폼별(`OUTPUT_SPECS`·`ARM_BUILTINS`, oFono·Android). 모뎀(`db_category: common`) deep case의 with arm은 증상 모듈 문서 +
 모뎀 SKILL(runtime `--also`와 같다). 한 arm(`--arms with`)은 관문 없이 `single-arm`이고, `--record`는 프롬프트 틀·입력·다른 arm
 문서가 그대로일 때만 기존 기록에 합친다(아니면 종료 2 "<arm> 기록이 낡음"). 기록에는 case마다 `doc_bytes`·`token_delta`, 관문에
@@ -459,8 +461,8 @@ def load_case(case_dir) -> Case:
         fail(f"{kind} schema_version은 {SCHEMA[kind]}")
     if data["name"] != name or not isinstance(name, str) or not NAME_RX.match(name):
         fail("name은 디렉토리 이름과 같고 소문자·숫자·-")
-    if data["synthetic"] is not True:
-        fail("synthetic은 true(합성)")
+    if not isinstance(data["synthetic"], bool):
+        fail("synthetic은 true(합성) 또는 false(사내에서 마스킹한 실제 이슈 case, SITE_PATHS에만)")
     if not isinstance(data["key"], str) or not KEY_RX.match(data["key"]):
         fail("key는 MOCK-9NNN")
     issue = data["issue"]
@@ -516,8 +518,13 @@ def load_case(case_dir) -> Case:
         fail("files/source.log는 UTF-8")
     if "\r" in log:
         fail("files/source.log는 LF 줄바꿈")
-    for why in skillcheck.origin_problems(data, log):     # 합성 표식(R4·R5)
-        fail(f"origin {why}")
+    if data["synthetic"]:
+        for why in skillcheck.origin_problems(data, log):     # 합성 표식(R4·R5)
+            fail(f"origin {why}")
+    else:                                                     # 사내 case: 합성 표식 대신 마스킹 잔여 0(종류만 낸다)
+        left = masking.residual(log)
+        if left:
+            fail(f"synthetic: false는 마스킹된 로그만 — source.log에 마스킹 안 된 값: {', '.join(sorted(left))}")
     if kind == "explore":                                   # 코덱스 리뷰 R5: 펼친 폴더에 없는 자료를 있다고 적은 analysis.json은 거부
         try:
             logs = (json.loads((files_dir / "analysis.json").read_text(encoding="utf-8")) or {}).get("logs") or {}
@@ -1652,13 +1659,13 @@ def _main(args) -> int:
         src = Source(templates=templates, platform=platform, module=module, arm_root=arm_root)
         if not src.module_dir.is_dir():
             raise UsageError(f"모듈 없음: {src.module_dir}")
-        cases = [load_case(d) for d in find_cases(src)]
-        names = {c.name for c in cases}
-        unknown = sorted(set(args.case) - names)
+        dirs = find_cases(src)
+        unknown = sorted(set(args.case) - {d.name for d in dirs})
         if unknown:
             raise UsageError(f"모르는 case: {', '.join(unknown)}")
-        if args.case:
-            cases = [c for c in cases if c.name in args.case]
+        if args.case:                       # 고른 case만 검증한다 — 다른 case의 형식 문제로 막히지 않는다
+            dirs = [d for d in dirs if d.name in args.case]
+        cases = [load_case(d) for d in dirs]
         if not cases:
             raise UsageError("case 없음")
         if args.regrade is not None:
