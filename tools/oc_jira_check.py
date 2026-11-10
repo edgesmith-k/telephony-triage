@@ -332,7 +332,8 @@ def _session_ids(events: list[dict]) -> list[str]:
 def run_session(tt, cmd: list[str], cwd: Path, env: dict) -> tuple[list[dict], int | None]:
     """`tt-oc` `run_opencode`로 한 번 돌린 (이벤트, 종료 코드 — 시간 초과·첫 응답 없음이면 None). 반환 튜플의 앞 셋만 쓴다
     (tt-oc가 뒤에 값을 더해도 여기는 깨지지 않는다 — 런타임 리뷰 2차 P1)."""
-    out = tt.run_opencode(cmd, cwd=cwd, env=env, timeout=RUN_TIMEOUT, progress=False)
+    # 첫 응답 시한은 끈다(가짜 모델은 바로 답한다) — 멈춤은 RUN_TIMEOUT 하나라 `opencode-run` 행의 시간 초과 문구가 맞다(3차 R2-P3-3)
+    out = tt.run_opencode(cmd, cwd=cwd, env=env, timeout=RUN_TIMEOUT, progress=False, first_timeout=0)
     return out[0], out[2]
 
 

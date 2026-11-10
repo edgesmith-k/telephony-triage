@@ -535,5 +535,8 @@ def test_check_run_session_matches_tt_oc_run_opencode(tmp_path, monkeypatch):
     cmd = [sys.executable, "-c", f"print({json.dumps(json.dumps(ev))})"]
     events, code = cj.run_session(tt, cmd, tmp_path, dict(os.environ))
     assert events == [ev] and code == 0 and cj._session_ids(events) == ["ses_X"]
-    monkeypatch.setattr(tt, "run_opencode", lambda *a, **k: ([], [], None, "tail", True))
+    seen = {}
+    monkeypatch.setattr(tt, "run_opencode", lambda *a, **k: (seen.update(k), ([], [], None, "tail", True))[1])
     assert cj.run_session(tt, ["x"], tmp_path, {}) == ([], None)
+    # 3차 R2-P3-3: 첫 응답 시한은 끈다 — 멈춤은 RUN_TIMEOUT 하나라 행의 "시간 초과(…초)"가 실제 멈춘 시한이다
+    assert seen["first_timeout"] == 0 and seen["timeout"] == cj.RUN_TIMEOUT
