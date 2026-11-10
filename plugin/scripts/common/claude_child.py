@@ -18,6 +18,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -87,9 +88,17 @@ def carried_env_key(k) -> bool:
 
 def user_auth_settings(env: dict[str, str]) -> tuple[dict, dict[str, str]]:
     """사용자 settings.json에서 인증·네트워크·게이트웨이 프로필 키만 (최상위 키, env 블록). 없거나 깨졌으면 빈 값."""
+    return _auth_settings(_user_settings_path(env))
+
+
+def _user_settings_path(env: dict[str, str]) -> Path:
     base = Path(env["CLAUDE_CONFIG_DIR"]) if env.get("CLAUDE_CONFIG_DIR") else Path(env.get("HOME", str(Path.home()))) / ".claude"
+    return base / "settings.json"
+
+
+def _auth_settings(path: Path) -> tuple[dict, dict[str, str]]:
     try:
-        data = json.loads((base / "settings.json").read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}, {}
     if not isinstance(data, dict):
@@ -108,23 +117,55 @@ GATEWAY_PROFILE = {
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
 GATEWAY_CREDENTIALS = ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY")
 GATEWAY_UNSET = "unset"      # 권장 값이 "두지 않는다"인 키: 변수 없음·빈 값·글자 그대로 "unset"이 모두 맞다(F, O10 거짓 실패)
+# 보조 호출(백그라운드·하위 에이전트)의 모델: 주 모델(ANTHROPIC_MODEL)과 같아야 `claude-*` ID가 게이트웨이로 가지 않는다(런타임 리뷰 5)
+GATEWAY_MODEL_KEYS = ("ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+                      "CLAUDE_CODE_SUBAGENT_MODEL")
+# Claude Code 관리 설정(managed-settings.json, 그 옆 managed-settings.d/*.json — 공식 문서 managed-settings). 레지스트리·MDM
+# 프로필·서버 관리 설정은 읽지 않는다(행에 그렇게 적는다).
+MANAGED_SETTINGS_DIR = (Path("/Library/Application Support/ClaudeCode") if sys.platform == "darwin"
+                        else Path(r"C:\Program Files\ClaudeCode") if os.name == "nt" else Path("/etc/claude-code"))
+
+
+def managed_settings_files() -> list[Path]:
+    base = MANAGED_SETTINGS_DIR
+    return [p for p in (base / "managed-settings.json", *sorted((base / "managed-settings.d").glob("*.json"))) if p.is_file()]
 
 
 def gateway_profile_check(env: dict[str, str]) -> list[dict]:
     """게이트웨이 프로필 점검 행 [{key, status, detail}] (status: ok | missing | differs | info). 프로세스 환경 위에 사용자
-    settings.json env 블록을 얹은 값(자식이 실제로 받는 값)을 본다. 비밀 값(주소·키)은 행에 넣지 않는다."""
+    settings.json env 블록, 그 위에 관리 설정 env 블록을 얹은 값을 본다(본 곳은 `env_sources` 행). 비밀 값(주소·키)은 행에 넣지 않는다."""
     top, settings_env = user_auth_settings(env)
+    managed = managed_settings_files()
+    for path in managed:
+        m_top, m_env = _auth_settings(path)
+        top, settings_env = {**top, **m_top}, {**settings_env, **m_env}
     eff = {**env, **settings_env}
     rows = []
 
     def add(key, status, detail):
         rows.append({"key": key, "status": status, "detail": detail})
-    add("ANTHROPIC_BASE_URL", "ok" if eff.get("ANTHROPIC_BASE_URL") else "missing",
-        "설정됨(값은 기록하지 않음)" if eff.get("ANTHROPIC_BASE_URL") else "게이트웨이 주소 없음 — 기본 Anthropic API로 간다")
+    add("env_sources", "info", f"프로세스 환경, {_user_settings_path(env)}, 관리 설정 "
+        + (", ".join(map(str, managed)) if managed else f"{MANAGED_SETTINGS_DIR}/managed-settings.json(.d) 없음")
+        + " (레지스트리·MDM·서버 관리 설정은 보지 않는다)")
+    base_url = eff.get("ANTHROPIC_BASE_URL")
+    if not base_url:
+        add("ANTHROPIC_BASE_URL", "missing", "게이트웨이 주소 없음 — 기본 Anthropic API로 간다")
+    elif base_url.rstrip("/").endswith("/v1"):
+        add("ANTHROPIC_BASE_URL", "differs", "끝이 /v1이다 — Claude Code는 <주소>/v1/messages로 보낸다(/v1/v1). /v1 앞까지만 둔다(값은 기록하지 않음)")
+    else:
+        add("ANTHROPIC_BASE_URL", "ok", "설정됨(값은 기록하지 않음)")
     cred = [k for k in GATEWAY_CREDENTIALS if eff.get(k)] + (["apiKeyHelper"] if top.get("apiKeyHelper") else [])
     add("credential", "ok" if cred else "missing", ", ".join(cred) if cred else "ANTHROPIC_AUTH_TOKEN·ANTHROPIC_API_KEY·apiKeyHelper 없음")
-    add("ANTHROPIC_MODEL", "ok" if eff.get("ANTHROPIC_MODEL") else "info",
-        eff.get("ANTHROPIC_MODEL") or "없음 — 실행마다 --model <사내 모델>을 준다")
+    main_model = eff.get("ANTHROPIC_MODEL")
+    add("ANTHROPIC_MODEL", "ok" if main_model else "info", main_model or "없음 — 실행마다 --model <사내 모델>을 준다")
+    for key in GATEWAY_MODEL_KEYS:
+        have = eff.get(key)
+        if not main_model:
+            add(key, "info", f"{have or '없음'} — ANTHROPIC_MODEL이 없어 비교하지 않는다(보조 호출 모델도 사내 모델로 둔다)")
+        else:
+            add(key, "ok" if have == main_model else ("missing" if not have else "differs"),
+                f"{have} (ANTHROPIC_MODEL과 같아야 한다)" if have else
+                "없음 — 보조 호출이 claude-* ID로 게이트웨이에 간다(ANTHROPIC_MODEL과 같은 값을 둔다)")
     for key, want in GATEWAY_PROFILE.items():
         have = eff.get(key)
         if want == GATEWAY_UNSET:

@@ -64,7 +64,7 @@
 python3 tools/site_step.py runtime-check claude-gateway
 ```
 
-- 판정은 `claude_child.gateway_profile_check`(비밀 값은 표에 없음). missing·differs면 종료 1. 끝에 사내 확인 0 curl을 보인다(실행 안 함).
+- 판정은 `claude_child.gateway_profile_check`(비밀 값은 표에 없음). missing·differs면 종료 1. 프로세스 환경·사용자 settings.json·관리 설정(`managed-settings.json`과 `managed-settings.d/*.json`)의 `env`를 본다(본 곳은 `env_sources` 행 — 레지스트리·MDM·서버 관리 설정은 안 본다). `ANTHROPIC_MODEL`이 있으면 `ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`·`CLAUDE_CODE_SUBAGENT_MODEL`이 그 값과 같아야 한다(없으면 missing, 다르면 differs — 보조 호출이 `claude-*` ID로 간다). `ANTHROPIC_BASE_URL` 끝이 `/v1`이면 differs(`/v1/v1/messages`가 된다). 끝에 사내 확인 0 curl을 보인다(실행 안 함).
 - 토큰 0 추가 행(`site_step.gateway_site_rows`, 종료 코드 무관): `claude_cli`(`claude --version`), `plugin_hooks`(사용자 config `plugin.scripts_path`의 설치본 `hooks/hooks.json`과 matcher 수 — 실제 로드는 사내 확인 5), `isolation_confirmed`(site-defaults `tracker.isolation_confirmed`, S1 기록). 이 점검이 **안 재는 것**: 게이트웨이 프로토콜·모델 응답·hook 동작·must_show — 아래 사내 확인이 확정한다.
 - 자격(`ANTHROPIC_AUTH_TOKEN` 또는 `ANTHROPIC_API_KEY`, 또는 `apiKeyHelper`)이 없으면 `credential` 행이 missing이다. 위 예시에 자격을 더한다.
 - `CLAUDE_CODE_EFFORT_LEVEL`은 없거나 비었거나 `"unset"`이면 ok(권장 값이 "두지 않음").

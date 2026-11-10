@@ -1051,7 +1051,7 @@ def runtime_claude_gateway(env: dict) -> tuple[str, int]:
 
     rows = claude_child.gateway_profile_check(env) + gateway_site_rows(env)
     result, code = _runtime_result(rows, "사용자 settings.json env(또는 환경 변수)를 고친 뒤 다시 실행한다")
-    title = ("런타임 점검 claude-gateway — 모델 호출 없음(프로세스 환경 + 사용자 settings.json env, 비밀 값은 적지 않는다). "
+    title = ("런타임 점검 claude-gateway — 모델 호출 없음(프로세스 환경 + 사용자 settings.json env + 관리 설정 env — env_sources 행, 비밀 값은 적지 않는다). "
              + GATEWAY_SCOPE)
     return "\n\n".join([_runtime_table(title, rows), result, check0_text()]), code
 
