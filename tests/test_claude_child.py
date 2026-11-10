@@ -369,7 +369,10 @@ def test_gateway_site_rows_report_cli_hooks_and_s1_without_blocking(tmp_path, mo
     root = plugin_root()
     (home / "config.yaml").write_text(f"plugin:\n  scripts_path: {root / 'scripts'}\n", encoding="utf-8")
     rows = {r["key"]: r for r in site_step.gateway_site_rows({"PATH": str(bare), "HOME": str(tmp_path)})}
-    assert rows["claude_cli"]["status"] == "ok" and rows["claude_cli"]["detail"].startswith("9.9.9")
+    # 런타임 리뷰 6: 시험한 판(CLAUDE_CLI_TESTED)과 다르면 warn(막지 않는다)
+    assert rows["claude_cli"]["status"] == "warn" and rows["claude_cli"]["detail"].startswith("9.9.9")
+    assert f"시험한 판 {cc.CLAUDE_CLI_TESTED}" in rows["claude_cli"]["detail"]
     assert rows["plugin_hooks"]["status"] == "ok" and "PreToolUse" in rows["plugin_hooks"]["detail"] and "matcher 8개" in rows["plugin_hooks"]["detail"]
+    fake.write_text(f"#!/bin/sh\necho '{cc.CLAUDE_CLI_TESTED} (Claude Code)'\n", encoding="utf-8")
     out, code = site_step.runtime_claude_gateway({"CLAUDE_CONFIG_DIR": str(tmp_path / "none"), "PATH": str(bare)})
     assert code == 1 and "| claude_cli | ok |" in out and "재는 것:" in out and "안 재는 것:" in out

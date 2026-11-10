@@ -1001,7 +1001,7 @@ def gateway_site_rows(env: dict) -> list[dict]:
     """토큰 0 추가 행(종합 리뷰 F: 이전에는 환경 변수 비교만이라 '종료 0 = 환경이 된다'로 읽혔다). 모두 ok·warn·info — 종료 코드에는
     영향이 없다(전제 확정은 사내 확인). `claude --version`은 모델·네트워크를 부르지 않는다."""
     _scripts_on_path()
-    from common import site_defaults, userconfig
+    from common import claude_child, site_defaults, userconfig
 
     rows: list[dict] = []
     exe = shutil.which("claude", path=env.get("PATH"))
@@ -1013,8 +1013,11 @@ def gateway_site_rows(env: dict) -> list[dict]:
                                   timeout=20, env=env)
             text = (proc.stdout or proc.stderr or "").strip().splitlines()
             ver = text[0][:80] if text else ""
-            rows.append({"key": "claude_cli", "status": "ok" if proc.returncode == 0 and ver else "warn",
-                         "detail": ver or f"--version 종료 {proc.returncode}"})
+            tested = claude_child.CLAUDE_CLI_TESTED
+            same = (ver.split() or [""])[0] == tested
+            rows.append({"key": "claude_cli", "status": "ok" if proc.returncode == 0 and same else "warn",
+                         "detail": (ver or f"--version 종료 {proc.returncode}") + ("" if same else
+                                   f" — 시험한 판 {tested}과 다르다(막지 않음). hook·show_guard 동작은 사내 확인 5로 다시 본다")})
         except (OSError, subprocess.TimeoutExpired) as exc:
             rows.append({"key": "claude_cli", "status": "warn", "detail": f"--version 실행 실패({type(exc).__name__})"})
     user = userconfig.load_user() or {}

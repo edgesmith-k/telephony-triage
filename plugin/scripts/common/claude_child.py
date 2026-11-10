@@ -116,6 +116,7 @@ GATEWAY_PROFILE = {
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1", "CLAUDE_CODE_EFFORT_LEVEL": "unset",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
 GATEWAY_CREDENTIALS = ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY")
+CLAUDE_CLI_TESTED = "2.1.318"   # 게이트웨이 프로필·hook·자식 실행을 시험한 Claude Code 판(RUNTIMES.md). 다르면 claude_cli 행 warn
 GATEWAY_UNSET = "unset"      # 권장 값이 "두지 않는다"인 키: 변수 없음·빈 값·글자 그대로 "unset"이 모두 맞다(F, O10 거짓 실패)
 # 보조 호출(백그라운드·하위 에이전트)의 모델: 주 모델(ANTHROPIC_MODEL)과 같아야 `claude-*` ID가 게이트웨이로 가지 않는다(런타임 리뷰 5)
 GATEWAY_MODEL_KEYS = ("ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
