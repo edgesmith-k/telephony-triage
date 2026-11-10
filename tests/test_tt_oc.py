@@ -260,8 +260,9 @@ def test_doctor_subcommand(env):
     assert r.returncode == 0, r.stdout
     rows = json.loads(r.stdout)["rows"]
     assert [x["check"] for x in rows] == ["env", "project-git", "instructions", "integrity", "opencode-version",
-                                          "opencode-config", "config-doctor"]
-    assert all(x["status"] == "ok" for x in rows)
+                                          "opencode-config", "config-doctor", "gateway-key"]
+    # 시험 설치의 opencode.json은 {}라 게이트웨이 행은 읽지 못함 warn 하나(막지 않는다)
+    assert all(x["status"] == "ok" for x in rows[:-1]) and rows[-1]["status"] == "warn"
 
 
 def test_command_name_and_message_required(env):
@@ -460,6 +461,48 @@ def test_script_flow_without_script_output_is_not_ok(env):
     events(env, final("모델 요약"))
     plat = env["work"] / "android"
     assert tt(env, "--command", "tt-analyze", "--", "ABC-1", extra_env={"STUB_SHOWN": str(plat)}).returncode == 0
+
+
+def test_doctor_gateway_key_and_url_rows_warn_only(env):
+    """런타임 리뷰 3: 키 환경 변수(opencode.json apiKey `{env:…}`)·baseURL `/v1` 모양은 warn(시작은 막지 않는다). 값은 적지 않는다."""
+    def install(url, key="{env:TT_GATEWAY_API_KEY}"):
+        cfg = {"model": "gw/glm-x", "provider": {"gw": {"options": {"baseURL": url, "apiKey": key}}}}
+        (env["proj"] / "opencode.json").write_text(json.dumps(cfg), encoding="utf-8")
+        write_meta(env["proj"], env["plug"], env["work"])
+
+    install("https://gw.example.invalid/v1/")
+    e = _with(env, TT_GATEWAY_API_KEY="sk-secret-x")
+    code, rows = _doctor_rows(e)
+    assert code == 0 and rows["gateway-key"]["status"] == rows["gateway-url"]["status"] == "ok"
+    assert "sk-secret-x" not in json.dumps(rows) and "gw.example.invalid" not in json.dumps(rows)
+    install("https://gw.example.invalid/api")
+    code, rows = _doctor_rows(_with(env, TT_GATEWAY_API_KEY=""))
+    assert code == 0 and rows["gateway-key"]["status"] == "warn" and "TT_GATEWAY_API_KEY 없음" in rows["gateway-key"]["detail"]
+    assert rows["gateway-url"]["status"] == "warn" and "/v1" in rows["gateway-url"]["detail"]
+    install("https://gw.example.invalid/v1", key="sk-inline")
+    code, rows = _doctor_rows(e)
+    assert rows["gateway-key"]["status"] == "warn" and "sk-inline" not in json.dumps(rows)
+    events(env, final())
+    r = tt(env, "--", "x")                                                   # warn은 시작을 막지 않는다
+    assert r.returncode == 0 and "gateway-key: warn" in r.stderr
+
+
+def test_no_first_response_stops_early_with_gateway_hint(env):
+    """런타임 리뷰 3: 게이트웨이 문제면 opencode는 이벤트 없이 재시도만 한다 — 첫 응답 시한(FIRST_RESPONSE_TIMEOUT)에서 멈춘다."""
+    mod = _load("tt_oc", TTOC)
+    assert mod.FIRST_RESPONSE_TIMEOUT == 120.0
+    events(env, final())
+    cmd = [str(env["stub"]), "run", "--format", "json", "--", "x"]
+    t0 = time.monotonic()
+    evs, _raw, code, _tail, silent = mod.run_opencode(cmd, cwd=env["proj"], env={**env["env"], "STUB_SLEEP": "30"},
+                                                      timeout=60, progress=False, first_timeout=1)
+    assert time.monotonic() - t0 < 20 and code is None and silent is True and evs == []
+    res = mod.judge(evs, code, no_response=silent)
+    assert res["outcome"] == "no-response" and mod.EXIT["no-response"] == 124
+    # 첫 이벤트가 오면 전체 시한까지 기다린다(시한 안에 끝나면 그대로)
+    evs, _raw, code, _tail, silent = mod.run_opencode(cmd, cwd=env["proj"], env={**env["env"], "STUB_SLEEP": "0"},
+                                                      timeout=60, progress=False, first_timeout=1)
+    assert code == 0 and silent is False and mod.judge(evs, code)["outcome"] == "ok"
 
 
 def test_timeout_kills_and_reports(env):

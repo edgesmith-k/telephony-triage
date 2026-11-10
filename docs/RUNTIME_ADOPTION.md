@@ -148,7 +148,7 @@ opencode/bin/tt-oc --project <dest> doctor
 python3 tools/site_step.py runtime-check opencode --project <dest>
 ```
 
-- `tt-oc doctor` 행: `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만), warn `module-skills`·`read-roots`. fail이면 종료 2.
+- `tt-oc doctor` 행: `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만), warn `module-skills`·`read-roots`·`gateway-key`(opencode.json `apiKey`의 `{env:…}` 변수가 없거나 빔)·`gateway-url`(baseURL이 `…/v1`로 끝나지 않음, 게이트웨이 경로가 원래 다르면 무시). fail이면 종료 2.
 - `runtime-check opencode`: 위 + 관리 설정(없으면 warn) + OpenCode용 사내 확인 0 curl(실행 안 함). fail이면 종료 1.
 - 사내 확인 0(OpenCode)은 OpenAI 호환 모양이다: (a) 토큰 0 `GET <baseURL>/models`에 모델 ID가 있는지, (b) 선택 `POST <baseURL>/chat/completions` 스트리밍 `tool_calls`(도구 강제), (c) 같은 요청의 자동 선택(`tool_choice: "auto"` — 실제 실행 모양, 도구 호출이 `content` 글로만 나오면 실패). 설치한 `opencode.json`의 baseURL·모델을 채워 보이고 키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다.
 
@@ -280,6 +280,7 @@ python3 tools/site_step.py audit --record   # 기준점 기록, 넘친 항목은
 | Claude Code 400(thinking·beta) | 사내 확인 2 | `DISABLE_THINKING=1`·`DISABLE_EXPERIMENTAL_BETAS=1`, 그래도면 보고 |
 | 확인 화면을 요약만 | 세션 기록, show_guard 되돌림 문구 | 대화형으로 다시. 반복되면 확인 5 실패로 보류 |
 | `tt-oc` 종료 2 | `tt-oc doctor`의 fail 행 | `integrity` → 3.5 · `instructions` → 지시 파일 치움 · `env` → `OPENCODE_*` 뺌 · 버전 → 1.19.5(우회 금지) |
+| `tt-oc` 종료 124 `no-response` | 첫 응답 120초(`FIRST_RESPONSE_TIMEOUT`) 없음 | `tt-oc doctor`의 `gateway-key`·`gateway-url`, 3.2 사내 확인 0 curl(키·주소·프록시) |
 | `tt-oc` 종료 3 | "run this exact command yourself: …" | 명령을 읽고 사용자가 터미널·Claude Code에서 실행 |
 | OpenCode에서 Jira 거부 | `TT_RUNTIME=opencode python3 <plugin>/scripts/config.py doctor`의 `jira_gate` | 3.4. 갱신 뒤면 확인부터 |
 | `설치 스킬 못 찾음` | `config.py check --roots`, `read-roots` 행 | `prefer`·`skill_dir` 확인 뒤 `install --force` |
