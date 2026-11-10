@@ -513,6 +513,18 @@ def test_lock_owner_retry_is_not_a_block_when_rerun_without_prefix(env):
     assert res["outcome"] == "ok" and not res["blocked"] and res["guard_warnings"]
     res = mod.judge([ev("step_start"), denied, step("tool-calls"), *final("멈춤")], 0)
     assert res["outcome"] == "blocked" and res["blocked"][0]["message"] == oc_adapter.LOCK_OWNER_DENY
+    # 3차 R2-P2-2: OpenCode가 오류를 `Error: …`로 감싸도 같다
+    wrapped = tool("bash", "error", input={"command": f"TT_LOCK_OWNER=abc {cmd}"}, error=f"Error: {oc_adapter.LOCK_OWNER_DENY}")
+    res = mod.judge([ev("step_start"), wrapped, rerun, step("tool-calls"), *final("확인 화면")], 0)
+    assert res["outcome"] == "ok" and not res["blocked"]
+    # 표시가 맨 앞이 아니면(다른 거부 글 안의 메아리) 재시도 거부로 보지 않는다
+    echoed = tool("bash", "error", input={"command": f"TT_LOCK_OWNER=abc {cmd}"},
+                  error=f"[telephony-triage] bash 허용 목록: x {oc_adapter.LOCK_OWNER_RETRY}")
+    res = mod.judge([ev("step_start"), echoed, rerun, step("tool-calls"), *final()], 0)
+    assert res["outcome"] == "blocked"
+    # 3차 R2-P3-1: 거부 **앞에** 같은 명령이 돌았던 것은 다시 한 것이 아니다
+    res = mod.judge([ev("step_start"), rerun, denied, step("tool-calls"), *final("멈춤")], 0)
+    assert res["outcome"] == "blocked" and len(res["blocked"]) == 1
 
 
 def test_child_env_drops_stale_lock_owner(env, monkeypatch):

@@ -77,6 +77,8 @@ REFUSED_ENV_PREFIX = OCV.REFUSED_ENV_PREFIX
 BLOCK_MARKERS = ("[telephony-triage]", *OCV.DENY_PHRASES, "OpenCode v1 does not run this")
 WARN_MARKER = "[telephony-triage] guard warning"
 RETRY_MARKER = "[telephony-triage] retry without TT_LOCK_OWNER="   # = oc_adapter.LOCK_OWNER_RETRY: 접두만 빼고 다시 하는 거부(막힘 아님)
+# 오류 글 맨 앞에서만 본다(OpenCode가 `Error: …`로 감쌀 수 있다). 다른 거부 글 안에 메아리친 명령은 해당하지 않는다
+RETRY_RE = re.compile(r"(?:\w+: )?" + re.escape(RETRY_MARKER))
 INSTRUCTION_FILES = OCV.INSTRUCTION_FILES   # 프로젝트 폴더에서 `/`까지 자동으로 싣는 지시 파일(CLAUDE.md는 CHILD_ENV로 끈다)
 USER_CMD = re.compile(r"run this exact command yourself:\s*(.+)", re.DOTALL)
 WRITE_CMD = re.compile(r"(db_pr\.py\s+(publish|merge|request-review)|issue_post\.py\s+approve|skill_patch\.py\b.*--apply"
@@ -414,9 +416,9 @@ def judge(events: list[dict], code: int | None, no_response: bool = False, step_
     session, final, blocked, errors, cmds, warnings = None, [], [], [], [], []
     tokens = dict.fromkeys(OCV.TOKEN_KINDS, 0)
     steps, finish, finished = 0, None, 0
-    retries, ran = [], set()   # 접두를 빼고 다시 하라는 거부(RETRY_MARKER)와 막히지 않고 돈 bash 명령
+    retries, ran = [], {}   # 접두를 빼고 다시 하라는 거부(RETRY_MARKER)와 막히지 않고 돈 bash 명령(마지막 이벤트 위치)
     V = OCV   # 이벤트 스키마 키는 oc_version 한 곳
-    for ev in events:
+    for idx, ev in enumerate(events):
         session = session or ev.get(V.EV_SESSION)
         typ, part = ev.get("type"), ev.get(V.EV_PART) if isinstance(ev.get(V.EV_PART), dict) else {}
         if typ == V.EV_STEP_START:
@@ -437,8 +439,8 @@ def judge(events: list[dict], code: int | None, no_response: bool = False, step_
                 tool = part.get(V.PART_TOOL)
                 if WARN_MARKER in msg:
                     warnings.append(f"{tool}: {msg}")
-                elif msg.startswith(RETRY_MARKER):
-                    retries.append((tool, msg, _bash_command(st.get(V.STATE_INPUT), strip_owner=True)))
+                elif RETRY_RE.match(msg):
+                    retries.append((idx, tool, msg, _bash_command(st.get(V.STATE_INPUT), strip_owner=True)))
                 elif any(m in msg for m in BLOCK_MARKERS):
                     blocked.append({"tool": tool, "message": msg})
                     m = USER_CMD.search(msg)
@@ -449,11 +451,11 @@ def judge(events: list[dict], code: int | None, no_response: bool = False, step_
                 else:
                     errors.append(f"{tool}: {msg}")
             elif part.get(V.PART_TOOL) == "bash":
-                ran.add(_bash_command(st.get(V.STATE_INPUT)))
+                ran[_bash_command(st.get(V.STATE_INPUT))] = idx
         elif typ == V.EV_ERROR:
             errors.append("error: " + json.dumps(ev.get("error"), ensure_ascii=False)[:500])
-    for tool, msg, again in retries:      # 접두를 빼고 같은 명령을 다시 돌렸으면 경고, 아니면 막힌 호출
-        if again in ran:
+    for idx, tool, msg, again in retries:   # 거부 **뒤에** 접두를 뺀 같은 명령이 돌았으면 경고, 아니면 막힌 호출
+        if ran.get(again, -1) > idx:
             warnings.append(f"{tool}: {msg}")
         else:
             blocked.append({"tool": tool, "message": msg})
