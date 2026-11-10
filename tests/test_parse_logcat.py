@@ -244,8 +244,11 @@ def test_phone_id_data_service_tag_and_ril_suffix():
     assert by_tag["DSM-C-0"] == 0 and by_tag["DN-17-C"] is None and by_tag["RILJ"] == 1
     # TNA-·QOSCT-·KT-<n>의 n은 netId(슬롯 아님). 같은 모양의 DNC-<n>은 슬롯이다
     assert by_tag["TNA-104"] is None and by_tag["QOSCT-104"] is None and by_tag["DNC-1"] == 1
-    from platforms.android import logcat as alog   # KT-는 샘플 tags.yaml에 없어 이벤트가 되지 않는다
-    assert alog.DEFAULT_PHONE_RULES.phone_id("KT-3", "z") is None
+    from platforms.android import logcat as alog   # KT-·Phone-은 샘플 tags.yaml에 없어 이벤트가 되지 않는다
+    rules = alog.DEFAULT_PHONE_RULES
+    assert rules.phone_id("KT-3", "z") is None
+    # Phone-<DEFAULT_PHONE_INDEX>(INT_MAX)는 슬롯이 아니다. 슬롯은 한 자리(` [n]` 꼴과 같다)
+    assert rules.phone_id("Phone-2147483647", "mCallRingDelay=3000") is None and rules.phone_id("Phone-1", "z") == 1
 
 
 def test_ril_pairing_same_serial_two_slots():

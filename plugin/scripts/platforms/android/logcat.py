@@ -58,7 +58,8 @@ BEGINNING_PREFIX = "--------- "
 # 슬롯 기본 표기. 사내 값은 `platform.log.phone_id`로 덮어쓴다 (`platforms.load()`, 02-config.md).
 # 태그 접미사는 "이름-숫자" 한 마디만 본다(DN-17-C 같은 DataNetwork 태그는 슬롯이 아니다).
 # TNA-·QOSCT-·KT-<n>의 n은 netId라 슬롯이 아니다(AOSP TelephonyNetworkAgent·QosCallbackTracker·KeepaliveTracker).
-TAG_PHONE_RE = re.compile(r"^(?!(?:TNA|QOSCT|KT)-)[A-Za-z]+(?:-[CI])?-(\d+)$")
+# 슬롯은 한 자리다(아래 TAG_PHONE_SPACE_RE의 ` [n]`과 같다). `Phone-2147483647`(DEFAULT_PHONE_INDEX = INT_MAX)은 슬롯이 아니다.
+TAG_PHONE_RE = re.compile(r"^(?!(?:TNA|QOSCT|KT)-)[A-Za-z]+(?:-[CI])?-(\d)$")
 # 태그 끝 " [n]"(공백 + 대괄호 숫자, `ImsManager [0]`). 태그 글자는 그대로 둔다. `MobileConnectionLog[4]`(공백 없음)는 아니다.
 TAG_PHONE_SPACE_RE = re.compile(r"^.+ \[(\d)\]$")
 MSG_PHONE_PREFIX_RE = re.compile(r"^\[(?:PHONE|SUB)(\d+)\]\s?")
