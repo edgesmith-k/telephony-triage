@@ -15,4 +15,4 @@
 - `ofonod`는 공개 upstream 데몬 이름이다. 그 밖 구성요소 자리는 placeholder `daemon-a`(data)·`daemon-b`(call)이다.
 - 호스트 칸은 `dut`(placeholder)다. 파서는 호스트를 이벤트에 넣지 않는다.
 - 손으로 쓴 파일이다(생성기 없음). 마스킹을 다시 돌려도 바뀌지 않는다(`tests/test_ofono_skeleton.py`·`tests/test_ofono_components.py`가 확인).
-- (c)·gril 줄은 사외 공개 표본에서 **모양만** 본 것이다. 줄·값·이름은 손으로 쓴 것이고 표본의 내용은 없다(사내 확인 TODO(SITE:S24·S26)).
+- (c)·gril 줄은 **모양만** 확인한 것이다. 줄·값·이름은 손으로 쓴 합성이다(사내 확인 TODO(SITE:S24·S26)).

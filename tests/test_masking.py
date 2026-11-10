@@ -165,7 +165,7 @@ DETECT = [
     ("sn=R58M12ABCDE", "SERIAL", "R58M12ABCDE"),
     ("mPin=1234", "CRED", "1234"),
     ("wifiMacAddress=aabbccddeeff", "MAC", "aabbccddeeff"),
-    # 벤더 데몬 표기(사외 공개 표본에서 본 모양, 값은 합성): 괄호 ICCID, `key:` 바로 뒤 IPv6·잘린 표기·줄 경계 조각, 긴 token
+    # 벤더 데몬 표기(확인한 줄 모양, 값은 합성): 괄호 ICCID, `key:` 바로 뒤 IPv6·잘린 표기·줄 경계 조각, 긴 token
     ("SIM ICCID(8982300123456789012F) ready", "ICCID", "8982300123456789012F"),
     ("iccid[89823001234567890123]", "ICCID", "89823001234567890123"),
     ("iccid ( 8982300123456789012 )", "ICCID", "8982300123456789012"),

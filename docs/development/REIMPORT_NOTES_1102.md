@@ -2,7 +2,7 @@
 
 `REIMPORT_NOTES_1030.md` 뒤 묶음에 함께 들어간다. 절차는 `docs/SITE_INSTALL.md §8`. 설계는 `docs/design/17-platforms.md §8·§9·§11-2`(K19), 마스킹은 `08-safety.md §8`.
 
-배경: 공개 oFono 계열 표본 2개(사용자 확인: 사내 로그 아님)로 지금 뼈대가 그 형식을 한 줄도 읽지 못하는 것(형식 미확인)을 확인했다. 표본은 **모양만** 보았다. 레포(코드·fixture·테스트·문서)의 줄·값·데몬 이름(`ofonod` 제외)·호스트·D-Bus 이름은 합성·placeholder이고, fixture는 손으로 쓴 합성(`tests/fixtures/logs/ofono/syslog-busybox.log`)이다. 사내 값은 사내에서 SITE_PATHS에 채운다.
+배경: 지금 뼈대가 BusyBox syslogd 등 oFono 계열 줄 형식을 한 줄도 읽지 못하는 것(형식 미확인)을 확인했다. **줄 모양만** 보았다. 이 노트의 줄 수·건수·ms 수치는 그때 잰 값이다(현재 합성 fixture로 다시 잰 값이 아니다). 레포(코드·fixture·테스트·문서)의 줄·값·데몬 이름(`ofonod` 제외)·호스트·D-Bus 이름은 합성·placeholder이고, fixture는 손으로 쓴 합성(`tests/fixtures/logs/ofono/syslog-busybox.log`)이다. 사내 값은 사내에서 SITE_PATHS에 채운다.
 
 ## 1. 바뀐 것
 
@@ -37,7 +37,7 @@
 - `--mask` 짝 값 재마스킹이 부분 일치(`v in lv`)라 요청 이름·`NONE`이 같은 줄의 더 긴 가린 값(`password=NONE5`·`secret=DIALOUT1`) 안에 있으면 그 토큰이 된다 — 가짜 `ril_error`·이름 소실(원문 누출은 아님). 경계 일치로 좁히기.
 - 주소 키 바로 뒤 잘린 IPv6도 조각 규칙과 같은 조건(4묶음 이상·3~4자리 묶음 2개 이상)이라 3묶음 프리픽스·짧은 묶음 위주 주소는 남는다(08-safety는 조건 없이 가린다고 적음). (기존) 앞에 낱말이 `_`로 붙은 자격증명 키(`auth_token`·`access_token`·`client_secret`)는 `\b` 경계가 없어 가리지 않는다.
 - 08-safety ICCID 행이 문맥 없는 규칙(`89`로 시작 19~20자리)과 키·괄호 문맥 규칙(16진 18~20자리, `89` 시작 아님)을 한 칸에 섞어 적었다(문구만).
-- `tid_file_paren`이 함수 칸 뒤 `()`(`<func>() >`)를 받지 않아 같은 데몬 줄 일부가 앞머리 떼기·`split_tag`에서 빠진다(공개 표본 한 데몬 53줄 중 4줄). `src_suffix` 꼬리 상한 테스트는 회귀하면 실패 대신 오래 멈춘다.
+- `tid_file_paren`이 함수 칸 뒤 `()`(`<func>() >`)를 받지 않아 같은 데몬 줄 일부가 앞머리 떼기·`split_tag`에서 빠진다(한 데몬 53줄 중 4줄). `src_suffix` 꼬리 상한 테스트는 회귀하면 실패 대신 오래 멈춘다.
 - `log.phone_id`를 덮어쓸 때 함께 둘 내장 gril 슬롯 규칙 문자열이 예시·문서에 없고, 예시 주석 "목록이 통째로 바뀐다"는 적은 키만 바뀌는 동작과 어긋난다. site `components`에서 `ofono`(ident `ofonod`, `msg_format: file_func`)를 빼면 DBG 앞머리 뒤 gril trace 줄의 짝이 조용히 빠진다(실패 응답이면 `ril_error` 대신 `ril_no_response`) — 예시·17 §9-1 경고, site 점검 후보.
 - `platform-flow.html`의 gril "지연·무응답·오류 표시"에 DB `ril.yaml`에 이름이 있을 때만이라는 단서가 없고, `make_variant_dbs.py` 표의 issue-db-ofono 설명에 gril placeholder 요청이 빠졌다.
 - OFONO_LOG_COLLECTION 9항: 형식 (c)는 syslogd 옵션에 따라 다르다(`-S` 칸 없음·`-R`만이면 로컬 없음·`-K` kmsg) — 실행 명령줄을 `info.txt`에. 빈 nodename 호스트 `?`·syslogd 자신의 시작·종료 줄은 해석하지 못한다(종료·시작 줄은 재시작 표시 후보). 기본 회전(200KB·회전본 `messages.0` 1개)이라 회전본을 함께, 실패 직후 받으라는 안내가 없다.
@@ -58,12 +58,12 @@ Android 영향: 없다(oFono 모듈·`PairProtocol` 기본값 필드만, Android
 
 테스트: 새 `tests/test_ofono_hop.py`·fixture `tests/fixtures/logs/ofono/syslog-hop.log`(합성), `test_ofono_components.py`·`test_ofono_skeleton.py`·`test_platform_registry.py`·`test_site_checks.py` 보강.
 
-P2: 짝 규칙이 없는 데몬 줄을 위로 쓰기(`upstream: {tags, match}` — 공개 표본 IMS 계층), unsol 연결, FIFO 옵션(같은 이름이 몰린 구간에서 nearest와 다를 수 있다), `timeline.md`에 연결 표시. 위험: 창이 클수록 가짜 연결(공개 표본 50ms ≤3, 200ms ≤18), 위 규칙을 끄거나 아래 tags가 앞 규칙과 겹치면 연결 0, 응답 쪽 아래 줄 대부분은 다른 RIL 클라이언트 것이라 미연결이 많은 것이 정상이다.
+P2: 짝 규칙이 없는 데몬 줄을 위로 쓰기(`upstream: {tags, match}` — IMS 계층), unsol 연결, FIFO 옵션(같은 이름이 몰린 구간에서 nearest와 다를 수 있다), `timeline.md`에 연결 표시. 위험: 창이 클수록 가짜 연결(50ms ≤3, 200ms ≤18), 위 규칙을 끄거나 아래 tags가 앞 규칙과 겹치면 연결 0, 응답 쪽 아래 줄 대부분은 다른 RIL 클라이언트 것이라 미연결이 많은 것이 정상이다.
 
 eval(11/02, `log-guide.md` 변경): **73**만 다시 쟀다(claude-sonnet-5-5, iteration `r1102-a`, `offsite_results.json` 갱신). 7/8 통과·수동 행 통과(사용자 승인), 실패 1행은 Step 4 리포트를 보일 때 `events.json`을 함께 연 것(탐색·log-guide 읽기 전, 이번 변경과 무관 — 10/31 run은 통과)이라 73은 fail로 남는다(사내 `s2.offsite` fail 6: 15·40·46·47·69·73). 63·74는 log-guide를 읽지 않는다.
 
 재리뷰(11/02)에서 더한 것:
-- nearest-first 탐욕 배정은 최대 매칭이 아니다 — 같은 이름이 몰리면 이을 수 있는 아래 줄이 미연결로 남고 교차 배정이 생긴다(공개 표본 창 50ms 요청 연결 180 대 최대 184, 60 대 61). FIFO 단조 매칭·증가 경로 후보.
+- nearest-first 탐욕 배정은 최대 매칭이 아니다 — 같은 이름이 몰리면 이을 수 있는 아래 줄이 미연결로 남고 교차 배정이 생긴다(창 50ms 요청 연결 180 대 최대 184, 60 대 61). FIFO 단조 매칭·증가 경로 후보.
 - hop은 위·아래 `phone_id`가 둘 다 있으면 같아야 잇는데 `PhoneIdRules`는 오프셋이 없어, 1부터 세는 아래 데몬 슬롯 표기를 `log.phone_id`에 넣으면 단일 SIM 연결 0·듀얼 SIM 교차 연결이 된다 — 그런 데몬 슬롯 규칙은 넣지 않고 o2.pairs로 확인(오프셋은 S29 후보).
 - 위 위험의 가짜 연결 수치(50ms ≤3·200ms ≤18)와 K20 "±0.5~3초 밀면 0~3"은 밀기 ±0.5·1·3초에서 잰 값이다 — 같은 이름 요청이 약 2초 주기로 몰리는 표본에서 ±2초 밀면 50ms 24·200ms 28까지 는다(주기적 요청이면 우연 일치가 커진다).
 - "응답 쪽 아래 줄 대부분은 다른 RIL 클라이언트 것" 안내는 표본 벤더 RIL과 맞지 않는다(이름 든 요청 줄은 모두 ofonod 요청, 응답 줄에는 요청 이름이 없다) — `hop_resp` 미연결이 많으면 먼저 response 정규식을 본다. response 정규식이 아래 요청 줄에도 맞으면(요청 정규식이 변형을 놓치거나 response만 설정) 요청 줄이 `hop_resp`로 다음 같은 이름 위 응답에 체계적으로 이어진다 — 문서 경고, o2.pairs 근거를 방향별로.
@@ -80,12 +80,12 @@ eval(11/02, `log-guide.md` 변경): **73**만 다시 쟀다(claude-sonnet-5-5, i
 | 영역 | 바뀐 것 | 사내에서 할 일 |
 |---|---|---|
 | 짝 주석 `serial`(`kind: regex`·`hop`, `--mask`) | 설정 짝 규칙은 serial이 10진 1~10자리일 때만 주석(RIL serial은 int32 — 내장 gril과 같은 상한, 앞 0 허용). 11자리 이상(IMSI·ICCID·전화번호 모양)이면 그 줄은 주석이 없고 `hop`도 복사하지 않는다. `--mask`면 `proto` 주석 serial은 같은 수가 마스킹된 같은 줄의 토큰 밖에 숫자로 따로 보일 때만(숫자 경계, 앞 0 무시) 남기고 아니면 `null`(짝 시각·지연은 그대로, 파생 이벤트 필드에 `serial` 없음). `hop` 아래 줄 serial(위 줄 복사본)은 `--mask`면 `null`. 이전에는 site 정규식의 `serial` 그룹이 가린 숫자(IMSI 등)를 잡으면 `msg`는 토큰인데 `ril.serial`·파생 필드·`timeline.md`에 원문이 남았다(설정 짝 규칙이 생긴 때부터, `hop`이 아래 줄로 넓힘) | site `request`·`response` 정규식의 `serial` 그룹은 RIL serial 자리만 잡게(앞뒤 고정, `\d{1,10}` — 더 긴 숫자의 일부만 잡으면 `--mask`에서 serial이 `null`) |
-| 메시지 형식 `level_tid_file`·`tid_file_paren` | 함수 칸이 마스킹 토큰(`<IP#n>`)도 받는다. C++ 범위 연산자 조각(`ns::Cls`의 `::C`, `std::`의 `d::`)이 문맥 없는 IPv6 규칙에 가려져 마스킹본(`mask_pii`·`cut` fixture)에서 형식이 맞지 않았다 — 공개 표본 `level_tid_file` 줄이 마스킹본에서 271→0·76→0, 수정 뒤 원문과 같다. 원문(토큰 없는 줄) 결과는 그대로, 마스킹 규칙도 그대로 | 마스킹본으로 재는 O-2 `o2.pairs`·`db_regress`가 원문 분석과 같은지 |
+| 메시지 형식 `level_tid_file`·`tid_file_paren` | 함수 칸이 마스킹 토큰(`<IP#n>`)도 받는다. C++ 범위 연산자 조각(`ns::Cls`의 `::C`, `std::`의 `d::`)이 문맥 없는 IPv6 규칙에 가려져 마스킹본(`mask_pii`·`cut` fixture)에서 형식이 맞지 않았다 — `level_tid_file` 줄이 마스킹본에서 271→0·76→0, 수정 뒤 원문과 같다. 원문(토큰 없는 줄) 결과는 그대로, 마스킹 규칙도 그대로 | 마스킹본으로 재는 O-2 `o2.pairs`·`db_regress`가 원문 분석과 같은지 |
 | 문서 | 17 §9-3 gril 한 낱말 응답 근거를 표본 사실대로(오류 이름 모양 낱말만 `failed` 뒤 두 번째 trace, 그 밖은 정상 첫 응답 값), OFONO_LOG_COLLECTION 9항 BusyBox 긴 메시지(여러 줄로 자르지 않고 읽기 버퍼를 넘는 뒤를 버린다), 08-safety §8 짝 주석 값, 17 §8 P2 목록의 같은 두 전제(긴 메시지 잇기·IMS 계층 이름) | 끝이 잘린 줄은 `notes.md`에 |
 | 덤프 함수 이름 | D-Bus 덤프 줄의 함수 이름은 `log-guide.md`·17·이 노트에서 placeholder(`<덤프 함수>`)·"D-Bus 메시지 덤프 줄"로 쓴다(11/02 사용자 결정). `log-guide.md`가 바뀌어(덤프 함수 placeholder, D-Bus 오류 위치 `src/error.c` → `src/dbus.c`) eval 73을 다시 쟀다(아래) | 사내 데몬의 덤프 줄 모양(S24) |
 | 마스킹 `cid`(Android 공통) | 맨 `cid` 키 규칙을 없앴다 — `cid=1`·`cid: 1`·`"cid":1`·HIDL `.cid = 1`, 데이터 콜 객체(`DataCallResponse`·`SetupDataCallResult`·`VendorDataCall{`·`PdnInfo`·`PDN_INFO*`) 안·밖, 접두(`<접두>_PDN_INFO_EXT cid=`) 모두 가리지 않는다. 데이터 콜 context id가 분석에 중요하다는 11/02 사용자 결정으로, 이전 결정(데이터 콜 객체 안 첫 `cid`만 제외)을 넓혔다. 객체 구간 제외 장치(`Rule.outside`)는 이 규칙만 써서 함께 지웠다. 셀 위치 키(`mCid`·`mCi`·`lac`·`ci`·`cellId` 등)는 그대로 가린다 | 이미 마스킹해 둔 파일의 `<CELL#n>`(옛 `cid` 값)은 되돌아가지 않는다(값이 필요하면 원본에서 다시 마스킹). `mask_pii --check`(`db_precommit`·`db_pr stage`·hook)가 맨 `cid`를 더 이상 잡지 않는다. 셀 ID를 맨 `cid=`로 찍는 사내 로그가 있으면 그 값도 남는다 — S13에서 확인. 이슈 DB `parser-rules`·시그니처·fixture에 옛 마스킹본 모양 `cid=<CELL#n>`이 있으면 새 로그(`cid=1`)에서 맞지 않는다(옛 fixture로는 `db_regress`가 계속 통과) — 찾아서 원본에서 다시 마스킹하거나 규칙을 고친다 |
 
-Android 영향: 짝 serial·형식 수정은 없다(Android 주석은 `proto`가 없고 serial이 늘 있어 파생 필드도 그대로). 마스킹 `cid`는 맨 `cid` 키가 든 줄의 마스킹 결과만 바꾼다(`cid=<CELL#n>` → 원래 값, 같은 파일 뒤 `<CELL#n>` 번호가 당겨질 수 있다) — 줄 해석·짝·이벤트 종류·필드는 그대로이고, 맨 `cid`가 든 이벤트 줄은 `msg`만 바뀐다(사외 Android 표본은 cid가 든 이벤트 줄이 모두 옛 규칙이 이미 빼던 데이터 콜 객체 안이라 `parse --mask` 출력이 바이트 같았고, 마스킹본에서 바뀐 줄은 맨 `cid` 줄과 번호만 당겨진 줄뿐). 골든은 바이트 그대로다(원본 시나리오에 백엔드를 돌린 출력이라 마스킹과 무관). fixture는 맨 `cid` 줄만 바뀌었다 — 합성 시나리오 4개(`tests/mocks/scenarios/data-001-none*.yaml`·`data-002-none.yaml`·`dual-sim-ril.yaml`)의 `cid=1`을 옛 규칙이 `<CELL#1>`로 가려 커밋해 두었으므로, 새 규칙으로 다시 만든 파서 fixture 3개(`data-connected`·`dual-sim-cross-slot`·`dual-sim-ril`)·샘플 DB 음성 fixture 3개(`DATA-001.none`·`DATA-001.none.2`·`DATA-002.none`)의 8줄과 이벤트 스냅샷 3개의 4곳이 `cid=1`이 됐다(그 파일들에 다른 `<CELL#n>`이 없어 번호 당김 없음, `.expect.yaml`·`db_regress` 판정 그대로). 기본 설정 oFono(내장 gril)는 serial 수정으로는 `--mask`까지 출력이 같다(gril serial은 줄 앞에 보인다 — 공개 표본 562개 중 바뀐 것 0). 마스킹 `cid`로는 맨 `cid` 줄(과 뒤 번호가 당겨진 줄)의 `msg`만 바뀐다(공개 표본에서 짝·주석·이벤트 필드는 그대로).
+Android 영향: 짝 serial·형식 수정은 없다(Android 주석은 `proto`가 없고 serial이 늘 있어 파생 필드도 그대로). 마스킹 `cid`는 맨 `cid` 키가 든 줄의 마스킹 결과만 바꾼다(`cid=<CELL#n>` → 원래 값, 같은 파일 뒤 `<CELL#n>` 번호가 당겨질 수 있다) — 줄 해석·짝·이벤트 종류·필드는 그대로이고, 맨 `cid`가 든 이벤트 줄은 `msg`만 바뀐다(Android 표본은 cid가 든 이벤트 줄이 모두 옛 규칙이 이미 빼던 데이터 콜 객체 안이라 `parse --mask` 출력이 바이트 같았고, 마스킹본에서 바뀐 줄은 맨 `cid` 줄과 번호만 당겨진 줄뿐). 골든은 바이트 그대로다(원본 시나리오에 백엔드를 돌린 출력이라 마스킹과 무관). fixture는 맨 `cid` 줄만 바뀌었다 — 합성 시나리오 4개(`tests/mocks/scenarios/data-001-none*.yaml`·`data-002-none.yaml`·`dual-sim-ril.yaml`)의 `cid=1`을 옛 규칙이 `<CELL#1>`로 가려 커밋해 두었으므로, 새 규칙으로 다시 만든 파서 fixture 3개(`data-connected`·`dual-sim-cross-slot`·`dual-sim-ril`)·샘플 DB 음성 fixture 3개(`DATA-001.none`·`DATA-001.none.2`·`DATA-002.none`)의 8줄과 이벤트 스냅샷 3개의 4곳이 `cid=1`이 됐다(그 파일들에 다른 `<CELL#n>`이 없어 번호 당김 없음, `.expect.yaml`·`db_regress` 판정 그대로). 기본 설정 oFono(내장 gril)는 serial 수정으로는 `--mask`까지 출력이 같다(gril serial은 줄 앞에 보인다 — 562줄 중 바뀐 것 0). 마스킹 `cid`로는 맨 `cid` 줄(과 뒤 번호가 당겨진 줄)의 `msg`만 바뀐다(짝·주석·이벤트 필드는 그대로).
 
 테스트: `test_ofono_components.py`(serial 자리 PII·10/11자리 경계, 같은 줄 가린 값의 serial·조각, hop 복사본, 마스킹본 형식 예·토큰 모양 고정·원문/마스킹본 tag·짝 같음), `test_ofono_gril.py`(같은 줄 IP·번호·셀과 겹쳐도 gril serial 유지), `test_ofono_hop.py`(긴 serial은 복사 없음, `--mask` 아래 줄 serial null). 마스킹 `cid`: `test_masking.py`(맨 `cid`는 객체 안·밖·접두·JSON·HIDL 모양 모두 그대로·`find` 없음, `mCid`·`lac`·`ci`·`cellId`는 토큰). 위 합성 시나리오 4개는 원본 `cid=1` 그대로 두고(`data-001-none-cross-slot`은 골든 입력이기도 하다), 그 fixture를 `tests/helpers/make_log_fixtures.py`·`make_sample_fixtures.py`로, 이벤트 스냅샷을 `tests/test_parse_logcat.py --update`로 다시 만들었다(바뀐 것은 맨 `cid` 줄뿐).
 

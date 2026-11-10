@@ -2,7 +2,7 @@
 
 oFono 플랫폼의 로그 줄 해석(17-platforms 설계 §5). 실제 사내 로그 형식(journald 출력 옵션·syslog 여부·레벨 표기·
 타임존·연도·호스트 칸)은 아직 모른다. 아래 세 형식은 공개 도구의 기본 출력을 **가정**한 것이고 합성 로그로 시험했다
-((c)는 사외 공개 표본으로 모양만 확인).
+((c)는 줄 모양만 확인).
 
 - (a) `journalctl -o short-iso-precise`: `2026-09-20T14:32:09.100000+09:00 host ident[pid]: msg`
   (타임존이 없으면 `tz`, 소수점 자리는 1~9, 오프셋 `Z`·`±HH:MM`·`±HHMM`. 범위 밖 오프셋 줄은 해석 못 함으로 센다).
@@ -10,7 +10,7 @@ oFono 플랫폼의 로그 줄 해석(17-platforms 설계 §5). 실제 사내 로
   연도·타임존이 없으므로 `year`(없으면 `DEFAULT_YEAR`)·`tz`와 12월 → 1월 해 넘김 규칙을 쓴다(logcat과 같은 규칙,
   시각 함수는 `common.logtime`).
 - (c) BusyBox syslogd(`/var/log/messages`·`logread`): `Sep 20 14:32:11.250 host daemon.info ident[pid]: msg`.
-  (b)에 `<facility>.<severity>` 칸이 붙은 것(공개 표본으로 모양 확인, 사내 확인 남음 TODO(SITE:S24)). facility는 버리고
+  (b)에 `<facility>.<severity>` 칸이 붙은 것(줄 모양 확인, 사내 확인 남음 TODO(SITE:S24)). facility는 버리고
   severity를 레벨로 쓴다(`SEVERITY_LEVEL`). 모르는 facility·severity 줄은 해석 못 함. 호스트 `(none)`(BusyBox 기본)도 받는다.
   연도·타임존·해 넘김은 (b)와 같다. (b)·(c)는 서로 맞지 않는다(ident 자리 뒤 `:` 유무).
 - 호스트 칸은 ASCII 호스트 이름(`[A-Za-z0-9][A-Za-z0-9_.-]*`), ident는 ASCII `[A-Za-z0-9_.@-]+`만 받는다 — 스탬프로

@@ -1,4 +1,4 @@
-"""내장 짝 규칙 `gril` — upstream oFono `gril/` RIL trace 형식. 공개 표본으로 모양 확인, 사내 확인 TODO(SITE:S26).
+"""내장 짝 규칙 `gril` — upstream oFono `gril/` RIL trace 형식. 줄 모양 확인, 사내 확인 TODO(SITE:S26).
 
 upstream oFono rilmodem(`gril/`)이 `ofonod` 출력에 남기는 RIL 요청·응답 trace(공개 소스의 출력 형식):
 - 요청 `[<slot>,<serial>]> RIL_REQUEST_<NAME> <자유 문장>`
