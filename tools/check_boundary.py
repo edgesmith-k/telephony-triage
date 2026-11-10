@@ -126,23 +126,24 @@ def _not_secret(value: str) -> bool:
 # (id, 정규식, 맞은 문자열이 괜찮은지 판정 — None이면 언제나 위반)
 DEFAULT_PATTERNS: list[tuple[str, re.Pattern, object]] = [
     ("private-key", re.compile(r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----"), None),
-    ("github-token", re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})\b"),
+    # 값 경계(`\b`·`\w`·`\d`)는 ASCII다(`re.ASCII`): 값에 붙은 한글 조사(`203.0.113.7은`)도 경계로 본다
+    ("github-token", re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})\b", re.ASCII),
      lambda m: _placeholder(m.group(0))),
-    ("aws-access-key", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"), lambda m: _placeholder(m.group(0))),
-    ("slack-token", re.compile(r"\bxox[abposr]-[A-Za-z0-9-]{10,}"), lambda m: _placeholder(m.group(0))),
-    ("google-api-key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}(?![\w-])"), lambda m: _placeholder(m.group(0))),
-    ("atlassian-token", re.compile(r"\bATATT[A-Za-z0-9_=-]{40,}"), lambda m: _placeholder(m.group(0))),
-    ("package-token", re.compile(r"\b(?:npm_[A-Za-z0-9]{36}|pypi-AgE[A-Za-z0-9_-]{50,})"),
+    ("aws-access-key", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b", re.ASCII), lambda m: _placeholder(m.group(0))),
+    ("slack-token", re.compile(r"\bxox[abposr]-[A-Za-z0-9-]{10,}", re.ASCII), lambda m: _placeholder(m.group(0))),
+    ("google-api-key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}(?![\w-])", re.ASCII), lambda m: _placeholder(m.group(0))),
+    ("atlassian-token", re.compile(r"\bATATT[A-Za-z0-9_=-]{40,}", re.ASCII), lambda m: _placeholder(m.group(0))),
+    ("package-token", re.compile(r"\b(?:npm_[A-Za-z0-9]{36}|pypi-AgE[A-Za-z0-9_-]{50,})", re.ASCII),
      lambda m: _placeholder(m.group(0))),
     ("llm-api-key", re.compile(
-        r"\bsk-ant-[A-Za-z0-9_-]{20,}|\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]*T3BlbkFJ[A-Za-z0-9_-]+"),
+        r"\bsk-ant-[A-Za-z0-9_-]{20,}|\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]*T3BlbkFJ[A-Za-z0-9_-]+", re.ASCII),
      lambda m: _placeholder(m.group(0))),
-    ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
+    ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}", re.ASCII),
      lambda m: _placeholder(m.group(0))),
     ("auth-header", re.compile(
-        r"(?:(?i:\bauthorization)\s*[:=]\s*['\"]?(?:Bearer|Basic|token)\s+|\bBearer\s+)([A-Za-z0-9._~+/-]{16,}=*)"),
+        r"(?:(?i:\bauthorization)\s*[:=]\s*['\"]?(?:Bearer|Basic|token)\s+|\bBearer\s+)([A-Za-z0-9._~+/-]{16,}=*)", re.ASCII),
      lambda m: _not_secret(m.group(1))),
-    ("url-credential", re.compile(r"\b[A-Za-z][A-Za-z0-9+.-]*://[^\s:/@<>'\"]+:([^\s/@<>'\"]+)@"),
+    ("url-credential", re.compile(r"\b[A-Za-z][A-Za-z0-9+.-]*://[^\s:/@<>'\"]+:([^\s/@<>'\"]+)@", re.ASCII),
      lambda m: _placeholder(m.group(1))),
     ("netrc", re.compile(r"(?i)\blogin\s+\S+\s+password\s+(\S+)"), lambda m: _placeholder(m.group(1))),
     # 키 이름 앞뒤를 {0,30}으로 묶어 긴 줄에서 제곱 시간이 되지 않게 한다.
@@ -151,12 +152,12 @@ DEFAULT_PATTERNS: list[tuple[str, re.Pattern, object]] = [
         r"(?:token|secret|passw(?:or)?d|pwd|api[_-]?key|access[_-]?key|private[_-]?key|credentials?)"
         r"[\w.-]{0,30}?['\"]?\s*[:=]\s*['\"]?([A-Za-z0-9_\-+/=]{20,})"),
      lambda m: _not_secret(m.group(1))),
-    ("ip-address", re.compile(r"(?<![\w.])(\d{1,3}(?:\.\d{1,3}){3})(?![\w.])"),
+    ("ip-address", re.compile(r"(?<![\w.])(\d{1,3}(?:\.\d{1,3}){3})(?![\w.])", re.ASCII),
      lambda m: _ip_ok(m.group(1))),
-    ("long-number", re.compile(r"(?<![\w.])\d{15}(?![\w.])"), None),
-    ("email", re.compile(r"\b[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)\b"),
+    ("long-number", re.compile(r"(?<![\w.])\d{15}(?![\w.])", re.ASCII), None),
+    ("email", re.compile(r"\b[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)\b", re.ASCII),
      lambda m: _host_ok(m.group(1))),
-    ("url-host", re.compile(r"\b(?:https?|ssh|git)://(?:[^@/\s]+@)?([A-Za-z0-9.-]+)"),
+    ("url-host", re.compile(r"\b(?:https?|ssh|git)://(?:[^@/\s]+@)?([A-Za-z0-9.-]+)", re.ASCII),
      lambda m: _host_ok(m.group(1)) or "<" in m.group(0)),
     # 로그 출처 흔적 문구(발췌·첨부 표시·로그 id·마스커 해시·점검 날짜)의 재유입. 정규식 글자는 자기 자신에 맞지 않게 쓴다
     # (`\s`·`[-]`·`\[` — 이 파일은 예외 없이 검사를 통과한다). case 로그는 합성뿐이다(`-- [합성]`).

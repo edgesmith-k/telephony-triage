@@ -171,6 +171,14 @@ def test_each_rule_reports_injected_violation(fake_repo):
     assert code == 1 and out["violations"]
 
 
+def test_values_glued_to_hangul_are_reported(fake_repo):
+    """값 경계는 ASCII다: 한글 조사가 붙은 IP·15자리·이메일(`52.14.200.7은`)도 위반이다."""
+    _write(fake_repo, "docs/leak.md", "서버52.14.200.7은 사내\n단말359881234567812로\n담당kim@realcorp.co.kr으로\n")
+    found = _rules(boundary.scan(fake_repo, "external"))
+    for rule in ("ip-address", "long-number", "email"):
+        assert (f"pattern:{rule}", "docs/leak.md") in found, rule
+
+
 def test_synthetic_marks_and_registries_pass(fake_repo):
     fixtures = "tests/fixtures/issue-db-x/data/DATA-001-x/fixtures"
     _write(fake_repo, f"{fixtures}/DATA-001-01.log", "log\n")
