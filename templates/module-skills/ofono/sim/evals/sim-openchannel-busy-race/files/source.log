@@ -1,18 +1,18 @@
 -- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture.
 Sep 22 10:20:18.072 dut local0.info mgmtd[734]: GetEID requested from settings
 Sep 22 10:20:18.172 dut daemon.info simd[587]: tid:42 profile list: open channel aid <AID#1>
-Sep 22 10:20:18.173 dut daemon.debug ofonod[903]: src/sim.c:sim_open_channel() /ril_0 aid <AID#1>
+Sep 22 10:20:18.173 dut daemon.debug ofonod[903]: src/sim.c:example_open_channel() /ril_0 aid <AID#1>
 Sep 22 10:20:18.174 dut daemon.info ofonod[903]: [0,0857]> RIL_REQUEST_SIM_OPEN_CHANNEL (AID:<AID#1>) (P2:0)
 Sep 22 10:20:18.175 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: SIM_OPEN_CHANNEL (20 bytes)
-Sep 22 10:20:18.176 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_OPEN_SIM_CHANNEL_WITH_P2 seq=0x09e7 len=20
+Sep 22 10:20:18.176 dut daemon.debug vrild[618]: mux [ch1][TX] SIT_SIM_OPEN_CHANNEL seq=0x09e7 len=20
 Sep 22 10:20:18.182 dut daemon.info simd[589]: tid:9 GetEID: open channel aid <AID#2>
-Sep 22 10:20:18.183 dut daemon.debug ofonod[903]: src/sim.c:sim_open_channel() /ril_0 aid <AID#2> while channel open in progress
-Sep 22 10:20:18.184 dut daemon.info ofonod[903]: src/dbus.c:__ofono_error_busy() m:OpenChannel i:org.ofono.SimManager
+Sep 22 10:20:18.183 dut daemon.debug ofonod[903]: src/sim.c:example_open_channel() /ril_0 aid <AID#2> while channel open in progress
+Sep 22 10:20:18.184 dut daemon.info ofonod[903]: src/dbus.c:__ofono_error_busy() m:ExampleOpenChannel i:org.ofono.SimManager
 Sep 22 10:20:18.185 dut daemon.err simd[589]: tid:9 open channel failed: Operation already in progress
 Sep 22 10:20:18.186 dut daemon.warn simd[589]: tid:9 GetEID failed: EuiccNoResponse (eUICC not responding)
 Sep 22 10:20:18.188 dut local0.warn mgmtd[734]: GetEID call error: eUICC not responding
-Sep 22 10:20:18.222 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_OPEN_SIM_CHANNEL_WITH_P2, RSP OK(RCM_E_SUCCESS) seq=0x09e7 len=12
-Sep 22 10:20:18.223 dut daemon.info vrild[618]: [CardService_1] open-channel answer: session 1, sw1 : 90, sw2 : 00
+Sep 22 10:20:18.222 dut daemon.debug vrild[618]: mux [ch1][RX] SIT_SIM_OPEN_CHANNEL, RSP OK(RCM_E_SUCCESS) seq=0x09e7 len=12
+Sep 22 10:20:18.223 dut daemon.info vrild[618]: [SimService_1] open-channel answer: session 1, sw1 : 90, sw2 : 00
 Sep 22 10:20:18.224 dut daemon.info ofonod[903]: [0,0857]< RIL_REQUEST_SIM_OPEN_CHANNEL {1}
 Sep 22 10:20:18.225 dut daemon.info simd[587]: tid:42 channel 1 opened
 Sep 22 10:20:18.572 dut daemon.info ofonod[903]: [0,0858]> RIL_REQUEST_SIM_CLOSE_CHANNEL 1

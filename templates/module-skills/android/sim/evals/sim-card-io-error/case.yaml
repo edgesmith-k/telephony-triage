@@ -21,7 +21,7 @@ run_expect:
   C: 1
 expect:
   layer: '모뎀|망|벤더 RIL'
-  daemon: 'RIL$|RIL[ (]|CardService|벤더 RIL'
-  evidence: ['CARD_IO_ERROR', 'SIT_QUERY_SIM_STATUS.*Error\(RCM_E_']
+  daemon: 'RIL$|RIL[ (]|SimService|벤더 RIL'
+  evidence: ['CARD_IO_ERROR', 'SIT_GET_SIM_STATUS.*Error\(RCM_E_']
   trap: null
   wrong_layer: ['^\s*(프레임워크|UiccController|RILJ|RIL HAL)', '^\s*그\s*층\s*로그\s*없음']

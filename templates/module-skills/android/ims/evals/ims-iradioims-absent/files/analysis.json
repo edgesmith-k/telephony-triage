@@ -4,7 +4,7 @@
  "mode": "offline",
  "issue": {
   "origin": "file",
-  "occurred_at": "2026-08-09T13:12:32+00:00",
+  "occurred_at": "2026-10-15T11:47:23+00:00",
   "sw": null,
   "platform_version": "14",
   "sim_slot": "0",
@@ -21,30 +21,25 @@
    "source.log"
   ],
   "window": {
-   "start": "2026-08-09T13:07:32.000Z",
-   "end": "2026-08-09T13:17:32.000Z"
+   "start": "2026-10-15T11:42:23.000Z",
+   "end": "2026-10-15T11:52:23.000Z"
   },
   "range": [
-   "2026-08-09T13:10:57.481Z",
-   "2026-08-09T13:12:32.278Z"
+   "2026-10-15T11:46:02.114Z",
+   "2026-10-15T11:47:23.141Z"
   ],
   "in_range": "partial",
   "clock_anomalies": 0,
-  "events": 23,
+  "events": 17,
   "masked": null,
   "uncollected_tags": [
    {
     "tag": "Telephony",
-    "lines": 4,
+    "lines": 2,
     "warn": 2
    },
    {
     "tag": "SatelliteController",
-    "lines": 5,
-    "warn": 0
-   },
-   {
-    "tag": "PhoneInterfaceManager",
     "lines": 1,
     "warn": 0
    }
@@ -92,12 +87,12 @@
   "when": "ask"
  },
  "warnings": [
-  "형식을 모르는 줄 9개를 건너뛰었습니다."
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
  ],
  "must_show": [
-  "로그 범위: 2026-08-09T13:10:57.481Z ~ 2026-08-09T13:12:32.278Z (일부만 포함), 시계 이상 없음",
+  "로그 범위: 2026-10-15T11:46:02.114Z ~ 2026-10-15T11:47:23.141Z (일부만 포함), 시계 이상 없음",
   "오류·거부·타임아웃 이벤트: 추출 이벤트 기준 0건 (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 2건: RILJ 2줄)",
-  "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): Telephony 4줄(W/E 2), SatelliteController 5줄(W/E 0), PhoneInterfaceManager 1줄(W/E 0)"
+  "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): Telephony 2줄(W/E 2), SatelliteController 1줄(W/E 0)"
  ],
  "truncated": false
 }

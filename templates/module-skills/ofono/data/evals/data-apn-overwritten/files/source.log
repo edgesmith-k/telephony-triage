@@ -1,28 +1,28 @@
 -- [합성] C1D 보정 data-apn-overwritten. 레포의 줄 모양(network-radio-off-queries case의 데이터 구성요소 줄, C0·C1 합성 case)만 본떠 새로 썼다. 두 sync 사이 ofonod·UI 쪽 APN 설정 줄은 없다.
-Sep 22 09:00:00.010 dut local0.info mgmtd[731]: [UI___] 000201 *UI->Update  uiMsg.TimeMsg  mgmtd/ui/ui.go:108
-Sep 22 09:00:00.200 dut daemon.info vrild[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-95
-Sep 22 09:00:01.000 dut daemon.debug datad[618]: syncApnInfoWithOfono, Apn size: 2[./apn/feature/ApnManager.cxx +174]
-Sep 22 09:00:01.001 dut daemon.debug datad[618]: addApnInfo, userProfileId : 1, apn : <APN#2>, type : internet[./apn/feature/ApnManager.cxx +874]
-Sep 22 09:00:01.001 dut daemon.debug datad[618]: set IaProfileId = 1[./apn/inc/Status.h +90]
-Sep 22 09:00:01.002 dut daemon.debug datad[618]: addApnInfo, userProfileId : 2, apn : ims, type : ims[./apn/feature/ApnManager.cxx +874]
-Sep 22 09:00:01.002 dut daemon.debug datad[618]: handleGetAllApns, Apns size: 2[./apn/feature/ApnManager.cxx +591]
-Sep 22 09:00:01.200 dut daemon.info vrild[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-95
-Sep 22 09:00:01.450 dut daemon.debug datad[618]: syncApnInfoWithOfono, Apn size: 2[./apn/feature/ApnManager.cxx +174]
-Sep 22 09:00:01.451 dut daemon.debug datad[618]: addApnInfo, userProfileId : 1, apn : <APN#1>, type : internet[./apn/feature/ApnManager.cxx +874]
-Sep 22 09:00:01.451 dut daemon.debug datad[618]: set IaProfileId = 1[./apn/inc/Status.h +90]
-Sep 22 09:00:01.452 dut daemon.debug datad[618]: addApnInfo, userProfileId : 2, apn : ims, type : ims[./apn/feature/ApnManager.cxx +874]
-Sep 22 09:00:01.452 dut daemon.debug datad[618]: handleGetAllApns, Apns size: 2[./apn/feature/ApnManager.cxx +591]
-Sep 22 09:00:02.000 dut local0.info mgmtd[731]: [DBUS_] 000210 *BusHelperImpl->CallGenericMethod  dest: org.ofono objectPath: /ril_0/context1, dbusInterface: org.ofono.ConnectionContext, methodName SetProperty  mgmtd/dbus/helper/dbus_helper_impl.go:98
-Sep 22 09:00:02.002 dut daemon.info ofonod[466]: dump_dmsg method call - i:org.ofono.ConnectionContext m:SetProperty p:/ril_0/context1 a:"Active", variant(true)
-Sep 22 09:00:02.003 dut daemon.debug ofonod[466]: src/gprs.c:ofono_gprs_context_activate() /ril_0 context 1 activating
+Sep 22 09:00:00.010 dut local0.info mgmtd[734]: ui tick
+Sep 22 09:00:00.200 dut daemon.info vrild[452]: [NetRegService_0] signal update lte rsrp=-95
+Sep 22 09:00:01.000 dut daemon.debug datad[618]: syncApnInfoWithOfono, Apn size: 2[./svc/session.cxx +42]
+Sep 22 09:00:01.001 dut daemon.debug datad[618]: addApnInfo, userProfileId : 1, apn : <APN#2>, type : internet[./svc/session.cxx +42]
+Sep 22 09:00:01.001 dut daemon.debug datad[618]: set IaProfileId = 1[./svc/state.cxx +10]
+Sep 22 09:00:01.002 dut daemon.debug datad[618]: addApnInfo, userProfileId : 2, apn : ims, type : ims[./svc/session.cxx +42]
+Sep 22 09:00:01.002 dut daemon.debug datad[618]: handleGetAllApns, Apns size: 2[./svc/session.cxx +42]
+Sep 22 09:00:01.200 dut daemon.info vrild[452]: [NetRegService_0] signal update lte rsrp=-95
+Sep 22 09:00:01.450 dut daemon.debug datad[618]: syncApnInfoWithOfono, Apn size: 2[./svc/session.cxx +42]
+Sep 22 09:00:01.451 dut daemon.debug datad[618]: addApnInfo, userProfileId : 1, apn : <APN#1>, type : internet[./svc/session.cxx +42]
+Sep 22 09:00:01.451 dut daemon.debug datad[618]: set IaProfileId = 1[./svc/state.cxx +10]
+Sep 22 09:00:01.452 dut daemon.debug datad[618]: addApnInfo, userProfileId : 2, apn : ims, type : ims[./svc/session.cxx +42]
+Sep 22 09:00:01.452 dut daemon.debug datad[618]: handleGetAllApns, Apns size: 2[./svc/session.cxx +42]
+Sep 22 09:00:02.000 dut local0.info mgmtd[734]: dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1
+Sep 22 09:00:02.002 dut daemon.info ofonod[466]: dbus_trace method call - i:org.ofono.ConnectionContext m:SetProperty p:/ril_0/context1 a:"Active", variant(true)
+Sep 22 09:00:02.003 dut daemon.debug ofonod[466]: drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating
 Sep 22 09:00:02.004 dut daemon.info ofonod[466]: [0,0021]> RIL_REQUEST_SETUP_DATA_CALL 16,1,<APN#1>,0,IP
-Sep 22 09:00:02.005 dut daemon.debug vrild[452]: SOCKET VCHAN_1 REQUEST: SETUP_DATA_CALL length:120
-Sep 22 09:00:02.006 dut daemon.debug vrild[452]: [IpcCtx_0] RecordIpcHistory token=0x0221
-Sep 22 09:00:02.006 dut daemon.debug vrild[452]: [<DEV#1>][TX] SIT_SETUP_DATA_CALL, REQ, 96 bytes, Token(0x0221)
-Sep 22 09:00:02.610 dut daemon.debug vrild[452]: [<DEV#1>][RX] SIT_SETUP_DATA_CALL, RSP, 64 bytes, Token(0x0221), OK(RCM_E_SUCCESS)
+Sep 22 09:00:02.005 dut daemon.debug vrild[452]: client fd 9 VCHAN_1 REQUEST: SETUP_DATA_CALL (120 bytes)
+Sep 22 09:00:02.006 dut daemon.debug vrild[452]: [IpcCtx_0] track seq 0x0221
+Sep 22 09:00:02.006 dut daemon.debug vrild[452]: mux [ch0][TX] SIT_SETUP_DATA_CALL, REQ seq=0x0221 len=96
+Sep 22 09:00:02.610 dut daemon.debug vrild[452]: mux [ch0][RX] SIT_SETUP_DATA_CALL, RSP OK(RCM_E_SUCCESS) seq=0x0221 len=64
 Sep 22 09:00:02.611 dut daemon.info vrild[452]: [IpcCtx_0] OnIpcComplete Request ID=27, result=0
 Sep 22 09:00:02.613 dut daemon.debug ofonod[466]: [0,0021]< RIL_REQUEST_SETUP_DATA_CALL {status=0,retry=-1,cid=1,active=2,type=IP,ifname=rmnet0}
 Sep 22 09:00:02.615 dut daemon.info ofonod[466]: src/gprs.c:pri_activate_callback() context 1 active on rmnet0
-Sep 22 09:00:02.616 dut daemon.info ofonod[466]: dump_dmsg signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"Active", variant(true)
-Sep 22 09:00:03.010 dut local0.info mgmtd[731]: [UI___] 000202 *UI->Update  uiMsg.TimeMsg  mgmtd/ui/ui.go:108
-Sep 22 09:00:03.200 dut daemon.info vrild[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-96
+Sep 22 09:00:02.616 dut daemon.info ofonod[466]: dbus_trace signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"Active", variant(true)
+Sep 22 09:00:03.010 dut local0.info mgmtd[734]: ui tick
+Sep 22 09:00:03.200 dut daemon.info vrild[452]: [NetRegService_0] signal update lte rsrp=-96

@@ -2,7 +2,7 @@ Sep 20 14:50:00.000 dut daemon.info ofonod[812]: src/example.c:example_cb() /ril
 Sep 20 14:50:00.100 dut daemon.debug ofonod[812]: [0,0001]> RIL_REQUEST_SETUP_DATA_CALL placeholder
 Sep 20 14:50:00.400 dut daemon.debug ofonod[812]: [0,0001]< RIL_REQUEST_SETUP_DATA_CALL failed GENERIC_FAILURE
 Sep 20 14:50:01.000 dut daemon.debug ofonod[812]: [0,0002]> RIL_REQUEST_SETUP_DATA_CALL placeholder
-Sep 20 14:50:01.050 dut user.info daemon-a[901]: BearerCtx{cid=1 state=placeholder}
+Sep 20 14:50:01.050 dut user.info daemon-a[901]: PdnCtx{cid=1 state=placeholder}
 Sep 20 14:50:01.080 dut user.notice daemon-a[901]: request sent: token=0012
 Sep 20 14:50:32.000 dut daemon.debug ofonod[812]: [0,0002]< RIL_REQUEST_SETUP_DATA_CALL placeholder
 Sep 20 14:50:32.100 dut daemon.debug ofonod[812]: [0,UNSOL]< RIL_UNSOL_DATA_CALL_LIST_CHANGED placeholder

@@ -23,5 +23,5 @@ expect:
       daemon: 'datad2'
       evidence: ['RTM_NEWROUTE failed']
   trap:
-    - label: '^\s*(벤더 RIL|모뎀|망|ofonod|D-Bus|관리 데몬)'
+    - label: '^\s*(벤더 RIL|vrild|datad\b|모뎀|망|ofonod|D-Bus|관리 데몬)'
     - label: '^\s*그\s*층\s*로그\s*없음'

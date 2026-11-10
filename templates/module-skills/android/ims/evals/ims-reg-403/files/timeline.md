@@ -7,12 +7,12 @@
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
 15:00:02.100 p0 D RILJ [0306]> NOTIFY_IMS_DATA_NETWORK [PHONE0]
-15:00:04.114 - V RIL [<DEV#1>][RX] <unknown sit>, RSP, 12 bytes, Token(0x0206), Error(RCM_E_UNKNOWN_CMD)
+15:00:04.114 - V RIL mux [ch0][RX] <unknown sit>, RSP Error(RCM_E_UNKNOWN_CMD) seq=0x0206 len=12
 15:00:07.135 p0 D RILJ [0306]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
 15:00:13.000 p0 D ImsManager register: impu=sip:<IMPU#1>@<HOST#1> [PHONE0]
-15:00:13.300 - D VRIL-IMS 1373 [CONN] Sending AddPdn in 0 with PDN:SLID:0 APN_TYPE:<APN#1> STATE:IMS_REGISTERING slot:0 (StackControl%sendPdnInfo:457)
-15:00:13.400 - I VRIL-IMS 1412 [HELP] #:PURP:# SOL TX{OEM_REQ_MTEL_ADD_PDN_INFO} : pdn-type : 2 ip-type : 3 ims-pdn-ip-address4 : <IP#1> pdn-new : 1
-15:00:13.450 - I VRIL-IMS 1413 [HELP] #:PURP:# SOL RX{OEM_REQ_MTEL_ADD_PDN_INFO} : STATUS_SUCCESS
-15:00:15.100 - V RIL [<DEV#1>][RX] SIT_NOTIFY_MTEL_REGISTRATION, IND, 208 bytes
-15:00:15.105 - I VRIL-IMS 1416 [NETW] #:PURP:# UNSOL {OEM_UNSOL_MTEL_REGISTRATION} : reg-state : 0 feature : 11 feature-bitmask : 0 status-code : 403 delegate-bitmask : 0 mFeatureExt : …
+15:00:13.300 - D VRIL-IMS [pdn] add pdn apn=<APN#1> state=IMS_REGISTERING slot=0
+15:00:13.400 - I VRIL-IMS [ril] req -> OEM_REQ_IMS_ADD_PDN : type : 2 ip : 3 addr : <IP#1>
+15:00:13.450 - I VRIL-IMS [ril] rsp <- OEM_REQ_IMS_ADD_PDN : STATUS_SUCCESS
+15:00:15.100 - V RIL mux [ch0][RX] SIT_NOTIFY_IMS_REGISTRATION ind len=208
+15:00:15.105 - I VRIL-IMS [reg] ind <- OEM_UNSOL_IMS_REGISTRATION : state : 0 feature : 11 status-code : 403
 15:00:15.200 p0 W ImsRegistration onRegistrationFailed: code=403 reason=FORBIDDEN [PHONE0]  ⇒ ims_registration_failed(code=403,reason=FORBIDDEN)

@@ -4,7 +4,7 @@
  "mode": "offline",
  "issue": {
   "origin": "file",
-  "occurred_at": "2026-08-09T13:10:57+00:00",
+  "occurred_at": "2026-10-16T06:12:33+00:00",
   "sw": null,
   "platform_version": "14",
   "sim_slot": "0",
@@ -21,12 +21,12 @@
    "source.log"
   ],
   "window": {
-   "start": "2026-08-09T13:05:57.000Z",
-   "end": "2026-08-09T13:15:57.000Z"
+   "start": "2026-10-16T06:07:33.000Z",
+   "end": "2026-10-16T06:17:33.000Z"
   },
   "range": [
-   "2026-08-09T13:10:54.906Z",
-   "2026-08-09T13:10:57.430Z"
+   "2026-10-16T06:12:31.207Z",
+   "2026-10-16T06:12:33.920Z"
   ],
   "in_range": "partial",
   "clock_anomalies": 0,
@@ -34,18 +34,8 @@
   "masked": null,
   "uncollected_tags": [
    {
-    "tag": "DataReader",
-    "lines": 2,
-    "warn": 0
-   },
-   {
-    "tag": "OemMultiSimSettingController",
-    "lines": 2,
-    "warn": 0
-   },
-   {
-    "tag": "PhoneConfig",
-    "lines": 2,
+    "tag": "SatelliteController",
+    "lines": 1,
     "warn": 0
    }
   ]
@@ -91,11 +81,11 @@
   "when": "ask"
  },
  "warnings": [
-  "형식을 모르는 줄 6개를 건너뛰었습니다."
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
  ],
  "must_show": [
-  "로그 범위: 2026-08-09T13:10:54.906Z ~ 2026-08-09T13:10:57.430Z (일부만 포함), 시계 이상 없음",
-  "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): DataReader 2줄(W/E 0), OemMultiSimSettingController 2줄(W/E 0), PhoneConfig 2줄(W/E 0)"
+  "로그 범위: 2026-10-16T06:12:31.207Z ~ 2026-10-16T06:12:33.920Z (일부만 포함), 시계 이상 없음",
+  "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): SatelliteController 1줄(W/E 0)"
  ],
  "truncated": false
 }

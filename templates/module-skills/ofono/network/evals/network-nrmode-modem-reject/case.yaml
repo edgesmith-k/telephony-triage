@@ -22,6 +22,6 @@ run_expect:
 expect:
   layer: '모뎀|망'
   daemon: 'vrild'
-  evidence: ['SIT_QUERY_NR_MODE, RSP.*Error\(RCM_E_FAILURE\)', 'GET_NR_MODE failed GENERIC_FAILURE']
+  evidence: ['SIT_GET_PREFERRED_NETWORK_TYPE, RSP.*Error\(RCM_E_FAILURE\)', 'GET_PREFERRED_NETWORK_TYPE failed GENERIC_FAILURE']
   trap: null
   wrong_layer: ['^\s*(mgmtd|ofonod|관리 데몬|D-Bus|벤더 RIL|그\s*층|원인\s*아님)']

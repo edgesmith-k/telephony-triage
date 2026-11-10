@@ -569,7 +569,7 @@ def test_tag_position_word_not_in_tags_yaml_is_warned():
     from common.signatures import tag_position_word
     assert tag_position_word(r"RILJ.*>\s*SETUP_DATA_CALL") == "RILJ" and tag_position_word(r"DNC-0\s.*") == "DNC-0"
     for p in ("notifyDataEnabledChanged: enabled=false", ".*ROAMING_DISABLED.*", "ABSENT|UNKNOWN", "403", "RILJ", "(?i)x",
-              "RIL_REQUEST_DIAL failed", "IMS_UNSOL_UPDATE_IMS_REG_FAIL fail_code=401", "DNC-0 .*"):   # RIL 이름·메시지 문구는 아님
+              "RIL_REQUEST_DIAL failed", "IMS_UNSOL_REG_FAILED fail_code=401", "DNC-0 .*"):   # RIL 이름·메시지 문구는 아님
         assert tag_position_word(p) is None, p
     db = runner_copy(SAMPLE, "tag-unknown")
     tags = db / "parser-rules" / "tags.yaml"

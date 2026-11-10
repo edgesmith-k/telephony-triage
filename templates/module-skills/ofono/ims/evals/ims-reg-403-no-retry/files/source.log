@@ -1,27 +1,27 @@
 -- [합성] C1 ims-reg-403-no-retry. 레포 case의 줄 모양을 본떠 새로 썼다. 거절 코드 403과 재시도 문구는 가정(A).
-Sep 21 10:40:00.010 dut local0.info mgmtd[731]: [UI___] 000401 *UI->Update  uiMsg.TimeMsg  mgmtd/ui/ui.go:108
-Sep 21 10:40:00.200 dut daemon.info vrild[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-90
+Sep 21 10:40:00.010 dut local0.info mgmtd[734]: ui tick
+Sep 21 10:40:00.200 dut daemon.info vrild[452]: [NetRegService_0] signal update lte rsrp=-90
 Sep 21 10:40:01.000 dut daemon.info ofonod[466]: IMSD 0: <HEXDUMP 32B>
 Sep 21 10:40:02.010 dut user.debug imsd[733]: [SLOT_0][I] 5101 [ImsRegistration] triggerRegistering() SENT
-Sep 21 10:40:02.020 dut user.debug imsd[733]: [SID_0] SOL TX{OEM_REQ_MTEL_REGISTER} len=48
-Sep 21 10:40:02.021 dut daemon.debug vrild[452]: [<DEV#1>][TX] SIT_MTEL_REGISTER, REQ, 48 bytes, Token(0x0201)
-Sep 21 10:40:02.090 dut daemon.debug vrild[452]: [<DEV#1>][RX] SIT_MTEL_REGISTER, RSP, 12 bytes, Token(0x0201), OK(RCM_E_SUCCESS)
-Sep 21 10:40:05.000 dut daemon.debug vrild[452]: [<DEV#1>][RX] SIT_NOTIFY_MTEL_REG_FAIL, IND, 40 bytes, Token(0xffff)
-Sep 21 10:40:05.001 dut user.debug imsd[733]: [SLOT_0][V] 5110 [SID_0] UNSOL {OEM_UNSOL_MTEL_REG_FAIL(3077)} : 13RilIndRegFail [fail-code : 403]
-Sep 21 10:40:05.003 dut daemon.debug ofonod[466]: src/ims.c:ims_update_ims_reg_fail() fail_code = 403
-Sep 21 10:40:05.004 dut daemon.info ofonod[466]: [0,UNSOL]< IMS_UNSOL_UPDATE_IMS_REG_FAIL fail_code=403
+Sep 21 10:40:02.020 dut user.debug imsd[733]: [SID_0] req -> OEM_REQ_IMS_REGISTER len=48
+Sep 21 10:40:02.021 dut daemon.debug vrild[452]: mux [ch0][TX] SIT_IMS_REGISTER, REQ seq=0x0201 len=48
+Sep 21 10:40:02.090 dut daemon.debug vrild[452]: mux [ch0][RX] SIT_IMS_REGISTER, RSP OK(RCM_E_SUCCESS) seq=0x0201 len=12
+Sep 21 10:40:05.000 dut daemon.debug vrild[452]: mux [ch0][RX] SIT_NOTIFY_IMS_REG_FAIL ind len=40
+Sep 21 10:40:05.001 dut user.debug imsd[733]: [SLOT_0][V] 5110 [SID_0] ind <- OEM_UNSOL_IMS_REG_FAIL(3077) : [fail-code : 403]
+Sep 21 10:40:05.003 dut daemon.debug ofonod[466]: src/ims.c:example_reg_fail_notify() fail_code = 403
+Sep 21 10:40:05.004 dut daemon.info ofonod[466]: [0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=403
 Sep 21 10:40:05.006 dut user.debug imsd[733]: [SLOT_0][I] 5102 [ImsRegistration] registrationFailed() code=403
 Sep 21 10:40:05.007 dut user.debug imsd[733]: [SLOT_0][I] 5103 [ImsRegistration] registered:0 VoPS=1
-Sep 21 10:40:06.010 dut local0.info mgmtd[731]: [UI___] 000402 *UI->Update  uiMsg.TimeMsg  mgmtd/ui/ui.go:108
-Sep 21 10:40:06.200 dut daemon.info vrild[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-90
+Sep 21 10:40:06.010 dut local0.info mgmtd[734]: ui tick
+Sep 21 10:40:06.200 dut daemon.info vrild[452]: [NetRegService_0] signal update lte rsrp=-90
 Sep 21 10:40:10.010 dut user.debug imsd[733]: [SLOT_0][I] 5104 [ImsRegistration] triggerRegistering() NOT SENT (blocked after 403)
 Sep 21 10:40:11.000 dut daemon.info ofonod[466]: IMSD 0: <HEXDUMP 32B>
-Sep 21 10:40:12.010 dut local0.info mgmtd[731]: [UI___] 000403 *UI->Update  uiMsg.TimeMsg  mgmtd/ui/ui.go:108
-Sep 21 10:40:12.200 dut daemon.info vrild[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-91
+Sep 21 10:40:12.010 dut local0.info mgmtd[734]: ui tick
+Sep 21 10:40:12.200 dut daemon.info vrild[452]: [NetRegService_0] signal update lte rsrp=-91
 Sep 21 10:40:15.010 dut user.debug imsd[733]: [SLOT_0][I] 5105 [ImsRegistration] triggerRegistering() NOT SENT (blocked after 403)
 Sep 21 10:40:15.012 dut user.debug imsd[733]: [SLOT_0][I] 5106 [ImsRegistration] registered:0 VoPS=1
-Sep 21 10:40:18.010 dut local0.info mgmtd[731]: [UI___] 000404 *UI->Update  uiMsg.TimeMsg  mgmtd/ui/ui.go:108
-Sep 21 10:40:18.200 dut daemon.info vrild[452]: [NetworkService_0] SignalStrengthHandler OnUnsolicited() lte rsrp=-90
+Sep 21 10:40:18.010 dut local0.info mgmtd[734]: ui tick
+Sep 21 10:40:18.200 dut daemon.info vrild[452]: [NetRegService_0] signal update lte rsrp=-90
 Sep 21 10:40:20.010 dut user.debug imsd[733]: [SLOT_0][I] 5107 [ImsRegistration] triggerRegistering() NOT SENT (blocked after 403)
 Sep 21 10:40:21.000 dut daemon.info ofonod[466]: IMSD 0: <HEXDUMP 32B>
 Sep 21 10:40:25.010 dut user.debug imsd[733]: [SLOT_0][I] 5108 [ImsRegistration] triggerRegistering() NOT SENT (blocked after 403)

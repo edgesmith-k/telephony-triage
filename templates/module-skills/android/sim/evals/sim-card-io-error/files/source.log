@@ -1,34 +1,34 @@
 -- [합성] telephony-triage module-skills D eval log. Hand-written; base sample SIM-001-01.log recast to PHONE0.
 08-21 10:00:02.100  2101 2141 D RILJ    : [0301]> NOTIFY_IMS_DATA_NETWORK [PHONE0]
-08-21 10:00:03.107  1188 1258 V RIL     : [<DEV#1>][TX] <unknown sit>, REQ, 12 bytes, Token(0x0201)
-08-21 10:00:04.114  1188 1258 V RIL     : [<DEV#1>][RX] <unknown sit>, RSP, 12 bytes, Token(0x0201), Error(RCM_E_UNKNOWN_CMD)
-08-21 10:00:05.121  1188 1248 E VRIL    : Calling responseHandler() for token 301
-08-21 10:00:06.128  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
+08-21 10:00:03.107  1188 1258 V RIL     : mux [ch0][TX] <unknown sit>, REQ seq=0x0201 len=12
+08-21 10:00:04.114  1188 1258 V RIL     : mux [ch0][RX] <unknown sit>, RSP Error(RCM_E_UNKNOWN_CMD) seq=0x0201 len=12
+08-21 10:00:05.121  1188 1248 E VRIL    : reply to client token 301
+08-21 10:00:06.128  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
 08-21 10:00:07.135  2101 2141 D RILJ    : [0301]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
 08-21 10:00:15.000  2101 2101 D SMSVC   : updateSubscription: slot 0 pending
 08-21 10:00:20.000  2101 2141 D RILJ    : [0320]> GET_SIM_STATUS [PHONE0]
 08-21 10:00:20.004  1188 1188 D VRIL-SVC: RadioSimProxy::getIccCardStatus: serial 320
-08-21 10:00:20.006  1188 1241 I RIL     : GetSimStatusHandler: OnRequest() -->
-08-21 10:00:20.008  1188 1258 V RIL     : [<DEV#1>][TX] SIT_QUERY_SIM_STATUS, REQ, 8 bytes, Token(0x0210)
-08-21 10:00:20.009  1188 1258 V RIL     : [<DEV#1>][RX] <HEXDUMP 16B>
-08-21 10:00:21.020  1188 1258 V RIL     : [<DEV#1>][RX] SIT_QUERY_SIM_STATUS, RSP, 12 bytes, Token(0x0210), Error(RCM_E_FAILURE)
-08-21 10:00:21.022  1188 1242 I RIL     : [CardService_0] OnGetSimStatusComplete errorCode=2
-08-21 10:00:21.024  1188 1244 D VRIL-SVC: GetCardStatusCommand::onResponse: serial 320
+08-21 10:00:20.006  1188 1241 I RIL     : [SimService_0] sim status request
+08-21 10:00:20.008  1188 1258 V RIL     : mux [ch0][TX] SIT_GET_SIM_STATUS, REQ seq=0x0210 len=8
+08-21 10:00:20.009  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
+08-21 10:00:21.020  1188 1258 V RIL     : mux [ch0][RX] SIT_GET_SIM_STATUS, RSP Error(RCM_E_FAILURE) seq=0x0210 len=12
+08-21 10:00:21.022  1188 1242 I RIL     : [SimService_0] sim status done errorCode=2
+08-21 10:00:21.024  1188 1244 D VRIL-SVC: getIccCardStatus response: serial 320
 08-21 10:00:21.030  2101 2142 D RILJ    : [0320]< GET_SIM_STATUS error 2 [PHONE0]
 08-21 10:00:21.030  2101 2142 D RilRequest: [0320]< GET_SIM_STATUS error: com.android.internal.telephony.CommandException: GENERIC_FAILURE ret= result={ what=3 }
 08-21 10:00:21.040  2101 2101 W UiccController: onIccCardStatusDone: error=CARD_IO_ERROR [PHONE0]
 08-21 10:00:23.000  2101 2101 W UiccController: SIM state changed: ABSENT [PHONE0]
-08-21 10:00:23.500  1188 1248 E VRIL    : Calling responseHandler() for token 320
+08-21 10:00:23.500  1188 1248 E VRIL    : reply to client token 320
 08-21 10:00:28.000  2101 2141 D RILJ    : [0321]> GET_SIM_STATUS [PHONE0]
 08-21 10:00:28.004  1188 1188 D VRIL-SVC: RadioSimProxy::getIccCardStatus: serial 321
-08-21 10:00:28.006  1188 1241 I RIL     : GetSimStatusHandler: OnRequest() -->
-08-21 10:00:28.008  1188 1258 V RIL     : [<DEV#1>][TX] SIT_QUERY_SIM_STATUS, REQ, 8 bytes, Token(0x0211)
-08-21 10:00:28.009  1188 1258 V RIL     : [<DEV#1>][RX] <HEXDUMP 16B>
-08-21 10:00:29.020  1188 1258 V RIL     : [<DEV#1>][RX] SIT_QUERY_SIM_STATUS, RSP, 12 bytes, Token(0x0211), Error(RCM_E_FAILURE)
-08-21 10:00:29.022  1188 1242 I RIL     : [CardService_0] OnGetSimStatusComplete errorCode=2
-08-21 10:00:29.024  1188 1244 D VRIL-SVC: GetCardStatusCommand::onResponse: serial 321
+08-21 10:00:28.006  1188 1241 I RIL     : [SimService_0] sim status request
+08-21 10:00:28.008  1188 1258 V RIL     : mux [ch0][TX] SIT_GET_SIM_STATUS, REQ seq=0x0211 len=8
+08-21 10:00:28.009  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
+08-21 10:00:29.020  1188 1258 V RIL     : mux [ch0][RX] SIT_GET_SIM_STATUS, RSP Error(RCM_E_FAILURE) seq=0x0211 len=12
+08-21 10:00:29.022  1188 1242 I RIL     : [SimService_0] sim status done errorCode=2
+08-21 10:00:29.024  1188 1244 D VRIL-SVC: getIccCardStatus response: serial 321
 08-21 10:00:29.030  2101 2142 D RILJ    : [0321]< GET_SIM_STATUS error 2 [PHONE0]
 08-21 10:00:29.030  2101 2142 D RilRequest: [0321]< GET_SIM_STATUS error: com.android.internal.telephony.CommandException: GENERIC_FAILURE ret= result={ what=3 }
 08-21 10:00:29.040  2101 2101 W UiccController: onIccCardStatusDone: error=CARD_IO_ERROR [PHONE0]
 08-21 10:00:30.000  2101 2101 W SubscriptionManagerService: no subscription for slot: iccid=<ICCID#1> [PHONE0]
-08-21 10:00:31.000  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
+08-21 10:00:31.000  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009

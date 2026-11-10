@@ -21,7 +21,7 @@ expect:
   accept:
     - layer: '모뎀|망'
       daemon: 'vrild'
-      evidence: ['SIT_NOTIFY_TOTAL_OOS', 'DM packet dropped']
+      evidence: ['SIT_NOTIFY_OUT_OF_SERVICE', 'DM packet dropped']
   trap:
     - label: '^\s*(곁가지|관리 데몬|D-Bus|ofonod|그\s*층|원인\s*아님)'
     - label: '^\s*mgmtd'

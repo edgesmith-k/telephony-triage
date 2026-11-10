@@ -26,7 +26,7 @@
    "end": "2026-09-22T10:05:20.000Z"
   },
   "range": [
-   "2026-09-22T10:00:16.536Z",
+   "2026-09-22T10:00:16.546Z",
    "2026-09-22T10:00:22.236Z"
   ],
   "in_range": "partial",
@@ -49,12 +49,6 @@
   ],
   "error_events": [
    {
-    "ts": "2026-09-22T10:00:21.721Z",
-    "tag": "vrild",
-    "event": "builtin.common.vendor_request_failed",
-    "phone": null
-   },
-   {
     "ts": "2026-09-22T10:00:21.723Z",
     "tag": "ofonod",
     "event": "ril_error",
@@ -63,7 +57,7 @@
     "error": "INVALID_RESPONSE"
    }
   ],
-  "error_event_total": 2,
+  "error_event_total": 1,
   "unextracted_warn": 1
  },
  "code": {
@@ -74,7 +68,7 @@
   "when": "ask"
  },
  "must_show": [
-  "로그 범위: 2026-09-22T10:00:16.536Z ~ 2026-09-22T10:00:22.236Z (일부만 포함), 시계 이상 없음"
+  "로그 범위: 2026-09-22T10:00:16.546Z ~ 2026-09-22T10:00:22.236Z (일부만 포함), 시계 이상 없음"
  ],
  "truncated": false
 }

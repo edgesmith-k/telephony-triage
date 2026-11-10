@@ -1,26 +1,26 @@
 -- [합성] telephony-triage module-skills D eval log. Hand-written; composed IMS SMS path.
 08-25 14:00:02.100  2101 2141 D RILJ    : [0305]> NOTIFY_IMS_DATA_NETWORK [PHONE0]
-08-25 14:00:03.107  1188 1258 V RIL     : [<DEV#1>][TX] <unknown sit>, REQ, 12 bytes, Token(0x0205)
-08-25 14:00:04.114  1188 1258 V RIL     : [<DEV#1>][RX] <unknown sit>, RSP, 12 bytes, Token(0x0205), Error(RCM_E_UNKNOWN_CMD)
-08-25 14:00:05.121  1188 1248 E VRIL    : Calling responseHandler() for token 305
-08-25 14:00:06.128  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
+08-25 14:00:03.107  1188 1258 V RIL     : mux [ch0][TX] <unknown sit>, REQ seq=0x0205 len=12
+08-25 14:00:04.114  1188 1258 V RIL     : mux [ch0][RX] <unknown sit>, RSP Error(RCM_E_UNKNOWN_CMD) seq=0x0205 len=12
+08-25 14:00:05.121  1188 1248 E VRIL    : reply to client token 305
+08-25 14:00:06.128  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
 08-25 14:00:07.135  2101 2141 D RILJ    : [0305]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
 08-25 14:00:20.000  2101 2111 I SmsDispatchersController: sendText: dest=<MSISDN#1> parts=1 [PHONE0]
 08-25 14:00:20.010  2101 2101 D ImsSmsDispatcher [0]: sendSms: token=7 format=3gpp
-08-25 14:00:20.050  1777 1777 E VRIL-IMS: 1502 [SMS#] send rejected: SMS over IMS feature off (feature-bitmask : 0) (SmsAdaptor%sendSms:211)
+08-25 14:00:20.050  1777 1777 E VRIL-IMS: [sms] send rejected: SMS over IMS feature off
 08-25 14:00:20.060  2101 2101 W ImsSmsDispatcher [0]: onSendSmsResult token=7 messageRef=0 status=SEND_STATUS_ERROR_FALLBACK
 08-25 14:00:20.100  2101 2141 D RILJ    : [0702]> SEND_SMS [PHONE0]
 08-25 14:00:20.104  1188 1188 D VRIL-SVC: RadioMessagingProxy::sendSms: serial 702
 08-25 14:00:21.000  2101 2111 W SmsDispatchersController: sendSms failed: result=GENERIC_FAILURE [PHONE0]
-08-25 14:00:21.001  1188 1258 V RIL     : [<DEV#1>][RX] <HEXDUMP 16B>
-08-25 14:00:22.000  1188 1248 E VRIL    : Calling responseHandler() for token 702
+08-25 14:00:21.001  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
+08-25 14:00:22.000  1188 1248 E VRIL    : reply to client token 702
 08-25 14:00:24.100  2101 2142 D RILJ    : [0702]< SEND_SMS [PHONE0]
-08-25 14:00:25.000  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
-08-25 14:00:50.011  1188 1248 E VRIL    : Calling responseHandler() for token 420
-08-25 14:00:50.311  1188 1258 V RIL     : [<DEV#1>][RX] <HEXDUMP 16B>
-08-25 14:00:50.611  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
-08-25 14:00:51.011  1188 1248 E VRIL    : Calling responseHandler() for token 423
-08-25 14:00:51.311  1188 1258 V RIL     : [<DEV#1>][RX] <HEXDUMP 16B>
-08-25 14:00:51.611  1188 1258 V RIL     : Send()_0 RCM Response Routing : Type=0001, RCM ID=0x0703 Service ID=5 Message ID=4009
-08-25 14:00:52.011  1188 1248 E VRIL    : Calling responseHandler() for token 426
-08-25 14:00:52.311  1188 1258 V RIL     : [<DEV#1>][RX] <HEXDUMP 16B>
+08-25 14:00:25.000  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
+08-25 14:00:50.011  1188 1248 E VRIL    : reply to client token 420
+08-25 14:00:50.311  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
+08-25 14:00:50.611  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
+08-25 14:00:51.011  1188 1248 E VRIL    : reply to client token 423
+08-25 14:00:51.311  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
+08-25 14:00:51.611  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
+08-25 14:00:52.011  1188 1248 E VRIL    : reply to client token 426
+08-25 14:00:52.311  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>

@@ -7,7 +7,7 @@ key: MOCK-9813
 issue:
   summary: IMS 서비스 없음 로그가 반복됨
   description: IMS 서비스를 쓸 수 없다는 로그가 반복해서 찍힙니다. IMS 등록에 문제가 있는지 확인해 주세요.
-  occurred_at: '2026-08-09T13:12:32+0000'
+  occurred_at: '2026-10-15T11:47:23+0000'
   platform_version: '14'
   sim_slot: '0'
 parse: {tz: UTC, year: 2026, minutes: 5}
