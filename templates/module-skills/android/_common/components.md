@@ -10,7 +10,7 @@
 | AT 중계·모뎀 진단 | VRIL-MODEM | — | 곁가지(<태그>) | `at-in: AT…` = 시험 장비가 보낸 AT, `at-out: …` = 모뎀 답 (TODO(SITE:S25)) |
 | 벤더 프레임워크 태그 | VRIL-DATA, VRIL-NETWORK | — | 프레임워크 | data·network |
 
-AOSP 태그는 이름 그대로 쓴다: RILJ(`[n]> REQ`, `[n]< REQ error <n>`, `[UNSL]<`), RilRequest, RadioConfig·RadioConfigResponseAidl(모뎀 설정), DNC·DN·DPM·DRM·DSMGR·DSM·DCM·DSRM, SST·NRM, Uicc*·SIMRecords, ImsPhone*·ImsRegistration·ImsManager, SmsDispatchersController·ImsSmsDispatcher.
+AOSP 태그는 이름 그대로 쓴다: RILJ(`[n]> REQ`, `[n]< REQ error <n>`, `[UNSL]<`), RilRequest, RadioConfig·RadioConfigResponseAidl(모뎀 설정), DNC·DN·DPM·DRM·DSMGR·DSM·DCM·DSRM, SST·NRM, Uicc*·SIMRecords, ImsPhone*·ImsRegCallbackHelper·ImsManager, SmsDispatchersController·ImsSmsDispatcher.
 
 ## 짝
 
@@ -25,7 +25,7 @@ AOSP 태그는 이름 그대로 쓴다: RILJ(`[n]> REQ`, `[n]< REQ error <n>`, `
 
 - 레벨은 심각도가 아니다. `reply to client token`은 정상 응답에도 E다.
 - `<HEXDUMP nB>`는 가린 내용이다. 뜻을 붙이지 않는다.
-- 태그 끝 ` [n]`·`-n`은 슬롯 번호다.
+- 태그 끝 ` [n]`·`-n`은 슬롯 번호다. 단 `TNA-<n>`·`QOSCT-<n>`·`KT-<n>`·`DN-<n>-C`의 n은 netId다.
 - 쓰지 않는 것: 다른 플랫폼 이름, 줄에 없는 값, 줄이 글자로 말하지 않는 코드의 뜻.
 
 ## 공통 증상
@@ -33,7 +33,7 @@ AOSP 태그는 이름 그대로 쓴다: RILJ(`[n]> REQ`, `[n]< REQ error <n>`, `
 | 증상 | 볼 것 | 첫 판단 | 받을 로그 |
 |---|---|---|---|
 | 타이밍(경쟁·순서·시간 초과) | 층별 시각, 겹친 요청 | 시각 차 큰 구간 아래 층(겹친 busy 아님) | 앞뒤 덮는 수집 |
-| 데몬 크래시·재시작 | RILJ `serviceDied`·`has died`, `RADIO_UNAVAILABLE` | 재시작 데몬 층(`UNSOL_MODEM_RESTART`와 구분) | tombstone(사내) |
+| 데몬 크래시·재시작 | RILJ `serviceDied`·`has died`, `radioStateChanged: UNAVAILABLE` | 재시작 데몬 층(`UNSOL_MODEM_RESTART`와 구분) | tombstone(사내) |
 | 로그 미수집 | 첫 줄이 응답, 아래 층 0줄 | `그 층 로그 없음(<층>)` | 수준·버퍼 바꾼 재수집 |
 
 `serviceDied`·`has died`는 AOSP RIL.java 문구다(TODO(SITE:S9)).

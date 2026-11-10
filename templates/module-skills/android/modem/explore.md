@@ -10,7 +10,7 @@
 
 ## ② 볼 역할과 줄
 
-- RILJ `[UNSL]< UNSOL_MODEM_RESTART`, `RADIO_POWER`, `serviceDied`·`has died`, 벤더 RIL 데몬 `radio state changed: newState=`
+- RILJ `[UNSL]< UNSOL_MODEM_RESTART`, `RADIO_POWER`, `radioStateChanged: OFF|UNAVAILABLE|ON`, `serviceDied`·`has died`, 벤더 RIL 데몬 `radio state changed: newState=`
 - RadioConfig `SET_PREFERRED_DATA_MODEM`, PhoneCfgMgr
 - AT 중계·모뎀 진단 `at-in: AT…`·`at-out: …`
 
@@ -31,5 +31,5 @@
 ## ⑤ 함정
 
 - RILJ 요청은 있는데 벤더 RIL·RIL HAL 줄이 하나도 없다 → `그 층 로그 없음(벤더 RIL)`. 벤더 RIL이나 모뎀을 탓하지 않는다. 단 `serviceDied`·`has died`면 죽어서 줄이 없는 것 → `벤더 RIL`.
-- `RADIO_UNAVAILABLE`만으로 모뎀 재시작이라 하지 않는다. `UNSOL_MODEM_RESTART` 없이 `serviceDied`면 벤더 RIL이 죽은 것이다.
+- `UNAVAILABLE`만으로 모뎀 재시작이라 하지 않는다. `UNSOL_MODEM_RESTART` 없이 `serviceDied`·`has died`면 벤더 RIL이 죽은 것이다.
 - 진단·NV 줄은 근거가 아니다.
