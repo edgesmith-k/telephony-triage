@@ -690,6 +690,13 @@ def _epoch(s) -> float | None:
     return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).timestamp()
 
 
+def _record_ok(r: dict) -> bool:
+    """화면 기록 모양: `lines`·`must_show`는 문자열 목록, `rules`는 객체 목록(없어도 된다). 파일은 모델도 쓸 수 있어 다른 모양이면
+    무시한다 — render_record가 TypeError로 죽어 막힌 호출·명령·결과 절이 안 나오지 않게."""
+    return (all(r.get(k) is None or (isinstance(r[k], list) and all(isinstance(x, str) for x in r[k])) for k in ("lines", "must_show"))
+            and (r.get("rules") is None or (isinstance(r["rules"], list) and all(isinstance(x, dict) for x in r["rules"]))))
+
+
 def shown_records(work_dirs: list[Path], since: float) -> tuple[list[dict], list[str]]:
     """work_dir마다 `.shown/log.jsonl`(+회전된 `.1`)에서 `at ≥ since`인 화면 기록(SHOWN_KINDS)을 시각 순으로. (기록, 경고)."""
     out, warn = [], []
@@ -702,7 +709,7 @@ def shown_records(work_dirs: list[Path], since: float) -> tuple[list[dict], list
             try:
                 lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
             except OSError as exc:
-                warn.append(f"{p}: 읽지 못함({type(exc).__name__})")
+                warn.append(f"{_esc(str(p), one_line=True)}: 읽지 못함({type(exc).__name__})")
                 continue
             for line in lines:
                 try:
@@ -711,7 +718,10 @@ def shown_records(work_dirs: list[Path], since: float) -> tuple[list[dict], list
                     continue
                 at = _epoch(r.get("at")) if isinstance(r, dict) else None
                 if at is not None and since <= at <= future and r.get("kind") in SHOWN_KINDS:
-                    out.append(r)
+                    if _record_ok(r):
+                        out.append(r)
+                    else:
+                        warn.append(f"{_esc(str(p), one_line=True)}: 형식이 맞지 않는 화면 기록 1건을 무시했다")
     return sorted(out, key=lambda r: str(r.get("at"))), warn
 
 

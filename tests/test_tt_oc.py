@@ -455,6 +455,27 @@ def test_script_screens_are_escaped_behind_their_own_gutter_and_future_records_s
     assert "앞날짜 기록" not in r.stdout and "FUT-1" not in r.stdout
 
 
+def test_malformed_screen_records_are_ignored_not_fatal(env):
+    """`.shown/log.jsonl`은 모델도 쓸 수 있다 — `lines`·`must_show`가 문자열 목록이 아니거나 `rules`가 객체 목록이 아닌 기록은
+    한 줄 경고로 무시하고, 막힌 호출·명령·결과 절은 그대로 나온다(TypeError로 죽지 않는다)."""
+    plat = env["work"] / "android"
+    (plat / ".shown").mkdir(parents=True)
+    base = {"v": 1, "at": _now(), "script": "triage", "kind": "report", "job": "ABC-1"}
+    bad = [{**base, "lines": 5}, {**base, "lines": "글자"}, {**base, "lines": [1, 2]}, {**base, "must_show": {"a": 1}},
+           {**base, "must_show": 7}, {**base, "rules": 5}, {**base, "rules": ["x"]}]
+    good = {**base, "lines": ["- 정상 줄"], "must_show": [], "rules": [{"id": "R1", "status": "ok", "reason": ""}]}
+    (plat / ".shown" / "log.jsonl").write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in [*bad, good]),
+                                               encoding="utf-8")
+    cmd = "python3 /p/scripts/db_pr.py merge --job ABC-1"
+    msg = f"[telephony-triage] OpenCode v1 does not run this; run this exact command yourself: {cmd}"
+    events(env, [ev("step_start"), tool("bash", "error", input={"command": cmd}, error=msg), step("tool-calls"), *final("직접")])
+    r = tt(env, "--", "x")
+    assert r.returncode == 3 and "Traceback" not in r.stderr, r.stdout + r.stderr
+    assert f"{S}- 정상 줄" in r.stdout and "막힌 호출(메시지 전문)" in r.stdout and f"{G}{cmd}" in r.stdout
+    assert "---- [tt-oc] 결과 ----" in r.stdout
+    assert r.stdout.count("형식이 맞지 않는 화면 기록 1건을 무시했다") == len(bad)
+
+
 def test_lone_surrogate_in_model_text_does_not_crash(env):
     """7차 R6-P3-5: 홀로 선 서로게이트는 텍스트·--json 모두 이스케이프한다(그대로 print하면 UnicodeEncodeError로 죽는다)."""
     evs = [ev("step_start"), ev("text", text="a\ud800b"), step()]
