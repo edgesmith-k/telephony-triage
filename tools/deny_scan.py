@@ -10,7 +10,8 @@
 바이트는 surrogateescape로 남기고 둘레 글자는 본다), BOM·NUL이 있으면 UTF-16 LE·BE(두 정렬)로도 — 건수는 그중 큰 값.
 압축 형식(zip·gzip·bzip2·xz·zstd·7z 머리)은 풀지 않으므로 내용을 다 보지 못한 파일(`skipped`)로 센다.
 읽을 수 없는 추적 파일(삭제됨·디렉토리 등)은 읽기 실패로 센다. 둘 중 하나라도 있으면 CLI는 종료 2.
-**출력에는 경로(항목 글자가 든 부분은 경계와 상관없이 `«k»`, k = 항목 번호)와 건수만 낸다 — 맞은 글자·항목 글자는
+**출력에는 경로(항목 글자가 든 부분은 경계와 상관없이 `«k»`, k = 항목 번호 — 경계 없이 맞았으면 그 항목이 든 영숫자 낱말
+전체)와 건수만 낸다 — 맞은 글자·항목 글자는
 내지 않는다.** 경로 건수는 내용과 같은 경계 규칙으로 센다(가림만 경계 없음).
 `--no-boundary`는 경계 없이(부분 일치) 센다 — 붙여 쓴 이름(`lib<x>.so`·`<X>Client`)도 세지만 일반 낱말 안의 우연 일치도
 센다. 판정용이 아니라 참고용이다(make_bundle `deny-file`은 이 건수를 경고 줄로만 낸다).
@@ -81,11 +82,15 @@ def _mask(text: str, patterns, repl=None) -> tuple[str, int]:
 
 
 def loose(patterns) -> list[tuple[int, re.Pattern]]:
-    """경로 가림용: 같은 항목을 경계 없이(부분 일치) 찾는 정규식. 건수는 `patterns`(경계 있음)로만 센다."""
+    """경계 없이(부분 일치) 찾는 정규식(경로 가림·`--no-boundary`). 경계가 있던 쪽은 맞은 자리를 그 영숫자 낱말 끝까지 넓힌다 —
+    일반 낱말 가운데만 가리면(`ev«k»s`) 짧은 항목을 거꾸로 짐작할 수 있다. 경계대로 맞은 자리는 넓어지지 않는다(항목만)."""
+    word = "[A-Za-z0-9]*"
     out = []
     for k, rx in patterns:
-        body = rx.pattern[len("(?=("):-len("))")].removeprefix(_EDGE_HEAD).removesuffix(_EDGE_TAIL)
-        out.append((k, re.compile("(?=(" + body + "))", re.IGNORECASE)))
+        body = rx.pattern[len("(?=("):-len("))")]
+        head, tail = body.startswith(_EDGE_HEAD), body.endswith(_EDGE_TAIL)
+        core = body.removeprefix(_EDGE_HEAD).removesuffix(_EDGE_TAIL)
+        out.append((k, re.compile("(?=(" + (word if head else "") + core + (word if tail else "") + "))", re.IGNORECASE)))
     return out
 
 

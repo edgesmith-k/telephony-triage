@@ -126,12 +126,17 @@ def test_no_boundary_counts_glued_names(tmp_path, deny):
 
 
 def test_path_masks_entry_even_inside_longer_word(tmp_path, deny):
-    """경로 가림은 경계 없이(부분 일치) — 건수는 경계 규칙 그대로(경로 `libabc`는 0건, 내용 1건)."""
+    """경로 가림은 경계 없이(부분 일치) — 경계 없이 맞으면 그 영숫자 낱말 전체를 가린다(`lib«1»`처럼 둘레를 남기지 않음).
+    경계대로 맞은 자리(`abc/`, 끝이 `.`인 `zzqx.`)는 항목만. 건수는 경계 규칙 그대로(경로 `libabc`는 0건, 내용 1건)."""
     (tmp_path / "abc").mkdir()
     (tmp_path / "libabc-notes.md").write_text("see abc\n", encoding="utf-8")
     (tmp_path / "abc" / "libABC.md").write_text("nothing\n", encoding="utf-8")
-    hits = ds.scan(tmp_path, ds.load(deny), ["libabc-notes.md", "abc/libABC.md"])[0]
-    assert hits == [("lib«1»-notes.md", 1), ("«1»/lib«1».md", 1)]
+    (tmp_path / "xabcz.json").write_text("abc\n", encoding="utf-8")
+    (tmp_path / "zzqx.bar").write_text("x\n", encoding="utf-8")
+    hits = ds.scan(tmp_path, ds.load(deny), ["libabc-notes.md", "abc/libABC.md", "xabcz.json", "zzqx.bar"])[0]
+    assert hits == [("«1»-notes.md", 1), ("«1»/«1».md", 1), ("«1».json", 1), ("«2»bar", 1)]
+    pats = ds.loose(ds.load(deny))
+    assert ds._mask("my-xabcz-file", pats) == ("my-«1»-file", 1)           # --no-boundary·경고 줄도 같은 가림
 
 
 def test_non_utf8_tracked_path_exits_2(tmp_path, deny, monkeypatch):
