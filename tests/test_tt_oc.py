@@ -616,6 +616,13 @@ def test_first_timeout_option_env_and_off_through_main(env):
     r = tt(env, "--first-timeout", "0", "--", "x", extra_env={**slow, "TT_OC_FIRST_TIMEOUT": "1"})   # 옵션이 env보다 앞, 0 = 끔
     assert r.returncode == 0 and "outcome: ok" in r.stdout
     assert tt(env, "--", "x", extra_env={"TT_OC_FIRST_TIMEOUT": "x"}).returncode == 2
+    # 3차 R2-P3-2: 유한한 0 이상만. 음수·nan·inf는 옵션이든 env든 종료 2, 잘못된 env는 doctor를 막지 않고 warn 행
+    for bad in ("-1", "nan", "inf"):
+        assert tt(env, "--", "x", extra_env={"TT_OC_FIRST_TIMEOUT": bad}).returncode == 2, bad
+        assert tt(env, "--first-timeout", bad, "--", "x").returncode == 2, bad
+    code, rows = _doctor_rows(_with(env, TT_OC_FIRST_TIMEOUT="nan"))
+    assert code == 0 and rows["first-timeout"]["status"] == "warn"
+    assert "first-timeout" not in _doctor_rows(env)[1]
 
 
 def test_timeout_kills_and_reports(env):

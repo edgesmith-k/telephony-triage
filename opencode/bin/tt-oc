@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import shlex
@@ -288,7 +289,26 @@ def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
     except (OSError, subprocess.TimeoutExpired) as exc:
         row("config-doctor", False, f"config.py doctor 실행 실패: {type(exc).__name__}")
     rows += read_roots_rows(proj, meta, env)
-    return rows + gateway_rows(proj, env)
+    return rows + gateway_rows(proj, env) + first_timeout_rows(env)
+
+
+def first_timeout_value(option: float | None, env) -> float:
+    """첫 응답 시한: `--first-timeout` > `TT_OC_FIRST_TIMEOUT` > `FIRST_RESPONSE_TIMEOUT`. 유한한 0 이상만(0 = 끔), 아니면 ValueError."""
+    raw = option if option is not None else (env.get("TT_OC_FIRST_TIMEOUT") or FIRST_RESPONSE_TIMEOUT)
+    value = float(raw)
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(raw)
+    return value
+
+
+def first_timeout_rows(env) -> list[dict]:
+    """`TT_OC_FIRST_TIMEOUT`이 잘못됐으면 warn 행 하나(실행은 그때 종료 2로 멈춘다). 맞거나 없으면 행 없음."""
+    try:
+        first_timeout_value(None, env)
+        return []
+    except ValueError:
+        return [{"check": "first-timeout", "status": "warn",
+                 "detail": "TT_OC_FIRST_TIMEOUT이 0 이상의 유한한 초가 아니다 — 실행은 시작하지 않는다(고치거나 지운다)"}]
 
 
 def gateway_rows(proj: Path, env: dict) -> list[dict]:
@@ -681,12 +701,13 @@ def main(argv=None) -> int:
     except SystemExit as exc:
         return 0 if exc.code == 0 else 2
     a.message = message
-    try:
-        first_timeout = (a.first_timeout if a.first_timeout is not None
-                         else float(os.environ.get("TT_OC_FIRST_TIMEOUT") or FIRST_RESPONSE_TIMEOUT))
-    except ValueError:
-        print("[tt-oc] TT_OC_FIRST_TIMEOUT는 초(숫자, 0 = 끔)다", file=sys.stderr)
-        return 2
+    first_timeout = FIRST_RESPONSE_TIMEOUT
+    if a.action != "doctor":          # doctor는 잘못된 TT_OC_FIRST_TIMEOUT을 행으로 보인다(preflight)
+        try:
+            first_timeout = first_timeout_value(a.first_timeout, os.environ)
+        except ValueError:
+            print("[tt-oc] --first-timeout·TT_OC_FIRST_TIMEOUT은 0 이상의 유한한 초다(0 = 끔)", file=sys.stderr)
+            return 2
     try:
         proj, meta = load_project(a.project)
     except Refused as exc:
