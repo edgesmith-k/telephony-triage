@@ -17,7 +17,7 @@
 만들지 않는다:
 - 스냅샷에 `*/*/evals/**`가 있다(eval case는 스냅샷이 아니다) → `<파일> 스냅샷에 evals`.
 - 스냅샷에 심볼릭 링크(파일·디렉토리)가 있다 → `<파일> 링크`.
-- 덮어쓴 파일에 `{{site:`·placeholder 이름(`PLACEHOLDER_RE`, 대문자 꼴·벤더 IPC placeholder 포함)이 남아 있다 →
+- 덮어쓴 파일에 `{{site:`·placeholder 이름(`PLACEHOLDER_RE`, 대문자 `<이름>_` 꼴·벤더 IPC placeholder 포함)이 남아 있다 →
   `스냅샷이 불완전: <파일>`. 스냅샷에 없는 템플릿 파일(`*/*/evals/**` 밖)이 placeholder를 담고 있다 → `스냅샷에 없음: <파일>`
   (eval case는 보지 않는다. `TODO(SITE:S25)`는 사내 스냅샷 문서에도 있을 수 있는 표식이라 보지 않는다).
 - 덮어쓴 결과를 임시 디렉토리에 만들어 위 2의 점검 + `validate_modules(strict)`를 돌린다 → `경로[:줄] 점검`
@@ -56,9 +56,10 @@ NEXT_STEPS = ("다음: GHE에 빈 모듈 레포를 만들고 이 디렉토리를
 EVALS_RE = re.compile(r"^[^/]+/[^/]+/evals/")
 # 남으면 스냅샷이 불완전한 표시: 사외 템플릿의 카테고리 힌트·placeholder 이름(PR-2 §2-0).
 # `TODO(SITE:S25)`는 넣지 않는다 — 사내 스냅샷 문서에도 있을 수 있는 표식이다
-# 데몬 이름은 대문자 꼴(`IMSD`·`DATAD_<값>`)도 본다. 벤더 IPC placeholder(`common/vendor_ipc.DEFAULT` — `VIPC_`는 접두어 셋 모두)와 벤더 서비스·채널·문맥
+# 데몬 이름의 대문자 꼴은 템플릿이 placeholder로 쓰는 `<이름>_` 꼴(`DATAD_<값>`)만 본다 — 뒤에 `_`가 없는 대문자 낱말(로그의 채널 글자 등)은 이름이 아니다. 벤더 IPC placeholder(`common/vendor_ipc.DEFAULT` — `VIPC_`는 접두어 셋 모두)와 벤더 서비스·채널·문맥
 # placeholder(`Example<대문자>…`·`VCHAN_`·`PdnCtx`)도 넣는다. 데몬 이름 앞이 `-`이면 공개 이름(`systemd-networkd`)이라 보지 않는다
-PLACEHOLDER_RE = re.compile(r"\{\{site:|(?i:(?<![\w-])(?:mgmtd|vrild|datad|imsd|simd|networkd|chatterd)\d*(?![A-Za-z0-9]))"
+PLACEHOLDER_RE = re.compile(r"\{\{site:|(?<![\w-])(?:mgmtd|vrild|datad|imsd|simd|networkd|chatterd)\d*(?![A-Za-z0-9])"
+                            r"|(?<![\w-])(?:MGMTD|VRILD|DATAD|IMSD|SIMD|NETWORKD|CHATTERD)\d*_"
                             r"|\bVRIL\b|\bIpcCtx_|\bOnIpcComplete\b|\bVIPC_|\bExample[A-Z]|\bVCHAN_|\bPdnCtx\b")
 
 

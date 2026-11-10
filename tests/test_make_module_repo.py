@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -205,7 +206,7 @@ def test_overlay_is_deterministic(src, tmp_path):
 
 @pytest.mark.parametrize("text", ["# x\n\n- vrild 줄\n", "# x\n\n{{site:data}}\n", "# x\n\n- VRIL-IMS 태그\n",
                                   "# x\n\n- datad2 줄\n", "# x\n\n- networkd 줄\n", "# x\n\n- `[IpcCtx_0]` 줄\n",
-                                  "# x\n\n- OnIpcComplete 줄\n", "# x\n\n- IMSD 태그\n", "# x\n\n- DATAD_X 값\n",
+                                  "# x\n\n- OnIpcComplete 줄\n", "# x\n\n- DATAD_X 값\n", "# x\n\n- SIMD2_X 값\n",
                                   "# x\n\n- `VIPC_DIAL` 줄\n", "# x\n\n- `Error(VIPC_E_BUSY)` 줄\n",
                                   "# x\n\n- `[ExamplePdnService_0]` 줄\n", "# x\n\n- `VCHAN_1 REQUEST` 줄\n",
                                   "# x\n\n- `PdnCtx` 줄\n"])
@@ -220,6 +221,25 @@ def test_incomplete_snapshot_creates_nothing(src, tmp_path, text):
 def test_public_daemon_name_with_dash_is_not_placeholder():
     """`systemd-networkd`처럼 `-` 뒤 데몬 이름은 공개 이름이다(placeholder `networkd`가 아님)."""
     assert not PLACEHOLDER.search("systemd-networkd 재시작") and PLACEHOLDER.search("networkd 재시작")
+
+
+def test_uppercase_word_without_underscore_is_not_placeholder(src, tmp_path):
+    """대문자 꼴은 `<이름>_` 꼴만 placeholder다 — 로그 채널 글자처럼 `_`가 없는 대문자 낱말(`IMSD`)은 통과한다."""
+    assert not PLACEHOLDER.search("noise: '^(Device|IMSD) \\d+: '") and PLACEHOLDER.search("DATAD_MOBILE_X")
+    snap = _snapshot(tmp_path / "snap", _full(src, {**SNAP, "ofono/data/explore.md": "# x\n\n- `IMSD 0: ` 덤프 줄\n"}))
+    assert _make(src, tmp_path / "repo", "--site-overlay", snap).returncode == 0
+
+
+def test_template_as_overlay_rejects_every_placeholder_file(src, tmp_path):
+    """템플릿을 그대로 스냅샷으로 주면 placeholder가 있는 파일은 모두 `스냅샷이 불완전`이다(좁힌 대문자 꼴로 빠진 파일 없음 —
+    대소문자를 가리지 않던 옛 꼴로 걸리는 파일과 같다)."""
+    wide = re.compile(r"\{\{site:|(?i:(?<![\w-])(?:mgmtd|vrild|datad|imsd|simd|networkd|chatterd)\d*(?![A-Za-z0-9]))"
+                      r"|\bVRIL\b|\bIpcCtx_|\bOnIpcComplete\b|\bVIPC_|\bExample[A-Z]|\bVCHAN_|\bPdnCtx\b")
+    files = {p.relative_to(src).as_posix(): p.read_text(encoding="utf-8") for p in sorted(src.rglob("*"))
+             if p.is_file() and "evals" not in p.relative_to(src).parts}
+    proc = _make(src, tmp_path / "repo", "--site-overlay", _snapshot(tmp_path / "snap", files))
+    flagged = {ln.split(": ", 1)[1] for ln in proc.stdout.splitlines() if ln.startswith("스냅샷이 불완전: ")}
+    assert proc.returncode == 1 and flagged == {rel for rel, text in files.items() if wide.search(text)}
 
 
 def test_snapshot_with_site_todo_marker_passes(src, tmp_path):
