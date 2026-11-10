@@ -53,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
         print("ruff가 없다: python3 -m pip install '.[lint]' 로 고정 버전을 설치한다 (pyproject.toml)", file=sys.stderr)
         return 2
     try:
-        version = subprocess.run([*ruff, "--version"], capture_output=True, text=True, check=True).stdout.split()[-1]
+        version = subprocess.run([*ruff, "--version"], capture_output=True, text=True, check=True, cwd=REPO).stdout.split()[-1]
     except (OSError, subprocess.CalledProcessError, IndexError) as exc:
         print(f"ruff 실행 실패: {exc}", file=sys.stderr)
         return 2
