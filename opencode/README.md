@@ -27,6 +27,9 @@ python3 tools/site_step.py runtime-check opencode --project <dest>   # 사내 �
 - `<dest>`는 git 레포 밖이어야 한다. 1.19.5는 `edit` 권한을 worktree 기준 상대 경로로 맞추는데, git 레포가 아닌 폴더의 worktree는
   `/`다(그래서 템플릿의 `@@*_REL@@` = 앞 `/`를 뗀 절대 경로).
 - 플러그인 루트는 가능하면 읽기 전용(root 소유)으로 설치한다. 설정의 `edit` deny는 다중 방어다.
+- `--work-root` 아래는 모델이 쓸 수 있다. 홈(`$HOME`)·Python 사용자 site(`site.getuserbase()`·site-packages)·플러그인·이 레포이거나
+  그것을 품는 폴더는 `install`이 거부한다(사용자 site·플러그인·레포는 그 안의 폴더도, 심볼릭 링크를 푼 실제 경로로 비교, 종료 2).
+  `~/tt-work`처럼 홈 안의 따로 둔 폴더를 쓴다.
 - `install`은 설치한 파일과 플러그인 스크립트(`scripts/**/*.py`)의 지문을 `tt-oc.json` `integrity`에 남기고, `tt-oc`가 실행마다
   비교한다(guard 플러그인이 지워지거나 adapter·guard가 바뀌면 시작하지 않는다). 플러그인을 갱신하면 `install --force`로 다시 설치한다.
 - `<dest>`와 그 위 폴더(`/`까지)에 `AGENTS.md`·`CONTEXT.md`가 있거나 `~/.config/opencode/AGENTS.md`가 있으면 OpenCode가 에이전트

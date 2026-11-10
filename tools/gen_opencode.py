@@ -23,6 +23,8 @@ CLI:
         `config.py check --roots`의 `read_roots`(풀린 설치 스킬 SKILL.md 폴더 등) 중 플러그인·작업·이슈 DB 밖인 폴더는
         `external_directory`에 읽기 allow로 더한다(B2 R21 — 설정을 바꾸면 다시 설치, `tt-oc doctor`가 경고).
         `<dest>`는 git 레포 밖이어야 한다: `edit` 패턴(`@@*_REL@@` = 앞 `/`를 뗀 절대 경로)은 worktree `/` 기준이다.
+        `--work-root`(모델이 쓸 수 있는 곳)가 홈·Python 사용자 site·플러그인·이 레포이거나 그것을 품으면(사용자 site·플러그인·
+        레포는 그 안이어도) 거부한다(실제 경로로 비교, 종료 2).
         `--jira-read-tool`(OpenCode 이름 `<서버>_<도구>`, 읽기 도구만 — 쓰기로 보이는 이름은 거부)은 permission 끝에 allow로
         더한다(마지막 규칙이 이긴다). Jira 읽기 관문(`config.py set opencode.jira_read open`)을 연 뒤 tt-oc에서 실제로 읽으려면
         필요하다(관리 설정 `/etc/opencode`의 `jira_*` deny는 관리자 몫).
@@ -331,12 +333,34 @@ def scripts_digest(plugin_root: Path) -> str:
     return h.hexdigest()
 
 
+def work_root_problems(work: str, plugin: str) -> list[str]:
+    """`--work-root` 아래는 모델이 쓸 수 있다(edit 권한). 작업 루트가 홈·Python 사용자 site·플러그인·이 레포이거나 그것을 품으면
+    (사용자 site·플러그인·레포는 그 안에 있어도) 모델이 셸 시작 파일·`.pth`·스크립트를 바꿀 수 있어 거부한다(런타임 리뷰 5차 R4-P3-3).
+    심볼릭 링크를 푼 실제 경로로 비교한다. 작업 루트가 홈 안(예: ~/tt-work)인 것은 괜찮다."""
+    import site
+    w = Path(os.path.realpath(work))
+    out = []
+    for name, raw, inner_ok in (("홈($HOME)", os.path.expanduser("~"), True),
+                                ("Python 사용자 site", site.getuserbase(), False),
+                                ("Python 사용자 site-packages", site.getusersitepackages(), False),
+                                ("플러그인", plugin, False), ("이 레포", str(REPO), False)):
+        if not raw or raw == "~":
+            continue
+        d = Path(os.path.realpath(raw))
+        if w == d or w in d.parents or (not inner_ok and d in w.parents):
+            out.append(f"--work-root({w})가 {name}({d})와 겹친다 — 모델이 그 아래 파일을 쓸 수 있게 된다. 따로 둔 작업 폴더를 쓴다")
+    return out
+
+
 def cmd_install(a) -> int:
     plugin = _abs_dir(a.plugin_root, "--plugin-root")
     if not (Path(plugin) / "scripts" / "guard.py").is_file():
         raise UsageError(f"--plugin-root에 scripts/guard.py가 없다: {plugin}")
     work = _abs_dir(a.work_root, "--work-root")
-    dbs = [_abs_dir(c, "--issue-db") for c in a.issue_db or []]
+    bad = work_root_problems(work, plugin)
+    if bad:
+        raise UsageError("; ".join(bad))
+    dbs =[_abs_dir(c, "--issue-db") for c in a.issue_db or []]
     dest = Path(_abs_dir(a.dest, "--dest", must_exist=False))
     for root in (plugin, *dbs):
         if dest == Path(root) or Path(root) in dest.parents:

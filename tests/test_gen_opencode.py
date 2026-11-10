@@ -315,6 +315,33 @@ def test_install_refusals(roots):
     assert r.returncode == 2
 
 
+def test_install_refuses_work_root_over_home_user_site_plugin_or_repo(roots, monkeypatch, capsys):
+    """5차 R4-P3-3: 모델이 쓸 수 있는 --work-root가 홈·사용자 site·플러그인·레포이거나 품으면(사용자 site·플러그인·레포는 그 안도)
+    거부(종료 2). 심볼릭 링크로 가려도 실제 경로로 본다. 홈 안의 따로 둔 폴더는 괜찮다."""
+    import site
+    home = roots / "home"
+    (home / ".local" / "lib").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(site, "USER_BASE", str(home / ".local"))
+    monkeypatch.setattr(site, "USER_SITE", str(home / ".local" / "lib" / "site-packages"))
+    (roots / "link").symlink_to(home)
+
+    def install(work, dest):
+        argv = ["install", "--dest", str(roots / dest), "--plugin-root", str(roots / "plug"), "--work-root", str(work),
+                "--gateway-url", "http://gw.example/v1", "--model", "m"]
+        code = gen_opencode.main(argv)
+        return code, capsys.readouterr().err
+
+    for i, (work, what) in enumerate(((home, "홈"), (roots, "홈"), (roots / "link", "홈"), (home / ".local", "사용자 site"),
+                                      (home / ".local" / "lib", "사용자 site"), (roots / "plug", "플러그인"),
+                                      (roots / "plug" / "scripts", "플러그인"), (gen_opencode.REPO / "tests", "레포"))):
+        code, err = install(work, f"bad{i}")
+        assert code == 2 and what in err and "--work-root" in err, (work, err)
+        assert not (roots / f"bad{i}").exists()
+    (home / "tt-work").mkdir()
+    assert install(home / "tt-work", "ok")[0] == 0
+
+
 def test_render_config_multi_only_in_keys():
     with pytest.raises(gen_opencode.UsageError):
         gen_opencode.render_config({"a": "@@ISSUE_DB_ROOT@@"}, {}, ["/x"])
