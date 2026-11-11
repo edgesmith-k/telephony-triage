@@ -22,6 +22,6 @@ run_expect:
 expect:
   layer: '프레임워크'
   daemon: 'SmsDispatchersController|(Gsm)?SMSDispatcher'
-  evidence: ['sendTextInternal', 'sendText id']
+  evidence: ['sendTextInternal', 'sendSms:\s+isIms\(\)=false.*\bSS=[1-3]\b']
   trap: null
   wrong_layer: ['^\s*(RILJ|RIL HAL|벤더|모뎀|망)']
