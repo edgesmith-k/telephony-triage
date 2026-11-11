@@ -153,8 +153,9 @@ EXPLORE_EXPECT_KEYS = {"accept", "trap"}
 ACCEPT_KEYS, ACCEPT_OPTIONAL = {"layer", "daemon", "evidence"}, {"show"}
 TRAP_MATCH_KEYS, TRAP_OPTIONAL = ("layer", "daemon", "label"), {"show"}
 SHOW_MAX = 80
-GRADER_VERSION = 5              # 채점 코드가 바뀌면 올린다 (3: explore 출력 계약을 실사용과 통일, 코덱스 리뷰 F4; 4: S4를 인용 줄 단위·접두 중복 제거로;
-                                # 5: S7 결정 토큰에 `키: 값`·태그 제외, 코덱스 리뷰 02e0ec2 F04) — 한 arm 기록 합치기 조건(설계 F3 후속)
+GRADER_VERSION = 6              # 채점 코드가 바뀌면 올린다 (3: explore 출력 계약을 실사용과 통일, 코덱스 리뷰 F4; 4: S4를 인용 줄 단위·접두 중복 제거로;
+                                # 5: S7 결정 토큰에 `키: 값`·태그 제외, 코덱스 리뷰 02e0ec2 F04;
+                                # 6: S7 결정 토큰에 `=` 값 뒤 `:포트`, c8b93388) — 한 arm 기록 합치기 조건(설계 F3 후속)
 EXPLORE_REASONS = {"no_candidate", "cause_unconfirmed"}
 NAME_RX = re.compile(r"^[a-z0-9][a-z0-9-]{2,60}$")
 KEY_RX = re.compile(r"^MOCK-9\d{3}$")

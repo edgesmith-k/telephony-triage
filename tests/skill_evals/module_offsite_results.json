@@ -384,10 +384,15 @@
     "data-profile-ipc-swallowed/timeline.md": "6dcb8a24cb8de09e5422bbd5d30633473a9b12f2fc2ae56af1c266ab94b73995"
    },
    "prompt_sha256": "e81e25358c811f3411337820e6223f2fae022b9cccda2ee29a3577dec6ff9707",
-   "grader_version": 5,
+   "grader_version": 6,
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "regraded": {
+    "from_grader": 5,
+    "original_grader": 5,
+    "at": "2026-11-11T23:06:08Z"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "data-apn-wrong-applied": {
@@ -1099,10 +1104,15 @@
     "call-volte-sip-invite-error/timeline.md": "c806617de071385ed4136081a37166f72ae5dae599d3f320d78765ad16ba84df"
    },
    "prompt_sha256": "e81e25358c811f3411337820e6223f2fae022b9cccda2ee29a3577dec6ff9707",
-   "grader_version": 5,
+   "grader_version": 6,
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "regraded": {
+    "from_grader": 5,
+    "original_grader": 5,
+    "at": "2026-11-11T23:05:59Z"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "call-cf-ut-no-rilj": {
@@ -1296,10 +1306,15 @@
     "ims-reg-403/timeline.md": "394ae0facd22ef0fb2a14bc48c6b7e5ffe3a72a752c4810f1b6148e98368dbf0"
    },
    "prompt_sha256": "e81e25358c811f3411337820e6223f2fae022b9cccda2ee29a3577dec6ff9707",
-   "grader_version": 5,
+   "grader_version": 6,
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "regraded": {
+    "from_grader": 5,
+    "original_grader": 5,
+    "at": "2026-11-11T23:06:00Z"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "ims-403-vendor-lines-missing": {
@@ -1492,10 +1507,15 @@
     "sim-slow-recognition/timeline.md": "556dd80d75295e4bf7049675d3b7a8cd63297a6ba85705a34a21c24b77fdb424"
    },
    "prompt_sha256": "e81e25358c811f3411337820e6223f2fae022b9cccda2ee29a3577dec6ff9707",
-   "grader_version": 5,
+   "grader_version": 6,
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "regraded": {
+    "from_grader": 5,
+    "original_grader": 5,
+    "at": "2026-11-11T23:06:09Z"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "sim-card-io-error": {
@@ -1650,15 +1670,15 @@
    "cost_basis": "reported"
   },
   "android/modem": {
-   "generated": "2026-11-11T14:17:23Z",
-   "repo_commit": "9a3e1e2b275e0705b4f448cd21dc584feda1508f",
+   "generated": "2026-11-11T23:08:24Z",
+   "repo_commit": "95ad8e02686fd48599188d0d5ace532a53053240",
    "repo_dirty": true,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/module-skill/android/_common/components.md": "657c2e2b6b277d4e65f1687f82363dafc36978ff740781fb04566afd90e43492",
     "with/module-skill/android/_common/layers.md": "645f758dfbe0822a6d43fd0b47a0267543ce316c1ef497afb8b48b79fffa44c0",
-    "with/module-skill/android/call/SKILL.md": "510030a1be96d55298c99143d53613e2e237cd2dd7d521413fb167d74ab27868",
+    "with/module-skill/android/call/SKILL.md": "30193cf0e52abc581e23b4290466fd1dd584f83f68c57e9b27464920a65e26e7",
     "with/module-skill/android/call/analyzer.md": "0c8f510525a49f47032d8f53115b4cadde4d19119099b2f693cdaa5896f556e5",
     "with/module-skill/android/call/references/CALL-001.md": "40e27e79b835dd9f3dbecf8bb3794c1bbd995e17bc5ebf82a8785864253edd68",
     "with/module-skill/android/modem/SKILL.md": "a32ad946ca7bf3a400fe24207ab151157263f7cde1882d1a1475ab8be122cba1",
@@ -1669,7 +1689,7 @@
     "without/builtin/ril-requests.md": "5141e7dc01f0d284526b1cebea9331f5817dfc2adac1ca3237cb97d1ec078365"
    },
    "cli_version": "2.1.322 (Claude Code)",
-   "iteration": "module-android-modem-001",
+   "iteration": "module-android-modem-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -1691,7 +1711,7 @@
     "modem-vendor-lines-missing/timeline.md": "5d9b9d4b7c548cac94fe76e0da24ec66ae992504659f0768e2ffb310c1b198bd"
    },
    "prompt_sha256": "e81e25358c811f3411337820e6223f2fae022b9cccda2ee29a3577dec6ff9707",
-   "grader_version": 5,
+   "grader_version": 6,
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
@@ -1705,12 +1725,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 54759,
-      "output_tokens": 2569,
-      "cost_usd": 0.10315619999999999,
-      "elapsed_s": 18.66,
-      "tie_tokens": 54759,
-      "noncache": 21097,
+      "tokens_total": 78439,
+      "output_tokens": 2462,
+      "cost_usd": 0.10790460000000002,
+      "elapsed_s": 17.89,
+      "tie_tokens": 78439,
+      "noncache": 21873,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1722,52 +1742,52 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 57522,
-      "output_tokens": 2236,
-      "cost_usd": 0.107148,
-      "elapsed_s": 17.03,
-      "tie_tokens": 57522,
-      "noncache": 22562,
+      "tokens_total": 58663,
+      "output_tokens": 2466,
+      "cost_usd": 0.11316610000000002,
+      "elapsed_s": 19.36,
+      "tie_tokens": 58663,
+      "noncache": 23722,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 10719,
-     "token_delta": -2763
+     "doc_bytes": 10820,
+     "token_delta": 19776
     },
     "modem-ril-daemon-crash": {
      "kind": "explore",
      "expect_sha256": "65d2df8685dd0a543f0ed32fea70263c7b73e980a07229ed7422368a0928e52b",
      "with": {
       "status": "completed",
-      "pass1": false,
+      "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 26166,
-      "output_tokens": 2338,
-      "cost_usd": 0.07358050000000001,
-      "elapsed_s": 16.16,
-      "tie_tokens": 26166,
-      "noncache": 14601,
+      "tokens_total": 34166,
+      "output_tokens": 2646,
+      "cost_usd": 0.07809650000000001,
+      "elapsed_s": 19.97,
+      "tie_tokens": 34166,
+      "noncache": 15081,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
       "init_model": "claude-sonnet-5-5",
-      "top1": false
+      "top1": true
      },
      "without": {
       "status": "completed",
       "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 37342,
-      "output_tokens": 3050,
-      "cost_usd": 0.09334150000000001,
-      "elapsed_s": 22.93,
-      "tie_tokens": 37342,
-      "noncache": 18287,
+      "tokens_total": 29233,
+      "output_tokens": 2591,
+      "cost_usd": 0.0873977,
+      "elapsed_s": 18.62,
+      "tie_tokens": 29233,
+      "noncache": 17676,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1775,7 +1795,7 @@
       "top1": false
      },
      "doc_bytes": 11036,
-     "token_delta": -11176
+     "token_delta": 4933
     },
     "modem-vendor-lines-missing": {
      "kind": "explore",
@@ -1785,12 +1805,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 34525,
-      "output_tokens": 2361,
-      "cost_usd": 0.0778576,
-      "elapsed_s": 17.08,
-      "tie_tokens": 34525,
-      "noncache": 15449,
+      "tokens_total": 27023,
+      "output_tokens": 2512,
+      "cost_usd": 0.0780525,
+      "elapsed_s": 18.25,
+      "tie_tokens": 27023,
+      "noncache": 15458,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1802,12 +1822,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 30886,
-      "output_tokens": 3561,
-      "cost_usd": 0.0998297,
-      "elapsed_s": 25.6,
-      "tie_tokens": 30886,
-      "noncache": 19329,
+      "tokens_total": 30683,
+      "output_tokens": 3349,
+      "cost_usd": 0.0977418,
+      "elapsed_s": 23.97,
+      "tie_tokens": 30683,
+      "noncache": 19125,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -1815,18 +1835,18 @@
       "top1": true
      },
      "doc_bytes": 11036,
-     "token_delta": 3639
+     "token_delta": -3660
     }
    },
    "gate": {
-    "pass1_with": 2,
+    "pass1_with": 3,
     "pass1_without": 2,
-    "tokens_with": 115450,
-    "tokens_without": 125750,
-    "token_delta": -10300,
-    "token_delta_noncache": -9031,
-    "token_goal": "met",
-    "cost_delta_usd": -0.045725,
+    "tokens_with": 139628,
+    "tokens_without": 118579,
+    "token_delta": 21049,
+    "token_delta_noncache": -8111,
+    "token_goal": "over",
+    "cost_delta_usd": -0.034252,
     "safety_violations": {
      "with": 0,
      "without": 0
@@ -1838,12 +1858,12 @@
     "invalid": [],
     "require_cost": true,
     "verdict": "pass",
-    "top1_with": 1,
+    "top1_with": 2,
     "top1_without": 1,
     "top1_regressed": false
    },
-   "unit_cost_usd": 0.092486,
-   "total_cost_usd": 0.554913,
+   "unit_cost_usd": 0.093727,
+   "total_cost_usd": 0.562359,
    "cost_basis": "reported"
   },
   "ofono/ims": {
@@ -2509,10 +2529,15 @@
     "network-reg-reject/timeline.md": "43a58aa5e0ec7f1d4702c5f25c3d097a34e65f6fe4c5b0e93b36c30a22af0bf9"
    },
    "prompt_sha256": "e81e25358c811f3411337820e6223f2fae022b9cccda2ee29a3577dec6ff9707",
-   "grader_version": 5,
+   "grader_version": 6,
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "regraded": {
+    "from_grader": 5,
+    "original_grader": 5,
+    "at": "2026-11-11T23:06:00Z"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "network-radio-buffer-late": {
@@ -2662,10 +2687,15 @@
     "sms-smsc-missing/timeline.md": "150e09cd9b02f6f1120f7d8ef5c24317f39f117373a6eb7bb8983901e6691b3c"
    },
    "prompt_sha256": "e81e25358c811f3411337820e6223f2fae022b9cccda2ee29a3577dec6ff9707",
-   "grader_version": 5,
+   "grader_version": 6,
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "regraded": {
+    "from_grader": 5,
+    "original_grader": 5,
+    "at": "2026-11-11T23:06:09Z"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "sms-ims-local-reject": {
