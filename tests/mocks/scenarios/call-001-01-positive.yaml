@@ -1,8 +1,9 @@
-# CALL-001-01 양성: IMS 등록이 안 된 상태에서 VoLTE 발신이 실패한다.
-# 태그·문구는 placeholder다 — TODO(SITE:S9), TODO(SITE:S10)
+# CALL-001-01 양성: IMS 등록이 안 된 상태(ImsPhone 서비스 상태 1)에서 발신해 CS로 가고 실패한다.
+# 문구는 Android 17 형식이다(캡처 줄은 마스킹, ImsPhone·LAST_CALL_FAIL_CAUSE는 소스 문구) — TODO(SITE:S9), TODO(SITE:S10)
 name: CALL-001-01
 start: "2026-09-18T19:40:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1300
 tid: 1312
 build:
@@ -15,12 +16,12 @@ expect:
   also_allowed: [IMS-001-01]
   occurred_at: "2026-09-18T19:44:00+09:00"
 entries:
-  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
-  - {after: 5, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
-  - {after: 200, tag: "ImsPhoneCallTracker", msg: "dial: isVolteEnabled=true imsRegistered=false"}
-  - {after: 0.5, ril_request: DIAL, serial: 77, args: "clir=0"}
-  - {after: 1.2, ril_response: DIAL, serial: 77, result: "error=NONE"}
-  - {after: 2, tag: RILJ, level: W, msg: "[UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED"}
+  - {at: 0, tag: "ImsResolver", msg: "bound to mock ImsService"}
+  - {after: 5, tag: "ImsPhone", msg: "[0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0"}
+  - {after: 200, tag: "GsmCdmaPhone", level: I, msg: "[0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=true, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=1"}
+  - {after: 0.05, ril_request: DIAL, serial: 77}
+  - {after: 1.2, ril_response: DIAL, serial: 77, result: ""}
+  - {after: 2, ril_unsol: UNSOL_RESPONSE_CALL_STATE_CHANGED}
   - {after: 0.3, ril_request: LAST_CALL_FAIL_CAUSE, serial: 78}
-  - {after: 0.4, ril_response: LAST_CALL_FAIL_CAUSE, serial: 78, result: "causeCode=17"}
+  - {after: 0.4, ril_response: LAST_CALL_FAIL_CAUSE, serial: 78, result: "com.android.internal.telephony.LastCallFailCause@5d3c2a1 causeCode: 17 vendorCause: null"}
   - {after: 0.2, tag: "ImsPhoneCallTracker", level: W, msg: "call ended: cause=17"}

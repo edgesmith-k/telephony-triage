@@ -46,9 +46,9 @@
     "title": "망 등록 거절"
    },
    {
-    "id": "MOCK-3101",
-    "kind": "issue",
-    "title": "등록 거절 코드 13 반복, 서비스 없음 표시"
+    "id": "SMS-001-01",
+    "kind": "cause",
+    "title": "전송 요청이 만들어지지 않음"
    }
   ],
   "error_events": [],

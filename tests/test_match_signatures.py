@@ -176,6 +176,24 @@ def test_cause_log_removed_gives_unresolved_type():
     assert round(top["score"], 4) == 0.4 + round(top["bonus"]["keyword"] + top["bonus"]["proximity"], 4)
 
 
+def test_healthy_sms_send_and_local_ims_deregistration_are_not_symptoms():
+    """리뷰 P1(Android 17 2차): 로그 중간의 정상 SMS 발신(CS·IMS)과 단말 쪽 IMS 해제(CODE_LOCAL_*)는 증상이 아니다.
+    SMS-001은 디스패처가 서비스 없음(SS=1~3)으로 멈춘 줄을 보고, IMS-001 증상은 reason으로 단말 쪽 해제를 뺀다."""
+    sent = (SAMPLE / "sms/SMS-001-sms-send-failed/fixtures/SMS-001.none.log").read_text(encoding="utf-8").splitlines()
+    early = "09-16 14:57:00.000  1500  1510 D SmsDispatchersController: SmsDispatchersController created"     # 발신보다 3분 앞
+    ims_send = ["09-16 15:05:00.000  1500  1510 D SmsDispatchersController: sendTextInternal: messageId=0, uniqueMessageId=5",
+                "09-16 15:05:00.110  1500  1510 D RILJ: [0062]> IMS_SEND_SMS [PHONE0]"]                       # IMS 경로: SEND_SMS 없음
+    local = ("09-16 15:06:00.000  1500  1510 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo="
+             "ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 0, null}, suggestedAction=0, disconnectedRadioTech=-1")
+    result = _match(_events(_write_log([early, *sent, *ims_send, local])))
+    assert [c["type"] for c in result["candidates"] if c["type"] in ("SMS-001", "IMS-001")] == [], result["candidates"]
+
+    stalled = sent[1].replace("SS=0", "SS=1")                 # 같은 로그에서 디스패처만 서비스 없음 → SMS-001-01
+    assert stalled != sent[1]
+    top = _match(_events(_write_log([early, sent[0], stalled])))["candidates"][0]
+    assert (top["type"], top["cause"], top["C"]) == ("SMS-001", "SMS-001-01", 1)
+
+
 def test_negative_fixtures_have_no_symptom():
     negatives = sorted(SAMPLE.glob("*/*/fixtures/*.none*.log"))
     assert len(negatives) >= 6

@@ -15,4 +15,4 @@
 15:00:13.450 - I VRIL-IMS [ril] rsp <- OEM_REQ_IMS_ADD_PDN : STATUS_SUCCESS
 15:00:15.100 - V RIL mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=208
 15:00:15.105 - I VRIL-IMS [reg] ind <- OEM_UNSOL_IMS_REGISTRATION : state : 0 feature : 11 status-code : 403
-15:00:15.200 p0 W ImsRegistration onRegistrationFailed: code=403 reason=FORBIDDEN [PHONE0]  ⇒ ims_registration_failed(code=403,reason=FORBIDDEN)
+15:00:15.200 - D ImsPhone [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnec…  ⇒ ims_registration_failed(code=1000,extra=403,reason=CODE_REGISTRATION_ERROR)

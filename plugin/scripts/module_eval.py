@@ -128,8 +128,8 @@ ARM_PINS = {
     "ofono/post/platforms/ofono/log-guide.md": "3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1",
     "ofono/post/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     # Android(H C1+D S12, 11/05 ④ 뒤 얼림 — tests/fixtures/module-arms/README.md 표)
-    "android/pre/log-tags.md": "f64baa5b4126f5288a6d7d964f3ab8f9f9d36d4a67f1ab0264bd0f16b380f5fb",
-    "android/pre/ril-requests.md": "262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5",
+    "android/pre/log-tags.md": "9820b909b15c148515e1265d5dd067d28e2f6e2c244470b7787dec2d469828db",
+    "android/pre/ril-requests.md": "5141e7dc01f0d284526b1cebea9331f5817dfc2adac1ca3237cb97d1ec078365",
     "android/pre/fail-causes.md": "51cd96821dfbefa48584982c040772f59ba26aaf9e597051d09d3643a6f4544c",
     "android/pre/explore-rules.md": "6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8",
     "android/post/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",

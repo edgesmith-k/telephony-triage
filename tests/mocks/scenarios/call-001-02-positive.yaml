@@ -1,17 +1,18 @@
-# CALL-001-02 양성 (issue-db-verify 변형 전용, Phase 10): IMS 등록은 정상인데 망이 통화를 거절(cause 31)한다.
-# 태그·문구는 placeholder다 — TODO(SITE:S9), TODO(SITE:S10)
+# CALL-001-02 양성 (issue-db-verify 변형 전용, Phase 10): IMS 등록(서비스 상태 0)은 정상인데 CS로 건 통화를 망이 거절(cause 31)한다.
+# 문구는 Android 17 형식이다(캡처 줄은 마스킹, ImsPhone·LAST_CALL_FAIL_CAUSE는 소스 문구) — TODO(SITE:S9), TODO(SITE:S10)
 name: CALL-001-02
 start: "2026-09-21T11:00:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1300
 tid: 1312
 entries:
-  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
-  - {after: 3, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
-  - {after: 30, tag: "ImsPhoneCallTracker", msg: "dial: isVolteEnabled=true imsRegistered=true"}
-  - {after: 0.5, ril_request: DIAL, serial: 64, args: "clir=0"}
-  - {after: 1.0, ril_response: DIAL, serial: 64, result: "error=NONE"}
-  - {after: 2, tag: RILJ, level: W, msg: "[UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED"}
+  - {at: 0, tag: "ImsResolver", msg: "bound to mock ImsService"}
+  - {after: 3, tag: "ImsPhone", msg: "[0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN"}
+  - {after: 30, tag: "GsmCdmaPhone", level: I, msg: "[0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=false, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=0"}
+  - {after: 0.05, ril_request: DIAL, serial: 64}
+  - {after: 1.0, ril_response: DIAL, serial: 64, result: ""}
+  - {after: 2, ril_unsol: UNSOL_RESPONSE_CALL_STATE_CHANGED}
   - {after: 0.3, ril_request: LAST_CALL_FAIL_CAUSE, serial: 65}
-  - {after: 0.4, ril_response: LAST_CALL_FAIL_CAUSE, serial: 65, result: "causeCode=31"}
+  - {after: 0.4, ril_response: LAST_CALL_FAIL_CAUSE, serial: 65, result: "com.android.internal.telephony.LastCallFailCause@5d3c2a1 causeCode: 31 vendorCause: null"}
   - {after: 0.2, tag: "ImsPhoneCallTracker", level: W, msg: "call ended: cause=31"}

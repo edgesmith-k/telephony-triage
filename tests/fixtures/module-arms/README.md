@@ -33,8 +33,8 @@ post_lg = "\n".join(lg[0:15] + [""] + lg[25:27] + [""] + lg[33:38]) + "\n"      
 
 | 파일 | 출처 | 바이트 | sha256 |
 |---|---|---|---|
-| `android/pre/log-tags.md` | reference/log-tags.md 전체 | 5040 | `f64baa5b4126f5288a6d7d964f3ab8f9f9d36d4a67f1ab0264bd0f16b380f5fb` |
-| `android/pre/ril-requests.md` | reference/ril-requests.md 전체 | 4164 | `262492459ef55a2be47e8a14a71afe244249d9a8868ecdc6f89b25c3dd5319e5` |
+| `android/pre/log-tags.md` | reference/log-tags.md 전체(Android 17 2차에 슬롯 줄 netId 예외를 고쳐 다시 얼림) | 5160 | `9820b909b15c148515e1265d5dd067d28e2f6e2c244470b7787dec2d469828db` |
+| `android/pre/ril-requests.md` | reference/ril-requests.md 전체(Android 17 2차에 `DATA_CALL_LIST`로 고쳐 다시 얼림) | 4160 | `5141e7dc01f0d284526b1cebea9331f5817dfc2adac1ca3237cb97d1ec078365` |
 | `android/pre/fail-causes.md` | reference/fail-causes.md 전체(④ 뒤; 제목 문구와 벤더 IPC 결과 절 문장을 고쳤다) | 4316 | `51cd96821dfbefa48584982c040772f59ba26aaf9e597051d09d3643a6f4544c` |
 | `android/pre/explore-rules.md` | `ofono/pre/explore-rules.md` 사본 | 2222 | `6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8` |
 | `android/post/explore-rules.md` | `ofono/post/explore-rules.md` 사본 | 2676 | `c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80` |

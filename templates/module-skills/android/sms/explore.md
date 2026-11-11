@@ -10,7 +10,7 @@
 
 ## ② 볼 역할과 줄
 
-- SmsDispatchersController `sendTextInternal:`
+- SmsDispatchersController `sendTextInternal:` · GsmSMSDispatcher `sendSms:  isIms()=false … SS=<n>`(CS 발신, `SS=1~3` 서비스 없음)
 - ImsSmsDispatcher `[n]` `sendSms:  mRetryCount=…`·`onSendSmsResult … status=<n>`·`sendSms failed. Falling back to PSTN.`
 - 벤더 IMS `[sms]`, RILJ `SEND_SMS`, 벤더 RIL `VIPC_*SMS*`
 
@@ -25,7 +25,7 @@ SmsDispatchersController → (도메인 선택이면 `DomainSelectionConnection-
 | 발신 실패 (초안) | RILJ `SEND_SMS`, IPC | IPC Error → 모뎀·망 / 벤더 RIL 줄 0 → `그 층 로그 없음(벤더 RIL)` | RILJ `< SEND_SMS error <n>` |
 | IMS 문자 실패 (초안) | ImsSmsDispatcher → 벤더 IMS `[sms]` | `onSendSmsResult … status=4`(FALLBACK) → 벤더 IMS(앞 `[sms]` 줄이 근거) | `sendSms failed. Falling back to PSTN.` |
 | 수신 안 됨 (초안) | `UNSOL_RESPONSE_NEW_SMS`, `SMS_ACKNOWLEDGE` | 수신 줄 없음 → 모뎀·망 쪽은 판단 못 함 | 모뎀 로그(사내) |
-| SMSC (초안) | 발신 요청 유무 | AOSP 발신 경로는 SMSC 값을 찍지 않는다. 요청이 없으면 → 프레임워크 | SMSC 설정(마스킹) |
+| SMSC (초안) | 발신 요청 유무 | AOSP 발신 경로는 SMSC 값을 찍지 않는다. `SS=1~3`이고 요청이 없으면 → 프레임워크 | SMSC 설정(마스킹) |
 | 셀 방송 (초안) | CellBroadcastConfigTracker | 설정 요청 오류를 전한 층 | 채널 설정 |
 | SMS over SGs (초안) | 결합 등록 | CS 미등록 → network 표 | 모뎀 NAS(사내) |
 

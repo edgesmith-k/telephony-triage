@@ -13,5 +13,5 @@
 08:00:14.012 - I RIL [ExampleIccService_0] sim status done errorCode=0
 08:00:14.014 - D VRIL-SVC getIccCardStatus response: serial 320
 08:00:14.020 p0 D RILJ [0320]< GET_SIM_STATUS [PHONE0]  ⇒ ril_timeout(latency_ms=9020,request=GET_SIM_STATUS,serial=320,timeout_ms=5000)
-08:00:14.100 p0 I UiccController [PHONE0] SIM state changed: READY  ⇒ sim_state_changed(state=READY)
-08:00:15.500 p0 I UiccController [PHONE0] SIM state changed: LOADED  ⇒ sim_state_changed(state=LOADED)
+08:00:14.100 - D UiccController Broadcasting intent ACTION_SIM_STATE_CHANGED READY reason null for phone: 0 sub: 1  ⇒ sim_state_changed(state=READY)
+08:00:15.500 - D UiccController Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 1  ⇒ sim_state_changed(state=LOADED)

@@ -5,7 +5,7 @@ default_phone: 0
 pid: 1300
 tid: 1312
 entries:
-  - {at: 0, tag: ImsPhoneCallTracker, msg: "dial: isVolteEnabled=true imsRegistered=true"}
+  - {at: 0, tag: GsmCdmaPhone, level: I, msg: "[0] useImsForCall=true, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=true, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=0"}
   - {after: 2, tag: ImsPhoneCallTracker, level: I, msg: "call state changed: ACTIVE"}
   - {after: 95, ril_unsol: UNSOL_RESPONSE_CALL_STATE_CHANGED}
   - {after: 0.2, tag: ImsPhoneCallTracker, level: W, msg: "call state changed: DISCONNECTED"}

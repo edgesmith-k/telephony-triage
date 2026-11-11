@@ -40,7 +40,7 @@ APPROVED = {
              r"^QOSCT-\d+$", r"^TNA-\d+$", r"^TNP$", r"^VRIL-DATA$"],
     "sim": [r"^CAT$", r"^IsimUiccRecords$", r"^MultiSimSettingController$", r"^SIMRecords$",
             r"^SecureElement-Terminal-SIM\d$", r"^UiccCard$", r"^UiccCardApplication( \[\d+\])?$",
-            r"^UiccProfile( \[\d+\])?$", r"^UiccSlot$", r"^UsimFH$"],
+            r"^UiccProfile( \[\d+\])?$", r"^UiccSlot( \[\d+\])?$", r"^UsimFH$"],
     "network": [r"^CSST$", r"^CellularNetworkService$", r"^DIC-\d+$", r"^LocaleTracker-\d+$",
                 r"^NRM-[CI]-\d+$", r"^NetworkTypeController$", r"^NitzStateMachineImpl$", r"^VRIL-NETWORK$"],
     "call": [r"^GsmCdmaCallTracker$", r"^CallManager$", r"^CallNotifier$", r"^CallWaitingCtrl$", r"^ImsUt$",

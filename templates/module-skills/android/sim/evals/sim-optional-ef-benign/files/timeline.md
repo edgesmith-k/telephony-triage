@@ -7,7 +7,7 @@
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
 08:30:14.602 - D MultiSimSettingController Carrier config subId 2 is not loaded.
-08:30:14.603 - D UiccController Broadcasting intent ACTION_SIM_STATE_CHANGED READY reason null for phone: 0 sub: 2
+08:30:14.603 - D UiccController Broadcasting intent ACTION_SIM_STATE_CHANGED READY reason null for phone: 0 sub: 2  ⇒ sim_state_changed(state=READY)
 08:30:14.731 - V RIL mux [ch0][TX] VIPC_EXAMPLE_CARD_IO, REQ seq=0x0c40 len=40
 08:30:14.732 - I RIL [ExampleEfService_0] sim io request
 08:30:14.760 - V RIL mux [ch0][RX] VIPC_EXAMPLE_CARD_IO, RSP Error(VIPC_E_FAILURE) seq=0x0c40 len=12  ⇒ builtin.common.vendor_ipc_error(error=VIPC_E_FAILURE,ipc=VIPC_EXAMPLE_CARD_IO)
@@ -21,4 +21,4 @@
 08:30:15.932 p0 D RILJ [0234]< SIM_IO error 2 [PHONE0]
 08:30:15.934 - E SIMRecords [SIMRecords-0] Exception in fetching EF_CSP data com.android.internal.telephony.CommandException: GENERIC_FAILURE
 08:30:15.937 - D VRIL-SVC RadioSimProxy::iccTransmitApduLogicalChannel
-08:30:18.218 - D UiccController Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 2
+08:30:18.218 - D UiccController Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 2  ⇒ sim_state_changed(state=LOADED)

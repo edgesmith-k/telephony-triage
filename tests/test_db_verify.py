@@ -37,9 +37,9 @@ BUILD = "MOCKB77_U2_20260925"
 PLUGIN_SKILL = Path(__file__).resolve().parents[1] / "plugin/skills/telephony-triage"
 
 CALL_CAUSE_SIG = ("        must_event:\n          - {id: regfail, event: ims_registration_failed}\n"
-                  "          - {id: dial, event: ims_dial_attempt, fields: {registered: 'false'}}\n"
+                  "          - {id: dial, event: ims_dial_attempt, fields: {ims_state: '[1-3]'}}\n"
                   "        sequence: [regfail, dial]\n        window_sec: 300\n")
-RESOLVED_LOG = """09-27 10:00:00.000  1234  1244 I UiccController: [PHONE0] SIM state changed: LOADED
+RESOLVED_LOG = """09-27 10:00:00.000  1234  1244 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 1
 09-27 10:00:01.000  1234  1244 I DNC-0: [PHONE0] onEvaluateNetworkRequests: reason=SIM_LOADED
 09-27 10:00:01.200  1234  1244 I DNC-0: [PHONE0] Data evaluation: evaluation reason:SIM_LOADED, Data allowed reason: NORMAL, candidate profile=null
 09-27 10:00:01.500  1234  1244 D RILJ: [PHONE0] [0051]> SETUP_DATA_CALL apn=default
@@ -233,9 +233,8 @@ def test_extractor_change_selects_dependents_and_event_change_needs_approval():
     """extractor만 바꿔도 참조하는 시그니처가 R1·R2 대상. 기존 이벤트를 바꾸는 수정은 R5 needs-approval(3)."""
     db = git_db()
     rules_file = db / "parser-rules/extractors.yaml"
-    edit(rules_file, "      - 'dial:\\s*isVolteEnabled=(?P<volte>true|false)\\s+imsRegistered=(?P<registered>true|false)'\n",
-         "      - 'dial:\\s*isVolteEnabled=(?P<volte>true|false)\\s+imsRegistered=(?P<registered>true|false)'\n"
-         "      - 'dial\\(\\):\\s*volte=(?P<volte>true|false)\\s+registered=(?P<registered>true|false)'\n")
+    edit(rules_file, "    event: ims_dial_attempt\n",
+         "      - 'dial\\(\\):\\s*ims=(?P<ims>true|false)\\s+state=(?P<ims_state>\\d)'\n    event: ims_dial_attempt\n")
     code, rows, out = rules(db)
     assert code == 0, rows
     why = {c["key"]: c["why"] for c in out["changes"]["signatures"]}
@@ -255,7 +254,7 @@ def test_extractor_change_selects_dependents_and_event_change_needs_approval():
     diff = run_json("db_regress.py", ["--events-diff", "HEAD", "--db", db])
     assert diff["summary"]["existing_changed"] and diff["summary"]["changed"] > 0
     changed = next(r for r in diff["fixtures"] if r["fixture"] == f"{CALL}/fixtures/CALL-001.none.log")["changed"][0]
-    assert changed["event"] == "ims_registered" and changed["fields_before"] == {"transport": "LTE"}
+    assert changed["event"] == "ims_registered" and changed["fields_before"] == {"transport": "WWAN"}
     assert changed["fields_after"] == {}
 
 
@@ -412,7 +411,7 @@ def test_fix_stops_without_build_or_required_signatures_and_lint_rules():
     db = copy_db(VERIFY_DB)
     type_md = db / CALL / "type.md"
     text = type_md.read_text(encoding="utf-8")
-    start = text.index("    recovery_signatures:\n      - id: ims-registered-call-active")
+    start = text.index("    recovery_signatures:\n      - id: ims-registered-dial")
     end = text.index("    resolution: 캐리어 설정의 VoLTE")
     type_md.write_text(text[:start] + "    recovery_signatures: []\n    scenario_signatures: []\n" + text[end:],
                        encoding="utf-8", newline="\n")
@@ -436,7 +435,7 @@ def set_traces(db: Path, *, scenario: bool, recovery: bool, rtype: str | None = 
     """CALL-001-01의 scenario·recovery 시그니처·resolution_type·fix.status를 바꾼다 (둘 다 false면 둘 다 비운다)."""
     type_md = db / CALL / "type.md"
     text = type_md.read_text(encoding="utf-8")
-    start = text.index("    recovery_signatures:\n      - id: ims-registered-call-active")
+    start = text.index("    recovery_signatures:\n      - id: ims-registered-dial")
     end = text.index("    resolution: 캐리어 설정의 VoLTE")
     rec_block = text[start:text.index("    scenario_signatures:", start)]
     body = (rec_block if recovery else "    recovery_signatures: []\n") + (TRACE_BLOCK if scenario else "    scenario_signatures: []\n")
@@ -623,7 +622,7 @@ def test_record_new_cause_resolution_draft_then_verified_stage(loaded_condition)
     recovery = json.loads(json.dumps(SIM_RECOVERY))
     if loaded_condition == "pattern":
         recovery[0]["must_event"].pop(0)
-        recovery[0]["must_match"] = [{"id": "loaded", "pattern": "SIM state changed: LOADED"}]
+        recovery[0]["must_match"] = [{"id": "loaded", "pattern": "ACTION_SIM_STATE_CHANGED LOADED"}]
     full["operations"][0]["cause"]["recovery_signatures"] = recovery
     draft_plan = json.loads(json.dumps(full))
     draft_plan["operations"] = [op for op in draft_plan["operations"]

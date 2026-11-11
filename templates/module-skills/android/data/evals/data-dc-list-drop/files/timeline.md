@@ -11,7 +11,7 @@
 11:00:20.010 p0 D RILJ [UNSL]< UNSOL_DATA_CALL_LIST_UPDATED [SetupDataCallResult{cause: NONE, suggestedRetryTime: 0, cid: 1, active: 2, type: IPV4V6, ifname: rmnet0}] [PHONE0]
 11:00:20.020 - D DN-101-C ConnectedState: onDataStateChanged: PDN inactive reported by WWAN data service.
 11:00:20.021 - D DN-101-C DisconnectedState: Data network disconnected. mEverConnected=true
-11:00:20.030 p0 D DNC-0 onDataNetworkDisconnected: [DataNetwork: DN-101-C, <APN#1>, state=null], cause=NONE(0x0)(0), tearDownReason=NONE
+11:00:20.030 p0 D DNC-0 onDataNetworkDisconnected: [DataNetwork: DN-101-C, <APN#1>, state=null], cause=NONE(0x0)(0), tearDownReason=NONE  ⇒ data_network_disconnected(cause=NONE,reason=NONE)
 11:00:20.031 p0 D DNC-0 Internet data state changed from CONNECTED to DISCONNECTED.  ⇒ data_internet_state_changed(from=CONNECTED,to=DISCONNECTED)
 11:00:20.040 p0 D DRM-0 retry scheduled in 30000ms
 11:00:25.000 p0 D DNC-0 Re-evaluating 1 unsatisfied network requests in 1 groups, [INTERNET|NOT_RESTRICTED|TRUSTED]-CELLULAR due to DATA_NETWORK_DISCONNECTED

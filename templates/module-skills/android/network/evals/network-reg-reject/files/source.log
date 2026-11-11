@@ -5,7 +5,7 @@
 08-22 11:00:05.121  1188 1248 E VRIL    : reply to client token 302
 08-22 11:00:06.128  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
 08-22 11:00:07.135  2101 2141 D RILJ    : [0302]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
-08-22 11:00:30.000  2101 2161 I SST-0   : onServiceStateChanged: regState=NOT_REGISTERED cellId=<CELL#1> [PHONE0]
+08-22 11:00:30.000  2101 2101 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false
 08-22 11:00:31.000  2101 2141 D RILJ    : [0330]> DATA_REGISTRATION_STATE [PHONE0]
 08-22 11:00:31.004  1188 1188 D VRIL-SVC: RadioNetworkProxy::getDataRegistrationState: serial 330
 08-22 11:00:31.006  1188 1241 I RIL     : [ExampleRegService_0] data reg state request
@@ -14,12 +14,12 @@
 08-22 11:00:31.040  1188 1258 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_PS_REG, RSP OK(VIPC_OK) seq=0x0220 len=88
 08-22 11:00:31.042  1188 1244 D VRIL-SVC: getDataRegistrationState response: serial 330
 08-22 11:00:31.050  2101 2142 D RILJ    : [0330]< DATA_REGISTRATION_STATE RegStateResult{regState: REG_DENIED, rat: LTE, reasonForDenial: 13, cellIdentity: CellIdentityLte:{ mCi=<CELL#1> }, registeredPlmn: <PLMN#1>} [PHONE0]
-08-22 11:00:32.000  2101 2161 W SST-0   : registration rejected: cause=13 domain=PS [PHONE0]
+08-22 11:00:32.000  2101 2162 D NRM-C-0 : onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=DENIED networkRegistrationState=DENIED roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=13 emergencyEnabled=false availableServices=[]
 08-22 11:00:32.500  1188 1248 E VRIL    : reply to client token 330
-08-22 11:00:42.000  2101 2161 W SST-0   : registration rejected: cause=13 domain=CS [PHONE0]
-08-22 11:01:02.000  2101 2161 I SST-0   : onServiceStateChanged: regState=NOT_REGISTERED cellId=<CELL#2> [PHONE0]
+08-22 11:00:42.000  2101 2162 D NRM-C-0 : onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=CS transportType=WWAN registrationState=DENIED networkRegistrationState=DENIED roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=13 emergencyEnabled=false availableServices=[]
+08-22 11:01:02.000  2101 2101 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = false hasDataAttached = {1=false, 2=false} hasDataDetached = {1=false, 2=false} hasDataRegStateChanged = {1=false, 2=false} hasRilVoiceRadioTechnologyChanged = false
 08-22 11:01:03.000  2101 2141 D RILJ    : [0331]> DATA_REGISTRATION_STATE [PHONE0]
 08-22 11:01:03.040  1188 1258 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_PS_REG, RSP OK(VIPC_OK) seq=0x0221 len=88
 08-22 11:01:03.050  2101 2142 D RILJ    : [0331]< DATA_REGISTRATION_STATE RegStateResult{regState: REG_DENIED, rat: LTE, reasonForDenial: 13, cellIdentity: CellIdentityLte:{ mCi=<CELL#2> }, registeredPlmn: <PLMN#1>} [PHONE0]
-08-22 11:01:04.000  2101 2161 W SST-0   : registration rejected: cause=13 domain=PS [PHONE0]
+08-22 11:01:04.000  2101 2162 D NRM-C-0 : onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=DENIED networkRegistrationState=DENIED roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=13 emergencyEnabled=false availableServices=[]
 08-22 11:01:05.000  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009

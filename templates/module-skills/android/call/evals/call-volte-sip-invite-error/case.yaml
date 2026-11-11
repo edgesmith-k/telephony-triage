@@ -21,7 +21,7 @@ expect:
   accept:
     - layer: '모뎀|망'
       daemon: 'VRIL-IMS|벤더 IMS'
-      evidence: ['status-code : 503', 'imsRegistered=true']
+      evidence: ['status-code : 503', 'useImsForCall=true|ims_state=0']
   trap:
     - label: '^\s*(프레임워크|ImsPhoneCallTracker|RILJ|RIL HAL|벤더 RIL)'
     - label: '^\s*그\s*층\s*로그\s*없음'

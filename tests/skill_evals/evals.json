@@ -1607,7 +1607,7 @@
       },
       "user_replies": [
         "원인 내용: 제목 'IMS 등록 타임아웃 (408)', 설명 '망이 REGISTER에 응답하지 않아 IMS 등록이 408로 실패함', 해결책 '망(P-CSCF) 설정을 확인해 등록 응답 지연을 해소한다', resolution_type network, 재현 시나리오 '해당 로밍 망에서 IMS 등록 시도'.",
-        "시그니처는 'ims_registration_failed 이벤트의 code가 408' 하나로 한다.",
+        "시그니처는 'ims_registration_failed 이벤트의 extra(SIP 응답 코드)가 408' 하나로 한다.",
         "해결책 효과 근거를 물으면 '없음'.",
         "다른 유형 fixture에서 걸렸다며 '좁히기 / 허용'을 물으면: 그 fixture(DATA-001-02.2.log)에 실제로 IMS 408 실패가 함께 있으므로 '허용'.",
         "확인 화면에서는 '승인'.",

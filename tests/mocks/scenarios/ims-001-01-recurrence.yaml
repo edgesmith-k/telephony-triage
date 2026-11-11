@@ -4,6 +4,7 @@
 name: IMS-001-01.recurrence.MOCKB77_U2_20260920
 start: "2026-09-27T14:05:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1600
 tid: 1610
 build:
@@ -12,7 +13,7 @@ build:
 expect:
   expect_top: IMS-001-01
 entries:
-  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
-  - {after: 2, tag: ImsManager, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
-  - {after: 3, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
-  - {after: 40, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
+  - {at: 0, tag: "ImsResolver", msg: "bound to mock ImsService"}
+  - {after: 2, tag: "ImsManager", msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 3, tag: "ImsPhone", msg: "[0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0"}
+  - {after: 40, tag: "ImsPhone", msg: "[0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0"}

@@ -13,8 +13,8 @@ build:
 entries:
   - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
   - {at: 10, tag: TestRunner, phone: null, msg: "Step 3 START"}
-  - {at: 12, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
-  - {at: 36, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
+  - {at: 12, tag: ImsPhone, phone_prefix: false, msg: "[0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0"}
+  - {at: 36, tag: ImsPhone, phone_prefix: false, msg: "[0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0"}
   - {at: 40, tag: TestRunner, phone: null, msg: "Step 3 PASS"}
   - {at: 180, tag: TestRunner, phone: null, msg: "Step 5 START"}
   - {at: 183, tag: "DSMGR-{phone}", msg: "notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings"}

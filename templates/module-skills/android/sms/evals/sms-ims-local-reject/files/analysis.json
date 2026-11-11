@@ -30,7 +30,7 @@
   ],
   "in_range": "partial",
   "clock_anomalies": 0,
-  "events": 26,
+  "events": 25,
   "masked": null
  },
  "candidates": [
@@ -39,7 +39,7 @@
    "cause": null,
    "title": "SMS가 전송되지 않음 (원인 미확인)",
    "category": "sms",
-   "score": 0.5,
+   "score": 0.4997,
    "confidence": "low",
    "S": 1,
    "C": 0,
@@ -48,9 +48,9 @@
    ],
    "evidence": [
     {
-     "ts": "2026-08-25T14:00:21.000Z",
-     "tag": "SmsDispatchersController",
-     "msg": "sendSms failed: result=GENERIC_FAILURE [PHONE0]",
+     "ts": "2026-08-25T14:00:20.060Z",
+     "tag": "ImsSmsDispatcher [0]",
+     "msg": "sendSms failed. Falling back to PSTN. Error: null",
      "event": "sms_send_failed"
     }
    ],
@@ -61,17 +61,15 @@
  ],
  "partial": [
   {
-   "kind": "missing",
+   "kind": "absent",
    "type": "SMS-001",
    "cause": "SMS-001-01",
-   "signature": "SMS-001-01/smsc-missing-then-fail",
-   "matched": "1/2",
+   "signature": "SMS-001-01/send-request-missing",
+   "matched": "0/1",
    "missing": [
-    "must_event smsc_address_missing"
+    "must_match 'GsmSMSDispatcher: sendSms: .*isIms\\\\(\\\\)=false …"
    ],
-   "at": [
-    "f0:L14"
-   ]
+   "at": []
   }
  ],
  "code": {

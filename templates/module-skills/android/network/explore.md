@@ -24,7 +24,7 @@ SST → RILJ 등록 상태 요청 → RIL HAL → 벤더 RIL IPC → 모뎀·망
 |---|---|---|---|
 | 등록 안 됨·서비스 없음 | `RegStateResult`, SST | `REG_DENIED`·`reasonForDenial≠NONE` → 모뎀·망 / 거절 없는 긴 미등록은 찾는 중 | NRM-C `rejectCause=` / 모뎀 NAS(사내) |
 | 무선 꺼진 뒤 서비스 없음 | `RADIO_POWER`, `AT+CFUN=0`, `RADIO_OFF`·`radioStateChanged: OFF` | 끈 뒤 실패는 결과 → 끈 쪽(AT 중계면 곁가지) | 벤더 RIL 데몬 줄 |
-| NR(SA/NSA) 모드 | NetworkTypeController, `UNSOL_PHYSICAL_CHANNEL_CONFIG` | IPC Error → 모뎀·망 (세부 초안) | 모뎀 로그(사내) |
+| NR(SA/NSA) 모드 | NetworkTypeController `EVENT_PHYSICAL_CHANNEL_CONFIG_NOTIF_CHANGED` | IPC Error → 모뎀·망 (세부 초안) | 모뎀 로그(사내) |
 | CSFB 쪽 결합 등록 (초안) | `VOICE_`(CS)·`DATA_REGISTRATION_STATE`(PS) | PS만 등록·CS 거절 → 모뎀·망(call 증상의 원인) | 모뎀 NAS(사내) |
 | 로밍·제한 서비스 (초안) | 등록 상태 값 | 값이 말하는 그대로 | — |
 

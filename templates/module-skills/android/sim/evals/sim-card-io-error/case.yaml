@@ -22,6 +22,6 @@ run_expect:
 expect:
   layer: '모뎀|망|벤더 RIL'
   daemon: 'RIL$|RIL[ (]|ExampleIccService|벤더 RIL'
-  evidence: ['CARD_IO_ERROR', 'VIPC_EXAMPLE_CARD_STATE.*Error\(VIPC_E_']
+  evidence: ['Error getting ICC status|GET_SIM_STATUS error 2', 'VIPC_EXAMPLE_CARD_STATE.*Error\(VIPC_E_']
   trap: null
   wrong_layer: ['^\s*(프레임워크|UiccController|RILJ|RIL HAL)', '^\s*그\s*층\s*로그\s*없음']

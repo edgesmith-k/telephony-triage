@@ -24,6 +24,7 @@ tags:
 
   # --- call / ims --- TODO(SITE:S9) TODO(SITE:S10)
   - {tag_regex: '^ImsPhone.*', category: call, added_for: CALL-001, added_on: 2026-09-28, reason: 초기 (ImsPhoneCallTracker 등)}
+  - {tag: GsmCdmaPhone, category: call, added_for: CALL-001-01, added_on: 2026-11-11, reason: 발신 경로 줄 useImsForCall= (GsmCdmaPhone)}
   - {tag_regex: '^Ims(Manager|Resolver|ServiceController|Registration).*', category: ims, added_for: IMS-001, added_on: 2026-09-28, reason: 초기 (IMS 등록 상태)}
 
   # --- network --- TODO(SITE:S9)
@@ -35,7 +36,8 @@ tags:
 
   # --- sms --- TODO(SITE:S9)
   - {tag: SmsDispatchersController, category: sms, added_for: SMS-001, added_on: 2026-09-28, reason: 초기 (SMS 전송)}
-  - {tag: InboundSmsHandler, category: sms, added_for: SMS-001, added_on: 2026-09-28, reason: 초기 (SMS 수신)}
+  - {tag: GsmSMSDispatcher, category: sms, added_for: SMS-001-01, added_on: 2026-11-11, reason: SMS 발신 디스패처 sendSms의 서비스 상태(SS=)}
+  - {tag: GsmInboundSmsHandler, category: sms, added_for: SMS-001, added_on: 2026-09-28, reason: 초기 (SMS 수신 — 17 태그는 GsmInboundSmsHandler)}
 
   # --- 벤더 RIL 태그(사내 확인 전, TODO(SITE:S9)) — 사내 DB는 DB PR로 ---
   # 이 묶음은 파일 끝에 둔다(issue-db-android-plain이 여기부터 지운다).
@@ -65,7 +67,7 @@ tags:
   - {tag_regex: '^UiccCard$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccCard)}
   - {tag_regex: '^UiccCardApplication( \[\d+\])?$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccCardApplication)}
   - {tag_regex: '^UiccProfile( \[\d+\])?$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccProfile)}
-  - {tag_regex: '^UiccSlot$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccSlot)}
+  - {tag_regex: '^UiccSlot( \[\d+\])?$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UiccSlot)}
   - {tag_regex: '^UsimFH$', category: sim, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (UsimFH)}
   # network
   - {tag_regex: '^CSST$', category: network, added_for: '-', added_on: 2026-11-05, reason: 사내 확인 전 (CSST)}

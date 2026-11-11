@@ -25,7 +25,7 @@
 - 평가 거부 사유(`Data disallowed reasons:` 뒤, 공백 구분)의 예: `DATA_DISABLED`, `ROAMING_DISABLED`, `NOT_IN_SERVICE`, `SIM_NOT_READY`, `NO_SUITABLE_DATA_PROFILE`,
   `DATA_RESTRICTED_BY_NETWORK`, `CONCURRENT_VOICE_DATA_NOT_ALLOWED`, `DATA_THROTTLED`. 실제 표기는 버전 소스의 `DataEvaluationReason`으로 확인.
 - 비행기 모드로 끊긴 연결은 `AirplaneModeStats`(`Airplane mode change. Value: true`) → `onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON` → Internet `DISCONNECTED` 순이고, 사용자가 데이터를 끈 경우는 `DSMGR`의 `enabled=false`가 앞선다. 데이터를 먼저 내리고 라디오(`RADIO_POWER on = false`)를 끈다.
-- 태그 접미사 숫자가 phone id(슬롯)다. 듀얼 SIM 로그에서 슬롯을 섞어 판단하지 않는다.
+- 태그 접미사 숫자(한 자리)가 phone id(슬롯)다. 단 `TNA-`·`QOSCT-`·`KT-<n>`·`DN-<n>-C|I`의 n은 netId이고 `Phone-2147483647`은 기본 인덱스다. 듀얼 SIM 로그에서 슬롯을 섞어 판단하지 않는다.
 
 ## 공통
 

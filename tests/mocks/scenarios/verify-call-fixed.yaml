@@ -3,14 +3,11 @@
 name: call-fixed
 start: "2026-09-27T10:00:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1300
 tid: 1312
 entries:
-  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
-  - {after: 4, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
-  - {after: 25, tag: "ImsPhoneCallTracker", msg: "dial: isVolteEnabled=true imsRegistered=true"}
-  - {after: 0.5, ril_request: DIAL, serial: 93, args: "clir=0"}
-  - {after: 1.1, ril_response: DIAL, serial: 93, result: "error=NONE"}
-  - {after: 2, tag: "ImsPhoneCallTracker", msg: "call state changed: DIALING"}
-  - {after: 3, tag: "ImsPhoneCallTracker", msg: "call state changed: ACTIVE"}
-  - {after: 40, tag: "ImsPhoneCallTracker", msg: "call state changed: DISCONNECTED"}
+  - {at: 0, tag: "ImsResolver", msg: "bound to mock ImsService"}
+  - {after: 4, tag: "ImsPhone", msg: "[0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN"}
+  - {after: 25, tag: "GsmCdmaPhone", level: I, msg: "[0] useImsForCall=true, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=true, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=0"}
+  - {after: 0.05, tag: "ImsPhoneCallTracker", msg: "[0] dial clirMode=0"}

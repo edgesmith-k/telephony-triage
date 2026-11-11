@@ -1,6 +1,6 @@
 -- [합성] telephony-triage module-skills C1D eval log. Line shapes of the repo cases; DPM data profile / preferred profile lines are AOSP 문구 가정.
-09-02 10:00:02.000  2101 2101 I UiccController: [PHONE0] SIM state changed: LOADED
-09-02 10:00:02.500  2101 2111 D DCM-0   : carrier config loaded: carrierId=<CARRIER>
+09-02 10:00:02.000  2101 2101 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 1
+09-02 10:00:02.500  2101 2111 D DCM-0   : Carrier config updated. Config is carrier specific.
 09-02 10:00:03.000  2101 2111 D DPM-0   : Data profiles updated: [DataProfile=[ApnSetting] DEFAULT <APN#2>, IPV4V6, preferred=false] [DataProfile=[ApnSetting] IMS <APN#3>, IPV4V6, preferred=false]
 09-02 10:00:03.010  2101 2111 D DPM-0   : Preferred data profile kept from previous carrier: [DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6, preferred=true]
 09-02 10:00:03.100  2101 2145 D RILJ    : [0410]> SET_INITIAL_ATTACH_APN [DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6] [PHONE0]

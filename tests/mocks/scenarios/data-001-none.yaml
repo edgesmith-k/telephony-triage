@@ -8,7 +8,7 @@ tid: 1244
 expect:
   expect_top: none
 entries:
-  - {at: 0, tag: "DCM-{phone}", msg: "carrier config loaded: carrierId=<CARRIER>"}
+  - {at: 0, tag: "DCM-{phone}", msg: "Carrier config updated. Config is carrier specific."}
   - {after: 1, tag: "DSMGR-{phone}", msg: "mIsDataEnabled=true, prevDataEnabled=false"}
   - {after: 0.5, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=NEW_REQUEST"}
   - {after: 0.2, tag: "DNC-{phone}", level: I, msg: "Data evaluation: evaluation reason:NEW_REQUEST, Data allowed reason: NORMAL, candidate profile=null"}

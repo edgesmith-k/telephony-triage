@@ -1,7 +1,7 @@
 {
  "coverage": {
   "first_ts": "2026-09-19T11:00:00.000Z",
-  "last_ts": "2026-09-19T11:01:37.600Z",
+  "last_ts": "2026-09-19T11:01:37.462Z",
   "window_in_range": true,
   "clock_anomalies": []
  },
@@ -11,10 +11,10 @@
    "ts": "2026-09-19T11:00:00.000Z",
    "pid": 1300,
    "tid": 1312,
-   "level": "D",
-   "tag": "ImsPhoneCallTracker",
-   "msg": "[PHONE0] dial: isVolteEnabled=true imsRegistered=true",
-   "phone_id": 0,
+   "level": "I",
+   "tag": "GsmCdmaPhone",
+   "msg": "[0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=false, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=1",
+   "phone_id": null,
    "category_hint": "call",
    "ril": null,
    "event": null,
@@ -29,16 +29,16 @@
    "ts": "2026-09-19T11:00:00.000Z",
    "pid": 1300,
    "tid": 1312,
-   "level": "D",
-   "tag": "ImsPhoneCallTracker",
-   "msg": "[PHONE0] dial: isVolteEnabled=true imsRegistered=true",
-   "phone_id": 0,
+   "level": "I",
+   "tag": "GsmCdmaPhone",
+   "msg": "[0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=false, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=1",
+   "phone_id": null,
    "category_hint": "call",
    "ril": null,
    "event": "ims_dial_attempt",
    "fields": {
-    "volte": "true",
-    "registered": "true"
+    "ims": "false",
+    "ims_state": "1"
    },
    "source": "rules",
    "line_ref": {
@@ -47,15 +47,22 @@
    }
   },
   {
-   "ts": "2026-09-19T11:00:02.000Z",
+   "ts": "2026-09-19T11:00:00.050Z",
    "pid": 1300,
    "tid": 1312,
-   "level": "I",
-   "tag": "ImsPhoneCallTracker",
-   "msg": "[PHONE0] call state changed: ACTIVE",
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[0088]> DIAL [PHONE0]",
    "phone_id": 0,
    "category_hint": "call",
-   "ril": null,
+   "ril": {
+    "serial": 88,
+    "dir": "req",
+    "request": "DIAL",
+    "error": null,
+    "paired_ts": "2026-09-19T11:00:00.051Z",
+    "latency_ms": 1
+   },
    "event": null,
    "fields": {},
    "source": "backend:reference",
@@ -65,32 +72,37 @@
    }
   },
   {
-   "ts": "2026-09-19T11:00:02.000Z",
-   "pid": 1300,
-   "tid": 1312,
-   "level": "I",
-   "tag": "ImsPhoneCallTracker",
-   "msg": "[PHONE0] call state changed: ACTIVE",
-   "phone_id": 0,
-   "category_hint": "call",
-   "ril": null,
-   "event": "call_state_changed",
-   "fields": {
-    "state": "ACTIVE"
-   },
-   "source": "rules",
-   "line_ref": {
-    "file_index": 0,
-    "line_no": 2
-   }
-  },
-  {
-   "ts": "2026-09-19T11:01:37.000Z",
+   "ts": "2026-09-19T11:00:00.051Z",
    "pid": 1300,
    "tid": 1312,
    "level": "D",
    "tag": "RILJ",
-   "msg": "[PHONE0] [UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED",
+   "msg": "[0088]< DIAL  [PHONE0]",
+   "phone_id": 0,
+   "category_hint": "call",
+   "ril": {
+    "serial": 88,
+    "dir": "resp",
+    "request": "DIAL",
+    "error": "NONE",
+    "paired_ts": "2026-09-19T11:00:00.050Z",
+    "latency_ms": 1
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 3
+   }
+  },
+  {
+   "ts": "2026-09-19T11:00:02.051Z",
+   "pid": 1300,
+   "tid": 1312,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED [PHONE0]",
    "phone_id": 0,
    "category_hint": "call",
    "ril": {
@@ -106,63 +118,25 @@
    "source": "backend:reference",
    "line_ref": {
     "file_index": 0,
-    "line_no": 3
-   }
-  },
-  {
-   "ts": "2026-09-19T11:01:37.200Z",
-   "pid": 1300,
-   "tid": 1312,
-   "level": "W",
-   "tag": "ImsPhoneCallTracker",
-   "msg": "[PHONE0] call state changed: DISCONNECTED",
-   "phone_id": 0,
-   "category_hint": "call",
-   "ril": null,
-   "event": null,
-   "fields": {},
-   "source": "backend:reference",
-   "line_ref": {
-    "file_index": 0,
     "line_no": 4
    }
   },
   {
-   "ts": "2026-09-19T11:01:37.200Z",
-   "pid": 1300,
-   "tid": 1312,
-   "level": "W",
-   "tag": "ImsPhoneCallTracker",
-   "msg": "[PHONE0] call state changed: DISCONNECTED",
-   "phone_id": 0,
-   "category_hint": "call",
-   "ril": null,
-   "event": "call_state_changed",
-   "fields": {
-    "state": "DISCONNECTED"
-   },
-   "source": "rules",
-   "line_ref": {
-    "file_index": 0,
-    "line_no": 4
-   }
-  },
-  {
-   "ts": "2026-09-19T11:01:37.300Z",
+   "ts": "2026-09-19T11:00:02.061Z",
    "pid": 1300,
    "tid": 1312,
    "level": "D",
    "tag": "RILJ",
-   "msg": "[PHONE0] [0090]> LAST_CALL_FAIL_CAUSE",
+   "msg": "[0089]> GET_CURRENT_CALLS [PHONE0]",
    "phone_id": 0,
-   "category_hint": "call",
+   "category_hint": "common",
    "ril": {
-    "serial": 90,
+    "serial": 89,
     "dir": "req",
-    "request": "LAST_CALL_FAIL_CAUSE",
+    "request": "GET_CURRENT_CALLS",
     "error": null,
-    "paired_ts": "2026-09-19T11:01:37.600Z",
-    "latency_ms": 300
+    "paired_ts": "2026-09-19T11:00:02.062Z",
+    "latency_ms": 1
    },
    "event": null,
    "fields": {},
@@ -173,21 +147,21 @@
    }
   },
   {
-   "ts": "2026-09-19T11:01:37.600Z",
+   "ts": "2026-09-19T11:00:02.062Z",
    "pid": 1300,
    "tid": 1312,
    "level": "D",
    "tag": "RILJ",
-   "msg": "[PHONE0] [0090]< LAST_CALL_FAIL_CAUSE causeCode=65",
+   "msg": "[0089]< GET_CURRENT_CALLS {[id=1,ACTIVE,toa=129,norm,mo,0,nonvoc,noevp,,cli=1,,1,audioQuality=0] } [PHONE0]",
    "phone_id": 0,
-   "category_hint": "call",
+   "category_hint": "common",
    "ril": {
-    "serial": 90,
+    "serial": 89,
     "dir": "resp",
-    "request": "LAST_CALL_FAIL_CAUSE",
+    "request": "GET_CURRENT_CALLS",
     "error": "NONE",
-    "paired_ts": "2026-09-19T11:01:37.300Z",
-    "latency_ms": 300
+    "paired_ts": "2026-09-19T11:00:02.061Z",
+    "latency_ms": 1
    },
    "event": null,
    "fields": {},
@@ -198,12 +172,87 @@
    }
   },
   {
-   "ts": "2026-09-19T11:01:37.600Z",
+   "ts": "2026-09-19T11:01:37.062Z",
    "pid": 1300,
    "tid": 1312,
    "level": "D",
    "tag": "RILJ",
-   "msg": "[PHONE0] [0090]< LAST_CALL_FAIL_CAUSE causeCode=65",
+   "msg": "[UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED [PHONE0]",
+   "phone_id": 0,
+   "category_hint": "call",
+   "ril": {
+    "serial": null,
+    "dir": "unsol",
+    "request": "UNSOL_RESPONSE_CALL_STATE_CHANGED",
+    "error": null,
+    "paired_ts": null,
+    "latency_ms": null
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 7
+   }
+  },
+  {
+   "ts": "2026-09-19T11:01:37.162Z",
+   "pid": 1300,
+   "tid": 1312,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[0090]> LAST_CALL_FAIL_CAUSE [PHONE0]",
+   "phone_id": 0,
+   "category_hint": "call",
+   "ril": {
+    "serial": 90,
+    "dir": "req",
+    "request": "LAST_CALL_FAIL_CAUSE",
+    "error": null,
+    "paired_ts": "2026-09-19T11:01:37.462Z",
+    "latency_ms": 300
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 8
+   }
+  },
+  {
+   "ts": "2026-09-19T11:01:37.462Z",
+   "pid": 1300,
+   "tid": 1312,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[0090]< LAST_CALL_FAIL_CAUSE com.android.internal.telephony.LastCallFailCause@5d3c2a1 causeCode: 65 vendorCause: null [PHONE0]",
+   "phone_id": 0,
+   "category_hint": "call",
+   "ril": {
+    "serial": 90,
+    "dir": "resp",
+    "request": "LAST_CALL_FAIL_CAUSE",
+    "error": "NONE",
+    "paired_ts": "2026-09-19T11:01:37.162Z",
+    "latency_ms": 300
+   },
+   "event": null,
+   "fields": {},
+   "source": "backend:reference",
+   "line_ref": {
+    "file_index": 0,
+    "line_no": 9
+   }
+  },
+  {
+   "ts": "2026-09-19T11:01:37.462Z",
+   "pid": 1300,
+   "tid": 1312,
+   "level": "D",
+   "tag": "RILJ",
+   "msg": "[0090]< LAST_CALL_FAIL_CAUSE com.android.internal.telephony.LastCallFailCause@5d3c2a1 causeCode: 65 vendorCause: null [PHONE0]",
    "phone_id": 0,
    "category_hint": "call",
    "ril": null,
@@ -214,7 +263,7 @@
    "source": "rules",
    "line_ref": {
     "file_index": 0,
-    "line_no": 6
+    "line_no": 9
    }
   }
  ]

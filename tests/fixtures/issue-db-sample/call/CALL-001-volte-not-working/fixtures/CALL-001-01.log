@@ -1,9 +1,9 @@
-09-18 19:40:00.000  1300  1312 D ImsResolver: [PHONE0] bound to mock ImsService
-09-18 19:40:05.000  1300  1312 W ImsRegistration: [PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN
-09-18 19:43:25.000  1300  1312 D ImsPhoneCallTracker: [PHONE0] dial: isVolteEnabled=true imsRegistered=false
-09-18 19:43:25.500  1300  1312 D RILJ: [PHONE0] [0077]> DIAL clir=0
-09-18 19:43:26.700  1300  1312 D RILJ: [PHONE0] [0077]< DIAL error=NONE
-09-18 19:43:28.700  1300  1312 W RILJ: [PHONE0] [UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED
-09-18 19:43:29.000  1300  1312 D RILJ: [PHONE0] [0078]> LAST_CALL_FAIL_CAUSE
-09-18 19:43:29.400  1300  1312 D RILJ: [PHONE0] [0078]< LAST_CALL_FAIL_CAUSE causeCode=17
-09-18 19:43:29.600  1300  1312 W ImsPhoneCallTracker: [PHONE0] call ended: cause=17
+09-18 19:40:00.000  1300  1312 D ImsResolver: bound to mock ImsService
+09-18 19:40:05.000  1300  1312 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0
+09-18 19:43:25.000  1300  1312 I GsmCdmaPhone: [0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=true, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=1
+09-18 19:43:25.050  1300  1312 D RILJ: [0077]> DIAL [PHONE0]
+09-18 19:43:26.250  1300  1312 D RILJ: [0077]< DIAL  [PHONE0]
+09-18 19:43:28.250  1300  1312 D RILJ: [UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED [PHONE0]
+09-18 19:43:28.550  1300  1312 D RILJ: [0078]> LAST_CALL_FAIL_CAUSE [PHONE0]
+09-18 19:43:28.950  1300  1312 D RILJ: [0078]< LAST_CALL_FAIL_CAUSE com.android.internal.telephony.LastCallFailCause@5d3c2a1 causeCode: 17 vendorCause: null [PHONE0]
+09-18 19:43:29.150  1300  1312 W ImsPhoneCallTracker: call ended: cause=17

@@ -4,13 +4,14 @@
 name: SIM-001.none
 start: "2026-09-16T07:00:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1400
 tid: 1410
 expect:
   expect_top: none
 entries:
   - {at: 0, ril_request: GET_SIM_STATUS, serial: 11}
-  - {after: 0.8, ril_response: GET_SIM_STATUS, serial: 11, result: "error=NONE state=PRESENT"}
-  - {after: 1, tag: UiccController, level: I, msg: "SIM state changed: READY"}
-  - {after: 2, tag: UiccController, level: I, msg: "SIM state changed: LOADED"}
-  - {after: 1, tag: SubscriptionManagerService, level: I, msg: "subscription loaded: iccid=<ICCID#1>"}
+  - {after: 0.8, ril_response: GET_SIM_STATUS, serial: 11, result: "IccCardState {CARDSTATE_PRESENT,PINSTATE_UNKNOWN,num_apps=3}"}
+  - {after: 1, tag: "UiccController", msg: "Broadcasting intent ACTION_SIM_STATE_CHANGED READY reason null for phone: 0 sub: 1"}
+  - {after: 2, tag: "UiccController", msg: "Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 1"}
+  - {after: 1, tag: "SubscriptionManagerService", level: I, msg: "subscription loaded: iccid=<ICCID#1>"}

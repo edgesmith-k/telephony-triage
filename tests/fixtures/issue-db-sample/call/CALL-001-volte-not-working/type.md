@@ -21,16 +21,15 @@ causes:
       - id: ims-not-registered-on-dial
         must_event:
           - {id: regfail, event: ims_registration_failed}
-          - {id: dial, event: ims_dial_attempt, fields: {registered: 'false'}}
+          - {id: dial, event: ims_dial_attempt, fields: {ims_state: '[1-3]'}}
         sequence: [regfail, dial]
         window_sec: 300
     recovery_signatures:
-      - id: ims-registered-call-active
+      - id: ims-registered-dial
         must_event:
           - {id: reg, event: ims_registered}
-          - {id: dial, event: ims_dial_attempt, fields: {registered: 'true'}}
-          - {id: active, event: call_state_changed, fields: {state: ACTIVE}}
-        sequence: [reg, dial, active]
+          - {id: dial, event: ims_dial_attempt, fields: {ims_state: '0'}}
+        sequence: [reg, dial]
         window_sec: 300
     scenario_signatures:
       - id: volte-dial-attempt
@@ -79,11 +78,11 @@ VoLTE로 발신하면 통화가 연결되지 않고 즉시 종료된다. 사용�
 
 ## 증상 판별 방법
 
-`ImsPhoneCallTracker`의 발신 시도(`dial:`) 뒤 `RILJ`의 `LAST_CALL_FAIL_CAUSE` 응답이 남는다.
+`GsmCdmaPhone`의 발신 경로 판단(`useImsForCall=`) 뒤 `RILJ`의 `LAST_CALL_FAIL_CAUSE` 응답이 남는다.
 
 ```
-09-18 19:43:20.000  1300  1312 D ImsPhoneCallTracker: [PHONE0] dial: isVolteEnabled=true imsRegistered=false
-09-18 19:43:23.000  1300  1312 D RILJ: [PHONE0] [0078]< LAST_CALL_FAIL_CAUSE causeCode=17
+09-18 19:43:20.000  1300  1300 I GsmCdmaPhone: [0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=true, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=1
+09-18 19:43:23.000  1300  1312 D RILJ: [0078]< LAST_CALL_FAIL_CAUSE com.android.internal.telephony.LastCallFailCause@5d3c2a1 causeCode: 17 vendorCause: null [PHONE0]
 ```
 
 - 발신 시도 없이 실패 코드만 있는 로그는 이 증상이 아니다(수신 실패일 수 있다).
@@ -94,11 +93,11 @@ VoLTE로 발신하면 통화가 연결되지 않고 즉시 종료된다. 사용�
 
 - **로그 예시**:
   ```
-  09-18 19:40:05.000  1300  1312 W ImsRegistration: [PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN
-  09-18 19:43:20.000  1300  1312 D ImsPhoneCallTracker: [PHONE0] dial: isVolteEnabled=true imsRegistered=false
-  09-18 19:43:23.000  1300  1312 D RILJ: [PHONE0] [0078]< LAST_CALL_FAIL_CAUSE causeCode=17
+  09-18 19:40:05.000  1300  1312 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0
+  09-18 19:43:20.000  1300  1300 I GsmCdmaPhone: [0] useImsForCall=false, … isUt=false, … imsPhone.getServiceState().getState()=1
+  09-18 19:43:23.000  1300  1312 D RILJ: [0078]< LAST_CALL_FAIL_CAUSE com.android.internal.telephony.LastCallFailCause@5d3c2a1 causeCode: 17 vendorCause: null [PHONE0]
   ```
-- **확인 방법**: 발신 시도 **앞에** IMS 등록 실패가 있고, 발신 시점의 `imsRegistered=false`다. 등록 실패 자체가 증상인 이슈는 IMS 카테고리(`IMS-001-01`)이고, 여기서는 그 결과로 통화가 실패하는 것을 다룬다. 두 원인은 `related`로 연결돼 있다.
+- **확인 방법**: 발신 시도 **앞에** IMS 등록 실패가 있고, 발신 시점의 IMS 서비스 상태가 `IN_SERVICE`(0)가 아니다(`getState()=1`). 등록 실패 자체가 증상인 이슈는 IMS 카테고리(`IMS-001-01`)이고, 여기서는 그 결과로 통화가 실패하는 것을 다룬다. 두 원인은 `related`로 연결돼 있다.
 - **재현 시나리오**: VoLTE 지원 SIM 삽입 → 캐리어 설정에서 VoLTE OFF(또는 등록 거절 망 진입) → IMS 등록 실패 확인 → VoLTE 발신
 - **해결책**: 캐리어 설정의 VoLTE 항목을 켜고 IMS 등록을 다시 시도한다. 등록이 계속 실패하면 IMS-001-01 쪽을 본다.
 - **코드 위치**: `ImsPhoneCallTracker#dial`이 등록 상태를 보고 발신 경로를 정한다.

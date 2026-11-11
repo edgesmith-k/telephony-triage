@@ -1,14 +1,18 @@
-# 파서 fixture: 연결된 VoLTE 통화가 끊김 (11-phases.md Phase 2).
-# 로그 문구와 원인 코드는 placeholder다 — TODO(SITE:S9)
+# 파서 fixture: 연결된 CS 통화가 끊김 (11-phases.md Phase 2).
+# 문구는 Android 17 형식이다(캡처 줄은 마스킹, LAST_CALL_FAIL_CAUSE는 소스 문구). 원인 코드는 placeholder — TODO(SITE:S9)
 name: call-drop
 start: "2026-09-19T20:00:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1300
 tid: 1312
 entries:
-  - {at: 0, tag: ImsPhoneCallTracker, msg: "dial: isVolteEnabled=true imsRegistered=true"}
-  - {after: 2, tag: ImsPhoneCallTracker, level: I, msg: "call state changed: ACTIVE"}
+  - {at: 0, tag: "GsmCdmaPhone", level: I, msg: "[0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=false, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=1"}
+  - {after: 0.05, ril_request: DIAL, serial: 88}
+  - {after: 0.001, ril_response: DIAL, serial: 88, result: ""}
+  - {after: 2, ril_unsol: UNSOL_RESPONSE_CALL_STATE_CHANGED}
+  - {after: 0.01, ril_request: GET_CURRENT_CALLS, serial: 89}
+  - {after: 0.001, ril_response: GET_CURRENT_CALLS, serial: 89, result: "{[id=1,ACTIVE,toa=129,norm,mo,0,nonvoc,noevp,,cli=1,,1,audioQuality=0] }"}
   - {after: 95, ril_unsol: UNSOL_RESPONSE_CALL_STATE_CHANGED}
-  - {after: 0.2, tag: ImsPhoneCallTracker, level: W, msg: "call state changed: DISCONNECTED"}
   - {after: 0.1, ril_request: LAST_CALL_FAIL_CAUSE, serial: 90}
-  - {after: 0.3, ril_response: LAST_CALL_FAIL_CAUSE, serial: 90, result: "causeCode=65"}
+  - {after: 0.3, ril_response: LAST_CALL_FAIL_CAUSE, serial: 90, result: "com.android.internal.telephony.LastCallFailCause@5d3c2a1 causeCode: 65 vendorCause: null"}

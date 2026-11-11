@@ -9,14 +9,13 @@
 08-27 16:00:20.010  1830 1910 V VRIL    : radio state changed: newState=RADIO_UNAVAILABLE
 08-27 16:00:20.500  2101 2141 D RILJ    : [0340]> GET_CURRENT_CALLS [PHONE0]
 08-27 16:00:21.000  2101 2101 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 0, null}, suggestedAction=0
-08-27 16:00:21.100  2101 2113 W ImsRegistration: onRegistrationFailed: code=1000 reason=LOCAL [PHONE0]
 08-27 16:00:21.200  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
-08-27 16:00:22.000  2101 2113 D ImsPhoneCallTracker: [0] dial: isVolteEnabled=true imsRegistered=false
-08-27 16:00:22.100  2101 2141 D RILJ    : [0342]> DIAL clir=0 [PHONE0]
-08-27 16:00:22.700  2101 2142 D RILJ    : [0342]< DIAL [PHONE0]
+08-27 16:00:22.000  2101 2101 I GsmCdmaPhone: [0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=true, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=1
+08-27 16:00:22.100  2101 2141 D RILJ    : [0342]> DIAL [PHONE0]
+08-27 16:00:22.700  2101 2142 D RILJ    : [0342]< DIAL  [PHONE0]
 08-27 16:00:23.000  2101 2142 D RILJ    : [UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED [PHONE0]
 08-27 16:00:23.100  2101 2141 D RILJ    : [0343]> LAST_CALL_FAIL_CAUSE [PHONE0]
-08-27 16:00:23.400  2101 2142 D RILJ    : [0343]< LAST_CALL_FAIL_CAUSE causeCode=17 [PHONE0]
+08-27 16:00:23.400  2101 2142 D RILJ    : [0343]< LAST_CALL_FAIL_CAUSE com.android.internal.telephony.LastCallFailCause@5d3c2a1 causeCode: 17 vendorCause: null [PHONE0]
 08-27 16:00:23.600  2101 2113 W ImsPhoneCallTracker: [0] call ended: cause=17
 08-27 16:00:24.000  1188 1248 E VRIL    : reply to client token 343
 08-27 16:00:32.010  1830 1910 V VRIL    : radio state changed: newState=RADIO_ON

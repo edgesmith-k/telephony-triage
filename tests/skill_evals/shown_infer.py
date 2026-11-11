@@ -236,7 +236,7 @@ def draft_rules(result: str) -> list[dict] | None:
 
 def tool_text(e) -> str:
     """도구 결과 본문: Read는 줄 번호 접두(`  12\\t`·`  12→`)를 떼고, `{"screen": …}` JSON(render --json)이면 screen."""
-    res = str(e.get("result") or "")
+    res = str(e.get("result") or "").replace("\r\n", "\n")     # Windows 실행 기록의 CRLF: `^…$` 화면 정규식이 줄 끝에 안 맞는다
     if e.get("name") == "Read":
         res = re.sub(r"^\s*\d+(?:\t|→)", "", res, flags=re.MULTILINE)
     if '"screen"' in res:

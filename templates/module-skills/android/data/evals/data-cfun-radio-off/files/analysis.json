@@ -30,7 +30,7 @@
   ],
   "in_range": "partial",
   "clock_anomalies": 0,
-  "events": 20,
+  "events": 23,
   "masked": null,
   "uncollected_tags": [
    {

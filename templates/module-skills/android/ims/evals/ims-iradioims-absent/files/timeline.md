@@ -13,5 +13,5 @@
 11:47:20.411 - D RilRequest [0527]< NOTIFY_IMS_DATA_NETWORK error: com.android.internal.telephony.CommandException: REQUEST_NOT_SUPPORTED
 11:47:23.051 - V RIL mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=96
 11:47:23.054 - V RIL [ImsService_0] ims registration indication: TRUE
-11:47:23.072 - D ImsPhone [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN
+11:47:23.072 - D ImsPhone [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN  ⇒ ims_registered(transport=WWAN)
 11:47:23.140 p0 E RILJ Unable to complete updateImsRegistrationInfo because service IMS is not available. [PHONE0]

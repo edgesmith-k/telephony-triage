@@ -1,8 +1,9 @@
-# SIM-001-01 양성: 카드 상태 조회가 CARD_IO_ERROR로 끝나고 SIM이 ABSENT가 된다. 슬롯 1.
-# 태그·문구는 placeholder다 — TODO(SITE:S9)
+# SIM-001-01 양성: 카드 상태 조회가 오류로 끝나고 SIM이 ABSENT가 된다. 슬롯 1.
+# 문구는 Android 17 형식이다(ACTION_SIM_STATE_CHANGED는 캡처 모양에 ABSENT 값 합성, ICC 조회 오류는 소스 문구). SubscriptionManagerService 줄은 placeholder — TODO(SITE:S9)
 name: SIM-001-01
 start: "2026-09-25T16:20:00+09:00"
 default_phone: 1
+phone_style: aosp
 pid: 1400
 tid: 1410
 build:
@@ -13,8 +14,11 @@ expect:
   occurred_at: "2026-09-25T16:20:03+09:00"
 entries:
   - {at: 0, ril_request: GET_SIM_STATUS, serial: 11}
-  - {after: 1, tag: UiccController, level: W, msg: "onIccCardStatusDone: error=CARD_IO_ERROR"}
-  - {after: 2, tag: UiccController, level: W, msg: "SIM state changed: ABSENT"}
+  - {after: 0.8, ril_response: GET_SIM_STATUS, serial: 11, result: "error 2"}
+  - {after: 0.2, tag: "UiccController", level: E, msg: "Error getting ICC status. RIL_REQUEST_GET_ICC_STATUS should never return an error"}
+  - {after: 0, tag: "UiccController", level: E, msg: "com.android.internal.telephony.CommandException: GENERIC_FAILURE"}
+  - {after: 2, tag: "UiccController", msg: "Broadcasting intent ACTION_SIM_STATE_CHANGED ABSENT reason null for phone: 1 sub: -1"}
   - {after: 5, ril_request: GET_SIM_STATUS, serial: 12}
-  - {after: 1, tag: UiccController, level: W, msg: "onIccCardStatusDone: error=CARD_IO_ERROR"}
-  - {after: 1, tag: SubscriptionManagerService, level: W, msg: "no subscription for slot: iccid=<ICCID#1>"}
+  - {after: 0.8, ril_response: GET_SIM_STATUS, serial: 12, result: "error 2"}
+  - {after: 0.2, tag: "UiccController", level: E, msg: "Error getting ICC status. RIL_REQUEST_GET_ICC_STATUS should never return an error"}
+  - {after: 1, tag: "SubscriptionManagerService", level: W, msg: "no subscription for slot: iccid=<ICCID#1>"}

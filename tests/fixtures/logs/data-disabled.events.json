@@ -13,7 +13,7 @@
    "tid": 1244,
    "level": "D",
    "tag": "DCM-0",
-   "msg": "carrier config loaded: carrierId=<CARRIER>",
+   "msg": "Carrier config updated. Config is carrier specific.",
    "phone_id": 0,
    "category_hint": "data",
    "ril": null,

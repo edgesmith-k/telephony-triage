@@ -116,6 +116,7 @@ platforms:
           - '^\[IpcCtx_\d\] (rx frame|Send|route req|OnRequest|OnIpcIndication)\b'
           - '^\[indFilter\] |^reply to client token'
           - 'satelliteConfigParser is not ready'
+          - '^(Idle|Delivering|Waiting|Startup)State\.(enter|exit|processMessage): '   # A: GsmInboundSmsHandler 상태 기계 잡음(캡처)
         not_error:
           - '^waitlist miss '
         background: []
@@ -169,7 +170,7 @@ platforms:
         services: [ExampleCallService, ExampleSsService]
         ipc: [VIPC_EXAMPLE_IMS_CF*, VIPC_EXAMPLE_VONR_SWITCH, VIPC_EXAMPLE_ECC_IND]
         keywords: ['re:\[ut\]', 'OEM_REQ_IMS_SET_CALL_FORWARD', 're:at-in: ATD']
-        also: {'^ImsPhone$': 'dialInternal|MmiCode|onMMIDone|Call', '^GsmCdmaPhone$': 'useImsForCall=', '^VRIL-IMS$': '\[ut\]|OEM_REQ_IMS_SET_CALL_FORWARD|INVITE'}   # INVITE: 사내 확인
+        also: {'^ImsPhone$': 'dialInternal|MmiCode|onMMIDone|Call', '^GsmCdmaPhone$': 'useImsForCall=', '^VRIL-IMS$': '\[ut\]|OEM_REQ_IMS_SET_CALL_FORWARD|INVITE', '^Telephony$': '^(PstnIncomingCallNotifier: handleNew|onCreate(Incoming|Outgoing|Unknown)Conn|placeOutgoingConn|perform(Answer|Reject|Hold|Unhold)|Holding active|getFirstPhoneForEmergency|isEmergencyNumberTest|Exception occurred|CallStateException|onStateChanged, state:|MSG_PRECISE_CALL)|onDisconnect', '^Phone-\d+$': 'Event EVENT_CALL_RING|notifyNewRingingConnection'}   # INVITE: 사내 확인. A: Telephony·Phone-<n>는 통화 줄만(캡처, 통화 밖 0줄)
         neighbours: [ims]
       sms:
         path: android/sms

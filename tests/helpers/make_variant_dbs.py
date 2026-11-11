@@ -144,7 +144,7 @@ def lint_errors(db: Path) -> None:
           "extractors:\n  - id: raw-iccid\n    added_for: SIM-001\n    added_on: 2026-09-29\n    reason: 린터 시험용\n"
           "    tag: UiccController\n    patterns: ['iccid=(?P<iccid>89\\d{17})']\n    event: raw_iccid\n    fields: [iccid]\n\n")
     # signatures-missing: pending 표시 없이 빈 시그니처
-    _sub(sms / "type.md", r"    signatures:\n      - id: smsc-missing-then-fail\n.*?(    recovery_signatures:)",
+    _sub(sms / "type.md", r"    signatures:\n      - id: send-request-missing\n.*?(    recovery_signatures:)",
          "    signatures: []\n\\1")
     # pending-on-type: 유형에 붙은 signatures_pending
     _edit(ims / "type.md", "status: active\nsymptom_signatures:", "status: active\nsignatures_pending: true\nsymptom_signatures:")
@@ -276,7 +276,7 @@ CALL_001_02 = """  - id: CALL-001-02
     signatures:
       - id: network-reject-31
         must_event:
-          - {id: dial, event: ims_dial_attempt, fields: {registered: 'true'}}
+          - {id: dial, event: ims_dial_attempt, fields: {ims_state: '0'}}
           - {id: failed, event: call_fail_cause, fields: {cause: '31'}}
         sequence: [dial, failed]
         window_sec: 120

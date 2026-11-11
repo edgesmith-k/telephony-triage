@@ -752,12 +752,12 @@ def test_masking_runs_before_extractors():
 
     def fake_masker(text: str) -> str:
         seen.append(text)
-        return text.replace("cause=13", "cause=99")
+        return text.replace("rejectCause=13", "rejectCause=99")
 
     out = parse_logcat.postprocess(events, rules, masker=fake_masker)
     rejected = [e for e in out if e["event"] == "network_registration_rejected"]
     assert rejected and all(e["fields"]["cause"] == "99" for e in rejected)
-    assert all("cause=13" not in e["msg"] for e in out)
+    assert all("rejectCause=13" not in e["msg"] for e in out)
     assert seen, "마스커가 불리지 않았다"
 
 

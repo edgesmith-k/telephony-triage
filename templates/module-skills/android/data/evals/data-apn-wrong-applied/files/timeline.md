@@ -6,7 +6,7 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): DEACTIVATE_DATA_CALL · SET_USER_DATA_ENABLED · SET_USER_DATA_ROAMING_ENABLED · UNSOL_DATA_CALL_LIST_CHANGED · UNSOL_DATA_CALL_LIST_UPDATED
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
-10:00:02.500 p0 D DCM-0 carrier config loaded: carrierId=<CARRIER>
+10:00:02.500 p0 D DCM-0 Carrier config updated. Config is carrier specific.
 10:00:03.000 p0 D DPM-0 Data profiles updated: [DataProfile=[ApnSetting] DEFAULT <APN#2>, IPV4V6, preferred=false] [DataProfile=[ApnSetting] IMS <APN#3>, IPV4V6, preferred=false]
 10:00:03.010 p0 D DPM-0 Preferred data profile kept from previous carrier: [DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6, preferred=true]
 10:00:03.100 p0 D RILJ [0410]> SET_INITIAL_ATTACH_APN [DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6] [PHONE0]
@@ -26,4 +26,4 @@
 10:00:05.400 p0 D DNC-0 Internet data state changed from DISCONNECTED to CONNECTED.  ⇒ data_internet_state_changed(from=DISCONNECTED,to=CONNECTED)
 
 ## 다른 모듈 줄 (±15초, 경고·오류)
-10:00:02.000 p0 I UiccController [PHONE0] SIM state changed: LOADED  ⇒ sim_state_changed(state=LOADED)
+10:00:02.000 - D UiccController Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 1  ⇒ sim_state_changed(state=LOADED)

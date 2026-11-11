@@ -9,6 +9,6 @@
 09-05 08:00:14.012  1188 1242 I RIL     : [ExampleIccService_0] sim status done errorCode=0
 09-05 08:00:14.014  1188 1244 D VRIL-SVC: getIccCardStatus response: serial 320
 09-05 08:00:14.020  2101 2142 D RILJ    : [0320]< GET_SIM_STATUS [PHONE0]
-09-05 08:00:14.100  2101 2101 I UiccController: [PHONE0] SIM state changed: READY
-09-05 08:00:15.500  2101 2101 I UiccController: [PHONE0] SIM state changed: LOADED
+09-05 08:00:14.100  2101 2101 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED READY reason null for phone: 0 sub: 1
+09-05 08:00:15.500  2101 2101 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 1
 09-05 08:00:20.000  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009

@@ -44,10 +44,10 @@ tags: [registration]
 
 ## 증상 판별 방법
 
-`SST`(ServiceStateTracker)에 등록 거절 로그가 남는다.
+`NRM`(NetworkRegistrationManager)의 등록 정보에 `registrationState=DENIED`와 거절 사유(`rejectCause=`)가 남는다.
 
 ```
-09-24 10:11:02.000  1234  1244 W SST-0: [PHONE0] registration rejected: cause=13 domain=PS
+09-24 10:11:02.000  1234  1260 D NRM-C-0: onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=DENIED networkRegistrationState=DENIED roamingType=NOT_ROAMING accessNetworkTechnology=NR rejectCause=13 emergencyEnabled=false availableServices=[]
 ```
 
 - 거절 없이 검색만 반복하는 경우(커버리지 문제)는 이 유형이 아니다.
@@ -58,11 +58,11 @@ tags: [registration]
 
 - **로그 예시**:
   ```
-  09-24 10:11:00.000  1234  1244 I SST-0: [PHONE0] onServiceStateChanged: regState=NOT_REGISTERED
-  09-24 10:11:02.000  1234  1244 W SST-0: [PHONE0] registration rejected: cause=13 domain=PS
-  09-24 10:11:12.000  1234  1244 W SST-0: [PHONE0] registration rejected: cause=13 domain=PS
+  09-24 10:11:00.000  1234  1234 D SST-0: pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} …
+  09-24 10:11:02.000  1234  1260 D NRM-C-0: onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=DENIED networkRegistrationState=DENIED roamingType=NOT_ROAMING accessNetworkTechnology=NR rejectCause=13 emergencyEnabled=false availableServices=[]
+  09-24 10:11:12.000  1234  1260 D NRM-C-0: onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=CS transportType=WWAN registrationState=DENIED networkRegistrationState=DENIED roamingType=NOT_ROAMING accessNetworkTechnology=NR rejectCause=13 emergencyEnabled=false availableServices=[]
   ```
-- **확인 방법**: 거절 코드가 가입자 관련 값(11/13/15)인지 본다. 다른 코드는 원인이 다르므로 새 원인을 검토한다.
+- **확인 방법**: 거절 코드가 가입자 관련 값(11/13/15)인지 본다. `rejectCause=0`은 사유 없음이라 이 원인으로 정하지 않는다(에뮬레이터는 DENIED에 0을 준다). 다른 코드는 원인이 다르므로 새 원인을 검토한다.
 - **재현 시나리오**: 해당 망에서 단말 재부팅 또는 비행기 모드 OFF → 등록 시도 → 거절 로그 확인
 - **해결책**: 거절 코드를 확인하고 가입 상태를 사업자에 문의한다.
 - **코드 위치**: 없음. AP 쪽은 상태 전이만 기록하고 판단 근거는 CP 로그다(`cp_evidence`). 사내에서 ServiceStateTracker 경로를 확인하면 추가한다 — TODO(SITE:S11).

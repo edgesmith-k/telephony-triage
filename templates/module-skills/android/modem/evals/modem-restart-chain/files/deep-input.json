@@ -11,12 +11,6 @@
    "cause": "CALL-001-01",
    "score": 1.0,
    "confidence": "high"
-  },
-  {
-   "type": "IMS-001",
-   "cause": null,
-   "score": 0.4997,
-   "confidence": "low"
   }
  ],
  "issue_summary": "통화 중 갑자기 서비스 안 됨 (합성)",
