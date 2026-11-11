@@ -238,9 +238,7 @@ def _text(path: Path) -> str | None:
 
 def _fold_ascii(text: str) -> str:
     """패턴이 `re.ASCII`라 전각·아라비아-인도 숫자와 유니코드 공백(NBSP)을 ASCII로 접어서 본다(글자 수 같음, masking.fold_ascii와 같은 규칙)."""
-    if text.isascii():
-        return text
-    return re.sub(r"[^\x00-\x7f]", lambda m: str(unicodedata.decimal(m.group(0))) if m.group(0).isdecimal()
+    return re.sub(r"[\x1c-\x1f]|[^\x00-\x7f]", lambda m: str(unicodedata.decimal(m.group(0))) if m.group(0).isdecimal()
                   else " " if m.group(0).isspace() else m.group(0), text)
 
 
@@ -255,7 +253,7 @@ def check_patterns(files: dict[str, Path], patterns) -> list[Finding]:
         for lineno, line in enumerate(text.splitlines(), 1):
             folded = _fold_ascii(line)
             for name, regex, ok in patterns:
-                for match in regex.finditer(folded):
+                for match in regex.finditer(folded if regex.flags & re.ASCII else line):   # 사내 패턴(ASCII 아님)은 원문 그대로
                     if ok is not None and ok(match):
                         continue
                     findings.append(Finding(f"pattern:{name}", rel, lineno, line[match.start():match.end()]))

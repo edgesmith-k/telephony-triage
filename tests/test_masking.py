@@ -479,6 +479,18 @@ def test_unicode_space_and_digits_are_folded_before_rules():
     assert masking.new_masker().find(fw)[0]["kind"] == "IMSI"
     assert masking.fold_ascii("한글 abc") == "한글 abc" and len(masking.fold_ascii(f"{fw}{nb}")) == 16
 
+    # 갈린 덤프 조각(oFono)도 접어서 본다: 전각 IMSI가 두 줄에 걸쳐도 뒷조각이 남지 않는다
+    head = "Nov 11 10:00:00.{ms} dut ofonod[123]: example_dump() "
+    lines = [head.format(ms="100") + "imsi=" + fw[:8], head.format(ms="200") + fw[8:] + " end"]
+    out = masking.mask_lines(masking.new_masker(log_lines=True), lines)
+    assert [line.split("example_dump() ")[1] for line in out] == ["imsi=<IMSI#1>", "<IMSI#1> end"], out
+
+    # ASCII 구분 문자(FS~US)도 유니코드 공백이다: 덤프 구분자로 쓰여도 가리고, 다시 가려도 결과가 같다
+    us = chr(0x1f)
+    assert masking.new_masker(log_lines=True)("Device 0:" + us + us.join(["12", "34", "56", "78", "9a", "bc"])) == "Device 0: <HEXDUMP 6B>"
+    once = masking.new_masker()(f"token={us}abcdef1234567890xyz")
+    assert once == f"token={us}<CRED#1>" and masking.new_masker(existing_text=once)(once) == once
+
 
 def test_hangul_glued_values_are_masked():
     """한글 조사가 붙은 값(`010-1234-5678로`)·한글 바로 뒤 값도 제 종류로 가린다 — 일반 마스커(`--check`·db_lint·issue_post)와

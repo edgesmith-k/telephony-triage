@@ -104,7 +104,7 @@ def _secretish(value: str) -> bool:
     return len(value) >= 16 and any(c.isdigit() for c in value)
 
 
-_NON_ASCII = re.compile(r"[^\x00-\x7f]")
+_NON_ASCII = re.compile(r"[\x1c-\x1f]|[^\x00-\x7f]")      # ASCII 밖 글자와, 유니코드 공백인 ASCII 구분 문자(FS~US)
 
 
 def _fold_char(m: re.Match) -> str:
@@ -115,7 +115,7 @@ def _fold_char(m: re.Match) -> str:
 def fold_ascii(text: str) -> str:
     r"""규칙이 보는 글: 유니코드 십진 숫자(전각 `４`·아라비아-인도 숫자)는 ASCII 숫자로, 유니코드 공백(NBSP·U+3000)은 ` `로.
     글자 수가 같아 구간은 원문에 그대로 쓴다. 규칙이 `re.ASCII`라 이게 없으면 `\d`·`\s`가 그 글자를 놓친다."""
-    return text if text.isascii() else _NON_ASCII.sub(_fold_char, text)
+    return _NON_ASCII.sub(_fold_char, text)
 
 
 def _digits(value: str) -> str:
@@ -138,7 +138,7 @@ def _pass_like(value: str) -> bool:
 
 def _norm_key(kind: str, value: str) -> str:
     """번호 대응표의 키. IMEI는 표기 변형(공백·대시·대소문자)이 같은 값이면 같은 번호가 되도록 정규화한다."""
-    return value.replace(" ", "").replace("-", "").upper() if kind == "IMEI" else value
+    return fold_ascii(value).replace(" ", "").replace("-", "").upper() if kind == "IMEI" else value
 
 
 def _alnum_mixed(value: str) -> bool:
@@ -601,7 +601,7 @@ class Masker:  # noqa: F811  # 위의 타입 별칭 Masker를 이 클래스가 �
 
 
 def _render(fmt: str, kind: str, n: int, value: str) -> str:
-    return fmt.format(kind=kind, n=n, b=_dump_bytes(value), h=len(value) // 2)
+    return fmt.format(kind=kind, n=n, b=_dump_bytes(fold_ascii(value)), h=len(value) // 2)
 
 
 def new_masker(existing_text: str | None = None, allow_patterns: Iterable[str] = (), *,
@@ -629,10 +629,12 @@ def _split_spans(texts: list, groups, masker=None) -> dict[int, list[tuple[int, 
     if not groups:
         return {}
     rules = [(r.kind, r.regex) for r in _SPLIT_RULES]
-    texts = [t.rstrip("\r") if isinstance(t, str) else "" for t in texts]
+    orig = [t.rstrip("\r") if isinstance(t, str) else "" for t in texts]
+    texts = [fold_ascii(t) for t in orig]              # 규칙은 접은 글을 보고(글자 수 같음), 값은 원문 조각에서 낸다
     out: dict[int, list] = {}
     used: list[tuple[int, int, int]] = []
-    for kind, value, pieces in dumpjoin.cross_hits(texts, rules, groups):
+    for kind, _folded, pieces in dumpjoin.cross_hits(texts, rules, groups):
+        value = "".join(orig[i][s:e] for i, s, e in pieces)
         if (masker is not None and masker._allowed(value)) or _android_masked(value):
             continue
         if any(i == j and s < f and t < e for i, s, e in pieces for j, t, f in used):
