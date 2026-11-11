@@ -20,7 +20,7 @@
 - **코덱스 종합 리뷰 반영 완료**(`58ae770`·`1554dc0`, GRADER_VERSION 5). WSL 전체 pytest 통과, hook_probes 176개 판정 동일. 상세는 `docs/history/draft-notes-2026-11.md`.
 - 다음 묶음 **import-20261109**(태그·반입은 사용자). 사내: 재반입 §8. 이번 묶음은 guard 판정이 바뀌었다(4-c 병합 계열·규칙 5 ask 전환, Approve·기각·자동 병합·보호 변경·refs 위조 deny 신설) — 반입 전 `s4a.protection_guard` 통과 전제. SITE_INSTALL §8대로 사내 대상 eval 12개(`pending.json` `site`) 전부 다시 돌린다.
 - 템플릿·fixture는 placeholder·합성(사내 값은 SITE_PATHS, 반입 전 SITE_RESTORE ⓪), 반입은 `stable`에서 (Android eval은 arm pin 갱신으로 두 arm 함께 재실행)
-- 11/10~12 병합 #85~#89·#91·#92(Android 17 문구·ARM_PINS·GRADER_VERSION 6, 캡처 없는 줄 `# 소스만`). 모듈 eval: sim만 fail(기준선 arm). PR 대기: #90 `fix/masking-hangul`.
+- 11/10~12 병합 #85~#92(#90 마스킹 한글 경계·전각 접기, #91·#92 Android 17 문구·ARM_PINS·GRADER_VERSION 6, 캡처 없는 줄 `# 소스만`). 모듈 eval: sim만 fail(기준선 arm). PR 대기 없음.
 - 모델 Sonnet 5.5 기준. `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서: `docs/book/telephony-triage-book.html`
 
