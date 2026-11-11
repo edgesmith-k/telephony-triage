@@ -11,18 +11,16 @@ symptom_signatures:
       - {event: sms_send_failed}
     window_sec: 60
   - id: sms-send-request-missing
-    must_match: ['SmsDispatchersController: sendTextInternal:']
-    must_not_match: ['RILJ.*>\s*SEND_SMS\b']
+    must_match: ['GsmSMSDispatcher: sendSms: .*isIms\(\)=false .*\bSS=[1-3]\b']
     window_sec: 60
 causes:
   - id: SMS-001-01
     status: active
     title: 전송 요청이 만들어지지 않음
-    description: 발신 요청(sendTextInternal)이 RIL SEND_SMS 요청으로 이어지지 않음(무선 꺼짐·SMSC 없음 등 단말 안에서 멈춤)
+    description: CS 발신이 디스패처 sendSms에서 서비스 없음(SS=1~3 — 무선 꺼짐·서비스 불가)으로 멈춰 RIL SEND_SMS 요청이 나가지 않음
     signatures:
       - id: send-request-missing
-        must_match: ['SmsDispatchersController: sendTextInternal:']
-        must_not_match: ['RILJ.*>\s*SEND_SMS\b']
+        must_match: ['GsmSMSDispatcher: sendSms: .*isIms\(\)=false .*\bSS=[1-3]\b']
         window_sec: 60
     recovery_signatures: []
     scenario_signatures: []
@@ -48,7 +46,7 @@ SMS를 보내면 전송 실패로 끝나거나 아예 나가지 않는다. 재�
 
 ## 증상 판별 방법
 
-IMS 전송이 실패해 CS로 넘긴 줄(`ImsSmsDispatcher`, 17 소스 문구)이 남거나, 발신 요청(`sendTextInternal:`) 뒤 RILJ `> SEND_SMS`가 없다.
+IMS 전송이 실패해 CS로 넘긴 줄(`ImsSmsDispatcher`, 17 소스 문구)이 남거나, CS 발신 디스패처 `sendSms:`가 서비스 없음(`SS=1~3`)으로 찍힌다(그 뒤 RILJ `> SEND_SMS`가 없다).
 
 ```
 09-26 13:00:05.000  1500  1510 E ImsSmsDispatcher [0]: sendSms failed. Falling back to PSTN. Error: <msg>
@@ -64,7 +62,7 @@ IMS 전송이 실패해 CS로 넘긴 줄(`ImsSmsDispatcher`, 17 소스 문구)�
   09-26 13:00:00.000  1500  1510 D SmsDispatchersController: sendTextInternal: messageId=0, uniqueMessageId=3
   09-26 13:00:00.170  1500  1510 D GsmSMSDispatcher: sendSms:  isIms()=false mRetryCount=0 mImsRetry=0 mMessageRef=0 mUsesImsServiceForIms=false SS=3 {x-message-id:0}
   ```
-- **확인 방법**: 발신 요청 뒤 60초 안에 RILJ `> SEND_SMS`가 없다. 17 발신 경로는 SMSC를 찍지 않으므로 멈춘 단계는 디스패처 `sendSms:`의 `SS=`(서비스 상태, 3은 무선 꺼짐)와 캐리어 설정으로 본다. IMS로 나간 문자는 RILJ `SEND_SMS`가 없으므로 IMS 등록 상태를 함께 본다(사내 확인).
+- **확인 방법**: `GsmSMSDispatcher`의 `sendSms: isIms()=false … SS=`가 1~3이다(서비스 상태, 0은 정상·3은 무선 꺼짐). 그 뒤 RILJ `> SEND_SMS`가 없는지 함께 본다. 17 발신 경로는 SMSC를 찍지 않으므로 SMSC는 캐리어 설정으로 본다. IMS로 나간 문자는 RILJ `SEND_SMS`가 없으므로 IMS 등록 상태를 함께 본다(사내 확인).
 - **재현 시나리오**: 비행기 모드(또는 SMSC 주소를 지운 SIM 프로필) → 문자 발신 → 요청·디스패처 로그 확인
 - **해결책**: 요청이 멈춘 단계(디스패처 sendSms의 서비스 상태 SS=, SMSC 설정)를 확인해 설정을 바로잡고 전송을 재시도한다.
 - **코드 위치**: 없음. 사내 SmsDispatchersController 경로를 확인하면 추가한다 — TODO(SITE:S11).

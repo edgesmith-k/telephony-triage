@@ -7,7 +7,7 @@
   {
    "signature": "SMS-001-01/send-request-missing",
    "missing": [
-    "must_match 'SmsDispatchersController: sendTextInternal:'"
+    "must_match 'GsmSMSDispatcher: sendSms: .*isIms\\\\(\\\\)=false …"
    ]
   }
  ],

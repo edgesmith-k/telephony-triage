@@ -12,5 +12,5 @@ entries:
   - {after: 1, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED"}
   - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null"}
   - {after: 5, tag: ImsManager, pid: 1600, tid: 1610, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
-  - {after: 32, tag: ImsRegistration, pid: 1600, tid: 1610, level: W, msg: "onRegistrationFailed: code=408 reason=REQUEST_TIMEOUT"}
+  - {after: 32, tag: ImsPhone, pid: 1600, tid: 1610, msg: "[0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 408, Request Timeout}, suggestedAction=0, disconnectedRadioTech=0"}
   - {after: 10, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null"}

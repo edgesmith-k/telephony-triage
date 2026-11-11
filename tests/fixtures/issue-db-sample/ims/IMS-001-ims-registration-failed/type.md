@@ -8,7 +8,7 @@ status: active
 symptom_signatures:
   - id: ims-registration-failure
     must_event:
-      - {event: ims_registration_failed}
+      - {event: ims_registration_failed, fields: {reason: 'CODE_(?!LOCAL_).*'}}
     window_sec: 300
 causes:
   - id: IMS-001-01

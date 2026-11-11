@@ -36,6 +36,7 @@ tags:
 
   # --- sms --- TODO(SITE:S9)
   - {tag: SmsDispatchersController, category: sms, added_for: SMS-001, added_on: 2026-09-28, reason: 초기 (SMS 전송)}
+  - {tag: GsmSMSDispatcher, category: sms, added_for: SMS-001-01, added_on: 2026-11-11, reason: SMS 발신 디스패처 sendSms의 서비스 상태(SS=)}
   - {tag: GsmInboundSmsHandler, category: sms, added_for: SMS-001, added_on: 2026-09-28, reason: 초기 (SMS 수신 — 17 태그는 GsmInboundSmsHandler)}
 
   # --- 벤더 RIL 태그(사내 확인 전, TODO(SITE:S9)) — 사내 DB는 DB PR로 ---

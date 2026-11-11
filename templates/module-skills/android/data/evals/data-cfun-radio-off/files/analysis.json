@@ -64,28 +64,6 @@
    "fix_judgement": null,
    "fix_message": "",
    "related": []
-  },
-  {
-   "type": "IMS-001",
-   "cause": null,
-   "title": "IMS 등록이 되지 않음 (원인 미확인)",
-   "category": "ims",
-   "score": 0.4999,
-   "confidence": "low",
-   "S": 1,
-   "C": 0,
-   "phones": [],
-   "evidence": [
-    {
-     "ts": "2026-10-14T15:22:40.285Z",
-     "tag": "ImsPhone",
-     "msg": "[0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 0, null}, suggestedA…",
-     "event": "ims_registration_failed"
-    }
-   ],
-   "fix_judgement": null,
-   "fix_message": "",
-   "related": []
   }
  ],
  "partial": [

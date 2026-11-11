@@ -7,6 +7,6 @@ tid: 1610
 entries:
   - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
   - {after: 3, tag: ImsManager, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
-  - {after: 32, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=408 reason=REQUEST_TIMEOUT"}
+  - {after: 32, tag: ImsPhone, msg: "[0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 408, Request Timeout}, suggestedAction=0, disconnectedRadioTech=0"}
   - {after: 30, tag: ImsManager, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
-  - {after: 32, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=408 reason=REQUEST_TIMEOUT"}
+  - {after: 32, tag: ImsPhone, msg: "[0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 408, Request Timeout}, suggestedAction=0, disconnectedRadioTech=0"}

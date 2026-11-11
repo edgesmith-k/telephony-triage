@@ -134,14 +134,16 @@ extractors:
     fields: [state]
 
   # --- ims ---
-  # 소스만(에뮬레이터 캡처 없음). code는 ImsReasonInfo 코드, SIP 응답 코드는 벤더 ImsService가 넣을 때만 extra에 온다
+  # 소스만(에뮬레이터 캡처 없음). code는 ImsReasonInfo 코드, SIP 응답 코드는 벤더 ImsService가 넣을 때만 extra에 온다.
+  # 이 줄은 단말 쪽 해제(CODE_LOCAL_* — 무선 끔·서비스 없음의 `121 : CODE_LOCAL_NETWORK_NO_SERVICE`)에도 찍힌다.
+  # 등록 실패로 볼 때는 시그니처가 reason으로 가린다(IMS-001 증상)
   - id: ims-registration-failed
     added_for: IMS-001
     added_on: 2026-09-28
     reason: IMS 등록 해제·실패 사유 추출 (ImsPhone handleImsUnregistered)
     tag: ImsPhone
     patterns:
-      - 'handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: \{(?P<code>\d+) : (?P<reason>[A-Z_]+), (?P<extra>-?\d+)'
+      - 'handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: \{(?P<code>\d+) : (?P<reason>[A-Z_0-9]+), (?P<extra>-?\d+)'
     event: ims_registration_failed
     fields: [code, reason, extra]
 
