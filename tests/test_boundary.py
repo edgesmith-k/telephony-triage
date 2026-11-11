@@ -352,6 +352,9 @@ SECRET_LINES = [
     ("secret-assign", "aws_secret_access_key = " + R + R),
     ("secret-assign", '"client_secret": "' + R + R + '"'),
     ("secret-assign", "JIRA_API_TOKEN=" + R + "9z9z"),
+    # 재리뷰 P1: ASCII 플래그가 없는 기본 패턴도 접은 글을 본다(NBSP·전각 숫자로 쓴 비밀값)
+    ("private-key", "-----BEGIN RSA PRIVATE KEY-----"),
+    ("secret-assign", "token: ABCDEFGH" + "１２３４５６７８９０１２"),
 ]
 
 
