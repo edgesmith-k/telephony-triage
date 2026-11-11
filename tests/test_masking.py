@@ -428,10 +428,138 @@ def test_imei_spelling_variants_share_number():
     assert masker.mask_value("49-015420-323751-8") == "<IMEI#1>"
 
 
-def test_gate_off_for_non_ascii():
-    """`(?i)`는 `ſ`→s·`İ`→i도 맞추므로 ASCII 아닌 줄은 게이트를 끈다(게이트 때문에 놓치지 않는다)."""
-    assert masking.new_masker()("paſs=hunter2") == "paſs=<CRED#1>"
-    assert masking.new_masker()("PİN=1234") == "PİN=<CRED#1>"
+def test_gate_on_for_non_ascii():
+    """규칙이 ASCII(`re.ASCII`)라 `(?i)`가 `ſ`·`İ`를 `s`·`i`로 접지 않는다 — 한글 줄도 게이트를 켜고 결과는 같다
+    (`test_gate_does_not_change_result`). `paſs=`·`PİN=`은 키로 보지 않는다(알려진 한계, 08-safety §8)."""
+    assert masking.new_masker()("비번pass=hunter2로") == "비번pass=<CRED#1>"
+    assert masking.new_masker()("PİN=1234") == "PİN=1234"
+
+
+# (입력, 종류, 원본 값) — 값 바로 앞이 한글·뒤가 조사(공백 없음). 경계는 ASCII 낱말 문자로만 본다
+HANGUL_GLUED = [
+    ("고객010-1234-5678로 연락", "MSISDN", "010-1234-5678"),
+    ("발신+82-10-1234-5678로", "MSISDN", "+82-10-1234-5678"),
+    ("번호dest=01098765432로", "MSISDN", "01098765432"),
+    ("전화tel:+821012345678로", "MSISDN", "+821012345678"),
+    ("메일kim@example.com으로", "EMAIL", "kim@example.com"),
+    ("IMSI 450081234567890에서 실패", "IMSI", "450081234567890"),
+    ("가입자imsi=450081234567890로", "IMSI", "450081234567890"),
+    ("번호450081234567891에서", "IMSI", "450081234567891"),
+    ("단말490154203237518의", "IMEI", "490154203237518"),
+    ("단말imei=490154203237518로", "IMEI", "490154203237518"),
+    ("단말49-015420-323751-8로", "IMEI", "49-015420-323751-8"),
+    ("카드89823001234567890123이", "ICCID", "89823001234567890123"),
+    ("카드iccid=8982300123456789012가", "ICCID", "8982300123456789012"),
+    ("주소192.0.2.10은 사설", "IP", "192.0.2.10"),
+    ("주소2001:db8::7로", "IP", "2001:db8::7"),
+    ("맥aa:bb:cc:dd:ee:ff로", "MAC", "aa:bb:cc:dd:ee:ff"),
+    ("가입imsi-450081234567890으로", "SUPI", "imsi-450081234567890"),
+    ("셀cellId=987654로", "CELL", "987654"),
+    ("임시tmsi=0x1a2b3c4d로", "TMSI", "0x1a2b3c4d"),
+    ("장치serial=R58M12ABCDE로", "SERIAL", "R58M12ABCDE"),
+    ("칩eid=89049032004008882600012345678901로", "EID", "89049032004008882600012345678901"),
+    ("비번password=hunter2", "CRED", "hunter2"),
+    ("인증token=ab12cd34ef로", "CRED", "ab12cd34ef"),
+]
+
+
+def test_unicode_space_and_digits_are_folded_before_rules():
+    """규칙은 `re.ASCII`지만 글을 접어서 본다: 키·값 사이 NBSP·U+3000, 전각·아라비아-인도 숫자도 main처럼 가린다(원문 글자는 유지)."""
+    nb, wide = chr(0xa0), chr(0x3000)
+    digits = "45005" + "1234567890"                                      # 15자리(경계 검사에 걸리지 않게 나눠 적음)
+    fw = "".join(chr(0xff10 + int(d)) for d in digits)                   # 전각
+    ar = "".join(chr(0x0660 + int(d)) for d in digits)                   # 아라비아-인도
+    cases = [(f"smsc={nb}82101234567", f"smsc={nb}<MSISDN#1>"), (f"salt={wide}0123456789abcdef0123", f"salt={wide}<SALT#1>"),
+             (f'"dns_addr"{nb}: [8, 8, 8, 8]', f'"dns_addr"{nb}: [<IP#1>]'), (f"pResponse={nb}9000ABCDEF0123", f"pResponse={nb}<APDU#1>[7B]"),
+             (f"imsi={fw}", "imsi=<IMSI#1>"), (fw, "<IMSI#1>"), (f"imsi={ar}", "imsi=<IMSI#1>"),
+             (f"version{nb}10.1.2.3", f"version{nb}10.1.2.3")]          # 버전 문맥도 NBSP 너머로 본다(IP로 가리지 않음)
+    for text, want in cases:
+        for log_lines in (False, True):
+            assert masking.new_masker(log_lines=log_lines)(text) == want, (text, log_lines)
+    assert masking.new_masker().find(fw)[0]["kind"] == "IMSI"
+    assert masking.fold_ascii("한글 abc") == "한글 abc" and len(masking.fold_ascii(f"{fw}{nb}")) == 16
+
+    # 갈린 덤프 조각(oFono)도 접어서 본다: 전각 IMSI가 두 줄에 걸쳐도 뒷조각이 남지 않는다
+    head = "Nov 11 10:00:00.{ms} dut ofonod[123]: example_dump() "
+    lines = [head.format(ms="100") + "imsi=" + fw[:8], head.format(ms="200") + fw[8:] + " end"]
+    out = masking.mask_lines(masking.new_masker(log_lines=True), lines)
+    assert [line.split("example_dump() ")[1] for line in out] == ["imsi=<IMSI#1>", "<IMSI#1> end"], out
+
+    # ASCII 구분 문자(FS~US)도 유니코드 공백이다: 덤프 구분자로 쓰여도 가리고, 다시 가려도 결과가 같다
+    us = chr(0x1f)
+    assert masking.new_masker(log_lines=True)("Device 0:" + us + us.join(["12", "34", "56", "78", "9a", "bc"])) == "Device 0: <HEXDUMP 6B>"
+    once = masking.new_masker()(f"token={us}abcdef1234567890xyz")
+    assert once == f"token={us}<CRED#1>" and masking.new_masker(existing_text=once)(once) == once
+
+
+def test_hangul_glued_values_are_masked():
+    """한글 조사가 붙은 값(`010-1234-5678로`)·한글 바로 뒤 값도 제 종류로 가린다 — 일반 마스커(`--check`·db_lint·issue_post)와
+    로그 마스커 모두. 로그 마스커가 15~20자리를 `NUM`으로만 가리던 IMSI·ICCID·IMEI도 제 종류다."""
+    for text, kind, raw in HANGUL_GLUED:
+        for log_lines in (False, True):
+            out = masking.new_masker(log_lines=log_lines)(text)
+            assert raw not in out and f"<{kind}#1>" in out, (log_lines, text, out)
+        assert [f["kind"] for f in masking.new_masker().find(text)] == [kind], text
+
+
+def test_unicode_space_between_key_and_value():
+    """키·값 사이 NBSP·U+3000(Jira 글)은 공백이고, 값 끝도 그 공백에서 멈춘다(뒤 낱말을 같이 가리지 않는다)."""
+    assert masking.new_masker()("imsi: 450081234567890") == "imsi: <IMSI#1>"
+    assert masking.new_masker()("password=　hunter2 다음") == "password=　<CRED#1> 다음"
+    assert masking.new_masker()("mPassword=hunter2　다음") == "mPassword=<CRED#1>　다음"
+
+
+def test_prefixed_credential_keys():
+    """접두가 붙은 비밀 키(`mPassword`·`apn_password`·`userPwd`·`clientSecret`·`authToken`)도 가린다. 키 낱말 바로 뒤가
+    구분자여야 하고, 접두 키는 영문+숫자 혼합 값만 본다 — 상태 값·대문자 열거형·짧은 token 숫자와 로그 이름표 값
+    (`SleepToken: tag=…`·apex 버전·`=`로 이은 설정 덩어리, 실제 로그 모양을 본뜬 합성 줄)은 둔다."""
+    for text, raw in (("mPassword=hunter2x", "hunter2x"), ("apn_password: abc123", "abc123"), ("userPwd=s3cret", "s3cret"),
+                      ('{"clientSecret":"xYz987"}', "xYz987"), ("authToken=abcDEF123456", "abcDEF123456"),
+                      ("mPasswd=pa55word", "pa55word"), ("refresh_token=AbC123dEf456", "AbC123dEf456"),
+                      ("APN_PASSWORD=hunter2", "hunter2"), ("clientSecret=abc123==", "abc123")):
+        out = masking.new_masker()(text)
+        assert raw not in out and "<CRED#1>" in out, (text, out)
+    assert masking.new_masker()("clientSecret=abc123==") == "clientSecret=<CRED#1>=="   # 접두 키 값은 `=` 앞까지
+    for text in ("hasPassword=true", "isPasswordSet=false", "password_required=1", "secretMode=on", "passwordless=abc123",
+                 "tokenizer=abc123", "passwordLength=8", "mPassword=null", "hasSecret=no", "mPasswordState=ENABLED",
+                 "mPassword=NOT_SET", "mPwd=12", "mToken=12", "authToken=0x1f", "hasToken=false", "sessionToken=<CRED#1>",
+                 "numTokens=3", "D WindowManager: Remove SleepToken: tag=Display-off, displayId=0",
+                 "security_level = Default, query_token = DemoCdmVersion", "/apex/com.example.authsecret:350000000,",
+                 "enable_number_row_in_password=true_pk=x1"):
+        assert masking.new_masker()(text) == text, text
+    assert masking.new_masker()("password=true") == "password=<CRED#1>"     # 접두 없는 키는 전과 같다
+
+
+def test_ril_cid_and_token_values_are_kept():
+    """RIL이 찍는 데이터 콜 `cid`(대소문자 무관, 객체 안·밖)와 요청 token(짧은 숫자, 접두 키 포함)은 분석에 쓰므로
+    ASCII 경계·접두 키를 넓힌 뒤에도 가리지 않는다(사용자 요구). 자바 객체 표기 token 값도 둔다. 긴 인증 토큰은 가린다.
+    (RILJ·벤더 RIL 모양을 본뜬 합성 줄)"""
+    keep = [
+        "cid=1", "Cid=2", "CID=3", "cid: 4", "CID: 5", '{"cid":12}', '"Cid": 7', "연결cid=2로", "데이터 콜 CID 3에서",
+        "[0605]< SETUP_DATA_CALL DataCallResponse: { cause=NONE retry=-1 cid=1 linkStatus=2 ifname=rmnet_data0 }",
+        "SetupDataCallResult{.cause = NONE, .cid = 1, .active = 2}",
+        "token=612", "token: 0042", "token=0x29", "Token=7", "TOKEN=1234", "mToken=41", "rilToken=1234", "reqToken: 0x1f",
+        "req_token=4294967295", "rilToken=0x0000002a,", "요청token=612로", "mToken=41)",
+        "[0605]> SETUP_DATA_CALL serial=605 token=605 apn=placeholder", "VRIL_SOCK: resp token=41 serial=41",
+        "EventLogger: setModeOwnerToken: android.os.Binder@1a2b3c4 -> [1000(com.android.phone)]",
+    ]
+    for text in keep:
+        for log_lines in (False, True):
+            assert masking.new_masker(log_lines=log_lines)(text) == text, (log_lines, text)
+        assert masking.new_masker().find(text) == [], text
+    auth = "authToken=" + "Ab1" * 14
+    assert masking.new_masker()(auth) == "authToken=<CRED#1>"
+    assert masking.new_masker()("인증token=ab12cd34ef로 보냄") == "인증token=<CRED#1>로 보냄"   # 값은 조사 앞까지
+
+
+def test_mask_pii_check_reports_hangul_glued():
+    """`mask_pii --check`(기본 마스커)도 한글 조사가 붙은 값을 낸다(값은 내지 않는다)."""
+    raw = _write([text for text, _, _ in HANGUL_GLUED] + ["mPassword=hunter2x 접두 키"], name="glued.txt")
+    proc = _run("mask_pii.py", [str(raw), "--check"], cwd=_tmp())
+    assert proc.returncode == 1, proc.stderr
+    kinds = [d["kind"] for d in json.loads(proc.stdout)["detections"]]
+    assert kinds == [kind for _, kind, _ in HANGUL_GLUED] + ["CRED"], kinds
+    assert not [v for _, _, v in HANGUL_GLUED if v in proc.stdout]
 
 
 def test_db_lint_state_patterns_are_not_raw_identifiers():
