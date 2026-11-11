@@ -371,7 +371,7 @@ def test_secret_patterns_catch_values(fake_repo, rule, line):
 def test_secret_pattern_folded_and_raw_match_reported_once(fake_repo):
     # 원문 match(`…ab`)와 접은 글 match(`…ab12`)는 자리가 달라도 같은 값이다 — 한 번만 알린다
     _write(fake_repo, "docs/leak.md", "token: ABCDEFGH1234567890ab" + "１２" + "\n")
-    rules = [r for r, _ in _rules(boundary.scan(fake_repo, "external"))]
+    rules = [f.rule for f in boundary.scan(fake_repo, "external")]
     assert rules.count("pattern:secret-assign") == 1
 
 
