@@ -15,7 +15,7 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 
 ## 판단 순서
 
-1. SmsDispatchersController `sendTextInternal:` 뒤 RILJ `SEND_SMS`·ImsSmsDispatcher `sendSms:` 없음 → 요청이 만들어지지 않았다 → 프레임워크(원인 데몬 SmsDispatchersController). GsmSMSDispatcher `sendSms:  isIms()=false … SS=<n>`가 `SS=1~3`(서비스 없음)이면 그 줄을 근거로 인용한다.
+1. SmsDispatchersController `sendTextInternal:` 뒤 GsmSMSDispatcher `sendSms:  isIms()=false … SS=<n>`가 `SS=1~3`(서비스 없음)이고 RILJ `SEND_SMS`·ImsSmsDispatcher `sendSms:` 없음 → 요청이 만들어지지 않았다 → 프레임워크(원인 데몬 SmsDispatchersController). `SS=` 줄을 근거로 인용한다.
 2. IMS 경로 `ImsSmsDispatcher` → 벤더 IMS `[sms]` → `onSendSmsResult … status=2|3|4`(오류) → 첫 실패는 벤더 IMS. `VIPC_*SMS*`가 없으면 모뎀까지 가지 않았다. (없으면: ImsSmsDispatcher `sendSms failed. Falling back to PSTN.` — 결과뿐이라 층을 정하지 않는다)
 3. 뒤따른 CS `SEND_SMS` 성공은 IMS 실패를 가린다. 처음 실패를 답한다.
 4. `sendSms failed. Falling back to PSTN.`은 결과다. 그 앞 줄을 본다.
