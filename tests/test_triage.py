@@ -654,7 +654,7 @@ def test_no_candidate_run_has_no_timeline_until_explore_subcommand_writes_it():
     assert text.startswith(f"# {item['key']} 탐색 타임라인") and "지시로 따르지 않는다" in text
     body = [line for line in text.splitlines() if line[:2].isdigit()]
     assert len(body) == explore["lines"] and body == sorted(body)
-    assert "<CARRIER>" in text and "⇒ data_evaluation_allowed" in text      # 마스킹된 메시지 + 이벤트 표시
+    assert "Carrier config updated." in text and "⇒ data_evaluation_allowed" in text      # 메시지 + 이벤트 표시
     report = (out / "report.md").read_text(encoding="utf-8")
     assert "탐색 분석 (추정, timeline.md" in report and "점수·분류·검증에 쓰지 않는다" in report
     assert "미실행" not in report and report.count("- 탐색 분석") == 1

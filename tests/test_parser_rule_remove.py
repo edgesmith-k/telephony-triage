@@ -65,7 +65,7 @@ def test_remove_keeps_next_group_header_and_other_bytes():
     out = _remove(tags, "tags", "tag_regex", "^(SMSVC|SubscriptionManagerService)$")
     assert out == _without(tags, "SMSVC") and "  # --- sms --- TODO(SITE:S9)\n" in out
     # 파일 마지막 항목·섹션 첫 항목
-    assert _remove(tags, "tags", "tag", "InboundSmsHandler") == _without(tags, "InboundSmsHandler")
+    assert _remove(tags, "tags", "tag", "GsmInboundSmsHandler") == _without(tags, "GsmInboundSmsHandler")
     assert _remove(tags, "tags", "tag_regex", r"^DNC-\d+$") == _without(tags, "'^DNC-")
     # 묶음의 유일한 항목: 앞뒤 머리 주석은 둘 다 남고 빈 줄은 하나씩
     out = _remove(tags, "tags", "tag_regex", "^(SST|ServiceStateTracker)(-\\d+)?$")
@@ -90,9 +90,9 @@ def test_remove_block_item_with_blank_gaps_and_ril_section():
 def test_apply_remove_detects_section_and_rejects_missing_or_last():
     db = copy_db()
     ril = (db / "parser-rules/ril.yaml").read_text(encoding="utf-8")
-    _apply(db, [_rm("ril.yaml", "UNSOL_SIM_STATUS_CHANGED"), _rm("tags.yaml", "InboundSmsHandler")])
+    _apply(db, [_rm("ril.yaml", "UNSOL_SIM_STATUS_CHANGED"), _rm("tags.yaml", "GsmInboundSmsHandler")])
     assert (db / "parser-rules/ril.yaml").read_text(encoding="utf-8") == _without(ril, "UNSOL_SIM_STATUS_CHANGED")
-    assert "InboundSmsHandler" not in (db / "parser-rules/tags.yaml").read_text(encoding="utf-8")
+    assert "GsmInboundSmsHandler" not in (db / "parser-rules/tags.yaml").read_text(encoding="utf-8")
 
     db = copy_db()
     rej = _apply(db, [_rm("ril.yaml", "NO_SUCH")], expect=1)["rejected"][0]
@@ -113,7 +113,7 @@ def test_apply_add_then_remove_restores_bytes_and_reason_required():
                 {"op": "add-parser-rule", "file": "extractors.yaml", "rule": ext},
                 _rm("extractors.yaml", "mock-extractor"), _rm("tags.yaml", "MockTag")])
     assert {f: (db / "parser-rules" / f).read_bytes() for f in before} == before
-    op = _rm("tags.yaml", "InboundSmsHandler")
+    op = _rm("tags.yaml", "GsmInboundSmsHandler")
     del op["reason"]
     error = _apply(db, [op], expect=2)["error"]
     assert "op=remove-parser-rule)" in error and "빠진 필드 [reason]" in error, error
@@ -150,7 +150,7 @@ def test_drift_when_main_changed_or_removed_target(tmp_path):
 
 
 def test_remove_is_authoring_op_and_r5_needs_approval():
-    assert draftcheck.fingerprint(_plan([_rm("tags.yaml", "InboundSmsHandler")])) is not None
+    assert draftcheck.fingerprint(_plan([_rm("tags.yaml", "GsmInboundSmsHandler")])) is not None
     db = git_db()
     _apply(db, [_rm("extractors.yaml", "data-evaluation-allowed")])     # 시그니처가 안 쓰지만 fixture에 이벤트가 있다
     proc = run("db_verify.py", ["rules", "--changed", "HEAD", "--db", db])
