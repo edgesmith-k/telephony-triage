@@ -230,9 +230,10 @@ def test_evidence_check_tag_colon_and_colon_after_equals_value():
         assert evidence.evidence_check(genuine, source, tags)[0] == "ok", genuine
     for altered in ("D/RILJ: SETUP_DATA_CALL completed retry: 9 cid 3",                    # 태그 접두 뒤 `키: 값` 변조는 그대로 잡는다
                     "SIP REGISTER sent pcscf=<IP#2>:5060 transport udp",
+                    "SIP REGISTER sent pcscf=<IP#1>:5061 transport udp",                  # 포트 변조(`=` 값 뒤 `:숫자`)
                     "onSetupDataCallResult: status=0x1 cid=3 → DataNetworkController: onDataNetworkConnected apn ims interface rmnet0"):
         assert evidence.evidence_check(altered, source, tags)[0] == "fabricated", altered
 
     def tokens(s):
         return [evidence._low(m.group(0)) for m in evidence.DECISION_TOKEN_RX.finditer(s)]
-    assert tokens("pcscf=<IP#1>:5060") == ["pcscf=<ip#1>"] and tokens("uri=sip:alice@example t=10:00:00") == ["uri=sip", "t=10"]
+    assert tokens("pcscf=<IP#1>:5060") == ["pcscf=<ip#1>:5060"] and tokens("uri=sip:alice@example t=10:00:00") == ["uri=sip", "t=10"]

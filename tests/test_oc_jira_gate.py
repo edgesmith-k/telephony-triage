@@ -293,6 +293,14 @@ def test_gate_closes_when_tracker_mapping_changes(w, change):
     assert gate_out(w)["open"] is True
 
 
+def test_tracker_view_reads_mapping_shaped_read_tools_like_guard():
+    """손으로 고친 매핑 꼴 `tracker.read_tools`: guard 규칙 2는 키를 허용 이름으로 읽으므로 지문 재료에도 그 이름이 든다."""
+    base = {"tracker": {"mcp_server": "mock-jira", "tools": {"get_issue": JIRA[0]}, "read_tools": [JIRA[0]]}}
+    edited = {"tracker": {**base["tracker"], "read_tools": {JIRA[0]: True, JIRA[1]: True}}}
+    assert oc.tracker_view(base).read_tools == (JIRA[0],)
+    assert oc.tracker_view(edited).read_tools == (JIRA[0], JIRA[1])
+
+
 def test_gate_closes_for_old_record_without_fingerprint(w):
     """F03: 지문(`tracker_fingerprint`) 없는 옛 기록은 닫힘이고, 그 기록으로는 열 수 없다."""
     _opened(w, record(w.root, w=w))
