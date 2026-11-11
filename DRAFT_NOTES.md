@@ -34,7 +34,7 @@
 
 ## 다음 사이클 후보 (11/09 사용자 목록, 확정 계획 아님)
 
-C 지표 자리 · 4-c 2차(guard 판정 축소 후속) · B 조건부 · F3 B/C(`mask_pii --check` 갈린 ICCID) · 4-c P2 6건 · D① P2 · 묶기·전구간 부정(S37 뒤 별도 설계) · 분석 전용 종료 표식 · Android 17: data extractor 2개·좁힌 태그 연결·call/sms 재캡처.
+C 지표 자리 · 4-c 2차(guard 판정 축소 후속) · B 조건부 · F3 B/C(`mask_pii --check` 갈린 ICCID) · 4-c P2 6건 · D① P2 · 묶기·전구간 부정(S37 뒤 별도 설계) · 분석 전용 종료 표식 · 포트 변조 잔여(끝 `.`·`키: 값`) · A17: extractor 2·좁힌 태그·call/sms 재캡처.
 
 ## 사내로 넘긴 것
 
