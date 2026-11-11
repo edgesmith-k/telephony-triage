@@ -171,6 +171,25 @@ def test_each_rule_reports_injected_violation(fake_repo):
     assert code == 1 and out["violations"]
 
 
+def test_values_glued_to_hangul_are_reported(fake_repo):
+    """값 경계는 ASCII다: 한글 조사가 붙은 IP·15자리·이메일(`52.14.200.7은`)도 위반이다."""
+    _write(fake_repo, "docs/leak.md", "서버52.14.200.7은 사내\n단말359881234567812로\n담당kim@realcorp.co.kr으로\n")
+    found = _rules(boundary.scan(fake_repo, "external"))
+    for rule in ("ip-address", "long-number", "email"):
+        assert (f"pattern:{rule}", "docs/leak.md") in found, rule
+
+
+def test_fullwidth_digits_and_nbsp_are_reported(fake_repo):
+    """패턴은 ASCII지만 줄을 접어서 본다: 전각 15자리·전각 숫자 IP, NBSP로 띄운 인증 헤더도 위반이다."""
+    fw = str.maketrans("0123456789", "".join(chr(0xff10 + n) for n in range(10)))
+    nb = chr(0xa0)
+    _write(fake_repo, "docs/leak.md", "단말 " + "359881234567812".translate(fw) + "\n서버 " + "52.14.200.7".translate(fw)
+           + f"\nAuthorization:{nb}Bearer{nb}abcdEFGH1234ijklMNOP5678\n")
+    found = _rules(boundary.scan(fake_repo, "external"))
+    for rule in ("long-number", "ip-address", "auth-header"):
+        assert (f"pattern:{rule}", "docs/leak.md") in found, rule
+
+
 def test_synthetic_marks_and_registries_pass(fake_repo):
     fixtures = "tests/fixtures/issue-db-x/data/DATA-001-x/fixtures"
     _write(fake_repo, f"{fixtures}/DATA-001-01.log", "log\n")
@@ -333,6 +352,9 @@ SECRET_LINES = [
     ("secret-assign", "aws_secret_access_key = " + R + R),
     ("secret-assign", '"client_secret": "' + R + R + '"'),
     ("secret-assign", "JIRA_API_TOKEN=" + R + "9z9z"),
+    # 재리뷰 P1: ASCII 플래그가 없는 기본 패턴도 접은 글을 본다(NBSP·전각 숫자로 쓴 비밀값)
+    ("private-key", "-----BEGIN RSA PRIVATE KEY-----"),
+    ("secret-assign", "token: ABCDEFGH" + "１２３４５６７８９０１２"),
 ]
 
 
@@ -344,6 +366,20 @@ def test_secret_patterns_catch_values(fake_repo, rule, line):
     # 출력에는 비밀값 전체가 남지 않는다
     if rule != "private-key":
         assert all(line not in f.text for f in found)
+
+
+def test_secret_pattern_folded_and_raw_match_reported_once(fake_repo):
+    # 원문 match(`…ab`)와 접은 글 match(`…ab12`)는 자리가 달라도 같은 값이다 — 한 번만 알린다
+    _write(fake_repo, "docs/leak.md", "token: ABCDEFGH1234567890ab" + "１２" + "\n")
+    rules = [f.rule for f in boundary.scan(fake_repo, "external")]
+    assert rules.count("pattern:secret-assign") == 1
+
+
+def test_secret_values_joined_by_fullwidth_char_stay_separate(fake_repo):
+    # 전각 글자 하나로 이어진 두 값: 접은 글에서는 match 하나지만 원문의 두 건으로 알린다(하나만 allow해도 다른 하나가 남게)
+    _write(fake_repo, "docs/leak.md", "password=" + R + "abcd" + "１" + "token=" + R[::-1] + "zyxw" + "\n")
+    rules = [f.rule for f in boundary.scan(fake_repo, "external")]
+    assert rules.count("pattern:secret-assign") == 2
 
 
 def test_secret_placeholders_and_code_pass(fake_repo):
