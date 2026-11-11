@@ -37,3 +37,9 @@
 - 커밋 `58ae770`(F01 보강·F02·F03·F04·F05·F06·Q01, 41 파일 +604/−122)·`1554dc0`(GRADER_VERSION 4→5). 절차: 항목마다 재확인(코드로 재현)·설계 한 줄(Fable) → Opus 구현 4명(파일 분리) → 별개 Opus 리뷰 2라운드(1라운드 7건: F04 회귀 2·F03 보완 2·문서 3, 2라운드 2건: db-authoring 상한·태그 제외 범위) → WSL 전체 pytest 4,001·lint·hook_probes 176 동일.
 - 설계에서 벗어난 점: F02 두 번째 낡음 시험은 `--arms without`; F03 지문에 `tracker.read_tools ∪ tracker.tools`와 계산 폴더 순서 `directory` > 기록 `project` > cwd, `tracker_view(cfg)`; F04 regex는 `=` 꼴·`:` 꼴 분리 + 꼬리 lookahead + 조각마다 `msg_part`·태그 키 `:` 토큰 제외; explore.md 상한 7,580·db-authoring 12,600·템플릿 call 2,700·data 2,900(run 예산 8,777 ≤ 8,800).
 - 확인: pytest 수는 브리프 3,986(02e0ec2)이 맞고 3,966은 90de0f6 값. "setup 10→3"은 개인 입력 항목 3개(브리프 §1-b 문구를 "config 질문(개인 입력 항목) 10→3"으로).
+
+## 11/12 이동: 결정 (m)(n)(t) 줄
+
+- (m) 플랫폼 분리(10/11, 사용자): 이슈 DB 플랫폼별, lock 플랫폼별, RF-4 유지 — `17-platforms.md` §7.
+- (n) 트래커 범용화(10/11, 사용자): `tracker.kind`(jira|github)·어댑터 `trackers/` — `18-trackers.md` §7.
+- (t) oFono 확장(10/30, 사용자): `17-platforms.md` §9~11. 원문은 `docs/history/draft-notes-2026-11.md`.
