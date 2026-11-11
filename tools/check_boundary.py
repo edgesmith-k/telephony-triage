@@ -254,13 +254,16 @@ def check_patterns(files: dict[str, Path], patterns) -> list[Finding]:
             folded = _fold_ascii(line)
             for name, regex, ok in patterns:
                 # ASCII 아닌 패턴(사내 패턴, 기본 private-key·secret-assign 등)은 원문과 접은 글을 둘 다 본다 — 접은 글만 보면
-                # 비ASCII가 든 사내 패턴이, 원문만 보면 전각·NBSP로 쓴 비밀값이 빠진다(재리뷰 P1). 같은 자리는 한 번만 알린다.
-                texts = (folded,) if regex.flags & re.ASCII or folded == line else (line, folded)
-                seen = set()
+                # 비ASCII가 든 사내 패턴이, 원문만 보면 전각·NBSP로 쓴 비밀값이 빠진다(재리뷰 P1). 접은 글을 먼저 보고,
+                # 원문 match는 이미 알린 자리와 겹치면 뺀다(같은 값을 두 번 알리지 않는다).
+                texts = (folded,) if regex.flags & re.ASCII or folded == line else (folded, line)
+                seen: list[tuple[int, int]] = []
                 for match in (m for t in texts for m in regex.finditer(t)):
-                    if match.span() in seen or (ok is not None and ok(match)):
+                    if ok is not None and ok(match):
                         continue
-                    seen.add(match.span())
+                    if any(match.start() < e and s < match.end() for s, e in seen):
+                        continue
+                    seen.append(match.span())
                     findings.append(Finding(f"pattern:{name}", rel, lineno, line[match.start():match.end()]))
     return findings
 
