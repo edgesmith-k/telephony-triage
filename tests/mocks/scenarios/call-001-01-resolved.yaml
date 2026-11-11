@@ -4,6 +4,7 @@
 name: CALL-001-01.resolved.1
 start: "2026-09-24T14:00:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1300
 tid: 1312
 build:
@@ -12,10 +13,8 @@ build:
 expect:
   expect_not: CALL-001-01
 entries:
-  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
-  - {after: 2, tag: ImsManager, msg: "carrier config applied: volte_available=true"}
-  - {after: 3, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
-  - {after: 15, tag: "ImsPhoneCallTracker", msg: "dial: isVolteEnabled=true imsRegistered=true"}
-  - {after: 0.5, ril_request: DIAL, serial: 81, args: "clir=0"}
-  - {after: 1.1, ril_response: DIAL, serial: 81, result: "error=NONE"}
-  - {after: 2, tag: "ImsPhoneCallTracker", msg: "call state changed: ACTIVE"}
+  - {at: 0, tag: "ImsResolver", msg: "bound to mock ImsService"}
+  - {after: 2, tag: "ImsManager", msg: "carrier config applied: volte_available=true"}
+  - {after: 3, tag: "ImsPhone", msg: "[0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN"}
+  - {after: 15, tag: "GsmCdmaPhone", level: I, msg: "[0] useImsForCall=true, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=true, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=0"}
+  - {after: 0.05, tag: "ImsPhoneCallTracker", msg: "[0] dial clirMode=0"}

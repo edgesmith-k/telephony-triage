@@ -22,6 +22,6 @@ run_expect:
 expect:
   layer: '모뎀|망|벤더 RIL'
   daemon: 'RIL$|RIL[ (]|ExampleRegService|벤더 RIL'
-  evidence: ['registration rejected: cause=13', 'reasonForDenial: 13']
+  evidence: ['[Cc]ause=13', 'reasonForDenial: 13']
   trap: null
   wrong_layer: ['^\s*(프레임워크|SST|RILJ|RIL HAL)']

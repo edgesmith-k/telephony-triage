@@ -2,12 +2,13 @@
 name: IMS-001.none
 start: "2026-09-16T18:00:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1600
 tid: 1610
 expect:
   expect_top: none
 entries:
-  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
-  - {after: 2, tag: ImsManager, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
-  - {after: 3, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
-  - {after: 60, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {at: 0, tag: "ImsResolver", msg: "bound to mock ImsService"}
+  - {after: 2, tag: "ImsManager", msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 3, tag: "ImsPhone", msg: "[0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN"}
+  - {after: 60, tag: "ImsPhone", msg: "[0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN"}

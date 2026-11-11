@@ -21,7 +21,7 @@ run_expect:
   C: 1
 expect:
   layer: '모뎀|망'
-  daemon: 'VRIL-IMS|벤더 IMS|ImsRegistration|알\s*수\s*없음'
-  evidence: ['onRegistrationFailed: code=403']
+  daemon: 'VRIL-IMS|벤더 IMS|ImsPhone|알\s*수\s*없음'
+  evidence: ['CODE_REGISTRATION_ERROR, 403']
   trap: null
   wrong_layer: ['^\s*(프레임워크|ImsManager|RILJ|RIL HAL|벤더 RIL|곁가지)', '^\s*그\s*층\s*로그\s*없음', '^\s*원인\s*아님']

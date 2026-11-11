@@ -1,7 +1,7 @@
 09-20 14:30:00.000  1234  1244 D ImsResolver: [PHONE0] bound to mock ImsService
 09-20 14:30:10.000  1234  1244 D TestRunner: Step 3 START
-09-20 14:30:12.000  1234  1244 W ImsRegistration: [PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN
-09-20 14:30:36.000  1234  1244 W ImsRegistration: [PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN
+09-20 14:30:12.000  1234  1244 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0
+09-20 14:30:36.000  1234  1244 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0
 09-20 14:30:40.000  1234  1244 D TestRunner: Step 3 PASS
 09-20 14:33:00.000  1234  1244 D TestRunner: Step 5 START
 09-20 14:33:03.000  1234  1244 D DSMGR-0: [PHONE0] notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings

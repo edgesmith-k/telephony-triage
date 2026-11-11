@@ -233,9 +233,8 @@ def test_extractor_change_selects_dependents_and_event_change_needs_approval():
     """extractor만 바꿔도 참조하는 시그니처가 R1·R2 대상. 기존 이벤트를 바꾸는 수정은 R5 needs-approval(3)."""
     db = git_db()
     rules_file = db / "parser-rules/extractors.yaml"
-    edit(rules_file, "      - 'dial:\\s*isVolteEnabled=(?P<volte>true|false)\\s+imsRegistered=(?P<registered>true|false)'\n",
-         "      - 'dial:\\s*isVolteEnabled=(?P<volte>true|false)\\s+imsRegistered=(?P<registered>true|false)'\n"
-         "      - 'dial\\(\\):\\s*volte=(?P<volte>true|false)\\s+registered=(?P<registered>true|false)'\n")
+    edit(rules_file, "    event: ims_dial_attempt\n",
+         "      - 'dial\\(\\):\\s*ims=(?P<ims>true|false)\\s+state=(?P<ims_state>\\d)'\n    event: ims_dial_attempt\n")
     code, rows, out = rules(db)
     assert code == 0, rows
     why = {c["key"]: c["why"] for c in out["changes"]["signatures"]}
@@ -412,7 +411,7 @@ def test_fix_stops_without_build_or_required_signatures_and_lint_rules():
     db = copy_db(VERIFY_DB)
     type_md = db / CALL / "type.md"
     text = type_md.read_text(encoding="utf-8")
-    start = text.index("    recovery_signatures:\n      - id: ims-registered-call-active")
+    start = text.index("    recovery_signatures:\n      - id: ims-registered-dial")
     end = text.index("    resolution: 캐리어 설정의 VoLTE")
     type_md.write_text(text[:start] + "    recovery_signatures: []\n    scenario_signatures: []\n" + text[end:],
                        encoding="utf-8", newline="\n")
@@ -436,7 +435,7 @@ def set_traces(db: Path, *, scenario: bool, recovery: bool, rtype: str | None = 
     """CALL-001-01의 scenario·recovery 시그니처·resolution_type·fix.status를 바꾼다 (둘 다 false면 둘 다 비운다)."""
     type_md = db / CALL / "type.md"
     text = type_md.read_text(encoding="utf-8")
-    start = text.index("    recovery_signatures:\n      - id: ims-registered-call-active")
+    start = text.index("    recovery_signatures:\n      - id: ims-registered-dial")
     end = text.index("    resolution: 캐리어 설정의 VoLTE")
     rec_block = text[start:text.index("    scenario_signatures:", start)]
     body = (rec_block if recovery else "    recovery_signatures: []\n") + (TRACE_BLOCK if scenario else "    scenario_signatures: []\n")

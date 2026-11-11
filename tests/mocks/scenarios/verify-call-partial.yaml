@@ -3,14 +3,15 @@
 name: call-partial
 start: "2026-09-27T14:00:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1300
 tid: 1312
 entries:
-  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
-  - {after: 5, tag: ImsRegistration, level: I, msg: "onRegistered: transport=LTE impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
-  - {after: 40, tag: "ImsPhoneCallTracker", msg: "dial: isVolteEnabled=true imsRegistered=true"}
-  - {after: 0.5, ril_request: DIAL, serial: 97, args: "clir=0"}
-  - {after: 1.0, ril_response: DIAL, serial: 97, result: "error=NONE"}
+  - {at: 0, tag: "ImsResolver", msg: "bound to mock ImsService"}
+  - {after: 5, tag: "ImsPhone", msg: "[0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN"}
+  - {after: 40, tag: "GsmCdmaPhone", level: I, msg: "[0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=false, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=0"}
+  - {after: 0.05, ril_request: DIAL, serial: 97}
+  - {after: 1.0, ril_response: DIAL, serial: 97, result: ""}
   - {after: 0.3, ril_request: LAST_CALL_FAIL_CAUSE, serial: 98}
-  - {after: 0.4, ril_response: LAST_CALL_FAIL_CAUSE, serial: 98, result: "causeCode=31"}
+  - {after: 0.4, ril_response: LAST_CALL_FAIL_CAUSE, serial: 98, result: "com.android.internal.telephony.LastCallFailCause@5d3c2a1 causeCode: 31 vendorCause: null"}
   - {after: 0.2, tag: "ImsPhoneCallTracker", level: W, msg: "call ended: cause=31"}

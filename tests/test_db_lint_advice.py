@@ -22,12 +22,13 @@ import make_variant_dbs  # noqa: E402
 from runner import SAMPLE, copy_db, edit, git, git_db, run, variant_db  # noqa: E402
 
 SMS = "sms/SMS-001-sms-send-failed/type.md"
-SAMPLE_TYPES = ["CALL-001", "DATA-001", "DATA-002", "IMS-001", "NETWORK-001", "SIM-001", "SMS-001"]
+SAMPLE_TYPES = ["CALL-001", "DATA-001", "DATA-002", "IMS-001", "NETWORK-001", "SIM-001"]   # SMS-001은 증상 시그니처 둘
 SAMPLE_CAUSES = ["CALL-001-01", "DATA-001-01", "DATA-001-02", "DATA-002-01", "IMS-001-01", "NETWORK-001-01",
                  "SIM-001-01", "SMS-001-01"]
-SECOND_SIG = """      - id: smsc-missing-alt
+SMS_SIG_END = "        must_not_match: ['RILJ.*>\\s*SEND_SMS\\b']\n        window_sec: 60\n"
+SECOND_SIG = """      - id: send-request-missing-alt
         must_event:
-          - {event: smsc_address_missing}
+          - {event: sms_send_failed}
         window_sec: 60
     recovery_signatures: []"""
 
@@ -81,8 +82,7 @@ def test_pending_cause_and_error_db_keep_exit_codes():
 
 def test_two_signatures_or_inactive_cause_get_no_advice():
     db = copy_db(SAMPLE)
-    edit(db / SMS, "        sequence: [smsc, failed]\n        window_sec: 60\n    recovery_signatures: []",
-         "        sequence: [smsc, failed]\n        window_sec: 60\n" + SECOND_SIG)
+    edit(db / SMS, SMS_SIG_END + "    recovery_signatures: []", SMS_SIG_END + SECOND_SIG)
     edit(db / "ims/IMS-001-ims-registration-failed/type.md", "  - id: IMS-001-01\n    status: active",
          "  - id: IMS-001-01\n    status: deprecated")
     edit(db / "call/CALL-001-volte-not-working/type.md", "\nstatus: active\n", "\nstatus: deprecated\n")
@@ -98,7 +98,7 @@ def test_changed_scope_filters_advice_like_findings():
     """`--changed`면 참고도 바뀐 파일 것만 낸다."""
     repo = git_db()
     git(repo, "checkout", "-qb", "work")
-    edit(repo / SMS, "title: SMSC 주소 없음", "title: SMSC 주소 비어 있음")
+    edit(repo / SMS, "title: 전송 요청이 만들어지지 않음", "title: 전송 요청이 나가지 않음")
     git(repo, "commit", "-qam", "edit")
     proc, result = _lint(repo, "--changed", "main", "--advice")
     assert proc.returncode == 0

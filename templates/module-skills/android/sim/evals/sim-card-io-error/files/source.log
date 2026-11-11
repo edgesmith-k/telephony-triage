@@ -16,8 +16,9 @@
 08-21 10:00:21.024  1188 1244 D VRIL-SVC: getIccCardStatus response: serial 320
 08-21 10:00:21.030  2101 2142 D RILJ    : [0320]< GET_SIM_STATUS error 2 [PHONE0]
 08-21 10:00:21.030  2101 2142 D RilRequest: [0320]< GET_SIM_STATUS error: com.android.internal.telephony.CommandException: GENERIC_FAILURE ret= result={ what=3 }
-08-21 10:00:21.040  2101 2101 W UiccController: onIccCardStatusDone: error=CARD_IO_ERROR [PHONE0]
-08-21 10:00:23.000  2101 2101 W UiccController: SIM state changed: ABSENT [PHONE0]
+08-21 10:00:21.040  2101 2101 E UiccController: Error getting ICC status. RIL_REQUEST_GET_ICC_STATUS should never return an error
+08-21 10:00:21.040  2101 2101 E UiccController: com.android.internal.telephony.CommandException: GENERIC_FAILURE
+08-21 10:00:23.000  2101 2101 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED ABSENT reason null for phone: 0 sub: -1
 08-21 10:00:23.500  1188 1248 E VRIL    : reply to client token 320
 08-21 10:00:28.000  2101 2141 D RILJ    : [0321]> GET_SIM_STATUS [PHONE0]
 08-21 10:00:28.004  1188 1188 D VRIL-SVC: RadioSimProxy::getIccCardStatus: serial 321
@@ -29,6 +30,7 @@
 08-21 10:00:29.024  1188 1244 D VRIL-SVC: getIccCardStatus response: serial 321
 08-21 10:00:29.030  2101 2142 D RILJ    : [0321]< GET_SIM_STATUS error 2 [PHONE0]
 08-21 10:00:29.030  2101 2142 D RilRequest: [0321]< GET_SIM_STATUS error: com.android.internal.telephony.CommandException: GENERIC_FAILURE ret= result={ what=3 }
-08-21 10:00:29.040  2101 2101 W UiccController: onIccCardStatusDone: error=CARD_IO_ERROR [PHONE0]
+08-21 10:00:29.040  2101 2101 E UiccController: Error getting ICC status. RIL_REQUEST_GET_ICC_STATUS should never return an error
+08-21 10:00:29.040  2101 2101 E UiccController: com.android.internal.telephony.CommandException: GENERIC_FAILURE
 08-21 10:00:30.000  2101 2101 W SubscriptionManagerService: no subscription for slot: iccid=<ICCID#1> [PHONE0]
 08-21 10:00:31.000  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009

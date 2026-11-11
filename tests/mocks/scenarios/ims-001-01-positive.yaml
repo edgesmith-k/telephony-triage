@@ -1,8 +1,9 @@
-# IMS-001-01 양성: IMS 등록이 403으로 거절된다.
-# 태그·문구는 placeholder다 — TODO(SITE:S10)
+# IMS-001-01 양성: IMS 등록이 403(ImsReasonInfo extra)으로 거절된다.
+# ImsPhone 문구는 Android 17 소스 형식이다(에뮬레이터 캡처 없음). ImsResolver·ImsManager 줄은 placeholder — TODO(SITE:S10)
 name: IMS-001-01
 start: "2026-09-27T09:30:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1600
 tid: 1610
 build:
@@ -12,8 +13,8 @@ expect:
   expect_top: IMS-001-01
   occurred_at: "2026-09-27T09:30:05+09:00"
 entries:
-  - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
-  - {after: 3, tag: ImsManager, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
-  - {after: 2, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
-  - {after: 30, tag: ImsManager, msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
-  - {after: 2, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
+  - {at: 0, tag: "ImsResolver", msg: "bound to mock ImsService"}
+  - {after: 3, tag: "ImsManager", msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 2, tag: "ImsPhone", msg: "[0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0"}
+  - {after: 30, tag: "ImsManager", msg: "register: impu=sip:<IMPU#1>@ims.mnc001.mcc450.3gppnetwork.org"}
+  - {after: 2, tag: "ImsPhone", msg: "[0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0"}

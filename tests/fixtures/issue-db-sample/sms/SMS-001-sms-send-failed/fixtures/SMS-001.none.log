@@ -1,5 +1,4 @@
-09-16 15:00:00.000  1500  1510 I SmsDispatchersController: [PHONE0] sendText: dest=<MSISDN#1> parts=1
-09-16 15:00:00.500  1500  1510 I SmsDispatchersController: [PHONE0] getSmscAddress: <MSISDN#2>
-09-16 15:00:01.000  1500  1510 D RILJ: [PHONE0] [0061]> SEND_SMS
-09-16 15:00:02.200  1500  1510 D RILJ: [PHONE0] [0061]< SEND_SMS error=NONE messageRef=7
-09-16 15:00:02.500  1500  1510 I SmsDispatchersController: [PHONE0] sendSms done: result=SUCCESS
+09-16 15:00:00.000  1500  1510 D SmsDispatchersController: sendTextInternal: messageId=0, uniqueMessageId=3
+09-16 15:00:00.110  1500  1510 D GsmSMSDispatcher: sendSms:  isIms()=false mRetryCount=0 mImsRetry=0 mMessageRef=0 mUsesImsServiceForIms=false SS=0 {x-message-id:0}
+09-16 15:00:00.113  1500  1510 D RILJ: [0061]> SEND_SMS [PHONE0]
+09-16 15:00:00.115  1500  1510 D RILJ: [0061]< SEND_SMS { mMessageRef = 4, mErrorCode = 0, mAckPdu = , {x-message-id:0}} [PHONE0]

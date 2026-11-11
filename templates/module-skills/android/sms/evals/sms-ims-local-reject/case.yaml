@@ -21,6 +21,6 @@ expect:
   accept:
     - layer: '벤더 IMS'
       daemon: 'VRIL-IMS|벤더 IMS'
-      evidence: ['SEND_STATUS_ERROR_FALLBACK', '\[0702\]> SEND_SMS']
+      evidence: ['Falling back to PSTN', '\[0702\]> SEND_SMS']
   trap:
     - label: '^\s*(모뎀|망|RILJ|RIL HAL|벤더 RIL|프레임워크)'

@@ -1,6 +1,9 @@
-09-19 20:00:00.000  1300  1312 D ImsPhoneCallTracker: [PHONE0] dial: isVolteEnabled=true imsRegistered=true
-09-19 20:00:02.000  1300  1312 I ImsPhoneCallTracker: [PHONE0] call state changed: ACTIVE
-09-19 20:01:37.000  1300  1312 D RILJ: [PHONE0] [UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED
-09-19 20:01:37.200  1300  1312 W ImsPhoneCallTracker: [PHONE0] call state changed: DISCONNECTED
-09-19 20:01:37.300  1300  1312 D RILJ: [PHONE0] [0090]> LAST_CALL_FAIL_CAUSE
-09-19 20:01:37.600  1300  1312 D RILJ: [PHONE0] [0090]< LAST_CALL_FAIL_CAUSE causeCode=65
+09-19 20:00:00.000  1300  1312 I GsmCdmaPhone: [0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=false, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=1
+09-19 20:00:00.050  1300  1312 D RILJ: [0088]> DIAL [PHONE0]
+09-19 20:00:00.051  1300  1312 D RILJ: [0088]< DIAL  [PHONE0]
+09-19 20:00:02.051  1300  1312 D RILJ: [UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED [PHONE0]
+09-19 20:00:02.061  1300  1312 D RILJ: [0089]> GET_CURRENT_CALLS [PHONE0]
+09-19 20:00:02.062  1300  1312 D RILJ: [0089]< GET_CURRENT_CALLS {[id=1,ACTIVE,toa=129,norm,mo,0,nonvoc,noevp,,cli=1,,1,audioQuality=0] } [PHONE0]
+09-19 20:01:37.062  1300  1312 D RILJ: [UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED [PHONE0]
+09-19 20:01:37.162  1300  1312 D RILJ: [0090]> LAST_CALL_FAIL_CAUSE [PHONE0]
+09-19 20:01:37.462  1300  1312 D RILJ: [0090]< LAST_CALL_FAIL_CAUSE com.android.internal.telephony.LastCallFailCause@5d3c2a1 causeCode: 65 vendorCause: null [PHONE0]

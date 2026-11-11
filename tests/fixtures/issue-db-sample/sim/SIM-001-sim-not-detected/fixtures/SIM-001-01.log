@@ -1,6 +1,9 @@
-09-25 16:20:00.000  1400  1410 D RILJ: [PHONE1] [0011]> GET_SIM_STATUS
-09-25 16:20:01.000  1400  1410 W UiccController: [PHONE1] onIccCardStatusDone: error=CARD_IO_ERROR
-09-25 16:20:03.000  1400  1410 W UiccController: [PHONE1] SIM state changed: ABSENT
-09-25 16:20:08.000  1400  1410 D RILJ: [PHONE1] [0012]> GET_SIM_STATUS
-09-25 16:20:09.000  1400  1410 W UiccController: [PHONE1] onIccCardStatusDone: error=CARD_IO_ERROR
-09-25 16:20:10.000  1400  1410 W SubscriptionManagerService: [PHONE1] no subscription for slot: iccid=<ICCID#1>
+09-25 16:20:00.000  1400  1410 D RILJ: [0011]> GET_SIM_STATUS [PHONE1]
+09-25 16:20:00.800  1400  1410 D RILJ: [0011]< GET_SIM_STATUS error 2 [PHONE1]
+09-25 16:20:01.000  1400  1410 E UiccController: Error getting ICC status. RIL_REQUEST_GET_ICC_STATUS should never return an error
+09-25 16:20:01.000  1400  1410 E UiccController: com.android.internal.telephony.CommandException: GENERIC_FAILURE
+09-25 16:20:03.000  1400  1410 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED ABSENT reason null for phone: 1 sub: -1
+09-25 16:20:08.000  1400  1410 D RILJ: [0012]> GET_SIM_STATUS [PHONE1]
+09-25 16:20:08.800  1400  1410 D RILJ: [0012]< GET_SIM_STATUS error 2 [PHONE1]
+09-25 16:20:09.000  1400  1410 E UiccController: Error getting ICC status. RIL_REQUEST_GET_ICC_STATUS should never return an error
+09-25 16:20:10.000  1400  1410 W SubscriptionManagerService: no subscription for slot: iccid=<ICCID#1>

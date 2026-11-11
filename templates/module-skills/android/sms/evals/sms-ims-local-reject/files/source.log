@@ -8,10 +8,9 @@
 08-25 14:00:20.000  2101 2111 I SmsDispatchersController: sendText: dest=<MSISDN#1> parts=1 [PHONE0]
 08-25 14:00:20.010  2101 2101 D ImsSmsDispatcher [0]: sendSms: token=7 format=3gpp
 08-25 14:00:20.050  1777 1777 E VRIL-IMS: [sms] send rejected: SMS over IMS feature off
-08-25 14:00:20.060  2101 2101 W ImsSmsDispatcher [0]: onSendSmsResult token=7 messageRef=0 status=SEND_STATUS_ERROR_FALLBACK
+08-25 14:00:20.060  2101 2101 E ImsSmsDispatcher [0]: sendSms failed. Falling back to PSTN. Error: null
 08-25 14:00:20.100  2101 2141 D RILJ    : [0702]> SEND_SMS [PHONE0]
 08-25 14:00:20.104  1188 1188 D VRIL-SVC: RadioMessagingProxy::sendSms: serial 702
-08-25 14:00:21.000  2101 2111 W SmsDispatchersController: sendSms failed: result=GENERIC_FAILURE [PHONE0]
 08-25 14:00:21.001  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
 08-25 14:00:22.000  1188 1248 E VRIL    : reply to client token 702
 08-25 14:00:24.100  2101 2142 D RILJ    : [0702]< SEND_SMS [PHONE0]

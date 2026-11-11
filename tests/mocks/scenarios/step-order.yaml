@@ -16,9 +16,9 @@ entries:
   - {at: 0, tag: ImsResolver, msg: "bound to mock ImsService"}
   - {at: 2, tag: "DSMGR-{phone}", msg: "notifyDataEnabledChanged: enabled=true, reason=BOOT, callingPackage=com.android.settings"}
   - {at: 5, tag: ConnectivityService, phone: null, msg: "setAirplaneMode enabled=true"}
-  - {at: 12, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
+  - {at: 12, tag: ImsPhone, phone_prefix: false, msg: "[0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0"}
   - {at: 20, tag: ConnectivityService, phone: null, msg: "setAirplaneMode enabled=false"}
-  - {at: 36, tag: ImsRegistration, level: W, msg: "onRegistrationFailed: code=403 reason=FORBIDDEN"}
+  - {at: 36, tag: ImsPhone, phone_prefix: false, msg: "[0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0"}
   - {at: 90, ril_unsol: UNSOL_RESPONSE_NETWORK_STATE_CHANGED}
   - {at: 170, tag: "DSMGR-{phone}", msg: "notifyDataEnabledChanged: enabled=true, reason=USER, callingPackage=com.android.settings"}
   - {at: 183, tag: "DSMGR-{phone}", msg: "notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings"}

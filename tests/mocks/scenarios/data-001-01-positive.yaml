@@ -13,7 +13,7 @@ expect:
   expect_top: DATA-001-01
   occurred_at: "2026-09-20T14:32:10+09:00"
 entries:
-  - {at: 0, tag: "DCM-{phone}", msg: "carrier config loaded: carrierId=<CARRIER>"}
+  - {at: 0, tag: "DCM-{phone}", msg: "Carrier config updated. Config is carrier specific."}
   - {after: 3, tag: "DSMGR-{phone}", msg: "notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings"}
   - {after: 0.35, tag: "DSMGR-{phone}", msg: "UserDataEnabled changed to false"}
   - {after: 0.05, tag: "DSMGR-{phone}", msg: "mIsDataEnabled=false, prevDataEnabled=true"}

@@ -22,6 +22,6 @@ run_expect:
 expect:
   layer: '프레임워크'
   daemon: 'SmsDispatchersController'
-  evidence: ['getSmscAddress: null', 'sendSms failed: result=GENERIC_FAILURE']
+  evidence: ['sendTextInternal', 'sendText id']
   trap: null
   wrong_layer: ['^\s*(RILJ|RIL HAL|벤더|모뎀|망)']

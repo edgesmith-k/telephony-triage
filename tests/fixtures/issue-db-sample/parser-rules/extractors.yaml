@@ -9,8 +9,9 @@
 #
 # data 문구는 AOSP 공개 소스(frameworks/opt/telephony data/ 의
 # DataSettingsManager·DataEvaluation·DataNetworkController) 형식이다.
-# 그 밖의 로그 문구는 **placeholder**다 — TODO(SITE:S9). 사내 실제 logcat으로
-# 확인하고 바꾼다 (14-site.md §14.2).
+# 그 밖의 문구는 Android 17 소스 형식이고, 에뮬레이터(API 37) 캡처로 본 줄과
+# `# 소스만` 표시(캡처 없음)를 구분한다. 사내 실제 logcat으로 다시
+# 확인한다 — TODO(SITE:S9) (14-site.md §14.2).
 
 extractors:
   # --- data ---
@@ -64,27 +65,64 @@ extractors:
     event: data_teardown_all
     fields: [reason]
 
+  # 캡처: 성공 234줄, 실패 188줄(RESULT_ERROR_ILLEGAL_STATE + 모뎀 cause). 실패 cause는 이 줄에만 있다
+  - id: data-setup-response
+    added_for: '-'
+    added_on: 2026-11-11
+    reason: 데이터 연결 요청 응답 결과와 모뎀 cause (DataNetwork onSetupResponse)
+    tag_regex: '^DN-\d+-[CI]$'
+    patterns:
+      - 'onSetupResponse: resultCode=(?P<result>RESULT_[A-Z_]+), response=(?:null|DataCallResponse: \{ cause=(?P<cause>[A-Z_0-9]+)\()'
+    event: data_setup_response
+    fields: [result, cause]
+
+  - id: data-retry-scheduled
+    added_for: '-'
+    added_on: 2026-11-11
+    reason: 데이터 연결 재시도 예약 (DataRetryManager)
+    tag_regex: '^DRM-\d+$'
+    patterns:
+      - 'Scheduled data retry \[Data(?P<kind>Setup|Handover)RetryEntry: delay=(?P<delay>\d+)ms'
+    event: data_retry_scheduled
+    fields: [kind, delay]
+
+  # cause만으로는 망 끊김을 가리지 못한다(캡처 119줄 중 116줄이 사용자·설정 해제의 LOST_CONNECTION).
+  # tearDownReason=NONE이 로컬 해제가 아닌 끊김이다
+  - id: data-network-disconnected
+    added_for: '-'
+    added_on: 2026-11-11
+    reason: 데이터 네트워크 해제 cause와 해제 사유 (DataNetworkController onDataNetworkDisconnected)
+    tag_regex: '^DNC-\d+$'
+    patterns:
+      - 'onDataNetworkDisconnected: .*?, cause=(?P<cause>[A-Z_0-9]+)\(0x[0-9a-f]+\)\(-?\d+\), tearDownReason=(?P<reason>[A-Z_]+)'
+    event: data_network_disconnected
+    fields: [cause, reason]
+
   # --- call ---
+  # 캡처(발신 11줄). isUt=true(USSD·MMI 경로)는 발신이 아니라 뺀다. ims_state는 발신 때 ImsPhone 서비스 상태
+  # (0 = IN_SERVICE = IMS 등록, 그 밖은 미등록). 17에는 isVolteEnabled·imsRegistered 필드가 없다
   - id: ims-dial-attempt
     added_for: CALL-001-01
     added_on: 2026-09-28
-    reason: VoLTE 발신 시도와 그때의 IMS 등록 상태
-    tag: ImsPhoneCallTracker
+    reason: 발신 시도와 그때의 IMS 사용 여부·IMS 서비스 상태 (GsmCdmaPhone)
+    tag: GsmCdmaPhone
     patterns:
-      - 'dial:\s*isVolteEnabled=(?P<volte>true|false)\s+imsRegistered=(?P<registered>true|false)'
+      - 'useImsForCall=(?P<ims>true|false), .*?\bisUt=false, .*?\bimsPhone\.getServiceState\(\)\.getState\(\)=(?P<ims_state>\d)'
     event: ims_dial_attempt
-    fields: [volte, registered]
+    fields: [ims, ims_state]
 
+  # 소스만(에뮬레이터 캡처 없음). 이름과 causeCode 사이에 LastCallFailCause@<hash>가 있다(옛 모양도 맞음)
   - id: call-fail-cause
     added_for: CALL-001
     added_on: 2026-09-28
     reason: 통화 실패 원인 코드 추출
     tag: RILJ
     patterns:
-      - 'LAST_CALL_FAIL_CAUSE\s+causeCode[=:]\s*(?P<cause>\d+)'
+      - 'LAST_CALL_FAIL_CAUSE\b.*?\bcauseCode[=:]\s*(?P<cause>\d+)'
     event: call_fail_cause
     fields: [cause]
 
+  # 17 이전 문구. 17 소스·캡처에 1:1 줄이 없다(사내 확인 목록). 시그니처는 이 이벤트를 쓰지 않는다
   - id: call-state-changed
     added_for: CALL-001-01
     added_on: 2026-09-28
@@ -96,85 +134,82 @@ extractors:
     fields: [state]
 
   # --- ims ---
+  # 소스만(에뮬레이터 캡처 없음). code는 ImsReasonInfo 코드, SIP 응답 코드는 벤더 ImsService가 넣을 때만 extra에 온다
   - id: ims-registration-failed
     added_for: IMS-001
     added_on: 2026-09-28
-    reason: IMS 등록 실패 코드 추출
-    tag_regex: '^Ims(Manager|Resolver|ServiceController|Registration).*'
+    reason: IMS 등록 해제·실패 사유 추출 (ImsPhone handleImsUnregistered)
+    tag: ImsPhone
     patterns:
-      - 'onRegistrationFailed:\s*code=(?P<code>\d+)(?:\s+reason=(?P<reason>\S+))?'
+      - 'handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: \{(?P<code>\d+) : (?P<reason>[A-Z_]+), (?P<extra>-?\d+)'
     event: ims_registration_failed
-    fields: [code, reason]
+    fields: [code, reason, extra]
 
+  # 소스만(에뮬레이터 캡처 없음). transport는 WWAN|WLAN
   - id: ims-registered
     added_for: IMS-001
     added_on: 2026-09-28
-    reason: IMS 등록 성공(정상 동작) 판별
-    tag_regex: '^Ims(Manager|Resolver|ServiceController|Registration).*'
+    reason: IMS 등록 성공(정상 동작) 판별 (ImsPhone handleImsRegistered)
+    tag: ImsPhone
     patterns:
-      - 'onRegistered:\s*transport=(?P<transport>\S+)'
+      - 'handleImsRegistered: onImsMmTelConnected imsTransportType=(?P<transport>\S+)'
     event: ims_registered
     fields: [transport]
 
   # --- network ---
+  # 캡처(20줄). 에뮬레이터는 DENIED에 rejectCause=0을 준다(사유 없음, 실제 망은 11·13·15 등)
   - id: network-registration-rejected
     added_for: NETWORK-001
     added_on: 2026-09-28
-    reason: 망 등록 거절 코드 추출
-    tag_regex: '^(SST|ServiceStateTracker)(-\d+)?$'
+    reason: 망 등록 거절 코드 추출 (NetworkRegistrationManager)
+    tag_regex: '^NRM-[CI]-\d+$'
     patterns:
-      - 'registration rejected:\s*cause=(?P<cause>\d+)(?:\s+domain=(?P<domain>\S+))?'
+      - 'onRequestNetworkRegistrationInfoComplete result: \d+, info: NetworkRegistrationInfo\{ domain=(?P<domain>\S+) .*?registrationState=DENIED .*?rejectCause=(?P<cause>\d+)'
     event: network_registration_rejected
     fields: [cause, domain]
 
+  # 캡처. 등록 상태가 바뀐 pollStateDone 줄만(hasRegistered·hasDeregistered 중 하나가 true). 둘 다 false인 줄은 뺀다
   - id: network-service-state
     added_for: NETWORK-001
     added_on: 2026-09-28
-    reason: 서비스 상태 변화 추출
+    reason: 음성 등록 상태 변화 추출 (ServiceStateTracker pollStateDone)
     tag_regex: '^(SST|ServiceStateTracker)(-\d+)?$'
     patterns:
-      - 'onServiceStateChanged:\s*regState=(?P<reg_state>[A-Z_]+)'
+      - 'pollStateDone: (?=hasRegistered = true|hasRegistered = false hasDeregistered = true)hasRegistered = (?P<registered>true|false) hasDeregistered = (?P<deregistered>true|false)'
     event: network_service_state
-    fields: [reg_state]
+    fields: [registered, deregistered]
 
   # --- sim ---
+  # 캡처(READY·LOADED·UNKNOWN)
   - id: sim-state-changed
     added_for: SIM-001
     added_on: 2026-09-28
-    reason: SIM 상태 변화 추출
+    reason: SIM 상태 변화 추출 (UiccController ACTION_SIM_STATE_CHANGED 방송)
     tag: UiccController
     patterns:
-      - 'SIM state changed:\s*(?P<state>[A-Z_]+)'
+      - 'Broadcasting intent ACTION_SIM_STATE_CHANGED (?P<state>[A-Z_]+) reason'
     event: sim_state_changed
     fields: [state]
 
+  # 소스만(에뮬레이터 캡처 없음). 예외 이름(CommandException)은 Rlog 예외 출력이라 다음 줄에 온다
   - id: uicc-card-status-error
     added_for: SIM-001-01
     added_on: 2026-09-28
-    reason: UICC 카드 상태 조회 오류 추출
+    reason: UICC 카드 상태 조회 오류 추출 (UiccController onGetIccCardStatusDone)
     tag: UiccController
     patterns:
-      - 'onIccCardStatusDone:\s*error=(?P<error>[A-Z_]+)'
+      - 'Error getting ICC status\. RIL_REQUEST_GET_ICC_STATUS should never return an error'
     event: uicc_card_status_error
-    fields: [error]
+    fields: []
 
   # --- sms ---
+  # 소스만(에뮬레이터 캡처 없음). IMS 전송 실패 뒤 CS로 넘기는 줄. result는 자유 문장
   - id: sms-send-failed
     added_for: SMS-001
     added_on: 2026-09-28
-    reason: SMS 전송 실패 결과 추출
-    tag: SmsDispatchersController
+    reason: SMS 전송 실패 결과 추출 (ImsSmsDispatcher)
+    tag_regex: '^ImsSmsDispatcher( \[\d+\])?$'
     patterns:
-      - 'sendSms failed:\s*result=(?P<result>[A-Z_]+)'
+      - 'sendSms failed\. Falling back to PSTN\. Error: (?P<result>.*)'
     event: sms_send_failed
     fields: [result]
-
-  - id: smsc-address-missing
-    added_for: SMS-001-01
-    added_on: 2026-09-28
-    reason: SMSC 주소 미설정 판별
-    tag: SmsDispatchersController
-    patterns:
-      - 'getSmscAddress:\s*(?P<smsc>null|empty)'
-    event: smsc_address_missing
-    fields: [smsc]

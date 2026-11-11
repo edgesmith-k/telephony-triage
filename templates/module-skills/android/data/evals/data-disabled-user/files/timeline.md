@@ -7,8 +7,8 @@
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
 09:00:04.114 - V RIL mux [ch0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0200 len=12
-09:00:20.000 p0 D DCM-0 carrier config loaded: carrierId=<CARRIER>
-09:00:21.200 - D ImsPhone [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN
+09:00:20.000 p0 D DCM-0 Carrier config updated. Config is carrier specific.
+09:00:21.200 - D ImsPhone [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN  ⇒ ims_registered(transport=WWAN)
 09:00:23.000 p0 D DSMGR-0 notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings  ⇒ data_setting_changed(enabled=false,reason=USER)
 09:00:23.350 p0 D DSMGR-0 UserDataEnabled changed to false
 09:00:23.400 p0 D DSMGR-0 mIsDataEnabled=false, prevDataEnabled=true

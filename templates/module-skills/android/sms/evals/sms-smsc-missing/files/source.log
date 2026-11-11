@@ -7,13 +7,12 @@
 08-24 13:00:07.135  2101 2141 D RILJ    : [0304]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
 08-24 13:00:10.000  2101 2101 D ImsSmsDispatcher [0]: ImsManager: connection unavailable, reason=0
 08-24 13:00:10.002  2101 2101 D ImsSmsDispatcher [0]: ImsManager: connection ready.
-08-24 13:00:20.000  2101 2111 I SmsDispatchersController: sendText: dest=<MSISDN#1> parts=1 [PHONE0]
-08-24 13:00:24.000  2101 2111 W SmsDispatchersController: getSmscAddress: null [PHONE0]
-08-24 13:00:25.000  2101 2111 W SmsDispatchersController: sendSms failed: result=GENERIC_FAILURE [PHONE0]
+08-24 13:00:20.000  2101 2111 D SmsDispatchersController: sendTextInternal: messageId=0, uniqueMessageId=3
+08-24 13:00:20.001  2101 2111 D SMSDispatcher: sendText id: {x-message-id:0}
 08-24 13:00:26.000  1188 1248 E VRIL    : reply to client token 304
 08-24 13:00:26.001  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
-08-24 13:00:35.000  2101 2111 W SmsDispatchersController: getSmscAddress: null [PHONE0]
-08-24 13:00:36.000  2101 2111 W SmsDispatchersController: sendSms failed: result=GENERIC_FAILURE [PHONE0]
+08-24 13:00:35.000  2101 2111 D SmsDispatchersController: sendTextInternal: messageId=0, uniqueMessageId=4
+08-24 13:00:35.001  2101 2111 D SMSDispatcher: sendText id: {x-message-id:0}
 08-24 13:00:40.000  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
 08-24 13:00:50.011  1188 1248 E VRIL    : reply to client token 410
 08-24 13:00:50.311  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>

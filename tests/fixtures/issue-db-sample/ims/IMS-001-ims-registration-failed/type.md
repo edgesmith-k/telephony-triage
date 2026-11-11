@@ -18,7 +18,7 @@ causes:
     signatures:
       - id: registration-forbidden
         must_event:
-          - {event: ims_registration_failed, fields: {code: '403'}}
+          - {event: ims_registration_failed, fields: {extra: '403'}}
         window_sec: 300
     recovery_signatures: []
     scenario_signatures: []
@@ -53,13 +53,13 @@ IMS 등록이 완료되지 않아 VoLTE/VoWiFi 기능이 동작하지 않는다.
 
 ## 증상 판별 방법
 
-IMS 등록 콜백에 실패가 남는다.
+`ImsPhone`에 IMS 등록 해제(실패) 사유가 남는다.
 
 ```
-09-27 09:30:05.000  1600  1610 W ImsRegistration: [PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN
+09-27 09:30:05.000  1600  1610 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0
 ```
 
-- 등록 성공(`onRegistered:`) 뒤 해제된 경우는 이 증상이 아니다.
+- 등록 성공(`handleImsRegistered:`) 뒤 해제된 경우는 이 증상이 아니다.
 
 ## 원인별 상세
 
@@ -68,10 +68,10 @@ IMS 등록 콜백에 실패가 남는다.
 - **로그 예시**:
   ```
   09-27 09:30:00.000  1600  1610 D ImsResolver: [PHONE0] bound to mock ImsService
-  09-27 09:30:05.000  1600  1610 W ImsRegistration: [PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN
-  09-27 09:30:35.000  1600  1610 W ImsRegistration: [PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN
+  09-27 09:30:05.000  1600  1610 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0
+  09-27 09:30:35.000  1600  1610 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0
   ```
-- **확인 방법**: 거절 코드가 403이다. 다른 코드(408 타임아웃 등)는 원인이 다르므로 새 원인을 검토한다.
+- **확인 방법**: SIP 거절 코드(`ImsReasonInfo`의 extra)가 403이다. 다른 코드(408 타임아웃 등)는 원인이 다르므로 새 원인을 검토한다. extra는 벤더 ImsService가 채울 때만 SIP 코드다(사내 확인).
 - **재현 시나리오**: IMS 지원 SIM 삽입 → 비행기 모드 OFF → 등록 시도 로그 확인
 - **해결책**: 캐리어 설정의 IMS 항목과 가입 상태를 확인하고 재등록을 시도한다.
 - **코드 위치**: 없음. 사내 ImsService/ImsRegistration 경로를 확인하면 추가한다 — TODO(SITE:S11).

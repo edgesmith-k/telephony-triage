@@ -5,7 +5,7 @@
 08-20 09:00:05.121  1188 1248 E VRIL    : reply to client token 300
 08-20 09:00:06.128  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
 08-20 09:00:07.135  2101 2141 D RILJ    : [0300]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
-08-20 09:00:20.000  2101 2111 D DCM-0   : carrier config loaded: carrierId=<CARRIER>
+08-20 09:00:20.000  2101 2111 D DCM-0   : Carrier config updated. Config is carrier specific.
 08-20 09:00:21.200  2101 2101 D ImsPhone: [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN
 08-20 09:00:22.100  2101 2141 D RILJ    : [0311]> iccIO: SIM_IO command = 0xb0 fileId = 0x6f3e path = 3F007FFF p1 = 0 p2 = 0 p3 = 4 data = null aid = <AID#1> [PHONE0]
 08-20 09:00:22.150  2101 2142 D RILJ    : [0311]< SIM_IO error 2 [PHONE0]

@@ -1,13 +1,14 @@
 # 파서 fixture: SIM 없음 (11-phases.md Phase 2). 슬롯 1.
-# 로그 문구와 RIL 결과 형식은 placeholder다 — TODO(SITE:S9)
+# 문구는 Android 17 형식이다(ACTION_SIM_STATE_CHANGED는 캡처 모양에 ABSENT 값 합성, ICC 조회 오류는 소스 문구). SubscriptionManagerService 줄은 placeholder — TODO(SITE:S9)
 name: sim-absent
 start: "2026-09-25T08:00:00+09:00"
 default_phone: 1
+phone_style: aosp
 pid: 1400
 tid: 1410
 entries:
   - {at: 0, ril_unsol: UNSOL_SIM_STATUS_CHANGED}
   - {after: 0.2, ril_request: GET_SIM_STATUS, serial: 21}
-  - {after: 0.3, ril_response: GET_SIM_STATUS, serial: 21, result: "cardState=ABSENT"}
-  - {after: 0.1, tag: UiccController, level: I, msg: "SIM state changed: ABSENT"}
-  - {after: 0.5, tag: SubscriptionManagerService, msg: "slot inactive: no card"}
+  - {after: 0.3, ril_response: GET_SIM_STATUS, serial: 21, result: "IccCardState {CARDSTATE_ABSENT,PINSTATE_UNKNOWN,num_apps=0}"}
+  - {after: 0.1, tag: "UiccController", msg: "Broadcasting intent ACTION_SIM_STATE_CHANGED ABSENT reason null for phone: 1 sub: -1"}
+  - {after: 0.5, tag: "SubscriptionManagerService", msg: "slot inactive: no card"}

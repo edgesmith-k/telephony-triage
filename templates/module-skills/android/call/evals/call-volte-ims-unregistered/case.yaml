@@ -21,7 +21,7 @@ run_expect:
   C: 1
 expect:
   layer: '모뎀|망|벤더 IMS'
-  daemon: 'VRIL-IMS|벤더 IMS|ImsRegistration'
-  evidence: ['imsRegistered=false', 'code=403']
+  daemon: 'VRIL-IMS|벤더 IMS|ImsPhone'
+  evidence: ['useImsForCall=false|ims_state=1', '403']
   trap: null
   wrong_layer: ['^\s*(RILJ|RIL HAL|벤더 RIL|프레임워크)', '^\s*ImsPhoneCallTracker']

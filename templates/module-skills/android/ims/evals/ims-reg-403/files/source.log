@@ -14,7 +14,7 @@
 08-26 15:00:14.000  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
 08-26 15:00:15.100  1188 1258 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=208
 08-26 15:00:15.105  1777 1777 I VRIL-IMS: [reg] ind <- OEM_UNSOL_IMS_REGISTRATION : state : 0  feature : 11  status-code : 403
-08-26 15:00:15.200  2101 2113 W ImsRegistration: onRegistrationFailed: code=403 reason=FORBIDDEN [PHONE0]
+08-26 15:00:15.200  2101 2101 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0
 08-26 15:00:16.000  1188 1248 E VRIL    : reply to client token 306
 08-26 15:00:43.000  2101 2113 D ImsManager: register: impu=sip:<IMPU#1>@<HOST#1> [PHONE0]
 08-26 15:00:43.300  1777 2677 D VRIL-IMS: [pdn] add pdn apn=<APN#1> state=IMS_REGISTERING slot=0
@@ -22,5 +22,5 @@
 08-26 15:00:43.450  1777 2677 I VRIL-IMS: [ril] rsp <- OEM_REQ_IMS_ADD_PDN : STATUS_SUCCESS
 08-26 15:00:45.100  1188 1258 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=208
 08-26 15:00:45.105  1777 1777 I VRIL-IMS: [reg] ind <- OEM_UNSOL_IMS_REGISTRATION : state : 0  feature : 11  status-code : 403
-08-26 15:00:45.200  2101 2113 W ImsRegistration: onRegistrationFailed: code=403 reason=FORBIDDEN [PHONE0]
+08-26 15:00:45.200  2101 2101 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0
 08-26 15:00:50.000  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009

@@ -2,10 +2,9 @@
 09-04 12:00:10.000  2101 2113 D ImsResolver: bound to mock ImsService [PHONE0]
 09-04 12:00:11.000  1188 1258 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=208
 09-04 12:00:11.005  1777 1777 I VRIL-IMS: [reg] ind <- OEM_UNSOL_IMS_REGISTRATION : state : 1  feature : 11  status-code : 200
-09-04 12:00:11.100  2101 2113 I ImsRegistration: [PHONE0] onRegistered: transport=LTE impu=sip:<IMPU#1>@<HOST#1>
-09-04 12:02:00.000  2101 2113 D ImsPhoneCallTracker: [0] dial: isVolteEnabled=true imsRegistered=true
+09-04 12:00:11.100  2101 2101 D ImsPhone: [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN
+09-04 12:02:00.000  2101 2101 I GsmCdmaPhone: [0] useImsForCall=true, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=true, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=0
 09-04 12:02:00.100  1777 2677 D VRIL-IMS: [call] Sending INVITE to <MSISDN#1> slot=0
 09-04 12:02:01.300  1777 2677 I VRIL-IMS: [call] Received INVITE response status-code : 503 slot=0
 09-04 12:02:01.400  2101 2113 W ImsPhoneCallTracker: [0] onCallStartFailed reasonCode=ImsReasonInfo :: {1014 : CODE_SIP_SERVICE_UNAVAILABLE, 503, null}
-09-04 12:02:01.410  2101 2113 W ImsPhoneCallTracker: [PHONE0] call state changed: DISCONNECTED
 09-04 12:02:10.000  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009

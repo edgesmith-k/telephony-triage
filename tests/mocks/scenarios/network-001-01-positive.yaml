@@ -1,8 +1,9 @@
 # NETWORK-001-01 양성: 망 등록이 거절 코드 13으로 반복 거절된다.
-# 태그·문구는 placeholder다 — TODO(SITE:S9)
+# 문구는 Android 17 캡처 형식이다(마스킹, NRM 줄은 availableServices=[] 뒤를 자름). 거절 사유 13은 합성(에뮬레이터는 0) — TODO(SITE:S9)
 name: NETWORK-001-01
 start: "2026-09-24T10:11:00+09:00"
 default_phone: 0
+phone_style: aosp
 pid: 1234
 tid: 1260
 build:
@@ -12,8 +13,8 @@ expect:
   expect_top: NETWORK-001-01
   occurred_at: "2026-09-24T10:11:02+09:00"
 entries:
-  - {at: 0, tag: "SST-{phone}", level: I, msg: "onServiceStateChanged: regState=NOT_REGISTERED cellId=<CELL#1>"}
-  - {after: 2, tag: "SST-{phone}", level: W, msg: "registration rejected: cause=13 domain=PS"}
-  - {after: 10, tag: "SST-{phone}", level: W, msg: "registration rejected: cause=13 domain=CS"}
-  - {after: 20, tag: "SST-{phone}", level: I, msg: "onServiceStateChanged: regState=NOT_REGISTERED cellId=<CELL#2>"}
-  - {after: 2, tag: "SST-{phone}", level: W, msg: "registration rejected: cause=13 domain=PS"}
+  - {at: 0, tag: "SST-{phone}", msg: "pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true"}
+  - {after: 2, tag: "NRM-C-{phone}", msg: "onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=DENIED networkRegistrationState=DENIED roamingType=NOT_ROAMING accessNetworkTechnology=NR rejectCause=13 emergencyEnabled=false availableServices=[]"}
+  - {after: 10, tag: "NRM-C-{phone}", msg: "onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=CS transportType=WWAN registrationState=DENIED networkRegistrationState=DENIED roamingType=NOT_ROAMING accessNetworkTechnology=NR rejectCause=13 emergencyEnabled=false availableServices=[]"}
+  - {after: 20, tag: "SST-{phone}", msg: "pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=false, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true"}
+  - {after: 2, tag: "NRM-C-{phone}", msg: "onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=DENIED networkRegistrationState=DENIED roamingType=NOT_ROAMING accessNetworkTechnology=NR rejectCause=13 emergencyEnabled=false availableServices=[]"}

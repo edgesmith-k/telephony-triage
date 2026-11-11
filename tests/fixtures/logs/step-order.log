@@ -1,9 +1,9 @@
 09-20 14:30:00.000  1234  1244 D ImsResolver: [PHONE0] bound to mock ImsService
 09-20 14:30:02.000  1234  1244 D DSMGR-0: [PHONE0] notifyDataEnabledChanged: enabled=true, reason=BOOT, callingPackage=com.android.settings
 09-20 14:30:05.000  1234  1244 D ConnectivityService: setAirplaneMode enabled=true
-09-20 14:30:12.000  1234  1244 W ImsRegistration: [PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN
+09-20 14:30:12.000  1234  1244 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0
 09-20 14:30:20.000  1234  1244 D ConnectivityService: setAirplaneMode enabled=false
-09-20 14:30:36.000  1234  1244 W ImsRegistration: [PHONE0] onRegistrationFailed: code=403 reason=FORBIDDEN
+09-20 14:30:36.000  1234  1244 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0
 09-20 14:31:30.000  1234  1244 D RILJ: [PHONE0] [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED
 09-20 14:32:50.000  1234  1244 D DSMGR-0: [PHONE0] notifyDataEnabledChanged: enabled=true, reason=USER, callingPackage=com.android.settings
 09-20 14:33:03.000  1234  1244 D DSMGR-0: [PHONE0] notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings

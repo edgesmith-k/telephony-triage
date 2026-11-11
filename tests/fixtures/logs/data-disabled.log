@@ -1,4 +1,4 @@
-09-20 14:30:00.000  1234  1244 D DCM-0: carrier config loaded: carrierId=<CARRIER>
+09-20 14:30:00.000  1234  1244 D DCM-0: Carrier config updated. Config is carrier specific.
 09-20 14:30:03.000  1234  1244 D DSMGR-0: notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings
 09-20 14:30:03.350  1234  1244 D DSMGR-0: UserDataEnabled changed to false
 09-20 14:30:03.400  1234  1244 D DSMGR-0: mIsDataEnabled=false, prevDataEnabled=true
