@@ -25,7 +25,7 @@ SMS = "sms/SMS-001-sms-send-failed/type.md"
 SAMPLE_TYPES = ["CALL-001", "DATA-001", "DATA-002", "IMS-001", "NETWORK-001", "SIM-001"]   # SMS-001은 증상 시그니처 둘
 SAMPLE_CAUSES = ["CALL-001-01", "DATA-001-01", "DATA-001-02", "DATA-002-01", "IMS-001-01", "NETWORK-001-01",
                  "SIM-001-01", "SMS-001-01"]
-SMS_SIG_END = "        must_not_match: ['RILJ.*>\\s*SEND_SMS\\b']\n        window_sec: 60\n"
+SMS_SIG_END = "        must_match: ['GsmSMSDispatcher: sendSms: .*isIms\\(\\)=false .*\\bSS=[1-3]\\b']\n        window_sec: 60\n"
 SECOND_SIG = """      - id: send-request-missing-alt
         must_event:
           - {event: sms_send_failed}
