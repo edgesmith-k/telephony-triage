@@ -375,6 +375,13 @@ def test_secret_pattern_folded_and_raw_match_reported_once(fake_repo):
     assert rules.count("pattern:secret-assign") == 1
 
 
+def test_secret_values_joined_by_fullwidth_char_stay_separate(fake_repo):
+    # 전각 글자 하나로 이어진 두 값: 접은 글에서는 match 하나지만 원문의 두 건으로 알린다(하나만 allow해도 다른 하나가 남게)
+    _write(fake_repo, "docs/leak.md", "password=" + R + "abcd" + "１" + "token=" + R[::-1] + "zyxw" + "\n")
+    rules = [f.rule for f in boundary.scan(fake_repo, "external")]
+    assert rules.count("pattern:secret-assign") == 2
+
+
 def test_secret_placeholders_and_code_pass(fake_repo):
     _write(fake_repo, "docs/howto.md", "\n".join([
         "-----BEGIN PUBLIC KEY-----",
