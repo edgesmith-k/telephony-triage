@@ -40,14 +40,15 @@ COVER_BLOCK, UNCOVERED_MAX = 4, 12
 # 토큰이 아니라 앵커에 들어가 앵커를 담은 줄이 없어 판정을 포기했다 → 부정·참/거짓 낱말도 토큰. ③ `retry=9` 같은 임의 `키=값`은
 # 토큰이 아니었다 → 인용의 모든 `키=값`·`키: 값` 조각이 토큰(값은 마스킹 토큰 `<IMSI#1>`도 받는다). 코덱스 리뷰 02e0ec2 F04: 임의
 # 키 분기가 `=`만 받아 `retry: 9`를 놓쳤다 → `키: 값` 분기를 따로 둔다. 값이 완결될 때만 토큰이다 — `=` 꼴은 뒤에 값 문자·`=`가
-# 안 올 때(`pcscf=<IP#1>:5060`·`t=10:00:00`처럼 `:`는 이어져도 된다), `:` 꼴은 `:`도 안 올 때. 아니면
+# 안 올 때(`t=10:00:00`·`uri=sip:alice`처럼 `:`는 이어져도 된다. 뒤가 `:숫자`로 끝나는 포트 꼴 `pcscf=<IP#1>:5060`은 포트까지
+# 토큰이다 — 포트 변조), `:` 꼴은 `:`도 안 올 때. 아니면
 # `onSetupDataCallResult: status=0x10`의 `…Result: status`가 토큰이 돼 `status=0x1` 변조를 놓친다. 키는 글자로 시작해 시각은 아니다.
 # 로그 태그 뒤 `:`(logcat 습관 `D/RILJ: …`·`→ ofonod: …` — 타임라인 행엔 없다)는 토큰이 아니다(`_decision_tokens_altered`).
 NEGATION_WORDS = ("not", "no", "never", "cannot", "unable", "without")
 DECISION_TOKEN_RX = re.compile(
     r"\[PHONE\d+\]|\bphone[_ ]?id\s*[=:]\s*\d+|"
     r"\b(?:error|err|errno|cause|code|reason|status|state|result|rat|fail_cause|failcause|rc|ret)\b\s*[=:]?\s*[-A-Za-z0-9_]+(?:\(\d+\))?|"
-    r"\b[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?=[-A-Za-z0-9_<])[-A-Za-z0-9_.<>#]+(?:\(\d+\))?(?![-A-Za-z0-9_.<>#=])|"
+    r"\b[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?=[-A-Za-z0-9_<])[-A-Za-z0-9_.<>#]+(?:\(\d+\))?(?::\d+(?![-A-Za-z0-9_.<>#=:]))?(?![-A-Za-z0-9_.<>#=])|"
     r"\b[A-Za-z_][A-Za-z0-9_]*\s*:\s*(?=[-A-Za-z0-9_<])[-A-Za-z0-9_.<>#]+(?:\(\d+\))?(?![-A-Za-z0-9_.<>#=:])|"
     r"\b(?:failed|failure|fail|succeeded|success|rejected|reject|accepted|timeout|timed out|denied|disconnected|connected|"
     + "|".join(NEGATION_WORDS) + r"|true|false|enabled|disabled|null|none)\b",
