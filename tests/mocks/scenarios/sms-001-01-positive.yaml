@@ -1,5 +1,5 @@
 # SMS-001-01 양성: 발신 요청(sendTextInternal)이 RIL SEND_SMS로 이어지지 않는다(무선 꺼짐, SS=3).
-# 문구는 Android 17 캡처 형식이다(마스킹). GsmSMSDispatcher는 샘플 tags.yaml이 모으지 않는 태그라 파서는 버린다 — TODO(SITE:S9)
+# 문구는 Android 17 캡처 형식이다(마스킹). 시그니처는 GsmSMSDispatcher sendSms 줄의 SS=1~3을 본다 — TODO(SITE:S9)
 name: SMS-001-01
 start: "2026-09-26T13:00:00+09:00"
 default_phone: 0

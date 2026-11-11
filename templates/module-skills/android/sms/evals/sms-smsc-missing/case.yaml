@@ -21,7 +21,7 @@ run_expect:
   C: 1
 expect:
   layer: '프레임워크'
-  daemon: 'SmsDispatchersController'
+  daemon: 'SmsDispatchersController|(Gsm)?SMSDispatcher'
   evidence: ['sendTextInternal', 'sendText id']
   trap: null
   wrong_layer: ['^\s*(RILJ|RIL HAL|벤더|모뎀|망)']
