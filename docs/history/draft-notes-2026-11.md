@@ -43,3 +43,16 @@
 - (m) 플랫폼 분리(10/11, 사용자): 이슈 DB 플랫폼별, lock 플랫폼별, RF-4 유지 — `17-platforms.md` §7.
 - (n) 트래커 범용화(10/11, 사용자): `tracker.kind`(jira|github)·어댑터 `trackers/` — `18-trackers.md` §7.
 - (t) oFono 확장(10/30, 사용자): `17-platforms.md` §9~11. 원문은 `docs/history/draft-notes-2026-11.md`.
+
+## 11/12 다음 사이클 후보 상세 (#89~#92 리뷰·eval에서 남긴 것)
+
+DRAFT_NOTES 후보 줄의 풀이와, 상한 때문에 거기 못 넣은 P2다. 고칠 범위는 결정 (r).
+
+- **sim fail 채점 기준**: Android 모듈 eval `sim-slow-recognition`(#91 때는 `network-reg-reject`도)에서 기준선(without) arm이 로그 줄이 아니라 이벤트 표기(`⇒ ril_timeout(latency_ms=…)`, `network_registration_rejected(cause=13,domain=PS)`)를 근거로 인용했고 채점기가 `지어낸 근거`로 셌다. with arm은 위반 0인데 관문이 두 arm 모두 0을 요구해 fail. 이벤트 표기 인용을 지어낸 근거로 볼지 정한다(판정이 바뀌면 GRADER_VERSION).
+- **sms 문서 P2 2**: `sms/SKILL.md` 1번 규칙에 `SS=1~3` 조건이 붙어 `SS=0`인데 `SEND_SMS`가 없는 경우의 규칙이 없다. `explore.md` "SMSC" 행의 조건이 SMSC가 아니라 서비스 없음 조건이다. 풀어 쓴 문구는 with arm이 `SS=` 줄을 인용하지 않아 eval fail(0/0)이라 되돌렸다(#92).
+- **`sms-ims-local-reject` 기대**: 두 arm 모두 `맞은 후보 근거에 regex 없음`으로 실패(이전 기록부터). 입력이 17 이전 문구인지, 기대 근거가 과한지 재검토.
+- **eval 42 allow-cause 경로 표시**: 모델이 `allow_cause_drafts`의 fixture를 `fixtures/` 경로 없이 파일 이름만 보임 — 2회 중 1회 실패(Sonnet 5.5). 스킬 문구(`db-authoring.md` "op 그대로")를 더 분명히 할지. `tests/test_skill_evals.py`의 eval 42 시험 자료도 경로 없는 꼴이다.
+- **Android 17**: SMS-001-01(`sendSms … SS=[1-3]`)이 5G SA의 `SS≠0` RIL 발신에도 맞을 수 있음(17 소스 미확인). CALL-001 `volte-dial-attempt`가 CS 발신에도 맞음. case 이름 `sms-smsc-missing`이 내용(서비스 없음)과 다름. `network/explore.md` 밖의 17 문구 점검은 #92에서 ims·call·network만 함.
+- **마스킹(#90)**: 한글만으로 된 `token=` 값 미마스킹(설계)과 contracts "값 무관" 문구 불일치. `iccid=8982` 뒤 US 구분자 꼴은 앞 4자리가 남음(이전부터). `fold_ascii`가 masking·check_boundary에 중복 정의, `isascii()` 빠른 경로 없음. 갈린 조각 표 키가 IMSI·ICCID는 접지 않은 원문. check_boundary: 예외 처리된 접은 글 match가 뒤 값을 삼키면 접은 글에서만 보이는 위반이 빠질 수 있음.
+- **사내**: IMS는 별도 APK라 IMS 줄·규칙·ims·call 모듈 문서는 S-1에서 먼저 맞춘다(확인 항목은 레포 밖 사내 확인 목록).
+- 기록이 없어 내용 확인이 필요한 후보: C 지표 자리, 4-c 2차, B 조건부, 4-c P2 6건, D① P2 잔여, F3의 B/C, 분석 전용 종료 표식, 포트 변조 잔여(끝 `.`·`키: 값`).
