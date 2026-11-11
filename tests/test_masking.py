@@ -463,6 +463,23 @@ HANGUL_GLUED = [
 ]
 
 
+def test_unicode_space_and_digits_are_folded_before_rules():
+    """규칙은 `re.ASCII`지만 글을 접어서 본다: 키·값 사이 NBSP·U+3000, 전각·아라비아-인도 숫자도 main처럼 가린다(원문 글자는 유지)."""
+    nb, wide = chr(0xa0), chr(0x3000)
+    digits = "45005" + "1234567890"                                      # 15자리(경계 검사에 걸리지 않게 나눠 적음)
+    fw = "".join(chr(0xff10 + int(d)) for d in digits)                   # 전각
+    ar = "".join(chr(0x0660 + int(d)) for d in digits)                   # 아라비아-인도
+    cases = [(f"smsc={nb}82101234567", f"smsc={nb}<MSISDN#1>"), (f"salt={wide}0123456789abcdef0123", f"salt={wide}<SALT#1>"),
+             (f'"dns_addr"{nb}: [8, 8, 8, 8]', f'"dns_addr"{nb}: [<IP#1>]'), (f"pResponse={nb}9000ABCDEF0123", f"pResponse={nb}<APDU#1>[7B]"),
+             (f"imsi={fw}", "imsi=<IMSI#1>"), (fw, "<IMSI#1>"), (f"imsi={ar}", "imsi=<IMSI#1>"),
+             (f"version{nb}10.1.2.3", f"version{nb}10.1.2.3")]          # 버전 문맥도 NBSP 너머로 본다(IP로 가리지 않음)
+    for text, want in cases:
+        for log_lines in (False, True):
+            assert masking.new_masker(log_lines=log_lines)(text) == want, (text, log_lines)
+    assert masking.new_masker().find(fw)[0]["kind"] == "IMSI"
+    assert masking.fold_ascii("한글 abc") == "한글 abc" and len(masking.fold_ascii(f"{fw}{nb}")) == 16
+
+
 def test_hangul_glued_values_are_masked():
     """한글 조사가 붙은 값(`010-1234-5678로`)·한글 바로 뒤 값도 제 종류로 가린다 — 일반 마스커(`--check`·db_lint·issue_post)와
     로그 마스커 모두. 로그 마스커가 15~20자리를 `NUM`으로만 가리던 IMSI·ICCID·IMEI도 제 종류다."""

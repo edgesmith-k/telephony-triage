@@ -41,6 +41,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from collections.abc import Callable, Iterable
 
@@ -101,6 +102,20 @@ def _valid_mcc(digits: str) -> bool:
 def _secretish(value: str) -> bool:
     """`key=` 문맥의 값이 비밀값처럼 보이는가 (설정 키 이름 같은 값은 제외)."""
     return len(value) >= 16 and any(c.isdigit() for c in value)
+
+
+_NON_ASCII = re.compile(r"[^\x00-\x7f]")
+
+
+def _fold_char(m: re.Match) -> str:
+    ch = m.group(0)
+    return str(unicodedata.decimal(ch)) if ch.isdecimal() else " " if ch.isspace() else ch
+
+
+def fold_ascii(text: str) -> str:
+    r"""규칙이 보는 글: 유니코드 십진 숫자(전각 `４`·아라비아-인도 숫자)는 ASCII 숫자로, 유니코드 공백(NBSP·U+3000)은 ` `로.
+    글자 수가 같아 구간은 원문에 그대로 쓴다. 규칙이 `re.ASCII`라 이게 없으면 `\d`·`\s`가 그 글자를 놓친다."""
+    return text if text.isascii() else _NON_ASCII.sub(_fold_char, text)
 
 
 def _digits(value: str) -> str:
@@ -528,6 +543,7 @@ class Masker:  # noqa: F811  # 위의 타입 별칭 Masker를 이 클래스가 �
         taken = [(m.start(), m.end()) for m in _PROTECTED.finditer(text)] + list(reserved)
         found: list[tuple[int, int, str, str, str | None]] = []
         # 규칙이 ASCII(`re.ASCII`)라 `(?i)`도 ASCII 글자만 접는다 — 한글 줄에서도 게이트가 결과를 바꾸지 않는다
+        text, orig = fold_ascii(text), text      # 규칙은 접은 글을 보고, 구간·값은 원문(`orig`)에서 낸다
         low = text.lower()
         log_lines = self.log_lines
         for rule in RULES:
@@ -553,14 +569,14 @@ class Masker:  # noqa: F811  # 위의 타입 별칭 Masker를 이 클래스가 �
                 for match in rule.regex.finditer(piece):
                     for group in groups:
                         value = match.group(group)
-                        if value is None or self._allowed(value) or (rule.check and not rule.check(value)):
-                            continue
                         start, end = match.span(group)
+                        if value is None or self._allowed(orig[lo + start:lo + end]) or (rule.check and not rule.check(value)):
+                            continue
                         if ctx_lines is not None and not any(a <= lo + start < b for a, b in ctx_lines):
                             continue
                         if rule.before is not None and rule.before.search(text[max(0, lo + start - 24):lo + start]):
                             continue
-                        found.append((lo + start, lo + end, rule.kind, value, rule.fmt))
+                        found.append((lo + start, lo + end, rule.kind, orig[lo + start:lo + end], rule.fmt))
                         taken.append((lo + start, lo + end))
         return sorted(found)
 

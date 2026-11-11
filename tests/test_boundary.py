@@ -179,6 +179,17 @@ def test_values_glued_to_hangul_are_reported(fake_repo):
         assert (f"pattern:{rule}", "docs/leak.md") in found, rule
 
 
+def test_fullwidth_digits_and_nbsp_are_reported(fake_repo):
+    """패턴은 ASCII지만 줄을 접어서 본다: 전각 15자리·전각 숫자 IP, NBSP로 띄운 인증 헤더도 위반이다."""
+    fw = str.maketrans("0123456789", "".join(chr(0xff10 + n) for n in range(10)))
+    nb = chr(0xa0)
+    _write(fake_repo, "docs/leak.md", "단말 " + "359881234567812".translate(fw) + "\n서버 " + "52.14.200.7".translate(fw)
+           + f"\nAuthorization:{nb}Bearer{nb}abcdEFGH1234ijklMNOP5678\n")
+    found = _rules(boundary.scan(fake_repo, "external"))
+    for rule in ("long-number", "ip-address", "auth-header"):
+        assert (f"pattern:{rule}", "docs/leak.md") in found, rule
+
+
 def test_synthetic_marks_and_registries_pass(fake_repo):
     fixtures = "tests/fixtures/issue-db-x/data/DATA-001-x/fixtures"
     _write(fake_repo, f"{fixtures}/DATA-001-01.log", "log\n")

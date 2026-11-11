@@ -53,6 +53,7 @@ import json
 import re
 import subprocess
 import sys
+import unicodedata
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -235,6 +236,14 @@ def _text(path: Path) -> str | None:
     return data.decode("utf-8", errors="replace")
 
 
+def _fold_ascii(text: str) -> str:
+    """패턴이 `re.ASCII`라 전각·아라비아-인도 숫자와 유니코드 공백(NBSP)을 ASCII로 접어서 본다(글자 수 같음, masking.fold_ascii와 같은 규칙)."""
+    if text.isascii():
+        return text
+    return re.sub(r"[^\x00-\x7f]", lambda m: str(unicodedata.decimal(m.group(0))) if m.group(0).isdecimal()
+                  else " " if m.group(0).isspace() else m.group(0), text)
+
+
 def check_patterns(files: dict[str, Path], patterns) -> list[Finding]:
     findings = []
     for rel, path in files.items():
@@ -244,11 +253,12 @@ def check_patterns(files: dict[str, Path], patterns) -> list[Finding]:
         if text is None:
             continue
         for lineno, line in enumerate(text.splitlines(), 1):
+            folded = _fold_ascii(line)
             for name, regex, ok in patterns:
-                for match in regex.finditer(line):
+                for match in regex.finditer(folded):
                     if ok is not None and ok(match):
                         continue
-                    findings.append(Finding(f"pattern:{name}", rel, lineno, match.group(0)))
+                    findings.append(Finding(f"pattern:{name}", rel, lineno, line[match.start():match.end()]))
     return findings
 
 
