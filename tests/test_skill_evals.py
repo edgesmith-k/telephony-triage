@@ -1996,6 +1996,15 @@ def test_push_screen_shown_verbatim_then_asked(tmp_path):
     assert ctx.screens("push")[0]["end_kind"] == "publish"      # --and-discard는 publish다
 
 
+def test_push_screen_content_matches_crlf_tool_output(tmp_path):
+    # Windows 실행 기록: Bash 결과가 CRLF여도 `^…$` 화면 정규식이 맞는다(eval 42 리뷰어 줄)
+    ctx = _vis_ctx(tmp_path, [_bash("s", STAGE_CMD, ("EXIT 0\n" + SCREEN).replace("\n", "\r\n")),
+                              _ask("q", SCREEN + "\n승인할까요?"), _bash("p", PUBLISH_CMD, "PR #1 생성")])
+    line = SCREEN.splitlines()[1]
+    ok, ev = ctx.screen_has("push", "^" + re.escape(line) + "$")
+    assert ok, ev
+
+
 def test_push_screen_split_and_reformatted_counts(tmp_path):
     """글과 질문에 나눠 보이고, 표 칸 공백을 바꾸고 ```` 울타리를 써도 줄이 다 있으면 보인 것이다."""
     head = SCREEN_HEAD.replace("| Jira 기록 | data/DATA-001-x/issues/MOCK-1.yaml | 신규 |",
