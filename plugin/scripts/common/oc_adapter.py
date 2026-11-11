@@ -423,7 +423,8 @@ def tracker_view(cfg: dict | None = None) -> TrackerView:
         cfg = userconfig.merged(defaults, userconfig.load_user() or {})
     # 읽기 허용 목록: guard 규칙 2가 보는 `tracker.read_tools`와 jira_bridge가 다루는 `tracker.tools` 값
     tools, listed = userconfig.get(cfg, "tracker.tools"), userconfig.get(cfg, "tracker.read_tools")
-    names = [*(tools.values() if isinstance(tools, dict) else []), *(listed if isinstance(listed, list) else [])]
+    # 손으로 고친 매핑 꼴 `read_tools`는 guard가 키를 허용 이름으로 읽는다(`for t in read_tools`) — 지문도 같은 이름을 본다
+    names = [*(tools.values() if isinstance(tools, dict) else []), *(listed if isinstance(listed, (list, dict)) else [])]
     read = sorted({mcptools.normalize(str(v)) for v in names if v})
     return TrackerView(issuepost.jira_prefixes(cfg), issuepost.raw_tool(cfg), trackers.all_server_words(), tuple(read))
 
