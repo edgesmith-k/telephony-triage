@@ -367,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:
               f"{'(임시)' if pr['temporary'] else ''} · 라벨셋 sha256 {meta['labelset_sha256'][:12]} · Python {meta['python']}")
         print(render(results, summary))
     if not summary["evaluated"]:     # 전부 오류인 평가를 정상 완료(0)로 보이지 않는다
-        print("평가 가능한 항목 없음 — 전부 오류", file=sys.stderr)
+        print("평가 가능한 항목 없음 — 전부 오류·대조군·표본내(지표 없음, 통과 아님)", file=sys.stderr)
         return 1
     return 0
 

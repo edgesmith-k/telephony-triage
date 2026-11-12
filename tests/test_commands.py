@@ -483,6 +483,7 @@ def test_offline_eval_marks_key_recorded_in_db_as_in_sample_even_outside_fixture
     root = plugin_root()
     proc = _offline(str(labelset), "--json", "--plugin-root", str(root))
     assert proc.returncode == 1, proc.stderr          # 전부 표본내 = 평가 0건, 통과 아님
+    assert "표본내" in proc.stderr                    # stderr도 "전부 오류"라고만 하지 않는다
     out = json.loads(proc.stdout)
     item = out["items"][0]
     assert item["in_sample"] is True and item["in_sample_reason"] == "db-record" and item["verdict"] == "표본내(1위)"
