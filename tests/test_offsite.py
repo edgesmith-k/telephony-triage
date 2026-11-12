@@ -172,6 +172,9 @@ def test_merge_fills_only_given_evals_and_refuses_conflicts(tmp_path, capsys):
     run(a, 1, [("x", True)])
     out = tmp_path / "offsite_results.json"
     assert main(d, out, a) == 0
+    rec = json.loads(out.read_text(encoding="utf-8"))
+    rec["grader_commit"] = "oldgrader0"                      # 예전 채점기로 만든 기록
+    offsite.write_atomic(out, rec)
     before = out.read_text(encoding="utf-8")
     run(b, 3, [("x", True)])
     merge = lambda *its, note="추가": offsite.main([*map(str, its), "--out", str(out), "--evals-dir", str(d), "--merge", "--note", note])  # noqa: E731
@@ -180,6 +183,9 @@ def test_merge_fills_only_given_evals_and_refuses_conflicts(tmp_path, capsys):
     data = json.loads(after)
     assert data["evals"]["3"]["verdict"] == "pass" and data["evals"]["3"]["runs"][0]["iteration"] == "it-b"
     assert data["note"] == "잠정 / 추가" and list(data["evals"]) == ["1", "2", "3", "4", "8"]
+    assert data["grader_commit"] == "oldgrader0"                 # 최상위는 기존 값 그대로
+    assert "grader_commit" in data["evals"]["3"] and data["evals"]["3"]["grader_commit"] != "oldgrader0"
+    assert all("grader_commit" not in e for k, e in data["evals"].items() if k != "3")
     cut = lambda text, a, b: text[text.index(f'    "{a}": {{'):text.index(f'    "{b}": {{')]  # noqa: E731
     assert cut(after, 1, 3) == cut(before, 1, 3) and after[after.index('    "4": {'):] == before[before.index('    "4": {'):]
     assert merge(b) == 2 and "이미 run이 있는 eval ['3']" in capsys.readouterr().err         # 같은 eval을 다시
