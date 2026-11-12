@@ -7,8 +7,8 @@ Sep 21 10:50:02.010 dut daemon.info vrild[452]: modem monitor: modem reset start
 Sep 21 10:50:02.050 dut daemon.info ofonod[466]: [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: UNAVAILABLE)
 Sep 21 10:50:02.060 dut daemon.info ofonod[466]: plugins/ril.c:ril_radio_state_changed() radio unavailable
 Sep 21 10:50:03.010 dut local0.info mgmtd[734]: ui tick
-Sep 21 10:50:05.000 dut local0.info mgmtd[734]: load rat mode slot=0
-Sep 21 10:50:05.002 dut local0.info mgmtd[734]: dbus -> org.ofono.RadioSettings.GetProperties on /ril_0
+Sep 21 10:50:05.000 dut local0.info mgmtd[734]: load rat mode slot=0  path/example_net.go:60
+Sep 21 10:50:05.002 dut local0.info mgmtd[734]: dbus -> org.ofono.RadioSettings.GetProperties on /ril_0  path/example_dbus.go:36
 Sep 21 10:50:05.004 dut daemon.info ofonod[466]: dbus_trace method call - i:org.ofono.RadioSettings m:GetProperties p:/ril_0 a:no args
 Sep 21 10:50:05.005 dut daemon.debug ofonod[466]: drivers/rilmodem/radio-settings.c:ril_query_rat_mode()
 Sep 21 10:50:05.005 dut daemon.info ofonod[466]: [0,0511]> RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE
@@ -23,7 +23,7 @@ Sep 21 10:50:05.021 dut daemon.debug vrild[452]: [IpcCtx_0] untrack seq 0x0241
 Sep 21 10:50:05.022 dut daemon.debug ofonod[466]: [0,0511]< RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE failed GENERIC_FAILURE
 Sep 21 10:50:05.022 dut daemon.info ofonod[466]: src/radio-settings.c:radio_rat_mode_query_callback() Error during radio access mode query
 Sep 21 10:50:05.023 dut daemon.info ofonod[466]: src/dbus.c:__ofono_error_failed() dbus_trace err return - i:org.ofono.RadioSettings m:GetProperties p:/ril_0
-Sep 21 10:50:05.025 dut local0.warn mgmtd[734]: load rat mode failed slot=0: Operation failed
+Sep 21 10:50:05.025 dut local0.warn mgmtd[734]: load rat mode failed slot=0: Operation failed  path/example_net.go:48
 Sep 21 10:50:05.040 dut daemon.info vrild[452]: modem monitor: modem reset done
 Sep 21 10:50:05.100 dut daemon.info ofonod[466]: [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: ON)
 Sep 21 10:50:06.010 dut local0.info mgmtd[734]: ui tick

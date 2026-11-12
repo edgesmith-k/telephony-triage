@@ -1,17 +1,17 @@
--- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture.
-Sep 22 09:40:17.630 dut daemon.info ofonod[903]: [0,0412]> IMS_REQUEST_AIRPLANE_MODE is_apm:1
-Sep 22 09:40:17.631 dut user.debug imsd[552]: slot0 <- ofonod: IMS_REQUEST_AIRPLANE_MODE serial 0412, apm on
+-- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture. 이름·문구는 placeholder(실제 벤더 로그 아님).
+Sep 22 09:40:17.630 dut daemon.info ofonod[903]: [0,0412]> IMS_REQUEST_AIRPLANE_MODE apm_on:1
+Sep 22 09:40:17.631 dut user.debug imsd[552]: [SLOT_0][D] 6101 slot0 <- ofonod: IMS_REQUEST_AIRPLANE_MODE serial 0412, apm on
 Sep 22 09:40:17.649 dut daemon.info ofonod[903]: [0,0412]< IMS_REQUEST_AIRPLANE_MODE
 Sep 22 09:40:18.419 dut local0.info mgmtd[734]: ui tick
 Sep 22 09:40:21.429 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=28
-Sep 22 09:40:21.430 dut user.debug imsd[552]: slot0: OEM_UNSOL_IMS_REGISTRATION parsed -> [state : 0] sid 0
-Sep 22 09:40:21.431 dut user.info imsd[552]: [SLOT_0] registered:0
-Sep 22 09:40:21.431 dut user.info imsd[552]: [SLOT_0] EPSFB failed, notify to ImsCallManager
-Sep 22 09:40:21.459 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_PDN_DEACTIVATE apnType:1
-Sep 22 09:40:21.460 dut daemon.debug ofonod[903]: src/ims.c:example_pdn_deactivate() apnType:1
+Sep 22 09:40:21.430 dut user.debug imsd[552]: [SLOT_0][D] 6102 slot0: OEM_UNSOL_IMS_EXAMPLE_REGISTRATION parsed -> [state : 0] sid 0
+Sep 22 09:40:21.431 dut user.info imsd[552]: [SLOT_0][I] 6103 registered:0
+Sep 22 09:40:21.431 dut user.info imsd[552]: [SLOT_0][I] 6104 EPSFB failed, notify to ExampleImsCallManager
+Sep 22 09:40:21.459 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_PDN_DEACTIVATE apn_class:1
+Sep 22 09:40:21.460 dut daemon.debug ofonod[903]: src/ims.c:example_pdn_deactivate() apn_class:1
 Sep 22 09:40:21.461 dut daemon.info ofonod[903]: [0,0414]> RIL_REQUEST_DEACTIVATE_DATA_CALL (14,2)
 Sep 22 09:40:21.462 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_CAPABILITIES voiceOverLteCapable=0, emerOverLteCapable=1 smsOverLteCapable=0
 Sep 22 09:40:21.463 dut daemon.debug ofonod[903]: src/ims.c:ims_set_voice_capable() /ril_0 voice capable 0
 Sep 22 09:40:21.539 dut daemon.info ofonod[903]: [0,0414]< RIL_REQUEST_DEACTIVATE_DATA_CALL
-Sep 22 09:40:21.719 dut local0.info mgmtd[734]: ui volte icon off
+Sep 22 09:40:21.719 dut local0.info mgmtd[734]: ui volte icon off  path/example_ui.go:24
 Sep 22 09:40:22.419 dut local0.info mgmtd[734]: ui tick

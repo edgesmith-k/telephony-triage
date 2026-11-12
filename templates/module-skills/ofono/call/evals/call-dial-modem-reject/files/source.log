@@ -4,14 +4,14 @@ Sep 21 10:10:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal upd
 Sep 21 10:10:01.000 dut daemon.info ofonod[466]: Device 0: <HEXDUMP 32B>
 Sep 21 10:10:02.010 dut local0.info mgmtd[734]: ui tick
 Sep 21 10:10:03.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-96
-Sep 21 10:10:05.000 dut local0.info mgmtd[734]: call dial requested number=<MSISDN#1>
-Sep 21 10:10:05.002 dut local0.info mgmtd[734]: dbus -> org.ofono.VoiceCallManager.Dial on /ril_0
+Sep 21 10:10:05.000 dut local0.info mgmtd[734]: call dial requested number=<MSISDN#1>  path/example_call.go:24
+Sep 21 10:10:05.002 dut local0.info mgmtd[734]: dbus -> org.ofono.VoiceCallManager.Dial on /ril_0  path/example_dbus.go:48
 Sep 21 10:10:05.004 dut daemon.info ofonod[466]: dbus_trace method call - i:org.ofono.VoiceCallManager m:Dial p:/ril_0 a:"<MSISDN#1>", "default"
 Sep 21 10:10:05.005 dut daemon.debug ofonod[466]: src/voicecall.c:manager_dial() dialing
 Sep 21 10:10:05.006 dut daemon.debug ofonod[466]: drivers/rilmodem/voicecall.c:ril_dial()
 Sep 21 10:10:05.006 dut daemon.info ofonod[466]: [0,0301]> RIL_REQUEST_DIAL (<MSISDN#1>,0)
 Sep 21 10:10:05.007 dut daemon.debug vrild[452]: client fd 9 VCHAN_1 REQUEST: DIAL (40 bytes)
-Sep 21 10:10:05.007 dut daemon.info vrild[452]: [IpcCtx_0] OnRequest
+Sep 21 10:10:05.007 dut daemon.info vrild[452]: [IpcCtx_0] OnExampleRequest
 Sep 21 10:10:05.007 dut daemon.debug vrild[452]: [IpcCtx_0] route req id=10 svc=2 msg=3001
 Sep 21 10:10:05.008 dut daemon.info vrild[452]: [ExampleCallService_0] dial start
 Sep 21 10:10:05.008 dut daemon.debug vrild[452]: [IpcCtx_0] track seq 0x0131
@@ -28,7 +28,7 @@ Sep 21 10:10:05.412 dut daemon.debug vrild[452]: [IpcCtx_0] untrack seq 0x0131
 Sep 21 10:10:05.413 dut daemon.debug ofonod[466]: [0,0301]< RIL_REQUEST_DIAL failed GENERIC_FAILURE
 Sep 21 10:10:05.413 dut daemon.info ofonod[466]: drivers/rilmodem/voicecall.c:rild_cb() Dial failed: GENERIC_FAILURE
 Sep 21 10:10:05.414 dut daemon.info ofonod[466]: src/dbus.c:__ofono_error_failed() dbus_trace err return - i:org.ofono.VoiceCallManager m:Dial p:/ril_0
-Sep 21 10:10:05.416 dut local0.warn mgmtd[734]: call dial error: Operation failed
+Sep 21 10:10:05.416 dut local0.warn mgmtd[734]: call dial error: Operation failed  path/example_call.go:12
 Sep 21 10:10:06.010 dut local0.info mgmtd[734]: ui tick
 Sep 21 10:10:06.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-95
 Sep 21 10:10:07.000 dut daemon.info ofonod[466]: Device 0: <HEXDUMP 32B>

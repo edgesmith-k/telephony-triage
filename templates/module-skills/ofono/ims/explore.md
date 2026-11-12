@@ -7,7 +7,7 @@ IMS(VoLTE) 등록·해제, IMS PDN. 통화·문자 자체는 `call`·`sms`다.
 
 ## ② 볼 역할과 줄
 - 1순위: IMS IPC — 벤더 RIL `VIPC_EXAMPLE_IMS_REG*`·`VIPC_EXAMPLE_IMS_*`.
-- IMS 구성요소 `[SLOT_<n>]` `registered:<0|1>`·`[IMS_REGISTERED]`, `[SID_0] ind <- OEM_UNSOL_IMS_REG_FAIL… … [fail-code : <n>]`.
+- IMS 구성요소 `[SLOT_<n>]` `registered:<0|1>`·`[IMS_REG_OK]`, `[SUB_0] ind <- OEM_UNSOL_IMS_EXAMPLE_REG_FAIL… … [fail-code : <n>]`.
 - ofonod `src/ims.c`, `IMS_UNSOL_REG_FAILED fail_code=<n>`, `IMS_REQUEST_*`.
 
 ## ③ 층 경로
@@ -22,5 +22,5 @@ IMS 구성요소 `IMS_UNSOL_PDN_ACTIVATE` → ofonod `SETUP_DATA_CALL (…ims…
 | VoWiFi·entitlement (초안) | — | 판단 못 함 → 그 층 로그 없음(<층>) | entitlement 로그 |
 
 ## ⑤ 함정
-- 401 뒤 약 1초 안에 `[IMS_REGISTERED]`면 인증 요청 뒤 등록이다 → `원인 아님(정상 동작)`.
+- 401 뒤 약 1초 안에 `[IMS_REG_OK]`면 인증 요청 뒤 등록이다 → `원인 아님(정상 동작)`.
 - 시작 때 사업자 정보가 아직 없다는 줄, 비행기 모드 뒤 IMS용 APN 항목이 없다는 줄은 순서 문제다.

@@ -6,7 +6,7 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): src/cbs.c · SMS_ACKNOWLEDGE · UNSOL_RESPONSE_NEW_SMS · VIPC_EXAMPLE_SMSC_QUERY · ExampleSmsService
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
-10:20:05.002 p0 I mgmtd dbus -> org.ofono.MessageManager.SendMessage on /ril_0
+10:20:05.002 p0 I mgmtd dbus -> org.ofono.MessageManager.SendMessage on /ril_0 path/example_dbus.go:24
 10:20:05.005 - D ofonod src/sms.c:sms_send_message() queued msg 1
 10:20:05.006 - D ofonod drivers/rilmodem/sms.c:ril_cmgs()
 10:20:05.610 p0 D ofonod [0,0412]< RIL_REQUEST_SEND_SMS failed GENERIC_FAILURE

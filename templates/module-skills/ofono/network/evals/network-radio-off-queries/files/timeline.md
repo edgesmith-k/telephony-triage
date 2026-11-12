@@ -10,7 +10,7 @@
 10:00:16.556 - D vrild client fd 9 VCHAN_2 REQUEST: RADIO_POWER (6 bytes)
 10:00:16.757 p0 I ofonod [0,0631]< RIL_REQUEST_RADIO_POWER
 10:00:21.616 p0 I ofonod [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF)
-10:00:21.618 - I networkd [SID_0] radio state changed: RADIO_OFF
+10:00:21.618 - I networkd [SUB_0] radio state changed: RADIO_OFF [ExampleNet.cpp+12]
 10:00:21.716 p0 I ofonod [0,0632]> RIL_REQUEST_SIGNAL_STRENGTH
 10:00:21.717 p0 I ofonod [0,0633]> RIL_REQUEST_OPERATOR
 10:00:21.719 - D vrild client fd 9 VCHAN_2 REQUEST: SIGNAL_STRENGTH (6 bytes)
@@ -21,4 +21,4 @@
 10:00:21.723 p0 D ofonod [0,0632]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE  ⇒ ril_error(error=INVALID_RESPONSE,request=SIGNAL_STRENGTH,serial=632)
 10:00:21.724 p0 D ofonod [0,0633]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE
 10:00:21.725 - I ofonod src/network.c:current_operator_callback() Error during current operator
-10:00:21.731 - I mgmtd load network info failed: Load data failed err: Operation failed
+10:00:21.731 - I mgmtd load network info failed: Load data failed err: Operation failed path/example_net.go:24
