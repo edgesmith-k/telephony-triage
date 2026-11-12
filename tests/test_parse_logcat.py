@@ -370,6 +370,17 @@ def test_vendor_token_after_rilj_response_within_1s():
     assert _hal(_vendor_parse([REQ41, HAL41, ERR41, past]), "ril_error") == "reached"
 
 
+def test_vendor_full_serial_matches_rilj_four_digits():
+    """RILJ는 `mSerial % 10000`을 찍는다(RILRequest.java) — 벤더가 전체 serial(10041)을 찍어도 [0041]과 잇는다."""
+    full = (0.005, 900, "VRIL_HAL", "req serial=10041 name=SETUP_DATA_CALL")
+    assert _hal(_vendor_parse([REQ41, full]), "ril_no_response") == "reached"
+    assert _hal(_vendor_parse([REQ41, HAL41]), "ril_no_response") == "reached"          # 4자리 이하로 찍어도 같다
+    other = (0.005, 900, "VRIL_HAL", "req serial=10040 name=DIAL")
+    assert _hal(_vendor_parse([REQ41, other]), "ril_no_response") == "not_reached"
+    tok = (0.4, 900, "VRIL_SOCK", "resp token=20041")
+    assert _hal(_vendor_parse([REQ41, full, tok]), "ril_no_response") == "responded"
+
+
 def test_vendor_non_decimal_group_value_is_ignored():
     """단어 문자 token 그룹에 `0x29` 같은 값이 와도 parse가 죽지 않고 그 줄만 무시한다."""
     vendor = {"layers": [*VENDOR["layers"][:1], {"tag": "VRIL_SOCK", "patterns": [r"^resp token=(?P<token>\w+)"]}]}
