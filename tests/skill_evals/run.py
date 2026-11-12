@@ -157,7 +157,8 @@ def prepare_plugin_mode(entry: dict, info: dict, env_dir: Path) -> dict:
                                                  (skill / "run.py").as_posix()), encoding="utf-8")
     if setup.get("analyzer_proposal"):     # 채점용: 준비 때 분석 스킬 디렉토리(파일 → sha256). grade.py가 실행 뒤와 비교한다
         dump(env_dir / ANALYZER_MANIFEST, skill_manifest(skill))
-    merge_skill_dir(info, skill)
+    if not setup.get("fresh_user"):     # 첫 사용자 eval(setup-first-time): config.yaml이 없어야 한다 — skill_dir만 든 config를 만들지 않는다
+        merge_skill_dir(info, skill)
     mcp = env_dir / "mcp.json"
     # mock-jira, 두 번째 트래커 eval(setup.tracker: github, 트래커 범용화 §6-3)이면 mock-github-issues도 — 격리 홈 .claude.json과 같은 정의
     trackers = tracker_servers(info["env"])
