@@ -206,7 +206,8 @@ def link_vendor(records: list[dict], rules: VendorRules) -> None:
                     key, store = ("serial", hal) if "serial" in pattern.groupindex else ("token", tok)
                     value = hit.group(key)
                     if value is not None and value.isascii() and value.isdigit():  # 10진 숫자만, 그 밖(0x29 등)은 무시
-                        store.setdefault(int(value), []).append(rec["_dt"])
+                        # RILJ는 mSerial % 10000을 찍는다 — serial·token 모두 맞춘다(이미 4자리면 그대로)
+                        store.setdefault(int(value) % 10000, []).append(rec["_dt"])
                     break
         elif tag in rules.coverage_tags:
             seen.append(rec["_dt"])
@@ -228,9 +229,10 @@ def link_vendor(records: list[dict], rules: VendorRules) -> None:
             hal_end = max(start + link, end)
         else:
             end, hal_end = start + TOKEN_UNPAIRED, start + link
-        if _within(tok.get(ann["serial"], []), start, end):
+        serial = ann["serial"] % 10000  # 저장 쪽과 같은 4자리 키(RILJ가 전체 값을 찍어도)
+        if _within(tok.get(serial, []), start, end):
             ann["hal"] = "responded"
-        elif _within(hal.get(ann["serial"], []), start - HAL_BEFORE, hal_end):
+        elif _within(hal.get(serial, []), start - HAL_BEFORE, hal_end):
             ann["hal"] = "reached"
         elif _within(seen, start - COVER, start + COVER):
             ann["hal"] = "not_reached"
