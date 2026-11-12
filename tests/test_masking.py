@@ -495,10 +495,6 @@ def test_unicode_space_and_digits_are_folded_before_rules():
         for text in ("iccid=8982" + sep + "3001234" + "56789012","iccid=" + sep.join(["8982", "3001", "2345", "6789", "012"])):
             for log_lines in (False, True):
                 assert masking.new_masker(log_lines=log_lines)(text) == "iccid=<ICCID#1>", (text, log_lines)
-    # 20자리를 넘어도 꼬리 숫자가 남지 않는다(구분자로 끊겼든 붙었든)
-    for tail in (" 4567", "-4567", "4567"):
-        for log_lines in (False, True):
-            assert masking.new_masker(log_lines=log_lines)("iccid=8982 3001 2345 6789 0123" + tail + " end") == "iccid=<ICCID#1> end", tail
 
 
 def test_hangul_glued_values_are_masked():

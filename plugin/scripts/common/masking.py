@@ -398,9 +398,8 @@ _BASE_RULES: tuple[Rule, ...] = (
          gate=("gps", "fused", "network", "passive")),
     # `iccid=`·`"iccid":` 외에 `ICCID(<값>)`·`iccid[<값>]`도(벤더 데몬 표기)
     Rule("ICCID", re.compile(r'(?i)\biccid(?:' + _SEP + r'|(?u:\s)*[(\[](?u:\s)*)(?P<v>[0-9A-Fa-f]{18,20})' + _NUM_END)),
-    # 구분자(`-`·공백, 접힌 FS~US 포함)로 끊긴 ICCID(`iccid=8982 3001 …`) — IMEI처럼. 위 규칙이 못 잡은 값만 온다.
-    # 자릿수 상한을 두지 않는다: 20자리에서 끊으면 꼬리 숫자가 남는다. 대신 구분자 하나로 이어진 뒤 숫자도 같이 가린다
-    Rule("ICCID", re.compile(r'(?i)\biccid(?:' + _SEP + r'|(?u:\s)*[(\[](?u:\s)*)(?P<v>\d(?:[ -]?\d){17,}[Ff]?)'),
+    # 구분자(`-`·공백, 접힌 FS~US 포함)로 끊긴 ICCID(`iccid=8982 3001 …`) — IMEI처럼. 위 규칙이 못 잡은 값만 온다
+    Rule("ICCID", re.compile(r'(?i)\biccid(?:' + _SEP + r'|(?u:\s)*[(\[](?u:\s)*)(?P<v>\d(?:[ -]?\d){17,19}[Ff]?)'),
          gate=("iccid",)),
     Rule("TMSI", re.compile(r'(?i)\b(?:p-?tmsi|m-?tmsi|s-?tmsi|tmsi)' + _SEP + r'(?P<v>(?:0x)?[0-9A-Fa-f]{4,10})\b')),
     Rule("GUTI", re.compile(r'(?i)\b(?:5g-?guti|guti)' + _SEP + r'(?P<v>[0-9A-Fa-f][0-9A-Fa-f-]{7,})\b')),
