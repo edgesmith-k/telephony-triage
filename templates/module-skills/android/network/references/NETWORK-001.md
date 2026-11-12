@@ -9,7 +9,7 @@
 1. RILJ 등록 상태 응답의 `regState`·`reasonForDenial`을 본다.
 2. 같은 요청의 IPC가 OK인지 본다. OK면 거절 값은 망이 준 것이다.
 3. NRM-C `onRequestNetworkRegistrationInfoComplete`의 `rejectCause=`가 응답 값과 같은지 본다.
-4. 직전에 무선 꺼짐(`AT+CFUN=0`, `RADIO_OFF`·`radioStateChanged: OFF`)이 있었는지 본다.
+4. 직전에 무선 꺼짐(`AT+CFUN=0`, `newState=RADIO_OFF`·`radioStateChanged: OFF`(17 캡처 없음 — 사내 확인))이 있었는지 본다.
 
 ## 코드 경로
 

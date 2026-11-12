@@ -10,8 +10,8 @@
 
 ## ② 볼 역할과 줄
 
-- SmsDispatchersController `sendTextInternal:` · GsmSMSDispatcher `sendSms:  isIms()=false … SS=<n>`(CS 발신, `SS=1~3` 서비스 없음)
-- ImsSmsDispatcher `[n]` `sendSms:  mRetryCount=…`·`onSendSmsResult … status=<n>`·`sendSms failed. Falling back to PSTN.`
+- SmsDispatchersController `sendTextInternal:` · GsmSMSDispatcher `sendSms:  isIms()=false mRetryCount=… SS=<n>`(CS 발신, `SS=1~3` 서비스 없음)
+- ImsSmsDispatcher `[n]` `sendSms: token=<n> format=3gpp`·`onSendSmsResult … status=<n>`·`sendSms failed. Falling back to PSTN.`
 - 벤더 IMS `[sms]`, RILJ `SEND_SMS`, 벤더 RIL `VIPC_*SMS*`
 
 ## ③ 층 경로

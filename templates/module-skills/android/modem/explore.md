@@ -10,7 +10,7 @@
 
 ## ② 볼 역할과 줄
 
-- RILJ `[UNSL]< UNSOL_MODEM_RESTART`, `RADIO_POWER`, `radioStateChanged: OFF|UNAVAILABLE|ON`, `serviceDied`·`has died`, 벤더 RIL 데몬 `radio state changed: newState=`
+- RILJ `[UNSL]< UNSOL_MODEM_RESTART`, `RADIO_POWER`, `radioStateChanged:`(17 캡처 없음 — 사내 확인), `serviceDied`·`has died`, 벤더 RIL 데몬 `radio state changed: newState=`
 - RadioConfig `SET_PREFERRED_DATA_MODEM`, PhoneCfgMgr
 - AT 중계·모뎀 진단 `at-in: AT…`·`at-out: …`
 
