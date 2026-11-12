@@ -7,7 +7,7 @@
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
 10:40:02.010 - D imsd [SLOT_0][I] 5101 [ExampleImsRegistration] exampleTriggerRegistering() SENT
-10:40:02.020 - D imsd [SID_0] req -> OEM_REQ_IMS_EXAMPLE_REGISTER len=48
+10:40:02.020 - D imsd [SLOT_0][D] 5111 [SID_0] req -> OEM_REQ_IMS_EXAMPLE_REGISTER len=48
 10:40:02.021 - D vrild mux [ch0][TX] VIPC_EXAMPLE_IMS_REG_REQ, REQ seq=0x0201 len=48
 10:40:02.090 - D vrild mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_REQ, RSP OK(VIPC_OK) seq=0x0201 len=12
 10:40:05.000 - D vrild mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=40

@@ -6,7 +6,7 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): datad · datad2 · src/lte.c · drivers/rilmodem/gprs.c · drivers/rilmodem/lte.c
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
-09:20:02.000 p0 I mgmtd dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1
+09:20:02.000 p0 I mgmtd dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1 path/example_dbus.go:12
 09:20:02.002 p0 I ofonod dbus_trace method call - i:org.ofono.ConnectionContext m:SetProperty p:/ril_0/context1 a:"Active", variant(true)
 09:20:02.003 p0 D ofonod drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating
 09:20:02.004 p0 I ofonod [0,0041]> RIL_REQUEST_SETUP_DATA_CALL 16,1,<APN#1>,0,IP

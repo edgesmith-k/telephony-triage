@@ -5,8 +5,8 @@ Sep 21 10:30:01.000 dut daemon.info ofonod[466]: IMSD 0: <HEXDUMP 32B>
 Sep 21 10:30:01.500 dut daemon.info ofonod[466]: src/ims.c:ims_set_sms_capable() IMS_UNSOL_CAPABILITIES voiceOverLteCapable=1 smsOverLteCapable=1
 Sep 21 10:30:02.010 dut local0.info mgmtd[734]: ui tick
 Sep 21 10:30:03.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-92
-Sep 21 10:30:05.000 dut local0.info mgmtd[734]: sms send requested to=<MSISDN#1> len=20
-Sep 21 10:30:05.002 dut local0.info mgmtd[734]: dbus -> org.ofono.MessageManager.SendMessage on /ril_0
+Sep 21 10:30:05.000 dut local0.info mgmtd[734]: sms send requested to=<MSISDN#1> len=20  path/example_sms.go:24
+Sep 21 10:30:05.002 dut local0.info mgmtd[734]: dbus -> org.ofono.MessageManager.SendMessage on /ril_0  path/example_dbus.go:24
 Sep 21 10:30:05.004 dut daemon.info ofonod[466]: dbus_trace method call - i:org.ofono.MessageManager m:SendMessage p:/ril_0 a:"<MSISDN#1>", <HEXDUMP 20B>
 Sep 21 10:30:05.005 dut daemon.debug ofonod[466]: src/sms.c:sms_send_message() queued msg 1, route ims smsOverLteCapable=1
 Sep 21 10:30:05.006 dut daemon.info ofonod[466]: src/ims.c:example_send_sms() IMS_REQUEST_SEND_SMS ref=1
@@ -17,7 +17,7 @@ Sep 21 10:30:05.012 dut user.debug imsd[733]: [SLOT_0][I] 4104 [ExampleImsSmsMan
 Sep 21 10:30:05.014 dut daemon.info ofonod[466]: src/ims.c:example_sms_result() IMS_UNSOL_SMS_RESULT ref=1 result=1
 Sep 21 10:30:05.015 dut daemon.info ofonod[466]: src/sms.c:tx_finished() send failed, giving up
 Sep 21 10:30:05.016 dut daemon.info ofonod[466]: src/dbus.c:__ofono_error_failed() dbus_trace err return - i:org.ofono.MessageManager m:SendMessage p:/ril_0
-Sep 21 10:30:05.018 dut local0.warn mgmtd[734]: sms send error: Operation failed
+Sep 21 10:30:05.018 dut local0.warn mgmtd[734]: sms send error: Operation failed  path/example_sms.go:12
 Sep 21 10:30:06.010 dut local0.info mgmtd[734]: ui tick
 Sep 21 10:30:06.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-93
 Sep 21 10:30:07.000 dut daemon.info ofonod[466]: IMSD 0: <HEXDUMP 32B>

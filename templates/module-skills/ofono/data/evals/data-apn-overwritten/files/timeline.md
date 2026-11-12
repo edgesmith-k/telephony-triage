@@ -12,7 +12,7 @@
 09:00:01.002 - D datad add apn entry, profile id : 2, apn : ims, type : ims[./src/apn_example.cxx +42]  〔script: 같은 줄 ×2〕
 09:00:01.002 - D datad apn list loaded, size: 2[./src/apn_example.cxx +42]  〔script: 같은 줄 ×2〕
 09:00:01.451 - D datad add apn entry, profile id : 1, apn : <APN#1>, type : internet[./src/apn_example.cxx +42]
-09:00:02.000 p0 I mgmtd dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1
+09:00:02.000 p0 I mgmtd dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1 path/example_dbus.go:12
 09:00:02.002 p0 I ofonod dbus_trace method call - i:org.ofono.ConnectionContext m:SetProperty p:/ril_0/context1 a:"Active", variant(true)
 09:00:02.003 p0 D ofonod drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating
 09:00:02.004 p0 I ofonod [0,0021]> RIL_REQUEST_SETUP_DATA_CALL 16,1,<APN#1>,0,IP

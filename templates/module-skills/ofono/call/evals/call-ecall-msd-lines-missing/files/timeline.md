@@ -6,7 +6,7 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): src/call-settings.c · src/call-forwarding.c · src/call-barring.c · drivers/rilmodem/voicecall.c · UNSOL_EMERGENCY_NUMBER_LIST
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
-10:20:05.002 p0 I mgmtd dbus -> org.ofono.VoiceCallManager.Dial on /ril_0
+10:20:05.002 p0 I mgmtd dbus -> org.ofono.VoiceCallManager.Dial on /ril_0 path/example_dbus.go:48
 10:20:05.004 p0 I ofonod dbus_trace method call - i:org.ofono.VoiceCallManager m:Dial p:/ril_0 a:"<MSISDN#1>", "default"
 10:20:05.005 - D ofonod src/voicecall.c:manager_dial() dialing
 10:20:05.006 p0 I ofonod [0,0361]> RIL_REQUEST_DIAL (<MSISDN#1>,0)

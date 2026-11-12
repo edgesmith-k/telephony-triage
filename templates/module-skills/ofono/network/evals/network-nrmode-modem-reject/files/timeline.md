@@ -6,7 +6,7 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): networkd · src/network.c · src/netmon.c · drivers/rilmodem/network-registration.c · drivers/rilmodem/netmon.c
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
-09:20:22.263 p0 I mgmtd dbus -> org.ofono.RadioSettings.GetProperties on /ril_0
+09:20:22.263 p0 I mgmtd dbus -> org.ofono.RadioSettings.GetProperties on /ril_0 path/example_dbus.go:36
 09:20:22.264 p0 D ofonod src/radio-settings.c:radio_get_properties() /ril_0
 09:20:22.265 - D ofonod drivers/rilmodem/radio-settings.c:ril_query_rat_mode()
 09:20:22.265 p0 I ofonod [0,0348]> RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE
@@ -22,5 +22,5 @@
 09:20:22.273 p0 D ofonod [0,0348]< RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE failed GENERIC_FAILURE  ⇒ ril_error(error=GENERIC_FAILURE,request=GET_PREFERRED_NETWORK_TYPE,serial=348)
 09:20:22.273 - I ofonod src/radio-settings.c:radio_rat_mode_query_callback() Error during radio access mode query
 09:20:22.274 - I ofonod src/dbus.c:__ofono_error_failed() m:GetProperties i:org.ofono.RadioSettings
-09:20:22.278 - I mgmtd dbus call error: Operation failed (GetProperties)
-09:20:22.279 - I mgmtd load rat mode failed slot=0
+09:20:22.278 - I mgmtd dbus call error: Operation failed (GetProperties) path/example_dbus.go:60
+09:20:22.279 - I mgmtd load rat mode failed slot=0 path/example_net.go:36

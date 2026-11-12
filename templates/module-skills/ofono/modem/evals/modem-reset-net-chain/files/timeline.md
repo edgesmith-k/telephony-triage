@@ -8,7 +8,7 @@
 
 10:50:00.200 - I vrild [ExampleRegService_0] signal update nr rsrp=-88
 10:50:02.050 p0 I ofonod [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: UNAVAILABLE)
-10:50:05.002 p0 I mgmtd dbus -> org.ofono.RadioSettings.GetProperties on /ril_0
+10:50:05.002 p0 I mgmtd dbus -> org.ofono.RadioSettings.GetProperties on /ril_0 path/example_dbus.go:36
 10:50:05.004 p0 I ofonod dbus_trace method call - i:org.ofono.RadioSettings m:GetProperties p:/ril_0 a:no args
 10:50:05.005 - D ofonod drivers/rilmodem/radio-settings.c:ril_query_rat_mode()
 10:50:05.005 p0 I ofonod [0,0511]> RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE
@@ -23,12 +23,12 @@
 10:50:05.022 p0 D ofonod [0,0511]< RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE failed GENERIC_FAILURE  ⇒ ril_error(error=GENERIC_FAILURE,request=GET_PREFERRED_NETWORK_TYPE,serial=511)
 10:50:05.022 - I ofonod src/radio-settings.c:radio_rat_mode_query_callback() Error during radio access mode query
 10:50:05.023 p0 I ofonod src/dbus.c:__ofono_error_failed() dbus_trace err return - i:org.ofono.RadioSettings m:GetProperties p:/ril_0
-10:50:05.025 - I mgmtd load rat mode failed slot=0: Operation failed
+10:50:05.025 - I mgmtd load rat mode failed slot=0: Operation failed path/example_net.go:48
 10:50:05.100 p0 I ofonod [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: ON)
 10:50:06.200 - I vrild [ExampleRegService_0] signal update nr rsrp=-89
 
 ## 모뎀 모듈 줄
 10:50:02.050 p0 I ofonod [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: UNAVAILABLE)
 10:50:02.060 - I ofonod plugins/ril.c:ril_radio_state_changed() radio unavailable
-10:50:05.025 - I mgmtd load rat mode failed slot=0: Operation failed
+10:50:05.025 - I mgmtd load rat mode failed slot=0: Operation failed path/example_net.go:48
 10:50:05.100 p0 I ofonod [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: ON)

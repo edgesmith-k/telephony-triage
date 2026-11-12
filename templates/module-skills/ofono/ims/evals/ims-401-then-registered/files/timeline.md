@@ -11,15 +11,15 @@
 09:30:20.794 - D ofonod src/ims.c:example_pdn_info_cb() pdn info set
 09:30:21.301 - D vrild mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=12
 09:30:21.302 - I vrild [ImsService_1] ims reg ind relayed to client chan 3
-09:30:21.303 - D imsd slot0: OEM_UNSOL_IMS_EXAMPLE_REG_FAIL parsed -> [fail-code : 401] sid 0
-09:30:21.303 - I imsd [SLOT_0] reg failure reported, fail code: 401
-09:30:21.304 - D imsd slot0 -> ofonod: IMS_UNSOL_REG_FAILED (14 bytes)
+09:30:21.303 - D imsd [SLOT_0][D] 7101 slot0: OEM_UNSOL_IMS_EXAMPLE_REG_FAIL parsed -> [fail-code : 401] sid 0
+09:30:21.303 - I imsd [SLOT_0][I] 7102 reg failure reported, fail code: 401
+09:30:21.304 - D imsd [SLOT_0][D] 7103 slot0 -> ofonod: IMS_UNSOL_REG_FAILED (14 bytes)
 09:30:21.305 p0 I ofonod [0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=401
 09:30:21.305 p0 I ofonod src/ims.c:example_reg_fail_notify() /ril_0 fail_code 401
-09:30:21.591 - I imsd [SLOT_0] SIP 401 Unauthorized, register again with credentials
+09:30:21.591 - I imsd [SLOT_0][I] 7104 SIP 401 Unauthorized, register again with credentials
 09:30:22.161 - D vrild mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=28
-09:30:22.162 - D imsd slot0: OEM_UNSOL_IMS_EXAMPLE_REGISTRATION parsed -> [state : 1] sid 0
-09:30:22.162 - I imsd [SLOT_0] IMS registration done
-09:30:22.163 - I imsd [SLOT_0] registered:1 [IMS_REGISTERED] VoPS:1 RAT:NR
+09:30:22.162 - D imsd [SLOT_0][D] 7105 slot0: OEM_UNSOL_IMS_EXAMPLE_REGISTRATION parsed -> [state : 1] sid 0
+09:30:22.162 - I imsd [SLOT_0][I] 7106 IMS registration done
+09:30:22.163 - I imsd [SLOT_0][I] 7107 registered:1 [IMS_REGISTERED] VoPS:1 RAT:NR
 09:30:22.164 p0 I ofonod [0,UNSOL]< IMS_UNSOL_RESPONSE_REGISTRATION_STATE_CHANGED
 09:30:22.165 p0 D ofonod src/ims.c:ofono_ims_status_notify() /ril_0 registered 1

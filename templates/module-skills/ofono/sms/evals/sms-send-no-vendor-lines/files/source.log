@@ -4,8 +4,8 @@ Sep 21 10:20:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal upd
 Sep 21 10:20:01.000 dut daemon.info ofonod[466]: Device 0: <HEXDUMP 32B>
 Sep 21 10:20:02.010 dut local0.info mgmtd[734]: ui tick
 Sep 21 10:20:03.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-97
-Sep 21 10:20:05.000 dut local0.info mgmtd[734]: sms send requested to=<MSISDN#1> len=12
-Sep 21 10:20:05.002 dut local0.info mgmtd[734]: dbus -> org.ofono.MessageManager.SendMessage on /ril_0
+Sep 21 10:20:05.000 dut local0.info mgmtd[734]: sms send requested to=<MSISDN#1> len=12  path/example_sms.go:24
+Sep 21 10:20:05.002 dut local0.info mgmtd[734]: dbus -> org.ofono.MessageManager.SendMessage on /ril_0  path/example_dbus.go:24
 Sep 21 10:20:05.004 dut daemon.info ofonod[466]: dbus_trace method call - i:org.ofono.MessageManager m:SendMessage p:/ril_0 a:"<MSISDN#1>", <HEXDUMP 12B>
 Sep 21 10:20:05.005 dut daemon.debug ofonod[466]: src/sms.c:sms_send_message() queued msg 1
 Sep 21 10:20:05.006 dut daemon.debug ofonod[466]: drivers/rilmodem/sms.c:ril_cmgs()
@@ -25,7 +25,7 @@ Sep 21 10:20:11.220 dut daemon.debug ofonod[466]: [0,0415]< RIL_REQUEST_SEND_SMS
 Sep 21 10:20:11.221 dut daemon.info ofonod[466]: drivers/rilmodem/sms.c:ril_submit_sms_cb() sms send failed: GENERIC_FAILURE
 Sep 21 10:20:11.222 dut daemon.info ofonod[466]: src/sms.c:tx_finished() send failed, giving up
 Sep 21 10:20:11.223 dut daemon.info ofonod[466]: src/dbus.c:__ofono_error_failed() dbus_trace err return - i:org.ofono.MessageManager m:SendMessage p:/ril_0
-Sep 21 10:20:11.226 dut local0.warn mgmtd[734]: sms send error: Operation failed
+Sep 21 10:20:11.226 dut local0.warn mgmtd[734]: sms send error: Operation failed  path/example_sms.go:12
 Sep 21 10:20:12.010 dut local0.info mgmtd[734]: ui tick
 Sep 21 10:20:13.000 dut daemon.info ofonod[466]: Device 0: <HEXDUMP 32B>
 Sep 21 10:20:13.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-96

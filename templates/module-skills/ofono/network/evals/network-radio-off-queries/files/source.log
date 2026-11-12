@@ -7,7 +7,7 @@ Sep 22 10:00:16.757 dut daemon.info ofonod[903]: [0,0631]< RIL_REQUEST_RADIO_POW
 Sep 22 10:00:17.236 dut daemon.info chatterd[746]: position fix pending
 Sep 22 10:00:21.616 dut daemon.info ofonod[903]: [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF)
 Sep 22 10:00:21.617 dut daemon.info ofonod[903]: src/modem.c:modem_change_state() /ril_0 online false
-Sep 22 10:00:21.618 dut user.info networkd[575]: [SID_0] radio state changed: RADIO_OFF
+Sep 22 10:00:21.618 dut user.info networkd[575]: [SID_0] radio state changed: RADIO_OFF [ExampleNet.cpp+12]
 Sep 22 10:00:21.716 dut daemon.info ofonod[903]: [0,0632]> RIL_REQUEST_SIGNAL_STRENGTH
 Sep 22 10:00:21.717 dut daemon.info ofonod[903]: [0,0633]> RIL_REQUEST_OPERATOR
 Sep 22 10:00:21.719 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: SIGNAL_STRENGTH (6 bytes)
@@ -18,6 +18,6 @@ Sep 22 10:00:21.722 dut daemon.err vrild[618]: chan 2: empty reply body, nothing
 Sep 22 10:00:21.723 dut daemon.debug ofonod[903]: [0,0632]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE
 Sep 22 10:00:21.724 dut daemon.debug ofonod[903]: [0,0633]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE
 Sep 22 10:00:21.725 dut daemon.info ofonod[903]: src/network.c:current_operator_callback() Error during current operator
-Sep 22 10:00:21.731 dut local0.warn mgmtd[734]: load network info failed: Load data failed err: Operation failed
+Sep 22 10:00:21.731 dut local0.warn mgmtd[734]: load network info failed: Load data failed err: Operation failed  path/example_net.go:24
 Sep 22 10:00:21.836 dut daemon.info chatterd[746]: position fix pending
 Sep 22 10:00:22.236 dut local0.info mgmtd[734]: ui tick

@@ -5,8 +5,8 @@ Sep 23 10:10:01.000 dut daemon.info vrild[452]: [ExampleRegService_0] Data RegSt
 Sep 23 10:10:01.002 dut daemon.info vrild[452]: [ExampleRegService_0] Voice RegState=NOT_REGISTERED, RejectCause=17
 Sep 23 10:10:01.500 dut daemon.info ofonod[466]: [0,UNSOL]< IMS_UNSOL_CAPABILITIES voiceOverLteCapable=0, emerOverLteCapable=1 smsOverLteCapable=0, utOverLteCapable=1
 Sep 23 10:10:02.010 dut local0.info mgmtd[734]: ui tick
-Sep 23 10:10:05.000 dut local0.info mgmtd[734]: call dial requested number=<MSISDN#1>
-Sep 23 10:10:05.002 dut local0.info mgmtd[734]: dbus -> org.ofono.VoiceCallManager.Dial on /ril_0
+Sep 23 10:10:05.000 dut local0.info mgmtd[734]: call dial requested number=<MSISDN#1>  path/example_call.go:24
+Sep 23 10:10:05.002 dut local0.info mgmtd[734]: dbus -> org.ofono.VoiceCallManager.Dial on /ril_0  path/example_dbus.go:48
 Sep 23 10:10:05.004 dut daemon.info ofonod[466]: dbus_trace method call - i:org.ofono.VoiceCallManager m:Dial p:/ril_0 a:"<MSISDN#1>", "default"
 Sep 23 10:10:05.005 dut daemon.debug ofonod[466]: src/voicecall.c:manager_dial() dialing
 Sep 23 10:10:05.006 dut daemon.info ofonod[466]: [0,0351]> RIL_REQUEST_DIAL (<MSISDN#1>,0)

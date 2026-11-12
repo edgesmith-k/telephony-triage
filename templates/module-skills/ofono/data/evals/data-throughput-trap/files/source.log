@@ -1,7 +1,7 @@
 -- [합성] C1D 보정 data-throughput-trap. 레포의 줄 모양(_common/components.md, platforms/ofono/msgformat.py의 src_suffix 예시, C0·C1 합성 case)만 본떠 새로 썼다. 이름·값은 placeholder. 연결·data call list는 안정이고 오류 줄은 없다.
 Sep 22 09:20:00.010 dut local0.info mgmtd[734]: ui tick
 Sep 22 09:20:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-93
-Sep 22 09:20:02.000 dut local0.info mgmtd[734]: dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1
+Sep 22 09:20:02.000 dut local0.info mgmtd[734]: dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1  path/example_dbus.go:12
 Sep 22 09:20:02.002 dut daemon.info ofonod[466]: dbus_trace method call - i:org.ofono.ConnectionContext m:SetProperty p:/ril_0/context1 a:"Active", variant(true)
 Sep 22 09:20:02.003 dut daemon.debug ofonod[466]: drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating
 Sep 22 09:20:02.004 dut daemon.info ofonod[466]: [0,0041]> RIL_REQUEST_SETUP_DATA_CALL 16,1,<APN#1>,0,IP

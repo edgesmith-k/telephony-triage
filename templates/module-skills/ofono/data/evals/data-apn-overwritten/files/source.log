@@ -12,7 +12,7 @@ Sep 22 09:00:01.451 dut daemon.debug datad[618]: add apn entry, profile id : 1, 
 Sep 22 09:00:01.451 dut daemon.debug datad[618]: set ia profile id = 1[./src/ia_example.cxx +10]
 Sep 22 09:00:01.452 dut daemon.debug datad[618]: add apn entry, profile id : 2, apn : ims, type : ims[./src/apn_example.cxx +42]
 Sep 22 09:00:01.452 dut daemon.debug datad[618]: apn list loaded, size: 2[./src/apn_example.cxx +42]
-Sep 22 09:00:02.000 dut local0.info mgmtd[734]: dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1
+Sep 22 09:00:02.000 dut local0.info mgmtd[734]: dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1  path/example_dbus.go:12
 Sep 22 09:00:02.002 dut daemon.info ofonod[466]: dbus_trace method call - i:org.ofono.ConnectionContext m:SetProperty p:/ril_0/context1 a:"Active", variant(true)
 Sep 22 09:00:02.003 dut daemon.debug ofonod[466]: drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating
 Sep 22 09:00:02.004 dut daemon.info ofonod[466]: [0,0021]> RIL_REQUEST_SETUP_DATA_CALL 16,1,<APN#1>,0,IP
