@@ -335,7 +335,8 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
         if row["status"] == "skipped" and row.get("review_required"):
             notes.append(f"{row['id']}: 검증 못 함 — 자동 검증 없음 ({row['reason']})")
     # 계획의 pr_notes: 흐름별 설명(drift 결정, verify-fix 근거, allow-cause 사유 등). 한 번 더 마스킹한다.
-    masker = masking.new_masker(allow_patterns=(db_cfg.get("mask") or {}).get("allow_patterns") or [])
+    allow = [str(p) for p in ((db_cfg.get("mask") or {}).get("allow_patterns") or [])]
+    masker = masking.new_masker(allow_patterns=allow)
     notes += [masker(str(n)) for n in plan.get("pr_notes") or [] if str(n).strip()]
     check = stage_result.get("config_check") or {}
     push_allowed = bool(check.get("push_allowed")) and not stage_result.get("dry_run")
@@ -356,6 +357,8 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
         "approval_needed": approval, "notes": notes, "commit_message": commit_message, "pr_title": title,
         "push_allowed": push_allowed, "push_note": push_note, "pending_included": applied.get("pending_included") or [],
     }
+    if jira.get("note"):    # PR 본문 메모 줄용. 이슈 DB 파일(dbadd/ops/jira.py)과 같은 새 masker — 토큰 번호가 같다
+        result["issue"]["note"] = masking.new_masker(allow_patterns=allow).mask(str(jira["note"]))
     if open_prs is None and not search_key(plan, applied):    # 검색어가 없어 찾지 않음 — gh 실패("확인 못 함")와 구분한다
         result["open_prs_unsearched"] = True
     changes = fix_changes(wt, entries, applied.get("operations") or [], state.get("base_sha"), git)
@@ -370,8 +373,9 @@ def pr_body(screen: dict, plan: dict) -> str:
     if jira:
         info = ", ".join(f"{k}: {jira[k]}" for k in ("model", "sw", "platform_version", "carrier") if jira.get(k))
         lines.append(f"- Jira: {jira.get('key')}" + (f" ({info})" if info else ""))
-        if jira.get("note"):
-            lines.append(f"- 메모: {jira['note']}")
+        note = (screen.get("issue") or {}).get("note")     # 가린 값만(plan 원문으로 되돌아가지 않는다)
+        if note:
+            lines.append(f"- 메모: {note}")
     for note in screen["notes"]:
         lines.append(f"- {note}")
     if screen["ids"]:
