@@ -45,6 +45,11 @@ setup 필드 (모두 선택):
         (`tests/helpers/module_remote.build`: mock = `tests/mocks/module-skills`, template = `templates/module-skills`) site-defaults
         `module_skills.remote`로 넣는다. missing = 없는 `file://<out>/missing.git`(git이 레포가 아니라고 해 `인증`, 오프라인 인증 실패).
         env.json에 `module_source`·`module_remote_sha`(missing이면 null)
+    fresh_user: true — 플러그인을 방금 설치한 첫 사용자(setup-first-time): 환경을 다 만든 뒤(before.json 뒤) 사용자 config.yaml과
+        이슈 DB clone을 지운다(모의 원격·gh 스텁은 그대로). 격리 홈 `.gitconfig`에 모의 GHE URL(`issue_db.remote`) → 로컬 bare 원격
+        `insteadOf`를 써서 setup 3번이 제안하는 `git clone <URL> <경로>`가 Bash에서 실제로 된다(`config.py init`은 로컬 경로
+        원격을 거부한다). env.json `work_dir`는 새 config의 기본값 `<TELEPHONY_TRIAGE_HOME>/work`(setup은 작업 디렉토리를 묻지
+        않는다), `issue_db_clone`은 지운 자리(사용자가 답할 경로)다. `run.py`는 이 eval의 config에 `skill_dir`를 합치지 않는다
 """
 
 from __future__ import annotations
@@ -54,6 +59,7 @@ import json
 import os
 import shutil
 import site
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -300,6 +306,20 @@ def tracker_servers(env: dict) -> dict:
     return out
 
 
+def _fresh_user(ws: Workspace, user_home: Path) -> None:
+    """setup.fresh_user: 사용자 config와 이슈 DB clone을 지우고, 격리 홈에서 모의 GHE URL이 로컬 bare 원격으로 clone되게 한다."""
+    import yaml
+    cfg = ws.home / "config.yaml"
+    url = yaml.safe_load(cfg.read_text(encoding="utf-8"))["issue_db"]["remote"]
+    cfg.unlink()
+    for p in ws.clone.rglob("*"):       # Windows: git 객체 파일은 읽기 전용이라 그대로는 지워지지 않는다
+        if not p.is_symlink():
+            p.chmod(p.stat().st_mode | stat.S_IWUSR)
+    shutil.rmtree(ws.clone)
+    subprocess.run(["git", "config", "--file", str(user_home / ".gitconfig"), f"url.{ws.remote.as_posix()}.insteadOf", url],
+                   check=True, capture_output=True)
+
+
 def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
     """direct_tools=False(plugin 모드)면 env.json에 jira_call·jira_tools_list·analyzer_run을 쓰지 않는다 —
     실행자가 MCP·Skill 대신 그 명령을 직접 부르는 우회를 막는다."""
@@ -461,6 +481,8 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
         "logs": sorted(str(p) for p in logs.iterdir()), "jira_dir": str(jira_dir),
         "gh_state": str(ws.gh_state), "user_home": str(user_home),
     }
+    if setup.get("fresh_user"):     # 새 config는 work_dir를 저장하지 않는다 — 기본값(<홈>/work)에 lock·스냅샷이 생긴다
+        info["work_dir"] = str(ws.home / "work")
     if gh_dir.is_dir():
         info["gh_issues_dir"] = str(gh_dir)
     if module_url:
@@ -476,6 +498,8 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
     (out / "env.json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
     (out / "before.json").write_text(json.dumps(_clone_state(ws.clone), ensure_ascii=False, indent=2),
                                      encoding="utf-8")
+    if setup.get("fresh_user"):
+        _fresh_user(ws, user_home)
     return info
 
 

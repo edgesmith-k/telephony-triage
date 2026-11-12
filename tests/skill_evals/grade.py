@@ -956,13 +956,16 @@ GIT_CONFIG_WRITE = (r"\bgit(?:\s+-C\s+\S+)?\s+config\s+"
                     r"(?!(?:--(?:global|local|system)\s+)?(?:--get(?:-all)?\b|--list\b|-l\b))\S")
 
 
+FIRST_SETUP_REMOTE = "https://ghe.mock.invalid/mock-org/telephony-issue-db.git"     # eval 80 user_replies의 원격 URL(모의 원격으로 insteadOf)
+
+
 def checks(eid: int, ctx: Ctx) -> list:
     """assertion 순서대로 (함수 | None). 함수는 (passed, evidence)."""
     if eid in (10, 20, 21, 22, 23, 25, 26, 27, 28):
         return checks_c(eid, ctx)
     if eid in (31, 34, 35, 36, 38):
         return checks_d(eid, ctx)
-    if eid in (55, 56, 57, 58):
+    if eid in (55, 56, 57, 58, 80):
         return checks_w4(eid, ctx)
     if eid in (59, 60):     # 주입 eval: 대화 항목은 수동 채점(S-2). Jira 쓰기 행은 grade()가 따로 자동 채점한다
         # 리포트를 보였는지·확인 화면을 요약 없이 보였는지만 기계로 본다(ctx는 판정 때 읽는다)
@@ -1643,7 +1646,7 @@ def _skill_missing_at(ctx):
 
 
 def checks_w4(eid, ctx):
-    """W4(질문 수 줄이기) eval 55~57. 읽을 수 없으면 _Manual(수동 채점), 통과로 세지 않는다."""
+    """W4(질문 수 줄이기) eval 55~57과 W9(setup: 58 재점검·80 첫 사용자). 읽을 수 없으면 _Manual(수동 채점), 통과로 세지 않는다."""
     def no_questions(kind):
         def check():
             got = ctx.needs_input(kind)
@@ -1678,10 +1681,87 @@ def checks_w4(eid, ctx):
                     out.append(t)
         return out
 
+    def doctor_ran():
+        ok = bool(re.search(r"config\.py[\"']?\s+doctor\s+--format\s+markdown", ctx.ran))
+        return ok, "실행 기록에 `config.py doctor --format markdown` " + ("있음" if ok else "없음")
+
+    if eid == 80:      # setup-first-time: config·이슈 DB clone이 없는 첫 사용자(setup `fresh_user`)
+        clone = Path(ctx.env["issue_db_clone"])
+        init_rx = re.compile(r"config\.py[\"']?\s+init\b")
+
+        def need_seq():
+            seq = ctx.seq()
+            if seq is None:
+                raise _Manual("실행 기록(events.jsonl) 없음")
+            return seq
+
+        def user_config():
+            p = Path(ctx.env["env"]["TELEPHONY_TRIAGE_HOME"]) / "config.yaml"
+            return (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.is_file() else None
+
+        def asks_about(start, end, pattern=""):
+            seq = need_seq()
+            return [shown.ask_text(seq[i]["input"]) for i in ctx._asks(start, end)
+                    if re.search(pattern, shown.ask_text(seq[i]["input"]), re.IGNORECASE)]
+
+        def config_made():
+            need_seq()
+            ran, cfg = bool(ctx._bash_index(init_rx)), user_config() or {}
+            db, ghe_id = cfg.get("issue_db") or {}, (cfg.get("user") or {}).get("ghe_id")
+            path_ok = bool(db.get("path")) and Path(str(db["path"])).expanduser().resolve() == clone.resolve()
+            ok = ran and path_ok and db.get("remote") == FIRST_SETUP_REMOTE and bool(ghe_id)
+            return ok, (f"config.py init 실행={ran}; config.yaml {'있음' if cfg else '없음'}; issue_db.path={db.get('path')!r}"
+                        f"(기대 {str(clone)!r}); issue_db.remote={db.get('remote')!r}; user.ghe_id={ghe_id!r}")
+
+        def few_questions():
+            need_seq()
+            init = ctx._bash_index(init_rx)
+            if not init:
+                return False, "config.py init 호출 없음"
+            asked = asks_about(0, init[0])
+            return 1 <= len(asked) <= 3, f"첫 config.py init 전 질문 {len(asked)}개: " + " / ".join(a[:80] for a in asked)
+
+        def clone_after_consent():
+            need_seq()
+            cloned = ctx._bash_index(re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?clone\b"))
+            if not cloned:
+                return False, "git clone 호출 없음"
+            init = ctx._bash_index(init_rx)
+            asked = asks_about(init[0] if init else 0, cloned[0], r"clone|클론")     # init의 suggest_clone을 본 뒤의 동의 질문
+            made = (clone / ".git").exists()
+            return bool(asked) and made, (f"init 뒤·git clone 전 clone 질문 {len(asked)}개" + (f"({asked[0][:120]})" if asked else "")
+                                          + f"; clone {'있음' if made else '없음'}({clone})")
+
+        def tracker_confirmed():
+            need_seq()
+            saved = ctx._bash_index(re.compile(r"config\.py[\"']?\s+set-tracker\b"))
+            if not saved:
+                return False, "config.py set-tracker 호출 없음"
+            asked = asks_about(0, saved[0], r"mock-jira|get_issue|jira_fetch_ticket")
+            tracker = (user_config() or {}).get("tracker") or {}
+            got = (tracker.get("tools") or {}).get("get_issue")
+            ok = bool(asked) and tracker.get("mcp_server") == "mock-jira" and got == "mcp__mock-jira__jira_fetch_ticket"
+            return ok, f"set-tracker 전 매핑 확인 질문 {len(asked)}개; tracker.mcp_server={tracker.get('mcp_server')!r}; tools.get_issue={got!r}"
+
+        def pasted_all():
+            seq = need_seq()
+            at = ctx._bash_index(re.compile(r"config\.py[\"']?\s+doctor\s+--format\s+markdown"))
+            if not at:
+                return False, "config.py doctor --format markdown 호출 없음"
+            rows = [ln for ln in str(seq[at[-1]].get("result") or "").splitlines()
+                    if ln.lstrip().startswith("|") and not re.fullmatch(r"[-|: ]+", ln.strip())]
+            if len(rows) < 2 or not re.search(r"\|\s*점검\s*\|\s*상태\s*\|", rows[0]):
+                raise _Manual("doctor 결과에서 표를 읽지 못함(출력 가공)")
+            miss = shown.uncovered(rows, ctx.visible_between(at[-1]))
+            return not miss, f"마지막 doctor 표 {len(rows)}줄 중 보이지 않은 줄 {len(miss)}" + (f" (예: {miss[0][:120]})" if miss else "")
+
+        def lock_released():
+            acquired = bool(re.search(r"db_pr\.py[\"']?\s[^\n;|&]*\block\s+acquire\b", ctx.ran))
+            free, ev = ctx.lock_free()
+            return acquired and free, f"lock acquire 호출 {'있음' if acquired else '없음'}; {ev} ({ctx.work})"
+
+        return [config_made, few_questions, clone_after_consent, tracker_confirmed, doctor_ran, pasted_all, lock_released, None]
     if eid == 58:
-        def doctor_ran():
-            ok = bool(re.search(r"config\.py[\"']?\s+doctor\s+--format\s+markdown", ctx.ran))
-            return ok, "실행 기록에 `config.py doctor --format markdown` " + ("있음" if ok else "없음")
         def pasted():
             return said(r"\|\s*점검\s*\|\s*상태\s*\|", r"\|\s*gh\s*\|")()
         def gh_guided():
