@@ -134,7 +134,7 @@ def _under_fixtures(log: Path, db: Path) -> bool:
     return "fixtures" in rel.parts[:-1]
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _recorded_keys(db: Path) -> frozenset[str]:
     """이슈 DB에 이미 기록된 이슈 키(`common/issuedb.py`: `<유형 디렉토리>/issues/<KEY>.yaml`). 라벨셋 key는 외부 입력이라
     glob에 넣지 않고 파일 이름(stem)과 비교한다. DB당 한 번만 훑는다."""
