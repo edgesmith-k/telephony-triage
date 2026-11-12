@@ -2,7 +2,7 @@
 """s0_stats.py — S-0 선행 확인용 지표 (15-local-draft.md §15.5 S-0, docs/development/S0_PROBE_CHECKLIST.md).
 
 사외 초안의 파서(`parse_logcat.py parse`)를 실제 로그에 돌려서 **개수와 비율만** 낸다. 로그 문구는 출력하지
-않는다(태그 이름은 낸다). 결과는 사내 `SITE_PROFILE.md`에만 적는다.
+않는다(태그 이름은 낸다). 결과는 사내 전용 파일(`SITE_PROFILE.md`·`docs/site/evidence.md`)에만 적는다.
 
     python3 tools/s0_stats.py <logcat...> --rules <parser-rules 디렉토리> --tz <IANA> [--year <YYYY>]
                               [--plugin-root <루트>] [--json]
@@ -16,8 +16,8 @@
 - 태그 상위(전체)·미수집 태그 상위, RIL 요청 대비 응답 짝 맞춤 비율, `phone_id` 추출 비율.
 - coverage: 시각 범위, 시계 이상(`backward`/`jump`) 개수, `warnings`·`errors` 개수.
 
-끝 줄 `SITE_PROFILE 행(S38 S-0 지표, 합계): tags=… pair=… tsfail=… cov=… pid=…`(수집 태그 비율·RIL 짝 비율·시각 파싱
-실패율·시계 이상 건수·phone_id 추출률)은 사내 설정 S-0에서 `site_step.py propose S-0 --set "row.S38.S-0 지표=<그 값>"`으로
+끝 줄 `SITE_PROFILE 행(S38 S-0 지표, 합계): tags=… pair=… tsfail=… clock=… pid=…`(수집 태그 비율·RIL 짝 맞춤
+비율·시각 파싱 실패율·시계 이상 건수·phone_id 추출률, 분모가 0이면 `-`)은 사내 설정 S-0에서 `site_step.py propose S-0 --set "row.S38.S-0 지표=<그 값>"`으로
 옮긴다(점검 `s0.metrics`). 반입 전에 잰 값도 반입 뒤 S-0에서 이렇게 옮긴다.
 """
 
@@ -128,7 +128,7 @@ def profile_row(t: dict) -> str:
     """확인값 S38 `S-0 지표` 한 행 값(site_checks.S0_KEYS와 같은 키). 출력만 한다 — 파일은 쓰지 않는다."""
     r = lambda a, b: f"{a / b:.0%}" if b else "-"  # noqa: E731
     return (f"tags={r(t['parsed_lines'], t['format_lines'])} pair={r(t['ril_paired'], t['ril_requests'])} "
-            f"tsfail={r(t['raw_lines'] - t['format_lines'], t['raw_lines'])} cov={t['clock_anomalies']} "
+            f"tsfail={r(t['raw_lines'] - t['format_lines'], t['raw_lines'])} clock={t['clock_anomalies']} "
             f"pid={r(t['slot_lines'], t['parsed_lines'])}")
 
 

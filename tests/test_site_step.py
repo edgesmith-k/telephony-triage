@@ -77,6 +77,21 @@ def test_done_advances_in_order_and_refuses_skips(tmp_path, monkeypatch, capsys)
     assert main(tmp_path, capsys, "--done", "S-7")[0] == 2
 
 
+def test_old_profile_without_s0_continues_where_it_was(tmp_path, monkeypatch, capsys):
+    """S-0이 정식 단계가 되기 전 프로필(완료 단계에 S-0 없음)은 그 단계에서 그대로 잇는다 — S-0으로 되돌리지 않는다."""
+    all_pass(monkeypatch)
+    prof = tmp_path / "SITE_PROFILE.md"
+    prof.write_text(ss.skeleton(tmp_path).replace("- 현재 단계: S-0", "- 현재 단계: S-2").replace(
+        "- 완료 단계: (없음)", "- 완료 단계: S-1 (2026-10-01)"), encoding="utf-8")
+    code, out, _ = main(tmp_path, capsys)
+    assert code == 0 and "지금 단계: S-2" in out and "자동 점검 S-2" in out
+    code, _, err = main(tmp_path, capsys, "--done", "S-0")
+    assert code == 2 and "현재 단계는 S-2" in err
+    code, out, err = main(tmp_path, capsys, "--done", "S-2")
+    assert code == 0 and "지금 단계: S-3" in out, err
+    assert "- 완료 단계: S-1 (2026-10-01), S-2 (" in prof.read_text(encoding="utf-8")
+
+
 def test_done_keeps_other_sections(tmp_path, monkeypatch, capsys):
     all_pass(monkeypatch)
     main(tmp_path, capsys)
@@ -141,7 +156,7 @@ def test_start_full_pack_first_visit_then_brief(tmp_path, monkeypatch, capsys):
     code, first, _ = main(tmp_path, capsys)
     assert code == 0                                                     # 점검이 모두 통과면 0
     _, again, _ = main(tmp_path, capsys)
-    assert "===== docs/design/04-parser-matching.md §5.8 =====" in first and "§5.8 =====" not in again
+    assert "===== docs/development/S0_PROBE_CHECKLIST.md =====" in first and "S0_PROBE_CHECKLIST.md =====" not in again
     assert "요약 — 이미 본 단계" in again and "context_pack.py S-0" in again
     for out in (first, again):
         assert "자동 점검 S-0" in out and "사용자에게 물을 것" in out and "--done S-0" in out

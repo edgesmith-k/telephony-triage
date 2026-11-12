@@ -55,7 +55,8 @@ def snapshot(root):
 
 # --- S-0 (측정 단계: 사용자 필요만, 실패 없음) ----------------------------------------------------------------
 
-S0_METRICS = "tags=<a> pair=<b> tsfail=<c> cov=<d> pid=<e>"         # 합성 placeholder 값(실제 지표 아님)
+S0_METRICS = "tags=50% pair=- tsfail=0.5% clock=3 pid=12%"          # 합성 값(실제 지표 아님). `-` = 잴 수 없음
+S0_PLACEHOLDER = "tags=<값> pair=<값> tsfail=<값> clock=<값> pid=<값>"    # 점검 ask가 보이는 꼴 그대로
 
 
 def s0_row(item: str, value: str) -> str:
@@ -75,12 +76,17 @@ def test_s0_checks_need_user_when_missing_or_partial_and_pass_when_recorded(tmp_
     prof.write_text(base.replace(table, table + s0_row("S-0 지표", "tags=<a> pair=<b> pid=") + "\n"
                                  + s0_row("S-0 결론", " ") + "\n"), encoding="utf-8")
     m, c = sc.s0_metrics(ctx), sc.s0_conclusion(ctx)
-    assert m["status"] == "needs-user" and "tsfail(" in m["evidence"] and "cov(" in m["evidence"] and "pid(" in m["evidence"]
+    assert m["status"] == "needs-user" and "tsfail(" in m["evidence"] and "clock(" in m["evidence"] and "pid(" in m["evidence"]
     assert "tags(" not in m["evidence"] and "pair(" not in m["evidence"]
     assert c["status"] == "needs-user"
+    for metrics, bad in ((S0_PLACEHOLDER, "tags, pair, tsfail, clock, pid"),          # ask 예시를 그대로 붙임
+                         ("tags=<%> pair=1% tsfail=0% clock=<n> pid=<%>", "tags, clock, pid")):   # §14.3 예시 꼴
+        prof.write_text(base.replace(table, table + s0_row("S-0 지표", metrics) + "\n"), encoding="utf-8")
+        m = sc.s0_metrics(ctx)
+        assert m["status"] == "needs-user" and f"숫자가 아닌 값: {bad} " in m["evidence"], m["evidence"]
     prof.write_text(base.replace(table, table + s0_row("S-0 지표", S0_METRICS) + "\n"
                                  + s0_row("S-0 결론", "<정성 결론 한 줄>") + "\n"), encoding="utf-8")
-    assert sc.s0_metrics(ctx)["status"] == sc.s0_conclusion(ctx)["status"] == "pass"
+    assert sc.s0_metrics(ctx)["status"] == sc.s0_conclusion(ctx)["status"] == "pass"     # 숫자·`-`는 통과
     assert [sc.check_id(f) for f in sc.CHECKS["S-0"]] == ["s0.metrics", "s0.conclusion"]
 
 

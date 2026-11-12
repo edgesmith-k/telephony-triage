@@ -266,8 +266,9 @@ def _first_line(text: str) -> str:
 S0_ROW = "S38"
 S0_METRICS_ITEM = "S-0 지표"
 S0_CONCLUSION_ITEM = "S-0 결론"
-S0_KEYS = {"tags": "수집 태그 비율", "pair": "RIL 짝 비율", "tsfail": "시각 파싱 실패율", "cov": "시계 이상 건수",
+S0_KEYS = {"tags": "수집 태그 비율", "pair": "RIL 짝 맞춤 비율", "tsfail": "시각 파싱 실패율", "clock": "시계 이상 건수",
            "pid": "phone_id 추출률"}
+S0_VALUE_RE = re.compile(r"\d+(?:\.\d+)?%?|-")     # 숫자(비율은 %) 또는 잴 수 없음(분모 0)의 `-`. placeholder는 통과하지 않는다
 S0_WAIVE = "반입 전에 했거나 실제 로그가 아직 없으면 `--done S-0 --waive {cid}=\"사유\"`"
 
 
@@ -290,6 +291,12 @@ def s0_metrics(ctx: Ctx) -> dict:
         return res(cid, "needs-user", f"{S0_ROW} {S0_METRICS_ITEM} 행에 빠진 지표: {', '.join(missing)} (꼴 `{form}`)", cmd,
                    ask=f"빠진 지표를 채워 주세요({', '.join(missing)}) → 같은 `propose S-0 --set \"row.{S0_ROW}.{S0_METRICS_ITEM}=…\"`로 "
                        "행을 바꾼다. " + S0_WAIVE.format(cid=cid))
+    bad = [k for k in S0_KEYS if not S0_VALUE_RE.fullmatch(got[k])]
+    if bad:
+        return res(cid, "needs-user", f"{S0_ROW} {S0_METRICS_ITEM} 행에서 숫자가 아닌 값: {', '.join(bad)} "
+                   "(숫자 또는 잴 수 없으면 `-` — placeholder를 그대로 붙였는지)", cmd,
+                   ask=f"`s0_stats.py` 끝 줄의 실제 값으로 바꿔 주세요({', '.join(bad)}) → "
+                       f"`propose S-0 --set \"row.{S0_ROW}.{S0_METRICS_ITEM}=…\"`. " + S0_WAIVE.format(cid=cid))
     return res(cid, "pass", f"{S0_ROW} {S0_METRICS_ITEM}: 지표 5종 있음({', '.join(S0_KEYS)})", cmd)
 
 
