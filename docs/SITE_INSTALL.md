@@ -191,7 +191,7 @@ rm -rf <work_dir>/_snapshot                                        # 옛 clone�
 명령은 레포 폴더에서, `claude`를 실행하는 것과 같은 Python으로(B면 `(tt)` 터미널).
 
 **0. 받은 파일 확인** — 1절과 같다(`sha256sum -c SHA256SUMS`). 이슈 DB 뼈대 zip은 해시가 지난번과 같으면 할 일이 없다.
-해시가 다르면 지난 뼈대 zip과 새 뼈대 zip을 각각 다른 폴더에 풀어 `diff -r`로 바뀐 파일을 보고, 운영 이슈 DB에는 메인테이너 로컬 브랜치의 PR로 옮긴다(스키마면 `docs/design/06-collaboration.md §6.4` 버전 올림 순서).
+해시가 다르면 지난 뼈대 zip과 새 뼈대 zip을 각각 다른 폴더에 풀어 `diff -r`로 바뀐 파일을 보고, 운영 이슈 DB에는 메인테이너 로컬 브랜치의 PR로 옮긴다(스키마면 `docs/design/06-collaboration.md §6.4` 버전 올림 순서). 운영 이슈 DB가 아직 없으면 새 zip만 쓴다(9절).
 `tools/sync_schemas.py --write`는 이슈 DB → 플러그인 사본 방향이라 이 일에 쓰지 않는다.
 S-6까지 끝낸 레포에 `templates/module-skills`가 있고 `docs/site/module-skills/`(사내 스냅샷)가 없으면 이 반입 **전에** [SITE_RESTORE.md](SITE_RESTORE.md) ⓪을 먼저 한다(`templates/module-skills`가 없으면 반입 전 할 일 없음 — 같은 문서 첫머리 (가)).
 
@@ -232,9 +232,9 @@ rm -rf ~/tt-old ~/tt-new
 ```
 실패하면 main에 합치지 않는다. `FAILED tests/…::<테스트 이름>` 줄만(사내 이름·경로는 빼고) 사외로 전달한다. 사내 레포에서는 사외 초안 전용 검사(`test_site_paths_are_absent_in_draft`, `test_check_boundary_external`, `test_site_defaults_required`)가 skip으로 나오는 것이 정상이다(import-20261014부터, 마지막 것은 그다음 묶음부터).
 
-반입한 묶음에서 **hook이나 공통 판정이 바뀌었으면**(`plugin/hooks/hooks.json`, `guard.py`, `show_guard.py`, `common/shown.py`, `jira_bridge.py`, 표시 기록을 쓰는 스크립트(`db_pr`·`issue_post`·`db_verify`·`triage`)의 기록 부분, 또는 `SKILL.md`·`reference/rules.md`의 공통 규칙) 사내 대상 eval 12개(`tests/skill_evals/pending.json` `site`)를 **모두** 다시 돌린다. 예외로 표시 보조(`show_guard.py`·`common/shown.py`)의 글만 바뀌었으면 영향받는 eval만. 그 밖이면 바뀐 흐름의 eval만. 어느 쪽인지는 묶음과 함께 오는 `DRAFT_NOTES.md` "사내로 넘긴 것"의 재반입 노트에 적혀 있다. 생성기 버전(`generator_version`)이 올라간 묶음이면 운영 이슈 DB를 `migrate --to <현재 스키마>`로 맞춘다(`docs/design/06-collaboration.md §6.4` 버전 올림 순서, 운영 DB가 아직 없으면 뼈대 config 한 줄). 새 시그니처 필드(`min_count`·`sequence_within_sec`)는 S37 결과·팀 설치본 통일 뒤에만 DB에 쓴다(`issue-db.config.yaml signature_features`에 선언 — 모르는 플러그인은 분석을 중단한다). 이어서 사내 단계는 `claude` → **계속**.
+반입한 묶음에서 **hook이나 공통 판정이 바뀌었으면**(`plugin/hooks/hooks.json`, `guard.py`, `show_guard.py`, `common/shown.py`, `jira_bridge.py`, 표시 기록을 쓰는 스크립트(`db_pr`·`issue_post`·`db_verify`·`triage`)의 기록 부분, 또는 `SKILL.md`·`reference/rules.md`의 공통 규칙) 사내 대상 eval 12개(`tests/skill_evals/pending.json` `site`)를 **모두** 다시 돌린다. 예외로 표시 보조(`show_guard.py`·`common/shown.py`)의 글만 바뀌었으면 영향받는 eval만(번호는 재반입 노트에 적는다). 그 밖이면 바뀐 흐름의 eval만. 어느 쪽인지는 묶음과 함께 오는 `DRAFT_NOTES.md` "사내로 넘긴 것"의 재반입 노트에 적혀 있다. 생성기 버전(`generator_version`)이 올라간 묶음이면 운영 이슈 DB를 `migrate --to <현재 스키마>`로 맞춘다(`docs/design/06-collaboration.md §6.4` 버전 올림 순서, 운영 DB가 아직 없으면 뼈대 config 한 줄). 새 시그니처 필드(`min_count`·`sequence_within_sec`)는 S37 결과·팀 설치본 통일 뒤에만 DB에 쓴다(`issue-db.config.yaml signature_features`에 선언 — 모르는 플러그인은 분석을 중단한다). 이어서 사내 단계는 `claude` → **계속**.
 
-**6. 배포** — 사내 마켓플레이스는 반입 태그(SHA)에 고정돼 있어 main에 합친 것만으로는 팀에 가지 않는다. 위 eval 재실행이 끝난 뒤 반입 커밋에 태그를 달고 마켓플레이스 정의(S2)가 그 태그·SHA를 가리키게 바꾼다. 되돌리기는 11.1.
+**6. 팀 배포 (8절 마지막 단계 — S-7로 팀에 배포한 뒤에만)** — 사내 마켓플레이스는 반입 태그(SHA)에 고정돼 있어 main에 합친 것만으로는 팀에 가지 않는다. 위 eval 재실행이 끝난 뒤 반입 커밋에 태그를 달고 마켓플레이스 정의(S2)가 그 태그·SHA를 가리키게 바꾼다. 되돌리기는 §11.1.
 
 ### 멈췄을 때
 
