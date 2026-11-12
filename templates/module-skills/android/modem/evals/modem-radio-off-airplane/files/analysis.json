@@ -1,0 +1,85 @@
+{
+ "status": "ok",
+ "key": "MOCK-9825",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-11-10T16:14:05+00:00",
+  "sw": null,
+  "platform_version": "17",
+  "sim_slot": "0",
+  "summary": "잠깐 서비스가 끊김, 모뎀 오류인지 (합성)",
+  "description": "대기 중 서비스가 잠깐 끊겼다가 돌아왔습니다. 로그에 radio OFF(radioStateChanged OFF)가 보이는데 모뎀 오류인가요? 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-11-10T16:09:05.000Z",
+   "end": "2026-11-10T16:19:05.000Z"
+  },
+  "range": [
+   "2026-11-10T16:14:05.342Z",
+   "2026-11-10T16:14:32.766Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 56,
+  "masked": null
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "NETWORK-001",
+    "kind": "type",
+    "title": "서비스가 잡히지 않음"
+   },
+   {
+    "id": "NETWORK-001-01",
+    "kind": "cause",
+    "title": "망 등록 거절"
+   },
+   {
+    "id": "SMS-001-01",
+    "kind": "cause",
+    "title": "전송 요청이 만들어지지 않음"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0,
+  "unextracted_warn": 4
+ },
+ "partial": [
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "signature": "DATA-001/no-setup-data-call-request",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ],
+   "at": []
+  }
+ ],
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-11-10T16:14:05.342Z ~ 2026-11-10T16:14:32.766Z (일부만 포함), 시계 이상 없음",
+  "오류·거부·타임아웃 이벤트: 추출 이벤트 기준 0건 (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 4건: RILJ 2줄, SST-0 2줄)"
+ ],
+ "truncated": false
+}

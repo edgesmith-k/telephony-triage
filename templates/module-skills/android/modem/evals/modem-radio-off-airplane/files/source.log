@@ -1,0 +1,56 @@
+-- [합성] telephony-triage module-skills eval log. Android 17 에뮬레이터 캡처(m02-airplane-on-off)에서 고른 줄이다(시각·pid 그대로, 줄만 줄임). 벤더 줄 없음.
+11-10 16:14:05.342 30666 30666 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0
+11-10 16:14:05.345 30666 30666 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0], IMS reg state=false, pending radio off=false
+11-10 16:14:05.345 30666 30666 D SST-0   : setPowerStateToDesired: powerOffRadioSafely()
+11-10 16:14:05.346 30666 30666 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON
+11-10 16:14:05.346 30666 30666 D SST-0   : powerOffRadioSafely: Data is active on phone 1. Wait for all data disconnect.
+11-10 16:14:05.350 30666 30909 D RILJ    : [0265]> DEACTIVATE_DATA_CALL cid = 1 reason = SHUTDOWN [PHONE0]
+11-10 16:14:05.352 30666 30909 D RILJ    : [0266]> NOTIFY_IMS_DATA_NETWORK accessNetwork=NGRAN dataNetworkState=DISCONNECTING physicalTransportType=WWAN physicalNetworkSlotIndex=0 [PHONE0]
+11-10 16:14:05.367 30666 30960 D RILJ    : [0265]< DEACTIVATE_DATA_CALL  [PHONE0]
+11-10 16:14:05.368 30666 30960 D RILJ    : [0266]< NOTIFY_IMS_DATA_NETWORK  [PHONE0]
+11-10 16:14:05.368 30666 31000 D RILJ    : [UNSL]< UNSOL_DATA_CALL_LIST_CHANGED [] [convertToString] [PHONE0]
+11-10 16:14:05.374 30666 30909 D RILJ    : [0267]> NOTIFY_IMS_DATA_NETWORK accessNetwork=NGRAN dataNetworkState=DISCONNECTED physicalTransportType=WWAN physicalNetworkSlotIndex=0 [PHONE0]
+11-10 16:14:05.375 30666 30960 D RILJ    : [0267]< NOTIFY_IMS_DATA_NETWORK  [PHONE0]
+11-10 16:14:05.375 30666 30666 D SST-0   : onAnyDataNetworkExistingChanged: anyData=false anyCellularData=false
+11-10 16:14:05.375 30666 30666 D SST-0   : EVENT_ALL_DATA_DISCONNECTED
+11-10 16:14:05.375 30666 30666 D SST-0   : Data disconnected for all phones, turn radio off now.
+11-10 16:14:05.379 30666 30666 D RILJ    : [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]
+11-10 16:14:05.380 30666 30960 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]
+11-10 16:14:05.381 30666 30960 D RILJ    : [UNSL]< UNSOL_RESPONSE_IMS_NETWORK_STATE_CHANGED [PHONE0]
+11-10 16:14:05.381 30666 30958 D RILJ    : [UNSL]< UNSOL_RESPONSE_SIM_STATUS_CHANGED [PHONE0]
+11-10 16:14:05.381 30666 30998 D RILJ    : [0268]< RADIO_POWER  [PHONE0]
+11-10 16:14:05.381 30666 30666 E RILJ    : getImsRegistrationState not supported on service NETWORK > 2.2. [PHONE0]
+11-10 16:14:05.381 30666 30666 E RILJ    : getImsRegistrationState not supported on service NETWORK > 2.2. [PHONE0]
+11-10 16:14:05.381 30666 30958 D RILJ    : [UNSL]< UNSOL_UICC_SUBSCRIPTION_STATUS_CHANGED {0} [PHONE0]
+11-10 16:14:05.381 30666 30666 D SST-0   : pollState: modemTriggered=true, radioState=1
+11-10 16:14:05.382 30666 31001 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]
+11-10 16:14:05.382 30666 30960 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]
+11-10 16:14:05.382 30666 30960 D RILJ    : [UNSL]< UNSOL_RESPONSE_IMS_NETWORK_STATE_CHANGED [PHONE0]
+11-10 16:14:05.383 30666 30666 D RILJ    : [0269]> OPERATOR [PHONE0]
+11-10 16:14:05.384 30666 31001 D RILJ    : [0269]< OPERATOR error 1 [PHONE0]
+11-10 16:14:05.384 30666 30666 D RILJ    : [0270]> QUERY_NETWORK_SELECTION_MODE [PHONE0]
+11-10 16:14:05.384 30666 30666 D SST-0   : EVENT_RADIO_POWER_OFF_DONE
+11-10 16:14:05.385 30666 30934 D RILJ    : [0271]> DATA_REGISTRATION_STATE [PHONE0]
+11-10 16:14:05.385 30666 30934 D RILJ    : getDataRegistrationState: overrideHalVersion=null [PHONE0]
+11-10 16:14:05.387 30666 30934 D RILJ    : [0273]> VOICE_REGISTRATION_STATE [PHONE0]
+11-10 16:14:05.387 30666 30934 D RILJ    : getVoiceRegistrationState: overrideHalVersion=null [PHONE0]
+11-10 16:14:05.387 30666 31001 D RILJ    : [0270]< QUERY_NETWORK_SELECTION_MODE {0} [PHONE0]
+11-10 16:14:05.387 30666 31001 D RILJ    : [0271]< DATA_REGISTRATION_STATE error 1 [PHONE0]
+11-10 16:14:05.395 30666 30998 D RILJ    : [0273]< VOICE_REGISTRATION_STATE error 1 [PHONE0]
+11-10 16:14:05.422 30666 30666 D SST-0   : handlePollStateResult exception java.lang.IllegalStateException: Service not connected.
+11-10 16:14:05.422 30666 30666 E SST-0   : handlePollStateResult: RIL returned an error where it must succeed: java.lang.IllegalStateException: Service not connected.
+11-10 16:14:05.422 30666 30666 E SST-0   : handlePollStateResult: RIL returned RADIO_NOT_AVAILABLE.
+11-10 16:14:05.422 30666 30666 D SST-0   : set service state as POWER_OFF
+11-10 16:14:05.422 30666 30666 D SST-0   : Could not set ServiceState channel number. CellIdentity null
+11-10 16:14:05.423 30666 30666 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = true hasRilDataRadioTechnologyChanged = {1=true, 2=true} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = true has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = true
+11-10 16:14:05.424 30666 30666 D SST-0   : RAT switched NR_SA -> Unknown at cell -1
+11-10 16:14:05.445 30666 30666 D SST-0   : notifyVoiceRegStateRilRadioTechnologyChanged: vrs=3 rat=0
+11-10 16:14:05.447 30666 30666 D SST-0   : EVENT_POLL_STATE_NETWORK_SELECTION_MODE
+11-10 16:14:05.447 30666 30666 D SST-0   : Could not set ServiceState channel number. CellIdentity null
+11-10 16:14:32.761 30666 30666 D SST-0   : setRadioPower power true forEmergencyCall false forceApply false reason 0
+11-10 16:14:32.761 30666 30666 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=true, getRadioState=0, mRadioPowerOffReasons=[], IMS reg state=false, pending radio off=false
+11-10 16:14:32.763 30666 30666 D RILJ    : [0285]> RADIO_POWER on = true forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]
+11-10 16:14:32.766 30666 30675 D RILJ    : [UNSL]< UNSOL_RESPONSE_SIM_STATUS_CHANGED [PHONE0]
+11-10 16:14:32.766 30666 30933 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: ON [PHONE0]
+11-10 16:14:32.766 30666 30675 D RILJ    : [UNSL]< UNSOL_UICC_SUBSCRIPTION_STATUS_CHANGED {1} [PHONE0]
+11-10 16:14:32.766 30666  9467 D RILJ    : [0285]< RADIO_POWER  [PHONE0]
