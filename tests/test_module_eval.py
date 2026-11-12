@@ -1760,6 +1760,14 @@ def test_explore_judgment_rows(env):
     assert me.candidate_format_problems({"candidates": [{"n": 1, "원인 층": "모뎀·망 — x", "원인 데몬": "a", "근거": ["x"]}]}) == []
 
 
+def test_candidate_evidence_cap_matches_contract():
+    """가설당 근거 상한은 계약(explore.md 1~5줄)·check-output과 같다(GRADER_VERSION 8). 4줄 통과, 6줄은 실패."""
+    def probs(k):
+        return me.candidate_format_problems(
+            {"candidates": [{"n": 1, "원인 층": "모뎀·망 — x", "원인 데몬": "a", "근거": [f"q{i}" for i in range(k)]}]})
+    assert probs(4) == [] and "가설 1 근거 6줄" in probs(6)
+
+
 def test_explore_safety_rows_use_candidate_parser(env, tmp_path):
     name = "data-route-fail"
     applied = GOOD[name].replace("반대 근거: 라우트 실패가 먼저 찍혔다", "반대 근거: tags.yaml에 규칙을 추가했다")
@@ -2013,7 +2021,7 @@ def test_regrade_reproduces_run_then_follows_grader(env, tmp_path, capsys, monke
     it = me.WORKSPACE / "module-ofono-data-001"
     first = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
     V = me.GRADER_VERSION
-    assert first["grader_version"] == V == 7
+    assert first["grader_version"] == V == 8
     old = {d: json.loads((d / "grading.json").read_text(encoding="utf-8")) for d in _run_dirs(it)}
     for d in _run_dirs(it):
         obj = json.loads((d / "result.json").read_text(encoding="utf-8"))

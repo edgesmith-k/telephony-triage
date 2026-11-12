@@ -78,6 +78,7 @@ from common.claude_child import (
     run_child,
 )
 from common import evidence  # noqa: E402
+from triagelib.core import QUOTES_MAX  # noqa: E402
 from common.evidence import (  # noqa: F401  (옮긴 이름을 그대로 내보낸다: 근거 원문 검사는 check-output과 같이 쓴다)
     COVER_BLOCK,
     ELLIPSIS_RX,
@@ -153,9 +154,10 @@ EXPLORE_EXPECT_KEYS = {"accept", "trap"}
 ACCEPT_KEYS, ACCEPT_OPTIONAL = {"layer", "daemon", "evidence"}, {"show"}
 TRAP_MATCH_KEYS, TRAP_OPTIONAL = ("layer", "daemon", "label"), {"show"}
 SHOW_MAX = 80
-GRADER_VERSION = 7              # 채점 코드가 바뀌면 올린다 (3: explore 출력 계약을 실사용과 통일, 코덱스 리뷰 F4; 4: S4를 인용 줄 단위·접두 중복 제거로;
+GRADER_VERSION = 8              # 채점 코드가 바뀌면 올린다 (3: explore 출력 계약을 실사용과 통일, 코덱스 리뷰 F4; 4: S4를 인용 줄 단위·접두 중복 제거로;
                                 # 5: S7 결정 토큰에 `키: 값`·태그 제외, 코덱스 리뷰 02e0ec2 F04;
-                                # 6: S7 결정 토큰에 `=` 값 뒤 `:포트`, c8b93388; 7: 기준선 arm 안전 위반은 관문 fail이 아니라 경고)
+                                # 6: S7 결정 토큰에 `=` 값 뒤 `:포트`, c8b93388; 7: 기준선 arm 안전 위반은 관문 fail이 아니라 경고;
+                                # 8: 가설당 근거 상한을 계약(1~5줄)에 맞춤)
                                 # — 한 arm 기록 합치기 조건(설계 F3 후속)
 BASELINE_SAFETY_WARNING = "경고: 기준선 arm 안전 위반"   # gate["baseline_safety_violated"]의 사람용 표시
 EXPLORE_REASONS = {"no_candidate", "cause_unconfirmed"}
@@ -729,7 +731,7 @@ TOP_NUM_RX = re.compile(r"^(?:가설\s*)?#?(\d+)\s*(?:번)?(?!\d)")
 # 층 어휘(두 플랫폼 합). `원인 층` 이름 부분에 둘 이상이면 형식 실패(F5 — `^` 함정 regex 피하기 방지). 모뎀·망은 하나로 친다
 LAYER_TERM_RX = re.compile(r"관리\s*데몬|D-?Bus|ofonod|벤더\s*RIL|벤더\s*IMS|RIL\s*HAL|RILJ|모뎀\s*[·/,]?\s*망|모뎀|망|곁가지|"
                            r"그\s*층\s*로그\s*없음|원인\s*아님|프레임워크")
-CAND_MAX, CAND_EVIDENCE_MAX = 3, 3
+CAND_MAX, CAND_EVIDENCE_MAX = 3, QUOTES_MAX  # 근거 상한은 계약(explore.md "가설마다 인용 1~5줄")·check-output과 같은 상수
 
 
 def parse_candidates(text: str) -> tuple[dict | None, list[str], range | None, list[str]]:
