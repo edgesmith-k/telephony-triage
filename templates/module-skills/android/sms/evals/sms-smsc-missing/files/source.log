@@ -1,27 +1,21 @@
--- [합성] telephony-triage module-skills D eval log. Hand-written; base sample SMS-001-01.log; no RILJ SEND_SMS (request never built).
-08-24 13:00:02.100  2101 2141 D RILJ    : [0304]> NOTIFY_IMS_DATA_NETWORK [PHONE0]
-08-24 13:00:03.107  1188 1258 V RIL     : mux [ch0][TX] <unknown ipc>, REQ seq=0x0204 len=12
-08-24 13:00:04.114  1188 1258 V RIL     : mux [ch0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0204 len=12
-08-24 13:00:05.121  1188 1248 E VRIL    : reply to client token 304
-08-24 13:00:06.128  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
-08-24 13:00:07.135  2101 2141 D RILJ    : [0304]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
-08-24 13:00:10.000  2101 2101 D ImsSmsDispatcher [0]: ImsManager: connection unavailable, reason=0
-08-24 13:00:10.002  2101 2101 D ImsSmsDispatcher [0]: ImsManager: connection ready.
-08-24 13:00:20.000  2101 2111 D SmsDispatchersController: sendTextInternal: messageId=0, uniqueMessageId=3
-08-24 13:00:20.001  2101 2111 D SMSDispatcher: sendText id: {x-message-id:0}
-08-24 13:00:20.170  2101 2111 D GsmSMSDispatcher: sendSms:  isIms()=false mRetryCount=0 mImsRetry=0 mMessageRef=0 mUsesImsServiceForIms=false SS=3 {x-message-id:0}
-08-24 13:00:26.000  1188 1248 E VRIL    : reply to client token 304
-08-24 13:00:26.001  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
-08-24 13:00:35.000  2101 2111 D SmsDispatchersController: sendTextInternal: messageId=0, uniqueMessageId=4
-08-24 13:00:35.001  2101 2111 D SMSDispatcher: sendText id: {x-message-id:0}
-08-24 13:00:35.170  2101 2111 D GsmSMSDispatcher: sendSms:  isIms()=false mRetryCount=0 mImsRetry=0 mMessageRef=0 mUsesImsServiceForIms=false SS=3 {x-message-id:0}
-08-24 13:00:40.000  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
-08-24 13:00:50.011  1188 1248 E VRIL    : reply to client token 410
-08-24 13:00:50.311  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
-08-24 13:00:50.611  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
-08-24 13:00:51.011  1188 1248 E VRIL    : reply to client token 413
-08-24 13:00:51.311  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
-08-24 13:00:51.611  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
-08-24 13:00:52.011  1188 1248 E VRIL    : reply to client token 416
-08-24 13:00:52.311  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
-08-24 13:00:52.611  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
+-- [합성] telephony-triage module-skills eval log. Android 17 에뮬레이터 캡처(x06r-mo-airplane)에서 고른 줄이다(시각·pid 그대로, 줄만 줄임). 벤더 줄 없음.
+11-11 00:02:50.112 31649 31649 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0
+11-11 00:02:50.112 31649 31649 D SST-0   : setPowerStateToDesired: powerOffRadioSafely()
+11-11 00:02:50.112 31649 31649 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON
+11-11 00:02:50.125 31649 31649 D SST-0   : Data disconnected for all phones, turn radio off now.
+11-11 00:02:50.132 31649 31649 D RILJ    : [3192]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]
+11-11 00:02:50.135 31649 31846 D RILJ    : [3192]< RADIO_POWER  [PHONE0]
+11-11 00:02:50.135 31649 31659 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]
+11-11 00:02:50.139 31649 31649 D SST-0   : EVENT_RADIO_POWER_OFF_DONE
+11-11 00:02:50.169 31649 31649 D SST-0   : set service state as POWER_OFF
+11-11 00:02:50.169 31649 31649 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = true hasRilDataRadioTechnologyChanged = {1=true, 2=true} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = true has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = true
+11-11 00:03:05.170 31649 31832 D RILJ    : [3209]> GET_SMSC_ADDRESS [PHONE0]
+11-11 00:03:05.171 31649 31840 D RILJ    : [3209]< GET_SMSC_ADDRESS  [PHONE0]
+11-11 00:03:05.171 31649 31832 D SmsDispatchersController: sendTextInternal: messageId=0, uniqueMessageId=4
+11-11 00:03:05.171 31649 31832 D ImsSmsDispatcher [0]: isAvailable: up=false, reg= false, cap= false
+11-11 00:03:05.171 31649 31832 D SMSDispatcher: sendText id: {x-message-id:0}
+11-11 00:03:05.340 31649 31832 D ImsSmsDispatcher [0]: isAvailable: up=false, reg= false, cap= false
+11-11 00:03:05.340 31649 31832 D GsmSMSDispatcher: sendSms:  isIms()=false mRetryCount=0 mImsRetry=0 mMessageRef=0 mUsesImsServiceForIms=false SS=3 {x-message-id:0}
+11-11 00:03:15.341 31649 31649 D RILJ    : [3210]> RADIO_POWER on = true forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]
+11-11 00:03:15.344 31649 31673 D RILJ    : [3210]< RADIO_POWER  [PHONE0]
+11-11 00:03:15.347 31649 31832 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: ON [PHONE0]
