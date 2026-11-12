@@ -20,7 +20,7 @@
 - **코덱스 종합 리뷰 반영 완료**(`58ae770`·`1554dc0`, GRADER_VERSION 5). WSL 전체 pytest 통과, hook_probes 176개 판정 동일. 상세는 `docs/history/draft-notes-2026-11.md`.
 - 다음 묶음 **import-20261109**(태그·반입은 사용자). 사내: 재반입 §8. 이번 묶음은 guard 판정이 바뀌었다(4-c 병합 계열·규칙 5 ask 전환, Approve·기각·자동 병합·보호 변경·refs 위조 deny 신설) — 반입 전 `s4a.protection_guard` 통과 전제. SITE_INSTALL §8대로 사내 대상 eval 12개(`pending.json` `site`) 전부 다시 돌린다.
 - 템플릿·fixture는 placeholder·합성(사내 값은 SITE_PATHS, 반입 전 SITE_RESTORE ⓪), 반입은 `stable`에서 (Android eval은 arm pin 갱신으로 두 arm 함께 재실행)
-- 11/10~12 병합 #85~#92(#90 마스킹 한글 경계·전각 접기, #91·#92 Android 17 문구·ARM_PINS·GRADER_VERSION 6, 캡처 없는 줄 `# 소스만`). 모듈 eval: sim만 fail(기준선 arm). PR 대기 없음.
+- 11/10~12 병합 #85~#96(#90 마스킹 한글 경계·전각 접기, #91·#92·#94 Android 17 문구(data 보충은 되돌림)·ARM_PINS, #93 관문: 기준선 arm 안전 위반은 경고·GRADER_VERSION 7, #95 구분자 ICCID, #96 sms eval 기대). PR 대기 없음.
 - 모델 Sonnet 5.5 기준. `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서: `docs/book/telephony-triage-book.html`
 
@@ -34,7 +34,7 @@
 
 ## 다음 사이클 후보 (11/09 사용자 목록, 확정 계획 아님)
 
-C 지표 자리 · 4-c 2차(guard 판정 축소 후속) · B 조건부 · F3 B/C(`mask_pii --check` 갈린 ICCID) · 4-c P2 6건 · D① P2 · 묶기·전구간 부정(S37 뒤 별도 설계) · 분석 전용 종료 표식 · 포트 변조 잔여(끝 `.`·`키: 값`) · A17: extractor 2·좁힌 태그·call/sms 재캡처·sim fail 채점 기준·sms 문서 P2 2·`sms-ims-local-reject` 기대 · eval 42 allow-cause 경로 표시 · 상세·그 밖 P2는 history 11/12
+C 지표 자리 · 4-c 2차(guard 판정 축소 후속) · B 조건부 · F3 B/C(`mask_pii --check` 갈린 ICCID) · 4-c P2 6건 · D① P2 · 묶기·전구간 부정(S37 뒤 별도 설계) · 분석 전용 종료 표식 · 포트 변조 잔여(끝 `.`·`키: 값`) · A17: extractor 2·좁힌 태그·data 문서 보충·sms 문서 P2 2 · eval 42 allow-cause 경로 표시 · 상세·그 밖 P2는 history 11/12
 
 ## 사내로 넘긴 것
 
