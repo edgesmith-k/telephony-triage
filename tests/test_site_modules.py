@@ -251,7 +251,7 @@ def test_modules_track_start_done_flow(tmp_path, monkeypatch, capsys):
     assert ss.main(["--root", str(root), "modules"]) == 2
     assert "S-3 완료 기록 뒤" in capsys.readouterr().err
     prof = root / "SITE_PROFILE.md"
-    prof.write_text(prof.read_text(encoding="utf-8").replace("- 완료 단계: (없음)", S3_DONE).replace(
+    prof.write_text(prof.read_text(encoding="utf-8").replace("- 완료 단계: S-0 (2026-10-01)", S3_DONE).replace(
         "- 현재 단계: S-1", "- 현재 단계: S-4a"), encoding="utf-8")
     before = _progress(root)
     monkeypatch.setitem(sc.MODULE_CHECKS, "MS-1", [lambda ctx: sc.res("ms1.ok", "pass", "합성")])
@@ -290,7 +290,7 @@ def test_modules_refused_on_offsite_pc(tmp_path, capsys):
 def test_modules_check_json_shape(tmp_path, capsys):
     root, _ = make_site(tmp_path, dbs=False)
     prof = root / "SITE_PROFILE.md"
-    prof.write_text(prof.read_text(encoding="utf-8").replace("- 완료 단계: (없음)", S3_DONE)
+    prof.write_text(prof.read_text(encoding="utf-8").replace("- 완료 단계: S-0 (2026-10-01)", S3_DONE)
                     + "", encoding="utf-8")
     text = ss._insert_progress(prof.read_text(encoding="utf-8"), "- 모듈 단계: MS-1", ss.MODULE_CURRENT_RE.pattern)
     prof.write_text(ss._insert_progress(text, "- 모듈 완료: (없음)", ss.MODULE_FINISHED_RE.pattern), encoding="utf-8")

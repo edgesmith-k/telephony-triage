@@ -4,7 +4,7 @@
 
 ### 14.1 배경과 원칙
 
-- 이 문서 세트(`CLAUDE.md` + `docs/design/*.md`)는 **사외에서, 사내 로그·Jira MCP·GHE·소스 트리에 접근하지 못한 상태로** 작성됐다. 구조와 절차는 확정이지만, 사내 환경에 따라 달라지는 **값·문구·형식**은 추정(placeholder)이다. 사내에서는 모드에 따라 **사내 보완이면 S-1**(`15-local-draft.md §15.5`), **사내 처음부터면 Phase 0**(14.4)으로 사내 환경을 먼저 확인한다.
+- 이 문서 세트(`CLAUDE.md` + `docs/design/*.md`)는 **사외에서, 사내 로그·Jira MCP·GHE·소스 트리에 접근하지 못한 상태로** 작성됐다. 구조와 절차는 확정이지만, 사내 환경에 따라 달라지는 **값·문구·형식**은 추정(placeholder)이다. 사내에서는 모드에 따라 **사내 보완이면 S-0·S-1**(`15-local-draft.md §15.5`), **사내 처음부터면 Phase 0**(14.4)으로 사내 환경을 먼저 확인한다.
 - 이 문서 세트에 나오는 logcat 태그, 로그 문구, RIL 요청 이름, 코드 심볼, 서버·팀 이름은 **예시(placeholder)** 다. 사내에서(S-1~S-4 또는 Phase 0) 실제 Android 16/17 logcat·소스·사내 환경으로 확인하고 반영한다. 단, 데이터 스택 태그는 Android 13+ 형식(`DNC-<n>`, `DN-<id>-<C|I>`, `DPM-<n>`, `DRM-<n>`, `DSMGR-<n>`, `DSM-<C|I>-<n>`, `DCM-<n>`, `DSRM-<n>`)으로 확정이며(10/07 실제 로그로 정정: DataSettingsManager는 `DSMGR`, `DSM-<C|I>`는 DataServiceManager. Android 13+ 데이터 스택(AOSP 13~17 동일 형식, Android 17 단말 로그로 형식 확인). 12 이하는 범위 밖 — 사내 S-4에서 단말 버전 확인.), 레거시 데이터 스택(DcTracker/DCT 등)은 고려하지 않는다. 실행 환경은 **Ubuntu**다(`01-architecture.md §3`).
 - 사내 자료는 밖으로 가져갈 수 없으므로, 사외에서 문서를 계속 다듬고 사내에서 보완하는 일이 반복된다. 그래서 **사내 확인값은 이 문서 세트에 쓰지 않고 `SITE_PROFILE.md`에 따로 둔다.**
   - 사외에서 새 버전의 문서 세트를 가져와 통째로 덮어써도 사내 확인값이 사라지지 않는다.
@@ -60,6 +60,7 @@
 | S35 | 분석 환경 이름(출처 기록의 label): 사내 실행 환경(Claude Code + 사내 모델 게이트웨이, OpenCode + GLM)을 기록에서 가려낼 짧은 이름. Claude Code가 모델·게이트웨이 환경 변수(`ANTHROPIC_MODEL`·`ANTHROPIC_DEFAULT_*_MODEL`·`ANTHROPIC_BASE_URL`)를 Bash까지 넘기는지 | B2 설계 §9.3, `MODULE_SKILLS_DECISIONS` 11/05 ①(출처 기록) | 환경마다 `module-skill.json`·`check-output.json`의 `env` 확인 | site-defaults runtime.label(선택, 영숫자·._ +-, 40자 이하) |
 | S36 | GHE MCP 서버(이슈 DB를 MCP로 다룰 때): 서버 이름, 병합·자동 병합·리뷰 도구 이름(이름 단어 `merge`·`approve`·`dismiss`가 드는가)과 동작 인자 이름(`event`·`action`·`method` 등), 쓰기 도구가 `mcptools.is_write`로 잡히는가. 4-c부터 대상 인자(owner·repo·URL)는 보지 않는다 — 트래커가 아닌 MCP 쓰기는 모두 ask. S3은 Jira MCP라 해당하지 않는다 | `08-safety.md` §9 규칙 11 | MCP `tools/list`(도구 이름·입력 스키마), S1 빈 플러그인 실험 hook으로 실제 `tool_input` 확인 | `guard.py` 규칙 11 동작 칸 목록(`MCP_ACTION_KEYS`, TODO(SITE:S36)) |
 | S37 | 시그니처 표현력 수요: 사내 과거 Jira 100건 중 원인 판별에 **횟수**(`min_count`)·**간격**(`sequence_within_sec`)·**묶기**(트랜잭션·call id 역참조)·**전구간 부정**(로그 전체에 없음)이 필요한 비율. 기준 10% — 묶기·전구간 부정이 10% 이상이면 별도 설계를 다음 작업으로, 횟수·간격이 10% 미만이면 새 필드는 쓰지 않아도 된다(기본값은 지금과 같다) | `04-parser-matching.md §5.11 (1)` | 메인테이너가 과거 Jira 100건(홀드아웃 라벨셋과 같이 고른다)의 원인 줄을 보고 부류별 건수를 센다(Jira·로그 원문은 옮기지 않는다) | `SITE_PROFILE.md`에 부류별 건수/100 숫자로 (S-1). 쓰기로 하면 `issue-db.config.yaml signature_features`에 선언(팀 설치본 통일 뒤, `04-parser-matching.md §5.11 (1)`) |
+| S38 | S-0 선행 확인 기록(사내 보완 S-0만): 사외 파서·매처를 실제 로그 3~5개에 돌린 지표 5종과 사외로 가져갈 정성 결론. 값은 숫자 기록이지 설정이 아니다(태그·형식 보정은 S7·S8·S10·S20에서) | `15-local-draft.md §15.5` S-0, `docs/development/S0_PROBE_CHECKLIST.md` | `tools/s0_stats.py` 끝 줄(`SITE_PROFILE 행(…)`), 결론은 사용자가 한 줄로 | `SITE_PROFILE.md` 확인값 두 행: `S38 · S-0 지표` = `tags=<수집 태그 비율> pair=<RIL 짝 비율> tsfail=<시각 파싱 실패율> cov=<시계 이상 건수> pid=<phone_id 추출률>`, `S38 · S-0 결론` = 한 줄(점검 `s0.metrics`·`s0.conclusion`, 없으면 사유와 함께 면제) |
 
 ### 14.3 `SITE_PROFILE.md` 형식
 
@@ -82,6 +83,7 @@
 | S3 | Jira MCP 서버 이름 | <값> | MCP 도구 목록 | 2026-10-01 | <아이디> | 확인 |
 | S9 | 데이터 평가 거부 로그 문구 | <정규식> | 샘플 로그 <파일명> 1234행 | ... | ... | 확인 |
 | S12 | 빌드명 체계 | <설명> | — | ... | ... | 미확인 (대안: 비교 불가 시 사용자 판단) |
+| S38 | S-0 지표 | tags=<%> pair=<%> tsfail=<%> cov=<n> pid=<%> | s0_stats 로그 <n>개 | ... | ... | 확인 |
 
 ## 설계 변경
 - (날짜) <변경 내용> — 사유, 사용자 결정
@@ -127,7 +129,7 @@
 6. 샘플 logcat은 Phase 1 fixture의 원본이 된다. fixture로 만들 때 반드시 마스킹한다.
 7. `SITE_PROFILE.md`의 "진행 상태"에 Phase 0 완료를 기록한다.
 
-완료 기준: 문서 정합성 검토 결과의 🔴 항목이 모두 처리 방식까지 정해졌고, `REVIEW-OPEN.md`의 모든 항목이 처리 방식이 정해졌거나 사유와 함께 보류로 `SITE_PROFILE.md`에 기록됐고, S1~S37(S24~S29는 그 플랫폼을 켤 때만, S30·S31은 GitHub 트래커를 쓸 때만, S33~S35는 모듈 스킬 레포를 쓸 때만, S36은 GHE MCP 서버를 쓸 때만)가 모두 "확인" 또는 "미확인 + 대안"으로 기록되고, 설계 변경이 필요한 항목은 사용자 결정이 기록돼 있다.
+완료 기준: 문서 정합성 검토 결과의 🔴 항목이 모두 처리 방식까지 정해졌고, `REVIEW-OPEN.md`의 모든 항목이 처리 방식이 정해졌거나 사유와 함께 보류로 `SITE_PROFILE.md`에 기록됐고, S1~S37(S24~S29는 그 플랫폼을 켤 때만, S30·S31은 GitHub 트래커를 쓸 때만, S33~S35는 모듈 스킬 레포를 쓸 때만, S36은 GHE MCP 서버를 쓸 때만. S38은 사내 보완 S-0 기록이라 Phase 0 대상이 아니다)가 모두 "확인" 또는 "미확인 + 대안"으로 기록되고, 설계 변경이 필요한 항목은 사용자 결정이 기록돼 있다.
 
 ### 14.5 사외 문서 업데이트를 사내에 반영할 때
 

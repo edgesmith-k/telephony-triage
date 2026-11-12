@@ -126,7 +126,7 @@ unzip ~/issue-db-skeleton-import-v1.zip -d ~/tt-skel
 python3 tools/s0_stats.py <logcat1> <logcat2> <logcat3> \
     --rules ~/tt-skel/parser-rules --tz Asia/Seoul --year 2026 --plugin-root $ROOT
 ```
-- 로그 3~5개(카테고리 섞어서, 듀얼 SIM 1개 이상). 숫자는 `SITE_PROFILE.md`에만(아직 없으면 메모 후 S-1에서 옮김).
+- 로그 3~5개(카테고리 섞어서, 듀얼 SIM 1개 이상). 숫자는 `SITE_PROFILE.md`에만(아직 없으면 메모 후 반입 뒤 첫 단계 S-0에서 끝 줄 `SITE_PROFILE 행(…)`을 확인값 S38로 옮김).
 - 읽는 법·판정은 `docs/development/S0_PROBE_CHECKLIST.md`. 시각 파싱 90% 미만·RIL 요청 0건·phone_id 0%처럼 많이 다르면, **반입 전에** 정성 결론("슬롯 표기가 `[SUB<n>]`")을 사외로 가져가 고치고 묶음을 다시 만드는 게 싸다.
 
 ### 첫 반입
@@ -156,7 +156,7 @@ git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manif
 
 | 단계 | 사용자가 줄 것 | 하는 일 |
 |---|---|---|
-| S-0 (선택) | 실제 로그 3~5개 — Claude 없이 `tools/s0_stats.py`도 가능 (절차 `docs/development/S0_PROBE_CHECKLIST.md`) | 반입 전·S-1 전 언제든. reference 파서·매처만 실제 로그에 Python으로 돌려 시각 파싱 비율·RIL 페어링·phone_id 추출·시계 이상을 봄. 결과 숫자는 `SITE_PROFILE.md`에만, 사외로는 정성 결론만. 로그 형식이 다르면 S-4가 커지므로 **권장** |
+| S-0 | 실제 로그 3~5개 — Claude 없이 `tools/s0_stats.py`도 가능 (절차 `docs/development/S0_PROBE_CHECKLIST.md`), 정성 결론 한 줄 | 사내 설정의 첫 단계(반입 전에 이미 했으면 그 값을 확인값 S38로 옮기고 넘어감, 로그를 아직 못 구했으면 사유와 함께 면제). reference 파서·매처만 실제 로그에 Python으로 돌려 시각 파싱 비율·RIL 페어링·phone_id 추출·시계 이상을 봄. 결과 숫자는 `SITE_PROFILE.md`에만, 사외로는 정성 결론만. 로그 형식이 다르면 S-4가 커지므로 **권장** |
 | S-1 | Jira 키 2~3개, 카테고리별 logcat 경로, 16/17 소스 경로, 빌드명, S-5 게이트 기준치 | TODO 목록·환경 확인, `REVIEW-OPEN.md` 처리, `SITE_PROFILE.md` 작성, 오프라인 평가 기준 합의 |
 | S-2 | eval 예산·비용 승인, S1 실험(`check S-2 --allow-api`), 59·60 수동 채점 | 플러그인 로드·hook·MCP 도구 이름 형식 확인, 다른 점만 수정, 사내 대상 eval 실행(나머지는 사외 결과) |
 | S-3 | Jira MCP 서버·도구 매핑, GHE, 샘플 Jira raw 저장 위치 | `site-defaults.yaml`(Jira 서버·도구 매핑·필드 매핑, GHE 등), 이슈 DB 설정 |

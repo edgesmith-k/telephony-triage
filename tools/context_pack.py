@@ -63,7 +63,7 @@ def step_row(name):
     """§15.5 표의 머리줄과 그 단계 행. 없으면 None."""
     lines = section((ROOT / STEPS).read_text(encoding="utf-8"), "15.5") or ""
     rows = [ln for ln in lines.splitlines() if ln.startswith("|")]
-    hit = [ln for ln in rows if _row_key(ln) == name]   # `S-0 (선택)`
+    hit = [ln for ln in rows if _row_key(ln) == name]   # 첫 셀의 첫 토큰(`S-0 (…)`도 `S-0`)
     return "\n".join(rows[:2] + hit) if hit else None
 
 

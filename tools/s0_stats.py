@@ -15,6 +15,10 @@
 - 수집 태그 비율: 읽은 줄 중 `tags.yaml`에 있는 태그라 수집된 줄(`parsed_lines`). 낮으면 태그 매핑이 모자란 것이다.
 - 태그 상위(전체)·미수집 태그 상위, RIL 요청 대비 응답 짝 맞춤 비율, `phone_id` 추출 비율.
 - coverage: 시각 범위, 시계 이상(`backward`/`jump`) 개수, `warnings`·`errors` 개수.
+
+끝 줄 `SITE_PROFILE 행(S38 S-0 지표, 합계): tags=… pair=… tsfail=… cov=… pid=…`(수집 태그 비율·RIL 짝 비율·시각 파싱
+실패율·시계 이상 건수·phone_id 추출률)은 사내 설정 S-0에서 `site_step.py propose S-0 --set "row.S38.S-0 지표=<그 값>"`으로
+옮긴다(점검 `s0.metrics`). 반입 전에 잰 값도 반입 뒤 S-0에서 이렇게 옮긴다.
 """
 
 from __future__ import annotations
@@ -109,14 +113,23 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     for r in results:
         show(r)
+    total = {k: sum(r[k] for r in results) for k in ("raw_lines", "format_lines", "parsed_lines", "ril_requests", "ril_paired",
+                                                      "slot_lines", "clock_anomalies")}
     if len(results) > 1:
-        total = {k: sum(r[k] for r in results) for k in ("raw_lines", "format_lines", "parsed_lines", "ril_requests", "ril_paired",
-                                                          "slot_lines", "clock_anomalies")}
         print(f"[합계 {len(results)}개] 시각 파싱 {pct(total['format_lines'], total['raw_lines'])}, "
               f"수집 태그 {pct(total['parsed_lines'], total['format_lines'])}, "
               f"RIL 짝 {pct(total['ril_paired'], total['ril_requests'])}, "
               f"phone_id {pct(total['slot_lines'], total['parsed_lines'])}, 시계 이상 {total['clock_anomalies']}건")
+    print(f"SITE_PROFILE 행(S38 S-0 지표, 합계): {profile_row(total)}")
     return 0
+
+
+def profile_row(t: dict) -> str:
+    """확인값 S38 `S-0 지표` 한 행 값(site_checks.S0_KEYS와 같은 키). 출력만 한다 — 파일은 쓰지 않는다."""
+    r = lambda a, b: f"{a / b:.0%}" if b else "-"  # noqa: E731
+    return (f"tags={r(t['parsed_lines'], t['format_lines'])} pair={r(t['ril_paired'], t['ril_requests'])} "
+            f"tsfail={r(t['raw_lines'] - t['format_lines'], t['raw_lines'])} cov={t['clock_anomalies']} "
+            f"pid={r(t['slot_lines'], t['parsed_lines'])}")
 
 
 if __name__ == "__main__":

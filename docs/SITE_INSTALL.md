@@ -10,7 +10,7 @@ S-6까지 끝낸 레포의 재반입은 [SITE_RESTORE.md](SITE_RESTORE.md) 첫�
 | 2 | 압축 풀기·회사명 검색·로컬 git | 검색 결과 `.git` 밖 0건, 첫 커밋 |
 | 3 | Python 3.10+ 확인, 설치 방법 선택(A `--user` / B venv) | `python3 --version` 3.10+ |
 | 4 | 의존성 설치 (사내 PyPI 미러) | 버전 3개 출력 |
-| 5 | `claude` → "사내 설정 시작" | `SITE_PROFILE.md` 생성, S-1 안내 |
+| 5 | `claude` → "사내 설정 시작" | `SITE_PROFILE.md` 생성, S-0 안내 |
 | (팀원) | 7절 — 담당자 S-7 뒤 | setup 점검 표 모두 ok |
 | (S-4a) | 9절 운영 이슈 DB 첫 push — 빈 레포, 보호 켜기 전 한 번 | push 성공, `s4a.protection` 통과 |
 | (새 묶음) | 8절 재반입 — 압축을 레포 위에 풀지 않는다 | `import_draft.py` 종료 0, pytest 통과, main에 ff 병합 |
@@ -108,7 +108,7 @@ cd <레포 폴더>                 # B(venv)면 먼저 . ~/.venvs/tt/bin/activat
 claude                         # /model 로 Opus 권장 (사내 설정 단계는 판단이 많다)
 ```
 
-첫 입력: **사내 설정 시작** (이어서 할 때는 **계속**). `tools/site_step.py`가 `SITE_PROFILE.md`(모드 사내 보완, 트래커 jira)를 만들고 S-1부터 할 일·점검·물을 것을 낸다. 단계 끝마다 사용자 확인 뒤 `--done S-n`.
+첫 입력: **사내 설정 시작** (이어서 할 때는 **계속**). `tools/site_step.py`가 `SITE_PROFILE.md`(모드 사내 보완, 트래커 jira)를 만들고 S-0(선행 확인 — 반입 전에 했으면 값만 옮기거나 사유와 함께 면제)부터 할 일·점검·물을 것을 낸다. 단계 끝마다 사용자 확인 뒤 `--done S-n`.
 
 **왜 터미널의 `python3`가 중요한가**: 플러그인 hook(`plugin/hooks/hooks.json`)과 git hook은 `python3`라는 이름으로 Python을 부른다. Claude가 Bash 도구로 돌리는 `triage.py` 같은 스크립트도 마찬가지다. 그 `python3`가 3.10 미만이거나 의존성을 import하지 못하면 hook이 실패하고, guard는 안전한 쪽으로 막는다(MCP 거부, git 쓰기 ask). Bash로 돌린 스크립트는 `ModuleNotFoundError`로 멈춘다. doctor의 guard 행에 `hook python3≠doctor python`이 보이면 hook과 doctor가 다른 Python을 쓰는 것이다. A는 어느 터미널이든 같다. B는 `(tt)` 없이 띄우면 시스템 python3로 돌아 의존성이 없다. 매번 켜기 번거로우면:
 

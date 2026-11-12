@@ -30,6 +30,8 @@ def test_matching_logs_report_full_parse_pairs_slots_and_clock_anomalies():
     assert "phone_id 추출: 10/11 (91%)" in out
     assert "시계 이상 2건" in out and "[합계 2개]" in out
     assert "RILJ" in out and "SETUP_DATA_CALL" not in out        # 태그 이름은 내고, 로그 문구는 내지 않는다
+    row = out.rstrip("\n").splitlines()[-1]                         # S-0 확인값 S38 한 행(site_checks.s0_metrics 키)
+    assert row.startswith("SITE_PROFILE 행(S38 S-0 지표, 합계): tags=") and "pair=75% tsfail=0% cov=2 pid=94%" in row   # 두 로그 합계
 
 
 def test_foreign_format_shows_up_as_unparsed_lines_and_zero_ril_requests():
