@@ -1,0 +1,26 @@
+-- [합성] telephony-triage module-skills eval log. Android 17 에뮬레이터 캡처(s02-sim-power)에서 고른 줄이다(시각·pid 그대로, 줄만 줄이고 사용자 id 칸은 뺌). 벤더 줄 없음.
+11-10 16:21:57.432  9995 10059 D PhoneInterfaceManager: handleShellCommand
+11-10 16:21:57.433  9995 10059 D TelephonyShellCommand: Disabling physical subscription with subId=1
+11-10 16:21:57.433  9995 10059 D SMSVC   : setUiccApplicationsEnabled: subId=1, enabled=false, calling package=null
+11-10 16:21:57.433  9995  9995 D SMSVC   : updateUserIdToAvailableSubs: {-10000=[1]}
+11-10 16:21:57.433  9995  9995 D MultiSimSettingController: notifySubscriptionInfoChanged
+11-10 16:21:57.439  9995 10014 V TelephonyProvider: callingUid=1001 update([content://telephony/siminfo/1, uicc_applications_enabled=0, null]) = 1
+11-10 16:21:57.442  9995  9995 D RILJ    : [0023]> ENABLE_UICC_APPLICATIONS false [PHONE0]
+11-10 16:21:57.442  9995  9995 D DSMGR-0 : handleSubscriptionChanged: 1 reevaluating data enabled
+11-10 16:21:57.443  9995  9995 D DSMGR-0 : mIsDataEnabled=true, prevDataEnabled=true
+11-10 16:21:57.443  9995  9995 D MultiSimSettingController: onSubscriptionsChanged
+11-10 16:21:57.443  9995  9995 D MultiSimSettingController: updateDefaults
+11-10 16:21:57.444  9995 10012 D RILJ    : [0023]< ENABLE_UICC_APPLICATIONS  [PHONE0]
+11-10 16:21:57.444  9995 10043 D RILJ    : [UNSL]< UNSOL_UICC_APPLICATIONS_ENABLEMENT_CHANGED false [PHONE0]
+11-10 16:21:57.445  9995  9995 D MultiSimSettingController: updateDefaultValues: change: 0
+11-10 16:21:57.445  9995  9995 D TNP     : Subscription changed.
+11-10 16:21:57.445  9995  9995 D TNP     : reevaluateNetworkRequests: subscription changed.
+11-10 16:21:57.446  9995  9995 D SST-0   : SubscriptionListener.onSubscriptionInfoChanged
+11-10 16:21:57.448  9995  9995 D PhoneSwitcher: Found an active subscription
+11-10 16:21:57.448  9995  9995 D GsmCdmaPhone: [0] EVENT_SUBSCRIPTIONS_CHANGED
+11-10 16:21:57.448  9995  9995 I PhoneInterfaceManager: unregisterMmTelCapabilityCallback: 1 is inactive, ignoring unregister.
+11-10 16:21:57.448  9995  9995 I PhoneInterfaceManager: unregisterImsRegistrationCallback: 1is inactive, ignoring unregister.
+11-10 16:21:57.449  9995  9995 D Phone-0 : isImsRegistered =false
+11-10 16:21:57.503  9995  9995 I PhoneInterfaceManager: setVoiceServiceStateOverride: subId=1, phone=Handler (com.android.internal.telephony.GsmCdmaPhone) {10e2691}, hasService=false, callingPackage=com.android.server.telecom
+11-10 16:21:57.504  9995  9995 W Telephony: registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
+11-10 16:21:57.504  9995  9995 W Telephony: registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1
