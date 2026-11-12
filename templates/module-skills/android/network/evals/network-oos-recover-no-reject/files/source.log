@@ -1,0 +1,44 @@
+-- [합성] telephony-triage module-skills eval log. Android 17 에뮬레이터 캡처(n09r-oos-recover)에서 고른 줄이다(시각·pid 그대로, 줄만 줄이고 셀 식별 값은 토큰으로 가림). 벤더 줄 없음.
+11-10 23:18:28.616 31649 31791 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]
+11-10 23:18:28.617 31649 31841 D NRM-C-0 : onNetworkStateChanged
+11-10 23:18:28.617 31649 31649 D SST-0   : pollState: modemTriggered=true, radioState=1
+11-10 23:18:28.617 31649 31882 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]
+11-10 23:18:28.617 31649 31841 D NRM-C-0 : onNetworkStateChanged
+11-10 23:18:28.619 31649 31649 D RILJ    : [0753]> OPERATOR [PHONE0]
+11-10 23:18:28.621 31649 31673 D RILJ    : [0753]< OPERATOR {T-Mobile, TMOBILE, 310260} [PHONE0]
+11-10 23:18:28.621 31649 31649 D RILJ    : [0754]> QUERY_NETWORK_SELECTION_MODE [PHONE0]
+11-10 23:18:28.621 31649 31841 D RILJ    : [0755]> DATA_REGISTRATION_STATE [PHONE0]
+11-10 23:18:28.623 31649 31673 D RILJ    : [0754]< QUERY_NETWORK_SELECTION_MODE {0} [PHONE0]
+11-10 23:18:28.623 31649 31841 D RILJ    : [0756]> VOICE_REGISTRATION_STATE [PHONE0]
+11-10 23:18:28.623 31649 31673 D RILJ    : [0755]< DATA_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_NOT_SEARCHING_OP, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdentityNr{mcc: 310, mnc: 260, nci: <CELL#1>, pci: <CELL#2>, tac: -1, nrarfcn: 9000, operatorNames: OperatorInfo{alphaLong: T-Mobile, alphaShort: TMOBILE, operatorNumeric: 310260, status: 2}, additionalPlmns: [310260], bands: [BAND_41]}), registeredPlmn: 310260, accessTechnologySpecificInfo: AccessTechnologySpecificInfo.ngranNrVopsInfo(NrVopsInfo{vopsSupported: 1, emcSupported: 1, emfSupported: 0})} [PHONE0]
+11-10 23:18:28.624 31649 31649 D SST-0   : pollState: modemTriggered=true, radioState=1
+11-10 23:18:28.625 31649 31649 D RILJ    : [0757]> OPERATOR [PHONE0]
+11-10 23:18:28.625 31649 31673 D RILJ    : [0756]< VOICE_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_NOT_SEARCHING_OP, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdentityNr{mcc: 310, mnc: 260, nci: <CELL#1>, pci: <CELL#2>, tac: -1, nrarfcn: 9000, operatorNames: OperatorInfo{alphaLong: T-Mobile, alphaShort: TMOBILE, operatorNumeric: 310260, status: 2}, additionalPlmns: [310260], bands: [BAND_41]}), registeredPlmn: 310260, accessTechnologySpecificInfo: AccessTechnologySpecificInfo.ngranNrVopsInfo(NrVopsInfo{vopsSupported: 1, emcSupported: 1, emfSupported: 0})} [PHONE0]
+11-10 23:18:28.625 31649 31649 D RILJ    : [0758]> QUERY_NETWORK_SELECTION_MODE [PHONE0]
+11-10 23:18:28.626 31649 31649 D SST-0   : handlePollStateResult exception java.lang.IllegalStateException: Service not connected.
+11-10 23:18:28.626 31649 31649 E SST-0   : handlePollStateResult: RIL returned an error where it must succeed: java.lang.IllegalStateException: Service not connected.
+11-10 23:18:28.634 31649 31649 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false
+11-10 23:18:28.634 31649 31649 D SST-0   : updateCarrierDisplayName: radio is on but out of service, set plmn='No service'
+11-10 23:18:38.268 31649 31649 D RILJ    : [0761]> GET_ACTIVITY_INFO [PHONE0]
+11-10 23:18:38.268 31649 31832 D RILJ    : [0761]< GET_ACTIVITY_INFO ModemActivityInfo{ mTimestamp=12156512 mSleepTimeMs=42 mIdleTimeMs=14 mActivityStatsTechSpecificInfo=[{mRat=UNKNOWN,mFrequencyRange=UNKNOWN,mTxTimeMs[]=[1, 3, 6, 8, 9],mRxTimeMs=9}]} [PHONE0]
+11-10 23:19:34.705 31649 31832 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]
+11-10 23:19:34.705 31649 31841 D NRM-C-0 : onNetworkStateChanged
+11-10 23:19:34.705 31649 31649 D SST-0   : pollState: modemTriggered=true, radioState=1
+11-10 23:19:34.706 31649 31832 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]
+11-10 23:19:34.706 31649 31841 D NRM-C-0 : onNetworkStateChanged
+11-10 23:19:34.706 31649 31649 D RILJ    : [0762]> OPERATOR [PHONE0]
+11-10 23:19:34.708 31649 31649 D RILJ    : [0763]> QUERY_NETWORK_SELECTION_MODE [PHONE0]
+11-10 23:19:34.708 31649 31903 D RILJ    : [0762]< OPERATOR {T-Mobile, TMOBILE, 310260} [PHONE0]
+11-10 23:19:34.709 31649 31785 D RILJ    : [0763]< QUERY_NETWORK_SELECTION_MODE {0} [PHONE0]
+11-10 23:19:34.709 31649 31841 D RILJ    : [0764]> DATA_REGISTRATION_STATE [PHONE0]
+11-10 23:19:34.711 31649 31841 D RILJ    : [0765]> VOICE_REGISTRATION_STATE [PHONE0]
+11-10 23:19:34.711 31649 31790 D RILJ    : [0764]< DATA_REGISTRATION_STATE RegStateResult{regState: REG_HOME, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdentityNr{mcc: 310, mnc: 260, nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, operatorNames: OperatorInfo{alphaLong: T-Mobile, alphaShort: TMOBILE, operatorNumeric: 310260, status: 2}, additionalPlmns: [310260], bands: [BAND_41]}), registeredPlmn: 310260, accessTechnologySpecificInfo: AccessTechnologySpecificInfo.ngranNrVopsInfo(NrVopsInfo{vopsSupported: 1, emcSupported: 1, emfSupported: 0})} [PHONE0]
+11-10 23:19:34.711 31649 31649 D SST-0   : pollState: modemTriggered=true, radioState=1
+11-10 23:19:34.714 31649 31649 D RILJ    : [0766]> OPERATOR [PHONE0]
+11-10 23:19:34.714 31649 31790 D RILJ    : [0765]< VOICE_REGISTRATION_STATE RegStateResult{regState: REG_HOME, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdentityNr{mcc: 310, mnc: 260, nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, operatorNames: OperatorInfo{alphaLong: T-Mobile, alphaShort: TMOBILE, operatorNumeric: 310260, status: 2}, additionalPlmns: [310260], bands: [BAND_41]}), registeredPlmn: 310260, accessTechnologySpecificInfo: AccessTechnologySpecificInfo.ngranNrVopsInfo(NrVopsInfo{vopsSupported: 1, emcSupported: 1, emfSupported: 0})} [PHONE0]
+11-10 23:19:34.715 31649 31902 D RILJ    : [0766]< OPERATOR {T-Mobile, TMOBILE, 310260} [PHONE0]
+11-10 23:19:34.715 31649 31649 D RILJ    : [0767]> QUERY_NETWORK_SELECTION_MODE [PHONE0]
+11-10 23:19:34.716 31649 31902 D RILJ    : [0767]< QUERY_NETWORK_SELECTION_MODE {0} [PHONE0]
+11-10 23:19:34.723 31649 31649 D SST-0   : handlePollStateResult exception java.lang.IllegalStateException: Service not connected.
+11-10 23:19:34.723 31649 31649 E SST-0   : handlePollStateResult: RIL returned an error where it must succeed: java.lang.IllegalStateException: Service not connected.
+11-10 23:19:34.729 31649 31649 D SST-0   : pollStateDone: hasRegistered = true hasDeregistered = false hasDataAttached = {1=true, 2=false} hasDataDetached = {1=false, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false

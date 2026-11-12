@@ -47,6 +47,7 @@ CASES = [
     ("call", "call-mo-out-of-service", "explore", None),
     ("sim", "sim-apps-disabled-by-request", "explore", None),
     ("modem", "modem-radio-off-airplane", "explore", None),
+    ("network", "network-oos-recover-no-reject", "explore", None),
 ]
 
 # 문서 상한(바이트, C1D 보정 §2.2) — skillcheck.CAPS보다 좁다(R24). 경로 키가 파일 이름 키보다 먼저.
