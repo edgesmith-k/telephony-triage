@@ -3100,8 +3100,7 @@
         "Jira MCP 서버(mock-jira)와 도구 매핑을 확인받은 뒤 `config.py set-tracker`로 저장했다(`tracker.tools.get_issue`)",
         "`config.py doctor --format markdown`을 실행했다",
         "doctor 표(`| 점검 | 상태 |` 머리와 모든 행)를 다시 요약하지 않고 그대로 붙였다",
-        "setup lock을 잡았다가 풀어 끝난 뒤 lock이 없다",
-        "묻지 않은 설정값(base 브랜치·GHE 호스트·타임존·작업 디렉토리 등)을 한 번만 한 줄씩 보였고, 끝에 이슈 DB `docs/getting-started.md` 위치를 알렸다"
+        "setup lock을 잡았다가 풀어 끝난 뒤 lock이 없다"
       ],
       "files": []
     }

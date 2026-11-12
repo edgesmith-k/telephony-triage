@@ -204,13 +204,13 @@ def set_inputs(root, text):
 def test_pending_is_site_set_with_baseline_and_manual():
     ids = {e["id"] for e in sc.eval_entries(ROOT)}
     pend = sc.load_pending(ROOT)
-    assert sorted(pend["site"]) == [1, 2, 8, 9, 39, 45, 58, 59, 60, 61, 62, 75, 80] and all(pend["site"].values())
+    assert sorted(pend["site"]) == [1, 2, 8, 9, 39, 45, 58, 59, 60, 61, 62, 75] and all(pend["site"].values())
     assert sorted(pend["site_if_model_differs"]) == [13, 17, 18, 24, 29, 33, 37]
     assert set(pend["site"]) | set(pend["site_if_model_differs"]) <= ids and not set(pend["site"]) & set(pend["site_if_model_differs"])
     assert pend["manual"] == [59, 60] and set(sc.BASELINE_EVALS) <= set(pend["site"]) and ss.BASELINE_EVALS == sc.BASELINE_EVALS
     assert "rerun_first" not in json.loads((ROOT / sc.EVAL_DIR / "pending.json").read_text(encoding="utf-8"))
     r = sc.s2_pending(sc.Ctx(ROOT))
-    assert r["status"] == "pass" and f"사내 대상 13/{len(ids)}" in r["evidence"] and "기준선 ⊆ 사내" in r["evidence"]
+    assert r["status"] == "pass" and f"사내 대상 12/{len(ids)}" in r["evidence"] and "기준선 ⊆ 사내" in r["evidence"]
 
 
 def test_repo_offsite_results_is_generated_record():

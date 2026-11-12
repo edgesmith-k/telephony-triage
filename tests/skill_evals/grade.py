@@ -1760,7 +1760,7 @@ def checks_w4(eid, ctx):
             free, ev = ctx.lock_free()
             return acquired and free, f"lock acquire 호출 {'있음' if acquired else '없음'}; {ev} ({ctx.work})"
 
-        return [config_made, few_questions, clone_after_consent, tracker_confirmed, doctor_ran, pasted_all, lock_released, None]
+        return [config_made, few_questions, clone_after_consent, tracker_confirmed, doctor_ran, pasted_all, lock_released]
     if eid == 58:
         def pasted():
             return said(r"\|\s*점검\s*\|\s*상태\s*\|", r"\|\s*gh\s*\|")()

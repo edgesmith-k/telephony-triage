@@ -3929,7 +3929,8 @@ def test_e80_fresh_user_env_has_no_config_or_clone(tmp_path):
     assert e["name"] == "setup-first-time" and e["batch"] == by_id[58]["batch"] and e["setup"] == {"fresh_user": True}
     assert not any((x.get("setup") or {}).get("fresh_user") for x in by_id.values() if x["id"] != 80)
     assert grader.FIRST_SETUP_REMOTE in e["user_replies"][0]
-    assert "80" in json.loads((EVALS / "pending.json").read_text(encoding="utf-8"))["site"]
+    assert "80" not in json.loads((EVALS / "pending.json").read_text(encoding="utf-8"))["site"]     # 사외 결과로 갈음(사용자 결정 11/12)
+    assert len(e["assertions"]) == 7                                                                 # 수동 행 없음 — 사외 판정이 수동 채점에 묶이지 않는다
     info = skill_eval_env.build(e, tmp_path / "env")
     home = Path(info["env"]["TELEPHONY_TRIAGE_HOME"])
     assert not (home / "config.yaml").exists() and not Path(info["issue_db_clone"]).exists() and Path(info["remote"]).is_dir()

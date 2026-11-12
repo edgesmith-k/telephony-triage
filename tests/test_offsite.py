@@ -164,3 +164,27 @@ def test_committed_record_verdicts_recompute_from_runs():
         assert e["verdict_commit"] == e["runs"][-1]["repo_commit"] and e["order"] in ("git", "mtime"), eid
         assert e["verdict"] == offsite.eval_verdict(e["runs"], e["verdict_commit"]), eid
         assert all(r["init_model"] == data["model"] for r in e["runs"]), eid
+
+
+def test_merge_fills_only_given_evals_and_refuses_conflicts(tmp_path, capsys):
+    d = evals_dir(tmp_path)
+    a, b = tmp_path / "it-a", tmp_path / "it-b"
+    run(a, 1, [("x", True)])
+    out = tmp_path / "offsite_results.json"
+    assert main(d, out, a) == 0
+    before = out.read_text(encoding="utf-8")
+    run(b, 3, [("x", True)])
+    merge = lambda *its, note="추가": offsite.main([*map(str, its), "--out", str(out), "--evals-dir", str(d), "--merge", "--note", note])  # noqa: E731
+    assert merge(b) == 0
+    after = out.read_text(encoding="utf-8")
+    data = json.loads(after)
+    assert data["evals"]["3"]["verdict"] == "pass" and data["evals"]["3"]["runs"][0]["iteration"] == "it-b"
+    assert data["note"] == "잠정 / 추가" and list(data["evals"]) == ["1", "2", "3", "4", "8"]
+    cut = lambda text, a, b: text[text.index(f'    "{a}": {{'):text.index(f'    "{b}": {{')]  # noqa: E731
+    assert cut(after, 1, 3) == cut(before, 1, 3) and after[after.index('    "4": {'):] == before[before.index('    "4": {'):]
+    assert merge(b) == 2 and "이미 run이 있는 eval ['3']" in capsys.readouterr().err         # 같은 eval을 다시
+    c = tmp_path / "it-c"
+    run(c, 2, [("x", True)], model="m-y")
+    assert merge(c) == 2 and "모델이 다르다" in capsys.readouterr().err
+    assert offsite.main([str(c), "--out", str(tmp_path / "none.json"), "--evals-dir", str(d), "--merge"]) == 2   # 기존 기록 없음
+    assert out.read_text(encoding="utf-8") == after
