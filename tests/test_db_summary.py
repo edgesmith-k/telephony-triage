@@ -40,7 +40,7 @@ FULL_CHECKS = {
 
 def test_pr_body_skipped_checks():
     plan = {"issue": {"key": "ABC-1", "model": "M1", "note": "메모"}}
-    body = db_summary.pr_body(_screen(notes=["n1"], ids=[{"temp_id": "T1", "id": "DATA-001"}],
+    body = db_summary.pr_body(_screen(issue={"note": "메모"}, notes=["n1"], ids=[{"temp_id": "T1", "id": "DATA-001"}],
                                       files=[{"kind": "유형", "path": "data/DATA-001/type.md", "change": "신규"}]),
                               plan)
     assert body.startswith("## 분석 요약\n\n- 구분: 분석 (analyze)\n- Jira: ABC-1 (model: M1)\n- 메모: 메모\n- n1\n")
@@ -250,6 +250,29 @@ def test_summary_flow_reports_fix_changes_only_for_fix_ops():
     other.acquire("MOCK-7003")
     other.stage("MOCK-7003", "issue/MOCK-7003")
     assert "fix_changes" not in other.db_pr("summary", other.wt("MOCK-7003"))
+
+
+def test_pr_body_note_is_masked_like_issue_db_file():
+    """R06a-01: PR 본문 메모 줄은 이슈 DB 파일의 note와 같은 가린 값이고, pr_notes 토큰 번호는 밀리지 않는다."""
+    import json
+
+    import yaml
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    from workspace import PLANS, Workspace
+    ws = Workspace()
+    plan = json.loads((PLANS / "p7-analyze-append.plan.json").read_text(encoding="utf-8"))
+    plan["issue"]["note"] = "고객 010-0000-1234, imsi=450009999999999 로밍"     # 합성 값
+    ws.plan("MOCK-7003", plan, pr_notes=["연락처 010-0000-5678"])
+    ws.acquire("MOCK-7003")
+    ws.stage("MOCK-7003", "issue/MOCK-7003")
+    summary = ws.db_pr("summary", ws.wt("MOCK-7003"))
+    body = summary["pr_body"]
+    [issue_file] = Path(ws.wt("MOCK-7003")).glob("**/issues/MOCK-7001.yaml")
+    db_note = yaml.safe_load(issue_file.read_text(encoding="utf-8"))["note"]
+    assert "010-0000-1234" not in body and "450009999999999" not in body
+    assert "<MSISDN#1>" in db_note and "<IMSI#1>" in db_note
+    assert f"- 메모: {db_note}\n" in body
+    assert "- 연락처 <MSISDN#1>\n" in body       # pr_notes 마스킹 결과(번호 포함)는 그대로
 
 
 def test_library_boundary():
