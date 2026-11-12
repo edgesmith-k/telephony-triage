@@ -14,16 +14,16 @@ RILJ    : [1234]< SETUP_DATA_CALL DataCallResponse{cause=0 ... }               [
 RILJ    : [1235]< LAST_CALL_FAIL_CAUSE error: GENERIC_FAILURE
 RILJ    : [UNSL]< UNSOL_DATA_CALL_LIST_CHANGED ...
 ```
-`>` 요청, `<` 응답(에러면 `error: <RadioError>`), `[UNSL]` unsolicited. 파서가 `(pid, phone_id, serial)`로 짝지어
+`>` 요청, `<` 응답(에러면 `error <n>` 숫자, 이름은 같은 serial `RilRequest` 줄), `[UNSL]` unsolicited. 파서가 `(pid, phone_id, serial)`로 짝지어
 `ril_error`, `ril_timeout`(응답이 `timeout_ms`보다 늦음), `ril_no_response`(응답 없음) 이벤트를 만든다.
 
 ## 카테고리별 주요 요청
 
 | 카테고리 | 요청 | 비고 |
 |---|---|---|
-| data | `SETUP_DATA_CALL`, `DEACTIVATE_DATA_CALL`, `DATA_CALL_LIST`, `SET_INITIAL_ATTACH_APN`, `SET_DATA_PROFILE`, `SET_DATA_ALLOWED` | setup 응답의 `cause`는 DataFailCause (`fail-causes.md`) |
+| data | `SETUP_DATA_CALL`, `DEACTIVATE_DATA_CALL`, `DATA_CALL_LIST`, `SET_INITIAL_ATTACH_APN`, `SET_DATA_PROFILE`, `ALLOW_DATA` | setup 응답의 `cause`는 DataFailCause (`fail-causes.md`) |
 | call | `DIAL`, `HANGUP`, `ANSWER`, `GET_CURRENT_CALLS`, `LAST_CALL_FAIL_CAUSE` | CS 경로. VoLTE 호는 IMS 쪽 로그가 주 근거 |
-| network | `VOICE_REGISTRATION_STATE`, `DATA_REGISTRATION_STATE`, `OPERATOR`, `SET_PREFERRED_NETWORK_TYPE`/`SET_ALLOWED_NETWORK_TYPES_BITMAP`, `GET_SIGNAL_STRENGTH` | 등록 상태 응답에 reject cause |
+| network | `VOICE_REGISTRATION_STATE`, `DATA_REGISTRATION_STATE`, `OPERATOR`, `SET_PREFERRED_NETWORK_TYPE`/`SET_ALLOWED_NETWORK_TYPES_BITMAP`, `SIGNAL_STRENGTH` | 등록 상태 응답에 reject cause |
 | sim | `GET_SIM_STATUS`, `SIM_IO`, `ENTER_SIM_PIN`, `ENTER_SIM_PUK`, `SET_UICC_SUBSCRIPTION` | |
 | sms | `SEND_SMS`, `SEND_SMS_EXPECT_MORE`, `IMS_SEND_SMS`, `SMS_ACKNOWLEDGE` | 응답 error code는 `fail-causes.md` |
 | ims (레거시) | `IMS_REGISTRATION_STATE` 등 | 최신 단말은 ImsService 로그로 본다. 쓰는 단말이 있을 때만 추가 |
@@ -35,7 +35,7 @@ RILJ    : [UNSL]< UNSOL_DATA_CALL_LIST_CHANGED ...
 | data | `UNSOL_DATA_CALL_LIST_CHANGED` |
 | call | `UNSOL_RESPONSE_CALL_STATE_CHANGED`, `UNSOL_CALL_RING` |
 | network | `UNSOL_RESPONSE_NETWORK_STATE_CHANGED`, `UNSOL_NITZ_TIME_RECEIVED`, `UNSOL_SIGNAL_STRENGTH` |
-| sim | `UNSOL_SIM_STATUS_CHANGED`, `UNSOL_SIM_REFRESH` |
+| sim | `UNSOL_RESPONSE_SIM_STATUS_CHANGED`, `UNSOL_SIM_REFRESH` |
 | sms | `UNSOL_RESPONSE_NEW_SMS`, `UNSOL_RESPONSE_NEW_SMS_STATUS_REPORT` |
 
 ## 해석 요령
