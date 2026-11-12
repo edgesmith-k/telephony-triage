@@ -86,3 +86,11 @@ DRAFT_NOTES 후보 줄의 풀이와, 상한 때문에 거기 못 넣은 P2다. �
 - 훑기(읽기 전용, Android·oFono 모듈 문서·case·fixture): 실제 칩셋·제조사 이름은 없다. 1단계로 고친 것 — oFono 모듈 문서에서 합성 로그에 없는 이름·문구, case 주석 2개, oFono 테스트 합성 줄.
 - 훑기에서 남긴 것(후보): Android `_common/components.md`의 벤더 층 서술에 "가정" 표시(공통 문서 상한 여유 39B, 바꾸면 7개 모듈 eval), case 로그의 벤더 층 줄을 더 밋밋한 값으로(기대값·생성물이 따라 바뀜 — 범위는 사용자), 벤더 줄이 있는 case 머리 주석에 "가정" 표시, 벤더 IPC 줄 뼈대는 `common/vendor_ipc.py` 정규식이라 규칙 변경. 둘은 같은 eval 재실행이 필요하므로 함께 한다.
 - oFono 모듈 eval(문서 정리 뒤 1회, claude-sonnet-5-5): data fail(with 3·without 3, with arm 안전 위반 2 — `dbus_trace` 줄 인용 뒤에 설명을 붙여 원문과 어긋남, `data-route-fail`은 출력 칸 누락), ims pass, network pass(11/08 fail), modem tie. data의 실패 행은 고친 문구와 무관한 인용·출력 형식이다. 다시 돌리지 않았다.
+
+## 11/12 Android case 보강 (#99)
+
+- 추가: `sms-mt-delivered-to-app`(explore, MOCK-9822) — Android 17 에뮬레이터 캡처에서 고른 AOSP 층 줄, 수신·ACK·앱 전달·raw 삭제까지 정상이라 정답은 `원인 아님(정상 동작)`(또는 곁가지). android case는 data 5·sim 3·network 2·call 3·sms 3·ims 3·modem 3.
+- 뺀 것: network case "허용 망 종류를 좁힘"(정답 프레임워크). 원인 줄의 태그 `PhoneInterfaceManager`·`Phone-0`이 샘플 DB tags.yaml에 없어 모듈 타임라인에 요청·응답 4줄만 남고, 그 근거로는 정답이 서지 않는다(별개 리뷰 P1 — 규칙을 지킨 `그 층 로그 없음` 답을 떨어뜨린다). 태그 추가는 파서 규칙 변경이라 사용자 확인 뒤에. case를 설계할 때는 `--write` 뒤 timeline.md에 근거 줄이 있는지 먼저 본다.
+- `_common/components.md` 벤더 층 서술 3곳에 "(가정)". 리뷰 P2(후보): 정의 없는 새 표기라 placeholder·TODO(SITE)와 통일할지, 제목에서 "벤더 IPC 결과"가 빠진 것, `layers.md`·`network/explore.md`는 같은 내용(AT 중계 = 곁가지)을 단정으로 쓴다. 공통 문서 합 5956B — `data/explore.md`와 묶인 explore run 예산(8800B) 때문에 5B만 남는다.
+- Android 모듈 eval(claude-sonnet-5-5, 1회): data·network·call·sms·ims·modem pass, sim fail(with arm이 이벤트 주석 `ril_timeout(…)`을 근거 줄로 인용 — 안전 위반 1). network·sms는 case를 고친 뒤 다시 돌린 결과다(첫 실행은 network pass·sms tie).
+- eval 형식 실패 후보(11/12 하루에 본 것, 문구와 무관하게 관문을 뒤집는다): 근거 줄 뒤에 설명을 붙여 원문과 어긋남, 이벤트 주석을 근거 줄로 인용, 가설 하나에 근거 4줄, `코드로 추정` 칸 누락. sms/explore.md에는 "수신·전달 성공인데 앱에 안 보임" 행이 없다.

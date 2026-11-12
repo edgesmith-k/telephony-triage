@@ -1,0 +1,91 @@
+{
+ "status": "ok",
+ "key": "MOCK-9822",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-11-12T01:14:31+00:00",
+  "sw": null,
+  "platform_version": "17",
+  "sim_slot": "0",
+  "summary": "문자가 안 옴 (합성)",
+  "description": "상대가 보낸 문자가 메시지 앱에 보이지 않습니다. 수신이 됐는지 확인해 주세요. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-11-12T01:09:31.000Z",
+   "end": "2026-11-12T01:19:31.000Z"
+  },
+  "range": [
+   "2026-11-12T01:14:30.705Z",
+   "2026-11-12T01:14:33.802Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 26,
+  "masked": null,
+  "uncollected_tags": [
+   {
+    "tag": "GsmInboundSmsHandler::CarrierServicesSms",
+    "lines": 1,
+    "warn": 0
+   }
+  ]
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "SMS-001",
+    "kind": "type",
+    "title": "SMS가 전송되지 않음"
+   },
+   {
+    "id": "SMS-001-01",
+    "kind": "cause",
+    "title": "전송 요청이 만들어지지 않음"
+   },
+   {
+    "id": "MOCK-5101",
+    "kind": "issue",
+    "title": "SMSC 주소가 비어 있는 SIM 프로필에서 발신 실패"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0
+ },
+ "partial": [
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "signature": "DATA-001/no-setup-data-call-request",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ],
+   "at": []
+  }
+ ],
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-11-12T01:14:30.705Z ~ 2026-11-12T01:14:33.802Z (일부만 포함), 시계 이상 없음",
+  "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): GsmInboundSmsHandler::CarrierServicesSms 1줄(W/E 0)"
+ ],
+ "truncated": false
+}

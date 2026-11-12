@@ -1,0 +1,28 @@
+-- [합성] telephony-triage module-skills eval log. Android 17 에뮬레이터 캡처(x08r2-mt-ack)에서 고른 줄이다(시각·pid 그대로, 줄만 줄이고 긴 숫자는 토큰으로 가림). 벤더 줄 없음.
+11-12 01:14:30.705 17217 17384 D RILJ    : [UNSL]< UNSOL_RESPONSE_NEW_SMS [PHONE0]
+11-12 01:14:30.706 17217 17217 D GsmInboundSmsHandler: IdleState.processMessage: processing EVENT_NEW_SMS
+11-12 01:14:30.707 17217 17217 D GsmInboundSmsHandler: IdleState.exit: acquired wakelock, leaving IdleState
+11-12 01:14:30.707 17217 17217 D GsmInboundSmsHandler: DeliveringState.enter: entering DeliveringState
+11-12 01:14:30.707 17217 17217 D GsmInboundSmsHandler: DeliveringState.processMessage: processing EVENT_NEW_SMS
+11-12 01:14:30.715 17217 17217 D GsmInboundSmsHandler: addTrackerToRawTable: URI of new row: content://sms/raw/7, {x-message-id:-<NUM#1>}
+11-12 01:14:30.716 17217 17217 D RILJ    : [0341]> SMS_ACKNOWLEDGE success = true cause = 0 [PHONE0]
+11-12 01:14:30.716 17217 17217 D GsmInboundSmsHandler: DeliveringState.processMessage: processing EVENT_BROADCAST_SMS
+11-12 01:14:30.717 17217 17397 D RILJ    : [0341]< SMS_ACKNOWLEDGE  [PHONE0]
+11-12 01:14:30.723 17217 17217 V GsmInboundSmsHandler::CarrierServicesSmsFilter: getCarrierAppPackageForFiltering: Unable to find carrierPackages: [] or systemPackages: [], id: -<NUM#1>
+11-12 01:14:30.729 17217 17217 D GsmInboundSmsHandler: Delivering SMS to: com.google.android.apps.messaging com.google.android.apps.messaging.shared.receiver.SmsDeliverReceiver, {x-message-id:-<NUM#1>}
+11-12 01:14:30.732 17217 17217 D GsmInboundSmsHandler: WaitingState.enter: entering WaitingState
+11-12 01:14:30.732 17217 17217 D GsmInboundSmsHandler: WaitingState.processMessage: processing EVENT_RETURN_TO_IDLE
+11-12 01:14:30.732 17217 17217 D GsmInboundSmsHandler: WaitingState.processMessage: processing EVENT_UPDATE_TRACKER
+11-12 01:14:30.770 17217 17217 D GsmInboundSmsHandler: Ordered broadcast completed for android.provider.Telephony.SMS_DELIVER in: 39 ms
+11-12 01:14:30.791 17217 17217 D GsmInboundSmsHandler: Ordered broadcast completed for android.provider.Telephony.SMS_RECEIVED in: 13 ms
+11-12 01:14:30.791 17217 17217 D GsmInboundSmsHandler: successful broadcast, deleting from raw table.
+11-12 01:14:30.800 17217 17217 D GsmInboundSmsHandler: Deleted 1 rows from raw table.
+11-12 01:14:30.800 17217 17217 D GsmInboundSmsHandler: WaitingState.processMessage: processing EVENT_BROADCAST_COMPLETE
+11-12 01:14:30.800 17217 17217 D GsmInboundSmsHandler: WaitingState.exit: leaving WaitingState
+11-12 01:14:30.800 17217 17217 D GsmInboundSmsHandler: DeliveringState.exit: leaving DeliveringState
+11-12 01:14:30.800 17217 17217 D GsmInboundSmsHandler: DeliveringState.enter: entering DeliveringState
+11-12 01:14:30.800 17217 17217 D GsmInboundSmsHandler: DeliveringState.processMessage: processing EVENT_RETURN_TO_IDLE
+11-12 01:14:30.800 17217 17217 D GsmInboundSmsHandler: DeliveringState.exit: leaving DeliveringState
+11-12 01:14:30.800 17217 17217 D GsmInboundSmsHandler: IdleState.enter: entering IdleState
+11-12 01:14:33.801 17217 17217 D GsmInboundSmsHandler: IdleState.processMessage: processing EVENT_RELEASE_WAKELOCK
+11-12 01:14:33.802 17217 17217 D GsmInboundSmsHandler: IdleState.processMessage: EVENT_RELEASE_WAKELOCK: mWakeLock released
