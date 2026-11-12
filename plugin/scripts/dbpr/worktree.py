@@ -8,7 +8,7 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from common import compat, userconfig, yamlio
+from common import compat, dbpath, userconfig, yamlio
 from common.buildname import is_valid_branch_name
 from common import checks as checks_mod
 from common import ghcli
@@ -49,10 +49,22 @@ def _platform_error(mismatch: list[dict], where: str) -> UsageError:
     return UsageError(mismatch[0]["message"], {"code": mismatch[0]["code"], "db": where})
 
 
-def snapshot(job: str, cfg: dict, lock: Lock) -> dict:
-    repo = Path(str(userconfig.get(cfg, "issue_db.path") or "")).expanduser()
+def clone_path(cfg: dict) -> Path:
+    """`issue_db.path`의 사용자 clone. 비었거나 절대 경로가 아니거나 이슈 DB 표식이 없으면 git을 부르기 전에 UsageError —
+    빈 값은 `Path("")`=현재 폴더라 무관한 저장소를 이슈 DB로 쓰게 된다(V10-01)."""
+    raw = str(userconfig.get(cfg, "issue_db.path") or "")
+    repo = Path(raw).expanduser()
+    if not repo.is_absolute() or not (repo / dbpath.CONFIG).is_file():
+        raise UsageError(f"issue_db.path가 이슈 DB clone이 아니다(설정 없음·빈 값·상대 경로·{dbpath.CONFIG} 없음): "
+                         f"{raw or '(없음)'}. /telephony-triage:setup을 먼저 한다(setup 3에서 clone한다). "
+                         "clone이 있으면 표식이 있는 브랜치를 checkout하고 있는지 본다.")
     if not (repo / ".git").exists():
         raise UsageError(f"issue_db.path가 git clone이 아닙니다: {repo} (setup 3에서 clone한다)")
+    return repo
+
+
+def snapshot(job: str, cfg: dict, lock: Lock) -> dict:
+    repo = clone_path(cfg)
     base = userconfig.get(cfg, "issue_db.base_branch") or "main"
     fetch = _git(repo, "fetch", "origin")
     lock.touch(job)
@@ -151,8 +163,7 @@ class Ctx:
         self.work_dir = lock.work_dir
 
     def require_repo(self) -> None:
-        if not (self.repo / ".git").exists():
-            raise UsageError(f"issue_db.path가 git clone이 아닙니다: {self.repo} (setup 3에서 clone한다)")
+        clone_path(self.cfg)
 
     def pending_dir(self) -> Path:
         return userconfig.pending_feedback_dir(self.cfg)
@@ -299,6 +310,14 @@ def _discard_outcome(job_dir: Path) -> str | None:
 def discard(ctx: Ctx, wt: Path) -> dict:
     job_dir, job = _job_of(wt, ctx)
     wt = abs_wt(wt)
+    git_skipped = None
+    try:
+        clone_path(ctx.cfg)
+    except UsageError as exc:
+        if wt.exists():     # clone에 등록된 worktree일 수 있다: 상태 파일·lock을 그대로 두고 멈춘다(고아 worktree를 만들지 않게)
+            raise UsageError(f"{exc} 작업 worktree가 남아 있어 아무것도 지우지 않았다: {wt} — issue_db.path를 바로잡은 뒤 "
+                             "discard를 다시 한다.") from exc
+        git_skipped = str(exc)     # worktree가 없으면 git만 건너뛰고 작업 파일 삭제·lock 해제는 끝까지 간다
     ctx.lock.touch(job)
     state = _read_json(job_dir / STATE) or {}
     branch = state.get("branch")
@@ -309,17 +328,23 @@ def discard(ctx: Ctx, wt: Path) -> dict:
     if wt.exists():
         _remove_worktree(ctx, wt)
         removed.append(str(wt))
-    _git(ctx.repo, "worktree", "prune", check=False)
     deleted_branch = None
-    if branch and _ref_sha(ctx.repo, f"refs/heads/{TOOL_PREFIX}{branch}"):
-        _git(ctx.repo, "branch", "-D", TOOL_PREFIX + branch)
-        deleted_branch = TOOL_PREFIX + branch
+    if git_skipped is None:
+        _git(ctx.repo, "worktree", "prune", check=False)
+        if branch and _ref_sha(ctx.repo, f"refs/heads/{TOOL_PREFIX}{branch}"):
+            _git(ctx.repo, "branch", "-D", TOOL_PREFIX + branch)
+            deleted_branch = TOOL_PREFIX + branch
+    elif branch:
+        git_skipped += f" 도구 브랜치 {TOOL_PREFIX}{branch}가 clone에 남았을 수 있다(바로잡은 뒤 cleanup)."
     trace_note(job_dir, "discard", outcome=_discard_outcome(job_dir))
     for name in WORK_FILES:
         (job_dir / name).unlink(missing_ok=True)
     released = ctx.lock.release(job, force=False)
-    return {"discarded": True, "job": job, "removed_worktrees": removed, "deleted_branch": deleted_branch,
-            "lock": released, "plan_kept": (job_dir / PLAN).is_file()}
+    out = {"discarded": True, "job": job, "removed_worktrees": removed, "deleted_branch": deleted_branch,
+           "lock": released, "plan_kept": (job_dir / PLAN).is_file()}
+    if git_skipped:
+        out["git_skipped"] = git_skipped
+    return out
 
 
 def _drop_pasted_steps(ctx: Ctx, job: str) -> None:

@@ -92,7 +92,9 @@ def safety_ctx(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
-    git(repo, "commit", "--allow-empty", "-qm", "synthetic")
+    (repo / "issue-db.config.yaml").write_text("", encoding="utf-8")     # 이슈 DB 표식(require_repo가 본다)
+    git(repo, "add", "issue-db.config.yaml")
+    git(repo, "commit", "-qm", "synthetic")
     work = tmp_path / "work"
     lock = module.Lock(work)
     lock.acquire("job", None, False)
