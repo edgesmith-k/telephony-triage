@@ -703,6 +703,24 @@ def test_relative_draft_from_work_dir_leaves_clone_untouched():
     assert git(ws.clone, "status", "--porcelain", "--untracked-files=all") == ""
 
 
+@pytest.mark.parametrize("kind", ("none", "empty", "relative", "not-db"))
+def test_draft_with_bad_issue_db_path_leaves_cwd_repo_untouched(tmp_path, kind):
+    """V10-01: issue_db.path가 없거나 이슈 DB가 아니면 `--draft`는 현재 폴더의 git 저장소에 worktree를 만들지 않고 종료 2."""
+    sys.path.insert(0, str(REPO / "tests"))
+    from test_db_pr import _bad_path_env, _repo_state, _victim
+    victim = _victim(tmp_path)
+    env = _bad_path_env(tmp_path, kind, victim)
+    before = _repo_state(victim)
+    loaded = kind in ("none", "not-db")     # 빈 값·상대 경로는 config 읽기(path_problems)가 먼저 거부한다
+    assert run("db_pr.py", ["lock", "acquire", "J1"], env=env, cwd=victim).returncode == (0 if loaded else 2)
+    plan = Path(env["TELEPHONY_TRIAGE_HOME"]) / "work" / "J1" / "plan.json"
+    plan.parent.mkdir(parents=True)
+    plan.write_text("{}", encoding="utf-8")
+    proc = run("db_verify.py", ["rules", "--plan", plan, "--draft", plan.parent / "draft"], env=env, cwd=victim)
+    assert proc.returncode == 2 and ("setup" in proc.stderr or not loaded), proc.stderr
+    assert _repo_state(victim) == before and not (plan.parent / "draft").exists()
+
+
 
 def test_shown_records_draft_table_with_transcript_key():
     """L R ②a: `rules --plan --draft`는 초안 검증표(기본 출력 행)를 draft 기록으로 남기고, key는 transcript 추론(옛 판정)이

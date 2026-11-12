@@ -153,7 +153,11 @@ def make_draft(plan: Path, draft: Path, defaults: dict, plugin_root: str | None)
         raise UsageError(str(exc)) from exc
     _check_lock(draft.parent.name, defaults)
     cfg = _session(defaults)[1]
-    repo = Path(str(userconfig.get(cfg, "issue_db.path") or "")).expanduser()
+    from dbpr.worktree import clone_path
+    try:      # 설정이 없거나 이슈 DB가 아니면 현재 폴더의 git 저장소에 worktree를 만들지 않는다(V10-01)
+        repo = clone_path(cfg)
+    except WorktreeError as exc:
+        raise UsageError(str(exc)) from exc
     base = userconfig.get(cfg, "issue_db.base_branch") or "main"
     _git(repo, "worktree", "prune")
     if draft.exists():

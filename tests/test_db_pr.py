@@ -17,6 +17,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPO = Path(__file__).resolve().parents[1]
@@ -1849,6 +1850,76 @@ def test_my_prs_gh_failure_is_a_warning_and_missing_config_stops_with_2():
     plain = tmp("tt-notclone-")
     ws.run("config.py", ["set", "issue_db.path", plain])
     assert ws.run("db_pr.py", ["my-prs"]).returncode == 2
+
+
+# -- issue_db.path 방어 (V10-01): 설정 전 sync가 현재 폴더의 무관한 git 저장소를 건드리지 않는다 ----------------------------
+
+BAD_PATH_KINDS = ("none", "empty", "relative", "not-db")
+
+
+def _victim(base: Path) -> Path:
+    """이슈 DB가 아닌 git 저장소: origin은 로컬 bare(1커밋 앞섬), main은 깨끗하고 `tt/x` 브랜치가 있다."""
+    origin, victim, other = base / "origin.git", base / "victim", base / "other"
+    git(base, "init", "-q", "--bare", "-b", "main", str(origin))
+    git(base, "init", "-q", "-b", "main", str(victim))
+    (victim / "a.txt").write_text("v1\n", encoding="utf-8")
+    git(victim, "add", "-A")
+    git(victim, "commit", "-q", "-m", "v1")
+    git(victim, "remote", "add", "origin", str(origin))
+    git(victim, "push", "-q", "-u", "origin", "main")
+    git(victim, "branch", "tt/x")
+    git(base, "clone", "-q", str(origin), str(other))
+    (other / "a.txt").write_text("v2\n", encoding="utf-8")
+    git(other, "commit", "-q", "-am", "v2")
+    git(other, "push", "-q", "origin", "main")
+    return victim
+
+
+def _repo_state(repo: Path) -> tuple:
+    return (git(repo, "rev-parse", "HEAD"), git(repo, "for-each-ref"), git(repo, "worktree", "list", "--porcelain"),
+            git(repo, "status", "--porcelain"))
+
+
+def _bad_path_env(base: Path, kind: str, victim: Path) -> dict:
+    """설정 없음 / 빈 값 / 상대 경로(현재 폴더) / 표식 없는 git 저장소의 절대 경로."""
+    home = base / "home"
+    home.mkdir()
+    if kind != "none":
+        value = {"empty": "", "relative": ".", "not-db": str(victim)}[kind]
+        (home / "config.yaml").write_text(yaml.safe_dump({"issue_db": {"path": value}}), encoding="utf-8")
+    return {"TELEPHONY_TRIAGE_HOME": home, "MOCK_GH_STATE_DIR": base / "gh-state"}
+
+
+@pytest.mark.parametrize("kind", BAD_PATH_KINDS)
+def test_bad_issue_db_path_leaves_cwd_repo_untouched(tmp_path, kind):
+    victim = _victim(tmp_path)
+    env = _bad_path_env(tmp_path, kind, victim)
+    db_pr = lambda *args: run("db_pr.py", list(args), env=env, cwd=victim)  # noqa: E731
+    before = _repo_state(victim)
+    loaded = kind in ("none", "not-db")     # 빈 값·상대 경로는 config 읽기(path_problems)가 모든 명령보다 먼저 거부한다
+    assert db_pr("lock", "acquire", "J1").returncode == (0 if loaded else 2)
+    wt = Path(env["TELEPHONY_TRIAGE_HOME"]) / "work" / "J1" / "wt"
+    state = wt.parent / "state.json"
+    wt.mkdir(parents=True)
+    state.write_text(json.dumps({"branch": "x"}), encoding="utf-8")
+    (wt / "f.txt").write_text("x\n", encoding="utf-8")
+    # snapshot·cleanup은 git 전에, discard는 worktree가 남아 있으면 아무것도 지우지 않고 멈춘다
+    for args in (("snapshot", "--job", "J1"), ("cleanup", "--dry-run"), ("discard", wt)):
+        proc = db_pr(*args)
+        assert proc.returncode == 2 and ("setup" in proc.stderr or not loaded), (args, proc.returncode, proc.stderr,
+                                                                                proc.stdout)
+        assert _repo_state(victim) == before, args
+    if not loaded:
+        return
+    assert state.is_file() and json.loads(db_pr("lock", "status").stdout)["held"] is True
+    (wt / "f.txt").unlink()
+    wt.rmdir()
+    proc = db_pr("discard", wt)         # 없으면 git을 건너뛰고 작업 파일 삭제·lock 해제까지 간다
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["lock"]["released"] is True and out["deleted_branch"] is None and "setup" in out["git_skipped"]
+    assert not state.exists() and json.loads(db_pr("lock", "status").stdout)["held"] is False
+    assert _repo_state(victim) == before
 
 
 def test_naive_timestamp_lock_is_corrupt_not_a_traceback():
