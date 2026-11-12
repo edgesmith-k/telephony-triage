@@ -466,7 +466,30 @@ def test_offline_eval_excludes_in_sample_fixtures_by_default():
     verdicts = {r["key"]: r["verdict"] for r in out["items"]}
     assert verdicts["EVAL-1"] == "표본내(1위)" and verdicts["EVAL-8"] == "대조군(미스)"
     text = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--plugin-root", str(root)).stdout
-    assert "표본내 — 시그니처 fixture 자체 — 7건은 지표에서 뺌" in text and "평가 가능한 항목 없음" in text
+    assert "표본내 — 시그니처 fixture 자체·이슈 DB에 이미 기록된 이슈 — 7건은 지표에서 뺌" in text and "평가 가능한 항목 없음" in text
+    assert {r["in_sample_reason"] for r in out["items"] if r["in_sample"]} == {"fixture"}   # 라벨셋 EVAL-*는 DB 기록(MOCK-*)에 없다
+
+
+def test_offline_eval_marks_key_recorded_in_db_as_in_sample_even_outside_fixtures(tmp_path):
+    """R05-02: 이슈 DB에 이미 기록된 키(`issues/MOCK-3101.yaml`)는 로그가 DB 밖 사본이어도 표본내로 가려 지표에서 뺀다."""
+    log = tmp_path / "a.log"
+    shutil.copyfile(SAMPLE / "network/NETWORK-001-no-service/fixtures/NETWORK-001-01.log", log)
+    labelset = tmp_path / "leak.yaml"
+    labelset.write_text(yaml.safe_dump({
+        "db": str(SAMPLE), "tz": "Asia/Seoul", "year": 2026,
+        "items": [{"key": "MOCK-3101", "occurred_at": "2026-09-24T10:11:02+09:00", "expect": "NETWORK-001-01",
+                   "logs": [str(log)]}],
+    }), encoding="utf-8")
+    root = plugin_root()
+    proc = _offline(str(labelset), "--json", "--plugin-root", str(root))
+    assert proc.returncode == 1, proc.stderr          # 전부 표본내 = 평가 0건, 통과 아님
+    assert "표본내" in proc.stderr                    # stderr도 "전부 오류"라고만 하지 않는다
+    out = json.loads(proc.stdout)
+    item = out["items"][0]
+    assert item["in_sample"] is True and item["in_sample_reason"] == "db-record" and item["verdict"] == "표본내(1위)"
+    assert out["summary"]["in_sample"] == 1 and out["summary"]["evaluated"] == 0 and out["summary"]["top1_accuracy"] is None
+    both = json.loads(_offline(str(labelset), "--json", "--plugin-root", str(root), "--include-in-sample").stdout)
+    assert both["summary"]["evaluated"] == 1 and both["summary"]["top1_accuracy"] == 1.0
 
 
 def test_offline_eval_counts_false_positive_when_unresolved_expected_but_candidate_produced(tmp_path):
