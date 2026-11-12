@@ -10,13 +10,13 @@
 09:10:21.358 p0 I ofonod [0,0263]> RIL_REQUEST_SIM_IO (cmd=0xC0,efid=0x6F46,path=3f007fff,0,0,15,(null),pin2=(null),aid=<AID#1>)
 09:10:21.359 - D vrild client fd 9 VCHAN_2 REQUEST: SIM_IO (36 bytes)
 09:10:21.359 - I vrild [ExampleIccService_1] sim-io get-response for ef 6f46 queued
-09:10:21.360 - D vrild [IpcCtx_2] track seq 0x0501 (1 in flight)
-09:10:21.360 - D vrild mux [ch1][TX] VIPC_EXAMPLE_CARD_IO seq=0x0501 len=36
-09:10:21.408 - D vrild mux [ch1][RX] VIPC_EXAMPLE_CARD_IO, RSP OK(VIPC_OK) seq=0x0501 len=258
+09:10:21.360 - D vrild [IpcCtx_2] track seq 0x05e1 (1 in flight)
+09:10:21.360 - D vrild mux [ch1][TX] VIPC_EXAMPLE_CARD_IO seq=0x05e1 len=36
+09:10:21.408 - D vrild mux [ch1][RX] VIPC_EXAMPLE_CARD_IO, RSP OK(VIPC_OK) seq=0x05e1 len=258
 09:10:21.409 - I vrild [ExampleIccService_1] sim-io reply parsed, 258 bytes
-09:10:21.409 - I vrild [IpcCtx_2] OnIpcComplete Request ID=50, result=2 -> chan 2 reply sent, 0 waiters, took 49 ms  ⇒ builtin.common.vendor_request_failed(request_id=50,result=2)
+09:10:21.409 - I vrild [IpcCtx_2] OnIpcComplete Request ID=58, result=2 -> chan 2 reply sent, 0 waiters, took 49 ms  ⇒ builtin.common.vendor_request_failed(request_id=58,result=2)
 09:10:21.409 - D vrild chan 2 <- reply written
-09:10:21.410 - D vrild [IpcCtx_2] untrack seq 0x0501 (0 in flight)
+09:10:21.410 - D vrild [IpcCtx_2] untrack seq 0x05e1 (0 in flight)
 09:10:21.411 p0 D ofonod [0,0263]< RIL_REQUEST_SIM_IO failed GENERIC_FAILURE  ⇒ ril_error(error=GENERIC_FAILURE,request=SIM_IO,serial=263)
 09:10:21.411 p0 I ofonod [0,0263]< RIL_REQUEST_SIM_IO (sw1=0x00,sw2=0x00,(null))
 09:10:21.412 - I ofonod drivers/rilmodem/sim.c:ril_file_info_cb() Reply failure: GENERIC_FAILURE, 00, 00

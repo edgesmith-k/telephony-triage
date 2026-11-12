@@ -6,13 +6,13 @@ Sep 22 09:20:22.265 dut daemon.debug ofonod[903]: drivers/rilmodem/radio-setting
 Sep 22 09:20:22.265 dut daemon.info ofonod[903]: [0,0348]> RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE
 Sep 22 09:20:22.266 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: GET_PREFERRED_NETWORK_TYPE (6 bytes)
 Sep 22 09:20:22.266 dut daemon.info vrild[618]: [ExampleRegService_1] begin rat-mode lookup
-Sep 22 09:20:22.267 dut daemon.debug vrild[618]: [IpcCtx_2] track seq 0x0601 (1 in flight)
-Sep 22 09:20:22.267 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_RAT_MODE seq=0x0601 len=8
-Sep 22 09:20:22.270 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_RAT_MODE, RSP Error(VIPC_E_FAILURE) seq=0x0601 len=8
+Sep 22 09:20:22.267 dut daemon.debug vrild[618]: [IpcCtx_2] track seq 0x06a2 (1 in flight)
+Sep 22 09:20:22.267 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_RAT_MODE seq=0x06a2 len=8
+Sep 22 09:20:22.270 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_RAT_MODE, RSP Error(VIPC_E_FAILURE) seq=0x06a2 len=8
 Sep 22 09:20:22.271 dut daemon.info vrild[618]: [ExampleRegService_1] rat-mode lookup returned
-Sep 22 09:20:22.271 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=70, result=2 -> chan 2 reply sent, 0 waiters, took 4 ms
+Sep 22 09:20:22.271 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=71, result=2 -> chan 2 reply sent, 0 waiters, took 4 ms
 Sep 22 09:20:22.271 dut daemon.debug vrild[618]: chan 2 <- reply written
-Sep 22 09:20:22.272 dut daemon.debug vrild[618]: [IpcCtx_2] untrack seq 0x0601 (0 in flight)
+Sep 22 09:20:22.272 dut daemon.debug vrild[618]: [IpcCtx_2] untrack seq 0x06a2 (0 in flight)
 Sep 22 09:20:22.273 dut daemon.debug ofonod[903]: [0,0348]< RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE failed GENERIC_FAILURE
 Sep 22 09:20:22.273 dut daemon.info ofonod[903]: src/radio-settings.c:radio_rat_mode_query_callback() Error during radio access mode query
 Sep 22 09:20:22.274 dut daemon.info ofonod[903]: src/dbus.c:__ofono_error_failed() m:GetProperties i:org.ofono.RadioSettings

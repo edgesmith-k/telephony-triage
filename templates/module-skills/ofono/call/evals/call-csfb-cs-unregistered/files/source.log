@@ -1,4 +1,4 @@
--- [합성] C1D 보정 call-csfb-cs-unregistered. 레포의 줄 모양(파서 형식 예시, C0·C1 합성 case)만 본떠 새로 썼다. 이름·값은 placeholder. LTE PS만 등록되고 CS는 거절된 채 발신. 비행기 모드·IMS 해제 없음.
+-- [합성] C1D 보정 call-csfb-cs-unregistered. 레포의 줄 모양(_common/components.md, C0·C1 합성 case)만 본떠 새로 썼다. 이름·값은 placeholder. LTE PS만 등록되고 CS는 거절된 채 발신. 비행기 모드·IMS 해제 없음.
 Sep 23 10:10:00.010 dut local0.info mgmtd[734]: ui tick
 Sep 23 10:10:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-95
 Sep 23 10:10:01.000 dut daemon.info vrild[452]: [ExampleRegService_0] Data RegState=REGISTERED, RejectCause=0

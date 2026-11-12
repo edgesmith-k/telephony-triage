@@ -15,8 +15,8 @@
 10:00:21.717 p0 I ofonod [0,0633]> RIL_REQUEST_OPERATOR
 10:00:21.719 - D vrild client fd 9 VCHAN_2 REQUEST: SIGNAL_STRENGTH (6 bytes)
 10:00:21.720 - D vrild client fd 9 VCHAN_2 REQUEST: OPERATOR (6 bytes)
-10:00:21.721 - I vrild [IpcCtx_2] OnIpcComplete Request ID=80, result=0 -> chan 2 reply sent, 1 waiters, took 2 ms
-10:00:21.721 - I vrild [IpcCtx_2] OnIpcComplete Request ID=81, result=0 -> chan 2 reply sent, 0 waiters, took 1 ms
+10:00:21.721 - I vrild [IpcCtx_2] OnIpcComplete Request ID=86, result=0 -> chan 2 reply sent, 1 waiters, took 2 ms
+10:00:21.721 - I vrild [IpcCtx_2] OnIpcComplete Request ID=87, result=0 -> chan 2 reply sent, 0 waiters, took 1 ms
 10:00:21.722 - E vrild chan 2: empty reply body, nothing to encode
 10:00:21.723 p0 D ofonod [0,0632]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE  ⇒ ril_error(error=INVALID_RESPONSE,request=SIGNAL_STRENGTH,serial=632)
 10:00:21.724 p0 D ofonod [0,0633]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE

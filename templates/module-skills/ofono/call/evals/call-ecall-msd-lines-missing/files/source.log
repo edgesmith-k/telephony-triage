@@ -1,4 +1,4 @@
--- [합성] C1D 보정 call-ecall-msd-lines-missing. 레포의 줄 모양(파서 형식 예시, C0·C1 합성 case)만 본떠 새로 썼다. 이름·값은 placeholder. eCall·IVS 경로 줄은 이 로그에 없다(이름 사내 확인).
+-- [합성] C1D 보정 call-ecall-msd-lines-missing. 레포의 줄 모양(_common/components.md, C0·C1 합성 case)만 본떠 새로 썼다. 이름·값은 placeholder. eCall·IVS 경로 줄은 이 로그에 없다(이름 사내 확인).
 Sep 23 10:20:00.010 dut local0.info mgmtd[734]: ui tick
 Sep 23 10:20:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-94
 Sep 23 10:20:05.000 dut local0.info mgmtd[734]: call dial requested number=<MSISDN#1>

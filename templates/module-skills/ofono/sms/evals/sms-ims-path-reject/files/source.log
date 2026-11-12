@@ -1,4 +1,4 @@
--- [합성] C1 sms-ims-path-reject. 레포 case의 줄 모양을 본떠 새로 썼다. ExampleImsSmsSender::sendSms 이름은 가정(A). 이름·문구는 placeholder.
+-- [합성] C1 sms-ims-path-reject. 레포 case의 줄 모양을 본떠 새로 썼다. ExampleImsSmsSender::sendSms 등 이름·문구는 placeholder(가정 A).
 Sep 21 10:30:00.010 dut local0.info mgmtd[734]: ui tick
 Sep 21 10:30:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-92
 Sep 21 10:30:01.000 dut daemon.info ofonod[466]: IMSD 0: <HEXDUMP 32B>

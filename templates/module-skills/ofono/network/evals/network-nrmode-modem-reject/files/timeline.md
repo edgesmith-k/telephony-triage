@@ -12,13 +12,13 @@
 09:20:22.265 p0 I ofonod [0,0348]> RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE
 09:20:22.266 - D vrild client fd 9 VCHAN_2 REQUEST: GET_PREFERRED_NETWORK_TYPE (6 bytes)
 09:20:22.266 - I vrild [ExampleRegService_1] begin rat-mode lookup
-09:20:22.267 - D vrild [IpcCtx_2] track seq 0x0601 (1 in flight)
-09:20:22.267 - D vrild mux [ch1][TX] VIPC_EXAMPLE_RAT_MODE seq=0x0601 len=8
-09:20:22.270 - D vrild mux [ch1][RX] VIPC_EXAMPLE_RAT_MODE, RSP Error(VIPC_E_FAILURE) seq=0x0601 len=8  ⇒ builtin.common.vendor_ipc_error(error=VIPC_E_FAILURE,ipc=VIPC_EXAMPLE_RAT_MODE)
+09:20:22.267 - D vrild [IpcCtx_2] track seq 0x06a2 (1 in flight)
+09:20:22.267 - D vrild mux [ch1][TX] VIPC_EXAMPLE_RAT_MODE seq=0x06a2 len=8
+09:20:22.270 - D vrild mux [ch1][RX] VIPC_EXAMPLE_RAT_MODE, RSP Error(VIPC_E_FAILURE) seq=0x06a2 len=8  ⇒ builtin.common.vendor_ipc_error(error=VIPC_E_FAILURE,ipc=VIPC_EXAMPLE_RAT_MODE)
 09:20:22.271 - I vrild [ExampleRegService_1] rat-mode lookup returned
-09:20:22.271 - I vrild [IpcCtx_2] OnIpcComplete Request ID=70, result=2 -> chan 2 reply sent, 0 waiters, took 4 ms  ⇒ builtin.common.vendor_request_failed(request_id=70,result=2)
+09:20:22.271 - I vrild [IpcCtx_2] OnIpcComplete Request ID=71, result=2 -> chan 2 reply sent, 0 waiters, took 4 ms  ⇒ builtin.common.vendor_request_failed(request_id=71,result=2)
 09:20:22.271 - D vrild chan 2 <- reply written
-09:20:22.272 - D vrild [IpcCtx_2] untrack seq 0x0601 (0 in flight)
+09:20:22.272 - D vrild [IpcCtx_2] untrack seq 0x06a2 (0 in flight)
 09:20:22.273 p0 D ofonod [0,0348]< RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE failed GENERIC_FAILURE  ⇒ ril_error(error=GENERIC_FAILURE,request=GET_PREFERRED_NETWORK_TYPE,serial=348)
 09:20:22.273 - I ofonod src/radio-settings.c:radio_rat_mode_query_callback() Error during radio access mode query
 09:20:22.274 - I ofonod src/dbus.c:__ofono_error_failed() m:GetProperties i:org.ofono.RadioSettings

@@ -23,5 +23,5 @@
 | NV·펌웨어 (초안) | 관리 데몬 줄은 일상 | 판단 못 함 → 그 층 로그 없음(모뎀·망) | 모뎀 로그 |
 
 ## ⑤ 함정
-- 벤더 RIL `example diag dropped`·`example diag write fail`는 진단 호스트가 읽지 않는 것이다. IND·RSP가 계속 오면 모뎀은 살아 있다.
+- 벤더 RIL `diag packet dropped`·`Fail to write`는 진단 호스트가 읽지 않는 것이다. IND·RSP가 계속 오면 모뎀은 살아 있다.
 - 관리 데몬의 레벨은 심각도가 아니다(일상 줄도 높은 레벨로 찍힌다).
