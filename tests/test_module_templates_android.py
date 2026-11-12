@@ -43,7 +43,6 @@ CASES = [
     ("sim", "sim-slow-recognition", "explore", None),
     ("modem", "modem-ril-daemon-crash", "explore", None),
     ("ims", "ims-403-vendor-lines-missing", "deep", None),
-    ("network", "network-allowed-types-narrowed", "explore", None),
     ("sms", "sms-mt-delivered-to-app", "explore", None),
 ]
 

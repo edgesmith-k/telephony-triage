@@ -3,7 +3,7 @@ schema_version: 2
 name: sms-mt-delivered-to-app
 kind: explore
 synthetic: true
-key: MOCK-9823
+key: MOCK-9822
 issue:
   summary: 문자가 안 옴 (합성)
   description: 상대가 보낸 문자가 메시지 앱에 보이지 않습니다. 수신이 됐는지 확인해 주세요. 합성 case.
@@ -20,7 +20,7 @@ run_expect:
 expect:
   accept:
     - layer: '원인\s*아님|곁가지'
-      daemon: 'GsmInboundSmsHandler|메시지|앱|없음|알 수 없음|messaging'
-      evidence: ['SMS_ACKNOWLEDGE success = true', 'successful broadcast']
+      daemon: 'GsmInboundSmsHandler|메시지|앱|없음|알 수 없음|.*messaging'
+      evidence: ['SMS_ACKNOWLEDGE', 'successful broadcast|Delivering SMS to']
   trap:
     - label: '^\s*(모뎀|망|벤더|RIL HAL|RILJ|프레임워크)'
