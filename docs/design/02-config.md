@@ -72,7 +72,11 @@ work_dir: ~/.telephony-triage/work          # 작업 계획·상태 파일, 읽�
 
 **모듈 스킬 레포·분석 스킬 선택(Q2 바꿈 11/05).** 5-1 출처는 `userconfig.deep_source` 하나가 정한다: `prefer: skill` + `skill` → 설치 스킬(`triage.py module --for deep`이 `SKILL.md` 경로를 풀어 모든 런타임이 Read로 읽는다 — `skill_dir`가 있으면 그것만, 없으면 Claude Code 설치 플러그인·스킬 폴더와 OpenCode 스킬 폴더를 찾는다. 못 찾거나 둘 이상이면 종료 1 `설치 스킬 못 찾음`이고, 그때만 스킬을 부르는 도구가 있는 런타임이 예전처럼 부른다), `prefer: skill`인데 `skill` 없음 → 설정 오류, `module_skills.remote` 있음 → 모듈 문서(그 카테고리에 `skill`이 있는데 `prefer`를 안 적었으면 `config.py check`·doctor `module_skills` 행이 경고), remote 없고 `skill` 있음 → 설치 스킬(예전 Q2), 둘 다 없음 → 지금 동작. 5-2(탐색)는 모듈 문서만이다. `config.py set module_skills.remote <주소>`(`--platform` 없이)·`set analyzers.<카테고리>.prefer skill`·`set analyzers.<카테고리>.skill_dir <절대 경로>`로 쓴다. `module_skills` 설정 오류는 `triage.py module`만 막고(종료 2) `run`은 막지 않는다. 폐지 하위 키 `analyzers.<카테고리>.inputs`·`max_tokens_hint`는 읽지 않고 `config.py check`·doctor가 경고한다(값은 무시).
 
+### 4.1 플랫폼 프로필
+
 **플랫폼 프로필(17-platforms.md §3).** 최상위 경로 키(`issue_db`·`work_dir`·`log_dir`·`code_profiles`·`recent_code_roots`)는 항상 android 프로필이다. 그 밖 플랫폼은 `platforms.<이름>` 아래에 같은 키와 `analyzers`(그 플랫폼 분석 스킬, 최상위 `analyzers`는 android 것이고 물려받지 않는다 — 17-platforms.md §10)만 둔다(그 밖 키, 예: `source_tree`는 거부 — 플랫폼 상수는 site-defaults에서만, RF-4). `config.py set --platform <이름> analyzers.<카테고리>.source <경로>`를 `init --platform <이름>`보다 먼저 하면 프로필이 생겨 뒤 `init`은 `--force`가 필요하다(`analyzers`는 유지). 그 플랫폼의 cfg는 공통 키(`user`·`tracker`·`logcat` 등)에 그 프로필을 얹은 것이고 android 값을 물려받지 않는다(`issue_db`는 `base_branch: main`·`ghe_host`·site `merge_wait_seconds`·site `platforms.<이름>.issue_db.remote`만 기본 — 최상위 `issue_db.remote`는 android 것이라 물려받지 않는다, `work_dir` 기본 `<home>/work-<이름>`, 보류 피드백 `<home>/pending-feedback-<이름>`). 최상위 프로필 없이 `platforms.<이름>`만 있는 config(그 플랫폼만 쓰는 따로 설치)도 된다. 경로 규칙: `work_dir`·`issue_db.path`는 비어 있지 않은 절대 경로(`~` 허용), `work_dir`은 clone 밖, 프로필끼리 `work_dir`·clone·원격이 겹치면 안 된다. 어기면 `config.py set`이 경고하고 doctor `platform` 행이 fail, 그 밖 스크립트는 종료 코드 2다. 개인 기본 `platform`은 `platform.enabled` 안의 이름만 쓴다.
+
+### 4.2 코드 경로·그 밖의 키·setup 순서
 
 **코드 경로는 analyze할 때마다 정한다.** Android 버전(16, 17 …)과 브랜치마다 소스 트리 위치가 다르고, 같은 파일도 버전에 따라 경로가 바뀌기 때문이다. `code_profiles`는 고르기 편하게 하는 프리셋일 뿐이고 없어도 된다. 절차는 `07-workflow.md §Step 2-1`이다.
 

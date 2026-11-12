@@ -290,8 +290,8 @@ VENDOR_FORMATS = [
     ("slot_level_seq", "[SLOT_1][W] 9", MsgView("")),
     ("slot_level_seq", "[SLOT_0] 123 y", None),
     ("slot_level_seq", "[SID_0][D] 123 y", None),
-    ("src_suffix", "[CAT__] 000123 <*Obj->Run>  ipc call 5 X  path/sub/example.go:12",
-     MsgView("[CAT__] 000123 <*Obj->Run>  ipc call 5 X", "example")),
+    ("src_suffix", "[x] ipc call 5 X  path/sub/example.go:12",
+     MsgView("[x] ipc call 5 X", "example")),
     ("src_suffix", "ipc reply 5[./path/example.cxx +12]", MsgView("ipc reply 5", "example")),
     ("src_suffix", "done [Example.cpp+7]", MsgView("done", "Example")),
     ("src_suffix", "see path/example.go:12 later", None),                        # 끝이 아니다
