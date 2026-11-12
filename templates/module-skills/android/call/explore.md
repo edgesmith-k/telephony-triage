@@ -22,12 +22,12 @@ CS: `Telephony` → RILJ `DIAL` → 벤더 RIL → 모뎀 → `LAST_CALL_FAIL_CA
 
 | 증상 | 볼 역할·줄 | 흔한 첫 실패 → 층 | 대체 근거 · 받을 로그 |
 |---|---|---|---|
-| 발신 실패 | RILJ `DIAL`, IPC `VIPC_EXAMPLE_CALL_START` | IPC Error → 모뎀·망 / OK 뒤 `errorCode≠0` → 벤더 RIL | `LAST_CALL_FAIL_CAUSE` |
-| CSFB·`DIAL` 없는 발신 실패 | 발신 전 `VOICE_REGISTRATION_STATE`·SST `hasDeregistered = true` | CS 미등록(결합 등록 실패)·서비스 없음 → 모뎀·망(network 표, 프레임워크는 증상) | 모뎀 NAS(사내) |
+| 발신 실패 | RILJ `DIAL`, IPC `VIPC_EXAMPLE_CALL_START` | IPC는 `layers.md` 판정대로 | `LAST_CALL_FAIL_CAUSE` |
+| CSFB·`DIAL`·INVITE 없는 발신 실패 | 발신 전 `VOICE_REGISTRATION_STATE`·SST `hasDeregistered = true` | CS 미등록(결합 등록 실패)·서비스 없음 → 모뎀·망(network 표, 프레임워크는 증상) | 모뎀 NAS(사내) |
 | VoLTE 호 설정 실패(SIP) | IMS IPC, `useImsForCall=true`, 벤더 IMS SIP 응답 | SIP 4xx·5xx → 모뎀·망 / `useImsForCall=false` → ims 등록부터 | `reasonCode=` |
-| EPS fallback·VoNR (초안) | 비행기 모드·IMS 해제 시각 | 그 뒤 실패 → 원인 아님 | — |
+| EPS fallback·VoNR (초안) | 비행기 모드·IMS 해제 시각 | 그 뒤 fallback 실패 → 원인 아님 | — |
 | eCall(MSD 전송 실패) | eCall 줄(이름 TODO(SITE:S24)) | 줄 없음 → `그 층 로그 없음(eCall)` | eCall·모뎀 IVS 로그(사내) |
-| 통화 끊김·착신 안 됨 (초안) | `UNSOL_RESPONSE_CALL_STATE_CHANGED` | `causeCode:` 전한 층 | — |
+| 통화 끊김·착신 안 됨 (초안) | `UNSOL_RESPONSE_CALL_STATE_CHANGED`, `causeCode:` | 원인 코드를 전한 층 | — |
 | 통화 중 소리 없음 (초안) | 통화 상태만 | `그 층 로그 없음(오디오)` | 오디오 HAL·RTP(사내) |
 | 부가서비스(UT) (초안) | 벤더 IMS `[ut]`, `State=` | RILJ 없음이 정상 | — |
 

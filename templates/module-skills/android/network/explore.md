@@ -22,7 +22,7 @@ SST → RILJ 등록 상태 요청 → RIL HAL → 벤더 RIL IPC → 모뎀·망
 
 | 증상 | 볼 역할·줄 | 흔한 첫 실패 → 층 | 대체 근거 · 받을 로그 |
 |---|---|---|---|
-| 등록 안 됨·서비스 없음 | `RegStateResult`, SST | `REG_DENIED`·`reasonForDenial≠NONE`·거절 없는 미등록(찾는 중) → 모뎀·망 | NRM-C `rejectCause=` / 모뎀 NAS(사내) |
+| 등록 안 됨·서비스 없음 | `RegStateResult`, SST | `REG_DENIED`·`reasonForDenial≠NONE`·거절 없는 미등록 → 모뎀·망 | NRM-C `rejectCause=` / 모뎀 NAS(사내) |
 | 무선 꺼진 뒤 서비스 없음 | `RADIO_POWER`, `AT+CFUN=0`, 벤더 RIL `newState=RADIO_OFF`·RILJ `radioStateChanged: OFF` | 끈 뒤 실패는 결과 → 끈 쪽(AT 중계면 곁가지) | 벤더 RIL 데몬 줄 |
 | NR(SA/NSA) 모드 | NetworkTypeController `EVENT_PHYSICAL_CHANNEL_CONFIG_NOTIF_CHANGED` | IPC Error → 모뎀·망 (세부 초안) | 모뎀 로그(사내) |
 | CSFB 쪽 결합 등록 (초안) | `VOICE_`(CS)·`DATA_REGISTRATION_STATE`(PS) | PS만 등록·CS 거절 → 모뎀·망(call 증상의 원인) | 모뎀 NAS(사내) |
@@ -30,7 +30,7 @@ SST → RILJ 등록 상태 요청 → RIL HAL → 벤더 RIL IPC → 모뎀·망
 
 ## ⑤ 함정
 
-- 첫 RILJ 줄이 응답(`[n]<`)이다 → radio 버퍼가 늦게 시작해 그 전 요청과 무선 켜짐은 RILJ에 없다 → `그 층 로그 없음(RILJ)`. 벤더 `RADIO_ON`이 이르면 벤더 줄이 먼저 남은 것뿐.
+- 첫 RILJ 줄이 응답(`[n]<`)이다 → 버퍼가 늦게 시작해 그 전 요청과 무선 켜짐은 RILJ에 없다 → `그 층 로그 없음(RILJ)`. 벤더 `RADIO_ON`이 이르면 벤더 줄이 먼저 남은 것뿐.
 - `reasonForDenial: NONE`·`rejectCause=0`은 사유가 없을 뿐, 거절은 `regState`·`registrationState`가 DENIED일 때만이다(모뎀·망, 사유를 안 준 것은 벤더 RIL).
-- 거절 아닌 `NOT_REG…`도 응답·NRM-C가 글자로 말한 아래 층 값 → 모뎀·망(벤더 줄 0이어도. 첫 RILJ 줄이 응답이면 위 규칙). 회복은 층을 안 바꾼다.
+- 거절 아닌 `NOT_REG…`도 응답·NRM-C가 글자로 말한 아래 층 값 → 모뎀·망(벤더 줄 0이어도. 버퍼 늦음·무선 끈 뒤는 위·표 행). 회복(`REG_HOME`)도 층을 안 바꾼다.
 - 셀·사업자 값은 마스킹 토큰이다.
