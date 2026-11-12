@@ -641,18 +641,26 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         return data or {}
 
     def code_question(self, version: str | None, suggested: dict, text: str | None = None) -> NeedsInput:
+        primary = self.platform_spec.primary_root
+        cands = suggested.get("candidates") or []
+
+        def head(c: dict) -> str:
+            return f"{c.get('name') or '최근'} {self.platform_label} {c.get('platform_version') or '?'}"
+
+        def where(c: dict) -> str:     # 주 루트 경로(자르지 않는다)
+            path = (c.get("roots") or {}).get(primary)
+            return f" — {path}" if path else ""
+
         options = [{"value": c.get("name") or ",".join(f"{k}={v}" for k, v in (c.get("roots") or {}).items()),
-                    "label": f"{c.get('name') or '최근'} {self.platform_label} {c.get('platform_version') or '?'}"
-                             + (" (추천)" if c.get("recommended") else "")}
-                   for c in suggested.get("candidates") or []]
+                    "label": head(c) + where(c) + (" (추천)" if c.get("recommended") else "")}
+                   for c in cands]
         # 질문당 선택지 4개(AskUserQuestion 상한): 후보 둘(추천이 첫째) + 직접 입력 + 건너뛰기, 나머지 후보는 문구에
         options, rest = options[:2], options[2:]
         options += [{"value": "<경로 또는 키=경로,…>", "label": "직접 입력"},
                     {"value": "skip", "label": "코드 분석 건너뛰기(로그 기반 분석만)"}]
         text = text or f"코드 경로를 고른다 (대상: {self.platform_label} {version or '?'})."
-        if rest:    # 이름 없는 최근 경로는 직접 입력에 그대로 적을 수 있게 경로 값을 함께
-            cands = (suggested.get("candidates") or [])[2:]
-            names = [o["label"] + ("" if c.get("name") else f" {o['value']}") for o, c in zip(rest, cands)]
+        if rest:    # 이름 없는 최근 경로는 직접 입력에 그대로 적을 수 있게 경로 값(모든 루트)을 함께
+            names = [head(c) + (where(c) if c.get("name") else f" {o['value']}") for o, c in zip(rest, cands[2:])]
             text += f" (그 밖 후보: {', '.join(names)} — 직접 입력에 이름이나 경로를 적는다)"
         return NeedsInput("code", text + (" (code.auto_select 값이 잘못돼 묻기로 본다)" if self.auto_invalid else ""), options)
 
@@ -699,11 +707,25 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                                            {"value": "skip", "label": "코드 분석 건너뛰기"}])
         if self.answer("code_confirm") == "skip":
             return {"skipped": True}
+        # 경로는 notes(출력 JSON·analysis.json — report.md·Jira 코멘트·이슈 DB로 가지 않는다)에만 보인다.
+        # must_show는 Jira 코멘트로 가므로(issue_post) 자동 선택 must_show 줄에는 경로를 넣지 않는다
+        path = ((data or {}).get("roots") or {}).get(self.platform_spec.primary_root)
+        if auto and path:
+            self.notes.append(f"코드 분석 트리 자동 선택 경로: {choice} — {path}")
         profiles = {p.get("name") for p in self.cfg.get("code_profiles") or []}
         if choice not in profiles and not self.state.data.get("code_remembered"):
-            self.run.call("2-1-code", "code_roots.py", ["remember", choice])
+            # 07 §Step 2-1 5번: 트리 추정 버전이 있을 때만 개인 프로필로 저장(Jira 버전으로 대신하지 않는다 — 문구 값·다른
+            # 버전 트리가 굳지 않게). dry-run·분석 전용은 최근 경로만
+            keep = None if self.args.dry_run or self.analysis_only else data.get("estimated_version")
+            _, saved, _ = self.run.call("2-1-code", "code_roots.py",
+                                        ["remember", choice] + (["--platform-version", str(keep)] if keep else []))
+            if (saved or {}).get("saved"):
+                self.state.data["code_saved"] = (f"{saved['profile']} ({self.platform_label} {saved['platform_version']}"
+                                                  + (f", {path})" if path else ")"))
             self.state.data["code_remembered"] = True
             self.state.save()
+        if self.state.data.get("code_saved"):     # 저장한 실행이 질문으로 멈췄어도 ok 출력까지 알린다
+            self.notes.append(f"코드 경로를 프로필로 저장: {self.state.data['code_saved']} — 이름 변경·삭제는 config.py set code_profiles")
         self.code_auto = choice if auto else None
         return {"skipped": False, "roots": choice, "tree_version": data.get("estimated_version"),
                 "warnings": data.get("warnings") or []}

@@ -32,7 +32,7 @@
 
 > `triage.py`는 같은 이슈를 같은 입력으로 다시 돌리면(세션이 바뀌어도) 파싱·매칭·후보별 DB 조회·코드 resolve를 다시 하지 않고 지난 실행의 결과를 다시 보여 준다. **재사용은 통과가 아니라 같은 결과의 재표시**다: 건너뛴 일은 "다시 검증했다"로 표시하지 않고, 리포트에 "재사용"이라고 밝히며, 검증·판정은 여전히 스크립트 출력이 기준이다.
 
-- **입력 해시** (`request_hash`, 파싱 전에 계산): 부분별 16자리 해시 `logs`(입력 로그 원본의 이름·sha, bugreport는 원본 파일) · `issue`(`issue.json`, 실패 스텝 반영 후) · `db`(스냅샷의 이슈 DB 소스·파서 환경, `compiled.source_hash`) · `config`(site-defaults + 사용자 config, `recent_code_roots` 제외) · `plugin`(`plugin.json` version(없으면 null) + `scripts/**/*.py` + 캐시 형식) · `args`(시간대·연도·`--minutes`·코드 트리·`--clock-offset`·steps-file sha·결과를 바꾸는 답 `time`·`window`·`anchor`·`year`·`code`·`code_confirm`). 합쳐서 `request_hash`. 실행 모드(write/read-only)·`--dry-run`은 넣지 않는다.
+- **입력 해시** (`request_hash`, 파싱 전에 계산): 부분별 16자리 해시 `logs`(입력 로그 원본의 이름·sha, bugreport는 원본 파일) · `issue`(`issue.json`, 실패 스텝 반영 후) · `db`(스냅샷의 이슈 DB 소스·파서 환경, `compiled.source_hash`) · `config`(site-defaults + 사용자 config, `recent_code_roots` 제외 — Step 2-1 5번이 프로필을 저장하면 다른 작업의 재사용은 config 변경으로 한 번 다시 계산된다) · `plugin`(`plugin.json` version(없으면 null) + `scripts/**/*.py` + 캐시 형식) · `args`(시간대·연도·`--minutes`·코드 트리·`--clock-offset`·steps-file sha·결과를 바꾸는 답 `time`·`window`·`anchor`·`year`·`code`·`code_confirm`). 합쳐서 `request_hash`. 실행 모드(write/read-only)·`--dry-run`은 넣지 않는다.
 - **적중 조건**: 오프라인이 아니고 `--refresh`가 아니며, state의 `job.cache.request_hash`와 같고, `JOB/analysis-cache.json`이 있고, `events.json`·`match.json`이 캐시가 기록한 크기·mtime 그대로이고(`timeline.md`는 캐시 파일이 아니다 — 동의 뒤 `triage.py explore`가 만들고 `run`이 지운다), resolve한 코드 경로가 아직 있다. 적중해도 사전 점검·Jira 읽기·스냅샷·열린 PR은 그대로 하고, 답 시각의 `issue_meta.json` 갱신과 `match_meta.json` 쓰기 같은 싼 파일 쓰기도 한다.
 - **무효화**: 부분 하나라도 다르면 다시 계산하고 `analysis.json.reuse`가 바뀐 부분(`changed`)·추가된 로그·1위 변화를 알려 준다. 캐시 파일이 없거나 산출물이 바뀌었으면 `reason: cache-missing`, 코드 경로가 옮겨졌으면 `changed: [code]`, `--refresh`면 `reason: refresh`. `needs_input`·중단·오류 실행은 캐시를 쓰지 않는다. 캐시와 `triage-state.json`에는 마스킹된 값·경로·sha만 둔다(`08-safety.md §8.1`).
 - **리포트**: 적중이면 `- 재사용: 입력(…)이 실행 n과 같아 파싱·매칭을 다시 하지 않았다`, 이전 실행이 있는데 다시 계산했으면 `- 재분석: 실행 m 대비 바뀐 입력 […] — 1위 X → Y | 1위 변화 없음`.
@@ -105,22 +105,23 @@ git -C <issue_db.path> pull --ff-only
 ### Step 2-1. 코드 경로 선택 (매 분석마다)
 Android 버전과 브랜치마다 소스 트리가 다르므로 **분석할 때마다 코드 경로를 정한다.**
 
-1. 대상 Android 버전을 정한다. 순서: Jira의 Android 버전/SW → bugreport `build.json` 또는 logcat의 빌드 정보(fingerprint 등) → 둘 다 없으면 사용자에게 묻는다.
+1. 대상 Android 버전은 Jira의 Android 버전 필드(`tracker.field_map.platform_version`)다. 없으면 버전 없이 4번처럼 묻는다(추천 없음). bugreport `build.json`·logcat 빌드 정보는 리포트에만 보이고 코드 경로 선택에는 쓰지 않는다(3번 "대체 출처는 쓰지 않는다").
 2. `--code`가 주어졌으면 그것을 쓴다. 프로필 이름이면 해당 `roots`를, 경로면 `aosp` 루트로 간주한다.
-3. **자동 선택**: `--code`도 답도 없고 `code.auto_select`(사용자 config > site-defaults > 기본 `true`, `02-config.md §4`)가 참이며, 대상 버전이 일치하는 `code_profiles` 프로필이 **정확히 1개**(`code_roots suggest`에서 `kind: profile`이고 `match`, 현재 "추천" 기준과 같다)면 그 프로필을 `--code <프로필>`처럼 쓰고 4번 검증으로 간다. 일치가 0개·2개 이상이거나 `auto_select: false`이거나 Jira 버전이 없으면(대체 출처는 쓰지 않는다) 4번처럼 묻는다. 최근 사용 경로만 일치하면 자동 선택하지 않는다. 알림은 의무다: `report.md` 코드 줄에 "(자동 선택: code.auto_select, `--code`로 변경 가능)", 그 아래 `- 코드 분석 트리 자동 선택: <roots> (<플랫폼> <트리 버전>) — 다른 트리는 --code로 지정` 줄(`must_show`, eval 55), 출력 `code.auto: true`. 자동 선택한 경로가 무효면 전체 선택지(`code`)로 묻고 상태에는 기록하지 않으며, 트리 버전이 다르면 기존 `code_confirm`이다. 성공한 자동 선택만 `triage-state.json`에 `code_auto=<프로필>`로 남아 같은 세션 재실행이 그 값을 쓴다(`answers`에는 넣지 않는다). 사용자의 답·`--code`가 자동 선택보다 우선한다.
+3. **자동 선택**: `--code`도 답도 없고 `code.auto_select`(사용자 config > site-defaults > 기본 `true`, `02-config.md §4`)가 참이며, 대상 버전이 일치하는 `code_profiles` 프로필이 **정확히 1개**(`code_roots suggest`에서 `kind: profile`이고 `match`, 현재 "추천" 기준과 같다)면 그 프로필을 `--code <프로필>`처럼 쓰고 4번 검증으로 간다. 일치가 0개·2개 이상이거나 `auto_select: false`이거나 Jira 버전이 없으면(대체 출처는 쓰지 않는다) 4번처럼 묻는다. 최근 사용 경로만 일치하면 자동 선택하지 않는다. 5번에서 저장된 프로필도 프로필로 센다 — 그 버전에 프로필이 둘 이상이 되면 자동 선택 대신 목록으로 묻는다. 알림은 의무다: `report.md` 코드 줄에 "(자동 선택: code.auto_select, `--code`로 변경 가능)", 그 아래 `- 코드 분석 트리 자동 선택: <roots> (<플랫폼> <트리 버전>) — 다른 트리는 --code로 지정` 줄(`must_show`, eval 55 — Jira 코멘트로도 가므로 경로는 넣지 않는다), 출력 `code.auto: true`, notes `코드 분석 트리 자동 선택 경로: <프로필> — <주 루트 경로>`(notes는 출력 JSON에만). 자동 선택한 경로가 무효면 전체 선택지(`code`)로 묻고 상태에는 기록하지 않으며, 트리 버전이 다르면 기존 `code_confirm`이다. 성공한 자동 선택만 `triage-state.json`에 `code_auto=<프로필>`로 남아 같은 세션 재실행이 그 값을 쓴다(`answers`에는 넣지 않는다). 사용자의 답·`--code`가 자동 선택보다 우선한다.
 3-1. 자동 선택하지 않으면 사용자에게 묻는다.
    ```
    코드 경로를 선택하세요. (대상: Android 16, SW <빌드>) (그 밖 후보: 최근 Android 16 aosp=/work/a16_qpr1,vendor_ril=/work/ril — 직접 입력에 이름이나 경로를 적는다)
-   1) android16-main   aosp=/path/to/android16  vendor_ril=...   ← 버전 일치, 추천
-   2) android17-dev    aosp=/path/to/android17  vendor_ril=...
+   1) android16-main Android 16 — /path/to/android16 (추천)
+   2) android17-dev Android 17 — /path/to/android17
    3) 직접 입력
    4) 코드 분석 건너뛰기 (로그 기반 분석만)
    ```
+   - 후보 라벨은 `<이름|최근> <플랫폼> <버전> — <주 루트 경로>[ (추천)]`(경로는 자르지 않는다), value는 프로필 이름 또는 `키=경로,…`. 그 밖 후보의 이름 없는 최근 경로는 모든 루트의 `키=경로`를 적는다.
    - 선택지는 질문당 4개다(AskUserQuestion 상한, `reference/rules.md`): 후보는 둘(추천이 첫째)까지, 나머지 후보 이름은 질문 문구에 둔다(L2 J7).
    - 버전이 일치하는 프로필과 최근 경로를 위에 올린다.
    - 직접 입력은 `code_root_keys`의 루트마다 묻는다. 모르는 루트는 비워둘 수 있다.
 4. 검증: 경로가 존재하는지, `aosp` 루트에 `platform.source_tree.required_dirs`(기본 `frameworks/opt/telephony`)가 모두 있는지 확인한다. 트리 버전을 추정해서 대상 버전과 다르면 경고하고 계속할지 묻는다. 추정은 빌드 시스템의 플랫폼 버전 정의(최신 AOSP는 release config 쪽, 이전 버전은 `build/make/core/version_defaults.mk` 등)를 순서대로 시도하고, 모두 실패하면 사용자 입력을 신뢰한다. 정확한 파일 위치는 Phase 0에서 확인하고(S11) `platform.source_tree.version_sources`에 반영한다.
-5. 직접 입력한 경로는 `recent_code_roots`에 기록한다. 같은 조합을 자주 쓰면 프로필로 저장할지 한 번만 묻는다.
+5. 프로필이 아닌 선택(직접 입력·최근 경로)이 4번 검증(과 `code_confirm`)을 통과하고 **트리 버전을 추정했으면** 개인 `code_profiles`에 그 추정 버전으로 저장하고 알린다(`code_roots remember --platform-version`, 묻지 않는다). Jira 버전으로 대신하지 않는다(문구 값이나 다른 버전 트리가 굳지 않게, `remember`도 숫자 버전만 받는다). 이름은 `<플랫폼><버전>-<주 루트 마지막 조각>`(영숫자·`._-` 밖은 `_`, `_`·`.`만 남으면 `tree`, 겹치면 `-2`…), 같은 roots(끝 구분자·`~` 정규화로 비교) 프로필이 있으면 만들지 않는다. notes `코드 경로를 프로필로 저장: <이름> (<플랫폼> <버전>, <주 루트 경로>) — 이름 변경·삭제는 config.py set code_profiles`. 트리 버전을 모르거나 `--dry-run`·분석 전용이면 지금처럼 `recent_code_roots`(최근 5개)에만 남긴다. 저장한 프로필은 다음부터 목록에 나오고, 그 버전 프로필이 하나뿐이면 3번 자동 선택 대상이다.
 6. **건너뛰기**를 고르면 Step 5를 생략하고, 리포트에 "코드 미확인"으로 표시한다. 이 경우 새 원인/유형의 `code_refs`는 비워두고 `db_lint.py`는 경고만 낸다.
 
 ### Step 3. logcat 파싱 (`parse_logcat.py`) → 마스킹

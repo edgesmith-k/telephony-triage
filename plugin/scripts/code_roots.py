@@ -20,8 +20,11 @@
         ① code_refs 디렉토리 → ② required_dirs → ③ 루트 전체 순으로 바이트 비교한다(20초·파일 1 MiB·20만 파일 상한).
         `{items[{id, status, refs[≤3 "key:rel:line"], aux_refs, log_call?, log_refs?}], scanned_files, truncated, scope}`.
         status: same|string-only|reworded|not-found|ambiguous|no-literal|limit. 줄 글자는 내지 않는다.
-    code_roots.py remember <roots>
-        직접 입력한 루트를 `recent_code_roots`에 기록한다(최근 5개).
+    code_roots.py remember <roots> [--platform-version <v>]
+        직접 입력한 루트를 기억한다. `--platform-version`이 있으면 개인 `code_profiles`에
+        `{name: <플랫폼><v>-<주 루트 마지막 조각>(겹치면 -2…), platform_version, roots}`로 저장한다(같은 roots 프로필이
+        있으면 만들지 않는다, 최근 목록에서는 뺀다) → `{profile, saved, platform_version}`.
+        없으면 `recent_code_roots`에 기록한다(최근 5개) → `{recent_code_roots}`.
 
 트리 버전 추정 파일은 `platform.source_tree.version_sources`로 사내 트리에 맞춘다 (`platforms.load()`, 02-config.md).
 `platform:`이 잘못되면 종료 코드 2.
@@ -123,7 +126,11 @@ def estimate_version(aosp: Path, sources=VERSION_SOURCES) -> str | None:
     for rel, regex in sources:
         path = aosp / rel
         if path.is_file():
-            hit = regex.search(path.read_text(encoding="utf-8", errors="replace"))
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:          # 읽기 권한 없음 등 — 이 파일로는 추정하지 못한다(다음 파일, 모두 실패면 None)
+                continue
+            hit = regex.search(text)
             if hit:
                 return hit.group(1)
     return None
@@ -556,9 +563,33 @@ def cmd_remember(args, defaults) -> dict:
     data = userconfig.load_user()
     if data is None:
         raise UsageError("config가 없습니다. 먼저 setup을 한다.")
-    roots = parse_roots(args.roots, _cfg(defaults), _profile(defaults).spec.primary_root)
-    key = userconfig.profile_key(_session(defaults)[0], "recent_code_roots")   # 선택 플랫폼 프로필에 기록한다
-    recent = [r for r in userconfig.get(data, key) or [] if (r.get("roots") or {}) != roots]
+    primary = _profile(defaults).spec.primary_root
+    roots = parse_roots(args.roots, _cfg(defaults), primary)
+    platform = _session(defaults)[0]
+    key = userconfig.profile_key(platform, "recent_code_roots")   # 선택 플랫폼 프로필에 기록한다
+    def norm(r: dict) -> dict:    # 비교만 정규화(끝 구분자·~), 저장 값은 입력 그대로
+        return {k: str(Path(str(v).rstrip("\\/") or str(v)).expanduser()) for k, v in (r or {}).items()}
+
+    recent = [r for r in userconfig.get(data, key) or [] if norm(r.get("roots")) != norm(roots)]
+    # 버전(트리 추정, 숫자)을 알면 개인 프로필로 저장하고 최근 목록에서는 뺀다(목록에 두 번 나오지 않게).
+    # 숫자가 아닌 값("Android 16" 같은 문구)은 굳히지 않고 종전대로 최근 경로에만
+    if args.platform_version and re.fullmatch(r"\d+", str(args.platform_version)):
+        pkey = userconfig.profile_key(platform, "code_profiles")
+        profiles = list(userconfig.get(data, pkey) or [])
+        same = next((p for p in profiles if norm(p.get("roots")) == norm(roots)), None)
+        name = same.get("name") if same else None
+        if same is None:
+            tail = re.sub(r"[^A-Za-z0-9._-]", "_", re.split(r"[\\/]", str(roots.get(primary, "")).rstrip("\\/"))[-1])
+            base = f"{platform}{args.platform_version}-{(tail.strip('_.') and tail) or 'tree'}"
+            names = {p.get("name") for p in profiles}
+            name, n = base, 2
+            while name in names:
+                name, n = f"{base}-{n}", n + 1
+            profiles.append({"name": name, "platform_version": str(args.platform_version), "roots": roots})
+            userconfig.set_value(data, pkey, profiles)
+        userconfig.set_value(data, key, recent)
+        userconfig.save(data)
+        return {"profile": name, "saved": same is None, "platform_version": str(args.platform_version)}
     recent.insert(0, {"roots": roots, "used_on": date.today().isoformat()})
     userconfig.set_value(data, key, recent[:RECENT_MAX])
     userconfig.save(data)
@@ -601,6 +632,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--roots", required=True)
     p = sub.add_parser("remember")
     p.add_argument("roots")
+    p.add_argument("--platform-version", metavar="v")
     p = sub.add_parser("find-text")
     p.add_argument("--roots", required=True)
     p.add_argument("--literals", required=True, metavar="json")

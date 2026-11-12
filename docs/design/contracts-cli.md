@@ -35,7 +35,7 @@
 | `validate` | `<roots> [--version <v>] [--db <DB>]` |  |
 | `resolve` | `<ref> --roots <ROOTS>` |  |
 | `find-symbol` | `<symbol> --roots <ROOTS>` |  |
-| `remember` | `<roots>` |  |
+| `remember` | `<roots> [--platform-version <v>]` |  |
 | `find-text` | `--roots <ROOTS> --literals <json> [--events <마스킹된 events.json>]` |  |
 
 ## `parse_logcat.py`
