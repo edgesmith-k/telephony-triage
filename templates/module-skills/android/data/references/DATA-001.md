@@ -9,7 +9,7 @@
 1. 창 안에 RILJ `SETUP_DATA_CALL` 요청이 정말 없는지 본다. 로그가 그 시점을 덮어야 "없음"이 근거다.
 2. DNC `Data disallowed reasons`의 사유를 하나씩 타임라인 줄과 맞춘다(설정 꺼짐 ↔ DSMGR `enabled=false`).
 3. 설정 변경이 평가 거부보다 앞서는지, 같은 슬롯인지 본다.
-4. 사유가 서비스 없음류면 network·radio 줄을 먼저 본다.
+4. 사유가 `NOT_IN_SERVICE`면 network·radio 줄을 먼저 본다. 등록을 잃은 쪽이 원인이라 층은 모뎀·망(프레임워크는 증상).
 
 ## 코드 경로
 
