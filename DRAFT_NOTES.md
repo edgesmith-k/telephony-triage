@@ -19,7 +19,7 @@
 - 모드: **사외 초안**. Phase D0·1~13·반입 전 보강·H 완료. 지난 묶음 **import-20261103**(main `77e2827`).
 - 다음 묶음 이름은 **태그 찍는 날짜** `import-YYYYMMDD`(`import-20261109`·`b`는 이미 있음, 태그·반입은 사용자). 사내: 재반입 §8. 이번 묶음은 guard 판정이 바뀌었다(4-c 병합 계열·규칙 5 ask 전환, Approve·기각·자동 병합·보호 변경·refs 위조 deny 신설) — 반입 전 `s4a.protection_guard` 통과 전제. SITE_INSTALL §8대로 사내 대상 eval 12개(`pending.json` `site`) 전부 다시 돌린다.
 - 템플릿·fixture는 placeholder·합성(사내 값은 SITE_PATHS, 반입 전 SITE_RESTORE ⓪), 반입은 `stable`에서 (Android eval은 arm pin 갱신으로 두 arm 함께 재실행)
-- 11/10~12 병합 #85~#96(#90 마스킹 한글 경계·전각 접기, #91·#92·#94 Android 17 문구(data 보충은 되돌림)·ARM_PINS, #93 관문: 기준선 arm 안전 위반은 경고·GRADER_VERSION 7, #95 구분자 ICCID, #96 sms eval 기대). #98: 작은 P2(`fold_ascii`·eval 80 사외 갈음·확인 화면 표시)·훑기 1단계·O-2/O-4 읽기 줄이기(history 11/12). #99: Android sms case 1개(수신 정상 전달)·`components.md` 가정 표시, 모듈 eval sim만 fail(인용 형식). 후속: case 5개 추가(call·sim·modem·network·data), 모듈 eval network tie(history 11/12).
+- 11/10~12 병합 #85~#96(#90 마스킹 한글 경계·전각 접기, #91·#92·#94 Android 17 문구(data 보충은 되돌림)·ARM_PINS, #93 관문: 기준선 arm 안전 위반은 경고·GRADER_VERSION 7, #95 구분자 ICCID, #96 sms eval 기대). #98: 작은 P2(`fold_ascii`·eval 80 사외 갈음·확인 화면 표시)·훑기 1단계·O-2/O-4 읽기 줄이기(history 11/12). #99: Android sms case 1개(수신 정상 전달)·`components.md` 가정 표시, 모듈 eval sim만 fail(인용 형식). 후속: case 5개 추가(모듈 eval network tie), 문서 보완 3자리 뒤 재측정 call·modem·network pass(history 11/12).
 - 11/12 가상 사용자 리허설(main `6f7bffc1`): 임시 마켓플레이스 설치·처음 setup·사용 13건 실패 0(기록은 history 11/12).
 - 모델 Sonnet 5.5 기준. `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서: `docs/book/telephony-triage-book.html`
