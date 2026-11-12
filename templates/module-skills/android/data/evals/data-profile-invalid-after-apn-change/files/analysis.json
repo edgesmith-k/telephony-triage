@@ -1,0 +1,117 @@
+{
+ "status": "ok",
+ "key": "MOCK-9827",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-11-10T21:59:21+00:00",
+  "sw": null,
+  "platform_version": "17",
+  "sim_slot": "0",
+  "summary": "데이터가 끊긴 뒤 다시 연결되지 않음 (합성)",
+  "description": "쓰던 중 모바일 데이터가 끊겼고 그 뒤로 다시 붙지 않습니다. 데이터 설정은 켜져 있습니다. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-11-10T21:54:21.000Z",
+   "end": "2026-11-10T22:04:21.000Z"
+  },
+  "range": [
+   "2026-11-10T21:59:20.519Z",
+   "2026-11-10T21:59:23.535Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 26,
+  "masked": null
+ },
+ "candidates": [
+  {
+   "type": "DATA-001",
+   "cause": null,
+   "title": "SETUP_DATA_CALL이 발생하지 않음 (원인 미확인)",
+   "category": "data",
+   "score": 0.5098,
+   "confidence": "low",
+   "S": 1,
+   "C": 0,
+   "phones": [
+    0
+   ],
+   "evidence": [
+    {
+     "ts": "2026-11-10T21:59:20.525Z",
+     "tag": "DNC-0",
+     "msg": "Evaluated [DataNetwork: DN-106-C, <APN#1>, state=ConnectedState], Data evaluation: evaluation reason:DATA_PROFILES_CHANGED, Data disallowed…",
+     "event": "data_evaluation_rejected"
+    }
+   ],
+   "fix_judgement": null,
+   "fix_message": "",
+   "related": []
+  },
+  {
+   "type": "DATA-002",
+   "cause": null,
+   "title": "데이터 연결이 사용자 조작으로 끊김 (원인 미확인)",
+   "category": "data",
+   "score": 0.507,
+   "confidence": "low",
+   "S": 1,
+   "C": 0,
+   "phones": [
+    0
+   ],
+   "evidence": [
+    {
+     "ts": "2026-11-10T21:59:20.531Z",
+     "tag": "DNC-0",
+     "msg": "Internet data state changed from CONNECTED to DISCONNECTED.",
+     "event": "data_internet_state_changed"
+    }
+   ],
+   "fix_judgement": null,
+   "fix_message": "",
+   "related": []
+  }
+ ],
+ "partial": [
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "cause": "DATA-001-02",
+   "signature": "DATA-001-02/roaming-disabled",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected {'reasons': '.*ROAMING_…"
+   ],
+   "at": []
+  }
+ ],
+ "code": {
+  "skipped": true
+ },
+ "analyzer": {
+  "skill": "mock-data-analyzer",
+  "when": "ask"
+ },
+ "explore": {
+  "reason": "cause_unconfirmed",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-11-10T21:59:20.519Z ~ 2026-11-10T21:59:23.535Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}

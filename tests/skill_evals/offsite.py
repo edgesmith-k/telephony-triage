@@ -21,7 +21,7 @@ eval마다 run 요약을 모은다. transcript·출력·절대 경로는 넣지 
 - 쓰기는 원자적이다(임시 파일 → 이름 바꾸기).
 - `--merge`: 예전 iteration이 없어 전체를 다시 만들 수 없을 때. 기존 `--out` 파일을 읽어 넘긴 iteration에 run이 있는 eval 항목만 채우고
   나머지 항목은 그대로 둔다. 기존 기록과 모델이 다르거나, 채울 eval에 이미 run이 있으면 종료 2(그때는 전체 iteration으로 다시 만든다).
-  `generated`·`grader_commit`은 갱신하고 `--note`는 기존 note 뒤에 덧붙인다.
+  `generated`는 갱신하고 최상위 `grader_commit`은 기존 값 그대로 두며 새로 채운 항목에만 `grader_commit`을 붙이고 `--note`는 기존 note 뒤에 덧붙인다.
 
 종료 코드: 0 기록함, 2 사용 오류(iteration 없음·run 없음·모델 혼합·`--merge` 조건 위반).
 """
@@ -218,9 +218,10 @@ def merge(old: dict, new: dict, note: str | None) -> tuple[dict, list[str]]:
     if taken:
         raise Usage(f"--merge: 기존 기록에 이미 run이 있는 eval {taken} — 전체 iteration으로 다시 만든다")
     evals = {**{k: e for k, e in new["evals"].items() if k not in old["evals"]}, **old["evals"]}     # 기존 순서 그대로, 새 eval은 채워지면 제자리
-    evals = {k: (new["evals"][k] if k in filled else evals[k]) for k in sorted(evals, key=int)}
+    evals = {k: ({**new["evals"][k], "grader_commit": new["grader_commit"]} if k in filled else evals[k])     # 채점기 커밋은 새로 채운 항목에만
+             for k in sorted(evals, key=int)}
     notes = " / ".join(n for n in (old.get("note"), note) if n)
-    return {"model": old["model"], "generated": new["generated"], "grader_commit": new["grader_commit"],
+    return {"model": old["model"], "generated": new["generated"], "grader_commit": old.get("grader_commit"),
             **({"note": notes} if notes else {}), "evals": evals}, filled
 
 

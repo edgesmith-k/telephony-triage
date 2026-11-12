@@ -168,6 +168,8 @@ def test_backend_vendor_ipc_builtin(tmp_path):
         "Sep 20 14:32:11.004 dut daemon.debug daemon-b[7]: [IpcCtx_0] OnIpcComplete Request ID=11, result=0",
         "Sep 20 14:32:11.005 dut daemon.debug ofonod[8]: [IpcCtx_0] OnIpcComplete Request ID=12, result=2",
         "Sep 20 14:32:11.006 dut daemon.debug daemon-a[9]: [<DEV#1>][RX] VIPC_DIAL, RSP, Error(VIPC_E_DEMO_FAILURE)",
+        "Sep 20 14:32:11.007 dut daemon.debug daemon-b[7]: [<DEV#1>][RX] VIPC_DEMO_SET, RSP, 12 bytes, "
+        "Token(0x0101), Error(VIPC_E_DEMO_FAILURE)",
     ])
 
     def builtins(b):
@@ -179,7 +181,8 @@ def test_backend_vendor_ipc_builtin(tmp_path):
     flagged = _flagged_backend(**{"daemon-b": "vendor_ipc"})
     assert builtins(flagged) == [
         ("daemon-b", "builtin.common.vendor_ipc_error", {"ipc": "VIPC_DEMO_QUERY", "error": "VIPC_E_DEMO_FAILURE"}),
-        ("daemon-b", "builtin.common.vendor_request_failed", {"request_id": "10", "result": "2"})]
+        ("daemon-b", "builtin.common.vendor_request_failed", {"request_id": "10", "result": "2"}),
+        ("daemon-b", "builtin.common.vendor_ipc_error", {"ipc": "VIPC_DEMO_SET", "error": "VIPC_E_DEMO_FAILURE"})]
     out = flagged.parse([path], "UTC", 2026, None)
     assert all(r["category_hint"] == "common" for r in out if (r["event"] or "").startswith("builtin."))
     assert backend.BACKEND._default_vendor_ipc == frozenset()                       # 원본(싱글톤)은 바뀌지 않는다

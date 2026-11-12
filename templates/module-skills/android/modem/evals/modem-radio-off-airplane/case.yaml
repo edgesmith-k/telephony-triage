@@ -1,0 +1,27 @@
+# 합성 case (11/12 Android case 보강). 출처: Android 17 에뮬레이터 캡처 m02-airplane-on-off(비행기 모드 켬→끔)에서 고른 줄 — AOSP 층만, 벤더 줄 없음. 캡처의 DNC 줄(무선 끄기 사유가 적힌 데이터 층 줄)은 샘플 DB의 기존 유형에 바로 걸려 explore case가 되지 않으므로 넣지 않았고, radio 버퍼의 RILJ·SST 줄만 추렸다. 기존 modem case(재시작 연쇄·벤더 줄 없음·RIL 데몬 죽음)의 대조: 프레임워크가 요청해 무선을 끈 것이고 모뎀 장애·재시작이 아니다. files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+schema_version: 2
+name: modem-radio-off-airplane
+kind: explore
+synthetic: true
+key: MOCK-9825
+issue:
+  summary: 잠깐 서비스가 끊김, 모뎀 오류인지 (합성)
+  description: 대기 중 서비스가 잠깐 끊겼다가 돌아왔습니다. 로그에 radio OFF(radioStateChanged OFF)가 보이는데 모뎀 오류인가요? 합성 case.
+  occurred_at: '2026-11-10T16:14:05+0000'
+  platform_version: '17'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  accept:
+    - layer: '프레임워크|원인\s*아님'
+      daemon: '알 수 없음|없음|프레임워크|ServiceStateTracker|SST'
+      evidence: ['\[0268\]> RADIO_POWER on = false', 'radioStateChanged: OFF']
+  trap:
+    - layer: '^\s*(모뎀|망|벤더 RIL|RIL HAL|RILJ|곁가지)'
+    - label: '^\s*그\s*층\s*로그\s*없음'

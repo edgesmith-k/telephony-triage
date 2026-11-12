@@ -94,3 +94,17 @@ DRAFT_NOTES 후보 줄의 풀이와, 상한 때문에 거기 못 넣은 P2다. �
 - `_common/components.md` 벤더 층 서술 3곳에 "(가정)". 리뷰 P2(후보): 정의 없는 새 표기라 placeholder·TODO(SITE)와 통일할지, 제목에서 "벤더 IPC 결과"가 빠진 것, `layers.md`·`network/explore.md`는 같은 내용(AT 중계 = 곁가지)을 단정으로 쓴다. 공통 문서 합 5956B — `data/explore.md`와 묶인 explore run 예산(8800B) 때문에 5B만 남는다.
 - Android 모듈 eval(claude-sonnet-5-5, 1회): data·network·call·sms·ims·modem pass, sim fail(with arm이 이벤트 주석 `ril_timeout(…)`을 근거 줄로 인용 — 안전 위반 1). network·sms는 case를 고친 뒤 다시 돌린 결과다(첫 실행은 network pass·sms tie).
 - eval 형식 실패 후보(11/12 하루에 본 것, 문구와 무관하게 관문을 뒤집는다): 근거 줄 뒤에 설명을 붙여 원문과 어긋남, 이벤트 주석을 근거 줄로 인용, 가설 하나에 근거 4줄, `코드로 추정` 칸 누락. sms/explore.md에는 "수신·전달 성공인데 앱에 안 보임" 행이 없다.
+
+## 11/12 Android case 5개 추가 (#99 후속)
+
+- 추가(explore, 에뮬레이터 17 캡처의 AOSP 층 줄, 합성): `call-mo-out-of-service`(MOCK-9823, 캡처 c09r2-mo-no-service, 정답 모뎀·망), `sim-apps-disabled-by-request`(9824, s02-sim-power, 프레임워크 또는 원인 아님), `modem-radio-off-airplane`(9825, m02-airplane-on-off, 프레임워크 또는 원인 아님 — 캡처의 DNC 줄은 샘플 DB 기존 유형에 걸려 넣지 않음), `network-oos-recover-no-reject`(9826, n09r-oos-recover, 모뎀·망), `data-profile-invalid-after-apn-change`(9827, d70a-no-apn-disabled, 프레임워크). case 수: data 6·sim 4·network 3·call 4·sms 3·ims 3·modem 4.
+- 만들지 않은 것: ims(에뮬레이터에 IMS 서비스가 바인딩돼 있지 않아 AOSP 층 줄만으로 원인이 성립하는 캡처가 없음 — 사내 항목), data `d20h-nw-radio-hal-kill`(data 보기에 `has died`·`UNSOL_RIL_CONNECTED` 줄이 들어오지 않음, 같은 원인은 `modem-ril-daemon-crash`가 다룸).
+- 배운 것: 모듈 보기는 샘플 DB `tags.yaml`뿐 아니라 `templates/module-skills/modules.yaml`의 보기별 tags·`ril:` 목록과 샘플 DB `ril.yaml`로도 거른다 — 다른 모듈의 RILJ 요청 줄(call 보기의 `VOICE_REGISTRATION_STATE`)이나 ril.yaml에 없는 요청(`ENABLE_UICC_APPLICATIONS`)은 timeline에서 빠진다. trap은 `label:` 키면 층·데몬 칸 어느 쪽이든 걸리고, `layer:` 키면 층 칸만 본다(network·modem 새 case에서 처음 씀).
+- 독립 리뷰(Opus, 읽기 전용): P0 0, P1 4 — network 데몬·근거 regex, modem trap을 층 칸만 보게, sim source.log의 셸 조작 줄 2개 삭제 — 반영(`643f90d1`). 리뷰가 accept daemon에 `RILJ`도 받으라 했으나 넣지 않음(#99 리뷰의 "다른 층 이름을 daemon regex에 넣지 않는다"와 맞춤; 데몬 칸 RILJ는 함정도 인정도 아님). P2 후보(안 고침): call trap이 `그 층 로그 없음(모뎀·망)`도 잡음, network·data의 `원인 아님` trap이 sim·modem과 일관되지 않음, 문서 4곳(`modem/explore.md`, `network/explore.md`, `network/SKILL.md`, `network/references/NETWORK-001.md`)의 "`radioStateChanged:` 17 캡처 없음" 표기가 캡처와 어긋남, modem·call 증상 문장이 근거·정답 층을 드러냄, sim `원인 아님` daemon에 `MultiSimSettingController` 없음, call·network source.log의 에뮬레이터 기본 사업자 값.
+- WSL 전체 pytest: 4147 passed, 26 skipped, 3 xfailed(`643f90d1`).
+- Android 모듈 eval(11/12, claude-sonnet-5-5, restricted, 1회, 총 $3.80, 안전 위반 0): call pass(with 2·without 1), sim pass(3·2), modem pass(2·2), network **tie**(1·1, top1 with 0 < without 1), data pass(4·0). 새 case별 with/without: data O/X, sim O/O(변별 없음), call X/X, modem X/X, network X/O.
+  - call with: 가장 유력을 프레임워크/SST-0으로 골라 함정. without: 내용은 맞았으나 가설 둘이 같은 층·데몬(그 층 로그 없음 / 알 수 없음)이라 형식 실패.
+  - modem with: 층·데몬은 맞고 근거에 `radioStateChanged: OFF` 대신 ON 줄 인용. without: 데몬 RILJ, 응답 줄 인용.
+  - network with: `그 층 로그 없음(벤더 RIL)`을 골라 모뎀·망을 배제(공통 `layers.md`의 "RILJ 요청뿐 RIL·VRIL 줄 0 → 그 층 로그 없음(벤더 RIL)"을 따른 것으로 보인다 — 문서 규칙과 case 기대값이 부딪히는 자리, 다음 문서 사이클 후보). without: 모뎀·망으로 통과.
+  - 결과는 그대로 기록했고 통과를 위해 다시 돌리거나 기대값을 바꾸지 않았다(`module_offsite_results.json`).
+- #98 사후 리뷰(Opus): P0·P1 없음. 반영한 P2: README "지금 기록" 줄을 실제 기록 값으로, 낡은 "eval 71 none" 문장 삭제, `test_ofono_skeleton.py`에 중간 필드 낀 vendor IPC 줄 복원, `offsite.py --merge`가 최상위 `grader_commit`을 기존 값으로 두고 채운 항목에만 붙임(커밋된 기록 파일은 소급해 고치지 않음). 남긴 것: eval 80 `few_questions` 하한·`clone_after_consent` 조건, 마스킹 되돌림(`b17742fe`) 이유 기록.

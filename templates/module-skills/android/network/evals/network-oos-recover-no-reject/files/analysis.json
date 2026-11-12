@@ -1,0 +1,85 @@
+{
+ "status": "ok",
+ "key": "MOCK-9826",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-11-10T23:19:00+00:00",
+  "sw": null,
+  "platform_version": "17",
+  "sim_slot": "0",
+  "summary": "1분쯤 서비스 안 됨이었다가 저절로 복구됨 (합성)",
+  "description": "1분 정도 서비스 안 됨이 떴다가 아무것도 안 했는데 다시 잡혔습니다. 왜 끊겼는지 확인해 주세요. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-11-10T23:14:00.000Z",
+   "end": "2026-11-10T23:24:00.000Z"
+  },
+  "range": [
+   "2026-11-10T23:18:28.616Z",
+   "2026-11-10T23:19:34.729Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 45,
+  "masked": null
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "NETWORK-001",
+    "kind": "type",
+    "title": "서비스가 잡히지 않음"
+   },
+   {
+    "id": "NETWORK-001-01",
+    "kind": "cause",
+    "title": "망 등록 거절"
+   },
+   {
+    "id": "SMS-001-01",
+    "kind": "cause",
+    "title": "전송 요청이 만들어지지 않음"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0,
+  "unextracted_warn": 2
+ },
+ "partial": [
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "signature": "DATA-001/no-setup-data-call-request",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ],
+   "at": []
+  }
+ ],
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-11-10T23:18:28.616Z ~ 2026-11-10T23:19:34.729Z (일부만 포함), 시계 이상 없음",
+  "오류·거부·타임아웃 이벤트: 추출 이벤트 기준 0건 (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 2건: SST-0 2줄)"
+ ],
+ "truncated": false
+}
