@@ -580,7 +580,7 @@ def cmd_remember(args, defaults) -> dict:
         name = same.get("name") if same else None
         if same is None:
             tail = re.sub(r"[^A-Za-z0-9._-]", "_", re.split(r"[\\/]", str(roots.get(primary, "")).rstrip("\\/"))[-1])
-            base = f"{platform}{args.platform_version}-{tail.strip('_.') and tail or 'tree'}"
+            base = f"{platform}{args.platform_version}-{(tail.strip('_.') and tail) or 'tree'}"
             names = {p.get("name") for p in profiles}
             name, n = base, 2
             while name in names:
