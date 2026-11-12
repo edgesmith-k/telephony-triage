@@ -253,6 +253,27 @@ def test_stop_report_missing_evidence_or_must_show_blocks(tmp_path):
     assert stop(write(tmp_path, prompt("p"), run, say(explore)), explore) is None
 
 
+def test_stop_report_block_lists_must_show_already_in_core_lines_once(tmp_path):
+    """되돌림의 '붙일 리포트 줄': 결정적 줄이 글자 그대로 담은 must_show(분석 전용·로그 범위)는 한 번만 싣는다. 점검은 그대로."""
+    only = "분석 전용: 이슈 DB에 기록하지 않는다(계획·PR 없음). 기록하려면 --analysis-only 없이 다시 실행"
+    extra = "읽기 전용: 다른 세션이 lock 보유"                           # 리포트 결정적 줄에 없는 must_show는 그대로 싣는다
+    report = REPORT.replace("- 분류 후보", f"- {only}\n- 분류 후보") + f"- {MUST}\n"
+    job = tmp_path / "work" / "MOCK-1"
+    job.mkdir(parents=True)
+    (job / "report.md").write_text(report, encoding="utf-8")
+    run = bash("t", "python3 /p/scripts/triage.py run MOCK-1 --logs logs/a.log --analysis-only", "EXIT 0\n" + json.dumps(
+        {"status": "ok", "key": "MOCK-1", "files": {"report": str(job / "report.md")}, "must_show": [only, MUST, extra]}))
+    out = stop(write(tmp_path, prompt("p"), run, say("요약")), "요약")
+    block = out["reason"].split("--- 붙일 리포트 줄 ---\n")[1].splitlines()
+    assert [ln for ln in block if only in ln] == [f"- {only}"] and [ln for ln in block if MUST in ln] == [f"- {MUST}"]
+    assert block[-1] == extra and "(빠진 줄 9/9)" in out["reason"]       # 빠진 줄 세기는 전과 같다(결정적 줄 6 + must_show 3)
+    for cut in (only, MUST, extra):                                     # 어느 줄이든 빠지면 여전히 되돌린다
+        short = "\n".join(ln for ln in block if cut not in ln)
+        assert stop(write(tmp_path, prompt("p"), run, say(short), name="cut.jsonl"), short)["decision"] == "block", cut
+    full = "\n".join(block)
+    assert stop(write(tmp_path, prompt("p"), run, say(full), name="full.jsonl"), full) is None      # 붙일 줄을 그대로 옮기면 통과
+
+
 # --- PreToolUse 질문 ---------------------------------------------------------------------------------------------
 
 def test_pre_ask_allow_and_deny_shape(tmp_path):
