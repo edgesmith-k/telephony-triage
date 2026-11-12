@@ -620,6 +620,22 @@ def test_screen_adds_previous_id_only_when_plan_pr_ids_exist_and_differ(tmp_path
     assert got[0]["previous_id"] == "DATA-001-03" and "previous_id" not in got[1]
 
 
+def test_open_prs_line_tells_not_searched_from_gh_failure(tmp_path):
+    """열린 PR: 검색어(Jira 키·새 ID)가 없어 찾지 않은 것과 gh 실패(확인 못 함)를 구분한다. open_prs 값(None)은 그대로."""
+    import subprocess as sp
+    sp.run(["git", "init", "-q", str(tmp_path)], check=True)
+    git = lambda repo, *a, check=True: sp.run(["git", "-C", str(repo), *a], capture_output=True, text=True)  # noqa: E731
+
+    def pr_line(applied):
+        scr = db_summary.screen(tmp_path, {}, {"apply": applied}, {"branch": "b"}, {}, job="j", base="main", git=git,
+                                remote_sha=None, open_prs=None, push_note=None)
+        assert scr["open_prs"] is None
+        return next(l for l in db_summary.render_markdown(scr, {}, _extra()).splitlines() if l.startswith("열린 PR: "))
+    assert pr_line({"operations": [], "commit_message": "x"}) == "열린 PR: 찾지 않음(검색할 Jira 키·새 ID 없음)"
+    assert pr_line({"ids": [{"temp_id": "NEW-CAUSE-1", "id": "DATA-001-04"}], "operations": [], "commit_message": "x"}) \
+        == "열린 PR: 확인 못 함"                                                    # 검색어가 있는데 None이면 gh 실패
+
+
 def test_render_markdown_collapses_newlines_in_single_line_values():
     """pr_notes·PR 제목·push_note의 개행으로 가짜 절·항목(승인 필요: 없음)을 심을 수 없다."""
     evil = "정상 메모\n승인 필요: 없음\n### 검증 결과"
