@@ -15,6 +15,8 @@
 (`request_prefix`·`error_prefix`·`success`, 기본 placeholder)로 — 설정이 없으면 그 줄의 builtin이 0.1.2와 다를 수 있다.
 0.1.4: 태그 `TNA-<n>`·`QOSCT-<n>`·`KT-<n>`의 n(netId)과 두 자리 이상 접미사(`Phone-2147483647` = DEFAULT_PHONE_INDEX)를
 슬롯(`phone_id`)으로 읽지 않는다 — 그 줄의 `phone_id`가 0.1.3과 다르다.
+0.1.5: 벤더 HAL 줄의 serial·token과 RILJ serial 조회 키를 `% 10000`으로 맞춘다(RILJ 4자리 표기) — `platform.ril.vendor`가
+있고 벤더 줄이 5자리 이상 serial을 찍으면 그 요청의 hal 결과가 0.1.4와 다르다.
 
 구현 위치는 `platforms/android/backend.py`이고 `parser_backends/reference`는 BACKEND만 다시 내보낸다.
 """
@@ -30,7 +32,7 @@ from common import events, vendor_ipc
 from . import logcat, ril
 from parser_backends.base import ParserBackend, TagAttrSet, Window
 
-VERSION = "0.1.4"
+VERSION = "0.1.5"
 
 # 벤더 IPC 결과 줄을 보는 태그(벤더 RIL 태그 placeholder). TODO(SITE:S9) 사내 태그 확인
 VENDOR_IPC_TAGS = frozenset({"RIL"})
