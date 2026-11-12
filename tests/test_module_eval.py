@@ -1995,7 +1995,7 @@ def test_regrade_reproduces_run_then_follows_grader(env, tmp_path, capsys, monke
     it = me.WORKSPACE / "module-ofono-data-001"
     first = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
     V = me.GRADER_VERSION
-    assert first["grader_version"] == V == 5
+    assert first["grader_version"] == V == 6
     old = {d: json.loads((d / "grading.json").read_text(encoding="utf-8")) for d in _run_dirs(it)}
     for d in _run_dirs(it):
         obj = json.loads((d / "result.json").read_text(encoding="utf-8"))

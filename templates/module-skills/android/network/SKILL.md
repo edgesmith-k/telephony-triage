@@ -15,7 +15,7 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 
 ## 판단 순서
 
-1. RILJ `VOICE/DATA_REGISTRATION_STATE` 응답의 `regState`·`reasonForDenial`을 본다. (없으면: NRM-C `onRequestNetworkRegistrationInfoComplete … registrationState=DENIED … rejectCause=`, SST `Poll ServiceState done: newSS=` — `registrationState=DENIED`면 2번으로 층을 정한다. `rejectCause=0`은 사유를 안 준 것이라 그 숫자에서 사유를 읽지 않는다)
+1. RILJ `VOICE/DATA_REGISTRATION_STATE` 응답의 `regState`·`reasonForDenial`을 본다. (없으면: NRM-C `onRequestNetworkRegistrationInfoComplete … registrationState=DENIED … rejectCause=`, SST `pollStateDone:` — `registrationState=DENIED`면 2번으로 층을 정한다. `rejectCause=0`은 사유를 안 준 것이라 그 숫자에서 사유를 읽지 않는다)
 2. `REG_DENIED`·`reasonForDenial≠NONE` → 모뎀·망. 원인 데몬은 그 값을 전한 벤더 RIL(`RIL`).
 3. 같은 요청의 IPC(`VIPC_EXAMPLE_*_REG`)가 OK면 거절 값은 망이 준 것이다.
 4. 무선이 꺼진 직후(`AT+CFUN=0`, `RADIO_OFF`, RILJ `radioStateChanged: OFF`)의 서비스 없음은 결과다 → 무선을 끈 쪽을 답한다.
