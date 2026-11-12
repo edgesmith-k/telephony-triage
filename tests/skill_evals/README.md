@@ -199,7 +199,7 @@ python3 tests/skill_evals/offsite.py workspace/<iteration>... --out tests/skill_
 - eval `verdict`: 가장 최근 커밋(`verdict_commit`)의 run들 가운데 가장 나쁜 판정(fail > undecided > pass). run 판정은 실패 행·안전 위반이 있으면 fail, 채점 안 됨·미결정 행이 있으면 undecided. run이 없으면 `none`(사내 대상이 아니면 경고).
 - `--merge`: 예전 iteration이 없어 전체를 다시 만들 수 없을 때 기존 `--out` 파일에 넘긴 iteration의 eval 항목만 채운다(나머지 항목 그대로, `generated`·`grader_commit` 갱신, `--note`는 기존 note 뒤에). 기존 기록과 모델이 다르거나 그 eval에 이미 run이 있으면 종료 2.
 - 모델이 섞이면 쓰지 않는다(종료 2). `grader_commit`은 만들 때의 `grade.py` 마지막 커밋이다. 쓰기는 원자적이다. `grade.py`는 고유 모듈 이름으로 읽는다.
-- 지금 기록(`generated` 2026-10-16, `note` "L2 (다) 반영 재측정")은 사외 로컬 workspace의 claude-sonnet-5-5 run(l2-a~h, 파일럿 제외)에서 만들었다: eval 70 중 pass 59·fail 0·none 11(사내 대상 eval — 사내에서 다시). 그 뒤 추가한 eval 71은 run이 없어 `none`(offsite.py가 run 없는 eval에 쓰는 값 그대로 한 줄 더함)이라 사외에서 재기 전까지 `s2.offsite`가 사용자 필요로 본다. eval 80(11/12 추가, 사외 결과로 갈음 — 사용자 결정)은 예전 iteration이 이 PC에 없어 `offsite.py --merge`로 그 run(first-setup-1112)만 채웠다. 수동 행은 사외에서 모두 채점해 미결정이 0이고, 각 eval 최신 커밋 run의 안전 위반(`safety_fail`)·안전 미결정은 0이다. 이전 run 이력은 git `6012486`의 이 파일에 있다. 사외에서 다시 재면 다시 만든다.
+- 지금 기록(`generated` 2026-11-12, `note` "G 전체 재측정 g-1(67개, Sonnet, -j 3, 11/06, 커밋 cc2ca81 위) + B2 eval …")은 사외 로컬 workspace의 claude-sonnet-5-5 run에서 만들었다: eval 80 중 pass 66·fail 5·none 9(사내 대상 eval — 사내에서 다시). 그 뒤 추가한 eval 71은 run이 없어 `none`(offsite.py가 run 없는 eval에 쓰는 값 그대로 한 줄 더함)이라 사외에서 재기 전까지 `s2.offsite`가 사용자 필요로 본다. eval 80(11/12 추가, 사외 결과로 갈음 — 사용자 결정)은 예전 iteration이 이 PC에 없어 `offsite.py --merge`로 그 run(first-setup-1112)만 채웠다. 수동 행은 사외에서 모두 채점해 미결정이 0이고, 각 eval 최신 커밋 run의 안전 위반(`safety_fail`)·안전 미결정은 0이다. 이전 run 이력은 git `6012486`의 이 파일에 있다. 사외에서 다시 재면 다시 만든다.
 
 ## 토큰 기록
 
