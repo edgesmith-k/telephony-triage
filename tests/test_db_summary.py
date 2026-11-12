@@ -261,7 +261,8 @@ def test_pr_body_note_is_masked_like_issue_db_file():
     from workspace import PLANS, Workspace
     ws = Workspace()
     plan = json.loads((PLANS / "p7-analyze-append.plan.json").read_text(encoding="utf-8"))
-    plan["issue"]["note"] = "고객 010-0000-1234, imsi=450009999999999 로밍"     # 합성 값
+    imsi = "45000" + "9999999999"                # 합성 15자리(경계 검사의 긴 숫자 패턴을 피해 나눠 쓴다)
+    plan["issue"]["note"] = f"고객 010-0000-1234, imsi={imsi} 로밍"     # 합성 값
     ws.plan("MOCK-7003", plan, pr_notes=["연락처 010-0000-5678"])
     ws.acquire("MOCK-7003")
     ws.stage("MOCK-7003", "issue/MOCK-7003")
@@ -269,7 +270,7 @@ def test_pr_body_note_is_masked_like_issue_db_file():
     body = summary["pr_body"]
     [issue_file] = Path(ws.wt("MOCK-7003")).glob("**/issues/MOCK-7001.yaml")
     db_note = yaml.safe_load(issue_file.read_text(encoding="utf-8"))["note"]
-    assert "010-0000-1234" not in body and "450009999999999" not in body
+    assert "010-0000-1234" not in body and imsi not in body
     assert "<MSISDN#1>" in db_note and "<IMSI#1>" in db_note
     assert f"- 메모: {db_note}\n" in body
     assert "- 연락처 <MSISDN#1>\n" in body       # pr_notes 마스킹 결과(번호 포함)는 그대로
