@@ -1,0 +1,27 @@
+# 합성 case (11/12 Android case 보강). 출처: Android 17 에뮬레이터 캡처 c09r2-mo-no-service(음성·데이터 미등록 상태에서 발신 1건)에서 고른 줄 — AOSP 층만, 벤더 줄 없음. 함정: 프레임워크가 서비스 없음(OOS)으로 발신을 스스로 막아 RILJ DIAL이 없다 — 그 층 로그 없음이 아니다. 등록 상태 RILJ·SST 줄은 call 보기에서 빠지고 SST pollStateDone(hasDeregistered)만 남는다. files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+schema_version: 2
+name: call-mo-out-of-service
+kind: explore
+synthetic: true
+key: MOCK-9823
+issue:
+  summary: 전화 걸면 바로 끊김 (합성)
+  description: 상태 표시줄에 서비스 없음이 보이는 상태에서 전화를 걸면 연결음 없이 바로 끊깁니다. 원인을 확인해 주세요. 합성 case.
+  occurred_at: '2026-11-12T01:07:19+0000'
+  platform_version: '17'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  accept:
+    - layer: '모뎀|망'
+      daemon: '없음|알 수 없음|SST'
+      evidence: ['hasDeregistered = true|deregistered=true', 'Cellular network not available']
+  trap:
+    - label: '^\s*(그\s*층\s*로그\s*없음|RILJ|RIL HAL|벤더 RIL|프레임워크)'
+    - label: '^\s*원인\s*아님'
