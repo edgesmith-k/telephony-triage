@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=병합 2(72 +1 뒤 병합해줘·75 +1 관문), H=모듈 스킬 레포·출력 검사 4(76~79). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=병합 2(72 +1 뒤 병합해줘·75 +1 관문), H=모듈 스킬 레포·출력 검사 4(76~79), W9=setup 2(58 재점검 doctor 표·80 첫 사용자 setup). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -3072,6 +3072,35 @@
         "우회하지 않았다: git clone·ls-remote·fetch, gh auth, 자격 증명 편집, module 다시 부르기가 없고 모의 SKILL.md 읽기·Skill 호출도 없다",
         "분류를 이어 가 계획(dry-run)까지 갔다",
         "모듈 스킬 lock이 남지 않았고 레포 브랜치가 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 80,
+      "name": "setup-first-time",
+      "batch": "W9",
+      "design": "플러그인을 방금 설치한 첫 사용자(setup `fresh_user`: 사용자 config도 이슈 DB clone도 없다, gh 인증은 있음)의 setup 1~10 전체. 팀 기본값에 이슈 DB 원격이 없어 config 전 질문은 원격 URL·clone 경로·GHE 아이디 확인 3개뿐이고, `config.py init` → 동의 뒤 `git clone`(격리 홈 `.gitconfig`의 insteadOf로 모의 GHE URL이 로컬 bare 원격이 된다) → Jira 도구 매핑 확인 → hook·스냅샷 → doctor 표까지 간다. eval 58(이미 설정된 사용자의 재점검)의 짝",
+      "prompt": "플러그인 방금 설치했어. /telephony-triage:setup",
+      "setup": {
+        "fresh_user": true
+      },
+      "user_replies": [
+        "이슈 DB 원격 URL을 물으면 'https://ghe.mock.invalid/mock-org/telephony-issue-db.git'.",
+        "이슈 DB 로컬 clone 경로를 물으면 환경 변수 TELEPHONY_TRIAGE_HOME의 상위 폴더 아래 repo/clone의 절대 경로를 답한다(값은 echo로 확인한다).",
+        "GHE 아이디를 확인해 달라고 하면 보인 아이디 그대로 확인한다(아이디를 물으면 'mock-user').",
+        "git clone을 제안하면 동의한다.",
+        "Jira MCP 서버(mock-jira)와 제안된 도구 매핑(get_issue·search_issues·get_comments)·읽기 도구를 확인해 달라고 하면 바꾸지 않고 그대로 확인한다.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "config가 없으므로 원격 URL → clone 경로 → GHE 아이디 확인(최대 3개)만 묻고 config.py init --answers로 config.yaml을 만든다. 묻지 않은 팀 기본값은 한 번만 한 줄씩 보인다. init의 suggest_clone을 제안해 동의 뒤 git clone하고, 0번 tracker-candidates 결과의 mock-jira 도구 매핑·읽기 도구를 확인받아 config.py set-tracker로 저장한다. install-hooks → lock acquire·snapshot·check → lock release → gh-status 뒤 config.py doctor --format markdown의 표를 가공하지 않고 그대로 보이고 이슈 DB docs/getting-started.md 위치를 알린다. 끝난 뒤 lock이 없다.",
+      "assertions": [
+        "`config.py init`을 실행해 사용자 config(`config.yaml`)가 생겼고 `issue_db.path`·`issue_db.remote`가 사용자가 답한 값이며 `user.ghe_id`가 있다",
+        "config를 만들기(`config.py init`) 전에 물은 것이 3개 이하다(원격 URL·clone 경로·GHE 아이디 확인)",
+        "이슈 DB clone은 `git clone`을 제안해 사용자 동의를 받은 뒤 만들었다",
+        "Jira MCP 서버(mock-jira)와 도구 매핑을 확인받은 뒤 `config.py set-tracker`로 저장했다(`tracker.tools.get_issue`)",
+        "`config.py doctor --format markdown`을 실행했다",
+        "doctor 표(`| 점검 | 상태 |` 머리와 모든 행)를 다시 요약하지 않고 그대로 붙였다",
+        "setup lock을 잡았다가 풀어 끝난 뒤 lock이 없다"
       ],
       "files": []
     }

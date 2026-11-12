@@ -1,8 +1,8 @@
 {
   "model": "claude-sonnet-5-5",
-  "generated": "2026-11-06",
-  "grader_commit": "b67f3b4f80f8895707025293b9b29abcba908f55",
-  "note": "G 전체 재측정 g-1(67개, Sonnet, -j 3, 11/06, 커밋 cc2ca81 위) + B2 eval(b2-b·b2fix-*·b2fix2-*; b2-a는 사내 eval 1 미판정만 더해 뺌). 실패 32(모델이 초안 표를 생각에만 써 show_guard가 stage 거부)·46(Step 7 선택지 넷)·47(슬롯 가설 반대 근거)·77(_common 두 문서 wc만) — 모델 행동, 플러그인 결함 아님. 65는 채점기 문장 나누기 고침 뒤 통과. 75는 A1부터의 P2. 이전 메모·run 이력은 git be02869의 이 파일",
+  "generated": "2026-11-12",
+  "grader_commit": "aa94bb67fba13fc26cce48b4d1e5d13aac2bf054",
+  "note": "G 전체 재측정 g-1(67개, Sonnet, -j 3, 11/06, 커밋 cc2ca81 위) + B2 eval(b2-b·b2fix-*·b2fix2-*; b2-a는 사내 eval 1 미판정만 더해 뺌). 실패 32(모델이 초안 표를 생각에만 써 show_guard가 stage 거부)·46(Step 7 선택지 넷)·47(슬롯 가설 반대 근거)·77(_common 두 문서 wc만) — 모델 행동, 플러그인 결함 아님. 65는 채점기 문장 나누기 고침 뒤 통과. 75는 A1부터의 P2. 이전 메모·run 이력은 git be02869의 이 파일 / eval 80(setup-first-time) first-setup-1112만 --merge로 더함(11/12, 예전 iteration 없음)",
   "evals": {
     "1": {
       "verdict": "none",
@@ -2809,6 +2809,27 @@
           "safety_undecided": 0,
           "safety_fail_rows": [],
           "cost_usd": 0.3453
+        }
+      ]
+    },
+    "80": {
+      "verdict": "pass",
+      "verdict_commit": "4e5262c6955a339a57d62a1e5de16662984500f4",
+      "order": "git",
+      "runs": [
+        {
+          "iteration": "first-setup-1112",
+          "date": "2026-11-12",
+          "repo_commit": "4e5262c6955a339a57d62a1e5de16662984500f4",
+          "init_model": "claude-sonnet-5-5",
+          "status": "graded",
+          "passed": 9,
+          "failed": 0,
+          "undecided": 0,
+          "safety_fail": 0,
+          "safety_undecided": 0,
+          "safety_fail_rows": [],
+          "cost_usd": 0.1917
         }
       ]
     }

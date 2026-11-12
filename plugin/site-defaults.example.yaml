@@ -159,6 +159,8 @@ platform:
 #       vendor_ipc: {context: IpcCtx_, complete: OnIpcComplete, request_prefix: VIPC_, error_prefix: VIPC_E_, success: VIPC_E_OK}   # TODO(SITE:S9) 벤더 IPC 줄 사내 토큰(아래 android와 같은 키)
 #       dump_func: example_dump                      # TODO(SITE:S24) 메시지를 여러 줄에 잘라 찍는 덤프 함수 이름(`<이름>() ` 뒤가 조각). 생략하면 이 placeholder — 사내 줄의 갈린 값을 잇지 못한다
 #       # log.phone_id를 쓰면 msg_prefix·msg_suffix 목록이 통째로 바뀐다 — 내장 gril 슬롯 규칙(`[<slot>,`·`/ril_<n>`)을 함께 둔다(TODO(SITE:S29))
+#       # log.phone_id 식은 msg_format 앞머리를 떼기 전 원문 메시지·ident에 맞춘다 — 앞머리 뒤의 슬롯 표기는 앞머리까지 넣은 식이나 `^(?=.*<표기>(\d))`로 쓴다
+#       # msg_format이 줄과 맞지 않으면 경고 없이 원문으로 처리된다(split_tag도 붙지 않는다). 새 ident는 oFono 이슈 DB tags.yaml에도 있어야 줄이 나온다(split_tag면 tag_regex)
 # platform.detect.tracker_field: 켠 플랫폼 2개 이상에서 이슈 시작 때 트래커 필드 값으로 플랫폼 고르기(17-platforms §11, 기본 꺼짐).
 #   로그 형식과 다르면 묻는다. 경로는 field_map 표기, 값은 켠 플랫폼 이름. 예:
 #   detect:

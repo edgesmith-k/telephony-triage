@@ -1,5 +1,5 @@
 # 합성 case (C1D 보정 §6.3 N2). files/의 timeline·입력·analysis는 make_module_eval_inputs.py --write가 만든다
-# 사용자 11/06: 새 파라미터 추가 때 datad·ofonod를 함께 고침 — 두 후보 모두 인정(APN 핵심 로직은 ofonod). source.log 1행 주석대로 ofonod 쪽 APN 설정 줄은 없어 근거는 datad 후보와 같은 두 줄
+# 채점 가정(11/06 검토): datad·ofonod 두 후보를 모두 인정한다(APN 핵심 로직은 ofonod 쪽으로 둔다). source.log 1행 주석대로 ofonod 쪽 APN 설정 줄은 없어 근거는 datad 후보와 같은 두 줄
 schema_version: 2
 name: data-apn-overwritten
 kind: explore

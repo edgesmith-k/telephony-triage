@@ -52,3 +52,5 @@ python3 plugin/scripts/module_eval.py --module ofono/data --dry-run
 ```
 
 `--dry-run`은 계획·추정 비용만 보인다. 실제 실행은 자식 `claude -p`를 띄워 비용이 들므로 dry-run 결과를 보이고 사용자가 승인한 뒤에만 한다. 결과는 `tests/skill_evals/workspace/module-<p>-<m>-NNN/`(커밋하지 않음)에 남는다.
+
+사내에서 문서의 이름(데몬·태그·로그 줄)을 사내 값으로 맞추는 PR에는 eval이 필요 없다(`module_repo_check.py` + 리뷰). 합성 case는 placeholder 이름 그대로라 사내 값을 넣은 문서와는 맞지 않는다 — 사내 값 적용 뒤에는 합성 case로 eval을 돌리지 않는다(토큰만 쓴다). 절차·판단 규칙을 바꿔 확인이 필요할 때만 사내 로그 case 소수로(`site_step.py` MS-2 2번).

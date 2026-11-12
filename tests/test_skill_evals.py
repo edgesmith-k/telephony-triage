@@ -1291,7 +1291,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 79      # H(76~79) 뒤. 그 전 75
+    assert len(by_id) == 80      # 80 setup-first-time 뒤. H(76~79)까지 79, 그 전 75
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 11), (62, 6)):
         e = by_id[eid]
@@ -3915,3 +3915,82 @@ def test_eval_env_bash_home_lists_mock_jira_as_user_scope_server(tmp_path):
     assert found["usable"] == ["mock-jira"], found
     (server,) = found["servers"]
     assert server["probe"] == "stdio" and server["suggested"]["get_issue"] == "mcp__mock-jira__jira_fetch_ticket"
+
+
+# --- 첫 사용자 setup (eval 80 setup-first-time, setup `fresh_user`) ------------------------------------------------
+
+def test_e80_fresh_user_env_has_no_config_or_clone(tmp_path):
+    """setup `fresh_user`: 사용자 config와 이슈 DB clone이 없고, 격리 홈 .gitconfig의 insteadOf로 모의 GHE URL이 로컬 원격에서
+    clone된다. `run.py`는 skill_dir만 든 config를 만들지 않는다. fresh_user가 없는 eval(58)의 환경은 그대로다."""
+    import skill_eval_env
+
+    by_id = {e["id"]: e for e in _entries()}
+    e = by_id[80]
+    assert e["name"] == "setup-first-time" and e["batch"] == by_id[58]["batch"] and e["setup"] == {"fresh_user": True}
+    assert not any((x.get("setup") or {}).get("fresh_user") for x in by_id.values() if x["id"] != 80)
+    assert grader.FIRST_SETUP_REMOTE in e["user_replies"][0]
+    assert "80" not in json.loads((EVALS / "pending.json").read_text(encoding="utf-8"))["site"]     # 사외 결과로 갈음(사용자 결정 11/12)
+    assert len(e["assertions"]) == 7                                                                 # 수동 행 없음 — 사외 판정이 수동 채점에 묶이지 않는다
+    info = skill_eval_env.build(e, tmp_path / "env")
+    home = Path(info["env"]["TELEPHONY_TRIAGE_HOME"])
+    assert not (home / "config.yaml").exists() and not Path(info["issue_db_clone"]).exists() and Path(info["remote"]).is_dir()
+    assert Path(info["work_dir"]) == home / "work"
+    evaluation.prepare_plugin_mode(e, info, tmp_path / "env")
+    assert not (home / "config.yaml").exists()
+    env = {**os.environ, "HOME": info["user_home"], "USERPROFILE": info["user_home"]}
+    subprocess.run(["git", "clone", "-q", grader.FIRST_SETUP_REMOTE, str(tmp_path / "c")], check=True, capture_output=True, env=env)
+    assert (tmp_path / "c" / "issue-db.config.yaml").is_file()
+    old = skill_eval_env.build(by_id[58], tmp_path / "env58")
+    assert not (Path(old["user_home"]) / ".gitconfig").exists() and Path(old["issue_db_clone"]).is_dir()
+    assert (Path(old["env"]["TELEPHONY_TRIAGE_HOME"]) / "config.yaml").is_file()
+    assert Path(old["work_dir"]) != Path(old["env"]["TELEPHONY_TRIAGE_HOME"]) / "work"
+
+
+E80_TABLE = "| 점검 | 상태 | 내용 |\n|---|---|---|\n| config | ok | 있음 |\n| gh | ok | mock-user |\n\nok 2 · warn 0 · fail 0 · skip 0\n"
+
+
+def _e80(tmp_path, *, extra_ask=False, clone_ask=True, table=E80_TABLE, lock=False):
+    env, run, home, clone = tmp_path / "env", run_dir(tmp_path), tmp_path / "home", tmp_path / "clone"
+    (home / "work").mkdir(parents=True)
+    (clone / ".git").mkdir(parents=True)
+    env.mkdir()
+    (env / "env.json").write_text(json.dumps({"remote": str(tmp_path / "remote"), "work_dir": str(home / "work"),
+                                              "issue_db_clone": str(clone), "gh_state": str(tmp_path / "gh"),
+                                              "env": {"TELEPHONY_TRIAGE_HOME": str(home)}}), encoding="utf-8")
+    (env / "before.json").write_text("{}", encoding="utf-8")
+    (home / "config.yaml").write_text(json.dumps({
+        "user": {"ghe_id": "mock-user"}, "issue_db": {"path": str(clone), "remote": grader.FIRST_SETUP_REMOTE},
+        "tracker": {"mcp_server": "mock-jira", "tools": {"get_issue": "mcp__mock-jira__jira_fetch_ticket"}}}), encoding="utf-8")
+    if lock:
+        (home / "work" / "session.lock").write_text("{}", encoding="utf-8")
+    n = iter(range(99))
+    ask = lambda q: ("tool", f"a{next(n)}", "mcp__eval-approver__ask_user", {"question": q}, "답", False)  # noqa: E731
+    bash = lambda c, r="{}": ("tool", f"b{next(n)}", "Bash", {"command": c}, r, False)  # noqa: E731
+    _seq_events(run, [
+        ask("이슈 DB 원격 URL은?"), ask("이슈 DB 로컬 clone 경로는?"), ask("이 아이디로 기록합니다: mock-user"),
+        *([ask("base 브랜치는?")] if extra_ask else []),
+        bash("python3 $S/config.py init --answers /tmp/a.json"),
+        *([ask("git clone https://ghe.mock.invalid/… 을 실행할까요?")] if clone_ask else []),
+        bash(f"git clone {grader.FIRST_SETUP_REMOTE} /tmp/clone"),
+        ask("mock-jira 도구 매핑 get_issue = mcp__mock-jira__jira_fetch_ticket 이 맞습니까?"),
+        bash("python3 $S/config.py set-tracker --server mock-jira --get-issue mcp__mock-jira__jira_fetch_ticket"),
+        bash("python3 $S/db_pr.py lock acquire setup --command setup"), bash("python3 $S/db_pr.py lock release setup"),
+        bash("python3 $S/config.py doctor --format markdown", E80_TABLE), ("text", table)])
+    return [fn for fn in grader.checks(80, grader.Ctx(env, run)) if fn]
+
+
+def test_e80_rows_follow_the_run_record(tmp_path):
+    verdicts = lambda **kw: [fn()[0] for fn in _e80(tmp_path / str(len(list(tmp_path.iterdir()))), **kw)]  # noqa: E731
+    assert verdicts() == [True] * 7
+    assert verdicts(extra_ask=True) == [True, False, True, True, True, True, True]       # config 전 질문 4개
+    assert verdicts(clone_ask=False) == [True, True, False, True, True, True, True]      # 동의 없이 git clone
+    assert verdicts(table="doctor 13개 모두 ok입니다.") == [True, True, True, True, True, False, True]   # 표를 요약
+    assert verdicts(lock=True) == [True] * 6 + [False]
+    d = tmp_path / "empty"                                  # 실행 흔적이 없으면 어느 항목도 통과로 세지 않는다
+    for fn in grader.checks(80, grader.Ctx(_synthetic_env(d), run_dir(d))):
+        if fn is None:
+            continue
+        try:
+            assert fn()[0] is False
+        except grader._Manual:
+            pass

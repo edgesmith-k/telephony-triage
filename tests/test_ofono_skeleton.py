@@ -136,7 +136,7 @@ def test_format_c_level_unreliable_components(tmp_path):
     path = _write(tmp_path, "unreliable.log", [
         "Sep 20 14:32:11.001 dut daemon.crit daemon-a[10]: netlink dump",
         "Sep 20 14:32:11.002 dut daemon.emerg daemon-a[10]: netlink dump",
-        "Sep 20 14:32:11.003 dut daemon.warn daemon-b[11]: self check : ok",
+        "Sep 20 14:32:11.003 dut daemon.warn daemon-b[11]: status ok",
         "Sep 20 14:32:11.004 dut local0.warn daemon-b[13]: ok",
         "Sep 20 14:32:11.005 dut daemon.err ofonod[14]: placeholder",
         "Sep 20 14:32:11.006 dut daemon.crit Daemon-a[15]: 대소문자가 다르면 그대로",
@@ -160,11 +160,11 @@ def test_backend_vendor_ipc_builtin(tmp_path):
     from platforms.ofono import backend
 
     path = _write(tmp_path, "ipc.log", [
-        "Sep 20 14:32:11.001 dut daemon.debug daemon-b[7]: [<DEV#1>][RX] VIPC_DEMO_QUERY, RSP, 12 bytes, "
-        "Token(0x0101), Error(VIPC_E_DEMO_FAILURE)",
+        "Sep 20 14:32:11.001 dut daemon.debug daemon-b[7]: [<DEV#1>][RX] VIPC_DEMO_QUERY, RSP, "
+        "Error(VIPC_E_DEMO_FAILURE)",
         "Sep 20 14:32:11.002 dut daemon.debug daemon-b[7]: [IpcCtx_0] OnIpcComplete Request ID=10, result=2",
-        "Sep 20 14:32:11.003 dut daemon.debug daemon-b[7]: [<DEV#1>][RX] VIPC_SIM_IO, RSP, 12 bytes, "
-        "Token(0x0102), OK(VIPC_OK)",
+        "Sep 20 14:32:11.003 dut daemon.debug daemon-b[7]: [<DEV#1>][RX] VIPC_SIM_IO, RSP, "
+        "OK(VIPC_OK)",
         "Sep 20 14:32:11.004 dut daemon.debug daemon-b[7]: [IpcCtx_0] OnIpcComplete Request ID=11, result=0",
         "Sep 20 14:32:11.005 dut daemon.debug ofonod[8]: [IpcCtx_0] OnIpcComplete Request ID=12, result=2",
         "Sep 20 14:32:11.006 dut daemon.debug daemon-a[9]: [<DEV#1>][RX] VIPC_DIAL, RSP, Error(VIPC_E_DEMO_FAILURE)",

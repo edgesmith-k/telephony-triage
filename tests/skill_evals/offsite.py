@@ -19,8 +19,11 @@ eval마다 run 요약을 모은다. transcript·출력·절대 경로는 넣지 
 - 여러 모델이 섞이면 쓰지 않는다(종료 2). 모델별로 따로 모아야 사내 모델과 비교할 수 있다.
 - `site`가 아닌 eval에 run이 없으면 `none`으로 두고 경고한다(사내 S-2 `s2.offsite`가 사용자 필요로 본다).
 - 쓰기는 원자적이다(임시 파일 → 이름 바꾸기).
+- `--merge`: 예전 iteration이 없어 전체를 다시 만들 수 없을 때. 기존 `--out` 파일을 읽어 넘긴 iteration에 run이 있는 eval 항목만 채우고
+  나머지 항목은 그대로 둔다. 기존 기록과 모델이 다르거나, 채울 eval에 이미 run이 있으면 종료 2(그때는 전체 iteration으로 다시 만든다).
+  `generated`·`grader_commit`은 갱신하고 `--note`는 기존 note 뒤에 덧붙인다.
 
-종료 코드: 0 기록함, 2 사용 오류(iteration 없음·run 없음·모델 혼합).
+종료 코드: 0 기록함, 2 사용 오류(iteration 없음·run 없음·모델 혼합·`--merge` 조건 위반).
 """
 from __future__ import annotations
 
@@ -204,6 +207,23 @@ def build(iterations: list[Path], entries: list[dict], site: set[int], note: str
     return out, warnings
 
 
+def merge(old: dict, new: dict, note: str | None) -> tuple[dict, list[str]]:
+    """기존 기록(old)에 new에서 run이 있는 eval 항목만 채운다 → (기록, 채운 eval id). 조건 위반은 Usage."""
+    if not isinstance(old.get("evals"), dict) or not old.get("model"):
+        raise Usage("--merge: 기존 기록 파일이 없거나 읽을 수 없다(model·evals)")
+    if old["model"] != new["model"]:
+        raise Usage(f"--merge: 모델이 다르다(기존 {old['model']} / 새 run {new['model']})")
+    filled = [k for k, e in new["evals"].items() if e["runs"]]
+    taken = [k for k in filled if (old["evals"].get(k) or {}).get("runs")]
+    if taken:
+        raise Usage(f"--merge: 기존 기록에 이미 run이 있는 eval {taken} — 전체 iteration으로 다시 만든다")
+    evals = {**{k: e for k, e in new["evals"].items() if k not in old["evals"]}, **old["evals"]}     # 기존 순서 그대로, 새 eval은 채워지면 제자리
+    evals = {k: (new["evals"][k] if k in filled else evals[k]) for k in sorted(evals, key=int)}
+    notes = " / ".join(n for n in (old.get("note"), note) if n)
+    return {"model": old["model"], "generated": new["generated"], "grader_commit": new["grader_commit"],
+            **({"note": notes} if notes else {}), "evals": evals}, filled
+
+
 def write_atomic(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
@@ -228,6 +248,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("iteration", nargs="+", help="사외 iteration 디렉토리(한 모델로 실행한 것만)")
     ap.add_argument("--out", default=str(DEFAULT_OUT), help="기록 파일(기본 tests/skill_evals/offsite_results.json)")
     ap.add_argument("--note", help="기록에 남길 메모(예: 잠정 — 재측정 뒤 다시 만든다)")
+    ap.add_argument("--merge", action="store_true",
+                    help="기존 --out 파일에 넘긴 iteration의 eval 항목만 채운다(나머지는 그대로, 이미 run이 있는 eval·모델 다름은 종료 2)")
     ap.add_argument("--evals-dir", default=str(HERE), help=argparse.SUPPRESS)   # 테스트용(evals.json·pending.json 위치)
     ap.add_argument("--git-repo", default=str(REPO), help=argparse.SUPPRESS)    # 테스트용(커밋 조상 관계를 볼 저장소)
     args = ap.parse_args(argv)
@@ -236,6 +258,9 @@ def main(argv: list[str] | None = None) -> int:
         entries = json.loads((evals_dir / "evals.json").read_text(encoding="utf-8"))["evals"]
         data, warnings = build([Path(p) for p in args.iteration], entries, site_ids(evals_dir), args.note,
                                Path(args.git_repo))
+        if args.merge:
+            data, filled = merge(_load(Path(args.out)), {**data, "note": None}, args.note)
+            warnings = [w for w in warnings if any(w.startswith(f"eval {k}:") for k in filled)]
     except Usage as exc:
         print(f"offsite.py: {exc}", file=sys.stderr)
         return 2

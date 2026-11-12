@@ -532,8 +532,10 @@ def _obligation(kind, key, i, n, r):
         lines, must = [str(x) for x in r.get("lines") or []], [str(x) for x in r.get("must_show") or []]
         if not (lines or must):
             return None
+        # 붙일 줄: 결정적 줄(`- ` 붙음)이 글자 그대로 담은 must_show는 다시 싣지 않는다 — 점검(`missing`)은 둘 다 그대로 본다
         return Obligation(kind, key, i, n, "end", lines=lines, must_show=must,
-                          block="\n".join(lines + [m for m in must if m not in lines]), path=r.get("path"), extra=extra)
+                          block="\n".join(lines + [m for m in must if not any(m in ln for ln in lines)]),
+                          path=r.get("path"), extra=extra)
     rules = [x for x in r.get("rules") or [] if isinstance(x, dict) and x.get("id")]
     return Obligation(kind, key, i, n, "end", rules=rules, block=_draft_block(rules), extra=extra)
 

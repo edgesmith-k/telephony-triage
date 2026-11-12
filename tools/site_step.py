@@ -108,6 +108,7 @@ MODULE_GUIDE = {
 1. (선택) 사내 Android 분석 스킬을 `android/<m>/`에 합친다(텍스트 절차만). 합치기 전에는 `prefer: skill`로 그대로 쓴다.
 2. (선택) `module_eval.py`를 S-5 라벨셋(마스킹, tests/site/module-evals/)에 소수로 — 비용 승인 뒤. case는 `synthetic: false`·`origin` 없음·
    source.log 마스킹 잔여 0, 렌더 트리에 넣고 `--case <이름>`으로 고른 case만(docs/SITE_RESTORE.md ⑥).
+   이름만 사내 값으로 맞춘 PR에는 돌리지 않는다. 템플릿의 합성 case(placeholder 이름)는 사내 문서와 맞지 않으니 사내에서 돌리지 않는다.
 3. 정기 점검(매주, 상한 300,000 토큰): `site_step.py audit` → 사내 Claude 리뷰(review.md) → `audit --record`.""",
 }
 EVAL_BATCH = 5
