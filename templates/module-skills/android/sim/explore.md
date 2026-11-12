@@ -24,7 +24,7 @@ Uicc*/SIMRecords → RILJ → RIL HAL `RadioSimProxy` → 벤더 RIL `[TX] VIPC_
 |---|---|---|---|
 | SIM 인식 안 됨 | UiccController, `GET_SIM_STATUS` | IPC `Error(VIPC_E_*)`·SW → 모뎀·망(카드) / IPC OK 뒤 `errorCode≠0` → 벤더 RIL | `Error getting ICC status` / 삽입부터 수집 |
 | 인식 느림 | 같은 요청의 RILJ → `[TX]` → `[RX]` 시각 | TX↔RX가 길면 모뎀·망(카드) / RILJ↔TX가 길면 벤더 RIL | `ACTION_SIM_STATE_CHANGED` 시각 / 부팅부터 수집 |
-| eSIM(프로필·EID·채널) | `SIM_OPEN_CHANNEL` | `NO_SUCH_ELEMENT`·SW `6A82` → 카드에 애플릿 없음 / 다른 클라이언트 채널 중 busy | 채널을 연 클라이언트, eSIM 앱 로그 |
+| eSIM(프로필·EID·채널) | `SIM_OPEN_CHANNEL` | `NO_SUCH_ELEMENT`·SW 6A82(`IccIoResult sw1:0x6a sw2:0x82`) → 카드에 애플릿 없음 / 다른 클라이언트 채널 중 busy | 채널을 연 클라이언트, eSIM 앱 로그 |
 
 ## ⑤ 함정
 
