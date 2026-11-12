@@ -24,9 +24,11 @@
         negative_control: true    # 선택. 대조군(일부러 틀린 라벨 등): 돌리고 판정은 보이되 지표의 분모·분자에서 뺀다
 
 지표(대조군 제외 — `negative_control: true` 항목은 `controls`로 따로 세고 표에 `대조군(<판정>)`으로 보인다. **표본내**
-항목 — 로그가 그 이슈 DB의 `*/fixtures/` 아래 파일(시그니처를 만들 때 쓴 fixture 자체)이면 자기 일치라 정확도 지표가 아니다 —
-도 자동으로 `in_sample`로 세고 표에 `표본내(<판정>)`로 보이며 지표에서 뺀다. 도구 동작 확인(합성 샘플)에는 `--include-in-sample`.
-사내 S-5는 시그니처 작성에 쓰지 않은 로그만 넣는다):
+항목 — 로그가 그 이슈 DB의 `*/fixtures/` 아래 파일(시그니처를 만들 때 쓴 fixture 자체)이거나, 항목 `key`가 그 DB에 이미
+기록된 이슈(`<카테고리>/<유형>/issues/<KEY>.yaml`의 파일 이름, Jira 키 기준)이면 자기 일치라 정확도 지표가 아니다 —
+도 자동으로 `in_sample`로 세고(사유는 항목 `in_sample_reason`: `fixture` 우선, 아니면 `db-record`) 표에 `표본내(<판정>)`로
+보이며 지표에서 뺀다. 도구 동작 확인(합성 샘플)에는 `--include-in-sample`. 기록 없이 시드(import fixture)에만 쓴 Jira는
+도구가 못 가린다 — 사내 S-5는 시그니처 작성에 쓰지 않은 로그만 넣는다):
   - 1위 정확도: 정답이 원인 ID인 항목 중 1위 후보가 정답인 비율
   - 상위 3 포함률: 정답이 원인 ID인 항목 중 상위 3 후보에 정답이 있는 비율
   - 오탐률: 정답이 unresolved인 항목 중 후보를 낸 비율
@@ -51,6 +53,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import platform
@@ -131,6 +134,13 @@ def _under_fixtures(log: Path, db: Path) -> bool:
     return "fixtures" in rel.parts[:-1]
 
 
+@functools.lru_cache(maxsize=None)
+def _recorded_keys(db: Path) -> frozenset[str]:
+    """이슈 DB에 이미 기록된 이슈 키(`common/issuedb.py`: `<유형 디렉토리>/issues/<KEY>.yaml`). 라벨셋 key는 외부 입력이라
+    glob에 넣지 않고 파일 이름(stem)과 비교한다. DB당 한 번만 훑는다."""
+    return frozenset(p.stem for p in Path(db).glob("*/*/issues/*.yaml"))
+
+
 def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work: Path) -> dict:
     """analyze와 같은 드라이버(`triage.py run --offline-db`)로 파서 → 매처를 돌린다."""
     key = str(item["key"])
@@ -150,9 +160,12 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     tz = item.get("tz", doc.get("tz"))
     if tz:
         args += ["--tz", str(tz)]
+    in_fixture = any(_under_fixtures(Path(p), db) for p in logs)
+    in_db = key in _recorded_keys(db)
     result = {"key": key, "expect": str(item["expect"]), "top": None, "top3": [], "error": None, "warning": None, "unjudged": None,
               "control": bool(item.get("negative_control")),
-              "in_sample": any(_under_fixtures(Path(p), db) for p in logs),
+              "in_sample": in_fixture or in_db,
+              "in_sample_reason": "fixture" if in_fixture else "db-record" if in_db else None,
               "logs_sha256": [hashlib.sha256(Path(p).read_bytes()).hexdigest() if Path(p).is_file() else None for p in logs],
               "backend": None, "external": None}
     try:
@@ -238,7 +251,7 @@ def summarize(results: list[dict], include_in_sample: bool = False) -> dict:
     return {
         "total": len(results),
         "controls": len(controls),          # 지표 제외(돌리기는 한다)
-        "in_sample": len(in_sample),        # fixture 자체인 항목 수(--include-in-sample이 아니면 지표 제외)
+        "in_sample": len(in_sample),        # fixture 자체·DB에 기록된 키인 항목 수(--include-in-sample이 아니면 지표 제외)
         "include_in_sample": include_in_sample,
         "evaluated": len(scored),
         "errors": len(counted) - len(scored),
@@ -276,7 +289,7 @@ def render(results: list[dict], summary: dict) -> str:
         "",
         f"평가 {summary['evaluated']}/전체 {summary['total']}"
         + (f" (대조군 {summary['controls']}건은 지표에서 뺌)" if summary.get("controls") else "")
-        + (f" (표본내 — 시그니처 fixture 자체 — {summary['in_sample']}건은 지표에서 뺌; 도구 동작 확인용이면 --include-in-sample)"
+        + (f" (표본내 — 시그니처 fixture 자체·이슈 DB에 이미 기록된 이슈 — {summary['in_sample']}건은 지표에서 뺌; 도구 동작 확인용이면 --include-in-sample)"
            if summary.get("in_sample") and not summary.get("include_in_sample")
            else f" (표본내 {summary['in_sample']}건 포함 — 정확도 지표 아님)" if summary.get("in_sample") else ""),
         f"항목 {summary['total'] - summary.get('controls', 0) - (0 if summary.get('include_in_sample') else summary.get('in_sample', 0))}건 "
@@ -304,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--plugin-root", default=None)
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--include-in-sample", action="store_true",
-                        help="표본내 항목(로그가 이슈 DB fixtures/ 자체)도 지표에 넣는다 — 도구 동작 확인용, 정확도 측정 아님")
+                        help="표본내 항목(로그가 이슈 DB fixtures/ 자체이거나 키가 DB에 기록된 이슈)도 지표에 넣는다 — 도구 동작 확인용, 정확도 측정 아님")
     args = parser.parse_args(argv)
 
     label_path = Path(args.labelset).resolve()
