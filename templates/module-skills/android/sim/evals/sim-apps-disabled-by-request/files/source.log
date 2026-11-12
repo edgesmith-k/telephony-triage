@@ -1,6 +1,4 @@
 -- [합성] telephony-triage module-skills eval log. Android 17 에뮬레이터 캡처(s02-sim-power)에서 고른 줄이다(시각·pid 그대로, 줄만 줄이고 사용자 id 칸은 뺌). 벤더 줄 없음.
-11-10 16:21:57.432  9995 10059 D PhoneInterfaceManager: handleShellCommand
-11-10 16:21:57.433  9995 10059 D TelephonyShellCommand: Disabling physical subscription with subId=1
 11-10 16:21:57.433  9995 10059 D SMSVC   : setUiccApplicationsEnabled: subId=1, enabled=false, calling package=null
 11-10 16:21:57.433  9995  9995 D SMSVC   : updateUserIdToAvailableSubs: {-10000=[1]}
 11-10 16:21:57.433  9995  9995 D MultiSimSettingController: notifySubscriptionInfoChanged

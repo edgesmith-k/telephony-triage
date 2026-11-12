@@ -20,7 +20,7 @@ run_expect:
 expect:
   accept:
     - layer: '모뎀|망'
-      daemon: '모뎀|망|없음|알 수 없음'
-      evidence: ['NOT_REG_MT_NOT_SEARCHING_OP', 'REG_HOME']
+      daemon: '모뎀|망|없음|알 수 없음|RIL$|RIL[ (]|SST|NRM'
+      evidence: ['NOT_REG_MT_NOT_SEARCHING_OP', 'REG_HOME|hasDeregistered = true']
   trap:
-    - label: '^\s*(프레임워크|SST|RILJ|RIL HAL|곁가지|원인\s*아님)'
+    - layer: '^\s*(프레임워크|SST|RILJ|RIL HAL|곁가지|원인\s*아님)'

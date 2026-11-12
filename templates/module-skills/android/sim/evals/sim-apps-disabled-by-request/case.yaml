@@ -20,7 +20,7 @@ run_expect:
 expect:
   accept:
     - layer: '프레임워크'
-      daemon: 'SMSVC|SubscriptionManager|MultiSimSettingController|프레임워크|설정|사용자|셸|shell|없음|알 수 없음'
+      daemon: 'SMSVC|SubscriptionManager|MultiSimSettingController|프레임워크|설정|사용자|없음|알 수 없음'
       evidence: ['setUiccApplicationsEnabled: .*enabled=false']
     - layer: '원인\s*아님'
       daemon: '없음|알 수 없음|SMSVC|SubscriptionManager'
