@@ -56,3 +56,24 @@ DRAFT_NOTES 후보 줄의 풀이와, 상한 때문에 거기 못 넣은 P2다. �
 - **마스킹(#90)**: 한글만으로 된 `token=` 값 미마스킹(설계)과 contracts "값 무관" 문구 불일치. `iccid=8982` 뒤 US 구분자 꼴은 앞 4자리가 남음(이전부터). `fold_ascii`가 masking·check_boundary에 중복 정의, `isascii()` 빠른 경로 없음. 갈린 조각 표 키가 IMSI·ICCID는 접지 않은 원문. check_boundary: 예외 처리된 접은 글 match가 뒤 값을 삼키면 접은 글에서만 보이는 위반이 빠질 수 있음.
 - **사내**: IMS는 별도 APK라 IMS 줄·규칙·ims·call 모듈 문서는 S-1에서 먼저 맞춘다(확인 항목은 레포 밖 사내 확인 목록).
 - 기록이 없어 내용 확인이 필요한 후보: C 지표 자리, 4-c 2차, B 조건부, 4-c P2 6건, D① P2 잔여, F3의 B/C, 분석 전용 종료 표식, 포트 변조 잔여(끝 `.`·`키: 값`).
+
+## 11/12 이동: 줄인 줄의 원문 (진행 상태 1줄, 결정 (v)(p)(q)(d)(e)(o))
+
+- **코덱스 종합 리뷰 반영 완료**(`58ae770`·`1554dc0`, GRADER_VERSION 5). WSL 전체 pytest 통과, hook_probes 176개 판정 동일. 상세는 `docs/history/draft-notes-2026-11.md`.
+- (v) 11/09 사용자(코덱스 02e0ec2): **F01 보강** — DB가 쓰는 시그니처 feature는 `issue-db.config.yaml signature_features`에 선언, 플러그인이 모르는 feature면 **분석 중단**(읽기 전용 아님, `feature-unsupported`); 새 필드는 S37 결과·팀 설치본 통일 뒤에만. **Q01 채택 관문** — 가설 줄 `[근거 불일치 N]`, fabricated 인용이 든 가설은 시그니처 초안에 쓰지 않고 사용자가 재확인한 인용만(종료 0 유지). 채점 판정(S 행 어느 것이든)이 바뀌면 GRADER_VERSION을 올린다.
+- (p) 수정 절차(10/14, 11/08 역할): **재확인·설계 = Fable 메인, 구현+시험 = Opus, 리뷰 = 별개 Opus(설계자 아님) → P0·P1은 그 단계에서 고치고 테스트·기계 검증** → 통과 뒤 커밋. H 진행 방식은 `MODULE_SKILLS_DECISIONS.md`.
+- (q) 사내 S-2 축소(10/14, 사용자): 사내 대상 = `pending.json` `site` 11개(hook·권한·적대 입력·외부 쓰기·사내 측정), 사내 모델이 다르면 +7. 나머지는 `offsite_results.json`(도구 생성)으로 갈음, 사외 실패·미결정은 사유 면제, 안전 위반은 면제 불가.
+- (d) 반입 전에는 v1 스키마를 직접 고치고, 배포 뒤 구조 변경은 항상 버전을 올린다. 호환 변경은 올리지 않고 운영 DB `schema/`를 메인테이너 PR로(`06 §6.4`). (10/04, 10/28 사용자)
+- (e) verify-fix 흔적: 코드·설정 수정 유형은 흔적 필수. 비코드 유형(user-setting·network·hw)에 흔적 시그니처가 둘 다 없을 때만 사용자 확인으로 판정하고 `verification.note`에 남긴다. (10/04, R9)
+- (o) 사내 트래커는 Jira (10/12, 사용자): 사내 설정은 `tracker.kind: jira`, S30·S31(GitHub 트래커)은 해당 없음. "사내 설정 시작" 한마디로 `tools/site_step.py`가 단계를 이어 낸다(완료 기준·사용자 확인은 그대로).
+
+## 11/12 가상 사용자 리허설 (태그 전, main `6f7bffc1`)
+
+- 방법: main을 묶음처럼 풀고 임시 마켓플레이스 정의(`source: ./plugin`)와 `site-defaults.yaml`(예시 복사)을 붙여 격리 프로필에서 Claude Code 2.1.322로 `plugin validate`·`marketplace add`·`install`. 사용은 `tests/skill_evals/run.py`(plugin 모드, 모의 Jira·원격·gh, Sonnet 5.5).
+- 설치: 성공. 하위 폴더 source 동작(S1 사외 확인 — 사내 CLI 버전에서 다시), 버전 = 커밋 SHA, 스킬 15·hook 4종. 경고는 `version` 없음(의도)·README 설치 줄 없음(조언).
+- 처음 setup(config·clone 없음 — 기존 eval에 없어 리허설 사본에만 추가): doctor 13항목 ok. 원격을 로컬 경로로 답하면 `config.py init`이 거부하고 멈춘다(의도대로).
+- 사용 13건(eval 1·2·3·12·17·19·31·46·51·53·54·61·72): 기계 채점 실패 0, 수동 17행 pass(별개 에이전트, eval 12 "유지/재분류" 행은 "재분석/그만둔다"로만 물어 단서). guard가 막은 쓰기 0. setup 재점검(58)은 채점 안 함.
+- P2(반입 뒤 후보): ① verify-fix 확인 화면 "열린 PR: 확인 못 함" — PR 검색어(Jira 키·새 ID)가 없어 검색을 안 한 것인데 gh 실패와 같은 문구(`dbpr/publish.py` open_prs, `db_summary.py`). ② `--analysis-only` 리포트를 되돌려 다시 보일 때 "분석 전용…"·"로그 범위…" 줄이 리포트 본문과 must_show 양쪽에 있어 두 번 나온다.
+- 사내 S-2에서 같이 볼 것: eval 1·46에서 publish·release 뒤 `issue_post.py status`와 Jira 게시 질문이 빠졌다(실행자가 "규칙에 없는 질문"이라 생략 — 모의 영향 가능, 미확정).
+- 설계대로라 고치지 않는 것: verify-fix 시각 연도 2000(`verify.md` 시각 기준), 스냅샷 없을 때 검색 `--db` 생략, `report.md` 원인 칸 `TODO(LLM)`.
+- 거슬린 점(미처리): 새 원인 질문 8개(분류 3단계)·Jira 코멘트 9개, 리뷰어 질문 선택지가 "지정 안 함" 하나, show-guard 되돌림으로 질문 재시도(1·2·46), 게시 본문에 `[placeholder 규칙 결과]` 노출.
