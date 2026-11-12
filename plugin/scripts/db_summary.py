@@ -337,7 +337,7 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
     # 계획의 pr_notes: 흐름별 설명(drift 결정, verify-fix 근거, allow-cause 사유 등). 한 번 더 마스킹한다.
     allow = [str(p) for p in ((db_cfg.get("mask") or {}).get("allow_patterns") or [])]
     masker = masking.new_masker(allow_patterns=allow)
-    notes +=[masker(str(n)) for n in plan.get("pr_notes") or [] if str(n).strip()]
+    notes += [masker(str(n)) for n in plan.get("pr_notes") or [] if str(n).strip()]
     check = stage_result.get("config_check") or {}
     push_allowed = bool(check.get("push_allowed")) and not stage_result.get("dry_run")
     commit_message = with_env_trailer(applied.get("commit_message") or "")
