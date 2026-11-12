@@ -45,9 +45,11 @@ def test_unknown_pack_exit_2():
 
 
 def test_s0_pack_is_small():
-    """R-28: S-0 pack에 contracts.md §3.2 전체(약 57KB)를 싣지 않는다."""
+    """R-28: S-0 pack에 contracts.md §3.2 전체(약 57KB)를 싣지 않는다. S-0는 사내 설정 첫 단계라 모든 사내 세션이
+    첫 방문에 싣는다 — 사람이 파이썬을 돌리는 단계이므로 §15.5 행·체크리스트만(§5.8은 경로만, 11/12 약 10.5KB)."""
     out = cp.render("S-0")
-    assert len(out.encode()) < 30_000 and "===== docs/design/contracts.md" not in out
+    assert len(out.encode()) < 11_000 and "===== docs/design/contracts.md" not in out
+    assert "===== docs/design/04-parser-matching.md" not in out and "04-parser-matching.md §5.8" in out
 
 
 def test_s2_pack_has_s1_baseline():

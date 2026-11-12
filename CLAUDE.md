@@ -9,13 +9,13 @@ Android Telephony 이슈 도구: Jira 이슈와 logcat으로 원인·해결책�
 > 1. **사용자가 모드를 말하면** 그 모드 ("사외 초안" / "사내 보완" / "사내 처음부터").
 > 2. **`SITE_PROFILE.md`(≤4KB)가 있으면 사내 모드.** 그 "진행 상태"의 모드·단계에서 잇는다.
 > 3. **`.local-draft`가 있으면 사외 초안.** 사외 PC 전용 표식(반입 안 함, `15-local-draft.md §15.2`). `DRAFT_NOTES.md` "진행 상태"에서 잇는다.
-> 4. **`DRAFT_NOTES.md`만 있으면 묻는다** (반입 때 같이 가므로 이것만으로 판별하지 않는다): 사외 초안 계속(`.local-draft` 생성) / 사내 보완 S-1 시작(`SITE_PROFILE.md` 생성, "모드: 사내 보완").
+> 4. **`DRAFT_NOTES.md`만 있으면 묻는다** (반입 때 같이 가므로 이것만으로 판별하지 않는다): 사외 초안 계속(`.local-draft` 생성) / 사내 보완 S-0 시작(`SITE_PROFILE.md` 생성, "모드: 사내 보완").
 > 5. **모두 없으면 묻는다**: 사외 초안(Phase D0, `.local-draft` 생성) / 사내 처음부터(Phase 0).
 >
 > | 모드 | 시작 | 읽을 것 | 진행 상태 | 하지 않는 것 |
 > |---|---|---|---|---|
 > | 사외 초안 | D0 → 1~13 | `11-phases.md`의 **그 Phase 절**과 "읽을 문서" | `DRAFT_NOTES.md` | Phase 0, 14 |
-> | 사내 보완 | S-1~S-7 (`15-local-draft.md §15.5`) | `context_pack.py S-n` 출력만 | `SITE_PROFILE.md` | **Phase 0·D0·1~13 재실행, `11-phases.md`·문서 전체 읽기** |
+> | 사내 보완 | S-0~S-7 (`15-local-draft.md §15.5`) | `context_pack.py S-n` 출력만 | `SITE_PROFILE.md` | **Phase 0·D0·1~13 재실행, `11-phases.md`·문서 전체 읽기** |
 > | 사내 처음부터 | 0 → D0 → 1~14 | 사외 초안과 같음 | `SITE_PROFILE.md` | — |
 >
 > 위 import가 안 되는 환경(S1)이면 세션 시작 시 `SITE_PROFILE.md`를 먼저 읽는다.

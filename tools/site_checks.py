@@ -260,6 +260,56 @@ def _first_line(text: str) -> str:
     return (text.strip().splitlines() or [""])[0][:120]
 
 
+# --- S-0 ----------------------------------------------------------------------------------------------------
+# 측정 단계이지 관문이 아니다: fail을 내지 않고 사용자 필요만 낸다(기록이 없으면 `--waive`로 사유와 함께 넘긴다).
+# 값은 확인값 S38 행 두 개(14-site.md §14.2): 지표 한 행(`s0_stats.py` 끝 줄을 그대로), 정성 결론 한 행.
+S0_ROW = "S38"
+S0_METRICS_ITEM = "S-0 지표"
+S0_CONCLUSION_ITEM = "S-0 결론"
+S0_KEYS = {"tags": "수집 태그 비율", "pair": "RIL 짝 맞춤 비율", "tsfail": "시각 파싱 실패율", "clock": "시계 이상 건수",
+           "pid": "phone_id 추출률"}
+S0_VALUE_RE = re.compile(r"\d+(?:\.\d+)?%?|-")     # 숫자(비율은 %) 또는 잴 수 없음(분모 0)의 `-`. placeholder는 통과하지 않는다
+S0_WAIVE = "반입 전에 했거나 실제 로그가 아직 없으면 `--done S-0 --waive {cid}=\"사유\"`"
+
+
+def _s0_value(ctx: Ctx, item: str) -> str | None:
+    """S38 행 중 항목이 `item`인 것의 확인값(없으면 None)."""
+    return next((r[2] if len(r) > 2 else "" for r in profile_rows(ctx.profile) if r[0] == S0_ROW and r[1] == item), None)
+
+
+def s0_metrics(ctx: Ctx) -> dict:
+    cid, cmd = "s0.metrics", "SITE_PROFILE.md ## 확인값 S38"
+    value = _s0_value(ctx, S0_METRICS_ITEM)
+    form = " ".join(f"{k}=<값>" for k in S0_KEYS)
+    if value is None:
+        return res(cid, "needs-user", f"확인값 행 없음: {S0_ROW} {S0_METRICS_ITEM}", cmd,
+                   ask=f"S-0 지표 5종을 재서(`tools/s0_stats.py`, docs/development/S0_PROBE_CHECKLIST.md) 끝 줄을 적어 주세요 → "
+                       f"`propose S-0 --set \"row.{S0_ROW}.{S0_METRICS_ITEM}={form}\"`. " + S0_WAIVE.format(cid=cid))
+    got = dict(re.findall(r"(?<!\S)(\w+)=(\S+)", value))
+    missing = [f"{k}({v})" for k, v in S0_KEYS.items() if not got.get(k)]
+    if missing:
+        return res(cid, "needs-user", f"{S0_ROW} {S0_METRICS_ITEM} 행에 빠진 지표: {', '.join(missing)} (꼴 `{form}`)", cmd,
+                   ask=f"빠진 지표를 채워 주세요({', '.join(missing)}) → 같은 `propose S-0 --set \"row.{S0_ROW}.{S0_METRICS_ITEM}=…\"`로 "
+                       "행을 바꾼다. " + S0_WAIVE.format(cid=cid))
+    bad = [k for k in S0_KEYS if not S0_VALUE_RE.fullmatch(got[k])]
+    if bad:
+        return res(cid, "needs-user", f"{S0_ROW} {S0_METRICS_ITEM} 행에서 숫자가 아닌 값: {', '.join(bad)} "
+                   "(숫자 또는 잴 수 없으면 `-` — placeholder를 그대로 붙였는지)", cmd,
+                   ask=f"`s0_stats.py` 끝 줄의 실제 값으로 바꿔 주세요({', '.join(bad)}) → "
+                       f"`propose S-0 --set \"row.{S0_ROW}.{S0_METRICS_ITEM}=…\"`. " + S0_WAIVE.format(cid=cid))
+    return res(cid, "pass", f"{S0_ROW} {S0_METRICS_ITEM}: 지표 5종 있음({', '.join(S0_KEYS)})", cmd)
+
+
+def s0_conclusion(ctx: Ctx) -> dict:
+    cid, cmd = "s0.conclusion", "SITE_PROFILE.md ## 확인값 S38"
+    value = (_s0_value(ctx, S0_CONCLUSION_ITEM) or "").strip()
+    if not value:
+        return res(cid, "needs-user", f"확인값 행 없음 또는 빈 값: {S0_ROW} {S0_CONCLUSION_ITEM}", cmd,
+                   ask="사외로 가져갈 정성 결론 한 줄(숫자·로그·태그 이름 없이, 예: \"슬롯 표기가 문서와 다름\")을 주세요 → "
+                       f"`propose S-0 --set \"row.{S0_ROW}.{S0_CONCLUSION_ITEM}=<결론>\"`. " + S0_WAIVE.format(cid=cid))
+    return res(cid, "pass", f"{S0_ROW} {S0_CONCLUSION_ITEM} 있음({len(value)}자)", cmd)
+
+
 # --- S-1 ----------------------------------------------------------------------------------------------------
 
 def s1_env(ctx: Ctx) -> dict:
@@ -2618,6 +2668,7 @@ MODULE_CHECKS = {
 
 
 CHECKS = {
+    "S-0": [s0_metrics, s0_conclusion],
     "S-1": [s1_profile, s1_review_open, s1_gate, s1_samples, s1_python, s1_env, s1_ghe, s1_claude, s1_todos],
     "S-2": [s2_pending, s2_graded, s2_offsite, s2_safety, s2_manual, s2_summary, s2_probe, s2_s1_rows, s2_baseline],
     "S-3": [s3_site_defaults, s3_tracker_kind, s3_config_check, s3_doctor, s3_parse_logcat, s3_tracker_candidates,

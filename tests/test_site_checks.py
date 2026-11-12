@@ -18,14 +18,16 @@ def git(cwd, *args):
     return subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True, check=True).stdout
 
 
-def site_root(tmp_path, review=(), gate=False, rows=()) -> Path:
-    """사내 루트(git, user.name 있음): SITE_PROFILE.md·REVIEW-OPEN.md만."""
+def site_root(tmp_path, review=(), gate=False, rows=(), step="S-1") -> Path:
+    """사내 루트(git, user.name 있음): SITE_PROFILE.md·REVIEW-OPEN.md만. 기본은 S-0을 마친 S-1(`step="S-0"`이면 새로 만든 그대로)."""
     root = tmp_path / "site"
     root.mkdir()
     git(root, "init", "-q")
     git(root, "config", "user.name", "tester")
     git(root, "config", "user.email", "tester@example.invalid")
     prof = ss.skeleton(root)
+    if step != "S-0":
+        prof = prof.replace("- 현재 단계: S-0", f"- 현재 단계: {step}").replace("- 완료 단계: (없음)", "- 완료 단계: S-0 (2026-10-01)")
     if gate:
         prof = prof.replace("- 진행:", GATE.rstrip("\n") + "\n- 진행:")
     for r in rows:
@@ -49,6 +51,65 @@ def by_id(results):
 
 def snapshot(root):
     return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file() and ".git" not in p.parts}
+
+
+# --- S-0 (측정 단계: 사용자 필요만, 실패 없음) ----------------------------------------------------------------
+
+S0_METRICS = "tags=50% pair=- tsfail=0.5% clock=3 pid=12%"          # 합성 값(실제 지표 아님). `-` = 잴 수 없음
+S0_PLACEHOLDER = "tags=<값> pair=<값> tsfail=<값> clock=<값> pid=<값>"    # 점검 ask가 보이는 꼴 그대로
+
+
+def s0_row(item: str, value: str) -> str:
+    return f"| S38 | {item} | {value} | 사용자 제공 | 2026-10-01 | tester | 확인 |"
+
+
+def test_s0_checks_need_user_when_missing_or_partial_and_pass_when_recorded(tmp_path):
+    root = site_root(tmp_path, step="S-0")
+    ctx = sc.Ctx(root)
+    m, c = sc.s0_metrics(ctx), sc.s0_conclusion(ctx)
+    assert m["status"] == c["status"] == "needs-user"
+    assert "row.S38.S-0 지표=" in m["ask"] and "--waive s0.metrics=" in m["ask"]
+    assert "row.S38.S-0 결론=" in c["ask"] and "--waive s0.conclusion=" in c["ask"]
+    prof = root / "SITE_PROFILE.md"
+    base = prof.read_text(encoding="utf-8")
+    table = "|---|---|---|---|---|---|---|\n"
+    prof.write_text(base.replace(table, table + s0_row("S-0 지표", "tags=<a> pair=<b> pid=") + "\n"
+                                 + s0_row("S-0 결론", " ") + "\n"), encoding="utf-8")
+    m, c = sc.s0_metrics(ctx), sc.s0_conclusion(ctx)
+    assert m["status"] == "needs-user" and "tsfail(" in m["evidence"] and "clock(" in m["evidence"] and "pid(" in m["evidence"]
+    assert "tags(" not in m["evidence"] and "pair(" not in m["evidence"]
+    assert c["status"] == "needs-user"
+    for metrics, bad in ((S0_PLACEHOLDER, "tags, pair, tsfail, clock, pid"),          # ask 예시를 그대로 붙임
+                         ("tags=<%> pair=1% tsfail=0% clock=<n> pid=<%>", "tags, clock, pid")):   # §14.3 예시 꼴
+        prof.write_text(base.replace(table, table + s0_row("S-0 지표", metrics) + "\n"), encoding="utf-8")
+        m = sc.s0_metrics(ctx)
+        assert m["status"] == "needs-user" and f"숫자가 아닌 값: {bad} " in m["evidence"], m["evidence"]
+    prof.write_text(base.replace(table, table + s0_row("S-0 지표", S0_METRICS) + "\n"
+                                 + s0_row("S-0 결론", "<정성 결론 한 줄>") + "\n"), encoding="utf-8")
+    assert sc.s0_metrics(ctx)["status"] == sc.s0_conclusion(ctx)["status"] == "pass"     # 숫자·`-`는 통과
+    assert [sc.check_id(f) for f in sc.CHECKS["S-0"]] == ["s0.metrics", "s0.conclusion"]
+
+
+def test_s0_done_needs_waiver_or_rows_then_advances_to_s1(tmp_path):
+    root = site_root(tmp_path, step="S-0")
+    r = run(root, "--done", "S-0")
+    assert r.returncode == 1 and "s0.metrics" in r.stdout and "실패는 면제할 수 없다" not in r.stdout
+    r = run(root, "--done", "S-0", "--waive", "s0.metrics=실제 로그를 아직 못 구함", "--waive", "s0.conclusion=같은 사유")
+    assert r.returncode == 0, r.stdout + r.stderr
+    prof = (root / "SITE_PROFILE.md").read_text(encoding="utf-8")
+    assert "- 현재 단계: S-1" in prof and "S-0 s0.metrics 면제(사용자 결정): 실제 로그를 아직 못 구함\n" in prof
+    assert "s0.conclusion 면제(needs-user, 근거 " in (root / sc.EVIDENCE_FILE).read_text(encoding="utf-8")
+
+
+def test_s0_propose_rows_then_done_without_waiver(tmp_path):
+    root = site_root(tmp_path, step="S-0")
+    sets = ["--set", f"row.S38.S-0 지표={S0_METRICS}", "--set", "row.S38.S-0 결론=<정성 결론>"]
+    r = run(root, "propose", "S-0", *sets, "--apply", "row.S38.S-0 지표,row.S38.S-0 결론")
+    assert r.returncode == 0, r.stderr
+    assert run(root, "check", "S-0").returncode == 0
+    r = run(root, "--done", "S-0")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "- 현재 단계: S-1" in (root / "SITE_PROFILE.md").read_text(encoding="utf-8")
 
 
 # --- S-1 ------------------------------------------------------------------------------------------------------

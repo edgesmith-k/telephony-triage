@@ -42,29 +42,30 @@ def main(root: Path, capsys, *args: str) -> tuple[int, str, str]:
     return code, out.out, out.err
 
 
-def test_steps_follow_15_5_table_without_s0():
-    assert ss.STEPS == [p for p in ("S-1", "S-2", "S-3", "S-4a", "S-4", "S-5", "S-6", "S-7") if cp.step_row(p)]
+def test_steps_follow_15_5_table_with_s0_first():
+    assert ss.STEPS == [p for p in ("S-0", "S-1", "S-2", "S-3", "S-4a", "S-4", "S-5", "S-6", "S-7") if cp.step_row(p)]
 
 
-def test_start_creates_profile_with_jira_and_prints_s1(tmp_path):
+def test_start_creates_profile_with_jira_and_prints_s0(tmp_path):
     r = run(tmp_path)
-    assert r.returncode == 1, r.stderr      # 출력은 낸다. 종료 코드는 점검 결과(게이트 줄·샘플 없음 = 사용자 필요)
+    assert r.returncode == 1, r.stderr      # 출력은 낸다. 종료 코드는 점검 결과(S-0 지표·결론 없음 = 사용자 필요)
     prof = (tmp_path / "SITE_PROFILE.md").read_text(encoding="utf-8")
-    assert "- 모드: 사내 보완" in prof and "- 현재 단계: S-1" in prof and "- 트래커: jira" in prof
+    assert "- 모드: 사내 보완" in prof and "- 현재 단계: S-0" in prof and "- 트래커: jira" in prof
     for head in ("## 진행 상태", "## 확인값", "## 설계 변경", "## 사외 문서와의 차이", "## 런타임 값 변경 이력"):
         assert head in prof                                    # 14-site.md §14.3 절
     assert len(prof.encode()) < 4096
-    assert "새로 만들었다" in r.stdout and "지금 단계: S-1" in r.stdout and "--done S-1" in r.stdout
-    assert "===== docs/design/15-local-draft.md §15.5 S-1 =====" in r.stdout
+    assert "새로 만들었다" in r.stdout and "지금 단계: S-0" in r.stdout and "--done S-0" in r.stdout
+    assert "===== docs/design/15-local-draft.md §15.5 S-0 =====" in r.stdout
+    assert "s0.metrics" in r.stdout and "s0.conclusion" in r.stdout
     again = run(tmp_path)                                      # 이어 하기: 다시 만들지 않는다
-    assert again.returncode == 1 and "새로 만들었다" not in again.stdout and "지금 단계: S-1" in again.stdout
+    assert again.returncode == 1 and "새로 만들었다" not in again.stdout and "지금 단계: S-0" in again.stdout
 
 
 def test_done_advances_in_order_and_refuses_skips(tmp_path, monkeypatch, capsys):
     all_pass(monkeypatch)
     main(tmp_path, capsys)
-    code, _, err = main(tmp_path, capsys, "--done", "S-2")
-    assert code == 2 and "현재 단계는 S-1" in err
+    code, _, err = main(tmp_path, capsys, "--done", "S-1")
+    assert code == 2 and "현재 단계는 S-0" in err
     for cur, nxt in zip(ss.STEPS, ss.STEPS[1:]):
         code, out, err = main(tmp_path, capsys, "--done", cur)
         assert code == 0, err
@@ -76,14 +77,29 @@ def test_done_advances_in_order_and_refuses_skips(tmp_path, monkeypatch, capsys)
     assert main(tmp_path, capsys, "--done", "S-7")[0] == 2
 
 
+def test_old_profile_without_s0_continues_where_it_was(tmp_path, monkeypatch, capsys):
+    """S-0이 정식 단계가 되기 전 프로필(완료 단계에 S-0 없음)은 그 단계에서 그대로 잇는다 — S-0으로 되돌리지 않는다."""
+    all_pass(monkeypatch)
+    prof = tmp_path / "SITE_PROFILE.md"
+    prof.write_text(ss.skeleton(tmp_path).replace("- 현재 단계: S-0", "- 현재 단계: S-2").replace(
+        "- 완료 단계: (없음)", "- 완료 단계: S-1 (2026-10-01)"), encoding="utf-8")
+    code, out, _ = main(tmp_path, capsys)
+    assert code == 0 and "지금 단계: S-2" in out and "자동 점검 S-2" in out
+    code, _, err = main(tmp_path, capsys, "--done", "S-0")
+    assert code == 2 and "현재 단계는 S-2" in err
+    code, out, err = main(tmp_path, capsys, "--done", "S-2")
+    assert code == 0 and "지금 단계: S-3" in out, err
+    assert "- 완료 단계: S-1 (2026-10-01), S-2 (" in prof.read_text(encoding="utf-8")
+
+
 def test_done_keeps_other_sections(tmp_path, monkeypatch, capsys):
     all_pass(monkeypatch)
     main(tmp_path, capsys)
     prof = tmp_path / "SITE_PROFILE.md"
     prof.write_text(prof.read_text(encoding="utf-8") + "- (10/13) 사내 메모\n", encoding="utf-8")
-    main(tmp_path, capsys, "--done", "S-1")
+    main(tmp_path, capsys, "--done", "S-0")
     text = prof.read_text(encoding="utf-8")
-    assert text.endswith("- (10/13) 사내 메모\n") and "- 완료 단계: S-1 (" in text
+    assert text.endswith("- (10/13) 사내 메모\n") and "- 완료 단계: S-0 (" in text
 
 
 def all_skip(monkeypatch):
@@ -99,14 +115,14 @@ WAIVE_LINE_RE = re.compile(r"^- \((\d{4}-\d{2}-\d{2})\) (S-\S+) (\S+) 면제\(�
 def test_waive_reason_with_dashes_is_recorded_whole_at_line_end(tmp_path, monkeypatch, capsys, why, form):
     all_skip(monkeypatch)
     main(tmp_path, capsys)
-    args = ["--waive", f"S-1.x={why}"] if form == "sep" else [f"--waive=S-1.x={why}"]
-    code, out, err = main(tmp_path, capsys, "--done", "S-1", *args)
+    args = ["--waive", f"S-0.x={why}"] if form == "sep" else [f"--waive=S-0.x={why}"]
+    code, out, err = main(tmp_path, capsys, "--done", "S-0", *args)
     assert code == 0, err
     lines = [l for l in (tmp_path / "SITE_PROFILE.md").read_text(encoding="utf-8").split("## 설계 변경")[1].splitlines()
              if "면제" in l]
     assert len(lines) == 1
     m = WAIVE_LINE_RE.match(lines[0])
-    assert m and m.group(2, 3, 4) == ("S-1", "S-1.x", why)                  # 사유가 줄 끝 — 그대로 되읽힌다
+    assert m and m.group(2, 3, 4) == ("S-0", "S-0.x", why)                  # 사유가 줄 끝 — 그대로 되읽힌다
     assert lines[0] in out                                                  # 기록한 줄을 출력에 보인다
     assert (tmp_path / ss.sc.EVIDENCE_FILE).read_text(encoding="utf-8").endswith(f" 사용자 결정: {why}\n")
 
@@ -116,7 +132,7 @@ def test_long_waive_reason_points_to_evidence_instead_of_silent_cut(tmp_path, mo
     main(tmp_path, capsys)
     why = "사내 Jira 프로젝트가 아직 없어 S-4에서 샘플을 받는다 - " + "가나다라마바사아자차 " * 15 + "끝"
     assert len(why) > 200
-    code, out, err = main(tmp_path, capsys, "--done", "S-1", "--waive", f"S-1.x={why}")
+    code, out, err = main(tmp_path, capsys, "--done", "S-0", "--waive", f"S-0.x={why}")
     assert code == 0, err
     prof = (tmp_path / "SITE_PROFILE.md").read_text(encoding="utf-8")
     line = next(l for l in prof.splitlines() if "면제(사용자 결정)" in l)
@@ -129,10 +145,10 @@ def test_long_waive_reason_points_to_evidence_instead_of_silent_cut(tmp_path, mo
 def test_duplicate_waive_id_refused(tmp_path, monkeypatch, capsys):
     all_skip(monkeypatch)
     main(tmp_path, capsys)
-    code, _, err = main(tmp_path, capsys, "--done", "S-1", "--waive", "S-1.x=a", "--waive", "S-1.x=b")
+    code, _, err = main(tmp_path, capsys, "--done", "S-0", "--waive", "S-0.x=a", "--waive", "S-0.x=b")
     assert code == 2 and "두 번" in err
     prof = (tmp_path / "SITE_PROFILE.md").read_text(encoding="utf-8")
-    assert "- 현재 단계: S-1" in prof and "면제" not in prof                 # 아무것도 기록하지 않는다
+    assert "- 현재 단계: S-0" in prof and "면제" not in prof                 # 아무것도 기록하지 않는다
 
 
 def test_start_full_pack_first_visit_then_brief(tmp_path, monkeypatch, capsys):
@@ -140,12 +156,12 @@ def test_start_full_pack_first_visit_then_brief(tmp_path, monkeypatch, capsys):
     code, first, _ = main(tmp_path, capsys)
     assert code == 0                                                     # 점검이 모두 통과면 0
     _, again, _ = main(tmp_path, capsys)
-    assert "===== docs/design/14-site.md §14.2 =====" in first and "§14.2 =====" not in again
-    assert "요약 — 이미 본 단계" in again and "context_pack.py S-1" in again
+    assert "===== docs/development/S0_PROBE_CHECKLIST.md =====" in first and "S0_PROBE_CHECKLIST.md =====" not in again
+    assert "요약 — 이미 본 단계" in again and "context_pack.py S-0" in again
     for out in (first, again):
-        assert "자동 점검 S-1" in out and "사용자에게 물을 것" in out and "--done S-1" in out
-    state = (tmp_path / "docs/site/steps/S-1.json").read_text(encoding="utf-8")
-    assert '"visited"' in state and '"S-1.ok"' in state
+        assert "자동 점검 S-0" in out and "사용자에게 물을 것" in out and "--done S-0" in out
+    state = (tmp_path / "docs/site/steps/S-0.json").read_text(encoding="utf-8")
+    assert '"visited"' in state and '"S-0.ok"' in state
 
 
 def test_external_draft_pc_refuses(tmp_path):
@@ -287,10 +303,10 @@ def test_android_done_shows_ofono_step_directly(tmp_path, monkeypatch, capsys):
     all_pass_all(monkeypatch)
     _done_through(tmp_path, capsys, "S-3")
     main(tmp_path, capsys, "ofono")
-    for s in ss.STEPS[3:]:
+    for s in ss.STEPS[ss.STEPS.index("S-3") + 1:]:
         assert main(tmp_path, capsys, "--done", s)[0] == 0
     code, out, _ = main(tmp_path, capsys)
-    assert code == 0 and "oFono 트랙 지금 단계: O-1" in out and "자동 점검 O-1" in out and "S-1~S-7이 모두 완료" not in out
+    assert code == 0 and "oFono 트랙 지금 단계: O-1" in out and "자동 점검 O-1" in out and "S-0~S-7이 모두 완료" not in out
     code, out, _ = main(tmp_path, capsys, "check")
     assert code == 0 and "자동 점검 O-1" in out
 
@@ -313,7 +329,7 @@ def test_check_o_step_writes_only_O_json(tmp_path):
     def git(*a):
         return subprocess.run(["git", "-C", str(tmp_path), *a], capture_output=True, text=True, check=True).stdout
     git("init", "-q")
-    prof = ss.skeleton(tmp_path).replace("- 현재 단계: S-1", "- 현재 단계: S-4a").replace(
+    prof = ss.skeleton(tmp_path).replace("- 현재 단계: S-0", "- 현재 단계: S-4a").replace(
         "- 완료 단계: (없음)", "- 완료 단계: S-1 (2026-10-01), S-2 (2026-10-02), S-3 (2026-10-03)")
     (tmp_path / "SITE_PROFILE.md").write_text(prof, encoding="utf-8")
     r = run(tmp_path, "check", "O-1")
@@ -328,4 +344,4 @@ def test_check_o_step_writes_only_O_json(tmp_path):
     assert changed == ["docs/site/steps/O-2.json"], changed
     r = run(tmp_path, "check", "O-9")
     assert r.returncode == 2 and "oFono 단계 'O-9'를 모른다" in r.stderr and "O-1 → O-2" in r.stderr
-    assert run(tmp_path, "check", "S-9").stderr.count("S-1 → S-2") == 1    # Android 메시지는 그대로
+    assert run(tmp_path, "check", "S-9").stderr.count("S-0 → S-1 → S-2") == 1    # Android 메시지는 그대로

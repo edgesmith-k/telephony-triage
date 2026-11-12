@@ -124,3 +124,14 @@ DRAFT_NOTES 후보 줄의 풀이와, 상한 때문에 거기 못 넣은 P2다. �
   - `call-volte-sip-invite-error` with: 모뎀·망/VRIL-IMS로 층·데몬은 맞았으나 인정 후보의 근거 regex 불일치(INVITE·503 응답·onCallStartFailed 3줄 인용; 어느 regex가 빠졌는지는 grading에 안 나옴).
   - 1회 실행이라 변동이 있고 통과를 위해 다시 돌리지 않았다(`module_offsite_results.json`).
 - 마스킹 되돌림(`b17742fe`, #98 사후 리뷰 P2)의 이유: 사용자 결정(11/12) "마스킹을 너무 집착할 필요 없다" — 20자리를 넘는 구분자 낀 ICCID의 꼬리 숫자 잔여는 알고 받아들인 것.
+
+## 11/12 S-0(선행 확인)을 사내 첫 단계로
+
+- 사용자 지시(11/12)로 S-0를 `tools/site_step.py`의 정식 첫 단계로 넣음. 순서 S-0 → S-1 → … → S-7, 새 `SITE_PROFILE.md`의 현재 단계는 S-0. 이미 S-1 이후로 진행 중인 프로필은 그대로 이어진다(회귀 테스트 있음).
+- 점검 `s0.metrics`·`s0.conclusion`(`tools/site_checks.py`): 기록이 없거나 값이 숫자·`-`가 아니면 fail이 아니라 "사용자 필요" → 기존 `--done S-0 --waive 점검="사유"`로 건너뛸 수 있다(예: 반입 전에 이미 함, 실제 로그를 아직 못 구함). S-0는 측정 단계이지 관문이 아니다.
+- 기록 자리: 확인값 표 새 번호 S38의 행 2개(`S-0 지표`, `S-0 결론`), 기존 `propose --set row.S38.…` 경로. `tools/s0_stats.py` 텍스트 출력 끝에 그 행에 붙여 넣을 한 줄(`tags= pair= tsfail= clock= pid=`)을 추가(파일은 쓰지 않음). 지표 5종: 수집 태그 비율·RIL 짝 맞춤 비율·시각 파싱 실패율·시계 이상 건수·phone_id 추출률(`s0_stats.py`는 "범위 밖" 비율을 내지 않는다).
+- 사내 토큰: S-0 안내 묶음에서 `04-parser-matching.md §5.8` 본문을 빼고 `S0_PROBE_CHECKLIST.md`만 남김(약 30.0KB → 약 10.6KB), 테스트 상한 30,000 → 11,000. 반입 전에 파서 일부만 가져가 미리 하는 방법(`S0_PROBE_CHECKLIST.md`)은 그대로 — 그때 잰 값을 반입 뒤 S-0에서 옮겨 적는다.
+- 문서 표기 수정: `15-local-draft.md`·`14-site.md`·`tasks.md`·`README`·`GUIDE.md`·`SITE_INSTALL.md`·`CLAUDE.md`(S-1~S-7 → S-0~S-7, 4,051B 그대로)·사람용 HTML의 단계 순서 문장. 사람용 HTML에 남은 옛 지표 이름("RIL 페어링" 등)은 고치지 않고 남김. `15-local-draft.md` §15.5 S-0 완료 기준은 "숫자(잴 수 없으면 `-`)"로 코드(`S0_VALUE_RE`)와 맞춤.
+- `12-principles.md`에 "스킬 문서를 고쳤을 때 eval 범위" 항목 추가(사용자 확인 11/12): 판단 규칙(어느 층·유형으로 답할지, 순서, 예외·우선순위, 근거로 삼을 것)을 바꾸면 고친 스킬·모듈의 eval만(추정 비용을 보이고 승인 뒤), 문구·표기·오타만 또는 placeholder를 실제 값으로 이름만 바꿨으면 pytest로 갈음, 애매하면 돌림, 건너뛴 것은 건너뛰었다고 보고. 이슈 DB·사내 값은 eval 대상 아님, 재반입 때 사내 대상 eval 범위는 `SITE_INSTALL.md` 8절. `site_step.py` MS-2 안내에 "그 이름이 판단 조건에 쓰이면 이름만 바꾼 것이 아니다" 단서.
+- 독립 리뷰(Opus, 읽기 전용): P0 없음, P1 2건(남은 "S-0(선택)" 표기, 사내 첫 방문 안내 묶음 30KB) 반영, P2 가운데 값 검사 강화·키 이름(`cov` → `clock`)·회귀 테스트·"사내 전용 파일" 문구 반영. 반영분 재리뷰 P0·P1 없음.
+- WSL 전체 pytest: 4151 passed, 26 skipped, 3 xfailed(rebase 전 `6032f447` 기준, rebase 뒤 재실행은 따로).

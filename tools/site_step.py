@@ -22,7 +22,8 @@
     python3 tools/site_step.py runtime-check opencode --project D --jira KEY [--missing-key KEY]
                                                         # OpenCode Jira 읽기 사내 확인(모델 토큰 0, tools/oc_jira_check.py)
 
-- 순서는 S-1 → S-2 → S-3 → S-4a → S-4 → S-5 → S-6 → S-7(`STEPS`). S-0(선택)은 반입 전 일이라 넣지 않는다.
+- 순서는 S-0 → S-1 → S-2 → S-3 → S-4a → S-4 → S-5 → S-6 → S-7(`STEPS`). S-0(선행 확인)은 반입 전에 이미 했으면 그 값을
+  확인값 S38 행으로 옮겨 적고, 못 하면 `--waive`로 사유와 함께 넘긴다(S-0 점검은 실패 없이 사용자 필요만 낸다).
 - oFono 트랙은 Android 단계와 따로 O-1 → O-2 → O-3 → O-4(`OFONO_STEPS`)다. "oFono 설정 시작"이면 `ofono`: S-3 완료 기록 뒤에만
   "진행 상태"에 `- oFono 단계: O-1`·`- oFono 완료: (없음)`을 넣는다(한 번). `check`·`propose`·`--done`은 단계 인자로 O-n을 받는다.
   인자 없는 실행은 Android 단계에 안내 한 줄(`oFono 트랙: O-n 진행 중 → …`)을 붙이고, Android가 모두 완료면 oFono 단계를 바로 보인다.
@@ -78,7 +79,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import context_pack  # noqa: E402
 import site_checks as sc  # noqa: E402
 
-STEPS = ["S-1", "S-2", "S-3", "S-4a", "S-4", "S-5", "S-6", "S-7"]
+STEPS = ["S-0", "S-1", "S-2", "S-3", "S-4a", "S-4", "S-5", "S-6", "S-7"]
 DONE = "완료"
 CURRENT_RE = re.compile(r"(?m)^- 현재 단계: *(\S+).*$")
 FINISHED_RE = re.compile(r"(?m)^- 완료 단계: *(.*)$")
@@ -108,7 +109,8 @@ MODULE_GUIDE = {
 1. (선택) 사내 Android 분석 스킬을 `android/<m>/`에 합친다(텍스트 절차만). 합치기 전에는 `prefer: skill`로 그대로 쓴다.
 2. (선택) `module_eval.py`를 S-5 라벨셋(마스킹, tests/site/module-evals/)에 소수로 — 비용 승인 뒤. case는 `synthetic: false`·`origin` 없음·
    source.log 마스킹 잔여 0, 렌더 트리에 넣고 `--case <이름>`으로 고른 case만(docs/SITE_RESTORE.md ⑥).
-   이름만 사내 값으로 맞춘 PR에는 돌리지 않는다. 템플릿의 합성 case(placeholder 이름)는 사내 문서와 맞지 않으니 사내에서 돌리지 않는다.
+   이름만 사내 값으로 맞춘 PR에는 돌리지 않는다(그 이름이 판단 조건에 쓰이면 이름만 바꾼 것이 아니다 — 12-principles.md).
+   템플릿의 합성 case(placeholder 이름)는 사내 문서와 맞지 않으니 사내에서 돌리지 않는다.
 3. 정기 점검(매주, 상한 300,000 토큰): `site_step.py audit` → 사내 Claude 리뷰(review.md) → `audit --record`.""",
 }
 EVAL_BATCH = 5
@@ -132,12 +134,12 @@ def _base(root: Path) -> str:
 
 
 def skeleton(root: Path) -> str:
-    """14-site.md §14.3 형식의 빈 SITE_PROFILE.md(사내 보완, 현재 단계 S-1, 트래커 jira)."""
+    """14-site.md §14.3 형식의 빈 SITE_PROFILE.md(사내 보완, 현재 단계 S-0, 트래커 jira)."""
     return f"""# SITE_PROFILE (사내 전용, 반출 금지)
 
 ## 진행 상태
 - 모드: 사내 보완
-- 현재 단계: S-1
+- 현재 단계: S-0
 - 완료 단계: (없음)
 - 트래커: jira (S30·S31 GitHub 트래커 항목은 해당 없음, S-3에서 `tracker.kind: jira`)
 - 기준 문서 세트: {_base(root)}
@@ -325,7 +327,7 @@ def guide(step: str, created: bool, root: Path | None = None, allow_api: bool = 
     if step == DONE:
         if ofono:
             return "oFono 트랙 O-1~O-4가 모두 완료로 기록돼 있다.", 0
-        return "사내 보완 S-1~S-7이 모두 완료로 기록돼 있다. 파일럿 뒤 할 일은 15-local-draft.md §15.5 S-7 비고와 docs/tasks.md.", 0
+        return "사내 보완 S-0~S-7이 모두 완료로 기록돼 있다. 파일럿 뒤 할 일은 15-local-draft.md §15.5 S-7 비고와 docs/tasks.md.", 0
     arg = f" {step}" if ofono else ""     # 인자 없는 check·propose는 Android 현재 단계를 본다
     head = [("SITE_PROFILE.md를 새로 만들었다(사내 보완, 트래커 jira). " if created else "")
             + ("oFono 트랙을 시작했다. " if started else "") + ("oFono 트랙 " if ofono else "") + f"지금 단계: {step}",
