@@ -356,6 +356,8 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
         "approval_needed": approval, "notes": notes, "commit_message": commit_message, "pr_title": title,
         "push_allowed": push_allowed, "push_note": push_note, "pending_included": applied.get("pending_included") or [],
     }
+    if open_prs is None and not search_key(plan, applied):    # 검색어가 없어 찾지 않음 — gh 실패("확인 못 함")와 구분한다
+        result["open_prs_unsearched"] = True
     changes = fix_changes(wt, entries, applied.get("operations") or [], state.get("base_sha"), git)
     if changes:      # 수정 상태가 바뀌는 계획에만 나온다(없으면 출력이 이전과 같다)
         result["fix_changes"] = changes
@@ -568,7 +570,8 @@ def render_markdown(scr: dict, plan: dict, extra: dict) -> str:
         head += f" → ({NO_RULE} — 원값: {md.line((scr.get('commit_message') or '').splitlines()[0] if scr.get('commit_message') else '') or '없음'})"
     branch = scr["branch"]
     prs = scr["open_prs"]
-    open_prs = ("확인 못 함" if prs is None else
+    open_prs = ("찾지 않음(검색할 Jira 키·새 ID 없음)" if prs is None and scr.get("open_prs_unsearched") else
+                "확인 못 함" if prs is None else
                 ", ".join(md.line(f"#{p.get('number')} {p.get('title')} ({p.get('url')})") for p in prs) or "없음")
     out = [head, f"구분: {md.line(scr['source_label'])}",
            f"브랜치: {branch['name']} ({branch['remote']}) → PR 대상: {branch['base']}",
