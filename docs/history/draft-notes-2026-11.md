@@ -108,3 +108,19 @@ DRAFT_NOTES 후보 줄의 풀이와, 상한 때문에 거기 못 넣은 P2다. �
   - network with: `그 층 로그 없음(벤더 RIL)`을 골라 모뎀·망을 배제(공통 `layers.md`의 "RILJ 요청뿐 RIL·VRIL 줄 0 → 그 층 로그 없음(벤더 RIL)"을 따른 것으로 보인다 — 문서 규칙과 case 기대값이 부딪히는 자리, 다음 문서 사이클 후보). without: 모뎀·망으로 통과.
   - 결과는 그대로 기록했고 통과를 위해 다시 돌리거나 기대값을 바꾸지 않았다(`module_offsite_results.json`).
 - #98 사후 리뷰(Opus): P0·P1 없음. 반영한 P2: README "지금 기록" 줄을 실제 기록 값으로, 낡은 "eval 71 none" 문장 삭제, `test_ofono_skeleton.py`에 중간 필드 낀 vendor IPC 줄 복원, `offsite.py --merge`가 최상위 `grader_commit`을 기존 값으로 두고 채운 항목에만 붙임(커밋된 기록 파일은 소급해 고치지 않음). 남긴 것: eval 80 `few_questions` 하한·`clone_after_consent` 조건, 마스킹 되돌림(`b17742fe`) 이유 기록.
+
+## 11/12 Android 모듈 문서 보완 (#100 eval 후속)
+
+- 보완(#100 eval에서 문서를 읽은 쪽이 틀린 세 자리의 빈 규칙; `_common`·case·파서 규칙·테스트는 그대로):
+  - network(`explore.md`·`SKILL.md`·`references/NETWORK-001.md`): 거절 아닌 미등록(`NOT_REG…`)도 RILJ 응답·NRM-C가 글자로 말한 아래 층 값 → 모뎀·망(벤더 줄이 없어도). 버퍼가 늦게 시작한 경우·무선을 끈 뒤는 기존 규칙이 먼저. "회복(`REG_HOME`)도 층을 안 바꾼다". "`radioStateChanged: OFF`(17 캡처 없음 — 사내 확인)" 표기 3곳 삭제(에뮬레이터 17 캡처 m02에서 그 줄 확인).
+  - modem(`explore.md`): 비행기 모드 행 — 죽음·재시작 줄이 있으면 그 행, 없고 RILJ `RADIO_POWER on = false` 요청이 `radioStateChanged: OFF`보다 앞서면 위에서 끔 → 원인 아님, 근거는 요청·OFF 두 줄. 같은 "17 캡처 없음" 표기 삭제. "요청 없이 OFF·UNAVAILABLE → 모뎀·망" 문장은 공통 규칙을 넓혀 읽은 것이라 넣었다가 뺌(사용자 확인 11/12, 그 경우는 공통 규칙에 맡김).
+  - call(`explore.md`): CSFB 행을 "CSFB·`DIAL`·INVITE 없는 발신 실패"로 넓힘 — 발신 전 SST `hasDeregistered = true`(서비스 없음) → 모뎀·망, 프레임워크는 증상. 자리 확보로 발신 실패 행의 IPC 판정을 공통 `layers.md` 참조로 바꾸고 표의 군말 몇 곳 축약.
+  - 문서 여유(바이트): network explore 2698/2700·SKILL 1999/2000·NETWORK-001 1288/1300, call explore 2694/2700, modem explore 2597/2700.
+- 독립 리뷰(Opus, 읽기 전용): P0·P1 없음, P2 9건 가운데 eval 전에 반영 — network "(찾는 중)" 표지 삭제·무선 끈 뒤 예외·회복 문구, modem "위 행" 모호함, call 축약으로 뜻이 바뀐 두 곳(EPS 행 "fallback", 끊김 행 "원인 코드를 전한 층") 복원·행 이름에 INVITE. 남긴 후보: network "긴 미등록"의 "긴"을 되살리지 못함(4B 부족), call에 Telecom "network not available" 표지를 넣지 못함, 새 규칙의 근거 표현이 case 정답과 닮음(과적합 기미 — eval 통과를 "빈 규칙을 채웠다"로 읽을 것), sms(서비스 없음 → 프레임워크)와 call(→ 모뎀·망) 정책이 다름 → sms를 call에 맞추는 방향으로 다음 사이클(사용자 11/12), 그때 deep case `sms-smsc-missing` 기대값부터 확인.
+- WSL 전체 pytest: 4147 passed, 26 skipped, 3 xfailed(`452c057c`).
+- Android 모듈 eval(문서 보완 뒤, claude-sonnet-5-5, restricted, 1회, 총 $2.01): call pass(with 3·without 2; 직전 2·1), modem pass(2·1; 직전 2·2, 기준선 arm 안전 위반 1 — `modem-restart-chain` without, 원본 .log를 `Grep '.'`로 통째 읽음), network pass(3·1; 직전 tie 1·1). 새 case with/without: `call-mo-out-of-service` O/O(직전 X/X), `network-oos-recover-no-reject` O/O(직전 X/O), `modem-radio-off-airplane` X/X(직전 X/X).
+  - `modem-radio-off-airplane` with: 가설 1이 원인 아님(RADIO_POWER on = false 요청 → OFF 순서)으로 층은 맞았으나 가설 1 근거 4줄이라 출력 칸 파싱 실패(형식). without: 가장 유력이 프레임워크(요청·응답 줄 인용)이고 채점은 "맞은 후보 근거에 regex 없음"(근거에 `radioStateChanged: OFF` 줄이 없음).
+  - `modem-ril-daemon-crash` with(직전에도 X): 벤더 RIL·VRIL로 층·데몬은 맞았으나 가설 1 근거 4줄(`serviceDied`·`GET_SIGNAL_STRENGTH error 1`·VRIL UNAVAILABLE·ON)이라 출력 칸 파싱 실패(형식).
+  - `call-volte-sip-invite-error` with: 모뎀·망/VRIL-IMS로 층·데몬은 맞았으나 인정 후보의 근거 regex 불일치(INVITE·503 응답·onCallStartFailed 3줄 인용; 어느 regex가 빠졌는지는 grading에 안 나옴).
+  - 1회 실행이라 변동이 있고 통과를 위해 다시 돌리지 않았다(`module_offsite_results.json`).
+- 마스킹 되돌림(`b17742fe`, #98 사후 리뷰 P2)의 이유: 사용자 결정(11/12) "마스킹을 너무 집착할 필요 없다" — 20자리를 넘는 구분자 낀 ICCID의 꼬리 숫자 잔여는 알고 받아들인 것.

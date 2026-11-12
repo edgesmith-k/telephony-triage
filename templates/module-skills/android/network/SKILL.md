@@ -18,6 +18,6 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 1. RILJ `VOICE/DATA_REGISTRATION_STATE` 응답의 `regState`·`reasonForDenial`을 본다. (없으면: NRM-C `onRequestNetworkRegistrationInfoComplete … registrationState=DENIED … rejectCause=`, SST `pollStateDone:` — `registrationState=DENIED`면 2번으로 층을 정한다. `rejectCause=0`은 사유를 안 준 것이라 그 숫자에서 사유를 읽지 않는다)
 2. `REG_DENIED`·`reasonForDenial≠NONE` → 모뎀·망. 원인 데몬은 그 값을 전한 벤더 RIL(`RIL`).
 3. 같은 요청의 IPC(`VIPC_EXAMPLE_*_REG`)가 OK면 거절 값은 망이 준 것이다.
-4. 무선이 꺼진 직후(`AT+CFUN=0`, 벤더 RIL `newState=RADIO_OFF`, RILJ `radioStateChanged: OFF`(17 캡처 없음 — 사내 확인))의 서비스 없음은 결과다 → 무선을 끈 쪽을 답한다.
-5. DENIED가 아닌 `reasonForDenial: NONE`은 거절이 아니다. DENIED면 `NONE`·`rejectCause=0`이어도 거절이다(모뎀·망, 사유를 빠뜨린 것은 벤더 RIL). 거절 없이 오래 `NOT_REGISTERED`면 찾는 중이다.
+4. 무선이 꺼진 직후(`AT+CFUN=0`, 벤더 RIL `newState=RADIO_OFF`, RILJ `radioStateChanged: OFF`)의 서비스 없음은 결과다 → 무선을 끈 쪽을 답한다.
+5. DENIED가 아닌 `reasonForDenial: NONE`은 거절이 아니다. DENIED면 `NONE`·`rejectCause=0`이어도 거절이다(모뎀·망, 사유를 빠뜨린 것은 벤더 RIL). 거절 없는 `NOT_REG…`도 응답·NRM-C가 아래 층 상태를 글자로 말해 모뎀·망(벤더 줄 0이어도. 첫 RILJ 줄이 응답이면 `그 층 로그 없음(RILJ)`, 무선 끈 뒤면 4번). `REG_HOME` 회복도 층은 같다.
 6. 1위와 비교: 같으면 `1위와 같음`, 다르면 `<원인 ID> — <근거>`.
