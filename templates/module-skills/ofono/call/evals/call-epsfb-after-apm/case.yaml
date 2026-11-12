@@ -21,6 +21,6 @@ expect:
   accept:
     - layer: '원인\s*아님|정상'
       daemon: '.*'
-      evidence: ['IMS_REQUEST_AIRPLANE_MODE is_apm:1', 'EPSFB failed']
+      evidence: ['IMS_REQUEST_AIRPLANE_MODE apm_on:1', 'EPSFB failed']
   trap:
     - label: '^\s*(벤더 RIL|모뎀|망|곁가지|관리 데몬|D-Bus|그\s*층)'

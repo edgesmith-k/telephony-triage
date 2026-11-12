@@ -34,6 +34,6 @@
 
 ## 보기가 달리 말하지 않으면 원인 아님
 
-- `RADIO_POWER (0)`·`state: OFF`·`is_apm:1`·`org.ofono.Modem` `Powered`·`Online` false 뒤 조회 실패.
+- `RADIO_POWER (0)`·`state: OFF`·`apm_on:1`·`org.ofono.Modem` `Powered`·`Online` false 뒤 조회 실패.
 - 로그 내내 같은 모양으로 되풀이되는 오류(〔script: 같은 형태 N회〕).
 - mgmtd·datad2의 레벨은 심각도가 아니다.

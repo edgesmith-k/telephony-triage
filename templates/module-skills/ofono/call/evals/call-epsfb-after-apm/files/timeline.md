@@ -6,7 +6,7 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): src/voicecall.c · src/call-settings.c · src/call-forwarding.c · src/call-barring.c · drivers/rilmodem/voicecall.c
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
-09:40:17.630 p0 I ofonod [0,0412]> IMS_REQUEST_AIRPLANE_MODE is_apm:1
+09:40:17.630 p0 I ofonod [0,0412]> IMS_REQUEST_AIRPLANE_MODE apm_on:1
 09:40:17.631 - D imsd [SLOT_0][D] 6101 slot0 <- ofonod: IMS_REQUEST_AIRPLANE_MODE serial 0412, apm on
 09:40:17.649 p0 I ofonod [0,0412]< IMS_REQUEST_AIRPLANE_MODE
 09:40:21.431 - I imsd [SLOT_0][I] 6104 EPSFB failed, notify to ExampleImsCallManager

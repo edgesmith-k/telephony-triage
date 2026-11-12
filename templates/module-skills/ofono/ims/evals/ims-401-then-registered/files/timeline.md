@@ -20,6 +20,6 @@
 09:30:22.161 - D vrild mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=28
 09:30:22.162 - D imsd [SLOT_0][D] 7105 slot0: OEM_UNSOL_IMS_EXAMPLE_REGISTRATION parsed -> [state : 1] sid 0
 09:30:22.162 - I imsd [SLOT_0][I] 7106 IMS registration done
-09:30:22.163 - I imsd [SLOT_0][I] 7107 registered:1 [IMS_REGISTERED] VoPS:1 RAT:NR
+09:30:22.163 - I imsd [SLOT_0][I] 7107 registered:1 [IMS_REG_OK] VoPS:1 RAT:NR
 09:30:22.164 p0 I ofonod [0,UNSOL]< IMS_UNSOL_RESPONSE_REGISTRATION_STATE_CHANGED
 09:30:22.165 p0 D ofonod src/ims.c:ofono_ims_status_notify() /ril_0 registered 1

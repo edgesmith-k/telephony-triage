@@ -3,11 +3,11 @@ Sep 21 10:40:00.010 dut local0.info mgmtd[734]: ui tick
 Sep 21 10:40:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-90
 Sep 21 10:40:01.000 dut daemon.info ofonod[466]: IMSD 0: <HEXDUMP 32B>
 Sep 21 10:40:02.010 dut user.debug imsd[733]: [SLOT_0][I] 5101 [ExampleImsRegistration] exampleTriggerRegistering() SENT
-Sep 21 10:40:02.020 dut user.debug imsd[733]: [SLOT_0][D] 5111 [SID_0] req -> OEM_REQ_IMS_EXAMPLE_REGISTER len=48
+Sep 21 10:40:02.020 dut user.debug imsd[733]: [SLOT_0][D] 5111 [SUB_0] req -> OEM_REQ_IMS_EXAMPLE_REGISTER len=48
 Sep 21 10:40:02.021 dut daemon.debug vrild[452]: mux [ch0][TX] VIPC_EXAMPLE_IMS_REG_REQ, REQ seq=0x0201 len=48
 Sep 21 10:40:02.090 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_REQ, RSP OK(VIPC_OK) seq=0x0201 len=12
 Sep 21 10:40:05.000 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=40
-Sep 21 10:40:05.001 dut user.debug imsd[733]: [SLOT_0][V] 5110 [SID_0] ind <- OEM_UNSOL_IMS_EXAMPLE_REG_FAIL(3100) : [fail-code : 403]
+Sep 21 10:40:05.001 dut user.debug imsd[733]: [SLOT_0][V] 5110 [SUB_0] ind <- OEM_UNSOL_IMS_EXAMPLE_REG_FAIL(3100) : [fail-code : 403]
 Sep 21 10:40:05.003 dut daemon.debug ofonod[466]: src/ims.c:example_reg_fail_notify() fail_code = 403
 Sep 21 10:40:05.004 dut daemon.info ofonod[466]: [0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=403
 Sep 21 10:40:05.006 dut user.debug imsd[733]: [SLOT_0][I] 5102 [ExampleImsRegistration] exampleRegistrationFailed() code=403

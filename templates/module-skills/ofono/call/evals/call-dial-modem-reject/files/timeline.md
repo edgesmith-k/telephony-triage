@@ -12,7 +12,7 @@
 10:10:05.006 - D ofonod drivers/rilmodem/voicecall.c:ril_dial()
 10:10:05.006 p0 I ofonod [0,0301]> RIL_REQUEST_DIAL (<MSISDN#1>,0)
 10:10:05.007 - D vrild client fd 9 VCHAN_1 REQUEST: DIAL (40 bytes)
-10:10:05.007 - I vrild [IpcCtx_0] OnRequest
+10:10:05.007 - I vrild [IpcCtx_0] OnExampleRequest
 10:10:05.007 - D vrild [IpcCtx_0] route req id=10 svc=2 msg=3001
 10:10:05.008 - I vrild [ExampleCallService_0] dial start
 10:10:05.008 - D vrild [IpcCtx_0] track seq 0x0131

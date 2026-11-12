@@ -15,7 +15,7 @@ Sep 22 09:30:21.981 dut local0.info mgmtd[734]: ui tick
 Sep 22 09:30:22.161 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=28
 Sep 22 09:30:22.162 dut user.debug imsd[552]: [SLOT_0][D] 7105 slot0: OEM_UNSOL_IMS_EXAMPLE_REGISTRATION parsed -> [state : 1] sid 0
 Sep 22 09:30:22.162 dut user.info imsd[552]: [SLOT_0][I] 7106 IMS registration done
-Sep 22 09:30:22.163 dut user.info imsd[552]: [SLOT_0][I] 7107 registered:1 [IMS_REGISTERED] VoPS:1 RAT:NR
+Sep 22 09:30:22.163 dut user.info imsd[552]: [SLOT_0][I] 7107 registered:1 [IMS_REG_OK] VoPS:1 RAT:NR
 Sep 22 09:30:22.163 dut daemon.info vrild[618]: [ExampleRegService_1] ims reg state now 1, cache updated
 Sep 22 09:30:22.164 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_RESPONSE_REGISTRATION_STATE_CHANGED
 Sep 22 09:30:22.165 dut daemon.debug ofonod[903]: src/ims.c:ofono_ims_status_notify() /ril_0 registered 1
