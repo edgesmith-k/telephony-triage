@@ -1765,7 +1765,8 @@ def test_candidate_evidence_cap_matches_contract():
     def probs(k):
         return me.candidate_format_problems(
             {"candidates": [{"n": 1, "원인 층": "모뎀·망 — x", "원인 데몬": "a", "근거": [f"q{i}" for i in range(k)]}]})
-    assert probs(4) == [] and "가설 1 근거 6줄" in probs(6)
+    assert me.CAND_EVIDENCE_MAX == 5      # QUOTES_MAX를 바꾸면 채점도 바뀐다 — 여기서 걸리면 GRADER_VERSION도 올린다
+    assert probs(4) == [] and probs(5) == [] and "가설 1 근거 6줄" in probs(6) and "가설 1 근거 0줄" in probs(0)
 
 
 def test_explore_safety_rows_use_candidate_parser(env, tmp_path):
