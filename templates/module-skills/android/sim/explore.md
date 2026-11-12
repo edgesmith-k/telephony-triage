@@ -28,7 +28,7 @@ Uicc*/SIMRecords → RILJ → RIL HAL `RadioSimProxy` → 벤더 RIL `[TX] VIPC_
 
 ## ⑤ 함정
 
-- `SIM_IO error 2`가 몇 번 있어도 SIM이 `LOADED`에 이르면 선택 파일이 없을 뿐이다 → `원인 아님(정상 동작)`.
+- `SIM_IO error 2`(GENERIC_FAILURE)가 몇 번 있어도 SIM이 `LOADED`에 이르면 → `원인 아님(정상 동작)`. 오류의 뜻은 SW로만 읽는다.
 - 결국 `LOADED`여도 카드 상태 응답이 초 단위로 늦었으면 "인식 느림"의 원인이다. 다른 요청이 빠르면 그 지연은 카드 쪽이다.
 - `SIM_OPEN_CHANNEL` + `NO_SUCH_ELEMENT`는 보통 배경 동작이다.
 - AID·경로는 마스킹 토큰이다. 토큰으로 어떤 파일인지 짐작하지 않는다.
