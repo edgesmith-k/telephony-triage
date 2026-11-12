@@ -229,9 +229,10 @@ def link_vendor(records: list[dict], rules: VendorRules) -> None:
             hal_end = max(start + link, end)
         else:
             end, hal_end = start + TOKEN_UNPAIRED, start + link
-        if _within(tok.get(ann["serial"], []), start, end):
+        serial = ann["serial"] % 10000  # 저장 쪽과 같은 4자리 키(RILJ가 전체 값을 찍어도)
+        if _within(tok.get(serial, []), start, end):
             ann["hal"] = "responded"
-        elif _within(hal.get(ann["serial"], []), start - HAL_BEFORE, hal_end):
+        elif _within(hal.get(serial, []), start - HAL_BEFORE, hal_end):
             ann["hal"] = "reached"
         elif _within(seen, start - COVER, start + COVER):
             ann["hal"] = "not_reached"

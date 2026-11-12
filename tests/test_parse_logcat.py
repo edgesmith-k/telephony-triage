@@ -379,6 +379,8 @@ def test_vendor_full_serial_matches_rilj_four_digits():
     assert _hal(_vendor_parse([REQ41, other]), "ril_no_response") == "not_reached"
     tok = (0.4, 900, "VRIL_SOCK", "resp token=20041")
     assert _hal(_vendor_parse([REQ41, full, tok]), "ril_no_response") == "responded"
+    req_full = (0, 1234, "RILJ", "[PHONE0] [10041]> SETUP_DATA_CALL")              # RILJ가 전체 값을 찍어도 맞는다
+    assert _hal(_vendor_parse([req_full, full]), "ril_no_response") == "reached"
 
 
 def test_vendor_non_decimal_group_value_is_ignored():
