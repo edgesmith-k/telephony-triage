@@ -1371,7 +1371,8 @@ def test_direct_path_is_saved_as_profile_and_auto_selected_next_time():
     _asked_code(_w4_write(ws))
     done = _w4_write(ws, "--answer", f"code={SRC / 'android16'}")
     assert done["status"] == "ok", done
-    note = "코드 경로를 프로필로 저장: android16-android16 (Android 16) — 이름 변경·삭제는 config.py set code_profiles"
+    note = (f"코드 경로를 프로필로 저장: android16-android16 (Android 16, {SRC / 'android16'})"
+            " — 이름 변경·삭제는 config.py set code_profiles")
     assert note in done["notes"]
     user = _w4_user(ws)
     assert user["code_profiles"][-1] == {"name": "android16-android16", "platform_version": "16",
@@ -1381,12 +1382,14 @@ def test_direct_path_is_saved_as_profile_and_auto_selected_next_time():
     ws.json("triage.py", ["release", W4_KEY])
     auto = _w4_write(ws)
     assert auto["status"] == "ok" and auto["code"]["auto"] is True and auto["code"]["roots"] == "android16-android16"
+    assert f"코드 분석 트리 자동 선택 경로: android16-android16 — {SRC / 'android16'}" in auto["notes"]
+    assert not [m for m in auto.get("must_show") or [] if str(SRC) in m]     # must_show는 Jira 코멘트로 간다 — 경로 없음
     assert len(_w4_user(ws)["code_profiles"]) == 2
     ws.json("triage.py", ["release", W4_KEY])
     # 같은 버전의 두 번째 경로(다른 roots) → 이름이 겹쳐 -2로 저장, 그 버전 프로필이 둘이라 다음엔 목록으로 묻는다
     tree = SRC / "android16"
     second = _w4_write(ws, "--answer", f"code=aosp={tree},vendor_ril={tree}")
-    assert second["status"] == "ok" and "코드 경로를 프로필로 저장: android16-android16-2 (Android 16)" in " ".join(second["notes"])
+    assert second["status"] == "ok" and "코드 경로를 프로필로 저장: android16-android16-2 (Android 16, " in " ".join(second["notes"])
     ws.json("triage.py", ["release", W4_KEY])
     _asked_code(_w4_write(ws))
     ws.json("triage.py", ["release", W4_KEY])
@@ -1404,7 +1407,7 @@ def test_confirmed_other_version_tree_is_saved_with_its_tree_version():
     ws.json("triage.py", ["release", W4_KEY])
     _w4_write(ws, "--answer", f"code={SRC / 'android17'}")
     done = _w4_write(ws, "--answer", "code_confirm=yes")
-    assert done["status"] == "ok" and "코드 경로를 프로필로 저장: android17-android17 (Android 17) — 이름 변경·삭제는 config.py set code_profiles" in done["notes"]
+    assert done["status"] == "ok" and f"코드 경로를 프로필로 저장: android17-android17 (Android 17, {SRC / 'android17'})" in " ".join(done["notes"])
     assert _w4_user(ws)["code_profiles"][-1]["platform_version"] == "17"
     ws.json("triage.py", ["release", W4_KEY])
 
@@ -1758,7 +1761,7 @@ def test_code_question_offers_four_choices_and_names_the_rest():
     from types import SimpleNamespace
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     from triagelib import driver
-    fake = SimpleNamespace(platform_label="Android", auto_invalid=False)
+    fake = SimpleNamespace(platform_label="Android", auto_invalid=False, platform_spec=SimpleNamespace(primary_root="aosp"))
     cands = [{"name": n, "platform_version": "16", "recommended": i == 0} for i, n in enumerate(("a16", "b16", "c16"))]
     q = driver.Driver.code_question(fake, "16", {"candidates": cands})
     assert [o["value"] for o in q.payload["options"]] == ["a16", "b16", "<경로 또는 키=경로,…>", "skip"]
@@ -1766,6 +1769,15 @@ def test_code_question_offers_four_choices_and_names_the_rest():
     recent = {"name": None, "platform_version": "16", "roots": {"aosp": "/work/a16_qpr1", "vendor_ril": "/work/ril"}}
     q = driver.Driver.code_question(fake, "16", {"candidates": [*cands[:2], recent]})
     assert "최근 Android 16 aosp=/work/a16_qpr1,vendor_ril=/work/ril" in q.payload["question"]   # 이름 없는 경로도 적을 수 있게
+    # 라벨·문구에 주 루트 경로(자르지 않음), value는 그대로
+    named = [{"name": "android16-main", "platform_version": "16", "recommended": True,
+              "roots": {"aosp": "/src/a16", "vendor_ril": "/src/ril"}}, recent,
+             {"name": "c17", "platform_version": "17", "roots": {"aosp": "/src/a17"}}]
+    q = driver.Driver.code_question(fake, "16", {"candidates": named})
+    assert [(o["value"], o["label"]) for o in q.payload["options"][:2]] == [
+        ("android16-main", "android16-main Android 16 — /src/a16 (추천)"),
+        ("aosp=/work/a16_qpr1,vendor_ril=/work/ril", "최근 Android 16 — /work/a16_qpr1")]
+    assert "(그 밖 후보: c17 Android 17 — /src/a17 — 직접 입력에" in q.payload["question"]
     two = driver.Driver.code_question(fake, "16", {"candidates": cands[:2]})
     assert len(two.payload["options"]) == 4 and "그 밖 후보" not in two.payload["question"]
 
