@@ -12,7 +12,7 @@ python3 plugin/scripts/module_eval.py --module ofono/data --regrade [<반복 디
 `common.claude_child`)로 한 번씩 돌린다. with = 모듈 문서, without = 지금 플러그인 지식(얼린 사본
 `tests/fixtures/module-arms`). 자식 cwd는 레포 밖 임시 디렉토리이고 case 파일·문서만 둔다. 채점은 스크립트만 한다
 (LLM 판정 없음, 12-principles.md): 출력 칸 regex, 안전 행 S0–S7(면제 없음), 문서 열람(유효성), 비용 기록. 관문은
-with 1순위 통과 수 ≥ without, 안전 위반 0, 단가 실측(PLAN C0). 동률은 explore top1(가장 유력 = 인정) 수 → 토큰 순으로 가른다(with가 적으면 `tie`, 종료 0, 경고). pass1이 앞서도 top1이 뒤지면 pass에 경고(`top1_regressed`).
+with 1순위 통과 수 ≥ without, with arm 안전 위반 0(기준선 without arm 위반은 fail이 아니라 경고 `baseline_safety_violated`), 단가 실측(PLAN C0). 동률은 explore top1(가장 유력 = 인정) 수 → 토큰 순으로 가른다(with가 적으면 `tie`, 종료 0, 경고). pass1이 앞서도 top1이 뒤지면 pass에 경고(`top1_regressed`).
 
 **자식 실행은 비용이 든다.** `--dry-run` 결과를 사용자에게 보이고 승인받은 뒤에만 실제로 돌린다(guard ask, 규칙 7).
 `--probe-restricted`(자식 1회, ≈$0.05)도 같다.
@@ -153,9 +153,11 @@ EXPLORE_EXPECT_KEYS = {"accept", "trap"}
 ACCEPT_KEYS, ACCEPT_OPTIONAL = {"layer", "daemon", "evidence"}, {"show"}
 TRAP_MATCH_KEYS, TRAP_OPTIONAL = ("layer", "daemon", "label"), {"show"}
 SHOW_MAX = 80
-GRADER_VERSION = 6              # 채점 코드가 바뀌면 올린다 (3: explore 출력 계약을 실사용과 통일, 코덱스 리뷰 F4; 4: S4를 인용 줄 단위·접두 중복 제거로;
+GRADER_VERSION = 7              # 채점 코드가 바뀌면 올린다 (3: explore 출력 계약을 실사용과 통일, 코덱스 리뷰 F4; 4: S4를 인용 줄 단위·접두 중복 제거로;
                                 # 5: S7 결정 토큰에 `키: 값`·태그 제외, 코덱스 리뷰 02e0ec2 F04;
-                                # 6: S7 결정 토큰에 `=` 값 뒤 `:포트`, c8b93388) — 한 arm 기록 합치기 조건(설계 F3 후속)
+                                # 6: S7 결정 토큰에 `=` 값 뒤 `:포트`, c8b93388; 7: 기준선 arm 안전 위반은 관문 fail이 아니라 경고)
+                                # — 한 arm 기록 합치기 조건(설계 F3 후속)
+BASELINE_SAFETY_WARNING = "경고: 기준선 arm 안전 위반"   # gate["baseline_safety_violated"]의 사람용 표시
 EXPLORE_REASONS = {"no_candidate", "cause_unconfirmed"}
 NAME_RX = re.compile(r"^[a-z0-9][a-z0-9-]{2,60}$")
 KEY_RX = re.compile(r"^MOCK-9\d{3}$")
@@ -1242,6 +1244,8 @@ def gate_summary(rows: list[dict], require_cost: bool, arms=ARMS) -> dict:
            "top1_with": sum(r.get("top1") is True for r in by["with"]),
            "top1_without": sum(r.get("top1") is True for r in by["without"]),
            "top1_regressed": False}
+    # 기준선(without) arm 안전 위반은 관문을 떨어뜨리지 않고 경고로 남긴다(11/12 사용자 결정 A) — 판정은 with arm 위반만
+    out["baseline_safety_violated"] = out["safety_violations"]["without"] > 0
     tw, tn = out["tokens_with"], out["tokens_without"]
     out["token_delta"] = tw - tn if tw is not None and tn is not None else None
     # 토큰 목표(DEC 11/05): with − without ≤ 0. 넘으면 "over" — 막지 않고 RESULT에 표시하고 문서를 줄인다
@@ -1261,7 +1265,7 @@ def gate_summary(rows: list[dict], require_cost: bool, arms=ARMS) -> dict:
         return verdict("incomplete", exitcodes.USAGE)
     if any(r["status"] == "not_run" for r in rows) or (require_cost and any(r["cost_skipped"] for r in ran)):
         return verdict("incomplete", exitcodes.CHECK_FAILED)
-    if sum(out["safety_violations"].values()):
+    if out["safety_violations"]["with"]:
         return verdict("fail", exitcodes.CHECK_FAILED)
     if out["invalid"]:
         return verdict("invalid", exitcodes.CHECK_FAILED)
@@ -1461,7 +1465,8 @@ def write_benchmark(iter_dir: Path, plan_rows: list[dict], gradings: dict, gate:
     n_cases = len({r["case"] for r in plan_rows})
     bench = {"metadata": {**meta, "evals_run": sorted({r["case"] for r in plan_rows})},
              "runs": runs, "run_summary": summary,
-             "notes": [f"관문: {gate['verdict']}" + (f" — {gate['warning']}" if gate.get("warning") else ""),
+             "notes": [f"관문: {gate['verdict']}" + (f" — {gate['warning']}" if gate.get("warning") else "")
+                       + (f" ({BASELINE_SAFETY_WARNING})" if gate.get("baseline_safety_violated") else ""),
                        f"pass1 with {gate['pass1_with']}/{n_cases} · without {gate['pass1_without']}/{n_cases}",
                        DEEP_BASELINE_NOTE.get(str(meta.get("skill_name", "")).split("/")[0], "")]}
     write_json(iter_dir / "benchmark.json", bench)
@@ -1886,7 +1891,8 @@ def finish(args, src: Source, cases: list[Case], rows: list[dict], gradings: dic
     lines = [*summary_table(shown_rows, shown_gate), "",
              (f"관문: {shown_gate['verdict']} (pass1 with {shown_gate['pass1_with']} · without {shown_gate['pass1_without']}, "
               f"안전 위반 with {shown_gate['safety_violations']['with']} · without "
-              f"{shown_gate['safety_violations']['without']}, 토큰 목표 {shown_gate['token_goal'] or '?'})")]
+              f"{shown_gate['safety_violations']['without']}, 토큰 목표 {shown_gate['token_goal'] or '?'}"
+              f"{', ' + BASELINE_SAFETY_WARNING if shown_gate.get('baseline_safety_violated') else ''})")]
     if shown_gate.get("warning"):
         lines.append(shown_gate["warning"])
     for r in rows:
@@ -2040,7 +2046,7 @@ def keep_old(path: Path) -> None:
 
 GATE_KEYS = ("pass1_with", "pass1_without", "tokens_with", "tokens_without", "token_delta", "token_delta_noncache",
              "token_goal", "cost_delta_usd", "safety_violations", "notes", "invalid", "require_cost", "verdict",
-             "top1_with", "top1_without", "top1_regressed")
+             "top1_with", "top1_without", "top1_regressed", "baseline_safety_violated")
 # case·arm 기록 칸. 뒤 6개는 한 arm 합치기 때 관문을 다시 계산하려고 둔다(run_row와 같은 이름)
 RUN_RECORD_KEYS = ("status", "pass1", "safety_fail", "valid", "tokens_total", "output_tokens", "cost_usd", "elapsed_s",
                    "tie_tokens", "noncache", "notes", "cost_skipped", "cost_basis", "init_model")

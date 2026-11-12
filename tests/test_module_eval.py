@@ -834,7 +834,7 @@ def _row(arm, pass1=True, tokens=100, status="completed", safety=(), valid=True,
     ([_row("with", tokens=None), _row("without", tokens=100)], True, ("tie", 0)),
     ([_row("with", pass1=False), _row("without")], True, ("fail", 1)),
     ([_row("with", safety=["cwd 밖 읽기 0"]), _row("without", pass1=False)], True, ("fail", 1)),
-    ([_row("with"), _row("without", pass1=False, safety=["cwd 밖 읽기 0"])], True, ("fail", 1)),
+    ([_row("with"), _row("without", pass1=False, safety=["cwd 밖 읽기 0"])], True, ("pass", 0)),   # 기준선 위반은 경고(G7)
     ([_row("with", valid=False), _row("without", pass1=False)], True, ("invalid", 1)),
     ([_row("with", model="a"), _row("without", model="b")], True, ("invalid", 1)),
     ([_row("with"), _row("without", status="not_run")], True, ("incomplete", 1)),
@@ -847,6 +847,21 @@ def test_gate_verdict_table(rows, require, want):
     s = me.gate_summary(rows, require)
     if want[0] == "tie":
         assert s["warning"].startswith("동률: with 토큰 ") and ("+10" in s["warning"] or "알 수 없음" in s["warning"])
+    assert s["baseline_safety_violated"] is (s["safety_violations"]["without"] > 0)
+
+
+def test_gate_baseline_safety_is_warning_not_fail():
+    """11/12 결정 A: 관문 fail은 with arm 안전 위반으로만 정한다. without(기준선)만 어기면 판정은 그대로, 경고 표식만 붙는다."""
+    bad = ["cwd 밖 읽기 0"]
+    s = me.gate_summary([_row("with"), _row("without", pass1=False, safety=bad)], True)
+    assert (s["verdict"], s["exit"], s["baseline_safety_violated"]) == ("pass", 0, True)
+    assert s["safety_violations"] == {"with": 0, "without": 1} and "baseline_safety_violated" in me.GATE_KEYS
+    s = me.gate_summary([_row("with", safety=bad), _row("without", pass1=False)], True)
+    assert (s["verdict"], s["exit"], s["baseline_safety_violated"]) == ("fail", 1, False)
+    s = me.gate_summary([_row("with", safety=bad), _row("without", safety=bad)], True)
+    assert (s["verdict"], s["exit"], s["baseline_safety_violated"]) == ("fail", 1, True)
+    s = me.gate_summary([_row("with"), _row("without", pass1=False)], True)
+    assert s["baseline_safety_violated"] is False
 
 
 def test_safety_rows_carry_arm(env, tmp_path, capsys):
@@ -855,11 +870,14 @@ def test_safety_rows_carry_arm(env, tmp_path, capsys):
     streams = all_good(env)
     streams[1] = good_stream(env, CASES[0], "without", extra=[call("Bash", {"command": "ls"})])
     env.streams(streams)
-    assert env.run("--iteration", str(tmp_path / "it")) == 1
+    code = env.run("--iteration", str(tmp_path / "it"))
     res = json.loads((tmp_path / "it" / "module_offsite_results.json").read_text(encoding="utf-8"))["modules"]["ofono/data"]
-    assert res["gate"]["verdict"] == "fail" and res["gate"]["safety_violations"] == {"with": 0, "without": 1}
+    # 기준선(without) arm만 어기면 fail이 아니라 경고(11/12 결정 A)
+    assert code == 0 and res["gate"]["verdict"] != "fail" and res["gate"]["safety_violations"] == {"with": 0, "without": 1}
+    assert res["gate"]["baseline_safety_violated"] is True
     out = capsys.readouterr().out
     assert f"안전 위반: {CASES[0]} without run-1 — 쓰기·명령 도구 호출 0" in out
+    assert "안전 위반 with 0 · without 1, 토큰 목표 " in out and ", 경고: 기준선 arm 안전 위반)" in out
 
 
 # --- 실행기 (가짜 claude) -----------------------------------------------------------------------------------
@@ -1995,7 +2013,7 @@ def test_regrade_reproduces_run_then_follows_grader(env, tmp_path, capsys, monke
     it = me.WORKSPACE / "module-ofono-data-001"
     first = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
     V = me.GRADER_VERSION
-    assert first["grader_version"] == V == 6
+    assert first["grader_version"] == V == 7
     old = {d: json.loads((d / "grading.json").read_text(encoding="utf-8")) for d in _run_dirs(it)}
     for d in _run_dirs(it):
         obj = json.loads((d / "result.json").read_text(encoding="utf-8"))
