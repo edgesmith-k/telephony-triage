@@ -826,7 +826,7 @@ def review_md(p: dict) -> str:
         elif it["kind"] == "module" and it.get("doc_only"):
             lines.append("- 볼 것: eval을 돌릴 수 없다 — 바뀐 문서(explore·SKILL·analyzer)가 플랫폼 공통 원칙·안전 규칙과 맞는지 diff로만 본다.")
         elif it["kind"] == "module":
-            lines.append("- 볼 것: with ≥ without, 안전 위반 0. 결과 기록은 스크립트(module_eval)만 쓴다.")
+            lines.append("- 볼 것: with ≥ without, with arm 안전 위반 0(기준선 arm 위반은 경고). 결과 기록은 스크립트(module_eval)만 쓴다.")
         lines.append("")
     if not now:
         lines.append("이번에 볼 것 없음.")

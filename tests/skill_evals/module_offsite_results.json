@@ -384,14 +384,14 @@
     "data-profile-ipc-swallowed/timeline.md": "6dcb8a24cb8de09e5422bbd5d30633473a9b12f2fc2ae56af1c266ab94b73995"
    },
    "prompt_sha256": "e81e25358c811f3411337820e6223f2fae022b9cccda2ee29a3577dec6ff9707",
-   "grader_version": 6,
+   "grader_version": 7,
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
    "regraded": {
-    "from_grader": 5,
+    "from_grader": 6,
     "original_grader": 5,
-    "at": "2026-11-11T23:06:08Z"
+    "at": "2026-11-12T00:11:19Z"
    },
    "init_model": "claude-sonnet-5-5",
    "cases": {
@@ -618,7 +618,8 @@
     "verdict": "pass",
     "top1_with": 2,
     "top1_without": 0,
-    "top1_regressed": false
+    "top1_regressed": false,
+    "baseline_safety_violated": false
    },
    "unit_cost_usd": 0.089027,
    "total_cost_usd": 0.890271,
@@ -1104,14 +1105,14 @@
     "call-volte-sip-invite-error/timeline.md": "c806617de071385ed4136081a37166f72ae5dae599d3f320d78765ad16ba84df"
    },
    "prompt_sha256": "e81e25358c811f3411337820e6223f2fae022b9cccda2ee29a3577dec6ff9707",
-   "grader_version": 6,
+   "grader_version": 7,
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
    "regraded": {
-    "from_grader": 5,
+    "from_grader": 6,
     "original_grader": 5,
-    "at": "2026-11-11T23:05:59Z"
+    "at": "2026-11-12T00:11:17Z"
    },
    "init_model": "claude-sonnet-5-5",
    "cases": {
@@ -1258,7 +1259,8 @@
     "verdict": "pass",
     "top1_with": 1,
     "top1_without": 0,
-    "top1_regressed": false
+    "top1_regressed": false,
+    "baseline_safety_violated": false
    },
    "unit_cost_usd": 0.090544,
    "total_cost_usd": 0.543264,
@@ -1306,14 +1308,14 @@
     "ims-reg-403/timeline.md": "394ae0facd22ef0fb2a14bc48c6b7e5ffe3a72a752c4810f1b6148e98368dbf0"
    },
    "prompt_sha256": "e81e25358c811f3411337820e6223f2fae022b9cccda2ee29a3577dec6ff9707",
-   "grader_version": 6,
+   "grader_version": 7,
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
    "regraded": {
-    "from_grader": 5,
+    "from_grader": 6,
     "original_grader": 5,
-    "at": "2026-11-11T23:06:00Z"
+    "at": "2026-11-12T00:11:17Z"
    },
    "init_model": "claude-sonnet-5-5",
    "cases": {
@@ -1460,7 +1462,8 @@
     "verdict": "pass",
     "top1_with": 1,
     "top1_without": 0,
-    "top1_regressed": false
+    "top1_regressed": false,
+    "baseline_safety_violated": false
    },
    "unit_cost_usd": 0.084429,
    "total_cost_usd": 0.506574,
@@ -1507,14 +1510,14 @@
     "sim-slow-recognition/timeline.md": "556dd80d75295e4bf7049675d3b7a8cd63297a6ba85705a34a21c24b77fdb424"
    },
    "prompt_sha256": "e81e25358c811f3411337820e6223f2fae022b9cccda2ee29a3577dec6ff9707",
-   "grader_version": 6,
+   "grader_version": 7,
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
    "regraded": {
-    "from_grader": 5,
+    "from_grader": 6,
     "original_grader": 5,
-    "at": "2026-11-11T23:06:09Z"
+    "at": "2026-11-12T00:11:20Z"
    },
    "init_model": "claude-sonnet-5-5",
    "cases": {
@@ -1660,10 +1663,11 @@
     },
     "invalid": [],
     "require_cost": true,
-    "verdict": "fail",
+    "verdict": "pass",
     "top1_with": 2,
     "top1_without": 0,
-    "top1_regressed": false
+    "top1_regressed": false,
+    "baseline_safety_violated": true
    },
    "unit_cost_usd": 0.093038,
    "total_cost_usd": 0.558227,
@@ -1711,10 +1715,15 @@
     "modem-vendor-lines-missing/timeline.md": "5d9b9d4b7c548cac94fe76e0da24ec66ae992504659f0768e2ffb310c1b198bd"
    },
    "prompt_sha256": "e81e25358c811f3411337820e6223f2fae022b9cccda2ee29a3577dec6ff9707",
-   "grader_version": 6,
+   "grader_version": 7,
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "regraded": {
+    "from_grader": 6,
+    "original_grader": 6,
+    "at": "2026-11-12T00:11:18Z"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "modem-restart-chain": {
@@ -1860,7 +1869,8 @@
     "verdict": "pass",
     "top1_with": 2,
     "top1_without": 1,
-    "top1_regressed": false
+    "top1_regressed": false,
+    "baseline_safety_violated": false
    },
    "unit_cost_usd": 0.093727,
    "total_cost_usd": 0.562359,
@@ -2529,14 +2539,14 @@
     "network-reg-reject/timeline.md": "43a58aa5e0ec7f1d4702c5f25c3d097a34e65f6fe4c5b0e93b36c30a22af0bf9"
    },
    "prompt_sha256": "e81e25358c811f3411337820e6223f2fae022b9cccda2ee29a3577dec6ff9707",
-   "grader_version": 6,
+   "grader_version": 7,
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
    "regraded": {
-    "from_grader": 5,
+    "from_grader": 6,
     "original_grader": 5,
-    "at": "2026-11-11T23:06:00Z"
+    "at": "2026-11-12T00:11:18Z"
    },
    "init_model": "claude-sonnet-5-5",
    "cases": {
@@ -2643,7 +2653,8 @@
     "verdict": "pass",
     "top1_with": 1,
     "top1_without": 0,
-    "top1_regressed": false
+    "top1_regressed": false,
+    "baseline_safety_violated": false
    },
    "unit_cost_usd": 0.092436,
    "total_cost_usd": 0.369745,
@@ -2687,14 +2698,14 @@
     "sms-smsc-missing/timeline.md": "150e09cd9b02f6f1120f7d8ef5c24317f39f117373a6eb7bb8983901e6691b3c"
    },
    "prompt_sha256": "e81e25358c811f3411337820e6223f2fae022b9cccda2ee29a3577dec6ff9707",
-   "grader_version": 6,
+   "grader_version": 7,
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
    "regraded": {
-    "from_grader": 5,
+    "from_grader": 6,
     "original_grader": 5,
-    "at": "2026-11-11T23:06:09Z"
+    "at": "2026-11-12T00:11:20Z"
    },
    "init_model": "claude-sonnet-5-5",
    "cases": {
@@ -2801,7 +2812,8 @@
     "verdict": "pass",
     "top1_with": 0,
     "top1_without": 0,
-    "top1_regressed": false
+    "top1_regressed": false,
+    "baseline_safety_violated": false
    },
    "unit_cost_usd": 0.078002,
    "total_cost_usd": 0.312009,
