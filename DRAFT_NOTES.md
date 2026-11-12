@@ -16,11 +16,12 @@
 
 ## 진행 상태 (11/12)
 
-- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강·H 완료. 지난 묶음 **import-20261103**(main `77e2827`).
-- 다음 묶음 이름은 **태그 찍는 날짜** `import-YYYYMMDD`(`import-20261109`·`b`는 이미 있음, 태그·반입은 사용자). 사내: 재반입 §8. 이번 묶음은 guard 판정이 바뀌었다(4-c 병합 계열·규칙 5 ask 전환, Approve·기각·자동 병합·보호 변경·refs 위조 deny 신설) — 반입 전 `s4a.protection_guard` 통과 전제. SITE_INSTALL §8대로 사내 대상 eval 12개(`pending.json` `site`) 전부 다시 돌린다.
+- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강·H 완료. 마지막 태그 **import-20261109b**(`a23dbefb`).
+- 다음 묶음 이름은 **태그 찍는 날짜** `import-YYYYMMDD`(`import-20261109`·`b` 있음, 태그·반입은 사용자). 사내: 재반입 §8. 이번 묶음은 guard 판정이 바뀌었다(병합 계열·규칙 5 ask 전환, Approve·기각·자동 병합·보호 변경·refs 위조 deny 신설) — 반입 전 `s4a.protection_guard` 통과 전제. SITE_INSTALL §8대로 사내 대상 eval 12개(`pending.json` `site`) 전부 다시 돌린다.
 - 템플릿·fixture는 placeholder·합성(사내 값은 SITE_PATHS, 반입 전 SITE_RESTORE ⓪), 반입은 `stable`에서 (Android eval은 arm pin 갱신으로 두 arm 함께 재실행)
-- 11/10~12 병합 #85~#96(#90 마스킹 한글 경계·전각 접기, #91·#92·#94 Android 17 문구(data 보충은 되돌림)·ARM_PINS, #93 관문: 기준선 arm 안전 위반은 경고·GRADER_VERSION 7, #95 구분자 ICCID, #96 sms eval 기대). #98 작은 P2·훑기 1단계, #99 Android case 보강·문서 보완 3자리 뒤 모듈 eval call·modem·network pass(history 11/12). S-0(선행 확인)을 사내 첫 단계로 넣음(S-0~S-7, 점검 `s0.metrics`·`s0.conclusion`은 면제 가능, history 11/12).
-- 11/12 가상 사용자 리허설(main `6f7bffc1`): 임시 마켓플레이스 설치·처음 setup·사용 13건 실패 0(기록은 history 11/12).
+- 11/10~12 병합 #85~#104: #90~#98 마스킹·Android 17 문구·관문·훑기, #99·#100 Android case 보강·추가(data 6·sim 4·network 3·call 4·sms 3·ims 3·modem 4), #101 모듈 문서 보완, #102 S-0를 `site_step.py` 첫 단계로·스킬 문서 eval 범위 원칙, #103 모듈 eval 채점기 가설당 근거 상한을 계약 1~5줄에 맞춤(`GRADER_VERSION` 8, 5개 모듈 재채점), #104 android sms(요청 미생성을 `SS=1·2` 모뎀·망/`SS=3` 끈 쪽으로 나눔, case 캡처로 재작성, eval tie). 직접 입력한 소스 경로를 버전과 함께 개인 `code_profiles`에 자동 저장.
+- 재채점 못 한 모듈 eval: android ims, ofono 전부(run 폴더가 사외 PC에 없음). grader 7·3으로 남아 한 arm만 합치려면 재실행 필요.
+- 11/12 가상 사용자 리허설 13건 실패 0(history).
 - 모델 Sonnet 5.5 기준. `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서: `docs/book/telephony-triage-book.html`
 
@@ -28,17 +29,17 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ F | 다음 묶음 — 사람 확인·태그·반입은 사용자 | SITE_INSTALL §8·반입 노트(`MODULE_SKILLS_RESULT.md`) |
+| ☐ F | 다음 묶음 — 사람 확인·태그·반입은 사용자. 반입 뒤 후보: 탐색 `--also`, 심층 분석 단계, Jira 버전 문구 패턴(`99-deferred.md` H·I·G) | SITE_INSTALL §8·반입 노트(`MODULE_SKILLS_RESULT.md`) |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
 | ☐ I | OpenCode·사내 모델판 — 사외 몫 ☑(사내 확인 남음) | `docs/RUNTIME_ADOPTION.md` |
 
 ## 다음 사이클 후보 (11/09 사용자 목록, 확정 계획 아님)
 
-C 지표 자리 · 4-c 2차(guard 판정 축소 후속) · B 조건부 · F3 B/C(`mask_pii --check` 갈린 ICCID) · 4-c P2 6건 · D① P2 · 묶기·전구간 부정(S37 뒤 별도 설계) · 분석 전용 종료 표식 · 포트 변조 잔여(끝 `.`·`키: 값`) · A17: extractor 2·좁힌 태그·data 문서 보충·sms 문서 P2 2 · eval 42 allow-cause 경로 표시 · 11/12 리허설 P2 3 · network case(태그 추가 확인 필요) · 훑기 남은 것 · eval 형식 실패 · 상세·그 밖 P2는 history 11/12
+C 지표 자리 · 4-c 2차(guard 판정 축소 후속) · B 조건부 · F3 B/C(`mask_pii --check` 갈린 ICCID) · 4-c P2 6건 · D① P2 · 묶기·전구간 부정(S37 뒤 별도 설계) · 분석 전용 종료 표식 · 포트 변조 잔여(끝 `.`·`키: 값`) · A17: extractor 2·좁힌 태그·data 문서 보충·sms 문서 P2 2 · eval 42 allow-cause 경로 표시 · 11/12 리허설 P2 3 · network case(태그 추가 확인 필요) · 훑기 남은 것 · eval 형식 실패 · 그 밖 P2는 history 11/12
 
 ## 사내로 넘긴 것
 
-- 사내 대상 eval 12개(`pending.json` `site`, S-2; 사내 모델이 다르면 +7 — 반입마다 `MODULE_SKILLS_RESULT.md` "반입 노트" 표로 영향 받는 것만, 11/05 결정), T4 Read line 힌트(S-2)·offline_eval 오류율 상한(S-5)·`max_tokens_hint`(S-4a)·U1 setup Jira 없음 중단(S-3)·db-authoring 요약 확장(S-2)·마켓플레이스 소스 유형 → version 규칙(S-2·S-7).
+- 사내 대상 eval 12개(`pending.json` `site`, S-2; 사내 모델이 다르면 +7 — 반입마다 `MODULE_SKILLS_RESULT.md` "반입 노트" 표로 영향 받는 것만), T4 Read line 힌트(S-2)·offline_eval 오류율 상한(S-5)·`max_tokens_hint`(S-4a)·U1 setup Jira 없음 중단(S-3)·db-authoring 요약 확장(S-2)·마켓플레이스 소스 유형 → version 규칙(S-2·S-7).
 - S-7: usage_stats format 2·`--transcripts` 허용 여부. S37 결과·팀 설치본 통일 뒤에만 `signature_features`를 DB에 선언(결정 (v)).
 - 사내 IMS는 별도 APK(11/12): IMS 줄·규칙·문서는 AOSP 기준·소스만 — S-1에서 먼저.
 - 반입 뒤 후보(RF-5·6·8·9, R-36~R-47)는 `docs/history/draft-notes-2026-10.md` "10/13 이동".
