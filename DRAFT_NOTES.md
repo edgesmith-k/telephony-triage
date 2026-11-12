@@ -17,9 +17,9 @@
 ## 진행 상태 (11/12)
 
 - 모드: **사외 초안**. Phase D0·1~13·반입 전 보강·H 완료. 지난 묶음 **import-20261103**(main `77e2827`).
-- 다음 묶음 **import-20261109**(태그·반입은 사용자). 사내: 재반입 §8. 이번 묶음은 guard 판정이 바뀌었다(4-c 병합 계열·규칙 5 ask 전환, Approve·기각·자동 병합·보호 변경·refs 위조 deny 신설) — 반입 전 `s4a.protection_guard` 통과 전제. SITE_INSTALL §8대로 사내 대상 eval 12개(`pending.json` `site`) 전부 다시 돌린다.
+- 다음 묶음 이름은 **태그 찍는 날짜** `import-YYYYMMDD`(`import-20261109`·`b`는 이미 있음, 태그·반입은 사용자). 사내: 재반입 §8. 이번 묶음은 guard 판정이 바뀌었다(4-c 병합 계열·규칙 5 ask 전환, Approve·기각·자동 병합·보호 변경·refs 위조 deny 신설) — 반입 전 `s4a.protection_guard` 통과 전제. SITE_INSTALL §8대로 사내 대상 eval 12개(`pending.json` `site`) 전부 다시 돌린다.
 - 템플릿·fixture는 placeholder·합성(사내 값은 SITE_PATHS, 반입 전 SITE_RESTORE ⓪), 반입은 `stable`에서 (Android eval은 arm pin 갱신으로 두 arm 함께 재실행)
-- 11/10~12 병합 #85~#96(#90 마스킹 한글 경계·전각 접기, #91·#92·#94 Android 17 문구(data 보충은 되돌림)·ARM_PINS, #93 관문: 기준선 arm 안전 위반은 경고·GRADER_VERSION 7, #95 구분자 ICCID, #96 sms eval 기대). PR 대기 없음.
+- 11/10~12 병합 #85~#96(#90 마스킹 한글 경계·전각 접기, #91·#92·#94 Android 17 문구(data 보충은 되돌림)·ARM_PINS, #93 관문: 기준선 arm 안전 위반은 경고·GRADER_VERSION 7, #95 구분자 ICCID, #96 sms eval 기대). #98: 작은 P2(`fold_ascii`·eval 80 사외 갈음·확인 화면 표시)·훑기 1단계·O-2/O-4 읽기 줄이기(history 11/12).
 - 11/12 가상 사용자 리허설(main `6f7bffc1`): 임시 마켓플레이스 설치·처음 setup·사용 13건 실패 0(기록은 history 11/12).
 - 모델 Sonnet 5.5 기준. `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서: `docs/book/telephony-triage-book.html`
@@ -28,13 +28,13 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ F | 묶음 import-20261109 — 사람 확인·태그·반입은 사용자 | SITE_INSTALL §8·반입 노트(`MODULE_SKILLS_RESULT.md`) |
+| ☐ F | 다음 묶음 — 사람 확인·태그·반입은 사용자 | SITE_INSTALL §8·반입 노트(`MODULE_SKILLS_RESULT.md`) |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
 | ☐ I | OpenCode·사내 모델판 — 사외 몫 ☑(사내 확인 남음) | `docs/RUNTIME_ADOPTION.md` |
 
 ## 다음 사이클 후보 (11/09 사용자 목록, 확정 계획 아님)
 
-C 지표 자리 · 4-c 2차(guard 판정 축소 후속) · B 조건부 · F3 B/C(`mask_pii --check` 갈린 ICCID) · 4-c P2 6건 · D① P2 · 묶기·전구간 부정(S37 뒤 별도 설계) · 분석 전용 종료 표식 · 포트 변조 잔여(끝 `.`·`키: 값`) · A17: extractor 2·좁힌 태그·data 문서 보충·sms 문서 P2 2 · eval 42 allow-cause 경로 표시 · 11/12 리허설 P2 2 · 상세·그 밖 P2는 history 11/12
+C 지표 자리 · 4-c 2차(guard 판정 축소 후속) · B 조건부 · F3 B/C(`mask_pii --check` 갈린 ICCID) · 4-c P2 6건 · D① P2 · 묶기·전구간 부정(S37 뒤 별도 설계) · 분석 전용 종료 표식 · 포트 변조 잔여(끝 `.`·`키: 값`) · A17: extractor 2·좁힌 태그·data 문서 보충·sms 문서 P2 2 · eval 42 allow-cause 경로 표시 · 11/12 리허설 P2 3 · Android case 보강(network·sms부터) · 훑기 남은 것 · 상세·그 밖 P2는 history 11/12
 
 ## 사내로 넘긴 것
 

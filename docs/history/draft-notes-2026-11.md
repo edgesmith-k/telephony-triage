@@ -77,3 +77,12 @@ DRAFT_NOTES 후보 줄의 풀이와, 상한 때문에 거기 못 넣은 P2다. �
 - 사내 S-2에서 같이 볼 것: eval 1·46에서 publish·release 뒤 `issue_post.py status`와 Jira 게시 질문이 빠졌다(실행자가 "규칙에 없는 질문"이라 생략 — 모의 영향 가능, 미확정).
 - 설계대로라 고치지 않는 것: verify-fix 시각 연도 2000(`verify.md` 시각 기준), 스냅샷 없을 때 검색 `--db` 생략, `report.md` 원인 칸 `TODO(LLM)`.
 - 거슬린 점(미처리): 새 원인 질문 8개(분류 3단계)·Jira 코멘트 9개, 리뷰어 질문 선택지가 "지정 안 함" 하나, show-guard 되돌림으로 질문 재시도(1·2·46), 게시 본문에 `[placeholder 규칙 결과]` 노출.
+
+## 11/12 작은 P2 묶음·훑기 1단계 (#98)
+
+- 리허설 P2 하나 더: 처음 setup에서 묻지 않은 팀 기본값을 한 줄씩이 아니라 한 문장으로 묶어 보였다(이제 어떤 채점 행도 보지 않는다 — eval 80은 사내 대상에서 뺐고 수동 행을 없앴다).
+- oFono 설정 반영 확인(합성 로그, 코드 수정 없음): site-defaults `platform.others.ofono`의 `components`(idents·msg_format·split_tag)·`protocols.<이름>.tags`·`log.phone_id`를 바꾸면 `parse_logcat parse` 출력이 따라 바뀐다. 알아 둘 것 셋은 `site-defaults.example.yaml` 주석에 적었다(새 ident는 이슈 DB tags.yaml에도, `log.phone_id`는 원문 기준, `msg_format` 불일치는 경고 없음).
+- O 단계 pack 크기: O-1 13.3KB, O-2 45.3→24.6KB, O-3 10.7KB, O-4 37.4→8.3KB(`02-config.md` §4.1).
+- 훑기(읽기 전용, Android·oFono 모듈 문서·case·fixture): 실제 칩셋·제조사 이름은 없다. 1단계로 고친 것 — oFono 모듈 문서에서 합성 로그에 없는 이름·문구, case 주석 2개, oFono 테스트 합성 줄.
+- 훑기에서 남긴 것(후보): Android `_common/components.md`의 벤더 층 서술에 "가정" 표시(공통 문서 상한 여유 39B, 바꾸면 7개 모듈 eval), case 로그의 벤더 층 줄을 더 밋밋한 값으로(기대값·생성물이 따라 바뀜 — 범위는 사용자), 벤더 줄이 있는 case 머리 주석에 "가정" 표시, 벤더 IPC 줄 뼈대는 `common/vendor_ipc.py` 정규식이라 규칙 변경. 둘은 같은 eval 재실행이 필요하므로 함께 한다.
+- oFono 모듈 eval(문서 정리 뒤 1회, claude-sonnet-5-5): data fail(with 3·without 3, with arm 안전 위반 2 — `dbus_trace` 줄 인용 뒤에 설명을 붙여 원문과 어긋남, `data-route-fail`은 출력 칸 누락), ims pass, network pass(11/08 fail), modem tie. data의 실패 행은 고친 문구와 무관한 인용·출력 형식이다. 다시 돌리지 않았다.
