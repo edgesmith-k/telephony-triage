@@ -1,0 +1,28 @@
+# 합성 case (11/12 Android case 보강). 출처: Android 17 에뮬레이터 캡처 d70a-no-apn-disabled(데이터 연결 중 APN DB가 바뀜)에서 고른 줄 — AOSP 층만, 벤더 줄 없음. 조작 줄은 넣지 않았다. 함정: 같은 줄의 cause=LOST_CONNECTION만 보고 모뎀·망 단절로 답함(해제 사유는 tearDownReason). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+schema_version: 2
+name: data-profile-invalid-after-apn-change
+kind: explore
+synthetic: true
+key: MOCK-9827
+issue:
+  summary: 데이터가 끊긴 뒤 다시 연결되지 않음 (합성)
+  description: 쓰던 중 모바일 데이터가 끊겼고 그 뒤로 다시 붙지 않습니다. 데이터 설정은 켜져 있습니다. 합성 case.
+  occurred_at: '2026-11-10T21:59:21+0000'
+  platform_version: '17'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: cause_unconfirmed
+expect:
+  accept:
+    - layer: '프레임워크'
+      daemon: 'DPM|DataProfileManager|DNC|DataNetworkController|DN-|DataNetwork'
+      evidence: ['DATA_PROFILE_INVALID', 'APN db updated|CONNECTED to DISCONNECTED|NO_SUITABLE_DATA_PROFILE']
+  trap:
+    - label: '^\s*(RILJ|RIL HAL|벤더|모뎀|망|곁가지)'
+    - label: '^\s*그\s*층\s*로그\s*없음'
+    - label: '^\s*원인\s*아님'

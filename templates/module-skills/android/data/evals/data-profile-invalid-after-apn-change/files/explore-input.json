@@ -1,0 +1,15 @@
+{
+ "around": "2026-11-10T21:59:21+00:00",
+ "failed_step": null,
+ "limit": 200,
+ "anchor": null,
+ "partial": [
+  {
+   "signature": "DATA-001-02/roaming-disabled",
+   "missing": [
+    "must_event data_evaluation_rejected {'reasons': '.*ROAMING_…"
+   ]
+  }
+ ],
+ "around_alt": []
+}

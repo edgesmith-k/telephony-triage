@@ -1,0 +1,23 @@
+-- [합성] telephony-triage module-skills eval log. Android 17 에뮬레이터 캡처(d70a-no-apn-disabled)에서 고른 줄이다(시각·pid 그대로, 줄만 줄이고 APN 이름은 토큰으로 가림). 벤더 줄 없음.
+11-10 21:59:20.519 21787 21787 D DPM-0   : Update data profiles due to APN db updated.
+11-10 21:59:20.522 21787 21787 D DPM-0   : Data profiles changed.
+11-10 21:59:20.524 21787 21787 D DPM-0   : updateDataProfilesAtModem: set 3 data profiles.
+11-10 21:59:20.525 21787 21787 D DRM-0   : Remove all retry and throttling entries, reason=DATA_PROFILES_CHANGED
+11-10 21:59:20.525 21787 21787 D DNC-0   : Re-evaluating 1 existing data networks due to DATA_PROFILES_CHANGED
+11-10 21:59:20.525 21787 21787 D DNC-0   : Evaluated [DataNetwork: DN-106-C, <APN#1>, state=ConnectedState], Data evaluation: evaluation reason:DATA_PROFILES_CHANGED, Data disallowed reasons: DATA_PROFILE_INVALID, candidate profile=null, time=21:59:20.525
+11-10 21:59:20.525 21787 21787 D DNC-0   : tearDownGracefully: Safe to tear down [DataNetwork: DN-106-C, <APN#1>, state=ConnectedState]
+11-10 21:59:20.525 21787 21787 D DN-106-C: ConnectedState: onTearDown: reason=DATA_PROFILE_INVALID
+11-10 21:59:20.526 21787 21965 D RILJ    : [2693]> SET_DATA_PROFILE with data profiles :  [PHONE0]
+11-10 21:59:20.527 21787 21970 D RILJ    : [2693]< SET_DATA_PROFILE  [PHONE0]
+11-10 21:59:20.527 21787 21965 D RILJ    : [2694]> DEACTIVATE_DATA_CALL cid = 22 reason = NORMAL [PHONE0]
+11-10 21:59:20.528 21787 21970 D RILJ    : [2694]< DEACTIVATE_DATA_CALL  [PHONE0]
+11-10 21:59:20.528 21787 21787 D DN-106-C: DisconnectingState: onDeactivateResponse: resultCode=RESULT_SUCCESS
+11-10 21:59:20.528 21787 21787 D DN-106-C: DisconnectingState: onDataStateChanged: PDN disconnected reported by WWAN data service. requireExplicitDisconnect false
+11-10 21:59:20.528 21787 21787 D DN-106-C: DisconnectedState: Data network disconnected. mEverConnected=true
+11-10 21:59:20.530 21787 21787 D DN-106-C: DisconnectedState: All network requests detached.
+11-10 21:59:20.531 21787 21787 D DNC-0   : Internet link status changed to INACTIVE
+11-10 21:59:20.531 21787 21787 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-106-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=DATA_PROFILE_INVALID
+11-10 21:59:20.531 21787 21787 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.
+11-10 21:59:20.531 21787 21787 D DNC-0   : IMS data state changed from CONNECTED to DISCONNECTED.
+11-10 21:59:23.535 21787 21787 D DPM-0   : Can't find any data profile that can satisfy [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED RequestorUid: 1000 RequestorPkg: android UnderlyingNetworks: Null] ], mPriority=20, state=UNSATISFIED, mAttachedDataNetwork=null, created time=21:06:15.053, evaluation result=Data evaluation: evaluation reason:DATA_SERVICE_STATE_CHANGED, Data disallowed reasons: NOT_IN_SERVICE SERVICE_OPTION_NOT_SUPPORTED, candidate profile=null, time=21:45:49.164]
+11-10 21:59:23.535 21787 21787 D DNC-0   : Data evaluation: evaluation reason:RETRY_AFTER_DISCONNECTED, Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, candidate profile=null, time=21:59:23.535, network type=NR, reg state=HOME, [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED RequestorUid: 1000 RequestorPkg: android UnderlyingNetworks: Null] ], mPriority=20, state=UNSATISFIED, mAttachedDataNetwork=null, created time=21:06:15.053, evaluation result=Data evaluation: evaluation reason:RETRY_AFTER_DISCONNECTED, Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, candidate profile=null, time=21:59:23.535]
