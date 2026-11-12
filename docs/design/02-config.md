@@ -38,7 +38,7 @@ tracker:
 logcat:
   timezone: <logcat 시각 타임존>             # 연도 없는 threadtime의 해석 기준 (14-site.md S7). 스킬이 parse_logcat --tz로 넘김
   year_source: tracker                      # tracker(발생 시각의 연도) | file-mtime | ask. 스킬이 연도를 정해 parse_logcat --year로 넘김
-code_profiles:                              # 선택. 소스 트리 프리셋(개인 경로 — site-defaults에는 없다). 직접 입력한 경로는 검증 뒤 버전과 함께 자동 추가(07 §Step 2-1 5번)
+code_profiles:                              # 선택. 소스 트리 프리셋(개인 경로 — site-defaults에는 없다). 직접 입력한 경로는 검증 뒤 트리 버전을 추정했으면 그 버전과 함께 자동 추가(dry-run·분석 전용 제외, 07 §Step 2-1 5번)
   - name: android16-main
     platform_version: "16"
     roots:
@@ -49,7 +49,7 @@ code_profiles:                              # 선택. 소스 트리 프리셋(�
     roots:
       aosp: /path/to/android17
       vendor_ril: /path/to/android17/vendor/<ril 경로>
-recent_code_roots: []                       # 버전을 몰라 프로필로 저장하지 못한 직접 입력 경로를 최근 5개까지 자동 기록
+recent_code_roots: []                       # 프로필로 저장하지 않은(트리 버전 모름·dry-run·분석 전용) 직접 입력 경로를 최근 5개까지 자동 기록
 log_dir: ~/logs                             # logcat 기본 탐색 경로 (선택)
 work_dir: ~/.telephony-triage/work          # 작업 계획·상태 파일, 읽기 스냅샷(_snapshot), 임시 worktree, 세션 lock 위치 (contracts.md §3.2)
 # 선택(17-platforms.md): 위 issue_db·work_dir·log_dir·code_profiles·recent_code_roots는 android 프로필이다

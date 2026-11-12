@@ -567,16 +567,20 @@ def cmd_remember(args, defaults) -> dict:
     roots = parse_roots(args.roots, _cfg(defaults), primary)
     platform = _session(defaults)[0]
     key = userconfig.profile_key(platform, "recent_code_roots")   # 선택 플랫폼 프로필에 기록한다
-    recent = [r for r in userconfig.get(data, key) or [] if (r.get("roots") or {}) != roots]
-    if args.platform_version:     # 버전을 알면 개인 프로필로 저장하고 최근 목록에서는 뺀다(목록에 두 번 나오지 않게)
+    def norm(r: dict) -> dict:    # 비교만 정규화(끝 구분자·~), 저장 값은 입력 그대로
+        return {k: str(Path(str(v).rstrip("\\/") or str(v)).expanduser()) for k, v in (r or {}).items()}
+
+    recent = [r for r in userconfig.get(data, key) or [] if norm(r.get("roots")) != norm(roots)]
+    # 버전(트리 추정, 숫자)을 알면 개인 프로필로 저장하고 최근 목록에서는 뺀다(목록에 두 번 나오지 않게).
+    # 숫자가 아닌 값("Android 16" 같은 문구)은 굳히지 않고 종전대로 최근 경로에만
+    if args.platform_version and re.fullmatch(r"\d+", str(args.platform_version)):
         pkey = userconfig.profile_key(platform, "code_profiles")
         profiles = list(userconfig.get(data, pkey) or [])
-        same = next((p for p in profiles
-                     if {k: str(v) for k, v in (p.get("roots") or {}).items()} == roots), None)
+        same = next((p for p in profiles if norm(p.get("roots")) == norm(roots)), None)
         name = same.get("name") if same else None
         if same is None:
-            tail = re.split(r"[\\/]", str(roots.get(primary, "")).rstrip("\\/"))[-1]
-            base = f"{platform}{args.platform_version}-{re.sub(r'[^A-Za-z0-9._-]', '_', tail) or 'tree'}"
+            tail = re.sub(r"[^A-Za-z0-9._-]", "_", re.split(r"[\\/]", str(roots.get(primary, "")).rstrip("\\/"))[-1])
+            base = f"{platform}{args.platform_version}-{tail.strip('_.') and tail or 'tree'}"
             names = {p.get("name") for p in profiles}
             name, n = base, 2
             while name in names:

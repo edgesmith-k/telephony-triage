@@ -722,9 +722,19 @@ def test_remember_with_version_saves_personal_profile():
     assert saved["recent_code_roots"] == []                                   # 목록에 두 번 나오지 않는다
     again = env.json("code_roots.py", ["remember", a16, "--platform-version", "16"])
     assert again == {"profile": "android16-android16-2", "saved": False, "platform_version": "16"}
+    slash = env.json("code_roots.py", ["remember", f"aosp={SRC / 'android16'}/", "--platform-version", "16"])
+    assert slash["saved"] is False                                            # 끝 구분자만 다른 같은 roots
     assert len(env.config()["code_profiles"]) == 2
     names = [c["name"] for c in env.json("code_roots.py", ["suggest", "--version", "16"])["candidates"]]
     assert names[:2] == ["android16-android16", "android16-android16-2"]
+    # 숫자가 아닌 버전("Android 16")은 프로필로 굳히지 않고 최근 경로에만
+    a17 = f"aosp={SRC / 'android17'}"
+    words = env.json("code_roots.py", ["remember", a17, "--platform-version", "Android 16"])
+    assert "profile" not in words and env.config()["recent_code_roots"][0]["roots"] == {"aosp": str(SRC / "android17")}
+    assert len(env.config()["code_profiles"]) == 2
+    # 이름 조각이 치환 뒤 `_`·`.`만 남으면 tree
+    odd = env.json("code_roots.py", ["remember", f"aosp={env.base / '한글'}", "--platform-version", "16"])
+    assert odd["profile"] == "android16-tree"
 
 
 def _all_tests():

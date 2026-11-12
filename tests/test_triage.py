@@ -1355,12 +1355,21 @@ def _w4_user(ws: Workspace) -> dict:
     return yaml.safe_load((ws.home / "config.yaml").read_text(encoding="utf-8"))
 
 
+def _w4_write(ws: Workspace, *extra, jira: Path | None = None) -> dict:
+    """쓰기 모드 실행(프로필 저장은 dry-run·분석 전용에서 하지 않는다). Jira 원문은 hook이 저장한 것처럼 둔다(추출 뒤 지워지므로 매번)."""
+    raw = ws.job_dir(W4_KEY) / "issue_raw.json"
+    raw.parent.mkdir(parents=True, exist_ok=True)
+    issue = yaml.safe_load((jira or MOCK_JIRA / f"{W4_KEY}.yaml").read_text(encoding="utf-8"))
+    raw.write_text(json.dumps(issue, ensure_ascii=False), encoding="utf-8")
+    return ws.json("triage.py", ["run", W4_KEY, "--logs", DATA_LOG, *extra])
+
+
 def test_direct_path_is_saved_as_profile_and_auto_selected_next_time():
     """07 §Step 2-1 5번: 검증을 통과한 직접 입력은 트리 추정 버전으로 개인 프로필에 저장·알림, 다음 실행은 그 버전 유일 프로필로 자동 선택."""
     ws = Workspace()
     _w4_config(ws, code_profiles=[_profile("android17-dev", "17")])
-    _asked_code(_w4_run(ws))
-    done = _w4_run(ws, "--answer", f"code={SRC / 'android16'}")
+    _asked_code(_w4_write(ws))
+    done = _w4_write(ws, "--answer", f"code={SRC / 'android16'}")
     assert done["status"] == "ok", done
     note = "코드 경로를 프로필로 저장: android16-android16 (Android 16) — 이름 변경·삭제는 config.py set code_profiles"
     assert note in done["notes"]
@@ -1368,18 +1377,18 @@ def test_direct_path_is_saved_as_profile_and_auto_selected_next_time():
     assert user["code_profiles"][-1] == {"name": "android16-android16", "platform_version": "16",
                                          "roots": {"aosp": str(SRC / "android16")}}
     assert not user.get("recent_code_roots")
-    assert _w4_run(ws)["notes"].count(note) == 1                 # 같은 owner 재실행: 다시 저장하지 않고 알림은 유지
+    assert _w4_write(ws)["notes"].count(note) == 1                 # 같은 owner 재실행: 다시 저장하지 않고 알림은 유지
     ws.json("triage.py", ["release", W4_KEY])
-    auto = _w4_run(ws)
+    auto = _w4_write(ws)
     assert auto["status"] == "ok" and auto["code"]["auto"] is True and auto["code"]["roots"] == "android16-android16"
     assert len(_w4_user(ws)["code_profiles"]) == 2
     ws.json("triage.py", ["release", W4_KEY])
     # 같은 버전의 두 번째 경로(다른 roots) → 이름이 겹쳐 -2로 저장, 그 버전 프로필이 둘이라 다음엔 목록으로 묻는다
     tree = SRC / "android16"
-    second = _w4_run(ws, "--answer", f"code=aosp={tree},vendor_ril={tree}")
+    second = _w4_write(ws, "--answer", f"code=aosp={tree},vendor_ril={tree}")
     assert second["status"] == "ok" and "코드 경로를 프로필로 저장: android16-android16-2 (Android 16)" in " ".join(second["notes"])
     ws.json("triage.py", ["release", W4_KEY])
-    _asked_code(_w4_run(ws))
+    _asked_code(_w4_write(ws))
     ws.json("triage.py", ["release", W4_KEY])
 
 
@@ -1387,30 +1396,31 @@ def test_confirmed_other_version_tree_is_saved_with_its_tree_version():
     """트리 버전이 대상과 달라 code_confirm=yes로 계속하면 트리 추정 버전(17)으로 저장한다. skip이면 저장하지 않는다."""
     ws = Workspace()
     _w4_config(ws, code_profiles=[])
-    asked = _w4_run(ws, "--answer", f"code={SRC / 'android17'}")
+    asked = _w4_write(ws, "--answer", f"code={SRC / 'android17'}")
     assert asked["needs_input"]["kind"] == "code_confirm", asked
-    skipped = _w4_run(ws, "--answer", "code_confirm=skip")
+    skipped = _w4_write(ws, "--answer", "code_confirm=skip")
     assert skipped["status"] == "ok" and skipped["code"] == {"skipped": True}
     assert not _w4_user(ws).get("code_profiles") and not _w4_user(ws).get("recent_code_roots")
     ws.json("triage.py", ["release", W4_KEY])
-    _w4_run(ws, "--answer", f"code={SRC / 'android17'}")
-    done = _w4_run(ws, "--answer", "code_confirm=yes")
+    _w4_write(ws, "--answer", f"code={SRC / 'android17'}")
+    done = _w4_write(ws, "--answer", "code_confirm=yes")
     assert done["status"] == "ok" and "코드 경로를 프로필로 저장: android17-android17 (Android 17) — 이름 변경·삭제는 config.py set code_profiles" in done["notes"]
     assert _w4_user(ws)["code_profiles"][-1]["platform_version"] == "17"
     ws.json("triage.py", ["release", W4_KEY])
 
 
-def test_same_roots_or_unknown_version_or_invalid_path_is_not_saved_as_profile(tmp_path):
-    """같은 roots 프로필이 있으면 만들지 않는다. 트리 버전·Jira 버전 둘 다 모르면 recent_code_roots만. 무효 경로는 아무것도 남기지 않는다."""
+def test_same_roots_or_unknown_version_or_invalid_path_is_not_saved_as_profile():
+    """같은 roots 프로필이 있으면 만들지 않는다. 트리 버전을 추정하지 못하면 Jira 버전(16)이 있어도 recent_code_roots만
+    (Jira 버전으로 대신하지 않는다). 무효 경로는 아무것도 남기지 않는다."""
     ws = Workspace()
     tree = SRC / "android16"
     _w4_config(ws, code_profiles=[_profile("android16-main", "16"), _profile("android16-alt", "16")])
-    done = _w4_run(ws, "--answer", f"code=aosp={tree},vendor_ril={tree}")
+    done = _w4_write(ws, "--answer", f"code=aosp={tree},vendor_ril={tree}")
     assert done["status"] == "ok" and not [n for n in done.get("notes") or [] if n.startswith("코드 경로를 프로필로 저장")]
     assert len(_w4_user(ws)["code_profiles"]) == 2 and not _w4_user(ws).get("recent_code_roots")
     ws.json("triage.py", ["release", W4_KEY])
 
-    bad = _w4_run(ws, "--answer", f"code={tmp('tt-gone-') / 'missing'}")
+    bad = _w4_write(ws, "--answer", f"code={tmp('tt-gone-') / 'missing'}")
     assert bad["needs_input"]["kind"] == "code" and len(_w4_user(ws)["code_profiles"]) == 2
     ws.json("triage.py", ["release", W4_KEY])
 
@@ -1418,11 +1428,24 @@ def test_same_roots_or_unknown_version_or_invalid_path_is_not_saved_as_profile(t
     (bare / "frameworks" / "opt" / "telephony").mkdir(parents=True)     # 필수 디렉토리만, 버전 파일 없음
     ws2 = Workspace()
     _w4_config(ws2, code_profiles=[])
-    done = _w4_run(ws2, "--answer", f"code={bare}", jira=_no_version_jira(tmp_path))
+    done = _w4_write(ws2, "--answer", f"code={bare}")          # Jira는 Android 16
     assert done["status"] == "ok", done
     user = _w4_user(ws2)
     assert not user.get("code_profiles") and user["recent_code_roots"][0]["roots"] == {"aosp": str(bare)}
     ws2.json("triage.py", ["release", W4_KEY])
+
+
+def test_dry_run_and_analysis_only_do_not_save_profile():
+    """dry-run·분석 전용은 프로필로 저장하지 않고 종전처럼 recent_code_roots에만 남긴다."""
+    for mode in ([], ["--analysis-only"]):
+        ws = Workspace()
+        _w4_config(ws, code_profiles=[])
+        done = _w4_run(ws, *mode, "--answer", f"code={SRC / 'android16'}")
+        assert done["status"] == "ok", done
+        assert not [n for n in done.get("notes") or [] if n.startswith("코드 경로를 프로필로 저장")]
+        user = _w4_user(ws)
+        assert not user.get("code_profiles") and user["recent_code_roots"][0]["roots"] == {"aosp": str(SRC / "android16")}
+        ws.json("triage.py", ["release", W4_KEY])
 
 
 def _leftover(ws: Workspace, job: str = "MOCK-8800") -> Path:

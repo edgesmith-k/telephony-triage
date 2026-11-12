@@ -701,8 +701,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             return {"skipped": True}
         profiles = {p.get("name") for p in self.cfg.get("code_profiles") or []}
         if choice not in profiles and not self.state.data.get("code_remembered"):
-            # 07 §Step 2-1 5번: 버전(트리 추정 > Jira)을 알면 개인 프로필로 저장, 모르면 최근 경로만
-            keep = data.get("estimated_version") or version
+            # 07 §Step 2-1 5번: 트리 추정 버전이 있을 때만 개인 프로필로 저장(Jira 버전으로 대신하지 않는다 — 문구 값·다른
+            # 버전 트리가 굳지 않게). dry-run·분석 전용은 최근 경로만
+            keep = None if self.args.dry_run or self.analysis_only else data.get("estimated_version")
             _, saved, _ = self.run.call("2-1-code", "code_roots.py",
                                         ["remember", choice] + (["--platform-version", str(keep)] if keep else []))
             if (saved or {}).get("saved"):
