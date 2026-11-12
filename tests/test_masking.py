@@ -490,6 +490,11 @@ def test_unicode_space_and_digits_are_folded_before_rules():
     assert masking.new_masker(log_lines=True)("Device 0:" + us + us.join(["12", "34", "56", "78", "9a", "bc"])) == "Device 0: <HEXDUMP 6B>"
     once = masking.new_masker()(f"token={us}abcdef1234567890xyz")
     assert once == f"token={us}<CRED#1>" and masking.new_masker(existing_text=once)(once) == once
+    # 구분자로 끊긴 ICCID도 앞 묶음(`8982`)까지 통째로 가린다(US·공백·하이픈)
+    for sep in (us, " ", "-"):
+        for text in ("iccid=8982" + sep + "3001234" + "56789012","iccid=" + sep.join(["8982", "3001", "2345", "6789", "012"])):
+            for log_lines in (False, True):
+                assert masking.new_masker(log_lines=log_lines)(text) == "iccid=<ICCID#1>", (text, log_lines)
 
 
 def test_hangul_glued_values_are_masked():
