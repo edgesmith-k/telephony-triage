@@ -53,7 +53,6 @@ import json
 import re
 import subprocess
 import sys
-import unicodedata
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -236,13 +235,10 @@ def _text(path: Path) -> str | None:
     return data.decode("utf-8", errors="replace")
 
 
-def _fold_ascii(text: str) -> str:
-    """패턴이 `re.ASCII`라 전각·아라비아-인도 숫자와 유니코드 공백(NBSP)을 ASCII로 접어서 본다(글자 수 같음, masking.fold_ascii와 같은 규칙)."""
-    return re.sub(r"[\x1c-\x1f]|[^\x00-\x7f]", lambda m: str(unicodedata.decimal(m.group(0))) if m.group(0).isdecimal()
-                  else " " if m.group(0).isspace() else m.group(0), text)
-
-
 def check_patterns(files: dict[str, Path], patterns) -> list[Finding]:
+    _skillcheck()                                # plugin/scripts를 경로에 넣는다
+    from common.masking import fold_ascii        # 패턴이 `re.ASCII`라 마스킹과 같은 규칙으로 접어서 본다(글자 수 같음)
+
     findings = []
     for rel, path in files.items():
         if rel in ALLOW_FILES:
@@ -251,7 +247,7 @@ def check_patterns(files: dict[str, Path], patterns) -> list[Finding]:
         if text is None:
             continue
         for lineno, line in enumerate(text.splitlines(), 1):
-            folded = _fold_ascii(line)
+            folded = fold_ascii(line)
             for name, regex, ok in patterns:
                 # ASCII 아닌 패턴(사내 패턴, 기본 private-key·secret-assign 등)은 원문과 접은 글을 둘 다 본다 — 접은 글만 보면
                 # 비ASCII가 든 사내 패턴이, 원문만 보면 전각·NBSP로 쓴 비밀값이 빠진다(재리뷰 P1). 원문을 먼저 보고,
