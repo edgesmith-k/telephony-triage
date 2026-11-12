@@ -7,7 +7,7 @@ IMS(VoLTE) 등록·해제, IMS PDN. 통화·문자 자체는 `call`·`sms`다.
 
 ## ② 볼 역할과 줄
 - 1순위: IMS IPC — 벤더 RIL `VIPC_EXAMPLE_IMS_REG*`·`VIPC_EXAMPLE_IMS_*`.
-- IMS 구성요소 `[SLOT_<n>]` `registered:<0|1>`·`[IMS_REGISTERED]`, `[SID_0] ind <- OEM_UNSOL_IMS_REG_FAIL… … [fail-code : <n>]`.
+- IMS 구성요소 `[SLOT_<n>]` `registered:<0|1>`·`[IMS_REGISTERED]`, `[SID_0] ind <- OEM_UNSOL_IMS_EXAMPLE_REG_FAIL… … [fail-code : <n>]`.
 - ofonod `src/ims.c`, `IMS_UNSOL_REG_FAILED fail_code=<n>`, `IMS_REQUEST_*`.
 
 ## ③ 층 경로

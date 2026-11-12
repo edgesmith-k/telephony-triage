@@ -1,4 +1,4 @@
--- [합성] C1D 보정 data-throughput-trap. 레포의 줄 모양(network-radio-off-queries case의 데이터 구성요소 줄, C0·C1 합성 case)만 본떠 새로 썼다. 연결·data call list는 안정이고 오류 줄은 없다.
+-- [합성] C1D 보정 data-throughput-trap. 레포의 줄 모양(파서 형식 예시, C0·C1 합성 case)만 본떠 새로 썼다. 이름·값은 placeholder. 연결·data call list는 안정이고 오류 줄은 없다.
 Sep 22 09:20:00.010 dut local0.info mgmtd[734]: ui tick
 Sep 22 09:20:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-93
 Sep 22 09:20:02.000 dut local0.info mgmtd[734]: dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1

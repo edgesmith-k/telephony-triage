@@ -1,8 +1,8 @@
--- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture.
+-- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture. 이름·문구는 placeholder(실제 벤더 로그 아님).
 Sep 22 10:00:16.546 dut daemon.info ofonod[903]: [0,0631]> RIL_REQUEST_RADIO_POWER (0)
 Sep 22 10:00:16.556 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: RADIO_POWER (6 bytes)
-Sep 22 10:00:16.557 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_POWER seq=0x07c3 len=8, power=0
-Sep 22 10:00:16.756 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_POWER, RSP OK(VIPC_OK) seq=0x07c3 len=8
+Sep 22 10:00:16.557 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_POWER seq=0x0701 len=8, power=0
+Sep 22 10:00:16.756 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_POWER, RSP OK(VIPC_OK) seq=0x0701 len=8
 Sep 22 10:00:16.757 dut daemon.info ofonod[903]: [0,0631]< RIL_REQUEST_RADIO_POWER
 Sep 22 10:00:17.236 dut daemon.info chatterd[746]: position fix pending
 Sep 22 10:00:21.616 dut daemon.info ofonod[903]: [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF)
@@ -12,8 +12,8 @@ Sep 22 10:00:21.716 dut daemon.info ofonod[903]: [0,0632]> RIL_REQUEST_SIGNAL_ST
 Sep 22 10:00:21.717 dut daemon.info ofonod[903]: [0,0633]> RIL_REQUEST_OPERATOR
 Sep 22 10:00:21.719 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: SIGNAL_STRENGTH (6 bytes)
 Sep 22 10:00:21.720 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: OPERATOR (6 bytes)
-Sep 22 10:00:21.721 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=86, result=0 -> chan 2 reply sent, 1 waiters, took 2 ms
-Sep 22 10:00:21.721 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=87, result=0 -> chan 2 reply sent, 0 waiters, took 1 ms
+Sep 22 10:00:21.721 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=80, result=0 -> chan 2 reply sent, 1 waiters, took 2 ms
+Sep 22 10:00:21.721 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=81, result=0 -> chan 2 reply sent, 0 waiters, took 1 ms
 Sep 22 10:00:21.722 dut daemon.err vrild[618]: chan 2: empty reply body, nothing to encode
 Sep 22 10:00:21.723 dut daemon.debug ofonod[903]: [0,0632]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE
 Sep 22 10:00:21.724 dut daemon.debug ofonod[903]: [0,0633]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE

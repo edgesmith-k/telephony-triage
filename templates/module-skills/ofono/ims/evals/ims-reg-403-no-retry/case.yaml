@@ -1,4 +1,4 @@
-# 합성 case (H C1, C1D §1.2). files/의 timeline·입력은 make_module_eval_inputs.py --write가 만든다
+# 합성 case (H C1, C1D §1.2). 손으로 쓴 합성 로그, 이름·문구는 placeholder. files/의 timeline·입력은 make_module_eval_inputs.py --write가 만든다
 schema_version: 2
 name: ims-reg-403-no-retry
 kind: explore

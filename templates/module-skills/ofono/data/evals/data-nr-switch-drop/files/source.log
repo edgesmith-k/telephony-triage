@@ -1,4 +1,4 @@
--- [합성] C1D 보정 data-nr-switch-drop. 레포의 줄 모양(network-radio-off-queries case의 데이터 구성요소 줄, C0·C1 합성 case)만 본떠 새로 썼다. SA에서 LTE로 연동하는 순간을 그렸다. 위에서 DEACTIVATE_DATA_CALL·RADIO_POWER 요청 없음.
+-- [합성] C1D 보정 data-nr-switch-drop. 레포의 줄 모양(파서 형식 예시, C0·C1 합성 case)만 본떠 새로 썼다. 이름·값은 placeholder. SA에서 LTE로 연동하는 순간을 그렸다. 위에서 DEACTIVATE_DATA_CALL·RADIO_POWER 요청 없음.
 Sep 22 09:10:00.010 dut local0.info mgmtd[734]: ui tick
 Sep 22 09:10:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-94
 Sep 22 09:10:02.000 dut local0.info mgmtd[734]: dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1

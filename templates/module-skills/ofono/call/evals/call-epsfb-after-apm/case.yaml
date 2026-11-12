@@ -1,4 +1,4 @@
-# 합성 case (H C1, C1D §1). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+# 합성 case (H C1, C1D §1). 손으로 쓴 합성 로그, 이름·문구는 placeholder. files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
 schema_version: 2
 name: call-epsfb-after-apm
 kind: explore

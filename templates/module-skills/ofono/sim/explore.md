@@ -22,5 +22,5 @@ SIM 인식·파일 읽기, eSIM(EID·프로필·채널), PIN. IMS 인증은 `ims
 | SIM 파일 읽기 실패 (초안) | `SIM_IO` `efid=` | 하나만 실패 → 벤더 RIL | SW 로그 수준 |
 
 ## ⑤ 함정
-- SIM 구성요소 `EuiccNoResponse`는 카드가 SW로 답했으면 이름과 달리 채널 경합·거절이다.
+- SIM 구성요소 `ExampleEuiccNoResponse`는 카드가 SW로 답했으면 이름과 달리 채널 경합·거절이다.
 - 로그 내내 되풀이되는 6A82 조회는 배경이다(〔script: 같은 형태 N회〕). 가려진 덤프에서 SW를 짐작하지 않는다.

@@ -8,11 +8,11 @@
 
 10:30:05.002 p0 I mgmtd dbus -> org.ofono.MessageManager.SendMessage on /ril_0
 10:30:05.005 - D ofonod src/sms.c:sms_send_message() queued msg 1, route ims smsOverLteCapable=1
-10:30:05.011 - E imsd [SLOT_0][E] 4103 [ImsSmsSender::sendSms] failed to build SMS-SUBMIT ref=1
-10:30:05.012 - D imsd [SLOT_0][I] 4104 [ImsSmsManager] sendSmsResult() ref=1 result=FAIL
+10:30:05.011 - E imsd [SLOT_0][E] 4103 [ExampleImsSmsSender::sendSms] failed to build SMS-SUBMIT ref=1
+10:30:05.012 - D imsd [SLOT_0][I] 4104 [ExampleImsSmsManager] exampleSendSmsResult() ref=1 result=FAIL
 10:30:05.015 - I ofonod src/sms.c:tx_finished() send failed, giving up
 10:30:05.016 p0 I ofonod src/dbus.c:__ofono_error_failed() dbus_trace err return - i:org.ofono.MessageManager m:SendMessage p:/ril_0
 10:30:05.018 - I mgmtd sms send error: Operation failed
 
 ## 다른 모듈 줄 (±15초, 경고·오류)
-10:30:05.012 - D imsd [SLOT_0][I] 4104 [ImsSmsManager] sendSmsResult() ref=1 result=FAIL
+10:30:05.012 - D imsd [SLOT_0][I] 4104 [ExampleImsSmsManager] exampleSendSmsResult() ref=1 result=FAIL

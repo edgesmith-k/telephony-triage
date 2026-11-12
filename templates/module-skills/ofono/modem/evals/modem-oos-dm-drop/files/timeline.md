@@ -6,10 +6,10 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): src/modem.c · plugins/ril.c · RADIO_POWER · UNSOL_RESPONSE_RADIO_STATE_CHANGED · VIPC_EXAMPLE_POWER
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
-09:50:13.153 - W vrild DM packet dropped: host not reading, write fail
-09:50:13.154 - E vrild Fail to write DM packet to usb
-09:50:17.153 - W vrild DM packet dropped: host not reading, write fail
+09:50:13.153 - W vrild example diag dropped: host not reading, write fail
+09:50:13.154 - E vrild example diag write fail
+09:50:17.153 - W vrild example diag dropped: host not reading, write fail
 09:50:19.153 - D vrild mux [ch1][RX] VIPC_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)
-09:50:21.153 - W vrild DM packet dropped: host not reading, write fail
+09:50:21.153 - W vrild example diag dropped: host not reading, write fail
 09:50:21.653 - D vrild mux [ch1][RX] VIPC_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)
 09:50:23.153 - D vrild mux [ch1][RX] VIPC_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)

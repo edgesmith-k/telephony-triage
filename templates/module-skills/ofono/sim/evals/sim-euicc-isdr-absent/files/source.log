@@ -1,4 +1,4 @@
--- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture.
+-- [합성] telephony-triage module-skills eval log. Hand-written, not a real capture. 이름·문구는 placeholder(실제 벤더 로그 아님).
 Sep 22 10:10:19.318 dut local0.info mgmtd[734]: GetEID requested from settings
 Sep 22 10:10:19.418 dut daemon.info simd[587]: tid:36 GetEID begin
 Sep 22 10:10:19.419 dut daemon.info simd[587]: tid:36 open channel aid <AID#1>
@@ -6,10 +6,10 @@ Sep 22 10:10:19.420 dut daemon.debug ofonod[903]: src/sim.c:example_open_channel
 Sep 22 10:10:19.421 dut daemon.info ofonod[903]: [0,0745]> RIL_REQUEST_SIM_OPEN_CHANNEL (AID:<AID#1>) (P2:0)
 Sep 22 10:10:19.422 dut daemon.debug vrild[618]: client fd 9 VCHAN_2 REQUEST: SIM_OPEN_CHANNEL (20 bytes)
 Sep 22 10:10:19.422 dut daemon.info vrild[618]: [ExampleIccService_1] open-channel start, p2 0x00
-Sep 22 10:10:19.423 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_CARD_OPEN seq=0x08d4 len=20
-Sep 22 10:10:19.458 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP Error(VIPC_E_NO_SUCH_ELEMENT) seq=0x08d4 len=12, 35 ms
+Sep 22 10:10:19.423 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_CARD_OPEN seq=0x0801 len=20
+Sep 22 10:10:19.458 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP Error(VIPC_E_NO_SUCH_ELEMENT) seq=0x0801 len=12, 35 ms
 Sep 22 10:10:19.459 dut daemon.info vrild[618]: [ExampleIccService_1] open-channel answer: no session, sw1 : 6A, sw2 : 82
-Sep 22 10:10:19.459 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=93, result=17 -> chan 2 reply sent, 0 waiters, took 37 ms
+Sep 22 10:10:19.459 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=90, result=17 -> chan 2 reply sent, 0 waiters, took 37 ms
 Sep 22 10:10:19.460 dut daemon.debug ofonod[903]: [0,0745]< RIL_REQUEST_SIM_OPEN_CHANNEL failed NO_SUCH_ELEMENT
 Sep 22 10:10:19.461 dut daemon.debug ofonod[903]: drivers/rilmodem/sim.c:example_open_channel_cb() reply failure: NO_SUCH_ELEMENT
 Sep 22 10:10:19.462 dut daemon.info ofonod[903]: src/dbus.c:__ofono_error_not_found() m:ExampleOpenChannel i:org.ofono.SimManager
@@ -18,8 +18,8 @@ Sep 22 10:10:19.464 dut daemon.warn simd[587]: tid:36 GetEID FAILED
 Sep 22 10:10:19.468 dut local0.warn mgmtd[734]: GetEID call error: Failed to get EID
 Sep 22 10:10:21.418 dut daemon.info simd[587]: tid:36 open channel aid <AID#1> (retry)
 Sep 22 10:10:21.420 dut daemon.info ofonod[903]: [0,0746]> RIL_REQUEST_SIM_OPEN_CHANNEL (AID:<AID#1>) (P2:0)
-Sep 22 10:10:21.421 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_CARD_OPEN seq=0x08d5 len=20
-Sep 22 10:10:21.456 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP Error(VIPC_E_NO_SUCH_ELEMENT) seq=0x08d5 len=12, 35 ms
+Sep 22 10:10:21.421 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_CARD_OPEN seq=0x0802 len=20
+Sep 22 10:10:21.456 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP Error(VIPC_E_NO_SUCH_ELEMENT) seq=0x0802 len=12, 35 ms
 Sep 22 10:10:21.457 dut daemon.info vrild[618]: [ExampleIccService_1] open-channel answer: no session, sw1 : 6A, sw2 : 82
 Sep 22 10:10:21.458 dut daemon.debug ofonod[903]: [0,0746]< RIL_REQUEST_SIM_OPEN_CHANNEL failed NO_SUCH_ELEMENT
 Sep 22 10:10:21.459 dut daemon.info ofonod[903]: src/dbus.c:__ofono_error_not_found() m:ExampleOpenChannel i:org.ofono.SimManager

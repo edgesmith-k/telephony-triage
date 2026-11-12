@@ -1,4 +1,4 @@
-# 합성 case (H C1, C1D §1). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+# 합성 case (H C1, C1D §1). 손으로 쓴 합성 로그, 이름·문구는 placeholder. files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
 schema_version: 2
 name: modem-oos-dm-drop
 kind: explore
@@ -21,7 +21,7 @@ expect:
   accept:
     - layer: '모뎀|망'
       daemon: 'vrild'
-      evidence: ['VIPC_EXAMPLE_NO_SERVICE_IND', 'DM packet dropped']
+      evidence: ['VIPC_EXAMPLE_NO_SERVICE_IND', 'example diag dropped']
   trap:
     - label: '^\s*(곁가지|관리 데몬|D-Bus|ofonod|그\s*층|원인\s*아님)'
     - label: '^\s*mgmtd'

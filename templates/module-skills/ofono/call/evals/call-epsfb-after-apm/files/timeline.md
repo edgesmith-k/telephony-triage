@@ -9,5 +9,5 @@
 09:40:17.630 p0 I ofonod [0,0412]> IMS_REQUEST_AIRPLANE_MODE is_apm:1
 09:40:17.631 - D imsd slot0 <- ofonod: IMS_REQUEST_AIRPLANE_MODE serial 0412, apm on
 09:40:17.649 p0 I ofonod [0,0412]< IMS_REQUEST_AIRPLANE_MODE
-09:40:21.431 - I imsd [SLOT_0] EPSFB failed, notify to ImsCallManager
+09:40:21.431 - I imsd [SLOT_0] EPSFB failed, notify to ExampleImsCallManager
 09:40:21.462 p0 I ofonod [0,UNSOL]< IMS_UNSOL_CAPABILITIES voiceOverLteCapable=0, emerOverLteCapable=1 smsOverLteCapable=0

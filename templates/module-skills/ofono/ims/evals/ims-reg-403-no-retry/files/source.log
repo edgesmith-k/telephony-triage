@@ -1,28 +1,28 @@
--- [합성] C1 ims-reg-403-no-retry. 레포 case의 줄 모양을 본떠 새로 썼다. 거절 코드 403과 재시도 문구는 가정(A).
+-- [합성] C1 ims-reg-403-no-retry. 레포 case의 줄 모양을 본떠 새로 썼다. 이름·문구는 placeholder. 거절 코드 403과 재시도 문구는 가정(A).
 Sep 21 10:40:00.010 dut local0.info mgmtd[734]: ui tick
 Sep 21 10:40:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-90
 Sep 21 10:40:01.000 dut daemon.info ofonod[466]: IMSD 0: <HEXDUMP 32B>
-Sep 21 10:40:02.010 dut user.debug imsd[733]: [SLOT_0][I] 5101 [ImsRegistration] triggerRegistering() SENT
-Sep 21 10:40:02.020 dut user.debug imsd[733]: [SID_0] req -> OEM_REQ_IMS_REGISTER len=48
+Sep 21 10:40:02.010 dut user.debug imsd[733]: [SLOT_0][I] 5101 [ExampleImsRegistration] exampleTriggerRegistering() SENT
+Sep 21 10:40:02.020 dut user.debug imsd[733]: [SID_0] req -> OEM_REQ_IMS_EXAMPLE_REGISTER len=48
 Sep 21 10:40:02.021 dut daemon.debug vrild[452]: mux [ch0][TX] VIPC_EXAMPLE_IMS_REG_REQ, REQ seq=0x0201 len=48
 Sep 21 10:40:02.090 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_REQ, RSP OK(VIPC_OK) seq=0x0201 len=12
 Sep 21 10:40:05.000 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=40
-Sep 21 10:40:05.001 dut user.debug imsd[733]: [SLOT_0][V] 5110 [SID_0] ind <- OEM_UNSOL_IMS_REG_FAIL(3077) : [fail-code : 403]
+Sep 21 10:40:05.001 dut user.debug imsd[733]: [SLOT_0][V] 5110 [SID_0] ind <- OEM_UNSOL_IMS_EXAMPLE_REG_FAIL(3100) : [fail-code : 403]
 Sep 21 10:40:05.003 dut daemon.debug ofonod[466]: src/ims.c:example_reg_fail_notify() fail_code = 403
 Sep 21 10:40:05.004 dut daemon.info ofonod[466]: [0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=403
-Sep 21 10:40:05.006 dut user.debug imsd[733]: [SLOT_0][I] 5102 [ImsRegistration] registrationFailed() code=403
-Sep 21 10:40:05.007 dut user.debug imsd[733]: [SLOT_0][I] 5103 [ImsRegistration] registered:0 VoPS=1
+Sep 21 10:40:05.006 dut user.debug imsd[733]: [SLOT_0][I] 5102 [ExampleImsRegistration] exampleRegistrationFailed() code=403
+Sep 21 10:40:05.007 dut user.debug imsd[733]: [SLOT_0][I] 5103 [ExampleImsRegistration] registered:0 VoPS=1
 Sep 21 10:40:06.010 dut local0.info mgmtd[734]: ui tick
 Sep 21 10:40:06.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-90
-Sep 21 10:40:10.010 dut user.debug imsd[733]: [SLOT_0][I] 5104 [ImsRegistration] triggerRegistering() NOT SENT (blocked after 403)
+Sep 21 10:40:10.010 dut user.debug imsd[733]: [SLOT_0][I] 5104 [ExampleImsRegistration] exampleTriggerRegistering() NOT SENT (blocked after 403)
 Sep 21 10:40:11.000 dut daemon.info ofonod[466]: IMSD 0: <HEXDUMP 32B>
 Sep 21 10:40:12.010 dut local0.info mgmtd[734]: ui tick
 Sep 21 10:40:12.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-91
-Sep 21 10:40:15.010 dut user.debug imsd[733]: [SLOT_0][I] 5105 [ImsRegistration] triggerRegistering() NOT SENT (blocked after 403)
-Sep 21 10:40:15.012 dut user.debug imsd[733]: [SLOT_0][I] 5106 [ImsRegistration] registered:0 VoPS=1
+Sep 21 10:40:15.010 dut user.debug imsd[733]: [SLOT_0][I] 5105 [ExampleImsRegistration] exampleTriggerRegistering() NOT SENT (blocked after 403)
+Sep 21 10:40:15.012 dut user.debug imsd[733]: [SLOT_0][I] 5106 [ExampleImsRegistration] registered:0 VoPS=1
 Sep 21 10:40:18.010 dut local0.info mgmtd[734]: ui tick
 Sep 21 10:40:18.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-90
-Sep 21 10:40:20.010 dut user.debug imsd[733]: [SLOT_0][I] 5107 [ImsRegistration] triggerRegistering() NOT SENT (blocked after 403)
+Sep 21 10:40:20.010 dut user.debug imsd[733]: [SLOT_0][I] 5107 [ExampleImsRegistration] exampleTriggerRegistering() NOT SENT (blocked after 403)
 Sep 21 10:40:21.000 dut daemon.info ofonod[466]: IMSD 0: <HEXDUMP 32B>
-Sep 21 10:40:25.010 dut user.debug imsd[733]: [SLOT_0][I] 5108 [ImsRegistration] triggerRegistering() NOT SENT (blocked after 403)
-Sep 21 10:40:25.012 dut user.debug imsd[733]: [SLOT_0][I] 5109 [ImsRegistration] registered:0 VoPS=1
+Sep 21 10:40:25.010 dut user.debug imsd[733]: [SLOT_0][I] 5108 [ExampleImsRegistration] exampleTriggerRegistering() NOT SENT (blocked after 403)
+Sep 21 10:40:25.012 dut user.debug imsd[733]: [SLOT_0][I] 5109 [ExampleImsRegistration] registered:0 VoPS=1

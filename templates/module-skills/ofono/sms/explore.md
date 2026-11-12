@@ -8,7 +8,7 @@
 ## ② 볼 역할과 줄
 - `org.ofono.MessageManager` `SendMessage`, `src/sms.c`(재시도 줄), `src/cbs.c`.
 - CS: gril `SEND_SMS`·`SMS_ACKNOWLEDGE`, `UNSOL_RESPONSE_NEW_SMS`, 벤더 RIL `ExampleSmsService_<n>`(가정, 사내 확인).
-- IMS: IMS 구성요소 `ImsSmsSender::sendSms`, IMS IPC TX. `smsOverLteCapable=<0|1>`이 길을 고른다.
+- IMS: IMS 구성요소 `ExampleImsSmsSender::sendSms`, IMS IPC TX. `smsOverLteCapable=<0|1>`이 길을 고른다.
 
 ## ③ 층 경로
 D-Bus → ofonod sms → gril → 벤더 RIL → 모뎀·망, 또는 ofonod IMS 길 → IMS 구성요소 → IMS IPC → 모뎀.
