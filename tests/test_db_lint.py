@@ -281,6 +281,20 @@ def test_new_cause_cannot_start_fixed():
     assert not [f for f in changed["errors"] if f["code"] == "new-cause-fixed" and "CALL" in f["message"]]
 
 
+def test_merged_fixed_cause_keeps_fixed():
+    """병합(move): base에서 fixed였던 옛 원인이 merged-into:<새 원인>이면 새 원인의 fixed는 허용(R10-01).
+    병합해 온 옛 원인이 fixed가 아니면 여전히 거부."""
+    repo = git_db()
+    edit(repo / D / "type.md", "tags: [data-evaluation]", NEW_FIXED_CAUSE)
+    old = repo / C / "type.md"
+    edit(old, "  - id: CALL-001-01\n    status: active", "  - id: CALL-001-01\n    status: merged-into:DATA-001-04")
+    assert ("new-cause-fixed", f"{D}/type.md") not in _pairs(_lint(repo, "--changed", "main"))
+    git(repo, "checkout", "--", C)
+    ims = next((repo / "ims").glob("*/type.md"))
+    edit(ims, "  - id: IMS-001-01\n    status: active", "  - id: IMS-001-01\n    status: merged-into:DATA-001-04")
+    assert ("new-cause-fixed", f"{D}/type.md") in _pairs(_lint(repo, "--changed", "main", expect=1))
+
+
 def test_regex_safety_heuristics():
     import db_lint
 

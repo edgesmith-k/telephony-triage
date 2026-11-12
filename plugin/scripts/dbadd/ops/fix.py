@@ -43,10 +43,12 @@ class FixOps:
             fix.setdefault(key, default)
         new = op["fix"]
         status = new.get("status", fix.get("status"))
+        # status 키가 없으면 상태 불변: fixed 원인이면 fixed_in(새 브랜치)·ref만 더하고 상태·검증 기록은 그대로(백포트)
+        keep_fixed = "status" not in new and status == "fixed"
         if fix.get("status") == "fixed" and status == "fix-submitted":
             raise Reject("fixed-to-fix-submitted", "fixed 원인을 fix-submitted로 바꿀 수 없습니다. 먼저 verify-fix 실패나 "
                          "회귀 의심으로 open으로 되돌린다.", i)
-        if status == "fixed":
+        if status == "fixed" and not keep_fixed:
             raise Reject("update-fix-fixed", "fixed로 바꾸는 것은 verify-fix op만 할 수 있습니다.", i)
         if status == "open" and fix.get("status") != "open":
             history = op.get("history") or {}
@@ -62,6 +64,9 @@ class FixOps:
                 same = next((e for e in merged if e.get("branch") == entry.get("branch")), None)
                 if same is None:
                     merged.append(dict(entry))
+                elif keep_fixed and any(same.get(k) != v for k, v in entry.items()):
+                    raise Reject("fixed-in-change", f"fixed 원인의 fixed_in {entry.get('branch')} 항목은 바꿀 수 없습니다 "
+                                 "(상태 불변 추가는 새 브랜치만. 바꾸려면 open으로 되돌린 뒤 verify-fix).", i)
                 else:
                     same.update(entry)
             fix["fixed_in"] = merged

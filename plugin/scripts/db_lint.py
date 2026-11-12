@@ -32,7 +32,8 @@
 - `builtin-event`·`ext-event` 오류: 현재 백엔드 `builtin_events()`에 없는 `builtin.*`, 이슈 DB `external_parsers`에
   없는 카테고리의 `ext.*`
 - `verified-without-evidence`·`evidence-missing` 오류: 근거 없는 verified, 없는 Jira 키·fixture 경로
-- `new-cause-fixed` 오류: base에 없던 원인이 `fixed` (`--changed`·`--staged`에서만)
+- `new-cause-fixed` 오류: base에 없던 원인이 `fixed` (`--changed`·`--staged`에서만). base에서 fixed였던 원인이
+  `merged-into:<이 원인>`이면 예외(병합 이동)
 - `title-form`: 유형 제목이 증상 형태(명사형 종결: "~하지 않음"·"~됨"·"끊김")가 아님 — base에 없던 새 유형은 오류(`--changed`·`--staged`), 그 밖은 경고
 - `fixed-without-verification` 오류: `fixed`인데 `fix.verification.result: passed`가 없음 (검증 없는 fixed 금지)
 - `fixed-without-trace` 오류: 코드·설정 수정 유형(`framework-bug`·`vendor-ril`·`modem`·`carrier-config`)이 `fixed`인데
@@ -186,7 +187,7 @@ def _one(sigs) -> bool:
 
 
 class Linter:
-    def __init__(self, root: Path, defaults: dict, base_causes: set[str] | None = None,
+    def __init__(self, root: Path, defaults: dict, base_causes: dict[str, str | None] | None = None,
                  residual: list[tuple[str, str]] | None = None, scope: set[str] | None = None,
                  advice: bool = False):
         self.root = root
@@ -266,10 +267,14 @@ class Linter:
                 self.types.append((type_md, data))
         self._stray_types()
         self.cause_owner = {}
+        self.merged_from: dict[str, list[str]] = {}    # 병합 대상 원인 ID → merged-into로 그것을 가리키는 원인들
         for type_md, data in self.types:
             for cause in data.get("causes") or []:
                 if isinstance(cause, dict) and cause.get("id"):
                     self.cause_owner.setdefault(str(cause["id"]), (type_md, data))
+                    status = str(cause.get("status") or "")
+                    if status.startswith("merged-into:"):
+                        self.merged_from.setdefault(status.split(":", 1)[1], []).append(str(cause["id"]))
 
         self._check_ids()
         self._check_step_focus()
@@ -696,8 +701,8 @@ class Linter:
                 break
         if cause.get("status") == "active" and not pending and cid not in positives:
             self.warn("fixture-missing", type_md, f"{cid}: 양성 fixture가 없습니다 (R1·R2 skipped, 리뷰 대상).")
-        if (self.base_causes is not None and cid not in self.base_causes
-                and fix.get("status") == "fixed"):
+        if (self.base_causes is not None and cid not in self.base_causes and fix.get("status") == "fixed"
+                and not any(self.base_causes.get(old) == "fixed" for old in self.merged_from.get(cid, ()))):
             self.err("new-cause-fixed", type_md, f"{cid}: 새 원인은 fixed로 시작할 수 없다 (verify-fix를 거친다).")
 
     def _check_code_ref(self, type_md, cid, ref) -> None:
@@ -940,12 +945,14 @@ class Linter:
 # -- 실행 -----------------------------------------------------------------------------
 
 
-def _base_causes(root: Path) -> set[str] | None:
+def _base_causes(root: Path) -> dict[str, str | None] | None:
+    """base의 유형·원인 ID → 원인의 `fix.status`(유형은 None). 유형 ID도 넣는다(새 유형 판별)."""
     try:
         db = issuedb.load(root)
     except issuedb.IssueDbError:
         return None
-    return {t.id for t in db.types} | {c.id for t in db.types for c in t.causes}     # 유형 ID도(새 유형 판별)
+    fix = lambda raw: raw["fix"].get("status") if isinstance(raw.get("fix"), dict) else None  # noqa: E731
+    return {t.id: None for t in db.types} | {c.id: fix(c.raw) for t in db.types for c in t.causes}
 
 
 def run(args, defaults: dict) -> tuple[dict, int]:

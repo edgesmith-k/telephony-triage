@@ -562,7 +562,7 @@ note: {{선택, 한 줄}}
 
 **"새 원인 fixed 금지" 검사 범위** (`db_lint`)
 - base ref가 있을 때(`--changed <ref>`의 merge-base, `--staged`의 HEAD, `db_pr stage`의 origin/<base>)만 검사한다. 대상은 **base에 없던 원인** 중 `fix.status: fixed`인 것이다.
-- base ref가 없는 검사(`--all`, `--ref`), 레포 초기 커밋(Phase 1 샘플 포함), `migrate/...` 브랜치의 마이그레이션 결과는 예외다.
+- base ref가 없는 검사(`--all`, `--ref`), 레포 초기 커밋(Phase 1 샘플 포함), `migrate/...` 브랜치의 마이그레이션 결과는 예외다. 병합 이동도 예외다: base에서 `fixed`였던 원인이 `merged-into:<새 원인>`이면 새 원인의 `fixed`를 허용한다(`fixed`면 `verification` 필수는 그대로).
 
 ### 5.10 카테고리 간 연관
 
