@@ -10,7 +10,7 @@
 
 ## ② 볼 역할과 줄
 
-- RILJ `[UNSL]< UNSOL_MODEM_RESTART`, `RADIO_POWER`, `radioStateChanged:`(17 캡처 없음 — 사내 확인), `serviceDied`·`has died`, 벤더 RIL 데몬 `radio state changed: newState=`
+- RILJ `[UNSL]< UNSOL_MODEM_RESTART`, `RADIO_POWER`, `radioStateChanged:`, `serviceDied`·`has died`, 벤더 RIL 데몬 `radio state changed: newState=`
 - RadioConfig `SET_PREFERRED_DATA_MODEM`, PhoneCfgMgr
 - AT 중계·모뎀 진단 `at-in: AT…`·`at-out: …`
 
@@ -25,7 +25,7 @@
 | 모뎀 크래시·리셋 (초안) | `UNSOL_MODEM_RESTART` | 그 뒤 모든 모듈 실패는 결과 → 모뎀·망 | `newState=RADIO_UNAVAILABLE`, `RADIO_POWER` / 모뎀 덤프 |
 | RIL 데몬 재시작 (초안) | `serviceDied`·`has died`, 요청 `error 1` | `UNSOL_MODEM_RESTART` 없음 → 벤더 RIL | tombstone(사내) |
 | RIL 무응답 (초안) | 응답 없는 RILJ 요청 | 벤더 RIL 줄도 0 → `그 층 로그 없음(벤더 RIL)` | 벤더 RIL 로그를 켠 수집 |
-| 비행기 모드·무선 전원 (초안) | `RADIO_POWER`, `AT+CFUN=0` | 끈 뒤 실패는 결과 → 끈 쪽 | 시험 장비 AT 기록 |
+| 비행기 모드·무선 전원 (초안) | RILJ `[n]> RADIO_POWER on = false`, `AT+CFUN=0` | 요청이 `radioStateChanged: OFF`보다 앞서고 죽음·재시작 줄이 없음 → 위에서 끔, `원인 아님(정상 동작)`. 근거는 요청·OFF 두 줄. 요청 없이 OFF·`UNAVAILABLE`이 먼저면 위 행, `AT+CFUN=0`은 `곁가지`. 끈 뒤 실패는 결과 | 시험 장비 AT 기록 |
 | NV·펌웨어 (초안) | 진단·NV 줄은 일상 | 판단 못 함 → `그 층 로그 없음(모뎀)` | 모뎀 로그(사내) |
 
 ## ⑤ 함정
