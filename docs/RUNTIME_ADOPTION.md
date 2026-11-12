@@ -105,7 +105,7 @@ python3 plugin/scripts/module_eval.py --module ofono/data --case data-apn-auth-r
 ```
 
 - 1줄째는 계획만(토큰 0). 2줄째가 통과하면 남은 case. `--bare`(입력 토큰 감소)는 `execution.json` `bare`가 `used`면 계속 쓴다.
-- 판정은 스크립트다: with 1순위 통과 수 ≥ without, 안전 위반 0. 비용 행 `skipped`("비용 미상")는 통과가 아니다.
+- 판정은 스크립트다: with 1순위 통과 수 ≥ without, with arm 안전 위반 0(기준선 without arm 위반은 fail이 아니라 경고). 비용 행 `skipped`("비용 미상")는 통과가 아니다.
 - 모듈은 oFono·Android 각 7개(data·sim·network·call·sms·ims·modem). 모듈 문서는 증상별 첫 점검 표·대체 근거(핵심 줄이 없을 때 볼 다른 층 줄)를 갖고, 데몬은 역할로 부른다(이름은 `_common/components.md` 역할 표 한 곳). 사내 모델로는 팀이 많이 쓰는 모듈 1~2개만 잰다.
 - 탐색(explore) 사례는 후보 채점이다: 후보 1~3개 + `가장 유력`, 인정 후보가 목록에 있고 함정이 가장 유력이 아니면 통과(1순위 적중은 기록만). 심층(deep)은 결론 1개 그대로.
 
@@ -116,7 +116,7 @@ python3 plugin/scripts/module_eval.py --module ofono/data --case data-apn-auth-r
 | `runtime-check claude-gateway` 종료 0 — **환경 변수·자격 이름·claude CLI·설치본 hooks·S1 기록만 잰다**(모델 응답·프로토콜·hook 실제 동작은 아래 사내 확인) | missing·differs 남음 |
 | 사내 확인 0·2·3 통과 | OpenAI 모양만(0 실패) → 이 환경 보류 |
 | 사내 확인 5에서 must_show 그대로 | 되돌림 뒤에도 요약 |
-| 고른 모듈 with ≥ without, 안전 위반 0 | 안전 위반 1건이라도 |
+| 고른 모듈 with ≥ without, with arm 안전 위반 0 | with arm 안전 위반 1건이라도 |
 
 go여도 쓰기 승인은 사람이 한다.
 
@@ -260,7 +260,7 @@ python3 tools/site_step.py audit --record   # 기준점 기록, 넘친 항목은
 ## 5. 팀원에게 열기 전 체크리스트
 
 - **공통**: [ ] S-7 끝, 재반입이면 §8 테스트 통과 · [ ] **반입 전**(IMPL §4.8 1·2): 운영 이슈 DB 브랜치 보호를 IMPL §4.5로, `docs/site/boundary-allow.txt`에 데몬 이름 줄(반입 뒤면 `--check-boundary`가 막음) · [ ] 모듈 레포면 `modules check` 통과·`prefer: skill` 결정 · [ ] 사내 모델을 열면 정기 점검 담당·요일
-- **Claude Code + 사내 모델**: [ ] `runtime-check claude-gateway` 0 · [ ] 사내 확인 0·2·3·5를 `SITE_PROFILE.md`에 · [ ] 고른 모듈 안전 위반 0 · [ ] 팀원용 `env` 예시(키 없이) · [ ] `runtime.label`
+- **Claude Code + 사내 모델**: [ ] `runtime-check claude-gateway` 0 · [ ] 사내 확인 0·2·3·5를 `SITE_PROFILE.md`에 · [ ] 고른 모듈 with arm 안전 위반 0 · [ ] 팀원용 `env` 예시(키 없이) · [ ] `runtime.label`
 - **OpenCode + 사내 모델**: [ ] 1.19.5·`/etc/opencode` 배포(또는 warn 사유) · [ ] 레포 사본 clone 주소·반입 태그 공지(3.1 0) · [ ] `tt-oc doctor`·`runtime-check opencode` 0, 3.3 통과 · [ ] Jira: 사용자별 3.4 절차와 `--accept-error-bodies` 여부 공지, 또는 "닫힘" 안내 · [ ] 갱신 절차 공지(`TEAM_GUIDE.md` 8절)
 
 **팀원이 처음 한 번** (`SITE_INSTALL.md` §7에 더해, 전문은 `TEAM_GUIDE.md`)
