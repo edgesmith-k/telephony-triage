@@ -293,6 +293,22 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
    explore: {when: never}          # 탐색 분석(규칙이 없을 때 Claude 가설): ask(기본) | always | never
    ```
    한 번만 끄려면 `analyze … --code skip`(코드 분석 건너뛰기) · `--no-analyzer` · `--no-explore`.
+7. (선택) **설정할 수 있는 것** — `config.py set <키> <값>`으로 바꾸거나 `~/.telephony-triage/config.yaml`을 직접 고친다. 한 번 바꾸면 이슈·세션이 바뀌어도 유지된다. 우선순위는 사용자 config > 팀 기본값(`site-defaults.yaml`) > 내장 기본값. 한 번만 바꾸려면 6번의 명령 옵션을 쓴다(있는 항목만).
+
+   | 키 | 기본값 | 범위 | 무엇이 달라지나 |
+   |---|---|---|---|
+   | `explore.when`, `analyzers.<분류>.when` | ask | ask·always·never | 6번 참조 |
+   | `explore.timeline_max_lines` | 200 | 20~1000 | 탐색 분석 타임라인 줄 수 상한. 늘리면 읽는 양(토큰)도 늘고, 모듈 보기 필터에서 빠진 줄은 늘려도 돌아오지 않는다. 범위 밖이면 경고하고 200으로 본다 |
+   | `code.auto_select` | true | true/false | 버전이 맞는 소스 프로필이 하나면 묻지 않고 고름. 불리언이 아니면 경고하고 묻는다 |
+   | `reviewer.ask` | true | true/false | 새 PR push 뒤 "리뷰어를 지정할까요?" 질문. false면 묻지 않고 지정 안 함 |
+   | `issue_db.merge_wait_seconds` | 420 | 0~480 | `db_pr merge`가 검사 통과를 기다리는 최대 초(범위 밖은 0~480으로 자름). 한 번만은 `--wait` |
+   | `log_dir` | 없음 | 경로 | logcat 기본 탐색 폴더 |
+   | `logcat.year_source` | tracker | tracker·file-mtime·ask | 연도 없는 로그 시각의 연도를 정하는 방법 |
+   | `tracker.timezone`, `logcat.timezone` | 팀 기본값 | IANA 시간대 | 이슈 발생 시각·logcat 시각의 해석 기준 |
+   | `module_skills.remote`, `.base_branch` | 없음 | 모듈 문서 레포 | 비우면 모듈 문서를 쓰지 않음 |
+   | `platform`, `platforms.<이름>.*` | | | 5번 참조 |
+
+   키 전체 정의는 `docs/design/02-config.md`, 팀 관리자만 바꾸는 팀 기본값 파일은 `docs/SITE_INSTALL.md`.
 
 ---
 
