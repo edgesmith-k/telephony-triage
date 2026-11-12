@@ -1855,6 +1855,7 @@ def test_my_prs_gh_failure_is_a_warning_and_missing_config_stops_with_2():
 # -- issue_db.path 방어 (V10-01): 설정 전 sync가 현재 폴더의 무관한 git 저장소를 건드리지 않는다 ----------------------------
 
 BAD_PATH_KINDS = ("none", "empty", "relative", "not-db")
+BAD_PATH_MSG = "issue_db.path가 이슈 DB clone이 아니다"     # dbpr/worktree.py clone_path의 문구
 
 
 def _victim(base: Path) -> Path:
@@ -1906,8 +1907,8 @@ def test_bad_issue_db_path_leaves_cwd_repo_untouched(tmp_path, kind):
     # snapshot·cleanup은 git 전에, discard는 worktree가 남아 있으면 아무것도 지우지 않고 멈춘다
     for args in (("snapshot", "--job", "J1"), ("cleanup", "--dry-run"), ("discard", wt)):
         proc = db_pr(*args)
-        assert proc.returncode == 2 and ("setup" in proc.stderr or not loaded), (args, proc.returncode, proc.stderr,
-                                                                                proc.stdout)
+        assert proc.returncode == 2 and (BAD_PATH_MSG in proc.stderr or not loaded), (args, proc.returncode,
+                                                                                      proc.stderr, proc.stdout)
         assert _repo_state(victim) == before, args
     if not loaded:
         return

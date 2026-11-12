@@ -707,7 +707,7 @@ def test_relative_draft_from_work_dir_leaves_clone_untouched():
 def test_draft_with_bad_issue_db_path_leaves_cwd_repo_untouched(tmp_path, kind):
     """V10-01: issue_db.path가 없거나 이슈 DB가 아니면 `--draft`는 현재 폴더의 git 저장소에 worktree를 만들지 않고 종료 2."""
     sys.path.insert(0, str(REPO / "tests"))
-    from test_db_pr import _bad_path_env, _repo_state, _victim
+    from test_db_pr import BAD_PATH_MSG, _bad_path_env, _repo_state, _victim
     victim = _victim(tmp_path)
     env = _bad_path_env(tmp_path, kind, victim)
     before = _repo_state(victim)
@@ -717,8 +717,9 @@ def test_draft_with_bad_issue_db_path_leaves_cwd_repo_untouched(tmp_path, kind):
     plan.parent.mkdir(parents=True)
     plan.write_text("{}", encoding="utf-8")
     proc = run("db_verify.py", ["rules", "--plan", plan, "--draft", plan.parent / "draft"], env=env, cwd=victim)
-    assert proc.returncode == 2 and ("setup" in proc.stderr or not loaded), proc.stderr
+    assert proc.returncode == 2 and (BAD_PATH_MSG in proc.stderr or not loaded), proc.stderr
     assert _repo_state(victim) == before and not (plan.parent / "draft").exists()
+    assert not (victim / ".git" / "worktrees").exists()
 
 
 

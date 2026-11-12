@@ -56,7 +56,8 @@ def clone_path(cfg: dict) -> Path:
     repo = Path(raw).expanduser()
     if not repo.is_absolute() or not (repo / dbpath.CONFIG).is_file():
         raise UsageError(f"issue_db.path가 이슈 DB clone이 아니다(설정 없음·빈 값·상대 경로·{dbpath.CONFIG} 없음): "
-                         f"{raw or '(없음)'}. /telephony-triage:setup을 먼저 한다(setup 3에서 clone한다).")
+                         f"{raw or '(없음)'}. /telephony-triage:setup을 먼저 한다(setup 3에서 clone한다). "
+                         "clone이 있으면 표식이 있는 브랜치를 checkout하고 있는지 본다.")
     if not (repo / ".git").exists():
         raise UsageError(f"issue_db.path가 git clone이 아닙니다: {repo} (setup 3에서 clone한다)")
     return repo
