@@ -286,7 +286,7 @@ claude mcp list               # Jira MCP 사용자 범위 등록 확인
 5. (팀이 플랫폼을 둘 이상 켰을 때) setup이 어느 플랫폼을 설정할지 묻는다. 다른 플랫폼도 쓰면 setup을 한 번 더 해서 그 플랫폼을 고른다 — 그 플랫폼의 이슈 DB clone·작업 폴더(기본 `~/.telephony-triage/work-<이름>`)만 따로 묻고 Jira·gh 설정은 같이 쓴다. 분석은 `analyze <JIRA> <로그> --platform <이름>`(말로 "oFono 로그로 분석해줘"도 된다). 플랫폼과 이슈 DB가 맞지 않으면 `platform-mismatch`로 멈춘다
 6. (선택) **반복 질문 줄이기** — 사용자 config `~/.telephony-triage/config.yaml`에 직접 적는다(setup은 묻지 않는다. 사용자 config가 팀 기본값보다 우선하고, 적은 키만 덮는다):
    ```yaml
-   code_profiles:                  # 버전별 소스 트리. Jira 버전과 맞는 프로필이 하나면 묻지 않고 고른다(code.auto_select, 기본 true)
+   code_profiles:                  # 버전별 소스 트리(개인 경로). Jira 버전과 맞는 프로필이 하나면 묻지 않고 고른다(code.auto_select, 기본 true). 직접 입력한 경로는 검증 뒤 여기에 자동 저장된다
      - {name: android16-main, platform_version: "16", roots: {aosp: /path/to/android16}}
    analyzers:
      data: {when: never}           # 심층 분석: ask(기본) | always | never

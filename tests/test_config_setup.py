@@ -702,6 +702,31 @@ def test_code_root_selector():
     assert env.run("code_roots.py", ["resolve", "/abs/path", "--roots", f"aosp={SRC / 'android16'}"]).returncode == 2
 
 
+def test_remember_with_version_saves_personal_profile():
+    """07 §Step 2-1 5번: `remember --platform-version`은 개인 code_profiles에 저장(이름 겹치면 -2, 같은 roots면 안 만듦,
+    최근 목록에서 뺌). 버전 없이는 지금처럼 recent_code_roots."""
+    env = Env()
+    env.init(env.base / "db")
+    cfg = env.config()
+    cfg["code_profiles"] = [{"name": "android16-android16", "platform_version": "16",
+                             "roots": {"aosp": str(SRC / "android17")}}]
+    (env.home / "config.yaml").write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    a16 = f"aosp={SRC / 'android16'}"
+    env.json("code_roots.py", ["remember", a16])                              # 버전 모름 → 최근 목록
+    assert env.config()["recent_code_roots"][0]["roots"] == {"aosp": str(SRC / "android16")}
+    out = env.json("code_roots.py", ["remember", a16, "--platform-version", "16"])
+    assert out == {"profile": "android16-android16-2", "saved": True, "platform_version": "16"}
+    saved = env.config()
+    assert saved["code_profiles"][-1] == {"name": "android16-android16-2", "platform_version": "16",
+                                          "roots": {"aosp": str(SRC / "android16")}}
+    assert saved["recent_code_roots"] == []                                   # 목록에 두 번 나오지 않는다
+    again = env.json("code_roots.py", ["remember", a16, "--platform-version", "16"])
+    assert again == {"profile": "android16-android16-2", "saved": False, "platform_version": "16"}
+    assert len(env.config()["code_profiles"]) == 2
+    names = [c["name"] for c in env.json("code_roots.py", ["suggest", "--version", "16"])["candidates"]]
+    assert names[:2] == ["android16-android16", "android16-android16-2"]
+
+
 def _all_tests():
     return [(n, o) for n, o in sorted(globals().items()) if n.startswith("test_") and callable(o)]
 

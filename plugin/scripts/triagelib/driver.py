@@ -701,9 +701,16 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             return {"skipped": True}
         profiles = {p.get("name") for p in self.cfg.get("code_profiles") or []}
         if choice not in profiles and not self.state.data.get("code_remembered"):
-            self.run.call("2-1-code", "code_roots.py", ["remember", choice])
+            # 07 §Step 2-1 5번: 버전(트리 추정 > Jira)을 알면 개인 프로필로 저장, 모르면 최근 경로만
+            keep = data.get("estimated_version") or version
+            _, saved, _ = self.run.call("2-1-code", "code_roots.py",
+                                        ["remember", choice] + (["--platform-version", str(keep)] if keep else []))
+            if (saved or {}).get("saved"):
+                self.state.data["code_saved"] = f"{saved['profile']} ({self.platform_label} {saved['platform_version']})"
             self.state.data["code_remembered"] = True
             self.state.save()
+        if self.state.data.get("code_saved"):     # 저장한 실행이 질문으로 멈췄어도 ok 출력까지 알린다
+            self.notes.append(f"코드 경로를 프로필로 저장: {self.state.data['code_saved']} — 이름 변경·삭제는 config.py set code_profiles")
         self.code_auto = choice if auto else None
         return {"skipped": False, "roots": choice, "tree_version": data.get("estimated_version"),
                 "warnings": data.get("warnings") or []}

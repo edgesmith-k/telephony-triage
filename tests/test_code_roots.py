@@ -176,3 +176,21 @@ def test_regex_runs_repeat_forms():
     assert code_roots._regex_runs("abc(?:def)+ghi") == (["abc", "def", "ghi"], False)
     assert code_roots._regex_runs("x*literal") == (["literal"], False)
     assert code_roots._regex_runs("(?i)Foo") == (["Foo"], True)
+
+
+def test_estimate_version_unreadable_file_is_estimation_failure(monkeypatch):
+    """읽을 수 없는 버전 파일(OSError)은 traceback 없이 다음 파일로, 모두 실패하면 None(추정 실패, 07 §Step 2-1 4번)."""
+    root = tmp("tt-unreadable-")
+    (root / "a.mk").write_text("V := 16\n", encoding="utf-8")
+    (root / "b.mk").write_text("V := 17\n", encoding="utf-8")
+    sources = [("a.mk", re.compile(r"V := (\d+)")), ("b.mk", re.compile(r"V := (\d+)"))]
+    real = Path.read_text
+
+    def deny_a(self, *args, **kwargs):
+        if self.name == "a.mk":
+            raise PermissionError("denied")
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", deny_a)
+    assert code_roots.estimate_version(root, sources) == "17"
+    assert code_roots.estimate_version(root, sources[:1]) is None
