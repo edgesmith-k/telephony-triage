@@ -1,4 +1,4 @@
-# 합성 case (설계 D §1.2-e). 프레임워크(GsmSMSDispatcher SS=3)가 서비스 없음으로 요청을 스스로 만들지 않아 RILJ SEND_SMS가 없다 — 그 층 로그 없음이 아니다. 원인은 서비스 없음(모뎀·망), 프레임워크는 증상(call-mo-out-of-service와 같은 정책). 등록 줄이 없어 원인 데몬은 알 수 없음. files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+# 합성 case (설계 D §1.2-e, 11/12 캡처로 교체). 출처: Android 17 에뮬레이터 캡처 x06r-mo-airplane(비행기 모드에서 문자 발신)에서 고른 줄 — AOSP 층만, 벤더 줄 없음. 함정: 프레임워크가 비행기 모드로 무선을 끈 뒤(RADIO_POWER on = false → radioStateChanged: OFF) 발신하면 GsmSMSDispatcher가 SS=3(무선 꺼짐)으로 요청을 스스로 만들지 않아 RILJ SEND_SMS가 없다 — 그 층 로그 없음도, 서비스 없음(모뎀·망)도 아니다. 답은 무선을 끈 쪽(modem-radio-off-airplane과 같은 뜻: 프레임워크 또는 원인 아님). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
 schema_version: 1
 name: sms-smsc-missing
 kind: deep
@@ -7,8 +7,8 @@ key: MOCK-9810
 issue:
   summary: 문자 전송 실패 (합성)
   description: 문자를 보내면 전송 실패가 뜹니다. 합성 case.
-  occurred_at: '2026-08-24T13:00:25+0000'
-  platform_version: '14'
+  occurred_at: '2026-11-11T00:03:05+0000'
+  platform_version: '17'
   sim_slot: '0'
 parse: {tz: UTC, year: 2026, minutes: 5}
 input:
@@ -20,8 +20,8 @@ run_expect:
   top_cause: SMS-001-01
   C: 1
 expect:
-  layer: '모뎀|망'
-  daemon: '없음|알 수 없음|SST'
-  evidence: ['sendTextInternal', 'sendSms:\s+isIms\(\)=false.*\bSS=[1-3]\b']
+  layer: '프레임워크|원인\s*아님'
+  daemon: '알 수 없음|없음|프레임워크|ServiceStateTracker|SST'
+  evidence: ['RADIO_POWER on = false', 'radioStateChanged: OFF', 'sendSms:\s+isIms\(\)=false.*\bSS=3\b']
   trap: null
-  wrong_layer: ['^\s*(그\s*층\s*로그\s*없음|프레임워크|RILJ|RIL HAL|벤더)']
+  wrong_layer: ['^\s*(모뎀|망|벤더 RIL|RIL HAL|RILJ|곁가지|그\s*층\s*로그\s*없음)']
