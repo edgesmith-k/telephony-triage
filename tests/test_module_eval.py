@@ -531,6 +531,17 @@ def test_stage_arm_sets(env, tmp_path):
                 assert (cwd / "builtin/explore-rules.md").read_text(encoding="utf-8").startswith(f"# {pre}/")
     assert me.cwd_problem(Path(me.tempfile.mkdtemp(prefix="tt-module-eval-"))) is None
     assert me.cwd_problem(REPO / "tests") is not None
+    # --deep: explore without = 기본 with, with = 기본 with + deep.md(explore.md 바로 뒤), 심층 갈래 불변
+    (env.templates / "ofono" / "data" / "deep.md").write_text("# 정밀\n", encoding="utf-8")
+    deep = me.Source(env.templates, "ofono", "data", env.arms, deep=True)
+    ex = want[("explore", "with")]
+    assert [r for r, _ in me.arm_sources(env.cases["data-route-fail"], "without", deep)[1]] == ex
+    assert [r for r, _ in me.arm_sources(env.cases["data-route-fail"], "with", deep)[1]] == \
+        ex[:4] + ["module-skill/ofono/data/deep.md"] + ex[4:]
+    for arm in me.ARMS:
+        assert [r for r, _ in me.arm_sources(env.cases["data-apn-auth-reject"], arm, deep)[1]] == want[("deep", arm)]
+        assert env.docs("data-route-fail", arm) == want[("explore", arm)]          # deep=False는 그대로
+    assert deep.key == "ofono/data+deep" and env.src.key == "ofono/data"
     # 참조 문서는 type_id 파일이 있을 때만
     (env.templates / "ofono" / "data" / "references" / "DATA-001.md").unlink()
     assert "module-skill/ofono/data/references/DATA-001.md" not in env.docs("data-apn-auth-reject", "with")
@@ -1068,6 +1079,13 @@ def test_unit_cost_read_from_results_file(env, capsys):
     assert est["total_usd"] == 0.6 and est["unit_source"] == "results.json"
     me.RESULTS.write_text(json.dumps({"modules": {"ofono/sim": {"unit_cost_usd": 0.2}}}), encoding="utf-8")
     assert me.estimate_unit("ofono/data") == (0.2, "results.json")
+    # deep: 자기 +deep 기록 → 그 모듈 기본 기록 → (+deep 뺀) 평균. +deep 기록은 기본 모드 평균에 섞이지 않는다
+    me.RESULTS.write_text(json.dumps({"modules": {"ofono/sim": {"unit_cost_usd": 0.2}, "ofono/data": {"unit_cost_usd": 0.4},
+                                                  "ofono/modem+deep": {"unit_cost_usd": 9.0}}}), encoding="utf-8")
+    assert me.estimate_unit("ofono/data+deep") == (0.4, "results.json")
+    assert me.estimate_unit("ofono/sim+deep") == (0.2, "results.json")
+    assert me.estimate_unit("ofono/modem") == (pytest.approx(0.3), "results.json")
+    assert me.estimate_unit("ofono/modem+deep") == (9.0, "results.json")
 
 
 @POSIX
@@ -1520,6 +1538,46 @@ def test_single_arm_dry_run_and_note(env, capsys):
     assert data["arms"] == ["without"] and {e["arm"] for e in data["plan"]} == {"without"}
     assert data["estimate"]["runs"] == 3 and data["note"] == "vendor tags added"
     assert data["prompt_sha256"] == me.prompt_frame_sha("ofono") != me.prompt_frame_sha("android")
+
+
+def test_deep_dry_run_plan(env, tmp_path, capsys):
+    """--deep: 계획은 explore case만, 심층 case를 --case로 주거나 deep.md가 없으면 종료 2. 기본 출력에는 deep 키가 없다."""
+    nocli = tmp_path / "no-such-claude"
+    assert env.run("--deep", "--dry-run", "--json", claude=nocli) == 2 and "deep.md 없음" in capsys.readouterr().err
+    (env.templates / "ofono" / "data" / "deep.md").write_text("# 정밀\n", encoding="utf-8")
+    assert env.run("--deep", "--dry-run", "--json", claude=nocli) == 0
+    data = json.loads(capsys.readouterr().out)
+    explore = [n for n in CASES if KIND[n] == "explore"]
+    assert data["module"] == "ofono/data+deep" and data["deep"] is True and data["estimate"]["runs"] == 4
+    assert [(e["case"], e["arm"]) for e in data["plan"]] == [(n, a) for n in explore for a in me.ARMS]
+    assert env.run("--deep", "--dry-run", claude=nocli) == 0 and me.DEEP_TOKEN_NOTE in capsys.readouterr().out
+    assert env.run("--deep", "--dry-run", "--json", "--case", "data-apn-auth-reject", claude=nocli) == 2
+    assert "--deep은 explore case만: data-apn-auth-reject" in capsys.readouterr().err
+    assert env.run("--dry-run", "--json", claude=nocli) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["module"] == "ofono/data" and "deep" not in data and data["estimate"]["runs"] == 6
+
+
+@POSIX
+def test_deep_record_own_key(env, tmp_path, capsys):
+    """--deep --record는 `<p>/<m>+deep`에만 쓰고 기존 `<p>/<m>` 기록은 바이트 그대로(기본 note는 deep 모드 설명)."""
+    env.streams(all_good(env))
+    assert env.run("--record", "--iteration", str(tmp_path / "it1")) == 0
+    before = json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]["ofono/data"]
+    (env.templates / "ofono" / "data" / "deep.md").write_text("# 정밀\n", encoding="utf-8")
+    env.src = me.Source(env.templates, "ofono", "data", env.arms, deep=True)          # good_stream이 deep 문서를 읽게
+    env.log.unlink()
+    env.streams([good_stream(env, n, a) for n in CASES if KIND[n] == "explore" for a in me.ARMS])
+    capsys.readouterr()
+    assert env.run("--deep", "--record") == 0                                          # 반복 디렉토리 접두어 …-deep-
+    assert me.DEEP_TOKEN_NOTE in capsys.readouterr().out
+    mods =json.loads(me.RESULTS.read_text(encoding="utf-8"))["modules"]
+    assert set(mods) == {"ofono/data", "ofono/data+deep"} and mods["ofono/data"] == before
+    rec = mods["ofono/data+deep"]
+    assert rec["note"] == me.DEEP_NOTE and set(rec["cases"]) == {n for n in CASES if KIND[n] == "explore"}
+    assert "with/module-skill/ofono/data/deep.md" in rec["docs_sha256"]
+    assert "without/module-skill/ofono/data/deep.md" not in rec["docs_sha256"]
+    assert json.loads((me.WORKSPACE / "module-ofono-data-deep-001" / "plan.json").read_text(encoding="utf-8"))["deep"] is True
 
 
 def _with_only(env):

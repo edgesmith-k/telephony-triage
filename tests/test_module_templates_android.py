@@ -54,8 +54,9 @@ CASES = [
 
 # 문서 상한(바이트, C1D 보정 §2.2) — skillcheck.CAPS보다 좁다(R24). 경로 키가 파일 이름 키보다 먼저.
 # explore.md는 5행 계약 문구(`가설 N:`부터, 코덱스 리뷰 02e0ec2 F05)로 +66B라 100씩 올렸다
+# deep.md(정밀 탐색)는 아직 목표가 없어 받을 때 상한(skillcheck.CAPS)과 같다
 DOC_CAPS = {"layers.md": 2900, "components.md": 3300, "SKILL.md": 2000, "analyzer.md": 1150, "explore.md": 2700,
-            "modem/SKILL.md": 1024, "data/explore.md": 2900}
+            "deep.md": 16384, "modem/SKILL.md": 1024, "data/explore.md": 2900}
 REFERENCE_CAP = 1300
 # run별 with arm 문서 합 = 그 run이 읽는 파일 상한의 합(C1D 보정 §2.3)
 COMMON_BUDGET, DEEP_RUN_BUDGET, ALSO_RUN_BUDGET, EXPLORE_RUN_BUDGET = 6000, 10450, 11474, 8800
@@ -99,7 +100,7 @@ def test_android_doc_caps():
         seen.add(rel.as_posix())
     want = {"_common/layers.md", "_common/components.md"}
     for module in MODULES:
-        want |= {f"{module}/{n}" for n in ("SKILL.md", "analyzer.md", "explore.md")}
+        want |= {f"{module}/{n}" for n in ("SKILL.md", "analyzer.md", "explore.md", "deep.md")}
     want |= {f"{m}/references/{t}.md" for m, t in REFERENCES.items()}
     assert seen == want
 
