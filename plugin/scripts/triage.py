@@ -163,6 +163,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--choose", metavar="top|dir", help="explore: 질문 없이 고른다(top = 1위 후보, dir = 모듈 디렉토리 이름)")
     p.add_argument("--also", action="store_true", help="deep: 모뎀 모듈 문서도 같은 SHA로 함께 받는다")
     p.add_argument("--at", metavar="ISO", help="explore --module: 받은 사본으로 타임라인 중심만 다시 잡는다(받기 없음)")
+    p.add_argument("--deep", action="store_true",
+                   help="explore: 정밀 탐색(사용자가 요청할 때만) — 모듈 deep.md도 받고 (모듈 필터가 있을 때) 보기 상한을 넓힌다(~96KB)")
     p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
     p = sub.add_parser("check-output", parents=[common])
     p.add_argument("key", metavar="KEY")

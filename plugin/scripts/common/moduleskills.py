@@ -511,8 +511,9 @@ def _missing(platform: str, x: str, sha: str) -> ModuleError:
                        {"module": f"{platform}/{x}", "sha": sha})
 
 
-def materialise(state, *, purpose, module=None, category=None, type_id=None, also=False) -> Fetched:
-    """B1 §5.4 H–L on state.sha: 모듈 찾기 → blob 재해시·글 점검 → (lock 확인) ff-only → (lock 확인) sparse."""
+def materialise(state, *, purpose, module=None, category=None, type_id=None, also=False, deep=False) -> Fetched:
+    """B1 §5.4 H–L on state.sha: 모듈 찾기 → blob 재해시·글 점검 → (lock 확인) ff-only → (lock 확인) sparse.
+    `deep`(explore 정밀 탐색): EXPLORE_FILES 뒤에 `{m}/deep.md`."""
     _step("H", state)
     p, sha, tree = state.platform, state.sha, state.tree
     block = (state.doc.get("platforms") or {}).get(p)
@@ -528,7 +529,7 @@ def materialise(state, *, purpose, module=None, category=None, type_id=None, als
         if len(hits) != 1:
             raise _missing(p, category or "?", sha)
         m = hits[0]
-    names = DEEP_FILES if purpose == "deep" else EXPLORE_FILES
+    names = DEEP_FILES if purpose == "deep" else EXPLORE_FILES + (("{m}/deep.md",) if deep else ())
     paths = [f"{p}/{n.format(m=m)}" for n in names]
     if any(x not in tree for x in paths):
         raise _missing(p, m, sha)

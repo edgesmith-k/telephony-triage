@@ -44,7 +44,7 @@ module-skills/                     # 사내 GHE. 사외에서는 templates/modul
 | `<m>/references/<유형 ID>.md` | 그 유형일 때만 읽는 점검 목록·코드 경로(`<root 키>:<경로>`) | 각 4KB | 5-1(1위 유형일 때) |
 | `<m>/evals/<case>/` | `case.yaml`과 `files/`(합성 로그, 마스킹된 timeline·입력) | case당 48 KiB(`skillcheck.CASE_CAP`, H C1+D R3) | 모듈 eval |
 
-**허용 이름(정확한 목록, glob 아님)**: 루트 `README.md`·`modules.yaml`·`.github/**`(선택 CI), `<p>/_common/{layers,components}.md`, `<p>/<m>/{explore,SKILL,analyzer}.md`, `<p>/<m>/references/<ID>.md`(`^[A-Z]+-\d{3}(-\d{2})?\.md$`), `<p>/<m>/evals/<case>/case.yaml`, `<p>/<m>/evals/<case>/files/*.{log,md,json}`. 그 밖의 이름, `CLAUDE.md`·`AGENTS.md`·`.claude/`(Claude Code가 자동으로 읽는 이름), 심볼릭 링크, 실행 비트는 거부한다(받을 때 §2.2, 고칠 때 §3.6).
+**허용 이름(정확한 목록, glob 아님)**: 루트 `README.md`·`modules.yaml`·`.github/**`(선택 CI), `<p>/_common/{layers,components}.md`, `<p>/<m>/{explore,deep,SKILL,analyzer}.md`, `<p>/<m>/references/<ID>.md`(`^[A-Z]+-\d{3}(-\d{2})?\.md$`), `<p>/<m>/evals/<case>/case.yaml`, `<p>/<m>/evals/<case>/files/*.{log,md,json}`. 그 밖의 이름, `CLAUDE.md`·`AGENTS.md`·`.claude/`(Claude Code가 자동으로 읽는 이름), 심볼릭 링크, 실행 비트는 거부한다(받을 때 §2.2, 고칠 때 §3.6).
 
 ### 1.3 modules.yaml
 

@@ -37,7 +37,7 @@ STREAM_FIXTURE = REPO / "tests" / "fixtures" / "module-arms" / "stream-2.1.318.j
 ALLOWED = [re.compile(p) for p in (
     r"README\.md", r"modules\.yaml", r"\.github/.+",
     r"[a-z]+/_common/(layers|components)\.md",
-    r"[a-z]+/[a-z]+/(explore|SKILL|analyzer)\.md",
+    r"[a-z]+/[a-z]+/(explore|deep|SKILL|analyzer)\.md",
     r"[a-z]+/[a-z]+/references/[A-Z]+-\d{3}(-\d{2})?\.md",
     r"[a-z]+/[a-z]+/evals/[a-z0-9][a-z0-9-]{2,60}/case\.yaml",
     r"[a-z]+/[a-z]+/evals/[a-z0-9][a-z0-9-]{2,60}/files/[^/]+\.(log|md|json)",
@@ -60,8 +60,9 @@ LAYER_NAMES = ("관리 데몬", "D-Bus", "ofonod", "벤더 RIL(<데몬>)", "모�
 OFONO_MODULES = ("data", "sim", "network", "call", "sms", "ims", "modem")
 # oFono 문서 바이트 목표(C1D §2.0, R24). skillcheck.CAPS(받을 때 상한)보다 낮다. Android 표는 test_module_templates_android
 # C1D 보정 §2.2(새 값)
+# deep.md(정밀 탐색, `--deep`일 때만 읽는다)는 아직 목표가 없어 받을 때 상한(skillcheck.CAPS)과 같다
 BUDGETS = {"_common/layers.md": 3100, "_common/components.md": 3800, "explore.md": 2400, "SKILL.md": 2000,
-           "modem/SKILL.md": 1024, "analyzer.md": 1150, "references": 1300,
+           "modem/SKILL.md": 1024, "analyzer.md": 1150, "references": 1300, "deep.md": 16384,
            "data/SKILL.md": 2400, "data/explore.md": 2800, "data/references/DATA-001.md": 1400}
 # 한 run with arm 모듈 문서 합 = 그 run이 읽는 파일 상한의 합(C1D 보정 §2.3, C-F6)
 COMMON_BUDGET = 6900
@@ -282,6 +283,13 @@ def test_doc_budgets():
         if mod != "modem":                     # also run = 증상 모듈 deep + 모뎀 SKILL
             assert deep + modem_skill <= ALSO_RUN_BUDGET, (mod, deep + modem_skill)
         assert common + (root / mod / "explore.md").stat().st_size <= EXPLORE_RUN_BUDGET, mod
+
+
+def test_deep_docs_present():
+    """정밀 탐색(`module --for explore --deep`): 두 플랫폼 14 모듈(모듈 이름은 같은 7개) 모두 `deep.md`가 있다.
+    상한·허용 이름·지위 문장·FORBIDDEN·위험 지시(test_skillcheck)·플랫폼 섞임은 다른 문서와 같은 시험이 본다."""
+    missing = [f"{p}/{m}" for p in ("ofono", "android") for m in OFONO_MODULES if not (TEMPLATES / p / m / "deep.md").is_file()]
+    assert missing == []
 
 
 @needs_module_eval

@@ -58,7 +58,7 @@ telephony-triage-plugin/                 # 개발 레포 루트
 ├── DRAFT_NOTES.md                       # 사외 초안 상태 파일(≤8KB): 진행 상태·남은 일·막힌 것·결정 (15-local-draft.md)
 ├── docs/history/                        # 아카이브(읽지 않음): draft-notes-<날짜>.md(Phase별 상세), CHANGES.md(문서 세트 변경 이력), REVIEW-10/11.md
 ├── tools/list_site_todos.py             # TODO(SITE:S<n>) 목록 추출
-├── templates/module-skills/            # 모듈 스킬 레포 템플릿(사내 GHE 새 레포로 옮긴다): README.md·modules.yaml(schema 2, 모듈 필터)·<p>/_common·<p>/<모듈>(explore.md·SKILL.md·analyzer.md·references·evals)
+├── templates/module-skills/            # 모듈 스킬 레포 템플릿(사내 GHE 새 레포로 옮긴다): README.md·modules.yaml(schema 2, 모듈 필터)·<p>/_common·<p>/<모듈>(explore.md·deep.md·SKILL.md·analyzer.md·references·evals)
 ├── tools/offline_eval.py                # 라벨셋(과거 Jira + 로그 + 정답 원인)으로 analyze --dry-run 1위 정확도·오탐률 측정 (15-local-draft.md §15.5 S-5)
 ├── docs/design/                         # 설계 문서 (이 파일 포함. 지도 README.md, 원칙 12-principles.md. 배포 대상 아님)
 ├── docs/site/                           # [사내 전용, SITE_PATHS] 확인 근거 (14-site.md §14.3)

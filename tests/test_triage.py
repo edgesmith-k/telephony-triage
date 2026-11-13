@@ -539,7 +539,7 @@ MODULE_SKILLS_NEEDLES = ("triage.py module", "--for deep", "--for explore", "`re
 def _check_module_skills_md(path):
     """B2 §10.2: 5-1·5-2 동의 뒤 절차(새 문서, 4KB). 런타임 중립 — 도구 이름·플러그인 변수 없이 쓴다(OpenCode도 읽는다)."""
     text = path.read_text(encoding="utf-8")
-    assert len(text.encode("utf-8")) <= 4096
+    assert len(text.encode("utf-8")) <= 4539      # 정밀 탐색(`--deep`) 절 뒤(11/14). 그 전 4,096B(4KB)
     for needle in MODULE_SKILLS_NEEDLES:
         assert needle in text, needle
     for bad in ("Read 도구", "AskUserQuestion", "Bash", "Task 도구", "${CLAUDE_PLUGIN_ROOT}"):
