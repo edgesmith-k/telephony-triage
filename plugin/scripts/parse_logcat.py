@@ -936,6 +936,8 @@ MASK_COPY_INDEX = "index.json"
 
 
 def _unique_name(name: str, used: set) -> str:
+    if name.casefold() == "head" or name.casefold().startswith(".git"):   # git이 저장소 파일로 읽는 이름(`HEAD`·`.git*`)은 피한다
+        name = "_" + name
     base, n = name, 1
     while name in used or name == MASK_COPY_INDEX:
         n += 1

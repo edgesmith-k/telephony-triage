@@ -1187,3 +1187,20 @@ def test_mask_copy_rerun_removes_only_previously_managed_copies():
     os.symlink(tmp / "input.log", out / "other.log")
     assert _run(["mask-copy", str(a), "--out", str(out)])[0] == 0
     assert (out / "other.log").is_symlink() and (tmp / "input.log").is_file() and first != (out / "input.log").read_text(encoding="utf-8")
+
+
+def test_mask_copy_renames_git_names():
+    """OC-C: 사본 이름이 `HEAD`(대소문자 무시)·`.git…`이면 `_`를 붙인다 — 다른 레포의 `.git/HEAD`를 사본으로 뜨면 작업 루트에 bare 모양
+    폴더가 생긴다. 이미 있는 이름과 겹치면 기존 `-n` 규칙."""
+    tmp = _tmp()
+    srcs = []
+    for i, name in enumerate(["HEAD", ".git", ".GitConfig", "_HEAD", "logcat.txt", "my.git.log"]):
+        (tmp / str(i)).mkdir()
+        srcs.append(tmp / str(i) / name)
+        srcs[-1].write_text("x\n", encoding="utf-8")
+    code, data, err = _run(["mask-copy", *map(str, srcs), "--out", str(tmp / "m")])
+    assert code == 0, err
+    assert [f["name"] for f in data["files"]] == ["_HEAD", "_.git", "_.GitConfig", "_HEAD-2", "logcat.txt", "my.git.log"]
+    assert sorted(p.name for p in (tmp / "m").iterdir()) == sorted([f["name"] for f in data["files"]] + ["index.json"])
+    (tmp / "1" / ".git").rename(tmp / "1" / "Head")                       # 대소문자 무시
+    assert _run(["mask-copy", str(tmp / "1" / "Head"), "--out", str(tmp / "m2")])[1]["files"][0]["name"] == "_Head"
