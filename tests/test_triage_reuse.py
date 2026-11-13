@@ -156,13 +156,18 @@ def test_platform_recent_code_roots_does_not_invalidate_but_code_profiles_does()
     cfg = ws.home / "config.yaml"
     data = yaml.safe_load(cfg.read_text(encoding="utf-8"))
     data["code_profiles"] = [{"name": "android16-main", "platform_version": "16", "roots": {"aosp": str(SRC)}}]
-    data["platforms"] = {"ofono": {"recent_code_roots": []}}
+    data["platforms"] = {"ofono": {"recent_code_roots": [],
+                                   "code_profiles": [{"name": "o2", "platform_version": "2", "roots": {"ofono": "/o2"}}]}}
     cfg.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
     _run(ws)
     data["platforms"]["ofono"]["recent_code_roots"] = [{"roots": {"ofono": "/tmp/somewhere"}, "used_on": "2026-10-01"}]
     cfg.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
     assert _run(ws)["reuse"] == {"hit": True, "run": 1}
     data["code_profiles"][0]["roots"]["aosp"] = str(SRC.parent / "android17")   # 프로필 이름으로 고른 작업은 경로가 바뀌면 다시 분석
+    cfg.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    changed = _run(ws)
+    assert changed["reuse"]["hit"] is False and changed["reuse"]["changed"] == ["config"]
+    data["platforms"]["ofono"]["code_profiles"][0]["roots"]["ofono"] = "/o3"   # 플랫폼 아래 code_profiles도 지문에 든다
     cfg.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
     changed = _run(ws)
     assert changed["reuse"]["hit"] is False and changed["reuse"]["changed"] == ["config"]
