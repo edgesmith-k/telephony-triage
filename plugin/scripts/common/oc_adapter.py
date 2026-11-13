@@ -227,6 +227,14 @@ def odd_path_char(path: str) -> str | None:
     return None
 
 
+_UNSHOWN = re.compile("[\x00-\x1f\x7f-\x9f\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")   # Cc·방향·폭 없는 글자
+
+
+def _shown(text: str) -> str:
+    """거부 사유에 싣는 모델 입력: 제어·방향 글자를 `\\xNN`·`\\uNNNN`으로 보인다(사유 줄을 끊거나 뒤집지 못하게)."""
+    return _UNSHOWN.sub(lambda m: f"\\x{ord(m[0]):02x}" if ord(m[0]) < 0x100 else f"\\u{ord(m[0]):04x}", text)
+
+
 def patch_paths(text: str) -> list[str]:
     """apply_patch 본문이 건드리는 경로(Add·Update·Delete·Move to), 1.19.5 파서(`lt`·`pa`)와 같은 규칙(JS `.trim()`).
     Begin/End 표시가 없거나 hunk가 없거나 경로에 보이지 않는 글자가 있으면 PatchError."""
@@ -641,7 +649,7 @@ def _config_call(rest: list[str]) -> tuple[str | None, str | None]:
     except SystemExit as exc:
         if exc.code == 0:
             return None, None
-        last = (err.getvalue().strip().splitlines() or [""])[-1][:300]     # argparse 오류 줄(모델이 인자를 고칠 수 있게)
+        last = _shown((err.getvalue().strip().splitlines() or [""])[-1][:300])     # argparse 오류 줄(모델이 인자를 고칠 수 있게)
         return f"config.py 인자를 읽지 못해 거부한다({last})" if last else "config.py 인자를 읽지 못해 거부한다", None
     if (a.cmd in CONFIG_SAFE_CMDS or (a.cmd == "rename-legacy" and not a.apply)
             or (a.cmd == "sync-scripts-path" and not hasattr(a, "plugin_root"))
@@ -659,10 +667,10 @@ def _check_python(words: list[str]) -> tuple[str | None, str | None]:
         return "python은 플러그인 스크립트 경로를 첫 인자로만 부른다(-c·-m·옵션·대화형 금지)", None
     script = words[1]
     if not os.path.isabs(script):
-        return f"스크립트 `{script}`는 절대 경로로 부른다", None
+        return f"스크립트 `{_shown(script)}`는 절대 경로로 부른다", None
     real, root = os.path.realpath(script), os.path.realpath(SCRIPTS)
     if not real.startswith(root + os.sep) or not real.endswith(".py"):
-        return f"`{script}`는 플러그인 스크립트({root}/…py)가 아니다", None
+        return f"`{_shown(script)}`는 플러그인 스크립트({root}/…py)가 아니다", None
     name, rest = os.path.basename(real).casefold(), words[2:]     # 대소문자 무시 파일 시스템의 `Config.py`도 같은 스크립트
     if any(len(w.split("=")[0]) >= 3 and "--plugin-root".startswith(w.split("=")[0]) for w in rest):
         return "플러그인 스크립트에 --plugin-root를 주지 않는다(다른 폴더의 site-defaults·스크립트를 읽고 실행한다)", None
@@ -822,13 +830,15 @@ def _git_meta(path: str, root: str | None = None) -> str | None:
         if {".git", ".githooks"} & set(parts) or parts[-1] == "head":
             return why
     if root:
-        base, d = os.path.normcase(root), _real(path)
-        while os.path.normcase(d) == base or os.path.normcase(d).startswith(base.rstrip(os.sep) + os.sep):
-            if os.path.isfile(os.path.join(d, "HEAD")):
-                return f"git 디렉터리 안의 경로({d}에 HEAD가 있다 — git이 그 설정·hook을 명령으로 실행한다)"
-            if os.path.dirname(d) == d:
-                break
-            d = os.path.dirname(d)
+        base = os.path.normcase(root)
+        # 논리 경로로도 오른다(`fw.git/hooks/x -> .repo/repo/hooks/x`처럼 실제 경로만 git 디렉터리 밖인 링크). 끊긴 링크 HEAD도 본다
+        for d in (os.path.normpath(path), _real(path)):
+            while os.path.normcase(d) == base or os.path.normcase(d).startswith(base.rstrip(os.sep) + os.sep):
+                if os.path.lexists(os.path.join(d, "HEAD")):
+                    return f"git 디렉터리 안의 경로({d}에 HEAD가 있다 — git이 그 설정·hook을 명령으로 실행한다)"
+                if os.path.dirname(d) == d:
+                    break
+                d = os.path.dirname(d)
     return None
 
 

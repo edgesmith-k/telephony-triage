@@ -780,6 +780,27 @@ def test_config_call_refuses_foreign_config_module(monkeypatch):
         oc._config_call(["show"])
 
 
+@pytest.mark.usefixtures("plugin_config")
+def test_refusal_escapes_control_chars():
+    """리뷰 10b O2: 거부 사유에 싣는 argparse 오류 줄·스크립트 경로의 제어·방향 글자는 `\\xNN`·`\\uNNNN`으로."""
+    why, _ = oc._config_call(["show", "a\x1b[2Jb\u202ec"])
+    assert "a\\x1b[2Jb\\u202ec" in why and "\x1b" not in why and "\u202e" not in why, why
+    assert oc._check_python(["python3", "x\u2066.py\n"])[0].startswith("스크립트 `x\\u2066.py\\x0a`")
+
+
+@POSIX
+@pytest.mark.usefixtures("plugin_config")
+def test_config_case_and_output_under_bare_repo(tmp_path):
+    """리뷰 10b T1: 대소문자만 다른 `Config.py`도 config 쓰기(직접 실행), `HEAD`가 있는 `m.git` 아래 스크립트 출력은 거부."""
+    v = oc.bash_allowlist(f'python3 "{oc.SCRIPTS}/Config.py" set k v', str(_dir()), str(_dir()), {})
+    assert v.deny is None and v.flow == "사용자 설정 변경(config.py set)", v
+    proj, root, env = _work_tree(tmp_path)
+    (root / "K-1" / "m.git").mkdir()
+    (root / "K-1" / "m.git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    v = oc.bash_allowlist(_py("mask_pii.py", "in.txt", "--out", f"{root}/K-1/m.git/x"), str(proj), str(proj), env)
+    assert v.deny and "git 디렉터리 안의 경로" in v.deny, v
+
+
 @POSIX
 def test_config_call_output_channel_is_one_json():
     """파서 출력(--help)은 버린다: before의 stdout은 JSON 하나."""
@@ -971,6 +992,29 @@ def test_writes_inside_git_dir_without_dot_git_name_refused(tmp_path, monkeypatc
         out = oc.before({"tool": "write", "args": {"filePath": str(target), "content": "x"}, "directory": str(proj)},
                         env=env, servers=[])
         assert out["decision"] == "allow", (target, out)
+
+
+def test_git_dir_found_through_links(tmp_path, monkeypatch):
+    """리뷰 10b O1: 실제 경로가 git 디렉터리 밖인 링크(repo 도구의 `fw.git/hooks/commit-msg -> .repo/repo/hooks/commit-msg`)와
+    `HEAD`가 끊긴 링크인 폴더 아래 쓰기도 거부(논리 경로로도 오르고 lexists로 본다)."""
+    proj, root, env = _work_tree(tmp_path)
+    monkeypatch.setattr(oc, "run_guard", lambda *a, **k: oc.HookRun("allow", "", []))
+    aosp = root / "aosp"
+    hook = aosp / ".repo" / "repo" / "hooks" / "commit-msg"
+    hook.parent.mkdir(parents=True)
+    hook.write_text("#!/bin/sh\n", encoding="utf-8")
+    (aosp / "fw.git" / "hooks").mkdir(parents=True)
+    (aosp / "fw.git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    (aosp / "d.git").mkdir()
+    try:
+        (aosp / "fw.git" / "hooks" / "commit-msg").symlink_to(hook)
+        (aosp / "d.git" / "HEAD").symlink_to("refs/heads/main")
+    except OSError:
+        pytest.skip("심볼릭 링크를 만들 수 없는 환경")
+    for target in (aosp / "fw.git" / "hooks" / "commit-msg", aosp / "d.git" / "config"):
+        out = oc.before({"tool": "write", "args": {"filePath": str(target), "content": "x"}, "directory": str(proj)},
+                        env=env, servers=[])
+        assert out["decision"] == "deny" and "git 디렉터리 안의 경로" in out["reason"], (target, out)
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="통합 회귀는 리눅스에서(경로·git)")
