@@ -260,7 +260,7 @@ def test_doctor_subcommand(env):
     assert r.returncode == 0, r.stdout
     rows = json.loads(r.stdout)["rows"]
     assert [x["check"] for x in rows] == ["env", "project-git", "instructions", "integrity", "opencode-version",
-                                          "opencode-config", "config-doctor", "gateway-key"]
+                                          "opencode-config", "config-doctor", "git", "gateway-key"]
     # 시험 설치의 opencode.json은 {}라 게이트웨이 행은 읽지 못함 warn 하나(막지 않는다)
     assert all(x["status"] == "ok" for x in rows[:-1]) and rows[-1]["status"] == "warn"
 
@@ -765,6 +765,43 @@ def test_child_env_drops_stale_lock_owner(env, monkeypatch):
     mod = _load("tt_oc", TTOC)
     monkeypatch.setenv("TT_LOCK_OWNER", "stale")
     assert "TT_LOCK_OWNER" not in mod.child_env({"plugin_root": "/p", "work_root": "/w"})
+
+
+def test_git_safe_env_for_children_doctor_row_and_publish(env, monkeypatch):
+    """OC-C (1)(3): OpenCode 자식·publish의 db_pr에 GIT_SAFE(oc_adapter와 같은 값)를 사용자 GIT_CONFIG_COUNT 항목 뒤에 붙인다. 깨진
+    사용자 값은 그대로 두고(git이 거부) doctor `git` 행이 fail, git 2.38 미만은 warn(시작은 막지 않는다)."""
+    mod = _load("tt_oc", TTOC)
+    from common import oc_adapter
+    assert mod.GIT_SAFE == oc_adapter.GIT_SAFE
+    meta = {"plugin_root": "/p", "work_root": "/w"}
+    for k in [k for k in os.environ if k.startswith("GIT_CONFIG")]:
+        monkeypatch.delenv(k)
+    child = mod.child_env(meta)
+    assert not oc_adapter.git_safe_missing(child) and child["GIT_CONFIG_COUNT"] == "2"
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "core.pager")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "cat")
+    child = mod.child_env(meta)
+    assert child["GIT_CONFIG_COUNT"] == "3" and child["GIT_CONFIG_VALUE_0"] == "cat" and child["GIT_CONFIG_KEY_1"] == "safe.bareRepository"
+    assert not oc_adapter.git_safe_missing(child)
+    for broken in ({"GIT_CONFIG_COUNT": "x"}, {"GIT_CONFIG_COUNT": "2"}):          # 숫자 아님 / KEY_1 없음
+        for k, v in broken.items():
+            monkeypatch.setenv(k, v)
+        child = mod.child_env(meta)
+        assert child["GIT_CONFIG_COUNT"] == broken["GIT_CONFIG_COUNT"] and oc_adapter.git_safe_missing(child)
+        assert mod.git_row(child)["status"] == "fail"
+    for k in ("GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"):
+        monkeypatch.delenv(k)
+    assert not oc_adapter.git_safe_missing(mod._publish_env(env["work"], "o" * 32, "/p"))
+    # git 버전: 가짜 git으로 2.37(warn)·2.38(ok)
+    bin_dir = env["tmp"] / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "git"
+    for ver, want in (("2.37.1", "warn"), ("2.38.0.windows.1", "ok"), ("2.43.0", "ok")):
+        fake.write_text(f"#!/bin/sh\necho 'git version {ver}'\n", encoding="utf-8")
+        fake.chmod(0o755)
+        row = mod.git_row({**mod.child_env(meta), "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+        assert row["check"] == "git" and row["status"] == want and ver.split(".windows")[0] in row["detail"], (ver, row)
 
 
 def test_finish_reason_length_step_limit_and_zero_tokens(env):
