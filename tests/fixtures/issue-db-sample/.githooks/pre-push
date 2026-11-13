@@ -22,6 +22,7 @@ TT_HOOK_HOME="${TELEPHONY_TRIAGE_HOME:-$HOME/.telephony-triage}"
 export TT_PUSH_REFS TT_HOOK_HOME
 
 python3 - "$@" <<'EOF'
+import sys; sys.path[:] = [p for p in sys.path if p not in ("", ".")]   # cwd(작업 트리)의 모듈을 import하지 않는다
 import glob, json, os, subprocess, sys
 
 PREFIX = "[telephony-triage pre-push]"

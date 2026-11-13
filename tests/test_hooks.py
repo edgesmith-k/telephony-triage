@@ -205,6 +205,27 @@ def test_git_hooks_name_missing_pyyaml_instead_of_misleading_errors():
     assert proc.returncode != 0 and "PyYAML이 없어" in proc.stderr
 
 
+def test_git_hooks_do_not_import_modules_from_the_work_tree():
+    """hook의 inline python(`python3 - <<EOF`)은 cwd(작업 트리 top)를 import 경로에 두지 않는다 — 작업 트리에 심은 무시된 가짜
+    `yaml/`(진짜를 다시 내보내 판정은 그대로)이 커밋·push 때 돌지 않는다 (리뷰 6 F-P0 고침 2)."""
+    ws = Workspace()
+    marker = ws.base / "PWNED"
+    branch_with_change(ws, "review/data-2026-10", "CONTRIBUTING.md", "직접 편집\n")
+    fake = ws.clone / "yaml"
+    fake.mkdir()
+    (fake / ".gitignore").write_text("*\n", encoding="utf-8")
+    (fake / "__init__.py").write_text(
+        f"import os, sys\nopen({str(marker)!r}, 'a').close()\n"
+        "here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))\n"
+        "sys.path[:] = [p for p in sys.path if os.path.abspath(p or os.curdir) != here]\n"
+        "del sys.modules[__name__]\nimport yaml\n", encoding="utf-8")
+    proc = gitp(ws.clone, "commit", "-qm", "직접 편집", env=ws.hook_env())
+    assert proc.returncode == 0 and not marker.exists(), proc.stderr
+    proc = gitp(ws.clone, "push", "-q", "origin", "HEAD:refs/heads/review/data-2026-10",
+                env=ws.hook_env(TT_PUBLISH_TOKEN="manual"))
+    assert proc.returncode == 0 and not marker.exists(), proc.stderr
+
+
 # -- Claude hook: Bash ---------------------------------------------------------------------------
 
 
