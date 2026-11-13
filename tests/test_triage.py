@@ -1826,3 +1826,17 @@ def test_cause_unconfirmed_run_shows_partial_match_and_code_check(tmp_path):
     assert "- 배제 조건 검증 불가: DATA-001/no-setup-data-call-request의 must_not_match 태그 RILJ 줄이 이 로그에 0줄" in report
     assert any(m.startswith("배제 조건 검증 불가") for m in done.get("must_show") or []), done.get("must_show")
     ws.json("triage.py", ["release", "MOCK-1001"])
+
+
+def test_analyze_surfaces_mask_copy_nul_warning(tmp_path):
+    """V2 범위 밖 2: NUL 든 줄을 비운 mask-copy 경고가 analyze 출력 warnings에 보인다(스크립트 stderr는 사용자에게 안 간다)."""
+    log = tmp_path / "radio.log"
+    log.write_bytes(b"09-26 13:00:00.000  1500  1510 I RILJ    : [PHONE0] x\0y\n"
+                    b"09-26 13:00:01.000  1500  1510 E RILJ    : [PHONE0] < SETUP_DATA_CALL error 2 failed\n")
+    meta = tmp_path / "m.json"
+    meta.write_text(json.dumps({"key": "MOCK-9012", "occurred_at": "2026-09-26T13:00:00+09:00", "summary": "data"}), encoding="utf-8")
+    out = tmp_path / "job"
+    analysis = run_json("triage.py", ["run", "MOCK-9012", "--offline-db", SAMPLE, "--out", out, "--logs", log, "--issue-meta", meta,
+                                      "--tz", "Asia/Seoul", "--year", "2026"])
+    assert "mask-copy-nul" in json.dumps(analysis.get("warnings") or [], ensure_ascii=False), analysis.get("warnings")
+    assert (out / "logs-masked" / "radio.log").read_text(encoding="utf-8").split("\n")[0] == "<REDACTED:NUL>"

@@ -1151,6 +1151,33 @@ def test_mask_copy_masks_keeps_line_numbers_and_skips_big():
     assert _run(["mask-copy", str(a), "--out", str(out), "--max-bytes", "0"])[0] == 2
 
 
+def test_mask_copy_and_cut_blank_nul_lines():
+    """V2 범위 밖 2: NUL 든 줄은 mask-copy·cut 사본(모델이 읽는다)에서 `<REDACTED:NUL>` 한 줄이 된다(줄 수 그대로). 거부하지 않고
+    경고(`mask-copy-nul`·`cut-nul`, iconv 안내)를 낸다. BOM 없는 UTF-16은 모든 줄이 자리표가 된다. 같은 이름 옛 사본은 덮어쓴다."""
+    head = "09-26 13:00:0{}.000  1500  1510 I RILJ    : "
+    tmp = _tmp()
+    log = tmp / "pad.log"
+    log.write_text(head.format(0) + "imsi=" + IMSI_A + "\n" + head.format(1) + "ok\n", encoding="utf-8")
+    assert _run(["mask-copy", str(log), "--out", str(tmp / "m")])[0] == 0
+    log.write_bytes((head.format(0) + "imsi=" + IMSI_A[:7] + "\0" + IMSI_A[7:] + " password=hunter2\0xyzQ\n"
+                     + head.format(1) + "ok imsi=" + IMSI_B + "\n").encode())
+    code, _, err = _run(["mask-copy", str(log), "--out", str(tmp / "m")])
+    lines = (tmp / "m" / "pad.log").read_text(encoding="utf-8").split("\n")
+    assert code == 0 and "경고[mask-copy-nul]" in err and "iconv" in err, err
+    assert lines[0] == "<REDACTED:NUL>" and "<IMSI#" in lines[1] and len(lines) == 3, lines
+    cut = tmp / "cut.log"
+    code, _, err = _run(["cut", str(log), "--around", "2026-09-26T13:00:00+00:00", "--out", str(cut), "--tz", "UTC",
+                         "--year", "2026"])
+    text = cut.read_text(encoding="utf-8")
+    assert code == 0 and "경고[cut-nul]" in err, err
+    assert "<REDACTED:NUL>" in text and IMSI_A[7:] not in text and "xyzQ" not in text and IMSI_B not in text, text
+    u16 = tmp / "u16.log"
+    u16.write_bytes((head.format(0) + "imsi=" + IMSI_A + "\n" + head.format(1) + "ok\n").encode("utf-16-le"))
+    code, _, err = _run(["mask-copy", str(u16), "--out", str(tmp / "m2")])
+    assert code == 0 and "경고[mask-copy-nul]" in err and "NUL 든 줄 2개(전체 2줄 중)" in err, err   # 끝 NUL 조각은 줄이 아니다
+    assert (tmp / "m2" / "u16.log").read_text(encoding="utf-8").split("\n") == ["<REDACTED:NUL>"] * 2 + [""]
+
+
 def test_mask_copy_rerun_removes_only_previously_managed_copies():
     """코덱스 리뷰 R3: 다시 실행하면 이전 index.json이 만든 사본만 지운다 — 상한 초과로 건너뛴 파일·이름이 바뀐 입력의 옛 사본이
     남지 않고, 사용자의 무관한 파일·index 없는 폴더의 파일은 건드리지 않는다. 실패한 재실행은 옛 사본·index를 그대로 둔다."""

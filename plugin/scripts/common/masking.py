@@ -27,7 +27,10 @@
 - **토큰 모양(`Rule.fmt`)**: 기본 `<종류#n>`. M1 덤프 줄은 `<HEXDUMP nB>`(번호 없음), M8 payload는 `<APDU#n>[nB]`,
   M11 호스트는 `host<n>`(journal 형식 정규식의 호스트 칸에 그대로 맞아 마스킹한 줄도 해석된다).
 - **남은 식별자(`residual`)·가리기(`redact`)**: 로그 마스커의 `find()` 그대로(다른 탐지기 없음), 줄 단위.
-  그래서 `residual(mask(x)) == {}`가 구조상 성립한다.
+  그래도 `residual(mask(x)) == {}`가 늘 성립하지는 않는다: `mask()`가 넣은 토큰이 줄을 나눠 `^…$` 덤프 규칙이
+  새로 맞을 수 있다(`rsp: 90 00 01 02 +8210…` → `rsp: 90 00 01 02 <MSISDN#1>`). `add-fixture`는 줄 단위로 한 번 더 가린다.
+- **NUL(`blank_nul_lines`)**: NUL이 든 줄은 통째로 `NUL_LINE` 한 줄로 바꾼다(줄 수 그대로, `add-fixture`·mask-copy·cut).
+  NUL 자리를 공백·지움 어느 꼴로 보든 값이 갈려 한쪽만 가려질 수 있어서다(BOM 없는 UTF-16·값 속 NUL).
 - **갈린 덤프 조각(`SPLIT_KINDS`)**: oFono 덤프 함수(site-defaults `dump_func`, `<이름>() ` 뒤가 조각)가 IMSI·ICCID 값을 두 줄에 가르면(`common.dumpjoin`으로 묶음)
   키 있는 IMSI·ICCID 규칙만 이은 글에 돌려 조각 경계를 넘는 맞음을 줄별 강제 구간(`forced`)으로 되돌린다. 토큰은 전체
   값으로 한 번 만들고(개수 1회) 조각마다 같은 토큰을 쓰며, 조각 글자도 번호 표에 그 토큰으로 넣는다(`mask_value`).
@@ -244,6 +247,7 @@ _M11_STAMPS = (
     r"\w{3} [ \d]\d \d\d:\d\d:\d\d(?:\.\d+)?",                                            # mask2.py:63 (RFC3164·BusyBox)
     r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})?",          # journal.py ISO
 )
+LINE_STAMPS = _M11_STAMPS     # 줄 머리 시각(syslog·journal) — `add-fixture` 둘째 패스의 reserved도 쓴다
 
 # 맨 앞: M11 호스트 칸(줄 처음 고정이라 다른 규칙이 구간을 나누기 전에) → M1 덤프 줄(한 줄이 토큰 하나)
 _M_FIRST: tuple[Rule, ...] = (
@@ -507,13 +511,13 @@ class Masker:  # noqa: F811  # 위의 타입 별칭 Masker를 이 클래스가 �
     def __call__(self, text: str) -> str:
         return self.mask(text)
 
-    def mask(self, text: str, forced=None) -> str:
+    def mask(self, text: str, forced=None, reserved=()) -> str:
         """`forced`: 갈린 덤프 조각 구간 `[(start, end, kind, 전체 값, 첫 조각?)]`(`forced_lines`·`forced_records`).
-        먼저 놓고, 겹치는 일반 규칙 구간은 보지 않는다."""
+        먼저 놓고, 겹치는 일반 규칙 구간은 보지 않는다. `reserved` 구간 `[(start, end)]`은 규칙이 보지 않고 그대로 둔다."""
         if not text:
             return text
         fixed = [f for f in (forced or ()) if 0 <= f[0] < f[1] <= len(text)]
-        spans = [(*sp, None) for sp in self._spans_fmt(text, [(f[0], f[1]) for f in fixed])]
+        spans = [(*sp, None) for sp in self._spans_fmt(text, [(f[0], f[1]) for f in fixed] + list(reserved))]
         spans += [(a, b, kind, value, None, first) for a, b, kind, value, first in fixed]
         out, pos = [], 0
         for start, end, kind, value, fmt, first in sorted(spans, key=lambda sp: sp[0]):  # 나온 순서대로 번호를 준다
@@ -682,7 +686,8 @@ def mask_records(masker, recs: list[dict]) -> list[dict]:
 def residual(text: str, allow_patterns: Iterable[str] = (), *, log_lines: bool = True) -> dict[str, int]:
     """남은 식별자 `{종류: 개수}`: 그 마스커의 `find()`를 줄마다 센 것 그대로(다른 탐지기 없음). 값은 내지 않는다.
 
-    마스커가 줄 단위로 일하므로(`^` 규칙) 줄마다 본다. 그래서 `residual(mask(line)) == {}`가 구조상 성립한다.
+    마스커가 줄 단위로 일하므로(`^` 규칙) 줄마다 본다. 토큰이 줄을 나눠 덤프 규칙이 새로 맞을 수 있어
+    `residual(mask(line)) == {}`가 늘 성립하지는 않는다(모듈 머리말).
     갈린 덤프 조각의 키 있는 IMSI·ICCID는 이은 값 하나로 센다(그 조각 구간은 줄 단위로 다시 세지 않는다)."""
     masker = new_masker(allow_patterns=allow_patterns, log_lines=log_lines)
     lines = (text or "").split("\n")
@@ -724,6 +729,20 @@ def redact(text: str, allow_patterns: Iterable[str] = (), *, log_lines: bool = T
     if not changed:
         return text, {}
     return "\n".join(out), dict(sorted(counts.items()))
+
+
+NUL_LINE = "<REDACTED:NUL>"   # NUL 든 줄 자리: `_PROTECTED`라 다시 가리지 않고 관문(`--check`)에도 걸리지 않는다
+NUL_HELP = "BOM 없는 UTF-16 로그면 `iconv -f UTF-16LE -t UTF-8 <원본> > <새 파일>`(BE면 UTF-16BE)로 바꾼 뒤 다시 한다"
+
+
+def blank_nul_lines(lines: list[str]) -> tuple[list[str], int]:
+    """NUL이 든 줄을 `NUL_LINE`으로 바꾼다(줄 수 그대로) → (줄 목록, 바꾼 줄 수)."""
+    lines = lines[:-1] + [""] if lines[-1:] == ["\0"] else lines   # BOM 없는 UTF-16LE 끝(`\n` 뒤 NUL 조각)은 줄로 세지 않는다
+    return [NUL_LINE if "\0" in ln else ln for ln in lines], sum("\0" in ln for ln in lines)
+
+
+def nul_warning(n: int, total: int, where: str) -> str:
+    return f"{where}: NUL 든 줄 {n}개(전체 {total}줄 중)를 {NUL_LINE}로 비웠다 — {NUL_HELP}"
 
 
 URL_USERINFO = re.compile(r"://[^/@\s]+@")

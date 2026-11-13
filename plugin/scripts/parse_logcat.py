@@ -965,10 +965,14 @@ def run_mask_copy(args) -> dict:
     for p in paths:
         size = p.stat().st_size
         (todo if size <= args.max_bytes else skipped).append((p, size))
-    texts = {}
+    texts, warnings = {}, []
     for p, _ in todo:
         with logtime.open_log(p) as fh:
-            texts[p] = fh.read()
+            lines, nul = masking.blank_nul_lines(fh.read().split("\n"))   # NUL 든 줄은 통째로 비운다(줄 수 그대로)
+        texts[p] = "\n".join(lines)
+        if nul:
+            warnings.append({"code": "mask-copy-nul", "message": masking.nul_warning(
+                nul, len(lines) - (lines[-1] == ""), p.name)})
     masker = masking.new_masker("\n".join(texts.values()), allow, log_lines=True)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -990,7 +994,6 @@ def run_mask_copy(args) -> dict:
         os.utime(tmp / name, (st.st_atime, st.st_mtime))     # 연도 추정(file-mtime)이 사본에서도 같게 — analyze는 사본을 파싱한다
         files.append({"name": name, "path": str(out / name), "source": str(p), "bytes": size,
                       "lines": len(lines) - (1 if lines and lines[-1] == "" else 0), "skipped": False})
-    warnings = []
     for p, size in skipped:
         files.append({"name": p.name, "path": None, "source": str(p), "bytes": size, "lines": None, "skipped": True,
                       "reason": f"{size:,}B > --max-bytes {args.max_bytes:,}B"})
@@ -1133,10 +1136,13 @@ def run_cut(args, profile: platforms.PlatformProfile | None = None) -> dict:
         raise UsageError(str(exc)) from exc
     read_file = (profile or platforms.default()).spec.log.read_file
     lines = []  # (파일 순번, LogLine, 원문 줄)
+    nul = total = 0
     for index, path in enumerate(paths):
         # `read_file`과 같은 방식으로 줄을 센다(`splitlines`는 \x0c 등에서도 끊어 줄 번호가 어긋난다).
         with logtime.open_log(path) as fh:
             raw = [text.rstrip("\r\n") for text in fh]
+        raw, n = masking.blank_nul_lines(raw)    # NUL 든 줄은 통째로 비운다(mask-copy와 같다)
+        nul, total = nul + n, total + len(raw)
         parsed, _ = read_file(path, index, args.tz, args.year)
         lines += [(index, line, raw[line.line_no - 1]) for line in parsed]
     anchors, anchors_by, warnings, picked = _cut_anchors(args, lines)
@@ -1172,6 +1178,8 @@ def run_cut(args, profile: platforms.PlatformProfile | None = None) -> dict:
         for k, spans in masking.forced_lines(masker, [lines[j][2] for j in idx]).items():
             forced[idx[k]] = spans
     masked = [masker.mask(lines[j][2], forced.get(j)) for j in chosen]
+    if nul:
+        warnings.append({"code": "cut-nul", "message": masking.nul_warning(nul, total, "cut 입력")})
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(masked) + "\n", encoding="utf-8", newline="\n")

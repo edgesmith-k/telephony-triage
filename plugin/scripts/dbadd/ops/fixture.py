@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
-from common import masking, yamldoc, yamlio
+from common import logtime, masking, yamldoc, yamlio
 from common.fixtures import parse_name
 
 from ..core import FIXTURE_REF_KINDS, Reject
+
+# 줄 머리 시각: logcat(`logtime.STAMP`)과 syslog·journal(M11 호스트 칸 앞 시각)
+_LINE_STAMP = re.compile(r"(?m)^(?:" + logtime.STAMP + "|" + "|".join(masking.LINE_STAMPS) + ")")
 
 
 class FixtureOps:
@@ -23,10 +27,10 @@ class FixtureOps:
         src = Path(value)
         if src.is_absolute():
             if src.is_file():
-                return src.read_text(encoding="utf-8")
+                return src.read_text(encoding="utf-8-sig")     # BOM을 떼야 첫 줄 머리 규칙(syslog 호스트)이 맞는다
         else:
             if (self.plan_dir / src).is_file():
-                return (self.plan_dir / src).read_text(encoding="utf-8")
+                return (self.plan_dir / src).read_text(encoding="utf-8-sig")
             inside = (self.tree.root / src).resolve()
             root = self.tree.root.resolve()
             if inside != root and root in inside.parents:
@@ -39,18 +43,28 @@ class FixtureOps:
         type_id, name = self.fixture_names[i]
         try:
             text = self._fixture_source(i, op["path"])
-        except UnicodeDecodeError:
-            text = "\0"
-        if "\0" in text:    # 그대로 두면 traceback이거나, 쓴 fixture를 커밋 관문이 막는다
-            raise Reject("fixture-source", f"fixture 원본이 UTF-8 텍스트가 아닙니다(NUL 또는 다른 인코딩): {op['path']} "
-                         "— 원본을 `parse_logcat.py mask-copy`로 다시 만든 뒤 넣는다.", i)
+        except UnicodeDecodeError:     # 그대로 두면 traceback이다
+            raise Reject("fixture-source", f"fixture 원본이 UTF-8 텍스트가 아닙니다: {op['path']} — {masking.NUL_HELP}", i) from None
         if op["kind"] != "negative":
             self._cause_or_reject(i, op["for"])
+        lines, nul = masking.blank_nul_lines(text.split("\n"))     # NUL 든 줄은 통째로 비운다(줄 수 그대로)
+        total = len(lines) - (lines[-1] == "")
+        if nul * 2 > total:     # 절반 넘게 비면(BOM 없는 UTF-16 등) fixture로 쓸모가 없다
+            raise Reject("fixture-source", f"fixture 원본 {total}줄 중 {nul}줄에 NUL이 있습니다: {op['path']} — "
+                         f"{masking.NUL_HELP}", i)
+        if nul:
+            self.warnings.append(masking.nul_warning(nul, total, f"add-fixture {op['path']}"))
+        text = "\n".join(lines)
         # 커밋 관문(`mask_pii --check`)이 fixtures/*.log에 쓰는 로그 마스커·줄 나눔 그대로(줄 머리 규칙·갈린 덤프 조각)
         masker = masking.new_masker(existing_text=text, allow_patterns=self.allow, log_lines=True)
         masked = "\n".join(masking.mask_lines(masker, text.split("\n")))
-        # 그 위에 기본 마스커를 글 전체로 한 번 더: 줄 단위로는 다음 줄로 접힌 SIP Digest `nonce=`·`response=`가 문맥을 못 본다
-        masked = masking.new_masker(existing_text=masked, allow_patterns=self.allow).mask(masked)
+        # 그 위에 기본 마스커를 글 전체로 한 번 더: 줄 단위로는 다음 줄로 접힌 SIP Digest `nonce=`·`response=`가 문맥을 못 본다.
+        # 줄 머리 시각은 비워 둔다 — 아니면 줄 끝 키(`token:`·`password=`)가 다음 줄 시각을 값으로 잡는다
+        masked = masking.new_masker(existing_text=masked, allow_patterns=self.allow).mask(
+            masked, reserved=[m.span() for m in _LINE_STAMP.finditer(masked)])
+        # 줄 단위로 한 번 더: 앞 패스가 넣은 토큰이 줄을 나눠 덤프 규칙이 새로 맞는다(`rsp: 90 00 01 02 <MSISDN#1>`, 관문이 본다)
+        again = masking.new_masker(existing_text=masked, allow_patterns=self.allow, log_lines=True)
+        masked = "\n".join(masking.mask_lines(again, masked.split("\n")))
         fdir = self._type_dir_any(type_id) / "fixtures"
         self.tree.write(fdir / name, masked)
         fx = parse_name(name)

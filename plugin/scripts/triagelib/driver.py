@@ -605,6 +605,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         _, data, _ = self.run.call("3-mask", "parse_logcat.py",
                                    ["mask-copy", *logs, "--out", dest, "--rules", self.snap / "parser-rules"])
         files = (data or {}).get("files") or []
+        for w in (data or {}).get("warnings") or []:
+            if w.get("code") == "mask-copy-nul":
+                self.warn(f"mask-copy-nul: {w.get('message')}")
         targets, copies = list(logs), {}
         for f in files:
             if f.get("skipped"):

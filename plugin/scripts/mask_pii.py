@@ -82,7 +82,7 @@ def _scope_files(db: Path, changed: str | None, staged: bool) -> list[tuple[str,
             path = db / name
             if path.is_file():
                 out.append((name, path.read_bytes()))
-    return [(name, _without_nul(data.decode("utf-8", errors="replace"))) for name, data in out]
+    return [(name, _without_nul(data.decode("utf-8-sig", errors="replace"))) for name, data in out]
 
 
 def _without_nul(text: str) -> str:
@@ -105,7 +105,7 @@ def run_check(args, db: Path | None) -> dict:
             path = Path(name)
             if not path.is_file():
                 raise UsageError(f"파일이 없습니다: {path}")
-            targets.append((name, path.read_text(encoding="utf-8", errors="replace")))
+            targets.append((name, path.read_text(encoding="utf-8-sig", errors="replace")))
     allow = _allow(db)
     plain, log = masking.new_masker(allow_patterns=allow), masking.new_masker(allow_patterns=allow, log_lines=True)
     detections = []
@@ -134,7 +134,7 @@ def run_replace(args, db: Path | None) -> tuple[dict, str | None]:
         path = Path(name)
         if not path.is_file():
             raise UsageError(f"파일이 없습니다: {path}")
-        text = path.read_text(encoding="utf-8", errors="replace")
+        text = path.read_text(encoding="utf-8-sig", errors="replace")   # BOM을 떼야 첫 줄 머리 규칙이 맞는다
         masker = masking.new_masker(text, allow, log_lines=True)
         masked = "\n".join(masking.mask_lines(masker, text.split("\n")))   # 갈린 덤프 조각도(08-safety §8)
         if args.in_place:

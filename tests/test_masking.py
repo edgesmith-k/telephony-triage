@@ -758,18 +758,86 @@ def test_add_fixture_masks_folded_sip_digest():
     assert again.read_bytes() == written.read_bytes()
 
 
-def test_add_fixture_rejects_nul_or_non_utf8_source():
-    """리뷰 7 P2-1·2: NUL이 들었거나 UTF-8이 아닌 원본은 `fixture-source`로 거부하고 fixture를 쓰지 않는다."""
+def _add_fixture_gate(lines_or_raw) -> tuple[str, int]:
+    """원본(줄 목록 또는 바이트)을 add-fixture로 넣고 → (쓴 fixture 글, 커밋 관문 `--check --staged` 종료 코드)."""
+    repo = _sample_repo()
+    if isinstance(lines_or_raw, bytes):
+        src = _tmp() / "cut-1.log"
+        src.write_bytes(lines_or_raw)
+    else:
+        src = _write(lines_or_raw, "cut-1.log")
+    fixtures = repo / _ADD_FIXTURES
+    before = set(fixtures.iterdir())
+    proc = _add_fixture(repo, src)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    [written] = set(fixtures.iterdir()) - before
+    _git(repo, "add", "-A")
+    return written.read_text(encoding="utf-8"), _run("mask_pii.py", ["--check", "--staged", "--db", str(repo)]).returncode
+
+
+def test_add_fixture_keeps_next_line_stamp_after_line_end_key():
+    """C-1: 둘째 패스(글 전체)가 줄 끝 `token:`·`password=`의 값으로 다음 줄 머리 시각(logcat·syslog)을 잡지 않는다."""
+    text, gate = _add_fixture_gate(["11-13 10:00:00.000  812  812 D Foo     : request token:",
+                                    "11-13 10:00:01.000  812  812 D RILJ    : SETUP_DATA_CALL",
+                                    "11-13 10:00:02.000  812  812 D Foo     : password=",
+                                    "11-13 10:00:03.000  812  812 D RILJ    : ok",
+                                    "Nov 13 10:00:04 host1 ofonod[1]: secret:",
+                                    "Nov 13 10:00:05 host1 ofonod[1]: ok"])
+    assert all(f"\n{ts}" in text for ts in ("11-13 10:00:01.000", "11-13 10:00:03.000", "Nov 13 10:00:05")), text
+    assert "<CRED#" not in text and gate == 0
+
+
+def test_add_fixture_output_has_no_residual_after_tokens_split_dump():
+    """C-2: 앞 패스가 넣은 토큰이 줄을 나눠 덤프 규칙이 새로 맞는 꼴(`rsp: 90 00 01 02 <MSISDN#1>`)도 관문을 통과한다."""
+    text, gate = _add_fixture_gate(["11-13 10:00:00.000  812  812 D RILJ    : rsp: 90 00 01 02 +821012345678"])
+    assert "<HEXDUMP 4B>" in text and "+8210" not in text and gate == 0, text
+
+
+def test_add_fixture_strips_utf8_bom_before_line_head_rules():
+    """C-4: UTF-8 BOM 원본의 첫 줄 syslog 호스트도 가린다. 관문(`mask_pii --check`)도 BOM 파일 첫 줄을 본다."""
+    imsi = "45008" + "1234567890"
+    text, gate = _add_fixture_gate(f"\ufeffNov 13 10:00:00 realhost-7 kernel: imsi={imsi}\n"
+                                   "Nov 13 10:00:01 realhost-7 kernel: x\n".encode())
+    assert "realhost" not in text and text.count("host1") == 2 and gate == 0, text
+    fx = _tmp() / "fixtures"
+    fx.mkdir()
+    (fx / "a.log").write_bytes("\ufeffNov 13 10:00:00 realhost-7 kernel: x\n".encode())
+    proc = _run("mask_pii.py", ["--check", str(fx / "a.log")])
+    assert [(d["line"], d["kind"]) for d in json.loads(proc.stdout)["detections"]] == [(1, "HOST")], proc.stdout
+    assert "realhost" not in _run("mask_pii.py", [str(fx / "a.log")]).stdout       # 치환 경로도 BOM을 뗀다(RQ F-6)
+    repo = _sample_repo()
+    shutil.copy(fx / "a.log", repo / _ADD_FIXTURES / "bom.log")
+    _git(repo, "add", "-A")
+    proc = _run("mask_pii.py", ["--check", "--staged", "--db", str(repo)])          # staged 경로도(RQ F-6)
+    assert [(d["line"], d["kind"]) for d in json.loads(proc.stdout)["detections"]] == [(1, "HOST")], proc.stdout
+
+
+def test_add_fixture_blanks_nul_lines_and_rejects_mostly_nul():
+    """G-2: NUL 든 줄은 통째로 `<REDACTED:NUL>` 한 줄이 된다(줄 수 그대로, 값이 NUL에서 갈려 한쪽만 가려지는 일이 없다).
+    관문을 통과하고 apply 경고에 남는다. 절반 넘게 NUL 줄(BOM 없는 UTF-16)이거나 UTF-8이 아니면 iconv 안내로 거부한다."""
+    imsi = "45008" + "1234567890"
+    head = "11-13 10:00:0{}.000  812  812 D RILJ    : "
+    raw = (head.format(0) + f"imsi={imsi}\n" + head.format(1) + "password=hunter2\0xyzQ token=tKq9Zr7xW3\0vLp8Nm2Qs4\n"
+           + head.format(2) + "ok\n").encode()
+    text, gate = _add_fixture_gate(raw)
+    lines = text.split("\n")
+    assert lines[1] == "<REDACTED:NUL>" and len(lines) == 4 and gate == 0, text
+    assert "\0" not in text and imsi not in text and "xyzQ" not in text and "vLp8" not in text, text
     repo = _sample_repo()
     fixtures = repo / _ADD_FIXTURES
     before = set(fixtures.iterdir())
-    for raw in (b"D RILJ    : ok\0tail\n", b"\xff\xfeD RILJ    : ok\n"):
+    for raw in ((head.format(0) + f"imsi={imsi}\n").encode("utf-16-le"), b"\xff\xfeD RILJ    : ok\n"):
         src = _tmp() / "cut-1.log"
         src.write_bytes(raw)
         proc = _add_fixture(repo, src)
         assert proc.returncode == 1, proc.stdout + proc.stderr
-        assert [r["code"] for r in json.loads(proc.stdout)["rejected"]] == ["fixture-source"], proc.stdout
+        [rej] = json.loads(proc.stdout)["rejected"]
+        assert rej["code"] == "fixture-source" and "iconv -f UTF-16LE" in rej["message"], rej
         assert set(fixtures.iterdir()) == before
+    src = _tmp() / "cut-1.log"
+    src.write_bytes(raw := (head.format(0) + "x\0\n" + head.format(1) + "ok\n" + head.format(2) + "ok\n").encode())
+    proc = _add_fixture(repo, src)
+    assert proc.returncode == 0 and "NUL 든 줄 1개" in json.dumps(json.loads(proc.stdout)["warnings"], ensure_ascii=False), proc.stdout
 
 
 def test_mask_pii_check_staged_fixture_log_uses_log_masker():
