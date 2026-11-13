@@ -16,7 +16,7 @@
 
 1. `S/triage.py module <KEY> --for explore`.
 2. `pick`이 null이면 `ask.question`과 `ask.options`를 **그대로** 따로 묻는다(동의 질문과 합치지 않는다, `--explore`·`always`여도). 질문 도구가 없으면 글로 보이고 턴을 끝낸다. 답은 `--module <p>/<모듈>`로 다시 부른다. 묻지 못하는 실행(헤드리스·`run -s`)만 `--choose top`.
-3. 종료 0(`pick` 있음): `read`의 파일을 순서대로 읽는다(그 밖은 `explore.md` 5번의 `refs`만). 마지막 파일이 이번 타임라인이다 — 그것만 인용하고 `JOB/timeline.md`는 읽지 않는다. `ask_switch`가 있으면 그대로 한 번 묻는다. 요약의 증상 시각과 타임라인 핵심 줄이 1분 넘게 어긋나면 한 번만 `--module <p>/<모듈> --at <ISO 시각>`.
+3. 종료 0(`pick` 있음): `read`의 파일을 순서대로 읽는다(그 밖은 `explore.md` 5번의 `refs`만). 마지막 파일이 이번 타임라인이다 — 그것만 인용하고 `JOB/timeline.md`는 읽지 않는다. `ask_switch`가 있으면 그대로 한 번 묻는다("같이 보기"면 `--module <p>/<지금 모듈> --with <그 모듈>`, 끝의 `## 보조 모듈 줄`도 인용). 요약의 증상 시각과 타임라인 핵심 줄이 1분 넘게 어긋나면 한 번만 `--module <p>/<모듈> --at <ISO 시각>`.
 4. 종료 1(`모듈 후보 없음`·`레포에 … 없음`): `JOB/timeline.md`로 `explore.md`대로 한다.
 5. 종료 2(받기 실패): stderr를 보이고 "탐색 분석을 내장 줄 모양만으로 할까요, 생략할까요?"를 묻는다. 생략이면 `check-output <KEY> --for explore --skipped "모듈 문서 받기 실패(<사유>)"`.
 6. 결과는 `explore.md` `## 쓰는 것`대로 `JOB/explore-output.md`에 쓰고 `check-output <KEY> --for explore`.

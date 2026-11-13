@@ -812,14 +812,119 @@ def test_explore_deep_without_deep_md(env):
     assert {n: (job / n).read_bytes() for n in before} == before and snapshot(job / "module-skill" / "explore") == tree
 
 
+# -- explore 같이 보기(--with) ----------------------------------------------------------------------
+
+WITH_EVENTS = [
+    {"ts": "2026-09-20T05:32:09.000Z", "tag": "DCM-1", "msg": "setup failed", "level": "E", "category_hint": "data"},
+    {"ts": "2026-09-20T05:32:08.000Z", "tag": "SIMSVC", "msg": "sim state ABSENT", "level": "E", "category_hint": "sim"},
+    {"ts": "2026-09-20T05:32:07.000Z", "tag": "SIMSVC", "msg": "sim service state OUT_OF_SERVICE", "level": "I",
+     "category_hint": "sim"},
+]
+WITH_ARGS = ("explore", "--module", "android/data")
+
+
+def _with_job(env):
+    return env.make_job(events=WITH_EVENTS, platform="android", explore=True)
+
+
+def test_explore_with_adds_aux_section(env):
+    """`--with sim`: 주 보기(data)는 그대로, 끝 `## 보조 모듈 줄 (sim)`에 주 보기에 없던 sim 줄만. 문서·read는 주 모듈만."""
+    job = _with_job(env)
+    tl = job / "module-skill" / "explore" / "timeline.md"
+    code, plain_out, err = env.module(*WITH_ARGS, platform="android")
+    assert code == 0, err
+    plain = tl.read_text(encoding="utf-8")
+    plain_line = env.report_line("- 탐색 분석")
+    assert "## 보조 모듈 줄" not in plain and "with" not in _explore_rec(job) and "with" not in plain_out
+    code, out, err = env.module(*WITH_ARGS, "--with", "sim", platform="android")
+    assert code == 0, err
+    text = tl.read_text(encoding="utf-8")
+    head, sep, aux = text.partition("\n## 보조 모듈 줄 (sim)\n")
+    assert sep and head == plain, text                                   # 주 보기 바이트 그대로 + 끝 절
+    aux_lines = [x for x in aux.split("\n") if x]
+    assert any("OUT_OF_SERVICE" in x for x in aux_lines) and "OUT_OF_SERVICE" not in plain   # 주 보기에 없던 줄
+    assert "sim state ABSENT" in plain and not set(aux_lines) & set(plain.split("\n"))    # 주 보기와 겹치지 않는다
+    assert out["read"] == plain_out["read"] and out["with"] == ["android/sim"] == _explore_rec(job)["with"]
+    assert env.report_line("- 탐색 분석") == plain_line.replace("모듈 문서 android/data @", "모듈 문서 android/data+sim @")
+    quote = next(x for x in aux_lines if "OUT_OF_SERVICE" in x)          # 보조 절 줄을 근거로 인용해도 원문 검사 통과
+    (job / "explore-output.md").write_text("\n".join([
+        "가설 1: 서비스 없음", "로그로 확인:", f"- {quote}", "코드로 추정: 코드 근거 없음", "반대 근거: 없음",
+        "다음 확인: 망 등록 로그"]) + "\n", encoding="utf-8")
+    code, data, err = env.call("check-output", KEY, "--for", "explore", "--out", job, "--platform", "android")
+    assert code == 0 and data["evidence"].startswith("- 근거 원문 검사: 인용 1개 중 원문에 없음 0"), (data, err)
+
+
+def test_explore_with_ask_switch(env):
+    """약한 신호(주 모듈 오류 줄 없음)면 `ask_switch`에 같이 보기 하나, `--with` 실행에는 없다."""
+    env.make_job(events=[dict(WITH_EVENTS[0], level="I", msg="setup request"), WITH_EVENTS[1]], platform="android",
+                 explore=True)
+    code, out, err = env.module(*WITH_ARGS, platform="android")
+    assert code == 0, err
+    assert out["ask_switch"]["options"] == ["그대로 data", "sim — 1줄", "data + sim 같이 보기"]
+    code, out, err = env.module(*WITH_ARGS, "--with", "sim", platform="android")
+    assert code == 0 and out["ask_switch"]["options"] == ["그대로 data", "sim — 1줄"], err
+
+
+def test_explore_with_at_keeps_with(env):
+    """`--at` 재실행은 기록의 `with`로 같은 보조 절을 다시 만든다(인자로는 받지 않는다)."""
+    job = _with_job(env)
+    assert env.module(*WITH_ARGS, "--with", "sim", platform="android")[0] == 0
+    code, out, err = env.module(*WITH_ARGS, "--at", "2026-09-20T05:32:08Z", platform="android")
+    assert code == 0, err
+    assert out["with"] == ["android/sim"] == _explore_rec(job)["with"]
+    assert "## 보조 모듈 줄 (sim)" in (job / "module-skill" / "explore" / "timeline.md").read_text(encoding="utf-8")
+    assert "모듈 문서 android/data+sim @" in env.report_line("- 탐색 분석")
+
+
+@pytest.mark.parametrize("bad", [["android/zzz"], ["android/data"], ["ofono/sim"], ["android/sim", "x"], "android/sim"])
+def test_explore_at_rejects_tampered_with(env, bad):
+    """기록의 `with`가 처음 받을 때의 검사(같은 플랫폼·다른 모듈·modules.yaml에 있음)를 못 넘으면 `--at`은 종료 2."""
+    job = _with_job(env)
+    assert env.module(*WITH_ARGS, "--with", "sim", platform="android")[0] == 0
+    path = job / "module-skill.json"
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    rec["explore"]["with"] = bad
+    path.write_text(json.dumps(rec), encoding="utf-8")
+    assert env.module(*WITH_ARGS, "--at", "2026-09-20T05:32:08Z", platform="android")[0] == 2
+
+
+@pytest.mark.parametrize("purpose, extra", [
+    ("deep", ("--with", "sim")),                                                  # deep은 --also 그대로
+    ("explore", ("--with", "sim")),                                               # --module·--choose 없이
+    ("explore", (*WITH_ARGS[1:], "--with", "data")),                              # 주 모듈과 같다
+    ("explore", (*WITH_ARGS[1:], "--with", "ims")),                               # modules.yaml에 없다
+    ("explore", (*WITH_ARGS[1:], "--with", "sim", "--at", "2026-09-20T05:32:08Z")),
+])
+def test_explore_with_usage_errors(env, purpose, extra):
+    job = _with_job(env)
+    assert env.module(*WITH_ARGS, platform="android")[0] == 0
+    before = {n: (job / n).read_bytes() for n in ("module-skill.json", "report.md")}
+    code, out, err = env.module(purpose, *extra, platform="android")
+    assert code == 2 and out["reason"] == "사용 오류" and err.startswith("사용 오류: ")
+    assert {n: (job / n).read_bytes() for n in before} == before
+
+
+def test_explore_with_needs_filter(env):
+    """모의 ofono `modules.yaml`에는 filter가 없다(보기 없음) — `--with`는 사용 오류, 기록·report 줄 그대로."""
+    job = env.make_job(explore=True)
+    assert env.module("explore", "--module", "ofono/data")[0] == 0
+    before = {n: (job / n).read_bytes() for n in ("module-skill.json", "report.md")}
+    code, out, err = env.module("explore", "--module", "ofono/data", "--with", "sim")
+    assert code == 2 and out["reason"] == "사용 오류" and "filter" in err
+    assert {n: (job / n).read_bytes() for n in before} == before
+
+
 def test_ask_switch_offers_only_modules_with_explore():
     """R40(H C1+D): 약한 신호 질문은 받은 트리에 `<p>/<m>/explore.md`가 있는 모듈만 권한다(14 모듈, 일부는 없을 수 있다)."""
     stats = {"hot_modules": {"sim": 9, "network": 7, "ims": 3, "data": 20}}
     tree = frozenset({"ofono/data/explore.md", "ofono/network/explore.md", "ofono/ims/explore.md"})
     got = modulecmd._ask_switch("data", stats, [], tree=tree, platform="ofono")
-    assert got["options"] == ["그대로 data", "network — 7줄", "ims — 3줄"]
+    assert got["options"] == ["그대로 data", "network — 7줄", "ims — 3줄", "data + network 같이 보기"]
     assert "sim" not in got["question"]
     deep = modulecmd._ask_switch("data", stats, [], tree=tree | {"ofono/ims/deep.md"}, platform="ofono", deep=True)
-    assert deep["options"] == ["그대로 data", "ims — 3줄"]                 # --deep: deep.md도 있는 모듈만
+    assert deep["options"] == ["그대로 data", "ims — 3줄", "data + ims 같이 보기"]     # --deep: deep.md도 있는 모듈만
     legacy = modulecmd._ask_switch("data", stats, [])                     # 트리를 모르면(--at) 예전처럼
-    assert legacy["options"] == ["그대로 data", "sim — 9줄", "network — 7줄"]
+    assert legacy["options"] == ["그대로 data", "sim — 9줄", "network — 7줄", "data + sim 같이 보기"]
+    joined = modulecmd._ask_switch("data", stats, [], joined=True)        # --with로 받은 실행: 같이 보기 없음
+    assert joined["options"] == ["그대로 data", "sim — 9줄", "network — 7줄"]
+    assert modulecmd._ask_switch("data", {"hot_modules": {}}, [])["options"] == ["그대로 data"]

@@ -162,6 +162,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--module", metavar="p/dir", help="explore: 이 모듈로(후보 계산 없이). deep에는 못 쓴다")
     p.add_argument("--choose", metavar="top|dir", help="explore: 질문 없이 고른다(top = 1위 후보, dir = 모듈 디렉토리 이름)")
     p.add_argument("--also", action="store_true", help="deep: 모뎀 모듈 문서도 같은 SHA로 함께 받는다")
+    p.add_argument("--with", dest="with_", metavar="dir",
+                   help="explore --module|--choose: 이 모듈의 줄도 타임라인 끝 '보조 모듈 줄' 절에 붙인다(문서는 주 모듈만)")
     p.add_argument("--at", metavar="ISO", help="explore --module: 받은 사본으로 타임라인 중심만 다시 잡는다(받기 없음)")
     p.add_argument("--deep", action="store_true",
                    help="explore: 정밀 탐색(사용자가 요청할 때만) — 모듈 deep.md도 받고 (모듈 필터가 있을 때) 보기 상한을 넓힌다(~96KB)")
