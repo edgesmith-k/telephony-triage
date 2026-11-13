@@ -70,6 +70,23 @@ def test_pr_time_from_trace_events_not_plan_mtime(tmp_path):
     assert s["analysis_minutes"]["values"] == [5.0] and s["pr_unmeasured"] == 0
 
 
+def test_merge_minutes_and_resyncs_after_first_created(tmp_path):
+    # B-17: 병합까지 = 첫 created → db_pr merge 병합 행(already 제외), 다시 올림 = 첫 created 뒤의 edited 행.
+    # 옛 PR이 열려 있어 첫 publish가 곧바로 edited인 행은 다시 올림이 아니다
+    rows = [*run(0), row("publish", 20, v=2, action="edited", pr=1, gh_ok=True),
+            row("publish", 30, v=2, action="created", pr=2, gh_ok=True),
+            row("publish", 60, v=2, action="edited", pr=2, gh_ok=True),
+            row("merge", 120, v=2, pr=2, merged=True, waited=0)]
+    _job(tmp_path, "A-1", _pr_plan(), rows)
+    _job(tmp_path, "B-1", _pr_plan(), [*run(0), row("publish", 30, v=2, action="created", pr=3, gh_ok=True),
+                                       row("merge", 50, v=2, pr=3, merged=True, already=True, waited=0)])
+    s = usage_stats.stats(tmp_path)
+    assert s["merge_minutes"]["values"] == [90.0]
+    assert s["resyncs"] == {"prs": 2, "total": 1, "per_pr": 0.5}
+    assert any("병합까지(" in ln and "중앙값 90.0분" in ln and "PR당 다시 올림(sync-pr 등) 0.5회" in ln
+               for ln in usage_stats.report_lines(s))
+
+
 def test_investigation_minutes_after_done_to_stage_release_or_discard(tmp_path):
     # F7 확장: 전체 조사 = 첫 0-key → 첫 done 뒤 처음 stage·end(release)·discard. 정보 행(explore·module·checked)은 끝이 아니고
     # analysis_min(첫 done)·pr_min은 그대로. done 앞 end(분석 전용 lock 해제)는 끝으로 보지 않는다
@@ -215,7 +232,8 @@ def test_json_and_text_carry_counts_only(tmp_path, capsys):
     data = json.loads(out)
     assert data["format"] == 2 and data["platform"] is None and data["tokens"] is None
     assert set(data) == {"format", "platform", "work_dir", "jobs", "states", "held_read_only", "analysis_only_runs",
-                         "cancel_ratio", "pr_minutes", "pr_unmeasured", "analysis_minutes", "investigation_minutes",
+                         "cancel_ratio", "pr_minutes", "pr_unmeasured", "merge_minutes", "resyncs", "analysis_minutes",
+                         "investigation_minutes",
                          "investigation_unmeasured", "questions", "retries", "legacy", "other_flows", "tokens"}
     assert usage_stats.main(["--work-dir", str(tmp_path)]) == 0
     text = capsys.readouterr().out
