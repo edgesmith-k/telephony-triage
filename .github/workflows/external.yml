@@ -7,6 +7,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # push가 없어도 주 1회 main을 돌린다(러너의 git·Python이 바뀌어 깨진 것을 다음 push 전에 안다). 한 번에 러너 약 215분.
+  schedule:
+    - cron: "0 18 * * 0"   # 일요일 18:00 UTC = 월요일 03:00 KST
 
 permissions:
   contents: read
