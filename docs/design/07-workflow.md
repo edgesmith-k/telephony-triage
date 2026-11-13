@@ -1,5 +1,6 @@
 # 07. 워크플로우 (SKILL.md와 `reference/`의 원본)
 
+> 의도·불변식 문서. 절차 글이 다르면 SKILL.md·`reference/`가 맞다(표·정의는 `contracts.md`).
 > 원본 7장 + validate / fix-submitted / verify-fix / sync-pr 사용자 흐름.
 > CLI는 `contracts.md §3.2`, op·drift는 `contracts.md §작업 계획`, 브랜치는 `contracts.md §브랜치`. 검증 판정 규칙은 `05-verification.md`, sync-pr 절차는 `06-collaboration.md §6.3`.
 > 스킬로 옮길 때 analyze(Step 0~8, Step 9는 요약만 — 절차는 `reference/post.md`)는 SKILL.md 본체, 나머지 절은 `reference/<흐름>.md`로 나눈다 (`10-skill-eval.md §SKILL 구성`).
@@ -33,7 +34,7 @@
 > `triage.py`는 같은 이슈를 같은 입력으로 다시 돌리면(세션이 바뀌어도) 파싱·매칭·후보별 DB 조회·코드 resolve를 다시 하지 않고 지난 실행의 결과를 다시 보여 준다. **재사용은 통과가 아니라 같은 결과의 재표시**다: 건너뛴 일은 "다시 검증했다"로 표시하지 않고, 리포트에 "재사용"이라고 밝히며, 검증·판정은 여전히 스크립트 출력이 기준이다.
 
 - **입력 해시** (`request_hash`, 파싱 전에 계산): 부분별 16자리 해시 `logs`(입력 로그 원본의 이름·sha, bugreport는 원본 파일) · `issue`(`issue.json`, 실패 스텝 반영 후) · `db`(스냅샷의 이슈 DB 소스·파서 환경, `compiled.source_hash`) · `config`(site-defaults + 사용자 config, `recent_code_roots` 제외 — Step 2-1 5번이 프로필을 저장하면 다른 작업의 재사용은 config 변경으로 한 번 다시 계산된다) · `plugin`(`plugin.json` version(없으면 null) + `scripts/**/*.py` + 캐시 형식) · `args`(시간대·연도·`--minutes`·코드 트리·`--clock-offset`·steps-file sha·결과를 바꾸는 답 `time`·`window`·`anchor`·`year`·`code`·`code_confirm`). 합쳐서 `request_hash`. 실행 모드(write/read-only)·`--dry-run`은 넣지 않는다.
-- **적중 조건**: 오프라인이 아니고 `--refresh`가 아니며, state의 `job.cache.request_hash`와 같고, `JOB/analysis-cache.json`이 있고, `events.json`·`match.json`이 캐시가 기록한 크기·mtime 그대로이고(`timeline.md`는 캐시 파일이 아니다 — 동의 뒤 `triage.py explore`가 만들고 `run`이 지운다), resolve한 코드 경로가 아직 있다. 적중해도 사전 점검·Jira 읽기·스냅샷·열린 PR은 그대로 하고, 답 시각의 `issue_meta.json` 갱신과 `match_meta.json` 쓰기 같은 싼 파일 쓰기도 한다.
+- **적중 조건**: 오프라인이 아니고 `--refresh`가 아니며, state의 `job.cache.request_hash`와 같고, `JOB/analysis-cache.json`이 있고, `events.json`·`match.json`이 캐시가 기록한 크기·mtime 그대로이고(`timeline.md`는 캐시 파일이 아니다 — 동의 뒤 `triage.py explore`가 만들고 `run`이 지운다), resolve한 코드 경로가 아직 있다(캐시 키에 코드 트리 내용은 없다 — 같은 경로의 트리를 갱신했으면 `--refresh`). 적중해도 사전 점검·Jira 읽기는 그대로 하고(같은 lock 세션 안에서는 스냅샷·열린 PR 결과를 다시 쓴다 — 스냅샷은 `--refresh`로 다시 받고, 열린 PR은 새 세션에서 다시 확인한다), 답 시각의 `issue_meta.json` 갱신과 `match_meta.json` 쓰기 같은 싼 파일 쓰기도 한다.
 - **무효화**: 부분 하나라도 다르면 다시 계산하고 `analysis.json.reuse`가 바뀐 부분(`changed`)·추가된 로그·1위 변화를 알려 준다. 캐시 파일이 없거나 산출물이 바뀌었으면 `reason: cache-missing`, 코드 경로가 옮겨졌으면 `changed: [code]`, `--refresh`면 `reason: refresh`. `needs_input`·중단·오류 실행은 캐시를 쓰지 않는다. 캐시와 `triage-state.json`에는 마스킹된 값·경로·sha만 둔다(`08-safety.md §8.1`).
 - **리포트**: 적중이면 `- 재사용: 입력(…)이 실행 n과 같아 파싱·매칭을 다시 하지 않았다`, 이전 실행이 있는데 다시 계산했으면 `- 재분석: 실행 m 대비 바뀐 입력 […] — 1위 X → Y | 1위 변화 없음`.
 

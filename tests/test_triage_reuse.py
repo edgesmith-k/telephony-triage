@@ -151,6 +151,42 @@ def test_config_change_invalidates_but_recent_code_roots_does_not():
     assert changed["reuse"]["hit"] is False and changed["reuse"]["changed"] == ["config"]
 
 
+def test_platform_recent_code_roots_does_not_invalidate_but_code_profiles_does():
+    ws = Workspace()
+    cfg = ws.home / "config.yaml"
+    data = yaml.safe_load(cfg.read_text(encoding="utf-8"))
+    data["code_profiles"] = [{"name": "android16-main", "platform_version": "16", "roots": {"aosp": str(SRC)}}]
+    data["platforms"] = {"ofono": {"recent_code_roots": [],
+                                   "code_profiles": [{"name": "o2", "platform_version": "2", "roots": {"ofono": "/o2"}}]}}
+    cfg.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    _run(ws)
+    data["platforms"]["ofono"]["recent_code_roots"] = [{"roots": {"ofono": "/tmp/somewhere"}, "used_on": "2026-10-01"}]
+    cfg.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    assert _run(ws)["reuse"] == {"hit": True, "run": 1}
+    data["code_profiles"][0]["roots"]["aosp"] = str(SRC.parent / "android17")   # 프로필 이름으로 고른 작업은 경로가 바뀌면 다시 분석
+    cfg.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    changed = _run(ws)
+    assert changed["reuse"]["hit"] is False and changed["reuse"]["changed"] == ["config"]
+    data["platforms"]["ofono"]["code_profiles"][0]["roots"]["ofono"] = "/o3"   # 플랫폼 아래 code_profiles도 지문에 든다
+    cfg.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    changed = _run(ws)
+    assert changed["reuse"]["hit"] is False and changed["reuse"]["changed"] == ["config"]
+
+
+def test_fingerprint_does_not_touch_loaded_user_config(monkeypatch):
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from types import SimpleNamespace
+
+    from common import userconfig
+    from triagelib.cache import CacheMixin
+
+    loaded = {"recent_code_roots": [{"roots": {"aosp": "/a"}}],
+              "platforms": {"ofono": {"recent_code_roots": [{"roots": {"ofono": "/o"}}], "work_dir": "/w"}}}
+    monkeypatch.setattr(userconfig, "load_user", lambda: loaded)
+    CacheMixin.fingerprint(SimpleNamespace(job=Path(tmp()), log_inputs=[], defaults={}))
+    assert loaded["recent_code_roots"] and loaded["platforms"]["ofono"]["recent_code_roots"]
+
+
 def test_plugin_code_change_invalidates():
     root = make_plugin_root.make(with_site_backend=True)
     ws = Workspace(root=root)

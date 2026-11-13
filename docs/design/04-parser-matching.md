@@ -171,7 +171,7 @@ base = symptom_weight × S + cause_weight × C
 bonus = proximity_bonus_max × (1 - |근거 시각 - 발생 시각| / 분석 범위 절반)   # 0 이상으로 자름
       + keyword_bonus_max × (Jira 텍스트(요약·설명·실패 스텝)와 원인 title/tags 키워드 일치 비율)
 score = min(1, base + bonus)
-순위 키 = (-(score + step), -(근접 + 키워드 + step), 유형, 원인)    # step = 스텝 기준 우선 유형이면 step_focus_bonus_max, 아니면 0
+순위 키 = (-(score + step), -(근접 + 키워드 + step), -일치 조건 수, 유형, 원인)    # step = 스텝 기준 우선 유형이면 step_focus_bonus_max, 아니면 0
 feedback_weight가 켜져 있고 해당 시그니처 표본 ≥ min_samples면: score × (0.5 + 0.5 × 수락률)
 ```
 

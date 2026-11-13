@@ -46,7 +46,7 @@ from common import events  # noqa: E402
 import make_log_fixtures  # noqa: E402
 import make_plugin_root  # noqa: E402
 import mock_env  # noqa: E402
-from runner import SITE_REPO_REASON, is_site_repo  # noqa: E402
+from runner import SITE_REPO_REASON, is_site_repo, plugin_root  # noqa: E402
 
 LOG_DIR = REPO / "tests" / "fixtures" / "logs"
 SAMPLE_DB = REPO / "tests" / "fixtures" / "issue-db-sample"
@@ -1151,6 +1151,57 @@ def test_mask_copy_masks_keeps_line_numbers_and_skips_big():
     assert _run(["mask-copy", str(a), "--out", str(out), "--max-bytes", "0"])[0] == 2
 
 
+def test_mask_copy_and_cut_blank_nul_lines():
+    """V2 범위 밖 2: NUL 든 줄은 mask-copy·cut 사본(모델이 읽는다)에서 `<REDACTED:NUL>` 한 줄이 된다(줄 수 그대로). 거부하지 않고
+    경고(`mask-copy-nul`·`cut-nul`, iconv 안내)를 낸다. BOM 없는 UTF-16은 모든 줄이 자리표가 된다. 같은 이름 옛 사본은 덮어쓴다."""
+    head = "09-26 13:00:0{}.000  1500  1510 I RILJ    : "
+    tmp = _tmp()
+    log = tmp / "pad.log"
+    log.write_text(head.format(0) + "imsi=" + IMSI_A + "\n" + head.format(1) + "ok\n", encoding="utf-8")
+    assert _run(["mask-copy", str(log), "--out", str(tmp / "m")])[0] == 0
+    log.write_bytes((head.format(0) + "imsi=" + IMSI_A[:7] + "\0" + IMSI_A[7:] + " password=hunter2\0xyzQ\n"
+                     + head.format(1) + "ok imsi=" + IMSI_B + "\n").encode())
+    code, _, err = _run(["mask-copy", str(log), "--out", str(tmp / "m")])
+    lines = (tmp / "m" / "pad.log").read_text(encoding="utf-8").split("\n")
+    assert code == 0 and "경고[mask-copy-nul]" in err and "iconv" in err, err
+    assert lines[0] == "<REDACTED:NUL>" and "<IMSI#" in lines[1] and len(lines) == 3, lines
+    cut = tmp / "cut.log"
+    code, _, err = _run(["cut", str(log), "--around", "2026-09-26T13:00:00+00:00", "--out", str(cut), "--tz", "UTC",
+                         "--year", "2026"])
+    text = cut.read_text(encoding="utf-8")
+    assert code == 0 and "경고[cut-nul]" in err, err
+    assert "<REDACTED:NUL>" in text and IMSI_A[7:] not in text and "xyzQ" not in text and IMSI_B not in text, text
+    u16 = tmp / "u16.log"
+    u16.write_bytes((head.format(0) + "imsi=" + IMSI_A + "\n" + head.format(1) + "ok\n").encode("utf-16-le"))
+    code, _, err = _run(["mask-copy", str(u16), "--out", str(tmp / "m2")])
+    assert code == 0 and "경고[mask-copy-nul]" in err and "NUL 든 줄 2개(전체 2줄 중)" in err, err   # 끝 NUL 조각은 줄이 아니다
+    assert (tmp / "m2" / "u16.log").read_text(encoding="utf-8").split("\n") == ["<REDACTED:NUL>"] * 2 + [""]
+
+
+def test_parse_mask_and_markers_drop_nul_lines():
+    """재리뷰 RR-2: `parse --mask`(모델이 읽는다)·`markers`도 NUL 든 줄을 쓰지 않는다 — NUL에서 갈린 값(`4500812\\0 34567890`)의 한쪽이
+    남지 않게 그 줄의 레코드를 버리고 mask-copy와 같은 경고(`parse-nul`·`markers-nul`, iconv 안내)를 낸다. 다른 줄은 그대로."""
+    head = "09-20 14:32:0{}.000  1234  1244 D {}: "
+    log = _tmp() / "nul.log"
+    log.write_bytes((head.format(0, "RILJ") + "[PHONE0] imsi=4500812\0 34567890 number=+8210\0 98765432\n"
+                     + head.format(1, "RILJ") + "[PHONE0] ok imsi=" + IMSI_B + "\n"
+                     + head.format(2, "TestRunner") + "Step 4 imsi=4500812\0 34567890 FAIL\n"
+                     + head.format(3, "TestRunner") + "Step 5 FAIL\n").encode())
+    code, data, err = _run(["parse", str(log), "--rules", str(RULES), "--full", "--mask", "--tz", TZ, "--year", str(YEAR)])
+    text = json.dumps(data, ensure_ascii=False)
+    assert code == 0 and "경고[parse-nul]: nul.log: NUL 든 줄 2개(전체 4줄 중)" in err and "iconv" in err, err
+    assert "34567890" not in text and "98765432" not in text and "\\u0000" not in text and IMSI_B not in text, text
+    assert any("<IMSI#" in str(e.get("msg")) for e in data["events"]), text
+    root = plugin_root("nul-markers", failed_step={
+        "marker_patterns": [r"^TestRunner\s*:\s*Step\s*(?P<step>\d+)\b.*?(?P<status>START|PASS|FAIL)\b"],
+        "marker_status": {"start": ["start"], "pass": ["pass"], "fail": ["fail"]},
+        "anchor_without_step": True, "window": {"pre_sec": 60, "post_sec": 30, "fail_only_pre_sec": 120, "max_span_sec": 900},
+        "disagree_minutes": 10, "steps_file_tz": None, "clock_offset": None})
+    code, data, err = _run(["markers", str(log), "--rules", str(RULES), "--tz", TZ, "--year", str(YEAR)], root)
+    assert code == 0 and "경고[markers-nul]" in err, err
+    assert [m["step"] for m in data["markers"]] == ["5"] and "34567890" not in json.dumps(data), data
+
+
 def test_mask_copy_rerun_removes_only_previously_managed_copies():
     """코덱스 리뷰 R3: 다시 실행하면 이전 index.json이 만든 사본만 지운다 — 상한 초과로 건너뛴 파일·이름이 바뀐 입력의 옛 사본이
     남지 않고, 사용자의 무관한 파일·index 없는 폴더의 파일은 건드리지 않는다. 실패한 재실행은 옛 사본·index를 그대로 둔다."""
@@ -1187,3 +1238,29 @@ def test_mask_copy_rerun_removes_only_previously_managed_copies():
     os.symlink(tmp / "input.log", out / "other.log")
     assert _run(["mask-copy", str(a), "--out", str(out)])[0] == 0
     assert (out / "other.log").is_symlink() and (tmp / "input.log").is_file() and first != (out / "input.log").read_text(encoding="utf-8")
+
+
+def test_mask_copy_renames_git_names():
+    """OC-C: 사본 이름이 `HEAD`(대소문자 무시)·`.git…`이면 `_`를 붙인다 — 다른 레포의 `.git/HEAD`를 사본으로 뜨면 작업 루트에 bare 모양
+    폴더가 생긴다. 이미 있는 이름과 겹치면 기존 `-n` 규칙."""
+    tmp = _tmp()
+    srcs = []
+    for i, name in enumerate(["HEAD", ".git", ".GitConfig", "_HEAD", "logcat.txt", "my.git.log"]):
+        (tmp / str(i)).mkdir()
+        srcs.append(tmp / str(i) / name)
+        srcs[-1].write_text("x\n", encoding="utf-8")
+    code, data, err = _run(["mask-copy", *map(str, srcs), "--out", str(tmp / "m")])
+    assert code == 0, err
+    assert [f["name"] for f in data["files"]] == ["_HEAD", "_.git", "_.GitConfig", "_HEAD-2", "logcat.txt", "my.git.log"]
+    assert sorted(p.name for p in (tmp / "m").iterdir()) == sorted([f["name"] for f in data["files"]] + ["index.json"])
+    (tmp / "1" / ".git").rename(tmp / "1" / "Head")                       # 대소문자 무시
+    assert _run(["mask-copy", str(tmp / "1" / "Head"), "--out", str(tmp / "m2")])[1]["files"][0]["name"] == "_Head"
+
+
+def test_parse_drops_records_whose_content_has_nul_even_without_line_position():
+    """줄 위치(`line_ref`)가 없는 레코드(외부 파서·site 백엔드)는 내용에 NUL이 있으면 버린다 (재확인 RR2-2)."""
+    import parse_logcat
+    assert parse_logcat._has_nul({"msg": "imsi=4500812\x0034567890", "line_ref": None})
+    assert parse_logcat._has_nul({"fields": {"a": ["ok", "x\x00y"]}})
+    assert not parse_logcat._has_nul({"msg": "imsi=<IMSI#1>", "fields": {"n": 3, "a": ["ok"]}, "line_ref": None})
+

@@ -12,7 +12,7 @@
 |---|---|---|---|
 | 겉모습 | `/telephony-triage:*`, 말로 요청 | 같음(모델만 게이트웨이로) | `tt-oc` 래퍼 + `/tt-*` |
 | 분석 | 됨 | 됨 | 됨 — v1은 **분석 전용** |
-| 쓰기(push·PR·`db_pr merge`·Jira 코멘트) | 확인 화면 → 승인 뒤 | 같음 | **안 함.** 명령을 출력 → 사용자가 터미널·Claude Code에서 실행 |
+| 쓰기(push·PR·`db_pr merge`·Jira 코멘트) | 확인 화면 → 승인 뒤 | 같음 | **안 함.** 명령을 출력 → 사용자가 터미널·Claude Code에서 실행. analyze 등록(PR)만 게시를 연 설치에서 `tt-oc publish`(3.7) |
 | Jira 읽기 | Jira MCP | 같음 | **닫힘이 기본.** 사용자마다 사내 확인 뒤 직접 연다(3.4). 코멘트는 늘 막힘 |
 | 안전 장치 | guard·git hook·show_guard | 같음 | `tt-guard.js` → `oc_adapter` → 같은 `guard.py` + 허용 목록 |
 | 확인 화면·must_show | show_guard 판정 | 같음 — **세션 기록을 켜야** 판정 | 래퍼가 모델을 거치지 않고 출력(TUI는 보장 없음) |
@@ -166,7 +166,7 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
 
 - 종료 0(끝남)이나 3(막힌 호출 — 사용자 차례). 1·2·124면 그대로 보고한다. `tt-analyze`·`tt-record`가 스크립트를 한 번도 돌리지 않고(화면 기록도 없이) 끝나면 `outcome: no-script-output`·종료 1이다 — 도구 호출을 글로 내는 게이트웨이를 의심하고 3.2 사내 확인 0 (c)를 본다. 결과 줄의 `finish`가 `length`면 `outcome: length`(출력 한도 16000에서 잘림), 에이전트 `steps` 한도(50)에 닿으면 `step-limit` — 둘 다 종료 1. 토큰이 0이면 `주의:` 줄(사내 확인 3).
 - 래퍼가 표시 기록(report·must_show·근거 검사 줄)을 그대로 출력한다.
-- 막힌 호출은 `[telephony-triage]`·"run this exact command yourself: …"가 그대로 나오고, 모델이 다른 모양으로 재시도하지 않는다. 터미널로 넘기는 명령은 모델이 만든 그대로 `  │ ` 뒤에 나온다(제어 문자는 보이는 이스케이프). lock owner가 필요한 `db_pr`·`db_verify` 명령이 있으면 tt-oc가 `주의:` 줄로 붙일 `TT_LOCK_OWNER=<owner>`와 그 작업을 알린다(터미널에는 OpenCode 안의 작업 상태 대체가 없다) — 명령을 복사하고 그 접두를 붙여 실행한다. owner는 지금 `session.lock`을 쥔 작업의 것이 확인될 때만 알리고, 아니면 owner 위치를 알린다.
+- 막힌 호출은 `[telephony-triage]`·"run this exact command yourself: …"가 그대로 나오고, 모델이 다른 모양으로 재시도하지 않는다. 터미널로 넘기는 명령은 모델이 만든 그대로 `  │ ` 뒤에 나온다(제어 문자는 보이는 이스케이프). lock owner가 필요한 `db_pr`·`db_verify` 명령이 있으면 tt-oc가 `주의:` 줄로 붙일 `TT_LOCK_OWNER=<owner>`와 그 작업을 알린다(터미널에는 OpenCode 안의 작업 상태 대체가 없다). owner는 지금 `session.lock`을 쥔 작업의 것이 확인될 때만 알리고, 아니면 owner 위치를 알린다. 팀원이 할 일: 모델이 보인 `db_pr.py publish` 명령은 붙여 넣지 않는다. 열린 설치면 OpenCode를 닫고 `tt-oc --project <dest> publish`, 닫힌 설치면 Claude Code에서 등록한다. 그 밖의 `db_pr`·`db_verify` 명령은 읽은 뒤 `주의:` 줄의 `TT_LOCK_OWNER=` 접두를 붙여 터미널에서 실행한다.
 - 질문은 번호 선택지로 끝난다 → `tt-oc --project <dest> -s <세션> -- <번호>`. 마지막 이어가기에 붙인다: `tt-oc --project <dest> -s <세션> --delete-session -- <번호>`(이어가기가 없으면 첫 실행의 `--` 앞에).
 
 ### 3.4 Jira 읽기 관문 열기
@@ -185,7 +185,7 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
    ```
    보내기 직전에 Jira 오류 본문을 숨긴다(`Jira 오류(본문 숨김)`, tt-guard.js transform). 확인의 `error-path` 행이 그것을 본다. pass가 아니면(warn, 또는 `--missing-key` 없이 돌려 skip) 열 때 `--accept-error-bodies`가 필요하다 — 허용 여부는 도입 담당자가 정해 `SITE_PROFILE.md`에.
 3. 통과 기록은 OpenCode 버전·플러그인 지문·트래커/MCP 설정 지문(Jira 도구 매핑·읽기 도구 목록·opencode.json MCP 서버 이름)에 묶인다. 플러그인을 갱신하거나 그 설정을 바꾸면 각자 1부터 다시. 닫기: `config.py set opencode.jira_read closed`. 상태는 `jira_gate` 행(6절).
-4. tt-oc에서 실제로 읽으려면 `gen_opencode.py install … --jira-read-tool <서버>_<도구> --force`(읽기 도구만 허용). `/etc/opencode`의 `"jira_*": "deny"`(`managed.json.sample`)는 관리자가 푼다 — 관리 설정이 마지막에 합쳐져 이긴다.
+4. tt-oc에서 실제로 읽으려면 `gen_opencode.py install … --jira-read-tool <서버>_<도구> --force`(읽기 도구만 허용. 게시를 열었으면 `--allow-publish`도 — 빠진 것은 꺼진다). `/etc/opencode`의 `"jira_*": "deny"`(`managed.json.sample`)는 관리자가 푼다 — 관리 설정이 마지막에 합쳐져 이긴다.
 
 ### 3.5 재설치
 
@@ -199,6 +199,10 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
 | 3.3 실행에서 규칙 지킴 | 막힌 호출 재시도, 화면 요약 |
 | 사내 확인 0(OpenCode, OpenAI 호환 (a)·(b)) 통과, 3.3 실행이 실제 확인 | (b)·(c)에서 tool_calls 안 나옴(글로만), 모델 ID 거부. `/models` 404만으로는 no-go가 아니다 |
 | Jira가 필요하면 3.4 통과, 아니면 "닫힘 — 이슈 본문은 `--issue-file`" 안내 | 오류 본문 위험 수용 여부 미정 |
+
+### 3.7 게시 열기 (`tt-oc publish`, 기본 닫힘)
+
+`install --allow-publish`로 연 설치에서는 analyze 확인 화면까지 간 작업을 사람이 OpenCode를 닫은 터미널에서 `tt-oc publish`로 PR까지 올린다. 실제 PR은 Jira에서 읽은 값으로만 만들어지므로 3.4 관문도 열려 있어야 한다. 순서와 여는 사람이 확인할 것(tty, `gh auth status`, 이슈 DB clone의 hooksPath·pre-push, 서버 브랜치 보호)은 `opencode/README.md` "처음부터 PR까지"·"게시"에 있다.
 
 ## 4. 공통
 

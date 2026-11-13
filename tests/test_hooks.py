@@ -205,6 +205,57 @@ def test_git_hooks_name_missing_pyyaml_instead_of_misleading_errors():
     assert proc.returncode != 0 and "PyYAML이 없어" in proc.stderr
 
 
+def test_git_hooks_do_not_import_modules_from_the_work_tree():
+    """hook의 inline python(`python3 - <<EOF`)은 cwd(작업 트리 top)를 import 경로에 두지 않는다 — 작업 트리에 심은 무시된 가짜
+    `yaml/`(진짜를 다시 내보내 판정은 그대로)이 커밋·push 때 돌지 않는다 (리뷰 6 F-P0 고침 2)."""
+    ws = Workspace()
+    marker = ws.base / "PWNED"
+    branch_with_change(ws, "review/data-2026-10", "CONTRIBUTING.md", "직접 편집\n")
+    fake = ws.clone / "yaml"
+    fake.mkdir()
+    (fake / ".gitignore").write_text("*\n", encoding="utf-8")
+    (fake / "__init__.py").write_text(
+        f"import os, sys\nopen({str(marker)!r}, 'a').close()\n"
+        "here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))\n"
+        "sys.path[:] = [p for p in sys.path if os.path.abspath(p or os.curdir) != here]\n"
+        "del sys.modules[__name__]\nimport yaml\n", encoding="utf-8")
+    proc = gitp(ws.clone, "commit", "-qm", "직접 편집", env=ws.hook_env())
+    assert proc.returncode == 0 and not marker.exists(), proc.stderr
+    proc = gitp(ws.clone, "push", "-q", "origin", "HEAD:refs/heads/review/data-2026-10",
+                env=ws.hook_env(TT_PUBLISH_TOKEN="manual"))
+    assert proc.returncode == 0 and not marker.exists(), proc.stderr
+
+
+def test_git_hooks_drop_pythonpath_that_links_to_the_work_tree():
+    """재리뷰 RR-4: 링크로 cwd(작업 트리 top)를 가리키는 `PYTHONPATH`도 hook의 inline python(`python3 -`) import 경로에서 뺀다.
+    cwd 아래 venv류 폴더(site-packages)는 cwd가 아니니 그대로 쓴다. 가짜 `yaml`은 inline python(argv[0] `-`)에서만 표시를 남긴다."""
+    ws = Workspace()
+    branch_with_change(ws, "review/data-2026-10", "CONTRIBUTING.md", "직접 편집\n")
+    link = ws.base / "clone-link"
+    try:
+        link.symlink_to(ws.clone, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        import pytest
+        pytest.skip("심볼릭 링크를 만들 수 없다")
+    site = ws.clone / "venv" / "site-packages"
+    marks = {}
+    for name, where in (("link", ws.clone), ("venv", site)):
+        marks[name] = ws.base / f"IMPORTED-{name}"
+        (where / "yaml").mkdir(parents=True)
+        (where / "yaml" / ".gitignore").write_text("*\n", encoding="utf-8")
+        (where / "yaml" / "__init__.py").write_text(
+            f"import os, sys\nif sys.argv[0] == '-':\n    open({str(marks[name])!r}, 'a').close()\n"
+            "here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))\n"
+            "sys.path[:] = [p for p in sys.path if os.path.abspath(p or os.curdir) != here]\n"
+            "del sys.modules[__name__]\nimport yaml\n", encoding="utf-8")
+    (ws.clone / "venv" / ".gitignore").write_text("*\n", encoding="utf-8")
+    proc = gitp(ws.clone, "commit", "-qm", "직접 편집", env={**ws.hook_env(), "PYTHONPATH": str(link)})
+    assert proc.returncode == 0 and not marks["link"].exists(), proc.stderr
+    proc = gitp(ws.clone, "push", "-q", "origin", "HEAD:refs/heads/review/data-2026-10",
+                env={**ws.hook_env(TT_PUBLISH_TOKEN="manual"), "PYTHONPATH": str(site)})
+    assert proc.returncode == 0 and marks["venv"].exists(), proc.stderr
+
+
 # -- Claude hook: Bash ---------------------------------------------------------------------------
 
 
@@ -848,7 +899,9 @@ def test_guard_jira_post_requires_approval():
     cfg_path = ws.home / "config.yaml"
     saved = cfg_path.read_text(encoding="utf-8")
     try:
-        ws.json("config.py", ["set", "tracker.read_tools", json.dumps([*JIRA_TOOLS, NOTE_TOOL])])
+        data = yaml.safe_load(saved)                       # config.py set은 쓰기형 이름을 거부하므로 손으로 넣는다
+        data["tracker"]["read_tools"] = [*JIRA_TOOLS, NOTE_TOOL]
+        cfg_path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
         out = post({"ticket": "MOCK-7101", "text": body})
         assert decision(out) == "deny" and "설정 오류" in out["permissionDecisionReason"]
         cfg_path.write_text(saved, encoding="utf-8")
@@ -1180,6 +1233,72 @@ def test_guard_git_dir_work_tree_and_env_forms():
     subprocess.run(["git", "init", "-q", "-b", "main", str(other)], check=True)
     for cmd in deny:
         assert decision(bash(ws, cmd.replace(str(c), str(other)), ws.base)) is None, cmd
+
+
+def test_guard_git_common_dir_with_git_dir():
+    """`GIT_DIR`와 `GIT_COMMON_DIR`가 둘 다 있으면 git은 config·객체를 `GIT_COMMON_DIR`에서 쓴다 — 둘 중 하나라도 이슈 DB면 이슈 DB."""
+    ws = shared()
+    C = ws.clone.as_posix()
+    fake = tmp("tt-fake-gitdir-")
+    (fake / "HEAD").write_text("ref: refs/heads/main\n")
+    F, plain = fake.as_posix(), tmp("tt-gcd-plain-")
+    for cmd, want in ((f"GIT_DIR={F} GIT_COMMON_DIR={C}/.git git push origin HEAD:main", "ask"),
+                      (f"GIT_DIR={F} GIT_COMMON_DIR={C}/.git git update-ref refs/remotes/origin/main HEAD", "deny"),
+                      (f"GIT_DIR={C}/.git GIT_COMMON_DIR={F} git update-ref refs/remotes/origin/main HEAD", "deny")):
+        assert decision(bash(ws, cmd, plain)) == want, cmd
+
+
+def test_guard_git_dir_forms_under_safe_bare_repository_explicit():
+    """git 2.38~2.44 + `safe.bareRepository=explicit`면 `.git` 안에서 부른 rev-parse가 128 — guard는 `.git` 앞 폴더에서
+    다시 물어 이슈 DB로 본다(2.45+는 이 설정에서도 처음 호출이 된다). 링크 `S -> <clone>/.git`는 실제 경로로 본다."""
+    ws = shared()
+    c, C = ws.clone, ws.clone.as_posix()
+    explicit = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "safe.bareRepository", "GIT_CONFIG_VALUE_0": "explicit"}
+    probe = subprocess.run(["git", "-C", str(c / ".git"), "rev-parse", "--git-dir"], capture_output=True, text=True,
+                           env={**os.environ, **explicit})
+    if probe.returncode == 0:
+        import pytest
+        ver =subprocess.run(["git", "--version"], capture_output=True, text=True).stdout.strip()
+        pytest.skip(f"{ver}: explicit에서도 `.git` 안의 rev-parse가 된다(2.38 미만·2.45+) — 재질문 경로를 시험할 수 없다")
+    env = ws.env(**explicit)
+    plain = tmp("tt-gh-plain-")
+    rows = [(f"git --git-dir={C}/.git push origin HEAD:main", plain, "ask"),
+            (f"git --git-dir={C}/.git update-ref refs/remotes/origin/main HEAD", plain, "deny"),
+            (f'GIT_DIR="{C}/.git" git push --no-verify origin HEAD:main', plain, "deny"),
+            ("git update-ref refs/remotes/origin/main HEAD", c / ".git", "deny")]
+    try:
+        (plain / "S").symlink_to(c / ".git", target_is_directory=True)
+        S = (plain / "S").as_posix()
+        rows += [(f"GIT_DIR={S} git push origin HEAD:main", plain, "ask"),
+                 (f"git -C {S} update-ref refs/remotes/origin/main HEAD", plain, "deny")]
+    except OSError:
+        pass    # 심볼릭 링크를 못 만드는 환경(Windows 권한 등)은 링크 꼴만 건너뛴다
+    for cmd, cwd, want in rows:
+        assert decision(bash(ws, cmd, cwd, env=env)) == want, cmd
+
+
+def test_guard_rev_parse_retries_outside_dot_git_without_host_git(monkeypatch):
+    """위 시험의 재질문 경로(`guard._rev_parse`)를 호스트 git 버전과 무관하게 지킨다(위 시험은 git 2.38~2.44에서만 돈다):
+    가짜 `_git`은 실제 경로에 `.git` 조각이 있으면 128 — 재질문·realpath·`.git` 조각 범위 중 하나라도 빠지면 None이 된다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import guard as g
+
+    def fake_git(d, *args):
+        bad = ".git" in Path(os.path.realpath(d)).parts
+        return subprocess.CompletedProcess([], 128 if bad else 0, "" if bad else f"{d}/.git\n", "")
+
+    monkeypatch.setattr(g, "_git", fake_git)
+    base = tmp("tt-gh-rp-")
+    clone = base / "c"
+    (clone / ".git" / "refs").mkdir(parents=True)
+    cwds = [clone / ".git", clone / ".git" / "refs"]
+    try:
+        (base / "S").symlink_to(clone / ".git", target_is_directory=True)
+        cwds.append(base / "S")
+    except OSError:
+        pass    # 심볼릭 링크를 못 만드는 환경(Windows 권한 등)은 링크 꼴만 건너뛴다
+    for cwd in cwds:
+        assert g._rev_parse(cwd, "--absolute-git-dir") == g._norm(f"{os.path.realpath(clone)}/.git"), cwd
 
 
 def test_guard_eval_and_xargs_wrappers():
@@ -3483,7 +3602,13 @@ def test_guard_inline_interpreter_code_and_symlink_into_clone_ask():
     raw_dir.mkdir(parents=True, exist_ok=True)
     (raw_dir / "events.json").write_text("{}", encoding="utf-8")
     link = tmp("tt-link-") / "lk"
+    job = ws.job_dir("INLINE-2").as_posix()          # 스크립트만 쓰는 기록 경로(규칙 2·7·12)
     asks = [
+        (f"python3 -c \"open('{job}/post.approved.json','w').write('x')\"", "기록 경로"),
+        (f"python3 - <<'EOF'\nopen('{job}/post.result.json','w').write('x')\nEOF", "기록 경로"),
+        (f"perl -e 'open(F,\">{job}/merge-offer.json\");print F 1'", "기록 경로"),
+        (f"python3 -c \"open('{job}/post.approved.json'); open('{clone.as_posix()}/x','w')\"", "기록 경로"),
+        (f"python3 -c \"open('{job}/post.approved.json'); open('{clone.as_posix()}/x','w')\"", "규칙 8"),
         (f"python3 -c \"open('{clone}/README.md','w').write('x')\"", "규칙 8"),
         (f"python3 - <<'EOF'\nopen('{clone}/README.md','w').write('x')\nEOF", "규칙 8"),
         (f"perl -e 'open(F,\">{clone}/README.md\");print F 1'", "규칙 8"),
@@ -3494,7 +3619,19 @@ def test_guard_inline_interpreter_code_and_symlink_into_clone_ask():
     for cmd, rule in asks:
         out = bash(ws, cmd, clone)
         assert decision(out) == "ask" and rule in out["permissionDecisionReason"], (cmd, out)
+    home = {"HOME": ws.base, "USERPROFILE": ws.base}  # `~/…` 꼴(Windows expanduser는 USERPROFILE)
+    out = bash(ws, "python3 -c \"open('~/work/INLINE-2/post.result.json','w')\"", clone, env=ws.env(**home))
+    assert decision(out) == "ask" and "기록 경로" in out["permissionDecisionReason"], out
+    # 기록 경로 ask는 clone·원문 낱말이 먼저 나와도 남고, 기록 경로가 여럿이어도 코드 하나에 한 번이다
+    for first, rule in ((f"{clone.as_posix()}/x", "규칙 8"), (f"{raw_dir.as_posix()}/events.json", "규칙 10")):
+        out = bash(ws, f"python3 -c \"open('{first}'); open('{job}/post.approved.json')\"", clone)
+        assert decision(out) == "ask" and "기록 경로" in out["permissionDecisionReason"], out
+        assert rule in out["permissionDecisionReason"], out
+    out = bash(ws, f"python3 -c \"open('{job}/post.approved.json'); open('{job}/merge-offer.json')\"", clone)
+    assert decision(out) == "ask" and out["permissionDecisionReason"].count("기록 경로") == 1, out
     for cmd in (f"python3 -c \"print(open('{ws.root}/no-such-notes.txt').read())\"", "python3 -c 'print(1+1)'",
+                f"python3 -c \"open('{job}/notes.txt','w')\"", "python3 -c \"open('/tmp/K1/post.approved.json','w')\"",
+                f"python3 -c \"open('{job}/skill-suggestions/a/rel.txt','w')\"",
                 f"ln -s {link} {link}2", "perl -e 'print 1'", f"python3 -c \"import json; json.load(open('{clone}'))\" --flag"):
         out = bash(ws, cmd, clone)
         assert decision(out) in (None, "ask") if "import json" in cmd else decision(out) is None, (cmd, out)

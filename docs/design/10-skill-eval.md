@@ -10,15 +10,15 @@
 
 | 파일 | 내용 | 언제 읽나 |
 |---|---|---|
-| `SKILL.md` | 실행 규칙은 `rules.md`로 연결, `triage.py run` 호출과 `needs_input` 처리(Step 0~5 resolve는 드라이버, `contracts.md §3.2`), 결과 읽기, Step 6 리포트 규칙, Step 7 결정표, Step 8은 `write-flow.md`로, 흐름 A(찾기·분석)/B(등록) 한 줄. **9,107B 이하**(한도는 `tests/test_triage.py` 단언 값, 늘린 이력은 그 주석 — B2 eval 수정 5-1 순서 문장 뒤 9,107B, 흐름 A/B 추가 뒤 8,064B, 그 전 7.5KB(RF-1), W6 전 8KB) | 스킬이 트리거될 때 |
-| `reference/rules.md` | 실행 규칙(스크립트 호출, 종료 코드 2·S-3 중단, lock, 마스킹, 사용자 확인 지점). 2,516B 이하(같은 테스트 단언 값, 그 전 2,496B·2KB) | analyze(SKILL이 지시), `record`·`verify-fix`·`fix-submitted`·`validate --cause`·`sync-pr`. `search`는 읽기 전용이라 읽지 않는다 |
+| `SKILL.md` | 실행 규칙은 `rules.md`로 연결, `triage.py run` 호출과 `needs_input` 처리(Step 0~5 resolve는 드라이버, `contracts.md §3.2`), 결과 읽기, Step 6 리포트 규칙, Step 7 결정표, Step 8은 `write-flow.md`로, 흐름 A(찾기·분석)/B(등록) 한 줄. (한도: `tests/test_triage.py` 흐름 합계 시험) | 스킬이 트리거될 때 |
+| `reference/rules.md` | 실행 규칙(스크립트 호출, 종료 코드 2·S-3 중단, lock, 마스킹, 사용자 확인 지점). (한도: `tests/test_triage.py` 흐름 합계 시험) | analyze(SKILL이 지시), `record`·`verify-fix`·`fix-submitted`·`validate --cause`·`sync-pr`. `search`는 읽기 전용이라 읽지 않는다 |
 | `reference/write-flow.md` | 공통 쓰기 절차(Step 8 방식), analyze 계획 형식, 확인 화면 형식, drift 결정, lock 해제 경로 | Step 7 계획 저장, Step 8, 모든 쓰기 흐름 |
 | `reference/record.md` | `07-workflow.md §record` | `record` 커맨드 |
 | `reference/verify.md` | `07-workflow.md §validate`(`--cause`), `§fix-submitted`, `§verify-fix` | 해당 커맨드 |
 | `reference/sync-pr.md` | `07-workflow.md §sync-pr`, `06-collaboration.md §6.3` sync-pr 절차 (**단일 원본** — `commands/sync-pr.md`는 이 파일을 가리키기만 한다) | `sync-pr` 커맨드, Step 8-2 원격 브랜치 있음 |
 | `reference/search.md` | `03-issue-db.md §5.5`, `09-commands.md` search (**단일 원본** — `commands/search.md`는 이 파일을 가리키기만 한다). 증상 문장을 그대로 `db_search.py`에 넘기고 이슈 번호 줄·유형 > 원인 표로 보인다. 읽기 전용 | `search` 커맨드, 증상만 묻는 "비슷한 이슈·이슈 번호?" |
 | `reference/post.md` | `07-workflow.md §Step 9`: Jira 결과 게시 절차(status·render·`post.fill.json` 형식과 basis 규칙·확인 화면 그대로·수정 요청·`--omit`·approve 출력 그대로 1회 호출·거부·MCP 없음 처리) | analyze Step 9, 같은 세션의 "결과 Jira에 올려줘" |
-| `reference/db-authoring.md` | 아래 "추가 지침" 목록 중 작성 판단만(op·drift·R 표는 스키마·`계획 형식 오류` 메시지·`db_verify`가 대신한다). §0 등록(흐름 B) 준비물·리뷰어 색인. 12KB 이하(필수 필드 요약 1KB 포함, §0 추가 전 11,392B) | 새 원인·유형·시그니처·파서 규칙을 만들 때 |
+| `reference/db-authoring.md` | 아래 "추가 지침" 목록 중 작성 판단만(op·drift·R 표는 스키마·`계획 형식 오류` 메시지·`db_verify`가 대신한다). §0 등록(흐름 B) 준비물·리뷰어 색인. (한도: `tests/test_triage.py` 흐름 합계 시험) | 새 원인·유형·시그니처·파서 규칙을 만들 때 |
 | `reference/ril-requests.md`, `fail-causes.md`, `log-tags.md` | 참조 자료 | 로그 해석이 필요할 때 |
 | `reference/platforms/<p>/*.md` | android 밖 플랫폼의 탐색 지식(참조 자료). 지금 `ofono/log-guide.md`(placeholder) 하나, 3,072B 이하(`tests/test_triage.py` 단언 값) | Step 5-2에서 `triage.py explore` 출력 `refs`에 있을 때만(`reference/explore.md` 5번, `17-platforms.md §10-2`) |
 

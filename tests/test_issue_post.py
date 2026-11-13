@@ -182,6 +182,34 @@ def test_fill_checks_fail_with_exit_1():
     assert any("상한" in p for p in out["problems"])
 
 
+def test_code_location_absolute_path_only_in_file_slot():
+    import issue_post
+
+    def problems(code):
+        masker = masking.new_masker(existing_text="", allow_patterns=[])
+        raw = {**FILL, "code_location": code}
+        return [p for p in issue_post.check_fill(raw, True, False, masker, [], [])[1] if "절대 경로" in p]
+
+    for code in ("/home/u/aosp/frameworks/X.java:12 — y", r"C:\src\aosp\X.java:12", "~/aosp/frameworks/X.java:12",
+                 "/X.java:12", "`/home/u/aosp/X.java:12` — y", '"/home/u/X.java:12"', r"(C:\src\X.java:12)",
+                 "~user/aosp/X.java:12", "**/home/u/X.java**", "- /home/u/X.java", "1. /home/u/X.java", "$HOME/aosp/X.java",
+                 r"%USERPROFILE%\aosp\X.java", "file:///home/u/X.java", "a/X.java, /home/u/Y.java", r"\\srv\s\X.java",
+                 # 재리뷰 RR-3: 단말 예외는 /sdcard/·/storage/emulated|self/만(`..`가 들면 아니다), 목록 번호·인용 뒤, ${HOME}, /mnt/c/·/c/Users/
+                 "/storage/build/aosp/frameworks/X.java:12", "/sdcard/../home/u/X.java", "/storage/../../home/u/X",
+                 "1. /work/aosp/X.java:12", "> /work/aosp/X.java", "a.java — ${HOME}/aosp/X.java",
+                 "a.java:1 — /mnt/c/Users/u/aosp/X.java", "a.java — /c/Users/u/X.java"):
+        assert problems(code), code
+    for code in ("frameworks/opt/telephony/X.java:12 — 요청/응답", "a/b/c.java:3 — https://cs.android.com/ 참고",
+                 "X.java:12 — /data/vendor/radio 를 읽는다", "`frameworks/opt/telephony/X.java:12` — y",
+                 "(참고) a/b.java:3 — z", "/sdcard/Download/log.txt 를 연다", "/storage/emulated/0/a.txt",
+                 "**frameworks/base/core/java/android/net/Foo.java:123**", "- packages/services/Telephony/Foo.java:45",
+                 "hardware/interfaces/radio/aidl/IRadioData.aidl:30", "./frameworks/X.java:1", "Foo.cpp:88 — 지연 ~3초/회",
+                 "a/b.java:3 — 50% 확률, 80% 재시도", "X.java:1 — https://cs.android.com/x/+/main:frameworks/base/",
+                 "/sdcard/Download/x.log", "/storage/emulated/0/x", "/storage/self/primary/x", "1. frameworks/X.java:3",
+                 "frameworks/base/core/java/android/net/Foo.java:123 — /mnt/data 아님", "X.java:1 — x=$HOMEDIR"):
+        assert not problems(code), code
+
+
 def test_pull_skipped_must_show_line_is_not_posted():
     """07 §Step 9 ANALYSIS: pull 건너뜀 줄은 사용자 clone 상태(로컬 브랜치 이름)라 Jira 본문에 넣지 않는다 — 다른 must_show는 그대로."""
     ws = shared()

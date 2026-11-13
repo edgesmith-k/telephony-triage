@@ -509,7 +509,7 @@ def _check_op_summary(path):
     start = text.index("op 필수 키 (")
     end = text.index(fallback) + len(fallback)
     block = text[start:end]
-    assert len(block.encode("utf-8")) <= 1152       # W7 add-fixture 세부 포함(그 전 1,024B, tools/gen_contracts.py BLOCK_MAX)
+    assert len(block.encode("utf-8")) <= 1152
     schema = json.loads((REPO / "plugin" / "schemas" / "plan.schema.json").read_text(encoding="utf-8"))
     required = {b["properties"]["op"]["const"]: [k for k in b["required"] if k != "op"] for b in schema["$defs"]["operation"]["oneOf"]}
     seen, seen_signature = {}, False
@@ -537,9 +537,8 @@ MODULE_SKILLS_NEEDLES = ("triage.py module", "--for deep", "--for explore", "`re
 
 
 def _check_module_skills_md(path):
-    """B2 §10.2: 5-1·5-2 동의 뒤 절차(새 문서, 4KB). 런타임 중립 — 도구 이름·플러그인 변수 없이 쓴다(OpenCode도 읽는다)."""
+    """B2 §10.2: 5-1·5-2 동의 뒤 절차(새 문서). 런타임 중립 — 도구 이름·플러그인 변수 없이 쓴다(OpenCode도 읽는다)."""
     text = path.read_text(encoding="utf-8")
-    assert len(text.encode("utf-8")) <= 4539      # 정밀 탐색(`--deep`) 절 뒤(11/14). 그 전 4,096B(4KB)
     for needle in MODULE_SKILLS_NEEDLES:
         assert needle in text, needle
     for bad in ("Read 도구", "AskUserQuestion", "Bash", "Task 도구", "${CLAUDE_PLUGIN_ROOT}"):
@@ -550,11 +549,11 @@ def _check_module_skills_md(path):
         assert not (re.search(r"열|읽", near) and re.search(r"않|금지", near)), near
 
 
-def test_skill_md_is_within_7_5kb_and_drives_triage():
+def test_skill_md_drives_triage():
     skill = REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md"
     reference = skill.parent / "reference"
     text = skill.read_text(encoding="utf-8")
-    assert len(text.encode("utf-8")) <= 9180        # 종합 리뷰 A6: S1 확인 전엔 guard가 Jira 읽기마다 묻는다(우회 금지) 한 구절 뒤. 그 전 9,107B — B2 e79: Step 5-1이 module 전에 module-skills.md를 읽게(종료 2 계속 규칙) 뒤. 그 전 9,063B — 규칙 제안 질문: 여러 개 가능·`모두`·`받지 않음(기본 — 이유)` 선택지(10/22 사용자) 뒤. 그 전 8,968B — Step 7 `[스킬]` 줄 → 담당자용 patch(`skill-patch.md`) 뒤. 그 전 8,962B — 분석 스킬 `규칙 제안:` 줄 처리(Step 5-1 괄호·Step 7 질문, 사내 문구 그대로) 뒤. 그 전 8,590B — L2 재측정 뒤: --more-logs는 --logs 대신(e52)·회귀 의심은 update-fix(e10) 명시 뒤. 그 전 8,500B — L2 ③ 리뷰: Step 7 질문 모양(고정 둘·글 거부·분석 스킬 의견 자리·후보 0개) 뒤. 그 전 8,280B — E67: Step 9 앞 PR 링크(`pr.url`)를 글로 보인다는 말 뒤. 그 전 8,256B — 전체 eval(10/14) 반영: 이어서 plan.next·mode write·거부 뒤 선택지·issue 재호출 뒤의 한도. 그 전 8,064B(흐름 A/B 한 줄 추가 뒤). 그 전 7,680B(W6: 실행 규칙을 reference/rules.md로 옮김), W6 전 8,192B
+    assert len(text.encode("utf-8")) <= 9180
     for needle in ("triage.py run", "needs_input", "--answer", "write-flow.md", "--commit", "reference/rules.md",
                    "steps-pasted.txt", "--dry-run --issue-file", "analyzer.skill",
                    "must_show", "triage.py explore", "triage.py module", "check-output", "module-skills.md"):
@@ -565,12 +564,9 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
     assert "답 전 explore·module·원문 열람 금지" in lines[at + 1] and "Skill로" not in block
     _check_module_skills_md(reference / "module-skills.md")
     rules = (reference / "rules.md").read_text(encoding="utf-8")      # SKILL §실행 규칙이던 내용
-    assert len(rules.encode("utf-8")) <= 2700      # 종합 리뷰 G①: 로그는 마스킹 사본 logs-masked/를 쓴다 한 구절 뒤. 그 전 2,516B — 병합은 +1 뒤 요청 시 `db_pr merge`만(Approve 금지, A2 11/04) 뒤. 그 전 2,496B — 머지는 `db_pr merge`만(본인 병합, 10/22) 뒤. 그 전 2,485B — `--platform`·`--json` 없이 목록에 skill_patch(10/22) 뒤의 한도. 그 전 2,460B — L2 J7 질문당 선택지 4개 줄 뒤의 한도. 그 전 2,320B — Bash·Read 출력 비가시(리포트·검증 표·확인 화면·notes·must_show, 전체 eval 10/14)·stage `next` 줄 뒤의 한도. 그 전 2,048B
+    assert len(rules.encode("utf-8")) <= 2700
     for needle in ("S-3", "계획 형식 오류", "TT_LOCK_OWNER", "stage --then-summary", "모든 종료 경로에서 푼다", "사용자 확인 후"):
         assert needle in rules, needle
-    assert len((reference / "db-authoring.md").read_bytes()) <= 12600      # 코덱스 리뷰 02e0ec2 F01: signature_features 선언 조건 한 구절 뒤(12,572B). 그 전 12,416B — D① min_count·sequence_within_sec 한 줄과 signature 선택 키 뒤(11/08 사용자). 그 전 12,288B — 필수 키 요약 포함. §0 등록 준비물·리뷰어 색인 추가 뒤의 한도(그 전 11,392B: W7 add-fixture 세부, 11,264B)
-    assert len((reference / "write-flow.md").read_bytes()) <= 16100     # 종합 리뷰 B2: 리뷰어 질문에 `reviewer.ask: false`면 안 묻는다 한 구절 뒤. 그 전 16,000B — A2 +1 병합(11/04): 바로 병합 선택지·--and-merge·병합 재시도 삭제, 리뷰어 질문(5번)·"병합해줘"(§6) 추가, stage 하는 일 압축 뒤. 그 전 15,872B — 확인 화면 선택지 push하고 바로 병합·--and-merge·병합 재시도(10/22) 뒤. 그 전 14,680B — L2 J5 확인 화면 압축(생성 파일 한 행·건너뜀 묶음·README 머리) 뒤(그 전 14,390B: E67 PR 링크를 다음 질문 전에 글자 그대로 보인다 뒤(그 전 14,344B)
-    assert len((reference / "skill-patch.md").read_bytes()) <= 2176      # B2 R2: 1번 SK = module --for deep 출력 base(스킬 도구 Base directory는 설치 스킬 못 찾음 뒤만)·모듈 문서면 메모. 그 전 2,048B — A2: SKILL.md 규칙 제안 문장 이동(`[스킬]` 줄은 계획에 넣지 않고 담당자용 patch, 11/04) 뒤 — E에서 전면 재작성·재설정. 그 전 1,920B — 4번 스킬 소스 적용(--apply --sha, 10/22) 뒤. 그 전 1,600B — 종료 2도 메모로 이어감(10/22 리뷰) 뒤. 그 전 1,536B — analyze Step 7 `[스킬]` 줄을 고를 때만 읽는다(write-flow에 두면 모든 쓰기 흐름이 읽는다). diff·마스킹·apply --check·안내 줄을 `skill_patch.py`로 옮긴 뒤(10/22, 표시 기록 kind patch). 그 전 1,800B — 리뷰 P1: 마스킹 뒤 git apply --check·실패 시 메모 포함
     _check_op_summary(reference / "db-authoring.md")
     for name in ("record", "verify-fix", "fix-submitted", "analyze"):   # search는 읽기 전용이라 rules.md를 읽지 않는다
         assert "reference/rules.md" in (REPO / "plugin" / "commands" / f"{name}.md").read_text(encoding="utf-8"), name
@@ -582,6 +578,35 @@ def test_skill_md_is_within_7_5kb_and_drives_triage():
         assert needle in verify, needle
     for name in ("analyze", "record", "verify-fix", "fix-submitted"):   # 보일러플레이트 없이 한 줄로 가리킨다
         assert len((REPO / "plugin" / "commands" / f"{name}.md").read_bytes()) < 1024, name
+
+
+REF_FILE_MAX = 16 * 1024    # reference/*.md 전부(하위 폴더 platforms/ 제외) 한 개
+FLOWS = {   # 한 흐름에서 읽는 문서(SKILL.md 말고는 reference/<이름>.md) 합 한도. 값 = 정할 때 합 x1.05를 KiB로 올림
+    "analyze 최악": (("SKILL.md", "rules", "module-skills", "explore", "write-flow", "db-authoring", "skill-patch", "post"),
+                   63 * 1024),
+    "record": (("rules", "record", "write-flow", "db-authoring"), 46 * 1024),
+    "verify-fix": (("rules", "verify", "write-flow", "db-authoring"), 45 * 1024),
+    "로그 해석": (("SKILL.md", "rules", "log-tags", "ril-requests", "fail-causes"), 27 * 1024),
+    "sync-pr": (("rules", "sync-pr", "write-flow"), 25 * 1024),
+    "search": (("search",), 4 * 1024),
+}
+
+
+def test_skill_doc_flow_budgets():
+    """스킬 문서 바이트 한도: 흐름 합계(FLOWS)가 묶고, 파일별 여유는 reference/*.md 전부(glob, platforms/ 제외)에 REF_FILE_MAX.
+    SKILL.md 9,180·rules.md 2,700은 test_skill_md_drives_triage, log-guide 3,072는 test_explore_setting_*이 따로 묶는다.
+    FLOWS 값은 정할 때 합 x1.05를 KiB로 올렸다. x1.05는 정한 값(측정 근거 없음).
+    흐름 합계나 고정 한도를 올리는 PR은 흐름별 증가 바이트와 사유를 적고 사용자 확인을 받는다. 그 흐름 eval을 돌렸으면
+    `grade.py --token-budget` 결과를 함께 적는다. SKILL.md·rules.md·CLAUDE.md·SITE_PROFILE은 기본적으로 올리지 않는다."""
+    skill = REPO / "plugin" / "skills" / "telephony-triage"
+    refs = sorted((skill / "reference").glob("*.md"))
+    assert len(refs) >= 14
+    assert {p.stem for p in refs} <= {d for docs, _ in FLOWS.values() for d in docs}   # 새 문서는 어느 흐름에든 넣는다
+    for path in refs:
+        assert len(path.read_bytes()) <= REF_FILE_MAX, (path.name, len(path.read_bytes()))
+    for flow, (docs, cap) in FLOWS.items():
+        total = sum(len((skill / (d if d == "SKILL.md" else f"reference/{d}.md")).read_bytes()) for d in docs)
+        assert total <= cap, (flow, total, cap)
 
 
 # -- 외부 리뷰 토큰 항목 ----------------------------------------------------------------------------------
@@ -784,9 +809,6 @@ def test_explore_setting_flows_from_site_defaults_and_skill_points_to_reference(
                    "explore-output.md", "check-output", "## 일반 판단 규칙", "〔script", "점수·신뢰도를 매기지 않는다",
                    "추정을 사실처럼 쓰지 않는다"):
         assert needle in ref, needle
-    # 코덱스 리뷰 02e0ec2 Q01: `[근거 불일치 N]` 한 줄 뒤 7,580. 그 전 코덱스 리뷰 F4: 선택 칸(원인 층·원인 데몬·가장 유력) 한 줄 뒤
-    # 7,350. 그 전 7,168 — B2 §10.3: 출력 파일 + check-output·일반 판단 규칙(log-guide에서 옮김) 뒤. 그 전 5,910B(한도 없음)
-    assert len(ref.encode("utf-8")) <= 7580
     assert ref.index("## 쓰는 것") < ref.index("## 일반 판단 규칙") < ref.index("## 다음")
     # android 밖 플랫폼 탐색 지식(17-platforms §10): `triage.py explore` 출력 refs로만 읽는다. placeholder라 작게 둔다
     guide = REPO / "plugin" / "skills" / "telephony-triage" / "reference" / "platforms" / "ofono" / "log-guide.md"
@@ -1804,3 +1826,17 @@ def test_cause_unconfirmed_run_shows_partial_match_and_code_check(tmp_path):
     assert "- 배제 조건 검증 불가: DATA-001/no-setup-data-call-request의 must_not_match 태그 RILJ 줄이 이 로그에 0줄" in report
     assert any(m.startswith("배제 조건 검증 불가") for m in done.get("must_show") or []), done.get("must_show")
     ws.json("triage.py", ["release", "MOCK-1001"])
+
+
+def test_analyze_surfaces_mask_copy_nul_warning(tmp_path):
+    """V2 범위 밖 2: NUL 든 줄을 비운 mask-copy 경고가 analyze 출력 warnings에 보인다(스크립트 stderr는 사용자에게 안 간다)."""
+    log = tmp_path / "radio.log"
+    log.write_bytes(b"09-26 13:00:00.000  1500  1510 I RILJ    : [PHONE0] x\0y\n"
+                    b"09-26 13:00:01.000  1500  1510 E RILJ    : [PHONE0] < SETUP_DATA_CALL error 2 failed\n")
+    meta = tmp_path / "m.json"
+    meta.write_text(json.dumps({"key": "MOCK-9012", "occurred_at": "2026-09-26T13:00:00+09:00", "summary": "data"}), encoding="utf-8")
+    out = tmp_path / "job"
+    analysis = run_json("triage.py", ["run", "MOCK-9012", "--offline-db", SAMPLE, "--out", out, "--logs", log, "--issue-meta", meta,
+                                      "--tz", "Asia/Seoul", "--year", "2026"])
+    assert "mask-copy-nul" in json.dumps(analysis.get("warnings") or [], ensure_ascii=False), analysis.get("warnings")
+    assert (out / "logs-masked" / "radio.log").read_text(encoding="utf-8").split("\n")[0] == "<REDACTED:NUL>"

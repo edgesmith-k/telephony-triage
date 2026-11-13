@@ -81,6 +81,7 @@ import trackers  # noqa: E402
 from common import compat, dbpath, gitscope, issuedb, masking, parser_rules, site_defaults, typedoc, yamlio  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE, parse_name  # noqa: E402
+from common.quality import CODE_FIX_TYPES  # noqa: E402
 from common.signatures import (  # noqa: E402
     SUPPORTED_FEATURES, SignatureError, compile_signature, features_used, tag_position_word)
 
@@ -88,7 +89,6 @@ TOKEN_FIXED_RE = re.compile(r"<[A-Z][A-Z0-9]*#\d+>")
 KEBAB_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SIG_KINDS = ("symptom_signatures", "signatures", "recovery_signatures", "scenario_signatures")
 TYPE_TITLE_MAX, CAUSE_TITLE_MAX = 30, 20
-CODE_FIX_TYPES = ("framework-bug", "vendor-ril", "modem", "carrier-config")
 # mask.allow_patterns 넓이 검사용 합성 PII 표본 (IP는 TEST-NET: 사설 대역 한정 예외는 통과시킨다)
 PII_PROBES = {"IMSI": "450081234567890", "IMEI": "356938035643809", "IP": "203.0.113.7",
               "MAC": "02:00:00:aa:bb:cc", "EMAIL": "user@example.com", "MSISDN": "010-1234-5678",
@@ -690,7 +690,7 @@ class Linter:
             if (fix.get("verification") or {}).get("result") != "passed":
                 self.err("fixed-without-verification", type_md,
                          f"{cid}: fixed인데 verification(result: passed)이 없다 (verify-fix로만 fixed가 된다).")
-            if (cause.get("resolution_type") in CODE_FIX_TYPES
+            if (str(cause.get("resolution_type")) in CODE_FIX_TYPES      # str: 집합이라 목록 값(schema 오류)도 안 깨진다
                     and not (cause.get("scenario_signatures") or cause.get("recovery_signatures"))):
                 self.err("fixed-without-trace", type_md,
                          f"{cid}: 코드·설정 수정 유형({cause.get('resolution_type')})의 fixed에는 scenario_signatures 또는 "
@@ -807,7 +807,8 @@ class Linter:
             return
         self.warn("tag-unknown", type_md, f"{key}: 패턴 {pattern!r}의 앞 낱말 '{word}'가 tags.yaml 태그에 맞지 않습니다 — 태그 자리면 "
                                         "그 줄이 수집되지 않아 있음 조건은 늘 거짓, 없음 조건은 공허하게 참입니다(개명·누락?). "
-                                        "메시지 낱말이면 `.*`로 시작하게 쓰면 경고가 사라집니다.")
+                                        "메시지 낱말이면 `(?:Word)`나 `\\bWord`처럼 메타 문자로 시작하게 쓰면 경고가 사라집니다"
+                                        "(`\\b`는 `onWord` 같은 낱말 안에는 맞지 않습니다).")
 
     def _check_event_name(self, type_md, key, name) -> None:
         if name.startswith("builtin.") and name not in self.builtin_events:

@@ -386,6 +386,14 @@ def test_fit_drops_order_last_before_clock_reason_before_focus():
     assert "reason" not in over["step_anchor"]["clock"] and over["step_anchor"]["focus"] == ["DATA-001"]
 
 
+def test_fit_clips_long_warnings():
+    import importlib
+    triage = importlib.import_module("triage")
+    fitted = triage.fit({"issue": {"summary": "s"}, "files": {"report": "r"}, "warnings": ["가" * 600] * 5})
+    assert len(triage.dumps(fitted).encode("utf-8")) + 1 <= triage.ANALYSIS_MAX and fitted["truncated"] is False
+    assert len(fitted["warnings"]) == 3 and all(len(w) <= 120 for w in fitted["warnings"])
+
+
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))

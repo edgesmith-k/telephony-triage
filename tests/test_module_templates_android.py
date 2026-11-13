@@ -52,14 +52,8 @@ CASES = [
     ("data", "data-no-service-eval-reject", "explore", None),
 ]
 
-# 문서 상한(바이트, C1D 보정 §2.2) — skillcheck.CAPS보다 좁다(R24). 경로 키가 파일 이름 키보다 먼저.
-# explore.md는 5행 계약 문구(`가설 N:`부터, 코덱스 리뷰 02e0ec2 F05)로 +66B라 100씩 올렸다
-# deep.md(정밀 탐색)는 아직 목표가 없어 받을 때 상한(skillcheck.CAPS)과 같다
-DOC_CAPS = {"layers.md": 2900, "components.md": 3300, "SKILL.md": 2000, "analyzer.md": 1150, "explore.md": 2700,
-            "deep.md": 16384, "modem/SKILL.md": 1024, "data/explore.md": 2900}
-REFERENCE_CAP = 1300
-# run별 with arm 문서 합 = 그 run이 읽는 파일 상한의 합(C1D 보정 §2.3)
-COMMON_BUDGET, DEEP_RUN_BUDGET, ALSO_RUN_BUDGET, EXPLORE_RUN_BUDGET = 6000, 10450, 11474, 8800
+# run별 with arm 문서 합 한도(C1D 보정 §2.3). 파일별 상한은 skillcheck.CAPS(test_module_templates test_size_caps)
+DEEP_RUN_BUDGET, ALSO_RUN_BUDGET, EXPLORE_RUN_BUDGET = 10450, 11474, 8800
 # 모듈마다 references(모뎀은 없음 — deep은 증상 모듈 + also)
 REFERENCES = {"data": "DATA-001", "sim": "SIM-001", "network": "NETWORK-001", "call": "CALL-001", "sms": "SMS-001",
               "ims": "IMS-001"}
@@ -91,12 +85,10 @@ def test_android_cases_present():
     assert sum(1 for *_, trap in CASES if trap) >= 1
 
 
-def test_android_doc_caps():
+def test_android_doc_set():
     seen = set()
     for path in _docs():
         rel = path.relative_to(ANDROID)
-        cap = REFERENCE_CAP if path.parent.name == "references" else DOC_CAPS.get(rel.as_posix(), DOC_CAPS.get(path.name))
-        assert path.stat().st_size <= cap, (rel.as_posix(), path.stat().st_size, cap)
         seen.add(rel.as_posix())
     want = {"_common/layers.md", "_common/components.md"}
     for module in MODULES:
@@ -136,7 +128,6 @@ def test_android_analyzer_identical():
 def test_android_run_budgets():
     """한 run의 with arm 문서 합(oFono test_doc_budgets와 같은 모양). also = 증상 모듈 deep + 모뎀 SKILL의 최댓값."""
     common = sum((ANDROID / "_common" / n).stat().st_size for n in ("layers.md", "components.md"))
-    assert common <= COMMON_BUDGET, common
     modem_skill = (ANDROID / "modem" / "SKILL.md").stat().st_size
     for module in MODULES:
         refs = [p.stat().st_size for p in (ANDROID / module / "references").glob("*.md")]

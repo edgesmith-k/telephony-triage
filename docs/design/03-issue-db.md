@@ -73,6 +73,7 @@ telephony-issue-db/
 │   ├── issue.schema.json
 │   ├── feedback.schema.json
 │   ├── plan.schema.json               # 작업 계획 (contracts.md §작업 계획)
+│   ├── expect.schema.json             # .expect.yaml (fixture 기대)
 │   └── parser-rules.schema.json
 ├── templates/
 │   ├── type.md                        # 새 유형

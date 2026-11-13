@@ -16,6 +16,8 @@ PR까지 = 첫 `0-key` → 그 뒤 첫 `publish{action: created, gh_ok: true}`(�
 확인(Step 5~7)을 포함한 경과 시간(보류·대기 포함, 능동 작업 시간 아님 — transcript 시각이 없어 재지 않는다). `done`은 있는데 그런 행이
 없으면(분석만 하고 release 안 함·아직 진행 중) investigation_unmeasured. `explore`·`module`·`checked` 행은 정보용이라 어느 지표도 legacy 판정(v≥2 행)도 보지 않는다.
 PR이 있는데 못 재면 pr_unmeasured(record처럼 analyze 없이 시작했거나 PR 뒤에 analyze한 작업).
+병합까지(`merge_minutes`, 상태 pr인 작업만) = 그 첫 `created` → 그 뒤 첫 `merge{merged: true}`(`already` 제외) — `db_pr merge`로 병합한 PR만
+(GHE 화면에서 병합하면 행이 없어 빠진다). 다시 올림(`resyncs`) = 첫 `created` **뒤**의 `publish{action: edited, gh_ok: true}` 행(sync-pr 등) 수(실패한 시도는 빼고).
 재시도의 analyze 실행은 질문(`needs_input`) 바로 뒤의 `--answer` 재실행을 빼고 따로(answer_reruns) 센다. 시간대 없는(naive) 시각·
 목록이 아닌 `job.runs` 같은 손상 값은 없는 것으로 본다. 드라이버 질문 = `needs_input` 행(kind
 `issue` 제외), 대화 질문(AskUserQuestion)은 스크립트 신호가 없어 세지 않는다. release(Step 7) 사유는 기록이 없어 파일 상태로만
@@ -36,7 +38,8 @@ CLI:
     (기본: 선택 플랫폼(`--platform` > TT_PLATFORM > 사용자 config platform > site)의 사용자 config work_dir.
     `--work-dir`와 `--platform`은 함께 쓸 수 없다. `--work-dir`면 site-defaults를 읽지 않는다)
     텍스트 10줄(첫 줄 집계 대상). `--json`이면 JSON 한 줄 `{format: 2, platform, work_dir, jobs, states{…}, held_read_only,
-    analysis_only_runs, cancel_ratio, pr_minutes{n, median, mean, values}, pr_unmeasured, analysis_minutes{…},
+    analysis_only_runs, cancel_ratio, pr_minutes{n, median, mean, values}, pr_unmeasured, merge_minutes{…}, resyncs{prs, total,
+    per_pr}, analysis_minutes{…},
     investigation_minutes{…}, investigation_unmeasured,
     questions{jobs, total, per_job, by_kind}, retries{runs, answer_reruns, errors, stages, stage_failed}, legacy{jobs, stages},
     other_flows, tokens}`
@@ -84,9 +87,13 @@ def _ts(row: dict | None):
     return t if t.tzinfo is not None else None
 
 
-def _minutes(rows: list, end) -> float | None:
-    """첫 `0-key` → 그 **뒤** 처음 `end` 행까지 분. 앞에 있는 행(예: analyze 전에 record로 만든 PR)은 보지 않는다."""
-    first = next((i for i, r in enumerate(rows) if r.get("step") == "0-key"), None)
+def _pr_created(r: dict) -> bool:
+    return r.get("step") == "publish" and r.get("action") == "created" and r.get("gh_ok") is True
+
+
+def _minutes(rows: list, end, start=lambda r: r.get("step") == "0-key") -> float | None:
+    """첫 `start`(기본 `0-key`) → 그 **뒤** 처음 `end` 행까지 분. 앞에 있는 행(예: analyze 전에 record로 만든 PR)은 보지 않는다."""
+    first = next((i for i, r in enumerate(rows) if start(r)), None)
     if first is None:
         return None
     t0, t1 = _ts(rows[first]), _ts(next((r for r in rows[first + 1:] if end(r)), None))
@@ -175,10 +182,14 @@ def _job(job: Path, lock: dict | None) -> dict:
     stages = [r for r in rows if r.get("step") == "stage"]
     fresh, reruns = _runs(rows)
     analyzed, investigation = _investigation(rows)
+    created = next((i for i, r in enumerate(rows) if _pr_created(r)), len(rows))
     return {"kind": "measured", "state": state, "read_only": state == "held" and last.get("mode") == "read-only",
             "analysis_only_runs": sum(1 for r in runs if isinstance(r, dict) and r.get("mode") == "analysis-only"),
-            "pr_min": _minutes(rows, lambda r: r.get("step") == "publish" and r.get("action") == "created"
-                               and r.get("gh_ok") is True),
+            "pr_min": _minutes(rows, _pr_created),
+            "merge_min": _minutes(rows, lambda r: r.get("step") == "merge" and r.get("merged") is True
+                                  and not r.get("already"), start=_pr_created),
+            "resyncs": sum(1 for r in rows[created + 1:] if r.get("step") == "publish" and r.get("action") == "edited"
+                           and r.get("gh_ok") is True),
             "analysis_min": _minutes(rows, lambda r: r.get("step") == "done"),
             "investigation_min": investigation, "investigation_open": analyzed and investigation is None,
             "asked": asked, "runs": fresh, "answer_reruns": reruns, "errors": sum(1 for r in rows if r.get("step") == "error"),
@@ -207,12 +218,16 @@ def stats(work_dir: Path) -> dict:
     states = {k: sum(1 for j in measured if j["state"] == k) for k in STATES}
     base = len(measured) - states["in_progress"] - states["practice"] - states["unknown"]
     asked = [k for j in measured for k in j["asked"]]
+    prs = [j for j in measured if j["state"] == "pr"]
     return {"format": 2, "jobs": len(measured), "states": states,
             "held_read_only": sum(1 for j in measured if j["read_only"]),
             "analysis_only_runs": sum(j["analysis_only_runs"] for j in measured),
             "cancel_ratio": round(states["cancelled"] / base, 3) if base > 0 else None,
             "pr_minutes": _dist([j["pr_min"] for j in measured if j["state"] == "pr" and j["pr_min"] is not None]),
             "pr_unmeasured": sum(1 for j in measured if j["state"] == "pr" and j["pr_min"] is None),
+            "merge_minutes": _dist([j["merge_min"] for j in prs if j["merge_min"] is not None]),
+            "resyncs": {"prs": len(prs), "total": sum(j["resyncs"] for j in prs),
+                        "per_pr": round(sum(j["resyncs"] for j in prs) / len(prs), 2) if prs else None},
             "analysis_minutes": _dist([j["analysis_min"] for j in measured if j["analysis_min"] is not None]),
             "investigation_minutes": _dist([j["investigation_min"] for j in measured if j["investigation_min"] is not None]),
             "investigation_unmeasured": sum(1 for j in measured if j["investigation_open"]),
@@ -512,7 +527,9 @@ def report_lines(s: dict) -> list[str]:
             f"{st['cancelled']} · 보류 {st['held']}(읽기 전용 {s['held_read_only']}) · 분석만 {st['analysis_only']}"
             f"(--analysis-only 실행 {s['analysis_only_runs']}) · 결과 없음 {st['no_result']} · 손상 {st['unknown']}",
             f"취소 비율 {ratio} (분모: 측정 작업 − 진행 중·연습·손상)",
-            f"PR까지(첫 analyze → PR 생성, 경과 시간·보류 포함) {dist(s['pr_minutes'])} · 측정 불가 {s['pr_unmeasured']}건",
+            f"PR까지(첫 analyze → PR 생성, 경과 시간·보류 포함) {dist(s['pr_minutes'])} · 측정 불가 {s['pr_unmeasured']}건 · "
+            f"병합까지(PR 생성 → db_pr merge, GHE 화면 병합은 안 잡힘) {dist(s['merge_minutes'])} · PR당 다시 올림(sync-pr 등) "
+            f"{'n/a' if s['resyncs']['per_pr'] is None else str(s['resyncs']['per_pr']) + '회'}",
             f"스크립트 분석까지(첫 analyze → 드라이버 done, 탐색·심층 분석·사용자 확인 제외) {dist(s['analysis_minutes'])}",
             f"전체 조사(첫 analyze → done 뒤 stage·release·discard, 탐색·심층·사용자 확인 포함, 경과 시간·보류 포함 — 능동 작업 "
             f"시간 아님) {dist(s['investigation_minutes'])} · 측정 불가 {s['investigation_unmeasured']}건",

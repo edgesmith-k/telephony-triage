@@ -18,6 +18,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[1]
 TOOL = REPO / "tools" / "import_draft.py"
 
@@ -43,7 +45,7 @@ def _write(root: Path, rel: str, text: str) -> Path:
 
 def _run(source: Path, dest: Path, *extra: str) -> tuple[int, dict | str]:
     result = subprocess.run(
-        [sys.executable, str(TOOL), str(source), "--dest", str(dest), "--json", *extra],
+        [sys.executable, str(TOOL), str(source), "--dest", str(dest), "--json", "--label", "t", *extra],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -242,7 +244,57 @@ def test_first_import_collision_message(tmp_path):
     source, dest = _dirs(tmp_path)
     _write(source, "README.md", "draft readme\n")
     _write(dest, "README.md", "readme created by the hosting site\n")
-    result = subprocess.run([sys.executable, str(TOOL), str(source), "--dest", str(dest)],
+    result = subprocess.run([sys.executable, str(TOOL), str(source), "--dest", str(dest), "--label", "t"],
                             capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert result.returncode == 1, result.stdout + result.stderr
     assert "첫 반입" in result.stderr and "기준선 이후" not in result.stderr
+
+
+def _files(root: Path) -> dict[str, bytes]:
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+def _cli(source: Path, dest: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, str(TOOL), str(source), "--dest", str(dest), *args],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+
+
+def test_label_is_required(tmp_path):
+    """B-19-1: `--label` 없이 부르면 사용 오류(종료 2)이고 대상은 그대로다 (옛 label이 기준선에 남지 않게)."""
+    source, dest = _dirs(tmp_path)
+    result = _cli(source, dest)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert _files(dest) == {}
+    assert _cli(source, dest, "--label", " ").returncode == 2 and _files(dest) == {}
+
+
+@pytest.mark.parametrize("text", ["{not json", '{"schema": 2, "files": {}}', "[]", '{"schema": 1, "files": []}', '{"schema": 1}'])
+def test_corrupt_manifest_is_usage_error(tmp_path, text):
+    """B-19-2: 손상된 기준선(JSON 오류·모르는 schema·객체 아님)은 트레이스백 없이 종료 2, 대상은 그대로다."""
+    source, dest = _dirs(tmp_path)
+    assert _run(source, dest)[0] == 0
+    (dest / ".draft-manifest.json").write_text(text, encoding="utf-8")
+    before = _files(dest)
+    result = _cli(source, dest, "--label", "t")
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert ".draft-manifest.json" in result.stderr and "Traceback" not in result.stderr
+    assert _files(dest) == before
+
+
+def test_restored_reports_files_deleted_on_site(tmp_path):
+    """B-19-3: 사내에서 지웠던 사외 파일을 되살리면 `restored`로 보고한다. 없으면 빈 목록이고 텍스트에 그 줄이 없다."""
+    source, dest = _dirs(tmp_path)
+    assert _run(source, dest)[0] == 0
+    _write(dest, "tests/test_site_extra.py", "# 사내 새 파일\n")  # 새 파일은 restored에 섞이지 않는다
+    code, out = _run(source, dest, "--dry-run")
+    assert code == 0 and out["restored"] == [], out
+    assert "되살림" not in _cli(source, dest, "--label", "t", "--dry-run").stdout
+
+    (dest / "tests/test_a.py").unlink()
+    assert "사내에서 지웠던 사외 파일 1개를 되살림:\n  - tests/test_a.py" in _cli(source, dest, "--label", "t", "--dry-run").stdout
+    code, out = _run(source, dest)
+    assert code == 0, out
+    assert out["restored"] == ["tests/test_a.py"]
+    assert (dest / "tests/test_a.py").read_text(encoding="utf-8") == "# v1 test a\n"
+    _write(dest, ".gitignore", "tests/test_a.py\n")  # 목록에서 빠져도 디스크에 있으면 restored가 아니다
+    assert _run(source, dest, "--dry-run")[1]["restored"] == []

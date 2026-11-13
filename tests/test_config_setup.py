@@ -335,6 +335,24 @@ def test_jira_tools_from_nonstandard_mock_server():
     assert env.run("config.py", ["set-tracker", "--server", "mock-jira", "--get-issue", "jira_fetch_ticket"]).returncode == 2
     assert env.run("config.py", ["set-tracker", "--server", "mock-jira",
                                  "--get-issue", "mcp__other__get_issue"]).returncode == 2
+    # 쓰기형 이름은 read_tools에 넣지 않는다(규칙 2): set-tracker·set(tracker 블록째) 종료 2, config 그대로
+    cfg_path = env.home / "config.yaml"
+    before = cfg_path.read_bytes()
+    proc = env.run("config.py", ["set-tracker", "--server", "mock-jira", "--get-issue", "mcp__mock-jira__jira_fetch_ticket",
+                                 "--read-tools", "mcp__mock-jira__jira_ticket_add_note"])
+    assert proc.returncode == 2 and "jira_ticket_add_note (낱말: add)" in proc.stderr, proc.stderr   # 걸린 낱말을 알린다
+    assert env.run("config.py", ["set-tracker", "--server", "mock-jira",
+                                 "--get-issue", "mcp__mock-jira__jira_move_ticket"]).returncode == 2
+    block = {**jira, "read_tools": [*jira["read_tools"], "mcp__mock-jira__jira_move_ticket"]}
+    assert env.run("config.py", ["set", "tracker", json.dumps(block)]).returncode == 2
+    # `set tracker.read_tools.<이름> true`는 read_tools를 {이름: true} 매핑으로 바꾼다 — 같이 막는다
+    assert env.run("config.py", ["set", "tracker.read_tools.mcp__mock-jira__jira_move_ticket", "true"]).returncode == 2
+    assert cfg_path.read_bytes() == before
+    # 손으로 넣어 둔 이름이 있어도 다른 tracker 키 set은 막지 않는다
+    cfg = env.config()
+    cfg["tracker"]["read_tools"].append("mcp__mock-jira__jira_move_ticket")
+    cfg_path.write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    assert env.run("config.py", ["set", "tracker.timezone", "UTC"]).returncode == 0
 
 
 def test_jira_server_names_are_normalized_like_session_tool_names():
@@ -750,6 +768,7 @@ def test_show_keys_returns_only_requested_values_and_lists_missing():
     assert out["values"] == {"work_dir": full["effective"]["work_dir"], "tracker.tools": full["effective"]["tracker"]["tools"]}
     assert out["missing"] == ["no.such"] and out["user_config"] == full["user_config"]
     assert env.json("config.py", ["show"]) == full      # --keys 없으면 이전과 같다
+    assert Path(full["pending_feedback_dir"]).name == "pending-feedback"
 
 
 # -- doctor (읽기 전용 점검) ---------------------------------------------------------------------
@@ -926,6 +945,21 @@ def test_doctor_gh_unauth_is_warn_and_exit_0():
     gh = _rows(result)["gh"]
     assert gh["status"] == "warn" and "gh auth login" in gh["next"]
     assert result["counts"] == {"ok": 12, "warn": 1, "fail": 0, "skip": 0}
+
+
+def test_doctor_write_like_read_tool_is_warn_and_exit_0():
+    """손으로 read_tools에 넣은 쓰기형 이름은 tracker warn(S-3을 막지 않는다), next 안내가 있다."""
+    env, _ = _ready_env()
+    cfg = env.config()
+    cfg.setdefault("tracker", {})["read_tools"] = ["mcp__mock-jira__jira_move_ticket"]
+    (env.home / "config.yaml").write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    result = _doctor(env)
+    row = _rows(result)["tracker"]
+    assert row["status"] == "warn" and "jira_move_ticket" in row["detail"] and "tracker 도구" in row["next"]
+    assert result["counts"]["warn"] == 1
+    # 목록·매핑이 아닌 read_tools는 예전처럼 저장되고 doctor가 형식 오류로 잡는다(traceback 아님)
+    assert env.run("config.py", ["set", "tracker.read_tools", "5"]).returncode == 0
+    assert "형식 오류" in _rows(_doctor(env, expect=1))["tracker"]["detail"]
 
 
 def test_doctor_snapshot_age_missing_and_corrupt_meta():
@@ -1307,6 +1341,24 @@ def test_check_deprecated_keys_and_runtime_label_warn_only():
     assert row["status"] == "warn" and row["detail"].startswith("runtime.label:")
     out = env2.json("config.py", ["check", "--db", env2.config()["issue_db"]["path"], "--for", "dry-run"])
     assert "runtime.label: 문자열(영숫자·._ +-, 40자 이하)이어야 합니다 — 출처 기록에서 뺀다" in out["warnings"]
+
+
+def test_doctor_warns_unknown_top_level_keys_only_in_config_row():
+    """코드가 읽지 않는 최상위 키(오타 등)는 doctor `config` 행 warn. `check`의 `warnings[]`에는 넣지 않는다."""
+    from common import userconfig
+    example = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))
+    assert set(example) <= userconfig.TOP_KEYS
+    # example에서 주석 처리된 site 키와 사용자 config 전용 키(setup이 쓰지 않는 것)
+    assert {"guard", "retention_days", "runtime", "module_skills", "platforms", "code", "reviewer", "opencode",
+            "explore", "log_dir", "recent_code_roots", "jira"} <= userconfig.TOP_KEYS
+    assert userconfig.unknown_keys({"schema": 1, "retention_dayz": 9}, {"user": {}, "work_dirr": "x"}) == [
+        "retention_dayz(site-defaults)", "work_dirr(사용자 config)"]
+    env, clone = _ready_env()
+    assert set(env.config()) <= userconfig.TOP_KEYS, "init 출력 키"
+    _set_user(env, retention_dayz=90)
+    row = _rows(_doctor(env))["config"]
+    assert row["status"] == "warn" and row["detail"] == "모르는 최상위 키(무시): retention_dayz(사용자 config)"
+    assert env.json("config.py", ["check", "--db", str(clone), "--for", "dry-run"])["warnings"] == []
 
 
 if __name__ == "__main__":

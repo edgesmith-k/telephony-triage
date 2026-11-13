@@ -79,6 +79,8 @@ def base_env(home: Path, extra: dict | None = None) -> dict:
     for key in ("PYTHONUSERBASE", "GH_HOST"):
         if os.environ.get(key):
             env[key] = os.environ[key]
+    from runner import GIT_SAFE_ENV   # tt-oc로 시작한 것처럼(없으면 어댑터가 bash의 git·플러그인 스크립트를 거부한다)
+    env.update(GIT_SAFE_ENV)
     env.update({k: str(v) for k, v in (extra or {}).items()})
     return env
 

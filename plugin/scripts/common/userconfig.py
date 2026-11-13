@@ -917,6 +917,20 @@ def runtime_problems(defaults: dict | None) -> list[str]:
     return [RUNTIME_LABEL_MSG]
 
 
+# 코드가 읽는 최상위 키: site-defaults ∪ 사용자 config ∪ 옛 키 `jira`(`legacy_problems`가 따로 막는다). doctor `config` 행이
+# 이 밖의 키(오타 등 — 읽지 않으므로 값이 무시된다)를 경고한다. 새 최상위 키를 읽게 되면 여기에 더한다(빠지면 doctor에 헛 warn).
+TOP_KEYS = frozenset((
+    "schema", "issue_db", "synthetic_allowed", "tracker", "ghe", "logcat", "parser", "platform", "platforms",
+    "external_parsers", "analyzers", "explore", "failed_step", "guard", "runtime", "retention_days", "module_skills", "code",
+    "user", "plugin", "code_profiles", "recent_code_roots", "log_dir", "work_dir", "reviewer", "opencode", "jira"))
+
+
+def unknown_keys(defaults: dict | None, user: dict | None) -> list[str]:
+    """`TOP_KEYS`에 없는 최상위 키 `<키>(<출처>)` 목록(site-defaults 먼저). 경고만이다. 예외 없음."""
+    return [f"{k}({where})" for where, data in (("site-defaults", defaults), ("사용자 config", user))
+            if isinstance(data, dict) for k in data if k not in TOP_KEYS]
+
+
 def read_roots(cfg: dict, plugin_root: Path) -> list[str]:
     """OpenCode `external_directory` 허용 목록(B2-21): 플러그인 스킬 폴더, `work_dir`, 풀린 설치 스킬 `SKILL.md`의 폴더마다.
     순서 유지·중복 제거. 설정 값으로는 예외 없음 — 값은 모두 모양을 보고 쓰고 `skillpath.resolve`는 예외를 사유로 바꾼다. 전체를

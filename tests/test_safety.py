@@ -317,7 +317,7 @@ def test_r7_new_file_collision_stops(draft_import, tmp_path, baseline):
         (dest / draft_import.MANIFEST).write_text(json.dumps({"schema": 1, "files": {}}), encoding="utf-8")
     result = draft_import.plan(source, dest, None)
     assert [item["path"] for item in result["locally_modified"]] == ["new.py"]
-    assert draft_import.main([str(source), "--dest", str(dest), "--json"]) == 1
+    assert draft_import.main([str(source), "--dest", str(dest), "--label", "t", "--json"]) == 1
     assert (dest / "new.py").read_text(encoding="utf-8") == "local"
 
 

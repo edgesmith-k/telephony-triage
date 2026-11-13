@@ -90,6 +90,37 @@ def test_release_without_owner_keeps_lock_and_says_so():
     assert proc.returncode == 2 and owner not in proc.stdout
 
 
+def test_discard_with_corrupt_state_json_releases_lock():
+    """손상된 state.json(JSON 아님·매핑 아님)이 있어도 discard는 끝까지 간다(종료 0, 작업 파일 정리, lock 풀림)."""
+    for text in ("{손상", "[1]"):
+        ws = Workspace(build=False)
+        ws.acquire(J)
+        state = ws.job_dir(J) / "state.json"
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text(text, encoding="utf-8")
+        out = ws.db_pr("discard", ws.wt(J))
+        assert out["discarded"] is True and out["lock"]["released"] is True, text
+        assert not state.exists() and not (ws.work / "session.lock").exists(), text
+
+
+def test_write_json_keeps_old_file_when_write_fails(tmp_path):
+    """원자 쓰기: 직렬화는 됐는데 쓰는 중 실패해도(UTF-8로 못 쓰는 외톨이 서러게이트) 원래 파일은 그대로이고 임시 파일이
+    남지 않는다. 쓰는 바이트는 예전과 같다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from dbpr.lock import _write_json
+    path = tmp_path / "state.json"
+    _write_json(path, {"a": "값"})
+    before = path.read_bytes()
+    assert before == (json.dumps({"a": "값"}, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    try:
+        _write_json(path, {"a": "\ud800"})
+    except UnicodeEncodeError:
+        pass
+    else:
+        raise AssertionError("쓰기 실패가 UnicodeEncodeError로 나야 한다")
+    assert path.read_bytes() == before and [p.name for p in tmp_path.iterdir()] == ["state.json"]
+
+
 def test_acquire_after_proper_release_needs_no_takeover():
     ws = Workspace(build=False)
     owner = ws.db_pr("lock", "acquire", J, "--command", "record")["lock"]["owner"]

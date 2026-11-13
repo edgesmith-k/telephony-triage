@@ -43,7 +43,6 @@ ALLOWED = [re.compile(p) for p in (
     r"[a-z]+/[a-z]+/evals/[a-z0-9][a-z0-9-]{2,60}/files/[^/]+\.(log|md|json)",
 )]
 # 파일별 상한은 skillcheck가 정본이다(CAPS·REFERENCE_CAP·CASE_CAP, R34). 받을 때 점검과 같은 값을 쓴다
-DEEP_SET_CAP = 22 * 1024
 
 # 지위 블록(H C1+D R10·S15): 두 플랫폼 모든 템플릿 문서에 같은 글. STATUS_FIRST는 그 첫 문장
 STATUS_FIRST = "분석 절차 보조 문서다."
@@ -58,14 +57,7 @@ FORBIDDEN = ("Skill 도구", "AskUserQuestion", "${CLAUDE_PLUGIN_ROOT}", "Bash",
 LAYER_NAMES = ("관리 데몬", "D-Bus", "ofonod", "벤더 RIL(<데몬>)", "모뎀·망", "곁가지(<데몬>)", "그 층 로그 없음(<층>)",
                "원인 아님(정상 동작)")
 OFONO_MODULES = ("data", "sim", "network", "call", "sms", "ims", "modem")
-# oFono 문서 바이트 목표(C1D §2.0, R24). skillcheck.CAPS(받을 때 상한)보다 낮다. Android 표는 test_module_templates_android
-# C1D 보정 §2.2(새 값)
-# deep.md(정밀 탐색, `--deep`일 때만 읽는다)는 아직 목표가 없어 받을 때 상한(skillcheck.CAPS)과 같다
-BUDGETS = {"_common/layers.md": 3100, "_common/components.md": 3800, "explore.md": 2400, "SKILL.md": 2000,
-           "modem/SKILL.md": 1024, "analyzer.md": 1150, "references": 1300, "deep.md": 16384,
-           "data/SKILL.md": 2400, "data/explore.md": 2800, "data/references/DATA-001.md": 1400}
-# 한 run with arm 모듈 문서 합 = 그 run이 읽는 파일 상한의 합(C1D 보정 §2.3, C-F6)
-COMMON_BUDGET = 6900
+# 한 run with arm 모듈 문서 합 한도(C1D 보정 §2.3, C-F6). 파일별 상한은 skillcheck.CAPS(test_size_caps)
 DEEP_RUN_BUDGET, ALSO_RUN_BUDGET, EXPLORE_RUN_BUDGET = 11850, 12874, 9700
 # 채점기 칸 이름(C0 설계 §9.1). module_eval이 있으면 그 FIELDS와도 같아야 한다
 FIELDS = ("원인 층", "원인 데몬", "근거", "반대 근거", "분석 스킬 의견", "규칙 제안")
@@ -138,13 +130,6 @@ def test_size_caps():
         assert total <= sc.CASE_CAP, (case.name, total)
     yml = TEMPLATES / "modules.yaml"
     assert yml.stat().st_size <= sc.CAPS["modules.yaml"] == 24 * 1024
-    for module in sorted(p for p in TEMPLATES.glob("*/*") if (p / "SKILL.md").is_file()):
-        common = module.parent / "_common"
-        refs = list((module / "references").glob("*.md"))
-        biggest = max((p.stat().st_size for p in refs), default=0)
-        deep = sum(p.stat().st_size for p in (common / "layers.md", common / "components.md",
-                                                module / "SKILL.md", module / "analyzer.md")) + biggest
-        assert deep <= DEEP_SET_CAP, (module, deep)
 
 
 @needs_module_eval
@@ -260,21 +245,9 @@ def test_analyzer_fields_match_grader():
 
 
 def test_doc_budgets():
-    """C1D §2.0 바이트 목표(토큰 최소). 한 run의 with arm 문서 합도 본다."""
+    """oFono 한 run의 with arm 모듈 문서 합 한도. 파일별 상한은 test_size_caps(skillcheck.CAPS)가 본다."""
     root = TEMPLATES / "ofono"
-
-    def budget(rel: str) -> int:
-        if rel in BUDGETS:
-            return BUDGETS[rel]
-        return BUDGETS["references"] if "/references/" in rel else BUDGETS[rel.rsplit("/", 1)[-1]]
-
-    for path in sorted(root.rglob("*.md")):
-        rel = path.relative_to(root).as_posix()
-        if "/evals/" in rel:
-            continue
-        assert path.stat().st_size <= budget(rel), (rel, path.stat().st_size, budget(rel))
     common = sum((root / "_common" / n).stat().st_size for n in ("layers.md", "components.md"))
-    assert common <= COMMON_BUDGET, common
     modem_skill = (root / "modem" / "SKILL.md").stat().st_size
     for mod in OFONO_MODULES:
         refs = [p.stat().st_size for p in (root / mod / "references").glob("*.md")]

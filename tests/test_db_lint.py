@@ -503,6 +503,15 @@ def test_broken_yaml_is_a_lint_finding_not_a_crash():
             assert not [e for e in result["errors"] if e["code"] == "parser-rules"], "같은 원인을 두 번 보고하지 않는다"
 
 
+def test_list_resolution_type_on_fixed_cause_is_schema_error_not_crash():
+    """fixed 원인(CALL-001-01)의 resolution_type이 목록이어도 fixed-without-trace 검사가 죽지 않고 스키마 오류로 끝난다."""
+    db = runner_copy()
+    edit(db / C / "type.md", "resolution_type: carrier-config", "resolution_type: [carrier-config]")
+    proc = run("db_lint.py", ["--db", db, "--all"])
+    assert proc.returncode == 1 and "Traceback" not in proc.stderr, proc.stderr[-1500:]
+    assert ("schema", f"{C}/type.md") in _pairs(json.loads(proc.stdout))
+
+
 def test_broken_yaml_is_usage_error_for_build_search_regress():
     db = _broken(f"{C}/issues/MOCK-2101.yaml")
     for script, args in (("db_build.py", ["--verify"]), ("db_search.py", ["call"]), ("db_regress.py", ["--all"])):

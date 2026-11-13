@@ -1,6 +1,6 @@
 # 모듈 eval arm 자료 (얼린 기준선)
 
-`plugin/scripts/module_eval.py`가 arm 작업 디렉토리에 복사하는 내장 자료 사본이다(C0 설계 §7.1). **다시 만들지 않는다.** B2가 `log-guide.md`를 줄여도(D6) "pre"는 C0 기준선으로 남아야 C1이 같은 기준과 비교할 수 있다. `module_eval.ARM_PINS`가 아래 sha256과 대조하고, 다르면 종료 2(`arm material changed`)다.
+`plugin/scripts/module_eval.py`가 arm 작업 디렉토리에 복사하는 내장 자료 사본이다(C0 설계 §7.1). **다시 만들지 않는다.** B2가 `log-guide.md`를 줄여도(D6) "pre"는 C0 기준선으로 남아야 C1이 같은 기준과 비교할 수 있다. `module_eval.ARM_PINS`가 아래 sha256과 대조하고, 다르면 종료 2(`arm material changed`)다. live 문서를 고치면 `test_arm_pins*`가 실패한다 — 기준선을 다시 잡기로 정했을 때만 pre 사본·`ARM_PINS`·이 표를 같이 바꾸고 그 모듈 eval을 다시 잰다.
 
 여기 `log-guide.md` 사본에는 원본과 같은 `TODO(SITE:S24)` 표시가 있다. `tools/list_site_todos.py`는 `module-arms` 디렉토리를 건너뛰어 원본에서만 센다.
 
