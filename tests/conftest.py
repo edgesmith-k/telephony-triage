@@ -49,19 +49,15 @@ def pytest_sessionstart(session):
 
 
 def pytest_sessionfinish(session, exitstatus):
-    try:
-        _check_shared_variants(session)
-    finally:
-        runner.cleanup_tmp()  # runner.tmp()가 만든 임시 디렉터리 (TT_KEEP_TMP=1이면 남긴다)
-        if os.environ.get("TT_KEEP_TMP") != "1":
-            shutil.rmtree(_SESSION_TMP, ignore_errors=True)   # 정리 목록 밖 mkdtemp·하위 프로세스 임시 폴더까지
+    runner.cleanup_tmp()  # runner.tmp()가 만든 임시 디렉터리 (TT_KEEP_TMP=1이면 남긴다)
+    if os.environ.get("TT_KEEP_TMP") != "1":
+        shutil.rmtree(_SESSION_TMP, ignore_errors=True)   # 정리 목록 밖 mkdtemp·하위 프로세스 임시 폴더까지
 
 
-def _check_shared_variants(session):
+def _check_shared_variants():
     # 공유 변형 트리를 제자리에서 바꾼 테스트가 있으면 새로 만든 것과 달라진다.
     if runner._VARIANT_DIR is None or not runner._VARIANT_DIR.is_dir():
         return
-    import shutil
     import make_variant_dbs
 
     fresh = runner.tmp("tt-variants-fresh-")
@@ -72,15 +68,16 @@ def _check_shared_variants(session):
     finally:
         shutil.rmtree(fresh, ignore_errors=True)
     if bad:
-        print("\n공유 변형 이슈 DB가 테스트 중에 바뀌었습니다 (copy_db()로 복사해서 쓰세요):")
-        for n, d in bad.items():
-            print(f"  {n}: {', '.join(d)}")
-        session.exitstatus = 1
+        # B-07: sessionfinish의 exitstatus는 xdist 워커에서 컨트롤러로 올라가지 않는다 — 세션 fixture 정리의 실패로 낸다
+        # (워커마다 자기 변형 디렉터리라 워커 단위 검사가 맞다. 그 워커의 마지막 시험에 teardown ERROR로 붙는다)
+        pytest.fail("공유 변형 이슈 DB가 테스트 중에 바뀌었습니다 (copy_db()로 복사해서 쓰세요):\n"
+                    + "\n".join(f"  {n}: {', '.join(d)}" for n, d in bad.items()), pytrace=False)
 
 
 @pytest.fixture(scope="session", autouse=True)
 def session_plugin_root(pytestconfig):
-    return pytestconfig._tt_plugin_root
+    yield pytestconfig._tt_plugin_root
+    _check_shared_variants()
 
 
 @pytest.fixture(autouse=True)

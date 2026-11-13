@@ -430,7 +430,7 @@ def test_format_json_is_default_and_brief_is_ignored_for_markdown():
     assert both.returncode == 2 and both.stdout == ""
 
 
-# --- verify_fix_blocked (99-deferred.md §F 방안 2, W3) -----------------------------------------------------------
+# --- verify_fix_blocked (05-verification.md §5.12 (2)) -----------------------------------------------------------
 
 CAUSE_KEYS = {"kind", "id", "type", "type_title", "category", "title", "status", "current", "chain", "merged_from",
               "signatures_pending", "resolution", "resolution_type", "resolution_verification", "fix", "related",

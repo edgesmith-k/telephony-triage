@@ -14,7 +14,7 @@
 | `04-parser-matching.md` | 파서 규칙, 매칭 점수·회귀 모드 |
 | `05-verification.md` | 검증 R1~R6, 수동 기록·해결책·verify-fix 검증 |
 | `06-collaboration.md` | CODEOWNERS, PR 규칙, 검증 체계·sync-pr·사후 정리, 스키마 버전, 피드백·리뷰·통계·용어집·새 카테고리 |
-| `07-workflow.md` | analyze Step 0~8, 공통 쓰기 절차, record/validate/fix-submitted/verify-fix/sync-pr |
+| `07-workflow.md` | 의도·불변식(절차 글이 다르면 SKILL.md·reference 가 맞다). analyze Step 0~9, 공통 쓰기 절차, record/validate/fix-submitted/verify-fix/sync-pr |
 | `08-safety.md` | 마스킹, Hooks 10종 + 표시 보조 1(§9.1) |
 | `09-commands.md` | 커맨드 14개 |
 | `10-skill-eval.md` | SKILL.md 구성, 트리거 테스트, eval(`tests/skill_evals/evals.json` 전체) |
@@ -34,7 +34,7 @@
 | `docs/tasks.md` | 사내 보완 단계(S-0~S-7)별 "읽을 것" 표. `python3 tools/context_pack.py S-n`이 그 파일·절만 출력 |
 | `docs/book/` | 사람용 통합 안내서 HTML 한 파일(스냅샷, 설계 본문이 우선). 경계 검사·반입 묶음에 포함 |
 | `docs/materials/` | 사람용 HTML 자료: 목록·교육 슬라이드·소개 2종(스냅샷). 경계 검사·반입 묶음에 포함 |
-| `docs/development/` | 개발 과정 문서(30개 안팎, 설계 본문이 우선): 리뷰 요청서·결과(`*REVIEW*`·`*_RESULT.md`·`CONCERNS.md`), 반입 기록(`REIMPORT_NOTES_*`), 인계(`*HANDOFF*`), 계획·결정(`MODULE_SKILLS_PLAN*.md`·`MODULE_SKILLS_DECISIONS.md`·`IMPROVEMENT_PLAN_*`), 런타임 가정(`RUNTIMES.md`), 체크리스트(`S0_PROBE_CHECKLIST.md`, oFono 로그 수집 `OFONO_LOG_COLLECTION.md`), 린트 검토 표(`LINT_REVIEW.md` — `tools/lint.py`가 남긴 지적의 사유). 외부 리뷰어는 결과·리뷰·인계 문서를 독립 평가 뒤에만 읽는다(`CODEX_HOLISTIC_REVIEW_BRIEF.md §6`) |
+| `docs/development/` | 개발 과정 문서(설계 본문이 우선): 리뷰 요청서·결과(`*REVIEW*`·`*_RESULT.md`·`CONCERNS.md`), 반입 기록(`REIMPORT_NOTES_*`), 계획·결정(`MODULE_SKILLS_PLAN*.md`·`MODULE_SKILLS_DECISIONS.md`), 런타임 가정(`RUNTIMES.md`), 체크리스트(`S0_PROBE_CHECKLIST.md`, oFono 로그 수집 `OFONO_LOG_COLLECTION.md`), 린트 검토 표(`LINT_REVIEW.md` — `tools/lint.py`가 남긴 지적의 사유). 외부 리뷰어는 결과·리뷰 문서를 독립 평가 뒤에만 읽는다(`CODEX_HOLISTIC_REVIEW_BRIEF.md §6`) |
 
 - `07-workflow.md §Step 8-5`는 "Step 8의 5번 항목". `§record`처럼 워크플로우 이름은 `07-workflow.md`의 `##` 절.
 - 변경 이력은 `docs/history/CHANGES.md`.

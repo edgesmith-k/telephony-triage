@@ -42,6 +42,7 @@ class Applier(JiraOps, EntityOps, FixOps, ResolutionOps, SignatureOps, FixtureOp
         self.new_ids: set[str] = set()                         # 이 계획이 만들 원인·유형 (전체)
         self.jira_checks: list[tuple[int, str, str]] = []      # (op, cause, Jira 키) 적용 후 확인
         self.warnings: list[str] = []
+        self.pending_skipped: list[dict] = []                  # 원인 ID가 트리에 없어 싣지 않은 pending 피드백
         self.allow = [str(p) for p in ((self.config.get("mask") or {}).get("allow_patterns") or [])]
         tracker = self.config.get("tracker") if isinstance(self.config.get("tracker"), dict) else {}
         try:     # 기록 키: DB `tracker.key_regex`(없으면 DB 트래커 기본값) + 트래커 경로 안전 형식(파일 이름이 된다)
@@ -201,7 +202,8 @@ class Applier(JiraOps, EntityOps, FixOps, ResolutionOps, SignatureOps, FixtureOp
         fb_path = self._feedback(feedback)
         included = [self._pending(p) for p in pending]
         return {"ids": ids, "fixtures": fixtures, "commit_message": commit, "feedback": fb_path,
-                "pending_included": [p for p in included if p], "operations": ops}
+                "pending_included": [p for p in included if p], "pending_skipped": self.pending_skipped,
+                "operations": ops}
 
     # op들이 같이 쓰는 확인 ------------------------------------------------------------
 
@@ -251,6 +253,15 @@ class Applier(JiraOps, EntityOps, FixOps, ResolutionOps, SignatureOps, FixtureOp
             stamp = datetime.fromisoformat(str(record.get("date")).replace("Z", "+00:00"))
         except (yaml.YAMLError, AttributeError, ValueError) as exc:
             raise Reject("pending-invalid", f"pending 피드백 {Path(src).name}을 읽을 수 없다(매핑·date ISO 시각 필요): {exc}") from None
+        # 다른 이슈 DB(플랫폼)의 찌꺼기 피드백: 원인 ID가 이 트리(최신 main + 계획 op)에 없으면 싣지 않는다.
+        # 두 DB에 같은 원인 ID가 있으면 통과한다 — 막는 것은 원인이 없는 피드백뿐.
+        suggested = record.get("suggested") if isinstance(record.get("suggested"), list) else []   # 목록 아님: 싣고 db_lint가 막는다
+        causes = [record.get("final")] + [s.get("cause") for s in suggested if isinstance(s, dict)]
+        missing = next((c for c in causes
+                        if isinstance(c, str) and c != "unresolved" and self.tree.cause(c)[1] is None), None)
+        if missing:
+            self.pending_skipped.append({"file": Path(src).name, "reason": f"원인 ID {missing}가 이 이슈 DB에 없다"})
+            return None
         path = self.tree.root / "feedback" / f"{stamp:%Y-%m}" / Path(src).name
         if self.tree.exists(path):
             self.warnings.append(f"pending 피드백 {Path(src).name}은 이미 이슈 DB에 있어 건너뛰었다.")
@@ -272,7 +283,10 @@ def cmd_apply(args, defaults: dict) -> tuple[dict, int]:
     except Reject as exc:
         return {"applied": False, "source": plan["source"], "rejected": [exc.as_dict()]}, CHECK_FAILED
     changes = tree.flush()
-    return {"applied": True, "db": str(db), "source": plan["source"], "changed": changes,
-            "ids": result["ids"], "fixtures": result["fixtures"], "commit_message": result["commit_message"],
-            "feedback": result["feedback"], "pending_included": result["pending_included"],
-            "operations": result["operations"], "warnings": applier.warnings}, OK
+    out = {"applied": True, "db": str(db), "source": plan["source"], "changed": changes,
+           "ids": result["ids"], "fixtures": result["fixtures"], "commit_message": result["commit_message"],
+           "feedback": result["feedback"], "pending_included": result["pending_included"],
+           "operations": result["operations"], "warnings": applier.warnings}
+    if result["pending_skipped"]:   # 비어 있으면 키를 싣지 않는다(평소 출력 불변)
+        out["pending_skipped"] = result["pending_skipped"]
+    return out, OK

@@ -19,6 +19,7 @@
   (`git add -A`와 같은 기준), 아니면 원본 `.gitignore`만 적용한다(PC 전역 무시 제외). 반입 뒤 모습
   (경계 검사·사내 새 파일 보고)에는 들어오는 `.gitignore`도 적용한다. git 필요.
 - 현재 사내 파일이 이미 새 초안과 같으면 사내에서 고친 것으로 보지 않는다.
+- 사내에서 지운 사외 파일이 새 초안에 있으면 다시 놓고 `restored`로 보고한다.
 - 새 초안 `SITE_PATHS`에만 있는 줄은 보고만 한다(사내 `SITE_PATHS`는 쓰지 않는다).
 - 끝나면 새 초안 기준으로 `.draft-manifest.json`을 다시 쓴다.
   첫 반입이면 기준선 없이 전체를 복사하고 기준선을 만든다. 첫 반입이라도 대상에
@@ -34,7 +35,7 @@
 
 CLI:
     python3 tools/import_draft.py <새 사외 초안 경로> [--dest <사내 레포>]
-        [--label <버전 표시>] [--dry-run] [--check-boundary] [--json]
+        --label <버전 표시> [--dry-run] [--check-boundary] [--json]
 
 종료 코드 (contracts.md §종료 코드)
     0  반입 완료 (경고 포함)
@@ -181,12 +182,15 @@ def load_manifest(dest: Path) -> dict | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise SystemExit(f"{path}를 읽을 수 없습니다: {exc}")
-    if data.get("schema") != MANIFEST_SCHEMA:
-        raise SystemExit(
-            f"{path}의 schema={data.get('schema')}를 이 도구가 모릅니다 "
+        raise ValueError(f"{path}를 읽을 수 없습니다: {exc}") from exc
+    schema = data.get("schema") if isinstance(data, dict) else None  # 객체가 아닌 JSON도 손상(종료 2)
+    if schema != MANIFEST_SCHEMA:
+        raise ValueError(
+            f"{path}의 schema={schema}를 이 도구가 모릅니다 "
             f"(아는 값: {MANIFEST_SCHEMA})."
         )
+    if not isinstance(data.get("files"), dict):     # 키가 없어도 손상(빈 기준선으로 이어 가지 않는다)
+        raise ValueError(f"{path}의 files가 객체가 아닙니다.")
     return data
 
 
@@ -209,6 +213,7 @@ def plan(source: Path, dest: Path, label: str | None) -> dict:
                                 - set(_read_lines(dest / SITE_PATHS_FILE)))
 
     locally_modified: list[dict] = []
+    restored: list[str] = []
     if not first_import:
         for rel, digest in baseline.items():
             if rel == SITE_PATHS_FILE or is_site_path(rel, site_patterns):
@@ -216,6 +221,8 @@ def plan(source: Path, dest: Path, label: str | None) -> dict:
             current = dest_files.get(rel)
             if current is None:
                 # 사내에서 지운 사외 파일. 새 초안에 있으면 다시 놓인다.
+                if rel in source_hashes and not (dest / rel).exists():
+                    restored.append(rel)
                 continue
             now = sha256(current)
             # 이미 새 초안과 같으면 덮어써도 잃는 것이 없다 (아래에서 unchanged).
@@ -258,6 +265,7 @@ def plan(source: Path, dest: Path, label: str | None) -> dict:
         "locally_modified": sorted(locally_modified, key=lambda item: item["path"]),
         "to_write": sorted(to_write),
         "to_delete": sorted(to_delete),
+        "restored": sorted(restored),
         "unchanged": sorted(untouched),
         "kept_site_paths": site_only,
         "kept_new_in_site": new_in_site,
@@ -404,6 +412,9 @@ def report(result: dict, applied: bool) -> str:
     if result["to_delete"]:
         lines.append("사외에서 지워져 사내에서도 지운 파일:")
         lines += [f"  - {rel}" for rel in result["to_delete"]]
+    if result["restored"]:
+        lines.append(f"사내에서 지웠던 사외 파일 {len(result['restored'])}개를 되살림:")
+        lines += [f"  - {rel}" for rel in result["restored"]]
     if result["kept_new_in_site"]:
         lines.append(
             "사내에서 새로 만든 비-SITE_PATHS 파일 (지우지 않았습니다). "
@@ -423,13 +434,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="import_draft.py", description=__doc__)
     parser.add_argument("source", help="새 사외 초안 경로")
     parser.add_argument("--dest", default=".", help="사내 플러그인 레포 (기본: 현재 디렉토리)")
-    parser.add_argument("--label", default=None, help="기준선에 적을 버전 표시")
+    parser.add_argument("--label", required=True, help="기준선에 적을 버전 표시")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--check-boundary", action="store_true",
                         help="활성 전환 전에 반입 뒤 모습을 check_boundary.py --mode site로 검사")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
+    if not args.label.strip():
+        print("--label이 비었습니다 (옛 label이 기준선에 남지 않게).", file=sys.stderr)
+        return USAGE
     source = Path(args.source).resolve()
     dest = Path(args.dest).resolve()
     if not source.is_dir():

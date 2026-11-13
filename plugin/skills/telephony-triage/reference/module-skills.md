@@ -21,6 +21,10 @@
 5. 종료 2(받기 실패): stderr를 보이고 "탐색 분석을 내장 줄 모양만으로 할까요, 생략할까요?"를 묻는다. 생략이면 `check-output <KEY> --for explore --skipped "모듈 문서 받기 실패(<사유>)"`.
 6. 결과는 `explore.md` `## 쓰는 것`대로 `JOB/explore-output.md`에 쓰고 `check-output <KEY> --for explore`.
 
+## 5-2 정밀 탐색 (`--deep`)
+
+사용자가 "정밀 탐색"을 명시 요청할 때만(자동 금지) — 요청이 동의, 시작 전 예상 크기(약 96KB + `deep.md`)를 알린다. 5-2 `module` 호출마다 `--deep`, `read`의 `deep.md`대로 한다(칸은 5-2 그대로). 보기가 길면 나눠 끝까지 읽는다(보기 확대는 필터가 있을 때만). 종료 2 `사용 오류`(`deep.md 없음`)면 `--deep` 없이 할지 묻는다.
+
 ## 공통
 
 - 읽는 것: `read`의 파일, `input`, `module` 출력 `timeline.path`(설치 스킬이면 그 절차가 `input`으로 부르는 파일)만. 폴더 훑기 금지. `WD/_module-skills/`·`JOB/module-skill*`·`skill-input.json`과 deep-input.json은 스크립트 기록이라 고치지 않는다. 관리 clone에 git을 쓰지 않는다.

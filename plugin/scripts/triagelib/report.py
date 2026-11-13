@@ -299,7 +299,7 @@ def fit(result: dict) -> dict:
     steps.insert(0, lambda: _drop_read_only_hint_if_shown(result))
     steps.insert(1, lambda: result.update(read_only_hint=_clip(result.get("read_only_hint"), 100))
                  if result.get("read_only_hint") else None)
-    steps += [lambda: result.update(warnings=(result.get("warnings") or [])[:3]),
+    steps += [lambda: result.update(warnings=[_clip(w, 120) for w in (result.get("warnings") or [])[:3]]),
               lambda: result.update(files={"report": result["files"]["report"]}),
               lambda: cands and cands[0].update(evidence=cands[0]["evidence"][:3]),
               lambda: _trim_error_events(result),

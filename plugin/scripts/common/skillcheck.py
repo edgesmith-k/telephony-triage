@@ -34,7 +34,7 @@ PLATFORM_RE = r"[a-z][a-z0-9_]*"
 ALLOWED = [re.compile(p) for p in (
     r"README\.md", r"modules\.yaml", r"\.github/[A-Za-z0-9._/-]+",
     rf"{PLATFORM_RE}/_common/(layers|components)\.md",
-    rf"{PLATFORM_RE}/[a-z]+/(explore|SKILL|analyzer)\.md",
+    rf"{PLATFORM_RE}/[a-z]+/(explore|deep|SKILL|analyzer)\.md",
     rf"{PLATFORM_RE}/[a-z]+/references/[A-Z]+-\d{{3}}(-\d{{2}})?\.md",
     rf"{PLATFORM_RE}/[a-z]+/evals/[a-z0-9][a-z0-9-]{{2,60}}/case\.yaml",
     rf"{PLATFORM_RE}/[a-z]+/evals/[a-z0-9][a-z0-9-]{{2,60}}/files/[a-z0-9][a-z0-9._-]*\.(log|md|json)",
@@ -42,7 +42,7 @@ ALLOWED = [re.compile(p) for p in (
 AUTO_READ = {"claude.md", "claude.local.md", "agents.md", ".claude", ".opencode", "opencode.json",
              ".gitattributes", ".gitmodules", ".lfsconfig"}          # 소문자로 비교, 경로의 어느 부분이든
 CAPS = {"README.md": 8192, "modules.yaml": 24576, "layers.md": 4096, "components.md": 6144,
-        "explore.md": 4096, "SKILL.md": 6144, "analyzer.md": 2048}
+        "explore.md": 4096, "deep.md": 16384, "SKILL.md": 6144, "analyzer.md": 2048}
 # case 한 개 합계 48 KiB(H C1+D R3): deep case는 events.json이 로그의 약 4배다(사내 로그 case는 사내에서 확인 TODO(SITE:S25)). 파일별 상한은 템플릿 시험이 본다
 REFERENCE_CAP, CASE_CAP = 4096, 49152
 CASE_LOG_CAP = 8192           # case source.log 상한(템플릿 시험이 본다)

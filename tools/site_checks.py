@@ -1426,12 +1426,21 @@ def s5_sandbox_pr(ctx: Ctx) -> dict:
     repo, early = _gh_ready(ctx, "sandbox_repo", "s5.sandbox_pr")
     if early:
         return early
-    cmd = f"gh pr list --repo {repo} --state all --limit 5 --json number"
-    code, out, _ = ctx.gh("pr", "list", "--repo", repo, "--state", "all", "--limit", "5", "--json", "number")
-    prs = json.loads(out or "[]") if code == 0 else []
+    cmd = f"gh pr list --repo {repo} --state all --limit 30 --json number,headRefName"
+    code, out, _ = ctx.gh("pr", "list", "--repo", repo, "--state", "all", "--limit", "30", "--json", "number,headRefName")
+    try:
+        prs = json.loads(out or "[]") if code == 0 else []
+    except ValueError:
+        prs = None
+    if not isinstance(prs, list):  # 깨진 출력은 예전(689254dd 전)처럼 fail — 0건으로 세지 않는다
+        return res("s5.sandbox_pr", "fail", "gh 출력이 JSON 목록이 아님", cmd)
+    # 이슈 등록·수정·검증 브랜치만 센다(contracts.md 브랜치 표). 손으로 만든 PR은 스모크가 아니다
+    prs = [p for p in prs if isinstance(p, dict)
+           and str(p.get("headRefName") or "").startswith(("issue/", "fix-submit/", "verify-fix/", "verify-res/"))]
     if not prs:
-        return res("s5.sandbox_pr", "needs-user", f"샌드박스 PR 0건(종료 {code})", cmd, ask="샌드박스 PR 1건을 만든 뒤 다시 점검한다")
-    return res("s5.sandbox_pr", "pass", f"샌드박스 PR {len(prs)}건", cmd)
+        return res("s5.sandbox_pr", "needs-user", f"이슈 등록·수정·검증 브랜치 샌드박스 PR 0건(종료 {code})", cmd,
+                   ask="이슈 등록·수정·검증 브랜치(`issue/`·`fix-submit/`·`verify-fix/`·`verify-res/`) PR 1건을 만든 뒤 다시 점검한다")
+    return res("s5.sandbox_pr", "pass", f"이슈 등록·수정·검증 브랜치 샌드박스 PR {len(prs)}건", cmd)
 
 
 def s5_smoke(ctx: Ctx) -> dict:
@@ -2229,10 +2238,11 @@ def module_tags(ctx: Ctx, doc: dict, cid: str, partial_ok: bool = True) -> dict:
     parser_rules = _plugin_common("parser_rules")
     import module_measure
 
-    missing, bad_rx, mismatch, seen, skipped = [], [], [], [], []
+    missing, bad_rx, mismatch, seen, skipped, nokey = [], [], [], [], [], []
     for plat, block in ((doc.get("platforms") or {}) if isinstance(doc.get("platforms"), dict) else {}).items():
         key = MODULE_DB_KEYS.get(plat)
         if key is None:
+            nokey.append(str(plat))     # 근거 문구에만 — `skipped`에 넣으면 restore.tags가 pass → skip
             continue
         db, why = _need_clone(ctx, cid, key)
         if why:
@@ -2260,11 +2270,14 @@ def module_tags(ctx: Ctx, doc: dict, cid: str, partial_ok: bool = True) -> dict:
         module_measure.config_checks(doc, plat, rules, None, found)
         mismatch += [f"{plat}:{f}" for f in found if "데몬 " in f and "≠" in f]
     cmd = "python3 -c 'parser_rules.load(<이슈 DB 임시 clone>/parser-rules).tag_category(<데몬>)'"
-    if not seen:
-        return res(cid, "skip", "이슈 DB 입력 없음: " + ("; ".join(skipped) or "modules.yaml 플랫폼 없음"), None,
-                   ask="플랫폼별 이슈 DB clone 경로를 알려 주세요 → `propose --set ops_db=<경로>`·`ofono_db=<경로>`")
+    nk = [f"{_cap_list(nokey)}: 이슈 DB 입력 키 없음"] if nokey else []
+    if not seen:    # 입력 키 없는 플랫폼뿐이면 알려 줄 clone 경로가 없다 — ask 없이 근거만
+        return res(cid, "skip", "이슈 DB 입력 없음: " + ("; ".join(skipped + nk) or "modules.yaml 플랫폼 없음"), None,
+                   ask="플랫폼별 이슈 DB clone 경로를 알려 주세요 → `propose --set ops_db=<경로>`·`ofono_db=<경로>`"
+                   if skipped or not nokey else None)
     bad = [f"tags.yaml에 없음 {x}" for x in missing] + [f"맞는 태그 없음 {x}" for x in bad_rx] + mismatch
-    ev = f"플랫폼 {', '.join(seen)}" + (f" (건너뜀 {'; '.join(skipped)})" if skipped else "")
+    ev = f"플랫폼 {', '.join(seen)}" + (f" (건너뜀 {'; '.join(skipped)})" if skipped else "") \
+        + (f" (판정 밖 {nk[0]})" if nokey else "")
     if bad:
         return res(cid, "fail", f"{ev} · {len(bad)}건: {_cap_list(bad)}", cmd,
                    ask="이름마다 고른다: 이슈 DB tags.yaml에 더함(계획 op PR — 새 태그는 사용자 확인) 또는 modules.yaml에서 뺌(모듈 레포 PR)")

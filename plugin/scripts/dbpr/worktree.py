@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -21,9 +22,11 @@ from .lock import (JOB_KEY_RE, Lock, PASTED_STEPS, PLAN, SNAPSHOT_DIR, SNAPSHOT_
 
 
 def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
+    # 비대화(B-18): 인증 실패가 자격 증명 프롬프트로 120초 매달리지 않고 바로 실패로 보고되게
+    env = {**(os.environ if env is None else env), "GIT_TERMINAL_PROMPT": "0"}
     try:
         proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8",
-                              errors="replace", env=env, timeout=120)
+                              errors="replace", env=env, timeout=120, stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired as exc:
         raise UsageError("git 시간 초과 (120초). 원격·로컬 상태를 확인한 뒤 재개한다.") from exc
     except OSError as exc:
@@ -276,14 +279,19 @@ def _pending_files(ctx: Ctx, job_dir: Path) -> list[Path]:
 def _prepare_worktree(ctx: Ctx, wt: Path, tool: str, base_sha: str) -> str:
     _job_of(wt, ctx)
     wt = abs_wt(wt)        # 절대 경로로: `git -C <clone>`이 상대 경로를 clone 기준으로 풀지 않게
+    # wt의 hook(post-checkout·reference-transaction 등 — 모델이 쓸 수 있는 `.githooks`)을 돌리지 않는다 (리뷰 10a Q-2).
+    # commit·push의 검증 hook은 이 함수 밖이라 그대로 돈다
+    nohook = ("-c", f"core.hooksPath={os.devnull}")
     if (wt / ".git").exists():
         _owned_worktree(ctx, wt)
-        for args in (("checkout", "-f", "-B", tool, base_sha), ("reset", "--hard", base_sha), ("clean", "-fd")):
-            _git(wt, *args)
+        # `-ffdx`: 무시된 파일·중첩 저장소까지. 남으면 계획 적용·검사·확인 화면이 그것이 있는 트리에서 돈다(무시된 `.gitattributes`가
+        # diff를 가린다 — 리뷰 10a Q-1). 대상은 위에서 확인한 도구 worktree뿐이고, 계획 적용 전이라 stage가 만들 파일은 아직 없다
+        for args in (("checkout", "-f", "-B", tool, base_sha), ("reset", "--hard", base_sha), ("clean", "-ffdx")):
+            _git(wt, *nohook, *args)
         return "reapplied"
     if wt.exists() and any(wt.iterdir()):
         raise UsageError(f"{wt}가 worktree가 아닌데 비어 있지 않습니다. 확인 후 지운다 (db_pr cleanup).")
-    _git(ctx.repo, "worktree", "add", "--no-track", "-B", tool, str(wt), base_sha)
+    _git(ctx.repo, *nohook, "worktree", "add", "--no-track", "-B", tool, str(wt), base_sha)
     return "created"
 
 
@@ -319,7 +327,12 @@ def discard(ctx: Ctx, wt: Path) -> dict:
                              "discard를 다시 한다.") from exc
         git_skipped = str(exc)     # worktree가 없으면 git만 건너뛰고 작업 파일 삭제·lock 해제는 끝까지 간다
     ctx.lock.touch(job)
-    state = _read_json(job_dir / STATE) or {}
+    try:
+        state = _read_json(job_dir / STATE) or {}
+    except ValueError:      # 손상된 state.json(JSON·UTF-8 아님): 브랜치는 worktree HEAD로 찾고 정리·lock 해제는 끝까지 간다
+        state = {}
+    if not isinstance(state, dict):     # 매핑이 아닌 state.json(예 `[1]`)도 손상으로 본다
+        state = {}
     branch = state.get("branch")
     if not branch and (wt / ".git").exists():
         head = _out(_git(wt, "symbolic-ref", "--short", "HEAD", check=False))
@@ -366,6 +379,7 @@ RETAINED_NOTES = {      # PR 생성 실패라고 단정하지 않는다: PR은 �
     "unpublished": "미게시 계획 보존 — 재개 또는 명시적 폐기(discard) 필요",
     "pushed-no-pr": "push 기록 있음, PR 연결 미확인 — 원격 브랜치·열린 PR 확인 후 publish 재시도 또는 "
                     "`sync-pr <브랜치>`로 복구(discard는 복구가 아니라 중단·로컬 정리)",
+    "unreadable": "plan.json 읽기 실패 — 원격 브랜치·열린 PR 확인 전 지우지 않는다",
 }
 
 
@@ -408,14 +422,19 @@ def cleanup(ctx: Ctx, yes: bool, older_than: int | None) -> dict:
             mtime = _tree_mtime(job_dir)
             if datetime.fromtimestamp(mtime, timezone.utc) > limit:
                 continue
-            plan = _read_json(job_dir / PLAN)
-            number = ((plan or {}).get("pr") or {}).get("number")
+            try:
+                plan = _read_json(job_dir / PLAN)
+            except ValueError:      # JSONDecodeError·UnicodeDecodeError: 손상된 계획도 지우지 않는다
+                plan = False
+            number = (plan.get("pr") or {}).get("number") if isinstance(plan, dict) else None
             if not number and plan is not None:     # 미게시 계획: 일괄 정리에서 빼고 따로 알린다 (S14에서 원문 보존 결정)
-                pushed = bool((plan.get("pr") or {}).get("head_sha"))   # branch는 계획을 만들 때부터 있다(스키마 필수)
+                if not isinstance(plan, dict):      # 읽지 못한 계획(손상·매핑 아님): PR 여부를 모른다
+                    kept = "unreadable"
+                else:                               # branch는 계획을 만들 때부터 있다(스키마 필수)
+                    kept = "pushed-no-pr" if (plan.get("pr") or {}).get("head_sha") else "unpublished"
                 retained.append({"job": job_dir.name, "path": str(job_dir), "days": (now() - datetime.fromtimestamp(
                     mtime, timezone.utc)).days, "raw_remains": any((job_dir / m).exists() for m in RAW_MARKERS),
-                    "state": "pushed-no-pr" if pushed else "unpublished",
-                    "note": RETAINED_NOTES["pushed-no-pr" if pushed else "unpublished"]})
+                    "state": kept, "note": RETAINED_NOTES[kept]})
                 continue
             if not number:      # 계획 없는 중단 작업(원문만 남음): 같은 기한이 지나면 디렉토리째
                 targets.append({"kind": "job-dir", "job": job_dir.name, "path": str(job_dir), "pr": None,

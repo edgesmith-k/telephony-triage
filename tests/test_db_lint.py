@@ -80,6 +80,11 @@ def test_fixed_in_ref_optional_and_checked():
     edit(db / C / "type.md", "ref: MOCKCL-12345}", "ref: CL 12345}")
     found = [f for f in _lint(db, "--all", expect=1)["errors"] if f["code"] == "fix-ref"]
     assert found and "fixed_in[].ref 'CL 12345'" in found[0]["message"], found
+    # 03-issue-db.md 원인 예시의 fixed_in 주석이 스키마 항목 필드를 모두 보인다(#117 ref)
+    schema = json.loads((REPO / "plugin" / "schemas" / "type.schema.json").read_text(encoding="utf-8"))
+    doc = (REPO / "docs" / "design" / "03-issue-db.md").read_text(encoding="utf-8").splitlines()
+    line = next(x for x in doc if x.strip().startswith("fixed_in: []"))
+    assert all(f"{k}:" in line for k in schema["$defs"]["fixedIn"]["items"]["properties"]), line
 
 
 def test_variant_builder_is_deterministic():
@@ -496,6 +501,15 @@ def test_broken_yaml_is_a_lint_finding_not_a_crash():
         assert msg[0].isdigit() and "행:" in msg and rel not in msg, msg          # 경로를 두 번 쓰지 않는다
         if rel.endswith("tags.yaml"):
             assert not [e for e in result["errors"] if e["code"] == "parser-rules"], "같은 원인을 두 번 보고하지 않는다"
+
+
+def test_list_resolution_type_on_fixed_cause_is_schema_error_not_crash():
+    """fixed 원인(CALL-001-01)의 resolution_type이 목록이어도 fixed-without-trace 검사가 죽지 않고 스키마 오류로 끝난다."""
+    db = runner_copy()
+    edit(db / C / "type.md", "resolution_type: carrier-config", "resolution_type: [carrier-config]")
+    proc = run("db_lint.py", ["--db", db, "--all"])
+    assert proc.returncode == 1 and "Traceback" not in proc.stderr, proc.stderr[-1500:]
+    assert ("schema", f"{C}/type.md") in _pairs(json.loads(proc.stdout))
 
 
 def test_broken_yaml_is_usage_error_for_build_search_regress():

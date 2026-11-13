@@ -385,6 +385,7 @@ def test_script_args_cannot_target_protected_files(w):
         out = adapter(w, "before", {"tool": "bash", "args": args, "directory": str(w.base)})
         assert out["decision"] == "deny" and "스크립트 인자" in out["reason"], (cmd, out)
     w.work.mkdir(parents=True, exist_ok=True)
+    (w.base / "tt-oc.json").write_text(json.dumps({"work_root": str(w.work)}), encoding="utf-8")   # 출력은 작업 루트 안(OC-B W2)
     ok = f"python3 {s}/mask_pii.py --events {w.work}/a.json --out {w.work}/K-1/masked.json"
     out = adapter(w, "before", {"tool": "bash", "args": {"command": ok}, "directory": str(w.base)})
     assert out["decision"] == "allow", out
@@ -398,6 +399,7 @@ def test_bash_allowlist_symlink_dotdot_physical_path(tmp_path):
     (home / "sub").mkdir(parents=True)
     (tmp_path / "w").mkdir()
     (tmp_path / "w" / "lnk").symlink_to(home / "sub")
+    (tmp_path / "w" / "tt-oc.json").write_text(json.dumps({"work_root": str(tmp_path)}), encoding="utf-8")   # OC-B W2
     env = {"HOME": str(tmp_path)}
     cmd = f"python3 {oc.SCRIPTS}/mask_pii.py --out lnk/../config.yaml"
     v = oc.bash_allowlist(cmd, str(tmp_path / "w"), str(tmp_path / "w"), env)

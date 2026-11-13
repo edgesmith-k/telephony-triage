@@ -109,14 +109,7 @@ v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 �
 - 관찰(W1·W4 eval): Bash `cat`·`cat -n`·`sed -n 1,20p` 같은 로그 원문 구간·전체 읽기도 규칙 10 대상이나 guard가 막지 않았다(eval 18·40·46). 새 WP 여부는 W 끝에서 결정.
 - 종결(W11): eval 18·40 trace에서 재현한 명령은 yaml·py·json 읽기이지 원문 로그가 아니었고, eval 46 trace는 없다. `fixtures/` 아래 로그는 설계상 예외다(`guard.py _is_raw_file`). W 끝 eval에서 다시 보이면 재개한다.
 
-## F. verify-fix 흔적 검사 강제 (반입 뒤)
-
-3E에서 Sonnet은 e25(코드·설정 수정 유형에 scenario·recovery 시그니처가 없음)에서 "판정 전 중단" 규칙을 문구만으로는 지키지 못했다(2/3). 구조로 강제한다.
-
-- 방안 1(완료, W3): `db_verify.py fix`가 코드·설정 수정 유형이면서 scenario·recovery 시그니처가 모두 없을 때 `judgement: unknown`을 내는 대신 **종료 코드 2와 "판정 전 중단 조건" 오류**로 거부한다. 오류에 "update-signature로 scenario/recovery 추가 → 초안 R1 흔적 검사 통과 → 재실행" 안내를 `must_show`처럼 담는다.
-- 방안 2(완료, W3): `db_search.py` 원인 출력에 `verify_fix_blocked: "<사유>"`를 내고 verify.md 3번에 "있으면 `db_verify fix`를 부르지 않는다"를 적는다.
-- 같이 할 것(b-6): SKILL 5-1을 "report.md의 그 칸 줄을 **파일에서 바꿔 쓰고** 답변에도 보인다"로 명확히 한다(e40·e41은 답변만 채우고 `report.md`는 TODO로 남았다).
-- ~~그때까지 verify-fix는 Opus를 권장한다~~ → W3 뒤 Sonnet 기본(eval 25 Sonnet 3/3, `GUIDE.md`).
+## F. (옮김 → `05-verification.md §5.12 (2)`)
 
 ## G. 설명 양식에서 SW·모델 추출 (H1, 사내 S-3 뒤)
 
@@ -133,9 +126,12 @@ v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 �
 
 ## I. 심층 분석 단계 (토큰을 덜 아끼고 원인 찾기, 파일럿 뒤)
 
+> 정밀 탐색으로 구현됨(`--deep`): `triage.py module --for explore --deep` — 모듈 `deep.md`·넓은 보기(`contracts.md` module 항목). 여러 모듈 보기 합침은 H(`--also`) 그대로 미룸. 아래 "조건"은 사용자의 명시 요청이 동의이고 시작 전에 예상 크기(약 96KB + `deep.md`)를 알리는 것으로 했다. 스크립트가 막는 것은 `explore.when: never`뿐이다(`explore-input.json`이 없어 `explore`·`module`이 멈춘다). `--no-explore`는 스킬 절차 규칙(5-2를 하지 않음)이고 `module`은 보지 않는다.
+> **효과 미확인**: 사외 eval(Android 7모듈, 짧은 합성 로그, 3회)은 `deep.md` 있음 53 · 없음 56(각 80)으로 run 간 잡음(같은 문서끼리 약 30% 갈림) 안이다 — 크게 해롭지 않다는 것까지만 보였고, 넓은 보기·코드 경로의 이득은 이 eval로 못 잰다. oFono 7개는 측정하지 않았다. 계속 둘지는 사내 실제 이슈로 판단한다.
+
 DB에 맞는 것이 없고 탐색으로도 가설이 서지 않으면 "가설 없음/다음 확인"으로 끝난다.
 - 후보: 사용자가 고르는 세 번째 단계(DB 매칭 → 탐색 → 심층). 푸는 것: 타임라인 줄 수 상한, 모듈 필터(여러 모듈 보기 합침), 문서 예산, 버전별 소스 읽기(코드 경로 추적). 풀지 않는 것: 마스킹된 로그만, 근거 줄 원문 대조(`check-output`), 채택은 사용자가, 시그니처·유형 추가는 확인 후.
-- 조건: 시작 전 예상 비용을 보이고 동의를 받는다. 결과는 `로그로 확인`/`코드로 추정`으로 계속 구분한다.
+- 조건: 사용자의 명시 요청을 동의로 보고, 시작 전에 예상 크기를 알린다. 결과는 `로그로 확인`/`코드로 추정`으로 계속 구분한다.
 - 되살리는 조건: 사내 파일럿에서 탐색이 "가설 없음"으로 끝나는 비율·모듈을 본 뒤. 검증은 사내 소스 경로(`SITE_PATHS`)가 있어야 한다.
 
 ## J. fixed 원인에 백포트 브랜치 추가 (상태 불변)
@@ -145,6 +141,7 @@ DB에 맞는 것이 없고 탐색으로도 가설이 서지 않으면 "가설 �
 - 같이 할 것(병합): `/review` 병합 op 순서와 `06-collaboration.md §6.6` move 조합에 fixed 유지 단계(옛 기록 그대로의 `verify-fix`) 넣기, 병합 때 `verification_history` 옮기기. 지금은 커맨드로 병합하면 새 원인이 fix-submitted/open으로 내려앉는다(lint 예외 `new-cause-fixed`는 직접 편집·손으로 쓴 계획만 쓴다, `03-issue-db.md §5.9`).
 - 되살릴 때 다룰 것: 같은 브랜치 항목의 `ref`가 `update-fix`의 항목 병합(`same.update`)으로 조용히 덮어써진다. 최상위 `fix.ref`와 항목 `ref`가 어긋날 수 있다.
 - 되살리는 조건: 반입 뒤. 사내 파일럿에서 다중 브랜치 수정 빈도를 본 뒤 범위를 정한다.
+- 코드 표시(`99-deferred.md §J` 주석): `plugin/scripts/dbadd/ops/fix.py` `op_update_fix`의 `same.update`, `plugin/scripts/match_signatures.py` `fix_judgement`의 `fixed_in` 비교 — 두 곳.
 
 ---
 

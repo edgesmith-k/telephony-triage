@@ -70,6 +70,8 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
     <h1>분석 스킬의 "규칙 제안"은 어떻게 처리되나</h1>
   </header>
 
+  <p class="note">병합·승인 흐름은 2026-11-13 기준으로 고쳤습니다. 그 밖의 내용은 스냅샷이며 절차가 다르면 <a href="../TEAM_GUIDE.md"><code>TEAM_GUIDE.md</code></a>가 정본입니다.</p>
+
   <p class="summary">분석 스킬이 <b>"이런 규칙을 추가하면 좋겠다"</b>고 제안하면, 이제 흘려보내지 않고 <b>분류를 정한 뒤 사용자에게 한 번 물어서</b> 반영합니다. 아무것도 자동으로 바뀌지 않습니다.</p>
 
   <section>
@@ -134,7 +136,7 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
         <path d="M210 90V226"/>
       </g>
       <text x="202" y="132" text-anchor="end" class="lbl">분류를 정한 뒤</text>
-      <text x="720" y="108" text-anchor="middle" class="lbl">바로 병합 또는 리뷰어가 병합</text>
+      <text x="720" y="108" text-anchor="middle" class="lbl">+1 뒤 병합</text>
       <text x="560" y="108" text-anchor="middle" class="lbl">승인한 내용만</text>
 
       <path d="M80 90V256H178" style="stroke:var(--accent);stroke-width:1.5;fill:none;stroke-dasharray:4 4" marker-end="url(#e2e-ark)"/>
@@ -163,7 +165,7 @@ pre { font-family: var(--mono); font-size: .8rem; background: var(--off-soft); b
         <h3>① 이슈 DB 규칙 제안</h3>
         <p class="eg">예: "이 로그 줄을 이벤트로 잡는 규칙을 추가하자"</p>
         <div class="flow"><span>초안 보여 줌</span><i>→</i><span>사용자 승인</span><i>→</i><span>자동 검증</span><i>→</i><span>확인 화면</span><i>→</i><span class="end">PR</span></div>
-        <p class="note">평소 이슈 기록과 같은 길을 탑니다. push 확인 화면에서 "push하고 바로 병합"을 고르면 본인이 바로 합칩니다. 다만 파서 규칙(<code>parser-rules/</code>) 같은 메인테이너 경로 변경은 메인테이너 리뷰를 거칩니다.</p>
+        <p class="note">평소 이슈 기록과 같은 길을 탑니다. push 확인 화면에서 승인하면 PR이 만들어지고, 작성자 외 1명이 Approve(+1)한 뒤 "병합해줘" 또는 GHE에서 병합합니다. 다만 파서 규칙(<code>parser-rules/</code>) 같은 메인테이너 경로 변경은 메인테이너가 Approve(+1)한 뒤 GHE에서 병합합니다.</p>
       </div>
       <div class="kind">
         <h3>② 분석 스킬 개선 제안</h3>

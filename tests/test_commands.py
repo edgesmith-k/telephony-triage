@@ -280,6 +280,9 @@ def test_cleanup_older_than_candidates_are_tool_jobs_only_and_dry_run_equals_yes
     doc["pr"] = {"number": None, "branch": "issue/MOCK-7006", "head_sha": "a" * 40}
     plan_file.write_text(json.dumps(doc), encoding="utf-8")
     _age(pushed)
+    broken = ws.plan("MOCK-7007", "p7-analyze-append.plan.json").parent      # 손상된 계획: PR 여부를 몰라 지우지 않는다
+    (broken / "plan.json").write_text("{손상", encoding="utf-8")
+    _age(broken)
     locked = ws.plan("MOCK-7005", "p7-analyze-append.plan.json").parent
     assert ws.acquire("MOCK-7005")["acquired"]
     _age(locked)
@@ -288,7 +291,8 @@ def test_cleanup_older_than_candidates_are_tool_jobs_only_and_dry_run_equals_yes
     jobs = {t["job"]: t for t in dry["targets"] if t["kind"] == "job-dir"}
     assert set(jobs) == {"RAW-1"} and jobs["RAW-1"]["pr"] is None
     kept = {r["job"]: r for r in dry["retained"]}
-    assert set(kept) == {"MOCK-7003", "MOCK-7006"} and kept["MOCK-7003"]["raw_remains"] is True
+    assert set(kept) == {"MOCK-7003", "MOCK-7006", "MOCK-7007"} and kept["MOCK-7003"]["raw_remains"] is True
+    assert kept["MOCK-7007"]["state"] == "unreadable" and "plan.json 읽기 실패" in kept["MOCK-7007"]["note"]
     assert kept["MOCK-7003"]["state"] == "unpublished" and "미게시 계획 보존" in kept["MOCK-7003"]["note"]
     assert kept["MOCK-7006"]["state"] == "pushed-no-pr" and kept["MOCK-7006"]["raw_remains"] is False
     assert "PR 연결 미확인" in kept["MOCK-7006"]["note"] and "sync-pr" in kept["MOCK-7006"]["note"]
@@ -300,7 +304,7 @@ def test_cleanup_older_than_candidates_are_tool_jobs_only_and_dry_run_equals_yes
     assert [t["job"] for t in done["removed"] if t["kind"] == "job-dir"] == list(jobs)    # dry-run 목록 = --yes 대상
     assert done["failed"] == [] and {r["job"]: r["state"] for r in done["retained"]} == {r["job"]: r["state"] for r in dry["retained"]}
     assert not raw.exists()
-    for keep in (recent, copied, empty, photos, hidden, logs_only, unpub, pushed, locked):
+    for keep in (recent, copied, empty, photos, hidden, logs_only, unpub, pushed, broken, locked):
         assert keep.exists(), keep
 
 
@@ -351,11 +355,13 @@ def test_sync_and_setup_bodies_list_new_steps_in_order():
 def test_setup_md_size_cap():
     """setup.md 바이트 상한 — 커맨드 본문은 매 호출 때 모델 문맥에 통째로 들어간다. A①②(0번 Jira MCP 점검·1번 최대 3개 질문·
     비android 분기 문구)로 7,456B → 8,924B가 됐다. 다른 문서처럼 지금 크기에 여유를 둔 상한(9,500B)으로 고정해 다음에 덧붙일 때
-    줄이는 쪽을 먼저 생각하게 한다. tt-setup.md는 gen_opencode 산출물(머리말 두 줄이 더 길다)이라 상한을 조금 더 준다."""
+    줄이는 쪽을 먼저 생각하게 한다. tt-setup.md는 gen_opencode 산출물(머리말 두 줄이 더 길다)이고, setup이 OpenCode 쓰기
+    흐름(`gen_opencode.WRITE_FLOWS`)이 되면서 "분석 전용" 안내 한 문단(약 750B — 설정 저장 명령을 돌리지 않고 보이기만 하라는
+    안전 문구라 줄이지 않는다)이 앞에 붙는다. 그만큼만 상한을 더 준다."""
     setup = (COMMANDS / "setup.md").read_bytes()
     assert len(setup) <= 9_500, len(setup)
     tt_setup = (REPO / "opencode" / "commands" / "tt-setup.md").read_bytes()
-    assert len(tt_setup) <= 9_600, len(tt_setup)
+    assert len(tt_setup) <= 10_400, len(tt_setup)
 
 
 def test_sync_sequence_keeps_recent_or_open_pr_workdirs():
@@ -431,7 +437,7 @@ def test_offline_eval_prints_accuracy_table_on_synthetic_labelset():
     assert set(meta["plugin_repo"]) == set(meta["db"]) == {"sha", "dirty"}
     assert meta["db"] == {"sha": None, "dirty": None}   # 샘플 DB는 플러그인 레포 하위 폴더(git 최상위 아님)
     assert meta["plugin_root"] == {"path": str(root), "temporary": False}
-    assert meta["site_defaults_sha256"] == hashlib.sha256((REPO / "plugin/site-defaults.example.yaml").read_bytes()).hexdigest()
+    assert meta["site_defaults_sha256"] == hashlib.sha256((root / "site-defaults.yaml").read_bytes()).hexdigest()
     item = out["items"][0]
     assert item["logs_sha256"] and all(len(h) == 64 for h in item["logs_sha256"])
     assert item["backend"]["name"] and "version" in item["backend"] and item["external"] == []    # 외부 파서 없음
@@ -444,7 +450,10 @@ def test_offline_eval_default_root_is_temporary_helper_root_without_site_default
     meta = json.loads(proc.stdout)["meta"]
     root = Path(meta["plugin_root"]["path"])
     assert meta["plugin_root"]["temporary"] is True and not root.exists()      # 임시 루트는 실행 뒤 지운다
-    assert meta["site_defaults_sha256"] == hashlib.sha256((REPO / "plugin/site-defaults.example.yaml").read_bytes()).hexdigest()
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import make_plugin_root
+    helper = make_plugin_root.site_defaults_bytes(REPO / "plugin/site-defaults.example.yaml")
+    assert meta["site_defaults_sha256"] == hashlib.sha256(helper).hexdigest()
 
 
 def test_offline_eval_text_table_has_the_three_metrics():

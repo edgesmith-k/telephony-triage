@@ -37,6 +37,14 @@ BANNED = [
     "같은 로그면 누가 돌려도",
     "같은 로그면 같은 후보",
     "팀 지식으로 굳지 않",
+    "바로 병합",
+    "--and-merge",
+    "issue_db.merge:",
+    "필수 승인 수 0",
+    "필수 승인 수는 0",
+    "필수 승인 수를 0",
+    'push만(리뷰어에게)',
+    '"push만"',
 ]
 PROMO_PAIR = ("docs/materials/02-marketing.html", "docs/materials/19-team-intro.html")
 # 공통 비교에서 빼는 절: story는 19에만, contact는 파일마다 다른 마무리. title은 비교하지 않고, 목차는 story·contact 링크를 뺀 순서만 비교한다.

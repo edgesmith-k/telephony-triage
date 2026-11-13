@@ -10,7 +10,7 @@
                    Atlassian·npm/PyPI·LLM API 토큰, JWT, `Authorization` 헤더 값, URL·netrc
                    자격증명, `*token*`·`*secret*`·`*password*`·`*api_key*` 대입 — 자리표시 값
                    `<…>`·`${…}`·`xxxx`·`REDACTED`·`EXAMPLE`은 제외, 대입 값은 숫자 포함 20자
-                   이상), 공인 IP, 15자리 숫자(IMEI·IMSI), 허용 목록 밖 이메일·URL 호스트,
+                   이상), 공인 IP, 15~20자리 숫자(IMEI·IMSI·ICCID), 허용 목록 밖 이메일·URL 호스트,
                    로그 출처 흔적 문구(`trace-wording`: 발췌·첨부 표시·로그 id·마스커 해시·점검 날짜).
                    비밀값은 출력에서 앞부분만 보인다. 사내는 `docs/site/boundary-patterns.txt`
                    (SITE_PATHS)에 실제 회사·서버·팀 이름 패턴을 더한다(모드와 무관).
@@ -154,7 +154,7 @@ DEFAULT_PATTERNS: list[tuple[str, re.Pattern, object]] = [
      lambda m: _not_secret(m.group(1))),
     ("ip-address", re.compile(r"(?<![\w.])(\d{1,3}(?:\.\d{1,3}){3})(?![\w.])", re.ASCII),
      lambda m: _ip_ok(m.group(1))),
-    ("long-number", re.compile(r"(?<![\w.])\d{15}(?![\w.])", re.ASCII), None),
+    ("long-number", re.compile(r"(?<![\w.])\d{15,20}(?![\w.])", re.ASCII), None),
     ("email", re.compile(r"\b[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)\b", re.ASCII),
      lambda m: _host_ok(m.group(1))),
     ("url-host", re.compile(r"\b(?:https?|ssh|git)://(?:[^@/\s]+@)?([A-Za-z0-9.-]+)", re.ASCII),

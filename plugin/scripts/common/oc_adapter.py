@@ -47,7 +47,16 @@ hook에서 tt-guard.js가 오류 tool part를 여기 넘기고, Jira 도구면 �
 문구를 그대로 쓴다. edit·write·apply_patch는 플러그인 루트·`.opencode/`·OpenCode 전역 설정·설정/지시 파일을 고치지 못한다
 (`protected_target`). 플러그인 스크립트 인자도 같다(`--out` 등으로 받은 경로에 쓰는 스크립트가 있다 — 낱말·`--opt=값`·`-o값`을
 작업 폴더와 `cd` 후보 기준으로 풀어 보호 경로면 거부). apply_patch 경로는 1.19.5처럼 JS `.trim()`으로 다듬고, 보이지 않는 글자가 남은 경로는 거부한다.
-모든 거부 사유는 `[telephony-triage]`로 시작한다(tt-oc가 막힌 호출로 판정한다).
+`config.py`는 config.py 자신의 파서로 읽어 사용자 설정을 쓰는 하위 명령(`init`·`set`·`set-tracker`·`install-hooks`·
+`rename-legacy --apply`·`tracker-candidates --mcp-config|--opencode-config`)은 "직접 실행"으로 돌린다(`_config_call`).
+`init --answers`는 일반 거부다(답 파일은 모델이 쓴 것). 플러그인 스크립트는 `--plugin-root`(줄임말 포함, `sync-scripts-path`도)를
+받지 않는다(다른 폴더의 site-defaults·스크립트를 읽고 실행한다). edit·write·apply_patch와 스크립트 출력은 `.git`·`.githooks`
+아래나 이름이 `HEAD`인 경로, 작업 루트 안에서 `HEAD` 파일이 있는 폴더(git 디렉터리) 아래에 쓰지 않는다(`_git_meta` — 모델이 만든
+저장소 설정·hook을 허용된 git 읽기가 실행한다). 스크립트 출력 인자(`guard._script_out_targets`)는 작업 루트
+(`<directory>/tt-oc.json`의 `work_root`) 안(루트 자체는 아님)이어야 하고, 그 파일을 못 읽으면 출력이 있는 호출은 거부한다
+(`_outside_outputs`). 작업 루트 밖 거부만은 절대 경로로 한 번 다시 하게 한다(`OUT_RETRY`).
+bash의 git·플러그인 스크립트는 tt-oc가 프로세스 환경에 준 git 설정(`GIT_SAFE`: `safe.bareRepository=explicit` 등)이 걸려 있을
+때만 돈다(`git_safe_missing` — 없으면 tt-oc 밖에서 시작한 것). 모든 거부 사유는 `[telephony-triage]`로 시작한다(tt-oc가 막힌 호출로 판정한다).
 
 **환경변수 무시 설정 거부(`REFUSED_ENV`)**: 설정을 덮거나 지우는 OpenCode 환경변수가 있으면 모든 도구를 거부한다(x3b·x4 실험).
 플러그인이 아예 안 실리는 `--pure` 실행은 여기서 막을 수 없다 — `tt-oc` 래퍼가 거절한다.
@@ -108,6 +117,14 @@ JIRA_GATE_ENV = "TT_OC_JIRA_GATE"
 JIRA_SESSION_ENV = "TT_OC_JIRA_SESSION_GATE"
 JIRA_ERROR_HIDDEN = "Jira 오류(본문 숨김)"
 GATE_SETTING = "opencode.jira_read"         # = oc_jira_gate.SETTING (사용자 config)
+
+# tt-oc가 OpenCode 프로세스 환경에 넣는 git 설정(= tt-oc `GIT_SAFE`). tt-guard.js는 그 환경을 이 프로세스에(`adapterEnv`) 주고,
+# bash 자식에는 `shell.env` hook이 같은 값을 다시 넣는다(실제 bash 자식에 걸리는지는 사내 e2e로 확인). 없으면 tt-oc 밖에서 시작한
+# 것이다 — bash의 git·플러그인 스크립트는 돌리지 않는다(닫힘): 모델이 만든 bare 모양 폴더의 config 명령을 git이 실행하는 길
+# (mask-copy 사본 이름 등 쓰기 쪽 표 밖의 길)을 이 설정이 닫는다.
+GIT_SAFE = (("safe.bareRepository", "explicit"), ("protocol.ext.allow", "never"))
+NO_GIT_SAFE = ("git 환경(GIT_CONFIG_COUNT의 safe.bareRepository=explicit·protocol.ext.allow=never)이 없다 — tt-oc로 시작하지 "
+               "않았다. `tt-oc --project <폴더>`로 시작한다")
 
 ASK_PREFIX = "OpenCode v1 does not run this; run this exact command yourself: "
 BRIDGE_FAILED = ("telephony-triage: OpenCode jira_bridge 처리 실패 — 원문은 표시하지 않는다. "
@@ -208,6 +225,14 @@ def odd_path_char(path: str) -> str | None:
         if cat in ("Cc", "Cf", "Zl", "Zp", "Cs", "Co", "Cn") or (cat == "Zs" and ch != " "):
             return f"U+{ord(ch):04X}"
     return None
+
+
+_UNSHOWN = re.compile("[\x00-\x1f\x7f-\x9f\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]")   # Cc·방향·폭 없는 글자
+
+
+def _shown(text: str) -> str:
+    """거부 사유에 싣는 모델 입력: 제어·방향 글자를 `\\xNN`·`\\uNNNN`으로 보인다(사유 줄을 끊거나 뒤집지 못하게)."""
+    return _UNSHOWN.sub(lambda m: f"\\x{ord(m[0]):02x}" if ord(m[0]) < 0x100 else f"\\u{ord(m[0]):04x}", text)
 
 
 def patch_paths(text: str) -> list[str]:
@@ -349,6 +374,22 @@ def map_tool(payload: dict, servers: list[str] | None, servers_error: str | None
 def refused_env(env: dict | None = None) -> list[str]:
     env = os.environ if env is None else env
     return sorted(k for k in env if k in REFUSED_ENV or k.startswith(REFUSED_ENV_PREFIXES))
+
+
+def git_safe_missing(env: dict) -> bool:
+    """이 프로세스 환경에서 GIT_SAFE가 git에 실제로 걸리지 않으면 True: `GIT_CONFIG_COUNT` 항목 중 같은 키의 마지막 값이 GIT_SAFE가
+    아니거나, 그 값이 깨졌거나(git도 거부), 그 뒤에 읽히는 `GIT_CONFIG_PARAMETERS`(`git -c`)가 같은 설정을 다시 정한다."""
+    raw = env.get("GIT_CONFIG_COUNT") or ""
+    if not re.fullmatch(r"[0-9]{1,4}", raw):
+        return True
+    last = {}
+    for i in range(int(raw)):
+        key, value = env.get(f"GIT_CONFIG_KEY_{i}"), env.get(f"GIT_CONFIG_VALUE_{i}")
+        if key is None or value is None:
+            return True
+        last[key.casefold()] = value
+    params = (env.get("GIT_CONFIG_PARAMETERS") or "").casefold()
+    return any(last.get(k.casefold()) != v or k.casefold() in params for k, v in GIT_SAFE)
 
 
 def jira_gate_files():
@@ -495,6 +536,7 @@ SCRIPT_DENY = {"module_eval.py": "모듈 스킬 평가(module_eval, 모델 호�
 SCRIPT_WRITE_WORDS = {"db_pr.py": {"publish": "이슈 DB push·PR(db_pr publish)", "merge": "이슈 DB PR 병합(db_pr merge)",
                                    "request-review": "리뷰어 요청(db_pr request-review)"},
                       "issue_post.py": {"approve": "Jira 코멘트 승인(issue_post approve)"}}
+CONFIG_SAFE_CMDS = {"show", "site-defaults", "check", "gh-status", "doctor"}   # 사용자 설정을 쓰지 않는 하위 명령
 _WORD_CHARS = re.compile(r"[A-Za-z0-9_./,:=@%+^-]")
 _REDIRECT_NULL = re.compile(r"[ \t]*/dev/null(?=$|[ \t\n;&|])")
 _OP_END = " \t\n;&|"
@@ -591,22 +633,54 @@ def split_bash(command: str) -> list[list[str]]:
     return segments
 
 
+def _config_call(rest: list[str]) -> tuple[str | None, str | None]:
+    """config.py 인자를 config.py 자신의 파서로 읽어 (거부 사유, 쓰기 흐름). 사용자 config를 쓰거나 지정 파일의 프로그램을
+    띄우는 꼴은 사람이 터미널에서. 파서 출력은 버린다 — 이 프로세스의 stdout은 결과 JSON 자리다."""
+    import contextlib
+    import io
+
+    import config as config_cli          # 못 불러오면 예외 → main이 거부(닫힘)
+    if Path(config_cli.__file__).resolve() != SCRIPTS / "config.py":     # 이름이 겹친 다른 모듈이면 판정하지 않는다
+        raise ImportError(f"config 모듈이 플러그인 config.py가 아니다: {config_cli.__file__}")
+    err = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            a = config_cli.build_parser().parse_args(rest)
+    except SystemExit as exc:
+        if exc.code == 0:
+            return None, None
+        last = _shown((err.getvalue().strip().splitlines() or [""])[-1][:300])     # argparse 오류 줄(모델이 인자를 고칠 수 있게)
+        return f"config.py 인자를 읽지 못해 거부한다({last})" if last else "config.py 인자를 읽지 못해 거부한다", None
+    if (a.cmd in CONFIG_SAFE_CMDS or (a.cmd == "rename-legacy" and not a.apply)
+            or (a.cmd == "sync-scripts-path" and not hasattr(a, "plugin_root"))
+            or (a.cmd == "tracker-candidates" and not (a.mcp_config or a.opencode_config))):
+        return None, None
+    if a.cmd == "init" and a.answers:   # 직접 실행 꼴로 보이면 그 명령(모델이 쓴 답 파일)이 붙여 넣을 명령이 된다 — 일반 거부로
+        return ("사용자 설정 만들기(config.py init) — --answers 파일은 모델이 쓴 것이다. 붙여 넣지 말고 터미널에서 "
+                "`config.py init`(대화형)으로 직접 답한다"), None
+    return None, f"사용자 설정 변경(config.py {a.cmd})"
+
+
 def _check_python(words: list[str]) -> tuple[str | None, str | None]:
     """(거부 사유, 쓰기 흐름 설명). 둘 다 None이면 허용."""
     if len(words) < 2 or words[1].startswith("-"):
         return "python은 플러그인 스크립트 경로를 첫 인자로만 부른다(-c·-m·옵션·대화형 금지)", None
     script = words[1]
     if not os.path.isabs(script):
-        return f"스크립트 `{script}`는 절대 경로로 부른다", None
+        return f"스크립트 `{_shown(script)}`는 절대 경로로 부른다", None
     real, root = os.path.realpath(script), os.path.realpath(SCRIPTS)
     if not real.startswith(root + os.sep) or not real.endswith(".py"):
-        return f"`{script}`는 플러그인 스크립트({root}/…py)가 아니다", None
-    name, rest = os.path.basename(real), words[2:]
+        return f"`{_shown(script)}`는 플러그인 스크립트({root}/…py)가 아니다", None
+    name, rest = os.path.basename(real).casefold(), words[2:]     # 대소문자 무시 파일 시스템의 `Config.py`도 같은 스크립트
+    if any(len(w.split("=")[0]) >= 3 and "--plugin-root".startswith(w.split("=")[0]) for w in rest):
+        return "플러그인 스크립트에 --plugin-root를 주지 않는다(다른 폴더의 site-defaults·스크립트를 읽고 실행한다)", None
     if name in SCRIPT_DENY:
         return None, SCRIPT_DENY[name]
     for word, label in SCRIPT_WRITE_WORDS.get(name, {}).items():
         if word in rest:
             return None, label
+    if name == "config.py":
+        return _config_call(rest)
     if name == "skill_patch.py" and any(len(w.split("=")[0]) >= 3 and "--apply".startswith(w.split("=")[0]) for w in rest):
         return None, "분석 스킬 소스 적용(skill_patch --apply)"
     return None, None
@@ -660,7 +734,7 @@ def _protected_args(words: list[str], cwds: list[str], directory: str, env: dict
                        or protected_target(os.path.realpath(joined), directory, env))
                 if why:
                     return f"스크립트 인자 `{word}`가 {why}를 가리킨다 — 스크립트로도 고치지 않는다(guard·설정 보호)"
-    return None
+    return _outside_outputs(words, cwds, directory)
 
 
 def bash_allowlist(command: str, cwd: str | None = None, directory: str | None = None,
@@ -741,6 +815,86 @@ def protected_target(target: str, directory: str, env: dict | None = None) -> st
         return "telephony-triage 사용자 설정(config.yaml·Jira 관문 통과 기록)"
     if os.path.basename(real) in PROTECTED_NAMES:
         return f"설정·지시 파일({os.path.basename(real)})"
+    return None
+
+
+def _git_meta(path: str, root: str | None = None) -> str | None:
+    """git 메타데이터 경로면 그 이유: 경로 조각에 `.git`·`.githooks`가 있거나 이름이 `HEAD`(대소문자 무시). 모델이 만든 저장소의
+    `config`(`core.fsmonitor` 등)·hook은 허용된 `git status`·`diff`가 실행한다. 논리 경로(normpath)와 실제 경로(realpath) 중
+    하나라도 걸리면 거부한다. `root`(작업 루트 실제 경로)를 주면 대상과 그 조상 폴더를 루트까지 올라가며 `HEAD` 파일이 있는
+    폴더(이름이 `.git`이 아닌 git 디렉터리 — bare·미러·`.repo/projects/x.git`)도 본다. worktree의 `.git`은 파일이고 그 폴더에
+    `HEAD`가 없으므로 걸리지 않는다."""
+    why = "git 메타데이터(`.git`·`.githooks` 아래 또는 이름이 HEAD — git이 그 설정·hook을 명령으로 실행한다)"
+    for p in (os.path.normpath(path), os.path.realpath(path)):
+        parts = [x.casefold() for x in re.split(r"[\\/]", p)]
+        if {".git", ".githooks"} & set(parts) or parts[-1] == "head":
+            return why
+    if root:
+        base = os.path.normcase(root)
+        # 논리 경로로도 오른다(`fw.git/hooks/x -> .repo/repo/hooks/x`처럼 실제 경로만 git 디렉터리 밖인 링크). 끊긴 링크 HEAD도 본다
+        for d in (os.path.normpath(path), _real(path)):
+            while os.path.normcase(d) == base or os.path.normcase(d).startswith(base.rstrip(os.sep) + os.sep):
+                if os.path.lexists(os.path.join(d, "HEAD")):
+                    return f"git 디렉터리 안의 경로({d}에 HEAD가 있다 — git이 그 설정·hook을 명령으로 실행한다)"
+                if os.path.dirname(d) == d:
+                    break
+                d = os.path.dirname(d)
+    return None
+
+
+TT_OC_HINT = "tt-oc로 시작했는지, 프로젝트 폴더를 `gen_opencode.py install`로 만들었는지 확인한다"
+# 출력 경로만 고치면 되는 거부(작업 루트 밖·루트 자체)의 꼬리: "턴을 끝낸다" 대신 한 번 다시 하게 한다(before가 이 꼬리로 알아본다).
+# tt-oc는 이 거부를 막힌 호출로 센다(다시 한 명령이 같은 명령이 아니라 LOCK_OWNER_RETRY처럼 짝을 지을 수 없다)
+OUT_RETRY = ("상대 경로는 `cd` 앞 폴더 기준으로도 본다. 출력을 절대 경로(`<work_dir>/<KEY>/…`)로 바꿔 한 번 다시 실행한다. "
+             "그래도 거부되면 이 메시지를 그대로 보인 뒤 턴을 끝낸다")
+
+
+def _work_root(directory: str) -> tuple[str | None, str | None]:
+    """(작업 루트 실제 경로, 못 읽은 이유): 설치 폴더 `<directory>/tt-oc.json`의 `work_root`(절대 경로 문자열). 그 파일은 모델이
+    고치지 못한다(`PROTECTED_NAMES`, 설정의 edit deny)."""
+    path = os.path.join(directory, "tt-oc.json")
+    try:
+        meta = json.loads(Path(path).read_text(encoding="utf-8"))
+    except OSError as exc:
+        return None, f"{path}를 읽지 못했다({type(exc).__name__})"
+    except ValueError:
+        return None, f"{path}가 JSON이 아니다"
+    root = meta.get("work_root") if isinstance(meta, dict) else None
+    if not isinstance(root, str) or not os.path.isabs(root):
+        return None, f"{path}에 절대 경로 work_root가 없다"
+    return os.path.realpath(root), None
+
+
+def _outside_outputs(words: list[str], cwds: list[str], directory: str) -> str | None:
+    """플러그인 스크립트 출력 인자(`guard._script_out_targets` — `--out`·줄임말·`--meta-out`·`--preview`·`mask_pii --in-place`·
+    `jira_fields extract --consume`)가 작업 루트(tt-oc.json `work_root`) 밖이거나 git 메타데이터면 그 이유. 안/밖은 실제 경로
+    (realpath, normcase) 하나로, 상대 경로는 모든 `cd` 후보 기준으로 본다. 판정할 수 없으면(guard·tt-oc.json) 거부한다(닫힘)."""
+    try:
+        import guard
+        targets = guard._script_out_targets([words[0], os.path.realpath(words[1]), *words[2:]])   # 실제 이름으로 고른다
+    except Exception as exc:  # noqa: BLE001 — 출력 대상을 못 뽑으면 플러그인 스크립트 호출을 거부(닫힘)
+        return f"guard를 불러오지 못해 스크립트 출력 인자를 판정할 수 없다({type(exc).__name__}) — 거부한다"
+    if not targets:
+        return None
+    root, why = _work_root(directory)
+    if root is None:
+        return (f"스크립트 출력 인자 `{targets[0]}`가 작업 루트 안인지 판정할 수 없다: {why}. {TT_OC_HINT}")
+    for target in targets:
+        if target.startswith("~"):      # 따옴표 안의 `~`는 셸이 풀지 않지만 스크립트가 풀 수 있다(triage --out) — 판정과 실제가 어긋난다
+            return f"스크립트 출력 인자 `{target}`: `~`로 시작하는 경로는 쓰지 않는다 — 작업 루트 아래 절대 경로로 준다"
+        for cwd in cwds:
+            joined = os.path.join(cwd, target)
+            real, base = os.path.normcase(os.path.realpath(joined)), os.path.normcase(root)
+            if real == base:        # 루트 자체: mask-copy 임시 폴더 등이 루트의 부모에 생긴다
+                return (f"스크립트 출력 인자 `{target}`가 작업 루트({root}) 자체다 — 출력은 그 아래 `<work_dir>/<KEY>/…`로 준다. "
+                        + OUT_RETRY)
+            if not real.startswith(base.rstrip(os.sep) + os.sep):
+                return (f"스크립트 출력 인자 `{target}`(실제 경로 {os.path.realpath(joined)})가 작업 루트({root}, {directory}/"
+                        "tt-oc.json의 work_root) 밖이다 — 스크립트는 작업 루트 밖에 쓰지 않는다. 플랫폼 work_dir가 작업 루트 밖이면 "
+                        "설치(`gen_opencode.py install --work-root`)를 그 위 폴더로 한다. " + OUT_RETRY)
+            why = _git_meta(joined, root)
+            if why:
+                return f"스크립트 출력 인자 `{target}`가 {why}다 — 다른 이름으로 쓴다"
     return None
 
 
@@ -831,11 +985,17 @@ def before(payload: dict, env: dict | None = None, servers: list[str] | None = N
             result["reason"] = f"[telephony-triage] {flow}는 OpenCode v1(분석 전용)에서 돌리지 않는다. {ASK_PREFIX}{mapped.command}"
             return result
     if mapped.kind in (FILE, PATCH):
+        root = _work_root(directory_of(payload))[0]     # 없으면 조상 HEAD 판정만 빠진다(작업 루트 밖 edit은 OpenCode 권한)
         for event in mapped.events:
             why = protected_target(event["tool_input"]["file_path"], directory_of(payload), env)
             if why:
                 result["reason"] = (f"[telephony-triage] {event['tool_input']['file_path']}: {why}는 OpenCode에서 고치지 않는다"
                                     "(guard·설정 보호).")
+                return result
+            why = _git_meta(event["tool_input"]["file_path"], root)
+            if why:
+                result["reason"] = (f"[telephony-triage] {event['tool_input']['file_path']}: {why}. OpenCode에서는 쓰지 않는다 — "
+                                    "분석 파일은 작업 루트의 다른 이름으로 쓴다.")
                 return result
     if mapped.kind == "mcp":
         try:
@@ -884,9 +1044,14 @@ def before(payload: dict, env: dict | None = None, servers: list[str] | None = N
                                 f"{ASK_PREFIX}{mapped.command}")
         elif verdict.deny == LOCK_OWNER_DENY:
             result["reason"] = LOCK_OWNER_DENY
+        elif verdict.deny and verdict.deny.endswith(OUT_RETRY):    # 출력 경로만 고치면 된다 — 한 번 다시(턴을 끝내지 않는다)
+            result["reason"] = f"{MARK} {verdict.deny}"
         elif verdict.deny:
             result["reason"] = (f"{MARK} bash 허용 목록: {verdict.deny}. {ALLOWLIST_HELP}. 다른 모양으로 다시 시도하지 말고 "
                                 "이 메시지를 그대로 보인 뒤 턴을 끝낸다.")
+        elif git_safe_missing(env) and any(w[0] == "git" or w[0] in BASH_PYTHON
+                                           for w in split_bash(mapped.events[0]["tool_input"]["command"])):
+            result["reason"] = f"{MARK} {NO_GIT_SAFE}. 이 메시지를 그대로 보인 뒤 턴을 끝낸다."
         else:
             result["decision"] = "allow"
     else:

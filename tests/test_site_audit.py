@@ -384,6 +384,41 @@ def test_module_without_case_or_arm_material_is_doc_review(site, fake_py):
     assert "diff로만 본다" in sa.review_md(p)
 
 
+def test_module_deep_md_only_is_doc_review(site, fake_py):
+    """기본 eval은 deep.md를 읽지 않는다 — deep.md만 바뀐 모듈은 문서 리뷰, 다른 파일과 같이 바뀌면 eval 계획."""
+    _, calls = fake_py
+    base = site["mod_head"]
+    mr.push(site["mod"], files={"ofono/sim/deep.md": "# 정밀\n"}, message="deep만")
+    p = plan(site, since=[f"modules={base}"], repos=["modules"])
+    item = {i["id"]: i for i in p["items"]}["mod:ofono/sim"]
+    assert item["doc_only"] and "deep.md만 — 문서 리뷰만" in item["flags"] and item["est_tokens"] == sa.MODULE_DOC_TOKENS
+    assert not [a for n, a in calls if n == "module_eval.py"]
+    mr.push(site["mod"], files={"ofono/sim/explore.md": "# b\n"}, message="explore도")
+    p = plan(site, since=[f"modules={base}"], repos=["modules"])
+    item = {i["id"]: i for i in p["items"]}["mod:ofono/sim"]
+    assert not item["doc_only"] and "deep.md도 바뀜 — 기본 eval 밖" in item["flags"]   # eval 통과가 deep.md까지 본 것처럼 보이지 않게
+    assert [a[1] for n, a in calls if n == "module_eval.py"] == ["ofono/sim"]
+    mr.push(site["mod"], files={"ofono/sim/deep.md": None}, message="deep 지움")
+    p = plan(site, since=[f"modules={base}"], repos=["modules"])
+    assert "deep.md 삭제됨" in {i["id"]: i for i in p["items"]}["mod:ofono/sim"]["flags"]
+
+
+def test_carried_deep_md_only_stays_doc_review(site, fake_py, capsys):
+    """이월된 deep.md만 항목은 다음 감사에서도 문서 리뷰(state carry_deep). 다른 파일도 바뀐 이월 항목은 eval 그대로."""
+    _, calls = fake_py
+    root = str(site["root"])
+    mr.push(site["mod"], files={"ofono/sim/deep.md": "# 정밀\n", "ofono/data/explore.md": "# a\n"}, message="둘")
+    ss.main(["--root", root, "audit", "--since", f"modules={site['mod_head']}", "--repo", "modules"])
+    assert ss.main(["--root", root, "audit", "--record", "--defer", "mod:ofono/sim,mod:ofono/data"]) == 0
+    state = json.loads((site["root"] / sa.STATE_FILE).read_text(encoding="utf-8"))
+    assert state["carry_deep"] == ["mod:ofono/sim"]
+    calls.clear()
+    by = {i["id"]: i for i in plan(site, repos=["modules"])["items"]}
+    assert by["mod:ofono/sim"]["doc_only"] and sa.DEEP_ONLY in by["mod:ofono/sim"]["flags"]
+    assert not by["mod:ofono/data"]["doc_only"] and [a[1] for n, a in calls if n == "module_eval.py"] == ["ofono/data"]
+    capsys.readouterr()
+
+
 def test_module_dry_run_real_script_on_templates(site, monkeypatch, tmp_path):
     """진짜 module_eval --dry-run(없는 claude 경로): 템플릿 ofono/data는 통과, arm 자료 없는 android 모듈은 문서 리뷰."""
     monkeypatch.setattr(sc.Ctx, "py", lambda self, script, *a, timeout=None:

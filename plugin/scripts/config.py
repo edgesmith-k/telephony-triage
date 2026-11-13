@@ -403,6 +403,10 @@ def cmd_set(args, defaults: dict) -> dict:
             raise UsageError(f"--platform {_platform(args)}: {exc}") from exc
     before = userconfig.merged(defaults, copy.deepcopy(data), _platform(args))
     userconfig.set_value(data, key, value)
+    rt_key = args.key in ("tracker", "tracker.read_tools") or args.key.startswith("tracker.read_tools.")  # `.<이름> true`는 매핑이 된다
+    bad = _write_like(userconfig.get(data, "tracker.read_tools") or []) if rt_key else []
+    if bad:
+        raise UsageError(f"{args.key}: 쓰기형 이름이라 read_tools에 넣지 않는다(규칙 2): {', '.join(bad)}")
     userconfig.save(data)
     out = {"config": str(userconfig.path()), "key": key, "value": value}
     old_clone = userconfig.get(before, "issue_db.path")
@@ -534,6 +538,19 @@ def _tool_problems(server: str, names: list[str]) -> list[str]:
     return problems
 
 
+def _write_like(names):
+    """쓰기형 이름(`mcptools.is_write`) 목록 — read_tools에 넣지 않는다(규칙 2, set-tracker·set·doctor 공유). 목록·매핑(키를 본다)이
+    아닌 값은 빈 목록(doctor가 형식 오류로 잡는다). 항목은 `이름 (낱말: <쓰기형으로 본 낱말>)` — 판정은 `is_write` 그대로."""
+    names = names if isinstance(names, (list, dict)) else []
+    out = []
+    for n in names:
+        if (m := mcptools.NAME_RE.match(str(n))) and mcptools.is_write(tool := m.group(2)):
+            v = mcptools.verb(tool)
+            word = v if v in mcptools.WRITE_VERBS else next(w for w in mcptools._words(tool) if mcptools._is_write_word(w))
+            out.append(f"{n} (낱말: {word})")
+    return out
+
+
 def cmd_set_tracker(args, defaults: dict) -> dict:
     data = userconfig.load_user()
     if data is None:
@@ -546,6 +563,10 @@ def cmd_set_tracker(args, defaults: dict) -> dict:
         raise UsageError(problems[0])
     added = [t for t in tools.values() if t not in read_tools]
     read_tools = sorted(set(read_tools) | set(tools.values()))  # read_tools는 tracker.tools 값을 포함한다
+    bad = _write_like(read_tools)
+    if bad:
+        raise UsageError("쓰기형 이름이라 read_tools에 넣지 않는다(규칙 2). 읽기 도구가 맞으면 사용자가 config.yaml을 직접 "
+                         f"고친다: {', '.join(bad)}")
     userconfig.set_value(data, "tracker.mcp_server", args.server)
     userconfig.set_value(data, "tracker.tools", tools)
     userconfig.set_value(data, "tracker.read_tools", read_tools)
@@ -566,6 +587,12 @@ def cmd_rename_legacy(args, defaults: dict) -> dict:
     data, changes = userconfig.rename_legacy(user)
     out["changes"] = changes
     if changes and args.apply:
+        tools = userconfig.get(data, "tracker.tools")
+        bad = _write_like(list(tools.values()) if isinstance(tools, dict) else []) + \
+            _write_like(userconfig.get(data, "tracker.read_tools") or [])
+        if bad:  # 옛 jira 키는 set 검사를 안 거치므로 옮길 때 막는다(규칙 2)
+            raise UsageError("쓰기형 이름이라 tracker 도구에 넣지 않는다(규칙 2). 읽기 도구가 맞으면 사용자가 config.yaml을 직접 "
+                             f"고친다: {', '.join(map(str, bad))}")
         userconfig.save(data)
         out["applied"] = True
     out["remaining"] = userconfig.legacy_problems(None, data if out["applied"] else user)
@@ -856,6 +883,10 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
                                  "그 줄을 지운다 · site-defaults면 관리자"))
             elif userconfig.runtime_problems(defaults):      # site 전용 runtime.label(출처 기록) — 경고만
                 rows.append(_row("config", "warn", userconfig.RUNTIME_LABEL_MSG, "site-defaults runtime.label을 고친다(관리자)"))
+            elif unknown := userconfig.unknown_keys(defaults, user):    # 읽지 않는 최상위 키(오타 등) — 경고만
+                more = f" 외 {len(unknown) - 3}개" if len(unknown) > 3 else ""
+                rows.append(_row("config", "warn", f"모르는 최상위 키(무시): {', '.join(unknown[:3])}{more}",
+                                 "키 이름을 고치거나 그 줄을 지운다 · site-defaults면 관리자"))
             else:
                 rows.append(_row("config", "ok", "config.yaml 있음"))
     except Exception as exc:    # noqa: BLE001 — 읽기 실패도 한 행의 fail이다
@@ -947,8 +978,12 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             rows.append(_row("tracker", "fail", "tracker.tools.get_issue 매핑 비어 있음", hint))
         else:
             problems = _tool_problems(str(server), names)
+            bad = _write_like(names)
             if problems:
                 rows.append(_row("tracker", "fail", problems[0], hint))
+            elif bad:
+                rows.append(_row("tracker", "warn", f"tracker 도구 이름에 쓰기형 이름: {', '.join(map(str, bad))}",
+                                 "읽기 도구가 아니면 config.yaml(팀 값이면 site-defaults)의 tracker 도구 설정에서 뺀다"))
             else:
                 rows.append(_row("tracker", "ok", f"{server} / get_issue 매핑 있음"))
     guarded("tracker", tracker) if ok_cfg else skip("tracker", "config 없음")
@@ -1230,9 +1265,10 @@ def cmd_show(args, defaults: dict) -> dict:
         return {"user_config": str(userconfig.path()) if user is not None else None,
                 "values": {k: v for k, v in found.items() if v is not _MISSING},
                 "missing": [k for k, v in found.items() if v is _MISSING]}
+    effective = userconfig.merged(defaults, user or {}, platform=_platform(args))
     return {"plugin_root": str(_plugin_root(args)), "site_defaults": str(_plugin_root(args) / site_defaults.FILENAME),
             "user_config": str(userconfig.path()) if user is not None else None,
-            "effective": userconfig.merged(defaults, user or {}, platform=_platform(args))}
+            "pending_feedback_dir": str(userconfig.pending_feedback_dir(effective)), "effective": effective}
 
 
 def build_parser() -> argparse.ArgumentParser:

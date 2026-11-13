@@ -16,6 +16,6 @@
 10-14 15:22:40.272  2214  2214 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.
 10-14 15:22:40.284  2214  2214 D ImsRegCallbackHelper: updateRegistrationState: registration state from REGISTRATION_STATE_REGISTERED to REGISTRATION_STATE_NOT_REGISTERED
 10-14 15:22:40.285  2214  2214 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 0, null}, suggestedAction=0, disconnectedRadioTech=-1, throttlingTimeSec=0
-10-14 15:22:40.331  1350  1404 I RIL     : [IpcCtx_0] OnIpcIndication Unsol Rsp ID=2104
+10-14 15:22:40.331  1350  1404 I RIL     : [IpcCtx_0] rx frame unsol id=3
 10-14 15:22:40.332  1361  1379 D VRIL-MODEM: at-out: OK
 10-14 15:22:40.333  1350  1404 D VRIL-SVC: emergencyNumberList indication

@@ -5,16 +5,16 @@
 10-15 11:46:05.631  2214  2214 E RILJ    : Unable to complete updateAllowedImsServices because service IMS is not available. [PHONE0]
 10-15 11:47:20.402  2214  2214 D ImsPhone: [0] handleImsRegistering: onImsMmTelProgressing imsRadioTech=WWAN
 10-15 11:47:20.404  2214  2338 D RILJ    : [0527]> NOTIFY_IMS_DATA_NETWORK accessNetwork=NGRAN dataNetworkState=CONNECTING physicalTransportType=WWAN physicalNetworkSlotIndex=0 [PHONE0]
-10-15 11:47:20.409  1350  1418 V RIL     : mux [ch0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0e07 len=12
+10-15 11:47:20.409  1350  1418 V RIL     : ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0e07 len=12
 10-15 11:47:20.409  1350  1418 V RIL     : <HEXDUMP 12B>
 10-15 11:47:20.410  1702  1733 D VRIL-NETWORK: network reg info request domain=2
 10-15 11:47:20.411  2214  2326 D RILJ    : [0527]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
 10-15 11:47:20.411  2214  2326 D RilRequest: [0527]< NOTIFY_IMS_DATA_NETWORK error: com.android.internal.telephony.CommandException: REQUEST_NOT_SUPPORTED
-10-15 11:47:23.051  1350  1418 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=96
+10-15 11:47:23.051  1350  1418 V RIL     : ipc[0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=96
 10-15 11:47:23.051  1350  1418 V RIL     : <HEXDUMP 16B>
 10-15 11:47:23.053  1350  1410 I VRIL    : [indFilter] clientId=4 indication=4410 filtered=false
 10-15 11:47:23.054  1350  1410 V RIL     : [ImsService_0] ims registration indication: TRUE
-10-15 11:47:23.054  1350  1410 I RIL     : [IpcCtx_0] OnIpcIndication Unsol Rsp ID=2101
+10-15 11:47:23.054  1350  1410 I RIL     : [IpcCtx_0] rx frame unsol id=1
 10-15 11:47:23.071  1350  1350 D VRIL-SVC: RadioNetworkProxy::getOperator: serial 531
 10-15 11:47:23.072  2214  2214 D ImsPhone: [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN
 10-15 11:47:23.140  2214  2214 E RILJ    : Unable to complete updateImsRegistrationInfo because service IMS is not available. [PHONE0]

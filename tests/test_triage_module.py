@@ -517,6 +517,7 @@ def test_job_preconditions(env):
 
 @pytest.mark.parametrize("extra, purpose", [
     (("--module", "ofono/data"), "deep"), (("--choose", "top"), "deep"), (("--at", "2026-09-20T05:32:10Z"), "deep"),
+    (("--deep",), "deep"),
     (("--also",), "explore"), (("--choose", "top", "--module", "ofono/data"), "explore"),
     (("--at", "2026-09-20T05:32:10Z"), "explore"), (("--choose", "Bad!"), "explore"),
     (("--module", "android/data"), "explore"), (("--module", "ofono/_common"), "explore"),
@@ -732,6 +733,85 @@ def test_single_timeline_sub_and_at_recentre(env):
     assert (code, out["reason"]) == (2, "작업 없음") and "이전 분석 것" in err
 
 
+# -- explore 정밀 탐색(--deep) ---------------------------------------------------------------------
+
+DEEP_DOC = "# Android data — 정밀 탐색\n\n- 단계 사슬을 순서대로 본다.\n"
+
+
+def _deep_android(env, n=300):
+    """deep.md가 있는 원격 + 기본 줄 상한(150)을 넘는 android data 줄 n개."""
+    env.url = mr.build(env.tmp / "remote-deep", extra={"android/data/deep.md": DEEP_DOC})
+    env.user({"module_skills": {"remote": env.url}})
+    events = [{"ts": f"2026-09-20T05:32:{i // 10:02d}.{i % 10}00Z", "tag": "DCM-1", "msg": f"setup failed step {i}",
+               "level": "E", "category_hint": "data"} for i in range(n)]
+    return env.make_job(events=events, platform="android", explore=True)
+
+
+def _explore_rec(job: Path) -> dict:
+    return json.loads((job / "module-skill.json").read_text(encoding="utf-8"))["explore"]
+
+
+def test_explore_deep_reads_deep_md_and_widens_view(env):
+    """`--deep`: read에 deep.md가 explore.md 뒤(타임라인 앞)에 붙고 보기 상한이 넓다. 플래그 없으면 상한·출력이 그대로."""
+    import make_module_eval_inputs as gen
+
+    job = _deep_android(env)
+    folder = job / "module-skill" / "explore"
+    tl = folder / "timeline.md"
+    args = ("explore", "--module", "android/data")
+    code, out, err = env.module(*args, platform="android")
+    assert code == 0, err
+    plain, plain_read = tl.read_bytes(), out["read"]
+    assert [Path(r).name for r in plain_read] == ["layers.md", "components.md", "explore.md", "timeline.md"]
+    assert out["timeline"]["lines"] == 150 and "deep" not in _explore_rec(job)
+    code, out, err = env.module(*args, "--deep", platform="android")
+    assert code == 0, err
+    assert out["read"] == plain_read[:3] + [str(folder / "android" / "data" / "deep.md"), str(tl)]
+    assert out["timeline"]["lines"] == 300 and _explore_rec(job)["deep"] is True
+    assert (folder / "android" / "data" / "deep.md").read_text(encoding="utf-8") == DEEP_DOC
+    code, out, err = env.module(*args, platform="android")                 # 다시 기본: 바이트 그대로
+    assert code == 0 and tl.read_bytes() == plain and out["read"] == plain_read and "deep" not in _explore_rec(job)
+    dummy = {"center": "c", "center_source": "s", "pins": [], "allow": []}
+
+    def caps(**kw):
+        got = modulecmd._explore_view_payload(job, KEY, "android", "data", dummy, {}, **kw)
+        return got["cap_rows"], got["cap_bytes"]
+
+    assert caps() == gen.VIEW_CAPS["explore"] == (150, 20480)               # 생성기(case 파일) 상한과 같다
+    assert caps(deep=True) == (1_000_000, 98304)
+
+
+def test_explore_deep_at_keeps_deep_caps(env):
+    """`--at` 재개는 기록의 `deep`으로 같은 상한을 쓴다. 기본 기록에 `--at --deep`은 사용 오류(조용히 기본 상한 금지,
+    기록·report 줄은 그대로)."""
+    job = _deep_android(env)
+    args = ("explore", "--module", "android/data")
+    assert env.module(*args, platform="android")[0] == 0
+    before = {n: (job / n).read_bytes() for n in ("module-skill.json", "report.md")}
+    code, out, err = env.module(*args, "--at", "2026-09-20T05:32:05Z", "--deep", platform="android")
+    assert (code, out) == (2, {"reason": "사용 오류", "next": core.NEXT_FIX_CALL}) and "--at 없이 먼저" in err
+    assert {n: (job / n).read_bytes() for n in before} == before
+    assert env.module(*args, "--deep", platform="android")[0] == 0
+    code, out, err = env.module(*args, "--at", "2026-09-20T05:32:05Z", platform="android")
+    assert code == 0, err
+    assert out["timeline"]["lines"] == 300 and out["read"][-2].endswith("deep.md")
+    rec = _explore_rec(job)
+    assert rec["deep"] is True and rec["center"] == "2026-09-20T05:32:05Z"
+
+
+def test_explore_deep_without_deep_md(env):
+    """deep.md 없는 모듈에 `--deep`: 사용 오류(stderr `deep.md 없음`) — 앞서 받은 기록·report 줄은 그대로, 명령을 고치라는 next."""
+    job = env.make_job(explore=True)
+    assert env.module("explore", "--module", "ofono/data")[0] == 0
+    before = {n: (job / n).read_bytes() for n in ("module-skill.json", "report.md")}
+    tree = snapshot(job / "module-skill" / "explore")
+    code, out, err = env.module("explore", "--module", "ofono/data", "--deep")
+    assert code == 2 and out == {"reason": "사용 오류", "module": "ofono/data",
+                                 "sha": mr.head(env.tmp / "remote"), "next": core.NEXT_FIX_CALL}
+    assert "deep.md 없음" in err and "--deep 없이 다시" in err
+    assert {n: (job / n).read_bytes() for n in before} == before and snapshot(job / "module-skill" / "explore") == tree
+
+
 def test_ask_switch_offers_only_modules_with_explore():
     """R40(H C1+D): 약한 신호 질문은 받은 트리에 `<p>/<m>/explore.md`가 있는 모듈만 권한다(14 모듈, 일부는 없을 수 있다)."""
     stats = {"hot_modules": {"sim": 9, "network": 7, "ims": 3, "data": 20}}
@@ -739,5 +819,7 @@ def test_ask_switch_offers_only_modules_with_explore():
     got = modulecmd._ask_switch("data", stats, [], tree=tree, platform="ofono")
     assert got["options"] == ["그대로 data", "network — 7줄", "ims — 3줄"]
     assert "sim" not in got["question"]
+    deep = modulecmd._ask_switch("data", stats, [], tree=tree | {"ofono/ims/deep.md"}, platform="ofono", deep=True)
+    assert deep["options"] == ["그대로 data", "ims — 3줄"]                 # --deep: deep.md도 있는 모듈만
     legacy = modulecmd._ask_switch("data", stats, [])                     # 트리를 모르면(--at) 예전처럼
     assert legacy["options"] == ["그대로 data", "sim — 9줄", "network — 7줄"]

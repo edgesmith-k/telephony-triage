@@ -238,6 +238,21 @@ export const TtGuard = async ({ directory }) => {
       output.env.CLAUDE_PLUGIN_ROOT = ROOT
       output.env[JIRA_SESSION_ENV] = jiraSessionGate   // shown by config.py doctor only; the adapter never reads bash env
       if (model) output.env.TT_MODEL = model
+      // The git settings tt-oc put in this process env (GIT_SAFE: safe.bareRepository=explicit, protocol.ext.allow=never)
+      // are set again for the bash child as they are. `git -c` values from the env are cleared (an empty
+      // GIT_CONFIG_PARAMETERS is accepted by git). GIT_ALLOW_PROTOCOL is not touched here: empty means "no protocol" to git;
+      // tt-oc removes it from the env instead.
+      const count = process.env.GIT_CONFIG_COUNT
+      if (count !== undefined) {
+        output.env.GIT_CONFIG_COUNT = count
+        for (let i = 0; i < (/^[0-9]{1,4}$/.test(count) ? Number(count) : 0); i++) {
+          for (const part of ["KEY", "VALUE"]) {
+            const name = `GIT_CONFIG_${part}_${i}`
+            if (process.env[name] !== undefined) output.env[name] = process.env[name]
+          }
+        }
+      }
+      output.env.GIT_CONFIG_PARAMETERS = ""
     },
 
     "chat.params": async (input) => {

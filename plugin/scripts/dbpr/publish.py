@@ -405,7 +405,8 @@ def _brief_stage(result: dict, job_dir: Path) -> dict:
         out["config_check"] = {k: cc.get(k) for k in ("for", "writable", "push_allowed", "reasons") if k in cc}
     applied = out.get("apply")
     if isinstance(applied, dict) and not out.get("stopped"):
-        out["apply"] = {k: applied[k] for k in ("ids", "changed", "fixtures", "feedback", "pending_included", "rejected")
+        out["apply"] = {k: applied[k] for k in ("ids", "changed", "fixtures", "feedback", "pending_included",
+                                                    "pending_skipped", "rejected")
                         if k in applied}
     if isinstance(out.get("checks"), dict):
         out["checks"] = _brief_checks(out["checks"])
@@ -644,14 +645,18 @@ def publish(ctx: Ctx, wt: Path, branch: str, lease: str, approved: str, commit: 
     plan["base_sha"] = state["base_sha"]
     included = {i["file"]: i for i in plan.get("included_pending") or []}
     inc_dir = job_dir / "included_pending"
+    skipped = {s["file"] for s in (stage_result.get("apply") or {}).get("pending_skipped") or []}
     for src in stage_result.get("pending_sources") or []:
         src = Path(src)
+        if src.name in skipped:     # 원인 ID가 이 이슈 DB에 없어 싣지 않은 피드백: 옮기지 않고, 재적용 때 빠진 것은 기록에서도 뺀다
+            included.pop(src.name, None)
+            continue
         if src.parent != inc_dir and src.is_file():
             inc_dir.mkdir(parents=True, exist_ok=True)
             shutil.move(str(src), str(inc_dir / src.name))
         included[src.name] = {"file": src.name, "pr": number}
     plan["included_pending"] = sorted(included.values(), key=lambda i: i["file"])
-    plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+    _write_json(plan_path, plan)
     trace_note(job_dir, "publish", action=action, pr=number, gh_ok=gh_error is None)   # PR 생성 시각(usage_stats)
     result = {"published": True, "pushed": True, **extra, "branch": branch, "head_sha": head, "lease": lease,
               "pr": {"number": number, "url": url, "action": action}, "plan": str(plan_path),

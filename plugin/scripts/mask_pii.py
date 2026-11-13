@@ -3,7 +3,7 @@
 
     mask_pii.py <file...> [--in-place | --out <file>] [--db <path>]
         치환 모드. 파일마다 마스커 하나(같은 값 = 같은 번호, 기존 토큰 다음 번호부터).
-        --in-place/--out이 없으면 파일 하나의 결과를 stdout으로 낸다.
+        --in-place/--out이 없으면 파일 하나의 결과를 stdout으로 낸다. NUL 든 줄은 `<REDACTED:NUL>`로 비우고 경고(mask-copy와 같다).
     mask_pii.py (<file...> | --changed <ref> | --staged) --check [--db <path>]
         검사 모드. 마스킹되지 않은 식별자가 있으면 목록(JSON)과 종료 코드 1.
         --staged는 index 내용, --changed는 `git merge-base <ref> HEAD` 이후 바뀐 파일의
@@ -15,6 +15,7 @@
         (08-safety.md §8.1). 분석 경로의 logcat은 `parse_logcat.py parse --mask`를 쓴다.
 
 치환·이벤트 모드는 로그 마스커(`log_lines=True`, M1~M11 모양 규칙 포함)를, 검사 모드는 기본 마스커를 쓴다(B2 §3.3).
+검사 모드도 이슈 DB fixture 로그(`fixtures/` 바로 아래 `*.log`)는 로그 마스커로 본다(`add-fixture`가 그 마스커로 가린다).
 
 `mask.allow_patterns`는 이슈 DB(`--db`, 없으면 cwd의 이슈 DB)의 `issue-db.config.yaml`에서
 읽는다. 이슈 DB를 찾지 못하면 예외 없이 마스킹한다.
@@ -81,7 +82,7 @@ def _scope_files(db: Path, changed: str | None, staged: bool) -> list[tuple[str,
             path = db / name
             if path.is_file():
                 out.append((name, path.read_bytes()))
-    return [(name, _without_nul(data.decode("utf-8", errors="replace"))) for name, data in out]
+    return [(name, _without_nul(data.decode("utf-8-sig", errors="replace"))) for name, data in out]
 
 
 def _without_nul(text: str) -> str:
@@ -104,10 +105,13 @@ def run_check(args, db: Path | None) -> dict:
             path = Path(name)
             if not path.is_file():
                 raise UsageError(f"파일이 없습니다: {path}")
-            targets.append((name, path.read_text(encoding="utf-8", errors="replace")))
-    masker = masking.new_masker(allow_patterns=_allow(db))
+            targets.append((name, path.read_text(encoding="utf-8-sig", errors="replace")))
+    allow = _allow(db)
+    plain, log = masking.new_masker(allow_patterns=allow), masking.new_masker(allow_patterns=allow, log_lines=True)
     detections = []
     for name, text in targets:
+        # 이슈 DB fixture 로그는 `add-fixture`가 가린 로그 마스커로 본다(덤프·base64·문맥 없는 긴 숫자·줄 머리 호스트)
+        masker = log if Path(name).parent.name == "fixtures" and name.endswith(".log") else plain
         lines = text.split("\n")   # mask_lines·residual과 같은 줄 나눔(갈린 덤프 조각 묶음이 replace와 같게)
         forced = masking.forced_lines(masker, lines)
         for i, line in enumerate(lines):
@@ -125,14 +129,18 @@ def run_replace(args, db: Path | None) -> tuple[dict, str | None]:
     if len(args.files) > 1 and not args.in_place:
         raise UsageError("파일이 여럿이면 --in-place를 쓰세요.")
     allow = _allow(db)
-    results, stdout_text = [], None
+    results, stdout_text, warnings = [], None, []
     for name in args.files:
         path = Path(name)
         if not path.is_file():
             raise UsageError(f"파일이 없습니다: {path}")
-        text = path.read_text(encoding="utf-8", errors="replace")
+        text = path.read_text(encoding="utf-8-sig", errors="replace")   # BOM을 떼야 첫 줄 머리 규칙이 맞는다
+        lines, nul = masking.blank_nul_lines(text.split("\n"))         # NUL 든 줄은 통째로 비운다(mask-copy와 같다, 재리뷰 RR-2)
+        if nul:
+            text = "\n".join(lines)
+            warnings.append({"code": "mask-pii-nul", "message": masking.nul_warning(nul, len(lines) - (lines[-1] == ""), name)})
         masker = masking.new_masker(text, allow, log_lines=True)
-        masked = "\n".join(masking.mask_lines(masker, text.split("\n")))   # 갈린 덤프 조각도(08-safety §8)
+        masked = "\n".join(masking.mask_lines(masker, lines))   # 갈린 덤프 조각도(08-safety §8)
         if args.in_place:
             path.write_text(masked, encoding="utf-8", newline="\n")
         elif args.out:
@@ -140,7 +148,7 @@ def run_replace(args, db: Path | None) -> tuple[dict, str | None]:
         else:
             stdout_text = masked
         results.append({"path": name, "replacements": dict(sorted(masker.counts.items()))})
-    return {"files": results}, stdout_text
+    return {"files": results, **({"warnings": warnings} if warnings else {})}, stdout_text
 
 
 def _mask_tree(value, masker):
@@ -228,6 +236,8 @@ def main(argv: list[str] | None = None) -> int:
             if args.changed or args.staged:
                 raise UsageError("--changed/--staged는 --check와 함께 씁니다.")
             result, text = run_replace(args, db)
+            for warning in result.get("warnings", []):
+                print(f"경고[{warning['code']}]: {warning['message']}", file=sys.stderr)
             if text is not None:
                 sys.stdout.write(text)
                 if args.json:

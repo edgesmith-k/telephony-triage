@@ -8,9 +8,9 @@
 10-17 13:05:22.081  1350  1418 V RIL     : <HEXDUMP 8B>
 10-17 13:05:22.082  1350  1418 I RIL     : [IpcCtx_0] rx frame
 10-17 13:05:22.082  1350  1418 V RIL     : route rsp type=2 id=0x0412 svc=5 msg=2210
-10-17 13:05:22.082  1350  1418 V RIL     : [VrilRouter] msgId=2210 svc=ExampleRegService_0(5) dir=Response
+10-17 13:05:22.082  1350  1418 V RIL     : [VrilRouter] reply msg=2210 to ExampleRegService_0
 10-17 13:05:22.083  1350  1404 I RIL     : [ExampleRegService_0] net state indication
-10-17 13:05:22.083  1350  1404 I RIL     : [IpcCtx_0] OnIpcIndication Unsol Rsp ID=2101
+10-17 13:05:22.083  1350  1404 I RIL     : [IpcCtx_0] rx frame unsol id=1
 10-17 13:05:22.084  1350  1404 I VRIL    : VCHAN_1 UNSOLICITED: UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED (0 bytes)
 10-17 13:05:22.085  2214  2214 D DN-12-C : DisconnectedState: updateNetworkCapabilities: Capabilities not changed.
 10-17 13:05:22.086  2214  2214 D DN-11-C : DisconnectedState: All network requests detached.
@@ -26,22 +26,22 @@
 10-17 13:05:22.094  2214  2214 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.
 10-17 13:05:22.095  2214  2214 D DNC-0   : IMS MMTEL deregistered. Info=ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 0, null}
 10-17 13:05:22.096  2214  2214 I Telephony: updateAdhocConfCapability - changed, new value: false
-10-17 13:05:22.097  1350  1418 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_IMS_PDN_DEL, RSP OK(VIPC_OK) seq=0x0e21 len=12
+10-17 13:05:22.097  1350  1418 V RIL     : ipc[0][RX] VIPC_EXAMPLE_IMS_PDN_DEL, RSP OK(VIPC_OK) seq=0x0e21 len=12
 10-17 13:05:22.097  1350  1418 V RIL     : <HEXDUMP 12B>
 10-17 13:05:22.097  1350  1418 I RIL     : [IpcCtx_0] rx frame
 10-17 13:05:22.098  1350  1418 V RIL     : waitlist hit seq 0x0e21 svc=4 msg=5102
 10-17 13:05:22.098  1350  1418 V RIL     : route rsp type=1 id=0x0413 svc=4 msg=5102
-10-17 13:05:22.098  1350  1418 V RIL     : [VrilRouter] msgId=5102 svc=ExampleModemService_0(4) dir=Response
-10-17 13:05:22.099  1350  1418 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=64
+10-17 13:05:22.098  1350  1418 V RIL     : [VrilRouter] reply msg=5102 to ExampleModemService_0
+10-17 13:05:22.099  1350  1418 V RIL     : ipc[0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=64
 10-17 13:05:22.099  1350  1418 V RIL     : <HEXDUMP 16B>
 10-17 13:05:22.099  1350  1418 V RIL     : <HEXDUMP 16B>
 10-17 13:05:22.099  1350  1418 V RIL     : <HEXDUMP 16B>
-10-17 13:05:22.100  1350  1410 I RIL     : [ExampleModemService_0] ims pdn release done errorCode=0
+10-17 13:05:22.100  1350  1410 I RIL     : [ExampleModemService_0] ims pdn release end errorCode=0
 10-17 13:05:22.100  1350  1410 I RIL     : [IpcCtx_0] OnIpcComplete Request ID=51, result=0
 10-17 13:05:22.101  1350  1410 D VRIL    : ext client reply clientId=3
 10-17 13:05:22.101  1350  1410 V RIL     : [IpcCtx_0] untrack seq 0x0e21
 10-17 13:05:22.102  1350  1412 V RIL     : [ImsService_0] ims registration indication: FALSE
-10-17 13:05:22.102  1350  1412 I RIL     : [IpcCtx_0] OnIpcIndication Unsol Rsp ID=1042
+10-17 13:05:22.102  1350  1412 I RIL     : [IpcCtx_0] rx frame unsol id=4
 10-17 13:05:22.103  1350  1412 I VRIL    : [indFilter] clientId=1 indication=4410 filtered=true
 10-17 13:05:22.103  1350  1412 I VRIL    : [indFilter] clientId=2 indication=4410 filtered=true
 10-17 13:05:22.103  1350  1412 I VRIL    : [indFilter] clientId=3 indication=4410 filtered=false

@@ -12,8 +12,8 @@
 
 - `render`: 스크립트가 결정적인 칸을 채우고 LLM 칸(`problem`·`cause`·`next`·`code_location`)은 `--fill`의 JSON에서 받는다.
   `--fill`이 없으면 LLM 칸을 `TODO(LLM)`로 둔 초안 화면만 낸다(해시 줄 없음). `--fill`이 있으면 검사(형식·basis·길이·TODO·
-  로그 원문 줄·Jira 원문 40자 이상 인용·code.skipped인데 코드 위치) → 마스킹(결정적 본문의 토큰 다음 번호부터, 전체 본문에
-  다시 적용, 남은 식별자 0) → 렌더 후 `JOB/post.md`(올라갈 본문 그대로)와 확인 화면을 낸다. 화면 마지막 줄은
+  로그 원문 줄·Jira 원문 40자 이상 인용·code.skipped인데 코드 위치·코드 위치 절대 경로) → 마스킹(결정적 본문의 토큰 다음 번호부터,
+  전체 본문에 다시 적용, 남은 식별자 0) → 렌더 후 `JOB/post.md`(올라갈 본문 그대로)와 확인 화면을 낸다. 화면 마지막 줄은
   `post_sha256: <hex>`이고 게시 가능할 때만 낸다. 실행할 때마다 기존 `post.approved.json`을 지운다(승인 무효화).
   `--omit failed_step|fields|evidence|must_show|others`(쉼표 구분)로 스크립트 칸 항목을 뺄 수 있다(문구는 못 바꾼다).
   `--again`은 사용자가 "다시 올려줘"라고 명시했을 때만 쓴다(게시 이력이 있어도 게시 가능, 승인 기록에 `again: true`).
@@ -61,6 +61,13 @@ CAUSE_ITEMS, NEXT_ITEMS = (1, 4), (0, 3)
 FIELD_MAX = 60                              # Jira 구조화 필드 값 하나 (작성자가 정하는 값: 한 줄로 접고 자른다)
 FAILED_STEP_MAX, EVIDENCE_LINES, EVIDENCE_CHARS, OTHERS_MAX = 120, 6, 160, 3
 QUOTE_MIN = 40                              # Jira 원문과 이만큼 같은 연속 부분이 있으면 인용으로 본다
+# code_location 절대 경로(`search`): 맨 앞 파일 칸(감싼 글자·목록 번호 뒤)의 `/`·`\`·`~user/`(단말 `/sdcard/`·`/storage/emulated|self/`는
+# 정당, `..`가 들면 아니다), 또는 어디서든 호스트 홈·드라이브(`/mnt/c/`·`/c/Users/`)·`~/`·`$HOME`·`${HOME}`·`%VAR%`·`file:/`.
+# 설명 속 단말 경로(`/data/…`)·URL은 정당 (재리뷰 RR-3)
+ABS_PATH = re.compile(r"""^[\s`"'(\[*<>\u201c\u2018-]*(?:\d+[.)]\s+)?"""
+                      r"""(?:(?!/(?:sdcard|storage/(?:emulated|self))/(?!\S*\.\.))[/\\]|~[\w-]*[\\/])"""
+                      r"""|(?:^|[\s,(\[`"'*>\u201c\u2018])(?:/(?:home|Users|root)/|/mnt/[a-z]/|/[a-z]/Users/|[A-Za-z]:[\\/]|~/"""
+                      r"""|\$\{?HOME\b|%\w+%|file:/)""")
 TODO = "TODO(LLM)"
 CONFIRMED = {"accepted", "chose-other", "new-cause", "new-type"}
 STALE_REASON = "분석 상태(triage-state.json)가 analysis.json과 다르다 — 다시 분석한다"   # job_status도 쓴다
@@ -479,6 +486,8 @@ def check_fill(raw, need_problem: bool, code_skipped: bool, masker, quote_src: l
     elif code and code_skipped:
         problems.append("코드 분석을 건너뛰어(code.skipped) code_location을 넣을 수 없다")
     elif code:
+        if ABS_PATH.search(code):
+            problems.append("code_location: 절대 경로가 있다(소스 루트 기준 상대 경로로)")
         texts.append(("code_location", code, CODE_MAX))
     masked: dict[str, str] = {}
     for name, value, limit in texts:

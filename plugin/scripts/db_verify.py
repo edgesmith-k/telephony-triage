@@ -846,7 +846,7 @@ def _check_fix_target(cause: issuedb.Cause, build: str | None, rules_cfg: list) 
     if cause.pending:
         raise UsageError(f"{cause.id}는 signatures_pending이라 verify-fix를 할 수 없습니다. 먼저 update-signature로 "
                          "판별 시그니처를 추가한다.")
-    if quality.no_trace(cause):     # 05-verification.md §5.12 (2) 전제, 99-deferred.md §F 방안 1
+    if quality.no_trace(cause):     # 05-verification.md §5.12 (2) 전제
         msg = (f"{cause.id}는 코드·설정 수정 유형({cause.raw.get('resolution_type')})인데 scenario_signatures·"
                "recovery_signatures가 모두 없어 판정 전에 중단합니다(판단 불가). 다음: update-signature로 "
                "scenario/recovery 시그니처 추가 → 초안 R1 흔적 검사 통과 → db_verify fix --plan <plan> --draft <dir>로 "

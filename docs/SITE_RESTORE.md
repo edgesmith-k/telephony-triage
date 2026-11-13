@@ -76,7 +76,7 @@ else (
 ```
 
 - 묶음을 이미 반입했다면 첫 줄의 `SHA`를 반입 커밋의 부모(`git rev-parse <반입 커밋>^`)로 둔다 — 반입 뒤 HEAD의 템플릿은 사외 판(placeholder)이라 `restore.overlay`가 "불완전"으로 실패한다.
-- 스냅샷 범위는 템플릿 트리 전체에서 `*/*/evals/`만 뺀 것이다(`modules.yaml`, `README.md`, `<p>/_common/*`, 모듈마다 `SKILL.md`·analyzer·explore·references).
+- 스냅샷 범위는 템플릿 트리 전체에서 `*/*/evals/`만 뺀 것이다(`modules.yaml`, `README.md`, `<p>/_common/*`, 모듈마다 `SKILL.md`·analyzer·explore·deep·references).
 - `.draft-manifest.json`이 없으면(첫 반입을 압축 풀기로 했으면) SITE_INSTALL.md 8절 3으로 기준선을 먼저 만든다.
 - `SOURCE`는 한 줄 `label=<반입 라벨> sha=<sha> date=<yyyy-mm-dd>`다. `sha` = 스냅샷을 꺼낸 커밋(바꾸지 않는다), `label`·`date` = 스냅샷 반영을 확인한 마지막 반입과 날짜(⑦에서 갱신).
 
@@ -154,7 +154,7 @@ diff -rq -x .git -x evals $CUR $OUT            # 출력 없음이 정상
 
 - evals 차이는 보내지 않는다(모듈 레포의 evals를 그대로 둔다). `Only in $CUR`(레포에만 있는 사내 파일)도 그대로 둔다. 모듈 레포 evals의 사내 case(`synthetic: false`)에 `origin` 키가 있으면 `module_eval.py`가 그 case를 읽지 않는다 — 키를 빼고 source.log의 마스킹 잔여가 0인지 본다(⑥).
 - 다른 파일 `<f>`마다: `git -C $CUR log --format=%h --invert-grep --grep='^restore: ' -- <f> | wc -l`(이 절차의 커밋은 뺀다)이 1보다 크면 모듈 레포에서 사내가 고친 것이다 → `cp $CUR/<f> docs/site/module-skills/<f>`로 스냅샷에 반영하고 커밋한 뒤 렌더·diff를 다시 한다. 1이면 렌더본이 보낼 변경이다. ⑦에서 방금 스냅샷을 고친 파일은 렌더본이 맞다.
-- 보낼 파일만 `$CUR`에 복사 → `git -C $CUR switch -c restore/<label>` → `git -C $CUR commit -am "restore: <label>"`(새 파일은 add) → push → GHE PR(+1 뒤 병합, 스쿼시면 제목도 `restore: <label>`).
+- 보낼 파일만 `$CUR`에 복사 → `git -C $CUR switch -c restore/<label>` → `git -C $CUR commit -am "restore: <label>"`(새 파일은 add — `deep.md`는 정밀 탐색을 아는 플러그인이 배포된 뒤에, `templates/module-skills/README.md`) → push → GHE PR(+1 뒤 병합, 스쿼시면 제목도 `restore: <label>`).
 
 ## ④ 검사
 
@@ -219,4 +219,5 @@ S-7·MS-*를 이어 간다(`python3 tools/site_step.py`). 이후 새 묶음을 �
    for c in $(git log --format=%H -- .draft-manifest.json); do echo "$c $(git show $c:.draft-manifest.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["label"])')"; done | head
    git diff <SOURCE label의 반입 커밋> HEAD -- templates/module-skills ':!templates/module-skills/*/*/evals/*'
    ```
+   diff에 새로 생긴 템플릿 파일(예: `deep.md`)은 사내 이름으로 스냅샷에 새로 만든다 — 자리 표시를 담은 파일이 없으면 `make_module_repo --site-overlay`가 `스냅샷에 없음`으로 종료 1이다. 자리 표시가 없는 파일(android/ims·android/modem의 `deep.md`)은 스냅샷에 없어도 종료 1이 나지 않고 사외판 그대로 들어가니, 사내 값에 맞는지 따로 본다.
 3. ③의 "이미 있으면" 갈래를 다시 돈다 → `SOURCE`의 `label`·`date`를 새 반입으로 고친다 → `restore check` 경고가 사라진다. 옮긴 **뒤** label을 올린다 — label만 올려도 `restore.label`은 통과하므로 옮길 것이 남았는지는 2의 diff로 직접 확인한다.

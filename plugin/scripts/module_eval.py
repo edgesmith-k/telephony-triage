@@ -4,7 +4,7 @@
 python3 plugin/scripts/module_eval.py --module ofono/data --dry-run [--json]
 python3 plugin/scripts/module_eval.py --module ofono/data [--case NAME ...] [--model M] [--max-cost USD | --no-max-cost]
     [--child-mode contract|restricted] [--require-cost | --no-require-cost] [--bare] [--record] [--note TEXT] [--json]
-    [--arms with,without | with | without]
+    [--arms with,without | with | without] [--deep]
 python3 plugin/scripts/module_eval.py --module ofono/data --probe-restricted [--model M] [--record] [--json]
 python3 plugin/scripts/module_eval.py --module ofono/data --regrade [<반복 디렉토리>] [--dry-run] [--record] [--note TEXT] [--json]
 
@@ -160,6 +160,9 @@ GRADER_VERSION = 8              # 채점 코드가 바뀌면 올린다 (3: explo
                                 # 8: 가설당 근거 상한을 계약(1~5줄)에 맞춤)
                                 # — 한 arm 기록 합치기 조건(설계 F3 후속)
 BASELINE_SAFETY_WARNING = "경고: 기준선 arm 안전 위반"   # gate["baseline_safety_violated"]의 사람용 표시
+DEEP_TOKEN_NOTE = "deep 모드: 토큰 목표는 판정에 쓰지 않는다(deep.md 만큼 늘 더 읽는다)"
+DEEP_NOTE = ("정밀 탐색: 짧은 case 로그(≤56줄)에서 explore 만 대 explore+deep 비교. 넓은 보기 상한·코드 경로 지시는 이 eval 밖"
+             "(pytest 가 상한을 잼). run 1회 — tie 는 '큰 해 없음'까지.")
 EXPLORE_REASONS = {"no_candidate", "cause_unconfirmed"}
 NAME_RX = re.compile(r"^[a-z0-9][a-z0-9-]{2,60}$")
 KEY_RX = re.compile(r"^MOCK-9\d{3}$")
@@ -314,6 +317,12 @@ class Source:
     platform: str
     module: str
     arm_root: Path
+    deep: bool = False          # --deep: explore case만, 두 arm 모두 explore 문서 + with에 deep.md(정밀 탐색)
+
+    @property
+    def key(self) -> str:
+        """기록 키(module_offsite_results.json `modules.<키>`): `<p>/<m>`, deep 모드면 `<p>/<m>+deep`."""
+        return f"{self.platform}/{self.module}" + ("+deep" if self.deep else "")
 
     @property
     def module_dir(self) -> Path:
@@ -626,6 +635,7 @@ def arm_sources(case: Case, arm: str, src: Source) -> tuple[list[tuple[str, Path
     - deep/without: 플랫폼 내장 pre 문서(oFono log-guide, Android log-tags·ril-requests·fail-causes).
     - explore/with: post explore-rules + `_common` ×2 + explore.md + 플랫폼 내장 post 문서(Android는 없음).
     - explore/without: pre explore-rules + 플랫폼 내장 pre 문서.
+    - `--deep`(explore만): without = 위 explore/with, with = 그것에 explore.md 바로 뒤 deep.md(runtime materialise 순서).
     """
     p, m = src.platform, src.module
     if p not in ARM_BUILTINS:
@@ -650,9 +660,11 @@ def arm_sources(case: Case, arm: str, src: Source) -> tuple[list[tuple[str, Path
                 docs.append((f"module-skill/{p}/{owner}/references/{tid}.md", ref))
         else:
             docs = list(builtin["pre"])
-    elif arm == "with":
+    elif arm == "with" or src.deep:
         docs = [("builtin/explore-rules.md", post / "explore-rules.md"), *common,
-                (f"module-skill/{p}/{m}/explore.md", src.module_dir / "explore.md"), *builtin["post"]]
+                (f"module-skill/{p}/{m}/explore.md", src.module_dir / "explore.md"),
+                *([(f"module-skill/{p}/{m}/deep.md", src.module_dir / "deep.md")] if src.deep and arm == "with" else []),
+                *builtin["post"]]
     else:
         docs = [("builtin/explore-rules.md", pre / "explore-rules.md"), *builtin["pre"]]
     return files, docs
@@ -1337,7 +1349,8 @@ def _load_json(path: Path) -> dict:
 
 
 def estimate_unit(module: str, results: Path | None = None) -> tuple[float, str]:
-    """run 한 번 추정 단가: 기록의 이 모듈 unit_cost_usd → 다른 모듈 평균 → 0.25(IMPL:647)."""
+    """run 한 번 추정 단가: 기록의 이 모듈 unit_cost_usd → (`+deep`이면 그 모듈 기본 기록) → 다른 모듈 평균 → 0.25(IMPL:647).
+    평균에는 `+deep` 기록을 넣지 않는다(기본 모드 추정이 deep 기록에 흔들리지 않게)."""
     path = RESULTS if results is None else results
     mods = _load_json(path).get("modules")
     mods = mods if isinstance(mods, dict) else {}
@@ -1345,9 +1358,10 @@ def estimate_unit(module: str, results: Path | None = None) -> tuple[float, str]
     def unit(v):
         u = v.get("unit_cost_usd") if isinstance(v, dict) else None
         return u if isinstance(u, (int, float)) and not isinstance(u, bool) and u > 0 else None
-    if unit(mods.get(module)) is not None:
-        return float(unit(mods[module])), path.name
-    others = [u for k, v in mods.items() if k != module and (u := unit(v)) is not None]
+    for k in dict.fromkeys((module, module.removesuffix("+deep"))):
+        if unit(mods.get(k)) is not None:
+            return float(unit(mods[k])), path.name
+    others = [u for k, v in mods.items() if k != module and not k.endswith("+deep") and (u := unit(v)) is not None]
     if others:
         return sum(others) / len(others), path.name
     return DEFAULT_UNIT, "default"
@@ -1536,6 +1550,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="자식 없이($0) run마다 result.json으로 지금 채점기를 다시 돌린다. 디렉토리를 안 주면 기록의 iteration")
     ap.add_argument("--record", action="store_true")
     ap.add_argument("--note", help="모듈 기록의 note(예: vendor tags added (unconfirmed for the real DB))")
+    ap.add_argument("--deep", action="store_true",
+                    help="정밀 탐색: explore case만, without = explore 문서, with = explore + deep.md. 기록 키 <p>/<m>+deep")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--json", action="store_true")
     return ap
@@ -1673,9 +1689,11 @@ def _main(args) -> int:
         if args.sha:
             tmp_src = Path(tempfile.mkdtemp(prefix="tt-module-sha-"))
             templates = export_sha(args.sha, templates, platform, tmp_src)
-        src = Source(templates=templates, platform=platform, module=module, arm_root=arm_root)
+        src = Source(templates=templates, platform=platform, module=module, arm_root=arm_root, deep=args.deep)
         if not src.module_dir.is_dir():
             raise UsageError(f"모듈 없음: {src.module_dir}")
+        if args.deep and not (src.module_dir / "deep.md").is_file():
+            raise UsageError(f"deep.md 없음(정밀 탐색 문서): {src.module_dir}")
         dirs = find_cases(src)
         unknown = sorted(set(args.case) - {d.name for d in dirs})
         if unknown:
@@ -1683,6 +1701,11 @@ def _main(args) -> int:
         if args.case:                       # 고른 case만 검증한다 — 다른 case의 형식 문제로 막히지 않는다
             dirs = [d for d in dirs if d.name in args.case]
         cases = [load_case(d) for d in dirs]
+        if args.deep:                       # 정밀 탐색은 explore만 — 심층(Step 5-1) case는 계획에서 뺀다
+            picked = sorted(c.name for c in cases if c.kind != "explore" and c.name in args.case)
+            if picked:
+                raise UsageError(f"--deep은 explore case만: {', '.join(picked)}")
+            cases = [c for c in cases if c.kind == "explore"]
         if not cases:
             raise UsageError("case 없음")
         if args.regrade is not None:
@@ -1692,7 +1715,7 @@ def _main(args) -> int:
         if args.child_mode == "restricted" and cli is not None and \
                 not {"--restricted", "--permission-prompts"} <= cli.flags:
             raise UsageError("이 CLI에 --restricted 없음")
-        unit, unit_source = estimate_unit(args.module)
+        unit, unit_source = estimate_unit(src.key)
         plan = [(c, a, n) for c in cases for a in arms for n in range(1, args.runs + 1)]
         within = max_cost is None or len(plan) * unit <= max_cost + EPS
         source = args.sha or "worktree"
@@ -1737,7 +1760,7 @@ def dry_run(args, src: Source, plan, cli: CliInfo | None, unit: float, unit_sour
     _, _, _, auth_keys = prepare_env(dict(os.environ))
     equals_live = pre_equals_live(src)
     restricted_ok = cli is not None and {"--restricted", "--permission-prompts"} <= cli.flags
-    data = {"module": args.module, "arms": list(arms), "runs": args.runs, "source": source,
+    data = {"module": src.key, **({"deep": True} if src.deep else {}), "arms": list(arms), "runs": args.runs, "source": source,
             "cli": ({"path": cli.path, "version": cli.version, "flags": sorted(cli.flags)} if cli else "missing"),
             "child_mode": args.child_mode, "require_cost": args.require_cost, "bare": args.bare, "plan": entries,
             "estimate": {"unit_usd": round(unit, 4), "unit_source": unit_source, "runs": len(plan),
@@ -1748,7 +1771,7 @@ def dry_run(args, src: Source, plan, cli: CliInfo | None, unit: float, unit_sour
             "prompt_sha256": prompt_frame_sha(src.platform), "grader_version": GRADER_VERSION, "tie_rule": TIE_RULE}
     if args.note:
         data["note"] = args.note
-    lines = [f"모듈 {args.module} · arm {','.join(arms)} · runs {args.runs} · 출처 {source}",
+    lines = [f"모듈 {src.key} · arm {','.join(arms)} · runs {args.runs} · 출처 {source}",
              f"cli: {cli.path + ' ' + str(cli.version) + ' ' + ','.join(sorted(cli.flags)) if cli else 'missing'}",
              f"자식 모드: {args.child_mode} · 비용 기록 필수: {args.require_cost}"]
     if args.bare:
@@ -1767,7 +1790,7 @@ def dry_run(args, src: Source, plan, cli: CliInfo | None, unit: float, unit_sour
                f"{'없음' if max_cost is None else f'${max_cost:.2f}'} · {'상한 안' if within else '상한 넘음'}"),
               (f"arm 자료 고정값 일치 · pre 내장 문서({', '.join(rel for rel, _ in EQUALS_LIVE[src.platform])}) = 현재 플러그인: "
                f"{equals_live}"),
-              f"동률 규칙: {TIE_RULE}",
+              f"동률 규칙: {TIE_RULE}", *([DEEP_TOKEN_NOTE] if src.deep else []),
               "자식 실행 없음(dry-run). 실제 실행은 사용자 승인 뒤에만."]
     _emit(args, data, lines)
     return exitcodes.OK
@@ -1775,12 +1798,14 @@ def dry_run(args, src: Source, plan, cli: CliInfo | None, unit: float, unit_sour
 
 def execute(args, src: Source, cases: list[Case], plan, cli: CliInfo, unit: float, max_cost: float | None,
             source: str, arms: list[str]) -> int:
-    iter_dir = (args.iteration or next_dir(WORKSPACE, f"module-{src.platform}-{src.module}-")).resolve()
+    prefix = f"module-{src.platform}-{src.module}-" + ("deep-" if src.deep else "")
+    iter_dir = (args.iteration or next_dir(WORKSPACE, prefix)).resolve()
     if iter_dir.exists():
         raise UsageError(f"기존 반복 디렉토리는 덮어쓰지 않는다: {iter_dir}")
     commit, dirty = repo_state(iter_dir)
     iter_dir.mkdir(parents=True)
-    write_json(iter_dir / "plan.json", {"module": args.module, "source": source, "child_mode": args.child_mode,
+    write_json(iter_dir / "plan.json", {"module": src.key, **({"deep": True} if src.deep else {}), "source": source,
+                                        "child_mode": args.child_mode,
                                         "require_cost": args.require_cost, "max_cost_usd": max_cost, "unit_usd": unit,
                                         "bare": args.bare,
                                         "cli": {"path": cli.path, "version": cli.version, "flags": sorted(cli.flags)},
@@ -1865,10 +1890,12 @@ def finish(args, src: Source, cases: list[Case], rows: list[dict], gradings: dic
     entry = module_entry(rows, gate, cases, arms, base, doc_bytes)
     if args.note:
         entry["note"] = args.note
+    elif src.deep and args.record and len(arms) == 2:   # 한 arm 합치기는 기존 기록의 note를 잇는다
+        entry.setdefault("note", DEEP_NOTE)
     if write_iter:
-        write_json(iter_dir / "module_offsite_results.json", {"schema_version": 1, "modules": {args.module: entry}})
+        write_json(iter_dir / "module_offsite_results.json", {"schema_version": 1, "modules": {src.key: entry}})
         write_benchmark(iter_dir, rows, gradings, gate, {
-            "skill_name": args.module, "skill_path": f"templates/module-skills/{args.module}",
+            "skill_name": src.key, "skill_path": f"templates/module-skills/{args.module}",
             "executor_model": entry["init_model"], "analyzer_model": None, "timestamp": entry["generated"],
             "runs_per_configuration": base["runs_per_case"], "grader_version": GRADER_VERSION})
     code = gate["exit"]
@@ -1878,7 +1905,7 @@ def finish(args, src: Source, cases: list[Case], rows: list[dict], gradings: dic
             print("--record 거부: 실행되지 않았거나 막힌 run이 있다(불완전한 자료는 단가로 쓰지 않는다)", file=sys.stderr)
             code = exitcodes.USAGE
         elif len(arms) == 1:
-            old = (_load_json(RESULTS).get("modules") or {}).get(args.module)
+            old = (_load_json(RESULTS).get("modules") or {}).get(src.key)
             try:
                 entry, shown_rows = merge_single_arm(old, entry, arms[0], src, cases, require_cost)
             except UsageError as exc:
@@ -1887,9 +1914,9 @@ def finish(args, src: Source, cases: list[Case], rows: list[dict], gradings: dic
             else:
                 shown_gate = gate_summary(shown_rows, require_cost)
                 code = shown_gate["exit"]
-                merge_record(RESULTS, lambda d: d.setdefault("modules", {}).__setitem__(args.module, entry))
+                merge_record(RESULTS, lambda d: d.setdefault("modules", {}).__setitem__(src.key, entry))
         else:
-            merge_record(RESULTS, lambda d: d.setdefault("modules", {}).__setitem__(args.module, entry))
+            merge_record(RESULTS, lambda d: d.setdefault("modules", {}).__setitem__(src.key, entry))
     lines = [*summary_table(shown_rows, shown_gate), "",
              (f"관문: {shown_gate['verdict']} (pass1 with {shown_gate['pass1_with']} · without {shown_gate['pass1_without']}, "
               f"안전 위반 with {shown_gate['safety_violations']['with']} · without "
@@ -1897,6 +1924,8 @@ def finish(args, src: Source, cases: list[Case], rows: list[dict], gradings: dic
               f"{', ' + BASELINE_SAFETY_WARNING if shown_gate.get('baseline_safety_violated') else ''})")]
     if shown_gate.get("warning"):
         lines.append(shown_gate["warning"])
+    if src.deep:
+        lines.append(DEEP_TOKEN_NOTE)
     for r in rows:
         for t in r["safety_fail"]:
             lines.append(f"안전 위반: {r['case']} {r['arm']} run-{r['run']} — {t}")
@@ -1931,7 +1960,7 @@ def regrade(args, src: Source, cases: list[Case]) -> int:
     디렉토리·plan.json이 없으면 사용 오류(2). `--record`는 기록의 반복 디렉토리(실제 경로)일 때만.
     plan.json은 있는데 run 하나라도 result.json이 없으면 재채점하지 않고 알린다 — `--record`면 그 모듈 기록에
     `regrade_unavailable: true`만 더한다. 기록의 `regraded`는 `from_grader`(직전 판)·`original_grader`(처음 판)를 잇는다."""
-    recorded = (_load_json(RESULTS).get("modules") or {}).get(args.module)
+    recorded = (_load_json(RESULTS).get("modules") or {}).get(src.key)
     rec_dirs = {}
     if isinstance(recorded, dict) and isinstance(recorded.get("iteration"), str):
         its = recorded.get("iterations") or {}
@@ -1940,13 +1969,13 @@ def regrade(args, src: Source, cases: list[Case]) -> int:
         d = Path(args.regrade).resolve()
         dirs = dict.fromkeys(ARMS, d)
         if args.record and d not in rec_dirs.values():        # 같은 이름의 옛 사본이 새 기록을 바꾸지 않게 실제 경로로 본다
-            raise UsageError(f"--record 거부: {d}는 {args.module} 기록의 반복 디렉토리가 아니다(--record 없이 재채점만 된다)")
+            raise UsageError(f"--record 거부: {d}는 {src.key} 기록의 반복 디렉토리가 아니다(--record 없이 재채점만 된다)")
         if len(set(rec_dirs.values())) > 1 and d in rec_dirs.values():
             dirs = {a: x for a, x in rec_dirs.items() if x == d}   # 합친 기록의 한 arm 디렉토리
     elif rec_dirs:
         dirs = rec_dirs
     else:
-        raise UsageError(f"기록 없음: {args.module} — --regrade <반복 디렉토리>")
+        raise UsageError(f"기록 없음: {src.key} — --regrade <반복 디렉토리>")
     runs, lacking = [], []
     for d in dict.fromkeys(dirs.values()):
         plan = _load_json(d / "plan.json").get("plan")
@@ -1962,15 +1991,15 @@ def regrade(args, src: Source, cases: list[Case]) -> int:
         raise UsageError(f"plan.json에 run 없음: {', '.join(str(d) for d in dict.fromkeys(dirs.values()))}")
     if args.dry_run:
         have = [{"case": c, "arm": a, "run": n, "result_json": (r / "result.json").is_file()} for c, a, n, r in runs]
-        _emit(args, {"module": args.module, "regrade": True, "runs": have, "lacking": lacking},
-              [f"재채점 계획 {args.module}: run {len(runs)}개, result.json 없음 {len(lacking)}개 (자식 실행 없음)",
+        _emit(args, {"module": src.key, "regrade": True, "runs": have, "lacking": lacking},
+              [f"재채점 계획 {src.key}: run {len(runs)}개, result.json 없음 {len(lacking)}개 (자식 실행 없음)",
                *(f"- {h['case']} {h['arm']} run-{h['run']}: result.json {'있음' if h['result_json'] else '없음'}" for h in have)])
         return exitcodes.OK
     if lacking:
-        _emit(args, {"module": args.module, "regrade_unavailable": True, "lacking": lacking, "runs": len(runs)},
-              [f"{UNAVAILABLE}: {args.module} — 없음 {len(lacking)}/{len(runs)} ({lacking[0]} …)"])
+        _emit(args, {"module": src.key, "regrade_unavailable": True, "lacking": lacking, "runs": len(runs)},
+              [f"{UNAVAILABLE}: {src.key} — 없음 {len(lacking)}/{len(runs)} ({lacking[0]} …)"])
         if args.record:
-            merge_record(RESULTS, lambda data: data["modules"][args.module].update(
+            merge_record(RESULTS, lambda data: data["modules"][src.key].update(
                 regrade_unavailable=True, regrade_note="run 결과 객체(result.json) 없음 — 지금 채점기로 재려면 다시 돌린다"))
         return exitcodes.OK
     by_name = {c.name: c for c in cases}
@@ -1978,9 +2007,9 @@ def regrade(args, src: Source, cases: list[Case]) -> int:
     if absent:
         raise UsageError(f"지금 템플릿에 없는 case: {', '.join(absent)} — 재채점 불가")
     first = next(iter(dirs.values()))
-    old = recorded if not args.regrade else (_load_json(first / "module_offsite_results.json").get("modules") or {}).get(args.module)
+    old = recorded if not args.regrade else (_load_json(first / "module_offsite_results.json").get("modules") or {}).get(src.key)
     if not isinstance(old, dict):
-        raise UsageError(f"반복 디렉토리에 {args.module} 모듈 기록 없음: {first}")
+        raise UsageError(f"반복 디렉토리에 {src.key} 모듈 기록 없음: {first}")
     rows, gradings, done = [], {}, []
     docs_sha, inputs_sha = {}, {}
     for name, arm, n, run_dir in runs:

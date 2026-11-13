@@ -63,7 +63,7 @@ class FixOps:
                 same = next((e for e in merged if e.get("branch") == entry.get("branch")), None)
                 if same is None:
                     merged.append(dict(entry))
-                else:
+                else:   # 99-deferred.md §J: 같은 브랜치 항목의 ref·build를 이력 없이 덮어쓴다(브랜치별 CL·검증 미구현)
                     same.update(entry)
             fix["fixed_in"] = merged
         fix["status"] = status

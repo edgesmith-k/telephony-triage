@@ -237,6 +237,71 @@ def test_pending_only_in_record_and_pending_feedback_only_in_analyze():
     ws.db_pr("discard", ws.wt("MOCK-7001"))
 
 
+def test_pending_feedback_with_unknown_cause_is_skipped():
+    """원인 ID가 이 이슈 DB 트리에 없는 pending 피드백(다른 플랫폼 찌꺼기)은 싣지 않고 pending 폴더에 남긴다."""
+    ws = Workspace()
+    pending = pending_feedback(ws)
+    pending.write_text(pending.read_text(encoding="utf-8").replace("final: unresolved", "final: DATA-999-01")
+                       .replace("decision: unresolved", "decision: chose-other"), encoding="utf-8")
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    out = ws.ship("MOCK-7001", "issue/MOCK-7001")
+    apply = out["stage"]["apply"]
+    assert apply["pending_included"] == []
+    assert apply["pending_skipped"] == [{"file": pending.name, "reason": "원인 ID DATA-999-01가 이 이슈 DB에 없다"}]
+    assert pending.is_file()
+    assert not (ws.job_dir("MOCK-7001") / "included_pending" / pending.name).exists()
+    assert ws.read_plan("MOCK-7001")["included_pending"] == []
+    assert any(n.startswith(f"pending 피드백 {pending.name} 건너뜀:") for n in out["summary"]["notes"])
+
+
+def test_pending_feedback_with_known_cause_is_included():
+    """원인 ID가 이 이슈 DB에 있으면(샘플의 DATA-001-01) pending 피드백은 실리고 included_pending/으로 옮겨진다."""
+    ws = Workspace()
+    pending = pending_feedback(ws)
+    pending.write_text(pending.read_text(encoding="utf-8").replace("final: unresolved", "final: DATA-001-01")
+                       .replace("decision: unresolved", "decision: chose-other"), encoding="utf-8")
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    apply = ws.ship("MOCK-7001", "issue/MOCK-7001")["stage"]["apply"]
+    assert apply["pending_included"] == [f"feedback/2026-09/{pending.name}"] and "pending_skipped" not in apply
+    assert not pending.exists() and (ws.job_dir("MOCK-7001") / "included_pending" / pending.name).is_file()
+
+
+def test_pending_feedback_suggested_cause_checked_and_non_list_is_not_internal_error():
+    """suggested의 원인 ID도 본다(없으면 건너뜀). suggested가 목록이 아니면 내부 오류 없이 실려 db_lint 스키마 오류로 막힌다."""
+    ws = Workspace()
+    pending = pending_feedback(ws)
+    text = pending.read_text(encoding="utf-8")
+    pending.write_text(text.replace("suggested: []", "suggested:\n- {cause: DATA-999-01, signature: DATA-999-01/sig-a, "
+                                    "score: 0.5}"), encoding="utf-8")
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    apply = ws.ship("MOCK-7001", "issue/MOCK-7001")["stage"]["apply"]
+    assert apply["pending_skipped"] == [{"file": pending.name, "reason": "원인 ID DATA-999-01가 이 이슈 DB에 없다"}]
+
+    pending.write_text(text.replace("suggested: []", "suggested: 5"), encoding="utf-8")
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.acquire("MOCK-7001")
+    out = ws.stage("MOCK-7001", "issue/MOCK-7001", expect=1)
+    assert out["apply"]["pending_included"] == [f"feedback/2026-09/{pending.name}"]
+    ws.db_pr("discard", ws.wt("MOCK-7001"))
+
+
+def test_republish_drops_now_skipped_pending_from_plan_record():
+    """sync-pr 재적용에서 원인 ID가 없어 건너뛴 pending은 계획의 included_pending 기록에서도 빠진다(파일은 included_pending/에 남는다)."""
+    ws = Workspace()
+    pending = pending_feedback(ws)
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.ship("MOCK-7001", "issue/MOCK-7001")
+    moved = ws.job_dir("MOCK-7001") / "included_pending" / pending.name
+    assert [i["file"] for i in ws.read_plan("MOCK-7001")["included_pending"]] == [pending.name]
+    moved.write_text(moved.read_text(encoding="utf-8").replace("final: unresolved", "final: DATA-999-01")
+                     .replace("decision: unresolved", "decision: chose-other"), encoding="utf-8")
+    found = ws.db_pr("find-plan", "--branch", "issue/MOCK-7001")
+    out = ws.ship("MOCK-7001", "issue/MOCK-7001", lease=found["remote_sha"])
+    assert [s["file"] for s in out["stage"]["apply"]["pending_skipped"]] == [pending.name]
+    assert ws.read_plan("MOCK-7001")["included_pending"] == [] and moved.is_file()
+    assert any(pending.name in n and "included_pending/" in n for n in out["summary"]["notes"])   # 안내가 실제 위치를 가리킨다
+
+
 def test_verify_resolution_and_update_fix_rules():
     ws = Workspace()
     ws.plan("MOCK-7006", "p7-record-verified.plan.json")
@@ -426,6 +491,28 @@ def test_restage_is_byte_identical_and_feedback_stable():
     fb = yaml.safe_load((ws.wt("MOCK-7002") / first["apply"]["feedback"]).read_text(encoding="utf-8"))
     assert str(fb["date"]).startswith("2026-09-29") and fb["final"] == "DATA-001-03"
     ws.db_pr("discard", ws.wt("MOCK-7002"))
+
+
+def test_restage_drops_ignored_files_and_skips_wt_hooks():
+    """재stage는 wt의 무시된 파일도 지우고(무시된 `.gitattributes`가 확인 화면 diff를 가리지 않게), 되돌리는 동안 wt의
+    hook(post-checkout·reference-transaction)을 돌리지 않는다 — clone은 `core.hooksPath .githooks` (리뷰 10a Q-1·Q-2)."""
+    ws = Workspace()
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7002")
+    ws.stage("MOCK-7002", "issue/MOCK-7002")
+    wt, marker = ws.wt("MOCK-7002"), ws.base / "PWNED"
+    d = wt / "data" / "DATA-001-no-setup-data-call"
+    (d / ".gitattributes").write_text("* -diff\n", encoding="utf-8")
+    (d / ".gitignore").write_text(".git*\n", encoding="utf-8")
+    for name in ("post-checkout", "reference-transaction"):
+        (wt / ".githooks" / name).write_text(f"#!/bin/sh\ntouch '{marker.as_posix()}'\ncat >/dev/null\n", encoding="utf-8")
+        (wt / ".githooks" / name).chmod(0o755)
+    assert "!! data/DATA-001-no-setup-data-call/.gitattributes" in git(wt, "status", "--porcelain", "--ignored")
+    assert ws.stage("MOCK-7002", "issue/MOCK-7002")["worktree"] == "reapplied"
+    assert not marker.exists()
+    assert not (d / ".gitattributes").exists() and not (d / ".gitignore").exists()
+    ws.db_pr("discard", wt)
 
 
 def test_user_clone_is_untouched_and_discard_cleans_up():
@@ -2943,3 +3030,15 @@ def test_sync_pr_republish_updates_merge_offer_head_and_old_approval_goes_stale(
     assert _gh(ws, "pr", "review", str(number), "--approve", MOCK_GH_USER="mock-reviewer").returncode == 0
     done = _merge(ws, None, reviews=None)
     assert done["merged"] is True and [a["commit"] for a in done["review"]["approvals"]] == [h2]
+
+
+def test_git_is_non_interactive(monkeypatch):
+    """B-18 (T-30): db_pr의 git(fetch·pull·push 포함)은 자격 증명 프롬프트로 매달리지 않는다 — 넘긴 env에도 붙는다."""
+    from dbpr import worktree
+    seen = []
+    monkeypatch.setattr(worktree.subprocess, "run",
+                        lambda cmd, **kw: seen.append(kw) or subprocess.CompletedProcess(cmd, 0, "", ""))
+    worktree._git(REPO, "fetch", "origin")
+    worktree._git(REPO, "push", "origin", env={"TT_PUBLISH_TOKEN": "x"})
+    assert [(kw["stdin"], kw["env"]["GIT_TERMINAL_PROMPT"]) for kw in seen] == [(subprocess.DEVNULL, "0")] * 2
+    assert seen[1]["env"]["TT_PUBLISH_TOKEN"] == "x"

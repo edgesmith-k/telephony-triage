@@ -667,6 +667,23 @@ def test_gh_host_env_and_remote_host_port(tmp_path, monkeypatch):
     assert sc._remote_host_org("/srv/repo") is None
 
 
+def test_s5_sandbox_pr_counts_tool_branches_only(tmp_path, monkeypatch):
+    root = site_root(tmp_path)
+    (root / sc.STEPS_FILE).parent.mkdir(parents=True)
+    (root / sc.STEPS_FILE).write_text("sandbox_repo: org/sandbox\n", encoding="utf-8")
+    def fake(out):
+        return lambda self, cmd, *, _out=out, **kw: (0, "", "") if cmd[1] == "auth" else (0, _out, "")
+    for out, status in (("[{not json", "fail"),
+                        (json.dumps([{"number": 1, "headRefName": "feature/x"}, {"number": 2, "headRefName": "issue/A-1"}]),
+                         "pass"),
+                        (json.dumps([{"number": 3, "headRefName": "verify-res/x"}]), "pass"),
+                        (json.dumps([{"number": 1, "headRefName": "feature/x"}]), "needs-user")):
+        monkeypatch.setattr(sc.Ctx, "run", fake(out))
+        r = sc.s5_sandbox_pr(sc.Ctx(root))
+        assert r["status"] == status and ("JSON 목록이 아님" in r["evidence"]) == (status == "fail"), out
+    assert "headRefName" in r["cmd"] and "issue/" in r["ask"]
+
+
 def test_s4a_protection_403_404_is_skip_and_weak_data_fails(tmp_path, monkeypatch):
     root = site_root(tmp_path)
     (root / sc.STEPS_FILE).parent.mkdir(parents=True)
@@ -1372,3 +1389,13 @@ def test_s4a_analyzers_no_remote_strings_unchanged(tmp_path):
                              ({"module_skills": {"remote": ""}}, "fail", "analyzers.data 비어 있음"), ({}, "fail", "analyzers.data 비어 있음")):
         r = sc.s4a_analyzers(sc.Ctx(_s4a_root(tmp_path, data)))
         assert (r["status"], r["evidence"], r["cmd"]) == (status, ev, "grep -n -A3 analyzers plugin/site-defaults.yaml"), data
+
+
+def test_module_tags_platform_without_db_key_is_evidence_only(monkeypatch):
+    """MODULE_DB_KEYS에 없는 플랫폼은 근거 문구에만 — restore.tags(partial_ok=False)도 pass 그대로(T-32)."""
+    db = ROOT / "tests" / "fixtures" / "issue-db-sample"
+    monkeypatch.setattr(sc, "_need_clone", lambda ctx, cid, key: (db, None))
+    r = sc.module_tags(sc.Ctx(ROOT), {"platforms": {"android": {}, "other": {}}}, "restore.tags", partial_ok=False)
+    assert r["status"] == "pass" and "판정 밖 other: 이슈 DB 입력 키 없음" in r["evidence"], r
+    r = sc.module_tags(sc.Ctx(ROOT), {"platforms": {"other": {}}}, "restore.tags", partial_ok=False)
+    assert r["status"] == "skip" and "other: 이슈 DB 입력 키 없음" in r["evidence"] and "ask" not in r, r

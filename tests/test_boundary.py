@@ -179,6 +179,17 @@ def test_values_glued_to_hangul_are_reported(fake_repo):
         assert (f"pattern:{rule}", "docs/leak.md") in found, rule
 
 
+def test_long_number_is_15_to_20_digits(fake_repo):
+    """긴 숫자는 15~20자리(IMEI·IMSI·ICCID)다. 14자리·21자리는 아니고, 허용 줄은 맞는 경로에서만 듣는다."""
+    nums = {16: "8982300123456789", 19: "8982300123456789012", 20: "89823001234567890123",
+            14: "35988123456781", 21: "898230012345678901234"}
+    _write(fake_repo, "docs/leak.md", "".join(f"iccid {n}\n" for n in nums.values()))
+    _write(fake_repo, "tests/test_x.py", f"ICCID = '{nums[19]}'\n")
+    _write(fake_repo, "tools/boundary-allow.txt", f"pattern:long-number tests/* ^{nums[19]}$\n")
+    found = [(f.rule, f.path, f.text) for f in boundary.scan(fake_repo, "external")]
+    assert found == [("pattern:long-number", "docs/leak.md", nums[n]) for n in (16, 19, 20)]
+
+
 def test_fullwidth_digits_and_nbsp_are_reported(fake_repo):
     """패턴은 ASCII지만 줄을 접어서 본다: 전각 15자리·전각 숫자 IP, NBSP로 띄운 인증 헤더도 위반이다."""
     fw = str.maketrans("0123456789", "".join(chr(0xff10 + n) for n in range(10)))
@@ -434,7 +445,7 @@ def _snapshot(root: Path) -> dict[str, bytes]:
 def test_check_boundary_on_import_uses_incoming_allow_file(tmp_path):
     source, dest = _draft(tmp_path / "draft"), tmp_path / "site"
     dest.mkdir()
-    code, out = _run(IMPORT, str(source), "--dest", str(dest), "--check-boundary", "--json")
+    code, out = _run(IMPORT, str(source), "--dest", str(dest), "--label", "t", "--check-boundary", "--json")
     assert code == 0, out
     assert out["status"] == "applied"
 
@@ -443,20 +454,20 @@ def test_check_boundary_violation_leaves_site_repo_unchanged(tmp_path):
     source = _draft(tmp_path / "draft")
     dest = tmp_path / "site"
     dest.mkdir()
-    assert _run(IMPORT, str(source), "--dest", str(dest), "--json")[0] == 0
+    assert _run(IMPORT, str(source), "--dest", str(dest), "--label", "t", "--json")[0] == 0
     _write(dest, "docs/site/boundary-patterns.txt", "id:corp-name (?i)acme-telecom\n")
     _write(dest, "tools/site_notes.md", "ACME-Telecom 빌드 서버 메모\n")  # 비-SITE_PATHS 사내 새 파일
     _write(source, "plugin/scripts/config.py", "# config v2\n")
     before = _snapshot(dest)
 
-    code, out = _run(IMPORT, str(source), "--dest", str(dest), "--check-boundary", "--json")
+    code, out = _run(IMPORT, str(source), "--dest", str(dest), "--label", "t", "--check-boundary", "--json")
     assert code == 1, out
     assert out["reason"] == "boundary"
     assert [(v["rule"], v["path"]) for v in out["violations"]] == [("pattern:corp-name", "tools/site_notes.md")]
     assert _snapshot(dest) == before
 
     # dry-run도 같은 검사를 하고 아무것도 바꾸지 않는다
-    code, out = _run(IMPORT, str(source), "--dest", str(dest), "--check-boundary", "--dry-run", "--json")
+    code, out = _run(IMPORT, str(source), "--dest", str(dest), "--label", "t", "--check-boundary", "--dry-run", "--json")
     assert code == 1 and _snapshot(dest) == before
 
 
