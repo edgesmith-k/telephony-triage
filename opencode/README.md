@@ -94,8 +94,9 @@ opencode/bin/tt-oc --project <dest> publish [--job <작업 키>]      # OpenCode
   `  ┃ ` 뒤에 그대로 보이고, 작업 키를 입력하면 같은 프로세스가 `db_pr publish … --approved <화면의 approved_hash> --commit
   --and-discard`를 한다. `d`는 전체 diff를 보이고 다시 묻는다. 그 밖의 입력·빈 줄·EOF는 취소(종료 0, 아무것도 push되지 않는다 —
   작업은 다시 stage된 상태). 입력 직후 `state.json`·`pr.json`·`stage.json`·`plan.json`이 화면 때와 다르면 거부한다.
-- 화면 전에 wt의 무시된(`.gitignore`) 파일을 지운다(`git clean -ffdX` — approved_hash·화면 diff에 안 나오는데 커밋 때 hook이 wt에서
-  import·실행할 수 있다). 입력 뒤에 무시된 파일이 다시 있으면 거부한다.
+- 무시된(`.gitignore`) 파일은 approved_hash·화면 diff에 안 나오는데 화면 diff를 가리거나(`.gitattributes`) 커밋 때 hook이 wt에서
+  import·실행할 수 있다. 그래서 stage가 계획을 적용하기 전에 wt를 되돌리며 무시된 파일까지 지우고(`git clean -ffdx`, wt의 hook은
+  돌리지 않는다), 화면을 보이기 전에 한 번 더 지운다(`git clean -ffdX`). 입력 뒤에 무시된 파일이 다시 있으면 거부한다.
 - 원격 `issue/<KEY>`에 커밋이 이미 있으면(계획의 PR head와 같을 때만 진행) 그 커밋의 작성자·날짜·제목을 보이고, 작업 키 다음에
   `덮어쓰기`를 따로 받는다(그 밖의 입력·빈 줄·EOF는 취소, 종료 0). 이 작업이 올린 커밋이 아니면 취소한다.
 - 거부(종료 2): 닫힘, tty 아님(파이프·CI), `TT_RUNTIME`·`CLAUDECODE`가 있음(OpenCode·Claude Code 안), `GIT_DIR`·`GIT_WORK_TREE`·

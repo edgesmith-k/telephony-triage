@@ -492,6 +492,28 @@ def test_restage_is_byte_identical_and_feedback_stable():
     ws.db_pr("discard", ws.wt("MOCK-7002"))
 
 
+def test_restage_drops_ignored_files_and_skips_wt_hooks():
+    """재stage는 wt의 무시된 파일도 지우고(무시된 `.gitattributes`가 확인 화면 diff를 가리지 않게), 되돌리는 동안 wt의
+    hook(post-checkout·reference-transaction)을 돌리지 않는다 — clone은 `core.hooksPath .githooks` (리뷰 10a Q-1·Q-2)."""
+    ws = Workspace()
+    ws.plan("MOCK-7002", "p7-analyze-new-cause.plan.json")
+    ws.put("MOCK-7002", "fixtures/cut-1.log", SIM_LOG)
+    ws.acquire("MOCK-7002")
+    ws.stage("MOCK-7002", "issue/MOCK-7002")
+    wt, marker = ws.wt("MOCK-7002"), ws.base / "PWNED"
+    d = wt / "data" / "DATA-001-no-setup-data-call"
+    (d / ".gitattributes").write_text("* -diff\n", encoding="utf-8")
+    (d / ".gitignore").write_text(".git*\n", encoding="utf-8")
+    for name in ("post-checkout", "reference-transaction"):
+        (wt / ".githooks" / name).write_text(f"#!/bin/sh\ntouch '{marker.as_posix()}'\ncat >/dev/null\n", encoding="utf-8")
+        (wt / ".githooks" / name).chmod(0o755)
+    assert "!! data/DATA-001-no-setup-data-call/.gitattributes" in git(wt, "status", "--porcelain", "--ignored")
+    assert ws.stage("MOCK-7002", "issue/MOCK-7002")["worktree"] == "reapplied"
+    assert not marker.exists()
+    assert not (d / ".gitattributes").exists() and not (d / ".gitignore").exists()
+    ws.db_pr("discard", wt)
+
+
 def test_user_clone_is_untouched_and_discard_cleans_up():
     ws = Workspace()
     clone = ws.clone

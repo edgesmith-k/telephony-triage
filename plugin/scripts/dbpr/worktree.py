@@ -279,14 +279,19 @@ def _pending_files(ctx: Ctx, job_dir: Path) -> list[Path]:
 def _prepare_worktree(ctx: Ctx, wt: Path, tool: str, base_sha: str) -> str:
     _job_of(wt, ctx)
     wt = abs_wt(wt)        # 절대 경로로: `git -C <clone>`이 상대 경로를 clone 기준으로 풀지 않게
+    # wt의 hook(post-checkout·reference-transaction 등 — 모델이 쓸 수 있는 `.githooks`)을 돌리지 않는다 (리뷰 10a Q-2).
+    # commit·push의 검증 hook은 이 함수 밖이라 그대로 돈다
+    nohook = ("-c", f"core.hooksPath={os.devnull}")
     if (wt / ".git").exists():
         _owned_worktree(ctx, wt)
-        for args in (("checkout", "-f", "-B", tool, base_sha), ("reset", "--hard", base_sha), ("clean", "-fd")):
-            _git(wt, *args)
+        # `-ffdx`: 무시된 파일·중첩 저장소까지. 남으면 계획 적용·검사·확인 화면이 그것이 있는 트리에서 돈다(무시된 `.gitattributes`가
+        # diff를 가린다 — 리뷰 10a Q-1). 대상은 위에서 확인한 도구 worktree뿐이고, 계획 적용 전이라 stage가 만들 파일은 아직 없다
+        for args in (("checkout", "-f", "-B", tool, base_sha), ("reset", "--hard", base_sha), ("clean", "-ffdx")):
+            _git(wt, *nohook, *args)
         return "reapplied"
     if wt.exists() and any(wt.iterdir()):
         raise UsageError(f"{wt}가 worktree가 아닌데 비어 있지 않습니다. 확인 후 지운다 (db_pr cleanup).")
-    _git(ctx.repo, "worktree", "add", "--no-track", "-B", tool, str(wt), base_sha)
+    _git(ctx.repo, *nohook, "worktree", "add", "--no-track", "-B", tool, str(wt), base_sha)
     return "created"
 
 
