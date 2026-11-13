@@ -205,15 +205,18 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
   자식에 걸리는지는 사내 e2e로 확인). 어댑터는 자기 환경에 이 설정이 없으면 bash의 git·스크립트를 거부한다.
   `tt-oc doctor`의 `git` 행은 어댑터와 같은 조건으로 자식 환경을 본다. tt-oc는 자식 환경에서 `GIT_CONFIG_PARAMETERS`도 뺀다
   (`'include.path'='<파일>'`처럼 키 이름 없이도 이 설정을 뒤집는다).
-  git 2.38 미만이면 doctor가 warn을 내고 시작은 한다. 그때 `safe.bareRepository`는 무시되고 `.git`·`HEAD` 쓰기 거부만 남는다
-  (`protocol.ext.allow=never`는 `GIT_CONFIG_COUNT`를 받는 git 2.31부터 걸린다). 2.38 이상을 쓴다.
+  플러그인 자체의 최소 git은 2.31이고(`GIT_CONFIG_COUNT`를 받으므로 `protocol.ext.allow=never`도 걸린다), `safe.bareRepository`
+  방어 한 겹만 2.38 이상에서 듣는다. 그보다 낮으면 doctor `git` 행이 warn이고 시작은 한다. 빠지는 것은 그 한 겹뿐이고
+  `.git`·`.githooks`·`HEAD` 쓰기 거부는 그대로다. Ubuntu 22.04 기본 git(2.34, 사내 리허설 기준)에서는 이 warn이 늘 나온다.
   모듈 스킬 git(`moduleskills._env`)은 `GIT_CONFIG_*`를 지우고 자체 `-c`·`GIT_CEILING_DIRECTORIES`로 돈다.
   플랫폼별 `work_dir`는 설치의 `--work-root` 안에 둔다(사내 analyze e2e에서 `--out` 거부가 없는지 확인).
   `tt-oc publish`(사람이 터미널에서 승인하는 게시)는 처음 설치할 때 `install … --allow-publish`를 주면 열림(tt-oc.json
-  `"publish": "open"`), 안 주면 닫힘이다. 이미 설치한 곳을 열거나 닫으려면 같은 install을 `--force`로 다시 한다.
-- OpenCode 허용 목록·guard 는 모델의 실수와 로그·Jira 본문에 섞인 지시를 걸러내는 사고 방지 장치다. 작정하고 우회를 찾는 모델을
-  막는다고 보장하지 않는다. 실제 경계는 OS 사용자 권한, 서버 브랜치 보호, 사람이 내용을 읽고 하는 승인이다. 모델이 출력한 명령은
-  읽지 않고 붙여 넣지 않는다.
+  `"publish": "open"`), 안 주면 닫힘이다. install을 `--force`로 한 번 더 하면 tt-oc.json을 그 인자대로 다시 쓴다(앞선 게시
+  열림·Jira 읽기 도구를 이어받지 않고 `꺼짐:` 줄로 알린다). 처음부터 PR까지의 순서는 `opencode/README.md` "처음부터 PR까지".
+- OpenCode 허용 목록·guard·tt-oc 점검은 모델의 실수, 로그·Jira 본문에 섞인 지시, 승인 화면 위조를 줄이는 사고 방지 장치다.
+  작정하고 우회를 찾는 모델을 막는다고 보장하지 않는다. 모델은 사용자와 같은 OS 계정으로 돌아 사용자의 git·gh 로그인을 그대로
+  쓸 수 있다. 그래서 승인 없는 push가 main에 들어가는 것을 확실히 막는 것은 서버의 브랜치 보호(PR 필수)와 +1 리뷰다
+  (`08-safety.md` §9). 모델이 보인 명령은 읽은 뒤에만 실행하고, `db_pr.py publish` 명령은 붙여 넣지 않는다(`tt-oc publish`).
 - **MCP 오류 경로(1.19.5 실험, 11/05)**: 오류로 끝난 MCP 호출(MCP `isError`·JSON-RPC 오류·시간 초과)은 `tool.execute.after`가
   돌지 않는다 — 바이너리의 MCP 실행 경로는 `isError`면 `throw Error(<텍스트 블록>)`이라 그 오류 글(응답 본문)이 tool part
   `state.error`가 되어 다음 모델 요청에 그대로 간다(after 기록 0건으로 확인). 대신 `experimental.chat.messages.transform`이

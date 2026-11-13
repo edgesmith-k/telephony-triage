@@ -10,7 +10,7 @@
 |---|---|---|
 | Claude Code + Claude | 분석, 기록(PR), Jira 코멘트, 병합 | 기본. **기록·코멘트는 여기서** |
 | Claude Code + 사내 모델 | 위와 같다(모델만 게이트웨이로) | 사내 모델로 분석·기록. 5절 주의 |
-| OpenCode + 사내 모델 | **분석 전용**. 쓰기 단계면 명령을 출력하고 멈춘다 | 빠른 분석. 명령은 터미널·Claude Code에서 직접 |
+| OpenCode + 사내 모델 | **분석 전용**. 쓰기 단계면 명령을 출력하고 멈춘다. 게시를 연 설치면 analyze 등록(PR)만 `tt-oc publish`로(4절) | 빠른 분석. 그 밖의 명령은 터미널·Claude Code에서 직접 |
 
 세 환경은 같은 사용자 설정(`~/.telephony-triage/config.yaml`)·이슈 DB clone·작업 디렉토리를 쓴다.
 
@@ -82,6 +82,7 @@ tt-oc doctor   # 사전 점검. fail이 있으면 시작하지 않는다
 
 - `--dest`는 git 밖. 그 폴더와 위 폴더(`/`까지)의 `AGENTS.md`·`CONTEXT.md`, 또는 `~/.config/opencode/AGENTS.md`가 있으면 시작 안 함.
 - `<작업 디렉토리>`는 사용자 설정의 `work_dir`(기본 플랫폼 `~/.telephony-triage/work`). 다른 플랫폼(oFono 등)의 기본 `~/.telephony-triage/work-<플랫폼>`은 그 밖이다 — 한 설치는 작업 폴더 하나만 쓰므로 oFono도 OpenCode로 쓰면 다른 `--dest`(예: `~/tt-oc-ofono`)에 `--work-root <work-ofono>`로 한 번 더 install한다. `--work-root`에 `~/.telephony-triage`는 주지 않는다(config.yaml이 edit 범위에 든다). `--issue-db`는 clone마다.
+- OpenCode에서 PR까지 하려면 install에 `--allow-publish`를 더하고 Jira 읽기 관문(4절)을 연다. 순서는 `opencode/README.md` "처음부터 PR까지".
 
 ## 2. 처음 한 번 설정
 
@@ -153,16 +154,17 @@ tt-oc -s <세션> --delete-session -- 2   # 마지막 답 + 세션 삭제
 ```
 
 - tt-oc 옵션(`-s`·`--delete-session` 등)은 `--` 앞에 둔다. 뒤는 모델에게 가는 메시지다.
-- **분석 전용**: 쓰기(코멘트·push·PR·병합·리뷰어 요청·스킬 적용)는 "OpenCode v1에서 실행하지 않은 명령" 절에 명령으로 낸다. "스크립트 화면" 절(모델을 거치지 않은 원본)을 읽고 승인할 때만 터미널에서 실행한다. 명령은 모델이 만든 그대로 `  │ ` 뒤에 나온다(tt-oc가 고치지 않는다). 최종 답도 줄마다 `  │ `가 붙으므로 답 속 코드 블록을 복사할 때는 줄 앞의 `  │ `를 지운다. 스크립트 화면은 `  ┃ ` 뒤에 나온다. `db_pr`·`db_verify` 명령에 lock owner가 필요하면 `주의:` 줄이 붙일 접두(`TT_LOCK_OWNER=<owner>`)와 작업 키를 알린다 — 명령을 복사하고 그 접두를 붙여 실행한다. owner를 확인하지 못했으면 `주의:` 줄이 owner가 있는 파일을 알린다 — 붙이지 않고 실행하면 `lock owner 불일치`로 멈춘다.
+- **분석 전용**: 쓰기(코멘트·push·PR·병합·리뷰어 요청·스킬 적용)는 "OpenCode v1에서 실행하지 않은 명령" 절에 명령으로 낸다. "스크립트 화면" 절(모델을 거치지 않은 원본)을 읽고 승인할 때만 터미널에서 실행한다(PR 등록은 아래 **할 일**대로). 명령은 모델이 만든 그대로 `  │ ` 뒤에 나온다(tt-oc가 고치지 않는다). 최종 답도 줄마다 `  │ `가 붙으므로 답 속 코드 블록을 복사할 때는 줄 앞의 `  │ `를 지운다. 스크립트 화면은 `  ┃ ` 뒤에 나온다. `db_pr`·`db_verify` 명령에 lock owner가 필요하면 `주의:` 줄이 붙일 접두(`TT_LOCK_OWNER=<owner>`)와 작업 키를 알린다. owner를 확인하지 못했으면 `주의:` 줄이 owner가 있는 파일을 알린다 — 붙이지 않고 실행하면 `lock owner 불일치`로 멈춘다. **할 일**: 모델이 보인 `db_pr.py publish` 명령은 붙여 넣지 않는다. 열린 설치면 OpenCode를 닫고 `tt-oc --project <dest> publish`, 닫힌 설치면 Claude Code에서 등록한다. 그 밖의 `db_pr`·`db_verify` 명령은 읽은 뒤 `주의:` 줄의 `TT_LOCK_OWNER=` 접두를 붙여 터미널에서 실행한다.
+- **등록(PR, `tt-oc publish`)**: 게시를 연 설치(`install --allow-publish`)에서는 analyze 확인 화면까지 간 작업을 OpenCode를 닫은 터미널에서 `tt-oc publish`로 올린다. 확인 화면을 읽고 작업 키를 입력하면 PR이 만들어진다. 실제 PR은 Jira에서 읽은 값으로만 만들어지므로 아래 Jira 읽기 관문이 열려 있어야 한다(`opencode/README.md` "처음부터 PR까지"·"게시").
 - **종료 코드**: 0 끝남, 1 오류(`no-script-output`이면 분석 스크립트가 한 번도 돌지 않았다 — 도입 담당자에게. `length`·`step-limit`이면 출력·스텝 한도에서 끊겼다 — `-s <세션>`으로 이어가기), 2 거부·사전 점검 실패, 3 막힌 호출(내 차례일 수 있음), 124 시간 초과(`no-response`면 게이트웨이가 120초 안에 답하지 않았다 — `tt-oc doctor`). 비용은 "미상"(`cost:0`≠0원).
 - **막힘 표시**: `[telephony-triage]`로 시작하면 guard가 막은 것(`… guard warning`은 경고뿐).
 - **Jira 읽기 관문**: 기본은 닫힘(`jira_gate` 행 warn). 이슈 내용은 `--issue-file <yaml>`로(`--analysis-only`·`--dry-run`에서만) 주거나 Claude Code에서 분석한다. 열기는 내가 직접 한다(OpenCode 안의 모델은 못 연다. 코멘트는 계속 막힘):
   1. Jira MCP를 `~/.config/opencode/opencode.json`의 `mcp`에 둔다.
   2. `python3 $TT/tools/site_step.py runtime-check opencode --project ~/tt-oc --jira <있는 키> --missing-key <없는 키>` 통과.
   3. `python3 $S/config.py set opencode.jira_read open`(오류 경로가 pass가 아니면 `--accept-error-bodies` — 허용 여부는 도입 담당자 안내).
-  4. `gen_opencode.py install … --jira-read-tool <서버>_<도구> --force`. 플러그인을 갱신하면 2부터 다시.
+  4. `gen_opencode.py install … --jira-read-tool <서버>_<도구> --force`(게시를 열었으면 `--allow-publish`도 — 빠진 것은 꺼진다). 플러그인을 갱신하면 2부터 다시.
 - **설치 스킬**: 스킬 도구가 없다(`skill: deny`). 스크립트가 알려 준 `SKILL.md`를 파일로 읽고, 못 읽으면 `심층 분석 생략: 설치 스킬 못 찾음`으로 계속한다. 모듈 문서 받기 실패도 분석을 멈추지 않는다.
-- **TUI**(`opencode` 직접 실행)는 화면 표시를 보장하지 않아 기록 판단에 쓰지 않는다.
+- **TUI**(`opencode` 직접 실행)에서는 플러그인 스크립트와 git이 모두 거부된다 — `tt-oc`로 실행한다.
 - 거부되는 옵션: `--pure`·`--auto`·`--attach`·`--port`·`-i`(`--interactive`)·`--fork`·`-c`(`--continue`)·`--agent`·`-m`(`--model`), 설정을 덮는 `OPENCODE_*` 변수.
 - 도구 출력이 `~/.local/share/opencode/opencode.db`에 남는다(지우려면 `--delete-session`).
 

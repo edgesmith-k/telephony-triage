@@ -221,7 +221,7 @@ git switch -c draft-import/<새 label>
 python3 ~/tt-new/tools/import_draft.py ~/tt-new --dest . --label <새 label> --dry-run
 #   "덮어씀 X / 지움 Y / 그대로 Z", SITE_PATHS 경로는 건드리지 않음 — 바뀌는 파일 수가 예상과 맞는지 본다
 python3 ~/tt-new/tools/import_draft.py ~/tt-new --dest . --label <새 label> --check-boundary
-git status --short          # 바뀐 사외 파일 + .draft-manifest.json만 M. SITE_PROFILE.md는 없어야 한다
+git status --short          # 사외에서 바뀐 파일은 M, 지운 파일은 D, 새 파일은 ??(.draft-manifest.json도 M). SITE_PROFILE.md는 없어야 한다
 ```
 
 **5. 테스트 후 병합**
@@ -243,7 +243,7 @@ rm -rf ~/tt-old ~/tt-new
 |---|---|---|
 | `사내에서 고친 사외 파일이 있어 멈춥니다` + 목록, 종료 1 | 기준선 뒤 사내에서 공통 파일을 고침(예: 사외 수정을 기다리며 넣은 임시 수정) | 새 묶음에 정식 수정이 있으면 마지막 반입의 사외 버전으로 되돌린다: `git restore --source=$(git log -1 --format=%H -- .draft-manifest.json) -- <파일>` → 커밋 → 다시 실행. 계속 필요한 수정이면 **변경 요지를 사내 정보 없는 문장으로** 사외에 전달한다(파일 반출 없음) |
 | 사내 새 파일 보고 | `SITE_PATHS` 밖에 사내에서 만든 파일 | 지워지지 않는다. 사내 전용이면 `SITE_PATHS`에 경로를 추가 |
-| 경계 검사 위반, 종료 1 | 반입 뒤 모습에 사내 표식·import 방향 문제 | 레포는 바뀌지 않았다. 파일·줄만 사외로 전달 |
+| 경계 검사 위반, 종료 1 | 반입 뒤 모습에 사내 표식·import 방향 문제 | 레포는 바뀌지 않았다. 파일·줄만 사외로 전달. 사내 파일의 15~20자리 숫자(ns 시각 등, `long-number`)가 걸린 것이면 `docs/site/boundary-allow.txt`에 그 값까지 적은 한 줄을 더한다(형식은 `tools/boundary-allow.txt` 머리말) |
 | `.draft-manifest.json를 읽을 수 없습니다` 또는 `schema=…를 이 도구가 모릅니다`, 종료 2 | 기준선 파일이 손상됨(충돌 표시·잘림·다른 형식) | 레포는 바뀌지 않았다. `git log -- .draft-manifest.json`으로 손상 전 커밋을 찾아 `git restore --source=<커밋> -- .draft-manifest.json` → 다시 실행 |
 | 종료 2 (적용 중 실패) | 도중 실패 | 도구가 되돌린다. 그래도 이상하면 `git reset --hard && git switch main`(1의 커밋으로) |
 
@@ -290,6 +290,8 @@ git push -u origin main
 | CODEOWNERS 필수 리뷰 | 메인테이너 경로만 | 아래 |
 
 CODEOWNERS에는 **메인테이너 경로**(`/.githooks/`·`/schema/`·`/parser-rules/`·`/templates/`·`/issue-db.config.yaml`·`/.github/`·`/docs/` 등)만 오너를 적고, 카테고리 경로(`/data/` 등)의 오너는 선택이다(적으면 GHE가 그 카테고리 PR에 오너를 자동 요청하고 오너 승인 전 BLOCKED다). `.githooks/`는 main의 스크립트가 모든 기여자 PC에서 돌므로 메인테이너 경로의 리뷰는 끄지 않는다(`docs/design/06-collaboration.md §6.1`). 병합은 작성자 외 1명이 Approve(+1)한 뒤 작성자가 "병합해줘"(`db_pr merge`) 또는 GHE에서 한다. Actions 검사를 쓰면 `issue_db.merge_wait_seconds`(기본 420, 최대 480)를 검사 시간에 맞춘다. 레포 설정 "Automatically delete head branches"를 켜 두면 병합한 PR 브랜치가 지워진다. 확인은 `python3 tools/site_step.py check`의 `s4a.protection`(권장 항목은 정보로 보인다). TODO(SITE:S5) 사내 GHE에서 위 항목(특히 Dismiss stale approvals·최근 push 승인)을 켤 수 있는지 확인한다(안 되는 항목은 보고한다). 카테고리 경로만 바꾼 시험 PR에서 `gh pr view <N> --json reviewDecision,mergeStateStatus`가 오류 없이 나오고, 다른 계정이 Approve하기 전에는 `reviewDecision`이 REVIEW_REQUIRED, head에 Approve한 뒤에는 APPROVED인지 본다(REVIEW_REQUIRED면 도구는 기다리지 않고 병합하지 않는다, 필드를 못 읽으면 병합이 늘 멈춘다). +1 병합 이전 판에서 올라왔으면 반입 뒤 site-defaults·사용자 config의 옛 `merge` 줄(`issue_db` 아래)을 지우고 doctor(`/telephony-triage:status --doctor`)의 `config` 행 경고가 사라졌는지 본다.
+
+뼈대의 `.githooks/pre-commit`·`pre-push`가 나중 묶음에서 고쳐지면, 그 고침은 그 묶음의 뼈대로 새로 만든 이슈 DB에만 들어간다. 이미 만든 운영 이슈 DB는 메인테이너가 두 파일을 새 묶음 뼈대의 것으로 바꾸는 PR을 낸다.
 
 **4. 뼈대 폴더 정리** — 이 폴더는 더 쓰지 않는다(지워도 된다). 도입 담당자도 팀원과 같이 `/telephony-triage:setup`으로 운영 레포를 clone하고, `core.hooksPath`는 setup이 설정한다. 이후 변경은 도구의 PR(`tt/*` 브랜치)이나 메인테이너 PR로만 한다.
 
