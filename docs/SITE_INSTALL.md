@@ -186,6 +186,7 @@ rm -rf <work_dir>/_snapshot                                        # 옛 clone�
 - `SITE_PATHS` 경로(`SITE_PROFILE.md`, `plugin/site-defaults.yaml`, `docs/site/` 등)는 건드리지 않는다.
 - 기준선(`.draft-manifest.json`) 이후 **사내에서 고친 사외 파일**이 있으면 바꾸지 않고 멈춘다(종료 1).
 - 사외에서 지운 파일은 지우고, 사내에서 새로 만든 비-`SITE_PATHS` 파일은 지우지 않고 보고한다.
+- 사내에서 지운 사외 파일은 새 묶음에 있으면 되살리고 `사내에서 지웠던 사외 파일 n개를 되살림:`으로 보고한다(JSON `restored`). 계속 없어야 하면 사외에 지워 달라고 전달한다.
 - 도중에 실패하면 원래대로 되돌린다.
 
 명령은 레포 폴더에서, `claude`를 실행하는 것과 같은 Python으로(B면 `(tt)` 터미널).
@@ -243,6 +244,7 @@ rm -rf ~/tt-old ~/tt-new
 | `사내에서 고친 사외 파일이 있어 멈춥니다` + 목록, 종료 1 | 기준선 뒤 사내에서 공통 파일을 고침(예: 사외 수정을 기다리며 넣은 임시 수정) | 새 묶음에 정식 수정이 있으면 마지막 반입의 사외 버전으로 되돌린다: `git restore --source=$(git log -1 --format=%H -- .draft-manifest.json) -- <파일>` → 커밋 → 다시 실행. 계속 필요한 수정이면 **변경 요지를 사내 정보 없는 문장으로** 사외에 전달한다(파일 반출 없음) |
 | 사내 새 파일 보고 | `SITE_PATHS` 밖에 사내에서 만든 파일 | 지워지지 않는다. 사내 전용이면 `SITE_PATHS`에 경로를 추가 |
 | 경계 검사 위반, 종료 1 | 반입 뒤 모습에 사내 표식·import 방향 문제 | 레포는 바뀌지 않았다. 파일·줄만 사외로 전달 |
+| `.draft-manifest.json를 읽을 수 없습니다` 또는 `schema=…를 이 도구가 모릅니다`, 종료 2 | 기준선 파일이 손상됨(충돌 표시·잘림·다른 형식) | 레포는 바뀌지 않았다. `git log -- .draft-manifest.json`으로 손상 전 커밋을 찾아 `git restore --source=<커밋> -- .draft-manifest.json` → 다시 실행 |
 | 종료 2 (적용 중 실패) | 도중 실패 | 도구가 되돌린다. 그래도 이상하면 `git reset --hard && git switch main`(1의 커밋으로) |
 
 공통 파일을 사내에서 직접 고치지 않는 것이 원칙이다(재반입 때 충돌). 사내 전용 코드·값은 `SITE_PATHS` 경로에만 둔다.

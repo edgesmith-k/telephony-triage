@@ -434,7 +434,7 @@ def _snapshot(root: Path) -> dict[str, bytes]:
 def test_check_boundary_on_import_uses_incoming_allow_file(tmp_path):
     source, dest = _draft(tmp_path / "draft"), tmp_path / "site"
     dest.mkdir()
-    code, out = _run(IMPORT, str(source), "--dest", str(dest), "--check-boundary", "--json")
+    code, out = _run(IMPORT, str(source), "--dest", str(dest), "--label", "t", "--check-boundary", "--json")
     assert code == 0, out
     assert out["status"] == "applied"
 
@@ -443,20 +443,20 @@ def test_check_boundary_violation_leaves_site_repo_unchanged(tmp_path):
     source = _draft(tmp_path / "draft")
     dest = tmp_path / "site"
     dest.mkdir()
-    assert _run(IMPORT, str(source), "--dest", str(dest), "--json")[0] == 0
+    assert _run(IMPORT, str(source), "--dest", str(dest), "--label", "t", "--json")[0] == 0
     _write(dest, "docs/site/boundary-patterns.txt", "id:corp-name (?i)acme-telecom\n")
     _write(dest, "tools/site_notes.md", "ACME-Telecom 빌드 서버 메모\n")  # 비-SITE_PATHS 사내 새 파일
     _write(source, "plugin/scripts/config.py", "# config v2\n")
     before = _snapshot(dest)
 
-    code, out = _run(IMPORT, str(source), "--dest", str(dest), "--check-boundary", "--json")
+    code, out = _run(IMPORT, str(source), "--dest", str(dest), "--label", "t", "--check-boundary", "--json")
     assert code == 1, out
     assert out["reason"] == "boundary"
     assert [(v["rule"], v["path"]) for v in out["violations"]] == [("pattern:corp-name", "tools/site_notes.md")]
     assert _snapshot(dest) == before
 
     # dry-run도 같은 검사를 하고 아무것도 바꾸지 않는다
-    code, out = _run(IMPORT, str(source), "--dest", str(dest), "--check-boundary", "--dry-run", "--json")
+    code, out = _run(IMPORT, str(source), "--dest", str(dest), "--label", "t", "--check-boundary", "--dry-run", "--json")
     assert code == 1 and _snapshot(dest) == before
 
 
