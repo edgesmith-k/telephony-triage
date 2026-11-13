@@ -14,10 +14,10 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게(10/06 사용자). 사용자 승인 대상(이슈 DB push, main 병합·태그 등 지시 없는 외부 동작)은 사용자에게.
 
-## 진행 상태 (11/13)
+## 진행 상태 (11/14)
 
 - 모드: **사외 초안**. Phase D0·1~13·반입 전 보강·H 완료. 사내 마지막 반입 **import-20261103**(`77e2827`). 태그 `import-20261109`·`b`는 반입되지 않았다.
-- 다음 묶음 **import-20261113**(태그·반입은 사용자, 사내 §8). 11/13 종합 리뷰: 반입해 사내 보완을 이어 가도 된다(P0 0).
+- 다음 묶음 **import-20261115**(태그·반입은 사용자, 사내 §8). 11/13 종합 리뷰: 반입해 사내 보완을 이어 가도 된다(P0 0).
 - 모델 Sonnet 5.5 기준. `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서(`docs/book/`)는 스냅샷, 정본은 `docs/TEAM_GUIDE.md`.
 
@@ -25,8 +25,7 @@
 
 | ☐ | 항목 | 메모 |
 |---|---|---|
-| ☐ F | 다음 묶음 — 사람 확인·태그·반입은 사용자. 반입 뒤 후보: 탐색 `--also`, 심층 분석 단계, Jira 버전 문구 패턴(`99-deferred.md` H·I·G) | SITE_INSTALL §8·아래 재반입 노트 |
-| ☐ M | 반입 전 병합 예정: #118 모듈 문서 사실 정정, Android 벤더 줄 꼴 정리(PR 미정). #114·#116·#117 병합됨 | 병합되면 재반입 노트 표시를 고친다 |
+| ☐ F | 다음 묶음 — 사람 확인·태그·반입은 사용자. 반입 뒤 후보: 다중 모듈 탐색, Jira 버전 문구 패턴(`99-deferred.md` H·G) | SITE_INSTALL §8·아래 재반입 노트 |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
 | ☐ I | OpenCode·사내 모델판 — 사외 몫 ☑(사내 확인 남음) | `docs/RUNTIME_ADOPTION.md` |
 
@@ -34,7 +33,7 @@
 
 ## 사내로 넘긴 것
 
-- **재반입 노트 (import-20261113 = import-20261103(`77e2827`) 이후 전부)**
+- **재반입 노트 (import-20261115 = import-20261103(`77e2827`) 이후 전부)**
   - guard 판정이 바뀌었다(`08-safety.md §9`): base push·병합 계열(규칙 6·11)과 규칙 5(`ci_mode: actions`)는 거부→ask, Claude의 Approve·리뷰 기각·자동 병합 켜기·보호 변경·`refs/remotes` 위조는 새로 거부. 팀 배포 전에 `site_step.py check S-4a`의 `s4a.protection_guard` 통과. §8대로 사내 대상 eval 12개 모두 다시.
   - S1 확인 전인데 site-defaults `tracker.isolation_confirmed: true`면 `false`로.
   - S13을 했어도 `14-site.md` S13의 새 확인 방법으로 다시. 확인 전에는 사내 로그를 fixture·이슈 DB에 넣지 않는다.
@@ -44,11 +43,13 @@
   - `platform.ril.vendor`를 두었으면 벤더 HAL 짝(`hal`)이 바뀔 수 있다 → `db_regress`로 확인(#109).
   - S-0이 `site_step` 첫 단계(#102). 직접 입력한 소스 경로는 개인 `code_profiles`에 자동 저장(#106).
   - 그 밖(#80 모듈 스킬 레포·+1 병합, #85 스냅샷 overlay, #86 Android 17 태그·RIL·슬롯, #87 OpenCode, #90·#95·#98 마스킹): 파일별 영향과 관리자 할 일(`site-defaults.yaml`의 `analyzers.*.inputs`·`max_tokens_hint`·`issue_db.merge` 지우기)은 `MODULE_SKILLS_RESULT.md` "반입 노트"(#80까지).
-  - #114 백엔드 0.1.5: 첫 분석은 캐시 없이 다시 돈다, `min_version`은 그대로. #116: plan·DB 영향 없음.
-  - #117: plan·DB 영향 없음. 사내 DB는 schema PR 전까지 항목 `ref` 든 계획을 종료 2로 거부. 상태 불변 `fixed_in` 추가·`/review` 병합 순서는 `99-deferred.md` J(반입 뒤).
-  - (병합 예정) #118: data 규칙 `NOT_IN_SERVICE`(등록 상실 뒤)→모뎀·망, 샘플 DB 파서 규칙 `UNSOL_RESPONSE_SIM_STATUS_CHANGED`. data eval 1회 tie(새 case 기대값 완화 뒤 재채점 pass1 with 3·without 3, 기록 파일은 재채점 전).
-  - (병합 예정) Android 벤더 줄 꼴 정리: <!-- sweep: 메인이 채움 -->
-  - 사내 읽기(import-20261103 대비, KB): S-0 −18.5·S-1 +7.8·S-2 +5.8·S-3 +11.8·S-4 +7.3·S-4a +1.2·S-5 +0.3·S-6 0·S-7 +2.1(11/13 #117 뒤, #118 전).
+  - #114 백엔드 0.1.5: 첫 분석은 캐시 없이 다시 돈다, `min_version`은 그대로.
+  - #117: plan·DB 영향 없음. 사내 DB는 schema PR 전까지 항목 `ref` 든 계획을 종료 2로 거부.
+  - #118: data 규칙 `NOT_IN_SERVICE`(등록 상실 뒤)→모뎀·망. #119: Android 합성 벤더 줄 꼴만(규칙 불변).
+  - #121 정밀 탐색(`--deep`): 명시 요청 때만, 효과 미확인. `deep.md`는 사내 스냅샷에 새로 만들고(없으면 `--site-overlay` 종료 1) 플러그인 배포 뒤 모듈 레포에 올린다.
+  - #122: `import_draft --label` 필수. `tracker.read_tools`에 쓰기형 도구 이름 거부(doctor `tracker` warn). 경계 검사 15~20자리·이슈 DB hook 교체는 SITE_INSTALL §8. `docs/development` 22개는 `docs/history`로 옮김(dry-run에 지움·새 파일 22씩). OpenCode는 첫 설치(`opencode/README.md`: `tt-oc publish`, git ≥ 2.38, 모델이 낸 명령을 붙여 넣지 않는다).
+  - #123: 탐색 `--with <모듈>`(보조 모듈 줄 절).
+  - 사내 읽기(import-20261103 대비, KB): S-0 −18.1·S-1 +7.8·S-2 +5.8·S-3 +11.7·S-4 +7.1·S-4a +1.1·S-5 +0.3·S-6 0·S-7 +2.1.
 - 재실행할 eval 수는 재반입 노트가 정한다(`pending.json` `site`, S-2; 사내 모델이 다르면 +7). 단계별 확인 항목·반입 뒤 후보(RF·R-36~47)는 history 11/13.
 - S-7: usage_stats format 2·`--transcripts` 허용 여부. S37 결과·팀 설치본 통일 뒤에만 `signature_features`를 DB에 선언(결정 (v)).
 - 사내 IMS는 별도 APK(11/12): IMS 줄·규칙·문서는 AOSP 기준·소스만 — S-1에서 먼저.
