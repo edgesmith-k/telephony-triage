@@ -211,6 +211,12 @@ def test_installed_copy_uses_written_plugin_root():
 def test_shell_env_marks_runtime():
     (got,), _ = harness([{"hook": "env"}])
     assert got["env"]["TT_RUNTIME"] == "opencode" and got["env"]["CLAUDE_PLUGIN_ROOT"].endswith("plugin")
+    # 리뷰 9 R2: tt-oc가 준 GIT_CONFIG_*는 bash 자식에 그대로 다시 넣고, `git -c` 값(GIT_CONFIG_PARAMETERS)은 빈 값으로 덮는다
+    git = {"GIT_CONFIG_COUNT": "2", "GIT_CONFIG_KEY_0": "safe.bareRepository", "GIT_CONFIG_VALUE_0": "explicit",
+           "GIT_CONFIG_KEY_1": "protocol.ext.allow", "GIT_CONFIG_VALUE_1": "never"}
+    (got,), _ = harness([{"hook": "env"}], extra_env={**git, "GIT_CONFIG_PARAMETERS": "'safe.bareRepository'='all'"})
+    assert {k: got["env"].get(k) for k in git} == git and got["env"]["GIT_CONFIG_PARAMETERS"] == ""
+    assert "GIT_ALLOW_PROTOCOL" not in got["env"]
 
 
 def test_plugin_uses_node_imports_only():

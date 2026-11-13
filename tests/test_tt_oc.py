@@ -802,6 +802,23 @@ def test_git_safe_env_for_children_doctor_row_and_publish(env, monkeypatch):
         fake.chmod(0o755)
         row = mod.git_row({**mod.child_env(meta), "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
         assert row["check"] == "git" and row["status"] == want and ver.split(".windows")[0] in row["detail"], (ver, row)
+    # 리뷰 9 R3: 어댑터와 같은 조건 — `GIT_CONFIG_PARAMETERS`가 같은 설정을 정하면 doctor도 fail
+    child = mod.child_env(meta)
+    for e in (child, {}, {**child, "GIT_CONFIG_PARAMETERS": "'safe.bareRepository'='all'"},
+              {**child, "GIT_CONFIG_KEY_1": "SAFE.BAREREPOSITORY", "GIT_CONFIG_VALUE_1": "all"}, {**child, "GIT_CONFIG_COUNT": "3"}):
+        assert mod.git_safe_missing(e) == oc_adapter.git_safe_missing(e), e
+    row = mod.git_row({**child, "GIT_CONFIG_PARAMETERS": "'protocol.ext.allow'='always'"})
+    assert row["status"] == "fail" and "GIT_CONFIG_PARAMETERS" in row["detail"], row
+    # R4: 사용자 GIT_ALLOW_PROTOCOL은 protocol.ext.allow=never를 이긴다 — 자식 환경에서 뺀다
+    monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "ext")
+    assert "GIT_ALLOW_PROTOCOL" not in mod.child_env(meta)
+    # R5: git을 실행하지 못한 것과 2.38 미만은 다른 문구
+    fake.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    row = mod.git_row({**child, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+    assert row["status"] == "warn" and "git version 실패" in row["detail"] and "2.38" not in row["detail"], row
+    monkeypatch.setattr(mod, "_run", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError("git")))
+    row = mod.git_row(child)
+    assert row["status"] == "warn" and "실행하지 못했다" in row["detail"] and "2.38" not in row["detail"], row
 
 
 def test_finish_reason_length_step_limit_and_zero_tokens(env):

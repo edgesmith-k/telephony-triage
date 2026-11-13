@@ -174,6 +174,8 @@ def child_env(meta: dict) -> dict:
     env = with_git_safe(dict(os.environ))
     # 터미널에 남은 TT_LOCK_OWNER(예: 직접 돌린 publish)가 있으면 analyze 작업의 작업 상태 owner 대신 쓰여 stage가 막힌다
     env.pop("TT_LOCK_OWNER", None)
+    # 사용자 환경의 GIT_ALLOW_PROTOCOL(예: `ext`)은 protocol.ext.allow=never보다 먼저 본다 — 빼서 GIT_SAFE가 이기게 한다
+    env.pop("GIT_ALLOW_PROTOCOL", None)
     # CHILD_ENV(oc_version): 자동 갱신·모델 목록 받기 끔, ~/.claude/CLAUDE.md(와 위 폴더의 CLAUDE.md)를 에이전트 프롬프트에
     # 붙이지 않음(사용자 결정 ⑤ — 프롬프트는 triage 에이전트 하나). AGENTS.md·CONTEXT.md는 끌 수 없어 사전 점검이 본다.
     env.update({**OCV.CHILD_ENV, "TT_RUNTIME": "opencode",
@@ -263,21 +265,45 @@ def version_row(oc: str, env: dict) -> tuple[dict, bool]:
             "detail": f"{ver[0] or '없음'} (고정 {PINNED})" + ("" if ver[0] == PINNED else " — 버전 불일치, 우회하지 말고 보고")}, True
 
 
+def git_safe_missing(env) -> bool:
+    """GIT_SAFE가 git에 실제로 걸리지 않으면 True. `oc_adapter.git_safe_missing`과 같은 조건이다(이 래퍼는 oc_adapter를 import하지
+    않는다 — 시험이 둘을 대조한다): `GIT_CONFIG_COUNT` 항목 중 같은 키의 마지막 값이 GIT_SAFE가 아니거나, 값이 깨졌거나,
+    `GIT_CONFIG_PARAMETERS`(`git -c`)가 같은 설정을 다시 정한다."""
+    raw = env.get("GIT_CONFIG_COUNT") or ""
+    if not re.fullmatch(r"[0-9]{1,4}", raw):
+        return True
+    last = {}
+    for i in range(int(raw)):
+        key, value = env.get(f"GIT_CONFIG_KEY_{i}"), env.get(f"GIT_CONFIG_VALUE_{i}")
+        if key is None or value is None:
+            return True
+        last[key.casefold()] = value
+    params = (env.get("GIT_CONFIG_PARAMETERS") or "").casefold()
+    return any(last.get(k.casefold()) != v or k.casefold() in params for k, v in GIT_SAFE)
+
+
 def git_row(env: dict) -> dict:
-    """`git` 행: 자식 환경의 GIT_SAFE(사용자 GIT_CONFIG_COUNT가 깨졌으면 fail)와 git 버전(2.38 미만·실행 실패는 warn — 그때의 방어는
-    어댑터의 `.git`·`HEAD` 쓰기 거부와 mask-copy 사본 이름 정리)."""
+    """`git` 행: 자식 환경의 GIT_SAFE(사용자 GIT_CONFIG_COUNT가 깨졌거나 `GIT_CONFIG_PARAMETERS`가 같은 설정을 정하면 fail — 어댑터가
+    bash의 git·플러그인 스크립트를 모두 거부한다)와 git 버전(2.38 미만·실행 실패는 warn — 그때의 방어는 어댑터의 `.git`·`HEAD` 쓰기
+    거부와 mask-copy 사본 이름 정리)."""
     if git_config_count(env) is None:
         return {"check": "git", "status": "fail", "detail": "GIT_CONFIG_COUNT·GIT_CONFIG_KEY_n·GIT_CONFIG_VALUE_n이 깨졌다(git이 모든 "
                 "명령을 거부한다) — 고치거나 지운 뒤 다시 실행"}
+    if git_safe_missing(env):
+        return {"check": "git", "status": "fail", "detail": "GIT_CONFIG_PARAMETERS가 safe.bareRepository·protocol.ext.allow를 다시 "
+                "정한다 — 어댑터가 bash의 git·플러그인 스크립트를 모두 거부한다. 그 환경 변수를 지운 뒤 다시 실행"}
     try:
-        out = _run(["git", "--version"], env=env, timeout=30).stdout or ""
+        r = _run(["git", "version"], env=env, timeout=30)      # = git --version(그 리터럴은 opencode 표면 대조 시험이 막는다)
     except (OSError, subprocess.TimeoutExpired) as exc:
-        out = f"실행 실패 {type(exc).__name__}"
-    m = re.search(r"(\d+)\.(\d+)[.\w]*", out)
-    if m and tuple(map(int, m.groups())) >= GIT_SAFE_MIN:
+        return {"check": "git", "status": "warn", "detail": f"git을 실행하지 못했다({type(exc).__name__}) — git이 PATH에 있는지 "
+                "확인한다. git이 없으면 git·이슈 DB 흐름이 돌지 않는다"}
+    m = re.search(r"(\d+)\.(\d+)[.\w]*", r.stdout or "")
+    if r.returncode != 0 or not m:
+        return {"check": "git", "status": "warn", "detail": f"git version 실패(종료 {r.returncode}) — git 설치를 확인한다"}
+    if tuple(map(int, m.groups())) >= GIT_SAFE_MIN:
         return {"check": "git", "status": "ok", "detail": f"git {m.group(0)} — safe.bareRepository=explicit·protocol.ext.allow=never"}
-    return {"check": "git", "status": "warn", "detail": f"git {m.group(0) if m else out.strip()[:80] or '?'} — git < 2.38은 "
-            "safe.bareRepository를 무시한다 — 모델이 작업 루트에 만든 bare 모양 폴더를 git이 레포로 읽을 수 있다. git 2.38 이상을 쓴다"}
+    return {"check": "git", "status": "warn", "detail": f"git {m.group(0)} — git < 2.38은 safe.bareRepository를 무시한다 — 모델이 "
+            "작업 루트에 만든 bare 모양 폴더를 git이 레포로 읽을 수 있다. git 2.38 이상을 쓴다"}
 
 
 def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
