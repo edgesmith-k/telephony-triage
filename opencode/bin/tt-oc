@@ -24,6 +24,10 @@ CLI:
     tt-oc --project <dir> [--timeout 초] [--first-timeout 초] [-s <세션>] [--command tt-<이름>] [--work-dir <dir>]... [--delete-session] [--json]
           [--opencode <바이너리>] -- <메시지...>
     tt-oc --project <dir> doctor [--json]
+    tt-oc --project <dir> publish [--job <작업 키>]
+
+`publish`(tt-oc.json `"publish": "open"`일 때만, 사람이 터미널에서): session.lock을 쥔 analyze 작업을 다시 stage해 확인 화면을
+보이고, 작업 키를 입력하면 그 프로세스가 `db_pr publish`를 한다(아래 `publish_main`).
 
 `--project`가 없으면 `TT_OC_PROJECT`. 플러그인·작업 루트는 `<project>/tt-oc.json`(install이 쓴다)에서 읽는다.
 
@@ -752,6 +756,237 @@ def render_record(r: dict) -> str:
     return "\n".join([head, *body])
 
 
+# -- publish: 사람이 터미널에서 확인 화면을 보고 작업 키를 입력하면 이슈 DB에 게시 (OC-A) --------------------------------------
+# 모델은 여전히 publish를 부르지 못한다. 작업 폴더(stage.json·state.json·plan.json·wt/.githooks)는 OpenCode 안의 모델도 쓸 수 있으므로
+# 래퍼가 stage를 다시 돌려(wt를 기준 SHA로 되돌리고 stage.json·state.json을 새로 쓴다) 그 화면을 보이고, 승인은 tty 입력뿐이며, 입력 직후
+# 작업 파일을 다시 대조한 뒤 같은 프로세스가 publish를 부른다. 승인 기록은 남기지 않는다(결속은 화면의 approved_hash = --approved).
+PUBLISH_CODE = "\n".join((
+    "import json, sys",
+    "from pathlib import Path",
+    "sys.path.insert(0, sys.argv[1])",
+    "from common import session_lock, userconfig",
+    "from dbpr.lock import handoff_owner",
+    "def plat(w):",
+    "    try:",
+    "        d = session_lock.read(w) if (w / session_lock.LOCK_FILE).is_file() else None",
+    "    except session_lock.LockError:",
+    "        d = None",
+    "    return (d or {}).get('platform') or userconfig.TOP_PROFILE",
+    "held = [{**handoff_owner(Path(w)), 'platform': plat(Path(w))} for w in sys.argv[2:]]",
+    "print(json.dumps({'scripts_path': userconfig.get(userconfig.load_user() or {}, 'plugin.scripts_path'), 'held': held}))",
+))
+GIT_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")     # 와 GIT_CONFIG* — 하위 git이 다른 레포·index·설정을 보게 한다
+PUBLISH_FILES = ("state.json", "pr.json", "stage.json", "plan.json")
+PUBLISH_TIMEOUT = 1800                                       # stage(regress 포함)·publish(push·gh) — _run의 60초로는 끝나지 않는다
+PUBLISH_PROMPT = "이 화면대로 push·PR을 만들려면 작업 키를 입력한다"
+_HASH_RE = re.compile(r"[0-9a-f]{40,64}")
+
+
+def _publish_refusal(meta: dict, proj: Path) -> str | None:
+    if meta.get("publish") != "open":
+        return ("publish는 이 설치에서 닫힘 — 확인 화면 뒤 게시는 Claude Code에서 한다. 열려면 사내 확인 뒤 "
+                "tools/gen_opencode.py install … --allow-publish(이미 설치했으면 --force) (opencode/README.md \"게시\")")
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return "publish는 사람이 터미널(tty)에서 직접 돌린다 — 파이프·리디렉션·CI에서는 하지 않는다"
+    nested = [k for k in ("TT_RUNTIME", "CLAUDECODE") if k in os.environ]
+    if nested:
+        return (f"publish는 OpenCode·Claude Code 안에서 돌리지 않는다({', '.join(nested)} 있음) — OpenCode 세션을 닫은 "
+                "터미널에서 직접 한다")
+    git = sorted(k for k in os.environ if k in GIT_ENV or k.startswith("GIT_CONFIG"))
+    if git:
+        return f"git 환경 변수가 있다({', '.join(git)}) — 지우고 다시 한다"
+    changed = integrity_problems(proj, meta)
+    if changed:
+        return "설치 뒤 바뀌었거나 없다: " + ", ".join(changed) + " — tt-oc doctor로 확인한다"
+    return None
+
+
+def _publish_env(root: Path, owner: str, plugin_root: str) -> dict:
+    """db_pr 하위 프로세스 환경: PYTHONPATH류와 TT_* 모두(TT_PLATFORM·TT_RUNTIME 등) 빼고 owner·플러그인 루트만 넣는다."""
+    env = {k: v for k, v in _lookup_env(root).items() if not k.startswith("TT_")}
+    env.update({"TT_LOCK_OWNER": owner, "CLAUDE_PLUGIN_ROOT": plugin_root, "GIT_TERMINAL_PROMPT": "0"})
+    return env
+
+
+def _digests(job: Path) -> dict | None:
+    try:
+        return {n: sha256_file(job / n) for n in PUBLISH_FILES}
+    except OSError:
+        return None
+
+
+def _read_obj(path: Path):
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _full_diff(wt: Path, env: dict) -> str:
+    """write-flow의 "전체 diff 보기": `git diff`(외부 diff·textconv 끔)와 새 파일 내용. 화면 diff는 50줄에서 잘린다."""
+    git = ["git", "-c", "core.fsmonitor=false", "--no-pager", "-C", str(wt)]
+    try:
+        out = _run([*git, "diff", "--no-ext-diff", "--no-textconv"], env=env, timeout=120).stdout
+        new = [p for p in _run([*git, "ls-files", "--others", "--exclude-standard", "-z"], env=env, timeout=120)
+               .stdout.split("\0") if p]
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"(diff를 읽지 못함: {type(exc).__name__})"
+    for rel in new:
+        p = wt / rel
+        body = p.read_text(encoding="utf-8", errors="replace") if p.is_file() and not p.is_symlink() else "(일반 파일 아님)"
+        out += f"\n+++ 새 파일 {rel}\n{body}"
+    return out.rstrip("\n") or "(변경 없음)"
+
+
+def _ask(key: str) -> str | None:
+    """tty에서 한 줄. 화면을 보기 전에 쳐 둔 입력은 버린다(tcflush). EOF·Ctrl-C는 None."""
+    sys.stdout.flush()
+    try:
+        import termios
+        termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+    except (ImportError, OSError, ValueError):
+        pass
+    try:
+        return input(f"{PUBLISH_PROMPT}({key}) — d = 전체 diff, 그 밖 = 취소: ")
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None
+
+
+def publish_main(a, proj: Path, meta: dict) -> int:
+    def refuse(msg: str) -> int:
+        print(f"[tt-oc] 거부: {msg}", file=sys.stderr)
+        return 2
+
+    why = _publish_refusal(meta, proj)
+    if why:
+        return refuse(why)
+    if a.job is not None and not _JOB_RE.fullmatch(a.job):
+        return refuse(f"--job은 작업 키 형식이다: {_esc(a.job, one_line=True)}")
+    root = Path(os.path.normpath(meta["work_root"]))
+    plugin_root = str(meta["plugin_root"])
+    scripts = Path(plugin_root) / "scripts"
+    try:
+        dirs = [root, *sorted(d for d in root.iterdir() if d.is_dir() and (d / "session.lock").is_file())]
+        r = _run([sys.executable, "-c", PUBLISH_CODE, str(scripts), *map(str, dirs)], cwd=str(scripts),
+                 env=_lookup_env(root), timeout=60)
+        info = json.loads(r.stdout) if r.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        info = None
+    if not isinstance(info, dict) or not isinstance(info.get("held"), list):
+        return refuse("작업 조회 실패(session.lock·사용자 config를 읽지 못함) — config.py doctor로 확인한다")
+    # H3: pre-commit hook은 사용자 config plugin.scripts_path의 db_precommit.py를 돌린다 — 지문을 확인한 설치본이어야 한다
+    sp = info.get("scripts_path")
+    if not isinstance(sp, str) or not sp or os.path.realpath(sp) != os.path.realpath(scripts):
+        return refuse(f"사용자 config의 plugin.scripts_path({_esc(str(sp), one_line=True)})가 설치본 {scripts}와 다르다 — "
+                      f"python3 {scripts / 'config.py'} sync-scripts-path로 되돌린 뒤 다시 한다")
+    found = {}
+    for h in info["held"]:
+        if isinstance(h, dict) and _OWNER_RE.fullmatch(str(h.get("owner") or "")) and \
+                _JOB_RE.fullmatch(str(h.get("job") or "")) and _JOB_RE.fullmatch(str(h.get("platform") or "")) and \
+                (a.job is None or h["job"] == a.job):
+            found.setdefault((str(h.get("work_dir")), h["job"]), h)
+    if not found:
+        return refuse(("작업 " + a.job if a.job else "작업") + "을 찾지 못함 — session.lock을 쥐고 triage-state.json owner가 "
+                      "그 lock owner와 같은 작업이 없다(OpenCode에서 tt-analyze를 확인 화면까지 한 뒤)")
+    if len(found) > 1:
+        return refuse("session.lock을 쥔 작업이 여럿이다: " + ", ".join(sorted(k for _, k in found)) + " — --job <작업 키>")
+    (h,) = found.values()
+    key, owner, platform = h["job"], h["owner"], h["platform"]
+    job, branch = Path(str(h["work_dir"])) / key, f"issue/{key}"
+    wt = job / "wt"
+    plan, state, staged = (_read_obj(job / n) for n in ("plan.json", "state.json", "stage.json"))
+    if not plan or plan.get("source") != "analyze":
+        return refuse(f"{key}: plan.json의 source가 analyze가 아니다 — tt-oc publish는 analyze 등록만 한다")
+    if not state or state.get("branch") != branch:      # H4: 브랜치 바꿔치기
+        return refuse(f"{key}: state.json의 branch가 {branch}가 아니다")
+    if not staged or staged.get("dry_run"):
+        return refuse(f"{key}: stage.json이 없거나 --dry-run으로 stage한 작업이다 — dry-run은 확인 화면까지만")
+    env = _publish_env(root, owner, plugin_root)
+    base = [sys.executable, str(scripts / "db_pr.py"), "--plugin-root", plugin_root, "--platform", platform]
+
+    def db_pr(*args, timeout=PUBLISH_TIMEOUT):
+        try:
+            return _run([*base, *args], cwd=str(scripts), env=env, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return None
+
+    def show(text: str) -> None:
+        if text.strip():
+            print(model_lines(text.rstrip("\n"), gutter=SCREEN_GUTTER))
+
+    # write-flow 순서: preflight → 브랜치 검사(lease) → stage --then-summary → 확인 화면 → publish
+    r = db_pr("preflight", "--branch", branch, timeout=300)
+    pre = _read_json_text(r.stdout) if r is not None and r.returncode == 0 else None
+    if pre is None:
+        show(((r.stdout or "") + (r.stderr or "")) if r is not None else "")
+        return refuse(f"{key}: db_pr preflight 실패" + (" (시간 초과)" if r is None else f"(종료 {r.returncode})"))
+    remote = pre.get("remote_sha")
+    head = (plan.get("pr") or {}).get("head_sha") if isinstance(plan.get("pr"), dict) else None
+    if remote is None:
+        lease = "new"
+    elif isinstance(remote, str) and _HASH_RE.fullmatch(remote) and remote == head:
+        lease = remote
+    else:
+        return refuse(f"{key}: 원격 {branch}가 있고 계획의 PR head와 다르다 — 덮어쓰기·중단 결정은 Claude Code에서 한다"
+                      "(write-flow §2)")
+    print(f"[tt-oc] {key}: stage를 다시 한다(작업 파일을 새로 만들고 검사한다 — 몇 분 걸릴 수 있다)", flush=True)
+    r = db_pr("stage", str(job / "plan.json"), "--wt", str(wt), "--branch", branch, "--then-summary")
+    if r is None or r.returncode not in (0, 3):
+        show(((r.stdout or "") + (r.stderr or "")) if r is not None else "")
+        return refuse(f"{key}: stage " + ("시간 초과" if r is None else f"종료 {r.returncode}") +
+                      " — 위 출력대로 OpenCode(tt-analyze)나 Claude Code에서 계획을 고친다")
+    m = re.fullmatch(r"approved_hash: ([0-9a-f]{40,64})", (r.stdout.rstrip("\n").splitlines() or [""])[-1])
+    state = _read_obj(job / "state.json")
+    if not m or not state or state.get("approved_hash") != m.group(1):
+        show(r.stdout)
+        return refuse(f"{key}: 확인 화면의 approved_hash가 없거나 state.json과 다르다")
+    approved, before = m.group(1), _digests(job)
+    if before is None:
+        return refuse(f"{key}: 작업 파일({', '.join(PUBLISH_FILES)})을 읽지 못함")
+    show(r.stdout)
+    print("\n---- [tt-oc] 게시 확인 — 위 화면(┃ 줄)은 db_pr이 방금 만든 것 ----")
+    print(f"작업 {key} · 브랜치 {branch} · " + ("원격 브랜치 새로 만듦(lease new)" if lease == "new" else
+                                              f"원격 {lease[:7]}를 이 내용으로 갱신(lease)") + f" · approved_hash {approved[:12]}…")
+    print("OpenCode 세션을 닫은 상태에서 입력한다(열려 있으면 모델이 그사이 작업 파일을 바꿀 수 있다).")
+    while True:
+        ans = _ask(key)
+        if ans != "d":
+            break
+        show(_full_diff(wt, env))
+    if ans != key:
+        print(f"[tt-oc] 게시하지 않았다(작업은 다시 stage된 상태 — 그만두려면 db_pr discard {_esc(str(wt), one_line=True)}).")
+        return 0
+    if _digests(job) != before:
+        return refuse(f"{key}: 화면 뒤에 작업 파일({', '.join(PUBLISH_FILES)})이 바뀌었다 — 게시하지 않았다. 다시 tt-oc publish")
+    r = db_pr("publish", str(wt), "--branch", branch, "--lease", lease, "--approved", approved, "--commit",
+              "--and-discard", "--json")
+    if r is None:
+        print("[tt-oc] publish 시간 초과 — push·PR이 됐는지 모른다. publish를 다시 하기 전에 원격 브랜치·PR을 확인한다.")
+        return 124
+    res = _read_json_text(r.stdout)
+    show(json.dumps(res, ensure_ascii=False, indent=1) if res is not None else r.stdout)
+    show(r.stderr)
+    if r.returncode == 0:
+        print(f"[tt-oc] {key}: 게시했다(종료 0).")
+    elif res is not None and res.get("published") is True:
+        nxt = (res.get("discard") or {}).get("next") if isinstance(res.get("discard"), dict) else None
+        print(f"[tt-oc] {key}: push는 됐다 — publish를 다시 하지 않는다(종료 {r.returncode})." +
+              (f" 다음: {_esc(str(nxt), one_line=True)}" if nxt else ""))
+    else:
+        print(f"[tt-oc] {key}: 게시되지 않았다(종료 {r.returncode}) — 위 problems를 고친 뒤 tt-oc publish를 다시 한다.")
+    return r.returncode
+
+
+def _read_json_text(text: str):
+    try:
+        data = json.loads(text)
+    except (TypeError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 # -- main -----------------------------------------------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -766,7 +1001,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--work-dir", action="append", default=[])
     ap.add_argument("--delete-session", action="store_true")
     ap.add_argument("--json", action="store_true")
-    ap.add_argument("action", nargs="?", choices=["doctor"])
+    ap.add_argument("--job", help="publish: 게시할 작업 키(session.lock을 쥔 작업이 여럿일 때)")
+    ap.add_argument("action", nargs="?", choices=["doctor", "publish"])
     return ap
 
 
@@ -788,8 +1024,11 @@ def main(argv=None) -> int:
     except SystemExit as exc:
         return 0 if exc.code == 0 else 2
     a.message = message
+    if (a.job is not None and a.action != "publish") or (a.action == "publish" and message):
+        print("[tt-oc] --job은 publish에서만, publish는 메시지를 받지 않는다", file=sys.stderr)
+        return 2
     first_timeout = FIRST_RESPONSE_TIMEOUT
-    if a.action != "doctor":          # doctor는 잘못된 TT_OC_FIRST_TIMEOUT을 행으로 보인다(preflight)
+    if a.action is None:              # 실행만. doctor는 잘못된 TT_OC_FIRST_TIMEOUT을 행으로 보인다(preflight)
         try:
             first_timeout = first_timeout_value(a.first_timeout, os.environ)
         except ValueError:
@@ -800,11 +1039,16 @@ def main(argv=None) -> int:
     except Refused as exc:
         print(f"[tt-oc] {exc}", file=sys.stderr)
         return 2
+    if a.action == "publish":         # opencode·preflight와 무관(opencode를 돌리지 않는다)
+        return publish_main(a, proj, meta)
     oc = shutil.which(a.opencode) or a.opencode
     env = child_env(meta)
     rows = preflight(oc, proj, meta, env)
     failed = [r for r in rows if r["status"] == "fail"]    # warn 행(module-skills·read-roots)은 막지 않는다
     if a.action == "doctor":
+        if "publish" in meta:         # 키가 있는 설치만(없으면 행 목록 그대로). preflight()에는 넣지 않는다(site_step이 쓴다)
+            rows.append({"check": "publish", "status": "ok", "detail": "열림 — 사람이 터미널에서 tt-oc publish로 게시"
+                         if meta["publish"] == "open" else f"닫힘({_esc(json.dumps(meta['publish']), one_line=True)})"})
         print(json.dumps({"rows": rows}, ensure_ascii=False)) if a.json else _print_rows(rows)
         return 2 if failed else 0
     if failed:
@@ -861,6 +1105,9 @@ def main(argv=None) -> int:
             print(model_lines(c, one_line=True))
         for n in res["handoff_notes"]:
             print(f"주의: {n}")
+        if meta.get("publish") == "open" and any(re.search(r"db_pr\.py\s+publish\b", c) for c in res["user_commands"]):
+            print(f"승인·게시: OpenCode 세션을 닫은 터미널에서 tt-oc --project {shlex.quote(str(proj))} publish — "
+                  "위 publish 명령을 붙여 넣지 않는다(재stage·scripts_path 대조가 없다)")
     print("\n---- [tt-oc] 결과 ----")
     t = res["tokens"]
     print(f"outcome: {res['outcome']} · session: {res['session'] or '없음'} · steps: {res['steps']} · "

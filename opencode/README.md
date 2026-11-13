@@ -65,6 +65,34 @@ opencode/bin/tt-oc --project <dest> -s <세션> -- 2          # 질문에 답하
 - TUI(`opencode`)는 자유 탐색만 — 표시 보장이 없다.
 - 끝난 세션은 `--delete-session`으로 지운다(`~/.local/share/opencode/opencode.db`에 도구 출력이 남는다).
 
+## 게시(`tt-oc publish`, 기본 닫힘)
+
+OpenCode 안의 모델은 이슈 DB에 push·PR을 만들지 못한다(위 "직접 실행"). 열린 설치에서는 analyze 확인 화면까지 간 작업을 **사람이
+터미널에서 직접** 게시한다:
+
+```sh
+opencode/bin/tt-oc --project <dest> publish [--job <작업 키>]      # OpenCode 세션(tt-oc·TUI)을 닫은 터미널에서
+```
+
+- 하는 일: session.lock을 쥔 작업(그 작업 `triage-state.json` owner가 lock owner와 같은 것, 여럿이면 `--job`)을 찾아
+  `db_pr preflight` → `stage --then-summary`(작업 파일·wt를 새로 만들고 검사를 다시 돈다 — 몇 분 걸릴 수 있다)의 확인 화면을
+  `  ┃ ` 뒤에 그대로 보이고, 작업 키를 입력하면 같은 프로세스가 `db_pr publish … --approved <화면의 approved_hash> --commit
+  --and-discard`를 한다. `d`는 전체 diff를 보이고 다시 묻는다. 그 밖의 입력·빈 줄·EOF는 취소(종료 0, 아무것도 push되지 않는다 —
+  작업은 다시 stage된 상태). 입력 직후 `state.json`·`pr.json`·`stage.json`·`plan.json`이 화면 때와 다르면 거부한다.
+- 거부(종료 2): 닫힘, tty 아님(파이프·CI), `TT_RUNTIME`·`CLAUDECODE`가 있음(OpenCode·Claude Code 안), `GIT_DIR`·`GIT_WORK_TREE`·
+  `GIT_INDEX_FILE`·`GIT_CONFIG*`가 있음, 설치 지문 불일치, 사용자 config `plugin.scripts_path`가 설치본 `<plugin>/scripts`가 아님
+  (`config.py sync-scripts-path`로 되돌린다 — pre-commit이 그 폴더의 코드를 돌린다), 계획 `source`가 analyze가 아님, `state.json`
+  브랜치가 `issue/<KEY>`가 아님, `--dry-run`으로 stage한 작업, 원격 브랜치가 계획의 PR head와 다름(덮어쓰기·중단은 Claude Code에서).
+- 범위: **analyze 등록만**. record·verify-fix·fix-submitted·sync-pr·병합·리뷰어 요청·Jira 코멘트는 OpenCode 설치에서 닫혀 있다
+  (Claude Code에서 한다).
+- **모델이 출력한 `db_pr.py publish` 명령을 붙여 넣지 않는다** — 그 경로에는 재stage·`scripts_path` 대조가 없다(모델이 작업
+  파일·`wt/.githooks`·사용자 config를 바꿔 둘 수 있다). 열린 설치에서는 "직접 실행" 절 끝에 `tt-oc … publish` 안내 줄이 나온다.
+- 여는 절차: 사내 확인(tty인 터미널, gh 인증·GHE 호스트, 이슈 DB clone의 hooksPath·pre-push 토큰 검사, 서버 브랜치 보호)을 마친 뒤
+  설치할 때 `python3 tools/gen_opencode.py install … --allow-publish`로 연다(플래그 없이 설치하면 닫힘) → `tt-oc doctor`의
+  `publish` 행이 열림인지 본다 → 첫 실제 작업에서 `tt-oc publish`로 화면까지 보고 빈 줄로 취소(아무것도 push되지 않는다) → 다시
+  돌려 작업 키로 승인한다. 이미 설치한 곳을 나중에 열거나 닫으려면 같은 install을 `--force`로 다시 한다(플래그 유무대로 `tt-oc.json`이
+  다시 쓰인다).
+
 ## Jira 읽기(관문, 기본 닫힘)
 
 OpenCode에서 Jira MCP 읽기는 사내 확인을 통과한 뒤 사용자가 직접 열 때만 된다(`docs/development/RUNTIMES.md` §5.5). 코멘트 쓰기는 v1에서 늘 막힌다.
