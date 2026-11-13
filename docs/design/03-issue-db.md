@@ -562,7 +562,7 @@ note: {{선택, 한 줄}}
 
 **"새 원인 fixed 금지" 검사 범위** (`db_lint`)
 - base ref가 있을 때(`--changed <ref>`의 merge-base, `--staged`의 HEAD, `db_pr stage`의 origin/<base>)만 검사한다. 대상은 **base에 없던 원인** 중 `fix.status: fixed`인 것이다.
-- base ref가 없는 검사(`--all`, `--ref`), 레포 초기 커밋(Phase 1 샘플 포함), `migrate/...` 브랜치의 마이그레이션 결과는 예외다.
+- base ref가 없는 검사(`--all`, `--ref`), 레포 초기 커밋(Phase 1 샘플 포함), `migrate/...` 브랜치의 마이그레이션 결과는 예외다. 병합 이동도 예외다: base에서 `active`·`fixed`였던 원인이 `merged-into:<새 원인>`이고 새 원인의 `fix.verification`이 그 원인의 base 기록과 같으면 새 원인의 `fixed`를 허용한다. `fixture`만은 옛 원인 ID를 새 ID로 바꾼 경로여야 하고(키가 없거나 다른 파일이면 예외 없음), `scenario_evidence`까지 나머지는 그대로 둔다(옛 원인 ID가 남는 것이 맞다). 이 예외는 직접 편집이나 손으로 쓴 계획(`new-cause`(fix-submitted) → `add-fixture`(fixed) → 옛 기록을 그대로 쓴 `verify-fix` → `set-status merged-into`)에서 쓰인다. `/review`의 병합 순서에는 아직 이 단계가 없다(`99-deferred.md` J).
 
 ### 5.10 카테고리 간 연관
 

@@ -104,7 +104,7 @@ v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 �
 
 ## E. Read 도구 원문 통독 차단 (사내 S1 뒤)
 
-규칙 10(`08-safety.md §9`)은 Bash 명령만 판정한다. Read 도구가 `limit` 없이 로그 원문·zip·`events.json`·`events-full.json`·`issue_raw.json`·`match.json`을 통째로 읽는 것은 막지 못한다. 사내 Claude Code(S1)에서 PreToolUse hook이 `Read`에 걸리고 입력에 `file_path`·`offset`·`limit`이 오는지 확인한 뒤, `hooks.json`에 matcher `Read`를 더하고 `guard.py check_file`(또는 같은 모양의 함수)에서 **`limit`·`offset` 없는 읽기**가 규칙 10과 같은 원문 대상(같은 이름·내용 판별, `fixtures/`·`draft/` 제외)이면 거부한다. 메시지는 규칙 10과 같게 구간 읽기를 안내한다. 대용량 파일은 Read 도구가 기본 줄 수 상한으로 자르기도 하므로(버전에 따라 다름) 상한이 있는 읽기를 어디까지 허용할지는 S1에서 정한다.
+규칙 10(`08-safety.md §9`)은 Bash 명령만 판정한다. Read 도구가 `limit` 없이 로그 원문·zip·`events.json`·`events-full.json`·`issue_raw.json`·`match.json`을 통째로 읽는 것은 막지 못한다. 사내 Claude Code(S1)에서 PreToolUse hook이 `Read`에 걸리고 입력에 `file_path`·`offset`·`limit`이 오는지 확인한 뒤, `hooks.json`에 matcher `Read`를 더하고 `guard.py check_file`(또는 같은 모양의 함수)에서 **`limit`·`offset` 없는 읽기**가 규칙 10과 같은 원문 대상(같은 이름·내용 판별, `fixtures/`·`draft/` 제외)이면 거부한다. 메시지는 규칙 10과 같게 구간 읽기를 안내한다. 대용량 파일은 Read 도구가 기본 줄 수 상한으로 자르기도 하므로(버전에 따라 다름) 상한이 있는 읽기를 어디까지 허용할지는 S1에서 정한다. 입력 확인은 S1 빈 플러그인 실험 21번(`tests/mocks/plugin-probe/README.md`)에서 18~20번과 한 번에 한다.
 
 - 관찰(W1·W4 eval): Bash `cat`·`cat -n`·`sed -n 1,20p` 같은 로그 원문 구간·전체 읽기도 규칙 10 대상이나 guard가 막지 않았다(eval 18·40·46). 새 WP 여부는 W 끝에서 결정.
 - 종결(W11): eval 18·40 trace에서 재현한 명령은 yaml·py·json 읽기이지 원문 로그가 아니었고, eval 46 trace는 없다. `fixtures/` 아래 로그는 설계상 예외다(`guard.py _is_raw_file`). W 끝 eval에서 다시 보이면 재개한다.
@@ -125,18 +125,26 @@ v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 �
 - 바꿀 곳: `02-config.md`(`tracker` 키 표·"실패 스텝(선택)" 문단 옆), `common/failedstep.py` 또는 새 `fieldpatterns.py`, `trackers/jira` 필드 읽기, `db_lint`는 무관(이슈 DB 아님), `tests/test_jira_fields.py`. 사내 양식을 보기 전에는 만들지 않는다(S-3 확인 뒤 결정).
 - 버전 문구: Jira의 버전 값이 숫자가 아니라 문구이면 `platform_version`도 같은 패턴 설정(`tracker.field_patterns`) 대상이다. 지금은 버전 일치가 안 돼 소스 프로필 자동 선택 없이 목록 질문으로 떨어진다(`jira_fields.py`·`code_roots.py suggest`는 문자열 그대로 비교). bugreport 헤더의 빌드 정보를 프로필 목록 정렬에 쓸지도 사내 형식을 본 뒤 정한다.
 
-## H. 탐색 `--also` (보조 모듈 1개)
+## H. 탐색 `--also` (보조 모듈 1개, 파일럿 뒤)
 
 탐색은 모듈 하나만 본다(`--module` 단수, 모듈 보기 필터가 다른 모듈 줄을 뺀다). 예: call·sms 보기에는 등록 줄이 없어 "서비스 없음"의 근거가 안 보인다. 완전한 다중 선택은 인자·기록·질문·필터·예산(공통 + explore.md 1개 ≤ 8800B)·eval이 모두 바뀌어 비싸다.
 - 후보: 주 모듈 + 보조 모듈 1개. 타임라인은 두 모듈 필터의 합집합(줄 수 상한 공유), 문서는 주 모듈 것만(보조 explore.md는 예산을 보고), 기록의 빈 `also` 자리를 쓴다(deep `--also`가 선례).
 - 되살리는 조건: 사내 파일럿에서 후보 모듈이 둘 이상 나오는 빈도와 "다른 모듈 문서로 바꿀까요?" 질문 빈도, 탐색 실패 건에서 정답 줄이 빠진 곳(수집 태그에 없음 / 모듈 필터 / 줄 수 상한 `explore.timeline_max_lines` 200)을 사내에서 세어 본 뒤.
 
-## I. 심층 분석 단계 (토큰을 덜 아끼고 원인 찾기)
+## I. 심층 분석 단계 (토큰을 덜 아끼고 원인 찾기, 파일럿 뒤)
 
 DB에 맞는 것이 없고 탐색으로도 가설이 서지 않으면 "가설 없음/다음 확인"으로 끝난다.
 - 후보: 사용자가 고르는 세 번째 단계(DB 매칭 → 탐색 → 심층). 푸는 것: 타임라인 줄 수 상한, 모듈 필터(여러 모듈 보기 합침), 문서 예산, 버전별 소스 읽기(코드 경로 추적). 풀지 않는 것: 마스킹된 로그만, 근거 줄 원문 대조(`check-output`), 채택은 사용자가, 시그니처·유형 추가는 확인 후.
 - 조건: 시작 전 예상 비용을 보이고 동의를 받는다. 결과는 `로그로 확인`/`코드로 추정`으로 계속 구분한다.
-- 되살리는 조건: 사내 파일럿에서 탐색이 "가설 없음"으로 끝나는 비율·모듈을 본 뒤. 검증은 사내 소스 경로가 있어야 한다.
+- 되살리는 조건: 사내 파일럿에서 탐색이 "가설 없음"으로 끝나는 비율·모듈을 본 뒤. 검증은 사내 소스 경로(`SITE_PATHS`)가 있어야 한다.
+
+## J. fixed 원인에 백포트 브랜치 추가 (상태 불변)
+
+수정 상태는 원인당 하나라, 한 브랜치에서 verify-fix를 통과해 `fixed`가 되면 다른 릴리스 브랜치에 들어간 같은 수정(백포트)을 적을 길이 없다(`update-fix`는 `fixed` 원인을 거부한다. 종합 리뷰 R10-02). 상태를 그대로 두고 `fixed_in`만 늘리는 경로는 판정을 바꾸므로 미뤘다.
+- 필요한 것: 브랜치별 CL(`fixed_in[].ref` — 스키마 자리만 넣었다), 브랜치별 검증 여부를 보는 판정(`match_signatures.fix_judgement`가 지금은 브랜치를 보지 않고 모든 build와 비교해, 새 항목만 더해도 `already-fixed`가 `regression-suspected`로 뒤집힌다 — 브랜치 키로 항목을 가른다), 브랜치 키 정규화(대소문자·끝 공백, 이름과 빌드의 일치), `fix-submitted` 커맨드·스킬·`07-workflow.md` 연결, 확인 화면에 "이 브랜치는 미검증" 표시. `ref`를 검증 없이 지우거나 바꾸는 길도 막는다.
+- 같이 할 것(병합): `/review` 병합 op 순서와 `06-collaboration.md §6.6` move 조합에 fixed 유지 단계(옛 기록 그대로의 `verify-fix`) 넣기, 병합 때 `verification_history` 옮기기. 지금은 커맨드로 병합하면 새 원인이 fix-submitted/open으로 내려앉는다(lint 예외 `new-cause-fixed`는 직접 편집·손으로 쓴 계획만 쓴다, `03-issue-db.md §5.9`).
+- 되살릴 때 다룰 것: 같은 브랜치 항목의 `ref`가 `update-fix`의 항목 병합(`same.update`)으로 조용히 덮어써진다. 최상위 `fix.ref`와 항목 `ref`가 어긋날 수 있다.
+- 되살리는 조건: 반입 뒤. 사내 파일럿에서 다중 브랜치 수정 빈도를 본 뒤 범위를 정한다.
 
 ---
 

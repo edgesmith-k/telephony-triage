@@ -25,6 +25,10 @@ Code 기능" 행). 배포 대상(`plugin/`)이 아니다.
 | 15 | **transcript 시각으로 스크립트 기록 고정** (show_guard의 의무 = 스크립트 표시 기록, `08-safety.md §9.1`, L R) | Bash 호출마다 tool_use 줄 `timestamp` − 2초 ≤ 스크립트가 `<work_dir>/.shown/log.jsonl`에 쓴 기록 시각(`at`) ≤ tool_result 줄 `timestamp`인지(transcript 시각이 스크립트 실행을 감싸는지 — 시계가 다른 실행 환경·원격 Bash면 깨진다). 확인: 쓰기 흐름(analyze → push 확인 화면)을 한 번 돌린 세션 transcript로 `python3 tools/hook_replay.py <세션.jsonl>`의 `summary.records`가 `{anchored: n>0, unanchored: 0}`(null이면 확인하지 못한 것) 한계: 자동 백그라운드 전환: 120초를 넘긴 Bash 호출은 Claude Code가 백그라운드로 돌려 tool_result가 먼저 기록되므로, 그 뒤에 쓴 기록(긴 `stage`)은 `at > rts`라 고정되지 않아 판정하지 않는다(옛 transcript 판정은 화면 없음으로 거부했다) |
 | 16 | **PowerShell 도구와 hook matcher** | 사내 Claude Code가 PowerShell 도구를 노출하는지(Windows), 노출하면 그 호출이 `hooks.json`의 `Bash` matcher에 걸리는지. 걸리지 않으면 guard 규칙 3~8·10·11과 show_guard가 보지 못하므로 matcher를 더하거나 PowerShell 도구를 deny한다(`08-safety.md §9.1` 한계, L_RESULT ②b P1 후보) |
 | 17 | **Bash 도구의 PATH와 venv** | venv `(tt)` 터미널에서 `claude`를 켰을 때 Bash 도구의 `command -v python3`·`echo "$VIRTUAL_ENV"`·`python3 -c 'import jsonschema'`가 hook의 `python3`(doctor guard 행 `hook python3≠doctor python`)와 같은지. `~/.bashrc`에 activate 줄이 있을 때와 없을 때를 비교한다. 다르면 `docs/SITE_INSTALL.md` 4절 표(A `--user`로 바꾸는 것이 가장 확실) |
+| 18 | **MCP 오류 결과의 hook** | Jira MCP 오류 때 PostToolUse(`jira_bridge.py`)가 도는지(PostToolUseFailure로만 가는지) |
+| 19 | **`onFailure: "block"`** | guard hook 시간 초과·시작 실패 때 도구가 막히는지(기본은 실행). 되면 guard 항목에 켠다 |
+| 20 | **권한 모드별 ask 창** | hook `ask`가 권한 모드(default·auto 등)마다 창을 띄우는지 |
+| 21 | **Read hook 입력** (`99-deferred.md` E) | matcher `Read`에 걸리고 `file_path`·`offset`·`limit`이 오는지 |
 
 ## 실행 절차
 

@@ -32,7 +32,7 @@ Sep 23 11:40:33.620 dut daemon.info chatterd[746]: position fix pending
 Sep 23 11:40:33.624 dut user.info imsd[552]: [SLOT_0] SIP 401 Unauthorized, register again with credentials
 Sep 23 11:40:33.625 dut daemon.info datad[633]: link status poll: rmnet0 up
 Sep 23 11:40:34.114 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=28
-Sep 23 11:40:34.115 dut user.info imsd[552]: [SLOT_0] IMS REGISTERED SUCCEEDED
+Sep 23 11:40:34.115 dut user.info imsd[552]: [SLOT_0] IMS registration done
 Sep 23 11:40:34.116 dut user.info imsd[552]: [SLOT_0] registered:1 [IMS_REGISTERED] VoPS:1 RAT:NR
 Sep 23 11:40:34.117 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_RESPONSE_REGISTRATION_STATE_CHANGED
 Sep 23 11:40:34.118 dut daemon.info ofonod[903]: [0,1276]> RIL_REQUEST_DATA_REGISTRATION_STATE
