@@ -189,6 +189,8 @@ def load_manifest(dest: Path) -> dict | None:
             f"{path}의 schema={schema}를 이 도구가 모릅니다 "
             f"(아는 값: {MANIFEST_SCHEMA})."
         )
+    if not isinstance(data.get("files", {}), dict):
+        raise ValueError(f"{path}의 files가 객체가 아닙니다.")
     return data
 
 
@@ -439,6 +441,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
+    if not args.label.strip():
+        print("--label이 비었습니다 (옛 label이 기준선에 남지 않게).", file=sys.stderr)
+        return USAGE
     source = Path(args.source).resolve()
     dest = Path(args.dest).resolve()
     if not source.is_dir():

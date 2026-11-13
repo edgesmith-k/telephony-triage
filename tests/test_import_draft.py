@@ -265,9 +265,10 @@ def test_label_is_required(tmp_path):
     result = _cli(source, dest)
     assert result.returncode == 2, result.stdout + result.stderr
     assert _files(dest) == {}
+    assert _cli(source, dest, "--label", " ").returncode == 2 and _files(dest) == {}
 
 
-@pytest.mark.parametrize("text", ["{not json", '{"schema": 2, "files": {}}', "[]"])
+@pytest.mark.parametrize("text", ["{not json", '{"schema": 2, "files": {}}', "[]", '{"schema": 1, "files": []}'])
 def test_corrupt_manifest_is_usage_error(tmp_path, text):
     """B-19-2: 손상된 기준선(JSON 오류·모르는 schema·객체 아님)은 트레이스백 없이 종료 2, 대상은 그대로다."""
     source, dest = _dirs(tmp_path)
@@ -295,3 +296,5 @@ def test_restored_reports_files_deleted_on_site(tmp_path):
     assert code == 0, out
     assert out["restored"] == ["tests/test_a.py"]
     assert (dest / "tests/test_a.py").read_text(encoding="utf-8") == "# v1 test a\n"
+    _write(dest, ".gitignore", "tests/test_a.py\n")  # 목록에서 빠져도 디스크에 있으면 restored가 아니다
+    assert _run(source, dest, "--dry-run")[1]["restored"] == []
