@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tools"))
 import check_book  # noqa: E402
@@ -75,8 +77,9 @@ def test_duplicate_id(tmp_path):
     assert len(out) == 1 and "dup-id" in out[0]
 
 
-def test_banned_wording(tmp_path):
-    out = _check(tmp_path, OK.replace("<p>", "<p>같은 로그면 누가 돌려도 같다 "))
+@pytest.mark.parametrize("word", ["같은 로그면 누가 돌려도", "바로 병합", "필수 승인 수는 0"])
+def test_banned_wording(tmp_path, word):
+    out = _check(tmp_path, OK.replace("<p>", f"<p>{word} 같다 "))
     assert len(out) == 1 and "wording" in out[0]
 
 
