@@ -294,6 +294,32 @@ def test_install_jira_read_tools_allowed_last(roots):
     assert "jira_get_issue" not in (roots / "proj3" / "opencode.json").read_text(encoding="utf-8")
 
 
+def test_install_allow_publish_writes_key_only_when_given(roots):
+    """OC-B: `--allow-publish`면 tt-oc.json에 `"publish": "open"`, 없으면 키 없음(닫힘). 플래그 없는 재설치(--force)는 닫힘으로
+    돌아간다. tt-oc.json은 설치 지문 대상 밖이라 지문(integrity)은 같다."""
+    def meta():
+        return json.loads((roots / "proj" / "tt-oc.json").read_text(encoding="utf-8"))
+
+    assert _install(roots).returncode == 0
+    closed = meta()
+    assert "publish" not in closed
+    assert _install(roots, "--allow-publish").returncode == 2                    # 이미 있는 tt-oc.json과 다름
+    assert _install(roots, "--allow-publish", "--force").returncode == 0
+    opened = meta()
+    assert opened.pop("publish") == "open" and opened == closed
+    assert _install(roots, "--force").returncode == 0 and meta() == closed
+    r = subprocess.run([sys.executable, str(REPO / "tools" / "gen_opencode.py"), "install", "--help"], capture_output=True,
+                       text=True, encoding="utf-8", env={**os.environ, "PYTHONIOENCODING": "utf-8", "COLUMNS": "400"}, check=False)
+    assert r.returncode == 0 and "--allow-publish" in r.stdout and '"publish": "open"' in r.stdout and "--force" in r.stdout
+
+
+def test_setup_is_write_flow():
+    """OC-B 조각 1: OpenCode 안에서 setup의 쓰기 단계(config.py init·set·set-tracker·install-hooks)는 직접 실행 — NOTE가 붙는다."""
+    assert "setup" in gen_opencode.WRITE_FLOWS and "setup" not in gen_opencode.READ_FLOWS
+    text = (OC / "commands" / "tt-setup.md").read_text(encoding="utf-8")
+    assert "OpenCode v1 — 분석 전용." in text and "`config.py init`" in text
+
+
 def test_install_refusals(roots):
     assert _install(roots).returncode == 0
     r = _install(roots, "--issue-db", str(roots / "dbA"))           # 이미 있는 파일과 다름
