@@ -601,6 +601,7 @@ def test_skill_doc_flow_budgets():
     skill = REPO / "plugin" / "skills" / "telephony-triage"
     refs = sorted((skill / "reference").glob("*.md"))
     assert len(refs) >= 14
+    assert {p.stem for p in refs} <= {d for docs, _ in FLOWS.values() for d in docs}   # 새 문서는 어느 흐름에든 넣는다
     for path in refs:
         assert len(path.read_bytes()) <= REF_FILE_MAX, (path.name, len(path.read_bytes()))
     for flow, (docs, cap) in FLOWS.items():

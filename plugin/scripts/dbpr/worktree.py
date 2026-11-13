@@ -326,6 +326,8 @@ def discard(ctx: Ctx, wt: Path) -> dict:
         state = _read_json(job_dir / STATE) or {}
     except ValueError:      # 손상된 state.json(JSON·UTF-8 아님): 브랜치는 worktree HEAD로 찾고 정리·lock 해제는 끝까지 간다
         state = {}
+    if not isinstance(state, dict):     # 매핑이 아닌 state.json(예 `[1]`)도 손상으로 본다
+        state = {}
     branch = state.get("branch")
     if not branch and (wt / ".git").exists():
         head = _out(_git(wt, "symbolic-ref", "--short", "HEAD", check=False))

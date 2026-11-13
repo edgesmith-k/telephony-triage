@@ -255,7 +255,8 @@ class Applier(JiraOps, EntityOps, FixOps, ResolutionOps, SignatureOps, FixtureOp
             raise Reject("pending-invalid", f"pending 피드백 {Path(src).name}을 읽을 수 없다(매핑·date ISO 시각 필요): {exc}") from None
         # 다른 이슈 DB(플랫폼)의 찌꺼기 피드백: 원인 ID가 이 트리(최신 main + 계획 op)에 없으면 싣지 않는다.
         # 두 DB에 같은 원인 ID가 있으면 통과한다 — 막는 것은 원인이 없는 피드백뿐.
-        causes = [record.get("final")] + [s.get("cause") for s in record.get("suggested") or [] if isinstance(s, dict)]
+        suggested = record.get("suggested") if isinstance(record.get("suggested"), list) else []   # 목록 아님: 싣고 db_lint가 막는다
+        causes = [record.get("final")] + [s.get("cause") for s in suggested if isinstance(s, dict)]
         missing = next((c for c in causes
                         if isinstance(c, str) and c != "unresolved" and self.tree.cause(c)[1] is None), None)
         if missing:

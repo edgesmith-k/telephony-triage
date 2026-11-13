@@ -1397,4 +1397,4 @@ def test_module_tags_platform_without_db_key_is_evidence_only(monkeypatch):
     r = sc.module_tags(sc.Ctx(ROOT), {"platforms": {"android": {}, "other": {}}}, "restore.tags", partial_ok=False)
     assert r["status"] == "pass" and "판정 밖 other: 이슈 DB 입력 키 없음" in r["evidence"], r
     r = sc.module_tags(sc.Ctx(ROOT), {"platforms": {"other": {}}}, "restore.tags", partial_ok=False)
-    assert r["status"] == "skip" and "other: 이슈 DB 입력 키 없음" in r["evidence"], r
+    assert r["status"] == "skip" and "other: 이슈 DB 입력 키 없음" in r["evidence"] and "ask" not in r, r

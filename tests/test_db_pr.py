@@ -254,6 +254,53 @@ def test_pending_feedback_with_unknown_cause_is_skipped():
     assert any(n.startswith(f"pending 피드백 {pending.name} 건너뜀:") for n in out["summary"]["notes"])
 
 
+def test_pending_feedback_with_known_cause_is_included():
+    """원인 ID가 이 이슈 DB에 있으면(샘플의 DATA-001-01) pending 피드백은 실리고 included_pending/으로 옮겨진다."""
+    ws = Workspace()
+    pending = pending_feedback(ws)
+    pending.write_text(pending.read_text(encoding="utf-8").replace("final: unresolved", "final: DATA-001-01")
+                       .replace("decision: unresolved", "decision: chose-other"), encoding="utf-8")
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    apply = ws.ship("MOCK-7001", "issue/MOCK-7001")["stage"]["apply"]
+    assert apply["pending_included"] == [f"feedback/2026-09/{pending.name}"] and "pending_skipped" not in apply
+    assert not pending.exists() and (ws.job_dir("MOCK-7001") / "included_pending" / pending.name).is_file()
+
+
+def test_pending_feedback_suggested_cause_checked_and_non_list_is_not_internal_error():
+    """suggested의 원인 ID도 본다(없으면 건너뜀). suggested가 목록이 아니면 내부 오류 없이 실려 db_lint 스키마 오류로 막힌다."""
+    ws = Workspace()
+    pending = pending_feedback(ws)
+    text = pending.read_text(encoding="utf-8")
+    pending.write_text(text.replace("suggested: []", "suggested:\n- {cause: DATA-999-01, signature: DATA-999-01/sig-a, "
+                                    "score: 0.5}"), encoding="utf-8")
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    apply = ws.ship("MOCK-7001", "issue/MOCK-7001")["stage"]["apply"]
+    assert apply["pending_skipped"] == [{"file": pending.name, "reason": "원인 ID DATA-999-01가 이 이슈 DB에 없다"}]
+
+    pending.write_text(text.replace("suggested: []", "suggested: 5"), encoding="utf-8")
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.acquire("MOCK-7001")
+    out = ws.stage("MOCK-7001", "issue/MOCK-7001", expect=1)
+    assert out["apply"]["pending_included"] == [f"feedback/2026-09/{pending.name}"]
+    ws.db_pr("discard", ws.wt("MOCK-7001"))
+
+
+def test_republish_drops_now_skipped_pending_from_plan_record():
+    """sync-pr 재적용에서 원인 ID가 없어 건너뛴 pending은 계획의 included_pending 기록에서도 빠진다(파일은 included_pending/에 남는다)."""
+    ws = Workspace()
+    pending = pending_feedback(ws)
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    ws.ship("MOCK-7001", "issue/MOCK-7001")
+    moved = ws.job_dir("MOCK-7001") / "included_pending" / pending.name
+    assert [i["file"] for i in ws.read_plan("MOCK-7001")["included_pending"]] == [pending.name]
+    moved.write_text(moved.read_text(encoding="utf-8").replace("final: unresolved", "final: DATA-999-01")
+                     .replace("decision: unresolved", "decision: chose-other"), encoding="utf-8")
+    found = ws.db_pr("find-plan", "--branch", "issue/MOCK-7001")
+    out = ws.ship("MOCK-7001", "issue/MOCK-7001", lease=found["remote_sha"])
+    assert [s["file"] for s in out["stage"]["apply"]["pending_skipped"]] == [pending.name]
+    assert ws.read_plan("MOCK-7001")["included_pending"] == [] and moved.is_file()
+
+
 def test_verify_resolution_and_update_fix_rules():
     ws = Workspace()
     ws.plan("MOCK-7006", "p7-record-verified.plan.json")

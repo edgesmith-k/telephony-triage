@@ -125,7 +125,8 @@ COMMON_UPPER_ALLOW = {
 
 
 def test_common_upper_imports_within_allow():
-    upper = {p.stem for p in SCRIPTS.glob("*.py")} | {p.parent.name for p in SCRIPTS.glob("*/__init__.py")}
+    upper = {p.stem for p in SCRIPTS.glob("*.py")}     # 폴더는 `__init__.py` 유무와 무관하게(namespace 패키지 `migrations/` 포함)
+    upper |= {p.name for p in SCRIPTS.iterdir() if p.is_dir() and p.name != "__pycache__"}
     upper -= {"__init__", "common", "platforms", "trackers"}
     actual: dict[str, set[str]] = {}
     for path, rel in _py_files("common"):
