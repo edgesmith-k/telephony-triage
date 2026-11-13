@@ -1,0 +1,93 @@
+{
+ "status": "ok",
+ "key": "MOCK-9828",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-11-10T17:18:24+00:00",
+  "sw": null,
+  "platform_version": "17",
+  "sim_slot": "0",
+  "summary": "모바일 데이터를 켰는데 연결되지 않음 (합성)",
+  "description": "모바일 데이터를 켰는데 인터넷이 연결되지 않습니다. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-11-10T17:13:24.000Z",
+   "end": "2026-11-10T17:23:24.000Z"
+  },
+  "range": [
+   "2026-11-10T17:18:08.117Z",
+   "2026-11-10T17:18:23.260Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 24,
+  "masked": null
+ },
+ "candidates": [
+  {
+   "type": "DATA-001",
+   "cause": null,
+   "title": "SETUP_DATA_CALL이 발생하지 않음 (원인 미확인)",
+   "category": "data",
+   "score": 0.5098,
+   "confidence": "low",
+   "S": 1,
+   "C": 0,
+   "phones": [
+    0
+   ],
+   "evidence": [
+    {
+     "ts": "2026-11-10T17:18:23.260Z",
+     "tag": "DNC-0",
+     "msg": "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: NOT_IN_SERVICE DATA_NETWORK_TRANSPORT_NOT_ALLOWED SERVICE…",
+     "event": "data_evaluation_rejected"
+    }
+   ],
+   "fix_judgement": null,
+   "fix_message": "",
+   "related": []
+  }
+ ],
+ "partial": [
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "cause": "DATA-001-02",
+   "signature": "DATA-001-02/roaming-disabled",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected {'reasons': '.*ROAMING_…"
+   ],
+   "at": []
+  }
+ ],
+ "code": {
+  "skipped": true
+ },
+ "analyzer": {
+  "skill": "mock-data-analyzer",
+  "when": "ask"
+ },
+ "explore": {
+  "reason": "cause_unconfirmed",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-11-10T17:18:08.117Z ~ 2026-11-10T17:18:23.260Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}
