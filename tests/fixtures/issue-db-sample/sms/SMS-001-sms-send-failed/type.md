@@ -17,7 +17,7 @@ causes:
   - id: SMS-001-01
     status: active
     title: 전송 요청이 만들어지지 않음
-    description: CS 발신이 디스패처 sendSms에서 서비스 없음(SS=1~3 — 무선 꺼짐·서비스 불가)으로 멈춰 RIL SEND_SMS 요청이 나가지 않음
+    description: CS 발신이 디스패처 sendSms에서 서비스 상태 아님(SS=1·2 서비스 없음, SS=3 무선 꺼짐)으로 멈춰 RIL SEND_SMS 요청이 나가지 않음
     signatures:
       - id: send-request-missing
         must_match: ['GsmSMSDispatcher: sendSms: .*isIms\(\)=false .*\bSS=[1-3]\b']
@@ -46,7 +46,7 @@ SMS를 보내면 전송 실패로 끝나거나 아예 나가지 않는다. 재�
 
 ## 증상 판별 방법
 
-IMS 전송이 실패해 CS로 넘긴 줄(`ImsSmsDispatcher`, 17 소스 문구)이 남거나, CS 발신 디스패처 `sendSms:`가 서비스 없음(`SS=1~3`)으로 찍힌다(그 뒤 RILJ `> SEND_SMS`가 없다).
+IMS 전송이 실패해 CS로 넘긴 줄(`ImsSmsDispatcher`, 17 소스 문구)이 남거나, CS 발신 디스패처 `sendSms:`가 서비스 상태 아님(`SS=1·2` 서비스 없음, `SS=3` 무선 꺼짐)으로 찍힌다(그 뒤 RILJ `> SEND_SMS`가 없다).
 
 ```
 09-26 13:00:05.000  1500  1510 E ImsSmsDispatcher [0]: sendSms failed. Falling back to PSTN. Error: <msg>

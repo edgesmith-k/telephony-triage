@@ -14,7 +14,7 @@ AOSP 태그는 이름 그대로 쓴다: RILJ(`[n]> REQ`, `[n]< REQ error <n>`, `
 
 ## 짝
 
-- RILJ serial = HAL `serial <n>`. IPC REQ↔RSP는 `seq=0x…`.
+- RILJ serial = HAL `serial <n>`의 끝 4자리. IPC REQ↔RSP는 `seq=0x…`.
 - `error <n>`의 이름: 같은 serial `RilRequest` 줄(`CommandException: <이름>`)·`⇒` 이벤트.
 
 ## VIPC_E_* (가정)

@@ -7,7 +7,7 @@ phone_style: aosp
 pid: 1400
 tid: 1410
 entries:
-  - {at: 0, ril_unsol: UNSOL_SIM_STATUS_CHANGED}
+  - {at: 0, ril_unsol: UNSOL_RESPONSE_SIM_STATUS_CHANGED}
   - {after: 0.2, ril_request: GET_SIM_STATUS, serial: 21}
   - {after: 0.3, ril_response: GET_SIM_STATUS, serial: 21, result: "IccCardState {CARDSTATE_ABSENT,PINSTATE_UNKNOWN,num_apps=0}"}
   - {after: 0.1, tag: "UiccController", msg: "Broadcasting intent ACTION_SIM_STATE_CHANGED ABSENT reason null for phone: 1 sub: -1"}

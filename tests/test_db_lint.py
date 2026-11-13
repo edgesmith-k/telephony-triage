@@ -202,7 +202,7 @@ def test_step_events_names_and_dir():
     assert [c for c, _ in builtin] == ["step-event"]
     ril = _step_events_lint("step_events:\n  - {pattern: 'a', ril: NO_SUCH_REQUEST}")
     assert [(c, "NO_SUCH_REQUEST" in m) for c, m in ril] == [("step-event", True)]
-    assert _step_events_lint("step_events:\n  - {pattern: 'a', ril: UNSOL_SIM_STATUS_CHANGED, dir: unsol}") == []
+    assert _step_events_lint("step_events:\n  - {pattern: 'a', ril: UNSOL_RESPONSE_SIM_STATUS_CHANGED, dir: unsol}") == []
     bad_dir = _step_events_lint("step_events:\n  - {pattern: 'a', ril: DIAL, dir: sideways}")
     assert [c for c, _ in bad_dir] == ["step-event"]
     fields = _step_events_lint("step_events:\n  - {pattern: 'a', ril: DIAL, fields: {x: '1'}}")

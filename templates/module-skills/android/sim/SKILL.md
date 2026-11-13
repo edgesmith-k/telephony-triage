@@ -20,5 +20,5 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 3. IPC OK인데 `errorCode≠0` → 벤더 RIL.
 4. 같은 요청의 `[TX]`→`[RX]`가 길면(초 단위) 모뎀·망(카드), RILJ→`[TX]`가 길면 벤더 RIL. 결국 `LOADED`여도 지연은 실패다.
 5. UiccController `CARDSTATE_ERROR`·`ACTION_SIM_STATE_CHANGED <상태>`는 결과 표시다. 프레임워크로 답하지 않는다.
-6. `SIM_IO error 2` 뒤 같은 창에 `LOADED` → 선택 파일 없음, `원인 아님(정상 동작)`.
+6. `SIM_IO error 2`(GENERIC_FAILURE) 뒤 같은 창에 `LOADED` → `원인 아님(정상 동작)`. 2는 일반 실패라 파일 없음은 SW `6A82`가 있을 때만 말한다.
 7. 1위와 비교: 같으면 `1위와 같음`, 다르면 `<원인 ID> — <근거>`.

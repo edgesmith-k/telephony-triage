@@ -13,13 +13,13 @@
    "tid": 1410,
    "level": "D",
    "tag": "RILJ",
-   "msg": "[UNSL]< UNSOL_SIM_STATUS_CHANGED [PHONE1]",
+   "msg": "[UNSL]< UNSOL_RESPONSE_SIM_STATUS_CHANGED [PHONE1]",
    "phone_id": 1,
    "category_hint": "sim",
    "ril": {
     "serial": null,
     "dir": "unsol",
-    "request": "UNSOL_SIM_STATUS_CHANGED",
+    "request": "UNSOL_RESPONSE_SIM_STATUS_CHANGED",
     "error": null,
     "paired_ts": null,
     "latency_ms": null
