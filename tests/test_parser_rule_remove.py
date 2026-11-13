@@ -149,6 +149,22 @@ def test_drift_when_main_changed_or_removed_target(tmp_path):
     assert drift.drift_items(plan, base, changed)[0]["current_value"]["category"] == "data"
 
 
+def test_drift_knows_every_plan_schema_op():
+    """B-05: drift가 op를 모르면 drift 없음으로 지나가지 않고 멈춘다. 스키마 op 집합 = drift 분기 집합."""
+    import re
+
+    import pytest
+    from dbadd.core import UsageError
+    schema = json.loads((REPO / "plugin" / "schemas" / "plan.schema.json").read_text(encoding="utf-8"))
+    ops = {o["properties"]["op"]["const"] for o in schema["$defs"]["operation"]["oneOf"]}
+    src = (REPO / "plugin" / "scripts" / "dbadd" / "drift.py").read_text(encoding="utf-8")
+    handled = {name for line in src.splitlines() if re.match(r" {8}(el)?if kind (==|in) ", line)
+               for name in re.findall(r'"([a-z-]+)"', line)}
+    assert ops == handled and len(ops) == 18
+    with pytest.raises(UsageError, match="bogus"):
+        drift.drift_items(_plan([{"op": "bogus"}]), None, None)
+
+
 def test_remove_is_authoring_op_and_r5_needs_approval():
     assert draftcheck.fingerprint(_plan([_rm("tags.yaml", "GsmInboundSmsHandler")])) is not None
     db = git_db()

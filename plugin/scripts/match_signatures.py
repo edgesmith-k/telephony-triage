@@ -196,7 +196,7 @@ def fix_judgement(cause: issuedb.Cause, sw: str | None, rules: list[dict], jira_
     if status not in ("fixed", "fix-submitted"):
         return result  # wont-fix / not-a-bug: 수정 판단 대상이 아니다
     comparisons = []
-    for item in fixed_in:
+    for item in fixed_in:   # 99-deferred.md §J: 브랜치를 보지 않고 모든 build와 비교한다(백포트 항목 하나로 판정이 뒤집힌다)
         if item.get("build"):
             cmp = builds.compare(sw, item["build"], rules)
             if cmp is not None:

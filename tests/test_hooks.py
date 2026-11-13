@@ -733,7 +733,7 @@ def _jira(server: str, get_issue: str) -> dict:
     """테스트 헬퍼 site-defaults의 jira 블록에서 서버·get_issue 이름만 바꾼 것."""
     base = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))["tracker"]
     return {**base, "mcp_server": server, "exclude_servers": [], "tools": {"get_issue": get_issue},
-            "read_tools": [get_issue]}
+            "read_tools": [get_issue], "isolation_confirmed": True}
 
 
 def test_guard_jira_server_name_is_normalized():

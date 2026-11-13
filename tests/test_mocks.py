@@ -537,7 +537,9 @@ def test_plugin_root_skips_site_paths(tmp_path, monkeypatch):
     monkeypatch.setattr(make_plugin_root, "PLUGIN", src)
 
     plain = make_plugin_root.make(tmp_path / "plain")
-    assert (plain / "site-defaults.yaml").read_bytes() == (src / "site-defaults.example.yaml").read_bytes()
+    # example은 사내 초기값 false(S1 전), 헬퍼 복사본만 true(B-05). 나머지 바이트는 같다
+    assert (plain / "site-defaults.yaml").read_bytes() == (src / "site-defaults.example.yaml").read_bytes().replace(
+        make_plugin_root.ISOLATION_FALSE, make_plugin_root.ISOLATION_TRUE)
     assert not (plain / "scripts/parser_backends/site").exists()
     assert not (plain / "scripts/adapters/site_real.py").exists()
 
@@ -555,6 +557,7 @@ def test_site_defaults_example_shape():
     )
     assert data["synthetic_allowed"] is True
     assert data["tracker"]["exclude_servers"] == []
+    assert data["tracker"]["isolation_confirmed"] is False     # 사내 S-3 초안이 이 사본이다(S1 확인 전 false)
     assert data["tracker"]["tools"]["get_issue"].startswith("mcp__mock-jira__")
     assert data["parser"]["backend"] == "reference"
     assert data["external_parsers"] == {}

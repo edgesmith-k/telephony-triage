@@ -2,7 +2,7 @@
 """테스트용 플러그인 루트를 만든다 (15-local-draft.md §15.1).
 
 `plugin/`을 임시 디렉토리로 복사하고 `site-defaults.example.yaml`을
-`site-defaults.yaml`로 넣는다. 모든 테스트·eval은 이 루트를
+`site-defaults.yaml`로 넣는다(`tracker.isolation_confirmed`만 모의 서버라 true로 바꾼다). 모든 테스트·eval은 이 루트를
 `${CLAUDE_PLUGIN_ROOT}`로 쓴다. 복사 때 SITE_PATHS 경로는 뺀다(사내 레포에서도
 복사본은 example·모의만 쓴다, §15.6).
 
@@ -27,6 +27,9 @@ EXAMPLE = "site-defaults.example.yaml"
 TARGET = "site-defaults.yaml"
 MOCK_SITE_BACKEND = REPO / "tests" / "mocks" / "parser_backends" / "site"
 MOCK_ADAPTERS = REPO / "tests" / "mocks" / "adapters"
+# example은 사내 초기값(S1 확인 전 false). 모의 서버만 쓰는 헬퍼 복사본은 true (guard 규칙 2)
+ISOLATION_FALSE = b"\n  isolation_confirmed: false\n"
+ISOLATION_TRUE = b"\n  isolation_confirmed: true\n"
 
 sys.path.insert(0, str(REPO / "tools"))
 from check_boundary import load_site_paths  # noqa: E402
@@ -52,7 +55,7 @@ def make(out: Path | None = None, with_site_backend: bool = False) -> Path:
     example = out / EXAMPLE
     if not example.is_file():
         raise SystemExit(f"{PLUGIN / EXAMPLE} 이(가) 없습니다.")
-    shutil.copyfile(example, out / TARGET)
+    (out / TARGET).write_bytes(site_defaults_bytes(example))
 
     if with_site_backend:
         if not MOCK_SITE_BACKEND.is_dir():
@@ -73,6 +76,14 @@ def _skip_site_paths(dirpath: str, names: list[str]) -> set[str]:
     """사내 `site-defaults.yaml`·파서 백엔드·어댑터가 복사본에 섞이지 않게 한다."""
     base = Path("plugin") / Path(dirpath).relative_to(PLUGIN)
     return {n for n in names if is_site_path((base / n).as_posix(), _SITE_PATTERNS)}
+
+
+def site_defaults_bytes(example: Path) -> bytes:
+    """example → 헬퍼 `site-defaults.yaml` 바이트(`isolation_confirmed` 한 줄만 true로)."""
+    data = Path(example).read_bytes()
+    if data.count(ISOLATION_FALSE) != 1:
+        raise SystemExit(f"{example}: tracker 블록의 `  isolation_confirmed: false` 줄이 꼭 하나여야 합니다.")
+    return data.replace(ISOLATION_FALSE, ISOLATION_TRUE)
 
 
 def _restore_exec_bits(root: Path) -> None:

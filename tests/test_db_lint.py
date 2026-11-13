@@ -80,6 +80,11 @@ def test_fixed_in_ref_optional_and_checked():
     edit(db / C / "type.md", "ref: MOCKCL-12345}", "ref: CL 12345}")
     found = [f for f in _lint(db, "--all", expect=1)["errors"] if f["code"] == "fix-ref"]
     assert found and "fixed_in[].ref 'CL 12345'" in found[0]["message"], found
+    # 03-issue-db.md 원인 예시의 fixed_in 주석이 스키마 항목 필드를 모두 보인다(#117 ref)
+    schema = json.loads((REPO / "plugin" / "schemas" / "type.schema.json").read_text(encoding="utf-8"))
+    doc = (REPO / "docs" / "design" / "03-issue-db.md").read_text(encoding="utf-8").splitlines()
+    line = next(x for x in doc if x.strip().startswith("fixed_in: []"))
+    assert all(f"{k}:" in line for k in schema["$defs"]["fixedIn"]["items"]["properties"]), line
 
 
 def test_variant_builder_is_deterministic():

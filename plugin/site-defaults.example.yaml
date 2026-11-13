@@ -41,8 +41,8 @@ tracker:
 
   # Jira 읽기 결과 격리(08-safety.md §9 9번, PostToolUse `updatedToolOutput` 대체)가 사내 Claude Code에서 동작함을 S1에서 확인한
   # 뒤에만 true로 둔다. 참이 아니면 guard가 읽기 도구 호출마다 묻는다(원문이 모델 문맥에 남을 수 있다는 경고). 사내 초기값은 false.
-  # 테스트 헬퍼(모의 서버)는 true. TODO(SITE:S1)
-  isolation_confirmed: true
+  # 테스트 헬퍼(make_plugin_root, 모의 서버)는 복사 때 이 줄만 true로 바꾼다. TODO(SITE:S1)
+  isolation_confirmed: false
 
 # 작업 폴더 보존 기간(일, 선택, 14-site S14). 두면 doctor `retention` 행이 기한 넘은 작업 폴더 수를 경고한다(지우지 않는다 —
 # 정리는 `db_pr.py cleanup --older-than <일>`). 없으면 그 행은 skip. 사내 보안 규정으로 정한다. TODO(SITE:S14)
