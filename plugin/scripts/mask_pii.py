@@ -3,7 +3,7 @@
 
     mask_pii.py <file...> [--in-place | --out <file>] [--db <path>]
         치환 모드. 파일마다 마스커 하나(같은 값 = 같은 번호, 기존 토큰 다음 번호부터).
-        --in-place/--out이 없으면 파일 하나의 결과를 stdout으로 낸다.
+        --in-place/--out이 없으면 파일 하나의 결과를 stdout으로 낸다. NUL 든 줄은 `<REDACTED:NUL>`로 비우고 경고(mask-copy와 같다).
     mask_pii.py (<file...> | --changed <ref> | --staged) --check [--db <path>]
         검사 모드. 마스킹되지 않은 식별자가 있으면 목록(JSON)과 종료 코드 1.
         --staged는 index 내용, --changed는 `git merge-base <ref> HEAD` 이후 바뀐 파일의
@@ -129,14 +129,18 @@ def run_replace(args, db: Path | None) -> tuple[dict, str | None]:
     if len(args.files) > 1 and not args.in_place:
         raise UsageError("파일이 여럿이면 --in-place를 쓰세요.")
     allow = _allow(db)
-    results, stdout_text = [], None
+    results, stdout_text, warnings = [], None, []
     for name in args.files:
         path = Path(name)
         if not path.is_file():
             raise UsageError(f"파일이 없습니다: {path}")
         text = path.read_text(encoding="utf-8-sig", errors="replace")   # BOM을 떼야 첫 줄 머리 규칙이 맞는다
+        lines, nul = masking.blank_nul_lines(text.split("\n"))         # NUL 든 줄은 통째로 비운다(mask-copy와 같다, 재리뷰 RR-2)
+        if nul:
+            text = "\n".join(lines)
+            warnings.append({"code": "mask-pii-nul", "message": masking.nul_warning(nul, len(lines) - (lines[-1] == ""), name)})
         masker = masking.new_masker(text, allow, log_lines=True)
-        masked = "\n".join(masking.mask_lines(masker, text.split("\n")))   # 갈린 덤프 조각도(08-safety §8)
+        masked = "\n".join(masking.mask_lines(masker, lines))   # 갈린 덤프 조각도(08-safety §8)
         if args.in_place:
             path.write_text(masked, encoding="utf-8", newline="\n")
         elif args.out:
@@ -144,7 +148,7 @@ def run_replace(args, db: Path | None) -> tuple[dict, str | None]:
         else:
             stdout_text = masked
         results.append({"path": name, "replacements": dict(sorted(masker.counts.items()))})
-    return {"files": results}, stdout_text
+    return {"files": results, **({"warnings": warnings} if warnings else {})}, stdout_text
 
 
 def _mask_tree(value, masker):
@@ -232,6 +236,8 @@ def main(argv: list[str] | None = None) -> int:
             if args.changed or args.staged:
                 raise UsageError("--changed/--staged는 --check와 함께 씁니다.")
             result, text = run_replace(args, db)
+            for warning in result.get("warnings", []):
+                print(f"경고[{warning['code']}]: {warning['message']}", file=sys.stderr)
             if text is not None:
                 sys.stdout.write(text)
                 if args.json:

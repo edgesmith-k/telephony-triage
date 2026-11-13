@@ -652,6 +652,17 @@ def test_mask_pii_replace_and_check_files():
     assert _run("mask_pii.py", [str(raw), "--check"], cwd=_tmp()).returncode == 0
 
 
+def test_mask_pii_replace_blanks_nul_lines():
+    """재리뷰 RR-2: 치환 모드도 NUL 든 줄을 `<REDACTED:NUL>`로 비우고 mask-copy와 같은 경고를 낸다(NUL에서 갈린 값의 한쪽이 남지
+    않게). 다른 줄은 그대로 가린다."""
+    raw = _tmp() / "nul.log"
+    raw.write_bytes(b"09-20 14:30:00.000  1234  1244 D RILJ: imsi=4500812\0 34567890 number=+8210\0 98765432\n"
+                    b"09-20 14:30:01.000  1234  1244 D SST-0: [PHONE0] cellId=123456\n")
+    proc = _run("mask_pii.py", [str(raw)], cwd=_tmp())
+    assert proc.returncode == 0 and "경고[mask-pii-nul]" in proc.stderr and "NUL 든 줄 1개(전체 2줄 중)" in proc.stderr, proc.stderr
+    assert proc.stdout.split("\n") == ["<REDACTED:NUL>", "09-20 14:30:01.000  1234  1244 D SST-0: [PHONE0] cellId=<CELL#1>", ""]
+
+
 def test_sample_db_fixtures_are_masked():
     logs = sorted(SAMPLE.glob("*/*/fixtures/*.log")) + sorted((REPO / "tests/fixtures/logs").glob("*.log"))
     proc = _run("mask_pii.py", [*map(str, logs), "--check", "--db", str(SAMPLE)])

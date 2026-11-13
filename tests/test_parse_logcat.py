@@ -46,7 +46,7 @@ from common import events  # noqa: E402
 import make_log_fixtures  # noqa: E402
 import make_plugin_root  # noqa: E402
 import mock_env  # noqa: E402
-from runner import SITE_REPO_REASON, is_site_repo  # noqa: E402
+from runner import SITE_REPO_REASON, is_site_repo, plugin_root  # noqa: E402
 
 LOG_DIR = REPO / "tests" / "fixtures" / "logs"
 SAMPLE_DB = REPO / "tests" / "fixtures" / "issue-db-sample"
@@ -1176,6 +1176,30 @@ def test_mask_copy_and_cut_blank_nul_lines():
     code, _, err = _run(["mask-copy", str(u16), "--out", str(tmp / "m2")])
     assert code == 0 and "경고[mask-copy-nul]" in err and "NUL 든 줄 2개(전체 2줄 중)" in err, err   # 끝 NUL 조각은 줄이 아니다
     assert (tmp / "m2" / "u16.log").read_text(encoding="utf-8").split("\n") == ["<REDACTED:NUL>"] * 2 + [""]
+
+
+def test_parse_mask_and_markers_drop_nul_lines():
+    """재리뷰 RR-2: `parse --mask`(모델이 읽는다)·`markers`도 NUL 든 줄을 쓰지 않는다 — NUL에서 갈린 값(`4500812\\0 34567890`)의 한쪽이
+    남지 않게 그 줄의 레코드를 버리고 mask-copy와 같은 경고(`parse-nul`·`markers-nul`, iconv 안내)를 낸다. 다른 줄은 그대로."""
+    head = "09-20 14:32:0{}.000  1234  1244 D {}: "
+    log = _tmp() / "nul.log"
+    log.write_bytes((head.format(0, "RILJ") + "[PHONE0] imsi=4500812\0 34567890 number=+8210\0 98765432\n"
+                     + head.format(1, "RILJ") + "[PHONE0] ok imsi=" + IMSI_B + "\n"
+                     + head.format(2, "TestRunner") + "Step 4 imsi=4500812\0 34567890 FAIL\n"
+                     + head.format(3, "TestRunner") + "Step 5 FAIL\n").encode())
+    code, data, err = _run(["parse", str(log), "--rules", str(RULES), "--full", "--mask", "--tz", TZ, "--year", str(YEAR)])
+    text = json.dumps(data, ensure_ascii=False)
+    assert code == 0 and "경고[parse-nul]: nul.log: NUL 든 줄 2개(전체 4줄 중)" in err and "iconv" in err, err
+    assert "34567890" not in text and "98765432" not in text and "\\u0000" not in text and IMSI_B not in text, text
+    assert any("<IMSI#" in str(e.get("msg")) for e in data["events"]), text
+    root = plugin_root("nul-markers", failed_step={
+        "marker_patterns": [r"^TestRunner\s*:\s*Step\s*(?P<step>\d+)\b.*?(?P<status>START|PASS|FAIL)\b"],
+        "marker_status": {"start": ["start"], "pass": ["pass"], "fail": ["fail"]},
+        "anchor_without_step": True, "window": {"pre_sec": 60, "post_sec": 30, "fail_only_pre_sec": 120, "max_span_sec": 900},
+        "disagree_minutes": 10, "steps_file_tz": None, "clock_offset": None})
+    code, data, err = _run(["markers", str(log), "--rules", str(RULES), "--tz", TZ, "--year", str(YEAR)], root)
+    assert code == 0 and "경고[markers-nul]" in err, err
+    assert [m["step"] for m in data["markers"]] == ["5"] and "34567890" not in json.dumps(data), data
 
 
 def test_mask_copy_rerun_removes_only_previously_managed_copies():

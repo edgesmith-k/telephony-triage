@@ -432,6 +432,21 @@ def _read_texts(paths: list[Path]) -> str:
     return "\n".join(logtime.open_log(p).read() for p in paths)
 
 
+def _nul_lines(paths: list[Path], code: str) -> tuple[str, set, list[dict]]:
+    """NUL 든 줄(mask-copy·cut과 같다, `masking.blank_nul_lines`) → (그 줄을 비운 전체 글 — 마스커용, NUL이 없으면 `_read_texts`와
+    같은 글, 그 줄 위치 `{(파일 순번, 줄 번호)}` — 백엔드 `line_ref`와 같은 줄 나눔, 경고). 그 줄의 레코드는 쓰는 쪽이 버린다."""
+    texts, refs, warnings = [], set(), []
+    for index, path in enumerate(paths):
+        with logtime.open_log(path) as fh:
+            raw = list(fh)
+        lines, n = masking.blank_nul_lines([text.rstrip("\r\n") for text in raw])
+        texts.append("\n".join(lines) if n else "".join(raw))
+        if n:
+            refs |= {(index, no) for no, text in enumerate(raw, 1) if "\0" in text}
+            warnings.append({"code": code, "message": masking.nul_warning(n, len(lines) - (lines[-1:] == [""]), path.name)})
+    return "\n".join(texts), refs, warnings
+
+
 def _allow_patterns(db_cfg: dict) -> list[str]:
     return list((db_cfg.get("mask") or {}).get("allow_patterns") or [])
 
@@ -539,14 +554,15 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
 
     masker = None
     post_window = None
+    nul_refs: set = set()
+    warnings: list[dict] = []
     if args.mask:
-        # 입력에 이미 있는 토큰의 다음 번호부터 준다 (부분 마스킹된 로그, fixture 재파싱).
-        texts = _read_texts(paths)
+        # 입력에 이미 있는 토큰의 다음 번호부터 준다 (부분 마스킹된 로그, fixture 재파싱). NUL 든 줄은 버린다(재리뷰 RR-2)
+        texts, nul_refs, warnings = _nul_lines(paths, "parse-nul")
         masker = masking.new_masker(texts, _allow_patterns(db_cfg), log_lines=True)
         # 시간 창 밖에 갈린 덤프 조각이 있을 수 있으면 창 없이 읽고 묶은 뒤 자른다(백엔드 인터페이스 무변경)
         post_window = window if window and dumpjoin.mark() in texts else None
 
-    warnings: list[dict] = []
     warnings += compat.check_parser_backend(db_cfg, backend.name, backend.version())
 
     coverage = backend.coverage(paths, args.tz, args.year)
@@ -588,6 +604,8 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
     timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
     errors: list[dict] = []
     events = backend.parse(paths, args.tz, args.year, None if post_window else window)
+    if nul_refs:
+        events = [e for e in events if evt.ref_key(e.get("line_ref")) not in nul_refs]
     dropped: dict = {}
     unextracted: dict = {}
     events = postprocess(events, rules, masker=masker, last_ts=coverage["last_ts"],
@@ -621,7 +639,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
             else:
                 ext_events = [e for e in ext_events if e["event"] is not None]
             if masker:
-                ext_events = [_mask_record(e, masker) for e in ext_events]
+                ext_events = [_mask_record(e, masker) for e in ext_events if evt.ref_key(e.get("line_ref")) not in nul_refs]
             events += ext_events
             external_info.append(
                 {"category": category, "adapter": status[category]["adapter"],
@@ -847,6 +865,9 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
             raise UsageError(f"파서 규칙 오류: {exc}") from exc
     if compiled or any(step_specs):
         raw_records = backend.parse(paths, args.tz, args.year, None)       # 한 번만 파싱한다
+        log_text, nul_refs, nul_warnings = _nul_lines(paths, "markers-nul")    # NUL 든 줄은 버린다(parse --mask와 같다)
+        warnings += nul_warnings
+        raw_records = [r for r in raw_records if evt.ref_key(r.get("line_ref")) not in nul_refs]
     if compiled:
         records = [r for r in raw_records if r.get("event") is None]
         texts = [f"{r['tag']}: {r['msg']}" for r in records]
@@ -866,7 +887,7 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
                 done = set(found)
                 remaining = [i for i in remaining if i not in done]
         if hits:
-            masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg), log_lines=True)
+            masker = masking.new_masker(log_text, _allow_patterns(db_cfg), log_lines=True)
             forced = masking.forced_records(masker, records)      # 갈린 덤프 조각(08-safety §8), 전체에서 한 번
             for i in sorted(hits):
                 off = len(texts[i]) - len(str(records[i]["msg"]))
