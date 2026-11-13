@@ -1431,14 +1431,16 @@ def s5_sandbox_pr(ctx: Ctx) -> dict:
     try:
         prs = json.loads(out or "[]") if code == 0 else []
     except ValueError:
-        prs = []
-    # 도구가 만드는 브랜치만 센다(contracts.md 브랜치 표). 손으로 만든 PR은 스모크가 아니다
-    prs = [p for p in (prs if isinstance(prs, list) else []) if isinstance(p, dict)
+        prs = None
+    if not isinstance(prs, list):  # 깨진 출력은 예전(689254dd 전)처럼 fail — 0건으로 세지 않는다
+        return res("s5.sandbox_pr", "fail", "gh 출력이 JSON 목록이 아님", cmd)
+    # 이슈 등록·수정·검증 브랜치만 센다(contracts.md 브랜치 표). 손으로 만든 PR은 스모크가 아니다
+    prs = [p for p in prs if isinstance(p, dict)
            and str(p.get("headRefName") or "").startswith(("issue/", "fix-submit/", "verify-fix/", "verify-res/"))]
     if not prs:
-        return res("s5.sandbox_pr", "needs-user", f"도구로 만든 샌드박스 PR 0건(종료 {code})", cmd,
-                   ask="도구로 만든 PR(`issue/`·`fix-submit/`·`verify-fix/`·`verify-res/` 브랜치) 1건을 만든 뒤 다시 점검한다")
-    return res("s5.sandbox_pr", "pass", f"도구로 만든 샌드박스 PR {len(prs)}건", cmd)
+        return res("s5.sandbox_pr", "needs-user", f"이슈 등록·수정·검증 브랜치 샌드박스 PR 0건(종료 {code})", cmd,
+                   ask="이슈 등록·수정·검증 브랜치(`issue/`·`fix-submit/`·`verify-fix/`·`verify-res/`) PR 1건을 만든 뒤 다시 점검한다")
+    return res("s5.sandbox_pr", "pass", f"이슈 등록·수정·검증 브랜치 샌드박스 PR {len(prs)}건", cmd)
 
 
 def s5_smoke(ctx: Ctx) -> dict:

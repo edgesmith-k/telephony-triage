@@ -673,13 +673,14 @@ def test_s5_sandbox_pr_counts_tool_branches_only(tmp_path, monkeypatch):
     (root / sc.STEPS_FILE).write_text("sandbox_repo: org/sandbox\n", encoding="utf-8")
     def fake(out):
         return lambda self, cmd, *, _out=out, **kw: (0, "", "") if cmd[1] == "auth" else (0, _out, "")
-    for out, status in ((json.dumps([{"number": 1, "headRefName": "feature/x"}]), "needs-user"),
+    for out, status in (("[{not json", "fail"),
                         (json.dumps([{"number": 1, "headRefName": "feature/x"}, {"number": 2, "headRefName": "issue/A-1"}]),
                          "pass"),
-                        ("[{not json", "needs-user")):
+                        (json.dumps([{"number": 3, "headRefName": "verify-res/x"}]), "pass"),
+                        (json.dumps([{"number": 1, "headRefName": "feature/x"}]), "needs-user")):
         monkeypatch.setattr(sc.Ctx, "run", fake(out))
         r = sc.s5_sandbox_pr(sc.Ctx(root))
-        assert r["status"] == status, out
+        assert r["status"] == status and ("JSON 목록이 아님" in r["evidence"]) == (status == "fail"), out
     assert "headRefName" in r["cmd"] and "issue/" in r["ask"]
 
 
