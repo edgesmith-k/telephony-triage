@@ -650,6 +650,10 @@ def _py(script: str, *args: str) -> str:
     return f"python3 {oc.SCRIPTS}/{script} " + " ".join(args)
 
 
+# 리뷰 8 F6: Windows 에서는 경로의 역슬래시를 split_bash 가 거부하고 symlink 에 권한이 든다 — 이 묶음의 bash 판정 시험은 리눅스에서 본다
+POSIX = pytest.mark.skipif(sys.platform == "win32", reason="경로의 역슬래시(split_bash 거부)·symlink 권한 — 리눅스에서 본다")
+
+
 @pytest.fixture
 def plugin_config(monkeypatch):
     """이 테스트 프로세스의 `config`는 임시 플러그인 사본에서 불렸다(conftest) — 어댑터가 보는 `oc.SCRIPTS/config.py`로 바꿔 둔다
@@ -678,6 +682,7 @@ CONFIG_ALLOWED = ["show", "show --keys work_dir", "site-defaults", "check", "che
                   "--help", "set --help", "set -h"]
 
 
+@POSIX
 @pytest.mark.parametrize("args,label", CONFIG_RUN_YOURSELF)
 @pytest.mark.usefixtures("plugin_config")
 def test_config_write_subcommands_are_run_yourself(args, label):
@@ -686,19 +691,24 @@ def test_config_write_subcommands_are_run_yourself(args, label):
     assert v.deny is None and v.flow and label in v.flow, (args, v)
 
 
+@POSIX
 @pytest.mark.parametrize("args", CONFIG_UNREADABLE)
 @pytest.mark.usefixtures("plugin_config")
 def test_config_unreadable_args_denied(args):
     v = oc.bash_allowlist(_py("config.py", args).rstrip(), str(_dir()), str(_dir()), {})
-    assert v.deny == "config.py 인자를 읽지 못해 거부한다" and v.flow is None, (args, v)
+    assert v.deny.startswith("config.py 인자를 읽지 못해 거부한다") and v.flow is None, (args, v)
+    if args in ("sett k v", ""):      # 리뷰 8 F4: argparse 오류 줄을 붙인다(모델이 인자를 고칠 수 있게)
+        assert "error:" in v.deny, v
 
 
+@POSIX
 @pytest.mark.parametrize("args", CONFIG_ALLOWED)
 @pytest.mark.usefixtures("plugin_config")
 def test_config_read_subcommands_allowed(args):
     assert oc.bash_allowlist(_py("config.py", args), str(_dir()), str(_dir()), {}) == oc.BashVerdict(), args
 
 
+@POSIX
 @pytest.mark.usefixtures("plugin_config")
 def test_config_set_shapes_not_bypassable(tmp_path):
     """조각 1 반증 꼴: python·`..`·`./`·심볼릭 링크·연산자 뒤·개행도 같은 판정."""
@@ -714,6 +724,7 @@ def test_config_set_shapes_not_bypassable(tmp_path):
     assert oc.v1_write_flow(_py("config.py", "set opencode.jira_read open")).startswith("OpenCode 설정 변경")
 
 
+@POSIX
 @pytest.mark.parametrize("args", ["init --answers a.json", "init --ans=a.json", "--platform android init --answers a.json"])
 @pytest.mark.usefixtures("plugin_config")
 def test_config_init_answers_is_plain_refusal(args):
@@ -732,6 +743,7 @@ def test_config_init_answers_is_plain_refusal(args):
     assert tt.USER_CMD.search(out["reason"]) is None
 
 
+@POSIX
 def test_git_safe_env_required_for_git_and_scripts():
     """OC-C (2): tt-oc가 준 git 설정(GIT_SAFE)이 없으면 bash의 git·플러그인 스크립트는 거부(tt-oc 밖에서 시작), 읽기 명령은 그대로.
     시험 헬퍼(`runner.run`)는 어댑터에 GIT_SAFE_ENV를 기본으로 준다(tt-oc의 child_env와 같은 값)."""
@@ -768,6 +780,7 @@ def test_config_call_refuses_foreign_config_module(monkeypatch):
         oc._config_call(["show"])
 
 
+@POSIX
 def test_config_call_output_channel_is_one_json():
     """파서 출력(--help)은 버린다: before의 stdout은 JSON 하나."""
     w = ws()
@@ -779,10 +792,11 @@ def test_config_call_output_channel_is_one_json():
     assert out["decision"] == "deny" and "사용자 설정 변경(config.py set)" in out["reason"] and oc.ASK_PREFIX in out["reason"]
 
 
+@POSIX
 @pytest.mark.usefixtures("plugin_config")
 @pytest.mark.parametrize("script", ["config.py doctor", "parse_logcat.py parse x.log", "job_status.py",
-                                    "config.py sync-scripts-path"])
-@pytest.mark.parametrize("opt", ["--plugin-root X", "--plugin-r=X", "--plu X"])
+                                    "config.py sync-scripts-path", "mask_pii.py a"])
+@pytest.mark.parametrize("opt", ["--plugin-root X", "--plugin-r=X", "--plu X", "--p X"])
 def test_plugin_root_denied_for_every_script(script, opt):
     """P: `--plugin-root`(줄임말·`=` 꼴, 하위 명령 앞)는 모든 플러그인 스크립트에서 거부."""
     name, *rest = script.split()
@@ -809,6 +823,7 @@ def test_file_tools_cannot_write_git_metadata(path):
         assert out["decision"] == "deny" and "git 메타데이터" in out["reason"] and out["reason"].startswith(oc.MARK), (p, out)
 
 
+@POSIX
 def test_git_metadata_lookalikes_allowed(tmp_path):
     for path in ("w/K-1/headers.txt", ".gitattributes", ".gitignore", "br/config", "w/head.log", "w/git/x"):
         assert oc._git_meta(str(tmp_path / path)) is None, path
@@ -830,6 +845,7 @@ def _work_tree(tmp_path: Path, meta: bool = True):
     return proj, root, {"HOME": str(home)}
 
 
+@POSIX
 def test_script_outputs_must_stay_in_work_root(tmp_path):
     """W2: 스크립트 출력 인자(`guard._script_out_targets`)는 작업 루트 안. 밖(~/.gitconfig·사용자 site `.pth` 등)이면 거부."""
     proj, root, env = _work_tree(tmp_path)
@@ -857,6 +873,7 @@ def test_script_outputs_must_stay_in_work_root(tmp_path):
     assert "작업 루트" in oc.bash_allowlist(f"cd {root} && {rel}", str(proj), str(proj), env).deny
 
 
+@POSIX
 def test_script_outputs_closed_without_tt_oc_json(tmp_path):
     proj, root, env = _work_tree(tmp_path, meta=False)
     v = oc.bash_allowlist(_py("mask_pii.py", "in.txt", "--out", f"{root}/K-1/x.json"), str(proj), str(proj), env)
@@ -868,6 +885,7 @@ def test_script_outputs_closed_without_tt_oc_json(tmp_path):
         assert v.deny and "판정할 수 없다" in v.deny and str(proj / "tt-oc.json") in v.deny and "gen_opencode.py install" in v.deny, text
 
 
+@POSIX
 def test_script_outputs_edge_values(tmp_path, monkeypatch):
     """검증 정정(별개 눈): 안/밖은 실제 경로 하나 — symlink를 거친 작업 루트의 정당한 출력은 허용, `없는폴더/../..`는 거부.
     따옴표 `~`, `-`·두 번·빈 값, guard를 못 불러오면 거부(닫힘)."""
@@ -897,6 +915,62 @@ def test_outside_outputs_normcase(tmp_path):
                                      encoding="utf-8")
     assert oc._outside_outputs(words, [str(proj)], str(proj)) is None
     assert "작업 루트" in oc._outside_outputs([*words[:3], str(tmp_path / "workx" / "y")], [str(proj)], str(proj))
+
+
+@POSIX
+def test_tilde_output_refused_even_inside_work_root(tmp_path):
+    """리뷰 8 F1: cwd가 작업 루트면 `'~/x'`는 루트 안 상대 경로로도 읽힌다 — `~` 규칙만이 거부한다(triage.py가 expanduser)."""
+    proj, root, env = _work_tree(tmp_path)
+    v = oc.bash_allowlist(_py("triage.py", "run", "K-1", "--out", "'~/x'"), str(root), str(proj), env)
+    assert v.deny and "`~`로 시작하는 경로" in v.deny and "작업 루트(" not in v.deny, v
+
+
+@POSIX
+def test_outside_output_asks_one_retry_with_absolute_path(tmp_path, monkeypatch):
+    """리뷰 8 F2·F9: 작업 루트 밖·루트 자체 출력 거부는 "턴을 끝낸다" 대신 절대 경로로 한 번 다시(`OUT_RETRY`). 다른 허용 목록
+    거부(git 메타데이터 등)는 그대로 턴을 끝낸다. 루트 아래 mask-copy 폴더는 허용."""
+    from runner import GIT_SAFE_ENV
+    proj, root, env = _work_tree(tmp_path)
+    monkeypatch.setattr(oc, "run_guard", lambda *a, **k: oc.HookRun("allow", "", []))
+
+    def before(command: str) -> dict:
+        return oc.before({"tool": "bash", "args": {"command": command}, "directory": str(proj)}, env={**GIT_SAFE_ENV, **env},
+                         servers=[])
+
+    rel = _py("parse_logcat.py", "cut", "a.log", "--out", "K-1/fixtures/cut-1.log")
+    for command in (f"cd {root} && {rel}", _py("parse_logcat.py", "mask-copy", "a.log", "--out", str(root))):
+        out = before(command)
+        assert out["decision"] == "deny" and out["reason"].startswith(oc.MARK) and out["reason"].endswith(oc.OUT_RETRY), out
+        assert "다른 모양으로 다시 시도하지 말고" not in out["reason"]
+    assert "자체" in before(_py("parse_logcat.py", "mask-copy", "a.log", "--out", f"{root}/"))["reason"]
+    out = before(_py("mask_pii.py", "in.txt", "--out", f"{root}/K-1/HEAD"))
+    assert "git 메타데이터" in out["reason"] and "다른 모양으로 다시 시도하지 말고" in out["reason"], out
+    assert before(_py("parse_logcat.py", "mask-copy", "a.log", "--out", f"{root}/K-1/logs-masked"))["decision"] == "allow"
+    assert before(f"cd {root} && " + _py("parse_logcat.py", "cut", "a.log", "--out", f"{root}/K-1/x.log"))["decision"] == "allow"
+
+
+def test_writes_inside_git_dir_without_dot_git_name_refused(tmp_path, monkeypatch):
+    """리뷰 8 F3: 작업 루트 안의 bare·미러(`x.git/`)·`.repo/projects/*.git/`처럼 이름이 `.git`이 아닌 git 디렉터리 안 쓰기는 거부
+    (대상과 조상 폴더를 작업 루트까지 올라가며 `HEAD` 파일을 본다). worktree(`wt/` — `.git`은 파일, `wt/HEAD` 없음)와 보통 작업
+    폴더는 그대로, 작업 루트 위의 `HEAD`는 보지 않는다."""
+    proj, root, env = _work_tree(tmp_path)
+    monkeypatch.setattr(oc, "run_guard", lambda *a, **k: oc.HookRun("allow", "", []))
+    for bare in (root / "K-1" / "m.git", root / "K-1" / "aosp" / ".repo" / "projects" / "x.git"):
+        (bare / "refs").mkdir(parents=True)
+        (bare / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+        for target in (bare / "config", bare / "refs" / "k", bare / "hooks" / "new" / "post-checkout"):
+            out = oc.before({"tool": "write", "args": {"filePath": str(target), "content": "x"}, "directory": str(proj)},
+                            env=env, servers=[])
+            assert out["decision"] == "deny" and "git 디렉터리 안의 경로" in out["reason"], (target, out)
+        assert oc._git_meta(str(bare), str(os.path.realpath(root)))                 # mask-copy --out <bare> 자체
+    wt = root / "K-1" / "wt"
+    wt.mkdir()
+    (wt / ".git").write_text("gitdir: /elsewhere/.git/worktrees/wt\n", encoding="utf-8")
+    (tmp_path / "HEAD").write_text("x\n", encoding="utf-8")                          # 작업 루트 위: 보지 않는다
+    for target in (wt / "cases" / "c.yaml", root / "K-1" / "notes.md", root / "review-x" / "report.md"):
+        out = oc.before({"tool": "write", "args": {"filePath": str(target), "content": "x"}, "directory": str(proj)},
+                        env=env, servers=[])
+        assert out["decision"] == "allow", (target, out)
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="통합 회귀는 리눅스에서(경로·git)")
