@@ -21,8 +21,8 @@
   Android 자체 마스킹(`***`, `xxxxxx`)도 그대로 둔다.
 
 - **로그 줄 전용 규칙(`Rule.log_only`, M1~M11)**: 합성 fixture로 고정한 로그 줄 규칙(B2 §3.2) 중 모양만 보는 것(hex 덤프·base64·빌드/제품 코드·15~20자리
-  숫자·syslog 호스트 칸)은 `log_lines=True`로 만든 마스커(로그 마스킹: parse·cut·`mask_pii` 치환/이벤트·보기·점검
-  도구)에서만 돈다. `db_lint`·`mask_pii --check`·`issue_post`는 기본값(`False`)이라 그 종류의 결과가 전과 같다.
+  숫자·syslog 호스트 칸)은 `log_lines=True`로 만든 마스커(로그 마스킹: parse·cut·`mask_pii` 치환/이벤트·`add-fixture`·보기·점검
+  도구, `mask_pii --check`의 `fixtures/*.log`)에서만 돈다. `db_lint`·그 밖의 `mask_pii --check`·`issue_post`는 기본값(`False`)이다.
   실제 식별자 규칙(M2a·M3·M4·M5·M7·M8 payload/salt·M9·뒤집힌 ICCID)은 어디서나 돈다.
 - **토큰 모양(`Rule.fmt`)**: 기본 `<종류#n>`. M1 덤프 줄은 `<HEXDUMP nB>`(번호 없음), M8 payload는 `<APDU#n>[nB]`,
   M11 호스트는 `host<n>`(journal 형식 정규식의 호스트 칸에 그대로 맞아 마스킹한 줄도 해석된다).

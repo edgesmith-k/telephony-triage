@@ -40,7 +40,9 @@ class FixtureOps:
         text = self._fixture_source(i, op["path"])
         if op["kind"] != "negative":
             self._cause_or_reject(i, op["for"])
-        masked = masking.new_masker(existing_text=text, allow_patterns=self.allow).mask(text)
+        # 커밋 관문(`mask_pii --check`)이 fixtures/*.log에 쓰는 로그 마스커·줄 나눔 그대로(줄 머리 규칙·갈린 덤프 조각)
+        masker = masking.new_masker(existing_text=text, allow_patterns=self.allow, log_lines=True)
+        masked = "\n".join(masking.mask_lines(masker, text.split("\n")))
         fdir = self._type_dir_any(type_id) / "fixtures"
         self.tree.write(fdir / name, masked)
         fx = parse_name(name)

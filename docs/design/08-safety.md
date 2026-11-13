@@ -42,7 +42,7 @@
 - 파서 백엔드·외부 파서가 낸 이벤트의 `msg`와 `fields`도 extractor 전에 같은 함수(같은 번호 대응)로 마스킹한다 (`parse_logcat.py parse --mask`).
 - **갈린 덤프 조각**: 마스커는 줄 단위지만 oFono 덤프 함수가 IMSI·ICCID 값을 두 줄에 가르면(덤프 함수 `<이름>() ` 뒤가 조각 — 이름은 site-defaults oFono 블록 `dump_func`, 기본 placeholder, 시각 뺀 앞머리 같고 1초 안, `common/dumpjoin.py`) 키 있는 IMSI·ICCID 규칙(`imsi=`·NAI·`iccid=`·`ICCID(`)만 이은 글에 돌려 경계를 넘는 값을 조각마다 전체 값의 토큰 하나로 가린다(개수 1회, 조각 글자도 같은 번호 — `fields`). 키 없는 숫자 규칙은 이은 글에 쓰지 않는다. `mask_pii`(파일·이벤트·`--check`)·`parse --mask`(시간 창 밖 조각까지 묶음)·`markers`·`cut`(전체 줄로 묶은 뒤 고른 줄에 적용)·`residual`·`redact`가 같다.
 - **짝 주석 값**(oFono 설정 짝 규칙·내장 gril의 `proto` 주석, `17-platforms.md §9-3`): site 정규식이 뽑을 수 있는 값이라 `--mask`면 한 번 더 본다. `request`·`error`는 같은 줄에서 가린 값이면 그 토큰, 아니면 텍스트 규칙으로 마스킹한다. `serial`은 짝 규칙이 10진 1~10자리만 주석에 싣고(11자리 이상 IMSI·ICCID·전화번호 모양은 주석 없음), `--mask` 출력에는 같은 수(앞 0 무시)가 마스킹된 같은 줄의 토큰 밖에 숫자로 따로 보일 때만 남긴다(숫자 경계 — 더 긴 숫자의 조각은 안 된다) — 아니면 `null`(파생 이벤트 필드에도 없다). 다른 줄에서 복사한 serial(`kind: hop` 아래 줄)은 같은 줄 대조를 할 수 없어 `null`이다. 번호 표 전체가 아니라 같은 줄만 본다(앞 줄의 같은 글자와 우연히 겹치지 않게). 한계: 가린 값에서 뽑은 serial과 같은 수가 그 줄의 가리지 않은 곳에 숫자로 따로 보이면 남는다(숫자 자체는 이미 출력에 보이고, "serial = 가린 값" 연결만 남는다). Android 주석은 `proto`가 없어 그대로다.
-- `--check` 모드는 검출 시 종료 코드 1이다. NUL이 든 파일도 건너뛰지 않는다(`--staged`·`--changed`: NUL을 지운 줄과 공백으로 바꾼 줄을 함께 검사 — UTF-16·잘린 logcat). `db_precommit`(`--staged`), `db_pr stage`(`--changed`), Claude hook이 쓴다.
+- `--check` 모드는 검출 시 종료 코드 1이다. NUL이 든 파일도 건너뛰지 않는다(`--staged`·`--changed`: NUL을 지운 줄과 공백으로 바꾼 줄을 함께 검사 — UTF-16·잘린 logcat). `db_precommit`(`--staged`), `db_pr stage`(`--changed`), Claude hook이 쓴다. 이슈 DB fixture 로그(`fixtures/` 바로 아래 `*.log`)는 로그 마스커(덤프·base64·문맥 없는 15~20자리·syslog 호스트 칸 포함)로 보고, 그 밖의 파일은 기본 마스커로 본다(`add-fixture`가 같은 마스커·줄 나눔으로 가린다).
 - 항목별 누락/과잉 마스킹 테스트를 둔다.
 
 ### 8.1 Jira 텍스트

@@ -658,6 +658,65 @@ def test_sample_db_fixtures_are_masked():
     assert proc.returncode == 0, proc.stdout
 
 
+def test_repo_logs_pass_fixture_check_and_mask_idempotently():
+    """B-29-2 불변: 레포의 fixture 로그는 모두 `fixtures/*.log`로 두고 본 `--check`(로그 마스커)에서 검출 0이고,
+    `.log`는 모두 로그 마스킹이 멱등이다(가린 것을 다시 가려도 같다). 무시 경로(eval 결과·모의 상태)는 뺀다."""
+    logs = sorted(p for top in ("tests", "templates") for p in (REPO / top).rglob("*.log")
+                  if not {"mocks", "workspace", "results"} & set(p.parts))
+    fixtures = _tmp() / "fixtures"
+    fixtures.mkdir()
+    picked = [p for p in logs if "fixtures" in p.parts]
+    for i, path in enumerate(picked):
+        (fixtures / f"{i:03d}-{path.name}").write_bytes(path.read_bytes())
+    proc = _run("mask_pii.py", ["--check", *map(str, sorted(fixtures.iterdir()))], cwd=_tmp())
+    assert proc.returncode == 0 and json.loads(proc.stdout)["checked"] == len(picked) > 0, proc.stdout
+    for path in logs:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        once = "\n".join(masking.mask_lines(masking.new_masker(text, log_lines=True), text.split("\n")))
+        twice = "\n".join(masking.mask_lines(masking.new_masker(once, log_lines=True), once.split("\n")))
+        assert twice == once, path
+
+
+def test_mask_pii_check_uses_log_masker_only_for_fixture_logs():
+    """B-29-2: 로그 전용 규칙(문맥 없는 긴 숫자 등)은 `fixtures/` 바로 아래 `*.log`에서만 `--check`에 걸린다."""
+    base, paths = _tmp(), []
+    for rel in ("x.log", "fixtures/x.log", "fixtures/x.md", "fixtures/sub/x.log", "logs/x.log"):
+        paths.append(base / rel)
+        paths[-1].parent.mkdir(parents=True, exist_ok=True)
+        paths[-1].write_text("D X       : seq 1234567890123456789 done\n", encoding="utf-8")
+    proc = _run("mask_pii.py", ["--check", *map(str, paths)], cwd=base)
+    assert proc.returncode == 1, proc.stderr
+    assert [(Path(d["path"]).relative_to(base).as_posix(), d["kind"]) for d in json.loads(proc.stdout)["detections"]] \
+        == [("fixtures/x.log", "NUM")]
+
+
+def test_add_fixture_output_passes_commit_gate():
+    """B-29-2: `add-fixture`가 쓴 로그는 곧바로 커밋 관문(`--check --staged`, fixtures/*.log는 로그 마스커)을 통과한다.
+    줄마다 가려야 둘째 줄 syslog 호스트 칸(줄 머리 규칙)이 남지 않는다."""
+    repo = _tmp() / "db"
+    shutil.copytree(SAMPLE, repo)
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "add", "-A")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init")
+    src = _write(["Sep 20 14:32:10 mockhost ofonod[812]: imsi=450081234567890",
+                  "Sep 20 14:32:11 mockhost ofonod[812]: seq 1234567890123456789 done"], "cut-1.log")
+    plan = {"source": "verify-fix", "schema_version": 1, "started_at": "2026-09-29T10:00+09:00", "base_sha": "0" * 40,
+            "issue": None, "operations": [{"op": "add-fixture", "for": "DATA-001", "kind": "negative", "path": str(src)}],
+            "commit_message": "[DATA-001] fixture", "pr": {"number": None, "branch": "x", "head_sha": None},
+            "included_pending": []}
+    plan_path = src.parent / "plan.json"
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    fixtures = repo / "data/DATA-001-no-setup-data-call/fixtures"
+    before = set(fixtures.iterdir())
+    proc = _run("db_add.py", ["apply", str(plan_path), "--db", str(repo), "--user", "mock-user1"])
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    _git(repo, "add", "-A")
+    proc = _run("mask_pii.py", ["--check", "--staged", "--db", str(repo)])
+    assert proc.returncode == 0 and json.loads(proc.stdout)["checked"] == 1, proc.stdout
+    [written] = set(fixtures.iterdir()) - before
+    assert written.read_text(encoding="utf-8").count("host1") == 2
+
+
 def _git(repo: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
 
@@ -719,7 +778,7 @@ def test_mask_pii_check_does_not_skip_nul_files():
         assert proc.returncode == 1, (scope, proc.stdout, proc.stderr)
         result = json.loads(proc.stdout)
         assert result["checked"] == 2, scope
-        assert sorted(Path(d["path"]).name for d in result["detections"]) == ["x.log", "y.log"], scope
+        assert sorted({Path(d["path"]).name for d in result["detections"]}) == ["x.log", "y.log"], scope
 
 
 def test_mask_pii_bad_allow_pattern_is_usage_error():
