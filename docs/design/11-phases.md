@@ -39,7 +39,7 @@
 ### Phase 1. 이슈 DB 뼈대와 합성 샘플
 - 할 일:
   - 합성 샘플 트리 `tests/fixtures/issue-db-sample/`: `03-issue-db.md §5.2` 디렉토리 구조, `issue-db.config.yaml`(schema_version 1, generator_version 1, `external_parsers: {}`, `matcher.pattern_timeout_ms`, SITE_PROFILE의 S16~S19 값: `tracker.key_regex`, `tracker.base_url`, `fix_ref_regex`, `reviewers`. 사외 초안은 모의 값), `.gitignore`, `.gitattributes`
-  - `schema/` 6종(`plan.schema.json`은 `contracts.md §작업 계획`의 형식(`schema_version`, `base_sha`, `issue.origin`, `feedback.date`, `included_pending`)과 op 표 전체(`allow-cause` 포함), `source`는 9개 값만. `expect.schema.json`은 `.expect.yaml`(`expect_top`, `expect_not`, `also_allowed`, `occurred_at`, `origin`)), `templates/` 3종
+  - `schema/` 6종(`plan.schema.json`은 `contracts.md §작업 계획`의 형식(`schema_version`, `base_sha`, `issue.origin`, `feedback.date`, `included_pending`)과 op 표 전체(`allow-cause` 포함), `source`는 8개 값만. `expect.schema.json`은 `.expect.yaml`(`expect_top`, `expect_not`, `also_allowed`, `occurred_at`, `origin`)), `templates/` 3종
   - `schema/`에 `signatures_pending`(원인만, 새 유형은 증상 시그니처 필수), 시그니처 `same_phone`·`sequence`와 조건 `id`, 원인 `cp_evidence`, 피드백 `decision: manual`, 계획 `source`, Jira 기록 `occurred_on` 포함 (`contracts.md §상태 값`). `plan.schema.json`은 `operations`를 순서 있는 배열로 둔다 (적용 순서가 의미를 가짐)
   - `.github/CODEOWNERS`(메인테이너 경로만 — 카테고리 오너 없음, `06-collaboration.md §6.1`. 팀 이름은 SITE_PROFILE 또는 placeholder), `pull_request_template.md`(`06-collaboration.md §6.3`)
   - `CONTRIBUTING.md` (`03-issue-db.md §5.7` + `06-collaboration.md §6.2` 요약 + "push 전 `validate`" + 직접 편집 브랜치의 재동기화 절차 + 수동 기록 안내 + `also_allowed` 규칙), `GLOSSARY.md` 초안(경계 표, 금지 동의어, `06-collaboration.md §6.9`), `docs/` 3종(getting-started `06-collaboration.md §6.9`, review-guide §6.6 — 직접 편집과 `source: review` 계획 파일로 올리는 법 둘 다, branch-protection §6.1)
@@ -95,7 +95,7 @@
 
 ### Phase 7. 이슈 DB 반영, PR, sync-pr
 - 할 일:
-  - `db_add.py`: `apply`, `drift`, `renumber`(브랜치 안, "내 ID"만), `check-ids`, `similar`. op 표 전부(`allow-cause` 포함. 검증 op의 판정 로직 없이 적용 규칙만), 계획 `source`별 규칙(pending 피드백은 `analyze`만, `signatures_pending`은 `record`만, `source`는 9개 값만 허용), `schema_version` 검사, 임시 ID·fixture 번호 적용 시점 할당, type.md 엔티티 단위 재작성, 파서 규칙 항목 병합, related 양방향, 피드백 기록(`feedback.date` 사용)과 pending 규칙, `verify-resolution` evidence 존재 검사, `update-fix`의 `fixed` → `fix-submitted` 거부, drift 표(`contracts.md §작업 계획`).
+  - `db_add.py`: `apply`, `drift`, `renumber`(브랜치 안, "내 ID"만), `check-ids`, `similar`. op 표 전부(`allow-cause` 포함. 검증 op의 판정 로직 없이 적용 규칙만), 계획 `source`별 규칙(pending 피드백은 `analyze`만, `signatures_pending`은 `record`만, `source`는 8개 값만 허용), `schema_version` 검사, 임시 ID·fixture 번호 적용 시점 할당, type.md 엔티티 단위 재작성, 파서 규칙 항목 병합, related 양방향, 피드백 기록(`feedback.date` 사용)과 pending 규칙, `verify-resolution` evidence 존재 검사, `update-fix`의 `fixed` → `fix-submitted` 거부, drift 표(`contracts.md §작업 계획`).
   - `db_pr.py`: `cleanup`, `preflight`, `stage`(drift 검사, `--dry-run`, 다른 worktree의 `tt/<br>` 검사, `state.json`), `summary`(`source`·`issue.origin` 라벨, 검증 실행/건너뜀 표, 리뷰어 계산(`allow-cause` 대상 fixture의 카테고리 오너 포함 — CODEOWNERS에 있을 때), `approved_hash`), `publish`(`state.json` 대조, refspec push, `included_pending` 이동, `base_sha` 갱신), `discard`(lock 해제). 도구 브랜치 `tt/*`.
   - `sync-pr`: 계획 재적용(`06-collaboration.md §6.3`). 계획 없는 브랜치는 수동 절차 안내만.
   - 사후 lint(`06-collaboration.md §6.3` ⑤): ID 중복·Jira 중복을 **보고**한다 (정리는 메인테이너 수동).
@@ -110,7 +110,7 @@
   - 작업 중 사용자 clone의 브랜치·워킹 트리가 바뀌지 않는다. **사용자 로컬 `issue/<KEY>` 브랜치(원격보다 앞선 커밋 포함)가 있어도, 그 브랜치가 사용자 clone에 checkout돼 있어도** stage·publish·discard가 그 브랜치를 바꾸지 않는다. discard 후 worktree, `tt/*` 브랜치, `state.json`, lock이 남지 않는다
   - `tt/<br>`가 다른 worktree에 checkout돼 있으면 `stage`가 종료 코드 2를 낸다
   - 도구 브랜치 잔여물, 원격에 있는 브랜치 각각에서 Step 8-2 선택지대로 동작한다 ("plan으로 브랜치 갱신"은 lease push)
-  - `source`가 9개 값 밖(예: `migrate`)인 계획은 `db_add apply`가 거부한다. `stage --dry-run`은 gh 인증 없이 확인 화면(`summary`)까지 간다. `TT_FORCE_VERIFY_EXIT=3`이면 `stage`가 `3`을 집계한다
+  - `source`가 8개 값 밖(예: `migrate`)인 계획은 `db_add apply`가 거부한다. `stage --dry-run`은 gh 인증 없이 확인 화면(`summary`)까지 간다. `TT_FORCE_VERIFY_EXIT=3`이면 `stage`가 `3`을 집계한다
   - **drift**: 계획의 `set-resolution` 대상 원인의 해결책을 다른 PR이 main에서 먼저 바꾸면 `stage`가 적용 전에 drift(종료 코드 1)를 낸다. 결정을 계획에 반영하고 `base_sha`를 바꾸면 통과한다. 계획의 `update-parser-rule` 대상 키를 main이 기능 필드까지 바꿨으면 drift이고, 이력 필드만 바꿨으면 drift가 아니다. 계획의 `allow-cause` 대상 fixture의 `also_allowed`를 main이 먼저 바꿨으면 drift다
   - **`allow-cause`**: `.expect.yaml`이 없는 양성 fixture에 적용하면 기본 기대값 + `also_allowed`로 파일을 만들고, 있으면 `also_allowed`에 추가한다. 자기 원인·같은 유형 원인을 넣으면 거부된다. `summary`의 리뷰어에 그 fixture 카테고리 오너가 들어간다(CODEOWNERS에 그 카테고리 오너가 있을 때)
   - 같은 계획을 두 번 `stage`해도 피드백 파일의 이름과 `date`가 같다(`feedback.date`)
