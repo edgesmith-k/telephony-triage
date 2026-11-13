@@ -120,7 +120,9 @@ COMMON_UPPER_ALLOW = {
     "common/jobstatus.py": {"dbpr.worktree", "dbpr.worktree.RETAINED_NOTES", "issue_post"},
     "common/modulefilter.py": {"triagelib.core", "triagelib.core._clip", "triagelib.core.is_error_text",
                                "triagelib.report", "triagelib.report.merge_rows"},
-    "common/oc_adapter.py": {"guard"},
+    # oc_adapter 는 OpenCode 도구 호출을 위층 판정에 넘기는 다리다. `config` 는 config.py 하위 명령이 쓰기인지를 그 파일의
+    # argparse 로 읽으려는 것(`_config_call` — 파서를 따로 두면 어긋난 틈이 우회가 된다).
+    "common/oc_adapter.py": {"guard", "config"},
 }
 
 
