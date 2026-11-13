@@ -482,7 +482,7 @@ def check_mcp(tool: str, tool_input: dict, conf: Config, dec: Decision) -> None:
         read_tools = userconfig.get(conf.cfg, "tracker.read_tools") or []
         if name not in {mcptools.normalize(t) for t in read_tools}:
             dec.deny.append(f"이 플러그인은 Jira 읽기 전용이다(예외: 승인한 코멘트 추가 1종, tracker.write_tools.add_comment). "
-                            f"{tool}은(는) tracker.read_tools에 없어 거부한다 (규칙 2).")
+                            f"{tool}은(는) tracker.read_tools에 없어 거부한다 (규칙 2) — 쓰기 도구를 넣어 풀지 않는다.")
         elif not userconfig.get(conf.cfg, "tracker.isolation_confirmed") and not os.environ.get(OC_ADAPTER_ENV):
             # 규칙 9(원문 격리)는 PostToolUse `updatedToolOutput` 대체에 기대고 미지원이면 열린다(원문이 모델 문맥에 남는다).
             # 사내 S1 확인 전에는 읽기마다 사람이 그 위험을 보고 허용한다. OpenCode 어댑터는 `after`가 결과를 직접 바꾸고 자체
@@ -3964,7 +3964,8 @@ def _write_targets(inv: Invocation) -> list[str]:
 
 # 규칙 8·10 보강(종합 리뷰 P2 — 재현된 우회): 셸 파서는 인터프리터 인라인 코드(`python3 -c …`·`perl -e …`·`python3 - <<EOF` 본문)
 # 안의 open()·쓰기를 보지 못해 clone 쓰기(규칙 8)와 원문 통독(규칙 10)이 통과했다. 코드 의미는 모르므로 거부하지 않고, 코드 글에 든
-# 경로 낱말이 사용자 clone 안이거나 로그 원문·분석 파일이면 ask로 사람이 본다. 상대 경로 낱말(`/` 없는 이름)은 보지 않는다(한계).
+# 경로 낱말이 사용자 clone 안이거나 로그 원문·분석 파일이거나 기록 경로(규칙 2·7·12)면 ask로 사람이 본다. 상대 경로 낱말(`/` 없는
+# 이름)은 보지 않는다(한계).
 INLINE_CODE_OPTS = {"python": {"-c"}, "perl": {"-e", "-E"}, "ruby": {"-e"}, "node": {"-e", "-p"}, "php": {"-r"}, "lua": {"-e"}}
 _INTERP_RE = re.compile(r"^(?:(python)(?:[23](?:\.\d+)?)?|pypy3?|(perl)5?[\d.]*|(ruby)[\d.]*|(node)(?:js)?\d*|(php)\d*|(lua)[\d.]*)$")
 PATH_WORD_RE = re.compile(r"(?:~[A-Za-z0-9_-]*|\.{1,2})?(?:/[A-Za-z0-9_.@%+-]+)+")
@@ -4008,12 +4009,16 @@ def _inline_code_texts(command: str, cwd: Path, invs) -> list[tuple[str, Path]]:
 
 def check_inline_code(command: str, cwd: Path, dec: Decision, conf: Config, invs) -> None:
     """인라인 코드의 경로 낱말이 사용자 clone 안이면 ask(규칙 8), 로그 원문·zip·`events*.json`·`issue_raw.json`·`match.json`이면
-    ask(규칙 10). 코드 하나에 한 번만 묻는다."""
+    ask(규칙 10). 코드 하나에 한 번만 묻는다(기록 경로(규칙 2·7·12) ask는 낱말마다 따로 더한다)."""
     for code, at in _inline_code_texts(command, cwd, invs):
         for word in dict.fromkeys(m.group(0) for m in PATH_WORD_RE.finditer(code)):
             p = _expand(word)
             path = Path(p) if Path(p).is_absolute() else at / p
-            if conf.clones and _in_clone(_norm(path), conf):
+            t = _norm(path)
+            if _post_record(t, conf) or _script_record(t, conf):
+                dec.ask.append(f"인터프리터 인라인 코드에 스크립트만 쓰는 기록 경로가 있다({word}). 코드가 그 파일을 쓰면 규칙 2·7·12 "
+                               "위반이다 — 읽기만인지 확인한 뒤 허용한다.")
+            if conf.clones and _in_clone(t, conf):
                 dec.ask.append(f"인터프리터 인라인 코드에 사용자 clone 안 경로가 있다({word}). 코드가 그 파일을 쓰면 규칙 8 위반이다 — "
                                "읽기만인지 확인한 뒤 허용한다 (규칙 8, 셸 파서는 코드 안 쓰기를 보지 못한다).")
                 break

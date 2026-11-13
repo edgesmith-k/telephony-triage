@@ -403,6 +403,9 @@ def cmd_set(args, defaults: dict) -> dict:
             raise UsageError(f"--platform {_platform(args)}: {exc}") from exc
     before = userconfig.merged(defaults, copy.deepcopy(data), _platform(args))
     userconfig.set_value(data, key, value)
+    bad = _write_like(userconfig.get(data, "tracker.read_tools") or []) if args.key in ("tracker", "tracker.read_tools") else []
+    if bad:
+        raise UsageError(f"{args.key}: 쓰기형 이름이라 read_tools에 넣지 않는다(규칙 2): {', '.join(bad)}")
     userconfig.save(data)
     out = {"config": str(userconfig.path()), "key": key, "value": value}
     old_clone = userconfig.get(before, "issue_db.path")
@@ -534,6 +537,11 @@ def _tool_problems(server: str, names: list[str]) -> list[str]:
     return problems
 
 
+def _write_like(names):
+    """쓰기형 이름(`mcptools.is_write`) 목록 — read_tools에 넣지 않는다(규칙 2, set-tracker·set·doctor 공유)."""
+    return [n for n in names if (m := mcptools.NAME_RE.match(str(n))) and mcptools.is_write(m.group(2))]
+
+
 def cmd_set_tracker(args, defaults: dict) -> dict:
     data = userconfig.load_user()
     if data is None:
@@ -546,6 +554,10 @@ def cmd_set_tracker(args, defaults: dict) -> dict:
         raise UsageError(problems[0])
     added = [t for t in tools.values() if t not in read_tools]
     read_tools = sorted(set(read_tools) | set(tools.values()))  # read_tools는 tracker.tools 값을 포함한다
+    bad = _write_like(read_tools)
+    if bad:
+        raise UsageError("쓰기형 이름이라 read_tools에 넣지 않는다(규칙 2). 읽기 도구가 맞으면 사용자가 config.yaml을 직접 "
+                         f"고친다: {', '.join(bad)}")
     userconfig.set_value(data, "tracker.mcp_server", args.server)
     userconfig.set_value(data, "tracker.tools", tools)
     userconfig.set_value(data, "tracker.read_tools", read_tools)
@@ -951,8 +963,12 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             rows.append(_row("tracker", "fail", "tracker.tools.get_issue 매핑 비어 있음", hint))
         else:
             problems = _tool_problems(str(server), names)
+            bad = _write_like(names)
             if problems:
                 rows.append(_row("tracker", "fail", problems[0], hint))
+            elif bad:
+                rows.append(_row("tracker", "warn", f"read_tools에 쓰기형 이름: {', '.join(map(str, bad))}",
+                                 "읽기 도구가 아니면 config.yaml(팀 값이면 site-defaults)의 read_tools에서 뺀다"))
             else:
                 rows.append(_row("tracker", "ok", f"{server} / get_issue 매핑 있음"))
     guarded("tracker", tracker) if ok_cfg else skip("tracker", "config 없음")

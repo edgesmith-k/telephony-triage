@@ -848,7 +848,9 @@ def test_guard_jira_post_requires_approval():
     cfg_path = ws.home / "config.yaml"
     saved = cfg_path.read_text(encoding="utf-8")
     try:
-        ws.json("config.py", ["set", "tracker.read_tools", json.dumps([*JIRA_TOOLS, NOTE_TOOL])])
+        data = yaml.safe_load(saved)                       # config.py set은 쓰기형 이름을 거부하므로 손으로 넣는다
+        data["tracker"]["read_tools"] = [*JIRA_TOOLS, NOTE_TOOL]
+        cfg_path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
         out = post({"ticket": "MOCK-7101", "text": body})
         assert decision(out) == "deny" and "설정 오류" in out["permissionDecisionReason"]
         cfg_path.write_text(saved, encoding="utf-8")
@@ -3483,7 +3485,13 @@ def test_guard_inline_interpreter_code_and_symlink_into_clone_ask():
     raw_dir.mkdir(parents=True, exist_ok=True)
     (raw_dir / "events.json").write_text("{}", encoding="utf-8")
     link = tmp("tt-link-") / "lk"
+    job = ws.job_dir("INLINE-2").as_posix()          # 스크립트만 쓰는 기록 경로(규칙 2·7·12)
     asks = [
+        (f"python3 -c \"open('{job}/post.approved.json','w').write('x')\"", "기록 경로"),
+        (f"python3 - <<'EOF'\nopen('{job}/post.result.json','w').write('x')\nEOF", "기록 경로"),
+        (f"perl -e 'open(F,\">{job}/merge-offer.json\");print F 1'", "기록 경로"),
+        (f"python3 -c \"open('{job}/post.approved.json'); open('{clone.as_posix()}/x','w')\"", "기록 경로"),
+        (f"python3 -c \"open('{job}/post.approved.json'); open('{clone.as_posix()}/x','w')\"", "규칙 8"),
         (f"python3 -c \"open('{clone}/README.md','w').write('x')\"", "규칙 8"),
         (f"python3 - <<'EOF'\nopen('{clone}/README.md','w').write('x')\nEOF", "규칙 8"),
         (f"perl -e 'open(F,\">{clone}/README.md\");print F 1'", "규칙 8"),
@@ -3494,6 +3502,9 @@ def test_guard_inline_interpreter_code_and_symlink_into_clone_ask():
     for cmd, rule in asks:
         out = bash(ws, cmd, clone)
         assert decision(out) == "ask" and rule in out["permissionDecisionReason"], (cmd, out)
+    home = {"HOME": ws.base, "USERPROFILE": ws.base}  # `~/…` 꼴(Windows expanduser는 USERPROFILE)
+    out = bash(ws, "python3 -c \"open('~/work/INLINE-2/post.result.json','w')\"", clone, env=ws.env(**home))
+    assert decision(out) == "ask" and "기록 경로" in out["permissionDecisionReason"], out
     for cmd in (f"python3 -c \"print(open('{ws.root}/no-such-notes.txt').read())\"", "python3 -c 'print(1+1)'",
                 f"ln -s {link} {link}2", "perl -e 'print 1'", f"python3 -c \"import json; json.load(open('{clone}'))\" --flag"):
         out = bash(ws, cmd, clone)
