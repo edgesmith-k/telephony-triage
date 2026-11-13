@@ -1041,7 +1041,7 @@ def _pub_setup(e, publish="open", scripts_path=None, plan=None, state=None, stag
     _state(e["work"], KEY, owner)
     _hold_lock(e["work"], KEY, owner)
     job = e["work"] / KEY
-    (job / "wt").mkdir(exist_ok=True)
+    subprocess.run(["git", "init", "-q", str(job / "wt")], check=True)     # tt-oc가 wt에서 무시 파일·원격 tip을 git으로 본다
     for name, data in (("plan.json", plan or {"source": "analyze", "pr": {"head_sha": None}}),
                        ("state.json", state or {"branch": f"issue/{KEY}", "approved_hash": None}),
                        ("stage.json", stage or {"dry_run": False})):
@@ -1054,17 +1054,31 @@ def dbpr_calls(e):
     return [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines()] if p.exists() else []
 
 
+def _remote_commit(job):
+    """원격 브랜치 tip 흉내: wt에 남의 커밋 하나(preflight 스텁의 remote_sha로 쓴다). 계획 pr.head_sha도 그 sha로(모델이 맞춘 꼴)."""
+    wt = str(job / "wt")
+    subprocess.run(["git", "-C", wt, "-c", "user.name=Other Dev", "-c", "user.email=other@ghe.mock.invalid", "commit",
+                    "-q", "--allow-empty", "-m", "남의 커밋"], check=True)
+    sha = subprocess.run(["git", "-C", wt, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    (job / "plan.json").write_text(json.dumps({"source": "analyze", "pr": {"head_sha": sha}}), encoding="utf-8")
+    return sha
+
+
 PTY = pytest.mark.skipif(not hasattr(os, "openpty") or sys.platform == "win32", reason="tty 시험은 리눅스(os.openpty)")
 PROMPT = "작업 키를 입력한다".encode()
+PROMPT2 = "'덮어쓰기'를 입력한다".encode()
 
 
-def pty_tt(env, proj, *args, answers=(), on_prompt=None, timeout=120):
-    """tt-oc를 pty에서 돌린다. 프롬프트가 보일 때마다 `on_prompt(n)`을 부르고 answers[n]을 입력한다(None이면 EOF, Ctrl-D)."""
+def pty_tt(env, proj, *args, answers=(), on_prompt=None, timeout=120, early=b""):
+    """tt-oc를 pty에서 돌린다. 프롬프트가 보일 때마다 `on_prompt(n)`을 부르고 answers[n]을 입력한다(None이면 EOF, Ctrl-D).
+    `early`는 시작하자마자(프롬프트 전에) 써 넣는 입력이다."""
     import select
     master, slave = os.openpty()
     proc = subprocess.Popen([sys.executable, str(TTOC), "--project", str(proj), *args], stdin=slave, stdout=slave,
                             stderr=slave, env=env, close_fds=True)
     os.close(slave)
+    if early:
+        os.write(master, early)
     out, sent, deadline = b"", 0, time.monotonic() + timeout
     try:
         while time.monotonic() < deadline:
@@ -1076,7 +1090,7 @@ def pty_tt(env, proj, *args, answers=(), on_prompt=None, timeout=120):
                 if not chunk:
                     break
                 out += chunk
-            while sent < len(answers) and out.count(PROMPT) > sent:
+            while sent < len(answers) and out.count(PROMPT) + out.count(PROMPT2) > sent:
                 if on_prompt:
                     on_prompt(sent)
                 os.write(master, b"\x04" if answers[sent] is None else answers[sent].encode() + b"\n")
@@ -1164,21 +1178,25 @@ def test_publish_cancel(env, answer):
 
 @PTY
 def test_publish_approve_after_full_diff(env):
-    """d → 전체 diff를 보이고 다시 묻는다 → KEY → publish(--approved = 화면의 해시, lease, --commit --and-discard). 하위 프로세스는
-    TT_*를 빼고 owner·플러그인 루트·GIT_TERMINAL_PROMPT=0만, stdin /dev/null, cwd는 플러그인 scripts. 화면은 거터 뒤, 제어 문자 이스케이프."""
-    job = _pub_setup(env, plan={"source": "analyze", "pr": {"head_sha": "c" * 40}})
-    code, out = pty_tt({**_pub_env(env), "STUB_REMOTE": "c" * 40, "TT_PLATFORM": "x", "TT_OTHER": "y"}, env["proj"],
-                       "publish", "--job", KEY, answers=["d", KEY])
+    """d → 전체 diff를 보이고 다시 묻는다 → KEY → (원격에 커밋이 있어) 덮어쓰기 → publish(--approved = 화면의 해시, lease,
+    --commit --and-discard). 하위 프로세스는 TT_*를 빼고 owner·플러그인 루트·GIT_TERMINAL_PROMPT=0만, stdin /dev/null, cwd는 플러그인
+    scripts. 화면은 거터 뒤, 제어 문자 이스케이프. 원격 tip의 작성자·제목은 tt-oc 줄에 보인다."""
+    job = _pub_setup(env)
+    sha = _remote_commit(job)
+    code, out = pty_tt({**_pub_env(env), "STUB_REMOTE": sha, "TT_PLATFORM": "x", "TT_OTHER": "y"}, env["proj"],
+                       "publish", "--job", KEY, answers=["d", KEY, "덮어쓰기"])
     assert code == 0, out
-    assert out.count(PROMPT.decode()) == 2 and f"{S}(변경 없음)" in out, out          # wt가 git이 아니라 diff 없음
+    assert out.count(PROMPT.decode()) == 2 and out.count(PROMPT2.decode()) == 1 and f"{S}(변경 없음)" in out, out
     assert f"{S}\\x1b[2K주의: 가짜 줄" in out and f"{S}approved_hash: {HASH}" in out and "\x1b" not in out
-    assert f"approved_hash {HASH[:12]}…" in out and "원격 ccccccc를 이 내용으로 갱신" in out and "게시했다" in out
+    assert f"approved_hash {HASH[:12]}…" in out and f"원격 {sha[:7]}를 이 내용으로 갱신" in out and "게시했다" in out
+    assert f"원격 issue/{KEY}에 커밋이 이미 있다: {sha[:7]} · Other Dev <other@ghe.mock.invalid> · " in out
+    assert " · 남의 커밋\n" in out and "승인하면 이 커밋을 덮어쓴다" in out
     pre, stage, pub = dbpr_calls(env)
     common = ["--plugin-root", str(env["plug"]), "--platform", "android"]
     assert pre["args"] == [*common, "preflight", "--branch", f"issue/{KEY}"]
     assert stage["args"] == [*common, "stage", str(job / "plan.json"), "--wt", str(job / "wt"), "--branch", f"issue/{KEY}",
                              "--then-summary"]
-    assert pub["args"] == [*common, "publish", str(job / "wt"), "--branch", f"issue/{KEY}", "--lease", "c" * 40,
+    assert pub["args"] == [*common, "publish", str(job / "wt"), "--branch", f"issue/{KEY}", "--lease", sha,
                            "--approved", HASH, "--commit", "--and-discard", "--json"]
     for c in (pre, stage, pub):
         assert c["env"] == {"TT_LOCK_OWNER": OWN, "CLAUDE_PLUGIN_ROOT": str(env["plug"]), "GIT_TERMINAL_PROMPT": "0",
@@ -1192,6 +1210,26 @@ def test_publish_new_branch_and_pushed_but_failed(env):
     code, out = pty_tt({**_pub_env(env), "STUB_PUBLISH_EXIT": "2"}, env["proj"], "publish", answers=[KEY])
     assert code == 2 and "push는 됐다 — publish를 다시 하지 않는다" in out and "db_pr discard 다시" in out, out
     assert dbpr_calls(env)[-1]["args"][-7:-5] == ["--lease", "new"]
+
+
+@PTY
+@pytest.mark.parametrize("second", ["", "y", KEY, None])
+def test_publish_existing_remote_needs_overwrite_word(env, second):
+    """원격 브랜치에 커밋이 있고 계획 head와 같아도(모델이 맞출 수 있다) 작업 키만으로는 게시하지 않는다 — 둘째 확인이 덮어쓰기가
+    아니면(빈 줄·다른 낱말·작업 키·EOF) 취소, 종료 0 (리뷰 6 F-P1)."""
+    job = _pub_setup(env)
+    code, out = pty_tt({**_pub_env(env), "STUB_REMOTE": _remote_commit(job)}, env["proj"], "publish", answers=[KEY, second])
+    assert code == 0 and out.count(PROMPT2.decode()) == 1 and "게시하지 않았다(작업은 다시 stage된 상태" in out, out
+    assert [c["args"][4] for c in dbpr_calls(env)] == ["preflight", "stage"]
+
+
+@PTY
+def test_publish_input_typed_before_prompt_is_discarded(env):
+    """화면이 뜨기 전에 쳐 둔(또는 모델이 tty에 넣은) 작업 키는 버린다(tcflush) — 프롬프트 뒤 EOF면 게시하지 않는다 (리뷰 6 F-P2a)."""
+    _pub_setup(env)
+    code, out = pty_tt(_pub_env(env), env["proj"], "publish", answers=[None], early=f"{KEY}\n".encode())
+    assert code == 0 and "게시하지 않았다" in out, out
+    assert [c["args"][4] for c in dbpr_calls(env)] == ["preflight", "stage"]
 
 
 @PTY
@@ -1224,15 +1262,46 @@ def test_publish_hint_and_doctor_row_only_when_configured(env):
 
 # 통합: 실제 db_pr(clone·bare 원격·hook·gh 스텁)에서 모델이 stage까지 한 analyze 작업 → tt-oc publish → 원격에 브랜치·PR.
 # 회귀: (H1) 위조한 stage.json(pending_sources에 작업 밖 파일, 가짜 검사 결과)은 재stage로 사라진다 (H2) wt/.githooks/pre-commit을
-# 바꿔도 재stage가 되돌려 그 코드가 돌지 않는다.
+# 바꿔도 재stage가 되돌려 그 코드가 돌지 않는다. (리뷰 6 F-P0) wt에 심은 무시된 파일 — hook이 cwd에서 import하는 가짜 `yaml/`,
+# 실행 비트가 있는 `.githooks/post-commit` — 은 화면 전에 지워지고, 화면 뒤에 심으면 거부. (F-P1) 원격에 남의 커밋이 있으면 그 작성자·
+# 제목을 보이고, 작업 키만으로는 덮어쓰지 않는다.
+FAKE_YAML = """import os, sys
+open({marker!r}, "a").close()
+here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path[:] = [p for p in sys.path if os.path.abspath(p or os.curdir) != here]
+del sys.modules[__name__]
+import yaml                     # 진짜 PyYAML을 다시 내보낸다 — hook은 그대로 통과한다
+"""
+
+
+def _plant(wt, kind, marker):
+    """무시된(`.gitignore` `*`) 파일을 wt에 심는다: `yaml`(cwd import) 또는 `post-commit`(실행 비트 hook)."""
+    d = wt / ("yaml" if kind == "yaml" else ".githooks")
+    d.mkdir(exist_ok=True)
+    (d / ".gitignore").write_text("*\n", encoding="utf-8")
+    if kind == "yaml":
+        (d / "__init__.py").write_text(FAKE_YAML.format(marker=str(marker)), encoding="utf-8")
+    else:
+        (d / "post-commit").write_text(f"#!/bin/sh\ntouch '{marker}'\n", encoding="utf-8")
+        (d / "post-commit").chmod(0o755)
+
+
 @PTY
-@pytest.mark.parametrize("forge", [None, "stage-json", "pre-commit"])
+@pytest.mark.parametrize("forge", [None, "stage-json", "pre-commit", "ignored-yaml", "ignored-hook", "after-screen",
+                                   "remote-commit"])
 def test_publish_integration_real_db_pr(tmp_path, forge):
     import mock_env
-    from workspace import Workspace
+    from workspace import PLANS, Workspace, git
     ws = Workspace()
     job, br = "MOCK-7001", "issue/MOCK-7001"
-    ws.plan(job, "p7-analyze-append.plan.json")
+    plan = json.loads((PLANS / "p7-analyze-append.plan.json").read_text(encoding="utf-8"))
+    other = None
+    if forge == "remote-commit":      # 다른 clone이 올린 커밋(hook 없이 원격에 바로), 모델이 계획 pr.head_sha를 그것으로 맞춘다
+        other = git(ws.remote, "-c", "user.name=Other Dev", "-c", "user.email=other@ghe.mock.invalid", "commit-tree",
+                    "main^{tree}", "-p", "main", "-m", "남의 커밋").strip()
+        git(ws.remote, "update-ref", f"refs/heads/{br}", other)
+        plan["pr"]["head_sha"] = other
+    ws.plan(job, plan)
     owner = ws.acquire(job)["lock"]["owner"]
     (ws.job_dir(job) / "triage-state.json").write_text(json.dumps({"owner": owner}), encoding="utf-8")
     proc = ws.run("db_pr.py", ["stage", ws.job_dir(job) / "plan.json", "--wt", ws.wt(job), "--branch", br, "--then-summary"],
@@ -1249,6 +1318,15 @@ def test_publish_integration_real_db_pr(tmp_path, forge):
         hook = ws.wt(job) / ".githooks" / "pre-commit"
         hook.write_text(f"#!/bin/sh\ntouch {marker}\nexit 0\n", encoding="utf-8")
         hook.chmod(0o755)
+    if forge in ("ignored-yaml", "ignored-hook"):
+        _plant(ws.wt(job), forge[len("ignored-"):], marker)
+    seen = []
+
+    def on_prompt(n):
+        if n == 0:
+            seen.append((ws.wt(job) / "yaml").exists() or (ws.wt(job) / ".githooks" / "post-commit").exists())
+            if forge == "after-screen":
+                _plant(ws.wt(job), "yaml", marker)
     proj = tmp_path / "proj"
     (proj / ".opencode" / "plugins").mkdir(parents=True)
     (proj / "opencode.json").write_text("{}", encoding="utf-8")
@@ -1257,9 +1335,19 @@ def test_publish_integration_real_db_pr(tmp_path, forge):
     env = {**mock_env.env_with_mocks(plugin_root=ws.root, gh_state_dir=ws.gh_state), **ws.env()}
     env = {k: str(v) for k, v in env.items()
            if k not in ("CLAUDECODE", "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE") and not k.startswith(("TT_", "GIT_CONFIG"))}
-    code, out = pty_tt(env, proj, "publish", answers=[job], timeout=600)
+    code, out = pty_tt(env, proj, "publish", answers=[job, None], on_prompt=on_prompt, timeout=600)
+    assert seen == [False], out                              # 화면 때 wt에 심은 무시 파일이 없다
+    assert not marker.exists(), out
+    if forge == "after-screen":
+        assert code == 2 and "화면 뒤에 wt에 무시된 파일이 생겼다" in out and f"{S}yaml/" in out, out
+        assert not ws.prs() and br not in git(ws.remote, "branch", "--list", br)
+        return
+    if forge == "remote-commit":
+        assert code == 0 and "게시하지 않았다" in out and f"{other[:7]} · Other Dev <other@ghe.mock.invalid> · " in out, out
+        assert " · 남의 커밋\n" in out and git(ws.remote, "rev-parse", f"refs/heads/{br}").strip() == other
+        assert not ws.prs()
+        return
     assert code == 0, out
     assert "게시했다" in out and ws.remote_files(br) and len(ws.prs()) == 1, out
     assert not ws.wt(job).exists()                          # --and-discard
     assert victim.is_file() == (forge == "stage-json") and "FORGED-OK" not in out
-    assert not marker.exists()

@@ -804,8 +804,9 @@ def render_record(r: dict) -> str:
 
 # -- publish: 사람이 터미널에서 확인 화면을 보고 작업 키를 입력하면 이슈 DB에 게시 (OC-A) --------------------------------------
 # 모델은 여전히 publish를 부르지 못한다. 작업 폴더(stage.json·state.json·plan.json·wt/.githooks)는 OpenCode 안의 모델도 쓸 수 있으므로
-# 래퍼가 stage를 다시 돌려(wt를 기준 SHA로 되돌리고 stage.json·state.json을 새로 쓴다) 그 화면을 보이고, 승인은 tty 입력뿐이며, 입력 직후
-# 작업 파일을 다시 대조한 뒤 같은 프로세스가 publish를 부른다. 승인 기록은 남기지 않는다(결속은 화면의 approved_hash = --approved).
+# 래퍼가 stage를 다시 돌려(wt를 기준 SHA로 되돌리고 stage.json·state.json을 새로 쓴다) wt의 무시된 파일을 지우고 그 화면을 보이고, 승인은
+# tty 입력뿐이며, 입력 직후 작업 파일·무시 파일을 다시 대조한 뒤 같은 프로세스가 publish를 부른다. 승인 기록은 남기지 않는다(결속은 화면의
+# approved_hash = --approved).
 PUBLISH_CODE = "\n".join((
     "import json, sys",
     "from pathlib import Path",
@@ -825,6 +826,7 @@ GIT_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")     # 와 GIT_CONFIG* �
 PUBLISH_FILES = ("state.json", "pr.json", "stage.json", "plan.json")
 PUBLISH_TIMEOUT = 1800                                       # stage(regress 포함)·publish(push·gh) — _run의 60초로는 끝나지 않는다
 PUBLISH_PROMPT = "이 화면대로 push·PR을 만들려면 작업 키를 입력한다"
+OVERWRITE = "덮어쓰기"                                       # 원격 브랜치에 커밋이 있을 때 작업 키 뒤의 둘째 확인(리뷰 6 F-P1)
 _HASH_RE = re.compile(r"[0-9a-f]{40,64}")
 
 
@@ -869,9 +871,29 @@ def _read_obj(path: Path):
     return data if isinstance(data, dict) else None
 
 
+def _wt_git(wt: Path) -> list[str]:
+    return ["git", "-c", "core.fsmonitor=false", "--no-pager", "-C", str(wt)]
+
+
+def _ignored_left(wt: Path, env: dict, clean: bool) -> str | None:
+    """무시된(.gitignore) untracked 파일은 approved_hash·화면 diff에 안 나오는데 커밋 때 hook이 wt를 cwd로 import·실행할 수 있다
+    (`yaml/`+`.gitignore`, `.githooks/post-commit` — 리뷰 6 F-P0). `clean`이면 먼저 지운다: stage가 만든 새 파일은 무시되지 않은
+    untracked라 `-X`(무시된 것만)는 그것을 남긴다. 남은 무시 파일 목록(또는 git 실패), 없으면 None."""
+    git = _wt_git(wt)
+    try:
+        if clean:
+            _run([*git, "clean", "-ffdX", "-q"], env=env, timeout=120)
+        r = _run([*git, "status", "--porcelain", "--ignored", "-unormal", "-z"], env=env, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"git status 실패({type(exc).__name__})"
+    if r.returncode != 0:
+        return f"git status 실패(종료 {r.returncode}): {r.stderr}"
+    return "\n".join(x[3:] for x in r.stdout.split("\0") if x.startswith("!! ")) or None
+
+
 def _full_diff(wt: Path, env: dict) -> str:
     """write-flow의 "전체 diff 보기": `git diff`(외부 diff·textconv 끔)와 새 파일 내용. 화면 diff는 50줄에서 잘린다."""
-    git = ["git", "-c", "core.fsmonitor=false", "--no-pager", "-C", str(wt)]
+    git = _wt_git(wt)
     try:
         out = _run([*git, "diff", "--no-ext-diff", "--no-textconv"], env=env, timeout=120).stdout
         new = [p for p in _run([*git, "ls-files", "--others", "--exclude-standard", "-z"], env=env, timeout=120)
@@ -885,7 +907,7 @@ def _full_diff(wt: Path, env: dict) -> str:
     return out.rstrip("\n") or "(변경 없음)"
 
 
-def _ask(key: str) -> str | None:
+def _ask(prompt: str) -> str | None:
     """tty에서 한 줄. 화면을 보기 전에 쳐 둔 입력은 버린다(tcflush). EOF·Ctrl-C는 None."""
     sys.stdout.flush()
     try:
@@ -894,7 +916,7 @@ def _ask(key: str) -> str | None:
     except (ImportError, OSError, ValueError):
         pass
     try:
-        return input(f"{PUBLISH_PROMPT}({key}) — d = 전체 diff, 그 밖 = 취소: ")
+        return input(prompt)
     except (EOFError, KeyboardInterrupt):
         print()
         return None
@@ -983,6 +1005,20 @@ def publish_main(a, proj: Path, meta: dict) -> int:
         show(((r.stdout or "") + (r.stderr or "")) if r is not None else "")
         return refuse(f"{key}: stage " + ("시간 초과" if r is None else f"종료 {r.returncode}") +
                       " — 위 출력대로 OpenCode(tt-analyze)나 Claude Code에서 계획을 고친다")
+    left = _ignored_left(wt, env, clean=True)
+    if left:
+        show(left)
+        return refuse(f"{key}: wt의 무시된 파일을 지우지 못했거나 확인하지 못했다(위) — 게시하지 않았다")
+    tip = None
+    if lease != "new":      # plan.pr.head_sha는 모델이 쓸 수 있다 — 같다는 것만으로 남의 커밋을 덮지 않게 tip을 보이고 따로 묻는다
+        try:
+            r2 = _run([*_wt_git(wt), "log", "-1", "--no-mailmap", "--no-show-signature", "--date=iso",
+                       "--format=%an <%ae>%x00%ad%x00%s", lease, "--"], env=env, timeout=60)
+            tip = r2.stdout.rstrip("\n").split("\0") if r2.returncode == 0 else None
+        except (OSError, subprocess.TimeoutExpired):
+            tip = None
+        if not tip or len(tip) != 3:
+            return refuse(f"{key}: 원격 {branch}의 커밋 {lease[:7]} 정보(작성자·날짜·제목)를 읽지 못함")
     m = re.fullmatch(r"approved_hash: ([0-9a-f]{40,64})", (r.stdout.rstrip("\n").splitlines() or [""])[-1])
     state = _read_obj(job / "state.json")
     if not m or not state or state.get("approved_hash") != m.group(1):
@@ -995,17 +1031,24 @@ def publish_main(a, proj: Path, meta: dict) -> int:
     print("\n---- [tt-oc] 게시 확인 — 위 화면(┃ 줄)은 db_pr이 방금 만든 것 ----")
     print(f"작업 {key} · 브랜치 {branch} · " + ("원격 브랜치 새로 만듦(lease new)" if lease == "new" else
                                               f"원격 {lease[:7]}를 이 내용으로 갱신(lease)") + f" · approved_hash {approved[:12]}…")
+    if tip:
+        print(f"원격 {branch}에 커밋이 이미 있다: {lease[:7]} · " + " · ".join(_esc(x, one_line=True) for x in tip))
+        print(f"승인하면 이 커밋을 덮어쓴다(이 작업이 올린 것이 아니면 취소). 작업 키 다음에 {OVERWRITE} 확인을 따로 받는다.")
     print("OpenCode 세션을 닫은 상태에서 입력한다(열려 있으면 모델이 그사이 작업 파일을 바꿀 수 있다).")
     while True:
-        ans = _ask(key)
+        ans = _ask(f"{PUBLISH_PROMPT}({key}) — d = 전체 diff, 그 밖 = 취소: ")
         if ans != "d":
             break
         show(_full_diff(wt, env))
-    if ans != key:
+    if ans != key or (tip and _ask(f"원격 커밋 {lease[:7]}을 덮어쓰려면 '{OVERWRITE}'를 입력한다 — 그 밖 = 취소: ") != OVERWRITE):
         print(f"[tt-oc] 게시하지 않았다(작업은 다시 stage된 상태 — 그만두려면 db_pr discard {_esc(str(wt), one_line=True)}).")
         return 0
     if _digests(job) != before:
         return refuse(f"{key}: 화면 뒤에 작업 파일({', '.join(PUBLISH_FILES)})이 바뀌었다 — 게시하지 않았다. 다시 tt-oc publish")
+    left = _ignored_left(wt, env, clean=False)
+    if left:
+        show(left)
+        return refuse(f"{key}: 화면 뒤에 wt에 무시된 파일이 생겼다(위) — 게시하지 않았다. 다시 tt-oc publish")
     r = db_pr("publish", str(wt), "--branch", branch, "--lease", lease, "--approved", approved, "--commit",
               "--and-discard", "--json")
     if r is None:
