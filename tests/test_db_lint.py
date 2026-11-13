@@ -316,14 +316,21 @@ TO_NEW = ("  - id: CALL-001-01\n    status: active", "  - id: CALL-001-01\n    s
 
 def test_merged_fixed_cause_keeps_fixed():
     """병합(move, R10-01): base에서 active·fixed였던 옛 원인이 merged-into:<새 원인>이고 새 원인의 verification이
-    base 기록과 같으면(fixture 경로 제외) 새 원인의 fixed는 허용. 기록이 다르거나 옛 원인이 base에서 이미 병합됐으면 거부."""
+    base 기록과 같으면(fixture는 옛 원인 ID만 새 ID로) 새 원인의 fixed는 허용. 기록이 다름·fixture가 다른 파일이거나
+    없음·옛 원인이 base에서 이미 병합됐으면 거부."""
     new_fixed = ("new-cause-fixed", f"{D}/type.md")
     repo = git_db()
     edit(repo / D / "type.md", "tags: [data-evaluation]", MOVED_CAUSE)
     edit(repo / C / "type.md", *TO_NEW)
     assert new_fixed not in _pairs(_lint(repo, "--changed", "main"))
-    edit(repo / D / "type.md", "        date: 2026-09-26\n", "        date: 2026-09-27\n")      # 검증 기록이 다름
-    assert new_fixed in _pairs(_lint(repo, "--changed", "main", expect=1))
+    moved = (repo / D / "type.md").read_text(encoding="utf-8")
+    fixture = "        fixture: fixtures/DATA-001-04.fixed.MOCKB77_U2_20260920.log\n"
+    for old, new in ((fixture, fixture.replace("DATA-001-04", "DATA-001-01")),         # 다른 원인의 fixture
+                     (fixture, ""),                                                    # fixture 키 없음
+                     ("        date: 2026-09-26\n", "        date: 2026-09-27\n")):      # 검증 기록이 다름
+        edit(repo / D / "type.md", old, new)
+        assert new_fixed in _pairs(_lint(repo, "--changed", "main", expect=1)), new
+        (repo / D / "type.md").write_text(moved, encoding="utf-8", newline="\n")
 
     repo = git_db()                                     # 옛 원인이 base에서 이미 다른 곳으로 병합돼 있음
     edit(repo / C / "type.md", TO_NEW[0], "  - id: CALL-001-01\n    status: merged-into:IMS-001-01")

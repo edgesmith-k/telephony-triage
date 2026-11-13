@@ -234,7 +234,7 @@ v1에서 도구는 이런 브랜치를 바꾸지 않는다. `sync-pr`는 아래 
 | 급증 | 최근 30일 발생이 이전 90일 월평균 × `quality.surge_ratio` 이상 (발생 기준일은 Jira 기록의 `occurred_on`, 없으면 `date`) | 원인 조사 |
 
 - **방치 기간과 기록자**: 두 "방치" 항목의 기간은 그 상태가 된 날부터 센다. 이슈 DB 파일에는 상태 전환 날짜·기록자 필드가 없으므로 git 이력(`common/history.py`)으로 구한다: 그 상태가 계속 참인 가장 오래된 `type.md` 커밋의 날짜와 **작성자 이름**(git author, 이메일은 내지 않음). 리포트 항목에 `by`와 "기록: <이름>"으로 보인다. 도구 경로의 커밋은 기록한 사용자의 git 신원으로 만들어지고 PR 머지 뒤에도 작성자가 유지되므로 그 사람이 검증 요청 대상이다. 커밋 전 상태나 이력이 없으면 "기간 확인 불가"로 따로 낸다.
-- **유형 병합**: 흡수되는 유형의 `status`를 `merged-into:<유형 ID>`로 바꾸고, 그 원인들은 흡수하는 유형의 원인으로 새 ID를 받아 옮긴다. 옛 원인에는 `status: merged-into:<새 원인 ID>`를 남기고 삭제하지 않는다. Jira 파일은 새 유형 디렉토리로 이동하고 `cause`를 새 ID로 바꾼다 (`reclassify`). 브랜치는 `move/...`, 계획 `source: move`, op 조합: `new-cause`(옛 원인 내용 복사, `temp_id`) → `add-fixture`(옛 fixture 파일 경로를 `path`로, 새 원인 이름으로 복사) → `set-status merged-into`(옛 원인·옛 유형) → `reclassify`(Jira 각각. 원인 미확정 Jira는 `to: <흡수하는 유형 ID>:unresolved`).
+- **유형 병합**: 흡수되는 유형의 `status`를 `merged-into:<유형 ID>`로 바꾸고, 그 원인들은 흡수하는 유형의 원인으로 새 ID를 받아 옮긴다. 옛 원인에는 `status: merged-into:<새 원인 ID>`를 남기고 삭제하지 않는다. Jira 파일은 새 유형 디렉토리로 이동하고 `cause`를 새 ID로 바꾼다 (`reclassify`). 브랜치는 `move/...`, 계획 `source: move`, op 조합: `new-cause`(옛 원인 내용 복사, `temp_id`) → `add-fixture`(옛 fixture 파일 경로를 `path`로, 새 원인 이름으로 복사) → `set-status merged-into`(옛 원인·옛 유형) → `reclassify`(Jira 각각. 원인 미확정 Jira는 `to: <흡수하는 유형 ID>:unresolved`). fixed 유지는 아직 이 조합에 없다(`99-deferred.md` J).
 - **원인 병합**: 옛 원인 `status: merged-into:<원인 ID>` (`set-status`), Jira `cause` 갱신 (`reclassify`). 같은 `source: move` 계획.
 
 ### 6.7 통계 (`STATS.md`, 생성 파일)

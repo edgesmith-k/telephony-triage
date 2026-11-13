@@ -33,7 +33,7 @@
   없는 카테고리의 `ext.*`
 - `verified-without-evidence`·`evidence-missing` 오류: 근거 없는 verified, 없는 Jira 키·fixture 경로
 - `new-cause-fixed` 오류: base에 없던 원인이 `fixed` (`--changed`·`--staged`에서만). base에서 active·fixed였던
-  원인이 `merged-into:<이 원인>`이고 `fix.verification`이 그 base 기록과 같으면(fixture 경로 제외) 예외(병합 이동)
+  원인이 `merged-into:<이 원인>`이고 `fix.verification`이 그 base 기록과 같으면(fixture는 옛 원인 ID만 새 ID로 바꾼 경로) 예외(병합 이동)
 - `title-form`: 유형 제목이 증상 형태(명사형 종결: "~하지 않음"·"~됨"·"끊김")가 아님 — base에 없던 새 유형은 오류(`--changed`·`--staged`), 그 밖은 경고
 - `fixed-without-verification` 오류: `fixed`인데 `fix.verification.result: passed`가 없음 (검증 없는 fixed 금지)
 - `fixed-without-trace` 오류: 코드·설정 수정 유형(`framework-bug`·`vendor-ril`·`modem`·`carrier-config`)이 `fixed`인데
@@ -710,13 +710,14 @@ class Linter:
 
     def _moved_fixed(self, cid: str, fix: dict) -> bool:
         """병합 이동 예외: `merged-into:<cid>`인 옛 원인이 base에서 active·fixed였고, 새 원인의 `fix.verification`이
-        그 base 기록과 같다(fixture 경로 제외)."""
+        그 base 기록과 같다. `fixture`만은 옛 원인 ID를 새 ID로 바꾼 경로여야 한다(fixture는 새 원인 이름으로 복사된다)."""
         for old in self.merged_from.get(cid, ()):
             base = self.base_causes.get(old) or {}
             base_fix = base.get("fix") if isinstance(base.get("fix"), dict) else {}
+            record = base_fix.get("verification")
             if (str(base.get("status", "active")) == "active" and base_fix.get("status") == "fixed"
-                    and base_fix.get("verification") and _without_fixture(base_fix.get("verification"))
-                    == _without_fixture(fix.get("verification"))):
+                    and isinstance(record, dict) and record.get("fixture")
+                    and fix.get("verification") == {**record, "fixture": str(record["fixture"]).replace(old, cid)}):
                 return True
         return False
 
@@ -967,11 +968,6 @@ def _base_causes(root: Path) -> dict[str, dict | None] | None:
     except issuedb.IssueDbError:
         return None
     return {t.id: None for t in db.types} | {c.id: c.raw for t in db.types for c in t.causes}
-
-
-def _without_fixture(verification) -> dict:
-    """병합 이동 대조용: fixture 경로는 새 원인 이름으로 바뀌므로(fixture-owner) 뺀다. 파일 존재는 evidence-missing이 본다."""
-    return {k: v for k, v in verification.items() if k != "fixture"} if isinstance(verification, dict) else {}
 
 
 def run(args, defaults: dict) -> tuple[dict, int]:

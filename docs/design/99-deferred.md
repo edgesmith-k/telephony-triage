@@ -142,6 +142,8 @@ DB에 맞는 것이 없고 탐색으로도 가설이 서지 않으면 "가설 �
 
 수정 상태는 원인당 하나라, 한 브랜치에서 verify-fix를 통과해 `fixed`가 되면 다른 릴리스 브랜치에 들어간 같은 수정(백포트)을 적을 길이 없다(`update-fix`는 `fixed` 원인을 거부한다. 종합 리뷰 R10-02). 상태를 그대로 두고 `fixed_in`만 늘리는 경로는 판정을 바꾸므로 미뤘다.
 - 필요한 것: 브랜치별 CL(`fixed_in[].ref` — 스키마 자리만 넣었다), 브랜치별 검증 여부를 보는 판정(`match_signatures.fix_judgement`가 지금은 브랜치를 보지 않고 모든 build와 비교해, 새 항목만 더해도 `already-fixed`가 `regression-suspected`로 뒤집힌다 — 브랜치 키로 항목을 가른다), 브랜치 키 정규화(대소문자·끝 공백, 이름과 빌드의 일치), `fix-submitted` 커맨드·스킬·`07-workflow.md` 연결, 확인 화면에 "이 브랜치는 미검증" 표시. `ref`를 검증 없이 지우거나 바꾸는 길도 막는다.
+- 같이 할 것(병합): `/review` 병합 op 순서와 `06-collaboration.md §6.6` move 조합에 fixed 유지 단계(옛 기록 그대로의 `verify-fix`) 넣기, 병합 때 `verification_history` 옮기기. 지금은 커맨드로 병합하면 새 원인이 fix-submitted/open으로 내려앉는다(lint 예외 `new-cause-fixed`는 직접 편집·손으로 쓴 계획만 쓴다, `03-issue-db.md §5.9`).
+- 되살릴 때 다룰 것: 같은 브랜치 항목의 `ref`가 `update-fix`의 항목 병합(`same.update`)으로 조용히 덮어써진다. 최상위 `fix.ref`와 항목 `ref`가 어긋날 수 있다.
 - 되살리는 조건: 반입 뒤. 사내 파일럿에서 다중 브랜치 수정 빈도를 본 뒤 범위를 정한다.
 
 ---
