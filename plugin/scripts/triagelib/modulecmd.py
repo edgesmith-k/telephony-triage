@@ -1,7 +1,7 @@
 """`triage.py module <KEY> --for deep|explore` (B1 §4, B2 §5): 모듈 스킬 문서 받기·모듈 타임라인·5-1/5-2 리포트 줄.
 
     module KEY --for deep [--also] [--out dir]
-    module KEY --for explore [--module p/dir | --choose top|dir] [--deep] [--at ISO] [--out dir]
+    module KEY --for explore [--module p/dir | --choose top|dir] [--with dir] [--deep] [--at ISO] [--out dir]
 
 - deep: 1위 후보 카테고리의 출처(`userconfig.deep_source`)가 `skill`이면 설치 스킬 `SKILL.md`를 찾아(`skillpath.resolve`)
   `skill-input.json`·타임라인을 쓰고 `{skill, read, base, input, timeline}`(못 찾으면 종료 1 `설치 스킬 못 찾음`).
@@ -390,11 +390,13 @@ def _run(args, defaults: dict, seen: dict):
         raise use(f"Jira 키 형식이 아니다: {args.key}")
     args.key = key
     if purpose == "deep":
-        if args.module or args.choose or args.at or args.deep:
-            raise use("--for deep은 --module·--choose·--at·--deep을 받지 않는다(1위 후보 카테고리로 고른다)")
+        if args.module or args.choose or args.at or args.deep or args.with_:
+            raise use("--for deep은 --module·--choose·--at·--deep·--with를 받지 않는다(1위 후보 카테고리로 고른다)")
     else:
         if args.also:
             raise use("--also는 --for deep에만 쓴다")
+        if args.with_ and (args.at or not (args.module or args.choose) or not re.fullmatch(r"[a-z]+", args.with_)):
+            raise use("--with는 --module·--choose와 함께, --at 없이, 모듈 디렉토리 이름으로 쓴다")
         if args.choose and args.module:
             raise use("--choose와 --module은 함께 못 쓴다")
         if args.at and not args.module:
@@ -795,6 +797,10 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
                         "timeline": {"lines": explore["kept"], "total": explore["total"]}}, "", None
     if args.deep and f"{p}/{d}/deep.md" not in state.tree:      # 사용 오류: 기록·report 줄을 건드리지 않는다
         raise _fail(purpose, 2, "사용 오류", "deep.md 없음(정밀 탐색 문서) — --deep 없이 다시", module=f"{p}/{d}", sha=state.sha)
+    w = args.with_
+    if w and (w == d or w not in mods or not _has_filter(doc, p)):     # 같은 사용 오류: 기록·report 줄 그대로
+        raise _fail(purpose, 2, "사용 오류", f"--with {w}: 주 모듈과 다르고 modules.yaml에 있으며 filter가 있어야 한다",
+                    module=f"{p}/{d}", sha=state.sha)
     fetched = moduleskills.materialise(state, purpose="explore", module=d, deep=args.deep)
     view = _has_filter(fetched.doc, p)
     stats = None
@@ -805,7 +811,7 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
     if view:
         lib = importlib.import_module("common.modulefilter")
         res = _view_or_fail(purpose, _filter(lib, _explore_view_payload(job, key, p, d, explore, fetched.doc,
-                                                                        deep=args.deep), args), ctx)
+                                                                        deep=args.deep, with_=w), args), ctx)
         data = res["text"].encode("utf-8")
         stats = res.get("stats") or {}
         files[TIMELINE_FILE] = data
@@ -825,22 +831,27 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
         record["timeline"] = tl_record
     if args.deep:
         record["deep"] = True
+    if w:
+        record["with"] = [f"{p}/{w}"]
     _locked_write(state, job, purpose, files, record)
     out = {"module": module, "sha": fetched.sha, "read": read, "also": [], "pick": {"by": by}}
+    if w:
+        out["with"] = record["with"]
     if cands_out:
         out["candidates"] = cands_out
     out["timeline"] = {"path": str(tl_path), "lines": kept, "total": total, "view": bool(view)}
     if stats and stats.get("weak"):
-        out["ask_switch"] = _ask_switch(d, stats, cands_out, tree=state.tree, platform=p, deep=args.deep)
-    return _success(job, purpose, out, _explore_lines(module, fetched.sha, kept, total, stats), fetched.warnings)
+        out["ask_switch"] = _ask_switch(d, stats, cands_out, tree=state.tree, platform=p, deep=args.deep, joined=bool(w))
+    return _success(job, purpose, out, _explore_lines(module + (f"+{w}" if w else ""), fetched.sha, kept, total, stats),
+                    fetched.warnings)
 
 
-def _explore_view_payload(job, key, p, d, explore, doc, center=None, source=None, deep=False) -> dict:
+def _explore_view_payload(job, key, p, d, explore, doc, center=None, source=None, deep=False, with_=None) -> dict:
     cap_rows, cap_bytes = VIEW_CAPS["explore_deep" if deep else "explore"]
     return {"op": "view", "mode": "explore", "events": str(job / "events.json"), "key": key, "module": d,
             "center": center or explore["center"], "center_source": source or explore["center_source"], "evidence": [],
             "pins": explore["pins"], "allow": explore["allow"], "cap_rows": cap_rows, "cap_bytes": cap_bytes,
-            "with_modem": False, "modules": doc, "platform": p}
+            "with_modem": False, "modules": doc, "platform": p, **({"with_module": with_} if with_ else {})}
 
 
 def _explore_lines(module, sha, kept, total, stats) -> list[str]:
@@ -848,8 +859,10 @@ def _explore_lines(module, sha, kept, total, stats) -> list[str]:
     return [line] + ([_sub_line(stats)] if stats is not None else [])
 
 
-def _ask_switch(d: str, stats: dict, cands: list[dict], tree=None, platform: str | None = None, deep=False) -> dict:
-    """약한 신호일 때 바꿀 모듈 질문. `tree`(받은 레포 트리)를 주면 `<p>/<m>/explore.md`(`deep`이면 `deep.md`도)가 있는 모듈만 권한다(H C1+D R40)."""
+def _ask_switch(d: str, stats: dict, cands: list[dict], tree=None, platform: str | None = None, deep=False,
+                joined=False) -> dict:
+    """약한 신호일 때 바꿀 모듈 질문. `tree`(받은 레포 트리)를 주면 `<p>/<m>/explore.md`(`deep`이면 `deep.md`도)가 있는 모듈만 권한다(H C1+D R40).
+    `--with`로 받은 실행(`joined`)이 아니면 1위 모듈과 같이 보기(`--with`)도 하나 낸다."""
     need = ("explore.md", "deep.md") if deep else ("explore.md",)
     hot = sorted(((k, v) for k, v in (stats.get("hot_modules") or {}).items() if k != d and NAME_OK.fullmatch(str(k))
                   and (tree is None or all(f"{platform}/{k}/{n}" in tree for n in need))),
@@ -857,7 +870,7 @@ def _ask_switch(d: str, stats: dict, cands: list[dict], tree=None, platform: str
     shown = " · ".join(f"{k} {v}" for k, v in hot[:3])
     others = [f"{k} — {v}줄" for k, v in hot[:2]]
     return {"question": f"고른 모듈 문서의 신호가 약합니다. 다른 모듈 문서로 바꿀까요? (모듈 신호 줄 수: {shown})",
-            "options": [f"그대로 {d}"] + others}
+            "options": [f"그대로 {d}"] + others + ([f"{d} + {hot[0][0]} 같이 보기"] if hot and not joined else [])}
 
 
 def _explore_at(args, job, key, p, events, explore, inputs, env, ctx):
@@ -893,11 +906,17 @@ def _explore_at(args, job, key, p, events, explore, inputs, env, ctx):
     except Exception:  # noqa: BLE001
         raise stale from None
     d = args.module.split("/", 1)[1]
+    ws = rec.get("with")
+    w = ws[0].partition("/")[2] if isinstance(ws, list) and ws and isinstance(ws[0], str) else ""
+    mods = ((doc.get("platforms") or {}).get(p) or {}).get("modules") or {}
+    if ws is not None and (ws != [f"{p}/{w}"] or w == d or w not in mods):     # 처음 받을 때와 같은 검사
+        raise stale
+    w = w or None                                       # 기록의 `with`를 이어 쓴다
     if not _has_filter(doc, p):
         raise _fail(purpose, 2, "사용 오류", "--at은 modules.yaml에 filter가 있을 때만 쓴다")
     lib = importlib.import_module("common.modulefilter")
     res = _view_or_fail(purpose, _filter(lib, _explore_view_payload(job, key, p, d, explore, doc, args.at, "--at",
-                                                                    deep=bool(rec.get("deep"))), args), ctx)
+                                                                    deep=bool(rec.get("deep")), with_=w), args), ctx)
     data, stats = res["text"].encode("utf-8"), res.get("stats") or {}
     files = {}
     for path in folder.rglob("*"):
@@ -916,6 +935,9 @@ def _explore_at(args, job, key, p, events, explore, inputs, env, ctx):
             if rel != "modules.yaml"] + [str(folder / TIMELINE_FILE)]
     out = {"module": args.module, "sha": rec.get("sha"), "read": read, "also": [], "pick": rec.get("pick") or {"by": "user"},
            "timeline": {"path": str(folder / TIMELINE_FILE), "lines": kept, "total": total, "view": True}, "at": args.at}
+    if w:
+        out["with"] = rec["with"]
     if stats.get("weak"):
-        out["ask_switch"] = _ask_switch(d, stats, [])
-    return _success(job, purpose, out, _explore_lines(args.module, rec.get("sha") or "", kept, total, stats), [])
+        out["ask_switch"] = _ask_switch(d, stats, [], joined=bool(w))
+    return _success(job, purpose, out, _explore_lines(args.module + (f"+{w}" if w else ""), rec.get("sha") or "", kept,
+                                                      total, stats), [])

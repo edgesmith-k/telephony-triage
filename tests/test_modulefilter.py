@@ -421,3 +421,14 @@ def test_run_and_explore_never_import_modulefilter():
             "print('common.modulefilter' in sys.modules)")
     proc = subprocess.run([sys.executable, "-c", code, str(SCRIPTS)], capture_output=True, text=True)
     assert proc.returncode == 0 and proc.stdout.strip() == "False", proc.stderr[-400:]
+
+
+def test_with_module_section_not_starved_by_lines_already_shown(tmp_path):
+    """보조 절 상한(40줄)은 주 보기에 이미 나온 줄을 뺀 뒤에 쓴다 — 공통 오류 줄이 많아도 보조 모듈 줄이 남는다."""
+    rows = [("2026-09-20T15:10:00.000Z", "datad", "setup failed", "E", {"category_hint": "data"})]
+    rows += [(f"2026-09-20T15:10:00.{i * 10:03d}Z", "ofonod", f"req {i} error", "E", {}) for i in range(1, 46)]
+    rows += [(f"2026-09-20T15:10:03.{i}00Z", "simd", f"sim state change {i}", "I", {"category_hint": "sim"}) for i in range(5)]
+    out = mf.build(_view_payload(_write_events(tmp_path, _events(rows)), with_module="sim"))
+    head, sep, aux = out["text"].partition("\n## 보조 모듈 줄 (sim)\n")
+    assert sep and sum("sim state change" in ln for ln in aux.splitlines()) == 5
+    assert not set(aux.splitlines()) & set(head.splitlines()) - {""}
