@@ -629,6 +629,8 @@ def _write_command(inp) -> list[str]:
 # (`dbpr.lock.handoff_owner`: 그 작업의 triage-state.json owner가 lock owner와 같을 때만). 모델 글은 owner가 필요한 하위 명령인지
 # 가르는 데만 본다(`db_pr.OWNER_CMDS` — 코드에서 나온 목록, `lock release`(--force 없음), `db_verify --draft`).
 OWNER_SCRIPTS = re.compile(r"\b(db_pr|db_verify)\.py\b")
+# publish는 owner 안내 대신 `게시:` 한 줄(tt-oc publish 또는 Claude Code). 문서 꼴 `python3 "<plugin>/scripts/db_pr.py" publish`도(리뷰 G-1)
+PUBLISH_RE = re.compile(r"""db_pr\.py["']?\s+publish\b""")
 # 하위 프로세스는 cwd를 플러그인 scripts 폴더로 두고 PYTHONPATH류를 뺀다: `-c`는 cwd를 import 경로 맨 앞에 두는데, 사용자가 tt-oc를
 # 모델이 쓸 수 있는 작업 폴더에서 돌리면 거기 심은 `pathlib.py` 등이 guard 밖에서 돈다(4차 R3-P1-1).
 HANDOFF_CODE = "\n".join((
@@ -702,7 +704,7 @@ def handoff_notes(cmds: list[str], meta: dict) -> list[str]:
     notes = []
     for n, cmd in enumerate(cmds, 1):
         script = _owner_script(cmd, owner_cmds)
-        if script is None:
+        if script is None or PUBLISH_RE.search(cmd):      # publish 명령은 붙여 넣지 않는다(main의 `게시:` 줄, 리뷰 A-1·F-1)
             continue
         if held:
             notes += [f"터미널에서는 위 {n}번째 명령의 {script} 앞에 TT_LOCK_OWNER={owner} 를 붙인다 — {where}의 session.lock을 쥔 "
@@ -863,7 +865,7 @@ _HASH_RE = re.compile(r"[0-9a-f]{40,64}")
 def _publish_refusal(meta: dict, proj: Path) -> str | None:
     if meta.get("publish") != "open":
         return ("publish는 이 설치에서 닫힘 — 확인 화면 뒤 게시는 Claude Code에서 한다. 열려면 사내 확인 뒤 "
-                "tools/gen_opencode.py install … --allow-publish(이미 설치했으면 --force) (opencode/README.md \"게시\")")
+                "tools/gen_opencode.py install … --allow-publish(이미 설치했으면 처음과 같은 인자에 --force) (opencode/README.md \"게시\")")
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         return "publish는 사람이 터미널(tty)에서 직접 돌린다 — 파이프·리디렉션·CI에서는 하지 않는다"
     nested = [k for k in ("TT_RUNTIME", "CLAUDECODE") if k in os.environ]
@@ -872,17 +874,21 @@ def _publish_refusal(meta: dict, proj: Path) -> str | None:
                 "터미널에서 직접 한다")
     git = sorted(k for k in os.environ if k in GIT_ENV or k.startswith("GIT_CONFIG"))
     if git:
-        return f"git 환경 변수가 있다({', '.join(git)}) — 지우고 다시 한다"
+        return (f"git 환경 변수가 있다({', '.join(git)}) — 이 실행에서만 빼고 다시 한다: env "
+                + " ".join(f"-u {k}" for k in git) + f" tt-oc --project {shlex.quote(str(proj))} publish")
     changed = integrity_problems(proj, meta)
     if changed:
         return "설치 뒤 바뀌었거나 없다: " + ", ".join(changed) + " — tt-oc doctor로 확인한다"
     return None
 
 
-def _publish_env(root: Path, owner: str, plugin_root: str) -> dict:
-    """db_pr 하위 프로세스 환경: PYTHONPATH류와 TT_* 모두(TT_PLATFORM·TT_RUNTIME 등) 빼고 owner·플러그인 루트만 넣는다."""
+def _publish_env(root: Path, owner: str, plugin_root: str, model=None) -> dict:
+    """db_pr 하위 프로세스 환경: PYTHONPATH류와 사용자의 TT_* 모두(TT_PLATFORM 등) 빼고 owner·플러그인 루트와, 커밋 `Triage-Env`용
+    TT_RUNTIME=opencode·TT_MODEL(설치의 모델, 리뷰 A-2)만 넣는다. 중첩 실행 거부는 tt-oc 자신의 환경을 본다(_publish_refusal)."""
     env = {k: v for k, v in _lookup_env(root).items() if not k.startswith("TT_")}
-    env.update({"TT_LOCK_OWNER": owner, "CLAUDE_PLUGIN_ROOT": plugin_root, "GIT_TERMINAL_PROMPT": "0"})
+    env.update({"TT_LOCK_OWNER": owner, "CLAUDE_PLUGIN_ROOT": plugin_root, "GIT_TERMINAL_PROMPT": "0", "TT_RUNTIME": "opencode"})
+    if model:
+        env["TT_MODEL"] = str(model)
     return with_git_safe(env)      # GIT_CONFIG*가 있으면 _publish_refusal이 먼저 거부한다 — 여기서는 GIT_SAFE 둘만
 
 
@@ -1001,7 +1007,7 @@ def publish_main(a, proj: Path, meta: dict) -> int:
         return refuse(f"{key}: state.json의 branch가 {branch}가 아니다")
     if not staged or staged.get("dry_run"):
         return refuse(f"{key}: stage.json이 없거나 --dry-run으로 stage한 작업이다 — dry-run은 확인 화면까지만")
-    env = _publish_env(root, owner, plugin_root)
+    env = _publish_env(root, owner, plugin_root, meta.get("model"))
     base = [sys.executable, str(scripts / "db_pr.py"), "--plugin-root", plugin_root, "--platform", platform]
 
     def db_pr(*args, timeout=PUBLISH_TIMEOUT):
@@ -1035,7 +1041,7 @@ def publish_main(a, proj: Path, meta: dict) -> int:
         show(((r.stdout or "") + (r.stderr or "")) if r is not None else "")
         return refuse(f"{key}: stage " + ("시간 초과" if r is None else f"종료 {r.returncode}") +
                       " — 위 출력대로 OpenCode(tt-analyze)나 Claude Code에서 계획을 고친다")
-    left = _ignored_left(wt, env, clean=True)
+    left = _ignored_left(wt, env, clean=True)      # stage의 `clean -ffdx`가 먼저 지운다 — 이것은 두 번째 그물
     if left:
         show(left)
         return refuse(f"{key}: wt의 무시된 파일을 지우지 못했거나 확인하지 못했다(위) — 게시하지 않았다")
@@ -1072,7 +1078,9 @@ def publish_main(a, proj: Path, meta: dict) -> int:
             break
         show(_full_diff(wt, env))
     if ans != key or (tip and _ask(f"원격 커밋 {lease[:7]}을 덮어쓰려면 '{OVERWRITE}'를 입력한다 — 그 밖 = 취소: ") != OVERWRITE):
-        print(f"[tt-oc] 게시하지 않았다(작업은 다시 stage된 상태 — 그만두려면 db_pr discard {_esc(str(wt), one_line=True)}).")
+        discard = (f"TT_LOCK_OWNER={owner} python3 {shlex.quote(str(scripts / 'db_pr.py'))} --platform {platform} discard "
+                   f"{shlex.quote(str(wt))}")       # discard는 owner 명령이다(리뷰 A-6) — owner·작업은 위에서 확인한 값
+        print(f"[tt-oc] 게시하지 않았다(작업은 다시 stage된 상태 — 그만두려면 터미널에서 {_esc(discard, one_line=True)}).")
         return 0
     if _digests(job) != before:
         return refuse(f"{key}: 화면 뒤에 작업 파일({', '.join(PUBLISH_FILES)})이 바뀌었다 — 게시하지 않았다. 다시 tt-oc publish")
@@ -1096,6 +1104,14 @@ def publish_main(a, proj: Path, meta: dict) -> int:
               (f" 다음: {_esc(str(nxt), one_line=True)}" if nxt else ""))
     else:
         print(f"[tt-oc] {key}: 게시되지 않았다(종료 {r.returncode}) — 위 problems를 고친 뒤 tt-oc publish를 다시 한다.")
+    merge, pr = ((res or {}).get(k) for k in ("merge", "pr"))
+    how = merge.get("how") if isinstance(merge, dict) else None
+    if how:          # 기본 병합 줄의 `db_pr merge`는 OpenCode에서 닫혀 있다(리뷰 A-9). 메인테이너 쪽 줄은 그대로
+        print("병합: " + ("작성자 외 1명이 Approve(+1)한 뒤 Claude Code('병합해줘') 또는 GHE에서" if "db_pr merge" in str(how)
+                         else _esc(str(how), one_line=True)))
+    url = pr.get("url") if isinstance(pr, dict) else None
+    if url:          # JSON 속에 묻힌 PR 주소를 마지막 한 줄로
+        print(f"PR: {_esc(str(url), one_line=True)}")
     return r.returncode
 
 
@@ -1225,9 +1241,11 @@ def main(argv=None) -> int:
             print(model_lines(c, one_line=True))
         for n in res["handoff_notes"]:
             print(f"주의: {n}")
-        if meta.get("publish") == "open" and any(re.search(r"db_pr\.py\s+publish\b", c) for c in res["user_commands"]):
-            print(f"승인·게시: OpenCode 세션을 닫은 터미널에서 tt-oc --project {shlex.quote(str(proj))} publish — "
-                  "위 publish 명령을 붙여 넣지 않는다(재stage·scripts_path 대조가 없다)")
+    # 막힌 호출이든 최종 글로만 보였든(규칙 5·NOTE) 열림·닫힘 모두 한 줄. 모델 글이 거짓으로 부를 수 있지만 tt-oc 자신의 안전한 안내다
+    if any(PUBLISH_RE.search(c) for c in [*res["user_commands"], res["final_text"] or ""]):
+        print("게시: 모델이 보인 db_pr.py publish 명령은 붙여 넣지 않는다 — " + (
+            f"OpenCode 세션을 닫은 터미널에서 tt-oc --project {shlex.quote(str(proj))} publish(재stage·scripts_path 대조를 거친다)"
+            if meta.get("publish") == "open" else "이 설치는 게시가 닫혀 있다. Claude Code에서 등록한다"))
     print("\n---- [tt-oc] 결과 ----")
     t = res["tokens"]
     print(f"outcome: {res['outcome']} · session: {res['session'] or '없음'} · steps: {res['steps']} · "

@@ -307,7 +307,17 @@ def test_install_allow_publish_writes_key_only_when_given(roots):
     assert _install(roots, "--allow-publish", "--force").returncode == 0
     opened = meta()
     assert opened.pop("publish") == "open" and opened == closed
-    assert _install(roots, "--force").returncode == 0 and meta() == closed
+    r = _install(roots, "--force")
+    assert r.returncode == 0 and meta() == closed
+    # 리뷰 A-8·G-5: 다시 설치하며 꺼진 것을 한 줄씩 알리고(이어받지 않는다), 끝에 지금 상태 한 줄(stderr — stdout은 JSON 그대로)
+    assert "꺼짐: 이전 설치는 게시가 열려 있었다 — 이번에는 닫혔다. 유지하려면 --allow-publish" in r.stderr, r.stderr
+    assert r.stderr.rstrip().endswith("지금 상태: 게시 닫힘 · Jira 읽기 도구 0개") and json.loads(r.stdout)["ok"], r.stderr
+    r = _install(roots, "--jira-read-tool", "jira_get_issue", "--allow-publish", "--force")
+    assert "꺼짐" not in r.stderr and "지금 상태: 게시 열림 · Jira 읽기 도구 1개" in r.stderr, r.stderr
+    r = _install(roots, "--allow-publish", "--force")
+    assert r.returncode == 0 and "jira_read_tools" not in meta(), r.stderr
+    assert "꺼짐: 이전 설치의 Jira 읽기 도구 jira_get_issue가 이번에는 빠졌다 — 유지하려면 --jira-read-tool jira_get_issue" \
+        in r.stderr and "게시가 열려" not in r.stderr, r.stderr
     r = subprocess.run([sys.executable, str(REPO / "tools" / "gen_opencode.py"), "install", "--help"], capture_output=True,
                        text=True, encoding="utf-8", env={**os.environ, "PYTHONIOENCODING": "utf-8", "COLUMNS": "400"}, check=False)
     assert r.returncode == 0 and "--allow-publish" in r.stdout and '"publish": "open"' in r.stdout and "--force" in r.stdout

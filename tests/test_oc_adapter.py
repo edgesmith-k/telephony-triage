@@ -892,6 +892,7 @@ def test_script_outputs_must_stay_in_work_root(tmp_path):
     rel = _py("parse_logcat.py", "cut", "a.log", "--out", "K-1/fixtures/cut-1.log")
     assert oc.bash_allowlist(rel, str(root), str(proj), env) == oc.BashVerdict()
     assert "작업 루트" in oc.bash_allowlist(f"cd {root} && {rel}", str(proj), str(proj), env).deny
+    assert "작업 루트" in oc.bash_allowlist(f"cd {tmp_path}/home && {rel}", str(root), str(proj), env).deny   # 리뷰 E-1
 
 
 @POSIX

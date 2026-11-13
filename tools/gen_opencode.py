@@ -30,7 +30,8 @@ CLI:
         필요하다(관리 설정 `/etc/opencode`의 `jira_*` deny는 관리자 몫).
         `--allow-publish`를 주면 tt-oc.json에 `"publish": "open"`을 쓴다(`tt-oc publish` — 사람이 터미널에서 승인하는 이슈 DB
         게시). 주지 않으면 그 키를 쓰지 않는다(닫힘). 이미 설치한 곳을 열거나 닫으려면 같은 install을 `--force`로 다시 한다
-        (tt-oc.json은 설치 지문 대상 밖이라 지문은 그대로다).
+        (tt-oc.json은 설치 지문 대상 밖이라 지문은 그대로다). 다시 설치할 때 앞선 설치의 게시 열림·Jira 읽기 도구가 이번 인자에
+        없으면 이어받지 않고 stderr에 `꺼짐:` 줄로 알린다. 끝에 지금 상태(게시 열림·닫힘, Jira 읽기 도구 수)를 stderr 한 줄로 낸다.
 
 종료 코드 (contracts.md §종료 코드)
     0  맞음 / 썼음
@@ -401,11 +402,28 @@ def cmd_install(a) -> int:
     differ = [str(p) for p, text in files.items() if p.exists() and p.read_text(encoding="utf-8") != text]
     if differ and not a.force:
         raise UsageError(f"이미 있는 파일과 다르다(--force로 덮어쓴다): {differ}")
+    try:            # --force는 tt-oc.json을 인자대로 다시 쓴다 — 앞선 설치에서 꺼지는 것을 알린다(이어받지 않는다, 리뷰 A-8·G-5)
+        prev = json.loads((dest / "tt-oc.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        prev = None
+    prev = prev if isinstance(prev, dict) else {}
+    off = []
+    if prev.get("publish") == "open" and not a.allow_publish:
+        off.append("이전 설치는 게시가 열려 있었다 — 이번에는 닫혔다. 유지하려면 --allow-publish를 다시 준다")
+    old = prev.get("jira_read_tools")
+    gone = [t for t in old if isinstance(t, str) and t not in jira_read] if isinstance(old, list) else []
+    if gone:
+        off.append(f"이전 설치의 Jira 읽기 도구 {', '.join(gone)}가 이번에는 빠졌다 — 유지하려면 "
+                   + " ".join(f"--jira-read-tool {t}" for t in gone) + "를 다시 준다")
     for p, text in files.items():
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text, encoding="utf-8", newline="\n")
     print(json.dumps({"ok": True, "dest": str(dest), "written": [str(p) for p in files],
                       "next": f"opencode/bin/tt-oc --project {dest} doctor"}, ensure_ascii=False))
+    for line in off:                # stdout은 JSON 한 줄 그대로
+        print(f"[gen_opencode] 꺼짐: {line}", file=sys.stderr)
+    print(f"[gen_opencode] 지금 상태: 게시 {'열림' if a.allow_publish else '닫힘'} · Jira 읽기 도구 {len(jira_read)}개",
+          file=sys.stderr)
     return 0
 
 
