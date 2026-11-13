@@ -738,6 +738,13 @@ def _view_op(payload: dict) -> dict:
     text = render(payload.get("key") or "", spec.platform, module, mode, picked, oth, stats)
     if mrows:
         text += "\n## 모뎀 모듈 줄\n" + "\n".join(v["line"] for v in mrows) + "\n"
+    extra = payload.get("with_module")
+    if extra and extra != module:       # 탐색 `--with`: 보조 모듈 보기에서 주 보기(다른 모듈 줄 절 포함)에 없던 줄만
+        seen = {v["row"]["idx"] for v in picked} | {r["idx"] for r in oth}
+        wrows = [v for v in view(spec, rows, extra, center, "explore", cap_rows=MODEM_ROWS, cap_bytes=MODEM_BYTES)[0]
+                 if v["row"]["idx"] not in seen]
+        if wrows:
+            text += f"\n## 보조 모듈 줄 ({extra})\n" + "\n".join(v["line"] for v in wrows) + "\n"
     allow = payload.get("allow") or []
     text, counts = masking.redact(text, allow)
     if counts:

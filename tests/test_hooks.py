@@ -1377,6 +1377,9 @@ def test_guard_blocks_plugin_script_outputs_into_clone():
                 f"python3 {P}/mask_pii.py --check --in-place {c}/a", f"python3 {P}/mask_pii.py --events e --in-place {c}/a",
                 f"python3 {P}/db_build.py --write --db {w}/wt"):
         assert decision(bash(ws, cmd, ws.base)) is None, cmd
+    for o in (f"{c}/x", f"{w}/MOCK-1/x"):           # 탐색 `--with`는 `--module` 명령과 같은 판정
+        cmd = f"python3 {P}/triage.py module K --for explore --module ofono/data --out {o}"
+        assert decision(bash(ws, cmd.replace(" --out", " --with sim --out"), ws.base)) == decision(bash(ws, cmd, ws.base))
     for cmd in (f"python3 -c pass {P}/mask_pii.py a --out {c}/b", f"python3 -uc pass {P}/mask_pii.py a --out {c}/b"):
         out = bash(ws, cmd, ws.base)
         assert decision(out) != "deny" or "규칙 8" not in out["permissionDecisionReason"], cmd

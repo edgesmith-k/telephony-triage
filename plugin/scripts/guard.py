@@ -3760,7 +3760,7 @@ SCRIPT_OUT_OPTS = {
     "triage.py": (("--out",), ("--plugin-root", "--json", "--logs", "--more-logs", "--issue-raw", "--issue-file",
                                "--issue-meta", "--code", "--dry-run", "--analysis-only", "--answer", "--tz", "--year",
                                "--minutes", "--refresh", "--offline-db", "--out", "--failed-step", "--steps-file",
-                               "--clock-offset", "--for", "--module", "--choose", "--also", "--at", "--skipped")),
+                               "--clock-offset", "--for", "--module", "--choose", "--also", "--with", "--at", "--skipped")),
     "db_build.py": (("--preview",), ("--db", "--write", "--verify", "--preview", "--staged", "--index-tree", "--json",
                                      "--plugin-root")),
     "jira_fields.py": (("--meta-out",), ("--db", "--json", "--plugin-root", "--origin", "--meta-out", "--consume",
