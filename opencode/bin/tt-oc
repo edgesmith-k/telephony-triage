@@ -629,8 +629,9 @@ def _write_command(inp) -> list[str]:
 # (`dbpr.lock.handoff_owner`: 그 작업의 triage-state.json owner가 lock owner와 같을 때만). 모델 글은 owner가 필요한 하위 명령인지
 # 가르는 데만 본다(`db_pr.OWNER_CMDS` — 코드에서 나온 목록, `lock release`(--force 없음), `db_verify --draft`).
 OWNER_SCRIPTS = re.compile(r"\b(db_pr|db_verify)\.py\b")
-# publish는 owner 안내 대신 `게시:` 한 줄(tt-oc publish 또는 Claude Code). 문서 꼴 `python3 "<plugin>/scripts/db_pr.py" publish`도(리뷰 G-1)
-PUBLISH_RE = re.compile(r"""db_pr\.py["']?\s+publish\b""")
+# publish는 owner 안내 대신 `게시:` 한 줄(tt-oc publish 또는 Claude Code). 문서 꼴 `python3 "<plugin>/scripts/db_pr.py" publish`도(리뷰 G-1).
+# 하위 명령은 `db_pr.py` 뒤 낱말에서 전역 옵션과 그 값을 건너뛰고 본다(`--platform android publish`, 재리뷰 RR-1)
+DBPR_VALUE_OPTS = ("--platform", "--plugin-root")      # db_pr.py 옵션 중 값을 받는 것(build_parser·_allow_common_anywhere)
 # 하위 프로세스는 cwd를 플러그인 scripts 폴더로 두고 PYTHONPATH류를 뺀다: `-c`는 cwd를 import 경로 맨 앞에 두는데, 사용자가 tt-oc를
 # 모델이 쓸 수 있는 작업 폴더에서 돌리면 거기 심은 `pathlib.py` 등이 guard 밖에서 돈다(4차 R3-P1-1).
 HANDOFF_CODE = "\n".join((
@@ -673,6 +674,30 @@ def _owner_script(cmd: str, owner_cmds) -> str | None:
     return None
 
 
+def db_pr_subcommands(text: str) -> list[str]:
+    """글 속 `db_pr.py`마다 하위 명령(옵션과 그 값을 건너뛴 첫 위치 인자). `\\`+줄바꿈은 잇고(bash처럼), 따옴표가 안 맞으면
+    공백으로 나눈 낱말로 본다. `;`·`&`·`|`·`(`·`)`는 낱말을 끊는다."""
+    text = text.replace("\\\n", "")
+    try:
+        lex = shlex.shlex(text, posix=True, punctuation_chars=True)
+        lex.whitespace_split, lex.commenters = True, ""
+        words = list(lex)
+    except ValueError:
+        words = text.split()
+    subs = []
+    for i, w in enumerate(words):
+        if not w.strip("'\"").endswith("db_pr.py"):
+            continue
+        rest = iter(words[i + 1:])
+        for x in rest:
+            if x in DBPR_VALUE_OPTS:
+                next(rest, None)
+            elif not x.startswith("-"):
+                subs.append(x)
+                break
+    return subs
+
+
 def handoff_notes(cmds: list[str], meta: dict) -> list[str]:
     """사용자가 터미널에서 돌릴 명령 중 lock owner가 필요한 것마다 tt-oc 자신의 안내 한 줄. 지금 session.lock을 쥔 작업의 owner가 확인되면
     `TT_LOCK_OWNER=<owner>`를 붙이라고, 아니면 owner가 있는 곳과 `lock owner 불일치`로 멈춘다는 것을 알린다. 명령은 바꾸지 않는다."""
@@ -704,7 +729,7 @@ def handoff_notes(cmds: list[str], meta: dict) -> list[str]:
     notes = []
     for n, cmd in enumerate(cmds, 1):
         script = _owner_script(cmd, owner_cmds)
-        if script is None or PUBLISH_RE.search(cmd):      # publish 명령은 붙여 넣지 않는다(main의 `게시:` 줄, 리뷰 A-1·F-1)
+        if script is None or set(db_pr_subcommands(cmd)) == {"publish"}:   # publish는 붙여 넣지 않는다(main의 `게시:` 줄, 리뷰 A-1·F-1)
             continue
         if held:
             notes += [f"터미널에서는 위 {n}번째 명령의 {script} 앞에 TT_LOCK_OWNER={owner} 를 붙인다 — {where}의 session.lock을 쥔 "
@@ -875,7 +900,8 @@ def _publish_refusal(meta: dict, proj: Path) -> str | None:
     git = sorted(k for k in os.environ if k in GIT_ENV or k.startswith("GIT_CONFIG"))
     if git:
         return (f"git 환경 변수가 있다({', '.join(git)}) — 이 실행에서만 빼고 다시 한다: env "
-                + " ".join(f"-u {k}" for k in git) + f" tt-oc --project {shlex.quote(str(proj))} publish")
+                + " ".join(f"-u {k}" for k in git) + f" {shlex.quote(str(Path(__file__).resolve()))} --project "
+                f"{shlex.quote(str(proj))} publish")      # env -u 뒤 이름은 PATH로 찾으니 자신의 절대 경로(재리뷰 RR-5)
     changed = integrity_problems(proj, meta)
     if changed:
         return "설치 뒤 바뀌었거나 없다: " + ", ".join(changed) + " — tt-oc doctor로 확인한다"
@@ -1078,8 +1104,8 @@ def publish_main(a, proj: Path, meta: dict) -> int:
             break
         show(_full_diff(wt, env))
     if ans != key or (tip and _ask(f"원격 커밋 {lease[:7]}을 덮어쓰려면 '{OVERWRITE}'를 입력한다 — 그 밖 = 취소: ") != OVERWRITE):
-        discard = (f"TT_LOCK_OWNER={owner} python3 {shlex.quote(str(scripts / 'db_pr.py'))} --platform {platform} discard "
-                   f"{shlex.quote(str(wt))}")       # discard는 owner 명령이다(리뷰 A-6) — owner·작업은 위에서 확인한 값
+        discard = (f"TT_LOCK_OWNER={owner} {shlex.quote(sys.executable)} {shlex.quote(str(scripts / 'db_pr.py'))} "
+                   f"--platform {platform} discard {shlex.quote(str(wt))}")   # owner 명령(리뷰 A-6) — owner·작업은 위에서 확인한 값
         print(f"[tt-oc] 게시하지 않았다(작업은 다시 stage된 상태 — 그만두려면 터미널에서 {_esc(discard, one_line=True)}).")
         return 0
     if _digests(job) != before:
@@ -1110,7 +1136,7 @@ def publish_main(a, proj: Path, meta: dict) -> int:
         print("병합: " + ("작성자 외 1명이 Approve(+1)한 뒤 Claude Code('병합해줘') 또는 GHE에서" if "db_pr merge" in str(how)
                          else _esc(str(how), one_line=True)))
     url = pr.get("url") if isinstance(pr, dict) else None
-    if url:          # JSON 속에 묻힌 PR 주소를 마지막 한 줄로
+    if isinstance(url, str) and re.fullmatch(r"https?://\S+", url):      # JSON 속에 묻힌 PR 주소를 마지막 한 줄로(주소일 때만, RR-6)
         print(f"PR: {_esc(str(url), one_line=True)}")
     return r.returncode
 
@@ -1242,7 +1268,7 @@ def main(argv=None) -> int:
         for n in res["handoff_notes"]:
             print(f"주의: {n}")
     # 막힌 호출이든 최종 글로만 보였든(규칙 5·NOTE) 열림·닫힘 모두 한 줄. 모델 글이 거짓으로 부를 수 있지만 tt-oc 자신의 안전한 안내다
-    if any(PUBLISH_RE.search(c) for c in [*res["user_commands"], res["final_text"] or ""]):
+    if any("publish" in db_pr_subcommands(c) for c in [*res["user_commands"], res["final_text"] or ""]):
         print("게시: 모델이 보인 db_pr.py publish 명령은 붙여 넣지 않는다 — " + (
             f"OpenCode 세션을 닫은 터미널에서 tt-oc --project {shlex.quote(str(proj))} publish(재stage·scripts_path 대조를 거친다)"
             if meta.get("publish") == "open" else "이 설치는 게시가 닫혀 있다. Claude Code에서 등록한다"))

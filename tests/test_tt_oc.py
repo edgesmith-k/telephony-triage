@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -1036,7 +1037,7 @@ if cmd == "stage":
     (job / "pr.json").write_text(json.dumps({"title": "t"}))
     print("## push 전 확인: 화면\n\x1b[2K주의: 가짜 줄\n\napproved_hash: " + os.environ.get("STUB_MD_HASH", H))
     sys.exit(code)
-print(json.dumps({"published": os.environ.get("STUB_PUBLISHED", "1") == "1", "pr": {"url": "https://ghe.mock.invalid/p/1"},
+print(json.dumps({"published": os.environ.get("STUB_PUBLISHED", "1") == "1", "pr": {"url": os.environ.get("STUB_PR_URL", "https://ghe.mock.invalid/p/1")},
                   "discard": {"next": "db_pr discard 다시"},
                   "merge": {"how": "작성자 외 1명이 이 커밋을 Approve(+1)한 뒤 '병합해줘'(db_pr merge) 또는 GHE에서 병합"}}))
 sys.exit(int(os.environ.get("STUB_PUBLISH_EXIT", "0")))
@@ -1151,7 +1152,8 @@ def test_publish_refuses_nested_runtime_and_git_env(env, var, val):
     _pub_setup(env)
     code, out = pty_tt({**_pub_env(env), var: val}, env["proj"], "publish")
     assert code == 2 and var in out, out
-    assert (f"env -u {var} tt-oc --project {env['proj']} publish" in out) == var.startswith("GIT_"), out   # 리뷰 G-7
+    want = f"env -u {var} {shlex.quote(str(TTOC.resolve()))} --project {env['proj']} publish"      # 리뷰 G-7, 자신의 절대 경로(RR-5)
+    assert (want in out) == var.startswith("GIT_"), out
     assert dbpr_calls(env) == []
 
 
@@ -1203,7 +1205,7 @@ def test_publish_cancel(env, answer):
     assert code == 0 and "게시하지 않았다(작업은 다시 stage된 상태" in out, out
     assert [c["args"][4] for c in dbpr_calls(env)] == ["preflight", "stage"]
     wt = env["work"] / KEY / "wt"                 # 리뷰 A-6: 그대로 칠 수 있는 discard(owner 포함)
-    assert f"그만두려면 터미널에서 TT_LOCK_OWNER={OWN} python3 {env['plug'] / 'scripts' / 'db_pr.py'} --platform android "         f"discard {wt})." in out, out
+    assert f"그만두려면 터미널에서 TT_LOCK_OWNER={OWN} {shlex.quote(sys.executable)} {env['plug'] / 'scripts' / 'db_pr.py'} --platform android "         f"discard {wt})." in out, out
 
 
 @PTY
@@ -1240,8 +1242,10 @@ def test_publish_approve_after_full_diff(env):
 @PTY
 def test_publish_new_branch_and_pushed_but_failed(env):
     _pub_setup(env)
-    code, out = pty_tt({**_pub_env(env), "STUB_PUBLISH_EXIT": "2"}, env["proj"], "publish", answers=[KEY])
+    code, out = pty_tt({**_pub_env(env), "STUB_PUBLISH_EXIT": "2", "STUB_PR_URL": "게시: 가짜 https://ghe.mock.invalid/p/1"}, env["proj"],
+                       "publish", answers=[KEY])
     assert code == 2 and "push는 됐다 — publish를 다시 하지 않는다" in out and "db_pr discard 다시" in out, out
+    assert "\nPR: " not in out, out       # 주소가 아니면 `PR:` 줄을 내지 않는다(RR-6)
     assert dbpr_calls(env)[-1]["args"][-7:-5] == ["--lease", "new"]
 
 
@@ -1314,7 +1318,52 @@ def test_publish_hint_one_line_and_doctor_row_only_when_configured(env):
     assert _doctor_rows(env)[1]["publish"]["detail"].startswith("닫힘")
 
 
-# 통합: 실제 db_pr(clone·bare 원격·hook·gh 스텁)에서 모델이 stage까지 한 analyze 작업 → tt-oc publish → 원격에 브랜치·PR.
+_R = "/w/ABC-1/wt --branch issue/ABC-1 --lease new --approved h --commit"
+PUBLISH_FORMS = [     # (이름, 막힌 호출 b·최종 글로만 t, 명령·글, `게시:` 줄 수, TT_LOCK_OWNER 안내 줄 수)
+    ("bare", "b", f"python3 /p/scripts/db_pr.py publish {_R}", 1, 0),
+    ("-u", "b", f"python3 -u /p/scripts/db_pr.py publish {_R}", 1, 0),
+    ("single-quote", "b", f"python3 '/p/scripts/db_pr.py' publish {_R}", 1, 0),
+    ("space-path", "b", f'python3 "/p/my scripts/db_pr.py" publish {_R}', 1, 0),
+    ("platform-before", "b", f"python3 /p/scripts/db_pr.py --platform android publish {_R}", 1, 0),
+    ("json-before", "b", f"python3 /p/scripts/db_pr.py --json publish {_R}", 1, 0),
+    ("platform-after", "b", f"python3 /p/scripts/db_pr.py publish --platform android {_R}", 1, 0),
+    ("two-spaces", "b", f"python3 /p/scripts/db_pr.py  publish {_R}", 1, 0),
+    ("other-install", "b", f"python3 /other/plugin/scripts/db_pr.py publish {_R}", 1, 0),
+    ("stage", "b", "python3 /p/scripts/db_pr.py --platform android stage /w/ABC-1/plan.json --wt /w/ABC-1/wt --branch b", 0, 1),
+    ("discard", "b", "python3 /p/scripts/db_pr.py discard /w/ABC-1/wt", 0, 1),
+    ("discard;publish", "b", f"python3 /p/scripts/db_pr.py discard /w/ABC-1/wt; python3 /p/scripts/db_pr.py publish {_R}", 1, 1),
+    ("t-mention", "t", "게시는 db_pr.py publish로 하지 않습니다. 확인 화면까지 했습니다.", 0, 0),
+    ("t-publish-status", "t", "`db_pr.py publish-status`를 확인하세요.", 0, 0),
+    ("t-inline", "t", "다음은 db_pr.py publish 단계입니다.", 1, 0),     # 설명 속 낱말도 — 안내 한 줄이 더할 뿐
+    ("t-line-continuation", "t", "```sh\npython3 /p/scripts/db_pr.py \\\n  --platform android \\\n  publish " + _R + "\n```", 1, 0),
+    ("t-newline", "t", "python3 /p/scripts/db_pr.py\npublish " + _R, 1, 0),
+    ("t-platform-before", "t", f"```sh\npython3 /p/scripts/db_pr.py --platform android publish {_R}\n```", 1, 0),
+    ("t-unbalanced-quote", "t", f"모델's 명령: python3 /p/scripts/db_pr.py --platform android publish {_R}", 1, 0),
+    ("t-no-py", "t", "다음: `db_pr publish` 를 돌린다", 0, 0),
+    ("t-none", "t", "확인 화면까지 했습니다. 승인하면 등록합니다.", 0, 0),
+]
+
+
+@pytest.mark.parametrize("kind,text,pub,own", [c[1:] for c in PUBLISH_FORMS], ids=[c[0] for c in PUBLISH_FORMS])
+def test_publish_hint_reads_the_db_pr_subcommand_word(env, kind, text, pub, own):
+    """재리뷰 RR-1: `게시:` 줄과 publish의 owner 안내 생략은 같은 판정(`db_pr.py` 뒤 낱말에서 옵션과 그 값을 건너뛴 하위 명령)을 쓴다 —
+    `--platform x publish`·`--json publish`·줄 이음도 `게시:` 한 줄이고 owner 안내가 없다. stage·discard 안내는 그대로. 열림·닫힘 모두."""
+    _state(env["work"], "ABC-1", OWN)
+    _hold_lock(env["work"], "ABC-1", OWN)
+    for publish in (None, "open"):
+        if publish:
+            write_meta(env["proj"], env["plug"], env["work"], publish=publish)
+        if kind == "b":
+            out = _handoff(env, text)
+        else:
+            events(env, final(text))
+            out = tt(env, "--", "x").stdout
+        lines = out.splitlines()
+        assert len([x for x in lines if x.startswith("게시:")]) == pub, (publish, out)
+        assert len([x for x in lines if x.startswith("주의:") and "TT_LOCK_OWNER" in x]) == own, (publish, out)
+
+
+# 통합:실제 db_pr(clone·bare 원격·hook·gh 스텁)에서 모델이 stage까지 한 analyze 작업 → tt-oc publish → 원격에 브랜치·PR.
 # 회귀: (H1) 위조한 stage.json(pending_sources에 작업 밖 파일, 가짜 검사 결과)은 재stage로 사라진다 (H2) wt/.githooks/pre-commit을
 # 바꿔도 재stage가 되돌려 그 코드가 돌지 않는다. (리뷰 6 F-P0) wt에 심은 무시된 파일 — hook이 cwd에서 import하는 가짜 `yaml/`,
 # 실행 비트가 있는 `.githooks/post-commit` — 은 화면 전에 지워지고, 화면 뒤에 심으면 거부. (F-P1) 원격에 남의 커밋이 있으면 그 작성자·
