@@ -147,6 +147,7 @@ DB에 맞는 것이 없고 탐색으로도 가설이 서지 않으면 "가설 �
 - 같이 할 것(병합): `/review` 병합 op 순서와 `06-collaboration.md §6.6` move 조합에 fixed 유지 단계(옛 기록 그대로의 `verify-fix`) 넣기, 병합 때 `verification_history` 옮기기. 지금은 커맨드로 병합하면 새 원인이 fix-submitted/open으로 내려앉는다(lint 예외 `new-cause-fixed`는 직접 편집·손으로 쓴 계획만 쓴다, `03-issue-db.md §5.9`).
 - 되살릴 때 다룰 것: 같은 브랜치 항목의 `ref`가 `update-fix`의 항목 병합(`same.update`)으로 조용히 덮어써진다. 최상위 `fix.ref`와 항목 `ref`가 어긋날 수 있다.
 - 되살리는 조건: 반입 뒤. 사내 파일럿에서 다중 브랜치 수정 빈도를 본 뒤 범위를 정한다.
+- 코드 표시(`99-deferred.md §J` 주석): `plugin/scripts/dbadd/ops/fix.py` `op_update_fix`의 `same.update`, `plugin/scripts/match_signatures.py` `fix_judgement`의 `fixed_in` 비교 — 두 곳.
 
 ---
 
