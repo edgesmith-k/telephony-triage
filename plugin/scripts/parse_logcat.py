@@ -459,9 +459,12 @@ def _profile(defaults: dict, db_cfg: dict | None = None) -> platforms.PlatformPr
 
 
 def _dump_func(defaults: dict) -> str:
-    """갈린 덤프 조각 표식의 함수 이름(site-defaults oFono 블록 `dump_func`, 없으면 placeholder). 잘못되면 종료 2."""
+    """갈린 덤프 조각 표식의 함수 이름(`block_keys`에 `dump_func`가 있는 플랫폼의 site-defaults 블록 값, 생략은
+    placeholder). 그런 플랫폼이 설치돼 있지 않으면 `dumpjoin.DEFAULT_FUNC`. 잘못되면 종료 2."""
+    # ponytail: 첫 플랫폼만 — dump_func 를 가진 플랫폼이 둘이 되면 선택 플랫폼(`_platform_name`) 기준으로 고른다
     try:
-        return platforms.load(defaults, "ofono", require_enabled=False).dump_func
+        name = next((n for n in platforms.known() if "dump_func" in platforms.get(n).block_keys), None)
+        return platforms.load(defaults, name, require_enabled=False).dump_func if name else dumpjoin.DEFAULT_FUNC
     except platforms.PlatformConfigError as exc:
         raise UsageError(str(exc)) from exc
 

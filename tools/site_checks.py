@@ -2229,10 +2229,11 @@ def module_tags(ctx: Ctx, doc: dict, cid: str, partial_ok: bool = True) -> dict:
     parser_rules = _plugin_common("parser_rules")
     import module_measure
 
-    missing, bad_rx, mismatch, seen, skipped = [], [], [], [], []
+    missing, bad_rx, mismatch, seen, skipped, nokey = [], [], [], [], [], []
     for plat, block in ((doc.get("platforms") or {}) if isinstance(doc.get("platforms"), dict) else {}).items():
         key = MODULE_DB_KEYS.get(plat)
         if key is None:
+            nokey.append(f"{plat}: 이슈 DB 입력 키 없음")   # 근거 문구에만 — `skipped`에 넣으면 restore.tags가 pass → skip
             continue
         db, why = _need_clone(ctx, cid, key)
         if why:
@@ -2261,10 +2262,11 @@ def module_tags(ctx: Ctx, doc: dict, cid: str, partial_ok: bool = True) -> dict:
         mismatch += [f"{plat}:{f}" for f in found if "데몬 " in f and "≠" in f]
     cmd = "python3 -c 'parser_rules.load(<이슈 DB 임시 clone>/parser-rules).tag_category(<데몬>)'"
     if not seen:
-        return res(cid, "skip", "이슈 DB 입력 없음: " + ("; ".join(skipped) or "modules.yaml 플랫폼 없음"), None,
+        return res(cid, "skip", "이슈 DB 입력 없음: " + ("; ".join(skipped + nokey) or "modules.yaml 플랫폼 없음"), None,
                    ask="플랫폼별 이슈 DB clone 경로를 알려 주세요 → `propose --set ops_db=<경로>`·`ofono_db=<경로>`")
     bad = [f"tags.yaml에 없음 {x}" for x in missing] + [f"맞는 태그 없음 {x}" for x in bad_rx] + mismatch
-    ev = f"플랫폼 {', '.join(seen)}" + (f" (건너뜀 {'; '.join(skipped)})" if skipped else "")
+    ev = f"플랫폼 {', '.join(seen)}" + (f" (건너뜀 {'; '.join(skipped)})" if skipped else "") \
+        + (f" (판정 밖 {'; '.join(nokey)})" if nokey else "")
     if bad:
         return res(cid, "fail", f"{ev} · {len(bad)}건: {_cap_list(bad)}", cmd,
                    ask="이름마다 고른다: 이슈 DB tags.yaml에 더함(계획 op PR — 새 태그는 사용자 확인) 또는 modules.yaml에서 뺌(모듈 레포 PR)")

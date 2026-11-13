@@ -1372,3 +1372,13 @@ def test_s4a_analyzers_no_remote_strings_unchanged(tmp_path):
                              ({"module_skills": {"remote": ""}}, "fail", "analyzers.data 비어 있음"), ({}, "fail", "analyzers.data 비어 있음")):
         r = sc.s4a_analyzers(sc.Ctx(_s4a_root(tmp_path, data)))
         assert (r["status"], r["evidence"], r["cmd"]) == (status, ev, "grep -n -A3 analyzers plugin/site-defaults.yaml"), data
+
+
+def test_module_tags_platform_without_db_key_is_evidence_only(monkeypatch):
+    """MODULE_DB_KEYS에 없는 플랫폼은 근거 문구에만 — restore.tags(partial_ok=False)도 pass 그대로(T-32)."""
+    db = ROOT / "tests" / "fixtures" / "issue-db-sample"
+    monkeypatch.setattr(sc, "_need_clone", lambda ctx, cid, key: (db, None))
+    r = sc.module_tags(sc.Ctx(ROOT), {"platforms": {"android": {}, "other": {}}}, "restore.tags", partial_ok=False)
+    assert r["status"] == "pass" and "판정 밖 other: 이슈 DB 입력 키 없음" in r["evidence"], r
+    r = sc.module_tags(sc.Ctx(ROOT), {"platforms": {"other": {}}}, "restore.tags", partial_ok=False)
+    assert r["status"] == "skip" and "other: 이슈 DB 입력 키 없음" in r["evidence"], r

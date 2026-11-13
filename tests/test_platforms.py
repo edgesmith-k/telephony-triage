@@ -111,6 +111,31 @@ def test_common_does_not_import_platforms():
     assert actual == COMMON_ALLOW
 
 
+# common → 위층(`plugin/scripts` 최상위 모듈·패키지 중 common·platforms·아래층 trackers 를 뺀 것) 허용 목록.
+# 지금 있는 것만 — 줄일 수는 있어도 늘리지 않는다(부분집합 검사). 이름이 계산되는 동적 import(`checks.py`의
+# `import_module(Path(name).stem)`)는 `_imports`가 못 잡는다.
+COMMON_UPPER_ALLOW = {
+    "common/compiled.py": {"parser_backends"},
+    "common/evidence.py": {"triagelib", "triagelib.report"},
+    "common/jobstatus.py": {"dbpr.worktree", "dbpr.worktree.RETAINED_NOTES", "issue_post"},
+    "common/modulefilter.py": {"triagelib.core", "triagelib.core._clip", "triagelib.core.is_error_text",
+                               "triagelib.report", "triagelib.report.merge_rows"},
+    "common/oc_adapter.py": {"guard"},
+}
+
+
+def test_common_upper_imports_within_allow():
+    upper = {p.stem for p in SCRIPTS.glob("*.py")} | {p.parent.name for p in SCRIPTS.glob("*/__init__.py")}
+    upper -= {"__init__", "common", "platforms", "trackers"}
+    actual: dict[str, set[str]] = {}
+    for path, rel in _py_files("common"):
+        bad = {m for m in _imports(path, rel) if m.split(".")[0] in upper}
+        if bad:
+            actual[rel] = bad
+    extra = {rel: mods - COMMON_UPPER_ALLOW.get(rel, set()) for rel, mods in actual.items()}
+    assert {rel: mods for rel, mods in extra.items() if mods} == {}
+
+
 @pytest.mark.parametrize("src", [
     "import platforms\n",
     "from platforms import load\n",
@@ -257,12 +282,23 @@ def test_template_metas_cover_every_platform():
 
 
 def test_core_template_code_knows_no_platform_name():
-    """skillcheck.template_findings·module_eval은 플랫폼 이름 리터럴 없이 레지스트리 자료(TemplateMeta)로만 플랫폼을 안다."""
+    """skillcheck.template_findings·module_eval·parse_logcat은 플랫폼 이름 리터럴 없이 레지스트리 자료로만 플랫폼을 안다."""
     import platforms
     names = set(platforms.known())
-    for rel in ("common/skillcheck.py", "module_eval.py"):
+    for rel in ("common/skillcheck.py", "module_eval.py", "parse_logcat.py"):
         hit = names & _string_literals(SCRIPTS / rel)
         assert hit == set(), (rel, hit)
+
+
+def test_dump_func_without_dump_func_platform_is_default(monkeypatch):
+    """`block_keys`에 `dump_func`를 가진 플랫폼이 없으면 placeholder 기본값(oFono를 뺀 설치)."""
+    import parse_logcat
+    import platforms
+    from common import dumpjoin
+    defaults = {"platform": {"name": "android", "others": {"ofono": {"dump_func": "site_dump_x"}}}}
+    assert parse_logcat._dump_func(defaults) == "site_dump_x"
+    monkeypatch.setattr(platforms, "known", lambda: ["android"])
+    assert parse_logcat._dump_func(defaults) == dumpjoin.DEFAULT_FUNC
 
 
 def test_platform_doc_checks_are_platform_local():
