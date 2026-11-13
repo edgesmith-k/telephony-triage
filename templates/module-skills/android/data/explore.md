@@ -33,5 +33,5 @@ DNC → DPM → RILJ 요청 → RIL HAL → 벤더 RIL IPC `…errorCode=` → R
 ## ⑤ 함정
 
 - `at-in: AT+CFUN=0` 뒤 끊김은 사용자·망처럼 보인다. 위(RILJ `RADIO_POWER`) 요청이 없으면 → `곁가지(<태그>)`.
-- `NOT_IN_SERVICE`는 등록 상실(`hasDeregistered = true`·`->NOT_REG`) 뒤면 모뎀·망. 부팅 중·`RADIO_POWER_OFF` 동반이면 겹쳐도 안 쓴다. `reason=USER`가 먼저. RILJ `error 6`(미지원)은 잡음.
+- `NOT_IN_SERVICE`는 등록 상실(`hasDeregistered = true`) 뒤면 모뎀·망. 부팅 중·`RADIO_POWER_OFF`·`SIM_NOT_READY` 동반이면 겹쳐도 안 쓴다. `reason=USER` 끔이 먼저. RILJ `error 6`(미지원)은 잡음.
 - 응답이 `cause=NONE`이어도 실린 APN이 틀리면 실패다.

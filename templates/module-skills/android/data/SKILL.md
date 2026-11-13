@@ -16,8 +16,8 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 ## 판단 순서
 
 1. RILJ `SET_INITIAL_ATTACH_APN`·`SET_DATA_PROFILE`·`SETUP_DATA_CALL`에 실린 APN과 data call list(`UNSOL_DATA_CALL_LIST_CHANGED`·`_UPDATED`). 기대와 다른 APN이면 고른 쪽(DPM 선호 프로필·APN DB) → 프레임워크. (없으면: DSM-C `onSetDataProfileComplete`)
-2. DNC `Data disallowed reasons:`만, `SETUP_DATA_CALL` 없음 → 프레임워크(`enabled=false, reason=USER`면 원인 데몬 DSMGR). 그 줄 없이 등록 상실(`hasDeregistered`) 뒤 `NOT_IN_SERVICE`는 모뎀·망. 부팅·`RADIO_POWER_OFF`면 제외.
-3. `SETUP_DATA_CALL` 응답 `cause≠NONE` → 모뎀·망(원인 데몬 RIL). (없으면: data call list·DNC `Internet data state`. cause 없으면 층 미정)
+2. DNC `Data disallowed reasons:`만, `SETUP_DATA_CALL` 없음 → 프레임워크(`enabled=false, reason=USER`면 원인 데몬 DSMGR). USER 끔 없이 `hasDeregistered` 뒤 `NOT_IN_SERVICE`는 모뎀·망. 부팅·`RADIO_POWER_OFF`·`SIM_NOT_READY`면 제외.
+3. `SETUP_DATA_CALL` 응답 `cause≠NONE` → 모뎀·망(원인 데몬 RIL). (없으면 data call list·DNC `Internet data state`. cause 없으면 층 미정)
 4. RILJ 응답은 성공인데 같은 요청 IPC RSP가 `Error(VIPC_E_*)` → 벤더 RIL이 감춤. 두 줄이 근거.
 5. 끊김: `DEACTIVATE_DATA_CALL`·`RADIO_POWER` 요청 없이 목록에서 빠짐 → 모뎀·망(전한 벤더 RIL). AT 중계 `AT+CFUN=0` 뒤면 `곁가지(<태그>)`.
 6. 재시도 예약이 로그 끝 뒤면 재시도는 판단 않는다.
