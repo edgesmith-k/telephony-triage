@@ -1349,7 +1349,7 @@ def test_doctor_warns_unknown_top_level_keys_only_in_config_row():
     assert set(example) <= userconfig.TOP_KEYS
     # example에서 주석 처리된 site 키와 사용자 config 전용 키(setup이 쓰지 않는 것)
     assert {"guard", "retention_days", "runtime", "module_skills", "platforms", "code", "reviewer", "opencode",
-            "explore"} <= userconfig.TOP_KEYS
+            "explore", "log_dir", "recent_code_roots", "jira"} <= userconfig.TOP_KEYS
     assert userconfig.unknown_keys({"schema": 1, "retention_dayz": 9}, {"user": {}, "work_dirr": "x"}) == [
         "retention_dayz(site-defaults)", "work_dirr(사용자 config)"]
     env, clone = _ready_env()
