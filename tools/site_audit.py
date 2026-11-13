@@ -39,6 +39,7 @@ FIRST_WINDOW_DAYS = 14          # 기록이 없거나 기준점이 사라졌을 
 MODULE_RUN_TOKENS = 35_000      # 모듈 eval run 하나(C0 run 26–33k를 올림). 사외 실측(module_offsite_results.json)이 있으면 그 평균
 MODULE_DOC_TOKENS = 30_000      # eval을 못 돌리는 모듈(case 없음·arm 자료 없음)의 문서 리뷰 세션 하나(explore·SKILL·analyzer + diff)
 ARM_MATERIAL = "tests/fixtures/module-arms"   # = module_eval.ARM_MATERIAL(레포 루트 기준). 플랫폼 디렉토리가 없으면 eval 불가
+DEEP_ONLY = "deep.md만 — 문서 리뷰만"
 RECORD_BASE = 20_000            # 기록 리뷰 세션 한 번(지시문·도구 설명)
 RECORD_PER = 3_000              # 기록 하나 + diff 바이트/4(32 KiB까지)
 RECORD_DIFF_CAP = 32 * 1024
@@ -407,14 +408,16 @@ def _no_eval_reason(ctx, clone: Path, path: str) -> str | None:
 
 
 def module_checks(ctx, clone: Path, picked: list[dict], carried: list[str] | None = None,
-                  head: str = "") -> tuple[list[dict], list[dict], list[str]]:
-    """(검사 행, 모듈 항목 후보, 고칠 것). 바뀐 `<p>/<m>`(`<p>/_common`이면 그 플랫폼 모듈 전부)과 이월된 모듈만."""
+                  head: str = "", carried_deep: frozenset[str] = frozenset()) -> tuple[list[dict], list[dict], list[str]]:
+    """(검사 행, 모듈 항목 후보, 고칠 것). 바뀐 `<p>/<m>`(`<p>/_common`이면 그 플랫폼 모듈 전부)과 이월된 모듈만.
+    `carried_deep`: 이월 중 deep.md만 바뀌었던 모듈(state `carry_deep`)."""
     import module_repo_check
 
     doc = sc.modules_doc(clone)
     mods = sc._module_paths(doc)
     changed: dict[str, dict] = {}
     size: dict[str, int] = {}
+    touched: dict[str, set[str]] = {}
     for c in reversed(picked):                         # 오래된 것부터 → 마지막 커밋이 남는다
         for f in c["files"]:
             parts = f.split("/")
@@ -424,6 +427,7 @@ def module_checks(ctx, clone: Path, picked: list[dict], carried: list[str] | Non
             for path in hit:
                 changed[path] = c
                 size[path] = size.get(path, 0) + 1
+                touched.setdefault(path, set()).add(f)
     for path in carried or []:
         if path not in changed and any(p == path for _, _, p, _ in mods):
             changed[path] = {"sha": head, "at": ""}
@@ -438,9 +442,15 @@ def module_checks(ctx, clone: Path, picked: list[dict], carried: list[str] | Non
         if path in bad_paths:
             continue
         no_eval = _no_eval_reason(ctx, clone, path)
+        deep, mine = f"{path}/deep.md", touched.get(path, set())
+        # 기본 eval은 deep.md를 읽지 않는다(정밀 탐색은 module_eval --deep). 이월 항목은 그때 deep.md만이었을 때만
+        if not no_eval and mine <= {deep} and (path not in (carried or []) or path in carried_deep):
+            no_eval = DEEP_ONLY
+        deep_flags = (["deep.md도 바뀜 — 기본 eval 밖"] if deep in mine and not no_eval else []) + \
+                     (["deep.md 삭제됨"] if deep in mine and not (clone / deep).is_file() else [])
         if no_eval:                                    # eval을 못 돌리는 것은 실패가 아니다 — 문서 리뷰 항목으로(이월도 된다)
             items.append({"path": path, "commit": c, "runs": 0, "est": MODULE_DOC_TOKENS, "changed": size.get(path, 0),
-                          "per_run": 0, "measured": False, "doc_only": no_eval})
+                          "per_run": 0, "measured": False, "doc_only": no_eval, "deep_flags": deep_flags})
             continue
         code, out, err = ctx.py("plugin/scripts/module_eval.py", "--module", path, "--templates", str(clone), "--dry-run",
                                 "--json", "--claude", missing_claude)
@@ -453,7 +463,7 @@ def module_checks(ctx, clone: Path, picked: list[dict], carried: list[str] | Non
         runs_total += runs
         per = _measured(path, ctx.root) or MODULE_RUN_TOKENS
         items.append({"path": path, "commit": c, "runs": runs, "est": int(round(runs * per)), "changed": size.get(path, 0),
-                      "per_run": int(round(per)), "measured": per != MODULE_RUN_TOKENS})
+                      "per_run": int(round(per)), "measured": per != MODULE_RUN_TOKENS, "deep_flags": deep_flags})
     docs = [i for i in items if i.get("doc_only")]
     rows.append(_row("audit.modules.dry_run", "fail" if dry_fail else ("pass" if len(items) > len(docs) else "info"),
                      f"바뀐 모듈 {len(changed)} · dry-run 통과 {len(items) - len(docs)} · 실행 수 {runs_total}" +
@@ -552,7 +562,8 @@ def plan(ctx, since: list[str] | None = None, last: bool = False, repos: list[st
                         picked.append(c)
         picked.sort(key=lambda c: c["at"], reverse=True)
         if repo == "modules":
-            rows, mods, mfix = module_checks(ctx, clone, picked, [c[4:] for c in carried], w["to"])
+            rows, mods, mfix = module_checks(ctx, clone, picked, [c[4:] for c in carried], w["to"],
+                                             frozenset(c[4:] for c in state.get("carry_deep") or [] if c in carried))
             checks += rows
             fix += mfix
             remote = sc._plugin_common("userconfig").redact_remote(st["ms"]["remote"])
@@ -569,7 +580,7 @@ def plan(ctx, since: list[str] | None = None, last: bool = False, repos: list[st
                                        f"--sha {sha} --json" + (f" --model {model}" if model else "")]
                     note = f"run {m['runs']} × {m['per_run']:,} 토큰" + (" (사외 실측 평균)" if m["measured"] else "")
                 items.append({"id": f"mod:{m['path']}", "repo": "modules", "kind": "module", "priority": "M",
-                              "flags": ["바뀐 모듈"] + ([m["doc_only"]] if m.get("doc_only") else []) +
+                              "flags": ["바뀐 모듈"] + ([m["doc_only"]] if m.get("doc_only") else []) + m["deep_flags"] +
                                        (["이월"] if m.get("carried") or f"mod:{m['path']}" in carry else []),
                               "files": [m["path"] + "/"], "est_tokens": m["est"], "at": m["commit"].get("at", ""),
                               "changed": m["changed"], "sha": sha, "doc_only": bool(m.get("doc_only")),
@@ -824,7 +835,7 @@ def review_md(p: dict) -> str:
             lines.append(f"- 증거: {it.get('evidence', '')}")
             lines.append(f"- 볼 것(권고): {DRIFT_HOWTO}. 시그니처 추가·변경은 사용자 확인 뒤에만, 이 리뷰는 바꾸지 않는다.")
         elif it["kind"] == "module" and it.get("doc_only"):
-            lines.append("- 볼 것: eval을 돌릴 수 없다 — 바뀐 문서(explore·SKILL·analyzer)가 플랫폼 공통 원칙·안전 규칙과 맞는지 diff로만 본다.")
+            lines.append("- 볼 것: 기본 eval로 못 잰다 — 바뀐 문서(explore·SKILL·analyzer·deep)가 플랫폼 공통 원칙·안전 규칙과 맞는지 diff로만 본다.")
         elif it["kind"] == "module":
             lines.append("- 볼 것: with ≥ without, with arm 안전 위반 0(기준선 arm 위반은 경고). 결과 기록은 스크립트(module_eval)만 쓴다.")
         lines.append("")
@@ -871,6 +882,8 @@ def record(root: Path, defer: list[str] | None = None) -> str:
     keep = [c for c in state["carry"] if _carry_repo(c) not in done]   # 이번에 처리하지 않은 레포(--repo·clone 건너뜀·커밋 수 초과)의 이월은 남긴다
     carry = keep + [i["id"] for i in p["items"] if i["slot"] == "미룸"] + extra
     state["carry"] = list(dict.fromkeys(carry))
+    deep = {i["id"] for i in p["items"] if DEEP_ONLY in i["flags"]} | {c for c in state.get("carry_deep") or [] if c in keep}
+    state["carry_deep"] = [c for c in state["carry"] if c in deep]   # 다음 감사에서도 문서 리뷰로(기본 eval은 deep.md를 못 잰다)
     state["history"].append({"at": at, "window": {r: {"from": w.get("from") or w.get("since"), "to": w["to"]}
                                                   for r, w in p["window"].items()},
                              "counts": {"items": len(p["items"]), "now": sum(1 for i in p["items"] if i["slot"] == "이번"),
