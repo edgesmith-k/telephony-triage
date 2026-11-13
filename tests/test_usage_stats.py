@@ -76,6 +76,7 @@ def test_merge_minutes_and_resyncs_after_first_created(tmp_path):
     rows = [*run(0), row("publish", 20, v=2, action="edited", pr=1, gh_ok=True),
             row("publish", 30, v=2, action="created", pr=2, gh_ok=True),
             row("publish", 60, v=2, action="edited", pr=2, gh_ok=True),
+            row("publish", 70, v=2, action="edited", pr=2, gh_ok=False),     # 실패한 다시 올림은 세지 않는다
             row("merge", 120, v=2, pr=2, merged=True, waited=0)]
     _job(tmp_path, "A-1", _pr_plan(), rows)
     _job(tmp_path, "B-1", _pr_plan(), [*run(0), row("publish", 30, v=2, action="created", pr=3, gh_ok=True),

@@ -189,7 +189,7 @@ def load_manifest(dest: Path) -> dict | None:
             f"{path}의 schema={schema}를 이 도구가 모릅니다 "
             f"(아는 값: {MANIFEST_SCHEMA})."
         )
-    if not isinstance(data.get("files", {}), dict):
+    if not isinstance(data.get("files"), dict):     # 키가 없어도 손상(빈 기준선으로 이어 가지 않는다)
         raise ValueError(f"{path}의 files가 객체가 아닙니다.")
     return data
 

@@ -299,6 +299,7 @@ def test_republish_drops_now_skipped_pending_from_plan_record():
     out = ws.ship("MOCK-7001", "issue/MOCK-7001", lease=found["remote_sha"])
     assert [s["file"] for s in out["stage"]["apply"]["pending_skipped"]] == [pending.name]
     assert ws.read_plan("MOCK-7001")["included_pending"] == [] and moved.is_file()
+    assert any(pending.name in n and "included_pending/" in n for n in out["summary"]["notes"])   # 안내가 실제 위치를 가리킨다
 
 
 def test_verify_resolution_and_update_fix_rules():

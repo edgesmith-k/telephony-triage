@@ -540,9 +540,15 @@ def _tool_problems(server: str, names: list[str]) -> list[str]:
 
 def _write_like(names):
     """쓰기형 이름(`mcptools.is_write`) 목록 — read_tools에 넣지 않는다(규칙 2, set-tracker·set·doctor 공유). 목록·매핑(키를 본다)이
-    아닌 값은 빈 목록(doctor가 형식 오류로 잡는다)."""
+    아닌 값은 빈 목록(doctor가 형식 오류로 잡는다). 항목은 `이름 (낱말: <쓰기형으로 본 낱말>)` — 판정은 `is_write` 그대로."""
     names = names if isinstance(names, (list, dict)) else []
-    return [n for n in names if (m := mcptools.NAME_RE.match(str(n))) and mcptools.is_write(m.group(2))]
+    out = []
+    for n in names:
+        if (m := mcptools.NAME_RE.match(str(n))) and mcptools.is_write(tool := m.group(2)):
+            v = mcptools.verb(tool)
+            word = v if v in mcptools.WRITE_VERBS else next(w for w in mcptools._words(tool) if mcptools._is_write_word(w))
+            out.append(f"{n} (낱말: {word})")
+    return out
 
 
 def cmd_set_tracker(args, defaults: dict) -> dict:

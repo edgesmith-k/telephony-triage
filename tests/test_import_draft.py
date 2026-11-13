@@ -268,7 +268,7 @@ def test_label_is_required(tmp_path):
     assert _cli(source, dest, "--label", " ").returncode == 2 and _files(dest) == {}
 
 
-@pytest.mark.parametrize("text", ["{not json", '{"schema": 2, "files": {}}', "[]", '{"schema": 1, "files": []}'])
+@pytest.mark.parametrize("text", ["{not json", '{"schema": 2, "files": {}}', "[]", '{"schema": 1, "files": []}', '{"schema": 1}'])
 def test_corrupt_manifest_is_usage_error(tmp_path, text):
     """B-19-2: 손상된 기준선(JSON 오류·모르는 schema·객체 아님)은 트레이스백 없이 종료 2, 대상은 그대로다."""
     source, dest = _dirs(tmp_path)

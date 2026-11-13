@@ -17,7 +17,7 @@ PR까지 = 첫 `0-key` → 그 뒤 첫 `publish{action: created, gh_ok: true}`(�
 없으면(분석만 하고 release 안 함·아직 진행 중) investigation_unmeasured. `explore`·`module`·`checked` 행은 정보용이라 어느 지표도 legacy 판정(v≥2 행)도 보지 않는다.
 PR이 있는데 못 재면 pr_unmeasured(record처럼 analyze 없이 시작했거나 PR 뒤에 analyze한 작업).
 병합까지(`merge_minutes`, 상태 pr인 작업만) = 그 첫 `created` → 그 뒤 첫 `merge{merged: true}`(`already` 제외) — `db_pr merge`로 병합한 PR만
-(GHE 화면에서 병합하면 행이 없어 빠진다). 다시 올림(`resyncs`) = 첫 `created` **뒤**의 `publish{action: edited}` 행(sync-pr 등) 수.
+(GHE 화면에서 병합하면 행이 없어 빠진다). 다시 올림(`resyncs`) = 첫 `created` **뒤**의 `publish{action: edited, gh_ok: true}` 행(sync-pr 등) 수(실패한 시도는 빼고).
 재시도의 analyze 실행은 질문(`needs_input`) 바로 뒤의 `--answer` 재실행을 빼고 따로(answer_reruns) 센다. 시간대 없는(naive) 시각·
 목록이 아닌 `job.runs` 같은 손상 값은 없는 것으로 본다. 드라이버 질문 = `needs_input` 행(kind
 `issue` 제외), 대화 질문(AskUserQuestion)은 스크립트 신호가 없어 세지 않는다. release(Step 7) 사유는 기록이 없어 파일 상태로만
@@ -188,7 +188,8 @@ def _job(job: Path, lock: dict | None) -> dict:
             "pr_min": _minutes(rows, _pr_created),
             "merge_min": _minutes(rows, lambda r: r.get("step") == "merge" and r.get("merged") is True
                                   and not r.get("already"), start=_pr_created),
-            "resyncs": sum(1 for r in rows[created + 1:] if r.get("step") == "publish" and r.get("action") == "edited"),
+            "resyncs": sum(1 for r in rows[created + 1:] if r.get("step") == "publish" and r.get("action") == "edited"
+                           and r.get("gh_ok") is True),
             "analysis_min": _minutes(rows, lambda r: r.get("step") == "done"),
             "investigation_min": investigation, "investigation_open": analyzed and investigation is None,
             "asked": asked, "runs": fresh, "answer_reruns": reruns, "errors": sum(1 for r in rows if r.get("step") == "error"),

@@ -338,8 +338,9 @@ def test_jira_tools_from_nonstandard_mock_server():
     # 쓰기형 이름은 read_tools에 넣지 않는다(규칙 2): set-tracker·set(tracker 블록째) 종료 2, config 그대로
     cfg_path = env.home / "config.yaml"
     before = cfg_path.read_bytes()
-    assert env.run("config.py", ["set-tracker", "--server", "mock-jira", "--get-issue", "mcp__mock-jira__jira_fetch_ticket",
-                                 "--read-tools", "mcp__mock-jira__jira_ticket_add_note"]).returncode == 2
+    proc = env.run("config.py", ["set-tracker", "--server", "mock-jira", "--get-issue", "mcp__mock-jira__jira_fetch_ticket",
+                                 "--read-tools", "mcp__mock-jira__jira_ticket_add_note"])
+    assert proc.returncode == 2 and "jira_ticket_add_note (낱말: add)" in proc.stderr, proc.stderr   # 걸린 낱말을 알린다
     assert env.run("config.py", ["set-tracker", "--server", "mock-jira",
                                  "--get-issue", "mcp__mock-jira__jira_move_ticket"]).returncode == 2
     block = {**jira, "read_tools": [*jira["read_tools"], "mcp__mock-jira__jira_move_ticket"]}

@@ -316,7 +316,8 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
     elif fcheck.get("status") == "no-match-json":
         notes.append("제시 후보 기록 없음 — match.json 없음(수락률 통계 제외)")
     for skip in applied.get("pending_skipped") or []:   # 경로 말고 파일 이름만(PR 본문에도 들어간다)
-        notes.append(f"pending 피드백 {skip['file']} 건너뜀: {skip['reason']} — pending 폴더에서 지우거나 맞는 플랫폼 폴더로 옮긴다")
+        notes.append(f"pending 피드백 {skip['file']} 건너뜀: {skip['reason']} — pending 폴더(다시 올림이면 작업의 included_pending/)에서 "
+                     "지우거나 맞는 플랫폼 폴더로 옮긴다")
     new_pending, user_statement = [], False
     for op in applied.get("operations") or []:
         body = op.get("cause") if op.get("op") == "new-cause" else (op.get("first_cause") or {}).get("cause") \
