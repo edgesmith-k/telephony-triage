@@ -1205,6 +1205,20 @@ def test_guard_git_dir_work_tree_and_env_forms():
         assert decision(bash(ws, cmd.replace(str(c), str(other)), ws.base)) is None, cmd
 
 
+def test_guard_git_dir_forms_under_safe_bare_repository_explicit():
+    """git 2.38~2.44 + `safe.bareRepository=explicit`면 `.git` 안에서 부른 rev-parse가 128 — guard는 `.git` 앞 폴더에서
+    다시 물어 이슈 DB로 본다(2.45+는 이 설정에서도 처음 호출이 된다)."""
+    ws = shared()
+    c, C = ws.clone, ws.clone.as_posix()
+    env = ws.env(GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="safe.bareRepository", GIT_CONFIG_VALUE_0="explicit")
+    plain = tmp("tt-gh-plain-")
+    for cmd, cwd, want in ((f"git --git-dir={C}/.git push origin HEAD:main", plain, "ask"),
+                           (f"git --git-dir={C}/.git update-ref refs/remotes/origin/main HEAD", plain, "deny"),
+                           (f'GIT_DIR="{C}/.git" git push --no-verify origin HEAD:main', plain, "deny"),
+                           ("git update-ref refs/remotes/origin/main HEAD", c / ".git", "deny")):
+        assert decision(bash(ws, cmd, cwd, env=env)) == want, cmd
+
+
 def test_guard_eval_and_xargs_wrappers():
     ws = shared()
     c = ws.clone

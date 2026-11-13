@@ -429,18 +429,26 @@ def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
                           errors="replace")
 
 
-def _common_dir(cwd: Path) -> str | None:
+def _rev_parse(cwd: Path, *args: str) -> str | None:
+    """git 2.38~2.44의 `safe.bareRepository=explicit`는 `.git` 안에서 찾은 git dir도 거부한다(2.45+는 암묵 허용) —
+    실패하면 `.git` 조각 앞 폴더(깊은 것부터, 조상만)에서 다시 부른다. `-c safe.bareRepository=all`로 풀지 않는다
+    (모델이 만든 bare 모양 폴더의 config를 읽게 된다)."""
     if not cwd.is_dir():    # stat 오류(EACCES 등)는 올린다: 판정하지 못한 검사(`_checked` ask)다 — 레포가 아니라고 보지 않는다
         return None
-    proc = _git(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir")
-    return _norm(proc.stdout.strip()) if proc.returncode == 0 and proc.stdout.strip() else None
+    parts = cwd.parts
+    for d in [cwd, *(Path(*parts[:i]) for i in range(len(parts) - 1, 0, -1) if parts[i] == ".git")]:
+        proc = _git(d, "rev-parse", *args)
+        if proc.returncode == 0 and proc.stdout.strip():
+            return _norm(proc.stdout.strip())
+    return None
+
+
+def _common_dir(cwd: Path) -> str | None:
+    return _rev_parse(cwd, "--path-format=absolute", "--git-common-dir")
 
 
 def _git_dir(cwd: Path) -> str | None:
-    if not cwd.is_dir():
-        return None
-    proc = _git(cwd, "rev-parse", "--absolute-git-dir")
-    return _norm(proc.stdout.strip()) if proc.returncode == 0 and proc.stdout.strip() else None
+    return _rev_parse(cwd, "--absolute-git-dir")
 
 
 def _repo_slug(value: str) -> tuple[str | None, str, str] | None:
