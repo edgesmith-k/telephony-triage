@@ -192,14 +192,21 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
   읽기 도구를 허용해야 한다: `gen_opencode.py install … --jira-read-tool <서버>_<도구> --force`(permission 끝 allow — 템플릿의
   `"*"`·`jira_*` deny 뒤). 관리 설정(`/etc/opencode`)의 `jira_*` deny는 관리자 몫(확인의 tools-offered 행이 fail로 보인다).
 - **OpenCode 안의 쓰기 경계(11/13 OC-B, `oc_adapter.py`)**: `config.py`의 사용자 설정 쓰기 하위 명령(`init`·`set`·`set-tracker`·
-  `install-hooks`·`rename-legacy --apply`·`sync-scripts-path --plugin-root`·`tracker-candidates --mcp-config|--opencode-config`)은
-  config.py 자신의 파서로 읽어 "직접 실행"으로 돌린다(사람이 터미널에서. `init --answers`는 붙여 넣지 말고 대화형 `config.py init`).
-  그래서 `tt-setup`은 쓰기 흐름 커맨드다. 플러그인 스크립트는 `--plugin-root`(줄임말·`=` 꼴 포함)를 받지 않는다. 스크립트 출력
-  (`--out`·`--meta-out`·`--preview`·`mask_pii --in-place`·`jira_fields extract --consume`)은 작업 루트(설치 폴더 `tt-oc.json`의
-  `work_root`) 안이어야 하고(그 파일을 못 읽으면 출력이 있는 호출은 거부), `.git`·`.githooks` 아래나 이름이 `HEAD`인 경로에는
-  `edit`·`write`·`apply_patch`도 스크립트 출력도 쓰지 않는다(모델이 만든 저장소의 `core.fsmonitor`·hook을 허용된 `git status`가
-  실행한다). git은 `safe.bareRepository=explicit`로 돈다(tt-oc가 자식 환경에 준다 — 없으면 어댑터가 bash의 git·스크립트를 거부, git
-  2.38 이상은 `tt-oc doctor`의 `git` 행). 플랫폼별 `work_dir`는 설치의 `--work-root` 안에 둔다(사내 analyze e2e에서 `--out` 거부가 없는지 확인).
+  `install-hooks`·`rename-legacy --apply`·`tracker-candidates --mcp-config|--opencode-config`)은
+  config.py 자신의 파서로 읽어 "직접 실행"으로 돌린다(사람이 터미널에서). `init --answers`는 일반 거부다. 대화형 `config.py init`으로 답한다.
+  그래서 `tt-setup`은 쓰기 흐름 커맨드다. 플러그인 스크립트는 `--plugin-root`(줄임말·`=` 꼴 포함)를 받지 않는다(`sync-scripts-path`도 거부).
+  스크립트 출력(`--out`·`--meta-out`·`--preview`·`mask_pii --in-place`·`jira_fields extract --consume`)은 작업 루트(설치 폴더
+  `tt-oc.json`의 `work_root`) 안이어야 한다. 루트 자체는 안 된다. 그 파일을 못 읽으면 출력이 있는 호출은 거부한다.
+  `.git`·`.githooks` 아래나 이름이 `HEAD`인 경로에는 `edit`·`write`·`apply_patch`도 스크립트 출력도 쓰지 않는다(모델이 만든 저장소의
+  `core.fsmonitor`·hook을 허용된 `git status`가 실행한다). 작업 루트 안에서 `HEAD` 파일이 있는 폴더(bare·미러·`.repo/projects/*.git`)
+  아래에도 쓰지 않는다. 작업 루트 밖 출력 거부만은 모델이 절대 경로로 한 번 다시 하게 한다(`OUT_RETRY`, tt-oc는 막힌 호출로 센다).
+  tt-oc는 자식 환경에 `safe.bareRepository=explicit`·`protocol.ext.allow=never`를 붙이고 `GIT_ALLOW_PROTOCOL`을 뺀다.
+  tt-guard.js의 `shell.env`가 같은 `GIT_CONFIG_*`를 bash 자식에 다시 넣고 `GIT_CONFIG_PARAMETERS`를 빈 값으로 덮는다(실제 bash
+  자식에 걸리는지는 사내 e2e로 확인). 어댑터는 자기 환경에 이 설정이 없으면 bash의 git·스크립트를 거부한다.
+  `tt-oc doctor`의 `git` 행은 어댑터와 같은 조건으로 본다(`GIT_CONFIG_PARAMETERS`가 같은 설정을 정하면 fail).
+  git 2.38 미만이면 doctor가 warn을 내고 시작은 한다. 그때 이 설정은 무시되고 `.git`·`HEAD` 쓰기 거부만 남는다. 2.38 이상을 쓴다.
+  모듈 스킬 git(`moduleskills._env`)은 `GIT_CONFIG_*`를 지우고 자체 `-c`·`GIT_CEILING_DIRECTORIES`로 돈다.
+  플랫폼별 `work_dir`는 설치의 `--work-root` 안에 둔다(사내 analyze e2e에서 `--out` 거부가 없는지 확인).
   `tt-oc publish`(사람이 터미널에서 승인하는 게시)는 처음 설치할 때 `install … --allow-publish`를 주면 열림(tt-oc.json
   `"publish": "open"`), 안 주면 닫힘이다. 이미 설치한 곳을 열거나 닫으려면 같은 install을 `--force`로 다시 한다.
 - OpenCode 허용 목록·guard 는 모델의 실수와 로그·Jira 본문에 섞인 지시를 걸러내는 사고 방지 장치다. 작정하고 우회를 찾는 모델을

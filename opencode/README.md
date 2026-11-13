@@ -69,7 +69,12 @@ OpenCode 안에서는 `config.py`의 사용자 설정 쓰기(`init`·`set`·`set
 `tracker-candidates --mcp-config|--opencode-config`)를 돌리지 않고 정확한 명령만 보인다 — 사람이 읽고 터미널에서 직접 실행한다.
 `init --answers <파일>`의 답 파일은 모델이 쓴 것이므로 붙여 넣지 말고 `config.py init`(대화형)으로 직접 답한다. 플러그인 스크립트는
 `--plugin-root`를 받지 않고, 스크립트 출력(`--out` 등)은 설치의 작업 루트(`--work-root`) 안에만 쓰며, `.git`·`.githooks` 아래와
-`HEAD`라는 이름에는 어떤 도구로도 쓰지 않는다. git은 `safe.bareRepository=explicit`로 돈다(git 2.38 이상 — `tt-oc doctor`가 본다).
+`HEAD`라는 이름에는 어떤 도구로도 쓰지 않는다. 작업 루트 안에서 `HEAD` 파일이 있는 폴더(bare 저장소·미러) 아래에도 쓰지 않는다.
+코드 루트(AOSP 등)는 작업 루트 안에 두지 않는다.
+tt-oc는 OpenCode에 `safe.bareRepository=explicit`·`protocol.ext.allow=never`를 준다. 사용자 환경의 `GIT_ALLOW_PROTOCOL`은 뺀다.
+git 2.38 미만이면 doctor가 warn을 내고 시작은 한다. 그때 이 설정은 무시되고 `.git`·`HEAD` 쓰기 거부만 남는다. 2.38 이상을 쓴다.
+`GIT_CONFIG_PARAMETERS`가 이 설정을 다시 정하면 doctor가 fail을 낸다. 그 환경 변수를 지우고 시작한다.
+explicit에서는 bare 저장소를 직접 가리키는 `git -C <aosp>/.repo/projects/x.git log` 꼴이 거부된다. 작업 트리 폴더에서 돌린다.
 
 OpenCode 허용 목록·guard는 모델의 실수와 로그·Jira 본문에 섞인 지시를 걸러내는 사고 방지 장치다. 작정하고 우회를 찾는 모델을
 막는다고 보장하지 않는다. 실제 경계는 OS 사용자 권한, 서버 브랜치 보호, 사람이 내용을 읽고 하는 승인이다. 모델이 출력한 명령은

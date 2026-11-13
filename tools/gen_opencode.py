@@ -70,7 +70,8 @@ WRITE_FLOWS = {
     "migrate": "커밋 뒤 `git push`와 PR",
     "review": f"계획 적용의 {_PR}",
     "status": "병합(`db_pr.py merge`)",
-    "setup": "사용자 config 쓰기(`config.py init`·`set`·`set-tracker`·`install-hooks`·`rename-legacy --apply`)·이슈 DB clone(`git clone`)",
+    "setup": "사용자 config 쓰기(`config.py init`·`set`·`set-tracker`·`install-hooks`·`rename-legacy --apply`)·이슈 DB clone(`git clone`)."
+             " init은 `--answers` 없이 보인다(사용자가 터미널에서 대화형으로 답한다)",
 }
 NOTE = ("> **OpenCode v1 — 분석 전용.** 이 흐름의 다음 단계는 실행하지 않는다(guard·설정이 막는다): {ops}. 그 단계에 이르면 실행할 "
         "정확한 명령(절대 경로, 모든 인자)을 sh 코드 블록으로 보이고 \"OpenCode v1에서는 실행하지 않습니다. 터미널이나 Claude "
