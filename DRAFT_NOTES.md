@@ -26,7 +26,7 @@
 | ☐ | 항목 | 메모 |
 |---|---|---|
 | ☐ F | 다음 묶음 — 사람 확인·태그·반입은 사용자. 반입 뒤 후보: 탐색 `--also`, 심층 분석 단계, Jira 버전 문구 패턴(`99-deferred.md` H·I·G) | SITE_INSTALL §8·아래 재반입 노트 |
-| ☐ M | 반입 전 병합 대기: 백엔드 버전 올림, 이슈 DB `fixed_in`(병합 때 fixed 유지 포함), 모듈 문서 사실 정정 | 병합되면 재반입 노트에 한 줄씩 |
+| ☐ M | 반입 전 병합 예정: #118 모듈 문서 사실 정정, Android 벤더 줄 꼴 정리(PR 미정). #114·#116·#117 병합됨 | 병합되면 재반입 노트 표시를 고친다 |
 | ☐ G | 범용판 별도 레포 — **보류(10/07 사용자)** | 재개는 사용자가 정한다 |
 | ☐ I | OpenCode·사내 모델판 — 사외 몫 ☑(사내 확인 남음) | `docs/RUNTIME_ADOPTION.md` |
 
@@ -44,11 +44,14 @@
   - `platform.ril.vendor`를 두었으면 벤더 HAL 짝(`hal`)이 바뀔 수 있다 → `db_regress`로 확인(#109).
   - S-0이 `site_step` 첫 단계(#102). 직접 입력한 소스 경로는 개인 `code_profiles`에 자동 저장(#106).
   - 그 밖(#80 모듈 스킬 레포·+1 병합, #85 스냅샷 overlay, #86 Android 17 태그·RIL·슬롯, #87 OpenCode, #90·#95·#98 마스킹): 파일별 영향과 관리자 할 일(`site-defaults.yaml`의 `analyzers.*.inputs`·`max_tokens_hint`·`issue_db.merge` 지우기)은 `MODULE_SKILLS_RESULT.md` "반입 노트"(#80까지).
-  - 사내 읽기(import-20261103 대비, KB): S-0 −18.6·S-1 +7.8·S-2 +5.8·S-3 +11.8·S-4 +7.3·S-4a +1.2·S-5 +0.3·S-6 0·S-7 +2.0.
-- 재실행할 eval 수는 재반입 노트가 정한다(`pending.json` `site`, S-2; 사내 모델이 다르면 +7). T4 Read line 힌트(S-2)·offline_eval 오류율 상한(S-5)·`max_tokens_hint`(S-4a)·U1 setup Jira 없음 중단(S-3)·db-authoring 요약 확장(S-2)·마켓플레이스 소스 유형 → version 규칙(S-2·S-7).
+  - #114 백엔드 0.1.5: 첫 분석은 캐시 없이 다시 돈다, `min_version`은 그대로. #116: plan·DB 영향 없음.
+  - #117: plan·DB 영향 없음. 사내 DB는 schema PR 전까지 항목 `ref` 든 계획을 종료 2로 거부. 상태 불변 `fixed_in` 추가·`/review` 병합 순서는 `99-deferred.md` J(반입 뒤).
+  - (병합 예정) #118: data 규칙 `NOT_IN_SERVICE`(등록 상실 뒤)→모뎀·망, 샘플 DB 파서 규칙 `UNSOL_RESPONSE_SIM_STATUS_CHANGED`. data eval 1회 tie(새 case 기대값 완화 뒤 재채점 pass1 with 3·without 3, 기록 파일은 재채점 전).
+  - (병합 예정) Android 벤더 줄 꼴 정리: <!-- sweep: 메인이 채움 -->
+  - 사내 읽기(import-20261103 대비, KB): S-0 −18.5·S-1 +7.8·S-2 +5.8·S-3 +11.8·S-4 +7.3·S-4a +1.2·S-5 +0.3·S-6 0·S-7 +2.1(11/13 #117 뒤, #118 전).
+- 재실행할 eval 수는 재반입 노트가 정한다(`pending.json` `site`, S-2; 사내 모델이 다르면 +7). 단계별 확인 항목·반입 뒤 후보(RF·R-36~47)는 history 11/13.
 - S-7: usage_stats format 2·`--transcripts` 허용 여부. S37 결과·팀 설치본 통일 뒤에만 `signature_features`를 DB에 선언(결정 (v)).
 - 사내 IMS는 별도 APK(11/12): IMS 줄·규칙·문서는 AOSP 기준·소스만 — S-1에서 먼저.
-- 반입 뒤 후보(RF-5·6·8·9, R-36~R-47)는 `docs/history/draft-notes-2026-10.md` "10/13 이동".
 
 ## 사외에서는 못 하는 것 (사내 S-1~S-5)
 
@@ -65,11 +68,9 @@
 - (u) 11/02~03 사용자: 맨 `cid`는 마스킹하지 않는다(셀 위치 키·`mCid`는 가림). 데몬 이름은 카테고리별 placeholder(11/09 D10).
 - (q) 사내 S-2 축소(10/14, 사용자): 사내 대상 = `pending.json` `site`(사내 모델이 다르면 +7). 나머지는 `offsite_results.json`으로 갈음, 안전 위반은 면제 불가.
 - (a) 사내→사외 반출은 사용자가 직접 타이핑하는 사내 정보 없는 문장뿐. 사외는 합성 데이터로만 재현한다. (10/01)
-- (b) 자동 게시(RF-8)는 `confidence`가 아니라 별도 품질 게이트로만. (10/01)
 - (c) 실패 스텝·Claude 가설은 판정(S/C)에 쓰지 않는다. 구간·순위·검색·리포트 보조만. (10/04)
 - (d) 반입 전에는 v1 스키마를 직접 고치고, 배포 뒤 구조 변경은 버전을 올린다. 호환 변경은 올리지 않는다(`06 §6.4`). (10/04, 10/28)
-- (e) verify-fix 흔적: 코드·설정 수정 유형은 흔적 필수. 비코드 유형에 흔적 시그니처가 없을 때만 사용자 확인으로 판정하고 `verification.note`에 남긴다. (10/04)
 - (g) eval 판정: 전·후 같은 모델, 1순위 동작, 2순위 토큰 W0 폭. (10/06)
-- (f)(h)(i)(j)(k)(l)(m)(n)(p)(r)(s)(t) → history((i)(p)(r)(s) 11/13, (t) `17-platforms.md` §9~11, (m) §7, (n) `18-trackers.md` §7)
+- (b)(e)(f)(h)(i)(j)(k)(l)(m)(n)(p)(r)(s)(t) → history((b)(e)(i)(p)(r)(s) 11/13, (t) `17-platforms.md` §9~11, (m) §7, (n) `18-trackers.md` §7)
 - (o) 사내 트래커는 Jira(10/12, 사용자). "사내 설정 시작" 한마디로 `tools/site_step.py`가 단계를 이어 낸다.
 - 사내 로그가 모의와 다를 때 가장 먼저: `docs/development/S0_PROBE_CHECKLIST.md` + `tools/s0_stats.py`, 설정 초안은 `tools/s0_suggest.py`(사내 전용 출력).
