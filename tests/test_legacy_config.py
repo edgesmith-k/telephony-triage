@@ -200,6 +200,20 @@ def test_rename_legacy_lists_changes_and_writes_only_with_apply():
     assert w.json("config.py", ["rename-legacy", "--apply"])["changes"] == []          # 다시 해도 바꿀 것 없음
 
 
+def test_rename_legacy_apply_refuses_write_like_tracker_tools():
+    """옛 `jira.read_tools`는 set 검사를 안 거친다 — 쓰기형 이름이면 `--apply`가 종료 2·config 바이트 그대로(규칙 2)."""
+    w = ws()
+    path = w.home / "config.yaml"
+    set_user(w, {"jira": {"mcp_server": "mock-jira", "read_tools": [READ, "mcp__mock-jira__jira_update_issue"]}})
+    before = path.read_bytes()
+    proc = w.run("config.py", ["rename-legacy", "--apply"])
+    assert proc.returncode == 2 and "jira_update_issue" in proc.stderr, proc.stdout + proc.stderr
+    assert path.read_bytes() == before
+    set_user(w, {"jira": {"mcp_server": "mock-jira", "read_tools": [READ]}})
+    assert w.json("config.py", ["rename-legacy", "--apply"])["applied"] is True
+    assert yaml.safe_load(path.read_text(encoding="utf-8"))["tracker"]["read_tools"] == [READ]
+
+
 # -- 없어진 키 issue_db.merge (+1 병합, H A2 — 경고만, fail-closed 아님) -------------------------------------
 
 REMOVED_USER = {

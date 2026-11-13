@@ -581,6 +581,12 @@ def cmd_rename_legacy(args, defaults: dict) -> dict:
     data, changes = userconfig.rename_legacy(user)
     out["changes"] = changes
     if changes and args.apply:
+        tools = userconfig.get(data, "tracker.tools")
+        bad = _write_like(list(tools.values()) if isinstance(tools, dict) else []) + \
+            _write_like(userconfig.get(data, "tracker.read_tools") or [])
+        if bad:  # 옛 jira 키는 set 검사를 안 거치므로 옮길 때 막는다(규칙 2)
+            raise UsageError("쓰기형 이름이라 tracker 도구에 넣지 않는다(규칙 2). 읽기 도구가 맞으면 사용자가 config.yaml을 직접 "
+                             f"고친다: {', '.join(map(str, bad))}")
         userconfig.save(data)
         out["applied"] = True
     out["remaining"] = userconfig.legacy_problems(None, data if out["applied"] else user)
