@@ -1,0 +1,28 @@
+# 합성 case (11/13 질문 13 — NOT_IN_SERVICE 평가 거부). 출처: Android 17 에뮬레이터 캡처 d32f-fail-reg-unregistered(데이터 등록을 미등록으로 둔 채 모바일 데이터를 켬)에서 고른 줄 — AOSP 층만, 벤더 줄 없음. 모뎀이 미등록(NOT_REG_MT_NOT_SEARCHING_OP)을 올린 뒤 DNC가 NOT_IN_SERVICE로 평가를 거부해 SETUP_DATA_CALL이 나가지 않는다 — 프레임워크는 증상이다. 함정: 평가 거부(DNC)를 프레임워크 원인으로 답함, 데이터를 켠 줄(reason=USER)을 사용자 설정으로 읽음, 같은 시각 SET_USER_DATA_ENABLED error 6(미지원 요청)을 RILJ·벤더 RIL 원인으로 답함. files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+schema_version: 2
+name: data-no-service-eval-reject
+kind: explore
+synthetic: true
+key: MOCK-9828
+issue:
+  summary: 모바일 데이터를 켰는데 연결되지 않음 (합성)
+  description: 모바일 데이터를 켰는데 인터넷이 연결되지 않습니다. 합성 case.
+  occurred_at: '2026-11-10T17:18:24+0000'
+  platform_version: '17'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: cause_unconfirmed
+expect:
+  accept:
+    - layer: '모뎀|망'
+      daemon: '모뎀|망|없음|알 수 없음|RIL$|RIL[ (]'
+      evidence: ['Data disallowed reasons: NOT_IN_SERVICE', 'NOT_REG|OUT_OF_SERVICE|hasDeregistered = true']
+  trap:
+    - label: '^\s*(프레임워크|DNC|DataNetworkController|DSMGR|DataSettingsManager|RILJ|RIL HAL|벤더|곁가지)'
+    - label: '^\s*그\s*층\s*로그\s*없음'
+    - label: '^\s*원인\s*아님'
