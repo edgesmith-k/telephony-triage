@@ -191,10 +191,12 @@ def test_code_location_absolute_path_only_in_file_slot():
         return [p for p in issue_post.check_fill(raw, True, False, masker, [], [])[1] if "절대 경로" in p]
 
     for code in ("/home/u/aosp/frameworks/X.java:12 — y", r"C:\src\aosp\X.java:12", "~/aosp/frameworks/X.java:12",
-                 "/X.java:12"):
+                 "/X.java:12", "`/home/u/aosp/X.java:12` — y", '"/home/u/X.java:12"', r"(C:\src\X.java:12)",
+                 "~user/aosp/X.java:12"):
         assert problems(code), code
     for code in ("frameworks/opt/telephony/X.java:12 — 요청/응답", "a/b/c.java:3 — https://cs.android.com/ 참고",
-                 "X.java:12 — /data/vendor/radio 를 읽는다"):
+                 "X.java:12 — /data/vendor/radio 를 읽는다", "`frameworks/opt/telephony/X.java:12` — y",
+                 "(참고) a/b.java:3 — z"):
         assert not problems(code), code
 
 
