@@ -1,8 +1,8 @@
 # tools/check_boundary.py 예외 (사외). 사내 전용 예외는 docs/site/boundary-allow.txt (SITE_PATHS).
 # 형식: <규칙 glob> <경로 glob> [<맞은 문자열 정규식>]   — 예외는 좁게(값까지) 적는다.
 
-# 마스킹 시험용 합성 IMEI·IMSI (공개 예시 값)
-pattern:long-number tests/* ^(450081234567890|450081234567891|356938035643809|490154203237518)$
+# 마스킹 시험용 합성 IMEI·IMSI·ICCID (공개 예시 값)
+pattern:long-number tests/* ^(450081234567890|450081234567891|356938035643809|490154203237518|8982300123456789012|89823001234567890123|1234567890123456789|4901542032375101|98214365870921436587|981032547698103254|89820012345678901234|8982012345678901)$
 # oFono 설정 짝 규칙 PII 거부·마스킹 시험용 합성 IMSI (공개 시험 PLMN 310-150 예시 값)
 pattern:long-number tests/test_ofono_components.py ^310150123456789$
 # db_lint mask.allow_patterns 넓이 검사 표본 (같은 합성 값)
@@ -15,8 +15,8 @@ pattern:ip-address tests/test_masking.py ^1\.2\.3\.4$
 # 경계 시험이 일부러 넣는 위반 문자열
 pattern:* tests/test_boundary.py
 
-# 교육 자료의 마스킹 전·후 예시: 테스트 PLMN(001-01) 합성 IMSI
-pattern:long-number docs/* ^001010123456789$
+# 교육 자료의 마스킹 전·후 예시: 테스트 PLMN(001-01) 합성 IMSI, 합성 인증 응답(RES)
+pattern:long-number docs/* ^(001010123456789|0011223344556677)$
 
 # OpenCode 설정 JSON 스키마 주소($schema, 계획 I 2단계)
 pattern:url-host opencode/* ^https://opencode\.ai$

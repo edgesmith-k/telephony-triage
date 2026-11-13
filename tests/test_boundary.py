@@ -179,6 +179,17 @@ def test_values_glued_to_hangul_are_reported(fake_repo):
         assert (f"pattern:{rule}", "docs/leak.md") in found, rule
 
 
+def test_long_number_is_15_to_20_digits(fake_repo):
+    """긴 숫자는 15~20자리(IMEI·IMSI·ICCID)다. 14자리·21자리는 아니고, 허용 줄은 맞는 경로에서만 듣는다."""
+    nums = {16: "8982300123456789", 19: "8982300123456789012", 20: "89823001234567890123",
+            14: "35988123456781", 21: "898230012345678901234"}
+    _write(fake_repo, "docs/leak.md", "".join(f"iccid {n}\n" for n in nums.values()))
+    _write(fake_repo, "tests/test_x.py", f"ICCID = '{nums[19]}'\n")
+    _write(fake_repo, "tools/boundary-allow.txt", f"pattern:long-number tests/* ^{nums[19]}$\n")
+    found = [(f.rule, f.path, f.text) for f in boundary.scan(fake_repo, "external")]
+    assert found == [("pattern:long-number", "docs/leak.md", nums[n]) for n in (16, 19, 20)]
+
+
 def test_fullwidth_digits_and_nbsp_are_reported(fake_repo):
     """패턴은 ASCII지만 줄을 접어서 본다: 전각 15자리·전각 숫자 IP, NBSP로 띄운 인증 헤더도 위반이다."""
     fw = str.maketrans("0123456789", "".join(chr(0xff10 + n) for n in range(10)))
