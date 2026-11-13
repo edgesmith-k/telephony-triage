@@ -213,12 +213,14 @@
       }
     },
     "fixedIn": {
+      "$comment": "ref(선택): 그 브랜치에 들어간 수정 CL(fix_ref_regex). op의 ref를 자동으로 채우지 않는다",
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": ["branch"],
-        "properties": {"branch": {"type": "string", "minLength": 1}, "build": {"type": "string", "minLength": 1}}
+        "properties": {"branch": {"type": "string", "minLength": 1}, "build": {"type": "string", "minLength": 1},
+                       "ref": {"type": "string", "minLength": 1}}
       }
     },
     "verificationRecord": {

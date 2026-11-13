@@ -3317,7 +3317,7 @@ imsi=<span class="o">&lt;IMSI#1&gt;</span> tel:<span class="o">&lt;MSISDN#2&gt;<
       </tbody>
     </table></div>
   </div>
-  <p>규칙 일부는 기계가 검사합니다. 이슈 DB 정적 검사(<code>db_lint</code>)가 몇 가지를 오류로 막습니다. 새 유형의 제목 꼴(<code>title-form</code>), 원본 식별자 패턴(<code>raw-identifier</code>)이 그렇습니다. 새 원인의 fixed(<code>new-cause-fixed</code>)와 근거 없는 "검증됨"도 막습니다. fixture가 없는 원인은 경고(<code>fixture-missing</code>)로 남고 월간 리뷰 목록에 올라갑니다.</p>
+  <p>규칙 일부는 기계가 검사합니다. 이슈 DB 정적 검사(<code>db_lint</code>)가 몇 가지를 오류로 막습니다. 새 유형의 제목 꼴(<code>title-form</code>), 원본 식별자 패턴(<code>raw-identifier</code>)이 그렇습니다. 새 원인의 fixed(<code>new-cause-fixed</code>, 단 fixed였던 원인을 병합해 오며 검증 기록을 그대로 옮긴 새 원인은 예외)와 근거 없는 "검증됨"도 막습니다. fixture가 없는 원인은 경고(<code>fixture-missing</code>)로 남고 월간 리뷰 목록에 올라갑니다.</p>
   <div class="callout warn">이슈 DB에 넣으면 안 되는 것은 셋입니다. 마스킹하지 않은 로그, Jira 요약·설명·댓글 원문, 사람 이름·고객명입니다. 도구가 마스킹하고 검사하지만, 확인 화면에서 한 번 더 봅니다. 마스킹 항목은 <a href="#ch22">22장</a>에 있습니다.</div>
 
   <h3 id="ch26-3">26.3 브랜치와 PR 정책<a class="hl" href="#ch26-3" aria-label="링크">#</a></h3>

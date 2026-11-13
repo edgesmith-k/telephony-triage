@@ -545,9 +545,9 @@ ID가 바뀔 때 함께 바꿔야 하는 참조 목록이다. `db_add renumber`(
 | 원인 `status` | `active \| deprecated \| merged-into:<원인 ID>` | 같음 |
 | 원인 `signatures_pending` | `true` 또는 생략 | **원인에만** 둔다(유형은 증상 시그니처 필수). `true`면 원인 판별 시그니처(`signatures`)가 비어 있어도 된다. `db_lint` 경고, 월간 리뷰 "시그니처 없는 원인", 매처는 매칭할 수 없음. `resolution_verification: unverified` 고정. 만드는 것은 `record`뿐이고, `sync-pr`는 record 계획을 그대로 재적용하므로 유지된다 (op 표 `new-cause`) |
 | `resolution_type` | `user-setting \| carrier-config \| framework-bug \| vendor-ril \| modem \| network \| hw` | 코드·설정 수정 유형 = `framework-bug`, `vendor-ril`, `modem`, `carrier-config` |
-| `fix.status` | `open \| fix-submitted \| fixed \| wont-fix \| not-a-bug` | 필수 필드는 `03-issue-db.md §5.9` |
+| `fix.status` | `open \| fix-submitted \| fixed \| wont-fix \| not-a-bug` | 필수 필드는 `03-issue-db.md §5.9`. 새 원인의 `fixed`는 `db_lint` `new-cause-fixed`가 막는다. 예외인 병합 이동(옛 원인의 base 검증 기록을 그대로 옮김)은 직접 편집이나 손으로 쓴 계획(`new-cause` → `add-fixture` → 옛 기록 그대로의 `verify-fix` → `set-status merged-into`)에서만 쓰이고, `/review`의 병합 순서에는 아직 없다(`99-deferred.md` J) |
 | `fix.ref` | `fix_ref_regex`(`02-config.md §5.3`)에 맞는 문자열 또는 `null` | `db_lint`와 `update-fix` 적용이 검사한다 |
-| `fix.fixed_in[]` | `{branch: <필수>, build: <선택>}` | `build`가 없으면 `03-issue-db.md §5.9` 판정은 "판단 불가", verify-fix 통과 불가(`fixed`는 빌드 있는 항목이 필요하다. verify-fix가 로그 빌드와 비교하는 것은 `modem` 원인뿐) |
+| `fix.fixed_in[]` | `{branch: <필수>, build: <선택>, ref: <선택>}` | `build`가 없으면 `03-issue-db.md §5.9` 판정은 "판단 불가", verify-fix 통과 불가(`fixed`는 빌드 있는 항목이 필요하다. verify-fix가 로그 빌드와 비교하는 것은 `modem` 원인뿐). `ref`는 그 브랜치의 수정 CL로 `fix_ref_regex`에 맞아야 한다(`db_lint`·`new-cause`·`update-fix` 검사). op의 `fix.ref`로 자동으로 채우지 않고, 판정은 아직 이 칸을 보지 않는다. 확인 화면에도 보이지 않고 커맨드도 채우지 않는다(`99-deferred.md` J) |
 | `resolution_verification.status` | `unverified \| verified` | `verified`는 `evidence` 필수. 근거가 사용자 진술뿐이면 `unverified`로 두고 "근거: 사용자 진술"을 남긴다(새 원인은 `method`, 기존 원인은 Jira 기록 `note`. 월간 리뷰 "사용자 진술만 있는 해결책", `06-collaboration.md §6.6`) |
 | `fix.verification.result` | `passed` | `fixed`일 때만 존재 |
 | `verification_history[].result` | `passed \| failed \| partial \| reverted` | `passed`: 회귀로 되돌려진 이전 검증. `reverted`: 검증 없이 `open`으로 되돌림(회귀 의심 확인 등). 최신이 위 |

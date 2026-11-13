@@ -288,6 +288,23 @@ def test_verify_resolution_and_update_fix_rules():
     assert fix["status"] == "fix-submitted" and fix["ref"] == "MOCKCL-2"
 
 
+def test_fixed_in_entry_ref_is_kept_and_checked():
+    """`fixed_in[].ref`(선택): 항목에 있으면 그대로 남고 fix_ref_regex로 검사한다. op의 ref로 채우지는 않는다."""
+    db = git_db()
+    entry = {"branch": "MOCKA56_U1", "build": "MOCKA56_U1_20261001", "ref": "MOCKCL-7"}
+    plan = {"source": "fix-submitted", "schema_version": 1, "started_at": "2026-10-02T10:00+09:00",
+            "base_sha": "0" * 40, "issue": None, "commit_message": "[X] fix-submitted",
+            "operations": [{"op": "update-fix", "cause": "DATA-001-01",
+                            "fix": {"status": "fix-submitted", "ref": "MOCKCL-2",
+                                    "fixed_in": [entry, {"branch": "MOCKB77_U2"}]}}]}
+    bad = json.loads(json.dumps(plan))
+    bad["operations"][0]["fix"]["fixed_in"][0]["ref"] = "CL 7"
+    assert apply_json(db, bad, expect=1)["rejected"][0]["code"] == "fix-ref"
+    assert apply_json(db, plan)["applied"]
+    fix = cause_of((db / DATA_DIR / "type.md").read_text(encoding="utf-8"), "DATA-001-01")["fix"]
+    assert fix["fixed_in"] == [entry, {"branch": "MOCKB77_U2"}] and fix["ref"] == "MOCKCL-2"
+
+
 def test_source_outside_values_dry_run_and_forced_exit_3():
     db = git_db()
     plan = load_plan("p7-analyze-append.plan.json")

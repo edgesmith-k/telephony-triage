@@ -114,12 +114,14 @@
       ]
     },
     "fixedIn": {
+      "$comment": "ref(선택): 그 브랜치에 들어간 수정 CL(fix_ref_regex). 자리만 있다 — 브랜치별 판정은 99-deferred J",
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "required": ["branch"],
-        "properties": {"branch": {"type": "string", "minLength": 1}, "build": {"type": "string", "minLength": 1}}
+        "properties": {"branch": {"type": "string", "minLength": 1}, "build": {"type": "string", "minLength": 1},
+                       "ref": {"type": "string", "minLength": 1}}
       }
     },
     "fixturePath": {

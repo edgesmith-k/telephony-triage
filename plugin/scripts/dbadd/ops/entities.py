@@ -33,7 +33,8 @@ class EntityOps:
         fix.update({k: v for k, v in (body.get("fix") or {}).items() if k in ("status", "ref", "fixed_in")})
         if fix["status"] == "fixed":
             raise Reject("new-cause-fixed", "새 원인은 fixed로 시작할 수 없습니다 (verify-fix로만).", i)
-        self._check_fix_ref(i, fix.get("ref"))
+        for ref in [fix.get("ref"), *(e.get("ref") for e in fix.get("fixed_in") or [])]:
+            self._check_fix_ref(i, ref)
         if fix["status"] == "fix-submitted" and (not fix.get("ref") or not fix.get("fixed_in")):
             raise Reject("fix-fields", "fix-submitted에는 ref와 fixed_in이 필요합니다.", i)
         rv = {"status": "unverified"}

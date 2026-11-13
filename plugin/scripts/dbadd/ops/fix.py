@@ -59,6 +59,7 @@ class FixOps:
         if "fixed_in" in new:
             merged = list(fix.get("fixed_in") or [])
             for entry in new["fixed_in"]:
+                self._check_fix_ref(i, entry.get("ref"))
                 same = next((e for e in merged if e.get("branch") == entry.get("branch")), None)
                 if same is None:
                     merged.append(dict(entry))
