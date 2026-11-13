@@ -6,7 +6,7 @@
 10-16 06:12:31.275  2214  2290 D SatelliteController: EVENT_RADIO_STATE_CHANGED: radioState=1
 10-16 06:12:31.281  1988  1988 I VRIL-IMS: [adapter] stack start sim=0 type=1 slot=1
 --------- beginning of radio
-10-16 06:12:33.904  1350  1418 V RIL     : [VrilRouter] msgId=2204 svc=ExampleRegService_0(5) dir=Response
+10-16 06:12:33.904  1350  1418 V RIL     : [VrilRouter] reply msg=2204 to ExampleRegService_0
 10-16 06:12:33.911  2214  2377 D CellularNetworkService: No access tech specific info passes for RegStateResult
 10-16 06:12:33.912  1530  1688 W BestClock: java.time.DateTimeException: No network time available
 10-16 06:12:33.913  2214  2343 D RILJ    : [0612]< VOICE_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_NOT_SEARCHING_OP, rat: UNKNOWN, reasonForDenial: NONE, cellIdentity: CellIdentity.noinit(false), registeredPlmn: , accessTechnologySpecificInfo: AccessTechnologySpecificInfo.noinit(false)} [PHONE0]

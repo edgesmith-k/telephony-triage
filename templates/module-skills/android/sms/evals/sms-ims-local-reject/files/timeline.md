@@ -6,7 +6,7 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): GSM_SET_BROADCAST_CONFIG · GSM_BROADCAST_ACTIVATION · IMS_SEND_SMS · SMS_ACKNOWLEDGE · UNSOL_RESPONSE_NEW_SMS
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
-14:00:04.114 - V RIL mux [ch0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0205 len=12
+14:00:04.114 - V RIL ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0205 len=12
 14:00:20.000 p0 I SmsDispatchersController sendText: dest=<MSISDN#1> parts=1 [PHONE0]
 14:00:20.010 p0 D ImsSmsDispatcher [0] sendSms: token=7 format=3gpp
 14:00:20.050 - E VRIL-IMS [sms] send rejected: SMS over IMS feature off

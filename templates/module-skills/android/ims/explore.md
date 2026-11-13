@@ -16,13 +16,13 @@ IMS 등록·해제·재등록, IMS PDN과 등록의 관계, VoLTE 가능 상태.
 
 ## ③ 층 경로
 
-벤더 IMS `IMS_REGISTERING` → `add pdn` → `OEM_REQ_IMS_ADD_PDN` → 모뎀·망 → `VIPC_EXAMPLE_IMS_REG_IND` → 벤더 IMS UNSOL → ImsPhone 등록 상태 → SST.
+벤더 IMS `registering` → `add pdn` → `OEM_REQ_IMS_ADD_PDN` → 모뎀·망 → `VIPC_EXAMPLE_IMS_REG_IND` → 벤더 IMS UNSOL → ImsPhone 등록 상태 → SST. 벤더 IMS 안 순서는 가정이다(TODO(SITE:S25)).
 
 ## ④ 증상별 첫 점검
 
 | 증상 | 볼 역할·줄 | 흔한 첫 실패 → 층 | 대체 근거 · 받을 로그 |
 |---|---|---|---|
-| IMS 등록 실패 | IMS IPC → 벤더 IMS `status-code` → ImsPhone | `status-code : 4xx` → 모뎀·망 / 401 뒤 등록은 원인 아님 | ImsRegistration `code=` / 벤더 IMS 로그 수준 |
+| IMS 등록 실패 | IMS IPC → 벤더 IMS `status-code` → ImsPhone | `status-code=4xx` → 모뎀·망 / 401 뒤 등록은 원인 아님 | ImsRegistration `code=` / 벤더 IMS 로그 수준 |
 | IMS PDN 연결·끊김 | `OEM_REQ_IMS_ADD_PDN`, DN `IMS` | PDN 실패 → data 규칙 / PDN이 붙었으면 data는 원인 아님 | data call list |
 | 재등록 안 됨 (초안) | `handleImsUnregistered … ImsReasonInfo` | 121 → 서비스 없음의 결과, 앞 무선 상태 | 해제 뒤까지 수집 |
 | VoWiFi·entitlement (초안) | — | 판단 못 함 → `그 층 로그 없음(<층>)` | Wi-Fi·entitlement 로그(사내) |
