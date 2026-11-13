@@ -51,7 +51,7 @@ NOT_CLI: tuple[str, ...] = ("module_eval",)
 
 BLOCK_START = "op 필수 키 ("
 BLOCK_END = "여기 없는 op·세부 제약은 `SNAP/schema/plan.schema.json`\n"
-BLOCK_MAX = 1152       # W7 add-fixture 세부 포함(그 전 1,024B)
+BLOCK_MAX = 1152
 # 요약에 싣는 op(순서 그대로)와 하위 필수 키를 펼칠 속성, 값 목록·조건부 필수·선택 키를 펼칠 속성
 OPS = ("append", "unresolved", "new-cause", "new-type", "add-fixture", "update-signature", "add-parser-rule",
        "update-parser-rule", "set-resolution", "verify-resolution", "allow-cause", "reclassify", "update-fix",
