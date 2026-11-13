@@ -1071,11 +1071,11 @@ def dbpr_calls(e):
     return [json.loads(x) for x in p.read_text(encoding="utf-8").splitlines()] if p.exists() else []
 
 
-def _remote_commit(job):
+def _remote_commit(job, subject="남의 커밋"):
     """원격 브랜치 tip 흉내: wt에 남의 커밋 하나(preflight 스텁의 remote_sha로 쓴다). 계획 pr.head_sha도 그 sha로(모델이 맞춘 꼴)."""
     wt = str(job / "wt")
     subprocess.run(["git", "-C", wt, "-c", "user.name=Other Dev", "-c", "user.email=other@ghe.mock.invalid", "commit",
-                    "-q", "--allow-empty", "-m", "남의 커밋"], check=True)
+                    "-q", "--allow-empty", "-m", subject], check=True)
     sha = subprocess.run(["git", "-C", wt, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
     (job / "plan.json").write_text(json.dumps({"source": "analyze", "pr": {"head_sha": sha}}), encoding="utf-8")
     return sha
@@ -1233,11 +1233,14 @@ def test_publish_new_branch_and_pushed_but_failed(env):
 @pytest.mark.parametrize("second", ["", "y", KEY, None])
 def test_publish_existing_remote_needs_overwrite_word(env, second):
     """원격 브랜치에 커밋이 있고 계획 head와 같아도(모델이 맞출 수 있다) 작업 키만으로는 게시하지 않는다 — 둘째 확인이 덮어쓰기가
-    아니면(빈 줄·다른 낱말·작업 키·EOF) 취소, 종료 0 (리뷰 6 F-P1)."""
+    아니면(빈 줄·다른 낱말·작업 키·EOF) 취소, 종료 0 (리뷰 6 F-P1). tip 제목의 폭 없는·방향 글자는 이스케이프, 200자에서 자른다."""
     job = _pub_setup(env)
-    code, out = pty_tt({**_pub_env(env), "STUB_REMOTE": _remote_commit(job)}, env["proj"], "publish", answers=[KEY, second])
+    sha = _remote_commit(job, "‮‏evil​؜﻿" + "A" * 300)
+    code, out = pty_tt({**_pub_env(env), "STUB_REMOTE": sha}, env["proj"], "publish", answers=[KEY, second])
     assert code == 0 and out.count(PROMPT2.decode()) == 1 and "게시하지 않았다(작업은 다시 stage된 상태" in out, out
     assert [c["args"][4] for c in dbpr_calls(env)] == ["preflight", "stage"]
+    assert " · \\u202e\\u200fevil\\u200b\\u061c\\ufeff" + "A" * 191 + "…\n" in out, out      # 9 + 191 = 200자
+    assert not set("‮‏​؜﻿") & set(out)
 
 
 @PTY
@@ -1305,13 +1308,16 @@ def _plant(wt, kind, marker):
 
 @PTY
 @pytest.mark.parametrize("forge", [None, "stage-json", "pre-commit", "ignored-yaml", "ignored-hook", "after-screen",
-                                   "remote-commit"])
+                                   "remote-commit", "ignored-attr"])
 def test_publish_integration_real_db_pr(tmp_path, forge):
     import mock_env
+    from runner import variant_db
     from workspace import PLANS, Workspace, git
     ws = Workspace()
-    job, br = "MOCK-7001", "issue/MOCK-7001"
-    plan = json.loads((PLANS / "p7-analyze-append.plan.json").read_text(encoding="utf-8"))
+    attr = forge == "ignored-attr"      # 새 원인(type.md 본문이 화면 diff에 보여야 한다)
+    job = "MOCK-7002" if attr else "MOCK-7001"
+    br = f"issue/{job}"
+    plan = json.loads((PLANS / f"p7-analyze-{'new-cause' if attr else 'append'}.plan.json").read_text(encoding="utf-8"))
     other = None
     if forge == "remote-commit":      # 다른 clone이 올린 커밋(hook 없이 원격에 바로), 모델이 계획 pr.head_sha를 그것으로 맞춘다
         other = git(ws.remote, "-c", "user.name=Other Dev", "-c", "user.email=other@ghe.mock.invalid", "commit-tree",
@@ -1319,11 +1325,18 @@ def test_publish_integration_real_db_pr(tmp_path, forge):
         git(ws.remote, "update-ref", f"refs/heads/{br}", other)
         plan["pr"]["head_sha"] = other
     ws.plan(job, plan)
+    if attr:
+        ws.put(job, "fixtures/cut-1.log",
+               variant_db("issue-db-pending") / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-03.log")
     owner = ws.acquire(job)["lock"]["owner"]
     (ws.job_dir(job) / "triage-state.json").write_text(json.dumps({"owner": owner}), encoding="utf-8")
     proc = ws.run("db_pr.py", ["stage", ws.job_dir(job) / "plan.json", "--wt", ws.wt(job), "--branch", br, "--then-summary"],
                   env={"TT_LOCK_OWNER": owner})
     assert proc.returncode in (0, 3), proc.stderr
+    if attr:      # 무시된 `.gitattributes`(`* -diff`)가 재stage에 남으면 화면의 type.md가 `Binary files … differ`로 가려진다
+        d = ws.wt(job) / "data" / "DATA-001-no-setup-data-call"
+        (d / ".gitattributes").write_text("* -diff\n", encoding="utf-8")
+        (d / ".gitignore").write_text(".git*\n", encoding="utf-8")
     victim, marker = tmp_path / "victim.yaml", tmp_path / "PWNED"
     if forge == "stage-json":
         victim.write_text("x: 1\n", encoding="utf-8")
@@ -1365,6 +1378,8 @@ def test_publish_integration_real_db_pr(tmp_path, forge):
         assert not ws.prs()
         return
     assert code == 0, out
+    if attr:
+        assert "Binary files" not in out and "title: SIM 미준비" in out, out
     assert "게시했다" in out and ws.remote_files(br) and len(ws.prs()) == 1, out
     assert not ws.wt(job).exists()                          # --and-discard
     assert victim.is_file() == (forge == "stage-json") and "FORGED-OK" not in out

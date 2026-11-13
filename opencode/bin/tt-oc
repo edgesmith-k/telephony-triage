@@ -715,12 +715,12 @@ def handoff_notes(cmds: list[str], meta: dict) -> list[str]:
 
 
 # -- 모델·opencode에서 온 글의 출력 (6차 R5-P2-1) ---------------------------------------------------------------------------
-# 모델 글은 tt-oc 자신의 줄로 보이면 안 된다: 제어 문자(C0·C1·DEL·줄 구분·양방향 제어)는 보이는 이스케이프로 바꾸고, 줄마다 GUTTER를
-# 앞에 둔다(tt-oc 자신의 줄은 GUTTER로 시작하지 않는다). 명령은 한 줄로(줄바꿈 → ⏎, 탭도 이스케이프).
+# 모델 글은 tt-oc 자신의 줄로 보이면 안 된다: 제어 문자(C0·C1·DEL·줄 구분·양방향 제어·폭 없는 글자)는 보이는 이스케이프로
+# 바꾸고, 줄마다 GUTTER를 앞에 둔다(tt-oc 자신의 줄은 GUTTER로 시작하지 않는다). 명령은 한 줄로(줄바꿈 → ⏎, 탭도 이스케이프).
 GUTTER = "  │ "
 SCREEN_GUTTER = "  ┃ "     # 스크립트 화면(.shown/log.jsonl — 작업 루트 아래라 모델도 쓸 수 있다, 7차 R6-P2-1)
 # 홀로 선 서로게이트(U+D800–DFFF)도: 그대로 print하면 UnicodeEncodeError로 tt-oc가 죽는다(7차 R6-P3-5)
-_CTRL = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069\ud800-\udfff]")
+_CTRL = re.compile("[\x00-\x08\x0b-\x1f\x7f-\x9f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ud800-\udfff\ufeff]")
 # 셸 확장·여러 명령·리디렉션·주석·줄바꿈(7차 R6-P3-2) — 있으면 명령 앞에 MODEL_CMD_MARK
 EXPANSION = re.compile(r"[$`!;&|<>()#\n]")
 MODEL_CMD_MARK = ("↓ 모델이 만든 명령 — 셸 확장·여러 명령·리디렉션·주석·줄바꿈(`$`·백틱·`!`·`;`·`&`·`|`·`<`·`>`·`(`·`)`·`#`·⏎)이 "
@@ -1058,7 +1058,8 @@ def publish_main(a, proj: Path, meta: dict) -> int:
     print(f"작업 {key} · 브랜치 {branch} · " + ("원격 브랜치 새로 만듦(lease new)" if lease == "new" else
                                               f"원격 {lease[:7]}를 이 내용으로 갱신(lease)") + f" · approved_hash {approved[:12]}…")
     if tip:
-        print(f"원격 {branch}에 커밋이 이미 있다: {lease[:7]} · " + " · ".join(_esc(x, one_line=True) for x in tip))
+        print(f"원격 {branch}에 커밋이 이미 있다: {lease[:7]} · " +     # 칸마다 200자까지(모델이 맞춘 커밋일 수 있다)
+              " · ".join(_esc(x[:200] + ("…" if len(x) > 200 else ""), one_line=True) for x in tip))
         print(f"승인하면 이 커밋을 덮어쓴다(이 작업이 올린 것이 아니면 취소). 작업 키 다음에 {OVERWRITE} 확인을 따로 받는다.")
     print("OpenCode 세션을 닫은 상태에서 입력한다(열려 있으면 모델이 그사이 작업 파일을 바꿀 수 있다).")
     while True:
