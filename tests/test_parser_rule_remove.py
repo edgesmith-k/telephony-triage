@@ -80,7 +80,7 @@ def test_remove_block_item_with_blank_gaps_and_ril_section():
                                                if e["id"] != "data-evaluation-allowed"]
     assert out.count("\n") == ex.count("\n") - 10                       # 항목 9줄 + 구분 빈 줄 1
     ril = (RULES / "ril.yaml").read_text(encoding="utf-8")
-    assert _remove(ril, "unsolicited", "name", "UNSOL_SIM_STATUS_CHANGED") == _without(ril, "UNSOL_SIM_STATUS_CHANGED")
+    assert _remove(ril, "unsolicited", "name", "UNSOL_RESPONSE_SIM_STATUS_CHANGED") == _without(ril, "UNSOL_RESPONSE_SIM_STATUS_CHANGED")
     assert _remove(ril, "requests", "name", "GET_SIM_STATUS") == _without(ril, "GET_SIM_STATUS")
 
 
@@ -90,8 +90,8 @@ def test_remove_block_item_with_blank_gaps_and_ril_section():
 def test_apply_remove_detects_section_and_rejects_missing_or_last():
     db = copy_db()
     ril = (db / "parser-rules/ril.yaml").read_text(encoding="utf-8")
-    _apply(db, [_rm("ril.yaml", "UNSOL_SIM_STATUS_CHANGED"), _rm("tags.yaml", "GsmInboundSmsHandler")])
-    assert (db / "parser-rules/ril.yaml").read_text(encoding="utf-8") == _without(ril, "UNSOL_SIM_STATUS_CHANGED")
+    _apply(db, [_rm("ril.yaml", "UNSOL_RESPONSE_SIM_STATUS_CHANGED"), _rm("tags.yaml", "GsmInboundSmsHandler")])
+    assert (db / "parser-rules/ril.yaml").read_text(encoding="utf-8") == _without(ril, "UNSOL_RESPONSE_SIM_STATUS_CHANGED")
     assert "GsmInboundSmsHandler" not in (db / "parser-rules/tags.yaml").read_text(encoding="utf-8")
 
     db = copy_db()
@@ -131,20 +131,20 @@ def _edited(tmp_path: Path, name: str, change) -> drift.Snapshot:
 
 def test_drift_when_main_changed_or_removed_target(tmp_path):
     base = drift.Snapshot(SAMPLE)
-    plan = _plan([_rm("ril.yaml", "UNSOL_SIM_STATUS_CHANGED")])
+    plan = _plan([_rm("ril.yaml", "UNSOL_RESPONSE_SIM_STATUS_CHANGED")])
     hist = _edited(tmp_path, "hist", lambda d: (d / "ril.yaml").write_text(
         (d / "ril.yaml").read_text(encoding="utf-8").replace("added_for: SIM-001, added_on: 2026-09-28, reason: 초기}",
                                                              "added_for: SIM-001, added_on: 2026-10-01, reason: 보강}"),
         encoding="utf-8"))
     assert drift.drift_items(plan, base, hist) == []                    # 이력 필드만 바뀜
     gone = _edited(tmp_path, "gone", lambda d: (d / "ril.yaml").write_text(
-        _without((d / "ril.yaml").read_text(encoding="utf-8"), "UNSOL_SIM_STATUS_CHANGED"), encoding="utf-8"))
+        _without((d / "ril.yaml").read_text(encoding="utf-8"), "UNSOL_RESPONSE_SIM_STATUS_CHANGED"), encoding="utf-8"))
     items = drift.drift_items(plan, base, gone)
     assert [(d["op"], d["target"], d["field"], d["plan_value"], d["current_value"]) for d in items] == [
-        ("remove-parser-rule", "ril.yaml:UNSOL_SIM_STATUS_CHANGED", "unsolicited", None, None)]
+        ("remove-parser-rule", "ril.yaml:UNSOL_RESPONSE_SIM_STATUS_CHANGED", "unsolicited", None, None)]
     changed = _edited(tmp_path, "changed", lambda d: (d / "ril.yaml").write_text(
-        (d / "ril.yaml").read_text(encoding="utf-8").replace("{name: UNSOL_SIM_STATUS_CHANGED,          category: sim",
-                                                             "{name: UNSOL_SIM_STATUS_CHANGED, category: data"),
+        (d / "ril.yaml").read_text(encoding="utf-8").replace("{name: UNSOL_RESPONSE_SIM_STATUS_CHANGED, category: sim",
+                                                             "{name: UNSOL_RESPONSE_SIM_STATUS_CHANGED, category: data"),
         encoding="utf-8"))
     assert drift.drift_items(plan, base, changed)[0]["current_value"]["category"] == "data"
 
