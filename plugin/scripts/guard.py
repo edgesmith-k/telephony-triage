@@ -435,6 +435,7 @@ def _rev_parse(cwd: Path, *args: str) -> str | None:
     (모델이 만든 bare 모양 폴더의 config를 읽게 된다)."""
     if not cwd.is_dir():    # stat 오류(EACCES 등)는 올린다: 판정하지 못한 검사(`_checked` ask)다 — 레포가 아니라고 보지 않는다
         return None
+    cwd = Path(os.path.realpath(cwd))    # 링크 `S -> <clone>/.git`도 `.git` 조각으로 본다
     parts = cwd.parts
     for d in [cwd, *(Path(*parts[:i]) for i in range(len(parts) - 1, 0, -1) if parts[i] == ".git")]:
         proc = _git(d, "rev-parse", *args)
@@ -2803,6 +2804,8 @@ class GitCall:
         self.cwd = work_tree or git_dir or cwd
         # 규칙 12 (a)는 셋을 따로 본다(어느 하나라도 관리 clone 안이면 읽기 목록만): -C 뒤 cwd, git dir, work tree
         self.dir, self.git_dir, self.work_tree = cwd, git_dir, work_tree
+        # git은 config·객체를 `GIT_COMMON_DIR`에서 읽는다(git dir·work tree를 따로 줘도) — `check_git`이 이것도 이슈 DB인지 본다
+        self.common_env = at(cwd, env["GIT_COMMON_DIR"]) if env.get("GIT_COMMON_DIR") else None
         # 값 해석 없이 존재만 본다: hooksPath·index를 끼워 넣는 통로이고 정상 흐름에 없다 (규칙 5)
         self.config_env = sorted(k for k in env if k in GIT_CONFIG_ENV or re.match(r"^GIT_CONFIG_(KEY|VALUE)_\d+$", k))
 
@@ -4492,12 +4495,14 @@ def _forges_remote_ref(call: GitCall) -> bool:
 def check_git(call: GitCall, conf: Config, dec: Decision) -> None:
     """git 규칙 3~8(clone 불변·hooksPath·커밋 검사·push). 규칙 5는 `_rule5`(ci_mode actions면 ask하고 이어 간다)."""
     check_clone_git(call, conf, dec)
-    if (call.sub in REMOTE_SUBS and _forges_remote_ref(call) and conf.profile_of_common(_common_dir(call.cwd)) is not None) or \
+    def db_prof():   # 판별 디렉토리와 `GIT_COMMON_DIR` 중 하나라도 이슈 DB면 이슈 DB다
+        return next(filter(None, (conf.profile_of_common(_common_dir(d)) for d in (call.cwd, call.common_env) if d)), None)
+    if (call.sub in REMOTE_SUBS and _forges_remote_ref(call) and db_prof() is not None) or \
             (call.sub == "push" and _push_into_db(call, conf)):
         dec.deny.append(REMOTE_REF_MSG)
     if call.sub not in ("commit", "config", "push") and not call.overrides_hooks_path():
         return
-    prof = conf.profile_of_common(_common_dir(call.cwd))
+    prof = db_prof()
     if prof is None:
         return   # 이슈 DB가 아니다: 어떤 git 규칙도 적용하지 않는다
     call.db_base = prof.base        # 규칙 5 완화(`_rule5`)는 origin/<이 base>의 ci_mode만 본다

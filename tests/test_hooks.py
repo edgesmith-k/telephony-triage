@@ -1205,17 +1205,45 @@ def test_guard_git_dir_work_tree_and_env_forms():
         assert decision(bash(ws, cmd.replace(str(c), str(other)), ws.base)) is None, cmd
 
 
+def test_guard_git_common_dir_with_git_dir():
+    """`GIT_DIR`와 `GIT_COMMON_DIR`가 둘 다 있으면 git은 config·객체를 `GIT_COMMON_DIR`에서 쓴다 — 둘 중 하나라도 이슈 DB면 이슈 DB."""
+    ws = shared()
+    C = ws.clone.as_posix()
+    fake = tmp("tt-fake-gitdir-")
+    (fake / "HEAD").write_text("ref: refs/heads/main\n")
+    F, plain = fake.as_posix(), tmp("tt-gcd-plain-")
+    for cmd, want in ((f"GIT_DIR={F} GIT_COMMON_DIR={C}/.git git push origin HEAD:main", "ask"),
+                      (f"GIT_DIR={F} GIT_COMMON_DIR={C}/.git git update-ref refs/remotes/origin/main HEAD", "deny"),
+                      (f"GIT_DIR={C}/.git GIT_COMMON_DIR={F} git update-ref refs/remotes/origin/main HEAD", "deny")):
+        assert decision(bash(ws, cmd, plain)) == want, cmd
+
+
 def test_guard_git_dir_forms_under_safe_bare_repository_explicit():
     """git 2.38~2.44 + `safe.bareRepository=explicit`면 `.git` 안에서 부른 rev-parse가 128 — guard는 `.git` 앞 폴더에서
-    다시 물어 이슈 DB로 본다(2.45+는 이 설정에서도 처음 호출이 된다)."""
+    다시 물어 이슈 DB로 본다(2.45+는 이 설정에서도 처음 호출이 된다). 링크 `S -> <clone>/.git`는 실제 경로로 본다."""
     ws = shared()
     c, C = ws.clone, ws.clone.as_posix()
-    env = ws.env(GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="safe.bareRepository", GIT_CONFIG_VALUE_0="explicit")
+    explicit = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "safe.bareRepository", "GIT_CONFIG_VALUE_0": "explicit"}
+    probe = subprocess.run(["git", "-C", str(c / ".git"), "rev-parse", "--git-dir"], capture_output=True, text=True,
+                           env={**os.environ, **explicit})
+    if probe.returncode == 0:
+        import pytest
+        ver =subprocess.run(["git", "--version"], capture_output=True, text=True).stdout.strip()
+        pytest.skip(f"{ver}: explicit에서도 `.git` 안의 rev-parse가 된다(2.38 미만·2.45+) — 재질문 경로를 시험할 수 없다")
+    env = ws.env(**explicit)
     plain = tmp("tt-gh-plain-")
-    for cmd, cwd, want in ((f"git --git-dir={C}/.git push origin HEAD:main", plain, "ask"),
-                           (f"git --git-dir={C}/.git update-ref refs/remotes/origin/main HEAD", plain, "deny"),
-                           (f'GIT_DIR="{C}/.git" git push --no-verify origin HEAD:main', plain, "deny"),
-                           ("git update-ref refs/remotes/origin/main HEAD", c / ".git", "deny")):
+    rows = [(f"git --git-dir={C}/.git push origin HEAD:main", plain, "ask"),
+            (f"git --git-dir={C}/.git update-ref refs/remotes/origin/main HEAD", plain, "deny"),
+            (f'GIT_DIR="{C}/.git" git push --no-verify origin HEAD:main', plain, "deny"),
+            ("git update-ref refs/remotes/origin/main HEAD", c / ".git", "deny")]
+    try:
+        (plain / "S").symlink_to(c / ".git", target_is_directory=True)
+        S = (plain / "S").as_posix()
+        rows += [(f"GIT_DIR={S} git push origin HEAD:main", plain, "ask"),
+                 (f"git -C {S} update-ref refs/remotes/origin/main HEAD", plain, "deny")]
+    except OSError:
+        pass    # 심볼릭 링크를 못 만드는 환경(Windows 권한 등)은 링크 꼴만 건너뛴다
+    for cmd, cwd, want in rows:
         assert decision(bash(ws, cmd, cwd, env=env)) == want, cmd
 
 
