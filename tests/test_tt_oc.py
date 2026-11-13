@@ -261,8 +261,11 @@ def test_doctor_subcommand(env):
     rows = json.loads(r.stdout)["rows"]
     assert [x["check"] for x in rows] == ["env", "project-git", "instructions", "integrity", "opencode-version",
                                           "opencode-config", "config-doctor", "git", "gateway-key"]
-    # 시험 설치의 opencode.json은 {}라 게이트웨이 행은 읽지 못함 warn 하나(막지 않는다)
-    assert all(x["status"] == "ok" for x in rows[:-1]) and rows[-1]["status"] == "warn"
+    # 시험 설치의 opencode.json은 {}라 게이트웨이 행은 읽지 못함 warn 하나(막지 않는다). git 행은 호스트 git이 2.38 미만이면
+    # warn이다(Ubuntu 22.04의 git 2.34 — CI site-rehearsal). 판정 자체는 test_git_safe_env_for_children_doctor_row_and_publish가 본다.
+    status = {x["check"]: x["status"] for x in rows}
+    assert status.pop("gateway-key") == "warn" and status.pop("git") in ("ok", "warn")
+    assert set(status.values()) == {"ok"}, status
 
 
 def test_command_name_and_message_required(env):
