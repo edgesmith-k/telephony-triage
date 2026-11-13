@@ -77,7 +77,8 @@ def test_duplicate_id(tmp_path):
     assert len(out) == 1 and "dup-id" in out[0]
 
 
-@pytest.mark.parametrize("word", ["같은 로그면 누가 돌려도", "바로 병합", "필수 승인 수는 0"])
+@pytest.mark.parametrize("word", ["같은 로그면 누가 돌려도", "바로 병합", "--and-merge", "issue_db.merge:", "필수 승인 수 0",
+                                  "필수 승인 수는 0", "필수 승인 수를 0", "push만(리뷰어에게)", '"push만"'])
 def test_banned_wording(tmp_path, word):
     out = _check(tmp_path, OK.replace("<p>", f"<p>{word} 같다 "))
     assert len(out) == 1 and "wording" in out[0]

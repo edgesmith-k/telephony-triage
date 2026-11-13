@@ -95,7 +95,7 @@ open ──(수정 CL 머지, fix-submitted 커맨드)──▶ fix-submitted �
 ```
 
 **전제: 시나리오 흔적**
-- 코드·설정 수정 유형(`resolution_type`이 `framework-bug`, `vendor-ril`, `modem`, `carrier-config`)의 원인은 `fixed`로 바꾸기 전에 `scenario_signatures` 또는 `recovery_signatures` 중 **하나가 필수**다. 없으면 `db_verify fix`가 종료 코드 2와 다음 할 일(`update-signature` → R1 흔적 검사 통과 → 재실행)로 거부하고, `db_search`는 원인 항목에 `verify_fix_blocked`를 낸다 (`update-signature` op로 같은 PR에 넣을 수 있다. 이 경우 판정은 `db_verify fix --plan <p> --draft <dir>`로 시그니처를 적용한 트리에서 하고, R1(흔적 검사 포함)~R5가 함께 돈다. 흔적 시그니처가 R1 흔적 검사를 통과하지 못하면 판정 결과를 쓰지 않는다). 문구만으로는 지키지 못해(eval 25 Sonnet 2/3, 3E) 스크립트가 강제한다.
+- 코드·설정 수정 유형(`resolution_type`이 `framework-bug`, `vendor-ril`, `modem`, `carrier-config`)의 원인은 `fixed`로 바꾸기 전에 `scenario_signatures` 또는 `recovery_signatures` 중 **하나가 필수**다. 없으면 `db_verify fix`가 종료 코드 2와 다음 할 일(`update-signature` → R1 흔적 검사 통과 → 재실행)로 거부하고, `db_search`는 원인 항목에 `verify_fix_blocked`를 낸다 (`update-signature` op로 같은 PR에 넣을 수 있다. 이 경우 판정은 `db_verify fix --plan <p> --draft <dir>`로 시그니처를 적용한 트리에서 하고, R1(흔적 검사 포함)~R5가 함께 돈다. 흔적 시그니처가 R1 흔적 검사를 통과하지 못하면 판정 결과를 쓰지 않는다). 문구만으로는 지키지 못해(eval 25 Sonnet 2/3, 3E) 스크립트가 강제한다(스크립트 강제 뒤 3/3).
 - `signatures_pending` 원인은 원인 시그니처가 없으므로 verify-fix를 할 수 없다. 먼저 `update-signature`로 판별 시그니처를 추가한다.
 - "시나리오 흔적 충족" = `scenario_signatures`가 있으면 그것이 충족, 없으면 `recovery_signatures`가 충족. 판정은 시나리오 흔적 충족을 전제로 한다. **흔적이 없으면 판단 불가**다. 사용자 말만으로 흔적을 대신하지 않는다.
 - 그 밖의 유형(`user-setting`, `network`, `hw`)은 두 시그니처가 없어도 되지만, 없으면 흔적 판정 대신 사용자 확인을 받고 그 사실을 `verification.note`에 남긴다.

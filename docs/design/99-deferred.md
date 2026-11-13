@@ -109,6 +109,8 @@ v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 �
 - 관찰(W1·W4 eval): Bash `cat`·`cat -n`·`sed -n 1,20p` 같은 로그 원문 구간·전체 읽기도 규칙 10 대상이나 guard가 막지 않았다(eval 18·40·46). 새 WP 여부는 W 끝에서 결정.
 - 종결(W11): eval 18·40 trace에서 재현한 명령은 yaml·py·json 읽기이지 원문 로그가 아니었고, eval 46 trace는 없다. `fixtures/` 아래 로그는 설계상 예외다(`guard.py _is_raw_file`). W 끝 eval에서 다시 보이면 재개한다.
 
+## F. (옮김 → `05-verification.md §5.12 (2)`)
+
 ## G. 설명 양식에서 SW·모델 추출 (H1, 사내 S-3 뒤)
 
 사내 S-3(10/19)에서 본 것: Jira description의 양식 구역에 SW 버전·모델이 적히지만 v1은 본문 정규식 추출이 실패 스텝(`tracker.failed_step_patterns`, `failedstep.py`)뿐이고 `model`·`sw`는 `tracker.field_map` 필드 값만 읽는다. 확인값(양식 줄 꼴·필드 유무)은 `SITE_PROFILE.md`에 둔다.
