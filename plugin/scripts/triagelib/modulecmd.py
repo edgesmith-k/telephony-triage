@@ -908,7 +908,10 @@ def _explore_at(args, job, key, p, events, explore, inputs, env, ctx):
     d = args.module.split("/", 1)[1]
     ws = rec.get("with")
     w = ws[0].partition("/")[2] if isinstance(ws, list) and ws and isinstance(ws[0], str) else ""
-    w = w if re.fullmatch(r"[a-z]+", w) else None       # 기록의 `with`를 이어 쓴다
+    mods = ((doc.get("platforms") or {}).get(p) or {}).get("modules") or {}
+    if ws is not None and (ws != [f"{p}/{w}"] or w == d or w not in mods):     # 처음 받을 때와 같은 검사
+        raise stale
+    w = w or None                                       # 기록의 `with`를 이어 쓴다
     if not _has_filter(doc, p):
         raise _fail(purpose, 2, "사용 오류", "--at은 modules.yaml에 filter가 있을 때만 쓴다")
     lib = importlib.import_module("common.modulefilter")

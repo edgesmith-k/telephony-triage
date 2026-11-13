@@ -876,6 +876,18 @@ def test_explore_with_at_keeps_with(env):
     assert "모듈 문서 android/data+sim @" in env.report_line("- 탐색 분석")
 
 
+@pytest.mark.parametrize("bad", [["android/zzz"], ["android/data"], ["ofono/sim"], ["android/sim", "x"], "android/sim"])
+def test_explore_at_rejects_tampered_with(env, bad):
+    """기록의 `with`가 처음 받을 때의 검사(같은 플랫폼·다른 모듈·modules.yaml에 있음)를 못 넘으면 `--at`은 종료 2."""
+    job = _with_job(env)
+    assert env.module(*WITH_ARGS, "--with", "sim", platform="android")[0] == 0
+    path = job / "module-skill.json"
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    rec["explore"]["with"] = bad
+    path.write_text(json.dumps(rec), encoding="utf-8")
+    assert env.module(*WITH_ARGS, "--at", "2026-09-20T05:32:08Z", platform="android")[0] == 2
+
+
 @pytest.mark.parametrize("purpose, extra", [
     ("deep", ("--with", "sim")),                                                  # deep은 --also 그대로
     ("explore", ("--with", "sim")),                                               # --module·--choose 없이

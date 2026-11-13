@@ -741,8 +741,8 @@ def _view_op(payload: dict) -> dict:
     extra = payload.get("with_module")
     if extra and extra != module:       # 탐색 `--with`: 보조 모듈 보기에서 주 보기(다른 모듈 줄 절 포함)에 없던 줄만
         seen = {v["row"]["idx"] for v in picked} | {r["idx"] for r in oth}
-        wrows = [v for v in view(spec, rows, extra, center, "explore", cap_rows=MODEM_ROWS, cap_bytes=MODEM_BYTES)[0]
-                 if v["row"]["idx"] not in seen]
+        wrows = view(spec, [r for r in rows if r["idx"] not in seen], extra, center, "explore",   # 상한을 쓰기 전에 뺀다
+                     cap_rows=MODEM_ROWS, cap_bytes=MODEM_BYTES)[0]
         if wrows:
             text += f"\n## 보조 모듈 줄 ({extra})\n" + "\n".join(v["line"] for v in wrows) + "\n"
     allow = payload.get("allow") or []
