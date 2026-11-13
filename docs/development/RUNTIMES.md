@@ -198,7 +198,8 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
   (`--out`·`--meta-out`·`--preview`·`mask_pii --in-place`·`jira_fields extract --consume`)은 작업 루트(설치 폴더 `tt-oc.json`의
   `work_root`) 안이어야 하고(그 파일을 못 읽으면 출력이 있는 호출은 거부), `.git`·`.githooks` 아래나 이름이 `HEAD`인 경로에는
   `edit`·`write`·`apply_patch`도 스크립트 출력도 쓰지 않는다(모델이 만든 저장소의 `core.fsmonitor`·hook을 허용된 `git status`가
-  실행한다). 플랫폼별 `work_dir`는 설치의 `--work-root` 안에 둔다(사내 analyze e2e에서 `--out` 거부가 없는지 확인).
+  실행한다). git은 `safe.bareRepository=explicit`로 돈다(tt-oc가 자식 환경에 준다 — 없으면 어댑터가 bash의 git·스크립트를 거부, git
+  2.38 이상은 `tt-oc doctor`의 `git` 행). 플랫폼별 `work_dir`는 설치의 `--work-root` 안에 둔다(사내 analyze e2e에서 `--out` 거부가 없는지 확인).
   `tt-oc publish`(사람이 터미널에서 승인하는 게시)는 처음 설치할 때 `install … --allow-publish`를 주면 열림(tt-oc.json
   `"publish": "open"`), 안 주면 닫힘이다. 이미 설치한 곳을 열거나 닫으려면 같은 install을 `--force`로 다시 한다.
 - OpenCode 허용 목록·guard 는 모델의 실수와 로그·Jira 본문에 섞인 지시를 걸러내는 사고 방지 장치다. 작정하고 우회를 찾는 모델을

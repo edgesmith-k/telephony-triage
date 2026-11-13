@@ -65,6 +65,16 @@ opencode/bin/tt-oc --project <dest> -s <세션> -- 2          # 질문에 답하
 - TUI(`opencode`)는 자유 탐색만 — 표시 보장이 없다.
 - 끝난 세션은 `--delete-session`으로 지운다(`~/.local/share/opencode/opencode.db`에 도구 출력이 남는다).
 
+OpenCode 안에서는 `config.py`의 사용자 설정 쓰기(`init`·`set`·`set-tracker`·`install-hooks`·`rename-legacy --apply`·
+`tracker-candidates --mcp-config|--opencode-config`)를 돌리지 않고 정확한 명령만 보인다 — 사람이 읽고 터미널에서 직접 실행한다.
+`init --answers <파일>`의 답 파일은 모델이 쓴 것이므로 붙여 넣지 말고 `config.py init`(대화형)으로 직접 답한다. 플러그인 스크립트는
+`--plugin-root`를 받지 않고, 스크립트 출력(`--out` 등)은 설치의 작업 루트(`--work-root`) 안에만 쓰며, `.git`·`.githooks` 아래와
+`HEAD`라는 이름에는 어떤 도구로도 쓰지 않는다. git은 `safe.bareRepository=explicit`로 돈다(git 2.38 이상 — `tt-oc doctor`가 본다).
+
+OpenCode 허용 목록·guard는 모델의 실수와 로그·Jira 본문에 섞인 지시를 걸러내는 사고 방지 장치다. 작정하고 우회를 찾는 모델을
+막는다고 보장하지 않는다. 실제 경계는 OS 사용자 권한, 서버 브랜치 보호, 사람이 내용을 읽고 하는 승인이다. 모델이 출력한 명령은
+읽지 않고 붙여 넣지 않는다.
+
 ## 게시(`tt-oc publish`, 기본 닫힘)
 
 OpenCode 안의 모델은 이슈 DB에 push·PR을 만들지 못한다(위 "직접 실행"). 열린 설치에서는 analyze 확인 화면까지 간 작업을 **사람이
