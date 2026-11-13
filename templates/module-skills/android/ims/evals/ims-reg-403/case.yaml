@@ -22,6 +22,6 @@ run_expect:
 expect:
   layer: '모뎀|망'
   daemon: 'VRIL-IMS|벤더 IMS'
-  evidence: ['CODE_REGISTRATION_ERROR, 403', 'status-code : 403']
+  evidence: ['CODE_REGISTRATION_ERROR, 403', 'status-code ?[:=] ?403\b']
   trap: null
   wrong_layer: ['^\s*(프레임워크|ImsManager|ImsPhone|RILJ|벤더 RIL)']

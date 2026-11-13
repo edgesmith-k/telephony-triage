@@ -4,7 +4,7 @@
 
 | 역할 | 지금 이름 | 구 이름 | 층 | 비고 |
 |---|---|---|---|---|
-| 벤더 RIL 데몬 | RIL, VRIL | — | 벤더 RIL | `[<Svc>Service_<n>] <요청> request`·`… done errorCode=`, `mux [ch<n>][TX]/[RX] VIPC_*`, IMS 등록 결과 `[ImsService_<n>] ims registration indication:`, `radio state changed:` |
+| 벤더 RIL 데몬 | RIL, VRIL | — | 벤더 RIL | `[<Svc>Service_<n>] <요청> begin`·`… end errorCode=`, `ipc[<n>][TX]/[RX] VIPC_*`, IMS 등록 결과 `[ImsService_<n>] ims registration indication:`, `radio state changed:` |
 | 벤더 텔레포니 서비스 | VRIL-SVC | — | RIL HAL | `Radio<X>Proxy::<fn>: serial`, `<fn> request: serial`·`<fn> response: serial` (TODO(SITE:S25) SIM HAL 태그) |
 | 벤더 IMS | VRIL-IMS | — | 벤더 IMS | `[pdn]`·`[reg]`·`[ut]`·`[sms]`, `req -> OEM_REQ_IMS_*`·`rsp <- OEM_REQ_IMS_*`·`ind <- OEM_UNSOL_IMS_*` |
 | AT 중계·모뎀 진단 | VRIL-MODEM | — | 곁가지(<태그>) | `at-in: AT…` = 시험 장비 AT(가정), `at-out: …` = 모뎀 답 (TODO(SITE:S25)) |

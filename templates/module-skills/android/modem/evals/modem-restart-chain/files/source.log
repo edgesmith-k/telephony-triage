@@ -1,7 +1,7 @@
 -- [합성] telephony-triage module-skills D eval log. Hand-written; composed modem restart chain.
 08-27 16:00:02.100  2101 2141 D RILJ    : [0307]> NOTIFY_IMS_DATA_NETWORK [PHONE0]
-08-27 16:00:03.107  1188 1258 V RIL     : mux [ch0][TX] <unknown ipc>, REQ seq=0x0207 len=12
-08-27 16:00:04.114  1188 1258 V RIL     : mux [ch0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0207 len=12
+08-27 16:00:03.107  1188 1258 V RIL     : ipc[0][TX] <unknown ipc>, REQ seq=0x0207 len=12
+08-27 16:00:04.114  1188 1258 V RIL     : ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0207 len=12
 08-27 16:00:05.121  1188 1248 E VRIL    : reply to client token 307
 08-27 16:00:06.128  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
 08-27 16:00:07.135  2101 2141 D RILJ    : [0307]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
@@ -9,7 +9,7 @@
 08-27 16:00:20.010  1830 1910 V VRIL    : radio state changed: newState=RADIO_UNAVAILABLE
 08-27 16:00:20.500  2101 2141 D RILJ    : [0340]> GET_CURRENT_CALLS [PHONE0]
 08-27 16:00:21.000  2101 2101 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 0, null}, suggestedAction=0
-08-27 16:00:21.200  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
+08-27 16:00:21.200  1188 1258 V RIL     : ipc[0][RX] <HEXDUMP 16B>
 08-27 16:00:22.000  2101 2101 I GsmCdmaPhone: [0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=true, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=1
 08-27 16:00:22.100  2101 2141 D RILJ    : [0342]> DIAL [PHONE0]
 08-27 16:00:22.700  2101 2142 D RILJ    : [0342]< DIAL  [PHONE0]
@@ -21,5 +21,5 @@
 08-27 16:00:32.010  1830 1910 V VRIL    : radio state changed: newState=RADIO_ON
 08-27 16:00:33.000  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
 08-27 16:00:50.011  1188 1248 E VRIL    : reply to client token 430
-08-27 16:00:50.311  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
+08-27 16:00:50.311  1188 1258 V RIL     : ipc[0][RX] <HEXDUMP 16B>
 08-27 16:00:50.611  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009

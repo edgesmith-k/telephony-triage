@@ -13,7 +13,7 @@
 - RILJ `SET_INITIAL_ATTACH_APN`·`SET_DATA_PROFILE`(실린 APN), data call list `UNSOL_DATA_CALL_LIST_CHANGED`·`_UPDATED`
 - RILJ `SETUP_DATA_CALL`·`DEACTIVATE_DATA_CALL`, DPM 선호 프로필
 - DNC `Data evaluation`·`Internet data state changed from <A> to <B>`, DSMGR, DSM-C, DRM
-- 벤더 RIL `[ExamplePdnService_<n>] setup data call request`·`…errorCode=`, `VIPC_EXAMPLE_PROFILE`
+- 벤더 RIL `[ExamplePdnService_<n>] setup data call begin`·`…errorCode=`, `VIPC_EXAMPLE_PROFILE`
 
 ## ③ 층 경로
 

@@ -8,16 +8,16 @@
 
 08:30:14.602 - D MultiSimSettingController Carrier config subId 2 is not loaded.
 08:30:14.603 - D UiccController Broadcasting intent ACTION_SIM_STATE_CHANGED READY reason null for phone: 0 sub: 2  ⇒ sim_state_changed(state=READY)
-08:30:14.731 - V RIL mux [ch0][TX] VIPC_EXAMPLE_CARD_IO, REQ seq=0x0c40 len=40
-08:30:14.732 - I RIL [ExampleEfService_0] sim io request
-08:30:14.760 - V RIL mux [ch0][RX] VIPC_EXAMPLE_CARD_IO, RSP Error(VIPC_E_FAILURE) seq=0x0c40 len=12  ⇒ builtin.common.vendor_ipc_error(error=VIPC_E_FAILURE,ipc=VIPC_EXAMPLE_CARD_IO)
+08:30:14.731 - V RIL ipc[0][TX] VIPC_EXAMPLE_CARD_IO, REQ seq=0x0c40 len=40
+08:30:14.732 - I RIL [ExampleEfService_0] sim io begin
+08:30:14.760 - V RIL ipc[0][RX] VIPC_EXAMPLE_CARD_IO, RSP Error(VIPC_E_FAILURE) seq=0x0c40 len=12  ⇒ builtin.common.vendor_ipc_error(error=VIPC_E_FAILURE,ipc=VIPC_EXAMPLE_CARD_IO)
 08:30:14.763 p0 D RILJ [0233]< SIM_IO error 2 [PHONE0]
 08:30:14.764 - D RilRequest [0233]< SIM_IO error: com.android.internal.telephony.CommandException: GENERIC_FAILURE
 08:30:14.766 - E UsimFH exception caught from EVENT_GET_RECORD_SIZE
 08:30:14.768 p0 D RILJ [0234]> iccIO: SIM_IO command = 0xc0 fileId = 0x6f15 path = 3F007FFF p1 = 0 p2 = 0 p3 = 15 data = null aid = <AID#1> [PHONE0]
 08:30:14.770 - D SIMRecords [SIMRecords-0] onRecordLoaded 21 requested: true
-08:30:15.904 - V RIL mux [ch0][TX] VIPC_EXAMPLE_CARD_IO, REQ seq=0x0c47 len=40
-08:30:15.931 - V RIL mux [ch0][RX] VIPC_EXAMPLE_CARD_IO, RSP Error(VIPC_E_FAILURE) seq=0x0c47 len=12  ⇒ builtin.common.vendor_ipc_error(error=VIPC_E_FAILURE,ipc=VIPC_EXAMPLE_CARD_IO)
+08:30:15.904 - V RIL ipc[0][TX] VIPC_EXAMPLE_CARD_IO, REQ seq=0x0c47 len=40
+08:30:15.931 - V RIL ipc[0][RX] VIPC_EXAMPLE_CARD_IO, RSP Error(VIPC_E_FAILURE) seq=0x0c47 len=12  ⇒ builtin.common.vendor_ipc_error(error=VIPC_E_FAILURE,ipc=VIPC_EXAMPLE_CARD_IO)
 08:30:15.932 p0 D RILJ [0234]< SIM_IO error 2 [PHONE0]
 08:30:15.934 - E SIMRecords [SIMRecords-0] Exception in fetching EF_CSP data com.android.internal.telephony.CommandException: GENERIC_FAILURE
 08:30:15.937 - D VRIL-SVC RadioSimProxy::iccTransmitApduLogicalChannel

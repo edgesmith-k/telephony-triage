@@ -10,15 +10,15 @@
 10-14 09:41:06.909  1988  2031 D VRIL-IMS: [ut] route call forward via modem slot=0
 10-14 09:41:06.931  3120  3120 D CallerInfoAsyncQuery: ##### onQueryComplete() #####   query complete for token: 0
 10-14 09:41:07.512  1988  2044 I VRIL-IMS: [adapter] send call forward reason=UNCONDITIONAL slot=0
-10-14 09:41:07.513  1988  2044 I VRIL-IMS: [ril] req -> OEM_REQ_IMS_SET_CALL_FORWARD : status : 3  reason : 0  class : 1  toa : 129  number : 1**  time : 0 slot=0
+10-14 09:41:07.513  1988  2044 I VRIL-IMS: [ril] req -> OEM_REQ_IMS_SET_CALL_FORWARD status=3 reason=0 class=1 toa=129 number=123 time=0 slot=0
 10-14 09:41:07.515  1350  1410 V RIL     : [IpcCtx_0] track seq 0x0b12
-10-14 09:41:07.515  1350  1410 V RIL     : mux [ch0][TX] VIPC_EXAMPLE_IMS_CF, REQ seq=0x0b12 len=64
+10-14 09:41:07.515  1350  1410 V RIL     : ipc[0][TX] VIPC_EXAMPLE_IMS_CF, REQ seq=0x0b12 len=64
 10-14 09:41:07.516  1350  1410 V RIL     : <HEXDUMP 16B>
-10-14 09:41:09.284  1350  1415 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_IMS_CF, RSP OK(VIPC_OK) seq=0x0b12 len=16
+10-14 09:41:09.284  1350  1415 V RIL     : ipc[0][RX] VIPC_EXAMPLE_IMS_CF, RSP OK(VIPC_OK) seq=0x0b12 len=16
 10-14 09:41:09.284  1350  1415 V RIL     : <HEXDUMP 16B>
 10-14 09:41:09.286  1350  1410 D VRIL    : ext client reply clientId=3
 10-14 09:41:09.287  1350  1410 V RIL     : [IpcCtx_0] untrack seq 0x0b12
-10-14 09:41:09.289  1988  2044 I VRIL-IMS: [ril] rsp <- OEM_REQ_IMS_SET_CALL_FORWARD : status : SUCCESS slot=0
+10-14 09:41:09.289  1988  2044 I VRIL-IMS: [ril] rsp <- OEM_REQ_IMS_SET_CALL_FORWARD status=SUCCESS slot=0
 10-14 09:41:09.291  1988  2044 D VRIL-IMS: [ut] call forward update result received id=4021 slot=0
 10-14 09:41:09.318  1350  1350 V RIL     : [IpcCtx_0] route req id=31 svc=6 msg=1104
 10-14 09:41:09.320  2214  2214 D ImsPhoneMmiCode: onSetComplete: mmi=ImsPhoneMmiCode {State=COMPLETE action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}
