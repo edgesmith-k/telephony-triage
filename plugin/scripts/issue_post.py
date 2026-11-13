@@ -61,7 +61,10 @@ CAUSE_ITEMS, NEXT_ITEMS = (1, 4), (0, 3)
 FIELD_MAX = 60                              # Jira 구조화 필드 값 하나 (작성자가 정하는 값: 한 줄로 접고 자른다)
 FAILED_STEP_MAX, EVIDENCE_LINES, EVIDENCE_CHARS, OTHERS_MAX = 120, 6, 160, 3
 QUOTE_MIN = 40                              # Jira 원문과 이만큼 같은 연속 부분이 있으면 인용으로 본다
-ABS_PATH = re.compile(r"""\s*[`"'(\[]?(?:[/\\]|~[A-Za-z0-9_-]*[/\\]|[A-Za-z]:[\\/])""")   # code_location 맨 앞 파일 칸만 본다(설명 속 단말 경로·URL은 정당)
+# code_location 절대 경로(`search`): 맨 앞 파일 칸(감싼 글자 뒤)의 `/`·`\`·`~user/`(단말 `/sdcard`·`/storage`는 정당), 또는
+# 어디서든 호스트 홈·드라이브·`~/`·`$HOME`·`%VAR%`·`file:/`. 설명 속 단말 경로(`/data/…`)·URL은 정당
+ABS_PATH = re.compile(r"""^[\s`"'(\[*<\u201c\u2018-]*(?:(?!/(?:sdcard|storage)/)[/\\]|~[\w-]*[\\/])"""
+                      r"""|(?:^|[\s,(\[`"'*>\u201c\u2018])(?:/(?:home|Users|root)/|[A-Za-z]:[\\/]|~/|\$HOME\b|%\w+%|file:/)""")
 TODO = "TODO(LLM)"
 CONFIRMED = {"accepted", "chose-other", "new-cause", "new-type"}
 STALE_REASON = "분석 상태(triage-state.json)가 analysis.json과 다르다 — 다시 분석한다"   # job_status도 쓴다
@@ -480,7 +483,7 @@ def check_fill(raw, need_problem: bool, code_skipped: bool, masker, quote_src: l
     elif code and code_skipped:
         problems.append("코드 분석을 건너뛰어(code.skipped) code_location을 넣을 수 없다")
     elif code:
-        if ABS_PATH.match(code):
+        if ABS_PATH.search(code):
             problems.append("code_location: 절대 경로가 있다(소스 루트 기준 상대 경로로)")
         texts.append(("code_location", code, CODE_MAX))
     masked: dict[str, str] = {}
