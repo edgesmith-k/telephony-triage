@@ -61,10 +61,13 @@ CAUSE_ITEMS, NEXT_ITEMS = (1, 4), (0, 3)
 FIELD_MAX = 60                              # Jira 구조화 필드 값 하나 (작성자가 정하는 값: 한 줄로 접고 자른다)
 FAILED_STEP_MAX, EVIDENCE_LINES, EVIDENCE_CHARS, OTHERS_MAX = 120, 6, 160, 3
 QUOTE_MIN = 40                              # Jira 원문과 이만큼 같은 연속 부분이 있으면 인용으로 본다
-# code_location 절대 경로(`search`): 맨 앞 파일 칸(감싼 글자 뒤)의 `/`·`\`·`~user/`(단말 `/sdcard`·`/storage`는 정당), 또는
-# 어디서든 호스트 홈·드라이브·`~/`·`$HOME`·`%VAR%`·`file:/`. 설명 속 단말 경로(`/data/…`)·URL은 정당
-ABS_PATH = re.compile(r"""^[\s`"'(\[*<\u201c\u2018-]*(?:(?!/(?:sdcard|storage)/)[/\\]|~[\w-]*[\\/])"""
-                      r"""|(?:^|[\s,(\[`"'*>\u201c\u2018])(?:/(?:home|Users|root)/|[A-Za-z]:[\\/]|~/|\$HOME\b|%\w+%|file:/)""")
+# code_location 절대 경로(`search`): 맨 앞 파일 칸(감싼 글자·목록 번호 뒤)의 `/`·`\`·`~user/`(단말 `/sdcard/`·`/storage/emulated|self/`는
+# 정당, `..`가 들면 아니다), 또는 어디서든 호스트 홈·드라이브(`/mnt/c/`·`/c/Users/`)·`~/`·`$HOME`·`${HOME}`·`%VAR%`·`file:/`.
+# 설명 속 단말 경로(`/data/…`)·URL은 정당 (재리뷰 RR-3)
+ABS_PATH = re.compile(r"""^[\s`"'(\[*<>\u201c\u2018-]*(?:\d+[.)]\s+)?"""
+                      r"""(?:(?!/(?:sdcard|storage/(?:emulated|self))/(?!\S*\.\.))[/\\]|~[\w-]*[\\/])"""
+                      r"""|(?:^|[\s,(\[`"'*>\u201c\u2018])(?:/(?:home|Users|root)/|/mnt/[a-z]/|/[a-z]/Users/|[A-Za-z]:[\\/]|~/"""
+                      r"""|\$\{?HOME\b|%\w+%|file:/)""")
 TODO = "TODO(LLM)"
 CONFIRMED = {"accepted", "chose-other", "new-cause", "new-type"}
 STALE_REASON = "분석 상태(triage-state.json)가 analysis.json과 다르다 — 다시 분석한다"   # job_status도 쓴다
