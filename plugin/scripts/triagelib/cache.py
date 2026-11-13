@@ -89,6 +89,9 @@ class CacheMixin:
         jira_path = self.job / "issue.json"
         user = dict(userconfig.load_user() or {})
         user.pop("recent_code_roots", None)      # 코드 경로를 처음 쓸 때 도구가 기록한다 — 결과와 무관
+        if isinstance(user.get("platforms"), dict):   # 플랫폼 프로필의 기록도 같다(원본을 건드리지 않게 그 부분만 복사)
+            user["platforms"] = {p: {k: v for k, v in prof.items() if k != "recent_code_roots"} if isinstance(prof, dict) else prof
+                                 for p, prof in user["platforms"].items()}
         return {
             "logs": _digest([{"name": f["name"], "sha": f["sha"]} for f in self.log_inputs]),
             "issue": _file_sha(jira_path) if jira_path.is_file() else None,
