@@ -203,7 +203,8 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
   tt-oc는 자식 환경에 `safe.bareRepository=explicit`·`protocol.ext.allow=never`를 붙이고 `GIT_ALLOW_PROTOCOL`을 뺀다.
   tt-guard.js의 `shell.env`가 같은 `GIT_CONFIG_*`를 bash 자식에 다시 넣고 `GIT_CONFIG_PARAMETERS`를 빈 값으로 덮는다(실제 bash
   자식에 걸리는지는 사내 e2e로 확인). 어댑터는 자기 환경에 이 설정이 없으면 bash의 git·스크립트를 거부한다.
-  `tt-oc doctor`의 `git` 행은 어댑터와 같은 조건으로 본다(`GIT_CONFIG_PARAMETERS`가 같은 설정을 정하면 fail).
+  `tt-oc doctor`의 `git` 행은 어댑터와 같은 조건으로 자식 환경을 본다. tt-oc는 자식 환경에서 `GIT_CONFIG_PARAMETERS`도 뺀다
+  (`'include.path'='<파일>'`처럼 키 이름 없이도 이 설정을 뒤집는다).
   git 2.38 미만이면 doctor가 warn을 내고 시작은 한다. 그때 `safe.bareRepository`는 무시되고 `.git`·`HEAD` 쓰기 거부만 남는다
   (`protocol.ext.allow=never`는 `GIT_CONFIG_COUNT`를 받는 git 2.31부터 걸린다). 2.38 이상을 쓴다.
   모듈 스킬 git(`moduleskills._env`)은 `GIT_CONFIG_*`를 지우고 자체 `-c`·`GIT_CEILING_DIRECTORIES`로 돈다.

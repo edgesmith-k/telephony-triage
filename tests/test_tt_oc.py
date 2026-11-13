@@ -802,13 +802,18 @@ def test_git_safe_env_for_children_doctor_row_and_publish(env, monkeypatch):
         fake.chmod(0o755)
         row = mod.git_row({**mod.child_env(meta), "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
         assert row["check"] == "git" and row["status"] == want and ver.split(".windows")[0] in row["detail"], (ver, row)
-    # 리뷰 9 R3: 어댑터와 같은 조건 — `GIT_CONFIG_PARAMETERS`가 같은 설정을 정하면 doctor도 fail
+    # 리뷰 9 R3: 어댑터와 같은 조건(사본 대조)
     child = mod.child_env(meta)
     for e in (child, {}, {**child, "GIT_CONFIG_PARAMETERS": "'safe.bareRepository'='all'"},
               {**child, "GIT_CONFIG_KEY_1": "SAFE.BAREREPOSITORY", "GIT_CONFIG_VALUE_1": "all"}, {**child, "GIT_CONFIG_COUNT": "3"}):
         assert mod.git_safe_missing(e) == oc_adapter.git_safe_missing(e), e
-    row = mod.git_row({**child, "GIT_CONFIG_PARAMETERS": "'protocol.ext.allow'='always'"})
-    assert row["status"] == "fail" and "GIT_CONFIG_PARAMETERS" in row["detail"], row
+    row = mod.git_row({**child, "GIT_CONFIG_KEY_1": "SAFE.BAREREPOSITORY", "GIT_CONFIG_VALUE_1": "all"})
+    assert row["status"] == "fail" and "걸리지 않는다" in row["detail"], row
+    # 리뷰 10b E2: `GIT_CONFIG_PARAMETERS`(include.path로 키 이름 없이도 GIT_SAFE를 뒤집는다)는 자식 환경에서 뺀다 — doctor도 그 env로 ok
+    monkeypatch.setenv("GIT_CONFIG_PARAMETERS", "'include.path'='/x/evil.cfg'")
+    child2 = mod.child_env(meta)
+    assert "GIT_CONFIG_PARAMETERS" not in child2 and mod.git_row(child2)["status"] != "fail"
+    monkeypatch.delenv("GIT_CONFIG_PARAMETERS")
     # R4: 사용자 GIT_ALLOW_PROTOCOL은 protocol.ext.allow=never를 이긴다 — 자식 환경에서 뺀다
     monkeypatch.setenv("GIT_ALLOW_PROTOCOL", "ext")
     assert "GIT_ALLOW_PROTOCOL" not in mod.child_env(meta)
@@ -1136,7 +1141,7 @@ def test_publish_closed_and_not_tty(env):
 
 @PTY
 @pytest.mark.parametrize("var,val", [("TT_RUNTIME", "opencode"), ("TT_RUNTIME", ""), ("CLAUDECODE", "1"), ("CLAUDECODE", ""),
-                                     ("GIT_DIR", "/x"), ("GIT_CONFIG_COUNT", "1")])
+                                     ("GIT_DIR", "/x"), ("GIT_CONFIG_COUNT", "1"), ("GIT_ALLOW_PROTOCOL", "ext")])
 def test_publish_refuses_nested_runtime_and_git_env(env, var, val):
     _pub_setup(env)
     code, out = pty_tt({**_pub_env(env), var: val}, env["proj"], "publish")

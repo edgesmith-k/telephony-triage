@@ -176,6 +176,9 @@ def child_env(meta: dict) -> dict:
     env.pop("TT_LOCK_OWNER", None)
     # 사용자 환경의 GIT_ALLOW_PROTOCOL(예: `ext`)은 protocol.ext.allow=never보다 먼저 본다 — 빼서 GIT_SAFE가 이기게 한다
     env.pop("GIT_ALLOW_PROTOCOL", None)
+    # `GIT_CONFIG_PARAMETERS`(`git -c`)는 GIT_CONFIG_COUNT 뒤에 읽혀 GIT_SAFE를 다시 정할 수 있다 — `'include.path'='<파일>'`처럼
+    # 키 이름 없이도(리뷰 10b E2). 빼서 자식(opencode·어댑터·guard의 git)에 내려가지 않게 한다
+    env.pop("GIT_CONFIG_PARAMETERS", None)
     # CHILD_ENV(oc_version): 자동 갱신·모델 목록 받기 끔, ~/.claude/CLAUDE.md(와 위 폴더의 CLAUDE.md)를 에이전트 프롬프트에
     # 붙이지 않음(사용자 결정 ⑤ — 프롬프트는 triage 에이전트 하나). AGENTS.md·CONTEXT.md는 끌 수 없어 사전 점검이 본다.
     env.update({**OCV.CHILD_ENV, "TT_RUNTIME": "opencode",
@@ -283,15 +286,15 @@ def git_safe_missing(env) -> bool:
 
 
 def git_row(env: dict) -> dict:
-    """`git` 행: 자식 환경의 GIT_SAFE(사용자 GIT_CONFIG_COUNT가 깨졌거나 `GIT_CONFIG_PARAMETERS`가 같은 설정을 정하면 fail — 어댑터가
-    bash의 git·플러그인 스크립트를 모두 거부한다)와 git 버전(2.38 미만·실행 실패는 warn — 그때의 방어는 어댑터의 `.git`·`HEAD` 쓰기
+    """`git` 행: 자식 환경(`child_env` — `GIT_CONFIG_PARAMETERS`는 뺐다)의 GIT_SAFE(사용자 GIT_CONFIG_COUNT가 깨졌거나 걸리지 않으면
+    fail — 어댑터가 bash의 git·플러그인 스크립트를 모두 거부한다)와 git 버전(2.38 미만·실행 실패는 warn — 그때의 방어는 어댑터의 `.git`·`HEAD` 쓰기
     거부와 mask-copy 사본 이름 정리)."""
     if git_config_count(env) is None:
         return {"check": "git", "status": "fail", "detail": "GIT_CONFIG_COUNT·GIT_CONFIG_KEY_n·GIT_CONFIG_VALUE_n이 깨졌다(git이 모든 "
                 "명령을 거부한다) — 고치거나 지운 뒤 다시 실행"}
     if git_safe_missing(env):
-        return {"check": "git", "status": "fail", "detail": "GIT_CONFIG_PARAMETERS가 safe.bareRepository·protocol.ext.allow를 다시 "
-                "정한다 — 어댑터가 bash의 git·플러그인 스크립트를 모두 거부한다. 그 환경 변수를 지운 뒤 다시 실행"}
+        return {"check": "git", "status": "fail", "detail": "자식 환경에 safe.bareRepository·protocol.ext.allow가 걸리지 않는다 — "
+                "어댑터가 bash의 git·플러그인 스크립트를 모두 거부한다(tt-oc 버그로 보고)"}
     try:
         r = _run(["git", "version"], env=env, timeout=30)      # = git --version(그 리터럴은 opencode 표면 대조 시험이 막는다)
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -848,7 +851,8 @@ PUBLISH_CODE = "\n".join((
     "held = [{**handoff_owner(Path(w)), 'platform': plat(Path(w))} for w in sys.argv[2:]]",
     "print(json.dumps({'scripts_path': userconfig.get(userconfig.load_user() or {}, 'plugin.scripts_path'), 'held': held}))",
 ))
-GIT_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")     # 와 GIT_CONFIG* — 하위 git이 다른 레포·index·설정을 보게 한다
+GIT_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",     # 와 GIT_CONFIG* — 하위 git이 다른 레포·index·설정을 보게 한다.
+           "GIT_ALLOW_PROTOCOL")                           # protocol.ext.allow=never보다 먼저 본다(리뷰 10b E1)
 PUBLISH_FILES = ("state.json", "pr.json", "stage.json", "plan.json")
 PUBLISH_TIMEOUT = 1800                                       # stage(regress 포함)·publish(push·gh) — _run의 60초로는 끝나지 않는다
 PUBLISH_PROMPT = "이 화면대로 push·PR을 만들려면 작업 키를 입력한다"

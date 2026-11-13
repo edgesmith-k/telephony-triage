@@ -71,9 +71,10 @@ OpenCode 안에서는 `config.py`의 사용자 설정 쓰기(`init`·`set`·`set
 `--plugin-root`를 받지 않고, 스크립트 출력(`--out` 등)은 설치의 작업 루트(`--work-root`) 안에만 쓰며, `.git`·`.githooks` 아래와
 `HEAD`라는 이름에는 어떤 도구로도 쓰지 않는다. 작업 루트 안에서 `HEAD` 파일이 있는 폴더(bare 저장소·미러) 아래에도 쓰지 않는다.
 코드 루트(AOSP 등)는 작업 루트 안에 두지 않는다.
-tt-oc는 OpenCode에 `safe.bareRepository=explicit`·`protocol.ext.allow=never`를 준다. 사용자 환경의 `GIT_ALLOW_PROTOCOL`은 뺀다.
-git 2.38 미만이면 doctor가 warn을 내고 시작은 한다. 그때 이 설정은 무시되고 `.git`·`HEAD` 쓰기 거부만 남는다. 2.38 이상을 쓴다.
-`GIT_CONFIG_PARAMETERS`가 이 설정을 다시 정하면 doctor가 fail을 낸다. 그 환경 변수를 지우고 시작한다.
+tt-oc는 OpenCode에 `safe.bareRepository=explicit`·`protocol.ext.allow=never`를 준다. 사용자 환경의 `GIT_ALLOW_PROTOCOL`·
+`GIT_CONFIG_PARAMETERS`는 뺀다.
+git 2.38 미만이면 doctor가 warn을 내고 시작은 한다. 그때 `safe.bareRepository`는 무시되고 `.git`·`HEAD` 쓰기 거부만 남는다
+(`protocol.ext.allow=never`는 `GIT_CONFIG_COUNT`를 받는 git 2.31부터 걸린다). 2.38 이상을 쓴다.
 explicit에서는 bare 저장소를 직접 가리키는 `git -C <aosp>/.repo/projects/x.git log` 꼴이 거부된다. 작업 트리 폴더에서 돌린다.
 
 OpenCode 허용 목록·guard는 모델의 실수와 로그·Jira 본문에 섞인 지시를 걸러내는 사고 방지 장치다. 작정하고 우회를 찾는 모델을
@@ -100,7 +101,7 @@ opencode/bin/tt-oc --project <dest> publish [--job <작업 키>]      # OpenCode
 - 원격 `issue/<KEY>`에 커밋이 이미 있으면(계획의 PR head와 같을 때만 진행) 그 커밋의 작성자·날짜·제목을 보이고, 작업 키 다음에
   `덮어쓰기`를 따로 받는다(그 밖의 입력·빈 줄·EOF는 취소, 종료 0). 이 작업이 올린 커밋이 아니면 취소한다.
 - 거부(종료 2): 닫힘, tty 아님(파이프·CI), `TT_RUNTIME`·`CLAUDECODE`가 있음(OpenCode·Claude Code 안), `GIT_DIR`·`GIT_WORK_TREE`·
-  `GIT_INDEX_FILE`·`GIT_CONFIG*`가 있음, 설치 지문 불일치, 사용자 config `plugin.scripts_path`가 설치본 `<plugin>/scripts`가 아님
+  `GIT_INDEX_FILE`·`GIT_CONFIG*`·`GIT_ALLOW_PROTOCOL`이 있음, 설치 지문 불일치, 사용자 config `plugin.scripts_path`가 설치본 `<plugin>/scripts`가 아님
   (`config.py sync-scripts-path`로 되돌린다 — pre-commit이 그 폴더의 코드를 돌린다), 계획 `source`가 analyze가 아님, `state.json`
   브랜치가 `issue/<KEY>`가 아님, `--dry-run`으로 stage한 작업, 원격 브랜치가 계획의 PR head와 다름(덮어쓰기·중단은 Claude Code에서).
 - 설치 지문(`tt-oc doctor`·publish가 대조)은 `opencode.json`·`.opencode/` 아래 설치 파일(`tt-guard.js` 포함)·`<plugin>/scripts/**/*.py`를
