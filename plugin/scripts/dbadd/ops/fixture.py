@@ -37,12 +37,20 @@ class FixtureOps:
 
     def op_add_fixture(self, i, op):
         type_id, name = self.fixture_names[i]
-        text = self._fixture_source(i, op["path"])
+        try:
+            text = self._fixture_source(i, op["path"])
+        except UnicodeDecodeError:
+            text = "\0"
+        if "\0" in text:    # 그대로 두면 traceback이거나, 쓴 fixture를 커밋 관문이 막는다
+            raise Reject("fixture-source", f"fixture 원본이 UTF-8 텍스트가 아닙니다(NUL 또는 다른 인코딩): {op['path']} "
+                         "— 원본을 `parse_logcat.py mask-copy`로 다시 만든 뒤 넣는다.", i)
         if op["kind"] != "negative":
             self._cause_or_reject(i, op["for"])
         # 커밋 관문(`mask_pii --check`)이 fixtures/*.log에 쓰는 로그 마스커·줄 나눔 그대로(줄 머리 규칙·갈린 덤프 조각)
         masker = masking.new_masker(existing_text=text, allow_patterns=self.allow, log_lines=True)
         masked = "\n".join(masking.mask_lines(masker, text.split("\n")))
+        # 그 위에 기본 마스커를 글 전체로 한 번 더: 줄 단위로는 다음 줄로 접힌 SIP Digest `nonce=`·`response=`가 문맥을 못 본다
+        masked = masking.new_masker(existing_text=masked, allow_patterns=self.allow).mask(masked)
         fdir = self._type_dir_any(type_id) / "fixtures"
         self.tree.write(fdir / name, masked)
         fx = parse_name(name)
