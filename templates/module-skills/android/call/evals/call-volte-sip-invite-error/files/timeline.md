@@ -9,5 +9,5 @@
 12:00:11.100 - D ImsPhone [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN  ⇒ ims_registered(transport=WWAN)
 12:02:00.000 - I GsmCdmaPhone [0] useImsForCall=true, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isP…  ⇒ ims_dial_attempt(ims=true,ims_state=0)
 12:02:00.100 - D VRIL-IMS [call] Sending INVITE to <MSISDN#1> slot=0
-12:02:01.300 - I VRIL-IMS [call] Received INVITE response status-code : 503 slot=0
+12:02:01.300 - I VRIL-IMS [call] Received INVITE response status-code=503 slot=0
 12:02:01.400 - W ImsPhoneCallTracker [0] onCallStartFailed reasonCode=ImsReasonInfo :: {1014 : CODE_SIP_SERVICE_UNAVAILABLE, 503, null}

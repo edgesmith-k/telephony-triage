@@ -1,15 +1,15 @@
 -- [합성] telephony-triage module-skills D eval log. Hand-written; base sample CALL-001-01.log + vendor IMS registration before the dial.
 08-23 12:00:02.100  2101 2141 D RILJ    : [0303]> NOTIFY_IMS_DATA_NETWORK [PHONE0]
-08-23 12:00:03.107  1188 1258 V RIL     : mux [ch0][TX] <unknown ipc>, REQ seq=0x0203 len=12
-08-23 12:00:04.114  1188 1258 V RIL     : mux [ch0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0203 len=12
+08-23 12:00:03.107  1188 1258 V RIL     : ipc[0][TX] <unknown ipc>, REQ seq=0x0203 len=12
+08-23 12:00:04.114  1188 1258 V RIL     : ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0203 len=12
 08-23 12:00:05.121  1188 1248 E VRIL    : reply to client token 303
 08-23 12:00:06.128  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
 08-23 12:00:07.135  2101 2141 D RILJ    : [0303]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
 08-23 12:00:10.000  2101 2113 D ImsResolver: bound to mock ImsService [PHONE0]
-08-23 12:00:12.000  1777 1777 D VRIL-IMS: [pdn] registration state IMS_DEREGISTERED -> IMS_REGISTERING apn=<APN#1> slot=0
-08-23 12:00:14.900  1188 1258 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=208
-08-23 12:00:14.901  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
-08-23 12:00:14.905  1777 1777 I VRIL-IMS: [reg] ind <- OEM_UNSOL_IMS_REGISTRATION : state : 0  feature : 11  status-code : 403
+08-23 12:00:12.000  1777 1777 D VRIL-IMS: [pdn] registration state deregistered -> registering apn=<APN#1> slot=0
+08-23 12:00:14.900  1188 1258 V RIL     : ipc[0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=208
+08-23 12:00:14.901  1188 1258 V RIL     : ipc[0][RX] <HEXDUMP 16B>
+08-23 12:00:14.905  1777 1777 I VRIL-IMS: [reg] ind <- OEM_UNSOL_IMS_REGISTRATION state=0 feature=mmtel status-code=403
 08-23 12:00:15.000  2101 2101 D ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnectedRadioTech=0
 08-23 12:00:16.000  1188 1248 E VRIL    : reply to client token 303
 08-23 12:03:25.000  2101 2101 I GsmCdmaPhone: [0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {f8179f4}, imsPhone.isVoiceOverCellularImsEnabled()=true, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=1
@@ -22,5 +22,5 @@
 08-23 12:03:29.600  2101 2113 W ImsPhoneCallTracker: [0] call ended: cause=17
 08-23 12:03:30.000  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009
 08-23 12:03:50.011  1188 1248 E VRIL    : reply to client token 400
-08-23 12:03:50.311  1188 1258 V RIL     : mux [ch0][RX] <HEXDUMP 16B>
+08-23 12:03:50.311  1188 1258 V RIL     : ipc[0][RX] <HEXDUMP 16B>
 08-23 12:03:50.611  1188 1258 V RIL     : route rsp type=0001 id=0x0703 svc=5 msg=4009

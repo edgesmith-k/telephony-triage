@@ -5,8 +5,8 @@
 09-02 10:00:03.010  2101 2111 D DPM-0   : Preferred data profile kept from previous carrier: [DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6, preferred=true]
 09-02 10:00:03.100  2101 2145 D RILJ    : [0410]> SET_INITIAL_ATTACH_APN [DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6] [PHONE0]
 09-02 10:00:03.104  1188 1188 D VRIL-SVC: RadioDataProxy::setInitialAttachApn: serial 410
-09-02 10:00:03.106  1188 1258 V RIL     : mux [ch0][TX] VIPC_EXAMPLE_ATTACH_PROFILE, REQ seq=0x0310 len=120
-09-02 10:00:03.150  1188 1258 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_ATTACH_PROFILE, RSP OK(VIPC_OK) seq=0x0310 len=12
+09-02 10:00:03.106  1188 1258 V RIL     : ipc[0][TX] VIPC_EXAMPLE_ATTACH_PROFILE, REQ seq=0x0310 len=120
+09-02 10:00:03.150  1188 1258 V RIL     : ipc[0][RX] VIPC_EXAMPLE_ATTACH_PROFILE, RSP OK(VIPC_OK) seq=0x0310 len=12
 09-02 10:00:03.160  2101 2170 D RILJ    : [0410]< SET_INITIAL_ATTACH_APN [PHONE0]
 09-02 10:00:03.200  2101 2145 D RILJ    : [0411]> SET_DATA_PROFILE with data profiles :  [PHONE0]
 09-02 10:00:03.201  2101 2145 D RILJ    : [DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6, preferred=true] [PHONE0]
@@ -14,8 +14,8 @@
 09-02 10:00:03.262  2101 2244 D DSM-C-0 : onSetDataProfileComplete. resultCode = 0
 09-02 10:00:05.000  2101 2145 D RILJ    : [0412]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6] [PHONE0]
 09-02 10:00:05.004  1188 1188 D VRIL-SVC: RadioDataProxy::setupDataCall: serial 412
-09-02 10:00:05.006  1188 1241 I RIL     : [ExamplePdnService_0] setup data call request
-09-02 10:00:05.300  1188 1153 I RIL     : [ExamplePdnService_0] setup data call done errorCode=0, PdnCtx{cid=2, state=CONNECTED, active=ACTIVE_AND_LINKUP}
+09-02 10:00:05.006  1188 1241 I RIL     : [ExamplePdnService_0] setup data call begin
+09-02 10:00:05.300  1188 1153 I RIL     : [ExamplePdnService_0] setup data call end errorCode=0 PdnCtx cid=2 state=connected link=up
 09-02 10:00:05.310  2101 2170 D RILJ    : [0412]< SETUP_DATA_CALL DataCallResponse: { cause=NONE(0x0) retry=0 cid=2 linkStatus=2 protocolType=2 ifname=rmnet1 addresses=[<IP#1>/64] } [PHONE0]
 09-02 10:00:05.320  2101 2244 D DSM-C-0 : onSetupDataCallComplete. resultCode = 0
 09-02 10:00:05.400  2101 2101 D DNC-0   : Internet data state changed from DISCONNECTED to CONNECTED.

@@ -6,7 +6,7 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): SET_CLIR · ENABLE_VONR · UNSOL_EMERGENCY_NUMBER_LIST · HANGUP · VIPC_EXAMPLE_VONR_SWITCH
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
-16:00:04.114 - V RIL mux [ch0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0207 len=12
+16:00:04.114 - V RIL ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0207 len=12
 16:00:20.010 - V VRIL radio state changed: newState=RADIO_UNAVAILABLE
 16:00:20.500 p0 D RILJ [0340]> GET_CURRENT_CALLS [PHONE0]
 16:00:21.000 - D ImsPhone [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 0, null}, suggestedAction=0  ⇒ ims_registration_failed(code=121,extra=0,reason=CODE_LOCAL_NETWORK_NO_SERVICE)
@@ -19,7 +19,7 @@
 16:00:23.600 - W ImsPhoneCallTracker [0] call ended: cause=17
 
 ## 모뎀 모듈 줄
-16:00:04.114 - V RIL mux [ch0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0207 len=12
+16:00:04.114 - V RIL ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0207 len=12
 16:00:20.000 p0 D RILJ [UNSL]< UNSOL_MODEM_RESTART [PHONE0]
 16:00:20.010 - V VRIL radio state changed: newState=RADIO_UNAVAILABLE
 16:00:21.000 - D ImsPhone [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 0, null}, suggestedAction=0  ⇒ ims_registration_failed(code=121,extra=0,reason=CODE_LOCAL_NETWORK_NO_SERVICE)

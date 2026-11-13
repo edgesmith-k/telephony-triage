@@ -1,20 +1,20 @@
 -- [합성] module-filter fixture. Hand-written, not a real capture. AOSP 줄은 문구만, 벤더 줄은 placeholder.
 10-17 10:24:51.302  2214  2338 D RILJ    : [0715]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=1,isRoaming=false,allowRoaming=true [PHONE0]
 10-17 10:24:51.304  1350  1350 D VRIL-SVC: RadioDataProxy::setupDataCall: serial 715
-10-17 10:24:51.305  1350  1350 I RIL     : [ExamplePdnService_0] setup data call request
+10-17 10:24:51.305  1350  1350 I RIL     : [ExamplePdnService_0] setup data call begin
 10-17 10:24:51.305  1350  1350 V RIL     : [IpcCtx_0] track seq 0x0f02
-10-17 10:24:51.306  1350  1406 V RIL     : mux [ch0][TX] VIPC_EXAMPLE_PDN_UP, REQ seq=0x0f02 len=132
+10-17 10:24:51.306  1350  1406 V RIL     : ipc[0][TX] VIPC_EXAMPLE_PDN_UP, REQ seq=0x0f02 len=132
 10-17 10:24:51.306  1350  1406 V RIL     : <HEXDUMP 16B>
 10-17 10:24:51.306  1350  1406 V RIL     : <HEXDUMP 16B>
 10-17 10:24:51.306  1350  1406 V RIL     : <HEXDUMP 16B>
-10-17 10:24:51.812  1350  1418 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_PDN_UP, RSP OK(VIPC_OK) seq=0x0f02 len=88
+10-17 10:24:51.812  1350  1418 V RIL     : ipc[0][RX] VIPC_EXAMPLE_PDN_UP, RSP OK(VIPC_OK) seq=0x0f02 len=88
 10-17 10:24:51.812  1350  1418 V RIL     : <HEXDUMP 16B>
 10-17 10:24:51.813  1350  1418 I RIL     : [IpcCtx_0] rx frame
 10-17 10:24:51.813  1350  1418 V RIL     : route rsp type=1 id=0x0421 svc=3 msg=1201
 10-17 10:24:51.814  1350  1406 V RIL     : [ExamplePdnService_0] link state poll: rmnet2 index 9
 10-17 10:24:51.814  1350  1406 V RIL     : [ExamplePdnService_0] link state poll: rmnet2 index 9
 10-17 10:24:51.815  1350  1406 W RIL     : set mtu 1500 to rmnet2
-10-17 10:24:51.815  1350  1406 I RIL     : [ExamplePdnService_0] setup data call done errorCode=0, PdnCtx{cid=3, state=CONNECTED, active=ACTIVE_AND_LINKUP}
+10-17 10:24:51.815  1350  1406 I RIL     : [ExamplePdnService_0] setup data call end errorCode=0 PdnCtx cid=3 state=connected link=up
 10-17 10:24:51.816  1350  1406 V RIL     : [ExamplePdnService_0] data call list reply
 10-17 10:24:51.816  1350  1406 I RIL     : VrilApp::instance
 10-17 10:24:51.816  1350  1406 I RIL     : VrilApp::instance
@@ -30,9 +30,9 @@
 10-17 10:24:51.817  1350  1406 E VRIL    : reply to client token 715
 10-17 10:24:51.818  1350  1406 D VRIL-SVC: setupDataCall response: serial 715
 10-17 10:24:51.818  1350  1406 V RIL     : [IpcCtx_0] untrack seq 0x0f02
-10-17 10:24:51.819  1350  1406 V RIL     : mux [ch0][TX] VIPC_EXAMPLE_LINK_TUNE, REQ seq=0x0f03 len=16
+10-17 10:24:51.819  1350  1406 V RIL     : ipc[0][TX] VIPC_EXAMPLE_LINK_TUNE, REQ seq=0x0f03 len=16
 10-17 10:24:51.819  1350  1406 V RIL     : <HEXDUMP 16B>
-10-17 10:24:51.823  1350  1418 V RIL     : mux [ch0][RX] VIPC_EXAMPLE_LINK_TUNE, RSP OK(VIPC_OK) seq=0x0f03 len=12
+10-17 10:24:51.823  1350  1418 V RIL     : ipc[0][RX] VIPC_EXAMPLE_LINK_TUNE, RSP OK(VIPC_OK) seq=0x0f03 len=12
 10-17 10:24:51.823  1350  1418 V RIL     : <HEXDUMP 12B>
 10-17 10:24:51.823  1350  1418 I RIL     : [IpcCtx_0] rx frame
 10-17 10:24:51.824  1350  1418 E RIL     : waitlist miss seq 0x0f03
@@ -43,13 +43,13 @@
 10-17 10:24:51.828  2214  2214 D DN-14-C : ConnectingState: Link status updated to ACTIVE
 10-17 10:24:51.831  1530  1702 D ConnectivityService: Adding iface rmnet2 to network 114
 10-17 10:24:51.832  2214  2214 D DN-14-C : ConnectingState: updateNetworkCapabilities: Capabilities not changed.
-10-17 10:24:51.833  1350  1406 I RIL     : [ExamplePdnService_0] update pdn PdnCtx{cid=3, state=CONNECTED, active=ACTIVE_AND_LINKUP}
+10-17 10:24:51.833  1350  1406 I RIL     : [ExamplePdnService_0] update pdn PdnCtx cid=3 state=connected link=up
 10-17 10:24:51.833  1350  1406 V RIL     : [ExamplePdnService_0] pdn table
-10-17 10:24:51.833  1350  1406 V RIL     : [0] PdnCtx{cid=1, state=AVAILABLE, active=INACTIVE}
-10-17 10:24:51.833  1350  1406 V RIL     : [1] PdnCtx{cid=2, state=AVAILABLE, active=INACTIVE}
-10-17 10:24:51.833  1350  1406 V RIL     : [2] PdnCtx{cid=3, state=CONNECTED, active=ACTIVE_AND_LINKUP}
-10-17 10:24:51.833  1350  1406 V RIL     : [3] PdnCtx{cid=4, state=AVAILABLE, active=INACTIVE}
-10-17 10:24:51.833  1350  1406 V RIL     : [4] PdnCtx{cid=5, state=AVAILABLE, active=INACTIVE}
+10-17 10:24:51.833  1350  1406 V RIL     : [0] PdnCtx cid=1 state=available link=down
+10-17 10:24:51.833  1350  1406 V RIL     : [1] PdnCtx cid=2 state=available link=down
+10-17 10:24:51.833  1350  1406 V RIL     : [2] PdnCtx cid=3 state=connected link=up
+10-17 10:24:51.833  1350  1406 V RIL     : [3] PdnCtx cid=4 state=available link=down
+10-17 10:24:51.833  1350  1406 V RIL     : [4] PdnCtx cid=5 state=available link=down
 10-17 10:24:51.833  1350  1406 V RIL     : [ExamplePdnService_0] pdn table end
 10-17 10:24:51.834  1350  1406 V RIL     : [ExamplePdnService_0] ambr cid=0 down 0 kbps up 0 kbps
 10-17 10:24:51.834  1350  1406 V RIL     : [ExamplePdnService_0] data call list reply
