@@ -281,18 +281,44 @@ def test_new_cause_cannot_start_fixed():
     assert not [f for f in changed["errors"] if f["code"] == "new-cause-fixed" and "CALL" in f["message"]]
 
 
+# CALL-001-01(샘플, fixed)의 fix를 새 원인으로 옮긴 것 — verification은 fixture 경로만 새 원인 이름
+MOVED_FIX = """    fix:
+      status: fixed
+      ref: MOCKCL-12345
+      fixed_in:
+        - {branch: MOCKB77_U2, build: MOCKB77_U2_20260920}
+      verification:
+        result: passed
+        build: MOCKB77_U2_20260920
+        date: 2026-09-26
+        by: mock-user2
+        fixture: fixtures/DATA-001-04.fixed.MOCKB77_U2_20260920.log
+        scenario_evidence: CALL-001-01/volte-dial-attempt
+        note: 재현 시나리오 3회 수행, 재발 없음
+      verification_history: []
+"""
+MOVED_CAUSE = NEW_FIXED_CAUSE.replace(
+    NEW_FIXED_CAUSE[NEW_FIXED_CAUSE.index("    fix:\n"):NEW_FIXED_CAUSE.index("    related: []")], MOVED_FIX)
+TO_NEW = ("  - id: CALL-001-01\n    status: active", "  - id: CALL-001-01\n    status: merged-into:DATA-001-04")
+
+
 def test_merged_fixed_cause_keeps_fixed():
-    """병합(move): base에서 fixed였던 옛 원인이 merged-into:<새 원인>이면 새 원인의 fixed는 허용(R10-01).
-    병합해 온 옛 원인이 fixed가 아니면 여전히 거부."""
+    """병합(move, R10-01): base에서 active·fixed였던 옛 원인이 merged-into:<새 원인>이고 새 원인의 verification이
+    base 기록과 같으면(fixture 경로 제외) 새 원인의 fixed는 허용. 기록이 다르거나 옛 원인이 base에서 이미 병합됐으면 거부."""
+    new_fixed = ("new-cause-fixed", f"{D}/type.md")
     repo = git_db()
-    edit(repo / D / "type.md", "tags: [data-evaluation]", NEW_FIXED_CAUSE)
-    old = repo / C / "type.md"
-    edit(old, "  - id: CALL-001-01\n    status: active", "  - id: CALL-001-01\n    status: merged-into:DATA-001-04")
-    assert ("new-cause-fixed", f"{D}/type.md") not in _pairs(_lint(repo, "--changed", "main"))
-    git(repo, "checkout", "--", C)
-    ims = next((repo / "ims").glob("*/type.md"))
-    edit(ims, "  - id: IMS-001-01\n    status: active", "  - id: IMS-001-01\n    status: merged-into:DATA-001-04")
-    assert ("new-cause-fixed", f"{D}/type.md") in _pairs(_lint(repo, "--changed", "main", expect=1))
+    edit(repo / D / "type.md", "tags: [data-evaluation]", MOVED_CAUSE)
+    edit(repo / C / "type.md", *TO_NEW)
+    assert new_fixed not in _pairs(_lint(repo, "--changed", "main"))
+    edit(repo / D / "type.md", "        date: 2026-09-26\n", "        date: 2026-09-27\n")      # 검증 기록이 다름
+    assert new_fixed in _pairs(_lint(repo, "--changed", "main", expect=1))
+
+    repo = git_db()                                     # 옛 원인이 base에서 이미 다른 곳으로 병합돼 있음
+    edit(repo / C / "type.md", TO_NEW[0], "  - id: CALL-001-01\n    status: merged-into:IMS-001-01")
+    git(repo, "commit", "-qam", "base: CALL-001-01 merged")
+    edit(repo / D / "type.md", "tags: [data-evaluation]", MOVED_CAUSE)
+    edit(repo / C / "type.md", "status: merged-into:IMS-001-01", "status: merged-into:DATA-001-04")
+    assert new_fixed in _pairs(_lint(repo, "--changed", "main", expect=1))
 
 
 def test_regex_safety_heuristics():

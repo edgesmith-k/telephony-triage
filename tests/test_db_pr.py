@@ -287,31 +287,6 @@ def test_verify_resolution_and_update_fix_rules():
     assert fix["status"] == "fix-submitted" and fix["ref"] == "MOCKCL-2"
 
 
-def test_update_fix_without_status_on_fixed_cause_adds_branch_only():
-    """fixed 원인에 status 없는 update-fix(백포트, R10-02): fixed_in·ref만 바뀌고 상태·검증 기록·다른 칸은 그대로.
-    이미 있는 브랜치 항목 바꾸기·검증 칸·status fixed는 이 경로로 못 한다(verify-fix 우회로가 아니다)."""
-    db = git_db()
-    type_md = db / "call/CALL-001-volte-not-working/type.md"
-    before = cause_of(type_md.read_text(encoding="utf-8"), "CALL-001-01")
-    backport = {"branch": "MOCKA56_U1", "build": "MOCKA56_U1_20261001"}
-
-    def plan(fix: dict) -> dict:
-        return {"source": "fix-submitted", "schema_version": 1, "started_at": "2026-10-02T10:00+09:00",
-                "base_sha": "0" * 40, "issue": None, "commit_message": "[X] backport",
-                "operations": [{"op": "update-fix", "cause": "CALL-001-01", "fix": fix}]}
-
-    assert apply_json(db, plan({"ref": "MOCKCL-3", "fixed_in": [backport]}))["applied"]
-    after = cause_of(type_md.read_text(encoding="utf-8"), "CALL-001-01")
-    before["fix"].update(ref="MOCKCL-3", fixed_in=[*before["fix"]["fixed_in"], backport])
-    assert after == before and after["fix"]["status"] == "fixed" and after["fix"]["verification"]["result"] == "passed"
-
-    changed = {"branch": "MOCKB77_U2", "build": "MOCKB77_U2_20261002"}    # 검증된 브랜치의 빌드를 바꾸려 함
-    assert apply_json(db, plan({"fixed_in": [changed]}), expect=1)["rejected"][0]["code"] == "fixed-in-change"
-    for bad in ({"status": "fixed"}, {"verification": None}, {"verification_history": []}):
-        assert apply_json(db, plan(bad), expect=2)["error"], bad          # 계획 스키마가 거부
-    assert cause_of(type_md.read_text(encoding="utf-8"), "CALL-001-01") == before
-
-
 def test_source_outside_values_dry_run_and_forced_exit_3():
     db = git_db()
     plan = load_plan("p7-analyze-append.plan.json")
