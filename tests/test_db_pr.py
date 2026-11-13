@@ -2943,3 +2943,15 @@ def test_sync_pr_republish_updates_merge_offer_head_and_old_approval_goes_stale(
     assert _gh(ws, "pr", "review", str(number), "--approve", MOCK_GH_USER="mock-reviewer").returncode == 0
     done = _merge(ws, None, reviews=None)
     assert done["merged"] is True and [a["commit"] for a in done["review"]["approvals"]] == [h2]
+
+
+def test_git_is_non_interactive(monkeypatch):
+    """B-18 (T-30): db_pr의 git(fetch·pull·push 포함)은 자격 증명 프롬프트로 매달리지 않는다 — 넘긴 env에도 붙는다."""
+    from dbpr import worktree
+    seen = []
+    monkeypatch.setattr(worktree.subprocess, "run",
+                        lambda cmd, **kw: seen.append(kw) or subprocess.CompletedProcess(cmd, 0, "", ""))
+    worktree._git(REPO, "fetch", "origin")
+    worktree._git(REPO, "push", "origin", env={"TT_PUBLISH_TOKEN": "x"})
+    assert [(kw["stdin"], kw["env"]["GIT_TERMINAL_PROMPT"]) for kw in seen] == [(subprocess.DEVNULL, "0")] * 2
+    assert seen[1]["env"]["TT_PUBLISH_TOKEN"] == "x"

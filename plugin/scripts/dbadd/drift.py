@@ -179,6 +179,8 @@ def drift_items(plan: dict, base: Snapshot, onto: Snapshot) -> list[dict]:
                 if da.get(field) != db_.get(field):
                     add(i, op, op["fixture"], field, da.get(field), db_.get(field),
                         op.get("cause") if field == "also_allowed" else None)
+        else:   # 스키마에 op를 더하고 여기를 빠뜨리면 drift 없음(덮어쓰기)으로 보이지 않게 멈춘다
+            raise UsageError(f"drift가 모르는 op: {kind!r} (plan 스키마에 op를 더하면 dbadd/drift.py에도 더한다)")
     return out
 
 

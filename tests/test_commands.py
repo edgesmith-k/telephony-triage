@@ -431,7 +431,7 @@ def test_offline_eval_prints_accuracy_table_on_synthetic_labelset():
     assert set(meta["plugin_repo"]) == set(meta["db"]) == {"sha", "dirty"}
     assert meta["db"] == {"sha": None, "dirty": None}   # 샘플 DB는 플러그인 레포 하위 폴더(git 최상위 아님)
     assert meta["plugin_root"] == {"path": str(root), "temporary": False}
-    assert meta["site_defaults_sha256"] == hashlib.sha256((REPO / "plugin/site-defaults.example.yaml").read_bytes()).hexdigest()
+    assert meta["site_defaults_sha256"] == hashlib.sha256((root / "site-defaults.yaml").read_bytes()).hexdigest()
     item = out["items"][0]
     assert item["logs_sha256"] and all(len(h) == 64 for h in item["logs_sha256"])
     assert item["backend"]["name"] and "version" in item["backend"] and item["external"] == []    # 외부 파서 없음
@@ -444,7 +444,10 @@ def test_offline_eval_default_root_is_temporary_helper_root_without_site_default
     meta = json.loads(proc.stdout)["meta"]
     root = Path(meta["plugin_root"]["path"])
     assert meta["plugin_root"]["temporary"] is True and not root.exists()      # 임시 루트는 실행 뒤 지운다
-    assert meta["site_defaults_sha256"] == hashlib.sha256((REPO / "plugin/site-defaults.example.yaml").read_bytes()).hexdigest()
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import make_plugin_root
+    helper = make_plugin_root.site_defaults_bytes(REPO / "plugin/site-defaults.example.yaml")
+    assert meta["site_defaults_sha256"] == hashlib.sha256(helper).hexdigest()
 
 
 def test_offline_eval_text_table_has_the_three_metrics():

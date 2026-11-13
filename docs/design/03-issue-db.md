@@ -174,7 +174,7 @@ causes:
     fix:
       status: not-a-bug                # open | fix-submitted | fixed | wont-fix | not-a-bug
       ref: null                        # 코드 수정 참조(CL·커밋 등) (형식: issue-db.config.yaml fix_ref_regex)
-      fixed_in: []                     # [{branch: <브랜치, 필수>, build: <빌드, 선택>}]
+      fixed_in: []                     # [{branch: <브랜치, 필수>, build: <빌드, 선택>, ref: <그 브랜치의 수정 CL, 선택 — fix_ref_regex>}]
       verification: null               # fixed일 때 필수. 코드 수정 검증 기록 (05-verification.md §5.12 (2))
       verification_history: []         # 이전 검증·되돌림 기록, 최신이 위 (형식: contracts.md §상태 값)
     related: []                        # 다른 원인 ID (카테고리 무관, 양방향)
@@ -385,7 +385,7 @@ analyze Step 7까지의 결정은 이슈 DB를 바로 바꾸지 않고 **작업 
 | 원인 `description` | 왜 그 증상이 나는지 한 문장 | 로밍 중인데 데이터 로밍 설정이 꺼져 있음 | |
 | `resolution` | **행동 지시 1~2문장**, "~한다"로 끝냄. 워크어라운드면 앞에 `[WA]` | 데이터 로밍 설정을 켠다 / `[WA]` 비행기 모드를 껐다 켠다 | 확인 필요 / 수정함 |
 | `resolution_type` | 허용 값 중 하나 (`contracts.md §상태 값`) | user-setting, carrier-config, framework-bug, vendor-ril, modem, network, hw | etc |
-| `fix.status` | 허용 값 중 하나. `fix-submitted`면 `ref`와 `fixed_in`(브랜치 필수, 빌드 선택) 필수, `fixed`면 여기에 더해 `verification`(result: passed) 필수. **새 원인은 `fixed`로 시작할 수 없다** (verify-fix를 거쳐야 함, 검사 범위는 5.9 아래) | fix-submitted + CL 링크 + 브랜치[:빌드] | 검증 없이 fixed |
+| `fix.status` | 허용 값 중 하나. `fix-submitted`면 `ref`와 `fixed_in`(브랜치 필수, 빌드·항목 `ref` 선택 — `contracts.md` `fix.fixed_in[]`) 필수, `fixed`면 여기에 더해 `verification`(result: passed) 필수. **새 원인은 `fixed`로 시작할 수 없다** (verify-fix를 거쳐야 함, 검사 범위는 5.9 아래) | fix-submitted + CL 링크 + 브랜치[:빌드] | 검증 없이 fixed |
 | `resolution_verification` | 새 원인과 `resolution`을 바꾼 원인은 `unverified`로 시작. `verified`로 바꾸는 것은 `verify-resolution` op뿐이고 evidence(Jira 또는 `resolved` fixture) 필수. 같은 계획에서 `new-cause` 뒤에 `verify-resolution`이 오면 새 원인도 `verified`로 들어갈 수 있다. 기록 대상 Jira 자신은 evidence가 될 수 없고, 사용자 진술뿐이면 `unverified` + "근거: 사용자 진술"(새 원인은 `method`, 기존 원인은 Jira `note`) | `{status: verified, evidence: [ABC-222]}` | 근거 없이 verified, 기록하는 Jira 자신을 evidence로 |
 | `recovery_signatures` | 해결되면 나타나야 하는 **이 원인에 특정한** 정상 흐름. 원인의 계기가 풀리는 이벤트와 정상 동작을 `sequence`로 묶는다. 그 카테고리 음성 fixture(정상 로그) 전부에 맞으면 R1 흔적 검사에서 실패한다(`05-verification.md §5.12 (1)`). 코드·설정 수정 유형(framework-bug, vendor-ril, modem, carrier-config)은 권장 | `must_event: [{id: on, event: data_setting_changed, fields: {enabled: 'true'}}]` + `must_match: [{id: setup, pattern: 'RILJ.*>\s*SETUP_DATA_CALL'}]`, `sequence: [on, setup]` | 원인 시그니처의 단순 부정, 정상 로그면 어디에나 맞는 동작만(예: `SETUP_DATA_CALL` 요청만) |
 | `scenario_signatures` | 재현 시나리오 수행 흔적. 코드·설정 수정 유형은 **`fixed` 전환 전에 `scenario_signatures`나 `recovery_signatures` 중 하나가 필수** (`05-verification.md §5.12 (2)`) | 데이터 연결 시도 평가 로그, 발신 요청 로그 | 원인 시그니처 복사 |
@@ -519,7 +519,7 @@ note: {{선택, 한 줄}}
 - [ ] 유사 유형 검사 결과를 사용자에게 보여줌, 새 유형일 때 (`db_add similar`)
 - [ ] `related`가 가리키는 원인 ID가 실제로 존재하고 양방향 (`db_lint`)
 - [ ] `code_refs`가 `<root 키>:<상대 경로>` 형식이고 root 키가 `code_root_keys`에 있음, 절대 경로 없음 (`db_lint`)
-- [ ] `fix.ref`가 `fix_ref_regex`에 맞음 (`db_lint`)
+- [ ] `fix.ref`와 `fix.fixed_in[].ref`가 `fix_ref_regex`에 맞음 (`db_lint`)
 - [ ] 시그니처의 `builtin.*` 참조가 현재 백엔드 `builtin_events()`에, `ext.<category>.*` 참조가 이슈 DB `external_parsers`에 있음 (`db_lint`)
 - [ ] 파서 규칙 갱신 (`04-parser-matching.md §5.8`): 필요한 태그/RIL/extractor 존재, 원인별 양성 fixture 존재, fixture 파일명이 규칙에 맞음 (`db_lint`)
 - [ ] **전체 fixture 회귀 통과** (`db_regress --all`)

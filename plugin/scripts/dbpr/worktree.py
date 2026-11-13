@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -21,9 +22,11 @@ from .lock import (JOB_KEY_RE, Lock, PASTED_STEPS, PLAN, SNAPSHOT_DIR, SNAPSHOT_
 
 
 def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
+    # 비대화(B-18): 인증 실패가 자격 증명 프롬프트로 120초 매달리지 않고 바로 실패로 보고되게
+    env = {**(os.environ if env is None else env), "GIT_TERMINAL_PROMPT": "0"}
     try:
         proc = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8",
-                              errors="replace", env=env, timeout=120)
+                              errors="replace", env=env, timeout=120, stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired as exc:
         raise UsageError("git 시간 초과 (120초). 원격·로컬 상태를 확인한 뒤 재개한다.") from exc
     except OSError as exc:
