@@ -1240,12 +1240,12 @@ def test_publish_existing_remote_needs_overwrite_word(env, second):
     """원격 브랜치에 커밋이 있고 계획 head와 같아도(모델이 맞출 수 있다) 작업 키만으로는 게시하지 않는다 — 둘째 확인이 덮어쓰기가
     아니면(빈 줄·다른 낱말·작업 키·EOF) 취소, 종료 0 (리뷰 6 F-P1). tip 제목의 폭 없는·방향 글자는 이스케이프, 200자에서 자른다."""
     job = _pub_setup(env)
-    sha = _remote_commit(job, "‮‏evil​؜﻿" + "A" * 300)
+    sha = _remote_commit(job, "\u202e\u200fevil\u200b\u061c\ufeff" + "A" * 300)
     code, out = pty_tt({**_pub_env(env), "STUB_REMOTE": sha}, env["proj"], "publish", answers=[KEY, second])
     assert code == 0 and out.count(PROMPT2.decode()) == 1 and "게시하지 않았다(작업은 다시 stage된 상태" in out, out
     assert [c["args"][4] for c in dbpr_calls(env)] == ["preflight", "stage"]
     assert " · \\u202e\\u200fevil\\u200b\\u061c\\ufeff" + "A" * 191 + "…\n" in out, out      # 9 + 191 = 200자
-    assert not set("‮‏​؜﻿") & set(out)
+    assert not set("\u202e\u200f\u200b\u061c\ufeff") & set(out)
 
 
 @PTY
