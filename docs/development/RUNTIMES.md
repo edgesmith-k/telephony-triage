@@ -191,6 +191,19 @@ MCP 쓰기(add_comment 승인 유무)·Write/Edit 규칙 8은 이번에 돌리�
   거부한다. tt-oc에서 실제로 읽으려면 설치 설정이
   읽기 도구를 허용해야 한다: `gen_opencode.py install … --jira-read-tool <서버>_<도구> --force`(permission 끝 allow — 템플릿의
   `"*"`·`jira_*` deny 뒤). 관리 설정(`/etc/opencode`)의 `jira_*` deny는 관리자 몫(확인의 tools-offered 행이 fail로 보인다).
+- **OpenCode 안의 쓰기 경계(11/13 OC-B, `oc_adapter.py`)**: `config.py`의 사용자 설정 쓰기 하위 명령(`init`·`set`·`set-tracker`·
+  `install-hooks`·`rename-legacy --apply`·`sync-scripts-path --plugin-root`·`tracker-candidates --mcp-config|--opencode-config`)은
+  config.py 자신의 파서로 읽어 "직접 실행"으로 돌린다(사람이 터미널에서. `init --answers`는 붙여 넣지 말고 대화형 `config.py init`).
+  그래서 `tt-setup`은 쓰기 흐름 커맨드다. 플러그인 스크립트는 `--plugin-root`(줄임말·`=` 꼴 포함)를 받지 않는다. 스크립트 출력
+  (`--out`·`--meta-out`·`--preview`·`mask_pii --in-place`·`jira_fields extract --consume`)은 작업 루트(설치 폴더 `tt-oc.json`의
+  `work_root`) 안이어야 하고(그 파일을 못 읽으면 출력이 있는 호출은 거부), `.git`·`.githooks` 아래나 이름이 `HEAD`인 경로에는
+  `edit`·`write`·`apply_patch`도 스크립트 출력도 쓰지 않는다(모델이 만든 저장소의 `core.fsmonitor`·hook을 허용된 `git status`가
+  실행한다). 플랫폼별 `work_dir`는 설치의 `--work-root` 안에 둔다(사내 analyze e2e에서 `--out` 거부가 없는지 확인).
+  `tt-oc publish`(사람이 터미널에서 승인하는 게시)는 처음 설치할 때 `install … --allow-publish`를 주면 열림(tt-oc.json
+  `"publish": "open"`), 안 주면 닫힘이다. 이미 설치한 곳을 열거나 닫으려면 같은 install을 `--force`로 다시 한다.
+- OpenCode 허용 목록·guard 는 모델의 실수와 로그·Jira 본문에 섞인 지시를 걸러내는 사고 방지 장치다. 작정하고 우회를 찾는 모델을
+  막는다고 보장하지 않는다. 실제 경계는 OS 사용자 권한, 서버 브랜치 보호, 사람이 내용을 읽고 하는 승인이다. 모델이 출력한 명령은
+  읽지 않고 붙여 넣지 않는다.
 - **MCP 오류 경로(1.19.5 실험, 11/05)**: 오류로 끝난 MCP 호출(MCP `isError`·JSON-RPC 오류·시간 초과)은 `tool.execute.after`가
   돌지 않는다 — 바이너리의 MCP 실행 경로는 `isError`면 `throw Error(<텍스트 블록>)`이라 그 오류 글(응답 본문)이 tool part
   `state.error`가 되어 다음 모델 요청에 그대로 간다(after 기록 0건으로 확인). 대신 `experimental.chat.messages.transform`이

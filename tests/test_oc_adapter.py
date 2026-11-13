@@ -641,3 +641,248 @@ def test_before_plugin_script_out_into_clone_denied():
     w = ws()
     out = bash(f"python3 {_scripts()}/mask_pii.py safe.txt --out {w.clone}/CONTRIBUTING.md", w.base)
     assert out["decision"] == "deny" and "규칙 8" in out["reason"]
+
+
+# -- OC-B: config.py 쓰기는 직접 실행·--plugin-root 거부·git 메타데이터·출력은 작업 루트 안 ------------------------------------------
+
+
+def _py(script: str, *args: str) -> str:
+    return f"python3 {oc.SCRIPTS}/{script} " + " ".join(args)
+
+
+@pytest.fixture
+def plugin_config(monkeypatch):
+    """이 테스트 프로세스의 `config`는 임시 플러그인 사본에서 불렸다(conftest) — 어댑터가 보는 `oc.SCRIPTS/config.py`로 바꿔 둔다
+    (어댑터는 다른 파일의 `config`면 판정하지 않는다, 정정 6)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("config", oc.SCRIPTS / "config.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    monkeypatch.setitem(sys.modules, "config", mod)
+
+
+CONFIG_RUN_YOURSELF = [   # (인자, 쓰기 흐름에 들 글)
+    ("set work_dir /x", "config.py set"), ("set tracker x", "config.py set"), ("set tracker.tools.get_issue x", "config.py set"),
+    ("set -- k v", "config.py set"), ("set 'plugin.scripts_path' /x", "config.py set"),
+    ("--platform android set k v", "config.py set"), ("set k v --platform android", "config.py set"),
+    ("init", "config.py init"), ("init --force", "config.py init"),
+    ("init --answers a.json", "--answers 파일은 모델이 쓴 것"), ("init --ans=a.json", "--answers 파일은 모델이 쓴 것"),
+    ("set-tracker --server s --get-issue g", "config.py set-tracker"), ("set-tracker --serv s --get-iss g", "config.py set-tracker"),
+    ("install-hooks", "config.py install-hooks"), ("install-hooks --db /x", "config.py install-hooks"),
+    ("rename-legacy --apply", "config.py rename-legacy"), ("rename-legacy --app", "config.py rename-legacy"),
+    ("tracker-candidates --mcp-config f", "config.py tracker-candidates"),
+    ("tracker-candidates --opencode-config=f", "config.py tracker-candidates"),
+]
+CONFIG_UNREADABLE = ["sett k v", "set k", "se k v", "@args.txt", "--platform set k v", ""]
+CONFIG_ALLOWED = ["show", "show --keys work_dir", "site-defaults", "check", "check --roots", "doctor", "doctor --format markdown",
+                  "gh-status", "rename-legacy", "sync-scripts-path", "tracker-candidates", "tracker-candidates --tools-json f",
+                  "--help", "set --help", "set -h"]
+
+
+@pytest.mark.parametrize("args,label", CONFIG_RUN_YOURSELF)
+@pytest.mark.usefixtures("plugin_config")
+def test_config_write_subcommands_are_run_yourself(args, label):
+    """조각 1: 사용자 config를 쓰거나 지정 파일의 프로그램을 띄우는 config.py 하위 명령은 config.py 자신의 파서로 읽어 직접 실행."""
+    v = oc.bash_allowlist(_py("config.py", args), str(_dir()), str(_dir()), {})
+    assert v.deny is None and v.flow and label in v.flow, (args, v)
+
+
+@pytest.mark.parametrize("args", CONFIG_UNREADABLE)
+@pytest.mark.usefixtures("plugin_config")
+def test_config_unreadable_args_denied(args):
+    v = oc.bash_allowlist(_py("config.py", args).rstrip(), str(_dir()), str(_dir()), {})
+    assert v.deny == "config.py 인자를 읽지 못해 거부한다" and v.flow is None, (args, v)
+
+
+@pytest.mark.parametrize("args", CONFIG_ALLOWED)
+@pytest.mark.usefixtures("plugin_config")
+def test_config_read_subcommands_allowed(args):
+    assert oc.bash_allowlist(_py("config.py", args), str(_dir()), str(_dir()), {}) == oc.BashVerdict(), args
+
+
+@pytest.mark.usefixtures("plugin_config")
+def test_config_set_shapes_not_bypassable(tmp_path):
+    """조각 1 반증 꼴: python·`..`·`./`·심볼릭 링크·연산자 뒤·개행도 같은 판정."""
+    s = oc.SCRIPTS
+    (tmp_path / "c.py").symlink_to(s / "config.py")
+    for cmd in (f"python {s}/config.py set k v", f"python3 {s}/../scripts/config.py set k v", f"python3 {s}/./config.py set k v",
+                f"python3 {tmp_path}/c.py set k v", f"ls && python3 {s}/config.py set k v",
+                f"ls; python3 {s}/config.py set k v", f"python3 {s}/config.py set k v | head",
+                f"ls\npython3 {s}/config.py set k v"):
+        v = oc.bash_allowlist(cmd, str(tmp_path), str(tmp_path), {})
+        assert v.flow == "사용자 설정 변경(config.py set)", (cmd, v)
+    # 기존 `set opencode.*` 그물과 문구는 그대로(before가 guard보다 먼저 낸다)
+    assert oc.v1_write_flow(_py("config.py", "set opencode.jira_read open")).startswith("OpenCode 설정 변경")
+
+
+def test_config_call_refuses_foreign_config_module(monkeypatch):
+    """정정 6: `sys.modules["config"]`가 플러그인 config.py가 아니면 판정하지 않는다(예외 → main이 거부)."""
+    import types
+    fake = types.ModuleType("config")
+    fake.__file__ = "/elsewhere/config.py"
+    monkeypatch.setitem(sys.modules, "config", fake)
+    with pytest.raises(ImportError):
+        oc._config_call(["show"])
+
+
+def test_config_call_output_channel_is_one_json():
+    """파서 출력(--help)은 버린다: before의 stdout은 JSON 하나."""
+    w = ws()
+    proc = run("common/oc_adapter.py", ["before"], root=w.root, env=w.env(), cwd=w.base, stdin=json.dumps(
+        {"tool": "bash", "args": {"command": f"python3 {w.root}/scripts/config.py set --help"}, "directory": str(w.base)}))
+    assert proc.returncode == 0 and json.loads(proc.stdout)["decision"] == "allow"
+    assert len(proc.stdout.strip().splitlines()) == 1
+    out = bash(f"python3 {w.root}/scripts/config.py set work_dir /x", w.base)
+    assert out["decision"] == "deny" and "사용자 설정 변경(config.py set)" in out["reason"] and oc.ASK_PREFIX in out["reason"]
+
+
+@pytest.mark.usefixtures("plugin_config")
+@pytest.mark.parametrize("script", ["config.py doctor", "parse_logcat.py parse x.log", "job_status.py",
+                                    "config.py sync-scripts-path"])
+@pytest.mark.parametrize("opt", ["--plugin-root X", "--plugin-r=X", "--plu X"])
+def test_plugin_root_denied_for_every_script(script, opt):
+    """P: `--plugin-root`(줄임말·`=` 꼴, 하위 명령 앞)는 모든 플러그인 스크립트에서 거부."""
+    name, *rest = script.split()
+    v = oc.bash_allowlist(_py(name, opt, *rest), str(_dir()), str(_dir()), {})
+    assert v.deny and "--plugin-root" in v.deny and v.flow is None, v
+    assert oc.bash_allowlist(_py("config.py", "doctor"), str(_dir()), str(_dir()), {}) == oc.BashVerdict()
+
+
+GIT_META = [".git/config", ".GIT/x", "w/K-1/.git", "HEAD", "w/Head", "wt/.githooks/post-index-change", "x/.git/refs/heads/m"]
+
+
+@pytest.mark.parametrize("path", GIT_META)
+def test_file_tools_cannot_write_git_metadata(path):
+    """W1: 모델이 만든 `.git`(config의 core.fsmonitor 등)·`.githooks`·`HEAD`는 허용된 git 읽기가 실행으로 잇는다."""
+    d = _dir()
+    payloads = [{"tool": "write", "args": {"filePath": path, "content": "x"}},
+                {"tool": "edit", "args": {"filePath": path, "oldString": "a", "newString": "b"}},
+                {"tool": "apply_patch", "args": {"patchText": f"*** Begin Patch\n*** Add File: {path}\n+x\n*** End Patch"}},
+                {"tool": "apply_patch", "args": {"patchText": f"*** Begin Patch\n*** Update File: {path}\n@@\n-a\n+b\n*** End Patch"}},
+                {"tool": "apply_patch", "args": {"patchText": "*** Begin Patch\n*** Update File: ok.txt\n"
+                                                              f"*** Move to: {path}\n@@\n-a\n+b\n*** End Patch"}}]
+    for p in payloads:
+        out = oc.before({**p, "directory": str(d)}, env={}, servers=[])
+        assert out["decision"] == "deny" and "git 메타데이터" in out["reason"] and out["reason"].startswith(oc.MARK), (p, out)
+
+
+def test_git_metadata_lookalikes_allowed(tmp_path):
+    for path in ("w/K-1/headers.txt", ".gitattributes", ".gitignore", "br/config", "w/head.log", "w/git/x"):
+        assert oc._git_meta(str(tmp_path / path)) is None, path
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "lnk").symlink_to(tmp_path / ".git", target_is_directory=True)
+    assert oc._git_meta(str(tmp_path / "lnk" / "config"))          # 실제 경로가 .git 아래
+    w = ws()
+    assert cli("before", {"tool": "write", "args": {"filePath": ".gitignore", "content": "x"},
+                          "directory": str(w.base)})["decision"] == "allow"
+
+
+def _work_tree(tmp_path: Path, meta: bool = True):
+    """(프로젝트 폴더, 작업 루트, env). 프로젝트 폴더의 tt-oc.json이 작업 루트를 적는다(gen_opencode install과 같다)."""
+    proj, root, home = tmp_path / "proj", tmp_path / "work", tmp_path / "home"
+    for x in (proj, root / "K-1", home):
+        x.mkdir(parents=True)
+    if meta:
+        (proj / "tt-oc.json").write_text(json.dumps({"work_root": str(root)}), encoding="utf-8")
+    return proj, root, {"HOME": str(home)}
+
+
+def test_script_outputs_must_stay_in_work_root(tmp_path):
+    """W2: 스크립트 출력 인자(`guard._script_out_targets`)는 작업 루트 안. 밖(~/.gitconfig·사용자 site `.pth` 등)이면 거부."""
+    proj, root, env = _work_tree(tmp_path)
+    home = env["HOME"]
+    (root / "lnk").symlink_to(tmp_path / "home", target_is_directory=True)
+    denied = [_py("mask_pii.py", "in.txt", "--out", f"{home}/.gitconfig"),
+              _py("mask_pii.py", "in.txt", f"--out={home}/.local/lib/python3.12/site-packages/x.pth"),
+              _py("mask_pii.py", "in.txt", "--o", f"{root}/../x"), _py("db_review.py", "cat", "--out", "/tmp/x"),
+              _py("mask_pii.py", "--in-place", "/outside/f"), _py("jira_fields.py", "extract", "/outside/f", "--consume"),
+              _py("parse_logcat.py", "cut", "a.log", "--out", f"{root}/lnk/.bashrc"),           # 실제 경로가 밖
+              _py("mask_pii.py", "in.txt", "--out", "x.json")]                                    # cwd(프로젝트 폴더) 기준 밖
+    for cmd in denied:
+        v = oc.bash_allowlist(cmd, str(proj), str(proj), env)
+        assert v.deny and "작업 루트" in v.deny and v.flow is None, (cmd, v)
+    for cmd in (_py("mask_pii.py", "in.txt", "--out", f"{root}/K-1/.git/config"), _py("mask_pii.py", "--out", f"{root}/K-1/HEAD")):
+        v = oc.bash_allowlist(cmd, str(proj), str(proj), env)
+        assert v.deny and "git 메타데이터" in v.deny, (cmd, v)
+    allowed = [_py("mask_pii.py", "in.txt", "--out", f"{root}/K-1/x.json"), _py("db_build.py", "--preview", f"{root}/preview-1"),
+               _py("jira_fields.py", "extract", f"{root}/K-1/issue_raw.json", "--consume"), _py("db_search.py", "x")]
+    for cmd in allowed:
+        assert oc.bash_allowlist(cmd, str(proj), str(proj), env) == oc.BashVerdict(), cmd
+    # 상대 경로는 모든 cwd 후보 기준: workdir가 작업 루트면 허용, `cd` 뒤면 처음 cwd(프로젝트 폴더) 기준으로도 봐서 거부
+    rel = _py("parse_logcat.py", "cut", "a.log", "--out", "K-1/fixtures/cut-1.log")
+    assert oc.bash_allowlist(rel, str(root), str(proj), env) == oc.BashVerdict()
+    assert "작업 루트" in oc.bash_allowlist(f"cd {root} && {rel}", str(proj), str(proj), env).deny
+
+
+def test_script_outputs_closed_without_tt_oc_json(tmp_path):
+    proj, root, env = _work_tree(tmp_path, meta=False)
+    v = oc.bash_allowlist(_py("mask_pii.py", "in.txt", "--out", f"{root}/K-1/x.json"), str(proj), str(proj), env)
+    assert v.deny and "tt-oc.json" in v.deny and "판정할 수 없다" in v.deny
+    assert oc.bash_allowlist(_py("db_search.py", "x"), str(proj), str(proj), env) == oc.BashVerdict()   # 출력 없는 호출은 그대로
+    for text in ("{not json", "[]", "{}", json.dumps({"work_root": "work"}), json.dumps({"work_root": 3})):
+        (proj / "tt-oc.json").write_text(text, encoding="utf-8")
+        v = oc.bash_allowlist(_py("mask_pii.py", "--out", f"{root}/K-1/x"), str(proj), str(proj), env)
+        assert v.deny and "판정할 수 없다" in v.deny and str(proj / "tt-oc.json") in v.deny and "gen_opencode.py install" in v.deny, text
+
+
+def test_script_outputs_edge_values(tmp_path, monkeypatch):
+    """검증 정정(별개 눈): 안/밖은 실제 경로 하나 — symlink를 거친 작업 루트의 정당한 출력은 허용, `없는폴더/../..`는 거부.
+    따옴표 `~`, `-`·두 번·빈 값, guard를 못 불러오면 거부(닫힘)."""
+    proj, root, env = _work_tree(tmp_path)
+    (tmp_path / "wlink").symlink_to(root, target_is_directory=True)
+    assert oc.bash_allowlist(_py("mask_pii.py", "--out", f"{tmp_path}/wlink/K-1/x.json"), str(proj), str(proj), env) == oc.BashVerdict()
+    (proj / "tt-oc.json").write_text(json.dumps({"work_root": str(tmp_path / "wlink")}), encoding="utf-8")   # 적힌 루트가 symlink
+    assert oc.bash_allowlist(_py("mask_pii.py", "--out", f"{root}/K-1/x.json"), str(proj), str(proj), env) == oc.BashVerdict()
+    denied = [_py("mask_pii.py", "--out", f"{root}/nodir/../../x"), _py("triage.py", "run", "K-1", "--out", "'~/x'"),
+              _py("mask_pii.py", "--out", "-"), _py("mask_pii.py", "--out", f"{root}/K-1/a", "--out", f"{tmp_path}/home/b"),
+              _py("mask_pii.py", "--out=")]
+    for cmd in denied:
+        v = oc.bash_allowlist(cmd, str(proj), str(proj), env)
+        assert v.deny and ("작업 루트" in v.deny or "`~`" in v.deny), (cmd, v)
+    assert oc.bash_allowlist(_py("mask_pii.py", "--out", "-"), str(root), str(proj), env) == oc.BashVerdict()   # cwd가 루트면 안
+    monkeypatch.setitem(sys.modules, "guard", None)                         # import guard → ImportError
+    v = oc.bash_allowlist(_py("db_search.py", "x"), str(proj), str(proj), env)
+    assert v.deny and "guard를 불러오지 못해" in v.deny
+
+
+def test_outside_outputs_normcase(tmp_path):
+    """작업 루트 비교는 normcase(Windows에서도 돈다): 대소문자 무시 파일 시스템이면 대소문자만 다른 루트도 같은 폴더."""
+    proj, root, env = _work_tree(tmp_path)
+    words = ["python3", str(oc.SCRIPTS / "mask_pii.py"), "--out", str(root / "K-1" / "x.json")]
+    assert oc._outside_outputs(words, [str(proj)], str(proj)) is None
+    (proj / "tt-oc.json").write_text(json.dumps({"work_root": str(root).upper() if os.name == "nt" else str(root) + "/"}),
+                                     encoding="utf-8")
+    assert oc._outside_outputs(words, [str(proj)], str(proj)) is None
+    assert "작업 루트" in oc._outside_outputs([*words[:3], str(tmp_path / "workx" / "y")], [str(proj)], str(proj))
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="통합 회귀는 리눅스에서(경로·git)")
+def test_integration_git_and_gitconfig_writes_refused(tmp_path):
+    """통합 회귀: 실제 임시 폴더에서 어댑터 판정대로 했을 때 `.git` 쓰기와 `--out ~/.gitconfig`(HOME은 임시 폴더)는 일어나지 않고,
+    작업 루트 안 출력은 실제로 쓰인다."""
+    w = ws()
+    proj, root, env = _work_tree(tmp_path)
+    (root / "K-1" / "in.txt").write_text("hello\n", encoding="utf-8")
+    home = Path(env["HOME"])
+
+    def act(payload: dict) -> str:
+        out = cli("before", {**payload, "directory": str(proj), "sessionID": "s", "callID": "c"}, env=env)
+        if out["decision"] == "allow":
+            if payload["tool"] == "write":
+                target = Path(payload["args"]["filePath"])
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(payload["args"]["content"], encoding="utf-8")
+            else:
+                run_env = {**os.environ, **{k: str(v) for k, v in w.env().items()}, **env, "CLAUDE_PLUGIN_ROOT": str(w.root)}
+                subprocess.run(payload["args"]["command"], shell=True, cwd=proj, env=run_env, check=False, capture_output=True)
+        return out["decision"]
+
+    fsmonitor = "[core]\n\tfsmonitor = touch PWNED\n"
+    assert act({"tool": "write", "args": {"filePath": str(root / "K-1" / "r" / ".git" / "config"), "content": fsmonitor}}) == "deny"
+    assert act({"tool": "write", "args": {"filePath": str(root / "K-1" / "r" / ".git" / "HEAD"), "content": "ref: x\n"}}) == "deny"
+    assert not (root / "K-1" / "r").exists()
+    s = f"{w.root}/scripts"
+    assert act({"tool": "bash", "args": {"command": f"python3 {s}/mask_pii.py {root}/K-1/in.txt --out {home}/.gitconfig"}}) == "deny"
+    assert not (home / ".gitconfig").exists()
+    ok = f"python3 {s}/mask_pii.py {root}/K-1/in.txt --out {root}/K-1/masked.txt"
+    assert act({"tool": "bash", "args": {"command": ok}}) == "allow" and (root / "K-1" / "masked.txt").is_file()
