@@ -39,7 +39,7 @@
 | 요청은 나갔는데 응답 없음 | RILJ `DIAL` `>`만 / IMS dial 뒤 SIP 응답 없음 | 벤더 RIL 줄 0 → `그 층 로그 없음(벤더 RIL)` / `[TX]`만 → 모뎀·망 / INVITE 뒤 응답 없음 → 모뎀·망(망 무응답), 벤더 IMS 줄이 없으면 `그 층 로그 없음(벤더 IMS)` |
 | 오류 응답 — CS 정상·상대 계열 | 16 정상 해제, 17 통화 중, 18·19 응답 없음, 21 거절, 1 없는 번호 | `원인 아님(정상 동작)` 또는 상대 쪽. 증상과 맞는지만 본다 |
 | 오류 응답 — CS 망 자원 계열 | 34 회선 없음, 38 망 고장, 41 일시 실패, 42 혼잡, 47 자원 없음 | 모뎀·망 |
-| 오류 응답 — SIP | 벤더 IMS `status-code : 4xx·5xx`(예 403 금지, 404 없는 사용자, 480 일시 불가, 5xx 서버 오류) | 모뎀·망(IMS 망 거절, SKILL 2번) |
+| 오류 응답 — SIP | 벤더 IMS `status-code=4xx·5xx`(예 403 금지, 404 없는 사용자, 480 일시 불가, 5xx 서버 오류) | 모뎀·망(IMS 망 거절, SKILL 2번) |
 | 오류 응답 — RILJ `error <n>` | 같은 serial `RilRequest` 이름 | `GENERIC_FAILURE`는 IPC로 가름 / `RADIO_NOT_AVAILABLE` → modem 사슬 |
 | 요청 자체가 안 나감 | `DIAL`·`dial clirMode=` 둘 다 없음 | 1단계에서 막힘. 막은 이유 줄(서비스 상태·비행기 모드)이 근거, 이유의 사슬이 답 |
 | 단말이 끊음 | RILJ `HANGUP`·`HANGUP_*` 요청, `CODE_USER_TERMINATED`가 먼저 | 사용자면 원인 아님 / 사용자 조작 없이 프레임워크가 끊음 → 프레임워크 |

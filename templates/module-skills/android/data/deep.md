@@ -13,7 +13,7 @@
 1. **요청 생김** — 볼 것: DNC 요청 추가·`Data evaluation` 줄. 평가 줄이 아예 없음 → 요청을 만든 쪽(앱·Connectivity)은 이 모듈 밖, `그 층 로그 없음(프레임워크)`.
 2. **평가** — 볼 것: DNC `Data disallowed reasons:`, DSMGR `enabled=`. 처음 틀리면: 프레임워크(사유별은 ② 표, `NOT_IN_SERVICE`는 `explore.md` ⑤).
 3. **프로필 선택** — 볼 것: DPM 선호 프로필, RILJ `SET_INITIAL_ATTACH_APN`·`SET_DATA_PROFILE`·`SETUP_DATA_CALL` 인자의 APN·IP 종류. 기대와 다른 APN·IP 종류 → 프레임워크(APN DB·carrier config).
-4. **요청 전달** — 볼 것: RILJ `[n]> SETUP_DATA_CALL` → RIL HAL `serial` → 벤더 RIL `[ExamplePdnService_<n>] setup data call request` → `[TX]`. 줄이 끊긴 바로 아래 층이 후보(`layers.md` 수집 범위).
+4. **요청 전달** — 볼 것: RILJ `[n]> SETUP_DATA_CALL` → RIL HAL `serial` → 벤더 RIL `[ExamplePdnService_<n>] setup data call begin` → `[TX]`. 줄이 끊긴 바로 아래 층이 후보(`layers.md` 수집 범위).
 5. **응답** — 볼 것: `[RX]` RSP → `…errorCode=` → RILJ `[n]< SETUP_DATA_CALL … cause=`. `cause≠NONE` → 모뎀·망 / IPC OK인데 `errorCode≠0` → 벤더 RIL / IPC Error인데 RILJ 응답이 `cause=NONE`(연결 성공)이면 벤더 RIL이 감춤. 망 거절은 정상적으로 RadioError NONE + `cause≠NONE`으로 온다.
 6. **응답 처리·재시도** — 볼 것: DN 상태 변화, DRM 재시도 예약·다음 `SETUP_DATA_CALL`. 응답은 성공인데 DN이 연결로 가지 않음, 재시도 규칙이 막음 → 프레임워크.
 

@@ -16,7 +16,7 @@
 
 2. **사용 여부** — 볼 것: VoLTE 설정·carrier config·provisioning, ImsManager의 기능 켜기. 꺼져 있으면 등록하지 않는 것이 정상 → `원인 아님(정상 동작)`. 값이 의도와 다름 → 프레임워크(설정).
 3. **IMS PDN** — 볼 것: 벤더 IMS `[pdn]`·`OEM_REQ_IMS_ADD_PDN`, DN `IMS`. 실패 → data 사슬(`explore.md` ④).
-4. **등록 시도·결과** — 볼 것: 벤더 IMS `[reg]`·`IMS_REGISTERING` → SIP 응답(`status-code`) → `ind <- OEM_UNSOL_IMS_REGISTRATION` → ImsPhone `handleImsRegistering`·`handleImsRegistered`·`handleImsUnregistered`. 판정은 `explore.md`·SKILL 그대로. 벤더 IMS는 등록 성공인데 ImsPhone 줄이 없음 → 벤더 IMS(등록 콜백을 안 부름).
+4. **등록 시도·결과** — 볼 것: 벤더 IMS `[reg]`·`registering` → SIP 응답(`status-code`) → `ind <- OEM_UNSOL_IMS_REGISTRATION` → ImsPhone `handleImsRegistering`·`handleImsRegistered`·`handleImsUnregistered`. 판정은 `explore.md`·SKILL 그대로. 벤더 IMS는 등록 성공인데 ImsPhone 줄이 없음 → 벤더 IMS(등록 콜백을 안 부름).
 
 ### C. 기능 광고
 
