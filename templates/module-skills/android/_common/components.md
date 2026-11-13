@@ -33,7 +33,7 @@ AOSP 태그는 이름 그대로 쓴다: RILJ(`[n]> REQ`, `[n]< REQ error <n>`, `
 | 증상 | 볼 것 | 첫 판단 | 받을 로그 |
 |---|---|---|---|
 | 타이밍(경쟁·순서·시간 초과) | 층별 시각, 겹친 요청 | 시각 차 큰 구간 아래 층(겹친 busy 아님) | 앞뒤 덮는 수집 |
-| 데몬 크래시·재시작 | RILJ `Service <X> has died.` → VRIL `RADIO_UNAVAILABLE` → `UNSOL_RIL_CONNECTED` → UiccController `EVENT_RADIO_UNAVAILABLE` | 재시작 데몬 층(`UNSOL_MODEM_RESTART`와 구분) | tombstone(사내) |
+| 데몬 크래시·재시작 | RILJ `Service <X> has died.` → VRIL `RADIO_UNAVAILABLE` → `UNSOL_RIL_CONNECTED` → UiccController `Received RADIO_UNAVAILABLE` | 재시작 데몬 층(`UNSOL_MODEM_RESTART`와 구분) | tombstone(사내) |
 | 로그 미수집 | 첫 줄이 응답, 아래 층 0줄 | `그 층 로그 없음(<층>)` | 수준·버퍼 바꾼 재수집 |
 
 HIDL은 `serviceDied`. 둘 다 AOSP RIL.java 문구다(TODO(SITE:S9)).

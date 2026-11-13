@@ -11,7 +11,7 @@
 ```
 RILJ    : [1234]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,...   [PHONE0]
 RILJ    : [1234]< SETUP_DATA_CALL DataCallResponse{cause=0 ... }               [PHONE0]
-RILJ    : [1235]< LAST_CALL_FAIL_CAUSE error: GENERIC_FAILURE
+RILJ    : [1235]< LAST_CALL_FAIL_CAUSE error 2
 RILJ    : [UNSL]< UNSOL_DATA_CALL_LIST_CHANGED ...
 ```
 `>` 요청, `<` 응답(에러면 `error <n>` 숫자, 이름은 같은 serial `RilRequest` 줄), `[UNSL]` unsolicited. 파서가 `(pid, phone_id, serial)`로 짝지어

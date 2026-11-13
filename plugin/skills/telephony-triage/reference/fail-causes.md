@@ -5,7 +5,7 @@
 로그의 원인 코드를 사람이 읽는 말로 옮길 때 참고한다. 표준 값(3GPP)은 안정적이지만 Android 열거 이름과 벤더 확장 코드는 버전·벤더마다
 다르므로, 결론에 쓸 때는 대상 버전 소스(`DataFailCause`, `CallFailCause`, `ImsReasonInfo`, `SmsManager`)로 확인한다.
 원인 시그니처에 코드를 쓸 때는 extractor가 뽑은 필드로 쓴다. 값 모양은 extractor마다 다르다:
-data setup은 이름(`fields: {cause: '^ACTIVATION_REJECT_UNSPECIFIED$'}`, 로그 괄호 속 숫자는 16진), call·network는 10진 숫자(`'^31$'`).
+data(setup·해제)는 이름(`fields: {cause: '^ACTIVATION_REJECT_UNSPECIFIED$'}`, 로그 괄호 속 숫자는 16진), call·network는 10진 숫자(`'^31$'`).
 
 ## 데이터 setup 실패 (DataFailCause, 3GPP 24.301/24.008 ESM/SM cause 기반)
 
