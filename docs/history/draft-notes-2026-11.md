@@ -144,3 +144,39 @@ DRAFT_NOTES 후보 줄의 풀이와, 상한 때문에 거기 못 넣은 P2다. �
 - 소스 프로필 자동 저장: 직접 입력한 소스 경로를 버전과 함께 개인 `code_profiles`에 저장. 브랜치 개념 없이 도구는 가리킨 경로를 그대로 읽는다. GUIDE에 설정 절 추가.
 - 미룸 H(탐색 `--also`)·I(심층 분석 단계) 추가, G에 Jira 버전 문구 패턴 보탬(`99-deferred.md`).
 - 사용자 결정(11/12): 프로필 저장은 묻지 않는다. sms case는 캡처로 만든다.
+
+## 11/13 반입 준비 (DRAFT_NOTES에서 옮김)
+
+DRAFT_NOTES "진행 상태 (11/12)"에서 옮긴 줄(원문):
+- 다음 묶음 이름은 **태그 찍는 날짜** `import-YYYYMMDD`(`import-20261109`·`b` 있음, 태그·반입은 사용자). 사내: 재반입 §8. 이번 묶음은 guard 판정이 바뀌었다(병합 계열·규칙 5 ask 전환, Approve·기각·자동 병합·보호 변경·refs 위조 deny 신설) — 반입 전 `s4a.protection_guard` 통과 전제. SITE_INSTALL §8대로 사내 대상 eval 12개(`pending.json` `site`) 전부 다시 돌린다.
+- 11/10~12 병합 #85~#104: #90~#98 마스킹·Android 17 문구·관문·훑기, #99·#100 Android case 보강·추가(data 6·sim 4·network 3·call 4·sms 3·ims 3·modem 4), #101 모듈 문서 보완, #102 S-0를 `site_step.py` 첫 단계로·스킬 문서 eval 범위 원칙, #103 모듈 eval 채점기 가설당 근거 상한을 계약 1~5줄에 맞춤(`GRADER_VERSION` 8, 5개 모듈 재채점), #104 android sms(요청 미생성을 `SS=1·2` 모뎀·망/`SS=3` 끈 쪽으로 나눔, case 캡처로 재작성, eval tie). 직접 입력한 소스 경로를 버전과 함께 개인 `code_profiles`에 자동 저장.
+- 재채점 못 한 모듈 eval: android ims, ofono 전부(run 폴더가 사외 PC에 없음). grader 7·3으로 남아 한 arm만 합치려면 재실행 필요.
+- 11/12 가상 사용자 리허설 13건 실패 0(history).
+- 템플릿·fixture는 placeholder·합성(사내 값은 SITE_PATHS, 반입 전 SITE_RESTORE ⓪), 반입은 `stable`에서 (Android eval은 arm pin 갱신으로 두 arm 함께 재실행)
+
+DRAFT_NOTES "다음 사이클 후보 (11/09 사용자 목록, 확정 계획 아님)"(원문):
+C 지표 자리 · 4-c 2차(guard 판정 축소 후속) · B 조건부 · F3 B/C(`mask_pii --check` 갈린 ICCID) · 4-c P2 6건 · D① P2 · 묶기·전구간 부정(S37 뒤 별도 설계) · 분석 전용 종료 표식 · 포트 변조 잔여(끝 `.`·`키: 값`) · A17: extractor 2·좁힌 태그·data 문서 보충·sms 문서 P2 2 · eval 42 allow-cause 경로 표시 · 11/12 리허설 P2 3 · network case(태그 추가 확인 필요) · 훑기 남은 것 · eval 형식 실패 · 그 밖 P2는 history 11/12
+
+11/12~13 병합: #105 GUIDE 설정 절·미룸 H·I, #106 직접 입력 소스 경로를 개인 프로필로 자동 저장, #107 oFono 모듈 case·문서 placeholder 1:1 치환(1차), #108 시험 파일 실행 비트, #109 벤더 HAL serial(`ril.py`), #110 `offline_eval` 표본내 키 대조, #111 `14-site.md` S13 확인 방법, #112 PR 본문 메모 마스킹(`db_summary.py`), #113 이슈 DB 경로 방어(`dbpr/worktree.py`·`db_verify.py`). `import-20261109` 묶음은 사내에 반입되지 않아 다음 묶음 `import-20261113`의 재반입 노트는 `import-20261103` 이후 전부를 대상으로 한다. 11/13 종합 리뷰(사외 자료): 반입해 사내 보완을 이어 가도 된다, P0 0.
+
+사용자 결정(11/13, 종합 리뷰 뒤 — DRAFT_NOTES 결정 (w)의 전체):
+- D-02 재반입 때 표시 보조 글만 바뀐 경우는 영향받는 eval만 다시 돌린다(`SITE_INSTALL.md` §8). guard 고침은 다음 guard 묶음 하나로 모은다.
+- D-04 oFono에 남은 규칙·DB 결합 문구와 잡음 줄은 사내에서 실제 값으로 되돌릴 때 같이 한다(지금 안 함, oFono eval 재측정 없음).
+- D-05 guard는 실수 방지 장치로 본다. Approve는 토큰 권한 범위로 닫는다.
+- D-07 첫 파일럿은 Android만. oFono 도구·파서 보완은 파일럿 뒤.
+- D-08 안내서(book)는 스냅샷, 정본은 TEAM_GUIDE.
+- D-09 사내 마켓플레이스는 태그·SHA 고정(`SITE_INSTALL.md` §8 "6. 배포").
+- D-10 S1 빈 플러그인 실험에 3항목(MCP 오류 결과의 hook 경로, `onFailure: "block"`, 권한 모드별 ask 창)과 Read hook 입력(`99-deferred.md` E)을 더한다(`tests/mocks/plugin-probe/README.md` 18~21). 확인되면 guard 항목에 `onFailure: "block"`을 켠다.
+- D-12 스킬 문서 바이트 한도는 흐름 합계 한도 하나 + 파일별 여유로 재설계(파일럿 뒤). D-13 출처를 댈 수 없는 주석 번호는 지운다(파일럿 뒤). D-14 OpenCode·"사내 처음부터" 모드·개발 문서 정리는 사내 확인 결과 뒤. D-15 guard 셸 문법 강화는 여기서 멈춘다, eval 건너뛰는 규칙·사내 eval 추가는 두지 않는다.
+- network case용 태그 2개는 추가하지 않는다. 타임라인 200줄 상한은 파일럿에서 센다(잘림은 `timeline.md` 머리 `줄: 고른 수/전체 수`와 결과 JSON에 이미 남는다).
+- 사내 점검표 파일은 레포 밖 별도 파일로 같이 가져간다(레포에 넣지 않는다).
+- D-01 이슈 DB 경로 방어(#113)를 이번 묶음에 싣는다.
+- D-03 거부 목록 파일은 레포 밖에 둔다. 점검표는 레포 밖 별도 파일로 같이 가져간다. 11/09 묶음은 반입되지 않았다.
+- D-06 이슈 DB: 병합 때 fixed 유지와 상태 불변 `fixed_in` 추가를 둘 다 한다.
+- D-11 모듈 문서·샘플 DB 사실 정정은 전부 하고 eval까지 돌린다. data의 `NOT_IN_SERVICE` 거부는 모뎀·망 층으로.
+
+DRAFT_NOTES 결정에서 옮긴 것(원문, 사외 진행 규칙):
+- (s) 테스트는 수정마다 관련만, 전체는 묶음 끝·eval·반입 직전(10/15).
+- (p) 수정 절차(10/14, 11/08): 재확인·설계 = Fable 메인, 구현+시험 = Opus, 리뷰 = 별개 Opus → P0·P1은 그 단계에서 고치고 테스트 → 통과 뒤 커밋.
+- (r) 고칠 범위(10/15, 사용자): 리뷰·재측정에서 **P0·P1(안전 위반·기능 결함)만** 고치고 P2는 "반입 뒤 후보"에 적는다. 질문 순서·횟수 행은 안전 행이 아니다(쓰기 순서 행은 안전 행).
+- (i) eval은 변경과 관련된 최소만 사외에서 돌린다(바꾼 스킬·흐름의 eval만). 사내 S-2는 사내 대상만(결정 (q)). (10/07, 사용자) 단, 실행 방식·공통 지침이 바뀌면 전체 + 사람 판정(10/14).
