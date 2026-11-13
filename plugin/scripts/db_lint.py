@@ -807,7 +807,8 @@ class Linter:
             return
         self.warn("tag-unknown", type_md, f"{key}: 패턴 {pattern!r}의 앞 낱말 '{word}'가 tags.yaml 태그에 맞지 않습니다 — 태그 자리면 "
                                         "그 줄이 수집되지 않아 있음 조건은 늘 거짓, 없음 조건은 공허하게 참입니다(개명·누락?). "
-                                        "메시지 낱말이면 `.*`로 시작하게 쓰면 경고가 사라집니다.")
+                                        "메시지 낱말이면 `(?:Word)`나 `\\bWord`처럼 메타 문자로 시작하게 쓰면 경고가 사라집니다"
+                                        "(`\\b`는 `onWord` 같은 낱말 안에는 맞지 않습니다).")
 
     def _check_event_name(self, type_md, key, name) -> None:
         if name.startswith("builtin.") and name not in self.builtin_events:
