@@ -322,7 +322,10 @@ def discard(ctx: Ctx, wt: Path) -> dict:
                              "discard를 다시 한다.") from exc
         git_skipped = str(exc)     # worktree가 없으면 git만 건너뛰고 작업 파일 삭제·lock 해제는 끝까지 간다
     ctx.lock.touch(job)
-    state = _read_json(job_dir / STATE) or {}
+    try:
+        state = _read_json(job_dir / STATE) or {}
+    except ValueError:      # 손상된 state.json(JSON·UTF-8 아님): 브랜치는 worktree HEAD로 찾고 정리·lock 해제는 끝까지 간다
+        state = {}
     branch = state.get("branch")
     if not branch and (wt / ".git").exists():
         head = _out(_git(wt, "symbolic-ref", "--short", "HEAD", check=False))
@@ -369,6 +372,7 @@ RETAINED_NOTES = {      # PR 생성 실패라고 단정하지 않는다: PR은 �
     "unpublished": "미게시 계획 보존 — 재개 또는 명시적 폐기(discard) 필요",
     "pushed-no-pr": "push 기록 있음, PR 연결 미확인 — 원격 브랜치·열린 PR 확인 후 publish 재시도 또는 "
                     "`sync-pr <브랜치>`로 복구(discard는 복구가 아니라 중단·로컬 정리)",
+    "unreadable": "plan.json 읽기 실패 — 원격 브랜치·열린 PR 확인 전 지우지 않는다",
 }
 
 
@@ -411,14 +415,19 @@ def cleanup(ctx: Ctx, yes: bool, older_than: int | None) -> dict:
             mtime = _tree_mtime(job_dir)
             if datetime.fromtimestamp(mtime, timezone.utc) > limit:
                 continue
-            plan = _read_json(job_dir / PLAN)
-            number = ((plan or {}).get("pr") or {}).get("number")
+            try:
+                plan = _read_json(job_dir / PLAN)
+            except ValueError:      # JSONDecodeError·UnicodeDecodeError: 손상된 계획도 지우지 않는다
+                plan = False
+            number = (plan.get("pr") or {}).get("number") if isinstance(plan, dict) else None
             if not number and plan is not None:     # 미게시 계획: 일괄 정리에서 빼고 따로 알린다 (S14에서 원문 보존 결정)
-                pushed = bool((plan.get("pr") or {}).get("head_sha"))   # branch는 계획을 만들 때부터 있다(스키마 필수)
+                if not isinstance(plan, dict):      # 읽지 못한 계획(손상·매핑 아님): PR 여부를 모른다
+                    kept = "unreadable"
+                else:                               # branch는 계획을 만들 때부터 있다(스키마 필수)
+                    kept = "pushed-no-pr" if (plan.get("pr") or {}).get("head_sha") else "unpublished"
                 retained.append({"job": job_dir.name, "path": str(job_dir), "days": (now() - datetime.fromtimestamp(
                     mtime, timezone.utc)).days, "raw_remains": any((job_dir / m).exists() for m in RAW_MARKERS),
-                    "state": "pushed-no-pr" if pushed else "unpublished",
-                    "note": RETAINED_NOTES["pushed-no-pr" if pushed else "unpublished"]})
+                    "state": kept, "note": RETAINED_NOTES[kept]})
                 continue
             if not number:      # 계획 없는 중단 작업(원문만 남음): 같은 기한이 지나면 디렉토리째
                 targets.append({"kind": "job-dir", "job": job_dir.name, "path": str(job_dir), "pr": None,

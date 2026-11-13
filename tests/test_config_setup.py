@@ -750,6 +750,7 @@ def test_show_keys_returns_only_requested_values_and_lists_missing():
     assert out["values"] == {"work_dir": full["effective"]["work_dir"], "tracker.tools": full["effective"]["tracker"]["tools"]}
     assert out["missing"] == ["no.such"] and out["user_config"] == full["user_config"]
     assert env.json("config.py", ["show"]) == full      # --keys 없으면 이전과 같다
+    assert Path(full["pending_feedback_dir"]).name == "pending-feedback"
 
 
 # -- doctor (읽기 전용 점검) ---------------------------------------------------------------------
@@ -1307,6 +1308,24 @@ def test_check_deprecated_keys_and_runtime_label_warn_only():
     assert row["status"] == "warn" and row["detail"].startswith("runtime.label:")
     out = env2.json("config.py", ["check", "--db", env2.config()["issue_db"]["path"], "--for", "dry-run"])
     assert "runtime.label: 문자열(영숫자·._ +-, 40자 이하)이어야 합니다 — 출처 기록에서 뺀다" in out["warnings"]
+
+
+def test_doctor_warns_unknown_top_level_keys_only_in_config_row():
+    """코드가 읽지 않는 최상위 키(오타 등)는 doctor `config` 행 warn. `check`의 `warnings[]`에는 넣지 않는다."""
+    from common import userconfig
+    example = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))
+    assert set(example) <= userconfig.TOP_KEYS
+    # example에서 주석 처리된 site 키와 사용자 config 전용 키(setup이 쓰지 않는 것)
+    assert {"guard", "retention_days", "runtime", "module_skills", "platforms", "code", "reviewer", "opencode",
+            "explore"} <= userconfig.TOP_KEYS
+    assert userconfig.unknown_keys({"schema": 1, "retention_dayz": 9}, {"user": {}, "work_dirr": "x"}) == [
+        "retention_dayz(site-defaults)", "work_dirr(사용자 config)"]
+    env, clone = _ready_env()
+    assert set(env.config()) <= userconfig.TOP_KEYS, "init 출력 키"
+    _set_user(env, retention_dayz=90)
+    row = _rows(_doctor(env))["config"]
+    assert row["status"] == "warn" and row["detail"] == "모르는 최상위 키(무시): retention_dayz(사용자 config)"
+    assert env.json("config.py", ["check", "--db", str(clone), "--for", "dry-run"])["warnings"] == []
 
 
 if __name__ == "__main__":

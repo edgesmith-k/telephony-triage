@@ -107,13 +107,7 @@ class Lock:
 
     def write(self, data: dict) -> None:
         userconfig.ensure_private_dir(self.work_dir)
-        fd, name = tempfile.mkstemp(dir=self.work_dir, prefix=".session-")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-                handle.write(json.dumps(data, ensure_ascii=False, indent=1) + "\n")
-            os.replace(name, self.path)
-        finally:
-            Path(name).unlink(missing_ok=True)
+        _atomic_write(self.path, json.dumps(data, ensure_ascii=False, indent=1) + "\n")
 
     @_locked
     def acquire(self, job: str, command: str | None, take_over: bool) -> dict:
@@ -262,9 +256,20 @@ def _read_json(path: Path) -> dict | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _atomic_write(path: Path, text: str) -> None:
+    """같은 폴더 임시 파일에 쓰고 `os.replace` — 쓰다 멈춰도 원래 파일은 그대로다(직렬화는 호출자가 먼저 한다)."""
+    fd, name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+        os.replace(name, path)
+    finally:
+        Path(name).unlink(missing_ok=True)
+
+
 def _write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+    _atomic_write(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
 
 def trace_note(job_dir: Path, step: str, **fields) -> None:

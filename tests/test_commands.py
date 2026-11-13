@@ -280,6 +280,9 @@ def test_cleanup_older_than_candidates_are_tool_jobs_only_and_dry_run_equals_yes
     doc["pr"] = {"number": None, "branch": "issue/MOCK-7006", "head_sha": "a" * 40}
     plan_file.write_text(json.dumps(doc), encoding="utf-8")
     _age(pushed)
+    broken = ws.plan("MOCK-7007", "p7-analyze-append.plan.json").parent      # 손상된 계획: PR 여부를 몰라 지우지 않는다
+    (broken / "plan.json").write_text("{손상", encoding="utf-8")
+    _age(broken)
     locked = ws.plan("MOCK-7005", "p7-analyze-append.plan.json").parent
     assert ws.acquire("MOCK-7005")["acquired"]
     _age(locked)
@@ -288,7 +291,8 @@ def test_cleanup_older_than_candidates_are_tool_jobs_only_and_dry_run_equals_yes
     jobs = {t["job"]: t for t in dry["targets"] if t["kind"] == "job-dir"}
     assert set(jobs) == {"RAW-1"} and jobs["RAW-1"]["pr"] is None
     kept = {r["job"]: r for r in dry["retained"]}
-    assert set(kept) == {"MOCK-7003", "MOCK-7006"} and kept["MOCK-7003"]["raw_remains"] is True
+    assert set(kept) == {"MOCK-7003", "MOCK-7006", "MOCK-7007"} and kept["MOCK-7003"]["raw_remains"] is True
+    assert kept["MOCK-7007"]["state"] == "unreadable" and "plan.json 읽기 실패" in kept["MOCK-7007"]["note"]
     assert kept["MOCK-7003"]["state"] == "unpublished" and "미게시 계획 보존" in kept["MOCK-7003"]["note"]
     assert kept["MOCK-7006"]["state"] == "pushed-no-pr" and kept["MOCK-7006"]["raw_remains"] is False
     assert "PR 연결 미확인" in kept["MOCK-7006"]["note"] and "sync-pr" in kept["MOCK-7006"]["note"]
@@ -300,7 +304,7 @@ def test_cleanup_older_than_candidates_are_tool_jobs_only_and_dry_run_equals_yes
     assert [t["job"] for t in done["removed"] if t["kind"] == "job-dir"] == list(jobs)    # dry-run 목록 = --yes 대상
     assert done["failed"] == [] and {r["job"]: r["state"] for r in done["retained"]} == {r["job"]: r["state"] for r in dry["retained"]}
     assert not raw.exists()
-    for keep in (recent, copied, empty, photos, hidden, logs_only, unpub, pushed, locked):
+    for keep in (recent, copied, empty, photos, hidden, logs_only, unpub, pushed, broken, locked):
         assert keep.exists(), keep
 
 

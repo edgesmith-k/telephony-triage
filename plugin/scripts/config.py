@@ -856,6 +856,10 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
                                  "그 줄을 지운다 · site-defaults면 관리자"))
             elif userconfig.runtime_problems(defaults):      # site 전용 runtime.label(출처 기록) — 경고만
                 rows.append(_row("config", "warn", userconfig.RUNTIME_LABEL_MSG, "site-defaults runtime.label을 고친다(관리자)"))
+            elif unknown := userconfig.unknown_keys(defaults, user):    # 읽지 않는 최상위 키(오타 등) — 경고만
+                more = f" 외 {len(unknown) - 3}개" if len(unknown) > 3 else ""
+                rows.append(_row("config", "warn", f"모르는 최상위 키(무시): {', '.join(unknown[:3])}{more}",
+                                 "키 이름을 고치거나 그 줄을 지운다 · site-defaults면 관리자"))
             else:
                 rows.append(_row("config", "ok", "config.yaml 있음"))
     except Exception as exc:    # noqa: BLE001 — 읽기 실패도 한 행의 fail이다
@@ -1230,9 +1234,10 @@ def cmd_show(args, defaults: dict) -> dict:
         return {"user_config": str(userconfig.path()) if user is not None else None,
                 "values": {k: v for k, v in found.items() if v is not _MISSING},
                 "missing": [k for k, v in found.items() if v is _MISSING]}
+    effective = userconfig.merged(defaults, user or {}, platform=_platform(args))
     return {"plugin_root": str(_plugin_root(args)), "site_defaults": str(_plugin_root(args) / site_defaults.FILENAME),
             "user_config": str(userconfig.path()) if user is not None else None,
-            "effective": userconfig.merged(defaults, user or {}, platform=_platform(args))}
+            "pending_feedback_dir": str(userconfig.pending_feedback_dir(effective)), "effective": effective}
 
 
 def build_parser() -> argparse.ArgumentParser:

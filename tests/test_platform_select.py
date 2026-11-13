@@ -169,6 +169,8 @@ def test_config_set_and_show_platform_profile():
     assert show["values"] == {"work_dir": str(h / "work-ofono"), "issue_db.path": str(h / "ofono-db")}
     show = json.loads(run("config.py", ["show", "--keys", "work_dir"], root=root, env=env).stdout)
     assert show["values"] == {"work_dir": str(h / "work")}
+    show = json.loads(run("config.py", ["show", "--platform", "ofono"], root=root, env=env).stdout)
+    assert Path(show["pending_feedback_dir"]).name == "pending-feedback-ofono"
     # 켜지 않은 설치에서 --platform ofono는 사용 오류
     proc = run("config.py", ["show", "--platform", "ofono"], env=env)
     assert proc.returncode == 2 and "켜져 있지 않습니다" in proc.stderr

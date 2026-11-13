@@ -237,6 +237,23 @@ def test_pending_only_in_record_and_pending_feedback_only_in_analyze():
     ws.db_pr("discard", ws.wt("MOCK-7001"))
 
 
+def test_pending_feedback_with_unknown_cause_is_skipped():
+    """원인 ID가 이 이슈 DB 트리에 없는 pending 피드백(다른 플랫폼 찌꺼기)은 싣지 않고 pending 폴더에 남긴다."""
+    ws = Workspace()
+    pending = pending_feedback(ws)
+    pending.write_text(pending.read_text(encoding="utf-8").replace("final: unresolved", "final: DATA-999-01")
+                       .replace("decision: unresolved", "decision: chose-other"), encoding="utf-8")
+    ws.plan("MOCK-7001", "p7-analyze-append.plan.json")
+    out = ws.ship("MOCK-7001", "issue/MOCK-7001")
+    apply = out["stage"]["apply"]
+    assert apply["pending_included"] == []
+    assert apply["pending_skipped"] == [{"file": pending.name, "reason": "원인 ID DATA-999-01가 이 이슈 DB에 없다"}]
+    assert pending.is_file()
+    assert not (ws.job_dir("MOCK-7001") / "included_pending" / pending.name).exists()
+    assert ws.read_plan("MOCK-7001")["included_pending"] == []
+    assert any(n.startswith(f"pending 피드백 {pending.name} 건너뜀:") for n in out["summary"]["notes"])
+
+
 def test_verify_resolution_and_update_fix_rules():
     ws = Workspace()
     ws.plan("MOCK-7006", "p7-record-verified.plan.json")
