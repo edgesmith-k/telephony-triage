@@ -182,6 +182,22 @@ def test_fill_checks_fail_with_exit_1():
     assert any("상한" in p for p in out["problems"])
 
 
+def test_code_location_absolute_path_only_in_file_slot():
+    import issue_post
+
+    def problems(code):
+        masker = masking.new_masker(existing_text="", allow_patterns=[])
+        raw = {**FILL, "code_location": code}
+        return [p for p in issue_post.check_fill(raw, True, False, masker, [], [])[1] if "절대 경로" in p]
+
+    for code in ("/home/u/aosp/frameworks/X.java:12 — y", r"C:\src\aosp\X.java:12", "~/aosp/frameworks/X.java:12",
+                 "/X.java:12"):
+        assert problems(code), code
+    for code in ("frameworks/opt/telephony/X.java:12 — 요청/응답", "a/b/c.java:3 — https://cs.android.com/ 참고",
+                 "X.java:12 — /data/vendor/radio 를 읽는다"):
+        assert not problems(code), code
+
+
 def test_pull_skipped_must_show_line_is_not_posted():
     """07 §Step 9 ANALYSIS: pull 건너뜀 줄은 사용자 clone 상태(로컬 브랜치 이름)라 Jira 본문에 넣지 않는다 — 다른 must_show는 그대로."""
     ws = shared()
