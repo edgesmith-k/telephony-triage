@@ -70,6 +70,18 @@ def test_fix_ref_error_says_regex_is_mock_value():
     assert found and all("모의 값" in f["message"] and "S18" in f["message"] for f in found), found
 
 
+def test_fixed_in_ref_optional_and_checked():
+    """`fixed_in[].ref`(선택): 없는 기존 항목은 그대로 유효(샘플 깨끗 — test_sample_db_is_clean), 있으면
+    fix_ref_regex로 검사한다."""
+    db = runner_copy(SAMPLE)
+    old = "        - {branch: MOCKB77_U2, build: MOCKB77_U2_20260920}\n      verification:"
+    edit(db / C / "type.md", old, old.replace("20260920}", "20260920, ref: MOCKCL-12345}"))
+    assert _lint(db, "--all", expect=0)["errors"] == []
+    edit(db / C / "type.md", "ref: MOCKCL-12345}", "ref: CL 12345}")
+    found = [f for f in _lint(db, "--all", expect=1)["errors"] if f["code"] == "fix-ref"]
+    assert found and "fixed_in[].ref 'CL 12345'" in found[0]["message"], found
+
+
 def test_variant_builder_is_deterministic():
     result = make_variant_dbs.check()
     assert not any(result.values()), result

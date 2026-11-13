@@ -547,7 +547,7 @@ ID가 바뀔 때 함께 바꿔야 하는 참조 목록이다. `db_add renumber`(
 | `resolution_type` | `user-setting \| carrier-config \| framework-bug \| vendor-ril \| modem \| network \| hw` | 코드·설정 수정 유형 = `framework-bug`, `vendor-ril`, `modem`, `carrier-config` |
 | `fix.status` | `open \| fix-submitted \| fixed \| wont-fix \| not-a-bug` | 필수 필드는 `03-issue-db.md §5.9` |
 | `fix.ref` | `fix_ref_regex`(`02-config.md §5.3`)에 맞는 문자열 또는 `null` | `db_lint`와 `update-fix` 적용이 검사한다 |
-| `fix.fixed_in[]` | `{branch: <필수>, build: <선택>}` | `build`가 없으면 `03-issue-db.md §5.9` 판정은 "판단 불가", verify-fix 통과 불가(`fixed`는 빌드 있는 항목이 필요하다. verify-fix가 로그 빌드와 비교하는 것은 `modem` 원인뿐) |
+| `fix.fixed_in[]` | `{branch: <필수>, build: <선택>, ref: <선택>}` | `build`가 없으면 `03-issue-db.md §5.9` 판정은 "판단 불가", verify-fix 통과 불가(`fixed`는 빌드 있는 항목이 필요하다. verify-fix가 로그 빌드와 비교하는 것은 `modem` 원인뿐). `ref`는 그 브랜치의 수정 CL로 `fix_ref_regex`에 맞아야 한다(`db_lint`·`new-cause`·`update-fix` 검사). op의 `fix.ref`로 자동으로 채우지 않고, 판정은 아직 이 칸을 보지 않는다(`99-deferred.md` J) |
 | `resolution_verification.status` | `unverified \| verified` | `verified`는 `evidence` 필수. 근거가 사용자 진술뿐이면 `unverified`로 두고 "근거: 사용자 진술"을 남긴다(새 원인은 `method`, 기존 원인은 Jira 기록 `note`. 월간 리뷰 "사용자 진술만 있는 해결책", `06-collaboration.md §6.6`) |
 | `fix.verification.result` | `passed` | `fixed`일 때만 존재 |
 | `verification_history[].result` | `passed \| failed \| partial \| reverted` | `passed`: 회귀로 되돌려진 이전 검증. `reverted`: 검증 없이 `open`으로 되돌림(회귀 의심 확인 등). 최신이 위 |
