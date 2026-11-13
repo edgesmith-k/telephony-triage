@@ -424,7 +424,7 @@ def test_fix_stops_without_build_or_required_signatures_and_lint_rules():
     assert {"fixed-without-verification", "fixed-without-trace"} <= codes
 
 
-# W3: verify-fix 흔적 전제의 스크립트 강제 (05-verification.md §5.12 (2) 전제, 99-deferred.md §F 방안 1·2)
+# W3: verify-fix 흔적 전제의 스크립트 강제 (05-verification.md §5.12 (2) 전제)
 
 TRACE_BLOCK = ("    scenario_signatures:\n      - id: volte-dial-attempt\n        must_event:\n"
                "          - {event: ims_dial_attempt}\n        window_sec: 60\n")
@@ -450,7 +450,7 @@ def set_traces(db: Path, *, scenario: bool, recovery: bool, rtype: str | None = 
 
 BLOCK_HEAD = "CALL-001-01는 코드·설정 수정 유형"
 REGRESSION_LINE = "회귀라면 analyze Step 7로 open 되돌림을 안내한다"      # verify.md fix-submitted 1번 문구
-# (resolution_type, scenario, recovery, 기대 종료 코드, 기대) — 출처: 05 §5.12 (2) 전제, verify.md 3번·5번, 99 §F 방안 1
+# (resolution_type, scenario, recovery, 기대 종료 코드, 기대) — 출처: 05 §5.12 (2) 전제, verify.md 3번·5번
 FIX_PRECONDITION_TABLE = [
     *[(t, False, False, 2, "blocked") for t in ("framework-bug", "vendor-ril", "modem", "carrier-config")],
     ("carrier-config", True, False, 0, "judged"),         # scenario만 있으면 판정
@@ -544,9 +544,6 @@ def test_fix_precondition_rule_text_is_in_docs():
     assert "`db_verify fix`가 종료 코드 2와 다음 할 일(`update-signature` → R1 흔적 검사 통과 → 재실행)로 거부" in spec
     assert "`db_search`는 원인 항목에 `verify_fix_blocked`를 낸다" in spec
     assert "필수 시그니처 없음" not in spec
-    deferred = (design / "99-deferred.md").read_text(encoding="utf-8")
-    section = deferred[deferred.index("## F. verify-fix 흔적 검사 강제"):]
-    assert "종료 코드 2" in section and "update-signature" in section and "verify_fix_blocked" in section
     verify_md = (PLUGIN_SKILL / "reference/verify.md").read_text(encoding="utf-8")
     assert "`verify_fix_blocked`가 있으면" in verify_md and "필수 시그니처 없음" not in verify_md
     contracts = (design / "contracts.md").read_text(encoding="utf-8")
