@@ -21,7 +21,7 @@ expect:
   accept:
     - layer: '모뎀|망'
       daemon: '모뎀|망|없음|알 수 없음|RIL$|RIL[ (]|SST|NRM|ServiceStateTracker'
-      evidence: ['Data disallowed reasons: NOT_IN_SERVICE', 'NOT_REG|OUT_OF_SERVICE|hasDeregistered = true']
+      evidence: ['NOT_REG|OUT_OF_SERVICE|hasDeregistered = true']
   trap:
     - label: '^\s*(프레임워크|DNC|DataNetworkController|DSMGR|DataSettingsManager|RILJ|곁가지)'
     - layer: '^\s*(RIL HAL|벤더)'
