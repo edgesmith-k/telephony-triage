@@ -432,6 +432,15 @@ def _read_texts(paths: list[Path]) -> str:
     return "\n".join(logtime.open_log(p).read() for p in paths)
 
 
+def _has_nul(value) -> bool:
+    """레코드 안 어디든 NUL이 든 문자열이 있는가 — `line_ref`가 없는 레코드(외부 파서·site 백엔드)는 줄 위치로 못 거른다."""
+    if isinstance(value, str):
+        return "\0" in value
+    if isinstance(value, dict):
+        return any(_has_nul(v) for v in value.values())
+    return isinstance(value, (list, tuple)) and any(_has_nul(v) for v in value)
+
+
 def _nul_lines(paths: list[Path], code: str) -> tuple[str, set, list[dict]]:
     """NUL 든 줄(mask-copy·cut과 같다, `masking.blank_nul_lines`) → (그 줄을 비운 전체 글 — 마스커용, NUL이 없으면 `_read_texts`와
     같은 글, 그 줄 위치 `{(파일 순번, 줄 번호)}` — 백엔드 `line_ref`와 같은 줄 나눔, 경고). 그 줄의 레코드는 쓰는 쪽이 버린다."""
@@ -605,7 +614,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
     errors: list[dict] = []
     events = backend.parse(paths, args.tz, args.year, None if post_window else window)
     if nul_refs:
-        events = [e for e in events if evt.ref_key(e.get("line_ref")) not in nul_refs]
+        events = [e for e in events if evt.ref_key(e.get("line_ref")) not in nul_refs and not _has_nul(e)]
     dropped: dict = {}
     unextracted: dict = {}
     events = postprocess(events, rules, masker=masker, last_ts=coverage["last_ts"],
@@ -639,7 +648,8 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
             else:
                 ext_events = [e for e in ext_events if e["event"] is not None]
             if masker:
-                ext_events = [_mask_record(e, masker) for e in ext_events if evt.ref_key(e.get("line_ref")) not in nul_refs]
+                ext_events = [_mask_record(e, masker) for e in ext_events
+                              if evt.ref_key(e.get("line_ref")) not in nul_refs and not _has_nul(e)]
             events += ext_events
             external_info.append(
                 {"category": category, "adapter": status[category]["adapter"],
@@ -867,7 +877,7 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
         raw_records = backend.parse(paths, args.tz, args.year, None)       # 한 번만 파싱한다
         log_text, nul_refs, nul_warnings = _nul_lines(paths, "markers-nul")    # NUL 든 줄은 버린다(parse --mask와 같다)
         warnings += nul_warnings
-        raw_records = [r for r in raw_records if evt.ref_key(r.get("line_ref")) not in nul_refs]
+        raw_records = [r for r in raw_records if evt.ref_key(r.get("line_ref")) not in nul_refs and not _has_nul(r)]
     if compiled:
         records = [r for r in raw_records if r.get("event") is None]
         texts = [f"{r['tag']}: {r['msg']}" for r in records]

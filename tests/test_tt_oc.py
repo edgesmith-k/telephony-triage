@@ -1331,7 +1331,12 @@ PUBLISH_FORMS = [     # (이름, 막힌 호출 b·최종 글로만 t, 명령·�
     ("other-install", "b", f"python3 /other/plugin/scripts/db_pr.py publish {_R}", 1, 0),
     ("stage", "b", "python3 /p/scripts/db_pr.py --platform android stage /w/ABC-1/plan.json --wt /w/ABC-1/wt --branch b", 0, 1),
     ("discard", "b", "python3 /p/scripts/db_pr.py discard /w/ABC-1/wt", 0, 1),
-    ("discard;publish", "b", f"python3 /p/scripts/db_pr.py discard /w/ABC-1/wt; python3 /p/scripts/db_pr.py publish {_R}", 1, 1),
+    # publish가 섞인 명령은 통째로 붙여 넣지 않는다 — owner 줄을 내지 않는다(재확인 RR2-1)
+    ("discard;publish", "b", f"python3 /p/scripts/db_pr.py discard /w/ABC-1/wt; python3 /p/scripts/db_pr.py publish {_R}", 1, 0),
+    ("abbrev-plat", "b", f"python3 /p/scripts/db_pr.py --plat android publish {_R}", 1, 0),
+    ("bash-lc", "b", f"bash -lc \"python3 /p/scripts/db_pr.py publish {_R}\"", 1, 0),
+    ("cat;publish", "b", f"cat /p/scripts/db_pr.py; python3 /p/scripts/db_pr.py publish {_R}", 1, 0),
+    ("grep&&stage", "b", "grep -c x /p/scripts/db_pr.py && python3 /p/scripts/db_pr.py stage --wt /w/ABC-1/wt", 0, 1),
     ("t-mention", "t", "게시는 db_pr.py publish로 하지 않습니다. 확인 화면까지 했습니다.", 0, 0),
     ("t-publish-status", "t", "`db_pr.py publish-status`를 확인하세요.", 0, 0),
     ("t-inline", "t", "다음은 db_pr.py publish 단계입니다.", 1, 0),     # 설명 속 낱말도 — 안내 한 줄이 더할 뿐

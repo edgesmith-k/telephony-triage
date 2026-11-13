@@ -1255,3 +1255,12 @@ def test_mask_copy_renames_git_names():
     assert sorted(p.name for p in (tmp / "m").iterdir()) == sorted([f["name"] for f in data["files"]] + ["index.json"])
     (tmp / "1" / ".git").rename(tmp / "1" / "Head")                       # 대소문자 무시
     assert _run(["mask-copy", str(tmp / "1" / "Head"), "--out", str(tmp / "m2")])[1]["files"][0]["name"] == "_Head"
+
+
+def test_parse_drops_records_whose_content_has_nul_even_without_line_position():
+    """줄 위치(`line_ref`)가 없는 레코드(외부 파서·site 백엔드)는 내용에 NUL이 있으면 버린다 (재확인 RR2-2)."""
+    import parse_logcat
+    assert parse_logcat._has_nul({"msg": "imsi=4500812\x0034567890", "line_ref": None})
+    assert parse_logcat._has_nul({"fields": {"a": ["ok", "x\x00y"]}})
+    assert not parse_logcat._has_nul({"msg": "imsi=<IMSI#1>", "fields": {"n": 3, "a": ["ok"]}, "line_ref": None})
+

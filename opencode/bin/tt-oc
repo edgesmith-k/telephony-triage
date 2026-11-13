@@ -676,7 +676,8 @@ def _owner_script(cmd: str, owner_cmds) -> str | None:
 
 def db_pr_subcommands(text: str) -> list[str]:
     """글 속 `db_pr.py`마다 하위 명령(옵션과 그 값을 건너뛴 첫 위치 인자). `\\`+줄바꿈은 잇고(bash처럼), 따옴표가 안 맞으면
-    공백으로 나눈 낱말로 본다. `;`·`&`·`|`·`(`·`)`는 낱말을 끊는다."""
+    공백으로 나눈 낱말로 본다. `;`·`&`·`|`·`(`·`)`는 낱말을 끊고 거기서 그 명령은 끝난다. 값 옵션은 argparse 축약형(`--plat`)도,
+    따옴표 안에 든 명령(`bash -lc "… db_pr.py publish"`)도 본다."""
     text = text.replace("\\\n", "")
     try:
         lex = shlex.shlex(text, posix=True, punctuation_chars=True)
@@ -687,10 +688,14 @@ def db_pr_subcommands(text: str) -> list[str]:
     subs = []
     for i, w in enumerate(words):
         if not w.strip("'\"").endswith("db_pr.py"):
+            if "db_pr.py" in w and w != text and any(c.isspace() for c in w):
+                subs += db_pr_subcommands(w)
             continue
         rest = iter(words[i + 1:])
         for x in rest:
-            if x in DBPR_VALUE_OPTS:
+            if not x.strip(";&|()<>"):
+                break
+            if len(x) >= 3 and any(o.startswith(x) for o in DBPR_VALUE_OPTS):
                 next(rest, None)
             elif not x.startswith("-"):
                 subs.append(x)
@@ -729,7 +734,7 @@ def handoff_notes(cmds: list[str], meta: dict) -> list[str]:
     notes = []
     for n, cmd in enumerate(cmds, 1):
         script = _owner_script(cmd, owner_cmds)
-        if script is None or set(db_pr_subcommands(cmd)) == {"publish"}:   # publish는 붙여 넣지 않는다(main의 `게시:` 줄, 리뷰 A-1·F-1)
+        if script is None or "publish" in db_pr_subcommands(cmd):   # publish는 붙여 넣지 않는다(main의 `게시:` 줄, 리뷰 A-1·F-1)
             continue
         if held:
             notes += [f"터미널에서는 위 {n}번째 명령의 {script} 앞에 TT_LOCK_OWNER={owner} 를 붙인다 — {where}의 session.lock을 쥔 "
