@@ -53,7 +53,8 @@ hook에서 tt-guard.js가 오류 tool part를 여기 넘기고, Jira 도구면 �
 실행한다). edit·write·apply_patch와 스크립트 출력은 `.git`·`.githooks` 아래나 이름이 `HEAD`인 경로에 쓰지 않는다(`_git_meta` —
 모델이 만든 저장소 설정·hook을 허용된 git 읽기가 실행한다). 스크립트 출력 인자(`guard._script_out_targets`)는 작업 루트
 (`<directory>/tt-oc.json`의 `work_root`) 안이어야 하고, 그 파일을 못 읽으면 출력이 있는 호출은 거부한다(`_outside_outputs`).
-모든 거부 사유는 `[telephony-triage]`로 시작한다(tt-oc가 막힌 호출로 판정한다).
+bash의 git·플러그인 스크립트는 tt-oc가 프로세스 환경에 준 git 설정(`GIT_SAFE`: `safe.bareRepository=explicit` 등)이 걸려 있을
+때만 돈다(`git_safe_missing` — 없으면 tt-oc 밖에서 시작한 것). 모든 거부 사유는 `[telephony-triage]`로 시작한다(tt-oc가 막힌 호출로 판정한다).
 
 **환경변수 무시 설정 거부(`REFUSED_ENV`)**: 설정을 덮거나 지우는 OpenCode 환경변수가 있으면 모든 도구를 거부한다(x3b·x4 실험).
 플러그인이 아예 안 실리는 `--pure` 실행은 여기서 막을 수 없다 — `tt-oc` 래퍼가 거절한다.
@@ -114,6 +115,13 @@ JIRA_GATE_ENV = "TT_OC_JIRA_GATE"
 JIRA_SESSION_ENV = "TT_OC_JIRA_SESSION_GATE"
 JIRA_ERROR_HIDDEN = "Jira 오류(본문 숨김)"
 GATE_SETTING = "opencode.jira_read"         # = oc_jira_gate.SETTING (사용자 config)
+
+# tt-oc가 OpenCode 프로세스 환경에 넣는 git 설정(= tt-oc `GIT_SAFE`). tt-guard.js는 그 환경을 이 프로세스에(`adapterEnv`), OpenCode는
+# bash 자식에 물려준다. 없으면 tt-oc 밖에서 시작한 것이다 — bash의 git·플러그인 스크립트는 돌리지 않는다(닫힘): 모델이 만든 bare 모양
+# 폴더의 config 명령을 git이 실행하는 길(mask-copy 사본 이름 등 쓰기 쪽 표 밖의 길)을 이 설정이 닫는다.
+GIT_SAFE = (("safe.bareRepository", "explicit"), ("protocol.ext.allow", "never"))
+NO_GIT_SAFE = ("git 환경(GIT_CONFIG_COUNT의 safe.bareRepository=explicit·protocol.ext.allow=never)이 없다 — tt-oc로 시작하지 "
+               "않았다. `tt-oc --project <폴더>`로 시작한다")
 
 ASK_PREFIX = "OpenCode v1 does not run this; run this exact command yourself: "
 BRIDGE_FAILED = ("telephony-triage: OpenCode jira_bridge 처리 실패 — 원문은 표시하지 않는다. "
@@ -355,6 +363,22 @@ def map_tool(payload: dict, servers: list[str] | None, servers_error: str | None
 def refused_env(env: dict | None = None) -> list[str]:
     env = os.environ if env is None else env
     return sorted(k for k in env if k in REFUSED_ENV or k.startswith(REFUSED_ENV_PREFIXES))
+
+
+def git_safe_missing(env: dict) -> bool:
+    """이 프로세스 환경에서 GIT_SAFE가 git에 실제로 걸리지 않으면 True: `GIT_CONFIG_COUNT` 항목 중 같은 키의 마지막 값이 GIT_SAFE가
+    아니거나, 그 값이 깨졌거나(git도 거부), 그 뒤에 읽히는 `GIT_CONFIG_PARAMETERS`(`git -c`)가 같은 설정을 다시 정한다."""
+    raw = env.get("GIT_CONFIG_COUNT") or ""
+    if not re.fullmatch(r"[0-9]{1,4}", raw):
+        return True
+    last = {}
+    for i in range(int(raw)):
+        key, value = env.get(f"GIT_CONFIG_KEY_{i}"), env.get(f"GIT_CONFIG_VALUE_{i}")
+        if key is None or value is None:
+            return True
+        last[key.casefold()] = value
+    params = (env.get("GIT_CONFIG_PARAMETERS") or "").casefold()
+    return any(last.get(k.casefold()) != v or k.casefold() in params for k, v in GIT_SAFE)
 
 
 def jira_gate_files():
@@ -616,9 +640,9 @@ def _config_call(rest: list[str]) -> tuple[str | None, str | None]:
             or (a.cmd == "sync-scripts-path" and not hasattr(a, "plugin_root"))
             or (a.cmd == "tracker-candidates" and not (a.mcp_config or a.opencode_config))):
         return None, None
-    if a.cmd == "init" and a.answers:
-        return None, ("사용자 설정 만들기(config.py init) — --answers 파일은 모델이 쓴 것이다. 붙여 넣지 말고 터미널에서 "
-                      "`config.py init`(대화형)으로 직접 답한다")
+    if a.cmd == "init" and a.answers:   # 직접 실행 꼴로 보이면 그 명령(모델이 쓴 답 파일)이 붙여 넣을 명령이 된다 — 일반 거부로
+        return ("사용자 설정 만들기(config.py init) — --answers 파일은 모델이 쓴 것이다. 붙여 넣지 말고 터미널에서 "
+                "`config.py init`(대화형)으로 직접 답한다"), None
     return None, f"사용자 설정 변경(config.py {a.cmd})"
 
 
@@ -987,6 +1011,9 @@ def before(payload: dict, env: dict | None = None, servers: list[str] | None = N
         elif verdict.deny:
             result["reason"] = (f"{MARK} bash 허용 목록: {verdict.deny}. {ALLOWLIST_HELP}. 다른 모양으로 다시 시도하지 말고 "
                                 "이 메시지를 그대로 보인 뒤 턴을 끝낸다.")
+        elif git_safe_missing(env) and any(w[0] == "git" or w[0] in BASH_PYTHON
+                                           for w in split_bash(mapped.events[0]["tool_input"]["command"])):
+            result["reason"] = f"{MARK} {NO_GIT_SAFE}. 이 메시지를 그대로 보인 뒤 턴을 끝낸다."
         else:
             result["decision"] = "allow"
     else:

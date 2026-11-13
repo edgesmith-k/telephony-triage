@@ -666,7 +666,6 @@ CONFIG_RUN_YOURSELF = [   # (인자, 쓰기 흐름에 들 글)
     ("set -- k v", "config.py set"), ("set 'plugin.scripts_path' /x", "config.py set"),
     ("--platform android set k v", "config.py set"), ("set k v --platform android", "config.py set"),
     ("init", "config.py init"), ("init --force", "config.py init"),
-    ("init --answers a.json", "--answers 파일은 모델이 쓴 것"), ("init --ans=a.json", "--answers 파일은 모델이 쓴 것"),
     ("set-tracker --server s --get-issue g", "config.py set-tracker"), ("set-tracker --serv s --get-iss g", "config.py set-tracker"),
     ("install-hooks", "config.py install-hooks"), ("install-hooks --db /x", "config.py install-hooks"),
     ("rename-legacy --apply", "config.py rename-legacy"), ("rename-legacy --app", "config.py rename-legacy"),
@@ -713,6 +712,50 @@ def test_config_set_shapes_not_bypassable(tmp_path):
         assert v.flow == "사용자 설정 변경(config.py set)", (cmd, v)
     # 기존 `set opencode.*` 그물과 문구는 그대로(before가 guard보다 먼저 낸다)
     assert oc.v1_write_flow(_py("config.py", "set opencode.jira_read open")).startswith("OpenCode 설정 변경")
+
+
+@pytest.mark.parametrize("args", ["init --answers a.json", "init --ans=a.json", "--platform android init --answers a.json"])
+@pytest.mark.usefixtures("plugin_config")
+def test_config_init_answers_is_plain_refusal(args):
+    """OC-C (6): `init --answers`는 "직접 실행" 꼴이 아니라 일반 거부 — 모델이 쓴 답 파일을 넣은 명령을 붙여 넣을 명령으로 보이지 않는다.
+    tt-oc는 그 거부에서 직접 실행할 명령을 뽑지 않는다(`USER_CMD`)."""
+    v = oc.bash_allowlist(_py("config.py", args), str(_dir()), str(_dir()), {})
+    assert v.flow is None and "--answers 파일은 모델이 쓴 것" in v.deny and "`config.py init`(대화형)" in v.deny, v
+    w = ws()
+    out = bash(f"python3 {w.root}/scripts/config.py {args}", w.base)
+    assert out["decision"] == "deny" and "--answers 파일은 모델이 쓴 것" in out["reason"] and oc.ASK_PREFIX not in out["reason"]
+    import importlib.machinery
+    import importlib.util
+    loader = importlib.machinery.SourceFileLoader("tt_oc_answers", str(REPO / "opencode" / "bin" / "tt-oc"))
+    tt = importlib.util.module_from_spec(importlib.util.spec_from_loader("tt_oc_answers", loader))
+    loader.exec_module(tt)
+    assert tt.USER_CMD.search(out["reason"]) is None
+
+
+def test_git_safe_env_required_for_git_and_scripts():
+    """OC-C (2): tt-oc가 준 git 설정(GIT_SAFE)이 없으면 bash의 git·플러그인 스크립트는 거부(tt-oc 밖에서 시작), 읽기 명령은 그대로.
+    시험 헬퍼(`runner.run`)는 어댑터에 GIT_SAFE_ENV를 기본으로 준다(tt-oc의 child_env와 같은 값)."""
+    from runner import GIT_SAFE_ENV
+    assert oc.git_safe_missing(GIT_SAFE_ENV) is False
+    assert GIT_SAFE_ENV["GIT_CONFIG_COUNT"] == str(len(oc.GIT_SAFE)) and all(
+        (GIT_SAFE_ENV[f"GIT_CONFIG_KEY_{i}"], GIT_SAFE_ENV[f"GIT_CONFIG_VALUE_{i}"]) == kv for i, kv in enumerate(oc.GIT_SAFE))
+    w = ws()
+    gone = {"GIT_CONFIG_COUNT": ""}
+    for command in (f"git -C {w.clone} log --oneline -1", f"cd {w.clone} && git status", f'python3 "{w.root}/scripts/config.py" show'):
+        assert bash(command, w.base)["decision"] == "allow", command
+        out = bash(command, w.base, env=gone)
+        assert out["decision"] == "deny" and "tt-oc로 시작하지 않았다" in out["reason"] and "tt-oc --project" in out["reason"], out
+        assert out["reason"].startswith(oc.MARK)
+    assert bash("ls -la", w.base, env=gone)["decision"] == "allow"
+    # 사용자 항목 뒤에 붙은 꼴은 통과, 같은 키를 뒤에서 다시 정하거나·깨졌거나·`git -c`(GIT_CONFIG_PARAMETERS)가 정하면 없음으로 본다
+    user = {"GIT_CONFIG_COUNT": "3", "GIT_CONFIG_KEY_0": "core.pager", "GIT_CONFIG_VALUE_0": "cat",
+            **{f"GIT_CONFIG_{p}_{i + 1}": GIT_SAFE_ENV[f"GIT_CONFIG_{p}_{i}"] for i in range(2) for p in ("KEY", "VALUE")}}
+    assert oc.git_safe_missing(user) is False
+    assert oc.git_safe_missing({**GIT_SAFE_ENV, "GIT_CONFIG_KEY_1": "SAFE.BAREREPOSITORY", "GIT_CONFIG_VALUE_1": "all"})
+    for broken in ({}, {**GIT_SAFE_ENV, "GIT_CONFIG_COUNT": "x"}, {**GIT_SAFE_ENV, "GIT_CONFIG_COUNT": "3"},
+                   {**GIT_SAFE_ENV, "GIT_CONFIG_COUNT": "1"},
+                   {**GIT_SAFE_ENV, "GIT_CONFIG_PARAMETERS": "'safe.bareRepository'='all'"}):
+        assert oc.git_safe_missing(broken), broken
 
 
 def test_config_call_refuses_foreign_config_module(monkeypatch):
