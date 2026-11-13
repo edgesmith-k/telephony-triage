@@ -403,7 +403,8 @@ def cmd_set(args, defaults: dict) -> dict:
             raise UsageError(f"--platform {_platform(args)}: {exc}") from exc
     before = userconfig.merged(defaults, copy.deepcopy(data), _platform(args))
     userconfig.set_value(data, key, value)
-    bad = _write_like(userconfig.get(data, "tracker.read_tools") or []) if args.key in ("tracker", "tracker.read_tools") else []
+    rt_key = args.key in ("tracker", "tracker.read_tools") or args.key.startswith("tracker.read_tools.")  # `.<이름> true`는 매핑이 된다
+    bad = _write_like(userconfig.get(data, "tracker.read_tools") or []) if rt_key else []
     if bad:
         raise UsageError(f"{args.key}: 쓰기형 이름이라 read_tools에 넣지 않는다(규칙 2): {', '.join(bad)}")
     userconfig.save(data)
@@ -538,7 +539,9 @@ def _tool_problems(server: str, names: list[str]) -> list[str]:
 
 
 def _write_like(names):
-    """쓰기형 이름(`mcptools.is_write`) 목록 — read_tools에 넣지 않는다(규칙 2, set-tracker·set·doctor 공유)."""
+    """쓰기형 이름(`mcptools.is_write`) 목록 — read_tools에 넣지 않는다(규칙 2, set-tracker·set·doctor 공유). 목록·매핑(키를 본다)이
+    아닌 값은 빈 목록(doctor가 형식 오류로 잡는다)."""
+    names = names if isinstance(names, (list, dict)) else []
     return [n for n in names if (m := mcptools.NAME_RE.match(str(n))) and mcptools.is_write(m.group(2))]
 
 
@@ -967,8 +970,8 @@ def _doctor_rows(args, defaults: dict) -> list[dict]:
             if problems:
                 rows.append(_row("tracker", "fail", problems[0], hint))
             elif bad:
-                rows.append(_row("tracker", "warn", f"read_tools에 쓰기형 이름: {', '.join(map(str, bad))}",
-                                 "읽기 도구가 아니면 config.yaml(팀 값이면 site-defaults)의 read_tools에서 뺀다"))
+                rows.append(_row("tracker", "warn", f"tracker 도구 이름에 쓰기형 이름: {', '.join(map(str, bad))}",
+                                 "읽기 도구가 아니면 config.yaml(팀 값이면 site-defaults)의 tracker 도구 설정에서 뺀다"))
             else:
                 rows.append(_row("tracker", "ok", f"{server} / get_issue 매핑 있음"))
     guarded("tracker", tracker) if ok_cfg else skip("tracker", "config 없음")

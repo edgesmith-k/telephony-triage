@@ -3505,7 +3505,16 @@ def test_guard_inline_interpreter_code_and_symlink_into_clone_ask():
     home = {"HOME": ws.base, "USERPROFILE": ws.base}  # `~/…` 꼴(Windows expanduser는 USERPROFILE)
     out = bash(ws, "python3 -c \"open('~/work/INLINE-2/post.result.json','w')\"", clone, env=ws.env(**home))
     assert decision(out) == "ask" and "기록 경로" in out["permissionDecisionReason"], out
+    # 기록 경로 ask는 clone·원문 낱말이 먼저 나와도 남고, 기록 경로가 여럿이어도 코드 하나에 한 번이다
+    for first, rule in ((f"{clone.as_posix()}/x", "규칙 8"), (f"{raw_dir.as_posix()}/events.json", "규칙 10")):
+        out = bash(ws, f"python3 -c \"open('{first}'); open('{job}/post.approved.json')\"", clone)
+        assert decision(out) == "ask" and "기록 경로" in out["permissionDecisionReason"], out
+        assert rule in out["permissionDecisionReason"], out
+    out = bash(ws, f"python3 -c \"open('{job}/post.approved.json'); open('{job}/merge-offer.json')\"", clone)
+    assert decision(out) == "ask" and out["permissionDecisionReason"].count("기록 경로") == 1, out
     for cmd in (f"python3 -c \"print(open('{ws.root}/no-such-notes.txt').read())\"", "python3 -c 'print(1+1)'",
+                f"python3 -c \"open('{job}/notes.txt','w')\"", "python3 -c \"open('/tmp/K1/post.approved.json','w')\"",
+                f"python3 -c \"open('{job}/skill-suggestions/a/rel.txt','w')\"",
                 f"ln -s {link} {link}2", "perl -e 'print 1'", f"python3 -c \"import json; json.load(open('{clone}'))\" --flag"):
         out = bash(ws, cmd, clone)
         assert decision(out) in (None, "ask") if "import json" in cmd else decision(out) is None, (cmd, out)

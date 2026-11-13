@@ -337,12 +337,16 @@ def test_jira_tools_from_nonstandard_mock_server():
                                  "--get-issue", "mcp__other__get_issue"]).returncode == 2
     # 쓰기형 이름은 read_tools에 넣지 않는다(규칙 2): set-tracker·set(tracker 블록째) 종료 2, config 그대로
     cfg_path = env.home / "config.yaml"
-    before = cfg_path.read_text(encoding="utf-8")
+    before = cfg_path.read_bytes()
     assert env.run("config.py", ["set-tracker", "--server", "mock-jira", "--get-issue", "mcp__mock-jira__jira_fetch_ticket",
                                  "--read-tools", "mcp__mock-jira__jira_ticket_add_note"]).returncode == 2
+    assert env.run("config.py", ["set-tracker", "--server", "mock-jira",
+                                 "--get-issue", "mcp__mock-jira__jira_move_ticket"]).returncode == 2
     block = {**jira, "read_tools": [*jira["read_tools"], "mcp__mock-jira__jira_move_ticket"]}
     assert env.run("config.py", ["set", "tracker", json.dumps(block)]).returncode == 2
-    assert cfg_path.read_text(encoding="utf-8") == before
+    # `set tracker.read_tools.<이름> true`는 read_tools를 {이름: true} 매핑으로 바꾼다 — 같이 막는다
+    assert env.run("config.py", ["set", "tracker.read_tools.mcp__mock-jira__jira_move_ticket", "true"]).returncode == 2
+    assert cfg_path.read_bytes() == before
     # 손으로 넣어 둔 이름이 있어도 다른 tracker 키 set은 막지 않는다
     cfg = env.config()
     cfg["tracker"]["read_tools"].append("mcp__mock-jira__jira_move_ticket")
@@ -950,8 +954,11 @@ def test_doctor_write_like_read_tool_is_warn_and_exit_0():
     (env.home / "config.yaml").write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
     result = _doctor(env)
     row = _rows(result)["tracker"]
-    assert row["status"] == "warn" and "jira_move_ticket" in row["detail"] and "read_tools" in row["next"]
+    assert row["status"] == "warn" and "jira_move_ticket" in row["detail"] and "tracker 도구" in row["next"]
     assert result["counts"]["warn"] == 1
+    # 목록·매핑이 아닌 read_tools는 예전처럼 저장되고 doctor가 형식 오류로 잡는다(traceback 아님)
+    assert env.run("config.py", ["set", "tracker.read_tools", "5"]).returncode == 0
+    assert "형식 오류" in _rows(_doctor(env, expect=1))["tracker"]["detail"]
 
 
 def test_doctor_snapshot_age_missing_and_corrupt_meta():
