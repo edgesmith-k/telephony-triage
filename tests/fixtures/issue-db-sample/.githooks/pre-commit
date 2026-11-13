@@ -24,7 +24,7 @@ command -v python3 >/dev/null 2>&1 || guide "python3를 찾을 수 없다."
 [ -f "$config" ] || guide "사용자 config가 없다: $config"
 
 scripts=$(python3 - "$config" <<'EOF'
-import os, sys; sys.path[:] = [p for p in sys.path if os.path.abspath(p or os.curdir) != os.getcwd()]   # cwd(작업 트리)의 모듈을 import하지 않는다(Windows `python3 -`는 cwd 절대 경로)
+import os, sys; _real = lambda p: os.path.normcase(os.path.realpath(p)); sys.path[:] = [p for p in sys.path if _real(p or os.curdir) != _real(os.getcwd())]   # cwd(작업 트리)의 모듈을 import하지 않는다(Windows `python3 -`는 cwd 절대 경로, 링크·대소문자로 cwd를 가리키는 경로도)
 try:
     import yaml
 except ImportError:     # 이 python3(PATH 첫 번째)에 의존성이 없다 — scripts_path 문제로 오해하지 않게 따로 알린다

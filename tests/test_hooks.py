@@ -226,6 +226,36 @@ def test_git_hooks_do_not_import_modules_from_the_work_tree():
     assert proc.returncode == 0 and not marker.exists(), proc.stderr
 
 
+def test_git_hooks_drop_pythonpath_that_links_to_the_work_tree():
+    """재리뷰 RR-4: 링크로 cwd(작업 트리 top)를 가리키는 `PYTHONPATH`도 hook의 inline python(`python3 -`) import 경로에서 뺀다.
+    cwd 아래 venv류 폴더(site-packages)는 cwd가 아니니 그대로 쓴다. 가짜 `yaml`은 inline python(argv[0] `-`)에서만 표시를 남긴다."""
+    ws = Workspace()
+    branch_with_change(ws, "review/data-2026-10", "CONTRIBUTING.md", "직접 편집\n")
+    link = ws.base / "clone-link"
+    try:
+        link.symlink_to(ws.clone, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        import pytest
+        pytest.skip("심볼릭 링크를 만들 수 없다")
+    site = ws.clone / "venv" / "site-packages"
+    marks = {}
+    for name, where in (("link", ws.clone), ("venv", site)):
+        marks[name] = ws.base / f"IMPORTED-{name}"
+        (where / "yaml").mkdir(parents=True)
+        (where / "yaml" / ".gitignore").write_text("*\n", encoding="utf-8")
+        (where / "yaml" / "__init__.py").write_text(
+            f"import os, sys\nif sys.argv[0] == '-':\n    open({str(marks[name])!r}, 'a').close()\n"
+            "here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))\n"
+            "sys.path[:] = [p for p in sys.path if os.path.abspath(p or os.curdir) != here]\n"
+            "del sys.modules[__name__]\nimport yaml\n", encoding="utf-8")
+    (ws.clone / "venv" / ".gitignore").write_text("*\n", encoding="utf-8")
+    proc = gitp(ws.clone, "commit", "-qm", "직접 편집", env={**ws.hook_env(), "PYTHONPATH": str(link)})
+    assert proc.returncode == 0 and not marks["link"].exists(), proc.stderr
+    proc = gitp(ws.clone, "push", "-q", "origin", "HEAD:refs/heads/review/data-2026-10",
+                env={**ws.hook_env(TT_PUBLISH_TOKEN="manual"), "PYTHONPATH": str(site)})
+    assert proc.returncode == 0 and marks["venv"].exists(), proc.stderr
+
+
 # -- Claude hook: Bash ---------------------------------------------------------------------------
 
 
