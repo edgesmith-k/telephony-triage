@@ -667,6 +667,22 @@ def test_gh_host_env_and_remote_host_port(tmp_path, monkeypatch):
     assert sc._remote_host_org("/srv/repo") is None
 
 
+def test_s5_sandbox_pr_counts_tool_branches_only(tmp_path, monkeypatch):
+    root = site_root(tmp_path)
+    (root / sc.STEPS_FILE).parent.mkdir(parents=True)
+    (root / sc.STEPS_FILE).write_text("sandbox_repo: org/sandbox\n", encoding="utf-8")
+    def fake(out):
+        return lambda self, cmd, *, _out=out, **kw: (0, "", "") if cmd[1] == "auth" else (0, _out, "")
+    for out, status in ((json.dumps([{"number": 1, "headRefName": "feature/x"}]), "needs-user"),
+                        (json.dumps([{"number": 1, "headRefName": "feature/x"}, {"number": 2, "headRefName": "issue/A-1"}]),
+                         "pass"),
+                        ("[{not json", "needs-user")):
+        monkeypatch.setattr(sc.Ctx, "run", fake(out))
+        r = sc.s5_sandbox_pr(sc.Ctx(root))
+        assert r["status"] == status, out
+    assert "headRefName" in r["cmd"] and "issue/" in r["ask"]
+
+
 def test_s4a_protection_403_404_is_skip_and_weak_data_fails(tmp_path, monkeypatch):
     root = site_root(tmp_path)
     (root / sc.STEPS_FILE).parent.mkdir(parents=True)

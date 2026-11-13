@@ -1426,12 +1426,19 @@ def s5_sandbox_pr(ctx: Ctx) -> dict:
     repo, early = _gh_ready(ctx, "sandbox_repo", "s5.sandbox_pr")
     if early:
         return early
-    cmd = f"gh pr list --repo {repo} --state all --limit 5 --json number"
-    code, out, _ = ctx.gh("pr", "list", "--repo", repo, "--state", "all", "--limit", "5", "--json", "number")
-    prs = json.loads(out or "[]") if code == 0 else []
+    cmd = f"gh pr list --repo {repo} --state all --limit 30 --json number,headRefName"
+    code, out, _ = ctx.gh("pr", "list", "--repo", repo, "--state", "all", "--limit", "30", "--json", "number,headRefName")
+    try:
+        prs = json.loads(out or "[]") if code == 0 else []
+    except ValueError:
+        prs = []
+    # 도구가 만드는 브랜치만 센다(contracts.md 브랜치 표). 손으로 만든 PR은 스모크가 아니다
+    prs = [p for p in (prs if isinstance(prs, list) else []) if isinstance(p, dict)
+           and str(p.get("headRefName") or "").startswith(("issue/", "fix-submit/", "verify-fix/", "verify-res/"))]
     if not prs:
-        return res("s5.sandbox_pr", "needs-user", f"샌드박스 PR 0건(종료 {code})", cmd, ask="샌드박스 PR 1건을 만든 뒤 다시 점검한다")
-    return res("s5.sandbox_pr", "pass", f"샌드박스 PR {len(prs)}건", cmd)
+        return res("s5.sandbox_pr", "needs-user", f"도구로 만든 샌드박스 PR 0건(종료 {code})", cmd,
+                   ask="도구로 만든 PR(`issue/`·`fix-submit/`·`verify-fix/`·`verify-res/` 브랜치) 1건을 만든 뒤 다시 점검한다")
+    return res("s5.sandbox_pr", "pass", f"도구로 만든 샌드박스 PR {len(prs)}건", cmd)
 
 
 def s5_smoke(ctx: Ctx) -> dict:
