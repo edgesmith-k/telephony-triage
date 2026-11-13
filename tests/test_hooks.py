@@ -1247,6 +1247,30 @@ def test_guard_git_dir_forms_under_safe_bare_repository_explicit():
         assert decision(bash(ws, cmd, cwd, env=env)) == want, cmd
 
 
+def test_guard_rev_parse_retries_outside_dot_git_without_host_git(monkeypatch):
+    """위 시험의 재질문 경로(`guard._rev_parse`)를 호스트 git 버전과 무관하게 지킨다(위 시험은 git 2.38~2.44에서만 돈다):
+    가짜 `_git`은 실제 경로에 `.git` 조각이 있으면 128 — 재질문·realpath·`.git` 조각 범위 중 하나라도 빠지면 None이 된다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import guard as g
+
+    def fake_git(d, *args):
+        bad = ".git" in Path(os.path.realpath(d)).parts
+        return subprocess.CompletedProcess([], 128 if bad else 0, "" if bad else f"{d}/.git\n", "")
+
+    monkeypatch.setattr(g, "_git", fake_git)
+    base = tmp("tt-gh-rp-")
+    clone = base / "c"
+    (clone / ".git" / "refs").mkdir(parents=True)
+    cwds = [clone / ".git", clone / ".git" / "refs"]
+    try:
+        (base / "S").symlink_to(clone / ".git", target_is_directory=True)
+        cwds.append(base / "S")
+    except OSError:
+        pass    # 심볼릭 링크를 못 만드는 환경(Windows 권한 등)은 링크 꼴만 건너뛴다
+    for cwd in cwds:
+        assert g._rev_parse(cwd, "--absolute-git-dir") == g._norm(f"{os.path.realpath(clone)}/.git"), cwd
+
+
 def test_guard_eval_and_xargs_wrappers():
     ws = shared()
     c = ws.clone
