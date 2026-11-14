@@ -214,7 +214,7 @@ def _report_input(code_status="reworded", log_refs=("f1:L42",), skipped=False):
 def test_report_lines_reworded_with_log_refs():
     lines = ReportMixin.partial_lines(None, _report_input(), [])
     text = "\n".join(lines)
-    assert lines[0] == "- 부분 일치 (판정·점수 아님, S/C 불변):"
+    assert lines[0] == "- 부분 일치 (참고용, 후보 순위와 점수는 그대로):"
     assert "DATA-002 > DATA-002-01/sig1 2/3 [missing] — 맞음 a (f1:L120), b (f1:L131) / 없음 c" in text
     assert "    - 코드 대조 c: 문구 다름 aosp:fw/DataNetwork.java:1234" in text
     assert ("규칙 제안 (부분 일치): [이슈 DB] update-signature DATA-002-01 — 근거: 부분 일치 2/3·없는 줄 c·"

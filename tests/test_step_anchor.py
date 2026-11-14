@@ -602,7 +602,7 @@ def test_triage_reports_focus_types_in_step_anchor_and_report():
                                   "--tz", "Asia/Seoul", "--year", "2026", "--failed-step", "데이터 켜기",
                                   "--answer", "anchor=off"])
     assert _causes(done)[0] == "DATA-001-01" and done["step_anchor"] == {"source": "issue", "focus": ["DATA-001"]}
-    assert "- 스텝 기준 우선 유형 (순위 참고만, 점수·S/C 불변): DATA-001" in (out / "report.md").read_text(encoding="utf-8")
+    assert "- 스텝 기준 우선 유형 (순위 참고용, 점수는 그대로): DATA-001" in (out / "report.md").read_text(encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -272,12 +272,12 @@ def test_optional_step_without_lines_is_not_a_deviation():
     [f] = _check(RADIO[:5] + [TICK], ("radio-on",))
     inst = f["instances"][0]
     assert _sig(inst) == "ok ok ok ok - -" and inst["steps"][4]["detail"] == flows.OPTIONAL_NONE
-    assert flow_section({"flows": [f]}, None, None, "17", {})[1] == ["- 흐름 점검: 무선 켬 1회 정상(데이터 허용 줄 없음)"]
+    assert flow_section({"flows": [f]}, None, None, "17", {})[1] == ["- 흐름 점검: 무선 켬 1회 정상(데이터 허용 줄은 없어도 되는 단계라 없음)"]
     deny = RADIO[5][2].replace("Data allowed reasons: NORMAL", "Data disallowed reasons: DATA_DISABLED")
     [f] = _check(RADIO[:5] + [(0.6, "DNC-0", deny, PHONE, 0), TICK], ("radio-on",))
     assert _sig(f["instances"][0]) == "ok ok ok ok 값이상 -"
     lines = flow_section({"flows": [f]}, None, None, "17", {})[1]
-    assert lines[1].endswith("데이터 허용 값이상(평가 거부: Data disallowed reasons: DATA_DISABLED)")
+    assert lines[1].endswith("데이터 허용에서 이상한 값(평가 거부: Data disallowed reasons: DATA_DISABLED)")
     [f] = _check(RADIO[:6] + [TICK], ("radio-on",))
     assert _sig(f["instances"][0]) == "ok ok ok ok ok 없음"
 
@@ -310,9 +310,9 @@ def test_instances_over_cap_keep_the_tail_and_say_so():
     assert f["instances"][0]["key"] == "DN-1-C" and f["instances"][-1]["key"] == f"DN-{flows.INSTANCES_MAX}-C"
     ts = lambda s: logtime.format_ts(T0 + timedelta(seconds=s))   # noqa: E731
     lines = flow_section({"flows": [f]}, {"start": ts(-1), "end": ts(1)}, ts(0), "17", {})[1]
-    assert lines == [f"- 흐름 점검: 데이터 연결 인스턴스가 많아 뒤 {flows.INSTANCES_MAX}개만 봄 — 이 범위는 판정 못 함"]
+    assert lines == [f"- 흐름 점검: 데이터 연결 반복이 많아 마지막 {flows.INSTANCES_MAX}번만 봄 — 이 범위에서는 판단 못 함"]
     lines = flow_section({"flows": [f]}, {"start": ts(1999.5), "end": ts(2010)}, ts(2000), "17", {})[1]
-    assert lines[1].startswith(f"  - 데이터 연결 DN-{flows.INSTANCES_MAX}-C ") and "값이상" in lines[1]
+    assert lines[1].startswith(f"  - 데이터 연결 DN-{flows.INSTANCES_MAX}-C ") and "이상한 값" in lines[1]
 
 
 def test_cut_before_each_step_never_says_missing():
@@ -435,9 +435,9 @@ def test_triage_report_section_analysis_key_and_flow_json():
     analysis = _triage(db, work / "a")
     report = (work / "a" / "report.md").read_text(encoding="utf-8")
     lines = [line for line in report.splitlines() if "흐름 점검" in line or "→ 의심" in line or "데이터 연결 DN-1-C" in line]
-    assert lines[0] == "- 흐름 점검 (판정·점수 아님, S/C 불변; 흐름 기준 버전 17):"
-    assert lines[1] == "  - 데이터 연결 DN-1-C (f0:L1): 응답 받음 ok → 설정 만듦 값이상(주소 빔)"
-    assert lines[2].startswith("    → 의심: DataNetwork(응답 → 설정 변환) / 이 단계의 원인: DATA-001-01 ")
+    assert lines[0] == "- 흐름 점검 (참고용, 후보 순위와 점수는 그대로; 흐름 기준 버전 17):"
+    assert lines[1] == "  - 데이터 연결 DN-1-C (f0:L1): 응답 받음 정상 → 설정 만듦에서 이상한 값(주소 빔)"
+    assert lines[2].startswith("    → 의심되는 곳: DataNetwork(응답 → 설정 변환) / 이 단계에 등록된 원인: DATA-001-01 ")
     assert analysis["flows"] == [{"flow": "data/data-setup", "key": "DN-1-C", "step": "link-properties", "verdict": "값이상",
                                   "at": "f0:L3", "causes": ["DATA-001-01"]}]
     assert json.loads((work / "a" / "flow.json").read_text(encoding="utf-8"))["flows"][0]["flow"] == "data/data-setup"
@@ -500,17 +500,17 @@ def test_step_causes_put_ranked_candidates_first():
     causes = {"data/data-setup/response": [(f"DATA-00{n}-01", f"원인 {n}") for n in range(1, 6)]}
     analysis, lines = flow_section(_bad_resp_flow(), None, None, "17", causes, ["DATA-005-01", "OTHER-001-01", "DATA-003-01"])
     assert analysis[0]["causes"] == ["DATA-005-01", "DATA-003-01", "DATA-001-01"]
-    assert "이 단계의 원인: DATA-005-01 원인 5, DATA-003-01 원인 3, DATA-001-01 원인 1" in lines[2]
+    assert "이 단계에 등록된 원인: DATA-005-01 원인 5, DATA-003-01 원인 3, DATA-001-01 원인 1" in lines[2]
     assert flow_section(_bad_resp_flow(), None, None, "17", causes)[0][0]["causes"] == ["DATA-001-01", "DATA-002-01", "DATA-003-01"]
 
 
 def test_analysis_causes_only_for_deviation_and_start_repeat_wording():
-    """F-11: analysis.json causes는 멈춘 단계가 값이상·없음일 때만(report.md와 같다). F-17: 합친 시작 줄 수는 '시작 줄 n회 더'."""
+    """F-11: analysis.json causes는 멈춘 단계가 값이상·없음일 때만(report.md와 같다). F-17: 합친 시작 줄 수는 '같은 시작 줄이 n번 더 나옴'."""
     causes = {"data/data-setup/link-properties": [("DATA-001-01", "x")]}
     [f] = _check(_normal()[:2] + [(3.0, "Other", "tick")])          # 설정 만듦 로그끝(판정 불가)
     assert _sig(f["instances"][0]) == "ok 로그끝 - -"
     analysis, lines = flow_section({"flows": [f]}, None, None, "17", causes)
-    assert "causes" not in analysis[0] and not any("이 단계의 원인" in line for line in lines)
+    assert "causes" not in analysis[0] and not any("이 단계에 등록된 원인" in line for line in lines)
     rows = RADIO[:2] + [(0.0015, *RADIO[0][1:])] + [(0.002, *RADIO[2][1:])] + [TICK]
     lines = flow_section({"flows": _check(rows, ("radio-on",))}, None, None, "17", {})[1]
-    assert "무선 켬 SST-0 (시작 줄 1회 더) (f0:L1)" in lines[1] and "재시작" not in lines[1]
+    assert "무선 켬 SST-0 (같은 시작 줄이 1번 더 나옴) (f0:L1)" in lines[1] and "재시작" not in lines[1]
