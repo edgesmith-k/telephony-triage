@@ -1,3 +1,0 @@
--- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
-11-14 10:01:20.402  1301  1301 D ImsPhone: [0] handleImsRegistering: onImsMmTelProgressing imsRadioTech=WWAN
-11-14 10:01:23.072  1301  1301 D ImsPhone: [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN

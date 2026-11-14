@@ -6,7 +6,7 @@
   "issue": null,
   "feedback": null,
   "included_pending": [],
-  "commit_message": "[NEW-TYPE-1] import call-1: Android call 시작 유형 4개·원인 13개 (합성 fixture, Android 17)",
+  "commit_message": "[NEW-TYPE-1] import call-1: Android call 시작 유형 4개·원인 12개 (합성 fixture, Android 17)",
   "pr": {
     "number": null,
     "branch": "import/call-1",
@@ -25,7 +25,7 @@
           {
             "id": "mo-connection-failed",
             "must_match": [
-              "Telecom: CreateConnectionProcessor: Connection failed: \\(DisconnectCause"
+              "^(?!.*DIALED_MMI)Telecom: CreateConnectionProcessor: Connection failed: \\(DisconnectCause"
             ],
             "window_sec": 60
           }
@@ -78,7 +78,7 @@
         },
         "body": "- **로그 예시** (합성, fixture `mo-oos.log`):\n  ```\n  11-14 10:00:05.100   912   952 D Telecom : UserCallIntentProcessor: processOutgoingCallIntent videoState = 0: TSI.pC(cgat)@AgI\n  11-14 10:00:05.110   912   952 V Telecom : Call: setState NEW -> CONNECTING: TSI.pC->CM.fOCP(cgat)@AgI_1\n  11-14 10:00:05.150   912   952 I Telecom : CreateConnectionProcessor: Trying attempt CallAttemptRecord(ComponentInfo{com.android.phone/com.android.services.telephony.TelephonyConnectionService}, 1, UserHandle{0}): TSI.pC->CIP.sNOCI(cgat)@AgI_2\n  11-14 10:00:05.180   912   952 D Telecom : CreateConnectionProcessor: Connection failed: (DisconnectCause [ Code: (ERROR) Label: (Cellular network not available) Description: (Mobile network not available.) Reason: (ServiceState.STATE_OUT_OF_SERVICE, OUT_OF_SERVICE) Tone: (95)  TelephonyCause: 18/-1 ImsReasonInfo: null]): CSW.hCCC(cap/cast)@E-AgM\n  11-14 10:00:05.181   912   952 I Telecom : Call: handleCreateConnectionFailure; callid=TC@4, disconnectCause=DisconnectCause [ Code: (ERROR) Label: (Cellular network not available) Description: (Mobile network not available.) Reason: (ServiceState.STATE_OUT_OF_SERVICE, OUT_OF_SERVICE) Tone: (95)  TelephonyCause: 18/-1 ImsReasonInfo: null]: CSW.hCCC(cap/cast)@E-AgM\n  11-14 10:00:05.185   912   952 V Telecom : Call: setState CONNECTING -> DISCONNECTED: CSW.hCCC(cap/cast)@E-AgM\n  ```\n- **확인 방법**: `Connection failed` 줄의 Reason이 `ServiceState.STATE_OUT_OF_SERVICE`, TelephonyCause 18. RILJ `DIAL`이 없는 것은 프레임워크가 막았기 때문이다(그 층 로그 없음이 아니다).\n- **재현 시나리오**: 서비스 없음(미등록) 상태에서 일반 번호로 발신\n- **해결책**: 망 등록이 왜 안 됐는지(network 카테고리 서비스 없음 유형)를 먼저 본다.\n- **코드 위치**: `TelephonyConnectionService#getTelephonyConnection`이 서비스 상태를 보고 실패 연결을 만든다.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
       },
-      "body": "## 증상\n\n전화를 걸면 연결음 없이 바로 끊긴다. Telecom이 연결 생성 실패(`Connection failed`)를 남긴다.\n\n## 증상 판별 방법\n\nTelecom `CreateConnectionProcessor: Connection failed: (DisconnectCause [...])`. 원인은 그 줄의 `Reason`·`TelephonyCause`로 가른다.\n"
+      "body": "## 증상\n\n전화를 걸면 연결음 없이 바로 끊긴다. Telecom이 연결 생성 실패(`Connection failed`)를 남긴다.\n\n## 증상 판별 방법\n\nTelecom `CreateConnectionProcessor: Connection failed: (DisconnectCause [...])`. MMI·USSD 코드(`DIALED_MMI`, TelephonyCause 39)는 연결 없이 끝나는 것이 정상이라 같은 줄에서 뺀다. 원인은 그 줄의 `Reason`·`TelephonyCause`로 가른다.\n"
     },
     {
       "op": "add-fixture",
@@ -94,19 +94,18 @@
       "temp_id": "NEW-CAUSE-2",
       "type": "NEW-TYPE-1",
       "cause": {
-        "title": "비행기 모드 켬(시험 조작)",
-        "description": "시험 절차에서 비행기 모드(라디오 끔, 사유 USER)를 켠 뒤 발신해 POWER_OFF로 실패함",
+        "title": "라디오 꺼짐 상태에서 발신(비행기 모드 등)",
+        "description": "라디오가 꺼진(POWER_OFF) 상태에서 발신해 프레임워크가 실패시킴 — 대부분 시험 절차의 비행기 모드 켬",
         "signatures": [
           {
-            "id": "mo-failed-radio-off-by-user",
+            "id": "mo-failed-radio-off",
             "must_match": [
-              "SST-\\d+: setRadioPower power false forEmergencyCall false forceApply false reason 0",
               "Telecom: CreateConnectionProcessor: Connection failed: .*Reason: \\(ServiceState\\.STATE_POWER_OFF"
             ],
-            "window_sec": 300
+            "window_sec": 60
           }
         ],
-        "resolution": "정상 동작이다. 시험 절차의 비행기 모드 켬·끔 스텝과 발신 스텝 순서를 확인한다.",
+        "resolution": "앞쪽 SST `setRadioPower power false ... reason N`의 사유를 본다. 0(USER)이면 비행기 모드·라디오 끔 시험 조작이라 정상이고, 1·2·3(발열·사업자·근처 기기)이면 network 카테고리 라디오 끔 원인을 본다.",
         "resolution_type": "user-setting",
         "fix": {
           "status": "not-a-bug",
@@ -133,7 +132,7 @@
           }
         ]
       },
-      "body": "- **로그 예시** (합성, fixture `mo-airplane.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0\n  11-14 10:00:00.103  1301  1301 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0], IMS reg state=false, pending radio off=false\n  11-14 10:00:00.104  1301  1301 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON\n  11-14 10:00:00.140  1301  1301 D RILJ    : [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]\n  11-14 10:00:00.142  1301  1330 D RILJ    : [0268]< RADIO_POWER  [PHONE0]\n  11-14 10:00:00.143  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]\n  11-14 10:00:15.100   912   952 D Telecom : UserCallIntentProcessor: processOutgoingCallIntent videoState = 0: TSI.pC(cgat)@AgI\n  11-14 10:00:15.110   912   952 V Telecom : Call: setState NEW -> CONNECTING: TSI.pC->CM.fOCP(cgat)@AgI_1\n  11-14 10:00:15.150   912   952 I Telecom : CreateConnectionProcessor: Trying attempt CallAttemptRecord(ComponentInfo{com.android.phone/com.android.services.telephony.TelephonyConnectionService}, 1, UserHandle{0}): TSI.pC->CIP.sNOCI(cgat)@AgI_2\n  11-14 10:00:15.180   912   952 D Telecom : CreateConnectionProcessor: Connection failed: (DisconnectCause [ Code: (ERROR) Label: (Radio off) Description: (Turn off airplane mode to make a call.) Reason: (ServiceState.STATE_POWER_OFF, POWER_OFF) Tone: (27)  TelephonyCause: 17/-1 ImsReasonInfo: null]): CSW.hCCC(cap/cast)@E-AgM\n  11-14 10:00:15.181   912   952 I Telecom : Call: handleCreateConnectionFailure; callid=TC@4, disconnectCause=DisconnectCause [ Code: (ERROR) Label: (Radio off) Description: (Turn off airplane mode to make a call.) Reason: (ServiceState.STATE_POWER_OFF, POWER_OFF) Tone: (27)  TelephonyCause: 17/-1 ImsReasonInfo: null]: CSW.hCCC(cap/cast)@E-AgM\n  11-14 10:00:15.185   912   952 V Telecom : Call: setState CONNECTING -> DISCONNECTED: CSW.hCCC(cap/cast)@E-AgM\n  ```\n- **확인 방법**: 발신 전 창 안에 SST `setRadioPower power false ... reason 0`(사유 USER = 비행기 모드·사용자 라디오 끔)이 있고 `Connection failed`의 Reason이 `ServiceState.STATE_POWER_OFF`(TelephonyCause 17).\n- **재현 시나리오**: 비행기 모드 켬 → 일반 번호 발신\n- **해결책**: 정상 동작이다. 시험 절차의 비행기 모드 켬·끔 스텝과 발신 스텝 순서를 확인한다.\n- **코드 위치**: `ServiceStateTracker#powerOffRadioSafely`, `TelephonyConnectionService#getTelephonyConnection`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다. SST `powerOffRadioSafely: due to AIRPLANE_MODE_ON`은 라디오 끔 사유와 관계없이 찍히므로(발열·사업자 사유도 같은 문구) 사유는 `setRadioPower ... reason N`으로 본다.\n"
+      "body": "- **로그 예시** (합성, fixture `mo-airplane.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0\n  11-14 10:00:00.103  1301  1301 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0], IMS reg state=false, pending radio off=false\n  11-14 10:00:00.104  1301  1301 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON\n  11-14 10:00:00.140  1301  1301 D RILJ    : [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]\n  11-14 10:00:00.142  1301  1330 D RILJ    : [0268]< RADIO_POWER  [PHONE0]\n  11-14 10:00:00.143  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]\n  11-14 10:00:15.100   912   952 D Telecom : UserCallIntentProcessor: processOutgoingCallIntent videoState = 0: TSI.pC(cgat)@AgI\n  11-14 10:00:15.110   912   952 V Telecom : Call: setState NEW -> CONNECTING: TSI.pC->CM.fOCP(cgat)@AgI_1\n  11-14 10:00:15.150   912   952 I Telecom : CreateConnectionProcessor: Trying attempt CallAttemptRecord(ComponentInfo{com.android.phone/com.android.services.telephony.TelephonyConnectionService}, 1, UserHandle{0}): TSI.pC->CIP.sNOCI(cgat)@AgI_2\n  11-14 10:00:15.180   912   952 D Telecom : CreateConnectionProcessor: Connection failed: (DisconnectCause [ Code: (ERROR) Label: (Radio off) Description: (Turn off airplane mode to make a call.) Reason: (ServiceState.STATE_POWER_OFF, POWER_OFF) Tone: (27)  TelephonyCause: 17/-1 ImsReasonInfo: null]): CSW.hCCC(cap/cast)@E-AgM\n  11-14 10:00:15.181   912   952 I Telecom : Call: handleCreateConnectionFailure; callid=TC@4, disconnectCause=DisconnectCause [ Code: (ERROR) Label: (Radio off) Description: (Turn off airplane mode to make a call.) Reason: (ServiceState.STATE_POWER_OFF, POWER_OFF) Tone: (27)  TelephonyCause: 17/-1 ImsReasonInfo: null]: CSW.hCCC(cap/cast)@E-AgM\n  11-14 10:00:15.185   912   952 V Telecom : Call: setState CONNECTING -> DISCONNECTED: CSW.hCCC(cap/cast)@E-AgM\n  ```\n- **확인 방법**: `Connection failed`의 Reason이 `ServiceState.STATE_POWER_OFF`(TelephonyCause 17). 라디오를 끈 사유는 시그니처로 묶지 않는다(끈 시각과 발신 사이 간격이 정해져 있지 않다) — 앞쪽 SST `setRadioPower power false ... reason 0`(사유 USER)을 눈으로 확인하면 비행기 모드 조작이다.\n- **재현 시나리오**: 비행기 모드 켬 → 일반 번호 발신\n- **해결책**: 앞쪽 SST `setRadioPower power false ... reason N`의 사유를 본다. 0(USER)이면 비행기 모드·라디오 끔 시험 조작이라 정상이고, 1·2·3(발열·사업자·근처 기기)이면 network 카테고리 라디오 끔 원인을 본다.\n- **코드 위치**: `ServiceStateTracker#powerOffRadioSafely`, `TelephonyConnectionService#getTelephonyConnection`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다. SST `powerOffRadioSafely: due to AIRPLANE_MODE_ON`은 라디오 끔 사유와 관계없이 찍히므로(발열·사업자 사유도 같은 문구) 사유는 `setRadioPower ... reason N`으로 본다.\n"
     },
     {
       "op": "add-fixture",
@@ -225,16 +224,24 @@
       "type": "NEW-TYPE-2",
       "cause": {
         "title": "사용자가 종료",
-        "description": "단말 사용자(또는 시험 자동화)가 통화를 끝냄",
+        "description": "단말 사용자(또는 시험 자동화·통화 앱)가 Telecom으로 통화 종료를 요청함",
         "signatures": [
           {
-            "id": "disconnected-local",
+            "id": "disconnected-local-by-request",
             "must_match": [
-              "Telecom: ConnectionServiceWrapper: .*setDisconnected .*Code: \\(LOCAL\\) .*TelephonyCause: 3/"
+              {
+                "id": "req",
+                "pattern": "Telecom: ConnectionServiceWrapper: TC -> CS\\[cap\\]: disconnect "
+              },
+              {
+                "id": "drop",
+                "pattern": "Telecom: ConnectionServiceWrapper: .*setDisconnected .*Code: \\(LOCAL\\) .*TelephonyCause: 3/"
+              }
             ],
-            "window_sec": 600,
-            "must_not_match": [
-              "SST-\\d+: setRadioPower power false forEmergencyCall false forceApply false reason 0"
+            "window_sec": 10,
+            "sequence": [
+              "req",
+              "drop"
             ]
           }
         ],
@@ -258,7 +265,7 @@
           }
         ]
       },
-      "body": "- **로그 예시** (합성, fixture `drop-local.log`):\n  ```\n  11-14 10:00:10.500   912   952 V Telecom : Call: setState DIALING -> ACTIVE: CSW.sA(cap)@AUM\n  11-14 10:00:40.050  1301  1301 D RILJ    : [0230]> HANGUP gsmIndex = 1 [PHONE0]\n  11-14 10:00:40.052  1301  1330 D RILJ    : [0230]< HANGUP  [PHONE0]\n  11-14 10:00:40.100   912   952 D Telecom : ConnectionServiceWrapper: CS -> TC[cap]: setDisconnected TC@2_1 DisconnectCause [ Code: (LOCAL) Label: () Description: () Reason: (LOCAL) Tone: (27)  TelephonyCause: 3/-1 ImsReasonInfo: null]: CSW.sDc(cap)@Aig\n  11-14 10:00:40.101   912   952 V Telecom : Call: setState ACTIVE -> DISCONNECTED: CSW.sDc(cap)@Aig\n  11-14 10:00:40.103   912   952 I Telecom : CallLogManager: onCallStateChanged: call=TC@2, newState=DISCONNECTED, disconnectCause=LOCAL: CSW.sDc(cap)@Aig\n  ```\n- **확인 방법**: RILJ `> HANGUP`(AP가 끊음) 뒤 `setDisconnected` Code `LOCAL`, TelephonyCause 3. 같은 분석 범위에 라디오 끔(사유 USER)이 있으면 비행기 모드 원인이다.\n- **재현 시나리오**: 통화 연결 뒤 단말에서 종료\n- **해결책**: 정상 종료다. 시험 절차의 종료 스텝(통화 끝 키·자동화 명령) 시각을 확인한다.\n- **코드 위치**: `DisconnectCauseUtil#toTelecomDisconnectCause`(LOCAL → LOCAL).\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
+      "body": "- **로그 예시** (합성, fixture `drop-local.log`):\n  ```\n  11-14 10:00:10.500   912   952 V Telecom : Call: setState DIALING -> ACTIVE: CSW.sA(cap)@AUM\n  11-14 10:00:40.030   912   952 I Telecom : TelecomServiceImpl: endCall: Binder.getCallingUid = [1000] isCallerPrivileged = true: TSI.eC(a)@Afg\n  11-14 10:00:40.031   912   952 D Telecom : ConnectionServiceWrapper: TC -> CS[cap]: disconnect TC@2_1: TSI.eC(a)@Afg\n  11-14 10:00:40.050  1301  1301 D RILJ    : [0230]> HANGUP gsmIndex = 1 [PHONE0]\n  11-14 10:00:40.052  1301  1330 D RILJ    : [0230]< HANGUP  [PHONE0]\n  11-14 10:00:40.100   912   952 D Telecom : ConnectionServiceWrapper: CS -> TC[cap]: setDisconnected TC@2_1 DisconnectCause [ Code: (LOCAL) Label: () Description: () Reason: (LOCAL) Tone: (27)  TelephonyCause: 3/-1 ImsReasonInfo: null]: CSW.sDc(cap)@Aig\n  11-14 10:00:40.101   912   952 V Telecom : Call: setState ACTIVE -> DISCONNECTED: CSW.sDc(cap)@Aig\n  11-14 10:00:40.103   912   952 I Telecom : CallLogManager: onCallStateChanged: call=TC@2, newState=DISCONNECTED, disconnectCause=LOCAL: CSW.sDc(cap)@Aig\n  ```\n- **확인 방법**: Telecom `ConnectionServiceWrapper: TC -> CS[cap]: disconnect`(Telecom이 종료 요청을 보냄) 뒤 RILJ `> HANGUP`과 `setDisconnected` Code `LOCAL`, TelephonyCause 3. 비행기 모드로 끊긴 통화에는 Telecom 종료 요청 줄이 없다(프레임워크가 직접 끊음). 캡처 c01r2-mt-accept-hangup 모양.\n- **재현 시나리오**: 통화 연결 뒤 단말에서 종료\n- **해결책**: 정상 종료다. 시험 절차의 종료 스텝(통화 끝 키·자동화 명령) 시각을 확인한다.\n- **코드 위치**: `DisconnectCauseUtil#toTelecomDisconnectCause`(LOCAL → LOCAL).\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
     },
     {
       "op": "add-fixture",
@@ -289,7 +296,10 @@
                 "pattern": "Telecom: ConnectionServiceWrapper: .*setDisconnected .*TelephonyCause: 3/"
               }
             ],
-            "window_sec": 120,
+            "window_sec": 10,
+            "must_not_match": [
+              "Telecom: ConnectionServiceWrapper: TC -> CS\\[cap\\]: disconnect "
+            ],
             "sequence": [
               "off",
               "drop"
@@ -323,7 +333,7 @@
           }
         ]
       },
-      "body": "- **로그 예시** (합성, fixture `drop-airplane.log`):\n  ```\n  11-14 10:00:10.500   912   952 V Telecom : Call: setState DIALING -> ACTIVE: CSW.sA(cap)@AUM\n  11-14 10:00:30.100  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0\n  11-14 10:00:30.103  1301  1301 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0], IMS reg state=false, pending radio off=false\n  11-14 10:00:30.104  1301  1301 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON\n  11-14 10:00:30.150  1301  1301 D RILJ    : [0230]> HANGUP gsmIndex = 1 [PHONE0]\n  11-14 10:00:30.200   912   952 D Telecom : ConnectionServiceWrapper: CS -> TC[cap]: setDisconnected TC@2_1 DisconnectCause [ Code: (LOCAL) Label: () Description: () Reason: (LOCAL) Tone: (27)  TelephonyCause: 3/-1 ImsReasonInfo: null]: CSW.sDc(cap)@Aig\n  11-14 10:00:30.201   912   952 V Telecom : Call: setState ACTIVE -> DISCONNECTED: CSW.sDc(cap)@Aig\n  11-14 10:00:30.203   912   952 I Telecom : CallLogManager: onCallStateChanged: call=TC@2, newState=DISCONNECTED, disconnectCause=LOCAL: CSW.sDc(cap)@Aig\n  ```\n- **확인 방법**: SST `setRadioPower power false ... reason 0` 직후 RILJ `> HANGUP`과 `setDisconnected` TelephonyCause 3 — 라디오를 끄기 전에 `powerOffRadioSafely`가 통화를 끊는다.\n- **재현 시나리오**: 통화 연결 → 비행기 모드 켬\n- **해결책**: 정상 동작이다. 통화 중 비행기 모드 켬 스텝이 시험 절차에 있는지 확인한다.\n- **코드 위치**: `ServiceStateTracker#powerOffRadioSafely`(통화 중이면 `hangupIfAlive`).\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
+      "body": "- **로그 예시** (합성, fixture `drop-airplane.log`):\n  ```\n  11-14 10:00:10.500   912   952 V Telecom : Call: setState DIALING -> ACTIVE: CSW.sA(cap)@AUM\n  11-14 10:00:30.100  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0\n  11-14 10:00:30.103  1301  1301 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0], IMS reg state=false, pending radio off=false\n  11-14 10:00:30.104  1301  1301 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON\n  11-14 10:00:30.150  1301  1301 D RILJ    : [0230]> HANGUP gsmIndex = 1 [PHONE0]\n  11-14 10:00:30.200   912   952 D Telecom : ConnectionServiceWrapper: CS -> TC[cap]: setDisconnected TC@2_1 DisconnectCause [ Code: (LOCAL) Label: () Description: () Reason: (LOCAL) Tone: (27)  TelephonyCause: 3/-1 ImsReasonInfo: null]: CSW.sDc(cap)@Aig\n  11-14 10:00:30.201   912   952 V Telecom : Call: setState ACTIVE -> DISCONNECTED: CSW.sDc(cap)@Aig\n  11-14 10:00:30.203   912   952 I Telecom : CallLogManager: onCallStateChanged: call=TC@2, newState=DISCONNECTED, disconnectCause=LOCAL: CSW.sDc(cap)@Aig\n  ```\n- **확인 방법**: SST `setRadioPower power false ... reason 0` 직후(같은 처리 안, 수 ms~수백 ms) RILJ `> HANGUP`과 `setDisconnected` TelephonyCause 3 — 라디오를 끄기 전에 `powerOffRadioSafely`가 통화를 끊는다. 그 사이에 Telecom 종료 요청(`TC -> CS[cap]: disconnect`)이 없다(있으면 사용자 종료).\n- **재현 시나리오**: 통화 연결 → 비행기 모드 켬\n- **해결책**: 정상 동작이다. 통화 중 비행기 모드 켬 스텝이 시험 절차에 있는지 확인한다.\n- **코드 위치**: `ServiceStateTracker#powerOffRadioSafely`(통화 중이면 `hangupIfAlive`).\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
     },
     {
       "op": "add-fixture",
@@ -489,10 +499,7 @@
               "must_match": [
                 "GsmCdmaPhone: .*useImsForCall=false, .*isEmergency=false, .*isVoiceOverCellularImsEnabled\\(\\)=true, .*getServiceState\\(\\)\\.getState\\(\\)=[1-3]"
               ],
-              "window_sec": 600,
-              "must_not_match": [
-                "RILJ: .*> RADIO_POWER on = true"
-              ]
+              "window_sec": 60
             }
           ],
           "resolution": "IMS 등록이 왜 안 됐는지를 ims 쪽(IMS APK·망 등록)에서 본다. 프레임워크 발신 경로 판단은 정상이다.",
@@ -523,7 +530,7 @@
           ],
           "cp_evidence": "IMS 등록 쪽 — IMS 등록 실패 원인은 IMS 서비스(사내 별도 APK)·망 로그로 확정. 다음에 받을 로그: 같은 시각 IMS 등록 상태·SIP REGISTER 결과."
         },
-        "body": "- **로그 예시** (합성, fixture `cs-ims-unregistered.log`):\n  ```\n  11-14 10:00:05.100  1301  1301 I GsmCdmaPhone: [0] dial; isEmergency=false (based on all phones)\n  11-14 10:00:05.150  1301  1301 I GsmCdmaPhone: [0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {bd342b4}, imsPhone.isVoiceOverCellularImsEnabled()=true, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=1\n  11-14 10:00:05.200  1301  1301 D GsmCdmaPhone: [0] Trying (non-IMS) CS call\n  11-14 10:00:05.201  1301  1301 D GsmCdmaPhone: [0] dialInternal: dialing w/ mmi 'null'...\n  11-14 10:00:05.210  1301  1301 D GsmCdmaCallTracker: [0] update phone state, old=IDLE new=OFFHOOK\n  11-14 10:00:05.211  1301  1301 D RILJ    : [0268]> DIAL [PHONE0]\n  11-14 10:00:05.217  1301  1330 D RILJ    : [0268]< DIAL  [PHONE0]\n  ```\n- **확인 방법**: `useImsForCall=false`인데 `isVoiceOverCellularImsEnabled()=true`, `getServiceState().getState()`가 0(IN_SERVICE)이 아님. 같은 분석 범위에 라디오 켬(RADIO_POWER on = true)이 있으면 \"라디오 켬 뒤 IMS 재등록 전 발신\" 원인이다.\n- **재현 시나리오**: VoLTE 켜진 SIM에서 IMS 미등록 상태(등록 거절·IMS PDN 없음)로 발신\n- **해결책**: IMS 등록이 왜 안 됐는지를 ims 쪽(IMS APK·망 등록)에서 본다. 프레임워크 발신 경로 판단은 정상이다.\n- **코드 위치**: `GsmCdmaPhone#useImsForCall`(IMS 서비스 상태가 IN_SERVICE여야 IMS), `GsmCdmaPhone#dial`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
+        "body": "- **로그 예시** (합성, fixture `cs-ims-unregistered.log`):\n  ```\n  11-14 10:00:05.100  1301  1301 I GsmCdmaPhone: [0] dial; isEmergency=false (based on all phones)\n  11-14 10:00:05.150  1301  1301 I GsmCdmaPhone: [0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {bd342b4}, imsPhone.isVoiceOverCellularImsEnabled()=true, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=1\n  11-14 10:00:05.200  1301  1301 D GsmCdmaPhone: [0] Trying (non-IMS) CS call\n  11-14 10:00:05.201  1301  1301 D GsmCdmaPhone: [0] dialInternal: dialing w/ mmi 'null'...\n  11-14 10:00:05.210  1301  1301 D GsmCdmaCallTracker: [0] update phone state, old=IDLE new=OFFHOOK\n  11-14 10:00:05.211  1301  1301 D RILJ    : [0268]> DIAL [PHONE0]\n  11-14 10:00:05.217  1301  1330 D RILJ    : [0268]< DIAL  [PHONE0]\n  ```\n- **확인 방법**: `useImsForCall=false`인데 `isVoiceOverCellularImsEnabled()=true`, `getServiceState().getState()`가 0(IN_SERVICE)이 아님. 비행기 모드 해제(RILJ `RADIO_POWER on = true`) 직후 발신이면 IMS 재등록 전일 수 있다 — 해제 뒤 몇 초까지를 시험 대기로 볼지는 TODO(SITE).\n- **재현 시나리오**: VoLTE 켜진 SIM에서 IMS 미등록 상태(등록 거절·IMS PDN 없음)로 발신\n- **해결책**: IMS 등록이 왜 안 됐는지를 ims 쪽(IMS APK·망 등록)에서 본다. 프레임워크 발신 경로 판단은 정상이다.\n- **코드 위치**: `GsmCdmaPhone#useImsForCall`(IMS 서비스 상태가 IN_SERVICE여야 IMS), `GsmCdmaPhone#dial`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
       },
       "body": "## 증상\n\n\"통화가 3G로 떨어진다\", \"왜 VoLTE가 아니냐\". 발신 경로가 CS로 정해졌거나 통화 중 SRVCC로 CS로 넘어갔다.\n\n## 증상 판별 방법\n\n발신: `GsmCdmaPhone` `useImsForCall=false ...` 뒤 `Trying (non-IMS) CS call`. 통화 중: RILJ `[UNSL]< UNSOL_SRVCC_STATE_NOTIFY {0}`(SRVCC 시작). 원인은 `useImsForCall=` 줄의 필드(isEmergency·isVoiceOverCellularImsEnabled()·getServiceState().getState())로 가른다.\n"
     },
@@ -711,72 +718,6 @@
       }
     },
     {
-      "op": "new-cause",
-      "temp_id": "NEW-CAUSE-12",
-      "type": "NEW-TYPE-3",
-      "cause": {
-        "title": "라디오 켬 뒤 IMS 재등록 전 발신",
-        "description": "비행기 모드 해제(라디오 켬) 뒤 IMS가 다시 등록되기 전에 발신해 CS로 감",
-        "signatures": [
-          {
-            "id": "cs-dial-after-radio-on",
-            "must_match": [
-              {
-                "id": "on",
-                "pattern": "RILJ: .*> RADIO_POWER on = true"
-              },
-              {
-                "id": "dial",
-                "pattern": "GsmCdmaPhone: .*useImsForCall=false, .*isEmergency=false, .*isVoiceOverCellularImsEnabled\\(\\)=true, .*getServiceState\\(\\)\\.getState\\(\\)=[1-3]"
-              }
-            ],
-            "window_sec": 600,
-            "sequence": [
-              "on",
-              "dial"
-            ]
-          }
-        ],
-        "resolution": "라디오 켬 뒤 발신까지 시간이 사내 기준(TODO(SITE))보다 짧으면 시험 절차 대기 문제, 길면 IMS 재등록 실패로 ims 쪽을 본다.",
-        "resolution_type": "network",
-        "fix": {
-          "status": "open",
-          "ref": null,
-          "fixed_in": []
-        },
-        "platform_versions": [
-          "17"
-        ],
-        "code_refs": [
-          {
-            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/GsmCdmaPhone.java",
-            "symbol": "GsmCdmaPhone#dial",
-            "platform_versions": [
-              "17"
-            ]
-          },
-          {
-            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/GsmCdmaPhone.java",
-            "symbol": "GsmCdmaPhone#useImsForCall",
-            "platform_versions": [
-              "17"
-            ]
-          }
-        ],
-        "cp_evidence": "IMS 재등록 쪽 — 재등록이 끝내 없으면 IMS 서비스(사내 별도 APK)·망 로그로 확정. 시간 기준은 TODO(SITE)."
-      },
-      "body": "- **로그 예시** (합성, fixture `cs-after-radio-on.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power true forEmergencyCall false forceApply false reason 0\n  11-14 10:00:00.103  1301  1301 D RILJ    : [0285]> RADIO_POWER on = true forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]\n  11-14 10:00:00.106  1301  1330 D RILJ    : [0285]< RADIO_POWER  [PHONE0]\n  11-14 10:00:00.107  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: ON [PHONE0]\n  11-14 10:00:08.100  1301  1301 I GsmCdmaPhone: [0] dial; isEmergency=false (based on all phones)\n  11-14 10:00:08.150  1301  1301 I GsmCdmaPhone: [0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {bd342b4}, imsPhone.isVoiceOverCellularImsEnabled()=true, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=1\n  11-14 10:00:08.200  1301  1301 D GsmCdmaPhone: [0] Trying (non-IMS) CS call\n  11-14 10:00:08.201  1301  1301 D GsmCdmaPhone: [0] dialInternal: dialing w/ mmi 'null'...\n  11-14 10:00:08.210  1301  1301 D GsmCdmaCallTracker: [0] update phone state, old=IDLE new=OFFHOOK\n  11-14 10:00:08.211  1301  1301 D RILJ    : [0268]> DIAL [PHONE0]\n  11-14 10:00:08.217  1301  1330 D RILJ    : [0268]< DIAL  [PHONE0]\n  ```\n- **확인 방법**: RILJ `> RADIO_POWER on = true` 뒤에 IMS 미등록 발신(`isVoiceOverCellularImsEnabled()=true`, `getState()`≠0). 순서만 본다 — 몇 초가 지연인지는 TODO(SITE).\n- **재현 시나리오**: 비행기 모드 켬 → 끔 → 곧바로 발신\n- **해결책**: 라디오 켬 뒤 발신까지 시간이 사내 기준(TODO(SITE))보다 짧으면 시험 절차 대기 문제, 길면 IMS 재등록 실패로 ims 쪽을 본다.\n- **코드 위치**: `GsmCdmaPhone#useImsForCall`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
-    },
-    {
-      "op": "add-fixture",
-      "for": "NEW-CAUSE-12",
-      "kind": "positive",
-      "path": "fixtures/cs-after-radio-on.log",
-      "expect": {
-        "origin": "synthetic"
-      }
-    },
-    {
       "op": "new-type",
       "temp_id": "NEW-TYPE-4",
       "category": "call",
@@ -786,14 +727,11 @@
         "summary": "착신 전환을 설정했는데 RILJ에 SET_CALL_FORWARD 요청이 없다",
         "symptom_signatures": [
           {
-            "id": "cf-via-ims-without-rilj",
+            "id": "cf-via-ims-ut",
             "must_match": [
               "ImsPhone: .*setCallForwardingOption action="
             ],
-            "window_sec": 600,
-            "must_not_match": [
-              "RILJ: .*> SET_CALL_FORWARD"
-            ]
+            "window_sec": 60
           }
         ],
         "tags": [
@@ -802,7 +740,7 @@
         ]
       },
       "first_cause": {
-        "temp_id": "NEW-CAUSE-13",
+        "temp_id": "NEW-CAUSE-12",
         "cause": {
           "title": "IMS UT(XCAP)로 처리됨(정상)",
           "description": "IMS UT가 켜져 있어 착신 전환을 RIL이 아니라 ImsUt(XCAP)로 보냈고 완료됨",
@@ -845,11 +783,11 @@
         },
         "body": "- **로그 예시** (합성, fixture `cf-ut.log`):\n  ```\n  11-14 10:00:06.902  1301  1301 D ImsPhone: [0] dialInternal: dialing w/ mmi 'ImsPhoneMmiCode {State=PENDING action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}'...\n  11-14 10:00:06.903  1301  1301 D ImsPhoneMmiCode: processCode: is CF\n  11-14 10:00:06.903  1301  1301 D ImsPhoneMmiCode: processCode: is CF setCallForward\n  11-14 10:00:06.904  1301  1301 D ImsPhone: [0] setCallForwardingOption action=3, reason=0 serviceClass=0\n  11-14 10:00:06.905  1301  1301 D ImsUt   : updateCallForward :: Ut=com.android.ims.internal.IImsUt$Stub$Proxy, action=3, condition=0, number=[Qb7nW2cY9dLe], serviceClass=0, timeSeconds=0\n  11-14 10:00:09.320  1301  1301 D ImsPhoneMmiCode: onSetComplete: mmi=ImsPhoneMmiCode {State=COMPLETE action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}\n  11-14 10:00:09.321  1301  1301 D ImsPhone: [0] onMMIDone: mmi=ImsPhoneMmiCode {State=COMPLETE action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}\n  ```\n- **확인 방법**: `ImsUt: updateCallForward ::` 뒤 `onMMIDone`이 `State=COMPLETE`. UT 요청은 RILJ를 거치지 않는다.\n- **재현 시나리오**: IMS UT 지원 SIM에서 MMI(`*21*번호#`)로 착신 전환 설정\n- **해결책**: 정상 동작이다. 결과는 ImsUt·`onMMIDone`(State=COMPLETE)으로 확인한다.\n- **코드 위치**: `ImsPhone#setCallForwardingOption` → `ImsUt#updateCallForward`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
       },
-      "body": "## 증상\n\n착신 전환(CF)을 설정했는데 RILJ 로그에 요청이 없어 설정이 안 된 것처럼 보인다.\n\n## 증상 판별 방법\n\n`ImsPhone` `setCallForwardingOption action=` 줄이 있고 RILJ `> SET_CALL_FORWARD`가 없다.\n"
+      "body": "## 증상\n\n착신 전환(CF)을 설정했는데 RILJ 로그에 요청이 없어 설정이 안 된 것처럼 보인다.\n\n## 증상 판별 방법\n\n`ImsPhone` `setCallForwardingOption action=` — 이 경로는 IMS UT(ImsUt)로 보내므로 RILJ `SET_CALL_FORWARD`가 없다(UT를 못 쓰면 GsmCdmaPhone이 RIL로 보낸다).\n"
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-13",
+      "for": "NEW-CAUSE-12",
       "kind": "positive",
       "path": "fixtures/cf-ut.log",
       "expect": {

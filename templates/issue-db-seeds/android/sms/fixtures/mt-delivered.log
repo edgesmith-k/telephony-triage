@@ -1,9 +1,0 @@
--- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
-11-14 10:00:30.705  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_NEW_SMS [PHONE0]
-11-14 10:00:30.706  1301  1301 D GsmInboundSmsHandler: IdleState.processMessage: processing EVENT_NEW_SMS
-11-14 10:00:30.715  1301  1301 D GsmInboundSmsHandler: addTrackerToRawTable: URI of new row: content://sms/raw/7, {x-message-id:-<NUM#1>}
-11-14 10:00:30.716  1301  1301 D RILJ    : [0341]> SMS_ACKNOWLEDGE success = true cause = 0 [PHONE0]
-11-14 10:00:30.717  1301  1330 D RILJ    : [0341]< SMS_ACKNOWLEDGE  [PHONE0]
-11-14 10:00:30.729  1301  1301 D GsmInboundSmsHandler: Delivering SMS to: com.android.messaging com.android.messaging.receiver.SmsDeliverReceiver, {x-message-id:-<NUM#1>}
-11-14 10:00:30.770  1301  1301 D GsmInboundSmsHandler: Ordered broadcast completed for android.provider.Telephony.SMS_DELIVER in: 39 ms
-11-14 10:00:30.791  1301  1301 D GsmInboundSmsHandler: successful broadcast, deleting from raw table.

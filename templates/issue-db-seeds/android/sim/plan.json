@@ -6,7 +6,7 @@
   "issue": null,
   "feedback": null,
   "included_pending": [],
-  "commit_message": "[NEW-TYPE-1] import sim-1: Android sim 시작 유형 2개·원인 3개 (합성 fixture, Android 17)",
+  "commit_message": "[NEW-TYPE-1] import sim-1: Android sim 시작 유형 1개·원인 2개 (합성 fixture, Android 17)",
   "pr": {
     "number": null,
     "branch": "import/sim-1",
@@ -134,99 +134,6 @@
       "for": "NEW-CAUSE-2",
       "kind": "positive",
       "path": "fixtures/uicc-apps-disabled.log",
-      "expect": {
-        "origin": "synthetic"
-      }
-    },
-    {
-      "op": "new-type",
-      "temp_id": "NEW-TYPE-2",
-      "category": "sim",
-      "dir_slug": "sim-file-read-error",
-      "type": {
-        "title": "SIM 파일 읽기 오류가 보임",
-        "summary": "SIM 로딩 중 EF 읽기 예외 로그가 보인다",
-        "symptom_signatures": [
-          {
-            "id": "ef-fetch-exception",
-            "must_match": [
-              "SIMRecords: .*Exception in fetching EF_"
-            ],
-            "window_sec": 60
-          },
-          {
-            "id": "ef-record-size-exception",
-            "must_match": [
-              "UsimFH: exception caught from EVENT_GET_RECORD_SIZE"
-            ],
-            "window_sec": 60
-          }
-        ],
-        "tags": [
-          "sim-records"
-        ]
-      },
-      "first_cause": {
-        "temp_id": "NEW-CAUSE-3",
-        "cause": {
-          "title": "선택 EF 없음(정상)",
-          "description": "카드에 없는 선택 EF(예: EF_CSP)를 읽다 실패했지만 SIM 로딩은 끝까지 됨",
-          "signatures": [
-            {
-              "id": "optional-ef-then-loaded",
-              "must_match": [
-                {
-                  "id": "ef",
-                  "pattern": "SIMRecords: .*Exception in fetching EF_CSP"
-                },
-                {
-                  "id": "loaded",
-                  "pattern": "UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED"
-                }
-              ],
-              "window_sec": 60,
-              "sequence": [
-                "ef",
-                "loaded"
-              ]
-            }
-          ],
-          "resolution": "조치 없음 — 선택 EF가 없는 카드다. SIM 문제는 다른 줄에서 찾는다.",
-          "resolution_type": "hw",
-          "fix": {
-            "status": "not-a-bug",
-            "ref": null,
-            "fixed_in": []
-          },
-          "platform_versions": [
-            "17"
-          ],
-          "code_refs": [
-            {
-              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/uicc/SIMRecords.java",
-              "symbol": "SIMRecords#handleMessage",
-              "platform_versions": [
-                "17"
-              ]
-            },
-            {
-              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/uicc/IccFileHandler.java",
-              "symbol": "IccFileHandler#handleMessage",
-              "platform_versions": [
-                "17"
-              ]
-            }
-          ]
-        },
-        "body": "- **로그 예시** (합성, fixture `optional-ef-missing.log`):\n  ```\n  11-14 10:00:14.603  1301  1301 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED READY reason null for phone: 0 sub: 2\n  11-14 10:00:14.763  1301  1330 D RILJ    : [0233]< SIM_IO error 2 [PHONE0]\n  11-14 10:00:14.766  1301  1301 E UsimFH  : exception caught from EVENT_GET_RECORD_SIZE\n  11-14 10:00:15.932  1301  1330 D RILJ    : [0234]< SIM_IO error 2 [PHONE0]\n  11-14 10:00:15.934  1301  1301 E SIMRecords: [SIMRecords-0] Exception in fetching EF_CSP data com.android.internal.telephony.CommandException: GENERIC_FAILURE\n  11-14 10:00:18.218  1301  1301 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 2\n  ```\n- **확인 방법**: EF 읽기 예외 뒤 `ACTION_SIM_STATE_CHANGED LOADED`가 온다 — 로딩은 끝났다.\n- **재현 시나리오**: EF_CSP가 없는 SIM 장착\n- **해결책**: 조치 없음 — 선택 EF가 없는 카드다. SIM 문제는 다른 줄에서 찾는다.\n- **코드 위치**: `SIMRecords#handleMessage`(EF_CSP 실패는 기록만), `IccFileHandler#handleMessage`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
-      },
-      "body": "## 증상\n\nSIM 관련 신고 로그에 SIM 파일(EF) 읽기 예외가 보여 원인으로 의심된다.\n\n## 증상 판별 방법\n\nSIMRecords `Exception in fetching EF_...` 또는 UsimFH `exception caught from EVENT_GET_RECORD_SIZE`.\n"
-    },
-    {
-      "op": "add-fixture",
-      "for": "NEW-CAUSE-3",
-      "kind": "positive",
-      "path": "fixtures/optional-ef-missing.log",
       "expect": {
         "origin": "synthetic"
       }

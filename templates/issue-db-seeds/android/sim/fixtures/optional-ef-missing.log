@@ -1,7 +1,0 @@
--- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
-11-14 10:00:14.603  1301  1301 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED READY reason null for phone: 0 sub: 2
-11-14 10:00:14.763  1301  1330 D RILJ    : [0233]< SIM_IO error 2 [PHONE0]
-11-14 10:00:14.766  1301  1301 E UsimFH  : exception caught from EVENT_GET_RECORD_SIZE
-11-14 10:00:15.932  1301  1330 D RILJ    : [0234]< SIM_IO error 2 [PHONE0]
-11-14 10:00:15.934  1301  1301 E SIMRecords: [SIMRecords-0] Exception in fetching EF_CSP data com.android.internal.telephony.CommandException: GENERIC_FAILURE
-11-14 10:00:18.218  1301  1301 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 2
