@@ -24,16 +24,8 @@
         "symptom_signatures": [
           {
             "id": "evaluation-rejected",
-            "must_event": [
-              {
-                "event": "data_evaluation_rejected",
-                "fields": {
-                  "reasons": ".*(DATA_DISABLED|ROAMING_DISABLED|NOT_IN_SERVICE|NO_SUITABLE_DATA_PROFILE|CONCURRENT_VOICE_DATA_NOT_ALLOWED).*"
-                }
-              }
-            ],
-            "must_not_match": [
-              "RILJ.*\\]> SETUP_DATA_CALL"
+            "must_match": [
+              "^DNC-\\d+: Data evaluation: evaluation reason:\\S+, Data disallowed reasons: (?![^,]*\\b(SIM_NOT_READY|DATA_CONFIG_NOT_READY)\\b)[^,]*\\b(DATA_DISABLED|ROAMING_DISABLED|NO_SUITABLE_DATA_PROFILE|CONCURRENT_VOICE_DATA_NOT_ALLOWED)\\b"
             ],
             "window_sec": 60
           }
@@ -49,29 +41,9 @@
           "description": "사용자가 모바일 데이터 설정을 꺼서 평가가 DATA_DISABLED로 거부됨",
           "signatures": [
             {
-              "id": "user-data-off",
-              "must_event": [
-                {
-                  "id": "off",
-                  "event": "data_setting_changed",
-                  "fields": {
-                    "enabled": "false"
-                  }
-                }
-              ],
+              "id": "data-disabled-rejected",
               "must_match": [
-                {
-                  "id": "rejected",
-                  "pattern": "^DNC-\\d+: Data evaluation: evaluation reason:\\S+, Data disallowed reasons: [A-Z_ ]*DATA_DISABLED\\b"
-                }
-              ],
-              "must_not_match": [
-                "tearDownReason=DATA_DISABLED",
-                "onTearDown: reason=DATA_DISABLED"
-              ],
-              "sequence": [
-                "off",
-                "rejected"
+                "^(?!.*Capabilities: MMS\\b)DNC-\\d+: Data evaluation: evaluation reason:\\S+, Data disallowed reasons: [A-Z_ ]*\\bDATA_DISABLED\\b"
               ],
               "window_sec": 60
             }
@@ -110,9 +82,9 @@
             }
           ]
         },
-        "body": "- **로그 예시**:\n  ```\n  D DSMGR-0 : notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings\n  W DNC-0   : Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, ...\n  ```\n- **확인 방법**: `DSMGR-<slot>`의 `notifyDataEnabledChanged: enabled=false` **뒤에** 같은 슬롯의 요청 평가가 `DATA_DISABLED`로 거부된다. 연결돼 있던 데이터가 이 설정으로 해제된 경우(`tearDownReason=DATA_DISABLED`)는 \"데이터 연결이 끊김\" 유형의 원인이다.\n- **재현 시나리오**: 설정 > 모바일 데이터 끔 → 데이터를 쓰는 앱 실행\n- **해결책**: 모바일 데이터 설정을 켠다(단말 수정 대상 아님). `reason=`이 USER가 아니면(POLICY·CARRIER·THERMAL) 누가 껐는지 그 값으로 본다.\n- **코드 위치**: `DataSettingsManager#notifyDataEnabledChanged`(DataSettingsManager.java:791), 평가 `DataNetworkController.java:1828-1830`·로그 1919\n- **비고**: 출처: module eval data-disabled-user, 캡처 d02-user-off-on. Android 17 소스 기준.\n"
+        "body": "- **로그 예시**:\n  ```\n  D DSMGR-0 : notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings\n  W DNC-0   : Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, ...\n  ```\n- **확인 방법**: 요청 평가 줄이 `DATA_DISABLED`로 거부된다(그 줄의 요청이 MMS가 아닐 때 — MMS면 \"MMS 예외 아님\" 원인). 끈 시점(`DSMGR-<slot>: notifyDataEnabledChanged: enabled=false, reason=<누가>`)은 시험 전·부팅부터 꺼져 있으면 범위 안에 없을 수 있어 요구하지 않는다. 연결돼 있던 데이터가 이 설정으로 해제됐으면(`tearDownReason=DATA_DISABLED`) \"데이터 연결이 끊김\"의 데이터 끔 원인도 같이 맞는다 — 둘 다 같은 조작이다.\n- **재현 시나리오**: 설정 > 모바일 데이터 끔 → 데이터를 쓰는 앱 실행\n- **해결책**: 모바일 데이터 설정을 켠다(단말 수정 대상 아님). `reason=`이 USER가 아니면(POLICY·CARRIER·THERMAL) 누가 껐는지 그 값으로 본다.\n- **코드 위치**: `DataSettingsManager#notifyDataEnabledChanged`(DataSettingsManager.java:791), 평가 `DataNetworkController.java:1828-1830`·로그 1919\n- **비고**: 출처: module eval data-disabled-user, 캡처 d02-user-off-on. Android 17 소스 기준.\n"
       },
-      "body": "## 증상\n\n모바일 데이터가 붙지 않는다. RIL로 `SETUP_DATA_CALL` 요청 자체가 나가지 않는다 — 요청이 나갔는데 실패하는 경우는 \"데이터 연결 요청이 실패함\" 유형이다.\n\n## 증상 판별 방법\n\n`DNC-<slot>`의 `Data evaluation: ... Data disallowed reasons: <이유들>` 줄이 남고 같은 구간에 `RILJ`의 `> SETUP_DATA_CALL`이 없다. 거부 이유(공백으로 구분)가 원인을 가른다. `DATA_NETWORK_TRANSPORT_NOT_ALLOWED`만 있는 줄(위성 전송 요청)은 정상 로그에도 늘 있어 증상으로 보지 않는다. 부팅 중 `SIM_NOT_READY`·`DATA_CONFIG_NOT_READY`와 함께 나오는 이유도 정상이다.\n\n```\n11-14 09:00:24.900  2101  2101 D DNC-0   : Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null, ...\n```\n"
+      "body": "## 증상\n\n모바일 데이터가 붙지 않는다. RIL로 `SETUP_DATA_CALL` 요청 자체가 나가지 않는다 — 요청이 나갔는데 실패하는 경우는 \"데이터 연결 요청이 실패함\" 유형이다.\n\n## 증상 판별 방법\n\n`DNC-<slot>`의 `Data evaluation: ... Data disallowed reasons: <이유들>` 줄이 남고 같은 구간에 `RILJ`의 `> SETUP_DATA_CALL`이 없다. 거부 이유(공백으로 구분)가 원인을 가른다. `DATA_NETWORK_TRANSPORT_NOT_ALLOWED`만 있는 줄(위성 전송 요청)은 정상 로그에도 늘 있어 증상으로 보지 않는다. 부팅 중 `SIM_NOT_READY`·`DATA_CONFIG_NOT_READY`가 같이 있는 평가 줄은 정상이라 같은 줄에서 뺀다. `SETUP_DATA_CALL`이 정말 안 나갔는지는 시그니처가 보지 않는다(없는 줄은 창을 밀면 피해 간다) — 근거 시각 뒤 같은 슬롯의 `> SETUP_DATA_CALL`을 눈으로 확인한다. 기존 망 평가(`Evaluated [DataNetwork…`)·핸드오버 평가(`tryHandoverDataNetwork: Data evaluation`)는 줄 머리가 달라 잡지 않는다. 거부 이유가 `NOT_IN_SERVICE`(같은 줄 `reg state=NOT_REG_OR_SEARCHING`·`DENIED`)뿐이면 이 유형의 증상으로도, 원인으로도 두지 않았다 — 비행기 모드 해제·RIL HAL 재시작·모뎀 재시작 직후의 정상 검색 중에도 같은 줄이 나와 시그니처로 가를 수 없다(캡처 m02·d40d·m05). 미등록이 이어지는지, 왜 미등록인지는 같은 시각 network 유형(서비스 없음)의 원인(망 거절·사유 없는 미등록·HAL 죽음·모뎀 재시작·라디오 끔)으로 본다(DataNetworkController.java:1712-1714).\n\n```\n11-14 09:00:24.900  2101  2101 D DNC-0   : Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null, ...\n```\n"
     },
     {
       "op": "add-fixture",
@@ -128,98 +100,14 @@
       "temp_id": "NEW-CAUSE-2",
       "type": "NEW-TYPE-1",
       "cause": {
-        "title": "망 미등록(데이터 서비스 없음)",
-        "description": "PS(데이터) 망 등록이 안 돼 평가가 NOT_IN_SERVICE로 거부됨",
-        "signatures": [
-          {
-            "id": "not-in-service",
-            "must_event": [
-              {
-                "event": "data_evaluation_rejected",
-                "fields": {
-                  "reasons": ".*NOT_IN_SERVICE.*"
-                }
-              }
-            ],
-            "must_match": [
-              "^DNC-\\d+: Data evaluation: .*reg state=(NOT_REG_OR_SEARCHING|DENIED|NOT_REG_NOT_SEARCHING)"
-            ],
-            "must_not_match": [
-              "RADIO_POWER_OFF",
-              "SIM_NOT_READY"
-            ],
-            "window_sec": 60
-          }
-        ],
-        "resolution": "망 등록이 안 되는 원인(망 거절·커버리지·모뎀 상태)을 CP·망 쪽에서 확인한다",
-        "resolution_type": "network",
-        "fix": {
-          "status": "open",
-          "ref": null,
-          "fixed_in": []
-        },
-        "platform_versions": [
-          "17"
-        ],
-        "code_refs": [
-          {
-            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
-            "symbol": "DataNetworkController#evaluateNetworkRequest",
-            "platform_versions": [
-              "17"
-            ]
-          },
-          {
-            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
-            "symbol": "DataNetworkController#serviceStateAllowsPSAttach",
-            "platform_versions": [
-              "17"
-            ]
-          },
-          {
-            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataEvaluation.java",
-            "symbol": "DataEvaluation#toString",
-            "platform_versions": [
-              "17"
-            ]
-          }
-        ],
-        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀의 PS 등록 상태와 거절 원인(registration/attach reject cause), RILJ DATA_REGISTRATION_STATE 응답, 망 시뮬레이터 등록 로그"
-      },
-      "body": "- **로그 예시**:\n  ```\n  D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true ...\n  D DNC-0   : Data evaluation: evaluation reason:DATA_SERVICE_STATE_CHANGED, Data disallowed reasons: NOT_IN_SERVICE SERVICE_OPTION_NOT_SUPPORTED, ..., reg state=NOT_REG_OR_SEARCHING, ...\n  ```\n- **확인 방법**: 평가 거부 이유에 `NOT_IN_SERVICE`가 있고 같은 평가 줄의 `reg state=`가 미등록(`NOT_REG_OR_SEARCHING`·`DENIED` 등)이다. `RADIO_POWER_OFF`가 같이 있으면 무선이 꺼진 것(비행기 모드 등)이라 이 원인이 아니다. 프레임워크는 증상일 뿐이고 원인은 망 등록이다.\n- **재현 시나리오**: 데이터 등록을 잃게 한 뒤(망 시뮬레이터에서 PS 거절·커버리지 밖) 모바일 데이터 사용\n- **해결책**: 망 등록이 안 되는 이유를 CP·망 쪽에서 찾는다. 같은 시각 데이터를 켠 줄(reason=USER)은 계기가 아니다.\n- **코드 위치**: `DataNetworkController.java:1712-1714`(serviceStateAllowsPSAttach → NOT_IN_SERVICE), 로그 1919\n- **비고**: 출처: module eval data-no-service-eval-reject(캡처 d32f-fail-reg-unregistered). 비행기 모드 해제 직후 등록 전에도 잠깐 이 거부가 나온다 — 해제 뒤 몇 초까지가 정상인지는 TODO(SITE).\n"
-    },
-    {
-      "op": "add-fixture",
-      "for": "NEW-CAUSE-2",
-      "kind": "positive",
-      "path": "fixtures/data-no-service.log",
-      "expect": {
-        "origin": "synthetic"
-      }
-    },
-    {
-      "op": "new-cause",
-      "temp_id": "NEW-CAUSE-3",
-      "type": "NEW-TYPE-1",
-      "cause": {
         "title": "맞는 APN(데이터 프로필) 없음",
         "description": "요청을 만족하는 데이터 프로필이 없어 평가가 NO_SUITABLE_DATA_PROFILE로 거부됨",
         "signatures": [
           {
             "id": "no-suitable-profile",
-            "must_event": [
-              {
-                "event": "data_evaluation_rejected",
-                "fields": {
-                  "reasons": "NO_SUITABLE_DATA_PROFILE"
-                }
-              }
-            ],
             "must_match": [
+              "^DNC-\\d+: Data evaluation: evaluation reason:\\S+, Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, ",
               "^DPM-\\d+: Can't find any data profile that can satisfy"
-            ],
-            "must_not_match": [
-              "reason=DATA_PROFILE_INVALID"
             ],
             "window_sec": 60
           }
@@ -258,11 +146,11 @@
           }
         ]
       },
-      "body": "- **로그 예시**:\n  ```\n  D DPM-0   : Can't find any data profile that can satisfy [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&... ] ], ...]\n  D DNC-0   : Data evaluation: evaluation reason:..., Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, ...\n  ```\n- **확인 방법**: 거부 이유가 `NO_SUITABLE_DATA_PROFILE` **하나뿐**이고 `DPM-<slot>`에 `Can't find any data profile that can satisfy`가 있다. 부팅 중(`SIM_NOT_READY`·`DATA_CONFIG_NOT_READY`와 함께)은 정상이라 빼려고 이유 하나뿐인 것만 본다. 무엇이 안 맞는지는 `DPM`의 `Found N data profiles` 목록에서 요청 능력(INTERNET·MMS·IMS 등) ↔ APN 타입, 현재 RAT ↔ network_type_bitmask(목록의 permanentFailed 다음 칸, `UNKNOWN`=0=전체 허용), carrier_enabled, MVNO 조건을 대조한다.\n- **재현 시나리오**: 사업자 APN을 모두 지우거나 carrier_enabled=0, 또는 현재 RAT을 뺀 network_type_bitmask로 바꾼 뒤 데이터 사용\n- **해결책**: 요청에 맞는 APN을 넣거나 APN 조건을 고친다. 연결 중 APN이 바뀌어 끊긴 경우는 \"데이터 연결이 끊김\"의 APN 설정 변경 원인이다.\n- **코드 위치**: `DataProfileManager.java:875`(Can't find any data profile), `DataNetworkController` 평가 로그 1919\n- **비고**: 출처: 캡처 d70a-no-apn-disabled·d70b-no-apn-deleted·d73d-bitmask-gsm-only.\n"
+      "body": "- **로그 예시**:\n  ```\n  D DPM-0   : Can't find any data profile that can satisfy [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&... ] ], ...]\n  D DNC-0   : Data evaluation: evaluation reason:..., Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, ...\n  ```\n- **확인 방법**: 거부 이유가 `NO_SUITABLE_DATA_PROFILE` **하나뿐**이고 `DPM-<slot>`에 `Can't find any data profile that can satisfy`가 있다. 부팅 중(`SIM_NOT_READY`·`DATA_CONFIG_NOT_READY`와 함께)은 정상이라 빼려고 이유 하나뿐인 것만 본다. 무엇이 안 맞는지는 `DPM`의 `Found N data profiles` 목록에서 요청 능력(INTERNET·MMS·IMS 등) ↔ APN 타입, 현재 RAT ↔ network_type_bitmask(목록의 permanentFailed 다음 칸, `UNKNOWN`=0=전체 허용), carrier_enabled, MVNO 조건을 대조한다.\n- **재현 시나리오**: 사업자 APN을 모두 지우거나 carrier_enabled=0, 또는 현재 RAT을 뺀 network_type_bitmask로 바꾼 뒤 데이터 사용\n- **해결책**: 요청에 맞는 APN을 넣거나 APN 조건을 고친다. 연결 중 APN이 바뀌어 끊긴 경우는 \"데이터 연결이 끊김\"의 APN 설정 변경 원인이다.\n- **코드 위치**: `DataProfileManager.java:875`(Can't find any data profile), `DataNetworkController` 평가 로그 1918-1923\n- **비고**: 출처: 캡처 d70a-no-apn-disabled·d70b-no-apn-deleted. 연결 중 APN이 바뀌어 끊긴 뒤 이 거부가 이어지면 \"APN 설정 변경\" 원인도 같이 맞는다(둘 다 사실).\n"
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-3",
+      "for": "NEW-CAUSE-2",
       "kind": "positive",
       "path": "fixtures/data-no-suitable-profile.log",
       "expect": {
@@ -271,7 +159,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-4",
+      "temp_id": "NEW-CAUSE-3",
       "type": "NEW-TYPE-1",
       "cause": {
         "title": "데이터 로밍 꺼짐(사용자 설정)",
@@ -279,13 +167,8 @@
         "signatures": [
           {
             "id": "roaming-disabled",
-            "must_event": [
-              {
-                "event": "data_evaluation_rejected",
-                "fields": {
-                  "reasons": ".*ROAMING_DISABLED.*"
-                }
-              }
+            "must_match": [
+              "^DNC-\\d+: Data evaluation: evaluation reason:\\S+, Data disallowed reasons: [A-Z_ ]*\\bROAMING_DISABLED\\b"
             ],
             "window_sec": 60
           }
@@ -328,7 +211,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-4",
+      "for": "NEW-CAUSE-3",
       "kind": "positive",
       "path": "fixtures/data-roaming-disabled.log",
       "expect": {
@@ -337,7 +220,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-5",
+      "temp_id": "NEW-CAUSE-4",
       "type": "NEW-TYPE-1",
       "cause": {
         "title": "통화 중 데이터 불가(망·RAT 제약)",
@@ -345,13 +228,8 @@
         "signatures": [
           {
             "id": "concurrent-voice-data",
-            "must_event": [
-              {
-                "event": "data_evaluation_rejected",
-                "fields": {
-                  "reasons": ".*CONCURRENT_VOICE_DATA_NOT_ALLOWED.*"
-                }
-              }
+            "must_match": [
+              "^DNC-\\d+: Data evaluation: evaluation reason:\\S+, Data disallowed reasons: [A-Z_ ]*\\bCONCURRENT_VOICE_DATA_NOT_ALLOWED\\b"
             ],
             "window_sec": 60
           }
@@ -394,7 +272,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-5",
+      "for": "NEW-CAUSE-4",
       "kind": "positive",
       "path": "fixtures/data-concurrent-voice.log",
       "expect": {
@@ -403,7 +281,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-6",
+      "temp_id": "NEW-CAUSE-5",
       "type": "NEW-TYPE-1",
       "cause": {
         "title": "데이터 꺼짐인데 MMS 예외 아님",
@@ -412,7 +290,7 @@
           {
             "id": "mms-data-disabled",
             "must_match": [
-              "^DNC-\\d+: Data evaluation: .*Data disallowed reasons: DATA_DISABLED, .*Capabilities: MMS\\b"
+              "^DNC-\\d+: Data evaluation: evaluation reason:\\S+, Data disallowed reasons: DATA_DISABLED, .*Capabilities: MMS\\b"
             ],
             "window_sec": 60
           }
@@ -455,7 +333,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-6",
+      "for": "NEW-CAUSE-5",
       "kind": "positive",
       "path": "fixtures/data-mms-data-disabled.log",
       "expect": {
@@ -499,7 +377,7 @@
         ]
       },
       "first_cause": {
-        "temp_id": "NEW-CAUSE-7",
+        "temp_id": "NEW-CAUSE-6",
         "cause": {
           "title": "비행기 모드·무선 끄기 요청(시험 조작)",
           "description": "비행기 모드 켬(또는 무선 끄기 요청)으로 모든 데이터 네트워크가 해제됨",
@@ -509,7 +387,7 @@
               "must_match": [
                 {
                   "id": "power",
-                  "pattern": "^SST-\\d+: setRadioPower power false"
+                  "pattern": "^SST-\\d+: setRadioPower power false forEmergencyCall \\w+ forceApply \\w+ reason 0$"
                 }
               ],
               "must_event": [
@@ -562,13 +440,13 @@
             }
           ]
         },
-        "body": "- **로그 예시**:\n  ```\n  D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0\n  D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON\n  D DNC-0   : onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON\n  D RILJ    : [0602]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]\n  ```\n- **확인 방법**: `SST-<slot>`의 `setRadioPower power false`(무선 끄기 요청) **뒤에** `DNC-<slot>`의 `onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON`. 주의: `AIRPLANE_MODE_ON`은 비행기 모드만의 표시가 아니다 — `powerOffRadioSafely()`는 기기 종료가 아니면 늘 이 이유를 쓴다(ServiceStateTracker.java:4205-4207). data stall 복구의 무선 재시작도 같은 이유로 해제하지만 `setRadioPower` 줄 없이 바로 부른다(DataStallRecoveryManager.java:853-855) — 그 경우는 data stall 원인이다. `reason 0`은 사용자 요청(비행기 모드·무선 끄기 API), 1·2·3은 열·사업자·근거리 기기다. 비행기 모드 확정은 `AirplaneModeStats: Airplane mode change. Value: true`·`PhoneGlobals: Turning radio off - airplane`(이 DB 태그 목록에는 아직 없음).\n- **재현 시나리오**: 데이터 연결 중 비행기 모드 켬\n- **해결책**: 시험 조작이면 원인 아님. 진짜 문제 후보는 **끈 뒤 다시 붙지 않는 것**이다 — 해제 뒤 무선 켬 → 망 등록 → 데이터 평가 순서를 본다(\"데이터 연결 요청이 나가지 않음\" 유형). 해제 뒤 몇 초가 정상인지는 TODO(SITE).\n- **코드 위치**: `ServiceStateTracker.java:1110`(setRadioPower), 4198-4240(powerOffRadioSafely), `DataNetworkController.java:4417`\n- **비고**: 출처: 캡처 d40d-deact-airplane-on·d12r-airplane-teardown·m02-airplane-on-off.\n"
+        "body": "- **로그 예시**:\n  ```\n  D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0\n  D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON\n  D DNC-0   : onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON\n  D RILJ    : [0602]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]\n  ```\n- **확인 방법**: `SST-<slot>`의 `setRadioPower power false ... reason 0`(사용자 무선 끄기 요청) **뒤에** `DNC-<slot>`의 `onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON`. 주의: `AIRPLANE_MODE_ON`은 비행기 모드만의 표시가 아니다 — `powerOffRadioSafely()`는 기기 종료가 아니면 늘 이 이유를 쓴다(ServiceStateTracker.java:4205-4207). data stall 복구의 무선 재시작도 같은 이유로 해제하지만 `setRadioPower` 줄 없이 바로 부른다(DataStallRecoveryManager.java:853-855) — 그 경우는 data stall 원인이다. `reason 0`(사용자 요청: 비행기 모드·무선 끄기 API)만 이 원인이다. 1·2·3(열·사업자·근거리 기기)으로 끈 것은 시험 조작이 아니라 network 유형의 라디오 끔 원인이고 data 쪽은 이 원인에 맞지 않는다. 비행기 모드 확정은 `AirplaneModeStats: Airplane mode change. Value: true`·`PhoneGlobals: Turning radio off - airplane`(이 DB 태그 목록에는 아직 없음).\n- **재현 시나리오**: 데이터 연결 중 비행기 모드 켬\n- **해결책**: 시험 조작이면 원인 아님. 진짜 문제 후보는 **끈 뒤 다시 붙지 않는 것**이다 — 해제 뒤 무선 켬 → 망 등록 → 데이터 평가 순서를 본다(\"데이터 연결 요청이 나가지 않음\" 유형). 해제 뒤 몇 초가 정상인지는 TODO(SITE).\n- **코드 위치**: `ServiceStateTracker.java:1110`(setRadioPower), 4198-4240(powerOffRadioSafely), `DataNetworkController.java:4417`\n- **비고**: 출처: 캡처 d40d-deact-airplane-on·d12r-airplane-teardown·m02-airplane-on-off.\n"
       },
       "body": "## 증상\n\n쓰던 모바일 데이터가 갑자기 끊긴다. 시험 중이면 대부분 조작(비행기 모드·데이터 끔·APN 변경)이 만든 정상 해제다.\n\n## 증상 판별 방법\n\n`DNC-<slot>`의 `onDataNetworkDisconnected: ..., cause=<DataFailCause>, tearDownReason=<이유>`와 `Internet data state changed from CONNECTED to DISCONNECTED.`. 원인은 **`tearDownReason`**으로 가른다 — `cause`는 단말이 끊어도 `LOST_CONNECTION`이 찍히므로 그것만 보고 망 단절로 읽지 않는다. `tearDownReason=NONE`이면 프레임워크가 끊은 것이 아니다(모뎀·망 쪽).\n\n```\n11-14 09:40:00.012  2101  2101 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-101-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=DATA_DISABLED\n```\n"
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-7",
+      "for": "NEW-CAUSE-6",
       "kind": "positive",
       "path": "fixtures/data-airplane-on.log",
       "expect": {
@@ -577,7 +455,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-8",
+      "temp_id": "NEW-CAUSE-7",
       "type": "NEW-TYPE-2",
       "cause": {
         "title": "모바일 데이터 끔(사용자 설정)",
@@ -627,7 +505,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-8",
+      "for": "NEW-CAUSE-7",
       "kind": "positive",
       "path": "fixtures/data-teardown-user-off.log",
       "expect": {
@@ -636,7 +514,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-9",
+      "temp_id": "NEW-CAUSE-8",
       "type": "NEW-TYPE-2",
       "cause": {
         "title": "APN 설정 변경(프로필 무효·선호 바뀜)",
@@ -659,7 +537,7 @@
           }
         ],
         "resolution": "바뀐 APN 설정(시험 조작·사업자 설정 갱신·SIM refresh)을 확인하고, 다시 붙지 않으면 새 APN 목록에 요청에 맞는 APN이 있는지 본다",
-        "resolution_type": "user-setting",
+        "resolution_type": "carrier-config",
         "fix": {
           "status": "not-a-bug",
           "ref": null,
@@ -696,7 +574,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-9",
+      "for": "NEW-CAUSE-8",
       "kind": "positive",
       "path": "fixtures/data-teardown-profile-invalid.log",
       "expect": {
@@ -705,7 +583,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-10",
+      "temp_id": "NEW-CAUSE-9",
       "type": "NEW-TYPE-2",
       "cause": {
         "title": "모뎀·망 쪽 해제(프레임워크 요청 없음)",
@@ -755,11 +633,11 @@
         ],
         "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 같은 시각 모뎀의 PDN 해제 사유(망 deactivate 원인 코드)·CFUN 변경·무선 링크 끊김, 벤더 RIL의 data call list 변화, 망 시뮬레이터의 PDN 해제 기록"
       },
-      "body": "- **로그 예시**:\n  ```\n  D RILJ    : [UNSL]< UNSOL_DATA_CALL_LIST_CHANGED [SetupDataCallResult{cause: NONE, suggestedRetryTime: -1, cid: 1, active: 0, ...}] [PHONE0]\n  D DN-101-C: ConnectedState: onDataStateChanged: PDN inactive reported by WWAN data service.\n  D DNC-0   : onDataNetworkDisconnected: [...], cause=NONE(0x0)(0), tearDownReason=NONE\n  ```\n- **확인 방법**: `tearDownReason=NONE`(프레임워크 해제 요청 없음)이고 그 직전 `DN`에 `PDN inactive/disconnected reported by WWAN data service`(모뎀이 보낸 data call list에서 비활성·없어짐). 앞에 `DEACTIVATE_DATA_CALL` 요청·`RADIO_POWER` 끔 요청이 없다. 모뎀 쪽 무선 끔(CFUN)·RIL HAL 재시작(`cause=RADIO_NOT_AVAILABLE`)도 같은 모양이라 벤더 줄로 가른다.\n- **재현 시나리오**: 망 시뮬레이터에서 PDN 해제(network-initiated deactivate), 또는 모뎀 쪽 무선 끔\n- **해결책**: 프레임워크는 원인이 아니다(증상). CP·망 쪽에서 왜 PDN이 내려갔는지 찾는다.\n- **코드 위치**: `DataNetwork.java:3279-3299`, `DataNetworkController.java:3622`\n- **비고**: 출처: module eval data-dc-list-drop·data-cfun-radio-off(벤더 줄은 뺐다), 캡처 d20h-nw-radio-hal-kill.\n"
+      "body": "- **로그 예시**:\n  ```\n  D RILJ    : [UNSL]< UNSOL_DATA_CALL_LIST_CHANGED [SetupDataCallResult{cause: NONE, suggestedRetryTime: -1, cid: 1, active: 0, ...}] [PHONE0]\n  D DN-101-C: ConnectedState: onDataStateChanged: PDN inactive reported by WWAN data service.\n  D DNC-0   : onDataNetworkDisconnected: [...], cause=NONE(0x0)(0), tearDownReason=NONE\n  ```\n- **확인 방법**: `tearDownReason=NONE`(프레임워크 해제 요청 없음)이고 그 직전 `DN`에 `PDN inactive/disconnected reported by WWAN data service`(모뎀이 보낸 data call list에서 비활성·없어짐). 프레임워크의 `DEACTIVATE_DATA_CALL`·`RADIO_POWER` 끔 요청 없이 일어난다. 모뎀 쪽 무선 끔(CFUN)도 같은 모양이라 벤더 줄로 가른다. RIL HAL 재시작은 모양이 다르다 — PDN 줄 없이 `tearDownReason=NONE, cause=RADIO_NOT_AVAILABLE`만 남아 이 원인에 맞지 않는다(캡처 d20h, network 유형의 HAL 죽음 원인).\n- **재현 시나리오**: 망 시뮬레이터에서 PDN 해제(network-initiated deactivate), 또는 모뎀 쪽 무선 끔\n- **해결책**: 프레임워크는 원인이 아니다(증상). CP·망 쪽에서 왜 PDN이 내려갔는지 찾는다.\n- **코드 위치**: `DataNetwork.java:3279-3299`, `DataNetworkController.java:3622`\n- **비고**: 출처: module eval data-dc-list-drop·data-cfun-radio-off(벤더 줄은 뺐다). 소스 DataNetwork.java:3279-3299.\n"
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-10",
+      "for": "NEW-CAUSE-9",
       "kind": "positive",
       "path": "fixtures/data-modem-side-drop.log",
       "expect": {
@@ -768,7 +646,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-10",
+      "for": "NEW-CAUSE-9",
       "kind": "positive",
       "path": "fixtures/data-modem-side-radio-off.log",
       "expect": {
@@ -777,7 +655,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-11",
+      "temp_id": "NEW-CAUSE-10",
       "type": "NEW-TYPE-2",
       "cause": {
         "title": "data stall 복구 동작",
@@ -876,7 +754,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-11",
+      "for": "NEW-CAUSE-10",
       "kind": "positive",
       "path": "fixtures/data-stall-cleanup.log",
       "expect": {
@@ -885,7 +763,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-11",
+      "for": "NEW-CAUSE-10",
       "kind": "positive",
       "path": "fixtures/data-stall-radio-restart.log",
       "expect": {
@@ -907,6 +785,7 @@
               {
                 "event": "data_setup_response",
                 "fields": {
+                  "result": "RESULT_SUCCESS",
                   "cause": "(?!NONE$)[A-Z_0-9]+"
                 }
               }
@@ -926,7 +805,7 @@
         ]
       },
       "first_cause": {
-        "temp_id": "NEW-CAUSE-12",
+        "temp_id": "NEW-CAUSE-11",
         "cause": {
           "title": "APN 없음·틀림(망 거절)",
           "description": "망이 요청한 APN을 모르거나 없다고 거절함(MISSING_UNKNOWN_APN)",
@@ -937,6 +816,7 @@
                 {
                   "event": "data_setup_response",
                   "fields": {
+                    "result": "RESULT_SUCCESS",
                     "cause": "MISSING_UNKNOWN_APN"
                   }
                 }
@@ -988,11 +868,11 @@
         },
         "body": "- **로그 예시**:\n  ```\n  D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=MISSING_UNKNOWN_APN(0x1b) retry=-1 ...\n  D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.\n  ```\n- **확인 방법**: 응답 cause가 `MISSING_UNKNOWN_APN(0x1b)`(3GPP ESM/SM cause 27). 요청 줄의 dataProfile에서 APN 이름을 보고 망 쪽 설정과 대조한다.\n- **재현 시나리오**: 존재하지 않는 APN 이름으로 데이터 연결\n- **해결책**: APN DB(사업자 APN 목록)의 APN 이름을 고치거나 망 시뮬레이터에 그 APN을 만든다.\n- **코드 위치**: `DataNetwork.java:1751-1816`(onSetupResponse), `DataNetworkController.java:3287`, `DataFailCause.java`(상수·toString 1739)\n- **비고**: 망 거절 코드라 단말은 정상 동작이다. 사업자 APN DB가 틀렸으면 그 수정이 fix다. DataFailCause 상수는 `frameworks/base/telephony/java/android/telephony/DataFailCause.java:50`.\n"
       },
-      "body": "## 증상\n\n데이터 연결 요청(`SETUP_DATA_CALL`)은 나가는데 실패 응답이 온다. 재시도가 이어지거나 멈춘다(재시도는 \"데이터 연결 재시도가 멈춤\" 유형).\n\n## 증상 판별 방법\n\n`DN-<id>-C`의 `onSetupResponse: resultCode=..., response=DataCallResponse: { cause=<DataFailCause>(0x..) retry=<ms> ...`와 `DNC-<slot>`의 `onDataNetworkSetupDataFailed: ..., cause=..., retryDelayMillis=...ms.`. `cause`가 원인을 가른다. `resultCode`가 `RESULT_SUCCESS`가 아니면(예: `RESULT_ERROR_ILLEGAL_STATE`) DNC 줄의 cause는 resultCode에서 온 값(`RADIO_NOT_AVAILABLE` 등)이라 응답의 cause를 본다(DataNetwork.java:2867-2891).\n\n```\n11-14 12:00:01.122  2101  2101 D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=MISSING_UNKNOWN_APN(0x1b) retry=-1 ...\n```\n"
+      "body": "## 증상\n\n데이터 연결 요청(`SETUP_DATA_CALL`)은 나가는데 실패 응답이 온다. 재시도가 이어지거나 멈춘다(재시도는 \"데이터 연결 재시도가 멈춤\" 유형).\n\n## 증상 판별 방법\n\n`DN-<id>-C`의 `onSetupResponse: resultCode=..., response=DataCallResponse: { cause=<DataFailCause>(0x..) retry=<ms> ...`와 `DNC-<slot>`의 `onDataNetworkSetupDataFailed: ..., cause=..., retryDelayMillis=...ms.`. `cause`가 원인을 가른다. 응답의 `cause`는 `resultCode=RESULT_SUCCESS`일 때만 프레임워크가 쓴다(DataNetwork.java:2867-2891). **resultCode가 오류면(`RESULT_ERROR_ILLEGAL_STATE` 등) cause는 RIL·데이터 서비스 쪽 오류다 — 응답에 찍힌 cause(예: MISSING_UNKNOWN_APN)를 망 거절로 보지 않는다**(DNC 줄은 `RADIO_NOT_AVAILABLE` 등 resultCode에서 온 값). 이 경우 원인은 두지 않았다.\n\n```\n11-14 12:00:01.122  2101  2101 D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=MISSING_UNKNOWN_APN(0x1b) retry=-1 ...\n```\n"
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-12",
+      "for": "NEW-CAUSE-11",
       "kind": "positive",
       "path": "fixtures/data-setup-missing-apn.log",
       "expect": {
@@ -1001,7 +881,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-13",
+      "temp_id": "NEW-CAUSE-12",
       "type": "NEW-TYPE-3",
       "cause": {
         "title": "APN 인증 실패",
@@ -1013,6 +893,7 @@
               {
                 "event": "data_setup_response",
                 "fields": {
+                  "result": "RESULT_SUCCESS",
                   "cause": "USER_AUTHENTICATION"
                 }
               }
@@ -1066,7 +947,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-13",
+      "for": "NEW-CAUSE-12",
       "kind": "positive",
       "path": "fixtures/data-setup-auth-failure.log",
       "expect": {
@@ -1075,7 +956,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-14",
+      "temp_id": "NEW-CAUSE-13",
       "type": "NEW-TYPE-3",
       "cause": {
         "title": "가입 안 된 서비스",
@@ -1087,6 +968,7 @@
               {
                 "event": "data_setup_response",
                 "fields": {
+                  "result": "RESULT_SUCCESS",
                   "cause": "SERVICE_OPTION_NOT_SUBSCRIBED"
                 }
               }
@@ -1140,7 +1022,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-14",
+      "for": "NEW-CAUSE-13",
       "kind": "positive",
       "path": "fixtures/data-setup-not-subscribed.log",
       "expect": {
@@ -1149,7 +1031,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-15",
+      "temp_id": "NEW-CAUSE-14",
       "type": "NEW-TYPE-3",
       "cause": {
         "title": "네트워크 슬라이스 거절",
@@ -1161,6 +1043,7 @@
               {
                 "event": "data_setup_response",
                 "fields": {
+                  "result": "RESULT_SUCCESS",
                   "cause": "SLICE_REJECTED|MATCH_ALL_RULE_NOT_ALLOWED|ALL_MATCHING_RULES_FAILED"
                 }
               }
@@ -1217,11 +1100,11 @@
         ],
         "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀의 URSP 규칙·슬라이싱 설정(GET_SLICING_CONFIG 응답), 망의 허용 S-NSSAI"
       },
-      "body": "- **로그 예시**:\n  ```\n  D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=SLICE_REJECTED(0x8cc) retry=-1 ...\n  D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=SLICE_REJECTED(0x8cc), retryDelayMillis=-1ms.\n  ```\n- **확인 방법**: 응답 cause가 `SLICE_REJECTED(0x8cc)`·`MATCH_ALL_RULE_NOT_ALLOWED(0x8cd)`·`ALL_MATCHING_RULES_FAILED(0x8ce)`. 요청은 `TrafficDescriptor`(OsAppId App=ENTERPRISE·PRIORITIZE_LATENCY 등)를 단 프로필이다. TD 기반 프로필은 `Created data profile [DataProfile=null, TrafficDescriptor=...]`로 만들어진다(정상 — APN이 없어도 된다).\n- **재현 시나리오**: 엔터프라이즈·지연 우선 능력 요청 → 망이 그 슬라이스를 허용하지 않음\n- **해결책**: 망 슬라이스 설정·URSP를 맞춘다. 기본 슬라이스로 가야 하는데 거절되면 `MATCH_ALL_RULE_NOT_ALLOWED`(match-all 규칙 금지)를 본다.\n- **코드 위치**: `DataNetwork.java:1751-1816`(onSetupResponse), `DataNetworkController.java:3287`, `DataFailCause.java`(상수·toString 1739)\n- **비고**: DataFailCause.java:925-929. 요청 줄 모양은 캡처 d85-retry-cc-override·d50-enterprise-request(에뮬레이터는 MISSING_UNKNOWN_APN으로 거절). 슬라이스 거절 코드는 소스만.\n"
+      "body": "- **로그 예시**:\n  ```\n  D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=SLICE_REJECTED(0x8cc) retry=-1 ...\n  D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=SLICE_REJECTED(0x8cc), retryDelayMillis=-1ms.\n  ```\n- **확인 방법**: 응답 cause가 `SLICE_REJECTED(0x8cc)`·`MATCH_ALL_RULE_NOT_ALLOWED(0x8cd)`·`ALL_MATCHING_RULES_FAILED(0x8ce)`. 요청은 `TrafficDescriptor`(OsAppId App=ENTERPRISE·PRIORITIZE_LATENCY 등)를 단 프로필이다. TD 기반 프로필은 `Created data profile [DataProfile=null, TrafficDescriptor=...]`로 만들어진다(정상 — APN이 없어도 된다).\n- **재현 시나리오**: 엔터프라이즈·지연 우선 능력 요청 → 망이 그 슬라이스를 허용하지 않음\n- **해결책**: 망 슬라이스 설정·URSP를 맞춘다. 기본 슬라이스로 가야 하는데 거절되면 `MATCH_ALL_RULE_NOT_ALLOWED`(match-all 규칙 금지)를 본다.\n- **코드 위치**: `DataNetwork.java:1751-1816`(onSetupResponse), `DataNetworkController.java:3287`, `DataFailCause.java`(상수·toString 1739)\n- **비고**: DataFailCause.java:925-929. TD 요청 줄 모양은 캡처 d85-retry-cc-override·d50-enterprise-request(에뮬레이터 응답은 resultCode 오류라 망 거절이 아니다). 슬라이스 거절 코드는 소스만.\n"
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-15",
+      "for": "NEW-CAUSE-14",
       "kind": "positive",
       "path": "fixtures/data-setup-slice-rejected.log",
       "expect": {
@@ -1250,7 +1133,7 @@
         ]
       },
       "first_cause": {
-        "temp_id": "NEW-CAUSE-16",
+        "temp_id": "NEW-CAUSE-15",
         "cause": {
           "title": "재시도 횟수 소진(사업자 재시도 규칙)",
           "description": "사업자 설정 재시도 규칙의 최대 횟수만큼 실패해 시간 기반 재시도를 멈춤",
@@ -1297,13 +1180,13 @@
             }
           ]
         },
-        "body": "- **로그 예시**:\n  ```\n  D DRM-0   : For capability INTERNET, found matching rule [DataSetupRetryRule: ... Maximum retries=3], failed count=3\n  D DRM-0   : Data retry failed for 3 times on WWAN. Stopped timer-based data retry for INTERNET. Condition-based retry will still happen when condition changes.\n  ```\n- **확인 방법**: `found matching rule ... failed count=N`의 N이 규칙의 `Maximum retries`와 같고 `Data retry failed for N times ... Stopped timer-based data retry for <능력>`. 그 뒤로는 평가 계기(데이터 켬·망 등록 변화·RAT·APN·비행기 모드 해제)가 있어야 다시 시도한다.\n- **재현 시나리오**: 연결이 계속 실패하는 APN(또는 슬라이스)으로 요청을 유지\n- **해결책**: 실패 원인을 고친다. 멈춘 뒤 다시 붙여야 하면 조건 기반 재시도 계기(데이터 끔/켬 등)를 준다. 규칙 값은 사업자 설정에서 온다 — 시험 기준 간격·횟수는 TODO(SITE).\n- **코드 위치**: `DataRetryManager.java:1284-1304`\n- **비고**: 출처: 캡처 d83-permanent-failure-eims(EIMS 20회), d85-retry-cc-override(규칙 덮어쓰기).\n"
+        "body": "- **로그 예시**:\n  ```\n  D DRM-0   : For capability INTERNET, found matching rule [DataSetupRetryRule: ... Maximum retries=3], failed count=3\n  D DRM-0   : Data retry failed for 3 times on WWAN. Stopped timer-based data retry for INTERNET. Condition-based retry will still happen when condition changes.\n  ```\n- **확인 방법**: `found matching rule ... failed count=N`의 N이 규칙의 `Maximum retries`와 같고 `Data retry failed for N times ... Stopped timer-based data retry for <능력>`. 그 뒤로는 평가 계기(데이터 켬·망 등록 변화·RAT·APN·비행기 모드 해제)가 있어야 다시 시도한다.\n- **재현 시나리오**: 연결이 계속 실패하는 APN(또는 슬라이스)으로 요청을 유지\n- **해결책**: 실패 원인을 고친다. 멈춘 뒤 다시 붙여야 하면 조건 기반 재시도 계기(데이터 끔/켬 등)를 준다. 규칙 값은 사업자 설정에서 온다 — 시험 기준 간격·횟수는 TODO(SITE).\n- **코드 위치**: `DataRetryManager.java:1284-1304`\n- **비고**: 출처: 캡처 d83-permanent-failure-eims(EIMS 20회). 규칙 목록 줄(`onDataConfigUpdated: mDataSetupRetryRuleList=`) 모양은 d85-retry-cc-override.\n"
       },
       "body": "## 증상\n\n데이터 연결이 실패한 뒤 다시 시도하지 않는다(\"retry가 왜 안 되냐\"). 실패 원인 자체는 \"데이터 연결 요청이 실패함\" 유형에서 본다.\n\n## 증상 판별 방법\n\n`DRM-<slot>`의 `onEvaluateDataSetupRetry: <프로필>, transport=WWAN, cause=<DataFailCause>, retryDelayMillis=<ms>ms, ...` 뒤에 `Scheduled data retry [DataSetupRetryEntry: delay=...]`가 **없고** 멈춤 줄이 있다. 재시도 판단 순서(DataRetryManager.java:1211-1329): (1) 망이 준 retry가 무한대(`Long.MAX_VALUE`·`Integer.MAX_VALUE`)면 무기한 스로틀, (2) 망이 retry 시간을 주면 그 시간에 한 번 예약(스로틀), (3) 없으면 사업자 설정 재시도 규칙(`carrier_data_setup_retry_rules` 류, `DRM: onDataConfigUpdated: mDataSetupRetryRuleList=`)을 차례로 대조 — 영구 실패 규칙이면 그 APN을 영구 실패로 표시, 능력·cause가 맞는 규칙의 실패 횟수가 최대면 멈춤, 맞는 규칙이 없으면 멈춤. 멈춰도 **조건 기반 재시도**(데이터 켬·망 등록·RAT·APN 변경 등 평가 계기)는 남는다. 재시도·스로틀 기록은 `Remove all retry and throttling entries, reason=<RADIO_ON|MODEM_RESTART|DATA_PROFILES_CHANGED|DATA_CONFIG_CHANGED|TAC_CHANGED|DATA_SERVICE_BOUND>`로 지워진다.\n\n```\n11-14 18:29:33.046  2101  2101 D DRM-0   : Data retry failed for 20 times on WWAN. Stopped timer-based data retry for EIMS. Condition-based retry will still happen when condition changes.\n```\n"
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-16",
+      "for": "NEW-CAUSE-15",
       "kind": "positive",
       "path": "fixtures/data-retry-max.log",
       "expect": {
@@ -1312,7 +1195,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-17",
+      "temp_id": "NEW-CAUSE-16",
       "type": "NEW-TYPE-4",
       "cause": {
         "title": "망이 재시도 금지(무기한 스로틀)",
@@ -1365,7 +1248,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-17",
+      "for": "NEW-CAUSE-16",
       "kind": "positive",
       "path": "fixtures/data-retry-never.log",
       "expect": {
@@ -1374,7 +1257,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-18",
+      "temp_id": "NEW-CAUSE-17",
       "type": "NEW-TYPE-4",
       "cause": {
         "title": "맞는 재시도 규칙 없음(사업자 설정)",
@@ -1419,7 +1302,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-18",
+      "for": "NEW-CAUSE-17",
       "kind": "positive",
       "path": "fixtures/data-retry-no-rule.log",
       "expect": {
@@ -1448,7 +1331,7 @@
         ]
       },
       "first_cause": {
-        "temp_id": "NEW-CAUSE-19",
+        "temp_id": "NEW-CAUSE-18",
         "cause": {
           "title": "망·ePDG가 핸드오버 거절",
           "description": "핸드오버 요청에 대상 망(ePDG·셀룰러)이 실패 원인으로 응답해 핸드오버가 실패함",
@@ -1502,7 +1385,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-19",
+      "for": "NEW-CAUSE-18",
       "kind": "positive",
       "path": "fixtures/data-handover-rejected.log",
       "expect": {
@@ -1511,7 +1394,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-20",
+      "temp_id": "NEW-CAUSE-19",
       "type": "NEW-TYPE-5",
       "cause": {
         "title": "핸드오버 불가 평가(정책·대상 망 서비스 없음)",
@@ -1556,7 +1439,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-20",
+      "for": "NEW-CAUSE-19",
       "kind": "positive",
       "path": "fixtures/data-handover-not-allowed.log",
       "expect": {
@@ -1570,20 +1453,13 @@
       "dir_slug": "connected-no-traffic",
       "type": {
         "title": "데이터는 연결됐는데 통신이 되지 않음",
-        "summary": "SETUP_DATA_CALL은 성공했는데 망이 준 값(주소·DNS·IP 종류)이 비정상이거나 망 검증이 실패해 실제 통신이 안 된다",
+        "summary": "SETUP_DATA_CALL은 성공했는데 망이 준 값(주소·DNS·IP 종류)이 비정상이라 실제 통신이 안 된다",
         "symptom_signatures": [
           {
             "id": "bad-setup-values",
             "must_match": [
               "^DN-.+: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: \\{ cause=NONE\\(0x0\\) ",
               "^DN-.+: ConnectingState: (Empty dns response|no address for ifname=|Invalid DataCallResponse)"
-            ],
-            "window_sec": 60
-          },
-          {
-            "id": "validation-invalid",
-            "must_match": [
-              "^DNC-\\d+: onDataNetworkValidationStatusChanged: .*, validation status=INVALID"
             ],
             "window_sec": 60
           }
@@ -1593,7 +1469,7 @@
         ]
       },
       "first_cause": {
-        "temp_id": "NEW-CAUSE-21",
+        "temp_id": "NEW-CAUSE-20",
         "cause": {
           "title": "망 응답에 DNS 없음",
           "description": "연결 응답의 DNS 목록이 비어 있어 DNS 없이 연결됨(이름 조회·망 검증 실패)",
@@ -1642,13 +1518,13 @@
           ],
           "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀이 망에서 받은 PCO(DNS 서버 주소 항목)·IPv6 RA의 RDNSS, 벤더 RIL이 만든 SetupDataCallResult의 dnses, 망 시뮬레이터 PDN 설정의 DNS"
         },
-        "body": "- **로그 예시**:\n  ```\n  D DN-160-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=NONE(0x0) ... dnses=[] ...\n  E DN-160-C: ConnectingState: Empty dns response\n  D DN-160-C: ConnectingState: sendLinkProperties {... DnsAddresses: [ ] ...}\n  D DNC-0   : onDataNetworkValidationStatusChanged: [...], validation status=INVALID, \n  ```\n- **확인 방법**: 성공 응답의 `dnses=[]`와 `Empty dns response`(E). ③의 `DnsAddresses: [ ]`. 보통 ⑤가 `INVALID`가 된다 — 그 경우 원인은 이것이고 \"망 검증 실패\" 원인은 맞지 않게 좁혀 두었다.\n- **재현 시나리오**: 망 시뮬레이터 PDN 설정에서 DNS를 빼고 데이터 연결\n- **해결책**: 망·모뎀 쪽에서 DNS를 주게 한다. 응답(①)에는 DNS가 있는데 ③에서 비면 프레임워크 쪽(any 주소라 걸러짐)이다.\n- **코드 위치**: `DataNetwork.java:2937-2946`(DNS 추가·`Empty dns response`), 1753(onSetupResponse), `DataServiceManager.java:253`\n- **비고**: 소스만(에뮬레이터는 늘 DNS를 준다, 성공 줄 모양은 캡처 d01-setup).\n"
+        "body": "- **로그 예시**:\n  ```\n  D DN-160-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=NONE(0x0) ... dnses=[] ...\n  E DN-160-C: ConnectingState: Empty dns response\n  D DN-160-C: ConnectingState: sendLinkProperties {... DnsAddresses: [ ] ...}\n  ```\n- **확인 방법**: 성공 응답의 `dnses=[]`와 `Empty dns response`(E). ③의 `DnsAddresses: [ ]`. 보통 ⑤가 `INVALID`가 되는데, 그때도 원인은 이것이다.\n- **재현 시나리오**: 망 시뮬레이터 PDN 설정에서 DNS를 빼고 데이터 연결\n- **해결책**: 망·모뎀 쪽에서 DNS를 주게 한다. 응답(①)에는 DNS가 있는데 ③에서 비면 프레임워크 쪽(any 주소라 걸러짐)이다.\n- **코드 위치**: `DataNetwork.java:2937-2946`(DNS 추가·`Empty dns response`), 1753(onSetupResponse), `DataServiceManager.java:253`\n- **비고**: 소스만(에뮬레이터는 늘 DNS를 준다, 성공 줄 모양은 캡처 d01-setup).\n"
       },
-      "body": "## 증상\n\n데이터 아이콘은 붙었는데 인터넷이 안 된다(웹·앱 통신 실패, 느낌표 표시). 연결 요청은 성공(`cause=NONE`)했다.\n\n## 증상 판별 방법\n\n성공 흐름의 다섯 단계를 차례로 보고, 처음 빠지거나 값이 빈 단계로 의심할 곳을 정한다. 이 유형은 ② 뒤의 이상 줄 또는 ⑤의 `INVALID`가 있을 때 걸린다.\n\n| 단계 | 태그·줄 | 값에서 볼 것 | 이 줄이 없거나 값이 비면 의심되는 곳 |\n|---|---|---|---|\n| ① 망·모뎀 응답 | `RILJ: [n]< SETUP_DATA_CALL DataCallResponse: {...}`, `DSM-C-<slot>: onSetupDataCallComplete. resultCode = 0, response = DataCallResponse: {...}` | `cause=NONE`, `addresses=[..]`(주소·프리픽스), `dnses=[..]`, `gateways=[..]`, `pcscf=[..]`(IMS), `mtu`/`mtuV4`/`mtuV6`, `protocolType` | 응답이 없으면 모뎀·RIL. 값이 비면 망·모뎀(PCO·IPCP·RA로 받는 값) |\n| ② 프레임워크가 받음 | `DN-<id>-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=...` 뒤의 `Invalid DataCallResponse...`·`no address for ifname=`·`Empty dns response`(E) | 이상 줄이 있으면 응답 값 문제를 프레임워크가 알아챈 것 | ①은 있는데 ②가 없으면 DataServiceManager·DataNetwork(응답 전달) |\n| ③ 프레임워크가 만든 설정 | `DN-<id>-C: ...: sendLinkProperties {InterfaceName: .. LinkAddresses: [ .. ] DnsAddresses: [ .. ] ... MTU: .. Routes: [ <dst>/0 -> <gw> <if> mtu .. ]}` | 주소·DNS가 응답과 같은지, 게이트웨이마다 기본 경로(`/0 ->`)가 있는지, MTU | 응답에 값이 있는데 여기 없으면 DataNetwork(응답 → LinkProperties 변환). 응답부터 없으면 망 쪽 |\n| ④ 연결 | `DN-<id>-C: ConnectedState: network connected.`, `DNC-<slot>: onDataNetworkConnected: ...`, `Internet data state changed from DISCONNECTED to CONNECTED.` | — | ③은 있는데 ④가 없으면 DataNetwork 상태 머신(연결 중 해제·핸드오버) |\n| ⑤ 망 검증 | `DNC-<slot>: onDataNetworkValidationStatusChanged: [...], validation status=VALID` | `VALID` / `INVALID`(값은 이 둘뿐) | ④ 뒤 ⑤가 끝내 없거나 INVALID면 ConnectivityService·NetworkMonitor 탐침(DNS 조회·HTTP/HTTPS 프로브·캡티브 포털) 또는 망의 인터넷 경로 |\n\n판단 지식(시그니처 아님): 게이트웨이가 비면(`gateways=[]`) 프레임워크는 경로를 하나도 넣지 않는다(`Routes: [ ]`) — 응답 문서상 점대점 연결 뜻이라 그것만으로 이상이 아니다. MTU 0·음수는 망이 값을 안 준 것이고 APN의 MTU, 그다음 사업자 기본 MTU로 바꿔 쓴다 — ③의 `MTU:`가 실제 쓰는 값이다. 주소·DNS 중 any 주소(모든 자리가 0인 주소)는 ③에서 빠진다(마스킹 뒤에는 다른 주소와 구별되지 않는다).\n\n```\n11-14 13:00:01.100  2101  2101 D DN-160-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=NONE(0x0) ... addresses=[<IP#1>/64] dnses=[] gateways=[/<IP#3>] ...\n11-14 13:00:01.100  2101  2101 E DN-160-C: ConnectingState: Empty dns response\n```\n"
+      "body": "## 증상\n\n데이터 아이콘은 붙었는데 인터넷이 안 된다(웹·앱 통신 실패, 느낌표 표시). 연결 요청은 성공(`cause=NONE`)했다.\n\n## 증상 판별 방법\n\n성공 흐름의 다섯 단계를 차례로 보고, 처음 빠지거나 값이 빈 단계로 의심할 곳을 정한다. 이 유형은 ② 뒤의 이상 줄(값이 보이는 것)이 있을 때만 걸린다. ⑤의 망 검증 실패는 시그니처로 두지 않았다(아래 표 ⑤).\n\n| 단계 | 태그·줄 | 값에서 볼 것 | 이 줄이 없거나 값이 비면 의심되는 곳 |\n|---|---|---|---|\n| ① 망·모뎀 응답 | `RILJ: [n]< SETUP_DATA_CALL DataCallResponse: {...}`, `DSM-C-<slot>: onSetupDataCallComplete. resultCode = 0, response = DataCallResponse: {...}` | `cause=NONE`, `addresses=[..]`(주소·프리픽스), `dnses=[..]`, `gateways=[..]`, `pcscf=[..]`(IMS), `mtu`/`mtuV4`/`mtuV6`, `protocolType` | 응답이 없으면 모뎀·RIL. 값이 비면 망·모뎀(PCO·IPCP·RA로 받는 값) |\n| ② 프레임워크가 받음 | `DN-<id>-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=...` 뒤의 `Invalid DataCallResponse...`·`no address for ifname=`·`Empty dns response`(E) | 이상 줄이 있으면 응답 값 문제를 프레임워크가 알아챈 것 | ①은 있는데 ②가 없으면 DataServiceManager·DataNetwork(응답 전달) |\n| ③ 프레임워크가 만든 설정 | `DN-<id>-C: ...: sendLinkProperties {InterfaceName: .. LinkAddresses: [ .. ] DnsAddresses: [ .. ] ... MTU: .. Routes: [ <dst>/0 -> <gw> <if> mtu .. ]}` | 주소·DNS가 응답과 같은지, 게이트웨이마다 기본 경로(`/0 ->`)가 있는지, MTU | 응답에 값이 있는데 여기 없으면 DataNetwork(응답 → LinkProperties 변환). 응답부터 없으면 망 쪽 |\n| ④ 연결 | `DN-<id>-C: ConnectedState: network connected.`, `DNC-<slot>: onDataNetworkConnected: ...`, `Internet data state changed from DISCONNECTED to CONNECTED.` | — | ③은 있는데 ④가 없으면 DataNetwork 상태 머신(연결 중 해제·핸드오버) |\n| ⑤ 망 검증 | `DNC-<slot>: onDataNetworkValidationStatusChanged: [...], validation status=VALID` | `VALID` / `INVALID`(값은 이 둘뿐) | INVALID 뒤 같은 망의 VALID가 곧 오면 일시적이다(정상). INVALID가 이어지거나 ⑤가 끝내 없으면 ConnectivityService·NetworkMonitor 탐침(DNS 조회·HTTP/HTTPS 프로브·캡티브 포털) 또는 망의 인터넷 경로 — \"이어진다\"의 횟수·시간 기준은 TODO(SITE). 같은 시각 `DSRM-<slot>: doRecovery()` 줄이 있으면 \"데이터 연결이 끊김\"의 data stall 원인 쪽 |\n\n판단 지식(시그니처 아님): 게이트웨이가 비면(`gateways=[]`) 프레임워크는 경로를 하나도 넣지 않는다(`Routes: [ ]`) — 응답 문서상 점대점 연결 뜻이라 그것만으로 이상이 아니다. MTU 0·음수는 망이 값을 안 준 것이고 APN의 MTU, 그다음 사업자 기본 MTU로 바꿔 쓴다 — ③의 `MTU:`가 실제 쓰는 값이다. 주소·DNS 중 any 주소(모든 자리가 0인 주소)는 ③에서 빠진다(마스킹 뒤에는 다른 주소와 구별되지 않는다).\n\n```\n11-14 13:00:01.100  2101  2101 D DN-160-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=NONE(0x0) ... addresses=[<IP#1>/64] dnses=[] gateways=[/<IP#3>] ...\n11-14 13:00:01.100  2101  2101 E DN-160-C: ConnectingState: Empty dns response\n```\n"
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-21",
+      "for": "NEW-CAUSE-20",
       "kind": "positive",
       "path": "fixtures/data-link-empty-dns.log",
       "expect": {
@@ -1657,7 +1533,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-22",
+      "temp_id": "NEW-CAUSE-21",
       "type": "NEW-TYPE-6",
       "cause": {
         "title": "망 응답에 IP 주소 없음",
@@ -1704,7 +1580,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-22",
+      "for": "NEW-CAUSE-21",
       "kind": "positive",
       "path": "fixtures/data-link-no-address.log",
       "expect": {
@@ -1713,7 +1589,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-23",
+      "temp_id": "NEW-CAUSE-22",
       "type": "NEW-TYPE-6",
       "cause": {
         "title": "요청한 IP 종류와 받은 주소 불일치",
@@ -1752,85 +1628,9 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-23",
+      "for": "NEW-CAUSE-22",
       "kind": "positive",
       "path": "fixtures/data-link-ip-mismatch.log",
-      "expect": {
-        "origin": "synthetic"
-      }
-    },
-    {
-      "op": "new-cause",
-      "temp_id": "NEW-CAUSE-24",
-      "type": "NEW-TYPE-6",
-      "cause": {
-        "title": "망 검증 실패(받은 값은 정상)",
-        "description": "주소·DNS를 정상으로 받아 연결됐는데 ConnectivityService·NetworkMonitor 망 검증(DNS·HTTP 탐침)이 실패함",
-        "signatures": [
-          {
-            "id": "validation-failed-values-ok",
-            "must_match": [
-              {
-                "id": "ok",
-                "pattern": "^DN-.+: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: \\{ cause=NONE\\(0x0\\) .*\\baddresses=\\[[^\\]]+\\] dnses=\\[[^\\]]+\\]"
-              },
-              {
-                "id": "invalid",
-                "pattern": "^DNC-\\d+: onDataNetworkValidationStatusChanged: .*, validation status=INVALID"
-              }
-            ],
-            "must_not_match": [
-              "^DN-.+: ConnectingState: (Empty dns response|no address for ifname=|Invalid DataCallResponse)"
-            ],
-            "sequence": [
-              "ok",
-              "invalid"
-            ],
-            "window_sec": 120
-          }
-        ],
-        "resolution": "망 검증 탐침이 실패한 이유(DNS 응답·인터넷 경로·캡티브 포털·탐침 URL 접근)를 ConnectivityService·NetworkMonitor와 망 쪽에서 확인한다",
-        "resolution_type": "network",
-        "fix": {
-          "status": "open",
-          "ref": null,
-          "fixed_in": []
-        },
-        "platform_versions": [
-          "17"
-        ],
-        "code_refs": [
-          {
-            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
-            "symbol": "DataNetworkController#onDataNetworkValidationStatusChanged",
-            "platform_versions": [
-              "17"
-            ]
-          },
-          {
-            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataUtils.java",
-            "symbol": "DataUtils#validationStatusToString",
-            "platform_versions": [
-              "17"
-            ]
-          },
-          {
-            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetwork.java",
-            "symbol": "DataNetwork#updateValidationStatus",
-            "platform_versions": [
-              "17"
-            ]
-          }
-        ],
-        "cp_evidence": "망 검증(ConnectivityService·NetworkMonitor) 쪽 — 다음에 받을 로그: NetworkMonitor 탐침 결과(DNS·HTTP·HTTPS 프로브, 캡티브 포털 리다이렉트), 망 시뮬레이터의 인터넷 경로·DNS 서버 응답"
-      },
-      "body": "- **로그 예시**:\n  ```\n  D DN-163-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=NONE(0x0) ... addresses=[<IP#1>/64] dnses=[/<IP#2>] ...\n  D DN-163-C: ConnectingState: sendLinkProperties {... DnsAddresses: [ /<IP#2> ] ... Routes: [ ::/0 -> <IP#3> rmnet0 mtu 1500 ]}\n  D DNC-0   : onDataNetworkValidationStatusChanged: [...], validation status=INVALID, \n  ```\n- **확인 방법**: 성공 응답에 주소·DNS가 있고 ②의 이상 줄이 없는데 그 **뒤에** `validation status=INVALID`. 값이 빈 원인(DNS 없음·주소 없음·IP 종류 불일치)과 겹치면 그쪽이 맞고 이 원인은 맞지 않게 좁혔다. 캡티브 포털이면 같은 줄 끝에 리다이렉트 URI가 붙는다. INVALID가 이어지면 data stall 복구가 돌 수 있다(\"데이터 연결이 끊김\"의 data stall 원인).\n- **재현 시나리오**: 망 검증 탐침 URL에 닿지 않게 한 망에서 데이터 연결(캡처 d09-validation)\n- **해결책**: 탐침이 실패하는 경로를 고친다. 단말 쪽 판단은 ConnectivityService·NetworkMonitor 로그로 한다(텔레포니 밖).\n- **코드 위치**: `DataNetworkController.java:3553-3556`, `DataUtils.java:274-283`(VALID/INVALID 두 값), `DataNetwork.java:4133`(updateValidationStatus)\n- **비고**: 출처: 캡처 d09-validation(`validation status=INVALID`), 성공 흐름 d01-setup. 연결 뒤 120초 안의 INVALID만 본다 — 오래 연결된 뒤의 INVALID는 이 원인으로 잡지 않는다.\n"
-    },
-    {
-      "op": "add-fixture",
-      "for": "NEW-CAUSE-24",
-      "kind": "positive",
-      "path": "fixtures/data-link-validation-invalid.log",
       "expect": {
         "origin": "synthetic"
       }
