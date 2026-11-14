@@ -212,7 +212,7 @@ feedback_weight가 켜져 있고 해당 시그니처 표본 ≥ min_samples면: 
 #### (2) 순위·상한
 kind 순(missing → absent → order → window → blocked) → m/n 내림 → 없는 조건 수 → 발생 시각과 맞은 근거 거리 → 시그니처 키. 유형·원인당 하나. `match.json partial[]` ≤ 5(없는 조건 ≤ 3, 설명 60자), `analysis.json partial[]` ≤ 3(`fit()`: 다른 후보 근거 다음, 1위 근거·must_show 전에 `partial[1:]` → `missing` 40자 → 전체 제거), report.md 절 ≤ 1,200 B.
 
-#### (3) report.md (`render_report`, 분류 후보 절 다음·로그 범위 앞)
+#### (3) report.md (`render_report`, ANALYSIS 칸 — 후보 없음 줄 다음·로그 범위 앞)
 `- 부분 일치 (판정·점수 아님, S/C 불변): …` 머리 줄 + 항목마다 `<유형> > <시그니처> m/n [kind] — 맞음 … / 없음 …`, 코드 대조 줄 ≤ 3, `규칙 제안 (부분 일치): [이슈 DB] update-signature <ID> — 근거 … (Step 7, 사용자 확인 뒤에만)`. 계산했는데 없으면 `- 부분 일치: 없음`. 1위 시그니처에 `must_not_match`가 있으면 근거 줄 아래 `없음 근거 포함: must_not_match <패턴 40자> — 이 줄이 빌드에서 사라져도 같은 결과(03 §5.7)`. 탐색 입력(`explore-input.json`)에 `partial`(키·없는 조건 id)·`around_alt`(맞은 근거 시각 ≤ 3)를 넣는다.
 
 #### (4) 기록 (Step 7)

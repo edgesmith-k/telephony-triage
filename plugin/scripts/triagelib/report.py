@@ -9,7 +9,7 @@ import re
 import stat
 from pathlib import Path
 
-from common import events, masking, shown, userconfig
+from common import events, issuepost, masking, shown, userconfig
 from common.exitcodes import USAGE
 
 from .anchor import _parse_ts, _step_label
@@ -577,8 +577,14 @@ class ReportMixin:
                 "로그 추가(--more-logs), 새 유형이면 Step 7에서 등록")
 
     def render_report(self, r: dict, anchor: dict | None = None) -> tuple[str, list[str]]:
-        """`report.md` 본문과, 사용자에게 꼭 보여야 하는 줄(`must_show`: 우선순위 순, 줄 앞 "- " 없이, 최대 `MUST_SHOW_MAX`개)을 돌려준다."""
-        lines = [f"## {self.key} 분석", ""]
+        """`report.md` 본문과, 사용자에게 꼭 보여야 하는 줄(`must_show`: 우선순위 순, 줄 앞 "- " 없이, 최대 `MUST_SHOW_MAX`개)을 돌려준다.
+
+        본문은 제목 → 실행 안내(칸 밖) → Jira 코멘트와 같은 4칸(`issuepost.SECTIONS`: PROBLEM·CAUSE·NEXT ACTION·ANALYSIS)이다.
+        줄 문구는 칸과 무관하다(must_show·`rewrite_line`이 문구로 찾는다). 칸은 줄을 낼 때 정하고, 렌더 뒤 다시 나누지 않는다.
+        """
+        lines: list[str] = []                     # 실행 안내(플랫폼·분석 전용·읽기 전용·pull·재사용): 이슈 내용이 아니라 칸 밖에 둔다
+        sec: dict[str, list[str]] = {name: [] for name in issuepost.SECTIONS}
+        prob, cause_l, nxt, ana = (sec[n] for n in issuepost.SECTIONS)
         must: list[tuple[int, str]] = []          # (우선순위, 줄 본문). 이미 마스킹된 값만
 
         def add(priority: int, text: str) -> str:
@@ -593,13 +599,16 @@ class ReportMixin:
             lines.append(add(2, f"읽기 전용: {r['read_only_hint']}"))
         if (r.get("snapshot") or {}).get("pull_skipped_reason"):    # 07 §Step 1: 모드와 상관없이 알린다(분석과 무관해 맨 뒤 우선순위)
             lines.append(add(13, f"{PULL_SKIPPED}: {_clip(r['snapshot']['pull_skipped_reason'], MUST_SHOW_CLIP - len(PULL_SKIPPED) - 2)}"))
+        iss = r.get("issue") or {}       # 마스킹된 Jira 요약(jira_fields)
+        known = [f"{name} {iss[k]}" for name, k in (("SW", "sw"), ("발생 시각", "occurred_at")) if iss.get(k)]
+        prob.append(f"- 이슈: {self.key} — {iss.get('summary') or '요약 없음'}" + (f" ({', '.join(known)})" if known else ""))
         if self.failed_step:
-            lines.append(add(4, f"실패 스텝 (보조 정보, Jira {self.failed_step['source']}; 점수·S/C에 쓰지 않음; 분석 범위·순위 참고): "
+            prob.append(add(4, f"실패 스텝 (보조 정보, Jira {self.failed_step['source']}; 점수·S/C에 쓰지 않음; 분석 범위·순위 참고): "
                                 f"{self.failed_step['text']}"))
         if self.clock and self.clock.get("mode") == "none":
-            lines.append(add(5, f"장비 시각 미사용: 시계 정렬 불가({self.clock.get('reason')})"))
+            prob.append(add(5, f"장비 시각 미사용: 시계 정렬 불가({self.clock.get('reason')})"))
         if self.steps_member:
-            lines.append(f"- 시험 절차: zip 안 {self.steps_member}")
+            prob.append(f"- 시험 절차: zip 안 {self.steps_member}")
         reuse = r.get("reuse")
         if reuse and reuse.get("hit"):
             lines.append(f"- 재사용: 입력(로그·Jira·이슈 DB·설정·플러그인)이 실행 {reuse['run']}과 같아 파싱·매칭을 다시 하지 않았다")
@@ -621,23 +630,23 @@ class ReportMixin:
             jira_part = f" (Jira 발생 시각 {jira_at} / {gap:g}분 차이)" if jira_at and gap is not None else ""
             order = anchor.get("order")
             if order:
-                lines.append(f"- 실패 스텝 구간 (step_order): {_step_label(anchor.get('step'))} — 마지막 확인 스텝 "
+                prob.append(f"- 실패 스텝 구간 (step_order): {_step_label(anchor.get('step'))} — 마지막 확인 스텝 "
                              f"{order['last_label']} {order['last']['ts']} 이후 → 분석 범위 {anchor['window'][0]} ~ {anchor['window'][1]} "
                              f"(관측 가능 {order['observable']}개 중 {order['matched']}개 일치, 놓침 {order['missed']}, "
                              f"관측 불가 {order['unobservable']})" + jira_part)
-                lines += [f"  - {step} → {ts} {label}" for step, ts, label in self.order_evidence[-6:]]
+                prob += [f"  - {step} → {ts} {label}" for step, ts, label in self.order_evidence[-6:]]
             else:
-                lines.append(f"- 실패 스텝 구간 ({anchor['source']}): {_step_label(anchor.get('step'))} "
+                prob.append(f"- 실패 스텝 구간 ({anchor['source']}): {_step_label(anchor.get('step'))} "
                              f"{anchor['start'] or '?'} ~ {anchor['fail']} → 분석 범위 {anchor['window'][0]} ~ {anchor['window'][1]}"
                              + (f" (시계 차 {manual['offset_sec']:+g}초, 수동)"
                                 if anchor["source"] == "steps_file" and manual.get("mode") == "manual" else "")
                              + jira_part)
         if self.focus:
-            lines.append("- 스텝 기준 우선 유형 (순위 참고만, 점수·S/C 불변): " + ", ".join(self.focus))
+            ana.append("- 스텝 기준 우선 유형 (순위 참고만, 점수·S/C 불변): " + ", ".join(self.focus))
         cands = r["candidates"]
         unjudged = r.get("unjudged") or {}
         # 한 문장 결론(종합 리뷰 A): 머리 알림(분석 전용·읽기 전용·실패 스텝·시계) 다음, 후보 줄 바로 앞. must_show 아님(새 정보 없음)
-        lines.append("- " + self._conclusion(cands, unjudged))
+        cause_l.append("- " + self._conclusion(cands, unjudged))
         if cands:
             top = cands[0]
             label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
@@ -647,140 +656,143 @@ class ReportMixin:
                 cause = "원인 판정 불가(시그니처 시간 초과·오류 — 원인 미확인으로 단정하지 않음)"
             else:
                 cause = "원인 미확인"
-            lines.append(f"- 분류 후보: {top.get('category')} > {top['type']} > {cause} "
+            cause_l.append(f"- 분류 후보: {top.get('category')} > {top['type']} > {cause} "
                          f"(규칙 일치 점수 {top['score']}, 일치 조건 {top.get('matched_conditions', len(top['evidence']))}개, "
                          f"일치 수준 {label} — 진단 확신도 아님"
                          f"{'' if top['C'] else (', 유형 일치·원인 판정 불가' if top.get('_cause_unjudged') else ', 유형 일치·원인 미확인')})")
-            lines.append(f"- 근거 로그 (마스킹, 슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
-            lines += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ×{e['_count']}" if e.get("_count") else "")
+            ana.append(f"- 근거 로그 (마스킹, 슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
+            ana += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ×{e['_count']}" if e.get("_count") else "")
                       + (f" ({e['_ref']})" if e.get("_ref") else "")
                       for e in top["evidence"]]
             basis = (r.get("_partial") or {}).get("absence_basis")
             if basis:      # must_not_match에 기대는 시그니처: 그 줄이 빌드에서 사라져도 같은 결과(판정 불변, must_show 아님)
-                lines.append(f"  - 없음 근거 포함: must_not_match {basis['pattern']} — 이 줄이 빌드에서 사라져도 같은 결과")
+                ana.append(f"  - 없음 근거 포함: must_not_match {basis['pattern']} — 이 줄이 빌드에서 사라져도 같은 결과")
                 for u in (basis.get("unverifiable") or [])[:2]:    # 수집 태그 줄이 0줄: 공허하게 참일 수 있다 → must_show(과신 방지)
                     # 패턴 원문(정규식 메타 문자)은 위 줄에만 — must_show는 Jira 본문에 글자 그대로 들어가므로 wiki 마크업과 겹치지 않게
-                    lines.append(add(6, f"배제 조건 검증 불가: {u['signature']}의 must_not_match 태그 {u['anchor']} 줄이 이 로그에 0줄 — "
+                    ana.append(add(6, f"배제 조건 검증 불가: {u['signature']}의 must_not_match 태그 {u['anchor']} 줄이 이 로그에 0줄 — "
                                         "그 버퍼·태그가 수집되지 않았으면 '없음'은 확인된 것이 아니다(S/C·점수 불변, 일치 수준 과신 금지)"))
             jira_slot = (r.get("issue") or {}).get("sim_slot")
             slot = _slot_number(jira_slot)
             if slot is not None and top["phones"] and slot not in top["phones"]:
-                lines.append(add(7, f"슬롯 불일치: 1위 후보 근거는 phone {','.join(map(str, top['phones']))}, Jira SIM 슬롯은 "
+                ana.append(add(7, f"슬롯 불일치: 1위 후보 근거는 phone {','.join(map(str, top['phones']))}, Jira SIM 슬롯은 "
                                     f"{_clip(str(jira_slot), 20)} — 다른 슬롯의 로그로 판정됐을 수 있다(교차 슬롯 원인이 아니면 재검토)"))
             if top.get("clock_flags"):
-                lines.append(add(8, "시계 이상 구간의 근거: 1위의 순서·시간창 판정은 시각 재정렬 기준이라 신뢰가 낮다 — 근거 (f:L) 위치로 "
+                ana.append(add(8, "시계 이상 구간의 근거: 1위의 순서·시간창 판정은 시각 재정렬 기준이라 신뢰가 낮다 — 근거 (f:L) 위치로 "
                                     "순서 확인(이어 붙인(버퍼별 덤프) 파일이면 줄 순서가 시각 순서가 아니다) "
                                     f"[{', '.join(top['clock_flags'])}]"))
             if (len(cands) > 1 and cands[1]["score"] == top["score"]
                     and (cands[1]["S"], cands[1]["C"]) == (top["S"], top["C"])):
                 n = sum(1 for c in cands if c["score"] == top["score"])
-                lines.append(f"- 순위 참고: 규칙 일치 점수 동점 후보 {n}개 — 발생 시각 근접·키워드 근거 순으로 정렬했다(원인 확정 아님)")
+                cause_l.append(f"- 순위 참고: 규칙 일치 점수 동점 후보 {n}개 — 발생 시각 근접·키워드 근거 순으로 정렬했다(원인 확정 아님)")
         else:
             if unjudged.get("count"):
-                lines.append(f"- 분류 후보: **판정 불완전** — 증상 시그니처에 맞는 유형 없음, 판정 불가 유형 {unjudged['count']}개 "
+                cause_l.append(f"- 분류 후보: **판정 불완전** — 증상 시그니처에 맞는 유형 없음, 판정 불가 유형 {unjudged['count']}개 "
                              "(후보 없음으로 단정하지 않음)")
             else:
-                lines.append("- 분류 후보: **후보 없음** (증상 시그니처에 맞는 유형 없음)")
+                cause_l.append("- 분류 후보: **후보 없음** (증상 시그니처에 맞는 유형 없음)")
             hints = r.get("no_candidate") or {}
-            lines.append("- 설명 기반 유사 후보: " + (", ".join(f"{h['id']} {h['title']}" for h in hints.get("search_hits") or [])
+            ana.append("- 설명 기반 유사 후보: " + (", ".join(f"{h['id']} {h['title']}" for h in hints.get("search_hits") or [])
                                                  or "없음"))
             total, unext = hints.get("error_event_total", 0), hints.get("unextracted_warn")
             text = f"오류·거부·타임아웃 이벤트: 추출 이벤트 기준 {total}건"
             if unext:
                 tags = ", ".join(f"{t['tag']} {t['lines']}줄" for t in hints.get("_unextracted_tags") or [])
                 text += f" (수집 태그 W/E/F 줄 중 이벤트로 추출 안 된 줄 {unext}건" + (f": {tags}" if tags else "") + ")"
-            lines.append(add(11, text) if unext and not total else f"- {text}")
-            lines += [f"  - {_error_line(e)}" for e in (hints.get("error_events") or [])[:8]]
-        lines += self.partial_lines(r, cands)
+            ana.append(add(11, text) if unext and not total else f"- {text}")
+            ana += [f"  - {_error_line(e)}" for e in (hints.get("error_events") or [])[:8]]
+        ana += self.partial_lines(r, cands)
         if unjudged:
             err = (unjudged.get("errors") or [{}])[0]
             where = f"시그니처 시간 초과·오류 {err.get('signature')}: {err.get('error')}"
             if unjudged.get("count") or unjudged.get("cause_count"):
                 ids = ", ".join((unjudged.get("types") or []) + (unjudged.get("causes") or []))
                 n = f"{unjudged['count']}" + (f"·원인 {unjudged['cause_count']}" if unjudged.get("cause_count") else "")
-                lines.append(add(6, f"판정 불가 유형: {n}개" + (f" ({ids})" if ids else "") + f" — {where}. "
+                cause_l.append(add(6, f"판정 불가 유형: {n}개" + (f" ({ids})" if ids else "") + f" — {where}. "
                                     "후보 순위·'후보 없음'·'원인 미확인'은 불완전하다 (관리자: 이슈 DB matcher.pattern_timeout_ms·그 시그니처 확인)"))
             else:     # 충족된 유형의 다른 시그니처만 오류: S/C는 그대로, 근거 선택만 달라질 수 있다
-                lines.append(add(6, f"{where} — 충족된 유형의 다른 시그니처라 S/C는 그대로(근거 선택은 달라질 수 있다)"))
+                cause_l.append(add(6, f"{where} — 충족된 유형의 다른 시그니처라 S/C는 그대로(근거 선택은 달라질 수 있다)"))
         if anchor and (not cands or not cands[0]["C"]):
-            lines.append("- 힌트: 실패 스텝 구간 기준으로 좁게 분석했다. 원인이 스텝 시작 전에 있었을 수 있다 — "
+            nxt.append("- 힌트: 실패 스텝 구간 기준으로 좁게 분석했다. 원인이 스텝 시작 전에 있었을 수 있다 — "
                          "`--answer anchor=off`로 다시 실행하면 Jira 발생 시각 기준 범위로 넓힌다")
         outside = r.get("_outside")
         if outside and outside.get("total"):
-            lines.append(add(10, f"분석 범위 밖 오류 이벤트 (Jira 발생 시각 {outside['at']} 근처, 근거·점수에 쓰지 않음): "
+            ana.append(add(10, f"분석 범위 밖 오류 이벤트 (Jira 발생 시각 {outside['at']} 근처, 근거·점수에 쓰지 않음): "
                                 f"{outside['total']}건"))
-            lines += [f"  - {_error_line(e)}" for e in outside["rows"][:3]]
+            ana += [f"  - {_error_line(e)}" for e in outside["rows"][:3]]
         logs = r["logs"]
         if logs.get("uncollected_tags"):       # 후보 없음·원인 미확인일 때만 core가 채운다
             tags = ", ".join(f"{u['tag']} {u['lines']}줄(W/E {u['warn']})" for u in logs["uncollected_tags"])
-            lines.append(add(11, "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): " + tags))
+            ana.append(add(11, "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): " + tags))
         in_range = {True: "발생 시각 포함", "partial": "일부만 포함", False: "로그 범위 밖",
                     None: "해석한 줄 없음(형식·인코딩)"}.get(logs["in_range"], "?")
         range_text = (f"로그 범위: {logs['range'][0]} ~ {logs['range'][1]} ({in_range}), "
                       f"시계 이상 {'있음' if logs['clock_anomalies'] else '없음'}")
         if not cands or not cands[0]["C"] or logs["in_range"] is not True or logs["clock_anomalies"]:
-            lines.append(add(9, range_text))
+            ana.append(add(9, range_text))
         else:
-            lines.append(f"- {range_text}")
+            ana.append(f"- {range_text}")
         if r.get("explore") and r["explore"].get("when") != "never":     # 탐색 분석 줄과 같은 조건(아래)
-            lines.append("- 원인: TODO(LLM) — 로그로 확인한 것(탐색 동의 답 전엔 리포트에 보인 줄만 — 추출 안 된 줄은 동의 뒤 "
+            cause_l.append("- 원인: TODO(LLM) — 로그로 확인한 것(탐색 동의 답 전엔 리포트에 보인 줄만 — 추출 안 된 줄은 동의 뒤 "
                          "timeline.md, 로그 원문은 grep·Read 안 함) / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 쓴다")
         else:
-            lines.append("- 원인: TODO(LLM) — 로그로 확인한 것 / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 쓴다")
+            cause_l.append("- 원인: TODO(LLM) — 로그로 확인한 것 / 코드로 추정한 것 / placeholder 규칙 결과를 나눠 쓴다")
         code = r["code"]
         if code.get("skipped"):
-            lines.append("- 코드 위치: 코드 미확인")
+            ana.append("- 코드 위치: 코드 미확인")
         else:
             refs = ", ".join(f"{c['ref']}" for c in code.get("resolved") or []) or "code_refs 없음"
-            lines.append(f"- 코드 위치: TODO(LLM) 파일:라인 + 분기 조건 (열 파일: {refs}; 분석 트리: {code.get('roots')}, "
+            ana.append(f"- 코드 위치: TODO(LLM) 파일:라인 + 분기 조건 (열 파일: {refs}; 분석 트리: {code.get('roots')}, "
                          f"{self.platform_label} {code.get('tree_version') or '?'}{AUTO_CODE_NOTE if code.get('auto') else ''})")
             for m in code.get("moved") or []:
-                lines.append(f"  - 경로 변경: {m['ref']} → {m['new_ref'] or '찾지 못함'} (Step 7 add-code-ref 제안)")
+                ana.append(f"  - 경로 변경: {m['ref']} → {m['new_ref'] or '찾지 못함'} (Step 7 add-code-ref 제안)")
             if code.get("auto"):      # 자동 선택 알림은 의무다(07 §Step 2-1 3번): must_show로 사용자에게 보이게 한다
                 roots = code.get("roots")
                 roots = ", ".join(map(str, roots)) if isinstance(roots, (list, tuple)) else roots
-                lines.append(add(12, f"코드 분석 트리 자동 선택: {roots} ({self.platform_label} "
+                ana.append(add(12, f"코드 분석 트리 자동 선택: {roots} ({self.platform_label} "
                                      f"{code.get('tree_version') or '?'}) — 다른 트리는 --code로 지정"))
         if cands and cands[0]["cause"]:
             top = cands[0]
             verified = "검증됨" if top.get("resolution_verification") == "verified" else "⚠ 미검증"
-            lines.append(f"- 해결책: {top.get('resolution') or '-'}   해결책 검증: {verified}")
-            lines.append(f"- 수정 상태: {top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
+            nxt.append(f"- 해결책: {top.get('resolution') or '-'}   해결책 검증: {verified}")
+            nxt.append(f"- 수정 상태: {top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
             if top.get("_version_mismatch"):
-                lines.append(f"- 다른 버전 원인 ({self.platform_label} {', '.join(top['_version_mismatch'])})")
-            lines.append(f"- 기존 사례: Jira {top.get('issue_count') or 0}건 ({', '.join(top.get('issue_recent') or []) or '-'})")
-            lines.append(f"- 관련 원인: {', '.join(top['related']) or '없음'}")
+                cause_l.append(f"- 다른 버전 원인 ({self.platform_label} {', '.join(top['_version_mismatch'])})")
+            cause_l.append(f"- 기존 사례: Jira {top.get('issue_count') or 0}건 ({', '.join(top.get('issue_recent') or []) or '-'})")
+            cause_l.append(f"- 관련 원인: {', '.join(top['related']) or '없음'}")
         others = [f"{c['cause'] or c['type']} (규칙 일치 점수 {c['score']})" for c in cands[1:]]
-        lines.append(f"- 기타 후보: {', '.join(others) or '없음'}")
+        ana.append(f"- 기타 후보: {', '.join(others) or '없음'}")
         if r.get("pending_causes"):
-            lines.append("- 참고: 시그니처 없는 기존 원인: " + ", ".join(p["cause"] for p in r["pending_causes"]))
+            cause_l.append("- 참고: 시그니처 없는 기존 원인: " + ", ".join(p["cause"] for p in r["pending_causes"]))
         analyzer = r.get("analyzer")
         if analyzer and analyzer.get("error"):      # {error, when: never}: 설정 오류는 never 줄보다 먼저(B2-3)
-            lines.append(DEEP_CONFIG_ERROR.format(problem=analyzer["error"]))
+            ana.append(DEEP_CONFIG_ERROR.format(problem=analyzer["error"]))
         elif analyzer and analyzer.get("when") == "never":
             # 설정 키 경로: 기본 플랫폼은 최상위 analyzers, 그 밖은 platforms.<p>.analyzers (17-platforms §10)
             at = "" if self.platform == userconfig.TOP_PROFILE else f"platforms.{self.platform}."
-            lines.append(f"- 심층 분석 생략: {at}analyzers.{cands[0].get('category')}.when: never")
+            ana.append(f"- 심층 분석 생략: {at}analyzers.{cands[0].get('category')}.when: never")
         elif analyzer and analyzer.get("category"):     # 모듈 스킬: 동의 뒤 `module --for deep`가 받는다
-            lines.append(DEEP_MODULE_PENDING.format(platform=self.platform, category=analyzer["category"], key=self.key))
+            ana.append(DEEP_MODULE_PENDING.format(platform=self.platform, category=analyzer["category"], key=self.key))
         elif analyzer:
-            lines.append(f"- 심층 분석 ({analyzer['skill']}): TODO(LLM) 결과 요약 / 분석 스킬 의견: <원인 ID — 근거 | 1위와 같음>. "
+            ana.append(f"- 심층 분석 ({analyzer['skill']}): TODO(LLM) 결과 요약 / 분석 스킬 의견: <원인 ID — 근거 | 1위와 같음>. "
                          "실행 안 함·실패면 이 줄을 \"심층 분석 생략: <사유>\"로")
         else:
-            lines.append("- 심층 분석: 해당 없음(1위 카테고리에 분석 스킬 설정 없음) (만드는 법: 이슈 DB docs/analyzer-skills.md)"
+            ana.append("- 심층 분석: 해당 없음(1위 카테고리에 분석 스킬 설정 없음) (만드는 법: 이슈 DB docs/analyzer-skills.md)"
                          if cands else "- 심층 분석: 해당 없음(1위 후보 없음)")
         explore = r.get("explore")
         if explore and explore.get("when") == "never":
-            lines.append("- 탐색 분석: 생략 (explore.when: never)")
+            ana.append("- 탐색 분석: 생략 (explore.when: never)")
         elif explore:
-            lines.append(EXPLORE_PENDING_LINE.format(key=self.key))
+            ana.append(EXPLORE_PENDING_LINE.format(key=self.key))
         if self.analysis_only:
-            lines.append("- 열린 PR: 확인 안 함(분석 전용)")
+            nxt.append("- 열린 PR: 확인 안 함(분석 전용)")
             if (r.get("plan") or {}).get("exists"):
-                lines.append("- 기존 작업 계획: 있음(분석 전용이라 건드리지 않음)")
+                nxt.append("- 기존 작업 계획: 있음(분석 전용이라 건드리지 않음)")
         else:
             prs = r.get("open_prs") or []
-            lines.append(f"- 열린 PR: {', '.join(str(p.get('url') or p.get('number')) for p in prs) or '없음'}")
+            nxt.append(f"- 열린 PR: {', '.join(str(p.get('url') or p.get('number')) for p in prs) or '없음'}")
         if r["warnings"]:
-            lines.append("- 경고: " + "; ".join(r["warnings"]))
-        return "\n".join(lines) + "\n", [text for _, text in sorted(must, key=lambda m: m[0])][:MUST_SHOW_MAX]
+            ana.append("- 경고: " + "; ".join(r["warnings"]))
+        out = [f"## {self.key} 분석"] + (["", *lines] if lines else [])
+        for name, rows in sec.items():
+            out += ["", f"### {name}", *(rows or ["- 해당 없음"])]
+        return "\n".join(out) + "\n", [text for _, text in sorted(must, key=lambda m: m[0])][:MUST_SHOW_MAX]

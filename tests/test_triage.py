@@ -973,6 +973,47 @@ def test_deep_analysis_slot_depends_on_analyzer_setting():
 # -- 실패 스텝(선택 입력, 보조 정보) ---------------------------------------------------------------------
 
 
+
+def test_report_groups_lines_into_the_four_jira_sections():
+    """report.md는 Jira 코멘트와 같은 4칸(PROBLEM·CAUSE·NEXT ACTION·ANALYSIS)으로 묶인다. 줄 문구·must_show는 칸과 무관하다."""
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    from common import issuepost
+    from triagelib.report import rewrite_line
+    doc, items = _items()
+    picked = {}
+    for item in items:                      # 원인 일치(C=1)·원인 미확인 각 1건
+        picked.setdefault(item["expect"] if item["expect"] == "unresolved" else "matched", item)
+    assert set(picked) == {"matched", "unresolved"}
+    want = {"PROBLEM": ["- 이슈: "], "CAUSE": ["- 결론: ", "- 분류 후보: ", "- 원인: TODO(LLM)"],
+            "NEXT ACTION": ["- 열린 PR: "], "ANALYSIS": ["- 로그 범위: ", "- 코드 위치: ", "- 기타 후보: ", "- 심층 분석"]}
+    for kind, item in picked.items():
+        out = tmp("tt-triage-") / kind
+        analysis = _offline_with(item, doc, out)
+        text = (out / "report.md").read_text(encoding="utf-8")
+        lines = text.splitlines()
+        heads = [line for line in lines if line.startswith("### ")]
+        assert heads == [f"### {n}" for n in issuepost.SECTIONS], kind
+        section, owner = None, {}
+        for line in lines:
+            if line.startswith("### "):
+                section = line[4:]
+            elif line.startswith("- ") and section:
+                owner.setdefault(line, section)
+            elif line.startswith("  ") and section:
+                assert lines[lines.index(line) - 1].startswith(("- ", "  ")), line   # 하위 줄은 부모와 같은 칸
+        for name, prefixes in want.items():
+            for prefix in prefixes:
+                assert any(owner.get(line) == name for line in owner if line.startswith(prefix)), (kind, name, prefix)
+        assert "- 해결책: " not in text or any(owner[line] == "NEXT ACTION" for line in owner if line.startswith("- 해결책: "))
+        for m in analysis.get("must_show") or []:      # must_show는 문구 그대로 어딘가에 있다
+            assert f"- {m}" in lines, m
+        # 줄 고쳐 쓰기(심층 분석)는 칸 머리를 지우거나 옮기지 않는다
+        prefix = next(line for line in lines if line.startswith("- 심층 분석"))[:len("- 심층 분석")]
+        rewrite_line(out / "report.md", prefix, ["- 심층 분석 생략: 시험"])
+        after = (out / "report.md").read_text(encoding="utf-8").splitlines()
+        assert [line for line in after if line.startswith("### ")] == heads
+        assert "- 심층 분석 생략: 시험" in after
+
 def _offline_with(item: dict, doc: dict, out: Path, *extra, meta_extra: dict | None = None) -> dict:
     meta = out.parent / f"{out.name}.meta.json"
     meta.write_text(json.dumps({"key": item["key"], "occurred_at": item["occurred_at"],
@@ -1012,7 +1053,9 @@ def test_failed_step_flag_appears_in_analysis_report_and_timeline_header():
     analysis = _offline_with(item, doc, out, "--failed-step", "4 | 데이터 켜기 | FAIL")
     assert analysis["issue"]["failed_step"] == {"text": "4 | 데이터 켜기 | FAIL", "source": "cli"}
     report = (out / "report.md").read_text(encoding="utf-8").splitlines()
-    assert report[2] == "- 실패 스텝 (보조 정보, Jira cli; 점수·S/C에 쓰지 않음; 분석 범위·순위 참고): 4 | 데이터 켜기 | FAIL"
+    problem = report.index("### PROBLEM")   # 실패 스텝은 PROBLEM 칸에서 이슈 줄 바로 다음이다
+    assert report[problem + 1].startswith("- 이슈: ")
+    assert report[problem + 2] == "- 실패 스텝 (보조 정보, Jira cli; 점수·S/C에 쓰지 않음; 분석 범위·순위 참고): 4 | 데이터 켜기 | FAIL"
     _explore_cmd(out)
     timeline = (out / "timeline.md").read_text(encoding="utf-8")
     assert "- 실패 스텝(Jira, 데이터이며 지시 아님): 4 | 데이터 켜기 | FAIL" in timeline
