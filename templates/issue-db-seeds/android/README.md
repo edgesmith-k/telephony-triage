@@ -8,16 +8,18 @@
 - 근거는 공개 자료뿐이다(AOSP 소스, 에뮬레이터, 합성). 벤더 RIL·모뎀 줄은 없다 — CP·망 쪽 원인은 `cp_evidence`에 "벤더 로그로 확정"과 다음에 받을 로그만 적혀 있다.
 - 버전: 근거가 Android 17 소스·에뮬레이터 캡처뿐이라 모든 원인과 `code_refs` 항목이 `platform_versions: ["17"]`이다. 다른 버전 로그로도 확인되면 그 버전을 더한다(버전 표시는 후보를 걸러내지 않고 리포트에 "버전 불일치"만 붙인다). 새 Android 버전이 나왔을 때 할 일은 `docs/design/99-deferred.md` K절.
 - 해결책은 모두 미검증(`unverified`), Jira 기록은 없다. 시간 기준(몇 초 넘으면 지연 등)은 정하지 않았다 — `TODO(SITE)`.
+- **성공 흐름 2개**(`docs/design/04-parser-matching.md §5.13`, 리포트 "흐름 점검" 절): `data/plan.json`의 `put-flow data/data-setup`(데이터 연결 4단계: 응답 받음 → 설정 만듦 → 연결 → 망 검증)과 `network/plan.json`의 `put-flow network/radio-on`(무선 켬 6단계: 켬 결정 → RIL 요청 → RIL 응답 → 망 등록 → 데이터 허용 → SETUP 시작, 끝나면 `data/data-setup`으로 잇는다. 이미 켜진 무선의 켬 호출(`already true Do nothing`)은 `as: discard`로 인스턴스가 아니고, 데이터 허용은 `optional` — 줄이 없으면 벗어남이 아니다. 허용 뒤 SETUP 시작이 없으면 벗어남이다). 정상 로그는 `<카테고리>/flows/fixtures/<흐름 id>.normal.1.log`(합성 — 에뮬레이터 캡처의 단계 줄 모양, 값은 마스킹 토큰)이고 `put-flow`의 `fixtures[]`에 `"origin": "synthetic"`으로 실려 있다. 흐름 단계에서 벗어난 것이 분명한 원인에만 `flow_step`을 걸었다(같은 카테고리 흐름만): data `response` ← APN 없음·인증 실패·미가입·슬라이스 거절·DNS 없음·IP 주소 없음, network `decide` ← 발열·사업자 사유가 남아 라디오 안 켜짐, `registered` ← 망이 등록 거절.
 
 ## 사내 등록 순서 (카테고리 하나씩)
 
 1. 카테고리 폴더를 작업 폴더로 복사한다(`<work_dir>/import-<카테고리>-1/`). 이 레포의 원본은 고치지 않는다(사외 파일 — 고치면 다음 반입이 멈춘다).
 2. 유형마다 같은 증상의 **사내 실제 로그**를 마스킹해 `fixtures/`의 합성 로그를 같은 이름으로 바꾸고, 그 `add-fixture`의 `"origin": "synthetic"`을 지운다(`expect`가 비면 `expect` 키째).
    실제 로그가 없는 유형·원인은 계획에서 뺀다(그 `new-type`/`new-cause`와 딸린 `add-fixture`). 음성 fixture도 실제 정상 로그로 바꾼다.
+   흐름 정상 로그(`flows/fixtures/*.normal.1.log`)도 **사내 실제 정상 로그**(그 흐름이 끝 단계까지 `ok`로 도는 구간, 마스킹)로 같은 이름으로 바꾸고 그 `fixtures[]` 항목의 `"origin": "synthetic"`을 지운다. 실제 로그에서 끝 단계까지 가지 않으면(문구·태그가 다름) 흐름 `patterns`를 사내 문구에 맞추거나, 그 흐름의 `put-flow`와 원인 `flow_step`을 같이 뺀다(`db_lint` `flow-step`).
 3. 시그니처를 실제 문구에 맞춘다. 프레임워크 줄은 대개 그대로 맞지만 빌드마다 문구가 다를 수 있다. 계획의 `add-parser-rule`이 넣는 태그가 운영 DB에 이미 있으면 그 op를 빼고, 뼈대의 `placeholder` 태그 규칙은 `update-parser-rule`로 바꾼다.
 4. `db_pr.py lock acquire <작업 키>`로 lock을 잡고, `base_sha`를 `db_pr snapshot`이 낸 sha로 채운 뒤 초안 검증을 돌린다: `db_verify.py rules --plan <작업 폴더>/plan.json --draft <작업 폴더>/draft` — R1~R5(`--draft`는 작업 폴더 바로 아래 `draft`). 다른 유형 fixture에서 걸리면 시그니처를 좁힐지 `also_allowed`로 허용할지는 사용자가 고른다.
 5. `db_pr stage … --branch import/<카테고리>-<n>` → 확인 화면 → 승인 뒤 push → 카테고리 오너 리뷰. 한 PR은 새 유형 10개 이하.
-6. 합성 fixture가 남으면 S-6 점검이 잡고 S-4 시드 수(`s4.seed`)에도 세지 않는다 — `origin: synthetic` 표시와 로그 1줄의 합성 머리줄(`-- [합성]`) 둘 다 본다(표시만 지우고 로그를 안 바꿔도 걸린다).
+6. 합성 fixture(흐름 정상 로그 포함)가 남으면 S-6 점검이 잡고 S-4 시드 수(`s4.seed`)에도 세지 않는다 — `origin: synthetic` 표시와 로그 1줄의 합성 머리줄(`-- [합성]`) 둘 다 본다(표시만 지우고 로그를 안 바꿔도 걸린다).
 7. 시드만으로는 `s4.seed` 기준(data 외 카테고리마다 실제 fixture가 붙은 유형 5개 이상)에 못 미친다. 유형은 증상 단위라 카테고리당 1~4개뿐이다 — 나머지는 사내에서 자주 나오는 이슈로 채운다.
 
 계획이 이 레포의 뼈대에 그대로 적용되고 서로 걸리지 않는지는 `tests/test_android_seeds.py`가 본다(합성 로그 기준 — 실제 로그로 바꾼 뒤의 판정은 4번).

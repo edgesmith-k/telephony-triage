@@ -47,6 +47,11 @@
 - `yaml-syntax` 오류: YAML 문법 오류(파일·줄). 그 파일만 건너뛰고 검사는 계속(config가 깨지면 검사 불가라 거기서 끝)
 - `synthetic` 경고: `synthetic_allowed: false`인 플러그인에서 `origin: synthetic` fixture
 - `residual-id` 오류: `--residual`로 준 옛 ID가 남아 있음
+- 성공 흐름(`<category>/flows/<id>.yaml`, 04 §5.13): `schema`(흐름 스키마), `flow-id`(id ≠ 파일 이름), `flow-step-id`(단계 id
+  중복), `flow-regex`(정규식 오류, `name_template`은 `{key}`를 `X`로 바꿔)·`raw-identifier`·`fixed-token`·`regex-unsafe`(시그니처와 같은 검사)·`flow-token`(마스킹 토큰 금지), `flow-start`(같은 카테고리에
+  start가 같은 흐름 둘 이상) 오류, `flow-then` 경고(then 대상 없음), `flow-fixture-missing`(정상 fixture 없음)·`fixture-name`·
+  `fixture-owner`(`flows/fixtures/<id>.normal.<n>.log`) 오류, `flow-step` 오류(원인 `flow_step`의 흐름·단계가 없음, 다른 카테고리 흐름),
+  `schema` 오류(`issue-db.config.yaml` `flows.log_end_sec`가 양수 숫자가 아님)
 
 참고(advice, `--advice`일 때만 — 03-issue-db.md §5.7 (2) "근거 줄 하나에만 기대지 않기")
 - `single-signature`: active 유형의 active 원인에 판별 시그니처(`signatures`)가 하나뿐(`signatures_pending` 원인 제외)
@@ -79,6 +84,8 @@ import parser_backends  # noqa: E402
 import platforms  # noqa: E402
 import trackers  # noqa: E402
 from common import compat, dbpath, gitscope, issuedb, masking, parser_rules, site_defaults, typedoc, yamlio  # noqa: E402
+from common import flows  # noqa: E402
+from common.flows import FIXTURE_RE as FLOW_FIXTURE_RE  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE, parse_name  # noqa: E402
 from common.quality import CODE_FIX_TYPES  # noqa: E402
@@ -86,6 +93,7 @@ from common.signatures import (  # noqa: E402
     SUPPORTED_FEATURES, SignatureError, compile_signature, features_used, tag_position_word)
 
 TOKEN_FIXED_RE = re.compile(r"<[A-Z][A-Z0-9]*#\d+>")
+FLOW_TOKEN_RE = re.compile(r"<[A-Z][A-Z0-9]+(?:\\?#|\\?>| (?:\\d|\d))")  # `<IP#…>`·`<IMSI>`·`<HEXDUMP nB>`(`\<IP\#1\>`도) — 흐름은 가리지 않은 글에서 찾는다
 KEBAB_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SIG_KINDS = ("symptom_signatures", "signatures", "recovery_signatures", "scenario_signatures")
 TYPE_TITLE_MAX, CAUSE_TITLE_MAX = 30, 20
@@ -279,6 +287,7 @@ class Linter:
         self._check_ids()
         self._check_step_focus()
         self._check_step_events()
+        self._check_flows()
         for type_md, data in self.types:
             self._check_type(type_md, data)
         self._check_jira()
@@ -520,11 +529,11 @@ class Linter:
         import jsonschema
 
         out = {}
-        for name in ("type", "issue", "feedback", "expect"):
+        for name in ("type", "issue", "feedback", "expect", "flow"):
             path = self.root / "schema" / f"{name}.schema.json"
             if path.is_file():
                 out[name] = jsonschema.Draft202012Validator(json.loads(path.read_text(encoding="utf-8")))
-            else:
+            elif name != "flow":    # 흐름 스키마는 흐름 파일이 있을 때만 요구한다(_check_flows)
                 self.err("schema", f"schema/{name}.schema.json", "스키마 파일이 없습니다.")
         return out
 
@@ -702,6 +711,8 @@ class Linter:
             for hit in masking.new_masker().find(str(cause["cp_evidence"])):
                 self.err("raw-identifier", type_md, f"{cid}: cp_evidence에 마스킹되지 않은 {hit['kind']}가 있습니다.")
                 break
+        if cause.get("flow_step"):
+            self._check_flow_step(type_md, cid, str(cause["flow_step"]))
         if cause.get("status") == "active" and not pending and cid not in positives:
             self.warn("fixture-missing", type_md, f"{cid}: 양성 fixture가 없습니다 (R1·R2 skipped, 리뷰 대상).")
         if (self.base_causes is not None and cid not in self.base_causes and fix.get("status") == "fixed"
@@ -819,10 +830,10 @@ class Linter:
                 self.err("ext-event", type_md,
                          f"{key}: {name} — 카테고리 '{category}'가 이슈 DB external_parsers에 없습니다.")
 
-    def _check_pattern(self, path, key, pattern) -> None:
+    def _check_pattern(self, path, key, pattern, hint="마스킹된 로그 기준으로 쓴다") -> None:
         reason = raw_identifier_in_pattern(pattern)
         if reason:
-            self.err("raw-identifier", path, f"{key}: 패턴 {pattern!r}에 {reason} — 마스킹된 로그 기준으로 쓴다.")
+            self.err("raw-identifier", path, f"{key}: 패턴 {pattern!r}에 {reason} — {hint}.")
         if TOKEN_FIXED_RE.search(pattern):
             self.warn("fixed-token", path, f"{key}: 패턴 {pattern!r}이 특정 마스킹 번호를 고정합니다. "
                                            "<CELL#\\d+>처럼 종류로 쓴다.")
@@ -870,6 +881,97 @@ class Linter:
             if data.get("origin") == "synthetic" and not synthetic_ok:
                 self.warn("synthetic", path, "합성 fixture(origin: synthetic)가 있습니다 (synthetic_allowed: false).")
         return positives
+
+    # 성공 흐름 (04 §5.13) ------------------------------------------------------------
+
+    def _check_flows(self) -> None:
+        """`<category>/flows/<id>.yaml`과 정상 fixture `flows/fixtures/<id>.normal.<n>.log`. 통과한 흐름의 단계 id는
+        `self.flow_steps`(원인 `flow_step` 검사)에 모은다. 흐름 파일이 없으면 결과는 이전과 같다."""
+        self.flow_steps: dict[str, set[str]] = {}
+        thens = []
+        value = (self.config.get("flows") or {}).get("log_end_sec") if isinstance(self.config.get("flows"), dict) else None
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0):
+            self.err("schema", issuedb.CONFIG, f"flows.log_end_sec는 양수 숫자여야 합니다: {value!r} (엔진은 기본값 "
+                                               f"{flows.LOG_END_SEC:g}초로 본다)")
+        for cat in self.categories:
+            fdir = self.root / cat / "flows"
+            starts: dict[tuple, Path] = {}
+            for path in sorted(fdir.glob("*.yaml")):
+                data = self._yaml(path)
+                if path in self.bad_yaml:
+                    continue
+                if "flow" not in self.validators:
+                    self.err("schema", path, "schema/flow.schema.json이 없어 흐름을 검사할 수 없습니다.")
+                    continue
+                if not self._validate("flow", data, path):
+                    continue
+                ref = f"{cat}/{data['id']}"
+                if data["id"] != path.stem:
+                    self.err("flow-id", path, f"흐름 id {data['id']}가 파일 이름({path.name})과 다릅니다.")
+                    continue
+                ids = [s["id"] for s in data["steps"]]
+                dupes = sorted({x for x in ids if ids.count(x) > 1})
+                if dupes:
+                    self.err("flow-step-id", path, f"{ref}: 단계 id가 겹칩니다: {dupes}")
+                self.flow_steps[ref] = set(ids)
+                start = (data["start"]["tag_regex"], data["start"]["pattern"])
+                if start in starts:
+                    self.err("flow-start", [path, starts[start]], f"{ref}: 같은 카테고리에 start가 같은 흐름이 있습니다 "
+                                                                  "(버전별 흐름 고르기는 아직 없다 — 99-deferred).")
+                starts.setdefault(start, path)
+                patterns = [("start.tag_regex", start[0]), ("start.pattern", start[1])]
+                patterns += [(f"{k}[{n}]", e["pattern"]) for k in ("end", "notes") for n, e in enumerate(data.get(k) or [])]
+                patterns += [(f"{k}[{n}].name_template", e["name_template"].replace("{key}", "X"))   # {key} = re.escape(태그)
+                             for k in ("end", "notes", "steps") for n, e in enumerate(data.get(k) or []) if e.get("name_template")]
+                for s in data["steps"]:
+                    patterns += [(f"{s['id']}.patterns", p) for p in s["patterns"]] + \
+                        [(f"{s['id']}.ok", o["pattern"]) for o in s.get("ok") or []] + \
+                        [(f"{s['id']}.show", p) for p in s.get("show") or []]
+                for where, pattern in patterns:
+                    try:
+                        re.compile(pattern)
+                    except re.error as exc:
+                        self.err("flow-regex", path, f"{ref} {where}: 정규식 오류 {pattern!r}: {exc}")
+                        continue
+                    self._check_pattern(path, f"{ref} {where}", pattern, "실제 값 대신 값의 모양(정규식)으로 쓴다")
+                    if FLOW_TOKEN_RE.search(pattern):
+                        self.err("flow-token", path, f"{ref} {where}: 패턴 {pattern!r}에 마스킹 토큰이 있습니다 — 흐름은 "
+                                                     "가리지 않은 글에서 찾으므로 토큰 없이 씁니다(04 §5.13).")
+                if data.get("then"):
+                    thens.append((path, ref, data["then"] if "/" in data["then"] else f"{cat}/{data['then']}"))
+            self._check_flow_fixtures(cat, fdir)
+        for path, ref, target in thens:
+            if target not in self.flow_steps:
+                self.warn("flow-then", path, f"{ref}: then 대상 흐름 {target}가 없습니다 — 엔진은 잇지 않는다.")
+
+    def _check_flow_fixtures(self, cat: str, fdir: Path) -> None:
+        stems = {p.stem for p in fdir.glob("*.yaml")}
+        have = set()
+        for path in sorted(p for p in (fdir / "fixtures").glob("*") if p.is_file()):
+            m = FLOW_FIXTURE_RE.match(path.name)
+            if m is None:
+                self.err("fixture-name", path, f"흐름 fixture 이름은 <흐름 id>.normal.<n>.log: {path.name} (contracts.md §fixture)")
+            elif m["id"] not in stems:
+                self.err("fixture-owner", path, f"{path.name}가 가리키는 흐름 {cat}/{m['id']}가 없습니다.")
+            else:
+                have.add(m["id"])
+        for ref in sorted(r for r in self.flow_steps if r.startswith(cat + "/")):
+            if ref.split("/", 1)[1] not in have:
+                self.err("flow-fixture-missing", fdir / f"{ref.split('/', 1)[1]}.yaml",
+                         f"{ref}: 정상 fixture(flows/fixtures/<id>.normal.<n>.log)가 없습니다.")
+
+    def _check_flow_step(self, type_md: Path, cid: str, value: str) -> None:
+        """원인 `flow_step` `<category>/<flow id>/<step id>`: 같은 카테고리 흐름의 있는 단계여야 한다(V-8 — 시드 계획을
+        카테고리마다 따로 검증해도 깨지지 않게 다른 카테고리 흐름은 걸지 않는다)."""
+        cat, _, rest = value.partition("/")
+        ref, _, step = rest.rpartition("/")
+        flow_file = f"{cat}/flows/{ref}.yaml"
+        if cat != type_md.parent.parent.name:
+            self.err("flow-step", type_md, f"{cid}: flow_step {value}는 다른 카테고리 흐름이다 — 같은 카테고리 흐름만 건다.")
+        elif f"{cat}/{ref}" not in self.flow_steps:
+            self.err("flow-step", [type_md, flow_file], f"{cid}: flow_step {value}의 흐름 {cat}/{ref}가 없습니다.")
+        elif step not in self.flow_steps[f"{cat}/{ref}"]:
+            self.err("flow-step", [type_md, flow_file], f"{cid}: flow_step {value}의 단계 {step}가 흐름에 없습니다.")
 
     # Jira·피드백·규칙 --------------------------------------------------------------
 

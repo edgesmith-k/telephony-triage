@@ -160,7 +160,7 @@ def test_drift_knows_every_plan_schema_op():
     src = (REPO / "plugin" / "scripts" / "dbadd" / "drift.py").read_text(encoding="utf-8")
     handled = {name for line in src.splitlines() if re.match(r" {8}(el)?if kind (==|in) ", line)
                for name in re.findall(r'"([a-z-]+)"', line)}
-    assert ops == handled and len(ops) == 18
+    assert ops == handled and len(ops) == 19      # put-flow(04 §5.13) 포함
     with pytest.raises(UsageError, match="bogus"):
         drift.drift_items(_plan([{"op": "bogus"}]), None, None)
 

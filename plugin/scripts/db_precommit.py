@@ -14,7 +14,8 @@
 4. `mask_pii --check --staged`
 5. `db_regress --staged` (parser-rules 변경이면 전체로 확장, 이슈 기록만 바뀐 유형은 제외, db_regress가 판단).
    이슈 기록만 바뀌어 건너뛴 유형이 있으면(`summary.excluded`) 돌린 fixture 수와 그 파일을 note로 남긴다.
-   그 밖에 돌린 fixture가 0개면 "회귀 대상 fixture 0개 (바뀐 유형 없음)" note를 남긴다(종료 코드는 0 그대로).
+   그 밖에 돌린 fixture가 0개면(흐름 fixture `flows.total`도 0) "회귀 대상 fixture 0개 (바뀐 유형 없음)" note를 남긴다(종료 코드는
+   0 그대로). 흐름(`<category>/flows/`)만 바뀐 커밋은 db_regress가 그 카테고리 흐름 fixture를 돌린다.
 6. 규칙 변경(parser-rules/, type.md, fixture 기대값)이 있으면 `db_verify rules --staged`
 7. `ci_mode: local`/`actions`: `db_build --verify --staged`. `actions-build`: 생성 파일이 staged면 차단
    (13-actions.md). `migrate/schema-v<N>` 브랜치에서는 생성기 버전 불일치로 검증을 못 하면 경고만 한다.
@@ -57,7 +58,8 @@ def _brief(name: str, code: int, data: dict | None, err: str) -> str:
     if name == "mask":
         return "; ".join(f"{d['path']}:{d['line']} {d['kind']}" for d in (data.get("detections") or [])[:10])
     if name == "regress":
-        return "; ".join(f"{r['fixture']}" for r in data.get("results", []) if r.get("status") != "pass")
+        rows = data.get("results", []) + (data.get("flows") or {}).get("results", [])
+        return "; ".join(f"{r['fixture']}" for r in rows if r.get("status") != "pass")
     if name == "verify":
         return "; ".join(f"{r['id']} {r['status']}: {r.get('reason', '')}" for r in data.get("rules", [])
                          if r.get("status") in ("fail", "needs-approval"))
@@ -119,8 +121,11 @@ def run(db: Path, plugin_root: str | None) -> tuple[dict, int]:
                 f"회귀 대상 fixture {summary.get('total', 0)}개 — 이슈 기록만 바뀐 유형은 건너뜀 "
                 f"({summary['excluded'].get('reason')}): {', '.join(files[:5])}{more}"))
         elif (res.name == "regress" and res.code == OK and isinstance(res.data, dict)
-              and (res.data.get("summary") or {}).get("total") == 0):
+              and (res.data.get("summary") or {}).get("total") == 0 and not (res.data.get("flows") or {}).get("total")):
             add("regress", res.code, note="회귀 대상 fixture 0개 (바뀐 유형 없음)")   # 건너뜀을 통과로 보이지 않게
+        elif (res.name == "regress" and res.code == OK and isinstance(res.data, dict)
+              and (res.data.get("summary") or {}).get("total") == 0):
+            add("regress", res.code, note=f"회귀 대상 fixture 0개 (바뀐 유형 없음), 흐름 fixture {res.data['flows']['total']}개 통과")
         else:
             add(res.name, res.code, res.data, res.stderr)
 

@@ -41,30 +41,9 @@ class FixtureOps:
 
     def op_add_fixture(self, i, op):
         type_id, name = self.fixture_names[i]
-        try:
-            text = self._fixture_source(i, op["path"])
-        except UnicodeDecodeError:     # 그대로 두면 traceback이다
-            raise Reject("fixture-source", f"fixture 원본이 UTF-8 텍스트가 아닙니다: {op['path']} — {masking.NUL_HELP}", i) from None
+        masked = self._masked_fixture(i, op["path"], "add-fixture")
         if op["kind"] != "negative":
             self._cause_or_reject(i, op["for"])
-        lines, nul = masking.blank_nul_lines(text.split("\n"))     # NUL 든 줄은 통째로 비운다(줄 수 그대로)
-        total = len(lines) - (lines[-1] == "")
-        if nul * 2 > total:     # 절반 넘게 비면(BOM 없는 UTF-16 등) fixture로 쓸모가 없다
-            raise Reject("fixture-source", f"fixture 원본 {total}줄 중 {nul}줄에 NUL이 있습니다: {op['path']} — "
-                         f"{masking.NUL_HELP}", i)
-        if nul:
-            self.warnings.append(masking.nul_warning(nul, total, f"add-fixture {op['path']}"))
-        text = "\n".join(lines)
-        # 커밋 관문(`mask_pii --check`)이 fixtures/*.log에 쓰는 로그 마스커·줄 나눔 그대로(줄 머리 규칙·갈린 덤프 조각)
-        masker = masking.new_masker(existing_text=text, allow_patterns=self.allow, log_lines=True)
-        masked = "\n".join(masking.mask_lines(masker, text.split("\n")))
-        # 그 위에 기본 마스커를 글 전체로 한 번 더: 줄 단위로는 다음 줄로 접힌 SIP Digest `nonce=`·`response=`가 문맥을 못 본다.
-        # 줄 머리 시각은 비워 둔다 — 아니면 줄 끝 키(`token:`·`password=`)가 다음 줄 시각을 값으로 잡는다
-        masked = masking.new_masker(existing_text=masked, allow_patterns=self.allow).mask(
-            masked, reserved=[m.span() for m in _LINE_STAMP.finditer(masked)])
-        # 줄 단위로 한 번 더: 앞 패스가 넣은 토큰이 줄을 나눠 덤프 규칙이 새로 맞는다(`rsp: 90 00 01 02 <MSISDN#1>`, 관문이 본다)
-        again = masking.new_masker(existing_text=masked, allow_patterns=self.allow, log_lines=True)
-        masked = "\n".join(masking.mask_lines(again, masked.split("\n")))
         fdir = self._type_dir_any(type_id) / "fixtures"
         self.tree.write(fdir / name, masked)
         fx = parse_name(name)
@@ -87,6 +66,31 @@ class FixtureOps:
             expect["occurred_at"] = op["occurred_at"]
         if expect:
             self.tree.write(fdir / f"{fx.stem}.expect.yaml", yamldoc.dump_doc(expect))
+
+    def _masked_fixture(self, i: int, value: str, label: str) -> str:
+        """fixture 원본(`_fixture_source`)을 커밋 관문과 같은 3단 마스킹으로 — add-fixture·put-flow가 같이 쓴다."""
+        try:
+            text = self._fixture_source(i, value)
+        except UnicodeDecodeError:     # 그대로 두면 traceback이다
+            raise Reject("fixture-source", f"fixture 원본이 UTF-8 텍스트가 아닙니다: {value} — {masking.NUL_HELP}", i) from None
+        lines, nul = masking.blank_nul_lines(text.split("\n"))     # NUL 든 줄은 통째로 비운다(줄 수 그대로)
+        total = len(lines) - (lines[-1] == "")
+        if nul * 2 > total:     # 절반 넘게 비면(BOM 없는 UTF-16 등) fixture로 쓸모가 없다
+            raise Reject("fixture-source", f"fixture 원본 {total}줄 중 {nul}줄에 NUL이 있습니다: {value} — "
+                         f"{masking.NUL_HELP}", i)
+        if nul:
+            self.warnings.append(masking.nul_warning(nul, total, f"{label} {value}"))
+        text = "\n".join(lines)
+        # 커밋 관문(`mask_pii --check`)이 fixtures/*.log에 쓰는 로그 마스커·줄 나눔 그대로(줄 머리 규칙·갈린 덤프 조각)
+        masker = masking.new_masker(existing_text=text, allow_patterns=self.allow, log_lines=True)
+        masked = "\n".join(masking.mask_lines(masker, text.split("\n")))
+        # 그 위에 기본 마스커를 글 전체로 한 번 더: 줄 단위로는 다음 줄로 접힌 SIP Digest `nonce=`·`response=`가 문맥을 못 본다.
+        # 줄 머리 시각은 비워 둔다 — 아니면 줄 끝 키(`token:`·`password=`)가 다음 줄 시각을 값으로 잡는다
+        masked = masking.new_masker(existing_text=masked, allow_patterns=self.allow).mask(
+            masked, reserved=[m.span() for m in _LINE_STAMP.finditer(masked)])
+        # 줄 단위로 한 번 더: 앞 패스가 넣은 토큰이 줄을 나눠 덤프 규칙이 새로 맞는다(`rsp: 90 00 01 02 <MSISDN#1>`, 관문이 본다)
+        again = masking.new_masker(existing_text=masked, allow_patterns=self.allow, log_lines=True)
+        return "\n".join(masking.mask_lines(again, masked.split("\n")))
 
     def op_allow_cause(self, i, op):
         rel = self.fixture_ref(op["fixture"])

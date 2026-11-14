@@ -22,7 +22,7 @@
 /.github/               @<org>/telephony-issue-db-maintainers
 
 # 카테고리 오너는 두지 않는다(기본, 샘플 이슈 DB). 오너 리뷰를 받을 카테고리만 더한다 — 그 카테고리 PR은 GHE가 PR을 열 때
-# 오너를 자동 요청하고 오너 승인 전 BLOCKED다:
+# 오너를 자동 요청하고 오너 승인 전 BLOCKED다(카테고리 경로는 그 카테고리의 성공 흐름 /data/flows/도 덮는다):
 # /data/                @<org>/telephony-data-owners
 ```
 

@@ -225,7 +225,8 @@
         "related": {"type": "array", "items": {"$ref": "#/$defs/causeId"}, "uniqueItems": true},
         "cp_evidence": {"type": ["string", "null"]},
         "platform_versions": {"$ref": "#/$defs/platformVersions"},
-        "code_refs": {"type": "array", "items": {"$ref": "#/$defs/codeRef"}}
+        "code_refs": {"type": "array", "items": {"$ref": "#/$defs/codeRef"}},
+        "flow_step": {"description": "이 원인이 벗어나는 성공 흐름 단계 <category>/<flow id>/<step id> — 같은 카테고리 흐름만 (04 §5.13)", "type": "string", "pattern": "^[a-z][a-z0-9_]*/[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+(-[a-z0-9]+)*$"}
       },
       "allOf": [
         {

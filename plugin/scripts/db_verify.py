@@ -616,11 +616,21 @@ def r4(run: Run, regress: dict | None) -> tuple[dict, dict]:
         failed = [r for r in results if r["status"] != "pass"]
         regress = {"summary": {"scope": "all", "expanded": False, "total": len(results),
                                "passed": len(results) - len(failed), "failed": len(failed)}, "results": results}
-    failed = [r for r in regress.get("results", []) if r.get("status") != "pass"]
+    # 흐름 정상 fixture(04 §5.13)도 R4에 합친다(행을 늘리지 않는다). 흐름 파일이 없는 DB는 행이 이전과 같다
+    flow_part = regress.get("flows")
+    if not (isinstance(flow_part, dict) and isinstance(flow_part.get("results"), list)):
+        flow_part = db_regress.flow_regress(run.root, run.db.config, run.defaults)
+    if flow_part is not None:
+        regress["flows"] = flow_part
+    failed = [r for r in regress.get("results", []) + (flow_part or {}).get("results", []) if r.get("status") != "pass"]
+    kept = f"전체 fixture {regress.get('summary', {}).get('total', 0)}개 기대값 유지"
+    if flow_part is not None:
+        kept += f", 흐름 fixture {len(flow_part['results'])}개 끝까지 ok"
+        if flow_part.get("skipped"):        # 정상 fixture 없는 흐름: 통과로 세지 않는다(review_required, db_lint flow-fixture-missing)
+            kept += f" (정상 fixture 없어 건너뜀: {', '.join(s['flow'] for s in flow_part['skipped'])})"
     row = {"id": "R4", "status": "fail" if failed else "pass",
-           "reason": (f"기대값이 깨진 fixture {len(failed)}개" if failed else
-                      f"전체 fixture {regress.get('summary', {}).get('total', 0)}개 기대값 유지"),
-           "targets": [r["fixture"] for r in failed], "review_required": False,
+           "reason": f"기대값이 깨진 fixture {len(failed)}개" if failed else kept,
+           "targets": [r["fixture"] for r in failed], "review_required": bool((flow_part or {}).get("skipped")),
            "failures": [{"fixture": r["fixture"], "expect": r.get("expect"), "reasons": r.get("reasons"),
                          "allow_cause_drafts": r.get("allow_cause_drafts")} for r in failed]}
     return row, regress

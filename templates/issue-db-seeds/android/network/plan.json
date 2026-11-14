@@ -101,7 +101,8 @@
               ]
             }
           ],
-          "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀 NAS 등록 거절(Attach/Registration Reject) 메시지와 원인 값, 시험 장비 설정."
+          "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀 NAS 등록 거절(Attach/Registration Reject) 메시지와 원인 값, 시험 장비 설정.",
+          "flow_step": "network/radio-on/registered"
         },
         "body": "- **로그 예시** (합성, fixture `reg-denied.log`):\n  ```\n  11-14 10:00:30.100  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]\n  11-14 10:00:30.101  1301  1301 D SST-0   : pollState: modemTriggered=true, radioState=1\n  11-14 10:00:30.105  1301  1301 D RILJ    : [0755]> DATA_REGISTRATION_STATE [PHONE0]\n  11-14 10:00:30.107  1301  1330 D RILJ    : [0755]< DATA_REGISTRATION_STATE RegStateResult{regState: REG_DENIED, rat: NR, reasonForDenial: ROAMING_NOT_ALLOWED, cellIdentity: CellIdentity.nr(CellIdentityNr{nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, bands: [BAND_41]}), registeredPlmn: 00101} [PHONE0]\n  11-14 10:00:30.108  1301  1301 D RILJ    : [0756]> VOICE_REGISTRATION_STATE [PHONE0]\n  11-14 10:00:30.110  1301  1330 D RILJ    : [0756]< VOICE_REGISTRATION_STATE RegStateResult{regState: REG_DENIED, rat: NR, reasonForDenial: ROAMING_NOT_ALLOWED, cellIdentity: CellIdentity.nr(CellIdentityNr{nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, bands: [BAND_41]}), registeredPlmn: 00101} [PHONE0]\n  11-14 10:00:30.120  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false\n  11-14 10:00:30.121  1301  1301 D SST-0   : updateCarrierDisplayName: radio is on but out of service, set plmn='No service'\n  11-14 10:00:30.130  1301  1340 D NRM-C-0 : onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=DENIED networkRegistrationState=DENIED roamingType=NOT_ROAMING accessNetworkTechnology=NR rejectCause=13 emergencyEnabled=false availableServices=[] cellIdentity=null voiceSpecificInfo=null dataSpecificInfo=null nrState=NONE}\n  ```\n- **확인 방법**: RILJ 등록 상태 응답 `regState: REG_DENIED`와 `reasonForDenial`(NRM 줄 `rejectCause=`).\n- **재현 시나리오**: 가입 안 된 SIM·로밍 금지 망에 등록 시도\n- **해결책**: 거절 원인 코드(reasonForDenial, NRM `rejectCause`)로 가입·망 설정 문제를 망 쪽에 넘긴다.\n- **코드 위치**: `CellularNetworkService`가 RegStateResult를 NetworkRegistrationInfo로 바꾼다(`rejectCause`).\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
       },
@@ -387,7 +388,8 @@
               "17"
             ]
           }
-        ]
+        ],
+        "flow_step": "network/radio-on/decide"
       },
       "body": "- **로그 예시** (합성, fixture `radio-kept-off-thermal.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power true forEmergencyCall false forceApply false reason 0\n  11-14 10:00:00.101  1301  1301 D SST-0   : setRadioPowerForReason power: true forEmergencyCall= false isSelectedPhoneForEmergencyCall: false forceApply false reason: 0 will not power on the radio as it is powered off for the following reasons: [1].\n  ```\n- **확인 방법**: `will not power on the radio as it is powered off for the following reasons: [1]` — 켬 요청이 무시됐다(같은 줄의 사유 값으로 가른다).\n- **재현 시나리오**: 그 사유로 라디오 꺼진 상태에서 비행기 모드 켬 → 끔\n- **해결책**: 발열 사유가 해제될 때까지 라디오가 켜지지 않는다 — 단말 온도·발열 보호 상태를 확인한다.\n- **코드 위치**: `ServiceStateTracker#setRadioPowerForReason`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
     },
@@ -434,7 +436,8 @@
               "17"
             ]
           }
-        ]
+        ],
+        "flow_step": "network/radio-on/decide"
       },
       "body": "- **로그 예시** (합성, fixture `radio-kept-off-carrier.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power true forEmergencyCall false forceApply false reason 0\n  11-14 10:00:00.101  1301  1301 D SST-0   : setRadioPowerForReason power: true forEmergencyCall= false isSelectedPhoneForEmergencyCall: false forceApply false reason: 0 will not power on the radio as it is powered off for the following reasons: [2].\n  ```\n- **확인 방법**: `will not power on the radio as it is powered off for the following reasons: [2]` — 켬 요청이 무시됐다(같은 줄의 사유 값으로 가른다).\n- **재현 시나리오**: 그 사유로 라디오 꺼진 상태에서 비행기 모드 켬 → 끔\n- **해결책**: 사업자 사유(캐리어 앱의 라디오 끔)가 해제될 때까지 라디오가 켜지지 않는다 — 캐리어 앱·사업자 명령을 확인한다.\n- **코드 위치**: `ServiceStateTracker#setRadioPowerForReason`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
     },
@@ -821,6 +824,125 @@
       "expect": {
         "origin": "synthetic"
       }
+    },
+    {
+      "op": "put-flow",
+      "ref": "network/radio-on",
+      "flow": {
+        "id": "radio-on",
+        "title": "무선 켬",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^SST(-\\d+)?$",
+          "pattern": "setRadioPower power true"
+        },
+        "end": [
+          {
+            "scope": "own",
+            "pattern": "setRadioPower power false",
+            "label": "무선 끔"
+          },
+          {
+            "scope": "own",
+            "pattern": "setRadioPower mDesiredPowerState is already true Do nothing",
+            "label": "이미 켜짐",
+            "as": "discard"
+          }
+        ],
+        "steps": [
+          {
+            "id": "decide",
+            "title": "켬 결정",
+            "scope": "own",
+            "patterns": [
+              "setPowerStateToDesired: .*mDesiredPowerState=true"
+            ],
+            "ok": [
+              {
+                "pattern": "mRadioPowerOffReasons=\\[ *\\]",
+                "why": "끈 사유 남음"
+              }
+            ],
+            "show": [
+              "mRadioPowerOffReasons=\\[[^\\]]*\\]"
+            ],
+            "suspect": "SST(다른 끈 사유)"
+          },
+          {
+            "id": "ril-request",
+            "title": "RIL 요청",
+            "scope": "any",
+            "patterns": [
+              "\\]> RADIO_POWER on = true"
+            ],
+            "suspect": "SST → RIL"
+          },
+          {
+            "id": "ril-response",
+            "title": "RIL 응답",
+            "scope": "any",
+            "patterns": [
+              "\\]< RADIO_POWER"
+            ],
+            "suspect": "모뎀·RIL(응답 없음)"
+          },
+          {
+            "id": "registered",
+            "title": "망 등록",
+            "scope": "own",
+            "patterns": [
+              "Poll ServiceState done: newSS=\\{"
+            ],
+            "ok": [
+              {
+                "pattern": "mDataRegState=0\\(IN_SERVICE\\)",
+                "why": "데이터 미등록"
+              }
+            ],
+            "show": [
+              "mDataRegState=[^,]+"
+            ],
+            "suspect": "망·모뎀(등록)"
+          },
+          {
+            "id": "data-allowed",
+            "title": "데이터 허용",
+            "scope": "any",
+            "patterns": [
+              ": Data evaluation: .*\\[NetworkRequest \\[ REQUEST id=\\d+, \\[ Capabilities: INTERNET"
+            ],
+            "ok": [
+              {
+                "pattern": "Data allowed reason",
+                "why": "평가 거부"
+              }
+            ],
+            "show": [
+              "Data disallowed reasons: [A-Z_ ]+"
+            ],
+            "suspect": "DataNetworkController(평가 거부 사유)",
+            "optional": true
+          },
+          {
+            "id": "setup-start",
+            "title": "SETUP 시작",
+            "scope": "any",
+            "patterns": [
+              "ConnectingState: setupData:"
+            ],
+            "suspect": "DataNetworkController → DataNetwork"
+          }
+        ],
+        "then": "data/data-setup"
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/radio-on.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
     }
   ]
 }

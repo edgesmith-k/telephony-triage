@@ -74,6 +74,7 @@ telephony-issue-db/
 │   ├── feedback.schema.json
 │   ├── plan.schema.json               # 작업 계획 (contracts.md §작업 계획)
 │   ├── expect.schema.json             # .expect.yaml (fixture 기대)
+│   ├── flow.schema.json               # 성공 흐름 (04-parser-matching.md §5.13)
 │   └── parser-rules.schema.json
 ├── templates/
 │   ├── type.md                        # 새 유형
@@ -86,17 +87,21 @@ telephony-issue-db/
 │   └── CHANGELOG.md                   # [생성] 규칙 항목의 added_for/added_on/reason에서 생성
 ├── data/
 │   ├── README.md                      # [생성] 카테고리 상세 인덱스
-│   └── DATA-001-no-setup-data-call/   # 유형 디렉토리
-│       ├── type.md                    # 유형 + 원인 정의
-│       ├── issues/
-│       │   ├── ABC-111.yaml           # Jira 한 건 = 파일 하나
-│       │   ├── ABC-222.yaml
-│       │   └── ABC-333.yaml
-│       └── fixtures/                  # 이름 규칙: contracts.md §fixture
-│           ├── DATA-001-01.log        # 양성 fixture (마스킹된 최소 logcat)
-│           ├── DATA-001-02.log
-│           ├── DATA-001.none.log      # (선택) 음성 fixture
-│           └── DATA-001.none.expect.yaml
+│   ├── DATA-001-no-setup-data-call/   # 유형 디렉토리
+│   │   ├── type.md                    # 유형 + 원인 정의
+│   │   ├── issues/
+│   │   │   ├── ABC-111.yaml           # Jira 한 건 = 파일 하나
+│   │   │   ├── ABC-222.yaml
+│   │   │   └── ABC-333.yaml
+│   │   └── fixtures/                  # 이름 규칙: contracts.md §fixture
+│   │       ├── DATA-001-01.log        # 양성 fixture (마스킹된 최소 logcat)
+│   │       ├── DATA-001-02.log
+│   │       ├── DATA-001.none.log      # (선택) 음성 fixture
+│   │       └── DATA-001.none.expect.yaml
+│   └── flows/                         # (선택) 성공 흐름 — 계획 op put-flow로만 넣고 고친다 (04-parser-matching.md §5.13)
+│       ├── data-setup.yaml            # 흐름 정의(파일 이름 = id)
+│       └── fixtures/
+│           └── data-setup.normal.1.log # 정상 로그(마스킹, 흐름마다 ≥ 1, 끝 단계까지 ok — db_regress `flows`)
 ├── call/
 ├── network/
 ├── sim/
@@ -187,6 +192,7 @@ causes:
       - ref: vendor_ril:<상대 경로>
         symbol: <함수명>
         platform_versions: ["16"]       # 이 경로가 유효한 버전 (생략하거나 빈 목록이면 전 버전)
+    flow_step: data/data-setup/response # 선택. 이 원인이 벗어나는 성공 흐름 단계 <category>/<흐름 id>/<단계 id> — 같은 카테고리 흐름만, 리포트 "흐름 점검"이 그 단계 아래 나열 (04 §5.13)
   - id: DATA-001-02
     status: active
     title: Roaming disabled

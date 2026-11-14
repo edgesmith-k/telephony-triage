@@ -47,6 +47,7 @@ SCHEMAS = [
     "plan.schema.json",
     "parser-rules.schema.json",
     "expect.schema.json",
+    "flow.schema.json",
 ]
 
 CATEGORIES = ["data", "call", "network", "sim", "sms", "ims"]

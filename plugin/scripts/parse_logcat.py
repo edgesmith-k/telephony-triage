@@ -12,6 +12,10 @@
       `--step-events`: 이슈 DB `issue-db.config.yaml`의 `step_events` 규칙(스텝 이름은 인자로 받지 않는다)마다 로그에서
       그 흔적을 모아 `step_events[{rule, ts, seq, label}]`(규칙 번호·시각·줄 순번·이름 — 로그 본문 없음, (ts, seq, rule) 순)을
       더한다. 규칙당 1000개·전체 5000개 상한(넘으면 경고 `step-events-truncated`), 잘못된 규칙은 경고 `step-event-rule`.
+  flows <logcat...> --rules <db>/parser-rules [--tz <IANA>] [--year <YYYY>]
+      이슈 DB `<category>/flows/*.yaml` 성공 흐름을 전체 로그의 모든 줄에 돌려 인스턴스·단계 판정을 낸다(단계 줄은 가리지 않은
+      글에서 찾고, 출력에 글자가 나가는 줄만 마스킹)
+      (`{schema, flows[], warnings}`, 표시 전용 — 04-parser-matching.md §5.13). 흐름 파일이 없으면 `flows: []`.
   extract-bugreport <zip|txt> --out <dir>
       bugreport에서 logcat 섹션(기본 system/radio/main)과 빌드 정보(build.json)만 꺼낸다.
   cut <logcat...> (--evidence <match.json> --cause <원인 ID> | --around <ISO 시각> [--seconds 30]) --out <file>
@@ -45,13 +49,14 @@ import subprocess
 import sys
 from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
 import adapters  # noqa: E402
 import parser_backends  # noqa: E402
-from common import compat, dumpjoin, logtime, masking, parser_rules, site_defaults, stepanchor  # noqa: E402
+from common import compat, dumpjoin, flows, logtime, masking, parser_rules, site_defaults, stepanchor  # noqa: E402
 from common import events as evt  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS, PatternError, PatternRunner, PatternTimeout  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
@@ -832,25 +837,37 @@ def _step_event_hits(raw: list[dict], specs: list[dict | None], paths: list[Path
     return hits
 
 
+def _line_backend(paths: list[Path], rules_dir: Path, defaults: dict, tz: str | None,
+                  profile: platforms.PlatformProfile | None = None):
+    """markers·flows 공용 앞부분: 입력 파일·묶음 입력·시간대 검사, DB 설정과 백엔드 → `(db_cfg, backend)`(사용 오류는 `UsageError`)."""
+    for path in paths:
+        if not path.is_file():
+            raise UsageError(f"로그 파일이 없습니다: {path}")
+        profile = profile or _profile(defaults, compat.load_db_config(rules_dir.parent))
+        _capture_input(path, profile)
+    try:
+        logtime.get_tz(tz)
+    except ValueError as exc:
+        raise UsageError(str(exc)) from exc
+    db_cfg = compat.load_db_config(rules_dir.parent)
+    return db_cfg, _load_backend(defaults, profile or _profile(defaults, db_cfg))
+
+
+def _raw_line_records(backend, paths: list[Path], tz: str | None, year: int | None, code: str) -> tuple[list[dict], str, list[dict]]:
+    """전체 로그의 백엔드 레코드(창·태그로 거르지 않음, 한 번 파싱) → (NUL 든 줄을 뺀 레코드, 마스커용 전체 글, 경고)."""
+    raw = backend.parse(paths, tz, year, None)
+    log_text, nul_refs, warnings = _nul_lines(paths, code)      # NUL 든 줄은 버린다(parse --mask와 같다)
+    return [r for r in raw if evt.ref_key(r.get("line_ref")) not in nul_refs and not _has_nul(r)], log_text, warnings
+
+
 def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None = None) -> dict:
     """스텝 마커 줄을 모은다. 마커 태그는 `tags.yaml`에 없으므로 `parse` 출력을 쓰지 못하고 백엔드의 줄 레코드를 직접 본다.
 
     원문 줄에서 정규식이 맞는 줄만 골라(시간 상한 `matcher.pattern_timeout_ms`) 그 줄만 마스킹하고, 마스킹된 텍스트에서
     이름 그룹(`step`, `status`)을 다시 뽑는다 — 원문 값은 출력에 나가지 않는다. 마커 패턴은 `site-defaults.yaml`의
     `failed_step.marker_patterns`에서만 읽는다(사용자 config로 바꿀 수 없다). 패턴이 없으면 마커 없이 범위(`coverage`)만 낸다."""
-    paths = [Path(p) for p in args.logs]
-    for path in paths:
-        if not path.is_file():
-            raise UsageError(f"로그 파일이 없습니다: {path}")
-        profile = profile or _profile(defaults, compat.load_db_config(Path(args.rules).parent))
-        _capture_input(path, profile)
-    try:
-        logtime.get_tz(args.tz)
-    except ValueError as exc:
-        raise UsageError(str(exc)) from exc
-    rules_dir = Path(args.rules)
-    db_cfg = compat.load_db_config(rules_dir.parent)
-    backend = _load_backend(defaults, profile or _profile(defaults, db_cfg))
+    paths, rules_dir = [Path(p) for p in args.logs], Path(args.rules)
+    db_cfg, backend = _line_backend(paths, rules_dir, defaults, args.tz, profile)
 
     conf = defaults.get("failed_step") or {}
     status_map = conf.get("marker_status") if isinstance(conf.get("marker_status"), dict) else None
@@ -874,10 +891,8 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
         except parser_rules.RulesError as exc:
             raise UsageError(f"파서 규칙 오류: {exc}") from exc
     if compiled or any(step_specs):
-        raw_records = backend.parse(paths, args.tz, args.year, None)       # 한 번만 파싱한다
-        log_text, nul_refs, nul_warnings = _nul_lines(paths, "markers-nul")    # NUL 든 줄은 버린다(parse --mask와 같다)
+        raw_records, log_text, nul_warnings = _raw_line_records(backend, paths, args.tz, args.year, "markers-nul")
         warnings += nul_warnings
-        raw_records = [r for r in raw_records if evt.ref_key(r.get("line_ref")) not in nul_refs and not _has_nul(r)]
     if compiled:
         records = [r for r in raw_records if r.get("event") is None]
         texts = [f"{r['tag']}: {r['msg']}" for r in records]
@@ -940,6 +955,45 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
                                         f"(규칙당 {STEP_EVENT_PER_RULE}, 전체 {STEP_EVENT_TOTAL})을 넘어 앞부분만 냈습니다."})
         result["step_events"] = capped
     return result
+
+
+# -- flows -------------------------------------------------------------------
+
+
+def flow_check(paths: list[Path], rules_dir: Path, defaults: dict, tz: str | None = None, year: int | None = None,
+               profile: platforms.PlatformProfile | None = None) -> dict:
+    """성공 흐름 점검(04-parser-matching §5.13, 표시 전용): 이슈 DB `<category>/flows/*.yaml`을 전체 로그의 모든 줄 레코드에
+    돌린다. 단계 줄은 가리지 않은 글에서 찾고, 출력에 글자가 나가는 줄(메모·값)만 가린다(마커와 같다 — 한 마스커, 갈린 덤프 조각).
+    흐름 파일이 없으면 파싱하지 않고 `flows: []`. `db_regress`(흐름 fixture)도 이 함수를 부른다."""
+    db_cfg, backend = _line_backend(paths, rules_dir, defaults, tz, profile)
+    defs, warnings = flows.load(rules_dir.parent, db_cfg)
+    result = {"schema": OUTPUT_SCHEMA, "flows": [], "warnings": warnings}
+    if not defs:
+        return result
+    raw, log_text, nul_warnings = _raw_line_records(backend, paths, tz, year, "flows-nul")
+    warnings += nul_warnings
+    records = [r for r in raw if r.get("event") is None]
+    texts = [f"{r['tag']}: {r['msg']}" for r in records]
+    lazy: list = []
+
+    def mask(i: int) -> str:
+        if not lazy:
+            masker = masking.new_masker(log_text, _allow_patterns(db_cfg), log_lines=True)
+            lazy.extend((masker, masking.forced_records(masker, records)))      # 갈린 덤프 조각(08-safety §8), 전체에서 한 번
+        off = len(texts[i]) - len(str(records[i]["msg"]))
+        return lazy[0].mask(texts[i], [(a + off, b + off, *rest) for a, b, *rest in lazy[1].get(i, ())])
+    epoch_break = backend.log_format().epoch_break
+    breaks = {n for n, r in enumerate(records) if epoch_break(SimpleNamespace(tag=r["tag"], msg=r["msg"]))}
+    anomalies = backend.coverage(paths, tz, year)["clock_anomalies"]
+    timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
+    result["flows"], flow_warnings = flows.check(defs, records, texts, timeout_ms=timeout_ms,
+                                                 log_end=flows.log_end_sec(db_cfg), anomalies=anomalies, breaks=breaks, mask=mask)
+    warnings += flow_warnings
+    return result
+
+
+def run_flows(args, defaults: dict, profile: platforms.PlatformProfile | None = None) -> dict:
+    return flow_check([Path(p) for p in args.logs], Path(args.rules), defaults, args.tz, args.year, profile)
 
 
 # -- extract-bugreport --------------------------------------------------------
@@ -1264,6 +1318,12 @@ def build_parser() -> argparse.ArgumentParser:
     k.add_argument("--step-events", action="store_true",
                    help="이슈 DB step_events 규칙의 로그 흔적(step_events[{rule, ts, seq, label}])을 더한다")
 
+    f = sub.add_parser("flows", parents=[common], help="logcat → 성공 흐름 점검 (마스킹, 표시 전용)")
+    f.add_argument("logs", metavar="logcat", nargs="+")
+    f.add_argument("--rules", metavar="db/parser-rules", required=True, help="<db>/parser-rules (흐름은 <db>/<category>/flows/)")
+    f.add_argument("--tz", metavar="IANA", default=None, help="연도 없는 logcat 시각의 타임존 (IANA)")
+    f.add_argument("--year", metavar="YYYY", type=int, default=None, help="첫 줄의 연도")
+
     b = sub.add_parser("extract-bugreport", parents=[common], help="bugreport → logcat 섹션")
     b.add_argument("bugreport", metavar="zip|txt")
     b.add_argument("--out", metavar="dir", required=True)
@@ -1301,13 +1361,15 @@ def main(argv: list[str] | None = None) -> int:
     plugin_root = Path(root_opt) if root_opt else site_defaults.plugin_root()
 
     try:
-        db_cfg = compat.load_db_config(Path(args.rules).parent) if args.cmd in ("parse", "markers") else None
+        db_cfg = compat.load_db_config(Path(args.rules).parent) if args.cmd in ("parse", "markers", "flows") else None
         profile = _profile(defaults, db_cfg)
         dumpjoin.configure(_dump_func(defaults))
         if args.cmd == "parse":
             result = run_parse(args, plugin_root, defaults, profile)
         elif args.cmd == "markers":
             result = run_markers(args, defaults, profile)
+        elif args.cmd == "flows":
+            result = run_flows(args, defaults, profile)
         elif args.cmd == "extract-bugreport":
             result = run_extract_bugreport(args, profile)
         elif args.cmd == "mask-copy":
