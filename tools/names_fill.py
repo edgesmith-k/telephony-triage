@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""모듈 템플릿의 placeholder를 사내 실제 이름으로 바꾼다 (사내에서 실행).
+"""모듈 스킬 사내 스냅샷의 placeholder를 사내 실제 이름으로 바꾼다 (사내에서 실행).
 
-    python3 -I -X utf8 tools/names_fill.py <레포 루트> tools/site_names/ofono-names-form.json            # 미리 보기(파일을 쓰지 않음)
-    python3 -I -X utf8 tools/names_fill.py <레포 루트> tools/site_names/ofono-names-form.json --write
+    python3 -I -X utf8 tools/names_fill.py docs/site/module-skills tools/site_names/ofono-names-form.json            # 미리 보기
+    python3 -I -X utf8 tools/names_fill.py docs/site/module-skills tools/site_names/ofono-names-form.json --write
+
+첫 인자는 사내 스냅샷 폴더(SITE_PATHS, `docs/SITE_RESTORE.md` ⓪으로 만든다)다. 레포의 `templates/module-skills`는
+사외 파일이라 고치면 다음 재반입(`import_draft.py`)이 "사내에서 고친 사외 파일"로 멈추므로 받지 않는다(종료 2).
 
 양식: {"platform": "ofono"|"android", "rows": [{"placeholder", "real", "kind", "count", "example_lines", "files"}]}.
-"real"이 빈 행은 건너뛴다(placeholder로 남는다). 대상은 templates/module-skills/<platform>/** 와
-templates/module-skills/modules.yaml의 그 플랫폼 블록뿐이다.
+"real"이 빈 행은 건너뛴다(placeholder로 남는다). 대상은 <폴더>/<platform>/** 와 <폴더>/modules.yaml의 그 플랫폼 블록뿐이다.
+모듈 스킬 레포에는 `make_module_repo.py <out> --site-overlay docs/site/module-skills`로 얹는다.
 긴 placeholder부터 바꾼다(짧은 이름이 긴 이름의 앞부분인 경우가 있다 — 접두어 행은 남은 곳만 바뀐다).
 채운 양식은 사내 값이므로 사내 밖으로 내지 않는다. 순서: tools/site_names/README.md.
 """
@@ -15,8 +18,7 @@ import re
 import sys
 from pathlib import Path
 
-def targets(root, platform):
-    base = root / "templates/module-skills"
+def targets(base, platform):
     return [base / "modules.yaml"] + sorted(p for p in (base / platform).rglob("*") if p.is_file())
 
 def block(text, platform):                   # modules.yaml: `  <platform>:` 부터 다음 플랫폼 키 앞까지
@@ -26,6 +28,9 @@ def block(text, platform):                   # modules.yaml: `  <platform>:` 부
 
 def main():
     root, form = Path(sys.argv[1]), json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+    if root.resolve().parts[-2:] == ("templates", "module-skills"):
+        sys.exit("레포의 templates/module-skills는 사외 파일이다 — 고치면 재반입이 멈춘다. "
+                 "사내 스냅샷(docs/site/module-skills, docs/SITE_RESTORE.md ⓪)에 채운다")
     platform, rows = form["platform"], form["rows"]
     pairs = sorted(((r["placeholder"], r["real"]) for r in rows if r.get("real")), key=lambda p: -len(p[0]))
     total = 0
