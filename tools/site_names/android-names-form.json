@@ -1,0 +1,730 @@
+{
+ "platform": "android",
+ "rows": [
+  {
+   "placeholder": "ExampleCallService",
+   "real": "",
+   "kind": "클래스·함수·서비스 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "ExampleEfService",
+   "real": "",
+   "kind": "클래스·함수·서비스 이름",
+   "count": 3,
+   "example_lines": [
+    "10-16 08:30:14.732  1350  1412 I RIL     : [ExampleEfService_0] sim io begin"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/sim/evals/sim-optional-ef-benign/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-optional-ef-benign/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "ExampleIccService",
+   "real": "",
+   "kind": "클래스·함수·서비스 이름",
+   "count": 17,
+   "example_lines": [
+    "08-21 10:00:20.006  1188 1241 I RIL     : [ExampleIccService_0] sim status begin",
+    "08-21 10:00:21.022  1188 1242 I RIL     : [ExampleIccService_0] sim status end errorCode=2"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/case.yaml",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/events.json",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/timeline.md",
+    "templates/module-skills/android/sim/evals/sim-slow-recognition/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-slow-recognition/files/timeline.md",
+    "templates/module-skills/android/sim/explore.md",
+    "templates/module-skills/android/sim/references/SIM-001.md"
+   ]
+  },
+  {
+   "placeholder": "ExampleModemService",
+   "real": "",
+   "kind": "클래스·함수·서비스 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "ExamplePdnService",
+   "real": "",
+   "kind": "클래스·함수·서비스 이름",
+   "count": 17,
+   "example_lines": [
+    "09-02 10:00:05.006  1188 1241 I RIL     : [ExamplePdnService_0] setup data call begin",
+    "09-02 10:00:05.300  1188 1153 I RIL     : [ExamplePdnService_0] setup data call end errorCode=0 PdnCtx cid=2 state=connected link=up"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/data/deep.md",
+    "templates/module-skills/android/data/evals/data-apn-wrong-applied/files/source.log",
+    "templates/module-skills/android/data/evals/data-apn-wrong-applied/files/timeline.md",
+    "templates/module-skills/android/data/evals/data-dc-list-drop/case.yaml",
+    "templates/module-skills/android/data/evals/data-dc-list-drop/files/source.log",
+    "templates/module-skills/android/data/evals/data-dc-list-drop/files/timeline.md",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/case.yaml",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/files/source.log",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/files/timeline.md",
+    "templates/module-skills/android/data/explore.md"
+   ]
+  },
+  {
+   "placeholder": "ExampleRegService",
+   "real": "",
+   "kind": "클래스·함수·서비스 이름",
+   "count": 6,
+   "example_lines": [
+    "10-16 06:12:33.904  1350  1418 V RIL     : [VrilRouter] reply msg=2204 to ExampleRegService_0",
+    "08-22 11:00:31.006  1188 1241 I RIL     : [ExampleRegService_0] data reg state begin"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/network/evals/network-radio-buffer-late/files/source.log",
+    "templates/module-skills/android/network/evals/network-reg-reject/case.yaml",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/events.json",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/source.log",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "ExampleSatService",
+   "real": "",
+   "kind": "클래스·함수·서비스 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "ExampleSmsService",
+   "real": "",
+   "kind": "클래스·함수·서비스 이름",
+   "count": 2,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/sms/evals/sms-mt-delivered-to-app/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "ExampleSsService",
+   "real": "",
+   "kind": "클래스·함수·서비스 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "IpcCtx_",
+   "real": "",
+   "kind": "벤더 IPC 문맥 접두어",
+   "count": 13,
+   "example_lines": [
+    "10-14 09:41:07.515  1350  1410 V RIL     : [IpcCtx_0] track seq 0x0b12",
+    "10-14 09:41:09.287  1350  1410 V RIL     : [IpcCtx_0] untrack seq 0x0b12"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/call/evals/call-cf-ut-no-rilj/files/source.log",
+    "templates/module-skills/android/data/evals/data-cfun-radio-off/files/source.log",
+    "templates/module-skills/android/data/evals/data-dc-list-drop/files/source.log",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/files/source.log",
+    "templates/module-skills/android/ims/evals/ims-iradioims-absent/files/source.log",
+    "templates/module-skills/android/modem/evals/modem-ril-daemon-crash/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-optional-ef-benign/files/source.log"
+   ]
+  },
+  {
+   "placeholder": "VCHAN_",
+   "real": "",
+   "kind": "벤더 IPC 채널 접두어",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_E",
+   "real": "",
+   "kind": "벤더 IPC 접두어(와일드카드 규칙에 쓰임)",
+   "count": 172,
+   "example_lines": [
+    "10-14 09:41:07.515  1350  1410 V RIL     : ipc[0][TX] VIPC_EXAMPLE_IMS_CF, REQ seq=0x0b12 len=64",
+    "10-14 09:41:09.284  1350  1415 V RIL     : ipc[0][RX] VIPC_EXAMPLE_IMS_CF, RSP OK(VIPC_OK) seq=0x0b12 len=16"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/_common/components.md",
+    "templates/module-skills/android/_common/layers.md",
+    "templates/module-skills/android/call/deep.md",
+    "templates/module-skills/android/call/evals/call-cf-ut-no-rilj/files/source.log",
+    "templates/module-skills/android/call/evals/call-cf-ut-no-rilj/files/timeline.md",
+    "templates/module-skills/android/call/evals/call-volte-ims-unregistered/files/events.json",
+    "templates/module-skills/android/call/evals/call-volte-ims-unregistered/files/source.log",
+    "templates/module-skills/android/call/evals/call-volte-sip-invite-error/files/source.log",
+    "templates/module-skills/android/call/explore.md",
+    "templates/module-skills/android/call/SKILL.md",
+    "templates/module-skills/android/data/evals/data-apn-wrong-applied/files/source.log",
+    "templates/module-skills/android/data/evals/data-apn-wrong-applied/files/timeline.md",
+    "templates/module-skills/android/data/evals/data-disabled-user/files/events.json",
+    "templates/module-skills/android/data/evals/data-disabled-user/files/source.log",
+    "templates/module-skills/android/data/evals/data-disabled-user/files/timeline.md",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/case.yaml",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/files/source.log",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/files/timeline.md",
+    "templates/module-skills/android/data/explore.md",
+    "templates/module-skills/android/data/SKILL.md",
+    "templates/module-skills/android/ims/evals/ims-iradioims-absent/files/source.log",
+    "templates/module-skills/android/ims/evals/ims-iradioims-absent/files/timeline.md",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/events.json",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/source.log",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/timeline.md",
+    "templates/module-skills/android/ims/explore.md",
+    "templates/module-skills/android/ims/SKILL.md",
+    "templates/module-skills/android/modem/evals/modem-restart-chain/files/events.json",
+    "templates/module-skills/android/modem/evals/modem-restart-chain/files/source.log",
+    "templates/module-skills/android/modem/evals/modem-restart-chain/files/timeline.md",
+    "templates/module-skills/android/network/deep.md",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/events.json",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/source.log",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/timeline.md",
+    "templates/module-skills/android/network/explore.md",
+    "templates/module-skills/android/network/SKILL.md",
+    "templates/module-skills/android/sim/deep.md",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/case.yaml",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/events.json",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/timeline.md",
+    "templates/module-skills/android/sim/evals/sim-optional-ef-benign/files/analysis.json",
+    "templates/module-skills/android/sim/evals/sim-optional-ef-benign/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-optional-ef-benign/files/timeline.md",
+    "templates/module-skills/android/sim/evals/sim-slow-recognition/case.yaml",
+    "templates/module-skills/android/sim/evals/sim-slow-recognition/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-slow-recognition/files/timeline.md",
+    "templates/module-skills/android/sim/explore.md",
+    "templates/module-skills/android/sim/references/SIM-001.md",
+    "templates/module-skills/android/sim/SKILL.md",
+    "templates/module-skills/android/sms/evals/sms-ims-local-reject/files/source.log",
+    "templates/module-skills/android/sms/evals/sms-ims-local-reject/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE",
+   "real": "",
+   "kind": "벤더 IPC 접두어(와일드카드 규칙에 쓰임)",
+   "count": 115,
+   "example_lines": [
+    "10-14 09:41:07.515  1350  1410 V RIL     : ipc[0][TX] VIPC_EXAMPLE_IMS_CF, REQ seq=0x0b12 len=64",
+    "10-14 09:41:09.284  1350  1415 V RIL     : ipc[0][RX] VIPC_EXAMPLE_IMS_CF, RSP OK(VIPC_OK) seq=0x0b12 len=16"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/_common/layers.md",
+    "templates/module-skills/android/call/deep.md",
+    "templates/module-skills/android/call/evals/call-cf-ut-no-rilj/files/source.log",
+    "templates/module-skills/android/call/evals/call-cf-ut-no-rilj/files/timeline.md",
+    "templates/module-skills/android/call/evals/call-volte-ims-unregistered/files/events.json",
+    "templates/module-skills/android/call/evals/call-volte-ims-unregistered/files/source.log",
+    "templates/module-skills/android/call/evals/call-volte-sip-invite-error/files/source.log",
+    "templates/module-skills/android/call/explore.md",
+    "templates/module-skills/android/call/SKILL.md",
+    "templates/module-skills/android/data/evals/data-apn-wrong-applied/files/source.log",
+    "templates/module-skills/android/data/evals/data-apn-wrong-applied/files/timeline.md",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/case.yaml",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/files/source.log",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/files/timeline.md",
+    "templates/module-skills/android/data/explore.md",
+    "templates/module-skills/android/ims/evals/ims-iradioims-absent/files/source.log",
+    "templates/module-skills/android/ims/evals/ims-iradioims-absent/files/timeline.md",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/events.json",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/source.log",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/timeline.md",
+    "templates/module-skills/android/ims/explore.md",
+    "templates/module-skills/android/ims/SKILL.md",
+    "templates/module-skills/android/modem/evals/modem-restart-chain/files/timeline.md",
+    "templates/module-skills/android/network/deep.md",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/events.json",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/source.log",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/timeline.md",
+    "templates/module-skills/android/network/explore.md",
+    "templates/module-skills/android/network/SKILL.md",
+    "templates/module-skills/android/sim/deep.md",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/case.yaml",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/events.json",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/timeline.md",
+    "templates/module-skills/android/sim/evals/sim-optional-ef-benign/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-optional-ef-benign/files/timeline.md",
+    "templates/module-skills/android/sim/evals/sim-slow-recognition/case.yaml",
+    "templates/module-skills/android/sim/evals/sim-slow-recognition/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-slow-recognition/files/timeline.md",
+    "templates/module-skills/android/sim/explore.md",
+    "templates/module-skills/android/sim/references/SIM-001.md",
+    "templates/module-skills/android/sim/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_ADDR_IND",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_ATTACH_PROFILE",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 5,
+   "example_lines": [
+    "09-02 10:00:03.106  1188 1258 V RIL     : ipc[0][TX] VIPC_EXAMPLE_ATTACH_PROFILE, REQ seq=0x0310 len=120",
+    "09-02 10:00:03.150  1188 1258 V RIL     : ipc[0][RX] VIPC_EXAMPLE_ATTACH_PROFILE, RSP OK(VIPC_OK) seq=0x0310 len=12"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/data/evals/data-apn-wrong-applied/files/source.log",
+    "templates/module-skills/android/data/evals/data-apn-wrong-applied/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_CALL_START",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 2,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/android/call/deep.md",
+    "templates/module-skills/android/call/explore.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_CAPABILITY",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_CARD_APDU",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_CARD_CLOSE",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_CARD_IO",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 14,
+   "example_lines": [
+    "10-16 08:30:14.731  1350  1412 V RIL     : ipc[0][TX] VIPC_EXAMPLE_CARD_IO, REQ seq=0x0c40 len=40",
+    "10-16 08:30:14.760  1350  1418 V RIL     : ipc[0][RX] VIPC_EXAMPLE_CARD_IO, RSP Error(VIPC_E_FAILURE) seq=0x0c40 len=12"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/sim/deep.md",
+    "templates/module-skills/android/sim/evals/sim-optional-ef-benign/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-optional-ef-benign/files/timeline.md",
+    "templates/module-skills/android/sim/explore.md",
+    "templates/module-skills/android/sim/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_CARD_OPEN",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_CARD_STATE",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 27,
+   "example_lines": [
+    "08-21 10:00:20.008  1188 1258 V RIL     : ipc[0][TX] VIPC_EXAMPLE_CARD_STATE, REQ seq=0x0210 len=8",
+    "08-21 10:00:21.020  1188 1258 V RIL     : ipc[0][RX] VIPC_EXAMPLE_CARD_STATE, RSP Error(VIPC_E_FAILURE) seq=0x0210 len=12"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/sim/deep.md",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/case.yaml",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/events.json",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/timeline.md",
+    "templates/module-skills/android/sim/evals/sim-slow-recognition/case.yaml",
+    "templates/module-skills/android/sim/evals/sim-slow-recognition/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-slow-recognition/files/timeline.md",
+    "templates/module-skills/android/sim/explore.md",
+    "templates/module-skills/android/sim/references/SIM-001.md",
+    "templates/module-skills/android/sim/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_CARRIER_IND",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_CELL_QUERY",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_CS_REG",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_DATA_SWITCH",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_ECC_IND",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_IMS",
+   "real": "",
+   "kind": "벤더 IPC 접두어(와일드카드 규칙에 쓰임)",
+   "count": 23,
+   "example_lines": [
+    "10-14 09:41:07.515  1350  1410 V RIL     : ipc[0][TX] VIPC_EXAMPLE_IMS_CF, REQ seq=0x0b12 len=64",
+    "10-14 09:41:09.284  1350  1415 V RIL     : ipc[0][RX] VIPC_EXAMPLE_IMS_CF, RSP OK(VIPC_OK) seq=0x0b12 len=16"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/_common/layers.md",
+    "templates/module-skills/android/call/evals/call-cf-ut-no-rilj/files/source.log",
+    "templates/module-skills/android/call/evals/call-cf-ut-no-rilj/files/timeline.md",
+    "templates/module-skills/android/call/evals/call-volte-ims-unregistered/files/events.json",
+    "templates/module-skills/android/call/evals/call-volte-ims-unregistered/files/source.log",
+    "templates/module-skills/android/call/evals/call-volte-sip-invite-error/files/source.log",
+    "templates/module-skills/android/call/explore.md",
+    "templates/module-skills/android/call/SKILL.md",
+    "templates/module-skills/android/ims/evals/ims-iradioims-absent/files/source.log",
+    "templates/module-skills/android/ims/evals/ims-iradioims-absent/files/timeline.md",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/events.json",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/source.log",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/timeline.md",
+    "templates/module-skills/android/ims/explore.md",
+    "templates/module-skills/android/ims/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_IMS_CF",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 5,
+   "example_lines": [
+    "10-14 09:41:07.515  1350  1410 V RIL     : ipc[0][TX] VIPC_EXAMPLE_IMS_CF, REQ seq=0x0b12 len=64",
+    "10-14 09:41:09.284  1350  1415 V RIL     : ipc[0][RX] VIPC_EXAMPLE_IMS_CF, RSP OK(VIPC_OK) seq=0x0b12 len=16"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/call/evals/call-cf-ut-no-rilj/files/source.log",
+    "templates/module-skills/android/call/evals/call-cf-ut-no-rilj/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_IMS_REG_IND",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 13,
+   "example_lines": [
+    "08-23 12:00:14.900  1188 1258 V RIL     : ipc[0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=208",
+    "10-15 11:47:23.051  1350  1418 V RIL     : ipc[0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=96"
+   ],
+   "files": [
+    "templates/module-skills/android/call/evals/call-volte-ims-unregistered/files/events.json",
+    "templates/module-skills/android/call/evals/call-volte-ims-unregistered/files/source.log",
+    "templates/module-skills/android/call/evals/call-volte-sip-invite-error/files/source.log",
+    "templates/module-skills/android/ims/evals/ims-iradioims-absent/files/source.log",
+    "templates/module-skills/android/ims/evals/ims-iradioims-absent/files/timeline.md",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/events.json",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/source.log",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/timeline.md",
+    "templates/module-skills/android/ims/explore.md",
+    "templates/module-skills/android/ims/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_NET_IND",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_OPER",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_PDN_DOWN",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_PDN_LIST",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 2,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_PDN_LIST_IND",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_PDN_UP",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_PROFILE",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 12,
+   "example_lines": [
+    "10-15 07:05:12.408  1350  1406 V RIL     : ipc[0][TX] VIPC_EXAMPLE_PROFILE, REQ seq=0x0d31 len=180",
+    "10-15 07:05:12.436  1350  1418 V RIL     : ipc[0][RX] VIPC_EXAMPLE_PROFILE, RSP OK(VIPC_OK) seq=0x0d31 len=12"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/case.yaml",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/files/source.log",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/files/timeline.md",
+    "templates/module-skills/android/data/explore.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_PS_REG",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 9,
+   "example_lines": [
+    "08-22 11:00:31.008  1188 1258 V RIL     : ipc[0][TX] VIPC_EXAMPLE_PS_REG, REQ seq=0x0220 len=8",
+    "08-22 11:00:31.040  1188 1258 V RIL     : ipc[0][RX] VIPC_EXAMPLE_PS_REG, RSP OK(VIPC_OK) seq=0x0220 len=88"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/events.json",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/source.log",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_RAT_MASK",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_TOOLKIT",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_VONR_SWITCH",
+   "real": "",
+   "kind": "벤더 IPC 이름",
+   "count": 2,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/android/modem/evals/modem-restart-chain/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_E_FAILURE",
+   "real": "",
+   "kind": "벤더 IPC 결과·오류 코드",
+   "count": 23,
+   "example_lines": [
+    "10-15 07:05:12.471  1350  1418 V RIL     : ipc[0][RX] VIPC_EXAMPLE_PROFILE, RSP Error(VIPC_E_FAILURE) seq=0x0d32 len=12",
+    "08-21 10:00:21.020  1188 1258 V RIL     : ipc[0][RX] VIPC_EXAMPLE_CARD_STATE, RSP Error(VIPC_E_FAILURE) seq=0x0210 len=12"
+   ],
+   "files": [
+    "templates/module-skills/android/_common/components.md",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/case.yaml",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/files/source.log",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/files/timeline.md",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/events.json",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/timeline.md",
+    "templates/module-skills/android/sim/evals/sim-optional-ef-benign/files/analysis.json",
+    "templates/module-skills/android/sim/evals/sim-optional-ef-benign/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-optional-ef-benign/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_E_NO_SUCH_ELEMENT",
+   "real": "",
+   "kind": "벤더 IPC 결과·오류 코드",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/android/_common/components.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_E_UNKNOWN_CMD",
+   "real": "",
+   "kind": "벤더 IPC 결과·오류 코드",
+   "count": 23,
+   "example_lines": [
+    "08-23 12:00:04.114  1188 1258 V RIL     : ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0203 len=12",
+    "10-15 11:47:20.409  1350  1418 V RIL     : ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0e07 len=12"
+   ],
+   "files": [
+    "templates/module-skills/android/_common/components.md",
+    "templates/module-skills/android/call/evals/call-volte-ims-unregistered/files/events.json",
+    "templates/module-skills/android/call/evals/call-volte-ims-unregistered/files/source.log",
+    "templates/module-skills/android/data/evals/data-disabled-user/files/events.json",
+    "templates/module-skills/android/data/evals/data-disabled-user/files/source.log",
+    "templates/module-skills/android/data/evals/data-disabled-user/files/timeline.md",
+    "templates/module-skills/android/ims/evals/ims-iradioims-absent/files/source.log",
+    "templates/module-skills/android/ims/evals/ims-iradioims-absent/files/timeline.md",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/events.json",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/source.log",
+    "templates/module-skills/android/ims/evals/ims-reg-403/files/timeline.md",
+    "templates/module-skills/android/modem/evals/modem-restart-chain/files/events.json",
+    "templates/module-skills/android/modem/evals/modem-restart-chain/files/source.log",
+    "templates/module-skills/android/modem/evals/modem-restart-chain/files/timeline.md",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/events.json",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/source.log",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/timeline.md",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/events.json",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-card-io-error/files/timeline.md",
+    "templates/module-skills/android/sms/evals/sms-ims-local-reject/files/source.log",
+    "templates/module-skills/android/sms/evals/sms-ims-local-reject/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_OK",
+   "real": "",
+   "kind": "벤더 IPC 결과·오류 코드",
+   "count": 15,
+   "example_lines": [
+    "10-14 09:41:09.284  1350  1415 V RIL     : ipc[0][RX] VIPC_EXAMPLE_IMS_CF, RSP OK(VIPC_OK) seq=0x0b12 len=16",
+    "09-02 10:00:03.150  1188 1258 V RIL     : ipc[0][RX] VIPC_EXAMPLE_ATTACH_PROFILE, RSP OK(VIPC_OK) seq=0x0310 len=12"
+   ],
+   "files": [
+    "templates/module-skills/android/_common/components.md",
+    "templates/module-skills/android/_common/layers.md",
+    "templates/module-skills/android/call/evals/call-cf-ut-no-rilj/files/source.log",
+    "templates/module-skills/android/call/evals/call-cf-ut-no-rilj/files/timeline.md",
+    "templates/module-skills/android/data/evals/data-apn-wrong-applied/files/source.log",
+    "templates/module-skills/android/data/evals/data-apn-wrong-applied/files/timeline.md",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/files/source.log",
+    "templates/module-skills/android/data/evals/data-profile-ipc-swallowed/files/timeline.md",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/events.json",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/source.log",
+    "templates/module-skills/android/network/evals/network-reg-reject/files/timeline.md",
+    "templates/module-skills/android/sim/evals/sim-slow-recognition/files/source.log",
+    "templates/module-skills/android/sim/evals/sim-slow-recognition/files/timeline.md"
+   ]
+  }
+ ]
+}
