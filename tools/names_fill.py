@@ -10,7 +10,9 @@ templates/module-skills/modules.yaml의 그 플랫폼 블록뿐이다.
 긴 placeholder부터 바꾼다(짧은 이름이 긴 이름의 앞부분인 경우가 있다 — 접두어 행은 남은 곳만 바뀐다).
 채운 양식은 사내 값이므로 사내 밖으로 내지 않는다. 순서: tools/site_names/README.md.
 """
-import json, re, sys
+import json
+import re
+import sys
 from pathlib import Path
 
 def targets(root, platform):
