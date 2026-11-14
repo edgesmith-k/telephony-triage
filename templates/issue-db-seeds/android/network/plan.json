@@ -932,8 +932,7 @@
             "patterns": [
               "ConnectingState: setupData:"
             ],
-            "suspect": "DataNetworkController → DataNetwork",
-            "optional": true
+            "suspect": "DataNetworkController → DataNetwork"
           }
         ],
         "then": "data/data-setup"

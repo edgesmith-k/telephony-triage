@@ -215,7 +215,7 @@ def _run(flow, records, texts, dts, runner, cuts, breaks, shown) -> list[dict]:
         while cut < len(cuts) and dt >= cuts[cut][0]:
             for inst in list(opened.values()):
                 close(inst, BOUNDARY, cuts[cut][0])
-            if cuts[cut][1] > cuts[cut][0]:
+            if cuts[cut][0] < cuts[cut][1] and dt <= cuts[cut][1]:     # 이미 구간 끝을 넘은 줄이면 그 뒤 인스턴스는 구간 밖이다
                 exits.append(cuts[cut][1])
             cut += 1
         if i in breaks:
@@ -243,8 +243,8 @@ def _run(flow, records, texts, dts, runner, cuts, breaks, shown) -> list[dict]:
             if rec["pid"] != inst["pid"]:
                 continue
             end = next((e for e, h in ends if i in h and in_scope(e, h, inst, i)), None)
-            if end and end.get("as") == "discard":     # 예: 이미 켜짐 — 충족된 단계가 없으면 인스턴스가 아니다, 있으면 무시
-                if inst["n"] == 0:
+            if end and end.get("as") == "discard":     # 예: 이미 켜짐 — 충족된 단계도 이상 값도 없으면 인스턴스가 아니다, 있으면 무시
+                if inst["n"] == 0 and not inst["bad"]:
                     opened.pop((inst["pid"], inst["tag"]), None)
                     out.remove(inst)
                 continue

@@ -267,8 +267,8 @@ def test_radio_already_on_line_inside_progress_is_ignored():
 
 
 def test_optional_step_without_lines_is_not_a_deviation():
-    """F-7: 선택 단계(`data-allowed`·`setup-start`)에 맞는 줄이 하나도 없으면 `-`(줄 없음(선택 단계)) — 벗어남이 아니다.
-    이상 값 줄이 계속되면 지금처럼 `값이상`."""
+    """F-7: 선택 단계(`data-allowed`)에 맞는 줄이 하나도 없으면 `-`(줄 없음(선택 단계)) — 벗어남이 아니다.
+    이상 값 줄이 계속되면 지금처럼 `값이상`. 선택 단계가 `ok`면 다음 필수 단계는 그대로 판정한다(C-2: 허용 뒤 SETUP 없음)."""
     [f] = _check(RADIO[:5] + [TICK], ("radio-on",))
     inst = f["instances"][0]
     assert _sig(inst) == "ok ok ok ok - -" and inst["steps"][4]["detail"] == flows.OPTIONAL_NONE
@@ -278,6 +278,25 @@ def test_optional_step_without_lines_is_not_a_deviation():
     assert _sig(f["instances"][0]) == "ok ok ok ok 값이상 -"
     lines = flow_section({"flows": [f]}, None, None, "17", {})[1]
     assert lines[1].endswith("데이터 허용 값이상(평가 거부: Data disallowed reasons: DATA_DISABLED)")
+    [f] = _check(RADIO[:6] + [TICK], ("radio-on",))
+    assert _sig(f["instances"][0]) == "ok ok ok ok ok 없음"
+
+
+def test_clock_going_back_before_any_flow_line_does_not_close_later_instance():
+    """C-1: 역행 구간에 흐름 줄이 하나도 없으면(역행 뒤 첫 흐름 줄이 이미 구간 끝을 넘음) 그 뒤에 연 인스턴스는 그대로다."""
+    rows = [(t + 20.0, tag, msg, *rest) for t, tag, msg, *rest in RADIO] + [(60.0, "Other", "tick")]
+    recs, _ = _recs([(8.0, "Other", "b")])
+    [f] = _check(rows, ("radio-on",), anomalies=[{"ts": recs[0]["ts"], "kind": "backward", "delta_sec": -2.0}])
+    [inst] = f["instances"]
+    assert _sig(inst) == "ok ok ok ok ok ok" and inst["end"] is None
+
+
+def test_discard_line_keeps_instance_that_already_had_bad_values():
+    """C-4: `as: discard` 줄은 충족된 단계도 이상 값도 없을 때만 인스턴스를 버린다."""
+    bad = RADIO[1][2].replace("mRadioPowerOffReasons=[]", "mRadioPowerOffReasons=[1]")
+    rows = [RADIO[0], (0.001, "SST-0", bad, PHONE, 0), (0.002, "SST-0", ALREADY, PHONE, 0), TICK]
+    [inst] = _check(rows, ("radio-on",))[0]["instances"]
+    assert _sig(inst).startswith("값이상")
 
 
 def test_instances_over_cap_keep_the_tail_and_say_so():

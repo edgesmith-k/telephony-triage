@@ -179,6 +179,8 @@ PR 1(`04-parser-matching.md §5.13`)은 엔진·리포트 절·`put-flow`·검�
 - 흐름 칸 `normal_noise`(기다리는 동안 나와도 정상인 줄)·`key: none`·`added_on`·`reason`, DB 안의 깨진 흐름(`broken`) fixture.
 - 버전 자동 선택: 같은 카테고리에 시작 줄이 같은 버전별 흐름이 있을 때 이슈 버전으로 하나만 돌리기(규칙 후보는 설계 검증 과제 6). 그때 `db_lint` `flow-start` 오류를 겹치지 않는 `platform_versions` 검사로 바꾼다.
 - INTERNET이 아닌 PDN(IMS 등)에서 `onDataNetworkValidationStatusChanged`가 찍히는지 사내 첫 실행에서 확인 — `ConnectivityService.handleNetworkTested`는 결과가 오면 항상 agent에 알리지만 NetworkMonitor 쪽은 사외에서 확인 못 함. 안 찍히면 `data-setup`의 `validated`를 `optional`로.
+- 듀얼 SIM: 슬롯 없는 줄(`DN-<id>-C`)을 먼저 연 인스턴스가 가져간다(확인 리뷰 C-3) — 슬롯이 확정된 앞 단계(`DNC-<n>`)와 잇는 방법은 사내 듀얼 SIM 로그를 보고 정한다. 기본 데이터가 아닌 슬롯에서 INTERNET 평가 거부 줄이 계속 찍히는지(찍히면 그 사유를 `data-allowed` 패턴에서 뺀다)도 같이 본다.
+- `JOB/flow.json`은 흐름 단계에 닿기 전에 멈춘 실행에서 이전 것이 남을 수 있다(C-5 — 판정에 쓰는 것은 `analysis.json flows`다). 상한(뒤 1000개)에 일부만 잘린 범위는 리포트가 알리지 않는다(C-6 — 범위 안에 하나도 없을 때만 알린다).
 - 되살리는 조건: PR 1 병합 뒤. eval 비용은 PR 2 착수 때 추정한다.
 
 ## 되살릴 때 바꿀 곳
