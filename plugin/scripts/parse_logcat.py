@@ -13,7 +13,8 @@
       그 흔적을 모아 `step_events[{rule, ts, seq, label}]`(규칙 번호·시각·줄 순번·이름 — 로그 본문 없음, (ts, seq, rule) 순)을
       더한다. 규칙당 1000개·전체 5000개 상한(넘으면 경고 `step-events-truncated`), 잘못된 규칙은 경고 `step-event-rule`.
   flows <logcat...> --rules <db>/parser-rules [--tz <IANA>] [--year <YYYY>]
-      이슈 DB `<category>/flows/*.yaml` 성공 흐름을 전체 로그의 모든 줄(마스킹)에 돌려 인스턴스·단계 판정을 낸다
+      이슈 DB `<category>/flows/*.yaml` 성공 흐름을 전체 로그의 모든 줄에 돌려 인스턴스·단계 판정을 낸다(단계 줄은 가리지 않은
+      글에서 찾고, 출력에 글자가 나가는 줄만 마스킹)
       (`{schema, flows[], warnings}`, 표시 전용 — 04-parser-matching.md §5.13). 흐름 파일이 없으면 `flows: []`.
   extract-bugreport <zip|txt> --out <dir>
       bugreport에서 logcat 섹션(기본 system/radio/main)과 빌드 정보(build.json)만 꺼낸다.
@@ -983,7 +984,7 @@ def flow_check(paths: list[Path], rules_dir: Path, defaults: dict, tz: str | Non
         return lazy[0].mask(texts[i], [(a + off, b + off, *rest) for a, b, *rest in lazy[1].get(i, ())])
     epoch_break = backend.log_format().epoch_break
     breaks = {n for n, r in enumerate(records) if epoch_break(SimpleNamespace(tag=r["tag"], msg=r["msg"]))}
-    anomalies = [a["ts"] for a in backend.coverage(paths, tz, year)["clock_anomalies"]]
+    anomalies = backend.coverage(paths, tz, year)["clock_anomalies"]
     timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
     result["flows"], flow_warnings = flows.check(defs, records, texts, timeout_ms=timeout_ms,
                                                  log_end=flows.log_end_sec(db_cfg), anomalies=anomalies, breaks=breaks, mask=mask)

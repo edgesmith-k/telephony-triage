@@ -47,7 +47,7 @@ class FlowOps:
                            if c.get("flow_step") in gone)
             if users:
                 raise Reject("flow-step-in-use", f"흐름 {ref}에서 없어지는 단계를 원인이 가리킵니다: {', '.join(users)} "
-                             "(단계 id를 남기거나 원인 flow_step을 먼저 바꾼다).", i)
+                             "(그 단계 id를 남긴다 — 원인의 flow_step을 바꾸는 op는 아직 없다(99-deferred L)).", i)
         fdir = path.parent / "fixtures"
         names = self._names(fdir)
         for item in op.get("fixtures") or []:

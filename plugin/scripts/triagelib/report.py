@@ -285,7 +285,9 @@ def fit(result: dict) -> dict:
         return len(dumps(result).encode("utf-8")) + 1
 
     cands = result.get("candidates") or []
-    steps = []
+    # 성공 흐름(§5.13, 표시 전용 보조 칸): 후보 근거보다 먼저 — flows[1:] → 전체
+    steps = [lambda: result.get("flows") and result.update(flows=result["flows"][:1]),
+             lambda: result.pop("flows", None)]
     for c in cands[1:]:
         steps.append(lambda c=c: c.update(evidence=c["evidence"][:2]))
     # C′ 부분 일치(§5.12): 다른 후보 근거 다음, 1위 근거·must_show 줄이기 전에 partial[1:] → missing 40자 → partial 전체
@@ -293,9 +295,6 @@ def fit(result: dict) -> dict:
               lambda: result.get("partial") and result.update(partial=[
                   {**p, "missing": [_clip(m, 40) for m in p.get("missing") or []]} for p in result["partial"]]),
               lambda: result.pop("partial", None)]
-    # 성공 흐름(§5.13): partial 다음 — flows[1:] → 전체
-    steps += [lambda: result.get("flows") and result.update(flows=result["flows"][:1]),
-              lambda: result.pop("flows", None)]
     steps.append(lambda: cands and cands[0].update(evidence=cands[0]["evidence"][:6]))
     for c in cands:
         steps.append(lambda c=c: c.update(evidence=[{**e, "msg": _clip(e.get("msg"), 80)} for e in c["evidence"]]))
@@ -350,14 +349,24 @@ def _clip_bytes(text: str, limit: int) -> str:
     return text
 
 
-def flow_section(doc: dict, window: dict | None, around: str | None, version, causes: dict) -> tuple[list, list]:
+def _optional_none(inst: dict) -> int | None:
+    """`optional` 단계에 줄이 없어 멈춘 인스턴스(벗어남 아님)면 그 단계 번호."""
+    k = next((k for k, s in enumerate(inst["steps"]) if s["verdict"] != "ok"), None)
+    return k if k is not None and inst["steps"][k]["detail"] == flowlib.OPTIONAL_NONE else None
+
+
+def flow_section(doc: dict, window: dict | None, around: str | None, version, causes: dict,
+                 ranked: list | tuple = ()) -> tuple[list, list]:
     """성공 흐름 점검 (04-parser-matching.md §5.13, 판정·점수 아님, S/C 불변): `flow.json` → (analysis.json `flows[]` ≤ 3,
     report.md 줄 ≤ 1,200 B). 분석 범위 안에서 시작한 인스턴스만, 벗어난 것(값이상·없음) 먼저·발생 시각에 가까운 순, 흐름당 ≤ 3.
-    범위 안 인스턴스가 없으면 `해당 없음`, 모두 끝까지 ok면 한 줄. `causes`: `{"<cat>/<흐름>/<단계>": [(원인 ID, title)]}`(active)."""
+    범위 안 인스턴스가 없으면 `해당 없음`(흐름 인스턴스가 상한에 잘렸으면 판정 못 함 줄), 모두 정상이면 한 줄(선택 단계 줄 없음도 정상).
+    `causes`: `{"<cat>/<흐름>/<단계>": [(원인 ID, title)]}`(active, DB 순서) — `ranked`(매칭 후보 원인 ID, 순위 순)에 있는 것을 먼저."""
     lo, hi = (_parse_ts(window.get("start")), _parse_ts(window.get("end"))) if window else (None, None)
     at = _parse_ts(around)
+    ranked = list(ranked)
+    causes = {k: sorted(v, key=lambda c: ranked.index(c[0]) if c[0] in ranked else len(ranked)) for k, v in causes.items()}
     titles = {f["flow"]: f["title"] for f in doc.get("flows") or []}
-    picked, counts, vers = [], [], []
+    picked, counts, vers, cut = [], [], [], []
     for f in doc.get("flows") or []:
         rows = []
         for inst in f["instances"]:
@@ -365,30 +374,43 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
             if (lo and t < lo) or (hi and t > hi):
                 continue
             first = next((k for k, s in enumerate(inst["steps"]) if s["verdict"] != "ok"), None)
+            if _optional_none(inst) is not None:       # 선택 단계 줄 없음: 정상 쪽으로 센다
+                first = None
             bad = first is not None and inst["steps"][first]["verdict"] in ("값이상", "없음")
             rows.append((not bad, abs((t - at).total_seconds()) if at else 0.0, inst["start_ts"], f, inst, first))
         if not rows:
+            if f.get("truncated"):
+                cut.append(f["title"])
             continue
         rows.sort(key=lambda r: r[:3])
-        counts.append((f["title"], len(rows), all(r[5] is None for r in rows)))
+        skipped = sorted({f["steps"][k]["title"] for r in rows if (k := _optional_none(r[4])) is not None})
+        counts.append((f["title"], len(rows), all(r[5] is None for r in rows),
+                       sum(_optional_none(r[4]) is not None for r in rows), skipped))
         picked += rows[:FLOW_PER_FLOW]
         if f["platform_versions"] and flowlib.version_match(f["platform_versions"], version) is not True:
             vers += [v for v in f["platform_versions"] if v not in vers]
+    cut_line = ([f"- 흐름 점검: {'·'.join(cut)} 인스턴스가 많아 뒤 {flowlib.INSTANCES_MAX}개만 봄 — 이 범위는 판정 못 함"]
+                if cut else [])
     if not counts:
-        return [], ["- 흐름 점검: 해당 없음"]
+        return [], cut_line or ["- 흐름 점검: 해당 없음"]
     tail = (f"흐름 기준 버전 {', '.join(vers)}" + (f" — 이 이슈는 {_clip(version, 20)}, 줄 문구가 다를 수 있다" if version else "")
             if vers else "")
     analysis = []
     for _, _, _, f, inst, first in sorted(picked, key=lambda r: r[:3])[:FLOW_ANALYSIS_MAX]:
         step = inst["steps"][first] if first is not None else None
         ref = _ref_label((step or {}).get("line_ref") or inst.get("line_ref"))
-        hit = causes.get(f"{f['flow']}/{step['id']}") if step else None
+        hit = causes.get(f"{f['flow']}/{step['id']}") if step and step["verdict"] in ("값이상", "없음") else None
         analysis.append({k: v for k, v in {"flow": f["flow"], "key": inst["key"], "step": step and step["id"],
                                            "verdict": step["verdict"] if step else "ok", "at": ref,
                                            "causes": [c for c, _ in hit[:3]] if hit else None}.items() if v is not None})
-    if all(ok for _, _, ok in counts):
-        return analysis, ["- 흐름 점검: " + ", ".join(f"{t} {n}회" for t, n, _ in counts) + " 끝까지 정상"
-                          + (f" ({tail})" if tail else "")]
+    if all(ok for _, _, ok, _, _ in counts):
+        if any(k for _, _, _, k, _ in counts):
+            text = ", ".join(f"{t} {n}회 끝까지 정상" if not k else
+                             f"{t} {n}회 정상({'·'.join(names)} 줄 없음{f' {k}회' if k < n else ''})"
+                             for t, n, _, k, names in counts)
+        else:
+            text = ", ".join(f"{t} {n}회" for t, n, _, _, _ in counts) + " 끝까지 정상"
+        return analysis, ["- 흐름 점검: " + text + (f" ({tail})" if tail else "")] + cut_line
     lines = [f"- 흐름 점검 (판정·점수 아님, S/C 불변{'; ' + tail if tail else ''}):"]
     for _, _, _, f, inst, first in picked:
         parts = []
@@ -400,7 +422,7 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
             parts.append(f"{st['title']} {s['verdict']}" + (f"({why})" if why else ""))
             break
         ref = _ref_label(inst.get("line_ref"))
-        text = (f"{f['title']} {inst['key']}" + (f" (재시작 {inst['restarts']}회)" if inst["restarts"] else "")
+        text = (f"{f['title']} {inst['key']}" + (f" (시작 줄 {inst['restarts']}회 더)" if inst["restarts"] else "")
                 + (f" ({ref})" if ref else "") + ": " + " → ".join(parts))
         if first is None and inst["notes"]:
             text += f" (메모: {', '.join(inst['notes'])})"
@@ -415,7 +437,7 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
         if len("\n".join(lines + block).encode("utf-8")) > FLOW_REPORT_MAX:    # 절 전체 ≤ 1,200 B: 넘치면 뒤 항목부터 뺀다
             break
         lines += block
-    return analysis, lines
+    return analysis, lines + cut_line
 
 
 ANALYSIS_SCHEMA =SCRIPTS.parent / "schemas" / "output" / "analysis.schema.json"

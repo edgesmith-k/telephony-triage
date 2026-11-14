@@ -180,29 +180,120 @@ def test_other_pid_lines_are_ignored_and_same_tag_other_pid_closes():
 def test_clock_anomaly_and_reboot_line_close_as_log_boundary():
     rows = RADIO[:2] + [(1.0, "Other", "x")] + [(2.0, *RADIO[2][1:])] + [TICK]
     recs, _ = _recs(rows)
-    inst = _check(rows, ("radio-on",), anomalies=[recs[2]["ts"]])[0]["instances"][0]
+    inst = _check(rows, ("radio-on",), anomalies=[{"ts": recs[2]["ts"], "kind": "jump", "delta_sec": 3600.0}])[0]["instances"][0]
     assert inst["end"]["label"] == "로그 경계" and _sig(inst) == "ok - - - - -"
     inst = _check(rows, ("radio-on",), breaks={2})[0]["instances"][0]
     assert inst["end"] == {"label": "로그 경계", "ts": recs[2]["ts"]}
 
 
-def test_same_ms_line_before_previous_step_is_looked_back():
-    """W-3: 버퍼별 파일을 같이 주면 같은 ms에서 다음 단계 줄이 앞에 놓일 수 있다."""
+def test_clock_going_back_closes_instance_opened_in_overlap_cli():
+    """F-1: 시계가 뒤로 가면(NITZ 등) 시각순 정렬에서 역행 뒤 줄이 시작 줄 앞에 놓인다 — 거짓 `없음` 대신 `로그 경계`."""
+    work = tmp("tt-flows-")
+    (work / "db").mkdir()
+    db = _db(work / "db", "radio-on")
+    rows = [(5.0, *RADIO[0][1:3]), (5.001, *RADIO[1][1:3]), (0.002, *RADIO[2][1:3]), (0.004, *RADIO[3][1:3]),
+            (30.0, "Other", "tick")]
+    log = _log(work / "clock.log", rows)
+    out = run_json("parse_logcat.py", ["flows", log, "--rules", db / "parser-rules", "--tz", "UTC", "--year", "2026"])
+    [inst] = out["flows"][0]["instances"]
+    assert inst["end"]["label"] == "로그 경계" and _sig(inst) == "ok - - - - -"
+    assert inst["steps"][1]["detail"] == "로그 경계로 끝남"
+
+
+def _two_files(rows, second: set[int]):
+    """줄 순번 `second`는 다른 파일(file_index 1)의 줄이다."""
+    recs, texts = _recs(rows)
+    for n in second:
+        recs[n]["line_ref"] = {"file_index": 1, "line_no": n + 1}
+    return flows.check(_defs("data-setup"), recs, texts, timeout_ms=0)[0][0]["instances"]
+
+
+def test_same_ms_line_before_previous_step_is_looked_back_only_across_files():
+    """W-3·F-9: 버퍼별 파일을 같이 주면 같은 ms에서 다음 단계 줄이 앞에 놓일 수 있다 — 다른 파일 줄만 되돌아본다."""
     rows = [(0, "DN-1-C", SETUP), (0.03, "DN-1-C", LP_OK), (0.03, "DN-1-C", RESP_OK), (0.035, "DN-1-C", CONNECTED), TICK]
-    assert _sig(_check(rows)[0]["instances"][0]) == "ok ok ok 없음"
+    assert _sig(_two_files(rows, {1})[0]) == "ok ok ok 없음"
     rows[1] = (0.029, "DN-1-C", LP_OK)          # 다른 ms면 되돌아보지 않는다
+    assert _sig(_two_files(rows, {1})[0]) == "ok 없음 - -"
+    # 한 파일 안의 뒤집힌 순서(connected → link-properties → response)는 실제 순서다 — ok가 아니다
+    rows = [(0, "DN-1-C", SETUP), (0.03, "DN-1-C", CONNECTED), (0.03, "DN-1-C", LP_OK), (0.03, "DN-1-C", RESP_OK), TICK]
     assert _sig(_check(rows)[0]["instances"][0]) == "ok 없음 - -"
+    recs, texts = _recs(rows)
+    for r in recs:
+        r["line_ref"] = None                     # 파일 순번이 없으면 되돌아보지 않는다
+    assert _sig(flows.check(_defs("data-setup"), recs, texts, timeout_ms=0)[0][0]["instances"][0]) == "ok 없음 - -"
 
 
 def test_dual_sim_any_scope_skips_other_slot():
-    """W-4: `scope: any` 단계는 슬롯이 다른 줄(SST-1의 인스턴스에 [PHONE0] 줄)을 쓰지 않는다. `None`은 와일드카드."""
+    """W-4: `scope: any` 단계는 슬롯이 다른 줄(SST-1의 인스턴스에 [PHONE0] 줄)을 쓰지 않는다. `None`은 와일드카드.
+    F-6: 한 줄은 같은 흐름의 한 인스턴스만 쓴다 — 슬롯 없는 RIL 줄 한 벌은 먼저 연 SST-0만 쓴다."""
     one = [(r[0], r[1].replace("-0", "-1"), r[2], PHONE, 1) for r in RADIO[:2]]
     rows = sorted(RADIO[:4] + one, key=lambda r: r[0]) + [TICK]
     by = {i["key"]: _sig(i) for i in _check(rows, ("radio-on",))[0]["instances"]}
     assert by == {"SST-0": "ok ok ok 없음 - -", "SST-1": "ok 없음 - - - -"}
     rows = sorted(RADIO[:2] + one + [(r[0], r[1], r[2], PHONE, None) for r in RADIO[2:4]], key=lambda r: r[0]) + [TICK]
     assert {i["key"]: _sig(i) for i in _check(rows, ("radio-on",))[0]["instances"]} == \
-        {"SST-0": "ok ok ok 없음 - -", "SST-1": "ok ok ok 없음 - -"}
+        {"SST-0": "ok ok ok 없음 - -", "SST-1": "ok 없음 - - - -"}
+
+
+def test_dual_sim_slotless_setup_line_goes_to_one_instance_only():
+    """F-6: `DN-n-C`(슬롯 없음) setupData 하나를 두 슬롯 인스턴스가 함께 `setup-start`로 쓰고 `then`이 남의 연결에 붙지 않는다."""
+    one = [(r[0], r[1].replace("-0", "-1"), r[2].replace("[PHONE0]", "[PHONE1]").replace("[0243]", "[0244]"), PHONE, 1)
+           for r in RADIO[:6]]
+    rows = sorted(RADIO + one, key=lambda r: r[0]) + [TICK]
+    out = {f["flow"]: f for f in _check(rows, ("radio-on", "data-setup"))}
+    by = {i["key"]: i for i in out["network/radio-on"]["instances"]}
+    assert _sig(by["SST-0"]) == "ok ok ok ok ok ok" and by["SST-0"]["then"]["key"] == "DN-1-C"
+    assert by["SST-1"]["steps"][5]["verdict"] != "ok" and by["SST-1"]["then"] is None
+
+
+ALREADY = "setRadioPower mDesiredPowerState is already true Do nothing."
+POLL = RADIO[4][2]
+
+
+def test_radio_already_on_is_not_an_instance():
+    """F-2: 이미 켜진 무선의 `setRadioPower power true`(AOSP ServiceStateTracker: 곧바로 `already true Do nothing`)는
+    인스턴스가 아니다(거짓 `켬 결정 없음`·엉뚱한 원인 대신 출력 없음)."""
+    rows = [(0.0, *RADIO[0][1:]), (0.001, "SST-0", ALREADY, PHONE, 0), (5.0, "SST-0", POLL, PHONE, 0), TICK]
+    [f] = _check(rows, ("radio-on",))
+    assert f["instances"] == []
+    assert flow_section({"flows": [f]}, None, None, "17", {})[1] == ["- 흐름 점검: 해당 없음"]
+
+
+def test_radio_already_on_line_inside_progress_is_ignored():
+    """F-2 (c15 모양): 진행 중 인스턴스에 시작 줄이 또 오고 already-true 줄이 와도 닫히지 않고 그대로 진행한다."""
+    rows = RADIO[:2] + [(0.0015, *RADIO[0][1:]), (0.0016, "SST-0", ALREADY, PHONE, 0)] + RADIO[2:] + [TICK]
+    [inst] = _check(rows, ("radio-on",))[0]["instances"]
+    assert _sig(inst) == "ok ok ok ok ok ok" and inst["restarts"] == 1 and inst["end"] is None
+
+
+def test_optional_step_without_lines_is_not_a_deviation():
+    """F-7: 선택 단계(`data-allowed`·`setup-start`)에 맞는 줄이 하나도 없으면 `-`(줄 없음(선택 단계)) — 벗어남이 아니다.
+    이상 값 줄이 계속되면 지금처럼 `값이상`."""
+    [f] = _check(RADIO[:5] + [TICK], ("radio-on",))
+    inst = f["instances"][0]
+    assert _sig(inst) == "ok ok ok ok - -" and inst["steps"][4]["detail"] == flows.OPTIONAL_NONE
+    assert flow_section({"flows": [f]}, None, None, "17", {})[1] == ["- 흐름 점검: 무선 켬 1회 정상(데이터 허용 줄 없음)"]
+    deny = RADIO[5][2].replace("Data allowed reasons: NORMAL", "Data disallowed reasons: DATA_DISABLED")
+    [f] = _check(RADIO[:5] + [(0.6, "DNC-0", deny, PHONE, 0), TICK], ("radio-on",))
+    assert _sig(f["instances"][0]) == "ok ok ok ok 값이상 -"
+    lines = flow_section({"flows": [f]}, None, None, "17", {})[1]
+    assert lines[1].endswith("데이터 허용 값이상(평가 거부: Data disallowed reasons: DATA_DISABLED)")
+
+
+def test_instances_over_cap_keep_the_tail_and_say_so():
+    """F-3: 상한을 넘으면 뒤쪽 INSTANCES_MAX개를 남기고, 분석 범위에 남은 인스턴스가 없으면 '판정 못 함' 줄."""
+    bad = RESP_BAD.replace("RESULT_SUCCESS", "RESULT_ERROR_INVALID_ARG")
+    rows = []
+    for n in range(flows.INSTANCES_MAX + 1):
+        rows += [(n * 2.0, f"DN-{n}-C", SETUP), (n * 2.0 + 0.03, f"DN-{n}-C", bad)]
+    [f] = _check(rows + [(3000.0, "Other", "tick")])
+    assert f["truncated"] and len(f["instances"]) == flows.INSTANCES_MAX
+    assert f["instances"][0]["key"] == "DN-1-C" and f["instances"][-1]["key"] == f"DN-{flows.INSTANCES_MAX}-C"
+    ts = lambda s: logtime.format_ts(T0 + timedelta(seconds=s))   # noqa: E731
+    lines = flow_section({"flows": [f]}, {"start": ts(-1), "end": ts(1)}, ts(0), "17", {})[1]
+    assert lines == [f"- 흐름 점검: 데이터 연결 인스턴스가 많아 뒤 {flows.INSTANCES_MAX}개만 봄 — 이 범위는 판정 못 함"]
+    lines = flow_section({"flows": [f]}, {"start": ts(1999.5), "end": ts(2010)}, ts(2000), "17", {})[1]
+    assert lines[1].startswith(f"  - 데이터 연결 DN-{flows.INSTANCES_MAX}-C ") and "값이상" in lines[1]
 
 
 def test_cut_before_each_step_never_says_missing():
@@ -346,6 +437,11 @@ def test_triage_without_flow_files_is_unchanged():
     assert "흐름 점검" not in report and "flows" not in analysis and not (work / "a" / "flow.json").exists()
     trace = (work / "a" / "trace.jsonl").read_text(encoding="utf-8")
     assert "4-flows" not in trace
+    # F-12: 흐름이 있던 작업을 흐름을 뺀 스냅샷으로 다시 돌리면 이전 flow.json이 남지 않는다
+    _triage(_sample_with_flow(work / "b"), work / "c")
+    assert (work / "c" / "flow.json").exists()
+    _triage(SAMPLE, work / "c")
+    assert not (work / "c" / "flow.json").exists()
 
 
 def test_cache_key_includes_flow_files(tmp_path):
@@ -358,9 +454,44 @@ def test_cache_key_includes_flow_files(tmp_path):
     assert compiled.source_hash(db, config, {}) != before
 
 
-def test_fit_trims_flows_after_partial():
+def test_fit_trims_flows_before_other_candidate_evidence():
+    """F-4: 표시 전용 보조 칸(flows)이 다른 후보 근거보다 먼저 줄어든다 — 흐름이 있어도 후보 출력은 같다."""
     item = {"flow": "data/data-setup", "key": "DN-1-C", "step": "link-properties", "verdict": "없음", "at": "f0:L100000"}
+
+    def doc(n, with_flows):
+        ev = [{"ts": "2026-11-10T12:00:00.000Z", "tag": "DN-1-C", "msg": "x" * 100} for _ in range(n)]
+        out = {"status": "ok", "candidates": [{"type": "T1", "evidence": list(ev)}, {"type": "T2", "evidence": list(ev)}],
+               "files": {"report": "r"}, "warnings": []}
+        return {**out, "flows": [item] * 3} if with_flows else out
+    for n in range(10, 20):
+        assert fit(doc(n, True))["candidates"] == fit(doc(n, False))["candidates"], n
     big = [{"ts": "t", "tag": "T", "msg": "x" * 140} for _ in range(23)]
     out = fit({"status": "ok", "candidates": [{"type": "T", "evidence": list(big)}], "flows": [item] * 3,
                "files": {"report": "r"}, "warnings": []})
     assert len(out.get("flows") or []) <= 1 and len(out["candidates"][0]["evidence"]) == 23
+
+
+def _bad_resp_flow():
+    rows = [(0, "DN-1-C", SETUP), (0.03, "DN-1-C", RESP_BAD.replace("RESULT_SUCCESS", "RESULT_ERROR_INVALID_ARG")), TICK]
+    return {"flows": _check(rows)}
+
+
+def test_step_causes_put_ranked_candidates_first():
+    """(추가) 이 단계의 원인: 매칭 후보(순위 순)에 있는 원인을 먼저, 그다음 DB 순서, 상한 3."""
+    causes = {"data/data-setup/response": [(f"DATA-00{n}-01", f"원인 {n}") for n in range(1, 6)]}
+    analysis, lines = flow_section(_bad_resp_flow(), None, None, "17", causes, ["DATA-005-01", "OTHER-001-01", "DATA-003-01"])
+    assert analysis[0]["causes"] == ["DATA-005-01", "DATA-003-01", "DATA-001-01"]
+    assert "이 단계의 원인: DATA-005-01 원인 5, DATA-003-01 원인 3, DATA-001-01 원인 1" in lines[2]
+    assert flow_section(_bad_resp_flow(), None, None, "17", causes)[0][0]["causes"] == ["DATA-001-01", "DATA-002-01", "DATA-003-01"]
+
+
+def test_analysis_causes_only_for_deviation_and_start_repeat_wording():
+    """F-11: analysis.json causes는 멈춘 단계가 값이상·없음일 때만(report.md와 같다). F-17: 합친 시작 줄 수는 '시작 줄 n회 더'."""
+    causes = {"data/data-setup/link-properties": [("DATA-001-01", "x")]}
+    [f] = _check(_normal()[:2] + [(3.0, "Other", "tick")])          # 설정 만듦 로그끝(판정 불가)
+    assert _sig(f["instances"][0]) == "ok 로그끝 - -"
+    analysis, lines = flow_section({"flows": [f]}, None, None, "17", causes)
+    assert "causes" not in analysis[0] and not any("이 단계의 원인" in line for line in lines)
+    rows = RADIO[:2] + [(0.0015, *RADIO[0][1:])] + [(0.002, *RADIO[2][1:])] + [TICK]
+    lines = flow_section({"flows": _check(rows, ("radio-on",))}, None, None, "17", {})[1]
+    assert "무선 켬 SST-0 (시작 줄 1회 더) (f0:L1)" in lines[1] and "재시작" not in lines[1]

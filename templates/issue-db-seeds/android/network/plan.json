@@ -843,6 +843,12 @@
             "scope": "own",
             "pattern": "setRadioPower power false",
             "label": "무선 끔"
+          },
+          {
+            "scope": "own",
+            "pattern": "setRadioPower mDesiredPowerState is already true Do nothing",
+            "label": "이미 켜짐",
+            "as": "discard"
           }
         ],
         "steps": [
@@ -916,7 +922,8 @@
             "show": [
               "Data disallowed reasons: [A-Z_ ]+"
             ],
-            "suspect": "DataNetworkController(평가 거부 사유)"
+            "suspect": "DataNetworkController(평가 거부 사유)",
+            "optional": true
           },
           {
             "id": "setup-start",
@@ -925,7 +932,8 @@
             "patterns": [
               "ConnectingState: setupData:"
             ],
-            "suspect": "DataNetworkController → DataNetwork"
+            "suspect": "DataNetworkController → DataNetwork",
+            "optional": true
           }
         ],
         "then": "data/data-setup"

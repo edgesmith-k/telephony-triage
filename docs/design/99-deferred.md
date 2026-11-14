@@ -178,6 +178,7 @@ PR 1(`04-parser-matching.md §5.13`)은 엔진·리포트 절·`put-flow`·검�
 - README·CHANGELOG 흐름 표(`db_build`) — 생성 결과가 바뀌어 `GENERATOR_VERSION`을 올려야 한다(`06-collaboration.md §6.4`).
 - 흐름 칸 `normal_noise`(기다리는 동안 나와도 정상인 줄)·`key: none`·`added_on`·`reason`, DB 안의 깨진 흐름(`broken`) fixture.
 - 버전 자동 선택: 같은 카테고리에 시작 줄이 같은 버전별 흐름이 있을 때 이슈 버전으로 하나만 돌리기(규칙 후보는 설계 검증 과제 6). 그때 `db_lint` `flow-start` 오류를 겹치지 않는 `platform_versions` 검사로 바꾼다.
+- INTERNET이 아닌 PDN(IMS 등)에서 `onDataNetworkValidationStatusChanged`가 찍히는지 사내 첫 실행에서 확인 — `ConnectivityService.handleNetworkTested`는 결과가 오면 항상 agent에 알리지만 NetworkMonitor 쪽은 사외에서 확인 못 함. 안 찍히면 `data-setup`의 `validated`를 `optional`로.
 - 되살리는 조건: PR 1 병합 뒤. eval 비용은 PR 2 착수 때 추정한다.
 
 ## 되살릴 때 바꿀 곳

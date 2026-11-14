@@ -882,13 +882,14 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         return out, extra
 
     def flows(self, logs: list[Path], tz: str | None, year: int | None, around: str | None, events: dict,
-              version: str | None) -> tuple[list | None, list | None]:
+              version: str | None, ranked: list | None = None) -> tuple[list | None, list | None]:
         """성공 흐름 점검 (04-parser-matching.md §5.13, 표시 전용 — S/C·점수 불변): `parse_logcat.py flows`(전체 로그) →
         `JOB/flow.json` → (analysis.json `flows[]`, report.md 줄). 스냅샷에 흐름 파일이 없으면 부르지 않고 (None, None)이다 —
-        출력이 이전과 같다."""
+        출력이 이전과 같다. `ranked`: 매칭 후보 원인 ID(순위 순) — "이 단계의 원인"에서 먼저 보인다."""
         snap = Path(self.snap)
         config = compat.load_db_config(snap)
         if not flowlib.files(snap, config):
+            (self.job / "flow.json").unlink(missing_ok=True)      # 흐름을 뺀 스냅샷: 이전 실행의 flow.json을 남기지 않는다
             return None, None
         argv = ["flows", *logs, "--rules", snap / "parser-rules"] + (["--tz", tz] if tz else []) + (["--year", year] if year else [])
         _, data, _ = self.run.call("4-flows", "parse_logcat.py", argv)
@@ -900,7 +901,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             for c in issuedb.read_frontmatter(type_md).get("causes") or []:
                 if c.get("flow_step") and str(c.get("status", "active")) == "active":
                     causes.setdefault(str(c["flow_step"]), []).append((str(c.get("id")), str(c.get("title", ""))))
-        return flow_section(data or {}, (events.get("input") or {}).get("window"), around, version, causes)
+        return flow_section(data or {}, (events.get("input") or {}).get("window"), around, version, causes, ranked or ())
 
     def explore(self, candidates: list[dict]) -> dict | None:
         """Step 5-2 탐색 분석 해당 여부: 후보 없음·원인 미확인이면 `{reason, when}`, 아니면 None.
@@ -1061,7 +1062,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         no_candidate = None if candidates else self.no_candidate_hints(info, events)
         partial, partial_report = (self.partial(match, code, events_path, events) if match.get("partial") is not None
                                    else (None, None))
-        flows, flow_lines = self.flows(logs, tz, year, around, events, version)
+        flows, flow_lines = self.flows(logs, tz, year, around, events, version, [c["cause"] for c in candidates if c["cause"]])
         code_out = self.resolve_code(code, version, candidates)
         analyzer = self.analyzer(candidates)
         explore = self.explore(candidates)

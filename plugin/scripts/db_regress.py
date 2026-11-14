@@ -451,6 +451,8 @@ def main(argv: list[str] | None = None) -> int:
     except (UsageError, yamlio.YamlFileError) as exc:
         print(str(exc), file=sys.stderr)
         return USAGE
+    for s in (result.get("flows") or {}).get("skipped", []):      # 건너뛴 흐름은 통과가 아니다(db_lint flow-fixture-missing)
+        print(f"건너뜀: 흐름 {s['flow']} ({s['reason']})", file=sys.stderr)
     for r in result["results"] + (result.get("flows") or {}).get("results", []):
         if r["status"] != "pass" and "flow" in r:
             print(f"실패: {r['fixture']} (흐름 {r['flow']} 끝까지 ok)", file=sys.stderr)

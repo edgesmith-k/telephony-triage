@@ -6,18 +6,21 @@
 (`notes`·`show`)만 `mask(줄 순번)`으로 가린 뒤 거기서 다시 뽑는다(스텝 마커와 같은 방식, 가린 줄에 안 맞으면 내지 않는다).
 
 - 인스턴스 열쇠 = (시작 줄 pid, 시작 줄 태그). 열린 인스턴스에 같은 열쇠의 시작 줄이 또 오면 합친다(`restarts`만 센다).
-  끝 줄로 닫힌 뒤의 시작만 새 인스턴스다.
+  끝 줄로 닫힌 뒤의 시작만 새 인스턴스다. 끝 줄 `as: discard`는 아직 충족된 단계가 없으면 인스턴스를 버리고, 있으면 무시한다.
 - 단계·끝·메모 줄은 시작 줄 pid의 줄만 본다. scope `own`은 태그 = 열쇠, `named`는 `name_template`(`{key}` = re.escape(태그)),
-  `any`는 슬롯(`phone_id`)이 다르면 뺀다(`None`은 와일드카드).
-- 닫힘: 끝 줄(라벨), 시작 태그가 다른 pid로 나옴(`프로세스 재시작`), 시계 이상 시각·재부팅 줄(`로그 경계`).
-- 단계는 순서대로만 찾는다. 단계가 충족되면 같은 시각(ms)의 이미 지난 줄도 한 번 다음 단계로 본다(버퍼별 파일의 같은 ms 순서).
-- 판정 `ok`(+그 전 이상 값 n회) / `값이상` / `없음`(끝난 사유) / `로그끝`(뒤 로그 < log_end_sec, 판정 불가) / `-`(앞에서 벗어남).
+  `any`는 슬롯(`phone_id`)이 다르면 뺀다(`None`은 와일드카드). 한 줄은 같은 흐름의 한 인스턴스만 단계 충족에 쓴다(먼저 연 것).
+- 닫힘: 끝 줄(라벨), 시작 태그가 다른 pid로 나옴(`프로세스 재시작`), 시계 이상·재부팅 줄(`로그 경계`). 시계 역행(T, d<0)은
+  시각순 정렬에서 두 시계의 줄이 섞이는 구간 `[T, T+|d|]`이라 T에 열려 있던 인스턴스와 그 구간에서 연 인스턴스(T+|d|에서)를 닫는다.
+- 단계는 순서대로만 찾는다. 단계가 충족되면 같은 시각(ms)의 이미 지난 **다른 파일** 줄도 한 번 다음 단계로 본다(버퍼별 파일의 같은 ms 순서).
+- 판정 `ok`(+그 전 이상 값 n회) / `값이상` / `없음`(끝난 사유) / `로그끝`(뒤 로그 < log_end_sec, 판정 불가) / `-`(앞에서 벗어남,
+  또는 `optional` 단계에 맞는 줄이 하나도 없음 — 설명 `OPTIONAL_NONE`, 벗어남이 아니다).
 """
 
 from __future__ import annotations
 
 import json
 import re
+from datetime import timedelta
 from pathlib import Path
 
 from . import logtime, yamlio
@@ -25,9 +28,10 @@ from .patterns import PatternError, PatternRunner, PatternTimeout
 
 FLOW_SCHEMA = Path(__file__).resolve().parents[2] / "schemas" / "flow.schema.json"
 LOG_END_SEC = 10.0          # TODO(SITE) 뒤 로그가 이보다 짧으면 판정 불가(`로그끝`)
-INSTANCES_MAX = 1000        # 흐름당 출력 인스턴스 상한(넘으면 truncated)
+INSTANCES_MAX = 1000        # 흐름당 출력 인스턴스 상한(넘으면 뒤쪽만 남기고 truncated)
 NOTES_MAX = 5
 RESTART, BOUNDARY = "프로세스 재시작", "로그 경계"
+OPTIONAL_NONE = "줄 없음(선택 단계)"
 FIXTURE_RE = re.compile(r"^(?P<id>[a-z0-9]+(?:-[a-z0-9]+)*)\.normal\.(?P<n>[1-9]\d*)\.log$")   # 정상 fixture `flows/fixtures/<id>.normal.<n>.log`
 
 
@@ -78,15 +82,19 @@ def load(root: Path, config: dict) -> tuple[list[dict], list[dict]]:
 
 
 def check(flows: list[dict], records: list[dict], texts: list[str], *, timeout_ms: int | None = None,
-          log_end: float = LOG_END_SEC, anomalies: list[str] = (), breaks: set = frozenset(),
+          log_end: float = LOG_END_SEC, anomalies: list[dict] = (), breaks: set = frozenset(),
           mask=None) -> tuple[list[dict], list[dict]]:
     """줄 레코드(`event: None`, 파서 순서)와 같은 순서의 `TAG: msg` → (`flow.json flows[]`, 경고).
 
     `mask`: 줄 순번 → 가린 `TAG: msg`(출력에 글자가 나가는 줄에만 부른다). 없으면 `texts`가 이미 가린 글이라고 본다.
 
-    `anomalies`: 시계 이상 시각(`coverage.clock_anomalies[].ts`), `breaks`: 재부팅 줄의 레코드 순번 — 둘 다 열린 인스턴스를 닫는다."""
+    `anomalies`: `coverage.clock_anomalies[]`(`{ts, kind, delta_sec}`), `breaks`: 재부팅 줄의 레코드 순번 — 둘 다 열린 인스턴스를 닫는다."""
     dts = [logtime.parse_ts(r["ts"]) for r in records]
-    cuts = sorted(logtime.parse_ts(t) for t in anomalies)
+    cuts = []           # (T, 구간 끝): 역행은 [T, T+|d|], 점프는 T 한 점
+    for a in anomalies:
+        t = logtime.parse_ts(a["ts"])
+        cuts.append((t, t + timedelta(seconds=abs(float(a.get("delta_sec") or 0))) if a.get("kind") == "backward" else t))
+    cuts.sort()
     last = max(dts) if dts else None
     warnings, runs = [], {}
     with PatternRunner(texts, timeout_ms) as runner:
@@ -102,10 +110,10 @@ def check(flows: list[dict], records: list[dict], texts: list[str], *, timeout_m
     out = []
     for ref, (flow, insts) in runs.items():
         target = _then_ref(flow)
-        nxt = runs.get(target, (None, []))[1][:INSTANCES_MAX]
+        nxt = runs.get(target, (None, []))[1][-INSTANCES_MAX:]
         last_id = flow["steps"][-1]["id"]
         rows = []
-        for inst in insts[:INSTANCES_MAX]:
+        for inst in insts[-INSTANCES_MAX:]:
             row = _row(flow, inst, records)
             hit = inst["ok"].get(last_id)
             k = next((k for k, t in enumerate(nxt) if hit in t["starts"]), None) if hit is not None else None
@@ -141,6 +149,7 @@ def _run(flow, records, texts, dts, runner, cuts, breaks, shown) -> list[dict]:
         oks = [(o, set(runner.search(o["pattern"], indices=sorted(hits)))) for o in s.get("ok") or []]
         steps.append((s, hits, oks))
     named: dict = {}
+    used: set = set()       # 시작·단계 충족에 쓴 줄(흐름 전체 — 한 줄은 한 인스턴스만)
 
     def in_scope(item, hits, inst, i) -> bool:
         rec = records[i]
@@ -159,22 +168,28 @@ def _run(flow, records, texts, dts, runner, cuts, breaks, shown) -> list[dict]:
 
     def feed(inst, i) -> bool:
         s, hits, oks = steps[inst["n"]]
-        if i not in hits or i in inst["used"] or not in_scope(s, hits, inst, i):
+        if i not in hits or i in used or not in_scope(s, hits, inst, i):
             return False
         failed = [o for o, good in oks if i not in good]
         if failed:
             inst["bad"].setdefault(s["id"], []).append((i, [o["why"] for o in failed]))
             return False
         inst["ok"][s["id"]] = i
-        inst["used"].add(i)
+        used.add(i)
         inst["n"] += 1
         return True
 
-    def lookback(inst, bucket) -> None:
-        """W-3: 같은 ms의 이미 지난 줄을 다음 단계로 한 번 더 본다(충족될 때마다 다시)."""
-        moved = True
+    def fidx(i):
+        return (records[i].get("line_ref") or {}).get("file_index")
+
+    def lookback(inst, bucket, i) -> None:
+        """W-3: 같은 ms의 이미 지난 줄 중 줄 i와 **다른 파일**의 줄을 다음 단계로 한 번 더 본다(충족될 때마다 다시).
+        한 파일 안의 순서는 실제 순서라 되돌아보지 않는다. 파일 순번이 없으면 되돌아보지 않는다."""
+        here = fidx(i)
+        others = [j for j in bucket if here is not None and fidx(j) not in (None, here)]
+        moved = bool(others)
         while moved and inst["n"] < len(steps):
-            moved = any(feed(inst, j) for j in bucket)
+            moved = any(feed(inst, j) for j in others)
 
     out: list[dict] = []
     opened: dict[tuple, dict] = {}
@@ -188,14 +203,20 @@ def _run(flow, records, texts, dts, runner, cuts, breaks, shown) -> list[dict]:
         relevant |= h
     for _, h, _ in steps:
         relevant |= h
-    cut, bucket, bucket_dt = 0, [], None
+    cut, exits, bucket, bucket_dt = 0, [], [], None
     for i in sorted(relevant):
         rec, dt = records[i], dts[i]
         if dt != bucket_dt:
             bucket, bucket_dt = [], dt
-        while cut < len(cuts) and dt >= cuts[cut]:
+        for hi in sorted(h for h in exits if dt > h):      # 역행 구간을 지남: 그 안에서 연 인스턴스도 닫는다
             for inst in list(opened.values()):
-                close(inst, BOUNDARY, cuts[cut])
+                close(inst, BOUNDARY, hi)
+            exits.remove(hi)
+        while cut < len(cuts) and dt >= cuts[cut][0]:
+            for inst in list(opened.values()):
+                close(inst, BOUNDARY, cuts[cut][0])
+            if cuts[cut][1] > cuts[cut][0]:
+                exits.append(cuts[cut][1])
             cut += 1
         if i in breaks:
             for inst in list(opened.values()):
@@ -211,18 +232,24 @@ def _run(flow, records, texts, dts, runner, cuts, breaks, shown) -> list[dict]:
                 opened[key]["starts"].add(i)
             else:
                 inst = {"pid": rec["pid"], "tag": rec["tag"], "phone": rec.get("phone_id"), "start": i, "starts": {i},
-                        "restarts": 0, "n": 0, "ok": {}, "bad": {}, "notes": [], "end": None, "used": {i}}
+                        "restarts": 0, "n": 0, "ok": {}, "bad": {}, "notes": [], "end": None}
+                used.add(i)
                 opened[key] = inst
                 out.append(inst)
-                lookback(inst, bucket)
+                lookback(inst, bucket, i)
             bucket.append(i)
             continue
         for inst in list(opened.values()):
             if rec["pid"] != inst["pid"]:
                 continue
-            label = next((e["label"] for e, h in ends if i in h and in_scope(e, h, inst, i)), None)
-            if label:
-                close(inst, label, dt)
+            end = next((e for e, h in ends if i in h and in_scope(e, h, inst, i)), None)
+            if end and end.get("as") == "discard":     # 예: 이미 켜짐 — 충족된 단계가 없으면 인스턴스가 아니다, 있으면 무시
+                if inst["n"] == 0:
+                    opened.pop((inst["pid"], inst["tag"]), None)
+                    out.remove(inst)
+                continue
+            if end:
+                close(inst, end["label"], dt)
                 continue
             for n, h in notes:
                 if i in h and in_scope(n, h, inst, i) and len(inst["notes"]) < NOTES_MAX:
@@ -230,8 +257,11 @@ def _run(flow, records, texts, dts, runner, cuts, breaks, shown) -> list[dict]:
                     if m and m.group(0) not in inst["notes"]:
                         inst["notes"].append(m.group(0)[:60])
             if inst["n"] < len(steps) and feed(inst, i):
-                lookback(inst, bucket)
+                lookback(inst, bucket, i)
         bucket.append(i)
+    for hi in sorted(exits):        # 역행 구간 뒤에 볼 줄이 없음: 그 안에서 연 인스턴스도 닫는다
+        for inst in list(opened.values()):
+            close(inst, BOUNDARY, hi)
     for inst in out:      # 값이상일 때 보일 값: 멈춘 단계의 마지막 이상 줄에서 show 패턴이 맞은 글자
         bad = inst["bad"].get(flow["steps"][inst["n"]]["id"]) if inst["n"] < len(steps) else None
         shows = (flow["steps"][inst["n"]].get("show") or []) if bad else []
@@ -242,7 +272,7 @@ def _run(flow, records, texts, dts, runner, cuts, breaks, shown) -> list[dict]:
 
 
 def _judge(flow, inst, dts, last, log_end) -> list[tuple[str, str]]:
-    """단계마다 (판정, 설명) — 기준 구현 `flow_proto2.judge`와 같은 뜻."""
+    """단계마다 (판정, 설명)."""
     res, broken = [], False
     prev = dts[inst["start"]]
     end_dt = inst["end"][1] if inst["end"] else None
@@ -260,6 +290,8 @@ def _judge(flow, inst, dts, last, log_end) -> list[tuple[str, str]]:
         settled = end_dt is not None or tail >= log_end
         if inst["end"] and inst["end"][0] in (RESTART, BOUNDARY):     # 흐름 밖 사유로 끊김: 남은 단계는 판정하지 않는다(V-2)
             res.append(("-", f"{_ro(inst['end'][0])} 끝남"))
+        elif not bad and settled and s.get("optional"):      # 선택 단계: 줄이 하나도 없으면 벗어남이 아니다(남은 단계도 -)
+            res.append(("-", OPTIONAL_NONE))
         elif bad and settled:
             whys = "·".join(dict.fromkeys(bad[-1][1]))
             vals = ", ".join(inst["show"])

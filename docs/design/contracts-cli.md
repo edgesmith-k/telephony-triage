@@ -316,7 +316,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - blocked_by?
   - at?[≤3]
   - code?[≤3]
-- flows?[≤3](성공 흐름 점검(판정·점수 아님, S/C 불변; 이슈 DB에 흐름 파일이 있을 때만, 04-parser-matching.md §5.13). 분석 범위 안 인스턴스 중 벗어난 것 먼저·발생 시각에 가까운 순 {flow: "<category>/<id>", key(시작 줄 태그), step?(멈춘 단계 id, 끝까지 ok면 없음), verdict: ok|값이상|없음|로그끝|-, at?(f:L), causes?[≤3 그 단계에 flow_step이 걸린 active 원인 ID]}; 4KB 압축 시 partial 다음 flows[1:] → 전체 제거)
+- flows?[≤3](성공 흐름 점검(판정·점수 아님, S/C 불변; 이슈 DB에 흐름 파일이 있을 때만, 04-parser-matching.md §5.13). 분석 범위 안 인스턴스 중 벗어난 것 먼저·발생 시각에 가까운 순 {flow: "<category>/<id>", key(시작 줄 태그), step?(멈춘 단계 id, 끝까지 ok면 없음), verdict: ok|값이상|없음|로그끝|-, at?(f:L), causes?[≤3 멈춘 단계가 값이상·없음일 때만, 그 단계에 flow_step이 걸린 active 원인 ID — 매칭 후보 순위 먼저]}; 4KB 압축 시 다른 후보 근거보다 먼저 flows[1:] → 전체 제거)
   - flow
   - key
   - step?

@@ -48,9 +48,10 @@
 - `synthetic` 경고: `synthetic_allowed: false`인 플러그인에서 `origin: synthetic` fixture
 - `residual-id` 오류: `--residual`로 준 옛 ID가 남아 있음
 - 성공 흐름(`<category>/flows/<id>.yaml`, 04 §5.13): `schema`(흐름 스키마), `flow-id`(id ≠ 파일 이름), `flow-step-id`(단계 id
-  중복), `flow-regex`(정규식 오류)·`raw-identifier`·`fixed-token`·`regex-unsafe`(시그니처와 같은 검사)·`flow-token`(마스킹 토큰 금지), `flow-start`(같은 카테고리에
+  중복), `flow-regex`(정규식 오류, `name_template`은 `{key}`를 `X`로 바꿔)·`raw-identifier`·`fixed-token`·`regex-unsafe`(시그니처와 같은 검사)·`flow-token`(마스킹 토큰 금지), `flow-start`(같은 카테고리에
   start가 같은 흐름 둘 이상) 오류, `flow-then` 경고(then 대상 없음), `flow-fixture-missing`(정상 fixture 없음)·`fixture-name`·
-  `fixture-owner`(`flows/fixtures/<id>.normal.<n>.log`) 오류, `flow-step` 오류(원인 `flow_step`의 흐름·단계가 없음, 다른 카테고리 흐름)
+  `fixture-owner`(`flows/fixtures/<id>.normal.<n>.log`) 오류, `flow-step` 오류(원인 `flow_step`의 흐름·단계가 없음, 다른 카테고리 흐름),
+  `schema` 오류(`issue-db.config.yaml` `flows.log_end_sec`가 양수 숫자가 아님)
 
 참고(advice, `--advice`일 때만 — 03-issue-db.md §5.7 (2) "근거 줄 하나에만 기대지 않기")
 - `single-signature`: active 유형의 active 원인에 판별 시그니처(`signatures`)가 하나뿐(`signatures_pending` 원인 제외)
@@ -83,6 +84,7 @@ import parser_backends  # noqa: E402
 import platforms  # noqa: E402
 import trackers  # noqa: E402
 from common import compat, dbpath, gitscope, issuedb, masking, parser_rules, site_defaults, typedoc, yamlio  # noqa: E402
+from common import flows  # noqa: E402
 from common.flows import FIXTURE_RE as FLOW_FIXTURE_RE  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.fixtures import CAUSE_ID_RE, TYPE_ID_RE, parse_name  # noqa: E402
@@ -91,7 +93,7 @@ from common.signatures import (  # noqa: E402
     SUPPORTED_FEATURES, SignatureError, compile_signature, features_used, tag_position_word)
 
 TOKEN_FIXED_RE = re.compile(r"<[A-Z][A-Z0-9]*#\d+>")
-FLOW_TOKEN_RE = re.compile(r"<[A-Z][A-Z0-9]+(?:#|>| (?:\\d|\d))")     # `<IP#…>`·`<IMSI>`·`<HEXDUMP nB>` — 흐름은 가리지 않은 글에서 찾는다
+FLOW_TOKEN_RE = re.compile(r"<[A-Z][A-Z0-9]+(?:\\?#|\\?>| (?:\\d|\d))")  # `<IP#…>`·`<IMSI>`·`<HEXDUMP nB>`(`\<IP\#1\>`도) — 흐름은 가리지 않은 글에서 찾는다
 KEBAB_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SIG_KINDS = ("symptom_signatures", "signatures", "recovery_signatures", "scenario_signatures")
 TYPE_TITLE_MAX, CAUSE_TITLE_MAX = 30, 20
@@ -828,10 +830,10 @@ class Linter:
                 self.err("ext-event", type_md,
                          f"{key}: {name} — 카테고리 '{category}'가 이슈 DB external_parsers에 없습니다.")
 
-    def _check_pattern(self, path, key, pattern) -> None:
+    def _check_pattern(self, path, key, pattern, hint="마스킹된 로그 기준으로 쓴다") -> None:
         reason = raw_identifier_in_pattern(pattern)
         if reason:
-            self.err("raw-identifier", path, f"{key}: 패턴 {pattern!r}에 {reason} — 마스킹된 로그 기준으로 쓴다.")
+            self.err("raw-identifier", path, f"{key}: 패턴 {pattern!r}에 {reason} — {hint}.")
         if TOKEN_FIXED_RE.search(pattern):
             self.warn("fixed-token", path, f"{key}: 패턴 {pattern!r}이 특정 마스킹 번호를 고정합니다. "
                                            "<CELL#\\d+>처럼 종류로 쓴다.")
@@ -887,6 +889,10 @@ class Linter:
         `self.flow_steps`(원인 `flow_step` 검사)에 모은다. 흐름 파일이 없으면 결과는 이전과 같다."""
         self.flow_steps: dict[str, set[str]] = {}
         thens = []
+        value = (self.config.get("flows") or {}).get("log_end_sec") if isinstance(self.config.get("flows"), dict) else None
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0):
+            self.err("schema", issuedb.CONFIG, f"flows.log_end_sec는 양수 숫자여야 합니다: {value!r} (엔진은 기본값 "
+                                               f"{flows.LOG_END_SEC:g}초로 본다)")
         for cat in self.categories:
             fdir = self.root / cat / "flows"
             starts: dict[tuple, Path] = {}
@@ -915,6 +921,8 @@ class Linter:
                 starts.setdefault(start, path)
                 patterns = [("start.tag_regex", start[0]), ("start.pattern", start[1])]
                 patterns += [(f"{k}[{n}]", e["pattern"]) for k in ("end", "notes") for n, e in enumerate(data.get(k) or [])]
+                patterns += [(f"{k}[{n}].name_template", e["name_template"].replace("{key}", "X"))   # {key} = re.escape(태그)
+                             for k in ("end", "notes", "steps") for n, e in enumerate(data.get(k) or []) if e.get("name_template")]
                 for s in data["steps"]:
                     patterns += [(f"{s['id']}.patterns", p) for p in s["patterns"]] + \
                         [(f"{s['id']}.ok", o["pattern"]) for o in s.get("ok") or []] + \
@@ -925,7 +933,7 @@ class Linter:
                     except re.error as exc:
                         self.err("flow-regex", path, f"{ref} {where}: 정규식 오류 {pattern!r}: {exc}")
                         continue
-                    self._check_pattern(path, f"{ref} {where}", pattern)
+                    self._check_pattern(path, f"{ref} {where}", pattern, "실제 값 대신 값의 모양(정규식)으로 쓴다")
                     if FLOW_TOKEN_RE.search(pattern):
                         self.err("flow-token", path, f"{ref} {where}: 패턴 {pattern!r}에 마스킹 토큰이 있습니다 — 흐름은 "
                                                      "가리지 않은 글에서 찾으므로 토큰 없이 씁니다(04 §5.13).")

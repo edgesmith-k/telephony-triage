@@ -114,6 +114,7 @@ def test_put_flow_rejections():
     fewer = {**copy.deepcopy(FLOW), "steps": FLOW["steps"][:3]}
     out = _apply(db, _put(fewer, fixtures=()), expect=1)
     assert _rejected(out) == "flow-step-in-use" and "DATA-001-01" in out["rejected"][0]["message"]
+    assert "그 단계 id를 남긴다" in out["rejected"][0]["message"], "지금 할 수 있는 행동만 안내한다(F-15)"
     _apply(db, _put({**copy.deepcopy(FLOW), "title": "바뀐 제목"}, fixtures=()))
 
 
@@ -228,6 +229,28 @@ def test_lint_flow_file_checks():
     assert "data/twin" in found["flow-start"][0]
 
 
+def test_lint_name_templates_escaped_tokens_and_log_end_sec():
+    """F-5: name_template도 정규식·안전성 검사(`{key}` → X), end·notes의 named는 name_template 필수. F-13: 이스케이프한 토큰.
+    F-14: flows.log_end_sec가 양수 숫자가 아니면 오류."""
+    db = _flow_db()
+    flow = copy.deepcopy(FLOW)
+    flow["steps"][3]["name_template"] = "DataNetwork: {key}(("
+    flow["end"].append({"scope": "named", "name_template": "(a+)+{key}", "pattern": "x", "label": "y"})
+    flow["notes"].append({"scope": "own", "pattern": r"addresses=\[\<IP\#1\>"})
+    _write_flow(db, "data-setup", flow)
+    config = db / "issue-db.config.yaml"
+    config.write_text(config.read_text(encoding="utf-8") + "flows:\n  log_end_sec: 0\n", encoding="utf-8")
+    found = _lint(db)
+    assert "steps[3].name_template" in found["flow-regex"][0] and "정규식 오류" in found["flow-regex"][0]
+    assert "end[1].name_template" in " ".join(found["regex-unsafe"])
+    assert "notes[1]" in found["flow-token"][0]
+    assert any("flows.log_end_sec" in m for m in found["schema"])
+    flow = copy.deepcopy(FLOW)
+    flow["notes"] = [{"scope": "named", "pattern": "x"}]        # named인데 name_template 없음 → 스키마 오류
+    _write_flow(db, "data-setup", flow)
+    assert any("name_template" in m for m in _lint(db)["schema"])
+
+
 def test_lint_flow_fixtures_and_flow_step():
     db = _flow_db()
     fixtures = db / FLOW_DIR / "fixtures"
@@ -300,6 +323,16 @@ def test_verify_rules_r4_includes_flow_fixtures():
     rows = {r["id"]: r for r in run_json("db_verify.py", ["rules", "--changed", "HEAD~1", "--db", repo, "--verbose"],
                                          expect=1)["rules"]}
     assert rows["R4"]["status"] == "fail" and rows["R4"]["targets"] == [f"{FLOW_DIR}/fixtures/data-setup.normal.1.log"]
+    assert rows["R4"]["review_required"] is False
+    # 정상 fixture가 없어 건너뛴 흐름: 통과로 세지 않는다(F-8) — R4 review_required, db_regress stderr 한 줄
+    (repo / FLOW_DIR / "fixtures" / "data-setup.normal.1.log").unlink()
+    git(repo, "commit", "-qam", "no flow fixture")
+    rows = {r["id"]: r for r in run_json("db_verify.py", ["rules", "--changed", "HEAD~1", "--db", repo, "--verbose"],
+                                         expect=(0, 3))["rules"]}
+    assert rows["R4"]["status"] == "pass" and rows["R4"]["review_required"] is True
+    assert "정상 fixture 없어 건너뜀: data/data-setup" in rows["R4"]["reason"]
+    proc = run("db_regress.py", ["--db", repo, "--all"])
+    assert proc.returncode == 0 and "건너뜀: 흐름 data/data-setup (정상 fixture 없음)" in proc.stderr
 
 
 def test_precommit_flow_only_change_runs_flow_fixtures():
