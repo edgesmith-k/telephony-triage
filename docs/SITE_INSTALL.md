@@ -247,7 +247,7 @@ rm -rf ~/tt-old ~/tt-new
 | `.draft-manifest.json를 읽을 수 없습니다` 또는 `schema=…를 이 도구가 모릅니다`, 종료 2 | 기준선 파일이 손상됨(충돌 표시·잘림·다른 형식) | 레포는 바뀌지 않았다. `git log -- .draft-manifest.json`으로 손상 전 커밋을 찾아 `git restore --source=<커밋> -- .draft-manifest.json` → 다시 실행 |
 | 종료 2 (적용 중 실패) | 도중 실패 | 도구가 되돌린다. 그래도 이상하면 `git reset --hard && git switch main`(1의 커밋으로) |
 
-공통 파일을 사내에서 직접 고치지 않는 것이 원칙이다(재반입 때 충돌). 사내 전용 코드·값은 `SITE_PATHS` 경로에만 둔다.
+공통 파일을 사내에서 직접 고치지 않는 것이 원칙이다(재반입 때 충돌). 사내 전용 코드·값은 `SITE_PATHS` 경로에만 둔다. 지금 어긴 것이 있는지는 새 묶음 없이도 볼 수 있다: `python3 tools/import_draft.py --status` — 마지막 반입 뒤 사내에서 `고침`·`지움`·`새 파일`인 사외 파일 경로만 낸다(읽기만, 고친 파일이 있으면 종료 1 = 다음 반입이 멈춘다).
 
 ## 9. 운영 이슈 DB 첫 push (S-4a, 도입 담당자 한 번)
 
@@ -302,7 +302,7 @@ CODEOWNERS에는 **메인테이너 경로**(`/.githooks/`·`/schema/`·`/parser-
 1. **주소를 넣기 전에** 설치 분석 스킬이 연결된 카테고리에 `prefer: skill`을 적을지 정한다. 안 적으면 그 카테고리 5-1이 모듈 문서로 바뀐다. 레포에 그 모듈이 없으면 **분석은 멈추지 않고** 그 심층 분석만 생략된다(리포트 `심층 분석: 해당 없음(레포에 <모듈> 없음 @<sha>)`, `triage.py module` 종료 1·`next`는 계속 — 탐색 5-2는 `JOB/timeline.md`로 내장 절차). `prefer: skill`인데 스킬 이름이 없으면 설정 오류(종료 2, 리포트 `심층 분석 생략: 설정 오류`)이고 역시 기본 분석은 계속한다. (`config.py set analyzers.<카테고리>.prefer skill`, 플랫폼이면 `--platform <p>`; 동작 근거 `triagelib/modulecmd.py` `_next`·`_fail_line`, `reference/module-skills.md` 5-1 5항)
 2. `python3 tools/site_step.py modules` → `modules check`: remote·push 권한·트리 = modules.yaml·데몬 ⊆ tags.yaml·prefer 규칙·보호·CI(정보). 중첩 `claude -p` 확인은 명령만 보인다(사용자가 한 번 돌리고 `--waive`).
 3. `python3 tools/site_step.py modules coverage --out docs/site/module-coverage.diff`(토큰 0, 사내 전용 출력): 사내 로그로 모듈별 줄 수·모듈에 없는 데몬·tags.yaml에 없는 태그를 보고, modules.yaml diff를 검토해 모듈 레포 PR로 보낸다. tags.yaml에 없는 태그는 이슈 DB 계획 op PR이 먼저다(사용자 확인).
-   벤더 고유 이름은 묶음에 placeholder로 들어 있다. 실제 이름은 사내에서 채운다: 빈 양식 `tools/site_names/*-names-form.json`의 `real` 칸을 사내 마스킹 로그로 채우고(확실한 것만, 사용자 확인 뒤) `python3 tools/names_fill.py`로 템플릿에 반영한다. 순서와 Claude에게 줄 문장은 `tools/site_names/README.md`(토큰을 쓰는 단계). 채운 양식은 사내 값이다.
+   벤더 고유 이름은 묶음에 placeholder로 들어 있다. 실제 이름은 사내에서 채운다: 빈 양식 `tools/site_names/*-names-form.json`의 `real` 칸을 사내 마스킹 로그로 채우고(확실한 것만, 사용자 확인 뒤) `python3 tools/names_fill.py docs/site/module-skills …`로 사내 스냅샷(SITE_PATHS)에 반영한다 — 레포 `templates/`는 고치지 않는다(재반입이 멈춘다). 순서와 Claude에게 줄 문장은 `tools/site_names/README.md`(토큰을 쓰는 단계). 채운 양식은 사내 값이다.
 4. **정기 점검(매주, 상한 300,000 토큰/회)**: `python3 tools/site_step.py audit` — 사내 모델·출처 모름 커밋만 골라 토큰 0 검사를 먼저 돈다. 남은 것은 `docs/site/audit/<날짜>-review.md`의 목록·추정 토큰뿐이다(Claude는 부르지 않는다). 사내 Claude 리뷰(승인 뒤) → `audit --record`(넘친 항목은 이월). 14일 넘으면 ms2.audit가 사용자 필요.
    걸린 것이 사람 눈에 안 띄어도 남게 `audit --notify`: P0·P1 항목(시그니처 소실·걸린 기록)과 실패한 검사 행을 이슈 DB 레포(steps.yaml `ops_db_repo`·`ofono_db_repo`) Issue로 올린다. 기본은 표만 보이고, 사용자 확인 뒤 `audit --notify --create`가 만든다(제목이 `[triage-audit] <id>`와 같은 열린 Issue가 있으면 건너뜀 — 제목을 고치면 표식이 깨져 다음 회차에 새로 생긴다). 본문은 계획에 든 표식·근거 이름·파일·Jira 키·명령뿐이다(로그 원문 없음).
 

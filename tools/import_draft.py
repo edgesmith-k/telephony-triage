@@ -36,10 +36,13 @@
 CLI:
     python3 tools/import_draft.py <새 사외 초안 경로> [--dest <사내 레포>]
         --label <버전 표시> [--dry-run] [--check-boundary] [--json]
+    python3 tools/import_draft.py --status [--dest <사내 레포>] [--json]
+        반입 없이(새 초안 없이) 기준선과 지금 사내 레포만 비교해, 마지막 반입 이후 달라진 사외 파일
+        (`SITE_PATHS` 밖) 경로를 한 줄씩 낸다: `고침`(다음 반입을 멈춘다)·`지움`·`새 파일`. 읽기만 한다.
 
 종료 코드 (contracts.md §종료 코드)
-    0  반입 완료 (경고 포함)
-    1  사내에서 고친 사외 파일이 있거나 경계 검사 위반이라 멈춤 (대상 변경 없음)
+    0  반입 완료 (경고 포함). `--status`: 고친 사외 파일 없음
+    1  사내에서 고친 사외 파일이 있거나 경계 검사 위반이라 멈춤 (대상 변경 없음). `--status`: 고친 사외 파일 있음
     2  사용 오류·환경 오류 (적용 중 실패면 되돌린 뒤)
 """
 
@@ -194,6 +197,35 @@ def load_manifest(dest: Path) -> dict | None:
     return data
 
 
+def baseline_changes(dest_files: dict[str, Path], baseline: dict[str, str],
+                     site_patterns: list[str]) -> tuple[dict[str, str], list[str]]:
+    """기준선의 사외 파일 중 지금 해시가 다른 것 `{경로: 지금 해시}`과 지금 목록에 없는 것. 반입 계획과 `--status`가 같이 쓴다."""
+    changed, missing = {}, []
+    for rel, digest in baseline.items():
+        if rel == SITE_PATHS_FILE or is_site_path(rel, site_patterns):
+            continue
+        current = dest_files.get(rel)
+        if current is None:
+            missing.append(rel)
+        elif (now := sha256(current)) != digest:
+            changed[rel] = now
+    return changed, missing
+
+
+def status(dest: Path) -> dict:
+    """마지막 반입(기준선) 이후 사내 레포에서 달라진 사외 파일(`SITE_PATHS` 밖): 고친 것·지운 것·새로 만든 것. 읽기만 한다."""
+    manifest = load_manifest(dest)
+    if manifest is None:
+        raise ValueError(f"{dest / MANIFEST}가 없습니다 (반입한 적 없는 레포).")
+    site_patterns = load_site_paths(dest, dest)
+    files = walk(dest, site_patterns)
+    files.pop(SITE_PATHS_FILE, None)
+    changed, missing = baseline_changes(files, manifest["files"], site_patterns)
+    return {"label": manifest.get("label"), "modified": sorted(changed),
+            "deleted": sorted(rel for rel in missing if not (dest / rel).exists()),
+            "new": sorted(rel for rel in files if rel not in manifest["files"])}
+
+
 def plan(source: Path, dest: Path, label: str | None) -> dict:
     site_patterns = load_site_paths(dest, source)
     src_files = walk(source, site_patterns)
@@ -215,19 +247,12 @@ def plan(source: Path, dest: Path, label: str | None) -> dict:
     locally_modified: list[dict] = []
     restored: list[str] = []
     if not first_import:
-        for rel, digest in baseline.items():
-            if rel == SITE_PATHS_FILE or is_site_path(rel, site_patterns):
-                continue
-            current = dest_files.get(rel)
-            if current is None:
-                # 사내에서 지운 사외 파일. 새 초안에 있으면 다시 놓인다.
-                if rel in source_hashes and not (dest / rel).exists():
-                    restored.append(rel)
-                continue
-            now = sha256(current)
-            # 이미 새 초안과 같으면 덮어써도 잃는 것이 없다 (아래에서 unchanged).
-            if now != digest and now != source_hashes.get(rel):
-                locally_modified.append({"path": rel, "baseline": digest, "current": now})
+        changed, missing = baseline_changes(dest_files, baseline, site_patterns)
+        # 사내에서 지운 사외 파일. 새 초안에 있으면 다시 놓인다.
+        restored = [rel for rel in missing if rel in source_hashes and not (dest / rel).exists()]
+        # 이미 새 초안과 같으면 덮어써도 잃는 것이 없다 (아래에서 unchanged).
+        locally_modified = [{"path": rel, "baseline": baseline[rel], "current": now}
+                            for rel, now in changed.items() if now != source_hashes.get(rel)]
 
     to_write, to_delete, untouched = [], [], []
     for rel, path in src_files.items():
@@ -432,15 +457,35 @@ def report(result: dict, applied: bool) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="import_draft.py", description=__doc__)
-    parser.add_argument("source", help="새 사외 초안 경로")
+    parser.add_argument("source", nargs="?", help="새 사외 초안 경로")
     parser.add_argument("--dest", default=".", help="사내 플러그인 레포 (기본: 현재 디렉토리)")
-    parser.add_argument("--label", required=True, help="기준선에 적을 버전 표시")
+    parser.add_argument("--label", help="기준선에 적을 버전 표시 (반입 때 필수)")
+    parser.add_argument("--status", action="store_true",
+                        help="반입하지 않고, 마지막 반입 이후 사내에서 고친·지운·새로 만든 사외 파일 경로만 낸다")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--check-boundary", action="store_true",
                         help="활성 전환 전에 반입 뒤 모습을 check_boundary.py --mode site로 검사")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
+    if args.status:
+        if args.source or args.label:
+            parser.error("--status는 초안 경로·--label 없이 쓴다")
+        try:
+            found = status(Path(args.dest).resolve())
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            print(str(exc), file=sys.stderr)
+            return USAGE
+        if args.json:
+            print(json.dumps(found, ensure_ascii=False, indent=2))
+        else:
+            for mark, key in (("고침", "modified"), ("지움", "deleted"), ("새 파일", "new")):
+                for rel in found[key]:
+                    print(f"{mark}\t{rel}")
+        # 고친 파일은 다음 반입을 멈춘다(지운 파일은 되살아나고, 새 파일은 남는다)
+        return CHECK_FAILED if found["modified"] else OK
+    if not args.source or args.label is None:
+        parser.error("초안 경로와 --label이 필요하다")
     if not args.label.strip():
         print("--label이 비었습니다 (옛 label이 기준선에 남지 않게).", file=sys.stderr)
         return USAGE

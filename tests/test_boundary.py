@@ -512,6 +512,28 @@ def test_second_import_of_same_draft_is_identical(tmp_path):
     assert all(draft.sha256(dest / rel) == digest for rel, digest in second["files"].items())
 
 
+def test_status_lists_site_edits_since_last_import(tmp_path):
+    """`--status`: 새 초안 없이 기준선과 비교해 고친·지운·새로 만든 사외 파일 경로만 낸다. SITE_PATHS는 빠지고 읽기만 한다."""
+    source, dest = _draft(tmp_path / "draft", {"docs/keep.md": "keep\n"}), tmp_path / "site"
+    dest.mkdir()
+    assert _run(IMPORT, "--status", "--dest", str(dest))[0] == 2                       # 반입한 적 없음
+    assert _run(IMPORT, str(source), "--dest", str(dest), "--label", "v1", "--json")[0] == 0
+    assert _run(IMPORT, "--status", "--dest", str(dest), "--json") == (0, {"label": "v1", "modified": [], "deleted": [], "new": []})
+    _write(dest, "plugin/scripts/config.py", "# 사내에서 고침\n")
+    (dest / "docs/keep.md").unlink()
+    _write(dest, "docs/new.md", "new\n")
+    _write(dest, "SITE_PROFILE.md", "사내 값\n")                                         # SITE_PATHS — 목록에 없다
+    before = _snapshot(dest)
+    code, out = _run(IMPORT, "--status", "--dest", str(dest), "--json")
+    assert (code, out) == (1, {"label": "v1", "modified": ["plugin/scripts/config.py"], "deleted": ["docs/keep.md"],
+                               "new": ["docs/new.md"]})
+    code, text = _run(IMPORT, "--status", "--dest", str(dest))
+    assert code == 1 and text.splitlines() == ["고침\tplugin/scripts/config.py", "지움\tdocs/keep.md", "새 파일\tdocs/new.md"]
+    assert _snapshot(dest) == before
+    assert _run(IMPORT, "--status", str(source), "--dest", str(dest))[0] == 2          # 초안 경로와 같이 쓰지 않는다
+    assert _run(IMPORT, str(source), "--dest", str(dest))[0] == 2                      # 반입은 --label 필수 그대로
+
+
 # ---------------------------------------------------------------- plugin/schemas
 
 
