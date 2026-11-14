@@ -1,0 +1,6 @@
+-- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:00:00.666  1301  1301 D Phone-0 : setAllowedNetworkTypes: subId=1, reason=enable_2g, allowed network types=UMTS|HSDPA|HSUPA|HSPA|LTE|HSPA+|LTE_CA|NR, uid=1001
+11-14 10:00:00.667  1301  1301 D Phone-0 : [0] setAllowedNetworkTypes: modemRafBitMask = 578439 ,modemRaf = GPRS|EDGE|UMTS|HSDPA|HSUPA|HSPA|LTE|HSPA+|GSM|LTE_CA|NR ,filteredRafBitMask = 4096 ,filteredRaf = UMTS|HSDPA|HSUPA|HSPA|LTE|HSPA+|LTE_CA|NR
+11-14 10:00:00.668  1301  1301 D RILJ    : [0943]> SET_ALLOWED_NETWORK_TYPES_BITMAP [PHONE0]
+11-14 10:00:00.674  1301  1330 D RILJ    : [0943]< SET_ALLOWED_NETWORK_TYPES_BITMAP  [PHONE0]
+11-14 10:00:00.675  1301  1301 I GsmCdmaPhone: [0] 2G is disabled by carrier.

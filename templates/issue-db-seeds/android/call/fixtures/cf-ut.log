@@ -1,0 +1,8 @@
+-- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:00:06.902  1301  1301 D ImsPhone: [0] dialInternal: dialing w/ mmi 'ImsPhoneMmiCode {State=PENDING action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}'...
+11-14 10:00:06.903  1301  1301 D ImsPhoneMmiCode: processCode: is CF
+11-14 10:00:06.903  1301  1301 D ImsPhoneMmiCode: processCode: is CF setCallForward
+11-14 10:00:06.904  1301  1301 D ImsPhone: [0] setCallForwardingOption action=3, reason=0 serviceClass=0
+11-14 10:00:06.905  1301  1301 D ImsUt   : updateCallForward :: Ut=com.android.ims.internal.IImsUt$Stub$Proxy, action=3, condition=0, number=[Qb7nW2cY9dLe], serviceClass=0, timeSeconds=0
+11-14 10:00:09.320  1301  1301 D ImsPhoneMmiCode: onSetComplete: mmi=ImsPhoneMmiCode {State=COMPLETE action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}
+11-14 10:00:09.321  1301  1301 D ImsPhone: [0] onMMIDone: mmi=ImsPhoneMmiCode {State=COMPLETE action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}

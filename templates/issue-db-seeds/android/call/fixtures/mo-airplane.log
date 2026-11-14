@@ -1,0 +1,13 @@
+-- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0
+11-14 10:00:00.103  1301  1301 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0], IMS reg state=false, pending radio off=false
+11-14 10:00:00.104  1301  1301 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON
+11-14 10:00:00.140  1301  1301 D RILJ    : [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]
+11-14 10:00:00.142  1301  1330 D RILJ    : [0268]< RADIO_POWER  [PHONE0]
+11-14 10:00:00.143  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]
+11-14 10:00:15.100   912   952 D Telecom : UserCallIntentProcessor: processOutgoingCallIntent videoState = 0: TSI.pC(cgat)@AgI
+11-14 10:00:15.110   912   952 V Telecom : Call: setState NEW -> CONNECTING: TSI.pC->CM.fOCP(cgat)@AgI_1
+11-14 10:00:15.150   912   952 I Telecom : CreateConnectionProcessor: Trying attempt CallAttemptRecord(ComponentInfo{com.android.phone/com.android.services.telephony.TelephonyConnectionService}, 1, UserHandle{0}): TSI.pC->CIP.sNOCI(cgat)@AgI_2
+11-14 10:00:15.180   912   952 D Telecom : CreateConnectionProcessor: Connection failed: (DisconnectCause [ Code: (ERROR) Label: (Radio off) Description: (Turn off airplane mode to make a call.) Reason: (ServiceState.STATE_POWER_OFF, POWER_OFF) Tone: (27)  TelephonyCause: 17/-1 ImsReasonInfo: null]): CSW.hCCC(cap/cast)@E-AgM
+11-14 10:00:15.181   912   952 I Telecom : Call: handleCreateConnectionFailure; callid=TC@4, disconnectCause=DisconnectCause [ Code: (ERROR) Label: (Radio off) Description: (Turn off airplane mode to make a call.) Reason: (ServiceState.STATE_POWER_OFF, POWER_OFF) Tone: (27)  TelephonyCause: 17/-1 ImsReasonInfo: null]: CSW.hCCC(cap/cast)@E-AgM
+11-14 10:00:15.185   912   952 V Telecom : Call: setState CONNECTING -> DISCONNECTED: CSW.hCCC(cap/cast)@E-AgM
