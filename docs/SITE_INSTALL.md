@@ -295,6 +295,8 @@ CODEOWNERS에는 **메인테이너 경로**(`/.githooks/`·`/schema/`·`/parser-
 
 **4. 뼈대 폴더 정리** — 이 폴더는 더 쓰지 않는다(지워도 된다). 도입 담당자도 팀원과 같이 `/telephony-triage:setup`으로 운영 레포를 clone하고, `core.hooksPath`는 setup이 설정한다. 이후 변경은 도구의 PR(`tt/*` 브랜치)이나 메인테이너 PR로만 한다.
 
+**5. 카테고리 시드 (S-4에서)** — 운영 이슈 DB는 유형 없이 시작한다. AOSP 프레임워크 로그로 판별되는 유형·원인 초안이 `templates/issue-db-seeds/android/<카테고리>/`에 있다(Android 17 기준, fixture는 합성). 카테고리마다 합성 로그를 사내 실제 마스킹 로그로 바꿔 `import/<카테고리>-<n>` PR로 등록한다 — 순서는 그 폴더 `README.md`. 합성 로그 그대로는 올리지 않는다(S-6 점검이 막고 `s4.seed`에도 세지 않는다).
+
 관련: 반입 체크리스트 `docs/design/15-local-draft.md §15.4`, 사내 단계 §15.5, 재반입 §15.6, 사람용 총정리 `GUIDE.md` 4장.
 
 ## 10. 모듈 스킬 레포 연결과 정기 점검 (MS-1·MS-2, S-3 완료 뒤)

@@ -169,7 +169,7 @@ git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manif
 | S-2 | eval 예산·비용 승인, S1 실험(`check S-2 --allow-api`), 59·60 수동 채점 | 플러그인 로드·hook·MCP 도구 이름 형식 확인, 다른 점만 수정, 사내 대상 eval 실행(나머지는 사외 결과) |
 | S-3 | Jira MCP 서버·도구 매핑, GHE, 샘플 Jira raw 저장 위치 | `site-defaults.yaml`(Jira 서버·도구 매핑·필드 매핑, GHE 등), 이슈 DB 설정 |
 | S-4a | 운영 DB 레포(owner/repo), 기존 파서 코드 경로 | **① 기존 파서 포팅**: 포팅 전 골든 출력 저장 → 이벤트 매핑 확인 → 사내 백엔드로 포팅 → 골든 테스트 통과. **② 기존 data 분류 import PR**. **③ 분석 스킬 연결** |
-| S-4 | 운영 DB clone 경로, 이번에 할 카테고리(예: call만) | 운영 이슈 DB의 placeholder 규칙을 실제 태그·문구로 바꾸고, 카테고리마다 자주 나오는 유형 5~10개를 실제 마스킹 fixture와 함께 `import` PR로 시드 (카테고리별로 세션 분리 권장). 점검은 임시 clone에서 |
+| S-4 | 운영 DB clone 경로, 이번에 할 카테고리(예: call만) | 운영 이슈 DB의 placeholder 규칙을 실제 태그·문구로 바꾸고, 카테고리마다 자주 나오는 유형 5~10개를 실제 마스킹 fixture와 함께 `import` PR로 시드 (카테고리별로 세션 분리 권장). 초안은 `templates/issue-db-seeds/android/`(AOSP 로그 기준 유형·원인, 합성 fixture를 실제 로그로 바꿔 등록). 점검은 임시 clone에서 |
 | S-5 | 라벨셋, 샌드박스 레포, 스모크 결과 확인 | 실제 Jira·로그로 dry-run, 샌드박스에 PR 1건. 과거 해결 Jira 20~30건 라벨셋으로 `tools/offline_eval.py` 정확도 게이트 |
 | S-6 | — | 남은 `REVIEW-OPEN.md` 정리, 운영 이슈 DB에 합성 fixture·placeholder가 남았는지 확인 |
 | S-7 | 파일럿 결과, 전체 확대 결정 | 마켓플레이스 등록, 카테고리별 파일럿(10~20건), 첫 월간 리뷰 → 전체 확대 결정 |
