@@ -16,8 +16,8 @@
 10:20:18.183 p0 D ofonod src/sim.c:example_open_channel() /ril_0 aid <AID#2> while channel open in progress
 10:20:18.184 - I ofonod src/dbus.c:__ofono_error_busy() m:ExampleOpenChannel i:org.ofono.SimManager
 10:20:18.185 - E simd tid:9 ExampleSim.cpp(62):ExampleChannelOpen > open channel failed: Operation already in progress
-10:20:18.186 - W simd tid:9 ExampleSim.cpp(68):ExampleGetEid > GetEID failed: ExampleEuiccNoResponse (eUICC not responding)
-10:20:18.188 - I mgmtd GetEID call error: eUICC not responding path/example_sim.go:24
+10:20:18.186 - W simd tid:9 ExampleSim.cpp(68):ExampleGetEid > GetEID failed: ExampleEuiccNoResponse (eUICC example timeout)
+10:20:18.188 - I mgmtd GetEID call error: eUICC example timeout path/example_sim.go:24
 10:20:18.222 - D vrild mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP OK(VIPC_OK) seq=0x09e7 len=12
 10:20:18.223 - I vrild [ExampleIccService_1] open-channel answer: session 1, sw1 : 90, sw2 : 00
 10:20:18.224 p0 I ofonod [0,0857]< RIL_REQUEST_SIM_OPEN_CHANNEL {1}

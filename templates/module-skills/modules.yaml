@@ -19,10 +19,10 @@ platforms:
         not_error:
           - '(RejectCause|reject cause|errorCode|IpcErrorCode|rejectCode)\s*[:=(]\s*0\b'
         background:
-          - 'SIM_OPEN_CHANNEL|__ofono_error_not_found\(\).*m:ExampleOpenChannel|openChannel: Application not found|EuiccNoResponse|eUICC not responding|GetEID FAILED|Failed to get EID'
+          - 'SIM_OPEN_CHANNEL|__ofono_error_not_found\(\).*m:ExampleOpenChannel|openChannel: Application not found|ExampleEuiccNoResponse|eUICC example timeout|GetEID FAILED|Failed to get EID'
         state:
           - ['.', 'RADIO_POWER|RADIO_STATE_CHANGED|RADIO_O(N|FF)\b']
-          - ['.', 'IMS_REQUEST_AIRPLANE_MODE']
+          - ['.', 'IMS_REQUEST_EXAMPLE_APM']
         chain: 'VCHAN_\d+ REQUEST|\]\[(TX|RX)\] VIPC_|OnIpcComplete|RejectCause=[1-9]|sw1|Error\(VIPC_E_'
         request_on_line: '^\[\d+,\w+\][<>] ?(?:RIL_(?:REQUEST_)?)?([A-Z][A-Z0-9_]+)|VCHAN_\d+ (?:REQUEST|UNSOLICITED): (?:RIL_(?:REQUEST_)?)?(\w+)'
         source_file: '^((?:src|drivers|plugins)/[\w/-]+\.c):'
@@ -92,7 +92,7 @@ platforms:
         db_category: ims
         daemons: [imsd]
         ofonod_files: [src/ims.c]
-        ril: [IMS_REQUEST_SET_PDN_INFO, IMS_REQUEST_SET_OPERATOR_INFO, IMS_REQUEST_AIRPLANE_MODE, IMS_UNSOL_PDN_ACTIVATE, IMS_UNSOL_PDN_DEACTIVATE, IMS_UNSOL_OPERATOR_INFO_QUERY, IMS_UNSOL_RESPONSE_REGISTRATION_STATE_CHANGED, IMS_UNSOL_CAPABILITIES, IMS_UNSOL_REG_FAILED]
+        ril: [IMS_REQUEST_SET_PDN_INFO, IMS_REQUEST_EXAMPLE_OPER_INFO, IMS_REQUEST_EXAMPLE_APM, IMS_UNSOL_PDN_ACTIVATE, IMS_UNSOL_PDN_DEACTIVATE, IMS_UNSOL_OPERATOR_INFO_QUERY, IMS_UNSOL_EXAMPLE_REG_STATE, IMS_UNSOL_CAPABILITIES, IMS_UNSOL_REG_FAILED]
         ipc: [VIPC_EXAMPLE_IMS_*]
         services: [ImsService]
         dbus: [org.ofono.IpMultimediaSystem]

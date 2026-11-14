@@ -14,8 +14,8 @@
 1. **호출** — 관리 데몬의 `IpMultimediaSystem` `Register`·`Unregister`, 또는 PDN 뒤 IMS 구성요소의 자체 등록. 호출이 있어야 할 때 없으면 → `관리 데몬`.
 2. **core(`src/ims.c`) → 드라이버** — `Register`가 드라이버 호출 전에(드라이버 줄 없이) `org.ofono.Error.*`로 바로 오면 core가 막았다. 상태로 설명되면 그 상태 단계, 아니면 → `ofonod`. 드라이버 줄 뒤 콜백 실패는 core 검사가 아니다(② 표).
 3. **IMS 구성요소 → IMS IPC** — `[SLOT_<n>]` 등록 시도 줄 → `VIPC_EXAMPLE_IMS_REG*` TX. 구성요소 `[E]` 뒤 TX 없음 → `곁가지(<데몬>)`. IMS 구성요소에는 벤더 RIL 소켓 줄 짝이 없다(자기 OEM 채널).
-4. **망 응답** — `VIPC_EXAMPLE_IMS_REG_FAIL_IND` → 구성요소 `[fail-code : <n>]`. fail-code는 망의 답 → `모뎀·망`. 단, 약 1초 안에 `[IMS_REG_OK]`가 오면 인증 요청 뒤 등록이다 → `원인 아님(정상 동작)`.
-5. **ofonod 반영** — `IMS_UNSOL_REG_FAILED fail_code=<n>`·`IMS_UNSOL_RESPONSE_REGISTRATION_STATE_CHANGED` 뒤 core가 상태를 바꾸나. 구성요소 `registered:1`인데 ofonod 비요청이 없으면 → `곁가지(<데몬>)`, 비요청은 있는데 다음 단계가 없으면 → `ofonod`.
+4. **망 응답** — `VIPC_EXAMPLE_IMS_REG_FAIL_IND` → 구성요소 `[example-code : <n>]`. example-code는 망의 답 → `모뎀·망`. 단, 약 1초 안에 `[IMS_REG_OK]`가 오면 인증 요청 뒤 등록이다 → `원인 아님(정상 동작)`.
+5. **ofonod 반영** — `IMS_UNSOL_REG_FAILED fail_code=<n>`·`IMS_UNSOL_EXAMPLE_REG_STATE` 뒤 core가 상태를 바꾸나. 구성요소 `registered:1`인데 ofonod 비요청이 없으면 → `곁가지(<데몬>)`, 비요청은 있는데 다음 단계가 없으면 → `ofonod`.
 
 ### C. Registered 속성
 1. **D-Bus 시그널** — `IpMultimediaSystem` `Registered`·`VoiceCapable`·`SmsCapable` 시그널이 B5 비요청과 같은가. 다르면 → `ofonod`.
@@ -23,7 +23,7 @@
 3. **관리 데몬** — 시그널은 맞는데 정책·화면이 다르면 → `관리 데몬`.
 
 ### D. 해제(망 vs 단말)
-1. **단말이 내림** — `Unregister` 호출·비행기 모드(`IMS_REQUEST_AIRPLANE_MODE`)·PDN 해제가 먼저 → `원인 아님(정상 동작)` 또는 그것을 부른 층.
+1. **단말이 내림** — `Unregister` 호출·비행기 모드(`IMS_REQUEST_EXAMPLE_APM`)·PDN 해제가 먼저 → `원인 아님(정상 동작)` 또는 그것을 부른 층.
 2. **망·모뎀** — 그런 요청 없이 `registered:0`·`IMS_UNSOL_PDN_DEACTIVATE`가 오면 → `모뎀·망`, 원인 데몬은 그 IND를 찍은 이름. 모뎀 재시작이 먼저면 modem 사슬.
 
 ## ② 분기
@@ -34,7 +34,7 @@
 | 드라이버 줄 뒤 콜백 실패인데 아래 줄(`IMS_REQUEST_*`·IMS 구성요소·IMS IPC)이 하나도 없음 | core 검사 아님 — 아래 로그가 꺼졌을 수 있다 | `그 층 로그 없음(<층>)`(`_common` 규칙: 누가 냈는지 모르면 그 층 로그 없음). '아래 요청 없음'은 그 층의 다른 줄이 있어 로그가 켜진 것이 보일 때만 근거 |
 | 같은 오류인데 앞에 아래 층 실패 | 아래 실패의 증상 | 아래 층으로 |
 | IMS IPC TX 뒤 응답·IND 없음 | 요청은 나감 | `모뎀·망`(IPC 줄이 시각을 덮을 때만) / IPC 줄 없음 → `그 층 로그 없음(<층>)` |
-| fail-code·RSP 오류 | 망이 거절 | `모뎀·망`. 1초 안 등록이면 `원인 아님(정상 동작)` |
+| example-code·RSP 오류 | 망이 거절 | `모뎀·망`. 1초 안 등록이면 `원인 아님(정상 동작)` |
 | 구성요소 `[E]` 뒤 TX 없음 | 요청이 안 나감 | `곁가지(<데몬>)` |
 | 등록 풀림 | 망 vs 단말 | D1·D2 |
 
@@ -46,7 +46,7 @@
 | B5 | `<ofonod IMS 드라이버 경로>` TODO(SITE:S27) | `IMS_UNSOL_*` 처리 |
 | A1 | `ofono:drivers/rilmodem/gprs-context.c` | data `deep.md` ③ |
 | 오류 | `ofono:src/dbus.c` | `__ofono_error_*` |
-| B3·B4 | `<IMS 구성요소 루트 키>:<경로>` TODO(SITE:S27) | `[SLOT_<n>]`·`[fail-code` 앞뒤 문구 |
+| B3·B4 | `<IMS 구성요소 루트 키>:<경로>` TODO(SITE:S27) | `[SLOT_<n>]`·`[example-code` 앞뒤 문구 |
 
 찾는 법: 타임라인 줄의 `src/<파일>.c:<함수>()` 앞머리가 있으면 그 함수를, 없으면 위 표의 이름·요청 이름을 `code.roots`의 `ofono` 루트에서 찾아 필요한 함수만 읽는다. IMS 구성요소는 그 루트 키가 `code.roots`에 있을 때만 본다.
 
@@ -56,7 +56,7 @@
 |---|---|
 | ofonod 디버그(`src/<파일>.c:` 앞머리) | B2·B5·C1 core 반영 |
 | D-Bus 모니터 또는 ofonod D-Bus 덤프 | B1·C1 누가 불렀나, `Registered` 시그널 |
-| IMS 구성요소 로그 | B3·B4 fail-code |
+| IMS 구성요소 로그 | B3·B4 example-code |
 | IMS IPC 줄 | B3·B4 → `그 층 로그 없음(<층>)` |
 | 모뎀 IMS·SIP 로그(사내) | 거절 코드의 뜻 |
 

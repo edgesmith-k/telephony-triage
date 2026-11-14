@@ -9,8 +9,8 @@ Sep 22 10:20:18.182 dut daemon.info simd[589]: tid:9 ExampleSim.cpp(56):ExampleC
 Sep 22 10:20:18.183 dut daemon.debug ofonod[903]: src/sim.c:example_open_channel() /ril_0 aid <AID#2> while channel open in progress
 Sep 22 10:20:18.184 dut daemon.info ofonod[903]: src/dbus.c:__ofono_error_busy() m:ExampleOpenChannel i:org.ofono.SimManager
 Sep 22 10:20:18.185 dut daemon.err simd[589]: tid:9 ExampleSim.cpp(62):ExampleChannelOpen > open channel failed: Operation already in progress
-Sep 22 10:20:18.186 dut daemon.warn simd[589]: tid:9 ExampleSim.cpp(68):ExampleGetEid > GetEID failed: ExampleEuiccNoResponse (eUICC not responding)
-Sep 22 10:20:18.188 dut local0.warn mgmtd[734]: GetEID call error: eUICC not responding  path/example_sim.go:24
+Sep 22 10:20:18.186 dut daemon.warn simd[589]: tid:9 ExampleSim.cpp(68):ExampleGetEid > GetEID failed: ExampleEuiccNoResponse (eUICC example timeout)
+Sep 22 10:20:18.188 dut local0.warn mgmtd[734]: GetEID call error: eUICC example timeout  path/example_sim.go:24
 Sep 22 10:20:18.222 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP OK(VIPC_OK) seq=0x09e7 len=12
 Sep 22 10:20:18.223 dut daemon.info vrild[618]: [ExampleIccService_1] open-channel answer: session 1, sw1 : 90, sw2 : 00
 Sep 22 10:20:18.224 dut daemon.info ofonod[903]: [0,0857]< RIL_REQUEST_SIM_OPEN_CHANNEL {1}
