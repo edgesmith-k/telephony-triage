@@ -1,6 +1,0 @@
--- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
-11-14 10:00:34.170  1301  1301 D RILJ    : [3209]> GET_SMSC_ADDRESS [PHONE0]
-11-14 10:00:34.171  1301  1330 D RILJ    : [3209]< GET_SMSC_ADDRESS  [PHONE0]
-11-14 10:00:34.172  1301  1301 D SmsDispatchersController: sendTextInternal: messageId=0, uniqueMessageId=4
-11-14 10:00:34.173  1301  1301 D SMSDispatcher: sendText id: {x-message-id:0}
-11-14 10:00:34.340  1301  1301 D GsmSMSDispatcher: sendSms:  isIms()=false mRetryCount=0 mImsRetry=0 mMessageRef=0 mUsesImsServiceForIms=false SS=1 {x-message-id:0}

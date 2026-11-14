@@ -35,9 +35,9 @@
         "summary": "음성·데이터 망 등록이 없거나 풀려 서비스 없음이 된다",
         "symptom_signatures": [
           {
-            "id": "radio-on-out-of-service",
+            "id": "registration-denied-response",
             "must_match": [
-              "SST-\\d+: updateCarrierDisplayName: radio is on but out of service"
+              "RILJ: .*< (VOICE|DATA)_REGISTRATION_STATE RegStateResult\\{regState: REG_DENIED"
             ],
             "window_sec": 60
           },
@@ -105,7 +105,7 @@
         },
         "body": "- **로그 예시** (합성, fixture `reg-denied.log`):\n  ```\n  11-14 10:00:30.100  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]\n  11-14 10:00:30.101  1301  1301 D SST-0   : pollState: modemTriggered=true, radioState=1\n  11-14 10:00:30.105  1301  1301 D RILJ    : [0755]> DATA_REGISTRATION_STATE [PHONE0]\n  11-14 10:00:30.107  1301  1330 D RILJ    : [0755]< DATA_REGISTRATION_STATE RegStateResult{regState: REG_DENIED, rat: NR, reasonForDenial: ROAMING_NOT_ALLOWED, cellIdentity: CellIdentity.nr(CellIdentityNr{nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, bands: [BAND_41]}), registeredPlmn: 00101} [PHONE0]\n  11-14 10:00:30.108  1301  1301 D RILJ    : [0756]> VOICE_REGISTRATION_STATE [PHONE0]\n  11-14 10:00:30.110  1301  1330 D RILJ    : [0756]< VOICE_REGISTRATION_STATE RegStateResult{regState: REG_DENIED, rat: NR, reasonForDenial: ROAMING_NOT_ALLOWED, cellIdentity: CellIdentity.nr(CellIdentityNr{nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, bands: [BAND_41]}), registeredPlmn: 00101} [PHONE0]\n  11-14 10:00:30.120  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false\n  11-14 10:00:30.121  1301  1301 D SST-0   : updateCarrierDisplayName: radio is on but out of service, set plmn='No service'\n  11-14 10:00:30.130  1301  1340 D NRM-C-0 : onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=DENIED networkRegistrationState=DENIED roamingType=NOT_ROAMING accessNetworkTechnology=NR rejectCause=13 emergencyEnabled=false availableServices=[] cellIdentity=null voiceSpecificInfo=null dataSpecificInfo=null nrState=NONE}\n  ```\n- **확인 방법**: RILJ 등록 상태 응답 `regState: REG_DENIED`와 `reasonForDenial`(NRM 줄 `rejectCause=`).\n- **재현 시나리오**: 가입 안 된 SIM·로밍 금지 망에 등록 시도\n- **해결책**: 거절 원인 코드(reasonForDenial, NRM `rejectCause`)로 가입·망 설정 문제를 망 쪽에 넘긴다.\n- **코드 위치**: `CellularNetworkService`가 RegStateResult를 NetworkRegistrationInfo로 바꾼다(`rejectCause`).\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
       },
-      "body": "## 증상\n\n상태 표시줄에 서비스 없음, 통화·SMS·데이터가 모두 안 된다. 시험 중 비행기 모드 조작 뒤에도 많이 신고된다.\n\n## 증상 판별 방법\n\nSST `updateCarrierDisplayName: radio is on but out of service`(라디오는 켜졌는데 미등록) 또는 `pollStateDone: hasRegistered = false hasDeregistered = true`(등록이 풀림), 라디오가 다른 사유로 안 켜지면 `will not power on the radio`. 원인은 RILJ 등록 상태 응답(regState·reasonForDenial)과 라디오 전원 줄로 가른다.\n"
+      "body": "## 증상\n\n상태 표시줄에 서비스 없음, 통화·SMS·데이터가 모두 안 된다. 시험 중 비행기 모드 조작 뒤에도 많이 신고된다.\n\n## 증상 판별 방법\n\nSST `pollStateDone: hasRegistered = false hasDeregistered = true`(등록돼 있다가 풀림), RILJ 등록 상태 응답 `regState: REG_DENIED`(망 거절), 라디오가 다른 사유로 안 켜지면 `will not power on the radio`. 원인은 RILJ 등록 상태 응답(regState·reasonForDenial)과 라디오 전원 줄로 가른다.\n"
     },
     {
       "op": "add-fixture",
@@ -125,17 +125,29 @@
         "description": "모뎀이 거절 원인 없이 미등록(NOT_REG)을 올림 — 커버리지·셀 탐색·모뎀 쪽",
         "signatures": [
           {
-            "id": "not-registered-no-reject",
+            "id": "lost-registration-no-reject",
             "must_match": [
-              "RILJ: .*< (VOICE|DATA)_REGISTRATION_STATE RegStateResult\\{regState: NOT_REG_MT_(NOT_)?SEARCHING_OP, rat: \\w+, reasonForDenial: NONE",
-              "SST-\\d+: updateCarrierDisplayName: radio is on but out of service"
+              {
+                "id": "unsol",
+                "pattern": "RILJ: \\[UNSL\\]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED"
+              },
+              {
+                "id": "notreg",
+                "pattern": "RILJ: .*< (VOICE|DATA)_REGISTRATION_STATE RegStateResult\\{regState: NOT_REG_MT_(NOT_)?SEARCHING_OP, rat: \\w+, reasonForDenial: NONE"
+              },
+              {
+                "id": "dereg",
+                "pattern": "SST-\\d+: pollStateDone: hasRegistered = false hasDeregistered = true"
+              }
             ],
-            "window_sec": 600,
+            "window_sec": 10,
             "must_not_match": [
-              "REG_DENIED",
-              "RILJ: Service \\w+ has died\\.",
-              "UNSOL_MODEM_RESTART",
-              "RILJ: .*> RADIO_POWER on = true"
+              "RILJ: \\[UNSL\\]< UNSOL_RESPONSE_RADIO_STATE_CHANGED"
+            ],
+            "sequence": [
+              "unsol",
+              "notreg",
+              "dereg"
             ]
           }
         ],
@@ -167,7 +179,7 @@
         ],
         "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀 셀 탐색·등록 로그, 신호 세기(GET_SIGNAL_STRENGTH), 시험 장비 셀 설정."
       },
-      "body": "- **로그 예시** (합성, fixture `not-registered-no-reject.log`):\n  ```\n  11-14 10:00:30.100  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]\n  11-14 10:00:30.101  1301  1301 D SST-0   : pollState: modemTriggered=true, radioState=1\n  11-14 10:00:30.105  1301  1301 D RILJ    : [0755]> DATA_REGISTRATION_STATE [PHONE0]\n  11-14 10:00:30.107  1301  1330 D RILJ    : [0755]< DATA_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_NOT_SEARCHING_OP, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdentityNr{nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, bands: [BAND_41]}), registeredPlmn: 00101} [PHONE0]\n  11-14 10:00:30.108  1301  1301 D RILJ    : [0756]> VOICE_REGISTRATION_STATE [PHONE0]\n  11-14 10:00:30.110  1301  1330 D RILJ    : [0756]< VOICE_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_NOT_SEARCHING_OP, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdentityNr{nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, bands: [BAND_41]}), registeredPlmn: 00101} [PHONE0]\n  11-14 10:00:30.120  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false\n  11-14 10:00:30.121  1301  1301 D SST-0   : updateCarrierDisplayName: radio is on but out of service, set plmn='No service'\n  ```\n- **확인 방법**: RILJ 등록 상태 응답 `regState: NOT_REG_MT_(NOT_)SEARCHING_OP`, `reasonForDenial: NONE`. 분석 범위에 HAL 죽음·모뎀 재시작·라디오 켬이 있으면 그 원인이다.\n- **재현 시나리오**: 시험 장비에서 셀 끔·약화 → 복구\n- **해결책**: 같은 시각 신호·셀 정보와 모뎀 등록 로그로 커버리지·모뎀 문제를 가른다. 저절로 REG_HOME으로 돌아왔으면 일시 커버리지 이탈이다.\n- **코드 위치**: `ServiceStateTracker#getCarrierDisplayNameLegacy`(라디오 켜짐 + 미등록 = No service).\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
+      "body": "- **로그 예시** (합성, fixture `not-registered-no-reject.log`):\n  ```\n  11-14 10:00:30.100  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]\n  11-14 10:00:30.101  1301  1301 D SST-0   : pollState: modemTriggered=true, radioState=1\n  11-14 10:00:30.105  1301  1301 D RILJ    : [0755]> DATA_REGISTRATION_STATE [PHONE0]\n  11-14 10:00:30.107  1301  1330 D RILJ    : [0755]< DATA_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_NOT_SEARCHING_OP, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdentityNr{nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, bands: [BAND_41]}), registeredPlmn: 00101} [PHONE0]\n  11-14 10:00:30.108  1301  1301 D RILJ    : [0756]> VOICE_REGISTRATION_STATE [PHONE0]\n  11-14 10:00:30.110  1301  1330 D RILJ    : [0756]< VOICE_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_NOT_SEARCHING_OP, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdentityNr{nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, bands: [BAND_41]}), registeredPlmn: 00101} [PHONE0]\n  11-14 10:00:30.120  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false\n  11-14 10:00:30.121  1301  1301 D SST-0   : updateCarrierDisplayName: radio is on but out of service, set plmn='No service'\n  ```\n- **확인 방법**: 모뎀이 먼저 알린 망 상태 변경(`UNSOL_RESPONSE_NETWORK_STATE_CHANGED`) → 등록 상태 응답 `NOT_REG_MT_(NOT_)SEARCHING_OP`·`reasonForDenial: NONE` → `pollStateDone ... hasDeregistered = true`(등록돼 있다가 풀림)가 한 번의 갱신 안(수십 ms)에 이어진다. 그 사이에 라디오 상태 변경(HAL 죽음·모뎀 재시작·라디오 끔)이 끼면 이 원인이 아니다. 라디오를 켤 때 잠깐 보이는 미등록은 \"풀림\"이 아니라 이 원인에 안 든다(캡처 m02·n09r). 모뎀이 미등록을 먼저 올리고 곧(약 1초) `REG_DENIED`를 올리면(캡처 d04r-denied·d20b·d32e) \"망이 등록 거절\"도 같이 맞는다 — 거절 원인을 우선한다(뒤따르는 거절 줄은 시그니처로 뺄 수 없다).\n- **재현 시나리오**: 시험 장비에서 셀 끔·약화 → 복구\n- **해결책**: 같은 시각 신호·셀 정보와 모뎀 등록 로그로 커버리지·모뎀 문제를 가른다. 저절로 REG_HOME으로 돌아왔으면 일시 커버리지 이탈이다.\n- **코드 위치**: `ServiceStateTracker#getCarrierDisplayNameLegacy`(라디오 켜짐 + 미등록 = No service).\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
     },
     {
       "op": "add-fixture",
@@ -193,10 +205,10 @@
               "SST-\\d+: set service state as POWER_OFF",
               "SST-\\d+: pollStateDone: hasRegistered = false hasDeregistered = true"
             ],
-            "window_sec": 120
+            "window_sec": 10
           }
         ],
-        "resolution": "정상 동작이다. 시험 절차의 비행기 모드 켬·끔 스텝을 확인한다(끈 뒤 등록이 안 되면 \"라디오 켬 뒤 미등록\" 원인).",
+        "resolution": "정상 동작이다. 시험 절차의 비행기 모드 켬·끔 스텝을 확인한다(끈 뒤 복구가 늦은지는 시간 기준 TODO(SITE)로 따로 본다).",
         "resolution_type": "user-setting",
         "fix": {
           "status": "not-a-bug",
@@ -223,7 +235,7 @@
           }
         ]
       },
-      "body": "- **로그 예시** (합성, fixture `radio-off-airplane.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0\n  11-14 10:00:00.103  1301  1301 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0], IMS reg state=false, pending radio off=false\n  11-14 10:00:00.104  1301  1301 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON\n  11-14 10:00:00.140  1301  1301 D RILJ    : [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]\n  11-14 10:00:00.142  1301  1330 D RILJ    : [0268]< RADIO_POWER  [PHONE0]\n  11-14 10:00:00.143  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]\n  11-14 10:00:00.150  1301  1301 D RILJ    : [0271]> DATA_REGISTRATION_STATE [PHONE0]\n  11-14 10:00:00.152  1301  1330 D RILJ    : [0271]< DATA_REGISTRATION_STATE error 1 [PHONE0]\n  11-14 10:00:00.160  1301  1301 E SST-0   : handlePollStateResult: RIL returned RADIO_NOT_AVAILABLE.\n  11-14 10:00:00.161  1301  1301 D SST-0   : set service state as POWER_OFF\n  11-14 10:00:00.162  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false\n  11-14 10:00:00.163  1301  1301 D SST-0   : RAT switched NR_SA -> Unknown at cell -1\n  ```\n- **확인 방법**: SST `setRadioPower power false ... reason 0`(사유 USER) 뒤 `set service state as POWER_OFF`.\n- **재현 시나리오**: 비행기 모드 켬\n- **해결책**: 정상 동작이다. 시험 절차의 비행기 모드 켬·끔 스텝을 확인한다(끈 뒤 등록이 안 되면 \"라디오 켬 뒤 미등록\" 원인).\n- **코드 위치**: `ServiceStateTracker#setRadioPowerForReason`·`powerOffRadioSafely`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다. `powerOffRadioSafely: due to AIRPLANE_MODE_ON`은 사유와 관계없이 찍히므로 비행기 모드 판단 근거로 쓰지 않는다.\n"
+      "body": "- **로그 예시** (합성, fixture `radio-off-airplane.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0\n  11-14 10:00:00.103  1301  1301 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0], IMS reg state=false, pending radio off=false\n  11-14 10:00:00.104  1301  1301 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON\n  11-14 10:00:00.140  1301  1301 D RILJ    : [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]\n  11-14 10:00:00.142  1301  1330 D RILJ    : [0268]< RADIO_POWER  [PHONE0]\n  11-14 10:00:00.143  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]\n  11-14 10:00:00.150  1301  1301 D RILJ    : [0271]> DATA_REGISTRATION_STATE [PHONE0]\n  11-14 10:00:00.152  1301  1330 D RILJ    : [0271]< DATA_REGISTRATION_STATE error 1 [PHONE0]\n  11-14 10:00:00.160  1301  1301 E SST-0   : handlePollStateResult: RIL returned RADIO_NOT_AVAILABLE.\n  11-14 10:00:00.161  1301  1301 D SST-0   : set service state as POWER_OFF\n  11-14 10:00:00.162  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false\n  11-14 10:00:00.163  1301  1301 D SST-0   : RAT switched NR_SA -> Unknown at cell -1\n  ```\n- **확인 방법**: SST `setRadioPower power false ... reason 0`(사유 USER) 뒤 `set service state as POWER_OFF`.\n- **재현 시나리오**: 비행기 모드 켬\n- **해결책**: 정상 동작이다. 시험 절차의 비행기 모드 켬·끔 스텝을 확인한다(끈 뒤 복구가 늦은지는 시간 기준 TODO(SITE)로 따로 본다).\n- **코드 위치**: `ServiceStateTracker#setRadioPowerForReason`·`powerOffRadioSafely`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다. `powerOffRadioSafely: due to AIRPLANE_MODE_ON`은 사유와 관계없이 찍히므로 비행기 모드 판단 근거로 쓰지 않는다.\n"
     },
     {
       "op": "add-fixture",
@@ -239,19 +251,19 @@
       "temp_id": "NEW-CAUSE-4",
       "type": "NEW-TYPE-1",
       "cause": {
-        "title": "발열·사업자 사유로 라디오 끔",
-        "description": "사용자 조작이 아닌 사유(1 발열, 2 사업자, 3 근처 기기)로 프레임워크가 라디오를 끔",
+        "title": "발열 사유로 라디오 끔",
+        "description": "단말 발열 보호(사유 1 THERMAL)로 프레임워크가 라디오를 끔",
         "signatures": [
           {
-            "id": "radio-off-non-user-reason",
+            "id": "radio-off-reason-1",
             "must_match": [
-              "SST-\\d+: setRadioPower power false forEmergencyCall false forceApply \\w+ reason [1-3]\\b",
+              "SST-\\d+: setRadioPower power false forEmergencyCall false forceApply \\w+ reason 1\\b",
               "SST-\\d+: set service state as POWER_OFF"
             ],
-            "window_sec": 120
+            "window_sec": 10
           }
         ],
-        "resolution": "`reason` 값(1 발열·2 사업자·3 근처 기기)으로 누가 라디오를 껐는지 확인하고 그 조건(단말 온도·사업자 명령)을 해소한다.",
+        "resolution": "단말 온도와 발열 보호 동작(발열 관리 서비스)을 확인하고 온도가 내려간 뒤 다시 시험한다.",
         "resolution_type": "hw",
         "fix": {
           "status": "not-a-bug",
@@ -278,13 +290,13 @@
           }
         ]
       },
-      "body": "- **로그 예시** (합성, fixture `radio-off-other-reason.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 1\n  11-14 10:00:00.103  1301  1301 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=true, getRadioState=1, mRadioPowerOffReasons=[1], IMS reg state=false, pending radio off=false\n  11-14 10:00:00.104  1301  1301 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON\n  11-14 10:00:00.140  1301  1301 D RILJ    : [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]\n  11-14 10:00:00.143  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]\n  11-14 10:00:00.161  1301  1301 D SST-0   : set service state as POWER_OFF\n  11-14 10:00:00.162  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false\n  ```\n- **확인 방법**: SST `setRadioPower power false ... reason N`(N=1·2·3)과 `mRadioPowerOffReasons=[N]`. 사용자 비행기 모드가 아니다.\n- **재현 시나리오**: 발열 보호·사업자 라디오 끔 명령(시험 명령으로 사유 지정)\n- **해결책**: `reason` 값(1 발열·2 사업자·3 근처 기기)으로 누가 라디오를 껐는지 확인하고 그 조건(단말 온도·사업자 명령)을 해소한다.\n- **코드 위치**: `ServiceStateTracker#setRadioPowerForReason`(사유 목록 mRadioPowerOffReasons).\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다. 이 경우에도 SST는 `powerOffRadioSafely: due to AIRPLANE_MODE_ON`을 찍는다.\n"
+      "body": "- **로그 예시** (합성, fixture `radio-off-thermal.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 1\n  11-14 10:00:00.103  1301  1301 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[1], IMS reg state=false, pending radio off=false\n  11-14 10:00:00.104  1301  1301 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON\n  11-14 10:00:00.140  1301  1301 D RILJ    : [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]\n  11-14 10:00:00.143  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]\n  11-14 10:00:00.161  1301  1301 D SST-0   : set service state as POWER_OFF\n  11-14 10:00:00.162  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false\n  ```\n- **확인 방법**: SST `setRadioPower power false ... reason 1`과 `mRadioPowerOffReasons=[1]` 뒤 `set service state as POWER_OFF`(같은 처리 안). 사용자 비행기 모드(reason 0)가 아니다.\n- **재현 시나리오**: 발열 보호 동작(시험: 사유 1로 라디오 끔 명령)\n- **해결책**: 단말 온도와 발열 보호 동작(발열 관리 서비스)을 확인하고 온도가 내려간 뒤 다시 시험한다.\n- **코드 위치**: `ServiceStateTracker#setRadioPowerForReason`(사유 목록 mRadioPowerOffReasons).\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다. 이 경우에도 SST는 `powerOffRadioSafely: due to AIRPLANE_MODE_ON`을 찍는다. 사유 3(근처 기기)은 시드에 넣지 않았다.\n"
     },
     {
       "op": "add-fixture",
       "for": "NEW-CAUSE-4",
       "kind": "positive",
-      "path": "fixtures/radio-off-other-reason.log",
+      "path": "fixtures/radio-off-thermal.log",
       "expect": {
         "origin": "synthetic"
       }
@@ -294,18 +306,73 @@
       "temp_id": "NEW-CAUSE-5",
       "type": "NEW-TYPE-1",
       "cause": {
-        "title": "다른 사유가 남아 라디오 안 켜짐",
-        "description": "비행기 모드를 꺼도 다른 끔 사유(발열·사업자 등)가 남아 프레임워크가 라디오를 켜지 않음",
+        "title": "사업자 사유로 라디오 끔",
+        "description": "사업자(캐리어 앱·사업자 명령, 사유 2 CARRIER)가 라디오를 끔",
         "signatures": [
           {
-            "id": "radio-on-blocked-by-reason",
+            "id": "radio-off-reason-2",
             "must_match": [
-              "SST-\\d+: setRadioPowerForReason power: true .*will not power on the radio as it is powered off for the following reasons: \\["
+              "SST-\\d+: setRadioPower power false forEmergencyCall false forceApply \\w+ reason 2\\b",
+              "SST-\\d+: set service state as POWER_OFF"
+            ],
+            "window_sec": 10
+          }
+        ],
+        "resolution": "사업자 명령(캐리어 앱)·사업자 설정이 라디오를 끈 조건을 확인한다.",
+        "resolution_type": "carrier-config",
+        "fix": {
+          "status": "not-a-bug",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/ServiceStateTracker.java",
+            "symbol": "ServiceStateTracker#setRadioPowerForReason",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/ServiceStateTracker.java",
+            "symbol": "ServiceStateTracker#powerOffRadioSafely",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ]
+      },
+      "body": "- **로그 예시** (합성, fixture `radio-off-carrier.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 2\n  11-14 10:00:00.103  1301  1301 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[2], IMS reg state=false, pending radio off=false\n  11-14 10:00:00.104  1301  1301 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON\n  11-14 10:00:00.140  1301  1301 D RILJ    : [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]\n  11-14 10:00:00.143  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]\n  11-14 10:00:00.161  1301  1301 D SST-0   : set service state as POWER_OFF\n  11-14 10:00:00.162  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false\n  ```\n- **확인 방법**: SST `setRadioPower power false ... reason 2`과 `mRadioPowerOffReasons=[2]` 뒤 `set service state as POWER_OFF`(같은 처리 안). 사용자 비행기 모드(reason 0)가 아니다.\n- **재현 시나리오**: 캐리어 앱의 라디오 끔 요청(시험: 사유 2로 라디오 끔 명령)\n- **해결책**: 사업자 명령(캐리어 앱)·사업자 설정이 라디오를 끈 조건을 확인한다.\n- **코드 위치**: `ServiceStateTracker#setRadioPowerForReason`(사유 목록 mRadioPowerOffReasons).\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다. 이 경우에도 SST는 `powerOffRadioSafely: due to AIRPLANE_MODE_ON`을 찍는다. 사유 3(근처 기기)은 시드에 넣지 않았다.\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-5",
+      "kind": "positive",
+      "path": "fixtures/radio-off-carrier.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-6",
+      "type": "NEW-TYPE-1",
+      "cause": {
+        "title": "발열 사유가 남아 라디오 안 켜짐",
+        "description": "비행기 모드를 꺼도 다른 끔 사유가 남아 프레임워크가 라디오를 켜지 않음",
+        "signatures": [
+          {
+            "id": "radio-on-blocked-by-reason-1",
+            "must_match": [
+              "SST-\\d+: setRadioPowerForReason power: true .*will not power on the radio as it is powered off for the following reasons: \\[1\\]"
             ],
             "window_sec": 60
           }
         ],
-        "resolution": "줄 끝 사유 목록(1 발열·2 사업자·3 근처 기기)을 확인하고 그 사유를 해제한다.",
+        "resolution": "발열 사유가 해제될 때까지 라디오가 켜지지 않는다 — 단말 온도·발열 보호 상태를 확인한다.",
         "resolution_type": "hw",
         "fix": {
           "status": "not-a-bug",
@@ -325,55 +392,37 @@
           }
         ]
       },
-      "body": "- **로그 예시** (합성, fixture `radio-kept-off.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power true forEmergencyCall false forceApply false reason 0\n  11-14 10:00:00.101  1301  1301 D SST-0   : setRadioPowerForReason power: true forEmergencyCall= false isSelectedPhoneForEmergencyCall: false forceApply false reason: 0 will not power on the radio as it is powered off for the following reasons: [1].\n  ```\n- **확인 방법**: `will not power on the radio as it is powered off for the following reasons: [N]` — 켬 요청이 무시됐다.\n- **재현 시나리오**: 발열 사유로 라디오 꺼진 상태에서 비행기 모드 켬 → 끔\n- **해결책**: 줄 끝 사유 목록(1 발열·2 사업자·3 근처 기기)을 확인하고 그 사유를 해제한다.\n- **코드 위치**: `ServiceStateTracker#setRadioPowerForReason`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
+      "body": "- **로그 예시** (합성, fixture `radio-kept-off-thermal.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power true forEmergencyCall false forceApply false reason 0\n  11-14 10:00:00.101  1301  1301 D SST-0   : setRadioPowerForReason power: true forEmergencyCall= false isSelectedPhoneForEmergencyCall: false forceApply false reason: 0 will not power on the radio as it is powered off for the following reasons: [1].\n  ```\n- **확인 방법**: `will not power on the radio as it is powered off for the following reasons: [1]` — 켬 요청이 무시됐다(같은 줄의 사유 값으로 가른다).\n- **재현 시나리오**: 그 사유로 라디오 꺼진 상태에서 비행기 모드 켬 → 끔\n- **해결책**: 발열 사유가 해제될 때까지 라디오가 켜지지 않는다 — 단말 온도·발열 보호 상태를 확인한다.\n- **코드 위치**: `ServiceStateTracker#setRadioPowerForReason`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-5",
+      "for": "NEW-CAUSE-6",
       "kind": "positive",
-      "path": "fixtures/radio-kept-off.log",
+      "path": "fixtures/radio-kept-off-thermal.log",
       "expect": {
         "origin": "synthetic"
       }
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-6",
+      "temp_id": "NEW-CAUSE-7",
       "type": "NEW-TYPE-1",
       "cause": {
-        "title": "라디오 켬 뒤 미등록",
-        "description": "비행기 모드 해제·부팅으로 라디오를 켰는데 모뎀이 등록하지 못함(미등록 상태가 이어짐)",
+        "title": "사업자 사유가 남아 라디오 안 켜짐",
+        "description": "비행기 모드를 꺼도 다른 끔 사유가 남아 프레임워크가 라디오를 켜지 않음",
         "signatures": [
           {
-            "id": "not-registered-after-radio-on",
+            "id": "radio-on-blocked-by-reason-2",
             "must_match": [
-              {
-                "id": "on",
-                "pattern": "RILJ: .*> RADIO_POWER on = true"
-              },
-              {
-                "id": "notreg",
-                "pattern": "RILJ: .*< (VOICE|DATA)_REGISTRATION_STATE RegStateResult\\{regState: NOT_REG_MT_(NOT_)?SEARCHING_OP, rat: \\w+, reasonForDenial: NONE"
-              },
-              {
-                "id": "oos",
-                "pattern": "SST-\\d+: updateCarrierDisplayName: radio is on but out of service"
-              }
+              "SST-\\d+: setRadioPowerForReason power: true .*will not power on the radio as it is powered off for the following reasons: \\[2\\]"
             ],
-            "window_sec": 600,
-            "must_not_match": [
-              "REG_DENIED"
-            ],
-            "sequence": [
-              "on",
-              "notreg"
-            ]
+            "window_sec": 60
           }
         ],
-        "resolution": "라디오 켬 뒤 등록까지 걸린 시간을 사내 기준(TODO(SITE))과 비교하고, 넘으면 모뎀 셀 탐색·등록 로그를 받는다.",
-        "resolution_type": "modem",
+        "resolution": "사업자 사유(캐리어 앱의 라디오 끔)가 해제될 때까지 라디오가 켜지지 않는다 — 캐리어 앱·사업자 명령을 확인한다.",
+        "resolution_type": "carrier-config",
         "fix": {
-          "status": "open",
+          "status": "not-a-bug",
           "ref": null,
           "fixed_in": []
         },
@@ -387,31 +436,23 @@
             "platform_versions": [
               "17"
             ]
-          },
-          {
-            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/CellularNetworkService.java",
-            "symbol": "CellularNetworkService#getRegistrationStateFromResult",
-            "platform_versions": [
-              "17"
-            ]
           }
-        ],
-        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 라디오 켬 이후 모뎀 셀 탐색·등록 로그. 시간 기준은 TODO(SITE)."
+        ]
       },
-      "body": "- **로그 예시** (합성, fixture `not-registered-after-radio-on.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power true forEmergencyCall false forceApply false reason 0\n  11-14 10:00:00.103  1301  1301 D RILJ    : [0285]> RADIO_POWER on = true forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]\n  11-14 10:00:00.106  1301  1330 D RILJ    : [0285]< RADIO_POWER  [PHONE0]\n  11-14 10:00:00.107  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: ON [PHONE0]\n  11-14 10:00:02.100  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]\n  11-14 10:00:02.101  1301  1301 D SST-0   : pollState: modemTriggered=true, radioState=1\n  11-14 10:00:02.105  1301  1301 D RILJ    : [0755]> DATA_REGISTRATION_STATE [PHONE0]\n  11-14 10:00:02.107  1301  1330 D RILJ    : [0755]< DATA_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_SEARCHING_OP, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdentityNr{nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, bands: [BAND_41]}), registeredPlmn: 00101} [PHONE0]\n  11-14 10:00:02.108  1301  1301 D RILJ    : [0756]> VOICE_REGISTRATION_STATE [PHONE0]\n  11-14 10:00:02.110  1301  1330 D RILJ    : [0756]< VOICE_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_SEARCHING_OP, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdentityNr{nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, bands: [BAND_41]}), registeredPlmn: 00101} [PHONE0]\n  11-14 10:00:02.121  1301  1301 D SST-0   : updateCarrierDisplayName: radio is on but out of service, set plmn='No service'\n  ```\n- **확인 방법**: RILJ `> RADIO_POWER on = true` 뒤 등록 상태 응답이 `NOT_REG_MT_(NOT_)SEARCHING_OP`이고 거절은 없다. 순서만 본다 — 몇 초가 지연인지는 TODO(SITE).\n- **재현 시나리오**: 비행기 모드 켬 → 끔 → 등록 대기\n- **해결책**: 라디오 켬 뒤 등록까지 걸린 시간을 사내 기준(TODO(SITE))과 비교하고, 넘으면 모뎀 셀 탐색·등록 로그를 받는다.\n- **코드 위치**: `ServiceStateTracker#setRadioPowerForReason` → RIL `RADIO_POWER`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
+      "body": "- **로그 예시** (합성, fixture `radio-kept-off-carrier.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power true forEmergencyCall false forceApply false reason 0\n  11-14 10:00:00.101  1301  1301 D SST-0   : setRadioPowerForReason power: true forEmergencyCall= false isSelectedPhoneForEmergencyCall: false forceApply false reason: 0 will not power on the radio as it is powered off for the following reasons: [2].\n  ```\n- **확인 방법**: `will not power on the radio as it is powered off for the following reasons: [2]` — 켬 요청이 무시됐다(같은 줄의 사유 값으로 가른다).\n- **재현 시나리오**: 그 사유로 라디오 꺼진 상태에서 비행기 모드 켬 → 끔\n- **해결책**: 사업자 사유(캐리어 앱의 라디오 끔)가 해제될 때까지 라디오가 켜지지 않는다 — 캐리어 앱·사업자 명령을 확인한다.\n- **코드 위치**: `ServiceStateTracker#setRadioPowerForReason`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-6",
+      "for": "NEW-CAUSE-7",
       "kind": "positive",
-      "path": "fixtures/not-registered-after-radio-on.log",
+      "path": "fixtures/radio-kept-off-carrier.log",
       "expect": {
         "origin": "synthetic"
       }
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-7",
+      "temp_id": "NEW-CAUSE-8",
       "type": "NEW-TYPE-1",
       "cause": {
         "title": "RIL HAL 서비스 죽음",
@@ -420,10 +461,20 @@
           {
             "id": "radio-hal-died",
             "must_match": [
-              "RILJ: Service \\w+ has died\\.",
-              "SST-\\d+: updateCarrierDisplayName: radio is on but out of service"
+              {
+                "id": "died",
+                "pattern": "RILJ: Service \\w+ has died\\."
+              },
+              {
+                "id": "dereg",
+                "pattern": "SST-\\d+: pollStateDone: hasRegistered = false hasDeregistered = true"
+              }
             ],
-            "window_sec": 60
+            "window_sec": 10,
+            "sequence": [
+              "died",
+              "dereg"
+            ]
           }
         ],
         "resolution": "HAL 프로세스가 죽은 이유(tombstone·벤더 RIL 로그)를 벤더 쪽에서 본다.",
@@ -454,11 +505,11 @@
         ],
         "cp_evidence": "CP(벤더 RIL HAL) 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 같은 시각 radio HAL 프로세스 종료 로그·tombstone, 벤더 RIL 로그."
       },
-      "body": "- **로그 예시** (합성, fixture `radio-hal-died.log`):\n  ```\n  11-14 10:00:02.869  1301  1330 D RILJ    : Service SIM has died. [PHONE0]\n  11-14 10:00:02.869  1301  1331 D RILJ    : Service MODEM has died. [PHONE0]\n  11-14 10:00:02.869  1301  1332 D RILJ    : Service VOICE has died. [PHONE0]\n  11-14 10:00:02.869  1301  1333 D RILJ    : Service NETWORK has died. [PHONE0]\n  11-14 10:00:02.869  1301  1334 D RILJ    : Service DATA has died. [PHONE0]\n  11-14 10:00:02.869  1301  1335 D RILJ    : Service IMS has died. [PHONE0]\n  11-14 10:00:02.869  1301  1336 D RILJ    : Service MESSAGING has died. [PHONE0]\n  11-14 10:00:02.933  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]\n  11-14 10:00:02.939  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: ON [PHONE0]\n  11-14 10:00:03.028  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false\n  11-14 10:00:03.029  1301  1301 D SST-0   : updateCarrierDisplayName: radio is on but out of service, set plmn='No service'\n  ```\n- **확인 방법**: RILJ `Service <HAL 서비스> has died.` 직후 SST 미등록. 에뮬레이터 캡처(radio HAL 프로세스 kill)와 같은 모양.\n- **재현 시나리오**: radio HAL 프로세스 종료(시험: 프로세스 kill)\n- **해결책**: HAL 프로세스가 죽은 이유(tombstone·벤더 RIL 로그)를 벤더 쪽에서 본다.\n- **코드 위치**: `RIL`의 `BinderServiceDeathRecipient#binderDied`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
+      "body": "- **로그 예시** (합성, fixture `radio-hal-died.log`):\n  ```\n  11-14 10:00:02.869  1301  1330 D RILJ    : Service SIM has died. [PHONE0]\n  11-14 10:00:02.869  1301  1331 D RILJ    : Service MODEM has died. [PHONE0]\n  11-14 10:00:02.869  1301  1332 D RILJ    : Service VOICE has died. [PHONE0]\n  11-14 10:00:02.869  1301  1333 D RILJ    : Service NETWORK has died. [PHONE0]\n  11-14 10:00:02.869  1301  1334 D RILJ    : Service DATA has died. [PHONE0]\n  11-14 10:00:02.869  1301  1335 D RILJ    : Service IMS has died. [PHONE0]\n  11-14 10:00:02.869  1301  1336 D RILJ    : Service MESSAGING has died. [PHONE0]\n  11-14 10:00:02.933  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]\n  11-14 10:00:02.939  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: ON [PHONE0]\n  11-14 10:00:02.942  1301  1330 D RILJ    : [9703]< DATA_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_NOT_SEARCHING_OP, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdentityNr{nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, bands: [BAND_41]}), registeredPlmn: 00101} [PHONE0]\n  11-14 10:00:03.028  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false\n  11-14 10:00:03.029  1301  1301 D SST-0   : updateCarrierDisplayName: radio is on but out of service, set plmn='No service'\n  ```\n- **확인 방법**: RILJ `Service <HAL 서비스> has died.` 뒤 수백 ms 안에 SST `hasDeregistered = true`. HAL이 다시 붙는 동안 라디오 상태가 OFF/ON으로 바뀌고 잠깐 미등록 응답이 온다(캡처 m05-ril-restart 모양) — 그래서 \"거절 사유 없이 미등록\"(라디오 상태 변경이 끼면 안 맞음)과 갈린다.\n- **재현 시나리오**: radio HAL 프로세스 종료(시험: 프로세스 kill)\n- **해결책**: HAL 프로세스가 죽은 이유(tombstone·벤더 RIL 로그)를 벤더 쪽에서 본다.\n- **코드 위치**: `RIL`의 `BinderServiceDeathRecipient#binderDied`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-7",
+      "for": "NEW-CAUSE-8",
       "kind": "positive",
       "path": "fixtures/radio-hal-died.log",
       "expect": {
@@ -467,7 +518,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-8",
+      "temp_id": "NEW-CAUSE-9",
       "type": "NEW-TYPE-1",
       "cause": {
         "title": "모뎀 재시작",
@@ -476,10 +527,20 @@
           {
             "id": "modem-restarted",
             "must_match": [
-              "RILJ: \\[UNSL\\]< UNSOL_MODEM_RESTART",
-              "SST-\\d+: updateCarrierDisplayName: radio is on but out of service"
+              {
+                "id": "restart",
+                "pattern": "RILJ: \\[UNSL\\]< UNSOL_MODEM_RESTART"
+              },
+              {
+                "id": "dereg",
+                "pattern": "SST-\\d+: pollStateDone: hasRegistered = false hasDeregistered = true"
+              }
             ],
-            "window_sec": 60
+            "window_sec": 10,
+            "sequence": [
+              "restart",
+              "dereg"
+            ]
           }
         ],
         "resolution": "UNSOL 뒤 재시작 사유 문자열과 모뎀 크래시 덤프로 모뎀 쪽에서 본다. 사용자·명령에 의한 재시작이면 시험 조작이다.",
@@ -510,11 +571,11 @@
         ],
         "cp_evidence": "CP(모뎀) 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀 크래시 덤프·재시작 사유, 같은 시각 벤더 RIL 로그."
       },
-      "body": "- **로그 예시** (합성, fixture `modem-restart.log`):\n  ```\n  11-14 10:00:20.000  1301  1331 D RILJ    : [UNSL]< UNSOL_MODEM_RESTART AT command initiated restart [PHONE0]\n  11-14 10:00:31.000  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: ON [PHONE0]\n  11-14 10:00:31.200  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false\n  11-14 10:00:31.201  1301  1301 D SST-0   : updateCarrierDisplayName: radio is on but out of service, set plmn='No service'\n  ```\n- **확인 방법**: RILJ `[UNSL]< UNSOL_MODEM_RESTART <사유>` 뒤 SST 미등록.\n- **재현 시나리오**: 모뎀 재시작(시험: 모뎀 재시작 명령)\n- **해결책**: UNSOL 뒤 재시작 사유 문자열과 모뎀 크래시 덤프로 모뎀 쪽에서 본다. 사용자·명령에 의한 재시작이면 시험 조작이다.\n- **코드 위치**: `ModemIndication#modemReset`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
+      "body": "- **로그 예시** (합성, fixture `modem-restart.log`):\n  ```\n  11-14 10:00:20.000  1301  1331 D RILJ    : [UNSL]< UNSOL_MODEM_RESTART AT command initiated restart [PHONE0]\n  11-14 10:00:20.010  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: UNAVAILABLE [PHONE0]\n  11-14 10:00:20.200  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false\n  11-14 10:00:20.201  1301  1301 D SST-0   : updateCarrierDisplayName: radio is on but out of service, set plmn='No service'\n  ```\n- **확인 방법**: RILJ `[UNSL]< UNSOL_MODEM_RESTART <사유>` 직후 SST `hasDeregistered = true`. 에뮬레이터는 모뎀 재시작 명령을 지원하지 않아 캡처 근거가 없다(소스 근거만).\n- **재현 시나리오**: 모뎀 재시작(시험: 모뎀 재시작 명령)\n- **해결책**: UNSOL 뒤 재시작 사유 문자열과 모뎀 크래시 덤프로 모뎀 쪽에서 본다. 사용자·명령에 의한 재시작이면 시험 조작이다.\n- **코드 위치**: `ModemIndication#modemReset`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-8",
+      "for": "NEW-CAUSE-9",
       "kind": "positive",
       "path": "fixtures/modem-restart.log",
       "expect": {
@@ -545,7 +606,7 @@
         ]
       },
       "first_cause": {
-        "temp_id": "NEW-CAUSE-9",
+        "temp_id": "NEW-CAUSE-10",
         "cause": {
           "title": "사용자·설정 앱이 바꿈",
           "description": "사용자 설정(선호 망 종류)이나 시험 명령이 허용 망 종류를 바꿈",
@@ -584,7 +645,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-9",
+      "for": "NEW-CAUSE-10",
       "kind": "positive",
       "path": "fixtures/allowed-user.log",
       "expect": {
@@ -593,7 +654,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-10",
+      "temp_id": "NEW-CAUSE-11",
       "type": "NEW-TYPE-2",
       "cause": {
         "title": "절전(power) 사유로 제한",
@@ -631,7 +692,7 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-10",
+      "for": "NEW-CAUSE-11",
       "kind": "positive",
       "path": "fixtures/allowed-power.log",
       "expect": {
@@ -640,7 +701,7 @@
     },
     {
       "op": "new-cause",
-      "temp_id": "NEW-CAUSE-11",
+      "temp_id": "NEW-CAUSE-12",
       "type": "NEW-TYPE-2",
       "cause": {
         "title": "사업자 설정으로 제한",
@@ -685,59 +746,9 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-11",
-      "kind": "positive",
-      "path": "fixtures/allowed-carrier.log",
-      "expect": {
-        "origin": "synthetic"
-      }
-    },
-    {
-      "op": "new-cause",
-      "temp_id": "NEW-CAUSE-12",
-      "type": "NEW-TYPE-2",
-      "cause": {
-        "title": "사용자 2G 끄기",
-        "description": "사용자가 2G 허용 끄기 설정을 켜 2G가 빠짐",
-        "signatures": [
-          {
-            "id": "allowed-types-reason-enable-2g",
-            "must_match": [
-              "Phone-\\d+: setAllowedNetworkTypes: subId=\\d+, reason=enable_2g,"
-            ],
-            "window_sec": 600,
-            "must_not_match": [
-              "GsmCdmaPhone: .*2G is disabled by carrier\\."
-            ]
-          }
-        ],
-        "resolution": "정상 동작이다. 2G 허용 설정을 확인한다(2G 시험이면 켠다).",
-        "resolution_type": "user-setting",
-        "fix": {
-          "status": "not-a-bug",
-          "ref": null,
-          "fixed_in": []
-        },
-        "platform_versions": [
-          "17"
-        ],
-        "code_refs": [
-          {
-            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/Phone.java",
-            "symbol": "Phone#setAllowedNetworkTypes",
-            "platform_versions": [
-              "17"
-            ]
-          }
-        ]
-      },
-      "body": "- **로그 예시** (합성, fixture `allowed-enable-2g-user.log`):\n  ```\n  11-14 10:00:00.666  1301  1301 D Phone-0 : setAllowedNetworkTypes: subId=1, reason=enable_2g, allowed network types=UMTS|HSDPA|HSUPA|HSPA|LTE|HSPA+|LTE_CA|NR, uid=1001\n  11-14 10:00:00.667  1301  1301 D Phone-0 : [0] setAllowedNetworkTypes: modemRafBitMask = 578439 ,modemRaf = GPRS|EDGE|UMTS|HSDPA|HSUPA|HSPA|LTE|HSPA+|GSM|LTE_CA|NR ,filteredRafBitMask = 4096 ,filteredRaf = UMTS|HSDPA|HSUPA|HSPA|LTE|HSPA+|LTE_CA|NR\n  11-14 10:00:00.668  1301  1301 D RILJ    : [0943]> SET_ALLOWED_NETWORK_TYPES_BITMAP [PHONE0]\n  11-14 10:00:00.674  1301  1330 D RILJ    : [0943]< SET_ALLOWED_NETWORK_TYPES_BITMAP  [PHONE0]\n  ```\n- **확인 방법**: `reason=enable_2g`이고 사업자 기본값 줄(`2G is disabled by carrier.`)이 없다.\n- **재현 시나리오**: 설정 → 2G 허용 끔\n- **해결책**: 정상 동작이다. 2G 허용 설정을 확인한다(2G 시험이면 켠다).\n- **코드 위치**: `Phone#setAllowedNetworkTypes`가 사유별 허용 망 종류를 합쳐(AND) 모뎀에 보낸다.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
-    },
-    {
-      "op": "add-fixture",
       "for": "NEW-CAUSE-12",
       "kind": "positive",
-      "path": "fixtures/allowed-enable-2g-user.log",
+      "path": "fixtures/allowed-carrier.log",
       "expect": {
         "origin": "synthetic"
       }
@@ -747,20 +758,19 @@
       "temp_id": "NEW-CAUSE-13",
       "type": "NEW-TYPE-2",
       "cause": {
-        "title": "사업자 기본값으로 2G 꺼짐",
-        "description": "사업자 설정(2G 보호 기본값)으로 프레임워크가 처음 한 번 2G를 끔",
+        "title": "2G 끄기(사용자 설정·사업자 기본값)",
+        "description": "2G 허용 끄기(사용자 설정) 또는 사업자 2G 보호 기본값으로 2G가 빠짐",
         "signatures": [
           {
-            "id": "allowed-types-reason-enable-2g-carrier-default",
+            "id": "allowed-types-reason-enable-2g",
             "must_match": [
-              "Phone-\\d+: setAllowedNetworkTypes: subId=\\d+, reason=enable_2g,",
-              "GsmCdmaPhone: .*2G is disabled by carrier\\."
+              "Phone-\\d+: setAllowedNetworkTypes: subId=\\d+, reason=enable_2g,"
             ],
             "window_sec": 60
           }
         ],
-        "resolution": "사업자 설정의 2G 보호 기본값이 시험 조건에 맞는지 확인하고, 2G 시험이면 2G 허용을 켠다.",
-        "resolution_type": "carrier-config",
+        "resolution": "2G 허용 설정을 확인한다(2G 시험이면 켠다). 같은 처리 안에 GsmCdmaPhone `2G is disabled by carrier.`가 있으면 사업자 설정의 2G 보호 기본값이 처음 한 번 끈 것이다.",
+        "resolution_type": "user-setting",
         "fix": {
           "status": "not-a-bug",
           "ref": null,
@@ -786,13 +796,13 @@
           }
         ]
       },
-      "body": "- **로그 예시** (합성, fixture `allowed-enable-2g-carrier.log`):\n  ```\n  11-14 10:00:00.666  1301  1301 D Phone-0 : setAllowedNetworkTypes: subId=1, reason=enable_2g, allowed network types=UMTS|HSDPA|HSUPA|HSPA|LTE|HSPA+|LTE_CA|NR, uid=1001\n  11-14 10:00:00.667  1301  1301 D Phone-0 : [0] setAllowedNetworkTypes: modemRafBitMask = 578439 ,modemRaf = GPRS|EDGE|UMTS|HSDPA|HSUPA|HSPA|LTE|HSPA+|GSM|LTE_CA|NR ,filteredRafBitMask = 4096 ,filteredRaf = UMTS|HSDPA|HSUPA|HSPA|LTE|HSPA+|LTE_CA|NR\n  11-14 10:00:00.668  1301  1301 D RILJ    : [0943]> SET_ALLOWED_NETWORK_TYPES_BITMAP [PHONE0]\n  11-14 10:00:00.674  1301  1330 D RILJ    : [0943]< SET_ALLOWED_NETWORK_TYPES_BITMAP  [PHONE0]\n  11-14 10:00:00.675  1301  1301 I GsmCdmaPhone: [0] 2G is disabled by carrier.\n  ```\n- **확인 방법**: `reason=enable_2g`와 GsmCdmaPhone `2G is disabled by carrier.` — 사용자가 끈 것이 아니다.\n- **재현 시나리오**: 2G 보호 기본값이 켜진 사업자 SIM 첫 장착\n- **해결책**: 사업자 설정의 2G 보호 기본값이 시험 조건에 맞는지 확인하고, 2G 시험이면 2G 허용을 켠다.\n- **코드 위치**: `Phone#setAllowedNetworkTypes`가 사유별 허용 망 종류를 합쳐(AND) 모뎀에 보낸다.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
+      "body": "- **로그 예시** (합성, fixture `allowed-enable-2g.log`):\n  ```\n  11-14 10:00:00.666  1301  1301 D Phone-0 : setAllowedNetworkTypes: subId=1, reason=enable_2g, allowed network types=UMTS|HSDPA|HSUPA|HSPA|LTE|HSPA+|LTE_CA|NR, uid=1001\n  11-14 10:00:00.667  1301  1301 D Phone-0 : [0] setAllowedNetworkTypes: modemRafBitMask = 578439 ,modemRaf = GPRS|EDGE|UMTS|HSDPA|HSUPA|HSPA|LTE|HSPA+|GSM|LTE_CA|NR ,filteredRafBitMask = 4096 ,filteredRaf = UMTS|HSDPA|HSUPA|HSPA|LTE|HSPA+|LTE_CA|NR\n  11-14 10:00:00.668  1301  1301 D RILJ    : [0943]> SET_ALLOWED_NETWORK_TYPES_BITMAP [PHONE0]\n  11-14 10:00:00.674  1301  1330 D RILJ    : [0943]< SET_ALLOWED_NETWORK_TYPES_BITMAP  [PHONE0]\n  11-14 10:00:00.675  1301  1301 I GsmCdmaPhone: [0] 2G is disabled by carrier.\n  ```\n- **확인 방법**: `reason=enable_2g`. 바로 뒤(같은 호출) GsmCdmaPhone `2G is disabled by carrier.`가 있으면 사업자 기본값, 없으면 사용자 설정이다 — 뒤따르는 줄의 없음은 시그니처로 가를 수 없어 원인 하나로 둔다.\n- **재현 시나리오**: 설정 → 2G 허용 끔, 또는 2G 보호 기본값이 켜진 사업자 SIM 첫 장착\n- **해결책**: 2G 허용 설정을 확인한다(2G 시험이면 켠다). 같은 처리 안에 GsmCdmaPhone `2G is disabled by carrier.`가 있으면 사업자 설정의 2G 보호 기본값이 처음 한 번 끈 것이다.\n- **코드 위치**: `Phone#setAllowedNetworkTypes`가 사유별 허용 망 종류를 합쳐(AND) 모뎀에 보낸다.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
     },
     {
       "op": "add-fixture",
       "for": "NEW-CAUSE-13",
       "kind": "positive",
-      "path": "fixtures/allowed-enable-2g-carrier.log",
+      "path": "fixtures/allowed-enable-2g.log",
       "expect": {
         "origin": "synthetic"
       }
@@ -802,6 +812,15 @@
       "for": "NEW-TYPE-1",
       "kind": "negative",
       "path": "fixtures/network-normal-registered.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-TYPE-1",
+      "kind": "negative",
+      "path": "fixtures/network-airplane-off-recovered.log",
       "expect": {
         "origin": "synthetic"
       }

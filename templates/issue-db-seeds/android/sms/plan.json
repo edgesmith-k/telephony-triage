@@ -6,7 +6,7 @@
   "issue": null,
   "feedback": null,
   "included_pending": [],
-  "commit_message": "[NEW-TYPE-1] import sms-1: Android sms 시작 유형 2개·원인 4개 (합성 fixture, Android 17)",
+  "commit_message": "[NEW-TYPE-1] import sms-1: Android sms 시작 유형 1개·원인 2개 (합성 fixture, Android 17)",
   "pr": {
     "number": null,
     "branch": "import/sms-1",
@@ -23,14 +23,11 @@
         "summary": "SMS 발신이 실패한다",
         "symptom_signatures": [
           {
-            "id": "send-not-in-service",
+            "id": "send-radio-off",
             "must_match": [
-              "GsmSMSDispatcher: sendSms: .*SS=[123]\\b"
+              "GsmSMSDispatcher: sendSms: +isIms\\(\\)=false .*SS=3\\b"
             ],
-            "window_sec": 600,
-            "must_not_match": [
-              "RILJ: .*> SEND_SMS"
-            ]
+            "window_sec": 60
           },
           {
             "id": "send-ril-error",
@@ -47,29 +44,18 @@
       "first_cause": {
         "temp_id": "NEW-CAUSE-1",
         "cause": {
-          "title": "비행기 모드 켬(시험 조작)",
-          "description": "비행기 모드(라디오 끔 사유 USER)를 켠 뒤 발신해 서비스 상태 POWER_OFF(SS=3)로 RIL 요청 없이 실패함",
+          "title": "라디오 꺼짐 상태에서 발신(비행기 모드 등)",
+          "description": "라디오가 꺼진 상태(서비스 상태 POWER_OFF, SS=3)에서 IMS가 아닌 경로로 발신해 RIL 요청 없이 실패함 — 대부분 시험 절차의 비행기 모드 켬",
           "signatures": [
             {
-              "id": "send-after-radio-off-by-user",
+              "id": "send-while-radio-off",
               "must_match": [
-                {
-                  "id": "off",
-                  "pattern": "SST-\\d+: setRadioPower power false forEmergencyCall false forceApply false reason 0"
-                },
-                {
-                  "id": "send",
-                  "pattern": "GsmSMSDispatcher: sendSms: .*SS=3\\b"
-                }
+                "GsmSMSDispatcher: sendSms: +isIms\\(\\)=false .*SS=3\\b"
               ],
-              "window_sec": 300,
-              "sequence": [
-                "off",
-                "send"
-              ]
+              "window_sec": 60
             }
           ],
-          "resolution": "정상 동작이다(RESULT_ERROR_RADIO_OFF). 시험 절차의 비행기 모드 켬·끔과 발신 스텝 순서를 확인한다.",
+          "resolution": "앞쪽 SST `setRadioPower power false ... reason N`의 사유를 본다. 0(USER)이면 비행기 모드 시험 조작이라 정상(RESULT_ERROR_RADIO_OFF)이고, 1·2·3이면 network 카테고리 라디오 끔 원인을 본다.",
           "resolution_type": "user-setting",
           "fix": {
             "status": "not-a-bug",
@@ -103,9 +89,9 @@
             }
           ]
         },
-        "body": "- **로그 예시** (합성, fixture `send-airplane.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0\n  11-14 10:00:00.103  1301  1301 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0], IMS reg state=false, pending radio off=false\n  11-14 10:00:00.104  1301  1301 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON\n  11-14 10:00:00.140  1301  1301 D RILJ    : [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]\n  11-14 10:00:00.142  1301  1330 D RILJ    : [0268]< RADIO_POWER  [PHONE0]\n  11-14 10:00:00.143  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]\n  11-14 10:00:15.170  1301  1301 D RILJ    : [3209]> GET_SMSC_ADDRESS [PHONE0]\n  11-14 10:00:15.171  1301  1330 D RILJ    : [3209]< GET_SMSC_ADDRESS  [PHONE0]\n  11-14 10:00:15.172  1301  1301 D SmsDispatchersController: sendTextInternal: messageId=0, uniqueMessageId=4\n  11-14 10:00:15.173  1301  1301 D SMSDispatcher: sendText id: {x-message-id:0}\n  11-14 10:00:15.340  1301  1301 D GsmSMSDispatcher: sendSms:  isIms()=false mRetryCount=0 mImsRetry=0 mMessageRef=0 mUsesImsServiceForIms=false SS=3 {x-message-id:0}\n  ```\n- **확인 방법**: SST `setRadioPower power false ... reason 0` 뒤 `sendSms: ... SS=3`이고 RILJ `> SEND_SMS`가 없다.\n- **재현 시나리오**: 비행기 모드 켬 → 문자 발신\n- **해결책**: 정상 동작이다(RESULT_ERROR_RADIO_OFF). 시험 절차의 비행기 모드 켬·끔과 발신 스텝 순서를 확인한다.\n- **코드 위치**: `GsmSMSDispatcher#sendSms`(IMS 아님 + 서비스 없음이면 바로 실패), `SMSDispatcher#getNotInServiceError`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
+        "body": "- **로그 예시** (합성, fixture `send-airplane.log`):\n  ```\n  11-14 10:00:00.100  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0\n  11-14 10:00:00.103  1301  1301 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0], IMS reg state=false, pending radio off=false\n  11-14 10:00:00.104  1301  1301 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON\n  11-14 10:00:00.140  1301  1301 D RILJ    : [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]\n  11-14 10:00:00.142  1301  1330 D RILJ    : [0268]< RADIO_POWER  [PHONE0]\n  11-14 10:00:00.143  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]\n  11-14 10:00:15.170  1301  1301 D RILJ    : [3209]> GET_SMSC_ADDRESS [PHONE0]\n  11-14 10:00:15.171  1301  1330 D RILJ    : [3209]< GET_SMSC_ADDRESS  [PHONE0]\n  11-14 10:00:15.172  1301  1301 D SmsDispatchersController: sendTextInternal: messageId=0, uniqueMessageId=4\n  11-14 10:00:15.173  1301  1301 D SMSDispatcher: sendText id: {x-message-id:0}\n  11-14 10:00:15.340  1301  1301 D GsmSMSDispatcher: sendSms:  isIms()=false mRetryCount=0 mImsRetry=0 mMessageRef=0 mUsesImsServiceForIms=false SS=3 {x-message-id:0}\n  ```\n- **확인 방법**: `sendSms:  isIms()=false ... SS=3` 한 줄로 판정한다(라디오가 꺼져 있으면 데이터 RAT도 없어 RIL 요청 없이 실패). 라디오를 끈 사유는 시그니처로 묶지 않는다 — 앞쪽 SST `setRadioPower power false ... reason 0`이면 비행기 모드 조작이다. 캡처 x06r-mo-airplane 모양.\n- **재현 시나리오**: 비행기 모드 켬 → 문자 발신\n- **해결책**: 앞쪽 SST `setRadioPower power false ... reason N`의 사유를 본다. 0(USER)이면 비행기 모드 시험 조작이라 정상(RESULT_ERROR_RADIO_OFF)이고, 1·2·3이면 network 카테고리 라디오 끔 원인을 본다.\n- **코드 위치**: `GsmSMSDispatcher#sendSms`(IMS 아님 + 서비스 없음이면 바로 실패), `SMSDispatcher#getNotInServiceError`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
       },
-      "body": "## 증상\n\n문자를 보내면 실패(재전송 표시)한다. 시험 중 비행기 모드 조작 직후에 많다.\n\n## 증상 판별 방법\n\nGsmSMSDispatcher `sendSms: ... SS=<1|2|3>` 뒤 RILJ `SEND_SMS`가 없음(서비스가 없어 프레임워크가 보내지 않음), 또는 SMSDispatcher `rilErrorToSmsManagerResult: rilError=`(RIL 응답 오류). 결과 코드는 `getNotInServiceError`(SS=3 → RESULT_ERROR_RADIO_OFF, 그 밖 → RESULT_ERROR_NO_SERVICE).\n"
+      "body": "## 증상\n\n문자를 보내면 실패(재전송 표시)한다. 시험 중 비행기 모드 조작 직후에 많다.\n\n## 증상 판별 방법\n\nGsmSMSDispatcher `sendSms:  isIms()=false ... SS=3`(라디오 꺼짐 — 프레임워크가 RIL 요청 없이 RESULT_ERROR_RADIO_OFF로 실패시킨다), 또는 SMSDispatcher `rilErrorToSmsManagerResult: rilError=`(RIL 응답 오류). 결과 코드는 `getNotInServiceError`(SS=3 → RESULT_ERROR_RADIO_OFF, 그 밖 → RESULT_ERROR_NO_SERVICE).\n"
     },
     {
       "op": "add-fixture",
@@ -119,64 +105,6 @@
     {
       "op": "new-cause",
       "temp_id": "NEW-CAUSE-2",
-      "type": "NEW-TYPE-1",
-      "cause": {
-        "title": "서비스 없음 상태에서 발신",
-        "description": "음성 서비스가 OUT_OF_SERVICE·긴급만(SS=1·2)이고 데이터 RAT도 NR이 아니라 RIL 요청 없이 실패함",
-        "signatures": [
-          {
-            "id": "send-out-of-service",
-            "must_match": [
-              "GsmSMSDispatcher: sendSms: .*SS=[12]\\b"
-            ],
-            "window_sec": 600,
-            "must_not_match": [
-              "RILJ: .*> SEND_SMS"
-            ]
-          }
-        ],
-        "resolution": "망 등록이 왜 안 됐는지(network 서비스 없음 유형)를 먼저 본다(RESULT_ERROR_NO_SERVICE).",
-        "resolution_type": "network",
-        "fix": {
-          "status": "open",
-          "ref": null,
-          "fixed_in": []
-        },
-        "platform_versions": [
-          "17"
-        ],
-        "code_refs": [
-          {
-            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/gsm/GsmSMSDispatcher.java",
-            "symbol": "GsmSMSDispatcher#sendSms",
-            "platform_versions": [
-              "17"
-            ]
-          },
-          {
-            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/SMSDispatcher.java",
-            "symbol": "SMSDispatcher#getNotInServiceError",
-            "platform_versions": [
-              "17"
-            ]
-          }
-        ],
-        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 같은 시각 망 등록 상태(RILJ VOICE/DATA_REGISTRATION_STATE)와 모뎀 등록 로그."
-      },
-      "body": "- **로그 예시** (합성, fixture `send-out-of-service.log`):\n  ```\n  11-14 10:00:34.170  1301  1301 D RILJ    : [3209]> GET_SMSC_ADDRESS [PHONE0]\n  11-14 10:00:34.171  1301  1330 D RILJ    : [3209]< GET_SMSC_ADDRESS  [PHONE0]\n  11-14 10:00:34.172  1301  1301 D SmsDispatchersController: sendTextInternal: messageId=0, uniqueMessageId=4\n  11-14 10:00:34.173  1301  1301 D SMSDispatcher: sendText id: {x-message-id:0}\n  11-14 10:00:34.340  1301  1301 D GsmSMSDispatcher: sendSms:  isIms()=false mRetryCount=0 mImsRetry=0 mMessageRef=0 mUsesImsServiceForIms=false SS=1 {x-message-id:0}\n  ```\n- **확인 방법**: `sendSms: ... SS=1`(또는 2)이고 RILJ `> SEND_SMS`가 없다. 데이터 RAT이 NR이면 SS가 1이어도 요청을 보낸다(에뮬레이터 캡처).\n- **재현 시나리오**: 서비스 없음(미등록) 상태에서 문자 발신\n- **해결책**: 망 등록이 왜 안 됐는지(network 서비스 없음 유형)를 먼저 본다(RESULT_ERROR_NO_SERVICE).\n- **코드 위치**: `GsmSMSDispatcher#sendSms`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
-    },
-    {
-      "op": "add-fixture",
-      "for": "NEW-CAUSE-2",
-      "kind": "positive",
-      "path": "fixtures/send-out-of-service.log",
-      "expect": {
-        "origin": "synthetic"
-      }
-    },
-    {
-      "op": "new-cause",
-      "temp_id": "NEW-CAUSE-3",
       "type": "NEW-TYPE-1",
       "cause": {
         "title": "RIL·망이 전송 오류 응답",
@@ -216,78 +144,9 @@
     },
     {
       "op": "add-fixture",
-      "for": "NEW-CAUSE-3",
+      "for": "NEW-CAUSE-2",
       "kind": "positive",
       "path": "fixtures/send-ril-error.log",
-      "expect": {
-        "origin": "synthetic"
-      }
-    },
-    {
-      "op": "new-type",
-      "temp_id": "NEW-TYPE-2",
-      "category": "sms",
-      "dir_slug": "mt-sms-not-shown",
-      "type": {
-        "title": "수신 SMS가 앱에 보이지 않음",
-        "summary": "문자가 왔다는데 메시지 앱에 안 보인다",
-        "symptom_signatures": [
-          {
-            "id": "new-sms-received",
-            "must_match": [
-              "RILJ: \\[UNSL\\]< UNSOL_RESPONSE_NEW_SMS"
-            ],
-            "window_sec": 60
-          }
-        ],
-        "tags": [
-          "mt-sms"
-        ]
-      },
-      "first_cause": {
-        "temp_id": "NEW-CAUSE-4",
-        "cause": {
-          "title": "텔레포니는 앱에 전달함",
-          "description": "텔레포니는 수신 SMS를 기본 메시지 앱에 전달(SMS_DELIVER 브로드캐스트 완료)했다 — 앱 쪽 표시 문제",
-          "signatures": [
-            {
-              "id": "delivered-to-app",
-              "must_match": [
-                "GsmInboundSmsHandler: Delivering SMS to: ",
-                "GsmInboundSmsHandler: successful broadcast, deleting from raw table"
-              ],
-              "window_sec": 60
-            }
-          ],
-          "resolution": "텔레포니 쪽은 정상이다. 기본 SMS 앱·앱 알림·차단 설정 쪽을 확인한다.",
-          "resolution_type": "user-setting",
-          "fix": {
-            "status": "not-a-bug",
-            "ref": null,
-            "fixed_in": []
-          },
-          "platform_versions": [
-            "17"
-          ],
-          "code_refs": [
-            {
-              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/InboundSmsHandler.java",
-              "symbol": "InboundSmsHandler#dispatchSmsDeliveryIntent",
-              "platform_versions": [
-                "17"
-              ]
-            }
-          ]
-        },
-        "body": "- **로그 예시** (합성, fixture `mt-delivered.log`):\n  ```\n  11-14 10:00:30.705  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_NEW_SMS [PHONE0]\n  11-14 10:00:30.706  1301  1301 D GsmInboundSmsHandler: IdleState.processMessage: processing EVENT_NEW_SMS\n  11-14 10:00:30.715  1301  1301 D GsmInboundSmsHandler: addTrackerToRawTable: URI of new row: content://sms/raw/7, {x-message-id:-<NUM#1>}\n  11-14 10:00:30.716  1301  1301 D RILJ    : [0341]> SMS_ACKNOWLEDGE success = true cause = 0 [PHONE0]\n  11-14 10:00:30.717  1301  1330 D RILJ    : [0341]< SMS_ACKNOWLEDGE  [PHONE0]\n  11-14 10:00:30.729  1301  1301 D GsmInboundSmsHandler: Delivering SMS to: com.android.messaging com.android.messaging.receiver.SmsDeliverReceiver, {x-message-id:-<NUM#1>}\n  11-14 10:00:30.770  1301  1301 D GsmInboundSmsHandler: Ordered broadcast completed for android.provider.Telephony.SMS_DELIVER in: 39 ms\n  11-14 10:00:30.791  1301  1301 D GsmInboundSmsHandler: successful broadcast, deleting from raw table.\n  ```\n- **확인 방법**: `Delivering SMS to: <앱>` 뒤 `successful broadcast, deleting from raw table.` — 망 응답(SMS_ACKNOWLEDGE success = true)도 나갔다.\n- **재현 시나리오**: 문자 수신 → 메시지 앱 확인\n- **해결책**: 텔레포니 쪽은 정상이다. 기본 SMS 앱·앱 알림·차단 설정 쪽을 확인한다.\n- **코드 위치**: `InboundSmsHandler#dispatchSmsDeliveryIntent`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
-      },
-      "body": "## 증상\n\n상대가 보낸 문자가 메시지 앱에 안 보인다고 신고된다.\n\n## 증상 판별 방법\n\nRILJ `[UNSL]< UNSOL_RESPONSE_NEW_SMS`(망에서 받음). 텔레포니가 앱에 전달했는지는 GsmInboundSmsHandler 줄로 본다.\n"
-    },
-    {
-      "op": "add-fixture",
-      "for": "NEW-CAUSE-4",
-      "kind": "positive",
-      "path": "fixtures/mt-delivered.log",
       "expect": {
         "origin": "synthetic"
       }
