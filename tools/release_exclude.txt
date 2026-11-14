@@ -1,0 +1,5 @@
+docs/history
+:(exclude)docs/history/CHANGES.md
+docs/development/CODEX_HOLISTIC_REVIEW_BRIEF.md
+docs/development/REIMPORT_NOTES_1030.md
+docs/development/MODULE_SKILLS_PLAN.md
