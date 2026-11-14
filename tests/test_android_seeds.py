@@ -108,6 +108,10 @@ def test_seed_plan_shape(plan):
     assert not [op["op"] for op in ops if op["op"] in ("append", "unresolved", "reclassify")], "Jira 기록은 넣지 않는다"
     types = [op for op in ops if op["op"] == "new-type"]
     assert 0 < len(types) <= 10 and {op["category"] for op in types} == {cat}
+    # 근거가 Android 17 소스·캡처뿐이다: 원인과 code_refs 항목에 버전을 적는다(빈 목록은 "전 버전"이라 쓰지 않는다)
+    causes = [op["first_cause"]["cause"] for op in types] + [op["cause"] for op in ops if op["op"] == "new-cause"]
+    versions = [c.get("platform_versions") for c in causes] + [r.get("platform_versions") for c in causes for r in c.get("code_refs", [])]
+    assert all(v == ["17"] for v in versions), "원인·code_refs의 platform_versions는 [\"17\"]"
     fixtures = [op for op in ops if op["op"] == "add-fixture"]
     assert any(op["kind"] == "negative" for op in fixtures), "카테고리마다 음성 fixture"
     assert all(op.get("expect", {}).get("origin") == "synthetic" for op in fixtures), "fixture마다 expect.origin: synthetic"
