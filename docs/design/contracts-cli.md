@@ -46,6 +46,7 @@
 |---|---|---|
 | `parse` | `<logcat>... (--around <ISO 시각> \| --between <ISO 시작> <ISO 끝> \| --full) [--minutes <MINUTES>] --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--mask] [--no-external]` | `--around`: 발생 시각 (타임존 있는 ISO); `--between`: 명시 구간 (타임존 있는 ISO 둘, 시작 ≤ 끝); `--full`: 파일 전체; `--minutes`: 기본 5; `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--mask`: extractor 전에 줄 단위 마스킹; `--no-external`: 외부 파서 끔 (분석 디버그용) |
 | `markers` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--step-events]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--step-events`: 이슈 DB step_events 규칙의 로그 흔적(step_events[{rule, ts, seq, label}])을 더한다 |
+| `flows` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>]` | `--rules`: <db>/parser-rules (흐름은 <db>/<category>/flows/); `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도 |
 | `extract-bugreport` | `<zip\|txt> --out <dir>` |  |
 | `cut` | `<logcat>... (--evidence <match.json> \| --around <ISO 시각>) [--cause <원인 ID>] [--seconds <SECONDS>] --out <file> [--rules <RULES>] [--context <CONTEXT>] [--max-lines <MAX_LINES>] [--tz <IANA>] [--year <YYYY>]` | `--evidence`: match_signatures.py 출력 (--cause 원인 후보의 근거); `--around`: 지정 시각 (타임존 있는 ISO); `--cause`: --evidence에서 근거를 쓸 원인 (--evidence에 필수); `--seconds`: --around 앞뒤 초, 기본 30; `--rules`: <db>/parser-rules (mask.allow_patterns를 읽는다); `--context`: 기본 20; `--max-lines`: 기본 100 |
 | `mask-copy` | `<logcat>... --out <dir> [--rules <RULES>] [--max-bytes <MAX_BYTES>]` | `--out`: 사본 디렉토리(<작업 디렉토리>/logs-masked); `--rules`: <db>/parser-rules (mask.allow_patterns를 읽는다); `--max-bytes`: 이보다 큰 파일은 사본을 만들지 않는다(경고 mask-copy-skipped, 기본 67108864), 기본 67108864 |
@@ -315,6 +316,13 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - blocked_by?
   - at?[≤3]
   - code?[≤3]
+- flows?[≤3](성공 흐름 점검(판정·점수 아님, S/C 불변; 이슈 DB에 흐름 파일이 있을 때만, 04-parser-matching.md §5.13). 분석 범위 안 인스턴스 중 벗어난 것 먼저·발생 시각에 가까운 순 {flow: "<category>/<id>", key(시작 줄 태그), step?(멈춘 단계 id, 끝까지 ok면 없음), verdict: ok|값이상|없음|로그끝|-, at?(f:L), causes?[≤3 그 단계에 flow_step이 걸린 active 원인 ID]}; 4KB 압축 시 partial 다음 flows[1:] → 전체 제거)
+  - flow
+  - key
+  - step?
+  - verdict: ok | 값이상 | 없음 | 로그끝 | -
+  - at?
+  - causes?[≤3]
 - code
   - skipped
   - roots?

@@ -10,12 +10,14 @@ import stat
 from pathlib import Path
 
 from common import events, issuepost, masking, shown, userconfig
+from common import flows as flowlib
 from common.exitcodes import USAGE
 
 from .anchor import _parse_ts, _step_label
 from .core import (ANALYSIS_MAX, AUTO_CODE_NOTE, CARRY_PARTS, DEEP_CONFIG_ERROR, DEEP_MODULE_PENDING, ERROR_EVENT_RE,
                    ERROR_FIELDS, EXPLORE_INPUT_FILE, EXPLORE_PENDING_LINE, Fail, is_error_text, MUST_SHOW_CLIP, MUST_SHOW_FIT, MUST_SHOW_MAX, PULL_SKIPPED, SCRIPTS, SEARCH_LIMIT,
-                   _HOT_LEVELS, _TOKEN_RE, _clip, _now, PARTIAL_REPORT_MAX)
+                   _HOT_LEVELS, _TOKEN_RE, _clip, _now, PARTIAL_REPORT_MAX, FLOW_ANALYSIS_MAX, FLOW_PER_FLOW,
+                   FLOW_REPORT_MAX)
 
 
 def _top_label(candidates: list) -> str | None:
@@ -291,6 +293,9 @@ def fit(result: dict) -> dict:
               lambda: result.get("partial") and result.update(partial=[
                   {**p, "missing": [_clip(m, 40) for m in p.get("missing") or []]} for p in result["partial"]]),
               lambda: result.pop("partial", None)]
+    # 성공 흐름(§5.13): partial 다음 — flows[1:] → 전체
+    steps += [lambda: result.get("flows") and result.update(flows=result["flows"][:1]),
+              lambda: result.pop("flows", None)]
     steps.append(lambda: cands and cands[0].update(evidence=cands[0]["evidence"][:6]))
     for c in cands:
         steps.append(lambda c=c: c.update(evidence=[{**e, "msg": _clip(e.get("msg"), 80)} for e in c["evidence"]]))
@@ -345,7 +350,75 @@ def _clip_bytes(text: str, limit: int) -> str:
     return text
 
 
-ANALYSIS_SCHEMA = SCRIPTS.parent / "schemas" / "output" / "analysis.schema.json"
+def flow_section(doc: dict, window: dict | None, around: str | None, version, causes: dict) -> tuple[list, list]:
+    """성공 흐름 점검 (04-parser-matching.md §5.13, 판정·점수 아님, S/C 불변): `flow.json` → (analysis.json `flows[]` ≤ 3,
+    report.md 줄 ≤ 1,200 B). 분석 범위 안에서 시작한 인스턴스만, 벗어난 것(값이상·없음) 먼저·발생 시각에 가까운 순, 흐름당 ≤ 3.
+    범위 안 인스턴스가 없으면 `해당 없음`, 모두 끝까지 ok면 한 줄. `causes`: `{"<cat>/<흐름>/<단계>": [(원인 ID, title)]}`(active)."""
+    lo, hi = (_parse_ts(window.get("start")), _parse_ts(window.get("end"))) if window else (None, None)
+    at = _parse_ts(around)
+    titles = {f["flow"]: f["title"] for f in doc.get("flows") or []}
+    picked, counts, vers = [], [], []
+    for f in doc.get("flows") or []:
+        rows = []
+        for inst in f["instances"]:
+            t = _parse_ts(inst["start_ts"])
+            if (lo and t < lo) or (hi and t > hi):
+                continue
+            first = next((k for k, s in enumerate(inst["steps"]) if s["verdict"] != "ok"), None)
+            bad = first is not None and inst["steps"][first]["verdict"] in ("값이상", "없음")
+            rows.append((not bad, abs((t - at).total_seconds()) if at else 0.0, inst["start_ts"], f, inst, first))
+        if not rows:
+            continue
+        rows.sort(key=lambda r: r[:3])
+        counts.append((f["title"], len(rows), all(r[5] is None for r in rows)))
+        picked += rows[:FLOW_PER_FLOW]
+        if f["platform_versions"] and flowlib.version_match(f["platform_versions"], version) is not True:
+            vers += [v for v in f["platform_versions"] if v not in vers]
+    if not counts:
+        return [], ["- 흐름 점검: 해당 없음"]
+    tail = (f"흐름 기준 버전 {', '.join(vers)}" + (f" — 이 이슈는 {_clip(version, 20)}, 줄 문구가 다를 수 있다" if version else "")
+            if vers else "")
+    analysis = []
+    for _, _, _, f, inst, first in sorted(picked, key=lambda r: r[:3])[:FLOW_ANALYSIS_MAX]:
+        step = inst["steps"][first] if first is not None else None
+        ref = _ref_label((step or {}).get("line_ref") or inst.get("line_ref"))
+        hit = causes.get(f"{f['flow']}/{step['id']}") if step else None
+        analysis.append({k: v for k, v in {"flow": f["flow"], "key": inst["key"], "step": step and step["id"],
+                                           "verdict": step["verdict"] if step else "ok", "at": ref,
+                                           "causes": [c for c, _ in hit[:3]] if hit else None}.items() if v is not None})
+    if all(ok for _, _, ok in counts):
+        return analysis, ["- 흐름 점검: " + ", ".join(f"{t} {n}회" for t, n, _ in counts) + " 끝까지 정상"
+                          + (f" ({tail})" if tail else "")]
+    lines = [f"- 흐름 점검 (판정·점수 아님, S/C 불변{'; ' + tail if tail else ''}):"]
+    for _, _, _, f, inst, first in picked:
+        parts = []
+        for st, s in zip(f["steps"], inst["steps"]):
+            if s["verdict"] == "ok":
+                parts.append(f"{st['title']} ok" + (f"(그 전 이상 값 {s['bad_count']}회)" if s["bad_count"] else ""))
+                continue
+            why = "; ".join(x for x in (s["detail"], ", ".join(inst["notes"])) if x)
+            parts.append(f"{st['title']} {s['verdict']}" + (f"({why})" if why else ""))
+            break
+        ref = _ref_label(inst.get("line_ref"))
+        text = (f"{f['title']} {inst['key']}" + (f" (재시작 {inst['restarts']}회)" if inst["restarts"] else "")
+                + (f" ({ref})" if ref else "") + ": " + " → ".join(parts))
+        if first is None and inst["notes"]:
+            text += f" (메모: {', '.join(inst['notes'])})"
+        if inst.get("then"):
+            text += f" ⇒ {titles.get(inst['then']['flow'], inst['then']['flow'])} {inst['then']['key']}"
+        block = [f"  - {_clip_bytes(text, 300)}"]
+        if first is not None and inst["steps"][first]["verdict"] in ("값이상", "없음"):
+            st = f["steps"][first]
+            hit = causes.get(f"{f['flow']}/{st['id']}") or []
+            owned = (" / 이 단계의 원인: " + ", ".join(f"{c} {_clip(t, 30)}" for c, t in hit[:3])) if hit else ""
+            block.append("    " + _clip_bytes(f"→ 의심: {st['suspect']}{owned}", 260))
+        if len("\n".join(lines + block).encode("utf-8")) > FLOW_REPORT_MAX:    # 절 전체 ≤ 1,200 B: 넘치면 뒤 항목부터 뺀다
+            break
+        lines += block
+    return analysis, lines
+
+
+ANALYSIS_SCHEMA =SCRIPTS.parent / "schemas" / "output" / "analysis.schema.json"
 
 
 def schema_violation(result: dict) -> str | None:
@@ -439,6 +512,7 @@ class ReportMixin:
             "unjudged": core.get("unjudged"),
             "no_candidate": core["no_candidate"],
             "partial": core.get("partial"),
+            "flows": core.get("flows"),
             "code": {**core["code"], "auto": True} if self.code_auto and not core["code"].get("skipped") else core["code"],
             "analyzer": core["analyzer"],
             "explore": core["explore"],
@@ -451,9 +525,11 @@ class ReportMixin:
         }
         result["_outside"] = core.get("outside")      # report.md 전용, analysis.json에는 안 나간다
         result["_partial"] = {k: core.get(k) for k in ("partial_report", "absence_basis", "partial_unjudged")}
+        result["_flow_lines"] = core.get("flow_lines")      # report.md 전용
         report, must_show = self.render_report(result, anchor)
         result.pop("_outside", None)
         result.pop("_partial", None)
+        result.pop("_flow_lines", None)
         if must_show:
             result["must_show"] = must_show
         # analysis.json 내용을 먼저 확정하고(TT_SCHEMA_CHECK면 검사) 그 뒤에 파일을 쓴다: 위반이면 이전 결과·캐시를 건드리지 않는다
@@ -701,6 +777,7 @@ class ReportMixin:
             ana.append(add(11, text) if unext and not total else f"- {text}")
             ana += [f"  - {_error_line(e)}" for e in (hints.get("error_events") or [])[:8]]
         ana += self.partial_lines(r, cands)
+        ana += r.get("_flow_lines") or []      # 성공 흐름 점검(§5.13): 흐름 파일이 없는 DB는 줄 없음(이전과 같다)
         if unjudged:
             err = (unjudged.get("errors") or [{}])[0]
             where = f"시그니처 시간 초과·오류 {err.get('signature')}: {err.get('error')}"

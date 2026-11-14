@@ -1,0 +1,49 @@
+# 성공 흐름: 무선 켬(비행기 모드 해제 뒤 데이터 복구) (04-parser-matching.md §5.13). AOSP 프레임워크 로그(Android 17 에뮬레이터) 기준.
+# 시드 계획(put-flow)으로 옮기기 전까지 tests/test_flows.py·측정이 여기서 읽는다. 카테고리 network.
+id: radio-on
+title: 무선 켬
+platform_versions: ["17"]
+start: {tag_regex: '^SST(-\d+)?$', pattern: 'setRadioPower power true'}
+end:
+  - {scope: own, pattern: 'setRadioPower power false', label: 무선 끔}
+steps:
+  - id: decide
+    title: 켬 결정
+    scope: own
+    patterns: ['setPowerStateToDesired: .*mDesiredPowerState=true']
+    ok:
+      - {pattern: 'mRadioPowerOffReasons=\[ *\]', why: 끈 사유 남음}
+    show: ['mRadioPowerOffReasons=\[[^\]]*\]']
+    suspect: SST(다른 끈 사유)
+  - id: ril-request
+    title: RIL 요청
+    scope: any
+    patterns: ['\]> RADIO_POWER on = true']
+    suspect: SST → RIL
+  - id: ril-response
+    title: RIL 응답
+    scope: any
+    patterns: ['\]< RADIO_POWER']
+    suspect: 모뎀·RIL(응답 없음)
+  - id: registered
+    title: 망 등록
+    scope: own
+    patterns: ['Poll ServiceState done: newSS=\{']
+    ok:
+      - {pattern: 'mDataRegState=0\(IN_SERVICE\)', why: 데이터 미등록}
+    show: ['mDataRegState=[^,]+']
+    suspect: 망·모뎀(등록)
+  - id: data-allowed
+    title: 데이터 허용
+    scope: any
+    patterns: [': Data evaluation: .*\[NetworkRequest \[ REQUEST id=\d+, \[ Capabilities: INTERNET']
+    ok:
+      - {pattern: 'Data allowed reason', why: 평가 거부}
+    show: ['Data disallowed reasons: [A-Z_ ]+']
+    suspect: DataNetworkController(평가 거부 사유)
+  - id: setup-start
+    title: SETUP 시작
+    scope: any
+    patterns: ['ConnectingState: setupData:']
+    suspect: DataNetworkController → DataNetwork
+then: data/data-setup

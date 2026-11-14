@@ -57,7 +57,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import builds, compat, dbpath, issuedb, parser_rules, site_defaults, stepanchor  # noqa: E402
+from common import builds, compat, dbpath, flows, issuedb, parser_rules, site_defaults, stepanchor  # noqa: E402
 from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS  # noqa: E402
@@ -599,9 +599,8 @@ def _rank_key(c: dict) -> tuple:
 
 
 def _version_match(cause, jira: dict) -> bool | None:
-    versions = [str(v).strip().split(".")[0] for v in (cause.raw.get("platform_versions") or [])] if cause else []
-    found = re.fullmatch(r"\s*(\d+)(?:\.\d+)*\s*", str(jira.get("platform_version") or ""))   # "Android 16"·"17 QPR1" 등은 비교하지 않는다
-    return (found.group(1) in versions) if versions and found else None
+    # "Android 16"·"17 QPR1" 등은 비교하지 않는다. 성공 흐름 버전 표시(§5.13)와 같은 비교
+    return flows.version_match(cause.raw.get("platform_versions") if cause else None, jira.get("platform_version"))
 
 
 def _candidate(db, itype, cause, S, C, sym, res, jira, occurred, half, scoring, use_bonus,

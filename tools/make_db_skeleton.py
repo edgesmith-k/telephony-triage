@@ -5,7 +5,7 @@
 fixture·피드백 기록을 뺀** 것이 뼈대다. 반입·사내 운영 레포는 이것으로 시작한다.
 
 들어가는 것
-    issue-db.config.yaml, schema/ (6), templates/ (3), parser-rules/ (placeholder),
+    issue-db.config.yaml, schema/ (7), templates/ (3), parser-rules/ (placeholder),
     .github/ (CODEOWNERS, PR 템플릿), docs/ (4), .githooks/ (pre-commit·pre-push),
     CONTRIBUTING.md, GLOSSARY.md, .gitignore, .gitattributes,
     빈 카테고리 디렉토리(.gitkeep)와 feedback/(.gitkeep)

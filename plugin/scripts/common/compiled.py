@@ -1,7 +1,7 @@
 """시그니처 컴파일과 이슈 DB 소스 해시·파서 환경 (06-collaboration.md §6.8, 04 §5.11 (3)).
 
 매처는 매번 `--db`(스냅샷)에서 메모리로 컴파일한다. 파일 캐시는 없다(06 §6.8).
-해시는 이슈 DB의 소스 파일(설정, `type.md`, `issues/`, `feedback/`, `parser-rules/`)과
+해시는 이슈 DB의 소스 파일(설정, `type.md`, `issues/`, `feedback/`, `parser-rules/`, 성공 흐름 `<category>/flows/*.yaml`)과
 **파서 백엔드·외부 파서 이름·버전**으로 만들고, 분석 재사용(`triagelib/cache.py`)이 쓴다.
 """
 
@@ -11,7 +11,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from . import issuedb
+from . import flows, issuedb
 from .signatures import compile_list
 
 
@@ -43,7 +43,7 @@ def source_files(root: Path, config: dict) -> list[Path]:
         files += sorted((type_md.parent / "issues").glob("*.yaml"))
     files += sorted((root / "feedback").glob("*/*.yaml"))
     files += sorted((root / "parser-rules").glob("*.yaml"))
-    return files
+    return files + flows.files(root, config)      # 흐름이 바뀌면 분석 재사용 캐시도 무효(흐름 절, 04 §5.13)
 
 
 def source_hash(root: Path, config: dict, env: dict) -> str:

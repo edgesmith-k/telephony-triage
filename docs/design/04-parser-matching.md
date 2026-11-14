@@ -221,3 +221,29 @@ kind 순(missing → absent → order → window → blocked) → m/n 내림 →
 #### (5) 코드 대조 (`code_roots.py find-text`, 토큰 0)
 `missing`·`absent`이고 코드 루트를 골랐을 때만(아니면 머리 줄에 "코드 대조: 코드 미확인"). 리터럴: 패턴을 `re._parser`로 파싱한 최상위 LITERAL 구간(필수 단일 그룹·대안 하나인 분기만 들어감, `.`·`\s`·클래스·반복은 끊음)에서 태그와 같은 구간·oFono `_FILE_FUNC` 앞머리·`/\w+_\d+` 조각·마스킹 토큰을 버리고 `: `·`=`에서 끊어 6자 이상·영문자 2개 이상 중 가장 긴 것. `must_event`는 그 이벤트를 내는 extractor가 하나·패턴 하나일 때만. 범위 ① code_refs 디렉토리 → ② `required_dirs` → ③ 루트 전체(표시만). 상한 20초·파일 1 MiB·20만 파일, 제외 `.git .repo out build prebuilts node_modules`·점 디렉토리, `test(s)/` 맞음은 aux. 출력은 `key:경로:줄`·상태뿐(코드 글 없음).
 상태 → 리포트: `same` 같음(±2줄 `LOG_CALL_RE`) · `string-only` 문자열만 있음(로그 호출 밖) · `reworded` 문구 다름(가장 긴 4자 이상 낱말 둘이 로그 호출 줄에) · `not-found` 못 찾음(①② 다 봤을 때만) · `ambiguous` 애매(문구 다름 4파일 이상 또는 같음과 섞임; 모델이 ≤ 2곳 × 앞뒤 20줄 읽고 "코드로 추정"으로만) · `no-literal`·`limit` 확인 못 함 · 리터럴 9개 넘음 건너뜀(상한). 확인 못 함·건너뜀은 통과로 보이지 않는다.
+
+### 5.13 성공 흐름 점검 (분석 모드 표시 전용, S/C·점수·회귀 불변)
+
+정상 동작을 순서 있는 단계로 적어 두고, 로그에서 어느 단계에서 벗어났는지 보인다. 판정은 리포트 보조 정보이고 분류·점수·회귀(`db_regress`)·검증 판정에 쓰지 않는다(부분 일치 §5.12와 같은 지위). 엔진 `common/flows.py`, CLI `parse_logcat.py flows`(`contracts.md §3.2`).
+
+#### (1) 형식 (`<category>/flows/<id>.yaml`, 스키마 `schema/flow.schema.json`)
+`id`(파일 이름과 같다, kebab-case, 바꾸지 않는다) · `title` · `platform_versions`(원인과 같은 표기, 빈 목록 = 전 버전) · `start{tag_regex, pattern}` · `end[{scope, pattern, label}]` · `notes[{scope, pattern}]` · `steps[{id, title, scope: own|named|any, name_template?, patterns[], ok[{pattern, why}], show[], suspect}]` · `then`(마지막 단계 줄이 다음 흐름의 시작 줄이면 `<id>` 또는 `<category>/<id>`).
+- 정규식은 모두 **마스킹된 `TAG: msg`** 기준이다(§5.11과 같다). msg 앞 `^` 앵커는 맞지 않는다(`TAG: ` 뒤라서). 빈 목록이 `[ ]`(공백)로 찍히는 줄(LinkProperties)은 `\[ *[^\] ]`처럼 공백을 건너뛰어 쓴다.
+- `scope`: `own` 태그 = 열쇠 태그, `named` 메시지에 `name_template`(`{key}`는 열쇠 태그를 `re.escape`한 것), `any` 같은 pid의 아무 줄(슬롯 `phone_id`가 열쇠 줄과 다르면 뺀다, `null`은 와일드카드).
+- `ok`: 줄이 `patterns`에 맞아도 `ok` 패턴 중 하나라도 안 맞으면 그 줄은 이상 값이다(`why`를 보인다). `show`는 이상 값일 때 보일 값(맞은 글자).
+- 구조가 버전마다 다르면 흐름 파일을 따로 두고, 문구만 다르면 `patterns`에 더한다. 지금 정의 2개(데이터 연결·무선 켬)는 `tests/fixtures/flow-defs/`(시드 계획으로 옮긴다).
+
+#### (2) 판정 규칙
+- 입력: 전체 로그의 모든 백엔드 줄 레코드(창·태그로 거르지 않는다), `parse --mask`와 같은 마스킹. 패턴마다 `PatternRunner.search`를 한 번(`matcher.pattern_timeout_ms`) 돌린 뒤 상태 기계를 돈다.
+- 인스턴스 열쇠 = (시작 줄 pid, 시작 줄 태그). 열린 인스턴스에 같은 열쇠의 시작 줄이 또 오면 **합친다**(`restarts`만 센다) — `end`로 닫힌 뒤의 시작만 새 인스턴스다(합치지 않으면 끄는 줄 없이 다시 켠 무선 켬이 거짓 `없음`이 된다).
+- 단계·끝·메모 줄은 시작 줄 pid의 줄만 본다. 닫힘: `end` 줄(그 `label`), 시작 태그가 다른 pid로 나옴(`프로세스 재시작`), 시계 이상 시각(`coverage.clock_anomalies`)·재부팅 줄(`LogFormat.epoch_break`)(`로그 경계`). 뒤의 둘은 흐름 밖 사유라 남은 단계를 `-`로 둔다(첫 단계에 사유).
+- 단계는 **순서대로만** 찾는다. 단계가 충족되면 같은 시각(ms)의 이미 지난 줄도 한 번 다음 단계로 본다(버퍼별 파일을 같이 주면 같은 ms 줄 순서가 파일 순서다).
+- 단계 판정: `ok`(+ `그 전 이상 값 n회`) / `값이상`(이상 값만 있고 인스턴스가 끝났거나 뒤 로그 ≥ `log_end_sec`) / `없음`(맞는 줄이 없고 끝났거나 뒤 로그 ≥ `log_end_sec`, 끝난 사유 라벨) / `로그끝`(뒤 로그 < `log_end_sec`, 판정 불가) / `-`(앞 단계에서 벗어남). `log_end_sec`은 `issue-db.config.yaml` `flows.log_end_sec`(기본 10, TODO(SITE)). 단계별 시간 기준은 없다.
+- `then`: 마지막 단계 줄이 다음 흐름 인스턴스의 시작 줄(합친 시작 포함)이면 잇는다. 대상 흐름이 없으면 잇지 않는다.
+
+#### (3) 리포트 (`triage.py run`, 표시 전용)
+- 스냅샷에 흐름 파일이 있을 때만 돈다(없으면 `report.md`·`analysis.json`이 이전과 바이트까지 같다). 결과 `JOB/flow.json`.
+- 고르는 인스턴스: 분석 범위(`events.json input.window`) 안에서 시작한 것, 벗어난 것(`값이상`·`없음`) 먼저 → 발생 시각에 가까운 순, 흐름당 ≤ 3. `analysis.json flows[]` ≤ 3(`fit()`: `partial` 다음).
+- report.md(ANALYSIS, 부분 일치 절 다음, ≤ 1,200 B): 범위 안 인스턴스가 없으면 `- 흐름 점검: 해당 없음`, 모두 끝까지 ok면 `- 흐름 점검: 데이터 연결 3회 끝까지 정상`, 아니면 머리 줄 `- 흐름 점검 (판정·점수 아님, S/C 불변):` 아래 인스턴스마다 `<흐름> <열쇠> (f:L): <단계> ok → <단계> <판정>(<사유>; <메모>)`, 벗어난 단계면 `→ 의심: <suspect> / 이 단계의 원인: <원인 ID> <title>`(원인 선택 칸 `flow_step: "<category>/<흐름 id>/<단계 id>"`가 걸린 active 원인 ≤ 3).
+- 버전: **거르지 않고 표시만** 한다(`match_signatures._version_match`와 같은 비교). 이슈 버전이 흐름 `platform_versions`에 있으면 표시 없음, 없으면 머리에 `흐름 기준 버전 17 — 이 이슈는 16, 줄 문구가 다를 수 있다`, 이슈 버전을 모르면 `흐름 기준 버전 17`.
+- 흐름 파일(fixture 제외)은 분석 재사용 해시(`compiled.source_files`)에 들어간다.

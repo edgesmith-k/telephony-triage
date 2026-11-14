@@ -11,7 +11,8 @@ from pathlib import Path
 
 import platforms
 import trackers
-from common import compat, failedstep, masking, stepanchor, userconfig
+from common import compat, failedstep, issuedb, masking, stepanchor, userconfig
+from common import flows as flowlib
 from common.exitcodes import CHECK_FAILED, USAGE
 
 from .anchor import AnchorMixin, _parse_ts
@@ -19,7 +20,7 @@ from .cache import CacheMixin, State, _digest, _file_sha
 from .core import (ERROR_EVENT_RE, EXPLORE_MAX_LINES, EXPLORE_WHEN, PLATFORM_ANSWER, Fail, NeedsInput,
                    MODULE_RECORD_DIR, Runner, SEARCH_LIMIT, SNAPSHOT_DIR, STALE_FILES, STATE_FILE, Stopped, TOP, _clip,
                    FIND_TEXT_ITEMS, PARTIAL_ANALYSIS_MAX)
-from .report import ReportMixin, _ref_label, _unique_evidence
+from .report import ReportMixin, _ref_label, _unique_evidence, flow_section
 
 MASKED_DIR = "logs-masked"       # 원문 마스킹 사본(parse_logcat.py mask-copy, 종합 리뷰 G①) — 모델이 읽을 대상
 
@@ -880,6 +881,27 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                      "log_refs": (res or {}).get("log_refs") or [], "scope": scope})
         return out, extra
 
+    def flows(self, logs: list[Path], tz: str | None, year: int | None, around: str | None, events: dict,
+              version: str | None) -> tuple[list | None, list | None]:
+        """성공 흐름 점검 (04-parser-matching.md §5.13, 표시 전용 — S/C·점수 불변): `parse_logcat.py flows`(전체 로그) →
+        `JOB/flow.json` → (analysis.json `flows[]`, report.md 줄). 스냅샷에 흐름 파일이 없으면 부르지 않고 (None, None)이다 —
+        출력이 이전과 같다."""
+        snap = Path(self.snap)
+        config = compat.load_db_config(snap)
+        if not flowlib.files(snap, config):
+            return None, None
+        argv = ["flows", *logs, "--rules", snap / "parser-rules"] + (["--tz", tz] if tz else []) + (["--year", year] if year else [])
+        _, data, _ = self.run.call("4-flows", "parse_logcat.py", argv)
+        for w in (data or {}).get("warnings") or []:      # 흐름 파일 오류·패턴 시간 초과(그 흐름만 건너뜀)
+            self.warn(_clip(w.get("message"), 120))
+        (self.job / "flow.json").write_text(json.dumps(data, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+        causes: dict[str, list] = {}       # 원인 `flow_step`(선택 칸) → 벗어난 단계에 걸린 active 원인
+        for type_md in issuedb.type_files(snap, config):
+            for c in issuedb.read_frontmatter(type_md).get("causes") or []:
+                if c.get("flow_step") and str(c.get("status", "active")) == "active":
+                    causes.setdefault(str(c["flow_step"]), []).append((str(c.get("id")), str(c.get("title", ""))))
+        return flow_section(data or {}, (events.get("input") or {}).get("window"), around, version, causes)
+
     def explore(self, candidates: list[dict]) -> dict | None:
         """Step 5-2 탐색 분석 해당 여부: 후보 없음·원인 미확인이면 `{reason, when}`, 아니면 None.
 
@@ -1039,6 +1061,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         no_candidate = None if candidates else self.no_candidate_hints(info, events)
         partial, partial_report = (self.partial(match, code, events_path, events) if match.get("partial") is not None
                                    else (None, None))
+        flows, flow_lines = self.flows(logs, tz, year, around, events, version)
         code_out = self.resolve_code(code, version, candidates)
         analyzer = self.analyzer(candidates)
         explore = self.explore(candidates)
@@ -1071,6 +1094,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             "partial": partial, "partial_report": partial_report, "absence_basis": match.get("absence_basis"),
             "partial_unjudged": bool(unjudged) or bool(cause_unjudged), "analyzer": analyzer, "explore": explore,
             "explore_input": explore_input,
+            **({"flows": flows, "flow_lines": flow_lines} if flow_lines is not None else {}),
             "logs": {"files": [p.name for p in logs], "window": (events.get("input") or {}).get("window"),
                      "range": [cov.get("first_ts"), cov.get("last_ts")], "in_range": cov.get("window_in_range"),
                      "clock_anomalies": len(cov.get("clock_anomalies") or []), "events": len(events.get("events") or []),

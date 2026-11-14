@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "성공 흐름 <category>/flows/<id>.yaml (04-parser-matching.md §5.13)",
+  "description": "정상 동작의 순서 있는 단계. 판정은 표시 전용(S/C·점수·회귀 불변). 정규식은 모두 마스킹된 `TAG: msg` 기준이다(msg 앞 `^` 앵커는 맞지 않는다).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "platform_versions", "start", "steps"],
+  "properties": {
+    "id": {"description": "카테고리 안에서 유일, 파일 이름과 같다. 바꾸지 않는다(원인 flow_step이 참조)", "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 40},
+    "platform_versions": {"description": "빈 목록은 전 버전. 거르지 않고 표시만 한다", "type": "array", "items": {"type": "string", "pattern": "^[0-9]+$"}, "uniqueItems": true},
+    "start": {
+      "description": "인스턴스 시작 줄. 열쇠 = (그 줄 pid, 그 줄 태그)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tag_regex", "pattern"],
+      "properties": {"tag_regex": {"$ref": "#/$defs/regex"}, "pattern": {"$ref": "#/$defs/regex"}}
+    },
+    "end": {
+      "description": "인스턴스가 끝나는 줄(사유 라벨) — 단계 `없음`에 그 라벨을 붙인다",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scope", "pattern", "label"],
+        "properties": {"scope": {"$ref": "#/$defs/scope"}, "name_template": {"$ref": "#/$defs/nameTemplate"},
+                       "pattern": {"$ref": "#/$defs/regex"}, "label": {"type": "string", "minLength": 1, "maxLength": 20}}
+      }
+    },
+    "notes": {
+      "description": "단계와 무관하게 인스턴스 안에서 보이면 리포트에 붙이는 줄(맞은 글자)",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scope", "pattern"],
+        "properties": {"scope": {"$ref": "#/$defs/scope"}, "name_template": {"$ref": "#/$defs/nameTemplate"},
+                       "pattern": {"$ref": "#/$defs/regex"}}
+      }
+    },
+    "steps": {
+      "description": "순서대로만 찾는다",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "scope", "patterns", "suspect"],
+        "properties": {
+          "id": {"description": "흐름 안에서 유일", "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"},
+          "title": {"type": "string", "minLength": 1, "maxLength": 30},
+          "scope": {"$ref": "#/$defs/scope"},
+          "name_template": {"$ref": "#/$defs/nameTemplate"},
+          "patterns": {"description": "OR — 버전별 문구 차이는 패턴을 더한다", "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/regex"}},
+          "ok": {
+            "description": "줄이 patterns에 맞는데 이 중 하나라도 안 맞으면 값이상(why를 보인다)",
+            "type": "array",
+            "items": {"type": "object", "additionalProperties": false, "required": ["pattern", "why"],
+                      "properties": {"pattern": {"$ref": "#/$defs/regex"}, "why": {"type": "string", "minLength": 1, "maxLength": 30}}}
+          },
+          "show": {"description": "값이상일 때 리포트에 보일 값(마스킹된 줄에서 맞은 글자)", "type": "array", "items": {"$ref": "#/$defs/regex"}},
+          "suspect": {"description": "이 단계에서 벗어나면 의심할 곳", "type": "string", "minLength": 1, "maxLength": 80}
+        },
+        "if": {"properties": {"scope": {"const": "named"}}},
+        "then": {"required": ["name_template"]}
+      }
+    },
+    "then": {"description": "마지막 단계 줄이 다음 흐름의 시작 줄이면 그 흐름(<id> 같은 카테고리 | <category>/<id>). 대상이 없으면 잇지 않는다",
+             "type": ["string", "null"], "pattern": "^([a-z0-9_-]+/)?[a-z0-9]+(-[a-z0-9]+)*$"}
+  },
+  "$defs": {
+    "regex": {"type": "string", "minLength": 1},
+    "scope": {"description": "own(태그 = 열쇠) | named(메시지에 name_template) | any(같은 pid의 아무 줄, 슬롯이 다른 줄은 뺀다)", "enum": ["own", "named", "any"]},
+    "nameTemplate": {"description": "정규식 조각, {key}는 열쇠 태그(re.escape)", "type": "string", "pattern": "\\{key\\}"}
+  }
+}

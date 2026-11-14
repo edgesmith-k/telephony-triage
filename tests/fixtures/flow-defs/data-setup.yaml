@@ -1,0 +1,45 @@
+# 성공 흐름: 데이터 연결 (04-parser-matching.md §5.13). AOSP 프레임워크 로그(Android 17 에뮬레이터) 기준.
+# 시드 계획(put-flow)으로 옮기기 전까지 tests/test_flows.py·측정이 여기서 읽는다.
+id: data-setup
+title: 데이터 연결
+platform_versions: ["17"]
+start: {tag_regex: '^DN-\d+-[CI]$', pattern: 'ConnectingState: setupData:'}
+end:
+  - {scope: own, pattern: 'DisconnectedState: Data network disconnected', label: 연결 해제}
+notes:
+  - {scope: own, pattern: 'Invalid DataCallResponse|no address for ifname|Empty dns response|Duplicate network interface|mismatched IP type'}
+steps:
+  - id: response
+    title: 응답 받음
+    scope: own
+    patterns: ['ConnectingState: onSetupResponse:']
+    ok:
+      - {pattern: 'resultCode=RESULT_SUCCESS', why: 응답 오류}
+      - {pattern: 'cause=NONE', why: 실패 원인}
+      - {pattern: 'addresses=\[[^\]]', why: 주소 빔}
+      - {pattern: 'dnses=\[[^\]]', why: DNS 빔}
+    show: ['resultCode=\w+', 'cause=\w+']
+    suspect: 모뎀·RIL·DataServiceManager
+  - id: link-properties
+    title: 설정 만듦
+    scope: own
+    patterns: ['sendLinkProperties \{']
+    ok:
+      - {pattern: 'LinkAddresses: \[ *[^\] ]', why: 주소 빔}
+      - {pattern: 'DnsAddresses: \[ *[^\] ]', why: DNS 빔}
+      - {pattern: '/0 ->', why: 기본 경로 없음}
+    suspect: DataNetwork(응답 → 설정 변환)
+  - id: connected
+    title: 연결
+    scope: own
+    patterns: ['ConnectedState: network connected\.']
+    suspect: DataNetwork 상태 머신
+  - id: validated
+    title: 망 검증
+    scope: named
+    name_template: 'DataNetwork: {key},'
+    patterns: ['onDataNetworkValidationStatusChanged: .*validation status=']
+    ok:
+      - {pattern: 'status=VALID', why: INVALID}
+    show: ['validation status=\w+']
+    suspect: ConnectivityService·NetworkMonitor·인터넷 경로

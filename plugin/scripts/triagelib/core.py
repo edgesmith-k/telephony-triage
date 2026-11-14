@@ -36,6 +36,8 @@ TOP = 3
 # C′ 부분 일치 (04-parser-matching.md §5.12): analysis.json `partial[]` ≤ 3개(목표 ≤ 600 B), report.md 절 ≤ 1,200 B,
 # 코드 대조 리터럴 ≤ 9개(부분 일치 3 × 없는 조건 3)
 PARTIAL_ANALYSIS_MAX, PARTIAL_REPORT_MAX, FIND_TEXT_ITEMS = 3, 1200, 9
+# 성공 흐름 점검 (04-parser-matching.md §5.13): analysis.json `flows[]` ≤ 3, report.md 절 ≤ 1,200 B(흐름당 인스턴스 ≤ 3)
+FLOW_ANALYSIS_MAX, FLOW_REPORT_MAX, FLOW_PER_FLOW = 3, 1200, 3
 SEARCH_LIMIT = 3
 ERROR_EVENT_RE = re.compile(r"(error|timeout|no_response|reject|fail|denied|lost)", re.IGNORECASE)
 # 0 값 오류 칸(`errorCode=0`·`RejectCause: 0`·`result=0`·`error(0)`)은 오류가 아니다. 오류 문구 판정(ERROR_EVENT_RE) 전에
