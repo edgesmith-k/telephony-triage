@@ -1,0 +1,9 @@
+-- [합성] telephony-triage issue-db seed fixture (data). AOSP 17 소스 문구·에뮬레이터 캡처 모양으로 새로 쓴 줄 — 실제 로그 아님.
+11-14 21:45:10.074  2101  2101 D DSRM-0  : getRecoveryAction: RECOVERY_ACTION_RADIO_RESTART
+11-14 21:45:10.075  2101  2101 D DSRM-0  : doRecovery(): restarting radio
+11-14 21:45:10.075  2101  2101 D DSRM-0  : powerOffRadio: Restart radio
+11-14 21:45:10.076  2101  2101 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON
+11-14 21:45:10.077  2101  2101 D DNC-0   : onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON
+11-14 21:45:10.077  2101  2101 D DN-105-C: ConnectedState: onTearDown: reason=AIRPLANE_MODE_ON
+11-14 21:45:10.090  2101  2101 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-105-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=AIRPLANE_MODE_ON
+11-14 21:45:10.091  2101  2101 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.

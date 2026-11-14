@@ -1,0 +1,11 @@
+-- [합성] telephony-triage issue-db seed fixture (data). AOSP 17 소스 문구·에뮬레이터 캡처 모양으로 새로 쓴 줄 — 실제 로그 아님.
+11-14 17:24:42.700  2101  2101 D DSMGR-0 : notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings
+11-14 17:24:42.744  2101  2101 D DNC-0   : Evaluated [DataNetwork: DN-151-C, <APN#1>, state=ConnectedState], Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null, time=17:24:42.744
+11-14 17:24:42.745  2101  2101 D DN-151-C: ConnectedState: onTearDown: reason=DATA_DISABLED
+11-14 17:24:42.747  2101  2141 D RILJ    : [0420]> DEACTIVATE_DATA_CALL cid = 1 reason = NORMAL [PHONE0]
+11-14 17:24:42.751  2101  2141 D RILJ    : [0420]< DEACTIVATE_DATA_CALL  [PHONE0]
+11-14 17:24:42.752  2101  2101 D DN-151-C: DisconnectingState: onDeactivateResponse: resultCode=RESULT_SUCCESS
+11-14 17:24:42.753  2101  2101 D DN-151-C: DisconnectingState: onDataStateChanged: PDN disconnected reported by WWAN data service. requireExplicitDisconnect false
+11-14 17:24:42.754  2101  2101 D DN-151-C: DisconnectedState: Data network disconnected. mEverConnected=true
+11-14 17:24:42.757  2101  2101 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-151-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=DATA_DISABLED
+11-14 17:24:42.758  2101  2101 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.

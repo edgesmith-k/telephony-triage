@@ -1,0 +1,16 @@
+-- [합성] telephony-triage issue-db seed fixture (data). AOSP 17 소스 문구·에뮬레이터 캡처 모양으로 새로 쓴 줄 — 실제 로그 아님.
+11-14 21:59:20.519  2101  2101 D DPM-0   : Update data profiles due to APN db updated.
+11-14 21:59:20.522  2101  2101 D DPM-0   : Data profiles changed.
+11-14 21:59:20.524  2101  2101 D DPM-0   : updateDataProfilesAtModem: set 3 data profiles.
+11-14 21:59:20.525  2101  2101 D DRM-0   : Remove all retry and throttling entries, reason=DATA_PROFILES_CHANGED
+11-14 21:59:20.525  2101  2101 D DNC-0   : Re-evaluating 1 existing data networks due to DATA_PROFILES_CHANGED
+11-14 21:59:20.525  2101  2101 D DNC-0   : Evaluated [DataNetwork: DN-106-C, <APN#1>, state=ConnectedState], Data evaluation: evaluation reason:DATA_PROFILES_CHANGED, Data disallowed reasons: DATA_PROFILE_INVALID, candidate profile=null, time=21:59:20.525
+11-14 21:59:20.525  2101  2101 D DNC-0   : tearDownGracefully: Safe to tear down [DataNetwork: DN-106-C, <APN#1>, state=ConnectedState]
+11-14 21:59:20.526  2101  2101 D DN-106-C: ConnectedState: onTearDown: reason=DATA_PROFILE_INVALID
+11-14 21:59:20.528  2101  2141 D RILJ    : [0420]> DEACTIVATE_DATA_CALL cid = 22 reason = NORMAL [PHONE0]
+11-14 21:59:20.532  2101  2141 D RILJ    : [0420]< DEACTIVATE_DATA_CALL  [PHONE0]
+11-14 21:59:20.533  2101  2101 D DN-106-C: DisconnectingState: onDeactivateResponse: resultCode=RESULT_SUCCESS
+11-14 21:59:20.534  2101  2101 D DN-106-C: DisconnectingState: onDataStateChanged: PDN disconnected reported by WWAN data service. requireExplicitDisconnect false
+11-14 21:59:20.535  2101  2101 D DN-106-C: DisconnectedState: Data network disconnected. mEverConnected=true
+11-14 21:59:20.538  2101  2101 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-106-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=DATA_PROFILE_INVALID
+11-14 21:59:20.539  2101  2101 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.

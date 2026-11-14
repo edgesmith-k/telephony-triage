@@ -1,0 +1,1585 @@
+{
+  "source": "import",
+  "schema_version": 1,
+  "started_at": "2026-11-14T23:30+09:00",
+  "base_sha": "0000000000000000000000000000000000000000",
+  "issue": null,
+  "feedback": null,
+  "included_pending": [],
+  "commit_message": "[NEW-TYPE-1] import data-1: Android data 시작 유형 묶음(합성 fixture)",
+  "pr": {
+    "number": null,
+    "branch": "import/data-1",
+    "head_sha": null
+  },
+  "operations": [
+    {
+      "op": "new-type",
+      "temp_id": "NEW-TYPE-1",
+      "category": "data",
+      "dir_slug": "no-setup-data-call",
+      "type": {
+        "title": "데이터 연결 요청이 나가지 않음",
+        "summary": "데이터 연결이 필요한데 프레임워크 평가(DataNetworkController)가 거부해 SETUP_DATA_CALL이 나가지 않는다",
+        "symptom_signatures": [
+          {
+            "id": "evaluation-rejected",
+            "must_event": [
+              {
+                "event": "data_evaluation_rejected",
+                "fields": {
+                  "reasons": ".*(DATA_DISABLED|ROAMING_DISABLED|NOT_IN_SERVICE|NO_SUITABLE_DATA_PROFILE|CONCURRENT_VOICE_DATA_NOT_ALLOWED).*"
+                }
+              }
+            ],
+            "must_not_match": [
+              "RILJ.*\\]> SETUP_DATA_CALL"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "tags": [
+          "data-evaluation"
+        ]
+      },
+      "first_cause": {
+        "temp_id": "NEW-CAUSE-1",
+        "cause": {
+          "title": "모바일 데이터 꺼짐(사용자 설정)",
+          "description": "사용자가 모바일 데이터 설정을 꺼서 평가가 DATA_DISABLED로 거부됨",
+          "signatures": [
+            {
+              "id": "user-data-off",
+              "must_event": [
+                {
+                  "id": "off",
+                  "event": "data_setting_changed",
+                  "fields": {
+                    "enabled": "false"
+                  }
+                }
+              ],
+              "must_match": [
+                {
+                  "id": "rejected",
+                  "pattern": "^DNC-\\d+: Data evaluation: evaluation reason:\\S+, Data disallowed reasons: [A-Z_ ]*DATA_DISABLED\\b"
+                }
+              ],
+              "must_not_match": [
+                "tearDownReason=DATA_DISABLED",
+                "onTearDown: reason=DATA_DISABLED"
+              ],
+              "sequence": [
+                "off",
+                "rejected"
+              ],
+              "window_sec": 60
+            }
+          ],
+          "resolution": "모바일 데이터 설정을 켠다",
+          "resolution_type": "user-setting",
+          "fix": {
+            "status": "not-a-bug",
+            "ref": null,
+            "fixed_in": []
+          },
+          "platform_versions": [
+            "17"
+          ],
+          "code_refs": [
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataSettingsManager.java",
+              "symbol": "DataSettingsManager#notifyDataEnabledChanged",
+              "platform_versions": [
+                "17"
+              ]
+            },
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+              "symbol": "DataNetworkController#evaluateNetworkRequest",
+              "platform_versions": [
+                "17"
+              ]
+            },
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataEvaluation.java",
+              "symbol": "DataEvaluation#toString",
+              "platform_versions": [
+                "17"
+              ]
+            }
+          ]
+        },
+        "body": "- **로그 예시**:\n  ```\n  D DSMGR-0 : notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings\n  W DNC-0   : Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, ...\n  ```\n- **확인 방법**: `DSMGR-<slot>`의 `notifyDataEnabledChanged: enabled=false` **뒤에** 같은 슬롯의 요청 평가가 `DATA_DISABLED`로 거부된다. 연결돼 있던 데이터가 이 설정으로 해제된 경우(`tearDownReason=DATA_DISABLED`)는 \"데이터 연결이 끊김\" 유형의 원인이다.\n- **재현 시나리오**: 설정 > 모바일 데이터 끔 → 데이터를 쓰는 앱 실행\n- **해결책**: 모바일 데이터 설정을 켠다(단말 수정 대상 아님). `reason=`이 USER가 아니면(POLICY·CARRIER·THERMAL) 누가 껐는지 그 값으로 본다.\n- **코드 위치**: `DataSettingsManager#notifyDataEnabledChanged`(DataSettingsManager.java:791), 평가 `DataNetworkController.java:1828-1830`·로그 1919\n- **비고**: 출처: module eval data-disabled-user, 캡처 d02-user-off-on. Android 17 소스 기준.\n"
+      },
+      "body": "## 증상\n\n모바일 데이터가 붙지 않는다. RIL로 `SETUP_DATA_CALL` 요청 자체가 나가지 않는다 — 요청이 나갔는데 실패하는 경우는 \"데이터 연결 요청이 실패함\" 유형이다.\n\n## 증상 판별 방법\n\n`DNC-<slot>`의 `Data evaluation: ... Data disallowed reasons: <이유들>` 줄이 남고 같은 구간에 `RILJ`의 `> SETUP_DATA_CALL`이 없다. 거부 이유(공백으로 구분)가 원인을 가른다. `DATA_NETWORK_TRANSPORT_NOT_ALLOWED`만 있는 줄(위성 전송 요청)은 정상 로그에도 늘 있어 증상으로 보지 않는다. 부팅 중 `SIM_NOT_READY`·`DATA_CONFIG_NOT_READY`와 함께 나오는 이유도 정상이다.\n\n```\n11-14 09:00:24.900  2101  2101 D DNC-0   : Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null, ...\n```\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-1",
+      "kind": "positive",
+      "path": "fixtures/data-disabled-user.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-2",
+      "type": "NEW-TYPE-1",
+      "cause": {
+        "title": "망 미등록(데이터 서비스 없음)",
+        "description": "PS(데이터) 망 등록이 안 돼 평가가 NOT_IN_SERVICE로 거부됨",
+        "signatures": [
+          {
+            "id": "not-in-service",
+            "must_event": [
+              {
+                "event": "data_evaluation_rejected",
+                "fields": {
+                  "reasons": ".*NOT_IN_SERVICE.*"
+                }
+              }
+            ],
+            "must_match": [
+              "^DNC-\\d+: Data evaluation: .*reg state=(NOT_REG_OR_SEARCHING|DENIED|NOT_REG_NOT_SEARCHING)"
+            ],
+            "must_not_match": [
+              "RADIO_POWER_OFF",
+              "SIM_NOT_READY"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "망 등록이 안 되는 원인(망 거절·커버리지·모뎀 상태)을 CP·망 쪽에서 확인한다",
+        "resolution_type": "network",
+        "fix": {
+          "status": "open",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#evaluateNetworkRequest",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#serviceStateAllowsPSAttach",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataEvaluation.java",
+            "symbol": "DataEvaluation#toString",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ],
+        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀의 PS 등록 상태와 거절 원인(registration/attach reject cause), RILJ DATA_REGISTRATION_STATE 응답, 망 시뮬레이터 등록 로그"
+      },
+      "body": "- **로그 예시**:\n  ```\n  D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true ...\n  D DNC-0   : Data evaluation: evaluation reason:DATA_SERVICE_STATE_CHANGED, Data disallowed reasons: NOT_IN_SERVICE SERVICE_OPTION_NOT_SUPPORTED, ..., reg state=NOT_REG_OR_SEARCHING, ...\n  ```\n- **확인 방법**: 평가 거부 이유에 `NOT_IN_SERVICE`가 있고 같은 평가 줄의 `reg state=`가 미등록(`NOT_REG_OR_SEARCHING`·`DENIED` 등)이다. `RADIO_POWER_OFF`가 같이 있으면 무선이 꺼진 것(비행기 모드 등)이라 이 원인이 아니다. 프레임워크는 증상일 뿐이고 원인은 망 등록이다.\n- **재현 시나리오**: 데이터 등록을 잃게 한 뒤(망 시뮬레이터에서 PS 거절·커버리지 밖) 모바일 데이터 사용\n- **해결책**: 망 등록이 안 되는 이유를 CP·망 쪽에서 찾는다. 같은 시각 데이터를 켠 줄(reason=USER)은 계기가 아니다.\n- **코드 위치**: `DataNetworkController.java:1712-1714`(serviceStateAllowsPSAttach → NOT_IN_SERVICE), 로그 1919\n- **비고**: 출처: module eval data-no-service-eval-reject(캡처 d32f-fail-reg-unregistered). 비행기 모드 해제 직후 등록 전에도 잠깐 이 거부가 나온다 — 해제 뒤 몇 초까지가 정상인지는 TODO(SITE).\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-2",
+      "kind": "positive",
+      "path": "fixtures/data-no-service.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-3",
+      "type": "NEW-TYPE-1",
+      "cause": {
+        "title": "맞는 APN(데이터 프로필) 없음",
+        "description": "요청을 만족하는 데이터 프로필이 없어 평가가 NO_SUITABLE_DATA_PROFILE로 거부됨",
+        "signatures": [
+          {
+            "id": "no-suitable-profile",
+            "must_event": [
+              {
+                "event": "data_evaluation_rejected",
+                "fields": {
+                  "reasons": "NO_SUITABLE_DATA_PROFILE"
+                }
+              }
+            ],
+            "must_match": [
+              "^DPM-\\d+: Can't find any data profile that can satisfy"
+            ],
+            "must_not_match": [
+              "reason=DATA_PROFILE_INVALID"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "APN 설정(타입·network_type_bitmask·carrier_enabled·MVNO 조건·사업자 APN 목록)을 확인해 요청에 맞는 APN을 넣는다",
+        "resolution_type": "carrier-config",
+        "fix": {
+          "status": "open",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataProfileManager.java",
+            "symbol": "DataProfileManager#getDataProfileForNetworkRequest",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#evaluateNetworkRequest",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataEvaluation.java",
+            "symbol": "DataEvaluation#toString",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ]
+      },
+      "body": "- **로그 예시**:\n  ```\n  D DPM-0   : Can't find any data profile that can satisfy [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&... ] ], ...]\n  D DNC-0   : Data evaluation: evaluation reason:..., Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, ...\n  ```\n- **확인 방법**: 거부 이유가 `NO_SUITABLE_DATA_PROFILE` **하나뿐**이고 `DPM-<slot>`에 `Can't find any data profile that can satisfy`가 있다. 부팅 중(`SIM_NOT_READY`·`DATA_CONFIG_NOT_READY`와 함께)은 정상이라 빼려고 이유 하나뿐인 것만 본다. 무엇이 안 맞는지는 `DPM`의 `Found N data profiles` 목록에서 요청 능력(INTERNET·MMS·IMS 등) ↔ APN 타입, 현재 RAT ↔ network_type_bitmask(목록의 permanentFailed 다음 칸, `UNKNOWN`=0=전체 허용), carrier_enabled, MVNO 조건을 대조한다.\n- **재현 시나리오**: 사업자 APN을 모두 지우거나 carrier_enabled=0, 또는 현재 RAT을 뺀 network_type_bitmask로 바꾼 뒤 데이터 사용\n- **해결책**: 요청에 맞는 APN을 넣거나 APN 조건을 고친다. 연결 중 APN이 바뀌어 끊긴 경우는 \"데이터 연결이 끊김\"의 APN 설정 변경 원인이다.\n- **코드 위치**: `DataProfileManager.java:875`(Can't find any data profile), `DataNetworkController` 평가 로그 1919\n- **비고**: 출처: 캡처 d70a-no-apn-disabled·d70b-no-apn-deleted·d73d-bitmask-gsm-only.\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-3",
+      "kind": "positive",
+      "path": "fixtures/data-no-suitable-profile.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-4",
+      "type": "NEW-TYPE-1",
+      "cause": {
+        "title": "데이터 로밍 꺼짐(사용자 설정)",
+        "description": "로밍 중인데 데이터 로밍 설정이 꺼져 평가가 ROAMING_DISABLED로 거부됨",
+        "signatures": [
+          {
+            "id": "roaming-disabled",
+            "must_event": [
+              {
+                "event": "data_evaluation_rejected",
+                "fields": {
+                  "reasons": ".*ROAMING_DISABLED.*"
+                }
+              }
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "데이터 로밍 설정을 켠다",
+        "resolution_type": "user-setting",
+        "fix": {
+          "status": "not-a-bug",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#evaluateNetworkRequest",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataSettingsManager.java",
+            "symbol": "DataSettingsManager#isDataRoamingEnabled",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataEvaluation.java",
+            "symbol": "DataEvaluation#toString",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ]
+      },
+      "body": "- **로그 예시**:\n  ```\n  W DNC-0   : Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, ..., reg state=ROAMING, ...\n  ```\n- **확인 방법**: 거부 이유에 `ROAMING_DISABLED`가 있고 평가 줄의 `reg state=ROAMING`이다. 데이터 설정 자체는 켜져 있다.\n- **재현 시나리오**: 로밍 망 진입 → 데이터 로밍 끔 → 데이터 사용\n- **해결책**: 데이터 로밍 설정을 켠다. 로밍이 아닌데 로밍으로 보이면 망 등록 정보(사업자 코드·로밍 판정)를 본다.\n- **코드 위치**: `DataNetworkController.java:1766-1778`\n- **비고**: 소스만(에뮬레이터 캡처에서 로밍 판정이 나지 않음). 위성망은 예외 규칙이 있다(1771).\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-4",
+      "kind": "positive",
+      "path": "fixtures/data-roaming-disabled.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-5",
+      "type": "NEW-TYPE-1",
+      "cause": {
+        "title": "통화 중 데이터 불가(망·RAT 제약)",
+        "description": "CS 통화 중이고 현재 망이 음성·데이터 동시 사용을 지원하지 않아 CONCURRENT_VOICE_DATA_NOT_ALLOWED로 거부됨",
+        "signatures": [
+          {
+            "id": "concurrent-voice-data",
+            "must_event": [
+              {
+                "event": "data_evaluation_rejected",
+                "fields": {
+                  "reasons": ".*CONCURRENT_VOICE_DATA_NOT_ALLOWED.*"
+                }
+              }
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "통화가 끝난 뒤 데이터가 다시 붙는지 확인한다. 동시 사용이 필요하면 망·RAT 조건(2G/3G CS 통화, DTM 미지원)을 바꿔 시험한다",
+        "resolution_type": "network",
+        "fix": {
+          "status": "not-a-bug",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#evaluateNetworkRequest",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/ServiceStateTracker.java",
+            "symbol": "ServiceStateTracker#isConcurrentVoiceAndDataAllowed",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataEvaluation.java",
+            "symbol": "DataEvaluation#toString",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ]
+      },
+      "body": "- **로그 예시**:\n  ```\n  D DNC-0   : Data evaluation: evaluation reason:NEW_REQUEST, Data disallowed reasons: CONCURRENT_VOICE_DATA_NOT_ALLOWED, ..., network type=UMTS, ...\n  ```\n- **확인 방법**: 거부 이유에 `CONCURRENT_VOICE_DATA_NOT_ALLOWED`가 있다. 통화 상태가 IDLE이 아니고 `ServiceStateTracker#isConcurrentVoiceAndDataAllowed`가 false일 때만 붙는 이유다(사용자 조작 없이 통화가 데이터를 막는 경우).\n- **재현 시나리오**: 3G(또는 2G) CS 통화 중 데이터를 쓰는 앱 실행\n- **해결책**: 단말 오동작이 아니다. 통화 중에도 데이터가 필요하면 동시 사용 가능한 망에서 시험한다. 이미 연결된 데이터는 해제되지 않고 멈춤(suspended)으로 남는다.\n- **코드 위치**: `DataNetworkController.java:1737-1742`\n- **비고**: 소스만(에뮬레이터 NR은 동시 사용 가능이라 캡처 없음). 기존 연결은 이 이유로 해제되지 않는다(기존 망 평가 2100-2320에 없음).\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-5",
+      "kind": "positive",
+      "path": "fixtures/data-concurrent-voice.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-6",
+      "type": "NEW-TYPE-1",
+      "cause": {
+        "title": "데이터 꺼짐인데 MMS 예외 아님",
+        "description": "모바일 데이터가 꺼져 있고 MMS 항상 허용 정책이 꺼져 있어 MMS 요청도 DATA_DISABLED로 거부됨",
+        "signatures": [
+          {
+            "id": "mms-data-disabled",
+            "must_match": [
+              "^DNC-\\d+: Data evaluation: .*Data disallowed reasons: DATA_DISABLED, .*Capabilities: MMS\\b"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "모바일 데이터가 꺼진 상태에서도 MMS를 보내야 하면 MMS 항상 허용 정책(mobile data policy MMS_ALWAYS_ALLOWED)을 켠다",
+        "resolution_type": "carrier-config",
+        "fix": {
+          "status": "not-a-bug",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataSettingsManager.java",
+            "symbol": "DataSettingsManager#isDataEnabledOverriddenForApn",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#evaluateNetworkRequest",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataEvaluation.java",
+            "symbol": "DataEvaluation#toString",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ]
+      },
+      "body": "- **로그 예시**:\n  ```\n  D DNC-0   : Data evaluation: evaluation reason:NEW_REQUEST, Data disallowed reasons: DATA_DISABLED, ..., [NetworkRequest [ REQUEST id=206, [ Transports: CELLULAR Capabilities: MMS ...\n  ```\n- **확인 방법**: MMS 능력 요청(`Capabilities: MMS`)의 평가가 `DATA_DISABLED`로 거부된다. 증상은 \"MMS가 안 보내짐\"으로 온다(sms 쪽 신고). `MOBILE_DATA_POLICY_MMS_ALWAYS_ALLOWED`가 켜져 있으면 MMS는 데이터가 꺼져도 허용된다(`Data allowed reason: MMS_REQUEST`).\n- **재현 시나리오**: 모바일 데이터 끔 → MMS 발송\n- **해결책**: MMS 항상 허용 정책을 켜거나 데이터를 켠다(정책은 사업자 설정·사용자 설정).\n- **코드 위치**: `DataSettingsManager.java:858-860`(MMS 예외), `DataNetworkController.java:1828-1848`\n- **비고**: 소스만(MMS 거부 캡처 없음, 요청 줄 모양은 캡처 d31-mms-request).\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-6",
+      "kind": "positive",
+      "path": "fixtures/data-mms-data-disabled.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-type",
+      "temp_id": "NEW-TYPE-2",
+      "category": "data",
+      "dir_slug": "data-disconnected",
+      "type": {
+        "title": "데이터 연결이 끊김",
+        "summary": "연결돼 있던 데이터(인터넷·IMS 등 PDN)가 해제된다",
+        "symptom_signatures": [
+          {
+            "id": "internet-disconnected",
+            "must_event": [
+              {
+                "event": "data_internet_state_changed",
+                "fields": {
+                  "from": "CONNECTED",
+                  "to": "DISCONNECTED"
+                }
+              }
+            ],
+            "window_sec": 60
+          },
+          {
+            "id": "network-disconnected",
+            "must_event": [
+              {
+                "event": "data_network_disconnected"
+              }
+            ],
+            "window_sec": 60
+          }
+        ],
+        "tags": [
+          "data-teardown"
+        ]
+      },
+      "first_cause": {
+        "temp_id": "NEW-CAUSE-7",
+        "cause": {
+          "title": "비행기 모드·무선 끄기 요청(시험 조작)",
+          "description": "비행기 모드 켬(또는 무선 끄기 요청)으로 모든 데이터 네트워크가 해제됨",
+          "signatures": [
+            {
+              "id": "radio-off-request",
+              "must_match": [
+                {
+                  "id": "power",
+                  "pattern": "^SST-\\d+: setRadioPower power false"
+                }
+              ],
+              "must_event": [
+                {
+                  "id": "apm",
+                  "event": "data_teardown_all",
+                  "fields": {
+                    "reason": "AIRPLANE_MODE_ON"
+                  }
+                }
+              ],
+              "sequence": [
+                "power",
+                "apm"
+              ],
+              "window_sec": 60
+            }
+          ],
+          "resolution": "시험 절차의 비행기 모드 켬(무선 끄기) 스텝인지 확인한다. 의도한 조작이면 정상이다",
+          "resolution_type": "user-setting",
+          "fix": {
+            "status": "not-a-bug",
+            "ref": null,
+            "fixed_in": []
+          },
+          "platform_versions": [
+            "17"
+          ],
+          "code_refs": [
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/ServiceStateTracker.java",
+              "symbol": "ServiceStateTracker#setRadioPower",
+              "platform_versions": [
+                "17"
+              ]
+            },
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/ServiceStateTracker.java",
+              "symbol": "ServiceStateTracker#powerOffRadioSafely",
+              "platform_versions": [
+                "17"
+              ]
+            },
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+              "symbol": "DataNetworkController#onTearDownAllDataNetworks",
+              "platform_versions": [
+                "17"
+              ]
+            }
+          ]
+        },
+        "body": "- **로그 예시**:\n  ```\n  D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0\n  D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON\n  D DNC-0   : onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON\n  D RILJ    : [0602]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]\n  ```\n- **확인 방법**: `SST-<slot>`의 `setRadioPower power false`(무선 끄기 요청) **뒤에** `DNC-<slot>`의 `onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON`. 주의: `AIRPLANE_MODE_ON`은 비행기 모드만의 표시가 아니다 — `powerOffRadioSafely()`는 기기 종료가 아니면 늘 이 이유를 쓴다(ServiceStateTracker.java:4205-4207). data stall 복구의 무선 재시작도 같은 이유로 해제하지만 `setRadioPower` 줄 없이 바로 부른다(DataStallRecoveryManager.java:853-855) — 그 경우는 data stall 원인이다. `reason 0`은 사용자 요청(비행기 모드·무선 끄기 API), 1·2·3은 열·사업자·근거리 기기다. 비행기 모드 확정은 `AirplaneModeStats: Airplane mode change. Value: true`·`PhoneGlobals: Turning radio off - airplane`(이 DB 태그 목록에는 아직 없음).\n- **재현 시나리오**: 데이터 연결 중 비행기 모드 켬\n- **해결책**: 시험 조작이면 원인 아님. 진짜 문제 후보는 **끈 뒤 다시 붙지 않는 것**이다 — 해제 뒤 무선 켬 → 망 등록 → 데이터 평가 순서를 본다(\"데이터 연결 요청이 나가지 않음\" 유형). 해제 뒤 몇 초가 정상인지는 TODO(SITE).\n- **코드 위치**: `ServiceStateTracker.java:1110`(setRadioPower), 4198-4240(powerOffRadioSafely), `DataNetworkController.java:4417`\n- **비고**: 출처: 캡처 d40d-deact-airplane-on·d12r-airplane-teardown·m02-airplane-on-off.\n"
+      },
+      "body": "## 증상\n\n쓰던 모바일 데이터가 갑자기 끊긴다. 시험 중이면 대부분 조작(비행기 모드·데이터 끔·APN 변경)이 만든 정상 해제다.\n\n## 증상 판별 방법\n\n`DNC-<slot>`의 `onDataNetworkDisconnected: ..., cause=<DataFailCause>, tearDownReason=<이유>`와 `Internet data state changed from CONNECTED to DISCONNECTED.`. 원인은 **`tearDownReason`**으로 가른다 — `cause`는 단말이 끊어도 `LOST_CONNECTION`이 찍히므로 그것만 보고 망 단절로 읽지 않는다. `tearDownReason=NONE`이면 프레임워크가 끊은 것이 아니다(모뎀·망 쪽).\n\n```\n11-14 09:40:00.012  2101  2101 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-101-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=DATA_DISABLED\n```\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-7",
+      "kind": "positive",
+      "path": "fixtures/data-airplane-on.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-8",
+      "type": "NEW-TYPE-2",
+      "cause": {
+        "title": "모바일 데이터 끔(사용자 설정)",
+        "description": "연결 중 모바일 데이터 설정이 꺼져 데이터 네트워크가 해제됨",
+        "signatures": [
+          {
+            "id": "teardown-data-disabled",
+            "must_event": [
+              {
+                "event": "data_network_disconnected",
+                "fields": {
+                  "reason": "DATA_DISABLED"
+                }
+              }
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "모바일 데이터 설정을 켠다",
+        "resolution_type": "user-setting",
+        "fix": {
+          "status": "not-a-bug",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#onDataNetworkDisconnected",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataSettingsManager.java",
+            "symbol": "DataSettingsManager#notifyDataEnabledChanged",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ]
+      },
+      "body": "- **로그 예시**:\n  ```\n  D DN-151-C: ConnectedState: onTearDown: reason=DATA_DISABLED\n  D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-151-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=DATA_DISABLED\n  ```\n- **확인 방법**: `tearDownReason=DATA_DISABLED`. 앞에 `DSMGR-<slot>: notifyDataEnabledChanged: enabled=false, reason=<누가>`가 있다(USER·POLICY·CARRIER·THERMAL).\n- **재현 시나리오**: 데이터 연결 중 설정 > 모바일 데이터 끔\n- **해결책**: 모바일 데이터 설정을 켠다. `reason=`이 USER가 아니면 그 주체(정책·사업자·열)를 본다.\n- **코드 위치**: `DataNetworkController.java:2298`(기존 망 평가 DATA_DISABLED), 2625-2626(해제 이유 매핑), 3622\n- **비고**: 출처: 캡처 d40a-deact-user-data-off·d02-user-off-on.\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-8",
+      "kind": "positive",
+      "path": "fixtures/data-teardown-user-off.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-9",
+      "type": "NEW-TYPE-2",
+      "cause": {
+        "title": "APN 설정 변경(프로필 무효·선호 바뀜)",
+        "description": "APN DB·선호 APN이 바뀌어 쓰던 데이터 프로필이 무효가 되거나 선호가 아니게 되어 해제됨",
+        "signatures": [
+          {
+            "id": "profile-changed",
+            "must_match": [
+              "^DPM-\\d+: (Update data profiles due to|Data profiles changed)"
+            ],
+            "must_event": [
+              {
+                "event": "data_network_disconnected",
+                "fields": {
+                  "reason": "DATA_PROFILE_INVALID|DATA_PROFILE_NOT_PREFERRED"
+                }
+              }
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "바뀐 APN 설정(시험 조작·사업자 설정 갱신·SIM refresh)을 확인하고, 다시 붙지 않으면 새 APN 목록에 요청에 맞는 APN이 있는지 본다",
+        "resolution_type": "user-setting",
+        "fix": {
+          "status": "not-a-bug",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataProfileManager.java",
+            "symbol": "DataProfileManager#handleMessage",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#onDataNetworkDisconnected",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#evaluateDataNetwork",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ]
+      },
+      "body": "- **로그 예시**:\n  ```\n  D DPM-0   : Update data profiles due to APN db updated.\n  D DN-106-C: ConnectedState: onTearDown: reason=DATA_PROFILE_INVALID\n  D DNC-0   : onDataNetworkDisconnected: [...], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=DATA_PROFILE_INVALID\n  ```\n- **확인 방법**: `DPM-<slot>`의 프로필 갱신(`Update data profiles due to APN db updated.`/`carrier config updated.`/`SIM refresh.`) 뒤 `tearDownReason=DATA_PROFILE_INVALID`(쓰던 APN이 없어짐·바뀜) 또는 `DATA_PROFILE_NOT_PREFERRED`(선호 APN이 다른 것으로). 같은 줄의 `cause=LOST_CONNECTION`만 보고 망 단절로 읽지 않는다.\n- **재현 시나리오**: 데이터 연결 중 쓰던 APN을 지우거나 고침, 또는 선호 APN을 바꿈\n- **해결책**: 의도한 APN 변경이면 정상이다. 그 뒤 다시 붙지 않으면(`NO_SUITABLE_DATA_PROFILE`) \"데이터 연결 요청이 나가지 않음\"의 APN 없음 원인을 본다. 사용자 조작 없이 바뀌었으면 계기(사업자 설정 갱신·SIM refresh)를 DPM 줄로 찾는다.\n- **코드 위치**: `DataProfileManager.java:226-258`(갱신 계기), 396, `DataNetworkController.java:2293-2313`\n- **비고**: 출처: module eval data-profile-invalid-after-apn-change(캡처 d70a-no-apn-disabled), 캡처 d40b·d40c·d40h.\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-9",
+      "kind": "positive",
+      "path": "fixtures/data-teardown-profile-invalid.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-10",
+      "type": "NEW-TYPE-2",
+      "cause": {
+        "title": "모뎀·망 쪽 해제(프레임워크 요청 없음)",
+        "description": "프레임워크가 해제를 요청하지 않았는데 데이터 콜 목록에서 PDN이 비활성·사라져 해제됨",
+        "signatures": [
+          {
+            "id": "modem-side-drop",
+            "must_match": [
+              "^DN-.+: \\S+: onDataStateChanged: PDN (inactive|disconnected) reported by WWAN data service"
+            ],
+            "must_event": [
+              {
+                "event": "data_network_disconnected",
+                "fields": {
+                  "reason": "NONE"
+                }
+              }
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "모뎀·망이 PDN을 끊은 이유(망 deactivate·무선 링크 끊김·모뎀 CFUN 변경·RIL HAL 재시작)를 CP·망 쪽 로그로 찾는다",
+        "resolution_type": "modem",
+        "fix": {
+          "status": "open",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetwork.java",
+            "symbol": "DataNetwork#onDataStateChanged",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#onDataNetworkDisconnected",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ],
+        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 같은 시각 모뎀의 PDN 해제 사유(망 deactivate 원인 코드)·CFUN 변경·무선 링크 끊김, 벤더 RIL의 data call list 변화, 망 시뮬레이터의 PDN 해제 기록"
+      },
+      "body": "- **로그 예시**:\n  ```\n  D RILJ    : [UNSL]< UNSOL_DATA_CALL_LIST_CHANGED [SetupDataCallResult{cause: NONE, suggestedRetryTime: -1, cid: 1, active: 0, ...}] [PHONE0]\n  D DN-101-C: ConnectedState: onDataStateChanged: PDN inactive reported by WWAN data service.\n  D DNC-0   : onDataNetworkDisconnected: [...], cause=NONE(0x0)(0), tearDownReason=NONE\n  ```\n- **확인 방법**: `tearDownReason=NONE`(프레임워크 해제 요청 없음)이고 그 직전 `DN`에 `PDN inactive/disconnected reported by WWAN data service`(모뎀이 보낸 data call list에서 비활성·없어짐). 앞에 `DEACTIVATE_DATA_CALL` 요청·`RADIO_POWER` 끔 요청이 없다. 모뎀 쪽 무선 끔(CFUN)·RIL HAL 재시작(`cause=RADIO_NOT_AVAILABLE`)도 같은 모양이라 벤더 줄로 가른다.\n- **재현 시나리오**: 망 시뮬레이터에서 PDN 해제(network-initiated deactivate), 또는 모뎀 쪽 무선 끔\n- **해결책**: 프레임워크는 원인이 아니다(증상). CP·망 쪽에서 왜 PDN이 내려갔는지 찾는다.\n- **코드 위치**: `DataNetwork.java:3279-3299`, `DataNetworkController.java:3622`\n- **비고**: 출처: module eval data-dc-list-drop·data-cfun-radio-off(벤더 줄은 뺐다), 캡처 d20h-nw-radio-hal-kill.\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-10",
+      "kind": "positive",
+      "path": "fixtures/data-modem-side-drop.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-10",
+      "kind": "positive",
+      "path": "fixtures/data-modem-side-radio-off.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-11",
+      "type": "NEW-TYPE-2",
+      "cause": {
+        "title": "data stall 복구 동작",
+        "description": "트래픽이 막혀(망 검증 실패·수신 없음) data stall 복구가 연결 정리 또는 무선 재시작으로 데이터를 끊음",
+        "signatures": [
+          {
+            "id": "stall-cleanup",
+            "must_match": [
+              {
+                "id": "cleanup",
+                "pattern": "^DSRM-\\d+: doRecovery\\(\\): cleanup all connections"
+              }
+            ],
+            "must_event": [
+              {
+                "id": "down",
+                "event": "data_network_disconnected",
+                "fields": {
+                  "reason": "DATA_STALL"
+                }
+              }
+            ],
+            "sequence": [
+              "cleanup",
+              "down"
+            ],
+            "window_sec": 60
+          },
+          {
+            "id": "stall-radio-restart",
+            "must_match": [
+              {
+                "id": "restart",
+                "pattern": "^DSRM-\\d+: doRecovery\\(\\): restarting radio"
+              }
+            ],
+            "must_event": [
+              {
+                "id": "apm",
+                "event": "data_teardown_all",
+                "fields": {
+                  "reason": "AIRPLANE_MODE_ON"
+                }
+              }
+            ],
+            "sequence": [
+              "restart",
+              "apm"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "데이터가 막힌 원인(망·모뎀 쪽 트래픽 단절, 망 검증 서버 도달 불가)을 찾는다. 복구 동작 자체는 정상이다",
+        "resolution_type": "network",
+        "fix": {
+          "status": "open",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataStallRecoveryManager.java",
+            "symbol": "DataStallRecoveryManager#doRecovery",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataStallRecoveryManager.java",
+            "symbol": "DataStallRecoveryManager#powerOffRadio",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#onDataStallReestablishInternet",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/ServiceStateTracker.java",
+            "symbol": "ServiceStateTracker#powerOffRadioSafely",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ],
+        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 복구 직전 구간의 모뎀 송수신(PDN·무선 링크 상태), 망 시뮬레이터 트래픽 기록, ConnectivityService·NetworkMonitor 망 검증 결과"
+      },
+      "body": "- **로그 예시**:\n  ```\n  D DSRM-0  : doRecovery(): cleanup all connections\n  D DN-104-C: ConnectedState: onTearDown: reason=DATA_STALL\n  D DSRM-0  : doRecovery(): restarting radio\n  D DNC-0   : onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON\n  ```\n- **확인 방법**: `DSRM-<slot>`의 `doRecovery(): cleanup all connections` 뒤 `tearDownReason=DATA_STALL`, 또는 `doRecovery(): restarting radio` 뒤 `onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON` — **비행기 모드가 아닌데 AIRPLANE_MODE_ON으로 찍힌다**(무선 재시작이 powerOffRadioSafely를 부름). 단계는 `getRecoveryAction:`으로 본다(GET_DATA_CALL_LIST → CLEANUP → RADIO_RESTART → RESET_MODEM).\n- **재현 시나리오**: 망 지연을 크게 두거나 망 검증 실패 상태로 데이터 사용(사용자 조작 없이 복구가 돈다)\n- **해결책**: 복구를 부른 트래픽 단절의 원인을 찾는다. 복구가 시험을 방해하면 data stall 복구 설정(사업자 설정)을 본다.\n- **코드 위치**: `DataStallRecoveryManager.java:1133-1157`(단계별 동작), 853-855(무선 재시작), `DataNetworkController.java:3782-3783`, `ServiceStateTracker.java:4205-4207`\n- **비고**: 출처: 캡처 d11-data-stall(cleanup). 무선 재시작 단계는 소스만.\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-11",
+      "kind": "positive",
+      "path": "fixtures/data-stall-cleanup.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-11",
+      "kind": "positive",
+      "path": "fixtures/data-stall-radio-restart.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-type",
+      "temp_id": "NEW-TYPE-3",
+      "category": "data",
+      "dir_slug": "setup-data-call-failed",
+      "type": {
+        "title": "데이터 연결 요청이 실패함",
+        "summary": "SETUP_DATA_CALL 요청이 나갔는데 모뎀·망이 실패 원인(DataFailCause)으로 거절한다",
+        "symptom_signatures": [
+          {
+            "id": "setup-response-failed",
+            "must_event": [
+              {
+                "event": "data_setup_response",
+                "fields": {
+                  "cause": "(?!NONE$)[A-Z_0-9]+"
+                }
+              }
+            ],
+            "window_sec": 60
+          },
+          {
+            "id": "setup-failed-dnc",
+            "must_match": [
+              "^DNC-\\d+: onDataNetworkSetupDataFailed: "
+            ],
+            "window_sec": 60
+          }
+        ],
+        "tags": [
+          "data-setup-fail"
+        ]
+      },
+      "first_cause": {
+        "temp_id": "NEW-CAUSE-12",
+        "cause": {
+          "title": "APN 없음·틀림(망 거절)",
+          "description": "망이 요청한 APN을 모르거나 없다고 거절함(MISSING_UNKNOWN_APN)",
+          "signatures": [
+            {
+              "id": "missing-unknown-apn",
+              "must_event": [
+                {
+                  "event": "data_setup_response",
+                  "fields": {
+                    "cause": "MISSING_UNKNOWN_APN"
+                  }
+                }
+              ],
+              "window_sec": 60
+            },
+            {
+              "id": "missing-unknown-apn-dnc",
+              "must_match": [
+                "^DNC-\\d+: onDataNetworkSetupDataFailed: .*cause=MISSING_UNKNOWN_APN\\(0x"
+              ],
+              "window_sec": 60
+            }
+          ],
+          "resolution": "APN 이름을 사업자·망 시뮬레이터 설정과 맞춘다",
+          "resolution_type": "carrier-config",
+          "fix": {
+            "status": "open",
+            "ref": null,
+            "fixed_in": []
+          },
+          "platform_versions": [
+            "17"
+          ],
+          "code_refs": [
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetwork.java",
+              "symbol": "DataNetwork#onSetupResponse",
+              "platform_versions": [
+                "17"
+              ]
+            },
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+              "symbol": "DataNetworkController#onDataNetworkSetupFailed",
+              "platform_versions": [
+                "17"
+              ]
+            },
+            {
+              "ref": "aosp:frameworks/base/telephony/java/android/telephony/DataFailCause.java",
+              "symbol": "DataFailCause#toString",
+              "platform_versions": [
+                "17"
+              ]
+            }
+          ],
+          "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀이 받은 망 거절 원인(ESM cause)과 망 시뮬레이터의 APN 설정"
+        },
+        "body": "- **로그 예시**:\n  ```\n  D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=MISSING_UNKNOWN_APN(0x1b) retry=-1 ...\n  D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.\n  ```\n- **확인 방법**: 응답 cause가 `MISSING_UNKNOWN_APN(0x1b)`(3GPP ESM/SM cause 27). 요청 줄의 dataProfile에서 APN 이름을 보고 망 쪽 설정과 대조한다.\n- **재현 시나리오**: 존재하지 않는 APN 이름으로 데이터 연결\n- **해결책**: APN DB(사업자 APN 목록)의 APN 이름을 고치거나 망 시뮬레이터에 그 APN을 만든다.\n- **코드 위치**: `DataNetwork.java:1751-1816`(onSetupResponse), `DataNetworkController.java:3287`, `DataFailCause.java`(상수·toString 1739)\n- **비고**: 망 거절 코드라 단말은 정상 동작이다. 사업자 APN DB가 틀렸으면 그 수정이 fix다. DataFailCause 상수는 `frameworks/base/telephony/java/android/telephony/DataFailCause.java:50`.\n"
+      },
+      "body": "## 증상\n\n데이터 연결 요청(`SETUP_DATA_CALL`)은 나가는데 실패 응답이 온다. 재시도가 이어지거나 멈춘다(재시도는 \"데이터 연결 재시도가 멈춤\" 유형).\n\n## 증상 판별 방법\n\n`DN-<id>-C`의 `onSetupResponse: resultCode=..., response=DataCallResponse: { cause=<DataFailCause>(0x..) retry=<ms> ...`와 `DNC-<slot>`의 `onDataNetworkSetupDataFailed: ..., cause=..., retryDelayMillis=...ms.`. `cause`가 원인을 가른다. `resultCode`가 `RESULT_SUCCESS`가 아니면(예: `RESULT_ERROR_ILLEGAL_STATE`) DNC 줄의 cause는 resultCode에서 온 값(`RADIO_NOT_AVAILABLE` 등)이라 응답의 cause를 본다(DataNetwork.java:2867-2891).\n\n```\n11-14 12:00:01.122  2101  2101 D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=MISSING_UNKNOWN_APN(0x1b) retry=-1 ...\n```\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-12",
+      "kind": "positive",
+      "path": "fixtures/data-setup-missing-apn.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-13",
+      "type": "NEW-TYPE-3",
+      "cause": {
+        "title": "APN 인증 실패",
+        "description": "PAP/CHAP 사용자·비밀번호가 맞지 않아 망이 거절함(USER_AUTHENTICATION)",
+        "signatures": [
+          {
+            "id": "user-authentication",
+            "must_event": [
+              {
+                "event": "data_setup_response",
+                "fields": {
+                  "cause": "USER_AUTHENTICATION"
+                }
+              }
+            ],
+            "window_sec": 60
+          },
+          {
+            "id": "user-authentication-dnc",
+            "must_match": [
+              "^DNC-\\d+: onDataNetworkSetupDataFailed: .*cause=USER_AUTHENTICATION\\(0x"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "APN의 인증 방식·사용자·비밀번호를 사업자·망 설정과 맞춘다",
+        "resolution_type": "carrier-config",
+        "fix": {
+          "status": "open",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetwork.java",
+            "symbol": "DataNetwork#onSetupResponse",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#onDataNetworkSetupFailed",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/base/telephony/java/android/telephony/DataFailCause.java",
+            "symbol": "DataFailCause#toString",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ],
+        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀이 받은 망 거절 원인과 망 시뮬레이터의 인증 설정"
+      },
+      "body": "- **로그 예시**:\n  ```\n  D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=USER_AUTHENTICATION(0x1d) retry=-1 ...\n  D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=USER_AUTHENTICATION(0x1d), retryDelayMillis=-1ms.\n  ```\n- **확인 방법**: 응답 cause가 `USER_AUTHENTICATION(0x1d)`(cause 29). dataProfile의 인증 방식 칸(APN 이름 뒤 `, <authType>,`)을 본다 — 사용자·비밀번호는 로그에 해시로만 남는다.\n- **재현 시나리오**: 인증이 필요한 APN에 틀린 사용자·비밀번호(또는 인증 없음)로 연결\n- **해결책**: APN 인증 설정을 고친다.\n- **코드 위치**: `DataNetwork.java:1751-1816`(onSetupResponse), `DataNetworkController.java:3287`, `DataFailCause.java`(상수·toString 1739)\n- **비고**: DataFailCause.java:54. 에뮬레이터는 인증을 검사하지 않아 캡처가 없다(캡처 d32d-fail-bad-auth는 성공함) — 소스만.\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-13",
+      "kind": "positive",
+      "path": "fixtures/data-setup-auth-failure.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-14",
+      "type": "NEW-TYPE-3",
+      "cause": {
+        "title": "가입 안 된 서비스",
+        "description": "가입자에게 그 APN·서비스가 허용되지 않아 망이 거절함(SERVICE_OPTION_NOT_SUBSCRIBED)",
+        "signatures": [
+          {
+            "id": "service-option-not-subscribed",
+            "must_event": [
+              {
+                "event": "data_setup_response",
+                "fields": {
+                  "cause": "SERVICE_OPTION_NOT_SUBSCRIBED"
+                }
+              }
+            ],
+            "window_sec": 60
+          },
+          {
+            "id": "service-option-not-subscribed-dnc",
+            "must_match": [
+              "^DNC-\\d+: onDataNetworkSetupDataFailed: .*cause=SERVICE_OPTION_NOT_SUBSCRIBED\\(0x"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "가입자 정보(시험 SIM·망 시뮬레이터 가입 프로필)에 그 APN·서비스를 넣는다",
+        "resolution_type": "network",
+        "fix": {
+          "status": "not-a-bug",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetwork.java",
+            "symbol": "DataNetwork#onSetupResponse",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#onDataNetworkSetupFailed",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/base/telephony/java/android/telephony/DataFailCause.java",
+            "symbol": "DataFailCause#toString",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ],
+        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 망 시뮬레이터·HSS의 가입 프로필(허용 APN)"
+      },
+      "body": "- **로그 예시**:\n  ```\n  D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=SERVICE_OPTION_NOT_SUBSCRIBED(0x21) retry=-1 ...\n  D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=SERVICE_OPTION_NOT_SUBSCRIBED(0x21), retryDelayMillis=-1ms.\n  ```\n- **확인 방법**: 응답 cause가 `SERVICE_OPTION_NOT_SUBSCRIBED(0x21)`(cause 33). 단말 설정이 아니라 망의 가입 정보 문제다.\n- **재현 시나리오**: 가입 프로필에 없는 APN으로 연결\n- **해결책**: 망·가입 정보를 고친다(단말 수정 대상 아님).\n- **코드 위치**: `DataNetwork.java:1751-1816`(onSetupResponse), `DataNetworkController.java:3287`, `DataFailCause.java`(상수·toString 1739)\n- **비고**: DataFailCause.java:62. 소스만.\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-14",
+      "kind": "positive",
+      "path": "fixtures/data-setup-not-subscribed.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-15",
+      "type": "NEW-TYPE-3",
+      "cause": {
+        "title": "네트워크 슬라이스 거절",
+        "description": "트래픽 설명자(URSP·S-NSSAI)로 요청한 슬라이스를 망·모뎀이 거절하거나 맞는 규칙이 없음",
+        "signatures": [
+          {
+            "id": "slice-rejected",
+            "must_event": [
+              {
+                "event": "data_setup_response",
+                "fields": {
+                  "cause": "SLICE_REJECTED|MATCH_ALL_RULE_NOT_ALLOWED|ALL_MATCHING_RULES_FAILED"
+                }
+              }
+            ],
+            "window_sec": 60
+          },
+          {
+            "id": "slice-rejected-dnc",
+            "must_match": [
+              "^DNC-\\d+: onDataNetworkSetupDataFailed: .*cause=(SLICE_REJECTED|MATCH_ALL_RULE_NOT_ALLOWED|ALL_MATCHING_RULES_FAILED)\\(0x"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "망의 슬라이스 설정(S-NSSAI 허용 목록)과 모뎀의 URSP 규칙을 확인한다",
+        "resolution_type": "network",
+        "fix": {
+          "status": "open",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetwork.java",
+            "symbol": "DataNetwork#onSetupResponse",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#onDataNetworkSetupFailed",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/base/telephony/java/android/telephony/DataFailCause.java",
+            "symbol": "DataFailCause#toString",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataProfileManager.java",
+            "symbol": "DataProfileManager#getDataProfileForNetworkRequest",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ],
+        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀의 URSP 규칙·슬라이싱 설정(GET_SLICING_CONFIG 응답), 망의 허용 S-NSSAI"
+      },
+      "body": "- **로그 예시**:\n  ```\n  D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=SLICE_REJECTED(0x8cc) retry=-1 ...\n  D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=SLICE_REJECTED(0x8cc), retryDelayMillis=-1ms.\n  ```\n- **확인 방법**: 응답 cause가 `SLICE_REJECTED(0x8cc)`·`MATCH_ALL_RULE_NOT_ALLOWED(0x8cd)`·`ALL_MATCHING_RULES_FAILED(0x8ce)`. 요청은 `TrafficDescriptor`(OsAppId App=ENTERPRISE·PRIORITIZE_LATENCY 등)를 단 프로필이다. TD 기반 프로필은 `Created data profile [DataProfile=null, TrafficDescriptor=...]`로 만들어진다(정상 — APN이 없어도 된다).\n- **재현 시나리오**: 엔터프라이즈·지연 우선 능력 요청 → 망이 그 슬라이스를 허용하지 않음\n- **해결책**: 망 슬라이스 설정·URSP를 맞춘다. 기본 슬라이스로 가야 하는데 거절되면 `MATCH_ALL_RULE_NOT_ALLOWED`(match-all 규칙 금지)를 본다.\n- **코드 위치**: `DataNetwork.java:1751-1816`(onSetupResponse), `DataNetworkController.java:3287`, `DataFailCause.java`(상수·toString 1739)\n- **비고**: DataFailCause.java:925-929. 요청 줄 모양은 캡처 d85-retry-cc-override·d50-enterprise-request(에뮬레이터는 MISSING_UNKNOWN_APN으로 거절). 슬라이스 거절 코드는 소스만.\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-15",
+      "kind": "positive",
+      "path": "fixtures/data-setup-slice-rejected.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-type",
+      "temp_id": "NEW-TYPE-4",
+      "category": "data",
+      "dir_slug": "data-retry-stopped",
+      "type": {
+        "title": "데이터 연결 재시도가 멈춤",
+        "summary": "데이터 연결이 실패한 뒤 DataRetryManager가 시간 기반 재시도를 더 예약하지 않는다",
+        "symptom_signatures": [
+          {
+            "id": "retry-stopped",
+            "must_match": [
+              "^DRM-\\d+: (Data retry failed for \\d+ times on|Network suggested never retry for|onEvaluateDataSetupRetry: Did not match any retry rule)"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "tags": [
+          "data-retry"
+        ]
+      },
+      "first_cause": {
+        "temp_id": "NEW-CAUSE-16",
+        "cause": {
+          "title": "재시도 횟수 소진(사업자 재시도 규칙)",
+          "description": "사업자 설정 재시도 규칙의 최대 횟수만큼 실패해 시간 기반 재시도를 멈춤",
+          "signatures": [
+            {
+              "id": "max-retries",
+              "must_match": [
+                "^DRM-\\d+: Data retry failed for \\d+ times on \\S+\\. Stopped timer-based data retry"
+              ],
+              "window_sec": 60
+            }
+          ],
+          "resolution": "실패 원인을 먼저 고친다. 재시도 횟수·간격이 시험 기준에 맞지 않으면 사업자 재시도 규칙(carrier config data setup retry rules)을 확인한다",
+          "resolution_type": "carrier-config",
+          "fix": {
+            "status": "not-a-bug",
+            "ref": null,
+            "fixed_in": []
+          },
+          "platform_versions": [
+            "17"
+          ],
+          "code_refs": [
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataRetryManager.java",
+              "symbol": "DataRetryManager#onEvaluateDataSetupRetry",
+              "platform_versions": [
+                "17"
+              ]
+            },
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataRetryManager.java",
+              "symbol": "DataRetryManager#getRetryFailedCount",
+              "platform_versions": [
+                "17"
+              ]
+            },
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataConfigManager.java",
+              "symbol": "DataConfigManager#getDataSetupRetryRules",
+              "platform_versions": [
+                "17"
+              ]
+            }
+          ]
+        },
+        "body": "- **로그 예시**:\n  ```\n  D DRM-0   : For capability INTERNET, found matching rule [DataSetupRetryRule: ... Maximum retries=3], failed count=3\n  D DRM-0   : Data retry failed for 3 times on WWAN. Stopped timer-based data retry for INTERNET. Condition-based retry will still happen when condition changes.\n  ```\n- **확인 방법**: `found matching rule ... failed count=N`의 N이 규칙의 `Maximum retries`와 같고 `Data retry failed for N times ... Stopped timer-based data retry for <능력>`. 그 뒤로는 평가 계기(데이터 켬·망 등록 변화·RAT·APN·비행기 모드 해제)가 있어야 다시 시도한다.\n- **재현 시나리오**: 연결이 계속 실패하는 APN(또는 슬라이스)으로 요청을 유지\n- **해결책**: 실패 원인을 고친다. 멈춘 뒤 다시 붙여야 하면 조건 기반 재시도 계기(데이터 끔/켬 등)를 준다. 규칙 값은 사업자 설정에서 온다 — 시험 기준 간격·횟수는 TODO(SITE).\n- **코드 위치**: `DataRetryManager.java:1284-1304`\n- **비고**: 출처: 캡처 d83-permanent-failure-eims(EIMS 20회), d85-retry-cc-override(규칙 덮어쓰기).\n"
+      },
+      "body": "## 증상\n\n데이터 연결이 실패한 뒤 다시 시도하지 않는다(\"retry가 왜 안 되냐\"). 실패 원인 자체는 \"데이터 연결 요청이 실패함\" 유형에서 본다.\n\n## 증상 판별 방법\n\n`DRM-<slot>`의 `onEvaluateDataSetupRetry: <프로필>, transport=WWAN, cause=<DataFailCause>, retryDelayMillis=<ms>ms, ...` 뒤에 `Scheduled data retry [DataSetupRetryEntry: delay=...]`가 **없고** 멈춤 줄이 있다. 재시도 판단 순서(DataRetryManager.java:1211-1329): (1) 망이 준 retry가 무한대(`Long.MAX_VALUE`·`Integer.MAX_VALUE`)면 무기한 스로틀, (2) 망이 retry 시간을 주면 그 시간에 한 번 예약(스로틀), (3) 없으면 사업자 설정 재시도 규칙(`carrier_data_setup_retry_rules` 류, `DRM: onDataConfigUpdated: mDataSetupRetryRuleList=`)을 차례로 대조 — 영구 실패 규칙이면 그 APN을 영구 실패로 표시, 능력·cause가 맞는 규칙의 실패 횟수가 최대면 멈춤, 맞는 규칙이 없으면 멈춤. 멈춰도 **조건 기반 재시도**(데이터 켬·망 등록·RAT·APN 변경 등 평가 계기)는 남는다. 재시도·스로틀 기록은 `Remove all retry and throttling entries, reason=<RADIO_ON|MODEM_RESTART|DATA_PROFILES_CHANGED|DATA_CONFIG_CHANGED|TAC_CHANGED|DATA_SERVICE_BOUND>`로 지워진다.\n\n```\n11-14 18:29:33.046  2101  2101 D DRM-0   : Data retry failed for 20 times on WWAN. Stopped timer-based data retry for EIMS. Condition-based retry will still happen when condition changes.\n```\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-16",
+      "kind": "positive",
+      "path": "fixtures/data-retry-max.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-17",
+      "type": "NEW-TYPE-4",
+      "cause": {
+        "title": "망이 재시도 금지(무기한 스로틀)",
+        "description": "실패 응답의 제안 재시도 시간이 무한대라 그 프로필을 무기한 스로틀함",
+        "signatures": [
+          {
+            "id": "never-retry",
+            "must_match": [
+              "^DRM-\\d+: Network suggested never retry for"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "망이 재시도를 막은 이유(실패 원인 코드)를 CP·망 쪽에서 확인한다. 스로틀은 무선 켬·모뎀 재시작·APN·사업자 설정 변경·TAC 변경 때 풀린다",
+        "resolution_type": "network",
+        "fix": {
+          "status": "open",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataRetryManager.java",
+            "symbol": "DataRetryManager#onEvaluateDataSetupRetry",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataRetryManager.java",
+            "symbol": "DataRetryManager#throttleDataProfile",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataRetryManager.java",
+            "symbol": "DataRetryManager#onReset",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ],
+        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀이 망에서 받은 back-off 타이머(T3396 등)와 거절 원인, 벤더 RIL이 넘긴 suggestedRetryTime"
+      },
+      "body": "- **로그 예시**:\n  ```\n  D DRM-0   : onEvaluateDataSetupRetry: [...], transport=WWAN, cause=OPERATOR_BARRED(0x8), retryDelayMillis=2147483647ms, ...\n  D DRM-0   : Network suggested never retry for [DataProfile=...]\n  D DRM-0   : Add throttling entry [DataThrottlingEntry: ...]\n  ```\n- **확인 방법**: `retryDelayMillis=`가 무한대 값(`Long.MAX_VALUE`, HAL 1.5 이하는 `Integer.MAX_VALUE`=2147483647)와 `Network suggested never retry for`. 그 뒤 요청 평가는 `DATA_THROTTLED`로 거부된다. 풀림은 `Remove all retry and throttling entries, reason=...`(RADIO_ON·MODEM_RESTART·DATA_PROFILES_CHANGED·DATA_CONFIG_CHANGED·TAC_CHANGED) 또는 `onDataProfileUnthrottled:`로 본다 — 비행기 모드 껐다 켜기가 풀어 주는 이유가 RADIO_ON이다.\n- **재현 시나리오**: 망 시뮬레이터에서 무기한 back-off와 함께 거절\n- **해결책**: 망 쪽 거절 이유를 고친다. `[WA]` 비행기 모드를 껐다 켜서 스로틀을 푼다.\n- **코드 위치**: `DataRetryManager.java:1218-1229`(never retry), 1421-1437(reset), 1626-1691(unthrottle)\n- **비고**: 소스만(에뮬레이터는 retry=10000만 준다, 캡처 d82-throttle). 시간이 정해진 스로틀(retry=N ms)은 재시도가 늦는 것이라 이 원인이 아니다 — 기준 시간은 TODO(SITE).\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-17",
+      "kind": "positive",
+      "path": "fixtures/data-retry-never.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-18",
+      "type": "NEW-TYPE-4",
+      "cause": {
+        "title": "맞는 재시도 규칙 없음(사업자 설정)",
+        "description": "실패 cause·요청 능력에 맞는 재시도 규칙이 사업자 설정에 없어 시간 기반 재시도를 하지 않음",
+        "signatures": [
+          {
+            "id": "no-retry-rule",
+            "must_match": [
+              "^DRM-\\d+: onEvaluateDataSetupRetry: Did not match any retry rule"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "사업자 재시도 규칙(carrier config data setup retry rules)에 이 능력·실패 원인을 덮는 규칙이 있는지 확인한다",
+        "resolution_type": "carrier-config",
+        "fix": {
+          "status": "open",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataRetryManager.java",
+            "symbol": "DataRetryManager#onEvaluateDataSetupRetry",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataConfigManager.java",
+            "symbol": "DataConfigManager#getDataSetupRetryRules",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ]
+      },
+      "body": "- **로그 예시**:\n  ```\n  D DRM-0   : onEvaluateDataSetupRetry: [...], cause=..., retryDelayMillis=-1ms, ...\n  D DRM-0   : onEvaluateDataSetupRetry: Did not match any retry rule. Stop timer-based retry.\n  ```\n- **확인 방법**: 망이 retry 시간을 주지 않았고(`retryDelayMillis=-1ms`) `Did not match any retry rule`. 규칙 목록은 `onDataConfigUpdated: mDataSetupRetryRuleList=`에 있다 — `Network capabilities`·`Fail causes`가 이 요청·cause를 덮는지 본다.\n- **재현 시나리오**: 재시도 규칙을 특정 능력(예: EIMS)만 덮게 바꾼 뒤 INTERNET 연결 실패\n- **해결책**: 규칙을 고친다(사업자 설정). 의도한 설정이면 조건 기반 재시도만 남는다.\n- **코드 위치**: `DataRetryManager.java:1325-1328`\n- **비고**: 소스만(캡처 없음).\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-18",
+      "kind": "positive",
+      "path": "fixtures/data-retry-no-rule.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-type",
+      "temp_id": "NEW-TYPE-5",
+      "category": "data",
+      "dir_slug": "data-handover-failed",
+      "type": {
+        "title": "데이터 핸드오버가 실패함",
+        "summary": "IWLAN(Wi-Fi) ↔ 셀룰러(WWAN) 사이 데이터·IMS PDN 핸드오버가 실패하거나 허용되지 않는다",
+        "symptom_signatures": [
+          {
+            "id": "handover-failed",
+            "must_match": [
+              "^DNC-\\d+: (Handover failed\\. |tryHandoverDataNetwork: Handover not allowed\\. )"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "tags": [
+          "data-handover"
+        ]
+      },
+      "first_cause": {
+        "temp_id": "NEW-CAUSE-19",
+        "cause": {
+          "title": "망·ePDG가 핸드오버 거절",
+          "description": "핸드오버 요청에 대상 망(ePDG·셀룰러)이 실패 원인으로 응답해 핸드오버가 실패함",
+          "signatures": [
+            {
+              "id": "handover-rejected",
+              "must_match": [
+                "^DNC-\\d+: Handover failed\\. .*, cause=(?!NONE\\()[A-Z_0-9]+\\(0x"
+              ],
+              "window_sec": 60
+            }
+          ],
+          "resolution": "핸드오버 실패 원인 코드로 대상 망(ePDG·IWLAN 서비스·셀룰러 망) 쪽 거절 이유를 확인한다",
+          "resolution_type": "network",
+          "fix": {
+            "status": "open",
+            "ref": null,
+            "fixed_in": []
+          },
+          "platform_versions": [
+            "17"
+          ],
+          "code_refs": [
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+              "symbol": "DataNetworkController#onDataNetworkHandoverFailed",
+              "platform_versions": [
+                "17"
+              ]
+            },
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetwork.java",
+              "symbol": "DataNetwork#onHandoverResponse",
+              "platform_versions": [
+                "17"
+              ]
+            },
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataRetryManager.java",
+              "symbol": "DataRetryManager#onEvaluateDataHandoverRetry",
+              "platform_versions": [
+                "17"
+              ]
+            }
+          ],
+          "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: IWLAN 데이터 서비스(ePDG IKE 협상)·모뎀의 핸드오버 응답, 망 시뮬레이터의 PDN 이동 기록"
+        },
+        "body": "- **로그 예시**:\n  ```\n  D DNC-0   : Start handover [DataNetwork: DN-140-C, <APN#2>, state=ConnectedState] to WLAN\n  D DN-140-C: onHandoverResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=IWLAN_IKEV2_AUTH_FAILURE(0x4001) ...\n  D DNC-0   : Handover failed. [...], cause=IWLAN_IKEV2_AUTH_FAILURE(0x4001), retryDelayMillis=-1ms, handoverFailureMode=retry handover\n  ```\n- **확인 방법**: `Handover failed.`의 `cause`가 NONE이 아니다. `IWLAN_*`면 Wi-Fi 쪽(ePDG·IKE), 3GPP cause면 셀룰러 망 쪽. 재시도가 다 차면 DRM `Data handover retry failed for N times. Stopped handover retry.`가 뒤따르고 기존 망 평가에 `HANDOVER_RETRY_STOPPED`가 붙는다.\n- **재현 시나리오**: IMS PDN이 셀룰러에 있을 때 Wi-Fi 통화 선호로 바꾸고 ePDG가 거절\n- **해결책**: 대상 망 쪽 거절 이유를 고친다. `HANDOFF_PREFERENCE_CHANGED`(0x8cb)는 진행 중 선호가 다시 바뀐 것이라 거절이 아니다.\n- **코드 위치**: `DataNetworkController.java:3696-3755`, `DataNetwork.java:3904-3960`, `DataRetryManager.java:1347-1401`\n- **비고**: 소스만(에뮬레이터는 IWLAN이 없다, 캡처 d33-handover-attempt 부분). 줄 모양은 소스 문구로 썼다.\n"
+      },
+      "body": "## 증상\n\nWi-Fi 통화·IWLAN ↔ 셀룰러 전환 때 IMS·데이터 PDN이 옮겨가지 못하고 원래 망에 남거나 끊긴다.\n\n## 증상 판별 방법\n\n선호 망 변경(`ANM-<slot>: setPreferredTransports: apnType=<타입>, transport=<WLAN|WWAN>`) → `DNC-<slot>: Start handover [DataNetwork: ...] to <망>` → `DN-<id>-<C|I>: onHandoverResponse: resultCode=..., response=...` → 실패면 `DNC-<slot>: Handover failed. [...], cause=<DataFailCause>, retryDelayMillis=<ms>ms, handoverFailureMode=<legacy|fallback|retry handover|retry setup new one|unknown>`, 평가에서 막히면 `tryHandoverDataNetwork: Handover not allowed. Tear down ...`. 실패 뒤 동작은 handoverFailureMode가 정한다(DataNetworkController.java:3699-3755): fallback이면 재시도 안 하고 선호 망 재평가, retry setup new one(또는 legacy+선호 망 다름)이면 원래 망을 끊고 대상 망에 새로 연결, 그 밖은 핸드오버 재시도(DRM `onEvaluateDataHandoverRetry`).\n\n```\n11-14 14:00:02.300  2101  2101 D DNC-0   : Handover failed. [DataNetwork: DN-140-C, <APN#2>, state=ConnectedState], cause=IWLAN_IKEV2_AUTH_FAILURE(0x4001), retryDelayMillis=-1ms, handoverFailureMode=retry handover\n```\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-19",
+      "kind": "positive",
+      "path": "fixtures/data-handover-rejected.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-20",
+      "type": "NEW-TYPE-5",
+      "cause": {
+        "title": "핸드오버 불가 평가(정책·대상 망 서비스 없음)",
+        "description": "대상 망 평가가 NOT_ALLOWED_BY_POLICY·NOT_IN_SERVICE·VOPS_NOT_SUPPORTED로 거부돼 핸드오버 대신 끊고 새로 연결함",
+        "signatures": [
+          {
+            "id": "handover-not-allowed",
+            "must_match": [
+              "^DNC-\\d+: tryHandoverDataNetwork: Handover not allowed\\. Tear down"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "핸드오버 정책(사업자 설정 IWLAN 핸드오버 정책)과 대상 망의 서비스 상태를 확인한다",
+        "resolution_type": "carrier-config",
+        "fix": {
+          "status": "open",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#tryHandoverDataNetwork",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#evaluateDataNetworkHandover",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ]
+      },
+      "body": "- **로그 예시**:\n  ```\n  D DNC-0   : tryHandoverDataNetwork: Data evaluation: evaluation reason:..., Data disallowed reasons: NOT_ALLOWED_BY_POLICY, ...\n  D DNC-0   : tryHandoverDataNetwork: Handover not allowed. Tear down[DataNetwork: ...] so a new network can be setup on WLAN\n  ```\n- **확인 방법**: `tryHandoverDataNetwork:` 평가 줄의 거부 이유(`NOT_ALLOWED_BY_POLICY`는 사업자 핸드오버 정책 규칙 `evaluateDataNetworkHandover: Matched <규칙>`, `NOT_IN_SERVICE`는 대상 망 미등록, `VOPS_NOT_SUPPORTED`) 뒤 `Handover not allowed. Tear down`. 끊긴 뒤 대상 망에 새로 연결되는지(`tearDownReason=HANDOVER_NOT_ALLOWED` 뒤 SETUP)를 본다. 통화 중 IMS는 끊지 않고 재시도로 미룬다(`Scheduled retry due to in voice call and target OOS`).\n- **재현 시나리오**: 핸드오버를 막는 사업자 정책 아래 IWLAN ↔ 셀룰러 선호 변경\n- **해결책**: 의도한 정책이면 정상이다(끊고 새로 연결). 끊김이 문제면 정책 값을 확인한다.\n- **코드 위치**: `DataNetworkController.java:3912-3956`, 2562-2606(정책 규칙 대조)\n- **비고**: 소스만(캡처 없음).\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-20",
+      "kind": "positive",
+      "path": "fixtures/data-handover-not-allowed.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-TYPE-1",
+      "kind": "negative",
+      "path": "fixtures/data-normal-setup.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-TYPE-5",
+      "kind": "negative",
+      "path": "fixtures/data-normal-handover.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    }
+  ]
+}

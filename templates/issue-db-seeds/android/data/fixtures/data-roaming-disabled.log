@@ -1,0 +1,3 @@
+-- [합성] telephony-triage issue-db seed fixture (data). AOSP 17 소스 문구·에뮬레이터 캡처 모양으로 새로 쓴 줄 — 실제 로그 아님.
+11-14 08:00:02.000  2101  2101 D DSMGR-0 : DataRoamingEnabled set to false on sub 1, changed=true
+11-14 08:00:03.500  2101  2101 W DNC-0   : Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null, time=09:00:00.000, network type=LTE, reg state=ROAMING, [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED RequestorUid: 1000 RequestorPkg: android UnderlyingNetworks: Null] ], mPriority=20, state=UNSATISFIED, mAttachedDataNetwork=null, created time=09:00:00.100, evaluation result=null]

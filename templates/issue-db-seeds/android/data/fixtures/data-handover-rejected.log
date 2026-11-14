@@ -1,0 +1,11 @@
+-- [합성] telephony-triage issue-db seed fixture (data). AOSP 17 소스 문구·에뮬레이터 캡처 모양으로 새로 쓴 줄 — 실제 로그 아님.
+11-14 14:00:00.000  2101  2141 D RILJ    : [0400]< SETUP_DATA_CALL DataCallResponse: { cause=NONE(0x0) retry=-1 cid=1 linkStatus=2 protocolType=2 ifname=rmnet0 addresses=[<IP#1>/64] dnses=[<IP#2>] gateways=[<IP#3>] pcscf=[] mtu=1500 mtuV4=1500 mtuV6=1500 handoverFailureMode=legacy pduSessionId=0 defaultQos=null qosBearerSessions=[] sliceInfo=null trafficDescriptors=[]} [PHONE0]
+11-14 14:00:00.002  2101  2101 D DN-140-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=NONE(0x0) retry=-1 cid=1 linkStatus=2 protocolType=2 ifname=rmnet0 addresses=[<IP#1>/64] dnses=[<IP#2>] gateways=[<IP#3>] pcscf=[] mtu=1500 mtuV4=1500 mtuV6=1500 handoverFailureMode=legacy pduSessionId=0 defaultQos=null qosBearerSessions=[] sliceInfo=null trafficDescriptors=[]}
+11-14 14:00:00.010  2101  2101 D DNC-0   : Internet data state changed from DISCONNECTED to CONNECTED.
+11-14 14:00:01.000  2101  2101 D ANM-0   : setPreferredTransports: apnType=ims, transport=WLAN
+11-14 14:00:01.002  2101  2101 D DNC-0   : onEvaluatePreferredTransport: IMS preferred on WLAN
+11-14 14:00:01.004  2101  2101 D DNC-0   : Start handover [DataNetwork: DN-140-C, <APN#2>, state=ConnectedState] to WLAN
+11-14 14:00:01.005  2101  2101 D DN-140-C: ConnectedState: Start handover from WWAN to WLAN
+11-14 14:00:02.300  2101  2101 D DN-140-C: HandoverState: onHandoverResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=IWLAN_IKEV2_AUTH_FAILURE(0x4001) retry=-1 cid=-1 linkStatus=0 protocolType=2 ifname=null addresses=[] dnses=[] gateways=[] pcscf=[] mtu=0 mtuV4=0 mtuV6=0 handoverFailureMode=legacy pduSessionId=0 defaultQos=null qosBearerSessions=[] sliceInfo=null trafficDescriptors=[]}
+11-14 14:00:02.302  2101  2101 D DNC-0   : Handover failed. [DataNetwork: DN-140-C, <APN#2>, state=ConnectedState], cause=IWLAN_IKEV2_AUTH_FAILURE(0x4001), retryDelayMillis=-1ms, handoverFailureMode=retry handover
+11-14 14:00:02.310  2101  2101 D DRM-0   : onEvaluateDataHandoverRetry: [DataNetwork: DN-140-C, <APN#2>, state=ConnectedState], cause=IWLAN_IKEV2_AUTH_FAILURE(0x4001), retryDelayMillis=-1ms
