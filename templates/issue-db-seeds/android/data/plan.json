@@ -1564,6 +1564,278 @@
       }
     },
     {
+      "op": "new-type",
+      "temp_id": "NEW-TYPE-6",
+      "category": "data",
+      "dir_slug": "connected-no-traffic",
+      "type": {
+        "title": "데이터는 연결됐는데 통신이 되지 않음",
+        "summary": "SETUP_DATA_CALL은 성공했는데 망이 준 값(주소·DNS·IP 종류)이 비정상이거나 망 검증이 실패해 실제 통신이 안 된다",
+        "symptom_signatures": [
+          {
+            "id": "bad-setup-values",
+            "must_match": [
+              "^DN-.+: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: \\{ cause=NONE\\(0x0\\) ",
+              "^DN-.+: ConnectingState: (Empty dns response|no address for ifname=|Invalid DataCallResponse)"
+            ],
+            "window_sec": 60
+          },
+          {
+            "id": "validation-invalid",
+            "must_match": [
+              "^DNC-\\d+: onDataNetworkValidationStatusChanged: .*, validation status=INVALID"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "tags": [
+          "data-link-properties"
+        ]
+      },
+      "first_cause": {
+        "temp_id": "NEW-CAUSE-21",
+        "cause": {
+          "title": "망 응답에 DNS 없음",
+          "description": "연결 응답의 DNS 목록이 비어 있어 DNS 없이 연결됨(이름 조회·망 검증 실패)",
+          "signatures": [
+            {
+              "id": "empty-dns",
+              "must_match": [
+                "^DN-.+: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: \\{ cause=NONE\\(0x0\\) .*\\bdnses=\\[\\]",
+                "^DN-.+: ConnectingState: Empty dns response"
+              ],
+              "window_sec": 60
+            }
+          ],
+          "resolution": "망·모뎀이 DNS를 주지 않는 이유(PCO·IPCP DNS 요청·망 설정)를 CP·망 쪽에서 확인한다",
+          "resolution_type": "network",
+          "fix": {
+            "status": "open",
+            "ref": null,
+            "fixed_in": []
+          },
+          "platform_versions": [
+            "17"
+          ],
+          "code_refs": [
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetwork.java",
+              "symbol": "DataNetwork#onSetupResponse",
+              "platform_versions": [
+                "17"
+              ]
+            },
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetwork.java",
+              "symbol": "DataNetwork#updateDataNetwork",
+              "platform_versions": [
+                "17"
+              ]
+            },
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataServiceManager.java",
+              "symbol": "DataServiceManager#onSetupDataCallComplete",
+              "platform_versions": [
+                "17"
+              ]
+            }
+          ],
+          "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀이 망에서 받은 PCO(DNS 서버 주소 항목)·IPv6 RA의 RDNSS, 벤더 RIL이 만든 SetupDataCallResult의 dnses, 망 시뮬레이터 PDN 설정의 DNS"
+        },
+        "body": "- **로그 예시**:\n  ```\n  D DN-160-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=NONE(0x0) ... dnses=[] ...\n  E DN-160-C: ConnectingState: Empty dns response\n  D DN-160-C: ConnectingState: sendLinkProperties {... DnsAddresses: [ ] ...}\n  D DNC-0   : onDataNetworkValidationStatusChanged: [...], validation status=INVALID, \n  ```\n- **확인 방법**: 성공 응답의 `dnses=[]`와 `Empty dns response`(E). ③의 `DnsAddresses: [ ]`. 보통 ⑤가 `INVALID`가 된다 — 그 경우 원인은 이것이고 \"망 검증 실패\" 원인은 맞지 않게 좁혀 두었다.\n- **재현 시나리오**: 망 시뮬레이터 PDN 설정에서 DNS를 빼고 데이터 연결\n- **해결책**: 망·모뎀 쪽에서 DNS를 주게 한다. 응답(①)에는 DNS가 있는데 ③에서 비면 프레임워크 쪽(any 주소라 걸러짐)이다.\n- **코드 위치**: `DataNetwork.java:2937-2946`(DNS 추가·`Empty dns response`), 1753(onSetupResponse), `DataServiceManager.java:253`\n- **비고**: 소스만(에뮬레이터는 늘 DNS를 준다, 성공 줄 모양은 캡처 d01-setup).\n"
+      },
+      "body": "## 증상\n\n데이터 아이콘은 붙었는데 인터넷이 안 된다(웹·앱 통신 실패, 느낌표 표시). 연결 요청은 성공(`cause=NONE`)했다.\n\n## 증상 판별 방법\n\n성공 흐름의 다섯 단계를 차례로 보고, 처음 빠지거나 값이 빈 단계로 의심할 곳을 정한다. 이 유형은 ② 뒤의 이상 줄 또는 ⑤의 `INVALID`가 있을 때 걸린다.\n\n| 단계 | 태그·줄 | 값에서 볼 것 | 이 줄이 없거나 값이 비면 의심되는 곳 |\n|---|---|---|---|\n| ① 망·모뎀 응답 | `RILJ: [n]< SETUP_DATA_CALL DataCallResponse: {...}`, `DSM-C-<slot>: onSetupDataCallComplete. resultCode = 0, response = DataCallResponse: {...}` | `cause=NONE`, `addresses=[..]`(주소·프리픽스), `dnses=[..]`, `gateways=[..]`, `pcscf=[..]`(IMS), `mtu`/`mtuV4`/`mtuV6`, `protocolType` | 응답이 없으면 모뎀·RIL. 값이 비면 망·모뎀(PCO·IPCP·RA로 받는 값) |\n| ② 프레임워크가 받음 | `DN-<id>-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=...` 뒤의 `Invalid DataCallResponse...`·`no address for ifname=`·`Empty dns response`(E) | 이상 줄이 있으면 응답 값 문제를 프레임워크가 알아챈 것 | ①은 있는데 ②가 없으면 DataServiceManager·DataNetwork(응답 전달) |\n| ③ 프레임워크가 만든 설정 | `DN-<id>-C: ...: sendLinkProperties {InterfaceName: .. LinkAddresses: [ .. ] DnsAddresses: [ .. ] ... MTU: .. Routes: [ <dst>/0 -> <gw> <if> mtu .. ]}` | 주소·DNS가 응답과 같은지, 게이트웨이마다 기본 경로(`/0 ->`)가 있는지, MTU | 응답에 값이 있는데 여기 없으면 DataNetwork(응답 → LinkProperties 변환). 응답부터 없으면 망 쪽 |\n| ④ 연결 | `DN-<id>-C: ConnectedState: network connected.`, `DNC-<slot>: onDataNetworkConnected: ...`, `Internet data state changed from DISCONNECTED to CONNECTED.` | — | ③은 있는데 ④가 없으면 DataNetwork 상태 머신(연결 중 해제·핸드오버) |\n| ⑤ 망 검증 | `DNC-<slot>: onDataNetworkValidationStatusChanged: [...], validation status=VALID` | `VALID` / `INVALID`(값은 이 둘뿐) | ④ 뒤 ⑤가 끝내 없거나 INVALID면 ConnectivityService·NetworkMonitor 탐침(DNS 조회·HTTP/HTTPS 프로브·캡티브 포털) 또는 망의 인터넷 경로 |\n\n판단 지식(시그니처 아님): 게이트웨이가 비면(`gateways=[]`) 프레임워크는 경로를 하나도 넣지 않는다(`Routes: [ ]`) — 응답 문서상 점대점 연결 뜻이라 그것만으로 이상이 아니다. MTU 0·음수는 망이 값을 안 준 것이고 APN의 MTU, 그다음 사업자 기본 MTU로 바꿔 쓴다 — ③의 `MTU:`가 실제 쓰는 값이다. 주소·DNS 중 any 주소(모든 자리가 0인 주소)는 ③에서 빠진다(마스킹 뒤에는 다른 주소와 구별되지 않는다).\n\n```\n11-14 13:00:01.100  2101  2101 D DN-160-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=NONE(0x0) ... addresses=[<IP#1>/64] dnses=[] gateways=[/<IP#3>] ...\n11-14 13:00:01.100  2101  2101 E DN-160-C: ConnectingState: Empty dns response\n```\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-21",
+      "kind": "positive",
+      "path": "fixtures/data-link-empty-dns.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-22",
+      "type": "NEW-TYPE-6",
+      "cause": {
+        "title": "망 응답에 IP 주소 없음",
+        "description": "연결 응답이 성공(cause=NONE)인데 주소 목록이 비어 있음",
+        "signatures": [
+          {
+            "id": "no-address",
+            "must_match": [
+              "^DN-.+: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: \\{ cause=NONE\\(0x0\\) .*\\baddresses=\\[\\]",
+              "^DN-.+: ConnectingState: no address for ifname="
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "모뎀·벤더 RIL이 주소 없이 성공 응답을 준 이유를 CP 쪽에서 확인한다",
+        "resolution_type": "modem",
+        "fix": {
+          "status": "open",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetwork.java",
+            "symbol": "DataNetwork#validateDataCallResponse",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetwork.java",
+            "symbol": "DataNetwork#updateDataNetwork",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ],
+        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀의 PDN 주소 할당(IPv4 주소·IPv6 인터페이스 ID), 벤더 RIL SetupDataCallResult의 addresses"
+      },
+      "body": "- **로그 예시**:\n  ```\n  E DN-161-C: ConnectingState: Invalid DataCallResponse:DataCallResponse: { cause=NONE(0x0) ... addresses=[] ...\n  E DN-161-C: ConnectingState: no address for ifname=rmnet0\n  D DN-161-C: ConnectingState: sendLinkProperties {InterfaceName: rmnet0 LinkAddresses: [ ] ...}\n  ```\n- **확인 방법**: 성공 응답의 `addresses=[]`와 `no address for ifname=`(E). 앞에 `Invalid DataCallResponse:`(이상 응답, anomaly 보고)도 남는다. ③의 `LinkAddresses: [ ]`.\n- **재현 시나리오**: 모뎀이 주소 없이 성공을 돌려주는 상황(벤더 RIL·모뎀 오류)\n- **해결책**: CP·벤더 RIL 쪽 응답을 고친다. 프레임워크는 받은 대로 연결한다.\n- **코드 위치**: `DataNetwork.java:3088-3097`(Invalid DataCallResponse), 2925-2935(no address)\n- **비고**: 소스만. APN 프로토콜이 IP·IPV6이면 \"IP 종류 불일치\" 줄도 같이 나므로 그 경우는 둘 다 맞을 수 있다(fixture는 IPV4V6).\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-22",
+      "kind": "positive",
+      "path": "fixtures/data-link-no-address.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-23",
+      "type": "NEW-TYPE-6",
+      "cause": {
+        "title": "요청한 IP 종류와 받은 주소 불일치",
+        "description": "APN 프로토콜(IP 또는 IPV6)로 요청했는데 그 종류의 주소를 받지 못함",
+        "signatures": [
+          {
+            "id": "ip-type-mismatch",
+            "must_match": [
+              "^DN-.+: ConnectingState: Invalid DataCallResponse\\. Requested IPv[46] but didn't get an IPv[46] address\\."
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "APN의 protocol·roaming_protocol을 망이 주는 IP 종류와 맞춘다",
+        "resolution_type": "carrier-config",
+        "fix": {
+          "status": "open",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetwork.java",
+            "symbol": "DataNetwork#validateDataCallResponse",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ],
+        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 망이 승인한 PDN 종류(요청과 다른 종류로 승인했는지), 모뎀의 PDN 종류 설정"
+      },
+      "body": "- **로그 예시**:\n  ```\n  E DN-162-C: ConnectingState: Invalid DataCallResponse. Requested IPv4 but didn't get an IPv4 address.DataCallResponse: { cause=NONE(0x0) ... addresses=[<IP#1>/64] ...\n  ```\n- **확인 방법**: `Requested IPv4 but didn't get an IPv4 address.`(또는 IPv6). 요청 프로필 줄의 protocol 칸(로밍이면 roaming protocol)과 응답 `addresses`의 주소 종류를 대조한다. IPV4V6 요청은 이 검사를 하지 않는다 — 한쪽만 받아도 줄이 없다.\n- **재현 시나리오**: APN protocol=IP로 IPv6만 주는 망에 연결(또는 로밍 프로토콜 불일치)\n- **해결책**: APN 프로토콜을 망에 맞춘다(사업자 APN DB).\n- **코드 위치**: `DataNetwork.java:3098-3131`(최초 연결 응답에서만, 등록·로밍 상태가 같을 때)\n- **비고**: 소스만(에뮬레이터는 IPv4만 준다).\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-23",
+      "kind": "positive",
+      "path": "fixtures/data-link-ip-mismatch.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-24",
+      "type": "NEW-TYPE-6",
+      "cause": {
+        "title": "망 검증 실패(받은 값은 정상)",
+        "description": "주소·DNS를 정상으로 받아 연결됐는데 ConnectivityService·NetworkMonitor 망 검증(DNS·HTTP 탐침)이 실패함",
+        "signatures": [
+          {
+            "id": "validation-failed-values-ok",
+            "must_match": [
+              {
+                "id": "ok",
+                "pattern": "^DN-.+: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: \\{ cause=NONE\\(0x0\\) .*\\baddresses=\\[[^\\]]+\\] dnses=\\[[^\\]]+\\]"
+              },
+              {
+                "id": "invalid",
+                "pattern": "^DNC-\\d+: onDataNetworkValidationStatusChanged: .*, validation status=INVALID"
+              }
+            ],
+            "must_not_match": [
+              "^DN-.+: ConnectingState: (Empty dns response|no address for ifname=|Invalid DataCallResponse)"
+            ],
+            "sequence": [
+              "ok",
+              "invalid"
+            ],
+            "window_sec": 120
+          }
+        ],
+        "resolution": "망 검증 탐침이 실패한 이유(DNS 응답·인터넷 경로·캡티브 포털·탐침 URL 접근)를 ConnectivityService·NetworkMonitor와 망 쪽에서 확인한다",
+        "resolution_type": "network",
+        "fix": {
+          "status": "open",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetworkController.java",
+            "symbol": "DataNetworkController#onDataNetworkValidationStatusChanged",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataUtils.java",
+            "symbol": "DataUtils#validationStatusToString",
+            "platform_versions": [
+              "17"
+            ]
+          },
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/data/DataNetwork.java",
+            "symbol": "DataNetwork#updateValidationStatus",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ],
+        "cp_evidence": "망 검증(ConnectivityService·NetworkMonitor) 쪽 — 다음에 받을 로그: NetworkMonitor 탐침 결과(DNS·HTTP·HTTPS 프로브, 캡티브 포털 리다이렉트), 망 시뮬레이터의 인터넷 경로·DNS 서버 응답"
+      },
+      "body": "- **로그 예시**:\n  ```\n  D DN-163-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=NONE(0x0) ... addresses=[<IP#1>/64] dnses=[/<IP#2>] ...\n  D DN-163-C: ConnectingState: sendLinkProperties {... DnsAddresses: [ /<IP#2> ] ... Routes: [ ::/0 -> <IP#3> rmnet0 mtu 1500 ]}\n  D DNC-0   : onDataNetworkValidationStatusChanged: [...], validation status=INVALID, \n  ```\n- **확인 방법**: 성공 응답에 주소·DNS가 있고 ②의 이상 줄이 없는데 그 **뒤에** `validation status=INVALID`. 값이 빈 원인(DNS 없음·주소 없음·IP 종류 불일치)과 겹치면 그쪽이 맞고 이 원인은 맞지 않게 좁혔다. 캡티브 포털이면 같은 줄 끝에 리다이렉트 URI가 붙는다. INVALID가 이어지면 data stall 복구가 돌 수 있다(\"데이터 연결이 끊김\"의 data stall 원인).\n- **재현 시나리오**: 망 검증 탐침 URL에 닿지 않게 한 망에서 데이터 연결(캡처 d09-validation)\n- **해결책**: 탐침이 실패하는 경로를 고친다. 단말 쪽 판단은 ConnectivityService·NetworkMonitor 로그로 한다(텔레포니 밖).\n- **코드 위치**: `DataNetworkController.java:3553-3556`, `DataUtils.java:274-283`(VALID/INVALID 두 값), `DataNetwork.java:4133`(updateValidationStatus)\n- **비고**: 출처: 캡처 d09-validation(`validation status=INVALID`), 성공 흐름 d01-setup. 연결 뒤 120초 안의 INVALID만 본다 — 오래 연결된 뒤의 INVALID는 이 원인으로 잡지 않는다.\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-24",
+      "kind": "positive",
+      "path": "fixtures/data-link-validation-invalid.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
       "op": "add-fixture",
       "for": "NEW-TYPE-1",
       "kind": "negative",
@@ -1577,6 +1849,15 @@
       "for": "NEW-TYPE-5",
       "kind": "negative",
       "path": "fixtures/data-normal-handover.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-TYPE-6",
+      "kind": "negative",
+      "path": "fixtures/data-normal-validated.log",
       "expect": {
         "origin": "synthetic"
       }
