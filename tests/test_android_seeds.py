@@ -2,8 +2,8 @@
 """Android 시작 유형 묶음(이슈 DB 시드) 시험 — `templates/issue-db-seeds/android/<카테고리>/plan.json`.
 
 - `add-fixture`의 `expect.origin: synthetic`이 `.expect.yaml`에 남고, 다른 값은 거부된다.
-- 계획 모양: `source: import`, Jira 기록 없음, 새 유형 10개 이하, fixture는 모두 계획 옆 `fixtures/`의 합성 표시 로그,
-  카테고리마다 음성 fixture, 벤더 층 placeholder 이름 없음.
+- 계획 모양: `source: import`, Jira 기록 없음, 새 유형 10개 이하, fixture는 모두 계획 옆 `fixtures/`(흐름 정상 로그는
+  `flows/fixtures/`, `put-flow`의 `fixtures[]`)의 합성 표시 로그, 카테고리마다 음성 fixture, 벤더 층 placeholder 이름 없음.
 - 계획마다 새 뼈대(`make_db_skeleton.py`)에 적용해 초안 검증 R1~R5 통과(리뷰 필요한 건너뜀도 실패로 본다).
 - 모든 계획을 한 뼈대에 차례로 병합해 가며 적용해도 통과(교차 카테고리 R2~R4).
 - 다 넣은 DB에서 fixture마다 앞뒤 20분에 무관한 줄을 붙여도 맞는 원인이 같다(창보다 긴 로그에서 `must_not_match`가
@@ -52,6 +52,8 @@ def load(plan: Path) -> dict:
 def verify(ws: Workspace, job: str, plan: Path) -> None:
     """계획을 작업 디렉토리에 놓고 초안 검증. R1~R4는 pass, R5는 pass 또는 해당 없음이어야 한다."""
     shutil.copytree(plan.parent / "fixtures", ws.job_dir(job) / "fixtures")
+    if (plan.parent / "flows").is_dir():      # put-flow 정상 로그(계획 기준 flows/fixtures/)
+        shutil.copytree(plan.parent / "flows", ws.job_dir(job) / "flows")
     path = ws.plan(job, load(plan))
     ws.acquire(job)
     proc = ws.run("db_verify.py", ["rules", "--plan", path, "--draft", ws.job_dir(job) / "draft", "--db", ws.clone])
@@ -149,10 +151,13 @@ def test_seed_plan_shape(plan):
     fixtures = [op for op in ops if op["op"] == "add-fixture"]
     assert any(op["kind"] == "negative" for op in fixtures), "카테고리마다 음성 fixture"
     assert all(op.get("expect", {}).get("origin") == "synthetic" for op in fixtures), "fixture마다 expect.origin: synthetic"
-    listed = {op["path"] for op in fixtures}
-    on_disk = {f"fixtures/{p.name}" for p in (plan.parent / "fixtures").iterdir()}
-    assert listed == on_disk, f"계획과 fixtures/ 차이: {sorted(listed ^ on_disk)}"
-    for path in (plan, SEEDS / "README.md", *sorted((plan.parent / "fixtures").iterdir())):
+    flow_fixtures = [f for op in ops if op["op"] == "put-flow" for f in op.get("fixtures") or []]
+    assert all(f.get("origin") == "synthetic" for f in flow_fixtures), "흐름 fixture마다 origin: synthetic"
+    listed = {op["path"] for op in fixtures} | {f["path"] for f in flow_fixtures}
+    logs = sorted((plan.parent / "fixtures").iterdir()) + sorted((plan.parent / "flows" / "fixtures").glob("*"))
+    on_disk = {p.relative_to(plan.parent).as_posix() for p in logs}
+    assert listed == on_disk, f"계획과 fixtures/·flows/fixtures/ 차이: {sorted(listed ^ on_disk)}"
+    for path in (plan, SEEDS / "README.md", *logs):
         text = path.read_text(encoding="utf-8")
         hit = VENDOR.search(text) or VENDOR_TAG.search(text)
         assert not hit, f"{path.name}: 벤더 층 이름·벤더 RIL 데몬 줄 {hit.group(0)!r}"

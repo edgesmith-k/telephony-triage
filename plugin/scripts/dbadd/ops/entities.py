@@ -49,6 +49,8 @@ class EntityOps:
             "related": [], "platform_versions": body.get("platform_versions") or [],
             "code_refs": body.get("code_refs") or [],
         }
+        if body.get("flow_step"):       # 선택 칸: 없으면 쓰지 않는다(옛 원인과 같은 모양)
+            values["flow_step"] = body["flow_step"]
         for ref in values["code_refs"]:
             self._check_code_ref(i, ref)
         out = {}

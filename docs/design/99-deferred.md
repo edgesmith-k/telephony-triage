@@ -161,8 +161,24 @@ DB에 맞는 것이 없고 탐색으로도 가설이 서지 않으면 "가설 �
 3. 코드 위치가 바뀐 원인: `code_refs`를 버전별 항목으로 나눈다(`03-issue-db.md` `code_refs`).
 4. `tests/test_android_seeds.py`가 버전별 fixture를 모두 보게 하고, 바뀐 목록을 재반입 노트(`DRAFT_NOTES.md`)에 적어 사내가 운영 DB에 같은 변경을 PR로 올리게 한다.
 5. 사내: `platform_versions_supported`에서 옛 버전을 빼기 **전에**, 새 버전에서도 확인된 원인에 새 버전을 더한다(안 그러면 `db_review`가 `deprecated` 후보로 올린다, `06-collaboration.md §6.6`).
+6. 성공 흐름(`<category>/flows/`, `04-parser-matching.md §5.13`): 새 버전 캡처에 흐름을 돌려(`parse_logcat.py flows`) 정상 동작이 끝 단계까지 `ok`인지 본다.
+   문구만 다르면 그 단계 `patterns`에 새 문구를 더하고 `platform_versions`에 새 버전을 더한다(`put-flow`로 교체 + 새 버전 정상 fixture). 단계가 생기거나
+   없어지는 등 구조가 다르면 다른 `id`·`platform_versions`의 흐름 파일을 따로 둔다 — 단 같은 카테고리에 `start`가 같은 흐름은 아직 `db_lint` 오류다(아래 L의 버전 자동 선택이 먼저).
 
 지금 만들지 않은 이유: 새 버전 소스가 없고, 버전별 시드를 미리 일반화하면 쓰지 않을 구조가 된다.
+
+## L. 성공 흐름 PR 2 (분석 중 흐름 수정 제안, PR 1 바로 뒤)
+
+PR 1(`04-parser-matching.md §5.13`)은 엔진·리포트 절·`put-flow`·검증·시드 흐름 2개까지이고 스킬 문서(`SKILL.md`·`reference/`)를 바꾸지 않았다. 그래서 지금은
+**메인테이너·작성자가 손으로 쓴 `put-flow` 계획**으로만 흐름을 넣고 고친다. 남은 것:
+- 분석 중 흐름 수정 제안: SKILL Step 7 `[이슈 DB]` 열거에 `put-flow`·`set-flow-step`, `reference/db-authoring.md` 흐름 작성 지침(새 문구는 마스킹된 로그 줄로만, 정상 fixture 필수,
+  단계 삭제 조건), `tools/gen_contracts.py` `OPS`에 `put-flow`(요약 블록이 스킬 문서에 들어간다), 초안 검증 표에 흐름 결과, 리포트 `규칙 제안 (흐름)` 줄과 흐름용 코드 대조,
+  분석 중 새 원인에 `flow_step` 제안 → 고친 스킬의 eval(추정 비용을 보이고 승인 뒤).
+- `set-flow-step` op(기존 원인에 `flow_step`을 걸거나 지우기) — 지금은 `new-cause`·`new-type`에만 실을 수 있다. 사내에 시드가 이미 들어갔으면 먼저 필요하다.
+- README·CHANGELOG 흐름 표(`db_build`) — 생성 결과가 바뀌어 `GENERATOR_VERSION`을 올려야 한다(`06-collaboration.md §6.4`).
+- 흐름 칸 `normal_noise`(기다리는 동안 나와도 정상인 줄)·`key: none`·`added_on`·`reason`, DB 안의 깨진 흐름(`broken`) fixture.
+- 버전 자동 선택: 같은 카테고리에 시작 줄이 같은 버전별 흐름이 있을 때 이슈 버전으로 하나만 돌리기(규칙 후보는 설계 검증 과제 6). 그때 `db_lint` `flow-start` 오류를 겹치지 않는 `platform_versions` 검사로 바꾼다.
+- 되살리는 조건: PR 1 병합 뒤. eval 비용은 PR 2 착수 때 추정한다.
 
 ## 되살릴 때 바꿀 곳
 

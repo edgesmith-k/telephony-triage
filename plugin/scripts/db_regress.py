@@ -18,6 +18,10 @@ fixture마다 `parse_logcat.py parse --full --mask`와 `match_signatures.py --re
 - 실패 원인: 음성 fixture면 S=1이 된 유형과 증상 시그니처 전역 키, 양성이면 C=1인 원인과
   시그니처 전역 키. 실패가 **다른 유형의 원인**이 C=1이 된 것 때문이면 `allow-cause` op 초안.
 - 정규식 시간 상한 초과(매처·extractor)는 실패다(04 §5.8 (4)).
+- 성공 흐름(04 §5.13): 흐름 정상 fixture(`<category>/flows/fixtures/<id>.normal.<n>.log`)마다 `parse_logcat.flow_check`(전체 줄)로
+  그 흐름의 인스턴스가 1개 이상이고 모든 단계가 `ok`인지 본다. 결과는 별도 키 `flows: {total, passed, failed, results, skipped}`
+  (`results`와 섞지 않는다, 실패는 종료 코드 1). 범위: `--all` 전체, `--changed`/`--staged`면 `<category>/flows/`가 바뀐 카테고리,
+  `issue-db.config.yaml`이 바뀌면 전체. 흐름 파일이 없는 DB는 키가 없다(출력 불변).
 - 파서 백엔드·외부 파서가 이슈 DB 고정값과 다르면 종료 코드 2(사람마다 결과가 달라지지 않게).
 - `--events-diff <ref>`(R5 이벤트 변화, 05-verification.md §5.12 (1)): 현재 트리(`--db`)의 **모든** fixture를 `<ref>`
   트리의 parser-rules와 현재 parser-rules로 각각 파싱해 이벤트(줄 레코드 제외)를 비교한다. 이벤트 식별은
@@ -43,7 +47,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import match_signatures  # noqa: E402
 import parse_logcat  # noqa: E402
-from common import compat, dbpath, gitscope, issuedb, site_defaults, yamlio  # noqa: E402
+from common import compat, dbpath, flows, gitscope, issuedb, site_defaults, yamlio  # noqa: E402
 from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 from common.fixtures import load_expectation, parse_name  # noqa: E402
@@ -298,6 +302,49 @@ def match_errors(result: dict, events: dict) -> dict:
     return result
 
 
+def flow_scope(config: dict, changed: list[str] | None) -> set[str] | None:
+    """흐름 fixture를 돌릴 카테고리. 전체면 None — `--all`, 또는 `issue-db.config.yaml`이 바뀜(흐름 설정·카테고리)."""
+    if changed is None or "issue-db.config.yaml" in changed:
+        return None
+    return {c["key"] for c in config.get("categories") or [] if isinstance(c, dict)
+            and any(name.startswith(f"{c.get('key')}/flows/") for name in changed)}
+
+
+def flow_regress(root: Path, config: dict, defaults: dict, categories: set[str] | None = None) -> dict | None:
+    """흐름 정상 fixture(`<category>/flows/fixtures/<id>.normal.<n>.log`) 판정 `{total, passed, failed, results, skipped}`.
+    통과 = 그 흐름 인스턴스가 1개 이상이고 모든 인스턴스의 모든 단계가 `ok`(엔진 입력은 전체 줄, `parse_logcat.flow_check`).
+    흐름 파일이 없는 DB는 None(출력 불변). 정상 fixture가 없는 흐름은 `skipped`(통과로 세지 않는다, db_lint 오류)."""
+    paths = flows.files(root, config)
+    if not paths:
+        return None
+    results, skipped = [], []
+    for flow_file in paths:
+        cat, fid = flow_file.parent.parent.name, flow_file.stem
+        if categories is not None and cat not in categories:
+            continue
+        logs = sorted(p for p in (flow_file.parent / "fixtures").glob(f"{fid}.normal.*.log") if flows.FIXTURE_RE.match(p.name))
+        if not logs:
+            skipped.append({"flow": f"{cat}/{fid}", "reason": "정상 fixture 없음"})
+        for log in logs:
+            try:
+                out = parse_logcat.flow_check([log], root / "parser-rules", defaults, tz="UTC")
+            except parse_logcat.UsageError as exc:
+                raise UsageError(f"{log.relative_to(root).as_posix()}: {exc}") from exc
+            found = next((f for f in out["flows"] if f["flow"] == f"{cat}/{fid}"), None)
+            reasons = [w["message"] for w in out["warnings"]       # 이 흐름의 정의·패턴 경고(다른 흐름·NUL 줄 경고는 뺀다)
+                       if f"{cat}/{fid}:" in w["message"] or f"{cat}/flows/{fid}.yaml" in w["message"]]
+            if found is None or not found["instances"]:
+                reasons.append("흐름 인스턴스가 없다(시작 줄 없음 또는 흐름 정의를 읽지 못함)")
+            for inst in (found or {}).get("instances") or []:
+                bad = [f"{s['id']} {s['verdict']}" for s in inst["steps"] if s["verdict"] != "ok"]
+                if bad:
+                    reasons.append(f"{inst['key']} {inst['start_ts']}: {', '.join(bad)}")
+            results.append({"fixture": log.relative_to(root).as_posix(), "flow": f"{cat}/{fid}",
+                            "status": "fail" if reasons else "pass", "reasons": reasons})
+    failed = sum(r["status"] != "pass" for r in results)
+    return {"total": len(results), "passed": len(results) - failed, "failed": failed, "results": results, "skipped": skipped}
+
+
 def run(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
     try:
         repo = dbpath.resolve(args.db)
@@ -348,6 +395,7 @@ def run(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
                 raise UsageError(f"{item['rel']}: {exc}") from exc
             result = match_errors(match_signatures.match(events, db, compiled, regress=True), events)
             results.append(judge(item, result))
+        flow_part = flow_regress(root, db.config, defaults, flow_scope(db.config, changed))
     finally:
         if workdir is not None:
             shutil.rmtree(workdir, ignore_errors=True)
@@ -363,7 +411,10 @@ def run(args, defaults: dict, plugin_root: Path) -> tuple[dict, int]:
     if records:
         # 이슈 기록만 바뀐 유형을 건너뛰었다 — 0건이 "검사 통과"로 읽히지 않게 사유를 남긴다
         summary["excluded"] = {"reason": "issues-only", "files": records}
-    return {"summary": summary, "results": results}, (CHECK_FAILED if failed else OK)
+    out = {"summary": summary, "results": results}
+    if flow_part is not None:     # 흐름 파일이 없는 DB는 키도 없다(출력 불변). results와 섞지 않는다(R4 fixture 집합 대조)
+        out["flows"] = flow_part
+    return out, (CHECK_FAILED if failed or (flow_part or {}).get("failed") else OK)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -400,8 +451,12 @@ def main(argv: list[str] | None = None) -> int:
     except (UsageError, yamlio.YamlFileError) as exc:
         print(str(exc), file=sys.stderr)
         return USAGE
-    for r in result["results"]:
-        if r["status"] != "pass":
+    for r in result["results"] + (result.get("flows") or {}).get("results", []):
+        if r["status"] != "pass" and "flow" in r:
+            print(f"실패: {r['fixture']} (흐름 {r['flow']} 끝까지 ok)", file=sys.stderr)
+            for reason in r["reasons"]:
+                print(f"  - {reason}", file=sys.stderr)
+        elif r["status"] != "pass":
             print(f"실패: {r['fixture']} ({r['expect']})", file=sys.stderr)
             for reason in r["reasons"]:
                 key = f" [{reason['signature']}]" if reason.get("signature") else ""

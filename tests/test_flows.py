@@ -21,18 +21,23 @@ from common import compiled, flows, logtime  # noqa: E402
 from runner import SAMPLE, run_json, tmp  # noqa: E402
 from triagelib.report import fit, flow_section  # noqa: E402
 
-DEFS = REPO / "tests" / "fixtures" / "flow-defs"
+SEEDS = REPO / "templates" / "issue-db-seeds" / "android"     # 흐름 정의는 시드 계획의 put-flow 한 벌만 둔다
+CATS = {"data-setup": "data", "radio-on": "network"}
 T0 = datetime(2026, 11, 10, 12, 0, 0, tzinfo=timezone.utc)
 PHONE = 100
 
 
+def _flow(name: str) -> dict:
+    plan = json.loads((SEEDS / CATS[name] / "plan.json").read_text(encoding="utf-8"))
+    return next(op["flow"] for op in plan["operations"] if op["op"] == "put-flow" and op["ref"] == f"{CATS[name]}/{name}")
+
+
+def _flow_text(name: str) -> str:
+    return yaml.safe_dump(_flow(name), allow_unicode=True, sort_keys=False)
+
+
 def _defs(*names) -> list[dict]:
-    cats = {"data-setup": "data", "radio-on": "network"}
-    out = []
-    for name in names:
-        data = yaml.safe_load((DEFS / f"{name}.yaml").read_text(encoding="utf-8"))
-        out.append({**data, "category": cats[name], "ref": f"{cats[name]}/{name}"})
-    return out
+    return [{**_flow(name), "category": CATS[name], "ref": f"{CATS[name]}/{name}"} for name in names]
 
 
 def _recs(rows):
@@ -216,11 +221,10 @@ def test_cut_before_each_step_never_says_missing():
 
 
 def _db(path: Path, *names) -> Path:
-    cats = {"data-setup": "data", "radio-on": "network"}
     (path / "issue-db.config.yaml").write_text("categories:\n  - {key: data}\n  - {key: network}\n", encoding="utf-8")
     for name in names:
-        (path / cats[name] / "flows").mkdir(parents=True, exist_ok=True)
-        shutil.copy(DEFS / f"{name}.yaml", path / cats[name] / "flows" / f"{name}.yaml")
+        (path / CATS[name] / "flows").mkdir(parents=True, exist_ok=True)
+        (path / CATS[name] / "flows" / f"{name}.yaml").write_text(_flow_text(name), encoding="utf-8")
     return path
 
 
@@ -228,7 +232,7 @@ def test_definitions_pass_schema_and_bad_files_are_skipped(tmp_path):
     db = _db(tmp_path, "data-setup", "radio-on")
     defs, warnings = flows.load(db, {"categories": [{"key": "data"}, {"key": "network"}]})
     assert [d["ref"] for d in defs] == ["data/data-setup", "network/radio-on"] and not warnings
-    (db / "data" / "flows" / "other.yaml").write_text((DEFS / "data-setup.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    (db / "data" / "flows" / "other.yaml").write_text(_flow_text("data-setup"), encoding="utf-8")
     defs, warnings = flows.load(db, {"categories": [{"key": "data"}]})
     assert [d["ref"] for d in defs] == ["data/data-setup"] and "id가 파일 이름과 다르다" in warnings[0]["message"]
 
@@ -294,7 +298,7 @@ def _sample_with_flow(work: Path, flow_step: str | None = None) -> Path:
     db = work / "db"
     shutil.copytree(SAMPLE, db)
     (db / "data" / "flows").mkdir()
-    shutil.copy(DEFS / "data-setup.yaml", db / "data" / "flows" / "data-setup.yaml")
+    (db / "data" / "flows" / "data-setup.yaml").write_text(_flow_text("data-setup"), encoding="utf-8")
     if flow_step:
         type_md = db / "data" / "DATA-001-no-setup-data-call" / "type.md"
         text = type_md.read_text(encoding="utf-8")

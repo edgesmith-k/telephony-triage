@@ -224,14 +224,14 @@ kind 순(missing → absent → order → window → blocked) → m/n 내림 →
 
 ### 5.13 성공 흐름 점검 (분석 모드 표시 전용, S/C·점수·회귀 불변)
 
-정상 동작을 순서 있는 단계로 적어 두고, 로그에서 어느 단계에서 벗어났는지 보인다. 판정은 리포트 보조 정보이고 분류·점수·회귀(`db_regress`)·검증 판정에 쓰지 않는다(부분 일치 §5.12와 같은 지위). 엔진 `common/flows.py`, CLI `parse_logcat.py flows`(`contracts.md §3.2`).
+정상 동작을 순서 있는 단계로 적어 두고, 로그에서 어느 단계에서 벗어났는지 보인다. 판정은 리포트 보조 정보이고 분류·점수·유형 fixture 회귀·검증 판정에 쓰지 않는다(부분 일치 §5.12와 같은 지위). 흐름 자체는 정상 fixture로 따로 회귀한다((4)). 엔진 `common/flows.py`, CLI `parse_logcat.py flows`(`contracts.md §3.2`).
 
 #### (1) 형식 (`<category>/flows/<id>.yaml`, 스키마 `schema/flow.schema.json`)
 `id`(파일 이름과 같다, kebab-case, 바꾸지 않는다) · `title` · `platform_versions`(원인과 같은 표기, 빈 목록 = 전 버전) · `start{tag_regex, pattern}` · `end[{scope, pattern, label}]` · `notes[{scope, pattern}]` · `steps[{id, title, scope: own|named|any, name_template?, patterns[], ok[{pattern, why}], show[], suspect}]` · `then`(마지막 단계 줄이 다음 흐름의 시작 줄이면 `<id>` 또는 `<category>/<id>`).
 - 정규식은 모두 **마스킹된 `TAG: msg`** 기준이다(§5.11과 같다). msg 앞 `^` 앵커는 맞지 않는다(`TAG: ` 뒤라서). 빈 목록이 `[ ]`(공백)로 찍히는 줄(LinkProperties)은 `\[ *[^\] ]`처럼 공백을 건너뛰어 쓴다.
 - `scope`: `own` 태그 = 열쇠 태그, `named` 메시지에 `name_template`(`{key}`는 열쇠 태그를 `re.escape`한 것), `any` 같은 pid의 아무 줄(슬롯 `phone_id`가 열쇠 줄과 다르면 뺀다, `null`은 와일드카드).
 - `ok`: 줄이 `patterns`에 맞아도 `ok` 패턴 중 하나라도 안 맞으면 그 줄은 이상 값이다(`why`를 보인다). `show`는 이상 값일 때 보일 값(맞은 글자).
-- 구조가 버전마다 다르면 흐름 파일을 따로 두고, 문구만 다르면 `patterns`에 더한다. 지금 정의 2개(데이터 연결·무선 켬)는 `tests/fixtures/flow-defs/`(시드 계획으로 옮긴다).
+- 구조가 버전마다 다르면 흐름 파일을 따로 두고, 문구만 다르면 `patterns`에 더한다. 지금 정의 2개(데이터 연결·무선 켬)는 시드 계획 `templates/issue-db-seeds/android/{data,network}/plan.json`의 `put-flow`다(시험도 거기서 읽는다).
 
 #### (2) 판정 규칙
 - 입력: 전체 로그의 모든 백엔드 줄 레코드(창·태그로 거르지 않는다), `parse --mask`와 같은 마스킹. 패턴마다 `PatternRunner.search`를 한 번(`matcher.pattern_timeout_ms`) 돌린 뒤 상태 기계를 돈다.
@@ -247,3 +247,9 @@ kind 순(missing → absent → order → window → blocked) → m/n 내림 →
 - report.md(ANALYSIS, 부분 일치 절 다음, ≤ 1,200 B): 범위 안 인스턴스가 없으면 `- 흐름 점검: 해당 없음`, 모두 끝까지 ok면 `- 흐름 점검: 데이터 연결 3회 끝까지 정상`, 아니면 머리 줄 `- 흐름 점검 (판정·점수 아님, S/C 불변):` 아래 인스턴스마다 `<흐름> <열쇠> (f:L): <단계> ok → <단계> <판정>(<사유>; <메모>)`, 벗어난 단계면 `→ 의심: <suspect> / 이 단계의 원인: <원인 ID> <title>`(원인 선택 칸 `flow_step: "<category>/<흐름 id>/<단계 id>"`가 걸린 active 원인 ≤ 3).
 - 버전: **거르지 않고 표시만** 한다(`match_signatures._version_match`와 같은 비교). 이슈 버전이 흐름 `platform_versions`에 있으면 표시 없음, 없으면 머리에 `흐름 기준 버전 17 — 이 이슈는 16, 줄 문구가 다를 수 있다`, 이슈 버전을 모르면 `흐름 기준 버전 17`.
 - 흐름 파일(fixture 제외)은 분석 재사용 해시(`compiled.source_files`)에 들어간다.
+
+#### (4) 작성·검증
+- 넣고 고치는 길은 계획 op `put-flow`(흐름을 op 안의 객체로, 정상 로그는 `fixtures`)뿐이다 — 규칙·drift는 `contracts.md §작업 계획`. 초안 검증 지문에 든다(`draftcheck.AUTHORING_OPS`).
+- 정상 fixture `<category>/flows/fixtures/<id>.normal.<n>.log`(마스킹, 흐름마다 ≥ 1): `db_regress`가 `parse_logcat.flow_check`(전체 줄)로 돌려 **그 흐름 인스턴스가 1개 이상이고 모든 단계가 `ok`**인지 본다(`로그끝`도 실패). 결과는 별도 키 `flows`(유형 fixture `results`와 섞지 않는다), 종료 코드에 든다. 범위는 `<category>/flows/` 변경이면 그 카테고리, `issue-db.config.yaml` 변경·`--all`이면 전체 — 흐름만 바뀐 pre-commit도 흐름 fixture를 돈다. `db_verify rules` R4가 이 실패를 합친다. 깨진 흐름 로그(`broken`) fixture는 v1에 없다(엔진 판정 시험은 `tests/test_flows.py`).
+- 원인 선택 칸 `flow_step: "<category>/<흐름 id>/<단계 id>"`(`new-cause`·`new-type` 첫 원인에 싣는다): `db_lint`가 흐름·단계가 있는지 보고, 다른 카테고리 흐름은 오류다(카테고리 시드 계획을 하나씩 검증해도 깨지지 않게). 바꾸는 `put-flow`가 그 단계를 없애면 거부한다.
+- `db_lint`: 흐름 스키마, 파일 이름 = `id`, 단계 id 중복, 정규식 오류·안전(시그니처와 같은 `raw-identifier`·`fixed-token`·`regex-unsafe`), 같은 카테고리에 `start`(`tag_regex`·`pattern` 문자열)가 같은 흐름 둘 이상(버전별 고르기가 없어 오류), `then` 대상 없음(경고 — 엔진은 잇지 않는다), 정상 fixture 없음·이름 규칙.

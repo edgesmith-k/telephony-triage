@@ -41,6 +41,12 @@ class Snapshot:
         rec = next((r for r in self.db.jira if r.get("key") == key), None)
         return rec
 
+    def flow(self, ref: str) -> str | None:
+        """흐름 파일 `<category>/flows/<id>.yaml` 글(없으면 None)."""
+        cat, _, fid = ref.partition("/")
+        path = self.root / cat / "flows" / f"{fid}.yaml"
+        return path.read_text(encoding="utf-8") if path.is_file() else None
+
     def expect(self, rel: str) -> tuple[bool, dict]:
         name = rel.split("/", 1)[-1]
         fx = parse_name(name)
@@ -179,6 +185,11 @@ def drift_items(plan: dict, base: Snapshot, onto: Snapshot) -> list[dict]:
                 if da.get(field) != db_.get(field):
                     add(i, op, op["fixture"], field, da.get(field), db_.get(field),
                         op.get("cause") if field == "also_allowed" else None)
+        elif kind == "put-flow":
+            # 추가인데 그사이 main에 같은 흐름이 생김 / 바꾸는데 main의 그 파일이 계획 당시와 다름
+            a, b = base.flow(op["ref"]), onto.flow(op["ref"])
+            if a != b:
+                add(i, op, op["ref"], "flow", a, b, op.get("flow"))
         else:   # 스키마에 op를 더하고 여기를 빠뜨리면 drift 없음(덮어쓰기)으로 보이지 않게 멈춘다
             raise UsageError(f"drift가 모르는 op: {kind!r} (plan 스키마에 op를 더하면 dbadd/drift.py에도 더한다)")
     return out

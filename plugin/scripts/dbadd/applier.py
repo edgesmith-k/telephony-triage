@@ -17,13 +17,14 @@ from .core import CAUSE_ID_RE, TEMP_RE, TYPE_ID_RE, Reject, Tree, UsageError, _d
 from .ops.entities import EntityOps
 from .ops.fix import FixOps
 from .ops.fixture import FixtureOps
+from .ops.flow import FlowOps
 from .ops.jira import JiraOps
 from .ops.parser_rules import ParserRuleOps
 from .ops.resolution import ResolutionOps
 from .ops.signature import SignatureOps
 
 
-class Applier(JiraOps, EntityOps, FixOps, ResolutionOps, SignatureOps, FixtureOps, ParserRuleOps):
+class Applier(JiraOps, EntityOps, FixOps, ResolutionOps, SignatureOps, FixtureOps, FlowOps, ParserRuleOps):
     """계획 하나를 메모리의 `Tree`에 순서대로 적용한다. op `<이름>`은 메서드 `op_<이름>`(ops/ 믹스인)."""
 
     def __init__(self, tree: Tree, plan: dict, plan_path: Path, user: str, defaults: dict):

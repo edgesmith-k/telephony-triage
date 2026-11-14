@@ -864,7 +864,8 @@
               ]
             }
           ],
-          "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀이 받은 망 거절 원인(ESM cause)과 망 시뮬레이터의 APN 설정"
+          "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀이 받은 망 거절 원인(ESM cause)과 망 시뮬레이터의 APN 설정",
+          "flow_step": "data/data-setup/response"
         },
         "body": "- **로그 예시**:\n  ```\n  D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=MISSING_UNKNOWN_APN(0x1b) retry=-1 ...\n  D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.\n  ```\n- **확인 방법**: 응답 cause가 `MISSING_UNKNOWN_APN(0x1b)`(3GPP ESM/SM cause 27). 요청 줄의 dataProfile에서 APN 이름을 보고 망 쪽 설정과 대조한다.\n- **재현 시나리오**: 존재하지 않는 APN 이름으로 데이터 연결\n- **해결책**: APN DB(사업자 APN 목록)의 APN 이름을 고치거나 망 시뮬레이터에 그 APN을 만든다.\n- **코드 위치**: `DataNetwork.java:1751-1816`(onSetupResponse), `DataNetworkController.java:3287`, `DataFailCause.java`(상수·toString 1739)\n- **비고**: 망 거절 코드라 단말은 정상 동작이다. 사업자 APN DB가 틀렸으면 그 수정이 fix다. DataFailCause 상수는 `frameworks/base/telephony/java/android/telephony/DataFailCause.java:50`.\n"
       },
@@ -941,7 +942,8 @@
             ]
           }
         ],
-        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀이 받은 망 거절 원인과 망 시뮬레이터의 인증 설정"
+        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀이 받은 망 거절 원인과 망 시뮬레이터의 인증 설정",
+        "flow_step": "data/data-setup/response"
       },
       "body": "- **로그 예시**:\n  ```\n  D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=USER_AUTHENTICATION(0x1d) retry=-1 ...\n  D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=USER_AUTHENTICATION(0x1d), retryDelayMillis=-1ms.\n  ```\n- **확인 방법**: 응답 cause가 `USER_AUTHENTICATION(0x1d)`(cause 29). dataProfile의 인증 방식 칸(APN 이름 뒤 `, <authType>,`)을 본다 — 사용자·비밀번호는 로그에 해시로만 남는다.\n- **재현 시나리오**: 인증이 필요한 APN에 틀린 사용자·비밀번호(또는 인증 없음)로 연결\n- **해결책**: APN 인증 설정을 고친다.\n- **코드 위치**: `DataNetwork.java:1751-1816`(onSetupResponse), `DataNetworkController.java:3287`, `DataFailCause.java`(상수·toString 1739)\n- **비고**: DataFailCause.java:54. 에뮬레이터는 인증을 검사하지 않아 캡처가 없다(캡처 d32d-fail-bad-auth는 성공함) — 소스만.\n"
     },
@@ -1016,7 +1018,8 @@
             ]
           }
         ],
-        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 망 시뮬레이터·HSS의 가입 프로필(허용 APN)"
+        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 망 시뮬레이터·HSS의 가입 프로필(허용 APN)",
+        "flow_step": "data/data-setup/response"
       },
       "body": "- **로그 예시**:\n  ```\n  D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=SERVICE_OPTION_NOT_SUBSCRIBED(0x21) retry=-1 ...\n  D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=SERVICE_OPTION_NOT_SUBSCRIBED(0x21), retryDelayMillis=-1ms.\n  ```\n- **확인 방법**: 응답 cause가 `SERVICE_OPTION_NOT_SUBSCRIBED(0x21)`(cause 33). 단말 설정이 아니라 망의 가입 정보 문제다.\n- **재현 시나리오**: 가입 프로필에 없는 APN으로 연결\n- **해결책**: 망·가입 정보를 고친다(단말 수정 대상 아님).\n- **코드 위치**: `DataNetwork.java:1751-1816`(onSetupResponse), `DataNetworkController.java:3287`, `DataFailCause.java`(상수·toString 1739)\n- **비고**: DataFailCause.java:62. 소스만.\n"
     },
@@ -1098,7 +1101,8 @@
             ]
           }
         ],
-        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀의 URSP 규칙·슬라이싱 설정(GET_SLICING_CONFIG 응답), 망의 허용 S-NSSAI"
+        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀의 URSP 규칙·슬라이싱 설정(GET_SLICING_CONFIG 응답), 망의 허용 S-NSSAI",
+        "flow_step": "data/data-setup/response"
       },
       "body": "- **로그 예시**:\n  ```\n  D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=SLICE_REJECTED(0x8cc) retry=-1 ...\n  D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=SLICE_REJECTED(0x8cc), retryDelayMillis=-1ms.\n  ```\n- **확인 방법**: 응답 cause가 `SLICE_REJECTED(0x8cc)`·`MATCH_ALL_RULE_NOT_ALLOWED(0x8cd)`·`ALL_MATCHING_RULES_FAILED(0x8ce)`. 요청은 `TrafficDescriptor`(OsAppId App=ENTERPRISE·PRIORITIZE_LATENCY 등)를 단 프로필이다. TD 기반 프로필은 `Created data profile [DataProfile=null, TrafficDescriptor=...]`로 만들어진다(정상 — APN이 없어도 된다).\n- **재현 시나리오**: 엔터프라이즈·지연 우선 능력 요청 → 망이 그 슬라이스를 허용하지 않음\n- **해결책**: 망 슬라이스 설정·URSP를 맞춘다. 기본 슬라이스로 가야 하는데 거절되면 `MATCH_ALL_RULE_NOT_ALLOWED`(match-all 규칙 금지)를 본다.\n- **코드 위치**: `DataNetwork.java:1751-1816`(onSetupResponse), `DataNetworkController.java:3287`, `DataFailCause.java`(상수·toString 1739)\n- **비고**: DataFailCause.java:925-929. TD 요청 줄 모양은 캡처 d85-retry-cc-override·d50-enterprise-request(에뮬레이터 응답은 resultCode 오류라 망 거절이 아니다). 슬라이스 거절 코드는 소스만.\n"
     },
@@ -1516,7 +1520,8 @@
               ]
             }
           ],
-          "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀이 망에서 받은 PCO(DNS 서버 주소 항목)·IPv6 RA의 RDNSS, 벤더 RIL이 만든 SetupDataCallResult의 dnses, 망 시뮬레이터 PDN 설정의 DNS"
+          "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀이 망에서 받은 PCO(DNS 서버 주소 항목)·IPv6 RA의 RDNSS, 벤더 RIL이 만든 SetupDataCallResult의 dnses, 망 시뮬레이터 PDN 설정의 DNS",
+          "flow_step": "data/data-setup/response"
         },
         "body": "- **로그 예시**:\n  ```\n  D DN-160-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=NONE(0x0) ... dnses=[] ...\n  E DN-160-C: ConnectingState: Empty dns response\n  D DN-160-C: ConnectingState: sendLinkProperties {... DnsAddresses: [ ] ...}\n  ```\n- **확인 방법**: 성공 응답의 `dnses=[]`와 `Empty dns response`(E). ③의 `DnsAddresses: [ ]`. 보통 ⑤가 `INVALID`가 되는데, 그때도 원인은 이것이다.\n- **재현 시나리오**: 망 시뮬레이터 PDN 설정에서 DNS를 빼고 데이터 연결\n- **해결책**: 망·모뎀 쪽에서 DNS를 주게 한다. 응답(①)에는 DNS가 있는데 ③에서 비면 프레임워크 쪽(any 주소라 걸러짐)이다.\n- **코드 위치**: `DataNetwork.java:2937-2946`(DNS 추가·`Empty dns response`), 1753(onSetupResponse), `DataServiceManager.java:253`\n- **비고**: 소스만(에뮬레이터는 늘 DNS를 준다, 성공 줄 모양은 캡처 d01-setup).\n"
       },
@@ -1574,7 +1579,8 @@
             ]
           }
         ],
-        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀의 PDN 주소 할당(IPv4 주소·IPv6 인터페이스 ID), 벤더 RIL SetupDataCallResult의 addresses"
+        "cp_evidence": "CP·망 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀의 PDN 주소 할당(IPv4 주소·IPv6 인터페이스 ID), 벤더 RIL SetupDataCallResult의 addresses",
+        "flow_step": "data/data-setup/response"
       },
       "body": "- **로그 예시**:\n  ```\n  E DN-161-C: ConnectingState: Invalid DataCallResponse:DataCallResponse: { cause=NONE(0x0) ... addresses=[] ...\n  E DN-161-C: ConnectingState: no address for ifname=rmnet0\n  D DN-161-C: ConnectingState: sendLinkProperties {InterfaceName: rmnet0 LinkAddresses: [ ] ...}\n  ```\n- **확인 방법**: 성공 응답의 `addresses=[]`와 `no address for ifname=`(E). 앞에 `Invalid DataCallResponse:`(이상 응답, anomaly 보고)도 남는다. ③의 `LinkAddresses: [ ]`.\n- **재현 시나리오**: 모뎀이 주소 없이 성공을 돌려주는 상황(벤더 RIL·모뎀 오류)\n- **해결책**: CP·벤더 RIL 쪽 응답을 고친다. 프레임워크는 받은 대로 연결한다.\n- **코드 위치**: `DataNetwork.java:3088-3097`(Invalid DataCallResponse), 2925-2935(no address)\n- **비고**: 소스만. APN 프로토콜이 IP·IPV6이면 \"IP 종류 불일치\" 줄도 같이 나므로 그 경우는 둘 다 맞을 수 있다(fixture는 IPV4V6).\n"
     },
@@ -1661,6 +1667,124 @@
       "expect": {
         "origin": "synthetic"
       }
+    },
+    {
+      "op": "put-flow",
+      "ref": "data/data-setup",
+      "flow": {
+        "id": "data-setup",
+        "title": "데이터 연결",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^DN-\\d+-[CI]$",
+          "pattern": "ConnectingState: setupData:"
+        },
+        "end": [
+          {
+            "scope": "own",
+            "pattern": "DisconnectedState: Data network disconnected",
+            "label": "연결 해제"
+          }
+        ],
+        "notes": [
+          {
+            "scope": "own",
+            "pattern": "Invalid DataCallResponse|no address for ifname|Empty dns response|Duplicate network interface|mismatched IP type"
+          }
+        ],
+        "steps": [
+          {
+            "id": "response",
+            "title": "응답 받음",
+            "scope": "own",
+            "patterns": [
+              "ConnectingState: onSetupResponse:"
+            ],
+            "ok": [
+              {
+                "pattern": "resultCode=RESULT_SUCCESS",
+                "why": "응답 오류"
+              },
+              {
+                "pattern": "cause=NONE",
+                "why": "실패 원인"
+              },
+              {
+                "pattern": "addresses=\\[[^\\]]",
+                "why": "주소 빔"
+              },
+              {
+                "pattern": "dnses=\\[[^\\]]",
+                "why": "DNS 빔"
+              }
+            ],
+            "show": [
+              "resultCode=\\w+",
+              "cause=\\w+"
+            ],
+            "suspect": "모뎀·RIL·DataServiceManager"
+          },
+          {
+            "id": "link-properties",
+            "title": "설정 만듦",
+            "scope": "own",
+            "patterns": [
+              "sendLinkProperties \\{"
+            ],
+            "ok": [
+              {
+                "pattern": "LinkAddresses: \\[ *[^\\] ]",
+                "why": "주소 빔"
+              },
+              {
+                "pattern": "DnsAddresses: \\[ *[^\\] ]",
+                "why": "DNS 빔"
+              },
+              {
+                "pattern": "/0 ->",
+                "why": "기본 경로 없음"
+              }
+            ],
+            "suspect": "DataNetwork(응답 → 설정 변환)"
+          },
+          {
+            "id": "connected",
+            "title": "연결",
+            "scope": "own",
+            "patterns": [
+              "ConnectedState: network connected\\."
+            ],
+            "suspect": "DataNetwork 상태 머신"
+          },
+          {
+            "id": "validated",
+            "title": "망 검증",
+            "scope": "named",
+            "name_template": "DataNetwork: {key},",
+            "patterns": [
+              "onDataNetworkValidationStatusChanged: .*validation status="
+            ],
+            "ok": [
+              {
+                "pattern": "status=VALID",
+                "why": "INVALID"
+              }
+            ],
+            "show": [
+              "validation status=\\w+"
+            ],
+            "suspect": "ConnectivityService·NetworkMonitor·인터넷 경로"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/data-setup.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
     }
   ]
 }

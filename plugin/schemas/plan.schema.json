@@ -199,7 +199,8 @@
         "related": {"type": "array", "items": {"$ref": "#/$defs/causeId"}, "uniqueItems": true},
         "cp_evidence": {"type": ["string", "null"]},
         "platform_versions": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]+$"}, "uniqueItems": true},
-        "code_refs": {"type": "array", "items": {"$ref": "#/$defs/codeRef"}}
+        "code_refs": {"type": "array", "items": {"$ref": "#/$defs/codeRef"}},
+        "flow_step": {"description": "이 원인이 벗어나는 성공 흐름 단계 <category>/<flow id>/<step id> — 같은 카테고리 흐름만 (04 §5.13)", "type": "string", "pattern": "^[a-z][a-z0-9_]*/[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+(-[a-z0-9]+)*$"}
       }
     },
     "codeRef": {
@@ -514,6 +515,23 @@
               "minLength": 1
             },
             "cause": {"$ref": "#/$defs/causeRef"}
+          }
+        },
+        {
+          "$comment": "put-flow: 성공 흐름 <category>/flows/<id>.yaml을 넣거나 통째로 바꾼다. flow 상세는 적용 때 DB schema/flow.schema.json으로 본다 (04 §5.13)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "ref", "flow"],
+          "properties": {
+            "op": {"const": "put-flow"},
+            "ref": {"description": "<category>/<flow id> — flow.id와 같다", "type": "string", "pattern": "^[a-z][a-z0-9_]*/[a-z0-9]+(-[a-z0-9]+)*$"},
+            "flow": {"type": "object"},
+            "fixtures": {
+              "description": "정상 로그(add-fixture와 같은 경로 찾기·마스킹) → <category>/flows/fixtures/<id>.normal.<n>.log",
+              "type": "array",
+              "items": {"type": "object", "additionalProperties": false, "required": ["path"],
+                        "properties": {"path": {"type": "string", "minLength": 1}, "origin": {"const": "synthetic"}}}
+            }
           }
         }
       ]

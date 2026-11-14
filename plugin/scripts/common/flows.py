@@ -27,6 +27,7 @@ LOG_END_SEC = 10.0          # TODO(SITE) 뒤 로그가 이보다 짧으면 판�
 INSTANCES_MAX = 1000        # 흐름당 출력 인스턴스 상한(넘으면 truncated)
 NOTES_MAX = 5
 RESTART, BOUNDARY = "프로세스 재시작", "로그 경계"
+FIXTURE_RE = re.compile(r"^(?P<id>[a-z0-9]+(?:-[a-z0-9]+)*)\.normal\.(?P<n>[1-9]\d*)\.log$")   # 정상 fixture `flows/fixtures/<id>.normal.<n>.log`
 
 
 def version_match(versions, platform_version) -> bool | None:
