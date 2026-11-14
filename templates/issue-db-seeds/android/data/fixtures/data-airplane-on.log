@@ -1,4 +1,4 @@
--- [합성] telephony-triage issue-db seed fixture (data). AOSP 17 소스 문구·에뮬레이터 캡처 모양으로 새로 쓴 줄 — 실제 로그 아님.
+-- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
 11-14 17:28:29.538  2101  2101 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0
 11-14 17:28:29.538  2101  2101 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON
 11-14 17:28:29.538  2101  2101 D SST-0   : powerOffRadioSafely: Data is active on phone 1. Wait for all data disconnect.

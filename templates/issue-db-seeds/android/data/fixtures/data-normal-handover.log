@@ -1,4 +1,4 @@
--- [합성] telephony-triage issue-db seed fixture (data). AOSP 17 소스 문구·에뮬레이터 캡처 모양으로 새로 쓴 줄 — 실제 로그 아님.
+-- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
 11-14 14:10:00.000  2101  2141 D RILJ    : [0400]< SETUP_DATA_CALL DataCallResponse: { cause=NONE(0x0) retry=-1 cid=1 linkStatus=2 protocolType=2 ifname=rmnet0 addresses=[<IP#1>/64] dnses=[<IP#2>] gateways=[<IP#3>] pcscf=[] mtu=1500 mtuV4=1500 mtuV6=1500 handoverFailureMode=legacy pduSessionId=0 defaultQos=null qosBearerSessions=[] sliceInfo=null trafficDescriptors=[]} [PHONE0]
 11-14 14:10:00.002  2101  2101 D DN-142-C: ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=NONE(0x0) retry=-1 cid=1 linkStatus=2 protocolType=2 ifname=rmnet0 addresses=[<IP#1>/64] dnses=[<IP#2>] gateways=[<IP#3>] pcscf=[] mtu=1500 mtuV4=1500 mtuV6=1500 handoverFailureMode=legacy pduSessionId=0 defaultQos=null qosBearerSessions=[] sliceInfo=null trafficDescriptors=[]}
 11-14 14:10:00.010  2101  2101 D DNC-0   : Internet data state changed from DISCONNECTED to CONNECTED.
