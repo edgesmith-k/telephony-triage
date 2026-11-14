@@ -924,6 +924,18 @@ def test_s4_seed_synthetic_marked_fixtures_do_not_count(tmp_path):
     assert out["status"] == "fail" and "call 0" in out["evidence"]
 
 
+def test_synthetic_head_line_counts_as_synthetic_without_origin_mark(tmp_path):
+    """시드 계획의 origin 줄만 지우고 합성 로그를 그대로 올린 경우: 머리줄 `-- [합성]`으로 s4.seed가 세지 않고 s6.synthetic이 잡는다."""
+    db = seed_db(tmp_path, {"call": 5, "sms": 5})                       # .expect.yaml 없음
+    for log in sorted(db.glob("*/*/fixtures/*.log")):
+        log.write_text("-- [합성] 이슈 DB 시드 fixture\n" + log.read_text(encoding="utf-8"), encoding="utf-8")
+    git(db, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qam", "seed")
+    out = _seed(tmp_path, db)
+    assert out["status"] == "fail" and "call 0" in out["evidence"] and "sms 0" in out["evidence"]
+    s6 = by_id(sc.run_checks("S-6", tmp_path / "site"))["s6.synthetic"]
+    assert s6["status"] == "fail" and "10건" in s6["evidence"]
+
+
 def test_s4_seed_without_categories_config_fails(tmp_path):
     out = _seed(tmp_path, seed_db(tmp_path, {"call": 5, "sms": 5}, config=False))
     assert out["status"] == "fail" and "categories" in out["evidence"]

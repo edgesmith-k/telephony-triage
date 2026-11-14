@@ -6,6 +6,8 @@
   카테고리마다 음성 fixture, 벤더 층 placeholder 이름 없음.
 - 계획마다 새 뼈대(`make_db_skeleton.py`)에 적용해 초안 검증 R1~R5 통과(리뷰 필요한 건너뜀도 실패로 본다).
 - 모든 계획을 한 뼈대에 차례로 병합해 가며 적용해도 통과(교차 카테고리 R2~R4).
+- 다 넣은 DB에서 fixture마다 앞뒤 20분에 무관한 줄을 붙여도 맞는 원인이 같다(창보다 긴 로그에서 `must_not_match`가
+  창을 옮겨 피해지거나, 긴 창이 무관한 줄로 막히는 시그니처를 잡는다 — 합성 fixture는 짧아서 R1~R4가 못 본다).
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ import re
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -29,6 +32,9 @@ from workspace import Workspace  # noqa: E402
 SEEDS = REPO / "templates" / "issue-db-seeds" / "android"
 PLANS = sorted(SEEDS.glob("*/plan.json"))
 VENDOR = re.compile(r"VIPC_|VRIL|IpcCtx_|vrild|Example[A-Z]\w")
+VENDOR_TAG = re.compile(r"(?m)^\d\d-\d\d \S+\s+\d+\s+\d+ [VDIWEF] (?:RIL|RilRequest)\s*:")   # 벤더 RIL 데몬 줄
+STAMP = re.compile(r"\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}")
+HEAD = "-- [합성]"
 SYNTHETIC = {"origin": "synthetic"}
 
 
@@ -56,6 +62,34 @@ def verify(ws: Workspace, job: str, plan: Path) -> None:
     bad = {rid: (rows[rid]["status"], rows[rid].get("reason")) for rid, ok in allowed.items()
            if rows[rid]["review_required"] or rows[rid]["status"] not in ok}
     assert not bad, f"{plan.parent.name}: {bad}\n{proc.stdout[-6000:]}"
+
+
+def padded(text: str) -> str:
+    """fixture 첫 줄 20분 앞과 끝 줄 20분 뒤에 어느 시그니처와도 무관한 줄을 하나씩 붙인다."""
+    lines = text.splitlines()
+    at = [i for i, line in enumerate(lines) if STAMP.match(line)]
+
+    def pad(i: int, minutes: int) -> str:
+        when = datetime.strptime("2026-" + STAMP.match(lines[i]).group(0), "%Y-%m-%d %H:%M:%S.%f") + timedelta(minutes=minutes)
+        return f"{when.strftime('%m-%d %H:%M:%S.%f')[:-3]}  1000  1000 D RILJ    : seed padding line"
+    return "\n".join([*lines[:at[0]], pad(at[0], -20), *lines[at[0]:], pad(at[-1], 20)]) + "\n"
+
+
+def matched_causes(db_dir: Path, root: Path, logs: list[Path]) -> dict[str, set[str]]:
+    """회귀 모드(파일 전체)로 로그마다 충족된 원인 ID."""
+    import db_regress
+    import match_signatures
+    from common import issuedb, site_defaults
+    defaults = site_defaults.load_or_exit(str(root))
+    db = issuedb.load(db_dir)
+    compiled = db_regress.prepare(db, defaults)
+    out = {}
+    for log in logs:
+        events = db_regress.parse_logs([log], db_dir / "parser-rules", root, defaults)
+        result = db_regress.match_errors(match_signatures.match(events, db, compiled, regress=True), events)
+        assert not result["errors"], f"{log.name}: {result['errors'][:3]}"
+        out[log.name] = {c["cause"] for c in result["causes"] if c["C"]}
+    return out
 
 
 def new_type_plan(origin: str) -> dict:
@@ -118,9 +152,12 @@ def test_seed_plan_shape(plan):
     listed = {op["path"] for op in fixtures}
     on_disk = {f"fixtures/{p.name}" for p in (plan.parent / "fixtures").iterdir()}
     assert listed == on_disk, f"계획과 fixtures/ 차이: {sorted(listed ^ on_disk)}"
-    for path in (plan, *sorted((plan.parent / "fixtures").iterdir())):
-        hit = VENDOR.search(path.read_text(encoding="utf-8"))
-        assert not hit, f"{path.name}: 벤더 층 placeholder 이름 {hit.group(0)!r}"
+    for path in (plan, SEEDS / "README.md", *sorted((plan.parent / "fixtures").iterdir())):
+        text = path.read_text(encoding="utf-8")
+        hit = VENDOR.search(text) or VENDOR_TAG.search(text)
+        assert not hit, f"{path.name}: 벤더 층 이름·벤더 RIL 데몬 줄 {hit.group(0)!r}"
+        # 합성 머리줄: 사내 점검(site_checks s4.seed·s6.synthetic)이 origin 표시가 지워진 합성 로그를 이것으로 센다
+        assert path.suffix != ".log" or text.startswith(HEAD), f"{path.name}: 1줄이 {HEAD!r}로 시작하지 않는다"
 
 
 @pytest.mark.parametrize("plan", PLANS, ids=lambda p: p.parent.name)
@@ -137,3 +174,12 @@ def test_all_seed_plans_apply_in_sequence_on_one_skeleton():
         verify(ws, job, plan)
         ws.ship(job, branch)
         ws.merge(branch)
+    db = ws.other_clone()
+    logs = sorted(db.glob("*/*/fixtures/*.log"))
+    long_dir = tmp("tt-seed-long-")
+    for log in logs:
+        (long_dir / log.name).write_text(padded(log.read_text(encoding="utf-8")), encoding="utf-8", newline="\n")
+    short, long = matched_causes(db, ws.root, logs), matched_causes(db, ws.root, sorted(long_dir.iterdir()))
+    assert len(short) == len(long) == len(logs) > 0
+    diff = {name: {"그대로": sorted(short[name]), "앞뒤 20분": sorted(long[name])} for name in short if short[name] != long[name]}
+    assert not diff, f"로그가 길어지면 맞는 원인이 달라진다: {json.dumps(diff, ensure_ascii=False, indent=1)}"
