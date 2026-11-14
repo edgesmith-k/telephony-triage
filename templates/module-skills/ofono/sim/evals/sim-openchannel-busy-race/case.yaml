@@ -5,8 +5,8 @@ kind: explore
 synthetic: true
 key: MOCK-9203
 issue:
-  summary: 'eSIM 정보 조회 시 eUICC not responding 오류'
-  description: 'eSIM 정보 조회 중 eUICC not responding 오류가 납니다.'
+  summary: 'eSIM 정보 조회 시 eUICC example timeout 오류'
+  description: 'eSIM 정보 조회 중 eUICC example timeout 오류가 납니다.'
   occurred_at: '2026-09-22T10:20:20+0000'
   platform_version: '2'
   sim_slot: '0'

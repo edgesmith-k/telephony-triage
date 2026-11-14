@@ -792,7 +792,7 @@ MODULES_TYPES = (
      "sms/evals/sms-send-no-vendor-lines", "2026-09-21T10:20:05+0000"),
     ("ims", "IMS-001-registration-401", "IMS 등록 401 거절됨 (합성)",
      "    must_match: ['IMS_UNSOL_REG_FAILED fail_code=401']\n",
-     "        must_match: ['IMS_UNSOL_REG_FAILED fail_code=401', 'fail-code : 401']\n",
+     "        must_match: ['IMS_UNSOL_REG_FAILED fail_code=401', 'example-code : 401']\n",
      "ims/evals/ims-401-then-registered", "2026-09-22T09:30:20+0000"),
 )
 

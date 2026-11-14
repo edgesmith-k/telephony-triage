@@ -1,6 +1,6 @@
 -- [합성] module-filter fixture: data call deactivation right after airplane mode. Hand-written, not a real capture.
 Sep 23 11:30:04.752 dut local0.info mgmtd[734]: airplane mode on requested by user
-Sep 23 11:30:04.753 dut daemon.info ofonod[903]: [0,1163]> IMS_REQUEST_AIRPLANE_MODE is_apm:1
+Sep 23 11:30:04.753 dut daemon.info ofonod[903]: [0,1163]> IMS_REQUEST_EXAMPLE_APM is_apm:1
 Sep 23 11:30:04.754 dut daemon.info chatterd[746]: position fix pending
 Sep 23 11:30:04.754 dut daemon.debug ofonod[903]: src/gprs.c:gprs_deactivate_all() /ril_0 detach requested
 Sep 23 11:30:04.755 dut daemon.info ofonod[903]: [0,1164]> RIL_REQUEST_DEACTIVATE_DATA_CALL (2,2)

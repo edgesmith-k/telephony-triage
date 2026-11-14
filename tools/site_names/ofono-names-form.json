@@ -1,0 +1,1628 @@
+{
+ "platform": "ofono",
+ "rows": [
+  {
+   "placeholder": "          - 'VIPC_EXAMPLE_SIGNAL_IND'",
+   "real": "",
+   "kind": "IPC",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "          - ['.', 'IMS_REQUEST_EXAMPLE_APM']",
+   "real": "",
+   "kind": "줄",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "        also: {imsd: 'SMS'}",
+   "real": "",
+   "kind": "데몬",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "        daemons: [datad, datad2]",
+   "real": "",
+   "kind": "데몬+확정:데몬",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "        daemons: [imsd]",
+   "real": "",
+   "kind": "데몬",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "        daemons: [networkd]",
+   "real": "",
+   "kind": "데몬",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "        daemons: [simd]",
+   "real": "",
+   "kind": "데몬",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "        ipc: [VIPC_EXAMPLE_ECC_IND]",
+   "real": "",
+   "kind": "IPC",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "        ipc: [VIPC_EXAMPLE_SMSC_QUERY]",
+   "real": "",
+   "kind": "IPC",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "        keywords: ['re:OEM_(REQ|UNSOL)_IMS_']",
+   "real": "",
+   "kind": "키워드 정규식",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "        level_unreliable: [datad2, mgmtd]",
+   "real": "",
+   "kind": "데몬+확정:데몬",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "        noise_tags: [chatterd]",
+   "real": "",
+   "kind": "데몬",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "        services: [ExampleCallService]",
+   "real": "",
+   "kind": "서비스",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "      daemons: [ofonod, mgmtd, vrild]",
+   "real": "",
+   "kind": "데몬",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml"
+   ]
+  },
+  {
+   "placeholder": "ExampleCallService",
+   "real": "",
+   "kind": "서비스",
+   "count": 15,
+   "example_lines": [
+    "Sep 23 10:10:05.008 dut daemon.info vrild[452]: [ExampleCallService_0] dial start",
+    "Sep 21 10:10:05.411 dut daemon.info vrild[452]: [ExampleCallService_0] dial answer"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/call/deep.md",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/events.json",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/timeline.md",
+    "templates/module-skills/ofono/call/explore.md",
+    "templates/module-skills/ofono/call/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "ExampleEuiccNoResponse",
+   "real": "",
+   "kind": "오류 이름",
+   "count": 4,
+   "example_lines": [
+    "Sep 22 10:20:18.186 dut daemon.warn simd[589]: tid:9 ExampleSim.cpp(68):ExampleGetEid > GetEID failed: ExampleEuiccNoResponse (eUICC example timeout)"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/timeline.md",
+    "templates/module-skills/ofono/sim/explore.md"
+   ]
+  },
+  {
+   "placeholder": "ExampleIccService",
+   "real": "",
+   "kind": "서비스",
+   "count": 20,
+   "example_lines": [
+    "Sep 22 10:10:19.422 dut daemon.info vrild[618]: [ExampleIccService_1] open-channel start, p2 0x00",
+    "Sep 22 10:10:19.459 dut daemon.info vrild[618]: [ExampleIccService_1] open-channel answer: no session, sw1 : 6A, sw2 : 82"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/sim/deep.md",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/events.json",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/timeline.md",
+    "templates/module-skills/ofono/sim/explore.md",
+    "templates/module-skills/ofono/sim/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "ExampleImsCallManager",
+   "real": "",
+   "kind": "클래스",
+   "count": 5,
+   "example_lines": [
+    "Sep 22 09:40:21.431 dut user.info imsd[552]: [SLOT_0][I] 6104 EPSFB failed, notify to ExampleImsCallManager"
+   ],
+   "files": [
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/timeline.md",
+    "templates/module-skills/ofono/call/explore.md",
+    "templates/module-skills/ofono/call/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "ExampleImsRegistration",
+   "real": "",
+   "kind": "클래스",
+   "count": 14,
+   "example_lines": [
+    "Sep 21 10:40:02.010 dut user.debug imsd[733]: [SLOT_0][I] 5101 [ExampleImsRegistration] exampleTriggerRegistering() SENT",
+    "Sep 21 10:40:05.006 dut user.debug imsd[733]: [SLOT_0][I] 5102 [ExampleImsRegistration] exampleRegistrationFailed() code=403"
+   ],
+   "files": [
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/files/source.log"
+   ]
+  },
+  {
+   "placeholder": "ExampleOpenChannel",
+   "real": "",
+   "kind": "D-Bus 메서드",
+   "count": 10,
+   "example_lines": [
+    "Sep 22 10:10:19.462 dut daemon.info ofonod[903]: src/dbus.c:__ofono_error_not_found() m:ExampleOpenChannel i:org.ofono.SimManager",
+    "Sep 22 10:20:18.184 dut daemon.info ofonod[903]: src/dbus.c:__ofono_error_busy() m:ExampleOpenChannel i:org.ofono.SimManager"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/sim/deep.md",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/timeline.md",
+    "templates/module-skills/ofono/sim/explore.md",
+    "templates/module-skills/ofono/sim/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "ExampleRegService",
+   "real": "",
+   "kind": "서비스",
+   "count": 71,
+   "example_lines": [
+    "Sep 23 10:10:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-95",
+    "Sep 23 10:10:01.000 dut daemon.info vrild[452]: [ExampleRegService_0] Data RegState=REGISTERED, RejectCause=0"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/events.json",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/events.json",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/timeline.md",
+    "templates/module-skills/ofono/network/deep.md",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/events.json",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/network/explore.md",
+    "templates/module-skills/ofono/network/SKILL.md",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/files/source.log",
+    "templates/module-skills/ofono/sms/evals/sms-send-no-vendor-lines/files/events.json",
+    "templates/module-skills/ofono/sms/evals/sms-send-no-vendor-lines/files/source.log"
+   ]
+  },
+  {
+   "placeholder": "ExampleSmsService",
+   "real": "",
+   "kind": "서비스",
+   "count": 6,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/sms/deep.md",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/files/timeline.md",
+    "templates/module-skills/ofono/sms/evals/sms-send-no-vendor-lines/files/timeline.md",
+    "templates/module-skills/ofono/sms/explore.md"
+   ]
+  },
+  {
+   "placeholder": "IMS registration done",
+   "real": "",
+   "kind": "문구",
+   "count": 5,
+   "example_lines": [
+    "Sep 22 09:30:22.162 dut user.info imsd[552]: [SLOT_0][I] 7106 IMS registration done"
+   ],
+   "files": [
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/references/IMS-001.md",
+    "templates/module-skills/ofono/ims/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "IMS_REG_OK",
+   "real": "",
+   "kind": "IMS 상태 표시",
+   "count": 9,
+   "example_lines": [
+    "Sep 22 09:30:22.163 dut user.info imsd[552]: [SLOT_0][I] 7107 registered:1 [IMS_REG_OK] VoPS:1 RAT:NR"
+   ],
+   "files": [
+    "templates/module-skills/ofono/ims/deep.md",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/case.yaml",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/explore.md",
+    "templates/module-skills/ofono/ims/references/IMS-001.md",
+    "templates/module-skills/ofono/ims/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "IMS_REQUEST_EXAMPLE_APM",
+   "real": "",
+   "kind": "벤더 RIL(IMS) 요청·알림 이름",
+   "count": 12,
+   "example_lines": [
+    "Sep 22 09:40:17.630 dut daemon.info ofonod[903]: [0,0412]> IMS_REQUEST_EXAMPLE_APM apm_on:1",
+    "Sep 22 09:40:17.631 dut user.debug imsd[552]: [SLOT_0][D] 6101 slot0 <- ofonod: IMS_REQUEST_EXAMPLE_APM serial 0412, apm on"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/case.yaml",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/timeline.md",
+    "templates/module-skills/ofono/ims/deep.md",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "IMS_REQUEST_EXAMPLE_OPER_INFO",
+   "real": "",
+   "kind": "벤더 RIL(IMS) 요청·알림 이름",
+   "count": 3,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "IMS_REQUEST_SET_PDN_INFO",
+   "real": "",
+   "kind": "RIL(IMS)",
+   "count": 11,
+   "example_lines": [
+    "Sep 22 09:30:20.781 dut daemon.info ofonod[903]: [0,0117]> IMS_REQUEST_SET_PDN_INFO",
+    "Sep 22 09:30:20.793 dut daemon.info ofonod[903]: [0,0117]< IMS_REQUEST_SET_PDN_INFO"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/ims/deep.md",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "IMS_UNSOL_CAPABILITIES",
+   "real": "",
+   "kind": "RIL(IMS)",
+   "count": 8,
+   "example_lines": [
+    "Sep 23 10:10:01.500 dut daemon.info ofonod[466]: [0,UNSOL]< IMS_UNSOL_CAPABILITIES voiceOverLteCapable=0, emerOverLteCapable=1 smsOverLteCapable=0, utOverLteCapable=1",
+    "Sep 22 09:40:21.462 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_CAPABILITIES voiceOverLteCapable=0, emerOverLteCapable=1 smsOverLteCapable=0"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/timeline.md",
+    "templates/module-skills/ofono/ims/deep.md",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/files/source.log"
+   ]
+  },
+  {
+   "placeholder": "IMS_UNSOL_EXAMPLE_REG_STATE",
+   "real": "",
+   "kind": "벤더 RIL(IMS) 요청·알림 이름",
+   "count": 6,
+   "example_lines": [
+    "Sep 22 09:30:22.164 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_EXAMPLE_REG_STATE"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/ims/deep.md",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "IMS_UNSOL_OPERATOR_INFO_QUERY",
+   "real": "",
+   "kind": "RIL(IMS)",
+   "count": 2,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "IMS_UNSOL_PDN_ACTIVATE",
+   "real": "",
+   "kind": "RIL(IMS)",
+   "count": 7,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/ims/deep.md",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md",
+    "templates/module-skills/ofono/ims/explore.md",
+    "templates/module-skills/ofono/ims/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "IMS_UNSOL_PDN_DEACTIVATE",
+   "real": "",
+   "kind": "RIL(IMS)",
+   "count": 5,
+   "example_lines": [
+    "Sep 22 09:40:21.459 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_PDN_DEACTIVATE apn_class:1"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/source.log",
+    "templates/module-skills/ofono/ims/deep.md",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "IMS_UNSOL_REG_FAILED",
+   "real": "",
+   "kind": "RIL(IMS)",
+   "count": 13,
+   "example_lines": [
+    "Sep 22 09:30:21.304 dut user.debug imsd[552]: [SLOT_0][D] 7103 slot0 -> ofonod: IMS_UNSOL_REG_FAILED (14 bytes)",
+    "Sep 22 09:30:21.305 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=401"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/ims/deep.md",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md",
+    "templates/module-skills/ofono/ims/explore.md",
+    "templates/module-skills/ofono/ims/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "IpcCtx_",
+   "real": "",
+   "kind": "클래스",
+   "count": 73,
+   "example_lines": [
+    "Sep 23 10:10:05.008 dut daemon.debug vrild[452]: [IpcCtx_0] track seq 0x0351",
+    "Sep 23 10:10:05.091 dut daemon.info vrild[452]: [IpcCtx_0] OnIpcComplete Request ID=10, result=0"
+   ],
+   "files": [
+    "templates/module-skills/ofono/_common/components.md",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/events.json",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/timeline.md",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/events.json",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/events.json",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/events.json",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "OEM_REQ_IMS_EXAMPLE_REGISTER",
+   "real": "",
+   "kind": "IPC(IMS 데몬)",
+   "count": 2,
+   "example_lines": [
+    "Sep 21 10:40:02.020 dut user.debug imsd[733]: [SLOT_0][D] 5111 [SUB_0] req -> OEM_REQ_IMS_EXAMPLE_REGISTER len=48"
+   ],
+   "files": [
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "OEM_UNSOL_IMS_EXAMPLE_REGISTRATION",
+   "real": "",
+   "kind": "IPC(IMS 데몬)",
+   "count": 4,
+   "example_lines": [
+    "Sep 22 09:40:21.430 dut user.debug imsd[552]: [SLOT_0][D] 6102 slot0: OEM_UNSOL_IMS_EXAMPLE_REGISTRATION parsed -> [state : 0] sid 0"
+   ],
+   "files": [
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "OEM_UNSOL_IMS_EXAMPLE_REG_FAIL",
+   "real": "",
+   "kind": "IPC(IMS 데몬)",
+   "count": 6,
+   "example_lines": [
+    "Sep 22 09:30:21.303 dut user.debug imsd[552]: [SLOT_0][D] 7101 slot0: OEM_UNSOL_IMS_EXAMPLE_REG_FAIL parsed -> [example-code : 401] sid 0",
+    "Sep 21 10:40:05.001 dut user.debug imsd[733]: [SLOT_0][V] 5110 [SUB_0] ind <- OEM_UNSOL_IMS_EXAMPLE_REG_FAIL(3100) : [example-code : 403]"
+   ],
+   "files": [
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md",
+    "templates/module-skills/ofono/ims/explore.md"
+   ]
+  },
+  {
+   "placeholder": "OEM_UNSOL_IMS_EXAMPLE_REG_FAIL(3100)",
+   "real": "",
+   "kind": "IPC(IMS 데몬)+번호",
+   "count": 2,
+   "example_lines": [
+    "Sep 21 10:40:05.001 dut user.debug imsd[733]: [SLOT_0][V] 5110 [SUB_0] ind <- OEM_UNSOL_IMS_EXAMPLE_REG_FAIL(3100) : [example-code : 403]"
+   ],
+   "files": [
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "OnExampleRequest",
+   "real": "",
+   "kind": "벤더 RIL 낱말",
+   "count": 3,
+   "example_lines": [
+    "Sep 21 10:10:05.007 dut daemon.info vrild[452]: [IpcCtx_0] OnExampleRequest"
+   ],
+   "files": [
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/events.json",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "OnIpcComplete",
+   "real": "",
+   "kind": "함수",
+   "count": 42,
+   "example_lines": [
+    "Sep 23 10:10:05.091 dut daemon.info vrild[452]: [IpcCtx_0] OnIpcComplete Request ID=10, result=0",
+    "Sep 22 09:20:22.271 dut daemon.info vrild[618]: [IpcCtx_2] OnIpcComplete Request ID=71, result=2 -> chan 2 reply sent, 0 waiters, took 4 ms"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/_common/components.md",
+    "templates/module-skills/ofono/_common/layers.md",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/events.json",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/timeline.md",
+    "templates/module-skills/ofono/call/references/CALL-001.md",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/timeline.md",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/events.json",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/events.json",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/timeline.md",
+    "templates/module-skills/ofono/network/references/NETWORK-001.md",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/case.yaml",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/events.json",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/timeline.md",
+    "templates/module-skills/ofono/sim/references/SIM-001.md",
+    "templates/module-skills/ofono/sim/SKILL.md",
+    "templates/module-skills/ofono/sms/references/SMS-001.md",
+    "templates/module-skills/ofono/sms/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "VCHAN_",
+   "real": "",
+   "kind": "IPC 채널",
+   "count": 40,
+   "example_lines": [
+    "Sep 23 10:10:05.007 dut daemon.debug vrild[452]: client fd 9 VCHAN_1 REQUEST: DIAL (40 bytes)",
+    "Sep 21 10:10:05.411 dut daemon.debug vrild[452]: reply sent to VCHAN_1"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/_common/components.md",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/events.json",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/timeline.md",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/events.json",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/events.json",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/events.json",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/timeline.md",
+    "templates/module-skills/ofono/sim/SKILL.md",
+    "templates/module-skills/ofono/sms/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_CARD_IO",
+   "real": "",
+   "kind": "IPC",
+   "count": 11,
+   "example_lines": [
+    "Sep 22 09:10:21.360 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_CARD_IO seq=0x05e1 len=36",
+    "Sep 22 09:10:21.408 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_CARD_IO, RSP OK(VIPC_OK) seq=0x05e1 len=258"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/sim/deep.md",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/case.yaml",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/events.json",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/timeline.md",
+    "templates/module-skills/ofono/sim/explore.md",
+    "templates/module-skills/ofono/sim/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_CARD_OPEN",
+   "real": "",
+   "kind": "IPC",
+   "count": 18,
+   "example_lines": [
+    "Sep 22 10:10:19.423 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_CARD_OPEN seq=0x08d4 len=20",
+    "Sep 22 10:10:19.458 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP Error(VIPC_E_NO_SUCH_ELEMENT) seq=0x08d4 len=12, 35 ms"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/sim/deep.md",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/timeline.md",
+    "templates/module-skills/ofono/sim/explore.md",
+    "templates/module-skills/ofono/sim/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_CARRIER_IND",
+   "real": "",
+   "kind": "IPC",
+   "count": 6,
+   "example_lines": [
+    "Sep 22 09:10:08.300 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_CARRIER_IND ind len=40"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/timeline.md",
+    "templates/module-skills/ofono/data/explore.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_IMS_",
+   "real": "",
+   "kind": "IPC 접두어",
+   "count": 29,
+   "example_lines": [
+    "Sep 22 09:40:21.429 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=28",
+    "Sep 22 09:30:21.301 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=12"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/call/deep.md",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/source.log",
+    "templates/module-skills/ofono/call/explore.md",
+    "templates/module-skills/ofono/call/SKILL.md",
+    "templates/module-skills/ofono/ims/deep.md",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md",
+    "templates/module-skills/ofono/ims/explore.md",
+    "templates/module-skills/ofono/ims/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_IMS_PDN_ADD",
+   "real": "",
+   "kind": "IPC",
+   "count": 4,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/ofono/ims/deep.md",
+    "templates/module-skills/ofono/ims/explore.md",
+    "templates/module-skills/ofono/ims/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_IMS_REG_FAIL_IND",
+   "real": "",
+   "kind": "IPC",
+   "count": 7,
+   "example_lines": [
+    "Sep 22 09:30:21.301 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=12"
+   ],
+   "files": [
+    "templates/module-skills/ofono/ims/deep.md",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md",
+    "templates/module-skills/ofono/ims/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_IMS_REG_IND",
+   "real": "",
+   "kind": "IPC",
+   "count": 4,
+   "example_lines": [
+    "Sep 22 09:40:21.429 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=28"
+   ],
+   "files": [
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_IMS_REG_REQ",
+   "real": "",
+   "kind": "IPC",
+   "count": 4,
+   "example_lines": [
+    "Sep 21 10:40:02.021 dut daemon.debug vrild[452]: mux [ch0][TX] VIPC_EXAMPLE_IMS_REG_REQ, REQ seq=0x0201 len=48",
+    "Sep 21 10:40:02.090 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_REQ, RSP OK(VIPC_OK) seq=0x0201 len=12"
+   ],
+   "files": [
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_NO_SERVICE_IND",
+   "real": "",
+   "kind": "IPC",
+   "count": 14,
+   "example_lines": [
+    "Sep 22 09:50:11.153 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/case.yaml",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/files/timeline.md",
+    "templates/module-skills/ofono/modem/explore.md",
+    "templates/module-skills/ofono/modem/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_PDN_LIST_IND",
+   "real": "",
+   "kind": "IPC",
+   "count": 5,
+   "example_lines": [
+    "Sep 22 09:10:08.340 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_PDN_LIST_IND ind len=24"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_PDN_UP",
+   "real": "",
+   "kind": "IPC",
+   "count": 14,
+   "example_lines": [
+    "Sep 22 09:00:02.006 dut daemon.debug vrild[452]: mux [ch0][TX] VIPC_EXAMPLE_PDN_UP, REQ seq=0x0221 len=96",
+    "Sep 22 09:00:02.610 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_PDN_UP, RSP OK(VIPC_OK) seq=0x0221 len=64"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/data/deep.md",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_POWER",
+   "real": "",
+   "kind": "IPC",
+   "count": 8,
+   "example_lines": [
+    "Sep 22 10:00:16.557 dut daemon.debug vrild[618]: mux [ch1][TX] VIPC_EXAMPLE_POWER seq=0x07c3 len=8, power=0",
+    "Sep 22 10:00:16.756 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_POWER, RSP OK(VIPC_OK) seq=0x07c3 len=8"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/modem/deep.md",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/source.log"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_RAT_MODE",
+   "real": "",
+   "kind": "IPC",
+   "count": 23,
+   "example_lines": [
+    "Sep 21 10:50:05.007 dut daemon.debug vrild[452]: mux [ch0][TX] VIPC_EXAMPLE_RAT_MODE, REQ seq=0x0241 len=12",
+    "Sep 21 10:50:05.020 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_RAT_MODE, RSP Error(VIPC_E_FAILURE) seq=0x0241 len=12"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/events.json",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/timeline.md",
+    "templates/module-skills/ofono/network/deep.md",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/case.yaml",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/events.json",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/network/explore.md",
+    "templates/module-skills/ofono/network/references/NETWORK-001.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_SIGNAL_IND",
+   "real": "",
+   "kind": "IPC",
+   "count": 7,
+   "example_lines": [
+    "Sep 22 09:20:22.563 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_SIGNAL_IND ind len=16"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/events.json",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/events.json",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/source.log"
+   ]
+  },
+  {
+   "placeholder": "VIPC_EXAMPLE_SMSC_QUERY",
+   "real": "",
+   "kind": "IPC",
+   "count": 3,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/files/timeline.md",
+    "templates/module-skills/ofono/sms/evals/sms-send-no-vendor-lines/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_E_*",
+   "real": "",
+   "kind": "IPC 접두어(문서)",
+   "count": 12,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/ofono/_common/layers.md",
+    "templates/module-skills/ofono/call/deep.md",
+    "templates/module-skills/ofono/call/references/CALL-001.md",
+    "templates/module-skills/ofono/call/SKILL.md",
+    "templates/module-skills/ofono/data/deep.md",
+    "templates/module-skills/ofono/data/explore.md",
+    "templates/module-skills/ofono/network/deep.md",
+    "templates/module-skills/ofono/network/SKILL.md",
+    "templates/module-skills/ofono/sim/deep.md",
+    "templates/module-skills/ofono/sim/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_E_<",
+   "real": "",
+   "kind": "IPC 접두어(문서)",
+   "count": 1,
+   "example_lines": [],
+   "files": [
+    "templates/module-skills/ofono/_common/components.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_E_FAILURE",
+   "real": "",
+   "kind": "IPC 결과",
+   "count": 20,
+   "example_lines": [
+    "Sep 21 10:10:05.410 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_CALL_START, RSP Error(VIPC_E_FAILURE) seq=0x0131 len=12",
+    "Sep 21 10:50:05.020 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_RAT_MODE, RSP Error(VIPC_E_FAILURE) seq=0x0241 len=12"
+   ],
+   "files": [
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/case.yaml",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/events.json",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/events.json",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/case.yaml",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/events.json",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "VIPC_E_NO_SUCH_ELEMENT",
+   "real": "",
+   "kind": "IPC 결과",
+   "count": 8,
+   "example_lines": [
+    "Sep 22 10:10:19.458 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP Error(VIPC_E_NO_SUCH_ELEMENT) seq=0x08d4 len=12, 35 ms"
+   ],
+   "files": [
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/analysis.json",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "[SUB_",
+   "real": "",
+   "kind": "IMS·네트워크 하위 식별",
+   "count": 9,
+   "example_lines": [
+    "Sep 21 10:40:02.020 dut user.debug imsd[733]: [SLOT_0][D] 5111 [SUB_0] req -> OEM_REQ_IMS_EXAMPLE_REGISTER len=48",
+    "Sep 21 10:40:05.001 dut user.debug imsd[733]: [SLOT_0][V] 5110 [SUB_0] ind <- OEM_UNSOL_IMS_EXAMPLE_REG_FAIL(3100) : [example-code : 403]"
+   ],
+   "files": [
+    "templates/module-skills/ofono/call/explore.md",
+    "templates/module-skills/ofono/call/SKILL.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md",
+    "templates/module-skills/ofono/ims/explore.md",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "] VIPC_",
+   "real": "",
+   "kind": "IPC 접두어(정규식)",
+   "count": 98,
+   "example_lines": [
+    "Sep 23 10:10:05.008 dut daemon.debug vrild[452]: mux [ch0][TX] VIPC_EXAMPLE_CALL_START, REQ seq=0x0351 len=36",
+    "Sep 23 10:10:05.090 dut daemon.debug vrild[452]: mux [ch0][RX] VIPC_EXAMPLE_CALL_START, RSP OK(VIPC_OK) seq=0x0351 len=12"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/_common/components.md",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/events.json",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/files/timeline.md",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/events.json",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/events.json",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/events.json",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "apm_on",
+   "real": "",
+   "kind": "RIL(IMS) 인자",
+   "count": 9,
+   "example_lines": [
+    "Sep 22 09:40:17.630 dut daemon.info ofonod[903]: [0,0412]> IMS_REQUEST_EXAMPLE_APM apm_on:1"
+   ],
+   "files": [
+    "templates/module-skills/ofono/_common/layers.md",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/case.yaml",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/timeline.md",
+    "templates/module-skills/ofono/call/explore.md",
+    "templates/module-skills/ofono/call/SKILL.md",
+    "templates/module-skills/ofono/modem/deep.md",
+    "templates/module-skills/ofono/modem/explore.md"
+   ]
+  },
+  {
+   "placeholder": "apn_class:",
+   "real": "",
+   "kind": "RIL(IMS) 인자",
+   "count": 2,
+   "example_lines": [
+    "Sep 22 09:40:21.459 dut daemon.info ofonod[903]: [0,UNSOL]< IMS_UNSOL_PDN_DEACTIVATE apn_class:1",
+    "Sep 22 09:40:21.460 dut daemon.debug ofonod[903]: src/ims.c:example_pdn_deactivate() apn_class:1"
+   ],
+   "files": [
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/source.log"
+   ]
+  },
+  {
+   "placeholder": "chatterd",
+   "real": "",
+   "kind": "데몬",
+   "count": 4,
+   "example_lines": [
+    "Sep 22 10:00:17.236 dut daemon.info chatterd[746]: position fix pending"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/_common/components.md",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/source.log"
+   ]
+  },
+  {
+   "placeholder": "datad",
+   "real": "",
+   "kind": "데몬",
+   "count": 61,
+   "example_lines": [
+    "Sep 20 15:10:01.000 dut daemon.info datad[610]: profile select: apn=internet.example auth=CHAP profile_id=1[./src/apn_example.cxx +20]",
+    "Sep 20 15:10:01.930 dut daemon.warn datad[610]: activate result: failed profile_id=1 retry in 10s[./src/call_example.cxx +30]"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/_common/components.md",
+    "templates/module-skills/ofono/_common/layers.md",
+    "templates/module-skills/ofono/data/evals/data-apn-auth-reject/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-apn-auth-reject/files/events.json",
+    "templates/module-skills/ofono/data/evals/data-apn-auth-reject/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-auth-reject/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-ofonod-only/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-ofonod-only/files/analysis.json",
+    "templates/module-skills/ofono/data/evals/data-ofonod-only/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-ofonod-only/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-route-fail/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-route-fail/files/analysis.json",
+    "templates/module-skills/ofono/data/evals/data-route-fail/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-route-fail/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "datad2",
+   "real": "",
+   "kind": "데몬",
+   "count": 16,
+   "example_lines": [
+    "Sep 20 15:20:01.724 dut daemon.err datad2[733]: netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002",
+    "Sep 20 15:20:01.726 dut daemon.warn datad2[733]: default route not installed for rmnet0"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/_common/components.md",
+    "templates/module-skills/ofono/_common/layers.md",
+    "templates/module-skills/ofono/data/evals/data-apn-auth-reject/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-ofonod-only/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-route-fail/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-route-fail/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-route-fail/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "dbus_trace",
+   "real": "",
+   "kind": "함수(ofonod D-Bus 덤프)",
+   "count": 41,
+   "example_lines": [
+    "Sep 23 10:10:05.004 dut daemon.info ofonod[466]: dbus_trace method call - i:org.ofono.VoiceCallManager m:Dial p:/ril_0 a:\"<MSISDN#1>\", \"default\"",
+    "Sep 23 10:10:05.432 dut daemon.info ofonod[466]: dbus_trace signal - i:org.ofono.VoiceCallManager m:CallRemoved p:/ril_0"
+   ],
+   "files": [
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/events.json",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/timeline.md",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/events.json",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/timeline.md",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/files/source.log",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/files/timeline.md",
+    "templates/module-skills/ofono/sms/evals/sms-send-no-vendor-lines/files/events.json",
+    "templates/module-skills/ofono/sms/evals/sms-send-no-vendor-lines/files/source.log"
+   ]
+  },
+  {
+   "placeholder": "diag packet dropped",
+   "real": "",
+   "kind": "문구",
+   "count": 9,
+   "example_lines": [
+    "Sep 22 09:50:13.153 dut daemon.warn vrild[618]: diag packet dropped: host not reading, write fail"
+   ],
+   "files": [
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/case.yaml",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/files/timeline.md",
+    "templates/module-skills/ofono/modem/explore.md",
+    "templates/module-skills/ofono/modem/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "drivers/rilmodem/sim.c:example_open_channel_cb()",
+   "real": "",
+   "kind": "함수",
+   "count": 2,
+   "example_lines": [
+    "Sep 22 10:10:19.461 dut daemon.debug ofonod[903]: drivers/rilmodem/sim.c:example_open_channel_cb() reply failure: NO_SUCH_ELEMENT"
+   ],
+   "files": [
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "eUICC example timeout",
+   "real": "",
+   "kind": "클래스·함수·서비스 이름",
+   "count": 9,
+   "example_lines": [
+    "Sep 22 10:20:18.186 dut daemon.warn simd[589]: tid:9 ExampleSim.cpp(68):ExampleGetEid > GetEID failed: ExampleEuiccNoResponse (eUICC example timeout)",
+    "Sep 22 10:20:18.188 dut local0.warn mgmtd[734]: GetEID call error: eUICC example timeout  path/example_sim.go:24"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/case.yaml",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/analysis.json",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "example-code",
+   "real": "",
+   "kind": "클래스·함수·서비스 이름",
+   "count": 18,
+   "example_lines": [
+    "Sep 22 09:30:21.303 dut user.debug imsd[552]: [SLOT_0][D] 7101 slot0: OEM_UNSOL_IMS_EXAMPLE_REG_FAIL parsed -> [example-code : 401] sid 0",
+    "Sep 21 10:40:05.001 dut user.debug imsd[733]: [SLOT_0][V] 5110 [SUB_0] ind <- OEM_UNSOL_IMS_EXAMPLE_REG_FAIL(3100) : [example-code : 403]"
+   ],
+   "files": [
+    "templates/module-skills/ofono/ims/deep.md",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/case.yaml",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/case.yaml",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md",
+    "templates/module-skills/ofono/ims/explore.md",
+    "templates/module-skills/ofono/ims/references/IMS-001.md",
+    "templates/module-skills/ofono/ims/SKILL.md"
+   ]
+  },
+  {
+   "placeholder": "exampleTriggerRegistering",
+   "real": "",
+   "kind": "함수",
+   "count": 7,
+   "example_lines": [
+    "Sep 21 10:40:02.010 dut user.debug imsd[733]: [SLOT_0][I] 5101 [ExampleImsRegistration] exampleTriggerRegistering() SENT",
+    "Sep 21 10:40:10.010 dut user.debug imsd[733]: [SLOT_0][I] 5104 [ExampleImsRegistration] exampleTriggerRegistering() NOT SENT (blocked after 403)"
+   ],
+   "files": [
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "example_reg_fail_notify",
+   "real": "",
+   "kind": "함수",
+   "count": 5,
+   "example_lines": [
+    "Sep 22 09:30:21.305 dut daemon.info ofonod[903]: src/ims.c:example_reg_fail_notify() /ril_0 fail_code 401",
+    "Sep 21 10:40:05.003 dut daemon.debug ofonod[466]: src/ims.c:example_reg_fail_notify() fail_code = 403"
+   ],
+   "files": [
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "imsd",
+   "real": "",
+   "kind": "데몬",
+   "count": 64,
+   "example_lines": [
+    "Sep 22 09:40:17.631 dut user.debug imsd[552]: [SLOT_0][D] 6101 slot0 <- ofonod: IMS_REQUEST_EXAMPLE_APM serial 0412, apm on",
+    "Sep 22 09:40:21.430 dut user.debug imsd[552]: [SLOT_0][D] 6102 slot0: OEM_UNSOL_IMS_EXAMPLE_REGISTRATION parsed -> [state : 0] sid 0"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/_common/components.md",
+    "templates/module-skills/ofono/_common/layers.md",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/case.yaml",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/case.yaml",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/files/source.log",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/case.yaml",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/files/analysis.json",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/files/source.log",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "mgmtd",
+   "real": "",
+   "kind": "데몬",
+   "count": 167,
+   "example_lines": [
+    "Sep 23 10:10:00.010 dut local0.info mgmtd[734]: ui tick",
+    "Sep 23 10:10:05.000 dut local0.info mgmtd[734]: call dial requested number=<MSISDN#1>  path/example_call.go:24"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/_common/components.md",
+    "templates/module-skills/ofono/_common/layers.md",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/case.yaml",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/case.yaml",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/events.json",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-auth-reject/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-apn-auth-reject/files/events.json",
+    "templates/module-skills/ofono/data/evals/data-apn-auth-reject/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-auth-reject/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-ofonod-only/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-ofonod-only/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-route-fail/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-route-fail/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/case.yaml",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/case.yaml",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/events.json",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/case.yaml",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/events.json",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/case.yaml",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/case.yaml",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/events.json",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/source.log",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/files/source.log",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/files/timeline.md",
+    "templates/module-skills/ofono/sms/evals/sms-send-no-vendor-lines/case.yaml",
+    "templates/module-skills/ofono/sms/evals/sms-send-no-vendor-lines/files/events.json",
+    "templates/module-skills/ofono/sms/evals/sms-send-no-vendor-lines/files/source.log",
+    "templates/module-skills/ofono/sms/evals/sms-send-no-vendor-lines/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "networkd",
+   "real": "",
+   "kind": "데몬",
+   "count": 6,
+   "example_lines": [
+    "Sep 22 10:00:21.618 dut user.info networkd[575]: [SUB_0] radio state changed: RADIO_OFF [ExampleNet.cpp+12]"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/_common/components.md",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "simd",
+   "real": "",
+   "kind": "데몬",
+   "count": 30,
+   "example_lines": [
+    "Sep 22 10:10:19.418 dut daemon.info simd[587]: tid:36 ExampleSim.cpp(20):ExampleGetEid > GetEID begin",
+    "Sep 22 10:10:19.419 dut daemon.info simd[587]: tid:36 ExampleSim.cpp(26):ExampleChannelOpen > open channel aid <AID#1>"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/_common/components.md",
+    "templates/module-skills/ofono/_common/layers.md",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/case.yaml",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/case.yaml",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/analysis.json",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "src/ims.c:example_pdn_info_cb()",
+   "real": "",
+   "kind": "함수",
+   "count": 3,
+   "example_lines": [
+    "Sep 22 09:30:20.794 dut daemon.debug ofonod[903]: src/ims.c:example_pdn_info_cb() pdn info set"
+   ],
+   "files": [
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "src/sim.c:example_open_channel()",
+   "real": "",
+   "kind": "함수",
+   "count": 6,
+   "example_lines": [
+    "Sep 22 10:10:19.420 dut daemon.debug ofonod[903]: src/sim.c:example_open_channel() /ril_0 aid <AID#1>",
+    "Sep 22 10:20:18.183 dut daemon.debug ofonod[903]: src/sim.c:example_open_channel() /ril_0 aid <AID#2> while channel open in progress"
+   ],
+   "files": [
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "track seq ",
+   "real": "",
+   "kind": "문구",
+   "count": 34,
+   "example_lines": [
+    "Sep 23 10:10:05.008 dut daemon.debug vrild[452]: [IpcCtx_0] track seq 0x0351",
+    "Sep 21 10:10:05.412 dut daemon.debug vrild[452]: [IpcCtx_0] untrack seq 0x0131"
+   ],
+   "files": [
+    "templates/module-skills/ofono/_common/components.md",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/events.json",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/timeline.md",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/events.json",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/events.json",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/events.json",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "untrack seq ",
+   "real": "",
+   "kind": "문구",
+   "count": 12,
+   "example_lines": [
+    "Sep 21 10:10:05.412 dut daemon.debug vrild[452]: [IpcCtx_0] untrack seq 0x0131",
+    "Sep 22 09:20:22.272 dut daemon.debug vrild[618]: [IpcCtx_2] untrack seq 0x06a2 (0 in flight)"
+   ],
+   "files": [
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/events.json",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/events.json",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/events.json",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/events.json",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/timeline.md"
+   ]
+  },
+  {
+   "placeholder": "vrild",
+   "real": "",
+   "kind": "데몬",
+   "count": 375,
+   "example_lines": [
+    "Sep 23 10:10:00.200 dut daemon.info vrild[452]: [ExampleRegService_0] signal update lte rsrp=-95",
+    "Sep 23 10:10:01.000 dut daemon.info vrild[452]: [ExampleRegService_0] Data RegState=REGISTERED, RejectCause=0"
+   ],
+   "files": [
+    "templates/module-skills/modules.yaml",
+    "templates/module-skills/ofono/_common/components.md",
+    "templates/module-skills/ofono/_common/layers.md",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/case.yaml",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-csfb-cs-unregistered/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/case.yaml",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/events.json",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-dial-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/case.yaml",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/source.log",
+    "templates/module-skills/ofono/call/evals/call-ecall-msd-lines-missing/files/timeline.md",
+    "templates/module-skills/ofono/call/evals/call-epsfb-after-apm/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-auth-reject/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-apn-auth-reject/files/events.json",
+    "templates/module-skills/ofono/data/evals/data-apn-auth-reject/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-auth-reject/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-apn-overwritten/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-nr-switch-drop/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-ofonod-only/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-ofonod-only/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-route-fail/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-route-fail/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-route-fail/files/timeline.md",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/case.yaml",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/source.log",
+    "templates/module-skills/ofono/data/evals/data-throughput-trap/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/case.yaml",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/events.json",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-401-then-registered/files/timeline.md",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/case.yaml",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/source.log",
+    "templates/module-skills/ofono/ims/evals/ims-reg-403-no-retry/files/timeline.md",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/case.yaml",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/files/analysis.json",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-oos-dm-drop/files/timeline.md",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/case.yaml",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/events.json",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/source.log",
+    "templates/module-skills/ofono/modem/evals/modem-reset-net-chain/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/case.yaml",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/events.json",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-nrmode-modem-reject/files/timeline.md",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/source.log",
+    "templates/module-skills/ofono/network/evals/network-radio-off-queries/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/case.yaml",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/analysis.json",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-euicc-isdr-absent/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/case.yaml",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-openchannel-busy-race/files/timeline.md",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/case.yaml",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/events.json",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/source.log",
+    "templates/module-skills/ofono/sim/evals/sim-simio-ril-result/files/timeline.md",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/case.yaml",
+    "templates/module-skills/ofono/sms/evals/sms-ims-path-reject/files/source.log",
+    "templates/module-skills/ofono/sms/evals/sms-send-no-vendor-lines/case.yaml",
+    "templates/module-skills/ofono/sms/evals/sms-send-no-vendor-lines/files/events.json",
+    "templates/module-skills/ofono/sms/evals/sms-send-no-vendor-lines/files/source.log"
+   ]
+  }
+ ]
+}

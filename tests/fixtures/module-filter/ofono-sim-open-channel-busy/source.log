@@ -25,8 +25,8 @@ Sep 23 11:10:09.076 dut daemon.debug ofonod[903]: Device 0: <HEXDUMP 12B>
 Sep 23 11:10:09.077 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_SIGNAL_IND ind len=16
 Sep 23 11:10:09.077 dut daemon.debug vrild[618]: link rx 16B
 Sep 23 11:10:09.078 dut daemon.err simd[589]: tid:9 Failed to open logical channel: org.ofono.Error.InProgress (Operation already in progress)
-Sep 23 11:10:09.078 dut daemon.warn simd[589]: tid:9 GetEID failed: EuiccNoResponse (eUICC not responding)
-Sep 23 11:10:09.079 dut local0.warn mgmtd[734]: GetEID call error: eUICC not responding
+Sep 23 11:10:09.078 dut daemon.warn simd[589]: tid:9 GetEID failed: ExampleEuiccNoResponse (eUICC example timeout)
+Sep 23 11:10:09.079 dut local0.warn mgmtd[734]: GetEID call error: eUICC example timeout
 Sep 23 11:10:09.080 dut daemon.info datad[633]: link status poll: rmnet0 up
 Sep 23 11:10:09.081 dut daemon.debug vrild[618]: mux [ch1][RX] VIPC_EXAMPLE_OPER, RSP OK(VIPC_OK) seq=0x0d32 len=36
 Sep 23 11:10:09.081 dut daemon.debug vrild[618]: link rx 36B

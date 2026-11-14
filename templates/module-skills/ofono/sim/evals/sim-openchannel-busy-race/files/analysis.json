@@ -9,8 +9,8 @@
   "sw": null,
   "platform_version": "2",
   "sim_slot": "0",
-  "summary": "eSIM 정보 조회 시 eUICC not responding 오류",
-  "description": "eSIM 정보 조회 중 eUICC not responding 오류가 납니다.",
+  "summary": "eSIM 정보 조회 시 eUICC example timeout 오류",
+  "description": "eSIM 정보 조회 중 eUICC example timeout 오류가 납니다.",
   "comments": 0,
   "missing": [
    "model",
