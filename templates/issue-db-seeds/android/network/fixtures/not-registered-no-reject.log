@@ -1,0 +1,9 @@
+-- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:00:30.100  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]
+11-14 10:00:30.101  1301  1301 D SST-0   : pollState: modemTriggered=true, radioState=1
+11-14 10:00:30.105  1301  1301 D RILJ    : [0755]> DATA_REGISTRATION_STATE [PHONE0]
+11-14 10:00:30.107  1301  1330 D RILJ    : [0755]< DATA_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_NOT_SEARCHING_OP, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdentityNr{nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, bands: [BAND_41]}), registeredPlmn: 00101} [PHONE0]
+11-14 10:00:30.108  1301  1301 D RILJ    : [0756]> VOICE_REGISTRATION_STATE [PHONE0]
+11-14 10:00:30.110  1301  1330 D RILJ    : [0756]< VOICE_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_NOT_SEARCHING_OP, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdentityNr{nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, bands: [BAND_41]}), registeredPlmn: 00101} [PHONE0]
+11-14 10:00:30.120  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false
+11-14 10:00:30.121  1301  1301 D SST-0   : updateCarrierDisplayName: radio is on but out of service, set plmn='No service'

@@ -147,6 +147,23 @@ DB에 맞는 것이 없고 탐색으로도 가설이 서지 않으면 "가설 �
 
 ---
 
+## K. 새 Android 버전이 나오면 할 일 (시드·시그니처 다시 맞추기)
+
+이슈 DB 시드(`templates/issue-db-seeds/android/`)와 그 `platform_versions: ["17"]`은 Android 17 소스·에뮬레이터 캡처 기준이다. 버전 표시는 후보를
+걸러내지 않고 리포트에 "버전 불일치"만 붙이므로(`match_signatures._version_match`), 새 버전에서 문구가 그대로면 계속 맞는다. 문구·태그·코드 위치가 바뀐 것은
+자동으로 반영되지 않는다 — 사내에서는 기록이 쌓인 뒤에야 정기 점검의 시그니처 소실 검사(`site_step.py audit`, `drift:<레포>:<K>`)가 알려 준다.
+
+새 버전(예: 18)의 AOSP 소스·에뮬레이터 캡처를 구하면 **사외에서 먼저** 한 번 훑는다(사내 토큰을 쓰지 않게):
+
+1. 시드 계획의 `must_match` 문구·태그와 `code_refs` 경로·심볼을 새 소스와 대조해 "바뀐 문구·태그·경로 목록"을 만든다.
+2. 문구가 바뀐 원인: 기존 시그니처를 바꾸지 않고 새 문구 시그니처를 **하나 더** 넣는다(한 원인의 시그니처 여러 개는 OR, `04-parser-matching.md`) + 새 버전 합성 fixture.
+   그대로인 원인: `platform_versions`에 새 버전을 더한다. 태그 이름이 바뀌었으면 파서 태그 규칙도(R5 이벤트 diff 확인).
+3. 코드 위치가 바뀐 원인: `code_refs`를 버전별 항목으로 나눈다(`03-issue-db.md` `code_refs`).
+4. `tests/test_android_seeds.py`가 버전별 fixture를 모두 보게 하고, 바뀐 목록을 재반입 노트(`DRAFT_NOTES.md`)에 적어 사내가 운영 DB에 같은 변경을 PR로 올리게 한다.
+5. 사내: `platform_versions_supported`에서 옛 버전을 빼기 **전에**, 새 버전에서도 확인된 원인에 새 버전을 더한다(안 그러면 `db_review`가 `deprecated` 후보로 올린다, `06-collaboration.md §6.6`).
+
+지금 만들지 않은 이유: 새 버전 소스가 없고, 버전별 시드를 미리 일반화하면 쓰지 않을 구조가 된다.
+
 ## 되살릴 때 바꿀 곳
 
 - `contracts.md`: `db_add` CLI(`extract`, `replay`, `renumber --in-main`), `db_pr snapshot --lease`와 lock 정의, op 표(replay 전용 op), `source: replay|migrate|category|cleanup`, `signatures_pending`의 replay 이어받기, 종료 코드 `3`의 `set-field` 예시, `config.py check --for migrate`와 `db_pr stage`의 마이그레이션 경로(`migration_to`)

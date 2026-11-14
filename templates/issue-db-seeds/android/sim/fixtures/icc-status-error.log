@@ -1,0 +1,7 @@
+-- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:00:20.000  1301  1301 D RILJ    : [0320]> GET_SIM_STATUS [PHONE0]
+11-14 10:00:21.030  1301  1330 D RILJ    : [0320]< GET_SIM_STATUS error 2 [PHONE0]
+11-14 10:00:21.040  1301  1301 E UiccController: Error getting ICC status. RIL_REQUEST_GET_ICC_STATUS should never return an error com.android.internal.telephony.CommandException: GENERIC_FAILURE
+11-14 10:00:28.000  1301  1301 D RILJ    : [0321]> GET_SIM_STATUS [PHONE0]
+11-14 10:00:29.030  1301  1330 D RILJ    : [0321]< GET_SIM_STATUS error 2 [PHONE0]
+11-14 10:00:29.040  1301  1301 E UiccController: Error getting ICC status. RIL_REQUEST_GET_ICC_STATUS should never return an error com.android.internal.telephony.CommandException: GENERIC_FAILURE

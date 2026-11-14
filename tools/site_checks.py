@@ -1287,13 +1287,26 @@ def _categories(db: Path) -> list[str] | None:
     return keys or None
 
 
+SYNTHETIC_HEAD = "-- [합성]"        # 합성 로그 1줄(이슈 DB 시드 fixture·모듈 템플릿 case)
+
+
+def _synthetic_log(log: Path) -> bool:
+    """합성 로그 머리줄. 시드 계획의 `origin` 줄만 지우고 로그를 실제 것으로 안 바꾼 fixture를 잡는다."""
+    try:
+        with log.open(encoding="utf-8", errors="replace") as fh:
+            return fh.readline().startswith(SYNTHETIC_HEAD)
+    except OSError:
+        return False
+
+
 def _real_fixture(type_dir: Path) -> bool:
-    """fixture 로그(`fixtures/*.log`) 중 같은 이름 `.expect.yaml`에 `origin: synthetic`이 없는 것이 하나라도 있으면 실제.
-    `.expect.yaml`은 기대값이 기본과 다를 때만 있다(contracts.md §fixture) — 없으면 실제 fixture다."""
+    """fixture 로그(`fixtures/*.log`) 중 같은 이름 `.expect.yaml`에 `origin: synthetic`이 없고 합성 머리줄(`-- [합성]`)도 없는 것이
+    하나라도 있으면 실제. `.expect.yaml`은 기대값이 기본과 다를 때만 있다(contracts.md §fixture) — 없으면 실제 fixture다."""
     fx = type_dir / "fixtures"
     for log in sorted(fx.glob("*.log")) if fx.is_dir() else []:
         expect = log.with_suffix(".expect.yaml")
-        if not (expect.is_file() and SYNTHETIC_RE.search(expect.read_text(encoding="utf-8", errors="replace"))):
+        marked = expect.is_file() and SYNTHETIC_RE.search(expect.read_text(encoding="utf-8", errors="replace"))
+        if not marked and not _synthetic_log(log):
             return True
     return False
 
@@ -1465,9 +1478,11 @@ def _synthetic(ctx: Ctx, cid: str, key: str = "ops_db") -> dict:
         return early
     hits = [p.relative_to(clone).as_posix() for p in sorted(clone.rglob("*.expect.yaml"))
             if SYNTHETIC_RE.search(p.read_text(encoding="utf-8", errors="replace"))]
-    return res(cid, "fail" if hits else "pass", f"`origin: synthetic` {len(hits)}건"
+    hits += [p.relative_to(clone).as_posix() for p in sorted(clone.rglob("fixtures/*.log")) if _synthetic_log(p)]
+    return res(cid, "fail" if hits else "pass", f"`origin: synthetic`·합성 머리줄 {len(hits)}건"
                + (": " + ", ".join(hits[:5]) + (" …" if len(hits) > 5 else "") if hits else ""),
-               "grep -rl 'origin: synthetic' --include='*.expect.yaml' <임시 clone>")
+               "grep -rl 'origin: synthetic' --include='*.expect.yaml' <임시 clone>; "
+               "grep -rlF -- '-- [합성]' --include='*.log' <임시 clone>")
 
 
 PLACEHOLDER_LINE = re.compile(r"(?m)^- placeholder (?:규칙|남은 것): ")     # 옛 형식(`규칙:`)도 바꿔 쓴다

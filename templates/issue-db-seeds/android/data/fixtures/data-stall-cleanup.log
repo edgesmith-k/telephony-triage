@@ -1,0 +1,16 @@
+-- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
+11-14 21:43:00.631  2101  2101 D DSRM-0  : Validation failed, but recovery has already started.
+11-14 21:43:53.724  2101  2101 D DSRM-0  : getRecoveryAction: RECOVERY_ACTION_CLEANUP
+11-14 21:43:53.725  2101  2101 D DSRM-0  : broadcastDataStallDetected recoveryAction: 1
+11-14 21:43:53.727  2101  2101 D DSRM-0  : doRecovery(): cleanup all connections
+11-14 21:43:53.727  2101  2101 D DSRM-0  : cleanUpDataNetwork: notify clean up data network
+11-14 21:43:53.727  2101  2101 D DSRM-0  : setRecoveryAction: RECOVERY_ACTION_RADIO_RESTART
+11-14 21:43:53.727  2101  2101 D DNC-0   : onDataStallReestablishInternet: Tear down data networks that support internet.
+11-14 21:43:53.728  2101  2101 D DN-104-C: ConnectedState: onTearDown: reason=DATA_STALL
+11-14 21:43:53.730  2101  2141 D RILJ    : [0420]> DEACTIVATE_DATA_CALL cid = 22 reason = NORMAL [PHONE0]
+11-14 21:43:53.734  2101  2141 D RILJ    : [0420]< DEACTIVATE_DATA_CALL  [PHONE0]
+11-14 21:43:53.735  2101  2101 D DN-104-C: DisconnectingState: onDeactivateResponse: resultCode=RESULT_SUCCESS
+11-14 21:43:53.736  2101  2101 D DN-104-C: DisconnectingState: onDataStateChanged: PDN disconnected reported by WWAN data service. requireExplicitDisconnect false
+11-14 21:43:53.737  2101  2101 D DN-104-C: DisconnectedState: Data network disconnected. mEverConnected=true
+11-14 21:43:53.740  2101  2101 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-104-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=DATA_STALL
+11-14 21:43:53.741  2101  2101 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.

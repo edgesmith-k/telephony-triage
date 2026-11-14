@@ -1,0 +1,8 @@
+-- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:00:05.100  1301  1301 I GsmCdmaPhone: [0] dial; isEmergency=true (based on all phones)
+11-14 10:00:05.150  1301  1301 I GsmCdmaPhone: [0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=true, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isPotentialUssdCode=false, isWpsCall=false, allowWpsOverIms=true, imsPhone=Handler (com.android.internal.telephony.imsphone.ImsPhone) {bd342b4}, imsPhone.isVoiceOverCellularImsEnabled()=false, imsPhone.isVowifiEnabled()=false, imsPhone.isVideoEnabled()=false, imsPhone.getServiceState().getState()=1
+11-14 10:00:05.200  1301  1301 D GsmCdmaPhone: [0] Trying (non-IMS) CS call
+11-14 10:00:05.201  1301  1301 D GsmCdmaPhone: [0] dialInternal: dialing w/ mmi 'null'...
+11-14 10:00:05.210  1301  1301 D GsmCdmaCallTracker: [0] update phone state, old=IDLE new=OFFHOOK
+11-14 10:00:05.211  1301  1301 D RILJ    : [0268]> DIAL [PHONE0]
+11-14 10:00:05.217  1301  1330 D RILJ    : [0268]< DIAL  [PHONE0]

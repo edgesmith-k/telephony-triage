@@ -1,0 +1,14 @@
+-- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
+11-14 17:28:29.538  2101  2101 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0
+11-14 17:28:29.538  2101  2101 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON
+11-14 17:28:29.538  2101  2101 D SST-0   : powerOffRadioSafely: Data is active on phone 1. Wait for all data disconnect.
+11-14 17:28:29.543  2101  2101 D DNC-0   : onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON
+11-14 17:28:29.543  2101  2101 D DNC-0   : tearDownGracefully: Safe to tear down [DataNetwork: DN-156-C, <APN#1>, state=ConnectedState]
+11-14 17:28:29.543  2101  2101 D DN-156-C: ConnectedState: onTearDown: reason=AIRPLANE_MODE_ON
+11-14 17:28:29.546  2101  2141 D RILJ    : [0599]> DEACTIVATE_DATA_CALL cid = 1 reason = SHUTDOWN [PHONE0]
+11-14 17:28:29.547  2101  2141 D RILJ    : [0599]< DEACTIVATE_DATA_CALL  [PHONE0]
+11-14 17:28:29.547  2101  2101 D DN-156-C: DisconnectingState: onDeactivateResponse: resultCode=RESULT_SUCCESS
+11-14 17:28:29.558  2101  2101 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-156-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=AIRPLANE_MODE_ON
+11-14 17:28:29.558  2101  2101 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.
+11-14 17:28:29.562  2101  2141 D RILJ    : [0602]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]
+11-14 17:28:29.565  2101  2141 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]

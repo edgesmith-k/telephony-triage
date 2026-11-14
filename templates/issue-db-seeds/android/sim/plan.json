@@ -1,0 +1,151 @@
+{
+  "source": "import",
+  "schema_version": 1,
+  "started_at": "2026-11-14T23:30+09:00",
+  "base_sha": "0000000000000000000000000000000000000000",
+  "issue": null,
+  "feedback": null,
+  "included_pending": [],
+  "commit_message": "[NEW-TYPE-1] import sim-1: Android sim 시작 유형 1개·원인 2개 (합성 fixture, Android 17)",
+  "pr": {
+    "number": null,
+    "branch": "import/sim-1",
+    "head_sha": null
+  },
+  "operations": [
+    {
+      "op": "new-type",
+      "temp_id": "NEW-TYPE-1",
+      "category": "sim",
+      "dir_slug": "sim-not-detected",
+      "type": {
+        "title": "SIM이 인식되지 않음",
+        "summary": "SIM이 없음·사용 안 함으로 보이거나 카드 상태를 읽지 못한다",
+        "symptom_signatures": [
+          {
+            "id": "icc-status-error",
+            "must_match": [
+              "UiccController: Error getting ICC status"
+            ],
+            "window_sec": 60
+          },
+          {
+            "id": "uicc-apps-disabled",
+            "must_match": [
+              "RILJ: \\[UNSL\\]< UNSOL_UICC_APPLICATIONS_ENABLEMENT_CHANGED false"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "tags": [
+          "sim-detect"
+        ]
+      },
+      "first_cause": {
+        "temp_id": "NEW-CAUSE-1",
+        "cause": {
+          "title": "카드 상태 조회 실패",
+          "description": "모뎀이 카드 상태 조회(GET_SIM_STATUS)에 오류를 돌려 프레임워크가 카드를 만들지 못함",
+          "signatures": [
+            {
+              "id": "get-sim-status-error",
+              "must_match": [
+                "RILJ: .*< GET_SIM_STATUS error \\d+",
+                "UiccController: Error getting ICC status\\. RIL_REQUEST_GET_ICC_STATUS should never return an error"
+              ],
+              "window_sec": 60
+            }
+          ],
+          "resolution": "카드 상태 조회 오류의 원인(카드 접촉·전원·모뎀 SIM 드라이버)을 모뎀 쪽에서 본다.",
+          "resolution_type": "modem",
+          "fix": {
+            "status": "open",
+            "ref": null,
+            "fixed_in": []
+          },
+          "platform_versions": [
+            "17"
+          ],
+          "code_refs": [
+            {
+              "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/uicc/UiccController.java",
+              "symbol": "UiccController#onGetIccCardStatusDone",
+              "platform_versions": [
+                "17"
+              ]
+            }
+          ],
+          "cp_evidence": "CP(모뎀·카드) 쪽 — 벤더 로그로 확정. 다음에 받을 로그: 모뎀 SIM 드라이버·APDU 로그, 카드 탈착·전원 이벤트."
+        },
+        "body": "- **로그 예시** (합성, fixture `icc-status-error.log`):\n  ```\n  11-14 10:00:20.000  1301  1301 D RILJ    : [0320]> GET_SIM_STATUS [PHONE0]\n  11-14 10:00:21.030  1301  1330 D RILJ    : [0320]< GET_SIM_STATUS error 2 [PHONE0]\n  11-14 10:00:21.040  1301  1301 E UiccController: Error getting ICC status. RIL_REQUEST_GET_ICC_STATUS should never return an error com.android.internal.telephony.CommandException: GENERIC_FAILURE\n  11-14 10:00:28.000  1301  1301 D RILJ    : [0321]> GET_SIM_STATUS [PHONE0]\n  11-14 10:00:29.030  1301  1330 D RILJ    : [0321]< GET_SIM_STATUS error 2 [PHONE0]\n  11-14 10:00:29.040  1301  1301 E UiccController: Error getting ICC status. RIL_REQUEST_GET_ICC_STATUS should never return an error com.android.internal.telephony.CommandException: GENERIC_FAILURE\n  ```\n- **확인 방법**: RILJ `< GET_SIM_STATUS error N` 뒤 UiccController `Error getting ICC status` — 프레임워크는 상태를 못 받아 아무것도 만들지 않는다.\n- **재현 시나리오**: 카드 접촉 불량·모뎀 SIM 오류 상태에서 부팅\n- **해결책**: 카드 상태 조회 오류의 원인(카드 접촉·전원·모뎀 SIM 드라이버)을 모뎀 쪽에서 본다.\n- **코드 위치**: `UiccController#onGetIccCardStatusDone`(오류면 바로 반환).\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
+      },
+      "body": "## 증상\n\nSIM 없음·SIM 사용 안 함으로 표시되고 가입자 서비스가 안 된다.\n\n## 증상 판별 방법\n\nUiccController `Error getting ICC status`(카드 상태 조회 실패) 또는 RILJ `UNSOL_UICC_APPLICATIONS_ENABLEMENT_CHANGED false`(UICC 응용 꺼짐).\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-1",
+      "kind": "positive",
+      "path": "fixtures/icc-status-error.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "new-cause",
+      "temp_id": "NEW-CAUSE-2",
+      "type": "NEW-TYPE-1",
+      "cause": {
+        "title": "UICC 응용 끄기 요청(SIM 사용 안 함)",
+        "description": "사용자·설정 앱·시험 명령이 그 SIM의 UICC 응용을 끄도록(SIM 사용 안 함) 요청함",
+        "signatures": [
+          {
+            "id": "uicc-apps-disabled-by-request",
+            "must_match": [
+              "SMSVC: setUiccApplicationsEnabled: subId=\\d+, enabled=false",
+              "RILJ: .*> ENABLE_UICC_APPLICATIONS false"
+            ],
+            "window_sec": 60
+          }
+        ],
+        "resolution": "정상 동작이다. 설정의 SIM 사용 스위치(시험 명령)를 확인하고 켠다.",
+        "resolution_type": "user-setting",
+        "fix": {
+          "status": "not-a-bug",
+          "ref": null,
+          "fixed_in": []
+        },
+        "platform_versions": [
+          "17"
+        ],
+        "code_refs": [
+          {
+            "ref": "aosp:frameworks/opt/telephony/src/java/com/android/internal/telephony/subscription/SubscriptionManagerService.java",
+            "symbol": "SubscriptionManagerService#setUiccApplicationsEnabled",
+            "platform_versions": [
+              "17"
+            ]
+          }
+        ]
+      },
+      "body": "- **로그 예시** (합성, fixture `uicc-apps-disabled.log`):\n  ```\n  11-14 10:00:57.433  1301  1359 D SMSVC   : setUiccApplicationsEnabled: subId=1, enabled=false, calling package=null\n  11-14 10:00:57.433  1301  1301 D MultiSimSettingController: notifySubscriptionInfoChanged\n  11-14 10:00:57.442  1301  1301 D RILJ    : [0023]> ENABLE_UICC_APPLICATIONS false [PHONE0]\n  11-14 10:00:57.444  1301  1330 D RILJ    : [0023]< ENABLE_UICC_APPLICATIONS  [PHONE0]\n  11-14 10:00:57.444  1301  1331 D RILJ    : [UNSL]< UNSOL_UICC_APPLICATIONS_ENABLEMENT_CHANGED false [PHONE0]\n  11-14 10:00:57.445  1301  1301 D MultiSimSettingController: updateDefaultValues: change: 0\n  ```\n- **확인 방법**: SMSVC `setUiccApplicationsEnabled: ... enabled=false`(요청자 `calling package=`) 뒤 RILJ `> ENABLE_UICC_APPLICATIONS false`.\n- **재현 시나리오**: 설정 → SIM 사용 끔(시험: 물리 구독 끄기 명령)\n- **해결책**: 정상 동작이다. 설정의 SIM 사용 스위치(시험 명령)를 확인하고 켠다.\n- **코드 위치**: `SubscriptionManagerService#setUiccApplicationsEnabled`.\n- **비고**: 시드(합성) 원인 — 사내 실제 마스킹 로그로 fixture를 바꾸고 문구를 맞춘다.\n"
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-CAUSE-2",
+      "kind": "positive",
+      "path": "fixtures/uicc-apps-disabled.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    },
+    {
+      "op": "add-fixture",
+      "for": "NEW-TYPE-1",
+      "kind": "negative",
+      "path": "fixtures/sim-normal-loaded.log",
+      "expect": {
+        "origin": "synthetic"
+      }
+    }
+  ]
+}
