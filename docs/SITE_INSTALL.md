@@ -247,7 +247,7 @@ rm -rf ~/tt-old ~/tt-new
 | `.draft-manifest.json를 읽을 수 없습니다` 또는 `schema=…를 이 도구가 모릅니다`, 종료 2 | 기준선 파일이 손상됨(충돌 표시·잘림·다른 형식) | 레포는 바뀌지 않았다. `git log -- .draft-manifest.json`으로 손상 전 커밋을 찾아 `git restore --source=<커밋> -- .draft-manifest.json` → 다시 실행 |
 | 종료 2 (적용 중 실패) | 도중 실패 | 도구가 되돌린다. 그래도 이상하면 `git reset --hard && git switch main`(1의 커밋으로) |
 
-공통 파일을 사내에서 직접 고치지 않는 것이 원칙이다(재반입 때 충돌). 사내 전용 코드·값은 `SITE_PATHS` 경로에만 둔다.
+공통 파일을 사내에서 직접 고치지 않는 것이 원칙이다(재반입 때 충돌). 사내 전용 코드·값은 `SITE_PATHS` 경로에만 둔다. 지금 어긴 것이 있는지는 새 묶음 없이도 볼 수 있다: `python3 tools/import_draft.py --status` — 마지막 반입 뒤 사내에서 `고침`·`지움`·`새 파일`인 사외 파일 경로만 낸다(읽기만, 고친 파일이 있으면 종료 1 = 다음 반입이 멈춘다).
 
 ## 9. 운영 이슈 DB 첫 push (S-4a, 도입 담당자 한 번)
 

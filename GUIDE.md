@@ -197,7 +197,7 @@ git add -A && git commit -m "사외 초안 반입: import-v1"     # .draft-manif
 3. 사내: 그 태그만 받는다(`git clone --depth 1 --branch import-<날짜> …`, 안 되면 묶음 zip). **일부 폴더만 받지 않는다** — 반입 도구가 없는 파일을 "사외에서 지움"으로 보고 지운다. 뺄 것은 사외 제외 목록에서 정한다.
 4. 사내: 작업 브랜치에서 `import_draft.py`(아래) → pytest → main 병합. hook·공통 판정이 바뀐 반입이면 `docs/SITE_INSTALL.md` 8절의 eval 재실행, 팀 배포 뒤면 반입 커밋에 태그(같은 절 6).
 5. 이슈 DB 뼈대가 바뀌었으면 바뀐 파일만 운영 이슈 DB에 PR. 모듈 스킬은 `docs/SITE_RESTORE.md`대로 사내 스냅샷(`docs/site/module-skills/`)을 얹어 모듈 레포 PR.
-6. 사내 → 사외는 파일을 내보내지 않는다. 사내에서 찾은 문제는 사내 정보 없는 문장(실패한 시험 이름, "이런 꼴의 줄을 못 잡는다")으로 사외에 전달한다. 사내 값(벤더 이름 등)은 SITE_PATHS(`docs/site/` 등)에만 둔다 — 사외 파일(`templates/` 포함)을 사내에서 고치면 다음 반입이 멈춘다.
+6. 사내 → 사외는 파일을 내보내지 않는다. 사내에서 찾은 문제는 사내 정보 없는 문장(실패한 시험 이름, "이런 꼴의 줄을 못 잡는다")으로 사외에 전달한다. 사내 값(벤더 이름 등)은 SITE_PATHS(`docs/site/` 등)에만 둔다 — 사외 파일(`templates/` 포함)을 사내에서 고치면 다음 반입이 멈춘다. 고친 것이 있는지는 `python3 tools/import_draft.py --status`로 미리 본다(경로만, 새 묶음 불필요).
 
 단계별 명령·기준선 만들기(첫 반입을 압축 풀기로 해서 `.draft-manifest.json`이 없을 때)·멈췄을 때 표는 `docs/SITE_INSTALL.md` 8절.
 ```
