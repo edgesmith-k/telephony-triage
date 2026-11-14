@@ -962,7 +962,7 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
 def flow_check(paths: list[Path], rules_dir: Path, defaults: dict, tz: str | None = None, year: int | None = None,
                profile: platforms.PlatformProfile | None = None) -> dict:
     """성공 흐름 점검(04-parser-matching §5.13, 표시 전용): 이슈 DB `<category>/flows/*.yaml`을 전체 로그의 모든 줄 레코드에
-    돌린다. 마스킹은 `parse --mask`(`postprocess`)와 같다 — 한 마스커, 갈린 덤프 조각, 줄마다 `msg`만 가린 뒤 `TAG: msg`.
+    돌린다. 단계 줄은 가리지 않은 글에서 찾고, 출력에 글자가 나가는 줄(메모·값)만 가린다(마커와 같다 — 한 마스커, 갈린 덤프 조각).
     흐름 파일이 없으면 파싱하지 않고 `flows: []`. `db_regress`(흐름 fixture)도 이 함수를 부른다."""
     db_cfg, backend = _line_backend(paths, rules_dir, defaults, tz, profile)
     defs, warnings = flows.load(rules_dir.parent, db_cfg)
@@ -972,16 +972,21 @@ def flow_check(paths: list[Path], rules_dir: Path, defaults: dict, tz: str | Non
     raw, log_text, nul_warnings = _raw_line_records(backend, paths, tz, year, "flows-nul")
     warnings += nul_warnings
     records = [r for r in raw if r.get("event") is None]
-    masker = masking.new_masker(log_text, _allow_patterns(db_cfg), log_lines=True)
-    forced = masking.forced_records(masker, records)
-    texts = [f"{r['tag']}: {masker.mask(r['msg'], forced[n]) if forced.get(n) else masker(r['msg'])}"
-             for n, r in enumerate(records)]
+    texts = [f"{r['tag']}: {r['msg']}" for r in records]
+    lazy: list = []
+
+    def mask(i: int) -> str:
+        if not lazy:
+            masker = masking.new_masker(log_text, _allow_patterns(db_cfg), log_lines=True)
+            lazy.extend((masker, masking.forced_records(masker, records)))      # 갈린 덤프 조각(08-safety §8), 전체에서 한 번
+        off = len(texts[i]) - len(str(records[i]["msg"]))
+        return lazy[0].mask(texts[i], [(a + off, b + off, *rest) for a, b, *rest in lazy[1].get(i, ())])
     epoch_break = backend.log_format().epoch_break
     breaks = {n for n, r in enumerate(records) if epoch_break(SimpleNamespace(tag=r["tag"], msg=r["msg"]))}
     anomalies = [a["ts"] for a in backend.coverage(paths, tz, year)["clock_anomalies"]]
     timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
     result["flows"], flow_warnings = flows.check(defs, records, texts, timeout_ms=timeout_ms,
-                                                 log_end=flows.log_end_sec(db_cfg), anomalies=anomalies, breaks=breaks)
+                                                 log_end=flows.log_end_sec(db_cfg), anomalies=anomalies, breaks=breaks, mask=mask)
     warnings += flow_warnings
     return result
 

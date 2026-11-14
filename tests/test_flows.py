@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 from datetime import datetime, timedelta, timezone
@@ -266,7 +267,7 @@ RAW = [(0, "DN-1-C", SETUP),
        (0.04, "DN-1-C", "DisconnectedState: Data network disconnected. reason=x"), (40.0, "Other", "tick")]
 
 
-def test_cli_masks_all_lines_and_reports_steps():
+def test_cli_masks_output_lines_and_reports_steps():
     work = tmp("tt-flows-")
     (work / "db").mkdir()
     db = _db(work / "db", "data-setup")
@@ -277,6 +278,17 @@ def test_cli_masks_all_lines_and_reports_steps():
     assert f["flow"] == "data/data-setup" and _sig(inst) == "ok 값이상 - -"
     assert inst["steps"][1]["detail"] == "주소 빔" and inst["line_ref"] == {"file_index": 0, "line_no": 1}
     assert "192.0.2" not in json.dumps(out)
+    # 단계 줄은 가리지 않은 글에서 찾고, 출력에 글자가 나가는 줄(메모·값)만 가린다
+    path = db / "data" / "flows" / "data-setup.yaml"
+    flow = _flow("data-setup")
+    flow["notes"] = [{"scope": "own", "pattern": r"addresses=\[[^\]]*\]"}]
+    flow["steps"][1]["show"] = [r"DnsAddresses: \[[^\]]*\]"]
+    path.write_text(yaml.safe_dump(flow, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    out = run_json("parse_logcat.py", ["flows", log, "--rules", db / "parser-rules", "--tz", "UTC", "--year", "2026"])
+    inst = out["flows"][0]["instances"][0]
+    assert _sig(inst) == "ok 값이상 - -" and "192.0.2" not in json.dumps(out)
+    assert re.fullmatch(r"addresses=\[<IP#\d+>/24\]", inst["notes"][0])
+    assert re.search(r"DnsAddresses: \[ /<IP#\d+> \]", inst["steps"][1]["detail"])
     # 흐름 파일이 없으면 파싱하지 않고 빈 목록
     shutil.rmtree(db / "data")
     assert run_json("parse_logcat.py", ["flows", log, "--rules", db / "parser-rules"])["flows"] == []

@@ -48,7 +48,7 @@
 - `synthetic` 경고: `synthetic_allowed: false`인 플러그인에서 `origin: synthetic` fixture
 - `residual-id` 오류: `--residual`로 준 옛 ID가 남아 있음
 - 성공 흐름(`<category>/flows/<id>.yaml`, 04 §5.13): `schema`(흐름 스키마), `flow-id`(id ≠ 파일 이름), `flow-step-id`(단계 id
-  중복), `flow-regex`(정규식 오류)·`raw-identifier`·`fixed-token`·`regex-unsafe`(시그니처와 같은 검사), `flow-start`(같은 카테고리에
+  중복), `flow-regex`(정규식 오류)·`raw-identifier`·`fixed-token`·`regex-unsafe`(시그니처와 같은 검사)·`flow-token`(마스킹 토큰 금지), `flow-start`(같은 카테고리에
   start가 같은 흐름 둘 이상) 오류, `flow-then` 경고(then 대상 없음), `flow-fixture-missing`(정상 fixture 없음)·`fixture-name`·
   `fixture-owner`(`flows/fixtures/<id>.normal.<n>.log`) 오류, `flow-step` 오류(원인 `flow_step`의 흐름·단계가 없음, 다른 카테고리 흐름)
 
@@ -91,6 +91,7 @@ from common.signatures import (  # noqa: E402
     SUPPORTED_FEATURES, SignatureError, compile_signature, features_used, tag_position_word)
 
 TOKEN_FIXED_RE = re.compile(r"<[A-Z][A-Z0-9]*#\d+>")
+FLOW_TOKEN_RE = re.compile(r"<[A-Z][A-Z0-9]+(?:#|>| (?:\\d|\d))")     # `<IP#…>`·`<IMSI>`·`<HEXDUMP nB>` — 흐름은 가리지 않은 글에서 찾는다
 KEBAB_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SIG_KINDS = ("symptom_signatures", "signatures", "recovery_signatures", "scenario_signatures")
 TYPE_TITLE_MAX, CAUSE_TITLE_MAX = 30, 20
@@ -925,6 +926,9 @@ class Linter:
                         self.err("flow-regex", path, f"{ref} {where}: 정규식 오류 {pattern!r}: {exc}")
                         continue
                     self._check_pattern(path, f"{ref} {where}", pattern)
+                    if FLOW_TOKEN_RE.search(pattern):
+                        self.err("flow-token", path, f"{ref} {where}: 패턴 {pattern!r}에 마스킹 토큰이 있습니다 — 흐름은 "
+                                                     "가리지 않은 글에서 찾으므로 토큰 없이 씁니다(04 §5.13).")
                 if data.get("then"):
                     thens.append((path, ref, data["then"] if "/" in data["then"] else f"{cat}/{data['then']}"))
             self._check_flow_fixtures(cat, fdir)

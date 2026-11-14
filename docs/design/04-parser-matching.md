@@ -228,7 +228,7 @@ kind 순(missing → absent → order → window → blocked) → m/n 내림 →
 
 #### (1) 형식 (`<category>/flows/<id>.yaml`, 스키마 `schema/flow.schema.json`)
 `id`(파일 이름과 같다, kebab-case, 바꾸지 않는다) · `title` · `platform_versions`(원인과 같은 표기, 빈 목록 = 전 버전) · `start{tag_regex, pattern}` · `end[{scope, pattern, label}]` · `notes[{scope, pattern}]` · `steps[{id, title, scope: own|named|any, name_template?, patterns[], ok[{pattern, why}], show[], suspect}]` · `then`(마지막 단계 줄이 다음 흐름의 시작 줄이면 `<id>` 또는 `<category>/<id>`).
-- 정규식은 모두 **마스킹된 `TAG: msg`** 기준이다(§5.11과 같다). msg 앞 `^` 앵커는 맞지 않는다(`TAG: ` 뒤라서). 빈 목록이 `[ ]`(공백)로 찍히는 줄(LinkProperties)은 `\[ *[^\] ]`처럼 공백을 건너뛰어 쓴다.
+- 정규식은 `TAG: msg` 기준이고 **마스킹 토큰(`<IP#1>`·`<IMSI>` 등)을 쓰지 않는다**(`db_lint` `flow-token`): 엔진은 단계 줄을 가리지 않은 글에서 찾고, 리포트에 글자가 나가는 줄(`notes`·`show`)만 가린 뒤 거기서 다시 뽑는다(스텝 마커 §5.8 (5)와 같은 방식 — 전체 줄 마스킹 시간을 쓰지 않는다. 마스킹 사본이 입력이어도 판정은 같다). 원본 식별자 패턴 금지(`raw-identifier`)는 그대로다. msg 앞 `^` 앵커는 맞지 않는다(`TAG: ` 뒤라서). 빈 목록이 `[ ]`(공백)로 찍히는 줄(LinkProperties)은 `\[ *[^\] ]`처럼 공백을 건너뛰어 쓴다.
 - `scope`: `own` 태그 = 열쇠 태그, `named` 메시지에 `name_template`(`{key}`는 열쇠 태그를 `re.escape`한 것), `any` 같은 pid의 아무 줄(슬롯 `phone_id`가 열쇠 줄과 다르면 뺀다, `null`은 와일드카드).
 - `ok`: 줄이 `patterns`에 맞아도 `ok` 패턴 중 하나라도 안 맞으면 그 줄은 이상 값이다(`why`를 보인다). `show`는 이상 값일 때 보일 값(맞은 글자).
 - 구조가 버전마다 다르면 흐름 파일을 따로 두고, 문구만 다르면 `patterns`에 더한다. 지금 정의 2개(데이터 연결·무선 켬)는 시드 계획 `templates/issue-db-seeds/android/{data,network}/plan.json`의 `put-flow`다(시험도 거기서 읽는다).

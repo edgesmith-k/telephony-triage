@@ -216,6 +216,7 @@ def test_lint_flow_file_checks():
     assert "단계 id가 겹칩니다" in found["flow-step-id"][0]
     assert "중첩 수량자" in " ".join(found["regex-unsafe"]) and "raw-identifier" in found
     assert "정규식 오류" in found["flow-regex"][0] and "fixed-token" in found
+    assert "<IP#1> up" in found["flow-token"][0]      # 흐름은 가리지 않은 글에서 찾는다 — 마스킹 토큰 금지
     assert found["flow-then"][0].startswith("warning:") and "data/missing-flow" in found["flow-then"][0]
     # 파일 이름 ≠ id, 스키마 오류, start가 같은 흐름 둘
     db = _flow_db()

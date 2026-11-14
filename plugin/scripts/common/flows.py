@@ -1,8 +1,9 @@
 """성공 흐름 점검 (04-parser-matching.md §5.13) — 표시 전용, S/C·점수·회귀 판정에 관여하지 않는다.
 
 흐름 = 시작 줄 + 끝 줄 + 순서 있는 단계(`<category>/flows/<id>.yaml`, 스키마 `flow.schema.json`). 입력은 백엔드의 **모든**
-줄 레코드와 그 마스킹된 `TAG: msg`(부르는 쪽 `parse_logcat.flow_check`가 `postprocess`와 같게 가린다). 패턴마다
-`PatternRunner.search`를 한 번 돌려 맞은 줄 집합을 구하고 그 위에서 상태 기계를 돈다.
+줄 레코드와 그 `TAG: msg`(가리지 않은 글 — 판정은 마스킹과 무관하고, 흐름 패턴은 마스킹 토큰을 쓰지 않는다: db_lint `flow-token`).
+패턴마다 `PatternRunner.search`를 한 번 돌려 맞은 줄 집합을 구하고 그 위에서 상태 기계를 돈다. 출력에 글자가 나가는 줄
+(`notes`·`show`)만 `mask(줄 순번)`으로 가린 뒤 거기서 다시 뽑는다(스텝 마커와 같은 방식, 가린 줄에 안 맞으면 내지 않는다).
 
 - 인스턴스 열쇠 = (시작 줄 pid, 시작 줄 태그). 열린 인스턴스에 같은 열쇠의 시작 줄이 또 오면 합친다(`restarts`만 센다).
   끝 줄로 닫힌 뒤의 시작만 새 인스턴스다.
@@ -77,8 +78,11 @@ def load(root: Path, config: dict) -> tuple[list[dict], list[dict]]:
 
 
 def check(flows: list[dict], records: list[dict], texts: list[str], *, timeout_ms: int | None = None,
-          log_end: float = LOG_END_SEC, anomalies: list[str] = (), breaks: set = frozenset()) -> tuple[list[dict], list[dict]]:
-    """줄 레코드(`event: None`, 파서 순서)와 같은 순서의 마스킹된 `TAG: msg` → (`flow.json flows[]`, 경고).
+          log_end: float = LOG_END_SEC, anomalies: list[str] = (), breaks: set = frozenset(),
+          mask=None) -> tuple[list[dict], list[dict]]:
+    """줄 레코드(`event: None`, 파서 순서)와 같은 순서의 `TAG: msg` → (`flow.json flows[]`, 경고).
+
+    `mask`: 줄 순번 → 가린 `TAG: msg`(출력에 글자가 나가는 줄에만 부른다). 없으면 `texts`가 이미 가린 글이라고 본다.
 
     `anomalies`: 시계 이상 시각(`coverage.clock_anomalies[].ts`), `breaks`: 재부팅 줄의 레코드 순번 — 둘 다 열린 인스턴스를 닫는다."""
     dts = [logtime.parse_ts(r["ts"]) for r in records]
@@ -88,7 +92,7 @@ def check(flows: list[dict], records: list[dict], texts: list[str], *, timeout_m
     with PatternRunner(texts, timeout_ms) as runner:
         for flow in flows:
             try:
-                insts = _run(flow, records, texts, dts, runner, cuts, set(breaks))
+                insts = _run(flow, records, texts, dts, runner, cuts, set(breaks), mask or texts.__getitem__)
             except (PatternTimeout, PatternError) as exc:
                 warnings.append({"code": "flow-pattern", "message": f"흐름 {flow['ref']}: 건너뜀 — {exc}"})
                 continue
@@ -122,7 +126,7 @@ def _then_ref(flow: dict) -> str | None:
     return target if "/" in target else f"{flow['category']}/{target}"
 
 
-def _run(flow, records, texts, dts, runner, cuts, breaks) -> list[dict]:
+def _run(flow, records, texts, dts, runner, cuts, breaks, shown) -> list[dict]:
     tags = sorted({r["tag"] for r in records})
     key_tags = {tags[i] for i in runner.search(flow["start"]["tag_regex"], texts=tags)}
     tag_lines = [i for i, r in enumerate(records) if r["tag"] in key_tags]
@@ -222,7 +226,7 @@ def _run(flow, records, texts, dts, runner, cuts, breaks) -> list[dict]:
                 continue
             for n, h in notes:
                 if i in h and in_scope(n, h, inst, i) and len(inst["notes"]) < NOTES_MAX:
-                    m = re.search(n["pattern"], texts[i])
+                    m = re.search(n["pattern"], shown(i))
                     if m and m.group(0) not in inst["notes"]:
                         inst["notes"].append(m.group(0)[:60])
             if inst["n"] < len(steps) and feed(inst, i):
@@ -232,7 +236,8 @@ def _run(flow, records, texts, dts, runner, cuts, breaks) -> list[dict]:
         bad = inst["bad"].get(flow["steps"][inst["n"]]["id"]) if inst["n"] < len(steps) else None
         shows = (flow["steps"][inst["n"]].get("show") or []) if bad else []
         j = bad[-1][0] if bad else None
-        inst["show"] = [re.search(p, texts[j]).group(0)[:60] for p in shows if runner.search(p, indices=[j])]
+        line = shown(j) if shows else ""
+        inst["show"] = [m.group(0)[:60] for p in shows if runner.search(p, indices=[j]) and (m := re.search(p, line))]
     return out
 
 
