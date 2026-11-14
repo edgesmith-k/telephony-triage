@@ -1,0 +1,7 @@
+-- [합성] 이슈 DB 시드 fixture. Android 17 AOSP 소스 문구(같은 줄이 있으면 에뮬레이터 캡처 모양)로 새로 쓴 줄 — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:00:05.100   912   952 D Telecom : UserCallIntentProcessor: processOutgoingCallIntent videoState = 0: TSI.pC(cgat)@AgI
+11-14 10:00:05.110   912   952 V Telecom : Call: setState NEW -> CONNECTING: TSI.pC->CM.fOCP(cgat)@AgI_1
+11-14 10:00:05.150   912   952 I Telecom : CreateConnectionProcessor: Trying attempt CallAttemptRecord(ComponentInfo{com.android.phone/com.android.services.telephony.TelephonyConnectionService}, 1, UserHandle{0}): TSI.pC->CIP.sNOCI(cgat)@AgI_2
+11-14 10:00:05.180   912   952 D Telecom : CreateConnectionProcessor: Connection failed: (DisconnectCause [ Code: (ERROR) Label: (Cellular network not available) Description: (Mobile network not available.) Reason: (ServiceState.STATE_OUT_OF_SERVICE, OUT_OF_SERVICE) Tone: (95)  TelephonyCause: 18/-1 ImsReasonInfo: null]): CSW.hCCC(cap/cast)@E-AgM
+11-14 10:00:05.181   912   952 I Telecom : Call: handleCreateConnectionFailure; callid=TC@4, disconnectCause=DisconnectCause [ Code: (ERROR) Label: (Cellular network not available) Description: (Mobile network not available.) Reason: (ServiceState.STATE_OUT_OF_SERVICE, OUT_OF_SERVICE) Tone: (95)  TelephonyCause: 18/-1 ImsReasonInfo: null]: CSW.hCCC(cap/cast)@E-AgM
+11-14 10:00:05.185   912   952 V Telecom : Call: setState CONNECTING -> DISCONNECTED: CSW.hCCC(cap/cast)@E-AgM
