@@ -72,7 +72,10 @@ class FixtureOps:
         default = {"positive": "expect_top", "recurrence": "expect_top", "extra": "expect_top",
                    "negative": "expect_top", "fixed": "expect_not", "resolved": "expect_not"}
         for key, value in (op.get("expect") or {}).items():
-            if key not in ("expect_top", "expect_not", "also_allowed"):
+            if key == "origin":     # 합성 fixture 표시(contracts.md §fixture) — 값은 synthetic만
+                if value != "synthetic":
+                    raise Reject("fixture-expect", f"expect.origin에는 synthetic만 쓸 수 있습니다: {value}", i)
+            elif key not in ("expect_top", "expect_not", "also_allowed"):
                 raise Reject("fixture-expect", f"expect에 쓸 수 없는 필드: {key}", i)
             expect[key] = value
         if expect:

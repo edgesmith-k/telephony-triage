@@ -226,6 +226,25 @@ def test_module_template_log_needs_synthetic_case(fake_repo):
     assert found == {f"{base}/notsyn/files/source.log", f"{base}/nocase/files/source.log",
                      "templates/module-skills/ofono/x.log"}
 
+
+def test_seed_fixture_needs_synthetic_mark_in_plan(fake_repo):
+    """이슈 DB 시드 로그: 같은 카테고리 plan.json의 add-fixture가 expect.origin: synthetic으로 실은 것만 통과."""
+    base = "templates/issue-db-seeds/android"
+    ops = [{"op": "add-fixture", "for": "NEW-CAUSE-1", "kind": "positive", "path": "fixtures/ok.log",
+            "expect": {"origin": "synthetic"}},
+           {"op": "add-fixture", "for": "NEW-CAUSE-1", "kind": "positive", "path": "fixtures/nomark.log"}]
+    _write(fake_repo, f"{base}/data/plan.json", json.dumps({"operations": ops}))
+    for name in ("ok", "nomark", "unlisted"):
+        _write(fake_repo, f"{base}/data/fixtures/{name}.log", "log\n")
+    _write(fake_repo, f"{base}/call/fixtures/noplan.log", "log\n")
+    _write(fake_repo, f"{base}/sms/plan.json", "{broken")
+    _write(fake_repo, f"{base}/sms/fixtures/badplan.log", "log\n")
+    _write(fake_repo, f"{base}/stray.log", "log\n")
+    found = {path for rule, path in _rules(boundary.scan(fake_repo, "external")) if rule == "fixture-origin"}
+    assert found == {f"{base}/data/fixtures/nomark.log", f"{base}/data/fixtures/unlisted.log",
+                     f"{base}/call/fixtures/noplan.log", f"{base}/sms/fixtures/badplan.log", f"{base}/stray.log"}
+
+
 TBASE = "templates/module-skills/ofono/sim/evals"
 
 

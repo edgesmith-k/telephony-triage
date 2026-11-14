@@ -22,6 +22,8 @@
                    모듈 스킬 템플릿 case 로그(`templates/module-skills/**/evals/<case>/files/*.log`)는
                    합성만: case.yaml `synthetic: true`, `origin:` 키 없음, 1줄 `-- [합성]` (H C1+D R6).
                    형식 전체는 `skillcheck.origin_problems`가 본다.
+                   이슈 DB 시드 로그(`templates/issue-db-seeds/**/<카테고리>/fixtures/*.log`)는 같은 카테고리
+                   `plan.json`의 `add-fixture`가 `expect.origin: synthetic`으로 실어야 한다.
     dbus-name      oFono 모듈 문서(`templates/module-skills/ofono/**/*.md`, evals 제외), modules.yaml의
                    `platforms.ofono` 블록, `tests/helpers/make_variant_dbs.py`의 `OFONO_*`·`MODULES_*` 문자열
                    상수에 허용 밖 D-Bus 이름(`skillcheck.dbus_allowed`: `org.ofono.*`·`org.freedesktop.DBus.*`·
@@ -319,6 +321,16 @@ def check_fixture_origin(root: Path, files: dict[str, Path]) -> list[Finding]:
                                         "모듈 템플릿 로그: evals/<case>/files/ 아래, case.yaml synthetic: true(origin "
                                         "키 없음) + 1줄 '-- [합성]'"))
             continue
+        if rel.startswith(SEEDS_ROOT) and rel.endswith(".log"):
+            # 이슈 DB 시드 fixture: <카테고리>/fixtures/ 아래, 같은 카테고리 plan.json의 add-fixture가 이 파일을
+            # expect.origin: synthetic으로 싣는다(사내에서 실제 로그로 바꿀 때 그 줄을 지운다)
+            name = rel.rsplit("/", 1)[1]
+            m = re.fullmatch(rf"({re.escape(SEEDS_ROOT)}.+)/fixtures/[^/]+\.log", rel)
+            if not m or name not in _seed_synthetic(files.get(f"{m.group(1)}/plan.json")):
+                findings.append(Finding("fixture-origin", rel, 0, name,
+                                        "이슈 DB 시드 로그: <카테고리>/fixtures/ 아래, 같은 카테고리 plan.json의 "
+                                        "add-fixture에 expect.origin: synthetic"))
+            continue
         if not (rel.startswith("tests/") and rel.endswith(".log")):
             continue
         parent, name = rel.rsplit("/", 1)
@@ -345,6 +357,21 @@ def check_fixture_origin(root: Path, files: dict[str, Path]) -> list[Finding]:
         findings.append(Finding("fixture-origin", rel, 0, name,
                                 "합성 로그 목록(README.md·log_fixtures.yaml)에 이름이 없다"))
     return findings
+
+
+SEEDS_ROOT = "templates/issue-db-seeds/"
+
+
+def _seed_synthetic(plan: Path | None) -> set[str]:
+    """시드 계획이 합성으로 싣는 fixture 파일 이름(`add-fixture`의 `path: fixtures/<이름>` + `expect.origin: synthetic`).
+    계획이 없거나 못 읽으면 빈 집합(그 카테고리 로그는 모두 위반)."""
+    try:
+        ops = json.loads(plan.read_text(encoding="utf-8"))["operations"] if plan else []
+    except (ValueError, KeyError, TypeError, OSError):
+        return set()
+    return {op["path"][len("fixtures/"):] for op in ops
+            if isinstance(op, dict) and op.get("op") == "add-fixture" and str(op.get("path", "")).startswith("fixtures/")
+            and (op.get("expect") or {}).get("origin") == "synthetic"}
 
 
 def _template_origin_ok(case_text: str, first_line: str) -> bool:
