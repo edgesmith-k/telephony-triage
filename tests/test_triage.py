@@ -1861,7 +1861,7 @@ def test_cause_unconfirmed_run_shows_partial_match_and_code_check(tmp_path):
     part = done["partial"]
     assert part[0]["cause"] == "DATA-001-01" and part[0]["kind"] == "missing" and part[0]["matched"] == "1/2"
     report = (ws.job_dir("MOCK-1001") / "report.md").read_text(encoding="utf-8")
-    assert "- 부분 일치 (판정·점수 아님, S/C 불변):" in report
+    assert "- 부분 일치 (참고용, 후보 순위와 점수는 그대로):" in report
     assert "DATA-001 > DATA-001-01/data-disabled 1/2 [missing]" in report
     assert "  - 코드 대조 setting-off: " in report
     assert "  - 없음 근거 포함: must_not_match " in report
