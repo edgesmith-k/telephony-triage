@@ -72,7 +72,9 @@ def test_same_inputs_reuse_core_without_parse_or_match():
     assert _reuse_note(rows)["hit"] is True and _reuse_note(rows)["run"] == 1
     report2 = (job / "report.md").read_text(encoding="utf-8").splitlines()
     assert "- 재사용: 입력(로그·Jira·이슈 DB·설정·플러그인)이 실행 1과 같아 파싱·매칭을 다시 하지 않았다" in report2
-    assert [x for x in report2 if not x.startswith("- 재사용:")] == report1.splitlines()
+    # 재사용 줄은 칸 밖 실행 안내다(제목 다음 빈 줄 + 그 줄). 그것만 빼면 첫 실행과 같다
+    assert report2[1:3] == ["", "- 재사용: 입력(로그·Jira·이슈 DB·설정·플러그인)이 실행 1과 같아 파싱·매칭을 다시 하지 않았다"]
+    assert report2[:1] + report2[3:] == report1.splitlines()
     assert [r["reused"] for r in _state(ws)["job"]["runs"]] == [False, True]
 
 
