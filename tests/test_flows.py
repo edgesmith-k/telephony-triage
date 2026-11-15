@@ -686,7 +686,10 @@ def test_eval_flow_scenarios_give_expected_hint_offline(eid):
     line, top = EVAL_HINTS[eid]
     hints = [x.strip() for x in report.splitlines() if "(흐름):" in x]
     assert len(hints) == 1 and hints[0].startswith(line + " — "), hints
-    assert analysis["candidates"][0]["cause"] == top and "(흐름):" not in json.dumps(analysis, ensure_ascii=False)
+    # 제안 줄은 must_show(꼭 보일 줄)에만 실리고 analysis.json의 다른 칸은 그대로다. Jira 본문에는 가지 않는다
+    must = [m for m in analysis.get("must_show") or [] if "(흐름):" in m]
+    rest = {k: v for k, v in analysis.items() if k != "must_show"}
+    assert analysis["candidates"][0]["cause"] == top and must == [hints[0]] and "(흐름):" not in json.dumps(rest, ensure_ascii=False)
     lint = run_json("db_lint.py", ["--db", db, "--all"], expect=(0, 1))
     assert not [i for i in lint["errors"] + lint["warnings"] if "flow" in i["code"]], "setup flows DB는 흐름 lint 0(W-9)"
 

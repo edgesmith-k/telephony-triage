@@ -884,6 +884,9 @@ class ReportMixin:
             ana += [f"  - {_error_line(e)}" for e in (hints.get("error_events") or [])[:8]]
         ana += self.partial_lines(r, cands)
         ana += r.get("_flow_lines") or []      # 성공 흐름 점검(§5.13): 흐름 파일이 없는 DB는 줄 없음(이전과 같다)
+        for fl in r.get("_flow_lines") or []:    # 흐름 제안 줄(최대 1)은 Step 7 질문 재료라 꼭 보인다(eval 81·83: 빼거나 바꿔 적음). Jira에는 안 감(issue_post)
+            if "(흐름): " in fl:
+                must.append((6, fl.strip()))
         if unjudged:
             err = (unjudged.get("errors") or [{}])[0]
             where = f"시그니처 시간 초과·오류 {err.get('signature')}: {err.get('error')}"
