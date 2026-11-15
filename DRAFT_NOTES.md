@@ -1,7 +1,7 @@
 # DRAFT_NOTES — 사외 초안 상태 파일
 
 > **작게 유지한다(≤8KB).** 사외 초안 모드의 진행 상태·남은 일·막힌 것·결정만 둔다 (`docs/design/15-local-draft.md §15.1`).
-> 지난 이력은 `docs/history/draft-notes-2026-*.md`와 `docs/history/CHANGES.md`. 필요한 절만 찾아 읽는다.
+> 지난 이력은 `docs/history/draft-notes-2026-*.md`와 `docs/history/CHANGES.md`. 필요한 절만 읽는다.
 > 이 파일은 반입 때 사내로 같이 간다. `.local-draft`는 가지 않는다. 모드 판별 규칙은 `CLAUDE.md` 머리말.
 
 ## 새 세션 시작 (사외 전용)
@@ -43,13 +43,12 @@
   - `platform.ril.vendor`를 두었으면 벤더 HAL 짝(`hal`)이 바뀔 수 있다 → `db_regress`로 확인(#109).
   - S-0이 `site_step` 첫 단계(#102). 직접 입력한 소스 경로는 개인 `code_profiles`에 자동 저장(#106).
   - 그 밖(#80 모듈 스킬 레포·+1 병합, #85 스냅샷 overlay, #86 Android 17 태그·RIL·슬롯, #87 OpenCode, #90·#95·#98 마스킹): 파일별 영향과 관리자 할 일(`site-defaults.yaml`의 `analyzers.*.inputs`·`max_tokens_hint`·`issue_db.merge` 지우기)은 `MODULE_SKILLS_RESULT.md` "반입 노트"(#80까지).
-  - #114 백엔드 0.1.5: 첫 분석은 캐시 없이 다시 돈다, `min_version`은 그대로.
+  - #114 백엔드 0.1.5: 첫 분석은 캐시 없이 돈다, `min_version`은 그대로.
   - #117: plan·DB 영향 없음. 사내 DB는 schema PR 전까지 항목 `ref` 든 계획을 종료 2로 거부.
   - #118: data 규칙 `NOT_IN_SERVICE`(등록 상실 뒤)→모뎀·망. #119: Android 합성 벤더 줄 꼴만(규칙 불변).
   - #121 정밀 탐색(`--deep`): 명시 요청 때만, 효과 미확인. `deep.md`는 사내 스냅샷에 새로 만들고(없으면 `--site-overlay` 종료 1) 플러그인 배포 뒤 모듈 레포에 올린다.
   - #122: `import_draft --label` 필수. `tracker.read_tools`에 쓰기형 도구 이름 거부(doctor `tracker` warn). 경계 검사 15~20자리·이슈 DB hook 교체는 SITE_INSTALL §8. `docs/development` 22개는 `docs/history`로 옮김(dry-run에 지움·새 파일 22씩). OpenCode는 첫 설치(`opencode/README.md`: `tt-oc publish`, git ≥ 2.38, 모델이 낸 명령을 붙여 넣지 않는다).
-  - #123: 탐색 `--with <모듈>`(보조 모듈 줄 절).
-  - #125~#134: report 네 칸, `import_draft --status`, Android 시드, 흐름 점검·제안 줄, 마스킹 끔. `set-flow-step`은 DB schema PR 뒤.
+  - #123·#125~#135: 탐색 `--with <모듈>`(보조 모듈 줄 절), report 네 칸, `import_draft --status`, Android 시드, 흐름 점검·제안 줄, 마스킹 끔. `set-flow-step`·oFono 글자 버전은 DB schema PR 뒤.
   - 사내 읽기(1103 대비, KB): S-0 −18.2·S-1 +8.2·S-2 +6.9·S-3 +12.1·S-4 +20.7·S-4a +1.1·S-5 +0.3·S-6 0·S-7 +2.1.
 - 재실행할 eval 수는 재반입 노트가 정한다(`pending.json` `site`, S-2; 사내 모델이 다르면 +7). 단계별 확인 항목·반입 뒤 후보(RF·R-36~47)는 history 11/13.
 - S-7: usage_stats format 2·`--transcripts` 허용 여부. 시그니처 필드 선언은 결정 (v)대로.

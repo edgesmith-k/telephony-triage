@@ -26,7 +26,7 @@ SCRIPTS = REPO / "plugin" / "scripts"
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 sys.path.insert(0, str(SCRIPTS))
 
-from runner import SAMPLE, SITE_REPO_REASON, is_site_repo, plugin_root, run, run_json, tmp, variant_db  # noqa: E402
+from runner import SAMPLE, SITE_REPO_REASON, copy_db, is_site_repo, plugin_root, run, run_json, tmp, variant_db  # noqa: E402
 
 import platforms  # noqa: E402
 from common import events, logtime, masking  # noqa: E402
@@ -333,6 +333,33 @@ def test_triage_offline_switches_platform():
     proc = run("triage.py", [*base, "--out", work / "job2", "--platform", "android"], root=root, env=env)
     assert proc.returncode == 2 and "플랫폼 불일치" in proc.stderr
     assert not (work / "job2" / "analysis.json").exists()
+
+
+def test_text_version_values():
+    """oFono Jira 버전 칸은 제품 단위 이름·모델 코드(사용자 11/15, 여기는 지어낸 이름): 원인·기록·지원 목록이 lint를 통과하고
+    후보 버전 표시가 글자 조각으로 비교된다(대소문자 무시)."""
+    db = copy_db(variant_db("issue-db-ofono"))
+    tdir = db / "data/DATA-001-data-connect-failed"
+    for path, old in ((tdir / "type.md", 'platform_versions: ["2"]'), (db / "issue-db.config.yaml", 'platform_versions_supported: ["2"]')):
+        text = path.read_text(encoding="utf-8")
+        assert old in text
+        path.write_text(text.replace(old, old[: old.index("[")] + '["prodx", "m100"]'), encoding="utf-8", newline="\n")
+    (tdir / "issues").mkdir()
+    (tdir / "issues/MOCK-9002.yaml").write_text("key: MOCK-9002\ncause: DATA-001-01\ndate: 2026-09-21\nmodel: MOCK-O1\n"
+                                                "platform_version: PRODX\nanalyzed_by: mock-user1\n", encoding="utf-8")
+    lint = run_json("db_lint.py", ["--db", db, "--all"])
+    assert lint["summary"]["errors"] == 0, lint
+    root, work = plugin_root("ofono-on", platform=ON), tmp("tt-ofono-ver-")
+    for n, version, match in ((1, "prodx/M100", True), (2, "m200", False)):
+        meta = work / f"meta{n}.json"
+        meta.write_text(json.dumps({"key": "MOCK-9001", "occurred_at": "2026-09-20T05:32:10Z", "summary": "x",
+                                    "platform_version": version}), encoding="utf-8")
+        run_json("triage.py", ["run", "MOCK-9001", "--offline-db", db, "--logs", ISO_LOG, "--issue-meta", meta,
+                               "--out", work / f"job{n}", "--platform", "ofono"], root=root, env={"TELEPHONY_TRIAGE_HOME": work / "home"})
+        top = json.loads((work / f"job{n}" / "analysis.json").read_text(encoding="utf-8"))["candidates"][0]
+        assert top["cause"] == "DATA-001-01"
+        report = (work / f"job{n}" / "report.md").read_text(encoding="utf-8")
+        assert ("다른 버전 원인 (oFono prodx, m100)" in report) is (not match)
 
 
 # -- 다중 프로토콜 -------------------------------------------------------------------------------------

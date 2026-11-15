@@ -29,7 +29,7 @@ tracker:
     occurred_at: <필드>
     model: <필드>
     sw: <필드>
-    platform_version: <필드>
+    platform_version: <필드>             # Android는 주 버전 숫자, oFono는 제품 단위 이름 또는 모델 코드(글자 값 그대로, 17-platforms.md §4)
     carrier: <필드>
     # 선택(14-site.md S22): 시험 절차·실패 스텝 필드. 없으면 쓰지 않는다
     test_steps: <필드>
@@ -179,4 +179,4 @@ reviewers:                           # CODEOWNERS 팀 오너를 push 뒤 사용�
 - 리뷰어 계산: `db_pr summary`가 변경 파일 경로와 유형의 `secondary_categories`로 `.github/CODEOWNERS`의 해당 항목(`/<category>/`, `/parser-rules/` 등)을 찾고, 그 오너(팀 `@<org>/<team>`은 `reviewers.format`으로 바꾸고, 개인 `@<login>`은 그대로)를 push 전 확인 화면에 제안으로 보인다. push 뒤 사용자가 리뷰어 질문에서 고르면 `db_pr request-review`가 하나씩 요청한다(내부 `gh pr edit --add-reviewer`, 실패는 경고 — 팀이면 S5·S19, 개인이면 S5 확인, PR은 그대로). 도구가 자동으로 요청하지는 않는다. 계획에 `allow-cause`가 있으면 대상 fixture 경로의 카테고리 오너도 더한다(다른 카테고리 fixture의 `also_allowed`를 바꾸므로, `contracts.md §fixture`). 카테고리 오너는 선택이고 샘플·뼈대 CODEOWNERS는 메인테이너 경로만 둔다(`06-collaboration.md §6.1`) — 맞는 오너가 없으면 리뷰어는 빈 목록이고 확인 화면에 `리뷰어(제안 — push 뒤 지정할지 묻는다, 지정 안 하면 아무나): 없음`이다(메인테이너 팀으로 대신 채우지 않는다).
 - 카테고리 목록 검증(`category`가 `categories`에 있는지, ID 접두어가 `id_prefix`와 맞는지)은 JSON Schema가 아니라 `db_lint.py`가 한다.
 - `generator_version`이 플러그인 `GENERATOR_VERSION`과 다르면 `ci_mode: local`/`actions`에서는 **이슈 DB 쓰기 전체**(Step 8, `record`, `sync-pr`, `verify-fix`, `validate --cause`, `fix-submitted`, 리뷰 PR)를 막고 읽기 전용 분석만 한다. 예외는 메인테이너가 버전을 올리는 `migrate/schema-v<N>` 브랜치의 직접 편집뿐이다(그 브랜치에서는 `config.py check`·pre-commit·`validate`가 버전 불일치를 차단하지 않는다, `06-collaboration.md §6.4`). `actions-build`에서는 생성 파일을 PR에 넣지 않으므로 영향이 없다.
-- 원인의 `platform_versions: []`는 **전 버전**을 뜻한다 (`03-issue-db.md §5.4`).
+- 원인의 `platform_versions: []`는 **전 버전**을 뜻한다 (`03-issue-db.md §5.4`). 값은 Android 주 버전 숫자(`"16"`)나 그 밖 플랫폼의 Jira 버전 칸 글자 값(oFono 제품 단위 이름·모델 코드, `17-platforms.md §4`)이다.

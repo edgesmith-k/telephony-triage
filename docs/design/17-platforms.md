@@ -70,6 +70,7 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 
 - 선언: `issue-db.config.yaml` 최상위 `platform: <name>`(없으면 android, android 샘플에는 넣지 않는다). `db_lint`가 형식과 설치 여부(`known()`)를 본다.
 - 버전 키: `platform_versions_supported`. 옛 이름 `android_versions_supported`는 읽지 않고 `db_lint` config 오류다(트래커 범용화 때 원칙 (d)로 정리, `18-trackers.md` T4).
+- 버전 값: Android는 주 버전 숫자(`16`)다. oFono Jira 버전 칸에는 숫자가 아니라 제품 단위 이름 또는 모델 코드가 적힌다(사용자 11/15, S28). 그래서 스키마(`platform_version`·`platform_versions` 항목)는 영숫자로 시작하는 영숫자·`.`·`-`·`_` 글자 값을 받고(`^[A-Za-z0-9][A-Za-z0-9._-]*$`, 숫자만인 값도 그대로), 기록에는 Jira 값을 그대로 쓴다. 버전 표시 비교(`common/flows.version_match`, 거르지 않고 표시만)는 이슈 값이 `16`·`16.0` 꼴이면 지금처럼 주 버전 숫자로, 아니면 원인 값이 모두 숫자일 때는 비교하지 않고(null — Android의 "Android 16" 등, 지금과 같다), 글자 값이 있으면 이슈 값을 `/`·쉼표·공백으로 나눈 조각 중 하나라도 원인 값에 있는지 대소문자 없이 본다. 코드 경로 프로필 이름(`code_roots remember`)은 숫자 버전일 때만 붙이고, 정기 점검의 빌드 순서(`site_audit` 시그니처 소실)도 숫자 주 버전만 쓴다(글자 값은 순서를 모른다). 이미 있는 이슈 DB는 메인테이너가 `schema/` 사본을 새 스키마로 올리는 PR을 병합해야 글자 값을 기록할 수 있다.
 - 세션 선택과 DB 선언이 다르면 **거부**(`platform-mismatch`, `contracts.md §공통 규칙`). 분석도 멈춘다(읽기 전용으로 계속하지 않는다). 원인·해결책이 다른 DB에 대고 매칭하는 것은 의미가 없기 때문이다.
 - 옛 플러그인 + oFono DB: 옛 플러그인은 `platform`을 모르고 android로 보지만, oFono DB의 `parser_backend.name`(`ofono_reference`)이 백엔드 불일치를 일으켜 쓰기가 막힌다. oFono DB는 이 플랫폼 분리가 들어간 플러그인부터 쓴다.
 - 카테고리 목록은 그 DB의 `categories`, 로그 출처 → 카테고리 매핑은 그 DB의 `parser-rules/tags.yaml`이 정한다(코드에 카테고리 6종 가정 없음).

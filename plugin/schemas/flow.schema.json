@@ -8,7 +8,7 @@
   "properties": {
     "id": {"description": "카테고리 안에서 유일, 파일 이름과 같다. 바꾸지 않는다(원인 flow_step이 참조)", "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"},
     "title": {"type": "string", "minLength": 1, "maxLength": 40},
-    "platform_versions": {"description": "빈 목록은 전 버전. 거르지 않고 표시만 한다", "type": "array", "items": {"type": "string", "pattern": "^[0-9]+$"}, "uniqueItems": true},
+    "platform_versions": {"description": "빈 목록은 전 버전. 거르지 않고 표시만 한다", "type": "array", "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"}, "uniqueItems": true},
     "start": {
       "description": "인스턴스 시작 줄. 열쇠 = (그 줄 pid, 그 줄 태그)",
       "type": "object",

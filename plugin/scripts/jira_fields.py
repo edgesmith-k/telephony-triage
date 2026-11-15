@@ -60,7 +60,7 @@ STRUCTURED = ("model", "sw", "platform_version", "carrier")
 QUESTION_LABELS = {
     "model": "모델",
     "sw": "SW 빌드",
-    "platform_version": "플랫폼 주 버전 — 숫자만, 예: 16",
+    "platform_version": "플랫폼 버전 — Android는 주 버전 숫자(예: 16), 그 밖 플랫폼은 Jira 버전 칸 값 그대로",
     "carrier": '캐리어 — "없음"이면 기록하지 않음',
     "occurred_at": '발생 시각 — 모르면 "모름", 그러면 occurred_on을 기록하지 않음',
 }

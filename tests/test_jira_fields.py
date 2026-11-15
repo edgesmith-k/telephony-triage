@@ -76,7 +76,7 @@ def test_extract_reports_missing_fields():
     assert out["issue"] == {"key": "MOCK-9", "origin": "mcp"}
     assert out["missing_question"] == (
         'Jira에 비어 있는 항목이 있습니다. 기록에 넣을 값을 "항목: 값" 한 줄씩 알려 주세요.\n'
-        "- 필수: model(모델), platform_version(플랫폼 주 버전 — 숫자만, 예: 16)\n"
+        "- 필수: model(모델), platform_version(플랫폼 버전 — Android는 주 버전 숫자(예: 16), 그 밖 플랫폼은 Jira 버전 칸 값 그대로)\n"
         '- 선택: sw(SW 빌드 — 모르면 "모름", 그러면 기록하지 않음(수정·회귀 판단 불가)), '
         'carrier(캐리어 — "없음"이면 기록하지 않음), '
         'occurred_at(발생 시각 — 모르면 "모름", 그러면 occurred_on을 기록하지 않음)')

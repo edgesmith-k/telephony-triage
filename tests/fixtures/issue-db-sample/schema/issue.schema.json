@@ -16,7 +16,7 @@
     "occurred_on": {"$ref": "#/$defs/isoDate"},
     "model": {"type": "string", "minLength": 1},
     "sw": {"description": "선택. Jira SW 빌드. Jira에 없고 사용자도 모르면 키를 두지 않는다(빈 문자열·자리표시 값 금지) — 그 Jira의 수정·회귀 판단은 '판단 불가'(03-issue-db.md §5.9).", "type": "string", "minLength": 1},
-    "platform_version": {"type": "string", "pattern": "^[0-9]+$"},
+    "platform_version": {"description": "Android는 주 버전 숫자, 그 밖 플랫폼은 Jira 버전 칸 값 그대로(제품 단위 이름·모델 코드, 17-platforms.md)", "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
     "carrier": {"type": "string", "minLength": 1},
     "analyzed_by": {"type": "string", "minLength": 1},
     "failed_step": {"description": "실패한 테스트 스텝 한 줄. 마스킹된 값, db_lint가 원본 식별자를 검사한다.", "type": "string", "maxLength": 200},

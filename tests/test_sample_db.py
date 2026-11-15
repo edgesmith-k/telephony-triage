@@ -189,6 +189,26 @@ def test_schemas_are_valid_json_schema():
         Draft202012Validator.check_schema(_schema(name))
 
 
+def _version_nodes(node, key=None):
+    if isinstance(node, dict):
+        if key in ("platform_version", "platform_versions", "platformVersions") and "pattern" in node.get("items", node):
+            yield node.get("items", node)
+        for k, v in node.items():
+            yield from _version_nodes(v, k)
+    elif isinstance(node, list):
+        for v in node:
+            yield from _version_nodes(v)
+
+
+def test_platform_version_takes_text_values():
+    """버전 칸: Android 숫자와 그 밖 플랫폼 글자 값(oFono 제품 단위 이름·모델 코드 — 지어낸 이름)을 받고 이상한 값은 거부."""
+    nodes = [n for name in SCHEMAS for n in _version_nodes(_schema(name))]
+    assert len(nodes) == 6 and len({n["pattern"] for n in nodes}) == 1   # flow 1·issue 1·plan 3·type 1
+    validator = Draft202012Validator(nodes[0])
+    assert all(validator.is_valid(v) for v in ("16", "prodx", "M100", "prodx-2.1_b"))
+    assert not any(validator.is_valid(v) for v in ("", "   ", "-x", ".x", "prodx m100", "prodx/m100"))
+
+
 # -- 2. 샘플 파일이 스키마를 통과한다 --------------------------------------
 
 

@@ -648,7 +648,7 @@ DRIFT_MAX_FEEDBACK = 5_000      # feedback 최신 N개
 DRIFT_MAX_BYTES = 16 * 1024     # 파일당 상한(넘으면 건너뛰고 개수 info)
 DRIFT_MAX_ROWS = 10             # 레포당 행(넘으면 개수만)
 DRIFT_KEYS = 3                  # 증거 칸 Jira 키 예시 수(원문·요약은 넣지 않는다)
-PV_RE = re.compile(r"^[0-9]+$")  # = issue.schema platform_version
+PV_RE = re.compile(r"^[0-9]+$")  # 주 버전 숫자만 순서가 있다. issue.schema는 글자 값(oFono 제품 단위 이름·모델 코드)도 받지만 순서를 모른다
 DRIFT_HOWTO = ("새 빌드 이슈 하나를 `analyze`로 다시 보고 부분 일치·코드 대조 줄을 확인 → 남은 다른 층 줄로 OR 시그니처를 "
                "`update-signature`로(사용자 확인·PR·+1)")
 
