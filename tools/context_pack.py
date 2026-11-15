@@ -68,20 +68,25 @@ def step_row(name):
     return "\n".join(rows[:2] + hit) if hit else None
 
 
-def section(text, num):
-    """제목 `num`(번호 `5.8` 또는 제목 글 `Step 8`)부터 같은 수준 이하의 다음 제목 전까지. 코드 펜스 안 `#`은 제목이 아니다."""
-    out, level, fence = [], 0, False
-    for ln in text.splitlines():
+def span(lines, num):
+    """제목 `num`(번호 `5.8` 또는 제목 글 `Step 8`)부터 같은 수준 이하의 다음 제목 전까지의 줄 범위 (시작, 끝) 또는 None.
+    코드 펜스 안 `#`은 제목이 아니다."""
+    start, level, fence = None, 0, False
+    for i, ln in enumerate(lines):
         if ln.lstrip().startswith("```"):
             fence = not fence
         m = None if fence else re.match(r"(#+)\s+(.+?)\s*$", ln)
         if m and not level and (m.group(2).split()[0].rstrip(".") == num or m.group(2).startswith(num)):
-            level = len(m.group(1))
+            start, level = i, len(m.group(1))
         elif m and level and len(m.group(1)) <= level:
-            break
-        if level:
-            out.append(ln)
-    return "\n".join(out) or None
+            return start, i
+    return (start, len(lines)) if level else None
+
+
+def section(text, num):
+    lines = text.splitlines()
+    r = span(lines, num)
+    return "\n".join(lines[r[0]:r[1]]) if r else None
 
 
 def render(name):
@@ -104,10 +109,11 @@ def render(name):
             if body is None:
                 raise LookupError(f"{path} §{ref}")
             for d in drops:
-                sub = section(body.split("\n", 1)[-1], d)   # 절 제목 줄 자신은 뺄 대상이 아니다
-                if sub is None:
+                lines = body.splitlines()
+                cut = span(lines[1:], d)     # 절 제목 줄 자신은 뺄 대상이 아니다. 찾은 자리를 줄 번호로 잘라 낸다(같은 글이 앞에 있어도)
+                if cut is None:
                     raise LookupError(f"{path} §{ref}")
-                body = (body + "\n").replace(sub + "\n", "", 1)
+                body = "\n".join(lines[:cut[0] + 1] + lines[cut[1] + 1:])
             if drops:
                 ref = f"{s} ({'·'.join(drops)} 뺌)"
             if r:
