@@ -99,8 +99,8 @@ def safe_name(raw: str) -> str:
 # -- 작업 디렉토리 --------------------------------------------------------------------------------
 
 
-def job_dir(args, defaults: dict) -> tuple[Path, list[str]]:
-    """`(JOB, mask.allow_patterns)`. 키 형식은 트래커 `safe_key_re`·스냅샷 `tracker.key_regex`(issue_post와 같다)."""
+def job_dir(args, defaults: dict) -> tuple[Path, dict]:
+    """`(JOB, 스냅샷 issue-db.config.yaml)` — 마스킹은 그 설정대로(`masking.for_db`). 키 형식은 트래커 `safe_key_re`·스냅샷 `tracker.key_regex`(issue_post와 같다)."""
     user = userconfig.load_user()
     if user is None:
         raise Usage("사용자 config가 없다 — /telephony-triage:setup 을 먼저 한다")
@@ -129,7 +129,7 @@ def job_dir(args, defaults: dict) -> tuple[Path, list[str]]:
         done = None
     if (done or userconfig.TOP_PROFILE) != name and (job / "analysis.json").is_file():
         raise Usage(f"이 분석은 {done or userconfig.TOP_PROFILE} 플랫폼이다(선택한 플랫폼: {name}) — --platform으로 다시 실행한다")
-    return job, list((db_cfg.get("mask") or {}).get("allow_patterns") or [])
+    return job, db_cfg
 
 
 # -- 사본 → diff ----------------------------------------------------------------------------------
@@ -209,9 +209,9 @@ def file_diff(rel: str, src: Path, dst: Path) -> tuple[str, int, int]:
     return "".join(out), add, rem
 
 
-def mask_patch(text: str, allow: list[str]) -> str:
+def mask_patch(text: str, db_cfg: dict) -> str:
     """`mask_pii.py` 치환 모드와 같다: 마스커 하나(기존 토큰 다음 번호부터), `\\n`으로 나눈 줄마다."""
-    masker = masking.new_masker(text, allow)
+    masker = masking.for_db(db_cfg, text)
     return "\n".join(masker(line) for line in text.split("\n"))
 
 
@@ -250,7 +250,7 @@ def apply_check(sk: Path, patch: str) -> str | None:
 # -- 실행 -----------------------------------------------------------------------------------------
 
 
-def build(job: Path, sk_arg: str, name: str, allow: list[str]) -> tuple[str, list[dict]]:
+def build(job: Path, sk_arg: str, name: str, db_cfg: dict) -> tuple[str, list[dict]]:
     """`(마스킹된 patch, 파일별 {path, added, removed})`. 실패는 Memo."""
     sk = Path(sk_arg).expanduser()
     if not str(sk_arg or "").strip() or not sk.is_dir():
@@ -269,7 +269,7 @@ def build(job: Path, sk_arg: str, name: str, allow: list[str]) -> tuple[str, lis
         raise Memo("사본이 스킬 디렉토리 원본과 같다(바뀐 파일 없음)")
     raw = "".join(pieces)
     try:
-        masked = mask_patch(raw, allow)
+        masked = mask_patch(raw, db_cfg)
     except masking.AllowPatternError as exc:
         raise Usage(f"mask.allow_patterns 오류: {exc}") from exc
     bad = changed_context(raw, masked)
@@ -284,13 +284,13 @@ def build(job: Path, sk_arg: str, name: str, allow: list[str]) -> tuple[str, lis
 
 
 def run(args, defaults: dict) -> tuple[dict, int]:
-    job, allow = job_dir(args, defaults)
+    job, db_cfg = job_dir(args, defaults)
     name = safe_name(args.name)
     out = job / SUGGEST_DIR / f"{name}.patch"
     meta = job / SUGGEST_DIR / f"{name}.meta.json"
     try:
         try:
-            patch, files = build(job, args.skill_dir, name, allow)
+            patch, files = build(job, args.skill_dir, name, db_cfg)
         except OSError as exc:      # 읽기·임시 사본 복사 실패(shutil.Error 포함)
             raise Memo(f"파일을 읽거나 복사하지 못했다({type(exc).__name__})") from exc
     except Memo as exc:

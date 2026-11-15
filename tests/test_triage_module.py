@@ -450,6 +450,16 @@ def test_explore_view_redacts(env):
     assert out["mask_warnings"] and sum(out["mask_warnings"].values()) >= 1
 
 
+def test_explore_timeline_mask_off_keeps_raw(env):
+    """마스킹 끔 DB의 events(`mask_off`, 08-safety §8): 탐색 타임라인이 가리지 않고 경고도 없다."""
+    env.make_job(events=[dict(EVENTS[0], msg="login password=hunter2secret9 ok")], explore=True)
+    path = env.job / "events.json"
+    path.write_text(json.dumps(dict(json.loads(path.read_text(encoding="utf-8")), mask_off=True)), encoding="utf-8")
+    code, out, _ = env.call("explore", KEY, "--out", env.job, "--platform", "ofono")
+    text = (env.job / "timeline.md").read_text(encoding="utf-8")
+    assert code == 0 and "hunter2secret9" in text and "<REDACTED:" not in text and "mask_warnings" not in out
+
+
 # -- 실패와 종료 표 -------------------------------------------------------------------------------
 
 

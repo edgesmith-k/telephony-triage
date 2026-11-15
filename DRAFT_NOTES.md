@@ -36,7 +36,7 @@
 - **재반입 노트 (import-20261115 = import-20261103(`77e2827`) 이후 전부)**
   - guard 판정이 바뀌었다(`08-safety.md §9`): base push·병합 계열(규칙 6·11)과 규칙 5(`ci_mode: actions`)는 거부→ask, Claude의 Approve·리뷰 기각·자동 병합 켜기·보호 변경·`refs/remotes` 위조는 새로 거부. 팀 배포 전에 `site_step.py check S-4a`의 `s4a.protection_guard` 통과. §8대로 사내 대상 eval 12개 모두 다시.
   - S1 확인 전인데 site-defaults `tracker.isolation_confirmed: true`면 `false`로.
-  - S13을 했어도 `14-site.md` S13의 새 확인 방법으로 다시. 확인 전에는 사내 로그를 fixture·이슈 DB에 넣지 않는다.
+  - 새 DB는 마스킹 끔(SITE_INSTALL §9, 스킬은 `cut` 인자만·eval 없음). 가리는 DB만 S13을 새 방법(`14-site.md`)으로 다시, 그 전엔 사내 로그를 DB에 안 넣는다.
   - S-5 `offline_eval`은 이슈 DB에 이미 있는 키도 표본내로 뺀다.
   - 옛 판으로 `summary`까지 한 대기 작업은 PR 본문에 메모 원문이 남는다 → `summary` 다시 또는 `discard`.
   - `issue_db.path`가 이슈 DB clone이 아니면(빈 값·상대 경로·`issue-db.config.yaml` 없음) `db_pr`·`db_verify`가 git 전에 종료 2. #112·#113의 바뀐 줄은 표시 기록 블록(`render_markdown`·`shown.record`)에 닿지 않는다.
@@ -51,7 +51,7 @@
   - #123: 탐색 `--with <모듈>`(보조 모듈 줄 절).
   - 사내 읽기(import-20261103 대비, KB): S-0 −18.1·S-1 +8.1·S-2 +6.1·S-3 +11.7·S-4 +7.1·S-4a +1.1·S-5 +0.3·S-6 0·S-7 +2.1.
 - 재실행할 eval 수는 재반입 노트가 정한다(`pending.json` `site`, S-2; 사내 모델이 다르면 +7). 단계별 확인 항목·반입 뒤 후보(RF·R-36~47)는 history 11/13.
-- S-7: usage_stats format 2·`--transcripts` 허용 여부. S37 결과·팀 설치본 통일 뒤에만 `signature_features`를 DB에 선언(결정 (v)).
+- S-7: usage_stats format 2·`--transcripts` 허용 여부. 시그니처 필드 선언은 결정 (v)대로.
 - 사내 IMS는 별도 APK(11/12): IMS 줄·규칙·문서는 AOSP 기준·소스만 — S-1에서 먼저.
 
 ## 사외에서는 못 하는 것 (사내 S-1~S-5)

@@ -82,14 +82,14 @@ class FixtureOps:
             self.warnings.append(masking.nul_warning(nul, total, f"{label} {value}"))
         text = "\n".join(lines)
         # 커밋 관문(`mask_pii --check`)이 fixtures/*.log에 쓰는 로그 마스커·줄 나눔 그대로(줄 머리 규칙·갈린 덤프 조각)
-        masker = masking.new_masker(existing_text=text, allow_patterns=self.allow, log_lines=True)
+        masker = masking.for_db(self.config, text, log_lines=True)    # 끔 DB면 원문 그대로(08-safety §8)
         masked = "\n".join(masking.mask_lines(masker, text.split("\n")))
         # 그 위에 기본 마스커를 글 전체로 한 번 더: 줄 단위로는 다음 줄로 접힌 SIP Digest `nonce=`·`response=`가 문맥을 못 본다.
         # 줄 머리 시각은 비워 둔다 — 아니면 줄 끝 키(`token:`·`password=`)가 다음 줄 시각을 값으로 잡는다
-        masked = masking.new_masker(existing_text=masked, allow_patterns=self.allow).mask(
+        masked = masking.for_db(self.config, masked).mask(
             masked, reserved=[m.span() for m in _LINE_STAMP.finditer(masked)])
         # 줄 단위로 한 번 더: 앞 패스가 넣은 토큰이 줄을 나눠 덤프 규칙이 새로 맞는다(`rsp: 90 00 01 02 <MSISDN#1>`, 관문이 본다)
-        again = masking.new_masker(existing_text=masked, allow_patterns=self.allow, log_lines=True)
+        again = masking.for_db(self.config, masked, log_lines=True)
         return "\n".join(masking.mask_lines(again, masked.split("\n")))
 
     def op_allow_cause(self, i, op):

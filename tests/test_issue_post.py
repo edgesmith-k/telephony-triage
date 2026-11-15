@@ -123,6 +123,23 @@ def test_render_without_fill_is_a_draft_with_todo_and_no_hash():
     assert proc.returncode == 0 and proc.stdout.startswith(f"## Jira 게시 전 확인: {KEY} → 코멘트 1건 ({NOTE_TOOL})")
 
 
+def test_render_mask_off_db_keeps_raw_text():
+    """마스킹 끔 DB(스냅샷 `signature_features: [mask-off]`, 08-safety §8): 본문을 가리지 않고 "마스킹" 문구를 쓰지 않는다."""
+    ws = shared()
+    cfg = ws.work / "_snapshot" / "issue-db.config.yaml"
+    saved = cfg.read_bytes()
+    try:
+        cfg.write_bytes(saved + b"signature_features: [mask-off]" + bytes([10]))
+        out = render(ws, "--fill", fill(ws, dict(FILL, next=["단말 주소 192.0.2.15에서 다시 확인한다"])))
+        body = post_md(ws)
+        assert out["problems"] == [] and "192.0.2.15" in body and "<IP#" not in body, out
+        assert "(마스킹," not in body and "- 마스킹: 끔(이슈 DB 설정)" in out["screen"], out["screen"]
+    finally:
+        cfg.write_bytes(saved)
+    render(ws, "--fill", fill(ws, dict(FILL, next=["단말 주소 192.0.2.15에서 다시 확인한다"])))
+    assert "<IP#" in post_md(ws) and "(마스킹," in post_md(ws)                                   # 선언 없는 DB는 지금처럼
+
+
 def test_render_with_fill_writes_post_md_and_hash_line():
     ws = shared()
     out = render(ws, "--fill", fill(ws, FILL))

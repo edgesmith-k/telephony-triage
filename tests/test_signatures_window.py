@@ -337,7 +337,7 @@ def test_features_used():
     assert signatures.features_used({**base, "must_event": [{"event": "e", "min_count": 3}]}) == {"min_count"}
     assert signatures.features_used({**SEQ, "sequence_within_sec": 1}) == {"sequence_within_sec"}
     both = {**SEQ, "sequence_within_sec": 1, "must_event": [{"event": "e", "min_count": 2}]}
-    assert signatures.features_used(both) == {"min_count", "sequence_within_sec"} == signatures.SUPPORTED_FEATURES
+    assert signatures.features_used(both) == {"min_count", "sequence_within_sec"} <= signatures.SUPPORTED_FEATURES
 
 
 def test_sample_db_signatures_all_compile():

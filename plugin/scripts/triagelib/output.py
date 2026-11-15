@@ -418,12 +418,13 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     events = _load(job / "events.json")
     events = events if isinstance(events, dict) else None
     allow = [p for p in (events or {}).get("mask_allow") or [] if isinstance(p, str)]
+    off = bool((events or {}).get("mask_off"))      # 마스킹 끔 DB의 events면 출력을 바꾸지 않는다(08-safety §8)
     src_rel, src_text, src_skip = _source(job, purpose, mode, rec, events)
 
     # 1~3. 마스킹 → 다시 쓰기 → residual
     raw_bytes = out_path.read_bytes()
     raw = raw_bytes.decode("utf-8", "replace")
-    masker = masking.new_masker(existing_text=src_text or "", allow_patterns=allow, log_lines=True)
+    masker = masking.new_masker(existing_text=src_text or "", allow_patterns=allow, log_lines=True, off=off)
     text = "\n".join(masker.mask(line) for line in raw.split("\n"))
     data = text.encode("utf-8")
     if data != raw_bytes:
@@ -434,7 +435,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     sha = _sha(data)
     if len(raw_bytes) > OUTPUT_MAX_BYTES:
         return _fail(job, purpose, env, "출력 형식 불일치", "출력 형식 불일치(파일 한도)", sha, args)
-    left = masking.residual(text, allow)
+    left = {} if off else masking.residual(text, allow)
     if left:
         what = ", ".join(f"{k} {n}건" for k, n in sorted(left.items()))
         return _fail(job, purpose, env, "마스킹 점검 실패", f"마스킹 점검 실패({what})", sha, args)

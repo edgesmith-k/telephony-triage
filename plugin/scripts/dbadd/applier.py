@@ -44,7 +44,6 @@ class Applier(JiraOps, EntityOps, FixOps, ResolutionOps, SignatureOps, FixtureOp
         self.jira_checks: list[tuple[int, str, str]] = []      # (op, cause, Jira 키) 적용 후 확인
         self.warnings: list[str] = []
         self.pending_skipped: list[dict] = []                  # 원인 ID가 트리에 없어 싣지 않은 pending 피드백
-        self.allow = [str(p) for p in ((self.config.get("mask") or {}).get("allow_patterns") or [])]
         tracker = self.config.get("tracker") if isinstance(self.config.get("tracker"), dict) else {}
         try:     # 기록 키: DB `tracker.key_regex`(없으면 DB 트래커 기본값) + 트래커 경로 안전 형식(파일 이름이 된다)
             self.tracker = trackers.of_db(self.config)

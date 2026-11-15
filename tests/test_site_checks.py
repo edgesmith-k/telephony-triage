@@ -1108,6 +1108,15 @@ def test_o1_masked_sniff_parse(tmp_path):
     texts = _log_texts()
     for r in out.values():
         assert not any(t in r["evidence"] for t in texts), r                  # 근거에 로그 원문 없음
+    # 점검할 oFono DB가 마스킹을 끄면(08-safety §8) 가린 사본을 요구하지 않는다
+    sys.path.insert(0, str(ROOT / "tests" / "helpers"))
+    from runner import copy_db, git_db, variant_db
+    src = copy_db(variant_db("issue-db-ofono"))
+    with (src / "issue-db.config.yaml").open("a", encoding="utf-8", newline="") as fh:
+        fh.write("signature_features: [mask-off]" + chr(10))
+    set_inputs(root, f"ofono_log_dir: {logs}{chr(10)}android_log_dir: {alogs}{chr(10)}ofono_db: {git_db(src)}{chr(10)}")
+    m = by_id(sc.run_checks("O-1", root))["o1.masked"]
+    assert m["status"] == "pass" and "마스킹을 끈다" in m["evidence"], m
 
 
 def test_o1_rows_and_missing_input(tmp_path):

@@ -48,8 +48,8 @@
 | `markers` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--step-events]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--step-events`: 이슈 DB step_events 규칙의 로그 흔적(step_events[{rule, ts, seq, label}])을 더한다 |
 | `flows` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>]` | `--rules`: <db>/parser-rules (흐름은 <db>/<category>/flows/); `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도 |
 | `extract-bugreport` | `<zip\|txt> --out <dir>` |  |
-| `cut` | `<logcat>... (--evidence <match.json> \| --around <ISO 시각>) [--cause <원인 ID>] [--seconds <SECONDS>] --out <file> [--rules <RULES>] [--context <CONTEXT>] [--max-lines <MAX_LINES>] [--tz <IANA>] [--year <YYYY>]` | `--evidence`: match_signatures.py 출력 (--cause 원인 후보의 근거); `--around`: 지정 시각 (타임존 있는 ISO); `--cause`: --evidence에서 근거를 쓸 원인 (--evidence에 필수); `--seconds`: --around 앞뒤 초, 기본 30; `--rules`: <db>/parser-rules (mask.allow_patterns를 읽는다); `--context`: 기본 20; `--max-lines`: 기본 100 |
-| `mask-copy` | `<logcat>... --out <dir> [--rules <RULES>] [--max-bytes <MAX_BYTES>]` | `--out`: 사본 디렉토리(<작업 디렉토리>/logs-masked); `--rules`: <db>/parser-rules (mask.allow_patterns를 읽는다); `--max-bytes`: 이보다 큰 파일은 사본을 만들지 않는다(경고 mask-copy-skipped, 기본 67108864), 기본 67108864 |
+| `cut` | `<logcat>... (--evidence <match.json> \| --around <ISO 시각>) [--cause <원인 ID>] [--seconds <SECONDS>] --out <file> [--rules <RULES>] [--context <CONTEXT>] [--max-lines <MAX_LINES>] [--tz <IANA>] [--year <YYYY>]` | `--evidence`: match_signatures.py 출력 (--cause 원인 후보의 근거); `--around`: 지정 시각 (타임존 있는 ISO); `--cause`: --evidence에서 근거를 쓸 원인 (--evidence에 필수); `--seconds`: --around 앞뒤 초, 기본 30; `--rules`: <db>/parser-rules (mask.allow_patterns·마스킹 끔을 읽는다); `--context`: 기본 20; `--max-lines`: 기본 100 |
+| `mask-copy` | `<logcat>... --out <dir> [--rules <RULES>] [--max-bytes <MAX_BYTES>]` | `--out`: 사본 디렉토리(<작업 디렉토리>/logs-masked); `--rules`: <db>/parser-rules (mask.allow_patterns·마스킹 끔을 읽는다); `--max-bytes`: 이보다 큰 파일은 사본을 만들지 않는다(경고 mask-copy-skipped, 기본 67108864), 기본 67108864 |
 
 ## `mask_pii.py`
 

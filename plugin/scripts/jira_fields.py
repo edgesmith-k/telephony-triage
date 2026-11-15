@@ -235,8 +235,7 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
     if when is None:
         missing.append("occurred_at")
 
-    allow = list((_db_cfg(db).get("mask") or {}).get("allow_patterns") or [])
-    masker = masking.new_masker(allow_patterns=allow)
+    masker = masking.for_db(_db_cfg(db))
 
     def texts(name: str):
         paths = [fmap[name]] if fmap.get(name) else list(adapter.text_defaults[name])

@@ -135,7 +135,9 @@ platform_versions_supported: ["16", "17"]   # 지원 중인 플랫폼 버전 (06
 parser_backend:                      # 이 이슈 DB의 시그니처가 전제하는 파서 백엔드 (16-existing-assets.md §16.3)
   name: site                         # site | reference (android, 사외 초안은 reference) | <플랫폼>_reference (예: ofono_reference)
   min_version: <버전>                # 이보다 낮은 백엔드면 쓰기 차단, 분석은 경고 후 진행
-# signature_features: [min_count, sequence_within_sec]   # 시그니처가 쓰는 선택 필드 선언(04-parser-matching.md §5.11 (1)). 없으면 기본 필드만
+signature_features: [mask-off]       # 모르는 플러그인이 분석을 멈춰야 하는 선언 목록(04-parser-matching.md §5.11 (1)). mask-off = 로그를 가리지 않음
+                                     # (08-safety.md §8.2, 뼈대 기본 — 빼면 가린다). 시그니처 선택 필드(min_count·sequence_within_sec)도 이 목록에
+                                     # 더한다. signature_features 줄을 두 번 쓰면 뒤 줄만 읽혀 db_lint config 오류
 external_parsers: {}                 # 어댑터(외부 파서)를 쓰는 카테고리 고정. 예: {data: {adapter: site_data_existing, min_version: <버전>}}
                                      # 여기 있는 카테고리의 어댑터가 없거나 낮으면 백엔드 불일치와 같이 처리 (contracts.md §기존 자산 연결 계약)
 code_root_keys: [aosp, vendor_ril]   # code_refs에 쓸 수 있는 소스 루트 키
@@ -163,7 +165,7 @@ quality:                             # 06-collaboration.md §6.5, §6.6
   unverified_max_days: 60          # 해결책 미검증 허용 기간
   fix_submitted_max_days: 30       # fix-submitted 후 verify-fix까지 허용 기간
   surge_ratio: 2.0
-mask:                                # 08-safety.md §8
+mask:                                # 08-safety.md §8 (마스킹 끔 DB면 쓰지 않는다)
   allow_patterns: []                 # 마스킹 오탐 예외 정규식 (빌드 번호 등). lint가 PII 표본 전체 일치를 거부
 matcher:
   pattern_timeout_ms: 2000           # 시그니처·extractor 정규식 패턴당 실행 시간 상한 (04-parser-matching.md §5.8 (4))

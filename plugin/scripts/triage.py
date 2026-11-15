@@ -267,7 +267,8 @@ def _explore(args, cfg: dict, job: Path) -> int:
         print(f"탐색 입력을 읽지 못했다({exc}) — 이 키로 /telephony-triage:analyze를 다시 실행한다", file=sys.stderr)
         return USAGE
     text, kept, total = timeline(args.key, events, spec.get("around"), limit, spec.get("failed_step"), spec.get("anchor"))
-    text, redacted = masking.redact(text, events.get("mask_allow") or [])    # 마스킹 전 JOB이어도 남은 값은 가린다(B2-25)
+    # 마스킹 전 JOB이어도 남은 값은 가린다(B2-25). 마스킹 끔 DB의 events(`mask_off`)면 가리지 않는다(08-safety §8)
+    text, redacted = (text, {}) if events.get("mask_off") else masking.redact(text, events.get("mask_allow") or [])
     (job / TIMELINE_FILE).write_text(text, encoding="utf-8", newline="\n")
     report = job / "report.md"
     if report.is_file():

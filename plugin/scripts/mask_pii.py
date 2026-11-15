@@ -17,8 +17,9 @@
 치환·이벤트 모드는 로그 마스커(`log_lines=True`, M1~M11 모양 규칙 포함)를, 검사 모드는 기본 마스커를 쓴다(B2 §3.3).
 검사 모드도 이슈 DB fixture 로그(`fixtures/` 바로 아래 `*.log`)는 로그 마스커로 본다(`add-fixture`가 그 마스커로 가린다).
 
-`mask.allow_patterns`는 이슈 DB(`--db`, 없으면 cwd의 이슈 DB)의 `issue-db.config.yaml`에서
-읽는다. 이슈 DB를 찾지 못하면 예외 없이 마스킹한다.
+`mask.allow_patterns`와 마스킹 끔(`signature_features: [mask-off]`, 08-safety.md §8)은 이슈 DB(`--db`, 없으면 cwd의
+이슈 DB)의 `issue-db.config.yaml`에서 읽는다. 끔이면 검사는 늘 통과하고 치환은 글을 그대로 쓴다. 이슈 DB를 찾지 못하면 예외 없이
+마스킹한다.
 """
 
 from __future__ import annotations
@@ -49,10 +50,8 @@ def _db(arg: str | None) -> Path | None:
         return None
 
 
-def _allow(db: Path | None) -> list[str]:
-    if db is None:
-        return []
-    return list((compat.load_db_config(db).get("mask") or {}).get("allow_patterns") or [])
+def _cfg(db: Path | None) -> dict:
+    return compat.load_db_config(db) if db is not None else {}
 
 
 def _git(db: Path, *args: str) -> str:
@@ -106,8 +105,8 @@ def run_check(args, db: Path | None) -> dict:
             if not path.is_file():
                 raise UsageError(f"파일이 없습니다: {path}")
             targets.append((name, path.read_text(encoding="utf-8-sig", errors="replace")))
-    allow = _allow(db)
-    plain, log = masking.new_masker(allow_patterns=allow), masking.new_masker(allow_patterns=allow, log_lines=True)
+    cfg = _cfg(db)
+    plain, log = masking.for_db(cfg), masking.for_db(cfg, log_lines=True)
     detections = []
     for name, text in targets:
         # 이슈 DB fixture 로그는 `add-fixture`가 가린 로그 마스커로 본다(덤프·base64·문맥 없는 긴 숫자·줄 머리 호스트)
@@ -128,7 +127,7 @@ def run_replace(args, db: Path | None) -> tuple[dict, str | None]:
         raise UsageError("파일을 주세요.")
     if len(args.files) > 1 and not args.in_place:
         raise UsageError("파일이 여럿이면 --in-place를 쓰세요.")
-    allow = _allow(db)
+    cfg = _cfg(db)
     results, stdout_text, warnings = [], None, []
     for name in args.files:
         path = Path(name)
@@ -139,7 +138,7 @@ def run_replace(args, db: Path | None) -> tuple[dict, str | None]:
         if nul:
             text = "\n".join(lines)
             warnings.append({"code": "mask-pii-nul", "message": masking.nul_warning(nul, len(lines) - (lines[-1] == ""), name)})
-        masker = masking.new_masker(text, allow, log_lines=True)
+        masker = masking.for_db(cfg, text, log_lines=True)
         masked = "\n".join(masking.mask_lines(masker, lines))   # 갈린 덤프 조각도(08-safety §8)
         if args.in_place:
             path.write_text(masked, encoding="utf-8", newline="\n")
@@ -168,7 +167,7 @@ def run_events(args, db: Path | None) -> dict:
         doc = json.loads(Path(args.events).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise UsageError(f"--events를 읽을 수 없습니다: {exc}") from exc
-    masker = masking.new_masker(json.dumps(doc, ensure_ascii=False), _allow(db), log_lines=True)
+    masker = masking.for_db(_cfg(db), json.dumps(doc, ensure_ascii=False), log_lines=True)
     if isinstance(doc, dict) and isinstance(doc.get("events"), list):
         events = []
         # tag·pid·ts가 있는 덤프 조각은 이어서 본다(갈린 IMSI·ICCID, 08-safety §8). 없으면 줄마다와 같다
@@ -182,7 +181,7 @@ def run_events(args, db: Path | None) -> dict:
                 for k, v in (event.get("fields") or {}).items()
             }
             events.append(event)
-        doc = dict(doc, events=events, masked=True)
+        doc = dict(doc, events=events, masked=True, **({"mask_off": True} if masker.off else {}))   # parse --mask와 같다
         mode = "events"
     else:
         doc = _mask_tree(doc, masker)

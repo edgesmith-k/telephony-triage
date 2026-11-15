@@ -125,7 +125,7 @@ class Job:
         self.key = self.tracker.parse_key(args.key) or args.key      # 작업 키로 정규화(jira는 입력 그대로)
         if not self.tracker.safe_key_re.fullmatch(self.key) or not key_re.fullmatch(self.key):
             raise Usage(f"{self.tracker.label} 키 형식이 아니다: {self.key}")
-        self.allow = list((db_cfg.get("mask") or {}).get("allow_patterns") or [])
+        self.db_cfg = db_cfg          # 마스킹(허용 패턴·끔)은 이 설정대로(`masking.for_db`)
         self.dir = work / self.key
         self.spec, self.spec_err = issuepost.write_spec(self.cfg)
         self.analysis = _read(self.dir / "analysis.json", "analysis.json")
@@ -363,7 +363,8 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
     cand = cl["cand"]
     ev = [e for e in (cand or {}).get("evidence") or [] if isinstance(e, dict)][:EVIDENCE_LINES]
     if "evidence" not in omit and ev:
-        s["ANALYSIS"].append(_line(f"근거 로그 (마스킹, {_cand_name(cand)} 후보 {len(ev)}줄):"))
+        masked = "" if masking.is_off(job.db_cfg) else "마스킹, "      # 끔 DB면 "마스킹"이라 쓰지 않는다
+        s["ANALYSIS"].append(_line(f"근거 로그 ({masked}{_cand_name(cand)} 후보 {len(ev)}줄):"))
         s["ANALYSIS"].append({"kind": "code", "text": [_clip(f"{e.get('ts')} {e.get('tag')} {e.get('msg')}", EVIDENCE_CHARS)
                                                        for e in ev]})
     # 사용자 clone 상태(triagelib PULL_SKIPPED 줄)는 분석과 무관하고 로컬 브랜치 이름이 들어 Jira에 올리지 않는다
@@ -527,7 +528,8 @@ def screen(job: Job, a: dict, plan: dict | None, info: dict, fmt: str, body: str
     lines.append(f"- 분류 출처: JOB/plan.json ({plan.get('started_at')})" if plan else
                  "- 분류 출처: 계획 없음" + (f" (JOB/plan.json은 쓰지 않음: {skipped})" if skipped else ""))
     if body is not None:
-        lines.append(f"- 마스킹: 적용(LLM 칸 새 토큰 {new_tokens}개), 남은 식별자 0")
+        lines.append("- 마스킹: 끔(이슈 DB 설정)" if masking.is_off(job.db_cfg) else
+                     f"- 마스킹: 적용(LLM 칸 새 토큰 {new_tokens}개), 남은 식별자 0")
     problem_src = "스크립트(plan note)" if info["note"] else "스크립트+LLM(problem)"
     lines.append(f"- 칸 출처: PROBLEM {problem_src} · CAUSE 스크립트+LLM(cause) · NEXT ACTION 스크립트+LLM(next) · "
                  "ANALYSIS 스크립트(+LLM code_location)")
@@ -580,7 +582,7 @@ def cmd_render(args, job: Job) -> tuple[dict, int]:
     sections, tail, info = build(job, a, plan, None, set(omit))       # 결정적 본문(TODO 칸 포함)
     det_text = "\n".join(issuepost.section_text(sections[n]) for n in issuepost.SECTIONS) + "\n" + tail
     try:
-        masker = masking.new_masker(existing_text=det_text, allow_patterns=job.allow)
+        masker = masking.for_db(job.db_cfg, det_text)
     except masking.AllowPatternError as exc:
         raise Usage(str(exc)) from exc
     code_skipped = (a.get("code") or {}).get("skipped", True)

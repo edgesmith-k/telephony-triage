@@ -19,6 +19,9 @@
   돈다. 결과는 같고 규칙당 고정비(줄마다 `finditer`)만 줄인다(08-safety.md §8 성능).
 - **예외**: `issue-db.config.yaml`의 `mask.allow_patterns`에 전체가 맞는 값은 그대로 둔다.
   Android 자체 마스킹(`***`, `xxxxxx`)도 그대로 둔다.
+- **끔(`off`, 08-safety.md §8)**: 이슈 DB가 `signature_features: [mask-off]`를 선언하면(`is_off`) 그 DB를 아는 곳은 `for_db`로
+  끔 마스커를 만든다. `mask`·`find`·갈린 덤프 조각(`_split_spans`)이 아무것도 바꾸지 않고 찾지 않는다. events를 받는 보기·점검은 `mask_off`면
+  `residual`·`redact`를 부르지 않는다.
 
 - **로그 줄 전용 규칙(`Rule.log_only`, M1~M11)**: 합성 fixture로 고정한 로그 줄 규칙(B2 §3.2) 중 모양만 보는 것(hex 덤프·base64·빌드/제품 코드·15~20자리
   숫자·syslog 호스트 칸)은 `log_lines=True`로 만든 마스커(로그 마스킹: parse·cut·`mask_pii` 치환/이벤트·`add-fixture`·보기·점검
@@ -463,8 +466,9 @@ class Masker:  # noqa: F811  # 위의 타입 별칭 Masker를 이 클래스가 �
     마스킹한다. 한 파일(분석 1회) 동안 같은 인스턴스를 쓴다."""
 
     def __init__(self, allow_patterns: Iterable[str] = (), existing_text: str | None = None, *,
-                 log_lines: bool = False):
+                 log_lines: bool = False, off: bool = False):
         self.log_lines = bool(log_lines)       # False면 `log_only` 규칙을 mask()·_spans()·find()에서 건너뛴다
+        self.off = bool(off)                   # True면 아무것도 가리지 않고 찾지 않는다(마스킹 끔 DB, `for_db`)
         self.allow = []
         for p in allow_patterns or ():
             try:
@@ -475,7 +479,7 @@ class Masker:  # noqa: F811  # 위의 타입 별칭 Masker를 이 클래스가 �
         self.next: dict[str, int] = {}
         self.counts: dict[str, int] = {}
         self.fmts: dict[str, str] = {}          # 번호 토큰 모양이 기본과 다른 종류(`HOST` → `host{n}`)
-        if existing_text:
+        if existing_text and not self.off:
             self.observe(existing_text)
 
     # -- 번호 -----------------------------------------------------------------
@@ -514,7 +518,7 @@ class Masker:  # noqa: F811  # 위의 타입 별칭 Masker를 이 클래스가 �
     def mask(self, text: str, forced=None, reserved=()) -> str:
         """`forced`: 갈린 덤프 조각 구간 `[(start, end, kind, 전체 값, 첫 조각?)]`(`forced_lines`·`forced_records`).
         먼저 놓고, 겹치는 일반 규칙 구간은 보지 않는다. `reserved` 구간 `[(start, end)]`은 규칙이 보지 않고 그대로 둔다."""
-        if not text:
+        if not text or self.off:
             return text
         fixed = [f for f in (forced or ()) if 0 <= f[0] < f[1] <= len(text)]
         spans = [(*sp, None) for sp in self._spans_fmt(text, [(f[0], f[1]) for f in fixed] + list(reserved))]
@@ -547,6 +551,8 @@ class Masker:  # noqa: F811  # 위의 타입 별칭 Masker를 이 클래스가 �
 
     def _spans_fmt(self, text: str, reserved=()) -> list[tuple[int, int, str, str, str | None]]:
         """`_spans`에 규칙의 토큰 모양(`Rule.fmt`)을 붙인 것. `reserved` 구간(갈린 조각)은 규칙이 보지 않는다."""
+        if self.off:                              # `find()`도 이 길이라 끔이면 찾는 것이 없다
+            return []
         taken = [(m.start(), m.end()) for m in _PROTECTED.finditer(text)] + list(reserved)
         found: list[tuple[int, int, str, str, str | None]] = []
         # 규칙이 ASCII(`re.ASCII`)라 `(?i)`도 ASCII 글자만 접는다 — 한글 줄에서도 게이트가 결과를 바꾸지 않는다
@@ -612,9 +618,24 @@ def _render(fmt: str, kind: str, n: int, value: str) -> str:
 
 
 def new_masker(existing_text: str | None = None, allow_patterns: Iterable[str] = (), *,
-               log_lines: bool = False) -> Masker:
+               log_lines: bool = False, off: bool = False) -> Masker:
     """새 마스커. `existing_text`에 이미 있는 토큰 다음 번호부터 준다. 로그 줄을 가릴 때는 `log_lines=True`."""
-    return Masker(allow_patterns=allow_patterns, existing_text=existing_text, log_lines=log_lines)
+    return Masker(allow_patterns=allow_patterns, existing_text=existing_text, log_lines=log_lines, off=off)
+
+
+MASK_OFF = "mask-off"   # `signature_features`의 이름(시그니처 필드가 아니라 "모르는 플러그인은 멈춘다"가 필요한 DB 동작 선언)
+
+
+def is_off(db_cfg: dict | None) -> bool:
+    """이슈 DB 설정이 마스킹 끔(`signature_features: [mask-off]`, 08-safety.md §8)을 선언했는가."""
+    features = (db_cfg or {}).get("signature_features")
+    return isinstance(features, list) and MASK_OFF in features
+
+
+def for_db(db_cfg: dict | None, existing_text: str | None = None, *, log_lines: bool = False) -> Masker:
+    """이슈 DB 설정(`mask.allow_patterns`·마스킹 끔)대로 만든 마스커."""
+    allow = [str(p) for p in (((db_cfg or {}).get("mask") or {}).get("allow_patterns") or [])]
+    return new_masker(existing_text, allow, log_lines=log_lines, off=is_off(db_cfg))
 
 
 # --- 갈린 덤프 조각 (oFono 덤프 함수, 표식 `common.dumpjoin.mark()`) -----------------------------------
@@ -633,7 +654,7 @@ _SPLIT_RULES = (_split_rule("IMSI", r"(?i)(?<![\w])0?(?P<v>\d{15})(?="), _split_
 
 def _split_spans(texts: list, groups, masker=None) -> dict[int, list[tuple[int, int, str, str, bool]]]:
     """조각 경계를 넘는 키 있는 IMSI·ICCID 맞음 → `{순번: [(start, end, kind, 전체 값, 첫 조각?)]}`."""
-    if not groups:
+    if not groups or (masker is not None and masker.off):
         return {}
     rules = [(r.kind, r.regex) for r in _SPLIT_RULES]
     orig = [t.rstrip("\r") if isinstance(t, str) else "" for t in texts]

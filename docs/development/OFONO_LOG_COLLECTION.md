@@ -44,6 +44,8 @@
 
 ## 5) 마스킹(공유 전에 반드시)
 
+점검할 oFono 이슈 DB가 마스킹을 끄면(`signature_features: [mask-off]`, 새 DB 기본 — `docs/design/08-safety.md §8.2`) 이 절은 하지 않는다. `.masked` 사본 없이 원본 그대로 두고, `site_checks`의 `o1.masked`도 가린 사본을 요구하지 않는다. 아래는 가리는 DB일 때다.
+
 1. 파일마다 `python3 "<플러그인>/scripts/mask_pii.py" <파일> --out <파일>.masked`(같은 값은 같은 번호로 바뀐다).
 2. 검사: `python3 "<플러그인>/scripts/mask_pii.py" <*.masked> --check`. 종료 코드 1이면 나온 종류를 다시 처리한다.
 3. **도구가 놓칠 수 있는 oFono 형식은 눈으로 확인한다**:

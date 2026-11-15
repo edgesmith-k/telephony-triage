@@ -183,6 +183,21 @@ PR 1(`04-parser-matching.md §5.13`)은 엔진·리포트 절·`put-flow`·검�
 - `JOB/flow.json`은 흐름 단계에 닿기 전에 멈춘 실행에서 이전 것이 남을 수 있다(C-5 — 판정에 쓰는 것은 `analysis.json flows`다). 상한(뒤 1000개)에 일부만 잘린 범위는 리포트가 알리지 않는다(C-6 — 범위 안에 하나도 없을 때만 알린다).
 - 되살리는 조건: PR 1 병합 뒤. eval 비용은 PR 2 착수 때 추정한다.
 
+## M. 마스킹 끔 DB의 남은 곳 (11/15 마스킹 끔 PR 뒤)
+
+마스킹 끔(`08-safety.md §8.2`)은 이슈 DB 설정을 아는 곳에만 닿는다. 아래는 그 PR에서 일부러 바꾸지 않은 것이다. 가리기 코드 자체는 지우지 않는다(켜는 DB가 쓴다).
+- **DB 설정을 모르는 곳은 끔에서도 가린다**: 진단·오류 글(`masking.mask_brief`, 호출 약 30곳), Jira 게시 실패 글(`jira_bridge.py:237`), 모델이 보는 Jira 요약
+  (`jira_bridge.py`가 `jira_fields`를 `db=None`으로 부름 — 끔이면 이 요약은 가려지고 `analysis.json issue`는 원문이라 둘이 다르게 보인다), OpenCode 거부 오류 글(`oc_adapter.py`),
+  측정·점검 도구(`s0_suggest`·`bench_scale`·`mask_parity`·`fixture_residual`·`module_measure`·`module_coverage`·`oc_jira_check`). 값이 토큰으로 보일 뿐 판정·매칭에는 쓰지 않는다.
+  `s0_suggest`가 보여 주는 가린 메시지 모양을 사람이 패턴으로 옮기면 `db_lint` `mask-token`이 잡는다.
+- **oFono hop 줄 serial(검증 W-5)**: `parse --mask`는 끔에서도 마스커를 넘겨 `_mask_record`가 `_serial_shown`을 부르므로, req·resp가 아닌 주석의 serial이 지금처럼 `null`이 된다.
+  분석과 회귀가 같은 길이라 서로 어긋나지는 않는다. 바꾸려면 끔일 때 `postprocess`에 `masker=None`을 넘기고 `masked: true`·`mask_off: true`는 그대로 쓴다(줄마다 드는 비용도 빠진다).
+- **모듈 문서·모듈 eval(검증 W-6)**: 모듈 문서 5곳("덤프는 가려져 있다" — `android/data/deep.md`, `android/_common/components.md`, `ofono/sim/SKILL.md`, `ofono/sim/explore.md`,
+  `ofono/_common/components.md`)은 토큰이 보일 때만 쓰이는 문장이라 끔에서 틀린 판정을 만들지는 않는다. 덤프를 근거로 쓰게 고치는 것은 판단 규칙 변경이라 모듈 eval이 필요하다.
+  모듈 eval 관문 둘(`module_eval.py`의 사내 case 원문 금지, S5 자식 출력 원문 금지)은 함께만 바꾼다 — eval 입력은 가린 로그라 끔 운영 입력과 다르다. `modules.yaml`의 android 공통 잡음 필터는
+  `<HEXDUMP nB>` 토큰만 거르므로 끔에서는 원문 덤프 줄이 보기에 들어온다(oFono처럼 원문 모양을 더해야 할 것으로 보임, 추론). 모듈 문서 보완 PR에서 eval 한 번에 같이 한다.
+- 디렉토리 이름 `logs-masked/`와 `analysis.json logs.masked`는 끔에서도 그대로다(모델이 읽는 법이 같다).
+
 ## 되살릴 때 바꿀 곳
 
 - `contracts.md`: `db_add` CLI(`extract`, `replay`, `renumber --in-main`), `db_pr snapshot --lease`와 lock 정의, op 표(replay 전용 op), `source: replay|migrate|category|cleanup`, `signatures_pending`의 replay 이어받기, 종료 코드 `3`의 `set-field` 예시, `config.py check --for migrate`와 `db_pr stage`의 마이그레이션 경로(`migration_to`)

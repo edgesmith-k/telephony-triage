@@ -6,7 +6,7 @@
 
 ## 8. 개인정보 마스킹 (`mask_pii.py`)
 
-이슈 DB에 들어가는 모든 로그 예시, fixture, 본문, 리포트에 적용한다. **extractor와 매칭 전 로그 줄에도 적용한다** (`parse_logcat.py parse --mask`, `07-workflow.md §Step 3`). 마스킹 함수는 `common/`에 있고 `mask_pii.py`와 `parse_logcat.py`가 공유한다.
+이슈 DB에 들어가는 모든 로그 예시, fixture, 본문, 리포트에 적용한다. **extractor와 매칭 전 로그 줄에도 적용한다** (`parse_logcat.py parse --mask`, `07-workflow.md §Step 3`). 마스킹 함수는 `common/`에 있고 `mask_pii.py`와 `parse_logcat.py`가 공유한다. 이슈 DB가 마스킹을 끄면(§8.2) 그 DB를 아는 곳에서는 가리지 않는다.
 
 | 항목 | 탐지 방법 (참고) | 치환 |
 |---|---|---|
@@ -60,6 +60,21 @@
 - **작업 기록**(`JOB/trace.jsonl`, `contracts.md` "작업 기록"): db_pr의 `stage`·`publish`·`discard` 행에는 결과 코드·PR 번호·사유(`after-publish`·`dry-run`·`cancel`)만, 정보 행(`explore`·`module`·`checked`)에는 종료 코드·`purpose`·불리언·모듈 이름 `<p>/<dir>`만(로그 글·PII 없음) 쓰고, `stage` 오류 메시지는 마스킹·URL 자격증명을 가려 120자까지만 둔다. `job_status --doctor`·`last-run-error`도 같은 가림을 거친 뒤 보인다.
 - `note` 초안은 스킬이 마스킹된 요약에서 한 문장으로 만들고 사용자가 확인한다. 사람 이름·고객명은 초안에 넣지 않는다.
 - `db_lint`는 `issues/*.yaml`의 `note`, 원인 본문, `cp_evidence`에 대해서도 원본 식별자 패턴(표의 항목)을 검사한다.
+
+### 8.2 마스킹 끔 (이슈 DB 설정 한 줄)
+
+로그에 고객 정보가 없는 환경(칩 인증 시험, 에뮬레이터·합성 로그)에서는 이슈 DB가 가리기를 끈다. 가리기 기능은 지우지 않고, 선언이 없는 DB에는 위 §8·§8.1이 그대로 적용된다. 중간 수준(일부 종류만 가림)은 두지 않는다.
+
+- **스위치**: `issue-db.config.yaml`의 `signature_features: [mask-off]`. 이 이름 하나가 유일한 출처다(다른 키를 두지 않는다). 판정은 `masking.is_off`, 마스커는 `masking.for_db`(허용 패턴과 끔을 설정에서 읽음)가 만든다.
+- **새 DB는 기본이 끔**: `tools/make_db_skeleton.py`가 어느 변형(기본·`--platform`·`--tracker`)이든 새 설정의 `mask:` 앞에 이 줄을 쓴다. 가리려면 그 줄을 지운다. 이미 만든 DB는 설정 PR 한 줄로 끈다(`docs/SITE_INSTALL.md`). 샘플 DB(`tests/fixtures/issue-db-sample`)는 가리는 DB로 남는다.
+- **옛 플러그인**: 이 이름을 모르는 플러그인은 `feature-unsupported`로 분석과 쓰기를 멈추고 플러그인을 올리라고 안내한다(`04-parser-matching.md §5.11 (1)`). 새 장치는 없다. 11/09 전 플러그인은 `signature_features`를 아예 보지 않는다(사내 설치본이 그 뒤인지 확인한다).
+- **줄 중복**: YAML은 같은 키가 두 번이면 뒤 줄만 읽는다. `mask-off` 줄 뒤에 `signature_features:` 줄을 하나 더 쓰면 조용히 다시 가리게 되므로 `db_lint`가 `config` 오류로 막는다. 다른 선언(`min_count` 등)은 같은 목록에 더한다.
+- **끔이면 가리지 않는 곳**: `parse --mask`(events에 `mask_off: true`를 더한다. `masked: true`는 그대로라 매칭 관문은 같다), `markers`·`flows` 출력, `mask-copy` 사본(가리지 않은 사본 — UTF-16 → UTF-8 변환과 NUL 줄 비움은 그대로 하고, 64MB 상한은 보지 않는다. 디렉토리 이름은 그대로 `logs-masked/`), `cut --rules`, `add-fixture`·`put-flow`, `mask_pii`(검사는 통과, 치환은 그대로 복사, `--events`도 `mask_off`), Jira 기록(`note`·`failed_step`)·`cp_evidence`·PR 확인 화면 메모, Jira 코멘트 본문, 실패 스텝, `[스킬]` patch. events의 `mask_off`를 받는 탐색 타임라인·모듈 보기·`check-output`은 가리지 않고 남은 식별자 점검도 하지 않는다.
+- **사람이 읽는 문구**: 끔이면 사실과 달라지는 "마스킹" 문구만 뺀다 — Jira 본문·리포트의 "근거 로그 (마스킹, …)", Jira 게시 확인 화면의 "마스킹: 적용"("마스킹: 끔(이슈 DB 설정)"으로), 타임라인·모듈 보기 머리말 "마스킹된 이벤트 요약". 켬 DB 출력은 그대로다.
+- **`cut`의 `--rules`**: 없으면 DB 설정을 몰라 늘 가리고 경고 `cut-no-rules`를 낸다. 스킬 문서의 `cut` 명령은 모두 `--rules SNAP/parser-rules`를 붙인다.
+- **`db_lint`(끔 DB)**: 본문·`cp_evidence`·Jira 기록의 `raw-identifier` 검사를 하지 않는다. 패턴(시그니처·extractor·`step_events`·`step_focus`)의 `raw-identifier`는 그대로다 — 특정 IP·셀 값에 시그니처를 묶지 않게 하는 과적합 방지라서다(안내만 "실제 값 대신 값의 모양(정규식)으로 쓴다"). 패턴에 마스커가 만드는 종류의 토큰(`<IP#…>`·`<HEXDUMP nB>`·`<REDACTED:…>`·`host<n>`)이 있으면 `mask-token` 오류다. 끔 DB의 로그에는 토큰이 생기지 않아 그런 패턴은 옛 fixture에만 맞기 때문이다. 같은 이유로 `fixed-token` 경고는 내지 않는다.
+- **쓰던 DB를 끌 때**: 이미 들어간 fixture와 Jira 기록의 `failed_step`은 가려진 채 남고 되돌리지 않는다. 끈 뒤 원문 값을 보는 시그니처를 만들면 그 옛 fixture에는 맞지 않아, 다른 유형 fixture와의 겹침 검사(R3·R4)가 약해질 수 있다. 처음부터 끈 새 DB는 해당하지 않는다.
+- **끔에서도 가리는 곳**(DB 설정을 모르는 곳, `99-deferred.md`): 진단·오류 글(`mask_brief`), Jira 게시 실패 글과 모델이 보는 Jira 요약(`jira_bridge`), OpenCode 오류 글, 모듈 eval 안전 점검, 측정 도구. 값이 토큰으로 보일 뿐 판정에는 쓰지 않는다. oFono hop 줄의 serial도 지금처럼 지워진다.
 
 ---
 

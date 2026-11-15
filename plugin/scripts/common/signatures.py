@@ -76,7 +76,8 @@ SIGNATURE_KEYS = frozenset({"id", "must_match", "must_event", "must_not_match", 
 MATCH_ITEM_KEYS = frozenset({"id", "pattern", "min_count"})
 EVENT_ITEM_KEYS = frozenset({"id", "event", "fields", "min_count"})
 # 이 플러그인이 아는 선택 필드(issue-db.config.yaml `signature_features`의 이름, 04-parser-matching.md §5.11 (1)).
-SUPPORTED_FEATURES = frozenset({"min_count", "sequence_within_sec"})
+# `mask-off`는 시그니처 필드가 아니라 DB 동작 선언이다(로그를 가리지 않음, `masking.is_off`, 08-safety.md §8) — 모르는 플러그인은 멈춘다.
+SUPPORTED_FEATURES = frozenset({"min_count", "sequence_within_sec", "mask-off"})
 
 
 def features_used(sig: dict) -> set[str]:
