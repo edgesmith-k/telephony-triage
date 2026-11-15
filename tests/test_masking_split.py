@@ -366,3 +366,18 @@ def test_parse_window_same_as_backend_window(tmp_path):
 
     masked, plain = _parse(log, "--mask", *BETWEEN), _parse(log, *BETWEEN)
     assert key(masked) == key(plain) and len([e for e in plain if e["event"] is None]) == 3
+
+
+def test_masker_off_changes_and_finds_nothing():
+    """마스킹 끔(`off`, 08-safety §8): 갈린 덤프 조각까지 아무것도 바꾸지 않고 찾지 않는다. """
+    imsi = "310260" + "000000000"                 # 에뮬레이터 꼴(경계 검사 때문에 나눠 쓴다)
+    lines = _split(imsi[:8], imsi[8:]) + [f"D RILJ    : imsi={imsi} ip 192.0.2.10 mCi=1234567"]
+    text = "\n".join(lines)
+    masker = masking.for_db({"signature_features": ["mask-off"]}, text, log_lines=True)
+    assert masker.off and masking.is_off({"signature_features": ["min_count", "mask-off"]})
+    assert not masking.is_off({}) and not masking.for_db({"signature_features": ["min_count"]}).off
+    assert masking.forced_lines(masker, lines) == {} and masking.forced_records(masker, _records(lines[:2])) == {}
+    assert masking.mask_lines(masker, lines) == lines and [r["msg"] for r in masking.mask_records(masker, _records(lines[:2]))] \
+        == [r["msg"] for r in _records(lines[:2])]
+    assert masker.mask(text) == text and masker.mask_value(imsi) == imsi and masker.find(text) == []
+    assert masker.counts == {} and masking.residual(text) and masking.redact(text)[1]     # 켬이면 같은 글에서 찾는다

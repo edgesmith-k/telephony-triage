@@ -63,7 +63,7 @@ MCP `tracker.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안�
     결과를 파일로 저장하고 `parse_logcat.py cut <log> --evidence <match.json> --cause <원인 ID> --out WD/<KEY>/fixtures/cut-1.log --rules SNAP/parser-rules` (parse와 같은 로그를 같은 순서로).
     종료 코드 2로 그 원인이 C=0·판정 불가라고 하면 "기존 원인 시그니처가 이 로그를 못 잡는다"고 알리고 fixture 없이(`append`만) / `update-signature` 검토를 `pr_notes`에 남김을 묻는다. `--around`로 양성 fixture를 만들지 않는다(R4가 실패한다).
   - 새 원인·유형: 새 시그니처는 계획에만 있어 스냅샷 매처로 근거를 찾을 수 없다. 발생 시각(없으면 사용자가 지정한 시각)으로
-    `parse_logcat.py cut <log> --around <시각> --out ...`. 그 fixture가 새 시그니처를 실제로 충족하는지는 7번 초안 검증(R1·R2)이 확인한다.
+    `parse_logcat.py cut <log> --around <시각> --out ... --rules SNAP/parser-rules`. 그 fixture가 새 시그니처를 실제로 충족하는지는 7번 초안 검증(R1·R2)이 확인한다.
   - fixture가 없으면 R1·R2가 `skipped: fixture 없음`(검증 못 함 — 자동 검증 없음)이 된다고 알린다.
   - 원인이 `signatures_pending`이면 그 fixture는 `"<유형 ID>:unresolved"` 기대값으로 회귀에 들어간다.
 - **수정 정보**(선택) — "이미 고쳤다"면 `ref`(fix_ref_regex)와 `fixed_in`(브랜치 필수, 빌드 선택)을 받아 `fix-submitted`로:
@@ -74,7 +74,7 @@ MCP `tracker.tools.get_issue`(매핑이 없으면 추측하지 말고 setup 안�
   2. `--resolved-fixture <logcat>`의 `db_verify resolution` 판정 **passed**. 기존 원인은
      `db_verify.py resolution --db SNAP --cause <ID> <log>`, 새 원인은
      `db_verify.py resolution --plan WD/<KEY>/plan.json --draft WD/<KEY>/draft --cause NEW-CAUSE-1 <log>`
-     (먼저 계획을 저장해야 한다). passed면 결과의 흔적 시각으로 `cut --around <ts> --tz UTC`(`--year` 없이, 판정과 같은 시각 기준 — `verify.md`)해 `add-fixture {kind: resolved}`와
+     (먼저 계획을 저장해야 한다). passed면 결과의 흔적 시각으로 `cut --around <ts> --tz UTC --rules SNAP/parser-rules`(`--year` 없이, 판정과 같은 시각 기준 — `verify.md`)해 `add-fixture {kind: resolved}`와
      `verify-resolution {cause, verification: {method, evidence: [<fixture 경로 또는 Jira 키>], by, date}}`를 넣는다(`status` 없음 — `db_verify` `suggested_ops` 그대로).
      **순서: `new-cause`/`set-resolution` 뒤에.** `signatures_pending` 원인은 해결책을 검증할 수 없다.
   - 기록 대상 Jira 자신은 근거가 아니다(그 Jira의 해결 진술은 사용자 진술이다). 근거가 없으면 `unverified`로 둔다.

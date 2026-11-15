@@ -277,7 +277,7 @@ def _around(job: Path, analysis: dict):
 
 def _generic_timeline(key: str, events: dict, around, limit: int) -> tuple[str, int, int]:
     text, kept, total = report.timeline(key, events, around, limit, None, None)
-    return masking.redact(text, events.get("mask_allow") or [])[0], kept, total
+    return (text if events.get("mask_off") else masking.redact(text, events.get("mask_allow") or [])[0]), kept, total
 
 
 def _parse_iso(value: str):
@@ -525,7 +525,7 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
     items, total = report.select_rows(rows, spec.get("around"), limit)
     text = report.render_timeline(key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
                                   spec.get("anchor"))
-    text = masking.redact(text, allow)[0]
+    text = text if events.get("mask_off") else masking.redact(text, allow)[0]
     if text.encode("utf-8") != tl:
         raise nojob(f"{TIMELINE_FILE}가 events.json과 맞지 않는다 — triage.py explore를 다시")
     anchor = spec.get("anchor") or {}
@@ -533,7 +533,8 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
     pins = [{"ts": r.get("ts"), "tag": r.get("tag"), "msg": r.get("msg")} for r in rows
             if anchor.get("fail") and r.get("ts") == anchor.get("fail")][:5]
     return {"spec": spec, "items": items, "kept": len(items), "total": total, "center": center,
-            "center_source": "실패 스텝" if anchor.get("fail") else "발생 시각", "pins": pins, "allow": allow}
+            "center_source": "실패 스텝" if anchor.get("fail") else "발생 시각", "pins": pins, "allow": allow,
+            "mask_off": bool(events.get("mask_off"))}
 
 
 # -- deep ------------------------------------------------------------------------------------------
@@ -608,7 +609,8 @@ def _deep_module(args, job, key, p, cfg, analysis, events, candidates, state, in
     if view:
         res = _view_or_fail(purpose, _filter(lib, {
             "op": "view", "mode": "deep", "events": str(job / "events.json"), "key": key, "module": fetched.module,
-            "center": None, "center_source": "근거", "evidence": ev, "pins": ev, "allow": allow, "cap_rows": limit,
+            "center": None, "center_source": "근거", "evidence": ev, "pins": ev, "allow": allow,
+            "mask_off": bool(events.get("mask_off")), "cap_rows": limit,
             "cap_bytes": VIEW_CAPS["deep"][1], "with_modem": bool(args.also), "modules": fetched.doc, "platform": p}, args), ctx)
         text, stats = res["text"], res.get("stats") or {}
         kept, total, center = stats.get("kept", 0), stats.get("pool", 0), stats.get("center")
@@ -850,8 +852,8 @@ def _explore_view_payload(job, key, p, d, explore, doc, center=None, source=None
     cap_rows, cap_bytes = VIEW_CAPS["explore_deep" if deep else "explore"]
     return {"op": "view", "mode": "explore", "events": str(job / "events.json"), "key": key, "module": d,
             "center": center or explore["center"], "center_source": source or explore["center_source"], "evidence": [],
-            "pins": explore["pins"], "allow": explore["allow"], "cap_rows": cap_rows, "cap_bytes": cap_bytes,
-            "with_modem": False, "modules": doc, "platform": p, **({"with_module": with_} if with_ else {})}
+            "pins": explore["pins"], "allow": explore["allow"], "mask_off": bool(explore.get("mask_off")), "cap_rows": cap_rows,
+            "cap_bytes": cap_bytes, "with_modem": False, "modules": doc, "platform": p, **({"with_module": with_} if with_ else {})}
 
 
 def _explore_lines(module, sha, kept, total, stats) -> list[str]:

@@ -371,6 +371,10 @@ def test_skeleton_is_clean():
     subprocess.run([sys.executable, str(REPO / "tools/make_db_skeleton.py"), str(skeleton)], check=True,
                    capture_output=True)
     assert _lint(skeleton, "--all", expect=0)["errors"] == []
+    # 새 DB는 마스킹 끔(08-safety §8): 설정에 선언 한 줄, 이 플러그인의 config check는 통과
+    assert (skeleton / "issue-db.config.yaml").read_text(encoding="utf-8").count("\nsignature_features: [mask-off]") == 1
+    proc = run("config.py", ["check", "--db", skeleton])
+    assert proc.returncode == 0 and "feature-unsupported" not in proc.stdout, proc.stdout + proc.stderr
 
 
 REJECTED = "{id: rejected, event: data_evaluation_rejected, fields: {reasons: '.*DATA_DISABLED.*'}}"
@@ -415,6 +419,37 @@ def test_signature_features_must_be_declared():
     bad = _sig_lint(features="[min_count, transaction_group]")
     assert [c for c, _ in bad] == ["config"] and "transaction_group" in bad[0][1], bad
     assert [c for c, _ in _sig_lint(features="min_count")] == ["config"]
+
+
+def test_mask_off_db_checks():
+    """마스킹 끔 DB(`signature_features: [mask-off]`, 08-safety §8): 본문·cp_evidence·Jira 기록의 원문 값은 통과한다. 패턴의 마스킹
+    토큰은 `mask-token` 오류(`fixed-token` 경고 대신), 패턴의 원본 식별자는 그대로 `raw-identifier`. `signature_features` 줄이 두 번이면
+    뒤 줄만 읽히므로 `config` 오류."""
+    def lint(features, *edits):
+        db = runner_copy(SAMPLE)
+        for rel, old, new in edits:
+            edit(db / rel, old, new)
+        if features:
+            with (db / "issue-db.config.yaml").open("a", encoding="utf-8", newline="\n") as fh:
+                fh.write("".join(f"\nsignature_features: {f}\n" for f in features))
+        result = _lint(db, "--all", expect=(0, 1))
+        return sorted({(f["code"], f["file"]) for f in result["errors"] + result["warnings"]})
+
+    raw = [(f"{D}/type.md", "## 증상\n\n", "## 증상\n\n주소 192.0.2.15, imsi=310260" "000000000.\n\n"),
+           (f"{D}/issues/MOCK-1101.yaml", "note: 모바일", "failed_step: 3 | 192.0.2.15 연결\nnote: 모바일")]
+    assert lint(["[mask-off]"], *raw) == []
+    assert {c for c, _ in lint(None, *raw)} == {"raw-identifier"}                 # 선언 없는 DB는 지금처럼 막는다
+    token = (f"{D}/type.md", r"must_not_match: ['RILJ.*>\s*SETUP_DATA_CALL']", r"must_not_match: ['RILJ.*>\s*SETUP_DATA_CALL', '\bcid=<CELL#1>']")
+    assert lint(["[mask-off]"], token) == [("mask-token", f"{D}/type.md")]
+    assert lint(None, token) == [("fixed-token", f"{D}/type.md")]
+    focus = ("issue-db.config.yaml", "  map: []", "  map: [{pattern: 'host\\d+ 연결', types: [DATA-001], categories: []}]")
+    assert lint(["[mask-off]"], focus) == [("mask-token", "issue-db.config.yaml")]
+    ident = (f"{D}/type.md", r"must_not_match: ['RILJ.*>\s*SETUP_DATA_CALL']", r"must_not_match: ['RILJ.*>\s*SETUP_DATA_CALL', '\bip 192\.0\.2\.15']")
+    assert lint(["[mask-off]"], ident) == [("raw-identifier", f"{D}/type.md")]
+    assert lint(["[mask-off]", "[min_count]"]) == [("config", "issue-db.config.yaml")]
+    import db_lint
+    assert db_lint.MASK_TOKEN_RE.search(r"\bhost\d+ 연결") and db_lint.MASK_TOKEN_RE.search("host[0-9]+ 연결")
+    assert not db_lint.MASK_TOKEN_RE.search(r"ghost\d+") and not db_lint.MASK_TOKEN_RE.search("<UNKNOWN>")
 
 
 def test_min_count_and_sequence_within_sec_format_errors():

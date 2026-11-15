@@ -70,8 +70,10 @@ import trackers  # noqa: E402
 
 SUGGEST_DIR = "skill-suggestions"
 GUIDE = "스킬 제안 patch(적용 안 함, 마스킹됨): {path} — 직접 검토해 스킬 소스의 dev 브랜치에 git apply, main에는 PR로 반영"
+GUIDE_OFF = "스킬 제안 patch(적용 안 함): {path} — 직접 검토해 스킬 소스의 dev 브랜치에 git apply, main에는 PR로 반영"   # 마스킹 끔 DB
 MEMO = "스킬 제안 patch 없음(직접 반영할 메모): {reason}"
 APPLY_OFFER = "스킬 소스 적용 대기: {source} — 아래 patch(마스킹됨, sha256 {sha})를 그대로 보이고 바로 적용할지 묻는다"
+APPLY_OFFER_OFF = "스킬 소스 적용 대기: {source} — 아래 patch(sha256 {sha})를 그대로 보이고 바로 적용할지 묻는다"     # 마스킹 끔 DB
 MASKED_NOTE = " — 추가 줄 {n}개가 마스킹으로 바뀜 — placeholder가 소스에 들어간다"
 OFFER_MAX_LINES, OFFER_MAX_BYTES = 200, 12288    # 화면에 patch 전문을 보일 수 있는 크기까지만 바로 적용을 제안한다
 APPLY_NO = "스킬 소스에 바로 적용할 수 없음(patch만 남김): {reason}"
@@ -99,8 +101,8 @@ def safe_name(raw: str) -> str:
 # -- 작업 디렉토리 --------------------------------------------------------------------------------
 
 
-def job_dir(args, defaults: dict) -> tuple[Path, list[str]]:
-    """`(JOB, mask.allow_patterns)`. 키 형식은 트래커 `safe_key_re`·스냅샷 `tracker.key_regex`(issue_post와 같다)."""
+def job_dir(args, defaults: dict) -> tuple[Path, dict]:
+    """`(JOB, 스냅샷 issue-db.config.yaml)` — 마스킹은 그 설정대로(`masking.for_db`). 키 형식은 트래커 `safe_key_re`·스냅샷 `tracker.key_regex`(issue_post와 같다)."""
     user = userconfig.load_user()
     if user is None:
         raise Usage("사용자 config가 없다 — /telephony-triage:setup 을 먼저 한다")
@@ -129,7 +131,7 @@ def job_dir(args, defaults: dict) -> tuple[Path, list[str]]:
         done = None
     if (done or userconfig.TOP_PROFILE) != name and (job / "analysis.json").is_file():
         raise Usage(f"이 분석은 {done or userconfig.TOP_PROFILE} 플랫폼이다(선택한 플랫폼: {name}) — --platform으로 다시 실행한다")
-    return job, list((db_cfg.get("mask") or {}).get("allow_patterns") or [])
+    return job, db_cfg
 
 
 # -- 사본 → diff ----------------------------------------------------------------------------------
@@ -209,9 +211,9 @@ def file_diff(rel: str, src: Path, dst: Path) -> tuple[str, int, int]:
     return "".join(out), add, rem
 
 
-def mask_patch(text: str, allow: list[str]) -> str:
+def mask_patch(text: str, db_cfg: dict) -> str:
     """`mask_pii.py` 치환 모드와 같다: 마스커 하나(기존 토큰 다음 번호부터), `\\n`으로 나눈 줄마다."""
-    masker = masking.new_masker(text, allow)
+    masker = masking.for_db(db_cfg, text)
     return "\n".join(masker(line) for line in text.split("\n"))
 
 
@@ -250,7 +252,7 @@ def apply_check(sk: Path, patch: str) -> str | None:
 # -- 실행 -----------------------------------------------------------------------------------------
 
 
-def build(job: Path, sk_arg: str, name: str, allow: list[str]) -> tuple[str, list[dict]]:
+def build(job: Path, sk_arg: str, name: str, db_cfg: dict) -> tuple[str, list[dict]]:
     """`(마스킹된 patch, 파일별 {path, added, removed})`. 실패는 Memo."""
     sk = Path(sk_arg).expanduser()
     if not str(sk_arg or "").strip() or not sk.is_dir():
@@ -269,7 +271,7 @@ def build(job: Path, sk_arg: str, name: str, allow: list[str]) -> tuple[str, lis
         raise Memo("사본이 스킬 디렉토리 원본과 같다(바뀐 파일 없음)")
     raw = "".join(pieces)
     try:
-        masked = mask_patch(raw, allow)
+        masked = mask_patch(raw, db_cfg)
     except masking.AllowPatternError as exc:
         raise Usage(f"mask.allow_patterns 오류: {exc}") from exc
     bad = changed_context(raw, masked)
@@ -284,13 +286,13 @@ def build(job: Path, sk_arg: str, name: str, allow: list[str]) -> tuple[str, lis
 
 
 def run(args, defaults: dict) -> tuple[dict, int]:
-    job, allow = job_dir(args, defaults)
+    job, db_cfg = job_dir(args, defaults)
     name = safe_name(args.name)
     out = job / SUGGEST_DIR / f"{name}.patch"
     meta = job / SUGGEST_DIR / f"{name}.meta.json"
     try:
         try:
-            patch, files = build(job, args.skill_dir, name, allow)
+            patch, files = build(job, args.skill_dir, name, db_cfg)
         except OSError as exc:      # 읽기·임시 사본 복사 실패(shutil.Error 포함)
             raise Memo(f"파일을 읽거나 복사하지 못했다({type(exc).__name__})") from exc
     except Memo as exc:
@@ -313,7 +315,9 @@ def run(args, defaults: dict) -> tuple[dict, int]:
         raise
     sha = hashlib.sha256(data).hexdigest()
     sk = str(Path(args.skill_dir).expanduser().resolve())
-    lines = [GUIDE.format(path=out.absolute())] + [f"- {f['path']} +{f['added']} −{f['removed']}" for f in files]
+    off = masking.is_off(db_cfg)     # 끔 DB면 patch를 가리지 않았으므로 "마스킹됨"을 쓰지 않는다
+    guide, offer_fmt = (GUIDE_OFF, APPLY_OFFER_OFF) if off else (GUIDE, APPLY_OFFER)
+    lines = [guide.format(path=out.absolute())] + [f"- {f['path']} +{f['added']} −{f['removed']}" for f in files]
     doc = {"status": "ok", "patch": str(out.absolute()), "files": files, "sha256": sha}
     offered = None
     src_raw = configured_source(args)
@@ -329,7 +333,7 @@ def run(args, defaults: dict) -> tuple[dict, int]:
         else:
             masked_n = getattr(build, "masked_added", 0)
             fence = _fence(patch)
-            lines += [APPLY_OFFER.format(source=src, sha=sha) + (MASKED_NOTE.format(n=masked_n) if masked_n else ""),
+            lines += [offer_fmt.format(source=src, sha=sha) + (MASKED_NOTE.format(n=masked_n) if masked_n else ""),
                       f"{fence}diff", *patch.rstrip("\n").split("\n"), fence]
             doc["apply"] = {"offer": True, "sha256": sha, "masked_added": masked_n}
             offered = str(src)

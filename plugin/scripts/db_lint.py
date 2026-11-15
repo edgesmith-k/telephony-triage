@@ -18,6 +18,8 @@
 - `fixture-missing` 경고: active 원인에 양성 fixture 없음
 - `raw-identifier` 오류: 시그니처·extractor 패턴, Jira `note`, 원인 `cp_evidence`, 유형 본문의 원본 식별자
 - `fixed-token` 경고: 시그니처·extractor가 특정 마스킹 번호(`<CELL#1>`)를 고정
+- 마스킹 끔 DB(`signature_features: [mask-off]`, 08-safety.md §8.2): 본문·`cp_evidence`·Jira 기록의 `raw-identifier`는 보지 않는다(패턴은 그대로).
+  `mask-token` 오류: 시그니처·extractor·`step_events`·`step_focus` 패턴에 마스커가 만드는 토큰(끔 로그에는 없다). `fixed-token`은 내지 않는다
 - `regex-unsafe` 오류: 중첩 수량자·겹치는 선택지 반복·역참조 (04 §5.8 (4), 정적·보수적)
 - `mask-allow-too-broad` 오류: `mask.allow_patterns` 패턴이 합성 PII 표본(IMSI·IMEI·IP·MAC·EMAIL·MSISDN 3형식·ICCID) 하나에
   통째로 맞음. 같은 목록의 정규식 오류·형식 오류는 `schema`, 안전성은 `regex-unsafe`
@@ -27,7 +29,7 @@
   `raw-identifier`·`fixed-token`·`regex-unsafe`
 - `sequence`·`signature` 오류: sequence의 없는 id·중복 id·must_not_match 참조, 시그니처 형식
 - `signature-feature` 오류: 시그니처가 쓰는 선택 필드(`min_count` ≥ 2·`sequence_within_sec`)가 `issue-db.config.yaml`
-  `signature_features`에 선언되지 않음. 그 목록이 문자열 목록이 아니거나 플러그인이 모르는 이름이면 `config` 오류
+  `signature_features`에 선언되지 않음. 그 목록이 문자열 목록이 아니거나 플러그인이 모르는 이름이거나 줄이 두 번이면 `config` 오류
 - `symptom-missing`·`signatures-missing` 오류, `signatures-pending` 경고, `pending-on-type`·`pending-verified` 오류
 - `builtin-event`·`ext-event` 오류: 현재 백엔드 `builtin_events()`에 없는 `builtin.*`, 이슈 DB `external_parsers`에
   없는 카테고리의 `ext.*`
@@ -94,6 +96,10 @@ from common.signatures import (  # noqa: E402
 
 TOKEN_FIXED_RE = re.compile(r"<[A-Z][A-Z0-9]*#\d+>")
 FLOW_TOKEN_RE = re.compile(r"<[A-Z][A-Z0-9]+(?:\\?#|\\?>| (?:\\d|\d))")  # `<IP#…>`·`<IMSI>`·`<HEXDUMP nB>`(`\<IP\#1\>`도) — 흐름은 가리지 않은 글에서 찾는다
+# 마스커가 만드는 종류의 토큰만(`<IP#…>`·`<HEXDUMP nB>`·`<REDACTED:…>`·`host<n>` — `\bhost\d+`·`host[0-9]+`도) — 마스킹 끔 DB에서는
+# 로그에 생기지 않는다(`mask-token`)
+MASK_TOKEN_RE = re.compile(r"<(?:%s)(?:\\?#|\\?>| (?:\\d|\d)|:)|(?:(?<![\w.-])|(?<=\\[A-Za-z]))host(?:\\d|\d|\[0-9)"
+                           % "|".join(sorted({r.kind for r in masking.RULES} | {"REDACTED"})))
 KEBAB_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SIG_KINDS = ("symptom_signatures", "signatures", "recovery_signatures", "scenario_signatures")
 TYPE_TITLE_MAX, CAUSE_TITLE_MAX = 30, 20
@@ -254,6 +260,7 @@ class Linter:
         self.key_re = self._compile_cfg("tracker.key_regex")
         self.fix_ref_re = self._compile_cfg("fix_ref_regex")
         self._check_mask_allow()
+        self.mask_off = masking.is_off(self.config)     # 마스킹 끔 DB(08-safety §8): 본문·기록 검사는 끄고 패턴 토큰을 막는다
         self.root_keys = set(self.config.get("code_root_keys") or [])
         self.external_cats = set((self.config.get("external_parsers") or {}).keys())
         self._check_platform_config()
@@ -384,6 +391,7 @@ class Linter:
                 unsafe = unsafe_regex(item["pattern"])
                 if unsafe:
                     self.err("regex-unsafe", cfg, f"{where}.pattern {item['pattern']!r}에 {unsafe}이(가) 있습니다.")
+                self._check_mask_token(cfg, where, item["pattern"])
             for name, known, label in (("types", type_ids, "유형"), ("categories", set(self.categories), "카테고리")):
                 values = item.get(name) or []
                 if not isinstance(values, list):
@@ -503,6 +511,12 @@ class Linter:
         선언된 이름은 `self.declared_features` — 시그니처가 쓰는 선택 필드와 대조한다(`_check_signature`)."""
         value = self.config.get("signature_features")
         self.declared_features: set[str] = set()
+        try:     # YAML은 같은 키가 두 번이면 뒤 줄이 조용히 이긴다 — `mask-off` 줄 뒤에 새 줄을 더하면 다시 가린다
+            twice = len(re.findall(r"(?m)^signature_features\s*:", (self.root / issuedb.CONFIG).read_text(encoding="utf-8"))) > 1
+        except OSError:
+            twice = False
+        if twice:
+            self.err("config", issuedb.CONFIG, "signature_features 줄이 두 번 있다 — 뒤 줄만 읽히므로 한 목록으로 합친다")
         if value is None:
             return
         if not isinstance(value, list) or not all(isinstance(f, str) for f in value):
@@ -615,7 +629,7 @@ class Linter:
                                              f"{type_id} 제목은 증상 형태로 끝낸다(\"~하지 않음\"·\"~됨\"·\"끊김\"): {data.get('title')}")
         body = type_md.read_text(encoding="utf-8").split("\n---\n", 1)
         if len(body) == 2:
-            for hit in masking.new_masker().find(body[1]):
+            for hit in masking.new_masker(off=self.mask_off).find(body[1]):
                 self.err("raw-identifier", type_md, f"본문에 마스킹되지 않은 {hit['kind']}가 있습니다.")
                 break
         for kind in SIG_KINDS[:1]:
@@ -708,7 +722,7 @@ class Linter:
         if fixture and not (type_md.parent / fixture).is_file():
             self.err("evidence-missing", type_md, f"{cid}: fix.verification.fixture {fixture}가 없습니다.")
         if cause.get("cp_evidence"):
-            for hit in masking.new_masker().find(str(cause["cp_evidence"])):
+            for hit in masking.new_masker(off=self.mask_off).find(str(cause["cp_evidence"])):
                 self.err("raw-identifier", type_md, f"{cid}: cp_evidence에 마스킹되지 않은 {hit['kind']}가 있습니다.")
                 break
         if cause.get("flow_step"):
@@ -830,16 +844,25 @@ class Linter:
                 self.err("ext-event", type_md,
                          f"{key}: {name} — 카테고리 '{category}'가 이슈 DB external_parsers에 없습니다.")
 
-    def _check_pattern(self, path, key, pattern, hint="마스킹된 로그 기준으로 쓴다") -> None:
+    def _check_pattern(self, path, key, pattern, hint=None) -> None:
+        """`hint`가 있으면 흐름 패턴(토큰은 `flow-token`이 따로 본다)."""
         reason = raw_identifier_in_pattern(pattern)
         if reason:
-            self.err("raw-identifier", path, f"{key}: 패턴 {pattern!r}에 {reason} — {hint}.")
-        if TOKEN_FIXED_RE.search(pattern):
+            off_hint = "실제 값 대신 값의 모양(정규식)으로 쓴다" if self.mask_off else "마스킹된 로그 기준으로 쓴다"
+            self.err("raw-identifier", path, f"{key}: 패턴 {pattern!r}에 {reason} — {hint or off_hint}.")
+        if hint is None:
+            self._check_mask_token(path, key, pattern)
+        if TOKEN_FIXED_RE.search(pattern) and not self.mask_off:   # 끔 DB면 `mask-token`이 대신 본다(안내가 반대라)
             self.warn("fixed-token", path, f"{key}: 패턴 {pattern!r}이 특정 마스킹 번호를 고정합니다. "
                                            "<CELL#\\d+>처럼 종류로 쓴다.")
         unsafe = unsafe_regex(pattern)
         if unsafe:
             self.err("regex-unsafe", path, f"{key}: 패턴 {pattern!r}에 {unsafe}이(가) 있습니다.")
+
+    def _check_mask_token(self, path, key, pattern) -> None:
+        if self.mask_off and MASK_TOKEN_RE.search(pattern):
+            self.err("mask-token", path, f"{key}: 패턴 {pattern!r}에 마스킹 토큰이 있습니다 — 이 이슈 DB는 로그를 가리지 않아"
+                                         "(signature_features: mask-off) 새 분석에는 맞지 않습니다. 원문 모양으로 씁니다.")
 
     # fixture ---------------------------------------------------------------------
 
@@ -1005,7 +1028,7 @@ class Linter:
                     self.err("issue-cause", path, f"cause {cause}가 유형 {type_id}의 원인이 아닙니다.")
                 for field in ("note", "failed_step"):
                     if record.get(field):
-                        for hit in masking.new_masker().find(str(record[field])):
+                        for hit in masking.new_masker(off=self.mask_off).find(str(record[field])):
                             self.err("raw-identifier", path, f"{field}에 마스킹되지 않은 {hit['kind']}가 있습니다.")
                             break
 

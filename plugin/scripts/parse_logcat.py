@@ -573,7 +573,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
     if args.mask:
         # 입력에 이미 있는 토큰의 다음 번호부터 준다 (부분 마스킹된 로그, fixture 재파싱). NUL 든 줄은 버린다(재리뷰 RR-2)
         texts, nul_refs, warnings = _nul_lines(paths, "parse-nul")
-        masker = masking.new_masker(texts, _allow_patterns(db_cfg), log_lines=True)
+        masker = masking.for_db(db_cfg, texts, log_lines=True)    # 끔 DB면 아무것도 가리지 않는다(08-safety §8)
         # 시간 창 밖에 갈린 덤프 조각이 있을 수 있으면 창 없이 읽고 묶은 뒤 자른다(백엔드 인터페이스 무변경)
         post_window = window if window and dumpjoin.mark() in texts else None
 
@@ -688,6 +688,8 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
         "errors": errors,
         "events": events,
     }
+    if masker is not None and masker.off:   # 마스킹 끔 DB: `masked`는 그대로 true(매칭 관문), 하류 보기·점검은 가리지 않는다
+        out["mask_off"] = True
     if uncollected:      # 최상위, 있을 때만(없으면 출력이 이전과 같다)
         out["uncollected_tags"] = uncollected
     if unextracted:      # 같은 규칙: 수집 태그 W/E/F 줄인데 이벤트로 추출 안 된 줄 (후보 없음 힌트, 분류·점수에 안 씀)
@@ -783,7 +785,7 @@ def _step_event_hits(raw: list[dict], specs: list[dict | None], paths: list[Path
     hits: list[dict] = []
     masker = None
     if any(sp and sp["kind"] in ("match", "event") for sp in specs):
-        masker = masking.new_masker(_read_texts(paths), _allow_patterns(db_cfg), log_lines=True)
+        masker = masking.for_db(db_cfg, _read_texts(paths), log_lines=True)
     line_idx = [i for i, r in enumerate(raw) if r.get("event") is None]
 
     for rule, sp in enumerate(specs):             # ril
@@ -912,7 +914,7 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
                 done = set(found)
                 remaining = [i for i in remaining if i not in done]
         if hits:
-            masker = masking.new_masker(log_text, _allow_patterns(db_cfg), log_lines=True)
+            masker = masking.for_db(db_cfg, log_text, log_lines=True)
             forced = masking.forced_records(masker, records)      # 갈린 덤프 조각(08-safety §8), 전체에서 한 번
             for i in sorted(hits):
                 off = len(texts[i]) - len(str(records[i]["msg"]))
@@ -978,7 +980,7 @@ def flow_check(paths: list[Path], rules_dir: Path, defaults: dict, tz: str | Non
 
     def mask(i: int) -> str:
         if not lazy:
-            masker = masking.new_masker(log_text, _allow_patterns(db_cfg), log_lines=True)
+            masker = masking.for_db(db_cfg, log_text, log_lines=True)
             lazy.extend((masker, masking.forced_records(masker, records)))      # 갈린 덤프 조각(08-safety §8), 전체에서 한 번
         off = len(texts[i]) - len(str(records[i]["msg"]))
         return lazy[0].mask(texts[i], [(a + off, b + off, *rest) for a, b, *rest in lazy[1].get(i, ())])
@@ -1016,7 +1018,7 @@ def run_extract_bugreport(args, profile: platforms.PlatformProfile | None = None
 
 # -- mask-copy (종합 리뷰 G① 축소판) --------------------------------------------------
 
-MASK_COPY_MAX_BYTES = 64 * 1024 * 1024    # 마스킹은 약 1초/MB(사외 실측) — 이보다 크면 건너뛰고 원문 구간 읽기 규칙만 남는다
+MASK_COPY_MAX_BYTES = 64 * 1024 * 1024    # 마스킹은 약 1초/MB(사외 실측) — 이보다 크면 건너뛰고 원문 구간 읽기 규칙만 남는다(끔 DB는 상한 없음)
 MASK_COPY_INDEX = "index.json"
 
 
@@ -1036,6 +1038,7 @@ def run_mask_copy(args) -> dict:
     """로그마다 마스킹 사본(줄 수·줄 번호 그대로)을 `--out/<이름>`에 쓴다 — analyze가 원문을 받자마자 만들어 모델의 grep·sed·Read 대상으로
     안내한다(guard 규칙 10 문구·rules.md). 한 masker로 모든 파일을 가려 토큰 번호가 파일 사이에 일관되고, 갈린 덤프 조각(08-safety §8)은
     파일 전체 줄로 묶어 강제 구간을 준다(`cut`과 같다). `--max-bytes`보다 큰 파일은 건너뛰고(경고 `mask-copy-skipped`) index.json에 남긴다.
+    마스킹 끔 DB(`--rules`, 08-safety §8)면 가리지 않은 사본(UTF-8 변환·NUL 줄 비움만)을 만들고 `--max-bytes`를 보지 않는다(복사는 빠르다).
     사본의 mtime은 원본과 같다(analyze가 사본을 파싱하므로 로그 파일 시각 기반 연도 추정이 바뀌지 않는다, 코덱스 리뷰 R1).
     다시 실행하면 이전 index.json이 관리하던 사본만 지우고 바꾼다(그 밖의 파일은 건드리지 않는다, 코덱스 리뷰 R3).
     출력: {out, files: [{name, path|null, source, bytes, lines|null, skipped, reason?}], replacements, warnings}."""
@@ -1045,11 +1048,12 @@ def run_mask_copy(args) -> dict:
             raise UsageError(f"로그 파일이 없습니다: {p}")
     if args.max_bytes <= 0:
         raise UsageError("--max-bytes는 0보다 크다")
-    allow = _allow_patterns(compat.load_db_config(Path(args.rules).parent)) if args.rules else []
+    db_cfg = compat.load_db_config(Path(args.rules).parent) if args.rules else {}
+    off = masking.is_off(db_cfg)
     todo, skipped = [], []
     for p in paths:
         size = p.stat().st_size
-        (todo if size <= args.max_bytes else skipped).append((p, size))
+        (todo if off or size <= args.max_bytes else skipped).append((p, size))
     texts, warnings = {}, []
     for p, _ in todo:
         with logtime.open_log(p) as fh:
@@ -1058,7 +1062,7 @@ def run_mask_copy(args) -> dict:
         if nul:
             warnings.append({"code": "mask-copy-nul", "message": masking.nul_warning(
                 nul, len(lines) - (lines[-1] == ""), p.name)})
-    masker = masking.new_masker("\n".join(texts.values()), allow, log_lines=True)
+    masker = masking.for_db(db_cfg, None if off else "\n".join(texts.values()), log_lines=True)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     # 새 사본은 임시 폴더에 먼저 쓰고, 다 되면 이전 index.json이 관리하던 사본만 지운 뒤 옮긴다(코덱스 리뷰 R3: 전에는 덮어쓰기만
@@ -1070,15 +1074,18 @@ def run_mask_copy(args) -> dict:
     tmp.mkdir()
     files, used = [], set()
     for p, size in todo:
-        lines = texts[p].split("\n")
-        forced = masking.forced_lines(masker, lines)
-        masked = [masker.mask(ln, forced.get(i)) for i, ln in enumerate(lines)]
+        text = texts[p]
+        n_lines = text.count("\n") + (text != "" and not text.endswith("\n"))
+        if not off:     # 끔이면 합친 글·줄 목록·줄별 mask 없이 원문을 바로 쓴다(상한이 없어 큰 파일이 온다)
+            lines = text.split("\n")
+            forced = masking.forced_lines(masker, lines)
+            text = "\n".join(masker.mask(ln, forced.get(i)) for i, ln in enumerate(lines))
         name = _unique_name(p.name, used)
-        (tmp / name).write_text("\n".join(masked), encoding="utf-8", newline="")
+        (tmp / name).write_text(text, encoding="utf-8", newline="")
         st = p.stat()
         os.utime(tmp / name, (st.st_atime, st.st_mtime))     # 연도 추정(file-mtime)이 사본에서도 같게 — analyze는 사본을 파싱한다
         files.append({"name": name, "path": str(out / name), "source": str(p), "bytes": size,
-                      "lines": len(lines) - (1 if lines and lines[-1] == "" else 0), "skipped": False})
+                      "lines": n_lines, "skipped": False})
     for p, size in skipped:
         files.append({"name": p.name, "path": None, "source": str(p), "bytes": size, "lines": None, "skipped": True,
                       "reason": f"{size:,}B > --max-bytes {args.max_bytes:,}B"})
@@ -1251,11 +1258,12 @@ def run_cut(args, profile: platforms.PlatformProfile | None = None) -> dict:
     if len(chosen) > args.max_lines:
         raise UsageError(f"근거 줄만 {len(chosen)}줄이라 --max-lines {args.max_lines}를 넘습니다.")
 
-    allow = []
-    if args.rules:
-        allow = _allow_patterns(compat.load_db_config(Path(args.rules).parent))
+    db_cfg = compat.load_db_config(Path(args.rules).parent) if args.rules else {}
+    if not args.rules:   # 이슈 DB 설정(허용 패턴·마스킹 끔)을 모르면 늘 가린다 — 끔 DB의 fixture면 분석 글과 달라진다
+        warnings.append({"code": "cut-no-rules", "message": "--rules가 없어 이슈 DB 설정 없이 가렸다 — fixture로 쓸 것이면 "
+                                                            "--rules SNAP/parser-rules를 붙여 다시 자른다"})
     texts = [lines[j][2] for j in chosen]
-    masker = masking.new_masker("\n".join(texts), allow, log_lines=True)
+    masker = masking.for_db(db_cfg, "\n".join(texts), log_lines=True)
     # 갈린 덤프 조각은 파일마다 전체 줄로 묶은 뒤 고른 줄에 적용한다(조각 1이 범위 밖이어도 조각 2를 가린다, 08-safety §8)
     forced: dict[int, list] = {}
     for file_index in sorted({entry[0] for entry in lines}):
@@ -1336,7 +1344,7 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--cause", metavar="원인 ID", help="--evidence에서 근거를 쓸 원인 (--evidence에 필수)")
     c.add_argument("--seconds", type=float, default=30, help="--around 앞뒤 초")
     c.add_argument("--out", metavar="file", required=True)
-    c.add_argument("--rules", default=None, help="<db>/parser-rules (mask.allow_patterns를 읽는다)")
+    c.add_argument("--rules", default=None, help="<db>/parser-rules (mask.allow_patterns·마스킹 끔을 읽는다)")
     c.add_argument("--context", type=int, default=20)
     c.add_argument("--max-lines", type=int, default=100)
     c.add_argument("--tz", metavar="IANA")
@@ -1344,7 +1352,7 @@ def build_parser() -> argparse.ArgumentParser:
     m = sub.add_parser("mask-copy", parents=[common], help="로그 → 마스킹 사본(줄 번호 그대로; 모델이 grep·sed·Read할 대상)")
     m.add_argument("logs", metavar="logcat", nargs="+")
     m.add_argument("--out", metavar="dir", required=True, help="사본 디렉토리(<작업 디렉토리>/logs-masked)")
-    m.add_argument("--rules", default=None, help="<db>/parser-rules (mask.allow_patterns를 읽는다)")
+    m.add_argument("--rules", default=None, help="<db>/parser-rules (mask.allow_patterns·마스킹 끔을 읽는다)")
     m.add_argument("--max-bytes", type=int, default=MASK_COPY_MAX_BYTES,
                    help=f"이보다 큰 파일은 사본을 만들지 않는다(경고 mask-copy-skipped, 기본 {MASK_COPY_MAX_BYTES})")
     return parser

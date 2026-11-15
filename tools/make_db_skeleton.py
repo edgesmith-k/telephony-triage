@@ -33,6 +33,9 @@ parser-rules는 샘플(android 문구)을 쓰지 않고 스키마 최소 placeho
 좁힌다, 예: `mock-org\\.mock-issues-\\d+`). 트래커 이름은 레지스트리(`plugin/scripts/trackers`)로 확인한다. jira면 결과는 옵션 없을
 때와 같다.
 
+마스킹 끔(08-safety.md §8): 새 DB는 기본이 끔이다. 어느 변형이든 설정의 `mask:` 앞에 `signature_features: [mask-off]` 한 줄을
+넣는다(샘플 설정에는 없다 — 샘플은 가리는 DB다). 가리게 하려면 그 줄을 지운다.
+
 CLI:
     python3 tools/make_db_skeleton.py <out_dir> [--platform NAME] [--tracker KIND] [--force] [--json]
 """
@@ -83,6 +86,11 @@ SKELETON_NOTE = (
     "# reason이 placeholder로 시작하는 규칙은 실제 로그로 확인하지 않은 것이다 — S-4에서\n"
     "# update-parser-rule로 바꾸거나 remove-parser-rule로 지운다.\n"
 )
+
+# 새 DB의 마스킹 끔 선언(08-safety.md §8). 샘플 설정의 `mask:` 줄 앞에 넣는다
+MASK_OFF_LINE = ("signature_features: [mask-off]       # 로그를 가리지 않는다(08-safety.md §8) — 이 이름을 빼면 가린다. "
+                 "다른 선언은 이 목록에 더한다(줄을 새로 만들지 않는다)\n")
+MASK_KEY_RE = re.compile(r"^mask:", re.MULTILINE)
 
 # 카테고리 디렉토리는 issue-db.config.yaml의 categories에서 읽는다.
 CATEGORY_RE = re.compile(r"^\s*-\s*\{key:\s*([a-z][a-z0-9_]*)\s*,", re.MULTILINE)
@@ -231,10 +239,13 @@ def make(out: Path, force: bool = False, platform: str | None = None, tracker: s
             raise SystemExit(f"샘플에 없습니다: {rel}")
         dst = out / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
-        if rel == "issue-db.config.yaml" and not (is_default and jira_db):
+        if rel == "issue-db.config.yaml":      # 기본 변형도 글로 읽어 끔 줄을 넣는다(그대로 복사하지 않는다)
             text = src.read_text(encoding="utf-8")
             text = text if is_default else _platform_config(text, spec, version)
-            _write(dst, text if jira_db else _tracker_config(text, tracker_spec))
+            text = text if jira_db else _tracker_config(text, tracker_spec)
+            if "signature_features:" in text or len(MASK_KEY_RE.findall(text)) != 1:
+                raise SystemExit("샘플 설정에 signature_features가 이미 있거나 mask: 줄이 하나가 아니다 — 끔 줄을 넣을 자리를 모른다")
+            _write(dst, MASK_KEY_RE.sub(lambda m: MASK_OFF_LINE + m.group(0), text))
         else:
             shutil.copy2(src, dst)
         created.append(rel)

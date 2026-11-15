@@ -36,9 +36,10 @@ ROWS = [("2026-09-20T15:10:00.100Z", "ofonod", "I", "src/gprs.c:gprs_attach() at
 EXTRA_ROW = ("2026-09-20T15:20:09.000Z", "datad2", "I", "policy table refreshed for interface rmnet_data7 entries=12")
 
 
-def _events(rows=ROWS, allow=()) -> dict:
+def _events(rows=ROWS, allow=(), mask_off=False) -> dict:
     return {"events": [{"ts": ts, "tag": tag, "level": lv, "msg": msg, "phone_id": 0, "event": None} for ts, tag, lv, msg in rows],
-            "input": {"window": {"start": "2026-09-20T15:00:00Z", "end": "2026-09-20T15:30:00Z"}}, "mask_allow": list(allow)}
+            "input": {"window": {"start": "2026-09-20T15:00:00Z", "end": "2026-09-20T15:30:00Z"}}, "mask_allow": list(allow),
+            **({"mask_off": True} if mask_off else {})}
 
 
 def _sha(p: Path) -> str:
@@ -50,13 +51,14 @@ def _report(line: str, sub: list[str] = ()) -> str:
 
 
 def make_job(base: Path, purpose: str = "deep", mode: str = "module", line: str | None = None, *, analyzer=None,
-             rows=ROWS, timeline_rows=None, allow=(), record: bool = True, failed_step: str | None = None) -> Path:
+             rows=ROWS, timeline_rows=None, allow=(), record: bool = True, failed_step: str | None = None,
+             mask_off: bool = False) -> Path:
     """JOB 하나. mode: module(모듈 기록) | skill(설치 스킬 기록) | none(기록 없음) | explore(뷰 기록) | plain(JOB/timeline.md만)."""
     job = base / KEY
     job.mkdir(parents=True)
-    ev = _events(rows, allow)
+    ev = _events(rows, allow, mask_off)
     (job / "events.json").write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
-    tl_ev = _events(timeline_rows if timeline_rows is not None else rows, allow)
+    tl_ev = _events(timeline_rows if timeline_rows is not None else rows, allow, mask_off)
     text, kept, total = report.timeline(KEY, tl_ev, "2026-09-20T15:10:02Z", 200, failed_step)
     if analyzer is None:
         analyzer = {"category": "data", "when": "ask"} if mode == "module" else {"skill": "mock-data-analyzer", "when": "ask"}
@@ -334,6 +336,17 @@ def test_residual_hit_is_masking_failure(tmp_path, capsys, monkeypatch):
     code, data, _ = check(job, capsys=capsys)
     assert code == 1 and data == {"reason": "마스킹 점검 실패", "detail": "마스킹 점검 실패(IMSI 1건)", "next": core.NEXT_CHECK_FAILED}
     assert _line(job) == "- 심층 분석 생략: 마스킹 점검 실패(IMSI 1건)"
+
+
+def test_mask_off_events_leave_output_and_timeline_unmasked(tmp_path, capsys):
+    """마스킹 끔 DB의 events(`mask_off`, 08-safety §8): 출력을 다시 가리지 않고 남은 식별자 점검도 하지 않는다. 타임라인 머리말에 "마스킹된"이 없다."""
+    job = make_job(tmp_path, mask_off=True)
+    body = _deep_out([Q1], against="imsi=310260" + "000000000 가입자 문제 아님")
+    (job / "deep-output.md").write_text(body, encoding="utf-8")
+    code, data, _ = check(job, capsys=capsys)
+    assert code == 0 and (job / "deep-output.md").read_text(encoding="utf-8") == body, data
+    head = (job / "module-skill" / "deep" / "timeline.md").read_text(encoding="utf-8").split("\n")[2]
+    assert head.startswith("- 이벤트 요약이다(원문 로그 아님)"), head
 
 
 def test_output_file_rewritten_masked(tmp_path, capsys):

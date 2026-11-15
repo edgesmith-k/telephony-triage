@@ -60,7 +60,7 @@ class EntityOps:
             if key == "signatures" and pending:
                 out["signatures_pending"] = True
             if key == "related" and body.get("cp_evidence"):
-                out["cp_evidence"] = masking.new_masker(allow_patterns=self.allow).mask(str(body["cp_evidence"]))
+                out["cp_evidence"] = masking.for_db(self.config).mask(str(body["cp_evidence"]))
         out.update(values)
         return out
 

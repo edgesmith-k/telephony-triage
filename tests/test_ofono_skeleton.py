@@ -438,6 +438,7 @@ def test_make_db_skeleton_platform_ofono_passes_lint():
     assert json.loads(proc.stdout)["platform"] == "ofono"
     cfg = (out / "issue-db.config.yaml").read_text(encoding="utf-8")
     assert "platform: ofono" in cfg and "name: ofono_reference" in cfg and "code_root_keys: [ofono]" in cfg
+    assert cfg.count("\nsignature_features: [mask-off]") == 1               # 플랫폼 변형도 마스킹 끔(08-safety §8)
     assert "DNC-" not in (out / "parser-rules" / "tags.yaml").read_text(encoding="utf-8")
     lint = run_json("db_lint.py", ["--db", out, "--all"])
     assert lint["summary"]["errors"] == 0 and lint["summary"]["warnings"] == 0

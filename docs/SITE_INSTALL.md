@@ -233,7 +233,7 @@ rm -rf ~/tt-old ~/tt-new
 ```
 실패하면 main에 합치지 않는다. `FAILED tests/…::<테스트 이름>` 줄만(사내 이름·경로는 빼고) 사외로 전달한다. 사내 레포에서는 사외 초안 전용 검사(`test_site_paths_are_absent_in_draft`, `test_check_boundary_external`, `test_site_defaults_required`)가 skip으로 나오는 것이 정상이다(import-20261014부터, 마지막 것은 그다음 묶음부터).
 
-반입한 묶음에서 **hook이나 공통 판정이 바뀌었으면**(`plugin/hooks/hooks.json`, `guard.py`, `show_guard.py`, `common/shown.py`, `jira_bridge.py`, 표시 기록을 쓰는 스크립트(`db_pr`·`issue_post`·`db_verify`·`triage`)의 기록 부분, 또는 `SKILL.md`·`reference/rules.md`의 공통 규칙) 사내 대상 eval 12개(`tests/skill_evals/pending.json` `site`)를 **모두** 다시 돌린다. 예외로 표시 보조(`show_guard.py`·`common/shown.py`)의 글만 바뀌었으면 영향받는 eval만(번호는 재반입 노트에 적는다). 그 밖이면 바뀐 흐름의 eval만. 어느 쪽인지는 묶음과 함께 오는 `DRAFT_NOTES.md` "사내로 넘긴 것"의 재반입 노트에 적혀 있다. 생성기 버전(`generator_version`)이 올라간 묶음이면 운영 이슈 DB를 `migrate --to <현재 스키마>`로 맞춘다(`docs/design/06-collaboration.md §6.4` 버전 올림 순서, 운영 DB가 아직 없으면 뼈대 config 한 줄). 새 시그니처 필드(`min_count`·`sequence_within_sec`)는 S37 결과·팀 설치본 통일 뒤에만 DB에 쓴다(`issue-db.config.yaml signature_features`에 선언 — 모르는 플러그인은 분석을 중단한다). 이어서 사내 단계는 `claude` → **계속**.
+반입한 묶음에서 **hook이나 공통 판정이 바뀌었으면**(`plugin/hooks/hooks.json`, `guard.py`, `show_guard.py`, `common/shown.py`, `jira_bridge.py`, 표시 기록을 쓰는 스크립트(`db_pr`·`issue_post`·`db_verify`·`triage`)의 기록 부분, 또는 `SKILL.md`·`reference/rules.md`의 공통 규칙) 사내 대상 eval 12개(`tests/skill_evals/pending.json` `site`)를 **모두** 다시 돌린다. 예외로 표시 보조(`show_guard.py`·`common/shown.py`)의 글만 바뀌었으면 영향받는 eval만(번호는 재반입 노트에 적는다). 그 밖이면 바뀐 흐름의 eval만. 어느 쪽인지는 묶음과 함께 오는 `DRAFT_NOTES.md` "사내로 넘긴 것"의 재반입 노트에 적혀 있다. 생성기 버전(`generator_version`)이 올라간 묶음이면 운영 이슈 DB를 `migrate --to <현재 스키마>`로 맞춘다(`docs/design/06-collaboration.md §6.4` 버전 올림 순서, 운영 DB가 아직 없으면 뼈대 config 한 줄). 새 시그니처 필드(`min_count`·`sequence_within_sec`)는 S37 결과·팀 설치본 통일 뒤에만 DB에 쓴다(`issue-db.config.yaml signature_features`에 선언 — 모르는 플러그인은 분석을 중단한다). 같은 목록의 `mask-off`는 시그니처 필드가 아니다(뼈대가 처음부터 쓴다, 9절 "마스킹 끔"). 이어서 사내 단계는 `claude` → **계속**.
 
 **6. 팀 배포 (8절 마지막 단계 — S-7로 팀에 배포한 뒤에만)** — 사내 마켓플레이스는 반입 태그(SHA)에 고정돼 있어 main에 합친 것만으로는 팀에 가지 않는다. 위 eval 재실행이 끝난 뒤 반입 커밋에 태그를 달고 마켓플레이스 정의(S2)가 그 태그·SHA를 가리키게 바꾼다. 되돌리기는 §11.1.
 
@@ -294,6 +294,13 @@ CODEOWNERS에는 **메인테이너 경로**(`/.githooks/`·`/schema/`·`/parser-
 뼈대의 `.githooks/pre-commit`·`pre-push`가 나중 묶음에서 고쳐지면, 그 고침은 그 묶음의 뼈대로 새로 만든 이슈 DB에만 들어간다. 이미 만든 운영 이슈 DB는 메인테이너가 두 파일을 새 묶음 뼈대의 것으로 바꾸는 PR을 낸다.
 
 **4. 뼈대 폴더 정리** — 이 폴더는 더 쓰지 않는다(지워도 된다). 도입 담당자도 팀원과 같이 `/telephony-triage:setup`으로 운영 레포를 clone하고, `core.hooksPath`는 setup이 설정한다. 이후 변경은 도구의 PR(`tt/*` 브랜치)이나 메인테이너 PR로만 한다.
+
+**마스킹 끔(뼈대 기본)** — 뼈대 설정에는 `signature_features: [mask-off]` 줄이 있어 운영 이슈 DB는 로그를 가리지 않는다(사내 로그에는 고객 정보가 없다는 결정, `docs/design/08-safety.md §8.2`). 가리게 하려면 첫 커밋 전에 그 줄을 지운다.
+- 이미 만든 운영 이슈 DB를 끄려면 메인테이너가 `issue-db.config.yaml`에 그 줄을 더하는 PR을 낸다. 다른 `signature_features` 선언이 있으면 같은 목록에 더한다(줄을 두 번 쓰면 뒤 줄만 읽혀 `db_lint` 오류).
+- 쓰던 DB를 끄면 이미 들어간 fixture와 Jira 기록의 `failed_step`은 가려진 채 남는다(되돌리지 않는다). 끈 뒤 원문 값(IP·셀 번호 등)을 보는 시그니처를 만들면 그 옛 fixture에는 맞지 않아, 다른 유형 fixture와의 겹침 검사가 약해질 수 있다. 시그니처·extractor 패턴에 `<IP#\d+>` 같은 토큰이 있으면 `db_lint`가 `mask-token` 오류로 알려 준다(원문 모양으로 고친다).
+- 배포 조건: 끔 DB는 이 변경이 든 플러그인에서만 분석·쓰기가 된다. 옛 플러그인은 `feature-unsupported`로 멈추고 업데이트를 안내한다. Actions를 쓰는 DB는 CI가 받는 플러그인 태그(`docs/design/13-actions.md`)도 이 변경 뒤여야 한다(아니면 `db-check`가 `config` 오류로 PR을 막는다). 11/09(`signature_features` 검사가 들어간 때) 전 플러그인은 이 줄을 보지 않고 가린 채 분석하므로, 팀 설치본이 그 뒤인지 확인한다.
+- S13 마스킹 확인(`docs/design/14-site.md`)과 oFono 수집 점검 `o1.masked`의 가린 사본 요구는 가리는 DB에만 해당한다.
+- 재반입 eval 범위(8절): 이 변경에서 스킬 문서는 `cut --around` 명령에 `--rules SNAP/parser-rules`를 붙인 것뿐이다. 바뀐 흐름이 없어 eval을 건너뛴다(명령 인자 교정).
 
 **5. 카테고리 시드 (S-4에서)** — 운영 이슈 DB는 유형 없이 시작한다. AOSP 프레임워크 로그로 판별되는 유형·원인 초안이 `templates/issue-db-seeds/android/<카테고리>/`에 있다(Android 17 기준, fixture는 합성). 카테고리마다 합성 로그를 사내 실제 마스킹 로그로 바꿔 `import/<카테고리>-<n>` PR로 등록한다 — 순서는 그 폴더 `README.md`. 합성 로그 그대로는 올리지 않는다(S-6 점검이 막고 `s4.seed`에도 세지 않는다).
 

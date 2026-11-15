@@ -345,6 +345,15 @@ def test_view_redacts_then_asserts(tmp_path, monkeypatch):
     assert mf.build(_view_payload(_write_events(tmp_path, events))) == {"error": "mask", "kinds": {"IMSI": 1}}
 
 
+def test_view_mask_off_keeps_raw_text(tmp_path):
+    """마스킹 끔 DB의 events(payload `mask_off`, 08-safety §8): 가리지 않고 점검도 하지 않으며 머리말에 "마스킹된"이 없다."""
+    imsi = "310260" + "000000000"
+    events = _events([("2026-09-20T15:10:00.000Z", "datad", f"activate failed imsi={imsi}", "W", {"category_hint": "data"})])
+    out = mf.build(_view_payload(_write_events(tmp_path, dict(events, mask_off=True)), mask_off=True))
+    assert f"imsi={imsi}" in out["text"] and "<REDACTED:" not in out["text"] and out["stats"]["redacted"] == {}
+    assert "- 이벤트 요약이다(원문 로그 아님)" in out["text"] and "마스킹" not in out["text"]
+
+
 def test_view_header_and_uncollected_names_only(tmp_path):
     events = _events([("2026-09-20T15:10:00.000Z", "datad", "activate result: failed", "W", {"category_hint": "data"})])
     out = mf.build(_view_payload(_write_events(tmp_path, events)))

@@ -706,9 +706,12 @@ def test_mask_pii_check_uses_log_masker_only_for_fixture_logs():
         == [("fixtures/x.log", "NUM")]
 
 
-def _sample_repo() -> Path:
+def _sample_repo(off: bool = False) -> Path:
     repo = _tmp() / "db"
     shutil.copytree(SAMPLE, repo)
+    if off:     # 마스킹 끔 DB(08-safety §8): 샘플 설정에 선언 한 줄
+        with open(repo / "issue-db.config.yaml", "a", encoding="utf-8", newline="\n") as fh:
+            fh.write("signature_features: [mask-off]\n")
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "add", "-A")
     _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init")
@@ -744,6 +747,70 @@ def test_add_fixture_output_passes_commit_gate():
     assert proc.returncode == 0 and json.loads(proc.stdout)["checked"] == 1, proc.stdout
     [written] = set(fixtures.iterdir()) - before
     assert written.read_text(encoding="utf-8").count("host1") == 2
+
+
+RAW_IMSI, RAW_IP = "310260" + "000000000", "192.0.2.15"     # 에뮬레이터 꼴 IMSI(경계 검사 때문에 나눠 쓴다)
+
+
+def test_mask_off_db_keeps_raw_text_everywhere():
+    """마스킹 끔 DB(`signature_features: [mask-off]`, 08-safety §8): parse·cut·mask-copy·add-fixture가 같은 원문을 쓰고
+    커밋 관문(`--check`)을 통과한다. 선언 없는 DB에서 같은 fixture는 지금처럼 관문에 걸린다."""
+    repo = _sample_repo(off=True)
+    rules = repo / "parser-rules"
+    line = f"09-20 14:30:01.000  1234  1244 D DCM-0: [PHONE0] subscriber imsi={RAW_IMSI} ip={RAW_IP}"
+    lines = (SAMPLE / _ADD_FIXTURES / "DATA-001-01.log").read_text(encoding="utf-8").splitlines()
+    log = _write(lines[:1] + [line] + lines[1:], "cut-1.log")
+
+    doc = _parse(log, "--mask", rules=rules)
+    assert doc["masked"] is True and doc["mask_off"] is True and "<IMSI#" not in json.dumps(doc)
+    assert any(RAW_IMSI in str(e.get("msg")) and RAW_IP in str(e.get("msg")) for e in doc["events"]), doc["events"]
+    assert "mask_off" not in _parse(log, "--mask")                              # 샘플(켬) DB는 출력이 이전과 같다
+
+    cut = _tmp() / "cut.log"
+    proc = _run("parse_logcat.py", ["cut", str(log), "--around", "2026-09-20T14:30:01+09:00", "--seconds", "1", "--context", "0",
+                                    "--out", str(cut), "--tz", TZ, "--year", YEAR, "--rules", str(rules)])
+    assert proc.returncode == 0 and "cut-no-rules" not in proc.stdout, proc.stderr
+    assert line in cut.read_text(encoding="utf-8").splitlines() and json.loads(proc.stdout)["replacements"] == {}
+    proc = _run("parse_logcat.py", ["cut", str(log), "--around", "2026-09-20T14:30:01+09:00", "--seconds", "1", "--context", "0",
+                                    "--out", str(cut), "--tz", TZ, "--year", YEAR])
+    assert proc.returncode == 0 and "cut-no-rules" in proc.stdout and RAW_IMSI not in cut.read_text(encoding="utf-8")
+
+    u16 = _tmp() / "u16.log"                                       # 사본 단계: 끔이어도 UTF-16 → UTF-8, 상한 없음
+    u16.write_bytes(("﻿" + log.read_text(encoding="utf-8")).encode("utf-16-le"))
+    copies = _tmp() / "m"
+    assert _run("parse_logcat.py", ["mask-copy", str(log), "--out", str(copies)]).returncode == 0       # 켬일 때 만든 옛 사본
+    assert RAW_IMSI not in (copies / "cut-1.log").read_text(encoding="utf-8")
+    proc = _run("parse_logcat.py", ["mask-copy", str(log), str(u16), "--out", str(copies), "--rules", str(rules),
+                                    "--max-bytes", "10"])
+    assert proc.returncode == 0, proc.stderr
+    n = len(log.read_text(encoding="utf-8").splitlines())
+    assert [(f["skipped"], f["lines"]) for f in json.loads(proc.stdout)["files"]] == [(False, n)] * 2, proc.stdout
+    assert "mask-copy-skipped" not in proc.stdout
+    assert (copies / "cut-1.log").read_text(encoding="utf-8") == (copies / "u16.log").read_text(encoding="utf-8") \
+        == log.read_text(encoding="utf-8")
+
+    fixtures = repo / _ADD_FIXTURES
+    before = set(fixtures.iterdir())
+    proc = _add_fixture(repo, log)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    [written] = set(fixtures.iterdir()) - before
+    assert written.read_text(encoding="utf-8").rstrip("\n") == log.read_text(encoding="utf-8").rstrip("\n")
+    _git(repo, "add", "-A")
+    assert _run("mask_pii.py", ["--check", "--staged", "--db", str(repo)]).returncode == 0
+    assert _run("mask_pii.py", ["--check", str(written), "--db", str(SAMPLE)]).returncode == 1     # 켬 DB는 지금처럼 막는다
+
+
+def test_mask_pii_staged_reads_config_from_index():
+    """커밋 관문 `--check --staged`는 설정도 index 기준이다: 작업 트리에만 `mask-off`를 더하고 stage하지 않으면 원문 fixture는 걸린다."""
+    repo = _sample_repo()
+    (repo / _ADD_FIXTURES / "raw.log").write_text(f"09-20 14:30:01.000  1234  1244 D DCM-0: imsi={RAW_IMSI}\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    with open(repo / "issue-db.config.yaml", "a", encoding="utf-8", newline="\n") as fh:
+        fh.write("signature_features: [mask-off]\n")
+    gate = lambda: _run("mask_pii.py", ["--check", "--staged", "--db", str(repo)]).returncode  # noqa: E731
+    assert gate() == 1
+    _git(repo, "add", "-A")
+    assert gate() == 0
 
 
 def test_add_fixture_masks_folded_sip_digest():
@@ -1087,7 +1154,7 @@ def _evidence_json(refs: list[dict | None], ts: str = "2026-09-20T05:30:10.000Z"
 def _cut(logs: list[Path], evidence: Path, *extra: str, cause: str | None = "X-001-01"):
     out = _tmp() / "cut.log"
     proc = _run("parse_logcat.py", ["cut", *map(str, logs), "--evidence", str(evidence), "--out", str(out),
-                                    "--tz", TZ, "--year", YEAR, *(["--cause", cause] if cause else []), *extra])
+                                    "--tz", TZ, "--year", YEAR, "--rules", str(RULES), *(["--cause", cause] if cause else []), *extra])
     return proc, out
 
 

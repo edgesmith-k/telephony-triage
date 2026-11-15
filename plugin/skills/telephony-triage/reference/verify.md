@@ -4,7 +4,7 @@
 계획은 모두 `write-flow.md` §계획 형식이다: `source`·`schema_version`(SNAP `issue-db.config.yaml`)·`started_at`·`base_sha`(`db_pr snapshot`의 `snapshot_sha`)·`issue`·`operations`(op 목록 — `ops` 아님)·`commit_message`·`pr_notes`. `db_verify`의 `suggested_ops`는 `operations`에 넣는다.
 판정은 `db_verify.py`의 출력으로만 한다(항상 회귀·검증 모드: 파일 전체, 모든 active 원인 독립 평가, bonus 0).
 **시각 기준**: 회귀·검증 모드는 로그 시각을 연도 없이 UTC로 읽는다. 그래서 `satisfied_traces`·`trace`의 `ts`는 "파일 시계 그대로(연도 2000)"다.
-이 시각으로 fixture를 자를 때는 `parse_logcat.py cut <log> --around <ts> --tz UTC`(**`--year` 없이**)로 같은 기준을 쓴다. 리포트에는 파일 시계 시각(월-일 시:분:초)으로 보여준다.
+이 시각으로 fixture를 자를 때는 `parse_logcat.py cut <log> --around <ts> --tz UTC --rules SNAP/parser-rules`(**`--year` 없이**)로 같은 기준을 쓴다. 리포트에는 파일 시계 시각(월-일 시:분:초)으로 보여준다.
 사용자 말이나 LLM 판단으로 판정을 대신하지 않는다 — `fixed`와 `verified`는 팀 전체가 믿는 상태라 로그 근거가 있어야 한다.
 
 수정 상태 흐름:
@@ -38,7 +38,7 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
 3. **unknown** → 이유와 필요한 조건(어떤 시그니처를 추가하거나 어떤 로그를 받아야 하는지)을 안내하고 **기록하지 않는다**.
    `lock release <작업 키>`. **failed** → 해결책이 효과가 없다고 보고하고 `set-resolution`이나 새 분석(analyze)을 제안한다.
    계획을 만들지 않고 `lock release <작업 키>`.
-4. **passed** → `parse_logcat.py cut <log> --around <satisfied_traces의 시각> --out WD/<작업 키>/fixtures/resolved-1.log` 후 계획
+4. **passed** → `parse_logcat.py cut <log> --around <satisfied_traces의 시각> --out WD/<작업 키>/fixtures/resolved-1.log --rules SNAP/parser-rules` 후 계획
    `WD/<작업 키>/plan.json`(`source: validate-cause`, `issue: null`):
    `add-fixture {for: <ID>, kind: resolved, path}` → `verify-resolution {cause: <ID>, verification: {method: <요약>, evidence: [<fixture 경로>, (선택) Jira 키], by, date}}`(`status` 없음 — `db_verify` `suggested_ops` 그대로).
    커밋 메시지 `[<ID>] verify-resolution: <요약>`.
@@ -97,7 +97,7 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
 
    | 판정 | 조건 | 계획 |
    |---|---|---|
-   | passed | 흔적 충족, 원인·증상 불충족, recovery 있으면 충족 | `cut --around <흔적 시각>` → `add-fixture {kind: fixed, build}` + `verify-fix {result: passed, verification{..., fixture: fixtures/<ID>.fixed.<build>.log}}` → `fixed` |
+   | passed | 흔적 충족, 원인·증상 불충족, recovery 있으면 충족 | `cut --around <흔적 시각> --rules SNAP/parser-rules` → `add-fixture {kind: fixed, build}` + `verify-fix {result: passed, verification{..., fixture: fixtures/<ID>.fixed.<build>.log}}` → `fixed` |
    | failed | 원인 시그니처 충족(재발) | `verify-fix {result: failed}` → open, 이전 `ref`·`fixed_in`은 `verification_history`에 보존. 재발 로그를 `recurrence` fixture로 넣을지 묻는다 |
    | partial | 흔적 충족, 원인 불충족, 증상 남음 | `verify-fix {result: partial}` → 상태 유지 + 이력. `other_candidates`를 보여주고 남은 증상은 `analyze`로 새로 분석하라고 안내. **"통과로 기록" 선택지를 제시하지 않는다** |
    | unknown | 흔적 없음, 구간 부족 | 계획을 만들지 않는다. 필요한 로그 조건(시나리오 수행 방법, 필요한 시그니처)을 안내하고 `lock release` |

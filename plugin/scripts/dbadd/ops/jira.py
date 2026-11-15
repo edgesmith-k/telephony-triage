@@ -42,11 +42,11 @@ class JiraOps:
             record["carrier"] = jira["carrier"]
         record["analyzed_by"] = self.user
         if jira.get("failed_step"):    # 선택 값. 마스킹은 멱등이므로 다시 거친다
-            step = failedstep.normalize(masking.new_masker(allow_patterns=self.allow).mask(str(jira["failed_step"])))
+            step = failedstep.normalize(masking.for_db(self.config).mask(str(jira["failed_step"])))
             if step:
                 record["failed_step"] = step
         if jira.get("note"):
-            record["note"] = masking.new_masker(allow_patterns=self.allow).mask(str(jira["note"]))
+            record["note"] = masking.for_db(self.config).mask(str(jira["note"]))
         path = self.tree.type_dir(type_id) / "issues" / f"{key}.yaml"
         self.tree.write(path, yamldoc.dump_doc(record))
 

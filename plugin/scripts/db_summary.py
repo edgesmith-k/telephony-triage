@@ -299,6 +299,8 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
     keys = [k for k in keys if k]
     diff, diff_total = _main_diff(wt, entries, git)
     checks = _check_rows(stage_result)
+    if "mask" in checks and masking.is_off(db_cfg):     # 끔 DB면 "마스킹 ✅"가 사실과 다르다(08-safety §8.2) — 화면에 "끔"으로
+        checks["mask"]["off"] = True
     verification = _verification_rows(stage_result)
     approval = [r for r in verification if r["status"] == "needs-approval"]
     verify_code = ((stage_result.get("checks") or {}).get("verify") or {}).get("code")
@@ -338,8 +340,7 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
         if row["status"] == "skipped" and row.get("review_required"):
             notes.append(f"{row['id']}: 검증 못 함 — 자동 검증 없음 ({row['reason']})")
     # 계획의 pr_notes: 흐름별 설명(drift 결정, verify-fix 근거, allow-cause 사유 등). 한 번 더 마스킹한다.
-    allow = [str(p) for p in ((db_cfg.get("mask") or {}).get("allow_patterns") or [])]
-    masker = masking.new_masker(allow_patterns=allow)
+    masker = masking.for_db(db_cfg)
     notes += [masker(str(n)) for n in plan.get("pr_notes") or [] if str(n).strip()]
     check = stage_result.get("config_check") or {}
     push_allowed = bool(check.get("push_allowed")) and not stage_result.get("dry_run")
@@ -361,7 +362,7 @@ def screen(wt: Path, plan: dict, stage_result: dict, state: dict, db_cfg: dict, 
         "push_allowed": push_allowed, "push_note": push_note, "pending_included": applied.get("pending_included") or [],
     }
     if jira.get("note"):    # PR 본문 메모 줄용. 이슈 DB 파일(dbadd/ops/jira.py)과 같은 새 masker — 토큰 번호가 같다
-        result["issue"]["note"] = masking.new_masker(allow_patterns=allow).mask(str(jira["note"]))
+        result["issue"]["note"] = masking.for_db(db_cfg).mask(str(jira["note"]))
     if open_prs is None and not search_key(plan, applied):    # 검색어가 없어 찾지 않음 — gh 실패("확인 못 함")와 구분한다
         result["open_prs_unsearched"] = True
     changes = fix_changes(wt, entries, applied.get("operations") or [], state.get("base_sha"), git)
@@ -397,7 +398,7 @@ def pr_body(screen: dict, plan: dict) -> str:
     else:
         ok = lambda v: "✅" if v else "❌"  # noqa: E731
         lines.append(f"- 스키마·lint {ok(checks['lint']['ok'])} (경고 {checks['lint']['warnings']}건) / "
-                     f"ID 중복 {ok(checks['ids']['ok'])} / 마스킹 {ok(checks['mask']['ok'])} / "
+                     f"ID 중복 {ok(checks['ids']['ok'])} / {_mask_cell(checks['mask'], ok)} / "
                      f"fixture 회귀 {ok(checks['regress']['ok'])} ({checks['regress']['passed']}/"
                      f"{checks['regress']['total']}) / 생성 파일 {ok(checks['build']['ok'])}")
     if screen["verification"]:
@@ -544,6 +545,11 @@ def _verification_table(rows: list[dict]) -> list[str]:
             f"{md.cell(r.get('reason') if r.get('status') != 'skipped' else '')} |" for ids, r in groups]
 
 
+def _mask_cell(mask: dict, ok) -> str:
+    """끔 DB면 "마스킹 ✅" 대신 "끔". 검사가 실패했으면(끔이어도) 그대로 ❌를 보인다."""
+    return "마스킹 끔(이슈 DB 설정)" if mask.get("off") and mask["ok"] else f"마스킹 {ok(mask['ok'])}"
+
+
 def _check_lines(checks: dict) -> list[str]:
     if "skipped" in checks:
         return [f"자동 검사: 건너뜀 — {md.line(checks['skipped'])}"]
@@ -555,7 +561,7 @@ def _check_lines(checks: dict) -> list[str]:
         lines.append(f"  - lint 오류 {lint['errors']}건 중 {len(lint['findings'])}건만 표시")
     lines.append(f"- ID·Jira 중복 {ok(ids['ok'])}")
     lines += [f"  - 중복: {md.line(d)}" for d in ids["duplicates"]]
-    lines.append(f"- 마스킹 {ok(mask['ok'])}")
+    lines.append(f"- {_mask_cell(mask, ok)}")
     if mask["detections"]:
         lines.append(f"  - 마스킹 검출 {mask['detections']}건")
     lines.append(f"- fixture 회귀 {ok(regress['ok'])} ({regress['passed']}/{regress['total']})")

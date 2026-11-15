@@ -488,10 +488,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
     def masker(self):
         try:
-            allow = list((compat.load_db_config(self.snap).get("mask") or {}).get("allow_patterns") or [])
-        except Exception:    # noqa: BLE001 — 호환성 문제는 compat 단계가 보고한다
-            allow = []
-        return masking.new_masker(allow_patterns=allow)
+            return masking.for_db(compat.load_db_config(self.snap))
+        except Exception:    # noqa: BLE001 — 호환성 문제(`mask:` 형식 등)는 compat 단계가 보고한다
+            return masking.for_db({})
 
     def existing_record(self) -> None:
         _, data, _ = self.run.call("2-existing", "db_search.py", [self.key, "--db", self.snap, "--limit", SEARCH_LIMIT])
