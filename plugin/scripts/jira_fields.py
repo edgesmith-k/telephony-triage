@@ -24,6 +24,8 @@
 `missing_question`: 빈 항목을 사용자에게 묻는 고정 문구(빈 항목만, 필드 순서). 빈 항목이 없으면 null.
 필수/선택은 `--db`의 `schema/issue.schema.json` `required` 기준(현재 필수 model·platform_version, 선택 sw·carrier·발생 시각).
 `missing`의 뜻(carrier 제외)은 그대로다.
+버전 칸이 다중 선택이라 값이 여럿이면 `issue.platform_version`을 넣지 않고 `missing`과 질문(하나를 고르게)에 넣는다.
+이은 값(`"a, b"`)은 `platform_version_all`에 두고 분석(`--meta-out`, triage)은 그것으로 비교한다.
 선택 키(실패 스텝은 선택 값이라 **있을 때만** 나온다, 07-workflow.md §Step 2): `text.test_steps`(마스킹, ≤1000자),
 `failed_step_auto {text, source}`(Jira에서 자동으로 얻은 값: field > description > test_steps),
 `failed_step {text, source}`(`--failed-step`·`--steps-file`까지 반영한 최종 값, source는 cli|field|description|test_steps|steps_file),
@@ -65,17 +67,24 @@ QUESTION_LABELS = {
     "occurred_at": '발생 시각 — 모르면 "모름", 그러면 occurred_on을 기록하지 않음',
 }
 OPTIONAL_HINTS = {"sw": ' — 모르면 "모름", 그러면 기록하지 않음(수정·회귀 판단 불가)'}   # 선택일 때만 붙인다
+MULTI_LABEL = "플랫폼 버전 — Jira 버전 칸에 값이 여럿({}), 그중 기록할 값 하나"   # 다중 선택 버전 칸(스키마는 값 하나만 받는다)
 
 
-def missing_question(required: list[str], optional: list[str]) -> str | None:
-    """빈 항목을 한 번에 묻는 고정 문구. 빈 항목이 없으면 None."""
+def missing_question(required: list[str], optional: list[str], multi: dict[str, str] | None = None) -> str | None:
+    """빈 항목(과 값이 여럿인 버전 칸 `multi`)을 한 번에 묻는 고정 문구. 물을 항목이 없으면 None."""
     if not required and not optional:
         return None
-    lines = ['Jira에 비어 있는 항목이 있습니다. 기록에 넣을 값을 "항목: 값" 한 줄씩 알려 주세요.']
+    multi = multi or {}
+    head = "비어 있거나 값이 여럿인" if multi else "비어 있는"
+    lines = [f'Jira에 {head} 항목이 있습니다. 기록에 넣을 값을 "항목: 값" 한 줄씩 알려 주세요.']
+
+    def label(n: str) -> str:
+        return MULTI_LABEL.format(multi[n]) if n in multi else QUESTION_LABELS[n]
+
     if required:
-        lines.append("- 필수: " + ", ".join(f"{n}({QUESTION_LABELS[n]})" for n in required))
+        lines.append("- 필수: " + ", ".join(f"{n}({label(n)})" for n in required))
     if optional:
-        lines.append("- 선택: " + ", ".join(f"{n}({QUESTION_LABELS[n]}{OPTIONAL_HINTS.get(n, '')})" for n in optional))
+        lines.append("- 선택: " + ", ".join(f"{n}({label(n)}{OPTIONAL_HINTS.get(n, '')})" for n in optional))
     return "\n".join(lines)
 
 
@@ -222,11 +231,15 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
     kre = key_regex(db, cfg)
     missing: list[str] = []
 
-    structured = {}
+    structured, multi = {}, {}
     for name in STRUCTURED:
         v = lookup(raw, fmap.get(name, "")) if fmap.get(name) else None
         if isinstance(v, list):
-            v = ", ".join(map(str, v))
+            if name == "platform_version" and len(v) > 1:   # 다중 선택: 기록하지 않고 묻는다, 분석에는 이은 값을 쓴다
+                multi[name] = ", ".join(map(str, v))
+                v = None
+            else:
+                v = ", ".join(map(str, v))
         structured[name] = None if v in (None, "") else str(v)
         if structured[name] is None and name != "carrier":
             missing.append(name)
@@ -298,8 +311,10 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
         "missing_question": missing_question(      # --db(스냅샷) 스키마 기준 — 옛 운영 DB면 sw도 필수로 묻는다
             [n for n in STRUCTURED if structured[n] is None and n in required],
             [n for n in STRUCTURED if structured[n] is None and n not in required]
-            + [n for n in missing if n == "occurred_at"]),
+            + [n for n in missing if n == "occurred_at"], multi),
     }
+    if multi:
+        result["platform_version_all"] = multi["platform_version"]
     result.update(optional)
     return result
 
@@ -373,8 +388,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.meta_out:
             meta = {"key": result["key"], "sw": result["issue"].get("sw"),
                     "summary": result["text"]["summary"], "description": result["text"]["description"]}
-            if result["issue"].get("platform_version"):
-                meta["platform_version"] = result["issue"]["platform_version"]
+            pv = result["issue"].get("platform_version") or result.get("platform_version_all")
+            if pv:
+                meta["platform_version"] = pv
             if result["occurred_at"]:
                 meta["occurred_at"] = result["occurred_at"]
             if result.get("sim_slot"):

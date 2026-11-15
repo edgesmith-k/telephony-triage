@@ -448,7 +448,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         self.apply_failed_step(data, meta_path)
         text = data.get("text") or {}
         info = {"key": self.key, "origin": data.get("origin"), "occurred_at": data.get("occurred_at"),
-                "sw": (data.get("issue") or {}).get("sw"), "platform_version": (data.get("issue") or {}).get("platform_version"),
+                "sw": (data.get("issue") or {}).get("sw"), "platform_version": (data.get("issue") or {}).get("platform_version") or data.get("platform_version_all"),
                 "sim_slot": data.get("sim_slot"), "summary": text.get("summary") or "", "missing": data.get("missing") or [],
                 "logcat": data.get("logcat") or {}, "jira_block": data.get("issue") or {}}
         self.out["issue"] = {"origin": info["origin"], "occurred_at": info["occurred_at"], "sw": info["sw"],
@@ -801,7 +801,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         for cand in candidates:
             for ref in cand.pop("_code_refs", []):
                 versions = [str(v) for v in ref.get("platform_versions") or []]
-                if versions and version and str(version) not in versions:
+                if versions and version and str(version) not in versions and not (   # 숫자만인 목록은 글자 그대로(Android)
+                        any(not v.isdigit() for v in versions) and flowlib.version_match(versions, version)):
                     continue
                 code_rc, data, _ = self.run.call("5-resolve", "code_roots.py",
                                                  ["resolve", ref["ref"], "--roots", code["roots"]], expect=(0, 2))

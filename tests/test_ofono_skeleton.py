@@ -362,6 +362,28 @@ def test_text_version_values():
         assert ("다른 버전 원인 (oFono prodx, m100)" in report) is (not match)
 
 
+def test_text_version_code_refs_and_supported_list():
+    """코드 경로 버전 필터와 지원 목록 판정: 글자 값은 조각·대소문자 없이(PRODX 대 prodx), 숫자만인 목록은 지금처럼 글자 그대로."""
+    from common import issuedb, quality
+    from triagelib.driver import Driver
+
+    class Run:
+        def call(self, *args, **kwargs):
+            return 0, {"exists": True, "path": "/src/x"}, None
+
+    stub = type("Stub", (), {"run": Run()})()
+
+    def kept(versions, version):
+        cands = [{"cause": "C", "_code_refs": [{"ref": "r", "platform_versions": versions}]}]
+        return bool(Driver.resolve_code(stub, {"roots": "x"}, version, cands)["resolved"])
+
+    assert kept(["prodx"], "PRODX") and kept(["m100"], "prodx/M100") and not kept(["prodx"], "m200")
+    assert kept(["16"], "16") and not kept(["16"], "16.0") and not kept(["16"], "Android 16")   # Android 그대로
+    for versions, supported, out in ((["PRODX"], ["prodx"], False), (["m100"], ["prodx"], True), (["15"], ["16"], True)):
+        cause = issuedb.Cause("C", "T", "active", "t", {"platform_versions": versions})
+        assert quality.unsupported_versions(cause, supported) is out
+
+
 # -- 다중 프로토콜 -------------------------------------------------------------------------------------
 
 

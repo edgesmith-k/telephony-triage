@@ -138,6 +138,25 @@ def test_meta_out_android_version_only_when_present():
     assert metas[0]["platform_version"] == "16" and "platform_version" not in metas[1]
 
 
+def test_multi_value_version_asks_for_one():
+    """다중 선택 버전 칸(지어낸 이름): 기록 초안에 넣지 않고 하나를 고르게 묻는다. 분석 meta에는 이은 값을 그대로 둔다."""
+    tmp = Path(tempfile.mkdtemp())
+    text = (MOCK_JIRA / "MOCK-1001.yaml").read_text(encoding="utf-8")
+    raw = tmp / "raw.yaml"
+    raw.write_text(text.replace('customfield_10004: "16"', 'customfield_10004: ["prodx", "m100"]'), encoding="utf-8")
+    meta = tmp / "meta.json"
+    out = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE, "--meta-out", meta], env=_home())
+    assert "platform_version" not in out["issue"] and out["missing"] == ["platform_version"]
+    assert out["platform_version_all"] == "prodx, m100"
+    assert out["missing_question"] == (
+        'Jira에 비어 있거나 값이 여럿인 항목이 있습니다. 기록에 넣을 값을 "항목: 값" 한 줄씩 알려 주세요.\n'
+        "- 필수: platform_version(플랫폼 버전 — Jira 버전 칸에 값이 여럿(prodx, m100), 그중 기록할 값 하나)")
+    assert json.loads(meta.read_text(encoding="utf-8"))["platform_version"] == "prodx, m100"
+    raw.write_text(text.replace('customfield_10004: "16"', 'customfield_10004: ["16"]'), encoding="utf-8")
+    one = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE], env=_home())
+    assert one["issue"]["platform_version"] == "16" and one["missing_question"] is None and "platform_version_all" not in one
+
+
 def test_meta_out_sim_slot_only_when_present():
     tmp = Path(tempfile.mkdtemp())
     text = (MOCK_JIRA / "MOCK-1001.yaml").read_text(encoding="utf-8")

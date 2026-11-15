@@ -207,6 +207,7 @@ def test_platform_version_takes_text_values():
     validator = Draft202012Validator(nodes[0])
     assert all(validator.is_valid(v) for v in ("16", "prodx", "M100", "prodx-2.1_b"))
     assert not any(validator.is_valid(v) for v in ("", "   ", "-x", ".x", "prodx m100", "prodx/m100"))
+    assert not any(validator.is_valid(v) for v in ("16.0", "16.1.2", "2.1"))   # 점 이은 숫자는 Android처럼 거부
 
 
 # -- 2. 샘플 파일이 스키마를 통과한다 --------------------------------------

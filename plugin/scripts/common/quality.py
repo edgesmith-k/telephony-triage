@@ -150,6 +150,6 @@ def user_statement_sources(cause: issuedb.Cause, jira: list[dict]) -> list[str]:
 
 def unsupported_versions(cause: issuedb.Cause, supported: list[str]) -> bool:
     """`platform_versions`(플랫폼 버전)가 비어 있지 않고 모두 지원 목록 밖.
-    빈 목록은 전 버전이라 제외."""
-    versions = [str(v) for v in cause.raw.get("platform_versions") or []]
-    return bool(versions) and not (set(versions) & {str(v) for v in supported})
+    빈 목록은 전 버전이라 제외. 글자 값(oFono)은 대소문자 없이 비교한다(숫자 값은 casefold해도 같다)."""
+    versions = [str(v).casefold() for v in cause.raw.get("platform_versions") or []]
+    return bool(versions) and not (set(versions) & {str(v).casefold() for v in supported})
