@@ -146,7 +146,7 @@ def test_multi_value_version_asks_for_one():
     raw.write_text(text.replace('customfield_10004: "16"', 'customfield_10004: ["prodx", "m100"]'), encoding="utf-8")
     meta = tmp / "meta.json"
     out = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE, "--meta-out", meta], env=_home())
-    assert "platform_version" not in out["issue"] and out["missing"] == ["platform_version"]
+    assert "platform_version" not in out["issue"] and out["missing"] == []
     assert out["platform_version_all"] == "prodx, m100"
     assert out["missing_question"] == (
         'Jira에 비어 있거나 값이 여럿인 항목이 있습니다. 기록에 넣을 값을 "항목: 값" 한 줄씩 알려 주세요.\n'
@@ -155,6 +155,9 @@ def test_multi_value_version_asks_for_one():
     raw.write_text(text.replace('customfield_10004: "16"', 'customfield_10004: ["16"]'), encoding="utf-8")
     one = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE], env=_home())
     assert one["issue"]["platform_version"] == "16" and one["missing_question"] is None and "platform_version_all" not in one
+    raw.write_text(text.replace('customfield_10004: "16"', 'customfield_10004: ["16", "16"]'), encoding="utf-8")
+    dup = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE], env=_home())
+    assert dup["issue"]["platform_version"] == "16" and dup["missing_question"] is None   # 같은 값이 겹친 목록은 하나
 
 
 def test_meta_out_sim_slot_only_when_present():

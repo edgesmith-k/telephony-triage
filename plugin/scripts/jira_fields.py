@@ -235,13 +235,14 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
     for name in STRUCTURED:
         v = lookup(raw, fmap.get(name, "")) if fmap.get(name) else None
         if isinstance(v, list):
-            if name == "platform_version" and len(v) > 1:   # 다중 선택: 기록하지 않고 묻는다, 분석에는 이은 값을 쓴다
-                multi[name] = ", ".join(map(str, v))
+            vals = list(dict.fromkeys(map(str, v)))           # 같은 값이 겹치면 하나로 센다
+            if name == "platform_version" and len(vals) > 1:  # 다중 선택: 기록하지 않고 묻는다, 분석에는 이은 값을 쓴다
+                multi[name] = ", ".join(vals)
                 v = None
             else:
-                v = ", ".join(map(str, v))
+                v = ", ".join(vals)
         structured[name] = None if v in (None, "") else str(v)
-        if structured[name] is None and name != "carrier":
+        if structured[name] is None and name != "carrier" and name not in multi:   # 값이 여럿이면 빈 칸이 아니다(질문은 따로)
             missing.append(name)
 
     when = parse_time(lookup(raw, fmap.get("occurred_at", "")) if fmap.get("occurred_at") else None, jtz)
