@@ -133,3 +133,14 @@ def test_drop_subsection(tmp_path, monkeypatch):
     except LookupError:
         return
     raise AssertionError("LookupError 기대")
+
+
+def test_drop_subsection_cuts_found_place_not_first_copy(tmp_path, monkeypatch):
+    # 코드 블록 안에 같은 글이 먼저 있어도 실제 소절을 뺀다(리뷰 T-1)
+    (tmp_path / "docs/design").mkdir(parents=True)
+    (tmp_path / cp.STEPS).write_text("", encoding="utf-8")
+    (tmp_path / "a.md").write_text("## 1 A\n```\n### (2) d\nz\n```\n### (2) d\nz\n### (3) e\nq\n", encoding="utf-8")
+    (tmp_path / "docs/tasks.md").write_text("| X-1 | `a.md §1!(2)` | |\n", encoding="utf-8")
+    monkeypatch.setattr(cp, "ROOT", tmp_path)
+    out = cp.render("X-1")
+    assert "## 1 A\n```\n### (2) d\nz\n```\n### (3) e\nq\n" in out
