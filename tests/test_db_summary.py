@@ -644,6 +644,23 @@ def test_screen_adds_previous_id_only_when_plan_pr_ids_exist_and_differ(tmp_path
     assert got[0]["previous_id"] == "DATA-001-03" and "previous_id" not in got[1]
 
 
+def test_mask_off_db_check_line_says_off(tmp_path):
+    """마스킹 끔 DB(08-safety §8.2): PR 본문·확인 화면의 마스킹 칸은 "✅" 대신 "끔"이다. 선언 없는 DB는 그대로."""
+    import subprocess as sp
+    sp.run(["git", "init", "-q", str(tmp_path)], check=True)
+    git = lambda repo, *a, check=True: sp.run(["git", "-C", str(repo), *a], capture_output=True, text=True)  # noqa: E731
+    stage = {"apply": {"operations": [], "commit_message": "x"},
+             "checks": {k: {"code": OK, "result": {}} for k in ("lint", "ids", "mask", "regress", "build")}}
+
+    def text(db_cfg):
+        scr = db_summary.screen(tmp_path, {}, stage, {"branch": "b"}, db_cfg, job="j", base="main", git=git,
+                                remote_sha=None, open_prs=[], push_note=None)
+        return db_summary.pr_body(scr, {}) + db_summary.render_markdown(scr, {}, _extra())
+    off = text({"signature_features": ["mask-off"]})
+    assert off.count("마스킹 끔(이슈 DB 설정)") == 2 and "마스킹 ✅" not in off
+    assert text({}).count("마스킹 ✅") == 2 and "마스킹 끔" not in text({})
+
+
 def test_open_prs_line_tells_not_searched_from_gh_failure(tmp_path):
     """열린 PR: 검색어(Jira 키·새 ID)가 없어 찾지 않은 것과 gh 실패(확인 못 함)를 구분한다. open_prs 값(None)은 그대로."""
     import subprocess as sp

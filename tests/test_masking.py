@@ -778,6 +778,8 @@ def test_mask_off_db_keeps_raw_text_everywhere():
     u16 = _tmp() / "u16.log"                                       # 사본 단계: 끔이어도 UTF-16 → UTF-8, 상한 없음
     u16.write_bytes(("﻿" + log.read_text(encoding="utf-8")).encode("utf-16-le"))
     copies = _tmp() / "m"
+    assert _run("parse_logcat.py", ["mask-copy", str(log), "--out", str(copies)]).returncode == 0       # 켬일 때 만든 옛 사본
+    assert RAW_IMSI not in (copies / "cut-1.log").read_text(encoding="utf-8")
     proc = _run("parse_logcat.py", ["mask-copy", str(log), str(u16), "--out", str(copies), "--rules", str(rules),
                                     "--max-bytes", "10"])
     assert proc.returncode == 0, proc.stderr
