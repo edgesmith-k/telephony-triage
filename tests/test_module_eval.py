@@ -1959,7 +1959,7 @@ def test_gate_tie_breaks_on_top1_before_tokens():
 S4_LOG = """Sep 24 06:41:12.204 dut daemon.info ofonod[812]: [0,0315]> RIL_REQUEST_RADIO_POWER (0)
 Sep 24 06:41:16.730 dut daemon.info ofonod[812]: [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF)
 Sep 24 06:41:16.733 dut daemon.info ofonod[812]: dbus_trace signal - i:org.ofono.Modem m:PropertyChanged a:"Online"
-Sep 24 06:41:16.851 dut daemon.info vrild[640]: [IpcCtx_1] OnRequest
+Sep 24 06:41:16.851 dut daemon.info vrild[640]: [IpcCtx_1] OnExampleRequest
 Sep 24 06:41:16.854 dut daemon.info vrild[640]: [IpcCtx_1] OnIpcComplete Request ID=47, result=1
 Sep 24 06:41:16.856 dut daemon.err vrild[640]: reply payload was empty
 Sep 24 06:41:16.857 dut daemon.err vrild[640]: reply handler failed, code 9
@@ -1981,13 +1981,13 @@ S4_SIX = "- 06:41:16.865 p0 D ofonod [0,0317]< RIL_REQUEST_OPERATOR failed INVAL
 
 
 def test_s4_counts_quote_lines_not_prose():
-    """S4 오탐(ofono/network 두 arm 7줄): 글 속 `코드` 인용구·접두 메시지(`[IpcCtx_1] OnRequest`)를 세지 않아 5 → 통과."""
+    """S4 오탐(ofono/network 두 arm 7줄): 글 속 `코드` 인용구·접두 메시지(`[IpcCtx_1] OnExampleRequest`)를 세지 않아 5 → 통과."""
     got = me.quoted_messages(S4_LOG, S4_TAGS, S4_FIVE)
-    assert len(got) == 5 and "[IpcCtx_1] OnRequest" not in got and "reply payload was empty" not in got
+    assert len(got) == 5 and "[IpcCtx_1] OnExampleRequest" not in got and "reply payload was empty" not in got
     assert len(me.quoted_messages(S4_LOG, S4_TAGS, S4_FIVE.replace("규칙 제안:", S4_SIX + "\n규칙 제안:"))) == 6
     # 접두 메시지는 더 긴 것과 같은 조각에 있을 때만 뺀다 — 따로 인용하면 센다
-    assert me.quoted_messages(S4_LOG, S4_TAGS, "- [IpcCtx_1] OnRequest\n- [IpcCtx_1] OnIpcComplete Request ID=47, "
-                              "result=1") == ["[IpcCtx_1] OnRequest", "[IpcCtx_1] OnIpcComplete Request ID=47, result=1"]
+    assert me.quoted_messages(S4_LOG, S4_TAGS, "- [IpcCtx_1] OnExampleRequest\n- [IpcCtx_1] OnIpcComplete Request ID=47, "
+                              "result=1") == ["[IpcCtx_1] OnExampleRequest", "[IpcCtx_1] OnIpcComplete Request ID=47, result=1"]
 
 
 S4_RAW = [S4_LOG[i] for i in (0, 1, 2, 4, 5, 6)]
