@@ -293,7 +293,7 @@ def test_marker_anchor_with_failed_step_moves_window_and_top_candidate():
     report = (job / "report.md").read_text(encoding="utf-8")
     assert "- 실패 스텝 구간 (log_marker): Step 5 2026-09-20T05:33:00.000Z ~ 2026-09-20T05:33:30.000Z → 분석 범위 " \
         "2026-09-20T05:32:00.000Z ~ 2026-09-20T05:34:00.000Z (Jira 발생 시각 2026-09-20T14:31:00+09:00 / 2.5분 차이)" in report
-    assert "점수·S/C에 쓰지 않음; 분석 범위·순위 참고" in report
+    assert "S/C에 쓰지 않음; 단어 겹침 가산·순위 참고·분석 범위" in report
     # Jira 시각은 가까우므로 경고 없음. issue_meta.json은 그대로, 매처는 match_meta.json(발생 시각 = 스텝 실패 시각)을 쓴다
     assert not any("분 다르다" in w for w in done.get("warnings") or [])
     assert json.loads((job / "issue_meta.json").read_text(encoding="utf-8"))["occurred_at"] == "2026-09-20T14:31:00+09:00"

@@ -1838,7 +1838,7 @@
       ],
       "expected_output": "실패 스텝 '5 | 데이터 켜기'(Jira 필드) 표시, 1위 DATA-001-01(로그 근거) → append, 계획 issue.failed_step 복사 → PR issue/MOCK-9048: issues/MOCK-9048.yaml에 failed_step, data/README.md '자주 실패한 스텝: 5 | 데이터 켜기 (3건)'.",
       "assertions": [
-        "리포트에 실패 스텝 '5 | 데이터 켜기'가 보이고 분류 이유는 로그 근거로 설명했다(실패 스텝은 점수·S/C에 쓰지 않는다)",
+        "리포트에 실패 스텝 '5 | 데이터 켜기'가 보이고 분류 이유는 로그 근거로 설명했다(실패 스텝은 S/C에 쓰지 않는다)",
         "계획이 append DATA-001-01 하나다",
         "계획 issue.failed_step이 '5 | 데이터 켜기'다",
         "원격 issue/MOCK-9048의 data/DATA-001-*/issues/MOCK-9048.yaml에 failed_step: 5 | 데이터 켜기가 있다",

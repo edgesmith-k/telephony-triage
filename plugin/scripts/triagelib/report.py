@@ -445,6 +445,7 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
     causes = {k: sorted(v, key=lambda c: ranked.index(c[0]) if c[0] in ranked else len(ranked)) for k, v in causes.items()}
     titles = {f["flow"]: f["title"] for f in doc.get("flows") or []}
     picked, counts, vers, cut = [], [], [], []
+    differ = False
     for f in doc.get("flows") or []:
         rows = []
         for inst in f["instances"]:
@@ -465,13 +466,15 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
         counts.append((f["title"], len(rows), all(r[5] is None for r in rows),
                        sum(_optional_none(r[4]) is not None for r in rows), skipped))
         picked += rows[:FLOW_PER_FLOW]
-        if f["platform_versions"] and flowlib.version_match(f["platform_versions"], version) is not True:
+        vm = flowlib.version_match(f["platform_versions"], version) if f["platform_versions"] else True
+        if vm is not True:
             vers += [v for v in f["platform_versions"] if v not in vers]
+            differ = differ or vm is False      # 숫자로 못 읽는 이슈 버전("17 QPR1")은 모름 — 기준 버전만 보인다(04 §5.13 (3))
     cut_line = ([f"- 흐름 점검: {', '.join(cut)} 반복이 많아 마지막 {flowlib.INSTANCES_MAX}번만 봄 — 이 범위에서는 판단 못 함"]
                 if cut else [])
     if not counts:
         return [], cut_line or ["- 흐름 점검: 해당 없음"]
-    tail = (f"흐름 기준 버전 {', '.join(vers)}" + (f" — 이 이슈는 {_clip(version, 20)}, 줄 문구가 다를 수 있다" if version else "")
+    tail = (f"흐름 기준 버전 {', '.join(vers)}" + (f" — 이 이슈는 {_clip(version, 20)}, 줄 문구가 다를 수 있다" if differ else "")
             if vers else "")
     analysis = []
     for _, _, _, f, inst, first in sorted(picked, key=lambda r: r[:3])[:FLOW_ANALYSIS_MAX]:
@@ -784,7 +787,7 @@ class ReportMixin:
         known = [f"{name} {iss[k]}" for name, k in (("SW", "sw"), ("발생 시각", "occurred_at")) if iss.get(k)]
         prob.append(f"- 이슈: {self.key} — {iss.get('summary') or '요약 없음'}" + (f" ({', '.join(known)})" if known else ""))
         if self.failed_step:
-            prob.append(add(4, f"실패 스텝 (보조 정보, Jira {self.failed_step['source']}; 점수·S/C에 쓰지 않음; 분석 범위·순위 참고): "
+            prob.append(add(4, f"실패 스텝 (보조 정보, Jira {self.failed_step['source']}; S/C에 쓰지 않음; 단어 겹침 가산·순위 참고·분석 범위): "
                                 f"{self.failed_step['text']}"))
         if self.clock and self.clock.get("mode") == "none":
             prob.append(add(5, f"장비 시각 미사용: 시계 정렬 불가({self.clock.get('reason')})"))
@@ -865,7 +868,7 @@ class ReportMixin:
             if (len(cands) > 1 and cands[1]["score"] == top["score"]
                     and (cands[1]["S"], cands[1]["C"]) == (top["S"], top["C"])):
                 n = sum(1 for c in cands if c["score"] == top["score"])
-                cause_l.append(f"- 순위 참고: 규칙 일치 점수 동점 후보 {n}개 — 발생 시각 근접·키워드 근거 순으로 정렬했다(원인 확정 아님)")
+                cause_l.append(f"- 순위 참고: 규칙 일치 점수 동점 후보 {n}개 — 발생 시각 근접·키워드 근거, 맞은 조건 수 순으로 정렬했다(원인 확정 아님)")
         else:
             if unjudged.get("count"):
                 cause_l.append(f"- 분류 후보: **판정 불완전** — 증상 시그니처에 맞는 유형 없음, 판정 불가 유형 {unjudged['count']}개 "

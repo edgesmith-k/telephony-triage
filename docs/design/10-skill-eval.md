@@ -123,7 +123,7 @@ skill-creator 스킬을 실행하고 아래를 입력으로 준다.
 45. 이슈 DB에 맞는 유형이 없는 로그(S=1 유형 없음) → "후보 없음" 절에 설명 기반 유사 후보(`db_search`)와 타임라인 요약의 오류·거부 이벤트, 범위·시계 판정이 나오고, 계획 op는 자동으로 만들지 않으며 "새 유형 / 원인 미확정 / 기록하지 않음"만 묻는다. 발생 시각이 로그 범위 밖이면 "로그 범위 밖"으로 따로 보고하고 `--full` 재파싱을 제안한다. bugreport zip을 로그로 주면 logcat 섹션만 추출해 같은 흐름을 진행하고 dumpsys 섹션은 읽지 않는다
 46. 후보 없음 로그에서 탐색 분석 여부를 묻고 승인되면 `JOB/timeline.md`만 읽어(`events.json`·`match.json`·`issue_raw.json`·로그 원문은 읽지 않음) 리포트 "탐색 분석 (추정)" 칸에 가설 1~3개(로그로 확인·코드로 추정·반대 근거·다음 확인)를 쓴다. 점수·확신도를 매기지 않고, Step 7 선택지는 "새 유형 / 원인 미확정 / 기록하지 않음" 그대로이며 가설로 op를 만들지 않는다
 47. 유형 일치·원인 미확인(듀얼 SIM 교차 슬롯) + `--explore` → 묻지 않고 탐색 분석. 다른 슬롯 흔적을 쓰는 가설에는 슬롯 차이를 반대 근거로 적는다. 사용자가 가설을 보류하면 `unresolved {type}`만 넣고, Jira 기록 `note`에 가설 한 줄(마스킹)을 남길지 묻는다
-48. Jira 실패 스텝 필드(`5 | 데이터 켜기`)가 있는 이슈(스텝 우선 유형 DB) → 리포트에 실패 스텝을 보이되 점수·S/C에 쓰지 않고, 계획 `issue.failed_step`에 그대로 복사해 PR의 Jira 기록에 `failed_step`이 남고 카테고리 README "자주 실패한 스텝"이 갱신된다
+48. Jira 실패 스텝 필드(`5 | 데이터 켜기`)가 있는 이슈(스텝 우선 유형 DB) → 리포트에 실패 스텝을 보이되 S/C에 쓰지 않고, 계획 `issue.failed_step`에 그대로 복사해 PR의 Jira 기록에 `failed_step`이 남고 카테고리 README "자주 실패한 스텝"이 갱신된다
 49. 사용자가 시험 스텝 목록을 대화에 붙여넣음(로그에 스텝 마커 없음, 이슈 DB `step_events` 있음) → `JOB/steps-pasted.txt`에 써서 `--steps-file`로 넘기고, 스텝 순서 기준(`step_order`)으로 마지막 PASS 스텝 이후를 분석해 Jira 시각 근처의 이른 IMS 403이 아니라 DATA-001-01을 1위로 보고한다. 시계 차를 추측하지 않고, 끝난 뒤 `steps-pasted.txt`가 남지 않는다
 50. 로그 두 개(main·radio) → 리포트 근거 줄의 위치 표기 `(f<n>:L<m>)`를 그대로 두고, 그 원인의 양성 fixture를 `parse_logcat.py cut --evidence JOB/match.json`으로 만들 때 triage에 준 로그를 같은 순서로 준다. `evidence-ref-mismatch` 경고가 나오면 사용자에게 알리고 순서를 맞춰 다시 자른다
 51. "분석만 해줘, 기록하지 마" → `triage.py run --analysis-only`로 Step 6 리포트까지만 보이고(5-1·5-2 포함), `plan.json`·`db_pr stage`·`publish`·PR 없이 끝나며 lock이 남지 않는다. 기록하려면 플래그 없이 다시 실행한다고 안내한다(RF-7)
