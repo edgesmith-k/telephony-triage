@@ -983,6 +983,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return checks_u(eid, ctx)
     if eid == 71:
         return checks_k(eid, ctx)
+    if eid in (81, 82, 83):
+        return checks_fl(eid, ctx)
     if eid == 72:
         return checks_m(eid, ctx)
     if eid in (76, 77, 78, 79):
@@ -3438,6 +3440,253 @@ def checks_k(eid, ctx):
         return ok and ctx.branches() == ["main"] and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}; {ev}"
 
     return [None, applies, unchanged, shown_patch, plan_clean, dry]
+
+
+# --- 성공 흐름 제안 eval 81~83 (배치 FL, 04-parser-matching.md §5.13 (3)) ------------------------------------------
+
+FLOW_STEP_81 = "network/radio-on/registered"
+FLOW_SEEDS = HERE.parents[1] / "templates" / "issue-db-seeds" / "android"
+# JOB/plan.json에 쓰는 Bash: 리디렉션·tee·파이썬 쓰기. 못 알아보면 None → 순서는 수동 채점
+_PLAN_WRITE = re.compile(r">\s*[\"']?[^\s;|&\"']*plan\.json|\btee\b[^\n|;&]*plan\.json|write_text|json\.dump|open\([^)\n]*plan\.json")
+# eval 83 넓이 검사용 합성 줄(초, 태그, msg): e083의 정상 구간과, 연결 줄만 다른 DN 줄로 바꾼 구간. 넓은 패턴이면 뒤쪽도 끝까지 ok다
+_E83_HEAD = [(0.0, "DN-1-C", "ConnectingState: setupData: accessNetwork=EUTRAN, isSatellite=false"),
+             (0.133, "DN-1-C", "ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=NONE(0x0) "
+                               "retry=-1 cid=1 ifname=rmnet0 addresses=[192.0.2.15/24] dnses=[/192.0.2.3] gateways=[/192.0.2.2] pcscf=[]"),
+             (0.133, "DN-1-C", "ConnectingState: sendLinkProperties {InterfaceName: rmnet0 LinkAddresses: [ 192.0.2.15/24 ] DnsAddresses: "
+                               "[ /192.0.2.3 ] Domains: null MTU: 1500 Routes: [ 0.0.0.0/0 -> 192.0.2.2 rmnet0 mtu 1500 ]}")]
+_E83_VALID = (0.308, "DNC-0", "onDataNetworkValidationStatusChanged: [DataNetwork: DN-1-C, mock.apn, state=ConnectedState], "
+                              "validation status=VALID,")
+E83_GOOD = _E83_HEAD + [(0.136, "DN-1-C", "ConnectedState: Data network connected, transport=WWAN"), _E83_VALID, (30.0, "Other", "tick")]
+E83_BROKEN = _E83_HEAD + [(0.136, "DN-1-C", "ConnectingState: Data network agent registered, transport=WWAN"), _E83_VALID,
+                          (30.0, "Other", "tick")]
+
+
+def seed_flow(ref: str) -> dict:
+    cat = ref.partition("/")[0]
+    plan = json.loads((FLOW_SEEDS / cat / "plan.json").read_text(encoding="utf-8"))
+    return next(o["flow"] for o in plan["operations"] if o["op"] == "put-flow" and o["ref"] == ref)
+
+
+def flow_verdicts(flow: dict, rows) -> list[list[str]]:
+    """초안 흐름을 합성 줄(초, 태그, msg)에 돌린 인스턴스별 단계 판정(엔진 `common.flows.check`, 로그 파서 없이)."""
+    from datetime import datetime, timedelta, timezone
+    from common import flows as flowlib, logtime
+    t0 = datetime(2026, 11, 14, 1, 20, tzinfo=timezone.utc)
+    recs = [{"ts": logtime.format_ts(t0 + timedelta(seconds=sec)), "pid": 2101, "tag": tag, "msg": msg,
+             "phone_id": 0 if tag.startswith("DNC") else None, "event": None, "line_ref": {"file_index": 0, "line_no": n}}
+            for n, (sec, tag, msg) in enumerate(sorted(rows, key=lambda r: r[0]), 1)]
+    out, _ = flowlib.check([{**flow, "category": "data", "ref": "data/data-setup"}], recs,
+                           [f"{r['tag']}: {r['msg']}" for r in recs], timeout_ms=0)
+    return [[s["verdict"] for s in inst["steps"]] for inst in out[0]["instances"]]
+
+
+def plan_write_at(ctx, needle: str) -> int | None:
+    """JOB/plan.json에 needle이 든 내용을 처음 쓴 도구 호출의 seq 순번(Write·Edit 또는 plan.json에 쓰는 Bash). 못 찾으면 None."""
+    for i, e in enumerate(ctx.seq() or []):
+        if e["kind"] != "tool" or shown.not_run(e) or not isinstance(e["input"], dict):
+            continue
+        if e["name"] in FILE_WRITE_TOOLS:
+            if str(e["input"].get("file_path", "")).replace("\\", "/").endswith("plan.json") \
+                    and needle in json.dumps(e["input"], ensure_ascii=False):
+                return i
+        elif e["name"] == "Bash":
+            raw = str(e["input"].get("command", ""))
+            if "plan.json" in raw and needle in raw and _PLAN_WRITE.search(raw):
+                return i
+    return None
+
+
+def _ask_all(inp) -> str:
+    """질문 도구 입력의 글 전부(질문 + 모의 ask_user `options` — `shown.ask_text`는 question만 돌려준다)."""
+    opts = inp.get("options") if isinstance(inp, dict) else None
+    return " ".join([shown.ask_text(inp), *map(str, opts if isinstance(opts, list) else [])])
+
+
+def _seen_at(ctx, pred, start: int = 0) -> int | None:
+    """seq[start:]에서 사용자에게 보인 글(assistant 텍스트·질문과 선택지, 거부된 질문 제외)이 pred를 만족하는 첫 순번."""
+    for i, e in enumerate(ctx.seq() or []):
+        if i < start:
+            continue
+        text = e["text"] if e["kind"] == "text" else _ask_all(e["input"]) if shown._live_ask(e) else None
+        if text is not None and pred(text):
+            return i
+    return None
+
+
+def _ask_from(ctx, start: int | None) -> int | None:
+    seq = ctx.seq() or []
+    return None if start is None else next(iter(ctx._asks(start, len(seq))), None)
+
+
+def shown_then_asked_before_write(ctx, shown_pred, needle: str, start: int = 0):
+    """초안(shown_pred)을 보이고(start 뒤) 그 뒤(같은 질문 포함) 질문을 한 다음에 needle을 plan.json에 썼다(V-5)."""
+    if ctx.seq() is None:
+        raise _Manual("실행 기록(events.jsonl) 없음")
+    w = plan_write_at(ctx, needle)
+    d = _seen_at(ctx, shown_pred, start)
+    a = _ask_from(ctx, d)
+    if w is None:
+        raise _Manual(f"{needle!r}을 plan.json에 쓴 호출을 못 찾음(초안 보임 seq {d}, 질문 seq {a})")
+    return d is not None and a is not None and a < w, f"초안 보임 seq {d}, 그 뒤 질문 seq {a}, plan.json 쓰기 seq {w}"
+
+
+def _job_ops(ctx, job: str) -> list[dict]:
+    return [o for o in (ctx.plan(job) or {}).get("operations") or [] if isinstance(o, dict)]
+
+
+def _dry_clean(ctx, job: str):
+    def check():
+        ok, ev = ctx.lock_free()
+        br = f"issue/{job}"
+        clean = ok and br not in ctx.branches() and not ctx.prs() and not ctx.pending()
+        return clean, f"branches={ctx.branches()} prs={len(ctx.prs())} pending={ctx.pending()}; {ev}"
+    return check
+
+
+def checks_fl(eid, ctx):
+    """성공 흐름 제안 eval 81~83(배치 FL): 리포트 흐름 줄 표시, 계획 op 내용, 초안·질문이 plan.json 쓰기보다 먼저(V-5),
+    eval 83은 초안 흐름의 넓이(합성 줄로 엔진을 직접 돌림)·fixture·R4."""
+    job = f"MOCK-90{eid}"
+    step7 = lambda: ctx.step7_index() or 0  # noqa: E731 — 분류 질문 뒤에 보인 글만 초안으로 센다(리포트의 흐름 줄 제외)
+    if eid == 81:
+        def new_cause():
+            ops = [o for o in _job_ops(ctx, job) if o.get("op") == "new-cause"]
+            c = (ops[0].get("cause") or {}) if ops else {}
+            sigs = json.dumps(c.get("signatures"), ensure_ascii=False)
+            ok = bool(ops) and ops[0].get("temp_id") == "NEW-CAUSE-1" and ops[0].get("type") == "NETWORK-001" \
+                and c.get("flow_step") == FLOW_STEP_81 and "network_registration_rejected" in sigs and re.search(r"(?<!\d)7(?!\d)", sigs)
+            return bool(ok), json.dumps(ops, ensure_ascii=False)[:700]
+
+        def fixture():
+            ops = [o for o in _job_ops(ctx, job) if o.get("op") == "add-fixture"]
+            ok = any(o.get("for") == "NEW-CAUSE-1" and o.get("kind") == "positive" for o in ops) and " cut " in ctx.ran
+            return ok, json.dumps(ops, ensure_ascii=False)
+
+        def order():
+            return shown_then_asked_before_write(ctx, lambda t: FLOW_STEP_81 in t and "flow_step" in t, FLOW_STEP_81, step7())
+        return [_report_check(ctx, job, r"새 원인 초안 참고 \(흐름\): flow_step network/radio-on/registered",
+                              source_patterns=(r"^- 분류 후보:[^\n]*원인 미확인",)),
+                new_cause, order, fixture, ctx.draft_shown, _dry_clean(ctx, job)]
+    if eid == 82:
+        line = "규칙 제안 (흐름): [이슈 DB] set-flow-step NETWORK-001-01 network/radio-on/registered"
+        want = [{"op": "append", "cause": "NETWORK-001-01"},
+                {"op": "set-flow-step", "cause": "NETWORK-001-01", "flow_step": FLOW_STEP_81}]
+
+        def asked_first():
+            seq = ctx.seq()
+            if seq is None:
+                raise _Manual("실행 기록(events.jsonl) 없음")
+            s7 = ctx.step7_index()
+            if s7 is None:
+                return False, "분류 질문 없음"
+
+            def asks_line(e):
+                if shown._live_ask(e):
+                    return "set-flow-step" in _ask_all(e["input"])
+                return e["kind"] == "text" and "set-flow-step" in e["text"] and is_question(e["text"], ".")
+            q = next((i for i in range(s7 + 1, len(seq)) if asks_line(seq[i])), None)
+            w = plan_write_at(ctx, "set-flow-step")
+            if w is None and q is not None:
+                raise _Manual(f"set-flow-step을 plan.json에 쓴 호출을 못 찾음(질문 seq {q})")
+            return q is not None and w is not None and q < w, f"분류 질문 seq {s7}, 흐름 줄 질문 seq {q}, plan.json 쓰기 seq {w}"
+
+        def plan():
+            p = ctx.plan(job) or {}
+            ops = _job_ops(ctx, job)
+            key = lambda o: json.dumps(o, sort_keys=True)  # noqa: E731
+            ok = sorted(map(key, ops)) == sorted(map(key, want)) and (p.get("feedback") or {}).get("decision") == "accepted"
+            return ok, json.dumps({"ops": ops, "fb": p.get("feedback")}, ensure_ascii=False)[:600]
+
+        def no_authoring():
+            if ctx.tool_uses() is None:
+                raise _Manual("실행 기록(events.jsonl) 없음")
+            hits = ctx.opened("db-authoring.md")
+            return not hits, f"db-authoring.md 열람 {len(hits)}회"
+        return [_report_check(ctx, job, re.escape(line), top="NETWORK-001-01"), asked_first, plan, no_authoring,
+                lambda: ctx.screen_has("push", r"flow_step: network/radio-on/registered"), _dry_clean(ctx, job)]
+    # eval 83
+    orig = seed_flow("data/data-setup")
+    orig_conn = next(s for s in orig["steps"] if s["id"] == "connected")
+
+    def put_op():
+        return next((o for o in _job_ops(ctx, job) if o.get("op") == "put-flow" and o.get("ref") == "data/data-setup"), None)
+
+    def added() -> list[str]:
+        op = put_op() or {}
+        conn = next((s for s in (op.get("flow") or {}).get("steps") or [] if isinstance(s, dict) and s.get("id") == "connected"), {})
+        return [p for p in conn.get("patterns") or [] if p not in orig_conn["patterns"]]
+
+    def flow_content():
+        op = put_op()
+        if op is None:
+            return False, f"put-flow data/data-setup 없음: {json.dumps(_job_ops(ctx, job), ensure_ascii=False)[:400]}"
+        flow = json.loads(json.dumps(op.get("flow") or {}))
+        conn = next((s for s in flow.get("steps") or [] if isinstance(s, dict) and s.get("id") == "connected"), {})
+        pats = list(conn.get("patterns") or [])
+        vers = {str(v) for v in flow.get("platform_versions") or []}
+        keep = all(p in pats for p in orig_conn["patterns"]) and len(pats) > len(orig_conn["patterns"])
+        rest, base = json.loads(json.dumps(flow)), json.loads(json.dumps(orig))
+        for f in (rest, base):
+            f.pop("platform_versions", None)
+            for s in f.get("steps") or []:
+                if isinstance(s, dict) and s.get("id") == "connected":
+                    s.pop("patterns", None)
+        ok = keep and {"16", "17"} <= vers and rest == base
+        return ok, f"연결 patterns={pats}; platform_versions={sorted(vers)}; 다른 칸 그대로={rest == base}"
+
+    def width():
+        op = put_op()
+        if op is None:
+            return False, "put-flow 없음"
+        try:
+            good, broken = flow_verdicts(op["flow"], E83_GOOD), flow_verdicts(op["flow"], E83_BROKEN)
+        except Exception as exc:  # noqa: BLE001 — 초안 흐름 모양이 틀리면 실패로 보인다
+            return False, f"초안 흐름을 엔진에 돌리지 못함: {exc}"
+        ok = bool(good) and all(v == "ok" for v in good[0]) and bool(broken) and any(v != "ok" for v in broken[0])
+        return ok, f"새 문구 정상 구간 {good}; 연결 줄 바꾼 구간 {broken}"
+
+    def fixture():
+        op = put_op() or {}
+        pats = added()
+        texts = []
+        for item in op.get("fixtures") or []:
+            p = Path(str(item.get("path", "")))
+            p = p if p.is_absolute() else ctx.work / job / p
+            texts.append(_read(p))
+        cut = [ln for ln in ctx.ran.splitlines() if "parse_logcat" in ln and re.search(r"\bcut\b", ln) and "--around" in ln
+               and "--rules" in ln]
+        hit = any(re.search(p, ln) for t in texts for ln in t.splitlines() for p in pats if _safe_rx(p))
+        return bool(texts) and all(texts) and bool(cut) and hit, \
+            f"fixtures={[i.get('path') for i in op.get('fixtures') or []]}; cut --around --rules 호출 {len(cut)}개; 새 문구 줄 {hit}"
+
+    def r4():
+        ok, ev = ctx.draft_shown()
+        w = ctx._draft_window()
+        row = next((r for r in (w or {}).get("rules") or [] if r.get("id") == "R4"), None)
+        good = bool(row) and row.get("status") == "pass" and "흐름 fixture" in str(row.get("reason"))
+        return ok and good, f"{ev}; R4={row}"
+
+    def order():
+        pats = added()
+        if not pats:
+            return False, "더한 문구 없음"
+        seen = lambda t: any(v in t for p in pats for v in (p, p.replace("\\", "\\\\"), p.replace("\\", "")))  # noqa: E731
+        return shown_then_asked_before_write(ctx, seen, "put-flow", step7())
+
+    def append_dry():
+        ok, ev = _dry_clean(ctx, job)()
+        has = {"op": "append", "cause": "DATA-002-01"} in _job_ops(ctx, job)
+        return ok and has, f"append DATA-002-01={has}; {ev}"
+    return [_report_check(ctx, job, re.escape("규칙 제안 (흐름): [이슈 DB] put-flow data/data-setup"), top="DATA-002-01"),
+            order, flow_content, width, fixture, r4, append_dry]
+
+
+def _safe_rx(pattern: str) -> bool:
+    try:
+        re.compile(pattern)
+    except re.error:
+        return False
+    return True
 
 
 MERGE_LINE = "^" + re.escape(_SCREEN_LINE) + r"[ \t\r]*$"     # db_summary가 찍는 병합 줄(merge.SCREEN_LINE) 그대로

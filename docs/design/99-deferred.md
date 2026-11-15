@@ -167,21 +167,19 @@ DB에 맞는 것이 없고 탐색으로도 가설이 서지 않으면 "가설 �
 
 지금 만들지 않은 이유: 새 버전 소스가 없고, 버전별 시드를 미리 일반화하면 쓰지 않을 구조가 된다.
 
-## L. 성공 흐름 PR 2 (분석 중 흐름 수정 제안, PR 1 바로 뒤)
+## L. 성공 흐름 남은 일 (PR 2 뒤)
 
-PR 1(`04-parser-matching.md §5.13`)은 엔진·리포트 절·`put-flow`·검증·시드 흐름 2개까지이고 스킬 문서(`SKILL.md`·`reference/`)를 바꾸지 않았다. 그래서 지금은
-**메인테이너·작성자가 손으로 쓴 `put-flow` 계획**으로만 흐름을 넣고 고친다. 남은 것:
-- 분석 중 흐름 수정 제안: SKILL Step 7 `[이슈 DB]` 열거에 `put-flow`·`set-flow-step`, `reference/db-authoring.md` 흐름 작성 지침(새 문구는 마스킹된 로그 줄로만, 정상 fixture 필수,
-  단계 삭제 조건), `tools/gen_contracts.py` `OPS`에 `put-flow`(요약 블록이 스킬 문서에 들어간다), 초안 검증 표에 흐름 결과, 리포트 `규칙 제안 (흐름)` 줄과 흐름용 코드 대조,
-  분석 중 새 원인에 `flow_step` 제안 → 고친 스킬의 eval(추정 비용을 보이고 승인 뒤).
-- `set-flow-step` op(기존 원인에 `flow_step`을 걸거나 지우기) — 지금은 `new-cause`·`new-type`에만 실을 수 있다. 사내에 시드가 이미 들어갔으면 먼저 필요하다.
+PR 1(`04-parser-matching.md §5.13`)은 엔진·리포트 절·`put-flow`·검증·시드 흐름 2개, PR 2는 리포트 제안 줄(`규칙 제안 (흐름)`·`새 원인 초안 참고 (흐름)`, §5.13 (3))·`set-flow-step` op·스킬 문서(SKILL Step 7·`reference/db-authoring.md` §8)·eval 81~83이다. 남은 것:
+- 흐름용 코드 대조: 정규식 패턴에서 글자를 뽑아 `code_roots.py find-text`에 넘기는 새 배관이 필요하다. 지금은 버전 조건과 초안 검증 R4가 거짓 제안이 계획에 들어가는 것을 막는다(질문 하나는 늘 수 있다).
+- 같은 버전 안에서 벤더 빌드가 문구를 바꾼 경우: put-flow 제안 줄은 이슈 버전을 알고 흐름 기준과 다를 때만 나온다. 지금은 사용자가 요청할 때만 고친다(K절과 같이 본다).
+- 새 흐름 자동 제안: 이슈 로그 하나로 흐름 전체를 만들면 품질이 낮고, 흐름 없는 카테고리 분석마다 질문이 는다. 지금은 요청할 때만.
 - README·CHANGELOG 흐름 표(`db_build`) — 생성 결과가 바뀌어 `GENERATOR_VERSION`을 올려야 한다(`06-collaboration.md §6.4`).
 - 흐름 칸 `normal_noise`(기다리는 동안 나와도 정상인 줄)·`key: none`·`added_on`·`reason`, DB 안의 깨진 흐름(`broken`) fixture.
 - 버전 자동 선택: 같은 카테고리에 시작 줄이 같은 버전별 흐름이 있을 때 이슈 버전으로 하나만 돌리기(규칙 후보는 설계 검증 과제 6). 그때 `db_lint` `flow-start` 오류를 겹치지 않는 `platform_versions` 검사로 바꾼다.
 - INTERNET이 아닌 PDN(IMS 등)에서 `onDataNetworkValidationStatusChanged`가 찍히는지 사내 첫 실행에서 확인 — `ConnectivityService.handleNetworkTested`는 결과가 오면 항상 agent에 알리지만 NetworkMonitor 쪽은 사외에서 확인 못 함. 안 찍히면 `data-setup`의 `validated`를 `optional`로.
 - 듀얼 SIM: 슬롯 없는 줄(`DN-<id>-C`)을 먼저 연 인스턴스가 가져간다(확인 리뷰 C-3) — 슬롯이 확정된 앞 단계(`DNC-<n>`)와 잇는 방법은 사내 듀얼 SIM 로그를 보고 정한다. 기본 데이터가 아닌 슬롯에서 INTERNET 평가 거부 줄이 계속 찍히는지(찍히면 그 사유를 `data-allowed` 패턴에서 뺀다)도 같이 본다.
 - `JOB/flow.json`은 흐름 단계에 닿기 전에 멈춘 실행에서 이전 것이 남을 수 있다(C-5 — 판정에 쓰는 것은 `analysis.json flows`다). 상한(뒤 1000개)에 일부만 잘린 범위는 리포트가 알리지 않는다(C-6 — 범위 안에 하나도 없을 때만 알린다).
-- 되살리는 조건: PR 1 병합 뒤. eval 비용은 PR 2 착수 때 추정한다.
+- 되살리는 조건: 항목마다 위에 적은 확인(사내 로그·새 버전) 뒤. 스킬 문서를 바꾸면 그 흐름의 eval(81~83) 비용을 먼저 보인다.
 
 ## M. 마스킹 끔 DB의 남은 곳 (11/15 마스킹 끔 PR 뒤)
 

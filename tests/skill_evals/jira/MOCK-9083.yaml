@@ -1,0 +1,17 @@
+# 스킬 eval 83용 모의 Jira 티켓 (tests/skill_evals/README.md). 형식은 tests/mocks/jira/*.yaml과 같다.
+key: MOCK-9083
+fields:
+  summary: 사용 중 데이터가 끊김
+  description: |
+    인터넷을 쓰다가 1분쯤 뒤 데이터가 끊겼습니다.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10001: "2026-11-14T10:21:01+0900"
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20260915
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments: []

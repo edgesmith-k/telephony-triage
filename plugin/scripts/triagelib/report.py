@@ -376,12 +376,45 @@ def _step_words(title: str, s: dict, notes: list) -> str:
     return text + (f"({why})" if why else "")
 
 
+def _in_instance(ts_list, f: dict, inst: dict) -> bool:
+    """근거 시각 하나라도 인스턴스 시작~끝(끝이 없으면 같은 흐름 다음 인스턴스 시작, 그것도 없으면 로그 끝) 안이다."""
+    lo = _parse_ts(inst["start_ts"])
+    hi = _parse_ts((inst.get("end") or {}).get("ts")) or min(
+        (t for i in f["instances"] if (t := _parse_ts(i["start_ts"])) and t > lo), default=None)
+    return any(t and lo <= t and (hi is None or t <= hi) for t in map(_parse_ts, ts_list))
+
+
+def _flow_hint(f: dict, inst: dict, first: int, version, causes: dict, top: dict | None) -> str | None:
+    """첫 벗어난 인스턴스의 멈춘 단계에 거는 제안 한 줄(04 §5.13 (3), 사용자 확인 뒤에만 계획에 들어간다). 없으면 None."""
+    st, verdict = f["steps"][first], inst["steps"][first]["verdict"]
+    ref = f"{f['flow']}/{st['id']}"
+    # 문구 다름 후보: 이슈 버전을 알고 흐름 기준과 다르고 단계 줄이 없으며, 같은 로그에 그 단계를 정상으로 지난 인스턴스가 없다
+    if (verdict == "없음" and flowlib.version_match(f["platform_versions"], version) is False
+            and not any(i["steps"][first]["verdict"] == "ok" for i in f["instances"])):
+        return (f"규칙 제안 (흐름): [이슈 DB] put-flow {f['flow']} — 근거: 흐름 기준 버전 {', '.join(f['platform_versions'])}·"
+                f"이 이슈 {_clip(version, 20)}, {st['title']} 줄 없음 — 문구 다름 후보 "
+                "(Step 7, 새 문구로 끝까지 정상인 구간이 있을 때만·사용자 확인 뒤에만)")
+    # 원인-단계: 1위가 같은 카테고리이고 1위 근거 시각이 이 인스턴스 안이다(다른 시각대의 벗어남에 걸지 않는다)
+    if not top or top.get("category") != f["flow"].split("/")[0] or not _in_instance(top.get("ts") or (), f, inst):
+        return None
+    if top.get("cause"):
+        if any(c == top["cause"] for v in causes.values() for c, _ in v):     # 이미 단계가 걸린 원인
+            return None
+        return (f"규칙 제안 (흐름): [이슈 DB] set-flow-step {top['cause']} {ref} — 근거: 1위 원인에 흐름 단계 없음, "
+                f"이 로그는 {st['title']}에서 벗어남 (Step 7, 1위로 확정할 때만·사용자 확인 뒤에만)")
+    if top.get("unjudged"):         # 판정 불가면 원인을 만들지 않는다(SKILL Step 7)
+        return None
+    return (f"새 원인 초안 참고 (흐름): flow_step {ref} — 근거: 1위 증상 근거가 {st['title']}에서 벗어난 인스턴스 안 "
+            "(이 유형의 새 원인을 만들 때만 cause.flow_step에)")
+
+
 def flow_section(doc: dict, window: dict | None, around: str | None, version, causes: dict,
-                 ranked: list | tuple = ()) -> tuple[list, list]:
+                 ranked: list | tuple = (), top: dict | None = None) -> tuple[list, list]:
     """성공 흐름 점검 (04-parser-matching.md §5.13, 판정·점수 아님, S/C 불변): `flow.json` → (analysis.json `flows[]` ≤ 3,
     report.md 줄 ≤ 1,200 B). 분석 범위 안에서 시작한 인스턴스만, 벗어난 것(값이상·없음) 먼저·발생 시각에 가까운 순, 흐름당 ≤ 3.
     범위 안 인스턴스가 없으면 `해당 없음`(흐름 인스턴스가 상한에 잘렸으면 판정 못 함 줄), 모두 정상이면 한 줄(선택 단계 줄 없음도 정상).
-    `causes`: `{"<cat>/<흐름>/<단계>": [(원인 ID, title)]}`(active, DB 순서) — `ranked`(매칭 후보 원인 ID, 순위 순)에 있는 것을 먼저."""
+    `causes`: `{"<cat>/<흐름>/<단계>": [(원인 ID, title)]}`(active, DB 순서) — `ranked`(매칭 후보 원인 ID, 순위 순)에 있는 것을 먼저.
+    `top`: 1위 후보 `{cause, category, unjudged, ts}`(후보가 없으면 None) — 첫 벗어난 인스턴스 블록 뒤 제안 줄 하나(`_flow_hint`)."""
     lo, hi = (_parse_ts(window.get("start")), _parse_ts(window.get("end"))) if window else (None, None)
     at = _parse_ts(around)
     ranked = list(ranked)
@@ -433,7 +466,7 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
             text = ", ".join(f"{t} {n}회" for t, n, _, _, _ in counts) + " 끝까지 정상"
         return analysis, ["- 흐름 점검: " + text + (f" ({tail})" if tail else "")] + cut_line
     lines = [f"- 흐름 점검 (참고용, 후보 순위와 점수는 그대로{'; ' + tail if tail else ''}):"]
-    for _, _, _, f, inst, first in picked:
+    for n, (_, _, _, f, inst, first) in enumerate(sorted(picked, key=lambda r: r[:3])):    # 벗어난 것 먼저(흐름 순서 아님)
         parts = []
         for st, s in zip(f["steps"], inst["steps"]):
             if s["verdict"] == "ok":
@@ -454,6 +487,9 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
             hit = causes.get(f"{f['flow']}/{st['id']}") or []
             owned = (" / 이 단계에 등록된 원인: " + ", ".join(f"{c} {_clip(t, 30)}" for c, t in hit[:3])) if hit else ""
             block.append("    " + _clip_bytes(f"→ 의심되는 곳: {st['suspect']}{owned}", 260))
+            hint = _flow_hint(f, inst, first, version, causes, top) if n == 0 else None
+            if hint:        # 근거 인스턴스 블록과 한 덩어리로 자리를 잡는다
+                block.append("    " + _clip_bytes(hint, 260))
         if len("\n".join(lines + block).encode("utf-8")) > FLOW_REPORT_MAX:    # 절 전체 ≤ 1,200 B: 넘치면 뒤 항목부터 뺀다
             break
         lines += block

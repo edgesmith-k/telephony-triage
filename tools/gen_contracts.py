@@ -55,7 +55,7 @@ BLOCK_MAX = 1152
 # 요약에 싣는 op(순서 그대로)와 하위 필수 키를 펼칠 속성, 값 목록·조건부 필수·선택 키를 펼칠 속성
 OPS = ("append", "unresolved", "new-cause", "new-type", "add-fixture", "update-signature", "add-parser-rule",
        "update-parser-rule", "set-resolution", "verify-resolution", "allow-cause", "reclassify", "update-fix",
-       "add-code-ref", "set-status")
+       "add-code-ref", "set-status", "put-flow", "set-flow-step")
 SUB_REQUIRED = {"new-cause": "cause", "new-type": "type", "verify-resolution": "verification"}
 DETAIL = {"add-fixture": "kind"}
 

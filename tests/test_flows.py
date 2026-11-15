@@ -12,6 +12,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPO = Path(__file__).resolve().parents[1]
@@ -514,3 +515,160 @@ def test_analysis_causes_only_for_deviation_and_start_repeat_wording():
     rows = RADIO[:2] + [(0.0015, *RADIO[0][1:])] + [(0.002, *RADIO[2][1:])] + [TICK]
     lines = flow_section({"flows": _check(rows, ("radio-on",))}, None, None, "17", {})[1]
     assert "무선 켬 SST-0 (같은 시작 줄이 1번 더 나옴) (f0:L1)" in lines[1] and "재시작" not in lines[1]
+
+
+# -- 흐름 제안 줄 (§5.13 (3), PR 2) ----------------------------------------------------------------------
+
+
+def _ts(sec: float) -> str:
+    return logtime.format_ts(T0 + timedelta(seconds=sec))
+
+
+OOS = RADIO[4][2].replace("mDataRegState=0(IN_SERVICE)", "mDataRegState=1(OUT_OF_SERVICE)")
+
+
+def _radio_bad(extra=()):
+    """무선 켬 SST-0이 망 등록에서 값이상(데이터 미등록)으로 멈춘 로그. extra는 뒤에 붙일 줄."""
+    return {"flows": _check(RADIO[:4] + [(0.5, "SST-0", OOS, PHONE, 0), *extra, TICK], ("radio-on",))}
+
+
+def _top(cause="NETWORK-001-01", category="network", ts=(1.0,), unjudged=False):
+    return {"cause": cause, "category": category, "unjudged": unjudged, "ts": [_ts(t) for t in ts]}
+
+
+def _hint(doc, version="17", causes=None, top=None) -> list[str]:
+    return [line.strip() for line in flow_section(doc, None, None, version, causes or {}, (), top)[1]
+            if "(흐름):" in line]
+
+
+def test_flow_hint_set_flow_step_only_for_top_cause_without_step_inside_instance():
+    doc = _radio_bad()
+    [line] = _hint(doc, top=_top())
+    assert line == ("규칙 제안 (흐름): [이슈 DB] set-flow-step NETWORK-001-01 network/radio-on/registered — 근거: 1위 원인에 "
+                    "흐름 단계 없음, 이 로그는 망 등록에서 벗어남 (Step 7, 1위로 확정할 때만·사용자 확인 뒤에만)")
+    lines = flow_section(doc, None, None, "17", {}, (), _top())[1]
+    assert lines.index("    " + line) == lines.index(next(x for x in lines if "→ 의심되는 곳" in x)) + 1, "근거 인스턴스 블록 바로 뒤"
+    # 이미 단계가 걸린 원인, 다른 카테고리 1위, 1위 근거가 인스턴스 밖(V-1)이면 없다
+    assert _hint(doc, causes={"network/radio-on/decide": [("NETWORK-001-01", "x")]}, top=_top()) == []
+    assert _hint(doc, top=_top(cause="DATA-001-01", category="data")) == []
+    assert _hint(doc, top=_top(ts=(-5.0,))) == []
+    ended = _radio_bad([(2.0, "SST-0", "setRadioPower power false forEmergencyCall false", PHONE, 0)])
+    assert _hint(ended, top=_top(ts=(1.0,))) and _hint(ended, top=_top(ts=(3.0,))) == [], "끝 줄 뒤 근거는 밖"
+    again = _radio_bad([(2.0, "SST-0", "setRadioPower power false forEmergencyCall false", PHONE, 0),
+                        *[(t + 3, tag, msg, *rest) for t, tag, msg, *rest in RADIO[:4]]])
+    assert _hint(again, top=_top(ts=(4.0,))) == [], "다음 인스턴스 시작 뒤 근거는 밖"
+    assert _hint(doc) == [], "후보가 없으면 없다"
+
+
+def test_flow_hint_new_cause_flow_step_unless_unjudged():
+    doc = _radio_bad()
+    [line] = _hint(doc, top=_top(cause=None))
+    assert line.startswith("새 원인 초안 참고 (흐름): flow_step network/radio-on/registered — 근거: 1위 증상 근거가 망 등록")
+    assert "규칙 제안" not in line, "규칙 제안 질문 항목이 아니다(새 원인 초안에 싣는다, W-2)"
+    assert _hint(doc, top=_top(cause=None, unjudged=True)) == [], "판정 불가면 원인을 만들지 않는다(V-2)"
+    assert _hint(doc, top=_top(cause=None, category="data")) == []
+
+
+def test_flow_hint_put_flow_only_when_version_known_different_and_step_never_ok():
+    missing = _check(_normal()[:3] + [TICK])                 # 연결 줄 없음
+    assert _sig(missing[0]["instances"][0]) == "ok ok 없음 -"
+    data_top = _top(cause="DATA-001-01", category="data", ts=(0.01,))
+    [line] = _hint({"flows": missing}, version="16", top=data_top)
+    assert line == ("규칙 제안 (흐름): [이슈 DB] put-flow data/data-setup — 근거: 흐름 기준 버전 17·이 이슈 16, 연결 줄 없음 "
+                    "— 문구 다름 후보 (Step 7, 새 문구로 끝까지 정상인 구간이 있을 때만·사용자 확인 뒤에만)")
+    assert len(line.encode("utf-8")) <= 260
+    # 버전 같음·모름이면 put-flow 줄 없이 원인-단계 줄로 간다
+    for version in ("17", None, "Android 16"):
+        assert [x.split(" — ")[0] for x in _hint({"flows": missing}, version=version, top=data_top)] == [
+            "규칙 제안 (흐름): [이슈 DB] set-flow-step DATA-001-01 data/data-setup/connected"], version
+    assert _hint({"flows": missing}, version="16") == ["규칙 제안 (흐름): [이슈 DB] put-flow data/data-setup — 근거: 흐름 기준 "
+                                                      "버전 17·이 이슈 16, 연결 줄 없음 — 문구 다름 후보 (Step 7, "
+                                                      "새 문구로 끝까지 정상인 구간이 있을 때만·사용자 확인 뒤에만)"]
+    # 값이상이면 문구 다름이 아니다
+    assert not any("put-flow" in x for x in _hint(_radio_bad(), version="16", top=_top()))
+    # V-3: 같은 로그(범위 밖 포함)에 그 단계를 정상으로 지난 인스턴스가 있으면 문구는 맞다
+    both = _check(_normal()[:3] + _normal(tag="DN-2-C", t=40.0) + [(80.0, "Other", "tick")])
+    assert [_sig(i) for i in both[0]["instances"]] == ["ok ok 없음 -", "ok ok ok ok"]
+    window = {"start": _ts(-1), "end": _ts(1)}
+    lines = flow_section({"flows": both}, window, _ts(0), "16", {}, (), data_top)[1]
+    assert [x.strip().split(" — ")[0] for x in lines if "(흐름):" in x] == [
+        "규칙 제안 (흐름): [이슈 DB] set-flow-step DATA-001-01 data/data-setup/connected"]
+
+
+def test_flow_hint_block_goes_first_and_section_stays_under_cap():
+    """W-3: 벗어난 인스턴스가 흐름 순서와 상관없이 먼저 찍히고, 제안 줄이 있어도 절 ≤ 1,200 B."""
+    radio = _check(RADIO[:4] + [(0.5, "SST-0", OOS, PHONE, 0), TICK], ("radio-on",))[0]
+    data = _check([r for k in range(3) for r in _normal(tag=f"DN-{k + 1}-C", t=k * 0.01)] + [TICK])[0]
+    lines = flow_section({"flows": [data, radio]}, None, None, "17", {}, (), _top())[1]
+    assert lines[1].startswith("  - 무선 켬 SST-0") and "(흐름):" in lines[3]
+    assert len("\n".join(lines).encode("utf-8")) <= 1200
+
+
+# -- eval 81~83 시나리오 오프라인 확인 (API eval 전, 검증 W-8) ----------------------------------------------
+
+EVALS = REPO / "tests" / "skill_evals"
+EVAL_HINTS = {81: ("새 원인 초안 참고 (흐름): flow_step network/radio-on/registered", None),
+              82: ("규칙 제안 (흐름): [이슈 DB] set-flow-step NETWORK-001-01 network/radio-on/registered", "NETWORK-001-01"),
+              83: ("규칙 제안 (흐름): [이슈 DB] put-flow data/data-setup", "DATA-002-01")}
+
+
+def _eval_run(eid: int, work: Path) -> tuple[Path, Path, dict, str]:
+    """eval setup과 같은 DB(샘플 + setup `flows` 시드 흐름)·시나리오 로그·모의 Jira로 triage를 오프라인으로 돌린다."""
+    import skill_eval_env
+    setup = next(e for e in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["evals"] if e["id"] == eid)["setup"]
+    db = work / "db"
+    shutil.copytree(SAMPLE, db)
+    skill_eval_env.put_seed_flows(db, setup["flows"])
+    [log] = [f for f in skill_eval_env._gen(EVALS / "scenarios" / setup["logs"][0]["scenario"], work / "gen") if f.suffix == ".log"]
+    [key] = setup["jira"]
+    analysis = run_json("triage.py", ["run", key, "--offline-db", db, "--out", work / "out", "--logs", log, "--issue-file",
+                                      EVALS / "jira" / f"{key}.yaml", "--tz", "Asia/Seoul", "--year", "2026"],
+                        env={"TT_SCHEMA_CHECK": "1"})
+    return db, log, analysis, (work / "out" / "report.md").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("eid", sorted(EVAL_HINTS))
+def test_eval_flow_scenarios_give_expected_hint_offline(eid):
+    work = tmp("tt-flows-eval-")
+    db, _, analysis, report = _eval_run(eid, work)
+    line, top = EVAL_HINTS[eid]
+    hints = [x.strip() for x in report.splitlines() if "(흐름):" in x]
+    assert len(hints) == 1 and hints[0].startswith(line + " — 근거:"), hints
+    assert analysis["candidates"][0]["cause"] == top and "(흐름):" not in json.dumps(analysis, ensure_ascii=False)
+    lint = run_json("db_lint.py", ["--db", db, "--all"], expect=(0, 1))
+    assert not [i for i in lint["errors"] + lint["warnings"] if "flow" in i["code"]], "setup flows DB는 흐름 lint 0(W-9)"
+
+
+def test_eval83_expected_put_flow_passes_r4_and_grader_width_check():
+    """eval 83의 기대 풀이(연결 단계에 새 문구 하나·버전 16, 그 인스턴스를 cut한 정상 fixture)가 초안 검증 R4를 통과하고,
+    채점기 넓이 검사가 그 풀이는 통과·`.*`처럼 넓은 문구는 실패로 본다."""
+    import copy
+
+    sys.path.insert(0, str(EVALS))
+    import grade
+    from workspace import Workspace
+    work = tmp("tt-flows-eval-")
+    db, log, _, _ = _eval_run(83, work)
+    flow = copy.deepcopy(grade.seed_flow("data/data-setup"))
+    next(s for s in flow["steps"] if s["id"] == "connected")["patterns"].append("ConnectedState: Data network connected,")
+    flow["platform_versions"].append("16")
+    assert all(v == "ok" for v in grade.flow_verdicts(flow, grade.E83_GOOD)[0])
+    assert grade.flow_verdicts(flow, grade.E83_BROKEN)[0][2] == "없음"
+    wide = copy.deepcopy(flow)
+    next(s for s in wide["steps"] if s["id"] == "connected")["patterns"].append("State: .*")
+    assert all(v == "ok" for v in grade.flow_verdicts(wide, grade.E83_BROKEN)[0]), "넓은 문구는 깨진 구간도 정상으로 만든다"
+    start = json.loads((work / "out" / "flow.json").read_text(encoding="utf-8"))["flows"][0]["instances"][0]["start_ts"]
+    ws = Workspace(src=db)
+    job = "MOCK-9083"
+    ws.acquire(job)
+    cut = ws.job_dir(job) / "fixtures" / "flow-1.log"
+    run_json("parse_logcat.py", ["cut", log, "--around", start, "--out", cut, "--rules", db / "parser-rules", "--tz", "Asia/Seoul",
+                                 "--year", "2026"])
+    assert "Data network connected, transport=WWAN" in cut.read_text(encoding="utf-8")
+    plan = {"source": "analyze", "schema_version": 1, "started_at": "2026-11-15T10:00+09:00", "issue": None, "feedback": None,
+            "included_pending": [], "commit_message": "[flow] data/data-setup", "pr": {"number": None, "branch": "issue/MOCK-9083", "head_sha": None},
+            "operations": [{"op": "put-flow", "ref": "data/data-setup", "flow": flow, "fixtures": [{"path": "fixtures/flow-1.log"}]}]}
+    plan_path = ws.plan(job, plan, match=None, draft_verified=False)
+    rows = {r["id"]: r for r in ws.json("db_verify.py", ["rules", "--plan", plan_path, "--draft", ws.job_dir(job) / "draft"],
+                                        expect=(0, 3))["rules"]}
+    assert rows["R4"]["status"] == "pass" and rows["R4"]["reason"].endswith("흐름 fixture 2개 끝까지 ok"), rows["R4"]

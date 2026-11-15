@@ -533,6 +533,17 @@
                         "properties": {"path": {"type": "string", "minLength": 1}, "origin": {"const": "synthetic"}}}
             }
           }
+        },
+        {
+          "$comment": "set-flow-step: 원인의 flow_step(성공 흐름 단계)을 쓰거나 \"\"로 지운다. 흐름·단계·카테고리는 stage db_lint flow-step이 본다 (04 §5.13)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "cause", "flow_step"],
+          "properties": {
+            "op": {"const": "set-flow-step"},
+            "cause": {"$ref": "#/$defs/causeRef"},
+            "flow_step": {"description": "causeBody.flow_step과 같은 형식, \"\"는 칸 지우기", "type": "string", "pattern": "^[a-z][a-z0-9_]*/[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+(-[a-z0-9]+)*$|^$"}
+          }
         }
       ]
     }

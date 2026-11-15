@@ -129,6 +129,12 @@ def drift_items(plan: dict, base: Snapshot, onto: Snapshot) -> list[dict]:
                     else:
                         pv = op.get("verification") if field == "resolution_verification" else None
                     add(i, op, op["cause"], field, ca.get(field), cb.get(field), pv)
+        elif kind == "set-flow-step":
+            check_active(i, op, op["cause"])
+            if not TEMP_RE.fullmatch(op["cause"]):
+                a, b = (base.cause(op["cause"]) or {}).get("flow_step"), (onto.cause(op["cause"]) or {}).get("flow_step")
+                if a != b:
+                    add(i, op, op["cause"], "flow_step", a, b, op["flow_step"])
         elif kind == "update-signature":
             owner = op["owner"]
             if TEMP_RE.fullmatch(owner):

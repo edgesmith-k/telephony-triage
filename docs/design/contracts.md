@@ -423,6 +423,7 @@
 | `add-fixture` | `for`, `kind`, `path` (+`build`: `fixed`·`recurrence`일 때) | fixture 파일, `.expect.yaml` | `path`는 절대 경로, 계획 디렉토리 기준 상대 경로, 없으면 **이슈 DB 기준 상대 경로** 순으로 찾는다(병합 계획이 옛 원인의 fixture를 새 원인 이름으로 복사할 때. 적용 중인 트리에서 읽고 트리 밖은 거부). 이름은 §fixture 표로 정한다. 번호 `<n1>`/`<n2>`는 **적용 시점에 최신 main 기준 다음 빈 번호**로 할당한다(계획에 쓰지 않음). `build`는 `sanitize_build`를 거친다. `expect`나 `occurred_at`이 기본값과 다를 때만 `.expect.yaml`을 쓴다 | `for`, 파일명, `expect` 값 |
 | `allow-cause` | `fixture`(유형 디렉토리 기준 경로 또는 같은 계획의 `add-fixture` 대상), `cause` | 그 fixture의 `.expect.yaml` `also_allowed` | `also_allowed`에 `cause`를 추가한다(`.expect.yaml`이 없으면 기본 기대값으로 만들고 추가). 대상 fixture가 양성·`recurrence`·`extra`·`"<유형 ID>:unresolved"` 기대값일 때만. `cause`는 그 fixture의 대상 원인 자신이나 같은 유형의 원인일 수 없다(같은 유형 안의 충돌은 시그니처 설계 문제). 같은 로그에 실제로 두 현상이 있을 때만 쓴다(§fixture). 대상 fixture가 다른 카테고리면 그 카테고리 오너(CODEOWNERS에 있을 때)가 리뷰어 제안에 추가된다(`02-config.md §5.3`) | `cause`, `fixture` 경로 |
 | `put-flow` | `ref`(`<category>/<흐름 id>`), `flow`(흐름 객체) (+`fixtures: [{path, origin?}]`) | 흐름 `<category>/flows/<id>.yaml`, 정상 fixture `<category>/flows/fixtures/<id>.normal.<n>.log` | 흐름을 **op 안의 객체로** 받아 파일을 통째로 넣거나 바꾼다(`yamldoc`). 이슈 DB `schema/flow.schema.json` 통과, `flow.id`·카테고리가 `ref`와 같고 카테고리가 `categories`에 있어야 한다. 정상 fixture가 1개 이상이어야 한다(이번 op의 것 + 트리에 이미 있는 것). 바꿀 때 없어지는 단계 id를 가리키는 원인 `flow_step`이 있으면 거부(`flow-step-in-use`). `fixtures[].path`는 `add-fixture`와 같은 경로 찾기·3단 마스킹을 거치고, 번호 `<n>`은 적용 시점 다음 빈 번호다. `origin: synthetic`은 시드 합성 표시(`check_boundary`)이고 이슈 DB에는 쓰지 않는다. 초안 검증 지문(`draftcheck`)의 작성 op다(04 §5.13) | — |
+| `set-flow-step` | `cause`, `flow_step`(`<category>/<흐름 id>/<단계 id>` 또는 `""`) | 원인 `flow_step` | 값이면 쓰고 `""`면 칸을 지운다. 흐름·단계가 있는지, 같은 카테고리인지는 stage `db_lint` `flow-step`이 본다(같은 계획의 앞 `put-flow` 반영 뒤 — 지운 뒤 그 단계를 없애는 `put-flow`는 통과한다). 새 원인은 `new-cause`의 `cause.flow_step`에 싣는다. 초안 검증 지문의 작성 op가 아니다(매칭·회귀 무관) | `cause` |
 
 - op는 `operations`의 **순서대로** 적용한다. 같은 대상에 대한 뒤의 op가 앞의 결과를 바꿀 수 있다(예: `new-cause` → `verify-resolution`).
 - 새 유형/원인의 `add-fixture`는 `for`에 `temp_id`를 쓴다.
@@ -445,6 +446,7 @@
 | `set-status` | 대상의 `status`가 바뀜 |
 | `allow-cause` | 대상 fixture가 없어짐, 또는 그 `.expect.yaml`의 `also_allowed`·`expect_top`이 바뀜 |
 | `put-flow` | 추가인데 main에 같은 흐름 파일이 생김 / 바꾸는데 main의 그 파일 내용이 `base_sha` 때와 다름(`plan_base_value`·`current_value`는 파일 글) |
+| `set-flow-step` | 대상 원인이 `active`가 아니게 됨, 또는 그 원인의 `flow_step`이 바뀜 |
 
 - drift 항목은 `{op_index, op, target, field, plan_value, plan_base_value, current_value}`다. 사용자에게는 세 값을 모두 보인다: **계획 값**(`plan_value`, 그 op가 쓰려는 값, op가 그 필드를 쓰지 않으면 `null`)·**계획 당시 main 값**(`plan_base_value`)·**현재 main 값**(`current_value`). `plan_base_value`를 "계획 값"으로 보이지 않는다.
 - drift 항목마다 사용자가 고른다: **계획 값 유지**(op 그대로) / **main 값 유지**(그 op 삭제) / **직접 입력**(op 수정). 결정을 계획에 반영하고 `base_sha`를 기준 SHA로 바꾼 뒤 다시 `stage`한다.

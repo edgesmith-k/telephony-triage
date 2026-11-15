@@ -1,4 +1,5 @@
-"""op `put-flow`: 성공 흐름 `<category>/flows/<id>.yaml`(+ 정상 fixture)을 넣거나 통째로 바꾼다 (04-parser-matching.md §5.13)."""
+"""op `put-flow`: 성공 흐름 `<category>/flows/<id>.yaml`(+ 정상 fixture)을 넣거나 통째로 바꾼다. op `set-flow-step`: 원인의
+`flow_step`을 쓰거나 지운다 (04-parser-matching.md §5.13)."""
 
 from __future__ import annotations
 
@@ -47,7 +48,7 @@ class FlowOps:
                            if c.get("flow_step") in gone)
             if users:
                 raise Reject("flow-step-in-use", f"흐름 {ref}에서 없어지는 단계를 원인이 가리킵니다: {', '.join(users)} "
-                             "(그 단계 id를 남긴다 — 원인의 flow_step을 바꾸는 op는 아직 없다(99-deferred L)).", i)
+                             "(그 단계 id를 남기거나, 먼저 set-flow-step으로 원인의 flow_step을 옮기거나 지운다).", i)
         fdir = path.parent / "fixtures"
         names = self._names(fdir)
         for item in op.get("fixtures") or []:
@@ -60,3 +61,11 @@ class FlowOps:
         if not any((m := FIXTURE_RE.match(name)) and m["id"] == fid for name in names):
             raise Reject("flow-fixture-missing", f"흐름 {ref}에 정상 fixture가 없습니다 (fixtures에 정상 로그를 하나 이상 싣는다).", i)
         self.tree.write(path, yamldoc.dump_doc(flow))
+
+    def op_set_flow_step(self, i, op):
+        """흐름·단계가 있는지와 같은 카테고리인지는 stage `db_lint` `flow-step`이 본다(같은 계획의 put-flow 반영 뒤)."""
+        _, cause = self._cause_or_reject(i, op["cause"])
+        if op["flow_step"]:
+            cause["flow_step"] = op["flow_step"]
+        else:
+            cause.pop("flow_step", None)

@@ -1,0 +1,26 @@
+# eval 83: 데이터 연결(DN-1-C)은 정상으로 끝까지 됐고, 1분 뒤 비행기 모드로 끊긴다 → DATA-002-01(1위, C=1).
+# 이슈 버전 16, 시드 흐름 data/data-setup 기준 버전 17. **연결 단계 줄 `ConnectedState: Data network connected, transport=WWAN`은
+# 지어낸 합성 문구다(실제 Android 16 문구가 아니다)** — 흐름 패턴 `ConnectedState: network connected\.`에 안 맞아 연결 단계가
+# `없음`(연결 해제로 끝남)이 되고, 같은 로그에 그 단계를 정상으로 지난 인스턴스가 없어 리포트가 put-flow 제안 줄을 낸다.
+# 나머지 줄은 Android 17 캡처 형식(시드 흐름 fixture·DATA-002-01 시나리오와 같은 모양), 주소는 문서용 TEST-NET.
+name: e083-flow-wording-16
+start: "2026-11-14T10:20:00+09:00"
+default_phone: 0
+phone_style: aosp
+pid: 2101
+tid: 2101
+entries:
+  - {at: 0, tag: "DN-1-C", msg: "ConnectingState: setupData: accessNetwork=EUTRAN, isSatellite=false, [DataProfile=[ApnSetting] mock.apn, 1, 00101, mock.apn, , null, , null, null, 0, default | supl, IP, IP, true, 0, false, 0, 0, 0, 0, 0, null, , false, UNKNOWN, UNKNOWN, 0, -1, -1, false, 3, 961, false, UNEDITED, TrafficDescriptor={mDnn=mock.apn, mOsAppId=null, mConnectionCapability=8}, preferred=true], isModemRoaming=false, allowRoaming=true, PDU session id=0, matchAllRuleAllowed=true"}
+  - {after: 0.133, tag: "DN-1-C", msg: "ConnectingState: onSetupResponse: resultCode=RESULT_SUCCESS, response=DataCallResponse: { cause=NONE(0x0) retry=-1 cid=1 linkStatus=2 protocolType=0 ifname=rmnet0 addresses=[192.0.2.15/24] dnses=[/192.0.2.3] gateways=[/192.0.2.2] pcscf=[] mtu=1500 mtuV4=1500 mtuV6=1500 handoverFailureMode=legacy pduSessionId=0 defaultQos=null qosBearerSessions=[] sliceInfo=null trafficDescriptors=[] networkValidationStatus=unsupported}"}
+  - {after: 0, tag: "DN-1-C", msg: "ConnectingState: sendLinkProperties {InterfaceName: rmnet0 LinkAddresses: [ 192.0.2.15/24 ] DnsAddresses: [ /192.0.2.3 ] Domains: null MTU: 1500 TcpBufferSizes: 2097152,6291456,16777216,512000,2097152,8388608 Routes: [ 0.0.0.0/0 -> 192.0.2.2 rmnet0 mtu 1500 ]}"}
+  - {after: 0.003, tag: "DN-1-C", msg: "ConnectedState: Data network connected, transport=WWAN"}
+  - {after: 0.172, tag: "DNC-{phone}", msg: "onDataNetworkValidationStatusChanged: [DataNetwork: DN-1-C, mock.apn, state=ConnectedState], validation status=VALID,"}
+  - {after: 0.2, tag: "DNC-{phone}", level: I, msg: "Internet data state changed from DISCONNECTED to CONNECTED."}
+  - {after: 60, tag: "AirplaneModeStats", msg: "Airplane mode change. Value: true", phone: null}
+  - {after: 0.01, tag: "SST-{phone}", msg: "powerOffRadioSafely: start"}
+  - {after: 0.01, tag: "DNC-{phone}", level: I, msg: "onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON"}
+  - {after: 0.01, tag: "DN-1-C", level: I, msg: "DisconnectingState: onTearDown: reason=AIRPLANE_MODE_ON"}
+  - {after: 0.7, tag: "DNC-{phone}", level: I, msg: "Internet data state changed from CONNECTED to DISCONNECTED."}
+  - {after: 0.01, tag: "DN-1-C", msg: "DisconnectedState: Data network disconnected. reason=AIRPLANE_MODE_ON"}
+  - {after: 0.01, ril_request: RADIO_POWER, serial: 61, args: "on = false"}
+  - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:DATA_SERVICE_STATE_CHANGED, Data disallowed reasons: SERVICE_OPTION_NOT_SUPPORTED NOT_IN_SERVICE RADIO_POWER_OFF, candidate profile=null"}
