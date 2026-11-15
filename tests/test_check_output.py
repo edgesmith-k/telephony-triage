@@ -349,6 +349,14 @@ def test_mask_off_events_leave_output_and_timeline_unmasked(tmp_path, capsys):
     assert head.startswith("- 이벤트 요약이다(원문 로그 아님)"), head
 
 
+def test_mask_off_emitted_line_equals_report_line(tmp_path, capsys):
+    """11/15 리뷰 D2-02: 마스킹 끔 DB에서는 돌려주는 줄(`line`, 꼭 보일 줄 기록)도 다시 가리지 않는다 — report.md 줄과 같은 글자."""
+    job = make_job(tmp_path, mask_off=True)
+    (job / "deep-output.md").write_text(_deep_out([Q1], layer="벤더 RIL(vrild) — APN 10.20.30.40 인증 거절"), encoding="utf-8")
+    code, data, _ = check(job, capsys=capsys)
+    assert code == 0 and "10.20.30.40" in _line(job) and data["line"] == _line(job), data
+
+
 def test_output_file_rewritten_masked(tmp_path, capsys):
     job = make_job(tmp_path)
     (job / "deep-output.md").write_text(_deep_out([Q1], against="imsi=450081234567890 가입자 문제 아님"), encoding="utf-8")
