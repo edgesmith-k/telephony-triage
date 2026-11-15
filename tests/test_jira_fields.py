@@ -76,7 +76,7 @@ def test_extract_reports_missing_fields():
     assert out["issue"] == {"key": "MOCK-9", "origin": "mcp"}
     assert out["missing_question"] == (
         'Jira에 비어 있는 항목이 있습니다. 기록에 넣을 값을 "항목: 값" 한 줄씩 알려 주세요.\n'
-        "- 필수: model(모델), platform_version(플랫폼 주 버전 — 숫자만, 예: 16)\n"
+        "- 필수: model(모델), platform_version(플랫폼 버전 — Android는 주 버전 숫자(예: 16), 그 밖 플랫폼은 Jira 버전 칸 값 그대로)\n"
         '- 선택: sw(SW 빌드 — 모르면 "모름", 그러면 기록하지 않음(수정·회귀 판단 불가)), '
         'carrier(캐리어 — "없음"이면 기록하지 않음), '
         'occurred_at(발생 시각 — 모르면 "모름", 그러면 occurred_on을 기록하지 않음)')
@@ -136,6 +136,28 @@ def test_meta_out_android_version_only_when_present():
         run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE, "--meta-out", meta], env=_home())
         metas.append(json.loads(meta.read_text(encoding="utf-8")))
     assert metas[0]["platform_version"] == "16" and "platform_version" not in metas[1]
+
+
+def test_multi_value_version_asks_for_one():
+    """다중 선택 버전 칸(지어낸 이름): 기록 초안에 넣지 않고 하나를 고르게 묻는다. 분석 meta에는 이은 값을 그대로 둔다."""
+    tmp = Path(tempfile.mkdtemp())
+    text = (MOCK_JIRA / "MOCK-1001.yaml").read_text(encoding="utf-8")
+    raw = tmp / "raw.yaml"
+    raw.write_text(text.replace('customfield_10004: "16"', 'customfield_10004: ["prodx", "m100"]'), encoding="utf-8")
+    meta = tmp / "meta.json"
+    out = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE, "--meta-out", meta], env=_home())
+    assert "platform_version" not in out["issue"] and out["missing"] == []
+    assert out["platform_version_all"] == "prodx, m100"
+    assert out["missing_question"] == (
+        'Jira에 비어 있거나 값이 여럿인 항목이 있습니다. 기록에 넣을 값을 "항목: 값" 한 줄씩 알려 주세요.\n'
+        "- 필수: platform_version(플랫폼 버전 — Jira 버전 칸에 값이 여럿(prodx, m100), 그중 기록할 값 하나)")
+    assert json.loads(meta.read_text(encoding="utf-8"))["platform_version"] == "prodx, m100"
+    raw.write_text(text.replace('customfield_10004: "16"', 'customfield_10004: ["16"]'), encoding="utf-8")
+    one = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE], env=_home())
+    assert one["issue"]["platform_version"] == "16" and one["missing_question"] is None and "platform_version_all" not in one
+    raw.write_text(text.replace('customfield_10004: "16"', 'customfield_10004: ["16", "16"]'), encoding="utf-8")
+    dup = run_json("jira_fields.py", ["extract", raw, "--origin", "file", "--db", SAMPLE], env=_home())
+    assert dup["issue"]["platform_version"] == "16" and dup["missing_question"] is None   # 같은 값이 겹친 목록은 하나
 
 
 def test_meta_out_sim_slot_only_when_present():

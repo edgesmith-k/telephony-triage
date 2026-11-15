@@ -328,7 +328,8 @@ IN_RANGE = {True: "발생 시각 포함", "partial": "발생 시각 일부", Fal
 def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str]) -> tuple[dict, str, dict]:
     """(sections, tail, info). fill이 None이면 LLM 칸은 TODO(LLM)."""
     jira_doc = _read(job.path("issue.json"), "issue.json") or {}
-    fields = jira_doc.get("issue") or {}
+    fields = dict(jira_doc.get("issue") or {})
+    fields.setdefault("platform_version", jira_doc.get("platform_version_all"))   # 다중 선택 버전 칸이면 이은 값
     note = ((plan or {}).get("issue") or {}).get("note")
     cl = classify(a, plan)
     s = {name: [] for name in issuepost.SECTIONS}

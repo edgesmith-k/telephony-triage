@@ -36,10 +36,19 @@ FIXTURE_RE = re.compile(r"^(?P<id>[a-z0-9]+(?:-[a-z0-9]+)*)\.normal\.(?P<n>[1-9]
 
 
 def version_match(versions, platform_version) -> bool | None:
-    """`match_signatures._version_match`와 같은 비교: 목록이 비거나 이슈 버전을 숫자로 못 읽으면 None."""
-    versions = [str(v).strip().split(".")[0] for v in versions or []]
-    found = re.fullmatch(r"\s*(\d+)(?:\.\d+)*\s*", str(platform_version or ""))
-    return (found.group(1) in versions) if versions and found else None
+    """`match_signatures._version_match`와 같은 비교. 목록이 비거나 이슈 버전이 없으면 None.
+    이슈 버전이 `16`·`16.0` 꼴이면 주 버전 숫자로 비교한다(Android). 아니면 목록이 모두 숫자일 때는 None(Android의
+    "Android 16"·"17 QPR1" — 지금과 같다), 글자 값이 있으면(oFono 제품 단위 이름·모델 코드) 이슈 값을 `/`·쉼표·공백으로
+    나눈 조각 중 하나라도 목록에 있으면 True(대소문자 무시), 없으면 False."""
+    raw = [str(v).strip() for v in versions or []]
+    text = str(platform_version or "")
+    found = re.fullmatch(r"\s*(\d+)(?:\.\d+)*\s*", text)
+    if found:
+        return (found.group(1) in [v.split(".")[0] for v in raw]) if raw else None
+    tokens = {t.casefold() for t in re.split(r"[/,\s]+", text) if t}
+    if not raw or not tokens or all(re.fullmatch(r"\d+(?:\.\d+)*", v) for v in raw):
+        return None
+    return bool(tokens & {v.casefold() for v in raw})
 
 
 def log_end_sec(config: dict) -> float:
