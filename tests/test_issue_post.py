@@ -231,10 +231,13 @@ def test_pull_skipped_must_show_line_is_not_posted():
     """07 §Step 9 ANALYSIS: pull 건너뜀 줄은 사용자 clone 상태(로컬 브랜치 이름)라 Jira 본문에 넣지 않는다 — 다른 must_show는 그대로."""
     ws = shared()
     pull = "이슈 DB pull 건너뜀: 사용자 clone의 현재 브랜치가 my-work라서 pull을 건너뛰었다 (main일 때만)"
-    edit_json(ws, "analysis.json", lambda a: a.update(must_show=["판정 불가 유형: 1개 (DATA-002)", pull]))
+    hint = "규칙 제안 (흐름): [이슈 DB] put-flow data/data-setup — 근거: 이 이슈는 16 (Step 7에서 사용자 확인)"   # 이슈 DB 관리 질문
+    edit_json(ws, "analysis.json", lambda a: a.update(must_show=["판정 불가 유형: 1개 (DATA-002)", pull, hint,
+                                                               "새 원인 초안 참고 (흐름): network/radio-on/registered — x"]))
     render(ws, "--fill", fill(ws, FILL))
     body = post_md(ws)
     assert "* 주의: 판정 불가 유형: 1개 (DATA-002)" in body and "my-work" not in body and "pull 건너뜀" not in body
+    assert "(흐름):" not in body
 
 
 def test_jira_field_values_cannot_forge_sections():

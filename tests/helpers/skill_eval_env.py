@@ -23,6 +23,8 @@ setup 필드 (모두 선택):
     logs: [{src: <레포 기준 경로> | scenario: <tests/skill_evals/scenarios 파일>, as: <파일명>, bugreport: zip|txt}]
         split_buffers: true — 버퍼별 파일 <as>.main.log·<as>.radio.log
     inject_main: [{scenario: <파일>, dest: <이슈 DB 안 디렉토리>, message: <커밋 메시지>}]
+    flows: ["<category>/<흐름 id>", …] — 시드 계획(`templates/issue-db-seeds/android/<category>/plan.json`)의 `put-flow` 흐름
+        yaml(put-flow와 같은 `yamldoc`)과 정상 fixture를 main에 넣는다(eval 81~83). 없으면 흐름 없는 DB 그대로(기존 eval)
     published_pr: {job, branch, plan: <tests/skill_evals/plans 파일>, files: {<작업 디렉토리 기준 경로>: <레포 기준 원본>}}
         또는 그 목록 — 순서대로 올린다(PR 번호 1, 2…, eval 75)
     main_after_pr: [<이름>]  — 아래 MAIN_EDITS의 이름. 이미 올린 PR 뒤에 main을 바꾼다
@@ -73,6 +75,7 @@ from runner import GH_SERVER, fixture_db, fixture_path, github_defaults, plugin_
 from workspace import Workspace, git  # noqa: E402
 
 GEN = REPO / "tests" / "mocks" / "logcat_gen.py"
+SEEDS = REPO / "templates" / "issue-db-seeds" / "android"
 CALL = REPO / "tests" / "mocks" / "jira_mcp" / "call.py"
 GH_CALL = REPO / "tests" / "mocks" / "github_issues_mcp" / "call.py"
 JIRA_MCP_PY = REPO / "tests" / "mocks" / "jira_mcp" / "server.py"
@@ -116,6 +119,20 @@ def _gen(scenario: Path, out: Path, name: str | None = None, bugreport: str | No
     if info.get("expect"):
         files.append(Path(info["expect"]))
     return files
+
+
+def put_seed_flows(db: Path, refs: list[str]) -> None:
+    """setup.flows: 시드 계획의 put-flow 흐름 yaml과 정상 fixture(`<id>.normal.<n>.log`)를 DB 트리에 쓴다."""
+    from common import yamldoc
+    for ref in refs:
+        cat, fid = ref.split("/")
+        plan = json.loads((SEEDS / cat / "plan.json").read_text(encoding="utf-8"))
+        op = next(o for o in plan["operations"] if o["op"] == "put-flow" and o["ref"] == ref)
+        fdir = db / cat / "flows"
+        (fdir / "fixtures").mkdir(parents=True, exist_ok=True)
+        (fdir / f"{fid}.yaml").write_text(yamldoc.dump_doc(op["flow"]), encoding="utf-8", newline="\n")
+        for n, item in enumerate(op.get("fixtures") or [], 1):
+            shutil.copyfile(SEEDS / cat / item["path"], fdir / "fixtures" / f"{fid}.normal.{n}.log")
 
 
 def _type_dir(root: Path, type_id: str) -> Path:
@@ -383,7 +400,9 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
                            check=True, capture_output=True, env=mock_env.env_with_mocks(plugin_root=root))
         ws.push_main(edit, inj.get("message", "eval 사전 주입"))
         shutil.rmtree(out / "_inj", ignore_errors=True)
-    if setup.get("inject_main"):
+    if setup.get("flows"):
+        ws.push_main(lambda other: put_seed_flows(other, setup["flows"]), "eval 사전 주입: 시드 흐름")
+    if setup.get("inject_main") or setup.get("flows"):
         git(ws.clone, "pull", "-q", "--ff-only")
 
     pubs = setup.get("published_pr") or []

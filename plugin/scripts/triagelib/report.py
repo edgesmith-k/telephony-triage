@@ -7,6 +7,7 @@ import json
 import os
 import re
 import stat
+from datetime import timedelta
 from pathlib import Path
 
 from common import events, issuepost, masking, shown, userconfig
@@ -376,12 +377,68 @@ def _step_words(title: str, s: dict, notes: list) -> str:
     return text + (f"({why})" if why else "")
 
 
+def _near_stop(ts_list, inst: dict, first: int, log_end: float) -> bool:
+    """근거 시각 하나라도 멈춘 단계 주변 창 안이다: 바로 앞 단계가 정상으로 지난 시각(첫 단계면 인스턴스 시작)부터, 값이상이면
+    그 단계의 마지막 이상 줄까지, 없음이면 앞 시각 + `log_end_sec`(그 전에 끝 줄이 오면 끝 줄)까지. 인스턴스 전체 수명은 쓰지 않는다."""
+    step = inst["steps"][first]
+    lo = _parse_ts(inst["steps"][first - 1].get("ts") if first else inst["start_ts"])
+    if lo is None:
+        return False
+    if step["verdict"] == "값이상":
+        hi = _parse_ts(step.get("ts"))
+    else:
+        end = _parse_ts((inst.get("end") or {}).get("ts"))
+        hi = min(t for t in (lo + timedelta(seconds=log_end), end) if t)
+    return hi is not None and any(t and lo <= t <= hi for t in map(_parse_ts, ts_list))
+
+
+def _fit(head: str, tail: str, limit: int = 260) -> str:
+    """줄 ≤ limit B. 넘치면 앞(근거 글)을 줄이고 끝의 확인 조건 글은 남긴다."""
+    return _clip_bytes(head, limit - len(tail.encode("utf-8"))) + tail
+
+
+def _flow_hint(rows: list, version, causes: dict, top: dict | None, log_end: float) -> tuple[int, str] | None:
+    """제안 한 줄과 그것을 붙일 블록 번호(04 §5.13 (3), 계획에는 Step 7 사용자 확인 뒤에만). 벗어난 인스턴스를 rows 순서로 모두 본다.
+    1위 근거가 어느 인스턴스의 멈춘 단계 주변 창 안이면 원인-단계 줄(1위 원인에 이미 단계가 걸려 있거나 1위가 판정 불가면 줄 없음).
+    그런 인스턴스가 없을 때만 문구 다름 후보: 이슈 버전을 알고 흐름 기준과 다르고, 단계 줄은 없는데 그 뒤 단계 줄은 나왔고, 같은 로그에
+    그 단계를 정상으로 지난 인스턴스가 없다(실제로 멈춘 고장은 뒤 단계 줄도 없다)."""
+    devs = [(n, f, inst, first) for n, (_, _, _, f, inst, first) in enumerate(rows)
+            if first is not None and inst["steps"][first]["verdict"] in ("값이상", "없음")]
+    for n, f, inst, first in devs:
+        if not top or top.get("category") != f["flow"].split("/")[0] or not _near_stop(top.get("ts") or (), inst, first, log_end):
+            continue
+        st = f["steps"][first]
+        ref = f"{f['flow']}/{st['id']}"
+        if top.get("cause"):
+            if any(c == top["cause"] for v in causes.values() for c, _ in v):     # 이미 단계가 걸린 원인
+                return None
+            return n, _fit(f"규칙 제안 (흐름): [이슈 DB] set-flow-step {top['cause']} {ref} — 1위 원인의 근거가 이 단계가 멈춘 "
+                           "시각에 있고, 이 원인에 걸어 둔 단계가 없다", " (1위로 확정하면 Step 7에서 사용자 확인)")
+        if top.get("unjudged"):         # 1위 원인이 판정 불가면 원인을 만들지 않는다(SKILL Step 7)
+            return None
+        return n, _fit(f"새 원인 초안 참고 (흐름): {ref} — 1위 증상의 근거가 이 단계가 멈춘 시각에 있다",
+                       " (이 유형에 새 원인을 만들면 그 원인에 이 단계를 적는다)")
+    for n, f, inst, first in devs:
+        st = f["steps"][first]
+        later = next((s for s in f["steps"] if s["id"] == inst.get("later_step")), None)
+        if (later and inst["steps"][first]["verdict"] == "없음"
+                and flowlib.version_match(f["platform_versions"], version) is False
+                and not any(i["steps"][first]["verdict"] == "ok" for i in f["instances"])):
+            return n, _fit(f"규칙 제안 (흐름): [이슈 DB] put-flow {f['flow']} — 근거: 이 이슈는 {_clip(version, 20)}, 흐름은 "
+                           f"{', '.join(f['platform_versions'])} 기준이고, {st['title']} 줄 없이 다음 {later['title']} 줄이 나와 "
+                           "문구가 바뀌었을 수 있다", " (Step 7에서 사용자 확인)")
+    return None
+
+
 def flow_section(doc: dict, window: dict | None, around: str | None, version, causes: dict,
-                 ranked: list | tuple = ()) -> tuple[list, list]:
+                 ranked: list | tuple = (), top: dict | None = None,
+                 log_end: float = flowlib.LOG_END_SEC) -> tuple[list, list]:
     """성공 흐름 점검 (04-parser-matching.md §5.13, 판정·점수 아님, S/C 불변): `flow.json` → (analysis.json `flows[]` ≤ 3,
     report.md 줄 ≤ 1,200 B). 분석 범위 안에서 시작한 인스턴스만, 벗어난 것(값이상·없음) 먼저·발생 시각에 가까운 순, 흐름당 ≤ 3.
     범위 안 인스턴스가 없으면 `해당 없음`(흐름 인스턴스가 상한에 잘렸으면 판정 못 함 줄), 모두 정상이면 한 줄(선택 단계 줄 없음도 정상).
-    `causes`: `{"<cat>/<흐름>/<단계>": [(원인 ID, title)]}`(active, DB 순서) — `ranked`(매칭 후보 원인 ID, 순위 순)에 있는 것을 먼저."""
+    `causes`: `{"<cat>/<흐름>/<단계>": [(원인 ID, title)]}`(active, DB 순서) — `ranked`(매칭 후보 원인 ID, 순위 순)에 있는 것을 먼저.
+    `top`: 1위 후보 `{cause, category, unjudged, ts}`(후보가 없으면 None) — 제안 줄 하나(`_flow_hint`, `log_end`: 없음 판정 대기 초).
+    블록은 analysis.json `flows[]`와 같은 순서이고, 제안 줄이 붙은 블록만 맨 앞으로 옮긴다(1,200 B에 잘리지 않게)."""
     lo, hi = (_parse_ts(window.get("start")), _parse_ts(window.get("end"))) if window else (None, None)
     at = _parse_ts(around)
     ranked = list(ranked)
@@ -433,7 +490,11 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
             text = ", ".join(f"{t} {n}회" for t, n, _, _, _ in counts) + " 끝까지 정상"
         return analysis, ["- 흐름 점검: " + text + (f" ({tail})" if tail else "")] + cut_line
     lines = [f"- 흐름 점검 (참고용, 후보 순위와 점수는 그대로{'; ' + tail if tail else ''}):"]
-    for _, _, _, f, inst, first in picked:
+    rows = sorted(picked, key=lambda r: r[:3])        # 벗어난 것 먼저 → 발생 시각에 가까운 순(analysis.json과 같다)
+    hint = _flow_hint(rows, version, causes, top, log_end)
+    if hint:
+        rows.insert(0, rows.pop(hint[0]))
+    for n, (_, _, _, f, inst, first) in enumerate(rows):
         parts = []
         for st, s in zip(f["steps"], inst["steps"]):
             if s["verdict"] == "ok":
@@ -454,6 +515,8 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
             hit = causes.get(f"{f['flow']}/{st['id']}") or []
             owned = (" / 이 단계에 등록된 원인: " + ", ".join(f"{c} {_clip(t, 30)}" for c, t in hit[:3])) if hit else ""
             block.append("    " + _clip_bytes(f"→ 의심되는 곳: {st['suspect']}{owned}", 260))
+            if hint and n == 0:        # 근거 인스턴스 블록과 한 덩어리로 자리를 잡는다
+                block.append("    " + hint[1])
         if len("\n".join(lines + block).encode("utf-8")) > FLOW_REPORT_MAX:    # 절 전체 ≤ 1,200 B: 넘치면 뒤 항목부터 뺀다
             break
         lines += block
@@ -821,6 +884,9 @@ class ReportMixin:
             ana += [f"  - {_error_line(e)}" for e in (hints.get("error_events") or [])[:8]]
         ana += self.partial_lines(r, cands)
         ana += r.get("_flow_lines") or []      # 성공 흐름 점검(§5.13): 흐름 파일이 없는 DB는 줄 없음(이전과 같다)
+        for fl in r.get("_flow_lines") or []:    # 흐름 제안 줄(최대 1)은 Step 7 질문 재료라 꼭 보인다(eval 81·83: 빼거나 바꿔 적음). Jira에는 안 감(issue_post)
+            if "(흐름): " in fl:
+                must.append((6, fl.strip()))
         if unjudged:
             err = (unjudged.get("errors") or [{}])[0]
             where = f"시그니처 시간 초과·오류 {err.get('signature')}: {err.get('error')}"

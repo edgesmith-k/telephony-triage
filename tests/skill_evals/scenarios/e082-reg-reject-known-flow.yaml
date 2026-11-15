@@ -1,0 +1,20 @@
+# eval 82: eval 81과 같은 흐름이고 거절 사유만 13(이슈 DB NETWORK-001-01 원인 시그니처가 맞음 → C=1, 1위).
+# 샘플 DB의 NETWORK-001-01에는 flow_step이 없으므로 리포트가 set-flow-step 제안 줄을 낸다(시드로 만든 실제 DB에는 이미 걸려 있다).
+# 문구는 Android 17 캡처 형식이고 거절 사유 13은 합성이다(에뮬레이터는 0, NETWORK-001-01 시나리오와 같다).
+name: e082-reg-reject-known-flow
+start: "2026-11-14T10:10:00+09:00"
+default_phone: 0
+phone_style: aosp
+pid: 1301
+tid: 1301
+entries:
+  - {at: 0, tag: "SST-{phone}", msg: "setRadioPower power true forEmergencyCall false forceApply false reason 0"}
+  - {after: 0, tag: "SST-{phone}", msg: "setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=true, getRadioState=0, mRadioPowerOffReasons=[], IMS reg state=false, pending radio off=false"}
+  - {after: 0.002, ril_request: RADIO_POWER, serial: 285, args: "on = true forEmergencyCall= false preferredForEmergencyCall=false"}
+  - {after: 0.003, ril_response: RADIO_POWER, serial: 285, tid: 1330}
+  - {after: 1, tag: "SST-{phone}", msg: "pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true"}
+  - {after: 1, tag: "NRM-C-{phone}", tid: 1360, msg: "onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=DENIED networkRegistrationState=DENIED roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=13 emergencyEnabled=false availableServices=[]"}
+  - {after: 0.01, tag: "SST-{phone}", msg: "Poll ServiceState done: newSS={mVoiceRegState=1(OUT_OF_SERVICE), mDataRegState=1(OUT_OF_SERVICE), mChannelNumber=-1, duplexMode()=0, mCellBandwidths=[], isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=0(Unknown), getRilDataRadioTechnology=0(Unknown), mCssIndicator=unsupported, mIsEmergencyOnly=false, isUsingCarrierAggregation=false, mArfcnRsrpBoost=0, mNrFrequencyRange=0, mIsDataRoamingFromRegistration=false, mIsIwlanPreferred=false, mIsUsingNonTerrestrialNetwork=false}"}
+  - {after: 10, tag: "NRM-C-{phone}", tid: 1360, msg: "onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=CS transportType=WWAN registrationState=DENIED networkRegistrationState=DENIED roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=13 emergencyEnabled=false availableServices=[]"}
+  - {after: 20, tag: "NRM-C-{phone}", tid: 1360, msg: "onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=DENIED networkRegistrationState=DENIED roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=13 emergencyEnabled=false availableServices=[]"}
+  - {after: 0.01, tag: "SST-{phone}", msg: "Poll ServiceState done: newSS={mVoiceRegState=1(OUT_OF_SERVICE), mDataRegState=1(OUT_OF_SERVICE), mChannelNumber=-1, duplexMode()=0, mCellBandwidths=[], isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=0(Unknown), getRilDataRadioTechnology=0(Unknown), mCssIndicator=unsupported, mIsEmergencyOnly=false, isUsingCarrierAggregation=false, mArfcnRsrpBoost=0, mNrFrequencyRange=0, mIsDataRoamingFromRegistration=false, mIsIwlanPreferred=false, mIsUsingNonTerrestrialNetwork=false}"}

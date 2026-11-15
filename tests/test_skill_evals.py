@@ -258,6 +258,10 @@ def test_eval_setup_references_resolve():
         for pr in [pubs] if isinstance(pubs, dict) else pubs:      # dict 또는 목록(eval 75)
             assert (EVALS / "plans" / pr["plan"]).is_file(), (e["id"], pr["plan"])
         skill_eval_env.gh_merge_env(setup.get("gh_merge"))         # 키·값·리뷰 형식(스텁 파서)이 맞다
+        for ref in setup.get("flows") or []:                     # 시드 계획에 그 put-flow가 있다(eval 81~83)
+            cat = ref.split("/")[0]
+            plan = json.loads((skill_eval_env.SEEDS / cat / "plan.json").read_text(encoding="utf-8"))
+            assert any(o["op"] == "put-flow" and o["ref"] == ref for o in plan["operations"]), (e["id"], ref)
 
 
 def test_split_buffers_setup_writes_one_file_per_buffer(tmp_path):
@@ -1291,7 +1295,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 80      # 80 setup-first-time 뒤. H(76~79)까지 79, 그 전 75
+    assert len(by_id) == 83      # FL(81~83 성공 흐름 제안) 뒤. 80 setup-first-time까지 80, H(76~79)까지 79, 그 전 75
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 11), (62, 6)):
         e = by_id[eid]
@@ -3994,3 +3998,55 @@ def test_e80_rows_follow_the_run_record(tmp_path):
             assert fn()[0] is False
         except grader._Manual:
             pass
+
+
+# --- 배치 FL(성공 흐름 제안 eval 81~83): 초안·질문이 plan.json 쓰기보다 먼저(검증 V-5) ------------------------------
+
+def _fl_order(tmp_path, eid, items):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _seq_events(run, items)
+    return grader.checks(eid, grader.Ctx(env_dir, run))[{81: 2, 82: 1}[eid]]()
+
+
+FL_STEP7 = ("tool", "s7", ASK, {"question": "분류를 어떻게 할까요?", "options": ["1위로", "다른 원인·유형", "원인 미확정", "기록하지 않음"]},
+            "다른 원인·유형", False)
+
+
+def test_fl82_rule_question_must_come_before_plan_write(tmp_path):
+    ask = ("tool", "q", ASK, {"question": "받을 규칙 제안을 고르세요.",
+                              "options": ["set-flow-step NETWORK-001-01 network/radio-on/registered", "받지 않음"]}, "set-flow-step", False)
+    write = ("tool", "w", "Write", {"file_path": "/w/MOCK-9082/plan.json",
+                                    "content": '{"operations": [{"op": "set-flow-step", "cause": "NETWORK-001-01"}]}'}, "ok", False)
+    heredoc = ("tool", "b", "Bash", {"command": "cat > \"$JOB/plan.json\" <<'EOF'\n{\"operations\": [{\"op\": \"set-flow-step\"}]}\nEOF"},
+               "", False)
+    assert _fl_order(tmp_path / "a", 82, [FL_STEP7, ask, write])[0] is True
+    assert _fl_order(tmp_path / "b", 82, [FL_STEP7, ask, heredoc])[0] is True, "heredoc으로 쓴 plan.json도 찾는다"
+    passed, ev = _fl_order(tmp_path / "c", 82, [FL_STEP7, write, ask])
+    assert passed is False and "plan.json 쓰기 seq 1" in ev, "묻지 않고 계획에 넣으면 실패"
+    with pytest.raises(grader._Manual):
+        _fl_order(tmp_path / "d", 82, [FL_STEP7, ask])     # 쓰기 호출을 못 찾으면 수동
+
+
+def test_fl81_new_cause_draft_shown_and_asked_before_stage(tmp_path):
+    draft = ("text", "새 원인 초안:\n```yaml\nflow_step: network/radio-on/registered\n```")
+    ask = ("tool", "q", ASK, {"question": "이 초안으로 진행할까요?", "options": ["승인", "수정"]}, "승인", False)
+    # 새 원인은 초안 검증이 plan.json을 먼저 요구한다 → 기준은 plan.json 쓰기가 아니라 첫 db_pr stage(eval 81 1차 실행)
+    write = ("tool", "w", "Write", {"file_path": "/w/MOCK-9081/plan.json",
+                                    "content": '{"cause": {"flow_step": "network/radio-on/registered"}}'}, "ok", False)
+    stage = ("tool", "s", "Bash", {"command": 'python3 "$S/db_pr.py" stage /w/MOCK-9081/plan.json --dry-run --then-summary'},
+             "ok", False)
+    report = ("text", "새 원인 초안 참고 (흐름): network/radio-on/registered — 1위 증상의 근거가 …")
+    assert _fl_order(tmp_path / "a", 81, [report, FL_STEP7, write, draft, ask, stage])[0] is True
+    assert _fl_order(tmp_path / "b", 81, [report, FL_STEP7, draft, write, stage, ask])[0] is False
+    assert _fl_order(tmp_path / "c", 81, [report, FL_STEP7, write, ask, stage])[0] is False, "분류 질문 앞 리포트 줄은 초안이 아니다"
+    # F-8: 분류 질문 뒤 리포트 줄을 옮겨 적기만 한 것은 초안이 아니다(리포트 줄에는 flow_step 칸 이름이 없다)
+    copied = ("text", "흐름 줄: 새 원인 초안 참고 (흐름): network/radio-on/registered — 1위 증상의 근거가 …")
+    assert _fl_order(tmp_path / "e", 81, [report, FL_STEP7, copied, ask, stage])[0] is False
+    as_json = ("text", '초안 `{"flow_step": "network/radio-on/registered"}`')
+    assert _fl_order(tmp_path / "f", 81, [report, FL_STEP7, as_json, ask, stage])[0] is True
+    listed = ("text", "- 흐름 단계: flow_step network/radio-on/registered (report.md의 새 원인 초안 참고 줄 그대로)")   # 실제 실행 모양
+    assert _fl_order(tmp_path / "h", 81, [report, FL_STEP7, write, listed, ask, stage])[0] is True
+    with pytest.raises(grader._Manual):
+        _fl_order(tmp_path / "g", 81, [report, draft, ask, stage])     # 분류 질문을 못 찾으면 시작점 0으로 세지 않고 수동

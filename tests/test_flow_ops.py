@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """성공 흐름 작성·검증 (04-parser-matching.md §5.13 (4), contracts.md §작업 계획 put-flow):
-계획 op `put-flow`(추가·교체·거부, fixture 3단 마스킹), `new-cause`·`new-type`의 `flow_step` 옮김, drift(추가인데 생김·교체인데
-바뀜), 초안 검증 지문, `db_lint` 흐름 검사, `db_regress`의 흐름 fixture 판정·범위, `db_verify rules` R4, pre-commit(흐름만 바뀐 커밋).
+계획 op `put-flow`(추가·교체·거부, fixture 3단 마스킹), `new-cause`·`new-type`의 `flow_step` 옮김, `set-flow-step`(쓰기·지우기·
+drift), drift(추가인데 생김·교체인데 바뀜), 초안 검증 지문, `db_lint` 흐름 검사, `db_regress`의 흐름 fixture 판정·범위,
+`db_verify rules` R4(`--changed`·`--plan --draft`), pre-commit(흐름만 바뀐 커밋).
 흐름 정의는 시드 계획(`templates/issue-db-seeds/android/data/plan.json`)의 put-flow 한 벌을 쓴다. 로그는 합성(마스킹 토큰·TEST-NET IP)."""
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
 from common import draftcheck  # noqa: E402
 from runner import copy_db, edit, git, git_db, run, run_json, tmp  # noqa: E402
+from workspace import Workspace  # noqa: E402
 
 SEEDS = REPO / "templates" / "issue-db-seeds" / "android"
 D = "data/DATA-001-no-setup-data-call"
@@ -114,7 +116,7 @@ def test_put_flow_rejections():
     fewer = {**copy.deepcopy(FLOW), "steps": FLOW["steps"][:3]}
     out = _apply(db, _put(fewer, fixtures=()), expect=1)
     assert _rejected(out) == "flow-step-in-use" and "DATA-001-01" in out["rejected"][0]["message"]
-    assert "그 단계 id를 남긴다" in out["rejected"][0]["message"], "지금 할 수 있는 행동만 안내한다(F-15)"
+    assert "set-flow-step으로" in out["rejected"][0]["message"], "지금 할 수 있는 행동만 안내한다(F-15)"
     _apply(db, _put({**copy.deepcopy(FLOW), "title": "바뀐 제목"}, fixtures=()))
 
 
@@ -126,6 +128,10 @@ def test_plan_schema_rejects_bad_put_flow_and_flow_step_shape():
     (job / "plan.json").write_text(json.dumps(_plan(bad), ensure_ascii=False), encoding="utf-8")
     proc = run("db_add.py", ["apply", job / "plan.json", "--db", db, "--user", "tester"])
     assert proc.returncode == 2 and "put-flow" in proc.stderr and "path" in proc.stderr
+    for value in ("data/data-setup", "Data/data-setup/response", None):     # 단계까지 3칸 또는 ""만
+        (job / "plan.json").write_text(json.dumps(_plan(_sfs(value)), ensure_ascii=False), encoding="utf-8")
+        proc = run("db_add.py", ["apply", job / "plan.json", "--db", db, "--user", "tester"])
+        assert proc.returncode == 2 and "set-flow-step" in proc.stderr, value
 
 
 NEW_CAUSE = {"title": "시험 원인", "description": "설명", "resolution": "해결", "resolution_type": "user-setting",
@@ -154,6 +160,68 @@ def test_new_cause_and_new_type_carry_flow_step():
     assert causes[ids["NEW-CAUSE-2"]]["flow_step"] == "data/data-setup/connected"
     assert "flow_step" not in causes["DATA-001-01"], "선택 칸: 없는 원인에는 쓰지 않는다"
     assert "flow-step" not in _lint(db)
+
+
+# -- set-flow-step ----------------------------------------------------------------------------------
+
+
+def _sfs(value, cause: str = "DATA-001-01") -> dict:
+    return {"op": "set-flow-step", "cause": cause, "flow_step": value}
+
+
+def _cause(db: Path, cid: str = "DATA-001-01") -> dict:
+    [type_md] = (db / "data").glob(f"{cid[:-3]}-*/type.md")
+    front = yaml.safe_load(type_md.read_text(encoding="utf-8").split("---\n")[1])
+    return next(c for c in front["causes"] if c["id"] == cid)
+
+
+def test_set_flow_step_writes_clears_and_leaves_step_checks_to_lint():
+    db = _flow_db()
+    out = _apply(db, _sfs("data/data-setup/validated"), logs={})
+    assert out["applied"] and _cause(db)["flow_step"] == "data/data-setup/validated" and "flow-step" not in _lint(db)
+    _apply(db, _sfs(""), logs={})
+    assert "flow_step" not in _cause(db)
+    assert _apply(db, _sfs(""), logs={})["applied"], "칸이 없는 원인 지우기는 아무 일도 하지 않는다"
+    assert _rejected(_apply(db, _sfs("data/data-setup/validated", "DATA-009-01"), logs={}, expect=1)) == "unknown-cause"
+    # 흐름·단계·카테고리는 op가 아니라 stage db_lint flow-step이 본다
+    _apply(db, _sfs("data/data-setup/no-such-step"), _sfs("network/radio-on/decide", "DATA-001-02"), logs={})
+    msgs = " | ".join(_lint(db)["flow-step"])
+    assert "단계 no-such-step" in msgs and "다른 카테고리" in msgs
+
+
+def test_set_flow_step_clear_lets_put_flow_drop_step_and_takes_temp_id():
+    db = _flow_db()
+    _set_flow_step(db, "data/data-setup/validated")
+    fewer = {**copy.deepcopy(FLOW), "steps": FLOW["steps"][:3]}
+    assert _rejected(_apply(db, _put(fewer, fixtures=()), expect=1)) == "flow-step-in-use"
+    out = _apply(db, _sfs(""), _put(fewer, fixtures=()))       # 같은 계획에서 먼저 지우면 그 단계를 없앨 수 있다
+    assert out["applied"] and "flow_step" not in _cause(db)
+    ops = [{"op": "new-cause", "temp_id": "NEW-CAUSE-1", "type": "DATA-001", "cause": NEW_CAUSE, "body": "- **확인 방법**: 시험\n"},
+           _sfs("data/data-setup/response", "NEW-CAUSE-1")]
+    assert _rejected(_apply(db, *reversed(ops), logs={}, expect=1)) == "order"
+    out = _apply(db, *ops, logs={})
+    assert _cause(db, out["ids"][0]["id"])["flow_step"] == "data/data-setup/response"
+
+
+def test_drift_set_flow_step_when_main_changed_step_or_status():
+    repo = git_db()
+    _with_flow(repo)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "flow")
+    base = git(repo, "rev-parse", "HEAD").strip()
+    op = _sfs("data/data-setup/validated")
+    assert _drift(repo, op, base) == []
+    _set_flow_step(repo, "data/data-setup/connected")
+    git(repo, "commit", "-qam", "main sets flow_step")
+    [item] = _drift(repo, op, base)
+    assert (item["op"], item["target"], item["field"], item["plan_base_value"], item["current_value"], item["plan_value"]) == (
+        "set-flow-step", "DATA-001-01", "flow_step", None, "data/data-setup/connected", "data/data-setup/validated")
+    base = git(repo, "rev-parse", "HEAD").strip()
+    [type_md] = (repo / "data").glob("DATA-001-*/type.md")
+    edit(type_md, "flow_step: data/data-setup/connected\n    status: active", "flow_step: data/data-setup/connected\n    status: deprecated")
+    git(repo, "commit", "-qam", "deprecated")
+    assert [(i["field"], i["current_value"]) for i in _drift(repo, op, base)] == [("status", "deprecated")]
+    assert _drift(repo, _sfs("data/data-setup/validated", "NEW-CAUSE-1"), base) == [], "임시 ID는 main과 비교하지 않는다"
 
 
 # -- 초안 검증 지문·drift -------------------------------------------------------------------------------
@@ -333,6 +401,25 @@ def test_verify_rules_r4_includes_flow_fixtures():
     assert "정상 fixture 없어 건너뜀: data/data-setup" in rows["R4"]["reason"]
     proc = run("db_regress.py", ["--db", repo, "--all"])
     assert proc.returncode == 0 and "건너뜀: 흐름 data/data-setup (정상 fixture 없음)" in proc.stderr
+
+
+def test_verify_rules_plan_draft_runs_put_flow_fixture():
+    """put-flow만 든 계획의 초안 검증(`--plan --draft`): R4가 이번 op의 정상 fixture를 돌리고, 끝까지 ok가 아니면 fail이다."""
+    ws = Workspace()
+    job = "flow-draft"
+    ws.acquire(job)
+    for text, code, status in ((RAW, (0, 3), "pass"), (RAW.replace("validation status=VALID", "validation status=INVALID"), 1, "fail")):
+        ws.put(job, "normal.log", text)
+        plan_path = ws.plan(job, _plan(_put()), match=None, draft_verified=False)
+        rows = {r["id"]: r for r in ws.json("db_verify.py", ["rules", "--plan", plan_path, "--draft", ws.job_dir(job) / "draft",
+                                                             "--verbose"], expect=code)["rules"]}
+        assert rows["R4"]["status"] == status, rows["R4"]
+    assert rows["R4"]["targets"] == [f"{FLOW_DIR}/fixtures/data-setup.normal.1.log"]
+    ws.put(job, "normal.log", RAW)
+    ws.plan(job, _plan(_put()), match=None, draft_verified=False)
+    rows = {r["id"]: r for r in ws.json("db_verify.py", ["rules", "--plan", plan_path, "--draft", ws.job_dir(job) / "draft",
+                                                         "--verbose"], expect=(0, 3))["rules"]}
+    assert rows["R4"]["reason"].endswith("흐름 fixture 1개 끝까지 ok"), rows["R4"]
 
 
 def test_precommit_flow_only_change_runs_flow_fixtures():

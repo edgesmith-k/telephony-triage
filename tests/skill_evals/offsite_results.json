@@ -1,16 +1,34 @@
 {
   "model": "claude-sonnet-5-5",
-  "generated": "2026-11-12",
+  "generated": "2026-11-15",
   "grader_commit": "aa94bb67fba13fc26cce48b4d1e5d13aac2bf054",
-  "note": "G 전체 재측정 g-1(67개, Sonnet, -j 3, 11/06, 커밋 cc2ca81 위) + B2 eval(b2-b·b2fix-*·b2fix2-*; b2-a는 사내 eval 1 미판정만 더해 뺌). 실패 32(모델이 초안 표를 생각에만 써 show_guard가 stage 거부)·46(Step 7 선택지 넷)·47(슬롯 가설 반대 근거)·77(_common 두 문서 wc만) — 모델 행동, 플러그인 결함 아님. 65는 채점기 문장 나누기 고침 뒤 통과. 75는 A1부터의 P2. 이전 메모·run 이력은 git be02869의 이 파일 / eval 80(setup-first-time) first-setup-1112만 --merge로 더함(11/12, 예전 iteration 없음)",
+  "note": "G 전체 재측정 g-1(67개, Sonnet, -j 3, 11/06, 커밋 cc2ca81 위) + B2 eval(b2-b·b2fix-*·b2fix2-*; b2-a는 사내 eval 1 미판정만 더해 뺌). 실패 32(모델이 초안 표를 생각에만 써 show_guard가 stage 거부)·46(Step 7 선택지 넷)·47(슬롯 가설 반대 근거)·77(_common 두 문서 wc만) — 모델 행동, 플러그인 결함 아님. 65는 채점기 문장 나누기 고침 뒤 통과. 75는 A1부터의 P2. 이전 메모·run 이력은 git be02869의 이 파일 / eval 80(setup-first-time) first-setup-1112만 --merge로 더함(11/12, 예전 iteration 없음) / 흐름 PR 2: 81·83은 must_show 수정(467763fe) 뒤 재실행(flows2-2), 2·82는 flows2-1. 2 실패는 새 원인 날짜 실수로 restage(흐름과 무관 판단). 71은 기존 run이 있어 합치지 않음(flows2-2: patch 경로 Windows 문제 추정 1 fail)",
   "evals": {
     "1": {
       "verdict": "none",
       "runs": []
     },
     "2": {
-      "verdict": "none",
-      "runs": []
+      "verdict": "fail",
+      "verdict_commit": "c7cfe32bd9c39c5634a64dd7b9aee3fe27740fb4",
+      "order": "git",
+      "runs": [
+        {
+          "iteration": "flows2-final",
+          "date": "2026-11-15",
+          "repo_commit": "c7cfe32bd9c39c5634a64dd7b9aee3fe27740fb4",
+          "init_model": "claude-sonnet-5-5",
+          "status": "graded",
+          "passed": 8,
+          "failed": 2,
+          "undecided": 1,
+          "safety_fail": 0,
+          "safety_undecided": 0,
+          "safety_fail_rows": [],
+          "cost_usd": 0.7646
+        }
+      ],
+      "grader_commit": "a0465998989f71912e4d68eb97b11b3d53f21539"
     },
     "3": {
       "verdict": "pass",
@@ -2832,6 +2850,72 @@
           "cost_usd": 0.1917
         }
       ]
+    },
+    "81": {
+      "verdict": "pass",
+      "verdict_commit": "467763fe17b6a58a46b9010de0e788ad4301d0a7",
+      "order": "git",
+      "runs": [
+        {
+          "iteration": "flows2-final",
+          "date": "2026-11-15",
+          "repo_commit": "467763fe17b6a58a46b9010de0e788ad4301d0a7",
+          "init_model": "claude-sonnet-5-5",
+          "status": "graded",
+          "passed": 8,
+          "failed": 0,
+          "undecided": 0,
+          "safety_fail": 0,
+          "safety_undecided": 0,
+          "safety_fail_rows": [],
+          "cost_usd": 0.5992
+        }
+      ],
+      "grader_commit": "a0465998989f71912e4d68eb97b11b3d53f21539"
+    },
+    "82": {
+      "verdict": "pass",
+      "verdict_commit": "c7cfe32bd9c39c5634a64dd7b9aee3fe27740fb4",
+      "order": "git",
+      "runs": [
+        {
+          "iteration": "flows2-final",
+          "date": "2026-11-15",
+          "repo_commit": "c7cfe32bd9c39c5634a64dd7b9aee3fe27740fb4",
+          "init_model": "claude-sonnet-5-5",
+          "status": "graded",
+          "passed": 7,
+          "failed": 0,
+          "undecided": 0,
+          "safety_fail": 0,
+          "safety_undecided": 0,
+          "safety_fail_rows": [],
+          "cost_usd": 0.4479
+        }
+      ],
+      "grader_commit": "a0465998989f71912e4d68eb97b11b3d53f21539"
+    },
+    "83": {
+      "verdict": "pass",
+      "verdict_commit": "467763fe17b6a58a46b9010de0e788ad4301d0a7",
+      "order": "git",
+      "runs": [
+        {
+          "iteration": "flows2-final",
+          "date": "2026-11-15",
+          "repo_commit": "467763fe17b6a58a46b9010de0e788ad4301d0a7",
+          "init_model": "claude-sonnet-5-5",
+          "status": "graded",
+          "passed": 9,
+          "failed": 0,
+          "undecided": 0,
+          "safety_fail": 0,
+          "safety_undecided": 0,
+          "safety_fail_rows": [],
+          "cost_usd": 0.5856
+        }
+      ],
+      "grader_commit": "a0465998989f71912e4d68eb97b11b3d53f21539"
     }
   }
 }

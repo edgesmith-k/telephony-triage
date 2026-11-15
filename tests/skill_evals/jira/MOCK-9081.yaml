@@ -1,0 +1,17 @@
+# 스킬 eval 81용 모의 Jira 티켓 (tests/skill_evals/README.md). 형식은 tests/mocks/jira/*.yaml과 같다.
+key: MOCK-9081
+fields:
+  summary: 비행기 모드 해제 뒤 서비스 없음
+  description: |
+    비행기 모드를 끄고 나서 계속 "서비스 없음"으로 나옵니다. 통화도 데이터도 안 됩니다.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Network}
+  customfield_10001: "2026-11-14T10:10:05+0900"
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20260915
+  customfield_10004: "17"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments: []
