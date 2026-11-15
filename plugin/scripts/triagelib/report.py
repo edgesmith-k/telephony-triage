@@ -355,6 +355,27 @@ def _optional_none(inst: dict) -> int | None:
     return k if k is not None and inst["steps"][k]["detail"] == flowlib.OPTIONAL_NONE else None
 
 
+def _secs(detail: str, fmt: str) -> str:
+    return re.sub(r"뒤 로그 ([\d.]+)s", lambda m: fmt.format(m.group(1)), detail)
+
+
+def _step_words(title: str, s: dict, notes: list) -> str:
+    """report.md에 쓰는 단계 문구. `flow.json`·`analysis.json`의 판정 값(`값이상`·`없음`·`로그끝`·`-`)은 그대로 두고 읽는 글만 푼다."""
+    verdict, detail = s["verdict"], s["detail"]
+    if verdict == "값이상":
+        text, why = f"{title}에서 이상한 값", re.sub(r" ×(\d+)$", r", \1번 반복", detail)
+    elif verdict == "없음":
+        text, why = f"{title} 줄이 로그에 없음", _secs(detail, "그 뒤로도 로그가 {}초 이어짐")
+    elif verdict == "로그끝":
+        text, why = f"{title} 전에 로그가 끝나 판단 못 함", _secs(detail, "남은 로그 {}초").replace("마지막 값 이상", "마지막 값은 이상")
+    elif detail == flowlib.OPTIONAL_NONE:
+        text, why = f"{title} 줄 없음", "없어도 되는 단계"
+    else:
+        text, why = f"{title}부터는 보지 않음", detail
+    why = "; ".join(x for x in (why, ", ".join(notes)) if x)
+    return text + (f"({why})" if why else "")
+
+
 def flow_section(doc: dict, window: dict | None, around: str | None, version, causes: dict,
                  ranked: list | tuple = ()) -> tuple[list, list]:
     """성공 흐름 점검 (04-parser-matching.md §5.13, 판정·점수 아님, S/C 불변): `flow.json` → (analysis.json `flows[]` ≤ 3,
@@ -389,7 +410,7 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
         picked += rows[:FLOW_PER_FLOW]
         if f["platform_versions"] and flowlib.version_match(f["platform_versions"], version) is not True:
             vers += [v for v in f["platform_versions"] if v not in vers]
-    cut_line = ([f"- 흐름 점검: {'·'.join(cut)} 인스턴스가 많아 뒤 {flowlib.INSTANCES_MAX}개만 봄 — 이 범위는 판정 못 함"]
+    cut_line = ([f"- 흐름 점검: {', '.join(cut)} 반복이 많아 마지막 {flowlib.INSTANCES_MAX}번만 봄 — 이 범위에서는 판단 못 함"]
                 if cut else [])
     if not counts:
         return [], cut_line or ["- 흐름 점검: 해당 없음"]
@@ -406,34 +427,33 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
     if all(ok for _, _, ok, _, _ in counts):
         if any(k for _, _, _, k, _ in counts):
             text = ", ".join(f"{t} {n}회 끝까지 정상" if not k else
-                             f"{t} {n}회 정상({'·'.join(names)} 줄 없음{f' {k}회' if k < n else ''})"
+                             f"{t} {n}회 정상({', '.join(names)} 줄은 없어도 되는 단계라 없음{f' {k}회' if k < n else ''})"
                              for t, n, _, k, names in counts)
         else:
             text = ", ".join(f"{t} {n}회" for t, n, _, _, _ in counts) + " 끝까지 정상"
         return analysis, ["- 흐름 점검: " + text + (f" ({tail})" if tail else "")] + cut_line
-    lines = [f"- 흐름 점검 (판정·점수 아님, S/C 불변{'; ' + tail if tail else ''}):"]
+    lines = [f"- 흐름 점검 (참고용, 후보 순위와 점수는 그대로{'; ' + tail if tail else ''}):"]
     for _, _, _, f, inst, first in picked:
         parts = []
         for st, s in zip(f["steps"], inst["steps"]):
             if s["verdict"] == "ok":
-                parts.append(f"{st['title']} ok" + (f"(그 전 이상 값 {s['bad_count']}회)" if s["bad_count"] else ""))
+                parts.append(f"{st['title']} 정상" + (f"(그 전에 이상한 값 {s['bad_count']}번)" if s["bad_count"] else ""))
                 continue
-            why = "; ".join(x for x in (s["detail"], ", ".join(inst["notes"])) if x)
-            parts.append(f"{st['title']} {s['verdict']}" + (f"({why})" if why else ""))
+            parts.append(_step_words(st["title"], s, inst["notes"]))
             break
         ref = _ref_label(inst.get("line_ref"))
-        text = (f"{f['title']} {inst['key']}" + (f" (시작 줄 {inst['restarts']}회 더)" if inst["restarts"] else "")
+        text = (f"{f['title']} {inst['key']}" + (f" (같은 시작 줄이 {inst['restarts']}번 더 나옴)" if inst["restarts"] else "")
                 + (f" ({ref})" if ref else "") + ": " + " → ".join(parts))
         if first is None and inst["notes"]:
             text += f" (메모: {', '.join(inst['notes'])})"
         if inst.get("then"):
-            text += f" ⇒ {titles.get(inst['then']['flow'], inst['then']['flow'])} {inst['then']['key']}"
+            text += f" — 이어서 {titles.get(inst['then']['flow'], inst['then']['flow'])} {inst['then']['key']}"
         block = [f"  - {_clip_bytes(text, 300)}"]
         if first is not None and inst["steps"][first]["verdict"] in ("값이상", "없음"):
             st = f["steps"][first]
             hit = causes.get(f"{f['flow']}/{st['id']}") or []
-            owned = (" / 이 단계의 원인: " + ", ".join(f"{c} {_clip(t, 30)}" for c, t in hit[:3])) if hit else ""
-            block.append("    " + _clip_bytes(f"→ 의심: {st['suspect']}{owned}", 260))
+            owned = (" / 이 단계에 등록된 원인: " + ", ".join(f"{c} {_clip(t, 30)}" for c, t in hit[:3])) if hit else ""
+            block.append("    " + _clip_bytes(f"→ 의심되는 곳: {st['suspect']}{owned}", 260))
         if len("\n".join(lines + block).encode("utf-8")) > FLOW_REPORT_MAX:    # 절 전체 ≤ 1,200 B: 넘치면 뒤 항목부터 뺀다
             break
         lines += block
@@ -645,7 +665,7 @@ class ReportMixin:
                     block.append("  - " + _clip_bytes(f"규칙 제안 (부분 일치): [이슈 DB] update-signature {owner} — 근거: 부분 일치 "
                                                       f"{p['matched']}·없는 줄 {ids}{new} (Step 7, 사용자 확인 뒤에만)", 220))
             out.append(block)
-        lines = [f"- 부분 일치 (판정·점수 아님, S/C 불변){tail}:"]
+        lines = [f"- 부분 일치 (참고용, 후보 순위와 점수는 그대로){tail}:"]
         for block in out:        # 절 전체 ≤ 1,200 B: 넘치면 뒤 항목부터 뺀다
             text = [f"  - {block[0]}"] + ["  " + b for b in block[1:]]
             if len("\n".join(lines + text).encode("utf-8")) > PARTIAL_REPORT_MAX:
@@ -740,7 +760,7 @@ class ReportMixin:
                                 if anchor["source"] == "steps_file" and manual.get("mode") == "manual" else "")
                              + jira_part)
         if self.focus:
-            ana.append("- 스텝 기준 우선 유형 (순위 참고만, 점수·S/C 불변): " + ", ".join(self.focus))
+            ana.append("- 스텝 기준 우선 유형 (순위 참고용, 점수는 그대로): " + ", ".join(self.focus))
         cands = r["candidates"]
         unjudged = r.get("unjudged") or {}
         # 한 문장 결론(종합 리뷰 A): 머리 알림(분석 전용·읽기 전용·실패 스텝·시계) 다음, 후보 줄 바로 앞. must_show 아님(새 정보 없음)
