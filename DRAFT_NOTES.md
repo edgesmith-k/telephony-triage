@@ -49,8 +49,8 @@
   - #121 정밀 탐색(`--deep`): 명시 요청 때만, 효과 미확인. `deep.md`는 사내 스냅샷에 새로 만들고(없으면 `--site-overlay` 종료 1) 플러그인 배포 뒤 모듈 레포에 올린다.
   - #122: `import_draft --label` 필수. `tracker.read_tools`에 쓰기형 도구 이름 거부(doctor `tracker` warn). 경계 검사 15~20자리·이슈 DB hook 교체는 SITE_INSTALL §8. `docs/development` 22개는 `docs/history`로 옮김(dry-run에 지움·새 파일 22씩). OpenCode는 첫 설치(`opencode/README.md`: `tt-oc publish`, git ≥ 2.38, 모델이 낸 명령을 붙여 넣지 않는다).
   - #123: 탐색 `--with <모듈>`(보조 모듈 줄 절).
-  - #125~#132: 기록 문서 제외, oFono 중립 이름, report 네 칸, `import_draft --status`, Android 시드, 흐름 점검, 마스킹 끔.
-  - 사내 읽기(import-20261103 대비, KB): S-0 −18.1·S-1 +8.1·S-2 +6.1·S-3 +11.7·S-4 +7.1·S-4a +1.1·S-5 +0.3·S-6 0·S-7 +2.1.
+  - #125~#134: report 네 칸, `import_draft --status`, Android 시드, 흐름 점검·제안 줄, 마스킹 끔. `set-flow-step`은 DB schema PR 뒤.
+  - 사내 읽기(1103 대비, KB): S-0 −18.2·S-1 +8.2·S-2 +6.9·S-3 +12.1·S-4 +20.7·S-4a +1.1·S-5 +0.3·S-6 0·S-7 +2.1.
 - 재실행할 eval 수는 재반입 노트가 정한다(`pending.json` `site`, S-2; 사내 모델이 다르면 +7). 단계별 확인 항목·반입 뒤 후보(RF·R-36~47)는 history 11/13.
 - S-7: usage_stats format 2·`--transcripts` 허용 여부. 시그니처 필드 선언은 결정 (v)대로.
 - 사내 IMS는 별도 APK(11/12): IMS 줄·규칙·문서는 AOSP 기준·소스만 — S-1에서 먼저.
