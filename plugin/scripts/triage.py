@@ -52,7 +52,7 @@
 
 `--failed-step`·`--steps-file`(선택)은 이 프로세스 안에서만 읽고 마스킹한다. 원문은 하위 스크립트 인자(→ `trace.jsonl`)와
 `triage-state.json`에 쓰지 않는다. 결과는 `issue.json`·`issue_meta.json`·`analysis.json`의 `issue.failed_step`·`report.md`·
-`timeline.md` 머리에 **있을 때만** 나온다(보조 정보, S/C·분류·검증에 쓰지 않는다 — 매처의 단어 겹침 가산(`keyword_bonus_max`)과 동점 순위에는 들어간다, contracts §3.2 match_signatures). 없거나 읽지 못해도 출력은 이전과 같다.
+`timeline.md` 머리에 **있을 때만** 나온다(보조 정보, S/C·분류·검증에 쓰지 않는다 — 매처의 단어 겹침 가산(`keyword_bonus_max`)과 순위(동점 정렬, 스텝 기준 우선 유형 가산)에는 들어간다, contracts §3.2 match_signatures). 없거나 읽지 못해도 출력은 이전과 같다.
 
 사용자 결정이 필요한 곳에서는 멈추고 `{"status": "needs_input", "needs_input": {kind, question, options[], answer}}`를
 낸다(종료 코드 0). 스킬이 사용자에게 묻고 `--answer <kind>=<값>`을 붙여 **같은 명령을 다시** 실행한다. 답과 진행 상태는

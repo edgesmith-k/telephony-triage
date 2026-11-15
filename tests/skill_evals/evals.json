@@ -1811,7 +1811,7 @@
     },
     {
       "id": 48,
-      "design": "Jira 실패 스텝 필드(`5 | 데이터 켜기`)가 있는 이슈(스텝 우선 유형 DB) → 리포트에 실패 스텝을 보이되 점수·S/C에 쓰지 않고, 계획 `issue.failed_step`에 그대로 복사해 PR의 Jira 기록에 `failed_step`이 남고 카테고리 README \"자주 실패한 스텝\"이 갱신된다",
+      "design": "Jira 실패 스텝 필드(`5 | 데이터 켜기`)가 있는 이슈(스텝 우선 유형 DB) → 리포트에 실패 스텝을 보이되 S/C에 쓰지 않고, 계획 `issue.failed_step`에 그대로 복사해 PR의 Jira 기록에 `failed_step`이 남고 카테고리 README \"자주 실패한 스텝\"이 갱신된다",
       "name": "failed-step-jira-field-recorded",
       "batch": "E",
       "prompt": "MOCK-9048 로그 분석해줘. 데이터가 안 붙는대. 로그: logs/data-disabled.log",
