@@ -313,7 +313,9 @@ def run(args, defaults: dict) -> tuple[dict, int]:
         raise
     sha = hashlib.sha256(data).hexdigest()
     sk = str(Path(args.skill_dir).expanduser().resolve())
-    lines = [GUIDE.format(path=out.absolute())] + [f"- {f['path']} +{f['added']} −{f['removed']}" for f in files]
+    off = masking.is_off(db_cfg)     # 끔 DB면 patch를 가리지 않았으므로 "마스킹됨"을 쓰지 않는다
+    guide, offer_fmt = (GUIDE.replace(", 마스킹됨", ""), APPLY_OFFER.replace("마스킹됨, ", "")) if off else (GUIDE, APPLY_OFFER)
+    lines = [guide.format(path=out.absolute())] + [f"- {f['path']} +{f['added']} −{f['removed']}" for f in files]
     doc = {"status": "ok", "patch": str(out.absolute()), "files": files, "sha256": sha}
     offered = None
     src_raw = configured_source(args)
@@ -329,7 +331,7 @@ def run(args, defaults: dict) -> tuple[dict, int]:
         else:
             masked_n = getattr(build, "masked_added", 0)
             fence = _fence(patch)
-            lines += [APPLY_OFFER.format(source=src, sha=sha) + (MASKED_NOTE.format(n=masked_n) if masked_n else ""),
+            lines += [offer_fmt.format(source=src, sha=sha) + (MASKED_NOTE.format(n=masked_n) if masked_n else ""),
                       f"{fence}diff", *patch.rstrip("\n").split("\n"), fence]
             doc["apply"] = {"offer": True, "sha256": sha, "masked_added": masked_n}
             offered = str(src)
