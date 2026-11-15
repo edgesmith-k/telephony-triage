@@ -258,9 +258,10 @@ def _run(flow, records, texts, dts, runner, cuts, breaks, shown) -> list[dict]:
                         inst["notes"].append(m.group(0)[:60])
             if inst["n"] < len(steps) and feed(inst, i):
                 lookback(inst, bucket, i)
-            elif inst["n"] < len(steps):     # 멈춘 단계 뒤 단계의 줄이 나옴: 흐름은 나아갔는데 이 단계 문구만 다를 수 있다
-                inst["ahead"].update(k for k in range(inst["n"] + 1, len(steps))
-                                     if i in steps[k][1] and in_scope(steps[k][0], steps[k][1], inst, i))
+            elif inst["n"] < len(steps):     # 멈춘 단계 뒤 단계의 줄이 정상 값으로 나옴: 흐름은 나아갔는데 이 단계 문구만 다를 수 있다
+                inst["ahead"].update(k for k in range(inst["n"] + 1, len(steps))      # 이상 값 줄(예: 서비스 없음)은 세지 않는다(확인 리뷰 C-1)
+                                     if i in steps[k][1] and in_scope(steps[k][0], steps[k][1], inst, i)
+                                     and all(i in good for _, good in steps[k][2]))
         bucket.append(i)
     for hi in sorted(exits):        # 역행 구간 뒤에 볼 줄이 없음: 그 안에서 연 인스턴스도 닫는다
         for inst in list(opened.values()):

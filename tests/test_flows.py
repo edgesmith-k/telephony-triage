@@ -605,6 +605,10 @@ def test_flow_hint_put_flow_only_when_later_step_line_appeared():
     assert [x.split(" — ")[0] for x in _hint(silent, version="16", top=_top("NETWORK-002-01", ts=(1.0,)))] == [
         "규칙 제안 (흐름): [이슈 DB] set-flow-step NETWORK-002-01 network/radio-on/ril-response"]
     assert not any("put-flow" in x for x in _hint(_radio_bad([TICK]), version="16")), "값이상은 문구 다름이 아니다"
+    # 확인 리뷰 C-1: RIL 응답 없음 + 뒤 단계(망 등록) 줄이 이상 값(서비스 없음)으로만 나옴 → 흐름이 나아간 증거가 아니다
+    no_svc = RADIO[:3] + [(0.5, "SST-0", OOS, PHONE, 0), TICK]
+    assert _check(no_svc, ("radio-on",))[0]["instances"][0]["later_step"] is None
+    assert not any("put-flow" in x for x in _hint(no_svc, version="16"))
     # V-3: 같은 로그(범위 밖 포함)에 그 단계를 정상으로 지난 인스턴스가 있으면 문구는 맞다
     both = _check(worded[:-1] + _normal(tag="DN-2-C", t=40.0) + [(80.0, "Other", "tick")])
     assert [_sig(i) for i in both[0]["instances"]] == ["ok ok 없음 -", "ok ok ok ok"]
