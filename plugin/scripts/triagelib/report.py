@@ -525,7 +525,7 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
             block.append("    " + _clip_bytes(f"→ 의심되는 곳: {st['suspect']}{owned}", 260))
             if hint and n == 0:        # 근거 인스턴스 블록과 한 덩어리로 자리를 잡는다
                 block.append("    " + hint[1])
-        if len("\n".join(lines + block).encode("utf-8")) > FLOW_REPORT_MAX:    # 절 전체 ≤ 1,200 B: 넘치면 뒤 항목부터 뺀다
+        if len("\n".join(lines + block + cut_line).encode("utf-8")) > FLOW_REPORT_MAX:    # 절 전체 ≤ 1,200 B: 넘치면 뒤 항목부터 뺀다
             break
         lines += block
     return analysis, lines + cut_line

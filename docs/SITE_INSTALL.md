@@ -196,7 +196,7 @@ rm -rf <work_dir>/_snapshot                                        # 옛 clone�
 `tools/sync_schemas.py --write`는 이슈 DB → 플러그인 사본 방향이라 이 일에 쓰지 않는다.
 S-6까지 끝낸 레포에 `templates/module-skills`가 있고 `docs/site/module-skills/`(사내 스냅샷)가 없으면 이 반입 **전에** [SITE_RESTORE.md](SITE_RESTORE.md) ⓪을 먼저 한다(`templates/module-skills`가 없으면 반입 전 할 일 없음 — 같은 문서 첫머리 (가)).
 
-**git으로 받았을 때** — zip 대신 반입용 레포를 받았으면(`git clone --depth 1 <반입 레포 URL> ~/tt-new`, 다음부터 `git -C ~/tt-new pull`) 아래 3·4의 압축 풀기를 건너뛰고 그 폴더를 `<새 초안>`(`~/tt-new`)으로 쓴다. 받은 것은 `git -C ~/tt-new log -1 --oneline`으로 확인한다. **그 폴더 안의 파일을 고치거나 더하지 않는다** — 더한 파일도 사외 파일로 반입된다.
+**git으로 받았을 때** — zip 대신 반입용 레포를 받았으면(`git clone --depth 1 <반입 레포 URL> ~/tt-new`, 다음부터 `git -C ~/tt-new pull`) 아래 4의 압축 풀기만 건너뛰고 그 폴더를 `<새 초안>`(`~/tt-new`)으로 쓴다(3의 기준선 만들기는 지금 레포에 든 옛 묶음이 있어야 한다). 5의 `rm -rf`에서 `~/tt-new`는 지우지 않는다. 받은 것은 `git -C ~/tt-new log -1 --oneline`으로 확인한다. **그 폴더 안의 파일을 고치거나 더하지 않는다** — 더한 파일도 사외 파일로 반입된다.
 
 **1. 지금 상태 커밋** — 반입이 잘못돼도 이 커밋으로 돌아온다.
 ```

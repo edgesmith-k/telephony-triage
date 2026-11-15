@@ -339,6 +339,10 @@ def test_instances_over_cap_keep_the_tail_and_say_so():
     before = f"- 흐름 점검: 데이터 연결 반복이 많아 마지막 {flows.INSTANCES_MAX}번만 봄 — 그 앞 시도는 점검하지 못함"
     assert flow_section({"flows": [f]}, {"start": ts(-1), "end": ts(5)}, ts(0), "17", {})[1][-1] == before
     assert flow_section({"flows": [f]}, None, None, "17", {})[1][-1] == before
+    from triagelib.report import FLOW_REPORT_MAX     # 11/15 PR 리뷰 P140-02: 안내 줄도 절 한도(1,200 B)에 센다
+    g = dict(f, flow="data-setup-2", title="데이터 연결 둘째" * 6)
+    both = flow_section({"flows": [f, g]}, None, None, "17", {})[1]
+    assert both[-1].endswith("그 앞 시도는 점검하지 못함") and len("\n".join(both).encode("utf-8")) <= FLOW_REPORT_MAX
 
 
 def test_cut_before_each_step_never_says_missing():
