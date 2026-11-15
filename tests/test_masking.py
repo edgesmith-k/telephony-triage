@@ -783,7 +783,9 @@ def test_mask_off_db_keeps_raw_text_everywhere():
     proc = _run("parse_logcat.py", ["mask-copy", str(log), str(u16), "--out", str(copies), "--rules", str(rules),
                                     "--max-bytes", "10"])
     assert proc.returncode == 0, proc.stderr
-    assert not any(f["skipped"] for f in json.loads(proc.stdout)["files"]) and "mask-copy-skipped" not in proc.stderr
+    n = len(log.read_text(encoding="utf-8").splitlines())
+    assert [(f["skipped"], f["lines"]) for f in json.loads(proc.stdout)["files"]] == [(False, n)] * 2, proc.stdout
+    assert "mask-copy-skipped" not in proc.stdout
     assert (copies / "cut-1.log").read_text(encoding="utf-8") == (copies / "u16.log").read_text(encoding="utf-8") \
         == log.read_text(encoding="utf-8")
 
@@ -796,6 +798,19 @@ def test_mask_off_db_keeps_raw_text_everywhere():
     _git(repo, "add", "-A")
     assert _run("mask_pii.py", ["--check", "--staged", "--db", str(repo)]).returncode == 0
     assert _run("mask_pii.py", ["--check", str(written), "--db", str(SAMPLE)]).returncode == 1     # 켬 DB는 지금처럼 막는다
+
+
+def test_mask_pii_staged_reads_config_from_index():
+    """커밋 관문 `--check --staged`는 설정도 index 기준이다: 작업 트리에만 `mask-off`를 더하고 stage하지 않으면 원문 fixture는 걸린다."""
+    repo = _sample_repo()
+    (repo / _ADD_FIXTURES / "raw.log").write_text(f"09-20 14:30:01.000  1234  1244 D DCM-0: imsi={RAW_IMSI}\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    with open(repo / "issue-db.config.yaml", "a", encoding="utf-8", newline="\n") as fh:
+        fh.write("signature_features: [mask-off]\n")
+    gate = lambda: _run("mask_pii.py", ["--check", "--staged", "--db", str(repo)]).returncode  # noqa: E731
+    assert gate() == 1
+    _git(repo, "add", "-A")
+    assert gate() == 0
 
 
 def test_add_fixture_masks_folded_sip_digest():

@@ -197,6 +197,12 @@ PR 1(`04-parser-matching.md §5.13`)은 엔진·리포트 절·`put-flow`·검�
   모듈 eval 관문 둘(`module_eval.py`의 사내 case 원문 금지, S5 자식 출력 원문 금지)은 함께만 바꾼다 — eval 입력은 가린 로그라 끔 운영 입력과 다르다. `modules.yaml`의 android 공통 잡음 필터는
   `<HEXDUMP nB>` 토큰만 거르므로 끔에서는 원문 덤프 줄이 보기에 들어온다(oFono처럼 원문 모양을 더해야 할 것으로 보임, 추론). 모듈 문서 보완 PR에서 eval 한 번에 같이 한다.
 - 디렉토리 이름 `logs-masked/`와 `analysis.json logs.masked`는 끔에서도 그대로다(모델이 읽는 법이 같다).
+- **끄는 PR 표시(리뷰 M-5)**: 켬 DB에 `mask-off` 한 줄과 원문 fixture를 같이 넣는 PR도 CI `mask_pii --check`를 통과한다(PR head 설정을 읽는다). PR 화면에는 "마스킹 끔(이슈 DB 설정)"만 보이고
+  "이 PR이 마스킹을 끈다"는 표시가 없다. 필요하면 `db_summary`가 설정 diff에 `mask-off`가 생길 때 한 줄을 더하고, SITE_INSTALL에 "끄는 PR과 원문 자료 PR을 나눈다"를 적는다.
+- **`issue.json` 재사용(리뷰 M-6)**: 같은 세션의 재분석은 `issue.json`(Jira 요약, 추출 때 DB 설정대로 가림)을 다시 쓰지 않고(`driver.py` `reuse = issue_done and …`), 이 재사용은 DB 설정을 보지 않는다.
+  끔으로 추출한 뒤 같은 세션에서 켬으로 바뀌면 가리지 않은 요약이 켬 리포트에 들어간다(반대 방향은 가린 채라 안전). 고치려면 `issue.json`에 추출 때의 `mask_off`를 적고 다르면 다시 추출한다.
+- **스킬 문서 "마스킹된 로그 기준" 문구(리뷰 M-8)**: `db-authoring.md`·`explore.md`·`record.md`의 "마스킹된 로그·텍스트 기준으로 시그니처를 쓴다"는 끔 DB에서 사실과 다르다.
+  모델이 보는 사본이 원문이라 결과는 대체로 맞고, 토큰을 쓰면 `db_lint` `mask-token`이 잡는다. 판단 규칙 문구라 스킬 eval이 필요해 모듈 문서 보완 PR과 함께 한다.
 
 ## 되살릴 때 바꿀 곳
 

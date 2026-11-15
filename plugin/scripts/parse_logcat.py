@@ -1062,7 +1062,7 @@ def run_mask_copy(args) -> dict:
         if nul:
             warnings.append({"code": "mask-copy-nul", "message": masking.nul_warning(
                 nul, len(lines) - (lines[-1] == ""), p.name)})
-    masker = masking.for_db(db_cfg, "\n".join(texts.values()), log_lines=True)
+    masker = masking.for_db(db_cfg, None if off else "\n".join(texts.values()), log_lines=True)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     # 새 사본은 임시 폴더에 먼저 쓰고, 다 되면 이전 index.json이 관리하던 사본만 지운 뒤 옮긴다(코덱스 리뷰 R3: 전에는 덮어쓰기만
@@ -1074,15 +1074,18 @@ def run_mask_copy(args) -> dict:
     tmp.mkdir()
     files, used = [], set()
     for p, size in todo:
-        lines = texts[p].split("\n")
-        forced = masking.forced_lines(masker, lines)
-        masked = [masker.mask(ln, forced.get(i)) for i, ln in enumerate(lines)]
+        text = texts[p]
+        n_lines = text.count("\n") + (text != "" and not text.endswith("\n"))
+        if not off:     # 끔이면 합친 글·줄 목록·줄별 mask 없이 원문을 바로 쓴다(상한이 없어 큰 파일이 온다)
+            lines = text.split("\n")
+            forced = masking.forced_lines(masker, lines)
+            text = "\n".join(masker.mask(ln, forced.get(i)) for i, ln in enumerate(lines))
         name = _unique_name(p.name, used)
-        (tmp / name).write_text("\n".join(masked), encoding="utf-8", newline="")
+        (tmp / name).write_text(text, encoding="utf-8", newline="")
         st = p.stat()
         os.utime(tmp / name, (st.st_atime, st.st_mtime))     # 연도 추정(file-mtime)이 사본에서도 같게 — analyze는 사본을 파싱한다
         files.append({"name": name, "path": str(out / name), "source": str(p), "bytes": size,
-                      "lines": len(lines) - (1 if lines and lines[-1] == "" else 0), "skipped": False})
+                      "lines": n_lines, "skipped": False})
     for p, size in skipped:
         files.append({"name": p.name, "path": None, "source": str(p), "bytes": size, "lines": None, "skipped": True,
                       "reason": f"{size:,}B > --max-bytes {args.max_bytes:,}B"})

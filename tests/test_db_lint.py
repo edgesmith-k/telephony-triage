@@ -447,6 +447,9 @@ def test_mask_off_db_checks():
     ident = (f"{D}/type.md", r"must_not_match: ['RILJ.*>\s*SETUP_DATA_CALL']", r"must_not_match: ['RILJ.*>\s*SETUP_DATA_CALL', '\bip 192\.0\.2\.15']")
     assert lint(["[mask-off]"], ident) == [("raw-identifier", f"{D}/type.md")]
     assert lint(["[mask-off]", "[min_count]"]) == [("config", "issue-db.config.yaml")]
+    import db_lint
+    assert db_lint.MASK_TOKEN_RE.search(r"\bhost\d+ 연결") and db_lint.MASK_TOKEN_RE.search("host[0-9]+ 연결")
+    assert not db_lint.MASK_TOKEN_RE.search(r"ghost\d+") and not db_lint.MASK_TOKEN_RE.search("<UNKNOWN>")
 
 
 def test_min_count_and_sequence_within_sec_format_errors():

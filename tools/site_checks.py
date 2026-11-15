@@ -1650,8 +1650,8 @@ def o1_masked(ctx: Ctx) -> dict:
     if _site_defaults(ctx) is None:
         return _need_defaults("o1.masked")
     clone, _ = _need_clone(ctx, "o1.masked", "ofono_db")     # oFono DB를 모르면(clone 없음·실패) 지금처럼 가린 것을 요구한다
-    if clone is not None and "mask-off" in ((yaml.safe_load((clone / "issue-db.config.yaml").read_text(encoding="utf-8")) or {})
-                                            .get("signature_features") or []):
+    # 판정은 플러그인과 같은 `masking.is_off`(설정 없음·dict 아님·목록 아님은 켬)
+    if clone is not None and _plugin_common("masking").is_off(_plugin_common("compat").load_db_config(clone)):
         return res("o1.masked", "pass", f"파일 {len(files)}개 — oFono 이슈 DB가 마스킹을 끈다(signature_features: mask-off), "
                    "가린 사본이 필요 없다", "grep -n signature_features <임시 clone>/issue-db.config.yaml")
     cmd = "python3 plugin/scripts/mask_pii.py <ofono_log_dir 파일> --check"

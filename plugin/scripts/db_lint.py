@@ -96,8 +96,9 @@ from common.signatures import (  # noqa: E402
 
 TOKEN_FIXED_RE = re.compile(r"<[A-Z][A-Z0-9]*#\d+>")
 FLOW_TOKEN_RE = re.compile(r"<[A-Z][A-Z0-9]+(?:\\?#|\\?>| (?:\\d|\d))")  # `<IP#…>`·`<IMSI>`·`<HEXDUMP nB>`(`\<IP\#1\>`도) — 흐름은 가리지 않은 글에서 찾는다
-# 마스커가 만드는 종류의 토큰만(`<IP#…>`·`<HEXDUMP nB>`·`<REDACTED:…>`·`host<n>`) — 마스킹 끔 DB에서는 로그에 생기지 않는다(`mask-token`)
-MASK_TOKEN_RE = re.compile(r"<(?:%s)(?:\\?#|\\?>| (?:\\d|\d)|:)|(?<![\w.-])host(?:\\d|\d)"
+# 마스커가 만드는 종류의 토큰만(`<IP#…>`·`<HEXDUMP nB>`·`<REDACTED:…>`·`host<n>` — `\bhost\d+`·`host[0-9]+`도) — 마스킹 끔 DB에서는
+# 로그에 생기지 않는다(`mask-token`)
+MASK_TOKEN_RE = re.compile(r"<(?:%s)(?:\\?#|\\?>| (?:\\d|\d)|:)|(?:(?<![\w.-])|(?<=\\[A-Za-z]))host(?:\\d|\d|\[0-9)"
                            % "|".join(sorted({r.kind for r in masking.RULES} | {"REDACTED"})))
 KEBAB_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SIG_KINDS = ("symptom_signatures", "signatures", "recovery_signatures", "scenario_signatures")

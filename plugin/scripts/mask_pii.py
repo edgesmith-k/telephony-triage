@@ -18,7 +18,7 @@
 검사 모드도 이슈 DB fixture 로그(`fixtures/` 바로 아래 `*.log`)는 로그 마스커로 본다(`add-fixture`가 그 마스커로 가린다).
 
 `mask.allow_patterns`와 마스킹 끔(`signature_features: [mask-off]`, 08-safety.md §8)은 이슈 DB(`--db`, 없으면 cwd의
-이슈 DB)의 `issue-db.config.yaml`에서 읽는다. 끔이면 검사는 늘 통과하고 치환은 글을 그대로 쓴다. 이슈 DB를 찾지 못하면 예외 없이
+이슈 DB)의 `issue-db.config.yaml`에서 읽는다(`--staged`면 index에 든 설정, index에 없으면 작업 트리). 끔이면 검사는 늘 통과하고 치환은 글을 그대로 쓴다. 이슈 DB를 찾지 못하면 예외 없이
 마스킹한다.
 """
 
@@ -33,7 +33,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import compat, dbpath, masking, site_defaults  # noqa: E402
+from common import compat, dbpath, issuedb, masking, site_defaults, yamlio  # noqa: E402
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 
 
@@ -52,6 +52,15 @@ def _db(arg: str | None) -> Path | None:
 
 def _cfg(db: Path | None) -> dict:
     return compat.load_db_config(db) if db is not None else {}
+
+
+def _staged_cfg(db: Path) -> dict:
+    """`--staged`: 설정도 index 기준(커밋될 설정으로 커밋될 내용을 본다). index에 없으면 작업 트리 설정(`_cfg`)."""
+    raw = subprocess.run(["git", "-C", str(db), "show", f":./{issuedb.CONFIG}"], capture_output=True)
+    if raw.returncode != 0:
+        return _cfg(db)
+    data = yamlio.loads(raw.stdout.decode("utf-8-sig", errors="replace"))
+    return data if isinstance(data, dict) else {}
 
 
 def _git(db: Path, *args: str) -> str:
@@ -105,7 +114,7 @@ def run_check(args, db: Path | None) -> dict:
             if not path.is_file():
                 raise UsageError(f"파일이 없습니다: {path}")
             targets.append((name, path.read_text(encoding="utf-8-sig", errors="replace")))
-    cfg = _cfg(db)
+    cfg = _staged_cfg(db) if args.staged else _cfg(db)
     plain, log = masking.for_db(cfg), masking.for_db(cfg, log_lines=True)
     detections = []
     for name, text in targets:

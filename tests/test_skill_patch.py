@@ -324,6 +324,17 @@ def test_source_offer_shows_masked_patch_and_apply_changes_working_tree_only(env
     assert rec["key"] == f"apply:{KEY}/{NAME}" and rec["kind"] == "patch" and rec["lines"] == proc.stdout.splitlines()
 
 
+def test_mask_off_db_guidance_and_offer_do_not_say_masked(env, src):
+    """마스킹 끔 DB(스냅샷 `signature_features: [mask-off]`, 08-safety §8.2): patch를 가리지 않았으므로 안내·적용 제안에 "마스킹됨"이 없다."""
+    snap = env["base"] / "work" / "_snapshot"
+    snap.mkdir()
+    (snap / "issue-db.config.yaml").write_text("signature_features: [mask-off]\n", encoding="utf-8")
+    lines = _offer(env, src)
+    assert lines[0] == f"스킬 제안 patch(적용 안 함): {env['patch'].absolute()}{GUIDE_TAIL}"
+    assert lines[2] == f"스킬 소스 적용 대기: {src.resolve()} — 아래 patch(sha256 {_sha(env)})를 그대로 보이고 바로 적용할지 묻는다"
+    assert "마스킹" not in "\n".join(lines)
+
+
 def test_source_offer_fence_longer_than_skill_code_fence(env, src):
     """스킬 파일의 코드 울타리(문맥 줄 " ```")가 화면의 diff 울타리를 닫지 않게 더 긴 울타리로 감싼다."""
     fenced = ORIG + "\n```\nadb logcat -b radio\n```\n"

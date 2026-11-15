@@ -97,7 +97,7 @@ open ─(fix-submitted)─▶ fix-submitted ─(verify-fix passed)─▶ fixed
 
    | 판정 | 조건 | 계획 |
    |---|---|---|
-   | passed | 흔적 충족, 원인·증상 불충족, recovery 있으면 충족 | `cut --around <흔적 시각>` → `add-fixture {kind: fixed, build}` + `verify-fix {result: passed, verification{..., fixture: fixtures/<ID>.fixed.<build>.log}}` → `fixed` |
+   | passed | 흔적 충족, 원인·증상 불충족, recovery 있으면 충족 | `cut --around <흔적 시각> --rules SNAP/parser-rules` → `add-fixture {kind: fixed, build}` + `verify-fix {result: passed, verification{..., fixture: fixtures/<ID>.fixed.<build>.log}}` → `fixed` |
    | failed | 원인 시그니처 충족(재발) | `verify-fix {result: failed}` → open, 이전 `ref`·`fixed_in`은 `verification_history`에 보존. 재발 로그를 `recurrence` fixture로 넣을지 묻는다 |
    | partial | 흔적 충족, 원인 불충족, 증상 남음 | `verify-fix {result: partial}` → 상태 유지 + 이력. `other_candidates`를 보여주고 남은 증상은 `analyze`로 새로 분석하라고 안내. **"통과로 기록" 선택지를 제시하지 않는다** |
    | unknown | 흔적 없음, 구간 부족 | 계획을 만들지 않는다. 필요한 로그 조건(시나리오 수행 방법, 필요한 시그니처)을 안내하고 `lock release` |

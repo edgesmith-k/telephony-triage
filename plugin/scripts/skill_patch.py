@@ -70,8 +70,10 @@ import trackers  # noqa: E402
 
 SUGGEST_DIR = "skill-suggestions"
 GUIDE = "스킬 제안 patch(적용 안 함, 마스킹됨): {path} — 직접 검토해 스킬 소스의 dev 브랜치에 git apply, main에는 PR로 반영"
+GUIDE_OFF = "스킬 제안 patch(적용 안 함): {path} — 직접 검토해 스킬 소스의 dev 브랜치에 git apply, main에는 PR로 반영"   # 마스킹 끔 DB
 MEMO = "스킬 제안 patch 없음(직접 반영할 메모): {reason}"
 APPLY_OFFER = "스킬 소스 적용 대기: {source} — 아래 patch(마스킹됨, sha256 {sha})를 그대로 보이고 바로 적용할지 묻는다"
+APPLY_OFFER_OFF = "스킬 소스 적용 대기: {source} — 아래 patch(sha256 {sha})를 그대로 보이고 바로 적용할지 묻는다"     # 마스킹 끔 DB
 MASKED_NOTE = " — 추가 줄 {n}개가 마스킹으로 바뀜 — placeholder가 소스에 들어간다"
 OFFER_MAX_LINES, OFFER_MAX_BYTES = 200, 12288    # 화면에 patch 전문을 보일 수 있는 크기까지만 바로 적용을 제안한다
 APPLY_NO = "스킬 소스에 바로 적용할 수 없음(patch만 남김): {reason}"
@@ -314,7 +316,7 @@ def run(args, defaults: dict) -> tuple[dict, int]:
     sha = hashlib.sha256(data).hexdigest()
     sk = str(Path(args.skill_dir).expanduser().resolve())
     off = masking.is_off(db_cfg)     # 끔 DB면 patch를 가리지 않았으므로 "마스킹됨"을 쓰지 않는다
-    guide, offer_fmt = (GUIDE.replace(", 마스킹됨", ""), APPLY_OFFER.replace("마스킹됨, ", "")) if off else (GUIDE, APPLY_OFFER)
+    guide, offer_fmt = (GUIDE_OFF, APPLY_OFFER_OFF) if off else (GUIDE, APPLY_OFFER)
     lines = [guide.format(path=out.absolute())] + [f"- {f['path']} +{f['added']} −{f['removed']}" for f in files]
     doc = {"status": "ok", "patch": str(out.absolute()), "files": files, "sha256": sha}
     offered = None

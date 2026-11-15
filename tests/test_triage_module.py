@@ -409,6 +409,23 @@ def test_explore_android_view(env):
     assert "  - 모듈 타임라인: 1/1줄, 잡음 0, 반복 접음 0, 미수집 com.example.Data" in text   # 모의 modules.yaml android/data dbus
 
 
+def test_explore_view_mask_off_keeps_raw(env):
+    """마스킹 끔 DB의 events(`mask_off`, 08-safety §8.2): 탐색 모듈 보기도 가리지 않는다 — modulecmd가 view payload에
+    `mask_off`를 넘긴다(빠지면 보기가 다시 가린다)."""
+    env.url = mr.build(env.tmp / "remote2")
+    env.user({"module_skills": {"remote": env.url}})
+    events = [{"ts": "2026-09-20T05:32:09.000Z", "tag": "DCM-1", "msg": "setup failed password=hunter2secret9", "level": "E",
+               "category_hint": "data"}]
+    job = env.make_job(events=events, platform="android", explore=True)
+    path = job / "events.json"
+    path.write_text(json.dumps(dict(json.loads(path.read_text(encoding="utf-8")), mask_off=True)), encoding="utf-8")
+    assert env.call("explore", KEY, "--out", job, "--platform", "android")[0] == 0     # 끔 events로 탐색 타임라인을 다시
+    code, out, err = env.module("explore", "--module", "android/data", platform="android")
+    assert code == 0 and out["timeline"]["view"] is True, err
+    view = (job / "module-skill" / "explore" / "timeline.md").read_text(encoding="utf-8")
+    assert "hunter2secret9" in view and "<REDACTED:" not in view and "mask_warnings" not in out
+
+
 def test_filter_timeout(env, monkeypatch):
     import common.modulefilter as mf
     monkeypatch.setattr(mf, "child", lambda payload, timeout=20.0: {"error": "timeout"})

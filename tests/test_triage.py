@@ -37,12 +37,12 @@ def _items() -> tuple[dict, list[dict]]:
     return doc, doc["items"]
 
 
-def _offline(item: dict, doc: dict, out: Path) -> dict:
+def _offline(item: dict, doc: dict, out: Path, db: Path = SAMPLE) -> dict:
     meta = out.parent / f"{out.name}.meta.json"
     meta.write_text(json.dumps({"key": item["key"], "occurred_at": item["occurred_at"],
                                 "summary": item.get("summary", "")}, ensure_ascii=False), encoding="utf-8")
     logs = [str((LABELSET.parent / p).resolve()) for p in item["logs"]]
-    return run_json("triage.py", ["run", item["key"], "--offline-db", SAMPLE, "--out", out, "--logs", *logs,
+    return run_json("triage.py", ["run", item["key"], "--offline-db", db, "--out", out, "--logs", *logs,
                                   "--issue-meta", meta, "--tz", doc["tz"], "--year", doc["year"]])
 
 
@@ -109,6 +109,21 @@ def test_analysis_is_small_deterministic_and_writes_report_and_trace():
     # start 행 v 2: 이 뒤 행으로 운영 지표를 잰다(usage_stats). 0-key는 trace를 열기 전에 불려 start 앞에 쓰인다
     steps = [row["step"] for row in trace]
     assert [row.get("v") for row in trace if row["step"] == "start"] == [2] and steps.index("0-key") < steps.index("start")
+
+
+def test_report_evidence_line_drops_masking_word_for_mask_off_db():
+    """마스킹 끔 DB(08-safety §8.2): 리포트 근거 줄 머리에 "마스킹"이 없다. 선언 없는 DB는 그대로 "(마스킹, …)"."""
+    doc, items = _items()
+    work = tmp("tt-triage-")
+    db = work / "db"
+    shutil.copytree(SAMPLE, db)
+    with (db / "issue-db.config.yaml").open("a", encoding="utf-8", newline="\n") as fh:
+        fh.write("signature_features: [mask-off]\n")
+    _offline(items[0], doc, work / "off", db)
+    _offline(items[0], doc, work / "on")
+    off, on = ((work / n / "report.md").read_text(encoding="utf-8") for n in ("off", "on"))
+    assert "- 근거 로그 (슬롯 phone " in off and "(마스킹," not in off
+    assert "- 근거 로그 (마스킹, 슬롯 phone " in on
 
 
 def test_version_mismatch_is_report_only(monkeypatch):
