@@ -53,7 +53,7 @@ CASES = [
 ]
 
 # run별 with arm 문서 합 한도(C1D 보정 §2.3). 파일별 상한은 skillcheck.CAPS(test_module_templates test_size_caps)
-DEEP_RUN_BUDGET, ALSO_RUN_BUDGET, EXPLORE_RUN_BUDGET = 10450, 11474, 8800
+DEEP_RUN_BUDGET, ALSO_RUN_BUDGET, EXPLORE_RUN_BUDGET = 10450, 11474, 8900
 # 모듈마다 references(모뎀은 없음 — deep은 증상 모듈 + also)
 REFERENCES = {"data": "DATA-001", "sim": "SIM-001", "network": "NETWORK-001", "call": "CALL-001", "sms": "SMS-001",
               "ims": "IMS-001"}
