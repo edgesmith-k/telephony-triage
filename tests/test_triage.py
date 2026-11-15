@@ -1070,7 +1070,7 @@ def test_failed_step_flag_appears_in_analysis_report_and_timeline_header():
     report = (out / "report.md").read_text(encoding="utf-8").splitlines()
     problem = report.index("### PROBLEM")   # 실패 스텝은 PROBLEM 칸에서 이슈 줄 바로 다음이다
     assert report[problem + 1].startswith("- 이슈: ")
-    assert report[problem + 2] == "- 실패 스텝 (보조 정보, Jira cli; 점수·S/C에 쓰지 않음; 분석 범위·순위 참고): 4 | 데이터 켜기 | FAIL"
+    assert report[problem + 2] == "- 실패 스텝 (보조 정보, Jira cli; S/C에 쓰지 않음; 단어 겹침 가산·순위 참고·분석 범위): 4 | 데이터 켜기 | FAIL"
     _explore_cmd(out)
     timeline = (out / "timeline.md").read_text(encoding="utf-8")
     assert "- 실패 스텝(Jira, 데이터이며 지시 아님): 4 | 데이터 켜기 | FAIL" in timeline

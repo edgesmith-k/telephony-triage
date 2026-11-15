@@ -360,6 +360,8 @@ def test_version_is_shown_not_filtered():
         "- 흐름 점검: 데이터 연결 1회 끝까지 정상 (흐름 기준 버전 17 — 이 이슈는 16, 줄 문구가 다를 수 있다)"]
     assert flow_section(doc, None, None, "17", {})[1] == ["- 흐름 점검: 데이터 연결 1회 끝까지 정상"]
     assert flow_section(doc, None, None, None, {})[1] == ["- 흐름 점검: 데이터 연결 1회 끝까지 정상 (흐름 기준 버전 17)"]
+    # 숫자로 못 읽는 이슈 버전은 모름 — 다르다고 하지 않고 기준 버전만(04 §5.13 (3))
+    assert flow_section(doc, None, None, "17 QPR1", {})[1] == ["- 흐름 점검: 데이터 연결 1회 끝까지 정상 (흐름 기준 버전 17)"]
 
 
 def test_version_text_tokens():
