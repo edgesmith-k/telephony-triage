@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """docs/tasks.md의 pack(S-n)을 출력한다: §15.5의 그 단계 행(할 일·완료 기준), 비고, `읽을 것`의 파일·절.
 `§절:행키`는 그 절의 표에서 첫 셀이 행키인 행만 싣는다(예: `§14.2:S2`).
+`§절!소절`은 그 절에서 제목이 `소절`인 하위 절을 뺀다(예: `§5.11!(2)!(3)`).
 모르는 pack·못 찾는 참조는 종료 2. `SITE_PROFILE.md`가 4KB를 넘으면 stderr 경고(종료 0)."""
 import re
 import sys
@@ -98,9 +99,17 @@ def render(name):
         text = f.read_text(encoding="utf-8")
         for s, r in secs or [(None, None)]:
             ref = f"{s}:{r}" if r else s
-            body = text if s is None else section(text, s)
+            s, *drops = (s or "").split("!")
+            body = section(text, s) if s else text
             if body is None:
                 raise LookupError(f"{path} §{ref}")
+            for d in drops:
+                sub = section(body.split("\n", 1)[-1], d)   # 절 제목 줄 자신은 뺄 대상이 아니다
+                if sub is None:
+                    raise LookupError(f"{path} §{ref}")
+                body = (body + "\n").replace(sub + "\n", "", 1)
+            if drops:
+                ref = f"{s} ({'·'.join(drops)} 뺌)"
             if r:
                 try:
                     body = filter_rows(body, r)

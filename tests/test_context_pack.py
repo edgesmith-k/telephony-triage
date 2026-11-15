@@ -104,3 +104,32 @@ def test_ofono_packs_resolve():
         assert out.startswith(f"===== {cp.STEPS} §15.5 {p} =====")
     assert "===== docs/design/14-site.md §14.2:S24 =====" in cp.render("O-1")
     assert cp.step_row("O-5") is None
+
+
+def test_s4_pack_drops_report_only_sections():
+    """S-4 pack은 04에서 분석 리포트·순위용 절을 빼고, 규칙·시그니처·회귀·흐름 작성 절은 싣는다(11/15 약 39KB)."""
+    out = cp.render("S-4")
+    for gone in ("#### (5) 스텝 마커", "#### (2) 점수", "#### (3) 컴파일", "### 5.12", "#### (3) 리포트"):
+        assert gone not in out, gone
+    for kept in ("#### (2) 규칙 파일 형식", "#### (6) 근거 출처", "#### (1) 시그니처 의미",
+                 "#### (4) 회귀·검증 모드와 fixture 기대값", "#### (2) 판정 규칙", "#### (4) 작성·검증",
+                 "## 16.4 기존 분류 가져오기"):
+        assert kept in out, kept
+    assert "===== docs/design/04-parser-matching.md §5.11 ((2)·(3) 뺌) =====" in out
+    assert "§5.12 부분 일치" in out                       # 비고가 뺀 절과 찾을 곳을 알린다
+    assert len(out.encode()) < 41_000
+
+
+def test_drop_subsection(tmp_path, monkeypatch):
+    (tmp_path / "docs/design").mkdir(parents=True)
+    (tmp_path / cp.STEPS).write_text("", encoding="utf-8")
+    (tmp_path / "a.md").write_text("## 1 A\nx\n### (1) k\ny\n### (2) d\nz\n## 2 B\nw\n", encoding="utf-8")
+    (tmp_path / "docs/tasks.md").write_text("| X-1 | `a.md §1!(2)` | |\n| X-2 | `a.md §1!(9)` | |\n", encoding="utf-8")
+    monkeypatch.setattr(cp, "ROOT", tmp_path)
+    out = cp.render("X-1")
+    assert "===== a.md §1 ((2) 뺌) =====\n## 1 A\nx\n### (1) k\ny\n" in out and "(2) d" not in out and "## 2" not in out
+    try:
+        cp.render("X-2")
+    except LookupError:
+        return
+    raise AssertionError("LookupError 기대")
