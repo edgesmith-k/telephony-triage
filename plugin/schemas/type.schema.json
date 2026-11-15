@@ -86,7 +86,7 @@
     "platformVersions": {
       "description": "빈 목록은 전 버전 (03-issue-db.md §5.4 (1)). Android는 주 버전 숫자, 그 밖 플랫폼은 Jira 버전 칸 값(제품 단위 이름·모델 코드)",
       "type": "array",
-      "items": {"type": "string", "pattern": "^(?![0-9]+(?:\\.[0-9]+)+$)[A-Za-z0-9][A-Za-z0-9._-]*$"},
+      "items": {"type": "string", "pattern": "^(?![0-9]+(?:\\.[0-9]*)+$)[A-Za-z0-9][A-Za-z0-9._-]*$"},
       "uniqueItems": true
     },
     "resolutionVerification": {
