@@ -24,7 +24,9 @@
 
 `--issue-meta` (분석 모드, 선택): `{key, occurred_at, sw, summary, description, failed_step?, platform_version?}` (`failed_step`은 있을 때만, 키워드 보너스 입력).
 `platform_version`은 표시 전용이다: 원인 후보에 `platform_versions`(원인 값, 빈 목록 = 전 버전)와 `version_match`(true·false, Jira 버전이 없거나
-원인이 전 버전이거나 원인 없는 후보면 null)를 낼 뿐 순위·score·S/C에는 쓰지 않는다. Jira 값이 `16`·`16.0` 꼴일 때만 주 버전을 비교하고 다른 꼴("Android 16", "17 QPR1")은 null이다.
+원인이 전 버전이거나 원인 없는 후보면 null)를 낼 뿐 순위·score·S/C에는 쓰지 않는다. Jira 값이 `16`·`16.0` 꼴이면 주 버전을 비교하고, 다른 꼴은
+원인 값이 모두 숫자면 null("Android 16", "17 QPR1"), 글자 값이 있으면(oFono 제품 단위 이름·모델 코드) Jira 값을 `/`·쉼표·공백으로 나눈
+조각이 원인 값에 있는지 대소문자 없이 본다(`common/flows.version_match`).
 `occurred_at`은 타임존 있는 ISO 시각, 텍스트 필드는 마스킹된 것이어야 한다.
 
 컴파일: 시그니처는 매번 `--db`에서 메모리로 컴파일한다 (06-collaboration.md §6.8).
@@ -599,7 +601,7 @@ def _rank_key(c: dict) -> tuple:
 
 
 def _version_match(cause, jira: dict) -> bool | None:
-    # "Android 16"·"17 QPR1" 등은 비교하지 않는다. 성공 흐름 버전 표시(§5.13)와 같은 비교
+    # 숫자 원인 값에 "Android 16"·"17 QPR1" 등은 비교하지 않는다. 성공 흐름 버전 표시(§5.13)와 같은 비교
     return flows.version_match(cause.raw.get("platform_versions") if cause else None, jira.get("platform_version"))
 
 

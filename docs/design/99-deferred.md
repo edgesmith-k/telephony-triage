@@ -116,7 +116,8 @@ v1의 실패 스텝은 필드·설명·시험 절차 텍스트와 사용자가 �
 사내 S-3(10/19)에서 본 것: Jira description의 양식 구역에 SW 버전·모델이 적히지만 v1은 본문 정규식 추출이 실패 스텝(`tracker.failed_step_patterns`, `failedstep.py`)뿐이고 `model`·`sw`는 `tracker.field_map` 필드 값만 읽는다. 확인값(양식 줄 꼴·필드 유무)은 `SITE_PROFILE.md`에 둔다.
 - 후보: `failedstep.py`의 줄 단위 패턴 방식을 일반화해 `tracker.field_patterns: {model: [...], sw: [...]}`(마스킹된 설명에서 줄 순서·패턴 순서로 처음 맞는 것, `(?P<value>…)` 그룹)를 두고, `field_map` 값이 있으면 그것이 이긴다. 값이 없거나 패턴 오류면 지금처럼 없는 것으로 본다(질문·중단 없음, 정규식 오류는 경고).
 - 바꿀 곳: `02-config.md`(`tracker` 키 표·"실패 스텝(선택)" 문단 옆), `common/failedstep.py` 또는 새 `fieldpatterns.py`, `trackers/jira` 필드 읽기, `db_lint`는 무관(이슈 DB 아님), `tests/test_jira_fields.py`. 사내 양식을 보기 전에는 만들지 않는다(S-3 확인 뒤 결정).
-- 버전 문구: Jira의 버전 값이 숫자가 아니라 문구이면 `platform_version`도 같은 패턴 설정(`tracker.field_patterns`) 대상이다. 지금은 버전 일치가 안 돼 소스 프로필 자동 선택 없이 목록 질문으로 떨어진다(`jira_fields.py`·`code_roots.py suggest`는 문자열 그대로 비교). bugreport 헤더의 빌드 정보를 프로필 목록 정렬에 쓸지도 사내 형식을 본 뒤 정한다.
+- 버전 문구: Jira의 버전 값이 숫자가 아니라 문구이면 `platform_version`도 같은 패턴 설정(`tracker.field_patterns`) 대상이다. oFono Jira 버전 칸은 제품 단위 이름 또는 모델 코드라(사용자 11/15) 패턴 없이 글자 값 그대로 기록·비교한다(`17-platforms.md §4`). 이 항목에 남는 것은 Android 문구("Android 16" 등)다. 지금은 버전 일치가 안 돼 소스 프로필 자동 선택 없이 목록 질문으로 떨어진다(`jira_fields.py`·`code_roots.py suggest`는 문자열 그대로 비교). bugreport 헤더의 빌드 정보를 프로필 목록 정렬에 쓸지도 사내 형식을 본 뒤 정한다.
+- 버전 정리 규칙(스킬 문서): `reference/db-authoring.md:114` "`platform_versions`에 이슈 버전 하나만 더한다"에 정리 규칙이 없다. "Android는 주 버전 숫자(`16.0`이면 `16`), 그 밖 플랫폼은 Jira 값 조각 하나를 원인·지원 목록에 이미 쓴 표기 그대로"를 더한다. 판단 규칙 문구라 다음 스킬 수정 때 skill-creator·eval과 묶는다. 그 전에는 `16.0`·`prodx/m100`을 그대로 넣으면 스키마 검사가 막는다.
 
 ## H. 탐색 `--also` (보조 모듈 1개, 파일럿 뒤)
 

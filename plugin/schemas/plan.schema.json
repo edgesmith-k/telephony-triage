@@ -28,7 +28,7 @@
             },
             "model": {"type": "string"},
             "sw": {"type": "string"},
-            "platform_version": {"type": "string", "pattern": "^[0-9]+$"},
+            "platform_version": {"type": "string", "pattern": "^(?![0-9]+(?:\\.[0-9]*)+$)[A-Za-z0-9][A-Za-z0-9._-]*$"},
             "carrier": {"type": "string"},
             "date": {"$ref": "#/$defs/isoDate"},
             "occurred_on": {"$ref": "#/$defs/isoDate"},
@@ -198,7 +198,7 @@
         },
         "related": {"type": "array", "items": {"$ref": "#/$defs/causeId"}, "uniqueItems": true},
         "cp_evidence": {"type": ["string", "null"]},
-        "platform_versions": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]+$"}, "uniqueItems": true},
+        "platform_versions": {"type": "array", "items": {"type": "string", "pattern": "^(?![0-9]+(?:\\.[0-9]*)+$)[A-Za-z0-9][A-Za-z0-9._-]*$"}, "uniqueItems": true},
         "code_refs": {"type": "array", "items": {"$ref": "#/$defs/codeRef"}},
         "flow_step": {"description": "이 원인이 벗어나는 성공 흐름 단계 <category>/<flow id>/<step id> — 같은 카테고리 흐름만 (04 §5.13)", "type": "string", "pattern": "^[a-z][a-z0-9_]*/[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+(-[a-z0-9]+)*$"}
       }
@@ -210,7 +210,7 @@
       "properties": {
         "ref": {"type": "string", "pattern": "^[a-z][a-z0-9_]*:[^/\\\\][^:]*$"},
         "symbol": {"type": "string", "minLength": 1},
-        "platform_versions": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]+$"}, "uniqueItems": true}
+        "platform_versions": {"type": "array", "items": {"type": "string", "pattern": "^(?![0-9]+(?:\\.[0-9]*)+$)[A-Za-z0-9][A-Za-z0-9._-]*$"}, "uniqueItems": true}
       }
     },
     "fixedIn": {

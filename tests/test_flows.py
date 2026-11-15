@@ -364,6 +364,17 @@ def test_version_is_shown_not_filtered():
     assert flow_section(doc, None, None, "17 QPR1", {})[1] == ["- 흐름 점검: 데이터 연결 1회 끝까지 정상 (흐름 기준 버전 17)"]
 
 
+def test_version_text_tokens():
+    """oFono Jira 버전 칸(제품 단위 이름·모델 코드, 지어낸 이름): 조각 하나라도 원인 값에 있으면 True, 대소문자 무시."""
+    vm = flows.version_match
+    assert vm(["prodx", "m100"], "PRODX") is True and vm(["prodx"], "M100") is False
+    assert vm(["m100"], "prodx/M100") is True and vm(["m100"], "prodx, m100") is True and vm(["m100"], "prodx m100") is True
+    assert vm(["m100"], "prodx/m200") is False
+    assert vm([], "prodx") is None and vm(["prodx"], "") is None and vm(["prodx"], None) is None and vm(["prodx"], " / ") is None
+    assert vm(["prodx"], "16") is False and vm(["16", "prodx"], "16.1") is True   # 숫자 꼴 이슈 값은 주 버전 비교 그대로
+    assert vm(["16", "17"], "Android 16") is None and vm(["2"], "prodx") is None   # 원인 값이 모두 숫자면 글자 이슈 값은 비교 안 함
+
+
 THREADTIME = "11-10 12:00:{sec:06.3f}  1001 {pid} {pid} D {tag}: {msg}"
 
 
