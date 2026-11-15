@@ -342,25 +342,25 @@
    "cost_basis": "reported"
   },
   "android/data": {
-   "generated": "2026-11-13T04:41:31Z",
-   "repo_commit": "07443a0ea4e043bc075b7dd73d74c5568ccf1c32",
-   "repo_dirty": false,
+   "generated": "2026-11-15T13:48:30Z",
+   "repo_commit": "56a460903e4e37ef6eefb8ee4156310b317e6d62",
+   "repo_dirty": true,
    "source": "worktree",
    "docs_sha256": {
     "with/builtin/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
     "with/module-skill/android/_common/components.md": "a19a8fd79ba2b27b1d11f465af13c82a139c19a307e5e48e994c2f37e618f42c",
     "with/module-skill/android/_common/layers.md": "4fafa1c1706741304f7857a2700fc5f5fbcfdad14ed755f7bc01c4a669a352e6",
-    "with/module-skill/android/data/SKILL.md": "014a37aecccdc088a18cff002b0c474f8b52de1bace2dfe5db25a379e437fd21",
+    "with/module-skill/android/data/SKILL.md": "21ddd672a2e4db8eceb0805739cfd443e715e7e43f88d7acc1d1c8435f895da0",
     "with/module-skill/android/data/analyzer.md": "e4a9f70bcde8de8c26190b62012d9ddf8d47a6580dcb4819b0ba3c34ec27c2dd",
-    "with/module-skill/android/data/explore.md": "f93f02adcc8564a86e5151796276180b9127a941b19afcacdf95b197490d4013",
-    "with/module-skill/android/data/references/DATA-001.md": "58c7e8431dc4b3c60c19cc8b2e7e2bf7d5e0de69de6ca5b3908f1e053bb44382",
+    "with/module-skill/android/data/explore.md": "5e12a297df92732ee4f7803d03a8e07fd83e4d328583f942f40456015c7e07f0",
+    "with/module-skill/android/data/references/DATA-001.md": "b56edabaa7ea6583449097c09be7d5f5297a0c5fd8fc89c797ec0c42bcb8538c",
     "without/builtin/explore-rules.md": "6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8",
     "without/builtin/fail-causes.md": "0077483d5c4ff0cb2b5e01873659f76a57acaa1f2f97949db1e9da756019e9cd",
     "without/builtin/log-tags.md": "9820b909b15c148515e1265d5dd067d28e2f6e2c244470b7787dec2d469828db",
     "without/builtin/ril-requests.md": "e3d078dbeadb6505ab62131e1b0cde83be959e2bc110c994ba43f90d2dda352d"
    },
-   "cli_version": "2.1.323 (Claude Code)",
-   "iteration": "module-android-data-001",
+   "cli_version": "2.1.325 (Claude Code)",
+   "iteration": "module-android-data-002",
    "runtime": "claude-code",
    "child_mode": "restricted",
    "builtin_plugins": [
@@ -398,6 +398,11 @@
    "runs_per_case": 1,
    "bare": false,
    "require_cost": true,
+   "note": "11/15 D5-01 NOT_IN_SERVICE 문구 (2회째 표본)",
+   "iterations": {
+    "without": "module-android-data-001",
+    "with": "module-android-data-002"
+   },
    "init_model": "claude-sonnet-5-5",
    "cases": {
     "data-apn-wrong-applied": {
@@ -405,20 +410,20 @@
      "expect_sha256": "64eac2d72923022fdc73ef30ae8178dd9339813b4a800d2da7014bcbe0a755fb",
      "with": {
       "status": "completed",
-      "pass1": false,
+      "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 27798,
-      "output_tokens": 2770,
-      "cost_usd": 0.08654980000000001,
-      "elapsed_s": 20.17,
-      "tie_tokens": 27798,
-      "noncache": 17220,
+      "tokens_total": 28020,
+      "output_tokens": 2968,
+      "cost_usd": 0.07411780000000001,
+      "elapsed_s": 21.88,
+      "tie_tokens": 28020,
+      "noncache": 13722,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
       "init_model": "claude-sonnet-5-5",
-      "top1": false
+      "top1": true
      },
      "without": {
       "status": "completed",
@@ -437,28 +442,28 @@
       "init_model": "claude-sonnet-5-5",
       "top1": true
      },
-     "doc_bytes": 11467,
-     "token_delta": -2812
+     "doc_bytes": 11576,
+     "token_delta": -2590
     },
     "data-cfun-radio-off": {
      "kind": "explore",
      "expect_sha256": "a2bffccfc3946cec5ed84b05c0b6a8b847c360617f5fb1207ffa7e7fe5007a24",
      "with": {
       "status": "completed",
-      "pass1": true,
+      "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 27513,
-      "output_tokens": 2592,
-      "cost_usd": 0.0804925,
-      "elapsed_s": 18.52,
-      "tie_tokens": 27513,
-      "noncache": 15948,
+      "tokens_total": 27822,
+      "output_tokens": 2883,
+      "cost_usd": 0.0728158,
+      "elapsed_s": 20.97,
+      "tie_tokens": 27822,
+      "noncache": 13524,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
       "init_model": "claude-sonnet-5-5",
-      "top1": true
+      "top1": false
      },
      "without": {
       "status": "completed",
@@ -477,8 +482,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 11467,
-     "token_delta": -3179
+     "doc_bytes": 11576,
+     "token_delta": -2870
     },
     "data-dc-list-drop": {
      "kind": "explore",
@@ -488,12 +493,12 @@
       "pass1": false,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 28280,
-      "output_tokens": 3725,
-      "cost_usd": 0.09035850000000001,
-      "elapsed_s": 26.41,
-      "tie_tokens": 28280,
-      "noncache": 16715,
+      "tokens_total": 36119,
+      "output_tokens": 3880,
+      "cost_usd": 0.08272399999999999,
+      "elapsed_s": 28.89,
+      "tie_tokens": 36119,
+      "noncache": 14319,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -517,8 +522,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 11467,
-     "token_delta": -1826
+     "doc_bytes": 11576,
+     "token_delta": 6013
     },
     "data-disabled-user": {
      "kind": "deep",
@@ -528,12 +533,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 40341,
-      "output_tokens": 1629,
-      "cost_usd": 0.0667854,
-      "elapsed_s": 12.1,
-      "tie_tokens": 40341,
-      "noncache": 13587,
+      "tokens_total": 40806,
+      "output_tokens": 1607,
+      "cost_usd": 0.05835,
+      "elapsed_s": 12.5,
+      "tie_tokens": 40806,
+      "noncache": 11446,
       "notes": 1,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -557,8 +562,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": null
      },
-     "doc_bytes": 10279,
-     "token_delta": 392
+     "doc_bytes": 10423,
+     "token_delta": 857
     },
     "data-no-service-eval-reject": {
      "kind": "explore",
@@ -568,12 +573,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 28596,
-      "output_tokens": 3188,
-      "cost_usd": 0.08839659999999999,
-      "elapsed_s": 21.97,
-      "tie_tokens": 28596,
-      "noncache": 17030,
+      "tokens_total": 28630,
+      "output_tokens": 3184,
+      "cost_usd": 0.0778499,
+      "elapsed_s": 22.64,
+      "tie_tokens": 28630,
+      "noncache": 14331,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -597,8 +602,8 @@
       "init_model": "claude-sonnet-5-5",
       "top1": true
      },
-     "doc_bytes": 11467,
-     "token_delta": -2431
+     "doc_bytes": 11576,
+     "token_delta": -2397
     },
     "data-profile-invalid-after-apn-change": {
      "kind": "explore",
@@ -608,12 +613,12 @@
       "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 28564,
-      "output_tokens": 3121,
-      "cost_usd": 0.0878705,
-      "elapsed_s": 22.27,
-      "tie_tokens": 28564,
-      "noncache": 16999,
+      "tokens_total": 29015,
+      "output_tokens": 3315,
+      "cost_usd": 0.0801837,
+      "elapsed_s": 23.59,
+      "tie_tokens": 29015,
+      "noncache": 14718,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
@@ -637,28 +642,28 @@
       "init_model": "claude-sonnet-5-5",
       "top1": true
      },
-     "doc_bytes": 11467,
-     "token_delta": -2561
+     "doc_bytes": 11576,
+     "token_delta": -2110
     },
     "data-profile-ipc-swallowed": {
      "kind": "explore",
      "expect_sha256": "0d0c61d534afd2da4b1138cfec8e9dd3be21ed3b213642fef0e284b73e05bcd3",
      "with": {
       "status": "completed",
-      "pass1": false,
+      "pass1": true,
       "safety_fail": [],
       "valid": true,
-      "tokens_total": 28344,
-      "output_tokens": 3500,
-      "cost_usd": 0.0892645,
-      "elapsed_s": 24.67,
-      "tie_tokens": 28344,
-      "noncache": 16779,
+      "tokens_total": 27720,
+      "output_tokens": 2860,
+      "cost_usd": 0.0722659,
+      "elapsed_s": 20.88,
+      "tie_tokens": 27720,
+      "noncache": 13421,
       "notes": 0,
       "cost_skipped": false,
       "cost_basis": "list",
       "init_model": "claude-sonnet-5-5",
-      "top1": false
+      "top1": true
      },
      "without": {
       "status": "completed",
@@ -677,19 +682,19 @@
       "init_model": "claude-sonnet-5-5",
       "top1": false
      },
-     "doc_bytes": 11467,
-     "token_delta": -2491
+     "doc_bytes": 11576,
+     "token_delta": -3115
     }
    },
    "gate": {
-    "pass1_with": 4,
+    "pass1_with": 5,
     "pass1_without": 3,
-    "tokens_with": 209436,
+    "tokens_with": 218132,
     "tokens_without": 224344,
-    "token_delta": -14908,
-    "token_delta_noncache": -22146,
+    "token_delta": -6212,
+    "token_delta_noncache": -40943,
     "token_goal": "met",
-    "cost_delta_usd": -0.085958,
+    "cost_delta_usd": -0.157369,
     "safety_violations": {
      "with": 0,
      "without": 0
@@ -701,13 +706,13 @@
     "invalid": [],
     "require_cost": true,
     "verdict": "pass",
-    "top1_with": 3,
+    "top1_with": 4,
     "top1_without": 3,
     "top1_regressed": false,
     "baseline_safety_violated": false
    },
-   "unit_cost_usd": 0.090385,
-   "total_cost_usd": 1.265394,
+   "unit_cost_usd": 0.085285,
+   "total_cost_usd": 1.193983,
    "cost_basis": "reported"
   },
   "ofono/sim": {
