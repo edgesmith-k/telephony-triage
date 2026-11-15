@@ -196,6 +196,8 @@ rm -rf <work_dir>/_snapshot                                        # 옛 clone�
 `tools/sync_schemas.py --write`는 이슈 DB → 플러그인 사본 방향이라 이 일에 쓰지 않는다.
 S-6까지 끝낸 레포에 `templates/module-skills`가 있고 `docs/site/module-skills/`(사내 스냅샷)가 없으면 이 반입 **전에** [SITE_RESTORE.md](SITE_RESTORE.md) ⓪을 먼저 한다(`templates/module-skills`가 없으면 반입 전 할 일 없음 — 같은 문서 첫머리 (가)).
 
+**git으로 받았을 때** — zip 대신 반입용 레포를 받았으면(`git clone --depth 1 <반입 레포 URL> ~/tt-new`, 다음부터 `git -C ~/tt-new pull`) 아래 3·4의 압축 풀기를 건너뛰고 그 폴더를 `<새 초안>`(`~/tt-new`)으로 쓴다. 받은 것은 `git -C ~/tt-new log -1 --oneline`으로 확인한다. **그 폴더 안의 파일을 고치거나 더하지 않는다** — 더한 파일도 사외 파일로 반입된다.
+
 **1. 지금 상태 커밋** — 반입이 잘못돼도 이 커밋으로 돌아온다.
 ```
 git status
@@ -247,7 +249,7 @@ rm -rf ~/tt-old ~/tt-new
 | `.draft-manifest.json를 읽을 수 없습니다` 또는 `schema=…를 이 도구가 모릅니다`, 종료 2 | 기준선 파일이 손상됨(충돌 표시·잘림·다른 형식) | 레포는 바뀌지 않았다. `git log -- .draft-manifest.json`으로 손상 전 커밋을 찾아 `git restore --source=<커밋> -- .draft-manifest.json` → 다시 실행 |
 | 종료 2 (적용 중 실패) | 도중 실패 | 도구가 되돌린다. 그래도 이상하면 `git reset --hard && git switch main`(1의 커밋으로) |
 
-공통 파일을 사내에서 직접 고치지 않는 것이 원칙이다(재반입 때 충돌). 사내 전용 코드·값은 `SITE_PATHS` 경로에만 둔다. 지금 어긴 것이 있는지는 새 묶음 없이도 볼 수 있다: `python3 tools/import_draft.py --status` — 마지막 반입 뒤 사내에서 `고침`·`지움`·`새 파일`인 사외 파일 경로만 낸다(읽기만, 고친 파일이 있으면 종료 1 = 다음 반입이 멈춘다).
+공통 파일을 사내에서 직접 고치지 않는 것이 원칙이다(재반입 때 충돌). 사내 전용 코드·값은 `SITE_PATHS` 경로에만 둔다. 지금 어긴 것이 있는지는 새 묶음 없이도 볼 수 있다: `python3 tools/import_draft.py --status`(사내 레포의 도구가 이 옵션을 모르는 옛 묶음이면 새로 받은 폴더의 도구로 `python3 <새 초안>/tools/import_draft.py --status --dest .`, 고친 것이 없으면 아무것도 내지 않는다) — 마지막 반입 뒤 사내에서 `고침`·`지움`·`새 파일`인 사외 파일 경로만 낸다(읽기만, 고친 파일이 있으면 종료 1 = 다음 반입이 멈춘다).
 
 ## 9. 운영 이슈 DB 첫 push (S-4a, 도입 담당자 한 번)
 

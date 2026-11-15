@@ -769,8 +769,9 @@ def nul_warning(n: int, total: int, where: str) -> str:
 URL_USERINFO = re.compile(r"://[^/@\s]+@")
 
 
-def mask_brief(text, limit: int = 120) -> str:
+def mask_brief(text, limit: int = 120, *, off: bool = False) -> str:
     """사람·관리자에게 보이는 짧은 진단 글(오류 메시지·doctor 내용): URL 자격증명(`://user:token@` → `://<CRED>@`)을 먼저
-    가리고 마스킹한 뒤 공백을 접어 `limit`자로 자른다(`db_pr` stage 기록, `job_status --doctor`)."""
-    text = " ".join(new_masker().mask(URL_USERINFO.sub("://<CRED>@", str(text or ""))).split())
+    가리고 마스킹한 뒤 공백을 접어 `limit`자로 자른다(`db_pr` stage 기록, `job_status --doctor`). `off`(마스킹 끔 DB)면
+    URL 자격증명만 가린다(report.md에 쓴 줄과 같은 글자가 되게)."""
+    text = " ".join(new_masker(off=off).mask(URL_USERINFO.sub("://<CRED>@", str(text or ""))).split())
     return text if len(text) <= limit else text[: limit - 1] + "…"

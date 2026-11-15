@@ -482,7 +482,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     n = (res or {}).get("n", 0)
     _record(job, purpose, {"mode": mode, "at": _now(), "env": env, "output_sha256": sha, "source": src_rel if res else None,
                            "quotes": n, **counts})
-    head = masking.mask_brief(lines[0], 300)
+    head = masking.mask_brief(lines[0], 300, off=off)     # 끔 DB: report.md 줄과 같은 글자(꼭 보일 줄 대조가 어긋나지 않게)
     fab = [sub.lstrip()] if counts["fabricated"] else []
     # 심층 분석은 결과 줄(첫 줄)을 늘 보인다 — 탐색은 지어낸 인용이 있을 때만(B2-6)
     _obligation(args, job, purpose, [head.removesuffix("…")] + fab if purpose == "deep" else fab)

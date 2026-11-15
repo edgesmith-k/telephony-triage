@@ -444,7 +444,7 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
     ranked = list(ranked)
     causes = {k: sorted(v, key=lambda c: ranked.index(c[0]) if c[0] in ranked else len(ranked)) for k, v in causes.items()}
     titles = {f["flow"]: f["title"] for f in doc.get("flows") or []}
-    picked, counts, vers, cut = [], [], [], []
+    picked, counts, vers, cut, cut_before = [], [], [], [], []
     differ = False
     for f in doc.get("flows") or []:
         rows = []
@@ -461,6 +461,8 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
             if f.get("truncated"):
                 cut.append(f["title"])
             continue
+        if f.get("truncated") and (lo is None or _parse_ts(f["instances"][0]["start_ts"]) > lo):
+            cut_before.append(f["title"])      # 범위가 잘린 앞쪽에 걸친다: 남은 것만으로 "정상"이라고 읽히지 않게
         rows.sort(key=lambda r: r[:3])
         skipped = sorted({f["steps"][k]["title"] for r in rows if (k := _optional_none(r[4])) is not None})
         counts.append((f["title"], len(rows), all(r[5] is None for r in rows),
@@ -472,6 +474,9 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
             differ = differ or vm is False      # 숫자로 못 읽는 이슈 버전("17 QPR1")은 모름 — 기준 버전만 보인다(04 §5.13 (3))
     cut_line = ([f"- 흐름 점검: {', '.join(cut)} 반복이 많아 마지막 {flowlib.INSTANCES_MAX}번만 봄 — 이 범위에서는 판단 못 함"]
                 if cut else [])
+    if cut_before:
+        cut_line.append(f"- 흐름 점검: {', '.join(cut_before)} 반복이 많아 마지막 {flowlib.INSTANCES_MAX}번만 봄 — "
+                        "그 앞 시도는 점검하지 못함")
     if not counts:
         return [], cut_line or ["- 흐름 점검: 해당 없음"]
     tail = (f"흐름 기준 버전 {', '.join(vers)}" + (f" — 이 이슈는 {_clip(version, 20)}, 줄 문구가 다를 수 있다" if differ else "")

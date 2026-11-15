@@ -300,6 +300,26 @@ def test_discard_line_keeps_instance_that_already_had_bad_values():
     assert _sig(inst).startswith("값이상")
 
 
+def test_start_after_all_steps_done_is_a_new_instance():
+    """11/15 리뷰 D1-02: 모든 단계를 지난 인스턴스에 같은 열쇠의 시작 줄이 또 오면 합치지 않고 닫는다(`다시 시작`) —
+    다시 켠 시도가 실패했는데 "1회 끝까지 정상"으로만 보이지 않게. no-op 시작(already true)은 그대로 버려진다."""
+    oos = RADIO[4][2].replace("mDataRegState=0(IN_SERVICE)", "mDataRegState=1(OUT_OF_SERVICE)")
+    again = [(5.0, "SST-0", "setRadioPower power true forEmergencyCall true forceApply true reason 0", PHONE, 0),
+             (5.001, "SST-0", RADIO[1][2], PHONE, 0),
+             (5.002, "RILJ", "[0250]> RADIO_POWER on = true forEmergencyCall= true [PHONE0]", PHONE, 0),
+             (5.004, "RILJ", "[0250]< RADIO_POWER  [PHONE0]", PHONE, 0), (5.5, "SST-0", oos, PHONE, 0)]
+    [f] = _check(RADIO + again + [(40.0, "Other", "tick")], ("radio-on",))
+    first, second = f["instances"]
+    assert set(_sig(first).split()) == {"ok"} and first["end"]["label"] == flows.AGAIN and first["restarts"] == 0
+    assert "값이상" in _sig(second) and second["restarts"] == 0
+    lines = flow_section({"flows": [f]}, None, None, "17", {})[1]
+    assert lines[0].startswith("- 흐름 점검 (참고용") and any("이상" in x for x in lines[1:])
+    noop = [(10.0 + k, "SST-0", RADIO[0][2], PHONE, 0) for k in range(3)]
+    noop += [(10.001 + k, "SST-0", ALREADY, PHONE, 0) for k in range(3)]
+    [inst] = _check(sorted(RADIO + noop) + [(40.0, "Other", "tick")], ("radio-on",))[0]["instances"]
+    assert set(_sig(inst).split()) == {"ok"} and inst["restarts"] == 0
+
+
 def test_instances_over_cap_keep_the_tail_and_say_so():
     """F-3: 상한을 넘으면 뒤쪽 INSTANCES_MAX개를 남기고, 분석 범위에 남은 인스턴스가 없으면 '판정 못 함' 줄."""
     bad = RESP_BAD.replace("RESULT_SUCCESS", "RESULT_ERROR_INVALID_ARG")
@@ -314,6 +334,11 @@ def test_instances_over_cap_keep_the_tail_and_say_so():
     assert lines == [f"- 흐름 점검: 데이터 연결 반복이 많아 마지막 {flows.INSTANCES_MAX}번만 봄 — 이 범위에서는 판단 못 함"]
     lines = flow_section({"flows": [f]}, {"start": ts(1999.5), "end": ts(2010)}, ts(2000), "17", {})[1]
     assert lines[1].startswith(f"  - 데이터 연결 DN-{flows.INSTANCES_MAX}-C ") and "이상한 값" in lines[1]
+    assert not any("점검하지 못함" in x for x in lines)        # 범위가 남은 인스턴스 안에만 있으면 안내 없음
+    # 11/15 리뷰 D2-01: 범위가 잘린 앞쪽에 걸치거나 범위가 없으면, 남은 것의 결과 뒤에 앞 시도를 못 봤다고 알린다
+    before = f"- 흐름 점검: 데이터 연결 반복이 많아 마지막 {flows.INSTANCES_MAX}번만 봄 — 그 앞 시도는 점검하지 못함"
+    assert flow_section({"flows": [f]}, {"start": ts(-1), "end": ts(5)}, ts(0), "17", {})[1][-1] == before
+    assert flow_section({"flows": [f]}, None, None, "17", {})[1][-1] == before
 
 
 def test_cut_before_each_step_never_says_missing():

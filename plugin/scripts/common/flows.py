@@ -6,7 +6,7 @@
 (`notes`·`show`)만 `mask(줄 순번)`으로 가린 뒤 거기서 다시 뽑는다(스텝 마커와 같은 방식, 가린 줄에 안 맞으면 내지 않는다).
 
 - 인스턴스 열쇠 = (시작 줄 pid, 시작 줄 태그). 열린 인스턴스에 같은 열쇠의 시작 줄이 또 오면 합친다(`restarts`만 센다).
-  끝 줄로 닫힌 뒤의 시작만 새 인스턴스다. 끝 줄 `as: discard`는 아직 충족된 단계가 없으면 인스턴스를 버리고, 있으면 무시한다.
+  끝 줄로 닫혔거나 모든 단계를 지난(`다시 시작`으로 닫는다) 뒤의 시작만 새 인스턴스다. 끝 줄 `as: discard`는 아직 충족된 단계가 없으면 인스턴스를 버리고, 있으면 무시한다.
 - 단계·끝·메모 줄은 시작 줄 pid의 줄만 본다. scope `own`은 태그 = 열쇠, `named`는 `name_template`(`{key}` = re.escape(태그)),
   `any`는 슬롯(`phone_id`)이 다르면 뺀다(`None`은 와일드카드). 한 줄은 같은 흐름의 한 인스턴스만 단계 충족에 쓴다(먼저 연 것).
 - 닫힘: 끝 줄(라벨), 시작 태그가 다른 pid로 나옴(`프로세스 재시작`), 시계 이상·재부팅 줄(`로그 경계`). 시계 역행(T, d<0)은
@@ -30,7 +30,7 @@ FLOW_SCHEMA = Path(__file__).resolve().parents[2] / "schemas" / "flow.schema.jso
 LOG_END_SEC = 10.0          # TODO(SITE) 뒤 로그가 이보다 짧으면 판정 불가(`로그끝`)
 INSTANCES_MAX = 1000        # 흐름당 출력 인스턴스 상한(넘으면 뒤쪽만 남기고 truncated)
 NOTES_MAX = 5
-RESTART, BOUNDARY = "프로세스 재시작", "로그 경계"
+RESTART, BOUNDARY, AGAIN = "프로세스 재시작", "로그 경계", "다시 시작"
 OPTIONAL_NONE = "줄 없음(선택 단계)"
 FIXTURE_RE = re.compile(r"^(?P<id>[a-z0-9]+(?:-[a-z0-9]+)*)\.normal\.(?P<n>[1-9]\d*)\.log$")   # 정상 fixture `flows/fixtures/<id>.normal.<n>.log`
 
@@ -236,6 +236,8 @@ def _run(flow, records, texts, dts, runner, cuts, breaks, shown) -> list[dict]:
                 close(inst, RESTART, dt)
         if i in starts:
             key = (rec["pid"], rec["tag"])
+            if key in opened and opened[key]["n"] >= len(steps):   # 모든 단계를 지난 인스턴스: 새 시작은 다음 시도다
+                close(opened[key], AGAIN, dt)
             if key in opened:
                 opened[key]["restarts"] += 1
                 opened[key]["starts"].add(i)

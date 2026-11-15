@@ -68,7 +68,7 @@ Phase 1~13 모의 환경으로 전부 구현           S-2  사내 Claude Code �
 **배포 브랜치**: 묶음은 전체가 든 `stable`(또는 `main`)이 아니라, 거기서 딴 배포 브랜치에서 만든다. 사내에서 쓰지 않는 기록 문서(목록 `tools/release_exclude.txt`)를 지운 브랜치다 — 목록을 고치면 다음 반입부터 적용된다.
 ```
 git switch -c release/import-v1 stable
-git rm -r -q --pathspec-from-file=tools/release_exclude.txt && git commit -m "배포본: 기록 문서 제외"
+git rm -r -q --ignore-unmatch --pathspec-from-file=tools/release_exclude.txt && git commit -m "배포본: 기록 문서 제외"
 ```
 배포 브랜치는 `stable`로 되돌려 병합하지 않는다. 도구의 `on_release_branch` 경고는 이 브랜치에서는 예상된 것이다. `docs/history/`는 `CHANGES.md`만 남는다(사내 문서 갱신 절차 `14-site.md`가 읽는다).
 
