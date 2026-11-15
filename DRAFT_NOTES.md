@@ -36,7 +36,7 @@
 - **재반입 노트 (import-20261115 = import-20261103(`77e2827`) 이후 전부)**
   - guard 판정이 바뀌었다(`08-safety.md §9`): base push·병합 계열(규칙 6·11)과 규칙 5(`ci_mode: actions`)는 거부→ask, Claude의 Approve·리뷰 기각·자동 병합 켜기·보호 변경·`refs/remotes` 위조는 새로 거부. 팀 배포 전에 `site_step.py check S-4a`의 `s4a.protection_guard` 통과. §8대로 사내 대상 eval 12개 모두 다시.
   - S1 확인 전인데 site-defaults `tracker.isolation_confirmed: true`면 `false`로.
-  - 새 DB는 마스킹 끔(SITE_INSTALL §9, 스킬은 `cut` 인자만·eval 없음). 가리는 DB만 S13을 새 방법(`14-site.md`)으로 다시, 그 전엔 사내 로그를 DB에 안 넣는다.
+  - 새 DB는 마스킹 끔(SITE_INSTALL §9, 스킬 eval 없음). 가리는 DB만 S13을 새 방법으로 다시, 그 전엔 사내 로그를 DB에 안 넣는다.
   - S-5 `offline_eval`은 이슈 DB에 이미 있는 키도 표본내로 뺀다.
   - 옛 판으로 `summary`까지 한 대기 작업은 PR 본문에 메모 원문이 남는다 → `summary` 다시 또는 `discard`.
   - `issue_db.path`가 이슈 DB clone이 아니면(빈 값·상대 경로·`issue-db.config.yaml` 없음) `db_pr`·`db_verify`가 git 전에 종료 2. #112·#113의 바뀐 줄은 표시 기록 블록(`render_markdown`·`shown.record`)에 닿지 않는다.
@@ -49,6 +49,7 @@
   - #121 정밀 탐색(`--deep`): 명시 요청 때만, 효과 미확인. `deep.md`는 사내 스냅샷에 새로 만들고(없으면 `--site-overlay` 종료 1) 플러그인 배포 뒤 모듈 레포에 올린다.
   - #122: `import_draft --label` 필수. `tracker.read_tools`에 쓰기형 도구 이름 거부(doctor `tracker` warn). 경계 검사 15~20자리·이슈 DB hook 교체는 SITE_INSTALL §8. `docs/development` 22개는 `docs/history`로 옮김(dry-run에 지움·새 파일 22씩). OpenCode는 첫 설치(`opencode/README.md`: `tt-oc publish`, git ≥ 2.38, 모델이 낸 명령을 붙여 넣지 않는다).
   - #123: 탐색 `--with <모듈>`(보조 모듈 줄 절).
+  - #125~#132: 기록 문서 제외, oFono 중립 이름, report 네 칸, `import_draft --status`, Android 시드, 흐름 점검, 마스킹 끔.
   - 사내 읽기(import-20261103 대비, KB): S-0 −18.1·S-1 +8.1·S-2 +6.1·S-3 +11.7·S-4 +7.1·S-4a +1.1·S-5 +0.3·S-6 0·S-7 +2.1.
 - 재실행할 eval 수는 재반입 노트가 정한다(`pending.json` `site`, S-2; 사내 모델이 다르면 +7). 단계별 확인 항목·반입 뒤 후보(RF·R-36~47)는 history 11/13.
 - S-7: usage_stats format 2·`--transcripts` 허용 여부. 시그니처 필드 선언은 결정 (v)대로.
@@ -65,13 +66,12 @@
 ## 결정
 
 - (w) 11/13 사용자: 첫 파일럿은 Android만. guard는 실수 방지 장치(Approve는 토큰 권한으로 닫음). 사내 마켓플레이스는 태그·SHA 고정. 전체는 history 11/13.
-- (v) 11/09 사용자: DB가 쓰는 시그니처 feature는 `issue-db.config.yaml signature_features`에 선언하고, 플러그인이 모르는 feature면 분석 중단(`feature-unsupported`). 새 시그니처 필드(`min_count`·`sequence_within_sec`)는 S37·팀 설치본 통일 뒤에만(같은 목록의 `mask-off`는 시그니처 필드가 아니라 뼈대가 처음부터 쓴다). fabricated 인용이 든 가설은 시그니처 초안에 쓰지 않는다. 채점 판정이 바뀌면 GRADER_VERSION을 올린다.
-- (u) 11/02~03 사용자: 맨 `cid`는 마스킹하지 않는다(셀 위치 키·`mCid`는 가림). 데몬 이름은 카테고리별 placeholder(11/09 D10).
+- (v) 11/09 사용자: DB가 쓰는 시그니처 feature는 `issue-db.config.yaml signature_features`에 선언하고, 플러그인이 모르는 feature면 분석 중단(`feature-unsupported`). 새 시그니처 필드는 S37·팀 설치본 통일 뒤에만(`mask-off` 제외). fabricated 인용이 든 가설은 시그니처 초안에 쓰지 않는다. 채점 판정이 바뀌면 GRADER_VERSION을 올린다.
 - (q) 사내 S-2 축소(10/14, 사용자): 사내 대상 = `pending.json` `site`(사내 모델이 다르면 +7). 나머지는 `offsite_results.json`으로 갈음, 안전 위반은 면제 불가.
 - (a) 사내→사외 반출은 사용자가 직접 타이핑하는 사내 정보 없는 문장뿐. 사외는 합성 데이터로만 재현한다. (10/01)
 - (c) 실패 스텝·Claude 가설은 판정(S/C)에 쓰지 않는다. 구간·순위·검색·리포트 보조만. (10/04)
 - (d) 반입 전에는 v1 스키마를 직접 고치고, 배포 뒤 구조 변경은 버전을 올린다. 호환 변경은 올리지 않는다(`06 §6.4`). (10/04, 10/28)
 - (g) eval 판정: 전·후 같은 모델, 1순위 동작, 2순위 토큰 W0 폭. (10/06)
-- (b)(e)(f)(h)(i)(j)(k)(l)(m)(n)(p)(r)(s)(t) → history((b)(e)(i)(p)(r)(s) 11/13, (t) `17-platforms.md` §9~11, (m) §7, (n) `18-trackers.md` §7)
+- (b)(e)(f)(h)(i)(j)(k)(l)(m)(n)(p)(r)(s)(t)(u) → history((b)(e)(i)(p)(r)(s) 11/13, (u) 11/15, (t) `17-platforms.md` §9~11, (m) §7, (n) `18-trackers.md` §7)
 - (o) 사내 트래커는 Jira(10/12, 사용자). "사내 설정 시작" 한마디로 `tools/site_step.py`가 단계를 이어 낸다.
 - 사내 로그가 모의와 다를 때 가장 먼저: `docs/development/S0_PROBE_CHECKLIST.md` + `tools/s0_stats.py`, 설정 초안은 `tools/s0_suggest.py`(사내 전용 출력).
