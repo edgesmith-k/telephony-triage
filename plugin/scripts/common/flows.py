@@ -232,7 +232,7 @@ def _run(flow, records, texts, dts, runner, cuts, breaks, shown) -> list[dict]:
                 opened[key]["starts"].add(i)
             else:
                 inst = {"pid": rec["pid"], "tag": rec["tag"], "phone": rec.get("phone_id"), "start": i, "starts": {i},
-                        "restarts": 0, "n": 0, "ok": {}, "bad": {}, "notes": [], "end": None}
+                        "restarts": 0, "n": 0, "ok": {}, "bad": {}, "notes": [], "end": None, "ahead": set()}
                 used.add(i)
                 opened[key] = inst
                 out.append(inst)
@@ -258,6 +258,9 @@ def _run(flow, records, texts, dts, runner, cuts, breaks, shown) -> list[dict]:
                         inst["notes"].append(m.group(0)[:60])
             if inst["n"] < len(steps) and feed(inst, i):
                 lookback(inst, bucket, i)
+            elif inst["n"] < len(steps):     # 멈춘 단계 뒤 단계의 줄이 나옴: 흐름은 나아갔는데 이 단계 문구만 다를 수 있다
+                inst["ahead"].update(k for k in range(inst["n"] + 1, len(steps))
+                                     if i in steps[k][1] and in_scope(steps[k][0], steps[k][1], inst, i))
         bucket.append(i)
     for hi in sorted(exits):        # 역행 구간 뒤에 볼 줄이 없음: 그 안에서 연 인스턴스도 닫는다
         for inst in list(opened.values()):
@@ -318,8 +321,10 @@ def _row(flow, inst, records) -> dict:
         bad = inst["bad"].get(s["id"]) or []
         at = inst["ok"].get(s["id"], bad[-1][0] if bad else None)
         steps.append({"id": s["id"], "verdict": verdict, "detail": detail,
-                      "line_ref": records[at].get("line_ref") if at is not None else None, "bad_count": len(bad)})
+                      "line_ref": records[at].get("line_ref") if at is not None else None,
+                      "ts": records[at]["ts"] if at is not None else None, "bad_count": len(bad)})
+    later = min((k for k in inst["ahead"] if k > inst["n"]), default=None)
     return {"key": inst["tag"], "start_ts": records[inst["start"]]["ts"], "line_ref": records[inst["start"]].get("line_ref"),
-            "restarts": inst["restarts"],
+            "restarts": inst["restarts"], "later_step": flow["steps"][later]["id"] if later is not None else None,
             "end": {"label": inst["end"][0], "ts": logtime.format_ts(inst["end"][1])} if inst["end"] else None,
             "steps": steps, "notes": inst["notes"], "then": None}

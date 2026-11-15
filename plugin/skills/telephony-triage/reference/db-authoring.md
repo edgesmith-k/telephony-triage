@@ -108,11 +108,10 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 - **기존 분류 가져오기**(`source: import`): record 규칙과 같되 새 유형·원인 모두 시그니처 필수(pending 불가), 해결책 unverified로 시작. 브랜치 `import/<category>-<n>`, PR당 새 유형 10개 이하.
 - **분석 스킬** 결과는 리포트 보조일 뿐 분류·점수·검증에 쓰지 않는다. 스킬이 DB에 없는 원인을 말해도 그것만으로 원인을 만들지 않는다 — 사용자가 고르면 `new-cause` 흐름(시그니처 초안·검증 포함).
 
-
 ## 8. 성공 흐름 (put-flow·set-flow-step)
 
 - 언제: `규칙 제안 (흐름)` 줄을 골랐거나 사용자가 흐름 수정을 요청할 때만(분석 스킬 `[이슈 DB]` 줄로는 만들지 않는다). set-flow-step은 줄 그대로(`""` 지우기는 요청 때만).
-- put-flow 고치기: `SNAP/<category>/flows/<id>.yaml`을 통째로 `flow`에 싣고 그 단계 `patterns`에 문구 하나, `platform_versions`에 이슈 버전 하나만 더한다. 새 문구는 그 인스턴스 안에서만 찾는다.
-- 문구: §2 시그니처와 달리 마스킹 설정과 무관하게 **가리지 않은 글** 기준(켬 DB는 토큰 자리를 `\S+`처럼, 끔 DB는 주소·번호 값을 일반화). 토큰·`^` 금지(`flow-token`). 원래 패턴처럼 클래스·상태 이름 같은 고정 글자를 넣고 `.*`만인 패턴은 쓰지 않는다.
-- 정상 fixture: 새 문구로 끝까지 정상인 인스턴스를 `parse_logcat.py cut <log> --around <JOB/flow.json의 그 start_ts> --out WD/<KEY>/fixtures/flow-<n>.log --rules SNAP/parser-rules`로 잘라 `fixtures: [{path}]`에. 없으면 put-flow 없이 `pr_notes`에 `흐름 <ref> 단계 <id> 문구 다름 후보 — 정상 로그로 재확인`.
+- put-flow 고치기: `SNAP/<category>/flows/<id>.yaml`을 통째로 `flow`에 싣고 그 단계 `patterns`에 문구 하나, `platform_versions`에 이슈 버전 하나만 더한다.
+- 문구: §2 시그니처와 달리 마스킹 설정과 무관하게 **가리지 않은 글** 기준(켬 DB는 토큰 자리를 `\S+`처럼, 끔 DB는 주소·번호 값을 일반화). 토큰·`^` 금지(`flow-token`). 그 단계 줄에만 있는 메시지 글자까지 넣는다(`ConnectedState:`처럼 상태 이름만이거나 `.*`만인 패턴은 다른 줄도 맞는다).
+- 새 문구 찾기와 정상 fixture: 먼저 `parse_logcat.py cut <log> --around <JOB/flow.json의 그 인스턴스 start_ts> --out WD/<KEY>/fixtures/flow-<n>.log --rules SNAP/parser-rules`로 자르고, 새 문구는 그 파일에서만 찾는다(로그 원문 전체를 읽지 않는다). 새 문구로 그 구간이 끝까지 정상이면 그 파일을 `fixtures: [{path}]`에. 아니면 put-flow 없이 `pr_notes`에 `흐름 <ref> 단계 <id> 문구 다름 후보 — 정상 로그로 재확인`.
 - 새 흐름(요청 때만): 정상 로그로 확인한 줄만, 정상 fixture 필수, 같은 카테고리 `start` 중복 금지.

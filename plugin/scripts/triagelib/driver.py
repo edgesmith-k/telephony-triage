@@ -885,7 +885,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         """성공 흐름 점검 (04-parser-matching.md §5.13, 표시 전용 — S/C·점수 불변): `parse_logcat.py flows`(전체 로그) →
         `JOB/flow.json` → (analysis.json `flows[]`, report.md 줄). 스냅샷에 흐름 파일이 없으면 부르지 않고 (None, None)이다 —
         출력이 이전과 같다. `ranked`: 매칭 후보 원인 ID(순위 순) — "이 단계의 원인"에서 먼저 보인다. `top`: 1위 후보
-        `{cause, category, unjudged, ts}` — 흐름 제안 줄(`report._flow_hint`)."""
+        `{cause, category, unjudged(1위 유형의 원인 판정 불가), ts(근거 시각)}` — 흐름 제안 줄(`report._flow_hint`)."""
         snap = Path(self.snap)
         config = compat.load_db_config(snap)
         if not flowlib.files(snap, config):
@@ -901,7 +901,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             for c in issuedb.read_frontmatter(type_md).get("causes") or []:
                 if c.get("flow_step") and str(c.get("status", "active")) == "active":
                     causes.setdefault(str(c["flow_step"]), []).append((str(c.get("id")), str(c.get("title", ""))))
-        return flow_section(data or {}, (events.get("input") or {}).get("window"), around, version, causes, ranked or (), top)
+        return flow_section(data or {}, (events.get("input") or {}).get("window"), around, version, causes, ranked or (), top,
+                            flowlib.log_end_sec(config))
 
     def explore(self, candidates: list[dict]) -> dict | None:
         """Step 5-2 탐색 분석 해당 여부: 후보 없음·원인 미확인이면 `{reason, when}`, 아니면 None.
@@ -1063,7 +1064,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         partial, partial_report = (self.partial(match, code, events_path, events) if match.get("partial") is not None
                                    else (None, None))
         top = ({"cause": candidates[0]["cause"], "category": candidates[0]["category"],
-                "unjudged": bool(unjudged or candidates[0].get("_cause_unjudged")),
+                "unjudged": bool(candidates[0].get("_cause_unjudged")),     # 1위 유형의 원인 판정 불가만
                 "ts": [e["ts"] for e in candidates[0]["evidence"]]} if candidates else None)
         flows, flow_lines = self.flows(logs, tz, year, around, events, version, [c["cause"] for c in candidates if c["cause"]],
                                        top)

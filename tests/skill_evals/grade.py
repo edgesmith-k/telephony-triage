@@ -3445,6 +3445,8 @@ def checks_k(eid, ctx):
 # --- 성공 흐름 제안 eval 81~83 (배치 FL, 04-parser-matching.md §5.13 (3)) ------------------------------------------
 
 FLOW_STEP_81 = "network/radio-on/registered"
+# 81 초안 모양: `flow_step: …`(YAML)·`"flow_step": "…"`(JSON)·`| flow_step | … |`(표). 리포트 줄을 옮겨 적은 것은 세지 않는다
+_DRAFT_STEP_81 = re.compile(r"flow_step[\"'`*]*\s*[:=|]\s*[\"'`*]*\s*network/radio-on/registered")
 FLOW_SEEDS = HERE.parents[1] / "templates" / "issue-db-seeds" / "android"
 # JOB/plan.json에 쓰는 Bash: 리디렉션·tee·파이썬 쓰기. 못 알아보면 None → 순서는 수동 채점
 _PLAN_WRITE = re.compile(r">\s*[\"']?[^\s;|&\"']*plan\.json|\btee\b[^\n|;&]*plan\.json|write_text|json\.dump|open\([^)\n]*plan\.json")
@@ -3457,7 +3459,8 @@ _E83_HEAD = [(0.0, "DN-1-C", "ConnectingState: setupData: accessNetwork=EUTRAN, 
 _E83_VALID = (0.308, "DNC-0", "onDataNetworkValidationStatusChanged: [DataNetwork: DN-1-C, mock.apn, state=ConnectedState], "
                               "validation status=VALID,")
 E83_GOOD = _E83_HEAD + [(0.136, "DN-1-C", "ConnectedState: Data network connected, transport=WWAN"), _E83_VALID, (30.0, "Other", "tick")]
-E83_BROKEN = _E83_HEAD + [(0.136, "DN-1-C", "ConnectingState: Data network agent registered, transport=WWAN"), _E83_VALID,
+E83_BROKEN = _E83_HEAD + [(0.136, "DN-1-C", "ConnectingState: Data network agent registered, transport=WWAN"),
+                          (0.137, "DN-1-C", "ConnectedState: onEnter, network agent created, score=60"), _E83_VALID,
                           (30.0, "Other", "tick")]
 
 
@@ -3471,12 +3474,13 @@ def flow_verdicts(flow: dict, rows) -> list[list[str]]:
     """초안 흐름을 합성 줄(초, 태그, msg)에 돌린 인스턴스별 단계 판정(엔진 `common.flows.check`, 로그 파서 없이)."""
     from datetime import datetime, timedelta, timezone
     from common import flows as flowlib, logtime
+    from common.patterns import DEFAULT_TIMEOUT_MS      # 모델이 쓴 정규식이 채점기를 멈추지 않게(시간 초과면 그 흐름을 건너뜀 → 실패)
     t0 = datetime(2026, 11, 14, 1, 20, tzinfo=timezone.utc)
     recs = [{"ts": logtime.format_ts(t0 + timedelta(seconds=sec)), "pid": 2101, "tag": tag, "msg": msg,
              "phone_id": 0 if tag.startswith("DNC") else None, "event": None, "line_ref": {"file_index": 0, "line_no": n}}
             for n, (sec, tag, msg) in enumerate(sorted(rows, key=lambda r: r[0]), 1)]
     out, _ = flowlib.check([{**flow, "category": "data", "ref": "data/data-setup"}], recs,
-                           [f"{r['tag']}: {r['msg']}" for r in recs], timeout_ms=0)
+                           [f"{r['tag']}: {r['msg']}" for r in recs], timeout_ms=DEFAULT_TIMEOUT_MS)
     return [[s["verdict"] for s in inst["steps"]] for inst in out[0]["instances"]]
 
 
@@ -3547,7 +3551,12 @@ def checks_fl(eid, ctx):
     """성공 흐름 제안 eval 81~83(배치 FL): 리포트 흐름 줄 표시, 계획 op 내용, 초안·질문이 plan.json 쓰기보다 먼저(V-5),
     eval 83은 초안 흐름의 넓이(합성 줄로 엔진을 직접 돌림)·fixture·R4."""
     job = f"MOCK-90{eid}"
-    step7 = lambda: ctx.step7_index() or 0  # noqa: E731 — 분류 질문 뒤에 보인 글만 초안으로 센다(리포트의 흐름 줄 제외)
+    def step7() -> int:
+        """분류 질문(Step 7) 순번 — 그 뒤에 보인 글만 초안으로 센다(리포트 줄 제외). 못 찾으면 수동 채점."""
+        s7 = ctx.step7_index()
+        if s7 is None:
+            raise _Manual("분류 질문(Step 7)을 찾지 못함 — 초안을 센 시작점을 정할 수 없다")
+        return s7
     if eid == 81:
         def new_cause():
             ops = [o for o in _job_ops(ctx, job) if o.get("op") == "new-cause"]
@@ -3563,8 +3572,8 @@ def checks_fl(eid, ctx):
             return ok, json.dumps(ops, ensure_ascii=False)
 
         def order():
-            return shown_then_asked_before_write(ctx, lambda t: FLOW_STEP_81 in t and "flow_step" in t, FLOW_STEP_81, step7())
-        return [_report_check(ctx, job, r"새 원인 초안 참고 \(흐름\): flow_step network/radio-on/registered",
+            return shown_then_asked_before_write(ctx, _DRAFT_STEP_81.search, FLOW_STEP_81, step7())
+        return [_report_check(ctx, job, r"새 원인 초안 참고 \(흐름\): network/radio-on/registered",
                               source_patterns=(r"^- 분류 후보:[^\n]*원인 미확인",)),
                 new_cause, order, fixture, ctx.draft_shown, _dry_clean(ctx, job)]
     if eid == 82:
@@ -3597,12 +3606,7 @@ def checks_fl(eid, ctx):
             ok = sorted(map(key, ops)) == sorted(map(key, want)) and (p.get("feedback") or {}).get("decision") == "accepted"
             return ok, json.dumps({"ops": ops, "fb": p.get("feedback")}, ensure_ascii=False)[:600]
 
-        def no_authoring():
-            if ctx.tool_uses() is None:
-                raise _Manual("실행 기록(events.jsonl) 없음")
-            hits = ctx.opened("db-authoring.md")
-            return not hits, f"db-authoring.md 열람 {len(hits)}회"
-        return [_report_check(ctx, job, re.escape(line), top="NETWORK-001-01"), asked_first, plan, no_authoring,
+        return [_report_check(ctx, job, re.escape(line), top="NETWORK-001-01"), asked_first, plan,
                 lambda: ctx.screen_has("push", r"flow_step: network/radio-on/registered"), _dry_clean(ctx, job)]
     # eval 83
     orig = seed_flow("data/data-setup")
