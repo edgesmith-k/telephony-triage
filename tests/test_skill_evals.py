@@ -4029,19 +4029,24 @@ def test_fl82_rule_question_must_come_before_plan_write(tmp_path):
         _fl_order(tmp_path / "d", 82, [FL_STEP7, ask])     # 쓰기 호출을 못 찾으면 수동
 
 
-def test_fl81_new_cause_draft_shown_and_asked_before_plan_write(tmp_path):
+def test_fl81_new_cause_draft_shown_and_asked_before_stage(tmp_path):
     draft = ("text", "새 원인 초안:\n```yaml\nflow_step: network/radio-on/registered\n```")
     ask = ("tool", "q", ASK, {"question": "이 초안으로 진행할까요?", "options": ["승인", "수정"]}, "승인", False)
+    # 새 원인은 초안 검증이 plan.json을 먼저 요구한다 → 기준은 plan.json 쓰기가 아니라 첫 db_pr stage(eval 81 1차 실행)
     write = ("tool", "w", "Write", {"file_path": "/w/MOCK-9081/plan.json",
                                     "content": '{"cause": {"flow_step": "network/radio-on/registered"}}'}, "ok", False)
+    stage = ("tool", "s", "Bash", {"command": 'python3 "$S/db_pr.py" stage /w/MOCK-9081/plan.json --dry-run --then-summary'},
+             "ok", False)
     report = ("text", "새 원인 초안 참고 (흐름): network/radio-on/registered — 1위 증상의 근거가 …")
-    assert _fl_order(tmp_path / "a", 81, [report, FL_STEP7, draft, ask, write])[0] is True
-    assert _fl_order(tmp_path / "b", 81, [report, FL_STEP7, draft, write, ask])[0] is False
-    assert _fl_order(tmp_path / "c", 81, [report, FL_STEP7, ask, write])[0] is False, "분류 질문 앞 리포트 줄은 초안이 아니다"
-    # F-8: 분류 질문 뒤 리포트 줄을 옮겨 적기만 한 것은 초안이 아니다(`flow_step:` 칸 모양이어야 한다)
-    copied = ("text", "흐름 줄: 새 원인 초안 참고 (흐름): network/radio-on/registered — flow_step network/radio-on/registered")
-    assert _fl_order(tmp_path / "e", 81, [report, FL_STEP7, copied, ask, write])[0] is False
+    assert _fl_order(tmp_path / "a", 81, [report, FL_STEP7, write, draft, ask, stage])[0] is True
+    assert _fl_order(tmp_path / "b", 81, [report, FL_STEP7, draft, write, stage, ask])[0] is False
+    assert _fl_order(tmp_path / "c", 81, [report, FL_STEP7, write, ask, stage])[0] is False, "분류 질문 앞 리포트 줄은 초안이 아니다"
+    # F-8: 분류 질문 뒤 리포트 줄을 옮겨 적기만 한 것은 초안이 아니다(리포트 줄에는 flow_step 칸 이름이 없다)
+    copied = ("text", "흐름 줄: 새 원인 초안 참고 (흐름): network/radio-on/registered — 1위 증상의 근거가 …")
+    assert _fl_order(tmp_path / "e", 81, [report, FL_STEP7, copied, ask, stage])[0] is False
     as_json = ("text", '초안 `{"flow_step": "network/radio-on/registered"}`')
-    assert _fl_order(tmp_path / "f", 81, [report, FL_STEP7, as_json, ask, write])[0] is True
+    assert _fl_order(tmp_path / "f", 81, [report, FL_STEP7, as_json, ask, stage])[0] is True
+    listed = ("text", "- 흐름 단계: flow_step network/radio-on/registered (report.md의 새 원인 초안 참고 줄 그대로)")   # 실제 실행 모양
+    assert _fl_order(tmp_path / "h", 81, [report, FL_STEP7, write, listed, ask, stage])[0] is True
     with pytest.raises(grader._Manual):
-        _fl_order(tmp_path / "g", 81, [report, draft, ask, write])     # 분류 질문을 못 찾으면 시작점 0으로 세지 않고 수동
+        _fl_order(tmp_path / "g", 81, [report, draft, ask, stage])     # 분류 질문을 못 찾으면 시작점 0으로 세지 않고 수동

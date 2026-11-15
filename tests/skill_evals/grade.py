@@ -3446,7 +3446,8 @@ def checks_k(eid, ctx):
 
 FLOW_STEP_81 = "network/radio-on/registered"
 # 81 초안 모양: `flow_step: …`(YAML)·`"flow_step": "…"`(JSON)·`| flow_step | … |`(표). 리포트 줄을 옮겨 적은 것은 세지 않는다
-_DRAFT_STEP_81 = re.compile(r"flow_step[\"'`*]*\s*[:=|]\s*[\"'`*]*\s*network/radio-on/registered")
+# 초안의 flow_step 칸(`flow_step: …`·JSON·표·"흐름 단계: flow_step …"). 리포트 줄은 F-13 뒤 `flow_step`을 쓰지 않아 옮겨 적은 것과 갈린다
+_DRAFT_STEP_81 = re.compile(r"flow_step[\"'`*]*\s*[:=|\s]\s*[\"'`*]*\s*network/radio-on/registered")
 FLOW_SEEDS = HERE.parents[1] / "templates" / "issue-db-seeds" / "android"
 # JOB/plan.json에 쓰는 Bash: 리디렉션·tee·파이썬 쓰기. 못 알아보면 None → 순서는 수동 채점
 _PLAN_WRITE = re.compile(r">\s*[\"']?[^\s;|&\"']*plan\.json|\btee\b[^\n|;&]*plan\.json|write_text|json\.dump|open\([^)\n]*plan\.json")
@@ -3572,7 +3573,15 @@ def checks_fl(eid, ctx):
             return ok, json.dumps(ops, ensure_ascii=False)
 
         def order():
-            return shown_then_asked_before_write(ctx, _DRAFT_STEP_81.search, FLOW_STEP_81, step7())
+            """새 원인은 초안 검증(`db_verify rules --plan`)이 plan.json을 먼저 요구한다 — 그래서 기준은 plan.json 쓰기가 아니라
+            첫 `db_pr stage`(DB 변경이 만들어지는 곳)다. flow_step이 든 초안을 보이고 물은 뒤에 stage했는지 본다."""
+            s7 = step7()
+            d = _seen_at(ctx, _DRAFT_STEP_81.search, s7)
+            a = _ask_from(ctx, d)
+            st = next(iter(ctx._bash_index(_STAGE, s7)), None)
+            if st is None:
+                raise _Manual(f"stage 호출을 못 찾음(초안 보임 seq {d}, 질문 seq {a})")
+            return d is not None and a is not None and a < st, f"초안 보임 seq {d}, 그 뒤 질문 seq {a}, 첫 stage seq {st}"
         return [_report_check(ctx, job, r"새 원인 초안 참고 \(흐름\): network/radio-on/registered",
                               source_patterns=(r"^- 분류 후보:[^\n]*원인 미확인",)),
                 new_cause, order, fixture, ctx.draft_shown, _dry_clean(ctx, job)]
