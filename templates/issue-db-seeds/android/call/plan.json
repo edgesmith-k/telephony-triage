@@ -802,6 +802,273 @@
       "expect": {
         "origin": "synthetic"
       }
+    },
+    {
+      "op": "put-flow",
+      "ref": "call/mo-call",
+      "flow": {
+        "id": "mo-call",
+        "title": "발신(CS)",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^GsmCdmaCallTracker$",
+          "pattern": "dialGsm - emergency dialer: "
+        },
+        "end": [
+          {
+            "scope": "any",
+            "pattern": "update phone state, old=(OFFHOOK|RINGING) new=IDLE",
+            "label": "통화 끝"
+          }
+        ],
+        "steps": [
+          {
+            "id": "ril-request",
+            "title": "RIL 요청",
+            "scope": "any",
+            "patterns": [
+              "\\]> (EMERGENCY_)?DIAL\\b"
+            ],
+            "suspect": "GsmCdmaCallTracker → RIL"
+          },
+          {
+            "id": "offhook",
+            "title": "통화 중 상태",
+            "scope": "own",
+            "patterns": [
+              "update phone state, old=\\w+ new=OFFHOOK"
+            ],
+            "suspect": "GsmCdmaCallTracker"
+          },
+          {
+            "id": "ril-response",
+            "title": "RIL 응답",
+            "scope": "any",
+            "patterns": [
+              "\\]< (EMERGENCY_)?DIAL\\b"
+            ],
+            "ok": [
+              {
+                "pattern": "DIAL(?! error)",
+                "why": "응답 오류"
+              }
+            ],
+            "show": [
+              "error \\d+"
+            ],
+            "suspect": "모뎀·RIL(발신 거절)"
+          },
+          {
+            "id": "connected",
+            "title": "상대 연결",
+            "scope": "any",
+            "patterns": [
+              "onStateChanged, state: (ALERTING|ACTIVE)"
+            ],
+            "suspect": "망·상대 단말(응답 없음은 정상일 수 있음)",
+            "optional": true
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/mo-call.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "call/mt-ring",
+      "flow": {
+        "id": "mt-ring",
+        "title": "착신 울림(CS)",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^GsmCdmaCallTracker$",
+          "pattern": "Notify new ring "
+        },
+        "end": [
+          {
+            "scope": "own",
+            "pattern": "update phone state, old=(OFFHOOK|RINGING) new=IDLE",
+            "label": "통화 끝"
+          }
+        ],
+        "steps": [
+          {
+            "id": "ringing",
+            "title": "울림 상태",
+            "scope": "own",
+            "patterns": [
+              "update phone state, old=\\w+ new=RINGING"
+            ],
+            "suspect": "GsmCdmaCallTracker"
+          },
+          {
+            "id": "notifier",
+            "title": "착신 알림",
+            "scope": "any",
+            "patterns": [
+              "PstnIncomingCallNotifier: handleNewRingingConnection"
+            ],
+            "suspect": "PstnIncomingCallNotifier(Phone 등록)"
+          },
+          {
+            "id": "connection",
+            "title": "Telecom 연결",
+            "scope": "any",
+            "patterns": [
+              "onCreateIncomingConnection, request: "
+            ],
+            "suspect": "Telecom → TelephonyConnectionService"
+          },
+          {
+            "id": "ui-ringing",
+            "title": "울림 표시",
+            "scope": "any",
+            "patterns": [
+              "onStateChanged, state: RINGING"
+            ],
+            "suspect": "TelephonyConnection"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/mt-ring.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "call/answer",
+      "flow": {
+        "id": "answer",
+        "title": "착신 응답(CS)",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^RILJ$",
+          "pattern": "\\]> ANSWER\\b"
+        },
+        "end": [
+          {
+            "scope": "any",
+            "pattern": "update phone state, old=(OFFHOOK|RINGING) new=IDLE",
+            "label": "통화 끝"
+          }
+        ],
+        "steps": [
+          {
+            "id": "ril-response",
+            "title": "RIL 응답",
+            "scope": "own",
+            "patterns": [
+              "\\]< ANSWER\\b"
+            ],
+            "ok": [
+              {
+                "pattern": "ANSWER(?! error)",
+                "why": "응답 오류"
+              }
+            ],
+            "show": [
+              "error \\d+"
+            ],
+            "suspect": "모뎀·RIL"
+          },
+          {
+            "id": "call-list",
+            "title": "통화 목록",
+            "scope": "own",
+            "patterns": [
+              "\\]< GET_CURRENT_CALLS \\{"
+            ],
+            "ok": [
+              {
+                "pattern": ",ACTIVE,",
+                "why": "활성 아님"
+              }
+            ],
+            "show": [
+              "id=\\d+,\\w+"
+            ],
+            "suspect": "모뎀(통화 상태)"
+          },
+          {
+            "id": "active",
+            "title": "통화 연결",
+            "scope": "any",
+            "patterns": [
+              "onStateChanged, state: ACTIVE"
+            ],
+            "suspect": "TelephonyConnection"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/answer.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "call/local-hangup",
+      "flow": {
+        "id": "local-hangup",
+        "title": "통화 끊기(내 쪽)",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^RILJ$",
+          "pattern": "\\]> HANGUP\\b"
+        },
+        "steps": [
+          {
+            "id": "ril-response",
+            "title": "RIL 응답",
+            "scope": "own",
+            "patterns": [
+              "\\]< HANGUP\\b"
+            ],
+            "ok": [
+              {
+                "pattern": "HANGUP(?! error)",
+                "why": "응답 오류"
+              }
+            ],
+            "show": [
+              "error \\d+"
+            ],
+            "suspect": "모뎀·RIL"
+          },
+          {
+            "id": "disconnected",
+            "title": "끊김 표시",
+            "scope": "any",
+            "patterns": [
+              "onStateChanged, state: DISCONNECTED"
+            ],
+            "suspect": "GsmCdmaCallTracker → TelephonyConnection"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/local-hangup.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
     }
   ]
 }
