@@ -4,7 +4,7 @@ description: "Jira 이슈와 logcat으로 telephony 이슈 분석 및 이슈 DB 
 agent: triage
 ---
 
-인자 형식: `/tt-analyze <JIRA-KEY> [logcat 경로...] [--code <프로필|경로|skip>] [--dry-run | --analysis-only] [--more-logs <로그...>] [--issue-file <yaml>] [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>] [--analyzer | --no-analyzer] [--explore | --no-explore] [--platform <이름>]`
+인자 형식: `/tt-analyze <JIRA-KEY> [로그...] [--code <프로필|경로|skip>] [--dry-run|--analysis-only] [--more-logs <로그...>] [--issue-file <yaml>] [--failed-step <줄>] [--steps-file <파일>] [--clock-offset <±시간>] [--look-at <줄>] [--look-note <질문>] [--analyzer|--no-analyzer] [--explore|--no-explore] [--platform <p>]`
 
 > **OpenCode v1 — 분석 전용.** 이 흐름의 다음 단계는 실행하지 않는다(guard·설정이 막는다): Jira 코멘트(`issue_post.py approve`)·이슈 DB push·PR(`db_pr.py publish`·`merge`·`request-review`)·스킬 적용(`skill_patch.py --apply`). 그 단계에 이르면 실행할 정확한 명령(절대 경로, 모든 인자)을 sh 코드 블록으로 보이고 "OpenCode v1에서는 실행하지 않습니다. 터미널이나 Claude Code에서 직접 실행하세요."라고 말한 뒤 턴을 끝낸다. 사용자 확인이 필요한 곳은 질문과 번호 선택지(4개 이하)로 턴을 끝낸다(답은 `tt-oc -s <세션> -- <답>`).
 

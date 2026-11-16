@@ -5,6 +5,7 @@
                   [--code <프로필|경로|키=경로,…|skip>] [--dry-run | --analysis-only] [--answer <kind>=<값>...]
                   [--tz <IANA>] [--year <YYYY>] [--minutes 5] [--refresh]
                   [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>]
+                  [--look-at <기준 줄>] [--look-note <확인할 내용>]
     triage.py run <KEY> --more-logs <logcat|bugreport>... [위 옵션]      # --logs와 함께 못 쓴다(종료 코드 2)
     triage.py run <KEY> --offline-db <path> --out <dir> --logs <logcat...> (--issue-meta <json> | --issue-file <yaml>)
     triage.py release <KEY>
@@ -50,6 +51,11 @@
 - 읽지 않는 파일: `events.json`(파서 출력), `match.json`(매처 출력, `parse_logcat cut --evidence` 입력),
   `issue.json`(마스킹된 Jira 추출 전체 — 코멘트 원문이 필요할 때만 읽는다), `issue_meta.json`, `triage-state.json`, `analysis-cache.json`.
 
+`--look-at`·`--look-note`(선택, 각 ≤300자 — 넘으면 종료 코드 2)도 이 프로세스 안에서만 마스킹하고, 하위 스크립트에는 가린 값을 담은
+`JOB/look-at.json` 경로만 넘긴다(`parse_logcat ipc --find`). 기준 줄(로그 줄 또는 `<IPC 이름> (token=0x…)`)을 로그에서 찾으면 그 줄
+시각 −30초~+300초를 분석 구간으로 쓴다(`step_anchor.source: look_at`, `look {hits, picked}`, 근접 중심도 그 시각). 못 찾으면 경고하고
+아래 앵커 순서대로 간다. 확인할 내용은 report.md 한 줄과 탐색 타임라인 머리에만 싣는다(`--look-at` 없이도).
+
 `--failed-step`·`--steps-file`(선택)은 이 프로세스 안에서만 읽고 마스킹한다. 원문은 하위 스크립트 인자(→ `trace.jsonl`)와
 `triage-state.json`에 쓰지 않는다. 결과는 `issue.json`·`issue_meta.json`·`analysis.json`의 `issue.failed_step`·`report.md`·
 `timeline.md` 머리에 **있을 때만** 나온다(보조 정보, S/C·분류·검증에 쓰지 않는다 — 매처의 단어 겹침 가산(`keyword_bonus_max`)과 순위(동점 정렬, 스텝 기준 우선 유형 가산)에는 들어간다, contracts §3.2 match_signatures). 없거나 읽지 못해도 출력은 이전과 같다.
@@ -78,7 +84,7 @@ KEY의 가장 늦은 활동인 동안(답한 뒤 다른 플랫폼 작업이 묻�
 상태 `code_auto`, report.md 코드 줄에 표시). 경로가 무효면 전체 선택지로 묻는다.
 
 실패 스텝 앵커(선택): 실패 스텝이 **어디를(시간 범위)·무엇을(우선 유형)** 볼지 정하고, **왜(S/C)** 는 로그 시그니처가 정한다.
-앵커 우선순위 `--answer anchor=off`(끔) > 로그 스텝 마커(`failed_step.marker_patterns`가 있을 때 `parse_logcat markers`, 기본 꺼짐) >
+앵커 우선순위 `--answer anchor=off`(끔) > 기준 줄(`--look-at`) > 로그 스텝 마커(`failed_step.marker_patterns`가 있을 때 `parse_logcat markers`, 기본 꺼짐) >
 `--steps-file`의 스텝 시각(**수동 시계 차 `--clock-offset`이 있을 때만**) > `--steps-file`의 스텝 순서(`step_order`: PASS 스텝의
 흔적을 이슈 DB `step_events` 규칙으로 로그에서 찾아 마지막 일치 뒤를 실패 구간으로 본다, 시계 불필요) > Jira 발생 시각(±`--minutes`) >
 증상 시각 스캔(`--answer time`). 시험 장비 시계는 단말 logcat 시계와 다를 수 있어, 시계 차를 모르면 장비 시각은 쓰지 않는다(경고).
@@ -152,6 +158,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--steps-file", metavar="파일", help="시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행")
     p.add_argument("--clock-offset", metavar="±시간", help="시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값). 예: +3m, -90s, +00:03:00, 180. "
                                           "없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다")
+    p.add_argument("--look-at", metavar="기준 줄", help="기준 줄(선택, ≤300자): 로그 줄 또는 `<IPC 이름> (token=0x…)`. 로그에서 찾으면 "
+                                                    "그 줄 시각 둘레로 분석 구간을 잡는다. 마스킹해서만 쓴다")
+    p.add_argument("--look-note", metavar="확인할 내용", help="확인할 내용(선택, ≤300자): 리포트·탐색 타임라인 머리에 싣는 사용자 질문. "
+                                                         "마스킹해서만 쓴다")
     p = sub.add_parser("explore", parents=[common])
     p.add_argument("key", metavar="KEY")
     p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
@@ -266,7 +276,8 @@ def _explore(args, cfg: dict, job: Path) -> int:
     except (OSError, ValueError) as exc:
         print(f"탐색 입력을 읽지 못했다({exc}) — 이 키로 /telephony-triage:analyze를 다시 실행한다", file=sys.stderr)
         return USAGE
-    text, kept, total = timeline(args.key, events, spec.get("around"), limit, spec.get("failed_step"), spec.get("anchor"))
+    text, kept, total = timeline(args.key, events, spec.get("around"), limit, spec.get("failed_step"), spec.get("anchor"),
+                                 spec.get("look_at"))
     # 마스킹 전 JOB이어도 남은 값은 가린다(B2-25). 마스킹 끔 DB의 events(`mask_off`)면 가리지 않는다(08-safety §8)
     text, redacted = (text, {}) if events.get("mask_off") else masking.redact(text, events.get("mask_allow") or [])
     (job / TIMELINE_FILE).write_text(text, encoding="utf-8", newline="\n")

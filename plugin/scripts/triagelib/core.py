@@ -22,7 +22,7 @@ STATE_FILE = "triage-state.json"
 PLATFORM_ANSWER = "platform_answer"   # 상태 키: 이 작업 플랫폼을 `--answer platform=`으로 정했다(17-platforms §11-3)
 STATE_SCHEMA = 2                 # 2: `job` 절(로그·실행 이력·재사용 캐시 요약)이 있다. 스키마 표시가 없는 파일은 job = {}
 CACHE_FILE = "analysis-cache.json"
-CACHE_FORMAT = 3                 # 캐시 형식·`core` 구조를 바꾸면 올린다(plugin 해시에 들어가 이전 캐시가 무효가 된다). 2: 타임라인은 캐시 파일이 아니다. 3: core.unjudged
+CACHE_FORMAT = 4                 # 캐시 형식·`core` 구조를 바꾸면 올린다(plugin 해시에 들어가 이전 캐시가 무효가 된다). 2: 타임라인은 캐시 파일이 아니다. 3: core.unjudged. 4: core.attrs.look·look_note
 RUNS_KEEP = 10                   # state.job.runs(실행 이력)에 남기는 수
 RUN_DIRS_KEEP = 5                # JOB/runs/<n>/(이전 analysis.json·report.md 보관)에 남기는 수
 RUNS_DIR = "runs"
@@ -59,6 +59,7 @@ TIMELINE_FILE = "timeline.md"
 # 기본 아닌 플랫폼의 탐색 분석 지식(플러그인 루트 기준). `<여기>/<플랫폼>/*.md`가 있으면 `triage.py explore`가 `refs`로 알린다
 # (17-platforms §10). 스킬 디렉토리 기준 경로는 `reference/platforms/<플랫폼>/<파일>`
 PLATFORM_REFS_DIR = ("skills", "telephony-triage", "reference", "platforms")
+LOOK_FILE = "look-at.json"      # `--look-at`(가린 글)·기준 시각 → `parse_logcat ipc --find`(원문을 인자로 넘기지 않는다)
 EXPLORE_INPUT_FILE = "explore-input.json"   # `triage.py explore`의 입력(마스킹된 값만). run이 쓰고, 탐색 동의 뒤 subcommand가 읽는다
 MUST_SHOW_MAX = 6                # render_report가 모으는 must_show 상한
 MUST_SHOW_FIT = 4                # fit이 마지막에 남기는 수
@@ -100,7 +101,7 @@ NEXT_CHECK_FAILED = "리포트 줄은 생략으로 고쳐 두었다 — 고쳐 �
 NEXT_CHECK_NA = "리포트 줄은 그대로 둔다 — Step 6로 계속"
 MODULE_RECORD_DIR = "module-skill"
 # 새 run이 지우는 이전 실행 산출물(B2 §7.4) — 폴더 MODULE_RECORD_DIR도 지운다
-STALE_FILES = (TIMELINE_FILE, EXPLORE_INPUT_FILE, "module-skill.json", "deep-input.json", "skill-input.json", "check-output.json",
+STALE_FILES = (TIMELINE_FILE, EXPLORE_INPUT_FILE, LOOK_FILE, "module-skill.json", "deep-input.json", "skill-input.json", "check-output.json",
                "deep-output.md", "explore-output.md")
 _HOT_LEVELS = {"W", "E", "F"}
 _TOKEN_RE = re.compile(r"[0-9A-Za-z가-힣_]{2,}")

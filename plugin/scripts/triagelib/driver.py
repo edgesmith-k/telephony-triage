@@ -11,7 +11,7 @@ from pathlib import Path
 
 import platforms
 import trackers
-from common import compat, failedstep, issuedb, masking, stepanchor, userconfig
+from common import compat, failedstep, issuedb, lookat, masking, stepanchor, userconfig
 from common import flows as flowlib
 from common.exitcodes import CHECK_FAILED, USAGE
 
@@ -85,6 +85,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         self.out: dict = {"key": self.key}
         self.failed_step: dict | None = None     # 마스킹된 {text, source}. 없으면 None (선택 값)
         self.anchor_off = False
+        self._look: dict | None = None           # --look-at·--look-note를 가린 값 {at, note} (look_inputs)
+        self.look_result: dict | None = None     # 기준 줄 찾기 결과 {hits, picked, pick, how, ts, line, at} | {hits: 0, why}
         self.clock_offset: float | None = None   # 장비 시각 → 단말 시각 시계 차(초). --clock-offset > failed_step.clock_offset
         self._steps = None                       # read_steps 결과 캐시 (steps-file은 한 번만 읽는다)
         self.order_fail: dict | None = None      # 스텝 순서 정렬을 시도했으나 앵커를 못 정한 이유 {matched, observable, missed, reason}
@@ -152,6 +154,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             if self.clock_offset is None:
                 raise Fail(USAGE, f"--clock-offset 형식이 맞지 않는다: {a.clock_offset!s:.40} "
                                   "(예: +3m, -90s, +1h2m3s, +00:03:00, 180 — 하루(86400초) 이내)")
+        for flag in ("look_at", "look_note"):     # 원문은 메시지에 싣지 않는다
+            if len(getattr(a, flag, None) or "") > lookat.TEXT_MAX:
+                raise Fail(USAGE, f"--{flag.replace('_', '-')}는 {lookat.TEXT_MAX}자 이하로 준다")
         if self.analysis_only and (a.dry_run or self.offline):
             raise Fail(USAGE, "--analysis-only는 " + ("--dry-run" if a.dry_run else "--offline-db")
                        + "과 함께 쓰지 않는다(분석 전용은 이슈 DB에 기록하지 않는 실행이다).")
@@ -486,11 +491,11 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
     # 실패 스텝(선택, 보조 정보) ----------------------------------------------------------------------
 
-    def masker(self):
+    def masker(self, log_lines: bool = False):
         try:
-            return masking.for_db(compat.load_db_config(self.snap))
+            return masking.for_db(compat.load_db_config(self.snap), log_lines=log_lines)
         except Exception:    # noqa: BLE001 — 호환성 문제(`mask:` 형식 등)는 compat 단계가 보고한다
-            return masking.for_db({})
+            return masking.for_db({}, log_lines=log_lines)
 
     def existing_record(self) -> None:
         _, data, _ = self.run.call("2-existing", "db_search.py", [self.key, "--db", self.snap, "--limit", SEARCH_LIMIT])
@@ -926,8 +931,13 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             self.warnings.append(f"explore.timeline_max_lines 값이 잘못됐다({limit}). {EXPLORE_MAX_LINES}로 본다")
             limit = EXPLORE_MAX_LINES
         step = getattr(self, "failed_step", None)
-        return {"around": around, "failed_step": step["text"] if step else None, "limit": limit,
-                "anchor": {k: anchor.get(k) for k in ("source", "step", "start", "fail")} if anchor else None}
+        out = {"around": around, "failed_step": step["text"] if step else None, "limit": limit,
+               "anchor": {k: anchor.get(k) for k in ("source", "step", "start", "fail")} if anchor else None}
+        look, found = self.look_inputs(), self.look_result or {}
+        if look["at"] or look["note"]:      # 타임라인 머리: 기준 줄(사용자 입력)·찾은 시각·일치 위치, 확인할 내용
+            out["look_at"] = {"line": look["at"], "note": look["note"], "ts": found.get("ts"), "hits": found.get("hits"),
+                              "at": found.get("at")}
+        return out
 
     # 실행 ------------------------------------------------------------------------------------------
 
@@ -1117,7 +1127,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                      **({"uncollected_tags": uncollected} if uncollected else {})},
             "warnings_core": self.warnings[warn0:], "extra_warnings": extra_warnings,
             "attrs": {"clock": self.clock, "order_fail": self.order_fail, "order_evidence": self.order_evidence,
-                      "focus": self.focus, "steps_member": self.steps_member},
+                      "focus": self.focus, "steps_member": self.steps_member, "look": self.look_result},
         }
 
     def analyzer(self, candidates: list[dict]) -> dict | None:
