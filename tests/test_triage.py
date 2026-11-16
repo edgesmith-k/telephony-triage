@@ -308,15 +308,15 @@ def test_time_question_warns_about_clock_anomalies():
 
 
 def test_time_answer_full_analyzes_whole_log_without_occurred_at():
-    """시각 없이 로그 전체(`--answer time=full`): occurred_at 없이 끝까지 돌고, step_anchor는 `none`,
+    """시각 없이 로그 전체(`--answer time=full`): 메타에 남아 있던 occurred_at도 지우고 끝까지 돌고, step_anchor는 `none`,
     리포트에 결정적 줄이 있고, 매칭은 근접 보너스 없이 된다(확신이 낮아지는 쪽)."""
     doc, items = _items()
     item = items[0]
     work = tmp("tt-triage-full-")
     out = work / "full"
-    meta = work / "full.meta.json"      # occurred_at 없는 메타
-    meta.write_text(json.dumps({"key": item["key"], "summary": item.get("summary", "")}, ensure_ascii=False),
-                    encoding="utf-8")
+    meta = work / "full.meta.json"      # occurred_at이 남아 있는 메타(예: CP 시계 Jira 값) — full이면 지워져야 한다
+    meta.write_text(json.dumps({"key": item["key"], "occurred_at": item["occurred_at"],
+                                "summary": item.get("summary", "")}, ensure_ascii=False), encoding="utf-8")
     logs = [str((LABELSET.parent / p).resolve()) for p in item["logs"]]
     analysis = run_json("triage.py", ["run", item["key"], "--offline-db", SAMPLE, "--out", out, "--logs", *logs,
                                       "--issue-meta", meta, "--tz", doc["tz"], "--year", doc["year"],
@@ -326,8 +326,11 @@ def test_time_answer_full_analyzes_whole_log_without_occurred_at():
     assert analysis["step_anchor"]["source"] == "none"
     assert "- 기준 시각 없음 — 로그 전체를 봄" in (out / "report.md").read_text(encoding="utf-8")
     match = json.loads((out / "match.json").read_text(encoding="utf-8"))
-    assert match["candidates"] and all(c["bonus"]["proximity"] == 0 for c in match["candidates"])
+    assert match["candidates"] and all((c.get("bonus") or {}).get("proximity", 0) == 0 for c in match["candidates"])
     normal = _offline(item, doc, work / "normal")       # 같은 로그를 발생 시각과 함께 돌린 기준
+    normal_match = json.loads((work / "normal" / "match.json").read_text(encoding="utf-8"))
+    assert any((c.get("bonus") or {}).get("proximity", 0) > 0 for c in normal_match["candidates"]), \
+        "기준 실행에 근접 보너스가 없다 — 이 테스트가 증명할 차이가 사라졌다"
     assert analysis["candidates"][0]["cause"] == normal["candidates"][0]["cause"]
     assert analysis["candidates"][0]["score"] <= normal["candidates"][0]["score"]       # 근접 보너스가 빠진 쪽
 

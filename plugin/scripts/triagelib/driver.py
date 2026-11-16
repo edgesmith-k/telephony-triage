@@ -999,9 +999,15 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
     def write_meta(self, anchor: dict | None) -> Path | None:
         """`time` 답을 issue_meta.json에, 앵커가 있으면 match_meta.json(근접 중심 = 스텝 실패 시각)에 쓴다 → 매처에 줄 메타 경로.
-        답 `full`(시각 없이 로그 전체)은 시각이 아니라 `occurred_at`에 쓰지 않는다 — 매처 `_parse_iso`가 종료 2로 죽는다."""
+        답 `full`(시각 없이 로그 전체)은 시각이 아니라 `occurred_at`에 쓰지 않고, 남아 있던 값도 지운다 — 매처 `_parse_iso`가
+        종료 2로 죽고, 남겨 두면 "기준 시각 없음"이라면서 근접 보너스가 옛 시각(예: CP 시계 Jira 값)에 걸린다."""
         meta_path = self.job / "issue_meta.json"
-        if self.answer("time") and self.answer("time") != "full":
+        if self.answer("time") == "full":
+            if meta_path.is_file():
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                if meta.pop("occurred_at", None) is not None:
+                    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
+        elif self.answer("time"):
             meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else {"key": self.key}
             meta["occurred_at"] = self.answer("time")
             meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")

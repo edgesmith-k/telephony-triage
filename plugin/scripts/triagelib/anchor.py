@@ -317,8 +317,8 @@ class AnchorMixin:
                     "Jira에 발생 시각이 없다 — 후보가 없으니 시각을 답하거나 '시각 없이 로그 전체'를 고른다.")
         options.append({"value": "full", "label": "시각 없이 로그 전체"})
         if bad is not None:
-            question = (f"답한 시각 '{_clip(bad, 60)}'을 읽지 못했다 — 후보 값 그대로 또는 ISO 8601(예: 2026-09-20T14:32:00+09:00)로 "
-                        "다시 답한다. " + question)
+            question = (f"답한 시각 '{_clip(bad, 60)}'을 읽지 못했다 — 후보 값 그대로, ISO 8601(예: 2026-09-20T14:32:00+09:00), "
+                        "또는 시각 없이 보려면 'full'로 다시 답한다. " + question)
         if jumps:
             question += f" 로그에 시계 이상(역행·점프) {jumps}건 — 후보 시각이 실제와 다를 수 있다(재부팅·NITZ 전 가능)."
         extra = {}
