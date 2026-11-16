@@ -655,6 +655,28 @@ def test_drift_resolution_parser_rule_and_allow_cause():
     assert base != ws.main_sha()
 
 
+def test_drift_reclassify_sees_unresolved_moved_to_other_type():
+    """main이 unresolved Jira를 다른 유형으로 옮겼으면(cause는 그대로 unresolved) 옛 reclassify 계획은 drift로 멈춘다."""
+    ws = Workspace()
+    job = "review-data-2026-10"
+    ws.plan(job, "p7-review-reclassify.plan.json")      # MOCK-1104: DATA-001 unresolved → DATA-001-01
+    other = "data/DATA-002-data-teardown-by-user-action"
+
+    def move(c: Path) -> None:
+        src, dst = c / DATA_DIR / "issues/MOCK-1104.yaml", c / other / "issues/MOCK-1104.yaml"
+        dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
+        src.unlink()
+
+    ws.push_main(move)
+    ws.acquire(job)
+    out = ws.stage(job, "review/data-2026-10", expect=1)
+    assert out["stopped"] == "drift" and "apply" not in out
+    assert [(d["op"], d["target"], d["field"], d["plan_value"], d["plan_base_value"], d["current_value"])
+            for d in out["drift"]] == [("reclassify", "MOCK-1104", "type", "DATA-001", "DATA-001", "DATA-002")]
+    assert not (ws.wt(job) / DATA_DIR / "issues/MOCK-1104.yaml").exists()   # 사용자 선택 전 적용하지 않았다
+    ws.db_pr("discard", ws.wt(job))
+
+
 def _edit(path: Path, old: str, new: str) -> None:
     text = path.read_text(encoding="utf-8")
     assert old in text, f"{path.name}: {old!r} 없음"
