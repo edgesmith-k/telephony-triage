@@ -179,6 +179,9 @@ PR 1(`04-parser-matching.md §5.13`)은 엔진·리포트 절·`put-flow`·검�
 - 버전 자동 선택: 같은 카테고리에 시작 줄이 같은 버전별 흐름이 있을 때 이슈 버전으로 하나만 돌리기(규칙 후보는 설계 검증 과제 6). 그때 `db_lint` `flow-start` 오류를 겹치지 않는 `platform_versions` 검사로 바꾼다.
 - INTERNET이 아닌 PDN(IMS 등)에서 `onDataNetworkValidationStatusChanged`가 찍히는지 사내 첫 실행에서 확인 — `ConnectivityService.handleNetworkTested`는 결과가 오면 항상 agent에 알리지만 NetworkMonitor 쪽은 사외에서 확인 못 함. 안 찍히면 `data-setup`의 `validated`를 `optional`로.
 - 듀얼 SIM: 슬롯 없는 줄(`DN-<id>-C`)을 먼저 연 인스턴스가 가져간다(확인 리뷰 C-3) — 슬롯이 확정된 앞 단계(`DNC-<n>`)와 잇는 방법은 사내 듀얼 SIM 로그를 보고 정한다. 기본 데이터가 아닌 슬롯에서 INTERNET 평가 거부 줄이 계속 찍히는지(찍히면 그 사유를 `data-allowed` 패턴에서 뺀다)도 같이 본다.
+- 듀얼 SIM(모듈 흐름 18개, 11/16): 슬롯 없는 태그가 열쇠인 흐름(RILJ: answer·local-hangup·mt-sms-store·modem-boot·hal-recover·ims-pdn-notify, UiccController: sim-load, CAT: stk-command, GsmSMSDispatcher·GsmInboundSmsHandler: sms, GsmCdmaCallTracker: mo-call·mt-ring)은 두 슬롯이 한 인스턴스로 섞일 수 있다 — 캡처는 모두 SIM 하나라 사외에서 확인 못 함. 사내 듀얼 SIM 로그로 확인 뒤 잇는 방법을 정한다(위 `DN-<id>-C` 항목과 같이).
+- RILJ 응답을 serial로 잇지 못함: `ims-pdn-notify`의 두 ack 단계가 같은 패턴이라, CONNECTED 알림이 CONNECTING ack보다 먼저 찍히면 순서가 어긋난다(캡처 271개에서 0건 — 사내 단말에서 확인). `data-retry-fire` 끝 줄도 같은 DNC의 다른 연결 실패 줄에 닫힐 수 있다(측정 거짓 이상 1건).
+- 교차 프로세스 단계: `stk-command`의 StkAppService 줄은 에뮬레이터에서 phone 프로세스(같은 pid)로 찍혔다 — 사내 단말에서 STK 앱이 딴 프로세스면 이 단계가 늘 `없음`이 된다(엔진은 시작 줄 pid만 본다). 사내 첫 STK 이슈에서 확인.
 - `JOB/flow.json`은 흐름 단계에 닿기 전에 멈춘 실행에서 이전 것이 남을 수 있다(C-5 — 판정에 쓰는 것은 `analysis.json flows`다). 상한(뒤 1000개)에 일부만 잘린 범위는 리포트가 알리지 않는다(C-6 — 범위 안에 하나도 없을 때만 알린다).
 - 되살리는 조건: 항목마다 위에 적은 확인(사내 로그·새 버전) 뒤. 스킬 문서를 바꾸면 그 흐름의 eval(81~83) 비용을 먼저 보인다.
 

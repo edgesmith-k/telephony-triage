@@ -1885,10 +1885,6 @@
             "patterns": [
               "onDataNetworkSetupDataFailed: "
             ],
-            "show": [
-              "cause=\\w+",
-              "retryDelayMillis=-?\\d+"
-            ],
             "suspect": "DataNetwork → DataNetworkController"
           },
           {
