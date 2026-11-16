@@ -244,9 +244,9 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 - snapshot?
 - plan?(analysis-only면 {exists, source, pr_number}만. choice resume이면 next(Step 7 없이 기존 계획으로 Step 8))
 - issue?(failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보)
-- step_anchor?(실패 스텝 앵커·실패 스텝·시계 정렬·스텝 순서 시도가 있을 때만)
+- step_anchor?(실패 스텝 앵커·실패 스텝·시계 정렬·스텝 순서 시도·시각 답 full이 있을 때만)
   - outside_errors?(앵커가 있고 Jira 발생 시각이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음)
-  - source: log_marker | steps_file | step_order | issue | symptom_scan
+  - source: log_marker | steps_file | step_order | issue | symptom_scan | none
   - step?(≤80, 4KB 압축 시 40)
   - step_from?(마커의 스텝을 쓴 경우만): "marker"
   - span?([시작|null, 실패])

@@ -226,7 +226,7 @@
   - 증상 시각 스캔 질문(`time`)은 판정 불가 유형이 있으면 그 수를 질문 끝에 붙이고 `needs_input.unjudged`를 낸다.
 - 4KB 압축 시 `read_only_hint`는 must_show에 읽기 전용 줄이 있으면 먼저 뺀다(`읽기 전용:`), 마지막 단계로 줄당 160자로 줄이고 앞 4개만 남긴다(`truncated`의 의미는 그대로). 스킬은 이 줄들을 사용자에게 그대로 보여 준다.
 - **`step_anchor`**(실패 스텝 앵커·실패 스텝·시계 정렬·스텝 순서 시도가 있을 때만 키가 있다): 키 모양은 `contracts-cli.md` §`triage.py run` → analysis.json 키. `outside_errors`의 trace 단계는 `3-parse-outside`다.
-  - 앵커 우선순위는 `anchor=off` > `log_marker` > `steps_file`(**수동 시계 차 `--clock-offset`(또는 `failed_step.clock_offset`)이 있을 때만**; 단말 = 장비 + 값, 하루 이내, 형식 오류는 종료 코드 2) > `step_order`(스텝 순서 정렬, 시계 불필요) > `issue` > `symptom_scan`(`07-workflow.md §Step 3`).
+  - 앵커 우선순위는 `anchor=off` > `log_marker` > `steps_file`(**수동 시계 차 `--clock-offset`(또는 `failed_step.clock_offset`)이 있을 때만**; 단말 = 장비 + 값, 하루 이내, 형식 오류는 종료 코드 2) > `step_order`(스텝 순서 정렬, 시계 불필요) > `issue` > `symptom_scan`(`07-workflow.md §Step 3`). 앵커 없이 `time` 답이 `full`(시각 없이 로그 전체)이면 `source: none` — 기준 시각 없이 전체를 파싱하고 근접 보너스 없이 매칭한다(`occurred_at`에는 쓰지 않는다).
   - `clock`은 steps-file 시각을 시도했을 때만 있고 앵커가 `issue`로 돌아가도 남는다.
   - 앵커(`log_marker`·`steps_file`·`step_order`)가 있으면 분석 범위는 `parse --between`, 근접 중심은 스텝 실패 시각이고(`JOB/match_meta.json`) `request_hash`에 [출처, 범위]가 더해진다.
   - 마커 스캔(`parse_logcat markers`, trace 단계 `3-markers`)은 `failed_step.marker_patterns`가 있거나 `--steps-file`이 있을 때만 돌고, `--steps-file`이 있고 스냅샷의 `step_events`가 비어 있지 않으면 `--step-events`가 붙는다(`07-workflow.md §Step 3`).
