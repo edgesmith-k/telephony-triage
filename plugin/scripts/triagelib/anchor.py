@@ -283,9 +283,11 @@ class AnchorMixin:
         return {"source": "steps_file", "step": label or None, "step_from": "failed_step",
                 "start": start if start and start < fail else None, "fail": fail, "end": fail}
 
-    def occurred(self, info: dict, logs: list[Path], tz: str | None, year: int | None) -> str:
+    def occurred(self, info: dict, logs: list[Path], tz: str | None, year: int | None) -> str | None:
         bad = None
         if self.answer("time"):
+            if self.answer("time") == "full":
+                return None     # 시각 없이 로그 전체 — answers["time"]은 "full"로 남긴다(캐시 키 구분)
             dt = lc.normalize_ts(self.answer("time"), tz, year)
             if dt is not None:
                 # 파서(--around)는 오프셋 있는 ISO만 받는다: 타임존 없는 ISO·logcat 스탬프는 로그 tz로 정규화해 넘기고 답도 바꿔 둔다
@@ -310,8 +312,10 @@ class AnchorMixin:
         options = [{"value": ts, "label": f"{ts} {tid}"} for ts, tid in times[:3]]
         cov = full.get("coverage") or {}
         jumps = len(cov.get("clock_anomalies") or [])
-        question = ("Jira에 발생 시각이 없다. 증상 시그니처가 충족된 시각 후보에서 고르게 한다"
-                    + ("." if options else " — 후보가 없으니 시각을 묻는다."))
+        question = ("Jira에 발생 시각이 없다. 증상 시그니처가 충족된 시각 후보에서 고르거나, 시각 없이 로그 전체로 분석한다."
+                    if options else
+                    "Jira에 발생 시각이 없다 — 후보가 없으니 시각을 답하거나 '시각 없이 로그 전체'를 고른다.")
+        options.append({"value": "full", "label": "시각 없이 로그 전체"})
         if bad is not None:
             question = (f"답한 시각 '{_clip(bad, 60)}'을 읽지 못했다 — 후보 값 그대로 또는 ISO 8601(예: 2026-09-20T14:32:00+09:00)로 "
                         "다시 답한다. " + question)
@@ -328,11 +332,13 @@ class AnchorMixin:
         raise NeedsInput("time", question, options, log_range=[cov.get("first_ts"), cov.get("last_ts")], **extra)
 
     def anchor_out(self, anchor: dict | None, info: dict, outside: dict | None = None) -> dict | None:
-        """`analysis.json`의 `step_anchor`: 앵커가 있거나 실패 스텝이 있을 때만(없으면 키가 없다)."""
+        """`analysis.json`의 `step_anchor`: 앵커가 있거나 실패 스텝·시각 답 full이 있을 때만(없으면 키가 없다)."""
         if anchor:
             out = {"source": anchor["source"], "step": _clip(_step_label(anchor.get("step")), 80),
                    "step_from": anchor["step_from"] if anchor["step_from"] != "failed_step" else None,
                    "span": [anchor["start"], anchor["fail"]], "issue_gap_min": anchor.get("issue_gap_min")}
+        elif self.answer("time") == "full":
+            out = {"source": "none"}      # 기준 시각 없음 — 로그 전체를 봤다
         elif self.failed_step or self.clock or self.order_fail:
             out = {"source": "issue" if info.get("occurred_at") and not self.answer("time") else "symptom_scan"}
         else:
