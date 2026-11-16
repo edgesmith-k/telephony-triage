@@ -1,0 +1,7 @@
+-- [합성] 이슈 DB 시드 흐름 fixture(sim/sim-load 정상, 끝 단계까지 ok). Android 17 에뮬레이터 캡처의 단계 줄 모양으로 줄여 새로 쓴 줄(값은 마스킹 토큰) — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:31:00.000  2101  2101 D UiccController: updateSimState: phoneId=0, state=READY, reason=null
+11-14 10:31:01.823  2101  2101 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED READY reason null for phone: 0 sub: 1
+11-14 10:31:04.582  2101  2101 D SIMRecords: [SIMRecords-0] onAllRecordsLoaded set 'gsm.sim.operator.numeric' to operator='00101'
+11-14 10:31:04.788  2101  2101 D UiccController: updateSimState: phoneId=0, state=LOADED, reason=null
+11-14 10:31:04.796  2101  2101 D UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 1
+11-14 10:31:04.881  2101  2101 D CarrierConfigLoader: Update config for phoneId=0 simState=LOADED

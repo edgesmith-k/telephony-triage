@@ -146,6 +146,138 @@
       "expect": {
         "origin": "synthetic"
       }
+    },
+    {
+      "op": "put-flow",
+      "ref": "sim/sim-load",
+      "flow": {
+        "id": "sim-load",
+        "title": "SIM 준비",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^UiccController$",
+          "pattern": "updateSimState: phoneId=\\d+, state=READY"
+        },
+        "end": [
+          {
+            "scope": "own",
+            "pattern": "updateSimState: phoneId=\\d+, state=(ABSENT|NOT_READY|CARD_IO_ERROR|CARD_RESTRICTED)",
+            "label": "SIM 빠짐"
+          }
+        ],
+        "steps": [
+          {
+            "id": "ready-broadcast",
+            "title": "준비 알림",
+            "scope": "own",
+            "patterns": [
+              "Broadcasting intent ACTION_SIM_STATE_CHANGED READY"
+            ],
+            "suspect": "UiccController"
+          },
+          {
+            "id": "records",
+            "title": "파일 읽기 끝",
+            "scope": "any",
+            "patterns": [
+              "\\[SIMRecords-\\d+\\] onAllRecordsLoaded "
+            ],
+            "suspect": "SIMRecords(EF 읽기)"
+          },
+          {
+            "id": "loaded",
+            "title": "SIM 로드됨",
+            "scope": "own",
+            "patterns": [
+              "updateSimState: phoneId=\\d+, state=LOADED"
+            ],
+            "suspect": "UiccController"
+          },
+          {
+            "id": "broadcast",
+            "title": "로드 알림",
+            "scope": "own",
+            "patterns": [
+              "Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED"
+            ],
+            "suspect": "UiccController"
+          },
+          {
+            "id": "carrier-config",
+            "title": "사업자 설정",
+            "scope": "any",
+            "patterns": [
+              "Update config for phoneId=\\d+ simState=LOADED"
+            ],
+            "suspect": "CarrierConfigLoader"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/sim-load.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "sim/stk-command",
+      "flow": {
+        "id": "stk-command",
+        "title": "SIM 툴킷 명령",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^CAT$",
+          "pattern": "CatService: ril message arrived"
+        },
+        "end": [
+          {
+            "scope": "own",
+            "pattern": "CatService: Disposing CatService object",
+            "label": "CAT 종료"
+          }
+        ],
+        "steps": [
+          {
+            "id": "parsed",
+            "title": "명령 해석",
+            "scope": "own",
+            "patterns": [
+              "CommandParamsFactory: process \\w+"
+            ],
+            "suspect": "CommandParamsFactory(BER-TLV)"
+          },
+          {
+            "id": "sent-app",
+            "title": "앱으로 보냄",
+            "scope": "own",
+            "patterns": [
+              "CatService: Sending CmdMsg: "
+            ],
+            "suspect": "CatService"
+          },
+          {
+            "id": "app-handle",
+            "title": "앱 처리",
+            "scope": "own",
+            "patterns": [
+              "StkAppService: \\[handleCmd\\]\\w+"
+            ],
+            "suspect": "STK 앱"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/stk-command.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
     }
   ]
 }
