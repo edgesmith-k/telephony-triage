@@ -1,0 +1,6 @@
+-- [합성] 이슈 DB 시드 흐름 fixture(sms/mt-sms-store 정상, 끝 단계까지 ok, 끝 줄은 ACK 응답). Android 17 에뮬레이터 캡처의 단계 줄 모양으로 줄여 새로 쓴 줄(값은 마스킹 토큰) — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:22:00.000  2101  2131 D RILJ    : [UNSL]< UNSOL_RESPONSE_NEW_SMS [PHONE0]
+11-14 10:22:00.001  2101  2101 D GsmInboundSmsHandler: IdleState.processMessage: processing EVENT_NEW_SMS
+11-14 10:22:00.019  2101  2101 D GsmInboundSmsHandler: addTrackerToRawTable: URI of new row: content://sms/raw/3
+11-14 10:22:00.021  2101  2101 D RILJ    : [0266]> SMS_ACKNOWLEDGE success = true cause = 0 [PHONE0]
+11-14 10:22:00.023  2101  2132 D RILJ    : [0266]< SMS_ACKNOWLEDGE  [PHONE0]

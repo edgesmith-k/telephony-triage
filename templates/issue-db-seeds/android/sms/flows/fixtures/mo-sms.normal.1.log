@@ -1,0 +1,5 @@
+-- [합성] 이슈 DB 시드 흐름 fixture(sms/mo-sms 정상, 끝 단계까지 ok, 끝 줄은 전송 기록). Android 17 에뮬레이터 캡처의 단계 줄 모양으로 줄여 새로 쓴 줄(값은 마스킹 토큰) — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:21:00.000  2101  2130 D GsmSMSDispatcher: sendSms:  isIms()=false mRetryCount=0 mImsRetry=0 mMessageRef=0 mUsesImsServiceForIms=false SS=0
+11-14 10:21:00.003  2101  2130 D RILJ    : [3148]> SEND_SMS [PHONE0]
+11-14 10:21:00.005  2101  2130 D RILJ    : [3148]< SEND_SMS { mMessageRef = 4, mErrorCode = 0, mAckPdu = } [PHONE0]
+11-14 10:21:00.038  2101  2101 D PersistAtomsStorage: Add new outgoing SMS atom: app_uid: 0

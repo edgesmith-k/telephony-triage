@@ -1785,6 +1785,348 @@
           "origin": "synthetic"
         }
       ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "data/data-teardown",
+      "flow": {
+        "id": "data-teardown",
+        "title": "데이터 연결 해제(요청)",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^DN-\\d+-[CI]$",
+          "pattern": "onTearDown: reason="
+        },
+        "steps": [
+          {
+            "id": "deactivate-request",
+            "title": "RIL 해제 요청",
+            "scope": "any",
+            "patterns": [
+              "\\]> DEACTIVATE_DATA_CALL"
+            ],
+            "suspect": "DataNetwork → DataServiceManager → RIL"
+          },
+          {
+            "id": "deactivate-response",
+            "title": "해제 응답",
+            "scope": "own",
+            "patterns": [
+              "onDeactivateResponse: resultCode=",
+              "onDataStateChanged: PDN disconnected reported by"
+            ],
+            "ok": [
+              {
+                "pattern": "resultCode=RESULT_SUCCESS|PDN disconnected reported by",
+                "why": "응답 오류"
+              }
+            ],
+            "show": [
+              "resultCode=\\w+"
+            ],
+            "suspect": "모뎀·RIL(해제 응답)"
+          },
+          {
+            "id": "disconnected",
+            "title": "연결 끊김",
+            "scope": "own",
+            "patterns": [
+              "DisconnectedState: Data network disconnected"
+            ],
+            "suspect": "DataNetwork 상태 머신"
+          },
+          {
+            "id": "controller",
+            "title": "컨트롤러 반영",
+            "scope": "named",
+            "name_template": "DataNetwork: {key},",
+            "patterns": [
+              "onDataNetworkDisconnected: "
+            ],
+            "suspect": "DataNetworkController"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/data-teardown.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "data/data-retry",
+      "flow": {
+        "id": "data-retry",
+        "title": "데이터 재시도 예약",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^DN-\\d+-[CI]$",
+          "pattern": "DisconnectedState: Data network disconnected\\. mEverConnected=false"
+        },
+        "end": [
+          {
+            "scope": "any",
+            "pattern": "Network suggested never retry for|onEvaluateDataSetupRetry: Did not match any retry rule|Data retry failed for \\d+ times",
+            "label": "재시도 안 함"
+          }
+        ],
+        "steps": [
+          {
+            "id": "failed",
+            "title": "실패 보고",
+            "scope": "named",
+            "name_template": "DataNetwork: {key},",
+            "patterns": [
+              "onDataNetworkSetupDataFailed: "
+            ],
+            "suspect": "DataNetwork → DataNetworkController"
+          },
+          {
+            "id": "evaluate",
+            "title": "재시도 판단",
+            "scope": "any",
+            "patterns": [
+              "onEvaluateDataSetupRetry: "
+            ],
+            "suspect": "DataRetryManager"
+          },
+          {
+            "id": "scheduled",
+            "title": "재시도 예약",
+            "scope": "any",
+            "patterns": [
+              "Scheduled data retry \\[DataSetupRetryEntry"
+            ],
+            "suspect": "DataRetryManager(재시도 규칙)"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/data-retry.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "data/data-retry-fire",
+      "flow": {
+        "id": "data-retry-fire",
+        "title": "데이터 재시도 실행",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^DNC-\\d+$",
+          "pattern": "onDataNetworkSetupRetry: Request list:\\["
+        },
+        "end": [
+          {
+            "scope": "own",
+            "pattern": "onDataNetworkSetupDataFailed: ",
+            "label": "다시 실패"
+          },
+          {
+            "scope": "own",
+            "pattern": "onDataNetworkConnected: ",
+            "label": "연결됨"
+          }
+        ],
+        "steps": [
+          {
+            "id": "allowed",
+            "title": "재시도 평가",
+            "scope": "own",
+            "patterns": [
+              "Data evaluation: evaluation reason:DATA_RETRY"
+            ],
+            "ok": [
+              {
+                "pattern": "Data allowed reason",
+                "why": "평가 거부"
+              }
+            ],
+            "show": [
+              "Data disallowed reasons: [A-Z_ ]+"
+            ],
+            "suspect": "DataNetworkController(평가 거부 사유)"
+          },
+          {
+            "id": "setup-network",
+            "title": "연결 만들기",
+            "scope": "own",
+            "patterns": [
+              "onSetupDataNetwork: dataProfile="
+            ],
+            "suspect": "DataNetworkController"
+          },
+          {
+            "id": "setup-start",
+            "title": "SETUP 시작",
+            "scope": "any",
+            "patterns": [
+              "ConnectingState: setupData:"
+            ],
+            "suspect": "DataNetworkController → DataNetwork"
+          }
+        ],
+        "then": "data-setup"
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/data-retry-fire.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "data/data-enable",
+      "flow": {
+        "id": "data-enable",
+        "title": "모바일 데이터 켬",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^DNC-\\d+$",
+          "pattern": "onDataEnabledChanged: enabled=true"
+        },
+        "end": [
+          {
+            "scope": "own",
+            "pattern": "onDataEnabledChanged: enabled=false",
+            "label": "다시 끔"
+          }
+        ],
+        "steps": [
+          {
+            "id": "evaluate",
+            "title": "평가 허용",
+            "scope": "own",
+            "patterns": [
+              "Data evaluation: evaluation reason:\\w+, Data (allowed|disallowed) .*\\[NetworkRequest \\[ REQUEST id=\\d+, \\[ Capabilities: INTERNET"
+            ],
+            "ok": [
+              {
+                "pattern": "Data allowed reason",
+                "why": "평가 거부"
+              }
+            ],
+            "show": [
+              "Data disallowed reasons: [A-Z_ ]+"
+            ],
+            "suspect": "DataNetworkController(평가 거부 사유)"
+          },
+          {
+            "id": "setup-network",
+            "title": "연결 만들기",
+            "scope": "own",
+            "patterns": [
+              "onSetupDataNetwork: dataProfile="
+            ],
+            "suspect": "DataNetworkController"
+          },
+          {
+            "id": "setup-start",
+            "title": "SETUP 시작",
+            "scope": "any",
+            "patterns": [
+              "ConnectingState: setupData:"
+            ],
+            "suspect": "DataNetworkController → DataNetwork"
+          }
+        ],
+        "then": "data-setup"
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/data-enable.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "data/ims-pdn-notify",
+      "flow": {
+        "id": "ims-pdn-notify",
+        "title": "IMS PDN 상태 알림",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^RILJ$",
+          "pattern": "\\]> NOTIFY_IMS_DATA_NETWORK .*dataNetworkState=CONNECTING"
+        },
+        "end": [
+          {
+            "scope": "own",
+            "pattern": "\\]> NOTIFY_IMS_DATA_NETWORK .*dataNetworkState=DISCONNECTED",
+            "label": "연결 해제"
+          }
+        ],
+        "steps": [
+          {
+            "id": "connecting-ack",
+            "title": "연결 중 응답",
+            "scope": "own",
+            "patterns": [
+              "\\]< NOTIFY_IMS_DATA_NETWORK\\b"
+            ],
+            "ok": [
+              {
+                "pattern": "NOTIFY_IMS_DATA_NETWORK(?! error)",
+                "why": "응답 오류"
+              }
+            ],
+            "show": [
+              "error \\d+"
+            ],
+            "suspect": "모뎀·RIL(IRadioData 2.4)"
+          },
+          {
+            "id": "connected",
+            "title": "연결됨 알림",
+            "scope": "own",
+            "patterns": [
+              "\\]> NOTIFY_IMS_DATA_NETWORK .*dataNetworkState=CONNECTED"
+            ],
+            "suspect": "DataNetwork(IMS 능력 망 연결)"
+          },
+          {
+            "id": "connected-ack",
+            "title": "연결됨 응답",
+            "scope": "own",
+            "patterns": [
+              "\\]< NOTIFY_IMS_DATA_NETWORK\\b"
+            ],
+            "ok": [
+              {
+                "pattern": "NOTIFY_IMS_DATA_NETWORK(?! error)",
+                "why": "응답 오류"
+              }
+            ],
+            "show": [
+              "error \\d+"
+            ],
+            "suspect": "모뎀·RIL"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/ims-pdn-notify.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
     }
   ]
 }

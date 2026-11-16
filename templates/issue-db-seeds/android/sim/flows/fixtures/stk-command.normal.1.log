@@ -1,0 +1,5 @@
+-- [합성] 이슈 DB 시드 흐름 fixture(sim/stk-command 정상, 끝 단계까지 ok). Android 17 에뮬레이터 캡처의 단계 줄 모양으로 줄여 새로 쓴 줄(값은 마스킹 토큰) — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:32:00.000  2101  2111 D CAT     : CatService: ril message arrived,slotid:0
+11-14 10:32:00.001  2101  2144 D CAT     : CommandParamsFactory: process DisplayText
+11-14 10:32:00.002  2101  2111 D CAT     : CatService: Sending CmdMsg: com.android.internal.telephony.cat.CatCmdMessage@1c4040e on slotid:0
+11-14 10:32:00.105  2101  2146 D CAT     : StkAppService: [handleCmd]DISPLAY_TEXT

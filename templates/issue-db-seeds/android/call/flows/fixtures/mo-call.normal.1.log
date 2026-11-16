@@ -1,0 +1,6 @@
+-- [합성] 이슈 DB 시드 흐름 fixture(call/mo-call 정상, 끝 단계까지 ok, 상대 연결은 선택 단계). Android 17 에뮬레이터 캡처의 단계 줄 모양으로 줄여 새로 쓴 줄(값은 마스킹 토큰) — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:11:00.000  2101  2101 D GsmCdmaCallTracker: dialGsm - emergency dialer: false
+11-14 10:11:00.043  2101  2101 D RILJ    : [0180]> DIAL [PHONE0]
+11-14 10:11:00.045  2101  2101 D GsmCdmaCallTracker: [0] update phone state, old=IDLE new=OFFHOOK
+11-14 10:11:00.081  2101  2125 D RILJ    : [0180]< DIAL  [PHONE0]
+11-14 10:11:02.193  2101  2101 V Telephony: onStateChanged, state: ACTIVE

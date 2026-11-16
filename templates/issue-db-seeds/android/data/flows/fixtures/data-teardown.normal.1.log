@@ -1,0 +1,6 @@
+-- [합성] 이슈 DB 시드 흐름 fixture(data/data-teardown 정상, 끝 단계까지 ok). Android 17 에뮬레이터 캡처의 단계 줄 모양으로 줄여 새로 쓴 줄(값은 마스킹 토큰) — 사내 실제 마스킹 로그로 바꾼다.
+11-14 09:51:00.000  2101  2101 D DN-151-C: ConnectedState: onTearDown: reason=DATA_DISABLED
+11-14 09:51:00.002  2101  2120 D RILJ    : [1342]> DEACTIVATE_DATA_CALL cid = 1 reason = NORMAL [PHONE0]
+11-14 09:51:00.004  2101  2101 D DN-151-C: DisconnectingState: onDeactivateResponse: resultCode=RESULT_SUCCESS
+11-14 09:51:00.005  2101  2101 D DN-151-C: DisconnectedState: Data network disconnected. mEverConnected=true
+11-14 09:51:00.010  2101  2101 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-151-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=DATA_DISABLED

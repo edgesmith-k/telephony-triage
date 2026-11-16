@@ -943,6 +943,392 @@
           "origin": "synthetic"
         }
       ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "network/radio-off",
+      "flow": {
+        "id": "radio-off",
+        "title": "무선 끔",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^SST(-\\d+)?$",
+          "pattern": "setRadioPower power false"
+        },
+        "end": [
+          {
+            "scope": "own",
+            "pattern": "setRadioPower power true",
+            "label": "다시 켬"
+          },
+          {
+            "scope": "own",
+            "pattern": "setRadioPower mDesiredPowerState is already false Do nothing",
+            "label": "이미 꺼짐",
+            "as": "discard"
+          }
+        ],
+        "notes": [
+          {
+            "scope": "own",
+            "pattern": "powerOffRadioSafely: due to \\w+"
+          }
+        ],
+        "steps": [
+          {
+            "id": "decide",
+            "title": "끔 결정",
+            "scope": "own",
+            "patterns": [
+              "setPowerStateToDesired: .*mDesiredPowerState=false"
+            ],
+            "suspect": "SST(끔 사유)"
+          },
+          {
+            "id": "ril-request",
+            "title": "RIL 요청",
+            "scope": "any",
+            "patterns": [
+              "\\]> RADIO_POWER on = false"
+            ],
+            "suspect": "SST(데이터 해제 대기) → RIL"
+          },
+          {
+            "id": "ril-response",
+            "title": "RIL 응답",
+            "scope": "any",
+            "patterns": [
+              "\\]< RADIO_POWER"
+            ],
+            "ok": [
+              {
+                "pattern": "RADIO_POWER(?! error)",
+                "why": "응답 오류"
+              }
+            ],
+            "show": [
+              "error \\d+"
+            ],
+            "suspect": "모뎀·RIL(응답 없음)"
+          },
+          {
+            "id": "power-off-state",
+            "title": "꺼짐 반영",
+            "scope": "own",
+            "patterns": [
+              "Poll ServiceState done: newSS=\\{"
+            ],
+            "ok": [
+              {
+                "pattern": "mVoiceRegState=3\\(POWER_OFF\\)",
+                "why": "꺼짐 아님"
+              }
+            ],
+            "show": [
+              "mVoiceRegState=[^,]+"
+            ],
+            "suspect": "SST(상태 갱신)"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/radio-off.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "network/reg-recover",
+      "flow": {
+        "id": "reg-recover",
+        "title": "망 등록 회복",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^SST(-\\d+)?$",
+          "pattern": "pollStateDone: hasRegistered = true"
+        },
+        "end": [
+          {
+            "scope": "own",
+            "pattern": "pollStateDone: hasRegistered = false hasDeregistered = true",
+            "label": "다시 빠짐"
+          },
+          {
+            "scope": "own",
+            "pattern": "setRadioPower power false",
+            "label": "무선 끔"
+          }
+        ],
+        "steps": [
+          {
+            "id": "broadcast",
+            "title": "서비스 상태 알림",
+            "scope": "own",
+            "patterns": [
+              "Broadcasting ServiceState : \\{"
+            ],
+            "ok": [
+              {
+                "pattern": "mVoiceRegState=0\\(IN_SERVICE\\)",
+                "why": "음성 미등록"
+              },
+              {
+                "pattern": "mDataRegState=0\\(IN_SERVICE\\)",
+                "why": "데이터 미등록"
+              }
+            ],
+            "show": [
+              "mVoiceRegState=[^,]+",
+              "mDataRegState=[^,]+"
+            ],
+            "suspect": "SST(등록 상태 합치기)"
+          },
+          {
+            "id": "data-sees",
+            "title": "데이터가 받음",
+            "scope": "any",
+            "patterns": [
+              "onServiceStateChanged: \\[WWAN: "
+            ],
+            "ok": [
+              {
+                "pattern": "\\[WWAN: \\S+->\\S+, \\S+->(HOME|ROAMING),",
+                "why": "데이터 쪽 미등록"
+              }
+            ],
+            "show": [
+              "\\[WWAN: [^\\]]*\\]"
+            ],
+            "suspect": "DataNetworkController(서비스 상태 수신)"
+          },
+          {
+            "id": "data-connected",
+            "title": "데이터 사용 가능",
+            "scope": "any",
+            "patterns": [
+              "Internet data state changed from \\w+ to CONNECTED"
+            ],
+            "suspect": "DataNetworkController(재개·재연결)",
+            "optional": true
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/reg-recover.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "network/allowed-types",
+      "flow": {
+        "id": "allowed-types",
+        "title": "허용 망 종류 변경",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^Phone-\\d+$",
+          "pattern": "setAllowedNetworkTypes: modemRafBitMask = "
+        },
+        "steps": [
+          {
+            "id": "ril-request",
+            "title": "RIL 요청",
+            "scope": "any",
+            "patterns": [
+              "\\]> SET_ALLOWED_NETWORK_TYPES_BITMAP"
+            ],
+            "suspect": "Phone → RIL"
+          },
+          {
+            "id": "ril-response",
+            "title": "RIL 응답",
+            "scope": "any",
+            "patterns": [
+              "\\]< SET_ALLOWED_NETWORK_TYPES_BITMAP"
+            ],
+            "ok": [
+              {
+                "pattern": "SET_ALLOWED_NETWORK_TYPES_BITMAP(?! error)",
+                "why": "응답 오류"
+              }
+            ],
+            "show": [
+              "error \\d+"
+            ],
+            "suspect": "모뎀·RIL"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/allowed-types.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "network/modem-boot",
+      "flow": {
+        "id": "modem-boot",
+        "title": "무선 준비(부팅·폰 재시작)",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^RILJ$",
+          "pattern": "\\[UNSL\\]< UNSOL_RIL_CONNECTED"
+        },
+        "steps": [
+          {
+            "id": "radio-state",
+            "title": "무선 상태 받음",
+            "scope": "own",
+            "patterns": [
+              "UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: (ON|OFF)"
+            ],
+            "suspect": "모뎀(무선 사용 불가로 남음)"
+          },
+          {
+            "id": "baseband",
+            "title": "모뎀 버전",
+            "scope": "own",
+            "patterns": [
+              "\\]< BASEBAND_VERSION\\b"
+            ],
+            "ok": [
+              {
+                "pattern": "BASEBAND_VERSION(?! error)",
+                "why": "응답 오류"
+              }
+            ],
+            "show": [
+              "error \\d+"
+            ],
+            "suspect": "모뎀·RIL"
+          },
+          {
+            "id": "capability",
+            "title": "무선 능력 응답",
+            "scope": "own",
+            "patterns": [
+              "\\]< GET_RADIO_CAPABILITY\\b"
+            ],
+            "ok": [
+              {
+                "pattern": "GET_RADIO_CAPABILITY \\{",
+                "why": "응답 오류"
+              }
+            ],
+            "show": [
+              "error \\d+"
+            ],
+            "suspect": "모뎀·RIL(RadioConfig)"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/modem-boot.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "network/hal-recover",
+      "flow": {
+        "id": "hal-recover",
+        "title": "RIL HAL 재연결",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^RILJ$",
+          "pattern": "Service \\w+ has died\\."
+        },
+        "steps": [
+          {
+            "id": "ril-connected",
+            "title": "HAL 다시 붙음",
+            "scope": "own",
+            "patterns": [
+              "\\[UNSL\\]< UNSOL_RIL_CONNECTED"
+            ],
+            "suspect": "RIL HAL 프로세스(재시작 안 됨)"
+          },
+          {
+            "id": "radio-state",
+            "title": "무선 상태 받음",
+            "scope": "own",
+            "patterns": [
+              "UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: ON"
+            ],
+            "suspect": "모뎀(무선 켜짐)"
+          },
+          {
+            "id": "uicc",
+            "title": "SIM 상태 다시 읽기",
+            "scope": "any",
+            "patterns": [
+              "UiccController: handleMessage: Received RADIO_AVAILABLE"
+            ],
+            "suspect": "UiccController"
+          },
+          {
+            "id": "capability",
+            "title": "무선 능력 응답",
+            "scope": "own",
+            "patterns": [
+              "\\]< GET_RADIO_CAPABILITY\\b"
+            ],
+            "ok": [
+              {
+                "pattern": "GET_RADIO_CAPABILITY \\{",
+                "why": "응답 오류"
+              }
+            ],
+            "show": [
+              "error \\d+"
+            ],
+            "suspect": "모뎀·RIL(RadioConfig)"
+          },
+          {
+            "id": "registered",
+            "title": "망 등록",
+            "scope": "any",
+            "patterns": [
+              "Poll ServiceState done: newSS=\\{"
+            ],
+            "ok": [
+              {
+                "pattern": "mVoiceRegState=0\\(IN_SERVICE\\)",
+                "why": "미등록"
+              }
+            ],
+            "show": [
+              "mVoiceRegState=[^,]+"
+            ],
+            "suspect": "망·모뎀(등록)"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/hal-recover.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
     }
   ]
 }

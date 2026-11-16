@@ -1,0 +1,8 @@
+-- [합성] 이슈 DB 시드 흐름 fixture(network/hal-recover 정상, 끝 단계까지 ok). Android 17 에뮬레이터 캡처의 단계 줄 모양으로 줄여 새로 쓴 줄(값은 마스킹 토큰) — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:05:00.000  2101  2130 D RILJ    : Service SIM has died. [PHONE0]
+11-14 10:05:00.051  2101  2112 D RILJ    : [UNSL]< UNSOL_RIL_CONNECTED [PHONE0]
+11-14 10:05:00.069  2101  2112 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: ON [PHONE0]
+11-14 10:05:00.090  2101  2101 D UiccController: handleMessage: Received RADIO_AVAILABLE for phoneId 0
+11-14 10:05:00.092  2101  2141 D RILJ    : [9725]< BASEBAND_VERSION <SW#1> [PHONE0]
+11-14 10:05:00.094  2101  2140 D RILJ    : [9727]< GET_RADIO_CAPABILITY {mPhoneId = 0 mVersion=1 mSession=1566979727 mPhase=0 mRadioAccessFamily=578439 mStatus=1} [PHONE0]
+11-14 10:05:01.082  2101  2101 D SST-0   : Poll ServiceState done: newSS={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=9000}
