@@ -1,0 +1,5 @@
+-- [합성] 이슈 DB 시드 흐름 fixture(network/modem-boot 정상, 끝 단계까지 ok). Android 17 에뮬레이터 캡처의 단계 줄 모양으로 줄여 새로 쓴 줄(값은 마스킹 토큰) — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:04:00.000  2101  2104 D RILJ    : [UNSL]< UNSOL_RIL_CONNECTED [PHONE0]
+11-14 10:04:00.001  2101  2104 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: ON [PHONE0]
+11-14 10:04:00.185  2101  2123 D RILJ    : [0006]< BASEBAND_VERSION 1.0.0.0 [PHONE0]
+11-14 10:04:00.192  2101  2104 D RILJ    : [0008]< GET_RADIO_CAPABILITY {mPhoneId = 0 mVersion=1 mSession=8 mPhase=0 mRadioAccessFamily=578439 mStatus=1} [PHONE0]

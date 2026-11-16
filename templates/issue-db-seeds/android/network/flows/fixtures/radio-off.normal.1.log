@@ -1,0 +1,6 @@
+-- [합성] 이슈 DB 시드 흐름 fixture(network/radio-off 정상, 끝 단계까지 ok). Android 17 에뮬레이터 캡처의 단계 줄 모양으로 줄여 새로 쓴 줄(값은 마스킹 토큰) — 사내 실제 마스킹 로그로 바꾼다.
+11-14 10:01:00.000  2101  2101 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0
+11-14 10:01:00.003  2101  2101 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0]
+11-14 10:01:00.040  2101  2120 D RILJ    : [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]
+11-14 10:01:00.042  2101  2121 D RILJ    : [0268]< RADIO_POWER  [PHONE0]
+11-14 10:01:00.080  2101  2101 D SST-0   : Poll ServiceState done: newSS={mVoiceRegState=3(POWER_OFF), mDataRegState=3(POWER_OFF), mChannelNumber=-1, duplexMode()=0, mCellBandwidths=[]}
