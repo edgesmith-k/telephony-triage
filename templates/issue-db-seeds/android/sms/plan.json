@@ -159,6 +159,197 @@
       "expect": {
         "origin": "synthetic"
       }
+    },
+    {
+      "op": "put-flow",
+      "ref": "sms/mo-sms",
+      "flow": {
+        "id": "mo-sms",
+        "title": "SMS 보내기(CS·RIL)",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^GsmSMSDispatcher$",
+          "pattern": "sendSms: +isIms\\(\\)="
+        },
+        "end": [
+          {
+            "scope": "any",
+            "pattern": "Add new outgoing SMS atom",
+            "label": "전송 기록"
+          }
+        ],
+        "notes": [
+          {
+            "scope": "own",
+            "pattern": "SS=[1-9]"
+          }
+        ],
+        "steps": [
+          {
+            "id": "ril-request",
+            "title": "RIL 요청",
+            "scope": "any",
+            "patterns": [
+              "\\]> (IMS_)?SEND_SMS\\b"
+            ],
+            "suspect": "SMSDispatcher → RIL(서비스 없음이면 여기서 멈춤)"
+          },
+          {
+            "id": "ril-response",
+            "title": "RIL 응답",
+            "scope": "any",
+            "patterns": [
+              "\\]< (IMS_)?SEND_SMS\\b"
+            ],
+            "ok": [
+              {
+                "pattern": "SEND_SMS \\{",
+                "why": "응답 오류"
+              },
+              {
+                "pattern": "mErrorCode = (0|-1),",
+                "why": "망 오류 코드"
+              }
+            ],
+            "show": [
+              "error \\d+",
+              "mErrorCode = -?\\d+"
+            ],
+            "suspect": "모뎀·망(SMSC)"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/mo-sms.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "sms/mt-sms-store",
+      "flow": {
+        "id": "mt-sms-store",
+        "title": "SMS 받기(저장·응답)",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^RILJ$",
+          "pattern": "\\[UNSL\\]< UNSOL_RESPONSE_NEW_SMS\\b"
+        },
+        "end": [
+          {
+            "scope": "own",
+            "pattern": "\\]< SMS_ACKNOWLEDGE\\b",
+            "label": "ACK 응답"
+          }
+        ],
+        "steps": [
+          {
+            "id": "handler",
+            "title": "수신 처리 시작",
+            "scope": "any",
+            "patterns": [
+              "(Idle|Delivering)State\\.processMessage: processing EVENT_NEW_SMS"
+            ],
+            "suspect": "InboundSmsHandler"
+          },
+          {
+            "id": "stored",
+            "title": "임시 저장",
+            "scope": "any",
+            "patterns": [
+              "addTrackerToRawTable: URI of new row"
+            ],
+            "suspect": "InboundSmsHandler(디코드·raw 표)"
+          },
+          {
+            "id": "ack",
+            "title": "망에 ACK",
+            "scope": "own",
+            "patterns": [
+              "\\]> SMS_ACKNOWLEDGE "
+            ],
+            "ok": [
+              {
+                "pattern": "success = true",
+                "why": "실패 ACK"
+              }
+            ],
+            "show": [
+              "cause = \\d+"
+            ],
+            "suspect": "InboundSmsHandler(저장 실패)"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/mt-sms-store.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "sms/mt-sms-deliver",
+      "flow": {
+        "id": "mt-sms-deliver",
+        "title": "SMS 받기(앱 전달)",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^(Gsm|Cdma)?InboundSmsHandler$",
+          "pattern": "Delivering SMS to: "
+        },
+        "end": [
+          {
+            "scope": "own",
+            "pattern": "IdleState\\.enter: entering IdleState",
+            "label": "대기로 돌아감"
+          }
+        ],
+        "steps": [
+          {
+            "id": "deliver-done",
+            "title": "기본 앱 전달",
+            "scope": "own",
+            "patterns": [
+              "Ordered broadcast completed for android\\.provider\\.Telephony\\.SMS_DELIVER"
+            ],
+            "suspect": "기본 SMS 앱"
+          },
+          {
+            "id": "received-done",
+            "title": "수신 방송",
+            "scope": "own",
+            "patterns": [
+              "Ordered broadcast completed for android\\.provider\\.Telephony\\.SMS_RECEIVED"
+            ],
+            "suspect": "수신 방송 받는 앱"
+          },
+          {
+            "id": "cleanup",
+            "title": "전달 끝",
+            "scope": "own",
+            "patterns": [
+              "successful broadcast, deleting from raw table"
+            ],
+            "suspect": "InboundSmsHandler"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/mt-sms-deliver.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
     }
   ]
 }
