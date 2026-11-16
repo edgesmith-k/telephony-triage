@@ -366,11 +366,12 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
     (ok | weak | fabricated | raw, 입력 순서 — check-output이 가설별로 나눈다).
 
     `〔script` 메모를 인용한 항목은 지어낸 것으로 센다. `raw_items`(check-output 마스킹이 바꾼 항목 = 원문 값이 든 인용,
-    설치 스킬 모드만)는 `raw`로 세고 지어낸 것으로 세지 않는다. 원문이 256KB보다 크면 인용마다 8자 이상 낱말을 공유하는
-    행(최대 300행)만 본다.
+    설치 스킬 모드만)는 `raw`로 세고 지어낸 것으로 세지 않는다. 원문이 256KB보다 크면 먼저 인용 조각이 모두 원문 한 줄
+    안에 그대로(공백 차이만 허용) 있는지 보고, 있으면 ok, 없을 때만 인용마다 8자 이상 낱말을 공유하는 행(최대 300행)만 본다.
     """
     from common import masking
     rows = source.split("\n") if len(source) > BIG_SOURCE else None
+    ws_lines = "\n".join(ws(row) for row in rows) if rows is not None else ""   # 줄마다 공백 접기(`WS_RX`가 개행도 접으므로)
     res = {"n": len(items), "fabricated": 0, "weak": 0, "raw": 0, "first": None, "verdicts": []}
     for i, item in enumerate(items):
         if i in raw_items:
@@ -380,9 +381,14 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
         else:
             text = source
             if rows is not None:
-                words = _WORD_RX.findall(" ".join(_quote_parts(item, tags)))
-                text = _subset(words, rows)
-            verdict = evidence_check(item, text, tags)[0]
+                parts = _quote_parts(item, tags)
+                # 조각에는 개행이 없어(`ws`로 접힘) `in ws_lines`는 한 줄 안 일치만 된다
+                if parts and all(p in ws_lines for p in parts):
+                    text = None
+                else:
+                    # ponytail: 공백 말고도 표기가 다른 인용은 축소 검색(8자 이상 낱말 공유 첫 300행)에 기대므로, 그 밖의 줄을 인용하면 여전히 fabricated 오탐
+                    text = _subset(_WORD_RX.findall(" ".join(parts)), rows)
+            verdict = "ok" if text is None else evidence_check(item, text, tags)[0]
         res["verdicts"].append(verdict)
         if verdict != "ok":
             res[verdict] += 1
