@@ -162,7 +162,7 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
         args += ["--tz", str(tz)]
     in_fixture = any(_under_fixtures(Path(p), db) for p in logs)
     in_db = key in _recorded_keys(db)
-    result = {"key": key, "expect": str(item["expect"]), "top": None, "top3": [], "error": None, "warning": None, "unjudged": None,
+    result = {"key": key, "expect": str(item["expect"]), "top": None, "top3": [], "error": None, "warning": None, "unjudged": None, "observation": None,
               "control": bool(item.get("negative_control")),
               "in_sample": in_fixture or in_db,
               "in_sample_reason": "fixture" if in_fixture else "db-record" if in_db else None,
@@ -198,6 +198,14 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     candidates = analysis.get("candidates") or []
     result["top3"] = [c["cause"] for c in candidates[:3]]
     result["top"] = result["top3"][0] if result["top3"] else None
+    obs = analysis.get("observation")
+    if obs:     # 관측 불완전(extractor 시간 초과 등): 못 본 이벤트가 결과를 바꿀 수 있다 → 정답·미스를 단정하지 않는다(분모 제외)
+        result["observation"] = {"count": obs.get("count", 0), "extractor": obs.get("extractor", 0)}
+        first = (obs.get("errors") or [{}])[0]
+        result["error"] = (f"관측 불완전(extractor 오류 {result['observation']['extractor']}·전체 {result['observation']['count']})"
+                           + (f" — {first.get('error')}" if first.get("error") else ""))
+        result["top"], result["top3"] = None, []
+        return result
     u = analysis.get("unjudged") or {}
     if not u:
         return result
@@ -256,6 +264,7 @@ def summarize(results: list[dict], include_in_sample: bool = False) -> dict:
         "evaluated": len(scored),
         "errors": len(counted) - len(scored),
         "unjudged_errors": sum(bool(r["error"]) and bool(r.get("unjudged")) for r in counted),
+        "observation_errors": sum(bool(r["error"]) and bool(r.get("observation")) for r in counted),
         "error_rate": rate(len(counted) - len(scored), len(counted)),
         "type_only": sum(bool(r["top3"]) and all(c is None for c in r["top3"]) for r in negative),
         "positive": len(positive),          # 평가된(오류 아닌) 항목만
@@ -299,7 +308,7 @@ def render(results: list[dict], summary: dict) -> str:
         f"상위 3 포함률 {_pct(summary['top3_inclusion'])}",
         f"오탐률        {_pct(summary['false_positive_rate'])} (원인 후보 기준, 유형만 {summary['type_only']}건 제외)",
         f"오류율        {_pct(summary['error_rate'])} ({summary['errors']}/{summary['total']}, 평가에서 제외됨, "
-        f"그중 판정 불가 {summary['unjudged_errors']}건)",
+        f"그중 판정 불가 {summary['unjudged_errors']}건·관측 불완전 {summary['observation_errors']}건)",
     ]
     if not summary["evaluated"]:
         lines.append("평가 가능한 항목 없음 — 전부 오류·대조군·표본내(지표 없음, 통과 아님)")

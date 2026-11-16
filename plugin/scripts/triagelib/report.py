@@ -332,6 +332,7 @@ def fit(result: dict) -> dict:
               lambda: (result.get("unjudged") or {}).pop("types", None),
               lambda: (result.get("unjudged") or {}).pop("causes", None),
               lambda: (result.get("unjudged") or {}).pop("errors", None),
+              lambda: (result.get("observation") or {}).pop("errors", None),
               lambda: _drop_order_last(result),
               lambda: _drop_clock_reason(result),
               lambda: _drop_focus(result),
@@ -644,6 +645,7 @@ class ReportMixin:
             "candidates": candidates,
             "pending_causes": core["pending_causes"],
             "unjudged": core.get("unjudged"),
+            "observation": core.get("observation"),
             "no_candidate": core["no_candidate"],
             "partial": core.get("partial"),
             "flows": core.get("flows"),
@@ -942,6 +944,14 @@ class ReportMixin:
                                     "후보 순위·'후보 없음'·'원인 미확인'은 불완전하다 (관리자: 이슈 DB matcher.pattern_timeout_ms·그 시그니처 확인)"))
             else:     # 충족된 유형의 다른 시그니처만 오류: S/C는 그대로, 근거 선택만 달라질 수 있다
                 cause_l.append(add(6, f"{where} — 충족된 유형의 다른 시그니처라 S/C는 그대로(근거 선택은 달라질 수 있다)"))
+        obs = r.get("observation")
+        if obs:     # 관측 실패(정상 불일치 아님): 판정 불가 유형과 따로 한 줄
+            other = obs["count"] - obs["extractor"]
+            what = "·".join(([f"extractor 오류 {obs['extractor']}개"] if obs["extractor"] else [])
+                            + ([f"파일 해석·외부 파서 문제 {other}건"] if other else []))
+            first = (obs.get("errors") or [{}])[0]
+            cause_l.append(add(6, f"관측 불완전: {what} ({first.get('error')}) — 못 읽은 이벤트가 있어 "
+                                  "후보 순위·'후보 없음'·'원인 미확인'은 불완전하다"))
         if anchor and (not cands or not cands[0]["C"]):
             nxt.append("- 힌트: " + ("기준 줄 둘레(−30초~+300초)로 좁게 분석했다. 원인이 그 앞에 있었을 수 있다"
                                      if anchor["source"] == "look_at" else

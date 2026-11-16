@@ -675,6 +675,9 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
         "external": external_info,
         "external_disabled": bool(args.no_external),
         "complete": not args.no_external and not observation_errors({"warnings": warnings}),
+        # 관측 상태: `complete`(파일·외부 파서)에 extractor 오류(시간 초과로 그 이벤트를 버림)를 더한 것. 정상 불일치와
+        # 관측 실패를 가르는 하류(triage `observation`·offline_eval)가 읽는다. `complete`·`errors`의 뜻은 그대로다
+        "observation": _observation(warnings, errors, args.no_external),
         "rules": {"path": str(rules_dir), **rules.summary()},
         "input": {
             "files": [str(p) for p in paths],
@@ -702,6 +705,13 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
         out["unextracted_warn"] = {"lines": sum(unextracted.values()),
                                    "tags": [{"tag": tag[:40], "lines": n} for tag, n in rows]}
     return out
+
+
+def _observation(warnings: list[dict], errors: list[dict], external_disabled: bool) -> dict:
+    """`{complete, errors[{code, error}]}` — `observation_errors`(같은 `complete` 판정)에 extractor 오류(`pattern-timeout`)를 더한다."""
+    errs = observation_errors({"warnings": warnings, "external_disabled": external_disabled})
+    errs += [{"error": f"extractor {e['extractor']}: {e['error']}", "code": "pattern-timeout"} for e in errors]
+    return {"complete": not errs, "errors": errs}
 
 
 def observation_errors(doc: dict) -> list[dict]:

@@ -58,6 +58,17 @@ def _unjudged(match: dict) -> dict | None:
     return out
 
 
+def _observation(events: dict) -> dict | None:
+    """events.json `observation`이 불완전이면 `{count, extractor, errors[≤2 {code, error(≤80)}]}`, 완전하면 None.
+    `unjudged`(매처 시그니처 오류)와 따로 둔다 — 정상 불일치가 아니라 로그를 다 보지 못한 것이다. 분석은 그대로 잇는다."""
+    obs = events.get("observation") or {}
+    if obs.get("complete", True):
+        return None
+    errors = obs.get("errors") or []
+    return {"count": len(errors), "extractor": sum(e.get("code") == "pattern-timeout" for e in errors),
+            "errors": [{"code": e.get("code"), "error": _clip(e.get("error"), 80)} for e in errors[:2]]}
+
+
 def _unjudged_label(u: dict) -> str:
     """`판정 불가 유형 N개` 또는 `판정 불가 유형 N·원인 M개`."""
     return f"판정 불가 유형 {u['count']}" + (f"·원인 {u['cause_count']}개" if u.get("cause_count") else "개")
@@ -1107,6 +1118,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             err = (unjudged.get("errors") or [{}])[0]
             extra_warnings.append(_clip(f"{_unjudged_label(unjudged)} — 시그니처 시간 초과·오류: "
                                         f"{err.get('signature')}: {err.get('error')}", 120))
+        observation = _observation(events)
         if cov.get("clock_anomalies"):
             extra_warnings.append("시계 이상(재부팅·NITZ 전 가능) — 증상 시각 스캔(--answer time=…)을 제안한다")
         member = self.steps_info()[3]
@@ -1115,7 +1127,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             "around": around, "anchor": anchor, "outside": outside, "candidates": candidates,
             "pending_causes": [{"cause": p["cause"], "title": _clip(p.get("title"), 50)}
                                for p in match.get("pending_causes") or []][:TOP],
-            "no_candidate": no_candidate, "unjudged": unjudged, "code": code_out,
+            "no_candidate": no_candidate, "unjudged": unjudged, "observation": observation, "code": code_out,
             "partial": partial, "partial_report": partial_report, "absence_basis": match.get("absence_basis"),
             "partial_unjudged": bool(unjudged) or bool(cause_unjudged), "analyzer": analyzer, "explore": explore,
             "explore_input": explore_input,

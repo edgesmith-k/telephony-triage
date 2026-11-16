@@ -613,6 +613,11 @@ def test_slow_extractor_times_out_and_others_continue():
     assert "pattern-timeout" in [w["code"] for w in data["warnings"]]
     assert not _events(data, event="slow_one")
     assert _events(data, event="data_evaluation_rejected"), "다른 extractor는 그대로 돈다"
+    # 관측 상태(F-A03): `complete`(파일·외부 파서)의 뜻은 그대로, extractor 오류는 `observation`이 불완전으로 센다
+    assert data["complete"] is True
+    assert data["observation"]["complete"] is False
+    assert [e["code"] for e in data["observation"]["errors"]] == ["pattern-timeout"]
+    assert data["observation"]["errors"][0]["error"].startswith("extractor slow-one: ")
 
 
 # -- 백엔드와 외부 파서 ------------------------------------------------------------
@@ -901,6 +906,7 @@ def test_zero_lines_is_not_out_of_range():
     log.write_text("not a log line\nanother one\n", encoding="utf-8", newline="\n")
     data = _parse([log], "--around", "2026-09-22T12:05:00+09:00")
     assert data["coverage"]["window_in_range"] is None and data["complete"] is False
+    assert data["observation"]["complete"] is False and "file-unparsed" in {e["code"] for e in data["observation"]["errors"]}
     assert {"no-lines-parsed", "file-unparsed"} <= {w["code"] for w in data["warnings"]}
     assert _parse([log], "--full")["coverage"]["window_in_range"] is None     # window와 무관
 

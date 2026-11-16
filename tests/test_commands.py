@@ -680,6 +680,28 @@ def test_offline_eval_end_to_end_signature_timeout_is_unjudged_error(tmp_path):
     assert item["error"].startswith("판정 불가") and item["unjudged"]["count"] >= 1
 
 
+def test_offline_eval_end_to_end_extractor_timeout_is_observation_error_not_scored(tmp_path):
+    """F-A03: extractor 시간 초과 사례는 정답·미스가 아니라 관측 불완전 오류(분모 제외, 오류율에 잡힘)."""
+    sys.path.insert(0, str(REPO / "tests"))
+    from test_triage import _slow_extractor_db, _slow_log
+    labelset = tmp_path / "slowext.yaml"
+    labelset.write_text(yaml.safe_dump({
+        "db": str(_slow_extractor_db()), "tz": "Asia/Seoul", "year": 2026,
+        "items": [{"key": "SLOWX-1", "occurred_at": "2026-09-20T14:30:05+09:00", "expect": "DATA-001-01",
+                   "logs": [str(_slow_log())]}],
+    }), encoding="utf-8")
+    proc = _offline(str(labelset), "--json")
+    assert proc.returncode == 1, proc.stderr          # 전부 오류 = 통과 아님
+    out = json.loads(proc.stdout)
+    s = out["summary"]
+    assert s["errors"] == s["observation_errors"] == 1 and s["unjudged_errors"] == 0 and s["evaluated"] == 0
+    assert s["error_rate"] == 1.0 and s["top1_accuracy"] is None
+    item = out["items"][0]
+    assert item["error"].startswith("관측 불완전(extractor 오류 1·전체 1) — extractor slow-one: "), item["error"]
+    assert "verdict" not in item and item["top"] is None
+    assert "관측 불완전 1건" in _offline(str(labelset)).stdout
+
+
 def test_offline_eval_rejects_bad_labelset(tmp_path):
     bad = tmp_path / "bad.yaml"
     bad.write_text("items: [{key: X-1}]\n", encoding="utf-8")
