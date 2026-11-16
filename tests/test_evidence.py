@@ -122,6 +122,36 @@ def test_check_quotes_prefilter_same_verdicts_on_big_source():
     assert fast == full and fast["fabricated"] >= 1
 
 
+def _big_source_with_tail(tail: list[str]) -> tuple[str, object]:
+    """같은 긴 낱말(`connectivity_monitor`)을 가진 행 5000개 뒤에 `tail` 줄을 붙인 256KB 넘는 합성 원문."""
+    rows = [f"10:{i // 60 % 60:02d}:{i % 60:02d}.000 p0 I daemon0 connectivity_monitor heartbeat seq{i:05d} ok"
+            for i in range(5000)] + tail
+    source = "\n".join(rows)
+    assert len(source) > evidence.BIG_SOURCE
+    return source, evidence.tag_rx(["daemon0"])
+
+
+def test_check_quotes_big_source_exact_line_past_prefilter_rows_is_ok():
+    # 축소 검색은 낱말을 공유하는 첫 300행만 남겨 이 줄을 빠뜨렸다(A02). 한 줄 그대로인 인용은 선검사로 ok
+    source, tags = _big_source_with_tail(["11:00:00.000 p0 I daemon0 connectivity_monitor apn handover rejected by peer"])
+    res = evidence.check_quotes(["connectivity_monitor  apn handover rejected by peer"], source, tags)   # 공백 차이 허용
+    assert res["verdicts"] == ["ok"]
+
+
+def test_check_quotes_big_source_short_words_quote_is_ok():
+    # 낱말이 모두 8자 미만이면 축소 검색 후보가 0행이었다(A02)
+    source, tags = _big_source_with_tail(["11:00:00.000 p0 E daemon0 setup failed"])
+    assert evidence.check_quotes(["setup failed"], source, tags)["verdicts"] == ["ok"]
+
+
+def test_check_quotes_big_source_precheck_keeps_fabricated():
+    # 원문에 없는 인용, 두 줄("setup failed" / "with retry")에 걸친 인용은 선검사가 ok로 만들지 않는다
+    source, tags = _big_source_with_tail(["11:00:00.000 p0 E daemon0 setup failed", "with retry"])
+    res = evidence.check_quotes(["connectivity_monitor modem firmware crashed in handler", "setup failed with retry"],
+                                source, tags)
+    assert res["verdicts"] == ["fabricated", "fabricated"]
+
+
 def test_evidence_check_catches_decision_token_alteration():
     """종합 리뷰 P1: 12자 미만 변조(오류 코드·슬롯·성공/실패 낱말)와 결론과 무관한 줄 인용이 ok로 통과했다. 결정 토큰은 앵커(토큰을 뺀
     가장 긴 조각)가 든 원문 한 줄에 모두 있어야 ok다."""
