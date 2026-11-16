@@ -97,7 +97,11 @@ def module_remote(spec, out: Path) -> tuple[str | None, str | None]:
     kwargs = {"src": MODULE_TEMPLATES} if spec["source"] == "template" else {}
     url = mr.build(out / "module-remote", **kwargs)
     from urllib.parse import unquote, urlparse
-    bare = Path(unquote(urlparse(url).path))
+    import re as _re
+    raw = unquote(urlparse(url).path)
+    if _re.match(r"^/[A-Za-z]:", raw):   # Windows file:///C:/... 꼴은 앞 슬래시를 뗀다
+        raw = raw[1:]
+    bare = Path(raw)
     sha = subprocess.run(["git", "--git-dir", str(bare), "rev-parse", "HEAD"], capture_output=True, text=True,
                          check=True).stdout.strip()
     return url, sha
