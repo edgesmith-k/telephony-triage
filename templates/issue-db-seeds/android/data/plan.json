@@ -2056,6 +2056,81 @@
           "origin": "synthetic"
         }
       ]
+    },
+    {
+      "op": "put-flow",
+      "ref": "data/ims-pdn-notify",
+      "flow": {
+        "id": "ims-pdn-notify",
+        "title": "IMS PDN 상태 알림",
+        "platform_versions": [
+          "17"
+        ],
+        "start": {
+          "tag_regex": "^RILJ$",
+          "pattern": "\\]> NOTIFY_IMS_DATA_NETWORK .*dataNetworkState=CONNECTING"
+        },
+        "end": [
+          {
+            "scope": "own",
+            "pattern": "\\]> NOTIFY_IMS_DATA_NETWORK .*dataNetworkState=DISCONNECTED",
+            "label": "연결 해제"
+          }
+        ],
+        "steps": [
+          {
+            "id": "connecting-ack",
+            "title": "연결 중 응답",
+            "scope": "own",
+            "patterns": [
+              "\\]< NOTIFY_IMS_DATA_NETWORK\\b"
+            ],
+            "ok": [
+              {
+                "pattern": "NOTIFY_IMS_DATA_NETWORK(?! error)",
+                "why": "응답 오류"
+              }
+            ],
+            "show": [
+              "error \\d+"
+            ],
+            "suspect": "모뎀·RIL(IRadioData 2.4)"
+          },
+          {
+            "id": "connected",
+            "title": "연결됨 알림",
+            "scope": "own",
+            "patterns": [
+              "\\]> NOTIFY_IMS_DATA_NETWORK .*dataNetworkState=CONNECTED"
+            ],
+            "suspect": "DataNetwork(IMS 능력 망 연결)"
+          },
+          {
+            "id": "connected-ack",
+            "title": "연결됨 응답",
+            "scope": "own",
+            "patterns": [
+              "\\]< NOTIFY_IMS_DATA_NETWORK\\b"
+            ],
+            "ok": [
+              {
+                "pattern": "NOTIFY_IMS_DATA_NETWORK(?! error)",
+                "why": "응답 오류"
+              }
+            ],
+            "show": [
+              "error \\d+"
+            ],
+            "suspect": "모뎀·RIL"
+          }
+        ]
+      },
+      "fixtures": [
+        {
+          "path": "flows/fixtures/ims-pdn-notify.normal.1.log",
+          "origin": "synthetic"
+        }
+      ]
     }
   ]
 }
