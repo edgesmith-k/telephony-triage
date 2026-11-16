@@ -3,7 +3,7 @@
 사용자가 붙인 로그 줄이나 `<IPC 이름> (token=0x…)`을 로그에서 찾아 그 줄의 로그 시각을 분석 구간의 중심으로 쓴다.
 찾는 순서: ① IPC 이름과 token이 같은 레코드(`common.ipcseq`) ② 이름 없이 token만 주면 token이 같은 레코드 ③ 그 밖은 정리한 글을
 로그 줄(`태그: 메시지`)에 부분 일치(대소문자 무시, 8자 미만이면 찾지 않음). 비교 전에 양쪽 마스킹 토큰(`<IP#7>`)을 번호 없이
-접는다(`modulefilter._TOKEN_FOLD`) — 입력과 로그를 다른 마스커가 가려 번호가 달라도 맞게. 후보가 여럿이면 기준 시각(Jira 발생
+접는다(`modulefilter._TOKEN_FOLD`와 같은 식) — 입력과 로그를 다른 마스커가 가려 번호가 달라도 맞게. 후보가 여럿이면 기준 시각(Jira 발생
 시각)에 가장 가까운 것, 기준 시각이 없으면 마지막 것(시험은 FAIL에서 멈추므로 실패는 보통 로그 끝쪽)을 고르고 고른 방식을 남긴다.
 """
 
@@ -12,7 +12,6 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
-from .modulefilter import _TOKEN_FOLD, ipc_re_for
 
 PRE_SEC, POST_SEC = 30, 300      # 분석 구간 = 기준 줄 시각 −30초 ~ +300초 (설정 키 대신 상수, VERIFY P2 20)
 TEXT_MAX = 300                   # --look-at·--look-note 글자 수 상한
@@ -27,6 +26,8 @@ _HEAD = re.compile(r"^\s*(?:\d{4}-)?\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?
 _BRACKET_TS = re.compile(r"\[\s*\d+\.\d+\s*\]|\[\d{1,2}:\d{2}:\d{2}(?:\.\d+)?\]")
 _TOKEN = re.compile(r"(?i)\btoken\s*[=:]\s*(0x[0-9A-Fa-f]{1,8}|\d{1,10})\b")    # 괄호 없이 써도 읽는다(P2 22)
 _BARE_TOKEN = re.compile(r"0[xX][0-9A-Fa-f]{1,8}")
+# `common.modulefilter._TOKEN_FOLD`의 사본 — run·explore 경로는 modulefilter를 import하지 않는다(test_modulefilter). 바꾸면 둘 다
+_TOKEN_FOLD = re.compile(r"<[A-Z][A-Z0-9_]*#\d+>|<HEXDUMP \d+B>|<REDACTED:[A-Z0-9]+>")
 
 
 def clean(text) -> str:
@@ -41,9 +42,9 @@ def fold(text) -> str:
 
 
 def query(text, prefix: str = "VIPC_") -> dict:
-    """입력 → `{text(정리한 글), name, token(int|None)}`. 이름은 `ipc_re_for(prefix)`, token은 `token=`·`token:`·글 전체가 `0x…`."""
+    """입력 → `{text(정리한 글), name, token(int|None)}`. 이름은 접두어+단어 문자, token은 `token=`·`token:`·글 전체가 `0x…`."""
     body = clean(text)
-    m = re.search(ipc_re_for(prefix), body)
+    m = re.search(r"\b(" + re.escape(prefix) + r"\w+)", body)     # = modulefilter.ipc_re_for(prefix)
     t = _TOKEN.search(body)
     raw = t.group(1) if t else (body if _BARE_TOKEN.fullmatch(body) else None)
     token = None if raw is None else (int(raw, 16) if raw[:2].lower() == "0x" else int(raw))

@@ -815,7 +815,8 @@ def test_explore_marks_cause_unconfirmed_and_rejects_bad_settings(tmp_path):
     from types import SimpleNamespace
     triage = _triage_module()
     drv = SimpleNamespace(cfg={"explore": {"when": "sometimes", "timeline_max_lines": 5}}, warnings=[], job=tmp_path, key="K-1",
-                          failed_step={"text": "4 | x | FAIL", "source": "cli"})
+                          failed_step={"text": "4 | x | FAIL", "source": "cli"},
+                          look_inputs=lambda: {"at": None, "note": None}, look_result=None)
     got = triage.Driver.explore(drv, [{"C": 0}])
     assert got == {"reason": "cause_unconfirmed", "when": "ask", "note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-2)"}
     spec = triage.Driver.explore_input(drv, "2026-09-20T05:30:00Z", None)
