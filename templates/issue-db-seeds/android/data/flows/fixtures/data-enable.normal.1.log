@@ -1,0 +1,5 @@
+-- [합성] 이슈 DB 시드 흐름 fixture(data/data-enable 정상, 끝 단계까지 ok). Android 17 에뮬레이터 캡처의 단계 줄 모양으로 줄여 새로 쓴 줄(값은 마스킹 토큰) — 사내 실제 마스킹 로그로 바꾼다.
+11-14 09:54:00.000  2101  2101 D DNC-0   : onDataEnabledChanged: enabled=true
+11-14 09:54:00.002  2101  2101 D DNC-0   : Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data allowed reason: NORMAL, candidate profile=[DataProfile=[ApnSetting] <APN#1>, 1, 00101, <APN#1>, , null, , null, null, 0, default | supl, IP, IP, true, 0], [NetworkRequest [ REQUEST id=23, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED RequestorUid: 1073 RequestorPkg: com.google.android.networkstack ] ]]
+11-14 09:54:00.003  2101  2101 D DNC-0   : onSetupDataNetwork: dataProfile=[DataProfile=[ApnSetting] <APN#1>, 1, 00101, <APN#1>, , null, , null, null, 0, default | supl, IP, IP, true, 0], retryEntry=null, allowed reason=NORMAL
+11-14 09:54:00.010  2101  2101 D DN-152-C: ConnectingState: setupData: accessNetwork=NGRAN, isSatellite=false, [DataProfile=[ApnSetting] <APN#1>, 1, 00101, <APN#1>, , null, , null, null, 0, default | supl, IP, IP, true, 0], isModemRoaming=false, allowRoaming=true, PDU session id=0, matchAllRuleAllowed=true

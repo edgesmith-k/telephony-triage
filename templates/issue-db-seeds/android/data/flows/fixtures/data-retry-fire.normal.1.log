@@ -1,0 +1,6 @@
+-- [합성] 이슈 DB 시드 흐름 fixture(data/data-retry-fire 정상, 끝 단계까지 ok, 끝 줄은 다시 실패). Android 17 에뮬레이터 캡처의 단계 줄 모양으로 줄여 새로 쓴 줄(값은 마스킹 토큰) — 사내 실제 마스킹 로그로 바꾼다.
+11-14 09:53:10.000  2101  2101 D DNC-0   : onDataNetworkSetupRetry: Request list:[NetworkRequestList: size=1, leading by [NetworkRequest [ REQUEST id=244, [ Transports: CELLULAR Capabilities: ENTERPRISE RequestorUid: 1000 RequestorPkg: android ] ]]]
+11-14 09:53:10.001  2101  2101 D DNC-0   : Data evaluation: evaluation reason:DATA_RETRY, Data allowed reason: NORMAL, candidate profile=[DataProfile=null, TrafficDescriptor={mDnn=null}, preferred=false], time=09:53:10.001, network type=NR, reg state=HOME
+11-14 09:53:10.002  2101  2101 D DNC-0   : onSetupDataNetwork: dataProfile=[DataProfile=null, TrafficDescriptor={mDnn=null}, preferred=false], retryEntry=[DataSetupRetryEntry: delay=10000ms, retry type=BY_PROFILE, state=NOT_RETRIED], allowed reason=NORMAL
+11-14 09:53:10.005  2101  2101 D DN-232-C: ConnectingState: setupData: accessNetwork=NGRAN, isSatellite=false, [DataProfile=null, TrafficDescriptor={mDnn=null}, preferred=false], isModemRoaming=false, allowRoaming=true, PDU session id=0, matchAllRuleAllowed=false
+11-14 09:53:10.010  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-232-C, null, state=null], cause=RADIO_NOT_AVAILABLE(0x10001), retryDelayMillis=10000ms.

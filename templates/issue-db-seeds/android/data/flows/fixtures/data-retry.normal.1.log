@@ -1,0 +1,5 @@
+-- [합성] 이슈 DB 시드 흐름 fixture(data/data-retry 정상, 끝 단계까지 ok). Android 17 에뮬레이터 캡처의 단계 줄 모양으로 줄여 새로 쓴 줄(값은 마스킹 토큰) — 사내 실제 마스킹 로그로 바꾼다.
+11-14 09:52:00.000  2101  2101 D DN-231-C: DisconnectedState: Data network disconnected. mEverConnected=false
+11-14 09:52:00.001  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-231-C, null, state=null], cause=RADIO_NOT_AVAILABLE(0x10001), retryDelayMillis=10000ms.
+11-14 09:52:00.002  2101  2101 D DRM-0   : onEvaluateDataSetupRetry: [DataProfile=null, TrafficDescriptor={mDnn=null}, preferred=false], transport=WWAN, cause=RADIO_NOT_AVAILABLE(0x10001), retryDelayMillis=10000ms
+11-14 09:52:00.003  2101  2101 D DRM-0   : Scheduled data retry [DataSetupRetryEntry: delay=10000ms, retry time:09:52:10.003, [DataProfile=null, TrafficDescriptor={mDnn=null}, preferred=false], transport=WWAN, retry type=BY_PROFILE, state=NOT_RETRIED]
