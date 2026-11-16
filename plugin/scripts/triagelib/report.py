@@ -791,7 +791,7 @@ class ReportMixin:
         iss = r.get("issue") or {}       # 마스킹된 Jira 요약(jira_fields)
         known = [f"{name} {iss[k]}" for name, k in (("SW", "sw"), ("발생 시각", "occurred_at")) if iss.get(k)]
         prob.append(f"- 이슈: {self.key} — {iss.get('summary') or '요약 없음'}" + (f" ({', '.join(known)})" if known else ""))
-        if self.answer("time") == "full":
+        if not anchor and self.answer("time") == "full":    # 앵커가 있으면 범위는 앵커 기준이라 이 줄이 맞지 않다
             prob.append("- 기준 시각 없음 — 로그 전체를 봄")
         if self.failed_step:
             prob.append(add(4, f"실패 스텝 (보조 정보, Jira {self.failed_step['source']}; S/C에 쓰지 않음; 단어 겹침 가산·순위 참고·분석 범위): "
