@@ -103,11 +103,14 @@ class OfonoReferenceBackend(ParserBackend):
     def log_format(self):
         return SPEC.log
 
+    def is_vendor_ipc(self, tag: str) -> bool:
+        tag = tag or ""
+        return self._vendor_ipc(tag, tag.split("/", 1)[0])
+
     def detect(self, record: dict) -> list[tuple[str, dict]]:
         """줄 레코드 하나에 대한 builtin 판별 `[(이벤트 이름, fields)]`. 벤더 RIL 데몬 줄(`_vendor_ipc`: 구성요소
         `vendor_ipc: true`의 ident, tags.yaml `ipc: vendor`가 있으면 그것)의 IPC 결과만 본다."""
-        tag = record.get("tag") or ""
-        if not self._vendor_ipc(tag, tag.split("/", 1)[0]):
+        if not self.is_vendor_ipc(record.get("tag") or ""):
             return []
         return vendor_ipc.detect(record.get("msg") or "", self._ipc)
 

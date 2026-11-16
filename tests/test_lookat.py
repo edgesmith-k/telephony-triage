@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""기준 줄 찾기 순수 함수 (11/16 설계 §2, `common/lookat.py`). `pytest tests/test_lookat.py`."""
+
+from __future__ import annotations
+
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+
+from common import lookat as L  # noqa: E402
+
+UTC = timezone.utc
+
+
+def test_clean_strips_logcat_head_and_time_brackets_only():
+    assert L.clean("09-20 14:33:05.000   900   910 D RIL     : [TX] VIPC_SETUP_DATA, REQ, token=0x0de") \
+        == "[TX] VIPC_SETUP_DATA, REQ, token=0x0de"
+    assert L.clean("2026-09-20 14:33:05.000 +0900 1000 1234 1244 I DNC-0: a  b") == "a b"        # 연도·zone·uid
+    assert L.clean("09-20 14:33:05.000 D/RIL( 1234): [RX] x") == "[RX] x"                        # time 형식
+    assert L.clean("[  12.345] [IpcCtx_0] OnIpcComplete [14:32:11.001] ok") == "[IpcCtx_0] OnIpcComplete ok"   # P2 21
+    assert L.clean("  plain   text ") == "plain text" and L.clean(None) == ""
+
+
+def test_query_reads_name_and_token_loosely():
+    assert L.query("VIPC_X (token=0x0de)") == {"text": "VIPC_X (token=0x0de)", "name": "VIPC_X", "token": 0x0DE}
+    assert L.query("VIPC_X token: 222")["token"] == 222                       # 괄호 없이·콜론(P2 22)
+    assert L.query("0x0DE") == {"text": "0x0DE", "name": None, "token": 0x0DE}  # token만
+    assert L.query("[TX] VIPC_A, REQ")["token"] is None
+    assert L.query("AB_X token=1", prefix="AB_")["name"] == "AB_X"
+
+
+def test_ipc_hits_name_and_token_or_token_only():
+    recs = [{"name": "VIPC_A", "token": 1}, {"name": "VIPC_B", "token": 1}, {"name": "VIPC_A", "token": 2}]
+    assert L.ipc_hits({"name": "VIPC_A", "token": 1}, recs) == [0]
+    assert L.ipc_hits({"name": None, "token": 1}, recs) == [0, 1]
+    assert L.ipc_hits({"name": "VIPC_A", "token": None}, recs) == []
+
+
+def test_text_match_folds_mask_numbers_and_needs_eight_chars():
+    assert L.needle({"text": "short"}) is None and L.needle({"text": "12345678"}) == "12345678"
+    nd = L.needle({"text": "link up ip=<IP#1> IFACE"})
+    texts = ["DNC-0: link up ip=10.1.2.3 iface=x", "DNC-0: link down ip=10.1.2.3 iface=x", "X: link up ip=<IP#7> iface"]
+    masked = ["DNC-0: link up ip=<IP#3> iface=x", "DNC-0: link down ip=<IP#3> iface=x", texts[2]]
+    assert L.text_hits(nd, texts, lambda i: masked[i]) == [0, 2]      # 번호가 달라도(입력 #1, 로그 #3·#7) 맞다
+    assert L.text_hits(nd, texts) == [2]                              # 가리지 않은 원 줄은 값이 달라 안 맞는다
+
+
+def test_pick_nearest_or_last():
+    t0 = datetime(2026, 9, 20, 5, 30, tzinfo=UTC)
+    times = [t0, t0 + timedelta(minutes=3), t0 + timedelta(minutes=10)]
+    assert L.pick(times[:1], None) == (0, "only")
+    assert L.pick(times, t0 + timedelta(minutes=4)) == (1, "nearest")
+    assert L.pick(times, t0 + timedelta(minutes=1, seconds=30)) == (0, "nearest")   # 같은 거리면 앞
+    assert L.pick(times, None) == (2, "last")                                       # 기준 시각 없음 → 마지막(P2 23)

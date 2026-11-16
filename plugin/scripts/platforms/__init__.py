@@ -10,8 +10,8 @@ site-defaults에 `platform.name`이 없을 때만 쓴다.
   `02-config.md`)을 검증해 `PlatformProfile`로 준다. 기본 플랫폼은 `platform:` 블록 자체, 그 밖 플랫폼은
   `platform.others.<name>` 블록이다. 받는 상수 키는 `SPEC.block_keys`다. `components`(구성요소, 통째로 바뀜)와
   `protocols.<이름>: {kind, ...}`(설정 정의 짝 규칙, `SPEC.protocol_kinds`)는 `PlatformProfile.components`·`protocols`.
-  `vendor_ipc: {context, complete, request_prefix, error_prefix, success}`(벤더 IPC 줄의 사내 토큰, 생략 = placeholder)는
-  `PlatformProfile.vendor_ipc`. `dump_func`(oFono 덤프 함수 이름, 생략 = placeholder `example_dump`)는
+  `vendor_ipc: {context, complete, request_prefix, error_prefix, success, trace?}`(벤더 IPC 줄의 사내 토큰, 생략 = placeholder,
+  `trace`는 선택 IPC 메시지 줄 정규식 목록)는 `PlatformProfile.vendor_ipc`. `dump_func`(oFono 덤프 함수 이름, 생략 = placeholder `example_dump`)는
   `PlatformProfile.dump_func`(`common.dumpjoin`이 갈린 덤프 조각을 잇는 표식).
 - `backend_name(defaults, name)`: 그 플랫폼의 파서 백엔드 이름. `raw_line_finders(defaults)`: 켠 플랫폼의 원문 줄 판별.
 
@@ -47,6 +47,7 @@ from platforms.base import (  # noqa: F401  (계약 타입을 `platforms.X`로�
     cfg_mapping,
     config_error as _err,
 )
+from common import ipcseq as _ipcseq
 from common import vendor_ipc as _vipc
 
 DUMP_FUNC_DEFAULT = "example_dump"         # `common.dumpjoin.DEFAULT_FUNC`와 같다(placeholder)
@@ -394,8 +395,10 @@ def _dump_func(raw, base: str) -> str:
 def _vendor_ipc(raw, base: str) -> _vipc.Spec:
     """`<블록>.vendor_ipc: {context, complete, request_prefix, error_prefix, success}`(벤더 IPC 줄의 사내 토큰, TODO(SITE:S9))
     → `vendor_ipc.Spec`. 값은 식별자 모양 글(`vendor_ipc.VALUE_RE`). 블록을 생략하면(`null`·`{}` 포함) placeholder 기본값,
-    블록을 쓰면 다섯 키 모두(일부만 쓰면 나머지가 placeholder로 남아 그 줄 판별이 조용히 0이 된다)."""
-    node = _mapping(raw, base, _vipc.KEYS)
+    블록을 쓰면 다섯 키 모두(일부만 쓰면 나머지가 placeholder로 남아 그 줄 판별이 조용히 0이 된다).
+    `trace`(선택, IPC 메시지 줄 정규식 목록 `common.ipcseq`)는 다섯 키 규칙과 따로 본다: 정규식 컴파일·`name` 그룹 필수·길이."""
+    node = dict(_mapping(raw, base, (*_vipc.KEYS, _vipc.TRACE_KEY)))
+    trace = node.pop(_vipc.TRACE_KEY, None)
     for key, value in node.items():
         if not isinstance(value, str) or not _vipc.VALUE_RE.fullmatch(value):
             raise _err(f"{base}.{key}", f"식별자 모양 글(^[A-Za-z][A-Za-z0-9_]*$, 64자 이하)이어야 합니다: {value!r}")
@@ -404,6 +407,16 @@ def _vendor_ipc(raw, base: str) -> _vipc.Spec:
         raise _err(f"{base}.{missing[0]}", f"{'·'.join(_vipc.KEYS)}를 함께 적어야 합니다(빠짐: {', '.join(missing)}).")
     if node and not node["success"].startswith(node["error_prefix"]):   # 오류 줄 값 전체와 비교 — 접미어만이면 성공마다 오류 이벤트
         raise _err(f"{base}.success", "error_prefix로 시작하는 결과 값 전체여야 합니다(Error(<값>) 안 글자 그대로).")
+    if trace is not None:
+        at = f"{base}.{_vipc.TRACE_KEY}"
+        items = _list(trace, at, non_empty=True)
+        if len(items) > _ipcseq.TRACE_MAX:
+            raise _err(at, f"정규식은 {_ipcseq.TRACE_MAX}개까지입니다.")
+        for i, item in enumerate(items):
+            problem = _ipcseq.check(item)
+            if problem:
+                raise _err(f"{at}[{i}]", problem)
+        node["trace"] = tuple(items)
     return _vipc.Spec(**node)
 
 

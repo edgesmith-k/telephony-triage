@@ -5,7 +5,7 @@
 | `issue-db-sample/` | **합성 샘플 이슈 DB** (Phase 1). 테스트는 `tests/helpers/make_repo.py`로 이 트리에서 임시 git 레포와 bare 원격을 만들어 쓴다 |
 | `plans/` | 샘플 작업 계획 (`contracts.md §작업 계획`). `schema/plan.schema.json` 검사에 쓴다. 실제 계획은 `<work_dir>`에만 있고 커밋하지 않는다 |
 | `migrations/` | 예시 스키마 마이그레이션 v1 → v2 (`db_migrate.py` 계약 시험용). 배포 `plugin/scripts/migrations/`에는 없고 `runner.versioned_root(schema=…)`가 임시 플러그인 루트로 복사한다 |
-| `logs/` | **파서 fixture** (Phase 2). `<name>.log`는 `tests/mocks/log_fixtures.yaml`의 시나리오에서 `tests/helpers/make_log_fixtures.py`가 만들고(`--check`로 검사), `<name>.events.json`은 `parse --full --tz Asia/Seoul --year 2026` 결과 스냅샷이다(`python3 tests/test_parse_logcat.py --update`로 갱신). 이슈 DB 안의 fixture와 섞지 않는다 |
+| `logs/` | **파서 fixture** (Phase 2). `<name>.log`는 `tests/mocks/log_fixtures.yaml`의 시나리오에서 `tests/helpers/make_log_fixtures.py`가 만들고(`--check`로 검사), `<name>.events.json`은 `parse --full --tz Asia/Seoul --year 2026` 결과 스냅샷이다(`python3 tests/test_parse_logcat.py --update`로 갱신). 이슈 DB 안의 fixture와 섞지 않는다. 예외로 생성기 밖에서 손으로 쓴 **합성** 로그 `ipc-lookat.log`·`ipc-fail.log`(에뮬레이터 logcat 머리 + 합성 `VIPC_` 벤더 IPC 줄, 이벤트 스냅샷 없음)는 기준 줄·IPC 메시지 줄 시험(`test_triage_lookat.py`·`test_ipcseq.py`)에만 쓴다 |
 
 - 변형 트리(오류 주입, 0건 카테고리, 리뷰 케이스 등)는 커밋하지 않고 샘플 트리를 오염시키지 않는다 (`11-phases.md`).
   변형(`issue-db-lint-errors`·`-empty-category`·`-pending`·`-dup-id`·`-verify`·`-review`·`-github` 등, 전체 목록은 생성기 머리말)과 `verify-logs/`는 `tests/helpers/make_variant_dbs.py`가 샘플·시나리오에서 결정적으로 만든다(`--check`로 검사). 샘플을 바꾸면 다시 만든다.

@@ -68,6 +68,11 @@ class ParserBackend(ABC):
         선언하면 DB만, 아니면 백엔드 기본 집합(구성요소 설정)을 본다. 원본 객체(싱글톤)는 바꾸지 않는다."""
         return self
 
+    def is_vendor_ipc(self, tag: str) -> bool | None:
+        """이 태그 줄이 벤더 IPC 줄인가(`parse_logcat.py ipc`가 IPC 메시지 순서를 만들 줄 고르기). None = 이 백엔드는 모른다
+        (IPC 순서를 만들지 않고 경고한다). reference·oFono는 builtin 판별(`detect`)과 같은 태그 판단을 쓴다."""
+        return None
+
     @abstractmethod
     def parse(
         self,
