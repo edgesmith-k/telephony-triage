@@ -323,6 +323,32 @@ def test_install_allow_publish_writes_key_only_when_given(roots):
     assert r.returncode == 0 and "--allow-publish" in r.stdout and '"publish": "open"' in r.stdout and "--force" in r.stdout
 
 
+def test_install_provider_model_builtin_provider(roots):
+    """A232: 일부 게이트웨이는 OpenCode 내장 provider로만 받는다 — `--provider-model <provider>/<모델>`이면 provider 블록 없이
+    model·small_model만 그 값으로 쓴다(키·주소는 OpenCode 전역 설정 몫). 조합·형식·빠짐 오류는 모두 종료 2(문구 고정)."""
+    r = run_gen("install", "--dest", str(roots / "proj"), "--plugin-root", str(roots / "plug"), "--work-root",
+                str(roots / "work"), "--provider-model", "acme/glm-x")
+    assert r.returncode == 0, r.stderr
+    cfg = json.loads((roots / "proj" / "opencode.json").read_text(encoding="utf-8"))
+    assert cfg["model"] == cfg["small_model"] == "acme/glm-x" and "provider" not in cfg
+    assert "TT_GATEWAY_API_KEY" not in json.dumps(cfg) and "@@" not in json.dumps(cfg)
+    meta = json.loads((roots / "proj" / "tt-oc.json").read_text(encoding="utf-8"))
+    assert meta["model"] == "acme/glm-x"
+    assert meta["integrity"]["files"]["opencode.json"] == \
+        hashlib.sha256((roots / "proj" / "opencode.json").read_bytes()).hexdigest()   # 지문은 최종 설정 기준
+    r = _install(roots, "--provider-model", "acme/glm-x", "--force")          # _install은 --gateway-url·--model도 준다
+    assert r.returncode == 2 and "--provider-model은 --gateway-url·--model과 함께 쓰지 않는다" in r.stderr
+    for bad in ("acme", "acme/x/y", "acme/", "/x", "a b/c"):
+        r = run_gen("install", "--dest", str(roots / "p2"), "--plugin-root", str(roots / "plug"), "--work-root",
+                    str(roots / "work"), "--provider-model", bad)
+        assert r.returncode == 2 and "--provider-model 형식: <provider>/<모델>, 영문·숫자·._:-와 / 하나" in r.stderr, (bad, r.stderr)
+    r = run_gen("install", "--dest", str(roots / "p3"), "--plugin-root", str(roots / "plug"), "--work-root", str(roots / "work"))
+    assert r.returncode == 2 and "--gateway-url과 --model이 필요하다(또는 --provider-model)" in r.stderr
+    r = run_gen("install", "--dest", str(roots / "p4"), "--plugin-root", str(roots / "plug"), "--work-root",
+                str(roots / "work"), "--gateway-url", "http://gw.example/v1")
+    assert r.returncode == 2 and "--gateway-url과 --model이 필요하다" in r.stderr
+
+
 def test_setup_is_write_flow():
     """OC-B 조각 1: OpenCode 안에서 setup의 쓰기 단계(config.py init·set·set-tracker·install-hooks)는 직접 실행 — NOTE가 붙는다."""
     assert "setup" in gen_opencode.WRITE_FLOWS and "setup" not in gen_opencode.READ_FLOWS
