@@ -393,10 +393,15 @@ def first_timeout_rows(env) -> list[dict]:
 
 def gateway_rows(proj: Path, env: dict) -> list[dict]:
     """게이트웨이 키 환경 변수 유무와 baseURL 모양(런타임 리뷰 3) — warn만(막지 않는다, 게이트웨이마다 경로가 다를 수 있다).
-    키 값·주소는 적지 않는다."""
+    키 값·주소는 적지 않는다. 모델 접두가 프로젝트 설정의 provider에 없으면(내장 provider 설치, install --provider-model)
+    키·주소는 OpenCode 전역 설정 몫이라 점검하지 않는다(A232)."""
     try:
         cfg = json.loads((proj / "opencode.json").read_text(encoding="utf-8"))
-        opts = cfg["provider"][str(cfg["model"]).partition("/")[0]]["options"]
+        providers = cfg.get("provider") if isinstance(cfg.get("provider"), dict) else {}
+        prefix = str(cfg["model"]).partition("/")[0]
+        if prefix not in providers:
+            return [{"check": "gateway-key", "status": "ok", "detail": "외부 provider — 키·주소 점검 안 함"}]
+        opts = providers[prefix]["options"]
         key, url = str(opts.get("apiKey") or ""), str(opts.get("baseURL") or "")
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return [{"check": "gateway-key", "status": "warn",
@@ -1231,7 +1236,7 @@ def main(argv=None) -> int:
     if not a.message and not a.oc_command:
         print("[tt-oc] 메시지가 없다: tt-oc --project <dir> -- <메시지>", file=sys.stderr)
         return 2
-    cmd = [oc, *OCV.RUN_ARGS, "--agent", AGENT]
+    cmd = [oc, *OCV.RUN_ARGS, "--dir", str(proj), "--agent", AGENT]   # cwd=proj에 더해 세션 폴더도 프로젝트로 고정(1.19.5 run --dir)
     if a.oc_command:
         cmd += ["--command", a.oc_command]
     if a.session:

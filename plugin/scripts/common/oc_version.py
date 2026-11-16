@@ -18,7 +18,7 @@ OPENCODE_VERSION = "1.19.5"
 # -- CLI(1.19.5 실험 11/05: `opencode run --format json`·`debug config`·`session delete`) ----------------------------------
 VERSION_ARGS = ("--version",)                 # 마지막 줄이 버전
 DEBUG_CONFIG_ARGS = ("debug", "config")       # 합쳐진 실제 설정 JSON(관리 설정 포함)
-RUN_ARGS = ("run", "--format", "json")        # + `--agent <이름>` [`--command <이름>`] [`-s <세션>`] `-- <메시지>`
+RUN_ARGS = ("run", "--format", "json")        # + `--dir <프로젝트>` `--agent <이름>` [`--command <이름>`] [`-s <세션>`] `-- <메시지>`
 SESSION_DELETE_ARGS = ("session", "delete")   # + <세션>
 # tt-oc가 거절하는 opencode 옵션: 플러그인·설정·에이전트를 건너뛰거나 바꾸는 것(`--pure`는 플러그인을 아예 싣지 않는다).
 REFUSED_ARGS = ("--pure", "--auto", "--attach", "--port", "-i", "--interactive", "--fork", "-c", "--continue",

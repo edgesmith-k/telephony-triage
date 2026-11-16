@@ -275,7 +275,8 @@ def test_command_name_and_message_required(env):
     events(env, final())
     assert tt(env, "--command", "tt-status", "--", "ABC-1").returncode == 0
     (c,) = run_calls(env)
-    assert c["args"] == ["run", "--format", "json", "--agent", "triage", "--command", "tt-status", "--", "ABC-1"]
+    assert c["args"] == ["run", "--format", "json", "--dir", str(env["proj"]), "--agent", "triage",
+                         "--command", "tt-status", "--", "ABC-1"]
 
 
 # -- 실행·판정 ----------------------------------------------------------------------------------------------------------
@@ -285,7 +286,8 @@ def test_ok_run_invocation_and_output(env):
     r = tt(env, "-s", "ses_PREV", "--", "분석", "ABC-1")
     assert r.returncode == 0, r.stdout + r.stderr
     (c,) = run_calls(env)
-    assert c["args"] == ["run", "--format", "json", "--agent", "triage", "--session", "ses_PREV", "--", "분석", "ABC-1"]
+    assert c["args"] == ["run", "--format", "json", "--dir", str(env["proj"]), "--agent", "triage",
+                         "--session", "ses_PREV", "--", "분석", "ABC-1"]
     assert c["stdin_null"] is True and c["cwd"] == str(env["proj"])
     assert c["env"] == {"TT_RUNTIME": "opencode", "CLAUDE_PLUGIN_ROOT": str(env["plug"]), "TT_MODEL": "glm-x",
                         "OPENCODE_DISABLE_AUTOUPDATE": "1", "OPENCODE_DISABLE_MODELS_FETCH": "1",
@@ -878,6 +880,17 @@ def test_doctor_gateway_key_and_url_rows_warn_only(env):
     events(env, final())
     r = tt(env, "--", "x")                                                   # warn은 시작을 막지 않는다
     assert r.returncode == 0 and "gateway-key: warn" in r.stderr
+
+
+def test_doctor_external_provider_single_ok_row(env):
+    """A232: 모델 접두가 프로젝트 opencode.json의 provider에 없으면(내장 provider 설치, install --provider-model)
+    키·주소는 OpenCode 전역 설정 몫 — gateway-key ok 한 행만 내고 gateway-url 행은 없다."""
+    (env["proj"] / "opencode.json").write_text(json.dumps({"model": "acme/glm-x"}), encoding="utf-8")
+    write_meta(env["proj"], env["plug"], env["work"])
+    code, rows = _doctor_rows(env)
+    assert code == 0, rows
+    assert rows["gateway-key"]["status"] == "ok" and rows["gateway-key"]["detail"] == "외부 provider — 키·주소 점검 안 함"
+    assert "gateway-url" not in rows
 
 
 def test_no_first_response_stops_early_with_gateway_hint(env):

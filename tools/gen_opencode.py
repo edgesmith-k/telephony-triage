@@ -14,11 +14,14 @@ CLI:
     python3 tools/gen_opencode.py [--check]
         opencode/commands/를 다시 만든다. --check는 쓰지 않고 다르면 종료 코드 1(골든 검사).
     python3 tools/gen_opencode.py install --dest <OpenCode 프로젝트 폴더> --plugin-root <설치된 plugin/>
-            --work-root <작업 루트> --gateway-url <URL> --model <모델 ID> [--issue-db <clone> ...]
-            [--jira-read-tool <OpenCode 이름> ...] [--allow-publish] [--force]
+            --work-root <작업 루트> (--gateway-url <URL> --model <모델 ID> | --provider-model <provider>/<모델>)
+            [--issue-db <clone> ...] [--jira-read-tool <OpenCode 이름> ...] [--allow-publish] [--force]
         <dest>/opencode.json(템플릿 렌더링)·<dest>/tt-oc.json(래퍼가 읽는 경로)과 <dest>/.opencode/{agents,commands,plugins}/를
         쓴다. `tt-oc --project <dest>`로
-        실행한다. 이미 있는 파일이 다르면 --force 없이는 쓰지 않는다. 키에 `@@ISSUE_DB_ROOT@@`가 든 설정 항목은 `--issue-db`
+        실행한다. 이미 있는 파일이 다르면 --force 없이는 쓰지 않는다.
+        `--provider-model <provider>/<모델>`은 게이트웨이가 OpenCode **내장 provider**로만 받는 곳용(커스텀
+        `@ai-sdk/openai-compatible`을 거절하는 게이트웨이): 설정에 `provider` 블록을 쓰지 않고 `model`·`small_model`만 그 값으로
+        쓴다(키·주소는 OpenCode 전역 설정 몫). `--gateway-url`·`--model`과 같이 주면 종료 2. 키에 `@@ISSUE_DB_ROOT@@`가 든 설정 항목은 `--issue-db`
         마다 하나씩 펼친다(없으면 뺀다). 게이트웨이 키는 설정에 쓰지 않는다(`{env:TT_GATEWAY_API_KEY}`).
         `config.py check --roots`의 `read_roots`(풀린 설치 스킬 SKILL.md 폴더 등) 중 플러그인·작업·이슈 DB 밖인 폴더는
         `external_directory`에 읽기 allow로 더한다(B2 R21 — 설정을 바꾸면 다시 설치, `tt-oc doctor`가 경고).
@@ -277,7 +280,7 @@ def add_jira_reads(config: dict, names: list[str]) -> dict:
 
 
 def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[str] = (),
-                  jira_read: list[str] = (), allow_publish: bool = False) -> dict[Path, str]:
+                  jira_read: list[str] = (), allow_publish: bool = False, provider_model: str | None = None) -> dict[Path, str]:
     template = json.loads((OC / "opencode.json.template").read_text(encoding="utf-8"))
     meta = {"version": 1, "opencode": OPENCODE_VERSION, "plugin_root": values["@@PLUGIN_ROOT@@"],
             "work_root": values["@@WORK_ROOT@@"], "issue_dbs": issue_dbs, "model": values["@@MODEL_ID@@"]}
@@ -285,7 +288,11 @@ def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[st
         meta["jira_read_tools"] = list(jira_read)
     if allow_publish:
         meta["publish"] = "open"         # 없으면 닫힘(tt-oc publish). install은 tt-oc.json을 통째로 다시 쓴다
-    config = add_read_roots(render_config(template, values, issue_dbs), list(roots),
+    config = render_config(template, values, issue_dbs)
+    if provider_model:                   # 내장 provider: provider 블록 없이 model·small_model만(A232 — 키·주소는 전역 설정 몫)
+        config["model"] = config["small_model"] = provider_model
+        config.pop("provider", None)
+    config = add_read_roots(config, list(roots),
                             [values["@@PLUGIN_ROOT@@"], values["@@WORK_ROOT@@"], *issue_dbs])
     config = add_jira_reads(config, list(jira_read))
     files = {dest / "opencode.json": json.dumps(config, ensure_ascii=False, indent=2) + "\n",
@@ -388,17 +395,26 @@ def cmd_install(a) -> int:
             raise UsageError(f"--dest는 플러그인·이슈 DB clone 밖이어야 한다: {dest}")
     if git_root(dest):
         raise UsageError(f"--dest가 git 레포({git_root(dest)}) 안이다 — edit 권한 패턴이 맞지 않는다. git 레포 밖 폴더를 쓴다.")
-    if not re.fullmatch(r"https?://[^\s\"]+", a.gateway_url):
-        raise UsageError(f"--gateway-url 형식: http(s)://…: {a.gateway_url}")
-    if not re.fullmatch(r"[A-Za-z0-9._:/-]+", a.model):
-        raise UsageError(f"--model 형식: 영문·숫자·._:/- : {a.model}")
+    if a.provider_model:
+        if a.gateway_url or a.model:
+            raise UsageError("--provider-model은 --gateway-url·--model과 함께 쓰지 않는다")
+        if not re.fullmatch(r"[A-Za-z0-9._:-]+/[A-Za-z0-9._:-]+", a.provider_model):
+            raise UsageError(f"--provider-model 형식: <provider>/<모델>, 영문·숫자·._:-와 / 하나: {a.provider_model}")
+    elif not (a.gateway_url and a.model):
+        raise UsageError("--gateway-url과 --model이 필요하다(또는 --provider-model)")
+    else:
+        if not re.fullmatch(r"https?://[^\s\"]+", a.gateway_url):
+            raise UsageError(f"--gateway-url 형식: http(s)://…: {a.gateway_url}")
+        if not re.fullmatch(r"[A-Za-z0-9._:/-]+", a.model):
+            raise UsageError(f"--model 형식: 영문·숫자·._:/- : {a.model}")
     values = {"@@PLUGIN_ROOT@@": plugin, "@@WORK_ROOT@@": work, "@@PLUGIN_ROOT_REL@@": _rel(plugin),
-              "@@WORK_ROOT_REL@@": _rel(work), "@@GATEWAY_BASE_URL@@": a.gateway_url, "@@MODEL_ID@@": a.model}
+              "@@WORK_ROOT_REL@@": _rel(work), "@@GATEWAY_BASE_URL@@": a.gateway_url or "",
+              "@@MODEL_ID@@": a.provider_model or a.model}
     jira_read = list(dict.fromkeys(a.jira_read_tool or []))
     bad = jira_read_problems(jira_read)
     if bad:
         raise UsageError("; ".join(bad))
-    files = install_files(dest, values, dbs, read_roots(plugin), jira_read, a.allow_publish)
+    files = install_files(dest, values, dbs, read_roots(plugin), jira_read, a.allow_publish, a.provider_model)
     differ = [str(p) for p, text in files.items() if p.exists() and p.read_text(encoding="utf-8") != text]
     if differ and not a.force:
         raise UsageError(f"이미 있는 파일과 다르다(--force로 덮어쓴다): {differ}")
@@ -437,8 +453,11 @@ def main(argv=None) -> int:
     p.add_argument("--plugin-root", required=True)
     p.add_argument("--work-root", required=True)
     p.add_argument("--issue-db", action="append")
-    p.add_argument("--gateway-url", required=True)
-    p.add_argument("--model", required=True)
+    p.add_argument("--gateway-url")
+    p.add_argument("--model")
+    p.add_argument("--provider-model",
+                   help="OpenCode 내장 provider로 받는 게이트웨이용 <provider>/<모델> — provider 블록 없이 model·small_model만 쓴다. "
+                        "--gateway-url·--model과 같이 쓰지 않는다")
     p.add_argument("--jira-read-tool", action="append",
                    help="Jira 읽기 도구의 OpenCode 이름(<서버>_<도구>)을 permission allow로 더한다(관문을 연 뒤 tt-oc에서 읽으려면)")
     p.add_argument("--allow-publish", action="store_true",
