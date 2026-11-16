@@ -409,6 +409,22 @@ def test_explore_android_view(env):
     assert "  - 모듈 타임라인: 1/1줄, 잡음 0, 반복 접음 0, 미수집 com.example.Data" in text   # 모의 modules.yaml android/data dbus
 
 
+def test_explore_view_names_look_at_center_as_look_line(env):
+    """기준 줄(look_at) 앵커의 중심은 모듈 보기 머리에 "기준 줄"로 쓴다("실패 스텝"이 아니다)."""
+    env.url = mr.build(env.tmp / "remote2")
+    env.user({"module_skills": {"remote": env.url}})
+    events = [{"ts": "2026-09-20T05:32:09.000Z", "tag": "DCM-1", "msg": "setup failed", "level": "E", "category_hint": "data"}]
+    job = env.make_job(events=events, platform="android", extra={"explore": {"reason": "cause_unconfirmed", "when": "ask"}})
+    anchor = {"source": "look_at", "step": None, "start": None, "fail": "2026-09-20T05:32:09.000Z"}
+    (job / core.EXPLORE_INPUT_FILE).write_text(json.dumps({"around": "2026-09-20T05:32:10Z", "failed_step": None, "limit": 200,
+                                                           "anchor": anchor}), encoding="utf-8")
+    assert env.call("explore", KEY, "--out", job, "--platform", "android")[0] == 0
+    code, out, err = env.module("explore", "--module", "android/data", platform="android")
+    assert code == 0 and out["timeline"]["view"] is True, err
+    view = (job / "module-skill" / "explore" / "timeline.md").read_text(encoding="utf-8")
+    assert "2026-09-20T05:32:09.000Z (기준 줄)" in view and "(실패 스텝)" not in view
+
+
 def test_explore_view_mask_off_keeps_raw(env):
     """마스킹 끔 DB의 events(`mask_off`, 08-safety §8.2): 탐색 모듈 보기도 가리지 않는다 — modulecmd가 view payload에
     `mask_off`를 넘긴다(빠지면 보기가 다시 가린다)."""

@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""벤더 IPC 메시지 줄 레코드 (11/16 설계 §1, `common/ipcseq.py`·`parse_logcat.py ipc`·설정 `platform.vendor_ipc.trace`).
+
+합성 `VIPC_` 꼴만 쓴다(실제 벤더 형식 아님). `pytest tests/test_ipcseq.py`.
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+import yaml
+
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "tests" / "helpers"))
+sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+
+import platforms  # noqa: E402
+from common import ipcseq, masking, vendor_ipc  # noqa: E402
+from runner import SAMPLE, plugin_root, run_json  # noqa: E402
+
+LOG = REPO / "tests" / "fixtures" / "logs" / "ipc-fail.log"
+RULES = SAMPLE / "parser-rules"
+TZ = ["--tz", "Asia/Seoul", "--year", "2026"]
+
+
+def _recs(msg: str, spec=vendor_ipc.DEFAULT) -> list[dict]:
+    out = []
+    for p in ipcseq.patterns(spec):
+        m = re.search(p, msg)
+        if m:
+            out.append(ipcseq.record(m, 0, "t"))
+            break
+    return out
+
+
+def test_default_patterns_read_dir_name_token_result():
+    (r,) = _recs("[TX] VIPC_SETUP_DATA, REQ, token=0x0de, len=24")
+    assert (r["dir"], r["name"], r["token"], r["result"]) == ("req", "VIPC_SETUP_DATA", 0x0DE, None)
+    (r,) = _recs("[RX] VIPC_SETUP_DATA, RSP, token=222, len=8, Error(VIPC_E_DEMO_FAILURE)")
+    assert (r["dir"], r["token"], r["result"]) == ("rsp", 222, "VIPC_E_DEMO_FAILURE")
+    (r,) = _recs("[RX] VIPC_SIGNAL_INFO, IND, len=16")
+    assert (r["dir"], r["token"]) == ("ind", None)
+    (r,) = _recs("VIPC_DEACT_DATA (token=0x0df) requested")      # 둘째 꼴: 방향 없음
+    assert (r["dir"], r["name"], r["token"]) == (None, "VIPC_DEACT_DATA", 0x0DF)
+    assert _recs("vendor service heartbeat") == []
+
+
+def test_long_token_masked_to_cred_keeps_record_without_token():
+    """9자리 이상 16진 token은 마스커가 `<CRED#n>`으로 바꾸며 `)`까지 먹는다 — 줄은 놓치지 않고 token만 None(P2 27)."""
+    masked = masking.new_masker(log_lines=True).mask("VIPC_X (token=0x1234abcd9)")
+    assert masked.startswith("VIPC_X (token=<CRED#1>") and ")" not in masked.split("token=")[1]
+    (r,) = _recs(masked)
+    assert (r["name"], r["token"]) == ("VIPC_X", None)
+
+
+def test_long_raw_token_is_not_cut_short():
+    """마스킹을 끈 로그의 긴 token은 앞 자리만 잘라 틀린 값으로 남기지 않는다 — 끝까지 읽고 16진 8자리·10진 10자리를 넘으면 None."""
+    (r,) = _recs("[TX] VIPC_SETUP_DATA, REQ, token=12345678901, len=24")       # 10진 11자리
+    assert (r["name"], r["token"]) == ("VIPC_SETUP_DATA", None)
+    (r,) = _recs("VIPC_X (token=0x123456789) requested")                        # 16진 9자리
+    assert (r["name"], r["token"]) == ("VIPC_X", None)
+    assert _recs("[TX] VIPC_A, REQ, token=4294967295")[0]["token"] == 4294967295  # 10자리는 그대로
+    assert _recs("VIPC_X (token=0xdeadbeef)")[0]["token"] == 0xDEADBEEF
+
+
+def test_short_tokens_survive_masking():
+    """짧은 token(10진 10자리·16진 8자리 이하)은 마스커가 두므로 값이 남는다(설계 §1 마지막 줄)."""
+    m = masking.new_masker(log_lines=True)
+    for line, token in (("[TX] VIPC_A, REQ, token=0x0de", 0x0DE), ("VIPC_A (token=0x0de)", 0x0DE),
+                        ("[TX] VIPC_A, REQ, token = 0x0DE", 0x0DE), ("[TX] VIPC_A, REQ, token=222", 222)):
+        assert m.mask(line) == line and _recs(line)[0]["token"] == token
+
+
+def test_prefix_placeholder_uses_site_prefix_escaped():
+    spec = vendor_ipc.Spec(request_prefix="AB", error_prefix="AB_E_", success="AB_E_OK")
+    (r,) = _recs("[TX] AB_SETUP, REQ, token=0x1", spec)
+    assert r["name"] == "AB_SETUP"
+    assert _recs("[TX] VIPC_SETUP, REQ", spec) == []
+    assert ipcseq.fill(r"x{prefix}y{1,8}", vendor_ipc.Spec(request_prefix="A.B")) == r"xA\.By{1,8}"
+    site = vendor_ipc.Spec(trace=(r"<(?P<name>{prefix}\w+)>",))
+    assert _recs("<VIPC_PING>", site)[0]["name"] == "VIPC_PING"
+    assert _recs("[TX] VIPC_SETUP, REQ", site) == []          # trace를 쓰면 기본 둘은 쓰지 않는다
+
+
+@pytest.mark.parametrize("trace, problem", [
+    ([], "비어 있으면"), ("x", "목록"), (["("], "정규식 오류"), (["(?P<x>a)"], "name"), ([r"(?P<name>a)(?P<foo>b)"], "foo"),
+    (["a" * 401], "400자"), ([r"(?P<name>a)"] * 9, "8개"),
+])
+def test_config_trace_key_is_checked(trace, problem):
+    with pytest.raises(platforms.PlatformConfigError, match=problem):
+        platforms._vendor_ipc({"trace": trace}, "platform.vendor_ipc")
+
+
+def test_config_trace_is_optional_sixth_key():
+    assert platforms._vendor_ipc(None, "b") == vendor_ipc.DEFAULT
+    spec = platforms._vendor_ipc({"trace": [r"(?P<name>{prefix}\w+)"]}, "b")       # trace만: 다섯 키 규칙과 무관
+    assert spec.trace == (r"(?P<name>{prefix}\w+)",) and spec.request_prefix == "VIPC_"
+    with pytest.raises(platforms.PlatformConfigError, match="함께 적어야"):           # 다섯 키 규칙은 그대로
+        platforms._vendor_ipc({"context": "X_", "trace": [r"(?P<name>a)"]}, "b")
+    assert vendor_ipc.KEYS == ("context", "complete", "request_prefix", "error_prefix", "success")
+
+
+def test_parse_logcat_ipc_records_on_fixture():
+    out = run_json("parse_logcat.py", ["ipc", LOG, "--rules", RULES, *TZ])
+    recs = out["records"]
+    assert out["total"] == len(recs) == 7 and out["truncated"] is False
+    assert [(r["dir"], r["name"], r["token"], r["result"]) for r in recs] == [
+        ("req", "VIPC_RADIO_POWER", 1, None), ("rsp", "VIPC_RADIO_POWER", 1, "VIPC_E_OK"),
+        ("ind", "VIPC_SIGNAL_INFO", None, None), ("req", "VIPC_SETUP_DATA", 222, None),
+        ("rsp", "VIPC_SETUP_DATA", 222, "VIPC_E_DEMO_FAILURE"), (None, "VIPC_DEACT_DATA", 0x0DF, None),
+        (None, "VIPC_DEACT_DATA", None, None)]                   # `<CRED#1>`(가린 긴 token)은 None
+    assert recs[0]["ts"] == "2026-09-20T05:32:00.000Z" and recs[0]["line_ref"] == {"file_index": 0, "line_no": 1}
+    assert out["coverage"]["first_ts"] == "2026-09-20T05:32:00.000Z"
+
+
+def test_parse_logcat_ipc_range_from_line_records_without_second_parse(monkeypatch):
+    """`ipc`는 범위(처음·끝 시각)를 이미 읽은 줄 레코드에서 정한다 — `backend.coverage`로 로그 전체를 다시 파싱하지 않는다."""
+    import parse_logcat
+    from parser_backends import base
+
+    monkeypatch.setattr(base.ParserBackend, "coverage", lambda *a, **k: pytest.fail("coverage로 다시 파싱했다"))
+    defaults = yaml.safe_load((plugin_root() / "site-defaults.yaml").read_text(encoding="utf-8"))
+    out = parse_logcat.run_ipc(SimpleNamespace(logs=[str(LOG)], rules=str(RULES), tz="Asia/Seoul", year=2026, find=None),
+                               defaults)
+    assert out["coverage"] == {"first_ts": "2026-09-20T05:32:00.000Z", "last_ts": "2026-09-20T05:32:06.000Z"}
+    assert out["total"] == 7
+
+
+def test_parse_logcat_ipc_uses_site_trace_and_tags_only():
+    """사이트 정규식(`platform.vendor_ipc.trace`)으로 바꾸고, 벤더 IPC 태그(RIL)가 아닌 줄은 보지 않는다."""
+    root = plugin_root("ipc-trace", platform={"name": "android", "vendor_ipc": {"trace": [r"\b(?P<name>{prefix}DEACT_\w+)"]}})
+    out = run_json("parse_logcat.py", ["ipc", LOG, "--rules", RULES, *TZ], root=root)
+    assert [r["name"] for r in out["records"]] == ["VIPC_DEACT_DATA", "VIPC_DEACT_DATA"]
+    assert all(r["dir"] is None and r["token"] is None for r in out["records"])

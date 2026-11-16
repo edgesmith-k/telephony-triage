@@ -524,7 +524,7 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
     rows = report.merge_rows(events)
     items, total = report.select_rows(rows, spec.get("around"), limit)
     text = report.render_timeline(key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
-                                  spec.get("anchor"))
+                                  spec.get("anchor"), spec.get("look_at"))
     text = text if events.get("mask_off") else masking.redact(text, allow)[0]
     if text.encode("utf-8") != tl:
         raise nojob(f"{TIMELINE_FILE}가 events.json과 맞지 않는다 — triage.py explore를 다시")
@@ -533,7 +533,8 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
     pins = [{"ts": r.get("ts"), "tag": r.get("tag"), "msg": r.get("msg")} for r in rows
             if anchor.get("fail") and r.get("ts") == anchor.get("fail")][:5]
     return {"spec": spec, "items": items, "kept": len(items), "total": total, "center": center,
-            "center_source": "실패 스텝" if anchor.get("fail") else "발생 시각", "pins": pins, "allow": allow,
+            "center_source": ("기준 줄" if anchor.get("source") == "look_at" else "실패 스텝") if anchor.get("fail") else "발생 시각",
+            "pins": pins, "allow": allow,
             "mask_off": bool(events.get("mask_off"))}
 
 

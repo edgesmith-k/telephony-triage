@@ -7,10 +7,10 @@ import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from common import compat, failedstep, stepanchor, userconfig
+from common import compat, failedstep, lookat, stepanchor, userconfig
 from common import logtime as lc
 
-from .core import NeedsInput, _clip
+from .core import LOOK_FILE, NeedsInput, _clip
 
 
 def _parse_ts(text: str | None) -> datetime | None:
@@ -103,23 +103,92 @@ class AnchorMixin:
         raise NeedsInput("year", "연도 없는 logcat의 연도를 정한다(logcat.year_source: ask).", options)
 
     def step_anchor(self, logs: list[Path], tz: str | None, year: int | None, info: dict) -> dict | None:
-        """실패 스텝 앵커(로그 마커 > steps-file) → `{source, step, step_from, start, fail, window}` | None.
+        """분석 구간 앵커(기준 줄 > 로그 마커 > steps-file) → `{source, step, step_from, start, fail, window}` | None.
 
-        마커 패턴(`site-defaults.yaml`의 `failed_step.marker_patterns`, 사용자 config로 바꿀 수 없다)이 있거나 `--steps-file`이
-        있을 때만 `parse_logcat markers`를 돌린다. 앵커의 실패 시각이 로그 범위 밖이면 경고하고 다음 출처로 넘어간다.
-        steps-file의 원문 줄은 이 프로세스 안에서 시각만 뽑고 버린다."""
+        `--answer anchor=off`면 없다. 기준 줄(`--look-at`)은 사용자가 직접 찍은 자리라 마커보다 먼저 찾는다(`parse_logcat ipc --find`,
+        못 찾으면 경고하고 다음 출처). 마커 패턴(`site-defaults.yaml`의 `failed_step.marker_patterns`, 사용자 config로 바꿀 수
+        없다)이 있거나 `--steps-file`이 있을 때만 `parse_logcat markers`를 돌린다. 앵커의 실패 시각이 로그 범위 밖이면 경고하고
+        다음 출처로 넘어간다. steps-file의 원문 줄은 이 프로세스 안에서 시각만 뽑고 버린다."""
         self.anchor_off = self.answer("anchor") == "off"
         if self.anchor_off:
+            if self.look_inputs()["at"]:
+                self.warn("기준 줄(--look-at)은 --answer anchor=off라 쓰지 않았다")
             return None
+        conf = userconfig.get(self.cfg, "failed_step") or {}
+        site = self.defaults.get("failed_step") or {}
+        # 설정 검사는 앵커 결과와 무관하게(기준 줄이 이겨도) 마커·steps-file이 있으면 늘 같은 자리에서 한다
+        if ((site.get("marker_patterns") or getattr(self.args, "steps_file", None)) and self.clock_offset is None
+                and conf.get("clock_offset") is not None):
+            self.clock_offset = stepanchor.parse_offset(conf["clock_offset"])
+            if self.clock_offset is None:
+                self.warn(f"failed_step.clock_offset 형식이 맞지 않아 쓰지 않았다({str(conf['clock_offset'])[:40]})")
+        jira_at = _parse_ts(info.get("occurred_at"))
+        span = self.look_span(logs, tz, year, jira_at) or self.marker_span(logs, tz, year, conf, jira_at)
+        if span is None:
+            return None
+        fail = span["fail"] or span["end"]
+        if span["source"] == "look_at":     # 기준 줄 뒤를 넓게(재시도·후속 처리), 앞은 짧게 — 상수(VERIFY P2 20)
+            start, end = fail - timedelta(seconds=lookat.PRE_SEC), fail + timedelta(seconds=lookat.POST_SEC)
+        elif span["source"] == "step_order":
+            start, end = span["start"], span["end"]
+        else:
+            start, end, warns = stepanchor.window(span, {"window": conf.get("window")})
+            for w in warns:
+                self.warn(w)
+        anchor = {"source": span["source"], "step": span.get("step"), "step_from": span["step_from"],
+                  "start": lc.format_ts(span["start"]) if span.get("start") else None, "fail": lc.format_ts(fail),
+                  "window": (lc.format_ts(start), lc.format_ts(end))}
+        if span.get("order"):
+            anchor["order"] = span["order"]
+        if jira_at:
+            gap = stepanchor.gap_minutes(fail, jira_at)
+            anchor["issue_gap_min"] = round(gap, 1)
+            limit = conf.get("disagree_minutes", stepanchor.DEFAULT_DISAGREE_MINUTES)
+            if isinstance(limit, (int, float)) and not isinstance(limit, bool) and gap > limit:
+                hint = " (Jira 시각이 장비 시각이면 시계 차 때문일 수 있다)" if span["source"] in ("steps_file", "step_order") else ""
+                what = "기준 줄" if span["source"] == "look_at" else "실패 스텝"
+                self.warn(f"Jira 발생 시각과 {what} 시각이 {gap:.0f}분 다르다 — {'스텝' if what == '실패 스텝' else what} 시각 "
+                          f"기준으로 분석했다(끄기: --answer anchor=off){hint}")     # 경고만 낸다. 구간은 바꾸지 않는다
+        return anchor
+
+    def look_inputs(self) -> dict:
+        """`--look-at`·`--look-note`(선택, 원문)를 이 프로세스에서 이슈 DB 설정대로 가린 값 `{at, note}`(없으면 None).
+        원문은 여기서만 쓴다 — 하위 스크립트에는 가린 값을 담은 `JOB/look-at.json` 경로만 넘긴다(trace.jsonl에 원문 없음)."""
+        if self._look is None:
+            at, note = getattr(self.args, "look_at", None), getattr(self.args, "look_note", None)
+            self._look = {"at": (lookat.clean(self.masker(log_lines=True)(at)) or None) if at else None,
+                          "note": (" ".join(self.masker()(note).split()) or None) if note else None}
+        return self._look
+
+    def look_span(self, logs: list[Path], tz: str | None, year: int | None, jira_at) -> dict | None:
+        """기준 줄을 로그에서 찾아(`parse_logcat ipc --find`) 그 줄 시각을 실패 시각으로 하는 span. 없거나 못 찾으면 None.
+        결과 요약은 `self.look_result`(`{hits, picked, pick, how, ts, line, at}` | `{hits: 0, why}`)에 둔다."""
+        text = self.look_inputs()["at"]
+        if not text:
+            return None
+        path = self.job / LOOK_FILE
+        path.write_text(json.dumps({"look_at": text, "ref": lc.format_ts(jira_at) if jira_at else None}, ensure_ascii=False)
+                        + "\n", encoding="utf-8", newline="\n")
+        argv = ["ipc", *logs, "--rules", self.snap / "parser-rules", "--find", path]
+        argv += (["--tz", tz] if tz else []) + (["--year", year] if year else [])
+        _, data, _ = self.run.call("3-lookat", "parse_logcat.py", argv)
+        for w in (data or {}).get("warnings") or []:
+            self.warn(_clip(w.get("message"), 120))
+        found = (data or {}).get("find") or {}
+        if not found.get("hits"):
+            self.look_result = {"hits": 0, "why": _clip(found.get("why") or "결과 없음", 60)}
+            self.warn(f"기준 줄을 로그에서 못 찾음({self.look_result['why']}) — 다음 출처로 분석 구간을 정했다")
+            return None
+        self.look_result = {k: found.get(k) for k in ("hits", "picked", "pick", "how", "ts", "line", "at")}
+        ts = stepanchor._ts(found["ts"])
+        return {"source": "look_at", "step": None, "step_from": None, "start": None, "fail": ts, "end": ts}
+
+    def marker_span(self, logs: list[Path], tz: str | None, year: int | None, conf: dict, jira_at) -> dict | None:
+        """로그 마커 > steps-file 시각 > steps-file 스텝 순서로 실패 구간 span. 마커 패턴·steps-file이 없으면 None."""
         site = self.defaults.get("failed_step") or {}
         steps_file = getattr(self.args, "steps_file", None)
         if not site.get("marker_patterns") and not steps_file:
             return None
-        conf = userconfig.get(self.cfg, "failed_step") or {}
-        if self.clock_offset is None and conf.get("clock_offset") is not None:
-            self.clock_offset = stepanchor.parse_offset(conf["clock_offset"])
-            if self.clock_offset is None:
-                self.warn(f"failed_step.clock_offset 형식이 맞지 않아 쓰지 않았다({str(conf['clock_offset'])[:40]})")
         argv = ["markers", *logs, "--rules", self.snap / "parser-rules"]
         if tz:
             argv += ["--tz", tz]
@@ -134,9 +203,7 @@ class AnchorMixin:
             self.warn(_clip(w.get("message"), 120))
         cov = data.get("coverage") or {}
         first, last = stepanchor._ts(cov.get("first_ts")), stepanchor._ts(cov.get("last_ts"))
-        jira_at = _parse_ts(info.get("occurred_at"))
         failed = self.failed_step["text"] if self.failed_step else None
-        window_cfg = {"window": conf.get("window")}
         max_span = {**stepanchor.DEFAULT_WINDOW, **(conf.get("window") or {})}["max_span_sec"]
 
         def inside(t) -> bool:
@@ -155,29 +222,7 @@ class AnchorMixin:
             span = self.steps_file_span(steps_file, tz, year, conf, jira_at, first, inside)
         if span is None and steps_file:
             span = self.step_order_span(data, step_rules, conf, last)
-        if span is None:
-            return None
-        fail = span["fail"] or span["end"]
-        if span["source"] == "step_order":
-            start, end = span["start"], span["end"]
-        else:
-            start, end, warns = stepanchor.window(span, window_cfg)
-            for w in warns:
-                self.warn(w)
-        anchor = {"source": span["source"], "step": span.get("step"), "step_from": span["step_from"],
-                  "start": lc.format_ts(span["start"]) if span.get("start") else None, "fail": lc.format_ts(fail),
-                  "window": (lc.format_ts(start), lc.format_ts(end))}
-        if span.get("order"):
-            anchor["order"] = span["order"]
-        if jira_at:
-            gap = stepanchor.gap_minutes(fail, jira_at)
-            anchor["issue_gap_min"] = round(gap, 1)
-            limit = conf.get("disagree_minutes", stepanchor.DEFAULT_DISAGREE_MINUTES)
-            if isinstance(limit, (int, float)) and not isinstance(limit, bool) and gap > limit:
-                hint = " (Jira 시각이 장비 시각이면 시계 차 때문일 수 있다)" if span["source"] in ("steps_file", "step_order") else ""
-                self.warn(f"Jira 발생 시각과 실패 스텝 시각이 {gap:.0f}분 다르다 — 스텝 시각 기준으로 분석했다"
-                          f"(끄기: --answer anchor=off){hint}")     # 경고만 낸다. 구간은 바꾸지 않는다
-        return anchor
+        return span
 
     def step_event_rules(self) -> list:
         """스냅샷 `issue-db.config.yaml`의 `step_events`(없거나 형식이 틀리면 빈 목록). 규칙 번호 = 목록 위치."""
@@ -333,13 +378,14 @@ class AnchorMixin:
 
     def anchor_out(self, anchor: dict | None, info: dict, outside: dict | None = None) -> dict | None:
         """`analysis.json`의 `step_anchor`: 앵커가 있거나 실패 스텝·시각 답 full이 있을 때만(없으면 키가 없다)."""
-        if anchor:
-            out = {"source": anchor["source"], "step": _clip(_step_label(anchor.get("step")), 80),
+        if anchor:      # 기준 줄(look_at)은 스텝이 아니다 — `step`을 내지 않는다(포털이 TC 스텝으로 보이지 않게)
+            out = {"source": anchor["source"],
+                   "step": None if anchor["source"] == "look_at" else _clip(_step_label(anchor.get("step")), 80),
                    "step_from": anchor["step_from"] if anchor["step_from"] != "failed_step" else None,
                    "span": [anchor["start"], anchor["fail"]], "issue_gap_min": anchor.get("issue_gap_min")}
         elif self.answer("time") == "full":
             out = {"source": "none"}      # 기준 시각 없음 — 로그 전체를 봤다
-        elif self.failed_step or self.clock or self.order_fail:
+        elif self.failed_step or self.clock or self.order_fail or self.look_result:
             out = {"source": "issue" if info.get("occurred_at") and not self.answer("time") else "symptom_scan"}
         else:
             return None
@@ -350,6 +396,8 @@ class AnchorMixin:
             out["order"] = dict(self.order_fail)
         if self.clock:
             out["clock"] = dict(self.clock)
+        if self.look_result:     # 기준 줄: 일치 수·고른 순번(못 찾았으면 hits 0). 4KB 압축 때 flows 다음으로 뺀다
+            out["look"] = {k: self.look_result[k] for k in ("hits", "picked") if self.look_result.get(k) is not None}
         if anchor and outside and outside.get("total"):
             out["outside_errors"] = outside["total"]
         if self.focus:

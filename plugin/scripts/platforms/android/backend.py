@@ -75,11 +75,14 @@ class ReferenceBackend(ParserBackend):
     def builtin_events(self) -> list[str]:
         return list(vendor_ipc.EVENTS)
 
+    def is_vendor_ipc(self, tag: str) -> bool:
+        return self._vendor_ipc(tag or "")
+
     def detect(self, record: dict) -> list[tuple[str, dict]]:
         """줄 레코드 하나에 대한 builtin 판별 `[(이벤트 이름, fields)]`.
         reference는 벤더 IPC 태그(`_vendor_ipc`: 기본 `VENDOR_IPC_TAGS`, tags.yaml `ipc: vendor`가 있으면 그것) 줄의
         결과만 본다. site 백엔드가 바꾼다."""
-        if not self._vendor_ipc(record.get("tag") or ""):
+        if not self.is_vendor_ipc(record.get("tag") or ""):
             return []
         return vendor_ipc.detect(record.get("msg") or "", self._ipc)
 

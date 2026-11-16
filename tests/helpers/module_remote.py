@@ -66,7 +66,7 @@ def build(out: Path, src: Path = MOCK, extra: dict | None = None) -> str:
     _git(work, "commit", "-q", "-m", "mock", out=out)
     _git(work, "remote", "add", "origin", str(bare), out=out)
     _git(work, "push", "-q", "origin", "main", out=out)
-    return "file://" + str(bare.resolve())
+    return bare.resolve().as_uri()   # Windows에서 "file://" + str()는 역슬래시라 urlparse가 경로를 못 읽는다
 
 
 def push(out: Path, files: dict | None = None, modes: dict | None = None, message: str = "change",

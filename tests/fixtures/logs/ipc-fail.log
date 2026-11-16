@@ -1,0 +1,9 @@
+09-20 14:32:00.000   900   910 D RIL     : [TX] VIPC_RADIO_POWER, REQ, token=0x001, len=4
+09-20 14:32:00.050   900   910 D RIL     : [RX] VIPC_RADIO_POWER, RSP, token=0x001, len=4, Error(VIPC_E_OK)
+09-20 14:32:01.000   900   910 D RIL     : [RX] VIPC_SIGNAL_INFO, IND, len=16
+09-20 14:32:02.000  1234  1244 D DNC-0: [PHONE0] onEvaluateNetworkRequests: reason=NEW_REQUEST
+09-20 14:32:03.000   900   910 D RIL     : [TX] VIPC_SETUP_DATA, REQ, token=222, len=24
+09-20 14:32:03.900   900   910 D RIL     : [RX] VIPC_SETUP_DATA, RSP, token=222, len=8, Error(VIPC_E_DEMO_FAILURE)
+09-20 14:32:04.000   900   910 D RIL     : VIPC_DEACT_DATA (token=0x0df)
+09-20 14:32:05.000   900   910 D RIL     : VIPC_DEACT_DATA (token=<CRED#1>
+09-20 14:32:06.000   900   910 D RIL     : vendor service heartbeat

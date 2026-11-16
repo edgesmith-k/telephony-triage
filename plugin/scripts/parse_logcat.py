@@ -16,6 +16,11 @@
       이슈 DB `<category>/flows/*.yaml` 성공 흐름을 전체 로그의 모든 줄에 돌려 인스턴스·단계 판정을 낸다(단계 줄은 가리지 않은
       글에서 찾고, 출력에 글자가 나가는 줄만 마스킹)
       (`{schema, flows[], warnings}`, 표시 전용 — 04-parser-matching.md §5.13). 흐름 파일이 없으면 `flows: []`.
+  ipc <logcat...> --rules <db>/parser-rules [--tz <IANA>] [--year <YYYY>] [--find <look-at.json>]
+      벤더 IPC 태그 줄(백엔드 `is_vendor_ipc`)을 `common.ipcseq` 정규식(site-defaults `platform.vendor_ipc.trace`, 없으면
+      placeholder)으로 읽어 `{schema, records[{i, ts, dir, name, token, result, line_ref}], total, truncated, coverage, warnings}`
+      (상한 20000, 맞은 줄만 마스킹)를 낸다. `--find`는 `triage.py run --look-at`이 쓴 파일로 기준 줄을 찾아 records 대신
+      `find {how: ipc|token|text|null, hits, picked, pick: only|nearest|last, ts, line, at[] | why}`를 낸다(`common.lookat`).
   extract-bugreport <zip|txt> --out <dir>
       bugreport에서 logcat 섹션(기본 system/radio/main)과 빌드 정보(build.json)만 꺼낸다.
   cut <logcat...> (--evidence <match.json> --cause <원인 ID> | --around <ISO 시각> [--seconds 30]) --out <file>
@@ -56,7 +61,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import adapters  # noqa: E402
 import parser_backends  # noqa: E402
-from common import compat, dumpjoin, flows, logtime, masking, parser_rules, site_defaults, stepanchor  # noqa: E402
+from common import compat, dumpjoin, flows, ipcseq, logtime, lookat, masking, parser_rules, site_defaults, stepanchor  # noqa: E402
 from common import events as evt  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS, PatternError, PatternRunner, PatternTimeout  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
@@ -862,6 +867,42 @@ def _raw_line_records(backend, paths: list[Path], tz: str | None, year: int | No
     return [r for r in raw if evt.ref_key(r.get("line_ref")) not in nul_refs and not _has_nul(r)], log_text, warnings
 
 
+def _first_hits(texts: list[str], patterns: list[re.Pattern], timeout_ms: int, code: str, label: str,
+                warnings: list[dict]) -> dict[int, re.Pattern]:
+    """정규식을 순서대로 원 줄에 돌려(시간 상한 `matcher.pattern_timeout_ms`) 줄마다 처음 맞은 정규식 → `{줄 순번: 정규식}`.
+    시간 초과·오류인 정규식은 경고 `code`로 건너뛴다(markers·ipc 공용)."""
+    hits: dict[int, re.Pattern] = {}
+    remaining = list(range(len(texts)))
+    with PatternRunner(texts, timeout_ms) as runner:
+        for rx in patterns:
+            if not remaining:
+                break
+            try:
+                found = runner.search(rx.pattern, indices=remaining)
+            except (PatternTimeout, PatternError) as exc:
+                warnings.append({"code": code, "message": f"{label} 건너뜀: {exc}"})
+                continue
+            for i in found:
+                hits[i] = rx
+            done = set(found)
+            remaining = [i for i in remaining if i not in done]
+    return hits
+
+
+def _line_masker(db_cfg: dict, log_text: str, records: list[dict], texts: list[str]):
+    """`texts[i]`(= `태그: 메시지`)를 가리는 함수. 마스커와 갈린 덤프 조각(08-safety §8)은 처음 부를 때 전체에서 한 번 만든다
+    (markers·flows·ipc 공용 — 맞은 줄만 가린다)."""
+    lazy: list = []
+
+    def mask(i: int) -> str:
+        if not lazy:
+            masker = masking.for_db(db_cfg, log_text, log_lines=True)
+            lazy.extend((masker, masking.forced_records(masker, records)))
+        off = len(texts[i]) - len(str(records[i]["msg"]))
+        return lazy[0].mask(texts[i], [(a + off, b + off, *rest) for a, b, *rest in lazy[1].get(i, ())])
+    return mask
+
+
 def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None = None) -> dict:
     """스텝 마커 줄을 모은다. 마커 태그는 `tags.yaml`에 없으므로 `parse` 출력을 쓰지 못하고 백엔드의 줄 레코드를 직접 본다.
 
@@ -898,27 +939,11 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
     if compiled:
         records = [r for r in raw_records if r.get("event") is None]
         texts = [f"{r['tag']}: {r['msg']}" for r in records]
-        hits: dict[int, re.Pattern] = {}
-        remaining = list(range(len(records)))
-        with PatternRunner(texts, timeout_ms) as runner:
-            for rx in compiled:
-                if not remaining:
-                    break
-                try:
-                    found = runner.search(rx.pattern, indices=remaining)
-                except (PatternTimeout, PatternError) as exc:
-                    warnings.append({"code": "marker-pattern", "message": f"마커 패턴 건너뜀: {exc}"})
-                    continue
-                for i in found:
-                    hits[i] = rx
-                done = set(found)
-                remaining = [i for i in remaining if i not in done]
+        hits = _first_hits(texts, compiled, timeout_ms, "marker-pattern", "마커 패턴", warnings)
         if hits:
-            masker = masking.for_db(db_cfg, log_text, log_lines=True)
-            forced = masking.forced_records(masker, records)      # 갈린 덤프 조각(08-safety §8), 전체에서 한 번
+            mask = _line_masker(db_cfg, log_text, records, texts)
             for i in sorted(hits):
-                off = len(texts[i]) - len(str(records[i]["msg"]))
-                masked = masker.mask(texts[i], [(a + off, b + off, *rest) for a, b, *rest in forced.get(i, ())])
+                masked = mask(i)
                 m = hits[i].search(masked)       # 이름 그룹은 마스킹된 텍스트에서만 뽑는다
                 if not m:
                     continue
@@ -976,14 +1001,7 @@ def flow_check(paths: list[Path], rules_dir: Path, defaults: dict, tz: str | Non
     warnings += nul_warnings
     records = [r for r in raw if r.get("event") is None]
     texts = [f"{r['tag']}: {r['msg']}" for r in records]
-    lazy: list = []
-
-    def mask(i: int) -> str:
-        if not lazy:
-            masker = masking.for_db(db_cfg, log_text, log_lines=True)
-            lazy.extend((masker, masking.forced_records(masker, records)))      # 갈린 덤프 조각(08-safety §8), 전체에서 한 번
-        off = len(texts[i]) - len(str(records[i]["msg"]))
-        return lazy[0].mask(texts[i], [(a + off, b + off, *rest) for a, b, *rest in lazy[1].get(i, ())])
+    mask = _line_masker(db_cfg, log_text, records, texts)
     epoch_break = backend.log_format().epoch_break
     breaks = {n for n, r in enumerate(records) if epoch_break(SimpleNamespace(tag=r["tag"], msg=r["msg"]))}
     anomalies = backend.coverage(paths, tz, year)["clock_anomalies"]
@@ -996,6 +1014,87 @@ def flow_check(paths: list[Path], rules_dir: Path, defaults: dict, tz: str | Non
 
 def run_flows(args, defaults: dict, profile: platforms.PlatformProfile | None = None) -> dict:
     return flow_check([Path(p) for p in args.logs], Path(args.rules), defaults, args.tz, args.year, profile)
+
+
+# -- ipc ---------------------------------------------------------------------
+
+
+def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = None) -> dict:
+    """벤더 IPC 메시지 줄 레코드(11/16 설계 §1, `common.ipcseq`)와 기준 줄 찾기(`--find`, §2). `parse` 출력은 구간·tags.yaml로
+    잘려 있어 쓰지 않고, 전체 로그의 백엔드 줄 레코드에서 벤더 IPC 태그 줄(`backend.is_vendor_ipc`, tags.yaml `ipc: vendor` 반영)만
+    본다. 정규식은 원 줄에 돌리고(시간 상한 `matcher.pattern_timeout_ms`) 맞은 줄만 가린 뒤 가린 글에서 값을 다시 뽑는다(마커와 같다).
+    `--find <json>`: `triage.py`가 쓴 `JOB/look-at.json`(`{look_at: 가린 글, ref: 기준 시각|null}`)으로 찾고 `records` 대신
+    `find {how, hits, picked, pick, ts, line, at[] | why}`를 낸다 — 원문 글은 인자로 받지 않는다(trace.jsonl에 남지 않게)."""
+    paths, rules_dir = [Path(p) for p in args.logs], Path(args.rules)
+    db_cfg, backend = _line_backend(paths, rules_dir, defaults, args.tz, profile)
+    try:
+        backend = backend.apply_rules(parser_rules.load(rules_dir))
+    except parser_rules.RulesError as exc:
+        raise UsageError(f"파서 규칙 오류: {exc}") from exc
+    spec = (profile or _profile(defaults, db_cfg)).vendor_ipc
+    look = None
+    if args.find:
+        try:
+            look = json.loads(Path(args.find).read_text(encoding="utf-8"))
+            if not isinstance(look, dict) or not isinstance(look.get("look_at"), str):
+                raise ValueError("look_at")
+        except (OSError, ValueError) as exc:
+            raise UsageError(f"--find 파일을 읽지 못했습니다({exc}): {args.find}") from exc
+    raw, log_text, warnings = _raw_line_records(backend, paths, args.tz, args.year, "ipc-nul")
+    stamps = [r["ts"] for r in raw if r.get("ts")]       # 범위는 줄 레코드의 처음·끝(backend.coverage 전체 파싱을 다시 하지 않는다)
+    coverage = {"first_ts": min(stamps) if stamps else None, "last_ts": max(stamps) if stamps else None}
+    lines = [r for r in raw if r.get("event") is None]
+    texts = [f"{r['tag']}: {r['msg']}" for r in lines]
+    mask = _line_masker(db_cfg, log_text, lines, texts)      # markers·flows와 같은 모양(`태그: 메시지`)으로 가린다
+    flags = [backend.is_vendor_ipc(r.get("tag") or "") for r in lines]
+    records: list[dict] = []
+    if any(f is None for f in flags):
+        warnings.append({"code": "ipc-unsupported",
+                         "message": "파서 백엔드가 벤더 IPC 태그를 알려 주지 않아(is_vendor_ipc) IPC 메시지 줄을 읽지 않았습니다."})
+    else:
+        idx = [n for n, f in enumerate(flags) if f]
+        timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
+        hits = _first_hits([str(lines[n]["msg"]) for n in idx], [re.compile(p) for p in ipcseq.patterns(spec)], timeout_ms,
+                           "ipc-pattern", "IPC 정규식", warnings)      # 정규식은 메시지에 돈다(태그 제외)
+        for k in sorted(hits):
+            n = idx[k]
+            m = hits[k].search(mask(n).split(": ", 1)[-1])       # 값은 가린 글(의 메시지 부분)에서만 뽑는다
+            if m:
+                records.append(ipcseq.record(m, n, lines[n]["ts"], lines[n].get("line_ref")))
+    result = {"schema": OUTPUT_SCHEMA, "total": len(records), "coverage": coverage, "warnings": warnings}
+    if look is None:
+        result["truncated"] = len(records) > ipcseq.RECORD_MAX
+        result["records"] = records[-ipcseq.RECORD_MAX:]     # 넘으면 앞을 버린다(실패는 보통 로그 끝쪽)
+        return result
+    q = lookat.query(look["look_at"], spec.request_prefix)
+    found, how = [records[k]["i"] for k in lookat.ipc_hits(q, records)], "ipc" if q["name"] else "token"
+    if not found:
+        how, text = "text", lookat.needle(q)
+        found = None if text is None else lookat.text_hits(text, texts, mask)
+        if found is None:      # 짧거나 거의 다 가려진 글은 본문으로 찾지 않는다(엉뚱한 줄에 붙지 않게)
+            if text is not None:
+                why = "값이 가려져 본문으로는 못 찾음 — token이나 다른 줄로"
+            elif q["token"] is not None:      # 맨몸 숫자·0x…는 token으로 먼저 맞춰 봤다
+                why = f"token {look['look_at'][:12]}인 IPC 줄 없음 — {lookat.TEXT_MIN}자 미만 글은 본문으로 찾지 않는다"
+            else:
+                why = f"기준 줄이 짧아({lookat.TEXT_MIN}자 미만) 찾지 않았다 — token=222 꼴로 적으면 token으로 찾습니다"
+            result["find"] = {"how": None, "hits": 0, "why": why}
+            return result
+    if not found:
+        result["find"] = {"how": None, "hits": 0, "why": "일치하는 줄 없음"}
+        return result
+    times = [logtime.parse_ts(lines[n]["ts"]) for n in found]
+    ref = look.get("ref")
+    try:
+        ref = logtime.parse_ts(ref) if ref else None
+    except ValueError:
+        ref = None
+    k, way = lookat.pick(times, ref)
+    n = found[k]
+    result["find"] = {"how": how, "hits": len(found), "picked": k + 1, "pick": way, "ts": lines[n]["ts"],
+                      "line": " ".join(mask(n).split())[:200],
+                      "at": [lines[i]["ts"] for i in found[:lookat.AT_MAX]]}
+    return result
 
 
 # -- extract-bugreport --------------------------------------------------------
@@ -1332,6 +1431,14 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("--tz", metavar="IANA", default=None, help="연도 없는 logcat 시각의 타임존 (IANA)")
     f.add_argument("--year", metavar="YYYY", type=int, default=None, help="첫 줄의 연도")
 
+    i = sub.add_parser("ipc", parents=[common], help="logcat → 벤더 IPC 메시지 줄 레코드·기준 줄 찾기 (마스킹)")
+    i.add_argument("logs", metavar="logcat", nargs="+")
+    i.add_argument("--rules", metavar="db/parser-rules", required=True, help="<db>/parser-rules")
+    i.add_argument("--tz", metavar="IANA", default=None, help="연도 없는 logcat 시각의 타임존 (IANA)")
+    i.add_argument("--year", metavar="YYYY", type=int, default=None, help="첫 줄의 연도")
+    i.add_argument("--find", metavar="look-at.json", default=None,
+                   help="기준 줄 찾기: triage.py가 쓴 {look_at, ref} 파일(원문 글은 인자로 받지 않는다). records 대신 find를 낸다")
+
     b = sub.add_parser("extract-bugreport", parents=[common], help="bugreport → logcat 섹션")
     b.add_argument("bugreport", metavar="zip|txt")
     b.add_argument("--out", metavar="dir", required=True)
@@ -1369,7 +1476,7 @@ def main(argv: list[str] | None = None) -> int:
     plugin_root = Path(root_opt) if root_opt else site_defaults.plugin_root()
 
     try:
-        db_cfg = compat.load_db_config(Path(args.rules).parent) if args.cmd in ("parse", "markers", "flows") else None
+        db_cfg = compat.load_db_config(Path(args.rules).parent) if args.cmd in ("parse", "markers", "flows", "ipc") else None
         profile = _profile(defaults, db_cfg)
         dumpjoin.configure(_dump_func(defaults))
         if args.cmd == "parse":
@@ -1378,6 +1485,8 @@ def main(argv: list[str] | None = None) -> int:
             result = run_markers(args, defaults, profile)
         elif args.cmd == "flows":
             result = run_flows(args, defaults, profile)
+        elif args.cmd == "ipc":
+            result = run_ipc(args, defaults, profile)
         elif args.cmd == "extract-bugreport":
             result = run_extract_bugreport(args, profile)
         elif args.cmd == "mask-copy":

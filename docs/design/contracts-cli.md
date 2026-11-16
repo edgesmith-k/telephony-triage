@@ -47,6 +47,7 @@
 | `parse` | `<logcat>... (--around <ISO 시각> \| --between <ISO 시작> <ISO 끝> \| --full) [--minutes <MINUTES>] --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--mask] [--no-external]` | `--around`: 발생 시각 (타임존 있는 ISO); `--between`: 명시 구간 (타임존 있는 ISO 둘, 시작 ≤ 끝); `--full`: 파일 전체; `--minutes`: 기본 5; `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--mask`: extractor 전에 줄 단위 마스킹; `--no-external`: 외부 파서 끔 (분석 디버그용) |
 | `markers` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--step-events]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--step-events`: 이슈 DB step_events 규칙의 로그 흔적(step_events[{rule, ts, seq, label}])을 더한다 |
 | `flows` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>]` | `--rules`: <db>/parser-rules (흐름은 <db>/<category>/flows/); `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도 |
+| `ipc` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--find <look-at.json>]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--find`: 기준 줄 찾기: triage.py가 쓴 {look_at, ref} 파일(원문 글은 인자로 받지 않는다). records 대신 find를 낸다 |
 | `extract-bugreport` | `<zip\|txt> --out <dir>` |  |
 | `cut` | `<logcat>... (--evidence <match.json> \| --around <ISO 시각>) [--cause <원인 ID>] [--seconds <SECONDS>] --out <file> [--rules <RULES>] [--context <CONTEXT>] [--max-lines <MAX_LINES>] [--tz <IANA>] [--year <YYYY>]` | `--evidence`: match_signatures.py 출력 (--cause 원인 후보의 근거); `--around`: 지정 시각 (타임존 있는 ISO); `--cause`: --evidence에서 근거를 쓸 원인 (--evidence에 필수); `--seconds`: --around 앞뒤 초, 기본 30; `--rules`: <db>/parser-rules (mask.allow_patterns·마스킹 끔을 읽는다); `--context`: 기본 20; `--max-lines`: 기본 100 |
 | `mask-copy` | `<logcat>... --out <dir> [--rules <RULES>] [--max-bytes <MAX_BYTES>]` | `--out`: 사본 디렉토리(<작업 디렉토리>/logs-masked); `--rules`: <db>/parser-rules (mask.allow_patterns·마스킹 끔을 읽는다); `--max-bytes`: 이보다 큰 파일은 사본을 만들지 않는다(경고 mask-copy-skipped, 기본 67108864), 기본 67108864 |
@@ -181,7 +182,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| `run` | `<KEY> [--logs <logcat\|bugreport>... \| --more-logs <logcat\|bugreport>...] [--issue-raw <json> \| --issue-file <yaml> \| --issue-meta <json>] [--code <프로필\|경로\|skip>] [--dry-run] [--analysis-only] [--answer <kind=값>]... [--tz <TZ>] [--year <YEAR>] [--minutes <MINUTES>] [--refresh] [--offline-db <db>] [--out <dir>] [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>]` | `--more-logs`: 이전 분석의 로그 뒤에 로그를 더해 다시 분석(RF-7). --logs와 함께 못 쓴다; `--analysis-only`: 이슈 DB에 기록하지 않는 분석 전용(cleanup·기존 계획·열린 PR 건너뜀, ok면 lock 해제). --dry-run과 함께 못 쓴다; `--refresh`: 같은 세션에서도 스냅샷을 다시 만들고, 같은 입력의 분석 재사용(analysis-cache.json)도 끈다; `--failed-step`: 실패 스텝 한 줄(선택, 보조 정보). 마스킹해서만 쓴다; `--steps-file`: 시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행; `--clock-offset`: 시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값). 예: +3m, -90s, +00:03:00, 180. 없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다 |
+| `run` | `<KEY> [--logs <logcat\|bugreport>... \| --more-logs <logcat\|bugreport>...] [--issue-raw <json> \| --issue-file <yaml> \| --issue-meta <json>] [--code <프로필\|경로\|skip>] [--dry-run] [--analysis-only] [--answer <kind=값>]... [--tz <TZ>] [--year <YEAR>] [--minutes <MINUTES>] [--refresh] [--offline-db <db>] [--out <dir>] [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>] [--look-at <기준 줄>] [--look-note <확인할 내용>]` | `--more-logs`: 이전 분석의 로그 뒤에 로그를 더해 다시 분석(RF-7). --logs와 함께 못 쓴다; `--analysis-only`: 이슈 DB에 기록하지 않는 분석 전용(cleanup·기존 계획·열린 PR 건너뜀, ok면 lock 해제). --dry-run과 함께 못 쓴다; `--refresh`: 같은 세션에서도 스냅샷을 다시 만들고, 같은 입력의 분석 재사용(analysis-cache.json)도 끈다; `--failed-step`: 실패 스텝 한 줄(선택, 보조 정보). 마스킹해서만 쓴다; `--steps-file`: 시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행; `--clock-offset`: 시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값). 예: +3m, -90s, +00:03:00, 180. 없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다; `--look-at`: 기준 줄(선택, ≤300자): 로그 줄 또는 `<IPC 이름> (token=0x…)`. 로그에서 찾으면 그 줄 시각 둘레로 분석 구간을 잡는다. 마스킹해서만 쓴다; `--look-note`: 확인할 내용(선택, ≤300자): 리포트·탐색 타임라인 머리에 싣는 사용자 질문. 마스킹해서만 쓴다 |
 | `explore` | `<KEY> [--out <dir>]` | `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
 | `module` | `<KEY> --for {deep,explore} [--module <p/dir>] [--choose <top\|dir>] [--also] [--with <dir>] [--at <ISO>] [--deep] [--out <dir>]` | `--for`: deep = 5-1 심층 분석 문서, explore = 5-2 탐색 문서; `--module`: explore: 이 모듈로(후보 계산 없이). deep에는 못 쓴다; `--choose`: explore: 질문 없이 고른다(top = 1위 후보, dir = 모듈 디렉토리 이름); `--also`: deep: 모뎀 모듈 문서도 같은 SHA로 함께 받는다; `--with`: explore --module\|--choose: 이 모듈의 줄도 타임라인 끝 '보조 모듈 줄' 절에 붙인다(문서는 주 모듈만); `--at`: explore --module: 받은 사본으로 타임라인 중심만 다시 잡는다(받기 없음); `--deep`: explore: 정밀 탐색(사용자가 요청할 때만) — 모듈 deep.md도 받고 (모듈 필터가 있을 때) 보기 상한을 넓힌다(~96KB); `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
 | `check-output` | `<KEY> --for {deep,explore} [--skipped <사유>] [--out <dir>]` | `--skipped`: 실행하지 않았거나 실패: report 줄을 '생략: <사유>'로; `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
@@ -244,16 +245,19 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 - snapshot?
 - plan?(analysis-only면 {exists, source, pr_number}만. choice resume이면 next(Step 7 없이 기존 계획으로 Step 8))
 - issue?(failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보)
-- step_anchor?(실패 스텝 앵커·실패 스텝·시계 정렬·스텝 순서 시도·시각 답 full이 있을 때만)
+- step_anchor?(앵커(기준 줄·실패 스텝)·실패 스텝·시계 정렬·스텝 순서 시도·기준 줄 입력·시각 답 full이 있을 때만)
   - outside_errors?(앵커가 있고 Jira 발생 시각이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음)
-  - source: log_marker | steps_file | step_order | issue | symptom_scan | none
-  - step?(≤80, 4KB 압축 시 40)
+  - source: look_at | log_marker | steps_file | step_order | issue | symptom_scan | none
+  - step?(≤80, 4KB 압축 시 40. look_at(기준 줄)이면 없음)
   - step_from?(마커의 스텝을 쓴 경우만): "marker"
   - span?([시작|null, 실패])
   - issue_gap_min?
   - focus?[≤3](유형 ID)
   - clock?({mode: manual|none, offset_sec?(manual), reason?(none, "시계 차 모름"; 4KB 압축 시 먼저 뺌)})
   - order?({matched, observable, missed, last{step(≤40), ts}(step_order일 때, 4KB 압축 시 가장 먼저 뺌), reason?(앵커를 못 정해 issue로 돌아갈 때)})
+  - look?(--look-at을 줬을 때만: hits(로그에서 일치한 줄 수, 못 찾으면 0), picked?(고른 순번, 1부터). 4KB 압축 시 flows 다음으로 뺌)
+    - hits
+    - picked?
 - existing?
 - open_prs?
 - build?
