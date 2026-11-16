@@ -933,28 +933,35 @@ OC_CHECK0_AUTO_BODY = OC_CHECK0_BODY.replace('{"type":"function","function":{"na
 _SHELL_BAD = "'\"$`\\ \n"
 
 
-def _oc_gateway(proj: Path | None) -> tuple[str, str]:
-    """설치한 opencode.json의 provider baseURL·모델 ID(비밀 아님). 없거나 읽지 못하면 자리표시."""
+def _oc_gateway(proj: Path | None) -> tuple[str, str, bool]:
+    """설치한 opencode.json의 provider baseURL·모델 ID(비밀 아님)와 외부(내장) provider 설치 여부.
+    없거나 읽지 못하면 자리표시. 모델은 있는데 그 접두 provider 블록이 없으면 내장 provider 설치(install --provider-model)."""
     base, model = "<게이트웨이 URL(/v1까지, install --gateway-url)>", "<사내 모델 ID>"
     if proj is None:
-        return base, model
+        return base, model, False
     try:
         cfg = json.loads((proj / "opencode.json").read_text(encoding="utf-8"))
         prov_id, _, mid = str(cfg.get("model") or "").partition("/")
-        url = (((cfg.get("provider") or {}).get(prov_id) or {}).get("options") or {}).get("baseURL")
+        providers = cfg.get("provider") if isinstance(cfg.get("provider"), dict) else {}
+        if mid and prov_id and prov_id not in providers:
+            return base, model, True
+        url = ((providers.get(prov_id) or {}).get("options") or {}).get("baseURL")
     except (OSError, ValueError, AttributeError):
-        return base, model
+        return base, model, False
     if isinstance(url, str) and url.startswith(("http://", "https://")) and not any(c in url for c in _SHELL_BAD):
         base = url.rstrip("/")
     if mid and "@@" not in mid and not any(c in mid for c in _SHELL_BAD):
         model = mid
-    return base, model
+    return base, model, False
 
 
 def oc_check0_text(proj: Path | None) -> str:
     """OpenCode용 사내 확인 0 — OpenAI 호환(`@ai-sdk/openai-compatible`) 모양 curl 명령(실행하지 않는다).
-    키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다."""
-    base, model = _oc_gateway(proj)
+    키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다. 내장 provider 설치(install --provider-model)는 이 curl이 해당 없다."""
+    base, model, builtin = _oc_gateway(proj)
+    if builtin:
+        return ("사내 확인 0(OpenCode) — 외부 provider 설치(install --provider-model): 게이트웨이 OpenAI 호환 curl은 해당 없다. "
+                "키·주소는 OpenCode 전역 설정 몫이고 TT_GATEWAY_API_KEY도 필요 없다. 모델 연결은 짧은 실행(tt-oc)으로 확인한다.")
     return "\n".join([
         "사내 확인 0(OpenCode) — 게이트웨이 OpenAI 호환 엔드포인트 (이 도구는 실행하지 않는다, 사용자가 터미널에서 한 번):",
         "```sh",

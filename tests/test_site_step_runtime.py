@@ -239,3 +239,14 @@ def test_opencode_check0_uses_installed_base_url_and_model_never_key(oc):
     (oc["proj"] / "opencode.json").write_text(json.dumps(cfg), encoding="utf-8")
     r = oc_run(oc, "--project", str(oc["proj"]))
     assert "rm -rf" not in r.stdout and "BASE='<게이트웨이 URL" in r.stdout and "MODEL='glm-x'" in r.stdout
+
+
+def test_opencode_check0_builtin_provider_skips_curl(oc):
+    """A232: 내장 provider 설치(install --provider-model — 모델 접두의 provider 블록 없음)는 게이트웨이 curl이 해당 없다 —
+    확인 0은 안내 한 줄만 내고 TT_GATEWAY_API_KEY·curl을 요구하지 않는다."""
+    cfg = {**CONFIG_OK, "model": "acme/glm-x", "small_model": "acme/glm-x"}
+    (oc["proj"] / "opencode.json").write_text(json.dumps(cfg), encoding="utf-8")
+    r = oc_run(oc, "--project", str(oc["proj"]))
+    assert "외부 provider 설치(install --provider-model)" in r.stdout and "사내 확인 0(OpenCode)" in r.stdout
+    assert "TT_GATEWAY_API_KEY도 필요 없다" in r.stdout
+    assert "chat/completions" not in r.stdout and 'curl -sS "$BASE/models"' not in r.stdout

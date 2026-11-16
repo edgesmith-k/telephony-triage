@@ -40,6 +40,8 @@ OpenCode로 분석하고 이슈 DB에 PR까지 올리는 순서다. 자세한 �
 ```sh
 python3 tools/gen_opencode.py install --dest <git 레포 밖 폴더> --plugin-root <설치된 plugin/> \
     --work-root <작업 루트> [--issue-db <clone>]... --gateway-url <http(s)://…/v1> --model <모델 ID>
+# 게이트웨이가 OpenCode 내장 provider로만 받으면 --gateway-url·--model 대신 --provider-model <provider>/<모델>
+# (provider 블록 없이 model·small_model만 쓴다 — 키·주소는 OpenCode 전역 설정 몫, TT_GATEWAY_API_KEY 불필요)
 export TT_GATEWAY_API_KEY=…            # 설정 파일에는 쓰지 않는다
 opencode/bin/tt-oc --project <dest> doctor
 python3 tools/site_step.py runtime-check opencode --project <dest>   # 사내 확인: 버전·설정·관리 설정 + 확인 0 curl 명령(모델 호출 없음)
