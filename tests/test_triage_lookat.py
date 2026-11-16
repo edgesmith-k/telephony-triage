@@ -12,11 +12,13 @@ import json
 import sys
 from pathlib import Path
 
+import yaml
+
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
-from runner import SAMPLE, run, run_json, tmp  # noqa: E402
+from runner import SAMPLE, plugin_root, run, run_json, tmp  # noqa: E402
 from triagelib.report import fit, dumps  # noqa: E402
 
 KEY = "MOCK-9001"
@@ -24,15 +26,15 @@ LOG = REPO / "tests" / "fixtures" / "logs" / "ipc-lookat.log"
 LINE = "09-20 14:33:05.000   900   910 D RIL     : [TX] VIPC_SETUP_DATA, REQ, token=0x0de, len=24"
 
 
-def _offline(name: str, *extra, occurred: str | None = "2026-09-20T14:34:00+09:00", logs=(LOG,), expect=0):
+def _offline(name: str, *extra, occurred: str | None = "2026-09-20T14:34:00+09:00", logs=(LOG,), expect=0, root=None):
     out = tmp("tt-look-") / name
     meta = out.parent / f"{name}.meta.json"
     meta.write_text(json.dumps({"key": KEY, "summary": "", **({"occurred_at": occurred} if occurred else {})}), encoding="utf-8")
     args = ["run", KEY, "--offline-db", SAMPLE, "--out", out, "--logs", *logs, "--issue-meta", meta,
             "--tz", "Asia/Seoul", "--year", "2026", *extra]
     if expect:
-        return run("triage.py", args), out
-    return run_json("triage.py", args), out
+        return run("triage.py", args, root=root), out
+    return run_json("triage.py", args, root=root), out
 
 
 def _causes(a: dict) -> list:
@@ -92,6 +94,34 @@ def test_not_found_and_short_text_fall_back_with_warning():
     assert "step_anchor" not in off and any("anchor=off라 쓰지 않았다" in w for w in off["warnings"])
     proc, _ = _offline("long", "--look-at", "x" * 301, expect=2)
     assert proc.returncode == 2 and "300자" in proc.stderr and "xxxx" not in proc.stderr
+
+
+def test_bare_decimal_is_tried_as_token_first():
+    """`--look-at 222`(맨몸 10진)는 token으로 먼저 맞춰 본다(0x0de = 222). 없으면 token으로 찾았다는 경고."""
+    done, _ = _offline("dec", "--look-at", "222")
+    assert done["step_anchor"]["source"] == "look_at" and done["step_anchor"]["look"] == {"hits": 4, "picked": 4}
+    miss, _ = _offline("decmiss", "--look-at", "999")
+    assert miss["step_anchor"]["look"] == {"hits": 0}
+    assert any("token 999인 IPC 줄 없음" in w for w in miss["warnings"])
+    short, _ = _offline("short2", "--look-at", "VIPC")
+    assert any("token=222 꼴로 적으면 token으로 찾습니다" in w for w in short["warnings"])
+
+
+def test_mostly_masked_line_is_not_matched_by_text():
+    """값이 거의 다 가려진 기준 줄(가린 조각 밖 글이 4자 미만)은 본문으로 찾지 않고 경고 후 기존 출처로 간다."""
+    done, _ = _offline("masked", "--look-at", "10.1.2.3 10.2.3.4 ab 10.3.4.5")
+    assert done["step_anchor"] == {"source": "issue", "look": {"hits": 0}}
+    assert any("값이 가려져 본문으로는 못 찾음" in w for w in done["warnings"])
+
+
+def test_clock_offset_setting_checked_even_when_look_at_wins():
+    """failed_step.clock_offset 형식 검사는 앵커 결과와 무관하게 돈다 — 기준 줄이 이겨도 같은 경고(실행마다 다르지 않게)."""
+    fs = dict(yaml.safe_load((plugin_root() / "site-defaults.yaml").read_text(encoding="utf-8"))["failed_step"])
+    fs.update(marker_patterns=[r"^TestRunner\s*:\s*step\s*(?P<step>\d+)\s+(?P<status>START|PASS|FAIL)\b"], clock_offset="bogus")
+    root = plugin_root("look-clock", failed_step=fs)
+    done, _ = _offline("clock", "--look-at", LINE, root=root)
+    assert done["step_anchor"]["source"] == "look_at"
+    assert any(w.startswith("failed_step.clock_offset 형식이 맞지 않아") for w in done["warnings"])
 
 
 def test_text_line_with_masked_value_matches_despite_different_token_numbers():

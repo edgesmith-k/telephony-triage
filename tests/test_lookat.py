@@ -30,6 +30,8 @@ def test_query_reads_name_and_token_loosely():
     assert L.query("0x0DE") == {"text": "0x0DE", "name": None, "token": 0x0DE}  # token만
     assert L.query("[TX] VIPC_A, REQ")["token"] is None
     assert L.query("AB_X token=1", prefix="AB_")["name"] == "AB_X"
+    assert L.query("222") == {"text": "222", "name": None, "token": 222}       # 맨몸 10진도 token 후보
+    assert L.query("12345678901")["token"] is None                             # 10자리를 넘으면 token 아님
 
 
 def test_ipc_hits_name_and_token_or_token_only():
@@ -46,6 +48,13 @@ def test_text_match_folds_mask_numbers_and_needs_eight_chars():
     masked = ["DNC-0: link up ip=<IP#3> iface=x", "DNC-0: link down ip=<IP#3> iface=x", texts[2]]
     assert L.text_hits(nd, texts, lambda i: masked[i]) == [0, 2]      # 번호가 달라도(입력 #1, 로그 #3·#7) 맞다
     assert L.text_hits(nd, texts) == [2]                              # 가리지 않은 원 줄은 값이 달라 안 맞는다
+
+
+def test_text_match_refuses_needle_mostly_masked():
+    """마스킹 토큰 밖 조각이 4자 미만이면(값이 거의 다 가려진 줄) 아무 줄에나 붙지 않게 찾지 않는다 → None."""
+    nd = L.needle({"text": "<IP#1> <CRED#2> ab <IP#3>"})
+    assert nd is not None and L.text_hits(nd, ["X: <IP#5> <CRED#6> ab <IP#7>", "Y: ab"]) is None
+    assert L.text_hits(L.needle({"text": "<IP#1> link <IP#2>"}), ["X: <IP#4> link <IP#5>"]) == [0]   # 4자 조각은 된다
 
 
 def test_pick_nearest_or_last():

@@ -115,6 +115,13 @@ class AnchorMixin:
                 self.warn("기준 줄(--look-at)은 --answer anchor=off라 쓰지 않았다")
             return None
         conf = userconfig.get(self.cfg, "failed_step") or {}
+        site = self.defaults.get("failed_step") or {}
+        # 설정 검사는 앵커 결과와 무관하게(기준 줄이 이겨도) 마커·steps-file이 있으면 늘 같은 자리에서 한다
+        if ((site.get("marker_patterns") or getattr(self.args, "steps_file", None)) and self.clock_offset is None
+                and conf.get("clock_offset") is not None):
+            self.clock_offset = stepanchor.parse_offset(conf["clock_offset"])
+            if self.clock_offset is None:
+                self.warn(f"failed_step.clock_offset 형식이 맞지 않아 쓰지 않았다({str(conf['clock_offset'])[:40]})")
         jira_at = _parse_ts(info.get("occurred_at"))
         span = self.look_span(logs, tz, year, jira_at) or self.marker_span(logs, tz, year, conf, jira_at)
         if span is None:
@@ -182,10 +189,6 @@ class AnchorMixin:
         steps_file = getattr(self.args, "steps_file", None)
         if not site.get("marker_patterns") and not steps_file:
             return None
-        if self.clock_offset is None and conf.get("clock_offset") is not None:
-            self.clock_offset = stepanchor.parse_offset(conf["clock_offset"])
-            if self.clock_offset is None:
-                self.warn(f"failed_step.clock_offset 형식이 맞지 않아 쓰지 않았다({str(conf['clock_offset'])[:40]})")
         argv = ["markers", *logs, "--rules", self.snap / "parser-rules"]
         if tz:
             argv += ["--tz", tz]

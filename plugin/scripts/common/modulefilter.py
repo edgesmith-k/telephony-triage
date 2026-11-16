@@ -68,7 +68,7 @@ DEFAULT_SERVICE_RE = r"\b([A-Z]\w+Service)_\d"
 NEVER = re.compile(r"(?!)")
 _TOKEN_FOLD = re.compile(r"<[A-Z][A-Z0-9_]*#\d+>|<HEXDUMP \d+B>|<REDACTED:[A-Z0-9]+>")
 _SCRIPT_NOTE = "〔script: {}〕"
-CENTER_SOURCES = ("근거", "실패 스텝", "발생 시각", "--at")
+CENTER_SOURCES = ("근거", "실패 스텝", "기준 줄", "발생 시각", "--at")
 
 
 def _rx(value, flags=0) -> re.Pattern:

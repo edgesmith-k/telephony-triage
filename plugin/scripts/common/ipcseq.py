@@ -8,7 +8,8 @@ ident)의 줄이고, 줄을 고르고 마스킹하는 일은 `parse_logcat.py ip
 `name`(필수), `token`·`dir`·`kind`·`result`(선택). 정규식 안의 `{prefix}`·`{error_prefix}`는 `vendor_ipc.request_prefix`·
 `error_prefix`를 `re.escape`해 채운다(사내 접두어는 site-defaults에만, TODO(SITE:S9)). 실제 벤더 형식은 레포에 쓰지 않는다.
 
-token: `0x` 16진·10진 모두 int. 마스킹이 바꾼 값(`<CRED#n>` — 9자리 이상 16진 등)은 None이다. 짧은 token은 마스커가 두므로
+token: `0x` 16진·10진 모두 int. 숫자는 끝까지 잡고(자르지 않는다) 16진 8자리·10진 10자리를 넘으면 None, 마스킹이 바꾼 값
+(`<CRED#n>`)도 None이다. 짧은 token은 마스커가 두므로
 (`masking._token_secret`) 값이 남는다. `platforms.android.ril.link_vendor`의 10진 전용 동작과는 무관하다(그대로 둔다).
 """
 
@@ -25,10 +26,10 @@ TRACE_LEN = 400                                       # 정규식 하나의 글�
 # placeholder 기본 정규식 둘(합성 `VIPC_` 꼴): `[TX] <이름>, REQ, … token=… Error(<결과>)` / `<이름> (token=0x0de)`
 DEFAULT_TRACE = (
     r"\[(?P<dir>TX|RX)\]\s*(?P<name>{prefix}[A-Z0-9_]+)\s*,\s*(?P<kind>REQ|RSP|IND)\b"
-    r"(?:.*?\btoken\s*=\s*(?P<token>0x[0-9A-Fa-f]{1,8}|\d{1,10}))?"
+    r"(?:.*?\btoken\s*=\s*(?P<token>(?:0x[0-9A-Fa-f]+|\d+)\b))?"
     r"(?:.*?\bError\(\s*(?P<result>{error_prefix}[A-Z0-9_]+)\s*\))?",
     # 9자리 이상 token은 마스커가 `<CRED#n>`으로 바꾸며 닫는 `)`까지 먹는다 — `)`는 선택, 그 값은 token None
-    r"\b(?P<name>{prefix}[A-Z0-9_]+)\s*\(\s*token\s*=\s*(?P<token>0x[0-9A-Fa-f]{1,8}|\d{1,10}|<[A-Z]+#\d+>)\s*\)?",
+    r"\b(?P<name>{prefix}[A-Z0-9_]+)\s*\(\s*token\s*=\s*(?P<token>(?:0x[0-9A-Fa-f]+|\d+)\b|<[A-Z]+#\d+>)\s*\)?",
 )
 _DIR = {"REQ": "req", "RSP": "rsp", "IND": "ind", "TX": "req", "RX": "rsp"}
 _TOKEN_VALUE = re.compile(r"0[xX][0-9A-Fa-f]{1,8}|\d{1,10}")

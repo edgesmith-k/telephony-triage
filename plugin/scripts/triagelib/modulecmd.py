@@ -533,7 +533,8 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
     pins = [{"ts": r.get("ts"), "tag": r.get("tag"), "msg": r.get("msg")} for r in rows
             if anchor.get("fail") and r.get("ts") == anchor.get("fail")][:5]
     return {"spec": spec, "items": items, "kept": len(items), "total": total, "center": center,
-            "center_source": "실패 스텝" if anchor.get("fail") else "발생 시각", "pins": pins, "allow": allow,
+            "center_source": ("기준 줄" if anchor.get("source") == "look_at" else "실패 스텝") if anchor.get("fail") else "발생 시각",
+            "pins": pins, "allow": allow,
             "mask_off": bool(events.get("mask_off"))}
 
 

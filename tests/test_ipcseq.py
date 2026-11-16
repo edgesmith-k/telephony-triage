@@ -9,8 +9,10 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
@@ -53,6 +55,16 @@ def test_long_token_masked_to_cred_keeps_record_without_token():
     assert masked.startswith("VIPC_X (token=<CRED#1>") and ")" not in masked.split("token=")[1]
     (r,) = _recs(masked)
     assert (r["name"], r["token"]) == ("VIPC_X", None)
+
+
+def test_long_raw_token_is_not_cut_short():
+    """마스킹을 끈 로그의 긴 token은 앞 자리만 잘라 틀린 값으로 남기지 않는다 — 끝까지 읽고 16진 8자리·10진 10자리를 넘으면 None."""
+    (r,) = _recs("[TX] VIPC_SETUP_DATA, REQ, token=12345678901, len=24")       # 10진 11자리
+    assert (r["name"], r["token"]) == ("VIPC_SETUP_DATA", None)
+    (r,) = _recs("VIPC_X (token=0x123456789) requested")                        # 16진 9자리
+    assert (r["name"], r["token"]) == ("VIPC_X", None)
+    assert _recs("[TX] VIPC_A, REQ, token=4294967295")[0]["token"] == 4294967295  # 10자리는 그대로
+    assert _recs("VIPC_X (token=0xdeadbeef)")[0]["token"] == 0xDEADBEEF
 
 
 def test_short_tokens_survive_masking():
@@ -103,6 +115,19 @@ def test_parse_logcat_ipc_records_on_fixture():
         (None, "VIPC_DEACT_DATA", None, None)]                   # `<CRED#1>`(가린 긴 token)은 None
     assert recs[0]["ts"] == "2026-09-20T05:32:00.000Z" and recs[0]["line_ref"] == {"file_index": 0, "line_no": 1}
     assert out["coverage"]["first_ts"] == "2026-09-20T05:32:00.000Z"
+
+
+def test_parse_logcat_ipc_range_from_line_records_without_second_parse(monkeypatch):
+    """`ipc`는 범위(처음·끝 시각)를 이미 읽은 줄 레코드에서 정한다 — `backend.coverage`로 로그 전체를 다시 파싱하지 않는다."""
+    import parse_logcat
+    from parser_backends import base
+
+    monkeypatch.setattr(base.ParserBackend, "coverage", lambda *a, **k: pytest.fail("coverage로 다시 파싱했다"))
+    defaults = yaml.safe_load((plugin_root() / "site-defaults.yaml").read_text(encoding="utf-8"))
+    out = parse_logcat.run_ipc(SimpleNamespace(logs=[str(LOG)], rules=str(RULES), tz="Asia/Seoul", year=2026, find=None),
+                               defaults)
+    assert out["coverage"] == {"first_ts": "2026-09-20T05:32:00.000Z", "last_ts": "2026-09-20T05:32:06.000Z"}
+    assert out["total"] == 7
 
 
 def test_parse_logcat_ipc_uses_site_trace_and_tags_only():

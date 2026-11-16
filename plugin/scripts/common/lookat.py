@@ -2,7 +2,7 @@
 
 사용자가 붙인 로그 줄이나 `<IPC 이름> (token=0x…)`을 로그에서 찾아 그 줄의 로그 시각을 분석 구간의 중심으로 쓴다.
 찾는 순서: ① IPC 이름과 token이 같은 레코드(`common.ipcseq`) ② 이름 없이 token만 주면 token이 같은 레코드 ③ 그 밖은 정리한 글을
-로그 줄(`태그: 메시지`)에 부분 일치(대소문자 무시, 8자 미만이면 찾지 않음). 비교 전에 양쪽 마스킹 토큰(`<IP#7>`)을 번호 없이
+로그 줄(`태그: 메시지`)에 부분 일치(대소문자 무시, 8자 미만이거나 마스킹 토큰 밖 조각이 4자 미만이면 찾지 않음). 비교 전에 양쪽 마스킹 토큰(`<IP#7>`)을 번호 없이
 접는다(`modulefilter._TOKEN_FOLD`와 같은 식) — 입력과 로그를 다른 마스커가 가려 번호가 달라도 맞게. 후보가 여럿이면 기준 시각(Jira 발생
 시각)에 가장 가까운 것, 기준 시각이 없으면 마지막 것(시험은 FAIL에서 멈추므로 실패는 보통 로그 끝쪽)을 고르고 고른 방식을 남긴다.
 """
@@ -17,6 +17,7 @@ PRE_SEC, POST_SEC = 30, 300      # 분석 구간 = 기준 줄 시각 −30초 ~ 
 TEXT_MAX = 300                   # --look-at·--look-note 글자 수 상한
 TEXT_MIN = 8                     # 부분 일치로 찾는 최소 글자 수(접은 뒤)
 AT_MAX = 8                       # 보이는 일치 시각 수(token은 다시 쓰일 수 있어 모든 위치를 보인다)
+PIECE_MIN = 4                    # 부분 일치 사전 필터: 마스킹 토큰 밖 조각 중 가장 긴 것이 이보다 짧으면 찾지 않는다
 
 # 앞의 logcat 머리: `[YYYY-]MM-DD HH:MM:SS.mmm [uid] pid tid L Tag:`(threadtime) 또는 `… L/Tag( pid):`(time)
 _HEAD = re.compile(r"^\s*(?:\d{4}-)?\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:\s*(?:Z|[+-]\d{2}:?\d{2}))?"
@@ -25,7 +26,7 @@ _HEAD = re.compile(r"^\s*(?:\d{4}-)?\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?
 # 대괄호는 시각 모양만 뗀다(`[TX]`·`[IpcCtx_0]`는 IPC 정규식이 쓴다, P2 21): `[  12.345]`·`[14:32:11.001]`
 _BRACKET_TS = re.compile(r"\[\s*\d+\.\d+\s*\]|\[\d{1,2}:\d{2}:\d{2}(?:\.\d+)?\]")
 _TOKEN = re.compile(r"(?i)\btoken\s*[=:]\s*(0x[0-9A-Fa-f]{1,8}|\d{1,10})\b")    # 괄호 없이 써도 읽는다(P2 22)
-_BARE_TOKEN = re.compile(r"0[xX][0-9A-Fa-f]{1,8}")
+_BARE_TOKEN = re.compile(r"0[xX][0-9A-Fa-f]{1,8}|\d{1,10}")    # 글 전체가 token 값(16진 또는 10진 숫자만)
 # `common.modulefilter._TOKEN_FOLD`의 사본 — run·explore 경로는 modulefilter를 import하지 않는다(test_modulefilter). 바꾸면 둘 다
 _TOKEN_FOLD = re.compile(r"<[A-Z][A-Z0-9_]*#\d+>|<HEXDUMP \d+B>|<REDACTED:[A-Z0-9]+>")
 
@@ -42,7 +43,7 @@ def fold(text) -> str:
 
 
 def query(text, prefix: str = "VIPC_") -> dict:
-    """입력 → `{text(정리한 글), name, token(int|None)}`. 이름은 접두어+단어 문자, token은 `token=`·`token:`·글 전체가 `0x…`."""
+    """입력 → `{text(정리한 글), name, token(int|None)}`. 이름은 접두어+단어 문자, token은 `token=`·`token:`·글 전체가 `0x…`이거나 10진 숫자만."""
     body = clean(text)
     m = re.search(r"\b(" + re.escape(prefix) + r"\w+)", body)     # = modulefilter.ipc_re_for(prefix)
     t = _TOKEN.search(body)
@@ -65,10 +66,13 @@ def needle(q: dict) -> str | None:
     return text if len(text) >= TEXT_MIN else None
 
 
-def text_hits(needle_text: str, texts: list[str], masked=None) -> list[int]:
+def text_hits(needle_text: str, texts: list[str], masked=None) -> list[int] | None:
     """`needle_text`(접은 글)가 든 줄의 위치. 먼저 가장 긴 마스킹 밖 조각으로 원 줄을 거르고, 걸린 줄만 `masked(i)`(그 줄을
-    가린 글, 없으면 원 줄)로 접어 확인한다 — 원문 사본 줄의 값도 입력처럼 가려 비교한다."""
+    가린 글, 없으면 원 줄)로 접어 확인한다 — 원문 사본 줄의 값도 입력처럼 가려 비교한다. 그 조각이 `PIECE_MIN`자보다 짧으면
+    (값이 거의 다 가려진 글) 엉뚱한 줄에 붙지 않게 찾지 않고 None."""
     piece = max(needle_text.split("<m>"), key=len).strip()
+    if len(piece) < PIECE_MIN:
+        return None
     out = []
     for i, text in enumerate(texts):
         if piece in " ".join(text.split()).casefold() and needle_text in fold(masked(i) if masked else text):
