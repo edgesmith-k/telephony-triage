@@ -198,30 +198,35 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     candidates = analysis.get("candidates") or []
     result["top3"] = [c["cause"] for c in candidates[:3]]
     result["top"] = result["top3"][0] if result["top3"] else None
-    obs = analysis.get("observation")
-    if obs:     # 관측 불완전(extractor 시간 초과 등): 못 본 이벤트가 결과를 바꿀 수 있다 → 정답·미스를 단정하지 않는다(분모 제외)
-        result["observation"] = {"count": obs.get("count", 0), "extractor": obs.get("extractor", 0)}
-        first = (obs.get("errors") or [{}])[0]
-        result["error"] = (f"관측 불완전(extractor 오류 {result['observation']['extractor']}·전체 {result['observation']['count']})"
-                           + (f" — {first.get('error')}" if first.get("error") else ""))
-        result["top"], result["top3"] = None, []
-        return result
+    # 정답·미스를 단정하지 못하는 이유 [(오류 문구, 오탐 확정 때 경고 문구)]: 판정 불가 유형·원인(unjudged)과 관측 불완전
+    # (observation). 둘 다 있으면 둘 다 기록한다
+    unsure: list[tuple[str, str]] = []
+    notes: list[str] = []
     u = analysis.get("unjudged") or {}
-    if not u:
-        return result
-    first = (u.get("errors") or [{}])[0]
-    why = f" — {first.get('signature')}: {first.get('error')}" if first.get("signature") else ""
-    if not (u.get("count") or u.get("cause_count")):   # 충족된 유형의 다른 시그니처만 오류(S/C 영향 없음): 평가는 하고 알린다
-        result["warning"] = f"시그니처 오류(S/C 영향 없음){why}"
-        return result
-    result["unjudged"] = {"count": u.get("count", 0), "cause_count": u.get("cause_count", 0)}
-    what = f"유형 {result['unjudged']['count']}·원인 {result['unjudged']['cause_count']}{why}"
-    if result["expect"] == UNRESOLVED and any(c is not None for c in result["top3"]):
-        # 원인 후보가 이미 있으면 판정 못 한 항목과 무관하게 오탐이 확정이다
-        result["warning"] = f"판정 불완전(시그니처 시간 초과·오류): {what} — 원인 후보가 있어 오탐은 확정"
-    else:   # 판정 못 한 유형·원인이 1위·후보를 바꿀 수 있다 → 정답·미스를 단정하지 않는다(분모 제외)
-        result["error"] = f"판정 불가(시그니처 시간 초과·오류): {what}"
+    if u:
+        first = (u.get("errors") or [{}])[0]
+        why = f" — {first.get('signature')}: {first.get('error')}" if first.get("signature") else ""
+        if not (u.get("count") or u.get("cause_count")):   # 충족된 유형의 다른 시그니처만 오류(S/C 영향 없음): 평가는 하고 알린다
+            notes.append(f"시그니처 오류(S/C 영향 없음){why}")
+        else:
+            result["unjudged"] = {"count": u.get("count", 0), "cause_count": u.get("cause_count", 0)}
+            what = f"유형 {result['unjudged']['count']}·원인 {result['unjudged']['cause_count']}{why}"
+            unsure.append((f"판정 불가(시그니처 시간 초과·오류): {what}", f"판정 불완전(시그니처 시간 초과·오류): {what}"))
+    obs = analysis.get("observation")
+    if obs:     # 관측 불완전(extractor 오류·파일 해석 실패 등): 못 본 이벤트가 1위·후보를 바꿀 수 있다
+        result["observation"] = {"count": obs.get("count", 0), "extractor": obs.get("extractor", 0)}
+        example = next((e["error"] for e in obs.get("errors") or [] if e.get("error")), None)
+        text = (f"관측 불완전(extractor 오류 {result['observation']['extractor']}·전체 {result['observation']['count']})"
+                + (f" — {example}" if example else ""))
+        unsure.append((text, text))
+    if unsure and result["expect"] == UNRESOLVED and any(c is not None for c in result["top3"]):
+        # 원인 후보가 이미 나왔으면 판정 못 한 항목·못 본 이벤트와 무관하게 오탐이 확정이다
+        notes.append("; ".join(w for _, w in unsure) + " — 원인 후보가 있어 오탐은 확정")
+    elif unsure:   # 판정 못 한 유형·원인, 못 본 이벤트가 1위·후보를 바꿀 수 있다 → 정답·미스를 단정하지 않는다(분모 제외)
+        result["error"] = "; ".join(e for e, _ in unsure)
         result["top"], result["top3"] = None, []
+    if notes:
+        result["warning"] = "; ".join(notes)
     return result
 
 

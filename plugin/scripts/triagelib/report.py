@@ -15,7 +15,7 @@ from common import flows as flowlib
 from common.exitcodes import USAGE
 
 from .anchor import _parse_ts, _step_label
-from .core import (ANALYSIS_MAX, AUTO_CODE_NOTE, CARRY_PARTS, DEEP_CONFIG_ERROR, DEEP_MODULE_PENDING, ERROR_EVENT_RE,
+from .core import (ANALYSIS_MAX, AUTO_CODE_NOTE, EXTRACTOR_CODES, CARRY_PARTS, DEEP_CONFIG_ERROR, DEEP_MODULE_PENDING, ERROR_EVENT_RE,
                    ERROR_FIELDS, EXPLORE_INPUT_FILE, EXPLORE_PENDING_LINE, Fail, is_error_text, MUST_SHOW_CLIP, MUST_SHOW_FIT, MUST_SHOW_MAX, PULL_SKIPPED, SCRIPTS, SEARCH_LIMIT,
                    _HOT_LEVELS, _TOKEN_RE, _clip, _now, PARTIAL_REPORT_MAX, FLOW_ANALYSIS_MAX, FLOW_PER_FLOW,
                    FLOW_REPORT_MAX)
@@ -945,13 +945,14 @@ class ReportMixin:
             else:     # 충족된 유형의 다른 시그니처만 오류: S/C는 그대로, 근거 선택만 달라질 수 있다
                 cause_l.append(add(6, f"{where} — 충족된 유형의 다른 시그니처라 S/C는 그대로(근거 선택은 달라질 수 있다)"))
         obs = r.get("observation")
-        if obs:     # 관측 실패(정상 불일치 아님): 판정 불가 유형과 따로 한 줄
+        if obs:     # 관측 실패(정상 불일치 아님): 판정 불가 유형과 따로 한 줄. 예시는 앞머리 라벨과 같은 종류
             other = obs["count"] - obs["extractor"]
             what = "·".join(([f"extractor 오류 {obs['extractor']}개"] if obs["extractor"] else [])
                             + ([f"파일 해석·외부 파서 문제 {other}건"] if other else []))
-            first = (obs.get("errors") or [{}])[0]
-            cause_l.append(add(6, f"관측 불완전: {what} ({first.get('error')}) — 못 읽은 이벤트가 있어 "
-                                  "후보 순위·'후보 없음'·'원인 미확인'은 불완전하다"))
+            want = (lambda e: e.get("code") in EXTRACTOR_CODES) if obs["extractor"] else (lambda e: e.get("code") not in EXTRACTOR_CODES)
+            example = next((e["error"] for e in obs.get("errors") or [] if want(e) and e.get("error")), None)
+            cause_l.append(add(6, f"관측 불완전: {what}" + (f" ({example})" if example else "")
+                                + " — 못 읽은 이벤트가 있어 후보 순위·'후보 없음'·'원인 미확인'은 불완전하다"))
         if anchor and (not cands or not cands[0]["C"]):
             nxt.append("- 힌트: " + ("기준 줄 둘레(−30초~+300초)로 좁게 분석했다. 원인이 그 앞에 있었을 수 있다"
                                      if anchor["source"] == "look_at" else

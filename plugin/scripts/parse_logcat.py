@@ -140,8 +140,9 @@ def _run_extractors(lines: list[dict], rules: parser_rules.Rules, timeout_ms: in
                         fields = {f: groups[f] for f in ex.fields if groups.get(f) is not None}
                         found.append((i, evt.derived_event(lines[i], ex.event, fields)))
                     remaining = [i for i in remaining if i not in hit_set]
-            except (PatternTimeout, PatternError) as exc:
-                errors.append({"extractor": ex.id, "error": str(exc)})
+            except (PatternTimeout, PatternError) as exc:     # code: 시간 초과(비결정)와 정규식 오류(결정)를 가른다
+                errors.append({"extractor": ex.id, "error": str(exc),
+                               "code": "pattern-timeout" if isinstance(exc, PatternTimeout) else "pattern-error"})
                 continue
             for i, rec in sorted(found, key=lambda item: item[0]):
                 derived[i].append(rec)
@@ -669,15 +670,16 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
     elif not args.no_external:
         warnings += compat.check_external(db_cfg, {})
 
+    observation = _observation(warnings, errors, args.no_external)
     out = {
         "schema": OUTPUT_SCHEMA,
         "backend": {"name": backend.name, "version": backend.version()},
         "external": external_info,
         "external_disabled": bool(args.no_external),
-        "complete": not args.no_external and not observation_errors({"warnings": warnings}),
-        # 관측 상태: `complete`(파일·외부 파서)에 extractor 오류(시간 초과로 그 이벤트를 버림)를 더한 것. 정상 불일치와
-        # 관측 실패를 가르는 하류(triage `observation`·offline_eval)가 읽는다. `complete`·`errors`의 뜻은 그대로다
-        "observation": _observation(warnings, errors, args.no_external),
+        # `complete`는 파일·외부 파서 기준(뜻 그대로), `observation`은 거기에 extractor 오류(그 이벤트를 버림)를 더한 관측
+        # 상태 — 둘 다 같은 판정 하나(`_observation`)에서 나온다. 정상 불일치와 관측 실패를 가르는 하류(triage·offline_eval)가 읽는다
+        "complete": not any(e["code"] not in EXTRACTOR_CODES for e in observation["errors"]),
+        "observation": observation,
         "rules": {"path": str(rules_dir), **rules.summary()},
         "input": {
             "files": [str(p) for p in paths],
@@ -707,10 +709,13 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
     return out
 
 
+EXTRACTOR_CODES = ("pattern-timeout", "pattern-error")   # extractor 오류: 시간 초과(비결정)·정규식 오류(결정)
+
+
 def _observation(warnings: list[dict], errors: list[dict], external_disabled: bool) -> dict:
-    """`{complete, errors[{code, error}]}` — `observation_errors`(같은 `complete` 판정)에 extractor 오류(`pattern-timeout`)를 더한다."""
+    """`{complete, errors[{code, error}]}` — `observation_errors`(파일·외부 파서)에 extractor 오류(`EXTRACTOR_CODES`)를 더한다."""
     errs = observation_errors({"warnings": warnings, "external_disabled": external_disabled})
-    errs += [{"error": f"extractor {e['extractor']}: {e['error']}", "code": "pattern-timeout"} for e in errors]
+    errs += [{"error": f"extractor {e['extractor']}: {e['error']}", "code": e["code"]} for e in errors]
     return {"complete": not errs, "errors": errs}
 
 

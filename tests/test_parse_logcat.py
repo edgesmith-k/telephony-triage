@@ -618,6 +618,21 @@ def test_slow_extractor_times_out_and_others_continue():
     assert data["observation"]["complete"] is False
     assert [e["code"] for e in data["observation"]["errors"]] == ["pattern-timeout"]
     assert data["observation"]["errors"][0]["error"].startswith("extractor slow-one: ")
+    assert data["errors"][0]["code"] == "pattern-timeout"
+
+
+def test_observation_separates_regex_error_from_timeout_and_derives_complete():
+    """extractor 정규식 오류(결정적)는 `pattern-error`, 시간 초과는 `pattern-timeout`. 최상위 `complete`는 같은 판정에서
+    extractor 오류만 빼고 나온다(파일·외부 파서 기준 그대로)."""
+    import parse_logcat
+    from triagelib import core
+    assert parse_logcat.EXTRACTOR_CODES == core.EXTRACTOR_CODES
+    obs = parse_logcat._observation([], [{"extractor": "bad", "error": "unbalanced", "code": "pattern-error"}], False)
+    assert obs == {"complete": False, "errors": [{"error": "extractor bad: unbalanced", "code": "pattern-error"}]}
+    unparsed = [{"code": "file-unparsed", "message": "x.log: 빈 파일"}]
+    assert parse_logcat._observation(unparsed, [], False)["errors"] == [{"error": "x.log: 빈 파일", "code": "file-unparsed"}]
+    assert parse_logcat._observation([], [], True)["errors"][0]["code"] == "incomplete-observation"   # 712행 경로와 같다
+    assert parse_logcat._observation([], [], False) == {"complete": True, "errors": []}
 
 
 # -- 백엔드와 외부 파서 ------------------------------------------------------------

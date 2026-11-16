@@ -233,8 +233,8 @@ class CacheMixin:
         job = self.state.job
         if not hit and core.get("unjudged"):   # 시그니처 시간 초과·오류(비결정적)가 있는 결과는 재사용하지 않는다
             self.run.note("cache-skipped", unjudged=core["unjudged"].get("count"))
-        elif not hit and (core.get("observation") or {}).get("extractor"):   # extractor 시간 초과도 비결정적
-            self.run.note("cache-skipped", observation=core["observation"]["extractor"])
+        elif not hit and (core.get("observation") or {}).get("timeout"):   # extractor 시간 초과도 비결정적(정규식 오류·파일 문제는 결정적)
+            self.run.note("cache-skipped", observation=core["observation"]["timeout"])
         elif not hit:
             files = {}
             for name in ("events", "match"):

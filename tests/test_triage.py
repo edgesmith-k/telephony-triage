@@ -1752,13 +1752,30 @@ def test_extractor_timeout_is_observation_incomplete_not_unjudged():
     assert analysis["candidates"][0]["cause"] == "DATA-001-01", "다른 extractor 이벤트로 분석은 그대로"
     assert analysis.get("unjudged") is None
     obs = analysis["observation"]
-    assert (obs["count"], obs["extractor"]) == (1, 1) and obs["errors"][0]["code"] == "pattern-timeout", obs
+    assert (obs["count"], obs["extractor"], obs["timeout"]) == (1, 1, 1) and obs["errors"][0]["code"] == "pattern-timeout", obs
     shown = [m for m in analysis["must_show"] if m.startswith("관측 불완전: extractor 오류 1개")]
     assert len(shown) == 1 and "slow-one" in shown[0], analysis["must_show"]
     assert sum("관측 불완전" in ln for ln in (out / "report.md").read_text(encoding="utf-8").splitlines()) == 1
     assert not (out / "analysis-cache.json").exists(), "extractor 시간 초과(비결정적) 결과는 재사용 캐시에 넣지 않는다"
     events = json.loads((out / "events.json").read_text(encoding="utf-8"))
     assert events["complete"] is True and events["observation"]["complete"] is False
+
+
+def test_observation_summary_counts_timeouts_and_quotes_matching_kind():
+    """정규식 오류(결정적)는 timeout 0(캐시해도 된다). 예시는 extractor 것 먼저, 리포트 줄은 라벨과 같은 종류를 인용한다."""
+    from triagelib import driver
+    events = {"observation": {"complete": False, "errors": [
+        {"code": "file-unparsed", "error": "a.log: 빈 파일"}, {"code": "pattern-error", "error": "extractor bad: unbalanced"}]}}
+    obs = driver._observation_summary(events)
+    assert obs == {"count": 2, "extractor": 1, "timeout": 0, "errors": [
+        {"code": "pattern-error", "error": "extractor bad: unbalanced"}, {"code": "file-unparsed", "error": "a.log: 빈 파일"}]}
+    assert driver._observation_summary({"observation": {"complete": True, "errors": []}}) is None
+    assert driver._observation_summary({}) is None          # observation이 없는 옛 events.json
+    out = tmp("tt-triage-") / "x"
+    meta = _meta(out, "MOCK-7415", occurred_at="2026-09-20T05:30:05.000Z")
+    analysis = run_json("triage.py", ["run", "MOCK-7415", "--offline-db", SAMPLE, "--out", out, "--logs", DATA_LOG,
+                                      "--issue-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+    assert analysis.get("observation") is None and not any("관측 불완전" in m for m in analysis["must_show"])
 
 
 def test_time_candidates_question_mentions_unjudged_types():

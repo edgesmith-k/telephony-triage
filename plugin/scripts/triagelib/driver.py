@@ -17,7 +17,7 @@ from common.exitcodes import CHECK_FAILED, USAGE
 
 from .anchor import AnchorMixin, _parse_ts
 from .cache import CacheMixin, State, _digest, _file_sha
-from .core import (ERROR_EVENT_RE, EXPLORE_MAX_LINES, EXPLORE_WHEN, PLATFORM_ANSWER, Fail, NeedsInput,
+from .core import (ERROR_EVENT_RE, EXPLORE_MAX_LINES, EXTRACTOR_CODES, EXPLORE_WHEN, PLATFORM_ANSWER, Fail, NeedsInput,
                    MODULE_RECORD_DIR, Runner, SEARCH_LIMIT, SNAPSHOT_DIR, STALE_FILES, STATE_FILE, Stopped, TOP, _clip,
                    FIND_TEXT_ITEMS, PARTIAL_ANALYSIS_MAX)
 from .report import ReportMixin, _ref_label, _unique_evidence, flow_section
@@ -58,15 +58,18 @@ def _unjudged(match: dict) -> dict | None:
     return out
 
 
-def _observation(events: dict) -> dict | None:
-    """events.json `observation`이 불완전이면 `{count, extractor, errors[≤2 {code, error(≤80)}]}`, 완전하면 None.
+def _observation_summary(events: dict) -> dict | None:
+    """events.json `observation`이 불완전이면 `{count, extractor, timeout, errors[≤2 {code, error(≤80)}]}`, 완전하면 None.
+    `extractor` = extractor 오류 수, 그중 `timeout` = 시간 초과(비결정 — 캐시 제외). 예시는 extractor 것 하나·그 밖 것 하나 순.
     `unjudged`(매처 시그니처 오류)와 따로 둔다 — 정상 불일치가 아니라 로그를 다 보지 못한 것이다. 분석은 그대로 잇는다."""
     obs = events.get("observation") or {}
     if obs.get("complete", True):
         return None
     errors = obs.get("errors") or []
-    return {"count": len(errors), "extractor": sum(e.get("code") == "pattern-timeout" for e in errors),
-            "errors": [{"code": e.get("code"), "error": _clip(e.get("error"), 80)} for e in errors[:2]]}
+    ext = [e for e in errors if e.get("code") in EXTRACTOR_CODES]
+    other = [e for e in errors if e.get("code") not in EXTRACTOR_CODES]
+    return {"count": len(errors), "extractor": len(ext), "timeout": sum(e.get("code") == "pattern-timeout" for e in ext),
+            "errors": [{"code": e.get("code"), "error": _clip(e.get("error"), 80)} for e in ext[:1] + other[:1]]}
 
 
 def _unjudged_label(u: dict) -> str:
@@ -1118,7 +1121,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             err = (unjudged.get("errors") or [{}])[0]
             extra_warnings.append(_clip(f"{_unjudged_label(unjudged)} — 시그니처 시간 초과·오류: "
                                         f"{err.get('signature')}: {err.get('error')}", 120))
-        observation = _observation(events)
+        observation = _observation_summary(events)
         if cov.get("clock_anomalies"):
             extra_warnings.append("시계 이상(재부팅·NITZ 전 가능) — 증상 시각 스캔(--answer time=…)을 제안한다")
         member = self.steps_info()[3]
