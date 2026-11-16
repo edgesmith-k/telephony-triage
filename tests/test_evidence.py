@@ -310,3 +310,36 @@ def test_check_quotes_big_source_head_check_same_verdicts():
         assert evidence.check_quotes(items, source, tags)["verdicts"] == want
     finally:
         evidence.BIG_SOURCE = small
+
+
+def test_check_quotes_big_source_typo_quote_head_found_past_prefilter_rows():
+    # 리뷰 #149-1: 메시지 오타로 축소 검색(첫 300행)에 간 인용의 머리 행을 그 300행 안에서만 찾아, 진짜 줄(꼬리)이 밖이면 weak였다
+    msg = "connectivity_monitor apn handover rejected by peer"
+    rows = [f"10:{i // 60 % 60:02d}:{i % 60:02d}.000 p0 I daemon0 {msg}" for i in range(5000)] + [f"11:00:00.000 p1 I daemon0 {msg}"]
+    source, tags = "\n".join(rows), evidence.tag_rx(["daemon0"])
+    assert len(source) > evidence.BIG_SOURCE
+    items = ["11:00:00.000 p1 I daemon0 connectivity_monitor apn handover rejectd by peer"]
+    small = evidence.BIG_SOURCE
+    try:
+        fast = evidence.check_quotes(items, source, tags)["verdicts"]
+        evidence.BIG_SOURCE = 10 ** 9           # 걸러 내지 않고 전체로
+        full = evidence.check_quotes(items, source, tags)["verdicts"]
+    finally:
+        evidence.BIG_SOURCE = small
+    assert fast == full == ["ok"]
+
+
+def test_check_quotes_level_letter_message_without_time_or_slot_is_not_head():
+    # 리뷰 #149-2: 레벨 글자로 시작하는 메시지-만 인용을 머리(레벨·태그)로 읽어 ok가 weak로 떨어졌다 — 시각이나 슬롯이 있어야 머리
+    source, tags = evidence.source_text(TL + "15:10:03.000 p0 I modemd E auth vector received from modem baseband\n")
+    res = evidence.check_quotes(["E auth vector received from modem baseband", "auth vector received from modem baseband"],
+                                source, tags)
+    assert res["verdicts"] == ["ok", "ok"]
+
+
+def test_check_quotes_made_up_tag_prefix_of_message_word_is_weak():
+    # 리뷰 #149-3: 태그 관용 비교가 단순 앞부분이라 지어낸 태그 `SET`이 `SETUP_DATA_CALL …` 행에서 통과했다 — 첫 낱말 전체가 같아야 한다
+    source, tags = evidence.source_text(TL)
+    res = evidence.check_quotes(["15:10:01.200 - E SET SETUP_DATA_CALL fail cause=AUTH",
+                                 "15:10:01.200 - E vrild SETUP_DATA_CALL fail cause=AUTH"], source, tags)
+    assert res["verdicts"] == ["weak", "ok"]

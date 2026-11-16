@@ -233,7 +233,8 @@ _HEAD_TAG_RX = re.compile(r"^<?([^\s<>\[\]:]+)>?(?:\[\d+\])?:?\s+")
 
 
 def _quote_head(item: str, tags) -> dict[str, str]:
-    """인용 앞머리(F-A01-min): `msg_part`가 떼는 시각·슬롯·레벨·태그 가운데 인용에 있는 것. 레벨까지 적었으면 다음 낱말은
+    """인용 앞머리(F-A01-min): `msg_part`가 떼는 시각·슬롯·레벨·태그 가운데 인용에 있는 것. 시각이나 슬롯이 있을 때만 머리다 —
+    레벨·태그만 있는 앞머리는 메시지 첫 글자(`E auth vector …`)일 수 있어 보지 않는다(빈 dict). 레벨까지 적었으면 다음 낱말은
     원문에 없는 태그라도 태그 자리다(행 문법 `시각 슬롯 레벨 태그 메시지`) — 지어낸 태그도 대조에 걸리게."""
     s = ws(QUOTE_CUT_RX.split(QUOTE_CHARS_RX.sub("", item), maxsplit=1)[0])
     head: dict[str, str] = {}
@@ -242,6 +243,8 @@ def _quote_head(item: str, tags) -> dict[str, str]:
             if name:
                 head[name] = m.group(0).strip()
             s = s[m.end():]
+    if "time" not in head and "slot" not in head:
+        return {}
     m = tags.match(s) if tags is not None else None
     if m is None and "level" in head:
         m = _HEAD_TAG_RX.match(s)
@@ -252,33 +255,35 @@ def _quote_head(item: str, tags) -> dict[str, str]:
 
 def _row_head_ok(row: str, head: dict[str, str]) -> bool:
     """행(`시각 슬롯 레벨 태그 메시지`)의 머리가 인용 머리와 맞나. 시각은 짧은 쪽이 긴 쪽의 앞부분이면 맞다(모델이 ms를 줄이거나
-    원본 로그의 µs까지 적는 정상 사례), 슬롯·레벨은 정확히. 태그는 같거나 행 메시지가 그 낱말로 시작하면 맞다(메시지 첫 낱말이
-    다른 행의 태그 이름일 때 태그로 잘못 읽은 경우)."""
+    원본 로그의 µs까지 적는 정상 사례), 슬롯·레벨은 정확히. 태그는 같거나 행 메시지의 첫 낱말이 그 태그(`<t>`·`t[12]`·`t:` 꼴
+    포함)이면 맞다(메시지 첫 낱말이 다른 행의 태그 이름일 때 태그로 잘못 읽은 경우). 앞부분만 같은 낱말(`SET`·`SETUP_…`)은 아니다."""
     cols = row.split(" ", 4)
     if len(cols) < 5:
         return False
     clock, slot, level, tag, msg = cols
-    t = head.get("time")
+    t, want = head.get("time"), head.get("tag")
     return ((t is None or clock.startswith(t) or t.startswith(clock)) and head.get("slot", slot) == slot
             and head.get("level", level) == level
-            and ("tag" not in head or head["tag"] == tag or msg.startswith(head["tag"])))
+            and (want is None or want == tag or re.match(rf"<?{re.escape(want)}>?(?:\[\d+\])?:?(?:\s|$)", msg) is not None))
 
 
-def _head_ok(item: str, rows: list[str], tags, ws_text: str | None = None) -> bool:
-    """머리(시각·슬롯·레벨·태그)를 적은 인용이면, 머리가 맞는 행에 인용 첫 조각(첫 `…`·화살표·한글 낱말 앞 메시지)이 있나.
-    머리 없는 인용은 True(동작 불변). ① 머리 맞는 행에 조각이 그대로(공백 차이만) 있으면 True. ② 조각이 원문(`ws_text`, 없으면
-    `rows`) 어딘가에 그대로 있는데 ①이 아니면 머리를 바꿔 적은 것 — False. ③ 조각 자체가 그대로는 없으면(표기 차이) 머리 맞는
-    행만 놓고 `evidence_check`(머리 맞는 행은 적다 — 큰 원문은 축소 검색 행만 넘어온다)."""
-    head = _quote_head(item, tags)
-    parts = _quote_parts(item, tags) if head else []
+def _head_ok(head: dict[str, str], parts: list[str], rows: list[str], ws_text: str, tags) -> bool:
+    """머리(`_quote_head`)를 적은 인용이면, 머리가 맞는 행에 인용 첫 조각(첫 `…`·화살표·한글 낱말 앞 메시지)이 있나. 머리 없는
+    인용은 True(동작 불변). `rows`는 원문 전체 행, `ws_text`는 그 행마다 공백을 접어 이은 글, `parts`는 `_quote_parts` 결과.
+    ① 머리 맞는 행에 조각이 그대로(공백 차이만) 있으면 True. ② 조각이 원문 어딘가에 그대로 있는데 ①이 아니면 머리를 바꿔 적은
+    것 — False. ③ 조각 자체가 그대로는 없으면(표기 차이) 머리 맞는 행만 놓고 `evidence_check`. 머리 행은 늘 원문 전체에서
+    찾는다(머리 칸 비교뿐이라 싸다) — 큰 원문 축소 검색 300행 안에서만 찾으면 선검사·전체 경로와 판정이 갈렸다."""
     seg = next((s.strip() for s in RUN_SPLIT_RX.split(parts[0]) if s.strip()), "") if parts else ""
-    if not seg:
+    if not head or not seg:
         return True
     hrows = [ws(r) for r in rows if _row_head_ok(r, head)]      # 행 머리 칸은 홑 공백(`ROW_RX`) — 걸러 낸 행만 접는다
     if any(seg in r for r in hrows):
         return True
-    if seg in (ws_text if ws_text is not None else "\n".join(ws(r) for r in rows)):
+    if seg in ws_text:
         return False
+    if len(hrows) > PREFILTER_ROWS:
+        # ponytail: 머리 맞는 행이 많으면(슬롯만 적은 인용) difflib 비용 때문에 8자 이상 낱말 공유 첫 300행만 — 그 밖의 줄이면 weak 오탐
+        hrows = [r for r in _subset(_WORD_RX.findall(seg), hrows).split("\n") if r]
     return bool(hrows) and evidence_check(seg, "\n".join(hrows), tags)[0] == "ok"
 
 
@@ -422,11 +427,13 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
     `〔script` 메모를 인용한 항목은 지어낸 것으로 센다. `raw_items`(check-output 마스킹이 바꾼 항목 = 원문 값이 든 인용,
     설치 스킬 모드만)는 `raw`로 세고 지어낸 것으로 세지 않는다. 원문이 256KB보다 크면 먼저 인용 조각이 모두 원문 한 줄
     안에 그대로(공백 차이만 허용) 있는지 보고, 있으면 ok, 없을 때만 인용마다 8자 이상 낱말을 공유하는 행(최대 300행)만 본다.
-    ok인 인용이 시각·슬롯·레벨·태그 머리를 적었으면 머리까지 맞는 행이 있어야 ok, 없으면 weak다(`_head_ok`, F-A01-min).
+    ok인 인용이 시각이나 슬롯 머리(레벨·태그는 그와 함께 적었을 때만)를 적었으면 머리까지 맞는 행이 원문 전체에 있어야 ok,
+    없으면 weak다(`_head_ok`, F-A01-min).
     """
     from common import masking
-    rows = source.split("\n") if len(source) > BIG_SOURCE else None
-    ws_lines = "\n".join(ws(row) for row in rows) if rows is not None else ""   # 줄마다 공백 접기(`WS_RX`가 개행도 접으므로)
+    big = len(source) > BIG_SOURCE
+    rows = source.split("\n")
+    ws_lines = "\n".join(ws(row) for row in rows)   # 줄마다 공백 접기(`WS_RX`가 개행도 접으므로)
     res = {"n": len(items), "fabricated": 0, "weak": 0, "raw": 0, "first": None, "verdicts": []}
     for i, item in enumerate(items):
         if i in raw_items:
@@ -434,22 +441,17 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
         elif "〔script" in item:
             verdict = "fabricated"
         else:
-            text = source
-            if rows is not None:
-                parts = _quote_parts(item, tags)
-                # 조각에는 개행이 없어(`ws`로 접힘) `in ws_lines`는 한 줄 안 일치만 된다
-                if parts and all(p in ws_lines for p in parts):
-                    text = None
-                else:
-                    # ponytail: 공백 말고도 표기가 다른 인용은 축소 검색(8자 이상 낱말 공유 첫 300행)에 기대므로, 그 밖의 줄을 인용하면 여전히 fabricated 오탐
-                    text = _subset(_WORD_RX.findall(" ".join(parts)), rows)
-            # F-A01-min: 메시지는 맞는데 적은 머리(시각·슬롯·태그)가 맞는 행이 없으면 약함(fabricated는 정밀도만 다른 정상 시각에서 오탐)
-            if text is None:
-                verdict = "ok" if _head_ok(item, rows, tags, ws_lines) else "weak"
+            parts = _quote_parts(item, tags)
+            # 조각에는 개행이 없어(`ws`로 접힘) `in ws_lines`는 한 줄 안 일치만 된다
+            if big and parts and all(p in ws_lines for p in parts):
+                verdict = "ok"
             else:
+                # ponytail: 공백 말고도 표기가 다른 인용은 축소 검색(8자 이상 낱말 공유 첫 300행)에 기대므로, 그 밖의 줄을 인용하면 여전히 fabricated 오탐
+                text = _subset(_WORD_RX.findall(" ".join(parts)), rows) if big else source
                 verdict = evidence_check(item, text, tags)[0]
-                if verdict == "ok" and not _head_ok(item, text.split("\n"), tags, ws_lines or None):
-                    verdict = "weak"
+            # F-A01-min: 메시지는 맞는데 적은 머리(시각·슬롯·태그)가 맞는 행이 없으면 약함(fabricated는 정밀도만 다른 정상 시각에서 오탐)
+            if verdict == "ok" and not _head_ok(_quote_head(item, tags), parts, rows, ws_lines, tags):
+                verdict = "weak"
         res["verdicts"].append(verdict)
         if verdict != "ok":
             res[verdict] += 1
