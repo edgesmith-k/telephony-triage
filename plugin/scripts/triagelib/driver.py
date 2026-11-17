@@ -61,7 +61,8 @@ def _unjudged(match: dict) -> dict | None:
 
 def _observation_summary(events: dict) -> dict | None:
     """events.json `observation`이 불완전이면 `{count, extractor, timeout, errors[≤2 {code, error(≤80)}]}`, 완전하면 None.
-    `extractor` = extractor 오류 수, 그중 `timeout` = 시간 초과(비결정 — 캐시 제외). 예시는 extractor 것 하나·그 밖 것 하나 순.
+    `extractor` = extractor 오류 수, 그중 `timeout` = 시간 초과(비결정 — 캐시 제외). 예시는 파일·외부 파서 것 하나·extractor 것
+    하나 순(리포트 줄 라벨과 같은 순서 — 파일 문제는 사용자가 고칠 수 있어 먼저).
     `unjudged`(매처 시그니처 오류)와 따로 둔다 — 정상 불일치가 아니라 로그를 다 보지 못한 것이다. 분석은 그대로 잇는다."""
     obs = events.get("observation") or {}
     if obs.get("complete", True):
@@ -70,7 +71,7 @@ def _observation_summary(events: dict) -> dict | None:
     ext = [e for e in errors if e.get("code") in EXTRACTOR_CODES]
     other = [e for e in errors if e.get("code") not in EXTRACTOR_CODES]
     return {"count": len(errors), "extractor": len(ext), "timeout": sum(e.get("code") == "pattern-timeout" for e in ext),
-            "errors": [{"code": e.get("code"), "error": _clip(e.get("error"), 80)} for e in ext[:1] + other[:1]]}
+            "errors": [{"code": e.get("code"), "error": _clip(e.get("error"), 80)} for e in other[:1] + ext[:1]]}
 
 
 def _unjudged_label(u: dict) -> str:
@@ -1042,7 +1043,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                     fields = None
                 if fields is not None:
                     # FR-10①: 가설은 근거 원문 검사를 실제로 했고(source 있음 — 건너뜀 아님) 원문에 없는 인용이 0일 때만 넘긴다.
-                    # weak는 남긴다(정밀도만 다른 정상 인용 오탐 여지). `가설 없음` 이유는 인용이 없어 그대로 넘긴다
+                    # weak는 남긴다(정밀도만 다른 정상 인용 오탐 여지). `가설 없음` 이유는 인용이 없어 그대로 넘긴다.
+                    # 구버전 check-output 기록(source·fabricated 키 없음)은 검사 불명으로 보고 탈락시킨다(의도한 fail-closed, 비용은 탐색 1회)
                     checked = bool(rec.get("source")) and rec.get("fabricated") == 0
                     judged = {"hyps": [_clip(h["가설"] + (f" — 반대: {h['반대 근거']}"
                                                          if h.get("반대 근거") not in (None, "", "없음") else ""), 120)

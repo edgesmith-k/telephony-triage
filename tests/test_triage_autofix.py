@@ -19,7 +19,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import SAMPLE, parse_calls, plugin_root, run_json, tmp  # noqa: E402
+from runner import SAMPLE, parse_calls, plugin_root, run, run_json, tmp  # noqa: E402
 from workspace import Workspace  # noqa: E402
 
 LABELSET = REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"
@@ -203,6 +203,40 @@ def test_unfit_top_holds_with_reason_and_next_check_then_rerun_carries_prior():
     assert not (out / "explore-output.md").exists()                      # 추린 뒤에 지웠다(drop_stale_records)
     third = _run(item, out, "--explore")                                  # 검사 기록도 지워졌으니 다시 넘기지 않는다
     assert "prior" not in third
+
+
+def test_fit_hold_is_recorded_even_when_lines_cannot_be_rewritten_and_survives_recheck():
+    """리뷰 지적(P2 fail-open): ① 보류 기록(fit_hold)은 구조 감지만으로 남는다 — 결론 줄을 못 고쳐도(줄 없음) 기록·경고가 남고
+    Jira 본문(계획 없음)은 보류다. ② 뒤 검사(형식 불일치 _fail)가 탐색 기록을 새로 써도 fit_hold는 이어받는다."""
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    import issue_post
+    item = _confirmed()
+    out = tmp("tt-hold-") / "x"
+    _run(item, out, "--explore")
+    run_json("triage.py", ["explore", item["key"], "--out", out])
+    report = out / "report.md"
+    pending = _report_line(out, "- 탐색 분석")
+    report.write_text("\n".join(x for x in report.read_text(encoding="utf-8").split("\n") if not x.startswith("- 결론:")),
+                      encoding="utf-8")
+    (out / "explore-output.md").write_text("가설 없음: 1위 DATA-001-01 부적합 — 슬롯이 다르다\n다음 확인: radio 로그\n",
+                                           encoding="utf-8")
+    proc = run("triage.py", ["check-output", item["key"], "--for", "explore", "--out", str(out)])
+    assert proc.returncode == 0 and "경고: 1위 보류를 report.md 결론 줄에 쓰지 못했다" in proc.stderr, proc.stderr
+    rec = json.loads((out / "check-output.json").read_text(encoding="utf-8"))["explore"]
+    assert rec["fit_hold"] == "DATA-001-01" and rec["fit_hold_unwritten"] == ["결론 줄"], rec
+    assert _report_line(out, "- 해결책").startswith("- 해결책(1위 기준, 보류됨): ")        # 고칠 수 있는 줄은 고쳤다
+    # 탐색 줄 재작성이 실패해 TODO가 남은 상황을 흉내 내고 다시 검사(형식 불일치 → _fail이 기록을 새로 쓴다)
+    text = report.read_text(encoding="utf-8")
+    report.write_text(text.replace(_report_line(out, "- 탐색 분석"), pending), encoding="utf-8")
+    (out / "explore-output.md").write_text("가설 1: 칸이 모자란 가설\n", encoding="utf-8")
+    run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", out], expect=1)
+    rec = json.loads((out / "check-output.json").read_text(encoding="utf-8"))["explore"]
+    assert rec.get("error") and rec["fit_hold"] == "DATA-001-01", rec
+    hold = issue_post.fit_hold_of(out / "check-output.json")
+    analysis = json.loads((out / "analysis.json").read_text(encoding="utf-8"))
+    nxt = issue_post.classify(analysis, None, hold)["next"]
+    assert hold == "DATA-001-01" and nxt[0] == "원인 미확정 — 추가 로그·재현 정보 필요", nxt
+    assert any(x.startswith("해결책(1위 기준, 보류됨): ") and x.endswith("(해결책 검증: 보류(1위 부적합))") for x in nxt), nxt
 
 
 def test_prior_skips_output_changed_after_check():

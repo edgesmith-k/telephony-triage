@@ -1809,7 +1809,7 @@ def test_conclusion_flags_observation_incomplete_without_blocking():
     me = SimpleNamespace(analysis_only=False)
     obs = {"count": 1, "extractor": 1, "timeout": 1, "errors": []}
     none = report.ReportMixin._conclusion(me, [], {}, obs)
-    assert none.startswith("결론: 아는 증상·원인과 맞는 후보 없음 — 단 로그 일부를 읽지 못해(관측 불완전) 전체 사실이 아닐 수 있음. "
+    assert none.startswith("아는 증상·원인과 맞는 후보 없음 — 단 로그 일부를 읽지 못해(관측 불완전) 전체 사실이 아닐 수 있음. "
                            "다음: 새 유형 등록 전 아래 관측 불완전 줄 확인"), none
     assert none.count(". 다음: ") == 1 and "Step 7" not in none.split(". 다음: ")[0]
     c0 = report.ReportMixin._conclusion(me, [{"cause": None, "type": "DATA-001", "confidence": "low"}], {}, obs)
@@ -1821,13 +1821,21 @@ def test_conclusion_flags_observation_incomplete_without_blocking():
 
 
 def test_observation_summary_counts_timeouts_and_quotes_matching_kind():
-    """정규식 오류(결정적)는 timeout 0(캐시해도 된다). 예시는 extractor 것 먼저, 리포트 줄은 라벨과 같은 종류를 인용한다."""
+    """정규식 오류(결정적)는 timeout 0(캐시해도 된다). 예시는 파일 문제 것 먼저(리포트 줄 라벨 순서와 같다 — 사용자가 고칠 수 있는
+    쪽), 리포트 줄은 라벨 첫 종류의 예시를 인용한다."""
     from triagelib import driver
     events = {"observation": {"complete": False, "errors": [
         {"code": "file-unparsed", "error": "a.log: 빈 파일"}, {"code": "pattern-error", "error": "extractor bad: unbalanced"}]}}
     obs = driver._observation_summary(events)
     assert obs == {"count": 2, "extractor": 1, "timeout": 0, "errors": [
-        {"code": "pattern-error", "error": "extractor bad: unbalanced"}, {"code": "file-unparsed", "error": "a.log: 빈 파일"}]}
+        {"code": "file-unparsed", "error": "a.log: 빈 파일"}, {"code": "pattern-error", "error": "extractor bad: unbalanced"}]}
+    from triagelib import report
+    line = report.observation_line(obs)              # 라벨 나열과 인용 예시가 같은 순서(파일 문제 먼저)
+    assert line.startswith("관측 불완전: 파일 해석·외부 파서 문제 1건·로그에서 이벤트를 뽑는 단계 오류 1개(extractor) (a.log: 빈 파일)")
+    ext_only = driver._observation_summary({"observation": {"complete": False, "errors": [
+        {"code": "pattern-error", "error": "extractor bad: unbalanced"}]}})
+    assert report.observation_line(ext_only).startswith(
+        "관측 불완전: 로그에서 이벤트를 뽑는 단계 오류 1개(extractor) (extractor bad: unbalanced)")
     assert driver._observation_summary({"observation": {"complete": True, "errors": []}}) is None
     assert driver._observation_summary({}) is None          # observation이 없는 옛 events.json
     out = tmp("tt-triage-") / "x"

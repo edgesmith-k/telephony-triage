@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import difflib
-import itertools
 import re
 
 FIELDS_DEEP = ("원인 층", "원인 데몬", "근거", "반대 근거", "분석 스킬 의견", "규칙 제안")
@@ -62,7 +61,12 @@ _KV_WS_RX = re.compile(r"\s*([=:])\s*")
 
 def _low(text: str) -> str:
     """토큰 대조용 정규화: 공백 하나·소문자·`=`/`:` 둘레 공백 제거(`key = v`와 `key=v`는 같다)."""
-    return _KV_WS_RX.sub(r"\1", ws(text)).lower()
+    return _low_folded(ws(text))
+
+
+def _low_folded(folded: str) -> str:
+    """`_low`에서 공백 접기(`ws`)를 뺀 것 — 이미 `ws`를 거친 글(큰 원문은 행마다 한 번만 접는다)."""
+    return _KV_WS_RX.sub(r"\1", folded).lower()
 
 
 def _has_token(low_line: str, low_token: str) -> bool:
@@ -422,11 +426,20 @@ def _subset(part_words: list[str], rows: list[str]) -> str:
 
 
 def _part_rows(parts: list[str], rows: list[str], ws_rows: list[str]) -> list[str]:
-    """조각마다 그 조각이 든 행(`ws_rows` = 행마다 공백 접은 글, 조각마다 첫 `PREFILTER_ROWS`행) — 경계만 틀린 줄(`status=10`)도
-    대조에 들게."""
+    """조각이 든 행(`ws_rows` = 행마다 공백 접은 글, 조각마다 첫 `PREFILTER_ROWS`행까지, 원문 순서) — 경계만 틀린 줄(`status=10`)도
+    대조에 들게. 행은 한 번만 훑는다(행마다 아직 상한이 안 찬 조각을 본다)."""
+    left = dict.fromkeys(parts, PREFILTER_ROWS)
     out = []
-    for p in parts:
-        out += list(itertools.islice((row for row, w in zip(rows, ws_rows) if p in w), PREFILTER_ROWS))
+    for row, w in zip(rows, ws_rows):
+        hit = [p for p in left if p in w]
+        if hit:
+            out.append(row)
+            for p in hit:
+                left[p] -= 1
+                if not left[p]:
+                    del left[p]
+            if not left:
+                break
     return out
 
 
@@ -448,7 +461,7 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
     ws_rows = [ws(row) for row in rows]
     ws_lines = "\n".join(ws_rows)                  # 줄마다 공백 접기(`WS_RX`가 개행도 접으므로)
     # 행마다 `_low` 뒤 잇기 — 통째로 하면 `=`/`:` 둘레 공백 제거가 개행을 넘는다. 조각·토큰엔 개행이 없어 일치는 한 줄 안이다
-    low_lines = "\n".join(_low(row) for row in rows) if big else ""
+    low_lines = "\n".join(_low_folded(w) for w in ws_rows) if big else ""
     res = {"n": len(items), "fabricated": 0, "weak": 0, "raw": 0, "first": None, "verdicts": []}
     for i, item in enumerate(items):
         if i in raw_items:
