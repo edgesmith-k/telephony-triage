@@ -1005,6 +1005,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         """재실행·답글 턴에 줄 이전 실행의 요약(`analysis.json prior`, 마스킹된 값만) — `drop_stale_records`가 지우기 전에 읽는다.
         top = 직전 실행 1위(state `job.runs`), looked = 이전 실행의 가린 기준 줄(state), hyps·none = `check-output`을 통과했고
         그 뒤 바뀌지 않은(기록 `output_sha256` == 지금 파일) `explore-output.md`의 가설 머리·반대 근거·`가설 없음` 이유.
+        hyps는 근거 원문 검사를 했고(`source`) 원문에 없는 인용이 0일 때만(검사 건너뜀·`fabricated` > 0이면 뺀다).
         hyps·none은 state `job.prior_explore`에도 남겨 산출물이 지워진 뒤(질문 턴·다음 실행)에도 넘긴다 — 새 검사 기록이 있으면
         그것으로 바꾸고, 그 검사가 실패했거나 출력이 바뀌었으면 지운다. top 말고 아무것도 없으면 None(키가 없다)."""
         def regular(path: Path) -> bool:
@@ -1038,9 +1039,12 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                 except (OSError, UnicodeDecodeError):
                     fields = None
                 if fields is not None:
+                    # FR-10①: 가설은 근거 원문 검사를 실제로 했고(source 있음 — 건너뜀 아님) 원문에 없는 인용이 0일 때만 넘긴다.
+                    # weak는 남긴다(정밀도만 다른 정상 인용 오탐 여지). `가설 없음` 이유는 인용이 없어 그대로 넘긴다
+                    checked = bool(rec.get("source")) and rec.get("fabricated") == 0
                     judged = {"hyps": [_clip(h["가설"] + (f" — 반대: {h['반대 근거']}"
                                                          if h.get("반대 근거") not in (None, "", "없음") else ""), 120)
-                                       for h in fields.get("hyps") or []][:3],
+                                       for h in fields.get("hyps") or []][:3] if checked else [],
                               "none": _clip(fields.get("none"), 120)}
                     judged = {k: v for k, v in judged.items() if v} or None
             if judged:

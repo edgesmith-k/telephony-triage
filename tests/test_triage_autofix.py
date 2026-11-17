@@ -248,6 +248,13 @@ def test_prior_keeps_checked_hypotheses_only():
     (out / "explore-output.md").write_text("가설 1: 칸이 모자란 가설\n", encoding="utf-8")
     run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", out], expect=1)
     assert "prior" not in _run(item, out)
+    # FR-10①(P8): 근거 원문 검사에서 지어낸 인용이 나온 가설은 "검사 통과한 이전 가설"로 넘기지 않는다
+    run_json("triage.py", ["explore", item["key"], "--out", out])
+    (out / "explore-output.md").write_text(
+        "가설 1: 모뎀 펌웨어 충돌\n로그로 확인:\n- modem firmware crashed with assertion in qmi_wds handler\n"
+        "코드로 추정: 코드 근거 없음\n반대 근거: 없음\n다음 확인: radio 버퍼\n", encoding="utf-8")
+    assert run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", out])["fabricated"] == 1
+    assert "prior" not in _run(item, out)
     # 검사 기록이 없으면(손으로 쓴 출력만) 넘기지 않는다
     (out / "explore-output.md").write_text("가설 없음: x\n다음 확인: y\n", encoding="utf-8")
     assert "prior" not in _run(item, out)
