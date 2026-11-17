@@ -29,6 +29,15 @@ FIXTURE_REF_KINDS = ("positive", "recurrence", "extra")
 GENERATED = ("README.md", "STATS.md", "parser-rules/CHANGELOG.md")
 
 
+def reclassify_target(to: str) -> tuple[str, str, str]:
+    """reclassify `to` → (대상 ID, 옮길 유형 ID, 쓸 cause). `<유형>:unresolved`면 대상은 유형이고 cause는 `unresolved`,
+    원인 ID면 대상·cause는 그 원인이고 유형은 원인 ID의 앞부분이다 (apply와 drift가 같이 쓴다)."""
+    if to.endswith(":unresolved"):
+        type_id = to.split(":", 1)[0]
+        return type_id, type_id, "unresolved"
+    return to, to.rsplit("-", 1)[0], to
+
+
 class UsageError(Exception):
     pass
 

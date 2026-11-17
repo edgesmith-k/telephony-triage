@@ -444,7 +444,7 @@
 |---|---|
 | `append`, `unresolved`, `add-related`, `add-code-ref`, `add-fixture`, `new-cause` | 대상 원인·유형이 `active`가 아니게 됨 (deprecated, merged-into) |
 | `new-type` | 같은 카테고리에 제목·증상 시그니처가 같은 유형이 생김 (`db_add similar` 기준 상위 1개가 동일) |
-| `reclassify` | 그 Jira 파일의 `cause`가 `from`이 아니게 됨, 또는 파일이 없어짐 |
+| `reclassify` | 그 Jira 파일의 `cause`가 `from`이 아니게 됨, 또는 파일이 없어짐(`field: cause`, 계획 값은 쓸 cause — `<유형 ID>:unresolved`면 `unresolved`) / `cause`는 그대로인데 파일이 다른 유형 디렉토리로 옮겨짐(`field: type`, 값은 유형 ID, `to`가 임시 ID면 계획 값 `null`; `field: cause` 항목이 난 op에는 내지 않는다) / 옮겨 갈 원인·유형(`to`)이 `active`가 아니게 됨 |
 | `update-fix`, `verify-fix` | 대상 원인의 `fix`가 바뀜 |
 | `set-resolution`, `verify-resolution` | 대상 원인의 `resolution` 또는 `resolution_verification`이 바뀜 |
 | `update-signature` | 같은 `sig_id` 시그니처가 바뀌거나 없어짐, 추가하려는 `sig_id`가 이미 생김 |
