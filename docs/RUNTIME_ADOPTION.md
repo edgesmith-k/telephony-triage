@@ -140,6 +140,10 @@ export TT_GATEWAY_API_KEY=<게이트웨이 키>   # 설정 파일에는 쓰지 �
 - 게이트웨이가 OpenCode **내장 provider**로만 받으면(커스텀 `@ai-sdk/openai-compatible` 거절) `--gateway-url`·`--model` 대신
   `--provider-model <provider>/<모델>`을 준다 — 설정에 provider 블록 없이 `model`·`small_model`만 쓰고, 키·주소는 OpenCode 전역
   설정 몫이다(`tt-oc doctor`의 `gateway-key` 행이 `skip` "내장 provider 설정 — 키·주소는 OpenCode 전역 설정에서 확인"으로 나온다 — 통과가 아니라 이 도구가 점검하지 않은 것이다. `TT_GATEWAY_API_KEY` 불필요).
+- 탐색 분석(analyze Step 5-2)은 하위 에이전트 `tt-explore`가 새 문맥에서 한다. 이 단계만 더 강한 모델로 돌리려면
+  `--explore-model <provider>/<모델>`을 더한다(없으면 세션 모델). `task`는 `tt-explore`만 허용한다 — 자세한 것은
+  `opencode/README.md` "탐색 분석 하위 에이전트". 이미 설치한 곳은 `install --force`로 다시 설치하고, 관리 설정을 배포했으면
+  `permission.task`를 새 예시(`{"*":"deny","tt-explore":"allow"}`)로 바꾼다(그대로 `"deny"`면 같은 세션에서 탐색 분석을 한다).
 - 템플릿이 `snapshot:false`·`autoupdate:false`·`share:"disabled"`·한도·허용 목록(`"*":"deny"`)을 넣는다.
 - `install`은 지문을 `tt-oc.json`에 남긴다. **설치 폴더 파일을 손으로 고치지 않는다**(시작 안 함).
 - `<dest>`와 그 위 폴더(`/`까지)의 `AGENTS.md`·`CONTEXT.md`, 또는 `~/.config/opencode/AGENTS.md`가 있으면 시작하지 않는다.

@@ -4,7 +4,10 @@
   "share": "disabled",
   "snapshot": false,
   "permission": {
-    "task": "deny",
+    "task": {
+      "*": "deny",
+      "tt-explore": "allow"
+    },
     "webfetch": "deny",
     "websearch": "deny",
     "codesearch": "deny",

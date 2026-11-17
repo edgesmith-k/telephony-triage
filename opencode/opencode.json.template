@@ -101,7 +101,10 @@
       "@@WORK_ROOT@@/**": "allow",
       "@@ISSUE_DB_ROOT@@/**": "allow"
     },
-    "task": "deny",
+    "task": {
+      "*": "deny",
+      "tt-explore": "allow"
+    },
     "webfetch": "deny",
     "websearch": "deny",
     "codesearch": "deny",

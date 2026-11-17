@@ -5,7 +5,8 @@
 - 거부: `--pure`·`--auto`·`--attach`·`--port`·`-i` 같은 opencode 옵션, 설정·권한을 덮는 환경 변수(`REFUSED_ENV`, 1.19.5에서
   `OPENCODE_PERMISSION`이 설정 deny를, `OPENCODE_CONFIG_CONTENT`가 `snapshot:false`를 이겼다 — 계획 I x3b·x4).
 - 사전 점검(`doctor`): opencode 버전 = `PINNED`, 프로젝트 폴더(`gen_opencode.py install` 결과)가 git 레포 밖, `opencode debug config`의
-  `snapshot:false`·`share:"disabled"`·`autoupdate:false`·`permission["*"]:"deny"`·`permission.task:"deny"`, `config.py doctor` 통과.
+  `snapshot:false`·`share:"disabled"`·`autoupdate:false`·`permission["*"]:"deny"`·`permission.task:{"*":"deny","tt-explore":"allow"}`
+  (또는 통째로 `"deny"`), `config.py doctor` 통과.
   하나라도 실패하면 시작하지 않는다(종료 코드 2). 예외(warn, 시작함): doctor의 fail이 `module_skills` 행뿐이면 "모듈 문서 받기는
   실패할 수 있음"(B2 R22), `config.py check --roots`의 `read_roots`가 설치한 external_directory 허용 밖이면 다시 설치 안내(R21),
   게이트웨이 키 환경 변수(opencode.json `apiKey`의 `{env:…}`)가 없거나 baseURL이 `…/v1`로 끝나지 않으면(`gateway-key`·`gateway-url`),
@@ -245,6 +246,11 @@ def _run(cmd, *, cwd=None, env=None, timeout=60) -> subprocess.CompletedProcess:
                           timeout=timeout, check=False)
 
 
+# task는 탐색 분석 하위 에이전트만(사용자 결정 ⑧을 좁힘). 이 객체(키·값 같음)이거나 통째로 "deny"만 받는다
+# = opencode.json.template `permission.task`, oc_adapter.TASK_ALLOWED
+TASK_PERMISSION = {"*": "deny", "tt-explore": "allow"}
+
+
 def config_problems(cfg: dict) -> list[str]:
     """v1 필수 설정과 다른 항목(`키=값(필요 값)`): snapshot:false·share:"disabled"·autoupdate:false·permission["*"]·task·
     bash["*"] deny. `opencode debug config`(합쳐진 실제 설정)와 `site_step.py runtime-check opencode`(설치한 opencode.json)가 쓴다."""
@@ -252,7 +258,9 @@ def config_problems(cfg: dict) -> list[str]:
     bash = perm.get("bash") if isinstance(perm.get("bash"), dict) else {"*": perm.get("bash")}
     need = {"snapshot": (cfg.get("snapshot"), False), "share": (cfg.get("share"), "disabled"),
             "autoupdate": (cfg.get("autoupdate"), False), 'permission["*"]': (perm.get("*"), "deny"),
-            "permission.task": (perm.get("task"), "deny"), 'permission.bash["*"]': (bash.get("*"), "deny")}
+            "permission.task": (perm.get("task"), TASK_PERMISSION), 'permission.bash["*"]': (bash.get("*"), "deny")}
+    if perm.get("task") == "deny":       # 더 막는 것(관리 설정이 통째로 deny) — 탐색 분석은 같은 세션에서 한다
+        del need["permission.task"]
     return [f"{k}={json.dumps(v[0])}(필요 {json.dumps(v[1])})" for k, v in need.items() if v[0] != v[1]]
 
 
@@ -343,7 +351,7 @@ def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
         row("opencode-config", False, f"debug config 실패(종료 {r.returncode})")
     elif isinstance(cfg, dict):
         wrong = config_problems(cfg)
-        row("opencode-config", not wrong, "snapshot:false·share:disabled·autoupdate:false·허용 목록·task deny" if not wrong
+        row("opencode-config", not wrong, "snapshot:false·share:disabled·autoupdate:false·허용 목록·task tt-explore만" if not wrong
             else "설정 불일치: " + ", ".join(wrong))
     script = Path(meta["plugin_root"]) / "scripts" / "config.py"
     try:

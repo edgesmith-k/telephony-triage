@@ -587,7 +587,8 @@ def test_config_deny_write_command_with_workdir(env):
 # 리뷰 P1: 실제 tt-guard.js·oc_adapter.py 거부 문구(모두 `[telephony-triage]`로 시작)는 막힌 호출(종료 코드 3)이고 전문을 보인다
 REAL_DENIES = [
     ("bash", "[telephony-triage] 로그 원문 통독 금지 (규칙 10): job/issue_raw.json은 스크립트가 읽는다. " + "가" * 400),
-    ("task", "[telephony-triage] task: task(하위 에이전트)는 전역 거부다(사용자 결정 ⑧). 같은 세션에서 직접 한다."),
+    ("task", "[telephony-triage] task: 하위 에이전트는 `tt-explore`(탐색 분석)만 쓴다(사용자 결정 ⑧을 좁힌 것). `general`은 "
+             "거부한다 — 같은 세션에서 직접 한다."),
     ("mock-jira_jira_ticket_add_note", ("[telephony-triage] Jira 코멘트 게시는 OpenCode v1에서 하지 않는다. "
                                         "issue_post.py render → approve → 게시는 Claude Code에서 한다.")),
     ("bash", "[telephony-triage] 이슈 DB clone push 금지 (규칙 6): main으로 직접 push하지 않는다."),
@@ -1014,7 +1015,18 @@ def test_shared_checks_for_site_step(env):
     mod = _load("tt_oc", TTOC)
     assert mod.config_problems(CONFIG_OK) == []
     assert mod.config_problems({**CONFIG_OK, "snapshot": True, "permission": {"*": "deny"}}) == [
-        "snapshot=true(필요 false)", 'permission.task=null(필요 "deny")', 'permission.bash["*"]=null(필요 "deny")']
+        "snapshot=true(필요 false)", 'permission.task=null(필요 {"*": "deny", "tt-explore": "allow"})',
+        'permission.bash["*"]=null(필요 "deny")']
+    # task: tt-explore만 허용하는 객체(템플릿 그대로) 또는 통째로 deny(관리 설정이 더 막음)만 통과
+    template = json.loads((REPO / "opencode" / "opencode.json.template").read_text(encoding="utf-8"))
+    assert template["permission"]["task"] == mod.TASK_PERMISSION
+    perm = CONFIG_OK["permission"]
+    for ok in (mod.TASK_PERMISSION, {"tt-explore": "allow", "*": "deny"}, "deny"):
+        assert mod.config_problems({**CONFIG_OK, "permission": {**perm, "task": ok}}) == [], ok
+    for bad in ("allow", "ask", {"*": "deny"}, {"*": "allow"}, {"*": "deny", "tt-explore": "allow", "general": "allow"},
+                {"*": "deny", "tt-explore": "ask"}, {"*": "deny", "tt-*": "allow"}):
+        assert [p for p in mod.config_problems({**CONFIG_OK, "permission": {**perm, "task": bad}})
+                if p.startswith("permission.task=")], bad
     row, ran = mod.version_row(str(env["stub"]), env["env"])
     assert ran and row == {"check": "opencode-version", "status": "ok", "detail": f"{PINNED} (고정 {PINNED})"}
     row, ran = mod.version_row(str(env["tmp"] / "no-opencode"), env["env"])

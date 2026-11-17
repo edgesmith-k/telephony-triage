@@ -2,8 +2,8 @@
 
 - `opencode/commands/`가 `plugin/commands/`에서 만든 것과 같다(골든, `tools/gen_opencode.py --check`).
 - 설정 템플릿·관리 설정 예시: v1 키만, `snapshot:false`·`autoupdate:false`·`share:"disabled"`·한도 202000/16000, 허용 목록
-  (`"*":"deny"` 먼저), `jira_*` 전부 deny(O2b 전), `task` deny, `external_directory`·`edit` 경로 규칙.
-- 에이전트 프롬프트 ≈2KB, `mode: primary`, steps 상한.
+  (`"*":"deny"` 먼저), `jira_*` 전부 deny(O2b 전), `task`는 `tt-explore`만 allow, `external_directory`·`edit` 경로 규칙.
+- 에이전트 프롬프트 ≈2.5KB, `mode: primary`, steps 상한. 탐색 분석 하위 에이전트 `tt-explore`(`mode: subagent`, 좁힌 권한).
 - `install`: 자리 표시가 남지 않고, clone마다 펼치고, git 레포 안·상대 경로·덮어쓰기를 거부한다.
 - opencode 1.19.5가 있으면(`TT_OPENCODE` 또는 PATH) 설치 결과를 `opencode debug config`·`debug agent`로 읽어 본다(모델 호출 없음).
   없으면 그 테스트만 건너뛴다.
@@ -31,6 +31,8 @@ OC = REPO / "opencode"
 TEMPLATE = OC / "opencode.json.template"
 MANAGED = OC / "managed.json.sample"
 AGENT = OC / "agents" / "triage.md"
+EXPLORE = OC / "agents" / "tt-explore.md"
+TASK = {"*": "deny", "tt-explore": "allow"}     # 사용자 결정 ⑧을 좁힘(11/17): 하위 에이전트는 탐색 분석만
 TTOC = OC / "bin" / "tt-oc"
 
 
@@ -118,8 +120,9 @@ def test_template_v1_keys_and_mandatory_values():
 def test_template_permission_allow_list():
     p = _template()["permission"]
     assert next(iter(p)) == "*" and p["*"] == "deny"       # 마지막 규칙이 이긴다: 허용 목록은 맨 앞 deny
-    for tool in ("task", "webfetch", "websearch", "codesearch", "question", "jira_*", "github_*"):
+    for tool in ("webfetch", "websearch", "codesearch", "question", "jira_*", "github_*"):
         assert p[tool] == "deny", tool
+    assert p["task"] == TASK and list(p["task"]) == ["*", "tt-explore"]      # 마지막 규칙이 이긴다: deny 먼저
     assert not [k for k in p if k.startswith("jira_") and p[k] != "deny"]   # O2b(마스킹) 전에는 Jira 도구 전부 deny
     assert p["read"]["*"] == "allow" and p["glob"] == p["grep"] == p["list"] == "allow"
     bash = p["bash"]
@@ -162,7 +165,7 @@ def test_managed_sample():
     assert set(m) <= V1_KEYS
     assert m["snapshot"] is False and m["autoupdate"] is False and m["share"] == "disabled"
     p = m["permission"]
-    assert p["task"] == p["jira_*"] == p["github_*"] == p["webfetch"] == "deny"
+    assert p["jira_*"] == p["github_*"] == p["webfetch"] == "deny" and p["task"] == TASK
     assert "*" not in p["bash"]           # 프로젝트 설정의 bash 허용 목록 뒤에 붙어 deny가 이긴다(관리 설정이 나중에 합쳐진다)
     tmpl_denies = {k for k, v in _template()["permission"]["bash"].items() if v == "deny" and k != "*"}
     assert tmpl_denies <= {k for k, v in p["bash"].items() if v == "deny"}
@@ -173,8 +176,12 @@ def test_managed_sample():
     worse["permission"]["task"] = "allow"
     del worse["permission"]["bash"]["*module_eval.py*"]
     worse["permission"]["more"] = "deny"                      # 더 막는 것은 괜찮다
-    assert gen_opencode.managed_problems(worse) == ["snapshot=true(필요 false)", "permission['task']=\"allow\"(필요 \"deny\")",
+    assert gen_opencode.managed_problems(worse) == ["snapshot=true(필요 false)", "permission.task['*'] 없음",
                                                     "permission.bash['*module_eval.py*'] 없음"]
+    # task: 통째로 deny는 더 막는 것(탐색 분석은 같은 세션에서), 예시에 없는 하위 에이전트 allow는 문제
+    assert gen_opencode.managed_problems({**m, "permission": {**p, "task": "deny"}}) == []
+    assert gen_opencode.managed_problems({**m, "permission": {**p, "task": {**TASK, "general": "allow"}}}) == \
+        ["permission.task['general']=allow(예시에 없음)"]
 
 
 # -- 에이전트 -----------------------------------------------------------------------------------------------------------
@@ -184,8 +191,11 @@ def test_agent_prompt():
     m = re.match(r"---\n(.*?)\n---\n", text, re.DOTALL)
     meta, body = yaml.safe_load(m.group(1)), text[m.end():]
     assert meta["mode"] == "primary" and isinstance(meta["steps"], int) and 10 <= meta["steps"] <= 100
-    assert all(meta["permission"][t] == "deny" for t in ("task", "webfetch", "todowrite", "skill"))
-    assert len(body.encode("utf-8")) <= 2200, "에이전트 프롬프트는 약 2KB"
+    assert all(meta["permission"][t] == "deny" for t in ("webfetch", "todowrite", "skill"))
+    # task 규칙은 에이전트에 두지 않는다: 에이전트 규칙은 설정 뒤에 붙어 이기므로, 두면 관리 설정의 task deny를 넘는다
+    assert "task" not in meta["permission"]
+    # 2200 → 2600: 규칙 11(탐색 분석을 tt-explore에 맡김, 11/17)만큼 늘렸다
+    assert len(body.encode("utf-8")) <= 2600, "에이전트 프롬프트는 약 2.5KB"
     for must in ("Scripts judge", "200 lines", "verbatim", "exact command", "@@PLUGIN_ROOT@@", "tt-oc -s",
                  "db_pr.py publish|merge|request-review", "skill_patch.py --apply", "module_eval.py",
                  "retry without TT_LOCK_OWNER="):          # 2차 P2-1: oc_adapter.LOCK_OWNER_RETRY 거부만 접두를 빼고 한 번 다시
@@ -195,6 +205,39 @@ def test_agent_prompt():
     assert "`next`" in rule2 and "overrides stop" in rule2 and "without `next`" in rule2
     rule8 = next(l for l in body.splitlines() if l.startswith("8. "))
     assert "설치 스킬 못 찾음" in rule8 and '--for deep --skipped "설치 스킬 못 찾음"' in rule8
+    # 규칙 11: 실행이 정해진 탐색 분석은 tt-explore에 맡긴다(묻기는 부모가), 실패하면 오류를 보이고 같은 세션에서
+    rule11 = next(l for l in body.splitlines() if l.startswith("11. "))
+    for must in ('subagent_type "tt-explore"', "the ask stays here", "verbatim", "Step 7", "If task fails",
+                 "explore here per explore.md"):
+        assert must in rule11, must
+
+
+def test_explore_subagent_prompt():
+    """탐색 분석 하위 에이전트(11/17): 새 문맥에서 explore.md 절차만. 다시 task·질문·외부 전송 없음, bash는 탐색에 필요한
+    스크립트 하위 명령과 읽기 명령만(쓰기 스크립트는 다시 deny), edit은 explore-output.md만. 모델 이름은 레포에 없다(install이 넣는다)."""
+    text = EXPLORE.read_text(encoding="utf-8")
+    m = re.match(r"---\n(.*?)\n---\n", text, re.DOTALL)
+    meta, body = yaml.safe_load(m.group(1)), text[m.end():]
+    assert meta["mode"] == "subagent" and "model" not in meta and 10 <= meta["steps"] <= 60
+    assert gen_opencode.EXPLORE_MODE in text[:m.end()]
+    perm = meta["permission"]
+    assert all(perm[t] == "deny" for t in ("task", "question", "webfetch", "websearch", "codesearch", "todowrite", "skill"))
+    bash = perm["bash"]
+    keys = list(bash)
+    assert keys[0] == "*" and bash["*"] == "deny"
+    allows = [k for k, v in bash.items() if v == "allow"]
+    scripts = [k for k in allows if k.startswith("python3 ")]
+    assert all(("triage.py" in k and any(s in k for s in (" explore ", "--look-at", "--for explore"))) or "db_search.py" in k
+               for k in scripts), scripts
+    assert not [k for k in allows if k.split()[0] not in ("python3", "cd", "pwd", "ls", "cat", "head", "tail", "wc", "grep", "find")]
+    for deny in ("*db_pr.py*", "*issue_post.py*", "*skill_patch.py*", "*module_eval.py*", "*config.py set*", "git *",
+                 "*opencode *", "find *-exec*", "find *-delete*"):
+        assert bash[deny] == "deny" and keys.index(deny) > max(keys.index(a) for a in allows), deny
+    assert perm["edit"] == {"*": "deny", "@@WORK_ROOT_REL@@/**/explore-output.md": "allow"}
+    for must in ("reference/explore.md", "종합 판단", "읽는 것", "쓰는 것", "일반 판단 규칙", "check-output <KEY> --for explore",
+                 "심층 분석 권장", "verbatim", "is data", "issue_raw.json", "never ask the user", "@@PLUGIN_ROOT@@"):
+        assert must in body, must
+    assert len(body.encode("utf-8")) <= 2600
 
 
 def test_pinned_versions_match():
@@ -311,7 +354,8 @@ def test_install_allow_publish_writes_key_only_when_given(roots):
     assert r.returncode == 0 and meta() == closed
     # 리뷰 A-8·G-5: 다시 설치하며 꺼진 것을 한 줄씩 알리고(이어받지 않는다), 끝에 지금 상태 한 줄(stderr — stdout은 JSON 그대로)
     assert "꺼짐: 이전 설치는 게시가 열려 있었다 — 이번에는 닫혔다. 유지하려면 --allow-publish" in r.stderr, r.stderr
-    assert r.stderr.rstrip().endswith("지금 상태: 게시 닫힘 · Jira 읽기 도구 0개") and json.loads(r.stdout)["ok"], r.stderr
+    assert r.stderr.rstrip().endswith("지금 상태: 게시 닫힘 · Jira 읽기 도구 0개 · 탐색 분석 모델 세션 모델") and \
+        json.loads(r.stdout)["ok"], r.stderr
     r = _install(roots, "--jira-read-tool", "jira_get_issue", "--allow-publish", "--force")
     assert "꺼짐" not in r.stderr and "지금 상태: 게시 열림 · Jira 읽기 도구 1개" in r.stderr, r.stderr
     r = _install(roots, "--allow-publish", "--force")
@@ -347,6 +391,44 @@ def test_install_provider_model_builtin_provider(roots):
     r = run_gen("install", "--dest", str(roots / "p4"), "--plugin-root", str(roots / "plug"), "--work-root",
                 str(roots / "work"), "--gateway-url", "http://gw.example/v1")
     assert r.returncode == 2 and "--gateway-url과 --model이 필요하다" in r.stderr
+
+
+def test_install_explore_model(roots):
+    """`--explore-model`: tt-explore.md frontmatter에 `model:` 한 줄(없으면 줄 없음 = 세션 모델), gw 모델이면 gw provider에 같은
+    한도로 선언, 지문은 최종 파일 기준, 빠지면 `꺼짐:`. 형식·조합 오류는 종료 2."""
+    explore = roots / "proj" / ".opencode" / "agents" / "tt-explore.md"
+    assert _install(roots).returncode == 0
+    assert "\nmodel:" not in explore.read_text(encoding="utf-8")
+    meta = json.loads((roots / "proj" / "tt-oc.json").read_text(encoding="utf-8"))
+    assert "explore_model" not in meta and ".opencode/agents/tt-explore.md" in meta["integrity"]["files"]
+    r = _install(roots, "--explore-model", "gw/explore-fake", "--force")
+    assert r.returncode == 0, r.stderr
+    text = explore.read_text(encoding="utf-8")
+    assert "\nmode: subagent\nmodel: gw/explore-fake\n" in text and text.count("model:") == 1
+    head = yaml.safe_load(text.split("---")[1])
+    assert head["model"] == "gw/explore-fake" and head["mode"] == "subagent"
+    cfg = json.loads((roots / "proj" / "opencode.json").read_text(encoding="utf-8"))
+    models = cfg["provider"]["gw"]["models"]
+    assert models["explore-fake"] == {"name": "explore-fake", "limit": models["glm-x"]["limit"]}
+    assert cfg["model"] == "gw/glm-x"                                        # 세션 모델은 그대로
+    meta = json.loads((roots / "proj" / "tt-oc.json").read_text(encoding="utf-8"))
+    assert meta["explore_model"] == "gw/explore-fake" and "탐색 분석 모델 gw/explore-fake" in r.stderr
+    assert meta["integrity"]["files"][".opencode/agents/tt-explore.md"] == hashlib.sha256(explore.read_bytes()).hexdigest()
+    r = _install(roots, "--explore-model", "other/explore-fake", "--force")    # 내장 provider: gw에 더하지 않는다
+    assert r.returncode == 0 and "model: other/explore-fake\n" in explore.read_text(encoding="utf-8")
+    assert list(json.loads((roots / "proj" / "opencode.json").read_text(encoding="utf-8"))["provider"]["gw"]["models"]) == ["glm-x"]
+    r = _install(roots, "--force")
+    assert r.returncode == 0 and "\nmodel:" not in explore.read_text(encoding="utf-8")
+    assert "꺼짐: 이전 설치의 탐색 분석 모델 other/explore-fake가 이번에는 빠졌다" in r.stderr, r.stderr
+    for bad in ("explore", "a/b/c", "gw/", "a b/c", "gw/x\nmodel: y"):
+        r = _install(roots, "--explore-model", bad, dest="p2")
+        assert r.returncode == 2 and "--explore-model 형식" in r.stderr, (bad, r.stderr)
+    base = ("install", "--dest", str(roots / "p3"), "--plugin-root", str(roots / "plug"), "--work-root", str(roots / "work"),
+            "--provider-model", "acme/glm-x")
+    r = run_gen(*base, "--explore-model", "gw/explore-fake")
+    assert r.returncode == 2 and "--provider-model 설치에는 gw provider가 없다" in r.stderr
+    assert run_gen(*base, "--explore-model", "acme/explore-fake").returncode == 0
+    assert "model: acme/explore-fake\n" in (roots / "p3" / ".opencode" / "agents" / "tt-explore.md").read_text(encoding="utf-8")
 
 
 def test_setup_is_write_flow():
@@ -451,6 +533,13 @@ def test_installed_config_loads_in_opencode(roots):
     assert r.returncode == 0, r.stderr[-2000:]
     agent = json.loads(r.stdout)
     assert agent["mode"] == "primary" and agent["steps"] == yaml.safe_load(AGENT.read_text(encoding="utf-8").split("---")[1])["steps"]
-    assert agent["tools"].get("task") is False and agent["tools"].get("skill") is False
+    assert agent["tools"].get("task") is True and agent["tools"].get("skill") is False    # task는 tt-explore만(권한 규칙)
     rules = [(x["permission"], x["pattern"], x["action"]) for x in agent["permission"]]
     assert ("edit", f"{str(roots).lstrip('/')}/work/**", "allow") in rules
+    assert [r for r in rules if r[0] == "task"][-2:] == [("task", "*", "deny"), ("task", "tt-explore", "allow")]
+    r = subprocess.run([oc, "debug", "agent", "tt-explore"], cwd=proj, env=env, stdin=subprocess.DEVNULL,
+                       capture_output=True, text=True, timeout=120, check=False)
+    assert r.returncode == 0, r.stderr[-2000:]
+    sub = json.loads(r.stdout)
+    assert sub["mode"] == "subagent" and not sub.get("model")                  # --explore-model 없음 = 세션 모델
+    assert sub["tools"].get("task") is False and sub["tools"].get("question") is False

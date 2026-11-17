@@ -3,7 +3,6 @@ description: telephony-triage analysis agent (OpenCode v1, analysis only)
 mode: primary
 steps: 50
 permission:
-  task: deny
   webfetch: deny
   todowrite: deny
   skill: deny
@@ -22,3 +21,4 @@ Rules:
 8. Analyzer skills: Read the SKILL.md path the script gives. No skill tool: on `설치 스킬 못 찾음` or a denied Read, run `check-output <KEY> --for deep --skipped "설치 스킬 못 찾음"`.
 9. bash runs only `python3 "<plugin root>/scripts/<name>.py" …` (absolute path) and read commands (ls, cat, head, tail, grep, find, git log/show/diff). No `>` file redirects, `$`, globs or env assignments; write files with the edit tool. Never prefix `TT_LOCK_OWNER=`.
 10. Edit only under the work root. Never edit the plugin, issue-DB clones, opencode.json, .opencode/ or AGENTS.md.
+11. Step 5-2 explore, once it runs (flag, `always` or the user said yes; the ask stays here): do not explore yourself. Call task with subagent_type "tt-explore" and a prompt with KEY, JOB dir, work root, reason and any user look-at/time info. Show its reply verbatim (rule 4), then Step 7. If task fails or is unavailable: show the error verbatim, then do explore here per explore.md.

@@ -24,7 +24,8 @@ MCP 도구로 본다. 둘 다 아니면 거부한다(모르는 도구 = 거부).
 - apply_patch → `*** Add/Update/Delete File:`·`*** Move to:` 경로마다 `Write` 하나. 1.19.5 파서와 같은 규칙으로 읽고, 읽지 못하거나
   hunk가 없으면 거부.
 - 읽기 전용(read·glob·grep·skill·lsp·todowrite·question·invalid)은 통과.
-- task(전역 거부, 사용자 결정 ⑧)·webfetch·websearch·codesearch(외부 전송)·execute·plan·MCP 리소스 도구는 v1에서 거부.
+- task는 `subagent_type`이 정확히 `tt-explore`(탐색 분석 하위 에이전트)일 때만 통과, 그 밖은 거부(사용자 결정 ⑧을 11/17에
+  좁힘 — 하위 세션의 도구 호출도 같은 hook으로 이 모듈을 거친다). webfetch·websearch·codesearch(외부 전송)·execute·plan·MCP 리소스 도구는 v1에서 거부.
 - MCP: OpenCode 이름은 `<서버>_<도구>`(둘 다 `[^A-Za-z0-9_-]`→`_`). 서버 이름 목록의 **모든** 접두사 후보(가장 긴 것 먼저)를
   `mcp__<서버>__<도구>`로 바꿔 guard에 각각 묻고 가장 엄한 결정을 쓴다(`corp`·`corp_jira`가 함께 있을 때의 모호함도 닫힌다).
 
@@ -87,13 +88,14 @@ PLUGIN_ROOT = SCRIPTS.parent
 
 # -- 도구 표 -------------------------------------------------------------------------------------------
 
-PASS, BASH, FILE, PATCH, DENY = "pass", "bash", "file", "patch", "deny"
+PASS, BASH, FILE, PATCH, DENY, TASK = "pass", "bash", "file", "patch", "deny", "task"
+TASK_ALLOWED = "tt-explore"     # 탐색 분석(analyze Step 5-2) 하위 에이전트 — 사용자 결정 ⑧(task 전역 거부)을 이것만 허용으로 좁혔다
 NOT_IN_V1 = "OpenCode v1(분석 전용)에서 쓰지 않는 도구다"
 BUILTINS: dict[str, tuple[str, str]] = {
     "invalid": (PASS, ""), "question": (PASS, ""), "read": (PASS, ""), "glob": (PASS, ""), "grep": (PASS, ""),
     "skill": (PASS, ""), "lsp": (PASS, ""), "todowrite": (PASS, ""),
     "bash": (BASH, ""), "edit": (FILE, "Edit"), "write": (FILE, "Write"), "apply_patch": (PATCH, ""),
-    "task": (DENY, "task(하위 에이전트)는 전역 거부다(사용자 결정 ⑧). 같은 세션에서 직접 한다"),
+    "task": (TASK, ""),          # tt-explore만 통과(`TASK_ALLOWED`), 그 밖은 거부
     "webfetch": (DENY, f"{NOT_IN_V1}(외부 전송)"), "websearch": (DENY, f"{NOT_IN_V1}(외부 전송)"),
     "codesearch": (DENY, f"{NOT_IN_V1}(외부 전송)"),
     "execute": (DENY, NOT_IN_V1), "plan": (DENY, NOT_IN_V1),
@@ -326,6 +328,11 @@ def map_tool(payload: dict, servers: list[str] | None, servers_error: str | None
             return Mapped(kind)
         if kind == DENY:
             return Mapped(kind, deny=f"{tool}: {extra}.")
+        if kind == TASK:
+            if args.get("subagent_type") == TASK_ALLOWED:
+                return Mapped(PASS)
+            return Mapped(DENY, deny=f"task: 하위 에이전트는 `{TASK_ALLOWED}`(탐색 분석)만 쓴다(사용자 결정 ⑧을 좁힌 것). "
+                                     f"`{args.get('subagent_type')}`은 거부한다 — 같은 세션에서 직접 한다.")
         if kind == BASH:
             command = args.get("command")
             if not isinstance(command, str):
