@@ -1,8 +1,8 @@
 {
   "model": "claude-sonnet-5-5",
-  "date": "2026-10-06",
-  "commit": "24fc254f66a91217020012f122259fb862cc8f03",
-  "dirty": true,
+  "date": "2026-11-17",
+  "commit": "715bbe18e61a3f7553e6a2729d05cf733599cb4c",
+  "dirty": false,
   "margin_default": 1.3,
   "margin_basis": "W0 실측(Sonnet 5.5): eval 1 3회 680,589~743,146(최소 대비 폭 9%). 대표값=최댓값, 여유율은 관측 폭의 약 3배. eval 2·45는 1회라 편차 미측정",
   "evals": {
@@ -83,6 +83,75 @@
           "total": 222781,
           "num_turns": 11,
           "total_cost_usd": 0.1660906
+        }
+      ]
+    },
+    "84": {
+      "total": 845959,
+      "num_turns": 25,
+      "input": 48,
+      "output": 10533,
+      "cache_creation": 49737,
+      "cache_read": 785641,
+      "total_cost_usd": 0.3829381,
+      "commit": "442a40a41f85cd563e99aefd6fff904bee17b877",
+      "dirty": false,
+      "runs": [
+        {
+          "total": 845959,
+          "num_turns": 25,
+          "input": 48,
+          "output": 10533,
+          "cache_creation": 49737,
+          "cache_read": 785641,
+          "total_cost_usd": 0.3829381,
+          "undecided": 0
+        }
+      ]
+    },
+    "85": {
+      "total": 1006361,
+      "num_turns": 28,
+      "input": 52,
+      "output": 12182,
+      "cache_creation": 54941,
+      "cache_read": 939186,
+      "total_cost_usd": 0.4356066,
+      "commit": "715bbe18e61a3f7553e6a2729d05cf733599cb4c",
+      "dirty": false,
+      "runs": [
+        {
+          "total": 1006361,
+          "num_turns": 28,
+          "input": 52,
+          "output": 12182,
+          "cache_creation": 54941,
+          "cache_read": 939186,
+          "total_cost_usd": 0.4356066,
+          "undecided": 0
+        }
+      ]
+    },
+    "86": {
+      "total": 763568,
+      "num_turns": 25,
+      "input": 48,
+      "output": 9205,
+      "cache_creation": 41299,
+      "cache_read": 713016,
+      "total_cost_usd": 0.32864360000000004,
+      "commit": "715bbe18e61a3f7553e6a2729d05cf733599cb4c",
+      "dirty": false,
+      "runs": [
+        {
+          "total": 763568,
+          "num_turns": 25,
+          "input": 48,
+          "output": 9205,
+          "cache_creation": 41299,
+          "cache_read": 713016,
+          "total_cost_usd": 0.32864360000000004,
+          "undecided": 0
         }
       ]
     }
