@@ -344,6 +344,7 @@ def test_time_answer_full_analyzes_whole_log_without_occurred_at():
     assert "occurred_at" not in json.loads((out / "issue_meta.json").read_text(encoding="utf-8"))
     assert analysis["step_anchor"]["source"] == "none"
     assert "- 기준 시각 없음 — 로그 전체를 봄" in (out / "report.md").read_text(encoding="utf-8")
+    assert "기준 시각 없음 — 로그 전체를 봄" in analysis["must_show"]       # FR-04(P4): 포털 확실한 일치에서 빠지게
     match = json.loads((out / "match.json").read_text(encoding="utf-8"))
     assert match["candidates"] and all((c.get("bonus") or {}).get("proximity", 0) == 0 for c in match["candidates"])
     normal = _offline(item, doc, work / "normal")       # 같은 로그를 발생 시각과 함께 돌린 기준
@@ -609,6 +610,9 @@ def _check_module_skills_md(path):
     for bad in ("Read 도구", "AskUserQuestion", "Bash", "Task 도구", "${CLAUDE_PLUGIN_ROOT}"):
         assert bad not in text, bad
     assert re.search(r"`ask_also`[^\n]{0,40}\*\*먼저\*\*", text)        # 문서를 읽기 전에 묻는다
+    # FR-08(P6): 플래그로 시작한 세션은 모듈 질문을 묻지도 받지도 않는다(모델이 스스로 골라 더 읽지 않게)
+    flag = next(ln for ln in text.splitlines() if ln.startswith("- `ask_also`·`ask_switch`:"))
+    assert "묻지 않고 받지 않는다" in flag and "스스로 골라" not in text, flag
     for m in re.finditer(r"deep-input\.json", text):                    # 읽는 것은 막지 않는다(고치지 않을 뿐)
         near = text[max(0, m.start() - 20):m.end() + 20]
         assert not (re.search(r"열|읽", near) and re.search(r"않|금지", near)), near
@@ -1677,6 +1681,21 @@ def test_w4_docs_match_the_implementation():
     assert "`cleanup`(yes|no)" not in doc and "`code`(프로필|경로|skip)" in doc
 
 
+def test_contracts_cache_and_state_match_code():
+    """FR-09(P7): 계약 문서가 코드와 같다 — 캐시 format(CACHE_FORMAT)·캐시 제외(extractor 시간 초과)·state의 `runs[].look`·
+    `job.prior_explore`·입력 해시의 `--(no-)explore`(07-workflow 해시 목록 포함)."""
+    from triagelib import core
+    contracts = (W4_DOCS / "contracts.md").read_text(encoding="utf-8")
+    assert re.findall(r"analysis-cache\.json`\(`\{format\((\d+)\)", contracts) == [str(core.CACHE_FORMAT)]
+    assert "extractor 시간 초과(`observation.timeout`" in contracts
+    state = next(ln for ln in contracts.splitlines() if ln.startswith("- `triage-state.json`은 스키마 2"))
+    assert "look?(" in state and "prior_explore?{" in state
+    assert "`--explore`·`--no-explore`(값이 있을 때만 `explore: true|false`)도 `args`에 든다" in contracts
+    hashes = next(ln for ln in (W4_DOCS / "07-workflow.md").read_text(encoding="utf-8").splitlines()
+                  if ln.startswith("- **입력 해시**"))
+    assert "`--explore`·`--no-explore`(준 것만)" in hashes
+
+
 # -- 묶음 B: 판정 불가 유형(매처 오류)·미추출 W/E 줄 ------------------------------------------------------------
 
 
@@ -1772,22 +1791,51 @@ def test_extractor_timeout_is_observation_incomplete_not_unjudged():
     assert analysis.get("unjudged") is None
     obs = analysis["observation"]
     assert (obs["count"], obs["extractor"], obs["timeout"]) == (1, 1, 1) and obs["errors"][0]["code"] == "pattern-timeout", obs
-    shown = [m for m in analysis["must_show"] if m.startswith("관측 불완전: extractor 오류 1개")]
+    shown = [m for m in analysis["must_show"] if m.startswith("관측 불완전: 로그에서 이벤트를 뽑는 단계 오류 1개(extractor)")]
     assert len(shown) == 1 and "slow-one" in shown[0], analysis["must_show"]
-    assert sum("관측 불완전" in ln for ln in (out / "report.md").read_text(encoding="utf-8").splitlines()) == 1
+    assert shown[0].endswith(" — 이 구간 이벤트가 빠졌을 수 있음(관리자: parse_logcat 로그 확인)"), shown   # FR-03: 할 일이 있는 문구
+    lines = (out / "report.md").read_text(encoding="utf-8").splitlines()
+    assert sum("관측 불완전" in ln for ln in lines) == 1        # 1위 C=1: 결론 줄은 그대로(후보 없음·원인 미확인만 꼬리)
     assert not (out / "analysis-cache.json").exists(), "extractor 시간 초과(비결정적) 결과는 재사용 캐시에 넣지 않는다"
     events = json.loads((out / "events.json").read_text(encoding="utf-8"))
     assert events["complete"] is True and events["observation"]["complete"] is False
 
 
+def test_conclusion_flags_observation_incomplete_without_blocking():
+    """FR-03(P3): 관측 불완전이면 후보 없음·원인 미확인 결론에 "로그 일부를 못 읽음"과 등록 전 확인을 붙인다(`. 다음:` 형식 유지 —
+    포털은 그 앞까지만 남긴다). 막지는 않고, 1위 C=1·판정 불완전 결론은 그대로다."""
+    from types import SimpleNamespace
+    from triagelib import report
+    me = SimpleNamespace(analysis_only=False)
+    obs = {"count": 1, "extractor": 1, "timeout": 1, "errors": []}
+    none = report.ReportMixin._conclusion(me, [], {}, obs)
+    assert none.startswith("아는 증상·원인과 맞는 후보 없음 — 단 로그 일부를 읽지 못해(관측 불완전) 전체 사실이 아닐 수 있음. "
+                           "다음: 새 유형 등록 전 아래 관측 불완전 줄 확인"), none
+    assert none.count(". 다음: ") == 1 and "Step 7" not in none.split(". 다음: ")[0]
+    c0 = report.ReportMixin._conclusion(me, [{"cause": None, "type": "DATA-001", "confidence": "low"}], {}, obs)
+    assert "(원인 미확인) — 단 로그 일부를 읽지 못해(관측 불완전)" in c0 and "다음: 새 원인 등록 전 아래 관측 불완전 줄 확인" in c0
+    assert report.ReportMixin._conclusion(me, [], {}, None) == report.ReportMixin._conclusion(me, [], {})   # 없으면 이전과 같다
+    assert "관측" not in report.ReportMixin._conclusion(me, [], {"count": 2}, obs)                   # 판정 불완전이 먼저
+    top = {"cause": "DATA-001-01", "type": "DATA-001", "category": "data", "title": "t", "confidence": "high"}
+    assert "관측" not in report.ReportMixin._conclusion(me, [top], {}, obs)
+
+
 def test_observation_summary_counts_timeouts_and_quotes_matching_kind():
-    """정규식 오류(결정적)는 timeout 0(캐시해도 된다). 예시는 extractor 것 먼저, 리포트 줄은 라벨과 같은 종류를 인용한다."""
+    """정규식 오류(결정적)는 timeout 0(캐시해도 된다). 예시는 파일 문제 것 먼저(리포트 줄 라벨 순서와 같다 — 사용자가 고칠 수 있는
+    쪽), 리포트 줄은 라벨 첫 종류의 예시를 인용한다."""
     from triagelib import driver
     events = {"observation": {"complete": False, "errors": [
         {"code": "file-unparsed", "error": "a.log: 빈 파일"}, {"code": "pattern-error", "error": "extractor bad: unbalanced"}]}}
     obs = driver._observation_summary(events)
     assert obs == {"count": 2, "extractor": 1, "timeout": 0, "errors": [
-        {"code": "pattern-error", "error": "extractor bad: unbalanced"}, {"code": "file-unparsed", "error": "a.log: 빈 파일"}]}
+        {"code": "file-unparsed", "error": "a.log: 빈 파일"}, {"code": "pattern-error", "error": "extractor bad: unbalanced"}]}
+    from triagelib import report
+    line = report.observation_line(obs)              # 라벨 나열과 인용 예시가 같은 순서(파일 문제 먼저)
+    assert line.startswith("관측 불완전: 파일 해석·외부 파서 문제 1건·로그에서 이벤트를 뽑는 단계 오류 1개(extractor) (a.log: 빈 파일)")
+    ext_only = driver._observation_summary({"observation": {"complete": False, "errors": [
+        {"code": "pattern-error", "error": "extractor bad: unbalanced"}]}})
+    assert report.observation_line(ext_only).startswith(
+        "관측 불완전: 로그에서 이벤트를 뽑는 단계 오류 1개(extractor) (extractor bad: unbalanced)")
     assert driver._observation_summary({"observation": {"complete": True, "errors": []}}) is None
     assert driver._observation_summary({}) is None          # observation이 없는 옛 events.json
     out = tmp("tt-triage-") / "x"

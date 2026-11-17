@@ -960,7 +960,7 @@ def oc_check0_text(proj: Path | None) -> str:
     키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다. 내장 provider 설치(install --provider-model)는 이 curl이 해당 없다."""
     base, model, builtin = _oc_gateway(proj)
     if builtin:
-        return ("사내 확인 0(OpenCode) — 외부 provider 설치(install --provider-model): 게이트웨이 OpenAI 호환 curl은 해당 없다. "
+        return ("사내 확인 0(OpenCode) — 내장 provider 설치(install --provider-model): 게이트웨이 OpenAI 호환 curl은 해당 없다. "
                 "키·주소는 OpenCode 전역 설정 몫이고 TT_GATEWAY_API_KEY도 필요 없다. 모델 연결은 짧은 실행(tt-oc)으로 확인한다.")
     return "\n".join([
         "사내 확인 0(OpenCode) — 게이트웨이 OpenAI 호환 엔드포인트 (이 도구는 실행하지 않는다, 사용자가 터미널에서 한 번):",

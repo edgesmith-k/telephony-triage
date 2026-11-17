@@ -76,7 +76,21 @@ def test_token_only_without_jira_time_picks_last_and_lists_all_hits():
     assert done["step_anchor"]["look"] == {"hits": 4, "picked": 4} and "issue_gap_min" not in done["step_anchor"]
     report = (job / "report.md").read_text(encoding="utf-8")
     assert "(일치 4개 중 4번째 — 기준 시각이 없어 마지막 것)" in report
-    assert "- 확인할 내용(사용자 질문): 이 줄 이후 재시도가 오는지 — 탐색 분석 안 함 — 확인할 내용은 답하지 않음" in report
+    # FR-16(P9): 확인할 내용은 분석 요청이다 — 1위 C=1이어도 적합성 확인(fit_check)을 열어 탐색에서 답한다
+    assert done["candidates"][0]["C"] == 1 and done["explore"]["reason"] == "fit_check", done.get("explore")
+    assert "- 확인할 내용(사용자 질문): 이 줄 이후 재시도가 오는지 — 탐색 분석(동의 뒤)에서 답한다" in report
+    off, job = _offline("tok-off", "--look-at", "0x0de", "--look-note", "이 줄 이후 재시도가 오는지", "--no-explore",
+                        occurred=None)
+    assert "explore" not in off                                            # 끄는 쪽(--no-explore)이 이긴다
+    assert ("- 확인할 내용(사용자 질문): 이 줄 이후 재시도가 오는지 — --no-explore라 탐색 분석 안 함 — 확인할 내용은 답하지 않음"
+            "(답을 받으려면 --no-explore 없이 다시 실행)") in (job / "report.md").read_text(encoding="utf-8")
+    never, job = _offline("tok-never", "--look-at", "0x0de", "--look-note", "이 줄 이후 재시도가 오는지", occurred=None,
+                          root=plugin_root(explore={"when": "never"}))
+    assert "explore" not in never
+    assert "- 확인할 내용(사용자 질문): 이 줄 이후 재시도가 오는지 — 탐색 분석 안 함 — 확인할 내용은 답하지 않음" in (
+        job / "report.md").read_text(encoding="utf-8")
+    plain, _ = _offline("tok-plain", "--look-at", "0x0de", occurred=None)     # 기준 줄만(질문 없음)은 이전과 같다
+    assert "explore" not in plain
     nearer, _ = _offline("near", "--look-at", "0x0de", occurred="2026-09-20T14:30:00+09:00")
     assert nearer["step_anchor"]["span"][1] == "2026-09-20T05:30:05.000Z" and nearer["step_anchor"]["look"]["picked"] == 1
     assert _causes(nearer)[0] == "IMS-001-01"
@@ -154,6 +168,12 @@ def test_explore_timeline_head_carries_line_hits_and_note():
                                "at": ["2026-09-20T05:30:05.000Z", "2026-09-20T05:30:05.120Z", "2026-09-20T05:33:05.000Z",
                                       "2026-09-20T05:33:05.400Z"]}
     assert "- 확인할 내용(사용자 질문): 재시도가 오는지 — 탐색 분석(동의 뒤)에서 답한다" in (job / "report.md").read_text(encoding="utf-8")
+    # 리뷰 지적: 탐색 줄(후보 없음)이 있어도 --no-explore면 스킬이 탐색하지 않는다 — 답을 약속하지 않는다
+    off, off_job = _offline("ex-off", "--look-at", "VIPC_SETUP_DATA (token=0x0de)", "--look-note", "재시도가 오는지", "--no-explore",
+                            logs=(log,))
+    assert off["explore"]["reason"] == "no_candidate"
+    text = (off_job / "report.md").read_text(encoding="utf-8")
+    assert "- 확인할 내용(사용자 질문): 재시도가 오는지 — --no-explore라 탐색 분석 안 함" in text and "동의 뒤)에서 답한다" not in text
     out = run_json("triage.py", ["explore", KEY, "--out", job])
     text = (job / "timeline.md").read_text(encoding="utf-8")
     assert out["lines"] > 0

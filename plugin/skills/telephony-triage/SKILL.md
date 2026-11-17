@@ -33,7 +33,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 1. `--issue-file`이 없으면 config(`S/config.py show --keys work_dir,tracker.tools [--platform <p>]`)의 `get_issue`(있으면 `get_comments`)를 그 스키마대로 부른다. 비어 있으면 추측하지 말고 멈춘다: `S/config.py doctor --format markdown` 표를 그대로 붙이고 setup 매핑 안내, 연습은 `--dry-run --issue-file <yaml>`. hook이 원문을
    `JOB/issue_raw.json`에 두고 마스킹 요약만 보여준다(`saved_to` 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작(S1 확인)"을 알린다. S1 확인 전엔 guard가 읽기마다 묻는다 — 우회하지 않는다). `--issue-file`은
    `--dry-run`·`--analysis-only` 전용.
-2. `S/triage.py run <KEY> --logs <…> [--platform <p>]` + 위 옵션(analyzer 외). stdout(=`JOB/analysis.json`)과 `JOB/report.md`만 읽는다.
+2. `S/triage.py run <KEY> --logs <…> [--platform <p>]` + 받은 옵션 그대로(analyzer 외). stdout(=`JOB/analysis.json`)과 `JOB/report.md`만 읽는다.
 3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**을 `--answer <kind>=<값>`으로 붙여 같은 명령을 재실행한다.
    `issue`는 1번 도구 재호출 뒤 `--answer` 없이, `logs`는 `--logs`를 붙여 재실행. `stopped`는 이유만.
 4. 종료 코드 1 → 키를 다시 묻는다.
@@ -44,7 +44,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 - `mode: read-only` → 계획 저장까지만임을 알리고 `snapshot.pull_skipped_reason`, `post_lint.errors`("메인테이너 정리"), `warnings`, `plan.pr_number`(→ `sync-pr`)도 알린다.
 - `plan.next`(이어서)가 있으면 그대로. `--dry-run`이어도 `mode: write`가 정상(push만 안 함).
 - `notes`는 항상 알린다. `code.auto` 알림(`--code`로 변경 가능)은 `must_show` 줄이다.
-- 로그 범위·`C: 0`·후보 없음은 report.md대로("로그 범위 밖"≠"매칭 없음").
+- 로그 범위·`C: 0`·후보 없음·`observation`은 report.md대로("로그 범위 밖"≠"매칭 없음").
 - Step 5: `code.resolved` 파일에서 근거 문구의 출력 위치·분기 조건을 찾는다. `code.moved`는
   "경로 변경"으로 알리고 Step 7에서 `add-code-ref`를 묻는다.
 - Step 5-1 `analyzer`·5-2 `explore`(값이 있을 때만): `--no-…`·`never`면 생략, `--analyzer`·`--explore`·`always`면

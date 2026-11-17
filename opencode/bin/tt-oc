@@ -310,7 +310,8 @@ def git_row(env: dict) -> dict:
 
 
 def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
-    """점검 행 [{check, status(ok|fail|warn), detail}]. warn은 막지 않는다. 앞 단계가 실패해도 할 수 있는 점검은 한다(건너뛴 것은 fail로 남긴다)."""
+    """점검 행 [{check, status(ok|fail|warn|skip), detail}]. warn·skip은 막지 않는다(skip = 이 도구가 점검하지 않는 항목 — 통과
+    표시가 아니다, 예: 내장 provider의 gateway-key). 앞 단계가 실패해도 할 수 있는 점검은 한다(실패로 건너뛴 것은 fail로 남긴다)."""
     rows = []
 
     def row(check, ok, detail):
@@ -394,13 +395,15 @@ def first_timeout_rows(env) -> list[dict]:
 def gateway_rows(proj: Path, env: dict) -> list[dict]:
     """게이트웨이 키 환경 변수 유무와 baseURL 모양(런타임 리뷰 3) — warn만(막지 않는다, 게이트웨이마다 경로가 다를 수 있다).
     키 값·주소는 적지 않는다. 모델 접두가 프로젝트 설정의 provider에 없으면(내장 provider 설치, install --provider-model)
-    키·주소는 OpenCode 전역 설정 몫이라 점검하지 않는다(A232)."""
+    키·주소는 OpenCode 전역 설정 몫이라 점검하지 않는다(A232) — gateway-key `skip` 한 행."""
     try:
         cfg = json.loads((proj / "opencode.json").read_text(encoding="utf-8"))
         providers = cfg.get("provider") if isinstance(cfg.get("provider"), dict) else {}
         prefix = str(cfg["model"]).partition("/")[0]
         if prefix not in providers:
-            return [{"check": "gateway-key", "status": "ok", "detail": "외부 provider — 키·주소 점검 안 함"}]
+            # 점검하지 않았으니 ok가 아니라 skip(FR-17 — 건너뛴 점검을 통과로 표시하지 않는다). doctor 종료 코드는 그대로
+            return [{"check": "gateway-key", "status": "skip",
+                     "detail": "내장 provider 설정 — 키·주소는 OpenCode 전역 설정에서 확인"}]
         opts = providers[prefix]["options"]
         key, url = str(opts.get("apiKey") or ""), str(opts.get("baseURL") or "")
     except (OSError, ValueError, KeyError, TypeError, AttributeError):

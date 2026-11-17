@@ -37,7 +37,8 @@ NOTE_TOOL = "mcp__mock-jira__jira_ticket_add_note"
 MOCK_JIRA = REPO / "tests" / "mocks" / "jira"
 DATA_LOG = SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log"
 PLANS = REPO / "tests" / "fixtures" / "plans"
-POST_FILES = ("post.md", "post.fill.json", "post.render.json", "post.approved.json", "post.result.json", "plan.json")
+POST_FILES = ("post.md", "post.fill.json", "post.render.json", "post.approved.json", "post.result.json", "plan.json",
+              "check-output.json")
 FILL = {"problem": "LTE는 표시되지만 데이터 통신이 되지 않는다",
         "cause": [{"basis": "log", "text": "사용자 설정 변경 직후 데이터 평가가 DATA_DISABLED로 거부됐다"},
                   {"basis": "code", "text": "설정이 꺼져 있으면 연결을 만들지 않는 분기로 보인다"}],
@@ -418,6 +419,26 @@ def test_omit_and_plan_classification():
     body = post_md(ws)
     assert "DATA-001 > 원인 미확정 — 원인 미확정(사용자 판단)" in body
     assert "* 원인 미확정 — 추가 로그·재현 정보 필요" in body and "* 이슈 DB: 계획만 저장(이슈 DB 미반영)" in body
+
+
+def test_fit_check_hold_marks_resolution_held_without_plan():
+    """FR-02(P2): 탐색 적합성 확인이 1위를 보류했으면(check-output 기록 `fit_hold`) 계획 없는 본문의 해결책을 보류로 적고
+    원인 미확정으로 본다 — 맞지 않는 해결책이 `검증됨`으로 나가지 않게. 다른 원인 ID의 기록이면 그대로다."""
+    ws = shared()
+    top = json.loads(_SAVED["analysis.json"])["candidates"][0]
+    assert top["cause"] and top.get("resolution"), top
+    render(ws, "--fill", fill(ws, FILL))
+    assert f"* 해결책: {top['resolution']} (해결책 검증: " in post_md(ws)
+    co = ws.job_dir(KEY) / "check-output.json"
+    co.write_text(json.dumps({"explore": {"mode": "explore", "fit_hold": top["cause"]}}), encoding="utf-8")
+    render(ws, "--fill", fill(ws, FILL))
+    body = post_md(ws)
+    assert f"* 해결책(1위 기준, 보류됨): {top['resolution']} (해결책 검증: 보류(1위 부적합))" in body
+    assert "* 원인 미확정 — 추가 로그·재현 정보 필요" in body and "* 탐색 분석 적합성 확인: 1위가 증상과 맞지 않아 보류" in body
+    assert f"* 해결책: {top['resolution']}" not in body
+    co.write_text(json.dumps({"explore": {"mode": "explore", "fit_hold": "OTHER-001-01"}}), encoding="utf-8")
+    render(ws, "--fill", fill(ws, FILL))
+    assert f"* 해결책: {top['resolution']} (해결책 검증: " in post_md(ws) and "보류(1위 부적합)" not in post_md(ws)
 
 
 def test_stale_or_non_analyze_plan_is_not_used():

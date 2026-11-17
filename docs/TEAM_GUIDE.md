@@ -81,7 +81,7 @@ tt-oc doctor   # 사전 점검. fail이 있으면 시작하지 않는다
 ```
 
 - `--dest`는 git 밖. 그 폴더와 위 폴더(`/`까지)의 `AGENTS.md`·`CONTEXT.md`, 또는 `~/.config/opencode/AGENTS.md`가 있으면 시작 안 함.
-- 게이트웨이가 OpenCode 내장 provider로만 받으면 `--gateway-url`·`--model` 대신 `--provider-model <provider>/<모델>`을 준다(키·주소는 OpenCode 전역 설정 몫 — `TT_GATEWAY_API_KEY` 불필요, doctor `gateway-key` 행이 "외부 provider"로 나온다).
+- 게이트웨이가 OpenCode 내장 provider로만 받으면 `--gateway-url`·`--model` 대신 `--provider-model <provider>/<모델>`을 준다(키·주소는 OpenCode 전역 설정 몫 — `TT_GATEWAY_API_KEY` 불필요, doctor `gateway-key` 행이 `skip` "내장 provider 설정"으로 나온다 — 키·주소는 OpenCode 전역 설정에서 직접 확인).
 - `<작업 디렉토리>`는 사용자 설정의 `work_dir`(기본 플랫폼 `~/.telephony-triage/work`). 다른 플랫폼(oFono 등)의 기본 `~/.telephony-triage/work-<플랫폼>`은 그 밖이다 — 한 설치는 작업 폴더 하나만 쓰므로 oFono도 OpenCode로 쓰면 다른 `--dest`(예: `~/tt-oc-ofono`)에 `--work-root <work-ofono>`로 한 번 더 install한다. `--work-root`에 `~/.telephony-triage`는 주지 않는다(config.yaml이 edit 범위에 든다). `--issue-db`는 clone마다.
 - OpenCode에서 PR까지 하려면 install에 `--allow-publish`를 더하고 Jira 읽기 관문(4절)을 연다. 순서는 `opencode/README.md` "처음부터 PR까지".
 
@@ -102,6 +102,7 @@ tt-oc doctor   # 사전 점검. fail이 있으면 시작하지 않는다
    ```
    점검표 `module_skills` 행에 `5-1 설치 스킬: data · 그 밖=모듈 문서`처럼 보인다. OpenCode면 `install --force`.
 6. **반복 질문 줄이기(선택)**: 사용자 설정에 `analyzers: {data: {when: never}}`·`explore: {when: never}`, 한 번만이면 `--no-analyzer`·`--no-explore`.
+   `explore: {when: always}`는 묻지 않고 탐색 분석을 하는 설정이다. 예전에는 후보가 없거나 원인을 못 찾았을 때만 탐색했지만, 지금은 1위가 확신 일치(규칙이 원인까지 맞음)여도 그 1위가 증상을 설명하는지 매번 확인한다(적합성 확인). 그래서 쉬운 사례도 요청이 4회쯤 늘고 입력 토큰이 약 20~25% 는다(사외 eval 84 실측 기준). 끄는 쪽이 이긴다 — `never`면 `--explore`를 줘도 하지 않고, `--no-explore`면 `always`여도 하지 않는다.
 
 ## 3. 매일 쓰는 흐름
 

@@ -6,6 +6,8 @@ Claude가 쓴 `JOB/deep-output.md`·`JOB/explore-output.md`를 받아:
 3. 근거 원문 검사: 인용이 준 타임라인(모듈 뷰·`JOB/timeline.md`, 설치 스킬이면 events.json 전체 행)에 있는지.
 4. report.md의 5-1·5-2 줄(과 `  - ` 아래 줄)을 쓴다 — `TODO(LLM)`이 남은 줄만 고친다. 모델은 그 줄을 고치지 않는다.
    탐색 가설 줄에는 그 가설의 원문에 없는 인용 수 `[근거 불일치 N]`(N>0일 때만).
+   적합성 확인(`fit_check`)이 가설 없이 끝나면(1위 부적합 보류) 결론·해결책 줄도 보류로 고치고 기록에 `fit_hold: <원인 ID>`
+   (줄을 못 고쳐도 기록은 남기고 `fit_hold_unwritten`·stderr 경고. 뒤 검사·생략·실패 기록도 fit_hold를 이어받는다).
 
 `--skipped "<사유>"`: 실행하지 않았거나 실패 — 줄을 "생략: <사유>"로(이미 스크립트가 쓴 생략·해당 없음·받기 실패 줄이면 그대로).
 기록 `JOB/check-output.json[purpose]`(스크립트만 쓴다, guard 규칙 12)와 trace `checked` 행(`core.trace_event`). 표시 의무: 작업 디렉토리 JOB이면 검사마다 `evidence` 기록
@@ -60,6 +62,8 @@ INPUT_NAMES = {"analysis.json", "events.json", "match.json", TIMELINE_FILE, EXPL
 EVENTS_MAX = 64 << 20
 SKILL_LABEL = "근거 원문 검사(events.json 기준)"
 WARN_REWRITE = "경고: report.md 줄을 고치지 못했다"
+WARN_HOLD = "경고: 1위 보류를 report.md {what}에 쓰지 못했다 — check-output 기록(fit_hold)·Jira 본문은 보류로 남긴다"
+HOLD_KEEP = ("fit_hold", "fit_hold_unwritten")     # 탐색 기록을 새로 써도 이어받는다(보류로 고친 줄은 다음 run까지 남는다)
 
 
 class _Stop(Exception):
@@ -116,6 +120,9 @@ def _record(job: Path, purpose: str, entry: dict) -> None:
     path = job / RECORD
     data = _load(path)
     data = data if isinstance(data, dict) else {}
+    old = data.get(purpose)
+    if isinstance(old, dict) and old.get("fit_hold") and "fit_hold" not in entry:   # 다시 검사·생략·실패해도 보류는 이어 간다
+        entry = {**entry, **{k: old[k] for k in HOLD_KEEP if k in old}}
     data[purpose] = entry
     try:
         _write_atomic(path, (json.dumps(data, ensure_ascii=False, indent=1) + "\n").encode("utf-8"))
@@ -345,6 +352,34 @@ def _rewrite(report: Path, prefix: str, lines: list[str], keep_sub: tuple[str, .
     return ok
 
 
+def _fit_hold(analysis: dict, fields: dict) -> str | None:
+    """FR-02: 적합성 확인(`explore.reason: fit_check`)이 가설 없이 끝났으면(1위 부적합 보류) 보류한 1위 원인 ID, 아니면 None.
+    감지는 구조(사유·빈 가설)만 보고 판정(C·순위)은 바꾸지 않는다. report.md 재작성 성패와 무관하다(기록·Jira는 이것으로 정한다)."""
+    top = (analysis.get("candidates") or [None])[0]
+    cause = top.get("cause") if isinstance(top, dict) else None
+    if fields["hyps"] or (analysis.get("explore") or {}).get("reason") != "fit_check" or not cause:
+        return None
+    return cause
+
+
+def _hold_lines(report: Path, cause: str) -> list[str]:
+    """결론·해결책 줄을 보류로 고친다(탐색 줄과 달리 1위 확정·`검증됨`을 권하지 않게). 다시 불러도 같다(이미 고친 해결책 줄은 그대로).
+    못 고친 줄 이름 목록(줄 없음·쓰기 실패)."""
+    failed = []
+    if not rep.rewrite_line(report, rep.CONCLUSION_PREFIX, [rep.CONCLUSION_PREFIX + rep.FIT_HOLD_CONCLUSION.format(cause=cause)]):
+        failed.append("결론 줄")
+    line = rep.current_line(report, rep.RESOLUTION_PREFIX)
+    if line:
+        body = line[len(rep.RESOLUTION_PREFIX):]
+        body = body.rpartition(rep.RESOLUTION_CHECK)[0] or body
+        if not rep.rewrite_line(report, rep.RESOLUTION_PREFIX,
+                                [f"{rep.FIT_HOLD_RESOLUTION}{body}{rep.RESOLUTION_CHECK}{rep.FIT_HOLD_CHECK}"]):
+            failed.append("해결책 줄")
+    elif rep.current_line(report, rep.FIT_HOLD_RESOLUTION) is None:      # 이미 보류로 고친 줄이면 실패가 아니다
+        failed.append("해결책 줄")
+    return failed
+
+
 def _skipped(args, job: Path, purpose: str, env: dict) -> int:
     report, prefix = job / "report.md", PREFIX[purpose]
     reason = masking.mask_brief(args.skipped, 120)
@@ -477,11 +512,16 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
         default = f"{DEEP_PREFIX} ({name}): "
     lines = _render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp)
     _rewrite(report, prefix, lines, KEEP_SUB)
+    hold = _fit_hold(analysis, fields) if purpose == "explore" else None
+    unwritten = _hold_lines(report, hold) if hold else []
+    if unwritten:
+        print(WARN_HOLD.format(what="·".join(unwritten)), file=sys.stderr)
 
     counts = {k: (res or {}).get(k, 0) for k in ("fabricated", "weak", "raw")}
     n = (res or {}).get("n", 0)
     _record(job, purpose, {"mode": mode, "at": _now(), "env": env, "output_sha256": sha, "source": src_rel if res else None,
-                           "quotes": n, **counts})
+                           "quotes": n, **counts, **({"fit_hold": hold} if hold else {}),
+                           **({"fit_hold_unwritten": unwritten} if unwritten else {})})
     head = masking.mask_brief(lines[0], 300, off=off)     # 끔 DB: report.md 줄과 같은 글자(꼭 보일 줄 대조가 어긋나지 않게)
     fab = [sub.lstrip()] if counts["fabricated"] else []
     # 심층 분석은 결과 줄(첫 줄)을 늘 보인다 — 탐색은 지어낸 인용이 있을 때만(B2-6)

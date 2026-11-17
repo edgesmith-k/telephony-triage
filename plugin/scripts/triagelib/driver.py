@@ -61,7 +61,8 @@ def _unjudged(match: dict) -> dict | None:
 
 def _observation_summary(events: dict) -> dict | None:
     """events.json `observation`이 불완전이면 `{count, extractor, timeout, errors[≤2 {code, error(≤80)}]}`, 완전하면 None.
-    `extractor` = extractor 오류 수, 그중 `timeout` = 시간 초과(비결정 — 캐시 제외). 예시는 extractor 것 하나·그 밖 것 하나 순.
+    `extractor` = extractor 오류 수, 그중 `timeout` = 시간 초과(비결정 — 캐시 제외). 예시는 파일·외부 파서 것 하나·extractor 것
+    하나 순(리포트 줄 라벨과 같은 순서 — 파일 문제는 사용자가 고칠 수 있어 먼저).
     `unjudged`(매처 시그니처 오류)와 따로 둔다 — 정상 불일치가 아니라 로그를 다 보지 못한 것이다. 분석은 그대로 잇는다."""
     obs = events.get("observation") or {}
     if obs.get("complete", True):
@@ -70,7 +71,7 @@ def _observation_summary(events: dict) -> dict | None:
     ext = [e for e in errors if e.get("code") in EXTRACTOR_CODES]
     other = [e for e in errors if e.get("code") not in EXTRACTOR_CODES]
     return {"count": len(errors), "extractor": len(ext), "timeout": sum(e.get("code") == "pattern-timeout" for e in ext),
-            "errors": [{"code": e.get("code"), "error": _clip(e.get("error"), 80)} for e in ext[:1] + other[:1]]}
+            "errors": [{"code": e.get("code"), "error": _clip(e.get("error"), 80)} for e in other[:1] + ext[:1]]}
 
 
 def _unjudged_label(u: dict) -> str:
@@ -930,7 +931,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
     def explore(self, candidates: list[dict]) -> dict | None:
         """Step 5-2 탐색 분석 해당 여부: 후보 없음·원인 미확인이면 `{reason, when}`, 1위 C=1이면 `run --explore`·`explore.when:
-        always`일 때만 `fit_check`(적합성 확인), 아니면 None.
+        always`·확인할 내용(`--look-note`)이 있을 때만 `fit_check`(적합성 확인), 아니면 None. 끄는 쪽이 이긴다: `never`면
+        `--explore`여도, `--no-explore`면 `always`여도 열지 않는다(FR-07). 확인할 내용은 사용자 질문이라 분석 요청으로 본다(FR-16 —
+        포털 R1과 같은 논리, 답은 탐색 분석이 한다).
 
         타임라인은 만들지 않는다(동의 뒤 `triage.py explore`가 `explore_input()`의 값으로 만든다). 판정은 하지 않는다(07-workflow.md §Step 5-2).
         """
@@ -940,7 +943,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             when = "ask"
         if candidates and candidates[0]["C"]:
             # 확신 일치도 탐색을 묻지 않고 하는 세션이면 1위가 증상을 설명하는지 확인할 맥락을 준다. 그 밖은 이전과 같다(묻지 않음)
-            if when == "never" or (when != "always" and not self.args.explore):
+            if when == "never" or self.args.explore is False or (
+                    when != "always" and not self.args.explore and not self.look_inputs()["note"]):
                 return None
             reason = "fit_check"
         else:
@@ -1004,6 +1008,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         """재실행·답글 턴에 줄 이전 실행의 요약(`analysis.json prior`, 마스킹된 값만) — `drop_stale_records`가 지우기 전에 읽는다.
         top = 직전 실행 1위(state `job.runs`), looked = 이전 실행의 가린 기준 줄(state), hyps·none = `check-output`을 통과했고
         그 뒤 바뀌지 않은(기록 `output_sha256` == 지금 파일) `explore-output.md`의 가설 머리·반대 근거·`가설 없음` 이유.
+        hyps는 근거 원문 검사를 했고(`source`) 원문에 없는 인용이 0일 때만(검사 건너뜀·`fabricated` > 0이면 뺀다).
         hyps·none은 state `job.prior_explore`에도 남겨 산출물이 지워진 뒤(질문 턴·다음 실행)에도 넘긴다 — 새 검사 기록이 있으면
         그것으로 바꾸고, 그 검사가 실패했거나 출력이 바뀌었으면 지운다. top 말고 아무것도 없으면 None(키가 없다)."""
         def regular(path: Path) -> bool:
@@ -1037,9 +1042,13 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                 except (OSError, UnicodeDecodeError):
                     fields = None
                 if fields is not None:
+                    # FR-10①: 가설은 근거 원문 검사를 실제로 했고(source 있음 — 건너뜀 아님) 원문에 없는 인용이 0일 때만 넘긴다.
+                    # weak는 남긴다(정밀도만 다른 정상 인용 오탐 여지). `가설 없음` 이유는 인용이 없어 그대로 넘긴다.
+                    # 구버전 check-output 기록(source·fabricated 키 없음)은 검사 불명으로 보고 탈락시킨다(의도한 fail-closed, 비용은 탐색 1회)
+                    checked = bool(rec.get("source")) and rec.get("fabricated") == 0
                     judged = {"hyps": [_clip(h["가설"] + (f" — 반대: {h['반대 근거']}"
                                                          if h.get("반대 근거") not in (None, "", "없음") else ""), 120)
-                                       for h in fields.get("hyps") or []][:3],
+                                       for h in fields.get("hyps") or []][:3] if checked else [],
                               "none": _clip(fields.get("none"), 120)}
                     judged = {k: v for k, v in judged.items() if v} or None
             if judged:

@@ -884,12 +884,14 @@ def test_doctor_gateway_key_and_url_rows_warn_only(env):
 
 def test_doctor_external_provider_single_ok_row(env):
     """A232: 모델 접두가 프로젝트 opencode.json의 provider에 없으면(내장 provider 설치, install --provider-model)
-    키·주소는 OpenCode 전역 설정 몫 — gateway-key ok 한 행만 내고 gateway-url 행은 없다."""
+    키·주소는 OpenCode 전역 설정 몫 — gateway-key 한 행만 내고 gateway-url 행은 없다. 점검하지 않았으니 ok가 아니라 skip이고
+    (FR-17) doctor 종료 코드는 0 그대로다."""
     (env["proj"] / "opencode.json").write_text(json.dumps({"model": "acme/glm-x"}), encoding="utf-8")
     write_meta(env["proj"], env["plug"], env["work"])
     code, rows = _doctor_rows(env)
     assert code == 0, rows
-    assert rows["gateway-key"]["status"] == "ok" and rows["gateway-key"]["detail"] == "외부 provider — 키·주소 점검 안 함"
+    assert rows["gateway-key"] == {"check": "gateway-key", "status": "skip",
+                                   "detail": "내장 provider 설정 — 키·주소는 OpenCode 전역 설정에서 확인"}, rows
     assert "gateway-url" not in rows
 
 

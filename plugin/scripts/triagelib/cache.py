@@ -127,8 +127,9 @@ class CacheMixin:
                              "clock_offset_sec": self.clock_offset, "steps_file_sha": steps_sha,
                              "look": self.look_inputs(),       # 가린 기준 줄·확인할 내용(원문은 해시에도 쓰지 않는다)
                              "answers": {k: v for k, v in sorted(self.state.answers.items()) if k in ANSWER_KEYS},
-                             # --explore는 1위 C=1의 fit_check(core.explore)를 바꾼다. 없으면 해시가 이전과 같다
-                             **({"explore": True} if getattr(a, "explore", None) else {})}),
+                             # --(no-)explore는 1위 C=1의 fit_check(core.explore)를 바꾼다(--no-explore는 always를 끈다).
+                             # 없으면 해시가 이전과 같다
+                             **({"explore": a.explore} if getattr(a, "explore", None) is not None else {})}),
         }
 
     def reuse_check(self, parts: dict, request_hash: str) -> dict | None:

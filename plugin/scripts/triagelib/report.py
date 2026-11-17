@@ -30,6 +30,12 @@ _ref_label = events.ref_label   # report.md 전용 `f<순번>:L<줄>`
 _SOURCE_LABEL = {"log_marker": "로그 스텝 마커", "steps_file": "steps-file 시각", "step_order": "steps-file 스텝 순서",
                  "issue": "Jira 발생 시각", "symptom_scan": "증상 시각", "none": "로그 전체", None: "Jira 발생 시각"}
 _PICK_LABEL = {"nearest": "발생 시각에 가장 가까운 것", "last": "기준 시각이 없어 마지막 것"}
+# 결론·해결책 줄 모양 — 렌더(아래)와 check-output 적합성 확인 보류 재작성(`output._fit_hold`)이 같이 쓴다. 결론 줄은 `. 다음:`
+# 앞까지가 결론이다(포털이 그 앞만 남긴다 — 그 앞에 Step 7을 쓰지 않는다)
+CONCLUSION_PREFIX = "- 결론: "
+RESOLUTION_PREFIX, RESOLUTION_CHECK = "- 해결책: ", "   해결책 검증: "
+FIT_HOLD_CONCLUSION = "1위 {cause}가 증상과 맞지 않아 보류(탐색 분석 참조). 다음: Step 7에서 보류를 고르거나 근거 로그 확인"
+FIT_HOLD_RESOLUTION, FIT_HOLD_CHECK = "- 해결책(1위 기준, 보류됨): ", "보류(1위 부적합)"
 
 
 def dumps(result: dict) -> str:
@@ -66,6 +72,18 @@ def _unique_evidence(evidence: list) -> list:
         elif (e.get("count") or e.get("_count")) and not (out[seen[key]].get("count") or out[seen[key]].get("_count")):
             out[seen[key]] = e
     return out
+
+
+def observation_line(obs: dict) -> str:
+    """관측 불완전 줄(must_show, `-` 없이). 라벨 나열과 예시는 같은 순서 — 파일 해석·외부 파서 문제(형식·인코딩, 사용자가 고칠 수
+    있다) 먼저, extractor 오류 다음. 예시는 라벨 첫 종류의 것(`driver._observation_summary`의 errors 순서와 같다)."""
+    other = obs["count"] - obs["extractor"]
+    what = "·".join(([f"파일 해석·외부 파서 문제 {other}건"] if other else [])
+                    + ([f"로그에서 이벤트를 뽑는 단계 오류 {obs['extractor']}개(extractor)"] if obs["extractor"] else []))
+    want = (lambda e: e.get("code") not in EXTRACTOR_CODES) if other else (lambda e: e.get("code") in EXTRACTOR_CODES)
+    example = next((e["error"] for e in obs.get("errors") or [] if want(e) and e.get("error")), None)
+    return (f"관측 불완전: {what}" + (f" ({example})" if example else "")
+            + " — 이 구간 이벤트가 빠졌을 수 있음(관리자: parse_logcat 로그 확인)")
 
 
 def _error_line(e: dict) -> str:
@@ -780,25 +798,33 @@ class ReportMixin:
             lines += text
         return lines
 
-    def _conclusion(self, cands: list, unjudged: dict) -> str:
-        """결론 한 줄(후보 줄 바로 앞): 분류 결과 한 문장과 다음 행동. 판정은 아래 줄들과 같다(새 정보 없음) — 엔지니어가 이 줄만
-        보고 다음 행동을 고르게. 규칙 일치 수준은 진단 확신이 아니다."""
+    def _conclusion(self, cands: list, unjudged: dict, observation: dict | None = None) -> str:
+        """결론 한 줄(후보 줄 바로 앞, `CONCLUSION_PREFIX` 뒤 글): 분류 결과 한 문장과 다음 행동. 판정은 아래 줄들과 같다(새 정보 없음) — 엔지니어가 이 줄만
+        보고 다음 행동을 고르게. 규칙 일치 수준은 진단 확신이 아니다. 관측 불완전(`observation`)이면 후보 없음·원인 미확인
+        결론에 "못 읽은 줄이 있다"와 새 유형·원인 등록 전 확인을 붙인다(막지는 않는다, FR-03)."""
         nxt = ("기록 없음(분석 전용)" if self.analysis_only else "아래 후보를 보고 Step 7에서 분류를 확정하거나 다른 원인을 고른다")
         if cands:
             top = cands[0]
             label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
             if top["cause"]:
-                return (f"결론: {top.get('category')} > {top['type']} > {top['cause']} {top['title']} — 규칙 일치 {label}"
+                return (f"{top.get('category')} > {top['type']} > {top['cause']} {top['title']} — 규칙 일치 {label}"
                         f"(진단 확신 아님). 다음: {nxt}")
             if top.get("_cause_unjudged"):
-                return (f"결론: 증상은 {top['type']}에 맞으나 원인 시그니처가 판정 불가(시간 초과·오류). 다음: 관리자에게 시그니처 확인을 "
+                return (f"증상은 {top['type']}에 맞으나 원인 시그니처가 판정 불가(시간 초과·오류). 다음: 관리자에게 시그니처 확인을 "
                         f"요청하고, 원인은 탐색 분석(동의 뒤)·로그 추가(--more-logs)로 찾는다")
-            return (f"결론: 증상은 {top['type']}에 맞으나 아는 원인과 맞지 않음(원인 미확인). 다음: 탐색 분석(동의 뒤) 또는 "
+            if observation:
+                return (f"증상은 {top['type']}에 맞으나 아는 원인과 맞지 않음(원인 미확인) — 단 로그 일부를 읽지 못해(관측 불완전) "
+                        f"전체 사실이 아닐 수 있음. 다음: 새 원인 등록 전 아래 관측 불완전 줄 확인, 탐색 분석(동의 뒤) 또는 로그 추가"
+                        f"(--more-logs), 그래도 없으면 원인 미확정으로 기록")
+            return (f"증상은 {top['type']}에 맞으나 아는 원인과 맞지 않음(원인 미확인). 다음: 탐색 분석(동의 뒤) 또는 "
                     f"로그 추가(--more-logs), 그래도 없으면 원인 미확정으로 기록")
         if unjudged.get("count"):
-            return ("결론: 판정 불완전 — 시그니처 시간 초과·오류로 일부 유형을 판정하지 못함. 다음: 관리자에게 시그니처 확인을 요청하고 "
+            return ("판정 불완전 — 시그니처 시간 초과·오류로 일부 유형을 판정하지 못함. 다음: 관리자에게 시그니처 확인을 요청하고 "
                     "'후보 없음'으로 단정하지 않는다")
-        return ("결론: 아는 증상·원인과 맞는 후보 없음. 다음: 아래 설명 기반 유사 후보·오류 이벤트를 보고 탐색 분석(동의 뒤) 또는 "
+        if observation:
+            return ("아는 증상·원인과 맞는 후보 없음 — 단 로그 일부를 읽지 못해(관측 불완전) 전체 사실이 아닐 수 있음. 다음: 새 유형 "
+                    "등록 전 아래 관측 불완전 줄 확인, 설명 기반 유사 후보·오류 이벤트를 보고 탐색 분석(동의 뒤) 또는 로그 추가(--more-logs)")
+        return ("아는 증상·원인과 맞는 후보 없음. 다음: 아래 설명 기반 유사 후보·오류 이벤트를 보고 탐색 분석(동의 뒤) 또는 "
                 "로그 추가(--more-logs), 새 유형이면 Step 7에서 등록")
 
     def render_report(self, r: dict, anchor: dict | None = None) -> tuple[str, list[str]]:
@@ -810,9 +836,9 @@ class ReportMixin:
         lines: list[str] = []                     # 실행 안내(플랫폼·분석 전용·읽기 전용·pull·재사용): 이슈 내용이 아니라 칸 밖에 둔다
         sec: dict[str, list[str]] = {name: [] for name in issuepost.SECTIONS}
         prob, cause_l, nxt, ana = (sec[n] for n in issuepost.SECTIONS)
-        must: list[tuple[int, str]] = []          # (우선순위, 줄 본문). 이미 마스킹된 값만
+        must: list[tuple[float, str]] = []        # (우선순위, 줄 본문). 이미 마스킹된 값만
 
-        def add(priority: int, text: str) -> str:
+        def add(priority: float, text: str) -> str:
             must.append((priority, text))
             return f"- {text}"
 
@@ -827,13 +853,14 @@ class ReportMixin:
         iss = r.get("issue") or {}       # 마스킹된 Jira 요약(jira_fields)
         known = [f"{name} {iss[k]}" for name, k in (("SW", "sw"), ("발생 시각", "occurred_at")) if iss.get(k)]
         prob.append(f"- 이슈: {self.key} — {iss.get('summary') or '요약 없음'}" + (f" ({', '.join(known)})" if known else ""))
+        # 기준 시각 없음 줄은 must_show(3.5 — 재분석 뒤·실패 스텝 앞, FR-04): 포털이 모르는 머리말로 보고 확실한 일치에서 뺀다
         if not anchor and self.answer("time") == "full":    # 앵커가 있으면 범위는 앵커 기준이라 이 줄이 맞지 않다
-            prob.append("- 기준 시각 없음 — 로그 전체를 봄")
+            prob.append(add(3.5, "기준 시각 없음 — 로그 전체를 봄"))
         elif not anchor and self.time_candidates is not None:     # 앵커·Jira 시각·시각 답이 없어 묻지 않고 전체를 봤다
             seen = ", ".join(f"{t['ts']} {t['type']}" for t in self.time_candidates)
             why = "시각 입력 없음·기준 줄 못 찾음" if self.look_result else "시각·기준 줄 입력 없음"
-            prob.append(f"- 기준 시각 없음({why}) — 로그 전체를 봄. 증상 시각 후보 {len(self.time_candidates)}개"
-                        + (f": {seen}" if seen else ""))
+            prob.append(add(3.5, f"기준 시각 없음({why}) — 로그 전체를 봄. 증상 시각 후보 {len(self.time_candidates)}개"
+                                 + (f": {seen}" if seen else "")))
         if self.failed_step:
             prob.append(add(4, f"실패 스텝 (보조 정보, Jira {self.failed_step['source']}; S/C에 쓰지 않음; 단어 겹침 가산·순위 참고·분석 범위): "
                                 f"{self.failed_step['text']}"))
@@ -885,14 +912,19 @@ class ReportMixin:
         note = self.look_inputs()["note"]
         if note:        # 확인할 내용은 항상 한 줄. 답은 탐색 분석이 한다 — 탐색을 안 하면 그렇다고 적는다(강제하지 않는다)
             ex = r.get("explore")
-            prob.append(f"- 확인할 내용(사용자 질문): {note} — " + ("탐색 분석(동의 뒤)에서 답한다" if ex and ex.get("when") != "never"
-                                                               else "탐색 분석 안 함 — 확인할 내용은 답하지 않음(근거 로그로 직접 확인)"))
+            never = (ex or {}).get("when", userconfig.get(self.cfg, "explore.when", "ask")) == "never"
+            off = getattr(self.args, "explore", None) is False      # --no-explore: 탐색 줄이 있어도 스킬은 하지 않는다
+            prob.append(f"- 확인할 내용(사용자 질문): {note} — " + (
+                "탐색 분석 안 함 — 확인할 내용은 답하지 않음(근거 로그로 직접 확인)" if never else
+                "--no-explore라 탐색 분석 안 함 — 확인할 내용은 답하지 않음(답을 받으려면 --no-explore 없이 다시 실행)" if off else
+                "탐색 분석(동의 뒤)에서 답한다" if ex else
+                "확인할 내용은 --explore와 함께 주면 탐색에서 답한다(지금 실행은 탐색 안 함)"))
         if self.focus:
             ana.append("- 스텝 기준 우선 유형 (순위 참고용, 점수는 그대로): " + ", ".join(self.focus))
         cands = r["candidates"]
         unjudged = r.get("unjudged") or {}
         # 한 문장 결론(종합 리뷰 A): 머리 알림(분석 전용·읽기 전용·실패 스텝·시계) 다음, 후보 줄 바로 앞. must_show 아님(새 정보 없음)
-        cause_l.append("- " + self._conclusion(cands, unjudged))
+        cause_l.append(CONCLUSION_PREFIX + self._conclusion(cands, unjudged, r.get("observation")))
         if cands:
             top = cands[0]
             label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
@@ -963,14 +995,8 @@ class ReportMixin:
             else:     # 충족된 유형의 다른 시그니처만 오류: S/C는 그대로, 근거 선택만 달라질 수 있다
                 cause_l.append(add(6, f"{where} — 충족된 유형의 다른 시그니처라 S/C는 그대로(근거 선택은 달라질 수 있다)"))
         obs = r.get("observation")
-        if obs:     # 관측 실패(정상 불일치 아님): 판정 불가 유형과 따로 한 줄. 예시는 앞머리 라벨과 같은 종류
-            other = obs["count"] - obs["extractor"]
-            what = "·".join(([f"extractor 오류 {obs['extractor']}개"] if obs["extractor"] else [])
-                            + ([f"파일 해석·외부 파서 문제 {other}건"] if other else []))
-            want = (lambda e: e.get("code") in EXTRACTOR_CODES) if obs["extractor"] else (lambda e: e.get("code") not in EXTRACTOR_CODES)
-            example = next((e["error"] for e in obs.get("errors") or [] if want(e) and e.get("error")), None)
-            cause_l.append(add(6, f"관측 불완전: {what}" + (f" ({example})" if example else "")
-                                + " — 못 읽은 이벤트가 있어 후보 순위·'후보 없음'·'원인 미확인'은 불완전하다"))
+        if obs:     # 관측 실패(정상 불일치 아님): 판정 불가 유형과 따로 한 줄
+            cause_l.append(add(6, observation_line(obs)))
         if anchor and (not cands or not cands[0]["C"]):
             nxt.append("- 힌트: " + ("기준 줄 둘레(−30초~+300초)로 좁게 분석했다. 원인이 그 앞에 있었을 수 있다"
                                      if anchor["source"] == "look_at" else
@@ -1015,7 +1041,7 @@ class ReportMixin:
         if cands and cands[0]["cause"]:
             top = cands[0]
             verified = "검증됨" if top.get("resolution_verification") == "verified" else "⚠ 미검증"
-            nxt.append(f"- 해결책: {top.get('resolution') or '-'}   해결책 검증: {verified}")
+            nxt.append(f"{RESOLUTION_PREFIX}{top.get('resolution') or '-'}{RESOLUTION_CHECK}{verified}")
             nxt.append(f"- 수정 상태: {top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
             if top.get("_version_mismatch"):
                 cause_l.append(f"- 다른 버전 원인 ({self.platform_label} {', '.join(top['_version_mismatch'])})")

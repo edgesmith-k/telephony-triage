@@ -61,7 +61,12 @@ _KV_WS_RX = re.compile(r"\s*([=:])\s*")
 
 def _low(text: str) -> str:
     """토큰 대조용 정규화: 공백 하나·소문자·`=`/`:` 둘레 공백 제거(`key = v`와 `key=v`는 같다)."""
-    return _KV_WS_RX.sub(r"\1", ws(text)).lower()
+    return _low_folded(ws(text))
+
+
+def _low_folded(folded: str) -> str:
+    """`_low`에서 공백 접기(`ws`)를 뺀 것 — 이미 `ws`를 거친 글(큰 원문은 행마다 한 번만 접는다)."""
+    return _KV_WS_RX.sub(r"\1", folded).lower()
 
 
 def _has_token(low_line: str, low_token: str) -> bool:
@@ -420,20 +425,43 @@ def _subset(part_words: list[str], rows: list[str]) -> str:
     return "\n".join(out)
 
 
+def _part_rows(parts: list[str], rows: list[str], ws_rows: list[str]) -> list[str]:
+    """조각이 든 행(`ws_rows` = 행마다 공백 접은 글, 조각마다 첫 `PREFILTER_ROWS`행까지, 원문 순서) — 경계만 틀린 줄(`status=10`)도
+    대조에 들게. 행은 한 번만 훑는다(행마다 아직 상한이 안 찬 조각을 본다)."""
+    left = dict.fromkeys(parts, PREFILTER_ROWS)
+    out = []
+    for row, w in zip(rows, ws_rows):
+        hit = [p for p in left if p in w]
+        if hit:
+            out.append(row)
+            for p in hit:
+                left[p] -= 1
+                if not left[p]:
+                    del left[p]
+            if not left:
+                break
+    return out
+
+
 def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[int] = frozenset()) -> dict:
     """인용 목록 판정 → {"n", "fabricated", "weak", "raw", "first", "verdicts"}. `verdicts`는 항목별 판정
     (ok | weak | fabricated | raw, 입력 순서 — check-output이 가설별로 나눈다).
 
     `〔script` 메모를 인용한 항목은 지어낸 것으로 센다. `raw_items`(check-output 마스킹이 바꾼 항목 = 원문 값이 든 인용,
-    설치 스킬 모드만)는 `raw`로 세고 지어낸 것으로 세지 않는다. 원문이 256KB보다 크면 먼저 인용 조각이 모두 원문 한 줄
-    안에 그대로(공백 차이만 허용) 있는지 보고, 있으면 ok, 없을 때만 인용마다 8자 이상 낱말을 공유하는 행(최대 300행)만 본다.
+    설치 스킬 모드만)는 `raw`로 세고 지어낸 것으로 세지 않는다. 원문이 256KB보다 크면 먼저 인용 조각마다 원문 한 줄 안에
+    **토큰 경계를 두고**(`_has_token`, 행마다 `_low` — 공백·대소문자·`=`/`:` 둘레 차이만 허용) 있는지 보고, 모두 있으면 ok다
+    (FR-01: 부분 문자열만 보면 `status=10`→`status=1`·`disconnected`→`connected` 같은 변조를 ok로 봤다). 아니면 조각이 든
+    행(조각마다 최대 300행)과 8자 이상 낱말을 공유하는 행(최대 300행)으로 `evidence_check`를 돈다.
     ok인 인용이 시각이나 슬롯 머리(레벨·태그는 그와 함께 적었을 때만)를 적었으면 머리까지 맞는 행이 원문 전체에 있어야 ok,
     없으면 weak다(`_head_ok`, F-A01-min).
     """
     from common import masking
     big = len(source) > BIG_SOURCE
     rows = source.split("\n")
-    ws_lines = "\n".join(ws(row) for row in rows)   # 줄마다 공백 접기(`WS_RX`가 개행도 접으므로)
+    ws_rows = [ws(row) for row in rows]
+    ws_lines = "\n".join(ws_rows)                  # 줄마다 공백 접기(`WS_RX`가 개행도 접으므로)
+    # 행마다 `_low` 뒤 잇기 — 통째로 하면 `=`/`:` 둘레 공백 제거가 개행을 넘는다. 조각·토큰엔 개행이 없어 일치는 한 줄 안이다
+    low_lines = "\n".join(_low_folded(w) for w in ws_rows) if big else ""
     res = {"n": len(items), "fabricated": 0, "weak": 0, "raw": 0, "first": None, "verdicts": []}
     for i, item in enumerate(items):
         if i in raw_items:
@@ -442,12 +470,12 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
             verdict = "fabricated"
         else:
             parts = _quote_parts(item, tags)
-            # 조각에는 개행이 없어(`ws`로 접힘) `in ws_lines`는 한 줄 안 일치만 된다
-            if big and parts and all(p in ws_lines for p in parts):
+            if big and parts and all(_has_token(low_lines, _low(p)) for p in parts):
                 verdict = "ok"
             else:
-                # ponytail: 공백 말고도 표기가 다른 인용은 축소 검색(8자 이상 낱말 공유 첫 300행)에 기대므로, 그 밖의 줄을 인용하면 여전히 fabricated 오탐
-                text = _subset(_WORD_RX.findall(" ".join(parts)), rows) if big else source
+                # ponytail: 공백 말고도 표기가 다른 인용은 축소 검색(조각이 든 행 + 8자 이상 낱말 공유 첫 300행)에 기대므로, 그 밖의 줄을 인용하면 여전히 fabricated 오탐
+                text = source if not big else "\n".join(dict.fromkeys(
+                    _part_rows(parts, rows, ws_rows) + _subset(_WORD_RX.findall(" ".join(parts)), rows).split("\n")))
                 verdict = evidence_check(item, text, tags)[0]
             # F-A01-min: 메시지는 맞는데 적은 머리(시각·슬롯·태그)가 맞는 행이 없으면 약함(fabricated는 정밀도만 다른 정상 시각에서 오탐)
             if verdict == "ok" and not _head_ok(_quote_head(item, tags), parts, rows, ws_lines, tags):

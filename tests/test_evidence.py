@@ -152,6 +152,33 @@ def test_check_quotes_big_source_precheck_keeps_fabricated():
     assert res["verdicts"] == ["fabricated", "fabricated"]
 
 
+def test_check_quotes_big_source_precheck_needs_token_boundary():
+    """FR-01(P1): 선검사가 부분 문자열만 보면 `status=10`→`status=1`(자름)·`fail_cause`→`cause`(접두 뗌)·`disconnected`→
+    `connected` 변조가 큰 원문에서 ok였다 — 토큰 경계로 보고, 아니면 조각이 든 행으로 `evidence_check`(전체 원문과 같은 판정)."""
+    source, tags = _big_source_with_tail(["11:00:00.000 p0 E daemon0 setup data call ended with status=10",
+                                          "11:00:01.000 p0 E daemon0 setup data call rejected fail_cause=AUTH(29)",
+                                          "11:00:02.000 p0 I daemon0 apn link state disconnected by peer"])
+    items = ["setup data call ended with status=1", "cause=AUTH(29)", "connected by peer",
+             "setup data call ended with status=10", "apn link state disconnected by peer"]
+    small = evidence.BIG_SOURCE
+    try:
+        fast = evidence.check_quotes(items, source, tags)
+        evidence.BIG_SOURCE = 10 ** 9           # 걸러 내지 않고 전체로
+        full = evidence.check_quotes(items, source, tags)
+    finally:
+        evidence.BIG_SOURCE = small
+    assert fast["verdicts"] == full["verdicts"] == ["fabricated"] * 3 + ["ok"] * 2, (fast, full)
+
+
+def test_check_quotes_big_source_common_part_quotes_stay_ok():
+    """P1 재검토: 300행 상한 행 모으기는 정상 인용을 오탐했다 — 같은 조각이 300행 넘게 있는 인용(목표 줄은 4,999번째)과
+    흔한 앞 조각(5,000행) 뒤 `…`로 이은 끝 줄 인용은 선검사에서 ok다."""
+    source, tags = _big_source_with_tail(["11:00:00.000 p0 I daemon0 apn handover rejected by peer"])
+    res = evidence.check_quotes(["connectivity_monitor heartbeat seq04999 ok",
+                                 "connectivity_monitor … apn handover rejected by peer"], source, tags)
+    assert res["verdicts"] == ["ok", "ok"], res
+
+
 def test_evidence_check_catches_decision_token_alteration():
     """종합 리뷰 P1: 12자 미만 변조(오류 코드·슬롯·성공/실패 낱말)와 결론과 무관한 줄 인용이 ok로 통과했다. 결정 토큰은 앵커(토큰을 뺀
     가장 긴 조각)가 든 원문 한 줄에 모두 있어야 ok다."""

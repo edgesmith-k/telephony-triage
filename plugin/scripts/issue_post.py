@@ -227,8 +227,16 @@ def _find_op(plan: dict, kind: str, pred) -> dict | None:
                 None)
 
 
-def classify(a: dict, plan: dict | None) -> dict:
-    """CAUSE·NEXT ACTION의 결정적 내용. `cand`는 본문이 가리키는 후보(근거 로그·해결책 출처)."""
+def fit_hold_of(path: Path) -> str | None:
+    """`check-output.json` explore 기록의 `fit_hold`(탐색 적합성 확인이 보류한 1위 원인 ID). 없으면 None, 손상이면 Usage."""
+    rec = ((_read(path, "check-output.json") or {}).get("explore") or {})
+    hold = rec.get("fit_hold") if isinstance(rec, dict) else None
+    return hold if isinstance(hold, str) else None
+
+
+def classify(a: dict, plan: dict | None, fit_hold: str | None = None) -> dict:
+    """CAUSE·NEXT ACTION의 결정적 내용. `cand`는 본문이 가리키는 후보(근거 로그·해결책 출처). `fit_hold`: 탐색 적합성 확인이
+    보류한 1위 원인 ID(`check-output.json` explore) — 계획 없음이면 그 해결책을 보류로 적고 원인 미확정으로 본다(FR-02)."""
     cands = [c for c in a.get("candidates") or [] if isinstance(c, dict)]
     top = cands[0] if cands else None
     by_type = lambda t: next((c for c in cands if c.get("type") == t), None)  # noqa: E731
@@ -295,7 +303,11 @@ def classify(a: dict, plan: dict | None) -> dict:
             if top.get("cause") and top.get("C"):
                 out["cls"] = f"{top.get('category')} > {top.get('type')} > {top['cause']} {top.get('title') or ''}".rstrip()
                 out["lines"].append(_score(top))
-                if top.get("resolution"):
+                if fit_hold == top["cause"]:
+                    out["lines"].append("탐색 분석 적합성 확인: 1위가 증상과 맞지 않아 보류")
+                if top.get("resolution") and fit_hold == top["cause"]:
+                    out["next"].append(f"해결책(1위 기준, 보류됨): {top['resolution']} (해결책 검증: 보류(1위 부적합))")
+                elif top.get("resolution"):
                     out["resolved"] = True
                     out["next"].append(f"해결책: {top['resolution']} (해결책 검증: "
                                        f"{'검증됨' if top.get('resolution_verification') == 'verified' else '미검증'})")
@@ -331,7 +343,7 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
     fields = dict(jira_doc.get("issue") or {})
     fields.setdefault("platform_version", jira_doc.get("platform_version_all"))   # 다중 선택 버전 칸이면 이은 값
     note = ((plan or {}).get("issue") or {}).get("note")
-    cl = classify(a, plan)
+    cl = classify(a, plan, fit_hold_of(job.path("check-output.json")))
     s = {name: [] for name in issuepost.SECTIONS}
     # PROBLEM
     s["PROBLEM"].append(_line(f"{job.tracker.label}: {job.tracker.display(job.key)}"))

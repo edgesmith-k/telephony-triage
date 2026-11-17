@@ -247,6 +247,6 @@ def test_opencode_check0_builtin_provider_skips_curl(oc):
     cfg = {**CONFIG_OK, "model": "acme/glm-x", "small_model": "acme/glm-x"}
     (oc["proj"] / "opencode.json").write_text(json.dumps(cfg), encoding="utf-8")
     r = oc_run(oc, "--project", str(oc["proj"]))
-    assert "외부 provider 설치(install --provider-model)" in r.stdout and "사내 확인 0(OpenCode)" in r.stdout
+    assert "내장 provider 설치(install --provider-model)" in r.stdout and "사내 확인 0(OpenCode)" in r.stdout
     assert "TT_GATEWAY_API_KEY도 필요 없다" in r.stdout
     assert "chat/completions" not in r.stdout and 'curl -sS "$BASE/models"' not in r.stdout
