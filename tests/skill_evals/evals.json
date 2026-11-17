@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=병합 2(72 +1 뒤 병합해줘·75 +1 관문), H=모듈 스킬 레포·출력 검사 4(76~79), W9=setup 2(58 재점검 doctor 표·80 첫 사용자 setup), FL=성공 흐름 제안 3(81 새 원인 flow_step·82 set-flow-step·83 put-flow 문구 고치기). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=병합 2(72 +1 뒤 병합해줘·75 +1 관문), H=모듈 스킬 레포·출력 검사 4(76~79), W9=setup 2(58 재점검 doctor 표·80 첫 사용자 setup), FL=성공 흐름 제안 3(81 새 원인 flow_step·82 set-flow-step·83 put-flow 문구 고치기), FT=적합성 확인·반복 금지 3(84~86: 84 확신 일치 짧은 판단·85 부적합 보류·86 재실행 prior). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -3223,6 +3223,115 @@
         "put-flow fixtures의 정상 fixture를 parse_logcat cut --around … --rules로 만들었고 그 파일에 새 문구 줄이 있다",
         "db_verify rules --plan --draft 초안 검증 결과표를 보였고 R4가 통과(흐름 fixture n개 끝까지 ok)다",
         "계획에 append DATA-002-01이 있고, --dry-run이라 push·PR이 없고 원격에 issue/MOCK-9083 브랜치가 없으며 끝난 뒤 lock·pending 피드백 파일이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 84,
+      "name": "fit-check-confirmed-short",
+      "batch": "FT",
+      "design": "1위 C=1(확신 일치, DATA-001-01 Data disabled)인데 `--explore` 세션 — 스킬이 `triage.py run`에 `--explore`를 넘겨 `explore.reason: fit_check`를 받고, 묻지 않고 `triage.py explore` → 적합성 확인. 1위가 증상·시각·슬롯을 설명하고 모순이 없는 쉬운 사례라 추가 조회(`--look-at` 재실행·`db_search`) 없이 같은 턴에 가설 1 = 1위로 짧게 끝내고 `check-output` → Step 7(11/17 F-FIT, explore.md 종합 판단 5번)",
+      "prompt": "MOCK-9084 로그 분석해줘 --dry-run --explore. 데이터가 안 붙는대. 로그: logs/data-disabled.log",
+      "setup": {
+        "jira": [
+          "MOCK-9084"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 제안(DATA-001-01 Data disabled)에는 '예'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서는 '승인'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "triage.py run … --explore → analysis.json explore {reason: fit_check} → 묻지 않고 triage.py explore → timeline.md만 읽고 추가 조회 없이 가설 1 = DATA-001-01(데이터 꺼짐)로 explore-output.md → check-output 통과 → Step 7 1위 수락 → append {cause: DATA-001-01} 계획 → 확인 화면 → dry-run이라 원격·PR 없음, lock 없음.",
+      "assertions": [
+        "triage.py run에 --explore를 붙였고 analysis.json explore.reason이 fit_check다",
+        "--explore라 탐색 실행 여부를 묻지 않고 triage.py explore를 실행했고 check-output --for explore가 통과했다",
+        "쉬운 사례라 triage.py explore 뒤 추가 조회(--look-at 재실행·db_search)가 없다",
+        "탐색 출력의 가설 1이 1위 원인(DATA-001-01, 데이터 꺼짐)을 그대로 설명하고 점수·확신도를 매기지 않았다",
+        "계획 operations에 append {cause: DATA-001-01}이 있다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 85,
+      "name": "fit-check-unfit-hold",
+      "batch": "FT",
+      "design": "1위 C=1(DATA-001-01, 근거 phone 0)인데 Jira는 슬롯 1만 안 되고 슬롯 0은 정상·데이터를 끈 적 없음 — `--explore` 세션의 적합성 확인에서 1위가 증상·슬롯을 설명하지 못하므로 새 근거 없이 `가설 없음: 1위 DATA-001-01 부적합 — <이유>`와 `다음 확인:`으로 보류한다(보류가 정상 결과, 토큰 절약을 이유로 확정하지 않음). 리포트 탐색 줄에 이유와 다음 확인이 있고 1위를 확정하지 않는다(11/17 F-FIT·F-END)",
+      "prompt": "MOCK-9085 분석해줘 --dry-run --explore. 로그: logs/data-disabled.log",
+      "setup": {
+        "jira": [
+          "MOCK-9085"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 질문에 추천으로 표시된 선택지가 있으면 그것을 고르고, 없으면 '원인 미확정'을 고른다.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서는 '승인'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "triage.py run … --explore → explore {reason: fit_check}, must_show 슬롯 불일치 → triage.py explore → explore-output.md `가설 없음: 1위 DATA-001-01 부적합 — 슬롯 0 근거·슬롯 1 증상` + `다음 확인: 슬롯 1 로그` → check-output 통과, 리포트 탐색 줄에 둘 다 → Step 7에서 1위를 확정하지 않고 unresolved {type: DATA-001} → 확인 화면 → dry-run이라 원격·PR 없음, lock 없음.",
+      "assertions": [
+        "triage.py run에 --explore를 붙였고 analysis.json explore.reason이 fit_check다",
+        "탐색 출력이 `가설 없음:`(1위 부적합 이유)과 `다음 확인:`이고 check-output을 통과했으며 리포트 탐색 분석 줄에 둘 다 있다",
+        "1위를 확정하지 않았다: 계획에 append {cause: DATA-001-01}이 없고 unresolved {type: DATA-001}이 있다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
+      "files": []
+    },
+    {
+      "id": 86,
+      "name": "rerun-prior-no-repeat",
+      "batch": "FT",
+      "design": "eval 85와 같은 슬롯 불일치 사례를 분석 전용·`--explore`로 보고(1회차 부적합 보류), 사용자가 새 로그 없이 '같은 로그로 한 번 더' 하면 재실행한다. 재실행 analysis.json `prior`에 이전 판단(`가설 없음` 이유)이 실리고, 2회차는 1회차와 같은 `--look-at` 조회를 되풀이하지 않으며 1위 DATA-001-01을 새 근거 없이 다시 고르지 않는다(11/17 F-NOREPEAT)",
+      "prompt": "MOCK-9086 로그 분석만 해줘, 기록하지 마 --explore. 로그: logs/data-disabled.log",
+      "setup": {
+        "jira": [
+          "MOCK-9086"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/logs/data-disabled.log",
+            "as": "data-disabled.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 질문에 추천으로 표시된 선택지가 있으면 그것을 고르고, 없으면 '원인 미확정'을 고른다.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 '아니오'.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서는 '승인'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "followups": [
+        "SIM 1 로그는 더 구하지 못했어. 같은 로그로 한 번 더 봐줘"
+      ],
+      "expected_output": "1회차: triage.py run --analysis-only … --explore → fit_check → 탐색 `가설 없음: 1위 DATA-001-01 부적합 …`·`다음 확인` → check-output 통과 → 분석 전용 리포트. 후속 메시지 뒤 같은 명령으로 재실행 → analysis.json prior.none = 1회차 이유 → 같은 조회·후보를 되풀이하지 않고 이전 판단과 다음 확인(슬롯 1 로그)을 알린다. plan.json 없음, lock 없음.",
+      "assertions": [
+        "triage.py run에 --explore를 붙였고 analysis.json explore.reason이 fit_check다",
+        "1회차 check-output 결과가 `가설 없음`(1위 부적합)과 `다음 확인`이다",
+        "후속 메시지 뒤 triage.py run을 다시 했고 그 analysis.json prior에 이전 판단(가설 없음 이유·가설)이 있다",
+        "1회차에 쓴 --look-at 조회를 2회차에서 같은 글로 되풀이하지 않았다",
+        "2회차에 1위 DATA-001-01을 새 근거 없이 다시 고르지 않았다(다시 탐색했으면 그 출력이 가설 없음이거나 새 근거가 있다)",
+        "분석 전용이라 plan.json이 없고 끝난 뒤 lock이 없다"
       ],
       "files": []
     }
