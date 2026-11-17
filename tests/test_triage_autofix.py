@@ -108,6 +108,9 @@ def test_confirmed_top_gets_fit_check_only_with_explore_flag_or_always():
     assert always["explore"] == {"reason": "fit_check", "when": "always"}
     never = _run(item, tmp("tt-fit-") / "d", "--explore", root=plugin_root(explore={"when": "never"}))
     assert "explore" not in never                                       # never면 플래그가 있어도 열지 않는다
+    # FR-07(P5): 끄는 쪽이 이긴다 — --no-explore면 always여도 열지 않는다
+    off = _run(item, tmp("tt-fit-") / "g", "--no-explore", root=plugin_root(explore={"when": "always"}))
+    assert "explore" not in off and not (tmp("tt-fit-") / "g" / "explore-input.json").exists()
     # 기존 두 사유는 플래그와 상관없이 그대로
     unresolved = _run(_unresolved(), tmp("tt-fit-") / "e", "--explore")
     assert unresolved["explore"] == {"reason": "no_candidate", "when": "ask", "note": ASK_NOTE}
@@ -124,10 +127,29 @@ def test_cause_unconfirmed_reason_unchanged(tmp_path):
     assert triage.Driver.explore(drv, [{"C": 1}])["reason"] == "fit_check"
     drv.args.explore = None
     assert triage.Driver.explore(drv, [{"C": 1}]) is None
+    always = SimpleNamespace(cfg={"explore": {"when": "always"}}, warnings=[], args=SimpleNamespace(explore=False))
+    assert triage.Driver.explore(always, [{"C": 1}]) is None                       # --no-explore > always (P5)
+    assert triage.Driver.explore(always, [{"C": 0}])["reason"] == "cause_unconfirmed"   # 기존 두 사유는 그대로
     # 잘못된 explore.when은 C=1 경로에서도 먼저 경고하고 ask로 본다(조용히 꺼지지 않는다)
     bad = SimpleNamespace(cfg={"explore": {"when": "sometimes"}}, warnings=[], args=SimpleNamespace(explore=True))
     assert triage.Driver.explore(bad, [{"C": 1}])["reason"] == "fit_check"
     assert bad.warnings == ["explore.when 값이 잘못됐다(sometimes). ask로 본다"]
+
+
+def test_no_explore_is_in_request_hash_so_always_fit_check_is_not_reused():
+    """P5: --no-explore는 입력 해시(args)에 든다 — 없으면 always 설정에서 fit_check를 연 결과가 --no-explore 실행에 재사용됐다."""
+    ws = Workspace(root=plugin_root(explore={"when": "always"}))
+    log = tmp("tt-fit-hash-") / "roaming.log"
+    log.write_bytes((REPO / "tests/fixtures/logs/data-roaming-disabled.log").read_bytes())
+    args = ["run", "MOCK-9005", "--dry-run", "--issue-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
+            "--logs", log, "--code", "skip"]
+    first = ws.json("triage.py", args)
+    assert first["status"] == "ok" and first["explore"]["reason"] == "fit_check", first
+    off = ws.json("triage.py", [*args, "--no-explore"])
+    assert off["reuse"]["hit"] is False and "args" in off["reuse"]["changed"] and "explore" not in off, off["reuse"]
+    again = ws.json("triage.py", args)                                   # 플래그 없음은 처음 해시 그대로
+    assert again["explore"]["reason"] == "fit_check"
+    ws.json("triage.py", ["release", "MOCK-9005"])
 
 
 def test_fit_drops_prior_hyps_then_prior_when_only_top_is_left():

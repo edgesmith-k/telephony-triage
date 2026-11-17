@@ -21,7 +21,7 @@
   `done`·`stopped`·`error`). db_pr의 `stage`·`publish`·`discard` 행과 explore·module·check-output의 정보 행(`explore`·`module`·
   `checked`, `v: 2`)도 같은 파일이다(contracts.md §3.2 작업 기록, usage_stats가 센다 — 정보 행은 세지 않는다).
 - `JOB/explore-input.json`: 후보 없음·원인 미확인(1위 C=0)이고 `explore.when`이 `never`가 아닐 때, 또는 1위 C=1이고 `--explore`·
-  `explore.when: always`일 때(`explore.reason: fit_check`, 1위가 증상을 설명하는지 확인)만. 탐색 분석 입력(마스킹된 값만:
+  `explore.when: always`일 때(`explore.reason: fit_check`, 1위가 증상을 설명하는지 확인 — `never`·`--no-explore`면 아님)만. 탐색 분석 입력(마스킹된 값만:
   발생 시각·실패 스텝·앵커 머리·줄 수 상한 `explore.timeline_max_lines`, 시각 입력 없이 전체를 봤으면 `time_candidates`). `run`은 타임라인을 만들지 않고 이전 `timeline.md`·입력 파일을 지운다.
 - `triage.py explore <KEY> [--out <dir>]`: 사용자가 탐색 분석에 동의한 뒤(또는 `--explore`·`explore.when: always`) `JOB/explore-input.json`과
   `events.json`으로 `JOB/timeline.md`(마스킹된 요약 타임라인, 줄 수 상한 기본 200)를 만들고 `report.md`의 탐색 분석 줄을 갱신한다.
@@ -164,8 +164,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--look-note", metavar="확인할 내용", help="확인할 내용(선택, ≤300자): 리포트·탐색 타임라인 머리에 싣는 사용자 질문. "
                                                          "마스킹해서만 쓴다")
     p.add_argument("--explore", action=argparse.BooleanOptionalAction, default=None,
-                   help="스킬 --(no-)explore 그대로. --explore면 1위 C=1이어도 적합성 확인(explore.reason fit_check)을 연다. "
-                        "없거나 --no-explore면 이전과 같다")
+                   help="스킬 --(no-)explore 그대로. --explore면 1위 C=1이어도 적합성 확인(explore.reason fit_check)을 연다"
+                        "(explore.when: never면 열지 않는다). --no-explore면 explore.when: always여도 열지 않는다")
     p = sub.add_parser("explore", parents=[common])
     p.add_argument("key", metavar="KEY")
     p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")

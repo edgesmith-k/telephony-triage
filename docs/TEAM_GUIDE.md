@@ -102,6 +102,7 @@ tt-oc doctor   # 사전 점검. fail이 있으면 시작하지 않는다
    ```
    점검표 `module_skills` 행에 `5-1 설치 스킬: data · 그 밖=모듈 문서`처럼 보인다. OpenCode면 `install --force`.
 6. **반복 질문 줄이기(선택)**: 사용자 설정에 `analyzers: {data: {when: never}}`·`explore: {when: never}`, 한 번만이면 `--no-analyzer`·`--no-explore`.
+   `explore: {when: always}`는 묻지 않고 탐색 분석을 하는 설정이다. 예전에는 후보가 없거나 원인을 못 찾았을 때만 탐색했지만, 지금은 1위가 확신 일치(규칙이 원인까지 맞음)여도 그 1위가 증상을 설명하는지 매번 확인한다(적합성 확인). 그래서 쉬운 사례도 요청이 4회쯤 늘고 입력 토큰이 약 20~25% 는다(사외 eval 84 실측 기준). 끄는 쪽이 이긴다 — `never`면 `--explore`를 줘도 하지 않고, `--no-explore`면 `always`여도 하지 않는다.
 
 ## 3. 매일 쓰는 흐름
 
