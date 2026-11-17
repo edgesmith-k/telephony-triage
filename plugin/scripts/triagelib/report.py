@@ -818,9 +818,9 @@ class ReportMixin:
         lines: list[str] = []                     # 실행 안내(플랫폼·분석 전용·읽기 전용·pull·재사용): 이슈 내용이 아니라 칸 밖에 둔다
         sec: dict[str, list[str]] = {name: [] for name in issuepost.SECTIONS}
         prob, cause_l, nxt, ana = (sec[n] for n in issuepost.SECTIONS)
-        must: list[tuple[int, str]] = []          # (우선순위, 줄 본문). 이미 마스킹된 값만
+        must: list[tuple[float, str]] = []        # (우선순위, 줄 본문). 이미 마스킹된 값만
 
-        def add(priority: int, text: str) -> str:
+        def add(priority: float, text: str) -> str:
             must.append((priority, text))
             return f"- {text}"
 
@@ -835,13 +835,14 @@ class ReportMixin:
         iss = r.get("issue") or {}       # 마스킹된 Jira 요약(jira_fields)
         known = [f"{name} {iss[k]}" for name, k in (("SW", "sw"), ("발생 시각", "occurred_at")) if iss.get(k)]
         prob.append(f"- 이슈: {self.key} — {iss.get('summary') or '요약 없음'}" + (f" ({', '.join(known)})" if known else ""))
+        # 기준 시각 없음 줄은 must_show(3.5 — 재분석 뒤·실패 스텝 앞, FR-04): 포털이 모르는 머리말로 보고 확실한 일치에서 뺀다
         if not anchor and self.answer("time") == "full":    # 앵커가 있으면 범위는 앵커 기준이라 이 줄이 맞지 않다
-            prob.append("- 기준 시각 없음 — 로그 전체를 봄")
+            prob.append(add(3.5, "기준 시각 없음 — 로그 전체를 봄"))
         elif not anchor and self.time_candidates is not None:     # 앵커·Jira 시각·시각 답이 없어 묻지 않고 전체를 봤다
             seen = ", ".join(f"{t['ts']} {t['type']}" for t in self.time_candidates)
             why = "시각 입력 없음·기준 줄 못 찾음" if self.look_result else "시각·기준 줄 입력 없음"
-            prob.append(f"- 기준 시각 없음({why}) — 로그 전체를 봄. 증상 시각 후보 {len(self.time_candidates)}개"
-                        + (f": {seen}" if seen else ""))
+            prob.append(add(3.5, f"기준 시각 없음({why}) — 로그 전체를 봄. 증상 시각 후보 {len(self.time_candidates)}개"
+                                 + (f": {seen}" if seen else "")))
         if self.failed_step:
             prob.append(add(4, f"실패 스텝 (보조 정보, Jira {self.failed_step['source']}; S/C에 쓰지 않음; 단어 겹침 가산·순위 참고·분석 범위): "
                                 f"{self.failed_step['text']}"))

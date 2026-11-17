@@ -344,6 +344,7 @@ def test_time_answer_full_analyzes_whole_log_without_occurred_at():
     assert "occurred_at" not in json.loads((out / "issue_meta.json").read_text(encoding="utf-8"))
     assert analysis["step_anchor"]["source"] == "none"
     assert "- 기준 시각 없음 — 로그 전체를 봄" in (out / "report.md").read_text(encoding="utf-8")
+    assert "기준 시각 없음 — 로그 전체를 봄" in analysis["must_show"]       # FR-04(P4): 포털 확실한 일치에서 빠지게
     match = json.loads((out / "match.json").read_text(encoding="utf-8"))
     assert match["candidates"] and all((c.get("bonus") or {}).get("proximity", 0) == 0 for c in match["candidates"])
     normal = _offline(item, doc, work / "normal")       # 같은 로그를 발생 시각과 함께 돌린 기준

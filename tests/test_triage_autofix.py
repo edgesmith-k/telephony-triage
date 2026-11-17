@@ -75,6 +75,11 @@ def test_no_time_no_look_no_jira_time_finishes_with_time_candidates_and_one_pars
     assert spec["time_candidates"] == anchor["time_candidates"] and spec["around"] is None
     assert _report_line(out, "- 기준 시각 없음").startswith(
         f"- 기준 시각 없음(시각·기준 줄 입력 없음) — 로그 전체를 봄. 증상 시각 후보 {len(anchor['time_candidates'])}개: ")
+    # FR-04(P4): must_show(우선순위 3.5 — 실패 스텝 앞). 포털은 모르는 머리말을 확실한 일치에서 뺀다(fail-closed)
+    assert _report_line(out, "- 기준 시각 없음")[2:] in analysis["must_show"], analysis["must_show"]
+    failed = _run(_confirmed(), tmp("tt-auto-") / "f", "--failed-step", "Step 3 데이터 연결 확인", occurred=False)
+    shown = [m.split(" ", 1)[0] for m in failed["must_show"]]
+    assert shown.index("기준") < shown.index("실패"), failed["must_show"]
 
 
 def test_given_time_still_wins_over_auto_scan():
