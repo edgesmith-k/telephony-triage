@@ -11,7 +11,7 @@ from pathlib import Path
 from common import compat, compiled, userconfig
 
 from .core import (ANSWER_KEYS, CACHE_FILE, CARRY_KEYS, CACHE_FILES, CACHE_FORMAT, PART_KEYS, RUNS_DIR, RUNS_KEEP, RUN_DIRS_KEEP,
-                   SCRIPTS, STATE_SCHEMA, _now)
+                   SCRIPTS, STATE_SCHEMA, _clip, _now)
 from .report import _top_label
 
 
@@ -126,7 +126,9 @@ class CacheMixin:
                              "code": {k: code.get(k) for k in ("skipped", "roots", "tree_version")},
                              "clock_offset_sec": self.clock_offset, "steps_file_sha": steps_sha,
                              "look": self.look_inputs(),       # 가린 기준 줄·확인할 내용(원문은 해시에도 쓰지 않는다)
-                             "answers": {k: v for k, v in sorted(self.state.answers.items()) if k in ANSWER_KEYS}}),
+                             "answers": {k: v for k, v in sorted(self.state.answers.items()) if k in ANSWER_KEYS},
+                             # --explore는 1위 C=1의 fit_check(core.explore)를 바꾼다. 없으면 해시가 이전과 같다
+                             **({"explore": True} if getattr(a, "explore", None) else {})}),
         }
 
     def reuse_check(self, parts: dict, request_hash: str) -> dict | None:
@@ -185,6 +187,7 @@ class CacheMixin:
         self.focus = list(attrs.get("focus") or [])
         self.steps_member = attrs.get("steps_member")
         self.look_result = attrs.get("look")
+        self.time_candidates = attrs.get("time_candidates")
         self.warnings += core.get("warnings_core") or []
         self.write_meta(core.get("anchor"))
 
@@ -250,6 +253,8 @@ class CacheMixin:
                      # dry-run이면 analysis.json `mode`는 write와 같다. 게시 판정(issue_post postable)이 이 값으로 구분한다
                      "dry_run": bool(getattr(self.args, "dry_run", False)),
                      "logs": [f["name"] for f in self.log_inputs],
+                     # 이 실행의 가린 기준 줄(다음 실행의 `prior.looked` — 같은 조회를 반복하지 않게)
+                     **({"look": _clip(self.look_inputs()["at"], 80)} if self.look_inputs()["at"] else {}),
                      "top": {k: top[k] for k in ("type", "cause", "score", "S", "C")} if top else None, "reused": hit})
         job["runs"] = runs[-RUNS_KEEP:]
         job["logs"] = self.log_inputs

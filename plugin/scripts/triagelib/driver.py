@@ -11,7 +11,7 @@ from pathlib import Path
 
 import platforms
 import trackers
-from common import compat, failedstep, issuedb, lookat, masking, stepanchor, userconfig
+from common import compat, evidence, failedstep, issuedb, lookat, masking, stepanchor, userconfig
 from common import flows as flowlib
 from common.exitcodes import CHECK_FAILED, USAGE
 
@@ -93,6 +93,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         self.order_evidence: list[tuple[str, str, str]] = []   # (스텝 이름, 로그 시각, 흔적 이름) — 리포트용(마스킹됨)
         self.clock: dict | None = None           # 시계 정렬 결과 {mode: manual|none, offset_sec | reason}
         self.focus: list[str] = []               # match.step_focus.types (순위 참고용 우선 유형)
+        self.time_candidates: list[dict] | None = None   # 시각 입력 없이 로그 전체를 볼 때 찾은 증상 시각 후보 [{ts, type}] (≤3)
+        self.full_events: dict | None = None     # 그때 만든 전체 파싱(`events-full.json`) — 본 분석이 다시 파싱하지 않고 쓴다
+        self.prior: dict | None = None           # 이전 실행의 1위·탐색 가설·기준 줄 조회(`analysis.json prior`, 재실행일 때만)
         self.steps_member: str | None = None     # steps-file이 zip일 때 읽은 멤버 경로(마스킹·≤120자) — 리포트용
         self.log_inputs: list[dict] = []         # 입력 로그 원본 [{path, name, sha, size}] (bugreport는 원본 파일)
         self.auto_invalid = False                # `code.auto_select`가 불리언이 아니었다
@@ -911,14 +914,19 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                             flowlib.log_end_sec(config))
 
     def explore(self, candidates: list[dict]) -> dict | None:
-        """Step 5-2 탐색 분석 해당 여부: 후보 없음·원인 미확인이면 `{reason, when}`, 아니면 None.
+        """Step 5-2 탐색 분석 해당 여부: 후보 없음·원인 미확인이면 `{reason, when}`, 1위 C=1이면 `run --explore`·`explore.when:
+        always`일 때만 `fit_check`(적합성 확인), 아니면 None.
 
         타임라인은 만들지 않는다(동의 뒤 `triage.py explore`가 `explore_input()`의 값으로 만든다). 판정은 하지 않는다(07-workflow.md §Step 5-2).
         """
-        if candidates and candidates[0]["C"]:
-            return None
-        reason = "cause_unconfirmed" if candidates else "no_candidate"
         when = userconfig.get(self.cfg, "explore.when", "ask")
+        if candidates and candidates[0]["C"]:
+            # 확신 일치도 탐색을 묻지 않고 하는 세션이면 1위가 증상을 설명하는지 확인할 맥락을 준다. 그 밖은 이전과 같다(묻지 않음)
+            if when == "never" or (when != "always" and not getattr(getattr(self, "args", None), "explore", None)):
+                return None
+            reason = "fit_check"
+        else:
+            reason = "cause_unconfirmed" if candidates else "no_candidate"
         if when not in EXPLORE_WHEN:
             self.warnings.append(f"explore.when 값이 잘못됐다({when}). ask로 본다")
             when = "ask"
@@ -933,6 +941,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         step = getattr(self, "failed_step", None)
         out = {"around": around, "failed_step": step["text"] if step else None, "limit": limit,
                "anchor": {k: anchor.get(k) for k in ("source", "step", "start", "fail")} if anchor else None}
+        if getattr(self, "time_candidates", None):     # 시각 입력 없이 전체를 봤을 때의 증상 시각 후보(사건 후보)
+            out["time_candidates"] = [dict(t) for t in self.time_candidates]
         look, found = self.look_inputs(), self.look_result or {}
         if look["at"] or look["note"]:      # 타임라인 머리: 기준 줄(사용자 입력)·찾은 시각·일치 위치, 확인할 내용
             out["look_at"] = {"line": look["at"], "note": look["note"], "ts": found.get("ts"), "hits": found.get("hits"),
@@ -975,11 +985,48 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         else:
             path.unlink(missing_ok=True)
 
+    def read_prior(self) -> dict | None:
+        """재실행·답글 턴에 줄 이전 실행의 요약(`analysis.json prior`, 마스킹된 값만) — `drop_stale_records`가 지우기 전에 읽는다.
+        top = 직전 실행 1위(state `job.runs`), looked = 이전 실행의 가린 기준 줄(state), hyps·none = `check-output`을 통과한
+        이전 `explore-output.md`의 가설 머리·반대 근거·`가설 없음` 이유. top 말고 아무것도 없으면 None(키가 없다)."""
+        def regular(path: Path) -> bool:
+            try:
+                return stat.S_ISREG(os.lstat(path).st_mode)
+            except OSError:
+                return False
+
+        runs = self.state.job.get("runs") or []
+        top = (runs[-1].get("top") or {}) if runs else {}
+        out: dict = {"top": top.get("cause") or top.get("type")}
+        looked: list[str] = []
+        for r in runs:
+            if r.get("look") and r["look"] not in looked:
+                looked.append(r["look"])
+        out["looked"] = looked[-3:]
+        rec = None
+        if regular(self.job / "check-output.json"):
+            try:
+                rec = (json.loads((self.job / "check-output.json").read_text(encoding="utf-8")) or {}).get("explore")
+            except (OSError, ValueError, AttributeError):
+                rec = None
+        if isinstance(rec, dict) and rec.get("mode") and not rec.get("error") and regular(self.job / "explore-output.md"):
+            try:
+                fields = evidence.parse_explore((self.job / "explore-output.md").read_text(encoding="utf-8")) or {}
+            except (OSError, UnicodeDecodeError):
+                fields = {}
+            out["hyps"] = [_clip(h["가설"] + (f" — 반대: {h['반대 근거']}" if h.get("반대 근거") not in (None, "", "없음") else ""), 120)
+                           for h in fields.get("hyps") or []][:3]
+            out["none"] = _clip(fields.get("none"), 120)
+        out = {k: v for k, v in out.items() if v}
+        # 1위만 있으면(이전 판단·조회 없음) 넘기지 않는다 — 같은 입력의 재실행 출력이 이전과 같게(`reuse.prev_top`이 이미 있다)
+        return out if set(out) - {"top"} else None
+
     def prepare(self) -> dict:
         """Step 0~2와 입력 정리(로그·코드·시간대·연도). 여기까지는 재사용 여부와 상관없이 항상 한다."""
         self.preflight_args()
         self.check_key()
         self.open_job()
+        self.prior = self.read_prior()       # 이전 탐색 산출물을 지우기 전에 추린다
         self.drop_stale_records()
         if not self.offline:
             self.lock()
@@ -1038,7 +1085,11 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         anchor = self.step_anchor(logs, tz, year, info)
         around = anchor["fail"] if anchor else self.occurred(info, logs, tz, year)
         events_path = self.job / "events.json"
-        events = self.parse(logs, around, tz, year, events_path, between=anchor["window"] if anchor else None)
+        if around is None and anchor is None and self.full_events is not None:     # occurred()의 전체 파싱과 같은 인자
+            events = self.full_events
+            events_path.write_text(json.dumps(events, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+        else:
+            events = self.parse(logs, around, tz, year, events_path, between=anchor["window"] if anchor else None)
         cov = events.get("coverage") or {}
         if cov.get("window_in_range") is False:
             choice = self.answer("window")
@@ -1127,7 +1178,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                      **({"uncollected_tags": uncollected} if uncollected else {})},
             "warnings_core": self.warnings[warn0:], "extra_warnings": extra_warnings,
             "attrs": {"clock": self.clock, "order_fail": self.order_fail, "order_evidence": self.order_evidence,
-                      "focus": self.focus, "steps_member": self.steps_member, "look": self.look_result},
+                      "focus": self.focus, "steps_member": self.steps_member, "look": self.look_result,
+                      "time_candidates": self.time_candidates},
         }
 
     def analyzer(self, candidates: list[dict]) -> dict | None:

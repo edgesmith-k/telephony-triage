@@ -264,42 +264,67 @@ def test_full_run_resolves_code_refs_against_the_chosen_tree():
     ws.json("triage.py", ["release", "MOCK-1001"])
 
 
-def test_jira_without_time_offers_time_candidates_instead_of_asking_year():
-    """eval 5: `year_source: jira`인데 Jira 발생 시각이 없으면 연도를 묻지 않고 `--full` 시각 후보로 간다."""
+def _parse_calls(job: Path) -> list[list]:
+    """trace.jsonl의 `parse_logcat.py parse` 호출 인자(파싱 횟수 확인용)."""
+    rows = [json.loads(line) for line in (job / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
+    return [r["args"] for r in rows if r.get("script") == "parse_logcat.py" and (r.get("args") or [None])[0] == "parse"]
+
+
+def test_jira_without_time_runs_whole_log_without_asking_and_keeps_time_candidates():
+    """F-AUTO: 시각·기준 줄·Jira 시각이 다 없으면 묻지 않고 로그 전체로 끝까지 간다(`full` 답과 같은 경로).
+    증상 시각 후보는 `step_anchor.time_candidates`·탐색 입력에 남고, 후보를 만든 전체 파싱을 본 분석이 다시 쓴다(파싱 1회).
+    `year_source: jira`인데 Jira 발생 시각이 없으면 연도를 묻지 않는다(eval 5). 읽을 수 없는 시각 답만 다시 묻는다(eval 67)."""
     ws = Workspace()
     log = tmp("tt-triage-year-") / "roaming.log"
     log.write_bytes((REPO / "tests/fixtures/logs/data-roaming-disabled.log").read_bytes())  # mtime = 오늘
     args = ["run", "MOCK-9005", "--dry-run", "--issue-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
             "--logs", log, "--code", "skip"]
-    ask = ws.json("triage.py", args)
-    assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "time", ask
-    options = ask["needs_input"]["options"]
-    assert 2 <= len(options) <= 4 and "DATA-001" in options[0]["label"]
-    assert options[-1] == {"value": "full", "label": "시각 없이 로그 전체"}       # 항상 마지막 선택지
+    done = ws.json("triage.py", args)
+    assert done["status"] == "ok", done
+    anchor = done["step_anchor"]
+    assert anchor["source"] == "symptom_scan" and 1 <= len(anchor["time_candidates"]) <= 3, anchor
+    first = anchor["time_candidates"][0]
+    assert set(first) == {"ts", "type"} and first["type"].startswith("DATA-001")
+    assert done["candidates"][0]["cause"] == "DATA-001-02"
+    assert any("임시로" in w for w in done.get("warnings") or [])
+    job = ws.job_dir("MOCK-9005")
+    calls = _parse_calls(job)
+    assert len(calls) == 1 and "--full" in calls[0], calls          # 같은 전체 파싱을 두 번 하지 않는다
+    assert (job / "events.json").read_bytes() == (job / "events-full.json").read_bytes()
+    report = (job / "report.md").read_text(encoding="utf-8")
+    assert f"- 기준 시각 없음(시각·기준 줄 입력 없음) — 로그 전체를 봄. 증상 시각 후보 {len(anchor['time_candidates'])}개: "            f"{first['ts']} {first['type']}" in report
+    spec = json.loads((job / "explore-input.json").read_text(encoding="utf-8")) if (job / "explore-input.json").is_file() else None
+    assert spec is None or spec.get("time_candidates") == anchor["time_candidates"]
 
     bad = ws.json("triage.py", [*args, "--answer", "time=2026-09-20 14:32 KST"])      # 읽을 수 없는 답: 종료 2 대신 다시 묻는다 (eval 67)
     assert bad["status"] == "needs_input" and bad["needs_input"]["kind"] == "time", bad
-    assert "읽지 못했다" in bad["needs_input"]["question"] and bad["needs_input"]["options"] == options
+    options = bad["needs_input"]["options"]
+    assert "읽지 못했다" in bad["needs_input"]["question"] and 2 <= len(options) <= 4 and "DATA-001" in options[0]["label"]
+    assert options[-1] == {"value": "full", "label": "시각 없이 로그 전체"}       # 항상 마지막 선택지
+    assert options[0]["value"] == first["ts"]
     naive = ws.json("triage.py", [*args, "--answer", "time=2026-09-22 08:00:03"])       # 타임존 없는 ISO: 로그 tz(KST)로 정규화
     assert naive["status"] == "ok", naive
-    done = ws.json("triage.py", [*args, "--answer", f"time={options[0]['value']}"])
-    assert done["status"] == "ok", done
-    assert done["candidates"][0]["cause"] == "DATA-001-02"
-    assert any("임시로" in w for w in done.get("warnings") or [])
+    picked = ws.json("triage.py", [*args, "--answer", f"time={first['ts']}"])          # 후보 시각으로 다시 보기(사용자가 줄 때 우선)
+    assert picked["status"] == "ok" and "time_candidates" not in (picked.get("step_anchor") or {}), picked
+    assert picked["candidates"][0]["cause"] == "DATA-001-02"
     ws.json("triage.py", ["release", "MOCK-9005"])
 
 
-def test_time_question_warns_about_clock_anomalies():
-    """A3: Jira에 발생 시각이 없고 로그에 시계 이상이 있으면 시각 질문에 경고를 붙인다."""
+def test_time_question_for_unreadable_answer_warns_about_clock_anomalies():
+    """A3: Jira에 발생 시각이 없고 로그에 시계 이상이 있으면 — 묻지 않고 전체를 볼 때는 경고로, 읽을 수 없는 답을 다시 물을 때는
+    질문에 경고를 붙인다."""
     ws = Workspace()
     log = tmp("tt-triage-clock-") / "clock-anomaly.log"
     log.write_bytes((REPO / "tests/fixtures/logs/clock-anomaly.log").read_bytes())
     args = ["run", "MOCK-9005", "--dry-run", "--issue-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
             "--logs", log, "--code", "skip"]
-    ask = ws.json("triage.py", args)
+    done = ws.json("triage.py", args)
+    assert done["status"] == "ok" and done["step_anchor"]["source"] == "symptom_scan", done
+    assert any("시계 이상" in w for w in done["warnings"]), done["warnings"]
+    ask = ws.json("triage.py", [*args, "--answer", "time=어제쯤"])
     assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "time", ask
     question = ask["needs_input"]["question"]
-    assert "시계 이상" in question, question
+    assert "시계 이상" in question and "읽지 못했다" in question, question
     options = ask["needs_input"]["options"]
     assert options[-1]["value"] == "full"       # "시각 없이 로그 전체"는 항상 있다
     if len(options) == 1:                       # 시각 후보가 없으면 full뿐
@@ -1728,10 +1753,16 @@ def test_matcher_timeout_is_must_shown_and_not_cached():
 
 
 def test_time_candidates_question_mentions_unjudged_types():
+    """시각 질문(읽을 수 없는 답을 다시 물을 때)은 판정 불가 유형을 알린다. 묻지 않고 전체를 본 실행은 `unjudged`로 알린다."""
+    db, log = _slow_symptom_db(), _slow_log()
     out = tmp("tt-triage-") / "x"
     meta = _meta(out, "MOCK-7411")
-    ask = run_json("triage.py", ["run", "MOCK-7411", "--offline-db", _slow_symptom_db(), "--out", out,
-                                 "--logs", _slow_log(), "--issue-meta", meta, "--tz", "Asia/Seoul", "--year", 2026])
+    base = ["run", "MOCK-7411", "--offline-db", db, "--out", out, "--logs", log, "--issue-meta", meta,
+            "--tz", "Asia/Seoul", "--year", 2026]
+    done = run_json("triage.py", base)
+    assert done["status"] == "ok" and done["step_anchor"]["source"] == "symptom_scan", done
+    assert done["unjudged"]["count"] >= 1, done
+    ask = run_json("triage.py", [*base, "--answer", "time=모름"])
     assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "time", ask
     assert "판정 불가 유형" in ask["needs_input"]["question"], ask
 
