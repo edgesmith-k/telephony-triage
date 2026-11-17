@@ -930,8 +930,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
     def explore(self, candidates: list[dict]) -> dict | None:
         """Step 5-2 탐색 분석 해당 여부: 후보 없음·원인 미확인이면 `{reason, when}`, 1위 C=1이면 `run --explore`·`explore.when:
-        always`일 때만 `fit_check`(적합성 확인), 아니면 None. 끄는 쪽이 이긴다: `never`면 `--explore`여도, `--no-explore`면
-        `always`여도 열지 않는다(FR-07).
+        always`·확인할 내용(`--look-note`)이 있을 때만 `fit_check`(적합성 확인), 아니면 None. 끄는 쪽이 이긴다: `never`면
+        `--explore`여도, `--no-explore`면 `always`여도 열지 않는다(FR-07). 확인할 내용은 사용자 질문이라 분석 요청으로 본다(FR-16 —
+        포털 R1과 같은 논리, 답은 탐색 분석이 한다).
 
         타임라인은 만들지 않는다(동의 뒤 `triage.py explore`가 `explore_input()`의 값으로 만든다). 판정은 하지 않는다(07-workflow.md §Step 5-2).
         """
@@ -941,7 +942,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             when = "ask"
         if candidates and candidates[0]["C"]:
             # 확신 일치도 탐색을 묻지 않고 하는 세션이면 1위가 증상을 설명하는지 확인할 맥락을 준다. 그 밖은 이전과 같다(묻지 않음)
-            if when == "never" or self.args.explore is False or (when != "always" and not self.args.explore):
+            if when == "never" or self.args.explore is False or (
+                    when != "always" and not self.args.explore and not self.look_inputs()["note"]):
                 return None
             reason = "fit_check"
         else:

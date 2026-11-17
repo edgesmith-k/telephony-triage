@@ -115,7 +115,7 @@
      }
     },
     "analyzer": {"type": "object", "description": "{skill, when, note?} 설치 분석 스킬(레거시·prefer: skill) | {category, when, note?} 모듈 스킬 | {error, when} 설정 오류 (note: when ask일 때만 답 전 안내)"},
-    "explore": {"type": "object", "description": "{reason: no_candidate|cause_unconfirmed|fit_check(1위 C=1, run --explore·explore.when: always일 때만 — 끄는 쪽이 이긴다: never·--no-explore면 열지 않는다), when: ask|always|never, note?: when ask일 때만 답 전 안내}(run은 타임라인을 만들지 않는다)"},
+    "explore": {"type": "object", "description": "{reason: no_candidate|cause_unconfirmed|fit_check(1위 C=1, run --explore·explore.when: always·--look-note(확인할 내용)일 때만 — 끄는 쪽이 이긴다: never·--no-explore면 열지 않는다), when: ask|always|never, note?: when ask일 때만 답 전 안내}(run은 타임라인을 만들지 않는다)"},
     "prior": {"type": "object", "description": "재실행일 때 이전 실행이 남긴 것(hyps·none·looked 중 하나라도 있을 때만, 4KB 압축 시 hyps → 전체 순으로 뺀다): top(직전 1위 원인|유형), hyps[≤3](근거 원문 검사를 통과한(원문에 없는 인용 0, 검사 건너뜀 아님) 이전 탐색 가설 머리와 반대 근거, ≤120), none(이전 탐색 `가설 없음` 이유, ≤120), looked[≤3](이전 실행의 가린 기준 줄, ≤80)", "properties": {"top": {"type": "string"}, "hyps": {"type": "array", "maxItems": 3}, "none": {"type": "string"}, "looked": {"type": "array", "maxItems": 3}}, "additionalProperties": false},
     "warnings": {"type": "array"},
     "notes": {"type": "array", "description": "잔여 worktree·도구 브랜치 안내 등"},

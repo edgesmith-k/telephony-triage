@@ -121,19 +121,30 @@ def test_cause_unconfirmed_reason_unchanged(tmp_path):
     sys.path.insert(0, str(plugin_root() / "scripts"))
     import importlib
     triage = importlib.import_module("triage")
-    drv = SimpleNamespace(cfg={}, warnings=[], args=SimpleNamespace(explore=True))
+    no_note = lambda: {"at": None, "note": None}  # noqa: E731
+    drv = SimpleNamespace(cfg={}, warnings=[], args=SimpleNamespace(explore=True), look_inputs=no_note)
     assert triage.Driver.explore(drv, [{"C": 0}])["reason"] == "cause_unconfirmed"
     assert triage.Driver.explore(drv, [])["reason"] == "no_candidate"
     assert triage.Driver.explore(drv, [{"C": 1}])["reason"] == "fit_check"
     drv.args.explore = None
     assert triage.Driver.explore(drv, [{"C": 1}]) is None
-    always = SimpleNamespace(cfg={"explore": {"when": "always"}}, warnings=[], args=SimpleNamespace(explore=False))
+    always = SimpleNamespace(cfg={"explore": {"when": "always"}}, warnings=[], args=SimpleNamespace(explore=False),
+                             look_inputs=no_note)
     assert triage.Driver.explore(always, [{"C": 1}]) is None                       # --no-explore > always (P5)
     assert triage.Driver.explore(always, [{"C": 0}])["reason"] == "cause_unconfirmed"   # 기존 두 사유는 그대로
     # 잘못된 explore.when은 C=1 경로에서도 먼저 경고하고 ask로 본다(조용히 꺼지지 않는다)
-    bad = SimpleNamespace(cfg={"explore": {"when": "sometimes"}}, warnings=[], args=SimpleNamespace(explore=True))
+    bad = SimpleNamespace(cfg={"explore": {"when": "sometimes"}}, warnings=[], args=SimpleNamespace(explore=True),
+                          look_inputs=no_note)
     assert triage.Driver.explore(bad, [{"C": 1}])["reason"] == "fit_check"
     assert bad.warnings == ["explore.when 값이 잘못됐다(sometimes). ask로 본다"]
+    # FR-16(P9): 확인할 내용(--look-note)이 있으면 플래그 없이도 fit_check를 연다 — never·--no-explore는 그래도 끈다
+    note = lambda: {"at": None, "note": "재시도가 오는지"}  # noqa: E731
+    asked = SimpleNamespace(cfg={}, warnings=[], args=SimpleNamespace(explore=None), look_inputs=note)
+    assert triage.Driver.explore(asked, [{"C": 1}])["reason"] == "fit_check"
+    asked.args.explore = False
+    assert triage.Driver.explore(asked, [{"C": 1}]) is None
+    asked.args.explore, asked.cfg = None, {"explore": {"when": "never"}}
+    assert triage.Driver.explore(asked, [{"C": 1}]) is None
 
 
 def test_no_explore_is_in_request_hash_so_always_fit_check_is_not_reused():

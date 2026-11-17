@@ -894,8 +894,11 @@ class ReportMixin:
         note = self.look_inputs()["note"]
         if note:        # 확인할 내용은 항상 한 줄. 답은 탐색 분석이 한다 — 탐색을 안 하면 그렇다고 적는다(강제하지 않는다)
             ex = r.get("explore")
-            prob.append(f"- 확인할 내용(사용자 질문): {note} — " + ("탐색 분석(동의 뒤)에서 답한다" if ex and ex.get("when") != "never"
-                                                               else "탐색 분석 안 함 — 확인할 내용은 답하지 않음(근거 로그로 직접 확인)"))
+            never = (ex or {}).get("when", userconfig.get(self.cfg, "explore.when", "ask")) == "never"
+            prob.append(f"- 확인할 내용(사용자 질문): {note} — " + (
+                "탐색 분석 안 함 — 확인할 내용은 답하지 않음(근거 로그로 직접 확인)" if never else
+                "탐색 분석(동의 뒤)에서 답한다" if ex else
+                "확인할 내용은 --explore와 함께 주면 탐색에서 답한다(지금 실행은 탐색 안 함)"))
         if self.focus:
             ana.append("- 스텝 기준 우선 유형 (순위 참고용, 점수는 그대로): " + ", ".join(self.focus))
         cands = r["candidates"]
