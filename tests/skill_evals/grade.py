@@ -3691,7 +3691,8 @@ def checks_ft(eid, ctx):
     def no_readopt():
         """2회차에 탐색을 다시 했으면 그 출력이 `가설 없음`이다(1위를 새 근거 없이 다시 고르지 않음). 가설을 세웠으면 수동 채점."""
         at = boundary()
-        again = [i for i, c in bash(at) if re.search(r"check-output\b", c)]
+        # 탐색 검사(`--for explore`, `--skipped` 아님)를 다시 했을 때만 새 출력이 있다 — 생략(이전 판단 유지)은 되풀이가 아니다
+        again = [i for i, c in bash(at) if re.search(r"check-output\b[^;&|\n]*--for\s+explore\b(?![^;&|\n]*--skipped)", c)]
         if not again:
             return True, "2회차 탐색 출력 없음(이전 판단을 알림)"
         f = explore_fields() or {}
