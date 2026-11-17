@@ -20,7 +20,11 @@
   (`<work_dir>/.shown/log.jsonl`의 report 결정적 줄·must_show, push·post 화면, 초안 검증표, 스킬 패치 안내 — 모델을 거치지 않지만
   파일은 모델도 쓸 수 있어 줄마다 `  ┃ ` 뒤, 제어 문자 이스케이프, 앞날짜 기록은 건너뜀), 막힌 호출의 메시지 전문(`  │ ` 뒤 —
   guard가 준 "run this exact command yourself: …" 명령 포함), 결과 줄(토큰, 비용은 미상 — OpenCode `cost:0`은 0원이 아니다).
-- `--delete-session`: 끝나면 `opencode session delete <세션>`(보존 최소화, 이어가기는 못 한다).
+- 하위 세션(탐색 분석 `tt-explore`): 1.19.5 `run --format json`은 sessionID가 다른 part를 내보내지 않는다. 그래서 task 도구 part의
+  `state.metadata.sessionId`로 하위 세션을 찾아 `opencode export <세션>`으로 읽고, 막힌 호출(종료 3)·직접 실행 명령·guard 경고·
+  토큰(합계에 더함, 세션별은 `children`)·하위 스텝 한도(`tt-explore.md` `steps:`, `step-limit`)를 같은 규칙으로 판정한다. 읽지 못하면
+  오류(종료 1)다 — 판정하지 못한 하위 세션을 통과로 두지 않는다.
+- `--delete-session`: 끝나면 `opencode session delete <세션>`(하위 세션도, 보존 최소화, 이어가기는 못 한다).
 
 CLI:
     tt-oc --project <dir> [--timeout 초] [--first-timeout 초] [-s <세션>] [--command tt-<이름>] [--work-dir <dir>]... [--delete-session] [--json]
@@ -246,9 +250,10 @@ def _run(cmd, *, cwd=None, env=None, timeout=60) -> subprocess.CompletedProcess:
                           timeout=timeout, check=False)
 
 
-# task는 탐색 분석 하위 에이전트만(사용자 결정 ⑧을 좁힘). 이 객체(키·값 같음)이거나 통째로 "deny"만 받는다
-# = opencode.json.template `permission.task`, oc_adapter.TASK_ALLOWED
-TASK_PERMISSION = {"*": "deny", "tt-explore": "allow"}
+# task는 탐색 분석 하위 에이전트만(사용자 결정 ⑧을 좁힘) = opencode.json.template `permission.task`. 판정은 글자 비교가 아니라
+# 마지막 일치 규칙의 효과(`OCV.task_rule_state`): tt-explore만 allow이거나 모두 deny만 받는다
+TASK_PERMISSION = {"*": "deny", OCV.TASK_AGENT: "allow"}
+TASK_STATE_TEXT = {"explore-only": "task tt-explore만", "all-deny": "task 모두 거부(탐색 분석은 같은 세션에서)"}
 
 
 def config_problems(cfg: dict) -> list[str]:
@@ -258,10 +263,12 @@ def config_problems(cfg: dict) -> list[str]:
     bash = perm.get("bash") if isinstance(perm.get("bash"), dict) else {"*": perm.get("bash")}
     need = {"snapshot": (cfg.get("snapshot"), False), "share": (cfg.get("share"), "disabled"),
             "autoupdate": (cfg.get("autoupdate"), False), 'permission["*"]': (perm.get("*"), "deny"),
-            "permission.task": (perm.get("task"), TASK_PERMISSION), 'permission.bash["*"]': (bash.get("*"), "deny")}
-    if perm.get("task") == "deny":       # 더 막는 것(관리 설정이 통째로 deny) — 탐색 분석은 같은 세션에서 한다
-        del need["permission.task"]
-    return [f"{k}={json.dumps(v[0])}(필요 {json.dumps(v[1])})" for k, v in need.items() if v[0] != v[1]]
+            'permission.bash["*"]': (bash.get("*"), "deny")}
+    out = [f"{k}={json.dumps(v[0])}(필요 {json.dumps(v[1])})" for k, v in need.items() if v[0] != v[1]]
+    if OCV.task_rule_state(perm.get("task")) is None:
+        out.append(f"permission.task={json.dumps(perm.get('task'))}(필요 {json.dumps(TASK_PERMISSION)} 또는 \"deny\" — "
+                   "tt-explore만 allow, 다른 이름은 deny)")
+    return out
 
 
 def version_row(oc: str, env: dict) -> tuple[dict, bool]:
@@ -351,7 +358,8 @@ def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
         row("opencode-config", False, f"debug config 실패(종료 {r.returncode})")
     elif isinstance(cfg, dict):
         wrong = config_problems(cfg)
-        row("opencode-config", not wrong, "snapshot:false·share:disabled·autoupdate:false·허용 목록·task tt-explore만" if not wrong
+        state = TASK_STATE_TEXT.get(OCV.task_rule_state((cfg.get("permission") or {}).get("task")), "")
+        row("opencode-config", not wrong, f"snapshot:false·share:disabled·autoupdate:false·허용 목록·{state}" if not wrong
             else "설정 불일치: " + ", ".join(wrong))
     script = Path(meta["plugin_root"]) / "scripts" / "config.py"
     try:
@@ -600,10 +608,85 @@ def judge(events: list[dict], code: int | None, no_response: bool = False, step_
             "notes": notes}
 
 
-def agent_step_limit(proj: Path) -> int | None:
-    """설치한 triage 에이전트의 `steps:`(frontmatter). 없거나 읽지 못하면 None(한도 판정 안 함)."""
+_SESSION_RE = re.compile(r"ses_[A-Za-z0-9]{1,64}")
+
+
+def child_sessions(events: list[dict]) -> list[str]:
+    """task 도구 part의 하위 세션 ID(`state.metadata.sessionId`, 나온 순서). `run --format json`은 하위 세션 이벤트를 내보내지 않는다."""
+    out = []
+    for ev in events:
+        part = ev.get(OCV.EV_PART) if isinstance(ev.get(OCV.EV_PART), dict) else {}
+        if ev.get("type") != OCV.EV_TOOL_USE or part.get(OCV.PART_TOOL) != OCV.TASK_TOOL:
+            continue
+        meta = (part.get(OCV.PART_STATE) or {}).get(OCV.STATE_METADATA)
+        sid = meta.get(OCV.META_SESSION) if isinstance(meta, dict) else None
+        if isinstance(sid, str) and _SESSION_RE.fullmatch(sid) and sid not in out:
+            out.append(sid)
+    return out
+
+
+def export_events(data) -> list[dict] | None:
+    """`opencode export` JSON → `run --format json`과 같은 모양의 이벤트(assistant 메시지 part만). 모양이 다르면 None."""
+    msgs = data.get(OCV.EXPORT_MESSAGES) if isinstance(data, dict) else None
+    if not isinstance(msgs, list):
+        return None
+    sid = (data.get(OCV.EXPORT_INFO) or {}).get("id")
+    events = []
+    for m in msgs:
+        if not isinstance(m, dict) or (m.get(OCV.EXPORT_INFO) or {}).get(OCV.EXPORT_ROLE) != "assistant":
+            continue
+        for part in m.get(OCV.EXPORT_PARTS) or []:
+            typ = OCV.EXPORT_PART_EVENT.get(part.get("type")) if isinstance(part, dict) else None
+            if typ:
+                events.append({"type": typ, OCV.EV_SESSION: sid, OCV.EV_PART: part})
+    return events
+
+
+def read_child(oc: str, sid: str, proj: Path, env: dict) -> list[dict] | None:
     try:
-        head = (proj / ".opencode" / "agents" / f"{AGENT}.md").read_text(encoding="utf-8").split("\n---", 1)[0]
+        r = _run([oc, *OCV.EXPORT_ARGS, sid], cwd=proj, env=env, timeout=120)
+        out = r.stdout or ""
+        return export_events(json.loads(out[out.index("{"):])) if r.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+
+
+def add_children(res: dict, children: list[tuple[str, list[dict] | None]], step_limit: int | None) -> dict:
+    """하위 세션(tt-explore) 판정을 합친다: 막힌 호출·직접 실행 명령·guard 경고·오류·토큰을 더하고(`children`에 세션별 요약),
+    막힌 하위 호출은 막힌 호출(종료 3), 하위 스텝 한도는 `step-limit`, 읽지 못한 하위 세션은 오류다(판정하지 못한 것을 통과로 두지 않는다)."""
+    res["children"] = []
+    hit = False
+    for sid, events in children:
+        if events is None:
+            res["errors"].append(f"error: 하위 세션 {sid}을 읽지 못했다(opencode export) — 하위 에이전트의 막힌 호출·토큰을 판정하지 못했다")
+            res["children"].append({"session": sid, "read": False})
+            continue
+        c = judge(events, 0, step_limit=step_limit)
+        res["blocked"] += [{**b, "session": sid} for b in c["blocked"]]
+        res["user_commands"] += c["user_commands"]
+        res["guard_warnings"] += c["guard_warnings"]
+        res["errors"] += c["errors"]
+        for k in res["tokens"]:
+            res["tokens"][k] += c["tokens"][k]
+        limit = c["outcome"] == "step-limit"
+        hit = hit or limit
+        if limit:
+            res["notes"].append(f"하위 에이전트({sid})가 스텝 한도({step_limit})에 닿았다 — 탐색 분석이 끝나지 않았을 수 있다")
+        res["children"].append({"session": sid, "read": True, "steps": c["steps"], "tokens": c["tokens"],
+                                "blocked": len(c["blocked"]), "finish": c["finish"], "step_limit": limit})
+    if res["outcome"] in ("ok", "blocked", "no-final-text", "step-limit") and any(e.startswith("error: ") for e in res["errors"]):
+        res["outcome"] = "error"
+    elif res["outcome"] in ("ok", "blocked") and hit:
+        res["outcome"] = "step-limit"
+    elif res["outcome"] == "ok" and res["blocked"]:
+        res["outcome"] = "blocked"
+    return res
+
+
+def agent_step_limit(proj: Path, agent: str = AGENT) -> int | None:
+    """설치한 에이전트의 `steps:`(frontmatter). 없거나 읽지 못하면 None(한도 판정 안 함)."""
+    try:
+        head = (proj / ".opencode" / "agents" / f"{agent}.md").read_text(encoding="utf-8").split("\n---", 1)[0]
     except OSError:
         return None
     m = re.search(r"^steps:\s*(\d+)\s*$", head, re.MULTILINE)
@@ -1257,6 +1340,9 @@ def main(argv=None) -> int:
     events, raw, code, tail, silent = run_opencode(cmd, cwd=proj, env=env, timeout=a.timeout, progress=not a.json,
                                                    first_timeout=first_timeout)
     res = judge(events, code, no_response=silent, step_limit=agent_step_limit(proj))
+    kids = child_sessions(events)
+    if kids:
+        add_children(res, [(sid, read_child(oc, sid, proj, env)) for sid in kids], agent_step_limit(proj, OCV.TASK_AGENT))
     recs, warn = shown_records(work_dirs_for(meta, a.work_dir), since)
     if res["outcome"] == "ok" and a.oc_command in SCRIPT_FLOWS and not recs and not ran_plugin_script(events):
         res["outcome"] = "no-script-output"
@@ -1264,7 +1350,8 @@ def main(argv=None) -> int:
     deleted = None
     if a.delete_session and res["session"]:
         try:
-            deleted = _run([oc, *OCV.SESSION_DELETE_ARGS, res["session"]], cwd=proj, env=env, timeout=60).returncode == 0
+            deleted = all(_run([oc, *OCV.SESSION_DELETE_ARGS, s], cwd=proj, env=env, timeout=60).returncode == 0
+                          for s in [*kids, res["session"]])      # 하위 세션 먼저(부모 먼저면 하위 삭제가 실패했다, 1.19.5)
         except (OSError, subprocess.TimeoutExpired):
             deleted = False
     if a.json:
@@ -1279,7 +1366,7 @@ def main(argv=None) -> int:
     if res["blocked"]:
         print("\n---- [tt-oc] 막힌 호출(메시지 전문) ----")
         for b in res["blocked"]:
-            print(model_lines(f"[{b['tool']}] {b['message']}"))
+            print(model_lines(f"[{b['tool']}{' · 하위 ' + b['session'] if b.get('session') else ''}] {b['message']}"))
     if res["user_commands"]:
         print("\n---- [tt-oc] OpenCode v1에서 실행하지 않은 명령 — 터미널이나 Claude Code에서 직접 실행 ----")
         for c in res["user_commands"]:      # 모델 글 그대로(고치지 않는다). 셸 확장이 있으면 tt-oc 자신의 줄로 표시
@@ -1295,7 +1382,8 @@ def main(argv=None) -> int:
             if meta.get("publish") == "open" else "이 설치는 게시가 닫혀 있다. Claude Code에서 등록한다"))
     print("\n---- [tt-oc] 결과 ----")
     t = res["tokens"]
-    print(f"outcome: {res['outcome']} · session: {res['session'] or '없음'} · steps: {res['steps']} · "
+    sub = "".join(f" (+하위 {c['steps']})" if c.get("read") else " (+하위 읽기 실패)" for c in res.get("children", []))
+    print(f"outcome: {res['outcome']} · session: {res['session'] or '없음'} · steps: {res['steps']}{sub} · "
           f"tokens in/out/reasoning: {t['input']}/{t['output']}/{t['reasoning']} · cost: 미상(OpenCode cost 0은 0원이 아니다) · "
           f"finish: {res['finish'] or '없음'}")
     if res["outcome"] == "length":

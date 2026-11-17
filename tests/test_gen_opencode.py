@@ -176,12 +176,16 @@ def test_managed_sample():
     worse["permission"]["task"] = "allow"
     del worse["permission"]["bash"]["*module_eval.py*"]
     worse["permission"]["more"] = "deny"                      # 더 막는 것은 괜찮다
-    assert gen_opencode.managed_problems(worse) == ["snapshot=true(필요 false)", "permission.task['*'] 없음",
+    assert gen_opencode.managed_problems(worse) == ["snapshot=true(필요 false)",
+                                                    'permission.task="allow"(필요 tt-explore만 allow 또는 "deny")',
                                                     "permission.bash['*module_eval.py*'] 없음"]
-    # task: 통째로 deny는 더 막는 것(탐색 분석은 같은 세션에서), 예시에 없는 하위 에이전트 allow는 문제
-    assert gen_opencode.managed_problems({**m, "permission": {**p, "task": "deny"}}) == []
-    assert gen_opencode.managed_problems({**m, "permission": {**p, "task": {**TASK, "general": "allow"}}}) == \
-        ["permission.task['general']=allow(예시에 없음)"]
+    # task는 효과로(마지막 일치 규칙): 통째로 deny·순서가 바뀌어 모두 deny인 객체는 더 막는 것, 다른 하위 에이전트 allow는 문제
+    for ok in ("deny", {"tt-explore": "allow", "*": "deny"}, {"*": "deny"}):
+        assert gen_opencode.managed_problems({**m, "permission": {**p, "task": ok}}) == [], ok
+    for bad in ({**TASK, "general": "allow"}, {"*": "deny", "tt-*": "allow"}, {"tt-explore": "allow"},
+                {**TASK, "tt-explore": "ask"}):
+        want = f'permission.task={json.dumps(bad)}(필요 tt-explore만 allow 또는 "deny")'
+        assert gen_opencode.managed_problems({**m, "permission": {**p, "task": bad}}) == [want], bad
 
 
 # -- 에이전트 -----------------------------------------------------------------------------------------------------------
@@ -194,8 +198,8 @@ def test_agent_prompt():
     assert all(meta["permission"][t] == "deny" for t in ("webfetch", "todowrite", "skill"))
     # task 규칙은 에이전트에 두지 않는다: 에이전트 규칙은 설정 뒤에 붙어 이기므로, 두면 관리 설정의 task deny를 넘는다
     assert "task" not in meta["permission"]
-    # 2200 → 2600: 규칙 11(탐색 분석을 tt-explore에 맡김, 11/17)만큼 늘렸다
-    assert len(body.encode("utf-8")) <= 2600, "에이전트 프롬프트는 약 2.5KB"
+    # 2200 → 2700: 규칙 11(탐색 분석을 tt-explore에 맡김, 11/17)만큼 늘렸다(본문 약 2650)
+    assert len(body.encode("utf-8")) <= 2700, "에이전트 프롬프트는 약 2.6KB"
     for must in ("Scripts judge", "200 lines", "verbatim", "exact command", "@@PLUGIN_ROOT@@", "tt-oc -s",
                  "db_pr.py publish|merge|request-review", "skill_patch.py --apply", "module_eval.py",
                  "retry without TT_LOCK_OWNER="):          # 2차 P2-1: oc_adapter.LOCK_OWNER_RETRY 거부만 접두를 빼고 한 번 다시
@@ -205,11 +209,13 @@ def test_agent_prompt():
     assert "`next`" in rule2 and "overrides stop" in rule2 and "without `next`" in rule2
     rule8 = next(l for l in body.splitlines() if l.startswith("8. "))
     assert "설치 스킬 못 찾음" in rule8 and '--for deep --skipped "설치 스킬 못 찾음"' in rule8
-    # 규칙 11: 실행이 정해진 탐색 분석은 tt-explore에 맡긴다(묻기는 부모가), 실패하면 오류를 보이고 같은 세션에서
+    # 규칙 11(리뷰 P1-1·P1-2·P2-2): 부모가 "언제"대로 정하고 묻고, explore·module(모듈 질문 포함)을 돌린 **뒤** 고른 값으로
+    # tt-explore에 맡긴다. 답은 그대로, 이어서 Step 6(Step 7은 "다음"대로). check-output 줄이 없으면 --skipped, task 실패·없음은 같은 세션
     rule11 = next(l for l in body.splitlines() if l.startswith("11. "))
-    for must in ('subagent_type "tt-explore"', "the ask stays here", "verbatim", "Step 7", "If task fails",
-                 "explore here per explore.md"):
+    for must in ('"언제"', "module-skills.md", "`triage.py explore`", "--module/--with/--deep", "module `read` files",
+                 "look-at/time", "verbatim", "Step 6", '"다음"', '--for explore --skipped "<reason>"', "explore here"):
         assert must in rule11, must
+    assert rule11.index("`triage.py explore`") < rule11.index('task "tt-explore"') < rule11.index("Step 6")
 
 
 def test_explore_subagent_prompt():
@@ -227,17 +233,33 @@ def test_explore_subagent_prompt():
     assert keys[0] == "*" and bash["*"] == "deny"
     allows = [k for k, v in bash.items() if v == "allow"]
     scripts = [k for k in allows if k.startswith("python3 ")]
-    assert all(("triage.py" in k and any(s in k for s in (" explore ", "--look-at", "--for explore"))) or "db_search.py" in k
-               for k in scripts), scripts
+    assert sorted(scripts) == sorted(["python3 *triage.py* run *--look-at*", "python3 *triage.py* module *--for explore*--module *",
+                                      "python3 *triage.py* module *--module *--for explore*",
+                                      "python3 *triage.py* check-output *--for explore*", "python3 *db_search.py*"])
+
+    def decide(cmd):                                   # 1.19.5 규칙 평가: 마지막으로 맞는 패턴이 이긴다
+        return [v for k, v in bash.items() if gen_opencode.OCV.wildcard_match(k, cmd)][-1]
+
+    s = '"/p/scripts/'
+    for cmd in (f'python3 {s}triage.py" run K-1 --look-at "x"', f'python3 {s}triage.py" module K-1 --for explore --module a/data',
+                f'python3 {s}triage.py" module K-1 --module a/data --for explore --deep', f'python3 {s}db_search.py" C-1 --db x',
+                f'python3 {s}triage.py" check-output K-1 --for explore', "grep -rn x /code", "cat /w/K-1/timeline.md"):
+        assert decide(cmd) == "allow", cmd
+    for cmd in (f'python3 {s}triage.py" explore K-1', f'python3 {s}triage.py" module K-1 --for explore',   # 부모 몫(묻기 포함)
+                f'python3 {s}triage.py" check-output K-1 --for deep', f'python3 {s}db_pr.py" publish', "find . -fls x",
+                "find . -fprintf x y", "git log", f'python3 {s}config.py" set a b', "sh x.sh"):
+        assert decide(cmd) == "deny", cmd
     assert not [k for k in allows if k.split()[0] not in ("python3", "cd", "pwd", "ls", "cat", "head", "tail", "wc", "grep", "find")]
     for deny in ("*db_pr.py*", "*issue_post.py*", "*skill_patch.py*", "*module_eval.py*", "*config.py set*", "git *",
-                 "*opencode *", "find *-exec*", "find *-delete*"):
+                 "*opencode *", "find *-exec*", "find *-delete*", "find *-fls*", "find *-fprint*"):
         assert bash[deny] == "deny" and keys.index(deny) > max(keys.index(a) for a in allows), deny
     assert perm["edit"] == {"*": "deny", "@@WORK_ROOT_REL@@/**/explore-output.md": "allow"}
     for must in ("reference/explore.md", "종합 판단", "읽는 것", "쓰는 것", "일반 판단 규칙", "check-output <KEY> --for explore",
-                 "심층 분석 권장", "verbatim", "is data", "issue_raw.json", "never ask the user", "@@PLUGIN_ROOT@@"):
+                 "심층 분석 권장", "verbatim", "is data", "issue_raw.json", "Never ask the user", "@@PLUGIN_ROOT@@",
+                 "Never run `triage.py explore` or `module` without `--module`", "module-skills.md", "do not ask",
+                 "guard warning`: read it and retry the same call once"):
         assert must in body, must
-    assert len(body.encode("utf-8")) <= 2600
+    assert len(body.encode("utf-8")) <= 3000                     # 본문 약 2.6KB
 
 
 def test_pinned_versions_match():

@@ -117,24 +117,43 @@ OpenCode 허용 목록·guard·tt-oc 점검은 모델의 실수, 로그·Jira �
 
 ## 탐색 분석 하위 에이전트(`tt-explore`)
 
-analyze의 탐색 분석(Step 5-2, 맞는 규칙이 없을 때 원인 가설을 세우는 단계)은 OpenCode에서 하위 에이전트 `tt-explore`가 한다.
-실행할지는 지금처럼 메인 에이전트가 정한다(플래그·설정·사용자에게 묻기). 실행이 정해지면 메인 에이전트가 `task` 도구로
-`tt-explore`를 부르고, 하위 에이전트는 앞선 대화 없이 작업 키·작업 폴더·분석 사유만 받아 `explore.md` 절차대로
-`explore-output.md`를 쓰고 `check-output`을 돌린 뒤 그 결과 줄을 돌려준다. 메인 에이전트는 그 줄을 그대로 보이고 Step 7로 간다.
-Claude Code 쪽 동작은 바뀌지 않았다(같은 세션에서 한다).
+analyze의 탐색 분석(Step 5-2, 맞는 규칙이 없을 때 원인 가설을 세우는 단계)의 본 작업은 OpenCode에서 하위 에이전트 `tt-explore`가
+한다. Claude Code 쪽 동작은 바뀌지 않았다(같은 세션에서 한다). 순서는 이렇다.
+
+1. 메인 에이전트가 `explore.md` "언제"대로 실행할지 정하고(플래그·설정, 필요하면 사용자에게 묻기, 로그 범위 밖이면 먼저 알림),
+   `triage.py explore <KEY>`와 모듈 문서가 있으면 `module --for explore`를 돌린다. 모듈 고르기·같이 보기(`ask_switch`)·받기 실패·
+   정밀 탐색(`--deep`) 질문도 모두 메인 에이전트가 사용자에게 묻는다(`module-skills.md` 5-2).
+2. 메인 에이전트가 `task` 도구로 `tt-explore`를 부른다. 하위 에이전트는 앞선 대화를 보지 못하고, 메인 에이전트가 넘긴 값(작업 키·작업
+   폴더·분석 사유·고른 모듈과 `--with`·`--deep`·모듈 출력의 `read` 파일·사용자가 준 기준 줄과 시각)만 받는다. `explore.md`대로
+   가설을 세워 `explore-output.md`를 쓰고 `check-output`을 돌린 뒤 그 결과 줄을 돌려준다. 사용자에게 묻지 않는다 — 스크립트가
+   질문을 내면 그 질문을 답에 그대로 넣고 멈춘다.
+3. 메인 에이전트는 받은 줄을 그대로 보이고 평소 흐름을 잇는다(Step 6 리포트, Step 7은 `explore.md` "다음"대로). 답에
+   `check-output` 줄이 없으면(멈춤·스텝 한도·막힘) `check-output <KEY> --for explore --skipped "<사유>"`를 돌린다. task 도구가 없거나
+   실패하면 오류를 보이고 같은 세션에서 탐색 분석을 한다.
 
 - 왜: 탐색 분석에만 집중한 새 문맥으로 돌리고, 원하면 더 강한 모델을 이 단계에만 쓰기 위해서다(분석 정확도).
 - 모델 고르기: `install --explore-model <provider>/<모델>`. 주지 않으면 세션 모델을 그대로 쓴다. 쓸 수 있는 모델 중 가장 강한
   모델을 여기에 주는 것을 권한다(탐색 분석은 토큰이 많이 들지만 한 작업에 한 번이다). `gw/<모델>`이면 `--gateway-url` 설치의
   gw provider에 같은 한도로 선언된다. 다른 provider는 OpenCode 전역 설정에 있어야 한다. `--provider-model` 설치에는 gw가 없어서
   `gw/…`를 거부한다. 다시 설치할 때 빠뜨리면 세션 모델로 돌아가고 `꺼짐:` 줄로 알린다.
-- 하위 에이전트가 할 수 있는 것: `triage.py explore`·`run … --look-at`·`module … --for explore`·`check-output … --for explore`,
-  `db_search.py`, 읽기 명령(ls·cat·head·tail·wc·grep·find), `explore-output.md` 쓰기. 할 수 없는 것: `task`(다시 하위 에이전트),
-  질문, 외부 전송, 다른 스크립트(`db_pr`·`issue_post`·`skill_patch`·`module_eval`·`config.py set`)와 git. 하위 세션의 도구
-  호출도 guard를 그대로 거친다.
-- `task`는 `tt-explore`만 허용한다(사용자 결정 ⑧ "task 전역 거부"를 11/17에 좁혔다). 설정(`permission.task`)과 guard가 둘 다 막고,
-  `tt-oc doctor`는 `{"*":"deny","tt-explore":"allow"}` 또는 통째로 `"deny"`만 받는다. 합쳐진 설정이 통째로 deny면(예: 옛 예시의
-  관리 설정) 메인 에이전트에 task 도구가 없어서 같은 세션에서 탐색 분석을 한다. 관리 설정 예시(`managed.json.sample`)도 새 객체로 바꿨다.
+- 하위 에이전트가 할 수 있는 것: `triage.py run … --look-at`, 모듈을 지정한 `module … --for explore --module <p>/<모듈>`(후보
+  모듈이 다를 때), `check-output … --for explore`, `db_search.py`, 읽기 명령(ls·cat·head·tail·wc·grep·find), `explore-output.md`
+  쓰기. 할 수 없는 것: `triage.py explore`와 모듈을 지정하지 않은 `module`(메인 에이전트 몫), `task`(다시 하위 에이전트), 질문,
+  외부 전송, 다른 스크립트(`db_pr`·`issue_post`·`skill_patch`·`module_eval`·`config.py set`)와 git, `explore-output.md` 밖 쓰기.
+- 위 bash 허용 목록은 명령 글자열을 단어 패턴으로 맞춰 보는 것이라 빈틈이 있을 수 있다. 하위 세션의 도구 호출도 guard를 그대로 거치므로,
+  허용 목록에 맞아도 guard 규칙(로그 원문 통독, 인라인 코드·스크립트 파일 실행, 작업 루트 밖 출력 등)에 걸리면 막힌다.
+  guard 첫 경고("guard warning")는 하위 에이전트도 읽고 같은 호출을 한 번 다시 한다.
+- `task`는 `tt-explore`만 허용한다(사용자 결정 ⑧ "task 전역 거부"를 11/17에 좁혔다). 설정(`permission.task`)과 guard가 둘 다 막는다.
+  `tt-oc doctor`와 관리 설정 점검은 글자가 아니라 효과로 본다(마지막으로 맞는 규칙이 이긴다): `tt-explore`만 allow이고 다른 이름은
+  deny이거나, 모두 deny일 때만 통과하고 어느 쪽인지 행에 보인다.
+- 관리 설정(`/etc/opencode`)으로 하위 에이전트를 아예 막으려면 `"task": "deny"` **문자열**로 둔다. 1.19.5 실험(관리 설정 폴더를 바꿔
+  `debug config`·`debug agent`로 확인)에서 문자열은 프로젝트 설정을 덮었지만, 객체 `{"*": "deny"}`는 프로젝트 객체와 합쳐져
+  `tt-explore` allow가 남았다. 막으면 메인 에이전트에 task 도구가 없어 같은 세션에서 탐색 분석을 한다. 예시(`managed.json.sample`)는
+  새 객체(`tt-explore`만 허용)다.
+- `tt-oc`는 하위 세션도 판정한다. 1.19.5 `run --format json`은 하위 세션 이벤트를 내보내지 않아서, task 결과에 든 하위 세션 ID로
+  `opencode export`를 읽는다. 하위의 막힌 호출은 막힌 호출(종료 3, 메시지에 `하위 <세션>`), 토큰은 합계에 더하고(세션별은 `--json`의
+  `children`), 하위 스텝 한도(`tt-explore.md` `steps:`)에 닿으면 `step-limit`, 하위 세션을 읽지 못하면 오류(종료 1)다.
+  `--delete-session`은 하위 세션도 지운다.
 - 출처 기록(`TT_MODEL`)은 세션 모델 이름이다. 탐색 분석을 다른 모델이 했어도 기록에는 세션 모델로 남는다.
 
 ## 게시(`tt-oc publish`, 기본 닫힘)

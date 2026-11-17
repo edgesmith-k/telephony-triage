@@ -89,7 +89,7 @@ PLUGIN_ROOT = SCRIPTS.parent
 # -- 도구 표 -------------------------------------------------------------------------------------------
 
 PASS, BASH, FILE, PATCH, DENY, TASK = "pass", "bash", "file", "patch", "deny", "task"
-TASK_ALLOWED = "tt-explore"     # 탐색 분석(analyze Step 5-2) 하위 에이전트 — 사용자 결정 ⑧(task 전역 거부)을 이것만 허용으로 좁혔다
+TASK_ALLOWED = oc_version.TASK_AGENT     # 탐색 분석(analyze Step 5-2) 하위 에이전트 — 사용자 결정 ⑧(task 전역 거부)을 이것만 허용으로 좁혔다
 NOT_IN_V1 = "OpenCode v1(분석 전용)에서 쓰지 않는 도구다"
 BUILTINS: dict[str, tuple[str, str]] = {
     "invalid": (PASS, ""), "question": (PASS, ""), "read": (PASS, ""), "glob": (PASS, ""), "grep": (PASS, ""),

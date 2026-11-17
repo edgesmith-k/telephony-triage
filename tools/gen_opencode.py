@@ -109,7 +109,8 @@ def _oc_version_module():
     return mod
 
 
-OPENCODE_VERSION = _oc_version_module().OPENCODE_VERSION     # = opencode/bin/tt-oc PINNED = oc_adapter.OPENCODE_VERSION
+OCV = _oc_version_module()
+OPENCODE_VERSION = OCV.OPENCODE_VERSION     # = opencode/bin/tt-oc PINNED = oc_adapter.OPENCODE_VERSION
 
 
 class UsageError(Exception):
@@ -340,8 +341,8 @@ MANAGED_NAMES = ("opencode.json", "opencode.jsonc")
 
 def managed_problems(cfg) -> list[str]:
     """배포된 관리 설정이 `managed.json.sample`의 막는 항목을 모두 갖는지: 최상위 snapshot·autoupdate·share는 같은 값,
-    permission의 deny(bash 패턴 포함)는 모두 deny. 다른 키를 더한 것은 문제가 아니다(사내가 더 막을 수 있다). allow가 있는
-    객체(task — tt-explore만 허용)는 예시에 없는 allow가 문제이고, 통째로 "deny"는 더 막는 것이라 괜찮다."""
+    permission의 deny(bash 패턴 포함)는 모두 deny. 다른 키를 더한 것은 문제가 아니다(사내가 더 막을 수 있다). `task`는 글자 비교가
+    아니라 효과로 본다(`oc_version.task_rule_state`): tt-explore만 allow이거나 통째로 "deny"(더 막는 것)만 괜찮다."""
     want = json.loads(MANAGED_SAMPLE.read_text(encoding="utf-8"))
     if not isinstance(cfg, dict):
         return ["객체가 아니다"]
@@ -349,14 +350,14 @@ def managed_problems(cfg) -> list[str]:
            for k in ("snapshot", "autoupdate", "share") if k in want and cfg.get(k) != want[k]]
     have = cfg.get("permission") if isinstance(cfg.get("permission"), dict) else {}
     for key, value in want.get("permission", {}).items():
-        if isinstance(value, dict):
-            if have.get(key) == "deny":      # 통째로 deny는 더 막는 것(task면 tt-explore 없이 같은 세션에서 탐색 분석)
+        if key == "task":
+            if OCV.task_rule_state(have.get(key)) is None:
+                out.append(f"permission.task={json.dumps(have.get(key))}(필요 tt-explore만 allow 또는 \"deny\")")
+        elif isinstance(value, dict):
+            if have.get(key) == "deny":      # 통째로 deny는 더 막는 것
                 continue
             sub = have.get(key) if isinstance(have.get(key), dict) else {}
             out += [f"permission.{key}[{pat!r}] 없음" for pat, v in value.items() if v == "deny" and sub.get(pat) != "deny"]
-            if "allow" in value.values():    # 허용 목록 모양(task): 예시에 없는 allow는 문제
-                out += [f"permission.{key}[{pat!r}]=allow(예시에 없음)" for pat, v in sub.items()
-                        if v == "allow" and value.get(pat) != "allow"]
         elif value == "deny" and have.get(key) != "deny":
             out.append(f"permission[{key!r}]={json.dumps(have.get(key))}(필요 \"deny\")")
     return out
