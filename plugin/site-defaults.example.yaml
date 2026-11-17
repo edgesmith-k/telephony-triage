@@ -185,13 +185,17 @@ platform:
   #       - {tag: VRIL_HAL, patterns: ['^req serial=(?P<serial>\d+)']}
   #       - {tag: VRIL_SOCK, patterns: ['^resp token=(?P<token>\d+)']}
   #     coverage_tags: [VRIL_MODEM]  # 선택. 정규식 없이 "수집 살아 있음"만 표시(한가한 구간의 unknown 방지)
-  # vendor_ipc:                      # TODO(SITE:S9) 벤더 IPC 줄의 사내 토큰. 다섯 키를 함께 적는다(값은 식별자 모양)
+  # vendor_ipc:                      # TODO(SITE:S9) 벤더 IPC 줄의 사내 토큰. 다섯 키를 함께 적는다(값은 식별자 모양, trace는 선택 키)
   #   context: IpcCtx_               # 요청 완료 줄 `[<context><n>] <complete> Request ID=…, result=…`의 문맥 접두어
   #   complete: OnIpcComplete        # 그 줄의 완료 낱말
   #   request_prefix: VIPC_          # IPC 오류 줄 `[RX] <request_prefix><X>, RSP, … Error(<error_prefix><Y>)`의 메시지 이름 접두어
   #   error_prefix: VIPC_E_          # 그 줄의 결과 값 접두어
   #   success: VIPC_E_OK             # 성공 결과 값 전체(error_prefix로 시작, 이벤트로 내지 않음). 블록을 생략하면 이 placeholder들 — 사내 줄은 잡히지 않는다.
   #                                  # 사내 값은 사내 site-defaults에만(17-platforms §9-1)
+  #   trace:                         # 선택(TODO(SITE:S9), 다섯 키와 따로 본다). 기준 줄 IPC 찾기(--look-at)가 읽는 IPC 메시지 줄 정규식
+  #                                  # 목록(≤8개·각 ≤400자, (?P<name>) 필수, token·dir·kind·result 선택, {prefix}·{error_prefix}는 위 두
+  #                                  # 접두어로 채움). 생략하면 placeholder 기본 둘(VIPC_ 꼴, 아래는 그 둘째) — 사내 IPC 줄 형식은 사내에서 채운다
+  #     - '\b(?P<name>{prefix}[A-Z0-9_]+)\s*\(\s*token\s*=\s*(?P<token>(?:0x[0-9A-Fa-f]+|\d+)\b|<[A-Z]+#\d+>)\s*\)?'   # `VIPC_X (token=0x0de)` 꼴
   # bugreport:                       # TODO(SITE:S21) dumpstate 섹션 헤더
   #   wanted_buffers: [system, radio, main]          # ^[a-z]+$, 출력 파일 순서
   #   section_regex: '^------ (?P<title>.+?) \((?P<cmd>logcat\b[^)]*)\) ------\s*$'   # (?P<cmd>) 필수
