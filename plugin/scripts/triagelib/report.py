@@ -282,6 +282,16 @@ def _clip_anchor_step(result: dict, limit: int) -> None:
         sa["step"] = _clip(sa["step"], limit)
 
 
+def _drop_prior_hyps(result: dict) -> None:
+    """`prior.hyps`를 뺀다. 남는 것이 `top`뿐이면 `prior` 전체를 뺀다(계약: hyps·none·looked 중 하나라도 있을 때만)."""
+    prior = result.get("prior")
+    if not prior:
+        return
+    prior.pop("hyps", None)
+    if not set(prior) - {"top"}:
+        result.pop("prior", None)
+
+
 def _drop_reuse(result: dict, key: str) -> None:
     (result.get("reuse") or {}).pop(key, None)
 
@@ -309,7 +319,9 @@ def fit(result: dict) -> dict:
     # 성공 흐름(§5.13, 표시 전용 보조 칸): 후보 근거보다 먼저 — flows[1:] → 전체
     steps = [lambda: result.get("flows") and result.update(flows=result["flows"][:1]),
              lambda: result.pop("flows", None),
-             lambda: (result.get("step_anchor") or {}).pop("look", None)]     # 기준 줄 일치 수(리포트 줄에 같은 내용)
+             lambda: (result.get("step_anchor") or {}).pop("look", None),     # 기준 줄 일치 수(리포트 줄에 같은 내용)
+             lambda: _drop_prior_hyps(result),          # 이전 탐색 가설(이전 report.md·runs/에 남아 있다)
+             lambda: result.pop("prior", None)]
     for c in cands[1:]:
         steps.append(lambda c=c: c.update(evidence=c["evidence"][:2]))
     # C′ 부분 일치(§5.12): 다른 후보 근거 다음, 1위 근거·must_show 줄이기 전에 partial[1:] → missing 40자 → partial 전체
@@ -652,6 +664,7 @@ class ReportMixin:
             "code": {**core["code"], "auto": True} if self.code_auto and not core["code"].get("skipped") else core["code"],
             "analyzer": core["analyzer"],
             "explore": core["explore"],
+            "prior": getattr(self, "prior", None),      # 재실행: 이전 1위·탐색 가설·기준 줄 조회(캐시 core 밖, 실행마다)
             "warnings": self.warnings + core["extra_warnings"],
             "notes": self.notes,
             "lock_owner": None if released else self.run.env.get("TT_LOCK_OWNER"),
@@ -816,6 +829,11 @@ class ReportMixin:
         prob.append(f"- 이슈: {self.key} — {iss.get('summary') or '요약 없음'}" + (f" ({', '.join(known)})" if known else ""))
         if not anchor and self.answer("time") == "full":    # 앵커가 있으면 범위는 앵커 기준이라 이 줄이 맞지 않다
             prob.append("- 기준 시각 없음 — 로그 전체를 봄")
+        elif not anchor and self.time_candidates is not None:     # 앵커·Jira 시각·시각 답이 없어 묻지 않고 전체를 봤다
+            seen = ", ".join(f"{t['ts']} {t['type']}" for t in self.time_candidates)
+            why = "시각 입력 없음·기준 줄 못 찾음" if self.look_result else "시각·기준 줄 입력 없음"
+            prob.append(f"- 기준 시각 없음({why}) — 로그 전체를 봄. 증상 시각 후보 {len(self.time_candidates)}개"
+                        + (f": {seen}" if seen else ""))
         if self.failed_step:
             prob.append(add(4, f"실패 스텝 (보조 정보, Jira {self.failed_step['source']}; S/C에 쓰지 않음; 단어 겹침 가산·순위 참고·분석 범위): "
                                 f"{self.failed_step['text']}"))

@@ -552,11 +552,10 @@ def test_github_end_to_end_markdown_approve_guard_bridge():
     for ti in (need["needs_input"]["tool_args"], need["needs_input"]["comments_args"]):
         result, _ = gh_server.call_tool("issue_read", ti)
         _bridge(ws, {"tool_name": GH_READ, "tool_input": ti, "tool_response": gh_server.wrap(result, False)})
-    need = ws.json("triage.py", ["run", GH_KEY, "--logs", DATA_LOG, "--code", "skip"])
-    assert need["needs_input"]["kind"] == "time"                     # GitHub에는 발생 시각 기본값이 없다(설계 §4-5)
-    when = need["needs_input"]["options"][0]["value"]
-    done = ws.json("triage.py", ["run", GH_KEY, "--logs", DATA_LOG, "--code", "skip", "--answer", f"time={when}"])
-    assert done["status"] == "ok" and done["mode"] == "write" and done["issue"]["origin"] == "mcp"
+    done = ws.json("triage.py", ["run", GH_KEY, "--logs", DATA_LOG, "--code", "skip"])
+    # GitHub에는 발생 시각 기본값이 없다(설계 §4-5) → 묻지 않고 로그 전체를 본다(F-AUTO, 시각 후보는 step_anchor에)
+    assert done["status"] == "ok" and done["step_anchor"]["source"] == "symptom_scan", done
+    assert done["mode"] == "write" and done["issue"]["origin"] == "mcp"
     assert set(done["issue"]["missing"]) >= {"model", "sw", "platform_version"}     # field_map 기본값 {}
     assert not (ws.job_dir(GH_KEY) / "issue_raw.json").exists()
     ws.json("triage.py", ["release", GH_KEY])

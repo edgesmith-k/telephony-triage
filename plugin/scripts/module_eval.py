@@ -163,7 +163,7 @@ BASELINE_SAFETY_WARNING = "경고: 기준선 arm 안전 위반"   # gate["baseli
 DEEP_TOKEN_NOTE = "deep 모드: 토큰 목표는 판정에 쓰지 않는다(deep.md 만큼 늘 더 읽는다)"
 DEEP_NOTE = ("정밀 탐색: 짧은 case 로그(≤56줄)에서 explore 만 대 explore+deep 비교. 넓은 보기 상한·코드 경로 지시는 이 eval 밖"
              "(pytest 가 상한을 잼). run 1회 — tie 는 '큰 해 없음'까지.")
-EXPLORE_REASONS = {"no_candidate", "cause_unconfirmed"}
+EXPLORE_REASONS = {"no_candidate", "cause_unconfirmed", "fit_check"}
 NAME_RX = re.compile(r"^[a-z0-9][a-z0-9-]{2,60}$")
 KEY_RX = re.compile(r"^MOCK-9\d{3}$")
 FILE_RX = re.compile(r"^files/([a-z0-9-]+\.(?:log|md|json))$")
@@ -519,7 +519,7 @@ def load_case(case_dir) -> Case:
                 or rexp["C"] != 1 or isinstance(rexp["C"], bool):
             fail("run_expect는 {top_cause: 글, C: 1}")
     elif not isinstance(rexp, dict) or set(rexp) != {"explore_reason"} or rexp["explore_reason"] not in EXPLORE_REASONS:
-        fail("run_expect는 {explore_reason: no_candidate|cause_unconfirmed}")
+        fail("run_expect는 {explore_reason: no_candidate|cause_unconfirmed|fit_check}")
     exp = data["expect"]
     why = _expect_problem(kind, exp)
     if why:

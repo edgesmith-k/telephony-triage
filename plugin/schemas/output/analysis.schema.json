@@ -50,7 +50,7 @@
     "issue": {"type": "object", "description": "failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보"},
     "step_anchor": {
      "type": "object",
-     "description": "앵커(기준 줄·실패 스텝)·실패 스텝·시계 정렬·스텝 순서 시도·기준 줄 입력·시각 답 full이 있을 때만",
+     "description": "앵커(기준 줄·실패 스텝)·실패 스텝·시계 정렬·스텝 순서 시도·기준 줄 입력·시각 답 full·시각 입력 없는 전체 분석이 있을 때만",
      "required": ["source"],
      "properties": {
       "outside_errors": {"type": "integer", "description": "앵커가 있고 Jira 발생 시각이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음"},
@@ -60,6 +60,7 @@
       "span": {"type": "array", "description": "[시작|null, 실패]"},
       "issue_gap_min": {},
       "focus": {"type": "array", "maxItems": 3, "description": "유형 ID"},
+      "time_candidates": {"type": "array", "maxItems": 3, "description": "앵커(기준 줄을 줬으나 로그에서 못 찾은 경우 포함)·Jira 시각·time 답이 다 없어 묻지 않고 로그 전체를 봤을 때(source symptom_scan)만: 증상 시그니처가 충족된 시각 후보 {ts, type}(이른 순, 없으면 빈 목록)", "items": {"type": "object", "required": ["ts", "type"], "properties": {"ts": {"type": "string"}, "type": {"type": "string"}}, "additionalProperties": false}},
       "clock": {"type": "object", "description": "{mode: manual|none, offset_sec?(manual), reason?(none, \"시계 차 모름\"; 4KB 압축 시 먼저 뺌)}"},
       "order": {"type": "object", "description": "{matched, observable, missed, last{step(≤40), ts}(step_order일 때, 4KB 압축 시 가장 먼저 뺌), reason?(앵커를 못 정해 issue로 돌아갈 때)}"},
       "look": {"type": "object", "description": "--look-at을 줬을 때만: hits(로그에서 일치한 줄 수, 못 찾으면 0), picked?(고른 순번, 1부터). 4KB 압축 시 flows 다음으로 뺌", "required": ["hits"], "properties": {"hits": {"type": "integer"}, "picked": {"type": "integer"}}, "additionalProperties": false}
@@ -114,7 +115,8 @@
      }
     },
     "analyzer": {"type": "object", "description": "{skill, when, note?} 설치 분석 스킬(레거시·prefer: skill) | {category, when, note?} 모듈 스킬 | {error, when} 설정 오류 (note: when ask일 때만 답 전 안내)"},
-    "explore": {"type": "object", "description": "{reason: no_candidate|cause_unconfirmed, when: ask|always|never, note?: when ask일 때만 답 전 안내}(run은 타임라인을 만들지 않는다)"},
+    "explore": {"type": "object", "description": "{reason: no_candidate|cause_unconfirmed|fit_check(1위 C=1, run --explore·explore.when: always일 때만), when: ask|always|never, note?: when ask일 때만 답 전 안내}(run은 타임라인을 만들지 않는다)"},
+    "prior": {"type": "object", "description": "재실행일 때 이전 실행이 남긴 것(hyps·none·looked 중 하나라도 있을 때만, 4KB 압축 시 hyps → 전체 순으로 뺀다): top(직전 1위 원인|유형), hyps[≤3](검사 통과한 이전 탐색 가설 머리와 반대 근거, ≤120), none(이전 탐색 `가설 없음` 이유, ≤120), looked[≤3](이전 실행의 가린 기준 줄, ≤80)", "properties": {"top": {"type": "string"}, "hyps": {"type": "array", "maxItems": 3}, "none": {"type": "string"}, "looked": {"type": "array", "maxItems": 3}}, "additionalProperties": false},
     "warnings": {"type": "array"},
     "notes": {"type": "array", "description": "잔여 worktree·도구 브랜치 안내 등"},
     "lock_owner": {"type": "string"},

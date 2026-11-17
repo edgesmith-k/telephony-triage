@@ -676,8 +676,10 @@ def _hints(job: Path, cfg: dict, analysis: dict, by_cat: dict[str, str]) -> tupl
     """IMPL §2.3 규칙 4 → [(dir, label)], hints_unmapped(≤3)."""
     cands = [c for c in analysis.get("candidates") or [] if isinstance(c, dict)]
     found: list[tuple[str, str]] = []
-    if (analysis.get("explore") or {}).get("reason") == "cause_unconfirmed" and cands and cands[0].get("type"):
-        found.append((str(cands[0]["type"]), f"1위 유형 {cands[0]['type']}(원인 미확인)"))
+    reason = (analysis.get("explore") or {}).get("reason")
+    if reason in ("cause_unconfirmed", "fit_check") and cands and cands[0].get("type"):
+        found.append((str(cands[0]["type"]), f"1위 유형 {cands[0]['type']}"
+                      + ("(원인 미확인)" if reason == "cause_unconfirmed" else "(적합성 확인)")))
     try:
         match = json.loads((job / "match.json").read_text("utf-8")) if (job / "match.json").is_file() else {}
     except (OSError, ValueError):

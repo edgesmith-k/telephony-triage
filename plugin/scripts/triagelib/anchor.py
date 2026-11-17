@@ -354,6 +354,12 @@ class AnchorMixin:
             if t.get("S") and t.get("evidence"):
                 times.append((min(e["ts"] for e in t["evidence"]), t["type"]))
         times.sort()
+        if bad is None:
+            # 앵커(기준 줄을 못 찾은 경우 포함)·Jira 시각·time 답이 다 없다 → 묻지 않고 로그 전체로 간다('full' 답과 같은 경로). 찾은 시각 후보는
+            # `step_anchor.time_candidates`·탐색 입력에 남기고, 이 전체 파싱은 본 분석이 다시 쓴다(`core`)
+            self.time_candidates = [{"ts": ts, "type": tid} for ts, tid in times[:3]]
+            self.full_events = full
+            return None
         options = [{"value": ts, "label": f"{ts} {tid}"} for ts, tid in times[:3]]
         cov = full.get("coverage") or {}
         jumps = len(cov.get("clock_anomalies") or [])
@@ -361,9 +367,9 @@ class AnchorMixin:
                     if options else
                     "Jira에 발생 시각이 없다 — 후보가 없으니 시각을 답하거나 '시각 없이 로그 전체'를 고른다.")
         options.append({"value": "full", "label": "시각 없이 로그 전체"})
-        if bad is not None:
-            question = (f"답한 시각 '{_clip(bad, 60)}'을 읽지 못했다 — 후보 값 그대로, ISO 8601(예: 2026-09-20T14:32:00+09:00), "
-                        "또는 시각 없이 보려면 'full'로 다시 답한다. " + question)
+        # 읽을 수 없는 답을 준 경우만 다시 묻는다(사용자가 시각을 주려 했다)
+        question = (f"답한 시각 '{_clip(bad, 60)}'을 읽지 못했다 — 후보 값 그대로, ISO 8601(예: 2026-09-20T14:32:00+09:00), "
+                    "또는 시각 없이 보려면 'full'로 다시 답한다. " + question)
         if jumps:
             question += f" 로그에 시계 이상(역행·점프) {jumps}건 — 후보 시각이 실제와 다를 수 있다(재부팅·NITZ 전 가능)."
         extra = {}
@@ -385,6 +391,8 @@ class AnchorMixin:
                    "span": [anchor["start"], anchor["fail"]], "issue_gap_min": anchor.get("issue_gap_min")}
         elif self.answer("time") == "full":
             out = {"source": "none"}      # 기준 시각 없음 — 로그 전체를 봤다
+        elif self.time_candidates is not None:     # 시각 입력이 없어 묻지 않고 로그 전체를 봤다 — 찾은 증상 시각 후보(≤3)
+            out = {"source": "symptom_scan", "time_candidates": [dict(t) for t in self.time_candidates]}
         elif self.failed_step or self.clock or self.order_fail or self.look_result:
             out = {"source": "issue" if info.get("occurred_at") and not self.answer("time") else "symptom_scan"}
         else:

@@ -985,6 +985,8 @@ def checks(eid: int, ctx: Ctx) -> list:
         return checks_k(eid, ctx)
     if eid in (81, 82, 83):
         return checks_fl(eid, ctx)
+    if eid in FT_EVALS:
+        return checks_ft(eid, ctx)
     if eid == 72:
         return checks_m(eid, ctx)
     if eid in (76, 77, 78, 79):
@@ -1334,8 +1336,21 @@ def checks(eid: int, ctx: Ctx) -> list:
             ok = bool(n) and n[0].get("category") == "call" and bool(op_list("MOCK-9004", "add-fixture")) and " cut " in ctx.ran
             return ok, json.dumps([o.get("op") for o in ops("MOCK-9004")])
         return [None, pr, nt, ctx.draft_shown, none_remote_lock]
-    if eid == 5:
-        return [in_cmd("--full", "--regress"), None, in_cmd("--around"), None, none_remote_lock]
+    if eid == 5:     # 11/17 F-AUTO: 시각을 묻지 않고 로그 전체로 끝까지 간다(시각 후보는 step_anchor.time_candidates)
+        def no_time_q():
+            asked = ctx.needs_input("time")
+            if asked is None:
+                raise _Manual("드라이버 trace 없음")
+            ok, ev = in_cmd("--full", "--regress")()
+            return ok and not asked, f"needs_input time={len(asked)}; {ev}"
+        def scanned():
+            p_ = ctx.work / "MOCK-9005" / "analysis.json"
+            a = json.loads(p_.read_text(encoding="utf-8")) if p_.is_file() else {}
+            sa = a.get("step_anchor") or {}
+            ok = sa.get("source") == "symptom_scan" and any(str(t.get("type", "")).startswith("DATA-001")
+                                                            for t in sa.get("time_candidates") or [])
+            return ok, f"step_anchor={json.dumps(sa, ensure_ascii=False)[:200]}"
+        return [no_time_q, scanned, None, none_remote_lock]
     if eid == 6:
         def fb():
             f = (ctx.plan("MOCK-9006") or {}).get("feedback") or {}
@@ -2659,7 +2674,7 @@ def checks_u(eid, ctx):
         time, code = ctx.needs_input("time"), ctx.needs_input("code")
         if time is None:
             raise _Manual("드라이버 trace 없음")
-        return len(time) == 1 and len(code) <= 1, f"needs_input time={len(time)} code={len(code)}"
+        return len(time) == 0 and len(code) <= 1, f"needs_input time={len(time)} code={len(code)}"   # F-AUTO: 시각 질문 없음
     def appended():
         o = ops()
         return {"op": "append", "cause": "DATA-001-02"} in o, json.dumps(o, ensure_ascii=False)[:400]
@@ -3546,6 +3561,153 @@ def _dry_clean(ctx, job: str):
         clean = ok and br not in ctx.branches() and not ctx.prs() and not ctx.pending()
         return clean, f"branches={ctx.branches()} prs={len(ctx.prs())} pending={ctx.pending()}; {ev}"
     return check
+
+
+
+# --- 적합성 확인·반복 금지(배치 FT, 11/17 F-FIT·F-END·F-NOREPEAT) ---------------------------------------------------
+FT_EVALS = {84: "MOCK-9084", 85: "MOCK-9085", 86: "MOCK-9086"}
+_RUN_CMD = re.compile(r"triage\.py[\"']?\s+run\b")
+_EXPLORE_CMD = re.compile(r"triage\.py[\"']?\s+(?:--\S+\s+\S+\s+)*explore\b")    # 하위 명령 explore(전역 옵션만 앞에)
+_LOOK_AT = re.compile(r"--look-at(?:=|\s+)(\"[^\"]*\"|'[^']*'|\S+)")
+
+
+def checks_ft(eid, ctx):
+    """1위 C=1(확신 일치)도 `--explore` 세션이면 적합성 확인(`explore.reason: fit_check`)을 한다(84 쉬운 사례 — 추가 조회 없이
+    같은 턴에 끝냄, 85 부적합 보류 — `가설 없음: …부적합…`·`다음 확인:`, 86 재실행 — `prior`를 받고 같은 조회·후보를 되풀이하지
+    않음). 실행 기록이 없으면 `_Manual`(없음을 보는 항목도 통과로 세지 않는다)."""
+    from common import evidence
+
+    job = FT_EVALS[eid]
+    jobdir = ctx.work / job
+
+    def need_seq():
+        s = ctx.seq()
+        if s is None:
+            raise _Manual("실행 기록(events.jsonl) 없음")
+        return s
+
+    def bash(start: int = 0, end: int | None = None):
+        """실행된(hook이 막지 않은) Bash 호출 [(seq 순번, 명령)]."""
+        s = need_seq()
+        return [(i, _command(e)) for i, e in enumerate(s[start:end], start)
+                if e["kind"] == "tool" and e["name"] == "Bash" and not shown.not_run(e)]
+
+    def analysis():
+        text = _read(jobdir / "analysis.json")
+        return json.loads(text) if text else {}
+
+    def ops():
+        return (ctx.plan(job) or {}).get("operations", [])
+
+    def none_remote_lock():
+        ok, ev = ctx.lock_free()
+        return ok and ctx.branches() == ["main"] and not ctx.prs(), f"branches={ctx.branches()} prs={len(ctx.prs())}; {ev}"
+
+    def flagged():
+        runs = [c for _, c in bash() if _RUN_CMD.search(c)]
+        reason = (analysis().get("explore") or {}).get("reason")
+        ok = bool(runs) and all("--explore" in c for c in runs) and reason == "fit_check"
+        return ok, f"triage run {len(runs)}회(--explore 붙음 {sum('--explore' in c for c in runs)}), explore.reason={reason}"
+
+    def checked():
+        """`triage.py explore`를 실행했고 `check-output --for explore` 기록이 통과(mode 있음·error 없음)다."""
+        explored = [i for i, c in bash() if _EXPLORE_CMD.search(c) and not _RUN_CMD.search(c)]
+        text = _read(jobdir / "check-output.json")
+        rec = (json.loads(text).get("explore") if text else None) or {}
+        ok = bool(explored) and bool(rec.get("mode")) and not rec.get("error") and rec.get("skipped") is None
+        return ok, f"triage explore {len(explored)}회, check-output explore={json.dumps(rec, ensure_ascii=False)[:200]}"
+
+    def explore_fields():
+        text = _read(jobdir / "explore-output.md")
+        return evidence.parse_explore(text) if text else None
+
+    def no_extra_lookup():
+        """쉬운 사례: 첫 `triage.py explore` 뒤 `--look-at` 재실행·`db_search` 호출이 없다."""
+        calls = bash()
+        first = next((i for i, c in calls if _EXPLORE_CMD.search(c) and not _RUN_CMD.search(c)), None)
+        if first is None:
+            return False, "triage explore 호출 없음"
+        extra = [c[:120] for i, c in calls if i > first and ((_RUN_CMD.search(c) and "--look-at" in c) or "db_search.py" in c)]
+        return not extra, f"explore 뒤 추가 조회 {len(extra)}건: {extra[:3]}"
+
+    def held_unfit():
+        """탐색 출력이 `가설 없음: <부적합 이유>`와 `다음 확인:`이고(검사 통과) 리포트 탐색 줄에 둘 다 있다."""
+        f = explore_fields()
+        ok_rec, ev = checked()
+        line = next((l for l in _read(jobdir / "report.md").splitlines() if l.startswith("- 탐색 분석")), "")
+        ok = (bool(f) and bool(f.get("none")) and bool(f.get("next")) and ok_rec
+              and "가설 없음:" in line and "다음 확인:" in line)
+        return ok, f"출력 none={((f or {}).get('none') or '')[:80]!r} next={((f or {}).get('next') or '')[:60]!r}; 리포트 줄={line[:160]!r}; {ev}"
+
+    def not_confirmed():
+        o = ops()
+        appended = [x for x in o if x.get("op") == "append" and x.get("cause") == "DATA-001-01"]
+        ok = not appended and {"op": "unresolved", "type": "DATA-001"} in o
+        return ok, json.dumps(o, ensure_ascii=False)[:400]
+
+    if eid == 84:
+        def appended():
+            o = ops()
+            return {"op": "append", "cause": "DATA-001-01"} in o, json.dumps(o, ensure_ascii=False)[:400]
+        return [flagged, checked, no_extra_lookup, None, appended, none_remote_lock]
+    if eid == 85:
+        return [flagged, held_unfit, not_confirmed, none_remote_lock]
+
+    # 86: 후속 메시지(같은 로그로 다시) 뒤 재실행에 prior가 실리고, 1회차 조회·기각 후보를 되풀이하지 않는다
+    FOLLOW = "SIM 1 로그는 더 구하지 못했어. 같은 로그로 한 번 더 봐줘"
+
+    def boundary():
+        at = followup_at(ctx.run, FOLLOW)
+        if at is None:
+            raise _Manual("후속 메시지 경계 없음")
+        return at
+
+    def looks(calls):
+        return {m.group(1).strip("\"'") for _, c in calls if _RUN_CMD.search(c) for m in _LOOK_AT.finditer(c)}
+
+    def held_first():
+        """1회차: fit_check에서 1위를 부적합으로 보류했다(검사 통과한 출력이 `가설 없음`)."""
+        at = boundary()
+        s = need_seq()
+        # 한 Bash에 deep --skipped와 explore 검사를 이어 붙여도 된다 — 결과의 탐색 분석 줄(JSON `line`)만 본다
+        lines = [m.group(1) for i, c in bash(0, at) if re.search(r"check-output\b", c)
+                 for m in re.finditer(r'"line"\s*:\s*"(- 탐색 분석[^"]*)"', str(s[i].get("result") or ""))]
+        ok = any("가설 없음:" in l and "다음 확인:" in l for l in lines)
+        return ok, f"1회차 탐색 검사 줄 {len(lines)}개: {lines[-1:]}"
+
+    def prior_carried():
+        at = boundary()
+        reruns = [c for _, c in bash(at) if _RUN_CMD.search(c)]
+        prior = analysis().get("prior") or {}
+        ok = bool(reruns) and bool(prior.get("none") or prior.get("hyps"))
+        return ok, f"2회차 triage run {len(reruns)}회, prior={json.dumps(prior, ensure_ascii=False)[:300]}"
+
+    def no_repeat_lookup():
+        at = boundary()
+        first, second = looks(bash(0, at)), looks(bash(at))
+        same = first & second
+        return not same, f"1회차 look-at {sorted(first)[:3]}, 2회차 {sorted(second)[:3]}, 같은 조회 {sorted(same)[:3]}"
+
+    def no_readopt():
+        """2회차에 탐색을 다시 했으면 그 출력이 `가설 없음`이다(1위를 새 근거 없이 다시 고르지 않음). 가설을 세웠으면 수동 채점."""
+        at = boundary()
+        # 탐색 검사(`--for explore`, `--skipped` 아님)를 다시 했을 때만 새 출력이 있다 — 생략(이전 판단 유지)은 되풀이가 아니다
+        again = [i for i, c in bash(at) if re.search(r"check-output\b[^;&|\n]*--for\s+explore\b(?![^;&|\n]*--skipped)", c)]
+        if not again:
+            return True, "2회차 탐색 출력 없음(이전 판단을 알림)"
+        f = explore_fields() or {}
+        if f.get("none"):
+            return True, f"2회차 출력 가설 없음: {f['none'][:100]}"
+        if any("DATA-001-01" in (h.get("가설") or "") for h in f.get("hyps") or []):
+            return False, "2회차 가설에 1위 DATA-001-01 — 새 근거 확인은 transcript로"
+        raise _Manual("2회차 가설 있음(1위 아님) — 새 근거로 세웠는지는 transcript로")
+
+    def end():
+        need_seq()          # 실행 흔적 없이 "없음"을 통과로 세지 않는다
+        ok, ev = ctx.lock_free()
+        return ok and not (jobdir / "plan.json").is_file(), f"{ev}; plan.json={'있음' if (jobdir / 'plan.json').is_file() else '없음'}"
+
+    return [flagged, held_first, prior_carried, no_repeat_lookup, no_readopt, end]
 
 
 def checks_fl(eid, ctx):

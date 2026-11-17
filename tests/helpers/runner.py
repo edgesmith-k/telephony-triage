@@ -213,6 +213,12 @@ def run_json(script: str, args: list[str], expect: int | tuple = 0, **kw) -> dic
     return json.loads(proc.stdout)
 
 
+def parse_calls(job: Path) -> list[list]:
+    """`JOB/trace.jsonl`의 `parse_logcat.py parse` 호출 인자(같은 파싱을 몇 번 했는지 보는 시험용)."""
+    rows = [json.loads(line) for line in (Path(job) / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
+    return [r["args"] for r in rows if r.get("script") == "parse_logcat.py" and (r.get("args") or [None])[0] == "parse"]
+
+
 _TMP_DIRS: list[Path] = []
 
 

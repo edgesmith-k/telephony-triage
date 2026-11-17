@@ -1295,7 +1295,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 83      # FL(81~83 성공 흐름 제안) 뒤. 80 setup-first-time까지 80, H(76~79)까지 79, 그 전 75
+    assert len(by_id) == 86      # FT(84~86 적합성 확인·반복 금지) 뒤. FL(81~83 성공 흐름 제안)까지 83, 80 setup-first-time까지 80, H(76~79)까지 79, 그 전 75
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 11), (62, 6)):
         e = by_id[eid]
@@ -1858,6 +1858,31 @@ def test_flow_evals_defined(tmp_path):
                 continue
             assert ok is False, (eid, fn.__name__)
     assert "U=사용 흐름 구분 3(68~70)" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
+
+
+def test_fit_check_evals_defined(tmp_path):
+    """eval 84~86(배치 FT, 11/17 F-FIT·F-END·F-NOREPEAT): 채점 함수 수 = assertion 수, 실행 흔적이 없으면 통과로 세지 않는다."""
+    by_id = {e["id"]: e for e in _entries()}
+    names = {84: "fit-check-confirmed-short", 85: "fit-check-unfit-hold", 86: "rerun-prior-no-repeat"}
+    assert by_id[86]["followups"] == ["SIM 1 로그는 더 구하지 못했어. 같은 로그로 한 번 더 봐줘"]
+    for eid, name in names.items():
+        e = by_id[eid]
+        assert e["batch"] == "FT" and e["name"] == name and e["setup"]["jira"] == [f"MOCK-{9000 + eid}"], eid
+        assert "--explore" in e["prompt"], eid
+        env = _synthetic_env(tmp_path / str(eid))
+        fns = grader.checks(eid, grader.Ctx(env, run_dir(tmp_path / str(eid))))
+        assert len(fns) == len(e["assertions"]), eid
+        for fn in fns:
+            if fn is None:
+                continue
+            try:
+                ok, _ = fn()
+            except grader._Manual:
+                continue
+            except Exception:  # noqa: BLE001 — 가짜 환경에는 원격·clone이 없다
+                continue
+            assert ok is False, (eid, fn.__name__)
+    assert "FT=적합성 확인·반복 금지 3(84~86:" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
 
 
 def test_unjudged_variant_db_has_slow_cause():
