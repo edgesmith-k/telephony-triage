@@ -139,7 +139,7 @@ export TT_GATEWAY_API_KEY=<게이트웨이 키>   # 설정 파일에는 쓰지 �
 
 - 게이트웨이가 OpenCode **내장 provider**로만 받으면(커스텀 `@ai-sdk/openai-compatible` 거절) `--gateway-url`·`--model` 대신
   `--provider-model <provider>/<모델>`을 준다 — 설정에 provider 블록 없이 `model`·`small_model`만 쓰고, 키·주소는 OpenCode 전역
-  설정 몫이다(`tt-oc doctor`의 `gateway-key` 행이 "외부 provider — 키·주소 점검 안 함"으로 나온다. `TT_GATEWAY_API_KEY` 불필요).
+  설정 몫이다(`tt-oc doctor`의 `gateway-key` 행이 `skip` "내장 provider 설정 — 키·주소는 OpenCode 전역 설정에서 확인"으로 나온다 — 통과가 아니라 이 도구가 점검하지 않은 것이다. `TT_GATEWAY_API_KEY` 불필요).
 - 템플릿이 `snapshot:false`·`autoupdate:false`·`share:"disabled"`·한도·허용 목록(`"*":"deny"`)을 넣는다.
 - `install`은 지문을 `tt-oc.json`에 남긴다. **설치 폴더 파일을 손으로 고치지 않는다**(시작 안 함).
 - `<dest>`와 그 위 폴더(`/`까지)의 `AGENTS.md`·`CONTEXT.md`, 또는 `~/.config/opencode/AGENTS.md`가 있으면 시작하지 않는다.

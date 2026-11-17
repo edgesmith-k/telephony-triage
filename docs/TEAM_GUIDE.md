@@ -81,7 +81,7 @@ tt-oc doctor   # 사전 점검. fail이 있으면 시작하지 않는다
 ```
 
 - `--dest`는 git 밖. 그 폴더와 위 폴더(`/`까지)의 `AGENTS.md`·`CONTEXT.md`, 또는 `~/.config/opencode/AGENTS.md`가 있으면 시작 안 함.
-- 게이트웨이가 OpenCode 내장 provider로만 받으면 `--gateway-url`·`--model` 대신 `--provider-model <provider>/<모델>`을 준다(키·주소는 OpenCode 전역 설정 몫 — `TT_GATEWAY_API_KEY` 불필요, doctor `gateway-key` 행이 "외부 provider"로 나온다).
+- 게이트웨이가 OpenCode 내장 provider로만 받으면 `--gateway-url`·`--model` 대신 `--provider-model <provider>/<모델>`을 준다(키·주소는 OpenCode 전역 설정 몫 — `TT_GATEWAY_API_KEY` 불필요, doctor `gateway-key` 행이 `skip` "내장 provider 설정"으로 나온다 — 키·주소는 OpenCode 전역 설정에서 직접 확인).
 - `<작업 디렉토리>`는 사용자 설정의 `work_dir`(기본 플랫폼 `~/.telephony-triage/work`). 다른 플랫폼(oFono 등)의 기본 `~/.telephony-triage/work-<플랫폼>`은 그 밖이다 — 한 설치는 작업 폴더 하나만 쓰므로 oFono도 OpenCode로 쓰면 다른 `--dest`(예: `~/tt-oc-ofono`)에 `--work-root <work-ofono>`로 한 번 더 install한다. `--work-root`에 `~/.telephony-triage`는 주지 않는다(config.yaml이 edit 범위에 든다). `--issue-db`는 clone마다.
 - OpenCode에서 PR까지 하려면 install에 `--allow-publish`를 더하고 Jira 읽기 관문(4절)을 연다. 순서는 `opencode/README.md` "처음부터 PR까지".
 
