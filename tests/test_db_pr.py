@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -26,6 +27,9 @@ sys.path.insert(0, str(REPO / "tests" / "helpers"))
 import mock_env  # noqa: E402
 from runner import SAMPLE, git_db, plugin_root, run_json, run, variant_db  # noqa: E402
 from workspace import PLANS, Workspace, git  # noqa: E402
+
+sys.path.insert(0, str(plugin_root() / "scripts"))
+from dbadd import drift  # noqa: E402
 
 SIM_LOG = variant_db("issue-db-pending") / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-03.log"
 NORMAL_LOG = SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001.none.log"
@@ -675,6 +679,45 @@ def test_drift_reclassify_sees_unresolved_moved_to_other_type():
             for d in out["drift"]] == [("reclassify", "MOCK-1104", "type", "DATA-001", "DATA-001", "DATA-002")]
     assert not (ws.wt(job) / DATA_DIR / "issues/MOCK-1104.yaml").exists()   # 사용자 선택 전 적용하지 않았다
     ws.db_pr("discard", ws.wt(job))
+
+
+def test_drift_reclassify_values_unresolved_target_temp_id_and_one_item_per_op(tmp_path):
+    """reclassify drift 값: `<유형>:unresolved` 대상, 임시 ID 대상, cause·유형 동시 변경(cause 항목 하나만)."""
+    other = "data/DATA-002-data-teardown-by-user-action"
+
+    def onto(name: str, cause: str | None = None, move: bool = True) -> drift.Snapshot:
+        root = tmp_path / name
+        shutil.copytree(SAMPLE, root)
+        src = root / DATA_DIR / "issues/MOCK-1104.yaml"
+        text = src.read_text(encoding="utf-8")
+        if cause:
+            text = text.replace("cause: unresolved", f"cause: {cause}")
+        src.unlink()
+        (root / (other if move else DATA_DIR) / "issues/MOCK-1104.yaml").write_text(text, encoding="utf-8")
+        return drift.Snapshot(root)
+
+    def items(to: str, snap: drift.Snapshot) -> list[tuple]:
+        plan = {"operations": [{"op": "reclassify", "issue": "MOCK-1104", "from": "unresolved", "to": to}]}
+        return [(d["field"], d["plan_value"], d["plan_base_value"], d["current_value"])
+                for d in drift.drift_items(plan, drift.Snapshot(SAMPLE), snap)]
+
+    moved = onto("moved")
+    assert items("DATA-002:unresolved", moved) == [("type", "DATA-002", "DATA-001", "DATA-002")]
+    assert items("NEW-CAUSE-1", moved) == [("type", None, "DATA-001", "DATA-002")]
+    assert items("NEW-TYPE-1:unresolved", moved) == [("type", None, "DATA-001", "DATA-002")]
+    # cause도 바뀌면 cause 항목 하나만 (같은 op에 서로 다른 답을 묻지 않는다). 계획 값은 그 필드에 쓸 cause
+    both = onto("both", cause="DATA-002-01")
+    assert items("DATA-002:unresolved", both) == [("cause", "unresolved", "unresolved", "DATA-002-01")]
+    assert items("DATA-001-01", both) == [("cause", "DATA-001-01", "unresolved", "DATA-002-01")]
+    # 유형은 그대로 cause만 바뀜
+    assert items("DATA-002:unresolved", onto("cause", cause="DATA-001-01", move=False)) == [
+        ("cause", "unresolved", "unresolved", "DATA-001-01")]
+    # 옮겨 갈 유형이 main에서 active가 아니게 됨
+    gone = onto("deprecated", move=False)
+    type_md = gone.root / other / "type.md"
+    type_md.write_text(type_md.read_text(encoding="utf-8").replace("status: active", "status: deprecated", 1),
+                       encoding="utf-8")
+    assert items("DATA-002:unresolved", drift.Snapshot(gone.root)) == [("status", None, "active", "deprecated")]
 
 
 def _edit(path: Path, old: str, new: str) -> None:

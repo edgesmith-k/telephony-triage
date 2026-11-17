@@ -11,8 +11,8 @@ from common.exitcodes import CHECK_FAILED, OK
 from common.fixtures import parse_name
 
 from .applier import Applier
-from .core import (CAUSE_ID_RE, HISTORY_FIELDS, RULE_SECTIONS, SIG_LISTS, TEMP_RE, TYPE_ID_RE, Reject, Tree, UsageError,
-                   _db, load_plan, validate_plan)
+from .core import (HISTORY_FIELDS, RULE_SECTIONS, SIG_LISTS, TEMP_RE, TYPE_ID_RE, Reject, Tree, UsageError, _db,
+                   load_plan, reclassify_target, validate_plan)
 from .ops.parser_rules import ParserRuleOps
 
 
@@ -104,15 +104,17 @@ def drift_items(plan: dict, base: Snapshot, onto: Snapshot) -> list[dict]:
                     add(i, op, t.id, "similar-type", None, {"id": t.id, "title": t.title},
                         {"title": spec["title"]})
         elif kind == "reclassify":
+            target, to_type, to_cause = reclassify_target(op["to"])
+            check_active(i, op, target)     # 옮겨 갈 원인·유형 (임시 ID는 check_active가 건너뛴다)
             a, b = base.jira(op["issue"]), onto.jira(op["issue"])
             if b is None or str(b.get("cause")) != op["from"]:
                 add(i, op, op["issue"], "cause", a.get("cause") if a else None, b.get("cause") if b else None,
-                    op.get("to"))
-            if a and b and a.get("_type") != b.get("_type"):
-                # cause가 그대로(unresolved)여도 main이 다른 유형으로 옮겼으면 계획 당시 판단이 아니다
-                to = str(op.get("to") or "")
+                    to_cause)
+            elif a and a.get("_type") != b.get("_type"):
+                # cause가 그대로(unresolved)여도 main이 다른 유형으로 옮겼으면 계획 당시 판단이 아니다.
+                # 계획 값은 옮길 유형 ID — 임시 ID(NEW-…)면 아직 정해지지 않았으므로 None
                 add(i, op, op["issue"], "type", a.get("_type"), b.get("_type"),
-                    to.split(":", 1)[0] if ":" in to else (to.rsplit("-", 1)[0] if CAUSE_ID_RE.match(to) else to))
+                    None if TEMP_RE.search(op["to"]) else to_type)
         elif kind in ("update-fix", "verify-fix"):
             if TEMP_RE.fullmatch(op["cause"]):
                 continue
