@@ -178,6 +178,17 @@ def test_fabricated_quote_sub_line_and_script_note(tmp_path, capsys):
     assert sub.startswith("  - 근거 원문 검사: 인용 3개 중 원문에 없음 2 (") and sub.endswith("…)")
 
 
+def test_altered_quote_head_counts_weak_not_fabricated(tmp_path, capsys):
+    # F-A01-min: 메시지는 원문 그대로인데 시각·슬롯을 바꿔 적은 인용은 기존 약함 칸으로 센다(원문에 없음 0)
+    job = make_job(tmp_path)
+    altered = [Q1.replace("p0", "p1", 1), Q1.replace("15:10:01.200", "15:10:09.200", 1)]
+    (job / "deep-output.md").write_text(_deep_out([Q1, *altered, Q2]), encoding="utf-8")
+    code, data, _ = check(job, capsys=capsys)
+    assert code == 0 and (data["quotes"], data["fabricated"], data["weak"]) == (4, 0, 2)
+    assert data["evidence"] == "- 근거 원문 검사: 인용 4개 중 원문에 없음 0 · 약함 2"
+    assert _rec(job)["weak"] == 2
+
+
 def test_header_failed_step_quote_is_fabricated(tmp_path, capsys):
     step = "데이터 연결 버튼을 눌렀는데 인터넷이 전혀 되지 않음 상태 지속"
     job = make_job(tmp_path, failed_step=step)
