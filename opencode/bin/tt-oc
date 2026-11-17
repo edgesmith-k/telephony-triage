@@ -630,12 +630,15 @@ def export_events(data) -> list[dict] | None:
     msgs = data.get(OCV.EXPORT_MESSAGES) if isinstance(data, dict) else None
     if not isinstance(msgs, list):
         return None
-    sid = (data.get(OCV.EXPORT_INFO) or {}).get("id")
+    info = data.get(OCV.EXPORT_INFO)
+    sid = info.get("id") if isinstance(info, dict) else None
     events = []
     for m in msgs:
-        if not isinstance(m, dict) or (m.get(OCV.EXPORT_INFO) or {}).get(OCV.EXPORT_ROLE) != "assistant":
+        mi = m.get(OCV.EXPORT_INFO) if isinstance(m, dict) else None
+        if not isinstance(mi, dict) or mi.get(OCV.EXPORT_ROLE) != "assistant":
             continue
-        for part in m.get(OCV.EXPORT_PARTS) or []:
+        parts = m.get(OCV.EXPORT_PARTS)
+        for part in parts if isinstance(parts, list) else []:
             typ = OCV.EXPORT_PART_EVENT.get(part.get("type")) if isinstance(part, dict) else None
             if typ:
                 events.append({"type": typ, OCV.EV_SESSION: sid, OCV.EV_PART: part})
@@ -1350,8 +1353,9 @@ def main(argv=None) -> int:
     deleted = None
     if a.delete_session and res["session"]:
         try:
-            deleted = all(_run([oc, *OCV.SESSION_DELETE_ARGS, s], cwd=proj, env=env, timeout=60).returncode == 0
-                          for s in [*kids, res["session"]])      # 하위 세션 먼저(부모 먼저면 하위 삭제가 실패했다, 1.19.5)
+            done = [_run([oc, *OCV.SESSION_DELETE_ARGS, s], cwd=proj, env=env, timeout=60).returncode == 0
+                    for s in [*kids, res["session"]]]      # 하위 세션 먼저(부모 먼저면 하위 삭제가 실패했다, 1.19.5), 하나 실패해도 모두 시도
+            deleted = all(done)
         except (OSError, subprocess.TimeoutExpired):
             deleted = False
     if a.json:

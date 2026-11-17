@@ -636,6 +636,8 @@ def test_child_session_judged_like_main():
     assert [e["type"] for e in kid] == [V.EV_STEP_START, V.EV_TOOL_USE, V.EV_STEP_FINISH, V.EV_STEP_START, V.EV_TEXT,
                                         V.EV_STEP_FINISH]
     assert mod.export_events({"x": 1}) is None and mod.export_events([]) is None
+    odd = mod.export_events({"info": "ses_x", "messages": ["m", {"info": "a"}, {"info": {"role": "assistant"}, "parts": "p"}]})
+    assert odd == []      # 모양이 다른 칸은 죽지 않고 건너뛴다(읽은 이벤트 없음)
 
     res = mod.add_children(mod.judge(main, 0), [("ses_kid1", kid)], step_limit=40)
     assert res["outcome"] == "blocked" and mod.EXIT[res["outcome"]] == 3

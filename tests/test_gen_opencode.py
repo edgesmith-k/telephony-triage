@@ -213,7 +213,7 @@ def test_agent_prompt():
     # tt-explore에 맡긴다. 답은 그대로, 이어서 Step 6(Step 7은 "다음"대로). check-output 줄이 없으면 --skipped, task 실패·없음은 같은 세션
     rule11 = next(l for l in body.splitlines() if l.startswith("11. "))
     for must in ('"언제"', "module-skills.md", "`triage.py explore`", "--module/--with/--deep", "module `read` files",
-                 "look-at/time", "verbatim", "Step 6", '"다음"', '--for explore --skipped "<reason>"', "explore here"):
+                 "look-at/time", "verbatim", "Step 6", '"다음"', "question: ask it, then task again", '--for explore --skipped "<reason>"', "explore here"):
         assert must in rule11, must
     assert rule11.index("`triage.py explore`") < rule11.index('task "tt-explore"') < rule11.index("Step 6")
 
