@@ -27,7 +27,7 @@
 
 ## 공통
 
-- `ask_also`·`ask_switch`: 사전 결정 플래그(`--(no-)analyzer`·`--(no-)explore`)로 시작한 세션은 묻지 않고(질문으로 턴을 끝내지 않고) 스스로 골라 이유를 쓴다. 그 밖은 묻는다.
+- `ask_also`·`ask_switch`: 사전 결정 플래그(`--(no-)analyzer`·`--(no-)explore`)로 시작한 세션은 묻지 않고 받지 않는다. 그 밖은 묻는다.
 - 읽는 것: `read`의 파일, `input`, `module` 출력 `timeline.path`(설치 스킬이면 그 절차가 `input`으로 부르는 파일)만. 폴더 훑기 금지. `WD/_module-skills/`·`JOB/module-skill*`·`skill-input.json`과 deep-input.json은 스크립트 기록이라 고치지 않는다. 관리 clone에 git을 쓰지 않는다.
 - 근거는 받은 파일에 있는 줄을 글자 그대로만. `〔script …〕`는 스크립트 메모라 근거가 아니다.
 - `check-output`이 마스킹·칸·한도(한 칸 768바이트)·근거 원문 검사를 하고 report 줄을 쓴다. 종료 1이면 줄이 "생략: 출력 형식 불일치"로 바뀐다 — 고쳐 쓰지 않는다. `check-output` 직후 다음 글에 출력의 `line`과 `evidence`(근거 원문 검사 줄)를 다음 질문 전에 그대로 보인다.

@@ -780,9 +780,10 @@ class ReportMixin:
             lines += text
         return lines
 
-    def _conclusion(self, cands: list, unjudged: dict) -> str:
+    def _conclusion(self, cands: list, unjudged: dict, observation: dict | None = None) -> str:
         """결론 한 줄(후보 줄 바로 앞): 분류 결과 한 문장과 다음 행동. 판정은 아래 줄들과 같다(새 정보 없음) — 엔지니어가 이 줄만
-        보고 다음 행동을 고르게. 규칙 일치 수준은 진단 확신이 아니다."""
+        보고 다음 행동을 고르게. 규칙 일치 수준은 진단 확신이 아니다. 관측 불완전(`observation`)이면 후보 없음·원인 미확인
+        결론에 "못 읽은 줄이 있다"와 새 유형·원인 등록 전 확인을 붙인다(막지는 않는다, FR-03)."""
         nxt = ("기록 없음(분석 전용)" if self.analysis_only else "아래 후보를 보고 Step 7에서 분류를 확정하거나 다른 원인을 고른다")
         if cands:
             top = cands[0]
@@ -793,11 +794,18 @@ class ReportMixin:
             if top.get("_cause_unjudged"):
                 return (f"결론: 증상은 {top['type']}에 맞으나 원인 시그니처가 판정 불가(시간 초과·오류). 다음: 관리자에게 시그니처 확인을 "
                         f"요청하고, 원인은 탐색 분석(동의 뒤)·로그 추가(--more-logs)로 찾는다")
+            if observation:
+                return (f"결론: 증상은 {top['type']}에 맞으나 아는 원인과 맞지 않음(원인 미확인) — 단 로그 일부를 읽지 못해(관측 불완전) "
+                        f"전체 사실이 아닐 수 있음. 다음: 새 원인 등록 전 아래 관측 불완전 줄 확인, 탐색 분석(동의 뒤) 또는 로그 추가"
+                        f"(--more-logs), 그래도 없으면 원인 미확정으로 기록")
             return (f"결론: 증상은 {top['type']}에 맞으나 아는 원인과 맞지 않음(원인 미확인). 다음: 탐색 분석(동의 뒤) 또는 "
                     f"로그 추가(--more-logs), 그래도 없으면 원인 미확정으로 기록")
         if unjudged.get("count"):
             return ("결론: 판정 불완전 — 시그니처 시간 초과·오류로 일부 유형을 판정하지 못함. 다음: 관리자에게 시그니처 확인을 요청하고 "
                     "'후보 없음'으로 단정하지 않는다")
+        if observation:
+            return ("결론: 아는 증상·원인과 맞는 후보 없음 — 단 로그 일부를 읽지 못해(관측 불완전) 전체 사실이 아닐 수 있음. 다음: 새 유형 "
+                    "등록 전 아래 관측 불완전 줄 확인, 설명 기반 유사 후보·오류 이벤트를 보고 탐색 분석(동의 뒤) 또는 로그 추가(--more-logs)")
         return ("결론: 아는 증상·원인과 맞는 후보 없음. 다음: 아래 설명 기반 유사 후보·오류 이벤트를 보고 탐색 분석(동의 뒤) 또는 "
                 "로그 추가(--more-logs), 새 유형이면 Step 7에서 등록")
 
@@ -892,7 +900,7 @@ class ReportMixin:
         cands = r["candidates"]
         unjudged = r.get("unjudged") or {}
         # 한 문장 결론(종합 리뷰 A): 머리 알림(분석 전용·읽기 전용·실패 스텝·시계) 다음, 후보 줄 바로 앞. must_show 아님(새 정보 없음)
-        cause_l.append("- " + self._conclusion(cands, unjudged))
+        cause_l.append("- " + self._conclusion(cands, unjudged, r.get("observation")))
         if cands:
             top = cands[0]
             label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
@@ -963,14 +971,14 @@ class ReportMixin:
             else:     # 충족된 유형의 다른 시그니처만 오류: S/C는 그대로, 근거 선택만 달라질 수 있다
                 cause_l.append(add(6, f"{where} — 충족된 유형의 다른 시그니처라 S/C는 그대로(근거 선택은 달라질 수 있다)"))
         obs = r.get("observation")
-        if obs:     # 관측 실패(정상 불일치 아님): 판정 불가 유형과 따로 한 줄. 예시는 앞머리 라벨과 같은 종류
+        if obs:     # 관측 실패(정상 불일치 아님): 판정 불가 유형과 따로 한 줄. 예시는 파일 문제(형식·인코딩 — 사용자가 고칠 수 있다) 먼저
             other = obs["count"] - obs["extractor"]
-            what = "·".join(([f"extractor 오류 {obs['extractor']}개"] if obs["extractor"] else [])
+            what = "·".join(([f"로그에서 이벤트를 뽑는 단계 오류 {obs['extractor']}개(extractor)"] if obs["extractor"] else [])
                             + ([f"파일 해석·외부 파서 문제 {other}건"] if other else []))
-            want = (lambda e: e.get("code") in EXTRACTOR_CODES) if obs["extractor"] else (lambda e: e.get("code") not in EXTRACTOR_CODES)
+            want = (lambda e: e.get("code") not in EXTRACTOR_CODES) if other else (lambda e: e.get("code") in EXTRACTOR_CODES)
             example = next((e["error"] for e in obs.get("errors") or [] if want(e) and e.get("error")), None)
             cause_l.append(add(6, f"관측 불완전: {what}" + (f" ({example})" if example else "")
-                                + " — 못 읽은 이벤트가 있어 후보 순위·'후보 없음'·'원인 미확인'은 불완전하다"))
+                                + " — 이 구간 이벤트가 빠졌을 수 있음(관리자: parse_logcat 로그 확인)"))
         if anchor and (not cands or not cands[0]["C"]):
             nxt.append("- 힌트: " + ("기준 줄 둘레(−30초~+300초)로 좁게 분석했다. 원인이 그 앞에 있었을 수 있다"
                                      if anchor["source"] == "look_at" else
