@@ -355,7 +355,7 @@ class AnchorMixin:
                 times.append((min(e["ts"] for e in t["evidence"]), t["type"]))
         times.sort()
         if bad is None:
-            # 시각·기준 줄·Jira 시각이 다 없다 → 묻지 않고 로그 전체로 간다('full' 답과 같은 경로). 찾은 시각 후보는
+            # 앵커(기준 줄을 못 찾은 경우 포함)·Jira 시각·time 답이 다 없다 → 묻지 않고 로그 전체로 간다('full' 답과 같은 경로). 찾은 시각 후보는
             # `step_anchor.time_candidates`·탐색 입력에 남기고, 이 전체 파싱은 본 분석이 다시 쓴다(`core`)
             self.time_candidates = [{"ts": ts, "type": tid} for ts, tid in times[:3]]
             self.full_events = full

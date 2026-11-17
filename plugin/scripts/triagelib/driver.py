@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -920,16 +921,16 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         타임라인은 만들지 않는다(동의 뒤 `triage.py explore`가 `explore_input()`의 값으로 만든다). 판정은 하지 않는다(07-workflow.md §Step 5-2).
         """
         when = userconfig.get(self.cfg, "explore.when", "ask")
+        if when not in EXPLORE_WHEN:
+            self.warnings.append(f"explore.when 값이 잘못됐다({when}). ask로 본다")
+            when = "ask"
         if candidates and candidates[0]["C"]:
             # 확신 일치도 탐색을 묻지 않고 하는 세션이면 1위가 증상을 설명하는지 확인할 맥락을 준다. 그 밖은 이전과 같다(묻지 않음)
-            if when == "never" or (when != "always" and not getattr(getattr(self, "args", None), "explore", None)):
+            if when == "never" or (when != "always" and not self.args.explore):
                 return None
             reason = "fit_check"
         else:
             reason = "cause_unconfirmed" if candidates else "no_candidate"
-        if when not in EXPLORE_WHEN:
-            self.warnings.append(f"explore.when 값이 잘못됐다({when}). ask로 본다")
-            when = "ask"
         return {"reason": reason, "when": when, **_ask_note(when, "5-2")}
 
     def explore_input(self, around: str | None, anchor: dict | None) -> dict:
@@ -987,8 +988,10 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
     def read_prior(self) -> dict | None:
         """재실행·답글 턴에 줄 이전 실행의 요약(`analysis.json prior`, 마스킹된 값만) — `drop_stale_records`가 지우기 전에 읽는다.
-        top = 직전 실행 1위(state `job.runs`), looked = 이전 실행의 가린 기준 줄(state), hyps·none = `check-output`을 통과한
-        이전 `explore-output.md`의 가설 머리·반대 근거·`가설 없음` 이유. top 말고 아무것도 없으면 None(키가 없다)."""
+        top = 직전 실행 1위(state `job.runs`), looked = 이전 실행의 가린 기준 줄(state), hyps·none = `check-output`을 통과했고
+        그 뒤 바뀌지 않은(기록 `output_sha256` == 지금 파일) `explore-output.md`의 가설 머리·반대 근거·`가설 없음` 이유.
+        hyps·none은 state `job.prior_explore`에도 남겨 산출물이 지워진 뒤(질문 턴·다음 실행)에도 넘긴다 — 새 검사 기록이 있으면
+        그것으로 바꾸고, 그 검사가 실패했거나 출력이 바뀌었으면 지운다. top 말고 아무것도 없으면 None(키가 없다)."""
         def regular(path: Path) -> bool:
             try:
                 return stat.S_ISREG(os.lstat(path).st_mode)
@@ -1009,14 +1012,28 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                 rec = (json.loads((self.job / "check-output.json").read_text(encoding="utf-8")) or {}).get("explore")
             except (OSError, ValueError, AttributeError):
                 rec = None
-        if isinstance(rec, dict) and rec.get("mode") and not rec.get("error") and regular(self.job / "explore-output.md"):
-            try:
-                fields = evidence.parse_explore((self.job / "explore-output.md").read_text(encoding="utf-8")) or {}
-            except (OSError, UnicodeDecodeError):
-                fields = {}
-            out["hyps"] = [_clip(h["가설"] + (f" — 반대: {h['반대 근거']}" if h.get("반대 근거") not in (None, "", "없음") else ""), 120)
-                           for h in fields.get("hyps") or []][:3]
-            out["none"] = _clip(fields.get("none"), 120)
+        if isinstance(rec, dict):           # 새 검사 기록이 있다 — 통과·같은 바이트일 때만 넘기고 남긴다
+            judged = None
+            path = self.job / "explore-output.md"
+            if rec.get("mode") and not rec.get("error") and rec.get("output_sha256") and regular(path):
+                try:
+                    data = path.read_bytes()
+                    fields = (evidence.parse_explore(data.decode("utf-8")) or {}
+                              if hashlib.sha256(data).hexdigest() == rec["output_sha256"] else None)
+                except (OSError, UnicodeDecodeError):
+                    fields = None
+                if fields is not None:
+                    judged = {"hyps": [_clip(h["가설"] + (f" — 반대: {h['반대 근거']}"
+                                                         if h.get("반대 근거") not in (None, "", "없음") else ""), 120)
+                                       for h in fields.get("hyps") or []][:3],
+                              "none": _clip(fields.get("none"), 120)}
+                    judged = {k: v for k, v in judged.items() if v} or None
+            if judged:
+                self.state.job["prior_explore"] = judged
+            else:
+                self.state.job.pop("prior_explore", None)
+            self.state.save()
+        out.update(self.state.job.get("prior_explore") or {})
         out = {k: v for k, v in out.items() if v}
         # 1위만 있으면(이전 판단·조회 없음) 넘기지 않는다 — 같은 입력의 재실행 출력이 이전과 같게(`reuse.prev_top`이 이미 있다)
         return out if set(out) - {"top"} else None

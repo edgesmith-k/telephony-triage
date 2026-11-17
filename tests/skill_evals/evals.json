@@ -164,7 +164,7 @@
     },
     {
       "id": 5,
-      "design": "발생 시각이 없는 Jira → 바로 묻지 않고 `parse --full`로 증상 시그니처가 충족되는 시각 후보(상위 3개)를 보여주고 고르게 한다. 선택지 끝에는 항상 '시각 없이 로그 전체'(full)가 있다. 후보가 없는 로그에서는 시각을 답하거나 로그 전체를 고르게 한다. 로그에 시계 역행이 있으면 경고하고 같은 경로를 제안한다",
+      "design": "발생 시각이 없는 Jira(기준 줄·시각 답도 없음) → 묻지 않고 로그 전체로 끝까지 분석한다(11/17 F-AUTO, 답 `full`과 같은 길). 드라이버가 `parse --full` + 매처 `--regress`로 증상 시그니처가 충족되는 시각 후보(상위 3개, 유형 이름과 함께)를 `step_anchor.time_candidates`(source symptom_scan)와 리포트 한 줄에 남기고, 그 전체 파싱을 본 분석이 그대로 쓴다. 사용자가 시각을 주면 그 길이 먼저다. 로그에 시계 역행이 있으면 경고한다",
       "batch": "B",
       "prompt": "MOCK-9005 로그 봐줘 --dry-run. 발생 시각은 모른대. 로그: logs/roaming.log",
       "setup": {
@@ -179,7 +179,6 @@
         ]
       },
       "user_replies": [
-        "발생 시각 후보를 보여주면 첫 번째 후보를 고른다.",
         "분류 제안에는 '예'.",
         "확인 화면에서는 '승인'.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
@@ -189,11 +188,10 @@
         "리뷰어를 지정할지 물으면 '지정 안 함'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "Jira에 발생 시각이 없으므로 바로 묻지 않고 parse --full + 매처 --regress로 증상이 충족되는 시각 후보(최대 3개, 유형 이름과 함께)와 '시각 없이 로그 전체' 선택지를 보여주고 고르게 한 뒤, 고른 시각으로 ±5분 재파싱해 분석한다.",
+      "expected_output": "Jira에 발생 시각이 없어도 시각을 묻지 않고 triage.py run이 로그 전체로 분석을 끝낸다(trace에 needs_input time 없음). analysis.json step_anchor는 source symptom_scan과 time_candidates(유형 ID와 함께)를 담고, 리포트의 '기준 시각 없음(시각·기준 줄 입력 없음) — 로그 전체를 봄. 증상 시각 후보 n개' 줄을 보인다. 1위 DATA-001-02.",
       "assertions": [
-        "발생 시각을 먼저 묻지 않고 parse_logcat parse --full과 match_signatures --regress를 돌렸다",
-        "증상이 충족되는 시각 후보(유형 ID와 함께)와 '시각 없이 로그 전체' 선택지를 보여주고 고르게 했다",
-        "고른 시각으로 --around 재파싱해 분석을 이어갔다",
+        "발생 시각을 묻지 않았고(trace에 needs_input time 없음) 드라이버가 parse_logcat parse --full과 match_signatures --regress를 돌렸다",
+        "analysis.json step_anchor가 source symptom_scan이고 time_candidates(유형 ID와 함께)가 있으며, 리포트의 '기준 시각 없음(시각·기준 줄 입력 없음) — 로그 전체를 봄' 줄을 보였다",
         "1위 후보가 DATA-001-02다",
         "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
       ],
@@ -2627,7 +2625,7 @@
     },
     {
       "id": 70,
-      "design": "사용 흐름 A → 기록 전환: \"분석만\" → `triage.py run --analysis-only`(발생 시각 질문에 답) → 사용자가 이어서 기록을 요청하면 같은 키·로그로 플래그만 빼고(`--dry-run`) 다시 실행한다. 입력이 같아 core를 재사용(`reuse {hit: true, run: 1}`)하고, 분석 전용에서 받은 시각·코드 경로 답을 이어 써 다시 묻지 않는다(contracts §3.2 `carry`)",
+      "design": "사용 흐름 A → 기록 전환: \"분석만\" → `triage.py run --analysis-only`(발생 시각은 묻지 않고 로그 전체로 분석, F-AUTO) → 사용자가 이어서 기록을 요청하면 같은 키·로그로 플래그만 빼고(`--dry-run`) 다시 실행한다. 입력이 같아 core를 재사용(`reuse {hit: true, run: 1}`)하고, 분석 전용에서 받은 코드 경로 답을 이어 써 다시 묻지 않는다(contracts §3.2 `carry`)",
       "name": "analysis-only-then-record-reuses-inputs",
       "batch": "U",
       "prompt": "MOCK-9070 로그 분석만 해줘, 아직 기록하지 마. 발생 시각은 모른대. 로그: logs/roaming.log",
@@ -2643,7 +2641,6 @@
         ]
       },
       "user_replies": [
-        "발생 시각 후보를 보여주면 첫 번째 후보를 고른다.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
         "심층 분석(mock-data-analyzer)·탐색 분석(explore) 실행 여부를 물으면 '아니오'.",
         "분류 제안(DATA-001-02)에는 '예'. note 한 줄 초안은 그대로 승인하고, 확인 화면에서는 '승인'(dry-run이므로 여기서 끝난다).",
@@ -2652,11 +2649,11 @@
       "followups": [
         "이제 이 원인으로 기록해줘, 연습이니 dry-run으로"
       ],
-      "expected_output": "1회차 triage.py run MOCK-9070 --analysis-only → time 질문에 답 → 분석 전용 리포트, lock 해제. 기록 요청 → 같은 키·로그로 --analysis-only 없이 --dry-run 재실행: reuse {hit: true, run: 1}, 시각·코드 경로 질문 없음(notes '분석 전용 실행에서 받은 답(…)을 이어 썼다'), 1위 DATA-001-02 → append {cause: DATA-001-02} 계획 → 확인 화면 → discard. 원격 브랜치·PR 없음, lock 없음.",
+      "expected_output": "1회차 triage.py run MOCK-9070 --analysis-only → (시각 질문 없이 로그 전체) → 분석 전용 리포트, lock 해제. 기록 요청 → 같은 키·로그로 --analysis-only 없이 --dry-run 재실행: reuse {hit: true, run: 1}, 시각 질문 없음·코드 경로 재질문 없음(notes '분석 전용 실행에서 받은 답(…)을 이어 썼다'), 1위 DATA-001-02 → append {cause: DATA-001-02} 계획 → 확인 화면 → discard. 원격 브랜치·PR 없음, lock 없음.",
       "assertions": [
-        "1회차 triage.py run을 --analysis-only로 불러 발생 시각 질문에 답하고 분석 전용 리포트를 보였다",
+        "1회차 triage.py run을 --analysis-only로 불렀고(발생 시각 질문 없이 로그 전체로 분석) 분석 전용 리포트를 보였다",
         "기록 요청에 같은 키·로그로 --analysis-only 없이 --dry-run으로 다시 실행했고 analysis.json reuse가 {hit: true, run: 1}이다",
-        "2회차에서 발생 시각(time)·코드 경로(code)를 다시 묻지 않았다(trace needs_input time 1회, code 1회 이하)",
+        "발생 시각(time)은 한 번도 묻지 않았고 2회차에서 코드 경로(code)를 다시 묻지 않았다(trace needs_input time 0회, code 1회 이하)",
         "계획 operations에 append {cause: DATA-001-02}가 있다",
         "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
       ],

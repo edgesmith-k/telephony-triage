@@ -248,13 +248,14 @@ class CacheMixin:
             os.replace(tmp, self.job / CACHE_FILE)
             job["cache"] = {"request_hash": request_hash, "parts": parts, "run": run_no}
         top = candidates[0] if candidates else None
+        look_at = self.look_inputs()["at"]
         runs = list(job.get("runs") or [])
         runs.append({"n": seq, "at": _now(), "request_hash": request_hash, "mode": self.out.get("mode"),
                      # dry-run이면 analysis.json `mode`는 write와 같다. 게시 판정(issue_post postable)이 이 값으로 구분한다
                      "dry_run": bool(getattr(self.args, "dry_run", False)),
                      "logs": [f["name"] for f in self.log_inputs],
                      # 이 실행의 가린 기준 줄(다음 실행의 `prior.looked` — 같은 조회를 반복하지 않게)
-                     **({"look": _clip(self.look_inputs()["at"], 80)} if self.look_inputs()["at"] else {}),
+                     **({"look": _clip(look_at, 80)} if look_at else {}),
                      "top": {k: top[k] for k in ("type", "cause", "score", "S", "C")} if top else None, "reused": hit})
         job["runs"] = runs[-RUNS_KEEP:]
         job["logs"] = self.log_inputs

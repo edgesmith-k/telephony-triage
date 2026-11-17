@@ -253,7 +253,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - span?([시작|null, 실패])
   - issue_gap_min?
   - focus?[≤3](유형 ID)
-  - time_candidates?[≤3](시각·기준 줄·Jira 시각이 다 없어 묻지 않고 로그 전체를 봤을 때(source symptom_scan)만: 증상 시그니처가 충족된 시각 후보 {ts, type}(이른 순, 없으면 빈 목록))
+  - time_candidates?[≤3](앵커(기준 줄을 줬으나 로그에서 못 찾은 경우 포함)·Jira 시각·time 답이 다 없어 묻지 않고 로그 전체를 봤을 때(source symptom_scan)만: 증상 시그니처가 충족된 시각 후보 {ts, type}(이른 순, 없으면 빈 목록))
     - ts
     - type
   - clock?({mode: manual|none, offset_sec?(manual), reason?(none, "시계 차 모름"; 4KB 압축 시 먼저 뺌)})

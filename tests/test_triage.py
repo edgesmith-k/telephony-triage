@@ -24,7 +24,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import SAMPLE, plugin_root, run, run_json, tmp  # noqa: E402
+from runner import SAMPLE, parse_calls, plugin_root, run, run_json, tmp  # noqa: E402
 from workspace import Workspace, git  # noqa: E402
 
 LABELSET = REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"
@@ -264,12 +264,6 @@ def test_full_run_resolves_code_refs_against_the_chosen_tree():
     ws.json("triage.py", ["release", "MOCK-1001"])
 
 
-def _parse_calls(job: Path) -> list[list]:
-    """trace.jsonl의 `parse_logcat.py parse` 호출 인자(파싱 횟수 확인용)."""
-    rows = [json.loads(line) for line in (job / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
-    return [r["args"] for r in rows if r.get("script") == "parse_logcat.py" and (r.get("args") or [None])[0] == "parse"]
-
-
 def test_jira_without_time_runs_whole_log_without_asking_and_keeps_time_candidates():
     """F-AUTO: 시각·기준 줄·Jira 시각이 다 없으면 묻지 않고 로그 전체로 끝까지 간다(`full` 답과 같은 경로).
     증상 시각 후보는 `step_anchor.time_candidates`·탐색 입력에 남고, 후보를 만든 전체 파싱을 본 분석이 다시 쓴다(파싱 1회).
@@ -288,7 +282,7 @@ def test_jira_without_time_runs_whole_log_without_asking_and_keeps_time_candidat
     assert done["candidates"][0]["cause"] == "DATA-001-02"
     assert any("임시로" in w for w in done.get("warnings") or [])
     job = ws.job_dir("MOCK-9005")
-    calls = _parse_calls(job)
+    calls = parse_calls(job)
     assert len(calls) == 1 and "--full" in calls[0], calls          # 같은 전체 파싱을 두 번 하지 않는다
     assert (job / "events.json").read_bytes() == (job / "events-full.json").read_bytes()
     report = (job / "report.md").read_text(encoding="utf-8")
@@ -841,7 +835,7 @@ def test_explore_marks_cause_unconfirmed_and_rejects_bad_settings(tmp_path):
     triage = _triage_module()
     drv = SimpleNamespace(cfg={"explore": {"when": "sometimes", "timeline_max_lines": 5}}, warnings=[], job=tmp_path, key="K-1",
                           failed_step={"text": "4 | x | FAIL", "source": "cli"},
-                          look_inputs=lambda: {"at": None, "note": None}, look_result=None)
+                          look_inputs=lambda: {"at": None, "note": None}, look_result=None, args=SimpleNamespace(explore=None))
     got = triage.Driver.explore(drv, [{"C": 0}])
     assert got == {"reason": "cause_unconfirmed", "when": "ask", "note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-2)"}
     spec = triage.Driver.explore_input(drv, "2026-09-20T05:30:00Z", None)

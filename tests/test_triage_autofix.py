@@ -19,7 +19,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import SAMPLE, plugin_root, run_json, tmp  # noqa: E402
+from runner import SAMPLE, parse_calls, plugin_root, run_json, tmp  # noqa: E402
 from workspace import Workspace  # noqa: E402
 
 LABELSET = REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"
@@ -52,11 +52,6 @@ def _unresolved() -> dict:
     return next(i for i in _doc()["items"] if i["expect"] == "unresolved")
 
 
-def _parse_calls(job: Path) -> list[list]:
-    rows = [json.loads(line) for line in (job / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
-    return [r["args"] for r in rows if r.get("script") == "parse_logcat.py" and (r.get("args") or [None])[0] == "parse"]
-
-
 def _report_line(out: Path, prefix: str) -> str:
     return next(line for line in (out / "report.md").read_text(encoding="utf-8").splitlines() if line.startswith(prefix))
 
@@ -72,7 +67,7 @@ def test_no_time_no_look_no_jira_time_finishes_with_time_candidates_and_one_pars
     assert anchor["source"] == "symptom_scan" and anchor["time_candidates"], anchor
     assert all(set(t) == {"ts", "type"} for t in anchor["time_candidates"])
     assert [t["ts"] for t in anchor["time_candidates"]] == sorted(t["ts"] for t in anchor["time_candidates"])
-    calls = _parse_calls(out)
+    calls = parse_calls(out)
     assert len(calls) == 1 and "--full" in calls[0], calls          # occurred()의 전체 파싱을 본 분석이 다시 쓴다
     assert (out / "events.json").read_bytes() == (out / "events-full.json").read_bytes()
     assert analysis["candidates"][0]["cause"] == "DATA-001-01"
@@ -87,7 +82,7 @@ def test_given_time_still_wins_over_auto_scan():
     item = _confirmed()
     analysis = _run(item, out, "--answer", f"time={item['occurred_at']}", occurred=False)
     assert analysis["status"] == "ok" and "time_candidates" not in (analysis.get("step_anchor") or {}), analysis
-    assert all("--around" in c for c in _parse_calls(out))
+    assert all("--around" in c for c in parse_calls(out))
 
 
 # -- F-FIT ----------------------------------------------------------------------------------------------------
@@ -124,6 +119,21 @@ def test_cause_unconfirmed_reason_unchanged(tmp_path):
     assert triage.Driver.explore(drv, [{"C": 1}])["reason"] == "fit_check"
     drv.args.explore = None
     assert triage.Driver.explore(drv, [{"C": 1}]) is None
+    # 잘못된 explore.when은 C=1 경로에서도 먼저 경고하고 ask로 본다(조용히 꺼지지 않는다)
+    bad = SimpleNamespace(cfg={"explore": {"when": "sometimes"}}, warnings=[], args=SimpleNamespace(explore=True))
+    assert triage.Driver.explore(bad, [{"C": 1}])["reason"] == "fit_check"
+    assert bad.warnings == ["explore.when 값이 잘못됐다(sometimes). ask로 본다"]
+
+
+def test_fit_drops_prior_hyps_then_prior_when_only_top_is_left():
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    from triagelib import report
+    result = {"prior": {"top": "DATA-001-01", "hyps": ["x"]}}
+    report._drop_prior_hyps(result)
+    assert "prior" not in result                      # top만 남으면 통째로 뺀다
+    result = {"prior": {"top": "DATA-001-01", "hyps": ["x"], "none": "y"}}
+    report._drop_prior_hyps(result)
+    assert result["prior"] == {"top": "DATA-001-01", "none": "y"}
 
 
 # -- F-END · F-NOREPEAT -----------------------------------------------------------------------------------------
@@ -147,6 +157,41 @@ def test_unfit_top_holds_with_reason_and_next_check_then_rerun_carries_prior():
     assert not (out / "explore-output.md").exists()                      # 추린 뒤에 지웠다(drop_stale_records)
     third = _run(item, out, "--explore")                                  # 검사 기록도 지워졌으니 다시 넘기지 않는다
     assert "prior" not in third
+
+
+def test_prior_skips_output_changed_after_check():
+    """검사 뒤 explore-output.md가 바뀌면(기록 output_sha256과 다름) 그 가설은 검사 통과로 넘기지 않는다."""
+    item = _confirmed()
+    out = tmp("tt-sha-") / "x"
+    _run(item, out, "--explore")
+    run_json("triage.py", ["explore", item["key"], "--out", out])
+    (out / "explore-output.md").write_text("가설 없음: 1위 부적합 — 시각이 다르다\n다음 확인: radio 로그\n", encoding="utf-8")
+    run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", out])
+    (out / "explore-output.md").write_text("가설 없음: 고쳐 쓴 이유\n다음 확인: radio 로그\n", encoding="utf-8")
+    assert "prior" not in _run(item, out, "--explore")
+
+
+def test_prior_survives_a_question_turn():
+    """질문(needs_input) 턴이 이전 산출물을 지워도 검사 통과한 이전 판단은 state에 남아 답한 재실행에 넘어간다."""
+    ws = Workspace()
+    log = tmp("tt-prior-q-") / "roaming.log"
+    log.write_bytes((REPO / "tests/fixtures/logs/data-roaming-disabled.log").read_bytes())
+    args = ["run", "MOCK-9005", "--dry-run", "--issue-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
+            "--logs", log, "--code", "skip", "--explore"]
+    first = ws.json("triage.py", args)
+    assert first["status"] == "ok" and first["explore"]["reason"] == "fit_check", first
+    job = ws.job_dir("MOCK-9005")
+    ws.json("triage.py", ["explore", "MOCK-9005"])
+    (job / "explore-output.md").write_text("가설 없음: 1위 부적합 — 증상 시각과 근거 시각이 다르다\n다음 확인: radio 로그\n",
+                                           encoding="utf-8")
+    ws.json("triage.py", ["check-output", "MOCK-9005", "--for", "explore"])
+    ask = ws.json("triage.py", [*args, "--answer", "time=어제쯤"])            # 읽을 수 없는 답 → 질문 턴
+    assert ask["status"] == "needs_input" and ask["needs_input"]["kind"] == "time", ask
+    assert not (job / "explore-output.md").exists() and not (job / "check-output.json").exists()
+    again = ws.json("triage.py", args)                                      # 답한(여기선 다시 자동) 재실행
+    assert again["status"] == "ok", again
+    assert again["prior"]["none"] == "1위 부적합 — 증상 시각과 근거 시각이 다르다", again.get("prior")
+    ws.json("triage.py", ["release", "MOCK-9005"])
 
 
 def test_prior_keeps_checked_hypotheses_only():

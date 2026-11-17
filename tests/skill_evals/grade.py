@@ -1334,8 +1334,21 @@ def checks(eid: int, ctx: Ctx) -> list:
             ok = bool(n) and n[0].get("category") == "call" and bool(op_list("MOCK-9004", "add-fixture")) and " cut " in ctx.ran
             return ok, json.dumps([o.get("op") for o in ops("MOCK-9004")])
         return [None, pr, nt, ctx.draft_shown, none_remote_lock]
-    if eid == 5:
-        return [in_cmd("--full", "--regress"), None, in_cmd("--around"), None, none_remote_lock]
+    if eid == 5:     # 11/17 F-AUTO: 시각을 묻지 않고 로그 전체로 끝까지 간다(시각 후보는 step_anchor.time_candidates)
+        def no_time_q():
+            asked = ctx.needs_input("time")
+            if asked is None:
+                raise _Manual("드라이버 trace 없음")
+            ok, ev = in_cmd("--full", "--regress")()
+            return ok and not asked, f"needs_input time={len(asked)}; {ev}"
+        def scanned():
+            p_ = ctx.work / "MOCK-9005" / "analysis.json"
+            a = json.loads(p_.read_text(encoding="utf-8")) if p_.is_file() else {}
+            sa = a.get("step_anchor") or {}
+            ok = sa.get("source") == "symptom_scan" and any(str(t.get("type", "")).startswith("DATA-001")
+                                                            for t in sa.get("time_candidates") or [])
+            return ok, f"step_anchor={json.dumps(sa, ensure_ascii=False)[:200]}"
+        return [no_time_q, scanned, None, none_remote_lock]
     if eid == 6:
         def fb():
             f = (ctx.plan("MOCK-9006") or {}).get("feedback") or {}
@@ -2659,7 +2672,7 @@ def checks_u(eid, ctx):
         time, code = ctx.needs_input("time"), ctx.needs_input("code")
         if time is None:
             raise _Manual("드라이버 trace 없음")
-        return len(time) == 1 and len(code) <= 1, f"needs_input time={len(time)} code={len(code)}"
+        return len(time) == 0 and len(code) <= 1, f"needs_input time={len(time)} code={len(code)}"   # F-AUTO: 시각 질문 없음
     def appended():
         o = ops()
         return {"op": "append", "cause": "DATA-001-02"} in o, json.dumps(o, ensure_ascii=False)[:400]
