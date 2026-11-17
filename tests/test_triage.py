@@ -1681,6 +1681,21 @@ def test_w4_docs_match_the_implementation():
     assert "`cleanup`(yes|no)" not in doc and "`code`(프로필|경로|skip)" in doc
 
 
+def test_contracts_cache_and_state_match_code():
+    """FR-09(P7): 계약 문서가 코드와 같다 — 캐시 format(CACHE_FORMAT)·캐시 제외(extractor 시간 초과)·state의 `runs[].look`·
+    `job.prior_explore`·입력 해시의 `--(no-)explore`(07-workflow 해시 목록 포함)."""
+    from triagelib import core
+    contracts = (W4_DOCS / "contracts.md").read_text(encoding="utf-8")
+    assert re.findall(r"analysis-cache\.json`\(`\{format\((\d+)\)", contracts) == [str(core.CACHE_FORMAT)]
+    assert "extractor 시간 초과(`observation.timeout`" in contracts
+    state = next(ln for ln in contracts.splitlines() if ln.startswith("- `triage-state.json`은 스키마 2"))
+    assert "look?(" in state and "prior_explore?{" in state
+    assert "`--explore`·`--no-explore`(값이 있을 때만 `explore: true|false`)도 `args`에 든다" in contracts
+    hashes = next(ln for ln in (W4_DOCS / "07-workflow.md").read_text(encoding="utf-8").splitlines()
+                  if ln.startswith("- **입력 해시**"))
+    assert "`--explore`·`--no-explore`(준 것만)" in hashes
+
+
 # -- 묶음 B: 판정 불가 유형(매처 오류)·미추출 W/E 줄 ------------------------------------------------------------
 
 
