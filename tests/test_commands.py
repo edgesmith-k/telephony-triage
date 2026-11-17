@@ -569,7 +569,8 @@ def test_offline_eval_out_of_range_item_is_error_not_scored(tmp_path):
     assert "평가 0/전체 1" in _offline(str(labelset)).stdout
 
 
-def _eval_with(tmp_path, monkeypatch, unjudged: dict | None, expect: str = "unresolved", causes: list | None = None) -> dict:
+def _eval_with(tmp_path, monkeypatch, unjudged: dict | None, expect: str = "unresolved", causes: list | None = None,
+               observation: dict | None = None) -> dict:
     """triage 결과를 꾸며 evaluate_item 한 건을 돌린다 (candidates의 cause 목록, unjudged)."""
     sys.path.insert(0, str(REPO / "tools"))
     import offline_eval
@@ -577,6 +578,8 @@ def _eval_with(tmp_path, monkeypatch, unjudged: dict | None, expect: str = "unre
                 "candidates": [{"cause": c} for c in (causes or [])]}
     if unjudged is not None:
         analysis["unjudged"] = unjudged
+    if observation is not None:
+        analysis["observation"] = observation
     monkeypatch.setattr(offline_eval, "_script", lambda root, name, args: subprocess.CompletedProcess(
         args, 0, json.dumps(analysis), ""))
     work = tmp_path / f"w{len(list(tmp_path.iterdir()))}"
@@ -637,6 +640,30 @@ def test_offline_eval_signature_only_error_is_warning_and_evaluated(tmp_path, mo
     assert "경고 U-1: 시그니처 오류" in offline_eval.render([r], s)
 
 
+OBS = {"count": 1, "extractor": 1, "timeout": 1, "errors": [{"code": "pattern-timeout", "error": "extractor slow: timeout"}]}
+
+
+def test_offline_eval_observation_keeps_definite_false_positive_and_unjudged(tmp_path, monkeypatch):
+    """관측 불완전이 판정 불가(unjudged) 처리를 가리지 않는다: 원인 후보가 있는 unresolved는 오탐 확정, 둘 다 기록."""
+    import offline_eval
+    u = {"count": 1, "errors": [{"signature": "X/slow", "error": "timeout"}]}
+    r = _eval_with(tmp_path, monkeypatch, u, causes=["DATA-001-01"], observation=OBS)
+    assert r["error"] is None and r["unjudged"] == {"count": 1, "cause_count": 0}
+    assert r["observation"] == {"count": 1, "extractor": 1}
+    assert r["warning"] == ("판정 불완전(시그니처 시간 초과·오류): 유형 1·원인 0 — X/slow: timeout; "
+                            "관측 불완전(extractor 오류 1·전체 1) — extractor slow: timeout — 원인 후보가 있어 오탐은 확정")
+    s = offline_eval.summarize([r])
+    assert r["verdict"] == "오탐" and s["false_positive_rate"] == 1.0 and s["errors"] == 0
+    r = _eval_with(tmp_path, monkeypatch, None, causes=["DATA-001-01"], observation=OBS)     # 관측 불완전만이어도 같다
+    assert r["error"] is None and r["warning"].endswith("원인 후보가 있어 오탐은 확정")
+    assert offline_eval.summarize([r])["false_positive_rate"] == 1.0
+    r = _eval_with(tmp_path, monkeypatch, u, causes=[None], observation=OBS)              # 오탐 확정 아님 → 두 이유 모두 오류에
+    assert r["error"] == ("판정 불가(시그니처 시간 초과·오류): 유형 1·원인 0 — X/slow: timeout; "
+                          "관측 불완전(extractor 오류 1·전체 1) — extractor slow: timeout")
+    s = offline_eval.summarize([r])
+    assert s["errors"] == s["unjudged_errors"] == s["observation_errors"] == 1 and s["evaluated"] == 0
+
+
 def test_offline_eval_all_error_labelset_is_not_shown_as_pass(tmp_path, monkeypatch):
     r = _eval_with(tmp_path, monkeypatch, {"count": 1})
     import offline_eval
@@ -678,6 +705,28 @@ def test_offline_eval_end_to_end_signature_timeout_is_unjudged_error(tmp_path):
     assert out["summary"]["errors"] == out["summary"]["unjudged_errors"] == 1 and out["summary"]["evaluated"] == 0
     item = out["items"][0]
     assert item["error"].startswith("판정 불가") and item["unjudged"]["count"] >= 1
+
+
+def test_offline_eval_end_to_end_extractor_timeout_is_observation_error_not_scored(tmp_path):
+    """F-A03: extractor 시간 초과 사례는 정답·미스가 아니라 관측 불완전 오류(분모 제외, 오류율에 잡힘)."""
+    sys.path.insert(0, str(REPO / "tests"))
+    from test_triage import _slow_extractor_db, _slow_log
+    labelset = tmp_path / "slowext.yaml"
+    labelset.write_text(yaml.safe_dump({
+        "db": str(_slow_extractor_db()), "tz": "Asia/Seoul", "year": 2026,
+        "items": [{"key": "SLOWX-1", "occurred_at": "2026-09-20T14:30:05+09:00", "expect": "DATA-001-01",
+                   "logs": [str(_slow_log())]}],
+    }), encoding="utf-8")
+    proc = _offline(str(labelset), "--json")
+    assert proc.returncode == 1, proc.stderr          # 전부 오류 = 통과 아님
+    out = json.loads(proc.stdout)
+    s = out["summary"]
+    assert s["errors"] == s["observation_errors"] == 1 and s["unjudged_errors"] == 0 and s["evaluated"] == 0
+    assert s["error_rate"] == 1.0 and s["top1_accuracy"] is None
+    item = out["items"][0]
+    assert item["error"].startswith("관측 불완전(extractor 오류 1·전체 1) — extractor slow-one: "), item["error"]
+    assert "verdict" not in item and item["top"] is None
+    assert "관측 불완전 1건" in _offline(str(labelset)).stdout
 
 
 def test_offline_eval_rejects_bad_labelset(tmp_path):
