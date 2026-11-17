@@ -113,6 +113,7 @@
 - 이벤트마다 `phone_id`(슬롯, 없으면 `null`)와 `line_ref`(`{file_index(입력 로그 목록의 0부터 순번), line_no(1부터, 외부 파서 이벤트는 null)}` 또는 `null`, 이벤트의 마지막 키, `04-parser-matching.md §5.8 (6)`).
 - 머리에 `coverage: {first_ts, last_ts, window_in_range: true\|partial\|false\|null, clock_anomalies: [{ts, kind: backward\|jump, delta_sec}]}`(`--full`이면 `window_in_range: true`, 단 `null` = 해석한 줄 없음은 window 유무와 무관하게 `null`이다 — \"범위 밖\"이 아니라 형식·인코딩 문제).
 - 경고 `file-unparsed`(해석한 줄이 0이거나 절반 넘게 못 읽은 파일 — 관측 불완전, `complete: false`)·`year_rollover_ambiguous`(여러 파일이 해를 넘김). 입력 인코딩은 UTF-8(BOM 허용)·UTF-16(BOM).
+- 최상위 `observation: {complete, errors[{code, error}]}`: `complete`(파일·외부 파서 기준, 뜻 그대로)에 extractor 오류(`errors[]`의 `code`: 시간 초과 `pattern-timeout`·정규식 오류 `pattern-error` — 그 extractor 이벤트를 버림)를 더한 관측 상태. 둘 다 같은 판정에서 나온다. 불완전이면 triage는 `observation`(unjudged와 별개, 시간 초과가 있으면 캐시 안 함)과 리포트 한 줄을 내고, offline_eval은 그 사례를 오류로 센다(원인 후보가 있는 unresolved는 오탐 확정, 분석은 계속).
 - 최상위 `uncollected_tags: [{tag(마스킹, ≤40), lines, warn(W/E/F 줄 수)}]`(있을 때만, 상위 5개, `(W/E/F 수, 줄 수, 태그)` 내림차순): `tags.yaml`에 없어 줄 레코드로 남지 않고 버려진 줄을, **수집된 줄 레코드와 같은 pid**의 것만 `(태그, pid, 레벨)`로 센 관측 누락 힌트다(pid가 없는 줄은 건너뜀. 분류·점수에 쓰지 않음, `07-workflow.md §Step 3`).
 - 최상위 `unextracted_warn: {lines, tags[{tag(마스킹, ≤40), lines}](상위 5개)}`(있을 때만): 수집 태그의 W/E/F 줄 중 이벤트(RIL 파생·extractor·같은 줄의 builtin)를 하나도 못 낸 줄 수 — 후보 없음 힌트이며 분류·점수에 쓰지 않는다(정상 경고 줄도 센다).
 - `--mask`면 **extractor 실행 전에** 각 줄(백엔드·외부 파서 이벤트의 `msg`·`fields` 포함)을 마스킹하고 `masked: true`, 아니면 `masked: false`. 마스킹 끔 DB(`08-safety.md §8.2`)면 가리지 않고 `masked: true`에 `mask_off: true`를 더한다(하류 보기·점검이 가리지 않는다). `--no-external`은 분석 모드 디버그용이다 (§기존 자산 연결 계약). `--between`은 명시 구간이다(타임존 있는 ISO 둘, 시작 ≤ 끝이 아니면 종료 코드 2, `input.mode: "between"`, `input.window`는 그 구간).
@@ -443,7 +444,7 @@
 |---|---|
 | `append`, `unresolved`, `add-related`, `add-code-ref`, `add-fixture`, `new-cause` | 대상 원인·유형이 `active`가 아니게 됨 (deprecated, merged-into) |
 | `new-type` | 같은 카테고리에 제목·증상 시그니처가 같은 유형이 생김 (`db_add similar` 기준 상위 1개가 동일) |
-| `reclassify` | 그 Jira 파일의 `cause`가 `from`이 아니게 됨, 또는 파일이 없어짐 |
+| `reclassify` | 그 Jira 파일의 `cause`가 `from`이 아니게 됨, 또는 파일이 없어짐(`field: cause`, 계획 값은 쓸 cause — `<유형 ID>:unresolved`면 `unresolved`) / `cause`는 그대로인데 파일이 다른 유형 디렉토리로 옮겨짐(`field: type`, 값은 유형 ID, `to`가 임시 ID면 계획 값 `null`; `field: cause` 항목이 난 op에는 내지 않는다) / 옮겨 갈 원인·유형(`to`)이 `active`가 아니게 됨 |
 | `update-fix`, `verify-fix` | 대상 원인의 `fix`가 바뀜 |
 | `set-resolution`, `verify-resolution` | 대상 원인의 `resolution` 또는 `resolution_verification`이 바뀜 |
 | `update-signature` | 같은 `sig_id` 시그니처가 바뀌거나 없어짐, 추가하려는 `sig_id`가 이미 생김 |

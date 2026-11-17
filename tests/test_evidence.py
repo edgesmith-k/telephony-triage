@@ -267,3 +267,79 @@ def test_evidence_check_tag_colon_and_colon_after_equals_value():
     def tokens(s):
         return [evidence._low(m.group(0)) for m in evidence.DECISION_TOKEN_RX.finditer(s)]
     assert tokens("pcscf=<IP#1>:5060") == ["pcscf=<ip#1>:5060"] and tokens("uri=sip:alice@example t=10:00:00") == ["uri=sip", "t=10"]
+
+
+# --- F-A01-min: 인용 머리(시각·슬롯·레벨·태그) 대조 -----------------------------------------------------------
+
+GPRS_MSG = "src/gprs.c:gprs_attach() attach requested"
+
+
+def test_check_quotes_altered_head_is_weak():
+    # 메시지는 원문 그대로인데 시각·슬롯·태그를 바꿔 적은 인용 — 전에는 msg_part가 머리를 떼고 비교해 ok였다
+    source, tags = evidence.source_text(TL)
+    items = [f"15:10:07.100 p0 I ofonod {GPRS_MSG}",          # 시각
+             f"15:10:00.100 p1 I ofonod {GPRS_MSG}",          # 슬롯
+             f"15:10:00.100 p0 I datad {GPRS_MSG}",           # 태그(원문의 다른 태그)
+             f"15:10:00.100 p0 I ofonox {GPRS_MSG}"]          # 태그(원문에 없는 이름)
+    res = evidence.check_quotes(items, source, tags)
+    assert res["verdicts"] == ["weak"] * 4 and res["weak"] == 4 and res["fabricated"] == 0
+
+
+def test_check_quotes_genuine_head_and_bare_message_are_ok():
+    source, tags = evidence.source_text(TL)
+    items = [f"15:10:00 p0 I ofonod {GPRS_MSG}",              # ms를 뺀 시각
+             f"15:10:00.1 ofonod {GPRS_MSG}",                 # 정밀도를 줄이고 슬롯·레벨 생략
+             f"15:10:00.100 p0 I ofonod {GPRS_MSG}",          # 원문 그대로
+             GPRS_MSG,                                        # 머리 없는 메시지
+             "15:10:01.200 - E vrild SETUP_DATA_CALL fail cause=AUTH"]
+    assert evidence.check_quotes(items, source, tags)["verdicts"] == ["ok"] * 5
+
+
+def test_check_quotes_big_source_head_check_same_verdicts():
+    # 256KB 넘는 원문: 선검사(한 줄 그대로) 경로도 머리를 본다. 인용 줄은 축소 검색 300행 밖이라 축소 검색만으로는 fabricated였을 것
+    msg = "connectivity_monitor apn handover rejected by peer"
+    source, _ = _big_source_with_tail([f"11:00:00.000 p0 I daemon0 {msg}", "11:00:01.000 p0 I daemon1 idle"])
+    tags = evidence.tag_rx(["daemon0", "daemon1"])
+    items = [f"11:00:00 p0 I daemon0 {msg}", f"11:00:00.000 p1 I daemon0 {msg}", f"11:00:05.000 p0 I daemon0 {msg}",
+             f"11:00:00.000 p0 I daemon1 {msg}", msg]
+    want = ["ok", "weak", "weak", "weak", "ok"]
+    assert evidence.check_quotes(items, source, tags)["verdicts"] == want
+    small = evidence.BIG_SOURCE
+    try:
+        evidence.BIG_SOURCE = 10 ** 9           # 걸러 내지 않고 전체로
+        assert evidence.check_quotes(items, source, tags)["verdicts"] == want
+    finally:
+        evidence.BIG_SOURCE = small
+
+
+def test_check_quotes_big_source_typo_quote_head_found_past_prefilter_rows():
+    # 리뷰 #149-1: 메시지 오타로 축소 검색(첫 300행)에 간 인용의 머리 행을 그 300행 안에서만 찾아, 진짜 줄(꼬리)이 밖이면 weak였다
+    msg = "connectivity_monitor apn handover rejected by peer"
+    rows = [f"10:{i // 60 % 60:02d}:{i % 60:02d}.000 p0 I daemon0 {msg}" for i in range(5000)] + [f"11:00:00.000 p1 I daemon0 {msg}"]
+    source, tags = "\n".join(rows), evidence.tag_rx(["daemon0"])
+    assert len(source) > evidence.BIG_SOURCE
+    items = ["11:00:00.000 p1 I daemon0 connectivity_monitor apn handover rejectd by peer"]
+    small = evidence.BIG_SOURCE
+    try:
+        fast = evidence.check_quotes(items, source, tags)["verdicts"]
+        evidence.BIG_SOURCE = 10 ** 9           # 걸러 내지 않고 전체로
+        full = evidence.check_quotes(items, source, tags)["verdicts"]
+    finally:
+        evidence.BIG_SOURCE = small
+    assert fast == full == ["ok"]
+
+
+def test_check_quotes_level_letter_message_without_time_or_slot_is_not_head():
+    # 리뷰 #149-2: 레벨 글자로 시작하는 메시지-만 인용을 머리(레벨·태그)로 읽어 ok가 weak로 떨어졌다 — 시각이나 슬롯이 있어야 머리
+    source, tags = evidence.source_text(TL + "15:10:03.000 p0 I modemd E auth vector received from modem baseband\n")
+    res = evidence.check_quotes(["E auth vector received from modem baseband", "auth vector received from modem baseband"],
+                                source, tags)
+    assert res["verdicts"] == ["ok", "ok"]
+
+
+def test_check_quotes_made_up_tag_prefix_of_message_word_is_weak():
+    # 리뷰 #149-3: 태그 관용 비교가 단순 앞부분이라 지어낸 태그 `SET`이 `SETUP_DATA_CALL …` 행에서 통과했다 — 첫 낱말 전체가 같아야 한다
+    source, tags = evidence.source_text(TL)
+    res = evidence.check_quotes(["15:10:01.200 - E SET SETUP_DATA_CALL fail cause=AUTH",
+                                 "15:10:01.200 - E vrild SETUP_DATA_CALL fail cause=AUTH"], source, tags)
+    assert res["verdicts"] == ["weak", "ok"]

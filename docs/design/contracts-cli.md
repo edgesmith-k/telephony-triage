@@ -308,6 +308,11 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - cause_count?(C를 정하지 못한 원인 수(match.json causes[].C null, 있을 때만))
   - causes?[≤5](그 원인 ID(있을 때만))
   - errors?[≤2]({signature, error(≤80)} — 판정 불가 항목의 오류(없으면 매처 errors[]); 4KB 압축 시 types→causes→errors 순으로 뺌)
+- observation?(관측 불완전(events.json observation.complete false: extractor 오류·파일 해석 실패·외부 파서 문제). unjudged(시그니처 오류)와 별개 — 정상 불일치가 아니라 로그를 다 못 봄. 있을 때만, 시간 초과가 있으면 캐시 저장 안 함)
+  - count
+  - extractor(그중 extractor 오류(pattern-timeout·pattern-error) 수)
+  - timeout(그중 시간 초과(pattern-timeout, 비결정) 수)
+  - errors?[≤2]({code, error(≤80)} — extractor 것 하나·그 밖 것 하나; 4KB 압축 시 뺌)
 - no_candidate?
   - search_hits
   - error_events[≤8]({ts, tag, event, phone, request?, error?, code?, reason?, cause?}(각 ≤40자, 있을 때만; 4KB 압축 시 4개·부가 필드 없음))

@@ -6,7 +6,7 @@ import re
 
 from common import failedstep, issuedb, masking, yamldoc, yamlio
 
-from ..core import Reject
+from ..core import Reject, reclassify_target
 
 
 class JiraOps:
@@ -72,21 +72,19 @@ class JiraOps:
             raise Reject("reclassify-from", f"Jira {key}의 현재 원인은 {record.get('cause')}입니다 (계획 from: "
                          f"{op['from']}).", i, current=record.get("cause"))
         to = op["to"]
-        if to.endswith(":unresolved"):
+        _, type_id, new_cause = reclassify_target(to)
+        if new_cause == "unresolved":
             # 원인 미확정 Jira를 다른 유형으로 옮긴다 (유형 병합, 06-collaboration.md §6.6)
-            type_id = to.split(":", 1)[0]
             doc = self.tree.docs.get(type_id)
             if doc is None:
                 raise Reject("unknown-type", f"유형 {type_id}가 없습니다.", i)
             if op["from"] != "unresolved":
                 raise Reject("reclassify-unresolved", f"`{to}`로는 원인 미확정 Jira만 옮길 수 있습니다 "
                              f"(from: {op['from']}).", i)
-            new_cause = "unresolved"
         else:
             doc, cause = self.tree.cause(to)
             if cause is None:
                 raise Reject("unknown-cause", f"원인 {to}가 없습니다.", i)
-            new_cause = to
         record["cause"] = new_cause
         origin = op["from"]
         if origin == "unresolved":
