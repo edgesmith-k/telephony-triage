@@ -151,6 +151,14 @@ def test_unfit_top_holds_with_reason_and_next_check_then_rerun_carries_prior():
     line = _report_line(out, "- 탐색 분석")
     assert "가설 없음: 1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다" in line
     assert "다음 확인: 실패 시각 앞뒤 1분 radio 로그" in line
+    # FR-02(P2): 보류면 결론·해결책 줄도 1위 확정·`검증됨`을 권하지 않는다(판정·후보 순위는 그대로)
+    assert _report_line(out, "- 결론:") == ("- 결론: 1위 DATA-001-01가 증상과 맞지 않아 보류(탐색 분석 참조). "
+                                         "다음: Step 7에서 보류를 고르거나 근거 로그 확인")
+    held = _report_line(out, "- 해결책")
+    assert held.startswith("- 해결책(1위 기준, 보류됨): ") and held.endswith("   해결책 검증: 보류(1위 부적합)"), held
+    assert not any(x.startswith("- 해결책: ") for x in (out / "report.md").read_text(encoding="utf-8").splitlines())
+    assert json.loads((out / "check-output.json").read_text(encoding="utf-8"))["explore"]["fit_hold"] == "DATA-001-01"
+    assert json.loads((out / "analysis.json").read_text(encoding="utf-8"))["candidates"][0]["C"] == 1
 
     again = _run(item, out, "--explore")                                  # 재실행(답글 턴): 이전 판단을 넘긴다
     assert again["prior"] == {"none": "1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다"}, again.get("prior")
@@ -204,6 +212,8 @@ def test_prior_keeps_checked_hypotheses_only():
         "가설 1: 캐리어 설정 뒤 데이터 평가 거부\n로그로 확인:\n- " + quote + "\n코드로 추정: 코드 근거 없음\n"
         "반대 근거: 거부 사유 줄 없음\n다음 확인: radio 버퍼\n", encoding="utf-8")
     run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", out])
+    assert "fit_hold" not in json.loads((out / "check-output.json").read_text(encoding="utf-8"))["explore"]   # fit_check 아님
+    assert _report_line(out, "- 결론:").startswith("- 결론: 아는 증상·원인과 맞는 후보 없음")
     again = _run(item, out)
     assert again["prior"] == {"hyps": ["캐리어 설정 뒤 데이터 평가 거부 — 반대: 거부 사유 줄 없음"]}, again.get("prior")
     # 검사에 실패한 출력(형식 불일치)은 넘기지 않는다

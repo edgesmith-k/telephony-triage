@@ -8,7 +8,6 @@
 - `JOB/timeline.md`는 실행이 정해진 뒤 부르는 `S/triage.py explore <KEY>`가 만든다(`run`은 만들지 않는다).
 - `analysis.json`에 `explore`가 있을 때만: `reason: no_candidate`(후보 없음)·`cause_unconfirmed`(1위 C=0)·`fit_check`(1위 C=1).
 - `--no-explore`·`explore.when: never` → 하지 않는다(리포트 "탐색 분석 생략: <사유>").
-- `--explore`·`explore.when: always` → 묻지 않고 한다.
 - 그 밖(`ask`, 기본) → "탐색 분석을 실행할까요? (토큰 추가 사용)"을 그대로 보이고 답 전엔 시작하지 않는다(`triage.py explore`
   호출·`timeline.md` 읽기 없음). 토큰이 드는 일이라 사용자가 고른다 — 앞선 지시나 "아마 원할 것"이란 짐작으로 건너뛰지 않는다.
 - 묻기 전·답 대기 중엔 로그 원문을 grep·Read하지 않는다 — 원문엔 마스킹 전 값이 있고, 원인 찾기는 동의 뒤 `timeline.md`로 한다.
@@ -72,6 +71,7 @@
 ## 다음 (Step 7)
 
 - `check-output`이 쓴 탐색 분석 줄(과 `근거 원문 검사` 줄)을 채택·보류 질문 **전에** 그대로 보인다(명령 출력은 사용자에게 안 보인다).
+- 1위 부적합 보류면 1위부터 권하지 않는다.
 - 가설을 **채택**하면 `db-authoring.md` 새 유형·새 원인 초안의 출발점으로 쓴다: "로그로 확인" 줄에서 시그니처
   초안(`must_event`/`must_match`, 마스킹된 텍스트 기준), 필요하면 파서 규칙 초안, fixture는 그 구간을 `parse_logcat.py cut --around <시각>
   --rules SNAP/parser-rules`로 자르고, `db_verify rules --draft`(R1~R5)·확인 화면은 평소와 같다.

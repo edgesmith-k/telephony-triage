@@ -6,6 +6,7 @@ Claude가 쓴 `JOB/deep-output.md`·`JOB/explore-output.md`를 받아:
 3. 근거 원문 검사: 인용이 준 타임라인(모듈 뷰·`JOB/timeline.md`, 설치 스킬이면 events.json 전체 행)에 있는지.
 4. report.md의 5-1·5-2 줄(과 `  - ` 아래 줄)을 쓴다 — `TODO(LLM)`이 남은 줄만 고친다. 모델은 그 줄을 고치지 않는다.
    탐색 가설 줄에는 그 가설의 원문에 없는 인용 수 `[근거 불일치 N]`(N>0일 때만).
+   적합성 확인(`fit_check`)이 가설 없이 끝나면(1위 부적합 보류) 결론·해결책 줄도 보류로 고치고 기록에 `fit_hold: <원인 ID>`.
 
 `--skipped "<사유>"`: 실행하지 않았거나 실패 — 줄을 "생략: <사유>"로(이미 스크립트가 쓴 생략·해당 없음·받기 실패 줄이면 그대로).
 기록 `JOB/check-output.json[purpose]`(스크립트만 쓴다, guard 규칙 12)와 trace `checked` 행(`core.trace_event`). 표시 의무: 작업 디렉토리 JOB이면 검사마다 `evidence` 기록
@@ -60,6 +61,10 @@ INPUT_NAMES = {"analysis.json", "events.json", "match.json", TIMELINE_FILE, EXPL
 EVENTS_MAX = 64 << 20
 SKILL_LABEL = "근거 원문 검사(events.json 기준)"
 WARN_REWRITE = "경고: report.md 줄을 고치지 못했다"
+# 적합성 확인 보류(FR-02). 결론 줄은 `. 다음:` 앞까지가 결론이다(포털이 그 앞만 남긴다 — 앞에 Step 7을 쓰지 않는다)
+FIT_HOLD_CONCLUSION = "- 결론: 1위 {cause}가 증상과 맞지 않아 보류(탐색 분석 참조). 다음: Step 7에서 보류를 고르거나 근거 로그 확인"
+CONCLUSION_PREFIX, RESOLUTION_PREFIX, RESOLUTION_CHECK = "- 결론: ", "- 해결책: ", "   해결책 검증: "   # report.render_report 줄 모양
+FIT_HOLD_RESOLUTION, FIT_HOLD_CHECK = "- 해결책(1위 기준, 보류됨): ", "보류(1위 부적합)"
 
 
 class _Stop(Exception):
@@ -345,6 +350,22 @@ def _rewrite(report: Path, prefix: str, lines: list[str], keep_sub: tuple[str, .
     return ok
 
 
+def _fit_hold(report: Path, analysis: dict, fields: dict) -> str | None:
+    """FR-02: 적합성 확인(`explore.reason: fit_check`)이 가설 없이 끝났으면(1위 부적합 보류) 결론·해결책 줄을 보류로 맞춘다 —
+    탐색 줄과 달리 1위 확정·`검증됨`을 권하지 않게. 감지는 구조(사유·빈 가설)만 보고 판정(C·순위)은 바꾸지 않는다.
+    탐색 줄을 고쳤을 때(한 번)만 부른다. 보류한 1위 원인 ID(없으면 None)."""
+    top = (analysis.get("candidates") or [None])[0]
+    cause = top.get("cause") if isinstance(top, dict) else None
+    if fields["hyps"] or (analysis.get("explore") or {}).get("reason") != "fit_check" or not cause:
+        return None
+    rep.rewrite_line(report, CONCLUSION_PREFIX, [FIT_HOLD_CONCLUSION.format(cause=cause)])
+    line = rep.current_line(report, RESOLUTION_PREFIX)
+    if line:
+        body = line[len(RESOLUTION_PREFIX):].rpartition(RESOLUTION_CHECK)[0] or line[len(RESOLUTION_PREFIX):]
+        rep.rewrite_line(report, RESOLUTION_PREFIX, [f"{FIT_HOLD_RESOLUTION}{body}{RESOLUTION_CHECK}{FIT_HOLD_CHECK}"])
+    return cause
+
+
 def _skipped(args, job: Path, purpose: str, env: dict) -> int:
     report, prefix = job / "report.md", PREFIX[purpose]
     reason = masking.mask_brief(args.skipped, 120)
@@ -476,12 +497,13 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
         name = (rec or {}).get("skill") or (analysis.get("analyzer") or {}).get("skill") or "-"
         default = f"{DEEP_PREFIX} ({name}): "
     lines = _render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp)
-    _rewrite(report, prefix, lines, KEEP_SUB)
+    rewrote = _rewrite(report, prefix, lines, KEEP_SUB)
+    hold = _fit_hold(report, analysis, fields) if purpose == "explore" and rewrote else None
 
     counts = {k: (res or {}).get(k, 0) for k in ("fabricated", "weak", "raw")}
     n = (res or {}).get("n", 0)
     _record(job, purpose, {"mode": mode, "at": _now(), "env": env, "output_sha256": sha, "source": src_rel if res else None,
-                           "quotes": n, **counts})
+                           "quotes": n, **counts, **({"fit_hold": hold} if hold else {})})
     head = masking.mask_brief(lines[0], 300, off=off)     # 끔 DB: report.md 줄과 같은 글자(꼭 보일 줄 대조가 어긋나지 않게)
     fab = [sub.lstrip()] if counts["fabricated"] else []
     # 심층 분석은 결과 줄(첫 줄)을 늘 보인다 — 탐색은 지어낸 인용이 있을 때만(B2-6)
