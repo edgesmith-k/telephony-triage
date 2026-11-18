@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -76,6 +77,18 @@ def test_result_prefers_error_word_like_detect():
     assert vendor_ipc.detect(line) == []                                     # detect도 성공으로 본다
     assert _recs("[RX] VIPC_A, RSP, Error(VIPC_E_X), Fail(VIPC_E_Y)")[0]["result"] == "VIPC_E_X"
     assert _recs("[RX] VIPC_A, RSP, Prev(VIPC_E_X), Fail(VIPC_E_Y)")[0]["result"] == "VIPC_E_X"   # Error 없으면 첫 것
+
+
+def test_default_patterns_stay_linear_on_long_lines():
+    """뒤쪽 `Error(` 확인을 낱말마다 돌리면 `Error(` 없는 긴 줄에서 줄 길이의 제곱 시간(4KB 200줄 ≈ 10초) — 시간 상한에 걸려
+    기본 식이 통째로 건너뛰어진다. 느슨한 상한 1초(선형이면 수십 ms)."""
+    body = " ".join(f"word{i}=val{i}" for i in range(400))[:4096]
+    lines = [f"[TX] VIPC_SETUP_DATA, REQ, token=0x0de, {body}"] * 200
+    rxs = [re.compile(p) for p in ipcseq.patterns()]
+    start = time.perf_counter()
+    for line in lines:
+        assert any(rx.search(line) for rx in rxs)
+    assert time.perf_counter() - start < 1.0
 
 
 def test_long_token_masked_to_cred_keeps_record_without_token():

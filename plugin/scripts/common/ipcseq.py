@@ -26,10 +26,12 @@ TRACE_LEN = 400                                       # 정규식 하나의 글�
 # placeholder 기본 정규식 둘(합성 `VIPC_` 꼴): `[TX] <이름>, REQ, … token=… <낱말>(<결과>)`와 `<이름> (token=0x0de)`.
 # token 구분은 `=`·`:`·`(`이고 `token`은 대소문자를 가리지 않는다(이름 `name`은 가린다).
 # 결과는 괄호 안이 오류 접두어인 `<낱말>(…)`이다. 한 줄에 여럿이면 `Error(…)`가 먼저(`vendor_ipc.detect`와 같은 값), 없으면 첫 것.
+# 단 token 뒤의 결과만 읽는다 — token 앞의 `Error(`는 기록 결과에 안 잡힌다(성공 여부는 detect 기준).
+# 뒤쪽 `Error(` 확인(부정 전방탐색)은 결과 후보(`<낱말>(<오류 접두어>`) 앞에서만 돈다 — 낱말마다 돌면 줄 길이의 제곱 시간
 DEFAULT_TRACE = (
     r"\[(?P<dir>TX|RX)\]\s*(?P<name>{prefix}[A-Z0-9_]+)\s*,\s*(?P<kind>REQ|RSP|IND)\b"
     r"(?:.*?\b(?i:token)\s*[=:(]\s*(?P<token>(?:0x[0-9A-Fa-f]+|\d+)\b))?"
-    r"(?:.*?\b(?:Error|(?!.*\bError\(\s*{error_prefix}[A-Z0-9_]+\s*\))[A-Za-z]+)"
+    r"(?:.*?\b(?:Error|[A-Za-z]+(?=\(\s*{error_prefix})(?!.*\bError\(\s*{error_prefix}[A-Z0-9_]+\s*\)))"
     r"\(\s*(?P<result>{error_prefix}[A-Z0-9_]+)\s*\))?",
     # 마스커는 `token=`·`token:` 뒤 긴 값(10진 11자리 이상·16진 9자리 이상, `masking._SHORT_NUM`을 넘는 값)을 `<CRED#n>`으로
     # 바꾸며 닫는 `)`까지 먹는다 — `)`는 선택, 그 값은 token None. 괄호 표기(`Token(…)`)는 마스커가 가리지 않는다
