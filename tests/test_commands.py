@@ -704,14 +704,16 @@ def test_offline_eval_condition_args_and_adoption_rule(tmp_path, monkeypatch):
     assert offline_eval._same_instant("2026-11-14T10:00:00", "2026-11-14T10:00:00+09:00") is None     # 타임존 없음 ≠ 틀림
     env = {"verdict": "match", "reason": None, "primary": "X-001-01", "confident": True, "errors": ["db_search"], "hidden": "mask-error"}
     assert offline_eval._portal_cells(env) == ("match(가림 실패·DB 조회 실패)", "X-001-01", "판정 불가")   # 환경 실패 ≠ 카드 판정
-    fake({"candidates": [{"cause": "X-001-01", "C": 1}], "decision": {"state": "held", "selected": None}})
+    fake({"candidates": [{"cause": "X-001-01", "C": 1}], "decision": {"state": "held", "reason": "no_reference", "selected": None}})
     held = offline_eval.evaluate_item(tmp_path, tmp_path, tmp_path, {"year": 2026}, item, work, "no_time")
-    assert held["adopted"] is None and held["adopted_from"] == "decision"
+    assert held["adopted"] is None and held["adopted_from"] == "decision" and held["held_reason"] == "no_reference"
     fake({"candidates": [], "decision": {"state": "accepted", "selected": {"cause": "Y-001-01"}}})
     acc = offline_eval.evaluate_item(tmp_path, tmp_path, tmp_path, {"year": 2026}, item, work, "no_time")
     assert acc["adopted"] == "Y-001-01"
     s = offline_eval.summarize([held, acc])
     assert (s["accepted_correct"], s["accepted_wrong"], s["held"], s["held_top_right"], s["answer_rate"]) == (0, 1, 1, 1, 0.5)
+    assert s["held_reasons"] == {"no_reference": 1}         # 단계 4: 보류 사유별 수(decision 없는 1위 기준 보류는 `top`)
+    assert offline_eval.summarize([r])["held_reasons"] == {"top": 1}
     first = {**held, "first_analysis": True, "expect": "unresolved"}     # 정답 unresolved인 보류 = 옳은 보류, 첫 분석 보류
     s = offline_eval.summarize([first, {**acc, "first_analysis": True}])
     assert s["correct_hold"] == 1 and s["first_total"] == 2 and s["first_hold_rate"] == 0.5

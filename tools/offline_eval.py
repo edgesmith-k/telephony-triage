@@ -40,7 +40,7 @@
 
 채택(단계 사이 비교용 정의): `analysis.json`에 `decision`이 있으면 `state: accepted`일 때 `selected.cause`, 없으면 1위 후보가
 원인을 갖고 C=1일 때 그 원인. 채택 지표(대조군·표본내·오류 제외, 조건별): 맞는 채택·틀린 채택·보류·답변률(채택÷평가)·옳은 보류
-(정답 unresolved인데 보류)·보류 중 raw 1위가 정답이던 수·기준 위치 정답(기준(`step_anchor.source`가 look_at·log_marker·
+(정답 unresolved인데 보류)·보류 사유별 수(`held_reasons`: `decision.reason`, decision 없으면 `top`)·보류 중 raw 1위가 정답이던 수·기준 위치 정답(기준(`step_anchor.source`가 look_at·log_marker·
 steps_file·step_order)을 쓴 실행에서 잡힌 실패 시각 = `fail_at`. 시각을 읽지 못하면 판정 없음과 항목 경고)·기준 못 잡음
 (`anchor_missed`: look_at 조건이나 `steps_file`로 기준을 요청했는데 기준 없이 돈 실행)·첫 분석 보류율.
 `--portal <dir>`(선택): `<dir>/portal/screener.py`(포털 소스 — 체크아웃이 아니라 `git archive`로 푼 사본)의 `classify`와 실제 카드가
@@ -77,6 +77,7 @@ steps_file·step_order)을 쓴 실행에서 잡힌 실패 시각 = `fail_at`. �
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import functools
 import hashlib
 import json
@@ -281,6 +282,9 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     result["top3"] = [c["cause"] for c in candidates[:3]]
     result["top"] = result["top3"][0] if result["top3"] else None
     result["adopted"], result["adopted_from"] = _adopted(analysis)
+    dec = analysis.get("decision")
+    if isinstance(dec, dict) and dec.get("state") == "held":
+        result["held_reason"] = dec.get("reason")
     sa = analysis.get("step_anchor") or {}
     if sa:
         result["anchor"] = {"source": sa.get("source"), "fail": (sa.get("span") or [None, None])[-1]}
@@ -378,6 +382,8 @@ def summarize(results: list[dict], include_in_sample: bool = False) -> dict:
         "accepted_correct": sum(r["adopted"] == r["expect"] for r in adopted),
         "accepted_wrong": sum(r["adopted"] != r["expect"] for r in adopted),
         "held": len(scored) - len(adopted),
+        # 보류 사유(decision.reason)별 수 — decision 없는 결과(1위 기준 채택)의 보류는 `top`
+        "held_reasons": dict(sorted(Counter(r.get("held_reason") or "top" for r in scored if not r.get("adopted")).items())),
         "answer_rate": rate(len(adopted), len(scored)),
         "correct_hold": sum(not r.get("adopted") and r["expect"] == UNRESOLVED for r in scored),
         "held_top_right": sum(not r.get("adopted") and r["expect"] != UNRESOLVED and r["top"] == r["expect"] for r in scored),
@@ -431,7 +437,8 @@ def render_conditions(results: list[dict], by_condition: dict) -> str:
                          "오류" if r["error"] else r["verdict"], where, *_portal_cells(r.get("portal"))))
         lines += ["", f"[조건 {cond}] 평가 {s['evaluated']}/전체 {s['total']}, 오류 {s['errors']}", *_table(rows), *_notes(runs),
                   f"채택: 맞음 {s['accepted_correct']} · 틀림 {s['accepted_wrong']} · 보류 {s['held']} · 답변률 {_pct(s['answer_rate'])}",
-                  f"보류: 옳은 보류(정답 unresolved) {s['correct_hold']} · 보류 중 raw 1위가 정답 {s['held_top_right']}",
+                  f"보류: 옳은 보류(정답 unresolved) {s['correct_hold']} · 보류 중 raw 1위가 정답 {s['held_top_right']} · 사유 "
+                  + (", ".join(f"{k} {n}" for k, n in s["held_reasons"].items()) or "-"),
                   f"기준 위치 정답 {s['anchor_correct']}/{s['anchor_runs']}(기준을 쓴 실행) · 기준 못 잡음 {s['anchor_missed']} · 첫 분석 보류율 "
                   f"{_pct(s['first_hold_rate'])}({s['first_total']}건)",
                   f"raw: 1위 정확도 {_pct(s['top1_accuracy'])} · 상위 3 포함률 {_pct(s['top3_inclusion'])} · "

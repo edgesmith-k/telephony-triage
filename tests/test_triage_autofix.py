@@ -236,7 +236,55 @@ def test_fit_hold_is_recorded_even_when_lines_cannot_be_rewritten_and_survives_r
     analysis = json.loads((out / "analysis.json").read_text(encoding="utf-8"))
     nxt = issue_post.classify(analysis, None, hold)["next"]
     assert hold == "DATA-001-01" and nxt[0] == "원인 미확정 — 추가 로그·재현 정보 필요", nxt
+    assert analysis["decision"]["state"] == "held"          # 단계 4: 기준 없이 돈 새 JOB은 이미 보류 — 해결책을 싣지 않는다
+    assert nxt == ["원인 미확정 — 추가 로그·재현 정보 필요"], nxt
+    old = {k: v for k, v in analysis.items() if k != "decision"}     # decision 없는 옛 JOB은 예전처럼 보류된 해결책
+    nxt = issue_post.classify(old, None, hold)["next"]
     assert any(x.startswith("해결책(1위 기준, 보류됨): ") and x.endswith("(해결책 검증: 보류(1위 부적합))") for x in nxt), nxt
+
+
+# 기준 줄(글자 일치 1개) — 단계 4에서 1위를 채택하게 하는 실패 지점
+LOOK = "notifyDataEnabledChanged: enabled=false"
+
+
+def test_decision_state_follows_deep_counter_then_fit_hold():
+    """단계 4 상태 전달(Y10 "채택을 심층이 반박" — 모델 능력 검증이 아니다): 기준 줄로 채택된 1위를 ① 심층 분석 의견이 다른
+    원인 ID로 반박하면 `counter`만 붙고 채택은 그대로, ② 탐색 적합성 확인이 보류하면 held/fit_check로 내려가고 counter가
+    없어진다. analysis.json(스키마 검사 통과)·report.md `- 판단:` 줄·Jira 본문 분류가 같이 바뀌고 후보 목록은 그대로다."""
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    import issue_post
+    item = _confirmed()
+    out = tmp("tt-dec-") / "x"
+    root = plugin_root(analyzers={"data": {"skill": "mock-data-analyzer", "when": "ask"}})
+    done = _run(item, out, "--explore", "--look-at", LOOK, root=root)
+    dec = done["decision"]
+    assert dec == {"state": "accepted", "reason": "anchored_top",
+                   "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
+                   "location": {"state": "confirmed", "source": "look_at", "kind": "near"}}, dec
+    assert _report_line(out, "- 판단:") == ("- 판단: 원인 채택 — DATA-001-01 (실패 지점: 담당자가 지정한 기준 줄·확인됨, "
+                                          "자격 검사 전)")
+    assert "(관측된 규칙 일치" not in _report_line(out, "- 분류 후보:")
+    (out / "deep-output.md").write_text("요약: 사용자 설정이 아니라 망 거절로 보인다\n근거:\n"
+                                        "분석 스킬 의견: DATA-001-02 — 망 거절 흔적\n규칙 제안:\n- 없음\n", encoding="utf-8")
+    run_json("triage.py", ["check-output", item["key"], "--for", "deep", "--out", out], root=root)
+    after = json.loads((out / "analysis.json").read_text(encoding="utf-8"))
+    assert after["decision"] == {**dec, "counter": {"cause": "DATA-001-02"}}
+    assert after["candidates"] == done["candidates"]
+    assert _report_line(out, "- 판단:").endswith("자격 검사 전) · 모델 검토에서 반대 근거 있음(DATA-001-02) — 확인 필요")
+    assert issue_post.classify(after, None)["cls"].endswith("DATA-001-01 Data disabled")      # 채택은 그대로
+
+    run_json("triage.py", ["explore", item["key"], "--out", out], root=root)
+    (out / "explore-output.md").write_text("가설 없음: 1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다\n"
+                                           "다음 확인: radio 로그\n", encoding="utf-8")
+    run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", out], root=root)
+    held = json.loads((out / "analysis.json").read_text(encoding="utf-8"))
+    assert held["decision"] == {"state": "held", "reason": "fit_check", "selected": None, "location": dec["location"]}
+    assert held["candidates"] == done["candidates"]
+    assert _report_line(out, "- 판단:") == ("- 판단: 원인 보류 — 탐색 분석 적합성 확인에서 1위가 증상과 맞지 않음. 아래 규칙 "
+                                          "일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다")
+    cl = issue_post.classify(held, None, issue_post.fit_hold_of(out / "check-output.json"))
+    assert cl["cls"] == "data > DATA-001 > 원인 보류 — 탐색 분석 적합성 확인에서 1위가 증상과 맞지 않음", cl
+    assert not any("해결책" in x for x in cl["next"]), cl["next"]
 
 
 def test_prior_skips_output_changed_after_check():

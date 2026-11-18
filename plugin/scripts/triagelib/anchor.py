@@ -138,6 +138,7 @@ class AnchorMixin:
         anchor = {"source": span["source"], "step": span.get("step"), "step_from": span["step_from"],
                   "start": lc.format_ts(span["start"]) if span.get("start") else None, "fail": lc.format_ts(fail),
                   "window": (lc.format_ts(start), lc.format_ts(end))}
+        anchor["location"] = self.location(span)
         if span.get("order"):
             anchor["order"] = span["order"]
         if jira_at:
@@ -150,6 +151,19 @@ class AnchorMixin:
                 self.warn(f"Jira 발생 시각과 {what} 시각이 {gap:.0f}분 다르다 — {'스텝' if what == '실패 스텝' else what} 시각 "
                           f"기준으로 분석했다(끄기: --answer anchor=off){hint}")     # 경고만 낸다. 구간은 바꾸지 않는다
         return anchor
+
+    def location(self, span: dict) -> dict:
+        """실패 지점 `{state, source, kind}`(analysis.json `decision.location`). 기준 줄은 일치 1개면 confirmed, 여럿이면 multiple
+        (ipc·token 일치는 point, 글자 일치는 near). 로그 마커는 FAIL 1개 confirmed·여럿 multiple·START만 found. steps-file 시각·
+        스텝 순서는 found(구간). 앵커가 없으면 이 함수를 부르지 않는다(`NO_LOCATION`)."""
+        src = span["source"]
+        if src == "look_at":
+            look = self.look_result or {}
+            return {"state": "confirmed" if look.get("hits") == 1 else "multiple", "source": src,
+                    "kind": "near" if look.get("how") == "text" else "point"}
+        if src == "log_marker" and span.get("fail") is not None:
+            return {"state": "confirmed" if span.get("n") == 1 else "multiple", "source": src, "kind": "range"}
+        return {"state": "found", "source": src, "kind": "range"}
 
     def look_inputs(self) -> dict:
         """`--look-at`·`--look-note`(선택, 원문)를 이 프로세스에서 이슈 DB 설정대로 가린 값 `{at, note}`(없으면 None).

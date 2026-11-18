@@ -53,6 +53,9 @@ def test_ipc_line_with_reused_token_picks_nearest_and_moves_window():
     assert sa == {"source": "look_at", "span": [None, "2026-09-20T05:33:05.400Z"], "issue_gap_min": 0.9,
                   "look": {"hits": 4, "picked": 4}}                            # 이름+token 같은 REQ·RSP 두 쌍, Jira에 가까운 것
     assert "step" not in sa                                                    # 기준 줄은 TC 스텝이 아니다(P1 8)
+    assert done["decision"]["state"] == "accepted" and done["decision"]["location"] == {      # 일치 여럿 = multiple(채택 유지)
+        "state": "multiple", "source": "look_at", "kind": "point"}
+    assert off["decision"]["reason"] == "no_reference"
     assert done["logs"]["window"] == {"start": "2026-09-20T05:32:35.400Z", "end": "2026-09-20T05:38:05.400Z"}
     assert _causes(done) == ["DATA-001-01"]                                    # IMS(14:30)는 구간 밖
     assert json.loads((job / "match_meta.json").read_text(encoding="utf-8"))["occurred_at"] == "2026-09-20T05:33:05.400Z"

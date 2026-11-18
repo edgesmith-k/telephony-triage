@@ -421,11 +421,20 @@ def test_omit_and_plan_classification():
     assert "* 원인 미확정 — 추가 로그·재현 정보 필요" in body and "* 이슈 DB: 계획만 저장(이슈 DB 미반영)" in body
 
 
+def _without_decision(ws: Workspace) -> dict:
+    """단계 4 이전에 만든 옛 JOB처럼 analysis.json에서 `decision`을 뺀다."""
+    analysis = json.loads(_SAVED["analysis.json"])
+    analysis.pop("decision")
+    (ws.job_dir(KEY) / "analysis.json").write_text(json.dumps(analysis, ensure_ascii=False), encoding="utf-8")
+    return analysis
+
+
 def test_fit_check_hold_marks_resolution_held_without_plan():
     """FR-02(P2): 탐색 적합성 확인이 1위를 보류했으면(check-output 기록 `fit_hold`) 계획 없는 본문의 해결책을 보류로 적고
-    원인 미확정으로 본다 — 맞지 않는 해결책이 `검증됨`으로 나가지 않게. 다른 원인 ID의 기록이면 그대로다."""
+    원인 미확정으로 본다 — 맞지 않는 해결책이 `검증됨`으로 나가지 않게. 다른 원인 ID의 기록이면 그대로다.
+    decision 없는 옛 JOB 기준(단계 4 뒤 새 JOB은 아래 `test_held_decision_*`)."""
     ws = shared()
-    top = json.loads(_SAVED["analysis.json"])["candidates"][0]
+    top = _without_decision(ws)["candidates"][0]
     assert top["cause"] and top.get("resolution"), top
     render(ws, "--fill", fill(ws, FILL))
     assert f"* 해결책: {top['resolution']} (해결책 검증: " in post_md(ws)
@@ -439,6 +448,28 @@ def test_fit_check_hold_marks_resolution_held_without_plan():
     co.write_text(json.dumps({"explore": {"mode": "explore", "fit_hold": "OTHER-001-01"}}), encoding="utf-8")
     render(ws, "--fill", fill(ws, FILL))
     assert f"* 해결책: {top['resolution']} (해결책 검증: " in post_md(ws) and "보류(1위 부적합)" not in post_md(ws)
+
+
+def test_held_decision_reports_cause_held_without_resolution():
+    """단계 4: 계획 없는 본문은 `decision`을 따른다. held(여기선 실패 지점 없음)면 분류가 "원인 보류 — <사유>"이고 1위는 관측된
+    참고로만 적으며 해결책을 싣지 않는다. accepted면 지금처럼 1위와 해결책."""
+    ws = shared()
+    analysis = json.loads(_SAVED["analysis.json"])
+    top = analysis["candidates"][0]
+    assert analysis["decision"] == {"state": "held", "reason": "no_reference", "selected": None,
+                                    "location": {"state": "none", "source": None, "kind": None}}, analysis["decision"]
+    render(ws, "--fill", fill(ws, FILL))
+    body = post_md(ws)
+    assert f"{top['type']} > 원인 보류 — 실패 지점 미정" in body
+    assert f"* 규칙 일치 1위 {top['cause']} {top['title']} — 로그에서 관측된 참고, 이 이슈의 원인으로 채택 안 함" in body
+    assert "해결책" not in body and "* 원인 미확정 — 추가 로그·재현 정보 필요" in body
+    accepted = {**analysis, "decision": {"state": "accepted", "reason": "anchored_top",
+                                         "selected": {k: top[k] for k in ("category", "type", "cause")},
+                                         "location": {"state": "confirmed", "source": "look_at", "kind": "point"}}}
+    (ws.job_dir(KEY) / "analysis.json").write_text(json.dumps(accepted, ensure_ascii=False), encoding="utf-8")
+    render(ws, "--fill", fill(ws, FILL))
+    body = post_md(ws)
+    assert f"* 해결책: {top['resolution']} (해결책 검증: " in body and "원인 보류" not in body
 
 
 def test_stale_or_non_analyze_plan_is_not_used():

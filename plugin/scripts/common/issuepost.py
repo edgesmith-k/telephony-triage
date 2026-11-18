@@ -40,6 +40,11 @@ FORBIDDEN_WORDS = {"delete", "remove", "transition", "assign", "update", "edit",
                    "close", "reopen", "worklog", "set", "resolve"}
 
 SECTIONS = ("PROBLEM", "CAUSE", "NEXT ACTION", "ANALYSIS")
+# analysis.json `decision.reason`(보류) 문구 — report.md `- 판단:`·결론 줄과 Jira 본문 분류가 같이 쓴다
+HELD_REASON = {"no_reference": "실패 지점 미정(담당자 기준 줄·로그 스텝 표시·TC 파일 시각 없음)",
+               "no_candidate": "맞는 후보 없음", "cause_unconfirmed": "유형만 일치, 원인 미확인",
+               "cause_unjudged": "원인 판정 불가(시그니처 시간 초과·오류)",
+               "fit_check": "탐색 분석 적합성 확인에서 1위가 증상과 맞지 않음"}
 SECTION_MAX = {"PROBLEM": 600, "CAUSE": 1000, "NEXT ACTION": 800, "ANALYSIS": 1600}
 BODY_MAX = 4000
 

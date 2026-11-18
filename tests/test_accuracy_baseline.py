@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import subprocess
 import sys
@@ -37,6 +38,12 @@ def current() -> dict:
     return {"by_condition": out["by_condition"], "runs": [{k: r.get(k) for k in ROW} for r in out["items"]]}
 
 
+@functools.lru_cache(maxsize=None)
+def _current() -> dict:
+    """같은 세션의 두 시험이 offline_eval을 한 번만 돌리게(결과는 읽기만 한다)."""
+    return current()
+
+
 def test_generator_output_matches_committed_files():
     result = maf.run(check=True)
     assert not result["missing"] and not result["mismatched"], f"{result} — python3 tests/helpers/make_accuracy_fixtures.py"
@@ -44,8 +51,23 @@ def test_generator_output_matches_committed_files():
 
 def test_baseline_matches_current_code():
     assert BASELINE.is_file(), "baseline.json 없음 — python3 tests/test_accuracy_baseline.py --update"
-    assert current() == json.loads(BASELINE.read_text(encoding="utf-8")), \
+    assert _current() == json.loads(BASELINE.read_text(encoding="utf-8")), \
         "지금 코드의 요약이 기준값과 다르다 — 의도한 변화면 python3 tests/test_accuracy_baseline.py --update 후 diff를 PR에 보인다"
+
+
+def test_stage4_holds_without_reference_and_adopts_anchored_top():
+    """단계 4 완료 기준: 기준(실패 지점)이 없는 no_time·time 조건은 채택 0(전부 보류, 사유 기록), 기준 줄이 있는 look_at은
+    지금처럼 원인 있는 1위를 채택한다. raw 1위·상위 3·판정은 판단과 무관하다 — 기준값(baseline.json)과 같음은 위 시험이 본다."""
+    now = _current()
+    runs = {c: [r for r in now["runs"] if r["condition"] == c] for c in ("no_time", "time", "look_at")}
+    assert runs["no_time"] and runs["time"] and runs["look_at"]
+    assert [r["key"] for c in ("no_time", "time") for r in runs[c] if r["adopted"] is not None] == []
+    assert all(r["adopted"] == r["top"] for r in runs["look_at"])
+    for cond in ("no_time", "time"):
+        s = now["by_condition"][cond]
+        assert (s["accepted_correct"], s["accepted_wrong"], s["held"]) == (0, 0, s["evaluated"]), (cond, s)
+        assert set(s["held_reasons"]) <= {"no_reference", "no_candidate", "cause_unconfirmed", "cause_unjudged"}, s
+        assert s["held_reasons"].get("no_reference"), s
 
 
 if __name__ == "__main__" and "--update" in sys.argv:

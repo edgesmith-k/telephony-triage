@@ -28,7 +28,8 @@ def _top_label(candidates: list) -> str | None:
 _ref_label = events.ref_label   # report.md 전용 `f<순번>:L<줄>`
 # 기준 줄을 못 찾았을 때 분석 구간을 정한 출처(`step_anchor.source`) · 후보가 여럿일 때 고른 방식(`common.lookat.pick`)
 _SOURCE_LABEL = {"log_marker": "로그 스텝 마커", "steps_file": "steps-file 시각", "step_order": "steps-file 스텝 순서",
-                 "issue": "Jira 발생 시각", "symptom_scan": "증상 시각", "none": "로그 전체", None: "Jira 발생 시각"}
+                 "issue": "Jira 발생 시각", "symptom_scan": "증상 시각", "none": "로그 전체", None: "Jira 발생 시각",
+                 "look_at": "담당자가 지정한 기준 줄", "comment": "Jira 코멘트", "model": "모델 추정"}
 _PICK_LABEL = {"nearest": "발생 시각에 가장 가까운 것", "last": "기준 시각이 없어 마지막 것"}
 # 결론·해결책 줄 모양 — 렌더(아래)와 check-output 적합성 확인 보류 재작성(`output._fit_hold`)이 같이 쓴다. 결론 줄은 `. 다음:`
 # 앞까지가 결론이다(포털이 그 앞만 남긴다 — 그 앞에 Step 7을 쓰지 않는다)
@@ -36,6 +37,27 @@ CONCLUSION_PREFIX = "- 결론: "
 RESOLUTION_PREFIX, RESOLUTION_CHECK = "- 해결책: ", "   해결책 검증: "
 FIT_HOLD_CONCLUSION = "1위 {cause}가 증상과 맞지 않아 보류(탐색 분석 참조). 다음: Step 7에서 보류를 고르거나 근거 로그 확인"
 FIT_HOLD_RESOLUTION, FIT_HOLD_CHECK = "- 해결책(1위 기준, 보류됨): ", "보류(1위 부적합)"
+# 판단 줄(analysis.json `decision`, 단계 4) — 렌더와 check-output(보류·반대 의견으로 고침)이 같이 쓴다
+DECISION_PREFIX = "- 판단: "
+HELD_REASON = issuepost.HELD_REASON
+_LOCATION_LABEL = {"confirmed": "확인됨", "found": "찾음(구간)", "multiple": "여러 곳", "none": "없음"}
+HELD_TAIL = " (관측된 규칙 일치 — 채택 안 함)"
+
+
+def decision_line(dec: dict, has_candidates: bool) -> str:
+    """`- 판단:` 줄. 채택은 실패 지점 출처·상태와 "자격 검사 전", 보류는 사유와(후보가 있으면) 규칙 일치를 채택하지 않았다는 말.
+    `counter`(심층 분석이 다른 원인을 냄)가 있으면 꼬리를 붙인다."""
+    if dec.get("state") == "accepted":
+        loc = dec.get("location") or {}
+        where = f"{_SOURCE_LABEL.get(loc.get('source'), loc.get('source'))}·{_LOCATION_LABEL.get(loc.get('state'), loc.get('state'))}"
+        text = f"원인 채택 — {(dec.get('selected') or {}).get('cause')} (실패 지점: {where}, 자격 검사 전)"
+    else:
+        text = f"원인 보류 — {HELD_REASON.get(dec.get('reason'), dec.get('reason'))}" + (
+            ". 아래 규칙 일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다" if has_candidates else "")
+    counter = (dec.get("counter") or {}).get("cause")
+    if counter:
+        text += f" · 모델 검토에서 반대 근거 있음({counter}) — 확인 필요"
+    return DECISION_PREFIX + text
 
 
 def dumps(result: dict) -> str:
@@ -586,6 +608,17 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
 ANALYSIS_SCHEMA =SCRIPTS.parent / "schemas" / "output" / "analysis.schema.json"
 
 
+def _decision_mismatch(result: dict) -> str | None:
+    """스키마로 못 쓰는 불변식: accepted면 `selected`가 `candidates[0]`의 category·type·cause와 같다."""
+    dec = result.get("decision")
+    if not isinstance(dec, dict) or dec.get("state") != "accepted":
+        return None
+    top = (result.get("candidates") or [{}])[0]
+    if {k: top.get(k) for k in ("category", "type", "cause")} != dec.get("selected"):
+        return "[telephony-triage] analysis 스키마 위반: decision/selected: candidates[0]과 다르다"
+    return None
+
+
 def schema_violation(result: dict) -> str | None:
     """`TT_SCHEMA_CHECK=1`(테스트·CI)일 때만 run 출력을 `schemas/output/analysis.schema.json`으로 검사한다.
 
@@ -603,7 +636,7 @@ def schema_violation(result: dict) -> str | None:
     validator = jsonschema.Draft202012Validator(json.loads(ANALYSIS_SCHEMA.read_text(encoding="utf-8")))
     errors = sorted(validator.iter_errors(result), key=lambda e: [str(x) for x in e.absolute_path])
     if not errors:
-        return None
+        return _decision_mismatch(result)
     err = errors[0]
     where = "/".join(str(x) for x in err.absolute_path) or "(최상위)"
     return f"[telephony-triage] analysis 스키마 위반: {where}: {err.message}"
@@ -672,6 +705,7 @@ class ReportMixin:
             "existing": self.out.get("existing"), "open_prs": self.out.get("open_prs"),
             "build": self.out.get("build"),
             "logs": core["logs"],
+            "decision": core.get("decision"),
             "candidates": candidates,
             "pending_causes": core["pending_causes"],
             "unjudged": core.get("unjudged"),
@@ -798,14 +832,21 @@ class ReportMixin:
             lines += text
         return lines
 
-    def _conclusion(self, cands: list, unjudged: dict, observation: dict | None = None) -> str:
+    def _conclusion(self, cands: list, unjudged: dict, observation: dict | None = None, decision: dict | None = None) -> str:
         """결론 한 줄(후보 줄 바로 앞, `CONCLUSION_PREFIX` 뒤 글): 분류 결과 한 문장과 다음 행동. 판정은 아래 줄들과 같다(새 정보 없음) — 엔지니어가 이 줄만
         보고 다음 행동을 고르게. 규칙 일치 수준은 진단 확신이 아니다. 관측 불완전(`observation`)이면 후보 없음·원인 미확인
-        결론에 "못 읽은 줄이 있다"와 새 유형·원인 등록 전 확인을 붙인다(막지는 않는다, FR-03)."""
+        결론에 "못 읽은 줄이 있다"와 새 유형·원인 등록 전 확인을 붙인다(막지는 않는다, FR-03). 1위에 원인이 있어도 판단이 보류
+        (`decision.state: held`, 실패 지점 없음)면 1위를 원인으로 쓰지 않고 보류로 맺는다(단계 4)."""
         nxt = ("기록 없음(분석 전용)" if self.analysis_only else "아래 후보를 보고 Step 7에서 분류를 확정하거나 다른 원인을 고른다")
         if cands:
             top = cands[0]
             label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
+            if top["cause"] and (decision or {}).get("state") == "held":
+                held = HELD_REASON.get(decision.get("reason"), decision.get("reason"))
+                step = ("기록 없음(분석 전용)" if self.analysis_only else
+                        "근거 로그로 확인하고 Step 7에서 원인을 고르거나 원인 미확정으로 기록")
+                return (f"원인 보류 — {held}. 규칙 일치 1위 {top['cause']} {top['title']}(일치 수준 {label})는 로그에서 관측된 "
+                        f"참고이고 이 이슈의 원인으로 채택하지 않음. 다음: {step}")
             if top["cause"]:
                 return (f"{top.get('category')} > {top['type']} > {top['cause']} {top['title']} — 규칙 일치 {label}"
                         f"(진단 확신 아님). 다음: {nxt}")
@@ -924,7 +965,10 @@ class ReportMixin:
         cands = r["candidates"]
         unjudged = r.get("unjudged") or {}
         # 한 문장 결론(종합 리뷰 A): 머리 알림(분석 전용·읽기 전용·실패 스텝·시계) 다음, 후보 줄 바로 앞. must_show 아님(새 정보 없음)
-        cause_l.append(CONCLUSION_PREFIX + self._conclusion(cands, unjudged, r.get("observation")))
+        dec = r.get("decision")
+        if dec:      # 판단 줄(단계 4): 결론 바로 앞. 옛 캐시·결과처럼 decision이 없으면 줄이 없다
+            cause_l.append(decision_line(dec, bool(cands)))
+        cause_l.append(CONCLUSION_PREFIX + self._conclusion(cands, unjudged, r.get("observation"), dec))
         if cands:
             top = cands[0]
             label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
@@ -937,7 +981,8 @@ class ReportMixin:
             cause_l.append(f"- 분류 후보: {top.get('category')} > {top['type']} > {cause} "
                          f"(규칙 일치 점수 {top['score']}, 일치 조건 {top.get('matched_conditions', len(top['evidence']))}개, "
                          f"일치 수준 {label} — 진단 확신도 아님"
-                         f"{'' if top['C'] else (', 유형 일치·원인 판정 불가' if top.get('_cause_unjudged') else ', 유형 일치·원인 미확인')})")
+                         f"{'' if top['C'] else (', 유형 일치·원인 판정 불가' if top.get('_cause_unjudged') else ', 유형 일치·원인 미확인')})"
+                         f"{HELD_TAIL if (dec or {}).get('state') == 'held' else ''}")
             masked = "" if self.masker().off else "마스킹, "       # 끔 DB면 "마스킹"이라 쓰지 않는다
             ana.append(f"- 근거 로그 ({masked}슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
             ana += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ×{e['_count']}" if e.get("_count") else "")

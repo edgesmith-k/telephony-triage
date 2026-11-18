@@ -28,6 +28,7 @@ import sys
 from pathlib import Path
 
 from common import evidence, masking, provenance, shown
+from common.fixtures import CAUSE_ID
 from common.exitcodes import CHECK_FAILED, OK, USAGE
 
 from . import report as rep
@@ -64,6 +65,8 @@ SKILL_LABEL = "근거 원문 검사(events.json 기준)"
 WARN_REWRITE = "경고: report.md 줄을 고치지 못했다"
 WARN_HOLD = "경고: 1위 보류를 report.md {what}에 쓰지 못했다 — check-output 기록(fit_hold)·Jira 본문은 보류로 남긴다"
 HOLD_KEEP = ("fit_hold", "fit_hold_unwritten")     # 탐색 기록을 새로 써도 이어받는다(보류로 고친 줄은 다음 run까지 남는다)
+WARN_DECISION = "경고: analysis.json 판단(decision)을 고치지 못했다({why})"
+OPINION_ID = re.compile(rf"\s*({CAUSE_ID})\b")      # 분석 스킬 의견 `<원인 ID> — <근거>`의 앞 ID
 
 
 class _Stop(Exception):
@@ -380,6 +383,36 @@ def _hold_lines(report: Path, cause: str) -> list[str]:
     return failed
 
 
+def _decision_update(job: Path, analysis: dict, *, hold: bool = False, opinion: str | None = None) -> None:
+    """analysis.json `decision`을 고친다(단계 4): 탐색 적합성 확인 보류(`hold`)면 채택 → held/fit_check(counter 없앰), 심층 분석
+    의견의 원인 ID가 채택 원인과 다르면 `counter`만 붙인다(상태·사유 그대로). 이미 보류면 사유를 바꾸지 않는다(앞 사유가 우선).
+    decision 없는 옛 JOB은 그대로. 원자 쓰기(TT_SCHEMA_CHECK면 스키마 검사 뒤) + report.md `- 판단:` 줄 재작성."""
+    dec = analysis.get("decision")
+    if not isinstance(dec, dict) or dec.get("state") != "accepted":
+        return
+    if hold:
+        new = {"state": "held", "reason": "fit_check", "selected": None, "location": dec.get("location")}
+    else:
+        m = OPINION_ID.match(opinion or "")
+        selected = (dec.get("selected") or {}).get("cause")
+        if not m or m.group(1) == selected or (dec.get("counter") or {}).get("cause") == m.group(1):
+            return
+        new = {**dec, "counter": {"cause": m.group(1)}}
+    result = rep.fit({**analysis, "decision": new})     # counter가 붙어도 4KB 안(판단은 줄이지 않는다)
+    violation = rep.schema_violation(result)
+    if violation:
+        print(WARN_DECISION.format(why=violation), file=sys.stderr)
+        return
+    try:
+        _write_atomic(job / "analysis.json", (rep.dumps(result) + "\n").encode("utf-8"))
+    except OSError:
+        print(WARN_DECISION.format(why="쓰기 실패"), file=sys.stderr)
+        return
+    cands = bool(analysis.get("candidates"))
+    if not rep.rewrite_line(job / "report.md", rep.DECISION_PREFIX, [rep.decision_line(new, cands)]):
+        print(WARN_REWRITE, file=sys.stderr)
+
+
 def _skipped(args, job: Path, purpose: str, env: dict) -> int:
     report, prefix = job / "report.md", PREFIX[purpose]
     reason = masking.mask_brief(args.skipped, 120)
@@ -516,6 +549,10 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     unwritten = _hold_lines(report, hold) if hold else []
     if unwritten:
         print(WARN_HOLD.format(what="·".join(unwritten)), file=sys.stderr)
+    if hold:
+        _decision_update(job, analysis, hold=True)
+    elif purpose == "deep":
+        _decision_update(job, analysis, opinion=fields.get("분석 스킬 의견"))
 
     counts = {k: (res or {}).get(k, 0) for k in ("fabricated", "weak", "raw")}
     n = (res or {}).get("n", 0)
