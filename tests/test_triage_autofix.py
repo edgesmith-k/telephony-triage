@@ -20,7 +20,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import SAMPLE, parse_calls, plugin_root, run, run_json, tmp  # noqa: E402
+from runner import SAMPLE, padded_log, parse_calls, plugin_root, run, run_json, tmp  # noqa: E402
 from workspace import Workspace  # noqa: E402
 
 LABELSET = REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"
@@ -254,7 +254,8 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
     없어진다. analysis.json(스키마 검사 통과)·report.md `- 판단:` 줄·Jira 본문 분류가 같이 바뀌고 후보 목록은 그대로다."""
     sys.path.insert(0, str(plugin_root() / "scripts"))
     import issue_post
-    item = _confirmed()
+    item = _confirmed()       # 로그 끝에 RILJ·꼬리 줄을 붙여 증상의 '없어야 할 줄' 확인을 채운다(그래야 채택 — 단계 5-1 리뷰 P1-2)
+    item = {**item, "logs": [str(padded_log((LABELSET.parent / p).resolve())) for p in item["logs"]]}
     out = tmp("tt-dec-") / "x"
     root = plugin_root(analyzers={"data": {"skill": "mock-data-analyzer", "when": "ask"}})
     done = _run(item, out, "--explore", "--look-at", LOOK, root=root)
@@ -412,8 +413,7 @@ def test_fit_hold_rewrites_report_obligation_and_reuse_keeps_decision(monkeypatc
     sys.path.insert(0, str(plugin_root() / "scripts"))
     from common import shown
     ws = Workspace()
-    log = tmp("tt-dec-shown-") / "roaming.log"
-    log.write_bytes((REPO / "tests/fixtures/logs/data-roaming-disabled.log").read_bytes())
+    log = padded_log(REPO / "tests/fixtures/logs/data-roaming-disabled.log", tmp("tt-dec-shown-") / "roaming.log")   # P1-2: 채택되게
     args = ["run", "MOCK-9005", "--dry-run", "--issue-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
             "--logs", log, "--code", "skip", "--explore", "--look-at",
             # 실패 줄을 시각째 붙여 넣는다 — 같은 줄이 두 번(10초 간격) 있어 시각으로 한 곳을 고른다(단계 5 §8-5)

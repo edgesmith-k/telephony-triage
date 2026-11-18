@@ -18,7 +18,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
-from runner import SAMPLE, plugin_root, run, run_json, tmp  # noqa: E402
+from runner import SAMPLE, padded_log, plugin_root, run, run_json, tmp  # noqa: E402
 from triagelib.report import fit, dumps  # noqa: E402
 
 KEY = "MOCK-9001"
@@ -48,7 +48,7 @@ def _trace(job: Path) -> list[dict]:
 def test_ipc_line_with_reused_token_picks_nearest_and_moves_window():
     off, _ = _offline("off")
     assert "IMS-001-01" in _causes(off) and "step_anchor" not in off              # 오늘의 동작(Jira ±5분에 둘 다)
-    done, job = _offline("on", "--look-at", LINE)
+    done, job = _offline("on", "--look-at", LINE, logs=(padded_log(LOG),))    # '없어야 할 줄' 확인을 채운 사본(채택 경로, P1-2)
     sa = done["step_anchor"]
     assert sa == {"source": "look_at", "span": [None, "2026-09-20T05:33:05.400Z"], "issue_gap_min": 0.9,
                   "look": {"hits": 4, "picked": 4}}                            # 이름+token 같은 REQ·RSP 두 쌍, Jira에 가까운 것

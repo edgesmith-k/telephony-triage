@@ -229,6 +229,20 @@ def tmp(prefix: str = "tt-test-") -> Path:
     return d
 
 
+def padded_log(src: Path, dest: Path | None = None) -> Path:
+    """짧은 합성 로그 끝에 RILJ 줄(+30초)과 꼬리 줄(+90초)을 붙인 사본. 자격 검사의 '없어야 할 줄' 확인(§8-6: RILJ 태그 수집,
+    마지막 근거 뒤 window_sec(60초)만큼 로그가 이어짐)을 채워 채택 경로를 시험할 때 쓴다(단계 5-1 리뷰 P1-2)."""
+    from datetime import datetime, timedelta
+    lines = src.read_text(encoding="utf-8").splitlines()
+    last = datetime.strptime(lines[-1][:18], "%m-%d %H:%M:%S.%f")
+    at = lambda s: (last + timedelta(seconds=s)).strftime("%m-%d %H:%M:%S.%f")[:18]  # noqa: E731
+    lines += [f"{at(30)}  1234  1260 D RILJ    : [0901]> GET_CURRENT_CALLS [PHONE0]",
+              f"{at(90)}  1234  1260 D RILJ    : [0901]< GET_CURRENT_CALLS {{}} [PHONE0]"]
+    dest = dest or tmp("tt-padded-") / src.name
+    dest.write_text("".join(x + "\n" for x in lines), encoding="utf-8", newline="\n")
+    return dest
+
+
 def cleanup_tmp() -> None:
     """`tmp()`가 만든 디렉터리를 모두 지운다. `TT_KEEP_TMP=1`이면 남긴다."""
     if os.environ.get("TT_KEEP_TMP") == "1":
