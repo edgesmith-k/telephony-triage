@@ -350,3 +350,17 @@ def test_ipc_name_and_token_must_be_one_pair():
 def test_fullwidth_token_is_format_error(job):
     res = _check(job, _output(clues=[_clue(5, "VIPC_PDN_CONNECT", "１２３", "VIPC_PDN_CONNECT (token=123)")]), 1)
     assert "clues[0].token" in res["detail"]
+
+
+def test_ipc_pair_skips_numbers_of_other_shape():
+    issue = dict(ISSUE, comments=[{"body": "VIPC_SETUP_DATA 2회 재시도 후 (token=0x0de) 실패"},
+                                  {"body": "VIPC_SETUP_DATA [slot 1] (token=0x0de) 실패"},
+                                  {"body": "VIPC_A_REQ (token=0x111) 응답 후 VIPC_B_REQ (token=0x222) 응답 없음"}])
+    job = tmp("tt-problem-") / KEY
+    _problem(job, issue, tc=None)
+    out = _output(rounds={"count": 1, "last_from_comment": None, "same_failure": "unknown"}, clues=[
+        _clue(1, "VIPC_SETUP_DATA", "0x0de", "VIPC_SETUP_DATA 2회 재시도 후 (token=0x0de)"),
+        _clue(2, "VIPC_SETUP_DATA", "0x0de", "VIPC_SETUP_DATA [slot 1] (token=0x0de)"),
+        _clue(3, "VIPC_A_REQ", "0x222", "VIPC_A_REQ (token=0x111) 응답 후 VIPC_B_REQ (token=0x222)")])
+    res = _check(job, out, 0)
+    assert res["clues"] == 2 and res["dropped_reasons"] == ["이름 뒤 첫 token이 그 token이 아님"]

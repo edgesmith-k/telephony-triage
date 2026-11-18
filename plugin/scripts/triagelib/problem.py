@@ -170,7 +170,8 @@ def _fail_lines(text: str, cfg: dict, masker, fail_name: str | None = None) -> l
 
     first = [i for i, line in enumerate(rows) if any(p.search(line) for p in compiled) or verdict(line)
              or (fail_name and fail_name in _fold(line) and FAIL_WORD.search(line))]
-    rest = [i for i, line in enumerate(rows) if FAIL_WORD.search(line) and i not in set(first)]
+    taken = set(first)
+    rest = [i for i, line in enumerate(rows) if FAIL_WORD.search(line) and i not in taken]
     keep: set[int] = set()
     used = skipped = 0
     for i in first + rest:
@@ -419,12 +420,13 @@ def _names(text: str) -> set[str]:
 
 
 def _paired(name: str, token: str, quote: str) -> bool:
-    """`ipc`: 인용에서 그 이름 뒤에 처음 나오는 token 값이 준 token인가(이름과 token이 같은 메시지의 짝)."""
+    """`ipc`: 인용에서 그 이름 뒤에 처음 나오는, 준 token과 같은 모양(16진/10진)의 값이 준 token인가(같은 메시지의 짝).
+    모양이 다른 숫자(`2회 재시도`·`[slot 1]`)는 건너뛴다."""
     want = _token_value(token)
     for m in QUOTE_NAME.finditer(quote):
         if name in _names(m.group()):
-            t = QUOTE_TOKEN.search(quote, m.end())
-            if t and _token_value(t.group()) == want:
+            same = (v for v in (_token_value(t.group()) for t in QUOTE_TOKEN.finditer(quote, m.end())) if v[0] == want[0])
+            if next(same, None) == want:
                 return True
     return False
 
