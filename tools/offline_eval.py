@@ -176,12 +176,13 @@ def _recorded_keys(db: Path) -> frozenset[str]:
 
 
 def _same_instant(a, b) -> bool | None:
-    """같은 시각인가. 읽지 못하면 None(판정 없음 — 틀림으로 세지 않는다). `Z`는 3.10도 읽게 바꾼다(`logtime.parse_ts`와 같은 방식)."""
+    """같은 시각인가. 읽지 못하거나 타임존이 없으면 None(판정 없음 — 틀림으로 세지 않는다). `Z`는 3.10도 읽게 바꾼다
+    (`logtime.parse_ts`와 같은 방식)."""
     try:
-        return (datetime.fromisoformat(str(a).replace("Z", "+00:00"))
-                == datetime.fromisoformat(str(b).replace("Z", "+00:00")))
+        x, y = (datetime.fromisoformat(str(v).replace("Z", "+00:00")) for v in (a, b))
     except (TypeError, ValueError):
         return None
+    return None if x.tzinfo is None or y.tzinfo is None else x == y
 
 
 def _adopted(analysis: dict) -> tuple[str | None, str]:
@@ -287,7 +288,7 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     if sa.get("source") in ANCHORED and item.get("fail_at"):
         result["anchor_ok"] = _same_instant(result["anchor"]["fail"], item["fail_at"])
         if result["anchor_ok"] is None:
-            anchor_note = f"기준 위치 판정 없음(시각 해석 실패: {result['anchor']['fail']} / {item['fail_at']})"
+            anchor_note = f"기준 위치 판정 없음(시각 해석 실패·타임존 없음: {result['anchor']['fail']} / {item['fail_at']})"
     elif item.get("fail_at") and (condition == "look_at" or item.get("steps_file")):
         result["anchor_missed"] = True      # 기준을 요청했는데 기준 없이 돌았다(못 찾음)
     # 정답·미스를 단정하지 못하는 이유 [(오류 문구, 오탐 확정 때 경고 문구)]: 판정 불가 유형·원인(unjudged)과 관측 불완전
@@ -410,8 +411,11 @@ def _portal_cells(p: dict | None) -> tuple[str, str, str]:
         return "미측정", "미측정", "미측정"
     if p.get("error"):
         return "오류", "오류", "오류"
-    return (p["verdict"] + (f"({p['reason']})" if p.get("reason") else ""), p.get("primary") or "-",
-            "예" if p["confident"] else "아니오")
+    # 평가 PC의 환경 문제(포털 쪽 마스킹 호출 실패·이슈 DB 조회 실패)는 카드 판정처럼 보이지 않게 표시하고 확실한 일치는 판정 불가
+    env = ((["가림 실패"] if "mask-error" in str(p.get("hidden") or "") else [])
+           + (["DB 조회 실패"] if "db_search" in (p.get("errors") or []) else []))
+    verdict = p["verdict"] + (f"({p['reason']})" if p.get("reason") else "") + (f"({'·'.join(env)})" if env else "")
+    return verdict, p.get("primary") or "-", "판정 불가" if env else "예" if p["confident"] else "아니오"
 
 
 def render_conditions(results: list[dict], by_condition: dict) -> str:

@@ -701,6 +701,9 @@ def test_offline_eval_condition_args_and_adoption_rule(tmp_path, monkeypatch):
     assert offline_eval.summarize([r])["anchor_missed"] == 1
     assert offline_eval._same_instant("2026-11-14T01:00:00Z", "2026-11-14T10:00:00+09:00") is True    # Z (3.10도)
     assert offline_eval._same_instant("bad", "2026-11-14T10:00:00+09:00") is None                     # 못 읽음 ≠ 틀림
+    assert offline_eval._same_instant("2026-11-14T10:00:00", "2026-11-14T10:00:00+09:00") is None     # 타임존 없음 ≠ 틀림
+    env = {"verdict": "match", "reason": None, "primary": "X-001-01", "confident": True, "errors": ["db_search"], "hidden": "mask-error"}
+    assert offline_eval._portal_cells(env) == ("match(가림 실패·DB 조회 실패)", "X-001-01", "판정 불가")   # 환경 실패 ≠ 카드 판정
     fake({"candidates": [{"cause": "X-001-01", "C": 1}], "decision": {"state": "held", "selected": None}})
     held = offline_eval.evaluate_item(tmp_path, tmp_path, tmp_path, {"year": 2026}, item, work, "no_time")
     assert held["adopted"] is None and held["adopted_from"] == "decision"
