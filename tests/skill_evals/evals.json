@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=병합 2(72 +1 뒤 병합해줘·75 +1 관문), H=모듈 스킬 레포·출력 검사 4(76~79), W9=setup 2(58 재점검 doctor 표·80 첫 사용자 setup), FL=성공 흐름 제안 3(81 새 원인 flow_step·82 set-flow-step·83 put-flow 문구 고치기), FT=적합성 확인·반복 금지 3(84~86: 84 확신 일치 짧은 판단·85 부적합 보류·86 재실행 prior), PB=문제 파악 16(87~102: --problem-only, 시드 DB, 기대값 `problem_expect`를 grade.py checks_pb가 problem.json과 대조 — 첫 유형·허용 밖 유형/단서 실패·회차 세 칸. 98~102는 리뷰어가 줄거리·기대값을 정함), PBH=문제 파악 처음 보는 세트 8(103~110: 지시문 작성자가 보지 않은 글타래, 채점은 PB와 같음 — 지시문을 고칠 때 열지 않는다). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=병합 2(72 +1 뒤 병합해줘·75 +1 관문), H=모듈 스킬 레포·출력 검사 4(76~79), W9=setup 2(58 재점검 doctor 표·80 첫 사용자 setup), FL=성공 흐름 제안 3(81 새 원인 flow_step·82 set-flow-step·83 put-flow 문구 고치기), FT=적합성 확인·반복 금지 3(84~86: 84 확신 일치 짧은 판단·85 부적합 보류·86 재실행 prior), PB=문제 파악 18(87~102·104·109: --problem-only, 시드 DB, 기대값 `problem_expect`를 grade.py checks_pb가 problem.json과 대조 — 첫 유형·허용 밖 유형/단서 실패·회차 세 칸. 98~102는 리뷰어가 줄거리·기대값을 정함), PBH=문제 파악 처음 보는 세트 6(103·105~108·110: 지시문 작성자가 보지 않은 글타래 — 104·109는 지시문을 고칠 때 보아 PB로 옮김, 채점은 PB와 같음 — 지시문을 고칠 때 열지 않는다). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -4112,7 +4112,7 @@
       "id": 100,
       "name": "problem-two-tokens-renamed-ipc",
       "batch": "PB",
-      "design": "문제 파악(분석 정확도 단계 2b, analyze --problem-only, reference/problem.md). 줄거리·기대값 출처는 단계 2b 리뷰. 리뷰 제안 3: 한 코멘트에 token 둘(요청 0x3e0 정상·응답 0x3e1 실패), AP 이름(SETUP_DATA_CALL)과 CP 이름(VIPC_DATA_CALL_*)이 다름. AP 이름에 CP token을 붙인 단서는 기대·허용 밖이라 실패",
+      "design": "문제 파악(분석 정확도 단계 2b, analyze --problem-only, reference/problem.md). 줄거리·기대값 출처는 단계 2b 리뷰. 리뷰 제안 3: 한 코멘트에 token 둘(요청 0x3e0 정상·응답 0x3e1 실패), AP 이름(SETUP_DATA_CALL)과 CP 이름(VIPC_DATA_CALL_*)이 다름. AP 이름에 CP token을 붙인 단서와 정상 처리된 0x3e0 단서는 기대·허용 밖이라 실패",
       "prompt": "MOCK-9100 문제 파악만 해줘 --problem-only",
       "setup": {
         "db": "seed",
@@ -4123,13 +4123,13 @@
       "user_replies": [
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "DATA-003, 3번 VIPC_DATA_CALL_CNF 0x3e1·2번 AP 오류 줄, (허용) 3번 VIPC_DATA_CALL_REQ 0x3e0.",
+      "expected_output": "DATA-003, 3번 VIPC_DATA_CALL_CNF 0x3e1·2번 AP 오류 줄, (허용) 2번 AP 요청 줄. 3번 VIPC_DATA_CALL_REQ 0x3e0은 정상 처리라고 적혀 단서가 아니다(사용자 규칙 11/18: 정상 token은 단서로 쓰지 않는다).",
       "assertions": [
         "문제 파악만 했다: triage.py problem → problem-input.md 읽기 → check-output --for problem으로 problem.json이 남았고 triage.py run은 부르지 않았다",
         "symptom.types 첫 칸이 DATA-003이고 그 밖의 유형은 없다",
         "first_analysis가 false다",
         "rounds가 count 1·last_from_comment null 또는 1·same_failure unknown다",
-        "clues가 3번 VIPC_DATA_CALL_CNF token 0x3e1(ipc) side cp, 2번 로그 줄 'SETUP_DATA_CALL error 2'(log_line) side ap이다(더 있어도 되는 것: 3번 VIPC_DATA_CALL_REQ token 0x3e0(ipc) side cp, 2번 로그 줄 'SETUP_DATA_CALL,reason=NORMAL'(log_line) side ap) — 그 밖의 단서는 없다",
+        "clues가 3번 VIPC_DATA_CALL_CNF token 0x3e1(ipc) side cp, 2번 로그 줄 'SETUP_DATA_CALL error 2'(log_line) side ap이다(더 있어도 되는 것: 2번 로그 줄 'SETUP_DATA_CALL,reason=NORMAL'(log_line) side ap) — 그 밖의 단서는 없다",
         "검사에서 버린 단서(dropped)가 0이다"
       ],
       "problem_expect": {
@@ -4167,14 +4167,6 @@
           }
         ],
         "allowed_clues": [
-          {
-            "comment": 3,
-            "kind": "ipc",
-            "name": "VIPC_DATA_CALL_REQ",
-            "token": "0x3e0",
-            "side": "cp",
-            "stale": false
-          },
           {
             "comment": 2,
             "kind": "log_line",
@@ -4383,8 +4375,8 @@
     {
       "id": 104,
       "name": "holdout-two-retests-same-step-new-symptom",
-      "batch": "PBH",
-      "design": "문제 파악 처음 보는 세트(PBH, analyze --problem-only). 지시문을 고칠 때 열지 않는다 — 열고 고쳤으면 이 사례는 PB로 옮기고 새 PBH를 만든다. 재는 것: 재시험 두 번(요청 낱말 없음), 마지막 회차는 같은 스텝·다른 증상, 마지막 회차 결과에는 단서가 없고 앞 회차에만 token",
+      "batch": "PB",
+      "design": "문제 파악 개발용(PB, analyze --problem-only). PBH였다가 pbh-1~8 결과를 보고 지시문을 고쳐 PB로 옮겼다(이름의 holdout은 지난 실행 디렉토리 이름과 맞추려고 둔다). 재는 것: 재시험 두 번(요청 낱말 없음), 마지막 회차는 같은 스텝·다른 증상, 마지막 회차 결과에는 단서가 없고 앞 회차에만 token",
       "prompt": "MOCK-9104 문제 파악만 해줘 --problem-only",
       "setup": {
         "db": "seed",
@@ -4395,7 +4387,7 @@
       "user_replies": [
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "problem_expect 참조(PBH — 지시문 작성 때 보지 않는다).",
+      "expected_output": "problem_expect 참조(PBH에서 옮긴 개발용).",
       "assertions": [
         "문제 파악만 했다: triage.py problem → problem-input.md 읽기 → check-output --for problem으로 problem.json이 남았고 triage.py run은 부르지 않았다",
         "symptom.types 첫 칸이 CALL-002이고 그 밖의 유형은 없다",
@@ -4704,8 +4696,8 @@
     {
       "id": 109,
       "name": "holdout-ap-module-chain-reversed",
-      "batch": "PBH",
-      "design": "문제 파악 처음 보는 세트(PBH, analyze --problem-only). 지시문을 고칠 때 열지 않는다 — 열고 고쳤으면 이 사례는 PB로 옮기고 새 PBH를 만든다. 재는 것: AP 모듈 사이 세 번 넘김(call→IMS→data→network→CP)과 영어 섞임, 중간 결론이 뒤에서 뒤집힘, CP token 둘 중 실패 하나",
+      "batch": "PB",
+      "design": "문제 파악 개발용(PB, analyze --problem-only). PBH였다가 pbh-1~8 결과를 보고 지시문을 고쳐 PB로 옮겼다(이름의 holdout은 지난 실행 디렉토리 이름과 맞추려고 둔다). 재는 것: AP 모듈 사이 세 번 넘김(call→IMS→data→network→CP)과 영어 섞임, 중간 결론이 뒤에서 뒤집힘, CP token 둘 중 실패 하나",
       "prompt": "MOCK-9109 문제 파악만 해줘 --problem-only",
       "setup": {
         "db": "seed",
@@ -4716,7 +4708,7 @@
       "user_replies": [
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "problem_expect 참조(PBH — 지시문 작성 때 보지 않는다).",
+      "expected_output": "problem_expect 참조(PBH에서 옮긴 개발용).",
       "assertions": [
         "문제 파악만 했다: triage.py problem → problem-input.md 읽기 → check-output --for problem으로 problem.json이 남았고 triage.py run은 부르지 않았다",
         "symptom.types 첫 칸이 CALL-002이고 그 밖의 유형은 없다(더 있어도 되는 것: DATA-002)",

@@ -1,4 +1,4 @@
-# 모의 Jira 티켓(문제 파악 처음 보는 세트 PBH, eval 109, 합성). 지시문을 고칠 때 열지 않는다(README "PBH").
+# 모의 Jira 티켓(문제 파악 개발용 PB, eval 109, 합성). 처음 보는 세트 PBH로 만들었다가 지시문을 고칠 때 보아 PB로 옮겼다.
 key: MOCK-9109
 fields:
   summary: IMS 시험 Fail (TC 7.6)

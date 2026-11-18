@@ -3567,7 +3567,7 @@ def _dry_clean(ctx, job: str):
 
 
 # --- 문제 파악(배치 PB, 분석 정확도 단계 2b, analyze --problem-only) --------------------------------------------------
-PB_EVALS = set(range(87, 111))     # PB 87~102(개발용) + PBH 103~110(처음 보는 세트, 채점 같음)
+PB_EVALS = set(range(87, 111))     # PB 87~102·104·109(개발용) + PBH 103·105~108·110(처음 보는 세트, 채점 같음)
 _PROBLEM_CMD = re.compile(r"triage\.py[\"']?\s+(?:--\S+\s+\S+\s+)*problem\b")
 _CHECK_PROBLEM = re.compile(r"check-output\b.*--for[\s=]+problem\b")
 _READ_INPUT_BASH = re.compile(r"\b(?:cat|head|tail|sed|less|more|type)\b[^|;&]*problem-input\.md")
@@ -3583,11 +3583,12 @@ def _token_key(token) -> tuple | None:
 
 
 def pb_clue_match(want: dict, got: dict) -> bool:
-    """기대 단서 하나와 검사를 통과한 단서 하나(`problem.json` `clues[]`)가 같은가: 코멘트 번호·종류·`side`(적혀 있으면),
-    ipc는 이름·token 값, ipc_name은 이름과 token 없음, log_line은 인용에 기대 글(`contains`)이 든 것. stale은 따로 본다."""
+    """기대 단서 하나와 검사를 통과한 단서 하나(`problem.json` `clues[]`)가 같은가: 코멘트 번호·종류·`side`,
+    ipc는 이름·token 값, ipc_name은 이름과 token 없음, log_line은 인용에 기대 글(`contains`)이 든 것. stale은 따로 본다.
+    `side`는 cp와 ap가 뒤바뀐 것만 틀림이다 — `unknown`(적은 쪽을 정하지 못함)은 틀림이 아니다(PB·PBH 모두)."""
     if got.get("comment") != want["comment"] or got.get("kind") != want["kind"]:
         return False
-    if want.get("side") and got.get("side") != want["side"]:
+    if {want.get("side"), got.get("side")} == {"cp", "ap"}:
         return False
     if want["kind"] == "log_line":
         return want["contains"] in " ".join(str(got.get("quote") or "").split())
