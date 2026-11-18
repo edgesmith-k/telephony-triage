@@ -77,6 +77,19 @@ def _observation_summary(events: dict) -> dict | None:
 NO_LOCATION = {"state": "none", "source": None, "kind": None}
 
 
+def _adopted_location(location: dict, why: str | None) -> dict:
+    """채택이면 실패 지점 상태를 자격 검사 결과로 정한다: 기준 줄 자체가 실패 사건(`same_line`·`cp_point`)이면 confirmed/point,
+    구간(`range`)은 FAIL 마커 1개일 때만 confirmed, 그 밖(근처 등)은 found. comment 출처는 늘 found("한 곳에서 찾았다" ≠
+    "이번 실패 지점을 확인했다" — 포털 확실한 일치는 accepted + confirmed만 본다)."""
+    if location.get("source") == "comment":      # kind는 단서 찾기 방식(ipc·token point, 글자 near) 그대로
+        return {**location, "state": "found"}
+    if why in ("same_line", "cp_point"):
+        return {**location, "state": "confirmed", "kind": "point"}
+    if why == "range" and location.get("source") == "log_marker" and location.get("state") == "confirmed":
+        return dict(location)
+    return {**location, "state": "found"}
+
+
 def _decision(candidates: list[dict], anchor: dict | None, elig: dict | None, clue_location: dict | None = None) -> dict:
     """판단 상태(단계 5): 자격 검사(`match.json` → `eligibility`, `common.eligibility`)가 기준 사건에 붙은 원인만 채택한다 — 후보
     목록·순서·점수는 그대로(채택 원인이 --top 밖이면 매처가 후보 끝에 붙였다). 사유는 처음 맞는 것: 후보 없음 → 실패 지점(앵커)
@@ -96,7 +109,7 @@ def _decision(candidates: list[dict], anchor: dict | None, elig: dict | None, cl
     elif elig.get("state") == "accepted" and picked:
         return {"state": "accepted", "reason": "anchored_top",
                 "selected": {"category": picked.get("category"), "type": picked["type"], "cause": picked["cause"]},
-                "location": location, **extra}
+                "location": _adopted_location(location, elig.get("why")), **extra}
     elif elig.get("state") == "accepted":      # 채택 원인이 후보에 없다(매처는 순위 원인만 붙이므로 정상 입력에선 없음) — 보류
         reason, extra["check"]["why"] = "ineligible", "cause_not_in_candidates"
     else:
@@ -846,7 +859,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         elif self.reference or self.problem_use:     # {refs: 명시 기준 + 단서, problem, comment_adopt, dropped}(단계 5-2)
             use = self.problem_use or {}
             bundle = {"refs": ([self.reference] if self.reference else []) + use.get("refs", []),
-                      "problem": use.get("problem"), "comment_adopt": use.get("comment_adopt", False),
+                      "problem": use.get("problem"), "comment_adopt": use.get("comment_adopt", True),
                       "dropped": use.get("dropped", [])}
             ref = self.job / REFERENCE_FILE
             ref.write_text(json.dumps(bundle, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")

@@ -22,7 +22,7 @@
   (ineligible/range_end_unknown). 같은 줄 점은 유형으로 거르지 않는다.
 - 여러 곳(`places` > 1) ambiguous/locations, 슬롯 둘 이상 ambiguous/slots, 출처끼리 다른 사건 ambiguous/sources.
 - 출처: 명시 기준(look_at·마커·steps-file)이 있으면 그것이 정한다 — 단서는 명시 기준과 다른 사건을 가리킬 때만 ambiguous/sources로
-  만든다. 단서만 있으면 단서가 정하되, `comment_adopt`가 거짓(기본)이면 붙은 사건을 싣고 ineligible/comment_unconfirmed로 보류한다.
+  만든다. 단서만 있으면 단서가 정하되, `comment_adopt`가 거짓이면(기본 참, Y1 허용) 붙은 사건을 싣고 ineligible/comment_unconfirmed로 보류한다.
 - 문제 파악이 "DB에 없는 증상"(`not_in_db`)이면 기준이 있어도 symptom_not_found/not_in_db(다른 사건의 원인으로 대신하지 않는다).
 사유 우선순위: no_candidate → no_reference → symptom_not_found → ambiguous → ineligible → cause_unjudged·cause_unconfirmed → accepted.
 """
@@ -183,7 +183,7 @@ def _pick(outcomes: list[tuple]) -> dict | tuple:
 
 
 def decide(events: list[dict], refs: list[dict], link_ms: int = DEFAULT_LINK_MS, problem: dict | None = None,
-           comment_adopt: bool = False) -> dict:
+           comment_adopt: bool = True) -> dict:
     """사건 목록 + 기준(0개 이상, 단서는 `source: comment`) + 문제 파악(`{types, not_in_db}` — types는 부른 쪽이 DB에 있는 것만
     남긴다, 없으면 None) → `{state, reason, why, cause, events(붙은 사건)}`. 후보 없음(no_candidate)은 부른 쪽이 먼저 본다."""
     if not refs:
@@ -208,7 +208,7 @@ def decide(events: list[dict], refs: list[dict], link_ms: int = DEFAULT_LINK_MS,
         return got
     ref = clue_refs[next(i for i, o in enumerate(clues) if o is got)]
     res = {**_adopt(got[1], got[2]), "via": {k: ref.get(k) for k in ("comment", "clue", "how", "places")}}
-    if res["state"] == "accepted" and not comment_adopt:     # 코멘트 지점 채택은 사용자 결정 전(Y1) — 붙은 사건은 싣고 보류
+    if res["state"] == "accepted" and not comment_adopt:     # 코멘트 지점 채택을 끈 설정 — 붙은 사건은 싣고 보류
         return {**_held("ineligible", "comment_unconfirmed", got[1]), "via": res["via"]}
     return res     # 보류면 실제 사유(원인이 실패 뒤·안 나옴 미확인·구간 원인 다름 등)를 그대로
 

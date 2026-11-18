@@ -1046,9 +1046,9 @@ def test_decision_reason_priority_and_candidates_untouched():
     none = {"state": "none", "source": None, "kind": None}
     row = {"type": "IMS-001", "at": "t", "line": "f0:L1", "phone": 0, "absence": False, "ref": True, "result": "adopted",
            "cause": "IMS-001-01", "why": None, "gap_s": 0.1}
-    elig = {"state": "accepted", "reason": "anchored_top", "why": "same_line", "cause": "IMS-001-01", "checked": 1, "total": 9,
+    elig = {"state": "accepted", "reason": "anchored_top", "why": "range", "cause": "IMS-001-01", "checked": 1, "total": 9,
             "events_total": 5, "events": [row] * 5}
-    extra = {"check": {"why": "same_line", "checked": 1, "total": 9}, "events": [row] * 3, "events_total": 5}
+    extra = {"check": {"why": "range", "checked": 1, "total": 9}, "events": [row] * 3, "events_total": 5}
     assert driver._decision([], anchor, elig) == {"state": "held", "reason": "no_candidate", "selected": None,
                                                   "location": anchor["location"], **extra}
     assert driver._decision([], None, None)["location"] == none

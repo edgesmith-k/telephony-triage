@@ -40,8 +40,8 @@ def current() -> dict:
     root = plugin_root()     # 명시 루트(SITE_PATHS 제외 복사본) — 사내 레포에서도 같은 결과
     db = maf.build_seed_db(tmp("tt-accuracy-db-") / "db", root)
     out = _eval(root, db)
-    # 사용자 결정 Y1(코멘트 지점 채택)을 켰을 때의 problem 조건 — site-defaults `eligibility.comment_adopt: true`
-    out["comment_adopt"] = _eval(plugin_root(eligibility={"comment_adopt": True}), db, "--condition", "problem")
+    # 코멘트 지점 채택을 끈 problem 조건(보고용) — 기본은 사용자 결정 Y1: 허용(`eligibility.comment_adopt: true`)
+    out["comment_adopt_off"] = _eval(plugin_root(eligibility={"comment_adopt": False}), db, "--condition", "problem")
     return out
 
 
@@ -85,24 +85,24 @@ def test_stage5_holds_without_reference_and_adopts_only_eligible():
 
 def test_stage5_problem_input_answer_upper_bound():
     """단계 5-2 완료 기준(정답 입력 problem.json — 라벨에서 손으로 쓴 것, "정답 입력일 때의 상한"): look_at+problem은 틀린 채택
-    0·look_at의 맞는 채택 그대로 + NEARPOS(AP 줄 인용 → 문제 파악 유형으로 근처 사건). problem(기준 줄 없음)은 코멘트 단서만이라
-    `eligibility.comment_adopt` 기본(끔)에서 채택 0 — TOKPOS·TOKONLYPOS·CLUEPOS는 ineligible(comment_unconfirmed)로 보류."""
+    0·look_at의 맞는 채택 그대로 + NEARPOS(AP 줄 인용 → 문제 파악 유형으로 근처 사건). problem(기준 줄 없음)은 코멘트 단서만이고
+    `eligibility.comment_adopt` 기본(참, Y1 허용)에서 TOKPOS·TOKONLYPOS·CLUEPOS 3건만 맞게 채택(3/0/21). 끈 실행(보고용)은 그 3건이
+    ineligible(comment_unconfirmed)로 보류된다."""
     now = _current()
     runs = {c: [r for r in now["runs"] if r["condition"] == c] for c in ("look_at+problem", "problem")}
     adopted = [r for r in runs["look_at+problem"] if r["adopted"]]
     assert all(r["adopted"] == r["expect"] for r in adopted), adopted
     assert sorted(r["key"] for r in adopted) == sorted(STAGE5_CORRECT + ["NEARPOS-1"])
-    assert [r["key"] for r in runs["problem"] if r["adopted"]] == []
-    s = now["by_condition"]["problem"]
-    assert (s["accepted_wrong"], s["held_reasons"].get("ineligible")) == (0, 3), s
-    # 코멘트 지점 보류 3건: 붙은 사건의 원인이 정답(켰다면 맞게 채택했을 것)이고, 켠 실행은 그 3건만 맞게 채택한다
-    held = [r for r in runs["problem"] if r["held_why"] == "comment_unconfirmed"]
-    assert sorted(r["key"] for r in held) == ["CLUEPOS-1", "TOKONLYPOS-1", "TOKPOS-1"]
-    assert all(r["held_cause"] == r["expect"] for r in held), held
-    on = now["comment_adopt"]
-    adopted = [r for r in on["runs"] if r["adopted"]]
+    adopted = [r for r in runs["problem"] if r["adopted"]]
     assert sorted(r["key"] for r in adopted) == ["CLUEPOS-1", "TOKONLYPOS-1", "TOKPOS-1"]
-    assert all(r["adopted"] == r["expect"] for r in adopted) and on["by_condition"]["problem"]["accepted_wrong"] == 0
+    assert all(r["adopted"] == r["expect"] for r in adopted), adopted
+    s = now["by_condition"]["problem"]
+    assert (s["accepted_correct"], s["accepted_wrong"], s["held"]) == (3, 0, 21), s
+    # 끈 실행: 그 3건은 붙은 사건의 원인이 정답인 채로 보류(comment_unconfirmed)
+    off = now["comment_adopt_off"]
+    held = [r for r in off["runs"] if r["held_why"] == "comment_unconfirmed"]
+    assert sorted(r["key"] for r in held) == ["CLUEPOS-1", "TOKONLYPOS-1", "TOKPOS-1"]
+    assert all(r["held_cause"] == r["expect"] for r in held) and not any(r["adopted"] for r in off["runs"]), held
 
 
 if __name__ == "__main__" and "--update" in sys.argv:

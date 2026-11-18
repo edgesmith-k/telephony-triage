@@ -381,12 +381,13 @@ def test_problem_not_in_db_holds_and_no_reference_stays():
 
 
 def test_clue_ipc_point_and_comment_adopt_switch():
-    """단서 ipc = CP 점(2초 안 허용 유형 첫 사건). 코멘트 단서만이면 comment_adopt(사용자 결정 Y1, 기본 끔)일 때만 채택한다."""
+    """단서 ipc = CP 점(2초 안 허용 유형 첫 사건). 코멘트 단서만이어도 채택한다(comment_adopt 기본 참, 사용자 결정 Y1 허용).
+    끄면 붙은 사건을 싣고 보류."""
     ipc = clue(point(4, 199, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 0xE3}, phone=None))
-    held = el.decide(EVENTS, [ipc], problem=D3)
+    held = el.decide(EVENTS, [ipc], problem=D3, comment_adopt=False)
     assert outcome(held) == ("held", "ineligible", "comment_unconfirmed")
     assert [e["type"] for e in held["events"]] == ["DATA-003"]          # 붙은 사건은 싣는다
-    assert outcome(el.decide(EVENTS, [ipc], problem=D3, comment_adopt=True)) == ("accepted", "anchored_top", "D1")
+    assert outcome(el.decide(EVENTS, [ipc], problem=D3)) == ("accepted", "anchored_top", "D1")
     assert outcome(el.decide(EVENTS, [ipc], problem={"types": ["CALL-001"], "not_in_db": False}, comment_adopt=True)) == \
         ("held", "symptom_not_found", "typeless_failure_within_link")     # 2초 안 사건이 허용 유형이 아님
 
@@ -458,10 +459,11 @@ IPC_CLUE = {"comment": 2, "kind": "ipc", "name": "VIPC_SETUP_DATA", "token": "0x
 def test_run_reads_problem_only_for_same_input_and_fresh_clues(seed_db):
     a, out = _problem_run(seed_db, "ok", "cluepos.log", [IPC_CLUE])
     d = a["decision"]
-    assert (d["state"], d["reason"], d["check"]["why"]) == ("held", "ineligible", "comment_unconfirmed")
-    assert d["location"] == {"state": "found", "source": "comment", "kind": "point"}       # 확정(confirmed)이 아니다
+    assert (d["state"], d["selected"]["cause"], d["check"]["why"]) == ("accepted", "DATA-003-01", "cp_point")
+    # 채택이어도 코멘트 단서 지점은 found(확정 아님) — "확실한 일치"(accepted + confirmed)가 되지 않는다
+    assert d["location"] == {"state": "found", "source": "comment", "kind": "point"}
     bundle = json.loads((out / "reference.json").read_text(encoding="utf-8"))
-    assert bundle["refs"][0]["source"] == "comment" and bundle["comment_adopt"] is False
+    assert bundle["refs"][0]["source"] == "comment" and bundle["comment_adopt"] is True
     assert "- 단서 위치: 코멘트 2번 단서(ipc) 로그에서 찾음" in (out / "report.md").read_text(encoding="utf-8")
     # 가설·모듈·모름·side·회차는 판정에 쓰지 않는다: 그 칸만 다른 problem.json은 기준·판정이 같다
     noise = {"hypotheses": ["NETWORK-001 비행기 모드가 원인"], "modules": ["data"], "unknown": ["CP 로그 없음"],
@@ -521,8 +523,7 @@ def test_run_clue_text_quotes_newline_mask_token_and_dedup(seed_db):
     odd = {**line, "comment": 4, "quote": 'x "quoted" (.*) [a-z]+ \\ $HOME; rm -rf'}
     a, out = _problem_run(seed_db, "text", "cluepos.log", [line, odd, {**line, "comment": 5}])
     d = a["decision"]
-    assert (d["reason"], d["check"]["why"], d["location"]) == \
-        ("ineligible", "comment_unconfirmed", {"state": "found", "source": "comment", "kind": "near"})
+    assert (d["state"], d["location"]) == ("accepted", {"state": "found", "source": "comment", "kind": "near"})
     bundle = json.loads((out / "reference.json").read_text(encoding="utf-8"))
     assert [r["comment"] for r in bundle["refs"]] == [3] and [x["comment"] for x in bundle["dropped"]] == [4]
     trace = [json.loads(x) for x in (out / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
@@ -547,14 +548,39 @@ def test_clue_with_bad_comment_number_is_not_used():
 
 
 def test_run_config_switches(seed_db):
-    """`eligibility.comment_adopt: true`면 코멘트 단서 지점에서 채택, `use_problem_types: false`면 유형을 안 써 근처는 5-1처럼 보류."""
-    a, out = _problem_run(seed_db, "adopt", "cluepos.log", [IPC_CLUE], root=plugin_root(eligibility={"comment_adopt": True}))
+    """`eligibility.comment_adopt` 기본(참)이면 코멘트 단서 지점에서 채택하되 위치는 found(확정 아님), `false`면 붙은 사건을
+    싣고 보류. `use_problem_types: false`면 유형을 안 써 근처는 5-1처럼 보류."""
+    a, out = _problem_run(seed_db, "adopt", "cluepos.log", [IPC_CLUE])
     d = a["decision"]
-    assert (d["state"], d["selected"]["cause"], d["location"]["source"]) == ("accepted", "DATA-003-01", "comment")
+    assert (d["state"], d["selected"]["cause"], d["location"]) == \
+        ("accepted", "DATA-003-01", {"state": "found", "source": "comment", "kind": "point"})
     assert "실패 지점: Jira 코멘트·단서 위치(확정 아님)" in (out / "report.md").read_text(encoding="utf-8")
+    a, _ = _problem_run(seed_db, "off", "cluepos.log", [IPC_CLUE], root=plugin_root(eligibility={"comment_adopt": False}))
+    assert (a["decision"]["state"], a["decision"]["check"]["why"]) == ("held", "comment_unconfirmed")
     near = "ConnectingState: setupData: accessNetwork=EUTRAN, isSatellite=false"
     a, _ = _problem_run(seed_db, "near", "nearpos.log", [], look_at=near)
     assert (a["decision"]["state"], a["decision"]["selected"]["cause"]) == ("accepted", "DATA-003-01")
     a, _ = _problem_run(seed_db, "notypes", "nearpos.log", [], look_at=near,
                         root=plugin_root(eligibility={"use_problem_types": False}))
     assert (a["decision"]["reason"], a["decision"]["check"]["why"]) == ("ineligible", "near_without_symptom")
+
+
+def test_adopted_location_follows_eligibility():
+    """채택이면 실패 지점 상태는 자격 검사 결과로: 기준 줄 자체가 실패 사건이면 confirmed/point(글자 일치여도), 근처 채택은 found,
+    구간은 FAIL 마커 1개일 때만 confirmed, comment 출처는 늘 found. 보류는 앵커 기준 그대로(글자 일치 한 곳 = found)."""
+    from triagelib import driver
+    cands = [{"category": "data", "type": "DATA-001", "cause": "DATA-001-01"}]
+    text = {"state": "found", "source": "look_at", "kind": "near"}
+
+    def loc(location, why, state="accepted"):
+        elig = {"state": state, "reason": "anchored_top" if state == "accepted" else "ineligible", "why": why,
+                "cause": "DATA-001-01" if state == "accepted" else None}
+        return driver._decision(cands, {"location": location}, elig)["location"]
+    assert loc(text, "same_line") == {"state": "confirmed", "source": "look_at", "kind": "point"}
+    assert loc({**text, "kind": "point", "state": "confirmed"}, "cp_point")["state"] == "confirmed"
+    assert loc(text, "near") == text                                   # 근처 채택(5-2) = 찾음
+    assert loc(text, "near_without_symptom", state="held") == text            # 보류는 앵커 기준 그대로
+    marker = {"state": "confirmed", "source": "log_marker", "kind": "range"}
+    assert loc(marker, "range") == marker
+    assert loc({**marker, "source": "steps_file", "state": "found"}, "range")["state"] == "found"
+    assert loc({"state": "confirmed", "source": "comment", "kind": "point"}, "same_line")["state"] == "found"
