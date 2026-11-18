@@ -34,6 +34,16 @@
   "events": 16,
   "masked": null
  },
+ "decision": {
+  "state": "held",
+  "reason": "no_candidate",
+  "selected": null,
+  "location": {
+   "state": "none",
+   "source": null,
+   "kind": null
+  }
+ },
  "no_candidate": {
   "search_hits": [],
   "error_events": [],

@@ -33,6 +33,16 @@
   "events": 30,
   "masked": null
  },
+ "decision": {
+  "state": "held",
+  "reason": "cause_unconfirmed",
+  "selected": null,
+  "location": {
+   "state": "none",
+   "source": null,
+   "kind": null
+  }
+ },
  "candidates": [
   {
    "type": "DATA-001",

@@ -18,17 +18,21 @@
    "top1_accuracy": 0.875,
    "top3_inclusion": 1.0,
    "false_positive_rate": 0.9167,
-   "accepted_correct": 7,
-   "accepted_wrong": 12,
-   "held": 1,
-   "answer_rate": 0.95,
-   "correct_hold": 1,
-   "held_top_right": 0,
+   "accepted_correct": 0,
+   "accepted_wrong": 0,
+   "held": 20,
+   "held_reasons": {
+    "no_candidate": 1,
+    "no_reference": 19
+   },
+   "answer_rate": 0.0,
+   "correct_hold": 12,
+   "held_top_right": 7,
    "anchor_runs": 0,
    "anchor_correct": 0,
    "anchor_missed": 0,
    "first_total": 2,
-   "first_hold_rate": 0.0
+   "first_hold_rate": 1.0
   },
   "time": {
    "total": 18,
@@ -48,12 +52,16 @@
    "top1_accuracy": 1.0,
    "top3_inclusion": 1.0,
    "false_positive_rate": 0.9091,
-   "accepted_correct": 7,
-   "accepted_wrong": 10,
-   "held": 1,
-   "answer_rate": 0.9444,
-   "correct_hold": 1,
-   "held_top_right": 0,
+   "accepted_correct": 0,
+   "accepted_wrong": 0,
+   "held": 18,
+   "held_reasons": {
+    "no_candidate": 1,
+    "no_reference": 17
+   },
+   "answer_rate": 0.0,
+   "correct_hold": 11,
+   "held_top_right": 7,
    "anchor_runs": 0,
    "anchor_correct": 0,
    "anchor_missed": 0,
@@ -81,6 +89,9 @@
    "accepted_correct": 7,
    "accepted_wrong": 8,
    "held": 2,
+   "held_reasons": {
+    "no_candidate": 2
+   },
    "answer_rate": 0.8824,
    "correct_hold": 2,
    "held_top_right": 0,
@@ -100,7 +111,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -113,7 +124,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -137,7 +148,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -150,7 +161,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -176,7 +187,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -189,7 +200,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -216,7 +227,7 @@
     "NETWORK-001-08",
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-08",
+   "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
    "error": null
@@ -230,7 +241,7 @@
     "NETWORK-001-08",
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-08",
+   "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
    "error": null
@@ -256,7 +267,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
    "error": null
@@ -269,7 +280,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
    "error": null
@@ -295,7 +306,7 @@
    "top3": [
     "DATA-002-01"
    ],
-   "adopted": "DATA-002-01",
+   "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
    "error": null
@@ -308,7 +319,7 @@
    "top3": [
     "DATA-002-01"
    ],
-   "adopted": "DATA-002-01",
+   "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
    "error": null
@@ -334,7 +345,7 @@
    "top3": [
     "CALL-001-02"
    ],
-   "adopted": "CALL-001-02",
+   "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
    "error": null
@@ -347,7 +358,7 @@
    "top3": [
     "CALL-001-02"
    ],
-   "adopted": "CALL-001-02",
+   "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
    "error": null
@@ -373,7 +384,7 @@
    "top3": [
     "NETWORK-001-08"
    ],
-   "adopted": "NETWORK-001-08",
+   "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
    "error": null
@@ -386,7 +397,7 @@
    "top3": [
     "NETWORK-001-08"
    ],
-   "adopted": "NETWORK-001-08",
+   "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
    "error": null
@@ -412,7 +423,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -425,7 +436,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -451,7 +462,7 @@
    "top3": [
     "DATA-003-01"
    ],
-   "adopted": "DATA-003-01",
+   "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
    "error": null
@@ -464,7 +475,7 @@
    "top3": [
     "DATA-003-01"
    ],
-   "adopted": "DATA-003-01",
+   "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
    "error": null
@@ -490,7 +501,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -503,7 +514,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -529,7 +540,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -542,7 +553,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -568,7 +579,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -581,7 +592,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -640,7 +651,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -653,7 +664,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -679,7 +690,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -692,7 +703,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -719,7 +730,7 @@
     "NETWORK-001-03",
     "DATA-003-01"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "상위3",
    "anchor_ok": null,
    "error": null
@@ -733,7 +744,7 @@
     "DATA-003-01",
     "NETWORK-001-03"
    ],
-   "adopted": "DATA-003-01",
+   "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
    "error": null
@@ -759,7 +770,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -772,7 +783,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -785,7 +796,7 @@
    "top3": [
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-03",
+   "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
    "error": null
@@ -799,7 +810,7 @@
     "NETWORK-001-08",
     "NETWORK-001-03"
    ],
-   "adopted": "NETWORK-001-08",
+   "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
    "error": null
