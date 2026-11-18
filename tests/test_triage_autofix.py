@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -266,8 +267,20 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
     assert "(관측된 규칙 일치" not in _report_line(out, "- 분류 후보:")
     (out / "deep-output.md").write_text("요약: 사용자 설정이 아니라 망 거절로 보인다\n근거:\n"
                                         "분석 스킬 의견: DATA-001-02 — 망 거절 흔적\n규칙 제안:\n- 없음\n", encoding="utf-8")
+    analysis = out / "analysis.json"
+
+    def turn_start() -> os.stat_result:
+        """포털은 턴 시작 뒤 바뀐 analysis.json만 읽는다(`read_safe(..., since)`) — 시작 시각을 1시간 앞으로 돌려 둔다."""
+        old = analysis.stat()
+        os.utime(analysis, ns=(old.st_atime_ns, old.st_mtime_ns - 3600 * 10**9))
+        return analysis.stat()
+
+    before = turn_start()
     run_json("triage.py", ["check-output", item["key"], "--for", "deep", "--out", out], root=root)
-    after = json.loads((out / "analysis.json").read_text(encoding="utf-8"))
+    after = json.loads(analysis.read_text(encoding="utf-8"))
+    now = analysis.stat()
+    assert now.st_mtime_ns > before.st_mtime_ns and now.st_ino != before.st_ino     # 원자적 교체(새 파일), mtime 갱신
+    assert not list(out.glob(".analysis.json.tmp-*"))
     assert after["decision"] == {**dec, "counter": {"cause": "DATA-001-02"}}
     assert after["candidates"] == done["candidates"]
     assert _report_line(out, "- 판단:").endswith("자격 검사 전) · 모델 검토에서 반대 근거 있음(DATA-001-02) — 확인 필요")
@@ -276,8 +289,11 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
     run_json("triage.py", ["explore", item["key"], "--out", out], root=root)
     (out / "explore-output.md").write_text("가설 없음: 1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다\n"
                                            "다음 확인: radio 로그\n", encoding="utf-8")
+    before = turn_start()
     run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", out], root=root)
-    held = json.loads((out / "analysis.json").read_text(encoding="utf-8"))
+    held = json.loads(analysis.read_text(encoding="utf-8"))
+    now = analysis.stat()
+    assert now.st_mtime_ns > before.st_mtime_ns and now.st_ino != before.st_ino
     assert held["decision"] == {"state": "held", "reason": "fit_check", "selected": None, "location": dec["location"]}
     assert held["candidates"] == done["candidates"]
     assert _report_line(out, "- 판단:") == ("- 판단: 원인 보류 — 탐색 분석 적합성 확인에서 1위가 증상과 맞지 않음. 아래 규칙 "

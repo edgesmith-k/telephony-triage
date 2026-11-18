@@ -1019,9 +1019,13 @@ def test_fit_worst_case_with_ask_notes_stays_within_4kb():
                 "location": {"state": "confirmed", "source": "log_marker", "kind": "range"},
                 "counter": {"cause": "ABCDEFGHIJ-001-02"}}
     result["decision"] = json.loads(json.dumps(decision))
+    result["candidates"][0].update({**decision["selected"], "C": 1})      # 채택 원인 = 1위(C=1) 후보
     out = triage.fit(result)
     assert len(triage.dumps(out).encode("utf-8")) + 1 <= 4096 and out["truncated"] is False
     assert out["decision"] == decision                               # 4KB 압축은 판단을 빼거나 줄이지 않는다
+    # 1위 후보도 남는다(포털은 selected가 C=1 후보 안에 없으면 판단 형식 오류로 본다) — 근거 줄만 줄인다
+    top = out["candidates"][0]
+    assert {k: top[k] for k in ("category", "type", "cause")} == decision["selected"] and top["C"] == 1 and top["evidence"]
     assert out["explore"]["note"] == driver.ASK_NOTE.format(step="5-2") and out["analyzer"]["note"].endswith("(SKILL 5-1)")
     assert driver._ask_note("always", "5-2") == {} and driver._ask_note("never", "5-1") == {}
 
