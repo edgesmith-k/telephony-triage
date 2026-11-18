@@ -33,6 +33,8 @@ ISSUE = {
         {"author": {"displayName": "Mock Tester", "name": "mock.tester"}, "created": "2026-11-15T09:00:00+0900",
          "body": "재시험 결과 같은 스텝에서 실패,\n로그 첨부."},
         {"body": "CP 확인: VIPC_PDN_CONNECT (token=0x1a2) 응답 없음."},       # 작성자·시각 없음
+        {"author": {"displayName": "Mock CP", "name": "mock.cp"}, "created": "2026-11-15T12:00:00+0900",
+         "body": "재확인: VIPC_PDN_CONNECT (token=123) 실패\n> 앞 글 인용 줄\n다음 줄 RIL_REQUEST_SETUP_DATA_CALL fail"},
     ],
     "changelog": {"histories": [{"author": {"name": "mock.cp"}, "created": "2026-11-14T13:01:00+0900", "items": [
         {"field": "assignee", "from": "mock.cp", "fromString": "Mock CP", "to": "mock.tester", "toString": "Mock Tester"},
@@ -68,7 +70,7 @@ def _problem(job: Path, issue: dict = ISSUE, db: Path = SAMPLE, tc: str | None =
         args += ["--steps-file", base / "tc.txt"]
     proc = run("triage.py", args)
     assert proc.returncode == expect, proc.stderr
-    return json.loads(proc.stdout)
+    return {**json.loads(proc.stdout), "_src": base}
 
 
 def _check(job: Path, output, expect: int):
@@ -189,3 +191,130 @@ def test_oversized_comments_keep_latest_and_mark_cut():
 def test_missing_issue_source_is_usage_error():
     res = _problem(tmp("tt-problem-") / KEY, src="", tc=None, expect=2)
     assert res["reason"] == "입력 없음" and "issue_raw.json" in res["next"]
+
+
+# --- 리뷰 C01·C02·C10: 이름·token은 값으로, 여러 줄 인용, 짧은 인용 -------------------------------------------
+
+@pytest.mark.parametrize("clue", [
+    _clue(2, "VIPC_SETUP_DATA", "0x0d", "VIPC_SETUP_DATA (token=0x0de)"),          # token 끝자리 잘림
+    _clue(2, "VIPC_SETUP_DATA", "0x0d", "VIPC_SETUP_DATA (token=0x0d"),            # 인용까지 값 중간에서 자름
+    _clue(2, "SETUP", "0x0de", "VIPC_SETUP_DATA (token=0x0de)"),                   # 이름 조각
+    _clue(2, "V", "0", "VIPC_SETUP_DATA (token=0x0de)"),
+    _clue(5, "VIPC_PDN_CONNECT", "12", "VIPC_PDN_CONNECT (token=123)"),            # 10진 앞자리
+])
+def test_partial_name_or_token_is_dropped(job, clue):
+    res = _check(job, _output(clues=[clue]), 0)
+    assert res["clues"] == 0 and res["dropped_reasons"][0] in ("name 값이 인용 안에 없음", "token 값이 인용 안에 없음")
+
+
+def test_same_token_value_in_other_case_passes(job):
+    res = _check(job, _output(clues=[_clue(2, "VIPC_SETUP_DATA", "0x0DE", "VIPC_SETUP_DATA (token=0x0de)")]), 0)
+    assert res["clues"] == 1 and res["dropped"] == 0
+
+
+@pytest.mark.parametrize("quote", [
+    "VIPC_PDN_CONNECT (token=123) 실패\n> > 앞 글 인용 줄\n> 다음 줄 RIL_REQUEST",     # 입력 md에서 그대로 복사(줄머리 `> `)
+    "VIPC_PDN_CONNECT (token=123) 실패\n> 앞 글 인용 줄\n다음 줄 RIL_REQUEST",         # 원문 그대로(원문 줄이 `>`로 시작)
+    "VIPC_PDN_CONNECT (token=123) 실패\n앞 글 인용 줄\n다음 줄 RIL_REQUEST",           # 표식 없이
+])
+def test_multiline_quote_copied_from_input_passes(job, quote):
+    assert "> > 앞 글 인용 줄" in (job / "problem-input.md").read_text(encoding="utf-8")
+    res = _check(job, _output(clues=[_clue(5, "VIPC_PDN_CONNECT", "123", quote)]), 0)
+    assert res["clues"] == 1 and res["dropped"] == 0
+
+
+def test_short_log_line_quote_is_dropped(job):
+    res = _check(job, _output(clues=[_clue(1, None, None, "로그", kind="log_line")]), 0)
+    assert res["dropped_reasons"] == ["인용이 너무 짧음(8자 미만)"]
+
+
+# --- 리뷰 C05: TC Fail 줄과 사유 --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("tc, reason", [
+    ("1 | Attach | PASS\n2 | 데이터 켜기 | FAIL (No response)\n", "FAIL (No response)"),             # 상태 칸에 사유
+    ("1 | Attach | PASS\n2 | 데이터 켜기 | FAIL | (No response)\n", "FAIL | (No response)"),         # 다음 칸에 사유
+    ("Step 1 Attach PASS\nStep 2 데이터 켜기 FAIL\n(No response from network)\n", "(No response from network)"),
+    ("No | Step | Result | Comment\n1 | Attach | PASS | -\n2 | 데이터 켜기 | FAIL | (No response)\n", "| (No response)"),
+])
+def test_tc_fail_line_and_reason_always_in_input(tc, reason):
+    job = tmp("tt-problem-") / KEY
+    _problem(job, tc=tc)
+    text = (job / "problem-input.md").read_text(encoding="utf-8")
+    part = text.split("## TC의 Fail 줄", 1)[1].split("\n## ", 1)[0]
+    assert reason in part and "데이터 켜기" in part
+
+
+def test_tc_fail_line_survives_many_steps():
+    tc = "No | Step | Result\n" + "".join(f"{i} | 스텝 {i} | PASS\n" for i in range(1, 300)) + "300 | 데이터 켜기 | FAIL (No response)\n"
+    job = tmp("tt-problem-") / KEY
+    _problem(job, tc=tc)
+    part = (job / "problem-input.md").read_text(encoding="utf-8").split("## TC의 Fail 줄", 1)[1]
+    assert "300 | 데이터 켜기 | FAIL (No response)" in part and "스텝 1 |" not in part
+
+
+# --- 리뷰 C04·C07·C08·C09·C11 ----------------------------------------------------------------------------
+
+def test_source_and_tc_hashes_are_recorded(job):
+    side = json.loads((job / "problem-input.json").read_text(encoding="utf-8"))
+    _check(job, _output(), 0)
+    rec = json.loads((job / "problem.json").read_text(encoding="utf-8"))
+    assert len(side["source_sha256"]) == 64 and len(side["steps_sha256"]) == 64
+    assert (rec["source_sha256"], rec["steps_sha256"]) == (side["source_sha256"], side["steps_sha256"])
+    other = tmp("tt-problem-") / KEY
+    out = _problem(other, tc=None)
+    side2 = json.loads((other / "problem-input.json").read_text(encoding="utf-8"))
+    assert side2["steps_sha256"] is None
+    assert side2["source_sha256"] == hashlib.sha256((out["_src"] / "issue.yaml").read_bytes()).hexdigest()
+
+
+def test_author_letters_use_ids_not_display_names_and_odd_times_kept():
+    issue = dict(ISSUE, comments=[
+        {"author": {"displayName": "Kim", "accountId": "a1"}, "created": "14/Nov/26 1:00 PM", "body": "첫 글입니다"},
+        {"author": {"displayName": "Kim", "accountId": "a2"}, "body": "두 번째 글"},
+        {"author": {"displayName": "Lee"}, "body": "세 번째 글"},
+        {"author": {"displayName": "Lee"}, "body": "네 번째 글"}])
+    job = tmp("tt-problem-") / KEY
+    _problem(job, issue, tc=None)
+    text = (job / "problem-input.md").read_text(encoding="utf-8")
+    for head in ("[1번 · 작성자 A · 14/Nov/26 1:00 PM]", "[2번 · 작성자 B · 없음]", "[3번 · 작성자 C · 없음]", "[4번 · 작성자 C · 없음]"):
+        assert head in text, head
+
+
+def test_comment_numbers_match_extract():
+    issue = {"key": KEY, "fields": {"summary": "s", "customfield_10001": "2026-11-14T10:02:00+0900",
+                                    "comment": {"comments": [{"body": "가"}, {"body": "나"}]}},
+             "comments": [{"body": ""}]}
+    job = tmp("tt-problem-") / KEY
+    out = _problem(job, issue, tc=None)
+    ext = run("jira_fields.py", ["extract", out["_src"] / "issue.yaml", "--origin", "file", "--db", SAMPLE])
+    assert ext.returncode == 0, ext.stderr
+    assert out["comments"] == len(json.loads(ext.stdout)["text"]["comments"]) == 0
+
+
+def test_mask_off_db_check_keeps_values():
+    db = copy_db()
+    cfg = db / "issue-db.config.yaml"
+    cfg.write_text(cfg.read_text(encoding="utf-8") + "signature_features: [mask-off]\n", encoding="utf-8")
+    job = tmp("tt-problem-") / KEY
+    _problem(job, db=db, tc=None)
+    out = _output(clues=[_clue("description", None, None, "단말 imsi=450081234567890", kind="log_line", side="unknown")],
+                  hypotheses=["imsi=450081234567890 단말에서만"])
+    assert _check(job, out, 0)["clues"] == 1
+    rec = json.loads((job / "problem.json").read_text(encoding="utf-8"))
+    assert rec["clues"][0]["quote"].endswith("450081234567890") and rec["hypotheses"] == ["imsi=450081234567890 단말에서만"]
+
+
+@pytest.mark.parametrize("last, stale", [(None, [False, False, False]), (1, [False, False, False]),
+                                         (2, [True, True, False]), (5, [True, True, True])])
+def test_stale_boundaries(job, last, stale):
+    clues = [_clue("description", None, None, "연결이 실패했습니다", kind="log_line", side="unknown"),
+             _clue(1, None, None, "로그 첨부했습니다", kind="log_line", side="unknown"),
+             _clue(4, "VIPC_PDN_CONNECT", "0x1a2", "VIPC_PDN_CONNECT (token=0x1a2)")]
+    _check(job, _output(rounds={"count": 2, "last_from_comment": last, "same_failure": "unknown"}, clues=clues), 0)
+    rec = json.loads((job / "problem.json").read_text(encoding="utf-8"))
+    assert [c["stale"] for c in rec["clues"]] == stale
+
+
+def test_last_from_comment_out_of_range_is_format_error(job):
+    res = _check(job, _output(rounds={"count": 2, "last_from_comment": 6, "same_failure": "yes"}), 1)
+    assert "rounds.last_from_comment" in res["detail"]
