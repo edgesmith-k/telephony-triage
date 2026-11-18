@@ -371,12 +371,25 @@ def _words(mapping, defaults: dict, key: str) -> set[str]:
     return {" ".join(("no" if w is False else str(w)).split()).casefold() for w in words}
 
 
-def _status_of(cell: str, pass_w: set[str], fail_w: set[str]) -> str | None:
+# 판정 단어 뒤 사유 표시: `Fail (사유)`·`Fail [코드]`·`FAIL: 사유`·`Fail - 사유`. `Fail-safe`·`Failover`·`Passive`는 판정이 아니다.
+_REASON_RE = re.compile(r"\s*[(\[:]|\s+-\s")
+# 번호 없이 이름이 이 단어 그대로인 줄은 합계 줄이다(`Total | FAIL`) — 스텝이 아니다.
+_SUMMARY_NAMES = {"total", "overall", "overall result", "result", "summary", "verdict", "합계", "종합", "최종 결과"}
+
+
+def _status_of(cell: str, pass_w: set[str], fail_w: set[str], reason: bool = False) -> str | None:
+    """칸 전체가 판정 단어면 그 판정. `reason`이면 판정 단어 뒤에 사유 표시(`_REASON_RE`)가 붙은 칸도 맞춘다."""
     key = cell.strip(_STATUS_STRIP).casefold()
     if key in fail_w:
         return "fail"
     if key in pass_w:
         return "pass"
+    if reason:
+        low = " ".join(cell.split()).casefold()
+        for status, words in (("fail", fail_w), ("pass", pass_w)):
+            for w in words:
+                if low.startswith(w) and _REASON_RE.match(low, len(w)):
+                    return status
     return None
 
 
@@ -414,7 +427,8 @@ def parse_steps(text, cfg=None) -> list[dict]:
 
     표 머리(스텝·결과 열 이름이 2개 이상 맞는 첫 줄, `cfg.steps_columns`)가 있으면 그 뒤 줄만 스텝으로 보고(번호 열이 있으면
     첫 칸이 번호인 줄만) 칸 수가 머리와 같을 때 열 위치를 쓴다. 없으면 `|`·탭·공백 2칸 이상으로 나누고 상태는 마지막
-    PASS/FAIL 칸(또는 마지막 칸의 끝 낱말)이다. PASS/FAIL이 없거나 이름이 빈 줄은 스텝이 아니다.
+    PASS/FAIL 칸(또는 마지막 칸의 끝 낱말)이다. 칸 전체 일치가 없으면 사유 붙은 판정(`Fail (사유)`)을 본다.
+    PASS/FAIL이 없거나 이름이 빈 줄, 번호 없는 합계 줄(`Total | FAIL`)은 스텝이 아니다.
     `time_raw`는 줄의 시각 표기(최대 2개, 공백으로 이은 원문)다 — 밖으로 내보내지 말고 시각을 뽑는 데만 쓴다.
     첫 FAIL 뒤의 줄은 호출자(`read_steps`)가 버린다."""
     from . import stepanchor
@@ -445,22 +459,32 @@ def _step_row(cells, header, header_n, pass_w, fail_w, stepanchor) -> dict | Non
     st_idx = None
     if aligned and "status" in header:
         st_idx = header["status"]
-        status = _status_of(cells[st_idx], pass_w, fail_w)
+        status = _status_of(cells[st_idx], pass_w, fail_w, reason=True)
         if status is None:
             st_idx = None
-    if status is None:
+    # 오른쪽부터: 모든 칸에서 전체 일치를 먼저, 없을 때만 사유 붙은 판정(이름 칸 `Fail (timeout) 재현`이 먼저 잡히지 않게).
+    # 판정 열을 아는 표에서는 다른 칸의 사유 붙은 모양을 판정으로 보지 않는다(`NG (no grant) 확인 | Skip`).
+    for reason in (False,) if aligned and "status" in header else (False, True):
+        if status is not None:
+            break
         for idx in range(len(cells) - 1, -1, -1):
-            status = _status_of(cells[idx], pass_w, fail_w)
+            status = _status_of(cells[idx], pass_w, fail_w, reason)
             if status:
                 st_idx = idx
                 break
     body = list(cells)
-    if status is None:      # 칸이 나뉘지 않은 한 줄: "Step 5: 데이터 켜기 FAIL"
+    if status is None:      # 칸이 나뉘지 않은 한 줄: "Step 5: 데이터 켜기 FAIL", 번호가 있으면 "Step 5: 데이터 켜기 Fail (timeout)"도
         tokens = cells[-1].split()
+        cut = len(tokens) - 1
         status = _status_of(tokens[-1], pass_w, fail_w) if len(tokens) > 1 else None
+        if status is None and stepanchor.step_number(cells[0]) is not None:
+            for cut in range(len(tokens) - 1, 0, -1):
+                status = _status_of(" ".join(tokens[cut:]), pass_w, fail_w, reason=True)
+                if status:
+                    break
         if status is None:
             return None
-        body[-1] = " ".join(tokens[:-1]).rstrip(_STATUS_STRIP + "|")
+        body[-1] = " ".join(tokens[:cut]).rstrip(_STATUS_STRIP + "|")
         st_idx = None
     if header and "number" in header and stepanchor.step_number(cells[0]) is None:
         return None         # 요약 표 등: 번호 열이 있는 표에서는 번호가 있는 줄만 스텝
@@ -485,7 +509,7 @@ def _step_row(cells, header, header_n, pass_w, fail_w, stepanchor) -> dict | Non
             body[0] = stepanchor._LEAD_RE.sub("", body[0], count=1)
         name = " | ".join(c for c in body if c)
     name = " ".join(str(name).split())
-    if not name:
+    if not name or (number is None and name.strip(_STATUS_STRIP).casefold() in _SUMMARY_NAMES):
         return None
     return {"number": number, "name_raw": name, "status": status, "time_raw": times}
 

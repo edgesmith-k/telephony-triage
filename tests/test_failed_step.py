@@ -349,3 +349,45 @@ def test_parse_steps_date_cell_is_not_step_number():
     assert [(r["number"], r["name_raw"], r["time_raw"]) for r in rows] == \
         [(None, "Attach PDN", "10:00:01"), (None, "Data call", "2026-09-21 10:00:09")]
     assert [(r["number"], r["name_raw"]) for r in failedstep.parse_steps("2026-09-21 | 3 | Attach | FAIL\n")] == [(3, "Attach")]
+
+
+def test_parse_steps_reads_verdict_with_reason():
+    """판정 칸 뒤에 사유가 붙어도(`Fail (사유)`·`FAIL: 사유`·`Fail - 사유`·`Fail [코드]`, `Pass (retry 1)`) 판정으로 읽는다.
+    사유는 스텝 이름에 섞이지 않는다(사유는 problem의 "TC의 Fail 줄" 절이 싣는다)."""
+    want = [(1, "Attach", "pass"), (2, "데이터 켜기", "fail")]
+    for cell in ("Fail (timeout)", "FAIL: no response", "Fail - 응답 없음", "Fail [E12]", "Failed(timeout)"):
+        for head in ("No | Step | Result\n", ""):          # 표 머리가 있을 때(판정 열)와 없을 때(오른쪽부터 훑기)
+            rows = failedstep.parse_steps(f"{head}1 | Attach | Pass (retry 1)\n2 | 데이터 켜기 | {cell}\n")
+            assert _expected_steps(rows) == want, (head, cell)
+    # 칸이 나뉘지 않은 한 줄(번호가 있을 때)
+    rows = failedstep.parse_steps("Step 1: Attach Pass (retry 1)\nStep 2: 데이터 켜기 Fail (timeout)\n")
+    assert _expected_steps(rows) == want
+    # 설정의 여러 단어 판정어도 같은 규칙
+    custom = {"steps_status": {"pass": ["ok"], "fail": ["not ok"]}}
+    assert _expected_steps(failedstep.parse_steps("1 | Attach | ok\n2 | 데이터 켜기 | Not OK (timeout)\n", custom)) == want
+    # steps-file로 실패 스텝을 고를 때도(run --steps-file 경로)
+    path = Path(tempfile.mkdtemp()) / "steps.txt"
+    path.write_text("No | Step | Result\n1 | Attach | Pass\n2 | 데이터 켜기 | Fail (No response)\n3 | 정리 | Fail (skipped)\n", encoding="utf-8")
+    steps, failed, warnings, _ = failedstep.read_steps(path)
+    assert failed == 1 and _expected_steps(steps) == want and "FAIL 스텝이 2개" in warnings[0]
+    assert failedstep.resolve(None, None, path, [], _masker())[0] == {"text": "2 | 데이터 켜기", "source": "steps_file"}
+
+
+def test_parse_steps_step_names_like_verdict_are_not_verdicts():
+    """`Fail-safe check`·`Failover test`·`Passive scan`은 스텝 이름이다. 이름 칸이 사유 붙은 판정 모양이어도 판정 칸의 전체 일치가 먼저,
+    판정 열을 아는 표에서는 다른 칸의 사유 붙은 모양을 판정으로 보지 않는다."""
+    rows = failedstep.parse_steps("1 | Fail-safe check | Pass\n2 | Failover test | PASS\n3 | Passive scan | FAIL\n"
+                                  "4 | Fail (timeout) 재현 | PASS\n")
+    assert _expected_steps(rows) == [(1, "Fail-safe check", "pass"), (2, "Failover test", "pass"), (3, "Passive scan", "fail"),
+                                     (4, "Fail (timeout) 재현", "pass")]
+    assert failedstep.parse_steps("No | Step | Result\n5 | NG (no grant) 확인 | Skip\n") == []
+
+
+def test_summary_row_is_not_failed_step():
+    """번호 없이 이름이 합계 단어 그대로인 줄(`Overall result | FAIL`·`Total | FAIL`·`합계 | FAIL`)은 스텝이 아니다."""
+    text = "Overall result | FAIL\n1 | Attach | PASS\n2 | 데이터 켜기 | Fail (timeout)\nTotal | FAIL\n합계: | FAIL\n"
+    assert _expected_steps(failedstep.parse_steps(text)) == [(1, "Attach", "pass"), (2, "데이터 켜기", "fail")]
+    path = Path(tempfile.mkdtemp()) / "steps.txt"
+    path.write_text(text, encoding="utf-8")
+    steps, failed, warnings, _ = failedstep.read_steps(path)
+    assert failed == 1 and warnings == []

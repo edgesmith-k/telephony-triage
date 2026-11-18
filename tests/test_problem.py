@@ -396,7 +396,8 @@ def test_error_prefix_recorded_and_used_by_check():
 
 
 @pytest.mark.parametrize("tc,note", [
-    ("No | Step | Result\n1 | Attach | Pass\n2 | 데이터 켜기 | Fail (No response)\n", True),     # 판정 칸에 사유 — 목록에서 빠짐
+    ("No | Step | Result\n1 | Attach | Pass\n2 | 데이터 켜기 | Failed due to No response\n", True),   # 표가 못 읽는 판정 — 목록에서 빠짐
+    ("No | Step | Result\n1 | Attach | Pass\n2 | 데이터 켜기 | Fail (No response)\n", False),     # 판정 칸에 사유 — 이제 표가 읽는다
     (TC, False)])
 def test_incomplete_step_list_is_marked(tc, note):
     job = tmp("tt-problem-") / KEY
@@ -404,7 +405,8 @@ def test_incomplete_step_list_is_marked(tc, note):
     text = (job / "problem-input.md").read_text(encoding="utf-8")
     tc_part = text.split("## TC\n", 1)[1].split("\n## ", 1)[0]
     assert ("이 목록은 불완전하다" in tc_part) is note
-    assert "Fail (No response)" in text or not note
+    assert "No response" in text
+    assert ("2 | 데이터 켜기 — FAIL" in tc_part) is ("Fail (No response)" in tc)
 
 
 def test_ipc_pair_skips_numbers_of_other_shape():
