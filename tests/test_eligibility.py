@@ -345,3 +345,24 @@ def test_decision_accepted_cause_missing_from_candidates_is_held():
     d = driver._decision(cands, {"location": {"state": "confirmed", "source": "look_at", "kind": "point"}}, elig)
     assert (d["state"], d["reason"], d["selected"], d["check"]["why"]) == ("held", "ineligible", None, "cause_not_in_candidates")
     assert "cause_not_in_candidates" in issuepost.HELD_WHY
+
+
+def test_adopted_location_follows_eligibility():
+    """채택이면 실패 지점 상태는 자격 검사 결과로: 기준 줄 자체가 실패 사건이면 confirmed/point(글자 일치여도), 근처 채택은 found,
+    구간은 FAIL 마커 1개일 때만 confirmed, comment 출처는 늘 found. 보류는 앵커 기준 그대로(글자 일치 한 곳 = found)."""
+    from triagelib import driver
+    cands = [{"category": "data", "type": "DATA-001", "cause": "DATA-001-01"}]
+    text = {"state": "found", "source": "look_at", "kind": "near"}
+
+    def loc(location, why, state="accepted"):
+        elig = {"state": state, "reason": "anchored_top" if state == "accepted" else "ineligible", "why": why,
+                "cause": "DATA-001-01" if state == "accepted" else None}
+        return driver._decision(cands, {"location": location}, elig)["location"]
+    assert loc(text, "same_line") == {"state": "confirmed", "source": "look_at", "kind": "point"}
+    assert loc({**text, "kind": "point", "state": "confirmed"}, "cp_point")["state"] == "confirmed"
+    assert loc(text, "near_symptom") == text                                   # 근처 채택(5-2) = 찾음
+    assert loc(text, "near_without_symptom", state="held") == text            # 보류는 앵커 기준 그대로
+    marker = {"state": "confirmed", "source": "log_marker", "kind": "range"}
+    assert loc(marker, "range") == marker
+    assert loc({**marker, "source": "steps_file", "state": "found"}, "range")["state"] == "found"
+    assert loc({"state": "confirmed", "source": "comment", "kind": "point"}, "same_line")["state"] == "found"

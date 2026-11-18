@@ -263,7 +263,7 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
     assert dec["check"]["why"] == "same_line" and dec["events"][0]["result"] == "adopted", dec     # 기준 줄 = 실패 사건 줄
     assert {k: v for k, v in dec.items() if k in ("state", "reason", "selected", "location", "counter")} == {"state": "accepted", "reason": "anchored_top",
                    "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
-                   "location": {"state": "confirmed", "source": "look_at", "kind": "near"}}, dec
+                   "location": {"state": "confirmed", "source": "look_at", "kind": "point"}}, dec     # 글자 일치지만 같은 줄 채택
     assert _report_line(out, "- 판단:") == ("- 판단: 원인 채택 — DATA-001-01 (실패 지점: 담당자가 지정한 기준 줄·확인됨, "
                                           "자격 검사 통과)")
     assert "(관측된 규칙 일치" not in _report_line(out, "- 분류 후보:")

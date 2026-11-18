@@ -155,14 +155,16 @@ class AnchorMixin:
         return anchor
 
     def location(self, span: dict) -> dict:
-        """실패 지점 `{state, source, kind}`(analysis.json `decision.location`). 기준 줄은 일치 1개면 confirmed, 여럿이면 multiple
-        (ipc·token 일치는 point, 글자 일치는 near). 로그 마커는 FAIL 1개 confirmed·여럿 multiple·START만 found. steps-file 시각·
-        스텝 순서는 found(구간). 앵커가 없으면 이 함수를 부르지 않는다(`NO_LOCATION`)."""
+        """실패 지점 `{state, source, kind}`(analysis.json `decision.location`). 기준 줄은 ipc·token 일치(point) 1개면 confirmed,
+        글자 일치(near) 1개면 found("한 곳에서 찾았다"이지 "이번 실패 지점을 확인했다"가 아니다), 여럿이면 multiple(곳 수는 같은
+        요청으로 묶은 뒤). 로그 마커는 FAIL 1개 confirmed·여럿 multiple·START만 found. steps-file 시각·스텝 순서는 found(구간).
+        채택이면 `driver._decision`이 자격 검사 결과로 다시 정한다. 앵커가 없으면 이 함수를 부르지 않는다(`NO_LOCATION`)."""
         src = span["source"]
         if src == "look_at":     # 같은 요청(IPC REQ→RSP·RIL 짝)으로 묶은 곳 수
             look = self.look_result or {}
-            return {"state": "confirmed" if look.get("places") == 1 else "multiple", "source": src,
-                    "kind": "near" if look.get("how") == "text" else "point"}
+            text = look.get("how") == "text"
+            return {"state": "multiple" if look.get("places") != 1 else "found" if text else "confirmed", "source": src,
+                    "kind": "near" if text else "point"}
         if src == "log_marker" and span.get("fail") is not None:
             return {"state": "confirmed" if span.get("n") == 1 else "multiple", "source": src, "kind": "range"}
         return {"state": "found", "source": src, "kind": "range"}
