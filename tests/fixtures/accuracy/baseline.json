@@ -121,17 +121,16 @@
    "top1_accuracy": 0.5833,
    "top3_inclusion": 1.0,
    "false_positive_rate": 0.9167,
-   "accepted_correct": 0,
+   "accepted_correct": 3,
    "accepted_wrong": 0,
-   "held": 24,
+   "held": 21,
    "held_reasons": {
     "ambiguous": 1,
-    "ineligible": 3,
     "no_candidate": 1,
     "no_reference": 18,
     "symptom_not_found": 1
    },
-   "answer_rate": 0.0,
+   "answer_rate": 0.125,
    "correct_hold": 12,
    "held_top_right": 7,
    "anchor_runs": 0,
@@ -1607,12 +1606,12 @@
     "NETWORK-001-03",
     "DATA-003-01"
    ],
-   "adopted": null,
+   "adopted": "DATA-003-01",
    "verdict": "상위3",
    "anchor_ok": null,
    "error": null,
-   "held_why": "comment_unconfirmed",
-   "held_cause": "DATA-003-01"
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKPOS-1",
@@ -1687,12 +1686,12 @@
     "NETWORK-001-03",
     "DATA-003-01"
    ],
-   "adopted": null,
+   "adopted": "DATA-003-01",
    "verdict": "상위3",
    "anchor_ok": null,
    "error": null,
-   "held_why": "comment_unconfirmed",
-   "held_cause": "DATA-003-01"
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKONLYPOS-1",
@@ -1831,15 +1830,15 @@
     "NETWORK-001-03",
     "DATA-003-01"
    ],
-   "adopted": null,
+   "adopted": "DATA-003-01",
    "verdict": "상위3",
    "anchor_ok": null,
    "error": null,
-   "held_why": "comment_unconfirmed",
-   "held_cause": "DATA-003-01"
+   "held_why": null,
+   "held_cause": null
   }
  ],
- "comment_adopt": {
+ "comment_adopt_off": {
   "by_condition": {
    "problem": {
     "total": 24,
@@ -1859,16 +1858,17 @@
     "top1_accuracy": 0.5833,
     "top3_inclusion": 1.0,
     "false_positive_rate": 0.9167,
-    "accepted_correct": 3,
+    "accepted_correct": 0,
     "accepted_wrong": 0,
-    "held": 21,
+    "held": 24,
     "held_reasons": {
      "ambiguous": 1,
+     "ineligible": 3,
      "no_candidate": 1,
      "no_reference": 18,
      "symptom_not_found": 1
     },
-    "answer_rate": 0.125,
+    "answer_rate": 0.0,
     "correct_hold": 12,
     "held_top_right": 7,
     "anchor_runs": 0,
@@ -2189,12 +2189,12 @@
      "NETWORK-001-03",
      "DATA-003-01"
     ],
-    "adopted": "DATA-003-01",
+    "adopted": null,
     "verdict": "상위3",
     "anchor_ok": null,
     "error": null,
-    "held_why": null,
-    "held_cause": null
+    "held_why": "comment_unconfirmed",
+    "held_cause": "DATA-003-01"
    },
    {
     "key": "TOKONLYPOS-1",
@@ -2205,12 +2205,12 @@
      "NETWORK-001-03",
      "DATA-003-01"
     ],
-    "adopted": "DATA-003-01",
+    "adopted": null,
     "verdict": "상위3",
     "anchor_ok": null,
     "error": null,
-    "held_why": null,
-    "held_cause": null
+    "held_why": "comment_unconfirmed",
+    "held_cause": "DATA-003-01"
    },
    {
     "key": "NEARPOS-1",
@@ -2237,12 +2237,12 @@
      "NETWORK-001-03",
      "DATA-003-01"
     ],
-    "adopted": "DATA-003-01",
+    "adopted": null,
     "verdict": "상위3",
     "anchor_ok": null,
     "error": null,
-    "held_why": null,
-    "held_cause": null
+    "held_why": "comment_unconfirmed",
+    "held_cause": "DATA-003-01"
    }
   ]
  }
