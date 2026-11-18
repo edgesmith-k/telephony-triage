@@ -5,6 +5,9 @@
 로그 줄(`태그: 메시지`)에 부분 일치(대소문자 무시, 8자 미만이거나 마스킹 토큰 밖 조각이 4자 미만이면 찾지 않음). 비교 전에 양쪽 마스킹 토큰(`<IP#7>`)을 번호 없이
 접는다(`modulefilter._TOKEN_FOLD`와 같은 식) — 입력과 로그를 다른 마스커가 가려 번호가 달라도 맞게. 후보가 여럿이면 기준 시각(Jira 발생
 시각)에 가장 가까운 것, 기준 시각이 없으면 마지막 것(시험은 FAIL에서 멈추므로 실패는 보통 로그 끝쪽)을 고르고 고른 방식을 남긴다.
+
+자격 검사(단계 5)용: 일치 줄을 같은 요청끼리 묶어(`group_places` — IPC REQ→RSP, RIL serial 짝) "몇 곳"인지 센다. 붙여 넣은 줄에
+logcat 시각이 있으면(`stamp`) 그 시각과 같은 곳을 먼저 고른다(`parse_logcat ipc --find`, 같은 단말 로그 시계라 유효).
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ _HEAD = re.compile(r"^\s*(?:\d{4}-)?\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?
 # 대괄호는 시각 모양만 뗀다(`[TX]`·`[IpcCtx_0]`는 IPC 정규식이 쓴다, P2 21): `[  12.345]`·`[14:32:11.001]`
 _BRACKET_TS = re.compile(r"\[\s*\d+\.\d+\s*\]|\[\d{1,2}:\d{2}:\d{2}(?:\.\d+)?\]")
 _TOKEN = re.compile(r"(?i)\btoken\s*[=:(]\s*(0x[0-9A-Fa-f]{1,8}|\d{1,10})\b")   # 괄호 없이·`Token(0x2FE)`도 읽는다(P2 22, 단계 3)
+_STAMP = re.compile(r"^\s*((?:\d{4}-)?\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3,9})")    # = logtime.STAMP(연도·시각 부분)
 _BARE_TOKEN = re.compile(r"0[xX][0-9A-Fa-f]{1,8}|\d{1,10}")    # 글 전체가 token 값(16진 또는 10진 숫자만)
 # `common.modulefilter._TOKEN_FOLD`의 사본 — run·explore 경로는 modulefilter를 import하지 않는다(test_modulefilter). 바꾸면 둘 다
 _TOKEN_FOLD = re.compile(r"<[A-Z][A-Z0-9_]*#\d+>|<HEXDUMP \d+B>|<REDACTED:[A-Z0-9]+>")
@@ -35,6 +39,12 @@ def clean(text) -> str:
     """앞의 logcat 머리·대괄호 시각을 떼고 공백을 한 칸으로. ponytail: syslog(oFono) 머리는 떼지 않는다 — 메시지 부분을 붙이면 찾는다."""
     text = _HEAD.sub("", str(text or ""), count=1)
     return " ".join(_BRACKET_TS.sub(" ", text).split())
+
+
+def stamp(text) -> str | None:
+    """붙여 넣은 줄 앞의 logcat 시각(`[YYYY-]MM-DD HH:MM:SS.mmm`) 글. 없으면 None — `clean`이 떼기 전에 부른다."""
+    m = _STAMP.match(str(text or ""))
+    return m.group(1) if m else None
 
 
 def fold(text) -> str:
@@ -91,3 +101,33 @@ def pick(times: list[datetime], ref: datetime | None) -> tuple[int, str]:
     if ref is not None:
         return min(range(len(times)), key=lambda k: (abs((times[k] - ref).total_seconds()), k)), "nearest"
     return len(times) - 1, "last"
+
+
+def group_places(hits: list[dict]) -> list[list[dict]]:
+    """일치 줄(`{ts, phone, ipc?: {dir, name, token}, ril?: {serial, pid, paired_ts}}`, 시각 순)을 같은 요청끼리 묶는다(H13):
+    IPC = 같은 name·token·슬롯의 REQ와 그 뒤 첫 RSP, RIL = 같은 pid·슬롯·serial이고 짝 시각(`paired_ts`)이 이어지는 줄.
+    나머지는 줄 하나가 한 곳."""
+    groups: list[list[dict]] = []
+    open_ipc: dict = {}
+    ril_last: dict = {}
+    for h in sorted(hits, key=lambda x: x["ts"]):
+        ipc, ril = h.get("ipc"), h.get("ril")
+        if ipc:
+            key = (ipc.get("name"), ipc.get("token"), h.get("phone"))
+            if ipc.get("dir") == "rsp" and key in open_ipc:
+                open_ipc.pop(key).append(h)
+                continue
+            groups.append([h])
+            if ipc.get("dir") == "req":
+                open_ipc[key] = groups[-1]
+        elif ril:
+            key = (ril.get("serial"), ril.get("pid"), h.get("phone"))
+            prev = ril_last.get(key)
+            if prev and ({prev[-1]["ts"], prev[-1]["ril"].get("paired_ts")} & {h["ts"], ril.get("paired_ts")}) - {None}:
+                prev.append(h)
+                continue
+            groups.append([h])
+            ril_last[key] = groups[-1]
+        else:
+            groups.append([h])
+    return groups

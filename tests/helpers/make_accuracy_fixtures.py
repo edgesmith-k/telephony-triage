@@ -9,6 +9,7 @@
 - `<사례>.log`: 조합 로그
 - `labelset.yaml`: `tools/offline_eval.py` 라벨셋(조건별 실행 `conditions`, 정답 `expect`, 정답 실패 줄 `fail_line`·`fail_at`,
   기준 줄 `look_at`). 정답이 의도와 다르게 나와도 사례를 맞추지 않는다 — 지금 코드의 출력은 `baseline.json`이 기록한다.
+- `y10/<사례>.log`·`y10/y10.json`: 자격 검사 합성 6건(단계 5)과 기준·기대 결과 — 라벨셋 밖, `tests/test_eligibility.py`가 돈다
 - `issues/<KEY>.yaml`: 코멘트가 필요한 사례의 Jira 글(`triage.py --issue-file` 모의 티켓 형식). **지금 코드는 선별에서 코멘트를
   쓰지 않아 읽히지 않는다** — 단계 4가 쓸 입력을 미리 고정해 둔다.
 
@@ -22,6 +23,7 @@ CLI:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -171,7 +173,59 @@ CASES = [
      "summary": "데이터 연결 실패", "failed_step": "데이터 연결 FAIL"},
     {"name": "mmh", "key": "FIRSTH-1", "expect": "NETWORK-001-08", "fail": "Service MODEM has died.", "first": True,
      "summary": "서비스 없음", "failed_step": "망 등록 FAIL"},
+    # 단계 5 새 양성(자격 검사가 채택해야 할 것, 시제품 11/19): token 점(응답 뒤 2초 안 DATA-003) · 이름만(요청 하나 = REQ·RSP 한 곳) ·
+    # AP 줄 인용(실패 줄이 아님 — problem.json 없는 5-1은 근처 보류, 5-2 문제 파악 유형이면 채택) · 코멘트 단서만(기준 줄 없음 — 5-2)
+    {"name": "tokpos", "key": "TOKPOS-1",
+     "segs": [(M, minute(0)), (OK, minute(1), "0x0dd", "VIPC_E_OK"), (F, minute(2), "0x0e1"), (M, minute(3))],
+     "expect": "DATA-003-01", "fail": "onDataNetworkSetupDataFailed:", "look": "VIPC_SETUP_DATA (token=0x0e1)",
+     "summary": "데이터 연결 실패", "comment": "CP 확인: VIPC_SETUP_DATA (token=0x0e1) 에서 실패했습니다."},
+    {"name": "tokonlypos", "key": "TOKONLYPOS-1", "segs": [(M, minute(0)), (F, minute(2), "0x0e2"), (M, minute(3))],
+     "expect": "DATA-003-01", "fail": "onDataNetworkSetupDataFailed:", "look": "VIPC_SETUP_DATA", "summary": "데이터 연결 실패",
+     "comment": "CP 확인: VIPC_SETUP_DATA 실패입니다."},
+    {"name": "nearpos", "key": "NEARPOS-1", "segs": [(M, minute(0)), (OFF, minute(0.5)), (F, minute(2)), (M, minute(3))],
+     "expect": "DATA-003-01", "fail": "onDataNetworkSetupDataFailed:",
+     "look": "ConnectingState: setupData: accessNetwork=EUTRAN, isSatellite=false", "summary": "데이터 연결 실패"},
+    {"name": "cluepos", "key": "CLUEPOS-1", "segs": [(M, minute(0)), (F, minute(2), "0x0e3"), (OK, minute(3), "0x0e4", "VIPC_E_OK")],
+     "expect": "DATA-003-01", "fail": "onDataNetworkSetupDataFailed:", "no_look": True, "summary": "데이터 연결 실패",
+     "comment": "CP 확인: VIPC_SETUP_DATA (token=0x0e3) 실패입니다."},
 ]
+AUTH = "data/fixtures/data-setup-auth-failure.log"
+DROP = "call/fixtures/drop-airplane.log"
+
+
+def _shift(lines: list[str], needle: str, sec: float) -> list[str]:
+    """needle이 든 줄의 시각을 sec초 옮긴다(원인 근거를 사건 뒤로)."""
+    out = []
+    for x in lines:
+        if needle in x:
+            t = STAMP.match(x)
+            x = (datetime.strptime(f"{YEAR}-{t.group(1)}", "%Y-%m-%d %H:%M:%S.%f") + timedelta(seconds=sec)).strftime(
+                "%m-%d %H:%M:%S.%f")[:-3] + t.group(2)
+        out.append(x)
+    return sorted(out, key=lambda x: STAMP.match(x).group(1))
+
+
+def y10_cases() -> list[tuple[str, list[str], dict]]:
+    """자격 검사 합성 6건(Y10, 시제품 11/19) `(이름, 로그 줄, {ref, expect})`. ref = ["text", 기준 줄] | ["range", START초, FAIL초]
+    (로그 FAIL 마커 구간, 11-14 00:00 기준). expect = [state, reason, 채택이면 원인·보류면 check.why] — problem.json 없는 5-1 기준
+    (RECOVER는 5-2가 문제 파악 유형을 읽으면 symptom_not_found/no_allowed_event_near로 바뀐다)."""
+    drop = [x for x in segment(DROP, minute(5)) if "DIALING -> ACTIVE" not in x]     # 짧은 로그(< 창 10초)
+    return [
+        ("Y10-LOGEND", drop, {"ref": ["text", "Call: setState ACTIVE -> DISCONNECTED"],
+                              "expect": ["held", "ineligible", "absence_unverified"]}),
+        ("Y10-RECOVER", build_log([(F, minute(2)), (OK, minute(2.5))]),
+         {"ref": ["text", "Internet data state changed from DISCONNECTED to CONNECTED."],
+          "expect": ["held", "ineligible", "near_without_symptom"]}),
+        ("Y10-SAMETOKEN", build_log([(OK, minute(1), "0x0e5", "VIPC_E_OK"), (F, minute(2), "0x0e5")]),
+         {"ref": ["text", "VIPC_SETUP_DATA (token=0x0e5)"], "expect": ["held", "ambiguous", "locations"]}),
+        ("Y10-SAMECAUSE", build_log([(M, minute(0)), (F, minute(2)), (F, minute(2.5))]),
+         {"ref": ["range", minute(1.5), minute(3)], "expect": ["accepted", "anchored_top", "DATA-003-01"]}),
+        ("Y10-DIFFCAUSE", build_log([(M, minute(0)), (F, minute(2)), (AUTH, minute(2.5))]),
+         {"ref": ["range", minute(1.5), minute(3)], "expect": ["held", "ambiguous", "multiple_events"]}),
+        ("Y10-AFTER", _shift(segment(M, minute(1)), "setRadioPower power false", 0.6),
+         {"ref": ["text", "pollStateDone: hasRegistered = false hasDeregistered = true"],
+          "expect": ["held", "cause_unconfirmed", "cause_after_event"]}),
+    ]
 
 
 def build_log(segs) -> list[str]:
@@ -203,6 +257,7 @@ def build(out: Path) -> list[Path]:
             item["fail_at"] = _iso(stamp)
             if not case.get("first"):
                 item["occurred_at"] = _iso(stamp)[:19] + TZ     # Jira 발생 시각(초 단위)
+            if not case.get("first") and not case.get("no_look"):
                 item["look_at"] = case.get("look") or hits[0]  # 기준 줄: 실패 줄 원문(붙여 넣은 AP 줄) 또는 IPC 이름+token
         elif case.get("occurred") is not None:
             item["occurred_at"] = _iso(_at(case["occurred"]))[:19] + TZ
@@ -232,6 +287,16 @@ def build(out: Path) -> list[Path]:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(yaml.safe_dump(ticket, allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")
         written.append(path)
+    y10 = {}
+    for name, lines, spec in y10_cases():      # 자격 검사 합성 6건: 라벨셋 밖(tests/test_eligibility.py가 기준을 직접 넘겨 돈다)
+        path = out / "y10" / f"{name}.log"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join([HEAD, *lines]) + "\n", encoding="utf-8", newline="\n")
+        written.append(path)
+        y10[name] = spec
+    path = out / "y10" / "y10.json"
+    path.write_text(json.dumps(y10, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
+    written.append(path)
     doc = {"tz": "Asia/Seoul", "year": YEAR, "conditions": CONDITIONS, "items": [i for i, _ in items]}
     path = out / "labelset.yaml"
     path.write_text("# 생성 파일 — tests/helpers/make_accuracy_fixtures.py. 손으로 고치지 않는다.\n"

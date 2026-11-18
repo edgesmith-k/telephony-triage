@@ -106,7 +106,7 @@ def test_single_ipc_line_is_confirmed_point_location():
     assert done["decision"] == {"state": "accepted", "reason": "anchored_top",
                                 "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
                                 "location": {"state": "confirmed", "source": "look_at", "kind": "point"}}
-    assert "- 판단: 원인 채택 — DATA-001-01 (실패 지점: 담당자가 지정한 기준 줄·확인됨, 자격 검사 전)" in \
+    assert "- 판단: 원인 채택 — DATA-001-01 (실패 지점: 담당자가 지정한 기준 줄·확인됨, 자격 검사 통과)" in \
         (job / "report.md").read_text(encoding="utf-8")
 
 

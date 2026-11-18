@@ -638,7 +638,7 @@ def _decision_job(base: Path, decision=ACCEPTED, full: bool = False) -> Path:
     msj = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))
     msj["explore"]["inputs"]["analysis.json"] = _sha(job / "analysis.json")
     (job / "module-skill.json").write_text(json.dumps(msj, ensure_ascii=False), encoding="utf-8")
-    (job / "report.md").write_text("\n".join(["# MOCK-9076 분석 리포트", "", report.decision_line(decision or ACCEPTED, True),
+    (job / "report.md").write_text("\n".join(["# MOCK-9076 분석 리포트", "", report.decision_line(decision or ACCEPTED, [{}]),
                                               "- 분류 후보: DATA-001-01", SKILL_PENDING, EXPLORE_PENDING, SUB,
                                               "- 기타 후보: 없음", ""]), encoding="utf-8")
     return job

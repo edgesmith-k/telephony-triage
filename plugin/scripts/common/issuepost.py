@@ -44,7 +44,22 @@ SECTIONS = ("PROBLEM", "CAUSE", "NEXT ACTION", "ANALYSIS")
 HELD_REASON = {"no_reference": "실패 지점을 잡지 못함(기준 줄·스텝 마커·TC 파일+시계 차 중 로그에서 찾은 것 없음)",
                "no_candidate": "맞는 후보 없음", "cause_unconfirmed": "유형만 일치, 원인 미확인",
                "cause_unjudged": "원인 판정 불가(시그니처 시간 초과·오류)",
-               "fit_check": "탐색 분석 적합성 확인에서 1위가 증상과 맞지 않음"}
+               "fit_check": "탐색 분석 적합성 확인에서 1위가 증상과 맞지 않음",
+               # 자격 검사(단계 5): 실패 지점의 사건에 붙는 원인을 정하지 못함
+               "symptom_not_found": "실패 지점에 이슈 DB 증상과 맞는 실패가 없음",
+               "ambiguous": "실패 지점을 하나로 정하지 못함",
+               "ineligible": "실패 지점과 규칙 일치를 이을 수 없음"}
+# 자격 검사 세부 사유(`decision.check.why`) — report.md `- 판단:` 줄 괄호
+HELD_WHY = {"near_without_symptom": "지정한 줄이 실패 줄이 아님 — 근처 실패를 고르려면 증상 종류(문제 파악)가 필요",
+            "range_end_unknown": "실패 구간의 끝을 모름", "range_without_symptom": "TC 파일 시각 구간은 증상 종류(문제 파악)가 있어야 씀",
+            "absence_unverified": "'이 줄이 없어야 함' 조건을 확인할 만큼 로그가 이어지지 않음",
+            "no_event_at_reference": "지정한 IPC 응답 뒤 2초 안에 실패가 없음",
+            "typeless_failure_within_link": "지정한 IPC 응답 뒤 실패가 이슈 DB 증상과 맞지 않음",
+            "same_line_typeless": "지정한 줄의 실패가 이슈 DB 증상과 맞지 않음",
+            "no_event_in_range": "실패 구간 안에 이슈 DB 증상과 맞는 실패가 없음",
+            "locations": "같은 줄이 로그 여러 곳에 있음", "slots": "두 SIM 슬롯에 모두 맞음",
+            "sources": "기준마다 다른 실패를 가리킴", "multiple_events": "구간 안 실패마다 원인이 다름",
+            "cause_after_event": "원인 근거가 실패 뒤에만 있음", "no_cause_before_event": "실패 전에 맞는 원인이 없음"}
 SECTION_MAX = {"PROBLEM": 600, "CAUSE": 1000, "NEXT ACTION": 800, "ANALYSIS": 1600}
 BODY_MAX = 4000
 

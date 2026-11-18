@@ -3468,7 +3468,7 @@ def test_guard_module_records_denied_copies_and_notes_pass():
     ws = shared()
     job = ws.work / "MOCK-1"
     for rel in ("module-skill.json", "deep-input.json", "skill-input.json", "check-output.json",
-                "problem-input.json", "problem.json", "module-skill/deep/ofono/data/SKILL.md"):
+                "problem-input.json", "problem.json", "eligibility.json", "module-skill/deep/ofono/data/SKILL.md"):
         out = guard(ws, "Write", {"file_path": str(job / rel), "content": "x"}, ws.base)
         assert decision(out) == "deny" and "만 쓴다" in _reason(out) and "규칙 12" in _reason(out), rel
         for cmd in (f"echo x > {job / rel}", f"rm -f {job / rel}"):

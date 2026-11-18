@@ -195,3 +195,41 @@ items:
   fail_at: '2026-11-14T10:04:00.000+09:00'
   failed_step: 망 등록 FAIL
   first_analysis: true
+- key: TOKPOS-1
+  logs:
+  - tokpos.log
+  expect: DATA-003-01
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.624  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.'
+  fail_at: '2026-11-14T10:02:00.624+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: VIPC_SETUP_DATA (token=0x0e1)
+  issue_file: issues/TOKPOS-1.yaml
+- key: TOKONLYPOS-1
+  logs:
+  - tokonlypos.log
+  expect: DATA-003-01
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.624  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.'
+  fail_at: '2026-11-14T10:02:00.624+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: VIPC_SETUP_DATA
+  issue_file: issues/TOKONLYPOS-1.yaml
+- key: NEARPOS-1
+  logs:
+  - nearpos.log
+  expect: DATA-003-01
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.624  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.'
+  fail_at: '2026-11-14T10:02:00.624+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: 'ConnectingState: setupData: accessNetwork=EUTRAN, isSatellite=false'
+- key: CLUEPOS-1
+  logs:
+  - cluepos.log
+  expect: DATA-003-01
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.624  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.'
+  fail_at: '2026-11-14T10:02:00.624+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  issue_file: issues/CLUEPOS-1.yaml

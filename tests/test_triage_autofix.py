@@ -263,7 +263,7 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
                    "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
                    "location": {"state": "confirmed", "source": "look_at", "kind": "near"}}, dec
     assert _report_line(out, "- 판단:") == ("- 판단: 원인 채택 — DATA-001-01 (실패 지점: 담당자가 지정한 기준 줄·확인됨, "
-                                          "자격 검사 전)")
+                                          "자격 검사 통과)")
     assert "(관측된 규칙 일치" not in _report_line(out, "- 분류 후보:")
     (out / "deep-output.md").write_text("요약: 사용자 설정이 아니라 망 거절로 보인다\n근거:\n"
                                         "분석 스킬 의견: DATA-001-02 — 망 거절 흔적\n규칙 제안:\n- 없음\n", encoding="utf-8")
@@ -283,7 +283,7 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
     assert not list(out.glob(".analysis.json.tmp-*"))
     assert after["decision"] == {**dec, "counter": {"cause": "DATA-001-02"}}
     assert after["candidates"] == done["candidates"]
-    assert _report_line(out, "- 판단:").endswith("자격 검사 전) · 모델 검토 의견이 다름(DATA-001-02) — 확인 필요")
+    assert _report_line(out, "- 판단:").endswith("자격 검사 통과) · 모델 검토 의견이 다름(DATA-001-02) — 확인 필요")
     assert issue_post.classify(after, None)["cls"].endswith("DATA-001-01 Data disabled")      # 채택은 그대로
 
     run_json("triage.py", ["explore", item["key"], "--out", out], root=root)

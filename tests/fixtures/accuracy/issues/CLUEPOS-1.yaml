@@ -1,0 +1,13 @@
+key: CLUEPOS-1
+fields:
+  summary: 데이터 연결 실패
+  description: 시험 중 데이터 연결이 실패했습니다.
+  customfield_10001: 2026-11-14T10:02:00+0900
+  customfield_10006: '0'
+comments:
+- author: mock.tester
+  created: 2026-11-14T11:00:00+0900
+  body: 로그 첨부했습니다.
+- author: mock.cp
+  created: 2026-11-14T13:00:00+0900
+  body: 'CP 확인: VIPC_SETUP_DATA (token=0x0e3) 실패입니다.'

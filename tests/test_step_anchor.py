@@ -121,9 +121,10 @@ def test_location_state_per_anchor_source():
     assert loc(two) == {"state": "multiple", "source": "log_marker", "kind": "range"}
     assert loc(start_only) == {"state": "found", "source": "log_marker", "kind": "range"}
     look_at = {"source": "look_at", "fail": _t("5:30:20")}
-    assert loc(look_at, {"hits": 1, "how": "ipc"}) == {"state": "confirmed", "source": "look_at", "kind": "point"}
-    assert loc(look_at, {"hits": 1, "how": "token"}) == {"state": "confirmed", "source": "look_at", "kind": "point"}
-    assert loc(look_at, {"hits": 3, "how": "text"}) == {"state": "multiple", "source": "look_at", "kind": "near"}
+    assert loc(look_at, {"hits": 1, "places": 1, "how": "ipc"}) == {"state": "confirmed", "source": "look_at", "kind": "point"}
+    # 같은 요청의 REQ·RSP 두 줄은 한 곳(단계 5) — 일치 줄 수가 아니라 묶은 곳 수로 본다
+    assert loc(look_at, {"hits": 2, "places": 1, "how": "token"}) == {"state": "confirmed", "source": "look_at", "kind": "point"}
+    assert loc(look_at, {"hits": 3, "places": 3, "how": "text"}) == {"state": "multiple", "source": "look_at", "kind": "near"}
     for src in ("steps_file", "step_order"):
         assert loc({"source": src, "fail": _t("5:30:20")}) == {"state": "found", "source": src, "kind": "range"}
 
@@ -319,7 +320,7 @@ def test_marker_anchor_with_failed_step_moves_window_and_top_candidate():
     assert done["logs"]["window"] == {"start": "2026-09-20T05:32:00.000Z", "end": "2026-09-20T05:34:00.000Z"}
     assert done["issue"]["failed_step"]["text"] == STEP and done["request_hash"] != off["request_hash"]
     report = (job / "report.md").read_text(encoding="utf-8")
-    assert "- 판단: 원인 채택 — DATA-001-01 (실패 지점: 로그 스텝 마커·확인됨, 자격 검사 전)" in report
+    assert "- 판단: 원인 채택 — DATA-001-01 (실패 지점: 로그 스텝 마커·확인됨, 자격 검사 통과)" in report
     assert "- 실패 스텝 구간 (log_marker): Step 5 2026-09-20T05:33:00.000Z ~ 2026-09-20T05:33:30.000Z → 분석 범위 " \
         "2026-09-20T05:32:00.000Z ~ 2026-09-20T05:34:00.000Z (Jira 발생 시각 2026-09-20T14:31:00+09:00 / 2.5분 차이)" in report
     assert "S/C에 쓰지 않음; 단어 겹침 가산·순위 참고·분석 범위" in report
