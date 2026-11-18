@@ -619,11 +619,21 @@ ACCEPTED = {"state": "accepted", "reason": "anchored_top",
             "location": {"state": "confirmed", "source": "look_at", "kind": "point"}}
 
 
-def _decision_job(base: Path, decision=ACCEPTED) -> Path:
-    """탐색 모듈 기록(입력 해시에 analysis.json)이 있는 JOB에 심층 분석(설치 스킬)·판단을 더한다 — 둘 다 TODO 줄."""
+# analysis 스키마 `ok`의 필수 키(합성 JOB을 완전한 run 출력으로 만들 때)
+OK_KEYS = {"status": "ok", "generated_at": "2026-09-20T06:00:00+00:00", "request_hash": "0123456789abcdef", "mode": "offline",
+           "logs": {"files": ["a.log"], "range": ["t0", "t1"], "in_range": True, "events": 4}, "code": {"skipped": True},
+           "files": {"report": "r"}, "truncated": False,
+           "candidates": [{"type": "DATA-001", "cause": "DATA-001-01", "category": "data", "score": 1.0, "confidence": "high",
+                           "S": 1, "C": 1, "evidence": []}]}
+
+
+def _decision_job(base: Path, decision=ACCEPTED, full: bool = False) -> Path:
+    """탐색 모듈 기록(입력 해시에 analysis.json)이 있는 JOB에 심층 분석(설치 스킬)·판단을 더한다 — 둘 다 TODO 줄.
+    full이면 analysis.json이 스키마 `ok`의 필수 키를 다 갖춘 run 출력이다(판단만 스키마를 어길 수 있게)."""
     job = make_job(base, "explore", "explore")
     analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
-    analysis.update(analyzer={"skill": "mock-data-analyzer", "when": "ask"}, **({"decision": decision} if decision else {}))
+    analysis.update(analyzer={"skill": "mock-data-analyzer", "when": "ask"}, **({"decision": decision} if decision else {}),
+                    **(OK_KEYS if full else {}))
     (job / "analysis.json").write_text(json.dumps(analysis, ensure_ascii=False), encoding="utf-8")
     msj = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))
     msj["explore"]["inputs"]["analysis.json"] = _sha(job / "analysis.json")
@@ -664,28 +674,35 @@ def test_deep_counter_rebases_module_inputs_so_later_explore_check_uses_its_view
     assert code == 0 and data["fabricated"] == 0 and _rec(job, "explore")["source"] == "module-skill/explore/timeline.md"
 
 
-def test_decision_not_written_on_schema_violation_or_changed_file(tmp_path, capsys):
-    """P2-2·P2-3: 스키마 위반(TT_SCHEMA_CHECK, 여기선 합성 analysis.json에 필수 키가 없다)이나 검사 중 analysis.json이 바뀌었으면
-    쓰지 않고 경고, 기록에 `decision_unwritten`. report.md 판단 줄도 그대로."""
-    job = _decision_job(tmp_path)
+def test_decision_not_written_on_schema_violation_or_changed_file(tmp_path, capsys, monkeypatch):
+    """P2-2·P2-3: 판단이 불변식을 어기거나(TT_SCHEMA_CHECK — 완전한 run 출력에 accepted인데 selected null) 검사 중 analysis.json이
+    바뀌었으면 쓰지 않고 경고, 기록에 `decision_unwritten`. report.md 판단 줄도 그대로. module-skill.json 해시를 못 고치면
+    판단은 쓰고 `module_inputs_unwritten`."""
+    sound = json.loads((_decision_job(tmp_path / "ok", full=True) / "analysis.json").read_text(encoding="utf-8"))
+    assert report.schema_violation(sound) is None                       # 판단만 바꾸면 위반이 되는 완전한 출력
+    job = _decision_job(tmp_path / "bad", decision={**ACCEPTED, "selected": None}, full=True)
     raw = (job / "analysis.json").read_bytes()
     judge = _line(job, "- 판단:")
     (job / "deep-output.md").write_text(_skill_out([Q1]).replace("DATA-001-01 — 1위와 같음", "DATA-001-02 — 망 거절"),
                                         encoding="utf-8")
     code, _, err = check(job, "deep", capsys=capsys)
-    assert code == 0 and "판단(decision)을 고치지 못했다" in err, err
+    assert code == 0 and "판단(decision)을 고치지 못했다" in err and "decision" in err, err
     assert (job / "analysis.json").read_bytes() == raw and _line(job, "- 판단:") == judge
     assert _rec(job, "deep")["decision_unwritten"] == "스키마 위반"
+    # 처음 읽은 뒤 바뀐 파일: 쓰지 않는다
+    job = _decision_job(tmp_path / "race", full=True)
+    raw = (job / "analysis.json").read_bytes()
     analysis = json.loads(raw)
-    (job / "analysis.json").write_text(json.dumps({**analysis, "note": "다른 프로세스가 고침"}), encoding="utf-8")
+    (job / "analysis.json").write_text(json.dumps({**analysis, "truncated": True}), encoding="utf-8")
     changed = (job / "analysis.json").read_bytes()
-    args = _args(job, "deep")
-    os.environ.pop("TT_SCHEMA_CHECK")
-    try:
-        why = output._decision_update(args, job, analysis, hashlib.sha256(raw).hexdigest(), opinion="DATA-001-02 — x")
-    finally:
-        os.environ["TT_SCHEMA_CHECK"] = "1"
-    assert why == "검사 중 analysis.json이 바뀌었다" and (job / "analysis.json").read_bytes() == changed
+    out = output._decision_update(_args(job, "deep"), job, analysis, hashlib.sha256(raw).hexdigest(), opinion="DATA-001-02 — x")
+    assert out == {"decision_unwritten": "검사 중 analysis.json이 바뀌었다"} and (job / "analysis.json").read_bytes() == changed
+    # module-skill.json 해시 갱신 실패: 판단은 쓰고 따로 남긴다
+    (job / "analysis.json").write_bytes(raw)
+    monkeypatch.setattr(output, "_rebase_module_inputs", lambda *a: False)
+    out = output._decision_update(_args(job, "deep"), job, analysis, hashlib.sha256(raw).hexdigest(), opinion="DATA-001-02 — x")
+    assert out == {"module_inputs_unwritten": True}
+    assert json.loads((job / "analysis.json").read_text(encoding="utf-8"))["decision"]["counter"] == {"cause": "DATA-001-02"}
 
 
 def test_old_job_without_decision_leaves_analysis_untouched(tmp_path, capsys, monkeypatch):

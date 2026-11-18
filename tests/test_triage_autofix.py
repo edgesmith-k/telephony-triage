@@ -400,7 +400,7 @@ def test_auto_scan_result_survives_reuse_cache_hit():
     ws.json("triage.py", ["release", "MOCK-9005"])
 
 
-def test_fit_hold_rewrites_report_obligation_and_reuse_keeps_decision():
+def test_fit_hold_rewrites_report_obligation_and_reuse_keeps_decision(monkeypatch):
     """P1-1: 작업 디렉토리 JOB에서 탐색 적합성 확인이 판단을 보류로 바꾸면, run이 남긴 리포트 표시 의무(같은 key)를 고친 줄로
     다시 남긴다 — show_guard가 옛 "원인 채택" 줄을 보이라고 하지 않는다. 캐시 적중(재사용)이면 판단·판단 줄이 같다(P2-7)."""
     sys.path.insert(0, str(plugin_root() / "scripts"))
@@ -431,4 +431,13 @@ def test_fit_hold_rewrites_report_obligation_and_reuse_keeps_decision():
     gap = shown.missing(ob, [])
     assert new in gap and old not in gap
     assert not any(x.endswith(old[2:]) for x in gap)
+    # run 기록·check-output 기록을 두 Bash 호출에 순서대로 고정하면 열린 리포트 의무는 하나이고, 그 줄은 새 보류 줄이다
+    pair = [recs[0], recs[-1]]
+    assert pair[0]["script"] == "triage" and pair[1]["script"] == "triage"
+    seq = [{"kind": "tool", "name": "Bash", "id": f"b{k}", "input": {"command": cmd}, "result": "{}", "error": False}
+           for k, cmd in enumerate(["python3 triage.py run MOCK-9005", "python3 triage.py check-output MOCK-9005 --for explore"])]
+    monkeypatch.setattr(shown, "anchor", lambda s, r: list(enumerate(r)))
+    live = [ob for ob in shown.record_obligations(seq, pair) if ob.open and ob.kind == "report"]
+    assert len(live) == 1 and live[0].start == 1, [(ob.key, ob.start) for ob in live]
+    assert new in live[0].lines and old not in live[0].lines
     ws.json("triage.py", ["release", "MOCK-9005"])

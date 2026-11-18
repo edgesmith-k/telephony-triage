@@ -394,13 +394,13 @@ def _read_analysis(job: Path) -> tuple[dict | None, str | None]:
         return None, None
 
 
-def _rebase_module_inputs(job: Path, old: str, new: str) -> None:
+def _rebase_module_inputs(job: Path, old: str, new: str) -> bool:
     """module-skill.json 기록 중 `inputs["analysis.json"]`이 고치기 전 해시인 것을 새 해시로 바꾼다 — 판단만 고친 analysis.json
-    때문에 뒤 검사가 그 기록을 "이전 분석 것"으로 보고 근거 원문 검사를 건너뛰지 않게."""
+    때문에 뒤 검사가 그 기록을 "이전 분석 것"으로 보고 근거 원문 검사를 건너뛰지 않게. 고칠 것을 못 썼으면 False."""
     path = job / MODULE_RECORD
     msj = _load(path)
     if not isinstance(msj, dict):
-        return
+        return True
     hit = [rec["inputs"] for rec in msj.values() if isinstance(rec, dict) and isinstance(rec.get("inputs"), dict)
            and rec["inputs"].get("analysis.json") == old]
     for inputs in hit:
@@ -410,25 +410,28 @@ def _rebase_module_inputs(job: Path, old: str, new: str) -> None:
             _write_atomic(path, (json.dumps(msj, ensure_ascii=False, indent=1) + "\n").encode("utf-8"))
         except OSError:
             print(f"경고: {MODULE_RECORD}의 analysis.json 해시를 고치지 못했다", file=sys.stderr)
+            return False
+    return True
 
 
 def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, hold: bool = False,
-                     opinion: str | None = None) -> str | None:
+                     opinion: str | None = None) -> dict:
     """analysis.json `decision`을 고친다(단계 4): 탐색 적합성 확인 보류(`hold`)면 채택 → held/fit_check(counter 없앰), 심층 분석
     의견의 원인 ID가 채택 원인과 다르면 `counter`만 붙인다(상태·사유 그대로). 이미 보류면 사유를 바꾸지 않는다(앞 사유가 우선).
     decision 없는 옛 JOB은 그대로. 4KB 압축 → 스키마 검사(TT_SCHEMA_CHECK) → 처음 읽은 뒤 바뀌지 않았는지 해시 대조 → 원자 쓰기 →
     module-skill.json 입력 해시 갱신 → report.md `- 판단:` 줄 재작성 → (작업 디렉토리 JOB이면) 리포트 표시 기록을 새 줄로 다시 남긴다.
-    고칠 것이 없으면 None, 고치지 못했으면 그 사유(check-output 기록 `decision_unwritten`)."""
+    check-output 기록에 더할 칸: 판단을 못 고쳤으면 `decision_unwritten: <사유>`, module-skill.json 해시를 못 고쳤으면
+    `module_inputs_unwritten: true`(판단은 썼다). 고칠 것이 없거나 다 썼으면 {}."""
     dec = analysis.get("decision")
     if not isinstance(dec, dict) or dec.get("state") != "accepted":
-        return None
+        return {}
     if hold:
         new = {"state": "held", "reason": "fit_check", "selected": None, "location": dec.get("location")}
     else:
         m = OPINION_ID.match(opinion or "")
         selected = (dec.get("selected") or {}).get("cause")
         if not m or m.group(1) == selected or (dec.get("counter") or {}).get("cause") == m.group(1):
-            return None
+            return {}
         new = {**dec, "counter": {"cause": m.group(1)}}
     result = rep.fit({**analysis, "decision": new})     # counter가 붙어도 4KB 안(판단은 줄이지 않는다)
     why = None
@@ -439,24 +442,23 @@ def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, h
         why = detail = "검사 중 analysis.json이 바뀌었다"
     if why:
         print(WARN_DECISION.format(why=detail), file=sys.stderr)
-        return why
+        return {"decision_unwritten": why}
     data = (rep.dumps(result) + "\n").encode("utf-8")
     try:
         _write_atomic(job / "analysis.json", data)
     except OSError:
         print(WARN_DECISION.format(why="쓰기 실패"), file=sys.stderr)
-        return "쓰기 실패"
-    if read_sha:
-        _rebase_module_inputs(job, read_sha, _sha(data))
+        return {"decision_unwritten": "쓰기 실패"}
+    extra = {} if not read_sha or _rebase_module_inputs(job, read_sha, _sha(data)) else {"module_inputs_unwritten": True}
     report = job / "report.md"
     if not rep.rewrite_line(report, rep.DECISION_PREFIX, [rep.decision_line(new, bool(analysis.get("candidates")))]):
         print(WARN_REWRITE, file=sys.stderr)
-        return "report.md 판단 줄"
+        return {**extra, "decision_unwritten": "report.md 판단 줄"}
     if not args.out:    # run이 남긴 리포트 표시 의무(같은 key)를 고친 줄로 바꾼다 — 옛 "원인 채택" 줄을 보이라고 하지 않게
         shown.record(job.parent, "triage", "report", job.name, key=f"report:{job.name}#{analysis.get('run')}",
                      lines=shown.report_core(report.read_text(encoding="utf-8")), must_show=result.get("must_show") or [],
                      path=str(job.absolute() / "report.md"))
-    return None
+    return extra
 
 
 def _skipped(args, job: Path, purpose: str, env: dict) -> int:
@@ -597,18 +599,17 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     if unwritten:
         print(WARN_HOLD.format(what="·".join(unwritten)), file=sys.stderr)
     if hold:
-        dec_why = _decision_update(args, job, analysis, read_sha, hold=True)
+        dec_extra = _decision_update(args, job, analysis, read_sha, hold=True)
     elif purpose == "deep":
-        dec_why = _decision_update(args, job, analysis, read_sha, opinion=fields.get("분석 스킬 의견"))
+        dec_extra = _decision_update(args, job, analysis, read_sha, opinion=fields.get("분석 스킬 의견"))
     else:
-        dec_why = None
+        dec_extra = {}
 
     counts = {k: (res or {}).get(k, 0) for k in ("fabricated", "weak", "raw")}
     n = (res or {}).get("n", 0)
     _record(job, purpose, {"mode": mode, "at": _now(), "env": env, "output_sha256": sha, "source": src_rel if res else None,
                            "quotes": n, **counts, **({"fit_hold": hold} if hold else {}),
-                           **({"fit_hold_unwritten": unwritten} if unwritten else {}),
-                           **({"decision_unwritten": dec_why} if dec_why else {})})
+                           **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra})
     head = masking.mask_brief(lines[0], 300, off=off)     # 끔 DB: report.md 줄과 같은 글자(꼭 보일 줄 대조가 어긋나지 않게)
     fab = [sub.lstrip()] if counts["fabricated"] else []
     # 심층 분석은 결과 줄(첫 줄)을 늘 보인다 — 탐색은 지어낸 인용이 있을 때만(B2-6)
