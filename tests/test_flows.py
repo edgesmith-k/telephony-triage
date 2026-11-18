@@ -706,6 +706,13 @@ EVAL_HINTS = {81: ("새 원인 초안 참고 (흐름): network/radio-on/register
               83: ("규칙 제안 (흐름): [이슈 DB] put-flow data/data-setup", "DATA-002-01")}
 
 
+def _empty_home(work: Path) -> dict:
+    """사용자 HOME의 `~/.telephony-triage/config.yaml`(사내 PC 실제 config)이 결과에 섞이지 않게 빈 홈을 준다."""
+    home = work / "home"
+    home.mkdir(exist_ok=True)
+    return {"HOME": home, "USERPROFILE": home, "TELEPHONY_TRIAGE_HOME": home / ".telephony-triage"}
+
+
 def _eval_run(eid: int, work: Path) -> tuple[Path, Path, dict, str]:
     """eval setup과 같은 DB(샘플 + setup `flows` 시드 흐름)·시나리오 로그·모의 Jira로 triage를 오프라인으로 돌린다."""
     import skill_eval_env
@@ -717,7 +724,7 @@ def _eval_run(eid: int, work: Path) -> tuple[Path, Path, dict, str]:
     [key] = setup["jira"]
     analysis = run_json("triage.py", ["run", key, "--offline-db", db, "--out", work / "out", "--logs", log, "--issue-file",
                                       EVALS / "jira" / f"{key}.yaml", "--tz", "Asia/Seoul", "--year", "2026"],
-                        env={"TT_SCHEMA_CHECK": "1"})
+                        env={"TT_SCHEMA_CHECK": "1", **_empty_home(work)})
     return db, log, analysis, (work / "out" / "report.md").read_text(encoding="utf-8")
 
 
