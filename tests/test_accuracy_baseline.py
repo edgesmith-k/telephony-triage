@@ -38,7 +38,7 @@ def current() -> dict:
     return {"by_condition": out["by_condition"], "runs": [{k: r.get(k) for k in ROW} for r in out["items"]]}
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _current() -> dict:
     """같은 세션의 두 시험이 offline_eval을 한 번만 돌리게(결과는 읽기만 한다)."""
     return current()
