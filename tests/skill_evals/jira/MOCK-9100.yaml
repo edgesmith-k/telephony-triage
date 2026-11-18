@@ -1,0 +1,34 @@
+# 모의 Jira 티켓(문제 파악 eval 100, 합성 — 줄거리·기대값은 단계 2b 리뷰 제안 3). 한 코멘트에 token 둘(요청·응답),
+# CP 이름과 AP 이름이 다른 같은 메시지.
+key: MOCK-9100
+fields:
+  summary: 데이터 연결 실패 (TC 2.6)
+  description: |
+    TC 2.6 step 3 Fail.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261110
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments:
+  - author: mock.tester
+    created: "2026-11-19T09:50:00+0900"
+    body: step 3 Fail. 로그 첨부합니다
+  - author: mock.ap.data
+    created: "2026-11-19T11:30:00+0900"
+    body: |
+      AP 로그 요청/응답 줄입니다.
+      {noformat}
+      11-19 09:31:05.402  2101  2141 D RILJ    : [0612]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN [PHONE0]
+      11-19 09:31:05.977  2101  2141 D RILJ    : [0612]< SETUP_DATA_CALL error 2 [PHONE0]
+      {noformat}
+      CP 확인 부탁드립니다.
+  - author: mock.cp
+    created: "2026-11-19T14:45:00+0900"
+    body: |
+      AP의 SETUP_DATA_CALL은 CP에서 VIPC_DATA_CALL_REQ로 받습니다. VIPC_DATA_CALL_REQ (token=0x3e0)는 정상 처리했고,
+      망 응답 VIPC_DATA_CALL_CNF (token=0x3e1)에 cause #26이 실려 실패했습니다.

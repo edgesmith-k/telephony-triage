@@ -1,0 +1,41 @@
+# 모의 Jira 티켓(문제 파악 eval 101, 합성 — 줄거리·기대값은 단계 2b 리뷰 제안 4). AP 모듈 사이 넘김(call → IMS → data),
+# 영어 코멘트 섞임. 로그 줄은 AOSP 이름 모양의 합성.
+key: MOCK-9101
+fields:
+  summary: VoLTE MO call fail (TC 7.4 step 8)
+  description: |
+    TC 7.4 step 8 MO VoLTE call Fail.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: IMS}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261110
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments:
+  - author: mock.tester
+    created: "2026-11-21T10:40:00+0900"
+    body: Step 8 MO VoLTE call failed right after dialing. Logs attached.
+  - author: mock.ap.call
+    created: "2026-11-21T13:05:00+0900"
+    body: |
+      Dial fails immediately:
+      11-21 10:15:03.552  1302  1302 D ImsPhoneCallTracker: dial: IMS is not registered, fail with CODE_LOCAL_NOT_REGISTERED
+      IMS was not registered at that time. IMS team please check.
+  - author: mock.ap.ims
+    created: "2026-11-21T14:20:00+0900"
+    body: |
+      Deregistration right before the dial:
+      11-21 10:15:01.430  1302  1340 D ImsRegistration: onDeregistered: reason=IMS PDN disconnected
+      IMS PDN was disconnected 2s before dialing. Data team please check.
+  - author: mock.ap.data
+    created: "2026-11-21T15:35:00+0900"
+    body: |
+      해당 시점 IMS PDN 해제 줄입니다.
+      11-21 10:15:01.105  2101  2101 D DataNetwork: [DN-88-I] tearDown: deactivated by network
+      프레임워크 쪽 요청은 아니고 망에서 끊긴 것으로 보여요. CP에서 deactivate 사유 확인 부탁드립니다.
+  - author: mock.pl
+    created: "2026-11-21T16:00:00+0900"
+    body: Need conclusion this week.

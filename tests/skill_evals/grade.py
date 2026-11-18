@@ -3567,9 +3567,10 @@ def _dry_clean(ctx, job: str):
 
 
 # --- 문제 파악(배치 PB, 분석 정확도 단계 2b, analyze --problem-only) --------------------------------------------------
-PB_EVALS = set(range(87, 98))
+PB_EVALS = set(range(87, 103))
 _PROBLEM_CMD = re.compile(r"triage\.py[\"']?\s+(?:--\S+\s+\S+\s+)*problem\b")
 _CHECK_PROBLEM = re.compile(r"check-output\b.*--for[\s=]+problem\b")
+_READ_INPUT_BASH = re.compile(r"\b(?:cat|head|tail|sed|less|more|type)\b[^|;&]*problem-input\.md")
 
 
 def _token_key(token) -> tuple | None:
@@ -3581,10 +3582,16 @@ def _token_key(token) -> tuple | None:
         return None
 
 
+def _quote_tokens(text) -> set:
+    return {_token_key(m) for m in re.findall(r"(?<![A-Za-z0-9_])(?:0[xX][0-9A-Fa-f]{1,8}|[0-9]{1,10})(?![A-Za-z0-9_])", str(text or ""))}
+
+
 def pb_clue_match(want: dict, got: dict) -> bool:
-    """기대 단서 하나와 검사를 통과한 단서 하나(`problem.json` `clues[]`)가 같은가: 코멘트 번호·종류, ipc는 이름·token 값,
-    ipc_name은 이름과 token 없음, log_line은 인용에 기대 글(`contains`)이 든 것. stale은 따로 본다."""
+    """기대 단서 하나와 검사를 통과한 단서 하나(`problem.json` `clues[]`)가 같은가: 코멘트 번호·종류·`side`(적혀 있으면),
+    ipc는 이름·token 값, ipc_name은 이름과 token 없음, log_line은 인용에 기대 글(`contains`)이 든 것. stale은 따로 본다."""
     if got.get("comment") != want["comment"] or got.get("kind") != want["kind"]:
+        return False
+    if want.get("side") and got.get("side") != want["side"]:
         return False
     if want["kind"] == "log_line":
         return want["contains"] in " ".join(str(got.get("quote") or "").split())
@@ -3594,59 +3601,90 @@ def pb_clue_match(want: dict, got: dict) -> bool:
 
 
 def pb_rows(expect: dict, rec: dict | None) -> list[tuple[bool, str]]:
-    """`problem_expect`와 `JOB/problem.json`을 대조한 행 2~6(유형·첫 분석·회차·단서·dropped). 기록이 없으면 모두 실패.
-    채점은 칸 값만 본다(문장은 보지 않는다)."""
+    """`problem_expect`와 `problem.json`을 대조한 행(유형·첫 분석·회차·단서·dropped, 칸 값 기대가 있으면 그 행). 기록이 없으면
+    모두 실패. 칸 값만 본다(문장 품질은 보지 않는다).
+    - 유형: 첫 칸이 `types` 가운데 하나, 나머지는 `types`·`allowed_types` 안. 범위 밖이 하나라도 있으면 실패(D02).
+    - 단서: 기대 단서가 모두 있고(stale·side까지), 모든 단서가 기대나 `allowed_clues` 가운데 하나에 맞는다. `absent_tokens`는
+      token 칸과 인용 글 둘 다에서 찾는다(D03).
+    - 회차: `count`·`last_from_comment`·`same_failure`가 허용 값 안(D07)."""
+    n = 6 if any(k in expect for k in PB_FIELD_KEYS) else 5
     if not rec:
-        return [(False, "problem.json 없음")] * 5
+        return [(False, "problem.json 없음")] * n
     sym, rounds = rec.get("symptom") or {}, rec.get("rounds") or {}
     types = list(sym.get("types") or [])
     if expect.get("not_in_db"):
         types_ok = (not types and sym.get("not_in_db") is True, f"types={types} not_in_db={sym.get('not_in_db')}")
     else:
-        hit = [t for t in expect["types"] if t in types]
-        bad = [t for t in expect.get("absent_types") or [] if t in types]
-        types_ok = (bool(hit) and not bad, f"types={types} 기대 중 하나={expect['types']} 없어야 함={expect.get('absent_types') or []}")
+        inside = set(expect["types"]) | set(expect.get("allowed_types") or [])
+        ok = bool(types) and types[0] in expect["types"] and all(t in inside for t in types)
+        types_ok = (ok, f"types={types} 첫 칸 기대={expect['types']} 허용={expect.get('allowed_types') or []}")
     first = (rec.get("first_analysis") is expect["first_analysis"], f"first_analysis={rec.get('first_analysis')}")
     want_r = expect["rounds"]
-    ok_r = rounds.get("last_from_comment") in want_r["last_from_comment"]
-    if "same_failure" in want_r:
-        ok_r = ok_r and rounds.get("same_failure") in want_r["same_failure"]
+    ok_r = all(rounds.get(k) in want_r[k] for k in ("count", "last_from_comment", "same_failure"))
     rnd = (ok_r, f"rounds={json.dumps(rounds, ensure_ascii=False)} 기대={json.dumps(want_r, ensure_ascii=False)}")
     clues = [c for c in rec.get("clues") or [] if isinstance(c, dict)]
-    brief = [{k: c.get(k) for k in ("comment", "kind", "name", "token", "stale")} for c in clues]
-    if expect.get("no_clues"):
-        cl = (not clues, f"clues={brief}")
-    else:
-        missing = [w for w in expect["clues"]
-                   if not any(pb_clue_match(w, c) and bool(c.get("stale")) == w["stale"] for c in clues)]
-        wrong = [c for c in clues for t in expect.get("absent_tokens") or [] if _token_key(c.get("token")) == _token_key(t)]
-        cl = (not missing and not wrong, f"없는 기대 단서={missing} 정정 전 token 단서={len(wrong)}; clues={brief}"[:1200])
+    brief = [{k: c.get(k) for k in ("comment", "kind", "name", "token", "side", "stale")} for c in clues]
+    wanted, allowed = expect.get("clues") or [], expect.get("allowed_clues") or []
+    missing = [w for w in wanted if not any(pb_clue_match(w, c) and bool(c.get("stale")) == w["stale"] for c in clues)]
+    extra = [b for c, b in zip(clues, brief)
+             if not any(pb_clue_match(w, c) and bool(c.get("stale")) == w["stale"] for w in wanted + allowed)]
+    bad = [b for c, b in zip(clues, brief) for t in expect.get("absent_tokens") or []
+           if _token_key(c.get("token")) == _token_key(t) or _token_key(t) in _quote_tokens(c.get("quote"))]
+    cl = (not missing and not extra and not bad,
+          f"없는 기대 단서={missing} 기대·허용 밖 단서={extra} 없어야 할 token 단서={bad}; clues={brief}"[:1400])
     dropped = rec.get("dropped") or []
     dr = (not dropped, f"dropped {len(dropped)}: {[d.get('reason') for d in dropped if isinstance(d, dict)]}")
-    return [types_ok, first, rnd, cl, dr]
+    rows = [types_ok, first, rnd, cl, dr]
+    if n == 6:
+        modules = [str(m).lower() for m in rec.get("modules") or []]
+        hyps = " ".join(str(h) for h in rec.get("hypotheses") or [])
+        probs = []
+        if expect.get("modules_any") and not any(any(w in m for m in modules) for w in expect["modules_any"]):
+            probs.append(f"modules에 {expect['modules_any']} 중 하나 없음")
+        probs += [f"modules에 {w} 없음" for w in expect.get("modules_all") or [] if not any(w in m for m in modules)]
+        probs += [f"hypotheses에 {w}" for w in expect.get("hypotheses_absent") or [] if w in hyps]
+        if len(rec.get("unknown") or []) < expect.get("unknown_min", 0):
+            probs.append(f"unknown {len(rec.get('unknown') or [])}개 < {expect['unknown_min']}")
+        rows.append((not probs, f"{probs or '맞음'}; modules={modules} unknown={len(rec.get('unknown') or [])}"))
+    return rows
+
+
+PB_FIELD_KEYS = ("modules_any", "modules_all", "hypotheses_absent", "unknown_min")
+
+
+def pb_record(run_dir: Path, job: Path, name: str):
+    """채점 근거 파일: 실행 폴더 사본(`outputs/problem/`, run.py가 남김)이 먼저, 없으면 임시 work_dir."""
+    for base in (run_dir / "outputs" / "problem", job):
+        text = _read(base / name)
+        if text:
+            return json.loads(text)
+    return None
 
 
 def checks_pb(eid, ctx):
-    """문제 파악 eval(87~97): 기대값은 evals.json `problem_expect`(글타래를 쓸 때 먼저 정함), 판정은 `JOB/problem.json` 칸.
-    첫 행(흐름)은 실행 기록으로 — 기록이 없으면 수동."""
+    """문제 파악 eval(87~102): 기대값은 evals.json `problem_expect`(글타래를 쓸 때 먼저 정함 — 98~102는 리뷰어가 정함),
+    판정은 `problem.json` 칸. 첫 행(흐름)은 실행 기록으로 — 기록이 없으면 수동."""
     entry = next(e for e in json.loads((HERE / "evals.json").read_text(encoding="utf-8"))["evals"] if e["id"] == eid)
     job = ctx.work / entry["setup"]["jira"][0]
-    text = _read(job / "problem.json")
-    rec = json.loads(text) if text else None
-    side_text = _read(job / "problem-input.json")
-    side = json.loads(side_text) if side_text else {}
+    rec = pb_record(ctx.run, job, "problem.json")
+    side = pb_record(ctx.run, job, "problem-input.json") or {}
 
     def flow():
         s = ctx.seq()
         if s is None:
             raise _Manual("실행 기록(events.jsonl) 없음")
-        cmds = [_command(e) for e in s if e["kind"] == "tool" and e["name"] == "Bash" and not shown.not_run(e)]
+        tools = [e for e in s if e["kind"] == "tool" and not shown.not_run(e)]
+        cmds = [_command(e) for e in tools if e["name"] == "Bash"]
         made = sum(1 for c in cmds if _PROBLEM_CMD.search(c))
         checked = sum(1 for c in cmds if _CHECK_PROBLEM.search(c))
         runs = sum(1 for c in cmds if re.search(r"triage\.py[\"']?\s+(?:--\S+\s+\S+\s+)*run\b", c))
+        read = sum(1 for e in tools if (e["name"] == "Read" and not e.get("error")
+                                        and str((e.get("input") or {}).get("file_path", "")).replace("\\", "/")
+                                        .endswith("problem-input.md"))) + sum(1 for c in cmds if _READ_INPUT_BASH.search(c))
         fresh = bool(rec) and rec.get("input_sha256") == side.get("input_sha256")
-        return (made > 0 and checked > 0 and fresh and runs == 0,
-                f"problem {made}회, check-output --for problem {checked}회, run {runs}회, problem.json {'최신' if fresh else '없음·낡음'}")
+        return (made > 0 and checked > 0 and read > 0 and fresh and runs == 0,
+                f"problem {made}회, problem-input.md 읽기 {read}회, check-output --for problem {checked}회, run {runs}회, "
+                f"problem.json {'최신' if fresh else '없음·낡음'}")
 
     rows = pb_rows(entry["problem_expect"], rec)
     return [flow] + [(lambda r=r: r) for r in rows]

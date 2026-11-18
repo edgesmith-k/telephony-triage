@@ -1295,7 +1295,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 97      # PB(87~97 문제 파악) 뒤. FT(84~86 적합성 확인·반복 금지)까지 86. FL(81~83 성공 흐름 제안)까지 83, 80 setup-first-time까지 80, H(76~79)까지 79, 그 전 75
+    assert len(by_id) == 102     # PB(87~102 문제 파악) 뒤. 87~97까지 97. FT(84~86 적합성 확인·반복 금지)까지 86. FL(81~83 성공 흐름 제안)까지 83, 80 setup-first-time까지 80, H(76~79)까지 79, 그 전 75
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 11), (62, 6)):
         e = by_id[eid]
@@ -1886,7 +1886,7 @@ def test_fit_check_evals_defined(tmp_path):
 
 
 def test_problem_evals_defined(tmp_path):
-    """eval 87~97(배치 PB, 문제 파악 단계 2b): 정의 모양과, 실행 흔적이 없으면 통과로 세지 않는다."""
+    """eval 87~102(배치 PB, 문제 파악 단계 2b): 정의 모양과, 실행 흔적이 없으면 통과로 세지 않는다."""
     by_id = {e["id"]: e for e in _entries()}
     for eid in sorted(grader.PB_EVALS):
         e = by_id[eid]
@@ -1896,14 +1896,39 @@ def test_problem_evals_defined(tmp_path):
             assert (REPO / item["src"]).is_file() and f"logs/{item['as']}" in e["prompt"], eid
         env = _synthetic_env(tmp_path / str(eid))
         fns = grader.checks(eid, grader.Ctx(env, run_dir(tmp_path / str(eid))))
-        assert len(fns) == len(e["assertions"]) == 6, eid
+        has_fields = any(k in e["problem_expect"] for k in grader.PB_FIELD_KEYS)
+        assert len(fns) == len(e["assertions"]) == (7 if has_fields else 6), eid
         for fn in fns:
             try:
                 ok, _ = fn()
             except grader._Manual:
                 continue
             assert ok is False, eid
-    assert "PB=문제 파악 11(87~97:" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
+    assert "PB=문제 파악 16(87~102:" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
+
+
+def test_problem_instructions_do_not_contain_eval_answers():
+    """지시문과 평가를 떼어 놓는다(단계 2b 리뷰 D01): 문제 파악 모의 티켓·TC의 token 값, IPC 이름(합성 접두어 `VIPC_`), 12자 이상의
+    줄(인용 줄·증상 문장)이 스킬 문서(SKILL.md·reference/)에 그대로 없다. 평가가 실패하면 그 사례의 답이나 문장을 지시문에 넣지
+    않고 일반 규칙으로 고친다 — 평가 글타래는 지시문이 보지 못한 것이어야 통과가 일반화의 근거가 된다."""
+    import yaml
+
+    skill = REPO / "plugin" / "skills" / "telephony-triage"
+    docs = "\n".join(p.read_text(encoding="utf-8") for p in [skill / "SKILL.md", *sorted((skill / "reference").rglob("*.md"))])
+    folded, lower = " ".join(docs.split()), docs.lower()
+    by_id = {e["id"]: e for e in _entries()}
+    for eid in sorted(grader.PB_EVALS):
+        t = yaml.safe_load((EVALS / "jira" / f"MOCK-{9000 + eid}.yaml").read_text(encoding="utf-8"))
+        texts = [t["fields"]["summary"], t["fields"].get("description") or ""] + [c["body"] for c in t.get("comments") or []]
+        texts += [(REPO / item["src"]).read_text(encoding="utf-8") for item in by_id[eid]["setup"].get("logs") or []]
+        for text in texts:
+            for tok in re.findall(r"0x[0-9A-Fa-f]{2,}", text):
+                assert tok.lower() not in lower, (eid, tok)
+            for name in re.findall(r"\bVIPC_[A-Z0-9_]+", text):
+                assert name not in docs, (eid, name)
+            for line in text.splitlines():
+                line = " ".join(re.sub(r"<[^>]+>|\{noformat\}", " ", line).split())
+                assert len(line) < 12 or line not in folded, (eid, line)
 
 
 def _pb_golden(entry: dict, ticket: dict) -> dict:
@@ -1913,16 +1938,17 @@ def _pb_golden(entry: dict, ticket: dict) -> dict:
     clues = []
     for w in x.get("clues") or []:
         needle = w.get("contains") or w["name"]
-        quote = next(l.strip() for l in bodies[w["comment"] - 1].splitlines() if needle in l)
+        line = next(l.strip() for l in bodies[w["comment"] - 1].splitlines() if needle in l)
+        quote = line if w["kind"] == "log_line" else line[line.index(needle):]     # ipc는 이름부터(앞 문장의 다른 token 제외)
         clues.append({"comment": w["comment"], "kind": w["kind"], "name": None if w["kind"] == "log_line" else w["name"],
-                      "token": w.get("token"), "quote": quote, "side": "ap" if w["kind"] == "log_line" else "cp"})
-    last = x["rounds"]["last_from_comment"][0]
+                      "token": w.get("token"), "quote": quote, "side": w["side"]})
+    r = x["rounds"]
     return {"first_analysis": x["first_analysis"],
             "symptom": {"text": "합성 정답", "types": [] if x.get("not_in_db") else x["types"][:1],
                         "not_in_db": bool(x.get("not_in_db"))},
-            "rounds": {"count": 1 if last is None else 2, "last_from_comment": last,
-                       "same_failure": (x["rounds"].get("same_failure") or ["unknown"])[0]},
-            "clues": clues, "hypotheses": [], "modules": [], "unknown": []}
+            "rounds": {"count": r["count"][0], "last_from_comment": r["last_from_comment"][0], "same_failure": r["same_failure"][0]},
+            "clues": clues, "hypotheses": [], "modules": list(x.get("modules_all") or x.get("modules_any", [])[:1]),
+            "unknown": ["합성"] * x.get("unknown_min", 0)}
 
 
 def test_problem_expectations_pass_through_real_check():
@@ -1950,9 +1976,15 @@ def test_problem_expectations_pass_through_real_check():
         assert proc.returncode == 0 and json.loads(proc.stdout)["dropped"] == 0, (key, proc.stdout, proc.stderr)
         rec = json.loads((job / "problem.json").read_text(encoding="utf-8"))
         assert all(ok for ok, _ in grader.pb_rows(e["problem_expect"], rec)), (key, grader.pb_rows(e["problem_expect"], rec))
-        if e["problem_expect"].get("absent_tokens"):     # 정정 전 token 단서가 있으면 단서 행 실패
-            bad = {**rec, "clues": rec["clues"] + [{**rec["clues"][0], "token": e["problem_expect"]["absent_tokens"][0]}]}
-            assert grader.pb_rows(e["problem_expect"], bad)[3][0] is False
+        x = e["problem_expect"]
+        if not x.get("not_in_db"):          # 범위 밖 유형이 하나라도 있으면 유형 행 실패(D02)
+            wide = {**rec, "symptom": {**rec["symptom"], "types": rec["symptom"]["types"] + ["SIM-001"]}}
+            assert grader.pb_rows(x, wide)[0][0] is False, key
+        extra = {"comment": 1, "kind": "log_line", "name": None, "token": None, "quote": "합성", "side": "ap", "stale": False}
+        assert grader.pb_rows(x, {**rec, "clues": rec["clues"] + [extra]})[3][0] is False, key   # 기대·허용 밖 단서(D03)
+        if x.get("absent_tokens"):       # 없어야 할 token이 인용에만 있어도 단서 행 실패
+            bad = {**extra, "quote": f"앞 시도 (token={x['absent_tokens'][0]})"}
+            assert grader.pb_rows(x, {**rec, "clues": rec["clues"] + [bad]})[3][0] is False, key
 
 
 def test_unjudged_variant_db_has_slow_cause():

@@ -352,6 +352,48 @@ def test_fullwidth_token_is_format_error(job):
     assert "clues[0].token" in res["detail"]
 
 
+def test_ipc_pair_rejects_other_ipc_name_between():
+    """AP 이름에 다른 IPC 메시지의 token을 붙여 바꿔 쓴 단서는 버린다(D03). 접두어는 설정 `vendor_ipc.request_prefix`(기본
+    placeholder `VIPC_`)이고 입력 기록에 남는다. 사이에 다른 IPC 이름이 없으면(재시도 횟수·슬롯) 그대로 짝이다."""
+    issue = dict(ISSUE, comments=[
+        {"body": "AP의 SETUP_DATA_CALL은 CP에서 VIPC_DATA_CALL_REQ로 받습니다. VIPC_DATA_CALL_REQ (token=0x3e0)는 정상"},
+        {"body": "VIPC_SETUP_DATA 2회 재시도 후 (token=0x0de) 실패, VIPC_SETUP_DATA [slot 1] (token=0x0df) 실패"}])
+    job = tmp("tt-problem-") / KEY
+    _problem(job, issue, tc=None)
+    assert json.loads((job / "problem-input.json").read_text(encoding="utf-8"))["ipc_prefix"] == "VIPC_"
+    q1 = "AP의 SETUP_DATA_CALL은 CP에서 VIPC_DATA_CALL_REQ로 받습니다. VIPC_DATA_CALL_REQ (token=0x3e0)"
+    out = _output(rounds={"count": 1, "last_from_comment": None, "same_failure": "unknown"}, clues=[
+        _clue(1, "SETUP_DATA_CALL", "0x3e0", q1, side="ap"),                     # 이름 바꿔 쓰기 — 버림
+        _clue(1, "VIPC_DATA_CALL_REQ", "0x3e0", q1),
+        _clue(2, "VIPC_SETUP_DATA", "0x0de", "VIPC_SETUP_DATA 2회 재시도 후 (token=0x0de)"),
+        _clue(2, "VIPC_SETUP_DATA", "0x0df", "VIPC_SETUP_DATA [slot 1] (token=0x0df)")])
+    res = _check(job, out, 0)
+    assert res["clues"] == 3 and res["dropped_reasons"] == ["이름 뒤 첫 token이 그 token이 아님"]
+
+
+def test_ipc_pair_without_prefix_uses_identifier_shape():
+    """입력 기록에 접두어가 없으면(빈 설정·옛 입력) 대문자·밑줄 식별자를 다른 IPC 이름으로 본다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from triagelib import problem
+
+    q = "AP SETUP_DATA_CALL은 XIPC_DATA_CALL_REQ (token=0x3e0) 로 받음"
+    assert not problem._paired("SETUP_DATA_CALL", "0x3e0", q, "")
+    assert problem._paired("XIPC_DATA_CALL_REQ", "0x3e0", q, "")
+    assert problem._paired("XIPC_SETUP", "0x0de", "XIPC_SETUP [slot 1] 2회 (token=0x0de)", "")
+
+
+@pytest.mark.parametrize("tc,note", [
+    ("No | Step | Result\n1 | Attach | Pass\n2 | 데이터 켜기 | Fail (No response)\n", True),     # 판정 칸에 사유 — 목록에서 빠짐
+    (TC, False)])
+def test_incomplete_step_list_is_marked(tc, note):
+    job = tmp("tt-problem-") / KEY
+    _problem(job, tc=tc)
+    text = (job / "problem-input.md").read_text(encoding="utf-8")
+    tc_part = text.split("## TC\n", 1)[1].split("\n## ", 1)[0]
+    assert ("이 목록은 불완전하다" in tc_part) is note
+    assert "Fail (No response)" in text or not note
+
+
 def test_ipc_pair_skips_numbers_of_other_shape():
     issue = dict(ISSUE, comments=[{"body": "VIPC_SETUP_DATA 2회 재시도 후 (token=0x0de) 실패"},
                                   {"body": "VIPC_SETUP_DATA [slot 1] (token=0x0de) 실패"},

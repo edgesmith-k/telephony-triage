@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<!-- 합성 TC 결과(문제 파악 eval 102, 단계 2b 리뷰 제안 5). Fail이 두 스텝이고 시험이 멈추지 않아 끝의 비행기 모드 켬까지 돈다. -->
+<html>
+<head><meta charset="utf-8"><title>Test Result - TC 3.9</title></head>
+<body>
+<h2>TC 3.9</h2>
+<table border="1">
+<tr><th>No</th><th>Time</th><th>Step</th><th>Result</th></tr>
+<tr><td>1</td><td>2026-11-21 08:50:02</td><td>Airplane mode ON</td><td>Pass</td></tr>
+<tr><td>2</td><td>2026-11-21 08:50:12</td><td>Airplane mode OFF</td><td>Pass</td></tr>
+<tr><td>3</td><td>2026-11-21 08:50:41</td><td>LTE 등록 확인</td><td>Pass</td></tr>
+<tr><td>4</td><td>2026-11-21 08:50:55</td><td>모바일 데이터 ON, 인터넷 PDN 연결 확인</td><td>Fail (PDN 연결 거절, 데이터 아이콘 없음)</td></tr>
+<tr><td>5</td><td>2026-11-21 08:51:30</td><td>브라우저로 테스트 페이지 접속</td><td>Fail (데이터 없음)</td></tr>
+<tr><td>6</td><td>2026-11-21 08:52:05</td><td>Airplane mode ON</td><td>Pass</td></tr>
+</table>
+</body>
+</html>
