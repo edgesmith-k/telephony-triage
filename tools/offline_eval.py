@@ -26,20 +26,26 @@
         sim_slot: "1"             # 선택. 이슈 메타의 SIM 슬롯(--issue-meta sim_slot)
 
 조건별 실행(선택, 분석 정확도 단계 1): 문서에 `conditions: [no_time, time, look_at]`가 있으면 항목마다 그 조건을 따로 돌린다.
-항목이 가진 조건만 돈다 — `no_time`(시각 없음: `occurred_at`을 넘기지 않고 `--answer time=full`, 포털이 시각 없이 주는 것과 같은
-경로)은 늘, `time`(발생 시각만)은 `occurred_at`이 있을 때, `look_at`(정답 기준 줄을 `--look-at`으로, 시각 없이 — 단계 4가 자동으로
-찾아야 할 것을 사람이 넣은 경우)은 항목 `look_at`이 있을 때. 이때 `occurred_at`은 필수가 아니고 연도는 `year`(항목·문서) 또는
-`occurred_at`에서 온다. 항목 필드 더: `look_at`(기준 줄), `fail_at`(정답 실패 줄의 시각, 타임존 있는 ISO — 기준 위치 정답 판정),
-`fail_line`(그 줄 원문, 표시용), `first_analysis: true`(첫 분석 — 단서 없음 사례), 그 밖(`issue_file`·`pair`)은 읽지 않는 기록용.
-`conditions`가 없으면 예전처럼 항목마다 한 번(`occurred_at` 필수) 돈다.
+항목이 가진 조건만 돈다 — `no_time`(시각 없음: `occurred_at`도 `--answer`도 넘기지 않는다. 포털의 첫 선별·analyze 기본처럼
+플러그인이 묻지 않고 증상 시각 스캔으로 로그 전체를 본다)은 늘, `time`(발생 시각만)은 `occurred_at`이 있을 때, `look_at`(정답 기준
+줄을 `--look-at`으로, 시각·답 없이 — 단계 4가 자동으로 찾아야 할 것을 사람이 넣은 경우)은 항목 `look_at`이 있을 때. 이때
+`occurred_at`은 필수가 아니고 연도는 `year`(항목·문서) 또는 `occurred_at`에서 온다. 항목 필드 더: `look_at`(기준 줄), `fail_at`(정답
+실패 줄의 시각, 타임존 있는 ISO — 기준 위치 정답 판정), `fail_line`(그 줄 원문, 기록용 — 표·JSON에 내지 않는다), `first_analysis: true`
+(첫 분석 — 단서 없음 사례), 그 밖(`issue_file`·`pair`)은 읽지 않는 기록용. `conditions`가 없으면 예전처럼 항목마다 한 번
+(`occurred_at` 필수) 돈다. 포털 선별과 다른 입력: 이 도구는 `--issue-meta`(실패 스텝은 메타의 `failed_step` 칸)로 주고, 포털은
+`--issue-file`(Jira 필드)·`--failed-step=`(CLI)·`--platform android`로 준다 — 단계 4에서 코멘트를 읽게 되면 `issue_file`로 도는
+조건이 따로 필요하다.
+조건이 있을 때 `--json`의 `summary`는 모든 조건의 실행을 합친 값(종료 코드 판단용)이라 S-5 게이트(`site_checks` s5)에 쓰지 않는다 —
+조건별 값은 `by_condition`.
 
 채택(단계 사이 비교용 정의): `analysis.json`에 `decision`이 있으면 `state: accepted`일 때 `selected.cause`, 없으면 1위 후보가
 원인을 갖고 C=1일 때 그 원인. 채택 지표(대조군·표본내·오류 제외, 조건별): 맞는 채택·틀린 채택·보류·답변률(채택÷평가)·옳은 보류
 (정답 unresolved인데 보류)·보류 중 raw 1위가 정답이던 수·기준 위치 정답(기준(`step_anchor.source`가 look_at·log_marker·
-steps_file·step_order)을 쓴 실행에서 잡힌 실패 시각 = `fail_at`)·첫 분석 보류율.
-`--portal <dir>`(선택): `<dir>/portal/screener.py`(포털 소스 — 체크아웃이 아니라 `git archive`로 푼 사본)의 `classify`·
-`confident_match`(대표 원인 정보는 포털 `_cause_info`)를 그대로 불러 실행마다 포털 카드 판정·대표 원인·확실한 일치를 열로 낸다
-(포털 규칙을 복제하지 않는다. 표시 전 검사(`safe_to_show`)는 돌리지 않는다). 없으면 그 열은 "미측정".
+steps_file·step_order)을 쓴 실행에서 잡힌 실패 시각 = `fail_at`. 시각을 읽지 못하면 판정 없음과 항목 경고)·기준 못 잡음
+(`anchor_missed`: look_at 조건이나 `steps_file`로 기준을 요청했는데 기준 없이 돈 실행)·첫 분석 보류율.
+`--portal <dir>`(선택): `<dir>/portal/screener.py`(포털 소스 — 체크아웃이 아니라 `git archive`로 푼 사본)의 `classify`와 실제 카드가
+거치는 `result_of`(대표 원인·주의 줄 거르기·표시 전 검사), `confident_match`를 그대로 불러 실행마다 포털 카드 판정·대표 원인·확실한
+일치를 열로 낸다(포털 규칙을 복제하지 않는다). `meta.portal`에 `screener.py` sha256을 남긴다. 없으면 그 열은 "미측정".
 
 지표(대조군 제외 — `negative_control: true` 항목은 `controls`로 따로 세고 표에 `대조군(<판정>)`으로 보인다. **표본내**
 항목 — 로그가 그 이슈 DB의 `*/fixtures/` 아래 파일(시그니처를 만들 때 쓴 fixture 자체)이거나, 항목 `key`가 그 DB에 이미
@@ -90,7 +96,10 @@ UNRESOLVED = "unresolved"
 CONDITIONS = ("no_time", "time", "look_at")
 ANCHORED = ("look_at", "log_marker", "steps_file", "step_order")    # 기준이 있는 `step_anchor.source`
 HEADER = ("규칙 동작 확인용 — 조합 로그는 시드 줄로 만든 표본 안 자료, 정확도 수치가 아님. 표본내 자동 제외(DB fixtures/ 자체·"
-          "DB에 기록된 키)는 이 조합 로그를 가리지 못한다(로그가 DB 밖 사본이고 키가 DB에 없다).")
+          "DB에 기록된 키)는 이 조합 로그를 가리지 못한다(로그가 DB 밖 사본이고 키가 DB에 없다).\n"
+          "look_at의 기준 위치 정답은 token 사례 말고는 넣은 줄(실패 줄 원문)을 다시 찾은 것이다.")
+PORTAL_NOTE = ("포털 열: 포털 classify·result_of·confident_match 그대로. 실제 카드와 다를 수 있는 곳 — 입력 인자(--issue-meta, "
+               "포털은 --issue-file·--failed-step=), 이해 카드·타임라인은 만들지 않음(입력 버전 없음).")
 
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 from common import history  # noqa: E402
@@ -166,11 +175,13 @@ def _recorded_keys(db: Path) -> frozenset[str]:
     return frozenset(p.stem for p in Path(db).glob("*/*/issues/*.yaml"))
 
 
-def _same_instant(a, b) -> bool:
+def _same_instant(a, b) -> bool | None:
+    """같은 시각인가. 읽지 못하면 None(판정 없음 — 틀림으로 세지 않는다). `Z`는 3.10도 읽게 바꾼다(`logtime.parse_ts`와 같은 방식)."""
     try:
-        return datetime.fromisoformat(str(a)) == datetime.fromisoformat(str(b))
+        return (datetime.fromisoformat(str(a).replace("Z", "+00:00"))
+                == datetime.fromisoformat(str(b).replace("Z", "+00:00")))
     except (TypeError, ValueError):
-        return False
+        return None
 
 
 def _adopted(analysis: dict) -> tuple[str | None, str]:
@@ -182,17 +193,16 @@ def _adopted(analysis: dict) -> tuple[str | None, str]:
     return (top.get("cause") if top.get("cause") and top.get("C") == 1 else None), "top"
 
 
-def _portal_column(screener, proc, root: Path, db: Path, work: Path) -> dict:
-    """포털의 선별 분류(`classify`)·대표 원인(`_cause_info` — 이슈 DB 조회)·확실한 일치(`confident_match`)를 그대로 부른다."""
+def _portal_column(screener, proc, root: Path, db: Path, job: Path, key: str) -> dict:
+    """포털 카드를 실제와 같은 함수로 만든다: 선별 분류(`classify`) → 카드(`result_of` — 대표 원인 이슈 DB 조회·주의 줄 거르기·
+    표시 전 검사, 입력 버전이 없어 이해 카드·타임라인은 없음) → 확실한 일치(`confident_match`). job = 그 실행의 `--out`."""
     try:
         c = screener.classify(proc.returncode, proc.stdout.encode("utf-8"), False)
-        errors: list = []
-        cfg = {"plugin_root": str(root), "screen_db": str(db), "data_dir": str(work)}
-        primary = screener._cause_info(cfg, c["primary"], errors) if c["primary"] else None
-        res = {"verdict": c["verdict"], "primary": primary,
-               "evidence": [str(x) for x in (c["data"] or {}).get("must_show") or []]}
-        return {"verdict": c["verdict"], "reason": c["reason"], "primary": (primary or {}).get("cause"),
-                "confident": screener.confident_match(res), "errors": errors}
+        cfg = {"plugin_root": str(root), "screen_db": str(db), "data_dir": str(job.parent), "secret_vars": []}
+        res = screener.result_of(cfg, key, job, c, [])
+        return {"verdict": res["verdict"], "reason": res["reason"], "primary": (res["primary"] or {}).get("cause"),
+                "confident": screener.confident_match(res), "errors": res["errors"],
+                "hidden": res.get("evidence_hidden") or res.get("report_hidden")}
     except Exception as exc:     # 포털 코드가 이 환경에서 못 도는 것은 열에 그대로 남긴다(통과로 보이지 않게)
         return {"error": f"{type(exc).__name__}: {exc}"[:200]}
 
@@ -215,8 +225,6 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     meta_path = job / "issue_input.json"
     meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
     args = ["run", key, "--offline-db", str(db), "--out", str(job), "--logs", *logs, "--issue-meta", str(meta_path)]
-    if condition in ("no_time", "look_at"):
-        args += ["--answer", "time=full"]
     if condition == "look_at":
         args += ["--look-at", str(item["look_at"])]
     if item.get("steps_file"):
@@ -235,7 +243,7 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
               "in_sample_reason": "fixture" if in_fixture else "db-record" if in_db else None,
               "logs_sha256": [hashlib.sha256(Path(p).read_bytes()).hexdigest() if Path(p).is_file() else None for p in logs],
               "backend": None, "external": None,
-              "condition": condition, "adopted": None, "adopted_from": None, "anchor": None, "anchor_ok": None,
+              "condition": condition, "adopted": None, "adopted_from": None, "anchor": None, "anchor_ok": None, "anchor_missed": False,
               "first_analysis": bool(item.get("first_analysis")), "portal": None}
     try:
         year = item.get("year") or doc.get("year")
@@ -250,7 +258,7 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     args += ["--year", str(year)]
     proc = _script(root, "triage.py", args)
     if screener is not None:
-        result["portal"] = _portal_column(screener, proc, root, db, work)
+        result["portal"] = _portal_column(screener, proc, root, db, job, key)
     if proc.returncode != 0:
         result["error"] = f"triage 종료 {proc.returncode}: {proc.stderr.strip()[:200]}"
         return result
@@ -275,12 +283,17 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     sa = analysis.get("step_anchor") or {}
     if sa:
         result["anchor"] = {"source": sa.get("source"), "fail": (sa.get("span") or [None, None])[-1]}
+    anchor_note = None
     if sa.get("source") in ANCHORED and item.get("fail_at"):
         result["anchor_ok"] = _same_instant(result["anchor"]["fail"], item["fail_at"])
+        if result["anchor_ok"] is None:
+            anchor_note = f"기준 위치 판정 없음(시각 해석 실패: {result['anchor']['fail']} / {item['fail_at']})"
+    elif item.get("fail_at") and (condition == "look_at" or item.get("steps_file")):
+        result["anchor_missed"] = True      # 기준을 요청했는데 기준 없이 돌았다(못 찾음)
     # 정답·미스를 단정하지 못하는 이유 [(오류 문구, 오탐 확정 때 경고 문구)]: 판정 불가 유형·원인(unjudged)과 관측 불완전
     # (observation). 둘 다 있으면 둘 다 기록한다
     unsure: list[tuple[str, str]] = []
-    notes: list[str] = []
+    notes: list[str] = [anchor_note] if anchor_note else []
     u = analysis.get("unjudged") or {}
     if u:
         first = (u.get("errors") or [{}])[0]
@@ -369,6 +382,7 @@ def summarize(results: list[dict], include_in_sample: bool = False) -> dict:
         "held_top_right": sum(not r.get("adopted") and r["expect"] != UNRESOLVED and r["top"] == r["expect"] for r in scored),
         "anchor_runs": sum(r.get("anchor_ok") is not None for r in scored),
         "anchor_correct": sum(r.get("anchor_ok") is True for r in scored),
+        "anchor_missed": sum(bool(r.get("anchor_missed")) for r in scored),
         "first_total": len(first),
         "first_hold_rate": rate(sum(not r.get("adopted") for r in first), len(first)),
     }
@@ -402,18 +416,19 @@ def _portal_cells(p: dict | None) -> tuple[str, str, str]:
 
 def render_conditions(results: list[dict], by_condition: dict) -> str:
     """조건별 표(사례마다 한 줄)와 채택 지표. 포털 열은 --portal이 없으면 "미측정"."""
-    lines = [HEADER]
+    lines = [HEADER] + ([PORTAL_NOTE] if any(r.get("portal") is not None for r in results) else [])
     for cond, s in by_condition.items():
         rows = [("키", "정답", "raw 1위", "채택", "판정", "기준 위치", "포털 판정", "포털 대표 원인", "확실한 일치")]
         runs = [r for r in results if r.get("condition") == cond]
         for r in runs:
-            where = "-" if r.get("anchor_ok") is None else "맞음" if r["anchor_ok"] else "틀림"
+            where = ("못 찾음" if r.get("anchor_missed") else "-" if r.get("anchor_ok") is None
+                     else "맞음" if r["anchor_ok"] else "틀림")
             rows.append((r["key"], r["expect"], r["top"] or "-", r.get("adopted") or "보류",
                          "오류" if r["error"] else r["verdict"], where, *_portal_cells(r.get("portal"))))
         lines += ["", f"[조건 {cond}] 평가 {s['evaluated']}/전체 {s['total']}, 오류 {s['errors']}", *_table(rows), *_notes(runs),
                   f"채택: 맞음 {s['accepted_correct']} · 틀림 {s['accepted_wrong']} · 보류 {s['held']} · 답변률 {_pct(s['answer_rate'])}",
                   f"보류: 옳은 보류(정답 unresolved) {s['correct_hold']} · 보류 중 raw 1위가 정답 {s['held_top_right']}",
-                  f"기준 위치 정답 {s['anchor_correct']}/{s['anchor_runs']}(기준을 쓴 실행) · 첫 분석 보류율 "
+                  f"기준 위치 정답 {s['anchor_correct']}/{s['anchor_runs']}(기준을 쓴 실행) · 기준 못 잡음 {s['anchor_missed']} · 첫 분석 보류율 "
                   f"{_pct(s['first_hold_rate'])}({s['first_total']}건)",
                   f"raw: 1위 정확도 {_pct(s['top1_accuracy'])} · 상위 3 포함률 {_pct(s['top3_inclusion'])} · "
                   f"오탐률 {_pct(s['false_positive_rate'])}"]
@@ -492,7 +507,8 @@ def main(argv: list[str] | None = None) -> int:
                 from portal import screener     # noqa: E402 — 포털 판정 규칙을 복제하지 않고 그대로 부른다
             except Exception as exc:            # 다른 의존성 때문에 안 되면 우회하지 않고 멈춘다
                 raise EvalError(f"포털 소스를 불러올 수 없습니다: {args.portal} ({type(exc).__name__}: {exc})")
-            meta["portal"] = {"path": str(Path(args.portal).resolve())}
+            meta["portal"] = {"path": str(Path(args.portal).resolve()),
+                              "screener_sha256": hashlib.sha256(Path(screener.__file__).read_bytes()).hexdigest()}
         conds = doc.get("conditions")
         has = {"no_time": lambda i: True, "time": lambda i: bool(i.get("occurred_at")), "look_at": lambda i: bool(i.get("look_at"))}
         work = Path(tempfile.mkdtemp(prefix="tt-offline-eval-"))

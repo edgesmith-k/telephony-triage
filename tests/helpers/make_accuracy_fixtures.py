@@ -40,6 +40,7 @@ YEAR, TZ, DAY = 2026, "+09:00", "11-14"
 STAMP = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3})(.*)$")
 HEAD = "-- [합성] 분석 정확도 조합 로그. 시드 fixture 줄과 합성 VIPC_ 줄을 시각만 옮겨 이어 붙였다(tests/helpers/make_accuracy_fixtures.py)."
 CONDITIONS = ["no_time", "time", "look_at"]
+NOT_GENERATED = {"baseline.json"}     # 이 폴더에 있지만 생성기가 만들지 않는 것(tests/test_accuracy_baseline.py --update)
 
 
 def seed(rel: str, keep=None) -> list[str]:
@@ -265,7 +266,11 @@ def run(check: bool = False) -> dict:
         missing = [str(p.relative_to(tmp)) for p in made if not (OUT / p.relative_to(tmp)).is_file()]
         mismatched = [str(p.relative_to(tmp)) for p in made
                       if (OUT / p.relative_to(tmp)).is_file() and (OUT / p.relative_to(tmp)).read_bytes() != p.read_bytes()]
-        return {"written": [], "mismatched": mismatched, "missing": missing}
+        # 남은 옛 파일(사례를 지웠는데 남은 로그·코멘트): 폴더의 파일 = 만든 파일 + 생성 대상이 아닌 기준값 스냅샷
+        made_rel = {p.relative_to(tmp).as_posix() for p in made}
+        stale = sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*") if p.is_file()
+                       and p.relative_to(OUT).as_posix() not in made_rel | NOT_GENERATED)
+        return {"written": [], "mismatched": mismatched + [f"{x} (만든 목록에 없음)" for x in stale], "missing": missing}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

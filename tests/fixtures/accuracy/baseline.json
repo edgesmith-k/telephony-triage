@@ -26,6 +26,7 @@
    "held_top_right": 0,
    "anchor_runs": 0,
    "anchor_correct": 0,
+   "anchor_missed": 0,
    "first_total": 2,
    "first_hold_rate": 0.0
   },
@@ -55,6 +56,7 @@
    "held_top_right": 0,
    "anchor_runs": 0,
    "anchor_correct": 0,
+   "anchor_missed": 0,
    "first_total": 0,
    "first_hold_rate": null
   },
@@ -84,6 +86,7 @@
    "held_top_right": 0,
    "anchor_runs": 17,
    "anchor_correct": 17,
+   "anchor_missed": 0,
    "first_total": 0,
    "first_hold_rate": null
   }
@@ -99,7 +102,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "MMX-1",
@@ -111,7 +115,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "MMX-1",
@@ -121,7 +126,8 @@
    "top3": [],
    "adopted": null,
    "verdict": "정답",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "XM-1",
@@ -133,7 +139,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "XM-1",
@@ -145,7 +152,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "XM-1",
@@ -157,7 +165,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "MXM-1",
@@ -169,7 +178,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "MXM-1",
@@ -181,7 +191,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "MXM-1",
@@ -193,7 +204,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "MMH-1",
@@ -206,7 +218,8 @@
    ],
    "adopted": "NETWORK-001-08",
    "verdict": "1위",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "MMH-1",
@@ -219,7 +232,8 @@
    ],
    "adopted": "NETWORK-001-08",
    "verdict": "1위",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "MMH-1",
@@ -231,7 +245,8 @@
    ],
    "adopted": "NETWORK-001-08",
    "verdict": "1위",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "CTLM-1",
@@ -243,7 +258,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "1위",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "CTLM-1",
@@ -255,7 +271,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "1위",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "CTLM-1",
@@ -267,7 +284,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "1위",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "D12R-1",
@@ -279,7 +297,8 @@
    ],
    "adopted": "DATA-002-01",
    "verdict": "1위",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "D12R-1",
@@ -291,7 +310,8 @@
    ],
    "adopted": "DATA-002-01",
    "verdict": "1위",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "D12R-1",
@@ -303,7 +323,8 @@
    ],
    "adopted": "DATA-002-01",
    "verdict": "1위",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "C15-1",
@@ -315,7 +336,8 @@
    ],
    "adopted": "CALL-001-02",
    "verdict": "1위",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "C15-1",
@@ -327,7 +349,8 @@
    ],
    "adopted": "CALL-001-02",
    "verdict": "1위",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "C15-1",
@@ -339,7 +362,8 @@
    ],
    "adopted": "CALL-001-02",
    "verdict": "1위",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "HAL-1",
@@ -351,7 +375,8 @@
    ],
    "adopted": "NETWORK-001-08",
    "verdict": "1위",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "HAL-1",
@@ -363,7 +388,8 @@
    ],
    "adopted": "NETWORK-001-08",
    "verdict": "1위",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "HAL-1",
@@ -375,7 +401,8 @@
    ],
    "adopted": "NETWORK-001-08",
    "verdict": "1위",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "TC-1",
@@ -387,7 +414,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "TC-1",
@@ -399,7 +427,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "TC-1",
@@ -411,7 +440,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "RECOVER-1",
@@ -423,7 +453,8 @@
    ],
    "adopted": "DATA-003-01",
    "verdict": "1위",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "RECOVER-1",
@@ -435,7 +466,8 @@
    ],
    "adopted": "DATA-003-01",
    "verdict": "1위",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "RECOVER-1",
@@ -447,7 +479,8 @@
    ],
    "adopted": "DATA-003-01",
    "verdict": "1위",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "TOKSAME-1",
@@ -459,7 +492,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "TOKSAME-1",
@@ -471,7 +505,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "TOKSAME-1",
@@ -483,7 +518,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "TOKNAME-1",
@@ -495,7 +531,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "TOKNAME-1",
@@ -507,7 +544,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "TOKNAME-1",
@@ -519,7 +557,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "TOKONLY-1",
@@ -531,7 +570,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "TOKONLY-1",
@@ -543,7 +583,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "TOKONLY-1",
@@ -555,7 +596,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "DUAL-1",
@@ -565,7 +607,8 @@
    "top3": [],
    "adopted": null,
    "verdict": "정답",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "DUAL-1",
@@ -575,7 +618,8 @@
    "top3": [],
    "adopted": null,
    "verdict": "정답",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "DUAL-1",
@@ -585,7 +629,8 @@
    "top3": [],
    "adopted": null,
    "verdict": "정답",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "RETEST-1",
@@ -597,7 +642,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "RETEST-1",
@@ -609,7 +655,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "RETEST-1",
@@ -621,7 +668,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "RETESTX-1",
@@ -633,7 +681,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "RETESTX-1",
@@ -645,7 +694,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "RETESTX-1",
@@ -657,7 +707,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "PAIRFAIL-1",
@@ -670,7 +721,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "상위3",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "PAIRFAIL-1",
@@ -683,7 +735,8 @@
    ],
    "adopted": "DATA-003-01",
    "verdict": "1위",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "PAIRFAIL-1",
@@ -695,7 +748,8 @@
    ],
    "adopted": "DATA-003-01",
    "verdict": "1위",
-   "anchor_ok": true
+   "anchor_ok": true,
+   "error": null
   },
   {
    "key": "PAIRPASS-1",
@@ -707,7 +761,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "PAIRPASS-1",
@@ -719,7 +774,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "FIRSTTC-1",
@@ -731,7 +787,8 @@
    ],
    "adopted": "NETWORK-001-03",
    "verdict": "오탐",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   },
   {
    "key": "FIRSTH-1",
@@ -744,7 +801,8 @@
    ],
    "adopted": "NETWORK-001-08",
    "verdict": "1위",
-   "anchor_ok": null
+   "anchor_ok": null,
+   "error": null
   }
  ]
 }
