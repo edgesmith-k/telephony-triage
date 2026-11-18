@@ -195,7 +195,11 @@ platform:
   #   trace:                         # 선택(TODO(SITE:S9), 다섯 키와 따로 본다). 기준 줄 IPC 찾기(--look-at)가 읽는 IPC 메시지 줄 정규식
   #                                  # 목록(≤8개·각 ≤400자, (?P<name>) 필수, token·dir·kind·result 선택, {prefix}·{error_prefix}는 위 두
   #                                  # 접두어로 채움). 생략하면 placeholder 기본 둘(VIPC_ 꼴, 아래는 그 둘째) — 사내 IPC 줄 형식은 사내에서 채운다
-  #     - '\b(?P<name>{prefix}[A-Z0-9_]+)\s*\(\s*token\s*=\s*(?P<token>(?:0x[0-9A-Fa-f]+|\d+)\b|<[A-Z]+#\d+>)\s*\)?'   # `VIPC_X (token=0x0de)` 꼴
+  #     - '\b(?P<name>{prefix}[A-Z0-9_]+)\s*\(\s*(?i:token)\s*[=:(]\s*(?P<token>(?:0x[0-9A-Fa-f]+|\d+)\b|<[A-Z]+#\d+>)\s*\)?'   # `VIPC_X (token=0x0de)` 꼴
+  #   slot:                          # 선택(TODO(SITE:S20), 다섯 키와 따로 본다). IPC 메시지 줄에서만 쓰는 SIM 슬롯 정규식 목록(≤8개·각
+  #                                  # ≤400자, 그룹 1 = 슬롯 번호, 순서대로 첫 일치, 가린 메시지에 돈다). 맞으면 그 IPC 기록의 슬롯은 이 값이
+  #                                  # 먼저, 없거나 안 맞으면 줄의 phone_id(위 log.phone_id 규칙). log.phone_id와는 따로다
+  #     - '^ipc\[(\d)\]'             # `ipc[1][RX] VIPC_X, RSP, …` 꼴(합성 예) — 사내 IPC 줄의 슬롯 표기는 사내에서 채운다
   # bugreport:                       # TODO(SITE:S21) dumpstate 섹션 헤더
   #   wanted_buffers: [system, radio, main]          # ^[a-z]+$, 출력 파일 순서
   #   section_regex: '^------ (?P<title>.+?) \((?P<cmd>logcat\b[^)]*)\) ------\s*$'   # (?P<cmd>) 필수

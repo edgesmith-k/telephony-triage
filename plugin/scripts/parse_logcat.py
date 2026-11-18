@@ -18,9 +18,10 @@
       (`{schema, flows[], warnings}`, 표시 전용 — 04-parser-matching.md §5.13). 흐름 파일이 없으면 `flows: []`.
   ipc <logcat...> --rules <db>/parser-rules [--tz <IANA>] [--year <YYYY>] [--find <look-at.json>]
       벤더 IPC 태그 줄(백엔드 `is_vendor_ipc`)을 `common.ipcseq` 정규식(site-defaults `platform.vendor_ipc.trace`, 없으면
-      placeholder)으로 읽어 `{schema, records[{i, ts, dir, name, token, result, line_ref}], total, truncated, coverage, warnings}`
-      (상한 20000, 맞은 줄만 마스킹)를 낸다. `--find`는 `triage.py run --look-at`이 쓴 파일로 기준 줄을 찾아 records 대신
-      `find {how: ipc|token|text|null, hits, picked, pick: only|nearest|last, ts, line, at[] | why}`를 낸다(`common.lookat`).
+      placeholder)으로 읽어 `{schema, records[{i, ts, dir, name, token, result, line_ref, phone_id}], total, truncated, coverage,
+      warnings}`(상한 20000, 맞은 줄만 마스킹)를 낸다. `phone_id`는 `vendor_ipc.slot`(선택)이 맞으면 그 값, 아니면 줄 레코드의 슬롯.
+      `--find`는 `triage.py run --look-at`이 쓴 파일로 기준 줄을 찾아 records 대신
+      `find {how: ipc|token|text|null, hits, picked, pick: only|nearest|last, ts, line, at[], slots | why}`를 낸다(`common.lookat`).
   extract-bugreport <zip|txt> --out <dir>
       bugreport에서 logcat 섹션(기본 system/radio/main)과 빌드 정보(build.json)만 꺼낸다.
   cut <logcat...> (--evidence <match.json> --cause <원인 ID> | --around <ISO 시각> [--seconds 30]) --out <file>
@@ -52,6 +53,7 @@ import re
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -1038,8 +1040,9 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
     """벤더 IPC 메시지 줄 레코드(11/16 설계 §1, `common.ipcseq`)와 기준 줄 찾기(`--find`, §2). `parse` 출력은 구간·tags.yaml로
     잘려 있어 쓰지 않고, 전체 로그의 백엔드 줄 레코드에서 벤더 IPC 태그 줄(`backend.is_vendor_ipc`, tags.yaml `ipc: vendor` 반영)만
     본다. 정규식은 원 줄에 돌리고(시간 상한 `matcher.pattern_timeout_ms`) 맞은 줄만 가린 뒤 가린 글에서 값을 다시 뽑는다(마커와 같다).
-    `--find <json>`: `triage.py`가 쓴 `JOB/look-at.json`(`{look_at: 가린 글, ref: 기준 시각|null}`)으로 찾고 `records` 대신
-    `find {how, hits, picked, pick, ts, line, at[] | why}`를 낸다 — 원문 글은 인자로 받지 않는다(trace.jsonl에 남지 않게)."""
+    `--find <json>`: `triage.py`가 쓴 `JOB/look-at.json`(`{look_at: 가린 글, ref: 기준 시각|null, slot?: 요청 SIM 슬롯|null}`)으로
+    찾고 `records` 대신 `find {how, hits, picked, pick, ts, line, at[], slots | why}`를 낸다 — 원문 글은 인자로 받지 않는다
+    (trace.jsonl에 남지 않게). `slot`이 있으면 IPC 일치는 그 슬롯이거나 슬롯 모름인 레코드만, `slots`는 슬롯별 일치 수."""
     paths, rules_dir = [Path(p) for p in args.logs], Path(args.rules)
     db_cfg, backend = _line_backend(paths, rules_dir, defaults, args.tz, profile)
     try:
@@ -1053,6 +1056,8 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
             look = json.loads(Path(args.find).read_text(encoding="utf-8"))
             if not isinstance(look, dict) or not isinstance(look.get("look_at"), str):
                 raise ValueError("look_at")
+            if look.get("slot") is not None and (type(look["slot"]) is not int or look["slot"] < 0):
+                raise ValueError("slot")
         except (OSError, ValueError) as exc:
             raise UsageError(f"--find 파일을 읽지 못했습니다({exc}): {args.find}") from exc
     raw, log_text, warnings = _raw_line_records(backend, paths, args.tz, args.year, "ipc-nul")
@@ -1071,18 +1076,28 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
         timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
         hits = _first_hits([str(lines[n]["msg"]) for n in idx], [re.compile(p) for p in ipcseq.patterns(spec)], timeout_ms,
                            "ipc-pattern", "IPC 정규식", warnings)      # 정규식은 메시지에 돈다(태그 제외)
+        msgs: list[str] = []     # 레코드마다 값을 뽑은 가린 메시지(슬롯 규칙도 여기에 돈다)
         for k in sorted(hits):
             n = idx[k]
             m = hits[k].search(mask(n).split(": ", 1)[-1])       # 값은 가린 글(의 메시지 부분)에서만 뽑는다
             if m:
-                records.append(ipcseq.record(m, n, lines[n]["ts"], lines[n].get("line_ref")))
+                msgs.append(m.string)
+                records.append(ipcseq.record(m, n, lines[n]["ts"], lines[n].get("line_ref"), lines[n].get("phone_id")))
+        if spec.slot and records:      # IPC 줄 전용 슬롯 규칙(`vendor_ipc.slot`)이 맞으면 줄 레코드의 phone_id보다 먼저
+            for k, rx in _first_hits(msgs, [re.compile(p) for p in spec.slot], timeout_ms, "ipc-pattern",
+                                     "IPC 슬롯 정규식", warnings).items():
+                slot = ipcseq.slot_value(rx.search(msgs[k]))
+                if slot is not None:
+                    records[k]["phone_id"] = slot
     result = {"schema": OUTPUT_SCHEMA, "total": len(records), "coverage": coverage, "warnings": warnings}
     if look is None:
         result["truncated"] = len(records) > ipcseq.RECORD_MAX
         result["records"] = records[-ipcseq.RECORD_MAX:]     # 넘으면 앞을 버린다(실패는 보통 로그 끝쪽)
         return result
     q = lookat.query(look["look_at"], spec.request_prefix)
-    found, how = [records[k]["i"] for k in lookat.ipc_hits(q, records)], "ipc" if q["name"] else "token"
+    picks = lookat.ipc_hits(q, records, look.get("slot"))
+    found, how = [records[k]["i"] for k in picks], "ipc" if q["name"] else "token"
+    slots = [records[k]["phone_id"] for k in picks]
     if not found:
         how, text = "text", lookat.needle(q)
         found = None if text is None else lookat.text_hits(text, texts, mask)
@@ -1106,9 +1121,13 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
         ref = None
     k, way = lookat.pick(times, ref)
     n = found[k]
+    if how == "text":      # 본문 일치는 줄 레코드의 슬롯
+        slots = [lines[i].get("phone_id") for i in found]
     result["find"] = {"how": how, "hits": len(found), "picked": k + 1, "pick": way, "ts": lines[n]["ts"],
                       "line": " ".join(mask(n).split())[:200],
-                      "at": [lines[i]["ts"] for i in found[:lookat.AT_MAX]]}
+                      "at": [lines[i]["ts"] for i in found[:lookat.AT_MAX]],
+                      # 슬롯별 일치 수(`"null"` = 슬롯 모름) — 두 슬롯에 다 맞아도 여기서는 고르지 않는다(뒤 단계가 본다)
+                      "slots": {("null" if s is None else str(s)): c for s, c in Counter(slots).items()}}
     return result
 
 

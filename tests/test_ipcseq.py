@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -20,7 +21,7 @@ sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
 import platforms  # noqa: E402
 from common import ipcseq, masking, vendor_ipc  # noqa: E402
-from runner import SAMPLE, plugin_root, run_json  # noqa: E402
+from runner import SAMPLE, plugin_root, run, run_json, tmp  # noqa: E402
 
 LOG = REPO / "tests" / "fixtures" / "logs" / "ipc-fail.log"
 RULES = SAMPLE / "parser-rules"
@@ -49,6 +50,24 @@ def test_default_patterns_read_dir_name_token_result():
     assert _recs("vendor service heartbeat") == []
 
 
+def test_default_patterns_token_and_result_notation_widened():
+    """단계 3: token 구분 `=`·`:`·`(`, `token` 대소문자 무시, 결과는 괄호 앞 낱말을 가리지 않는다(괄호 안이 오류 접두어일 때만)."""
+    for line in ("[TX] VIPC_SETUP_DATA, REQ, Token(0x2FE), len=24", "[TX] VIPC_SETUP_DATA, REQ, TOKEN: 766",
+                 "[TX] VIPC_SETUP_DATA, REQ, token=0x02FE", "[TX] VIPC_SETUP_DATA, REQ, TOKEN=0x2fe"):
+        (r,) = _recs(line)
+        assert (r["name"], r["token"]) == ("VIPC_SETUP_DATA", 0x2FE), line
+    for line in ("VIPC_DEACT_DATA (Token(0x2FE))", "VIPC_DEACT_DATA (TOKEN: 766)", "VIPC_DEACT_DATA (token=0x2fe)"):
+        (r,) = _recs(line)
+        assert (r["name"], r["token"]) == ("VIPC_DEACT_DATA", 0x2FE), line
+    fail = _recs("[RX] VIPC_SETUP_DATA, RSP, token=0x2fe, Fail(VIPC_E_DEMO_FAILURE)")[0]
+    error = _recs("[RX] VIPC_SETUP_DATA, RSP, token=0x2fe, Error(VIPC_E_DEMO_FAILURE)")[0]
+    assert fail["result"] == error["result"] == "VIPC_E_DEMO_FAILURE"
+    (r,) = _recs("[RX] VIPC_SETUP_DATA, RSP, token=0x2fe, Slot(1)")          # 오류 접두어가 아닌 괄호는 결과가 아니다
+    assert (r["token"], r["result"]) == (0x2FE, None)
+    (r,) = _recs("[RX] VIPC_SETUP_DATA, RSP, Slot(1), token=0x2fe, Fail(VIPC_E_OK)")
+    assert (r["token"], r["result"]) == (0x2FE, "VIPC_E_OK")
+
+
 def test_long_token_masked_to_cred_keeps_record_without_token():
     """9자리 이상 16진 token은 마스커가 `<CRED#n>`으로 바꾸며 `)`까지 먹는다 — 줄은 놓치지 않고 token만 None(P2 27)."""
     masked = masking.new_masker(log_lines=True).mask("VIPC_X (token=0x1234abcd9)")
@@ -71,7 +90,8 @@ def test_short_tokens_survive_masking():
     """짧은 token(10진 10자리·16진 8자리 이하)은 마스커가 두므로 값이 남는다(설계 §1 마지막 줄)."""
     m = masking.new_masker(log_lines=True)
     for line, token in (("[TX] VIPC_A, REQ, token=0x0de", 0x0DE), ("VIPC_A (token=0x0de)", 0x0DE),
-                        ("[TX] VIPC_A, REQ, token = 0x0DE", 0x0DE), ("[TX] VIPC_A, REQ, token=222", 222)):
+                        ("[TX] VIPC_A, REQ, token = 0x0DE", 0x0DE), ("[TX] VIPC_A, REQ, token=222", 222),
+                        ("[TX] VIPC_A, REQ, Token(0x2FE)", 0x2FE), ("VIPC_A (TOKEN: 766)", 766)):
         assert m.mask(line) == line and _recs(line)[0]["token"] == token
 
 
@@ -136,3 +156,57 @@ def test_parse_logcat_ipc_uses_site_trace_and_tags_only():
     out = run_json("parse_logcat.py", ["ipc", LOG, "--rules", RULES, *TZ], root=root)
     assert [r["name"] for r in out["records"]] == ["VIPC_DEACT_DATA", "VIPC_DEACT_DATA"]
     assert all(r["dir"] is None and r["token"] is None for r in out["records"])
+
+
+# -- IPC 줄 SIM 슬롯 (단계 3, 설정 `platform.vendor_ipc.slot`) -----------------------------------------------
+
+DUAL = REPO / "tests" / "fixtures" / "accuracy" / "dual-sim.log"     # 같은 token 0x0de가 `ipc[0]`·`ipc[1]` 두 슬롯에 나온다
+SLOT_RULE = [r"^ipc\[(\d)\]"]
+LOOK = {"look_at": "VIPC_SETUP_DATA (token=0x0de)", "ref": None}
+
+
+@pytest.mark.parametrize("slot, problem", [
+    ([], "비어 있으면"), ("x", "목록"), (["("], "정규식 오류"), (["ipc"], "그룹 1"), (["a" * 401], "400자"),
+    ([r"(\d)"] * 9, "8개"),
+])
+def test_config_slot_key_is_checked(slot, problem):
+    with pytest.raises(platforms.PlatformConfigError, match=problem):
+        platforms._vendor_ipc({"slot": slot}, "platform.vendor_ipc")
+
+
+def test_config_slot_is_optional_and_separate_from_five_keys():
+    spec = platforms._vendor_ipc({"slot": SLOT_RULE}, "b")
+    assert spec.slot == tuple(SLOT_RULE) and spec.trace == () and spec.request_prefix == "VIPC_"
+    assert vendor_ipc.DEFAULT.slot == ()
+
+
+def _slot_root():
+    return plugin_root("ipc-slot", platform={"name": "android", "vendor_ipc": {"slot": SLOT_RULE}})
+
+
+def _find(root, look: dict, expect: int = 0):
+    path = tmp("tt-ipc-slot-") / "look-at.json"
+    path.write_text(json.dumps(look), encoding="utf-8")
+    args = ["ipc", DUAL, "--rules", RULES, *TZ, "--find", path]
+    return run("parse_logcat.py", args, root=root) if expect else run_json("parse_logcat.py", args, root=root)["find"]
+
+
+def test_ipc_records_take_slot_from_site_rule_else_line_record():
+    plain = run_json("parse_logcat.py", ["ipc", DUAL, "--rules", RULES, *TZ])["records"]
+    assert plain and all(r["phone_id"] is None for r in plain)          # RIL 태그 줄엔 슬롯 표기 없음 → 줄 레코드의 None
+    recs = run_json("parse_logcat.py", ["ipc", DUAL, "--rules", RULES, *TZ], root=_slot_root())["records"]
+    assert [r["phone_id"] for r in recs if r["token"] == 0x0DE] == [0, 0, 1, 1]
+
+
+def test_find_slot_filters_and_counts_per_slot():
+    root = _slot_root()
+    both = _find(root, LOOK)                                           # 슬롯 요청 없음: 두 슬롯 모두, 고르지 않고 개수만
+    assert both["hits"] == 4 and both["slots"] == {"0": 2, "1": 2}
+    one = _find(root, {**LOOK, "slot": 1})
+    assert one["hits"] == 2 and one["slots"] == {"1": 2}
+    assert _find(None, {**LOOK, "slot": 1})["slots"] == {"null": 4}    # 슬롯 규칙 없음: 슬롯 모름은 어느 요청에도 남는다
+
+
+def test_find_rejects_bad_slot_value():
+    proc = _find(None, {**LOOK, "slot": "1"}, expect=2)
+    assert proc.returncode == 2 and "slot" in proc.stderr
