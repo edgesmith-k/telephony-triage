@@ -678,8 +678,8 @@ def _hints(job: Path, cfg: dict, analysis: dict, by_cat: dict[str, str]) -> tupl
     found: list[tuple[str, str]] = []
     reason = (analysis.get("explore") or {}).get("reason")
     if reason in ("cause_unconfirmed", "fit_check") and cands and cands[0].get("type"):
-        found.append((str(cands[0]["type"]), f"1위 유형 {cands[0]['type']}"
-                      + ("(원인 미확인)" if reason == "cause_unconfirmed" else "(적합성 확인)")))
+        found.append((str(cands[0]["type"]), (f"1위 유형 {cands[0]['type']}(원인 미확인)" if reason == "cause_unconfirmed"
+                                              else f"채택 후보 유형 {cands[0]['type']}(적합성 확인)")))
     try:
         match = json.loads((job / "match.json").read_text("utf-8")) if (job / "match.json").is_file() else {}
     except (OSError, ValueError):

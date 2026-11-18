@@ -191,7 +191,7 @@ def test_unfit_top_holds_with_reason_and_next_check_then_rerun_carries_prior():
     assert "가설 없음: 1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다" in line
     assert "다음 확인: 실패 시각 앞뒤 1분 radio 로그" in line
     # FR-02(P2): 보류면 결론·해결책 줄도 1위 확정·`검증됨`을 권하지 않는다(판정·후보 순위는 그대로)
-    assert _report_line(out, "- 결론:") == ("- 결론: 1위 DATA-001-01가 증상과 맞지 않아 보류(탐색 분석 참조). "
+    assert _report_line(out, "- 결론:") == ("- 결론: 채택 후보 DATA-001-01가 증상과 맞지 않아 보류(탐색 분석 참조). "
                                          "다음: Step 7에서 보류를 고르거나 근거 로그 확인")
     held = _report_line(out, "- 해결책")       # 발생 시각만이라 run이 이미 보류(실패 지점 없음) — 사유는 앞 것이 남는다
     assert held.startswith("- 해결책(1위 기준, 보류됨): ") and held.endswith("   해결책 검증: 보류(실패 지점 없음)"), held
@@ -303,10 +303,10 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
                                            for e in dec["events"]]}
     assert held["decision"]["events"][0]["result"] == "held"
     assert held["candidates"] == done["candidates"]
-    assert _report_line(out, "- 판단:") == ("- 판단: 원인 보류 — 탐색 분석 적합성 확인에서 1위가 증상과 맞지 않음. 아래 규칙 "
+    assert _report_line(out, "- 판단:") == ("- 판단: 원인 보류 — 탐색 분석 적합성 확인에서 채택 원인이 증상과 맞지 않음. 아래 규칙 "
                                           "일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다")
     cl = issue_post.classify(held, None, issue_post.fit_hold_of(out / "check-output.json"))
-    assert cl["cls"] == "data > DATA-001 > 원인 보류 — 탐색 분석 적합성 확인에서 1위가 증상과 맞지 않음", cl
+    assert cl["cls"] == "data > DATA-001 > 원인 보류 — 탐색 분석 적합성 확인에서 채택 원인이 증상과 맞지 않음", cl
     assert not any("해결책" in x for x in cl["next"]), cl["next"]
 
 

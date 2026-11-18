@@ -35,7 +35,7 @@ _PICK_LABEL = {"nearest": "발생 시각에 가장 가까운 것", "last": "기�
 # 앞까지가 결론이다(포털이 그 앞만 남긴다 — 그 앞에 Step 7을 쓰지 않는다)
 CONCLUSION_PREFIX = "- 결론: "
 RESOLUTION_PREFIX, RESOLUTION_CHECK = "- 해결책: ", "   해결책 검증: "
-FIT_HOLD_CONCLUSION = "1위 {cause}가 증상과 맞지 않아 보류(탐색 분석 참조). 다음: Step 7에서 보류를 고르거나 근거 로그 확인"
+FIT_HOLD_CONCLUSION = "채택 후보 {cause}가 증상과 맞지 않아 보류(탐색 분석 참조). 다음: Step 7에서 보류를 고르거나 근거 로그 확인"
 FIT_HOLD_RESOLUTION, FIT_HOLD_CHECK = "- 해결책(1위 기준, 보류됨): ", "보류(1위 부적합)"
 # 판단 줄(analysis.json `decision`, 단계 4) — 렌더와 check-output(보류·반대 의견으로 고침)이 같이 쓴다
 DECISION_PREFIX = "- 판단: "

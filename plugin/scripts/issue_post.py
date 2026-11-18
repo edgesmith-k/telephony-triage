@@ -317,7 +317,7 @@ def classify(a: dict, plan: dict | None, fit_hold: str | None = None) -> dict:
                 out["cls"] = f"{top.get('category')} > {top.get('type')} > {top['cause']} {top.get('title') or ''}".rstrip()
                 out["lines"].append(_score(top))
                 if fit_hold == top["cause"]:
-                    out["lines"].append("탐색 분석 적합성 확인: 1위가 증상과 맞지 않아 보류")
+                    out["lines"].append("탐색 분석 적합성 확인: 채택 후보가 증상과 맞지 않아 보류")
                 if top.get("resolution") and fit_hold == top["cause"]:
                     out["next"].append(f"해결책(1위 기준, 보류됨): {top['resolution']} (해결책 검증: 보류(1위 부적합))")
                 elif top.get("resolution"):

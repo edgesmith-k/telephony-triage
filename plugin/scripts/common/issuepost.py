@@ -44,7 +44,7 @@ SECTIONS = ("PROBLEM", "CAUSE", "NEXT ACTION", "ANALYSIS")
 HELD_REASON = {"no_reference": "실패 지점을 잡지 못함(기준 줄·스텝 마커·TC 파일+시계 차 중 로그에서 찾은 것 없음)",
                "no_candidate": "맞는 후보 없음", "cause_unconfirmed": "유형만 일치, 원인 미확인",
                "cause_unjudged": "원인 판정 불가(시그니처 시간 초과·오류)",
-               "fit_check": "탐색 분석 적합성 확인에서 1위가 증상과 맞지 않음",
+               "fit_check": "탐색 분석 적합성 확인에서 채택 원인이 증상과 맞지 않음",
                # 자격 검사(단계 5): 실패 지점의 사건에 붙는 원인을 정하지 못함
                "symptom_not_found": "실패 지점에 이슈 DB 증상과 맞는 실패가 없음",
                "ambiguous": "실패 지점을 하나로 정하지 못함",

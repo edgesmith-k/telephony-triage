@@ -15,6 +15,8 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
+from common import logtime
+
 
 PRE_SEC, POST_SEC = 30, 300      # 분석 구간 = 기준 줄 시각 −30초 ~ +300초 (설정 키 대신 상수, VERIFY P2 20)
 TEXT_MAX = 300                   # --look-at·--look-note 글자 수 상한
@@ -118,7 +120,7 @@ def group_places(hits: list[dict], link_ms: int = PAIR_MS) -> list[list[dict]]:
         if ipc:
             key = (ipc.get("name"), ipc.get("token"), h.get("phone"))
             req = open_ipc.pop(key, None) if ipc.get("dir") == "rsp" else None
-            if req and (datetime.fromisoformat(h["ts"]) - datetime.fromisoformat(req[0]["ts"])).total_seconds() * 1000 <= link_ms:
+            if req and (logtime.parse_ts(h["ts"]) - logtime.parse_ts(req[0]["ts"])).total_seconds() * 1000 <= link_ms:
                 req.append(h)
                 continue
             groups.append([h])

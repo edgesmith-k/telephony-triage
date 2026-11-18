@@ -162,6 +162,8 @@ def test_group_places_pairs_request_response_and_ril_serial():
     assert len(lookat.group_places([h(1, "req"), h(1.5, "rsp"), h(3, "req"), h(3.5, "rsp")])) == 2
     assert len(lookat.group_places([h(1, "req"), h(4, "rsp")])) == 2              # 2초 넘은 RSP는 다른 곳(token 재사용)
     assert len(lookat.group_places([h(1, "req"), h(4, "rsp")], link_ms=5000)) == 1    # 사내 조정 값
+    z = lambda s, d: {**h(s, d), "ts": f"2026-11-14T01:00:{s:06.3f}Z"}  # noqa: E731  (logtime.format_ts 꼴, Python 3.10도)
+    assert [len(p) for p in lookat.group_places([z(1, "req"), z(1.5, "rsp"), z(5, "rsp")])] == [2, 1]
     r = lambda ts, paired: {"ts": ts, "phone": 0, "ril": {"serial": 7, "pid": 1, "paired_ts": paired}}  # noqa: E731
     assert len(lookat.group_places([r("t1", "t2"), r("t2", "t1")])) == 1
     assert len(lookat.group_places([r("t1", "t2"), r("t9", "t8")])) == 2

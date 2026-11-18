@@ -443,7 +443,7 @@ def test_fit_check_hold_marks_resolution_held_without_plan():
     render(ws, "--fill", fill(ws, FILL))
     body = post_md(ws)
     assert f"* 해결책(1위 기준, 보류됨): {top['resolution']} (해결책 검증: 보류(1위 부적합))" in body
-    assert "* 원인 미확정 — 추가 로그·재현 정보 필요" in body and "* 탐색 분석 적합성 확인: 1위가 증상과 맞지 않아 보류" in body
+    assert "* 원인 미확정 — 추가 로그·재현 정보 필요" in body and "* 탐색 분석 적합성 확인: 채택 후보가 증상과 맞지 않아 보류" in body
     assert f"* 해결책: {top['resolution']}" not in body
     co.write_text(json.dumps({"explore": {"mode": "explore", "fit_hold": "OTHER-001-01"}}), encoding="utf-8")
     render(ws, "--fill", fill(ws, FILL))
