@@ -181,6 +181,28 @@ def _text(value) -> str:
     return str(value)
 
 
+def comment_rows(raw, cfg: dict) -> list[tuple[object, object]]:
+    """코멘트 `(코멘트 객체 | None, 본문)` 목록 — `extract`와 `triage.py problem`이 같이 쓴다(같은 경로·같은 번호).
+    경로는 field_map `comments` 또는 트래커 기본값 중 값이 있는 첫 것(`_first`), 빈 본문은 뺀다. 객체는 본문 경로의 부모
+    (`x[].body` → `x[]`의 항목)이고, 짝을 맞출 수 없으면 None(작성자·시각 없음)."""
+    fmap = (cfg.get("tracker") or {}).get("field_map") or {}
+    paths = [fmap["comments"]] if fmap.get("comments") else list(trackers.of(cfg).text_defaults["comments"])
+    for path in paths:
+        value = lookup(raw, path)
+        if value in (None, "", []):
+            continue
+        if not isinstance(value, list):
+            return [(None, value)] if value and _text(value) else []
+        parent, _, leaf = path.rpartition(".")
+        owners = None
+        if parent.endswith("[]") and not leaf.endswith("[]"):     # lookup이 본문을 꺼낸 항목과 같은 걸러내기
+            owners = [o for o in lookup(raw, parent) or [] if isinstance(o, dict) and o.get(leaf) is not None]
+        if owners is None or len(owners) != len(value):
+            owners = [None] * len(value)
+        return [(o, v) for o, v in zip(owners, value) if _text(v)]
+    return []
+
+
 def comment_budget(spec: str) -> int | None:
     """`all` → None(전부), `last:N` → N. 결정적 절삭이다(뒤에서 N개)."""
     if spec == "all":
@@ -255,10 +277,7 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
         paths = [fmap[name]] if fmap.get(name) else list(adapter.text_defaults[name])
         return _first(raw, paths)
 
-    comments = texts("comments") or []
-    if not isinstance(comments, list):
-        comments = [comments]
-    comments = [c for c in comments if _text(c)]
+    comments = [body for _, body in comment_rows(raw, cfg)]
     total = len(comments)
     if last is not None:
         comments = comments[-last:] if last else []

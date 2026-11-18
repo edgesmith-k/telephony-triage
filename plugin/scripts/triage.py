@@ -35,7 +35,11 @@
   `{module, sha, read, also, input?, timeline, …}`(설치 스킬 `{skill, read, base, input, timeline}`, 후보 여럿 `{pick: null, ask, …}`),
   실패면 `{reason, next}`. 종료 코드 1 = 해당 없음(설정 없음·후보 없음·레포에 없음·설치 스킬 못 찾음), 2 = 오류(`next`를 따른다).
 - `triage.py check-output <KEY> --for deep|explore [--skipped <사유>] [--out <dir>]`: Claude가 쓴 `JOB/<purpose>-output.md`를
-  마스킹·칸 검사·근거 원문 검사하고 리포트 줄을 쓴다(`triagelib/output.py`). 출력 `{line, evidence, quotes, …}`, 실패 `{reason, next?}`.
+  마스킹·칸 검사·근거 원문 검사하고 리포트 줄을 쓴다(`triagelib/output.py`). 출력 `{line, evidence, quotes, …}`, 실패 `{reason, next?}`. `--for problem`은 아래 problem.
+- `triage.py problem <KEY> [--issue-raw <json> | --issue-file <yaml>] [--failed-step …] [--steps-file …] [--offline-db <db> --out <dir>]`:
+  분석 전 문제 파악 입력 `JOB/problem-input.md`(가린 제목·설명·코멘트 전부(작성자 글자·시각)·TC·이슈 DB 유형 목록)와 대조 자료
+  `problem-input.json`을 쓴다. `check-output <KEY> --for problem`이 모델이 쓴 `JOB/problem-output.json`을 검사해 `JOB/problem.json`을
+  쓴다(`triagelib/problem.py`). `run`은 이 파일들을 읽지 않는다.
 - `analysis.json`의 `must_show`(있을 때만, ≤6줄·4KB 압축 시 4줄·줄당 ≤160자): 리포트 줄 중 사용자에게 꼭 보여야 하는 것(분석 전용·읽기 전용·
   1위 변화 재분석·실패 스텝·장비 시각 미사용·판정 불가 유형·원인·슬롯 불일치·시계 이상 구간 근거·로그 범위 이상·범위 밖 오류·
   파서 규칙에 없는 태그·미추출 W/E 줄·코드 분석 트리 자동 선택·이슈 DB pull 건너뜀, 순서는 `07-workflow.md §Step 6`). `report.md`의 줄과 같은 문구다.
@@ -170,6 +174,15 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("explore", parents=[common])
     p.add_argument("key", metavar="KEY")
     p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
+    p = sub.add_parser("problem", parents=[common])
+    p.add_argument("key", metavar="KEY")
+    src = p.add_mutually_exclusive_group()
+    src.add_argument("--issue-raw", metavar="json", help="Jira 응답 원문(없으면 JOB/issue_raw.json). 지우지 않는다")
+    src.add_argument("--issue-file", metavar="yaml")
+    p.add_argument("--failed-step", metavar="한 줄", help="실패 스텝 한 줄(선택). 마스킹해서만 쓴다")
+    p.add_argument("--steps-file", metavar="파일", help="시험 절차 첨부 파일(TC, 선택)")
+    p.add_argument("--offline-db", metavar="db", help="이슈 DB(없으면 스냅샷 또는 config issue_db.path)")
+    p.add_argument("--out", metavar="dir", help="JOB 디렉토리(없으면 <work_dir>/<KEY>)")
     p = sub.add_parser("module", parents=[common])
     p.add_argument("key", metavar="KEY")
     p.add_argument("--for", dest="purpose", choices=("deep", "explore"), required=True,
@@ -185,7 +198,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
     p = sub.add_parser("check-output", parents=[common])
     p.add_argument("key", metavar="KEY")
-    p.add_argument("--for", dest="purpose", choices=("deep", "explore"), required=True)
+    p.add_argument("--for", dest="purpose", choices=("deep", "explore", "problem"), required=True)
     p.add_argument("--skipped", metavar="사유", help="실행하지 않았거나 실패: report 줄을 '생략: <사유>'로")
     p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
     p = sub.add_parser("release", parents=[common])
@@ -368,13 +381,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args.platform_name, args.platform_cfg = platform_session.resolve(defaults, args.platform)
     except (platforms.PlatformConfigError, yamlio.YamlFileError) as exc:
-        if args.cmd in ("module", "check-output"):       # 이 둘은 늘 JSON 한 줄(B1 §4.2)
+        if args.cmd in ("module", "check-output", "problem"):       # 늘 JSON 한 줄(B1 §4.2)
             _emit({"reason": "설정 오류"})
         print(str(exc), file=sys.stderr)
         return USAGE
     if args.cmd == "module":
         from triagelib import modulecmd
         return modulecmd.cmd_module(args, defaults)
+    if args.cmd == "problem" or (args.cmd == "check-output" and args.purpose == "problem"):
+        from triagelib import problem
+        return problem.cmd_problem(args, defaults) if args.cmd == "problem" else problem.cmd_check(args, defaults)
     if args.cmd == "check-output":
         from triagelib import output
         return output.cmd_check_output(args, defaults)
