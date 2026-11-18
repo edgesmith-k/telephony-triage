@@ -2048,9 +2048,9 @@ def test_problem_expectations_pass_through_real_check():
         if x.get("hypotheses_absent"):    # 빈 가설은 칸 값 행 실패(확인 리뷰 N2)
             assert grader.pb_rows(x, {**rec, "hypotheses": []})[5][0] is False, key
         if rec["clues"]:                  # side는 cp·ap가 뒤바뀐 것만 실패, unknown은 통과(11/18)
-            def side(v): return {**rec, "clues": [{**rec["clues"][0], "side": v}, *rec["clues"][1:]]}
-            assert grader.pb_rows(x, side("unknown"))[3][0], key
-            assert grader.pb_rows(x, side({"cp": "ap", "ap": "cp"}[rec["clues"][0]["side"]]))[3][0] is False, key
+            first = rec["clues"][0]
+            for v, ok in (("unknown", True), ({"cp": "ap", "ap": "cp"}[first["side"]], False)):
+                assert grader.pb_rows(x, {**rec, "clues": [{**first, "side": v}, *rec["clues"][1:]]})[3][0] is ok, key
 
 
 def test_unjudged_variant_db_has_slow_cause():
