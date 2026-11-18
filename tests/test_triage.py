@@ -1061,12 +1061,18 @@ def test_held_report_lines_keep_prefixes_and_conclusion_shape():
     assert analysis["decision"]["reason"] == "no_reference" and analysis["candidates"][0]["C"] == 1
     lines = (out / "report.md").read_text(encoding="utf-8").splitlines()
     i = next(n for n, x in enumerate(lines) if x.startswith("- 판단: "))
-    assert lines[i] == ("- 판단: 원인 보류 — 실패 지점 미정(담당자 기준 줄·로그 스텝 표시·TC 파일 시각 없음). 아래 규칙 일치는 "
-                        "로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다")
-    assert lines[i + 1].startswith("- 결론: 원인 보류 — 실패 지점 미정") and ". 다음: 근거 로그로 확인하고 Step 7" in lines[i + 1]
+    assert lines[i] == ("- 판단: 원인 보류 — 실패 지점을 잡지 못함(기준 줄·스텝 마커·TC 파일+시계 차 중 로그에서 찾은 것 없음). "
+                        "아래 규칙 일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다")
+    assert lines[i + 1].startswith("- 결론: 원인 보류 — 실패 지점을 잡지 못함") and ". 다음: 근거 로그로 확인하고 Step 7" in lines[i + 1]
     assert "DATA-001-01" in lines[i + 1].split(". 다음:")[0]
     assert lines[i + 2].startswith("- 분류 후보: data > DATA-001 > DATA-001-01 ")
     assert lines[i + 2].endswith(" (관측된 규칙 일치 — 채택 안 함)")
+    # NEXT ACTION: 해결책·수정 상태는 적합성 확인 보류와 같은 모양(1위 해결책을 권하지 않는다 — Jira 본문은 해결책 없음)
+    top = analysis["candidates"][0]
+    assert not any(x.startswith(("- 해결책: ", "- 수정 상태: ")) for x in lines)
+    res = next(x for x in lines if x.startswith("- 해결책(1위 기준, 보류됨): "))
+    assert res.endswith("   해결책 검증: 보류(실패 지점 없음)") and res.count("검증됨") == 0
+    assert any(x.startswith("- 수정 상태(1위 기준, 보류됨): ") for x in lines), top
 
 
 def _analyzer_report(cfg: dict) -> str:

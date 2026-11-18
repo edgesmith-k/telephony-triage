@@ -186,6 +186,9 @@ OK_OFFLINE = {
                     "evidence": [{"ts": "t", "tag": "RILJ", "msg": "m", "event": "e"}],
                     "fix_judgement": None, "fix_message": None, "related": []}],
     "code": {"skipped": True}, "files": {"report": "r"}, "truncated": False,
+    "decision": {"state": "accepted", "reason": "anchored_top",
+                 "selected": {"category": "call", "type": "CALL-001", "cause": "CALL-001-01"},
+                 "location": {"state": "confirmed", "source": "look_at", "kind": "point"}},
 }
 NEEDS_INPUT = {"status": "needs_input", "key": "EVAL-1", "lock_owner": None,
                "needs_input": {"kind": "time", "question": "q", "options": [], "answer": "--answer time=<값>",
@@ -227,6 +230,13 @@ HELD = {"state": "held", "reason": "no_reference", "selected": None, "location":
 def test_analysis_schema_accepts_decision(triage, monkeypatch, decision):
     monkeypatch.setenv("TT_SCHEMA_CHECK", "1")
     assert triage.schema_violation({**OK_OFFLINE, "decision": decision}) is None
+
+
+def test_analysis_schema_requires_decision(triage, monkeypatch):
+    """run은 늘 decision을 쓴다(단계 4) — 없는 ok 출력은 스키마 위반."""
+    monkeypatch.setenv("TT_SCHEMA_CHECK", "1")
+    doc = {k: v for k, v in OK_OFFLINE.items() if k != "decision"}
+    assert "decision" in (triage.schema_violation(doc) or "")
 
 
 @pytest.mark.parametrize("decision", [

@@ -610,3 +610,92 @@ def test_runtime_label_from_site_defaults(tmp_path, capsys, monkeypatch):
 
 def test_evidence_parsers_used_are_the_shared_ones():
     assert output.evidence is evidence and evidence.FIELDS_DEEP[0] == "원인 층"
+
+
+# --- 단계 4 판단(decision) 고치기 ---------------------------------------------------------------------------
+
+ACCEPTED = {"state": "accepted", "reason": "anchored_top",
+            "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
+            "location": {"state": "confirmed", "source": "look_at", "kind": "point"}}
+
+
+def _decision_job(base: Path, decision=ACCEPTED) -> Path:
+    """탐색 모듈 기록(입력 해시에 analysis.json)이 있는 JOB에 심층 분석(설치 스킬)·판단을 더한다 — 둘 다 TODO 줄."""
+    job = make_job(base, "explore", "explore")
+    analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    analysis.update(analyzer={"skill": "mock-data-analyzer", "when": "ask"}, **({"decision": decision} if decision else {}))
+    (job / "analysis.json").write_text(json.dumps(analysis, ensure_ascii=False), encoding="utf-8")
+    msj = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))
+    msj["explore"]["inputs"]["analysis.json"] = _sha(job / "analysis.json")
+    (job / "module-skill.json").write_text(json.dumps(msj, ensure_ascii=False), encoding="utf-8")
+    (job / "report.md").write_text("\n".join(["# MOCK-9076 분석 리포트", "", report.decision_line(decision or ACCEPTED, True),
+                                              "- 분류 후보: DATA-001-01", SKILL_PENDING, EXPLORE_PENDING, SUB,
+                                              "- 기타 후보: 없음", ""]), encoding="utf-8")
+    return job
+
+
+def test_opinion_id_shapes():
+    m = lambda s: (output.OPINION_ID.match(s) or [None, None])[1]     # noqa: E731
+    assert m("DATA-001-02 — 망 거절") == "DATA-001-02" and m("  `DATA-001-02` — x") == "DATA-001-02"
+    assert m("**DATA-001-02** — x") == "DATA-001-02" and m("DATA-001-02와 같은 망 거절") == "DATA-001-02"
+    assert m("DATA-001-021 — x") is None and m("1위와 같음") is None and m("해당 없음(후보 없음)") is None
+
+
+def test_deep_counter_rebases_module_inputs_so_later_explore_check_uses_its_view(tmp_path, capsys, monkeypatch):
+    """P2-1: 섞인 순서(module --for explore → check-output deep이 counter로 analysis.json을 다시 씀 → check-output explore)에서
+    탐색 기록의 입력 해시를 새 analysis.json으로 옮겨, 탐색 검사가 기록한 모듈 보기로 근거를 검사한다(건너뛰거나 다른 원문 아님)."""
+    monkeypatch.delenv("TT_SCHEMA_CHECK")          # 합성 analysis.json(필수 키 없음)이라 스키마 검사는 끈다
+    job = _decision_job(tmp_path)
+    before = _sha(job / "analysis.json")
+    (job / "deep-output.md").write_text(_skill_out([Q1]).replace("DATA-001-01 — 1위와 같음", "**DATA-001-02** — 망 거절"),
+                                        encoding="utf-8")
+    code, _, err = check(job, "deep", capsys=capsys)
+    assert code == 0 and "판단" not in err, err
+    analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    assert analysis["decision"] == {**ACCEPTED, "counter": {"cause": "DATA-001-02"}}
+    after = _sha(job / "analysis.json")
+    assert after != before
+    msj = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))
+    assert msj["explore"]["inputs"]["analysis.json"] == after
+    assert _line(job, "- 판단:").endswith("· 모델 검토 의견이 다름(DATA-001-02) — 확인 필요")
+    assert "decision_unwritten" not in _rec(job, "deep")
+    (job / "explore-output.md").write_text(_explore_out([("망 거절", [Q2])]), encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and data["fabricated"] == 0 and _rec(job, "explore")["source"] == "module-skill/explore/timeline.md"
+
+
+def test_decision_not_written_on_schema_violation_or_changed_file(tmp_path, capsys):
+    """P2-2·P2-3: 스키마 위반(TT_SCHEMA_CHECK, 여기선 합성 analysis.json에 필수 키가 없다)이나 검사 중 analysis.json이 바뀌었으면
+    쓰지 않고 경고, 기록에 `decision_unwritten`. report.md 판단 줄도 그대로."""
+    job = _decision_job(tmp_path)
+    raw = (job / "analysis.json").read_bytes()
+    judge = _line(job, "- 판단:")
+    (job / "deep-output.md").write_text(_skill_out([Q1]).replace("DATA-001-01 — 1위와 같음", "DATA-001-02 — 망 거절"),
+                                        encoding="utf-8")
+    code, _, err = check(job, "deep", capsys=capsys)
+    assert code == 0 and "판단(decision)을 고치지 못했다" in err, err
+    assert (job / "analysis.json").read_bytes() == raw and _line(job, "- 판단:") == judge
+    assert _rec(job, "deep")["decision_unwritten"] == "스키마 위반"
+    analysis = json.loads(raw)
+    (job / "analysis.json").write_text(json.dumps({**analysis, "note": "다른 프로세스가 고침"}), encoding="utf-8")
+    changed = (job / "analysis.json").read_bytes()
+    args = _args(job, "deep")
+    os.environ.pop("TT_SCHEMA_CHECK")
+    try:
+        why = output._decision_update(args, job, analysis, hashlib.sha256(raw).hexdigest(), opinion="DATA-001-02 — x")
+    finally:
+        os.environ["TT_SCHEMA_CHECK"] = "1"
+    assert why == "검사 중 analysis.json이 바뀌었다" and (job / "analysis.json").read_bytes() == changed
+
+
+def test_old_job_without_decision_leaves_analysis_untouched(tmp_path, capsys, monkeypatch):
+    """decision 없는 옛 JOB: 심층 의견이 달라도 check-output은 analysis.json·판단 줄을 건드리지 않는다(기록도 없음)."""
+    monkeypatch.delenv("TT_SCHEMA_CHECK")
+    job = _decision_job(tmp_path, decision=None)
+    raw, msj = (job / "analysis.json").read_bytes(), (job / "module-skill.json").read_bytes()
+    (job / "deep-output.md").write_text(_skill_out([Q1]).replace("DATA-001-01 — 1위와 같음", "DATA-001-02 — 망 거절"),
+                                        encoding="utf-8")
+    code, _, err = check(job, "deep", capsys=capsys)
+    assert code == 0 and "판단" not in err
+    assert (job / "analysis.json").read_bytes() == raw and (job / "module-skill.json").read_bytes() == msj
+    assert "decision_unwritten" not in _rec(job, "deep")

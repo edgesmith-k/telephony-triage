@@ -460,7 +460,7 @@ def test_held_decision_reports_cause_held_without_resolution():
                                     "location": {"state": "none", "source": None, "kind": None}}, analysis["decision"]
     render(ws, "--fill", fill(ws, FILL))
     body = post_md(ws)
-    assert f"{top['type']} > 원인 보류 — 실패 지점 미정" in body
+    assert f"{top['type']} > 원인 보류 — 실패 지점을 잡지 못함(기준 줄·스텝 마커·TC 파일+시계 차 중 로그에서 찾은 것 없음)" in body
     assert f"* 규칙 일치 1위 {top['cause']} {top['title']} — 로그에서 관측된 참고, 이 이슈의 원인으로 채택 안 함" in body
     assert "해결책" not in body and "* 원인 미확정 — 추가 로그·재현 정보 필요" in body
     accepted = {**analysis, "decision": {"state": "accepted", "reason": "anchored_top",

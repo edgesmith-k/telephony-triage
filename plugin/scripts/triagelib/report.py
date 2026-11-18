@@ -40,6 +40,7 @@ FIT_HOLD_RESOLUTION, FIT_HOLD_CHECK = "- 해결책(1위 기준, 보류됨): ", "
 # 판단 줄(analysis.json `decision`, 단계 4) — 렌더와 check-output(보류·반대 의견으로 고침)이 같이 쓴다
 DECISION_PREFIX = "- 판단: "
 HELD_REASON = issuepost.HELD_REASON
+HELD_SHORT = {"no_reference": "실패 지점 없음", "fit_check": "1위 부적합"}     # 보류된 해결책 줄의 검증 칸
 _LOCATION_LABEL = {"confirmed": "확인됨", "found": "찾음(구간)", "multiple": "여러 곳", "none": "없음"}
 HELD_TAIL = " (관측된 규칙 일치 — 채택 안 함)"
 
@@ -56,7 +57,7 @@ def decision_line(dec: dict, has_candidates: bool) -> str:
             ". 아래 규칙 일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다" if has_candidates else "")
     counter = (dec.get("counter") or {}).get("cause")
     if counter:
-        text += f" · 모델 검토에서 반대 근거 있음({counter}) — 확인 필요"
+        text += f" · 모델 검토 의견이 다름({counter}) — 확인 필요"
     return DECISION_PREFIX + text
 
 
@@ -1085,9 +1086,15 @@ class ReportMixin:
                                      f"{code.get('tree_version') or '?'}) — 다른 트리는 --code로 지정"))
         if cands and cands[0]["cause"]:
             top = cands[0]
-            verified = "검증됨" if top.get("resolution_verification") == "verified" else "⚠ 미검증"
-            nxt.append(f"{RESOLUTION_PREFIX}{top.get('resolution') or '-'}{RESOLUTION_CHECK}{verified}")
-            nxt.append(f"- 수정 상태: {top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
+            if (dec or {}).get("state") == "held":
+                # 보류(단계 4): 탐색 적합성 확인 보류(`output._hold_lines`)와 같은 모양 — 1위 해결책을 권하지 않는다(Jira 본문은 해결책 없음)
+                held = HELD_SHORT.get(dec.get("reason"), dec.get("reason"))
+                nxt.append(f"{FIT_HOLD_RESOLUTION}{top.get('resolution') or '-'}{RESOLUTION_CHECK}보류({held})")
+                nxt.append(f"- 수정 상태(1위 기준, 보류됨): {top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
+            else:
+                verified = "검증됨" if top.get("resolution_verification") == "verified" else "⚠ 미검증"
+                nxt.append(f"{RESOLUTION_PREFIX}{top.get('resolution') or '-'}{RESOLUTION_CHECK}{verified}")
+                nxt.append(f"- 수정 상태: {top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
             if top.get("_version_mismatch"):
                 cause_l.append(f"- 다른 버전 원인 ({self.platform_label} {', '.join(top['_version_mismatch'])})")
             cause_l.append(f"- 기존 사례: Jira {top.get('issue_count') or 0}건 ({', '.join(top.get('issue_recent') or []) or '-'})")

@@ -277,7 +277,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
     - files?
     - skipped?
   - uncollected_tags?[≤3]({tag(≤40), lines, warn}; 후보 없음·1위 C=0일 때만, 파서 규칙에 없는 태그 힌트)
-- decision?(판단 상태(단계 4, 1위 후보만 본다 — 후보 목록·순서·점수는 그대로). 사유는 처음 맞는 것: 후보 없음(no_candidate) → 1위 원인 판정 불가(cause_unjudged) → 1위 원인 미확인(cause_unconfirmed) → 실패 지점 없음(no_reference) → 채택(anchored_top). fit_check는 check-output(탐색 적합성 확인 보류)만 쓴다. 4KB 압축 시 빼지 않는다)
+- decision(판단 상태(단계 4, 1위 후보만 본다 — 후보 목록·순서·점수는 그대로). 사유는 처음 맞는 것: 후보 없음(no_candidate) → 1위 원인 판정 불가(cause_unjudged) → 1위 원인 미확인(cause_unconfirmed) → 실패 지점 없음(no_reference) → 채택(anchored_top). fit_check는 check-output(탐색 적합성 확인 보류)만 쓴다. 4KB 압축 시 빼지 않는다)
   - state: accepted | held
   - reason: anchored_top | no_reference | no_candidate | cause_unconfirmed | cause_unjudged | fit_check
   - selected(accepted면 1위 후보의 {category, type, cause}, held면 null)

@@ -193,8 +193,8 @@ def test_unfit_top_holds_with_reason_and_next_check_then_rerun_carries_prior():
     # FR-02(P2): 보류면 결론·해결책 줄도 1위 확정·`검증됨`을 권하지 않는다(판정·후보 순위는 그대로)
     assert _report_line(out, "- 결론:") == ("- 결론: 1위 DATA-001-01가 증상과 맞지 않아 보류(탐색 분석 참조). "
                                          "다음: Step 7에서 보류를 고르거나 근거 로그 확인")
-    held = _report_line(out, "- 해결책")
-    assert held.startswith("- 해결책(1위 기준, 보류됨): ") and held.endswith("   해결책 검증: 보류(1위 부적합)"), held
+    held = _report_line(out, "- 해결책")       # 발생 시각만이라 run이 이미 보류(실패 지점 없음) — 사유는 앞 것이 남는다
+    assert held.startswith("- 해결책(1위 기준, 보류됨): ") and held.endswith("   해결책 검증: 보류(실패 지점 없음)"), held
     assert not any(x.startswith("- 해결책: ") for x in (out / "report.md").read_text(encoding="utf-8").splitlines())
     assert json.loads((out / "check-output.json").read_text(encoding="utf-8"))["explore"]["fit_hold"] == "DATA-001-01"
     assert json.loads((out / "analysis.json").read_text(encoding="utf-8"))["candidates"][0]["C"] == 1
@@ -283,7 +283,7 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
     assert not list(out.glob(".analysis.json.tmp-*"))
     assert after["decision"] == {**dec, "counter": {"cause": "DATA-001-02"}}
     assert after["candidates"] == done["candidates"]
-    assert _report_line(out, "- 판단:").endswith("자격 검사 전) · 모델 검토에서 반대 근거 있음(DATA-001-02) — 확인 필요")
+    assert _report_line(out, "- 판단:").endswith("자격 검사 전) · 모델 검토 의견이 다름(DATA-001-02) — 확인 필요")
     assert issue_post.classify(after, None)["cls"].endswith("DATA-001-01 Data disabled")      # 채택은 그대로
 
     run_json("triage.py", ["explore", item["key"], "--out", out], root=root)
@@ -397,4 +397,38 @@ def test_auto_scan_result_survives_reuse_cache_hit():
     assert second["reuse"]["hit"] is True, second["reuse"]
     assert second["step_anchor"] == first["step_anchor"] and first["step_anchor"]["time_candidates"]
     assert "증상 시각 후보" in _report_line(ws.job_dir("MOCK-9005"), "- 기준 시각 없음")
+    ws.json("triage.py", ["release", "MOCK-9005"])
+
+
+def test_fit_hold_rewrites_report_obligation_and_reuse_keeps_decision():
+    """P1-1: 작업 디렉토리 JOB에서 탐색 적합성 확인이 판단을 보류로 바꾸면, run이 남긴 리포트 표시 의무(같은 key)를 고친 줄로
+    다시 남긴다 — show_guard가 옛 "원인 채택" 줄을 보이라고 하지 않는다. 캐시 적중(재사용)이면 판단·판단 줄이 같다(P2-7)."""
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    from common import shown
+    ws = Workspace()
+    log = tmp("tt-dec-shown-") / "roaming.log"
+    log.write_bytes((REPO / "tests/fixtures/logs/data-roaming-disabled.log").read_bytes())
+    args = ["run", "MOCK-9005", "--dry-run", "--issue-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
+            "--logs", log, "--code", "skip", "--explore", "--look-at", "DataRoamingEnabled changed to false"]
+    first = ws.json("triage.py", args)
+    job = ws.job_dir("MOCK-9005")
+    old = next(x for x in (job / "report.md").read_text(encoding="utf-8").splitlines() if x.startswith("- 판단:"))
+    assert first["decision"]["state"] == "accepted" and old.startswith("- 판단: 원인 채택 — "), first["decision"]
+    again = ws.json("triage.py", args)
+    assert again["reuse"]["hit"] is True and again["decision"] == first["decision"]
+    assert old in (job / "report.md").read_text(encoding="utf-8").splitlines()
+    ws.json("triage.py", ["explore", "MOCK-9005"])
+    (job / "explore-output.md").write_text("가설 없음: 1위 부적합 — 증상 시각과 근거 시각이 다르다\n다음 확인: radio 로그\n",
+                                           encoding="utf-8")
+    ws.json("triage.py", ["check-output", "MOCK-9005", "--for", "explore"])
+    new = next(x for x in (job / "report.md").read_text(encoding="utf-8").splitlines() if x.startswith("- 판단:"))
+    assert new.startswith("- 판단: 원인 보류 — 탐색 분석 적합성 확인")
+    key = f"report:MOCK-9005#{again['run']}"
+    recs = [json.loads(x) for x in (job.parent / ".shown" / "log.jsonl").read_text(encoding="utf-8").splitlines()
+            if x.strip() and json.loads(x).get("key") == key]
+    assert len(recs) >= 2 and old in recs[0]["lines"]
+    ob = shown._obligation("report", key, 0, 1, recs[-1])
+    gap = shown.missing(ob, [])
+    assert new in gap and old not in gap
+    assert not any(x.endswith(old[2:]) for x in gap)
     ws.json("triage.py", ["release", "MOCK-9005"])

@@ -99,6 +99,17 @@ def test_token_only_without_jira_time_picks_last_and_lists_all_hits():
     assert _causes(nearer)[0] == "IMS-001-01"
 
 
+def test_single_ipc_line_is_confirmed_point_location():
+    """단계 4: 이름·token이 하나뿐인 IPC 기준 줄(일치 1개) → 실패 지점 confirmed·point, 1위 원인이 있으면 채택."""
+    done, job = _offline("ipc1", "--look-at", "VIPC_DEACT_DATA (token=0x0df) requested")
+    assert done["step_anchor"]["look"] == {"hits": 1, "picked": 1}, done["step_anchor"]
+    assert done["decision"] == {"state": "accepted", "reason": "anchored_top",
+                                "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
+                                "location": {"state": "confirmed", "source": "look_at", "kind": "point"}}
+    assert "- 판단: 원인 채택 — DATA-001-01 (실패 지점: 담당자가 지정한 기준 줄·확인됨, 자격 검사 전)" in \
+        (job / "report.md").read_text(encoding="utf-8")
+
+
 def test_not_found_and_short_text_fall_back_with_warning():
     done, job = _offline("miss", "--look-at", "this line is nowhere in the log")
     assert done["step_anchor"] == {"source": "issue", "look": {"hits": 0}} and "IMS-001-01" in _causes(done)
