@@ -658,6 +658,7 @@ FLOWS = {   # 한 흐름에서 읽는 문서(SKILL.md 말고는 reference/<이�
     "로그 해석": (("SKILL.md", "rules", "log-tags", "ril-requests", "fail-causes"), 27 * 1024),
     "sync-pr": (("rules", "sync-pr", "write-flow"), 25 * 1024),
     "search": (("search",), 4 * 1024),
+    "문제 파악": (("SKILL.md", "rules", "problem"), 21 * 1024),     # analyze --problem-only(분석 정확도 단계 2b)
 }
 
 

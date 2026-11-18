@@ -1,0 +1,6 @@
+No | Time | Step | Result
+1 | 2026-11-25 08:30:02 | Airplane mode ON | Pass
+2 | 2026-11-25 08:30:12 | Airplane mode OFF | Pass
+3 | 2026-11-25 08:31:20 | LTE 망 등록 확인 (60s) | Fail (60초 동안 서비스 없음)
+4 | 2026-11-25 08:31:35 | 모바일 데이터 ON, 데이터 아이콘 확인 | Fail (데이터 아이콘 없음)
+5 | 2026-11-25 08:32:10 | Airplane mode ON | Pass

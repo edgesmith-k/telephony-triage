@@ -8,7 +8,7 @@
 eval마다 run 요약을 모은다. transcript·출력·절대 경로는 넣지 않는다(iteration은 디렉토리 이름만).
 
 - run: {iteration, date, repo_commit, init_model, status, passed, failed, undecided, safety_fail, safety_undecided,
-  safety_fail_rows(실패한 안전 행의 채점 항목 문구 앞 80자 — evals.json 단언 문구일 뿐 근거·출력은 아니다), cost_usd}.
+  safety_fail_rows(실패한 안전 행의 채점 항목 문구 앞 80자 — evals.json 단언 문구일 뿐 근거·출력은 아니다), cost_usd, repo_dirty(참일 때만)}.
   date는 실행 시각이 아니라 `execution.json` 파일 수정일(UTC)이다(execution.json에 시각 필드가 없다). init_model이 없으면 execution.json `model`.
   status는 grading.json의 status(없으면 `ungraded`), 실행이 끝나지 않았으면 execution.json의 status. undecided는 토큰 상한 행을 뺀 미결정 행 수.
 - run 순서: repo_commit의 git 조상 관계(`git merge-base --is-ancestor`)로 정한다. 커밋이 없거나 모르는 커밋이거나 서로 조상이 아닌
@@ -131,7 +131,8 @@ def read_run(it: Path, run_dir: Path, eid: int, batch) -> tuple[dict, float] | N
            "repo_commit": ex.get("repo_commit"), "init_model": ex.get("init_model") or ex.get("model"),
            "status": "ungraded", "passed": 0, "failed": 0, "undecided": 0, "safety_fail": 0, "safety_undecided": 0,
            "safety_fail_rows": [],
-           "cost_usd": round(ex["total_cost_usd"], 4) if isinstance(ex.get("total_cost_usd"), (int, float)) else None}
+           "cost_usd": round(ex["total_cost_usd"], 4) if isinstance(ex.get("total_cost_usd"), (int, float)) else None,
+           **({"repo_dirty": True} if ex.get("repo_dirty") is True else {})}     # 커밋 밖 변경이 있던 run만 표시
     if ex.get("status") != "completed":
         run["status"] = ex.get("status") or "unknown"
     elif gr_p.is_file():

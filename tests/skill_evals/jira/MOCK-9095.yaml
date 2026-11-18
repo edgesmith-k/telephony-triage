@@ -1,0 +1,16 @@
+# 모의 Jira 티켓(문제 파악 eval 95, 합성). 첫 분석: 코멘트 없음, 제목과 TC(표 모양 txt)만.
+key: MOCK-9095
+fields:
+  summary: SMS 발신 실패
+  description: |
+    TC 결과 첨부.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Messaging}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261110
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments: []

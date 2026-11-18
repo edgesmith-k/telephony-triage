@@ -1,0 +1,28 @@
+# 모의 Jira 티켓(문제 파악 eval 99, 합성 — 줄거리·기대값은 단계 2b 리뷰 제안 2). 재시험 요청만 있고 결과는 아직 없다.
+key: MOCK-9099
+fields:
+  summary: PDN 연결 Fail (TC 3.4)
+  description: |
+    TC 3.4 step 4 Fail.
+  status: {name: In Progress}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261110
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments:
+  - author: mock.tester
+    created: "2026-11-18T10:10:00+0900"
+    body: step 4 Fail 났습니다. 로그 첨부
+  - author: mock.cp
+    created: "2026-11-18T14:00:00+0900"
+    body: "CP 확인: VIPC_PDN_CONNECT (token=0x2c4) 에 대해 망 응답이 없어서 타이머 만료로 실패했습니다."
+  - author: mock.cp
+    created: "2026-11-19T11:20:00+0900"
+    body: 수정 빌드 올렸습니다. 재테스트 요청합니다.
+  - author: mock.pl
+    created: "2026-11-19T13:00:00+0900"
+    body: 재시험은 다음 주 진행, 결과 나오면 공유하겠습니다.

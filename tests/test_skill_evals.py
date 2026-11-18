@@ -238,7 +238,7 @@ def test_eval_setup_references_resolve():
     import skill_eval_env
     from runner import fixture_path
 
-    dbs = {"issue-db-sample", *make_variant_dbs.VARIANTS}
+    dbs = {"issue-db-sample", "seed", *make_variant_dbs.VARIANTS}     # seed = 시드 계획 DB(문제 파악 eval 87~97)
     for e in _entries():
         setup = e["setup"]
         assert setup.get("db", "issue-db-sample") in dbs, (e["id"], setup.get("db"))
@@ -1295,7 +1295,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 86      # FT(84~86 적합성 확인·반복 금지) 뒤. FL(81~83 성공 흐름 제안)까지 83, 80 setup-first-time까지 80, H(76~79)까지 79, 그 전 75
+    assert len(by_id) == 112     # PBH 111·112 뒤. PBH(103~110 문제 파악 처음 보는 세트)까지 110. PB(87~102 문제 파악)까지 102. 87~97까지 97. FT(84~86 적합성 확인·반복 금지)까지 86. FL(81~83 성공 흐름 제안)까지 83, 80 setup-first-time까지 80, H(76~79)까지 79, 그 전 75
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 11), (62, 6)):
         e = by_id[eid]
@@ -1883,6 +1883,174 @@ def test_fit_check_evals_defined(tmp_path):
                 continue
             assert ok is False, (eid, fn.__name__)
     assert "FT=적합성 확인·반복 금지 3(84~86:" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
+
+
+def test_problem_evals_defined(tmp_path):
+    """eval 87~112(배치 PB 개발용 87~102·104·109, PBH 처음 보는 세트 103·105~108·110~112, 문제 파악 단계 2b): 정의 모양과, 실행 흔적이 없으면 통과로 세지 않는다."""
+    by_id = {e["id"]: e for e in _entries()}
+    for eid in sorted(grader.PB_EVALS):
+        e = by_id[eid]
+        assert e["batch"] == ("PBH" if eid in (103, 105, 106, 107, 108, 110, 111, 112) else "PB") and e["setup"]["db"] == "seed" and e["setup"]["jira"] == [f"MOCK-{9000 + eid}"], eid
+        assert "--problem-only" in e["prompt"] and (EVALS / "jira" / f"MOCK-{9000 + eid}.yaml").is_file(), eid
+        for item in e["setup"].get("logs") or []:
+            assert (REPO / item["src"]).is_file() and f"logs/{item['as']}" in e["prompt"], eid
+        env = _synthetic_env(tmp_path / str(eid))
+        fns = grader.checks(eid, grader.Ctx(env, run_dir(tmp_path / str(eid))))
+        has_fields = any(k in e["problem_expect"] for k in grader.PB_FIELD_KEYS)
+        assert len(fns) == len(e["assertions"]) == (7 if has_fields else 6), eid
+        for fn in fns:
+            try:
+                ok, _ = fn()
+            except grader._Manual:
+                continue
+            assert ok is False, eid
+    comment = json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
+    assert "PB=문제 파악 18(87~102·104·109:" in comment and "PBH=문제 파악 처음 보는 세트 8(103·105~108·110~112:" in comment
+
+
+def test_problem_instructions_do_not_contain_eval_answers():
+    """지시문과 평가를 떼어 놓는다(단계 2b 리뷰 D01): 문제 파악 모의 티켓·TC(개발용 PB와 처음 보는 세트 PBH 모두 — `PB_EVALS`)의 token 값, IPC 이름(합성 접두어 `VIPC_`), 12자 이상의
+    줄(인용 줄·증상 문장)이 스킬 문서(SKILL.md·reference/)에 그대로 없다. 평가가 실패하면 그 사례의 답이나 문장을 지시문에 넣지
+    않고 일반 규칙으로 고친다 — 평가 글타래는 지시문이 보지 못한 것이어야 통과가 일반화의 근거가 된다."""
+    import yaml
+
+    skill = REPO / "plugin" / "skills" / "telephony-triage"
+    docs = "\n".join(p.read_text(encoding="utf-8") for p in [skill / "SKILL.md", *sorted((skill / "reference").rglob("*.md"))])
+    folded, lower = " ".join(docs.split()), docs.lower()
+    raw = re.sub(r"(?s)```.*?```", "", (skill / "reference" / "problem.md").read_text(encoding="utf-8"))   # 형식 예시 블록 제외
+    problem = " ".join(raw.split())
+    quoted_phrases = [q for line in raw.splitlines() for q in re.findall(r'"([^"]{4,80})"', line)]
+    by_id = {e["id"]: e for e in _entries()}
+    for eid in sorted(grader.PB_EVALS):
+        t = yaml.safe_load((EVALS / "jira" / f"MOCK-{9000 + eid}.yaml").read_text(encoding="utf-8"))
+        texts = [t["fields"]["summary"], t["fields"].get("description") or ""] + [c["body"] for c in t.get("comments") or []]
+        texts += [(REPO / item["src"]).read_text(encoding="utf-8") for item in by_id[eid]["setup"].get("logs") or []]
+        for text in texts:
+            for tok in re.findall(r"0x[0-9A-Fa-f]{2,}", text):
+                assert tok.lower() not in lower, (eid, tok)
+            for name in re.findall(r"\bVIPC_[A-Z0-9_]+", text):
+                assert name not in docs, (eid, name)
+            for line in text.splitlines():
+                line = " ".join(re.sub(r"<[^>]+>|\{noformat\}", " ", line).split())
+                assert len(line) < 12 or line not in folded, (eid, line)
+            folded_text = " ".join(text.split())
+            for quoted in quoted_phrases:          # 거꾸로: 지시문의 따옴표 구절이 평가 글에 있으면 실패
+                assert quoted not in folded_text, (eid, quoted)
+            for phrase in _phrases(text):           # 줄의 일부인 구절도(확인 리뷰 N1) — 문제 파악 지시문에
+                edge = r"(?<![A-Za-z0-9_-])" if phrase[0].isascii() else ""     # 영문은 낱말 경계(--failed-step의 failed 제외)
+                assert not re.search(edge + re.escape(phrase) + edge.replace("<", ""), problem), (eid, phrase)
+
+
+def test_mock_ticket_text_not_cut_by_yaml_comment():
+    """모의 티켓의 글 칸(제목·설명·코멘트 본문)이 YAML 평문 스칼라의 ` #`에서 주석으로 잘리지 않는다 — 잘리면 모델이 쓰려던 글의
+    일부를 못 본다(PBH pbh-1~8은 그렇게 돌았다). 평문 스칼라가 끝난 같은 줄 뒤에 `#`이 남아 있으면 실패. 글에 `#`이 있으면
+    따옴표나 블록 스칼라(`|`)로 쓴다. 칸 이름 뒤 일부러 단 주석(`customfield_…: 값   # 모델`)은 글 칸이 아니라 보지 않는다."""
+    import yaml
+
+    text_keys = {"summary", "description", "body"}
+    for path in sorted([*(EVALS / "jira").glob("*.yaml"), *(REPO / "tests" / "mocks" / "jira").glob("*.yaml")]):
+        raw = path.read_text(encoding="utf-8")
+        lines = raw.splitlines()
+        stack = [yaml.compose(raw)]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, yaml.SequenceNode):
+                stack.extend(node.value)
+            if not isinstance(node, yaml.MappingNode):
+                continue
+            for key, value in node.value:
+                if (isinstance(key, yaml.ScalarNode) and key.value in text_keys and isinstance(value, yaml.ScalarNode)
+                        and value.style is None):
+                    rest = lines[value.end_mark.line][value.end_mark.column:] if value.end_mark.line < len(lines) else ""
+                    assert "#" not in rest, (path.name, value.end_mark.line + 1, rest.strip()[:40])
+                stack.append(value)
+
+
+HANGUL_MIN, LATIN_MIN = 8, 8    # 구절 길이 기준: 한글·영문 글자 수(공백·밑줄 제외). 영문을 6으로 하면 흔한 한 낱말·칸
+                                 # 이름(unknown·network·symptom)이 거짓 경보라 8로 올렸다(확인 리뷰 N1 반영 때)
+
+
+def _phrases(text: str) -> set[str]:
+    """글의 구절: 이어진 한글 낱말(또는 영문 낱말)을 각 낱말에서 시작해 글자 수가 기준에 처음 닿을 때까지 이은 것.
+    짧은 창이 지시문에 없으면 그것을 품은 긴 구절도 없으므로 가장 짧은 창만 본다."""
+    out = set()
+    for pattern, least in ((r"[가-힣]+(?:[ 	]+[가-힣]+)*", HANGUL_MIN), (r"[A-Za-z_]+(?:[ 	]+[A-Za-z_]+)*", LATIN_MIN)):
+        for run in re.findall(pattern, text):
+            words = run.split()
+            for i in range(len(words)):
+                n, j = 0, i
+                while j < len(words) and n < least:
+                    n, j = n + len(words[j].replace("_", "")), j + 1
+                if n >= least:
+                    out.add(" ".join(words[i:j]))
+    return out
+
+
+def _pb_golden(entry: dict, ticket: dict) -> dict:
+    """기대값(`problem_expect`)대로 손으로 쓴 정답 출력 — 인용은 그 코멘트에서 기대 글이 든 줄 그대로."""
+    x = entry["problem_expect"]
+    bodies = [c["body"] for c in ticket.get("comments") or []]
+    clues = []
+    for w in x.get("clues") or []:
+        needle = w.get("contains") or w["name"]
+        line = next(l.strip() for l in bodies[w["comment"] - 1].splitlines() if needle in l)
+        quote = line if w["kind"] == "log_line" else line[line.index(needle):]     # ipc는 이름부터(앞 문장의 다른 token 제외)
+        clues.append({"comment": w["comment"], "kind": w["kind"], "name": None if w["kind"] == "log_line" else w["name"],
+                      "token": w.get("token"), "quote": quote, "side": w["side"]})
+    r = x["rounds"]
+    return {"first_analysis": x["first_analysis"],
+            "symptom": {"text": "합성 정답", "types": [] if x.get("not_in_db") else x["types"][:1],
+                        "not_in_db": bool(x.get("not_in_db"))},
+            "rounds": {"count": r["count"][0], "last_from_comment": r["last_from_comment"][0], "same_failure": r["same_failure"][0]},
+            "clues": clues, "hypotheses": ["합성 가설"] if x.get("hypotheses_absent") else [],
+            "modules": list(x.get("modules_all") or x.get("modules_any", [])[:1]),
+            "unknown": [" ".join(g[0] for g in x["unknown_mentions"])] if x.get("unknown_mentions") else []}
+
+
+def test_problem_expectations_pass_through_real_check():
+    """기대값이 2a 스크립트로 이룰 수 있는 값인가: 시드 DB로 `triage.py problem` → 정답 출력 → `check-output --for problem`이
+    통과하고(dropped 0), 채점 행 2~6이 모두 통과한다. 정정 전 token을 넣은 출력은 단서 행이 실패한다."""
+    import yaml
+    from runner import run, tmp
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import make_accuracy_fixtures as maf
+    import make_plugin_root
+
+    root = make_plugin_root.make()
+    db = maf.build_seed_db(tmp("tt-pb-db-") / "db", root)
+    for e in (x for x in _entries() if x["id"] in grader.PB_EVALS):
+        key = e["setup"]["jira"][0]
+        ticket = yaml.safe_load((EVALS / "jira" / f"{key}.yaml").read_text(encoding="utf-8"))
+        job = tmp("tt-pb-") / key
+        args = ["problem", key, "--issue-file", str(EVALS / "jira" / f"{key}.yaml"), "--offline-db", str(db), "--out", str(job)]
+        for item in e["setup"].get("logs") or []:
+            args += ["--steps-file", str(REPO / item["src"])]
+        assert run("triage.py", args).returncode == 0, key
+        out = _pb_golden(e, ticket)
+        (job / "problem-output.json").write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+        proc = run("triage.py", ["check-output", key, "--for", "problem", "--out", str(job)])
+        assert proc.returncode == 0 and json.loads(proc.stdout)["dropped"] == 0, (key, proc.stdout, proc.stderr)
+        rec = json.loads((job / "problem.json").read_text(encoding="utf-8"))
+        assert all(ok for ok, _ in grader.pb_rows(e["problem_expect"], rec)), (key, grader.pb_rows(e["problem_expect"], rec))
+        x = e["problem_expect"]
+        if not x.get("not_in_db"):          # 범위 밖 유형이 하나라도 있으면 유형 행 실패(D02)
+            wide = {**rec, "symptom": {**rec["symptom"], "types": rec["symptom"]["types"] + ["SIM-001"]}}
+            assert grader.pb_rows(x, wide)[0][0] is False, key
+        extra = {"comment": 1, "kind": "log_line", "name": None, "token": None, "quote": "합성", "side": "ap", "stale": False}
+        assert grader.pb_rows(x, {**rec, "clues": rec["clues"] + [extra]})[3][0] is False, key   # 기대·허용 밖 단서(D03)
+        if x.get("absent_tokens"):       # 없어야 할 token은 token 칸만 본다(확인 리뷰 N5)
+            ipcs = [c for c in rec["clues"] if c["kind"] == "ipc"]
+            if ipcs:                      # token 칸이 맞는 ipc의 인용에 정정 전 token이 함께 있어도 통과
+                quoted = {**ipcs[0], "quote": f"{x['absent_tokens'][0]} 아님, " + ipcs[0]["quote"]}
+                assert grader.pb_rows(x, {**rec, "clues": [quoted if c is ipcs[0] else c for c in rec["clues"]]})[3][0], key
+            bad = {**ipcs[0], "token": x["absent_tokens"][0]} if ipcs else {**extra, "token": x["absent_tokens"][0]}
+            assert grader.pb_rows(x, {**rec, "clues": rec["clues"] + [bad]})[3][0] is False, key
+        if x.get("hypotheses_absent"):    # 빈 가설은 칸 값 행 실패(확인 리뷰 N2)
+            assert grader.pb_rows(x, {**rec, "hypotheses": []})[5][0] is False, key
+        if rec["clues"]:                  # side는 cp·ap가 뒤바뀐 것만 실패, unknown은 통과(11/18)
+            first = rec["clues"][0]
+            for v, ok in (("unknown", True), ({"cp": "ap", "ap": "cp"}[first["side"]], False)):
+                assert grader.pb_rows(x, {**rec, "clues": [{**first, "side": v}, *rec["clues"][1:]]})[3][0] is ok, key
 
 
 def test_unjudged_variant_db_has_slow_cause():

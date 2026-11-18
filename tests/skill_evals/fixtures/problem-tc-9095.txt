@@ -1,0 +1,7 @@
+No | Time | Step | Result
+1 | 2026-11-16 13:02:11 | Airplane mode ON | Pass
+2 | 2026-11-16 13:02:21 | Airplane mode OFF | Pass
+3 | 2026-11-16 13:02:50 | 망 등록 확인 (LTE) | Pass
+4 | 2026-11-16 13:03:05 | 메시지 앱에서 장비 번호로 SMS 작성 | Pass
+5 | 2026-11-16 13:03:20 | SMS 발신 후 전송 결과 확인 | Fail (전송 실패 표시, 장비에 SMS 도착 안 함)
+6 | - | 장비에서 MT SMS 발신 | Not executed

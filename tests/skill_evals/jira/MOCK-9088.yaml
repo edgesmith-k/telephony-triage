@@ -1,0 +1,30 @@
+# 모의 Jira 티켓(문제 파악 eval 88, 합성). 정정: CP가 처음 쓴 token(0x0d0)을 다음 코멘트에서 0x0de로 고친다. 단계 1 TOKNAME-1과 같은 이름·token.
+key: MOCK-9088
+fields:
+  summary: PDN 연결 시험 Fail (TC 3.1)
+  description: |
+    TC 3.1 step 4 "인터넷 PDN 연결" 에서 Fail. 30초 안에 연결 안 됨.
+  status: {name: In Progress}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261110
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments:
+  - author: mock.tester
+    created: "2026-11-14T10:40:00+0900"
+    body: 로그 첨부했습니다.
+  - author: mock.cp
+    created: "2026-11-14T13:20:00+0900"
+    body: CP 로그상 VIPC_PDN_CONNECT (token=0x0d0) 응답이 늦게 나간 것 같습니다. 조금 더 보고 업데이트 드릴게요.
+  - author: mock.cp
+    created: "2026-11-14T15:05:00+0900"
+    body: |
+      정정합니다. 위에 쓴 0x0d0은 앞 시도(정상 연결된 것)이고, 실패한 건 VIPC_PDN_CONNECT (token=0x0de) 입니다.
+      이 요청에 대해 망 응답이 끝내 안 왔고 CP에서 타이머 만료로 실패 처리했습니다.
+  - author: mock.ap.data
+    created: "2026-11-14T16:00:00+0900"
+    body: 넵 AP 쪽도 그 시점에 SETUP_DATA_CALL 응답이 안 와서 타임아웃 났습니다. 재시도는 정상적으로 했고 재시도도 같은 이유로 실패했어요.

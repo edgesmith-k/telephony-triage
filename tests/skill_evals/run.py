@@ -211,6 +211,7 @@ def evaluation_prompt(entry: dict, info: dict, env_dir: Path, run_dir: Path) -> 
 
 
 DERIVED_HEADER = "<!-- run.py: 실행자 미작성, events.jsonl에서 생성 -->"
+PROBLEM_FILES = ("problem.json", "problem-output.json", "problem-input.md", "problem-input.json")
 REQUIRED_OUTPUTS = ("transcript.md", "commands.md", "notes.md")
 
 
@@ -399,6 +400,12 @@ def execute(entry: dict, info: dict, env_dir: Path, run_dir: Path, claude: str,
     # 스크립트 표시 기록(L R): 임시 env가 지워져도 hook_replay 재생 비교가 되게 run 디렉토리로 복사한다
     if info.get("work_dir") and (shown_log := Path(info["work_dir"]) / ".shown" / "log.jsonl").is_file():
         shutil.copyfile(shown_log, run_dir / "shown-log.jsonl")
+    # 문제 파악 채점 근거(배치 PB): 임시 work_dir가 지워져도 채점기를 고친 뒤 다시 채점할 수 있게 outputs/problem/에 둔다
+    for key in (entry.get("setup") or {}).get("jira") or [] if info.get("work_dir") else []:
+        for name in PROBLEM_FILES:
+            if (src := Path(info["work_dir"]) / key / name).is_file():
+                (run_dir / "outputs" / "problem").mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(src, run_dir / "outputs" / "problem" / name)
     outcome = {"status": status, "reason": reason, "exit_code": proc.returncode,
                "elapsed_seconds": round(time.monotonic() - start, 2),
                "usage": (result or {}).get("usage"), "total_cost_usd": (result or {}).get("total_cost_usd"),

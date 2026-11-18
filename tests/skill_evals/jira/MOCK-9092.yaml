@@ -1,0 +1,27 @@
+# 모의 Jira 티켓(문제 파악 eval 92, 합성). 이름만: CP가 메시지 이름만 주고 token은 없다. 단계 1 TOKONLY-1과 같은 이름.
+key: MOCK-9092
+fields:
+  summary: 데이터 연결 실패 (TC 2.4)
+  description: |
+    TC 2.4 step 3 "모바일 데이터 켜고 연결 확인" Fail.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261110
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments:
+  - author: mock.tester
+    created: "2026-11-14T11:00:00+0900"
+    body: step 3 Fail. 로그 올립니다
+  - author: mock.cp
+    created: "2026-11-14T13:00:00+0900"
+    body: |
+      CP 확인: VIPC_SETUP_DATA 실패입니다.
+      이번 로그는 token 찍히는 디버그 레벨이 꺼져 있어서 token은 못 드려요. 시점은 step 3 데이터 켠 직후입니다.
+  - author: mock.ap.data
+    created: "2026-11-14T13:40:00+0900"
+    body: 넵 AP 쪽에서 해당 시점 찾아보겠습니다

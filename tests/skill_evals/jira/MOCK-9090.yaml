@@ -1,0 +1,33 @@
+# 모의 Jira 티켓(문제 파악 eval 90, 합성). 재시험에서 다른 스텝 실패: 데이터 스텝은 통과, VoLTE 발신 스텝이 새로 실패. 단계 1 RETESTX-1과 같은 이름·token.
+key: MOCK-9090
+fields:
+  summary: "[재시험] TC 5.3 Fail"
+  description: |
+    TC 5.3 (데이터 연결 후 VoLTE 발신) step 4 데이터 연결에서 Fail.
+  status: {name: In Progress}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261110
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments:
+  - author: mock.tester
+    created: "2026-11-14T11:00:00+0900"
+    body: step 4 데이터 연결 Fail. 로그 첨부합니다.
+  - author: mock.cp
+    created: "2026-11-14T13:00:00+0900"
+    body: VIPC_SETUP_DATA (token=0x0de) 실패 확인했습니다. CP 수정 반영했으니 재테스트 요청합니다.
+  - author: mock.tester
+    created: "2026-11-15T09:40:00+0900"
+    body: |
+      재테스트 했습니다. step 4는 이번엔 Pass 했고, step 7 (VoLTE 발신)에서 Fail 났습니다.
+      발신 누르자마자 바로 끊겨요. 로그 첨부합니다.
+  - author: mock.ap.call
+    created: "2026-11-15T13:15:00+0900"
+    body: |
+      2차 로그에서 발신 직후 아래 줄 확인됩니다.
+      11-15 09:12:31.402   912   952 D Telecom : CreateConnectionProcessor: Connection failed: (DisconnectCause [ Code: (ERROR) Label: (Call failed)
+      IMS 쪽도 같이 확인 부탁드립니다.

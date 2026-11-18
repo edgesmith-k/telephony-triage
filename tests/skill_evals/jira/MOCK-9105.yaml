@@ -1,0 +1,44 @@
+# 모의 Jira 티켓(문제 파악 처음 보는 세트 PBH, eval 105, 합성). 지시문을 고칠 때 열지 않는다(README "PBH").
+key: MOCK-9105
+fields:
+  summary: 듀얼 SIM 기본 데이터 전환 Fail (TC 9.5)
+  description: |
+    TC 9.5 step 7 (기본 데이터 SIM2로 전환 후 인터넷 접속) Fail. SIM1 기본일 때는 정상.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261120
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "1"
+comments:
+  - author: mock.tester
+    created: "2026-11-24T10:00:00+0900"
+    body: step 7 Fail입니다. SIM2로 바꾸고 나서 인터넷이 안 돼요
+  - author: mock.ap.data
+    created: "2026-11-24T11:30:00+0900"
+    body: |
+      전환 시점 줄입니다.
+      11-24 09:41:03.118  2101  2141 D RILJ    : [0810]< DEACTIVATE_DATA_CALL [PHONE0]
+      11-24 09:41:04.502  2101  2141 D RILJ    : [0812]< SETUP_DATA_CALL error 2 [PHONE1]
+      SIM1 해제는 정상이고 SIM2 쪽 요청이 에러예요. CP 확인 부탁
+  - author: mock.cp
+    created: "2026-11-24T14:10:00+0900"
+    body: "slot0 VIPC_DC_RELEASE (token=0x611) 은 정상 완료, slot1 VIPC_DC_ESTABLISH (token=0x614) 에 망이 #27로 거절했습니다. APN이 안 맞는 듯"
+  - author: mock.ap.data
+    created: "2026-11-24T14:40:00+0900"
+    body: SIM2 APN은 프로파일대로 들어가 있어요
+  - author: mock.tester
+    created: "2026-11-24T15:05:00+0900"
+    body: 장비 SIM2 APN도 TC 기준과 같습니다
+  - author: mock.ap.sim
+    created: "2026-11-24T15:30:00+0900"
+    body: SIM2 파일 로딩은 정상(ICCID, IMSI 읽힘). SIM 쪽은 아닌 듯해요
+  - author: mock.cp
+    created: "2026-11-25T10:20:00+0900"
+    body: 원인 찾았습니다. slot 바꿀 때 CP가 slot0에서 쓰던 APN을 그대로 실어 보내요. 수정해서 공유드릴게요
+  - author: mock.pl
+    created: "2026-11-25T10:45:00+0900"
+    body: ETA 알려주세요

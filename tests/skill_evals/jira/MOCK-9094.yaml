@@ -1,0 +1,25 @@
+# 모의 Jira 티켓(문제 파악 eval 94, 합성). token 없음: 코멘트에 단서가 없고 TC(HTML 표)의 Fail 줄 괄호 사유가 근거.
+key: MOCK-9094
+fields:
+  summary: 인터넷 접속 시험 Fail
+  description: |
+    자동화 시험 결과 첨부(tc_result.html).
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261110
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments:
+  - author: mock.tester
+    created: "2026-11-16T10:05:00+0900"
+    body: 자동화 시험 결과 첨부합니다. step 6 Fail.
+  - author: mock.pl
+    created: "2026-11-16T10:30:00+0900"
+    body: 담당자 지정했습니다. 확인 부탁드립니다.
+  - author: mock.ap.data
+    created: "2026-11-16T11:00:00+0900"
+    body: 로그 확인 중입니다.
