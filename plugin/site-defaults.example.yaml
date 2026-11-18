@@ -199,6 +199,7 @@ platform:
   #   slot:                          # 선택(TODO(SITE:S20), 다섯 키와 따로 본다). IPC 메시지 줄에서만 쓰는 SIM 슬롯 정규식 목록(≤8개·각
   #                                  # ≤400자, 그룹 1 = 슬롯 번호, 순서대로 첫 일치, 가린 메시지에 돈다). 맞으면 그 IPC 기록의 슬롯은 이 값이
   #                                  # 먼저, 없거나 안 맞으면 줄의 phone_id(위 log.phone_id 규칙). log.phone_id와는 따로다
+  #                                  # trace와 달리 {prefix}·{error_prefix}를 채우지 않는다 — 쓰면 오류, 접두어는 글자 그대로
   #     - '^ipc\[(\d)\]'             # `ipc[1][RX] VIPC_X, RSP, …` 꼴(합성 예) — 사내 IPC 줄의 슬롯 표기는 사내에서 채운다
   # bugreport:                       # TODO(SITE:S21) dumpstate 섹션 헤더
   #   wanted_buffers: [system, radio, main]          # ^[a-z]+$, 출력 파일 순서

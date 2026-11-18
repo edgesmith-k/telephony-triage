@@ -1042,7 +1042,7 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
     본다. 정규식은 원 줄에 돌리고(시간 상한 `matcher.pattern_timeout_ms`) 맞은 줄만 가린 뒤 가린 글에서 값을 다시 뽑는다(마커와 같다).
     `--find <json>`: `triage.py`가 쓴 `JOB/look-at.json`(`{look_at: 가린 글, ref: 기준 시각|null, slot?: 요청 SIM 슬롯|null}`)으로
     찾고 `records` 대신 `find {how, hits, picked, pick, ts, line, at[], slots | why}`를 낸다 — 원문 글은 인자로 받지 않는다
-    (trace.jsonl에 남지 않게). `slot`이 있으면 IPC 일치는 그 슬롯이거나 슬롯 모름인 레코드만, `slots`는 슬롯별 일치 수."""
+    (trace.jsonl에 남지 않게). `slot`이 있으면 IPC·본문 일치 모두 그 슬롯이거나 슬롯 모름인 것만, `slots`는 슬롯별 일치 수."""
     paths, rules_dir = [Path(p) for p in args.logs], Path(args.rules)
     db_cfg, backend = _line_backend(paths, rules_dir, defaults, args.tz, profile)
     try:
@@ -1101,6 +1101,8 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
     if not found:
         how, text = "text", lookat.needle(q)
         found = None if text is None else lookat.text_hits(text, texts, mask)
+        if found and look.get("slot") is not None:      # 요청 슬롯: 줄 레코드 슬롯이 그 슬롯이거나 모름인 줄만(IPC 일치와 같게)
+            found = [i for i in found if lines[i].get("phone_id") in (look["slot"], None)]
         if found is None:      # 짧거나 거의 다 가려진 글은 본문으로 찾지 않는다(엉뚱한 줄에 붙지 않게)
             if text is not None:
                 why = "값이 가려져 본문으로는 못 찾음 — token이나 다른 줄로"

@@ -66,6 +66,16 @@ def test_default_patterns_token_and_result_notation_widened():
     assert (r["token"], r["result"]) == (0x2FE, None)
     (r,) = _recs("[RX] VIPC_SETUP_DATA, RSP, Slot(1), token=0x2fe, Fail(VIPC_E_OK)")
     assert (r["token"], r["result"]) == (0x2FE, "VIPC_E_OK")
+    assert _recs("[TX] vipc_SETUP_DATA, REQ, token=1") == [] and _recs("vipc_X (token=1)") == []   # 이름은 대소문자를 가린다
+
+
+def test_result_prefers_error_word_like_detect():
+    """한 줄에 `<낱말>(<오류 접두어>…)`가 여럿이면 `Error(…)`가 먼저 — `vendor_ipc.detect`(Error 기준)와 같은 값."""
+    line = "[RX] VIPC_SETUP_DATA, RSP, token=1, Prev(VIPC_E_OLD), Error(VIPC_E_OK)"
+    assert _recs(line)[0]["result"] == "VIPC_E_OK"
+    assert vendor_ipc.detect(line) == []                                     # detect도 성공으로 본다
+    assert _recs("[RX] VIPC_A, RSP, Error(VIPC_E_X), Fail(VIPC_E_Y)")[0]["result"] == "VIPC_E_X"
+    assert _recs("[RX] VIPC_A, RSP, Prev(VIPC_E_X), Fail(VIPC_E_Y)")[0]["result"] == "VIPC_E_X"   # Error 없으면 첫 것
 
 
 def test_long_token_masked_to_cred_keeps_record_without_token():
@@ -167,7 +177,7 @@ LOOK = {"look_at": "VIPC_SETUP_DATA (token=0x0de)", "ref": None}
 
 @pytest.mark.parametrize("slot, problem", [
     ([], "비어 있으면"), ("x", "목록"), (["("], "정규식 오류"), (["ipc"], "그룹 1"), (["a" * 401], "400자"),
-    ([r"(\d)"] * 9, "8개"),
+    ([r"(\d)"] * 9, "8개"), ([r"^{prefix}\w+\[(\d)\]"], "자리표시"), ([r"{error_prefix}(\d)"], "자리표시"),
 ])
 def test_config_slot_key_is_checked(slot, problem):
     with pytest.raises(platforms.PlatformConfigError, match=problem):
@@ -178,6 +188,13 @@ def test_config_slot_is_optional_and_separate_from_five_keys():
     spec = platforms._vendor_ipc({"slot": SLOT_RULE}, "b")
     assert spec.slot == tuple(SLOT_RULE) and spec.trace == () and spec.request_prefix == "VIPC_"
     assert vendor_ipc.DEFAULT.slot == ()
+
+
+def test_slot_value_decimal_only():
+    rx = re.compile(r"ipc\[(.)\]")
+    assert ipcseq.slot_value(rx.search("ipc[1]")) == 1
+    assert ipcseq.slot_value(rx.search("ipc[²]")) is None       # 위첨자 2: isdigit이지만 int()가 못 읽는다 — 멈추지 않고 None
+    assert ipcseq.slot_value(rx.search("ipc[x]")) is None
 
 
 def _slot_root():
@@ -205,6 +222,25 @@ def test_find_slot_filters_and_counts_per_slot():
     one = _find(root, {**LOOK, "slot": 1})
     assert one["hits"] == 2 and one["slots"] == {"1": 2}
     assert _find(None, {**LOOK, "slot": 1})["slots"] == {"null": 4}    # 슬롯 규칙 없음: 슬롯 모름은 어느 요청에도 남는다
+
+
+def test_ipc_records_inherit_line_slot_and_site_slot_rule_wins():
+    """줄 슬롯 규칙(`platform.log.phone_id`)이 IPC 줄에 맞으면 기록이 그 슬롯을 이어받고, `vendor_ipc.slot`도 있으면 그것이 먼저."""
+    log = {"phone_id": {"msg_prefix": [r"^ipc\[(\d)\]"]}}       # 줄 규칙: `ipc[<n>]`(떼어 낸 뒤 IPC 정규식이 읽는다)
+    line = plugin_root("ipc-line-slot", platform={"name": "android", "log": log})
+    recs = run_json("parse_logcat.py", ["ipc", DUAL, "--rules", RULES, *TZ], root=line)["records"]
+    assert [r["phone_id"] for r in recs if r["token"] == 0x0DE] == [0, 0, 1, 1]
+    both = plugin_root("ipc-line-and-ipc-slot", platform={"name": "android", "log": log,
+                                                          "vendor_ipc": {"slot": [r"\blen=(\d)"]}})
+    recs = run_json("parse_logcat.py", ["ipc", DUAL, "--rules", RULES, *TZ], root=both)["records"]
+    assert [r["phone_id"] for r in recs if r["token"] == 0x0DE] == [2, 8, 2, 8]     # `len=24`·`len=8` 첫 자리 — IPC 규칙이 먼저
+
+
+def test_find_text_hits_respect_slot():
+    """본문 찾기도 요청 슬롯을 따른다: 슬롯 0(`DNC-0`) 줄에만 있는 글을 slot=1로 찾으면 0건."""
+    look = {"look_at": "Internet data state changed", "ref": None}
+    assert _find(None, look)["hits"] == 1 and _find(None, {**look, "slot": 0})["slots"] == {"0": 1}
+    assert _find(None, {**look, "slot": 1}) == {"how": None, "hits": 0, "why": "일치하는 줄 없음"}
 
 
 def test_find_rejects_bad_slot_value():
