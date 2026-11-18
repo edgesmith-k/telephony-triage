@@ -32,6 +32,9 @@ def _num(x: float):
 def _clue_text(c: dict, pb) -> tuple[str | None, str | None]:
     """problem.json 단서 → (찾을 글, 붙여 넣은 줄의 logcat 시각|None). 모양이 틀린 단서는 (None, None) — check-output이 이미
     걸렀지만 파일이 바뀌었을 수 있어 같은 식(`NAME_RE`·`TOKEN_RE`·`QUOTE_MAX`)으로 다시 본다."""
+    n = c.get("comment")
+    if not (n == "description" or (type(n) is int and n >= 1)):     # 경고·리포트의 "코멘트 n번"이 깨지지 않게
+        return None, None
     name, token, quote = c.get("name"), c.get("token"), c.get("quote")
     ok_name = isinstance(name, str) and pb.NAME_RE.fullmatch(name)
     if c.get("kind") == "ipc" and ok_name and isinstance(token, str) and pb.TOKEN_RE.fullmatch(token):
@@ -278,7 +281,8 @@ class AnchorMixin:
         if not refs:
             return None
         ref = via or refs[0]
-        return {"state": "multiple" if (ref.get("places") or 1) > 1 else "found", "source": "comment",
+        many = (ref.get("places") or 1) > 1 if via else any((r.get("places") or 1) > 1 for r in refs)
+        return {"state": "multiple" if many else "found", "source": "comment",
                 "kind": "near" if ref.get("how") == "text" else "point"}
 
     def look_inputs(self) -> dict:

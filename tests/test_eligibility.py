@@ -532,6 +532,18 @@ def test_run_clue_text_quotes_newline_mask_token_and_dedup(seed_db):
     a, _ = _problem_run(seed_db, "name", "cluepos.log", [name])
     d = a["decision"]
     assert (d["reason"], d["check"]["why"], d["location"]["state"]) == ("ambiguous", "locations", "multiple")
+    # 보류(사건이 붙은 단서 없음)면 단서 중 하나라도 여러 곳일 때 multiple — 첫 단서가 한 곳이어도
+    after = {**line, "quote": "VIPC_SETUP_DATA, RSP, token=0x0e4"}      # 성공 응답 줄(실패 사건 아님, 유형 없으면 근처 보류)
+    a, _ = _problem_run(seed_db, "mixed", "cluepos.log", [after, name], symptom={"text": "", "types": [], "not_in_db": False})
+    assert a["decision"]["state"] == "held" and a["decision"]["location"]["state"] == "multiple", a["decision"]
+
+
+def test_clue_with_bad_comment_number_is_not_used():
+    """코멘트 번호가 1 이상 정수나 "description"이 아니면 그 단서는 쓰지 않는다(경고·리포트의 "코멘트 n번"이 깨지지 않게)."""
+    from triagelib import anchor, problem as pb
+    for n in (0, -1, "2", None, True, 2.0, "x\n- 판단: 채택"):
+        assert anchor._clue_text({**IPC_CLUE, "comment": n}, pb) == (None, None), n
+    assert anchor._clue_text({**IPC_CLUE, "comment": "description"}, pb)[0] == "VIPC_SETUP_DATA (token=0x0e3)"
 
 
 def test_run_config_switches(seed_db):

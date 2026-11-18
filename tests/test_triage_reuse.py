@@ -426,6 +426,21 @@ def test_rerun_with_remote_drops_module_records_on_a_hit():
     assert outside.read_text(encoding="utf-8") == "keep" and (job / "explore-input.json").is_file()
 
 
+def test_rereading_jira_without_problem_json_keeps_reuse():
+    """problem.json이 없으면 이슈 입력 파일 해시는 캐시 키에 들어가지 않는다 — Jira를 다시 읽기만 해서는(같은 내용) 재사용된다."""
+    ws = Workspace()
+    job = ws.job_dir(KEY)
+    job.mkdir(parents=True, exist_ok=True)
+    body = json.dumps(yaml.safe_load((MOCK_JIRA / f"{KEY}.yaml").read_text(encoding="utf-8")), ensure_ascii=False)
+    args = ["run", KEY, "--dry-run", "--logs", LOG, "--answer", "code=skip"]
+    (job / "issue_raw.json").write_text(body, encoding="utf-8")
+    assert ws.json("triage.py", args)["status"] == "ok"
+    (job / "issue_raw.json").write_text(body + "\n", encoding="utf-8")      # 다시 읽음(바이트는 달라도 같은 이슈)
+    again = ws.json("triage.py", args)
+    assert again["reuse"]["hit"] is True, again.get("reuse")
+    ws.json("triage.py", ["release", KEY])
+
+
 def test_problem_json_after_raw_consumed_and_cache_miss_on_change():
     """단계 5-2: Jira 원문(`issue_raw.json`)을 `--consume`으로 지운 뒤 다시 돌아도 `.state.json`에 남긴 원문 해시로 problem.json을
     대조해 쓰고, problem.json이 바뀌면 재사용 캐시가 맞지 않는다(입력 `args`)."""
