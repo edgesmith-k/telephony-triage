@@ -211,7 +211,7 @@ def _steps_part(path, cfg: dict, masker) -> tuple[list[str], list[str], list[str
     around = _fail_lines(text, cfg, masker, fail_name) if text else []
     if failed is None and not around and text and text.strip():
         lines += ["", f"TC 원문(Fail 줄을 찾지 못함, 앞 {TC_TEXT_MAX}자까지):"] + _quoted(_clip(masker(text), TC_TEXT_MAX))
-    if failed is None and around:      # ponytail: failedstep이 `Fail (사유)` 칸을 못 읽는 동안의 표시(D06) — 고치면 지운다
+    if failed is None and around:      # 표가 아직 못 읽는 판정 모양의 안전망(D06, `Fail (사유)`는 failedstep이 읽는다)
         lines.insert(0, INCOMPLETE)
     return lines or ["TC 없음"], around, warnings
 
