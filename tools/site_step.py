@@ -1131,7 +1131,7 @@ def runtime_opencode(project: str | None, opencode: str, managed_dir: Path, env:
             wrong = [f"읽기 실패({type(exc).__name__})"]
         rows.append({"check": "installed-config", "status": "fail" if wrong else "ok",
                      "detail": ("설정 불일치: " + ", ".join(wrong) + " — gen_opencode.py install --force") if wrong
-                     else f"{proj / 'opencode.json'}: snapshot:false·share:disabled·autoupdate:false·허용 목록·task deny"})
+                     else f"{proj / 'opencode.json'}: snapshot:false·share:disabled·autoupdate:false·허용 목록·task tt-explore만"})
         if oc:
             rows += tt.preflight(oc, proj, meta, tt.child_env(meta))
     elif oc:

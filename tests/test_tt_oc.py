@@ -587,7 +587,8 @@ def test_config_deny_write_command_with_workdir(env):
 # 리뷰 P1: 실제 tt-guard.js·oc_adapter.py 거부 문구(모두 `[telephony-triage]`로 시작)는 막힌 호출(종료 코드 3)이고 전문을 보인다
 REAL_DENIES = [
     ("bash", "[telephony-triage] 로그 원문 통독 금지 (규칙 10): job/issue_raw.json은 스크립트가 읽는다. " + "가" * 400),
-    ("task", "[telephony-triage] task: task(하위 에이전트)는 전역 거부다(사용자 결정 ⑧). 같은 세션에서 직접 한다."),
+    ("task", "[telephony-triage] task: 하위 에이전트는 `tt-explore`(탐색 분석)만 쓴다(사용자 결정 ⑧을 좁힌 것). `general`은 "
+             "거부한다 — 같은 세션에서 직접 한다."),
     ("mock-jira_jira_ticket_add_note", ("[telephony-triage] Jira 코멘트 게시는 OpenCode v1에서 하지 않는다. "
                                         "issue_post.py render → approve → 게시는 Claude Code에서 한다.")),
     ("bash", "[telephony-triage] 이슈 DB clone push 금지 (규칙 6): main으로 직접 push하지 않는다."),
@@ -605,6 +606,50 @@ def test_real_deny_reasons_are_blocked_with_full_message(env, name, msg):
     assert out["blocked"] == [{"tool": name, "message": msg}] and out["errors"] == []
     r = tt(env, "--", "x")
     assert r.returncode == 3 and f"[{name}] {msg}" in r.stdout and "outcome: blocked" in r.stdout
+
+
+def test_child_session_judged_like_main():
+    """리뷰 P1-3: 1.19.5 `run --format json`은 하위 세션(tt-explore) part를 내보내지 않는다. task part의 metadata.sessionId로
+    찾아 `opencode export` JSON을 같은 이벤트 모양으로 바꿔 판정한다 — 하위의 막힌 호출은 막힘(종료 3), 토큰은 합계에 더하고,
+    하위 스텝 한도는 step-limit, 읽지 못한 하위 세션은 오류(통과로 두지 않는다)."""
+    mod = _load("tt_oc", TTOC)
+    V = mod.OCV
+    main = [{"type": V.EV_STEP_START, V.EV_SESSION: "ses_main"},
+            {"type": V.EV_TOOL_USE, V.EV_SESSION: "ses_main", V.EV_PART: {V.PART_TOOL: V.TASK_TOOL, V.PART_STATE: {
+                V.STATE_STATUS: "completed", V.STATE_METADATA: {V.META_SESSION: "ses_kid1", "parentSessionId": "ses_main"}}}},
+            {"type": V.EV_TOOL_USE, V.EV_PART: {V.PART_TOOL: V.TASK_TOOL, V.PART_STATE: {
+                V.STATE_STATUS: "error", V.STATE_METADATA: {V.META_SESSION: "bad id; rm"}}}},
+            {"type": V.EV_TEXT, V.EV_PART: {V.PART_TEXT: "done"}},
+            {"type": V.EV_STEP_FINISH, V.EV_PART: {V.PART_REASON: V.FINISH_STOP, V.PART_TOKENS: {"input": 10, "output": 1}}}]
+    assert mod.child_sessions(main) == ["ses_kid1"]
+    blocked = "[telephony-triage] 로그 원문 통독 금지 (규칙 10): job/events.json"
+    export = {"info": {"id": "ses_kid1"}, "messages": [
+        {"info": {"role": "user"}, "parts": [{"type": "text", "text": "CHILDTASK"}]},
+        {"info": {"role": "assistant"}, "parts": [
+            {"type": "step-start"},
+            {"type": "tool", "tool": "bash", "state": {"status": "error", "error": blocked, "input": {"command": "cat x"}}},
+            {"type": "step-finish", "reason": "tool-calls", "tokens": {"input": 100, "output": 5, "reasoning": 2}}]},
+        {"info": {"role": "assistant"}, "parts": [
+            {"type": "step-start"}, {"type": "text", "text": "CHILD DONE"},
+            {"type": "step-finish", "reason": "stop", "tokens": {"input": 50, "output": 3}}]}]}
+    kid = mod.export_events(export)
+    assert [e["type"] for e in kid] == [V.EV_STEP_START, V.EV_TOOL_USE, V.EV_STEP_FINISH, V.EV_STEP_START, V.EV_TEXT,
+                                        V.EV_STEP_FINISH]
+    assert mod.export_events({"x": 1}) is None and mod.export_events([]) is None
+    odd = mod.export_events({"info": "ses_x", "messages": ["m", {"info": "a"}, {"info": {"role": "assistant"}, "parts": "p"}]})
+    assert odd == []      # 모양이 다른 칸은 죽지 않고 건너뛴다(읽은 이벤트 없음)
+
+    res = mod.add_children(mod.judge(main, 0), [("ses_kid1", kid)], step_limit=40)
+    assert res["outcome"] == "blocked" and mod.EXIT[res["outcome"]] == 3
+    assert res["blocked"] == [{"tool": "bash", "message": blocked, "session": "ses_kid1"}]
+    assert res["tokens"] == {"input": 160, "output": 9, "reasoning": 2}
+    assert res["children"] == [{"session": "ses_kid1", "read": True, "steps": 2, "tokens": {"input": 150, "output": 8,
+                                "reasoning": 2}, "blocked": 1, "finish": "stop", "step_limit": False}]
+    res = mod.add_children(mod.judge(main, 0), [("ses_kid1", kid)], step_limit=2)
+    assert res["outcome"] == "step-limit" and any("스텝 한도(2)" in n for n in res["notes"])
+    res = mod.add_children(mod.judge(main, 0), [("ses_kid1", None)], step_limit=40)
+    assert res["outcome"] == "error" and res["children"] == [{"session": "ses_kid1", "read": False}]
+    assert any("opencode export" in e for e in res["errors"])
 
 
 def test_guard_warning_is_not_a_block(env):
@@ -1014,7 +1059,27 @@ def test_shared_checks_for_site_step(env):
     mod = _load("tt_oc", TTOC)
     assert mod.config_problems(CONFIG_OK) == []
     assert mod.config_problems({**CONFIG_OK, "snapshot": True, "permission": {"*": "deny"}}) == [
-        "snapshot=true(필요 false)", 'permission.task=null(필요 "deny")', 'permission.bash["*"]=null(필요 "deny")']
+        "snapshot=true(필요 false)", 'permission.bash["*"]=null(필요 "deny")',
+        'permission.task=null(필요 {"*": "deny", "tt-explore": "allow"} 또는 "deny" — tt-explore만 allow, 다른 이름은 deny)']
+    # task(리뷰 P2-3): 글자 비교가 아니라 마지막 일치 규칙의 효과. tt-explore만 allow(템플릿) 또는 모두 deny만 통과
+    template = json.loads((REPO / "opencode" / "opencode.json.template").read_text(encoding="utf-8"))
+    assert template["permission"]["task"] == mod.TASK_PERMISSION
+    V = mod.OCV
+    assert V.task_rule_state(mod.TASK_PERMISSION) == "explore-only"
+    perm = CONFIG_OK["permission"]
+    for ok, state in ((mod.TASK_PERMISSION, "explore-only"), ({"*": "deny", "tt-explore": "deny", "tt-explore ": "allow"}, None),
+                      ({"tt-explore": "allow", "*": "deny"}, "all-deny"),     # 순서가 바뀌면 "*"가 이긴다 = 모두 거부
+                      ("deny", "all-deny"), ({"*": "deny"}, "all-deny")):
+        assert V.task_rule_state(ok) == state, ok
+        if state:
+            assert mod.config_problems({**CONFIG_OK, "permission": {**perm, "task": ok}}) == [], ok
+    for bad in ("allow", "ask", None, {"*": "allow"}, {"*": "deny", "tt-explore": "allow", "general": "allow"},
+                {"*": "deny", "tt-explore": "ask"}, {"*": "deny", "tt-*": "allow"}, {"tt-explore": "allow"},
+                {"g*": "deny", "tt-explore": "allow"}):
+        assert V.task_rule_state(bad) is None, bad
+        assert [p for p in mod.config_problems({**CONFIG_OK, "permission": {**perm, "task": bad}})
+                if p.startswith("permission.task=")], bad
+    assert V.wildcard_match("tt-*", "tt-explore") and V.wildcard_match("a?c", "abc") and not V.wildcard_match("tt-*", "general")
     row, ran = mod.version_row(str(env["stub"]), env["env"])
     assert ran and row == {"check": "opencode-version", "status": "ok", "detail": f"{PINNED} (고정 {PINNED})"}
     row, ran = mod.version_row(str(env["tmp"] / "no-opencode"), env["env"])

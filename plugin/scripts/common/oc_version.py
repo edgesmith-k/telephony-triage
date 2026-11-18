@@ -55,6 +55,61 @@ STATUS_ERROR = "error"                        # 거부·실패한 도구 호출�
 FINISH_STOP = "stop"                          # 정상 종료의 reason
 FINISH_LENGTH = "length"                      # 출력 한도에서 잘림(AI SDK finishReason 이름 — 1.19.5 실제 이벤트로는 아직 못 봄)
 
+# -- 하위 에이전트(task) 세션(1.19.5 실험 11/17) ------------------------------------------------------------------------
+# `run --format json`은 sessionID가 다른 part를 내보내지 않는다(하위 세션의 도구 호출·토큰이 안 보인다). task 도구 part의
+# `state.metadata.sessionId`로 하위 세션을 찾아 `opencode export <id>`(stdout JSON `{info, messages: [{info: {role}, parts}]}`,
+# stderr에 "Exporting session") 로 읽는다. part 본문은 run 이벤트의 `part`와 같고 type 이름만 다르다.
+EXPORT_ARGS = ("export",)                     # + <세션>
+TASK_TOOL = "task"
+STATE_METADATA, META_SESSION = "metadata", "sessionId"
+EXPORT_MESSAGES, EXPORT_INFO, EXPORT_ROLE, EXPORT_PARTS = "messages", "info", "role", "parts"
+EXPORT_PART_EVENT = {"step-start": EV_STEP_START, "text": EV_TEXT, "step-finish": EV_STEP_FINISH, "tool": EV_TOOL_USE}
+
+# -- 권한 패턴(1.19.5 `Wildcard.match`: `*` 아무 글자열, `?` 한 글자, 전체 일치, 마지막으로 맞는 규칙이 이긴다) ----------------
+TASK_AGENT = "tt-explore"                     # task로 부를 수 있는 유일한 하위 에이전트(= oc_adapter.TASK_ALLOWED)
+TASK_PROBES = ("general", "~other~")          # 다른 하위 에이전트 이름 대표(내장 하나, 어느 이름 패턴에도 안 맞을 것 하나)
+
+
+def wildcard_match(pattern: str, text: str) -> bool:
+    p = t = 0
+    star, mark = -1, 0
+    while t < len(text):
+        if p < len(pattern) and pattern[p] in ("?", text[t]) and pattern[p] != "*":
+            p, t = p + 1, t + 1
+        elif p < len(pattern) and pattern[p] == "*":
+            star, mark, p = p, t, p + 1
+        elif star != -1:
+            p, mark = star + 1, mark + 1
+            t = mark
+        else:
+            return False
+    while p < len(pattern) and pattern[p] == "*":
+        p += 1
+    return p == len(pattern)
+
+
+def task_rule_state(value):
+    """설정 `permission.task` 값의 실제 효과: "explore-only"(tt-explore만 allow, 다른 이름 deny), "all-deny", 그 밖은 None.
+    글자 그대로 비교하지 않고 마지막 일치 규칙으로 판정한다(순서가 바뀐 객체는 모두 거부가 된다). allow는 `tt-explore` 글자
+    그대로인 키에만, 값은 allow·deny만(ask는 `opencode run`을 멈춘다)."""
+    if value == "deny":
+        return "all-deny"
+    if not isinstance(value, dict) or any(v not in ("allow", "deny") for v in value.values()):
+        return None
+    if any(v == "allow" and k != TASK_AGENT for k, v in value.items()):
+        return None
+
+    def last(name):
+        out = None
+        for k, v in value.items():
+            if isinstance(k, str) and wildcard_match(k, name):
+                out = v
+        return out
+
+    if any(last(n) != "deny" for n in TASK_PROBES):
+        return None
+    return "explore-only" if last(TASK_AGENT) == "allow" else "all-deny"
+
 # -- 플러그인 hook 이름(`opencode/plugins/tt-guard.js`가 구현, 시험이 대조) -------------------------------------------------
 # `tool.execute.after`는 오류로 끝난 MCP 호출에는 돌지 않는다(RUNTIMES.md §5.5) → `experimental.chat.messages.transform`.
 HOOKS = ("tool.execute.before", "tool.execute.after", "experimental.chat.messages.transform", "shell.env", "chat.params")

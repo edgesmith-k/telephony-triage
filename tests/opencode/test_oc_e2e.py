@@ -160,9 +160,10 @@ def test_env_override_refused():
 
 
 def test_task_denied():
+    """task는 tt-explore만(사용자 결정 ⑧을 좁힘). 설정에 task 규칙이 없어도 guard가 다른 하위 에이전트를 거부한다."""
     r = run("task", [{"tool": "task", "args": {"description": "d", "prompt": "CHILDTASK", "subagent_type": "general"}},
                      {"text": "FINAL"}], configured=False)
-    assert "전역 거부" in errors(r, "task")[0]
+    assert "`tt-explore`(탐색 분석)만" in errors(r, "task")[0]
     assert not any(q["child"] for q in r.requests)
 
 
@@ -305,13 +306,14 @@ def test_installed_project_loads_guard_without_plugin_root_env():
 
 
 def installed_run(base: Path, steps: list, *, plug: Path, work: Path, model: str = "glm-fake", issue_dbs=(),
-                  extra_env: dict | None = None) -> tuple[ocenv.OcRun, Path, list]:
+                  extra_env: dict | None = None, child: list | None = None, install_args: tuple = (),
+                  drop_guard: bool = False) -> tuple[ocenv.OcRun, Path, list]:
     """`gen_opencode.py install`한 프로젝트 폴더에서 `opencode run --agent triage`(TT_PLUGIN_ROOT 없음). (결과, dest, guard 로그)."""
     binary = ocenv.require_opencode()
     dest, home = base / "proj", base / "home"
     home.mkdir(parents=True)
     script_path, req_log, guard_log = home / "script.json", home / "requests.jsonl", home / "guard.log"
-    script_path.write_text(json.dumps({"main": steps, "child": [{"text": "CHILD DONE"}]}), encoding="utf-8")
+    script_path.write_text(json.dumps({"main": steps, "child": child or [{"text": "CHILD DONE"}]}), encoding="utf-8")
     server = subprocess.Popen([sys.executable, str(ocenv.FAKES / "fake_oai.py"), str(script_path), str(req_log)],
                               stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True)
     try:
@@ -319,11 +321,13 @@ def installed_run(base: Path, steps: list, *, plug: Path, work: Path, model: str
         dbs = [a for c in issue_dbs for a in ("--issue-db", str(c))]
         inst = subprocess.run([sys.executable, str(REPO / "tools" / "gen_opencode.py"), "install", "--dest", str(dest),
                                "--plugin-root", str(plug), "--work-root", str(work), *dbs, "--gateway-url",
-                               f"http://{ocenv.LOOPBACK}:{port}/v1", "--model", model],
+                               f"http://{ocenv.LOOPBACK}:{port}/v1", "--model", model, *install_args],
                               capture_output=True, text=True, check=False)
         if inst.returncode != 0 and "git" in inst.stdout + inst.stderr:
             pytest.skip(f"임시 폴더가 git 레포 안이다: {inst.stderr.strip()}")
         assert inst.returncode == 0, inst.stdout + inst.stderr
+        if drop_guard:                    # 설정 권한만으로 막히는지 볼 때(guard 플러그인 없음)
+            (dest / ".opencode" / "plugins" / "tt-guard.js").unlink()
         env = ocenv.base_env(home, {"TT_OC_GUARD_LOG": guard_log, "TT_PYTHON": sys.executable,
                                     "TT_GATEWAY_API_KEY": "dummy", **(extra_env or {})})
         proc = subprocess.run([binary, "run", "--format", "json", "--agent", "triage", "go"], cwd=dest, env=env,
@@ -337,6 +341,91 @@ def installed_run(base: Path, steps: list, *, plug: Path, work: Path, model: str
     reqs = [json.loads(ln) for ln in req_log.read_text(encoding="utf-8").splitlines() if ln.strip()] \
         if req_log.is_file() else []
     return ocenv.OcRun(proc.returncode, events, proc.stderr, logged, reqs), dest, logged
+
+
+EVENTS_SECRET = "EVENTS_SECRET_7f3a"
+
+
+def _explore_run(name: str, child: list, install_args: tuple = (), drop_guard: bool = False) -> tuple[ocenv.OcRun, Path]:
+    """부모: task `general`(거부) → task `tt-explore`(실행) → 끝. `child`의 `@@WORK@@`는 작업 루트로 바꾼다. (결과, 작업 루트)"""
+    base = tmp(f"tt-oce-{name}-")
+    work = base / "work"
+    (work / "job").mkdir(parents=True)
+    (work / "K-1").mkdir()
+    (work / "job" / "issue_raw.json").write_text("{}", encoding="utf-8")
+    (work / "job" / "events.json").write_text(json.dumps({"x": EVENTS_SECRET}), encoding="utf-8")
+    steps = [{"tool": "task", "args": {"description": "d", "prompt": "CHILDTASK", "subagent_type": "general"}},
+             {"tool": "task", "args": {"description": "explore", "prompt": "CHILDTASK explore K-1", "subagent_type": "tt-explore"}},
+             {"text": "FINAL"}]
+    child = json.loads(json.dumps(child).replace("@@WORK@@", str(work)))
+    r, _, _ = installed_run(base, steps, plug=plugin_root(), work=work, child=child, install_args=install_args,
+                            drop_guard=drop_guard)
+    return r, work
+
+
+def _child_file_steps() -> list:
+    """하위 에이전트의 파일 도구(리뷰 P2-9): explore-output.md만 쓸 수 있고, 다른 파일 쓰기·events.json 읽기는 거부."""
+    return [{"tool": "write", "args": {"filePath": "@@WORK@@/K-1/explore-output.md", "content": "가설 없음: 시험\n다음 확인: x\n"}},
+            {"tool": "write", "args": {"filePath": "@@WORK@@/job/other.md", "content": "x"}},
+            {"tool": "read", "args": {"filePath": "@@WORK@@/job/events.json"}}]
+
+
+def test_installed_explore_subagent_model_and_child_guard():
+    """탐색 분석 하위 에이전트(사용자 결정 ⑧을 좁힘, 11/17), 설치한 설정 그대로:
+    (a) 부모의 task는 `general` 거부·`tt-explore` 실행(부모가 하위 에이전트 마지막 글을 받는다), 하위 요청은 `--explore-model` 모델,
+    (b) 하위 에이전트에는 task·question 도구가 없다(재귀 없음), (c) 하위 bash는 하위 허용 목록 밖이면 설정이 거부하고, 허용 목록 안이어도
+    guard가 막을 것은 막는다 — guard 로그에 하위 세션의 호출이 남는다."""
+    plug = plugin_root()
+    child = [{"tool": "bash", "args": {"command": "echo CHILD_OTHER"}},
+             {"tool": "bash", "args": {"command": "cat @@WORK@@/job/issue_raw.json"}},
+             {"tool": "bash", "args": {"command": f'python3 "{plug}/scripts/db_search.py" --help'}},
+             *_child_file_steps(), {"text": "CHILD DONE"}]
+    r, work = _explore_run("explore", child, ("--explore-model", "gw/explore-fake"))
+    tasks = r.tool_states("task")
+    assert len(tasks) == 2, r.events
+    assert tasks[0]["status"] == "error" and "`tt-explore`(탐색 분석)만" in tasks[0]["error"], tasks[0]
+    assert tasks[1]["status"] == "completed" and "CHILD DONE" in str(tasks[1].get("output")), tasks[1]
+    main_reqs = [q for q in r.requests if q["kind"] == "main" and not q["child"]]
+    child_reqs = [q for q in r.requests if q["kind"] == "main" and q["child"]]
+    assert main_reqs and child_reqs, r.requests
+    assert {q["model"] for q in main_reqs} == {"glm-fake"} and {q["model"] for q in child_reqs} == {"explore-fake"}
+    assert not [q for q in child_reqs if "task" in q["tools"] or "question" in q["tools"]], [q["tools"] for q in child_reqs]
+    assert "task" in main_reqs[0]["tools"]
+    results = [t for q in child_reqs for t in q["tool_results"]]
+    assert not any(t.strip() == "CHILD_OTHER" for t in results), results                       # 하위 허용 목록 밖: 설정이 거부
+    assert any(oc.oc_version.DENY_PHRASES[0] in t for t in results), results
+    assert any("규칙 10" in t for t in results), results                                       # guard가 거부
+    assert any("usage" in t for t in results), results                                         # 허용 목록 안은 돈다
+    main_session = {e["session"] for e in r.guard_log if e.get("hook") == "before" and e.get("tool") == "task"}
+    child_bash = [e for e in r.guard_log if e.get("hook") == "before" and e.get("tool") == "bash"]
+    assert len(main_session) == 1 and child_bash and not {e["session"] for e in child_bash} & main_session, r.guard_log
+    assert [e["decision"] for e in child_bash if "규칙 10" in str(e.get("reason"))] == ["deny"], child_bash
+    assert (work / "K-1" / "explore-output.md").is_file() and not (work / "job" / "other.md").exists()
+    assert EVENTS_SECRET not in json.dumps(r.requests, ensure_ascii=False)
+
+
+def test_installed_explore_config_alone_enforces_task_and_child_permissions():
+    """리뷰 P2-9: guard 플러그인 없이(설정 권한만) — task `"*": deny`가 `general`을 막고 `tt-explore`만 돈다. 하위 에이전트의
+    bash 허용 목록 밖·explore-output.md 밖 쓰기·events.json 읽기도 설정이 막는다."""
+    child = [{"tool": "bash", "args": {"command": "echo CHILD_OTHER"}}, *_child_file_steps(), {"text": "CHILD DONE"}]
+    r, work = _explore_run("explore-noguard", child, drop_guard=True)
+    assert r.guard_log == []                                                      # guard는 돌지 않았다
+    tasks = r.tool_states("task")
+    assert [s["status"] for s in tasks] == ["error", "completed"], r.events
+    assert oc.oc_version.DENY_PHRASES[0] in tasks[0]["error"], tasks[0]
+    results = [t for q in r.requests if q["kind"] == "main" and q["child"] for t in q["tool_results"]]
+    assert not any(t.strip() == "CHILD_OTHER" for t in results), results
+    assert sum(oc.oc_version.DENY_PHRASES[0] in t for t in results) >= 3, results   # echo·다른 파일 쓰기·events.json 읽기
+    assert (work / "K-1" / "explore-output.md").is_file() and not (work / "job" / "other.md").exists()
+    assert EVENTS_SECRET not in json.dumps(r.requests, ensure_ascii=False)
+
+
+def test_installed_explore_subagent_inherits_session_model():
+    """`--explore-model` 없이 설치하면 하위 에이전트 요청도 세션 모델이다(tt-explore.md에 model 줄 없음)."""
+    r, _ = _explore_run("explore-inherit", [{"text": "CHILD DONE"}])
+    child_reqs = [q for q in r.requests if q["kind"] == "main" and q["child"]]
+    assert child_reqs and {q["model"] for q in child_reqs} == {"glm-fake"}, r.requests
+    assert [s["status"] for s in r.tool_states("task")] == ["error", "completed"], r.events
 
 
 def _sha(path: Path) -> str:
@@ -448,3 +537,53 @@ def test_tt_oc_real_run_exit_code_and_single_prompt():
     finally:
         server.kill()
         server.wait()
+
+
+def test_tt_oc_judges_child_session():
+    """리뷰 P1-3: 1.19.5 `run --format json`은 하위 세션 part를 내보내지 않는다 — tt-oc는 task part의 하위 세션 ID로
+    `opencode export`를 읽어, 하위 에이전트의 막힌 호출을 막힌 호출(종료 3)로 세고 하위 토큰을 합계에 더한다."""
+    binary = ocenv.require_opencode()
+    w = ws()
+    base = tmp("tt-oce-ttoc-kid-")
+    (w.work / "job").mkdir(parents=True, exist_ok=True)
+    (w.work / "job" / "issue_raw.json").write_text("{}", encoding="utf-8")
+    steps = [{"tool": "task", "args": {"description": "explore", "prompt": "CHILDTASK K-1", "subagent_type": "tt-explore"}},
+             {"text": "FINAL"}]
+    child = [{"tool": "bash", "args": {"command": f"cat {w.work}/job/issue_raw.json"}}, {"text": "CHILD DONE"}]
+    dest, home = base / "proj", base / "home"
+    home.mkdir()
+    script_path, req_log = home / "script.json", home / "requests.jsonl"
+    script_path.write_text(json.dumps({"main": steps, "child": child}), encoding="utf-8")
+    server = subprocess.Popen([sys.executable, str(ocenv.FAKES / "fake_oai.py"), str(script_path), str(req_log)],
+                              stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True)
+    try:
+        port = int(server.stdout.readline().strip())
+        inst = subprocess.run([sys.executable, str(REPO / "tools" / "gen_opencode.py"), "install", "--dest", str(dest),
+                               "--plugin-root", str(w.root), "--work-root", str(w.work), "--issue-db", str(w.clone),
+                               "--gateway-url", f"http://{ocenv.LOOPBACK}:{port}/v1", "--model", "glm-fake"],
+                              capture_output=True, text=True, check=False)
+        if inst.returncode != 0 and "git" in inst.stdout + inst.stderr:
+            pytest.skip(f"임시 폴더가 git 레포 안이다: {inst.stderr.strip()}")
+        assert inst.returncode == 0, inst.stdout + inst.stderr
+        env = ocenv.base_env(home, {"TT_OC_GUARD_LOG": home / "guard.log", "TT_PYTHON": sys.executable,
+                                    "TT_GATEWAY_API_KEY": "dummy", **w.env()})
+        ttoc = [sys.executable, str(REPO / "opencode" / "bin" / "tt-oc"), "--opencode", binary, "--project", str(dest)]
+        doctor = subprocess.run([*ttoc, "doctor", "--json"], env=env, capture_output=True, text=True, timeout=300,
+                                check=False)
+        rows = {x["check"]: x for x in json.loads(doctor.stdout)["rows"]}
+        if rows["config-doctor"]["status"] != "ok":
+            pytest.skip(f"테스트 작업공간의 config.py doctor가 통과하지 않는다: {rows['config-doctor']['detail']}")
+        proc = subprocess.run([*ttoc, "--json", "--timeout", "120", "--delete-session", "--", "go"], env=env,
+                              capture_output=True, text=True, timeout=300, check=False)
+    finally:
+        server.kill()
+        server.wait()
+    out = json.loads(proc.stdout)
+    assert proc.returncode == 3 and out["outcome"] == "blocked", (proc.returncode, out)
+    (kid,) = out["children"]
+    assert kid["read"] and kid["session"] != out["session"] and kid["blocked"] == 1, out
+    assert [b["session"] for b in out["blocked"]] == [kid["session"]] and "규칙 10" in out["blocked"][0]["message"]
+    reqs = [json.loads(ln) for ln in req_log.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    asked = [q for q in reqs if q["kind"] == "main"]
+    assert any(q["child"] for q in asked) and out["tokens"]["input"] == 100 * len(asked), (out["tokens"], len(asked))
+    assert out["session_deleted"] is True

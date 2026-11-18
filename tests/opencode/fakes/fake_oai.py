@@ -54,7 +54,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         child = any(m.get("role") == "user" and "CHILDTASK" in text_of(m) for m in messages)
         seq = SCRIPT["child" if child else "main"]
         step = {"text": "fake title"} if not tools else seq[min(turn, len(seq) - 1)]
-        log({"kind": "main" if tools else "aux", "child": child, "turn": turn,
+        log({"kind": "main" if tools else "aux", "child": child, "turn": turn, "model": req.get("model"),
              "tools": [t.get("function", {}).get("name") for t in tools], "step": step,
              "tool_results": [text_of(m)[:2000] for m in messages if m.get("role") == "tool"]})
         self.send_response(200)

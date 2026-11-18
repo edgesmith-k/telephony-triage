@@ -27,9 +27,10 @@ OpenCode로 분석하고 이슈 DB에 PR까지 올리는 순서다. 자세한 �
 
 | 파일 | 내용 |
 |---|---|
-| `opencode.json.template` | 프로젝트 설정(v1 키만). `snapshot:false` 필수, `autoupdate:false`, `share:"disabled"`, 한도 202000/16000, 허용 목록(`"*":"deny"` 뒤 read·glob·grep·list·bash·edit만 — read 도구는 원문 작업 파일 `issue_raw.json`·`events.json`·`events-full.json`·`match.json`·`jira_raw.json`을 deny(grep 도구·site 추가 이름은 막지 않는다, 08-safety 10번의 한계), bash도 `"*":"deny"` 뒤 `python3 *`·읽기 명령만), `jira_*`·`github_*`·`task` deny(Jira 읽기 도구는 `install --jira-read-tool`로만 끝에 allow), `external_directory`는 플러그인·작업 루트·clone만 |
+| `opencode.json.template` | 프로젝트 설정(v1 키만). `snapshot:false` 필수, `autoupdate:false`, `share:"disabled"`, 한도 202000/16000, 허용 목록(`"*":"deny"` 뒤 read·glob·grep·list·bash·edit만 — read 도구는 원문 작업 파일 `issue_raw.json`·`events.json`·`events-full.json`·`match.json`·`jira_raw.json`을 deny(grep 도구·site 추가 이름은 막지 않는다, 08-safety 10번의 한계), bash도 `"*":"deny"` 뒤 `python3 *`·읽기 명령만), `jira_*`·`github_*` deny, `task`는 `tt-explore`만 allow(Jira 읽기 도구는 `install --jira-read-tool`로만 끝에 allow), `external_directory`는 플러그인·작업 루트·clone만 |
 | `managed.json.sample` | `/etc/opencode/opencode.json` 예시(관리자 배포, 다중 방어). 프로젝트 설정 뒤에 합쳐진다 |
-| `agents/triage.md` | 에이전트 프롬프트(약 2KB): 스크립트가 판정, Read ≤200줄, 화면 그대로, 쓰기는 명령 출력만 |
+| `agents/triage.md` | 에이전트 프롬프트(약 2.5KB): 스크립트가 판정, Read ≤200줄, 화면 그대로, 쓰기는 명령 출력만, 탐색 분석은 `tt-explore`에 맡김 |
+| `agents/tt-explore.md` | 탐색 분석(analyze Step 5-2) 하위 에이전트: 새 문맥에서 `explore.md` 절차만 한다. 아래 "탐색 분석 하위 에이전트" |
 | `commands/tt-*.md` | `tools/gen_opencode.py`가 `plugin/commands/*.md`에서 만든다(손으로 고치지 않는다) |
 | `bin/tt-oc` | 실행 래퍼: 확인 화면·must_show가 있는 흐름은 이것으로. 표준 라이브러리만 쓰고 OpenCode 표면은 아래 한 파일에서 읽는다 |
 | `../plugin/scripts/common/oc_version.py` | **OpenCode 바이너리 의존 한 곳**: 고정 버전, CLI 인자, 거부·자식 환경 변수, 바이너리의 거부 문구, `run --format json` 이벤트 키, 플러그인 hook 이름. 버전을 올릴 때는 이 파일과 `tests/test_oc_version.py`의 고정값만 바꾸고, 파일에 적힌 실험을 새 버전으로 다시 한다(tt-guard.js는 시험이 대조) |
@@ -42,6 +43,7 @@ python3 tools/gen_opencode.py install --dest <git 레포 밖 폴더> --plugin-ro
     --work-root <작업 루트> [--issue-db <clone>]... --gateway-url <http(s)://…/v1> --model <모델 ID>
 # 게이트웨이가 OpenCode 내장 provider로만 받으면 --gateway-url·--model 대신 --provider-model <provider>/<모델>
 # (provider 블록 없이 model·small_model만 쓴다 — 키·주소는 OpenCode 전역 설정 몫, TT_GATEWAY_API_KEY 불필요)
+# 탐색 분석만 다른 모델로 돌리려면 --explore-model <provider>/<모델>을 더한다(아래 "탐색 분석 하위 에이전트")
 export TT_GATEWAY_API_KEY=…            # 설정 파일에는 쓰지 않는다
 opencode/bin/tt-oc --project <dest> doctor
 python3 tools/site_step.py runtime-check opencode --project <dest>   # 사내 확인: 버전·설정·관리 설정 + 확인 0 curl 명령(모델 호출 없음)
@@ -112,6 +114,47 @@ opencode/bin/tt-oc --project <dest> -s <세션> -- 2          # 질문에 답하
 OpenCode 허용 목록·guard·tt-oc 점검은 모델의 실수, 로그·Jira 본문에 섞인 지시, 승인 화면 위조를 줄이는 사고 방지 장치다.
 작정하고 우회를 찾는 모델을 막는다고 보장하지 않는다. 모델은 사용자와 같은 OS 계정으로 돌아 사용자의 git·gh 로그인을 그대로 쓸 수
 있다. 그래서 승인 없는 push가 main에 들어가는 것을 확실히 막는 것은 서버의 브랜치 보호(PR 필수)와 +1 리뷰다.
+
+## 탐색 분석 하위 에이전트(`tt-explore`)
+
+analyze의 탐색 분석(Step 5-2, 맞는 규칙이 없을 때 원인 가설을 세우는 단계)의 본 작업은 OpenCode에서 하위 에이전트 `tt-explore`가
+한다. Claude Code 쪽 동작은 바뀌지 않았다(같은 세션에서 한다). 순서는 이렇다.
+
+1. 메인 에이전트가 `explore.md` "언제"대로 실행할지 정하고(플래그·설정, 필요하면 사용자에게 묻기, 로그 범위 밖이면 먼저 알림),
+   `triage.py explore <KEY>`와 모듈 문서가 있으면 `module --for explore`를 돌린다. 모듈 고르기·같이 보기(`ask_switch`)·받기 실패·
+   정밀 탐색(`--deep`) 질문도 모두 메인 에이전트가 사용자에게 묻는다(`module-skills.md` 5-2).
+2. 메인 에이전트가 `task` 도구로 `tt-explore`를 부른다. 하위 에이전트는 앞선 대화를 보지 못하고, 메인 에이전트가 넘긴 값(작업 키·작업
+   폴더·분석 사유·고른 모듈과 `--with`·`--deep`·모듈 출력의 `read` 파일·사용자가 준 기준 줄과 시각)만 받는다. `explore.md`대로
+   가설을 세워 `explore-output.md`를 쓰고 `check-output`을 돌린 뒤 그 결과 줄을 돌려준다. 사용자에게 묻지 않는다 — 스크립트가
+   질문을 내면 그 질문을 답에 그대로 넣고 멈춘다.
+3. 메인 에이전트는 받은 줄을 그대로 보이고 평소 흐름을 잇는다(Step 6 리포트, Step 7은 `explore.md` "다음"대로). 답에
+   `check-output` 줄이 없으면(멈춤·스텝 한도·막힘) `check-output <KEY> --for explore --skipped "<사유>"`를 돌린다. task 도구가 없거나
+   실패하면 오류를 보이고 같은 세션에서 탐색 분석을 한다.
+
+- 왜: 탐색 분석에만 집중한 새 문맥으로 돌리고, 원하면 더 강한 모델을 이 단계에만 쓰기 위해서다(분석 정확도).
+- 모델 고르기: `install --explore-model <provider>/<모델>`. 주지 않으면 세션 모델을 그대로 쓴다. 쓸 수 있는 모델 중 가장 강한
+  모델을 여기에 주는 것을 권한다(탐색 분석은 토큰이 많이 들지만 한 작업에 한 번이다). `gw/<모델>`이면 `--gateway-url` 설치의
+  gw provider에 같은 한도로 선언된다. 다른 provider는 OpenCode 전역 설정에 있어야 한다. `--provider-model` 설치에는 gw가 없어서
+  `gw/…`를 거부한다. 다시 설치할 때 빠뜨리면 세션 모델로 돌아가고 `꺼짐:` 줄로 알린다.
+- 하위 에이전트가 할 수 있는 것: `triage.py run … --look-at`, 모듈을 지정한 `module … --for explore --module <p>/<모듈>`(후보
+  모듈이 다를 때), `check-output … --for explore`, `db_search.py`, 읽기 명령(ls·cat·head·tail·wc·grep·find), `explore-output.md`
+  쓰기. 할 수 없는 것: `triage.py explore`와 모듈을 지정하지 않은 `module`(메인 에이전트 몫), `task`(다시 하위 에이전트), 질문,
+  외부 전송, 다른 스크립트(`db_pr`·`issue_post`·`skill_patch`·`module_eval`·`config.py set`)와 git, `explore-output.md` 밖 쓰기.
+- 위 bash 허용 목록은 명령 글자열을 단어 패턴으로 맞춰 보는 것이라 빈틈이 있을 수 있다. 하위 세션의 도구 호출도 guard를 그대로 거치므로,
+  허용 목록에 맞아도 guard 규칙(로그 원문 통독, 인라인 코드·스크립트 파일 실행, 작업 루트 밖 출력 등)에 걸리면 막힌다.
+  guard 첫 경고("guard warning")는 하위 에이전트도 읽고 같은 호출을 한 번 다시 한다.
+- `task`는 `tt-explore`만 허용한다(사용자 결정 ⑧ "task 전역 거부"를 11/17에 좁혔다). 설정(`permission.task`)과 guard가 둘 다 막는다.
+  `tt-oc doctor`와 관리 설정 점검은 글자가 아니라 효과로 본다(마지막으로 맞는 규칙이 이긴다): `tt-explore`만 allow이고 다른 이름은
+  deny이거나, 모두 deny일 때만 통과하고 어느 쪽인지 행에 보인다.
+- 관리 설정(`/etc/opencode`)으로 하위 에이전트를 아예 막으려면 `"task": "deny"` **문자열**로 둔다. 1.19.5 실험(관리 설정 폴더를 바꿔
+  `debug config`·`debug agent`로 확인)에서 문자열은 프로젝트 설정을 덮었지만, 객체 `{"*": "deny"}`는 프로젝트 객체와 합쳐져
+  `tt-explore` allow가 남았다. 막으면 메인 에이전트에 task 도구가 없어 같은 세션에서 탐색 분석을 한다. 예시(`managed.json.sample`)는
+  새 객체(`tt-explore`만 허용)다.
+- `tt-oc`는 하위 세션도 판정한다. 1.19.5 `run --format json`은 하위 세션 이벤트를 내보내지 않아서, task 결과에 든 하위 세션 ID로
+  `opencode export`를 읽는다. 하위의 막힌 호출은 막힌 호출(종료 3, 메시지에 `하위 <세션>`), 토큰은 합계에 더하고(세션별은 `--json`의
+  `children`), 하위 스텝 한도(`tt-explore.md` `steps:`)에 닿으면 `step-limit`, 하위 세션을 읽지 못하면 오류(종료 1)다.
+  `--delete-session`은 하위 세션도 지운다.
+- 출처 기록(`TT_MODEL`)은 세션 모델 이름이다. 탐색 분석을 다른 모델이 했어도 기록에는 세션 모델로 남는다.
 
 ## 게시(`tt-oc publish`, 기본 닫힘)
 

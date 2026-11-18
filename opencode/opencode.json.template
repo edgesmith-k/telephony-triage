@@ -78,6 +78,7 @@
       "find *-ok*": "deny",
       "find *-delete*": "deny",
       "find *-fprint*": "deny",
+      "find *-fls*": "deny",
       "*db_pr.py publish*": "deny",
       "*db_pr.py merge*": "deny",
       "*db_pr.py request-review*": "deny",
@@ -101,7 +102,10 @@
       "@@WORK_ROOT@@/**": "allow",
       "@@ISSUE_DB_ROOT@@/**": "allow"
     },
-    "task": "deny",
+    "task": {
+      "*": "deny",
+      "tt-explore": "allow"
+    },
     "webfetch": "deny",
     "websearch": "deny",
     "codesearch": "deny",

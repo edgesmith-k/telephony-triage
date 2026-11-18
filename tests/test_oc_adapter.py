@@ -50,11 +50,11 @@ def _map(tool: str, args: dict, directory: Path, servers=None, err=None):
 def test_builtin_table_is_explicit_and_pinned():
     assert oc.OPENCODE_VERSION == oc_version.OPENCODE_VERSION   # 고정값 자체는 tests/test_oc_version.py
     passes = {"invalid", "question", "read", "glob", "grep", "skill", "lsp", "todowrite"}
-    denies = {"task", "webfetch", "websearch", "codesearch", "execute", "plan", "list_mcp_resources",
+    denies = {"webfetch", "websearch", "codesearch", "execute", "plan", "list_mcp_resources",
               "list_mcp_resource_templates", "read_mcp_resource"}
     assert {k for k, v in oc.BUILTINS.items() if v[0] == oc.PASS} == passes
     assert {k for k, v in oc.BUILTINS.items() if v[0] == oc.DENY} == denies
-    assert set(oc.BUILTINS) == passes | denies | {"bash", "edit", "write", "apply_patch"}
+    assert set(oc.BUILTINS) == passes | denies | {"bash", "edit", "write", "apply_patch", "task"}
     # JS 플러그인의 after 건너뛰기 표도 같은 이름이다
     js = (REPO / "opencode" / "plugins" / "tt-guard.js").read_text(encoding="utf-8")
     block = js.split("const BUILTINS = new Set([", 1)[1].split("])", 1)[0]
@@ -71,8 +71,18 @@ def test_read_only_builtins_pass(tool):
 def test_denied_builtins(tool):
     m = _map(tool, {"prompt": "CHILDTASK", "url": "https://mock-site.invalid"}, _dir())
     assert m.deny and m.events == []
-    if tool == "task":
-        assert "전역 거부" in m.deny
+
+
+@pytest.mark.parametrize("sub,allowed", [("tt-explore", True), ("general", False), ("build", False), ("TT-EXPLORE", False),
+                                         ("tt-explore ", False), (None, False), (["tt-explore"], False)])
+def test_task_only_tt_explore(sub, allowed):
+    """사용자 결정 ⑧을 좁힘(11/17): task는 탐색 분석 하위 에이전트 `tt-explore`(정확히)만 통과, 그 밖은 거부."""
+    args = {"description": "d", "prompt": "CHILDTASK"} | ({} if sub is None else {"subagent_type": sub})
+    m = _map("task", args, _dir())
+    if allowed:
+        assert m.deny is None and m.events == [] and m.kind == oc.PASS
+    else:
+        assert m.deny and m.events == [] and "tt-explore" in m.deny and "사용자 결정 ⑧" in m.deny
 
 
 def test_bash_cwd_comes_from_workdir():

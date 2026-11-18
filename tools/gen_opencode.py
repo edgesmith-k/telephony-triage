@@ -15,7 +15,8 @@ CLI:
         opencode/commands/를 다시 만든다. --check는 쓰지 않고 다르면 종료 코드 1(골든 검사).
     python3 tools/gen_opencode.py install --dest <OpenCode 프로젝트 폴더> --plugin-root <설치된 plugin/>
             --work-root <작업 루트> (--gateway-url <URL> --model <모델 ID> | --provider-model <provider>/<모델>)
-            [--issue-db <clone> ...] [--jira-read-tool <OpenCode 이름> ...] [--allow-publish] [--force]
+            [--issue-db <clone> ...] [--jira-read-tool <OpenCode 이름> ...] [--allow-publish] [--explore-model <provider>/<모델>]
+            [--force]
         <dest>/opencode.json(템플릿 렌더링)·<dest>/tt-oc.json(래퍼가 읽는 경로)과 <dest>/.opencode/{agents,commands,plugins}/를
         쓴다. `tt-oc --project <dest>`로
         실행한다. 이미 있는 파일이 다르면 --force 없이는 쓰지 않는다.
@@ -33,7 +34,11 @@ CLI:
         필요하다(관리 설정 `/etc/opencode`의 `jira_*` deny는 관리자 몫).
         `--allow-publish`를 주면 tt-oc.json에 `"publish": "open"`을 쓴다(`tt-oc publish` — 사람이 터미널에서 승인하는 이슈 DB
         게시). 주지 않으면 그 키를 쓰지 않는다(닫힘). 이미 설치한 곳을 열거나 닫으려면 같은 install을 `--force`로 다시 한다
-        (tt-oc.json은 설치 지문 대상 밖이라 지문은 그대로다). 다시 설치할 때 앞선 설치의 게시 열림·Jira 읽기 도구가 이번 인자에
+        (tt-oc.json은 설치 지문 대상 밖이라 지문은 그대로다).
+        `--explore-model <provider>/<모델>`은 탐색 분석 하위 에이전트(`tt-explore`, analyze Step 5-2)만 쓸 모델을
+        `.opencode/agents/tt-explore.md` frontmatter `model:`로 쓴다(주지 않으면 그 줄이 없어 세션 모델을 이어받는다). `gw/<모델>`이면
+        `--gateway-url` 설치의 gw provider `models`에 같은 한도로 더한다(`--provider-model` 설치에는 gw provider가 없어 거부).
+        다른 provider면 그 provider는 OpenCode 전역 설정 몫이다. 다시 설치할 때 앞선 설치의 게시 열림·Jira 읽기 도구가 이번 인자에
         없으면 이어받지 않고 stderr에 `꺼짐:` 줄로 알린다. 끝에 지금 상태(게시 열림·닫힘, Jira 읽기 도구 수)를 stderr 한 줄로 낸다.
 
 종료 코드 (contracts.md §종료 코드)
@@ -90,6 +95,8 @@ LOCK_NOTE = ("> **OpenCode lock owner.** `db_pr`·`db_verify`에 `TT_LOCK_OWNER=
 PLACEHOLDER = re.compile(r"@@[A-Z_]+@@")
 MULTI = ("@@ISSUE_DB_ROOT@@", "@@ISSUE_DB_ROOT_REL@@")
 INSTALL_DIRS = ("agents", "commands", "plugins")
+MODEL_RE = re.compile(r"[A-Za-z0-9._:-]+/[A-Za-z0-9._:-]+")     # --provider-model·--explore-model
+EXPLORE_MODE = "\nmode: subagent\n"                             # tt-explore.md frontmatter: 이 뒤에 model 줄을 넣는다
 
 
 def _oc_version_module():
@@ -102,7 +109,8 @@ def _oc_version_module():
     return mod
 
 
-OPENCODE_VERSION = _oc_version_module().OPENCODE_VERSION     # = opencode/bin/tt-oc PINNED = oc_adapter.OPENCODE_VERSION
+OCV = _oc_version_module()
+OPENCODE_VERSION = OCV.OPENCODE_VERSION     # = opencode/bin/tt-oc PINNED = oc_adapter.OPENCODE_VERSION
 
 
 class UsageError(Exception):
@@ -280,7 +288,8 @@ def add_jira_reads(config: dict, names: list[str]) -> dict:
 
 
 def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[str] = (),
-                  jira_read: list[str] = (), allow_publish: bool = False, provider_model: str | None = None) -> dict[Path, str]:
+                  jira_read: list[str] = (), allow_publish: bool = False, provider_model: str | None = None,
+                  explore_model: str | None = None) -> dict[Path, str]:
     template = json.loads((OC / "opencode.json.template").read_text(encoding="utf-8"))
     meta = {"version": 1, "opencode": OPENCODE_VERSION, "plugin_root": values["@@PLUGIN_ROOT@@"],
             "work_root": values["@@WORK_ROOT@@"], "issue_dbs": issue_dbs, "model": values["@@MODEL_ID@@"]}
@@ -288,10 +297,16 @@ def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[st
         meta["jira_read_tools"] = list(jira_read)
     if allow_publish:
         meta["publish"] = "open"         # 없으면 닫힘(tt-oc publish). install은 tt-oc.json을 통째로 다시 쓴다
+    if explore_model:
+        meta["explore_model"] = explore_model
     config = render_config(template, values, issue_dbs)
     if provider_model:                   # 내장 provider: provider 블록 없이 model·small_model만(A232 — 키·주소는 전역 설정 몫)
         config["model"] = config["small_model"] = provider_model
         config.pop("provider", None)
+    gw = config.get("provider", {}).get("gw", {}).get("models")
+    if explore_model and explore_model.startswith("gw/") and isinstance(gw, dict):   # gw 모델은 선언해야 부를 수 있다
+        name = explore_model[3:]
+        gw.setdefault(name, {**next(iter(gw.values())), "name": name})
     config = add_read_roots(config, list(roots),
                             [values["@@PLUGIN_ROOT@@"], values["@@WORK_ROOT@@"], *issue_dbs])
     config = add_jira_reads(config, list(jira_read))
@@ -301,6 +316,11 @@ def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[st
         for src in sorted((OC / sub).glob("*")) if (OC / sub).is_dir() else []:
             if src.is_file():
                 files[dest / ".opencode" / sub / src.name] = _sub(src.read_text(encoding="utf-8"), values)
+    if explore_model:                    # 없으면 model 줄이 없다 = 세션 모델을 이어받는다(1.19.5 실험)
+        p = dest / ".opencode" / "agents" / "tt-explore.md"
+        if files.get(p, "").count(EXPLORE_MODE) != 1:
+            raise UsageError(f"opencode/agents/tt-explore.md에 `{EXPLORE_MODE.strip()}` 줄이 하나가 아니다")
+        files[p] = files[p].replace(EXPLORE_MODE, f"{EXPLORE_MODE}model: {explore_model}\n")
     left = sorted({m for text in files.values() for m in PLACEHOLDER.findall(text)})
     if left:
         raise UsageError(f"바꾸지 못한 자리 표시: {left}")
@@ -321,7 +341,8 @@ MANAGED_NAMES = ("opencode.json", "opencode.jsonc")
 
 def managed_problems(cfg) -> list[str]:
     """배포된 관리 설정이 `managed.json.sample`의 막는 항목을 모두 갖는지: 최상위 snapshot·autoupdate·share는 같은 값,
-    permission의 deny(bash 패턴 포함)는 모두 deny. 다른 키를 더한 것은 문제가 아니다(사내가 더 막을 수 있다)."""
+    permission의 deny(bash 패턴 포함)는 모두 deny. 다른 키를 더한 것은 문제가 아니다(사내가 더 막을 수 있다). `task`는 글자 비교가
+    아니라 효과로 본다(`oc_version.task_rule_state`): tt-explore만 allow이거나 통째로 "deny"(더 막는 것)만 괜찮다."""
     want = json.loads(MANAGED_SAMPLE.read_text(encoding="utf-8"))
     if not isinstance(cfg, dict):
         return ["객체가 아니다"]
@@ -329,7 +350,12 @@ def managed_problems(cfg) -> list[str]:
            for k in ("snapshot", "autoupdate", "share") if k in want and cfg.get(k) != want[k]]
     have = cfg.get("permission") if isinstance(cfg.get("permission"), dict) else {}
     for key, value in want.get("permission", {}).items():
-        if isinstance(value, dict):
+        if key == "task":
+            if OCV.task_rule_state(have.get(key)) is None:
+                out.append(f"permission.task={json.dumps(have.get(key))}(필요 tt-explore만 allow 또는 \"deny\")")
+        elif isinstance(value, dict):
+            if have.get(key) == "deny":      # 통째로 deny는 더 막는 것
+                continue
             sub = have.get(key) if isinstance(have.get(key), dict) else {}
             out += [f"permission.{key}[{pat!r}] 없음" for pat, v in value.items() if v == "deny" and sub.get(pat) != "deny"]
         elif value == "deny" and have.get(key) != "deny":
@@ -398,7 +424,7 @@ def cmd_install(a) -> int:
     if a.provider_model:
         if a.gateway_url or a.model:
             raise UsageError("--provider-model은 --gateway-url·--model과 함께 쓰지 않는다")
-        if not re.fullmatch(r"[A-Za-z0-9._:-]+/[A-Za-z0-9._:-]+", a.provider_model):
+        if not MODEL_RE.fullmatch(a.provider_model):
             raise UsageError(f"--provider-model 형식: <provider>/<모델>, 영문·숫자·._:-와 / 하나: {a.provider_model}")
     elif not (a.gateway_url and a.model):
         raise UsageError("--gateway-url과 --model이 필요하다(또는 --provider-model)")
@@ -407,6 +433,11 @@ def cmd_install(a) -> int:
             raise UsageError(f"--gateway-url 형식: http(s)://…: {a.gateway_url}")
         if not re.fullmatch(r"[A-Za-z0-9._:/-]+", a.model):
             raise UsageError(f"--model 형식: 영문·숫자·._:/- : {a.model}")
+    if a.explore_model is not None:
+        if not MODEL_RE.fullmatch(a.explore_model):
+            raise UsageError(f"--explore-model 형식: <provider>/<모델>, 영문·숫자·._:-와 / 하나: {a.explore_model}")
+        if a.provider_model and a.explore_model.startswith("gw/"):
+            raise UsageError("--provider-model 설치에는 gw provider가 없다 — --explore-model은 내장 provider의 <provider>/<모델>로 준다")
     values = {"@@PLUGIN_ROOT@@": plugin, "@@WORK_ROOT@@": work, "@@PLUGIN_ROOT_REL@@": _rel(plugin),
               "@@WORK_ROOT_REL@@": _rel(work), "@@GATEWAY_BASE_URL@@": a.gateway_url or "",
               "@@MODEL_ID@@": a.provider_model or a.model}
@@ -414,7 +445,8 @@ def cmd_install(a) -> int:
     bad = jira_read_problems(jira_read)
     if bad:
         raise UsageError("; ".join(bad))
-    files = install_files(dest, values, dbs, read_roots(plugin), jira_read, a.allow_publish, a.provider_model)
+    files = install_files(dest, values, dbs, read_roots(plugin), jira_read, a.allow_publish, a.provider_model,
+                          a.explore_model)
     differ = [str(p) for p, text in files.items() if p.exists() and p.read_text(encoding="utf-8") != text]
     if differ and not a.force:
         raise UsageError(f"이미 있는 파일과 다르다(--force로 덮어쓴다): {differ}")
@@ -426,6 +458,9 @@ def cmd_install(a) -> int:
     off = []
     if prev.get("publish") == "open" and not a.allow_publish:
         off.append("이전 설치는 게시가 열려 있었다 — 이번에는 닫혔다. 유지하려면 --allow-publish를 다시 준다")
+    if prev.get("explore_model") and not a.explore_model:
+        off.append(f"이전 설치의 탐색 분석 모델 {prev['explore_model']}가 이번에는 빠졌다(세션 모델을 쓴다) — 유지하려면 "
+                   f"--explore-model {prev['explore_model']}를 다시 준다")
     old = prev.get("jira_read_tools")
     gone = [t for t in old if isinstance(t, str) and t not in jira_read] if isinstance(old, list) else []
     if gone:
@@ -438,7 +473,8 @@ def cmd_install(a) -> int:
                       "next": f"opencode/bin/tt-oc --project {dest} doctor"}, ensure_ascii=False))
     for line in off:                # stdout은 JSON 한 줄 그대로
         print(f"[gen_opencode] 꺼짐: {line}", file=sys.stderr)
-    print(f"[gen_opencode] 지금 상태: 게시 {'열림' if a.allow_publish else '닫힘'} · Jira 읽기 도구 {len(jira_read)}개",
+    print(f"[gen_opencode] 지금 상태: 게시 {'열림' if a.allow_publish else '닫힘'} · Jira 읽기 도구 {len(jira_read)}개 · "
+          f"탐색 분석 모델 {a.explore_model or '세션 모델'}",
           file=sys.stderr)
     return 0
 
@@ -463,6 +499,8 @@ def main(argv=None) -> int:
     p.add_argument("--allow-publish", action="store_true",
                    help="tt-oc.json에 \"publish\": \"open\"을 쓴다(tt-oc publish — 사람이 터미널에서 승인하는 게시). 주지 않으면 닫힘. "
                         "이미 설치한 곳을 열거나 닫으려면 같은 install을 --force로 다시 한다")
+    p.add_argument("--explore-model",
+                   help="탐색 분석 하위 에이전트(tt-explore)만 쓸 <provider>/<모델>. 주지 않으면 세션 모델. gw/<모델>이면 gw provider에 더한다")
     p.add_argument("--force", action="store_true")
     try:
         a = ap.parse_args(argv)
