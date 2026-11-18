@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""자격 검사(단계 5-1, `common/eligibility.py`·`match_signatures.occurrences`): 규칙별 단위 시험 + 합성 6건(Y10) + 기준 줄 묶기.
+"""자격 검사(단계 5-1·5-2, `common/eligibility.py`·`match_signatures.occurrences`): 규칙별 단위 시험 + 합성 6건(Y10) + 기준 줄 묶기
++ 문제 파악 입력(problem.json 유형·단서, 입력 해시·stale·설정 스위치 — `triage.py run` 오프라인).
 
 규칙 동작 확인이다(정확도 수치 아님). Y10 로그와 기대는 생성기(`tests/helpers/make_accuracy_fixtures.py`)가 만든
 `tests/fixtures/accuracy/y10/`이고, 시드 DB로 `parse_logcat.py parse --full` → (기준 줄이면 `ipc --find`) → `match_signatures.py
@@ -345,3 +346,140 @@ def test_decision_accepted_cause_missing_from_candidates_is_held():
     d = driver._decision(cands, {"location": {"state": "confirmed", "source": "look_at", "kind": "point"}}, elig)
     assert (d["state"], d["reason"], d["selected"], d["check"]["why"]) == ("held", "ineligible", None, "cause_not_in_candidates")
     assert "cause_not_in_candidates" in issuepost.HELD_WHY
+
+
+# -- 문제 파악 입력(단계 5-2: problem.json 유형·단서) -------------------------------------------------------------
+
+D3 = {"types": ["DATA-003"], "not_in_db": False}
+
+
+def clue(ref: dict, **kw) -> dict:
+    return {**ref, "source": "comment", **kw}
+
+
+def test_problem_types_make_near_and_steps_file_range_eligible():
+    """§2.2: 근처·TC 파일 시각 구간은 문제 파악 유형이 있어야 붙는다 — 허용 유형만, 같은 줄 점은 유형으로 거르지 않는다."""
+    assert outcome(el.decide(EVENTS, [point(99, 150)], problem=D3)) == ("accepted", "anchored_top", "D1")
+    assert outcome(el.decide(EVENTS, [point(99, 150)], problem={"types": ["CALL-001"], "not_in_db": False})) == \
+        ("held", "symptom_not_found", "no_allowed_event_near")
+    assert outcome(el.decide(EVENTS, [point(99, 600)], problem=D3)) == ("held", "symptom_not_found", "no_allowed_event_near")
+    assert outcome(el.decide(EVENTS, [rng("steps_file", 150, 210)], problem=D3)) == ("accepted", "anchored_top", "D1")
+    # 구간 안 NETWORK-001(N3)은 허용 유형이 아니라 빠진다 — 거르지 않으면 원인이 둘(multiple_events)
+    assert outcome(el.decide(EVENTS, [rng("log_marker", 100, 210)])) == ("held", "ambiguous", "multiple_events")
+    assert outcome(el.decide(EVENTS, [rng("log_marker", 100, 210)], problem=D3)) == ("accepted", "anchored_top", "D1")
+    assert outcome(el.decide(EVENTS, [point(16, 120)], problem=D3)) == ("accepted", "anchored_top", "N3")   # 같은 줄
+    # 유형이 비면(DB에 없는 유형만이라 매처가 비운 경우) 5-1과 같다
+    assert outcome(el.decide(EVENTS, [point(99, 150)], problem={"types": [], "not_in_db": False})) == \
+        ("held", "ineligible", "near_without_symptom")
+
+
+def test_problem_not_in_db_holds_and_no_reference_stays():
+    """`not_in_db`면 기준이 있어도 다른 사건의 원인으로 대신하지 않는다. 기준이 전혀 없으면 유형이 있어도 no_reference."""
+    nid = {"types": [], "not_in_db": True}
+    assert outcome(el.decide(EVENTS, [point(16, 120)], problem=nid)) == ("held", "symptom_not_found", "not_in_db")
+    assert outcome(el.decide(EVENTS, [], problem=D3)) == ("held", "no_reference", None)
+
+
+def test_clue_ipc_point_and_comment_adopt_switch():
+    """단서 ipc = CP 점(2초 안 허용 유형 첫 사건). 코멘트 단서만이면 comment_adopt(사용자 결정 Y1, 기본 끔)일 때만 채택한다."""
+    ipc = clue(point(4, 199, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 0xE3}, phone=None))
+    held = el.decide(EVENTS, [ipc], problem=D3)
+    assert outcome(held) == ("held", "ineligible", "comment_unconfirmed")
+    assert [e["type"] for e in held["events"]] == ["DATA-003"]          # 붙은 사건은 싣는다
+    assert outcome(el.decide(EVENTS, [ipc], problem=D3, comment_adopt=True)) == ("accepted", "anchored_top", "D1")
+    assert outcome(el.decide(EVENTS, [ipc], problem={"types": ["CALL-001"], "not_in_db": False}, comment_adopt=True)) == \
+        ("held", "symptom_not_found", "typeless_failure_within_link")     # 2초 안 사건이 허용 유형이 아님
+
+
+def test_clue_ipc_name_multiple_places_and_log_line_near():
+    """ipc_name 본문 일치가 여러 곳이면 보류(locations). log_line은 같은 줄이면 점, 아니면 유형이 있을 때 근처."""
+    assert outcome(el.decide(EVENTS, [clue(point(4, 199), places=3)], problem=D3, comment_adopt=True)) == \
+        ("held", "ambiguous", "locations")
+    assert outcome(el.decide(EVENTS, [clue(point(99, 150))], problem=D3, comment_adopt=True)) == ("accepted", "anchored_top", "D1")
+    assert outcome(el.decide(EVENTS, [clue(point(99, 150))], comment_adopt=True)) == ("held", "ineligible", "near_without_symptom")
+    assert outcome(el.decide(EVENTS, [clue(point(16, 120))], comment_adopt=True)) == ("accepted", "anchored_top", "N3")
+
+
+def test_explicit_reference_wins_and_conflicting_clue_is_ambiguous():
+    """명시 기준(look_at·마커)이 정한다. 단서가 다른 사건을 가리키면 ambiguous/sources, 같은 사건(구간 안 포함)이면 그대로."""
+    assert outcome(el.decide(EVENTS, [point(16, 120), clue(point(30, 200))], problem=D3)) == ("held", "ambiguous", "sources")
+    assert outcome(el.decide(EVENTS, [point(16, 120), clue(point(16, 120))])) == ("accepted", "anchored_top", "N3")
+    assert outcome(el.decide(EVENTS, [rng("log_marker", 150, 210), clue(point(30, 200))])) == ("accepted", "anchored_top", "D1")
+    # 명시 기준이 보류면 단서가 사건을 찾아도 대신하지 않는다
+    assert outcome(el.decide(EVENTS, [point(5, 0.62), clue(point(30, 200))], comment_adopt=True)) == \
+        ("held", "symptom_not_found", "same_line_typeless")
+    # 명시 기준이 채택이고 단서가 여러 곳(보류)이면 명시 기준 그대로
+    assert outcome(el.decide(EVENTS, [point(16, 120), clue(point(30, 200), places=2)])) == ("accepted", "anchored_top", "N3")
+
+
+def test_reference_input_keeps_db_types_only():
+    """매처가 문제 파악 유형 중 스냅샷 DB에 있는 것만 남긴다(값은 문자열 비교만). 기준 하나(5-1 모양)도 그대로 읽는다."""
+    import match_signatures as ms
+
+    class Db:
+        types = [type("T", (), {"id": "DATA-003"})()]
+    refs, problem, adopt = ms._reference_input({"refs": [point(16, 120), {"kind": "bad"}],
+                                                "problem": {"types": ["DATA-003", "NOPE-9", 3], "not_in_db": False},
+                                                "comment_adopt": True}, Db())
+    assert (len(refs), problem, adopt) == (1, {"types": ["DATA-003"], "not_in_db": False}, True)
+    assert ms._reference_input(point(16, 120), Db()) == ([point(16, 120)], None, False)
+    assert ms._reference_input({"refs": [], "comment_adopt": "yes"}, Db()) == ([], None, False)
+
+
+# triage.py run(오프라인)으로 problem.json 읽기: 같은 입력 해시일 때만, stale 단서 안 씀, 로그에 없는 단서는 버리고 기록, 설정 스위치
+def _problem_run(db: Path, name: str, log: str, clues: list, sha: str | None = "same", look_at: str | None = None,
+                 root: Path | None = None) -> tuple[dict, Path]:
+    import hashlib
+    out = tmp("tt-elig-prob-") / name
+    out.mkdir(parents=True)
+    meta = out.parent / f"{name}.meta.json"
+    meta.write_text(json.dumps({"key": "CLUEPOS-1", "summary": "데이터 연결 실패"}), encoding="utf-8")
+    doc = {"schema_version": 1, "key": "CLUEPOS-1", "origin": "정답 입력",
+           "source_sha256": hashlib.sha256(meta.read_bytes()).hexdigest() if sha == "same" else sha,
+           "symptom": {"text": "", "types": ["DATA-003"], "not_in_db": False},
+           "hypotheses": ["무시해야 할 가설"], "clues": clues}
+    (out / "problem.json").write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    args = ["run", "CLUEPOS-1", "--offline-db", db, "--out", out, "--logs", maf.OUT / log, "--issue-meta", meta,
+            "--tz", "Asia/Seoul", "--year", "2026", *(["--look-at", look_at] if look_at else [])]
+    return run_json("triage.py", args, root=root), out
+
+
+IPC_CLUE = {"comment": 2, "kind": "ipc", "name": "VIPC_SETUP_DATA", "token": "0x0e3", "quote": "VIPC_SETUP_DATA (token=0x0e3)",
+            "side": "cp", "stale": False}
+
+
+def test_run_reads_problem_only_for_same_input_and_fresh_clues(seed_db):
+    a, out = _problem_run(seed_db, "ok", "cluepos.log", [IPC_CLUE])
+    d = a["decision"]
+    assert (d["state"], d["reason"], d["check"]["why"]) == ("held", "ineligible", "comment_unconfirmed")
+    assert d["location"] == {"state": "found", "source": "comment", "kind": "point"}       # 확정(confirmed)이 아니다
+    bundle = json.loads((out / "reference.json").read_text(encoding="utf-8"))
+    assert bundle["refs"][0]["source"] == "comment" and bundle["comment_adopt"] is False
+    assert "hypotheses" not in bundle and "무시해야 할 가설" not in json.dumps(bundle, ensure_ascii=False)
+
+    a, _ = _problem_run(seed_db, "other", "cluepos.log", [IPC_CLUE], sha="0" * 64)
+    assert a["decision"]["reason"] == "no_reference"
+    assert any("problem.json" in w and "쓰지 않았다" in w for w in a.get("warnings") or []), a.get("warnings")
+
+    a, _ = _problem_run(seed_db, "stale", "cluepos.log", [{**IPC_CLUE, "stale": True}])
+    assert a["decision"]["reason"] == "no_reference"                                     # 이전 회차 단서는 안 쓴다(H03)
+
+    a, out = _problem_run(seed_db, "missing", "cluepos.log", [{**IPC_CLUE, "token": "0x0ff"}])
+    assert a["decision"]["reason"] == "no_reference"
+    assert "코멘트 2번 단서, 로그에서 못 찾음" in (a.get("warnings") or []), a.get("warnings")
+    assert json.loads((out / "eligibility.json").read_text(encoding="utf-8"))["reference"]["dropped"] == \
+        [{"comment": 2, "kind": "ipc", "why": "로그에서 못 찾음"}]
+
+
+def test_run_config_switches(seed_db):
+    """`eligibility.comment_adopt: true`면 코멘트 단서 지점에서 채택, `use_problem_types: false`면 유형을 안 써 근처는 5-1처럼 보류."""
+    a, out = _problem_run(seed_db, "adopt", "cluepos.log", [IPC_CLUE], root=plugin_root(eligibility={"comment_adopt": True}))
+    d = a["decision"]
+    assert (d["state"], d["selected"]["cause"], d["location"]["source"]) == ("accepted", "DATA-003-01", "comment")
+    assert "실패 지점: Jira 코멘트·단서 위치(확정 아님)" in (out / "report.md").read_text(encoding="utf-8")
+    near = "ConnectingState: setupData: accessNetwork=EUTRAN, isSatellite=false"
+    a, _ = _problem_run(seed_db, "near", "nearpos.log", [], look_at=near)
+    assert (a["decision"]["state"], a["decision"]["selected"]["cause"]) == ("accepted", "DATA-003-01")
+    a, _ = _problem_run(seed_db, "notypes", "nearpos.log", [], look_at=near,
+                        root=plugin_root(eligibility={"use_problem_types": False}))
+    assert (a["decision"]["reason"], a["decision"]["check"]["why"]) == ("ineligible", "near_without_symptom")

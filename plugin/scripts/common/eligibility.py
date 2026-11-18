@@ -8,16 +8,22 @@
 기준(`reference`, `triage.py`가 `JOB/reference.json`에 쓴다):
 - `{kind: line, source: look_at, places, lines[{line_ref, ts, phone, ipc?: {dir, name, token}, ril?: {serial, pid, paired_ts}}]}`
 - `{kind: range, source: log_marker|steps_file|step_order, places, start, fail}`
+- 문제 파악 단서(단계 5-2, `triage.py`가 같은 JOB `problem.json`의 단서를 로그에서 찾은 곳): 기준 줄과 같은 모양에 `source: comment`.
 
 기준 종류는 "기준 줄 자체가 실패 사건인가"로 나눈다:
 - 점(같은 줄): 기준 줄이 사건의 증상 줄·붙은 원인 줄·그 충족 구간에서 증상·붙은 원인 조건에 맞는 줄(§8-1) 중 하나이거나
   같은 RIL 요청(같은 pid·슬롯·serial + 짝 시각) → 그 사건.
 - 점(CP token): 기준이 벤더 IPC 줄 → 같은 요청의 RSP(없으면 REQ) 뒤 `link_ms`(기본 `DEFAULT_LINK_MS` 2초) 안 같은 슬롯(또는 모름)
   첫 유형 사건. 유형 없는 실패만 있으면 symptom_not_found, 없으면 ineligible/no_event_at_reference.
-- 근처(그 밖의 AP 줄): 문제 파악 유형이 있어야 붙인다 — 5-1은 problem.json을 읽지 않으므로 늘 ineligible/near_without_symptom.
-- 구간: 로그 FAIL 마커(START, 없으면 FAIL−120초 ~ FAIL) 안 유형 사건 전부 — 채택 원인이 모두 같을 때만. steps-file 시각 구간은
-  문제 파악 유형이 있어야(5-1은 ineligible/range_without_symptom), 스텝 순서·START만은 채택 안 함(ineligible/range_end_unknown).
+- 근처(그 밖의 AP 줄): 문제 파악 유형(`allowed`)이 있을 때만 기준 시각부터 `NEAR_SEC` 안 허용 유형 첫 사건(없으면
+  symptom_not_found/no_allowed_event_near), 유형이 없으면 ineligible/near_without_symptom.
+- 구간: 로그 FAIL 마커(START, 없으면 FAIL−120초 ~ FAIL) 안 유형 사건(허용 유형이 있으면 그 유형만) 전부 — 채택 원인이 모두 같을
+  때만. steps-file 시각 구간은 문제 파악 유형이 있어야(없으면 ineligible/range_without_symptom), 스텝 순서·START만은 채택 안 함
+  (ineligible/range_end_unknown). 같은 줄 점은 유형으로 거르지 않는다.
 - 여러 곳(`places` > 1) ambiguous/locations, 슬롯 둘 이상 ambiguous/slots, 출처끼리 다른 사건 ambiguous/sources.
+- 출처: 명시 기준(look_at·마커·steps-file)이 있으면 그것이 정한다 — 단서는 명시 기준과 다른 사건을 가리킬 때만 ambiguous/sources로
+  만든다. 단서만 있으면 단서가 정하되, `comment_adopt`가 거짓(기본)이면 붙은 사건을 싣고 ineligible/comment_unconfirmed로 보류한다.
+- 문제 파악이 "DB에 없는 증상"(`not_in_db`)이면 기준이 있어도 symptom_not_found/not_in_db(다른 사건의 원인으로 대신하지 않는다).
 사유 우선순위: no_candidate → no_reference → symptom_not_found → ambiguous → ineligible → cause_unjudged·cause_unconfirmed → accepted.
 """
 
@@ -28,6 +34,7 @@ from datetime import datetime, timedelta
 
 ERROR_EVENT_RE = re.compile(r"(error|timeout|no_response|reject|fail|denied|lost)", re.IGNORECASE)   # 파생 오류 이벤트 이름
 DEFAULT_LINK_MS = 2000      # = platforms.base.DEFAULT_LINK_MS (CP 점 → 사건 붙임 창)
+NEAR_SEC = 300              # 근처 기준 → 허용 유형 첫 사건 창(= lookat.POST_SEC, 기준 줄 뒤 분석 구간)
 RANGE_PRE_SEC = 120         # 로그 FAIL 마커에 START가 없을 때 구간 시작 = FAIL − 120초
 MERGE_SEC = 1.0             # 같은 유형·슬롯 사건이 이만큼 안이면 한 사건(유형의 다른 시그니처가 같은 실패를 따로 잡은 것, §8-4)
 EVENTS_MAX = 3              # analysis.json `decision.events[]` 상한(전체는 JOB/eligibility.json)
@@ -113,8 +120,8 @@ def _same_ril(e: dict, rils: list[dict]) -> bool:
     return False
 
 
-def _attach_line(ref: dict, events: list[dict], link_ms: int) -> tuple:
-    """기준 줄(한 곳) → ('events', [사건], why) | ('held', reason, why)."""
+def _attach_line(ref: dict, events: list[dict], link_ms: int, allowed: set | None = None) -> tuple:
+    """기준 줄(한 곳) → ('events', [사건], why) | ('held', reason, why). `allowed` = 문제 파악 허용 유형(없으면 None)."""
     lines = ref.get("lines") or []
     ipc = [x for x in lines if x.get("ipc")]
     if ipc:     # CP 점: 같은 요청의 RSP(없으면 REQ) 뒤 link_ms 안 같은 슬롯(또는 모름) 실패 사건
@@ -122,7 +129,7 @@ def _attach_line(ref: dict, events: list[dict], link_ms: int) -> tuple:
         t0, slot = ts(base["ts"]), base.get("phone")
         win = [e for e in events if t0 <= e["at"] <= t0 + timedelta(milliseconds=link_ms)
                and (slot is None or e.get("phone") in (slot, None))]
-        typed = [e for e in win if e["type"]]
+        typed = [e for e in win if e["type"] and (allowed is None or e["type"] in allowed)]
         if typed:
             return "events", typed[:1], "cp_point"
         return ("held", "symptom_not_found", "typeless_failure_within_link") if win else \
@@ -130,46 +137,77 @@ def _attach_line(ref: dict, events: list[dict], link_ms: int) -> tuple:
     refs = {k for k in (ref_key(x.get("line_ref")) for x in lines) if k}
     rils = [{**x["ril"], "phone": x.get("phone"), "ts": x["ts"]} for x in lines if x.get("ril")]
     # 근거 줄(증상·원인)이 기준 줄인 사건을 먼저, 없을 때만 창 안 조건 줄(§8-1) — 앞 사건 창이 뒤 사건 증상 줄을 덮어도 뒤 사건으로
-    same = [e for e in events if (e["lines"] | e.get("cause_lines", set())) & refs or (rils and _same_ril(e, rils))]         or [e for e in events if e.get("cond_lines", set()) & refs]
-    if same:    # 점(같은 줄·같은 RIL 요청)
+    same = [e for e in events if (e["lines"] | e.get("cause_lines", set())) & refs or (rils and _same_ril(e, rils))] \
+        or [e for e in events if e.get("cond_lines", set()) & refs]
+    if same:    # 점(같은 줄·같은 RIL 요청) — 유형으로 거르지 않는다(사용자가 그 줄을 가리켰다)
         typed = [e for e in same if e["type"]]
         return ("events", typed[:1], "same_line") if typed else ("held", "symptom_not_found", "same_line_typeless")
-    return "held", "ineligible", "near_without_symptom"     # 근처: 문제 파악 유형이 있어야 붙인다(5-2)
+    if allowed is None:
+        return "held", "ineligible", "near_without_symptom"     # 근처: 문제 파악 유형이 있어야 붙인다
+    t0 = min(ts(x["ts"]) for x in lines) if lines else None
+    near = [e for e in events if t0 and e["type"] in allowed and t0 <= e["at"] <= t0 + timedelta(seconds=NEAR_SEC)]
+    return ("events", near[:1], "near") if near else ("held", "symptom_not_found", "no_allowed_event_near")
 
 
-def _attach_range(ref: dict, events: list[dict]) -> tuple:
+def _attach_range(ref: dict, events: list[dict], allowed: set | None = None) -> tuple:
     if ref["source"] == "step_order" or not ref.get("fail"):
         return "held", "ineligible", "range_end_unknown"
-    if ref["source"] == "steps_file":
-        return "held", "ineligible", "range_without_symptom"     # TC 파일 시각 구간: 문제 파악 유형이 있어야(5-2)
+    if ref["source"] == "steps_file" and allowed is None:
+        return "held", "ineligible", "range_without_symptom"     # TC 파일 시각 구간: 문제 파악 유형이 있어야
     fail = ts(ref["fail"])
     lo = ts(ref["start"]) if ref.get("start") else fail - timedelta(seconds=RANGE_PRE_SEC)
-    inside = [e for e in events if e["type"] and lo <= e["at"] <= fail]
+    inside = [e for e in events if e["type"] and (allowed is None or e["type"] in allowed) and lo <= e["at"] <= fail]
     return ("events", inside, "range") if inside else ("held", "symptom_not_found", "no_event_in_range")
 
 
-def decide(events: list[dict], refs: list[dict], link_ms: int = DEFAULT_LINK_MS) -> dict:
-    """사건 목록 + 기준(0개 이상) → `{state, reason, why, cause, events(붙은 사건)}`. 후보 없음(no_candidate)은 부른 쪽이 먼저 본다."""
-    if not refs:
-        return _held("no_reference", None)
-    outcomes = []
-    for ref in refs:
-        slots = {x.get("phone") for x in ref.get("lines") or []} - {None}
-        if (ref.get("places") or 1) > 1:
-            outcomes.append(("held", "ambiguous", "locations"))
-        elif len(slots) > 1:
-            outcomes.append(("held", "ambiguous", "slots"))
-        elif ref["kind"] == "range":
-            outcomes.append(_attach_range(ref, events))
-        else:
-            outcomes.append(_attach_line(ref, events, ref.get("link_ms") or link_ms))
+def _outcome(ref: dict, events: list[dict], link_ms: int, allowed: set | None) -> tuple:
+    slots = {x.get("phone") for x in ref.get("lines") or []} - {None}
+    if (ref.get("places") or 1) > 1:
+        return "held", "ambiguous", "locations"
+    if len(slots) > 1:
+        return "held", "ambiguous", "slots"
+    if ref["kind"] == "range":
+        return _attach_range(ref, events, allowed)
+    return _attach_line(ref, events, ref.get("link_ms") or link_ms, allowed)
+
+
+def _pick(outcomes: list[tuple]) -> dict | tuple:
+    """같은 출처 무리의 결과 → 사건이 붙은 결과(여럿이면 같은 사건일 때만) | 보류 판정(사건이 없으면 가장 앞선 사유)."""
     got = [o for o in outcomes if o[0] == "events"]
     if len({tuple(id(e) for e in o[1]) for o in got}) > 1:
         return _held("ambiguous", "sources", [e for o in got for e in o[1]])
     if got:
-        return _adopt(got[0][1], got[0][2])
+        return got[0]
     best = min(outcomes, key=lambda o: _HELD_ORDER.index(o[1]))
     return _held(best[1], best[2])
+
+
+def decide(events: list[dict], refs: list[dict], link_ms: int = DEFAULT_LINK_MS, problem: dict | None = None,
+           comment_adopt: bool = False) -> dict:
+    """사건 목록 + 기준(0개 이상, 단서는 `source: comment`) + 문제 파악(`{types, not_in_db}` — types는 부른 쪽이 DB에 있는 것만
+    남긴다, 없으면 None) → `{state, reason, why, cause, events(붙은 사건)}`. 후보 없음(no_candidate)은 부른 쪽이 먼저 본다."""
+    if not refs:
+        return _held("no_reference", None)
+    if problem and problem.get("not_in_db"):
+        return _held("symptom_not_found", "not_in_db")
+    allowed = set(problem["types"]) if problem and problem.get("types") else None
+    explicit = [_outcome(r, events, link_ms, allowed) for r in refs if r.get("source") != "comment"]
+    clues = [_outcome(r, events, link_ms, allowed) for r in refs if r.get("source") == "comment"]
+    if explicit:    # 명시 기준이 정한다 — 단서는 다른 사건을 가리킬 때만 모호로
+        got = _pick(explicit)
+        if isinstance(got, dict):
+            return got
+        mine = {id(e) for e in got[1]}
+        other = [e for o in clues if o[0] == "events" for e in o[1] if id(e) not in mine]
+        if other:
+            return _held("ambiguous", "sources", got[1] + other)
+        return _adopt(got[1], got[2])
+    got = _pick(clues)
+    if isinstance(got, dict):
+        return got
+    if not comment_adopt:     # 코멘트 지점 채택은 사용자 결정 전(Y1) — 붙은 사건은 싣고 보류
+        return _held("ineligible", "comment_unconfirmed", got[1])
+    return _adopt(got[1], got[2])
 
 
 # -- 출력 ---------------------------------------------------------------------------------------------------

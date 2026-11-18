@@ -76,6 +76,20 @@ def test_stage5_holds_without_reference_and_adopts_only_eligible():
         assert s["held_reasons"].get("no_reference"), s
 
 
+def test_stage5_problem_input_answer_upper_bound():
+    """단계 5-2 완료 기준(정답 입력 problem.json — 라벨에서 손으로 쓴 것, "정답 입력일 때의 상한"): look_at+problem은 틀린 채택
+    0·look_at의 맞는 채택 그대로 + NEARPOS(AP 줄 인용 → 문제 파악 유형으로 근처 사건). problem(기준 줄 없음)은 코멘트 단서만이라
+    `eligibility.comment_adopt` 기본(끔)에서 채택 0 — TOKPOS·TOKONLYPOS·CLUEPOS는 ineligible(comment_unconfirmed)로 보류."""
+    now = _current()
+    runs = {c: [r for r in now["runs"] if r["condition"] == c] for c in ("look_at+problem", "problem")}
+    adopted = [r for r in runs["look_at+problem"] if r["adopted"]]
+    assert all(r["adopted"] == r["expect"] for r in adopted), adopted
+    assert sorted(r["key"] for r in adopted) == sorted(STAGE5_CORRECT + ["NEARPOS-1"])
+    assert [r["key"] for r in runs["problem"] if r["adopted"]] == []
+    s = now["by_condition"]["problem"]
+    assert (s["accepted_wrong"], s["held_reasons"].get("ineligible")) == (0, 3), s
+
+
 if __name__ == "__main__" and "--update" in sys.argv:
     try:
         BASELINE.write_text(json.dumps(current(), ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")

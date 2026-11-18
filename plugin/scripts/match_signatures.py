@@ -443,7 +443,8 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
         if not regress:     # 자격 검사: --top으로 자르기 전 순위로(H18)
             rank = {c["cause"]: n for n, c in enumerate(candidates) if c["cause"]}
             occ = occurrences(events_doc, evaluator, db, compiled, rank)
-            elig = {**eligibility.summary(eligibility.decide(occ, [reference] if reference else []), occ),
+            refs, problem, adopt = _reference_input(reference, db)
+            elig = {**eligibility.summary(eligibility.decide(occ, refs, problem=problem, comment_adopt=adopt), occ),
                     "reference": reference}
     finally:
         if own:
@@ -493,6 +494,26 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
 
 
 # -- 자격 검사 사건 목록 (단계 5, common/eligibility.py) ---------------------------------------------------------
+
+
+def _reference_input(reference: dict | None, db) -> tuple[list[dict], dict | None, bool]:
+    """`--reference` → (기준 목록, 문제 파악 `{types, not_in_db}`|None, comment_adopt). 파일은 기준 하나(`kind` 있음, 5-1 모양)나
+    묶음 `{refs[], problem?, comment_adopt?}`(triage.py, 단계 5-2). 문제 파악 유형은 스냅샷 DB에 있는 것만 남긴다 — 값은 문자열
+    비교에만 쓴다(정규식·경로로 쓰지 않는다)."""
+    if not reference:
+        return [], None, False
+    if "kind" in reference:
+        return [reference], None, False
+    refs = [r for r in reference.get("refs") or [] if isinstance(r, dict) and r.get("kind") in ("line", "range")]
+    problem = reference.get("problem")
+    if isinstance(problem, dict):
+        known = {t.id for t in db.types}
+        problem = {"types": [t for t in problem.get("types") or [] if isinstance(t, str) and t in known],
+                   "not_in_db": problem.get("not_in_db") is True}
+    else:
+        problem = None
+    return refs, problem, reference.get("comment_adopt") is True
+
 
 
 def _at(res) -> datetime:
@@ -800,7 +821,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--regress", action="store_true")
     parser.add_argument("--no-feedback-weight", action="store_true")
     parser.add_argument("--reference", metavar="json", default=None,
-                        help="자격 검사 기준(triage.py가 쓴 JOB/reference.json). 없으면 eligibility는 no_reference")
+                        help="자격 검사 기준(triage.py가 쓴 JOB/reference.json — 기준 하나 또는 {refs, problem, comment_adopt}). 없으면 eligibility는 no_reference")
     parser.add_argument("--top", type=int, default=3,
                         help="후보 수. types·causes는 충족된 것만, pending은 N개 (0이면 전부)")
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")

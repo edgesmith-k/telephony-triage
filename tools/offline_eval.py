@@ -31,7 +31,10 @@
 줄을 `--look-at`으로, 시각·답 없이 — 단계 4가 자동으로 찾아야 할 것을 사람이 넣은 경우)은 항목 `look_at`이 있을 때. 이때
 `occurred_at`은 필수가 아니고 연도는 `year`(항목·문서) 또는 `occurred_at`에서 온다. 항목 필드 더: `look_at`(기준 줄), `fail_at`(정답
 실패 줄의 시각, 타임존 있는 ISO — 기준 위치 정답 판정), `fail_line`(그 줄 원문, 기록용 — 표·JSON에 내지 않는다), `first_analysis: true`
-(첫 분석 — 단서 없음 사례), 그 밖(`issue_file`·`pair`)은 읽지 않는 기록용. `conditions`가 없으면 예전처럼 항목마다 한 번
+(첫 분석 — 단서 없음 사례), 그 밖(`issue_file`·`pair`)은 읽지 않는 기록용. `problem`(시각 없음 + 문제 파악 결과)·`look_at+problem`(기준 줄 + 문제 파악 결과)은 항목 `problem`(라벨셋 기준 상대 경로의
+**정답 입력** problem.json — 사람이 라벨에서 손으로 쓴 것, 모델 출력 아님)이 있을 때(`look_at+problem`은 `look_at`도): 그 파일을 작업
+폴더 `problem.json`으로 두고 입력 해시(`source_sha256`)를 이번 `--issue-meta` 파일의 것으로 찍어 돈다(단계 5-2, "정답 입력일 때의
+상한"). `conditions`가 없으면 예전처럼 항목마다 한 번
 (`occurred_at` 필수) 돈다. 포털 선별과 다른 입력: 이 도구는 `--issue-meta`(실패 스텝은 메타의 `failed_step` 칸)로 주고, 포털은
 `--issue-file`(Jira 필드)·`--failed-step=`(CLI)·`--platform android`로 준다 — 단계 4에서 코멘트를 읽게 되면 `issue_file`로 도는
 조건이 따로 필요하다.
@@ -94,7 +97,8 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 UNRESOLVED = "unresolved"
-CONDITIONS = ("no_time", "time", "look_at")
+CONDITIONS = ("no_time", "time", "look_at", "problem", "look_at+problem")
+WITH_LOOK = ("look_at", "look_at+problem")
 ANCHORED = ("look_at", "log_marker", "steps_file", "step_order")    # 기준이 있는 `step_anchor.source`
 HEADER = ("규칙 동작 확인용 — 조합 로그는 시드 줄로 만든 표본 안 자료, 정확도 수치가 아님. 표본내 자동 제외(DB fixtures/ 자체·"
           "DB에 기록된 키)는 이 조합 로그를 가리지 못한다(로그가 DB 밖 사본이고 키가 DB에 없다).\n"
@@ -226,8 +230,12 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
         meta["sim_slot"] = str(item["sim_slot"])
     meta_path = job / "issue_input.json"
     meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+    if condition in ("problem", "look_at+problem"):     # 정답 입력 problem.json — 이번 이슈 입력(메타 파일)의 해시를 찍는다
+        answer = json.loads((base / str(item["problem"])).read_text(encoding="utf-8"))
+        answer["source_sha256"] = hashlib.sha256(meta_path.read_bytes()).hexdigest()
+        (job / "problem.json").write_text(json.dumps(answer, ensure_ascii=False), encoding="utf-8")
     args = ["run", key, "--offline-db", str(db), "--out", str(job), "--logs", *logs, "--issue-meta", str(meta_path)]
-    if condition == "look_at":
+    if condition in WITH_LOOK:
         args += ["--look-at", str(item["look_at"])]
     if item.get("steps_file"):
         args += ["--steps-file", str((base / str(item["steps_file"])).resolve())]
@@ -293,7 +301,7 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
         result["anchor_ok"] = _same_instant(result["anchor"]["fail"], item["fail_at"])
         if result["anchor_ok"] is None:
             anchor_note = f"기준 위치 판정 없음(시각 해석 실패·타임존 없음: {result['anchor']['fail']} / {item['fail_at']})"
-    elif item.get("fail_at") and (condition == "look_at" or item.get("steps_file")):
+    elif item.get("fail_at") and (condition in WITH_LOOK or item.get("steps_file")):
         result["anchor_missed"] = True      # 기준을 요청했는데 기준 없이 돌았다(못 찾음)
     # 정답·미스를 단정하지 못하는 이유 [(오류 문구, 오탐 확정 때 경고 문구)]: 판정 불가 유형·원인(unjudged)과 관측 불완전
     # (observation). 둘 다 있으면 둘 다 기록한다
@@ -521,7 +529,8 @@ def main(argv: list[str] | None = None) -> int:
             meta["portal"] = {"path": str(Path(args.portal).resolve()),
                               "screener_sha256": hashlib.sha256(Path(screener.__file__).read_bytes()).hexdigest()}
         conds = doc.get("conditions")
-        has = {"no_time": lambda i: True, "time": lambda i: bool(i.get("occurred_at")), "look_at": lambda i: bool(i.get("look_at"))}
+        has = {"no_time": lambda i: True, "time": lambda i: bool(i.get("occurred_at")), "look_at": lambda i: bool(i.get("look_at")),
+               "problem": lambda i: bool(i.get("problem")), "look_at+problem": lambda i: bool(i.get("look_at") and i.get("problem"))}
         work = Path(tempfile.mkdtemp(prefix="tt-offline-eval-"))
         try:
             if conds:

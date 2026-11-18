@@ -241,6 +241,13 @@ explore:
 #   remote: https://<GHE 호스트>/<owner>/<repo>.git   # TODO(SITE:S33) 주소·partial clone 지원·사용자 PC git 버전(≥2.25)
 #   base_branch: main
 
+# 자격 검사(단계 5-2): 문제 파악 결과(JOB/problem.json)를 원인 채택 판정에 어떻게 쓸지 (02-config.md). 사용자 config가 덮는다.
+eligibility:
+  comment_adopt: false        # 기준 줄·마커 없이 코멘트 단서로만 찾은 실패 지점에서 원인을 채택할지. false면 그 사건을 싣고
+                              # 원인 보류(ineligible/comment_unconfirmed). TODO(사용자 결정 Y1) 정하면 바꾼다
+  use_problem_types: true     # 문제 파악의 증상 유형(symptom.types·not_in_db)으로 근처·TC 파일 구간·IPC 점의 사건을 거를지.
+                              # 사내 모델이 유형을 자주 틀리면 false — 그때는 5-1처럼 근처·TC 파일 구간은 보류
+
 # 분석 환경 출처 기록(module-skill.json·check-output.json·이슈 DB 커밋 꼬리말의 label). 선택, 이 파일에서만 읽는다.
 # runtime: {label: <사내 실행 환경 이름>}   # TODO(SITE:S35) 출처 기록용(선택) — 영숫자·._ +-, 40자 이하
 
