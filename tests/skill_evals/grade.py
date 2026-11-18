@@ -3567,7 +3567,7 @@ def _dry_clean(ctx, job: str):
 
 
 # --- 문제 파악(배치 PB, 분석 정확도 단계 2b, analyze --problem-only) --------------------------------------------------
-PB_EVALS = set(range(87, 111))     # PB 87~102·104·109(개발용) + PBH 103·105~108·110(처음 보는 세트, 채점 같음)
+PB_EVALS = set(range(87, 113))     # PB 87~102·104·109(개발용) + PBH 103·105~108·110~112(처음 보는 세트, 채점 같음)
 _PROBLEM_CMD = re.compile(r"triage\.py[\"']?\s+(?:--\S+\s+\S+\s+)*problem\b")
 _CHECK_PROBLEM = re.compile(r"check-output\b.*--for[\s=]+problem\b")
 _READ_INPUT_BASH = re.compile(r"\b(?:cat|head|tail|sed|less|more|type)\b[^|;&]*problem-input\.md")

@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=병합 2(72 +1 뒤 병합해줘·75 +1 관문), H=모듈 스킬 레포·출력 검사 4(76~79), W9=setup 2(58 재점검 doctor 표·80 첫 사용자 setup), FL=성공 흐름 제안 3(81 새 원인 flow_step·82 set-flow-step·83 put-flow 문구 고치기), FT=적합성 확인·반복 금지 3(84~86: 84 확신 일치 짧은 판단·85 부적합 보류·86 재실행 prior), PB=문제 파악 18(87~102·104·109: --problem-only, 시드 DB, 기대값 `problem_expect`를 grade.py checks_pb가 problem.json과 대조 — 첫 유형·허용 밖 유형/단서 실패·회차 세 칸. 98~102는 리뷰어가 줄거리·기대값을 정함), PBH=문제 파악 처음 보는 세트 6(103·105~108·110: 지시문 작성자가 보지 않은 글타래 — 104·109는 지시문을 고칠 때 보아 PB로 옮김, 채점은 PB와 같음 — 지시문을 고칠 때 열지 않는다). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=병합 2(72 +1 뒤 병합해줘·75 +1 관문), H=모듈 스킬 레포·출력 검사 4(76~79), W9=setup 2(58 재점검 doctor 표·80 첫 사용자 setup), FL=성공 흐름 제안 3(81 새 원인 flow_step·82 set-flow-step·83 put-flow 문구 고치기), FT=적합성 확인·반복 금지 3(84~86: 84 확신 일치 짧은 판단·85 부적합 보류·86 재실행 prior), PB=문제 파악 18(87~102·104·109: --problem-only, 시드 DB, 기대값 `problem_expect`를 grade.py checks_pb가 problem.json과 대조 — 첫 유형·허용 밖 유형/단서 실패·회차 세 칸. 98~102는 리뷰어가 줄거리·기대값을 정함), PBH=문제 파악 처음 보는 세트 8(103·105~108·110~112: 지시문 작성자가 보지 않은 글타래 — 104·109는 지시문을 고칠 때 보아 PB로 옮김, 채점은 PB와 같음 — 지시문을 고칠 때 열지 않는다). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -4852,6 +4852,148 @@
         ],
         "absent_tokens": [
           "0x412"
+        ]
+      },
+      "files": []
+    },
+    {
+      "id": 111,
+      "name": "holdout-cs-fallback-three-rounds",
+      "batch": "PBH",
+      "design": "문제 파악 처음 보는 세트(PBH, analyze --problem-only). 지시문을 고칠 때 열지 않는다 — 열고 고쳤으면 이 사례는 PB로 옮기고 새 PBH를 만든다. 재는 것: 재시험 두 번(요청 낱말 없음, 회차 중간에 결과가 아닌 테스터 글), 마지막 결과에는 단서가 없고 앞 회차에만 실패 token, 다른 회차의 정상 token",
+      "prompt": "MOCK-9111 문제 파악만 해줘 --problem-only",
+      "setup": {
+        "db": "seed",
+        "jira": [
+          "MOCK-9111"
+        ]
+      },
+      "user_replies": [
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "problem_expect 참조(PBH — 지시문 작성 때 보지 않는다).",
+      "assertions": [
+        "문제 파악만 했다: triage.py problem → problem-input.md 읽기 → check-output --for problem으로 problem.json이 남았고 triage.py run은 부르지 않았다",
+        "symptom.types 첫 칸이 CALL-003이고 그 밖의 유형은 없다",
+        "first_analysis가 false다",
+        "rounds가 count 3·last_from_comment 12·same_failure yes다",
+        "clues가 4번 VIPC_NW_VOPS_IND token 0x6d2(ipc) side cp stale이다(더 있어도 되는 것: 2번 로그 줄 'GsmCdmaCallTracker'(log_line) side ap stale) — 그 밖의 단서는 없다(token 칸에 0x701이 없다)",
+        "검사에서 버린 단서(dropped)가 0이다"
+      ],
+      "problem_expect": {
+        "types": [
+          "CALL-003"
+        ],
+        "first_analysis": false,
+        "rounds": {
+          "count": [
+            3
+          ],
+          "last_from_comment": [
+            12
+          ],
+          "same_failure": [
+            "yes"
+          ]
+        },
+        "clues": [
+          {
+            "comment": 4,
+            "kind": "ipc",
+            "name": "VIPC_NW_VOPS_IND",
+            "token": "0x6d2",
+            "side": "cp",
+            "stale": true
+          }
+        ],
+        "allowed_clues": [
+          {
+            "comment": 2,
+            "kind": "log_line",
+            "contains": "GsmCdmaCallTracker",
+            "side": "ap",
+            "stale": true
+          }
+        ],
+        "absent_tokens": [
+          "0x701"
+        ]
+      },
+      "files": []
+    },
+    {
+      "id": 112,
+      "name": "holdout-refresh-roaming-module-chain",
+      "batch": "PBH",
+      "design": "문제 파악 처음 보는 세트(PBH, analyze --problem-only). 지시문을 고칠 때 열지 않는다 — 열고 고쳤으면 이 사례는 PB로 옮기고 새 PBH를 만든다. 재는 것: AP 모듈 사이 여러 번 넘김(data→network→CP→SIM→data), 중간 결론이 뒤에서 뒤집힘, CP token 둘 중 문제를 알린 것 하나",
+      "prompt": "MOCK-9112 문제 파악만 해줘 --problem-only",
+      "setup": {
+        "db": "seed",
+        "jira": [
+          "MOCK-9112"
+        ]
+      },
+      "user_replies": [
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "problem_expect 참조(PBH — 지시문 작성 때 보지 않는다).",
+      "assertions": [
+        "문제 파악만 했다: triage.py problem → problem-input.md 읽기 → check-output --for problem으로 problem.json이 남았고 triage.py run은 부르지 않았다",
+        "symptom.types 첫 칸이 DATA-001이고 그 밖의 유형은 없다",
+        "first_analysis가 false다",
+        "rounds가 count 1·last_from_comment null 또는 1·same_failure unknown이다",
+        "clues가 2번 로그 줄 'ROAMING_DISABLED'(log_line) side ap, 3번 로그 줄 'roaming=true'(log_line) side ap, 4번 VIPC_NW_REG_IND token 0x2b9(ipc) side cp이다 — 그 밖의 단서는 없다(token 칸에 0x2b4이 없다)",
+        "검사에서 버린 단서(dropped)가 0이다",
+        "칸 값: modules에 data·network·sim이 모두 든다 (약한 행 — 낱말 모으기·고정 문구로도 통과할 수 있다)"
+      ],
+      "problem_expect": {
+        "types": [
+          "DATA-001"
+        ],
+        "first_analysis": false,
+        "rounds": {
+          "count": [
+            1
+          ],
+          "last_from_comment": [
+            null,
+            1
+          ],
+          "same_failure": [
+            "unknown"
+          ]
+        },
+        "clues": [
+          {
+            "comment": 2,
+            "kind": "log_line",
+            "contains": "ROAMING_DISABLED",
+            "side": "ap",
+            "stale": false
+          },
+          {
+            "comment": 3,
+            "kind": "log_line",
+            "contains": "roaming=true",
+            "side": "ap",
+            "stale": false
+          },
+          {
+            "comment": 4,
+            "kind": "ipc",
+            "name": "VIPC_NW_REG_IND",
+            "token": "0x2b9",
+            "side": "cp",
+            "stale": false
+          }
+        ],
+        "absent_tokens": [
+          "0x2b4"
+        ],
+        "modules_all": [
+          "data",
+          "network",
+          "sim"
         ]
       },
       "files": []

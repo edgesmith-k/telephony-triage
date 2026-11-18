@@ -1,0 +1,43 @@
+# 모의 Jira 티켓(문제 파악 처음 보는 세트 PBH, eval 112, 합성). 지시문을 고칠 때 열지 않는다(README "PBH").
+key: MOCK-9112
+fields:
+  summary: TC 4.11 SIM refresh 후 데이터 Fail
+  description: |
+    TC 4.11 step 6 (SIM refresh 후 인터넷 접속) Fail.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: SIM}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261120
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments:
+  - author: mock.tester
+    created: "2026-11-26T15:40:00+0900"
+    body: step 6 Fail. 장비에서 SIM refresh(OTA) 보낸 뒤로 인터넷이 안 돼요. 아이콘은 LTE 그대로입니다. 로그 FTP
+  - author: mock.ap.data
+    created: "2026-11-26T17:00:00+0900"
+    body: |
+      로밍으로 판단해서 요청을 아예 안 내보냅니다.
+      11-26 15:20:41.882  2101  2101 D DataNetworkController: Setup data not allowed: reasons=[ROAMING_DISABLED]
+      단말은 국내 망인데요. network 쪽 등록 상태 봐주세요
+  - author: mock.ap.net
+    created: "2026-11-27T09:50:00+0900"
+    body: |
+      refresh 직후 2초 정도 roaming으로 올라왔다가 home으로 돌아옵니다.
+      11-26 15:20:40.977  1301  1301 D SST     : [0] Poll ServiceState done: dataRegState=0 roaming=true
+      저는 CP가 보낸 등록 값대로 반영만 해요. CP 쪽 확인 부탁
+  - author: mock.cp
+    created: "2026-11-27T13:30:00+0900"
+    body: refresh 처리 VIPC_SIM_REFRESH_IND (token=0x2b4) 는 정상이었고, 바로 뒤 VIPC_NW_REG_IND (token=0x2b9) 에 roaming 비트를 켜서 올렸습니다. refresh 동안 EHPLMN 목록이 비어 있어서 그렇게 판정했어요. SIM 파일 읽는 순서 쪽을 봐주세요
+  - author: mock.ap.sim
+    created: "2026-11-27T15:10:00+0900"
+    body: EHPLMN은 refresh 끝나고 바로 다시 읽어요. 비어 있는 구간은 1초도 안 됩니다. 읽는 순서보다는 그 짧은 구간에 판정을 내린 쪽 문제로 보여요
+  - author: mock.ap.data
+    created: "2026-11-27T16:40:00+0900"
+    body: 다시 보니 home으로 돌아온 뒤에도 계속 막혀 있어요. 잠깐 roaming이었어도 복귀하면 다시 평가해야 하는데 그걸 안 하네요. 이건 저희 쪽 재평가 누락입니다
+  - author: mock.pl
+    created: "2026-11-27T17:00:00+0900"
+    body: 그럼 AP data 수정이랑 CP 판정 둘 다 보는 걸로 하죠

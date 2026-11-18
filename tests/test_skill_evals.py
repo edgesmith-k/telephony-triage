@@ -1295,7 +1295,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 110     # PBH(103~110 문제 파악 처음 보는 세트) 뒤. PB(87~102 문제 파악)까지 102. 87~97까지 97. FT(84~86 적합성 확인·반복 금지)까지 86. FL(81~83 성공 흐름 제안)까지 83, 80 setup-first-time까지 80, H(76~79)까지 79, 그 전 75
+    assert len(by_id) == 112     # PBH 111·112 뒤. PBH(103~110 문제 파악 처음 보는 세트)까지 110. PB(87~102 문제 파악)까지 102. 87~97까지 97. FT(84~86 적합성 확인·반복 금지)까지 86. FL(81~83 성공 흐름 제안)까지 83, 80 setup-first-time까지 80, H(76~79)까지 79, 그 전 75
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 11), (62, 6)):
         e = by_id[eid]
@@ -1886,11 +1886,11 @@ def test_fit_check_evals_defined(tmp_path):
 
 
 def test_problem_evals_defined(tmp_path):
-    """eval 87~110(배치 PB 개발용 87~102·104·109, PBH 처음 보는 세트 103·105~108·110, 문제 파악 단계 2b): 정의 모양과, 실행 흔적이 없으면 통과로 세지 않는다."""
+    """eval 87~112(배치 PB 개발용 87~102·104·109, PBH 처음 보는 세트 103·105~108·110~112, 문제 파악 단계 2b): 정의 모양과, 실행 흔적이 없으면 통과로 세지 않는다."""
     by_id = {e["id"]: e for e in _entries()}
     for eid in sorted(grader.PB_EVALS):
         e = by_id[eid]
-        assert e["batch"] == ("PBH" if eid in (103, 105, 106, 107, 108, 110) else "PB") and e["setup"]["db"] == "seed" and e["setup"]["jira"] == [f"MOCK-{9000 + eid}"], eid
+        assert e["batch"] == ("PBH" if eid in (103, 105, 106, 107, 108, 110, 111, 112) else "PB") and e["setup"]["db"] == "seed" and e["setup"]["jira"] == [f"MOCK-{9000 + eid}"], eid
         assert "--problem-only" in e["prompt"] and (EVALS / "jira" / f"MOCK-{9000 + eid}.yaml").is_file(), eid
         for item in e["setup"].get("logs") or []:
             assert (REPO / item["src"]).is_file() and f"logs/{item['as']}" in e["prompt"], eid
@@ -1905,7 +1905,7 @@ def test_problem_evals_defined(tmp_path):
                 continue
             assert ok is False, eid
     comment = json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
-    assert "PB=문제 파악 18(87~102·104·109:" in comment and "PBH=문제 파악 처음 보는 세트 6(103·105~108·110:" in comment
+    assert "PB=문제 파악 18(87~102·104·109:" in comment and "PBH=문제 파악 처음 보는 세트 8(103·105~108·110~112:" in comment
 
 
 def test_problem_instructions_do_not_contain_eval_answers():
