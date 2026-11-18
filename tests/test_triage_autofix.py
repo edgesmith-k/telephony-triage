@@ -259,7 +259,8 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
     root = plugin_root(analyzers={"data": {"skill": "mock-data-analyzer", "when": "ask"}})
     done = _run(item, out, "--explore", "--look-at", LOOK, root=root)
     dec = done["decision"]
-    assert dec == {"state": "accepted", "reason": "anchored_top",
+    assert dec["check"]["why"] == "same_line" and dec["events"][0]["result"] == "adopted", dec     # 기준 줄 = 실패 사건 줄
+    assert {k: v for k, v in dec.items() if k in ("state", "reason", "selected", "location", "counter")} == {"state": "accepted", "reason": "anchored_top",
                    "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
                    "location": {"state": "confirmed", "source": "look_at", "kind": "near"}}, dec
     assert _report_line(out, "- 판단:") == ("- 판단: 원인 채택 — DATA-001-01 (실패 지점: 담당자가 지정한 기준 줄·확인됨, "
@@ -294,7 +295,9 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
     held = json.loads(analysis.read_text(encoding="utf-8"))
     now = analysis.stat()
     assert now.st_mtime_ns > before.st_mtime_ns and now.st_ino != before.st_ino
-    assert held["decision"] == {"state": "held", "reason": "fit_check", "selected": None, "location": dec["location"]}
+    # check-output은 상태·사유·selected·counter만 바꾼다 — 자격 검사 칸(check·events·events_total)은 그대로
+    assert held["decision"] == {**{k: v for k, v in dec.items() if k != "counter"}, "state": "held", "reason": "fit_check",
+                                "selected": None}
     assert held["candidates"] == done["candidates"]
     assert _report_line(out, "- 판단:") == ("- 판단: 원인 보류 — 탐색 분석 적합성 확인에서 1위가 증상과 맞지 않음. 아래 규칙 "
                                           "일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다")
@@ -409,7 +412,10 @@ def test_fit_hold_rewrites_report_obligation_and_reuse_keeps_decision(monkeypatc
     log = tmp("tt-dec-shown-") / "roaming.log"
     log.write_bytes((REPO / "tests/fixtures/logs/data-roaming-disabled.log").read_bytes())
     args = ["run", "MOCK-9005", "--dry-run", "--issue-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
-            "--logs", log, "--code", "skip", "--explore", "--look-at", "DataRoamingEnabled changed to false"]
+            "--logs", log, "--code", "skip", "--explore", "--look-at",
+            # 실패 줄을 시각째 붙여 넣는다 — 같은 줄이 두 번(10초 간격) 있어 시각으로 한 곳을 고른다(단계 5 §8-5)
+            "09-22 08:00:03.500  1234  1250 W DNC-1: Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, "
+            "Data disallowed reasons: ROAMING_DISABLED, candidate profile=null"]
     first = ws.json("triage.py", args)
     job = ws.job_dir("MOCK-9005")
     old = next(x for x in (job / "report.md").read_text(encoding="utf-8").splitlines() if x.startswith("- 판단:"))

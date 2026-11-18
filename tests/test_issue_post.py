@@ -456,8 +456,9 @@ def test_held_decision_reports_cause_held_without_resolution():
     ws = shared()
     analysis = json.loads(_SAVED["analysis.json"])
     top = analysis["candidates"][0]
-    assert analysis["decision"] == {"state": "held", "reason": "no_reference", "selected": None,
-                                    "location": {"state": "none", "source": None, "kind": None}}, analysis["decision"]
+    assert {k: analysis["decision"][k] for k in ("state", "reason", "selected", "location")} == {
+        "state": "held", "reason": "no_reference", "selected": None,
+        "location": {"state": "none", "source": None, "kind": None}}, analysis["decision"]
     render(ws, "--fill", fill(ws, FILL))
     body = post_md(ws)
     assert f"{top['type']} > 원인 보류 — 실패 지점을 잡지 못함(기준 줄·스텝 마커·TC 파일+시계 차 중 로그에서 찾은 것 없음)" in body
