@@ -64,7 +64,7 @@ HELD_WHY = {"near_without_symptom": "지정한 줄이 실패 줄이 아님 — �
             # 문제 파악 입력(단계 5-2)
             "not_in_db": "문제 파악에서 이 증상이 이슈 DB에 없다고 봄 — 다른 실패의 원인으로 대신하지 않음",
             "no_allowed_event_near": "지정한 줄 근처(5분 안)에 문제 파악 증상 종류의 실패가 없음",
-            "comment_unconfirmed": "코멘트 단서로만 찾은 실패 지점 — 이 지점의 원인 채택은 설정에서 켜야 함"}
+            "comment_unconfirmed": "코멘트에 적힌 위치라 원인 채택은 사람 확인 필요"}
 SECTION_MAX = {"PROBLEM": 600, "CAUSE": 1000, "NEXT ACTION": 800, "ANALYSIS": 1600}
 BODY_MAX = 4000
 

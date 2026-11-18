@@ -192,7 +192,8 @@ def decide(events: list[dict], refs: list[dict], link_ms: int = DEFAULT_LINK_MS,
         return _held("symptom_not_found", "not_in_db")
     allowed = set(problem["types"]) if problem and problem.get("types") else None
     explicit = [_outcome(r, events, link_ms, allowed) for r in refs if r.get("source") != "comment"]
-    clues = [_outcome(r, events, link_ms, allowed) for r in refs if r.get("source") == "comment"]
+    clue_refs = [r for r in refs if r.get("source") == "comment"]
+    clues = [_outcome(r, events, link_ms, allowed) for r in clue_refs]
     if explicit:    # 명시 기준이 정한다 — 단서는 다른 사건을 가리킬 때만 모호로
         got = _pick(explicit)
         if isinstance(got, dict):
@@ -205,9 +206,11 @@ def decide(events: list[dict], refs: list[dict], link_ms: int = DEFAULT_LINK_MS,
     got = _pick(clues)
     if isinstance(got, dict):
         return got
-    if not comment_adopt:     # 코멘트 지점 채택은 사용자 결정 전(Y1) — 붙은 사건은 싣고 보류
-        return _held("ineligible", "comment_unconfirmed", got[1])
-    return _adopt(got[1], got[2])
+    ref = clue_refs[next(i for i, o in enumerate(clues) if o is got)]
+    res = {**_adopt(got[1], got[2]), "via": {k: ref.get(k) for k in ("comment", "clue", "how", "places")}}
+    if res["state"] == "accepted" and not comment_adopt:     # 코멘트 지점 채택은 사용자 결정 전(Y1) — 붙은 사건은 싣고 보류
+        return {**_held("ineligible", "comment_unconfirmed", got[1]), "via": res["via"]}
+    return res     # 보류면 실제 사유(원인이 실패 뒤·안 나옴 미확인·구간 원인 다름 등)를 그대로
 
 
 # -- 출력 ---------------------------------------------------------------------------------------------------
@@ -238,7 +241,8 @@ def summary(dec: dict, events: list[dict]) -> dict:
     order = [e for e in dec["events"]] + [e for e in typed if id(e) not in attached]
     return {"state": dec["state"], "reason": dec["reason"], "why": dec["why"], "cause": dec["cause"],
             "checked": len(dec["events"]), "total": len(events), "events_total": len(typed),
-            "events": [event_row(e, attached, result) for e in order]}
+            "events": [event_row(e, attached, result) for e in order],
+            **({"via": dec["via"]} if dec.get("via") else {})}     # 사건이 붙은 문제 파악 단서(단서만 있을 때)
 
 
 if __name__ == "__main__":     # 자기 점검(규칙별 시험은 tests/test_eligibility.py)

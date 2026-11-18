@@ -391,6 +391,14 @@ def test_clue_ipc_point_and_comment_adopt_switch():
         ("held", "symptom_not_found", "typeless_failure_within_link")     # 2초 안 사건이 허용 유형이 아님
 
 
+def test_clue_keeps_real_hold_reason_whether_comment_adopt_or_not():
+    """리뷰 P1-1: 단서 사건의 원인이 실패 뒤에만 있으면 comment_adopt와 무관하게 그 사유(comment_unconfirmed로 가리지 않는다)."""
+    for adopt in (False, True):
+        d = el.decide(EVENTS, [clue(point(50, 300), clue="log_line", how="text", places=1)], comment_adopt=adopt)
+        assert outcome(d) == ("held", "cause_unconfirmed", "cause_after_event")
+        assert d["via"] == {"comment": None, "clue": "log_line", "how": "text", "places": 1}
+
+
 def test_clue_ipc_name_multiple_places_and_log_line_near():
     """ipc_name 본문 일치가 여러 곳이면 보류(locations). log_line은 같은 줄이면 점, 아니면 유형이 있을 때 근처."""
     assert outcome(el.decide(EVENTS, [clue(point(4, 199), places=3)], problem=D3, comment_adopt=True)) == \
@@ -428,7 +436,7 @@ def test_reference_input_keeps_db_types_only():
 
 # triage.py run(오프라인)으로 problem.json 읽기: 같은 입력 해시일 때만, stale 단서 안 씀, 로그에 없는 단서는 버리고 기록, 설정 스위치
 def _problem_run(db: Path, name: str, log: str, clues: list, sha: str | None = "same", look_at: str | None = None,
-                 root: Path | None = None) -> tuple[dict, Path]:
+                 root: Path | None = None, **extra) -> tuple[dict, Path]:
     import hashlib
     out = tmp("tt-elig-prob-") / name
     out.mkdir(parents=True)
@@ -436,8 +444,7 @@ def _problem_run(db: Path, name: str, log: str, clues: list, sha: str | None = "
     meta.write_text(json.dumps({"key": "CLUEPOS-1", "summary": "데이터 연결 실패"}), encoding="utf-8")
     doc = {"schema_version": 1, "key": "CLUEPOS-1", "origin": "정답 입력",
            "source_sha256": hashlib.sha256(meta.read_bytes()).hexdigest() if sha == "same" else sha,
-           "symptom": {"text": "", "types": ["DATA-003"], "not_in_db": False},
-           "hypotheses": ["무시해야 할 가설"], "clues": clues}
+           "symptom": {"text": "", "types": ["DATA-003"], "not_in_db": False}, "clues": clues, **extra}
     (out / "problem.json").write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
     args = ["run", "CLUEPOS-1", "--offline-db", db, "--out", out, "--logs", maf.OUT / log, "--issue-meta", meta,
             "--tz", "Asia/Seoul", "--year", "2026", *(["--look-at", look_at] if look_at else [])]
@@ -455,7 +462,15 @@ def test_run_reads_problem_only_for_same_input_and_fresh_clues(seed_db):
     assert d["location"] == {"state": "found", "source": "comment", "kind": "point"}       # 확정(confirmed)이 아니다
     bundle = json.loads((out / "reference.json").read_text(encoding="utf-8"))
     assert bundle["refs"][0]["source"] == "comment" and bundle["comment_adopt"] is False
-    assert "hypotheses" not in bundle and "무시해야 할 가설" not in json.dumps(bundle, ensure_ascii=False)
+    assert "- 단서 위치: 코멘트 2번 단서(ipc) 로그에서 찾음" in (out / "report.md").read_text(encoding="utf-8")
+    # 가설·모듈·모름·side·회차는 판정에 쓰지 않는다: 그 칸만 다른 problem.json은 기준·판정이 같다
+    noise = {"hypotheses": ["NETWORK-001 비행기 모드가 원인"], "modules": ["data"], "unknown": ["CP 로그 없음"],
+             "rounds": {"count": 3, "last_from_comment": 1, "same_failure": "no"}}
+    b, out2 = _problem_run(seed_db, "noise", "cluepos.log", [{**IPC_CLUE, "side": "ap"}], **noise)
+    keep = ("state", "reason", "selected", "location", "check")       # events는 4KB 압축(경로 길이)에 따라 줄 수 있다
+    assert {k: b["decision"][k] for k in keep} == {k: d[k] for k in keep}
+    assert json.loads((out2 / "reference.json").read_text(encoding="utf-8")) == bundle
+    assert (out2 / "eligibility.json").read_text(encoding="utf-8") == (out / "eligibility.json").read_text(encoding="utf-8")
 
     a, _ = _problem_run(seed_db, "other", "cluepos.log", [IPC_CLUE], sha="0" * 64)
     assert a["decision"]["reason"] == "no_reference"
@@ -466,9 +481,57 @@ def test_run_reads_problem_only_for_same_input_and_fresh_clues(seed_db):
 
     a, out = _problem_run(seed_db, "missing", "cluepos.log", [{**IPC_CLUE, "token": "0x0ff"}])
     assert a["decision"]["reason"] == "no_reference"
-    assert "코멘트 2번 단서, 로그에서 못 찾음" in (a.get("warnings") or []), a.get("warnings")
+    assert "코멘트 2번 단서, 로그에서 못 찾음(일치하는 줄 없음)" in (a.get("warnings") or []), a.get("warnings")
     assert json.loads((out / "eligibility.json").read_text(encoding="utf-8"))["reference"]["dropped"] == \
-        [{"comment": 2, "kind": "ipc", "why": "로그에서 못 찾음"}]
+        [{"comment": 2, "kind": "ipc", "why": "일치하는 줄 없음"}]
+
+    a, _ = _problem_run(seed_db, "steps", "cluepos.log", [IPC_CLUE], steps_sha256="0" * 64)
+    assert a["decision"]["location"]["source"] == "comment"           # --steps-file 없으면 TC 해시는 보지 않는다
+
+
+def test_run_ignores_problem_when_steps_file_differs(seed_db):
+    """P2-2: `--steps-file`을 주면 problem.json `steps_sha256`과도 같아야 쓴다."""
+    import hashlib
+    steps = tmp("tt-elig-steps-") / "tc.txt"
+    steps.write_text("1 attach PASS\n2 data FAIL\n", encoding="utf-8")
+    sha = hashlib.sha256(steps.read_bytes()).hexdigest()
+    _, out = _problem_run(seed_db, "steps-same", "cluepos.log", [IPC_CLUE], steps_sha256=sha)
+    # _problem_run은 --steps-file을 넘기지 않으므로 같은 작업 폴더로 다시 돈다
+    args = ["run", "CLUEPOS-1", "--offline-db", seed_db, "--out", out, "--logs", maf.OUT / "cluepos.log",
+            "--issue-meta", out.parent / "steps-same.meta.json", "--tz", "Asia/Seoul", "--year", "2026", "--steps-file", steps]
+
+    def clue_refs() -> list:
+        path = out / "reference.json"
+        refs = json.loads(path.read_text(encoding="utf-8"))["refs"] if path.is_file() else []
+        return [r for r in refs if r["source"] == "comment"]
+    run_json("triage.py", args)
+    assert clue_refs()
+    doc = json.loads((out / "problem.json").read_text(encoding="utf-8"))
+    (out / "problem.json").write_text(json.dumps({**doc, "steps_sha256": "0" * 64}), encoding="utf-8")
+    other = run_json("triage.py", args)
+    assert clue_refs() == []
+    assert any("--steps-file" in w and "쓰지 않았다" in w for w in other.get("warnings") or []), other.get("warnings")
+
+
+def test_run_clue_text_quotes_newline_mask_token_and_dedup(seed_db):
+    """단서 글의 따옴표·정규식 글자는 글자 그대로 비교(못 찾으면 버림), 줄바꿈은 공백으로, 마스킹 토큰은 번호 없이 맞춘다.
+    같은 찾을 글은 한 번만 찾는다. 같은 이름이 여러 요청에 있으면 위치 multiple."""
+    line = {"comment": 3, "kind": "log_line", "name": None, "token": None, "side": "ap", "stale": False,
+            "quote": "onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C,\n<APN#7>, state=null]"}
+    odd = {**line, "comment": 4, "quote": 'x "quoted" (.*) [a-z]+ \\ $HOME; rm -rf'}
+    a, out = _problem_run(seed_db, "text", "cluepos.log", [line, odd, {**line, "comment": 5}])
+    d = a["decision"]
+    assert (d["reason"], d["check"]["why"], d["location"]) == \
+        ("ineligible", "comment_unconfirmed", {"state": "found", "source": "comment", "kind": "near"})
+    bundle = json.loads((out / "reference.json").read_text(encoding="utf-8"))
+    assert [r["comment"] for r in bundle["refs"]] == [3] and [x["comment"] for x in bundle["dropped"]] == [4]
+    trace = [json.loads(x) for x in (out / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert sum(1 for r in trace if r.get("step") == "3-clue") == 2          # 3번·4번만(5번은 3번과 같은 글)
+    name = {"comment": 2, "kind": "ipc_name", "name": "VIPC_SETUP_DATA", "token": None, "quote": "VIPC_SETUP_DATA 실패",
+            "side": "cp", "stale": False}
+    a, _ = _problem_run(seed_db, "name", "cluepos.log", [name])
+    d = a["decision"]
+    assert (d["reason"], d["check"]["why"], d["location"]["state"]) == ("ambiguous", "locations", "multiple")
 
 
 def test_run_config_switches(seed_db):

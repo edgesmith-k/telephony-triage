@@ -284,7 +284,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
     - category
     - type
     - cause
-  - location(실패 지점: 기준 줄 일치 1개·로그 FAIL 마커 1개면 confirmed, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). 앵커 없이 문제 파악 단서(problem.json)만 로그에서 찾았으면 source comment·state found(확정 아님). model은 계약에만(단계 6~7))
+  - location(실패 지점: 기준 줄 일치 1개·로그 FAIL 마커 1개면 confirmed, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). 앵커 없이 문제 파악 단서(problem.json)만 로그에서 찾았으면 source comment·state found(확정 아님, 단서 일치 여러 곳이면 multiple). model은 계약에만(단계 6~7))
     - state: none | found | confirmed | multiple
     - source: look_at | log_marker | steps_file | step_order | comment | model | null
     - kind(기준 줄 ipc·token 일치 point, 글자 일치 near, 마커·steps-file 구간 range): point | near | range | null

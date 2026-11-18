@@ -137,6 +137,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         self.reference: dict | None = None       # 자격 검사 기준(step_anchor가 정함, match_signatures --reference)
         self.issue_sha: str | None = None        # 이번 실행이 읽은 이슈 입력 파일의 sha256(problem.json source_sha256과 대조)
         self.problem_use: dict | None = None     # problem.json에서 자격 검사에 쓰는 것(anchor.problem_refs) | None
+        self.clue_rows: list[dict] = []          # 로그에서 찾은 문제 파악 단서 {where, clue, ts, places}(report.md 한 줄씩)
         self.clock_offset: float | None = None   # 장비 시각 → 단말 시각 시계 차(초). --clock-offset > failed_step.clock_offset
         self._steps = None                       # read_steps 결과 캐시 (steps-file은 한 번만 읽는다)
         self.order_fail: dict | None = None      # 스텝 순서 정렬을 시도했으나 앵커를 못 정한 이유 {matched, observable, missed, reason}
@@ -1236,7 +1237,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         flows, flow_lines = self.flows(logs, tz, year, around, events, version, [c["cause"] for c in candidates if c["cause"]],
                                        top)
         code_out = self.resolve_code(code, version, candidates)
-        decision = _decision(candidates, anchor, match.get("eligibility"), self.clue_location())
+        decision = _decision(candidates, anchor, match.get("eligibility"), self.clue_location((match.get("eligibility") or {}).get("via")))
         analyzer = self.analyzer(lead_first(decision, candidates))     # 심층 분석 카테고리: 채택 원인(없으면 1위)
         explore = self.explore(lead_first(decision, candidates))     # 적합성 확인도 채택 원인 기준
         explore_input = self.explore_input(around, anchor) if explore and explore["when"] != "never" else None
@@ -1278,7 +1279,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                      **({"uncollected_tags": uncollected} if uncollected else {})},
             "warnings_core": self.warnings[warn0:], "extra_warnings": extra_warnings,
             "attrs": {"clock": self.clock, "order_fail": self.order_fail, "order_evidence": self.order_evidence,
-                      "focus": self.focus, "steps_member": self.steps_member, "look": self.look_result,
+                      "focus": self.focus, "steps_member": self.steps_member, "look": self.look_result, "clues": self.clue_rows,
                       "time_candidates": self.time_candidates},
         }
 

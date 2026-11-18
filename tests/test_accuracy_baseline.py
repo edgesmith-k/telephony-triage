@@ -24,18 +24,25 @@ import make_accuracy_fixtures as maf  # noqa: E402
 from runner import cleanup_tmp, plugin_root, tmp  # noqa: E402
 
 BASELINE = maf.OUT / "baseline.json"
-ROW = ("key", "condition", "expect", "top", "top3", "adopted", "verdict", "anchor_ok", "error")
+ROW = ("key", "condition", "expect", "top", "top3", "adopted", "verdict", "anchor_ok", "error", "held_why", "held_cause")
+
+
+def _eval(root: Path, db: Path, *extra: str) -> dict:
+    proc = subprocess.run([sys.executable, str(REPO / "tools" / "offline_eval.py"), str(maf.OUT / "labelset.yaml"), "--json",
+                           "--db", str(db), "--plugin-root", str(root), *extra],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)
+    return {"by_condition": out["by_condition"], "runs": [{k: r.get(k) for k in ROW} for r in out["items"]]}
 
 
 def current() -> dict:
     root = plugin_root()     # 명시 루트(SITE_PATHS 제외 복사본) — 사내 레포에서도 같은 결과
     db = maf.build_seed_db(tmp("tt-accuracy-db-") / "db", root)
-    proc = subprocess.run([sys.executable, str(REPO / "tools" / "offline_eval.py"), str(maf.OUT / "labelset.yaml"), "--json",
-                           "--db", str(db), "--plugin-root", str(root)],
-                          capture_output=True, text=True, encoding="utf-8", errors="replace")
-    assert proc.returncode == 0, proc.stderr
-    out = json.loads(proc.stdout)
-    return {"by_condition": out["by_condition"], "runs": [{k: r.get(k) for k in ROW} for r in out["items"]]}
+    out = _eval(root, db)
+    # 사용자 결정 Y1(코멘트 지점 채택)을 켰을 때의 problem 조건 — site-defaults `eligibility.comment_adopt: true`
+    out["comment_adopt"] = _eval(plugin_root(eligibility={"comment_adopt": True}), db, "--condition", "problem")
+    return out
 
 
 @functools.cache
@@ -88,6 +95,14 @@ def test_stage5_problem_input_answer_upper_bound():
     assert [r["key"] for r in runs["problem"] if r["adopted"]] == []
     s = now["by_condition"]["problem"]
     assert (s["accepted_wrong"], s["held_reasons"].get("ineligible")) == (0, 3), s
+    # 코멘트 지점 보류 3건: 붙은 사건의 원인이 정답(켰다면 맞게 채택했을 것)이고, 켠 실행은 그 3건만 맞게 채택한다
+    held = [r for r in runs["problem"] if r["held_why"] == "comment_unconfirmed"]
+    assert sorted(r["key"] for r in held) == ["CLUEPOS-1", "TOKONLYPOS-1", "TOKPOS-1"]
+    assert all(r["held_cause"] == r["expect"] for r in held), held
+    on = now["comment_adopt"]
+    adopted = [r for r in on["runs"] if r["adopted"]]
+    assert sorted(r["key"] for r in adopted) == ["CLUEPOS-1", "TOKONLYPOS-1", "TOKPOS-1"]
+    assert all(r["adopted"] == r["expect"] for r in adopted) and on["by_condition"]["problem"]["accepted_wrong"] == 0
 
 
 if __name__ == "__main__" and "--update" in sys.argv:

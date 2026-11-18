@@ -126,6 +126,8 @@ class CacheMixin:
                              "code": {k: code.get(k) for k in ("skipped", "roots", "tree_version")},
                              "clock_offset_sec": self.clock_offset, "steps_file_sha": steps_sha,
                              "look": self.look_inputs(),       # 가린 기준 줄·확인할 내용(원문은 해시에도 쓰지 않는다)
+                             # 이번 실행이 읽은 이슈 입력 파일 해시(problem.json source_sha256 대조 — 같은 issue.json이어도 다를 수 있다)
+                             **({"issue_sha": self.issue_sha} if self.issue_sha else {}),
                              # 문제 파악 결과(단계 5-2 자격 검사 입력). 없으면 해시가 이전과 같다
                              **({"problem": _file_sha(self.job / "problem.json")}
                                 if (self.job / "problem.json").is_file() else {}),
@@ -191,6 +193,7 @@ class CacheMixin:
         self.focus = list(attrs.get("focus") or [])
         self.steps_member = attrs.get("steps_member")
         self.look_result = attrs.get("look")
+        self.clue_rows = attrs.get("clues") or []
         self.time_candidates = attrs.get("time_candidates")
         self.warnings += core.get("warnings_core") or []
         self.write_meta(core.get("anchor"))

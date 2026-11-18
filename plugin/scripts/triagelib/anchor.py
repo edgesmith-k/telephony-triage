@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import datetime, timedelta, timezone
@@ -204,7 +205,7 @@ class AnchorMixin:
         일치. 로그에 없는 단서는 버리고 경고("코멘트 n번 단서, 로그에서 못 찾음")와 `dropped`에 남긴다. `--answer anchor=off`면 안 읽는다."""
         from . import problem as pb      # 지연 import(문제 파악 모듈은 Jira·플랫폼 모듈을 끌어온다)
 
-        self.problem_use = None
+        self.problem_use, self.clue_rows = None, []
         path = self.job / pb.RESULT_FILE
         if self.anchor_off or path.is_symlink() or not path.is_file():
             return
@@ -215,9 +216,23 @@ class AnchorMixin:
         if not isinstance(doc, dict) or doc.get("schema_version") != 1:
             self.warn("문제 파악 결과(problem.json)를 읽지 못해 쓰지 않았다")
             return
-        if not self.issue_sha or doc.get("source_sha256") != self.issue_sha:
+        if not self.issue_sha:      # 해시 기록 전(이전 버전)에 Jira 원문을 읽고 지운 작업
+            self.warn("이 작업에는 이슈 입력 해시 기록이 없어 문제 파악 결과(problem.json)를 쓰지 않았다 — "
+                      "Jira를 다시 읽고 triage.py problem부터 다시")
+            return
+        if doc.get("source_sha256") != self.issue_sha:
             self.warn("문제 파악 결과(problem.json)가 이번 이슈 입력으로 만든 것이 아니라 쓰지 않았다 — triage.py problem부터 다시")
             return
+        steps = getattr(self.args, "steps_file", None)
+        if steps:       # TC 파일을 주었으면 문제 파악 때의 TC 파일과도 같아야 한다(TC의 실패 줄·사유가 문제 파악 입력이다)
+            try:
+                sha = hashlib.sha256(Path(steps).expanduser().read_bytes()).hexdigest()
+            except OSError:
+                sha = None
+            if sha is None or doc.get("steps_sha256") != sha:
+                self.warn("문제 파악 결과(problem.json)가 이번 TC 파일(--steps-file)로 만든 것이 아니라 쓰지 않았다 — "
+                          "같은 --steps-file로 triage.py problem부터 다시")
+                return
         conf = userconfig.get(self.cfg, "eligibility") or {}
         conf = conf if isinstance(conf, dict) else {}
         sym = doc.get("symptom") if isinstance(doc.get("symptom"), dict) else {}
@@ -225,14 +240,15 @@ class AnchorMixin:
         if conf.get("use_problem_types", True) is not False:
             problem = {"types": [t for t in sym.get("types") or [] if isinstance(t, str)][:pb.TYPES_MAX],
                        "not_in_db": sym.get("not_in_db") is True}
-        refs, dropped = [], []
+        refs, dropped, seen = [], [], set()
         clues = doc.get("clues") if isinstance(doc.get("clues"), list) else []
         for c in clues[:pb.CLUES_MAX]:
             if not isinstance(c, dict) or c.get("stale") is not False:     # 이전 회차 단서(stale)는 쓰지 않는다(H03)
                 continue
             text, stamp = _clue_text(c, pb)
-            if text is None:
+            if text is None or (text, stamp) in seen:      # 같은 찾을 글은 한 번만(같은 곳을 두 단서로 세지 않게)
                 continue
+            seen.add((text, stamp))
             where = "설명" if c.get("comment") == "description" else f"코멘트 {c.get('comment')}번"
             find = self.job / CLUE_FILE
             find.write_text(json.dumps({"look_at": text, "ref": None, **({"stamp": stamp} if stamp else {})},
@@ -240,23 +256,30 @@ class AnchorMixin:
             argv = ["ipc", *logs, "--rules", self.snap / "parser-rules", "--find", find]
             argv += (["--tz", tz] if tz else []) + (["--year", year] if year else [])
             _, data, _ = self.run.call("3-clue", "parse_logcat.py", argv)
+            for w in (data or {}).get("warnings") or []:
+                self.warn(_clip(w.get("message"), 120))
             found = (data or {}).get("find") or {}
             if not found.get("hits"):
-                dropped.append({"comment": c.get("comment"), "kind": c["kind"], "why": "로그에서 못 찾음"})
-                self.warn(f"{where} 단서, 로그에서 못 찾음")
+                why = _clip(found.get("why") or "일치하는 줄 없음", 60)
+                dropped.append({"comment": c.get("comment"), "kind": c["kind"], "why": why})
+                self.warn(f"{where} 단서, 로그에서 못 찾음({why})")
                 continue
             refs.append({"kind": "line", "source": "comment", "comment": c.get("comment"), "clue": c["kind"],
                          "how": found.get("how"), "places": found.get("places") or 1, "lines": found.get("place") or []})
+            self.clue_rows.append({"where": where, "clue": c["kind"], "ts": found.get("ts"), "places": refs[-1]["places"]})
         self.problem_use = {"problem": problem, "comment_adopt": conf.get("comment_adopt") is True, "refs": refs,
                             "dropped": dropped}
 
-    def clue_location(self) -> dict | None:
-        """앵커 없이 단서만 찾았을 때의 실패 지점(analysis.json `decision.location`): source comment, state found(확정 아님),
-        ipc·token 일치 point·글자 일치 near. 단서가 없으면 None."""
+    def clue_location(self, via: dict | None) -> dict | None:
+        """앵커 없이 단서만 찾았을 때의 실패 지점(analysis.json `decision.location`): source comment, state found(확정 아님) —
+        단서 일치가 여러 곳이면 multiple. kind는 사건이 붙은 단서(`via`, 없으면 첫 단서) 기준 ipc·token 일치 point·글자 일치 near.
+        단서가 없으면 None."""
         refs = (self.problem_use or {}).get("refs") or []
         if not refs:
             return None
-        return {"state": "found", "source": "comment", "kind": "near" if refs[0].get("how") == "text" else "point"}
+        ref = via or refs[0]
+        return {"state": "multiple" if (ref.get("places") or 1) > 1 else "found", "source": "comment",
+                "kind": "near" if ref.get("how") == "text" else "point"}
 
     def look_inputs(self) -> dict:
         """`--look-at`·`--look-note`(선택, 원문)를 이 프로세스에서 이슈 DB 설정대로 가린 값 `{at, note}`(없으면 None).

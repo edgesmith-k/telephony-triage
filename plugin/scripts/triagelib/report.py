@@ -981,6 +981,9 @@ class ReportMixin:
                              + (f" (시계 차 {manual['offset_sec']:+g}초, 수동)"
                                 if anchor["source"] == "steps_file" and manual.get("mode") == "manual" else "")
                              + jira_part)
+        for row in (getattr(self, "clue_rows", None) or [])[:3]:      # 문제 파악 단서로 찾은 곳(기준 줄처럼, 확정 아님)
+            more = f", 같은 줄 {row['places']}곳이라 하나로 못 정함" if (row.get("places") or 1) > 1 else ""
+            prob.append(f"- 단서 위치: {row['where']} 단서({row['clue']}) 로그에서 찾음 {row['ts']} (확정 아님{more})")
         note = self.look_inputs()["note"]
         if note:        # 확인할 내용은 항상 한 줄. 답은 탐색 분석이 한다 — 탐색을 안 하면 그렇다고 적는다(강제하지 않는다)
             ex = r.get("explore")

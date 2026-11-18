@@ -424,3 +424,32 @@ def test_rerun_with_remote_drops_module_records_on_a_hit():
     assert again["reuse"]["hit"] is True
     assert not any((job / n).exists() or (job / n).is_symlink() for n in (*names, "module-skill", "timeline.md"))
     assert outside.read_text(encoding="utf-8") == "keep" and (job / "explore-input.json").is_file()
+
+
+def test_problem_json_after_raw_consumed_and_cache_miss_on_change():
+    """단계 5-2: Jira 원문(`issue_raw.json`)을 `--consume`으로 지운 뒤 다시 돌아도 `.state.json`에 남긴 원문 해시로 problem.json을
+    대조해 쓰고, problem.json이 바뀌면 재사용 캐시가 맞지 않는다(입력 `args`)."""
+    import hashlib
+    ws = Workspace()
+    job = ws.job_dir(KEY)
+    job.mkdir(parents=True, exist_ok=True)
+    raw = job / "issue_raw.json"
+    raw.write_text(json.dumps(yaml.safe_load((MOCK_JIRA / f"{KEY}.yaml").read_text(encoding="utf-8")), ensure_ascii=False),
+                   encoding="utf-8")
+    clue = {"comment": 1, "kind": "log_line", "name": None, "token": None, "side": "ap", "stale": False,
+            "quote": "notifyDataEnabledChanged: enabled=false, reason=USER"}
+    doc = {"schema_version": 1, "key": KEY, "source_sha256": hashlib.sha256(raw.read_bytes()).hexdigest(),
+           "symptom": {"text": "", "types": ["DATA-001"], "not_in_db": False}, "clues": [clue]}
+    (job / "problem.json").write_text(json.dumps(doc), encoding="utf-8")
+    args = ["run", KEY, "--dry-run", "--logs", LOG, "--answer", "code=skip"]
+    first = ws.json("triage.py", args)
+    assert first["status"] == "ok" and not raw.exists()
+    assert first["decision"]["location"]["source"] == "comment"
+    doc["clues"] = [{**clue, "quote": "UserDataEnabled changed to false"}]
+    (job / "problem.json").write_text(json.dumps(doc), encoding="utf-8")
+    again = ws.json("triage.py", args)
+    assert again["reuse"]["hit"] is False and "args" in again["reuse"]["changed"]
+    assert again["decision"]["location"]["source"] == "comment"
+    assert not any("problem.json" in w for w in again.get("warnings") or []), again.get("warnings")
+    assert ws.json("triage.py", args)["reuse"]["hit"] is True
+    ws.json("triage.py", ["release", KEY])
