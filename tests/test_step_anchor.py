@@ -315,14 +315,18 @@ def test_marker_anchor_with_failed_step_moves_window_and_top_candidate():
     sa = done["step_anchor"]
     assert sa["source"] == "log_marker" and sa["step"] == "Step 5" and "step_from" not in sa
     assert sa["span"] == ["2026-09-20T05:33:00.000Z", "2026-09-20T05:33:30.000Z"]
+    # 단계 5-1: 구간 안 DATA-001 사건은 증상 시그니처가 "RILJ SETUP_DATA_CALL 없음"(must_not_match)에 기댄다. 이 로그에는 RILJ
+    # 줄이 하나도 없고(수집 안 된 태그) 마지막 증상 근거 뒤로 창(60초)만큼 이어지지도 않아 "없음"을 확인 못 한다 → 보류
     assert {k: done["decision"][k] for k in ("state", "reason", "selected", "location")} == {
-        "state": "accepted", "reason": "anchored_top", "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
+        "state": "held", "reason": "ineligible", "selected": None,
         "location": {"state": "confirmed", "source": "log_marker", "kind": "range"}}
-    assert done["decision"]["check"]["why"] == "range" and done["decision"]["events"][0]["result"] == "adopted"
+    assert done["decision"]["check"]["why"] == "absence_unverified" and done["decision"]["events"][0]["absence"] is True
     assert done["logs"]["window"] == {"start": "2026-09-20T05:32:00.000Z", "end": "2026-09-20T05:34:00.000Z"}
     assert done["issue"]["failed_step"]["text"] == STEP and done["request_hash"] != off["request_hash"]
     report = (job / "report.md").read_text(encoding="utf-8")
-    assert "- 판단: 원인 채택 — DATA-001-01 (실패 지점: 로그 스텝 마커·확인됨, 자격 검사 통과)" in report
+    assert ("- 판단: 원인 보류 — 실패 지점과 규칙 일치를 이을 수 없음('이 줄이 없어야 함' 조건을 확인할 수 없음 — "
+            "그 태그가 수집되지 않았거나 로그가 일찍 끝남)"
+            in report)
     assert "- 실패 스텝 구간 (log_marker): Step 5 2026-09-20T05:33:00.000Z ~ 2026-09-20T05:33:30.000Z → 분석 범위 " \
         "2026-09-20T05:32:00.000Z ~ 2026-09-20T05:34:00.000Z (Jira 발생 시각 2026-09-20T14:31:00+09:00 / 2.5분 차이)" in report
     assert "S/C에 쓰지 않음; 단어 겹침 가산·순위 참고·분석 범위" in report

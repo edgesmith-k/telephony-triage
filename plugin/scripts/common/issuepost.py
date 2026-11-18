@@ -52,7 +52,7 @@ HELD_REASON = {"no_reference": "실패 지점을 잡지 못함(기준 줄·스�
 # 자격 검사 세부 사유(`decision.check.why`) — report.md `- 판단:` 줄 괄호
 HELD_WHY = {"near_without_symptom": "지정한 줄이 실패 줄이 아님 — 근처 실패를 고르려면 증상 종류(문제 파악)가 필요",
             "range_end_unknown": "실패 구간의 끝을 모름", "range_without_symptom": "TC 파일 시각 구간은 증상 종류(문제 파악)가 있어야 씀",
-            "absence_unverified": "'이 줄이 없어야 함' 조건을 확인할 만큼 로그가 이어지지 않음",
+            "absence_unverified": "'이 줄이 없어야 함' 조건을 확인할 수 없음 — 그 태그가 수집되지 않았거나 로그가 일찍 끝남",
             "no_event_at_reference": "지정한 IPC 줄 뒤 2초 안에 실패가 없음",
             "typeless_failure_within_link": "지정한 IPC 줄 뒤 2초 안의 실패가 이슈 DB 증상과 맞지 않음",
             "same_line_typeless": "지정한 줄의 실패가 이슈 DB 증상과 맞지 않음",

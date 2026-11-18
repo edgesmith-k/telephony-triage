@@ -227,3 +227,21 @@ def test_adopted_cause_outside_top_is_appended(seed_db):
     cut = _eligibility(seed_db, log, ref, top=1)
     assert [c["cause"] for c in cut["candidates"]] == [names[0], "NETWORK-001-08"]
     assert cut["omitted"]["candidates"] == len(names) - 2
+
+
+def test_selected_not_top_shows_rank_and_keeps_invariant():
+    """selected ∈ candidates(1위가 아니어도 됨): 판단 줄에 "규칙 일치 n위", 불변식 검사는 후보 중 하나면 통과."""
+    from triagelib import report
+    cands = [{"category": "network", "type": "NETWORK-001", "cause": "NETWORK-001-03"},
+             {"category": "network", "type": "NETWORK-001", "cause": "NETWORK-001-08"}]
+    dec = {"state": "accepted", "reason": "anchored_top", "selected": cands[1],
+           "location": {"state": "confirmed", "source": "look_at", "kind": "near"}}
+    line = report.decision_line(dec, cands)
+    assert line.endswith("(실패 지점: 담당자가 지정한 기준 줄·확인됨, 자격 검사 통과, 규칙 일치 2위)"), line
+    assert "규칙 일치" not in report.decision_line({**dec, "selected": cands[0]}, cands)
+    assert report._decision_mismatch({"decision": dec, "candidates": cands}) is None
+    assert report._decision_mismatch({"decision": dec, "candidates": cands[:1]})
+    held = {"state": "held", "reason": "ineligible", "selected": None, "location": dec["location"],
+            "check": {"why": "near_without_symptom", "checked": 0, "total": 2}}
+    assert report.decision_line(held, cands).startswith(
+        "- 판단: 원인 보류 — 실패 지점과 규칙 일치를 이을 수 없음(지정한 줄이 실패 줄이 아님 — 근처 실패를 고르려면")
