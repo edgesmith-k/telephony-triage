@@ -31,6 +31,7 @@ EVENTS = (IPC_ERROR, REQUEST_FAILED)
 # `platform[.others.<p>].vendor_ipc` 키 (값은 식별자 모양 글). 블록을 쓰면 다섯 키 모두
 KEYS = ("context", "complete", "request_prefix", "error_prefix", "success")
 TRACE_KEY = "trace"     # 선택 6번째 키: IPC 메시지 줄 정규식 목록(`common.ipcseq`, 다섯 키 규칙과 무관)
+SLOT_KEY = "slot"       # 선택 7번째 키: IPC 메시지 줄의 SIM 슬롯 정규식 목록(그룹 1 = 슬롯 번호, 다섯 키 규칙과 무관)
 VALUE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 
 
@@ -43,6 +44,7 @@ class Spec:
     error_prefix: str = "VIPC_E_"                # 결과 값 접두어(`Error(<prefix><Y>)`)
     success: str = "VIPC_E_OK"                   # 성공 결과 값 전체(error_prefix로 시작, 이벤트로 내지 않는다)
     trace: tuple = ()                            # IPC 메시지 줄 정규식(`common.ipcseq`). 비면 placeholder 기본 둘
+    slot: tuple = ()                             # IPC 메시지 줄 SIM 슬롯 정규식(그룹 1). 비면 줄 레코드의 `phone_id`
 
     @cached_property
     def request_re(self) -> re.Pattern:
