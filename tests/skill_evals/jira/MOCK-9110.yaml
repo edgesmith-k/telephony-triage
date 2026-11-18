@@ -25,7 +25,7 @@ comments:
       망 해제 사유도 같이 봐야 해서 CP도 봐주세요
   - author: mock.cp
     created: "2026-11-25T09:40:00+0900"
-    body: VIPC_PDN_DEACT_IND (token=0x3f2) 로 망이 internet PDN 내렸고 cause #8 이에요. 그 뒤 AP에서 다시 요청이 안 왔습니다
+    body: "VIPC_PDN_DEACT_IND (token=0x3f2) 로 망이 internet PDN 내렸고 cause #8 이에요. 그 뒤 AP에서 다시 요청이 안 왔습니다"
   - author: mock.ap.data
     created: "2026-11-25T13:00:00+0900"
     body: carrier config retry rule 수정 넣었습니다. 빌드 _1126 나왔으니 다시 돌려주세요

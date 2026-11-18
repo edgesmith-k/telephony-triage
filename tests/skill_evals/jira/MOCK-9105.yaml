@@ -26,7 +26,7 @@ comments:
       SIM1 해제는 정상이고 SIM2 쪽 요청이 에러예요. CP 확인 부탁
   - author: mock.cp
     created: "2026-11-24T14:10:00+0900"
-    body: slot0 VIPC_DC_RELEASE (token=0x611) 은 정상 완료, slot1 VIPC_DC_ESTABLISH (token=0x614) 에 망이 #27로 거절했습니다. APN이 안 맞는 듯
+    body: "slot0 VIPC_DC_RELEASE (token=0x611) 은 정상 완료, slot1 VIPC_DC_ESTABLISH (token=0x614) 에 망이 #27로 거절했습니다. APN이 안 맞는 듯"
   - author: mock.ap.data
     created: "2026-11-24T14:40:00+0900"
     body: SIM2 APN은 프로파일대로 들어가 있어요

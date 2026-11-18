@@ -1941,7 +1941,32 @@ def test_problem_instructions_do_not_contain_eval_answers():
                 assert not re.search(edge + re.escape(phrase) + edge.replace("<", ""), problem), (eid, phrase)
 
 
-HANGUL_MIN, LATIN_MIN = 8, 8     # 구절 길이 기준: 한글·영문 글자 수(공백·밑줄 제외). 영문을 6으로 하면 흔한 한 낱말·칸
+def test_mock_ticket_text_not_cut_by_yaml_comment():
+    """모의 티켓의 글 칸(제목·설명·코멘트 본문)이 YAML 평문 스칼라의 ` #`에서 주석으로 잘리지 않는다 — 잘리면 모델이 쓰려던 글의
+    일부를 못 본다(PBH pbh-1~8은 그렇게 돌았다). 평문 스칼라가 끝난 같은 줄 뒤에 `#`이 남아 있으면 실패. 글에 `#`이 있으면
+    따옴표나 블록 스칼라(`|`)로 쓴다. 칸 이름 뒤 일부러 단 주석(`customfield_…: 값   # 모델`)은 글 칸이 아니라 보지 않는다."""
+    import yaml
+
+    text_keys = {"summary", "description", "body"}
+    for path in sorted([*(EVALS / "jira").glob("*.yaml"), *(REPO / "tests" / "mocks" / "jira").glob("*.yaml")]):
+        raw = path.read_text(encoding="utf-8")
+        lines = raw.splitlines()
+        stack = [yaml.compose(raw)]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, yaml.SequenceNode):
+                stack.extend(node.value)
+            if not isinstance(node, yaml.MappingNode):
+                continue
+            for key, value in node.value:
+                if (isinstance(key, yaml.ScalarNode) and key.value in text_keys and isinstance(value, yaml.ScalarNode)
+                        and value.style is None):
+                    rest = lines[value.end_mark.line][value.end_mark.column:] if value.end_mark.line < len(lines) else ""
+                    assert "#" not in rest, (path.name, value.end_mark.line + 1, rest.strip()[:40])
+                stack.append(value)
+
+
+HANGUL_MIN, LATIN_MIN = 8, 8    # 구절 길이 기준: 한글·영문 글자 수(공백·밑줄 제외). 영문을 6으로 하면 흔한 한 낱말·칸
                                  # 이름(unknown·network·symptom)이 거짓 경보라 8로 올렸다(확인 리뷰 N1 반영 때)
 
 

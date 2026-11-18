@@ -40,7 +40,7 @@ comments:
     body: RAT 바뀐 건 LTE 안에서 셀만 바뀐 거라 정상이에요. 등록도 안 빠졌고요. PDN을 망이 내린 거면 CP에서 사유 봐야 할 듯
   - author: mock.cp
     created: "2026-11-26T10:30:00+0900"
-    body: 셀 바뀔 때 VIPC_CELL_CHANGE_IND (token=0x938) 는 정상 처리했고, 3초 뒤 VIPC_PDN_CLOSE_IND (token=0x93b) 로 망이 IMS PDN을 내렸어요. cause #36. 망 쪽 정책인지 장비 확인 필요합니다
+    body: "셀 바뀔 때 VIPC_CELL_CHANGE_IND (token=0x938) 는 정상 처리했고, 3초 뒤 VIPC_PDN_CLOSE_IND (token=0x93b) 로 망이 IMS PDN을 내렸어요. cause #36. 망 쪽 정책인지 장비 확인 필요합니다"
   - author: mock.pl
     created: "2026-11-26T11:00:00+0900"
     body: 장비팀에 확인 요청했습니다

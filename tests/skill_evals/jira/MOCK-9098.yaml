@@ -31,7 +31,7 @@ comments:
       CP 쪽 확인 부탁드립니다.
   - author: mock.cp
     created: "2026-11-17T18:02:00+0900"
-    body: CP 로그 확인했습니다. VIPC_SETUP_DATA (token=0x0a1) 에 망이 reject cause #33 줬습니다.
+    body: "CP 로그 확인했습니다. VIPC_SETUP_DATA (token=0x0a1) 에 망이 reject cause #33 줬습니다."
   - author: mock.cp
     created: "2026-11-17T18:40:00+0900"
     body: |

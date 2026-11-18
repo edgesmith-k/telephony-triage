@@ -31,7 +31,7 @@ comments:
       CP에서 거절 사유 확인 부탁
   - author: mock.cp
     created: "2026-11-24T15:00:00+0900"
-    body: VIPC_NAS_ATTACH (token=0x1c8) 에 #15(no suitable cells) 받았어요. 장비 셀 TAC 설정 문제일 가능성 있어요
+    body: "VIPC_NAS_ATTACH (token=0x1c8) 에 #15(no suitable cells) 받았어요. 장비 셀 TAC 설정 문제일 가능성 있어요"
   - author: mock.tester
     created: "2026-11-25T09:30:00+0900"
     body: 셀 설정은 TC 표준 그대로입니다. 같은 SIM 꽂은 다른 단말은 등록 잘 돼요
