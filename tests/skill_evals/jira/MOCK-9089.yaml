@@ -1,0 +1,33 @@
+# 모의 Jira 티켓(문제 파악 eval 89, 합성). 재시험에서 같은 실패: 4번(재시험 결과)부터 마지막 시험, 앞 token 0x0de는 옛 로그. 단계 1 RETEST-1과 같은 이름·token.
+key: MOCK-9089
+fields:
+  summary: 데이터 연결 실패(재시험)
+  description: |
+    TC 4.3 step 6 "데이터 연결 확인" Fail.
+  status: {name: In Progress}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261110
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments:
+  - author: mock.tester
+    created: "2026-11-14T11:00:00+0900"
+    body: 1차 시험 step 6 Fail입니다. 로그 첨부했습니다.
+  - author: mock.cp
+    created: "2026-11-14T13:00:00+0900"
+    body: |
+      1차 시험: VIPC_SETUP_DATA (token=0x0de) 실패. 모뎀 쪽 수정 반영한 빌드 올렸습니다.
+      재시험 요청합니다.
+  - author: mock.pl
+    created: "2026-11-14T13:30:00+0900"
+    body: 재시험 일정 잡아주세요~
+  - author: mock.tester
+    created: "2026-11-15T10:20:00+0900"
+    body: 재시험 결과 동일하게 step 6에서 Fail입니다. 2차 로그 올렸습니다.
+  - author: mock.cp
+    created: "2026-11-15T14:10:00+0900"
+    body: 2차 로그 보면 VIPC_SETUP_DATA (token=0x1a2) 에서 또 실패하네요. 증상은 1차와 같습니다. 추가 확인 중입니다.

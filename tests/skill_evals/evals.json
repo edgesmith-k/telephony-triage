@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=병합 2(72 +1 뒤 병합해줘·75 +1 관문), H=모듈 스킬 레포·출력 검사 4(76~79), W9=setup 2(58 재점검 doctor 표·80 첫 사용자 setup), FL=성공 흐름 제안 3(81 새 원인 flow_step·82 set-flow-step·83 put-flow 문구 고치기), FT=적합성 확인·반복 금지 3(84~86: 84 확신 일치 짧은 판단·85 부적합 보류·86 재실행 prior). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=병합 2(72 +1 뒤 병합해줘·75 +1 관문), H=모듈 스킬 레포·출력 검사 4(76~79), W9=setup 2(58 재점검 doctor 표·80 첫 사용자 setup), FL=성공 흐름 제안 3(81 새 원인 flow_step·82 set-flow-step·83 put-flow 문구 고치기), FT=적합성 확인·반복 금지 3(84~86: 84 확신 일치 짧은 판단·85 부적합 보류·86 재실행 prior), PB=문제 파악 11(87~97: --problem-only, 시드 DB, 기대값 `problem_expect`를 grade.py checks_pb가 JOB/problem.json과 대조). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -3333,6 +3333,538 @@
         "2회차에 1위 DATA-001-01을 새 근거 없이 다시 고르지 않았다(다시 탐색했으면 그 출력이 가설 없음이거나 새 근거가 있다)",
         "분석 전용이라 plan.json이 없고 끝난 뒤 lock이 없다"
       ],
+      "files": []
+    },
+    {
+      "id": 87,
+      "name": "problem-handover-chain",
+      "batch": "PB",
+      "design": "문제 파악(분석 정확도 단계 2b, analyze --problem-only, reference/problem.md). 넘김 대화: 테스터 Fail → AP data가 RILJ 줄을 붙여 CP로 넘김 → CP가 이름+token과 망 거절 → 군더더기 2개. 마지막 코멘트만 보면 단서가 없다. 짝: 단계 1 TOKSAME-1(VIPC_SETUP_DATA 0x0de)·xm.log 실패 줄",
+      "prompt": "MOCK-9087 문제 파악만 해줘 --problem-only",
+      "setup": {
+        "db": "seed",
+        "jira": [
+          "MOCK-9087"
+        ]
+      },
+      "user_replies": [
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "Jira 읽기 → triage.py problem → problem-output.json(DATA-003, 2번 AP 줄·3번 CP 이름+token) → check-output 통과 → 정리를 보이고 멈춤. run 없음.",
+      "assertions": [
+        "문제 파악만 했다: triage.py problem과 check-output --for problem으로 JOB/problem.json이 남았고 triage.py run은 부르지 않았다",
+        "symptom.types에 DATA-003이 들었다",
+        "first_analysis가 false다",
+        "재시험이 없어 rounds.last_from_comment가 null 또는 1이다",
+        "clues에 2번 코멘트 AP 로그 줄 'SETUP_DATA_CALL error 2'(log_line), 3번 코멘트 VIPC_SETUP_DATA token 0x0de(ipc)이 있다(stale은 표시대로)",
+        "검사에서 버린 단서(dropped)가 0이다"
+      ],
+      "problem_expect": {
+        "types": [
+          "DATA-003"
+        ],
+        "first_analysis": false,
+        "rounds": {
+          "last_from_comment": [
+            null,
+            1
+          ]
+        },
+        "clues": [
+          {
+            "comment": 2,
+            "kind": "log_line",
+            "contains": "SETUP_DATA_CALL error 2",
+            "stale": false
+          },
+          {
+            "comment": 3,
+            "kind": "ipc",
+            "name": "VIPC_SETUP_DATA",
+            "token": "0x0de",
+            "stale": false
+          }
+        ]
+      },
+      "files": []
+    },
+    {
+      "id": 88,
+      "name": "problem-correction",
+      "batch": "PB",
+      "design": "문제 파악(분석 정확도 단계 2b, analyze --problem-only, reference/problem.md). 정정: CP가 2번에 token 0x0d0을 썼다가 3번에서 '0x0d0은 앞 시도, 실패는 0x0de'로 고친다. 고친 값만 단서, 정정 전 값은 싣지 않는다. 짝: 단계 1 TOKNAME-1(VIPC_PDN_CONNECT 0x0de)",
+      "prompt": "MOCK-9088 --problem-only 로 문제 정리만 부탁해",
+      "setup": {
+        "db": "seed",
+        "jira": [
+          "MOCK-9088"
+        ]
+      },
+      "user_replies": [
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "3번의 VIPC_PDN_CONNECT 0x0de만 단서, 0x0d0은 없음, DATA-003.",
+      "assertions": [
+        "문제 파악만 했다: triage.py problem과 check-output --for problem으로 JOB/problem.json이 남았고 triage.py run은 부르지 않았다",
+        "symptom.types에 DATA-003이 들었다",
+        "first_analysis가 false다",
+        "재시험이 없어 rounds.last_from_comment가 null 또는 1이다",
+        "clues에 3번 코멘트 VIPC_PDN_CONNECT token 0x0de(ipc)이 있다(stale은 표시대로) — 정정 전 token 0x0d0은 없다",
+        "검사에서 버린 단서(dropped)가 0이다"
+      ],
+      "problem_expect": {
+        "types": [
+          "DATA-003"
+        ],
+        "first_analysis": false,
+        "rounds": {
+          "last_from_comment": [
+            null,
+            1
+          ]
+        },
+        "clues": [
+          {
+            "comment": 3,
+            "kind": "ipc",
+            "name": "VIPC_PDN_CONNECT",
+            "token": "0x0de",
+            "stale": false
+          }
+        ],
+        "absent_tokens": [
+          "0x0d0"
+        ]
+      },
+      "files": []
+    },
+    {
+      "id": 89,
+      "name": "problem-retest-same-failure",
+      "batch": "PB",
+      "design": "문제 파악(분석 정확도 단계 2b, analyze --problem-only, reference/problem.md). 재시험에서 같은 실패: 1번 결과 → 2번 CP 0x0de + 재시험 요청 → 3번 일정 독촉 → 4번 재시험 결과(같은 스텝 Fail) → 5번 CP 0x1a2. 마지막 회차는 4번부터, 같은 실패, 앞 token은 stale. 짝: 단계 1 RETEST-1",
+      "prompt": "MOCK-9089 문제 파악만 해줘 --problem-only",
+      "setup": {
+        "db": "seed",
+        "jira": [
+          "MOCK-9089"
+        ]
+      },
+      "user_replies": [
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "rounds {count 2, last_from_comment 4, same_failure yes}, 5번 0x1a2(현재)·2번 0x0de(stale).",
+      "assertions": [
+        "문제 파악만 했다: triage.py problem과 check-output --for problem으로 JOB/problem.json이 남았고 triage.py run은 부르지 않았다",
+        "symptom.types에 DATA-003이 들었다",
+        "first_analysis가 false다",
+        "rounds.last_from_comment가 4이고 same_failure가 yes다",
+        "clues에 2번 코멘트 VIPC_SETUP_DATA token 0x0de(ipc) stale, 5번 코멘트 VIPC_SETUP_DATA token 0x1a2(ipc)이 있다(stale은 표시대로)",
+        "검사에서 버린 단서(dropped)가 0이다"
+      ],
+      "problem_expect": {
+        "types": [
+          "DATA-003"
+        ],
+        "first_analysis": false,
+        "rounds": {
+          "last_from_comment": [
+            4
+          ],
+          "same_failure": [
+            "yes"
+          ]
+        },
+        "clues": [
+          {
+            "comment": 2,
+            "kind": "ipc",
+            "name": "VIPC_SETUP_DATA",
+            "token": "0x0de",
+            "stale": true
+          },
+          {
+            "comment": 5,
+            "kind": "ipc",
+            "name": "VIPC_SETUP_DATA",
+            "token": "0x1a2",
+            "stale": false
+          }
+        ]
+      },
+      "files": []
+    },
+    {
+      "id": 90,
+      "name": "problem-retest-other-step",
+      "batch": "PB",
+      "design": "문제 파악(분석 정확도 단계 2b, analyze --problem-only, reference/problem.md). 재시험에서 다른 스텝 실패: 1회차 데이터 스텝 Fail(CP 0x0de) → 재테스트 요청 → 3번 재시험 결과 데이터는 Pass, VoLTE 발신 스텝 Fail → 4번 AP call이 Telecom 줄 인용. 새 문제라 증상은 발신 실패(CALL-001)이고 앞 데이터 유형을 끌어오지 않는다. 짝: 단계 1 RETESTX-1",
+      "prompt": "MOCK-9090 문제 파악만 해줘 --problem-only",
+      "setup": {
+        "db": "seed",
+        "jira": [
+          "MOCK-9090"
+        ]
+      },
+      "user_replies": [
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "CALL-001(DATA 유형 없음), rounds last 3·same_failure no, 4번 Telecom 줄(현재)·2번 0x0de(stale).",
+      "assertions": [
+        "문제 파악만 했다: triage.py problem과 check-output --for problem으로 JOB/problem.json이 남았고 triage.py run은 부르지 않았다",
+        "symptom.types에 CALL-001이 들었다(앞 회차 문제 유형 DATA-001·DATA-003은 없다)",
+        "first_analysis가 false다",
+        "rounds.last_from_comment가 3이고 same_failure가 no다",
+        "clues에 2번 코멘트 VIPC_SETUP_DATA token 0x0de(ipc) stale, 4번 코멘트 AP 로그 줄 'CreateConnectionProcessor: Connection failed'(log_line)이 있다(stale은 표시대로)",
+        "검사에서 버린 단서(dropped)가 0이다"
+      ],
+      "problem_expect": {
+        "types": [
+          "CALL-001"
+        ],
+        "absent_types": [
+          "DATA-001",
+          "DATA-003"
+        ],
+        "first_analysis": false,
+        "rounds": {
+          "last_from_comment": [
+            3
+          ],
+          "same_failure": [
+            "no"
+          ]
+        },
+        "clues": [
+          {
+            "comment": 2,
+            "kind": "ipc",
+            "name": "VIPC_SETUP_DATA",
+            "token": "0x0de",
+            "stale": true
+          },
+          {
+            "comment": 4,
+            "kind": "log_line",
+            "contains": "CreateConnectionProcessor: Connection failed",
+            "stale": false
+          }
+        ]
+      },
+      "files": []
+    },
+    {
+      "id": 91,
+      "name": "problem-token-dual-sim",
+      "batch": "PB",
+      "design": "문제 파악(분석 정확도 단계 2b, analyze --problem-only, reference/problem.md). token 있음 + 듀얼 SIM: CP가 'SIM2 VIPC_SETUP_DATA (token=0x0de) 실패'와 망 거절 사유. 1번의 장비 시각(14:20:05)은 단서가 아니다. 짝: 단계 1 DUAL-1",
+      "prompt": "MOCK-9091 문제 파악만 해줘 --problem-only",
+      "setup": {
+        "db": "seed",
+        "jira": [
+          "MOCK-9091"
+        ]
+      },
+      "user_replies": [
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "3번 VIPC_SETUP_DATA 0x0de, DATA-003.",
+      "assertions": [
+        "문제 파악만 했다: triage.py problem과 check-output --for problem으로 JOB/problem.json이 남았고 triage.py run은 부르지 않았다",
+        "symptom.types에 DATA-003이 들었다",
+        "first_analysis가 false다",
+        "재시험이 없어 rounds.last_from_comment가 null 또는 1이다",
+        "clues에 3번 코멘트 VIPC_SETUP_DATA token 0x0de(ipc)이 있다(stale은 표시대로)",
+        "검사에서 버린 단서(dropped)가 0이다"
+      ],
+      "problem_expect": {
+        "types": [
+          "DATA-003"
+        ],
+        "first_analysis": false,
+        "rounds": {
+          "last_from_comment": [
+            null,
+            1
+          ]
+        },
+        "clues": [
+          {
+            "comment": 3,
+            "kind": "ipc",
+            "name": "VIPC_SETUP_DATA",
+            "token": "0x0de",
+            "stale": false
+          }
+        ]
+      },
+      "files": []
+    },
+    {
+      "id": 92,
+      "name": "problem-name-only",
+      "batch": "PB",
+      "design": "문제 파악(분석 정확도 단계 2b, analyze --problem-only, reference/problem.md). 이름만: CP가 'VIPC_SETUP_DATA 실패'와 token을 못 준다고 적는다. ipc_name으로 token null — token을 만들지 않는다. 짝: 단계 1 TOKONLY-1",
+      "prompt": "MOCK-9092 문제 파악만 해줘 --problem-only",
+      "setup": {
+        "db": "seed",
+        "jira": [
+          "MOCK-9092"
+        ]
+      },
+      "user_replies": [
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "2번 ipc_name VIPC_SETUP_DATA(token null), DATA-003.",
+      "assertions": [
+        "문제 파악만 했다: triage.py problem과 check-output --for problem으로 JOB/problem.json이 남았고 triage.py run은 부르지 않았다",
+        "symptom.types에 DATA-003이 들었다",
+        "first_analysis가 false다",
+        "재시험이 없어 rounds.last_from_comment가 null 또는 1이다",
+        "clues에 2번 코멘트 VIPC_SETUP_DATA 이름만(ipc_name, token null)이 있다(stale은 표시대로)",
+        "검사에서 버린 단서(dropped)가 0이다"
+      ],
+      "problem_expect": {
+        "types": [
+          "DATA-003"
+        ],
+        "first_analysis": false,
+        "rounds": {
+          "last_from_comment": [
+            null,
+            1
+          ]
+        },
+        "clues": [
+          {
+            "comment": 2,
+            "kind": "ipc_name",
+            "name": "VIPC_SETUP_DATA",
+            "token": null,
+            "stale": false
+          }
+        ]
+      },
+      "files": []
+    },
+    {
+      "id": 93,
+      "name": "problem-ap-log-line",
+      "batch": "PB",
+      "design": "문제 파악(분석 정확도 단계 2b, analyze --problem-only, reference/problem.md). AP 줄 인용: AP network이 'Service MODEM has died' RILJ 줄을 붙여 CP로 넘기고, CP는 크래시 없음이라 HAL 쪽으로 되돌린다. 증상은 발신 시 서비스 없음. 짝: 단계 1 MMH-1·HAL-1",
+      "prompt": "MOCK-9093 문제 파악만 해줘 --problem-only",
+      "setup": {
+        "db": "seed",
+        "jira": [
+          "MOCK-9093"
+        ]
+      },
+      "user_replies": [
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "2번 log_line(Service MODEM has died, ap), NETWORK-001 또는 CALL-001.",
+      "assertions": [
+        "문제 파악만 했다: triage.py problem과 check-output --for problem으로 JOB/problem.json이 남았고 triage.py run은 부르지 않았다",
+        "symptom.types에 NETWORK-001 또는 CALL-001이 들었다",
+        "first_analysis가 false다",
+        "재시험이 없어 rounds.last_from_comment가 null 또는 1이다",
+        "clues에 2번 코멘트 AP 로그 줄 'Service MODEM has died'(log_line)이 있다(stale은 표시대로)",
+        "검사에서 버린 단서(dropped)가 0이다"
+      ],
+      "problem_expect": {
+        "types": [
+          "NETWORK-001",
+          "CALL-001"
+        ],
+        "first_analysis": false,
+        "rounds": {
+          "last_from_comment": [
+            null,
+            1
+          ]
+        },
+        "clues": [
+          {
+            "comment": 2,
+            "kind": "log_line",
+            "contains": "Service MODEM has died",
+            "stale": false
+          }
+        ]
+      },
+      "files": []
+    },
+    {
+      "id": 94,
+      "name": "problem-tc-table-no-token",
+      "batch": "PB",
+      "design": "문제 파악(분석 정확도 단계 2b, analyze --problem-only, reference/problem.md). token 없음: 코멘트는 첨부·담당 지정·확인 중뿐(분석 없음) → 첫 분석. TC(HTML 표)의 Fail 줄 괄호 사유 'DNS 조회 응답 없음'(데이터 아이콘은 LTE)로 DATA-006. 단서 없음",
+      "prompt": "MOCK-9094 문제 파악만 해줘 --problem-only. TC 결과: logs/tc_result.html",
+      "setup": {
+        "db": "seed",
+        "jira": [
+          "MOCK-9094"
+        ],
+        "logs": [
+          {
+            "src": "tests/skill_evals/fixtures/problem-tc-9094.html",
+            "as": "tc_result.html"
+          }
+        ]
+      },
+      "user_replies": [
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "--steps-file logs/tc_result.html, first_analysis true, DATA-006, 단서 없음.",
+      "assertions": [
+        "문제 파악만 했다: triage.py problem과 check-output --for problem으로 JOB/problem.json이 남았고 triage.py run은 부르지 않았다",
+        "symptom.types에 DATA-006이 들었다",
+        "first_analysis가 true다",
+        "재시험이 없어 rounds.last_from_comment가 null 또는 1이다",
+        "로그에서 찾을 단서가 글에 없어 clues가 비었다",
+        "검사에서 버린 단서(dropped)가 0이다"
+      ],
+      "problem_expect": {
+        "types": [
+          "DATA-006"
+        ],
+        "first_analysis": true,
+        "rounds": {
+          "last_from_comment": [
+            null,
+            1
+          ]
+        },
+        "no_clues": true
+      },
+      "files": []
+    },
+    {
+      "id": 95,
+      "name": "problem-first-analysis-title-tc",
+      "batch": "PB",
+      "design": "문제 파악(분석 정확도 단계 2b, analyze --problem-only, reference/problem.md). 첫 분석: 코멘트 없음, 제목 'SMS 발신 실패'와 TC(표 모양 txt) step 5 Fail(전송 실패 표시)만으로 SMS-001",
+      "prompt": "MOCK-9095 문제 파악만 해줘 --problem-only. TC 결과 파일: logs/tc-9095.txt",
+      "setup": {
+        "db": "seed",
+        "jira": [
+          "MOCK-9095"
+        ],
+        "logs": [
+          {
+            "src": "tests/skill_evals/fixtures/problem-tc-9095.txt",
+            "as": "tc-9095.txt"
+          }
+        ]
+      },
+      "user_replies": [
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "first_analysis true, SMS-001, 단서 없음.",
+      "assertions": [
+        "문제 파악만 했다: triage.py problem과 check-output --for problem으로 JOB/problem.json이 남았고 triage.py run은 부르지 않았다",
+        "symptom.types에 SMS-001이 들었다",
+        "first_analysis가 true다",
+        "재시험이 없어 rounds.last_from_comment가 null 또는 1이다",
+        "로그에서 찾을 단서가 글에 없어 clues가 비었다",
+        "검사에서 버린 단서(dropped)가 0이다"
+      ],
+      "problem_expect": {
+        "types": [
+          "SMS-001"
+        ],
+        "first_analysis": true,
+        "rounds": {
+          "last_from_comment": [
+            null,
+            1
+          ]
+        },
+        "no_clues": true
+      },
+      "files": []
+    },
+    {
+      "id": 96,
+      "name": "problem-symptom-not-in-db",
+      "batch": "PB",
+      "design": "문제 파악(분석 정확도 단계 2b, analyze --problem-only, reference/problem.md). 증상이 DB에 없는 종류: MT SMS 수신 실패. DB에는 SMS 발신 실패(SMS-001)뿐이라 억지로 고르지 않고 not_in_db. 재시험은 예고만이라 회차 1",
+      "prompt": "MOCK-9096 문제 파악만 해줘 --problem-only",
+      "setup": {
+        "db": "seed",
+        "jira": [
+          "MOCK-9096"
+        ]
+      },
+      "user_replies": [
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "types [] · not_in_db true, 단서 없음, 회차 1.",
+      "assertions": [
+        "문제 파악만 했다: triage.py problem과 check-output --for problem으로 JOB/problem.json이 남았고 triage.py run은 부르지 않았다",
+        "증상이 이슈 DB에 없는 종류라 symptom.types가 비었고 not_in_db가 true다",
+        "first_analysis가 false다",
+        "재시험이 없어 rounds.last_from_comment가 null 또는 1이다",
+        "로그에서 찾을 단서가 글에 없어 clues가 비었다",
+        "검사에서 버린 단서(dropped)가 0이다"
+      ],
+      "problem_expect": {
+        "not_in_db": true,
+        "first_analysis": false,
+        "rounds": {
+          "last_from_comment": [
+            null,
+            1
+          ]
+        },
+        "no_clues": true
+      },
+      "files": []
+    },
+    {
+      "id": 97,
+      "name": "problem-tc-sentence",
+      "batch": "PB",
+      "design": "문제 파악(분석 정확도 단계 2b, analyze --problem-only, reference/problem.md). TC가 문장 모양: '3. … → Fail (LTE로 넘어가지 않고 통화가 끊김)'. 코멘트는 결과 첨부·같이 봐 달라뿐 → 첫 분석. Wi-Fi 통화 → LTE 핸드오버 실패로 DATA-005(또는 통화 중 끊김 CALL-002)",
+      "prompt": "MOCK-9097 문제 파악만 해줘 --problem-only. TC: logs/tc-6.4.txt",
+      "setup": {
+        "db": "seed",
+        "jira": [
+          "MOCK-9097"
+        ],
+        "logs": [
+          {
+            "src": "tests/skill_evals/fixtures/problem-tc-9097.txt",
+            "as": "tc-6.4.txt"
+          }
+        ]
+      },
+      "user_replies": [
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "first_analysis true, DATA-005 또는 CALL-002, 단서 없음.",
+      "assertions": [
+        "문제 파악만 했다: triage.py problem과 check-output --for problem으로 JOB/problem.json이 남았고 triage.py run은 부르지 않았다",
+        "symptom.types에 DATA-005 또는 CALL-002이 들었다",
+        "first_analysis가 true다",
+        "재시험이 없어 rounds.last_from_comment가 null 또는 1이다",
+        "로그에서 찾을 단서가 글에 없어 clues가 비었다",
+        "검사에서 버린 단서(dropped)가 0이다"
+      ],
+      "problem_expect": {
+        "types": [
+          "DATA-005",
+          "CALL-002"
+        ],
+        "first_analysis": true,
+        "rounds": {
+          "last_from_comment": [
+            null,
+            1
+          ]
+        },
+        "no_clues": true
+      },
       "files": []
     }
   ]

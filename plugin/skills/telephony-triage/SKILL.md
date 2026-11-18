@@ -16,11 +16,12 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 | `record` / `verify-fix`·`fix-submitted`·`validate --cause` / `sync-pr` / 증상만 "비슷한 이슈·이슈 번호?"(search, analyze 아님) | `record.md` / `verify.md` / `sync-pr.md` / `search.md` |
 | 로그 해석 | `log-tags.md`, `ril-requests.md`, `fail-causes.md` |
 | Step 9·"결과 Jira에 올려줘" | `post.md` |
+| `--problem-only`("문제 파악만", `run` 없이) | `problem.md` |
 
 ## 실행 규칙
 
 `S/` = `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/`.
-스크립트 호출·종료 코드·lock·마스킹·확인 지점은 **`reference/rules.md`**(analyze도 첫 스크립트 호출 전에 읽는다).
+**`reference/rules.md`**를 따른다(analyze도 첫 스크립트 호출 전에 읽는다).
 
 ## analyze
 

@@ -1,0 +1,22 @@
+# 모의 Jira 티켓(문제 파악 eval 97, 합성). TC가 문장 모양(절차 문장 + "→ Pass/Fail (사유)"), 코멘트에 분석 없음.
+key: MOCK-9097
+fields:
+  summary: Wi-Fi 통화 핸드오버 시험 Fail
+  description: |
+    TC 6.4 결과 첨부(문장형).
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: IMS}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261110
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments:
+  - author: mock.tester
+    created: "2026-11-16T16:00:00+0900"
+    body: Wi-Fi 통화 핸드오버 시험 결과입니다. 3번 절차 Fail. 로그 첨부
+  - author: mock.pl
+    created: "2026-11-16T16:20:00+0900"
+    body: IMS / data 같이 봐주세요

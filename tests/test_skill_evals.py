@@ -1295,7 +1295,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 86      # FT(84~86 적합성 확인·반복 금지) 뒤. FL(81~83 성공 흐름 제안)까지 83, 80 setup-first-time까지 80, H(76~79)까지 79, 그 전 75
+    assert len(by_id) == 97      # PB(87~97 문제 파악) 뒤. FT(84~86 적합성 확인·반복 금지)까지 86. FL(81~83 성공 흐름 제안)까지 83, 80 setup-first-time까지 80, H(76~79)까지 79, 그 전 75
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 11), (62, 6)):
         e = by_id[eid]
@@ -1883,6 +1883,76 @@ def test_fit_check_evals_defined(tmp_path):
                 continue
             assert ok is False, (eid, fn.__name__)
     assert "FT=적합성 확인·반복 금지 3(84~86:" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
+
+
+def test_problem_evals_defined(tmp_path):
+    """eval 87~97(배치 PB, 문제 파악 단계 2b): 정의 모양과, 실행 흔적이 없으면 통과로 세지 않는다."""
+    by_id = {e["id"]: e for e in _entries()}
+    for eid in sorted(grader.PB_EVALS):
+        e = by_id[eid]
+        assert e["batch"] == "PB" and e["setup"]["db"] == "seed" and e["setup"]["jira"] == [f"MOCK-{9000 + eid}"], eid
+        assert "--problem-only" in e["prompt"] and (EVALS / "jira" / f"MOCK-{9000 + eid}.yaml").is_file(), eid
+        for item in e["setup"].get("logs") or []:
+            assert (REPO / item["src"]).is_file() and f"logs/{item['as']}" in e["prompt"], eid
+        env = _synthetic_env(tmp_path / str(eid))
+        fns = grader.checks(eid, grader.Ctx(env, run_dir(tmp_path / str(eid))))
+        assert len(fns) == len(e["assertions"]) == 6, eid
+        for fn in fns:
+            try:
+                ok, _ = fn()
+            except grader._Manual:
+                continue
+            assert ok is False, eid
+    assert "PB=문제 파악 11(87~97:" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
+
+
+def _pb_golden(entry: dict, ticket: dict) -> dict:
+    """기대값(`problem_expect`)대로 손으로 쓴 정답 출력 — 인용은 그 코멘트에서 기대 글이 든 줄 그대로."""
+    x = entry["problem_expect"]
+    bodies = [c["body"] for c in ticket.get("comments") or []]
+    clues = []
+    for w in x.get("clues") or []:
+        needle = w.get("contains") or w["name"]
+        quote = next(l.strip() for l in bodies[w["comment"] - 1].splitlines() if needle in l)
+        clues.append({"comment": w["comment"], "kind": w["kind"], "name": None if w["kind"] == "log_line" else w["name"],
+                      "token": w.get("token"), "quote": quote, "side": "ap" if w["kind"] == "log_line" else "cp"})
+    last = x["rounds"]["last_from_comment"][0]
+    return {"first_analysis": x["first_analysis"],
+            "symptom": {"text": "합성 정답", "types": [] if x.get("not_in_db") else x["types"][:1],
+                        "not_in_db": bool(x.get("not_in_db"))},
+            "rounds": {"count": 1 if last is None else 2, "last_from_comment": last,
+                       "same_failure": (x["rounds"].get("same_failure") or ["unknown"])[0]},
+            "clues": clues, "hypotheses": [], "modules": [], "unknown": []}
+
+
+def test_problem_expectations_pass_through_real_check():
+    """기대값이 2a 스크립트로 이룰 수 있는 값인가: 시드 DB로 `triage.py problem` → 정답 출력 → `check-output --for problem`이
+    통과하고(dropped 0), 채점 행 2~6이 모두 통과한다. 정정 전 token을 넣은 출력은 단서 행이 실패한다."""
+    import yaml
+    from runner import run, tmp
+    sys.path.insert(0, str(REPO / "tests" / "helpers"))
+    import make_accuracy_fixtures as maf
+    import make_plugin_root
+
+    root = make_plugin_root.make()
+    db = maf.build_seed_db(tmp("tt-pb-db-") / "db", root)
+    for e in (x for x in _entries() if x["id"] in grader.PB_EVALS):
+        key = e["setup"]["jira"][0]
+        ticket = yaml.safe_load((EVALS / "jira" / f"{key}.yaml").read_text(encoding="utf-8"))
+        job = tmp("tt-pb-") / key
+        args = ["problem", key, "--issue-file", str(EVALS / "jira" / f"{key}.yaml"), "--offline-db", str(db), "--out", str(job)]
+        for item in e["setup"].get("logs") or []:
+            args += ["--steps-file", str(REPO / item["src"])]
+        assert run("triage.py", args).returncode == 0, key
+        out = _pb_golden(e, ticket)
+        (job / "problem-output.json").write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+        proc = run("triage.py", ["check-output", key, "--for", "problem", "--out", str(job)])
+        assert proc.returncode == 0 and json.loads(proc.stdout)["dropped"] == 0, (key, proc.stdout, proc.stderr)
+        rec = json.loads((job / "problem.json").read_text(encoding="utf-8"))
+        assert all(ok for ok, _ in grader.pb_rows(e["problem_expect"], rec)), (key, grader.pb_rows(e["problem_expect"], rec))
+        if e["problem_expect"].get("absent_tokens"):     # 정정 전 token 단서가 있으면 단서 행 실패
+            bad = {**rec, "clues": rec["clues"] + [{**rec["clues"][0], "token": e["problem_expect"]["absent_tokens"][0]}]}
+            assert grader.pb_rows(e["problem_expect"], bad)[3][0] is False
 
 
 def test_unjudged_variant_db_has_slow_cause():

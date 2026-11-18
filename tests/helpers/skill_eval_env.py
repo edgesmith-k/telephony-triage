@@ -15,6 +15,7 @@
 
 setup 필드 (모두 선택):
     db: tests/fixtures 아래 이슈 DB 이름 (기본 issue-db-sample)
+        `seed`면 시드 계획 다섯 개를 적용한 DB(`make_accuracy_fixtures.build_seed_db`, 유형 14개·가림 끔 — 문제 파악 eval 87~97)
     jira: [티켓 키]  — tests/skill_evals/jira, 없으면 tests/mocks/jira에서 찾는다
     tracker: github — 두 번째 트래커(트래커 범용화 §6-3): site-defaults `tracker` 블록을 `runner.GITHUB_TRACKER`로(site_defaults의
         tracker가 있으면 그 키가 우선), db 기본값을 `issue-db-github`로, 모의 GitHub Issues MCP 환경(`MOCK_GH_ISSUES_DIR`·
@@ -360,8 +361,13 @@ def build(entry: dict, out: Path, direct_tools: bool = True) -> dict:
     if module_url:      # URL이 env 디렉토리마다 달라 plugin_root 캐시 키도 다르다
         overrides["module_skills"] = {"remote": module_url}
     root = plugin_root("eval", **overrides) if overrides else plugin_root()
-    db_src = fixture_db(setup.get("db", "issue-db-github" if github else "issue-db-sample"))
+    if setup.get("db") == "seed":
+        import make_accuracy_fixtures
+        db_src = make_accuracy_fixtures.build_seed_db(out / "_seed-db", root)
+    else:
+        db_src = fixture_db(setup.get("db", "issue-db-github" if github else "issue-db-sample"))
     ws = Workspace(src=db_src, root=root)
+    shutil.rmtree(out / "_seed-db", ignore_errors=True)
 
     jira_dir = out / "jira"
     jira_dir.mkdir()

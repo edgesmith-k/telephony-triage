@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<!-- 합성 TC 결과(문제 파악 eval 94). 표 모양: 스텝마다 시각(시험 장비 시계), 내용, 판정. Fail 뒤 괄호가 실패 사유. -->
+<html>
+<head><meta charset="utf-8"><title>Test Result - TC 3.7 Internet Access</title></head>
+<body>
+<h2>TC 3.7 Internet Access over LTE</h2>
+<p>DUT: MOCK-A56 / SW MOCKA56_U1_20261110 / Test equipment: mock network simulator</p>
+<table border="1">
+<tr><th>No</th><th>Time</th><th>Step</th><th>Result</th></tr>
+<tr><td>1</td><td>2026-11-16 09:41:02</td><td>Airplane mode ON</td><td>Pass</td></tr>
+<tr><td>2</td><td>2026-11-16 09:41:12</td><td>Airplane mode OFF</td><td>Pass</td></tr>
+<tr><td>3</td><td>2026-11-16 09:41:40</td><td>LTE 망 등록 확인</td><td>Pass</td></tr>
+<tr><td>4</td><td>2026-11-16 09:41:45</td><td>모바일 데이터 ON, 데이터 아이콘 확인</td><td>Pass</td></tr>
+<tr><td>5</td><td>2026-11-16 09:41:58</td><td>인터넷 PDN 연결 확인 (IPv4/IPv6 주소 할당)</td><td>Pass</td></tr>
+<tr><td>6</td><td>2026-11-16 09:42:10</td><td>브라우저로 테스트 페이지 접속</td><td>Fail (데이터 아이콘은 LTE로 표시되는데 페이지 로딩 안 됨, DNS 조회 응답 없음)</td></tr>
+<tr><td>7</td><td>-</td><td>Airplane mode ON</td><td>Not executed</td></tr>
+</table>
+</body>
+</html>
