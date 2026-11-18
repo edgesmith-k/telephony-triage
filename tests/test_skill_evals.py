@@ -238,7 +238,7 @@ def test_eval_setup_references_resolve():
     import skill_eval_env
     from runner import fixture_path
 
-    dbs = {"issue-db-sample", *make_variant_dbs.VARIANTS}
+    dbs = {"issue-db-sample", "seed", *make_variant_dbs.VARIANTS}     # seed = 시드 계획 DB(문제 파악 eval 87~97)
     for e in _entries():
         setup = e["setup"]
         assert setup.get("db", "issue-db-sample") in dbs, (e["id"], setup.get("db"))
