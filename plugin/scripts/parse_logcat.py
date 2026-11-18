@@ -1051,7 +1051,8 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
         backend = backend.apply_rules(parser_rules.load(rules_dir))
     except parser_rules.RulesError as exc:
         raise UsageError(f"파서 규칙 오류: {exc}") from exc
-    spec = (profile or _profile(defaults, db_cfg)).vendor_ipc
+    prof = profile or _profile(defaults, db_cfg)
+    spec = prof.vendor_ipc
     look = None
     if args.find:
         try:
@@ -1120,7 +1121,8 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
     if how == "text":      # 본문 일치는 줄 레코드의 슬롯
         slots = [lines[i].get("phone_id") for i in found]
     by_line = {r["i"]: r for r in records}
-    places = lookat.group_places([_hit_item(i, lines[i], by_line.get(i)) for i in found])
+    places = lookat.group_places([_hit_item(i, lines[i], by_line.get(i)) for i in found],
+                                 prof.ril_vendor.link_ms if prof.ril_vendor else lookat.PAIR_MS)
     stamp = logtime.normalize_ts(look.get("stamp"), args.tz, args.year) if look.get("stamp") else None
     same = [p for p in places if stamp is not None and any(logtime.parse_ts(x["ts"]) == stamp for x in p)]
     if len(same) == 1:     # 붙여 넣은 줄의 시각과 같은 곳이 하나 → 그곳(같은 단말 로그 시계, §8-5)

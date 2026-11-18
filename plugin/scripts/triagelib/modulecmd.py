@@ -424,8 +424,8 @@ def _run(args, defaults: dict, seen: dict):
         inputs["events.json"] = _sha256(raw)
     except (OSError, ValueError):
         raise nojob("analysis.json·events.json을 읽지 못했다 — /telephony-triage:analyze를 다시") from None
-    candidates = [c for c in (analysis.get("candidates") or []) if isinstance(c, dict)]
-    explore = None
+    candidates = report.lead_first(analysis.get("decision"), [c for c in (analysis.get("candidates") or []) if isinstance(c, dict)])
+    explore = None      # 채택 원인이 1위가 아니면 그 원인이 맨 앞(심층 분석 대상·카테고리·top_candidates)
     if purpose == "deep":
         if not candidates:
             raise _fail(purpose, 1, "분석 후보 없음", "1위 후보가 없다", ctx)
@@ -674,7 +674,7 @@ def _success(job, purpose, out, lines, warnings):
 
 def _hints(job: Path, cfg: dict, analysis: dict, by_cat: dict[str, str]) -> tuple[list[tuple[str, str]], list[str]]:
     """IMPL §2.3 규칙 4 → [(dir, label)], hints_unmapped(≤3)."""
-    cands = [c for c in analysis.get("candidates") or [] if isinstance(c, dict)]
+    cands = report.lead_first(analysis.get("decision"), [c for c in analysis.get("candidates") or [] if isinstance(c, dict)])
     found: list[tuple[str, str]] = []
     reason = (analysis.get("explore") or {}).get("reason")
     if reason in ("cause_unconfirmed", "fit_check") and cands and cands[0].get("type"):

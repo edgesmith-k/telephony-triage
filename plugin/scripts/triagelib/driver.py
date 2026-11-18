@@ -21,7 +21,7 @@ from .cache import CacheMixin, State, _digest, _file_sha
 from .core import (ELIGIBILITY_FILE, ERROR_EVENT_RE, EXPLORE_MAX_LINES, EXTRACTOR_CODES, EXPLORE_WHEN, PLATFORM_ANSWER, Fail, NeedsInput,
                    MODULE_RECORD_DIR, Runner, SEARCH_LIMIT, SNAPSHOT_DIR, STALE_FILES, STATE_FILE, Stopped, TOP, _clip,
                    FIND_TEXT_ITEMS, PARTIAL_ANALYSIS_MAX, REFERENCE_FILE)
-from .report import ReportMixin, _ref_label, _unique_evidence, flow_section
+from .report import ReportMixin, _ref_label, _unique_evidence, flow_section, lead_first
 
 MASKED_DIR = "logs-masked"       # 원문 마스킹 사본(parse_logcat.py mask-copy, 종합 리뷰 G①) — 모델이 읽을 대상
 
@@ -96,8 +96,10 @@ def _decision(candidates: list[dict], anchor: dict | None, elig: dict | None) ->
         return {"state": "accepted", "reason": "anchored_top",
                 "selected": {"category": picked.get("category"), "type": picked["type"], "cause": picked["cause"]},
                 "location": location, **extra}
+    elif elig.get("state") == "accepted":      # 채택 원인이 후보에 없다(매처는 순위 원인만 붙이므로 정상 입력에선 없음) — 보류
+        reason, extra["check"]["why"] = "ineligible", "cause_not_in_candidates"
     else:
-        reason = elig.get("reason") if elig.get("state") == "held" else "cause_unconfirmed"
+        reason = elig.get("reason") or "cause_unconfirmed"
     return {"state": "held", "reason": reason, "selected": None, "location": location, **extra}
 
 
@@ -828,6 +830,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         argv = ["--db", self.snap, "--events", events, "--top", 0 if regress else TOP]
         if meta is not None:
             argv += ["--issue-meta", meta]
+        if not regress:     # 이전 실행의 자격 검사 기록이 이번 결과로 읽히지 않게(이번 매처가 다시 쓴다)
+            (self.job / ELIGIBILITY_FILE).unlink(missing_ok=True)
+            (self.job / REFERENCE_FILE).unlink(missing_ok=True)
         if regress:
             argv.append("--regress")
         elif self.reference:
@@ -1219,8 +1224,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         flows, flow_lines = self.flows(logs, tz, year, around, events, version, [c["cause"] for c in candidates if c["cause"]],
                                        top)
         code_out = self.resolve_code(code, version, candidates)
-        analyzer = self.analyzer(candidates)
-        explore = self.explore(candidates)
+        decision = _decision(candidates, anchor, match.get("eligibility"))
+        analyzer = self.analyzer(lead_first(decision, candidates))     # 심층 분석 카테고리: 채택 원인(없으면 1위)
+        explore = self.explore(lead_first(decision, candidates))     # 적합성 확인도 채택 원인 기준
         explore_input = self.explore_input(around, anchor) if explore and explore["when"] != "never" else None
         if explore_input is not None and partial:    # 탐색 입력: 부분 일치 앞 3개(키·없는 조건 id)·맞은 근거 시각(보조 중심)
             explore_input["partial"] = [{"signature": p["signature"],
@@ -1245,7 +1251,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         self.steps_member = _clip(self.masker()(member), 120) if member else None
         return {
             "around": around, "anchor": anchor, "outside": outside, "candidates": candidates,
-            "decision": _decision(candidates, anchor, match.get("eligibility")),
+            "decision": decision,
             "pending_causes": [{"cause": p["cause"], "title": _clip(p.get("title"), 50)}
                                for p in match.get("pending_causes") or []][:TOP],
             "no_candidate": no_candidate, "unjudged": unjudged, "observation": observation, "code": code_out,

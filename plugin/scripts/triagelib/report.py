@@ -52,6 +52,13 @@ def selected_rank(dec: dict | None, cands: list) -> int | None:
     return next((n for n, c in enumerate(cands) if cause and c.get("cause") == cause), None)
 
 
+def lead_first(dec: dict | None, cands: list) -> list:
+    """채택 원인을 맨 앞으로 옮긴 후보 목록(나머지 순서 그대로). 채택이 아니거나 1위면 그대로 — 심층 분석 입력·적합성 보류·
+    리포트 근거가 "1위" 대신 채택 원인을 보게 한다."""
+    n = selected_rank(dec, cands)
+    return [cands[n], *cands[:n], *cands[n + 1:]] if n else list(cands)
+
+
 def decision_line(dec: dict, cands: list) -> str:
     """`- 판단:` 줄. 채택은 실패 지점 출처·상태(채택 원인이 1위가 아니면 "규칙 일치 n위"), 보류는 사유와(후보가 있으면) 규칙 일치를
     채택하지 않았다는 말. `counter`(심층 분석이 다른 원인을 냄)가 있으면 꼬리를 붙인다."""
@@ -368,34 +375,37 @@ def fit(result: dict) -> dict:
         return len(dumps(result).encode("utf-8")) + 1
 
     cands = result.get("candidates") or []
+    dec = result.get("decision") or {}
+    # 채택 원인(1위가 아닐 수 있다, 단계 5)의 근거를 1위 자리처럼 지킨다 — 나머지(others)부터 준다
+    lead = cands[selected_rank(dec, cands) or 0] if cands else None
+    others = [c for c in cands if c is not lead]
     # 성공 흐름(§5.13, 표시 전용 보조 칸): 후보 근거보다 먼저 — flows[1:] → 전체
     steps = [lambda: result.get("flows") and result.update(flows=result["flows"][:1]),
              lambda: result.pop("flows", None),
              lambda: (result.get("step_anchor") or {}).pop("look", None),     # 기준 줄 일치 수(리포트 줄에 같은 내용)
              lambda: _drop_prior_hyps(result),          # 이전 탐색 가설(이전 report.md·runs/에 남아 있다)
              lambda: result.pop("prior", None)]
-    for c in cands[1:]:
+    for c in others:
         steps.append(lambda c=c: c.update(evidence=c["evidence"][:2]))
     # C′ 부분 일치(§5.12): 다른 후보 근거 다음, 1위 근거·must_show 줄이기 전에 partial[1:] → missing 40자 → partial 전체
     steps += [lambda: result.get("partial") and result.update(partial=result["partial"][:1]),
               lambda: result.get("partial") and result.update(partial=[
                   {**p, "missing": [_clip(m, 40) for m in p.get("missing") or []]} for p in result["partial"]]),
               lambda: result.pop("partial", None)]
-    steps.append(lambda: cands and cands[0].update(evidence=cands[0]["evidence"][:6]))
+    steps.append(lambda: lead and lead.update(evidence=lead["evidence"][:6]))
     for c in cands:
         steps.append(lambda c=c: c.update(evidence=[{**e, "msg": _clip(e.get("msg"), 80)} for e in c["evidence"]]))
-    for c in cands[1:]:
+    for c in others:
         steps.append(lambda c=c: c.update(evidence=[]))
     steps.insert(0, lambda: _drop_read_only_hint_if_shown(result))
     steps.insert(1, lambda: result.update(read_only_hint=_clip(result.get("read_only_hint"), 100))
                  if result.get("read_only_hint") else None)
-    dec = result.get("decision") or {}
     # 자격 검사 사건(표시용, 전체는 JOB/eligibility.json)을 가장 먼저 줄인다 — events_total은 남긴다
     steps[0:0] = [lambda: dec.get("events") and dec.update(events=dec["events"][:1]),
                   lambda: dec.get("events") and dec.update(events=[])]
     steps += [lambda: result.update(warnings=[_clip(w, 120) for w in (result.get("warnings") or [])[:3]]),
               lambda: result.update(files={"report": result["files"]["report"]}),
-              lambda: cands and cands[0].update(evidence=cands[0]["evidence"][:3]),
+              lambda: lead and lead.update(evidence=lead["evidence"][:3]),
               lambda: _trim_error_events(result),
               lambda: (result.get("unjudged") or {}).pop("types", None),
               lambda: (result.get("unjudged") or {}).pop("causes", None),
@@ -1004,10 +1014,12 @@ class ReportMixin:
                          f"{'' if top['C'] else (', 유형 일치·원인 판정 불가' if top.get('_cause_unjudged') else ', 유형 일치·원인 미확인')})"
                          f"{HELD_TAIL if (dec or {}).get('state') == 'held' or selected_rank(dec, cands) else ''}")
             masked = "" if self.masker().off else "마스킹, "       # 끔 DB면 "마스킹"이라 쓰지 않는다
-            ana.append(f"- 근거 로그 ({masked}슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
+            sel = cands[selected_rank(dec, cands) or 0]      # 근거 로그는 채택 원인(1위가 아닐 수 있다, 단계 5) 것
+            ana.append(f"- 근거 로그 ({masked}슬롯 phone {','.join(map(str, sel['phones'])) or '?'}"
+                       f"{'' if sel is top else ', 채택 원인 ' + str(sel['cause'])}):")
             ana += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ×{e['_count']}" if e.get("_count") else "")
                       + (f" ({e['_ref']})" if e.get("_ref") else "")
-                      for e in top["evidence"]]
+                      for e in sel["evidence"]]
             basis = (r.get("_partial") or {}).get("absence_basis")
             if basis:      # must_not_match에 기대는 시그니처: 그 줄이 빌드에서 사라져도 같은 결과(판정 불변, must_show 아님)
                 ana.append(f"  - 없음 근거 포함: must_not_match {basis['pattern']} — 이 줄이 빌드에서 사라져도 같은 결과")
@@ -1118,7 +1130,7 @@ class ReportMixin:
                 cause_l.append(f"- 다른 버전 원인 ({self.platform_label} {', '.join(top['_version_mismatch'])})")
             cause_l.append(f"- 기존 사례: Jira {top.get('issue_count') or 0}건 ({', '.join(top.get('issue_recent') or []) or '-'})")
             cause_l.append(f"- 관련 원인: {', '.join(top['related']) or '없음'}")
-        others = [f"{c['cause'] or c['type']} (규칙 일치 점수 {c['score']})" for c in cands[1:]]
+        others = [f"{c['cause'] or c['type']} (규칙 일치 점수 {c['score']})" for c in cands if c is not top]   # 채택 원인 뺀 나머지
         ana.append(f"- 기타 후보: {', '.join(others) or '없음'}")
         if r.get("pending_causes"):
             cause_l.append("- 참고: 시그니처 없는 기존 원인: " + ", ".join(p["cause"] for p in r["pending_causes"]))
@@ -1128,7 +1140,7 @@ class ReportMixin:
         elif analyzer and analyzer.get("when") == "never":
             # 설정 키 경로: 기본 플랫폼은 최상위 analyzers, 그 밖은 platforms.<p>.analyzers (17-platforms §10)
             at = "" if self.platform == userconfig.TOP_PROFILE else f"platforms.{self.platform}."
-            ana.append(f"- 심층 분석 생략: {at}analyzers.{cands[0].get('category')}.when: never")
+            ana.append(f"- 심층 분석 생략: {at}analyzers.{(top or cands[0]).get('category')}.when: never")
         elif analyzer and analyzer.get("category"):     # 모듈 스킬: 동의 뒤 `module --for deep`가 받는다
             ana.append(DEEP_MODULE_PENDING.format(platform=self.platform, category=analyzer["category"], key=self.key))
         elif analyzer:

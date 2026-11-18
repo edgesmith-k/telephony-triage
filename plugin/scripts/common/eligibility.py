@@ -46,22 +46,29 @@ def ref_key(line_ref) -> tuple | None:
 
 
 def merge(events: list[dict]) -> list[dict]:
-    """시각 순 사건 목록에서 같은 유형·같은 슬롯(또는 모름) 사건이 `MERGE_SEC` 안에 이어지면 하나로 합친다."""
+    """시각 순 사건 목록에서 같은 유형·같은 슬롯(또는 모름) 사건이 첫 사건 시각부터 `MERGE_SEC` 안이면 하나로 합친다(합친 시각에서
+    다시 재지 않아 사슬처럼 늘어나지 않는다). 합친 사건 시각은 가장 늦은 것, 원인 간격(`gap_s`)은 그 시각 기준으로 다시 잰다."""
     out: list[dict] = []
+    first: dict[int, datetime] = {}
     for e in events:
         prev = next((m for m in reversed(out) if e["type"] and m["type"] == e["type"]
                      and (m.get("phone") == e.get("phone") or None in (m.get("phone"), e.get("phone")))
-                     and (e["at"] - m["at"]).total_seconds() <= MERGE_SEC), None)
+                     and (e["at"] - first[id(m)]).total_seconds() <= MERGE_SEC), None)
         if prev is None:
+            first[id(e)] = e["at"]
             out.append(e)
             continue
-        prev["at"] = max(prev["at"], e["at"])
+        at = max(prev["at"], e["at"])
+        shift = lambda c, x: (c[0], c[1], round(c[2] + (at - x["at"]).total_seconds(), 3))  # noqa: E731
+        causes = [shift(c, prev) for c in prev["causes"]] + [shift(c, e) for c in e["causes"]]
+        prev["at"] = at
         for k in ("lines", "cause_lines", "cond_lines"):
             prev[k] = prev[k] | e[k]
         best: dict = {}
-        for c in prev["causes"] + e["causes"]:
+        for c in causes:
             best[c[1]] = min(best.get(c[1], c), c)
         prev["causes"] = sorted(best.values())
+        prev["gap_s"] = prev["causes"][0][2] if prev["causes"] else None
         prev["after"] = sorted((set(prev["after"]) | set(e["after"])) - set(best))
         prev["absence_unverified"] = sorted(set(prev["absence_unverified"]) | set(e["absence_unverified"]))
         prev["raw"] = prev["raw"] + e["raw"]
@@ -79,11 +86,13 @@ def _held(reason: str, why: str | None, evs=()) -> dict:
 
 def _adopt(evs: list[dict], why: str) -> dict:
     """붙은 사건 → 채택(원인 1순위가 모두 같을 때만) 또는 보류."""
+    if any(e["absence_bad"] for e in evs):     # 증상의 안 나옴을 확인 못 함 — 붙은 원인이 있어도 사건 자체가 미확인(먼저 보류)
+        return _held("ineligible", "absence_unverified", evs)
     picks = [e["causes"][0][1] if e["causes"] else None for e in evs]
     if None in picks:
         e = evs[picks.index(None)]
-        if e["absence_bad"] or (e["absence_unverified"] and not e["after"]):
-            return _held("ineligible", "absence_unverified", evs)     # 안 나옴 필요조건 못 채움(로그가 먼저 끝남 등)
+        if e["absence_unverified"] and not e["after"]:
+            return _held("ineligible", "absence_unverified", evs)     # 원인의 안 나옴 필요조건 못 채움(로그가 먼저 끝남 등)
         if e["unjudged"] and not e["after"]:
             return _held("cause_unjudged", "cause_unjudged", evs)
         return _held("cause_unconfirmed", "cause_after_event" if e["after"] else "no_cause_before_event", evs)
@@ -121,8 +130,8 @@ def _attach_line(ref: dict, events: list[dict], link_ms: int) -> tuple:
             ("held", "ineligible", "no_event_at_reference")
     refs = {k for k in (ref_key(x.get("line_ref")) for x in lines) if k}
     rils = [{**x["ril"], "phone": x.get("phone"), "ts": x["ts"]} for x in lines if x.get("ril")]
-    same = [e for e in events if (e["lines"] | e.get("cause_lines", set()) | e.get("cond_lines", set())) & refs
-            or (rils and _same_ril(e, rils))]
+    # 근거 줄(증상·원인)이 기준 줄인 사건을 먼저, 없을 때만 창 안 조건 줄(§8-1) — 앞 사건 창이 뒤 사건 증상 줄을 덮어도 뒤 사건으로
+    same = [e for e in events if (e["lines"] | e.get("cause_lines", set())) & refs or (rils and _same_ril(e, rils))]         or [e for e in events if e.get("cond_lines", set()) & refs]
     if same:    # 점(같은 줄·같은 RIL 요청)
         typed = [e for e in same if e["type"]]
         return ("events", typed[:1], "same_line") if typed else ("held", "symptom_not_found", "same_line_typeless")

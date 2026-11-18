@@ -103,10 +103,13 @@ def pick(times: list[datetime], ref: datetime | None) -> tuple[int, str]:
     return len(times) - 1, "last"
 
 
-def group_places(hits: list[dict]) -> list[list[dict]]:
+PAIR_MS = 2000      # IPC REQ→RSP 짝 상한 기본값(= platforms.base.DEFAULT_LINK_MS, 사내는 `platform.ril.vendor.link_ms`)
+
+
+def group_places(hits: list[dict], link_ms: int = PAIR_MS) -> list[list[dict]]:
     """일치 줄(`{ts, phone, ipc?: {dir, name, token}, ril?: {serial, pid, paired_ts}}`, 시각 순)을 같은 요청끼리 묶는다(H13):
-    IPC = 같은 name·token·슬롯의 REQ와 그 뒤 첫 RSP, RIL = 같은 pid·슬롯·serial이고 짝 시각(`paired_ts`)이 이어지는 줄.
-    나머지는 줄 하나가 한 곳."""
+    IPC = 같은 name·token·슬롯의 REQ와 그 뒤 `link_ms` 안 첫 RSP(token이 돌아 다시 쓰여도 먼 RSP와 묶지 않게), RIL = 같은
+    pid·슬롯·serial이고 짝 시각(`paired_ts`)이 이어지는 줄. 나머지는 줄 하나가 한 곳."""
     groups: list[list[dict]] = []
     open_ipc: dict = {}
     ril_last: dict = {}
@@ -114,8 +117,9 @@ def group_places(hits: list[dict]) -> list[list[dict]]:
         ipc, ril = h.get("ipc"), h.get("ril")
         if ipc:
             key = (ipc.get("name"), ipc.get("token"), h.get("phone"))
-            if ipc.get("dir") == "rsp" and key in open_ipc:
-                open_ipc.pop(key).append(h)
+            req = open_ipc.pop(key, None) if ipc.get("dir") == "rsp" else None
+            if req and (datetime.fromisoformat(h["ts"]) - datetime.fromisoformat(req[0]["ts"])).total_seconds() * 1000 <= link_ms:
+                req.append(h)
                 continue
             groups.append([h])
             if ipc.get("dir") == "req":

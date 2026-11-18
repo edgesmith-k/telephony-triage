@@ -295,9 +295,12 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
     held = json.loads(analysis.read_text(encoding="utf-8"))
     now = analysis.stat()
     assert now.st_mtime_ns > before.st_mtime_ns and now.st_ino != before.st_ino
-    # check-output은 상태·사유·selected·counter만 바꾼다 — 자격 검사 칸(check·events·events_total)은 그대로
+    # check-output은 상태·사유·selected·counter와 붙은 사건의 result(adopted → held)만 바꾼다 — check·events_total은 그대로
     assert held["decision"] == {**{k: v for k, v in dec.items() if k != "counter"}, "state": "held", "reason": "fit_check",
-                                "selected": None}
+                                "selected": None,
+                                "events": [{**e, "result": "held" if e["result"] == "adopted" else e["result"]}
+                                           for e in dec["events"]]}
+    assert held["decision"]["events"][0]["result"] == "held"
     assert held["candidates"] == done["candidates"]
     assert _report_line(out, "- 판단:") == ("- 판단: 원인 보류 — 탐색 분석 적합성 확인에서 1위가 증상과 맞지 않음. 아래 규칙 "
                                           "일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다")

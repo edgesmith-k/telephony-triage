@@ -288,7 +288,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
     - state: none | found | confirmed | multiple
     - source: look_at | log_marker | steps_file | step_order | comment | model | null
     - kind(기준 줄 ipc·token 일치 point, 글자 일치 near, 마커·steps-file 구간 range): point | near | range | null
-  - check?(자격 검사 요약(표시 전용): why(세부 사유 — same_line|cp_point|range|near_without_symptom|range_end_unknown|range_without_symptom|no_event_at_reference|typeless_failure_within_link|same_line_typeless|no_event_in_range|locations|slots|sources|multiple_events|absence_unverified|cause_after_event|no_cause_before_event|cause_unjudged, 기준 없으면 null), checked(기준에 붙어 검사한 사건 수), total(실패 사건 수 — 유형 없는 파생 오류 이벤트 포함))
+  - check?(자격 검사 요약(표시 전용): why(세부 사유 — same_line|cp_point|range|near_without_symptom|range_end_unknown|range_without_symptom|no_event_at_reference|typeless_failure_within_link|same_line_typeless|no_event_in_range|locations|slots|sources|multiple_events|absence_unverified|cause_after_event|no_cause_before_event|cause_unjudged|cause_not_in_candidates, 기준 없으면 null), checked(기준에 붙어 검사한 사건 수), total(실패 사건 수 — 유형 없는 파생 오류 이벤트 포함))
     - why
     - checked
     - total

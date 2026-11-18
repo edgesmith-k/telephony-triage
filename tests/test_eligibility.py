@@ -121,6 +121,8 @@ def test_rule2_cause_after_event_absence_and_unjudged():
     assert outcome(el.decide([ev("X", 1, absence_unverified=["X-1"])], [point(1, 1)])) == \
         ("held", "ineligible", "absence_unverified")
     assert outcome(el.decide([ev("X", 1, unjudged=True)], [point(1, 1)])) == ("held", "cause_unjudged", "cause_unjudged")
+    # 증상의 안 나옴을 확인 못 한 사건은 원인이 붙어 있어도 먼저 보류(리뷰 P1-2)
+    assert outcome(el.decide([ev("X", 1, ["X-1"], absence_bad=True)], [point(1, 1)])) ==         ("held", "ineligible", "absence_unverified")
     assert outcome(el.decide(EVENTS, [])) == ("held", "no_reference", None)
 
 
@@ -129,6 +131,17 @@ def test_merge_same_type_within_one_second():
     out = el.merge([ev("DATA-003", 10, ["D1"]), ev("DATA-003", 10.002, ["D1"], line=(0, 2)), ev("DATA-003", 12, ["D1"])])
     assert len(out) == 2 and out[0]["lines"] == {(0, 1), (0, 2)}
     assert len(el.merge([ev("DATA-003", 10), ev("DATA-003", 10.5, phone=1)])) == 2     # 다른 슬롯은 따로
+    # 첫 사건 시각부터 1초 — 0.8초 간격 사슬은 셋째에서 끊긴다, 합친 사건의 gap_s는 합친 시각(가장 늦은 것) 기준(리뷰 P2-4)
+    out = el.merge([ev("DATA-003", 10, ["D1"]), ev("DATA-003", 10.8, line=(0, 2)), ev("DATA-003", 11.6, line=(0, 3))])
+    assert [len(e["lines"]) for e in out] == [2, 1] and out[0]["gap_s"] == pytest.approx(0.9)
+
+
+def test_same_line_prefers_evidence_over_window_lines():
+    """리뷰 P0-1: 앞 사건 창(cond_lines)이 뒤 사건의 증상 줄을 덮어도, 그 줄이 근거인 뒤 사건을 고른다."""
+    early = ev("CALL-002", 10, ["C2"], line=(0, 3), cond_lines={(0, 9)})
+    late = ev("CALL-002", 35, ["C3"], line=(0, 9))
+    assert outcome(el.decide([early, late], [point(9, 35)])) == ("accepted", "anchored_top", "C3")
+    assert outcome(el.decide([early], [point(9, 35)])) == ("accepted", "anchored_top", "C2")   # 근거 사건이 없을 때만 창 줄
 
 
 def test_summary_rows_put_attached_first_and_count_totals():
@@ -143,9 +156,12 @@ def test_summary_rows_put_attached_first_and_count_totals():
 # -- 기준 줄 묶기·시각(§8-5) -------------------------------------------------------------------------------------
 
 def test_group_places_pairs_request_response_and_ril_serial():
-    h = lambda ts, d, tok=222: {"ts": ts, "phone": 0, "ipc": {"dir": d, "name": "VIPC_SETUP_DATA", "token": tok}}  # noqa: E731
-    assert len(lookat.group_places([h("t1", "req"), h("t2", "rsp")])) == 1
-    assert len(lookat.group_places([h("t1", "req"), h("t2", "rsp"), h("t3", "req"), h("t4", "rsp")])) == 2
+    h = lambda s, d, tok=222: {"ts": f"2026-11-14T10:00:{s:06.3f}+09:00", "phone": 0,  # noqa: E731
+                               "ipc": {"dir": d, "name": "VIPC_SETUP_DATA", "token": tok}}
+    assert len(lookat.group_places([h(1, "req"), h(1.5, "rsp")])) == 1
+    assert len(lookat.group_places([h(1, "req"), h(1.5, "rsp"), h(3, "req"), h(3.5, "rsp")])) == 2
+    assert len(lookat.group_places([h(1, "req"), h(4, "rsp")])) == 2              # 2초 넘은 RSP는 다른 곳(token 재사용)
+    assert len(lookat.group_places([h(1, "req"), h(4, "rsp")], link_ms=5000)) == 1    # 사내 조정 값
     r = lambda ts, paired: {"ts": ts, "phone": 0, "ril": {"serial": 7, "pid": 1, "paired_ts": paired}}  # noqa: E731
     assert len(lookat.group_places([r("t1", "t2"), r("t2", "t1")])) == 1
     assert len(lookat.group_places([r("t1", "t2"), r("t9", "t8")])) == 2
@@ -229,6 +245,53 @@ def test_adopted_cause_outside_top_is_appended(seed_db):
     assert cut["omitted"]["candidates"] == len(names) - 2
 
 
+REG = REPO / "tests" / "fixtures" / "eligibility"
+
+
+def _line_ref(ln: int) -> dict:
+    return {"kind": "line", "source": "look_at", "places": 1, "lines": [
+        {"line_ref": {"file_index": 0, "line_no": ln}, "ts": "2026-11-14T10:00:35.101+09:00", "phone": None}]}
+
+
+def test_reference_line_picks_its_own_event_not_earlier_window(seed_db):
+    """리뷰 P0-1 회귀: 앞 끊김(31초)의 60초 창이 뒤 끊김 줄(9번, 35.101초)을 덮어도 9번 줄 기준은 뒤 사건의 원인(CALL-002-02)."""
+    for top in (3, 1):
+        out = _eligibility(seed_db, REG / "wrong-event.log", _line_ref(9), top=top)
+        e = out["eligibility"]
+        assert (e["state"], e["cause"]) == ("accepted", "CALL-002-02"), (top, e)
+        assert "CALL-002-02" in [c["cause"] for c in out["candidates"]]
+
+
+@pytest.mark.parametrize("ln", [6, 7, 8])
+def test_cause_only_in_extended_end_does_not_crash(seed_db, ln):
+    """리뷰 P0-2 회귀: 분석 끝을 늘린 구간에서만 충족한(후보 순위에 없는) 원인은 사건에 붙이지 않는다 — 매처가 끝나고(--top 0 포함),
+    채택이면 그 원인은 후보에 있다."""
+    for top in (3, 0):
+        out = _eligibility(seed_db, REG / "crash-stopiteration.log", _line_ref(ln), top=top)
+        e = out["eligibility"]
+        assert e["state"] == "held" or e["cause"] in [c["cause"] for c in out["candidates"]], (ln, top, e)
+
+
+def test_absence_end_is_parse_window_end(seed_db):
+    """리뷰 P1-1: 부분 파싱(--full 아님)이면 안 나옴 확인 끝은 min(로그 끝, 이번 파싱 창 끝) — 창 밖은 확인한 것으로 세지 않는다.
+    통화 끊김(10:05:19.7) 뒤 로그는 10:07까지 이어지지만 창이 10:05:21에 끝나면 원인의 '없어야 할 줄'을 확인하지 못했다."""
+    work = tmp("tt-elig-win-")
+    lines = maf.segment(maf.DROP, maf.minute(5))
+    log = work / "drop.log"
+    log.write_text("".join(x + "\n" for x in lines + ["11-14 10:07:00.000" + lines[-1][18:]]), encoding="utf-8", newline="\n")
+    found = _find(seed_db, log, "Call: setState ACTIVE -> DISCONNECTED")
+    (work / "ref.json").write_text(json.dumps({"kind": "line", "source": "look_at", "places": found["places"],
+                                               "lines": found["place"]}), encoding="utf-8")
+    got = {}
+    for name, extra in (("full", ["--full"]), ("part", ["--between", "2026-11-14T10:04:00+09:00", "2026-11-14T10:05:21+09:00"])):
+        events = run_json("parse_logcat.py", ["parse", log, *extra, "--mask", *_common(seed_db)])
+        (work / "events.json").write_text(json.dumps(events), encoding="utf-8")
+        e = run_json("match_signatures.py", ["--db", seed_db, "--events", work / "events.json", "--top", 3,
+                                             "--reference", work / "ref.json"])["eligibility"]
+        got[name] = (e["state"], e["reason"], e["cause"] or e["why"])
+    assert got == {"full": ("accepted", "anchored_top", "CALL-002-03"), "part": ("held", "ineligible", "absence_unverified")}
+
+
 def test_selected_not_top_shows_rank_and_keeps_invariant():
     """selected ∈ candidates(1위가 아니어도 됨): 판단 줄에 "규칙 일치 n위", 불변식 검사는 후보 중 하나면 통과."""
     from triagelib import report
@@ -245,3 +308,38 @@ def test_selected_not_top_shows_rank_and_keeps_invariant():
             "check": {"why": "near_without_symptom", "checked": 0, "total": 2}}
     assert report.decision_line(held, cands).startswith(
         "- 판단: 원인 보류 — 실패 지점과 규칙 일치를 이을 수 없음(지정한 줄이 실패 줄이 아님 — 근처 실패를 고르려면")
+
+
+def test_selected_not_top_drives_deep_fit_hold_and_post():
+    """리뷰 P1-3·P2-1: 채택 원인이 1위가 아니면 심층 분석 입력(맨 앞·top_candidates)·적합성 보류·Jira 확정 문구·4KB 압축이 그 원인 기준."""
+    import issue_post
+    from triagelib import modulecmd, output, report
+    ev8 = [{"ts": f"t{i}", "tag": "T", "msg": "m" * 300} for i in range(8)]
+    cands = [{"category": "network", "type": "NETWORK-001", "cause": "NETWORK-001-03", "C": 1, "score": 0.9,
+              "confidence": "high", "evidence": list(ev8)},
+             {"category": "data", "type": "DATA-003", "cause": "DATA-003-01", "C": 1, "score": 0.5,
+              "confidence": "medium", "evidence": list(ev8)}]
+    dec = {"state": "accepted", "reason": "anchored_top", "selected": {k: cands[1][k] for k in ("category", "type", "cause")}}
+    lead = report.lead_first(dec, cands)
+    assert [c["cause"] for c in lead] == ["DATA-003-01", "NETWORK-001-03"]
+    assert modulecmd._top3(lead)[0]["cause"] == "DATA-003-01"
+    assert report.lead_first({"state": "held"}, cands) == cands
+    analysis = {"candidates": cands, "decision": dec, "explore": {"reason": "fit_check"}}
+    assert output._fit_hold(analysis, {"hyps": []}) == "DATA-003-01"
+    post = issue_post.classify(analysis, None)
+    assert post["cand"]["cause"] == "DATA-003-01" and post["confirm"].startswith("자동 분석 채택 후보(규칙 일치 2위)")
+    big = {"candidates": [dict(c, evidence=list(ev8)) for c in cands], "decision": dec, "files": {"report": "r"}}
+    kept = {c["cause"]: len(c["evidence"]) for c in report.fit(big)["candidates"]}
+    assert kept["DATA-003-01"] > kept["NETWORK-001-03"], kept      # 채택 원인 근거를 먼저 지킨다
+
+
+def test_decision_accepted_cause_missing_from_candidates_is_held():
+    """리뷰 P0-2: 자격 검사가 채택했는데 그 원인이 후보에 없으면 보류(ineligible/cause_not_in_candidates) — why와 사유가 맞는다."""
+    from common import issuepost
+    from triagelib import driver
+    cands = [{"category": "network", "type": "NETWORK-001", "cause": "NETWORK-001-03"}]
+    elig = {"state": "accepted", "reason": "anchored_top", "why": "same_line", "cause": "DATA-003-01", "checked": 1, "total": 1,
+            "events": [], "events_total": 1}
+    d = driver._decision(cands, {"location": {"state": "confirmed", "source": "look_at", "kind": "point"}}, elig)
+    assert (d["state"], d["reason"], d["selected"], d["check"]["why"]) == ("held", "ineligible", None, "cause_not_in_candidates")
+    assert "cause_not_in_candidates" in issuepost.HELD_WHY

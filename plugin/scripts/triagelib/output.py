@@ -359,7 +359,7 @@ def _rewrite(report: Path, prefix: str, lines: list[str], keep_sub: tuple[str, .
 def _fit_hold(analysis: dict, fields: dict) -> str | None:
     """FR-02: 적합성 확인(`explore.reason: fit_check`)이 가설 없이 끝났으면(1위 부적합 보류) 보류한 1위 원인 ID, 아니면 None.
     감지는 구조(사유·빈 가설)만 보고 판정(C·순위)은 바꾸지 않는다. report.md 재작성 성패와 무관하다(기록·Jira는 이것으로 정한다)."""
-    top = (analysis.get("candidates") or [None])[0]
+    top = (rep.lead_first(analysis.get("decision"), analysis.get("candidates") or []) or [None])[0]   # 채택 원인(없으면 1위)
     cause = top.get("cause") if isinstance(top, dict) else None
     if fields["hyps"] or (analysis.get("explore") or {}).get("reason") != "fit_check" or not cause:
         return None
@@ -417,8 +417,8 @@ def _rebase_module_inputs(job: Path, old: str, new: str) -> bool:
 def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, hold: bool = False,
                      opinion: str | None = None) -> dict:
     """analysis.json `decision`을 고친다(단계 4): 탐색 적합성 확인 보류(`hold`)면 채택 → held/fit_check(counter 없앰), 심층 분석
-    의견의 원인 ID가 채택 원인과 다르면 `counter`만 붙인다(상태·사유 그대로). 상태·사유·selected·counter만 바꾸고 자격 검사 칸
-    (`check`·`events`·`events_total`)은 그대로 둔다. 이미 보류면 사유를 바꾸지 않는다(앞 사유가 우선).
+    의견의 원인 ID가 채택 원인과 다르면 `counter`만 붙인다(상태·사유 그대로). 상태·사유·selected·counter와 (보류면) 사건의
+    `result: adopted → held`만 바꾸고 나머지 자격 검사 칸(`check`·`events_total`)은 그대로 둔다. 이미 보류면 사유를 바꾸지 않는다(앞 사유가 우선).
     decision 없는 옛 JOB은 그대로. 4KB 압축 → 스키마 검사(TT_SCHEMA_CHECK) → 처음 읽은 뒤 바뀌지 않았는지 해시 대조 → 원자 쓰기 →
     module-skill.json 입력 해시 갱신 → report.md `- 판단:` 줄 재작성 → (작업 디렉토리 JOB이면) 리포트 표시 기록을 새 줄로 다시 남긴다.
     check-output 기록에 더할 칸: 판단을 못 고쳤으면 `decision_unwritten: <사유>`, module-skill.json 해시를 못 고쳤으면
@@ -427,7 +427,9 @@ def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, h
     if not isinstance(dec, dict) or dec.get("state") != "accepted":
         return {}
     if hold:
-        new = {**{k: v for k, v in dec.items() if k != "counter"}, "state": "held", "reason": "fit_check", "selected": None}
+        new = {**{k: v for k, v in dec.items() if k != "counter"}, "state": "held", "reason": "fit_check", "selected": None,
+               "events": [{**e, "result": "held"} if isinstance(e, dict) and e.get("result") == "adopted" else e
+                          for e in dec.get("events") or []]}     # 붙은 사건도 채택 → 보류(observed는 그대로)
     else:
         m = OPINION_ID.match(opinion or "")
         selected = (dec.get("selected") or {}).get("cause")

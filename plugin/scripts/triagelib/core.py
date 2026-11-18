@@ -105,8 +105,9 @@ NEXT_CHECK_FAILED = "리포트 줄은 생략으로 고쳐 두었다 — 고쳐 �
 NEXT_CHECK_NA = "리포트 줄은 그대로 둔다 — Step 6로 계속"
 MODULE_RECORD_DIR = "module-skill"
 # 새 run이 지우는 이전 실행 산출물(B2 §7.4) — 폴더 MODULE_RECORD_DIR도 지운다
-STALE_FILES = (TIMELINE_FILE, EXPLORE_INPUT_FILE, LOOK_FILE, "module-skill.json", "deep-input.json", "skill-input.json", "check-output.json",
-               "deep-output.md", "explore-output.md")
+# eligibility.json은 match.json처럼 매처가 돌 때마다 새로 쓰고(캐시 적중이면 그 실행 것을 그대로 쓴다) 여기 넣지 않는다 — driver.match
+STALE_FILES = (TIMELINE_FILE, EXPLORE_INPUT_FILE, LOOK_FILE, REFERENCE_FILE, "module-skill.json", "deep-input.json", "skill-input.json",
+               "check-output.json", "deep-output.md", "explore-output.md")
 _HOT_LEVELS = {"W", "E", "F"}
 _TOKEN_RE = re.compile(r"[0-9A-Za-z가-힣_]{2,}")
 

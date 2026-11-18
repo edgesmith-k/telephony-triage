@@ -459,8 +459,10 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
     shown = candidates[:top] if top else candidates
     if elig and elig["cause"] and all(c["cause"] != elig["cause"] for c in shown):
         # 채택 원인이 --top 밖이면 후보 끝에 붙인다(selected ∈ candidates) — 잘린 수에서 뺀다
-        shown = shown + [next(c for c in candidates if c["cause"] == elig["cause"])]
-        omitted["candidates"] -= 1
+        add = [c for c in candidates if c["cause"] == elig["cause"]][:1]
+        shown = shown + add
+        if omitted and add:
+            omitted["candidates"] -= 1
     result = {
         "schema": OUTPUT_SCHEMA,
         "mode": "regress" if regress else "analysis",
@@ -501,9 +503,10 @@ def _keys(evidence) -> set:
     return {k for k in (eligibility.ref_key(e.get("line_ref")) for e in evidence) if k}
 
 
-def _cond_lines(evaluator: Evaluator, sig, res) -> set:
-    """그 충족 구간 안(같은 슬롯 또는 모름)에서 시그니처 양성 조건에 맞는 모든 줄 — 근거는 조건마다 첫 줄 하나뿐이라(§8-1)."""
-    a, b = res.window
+def _cond_lines(evaluator: Evaluator, sig, res, at: datetime) -> set:
+    """그 충족 구간 안·사건 시각 `at` 이하(같은 슬롯 또는 모름)에서 시그니처 양성 조건에 맞는 모든 줄 — 근거는 조건마다 첫 줄 하나뿐이라
+    (§8-1). `at` 뒤 줄은 뒤 사건의 증상일 수 있어 넣지 않는다(앞 사건 창이 뒤 실패 줄을 덮는 경우)."""
+    a, b = res.window[0], min(res.window[1], at)
     phones = {e["phone_id"] for e in res.evidence if e.get("phone_id") is not None}
     out = set()
     for c in sig.positives:
@@ -532,7 +535,9 @@ def occurrences(events_doc: dict, evaluator: Evaluator, db, compiled: dict, rank
     안 나옴: 마지막 양성 근거 뒤로 window_sec만큼 로그가 이어지고, 관측 오류 없고, 배제 태그가 수집됐을 때만(§8-6).
     `rank`: 원인 → 자르기 전 후보 순위(붙은 원인이 여럿이면 앞 순위가 먼저)."""
     cov = events_doc.get("coverage") or {}
-    last = _parse_iso(cov["last_ts"], "coverage") if cov.get("last_ts") else None
+    window = (events_doc.get("input") or {}).get("window") or {}
+    ends = [_parse_iso(x, "coverage") for x in (cov.get("last_ts"), window.get("end")) if x]
+    last = min(ends) if cov.get("last_ts") else None     # 안 나옴은 이번에 읽은 곳까지만 본 것으로 센다(부분 파싱 창 밖은 미확인)
     obs_ok = (events_doc.get("observation") or {}).get("complete", True) is not False
     bad_neg = _unverifiable_negatives(evaluator, db, compiled)
 
@@ -553,8 +558,8 @@ def occurrences(events_doc: dict, evaluator: Evaluator, db, compiled: dict, rank
             if not syms:
                 continue
             sig_of = {g.key: g for owner_id in [itype.id, *(c.id for c in itype.causes)] for g in compiled.get(owner_id) or []}
-            cause_res = {c.id: _all_satisfied(evaluator, compiled[c.id], None, errors)
-                         for c in itype.causes if c.active and not c.pending}
+            cause_res = {c.id: _all_satisfied(evaluator, compiled[c.id], None, errors)    # 후보 순위에 있는 원인만(늘린 끝에서만
+                         for c in itype.causes if c.active and not c.pending and c.id in rank}  # 충족한 원인은 후보가 아니다)
             sym_at = [(_at(s), s) for s in syms]
 
             def owner(r, sym_at=sym_at):     # 원인 1회 충족이 붙는 사건 = 근거 마지막 줄 이후 첫 호환 사건(§8-2)
@@ -573,7 +578,7 @@ def occurrences(events_doc: dict, evaluator: Evaluator, db, compiled: dict, rank
                         "raw": [events_doc["events"][e["event_index"]] for e in s.evidence],
                         "phone": next(iter(phones)) if len(phones) == 1 else None,
                         "absence": bool(sig.negatives), "absence_bad": bool(sig.negatives) and not absence_ok(sig, s),
-                        "cause_lines": set(), "cond_lines": _cond_lines(evaluator, sig, s),
+                        "cause_lines": set(), "cond_lines": _cond_lines(evaluator, sig, s, at),
                         "causes": [], "after": [], "absence_unverified": [], "gap_s": None, "unjudged": bool(errors)}
                 for cid, results in cause_res.items():
                     comp = [r for r in results if _compatible(s, r)]
@@ -586,7 +591,7 @@ def occurrences(events_doc: dict, evaluator: Evaluator, db, compiled: dict, rank
                     if good:
                         for r in good:
                             item["cause_lines"] |= _keys(r.evidence)
-                            item["cond_lines"] |= _cond_lines(evaluator, sig_of[r.key], r)
+                            item["cond_lines"] |= _cond_lines(evaluator, sig_of[r.key], r, at)
                         item["causes"].append((rank.get(cid, 999), cid, round(min((at - _at(r)).total_seconds() for r in good), 3)))
                     elif any(owner(r) is None for r in comp):
                         item["after"].append(cid)       # 이 사건 뒤에만 관측(다른 사건 몫이면 넣지 않음)

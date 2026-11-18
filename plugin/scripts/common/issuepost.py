@@ -59,7 +59,8 @@ HELD_WHY = {"near_without_symptom": "지정한 줄이 실패 줄이 아님 — �
             "no_event_in_range": "실패 구간 안에 이슈 DB 증상과 맞는 실패가 없음",
             "locations": "같은 줄이 로그 여러 곳에 있음", "slots": "두 SIM 슬롯에 모두 맞음",
             "sources": "기준마다 다른 실패를 가리킴", "multiple_events": "구간 안 실패마다 원인이 다름",
-            "cause_after_event": "원인 근거가 실패 뒤에만 있음", "no_cause_before_event": "실패 전에 맞는 원인이 없음"}
+            "cause_after_event": "원인 근거가 실패 뒤에만 있음", "no_cause_before_event": "실패 전에 맞는 원인이 없음",
+            "cause_not_in_candidates": "자격 검사가 고른 원인이 후보 목록에 없음"}
 SECTION_MAX = {"PROBLEM": 600, "CAUSE": 1000, "NEXT ACTION": 800, "ANALYSIS": 1600}
 BODY_MAX = 4000
 
