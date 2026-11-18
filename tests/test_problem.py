@@ -318,3 +318,35 @@ def test_stale_boundaries(job, last, stale):
 def test_last_from_comment_out_of_range_is_format_error(job):
     res = _check(job, _output(rounds={"count": 2, "last_from_comment": 6, "same_failure": "yes"}), 1)
     assert "rounds.last_from_comment" in res["detail"]
+
+
+# --- 확인 리뷰 C13·C14·C15 ------------------------------------------------------------------------------
+
+def test_real_fail_line_wins_over_many_fail_named_pass_steps():
+    tc = "No | Step | Result\n" + "".join(f"{i} | fail-safe check {i} | PASS\n" for i in range(1, 100))
+    tc += "100 | 데이터 켜기 | FAIL (No response F)\n"
+    job = tmp("tt-problem-") / KEY
+    _problem(job, tc=tc)
+    part = (job / "problem-input.md").read_text(encoding="utf-8").split("## TC의 Fail 줄", 1)[1]
+    assert "100 | 데이터 켜기 | FAIL (No response F)" in part and "생략 — 크기 상한" in part
+
+
+def test_ipc_name_and_token_must_be_one_pair():
+    issue = dict(ISSUE, comments=[{"body": "VIPC_A_REQ (token=0x111) 응답 후 VIPC_B_REQ (token=0x222) 응답 없음"},
+                                  {"body": "RILJ.processResponse 에서 token 0x77 처리"},
+                                  {"body": "긴 숫자 " + "9" * 5000}])
+    job = tmp("tt-problem-") / KEY
+    _problem(job, issue, tc=None)
+    quote = "VIPC_A_REQ (token=0x111) 응답 후 VIPC_B_REQ (token=0x222)"
+    out = _output(rounds={"count": 1, "last_from_comment": None, "same_failure": "unknown"}, clues=[
+        _clue(1, "VIPC_A_REQ", "0x222", quote),                                    # 다른 메시지의 token — 버림
+        _clue(1, "VIPC_B_REQ", "0x222", quote),
+        _clue(2, "processResponse", "0x77", "RILJ.processResponse 에서 token 0x77"),  # 점으로 이은 이름의 조각
+        _clue(3, None, "1", "긴 숫자 9999999999", kind="log_line")])               # 10자리 넘는 숫자는 token이 아니다
+    res = _check(job, out, 0)
+    assert res["clues"] == 2 and res["dropped_reasons"] == ["이름 뒤 첫 token이 그 token이 아님", "token 값이 인용 안에 없음"]
+
+
+def test_fullwidth_token_is_format_error(job):
+    res = _check(job, _output(clues=[_clue(5, "VIPC_PDN_CONNECT", "１２３", "VIPC_PDN_CONNECT (token=123)")]), 1)
+    assert "clues[0].token" in res["detail"]

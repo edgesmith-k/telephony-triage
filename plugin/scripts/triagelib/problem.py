@@ -41,11 +41,12 @@ OUTPUT_MAX_BYTES = 16384
 CLUES_MAX, TYPES_MAX, HYPS_MAX, MODULES_MAX, UNKNOWN_MAX, ROUNDS_MAX = 10, 3, 3, 5, 5, 20
 SYMPTOM_MAX, QUOTE_MAX, HYP_MAX, MODULE_MAX, UNKNOWN_CHARS = 200, 300, 200, 80, 300
 NAME_RE = re.compile(r"[A-Za-z0-9_.:-]{1,80}")
-TOKEN_RE = re.compile(r"0x[0-9A-Fa-f]{1,8}|\d{1,10}")      # common.lookat `_TOKEN`과 같은 모양
+TOKEN_RE = re.compile(r"0x[0-9A-Fa-f]{1,8}|[0-9]{1,10}")   # common.lookat `_TOKEN`과 같은 범위, ASCII만
 TYPE_RE = re.compile(r"[A-Za-z0-9_-]{1,40}")
 TIME_RE = re.compile(r"[0-9TZ:.+\- /]{4,40}")              # Jira 작성 시각 모양 — 아니면 접고 잘라 가려서 싣는다
 # 인용 안의 값(정규식에 모델 값을 넣지 않는다): token = 낱말 경계의 16진·10진 숫자, 이름 = NAME_RE 글자 덩어리
-QUOTE_TOKEN = re.compile(r"(?<![A-Za-z0-9_])(?:0[xX][0-9A-Fa-f]+|\d+)(?![A-Za-z0-9_])")
+# 자릿수는 TOKEN_RE와 같다 — 더 긴 숫자는 token으로 보지 않는다(int()가 큰 수에서 죽지 않게)
+QUOTE_TOKEN = re.compile(r"(?<![A-Za-z0-9_])(?:0[xX][0-9A-Fa-f]{1,8}|[0-9]{1,10})(?![A-Za-z0-9_])")
 QUOTE_NAME = re.compile(r"[A-Za-z0-9_.:-]+")
 QUOTE_MARK = re.compile(r"(?m)^[ \t]*(?:>[ \t]?)+")          # 줄머리 인용 표식(입력 md의 `> `, Jira 인용 `>`)
 NEXT_FIX = "problem-output.json을 고쳐 다시 check-output --for problem"
@@ -152,24 +153,42 @@ def _quoted(text: str) -> list[str]:
     return ["> " + line for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
 
 
-def _fail_lines(text: str, cfg: dict, masker) -> list[str]:
-    """TC 원문에서 Fail이 든 줄과 앞뒤 `FAIL_AROUND`줄(가린 원문) — 판정 뒤 괄호 사유·다른 열·다음 줄 사유가 스텝 표 읽기와
-    상관없이 실린다. Fail 줄 = 설정 `tracker.failed_step_patterns`에 맞거나 낱말 fail(대소문자 무시). 상한은 이 절에만 따로."""
+def _fail_lines(text: str, cfg: dict, masker, fail_name: str | None = None) -> list[str]:
+    """TC 원문에서 Fail 줄과 앞뒤 `FAIL_AROUND`줄(가린 원문) — 판정 뒤 괄호 사유·다른 열·다음 줄 사유가 스텝 표 읽기와
+    상관없이 실린다. 상한(이 절만 따로) 안에서 먼저 싣는 줄: 실패 스텝으로 읽힌 줄(`fail_name`), 설정
+    `tracker.failed_step_patterns`에 맞는 줄, 칸 첫·끝 낱말이 fail 판정이고 pass 판정이 없는 줄. 그다음 남는 상한 안에서
+    낱말 fail이 든 나머지 줄(`fail-safe check` 같은 스텝 이름) — 이런 줄이 많아도 진짜 Fail 줄이 밀려나지 않게."""
     compiled, _warns = failedstep._compile(userconfig.get(cfg, "tracker.failed_step_patterns") or [])
+    conf = userconfig.get(cfg, "failed_step") or {}
+    words = {k: failedstep._words(conf.get("steps_status"), failedstep.DEFAULT_STEPS_STATUS, k) for k in ("pass", "fail")}
     rows = [line[: failedstep.MAX_LINE_CHARS] for line in text.splitlines()]
-    hits = [i for i, line in enumerate(rows) if FAIL_WORD.search(line) or any(p.search(line) for p in compiled)]
-    out, used, last = [], 0, -1
-    for n, i in enumerate(hits):
-        lo, hi = max(i - FAIL_AROUND, last + 1), min(i + FAIL_AROUND, len(rows) - 1)
-        if lo > hi:
+
+    def verdict(line: str) -> bool:
+        ends = {t.strip(failedstep._STATUS_STRIP).casefold() for c in failedstep._CELL_SPLIT.split(line) if c.strip()
+                for t in (c.split()[0], c.split()[-1])}
+        return bool(ends & words["fail"]) and not ends & words["pass"]
+
+    first = [i for i, line in enumerate(rows) if any(p.search(line) for p in compiled) or verdict(line)
+             or (fail_name and fail_name in _fold(line) and FAIL_WORD.search(line))]
+    rest = [i for i, line in enumerate(rows) if FAIL_WORD.search(line) and i not in set(first)]
+    keep: set[int] = set()
+    used = skipped = 0
+    for i in first + rest:
+        span = set(range(max(i - FAIL_AROUND, 0), min(i + FAIL_AROUND, len(rows) - 1) + 1)) - keep
+        size = sum(len(rows[k]) for k in span)
+        if keep and (used + size > FAIL_TEXT_MAX or len(keep) + len(span) > FAIL_LINES_MAX):
+            skipped += 1
             continue
-        block = [masker(rows[k]) for k in range(lo, hi + 1)]
-        size = sum(len(b) for b in block)
-        if out and (used + size > FAIL_TEXT_MAX or len(out) + len(block) > FAIL_LINES_MAX):
-            out.append(f"(뒤 Fail 줄 {len(hits) - n}개 생략 — 크기 상한)")
-            break
-        out += ([] if out and lo == last + 1 else [f"(원문 {lo + 1}번째 줄부터)"]) + _quoted("\n".join(block))
-        used, last = used + size, hi
+        keep |= span
+        used += size
+    out, prev = [], -2
+    for k in sorted(keep):
+        if k != prev + 1:
+            out.append(f"(원문 {k + 1}번째 줄부터)")
+        out += _quoted(masker(rows[k]))
+        prev = k
+    if skipped:
+        out.append(f"(Fail 줄 {skipped}개 생략 — 크기 상한)")
     return out
 
 
@@ -179,13 +198,14 @@ def _steps_part(path, cfg: dict, masker) -> tuple[list[str], list[str], list[str
     if not path:
         return ["TC 없음"], [], []
     rows, failed, warnings, _ = failedstep.read_steps(path, userconfig.get(cfg, "failed_step") or {})
+    fail_name = rows[failed]["name_raw"] if failed is not None else None
     lines = []
     if len(rows) > STEPS_MAX:
         lines.append(f"(앞 스텝 {len(rows) - STEPS_MAX}개 생략 — 크기 상한)")
         rows = rows[-STEPS_MAX:]
     lines += [f"- {failedstep.label(r, masker)} — {r['status'].upper()}" for r in rows]
     text, _why = failedstep.read_lines(path)
-    around = _fail_lines(text, cfg, masker) if text else []
+    around = _fail_lines(text, cfg, masker, fail_name) if text else []
     if failed is None and not around and text and text.strip():
         lines += ["", f"TC 원문(Fail 줄을 찾지 못함, 앞 {TC_TEXT_MAX}자까지):"] + _quoted(_clip(masker(text), TC_TEXT_MAX))
     return lines or ["TC 없음"], around, warnings
@@ -393,6 +413,22 @@ def _token_value(text: str) -> tuple[bool, int]:
     return (True, int(text, 16)) if text[:2].lower() == "0x" else (False, int(text))
 
 
+def _names(text: str) -> set[str]:
+    """인용·원문의 이름 낱말: 낱말 전체와, 점·콜론으로 나눈 조각(`RILJ.processResponse` → `processResponse`)."""
+    return {p for w in QUOTE_NAME.findall(text) for p in (w.rstrip(".:"), *re.split(r"[.:]+", w)) if p}
+
+
+def _paired(name: str, token: str, quote: str) -> bool:
+    """`ipc`: 인용에서 그 이름 뒤에 처음 나오는 token 값이 준 token인가(이름과 token이 같은 메시지의 짝)."""
+    want = _token_value(token)
+    for m in QUOTE_NAME.finditer(quote):
+        if name in _names(m.group()):
+            t = QUOTE_TOKEN.search(quote, m.end())
+            if t and _token_value(t.group()) == want:
+                return True
+    return False
+
+
 def _clue_problem(c: dict, sources: dict) -> str | None:
     """단서를 버릴 사유(없으면 None). 인용은 줄머리 인용 표식을 떼고 공백을 접어 그 코멘트(가린 글)에서 찾고, 이름·token은
     인용에서 뽑은 값과 **값으로** 비교한다(부분 문자열이 아니다)."""
@@ -407,12 +443,14 @@ def _clue_problem(c: dict, sources: dict) -> str | None:
     if c["kind"] == "ipc_name" and (not c["name"] or c["token"]):
         return "ipc_name인데 이름만이 아님"
     # 값은 인용에도, 원문에도 온전한 낱말로 있어야 한다(인용을 값 중간에서 잘라 `0x0d`를 만든 경우를 막는다)
-    names = [{w.rstrip(".:") for w in QUOTE_NAME.findall(t)} for t in (quote, src)]
+    names = [_names(t) for t in (quote, src)]
     if c["name"] and not all(c["name"].rstrip(".:") in n for n in names):
         return "name 값이 인용 안에 없음"
     tokens = [{_token_value(v) for v in QUOTE_TOKEN.findall(t)} for t in (quote, src)]
     if c["token"] and not all(_token_value(c["token"]) in t for t in tokens):
         return "token 값이 인용 안에 없음"
+    if c["kind"] == "ipc" and not _paired(c["name"].rstrip(".:"), c["token"], quote):
+        return "이름 뒤 첫 token이 그 token이 아님"
     if len(quote) < lookat.TEXT_MIN and c["kind"] != "ipc":     # ipc는 이름·token을 값으로 확인했다
         return f"인용이 너무 짧음({lookat.TEXT_MIN}자 미만)"
     return None
