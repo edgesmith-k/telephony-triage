@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<!-- 합성 TC 결과(문제 파악 처음 보는 세트 PBH, eval 107). 지시문을 고칠 때 열지 않는다. -->
+<html>
+<head><meta charset="utf-8"><title>Test Result - TC 8.4</title></head>
+<body>
+<h2>TC 8.4 SMS Delivery Report</h2>
+<table border="1">
+<tr><th>No</th><th>Time</th><th>Step</th><th>Result</th></tr>
+<tr><td>1</td><td>2026-11-25 08:40:01</td><td>Airplane mode ON</td><td>Pass</td></tr>
+<tr><td>2</td><td>2026-11-25 08:40:11</td><td>Airplane mode OFF</td><td>Pass</td></tr>
+<tr><td>3</td><td>2026-11-25 08:40:39</td><td>LTE 등록 확인</td><td>Pass</td></tr>
+<tr><td>4</td><td>2026-11-25 08:41:02</td><td>전달 보고 요청을 켜고 장비 번호로 SMS 발신 (장비 수신 확인)</td><td>Pass</td></tr>
+<tr><td>5</td><td>2026-11-25 08:43:05</td><td>단말에서 전달 보고 수신 확인</td><td>Fail (장비에는 SMS 도착, 단말에 전달 보고 표시 없음 120s)</td></tr>
+<tr><td>6</td><td>2026-11-25 08:43:20</td><td>Airplane mode ON</td><td>Pass</td></tr>
+</table>
+</body>
+</html>

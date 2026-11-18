@@ -1,0 +1,54 @@
+# 모의 Jira 티켓(문제 파악 처음 보는 세트 PBH, eval 103, 합성). 지시문을 고칠 때 열지 않는다(README "PBH").
+key: MOCK-9103
+fields:
+  summary: "[인증] TC 4.8 step 4 인터넷 PDN Fail"
+  description: |
+    TC 4.8 step 4 (인터넷 PDN 연결 확인) Fail. 재현 2/2.
+  status: {name: In Progress}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261120
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments:
+  - author: mock.tester
+    created: "2026-11-24T10:20:00+0900"
+    body: step 4 Fail입니다. 로그는 FTP에 올렸어요(경로는 메일 참고)
+  - author: mock.pl
+    created: "2026-11-24T10:41:00+0900"
+    body: AP data 먼저 봐주세요
+  - author: mock.ap.data
+    created: "2026-11-24T13:05:00+0900"
+    body: |
+      인터넷 APN 요청에 에러 응답이 옵니다.
+      {noformat}
+      11-24 09:58:41.207  2101  2141 D RILJ    : [0742]< SETUP_DATA_CALL error 2 [PHONE0]
+      {noformat}
+      모뎀 쪽 같아요.
+  - author: mock.cp
+    created: "2026-11-24T15:30:00+0900"
+    body: VIPC_PDN_OPEN (token=0x5c1) 보니까 망이 #33으로 거절했네요. 장비 가입 서비스 설정 문제로 보여요. 장비 쪽 확인 부탁드립니다.
+  - author: mock.tester
+    created: "2026-11-25T09:12:00+0900"
+    body: 장비 가입 정보 다시 봤는데 이상 없어요. 같은 SIM 꽂은 다른 단말은 바로 붙습니다.
+  - author: mock.cp
+    created: "2026-11-25T11:40:00+0900"
+    body: 다시 봤습니다. 0x5c1은 ims APN 쪽이었고 그건 accept 됐어요. internet은 VIPC_PDN_OPEN (token=0x5c7) 인데 망 응답 오기 전에 CP 타이머가 먼저 만료돼서 저희가 끊었습니다. 장비 문제 아니고 저희 쪽 같네요.
+  - author: mock.pl
+    created: "2026-11-25T11:55:00+0900"
+    body: 그럼 CP 수정 일정 부탁드려요
+  - author: mock.ap.ims
+    created: "2026-11-25T13:10:00+0900"
+    body: FYI IMS reg itself looks fine in this log. VIPC_PDN_OPEN (token=0x5c1) was accepted and IMS registered right after, so not an IMS issue.
+  - author: mock.ap.data
+    created: "2026-11-25T14:00:00+0900"
+    body: AP는 재시도까지 정상 동작했고 재시도도 같은 이유로 실패했어요.
+  - author: mock.cp
+    created: "2026-11-25T17:20:00+0900"
+    body: 타이머 값 확인 중입니다
+  - author: mock.pl
+    created: "2026-11-26T09:00:00+0900"
+    body: 금주 내 회신 부탁드립니다~

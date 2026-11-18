@@ -1,0 +1,31 @@
+# 모의 Jira 티켓(문제 파악 처음 보는 세트 PBH, eval 107, 합성). 지시문을 고칠 때 열지 않는다(README "PBH").
+key: MOCK-9107
+fields:
+  summary: SMS 전송 보고 Fail (TC 8.4)
+  description: |
+    TC 8.4 step 5 Fail. 자동화 결과 첨부.
+  status: {name: Open}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Messaging}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261120
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments:
+  - author: mock.tester
+    created: "2026-11-25T09:00:00+0900"
+    body: 결과 첨부. 장비 쪽엔 SMS 정상 도착했어요
+  - author: mock.ap.sms
+    created: "2026-11-25T11:10:00+0900"
+    body: 보낼 때 status report 요청 비트는 켜져 있어요. 단말이 보고를 받은 흔적이 AP에는 없어요
+  - author: mock.cp
+    created: "2026-11-25T14:30:00+0900"
+    body: CP 쪽에도 망에서 status report 온 기록이 없어요. 장비가 안 보낸 거면 장비 설정 문제고요
+  - author: mock.tester
+    created: "2026-11-25T15:00:00+0900"
+    body: 장비 SMSC에서 보고 발송 옵션 켜져 있는 거 확인했습니다
+  - author: mock.cp
+    created: "2026-11-25T16:10:00+0900"
+    body: 그럼 망에서 단말로 오는 구간 같은데 CP 로그로는 더 안 보여요. 장비 쪽 trace 있으면 부탁드려요

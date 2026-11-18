@@ -1,0 +1,49 @@
+# 모의 Jira 티켓(문제 파악 처음 보는 세트 PBH, eval 110, 합성). 지시문을 고칠 때 열지 않는다(README "PBH").
+key: MOCK-9110
+fields:
+  summary: PDN 재연결 Fail (TC 3.6)
+  description: |
+    TC 3.6 step 9 (망 해제 후 5분 안에 재연결) Fail.
+  status: {name: In Progress}
+  project: {key: MOCK, name: Mock Telephony}
+  components:
+    - {name: Data}
+  customfield_10002: MOCK-A56
+  customfield_10003: MOCKA56_U1_20261120
+  customfield_10004: "16"
+  customfield_10005: MockTel KR
+  customfield_10006: "0"
+comments:
+  - author: mock.tester
+    created: "2026-11-24T15:00:00+0900"
+    body: step 9 Fail. 망에서 끊은 다음 다시 안 붙어요. 로그 FTP
+  - author: mock.ap.data
+    created: "2026-11-24T16:30:00+0900"
+    body: |
+      재시도를 한 번 하고 멈춥니다.
+      11-24 14:46:10.051  2101  2101 D DataRetryManager: Not retrying. retry rule exhausted
+      망 해제 사유도 같이 봐야 해서 CP도 봐주세요
+  - author: mock.cp
+    created: "2026-11-25T09:40:00+0900"
+    body: VIPC_PDN_DEACT_IND (token=0x3f2) 로 망이 internet PDN 내렸고 cause #8 이에요. 그 뒤 AP에서 다시 요청이 안 왔습니다
+  - author: mock.ap.data
+    created: "2026-11-25T13:00:00+0900"
+    body: carrier config retry rule 수정 넣었습니다. 빌드 _1126 나왔으니 다시 돌려주세요
+  - author: mock.pl
+    created: "2026-11-25T13:20:00+0900"
+    body: 내일 오전 진행합니다
+  - author: mock.tester2
+    created: "2026-11-26T11:10:00+0900"
+    body: Re-ran on _1126. Network released the PDN at step 9 and it never came back within 5 min. Logs uploaded.
+  - author: mock.cp
+    created: "2026-11-26T14:00:00+0900"
+    body: 이번 로그 VIPC_PDN_DEACT_IND (token=0x412) 이후에도 재요청 없어요
+  - author: mock.cp
+    created: "2026-11-26T14:25:00+0900"
+    body: 아 0x412는 ims PDN 해제네요. internet 쪽은 VIPC_PDN_DEACT_IND (token=0x415) 입니다. 이후 재요청 없는 건 마찬가지예요
+  - author: mock.ap.data
+    created: "2026-11-26T16:00:00+0900"
+    body: 새 빌드에서도 retry rule이 다른 값으로 덮어써지는 걸 봤어요. 확인 중
+  - author: mock.pl
+    created: "2026-11-26T16:20:00+0900"
+    body: 공유 감사합니다
