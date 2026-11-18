@@ -59,8 +59,7 @@ def merge(events: list[dict]) -> list[dict]:
             out.append(e)
             continue
         at = max(prev["at"], e["at"])
-        shift = lambda c, x: (c[0], c[1], round(c[2] + (at - x["at"]).total_seconds(), 3))  # noqa: E731
-        causes = [shift(c, prev) for c in prev["causes"]] + [shift(c, e) for c in e["causes"]]
+        causes = [(c[0], c[1], round(c[2] + (at - x["at"]).total_seconds(), 3)) for x in (prev, e) for c in x["causes"]]
         prev["at"] = at
         for k in ("lines", "cause_lines", "cond_lines"):
             prev[k] = prev[k] | e[k]
