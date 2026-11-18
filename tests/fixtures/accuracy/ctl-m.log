@@ -1,0 +1,13 @@
+-- [합성] 분석 정확도 조합 로그. 시드 fixture 줄과 합성 VIPC_ 줄을 시각만 옮겨 이어 붙였다(tests/helpers/make_accuracy_fixtures.py).
+11-14 10:00:00.000  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0
+11-14 10:00:00.003  1301  1301 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0], IMS reg state=false, pending radio off=false
+11-14 10:00:00.004  1301  1301 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON
+11-14 10:00:00.040  1301  1301 D RILJ    : [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]
+11-14 10:00:00.042  1301  1330 D RILJ    : [0268]< RADIO_POWER  [PHONE0]
+11-14 10:00:00.043  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]
+11-14 10:00:00.050  1301  1301 D RILJ    : [0271]> DATA_REGISTRATION_STATE [PHONE0]
+11-14 10:00:00.052  1301  1330 D RILJ    : [0271]< DATA_REGISTRATION_STATE error 1 [PHONE0]
+11-14 10:00:00.060  1301  1301 E SST-0   : handlePollStateResult: RIL returned RADIO_NOT_AVAILABLE.
+11-14 10:00:00.061  1301  1301 D SST-0   : set service state as POWER_OFF
+11-14 10:00:00.062  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false
+11-14 10:00:00.063  1301  1301 D SST-0   : RAT switched NR_SA -> Unknown at cell -1

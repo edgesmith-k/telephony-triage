@@ -1,0 +1,808 @@
+{
+ "by_condition": {
+  "no_time": {
+   "total": 20,
+   "controls": 0,
+   "in_sample": 0,
+   "include_in_sample": false,
+   "evaluated": 20,
+   "errors": 0,
+   "unjudged_errors": 0,
+   "observation_errors": 0,
+   "error_rate": 0.0,
+   "type_only": 0,
+   "positive": 8,
+   "negative": 12,
+   "positive_total": 8,
+   "negative_total": 12,
+   "top1_accuracy": 0.875,
+   "top3_inclusion": 1.0,
+   "false_positive_rate": 0.9167,
+   "accepted_correct": 7,
+   "accepted_wrong": 12,
+   "held": 1,
+   "answer_rate": 0.95,
+   "correct_hold": 1,
+   "held_top_right": 0,
+   "anchor_runs": 0,
+   "anchor_correct": 0,
+   "anchor_missed": 0,
+   "first_total": 2,
+   "first_hold_rate": 0.0
+  },
+  "time": {
+   "total": 18,
+   "controls": 0,
+   "in_sample": 0,
+   "include_in_sample": false,
+   "evaluated": 18,
+   "errors": 0,
+   "unjudged_errors": 0,
+   "observation_errors": 0,
+   "error_rate": 0.0,
+   "type_only": 0,
+   "positive": 7,
+   "negative": 11,
+   "positive_total": 7,
+   "negative_total": 11,
+   "top1_accuracy": 1.0,
+   "top3_inclusion": 1.0,
+   "false_positive_rate": 0.9091,
+   "accepted_correct": 7,
+   "accepted_wrong": 10,
+   "held": 1,
+   "answer_rate": 0.9444,
+   "correct_hold": 1,
+   "held_top_right": 0,
+   "anchor_runs": 0,
+   "anchor_correct": 0,
+   "anchor_missed": 0,
+   "first_total": 0,
+   "first_hold_rate": null
+  },
+  "look_at": {
+   "total": 17,
+   "controls": 0,
+   "in_sample": 0,
+   "include_in_sample": false,
+   "evaluated": 17,
+   "errors": 0,
+   "unjudged_errors": 0,
+   "observation_errors": 0,
+   "error_rate": 0.0,
+   "type_only": 0,
+   "positive": 7,
+   "negative": 10,
+   "positive_total": 7,
+   "negative_total": 10,
+   "top1_accuracy": 1.0,
+   "top3_inclusion": 1.0,
+   "false_positive_rate": 0.8,
+   "accepted_correct": 7,
+   "accepted_wrong": 8,
+   "held": 2,
+   "answer_rate": 0.8824,
+   "correct_hold": 2,
+   "held_top_right": 0,
+   "anchor_runs": 17,
+   "anchor_correct": 17,
+   "anchor_missed": 0,
+   "first_total": 0,
+   "first_hold_rate": null
+  }
+ },
+ "runs": [
+  {
+   "key": "MMX-1",
+   "condition": "no_time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "MMX-1",
+   "condition": "time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "MMX-1",
+   "condition": "look_at",
+   "expect": "unresolved",
+   "top": null,
+   "top3": [],
+   "adopted": null,
+   "verdict": "정답",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "XM-1",
+   "condition": "no_time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "XM-1",
+   "condition": "time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "XM-1",
+   "condition": "look_at",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "MXM-1",
+   "condition": "no_time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "MXM-1",
+   "condition": "time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "MXM-1",
+   "condition": "look_at",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "MMH-1",
+   "condition": "no_time",
+   "expect": "NETWORK-001-08",
+   "top": "NETWORK-001-08",
+   "top3": [
+    "NETWORK-001-08",
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-08",
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "MMH-1",
+   "condition": "time",
+   "expect": "NETWORK-001-08",
+   "top": "NETWORK-001-08",
+   "top3": [
+    "NETWORK-001-08",
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-08",
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "MMH-1",
+   "condition": "look_at",
+   "expect": "NETWORK-001-08",
+   "top": "NETWORK-001-08",
+   "top3": [
+    "NETWORK-001-08"
+   ],
+   "adopted": "NETWORK-001-08",
+   "verdict": "1위",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "CTLM-1",
+   "condition": "no_time",
+   "expect": "NETWORK-001-03",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "CTLM-1",
+   "condition": "time",
+   "expect": "NETWORK-001-03",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "CTLM-1",
+   "condition": "look_at",
+   "expect": "NETWORK-001-03",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "1위",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "D12R-1",
+   "condition": "no_time",
+   "expect": "DATA-002-01",
+   "top": "DATA-002-01",
+   "top3": [
+    "DATA-002-01"
+   ],
+   "adopted": "DATA-002-01",
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "D12R-1",
+   "condition": "time",
+   "expect": "DATA-002-01",
+   "top": "DATA-002-01",
+   "top3": [
+    "DATA-002-01"
+   ],
+   "adopted": "DATA-002-01",
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "D12R-1",
+   "condition": "look_at",
+   "expect": "DATA-002-01",
+   "top": "DATA-002-01",
+   "top3": [
+    "DATA-002-01"
+   ],
+   "adopted": "DATA-002-01",
+   "verdict": "1위",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "C15-1",
+   "condition": "no_time",
+   "expect": "CALL-001-02",
+   "top": "CALL-001-02",
+   "top3": [
+    "CALL-001-02"
+   ],
+   "adopted": "CALL-001-02",
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "C15-1",
+   "condition": "time",
+   "expect": "CALL-001-02",
+   "top": "CALL-001-02",
+   "top3": [
+    "CALL-001-02"
+   ],
+   "adopted": "CALL-001-02",
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "C15-1",
+   "condition": "look_at",
+   "expect": "CALL-001-02",
+   "top": "CALL-001-02",
+   "top3": [
+    "CALL-001-02"
+   ],
+   "adopted": "CALL-001-02",
+   "verdict": "1위",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "HAL-1",
+   "condition": "no_time",
+   "expect": "NETWORK-001-08",
+   "top": "NETWORK-001-08",
+   "top3": [
+    "NETWORK-001-08"
+   ],
+   "adopted": "NETWORK-001-08",
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "HAL-1",
+   "condition": "time",
+   "expect": "NETWORK-001-08",
+   "top": "NETWORK-001-08",
+   "top3": [
+    "NETWORK-001-08"
+   ],
+   "adopted": "NETWORK-001-08",
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "HAL-1",
+   "condition": "look_at",
+   "expect": "NETWORK-001-08",
+   "top": "NETWORK-001-08",
+   "top3": [
+    "NETWORK-001-08"
+   ],
+   "adopted": "NETWORK-001-08",
+   "verdict": "1위",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "TC-1",
+   "condition": "no_time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "TC-1",
+   "condition": "time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "TC-1",
+   "condition": "look_at",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "RECOVER-1",
+   "condition": "no_time",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "RECOVER-1",
+   "condition": "time",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "RECOVER-1",
+   "condition": "look_at",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "TOKSAME-1",
+   "condition": "no_time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "TOKSAME-1",
+   "condition": "time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "TOKSAME-1",
+   "condition": "look_at",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "TOKNAME-1",
+   "condition": "no_time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "TOKNAME-1",
+   "condition": "time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "TOKNAME-1",
+   "condition": "look_at",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "TOKONLY-1",
+   "condition": "no_time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "TOKONLY-1",
+   "condition": "time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "TOKONLY-1",
+   "condition": "look_at",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "DUAL-1",
+   "condition": "no_time",
+   "expect": "unresolved",
+   "top": null,
+   "top3": [],
+   "adopted": null,
+   "verdict": "정답",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "DUAL-1",
+   "condition": "time",
+   "expect": "unresolved",
+   "top": null,
+   "top3": [],
+   "adopted": null,
+   "verdict": "정답",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "DUAL-1",
+   "condition": "look_at",
+   "expect": "unresolved",
+   "top": null,
+   "top3": [],
+   "adopted": null,
+   "verdict": "정답",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "RETEST-1",
+   "condition": "no_time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "RETEST-1",
+   "condition": "time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "RETEST-1",
+   "condition": "look_at",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "RETESTX-1",
+   "condition": "no_time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "RETESTX-1",
+   "condition": "time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "RETESTX-1",
+   "condition": "look_at",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "PAIRFAIL-1",
+   "condition": "no_time",
+   "expect": "DATA-003-01",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03",
+    "DATA-003-01"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "상위3",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "PAIRFAIL-1",
+   "condition": "time",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01",
+    "NETWORK-001-03"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "PAIRFAIL-1",
+   "condition": "look_at",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": true,
+   "error": null
+  },
+  {
+   "key": "PAIRPASS-1",
+   "condition": "no_time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "PAIRPASS-1",
+   "condition": "time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "FIRSTTC-1",
+   "condition": "no_time",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null
+  },
+  {
+   "key": "FIRSTH-1",
+   "condition": "no_time",
+   "expect": "NETWORK-001-08",
+   "top": "NETWORK-001-08",
+   "top3": [
+    "NETWORK-001-08",
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-08",
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null
+  }
+ ]
+}

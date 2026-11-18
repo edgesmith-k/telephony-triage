@@ -664,6 +664,59 @@ def test_offline_eval_observation_keeps_definite_false_positive_and_unjudged(tmp
     assert s["errors"] == s["unjudged_errors"] == s["observation_errors"] == 1 and s["evaluated"] == 0
 
 
+def test_offline_eval_condition_args_and_adoption_rule(tmp_path, monkeypatch):
+    """분석 정확도 단계 1: 조건별 인자(no_time·look_at은 시각도 답도 없이 — 포털 첫 선별과 같음), steps_file·sim_slot 전달, 채택 정의
+    (`decision`이 있으면 그 값, 없으면 1위가 원인을 갖고 C=1), 기준 위치 정답(`step_anchor.span` 끝 = `fail_at`)."""
+    sys.path.insert(0, str(REPO / "tools"))
+    import offline_eval
+    seen = {}
+
+    def fake(analysis):
+        def script(root, name, args):
+            seen["args"] = args
+            seen["meta"] = json.loads(Path(args[args.index("--issue-meta") + 1]).read_text(encoding="utf-8"))
+            return subprocess.CompletedProcess(args, 0, json.dumps({"status": "ok", "logs": {"in_range": True, "events": 3},
+                                                                     **analysis}), "")
+        monkeypatch.setattr(offline_eval, "_script", script)
+
+    item = {"key": "C-1", "logs": ["none.log"], "occurred_at": "2026-11-14T10:00:00+09:00", "expect": "X-001-01",
+            "look_at": "VIPC_A (token=0x1)", "fail_at": "2026-11-14T10:00:00.500+09:00", "steps_file": "tc.html", "sim_slot": 1}
+    ok_anchor = {"source": "look_at", "span": [None, "2026-11-14T01:00:00.500Z"]}
+    work = tmp_path / "w"
+    work.mkdir()
+    fake({"candidates": [{"cause": "X-001-01", "C": 1}], "step_anchor": ok_anchor})
+    r = offline_eval.evaluate_item(tmp_path, tmp_path, tmp_path, {"year": 2026}, item, work, "look_at")
+    assert "--answer" not in seen["args"] and "VIPC_A (token=0x1)" in seen["args"]
+    assert "occurred_at" not in seen["meta"] and seen["meta"]["sim_slot"] == "1"
+    assert str(tmp_path / "tc.html") in seen["args"]
+    assert r["adopted"] == "X-001-01" and r["adopted_from"] == "top" and r["anchor_ok"] is True
+    fake({"candidates": [{"cause": "X-001-01", "C": 0}]})          # 원인 미확인 1위는 채택 아님, 기준 없음은 위치 판정 없음
+    r = offline_eval.evaluate_item(tmp_path, tmp_path, tmp_path, {"year": 2026}, item, work, "time")
+    assert seen["meta"]["occurred_at"] == item["occurred_at"] and "--answer" not in seen["args"]
+    assert r["adopted"] is None and r["anchor_ok"] is None and r["anchor_missed"] is True    # steps_file로 기준을 요청했는데 못 잡음
+    no_req = offline_eval.evaluate_item(tmp_path, tmp_path, tmp_path, {"year": 2026}, {**item, "steps_file": None}, work, "time")
+    assert no_req["anchor_missed"] is False                                                  # 기준 요청 없음 = 못 찾음 아님
+    r = offline_eval.evaluate_item(tmp_path, tmp_path, tmp_path, {"year": 2026}, item, work, "look_at")   # 기준 요청, 못 잡음
+    assert r["anchor_missed"] is True and r["anchor_ok"] is None
+    assert offline_eval.summarize([r])["anchor_missed"] == 1
+    assert offline_eval._same_instant("2026-11-14T01:00:00Z", "2026-11-14T10:00:00+09:00") is True    # Z (3.10도)
+    assert offline_eval._same_instant("bad", "2026-11-14T10:00:00+09:00") is None                     # 못 읽음 ≠ 틀림
+    assert offline_eval._same_instant("2026-11-14T10:00:00", "2026-11-14T10:00:00+09:00") is None     # 타임존 없음 ≠ 틀림
+    env = {"verdict": "match", "reason": None, "primary": "X-001-01", "confident": True, "errors": ["db_search"], "hidden": "mask-error"}
+    assert offline_eval._portal_cells(env) == ("match(가림 실패·DB 조회 실패)", "X-001-01", "판정 불가")   # 환경 실패 ≠ 카드 판정
+    fake({"candidates": [{"cause": "X-001-01", "C": 1}], "decision": {"state": "held", "selected": None}})
+    held = offline_eval.evaluate_item(tmp_path, tmp_path, tmp_path, {"year": 2026}, item, work, "no_time")
+    assert held["adopted"] is None and held["adopted_from"] == "decision"
+    fake({"candidates": [], "decision": {"state": "accepted", "selected": {"cause": "Y-001-01"}}})
+    acc = offline_eval.evaluate_item(tmp_path, tmp_path, tmp_path, {"year": 2026}, item, work, "no_time")
+    assert acc["adopted"] == "Y-001-01"
+    s = offline_eval.summarize([held, acc])
+    assert (s["accepted_correct"], s["accepted_wrong"], s["held"], s["held_top_right"], s["answer_rate"]) == (0, 1, 1, 1, 0.5)
+    first = {**held, "first_analysis": True, "expect": "unresolved"}     # 정답 unresolved인 보류 = 옳은 보류, 첫 분석 보류
+    s = offline_eval.summarize([first, {**acc, "first_analysis": True}])
+    assert s["correct_hold"] == 1 and s["first_total"] == 2 and s["first_hold_rate"] == 0.5
+
+
 def test_offline_eval_all_error_labelset_is_not_shown_as_pass(tmp_path, monkeypatch):
     r = _eval_with(tmp_path, monkeypatch, {"count": 1})
     import offline_eval
@@ -734,6 +787,9 @@ def test_offline_eval_rejects_bad_labelset(tmp_path):
     bad.write_text("items: [{key: X-1}]\n", encoding="utf-8")
     proc = _offline(str(bad), "--db", str(SAMPLE))
     assert proc.returncode == 2 and "logs" in proc.stderr
+    bad.write_text("conditions: [no_time, someday]\nitems: [{key: X-1, logs: [a.log], expect: unresolved}]\n", encoding="utf-8")
+    proc = _offline(str(bad), "--db", str(SAMPLE))
+    assert proc.returncode == 2 and "conditions" in proc.stderr
 
 
 if __name__ == "__main__":

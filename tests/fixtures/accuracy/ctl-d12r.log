@@ -1,0 +1,14 @@
+-- [합성] 분석 정확도 조합 로그. 시드 fixture 줄과 합성 VIPC_ 줄을 시각만 옮겨 이어 붙였다(tests/helpers/make_accuracy_fixtures.py).
+11-14 10:00:00.000  2101  2101 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0
+11-14 10:00:00.000  2101  2101 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON
+11-14 10:00:00.000  2101  2101 D SST-0   : powerOffRadioSafely: Data is active on phone 1. Wait for all data disconnect.
+11-14 10:00:00.005  2101  2101 D DNC-0   : onTearDownAllDataNetworks: reason=AIRPLANE_MODE_ON
+11-14 10:00:00.005  2101  2101 D DNC-0   : tearDownGracefully: Safe to tear down [DataNetwork: DN-156-C, <APN#1>, state=ConnectedState]
+11-14 10:00:00.005  2101  2101 D DN-156-C: ConnectedState: onTearDown: reason=AIRPLANE_MODE_ON
+11-14 10:00:00.008  2101  2141 D RILJ    : [0599]> DEACTIVATE_DATA_CALL cid = 1 reason = SHUTDOWN [PHONE0]
+11-14 10:00:00.009  2101  2141 D RILJ    : [0599]< DEACTIVATE_DATA_CALL  [PHONE0]
+11-14 10:00:00.009  2101  2101 D DN-156-C: DisconnectingState: onDeactivateResponse: resultCode=RESULT_SUCCESS
+11-14 10:00:00.020  2101  2101 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-156-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=AIRPLANE_MODE_ON
+11-14 10:00:00.020  2101  2101 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.
+11-14 10:00:00.024  2101  2141 D RILJ    : [0602]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]
+11-14 10:00:00.027  2101  2141 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]

@@ -1,0 +1,13 @@
+key: RETESTX-1
+fields:
+  summary: 데이터 연결 실패(재시험)
+  description: 시험 중 데이터 연결이 실패했습니다.
+  customfield_10001: 2026-11-14T10:02:00+0900
+  customfield_10006: '0'
+comments:
+- author: mock.tester
+  created: 2026-11-14T11:00:00+0900
+  body: 로그 첨부했습니다.
+- author: mock.cp
+  created: 2026-11-14T13:00:00+0900
+  body: '1차 시험: VIPC_SETUP_DATA (token=0x0de) 실패. 재시험 요청합니다.'
