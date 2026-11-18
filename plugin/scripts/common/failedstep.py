@@ -371,8 +371,9 @@ def _words(mapping, defaults: dict, key: str) -> set[str]:
     return {" ".join(("no" if w is False else str(w)).split()).casefold() for w in words}
 
 
-# 판정 단어 뒤 사유 표시: `Fail (사유)`·`Fail [코드]`·`FAIL: 사유`·`Fail - 사유`. `Fail-safe`·`Failover`·`Passive`는 판정이 아니다.
-_REASON_RE = re.compile(r"\s*[(\[:]|\s+-\s")
+# 판정 단어 뒤 사유 표시: `Fail (사유)`·`Fail [코드]`(괄호는 끝에서 닫혀야 한다 — `OK (popup) button`은 아님)·`FAIL: 사유`·
+# `Fail - 사유`. `Fail-safe`·`Failover`·`Passive`는 판정이 아니다.
+_REASON_RE = re.compile(r"\s*(?:\(.*\)|\[.*\])$|\s*:|\s+-\s")
 # 번호 없이 이름이 이 단어 그대로인 줄은 합계 줄이다(`Total | FAIL`) — 스텝이 아니다.
 _SUMMARY_NAMES = {"total", "overall", "overall result", "result", "summary", "verdict", "합계", "종합", "최종 결과"}
 
@@ -463,11 +464,15 @@ def _step_row(cells, header, header_n, pass_w, fail_w, stepanchor) -> dict | Non
         if status is None:
             st_idx = None
     # 오른쪽부터: 모든 칸에서 전체 일치를 먼저, 없을 때만 사유 붙은 판정(이름 칸 `Fail (timeout) 재현`이 먼저 잡히지 않게).
-    # 판정 열을 아는 표에서는 다른 칸의 사유 붙은 모양을 판정으로 보지 않는다(`NG (no grant) 확인 | Skip`).
+    # 판정 열을 아는 표에서는 다른 칸의 사유 붙은 모양을 판정으로 보지 않는다(`NG (no grant) 확인 | Skip`). 그 밖에는
+    # 이름 자리(첫 칸이 번호면 둘째 칸, 아니면 첫 칸)를 사유 붙은 판정으로 보지 않는다(`3 | NG: 거절 확인 | N/A`).
+    name_idx = 1 if stepanchor.step_number(cells[0]) is not None else 0
     for reason in (False,) if aligned and "status" in header else (False, True):
         if status is not None:
             break
         for idx in range(len(cells) - 1, -1, -1):
+            if reason and idx == name_idx:
+                continue
             status = _status_of(cells[idx], pass_w, fail_w, reason)
             if status:
                 st_idx = idx

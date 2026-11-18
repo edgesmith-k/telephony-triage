@@ -381,6 +381,13 @@ def test_parse_steps_step_names_like_verdict_are_not_verdicts():
     assert _expected_steps(rows) == [(1, "Fail-safe check", "pass"), (2, "Failover test", "pass"), (3, "Passive scan", "fail"),
                                      (4, "Fail (timeout) 재현", "pass")]
     assert failedstep.parse_steps("No | Step | Result\n5 | NG (no grant) 확인 | Skip\n") == []
+    # 괄호 사유는 칸(한 줄 형식은 줄) 끝에서 닫혀야 판정이다
+    assert failedstep.parse_steps("Step 4: Press OK (popup) button\nStep 5: NG (no grant) 확인\nStep 6: Fail (timeout) 재현\n") == []
+    assert failedstep.parse_steps("5 | 확인 | NG (no grant) 확인\n") == []
+    # 표 머리가 없으면 이름 자리(번호 다음 칸, 번호가 없으면 첫 칸)는 사유 붙은 판정으로 보지 않는다
+    assert failedstep.parse_steps("3 | 실패 (재시도 포함) | Skip\n3 | NG: 거절 확인 | N/A\n") == []
+    assert _expected_steps(failedstep.parse_steps("3 | 데이터 켜기 | Fail (timeout)\n데이터 켜기 | Fail (timeout)\n")) == \
+        [(3, "데이터 켜기", "fail"), (None, "데이터 켜기", "fail")]
 
 
 def test_summary_row_is_not_failed_step():
