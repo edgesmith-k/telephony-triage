@@ -371,15 +371,28 @@ def test_ipc_pair_rejects_other_ipc_name_between():
     assert res["clues"] == 3 and res["dropped_reasons"] == ["이름 뒤 첫 token이 그 token이 아님"]
 
 
-def test_ipc_pair_without_prefix_uses_identifier_shape():
-    """입력 기록에 접두어가 없으면(빈 설정·옛 입력) 대문자·밑줄 식별자를 다른 IPC 이름으로 본다."""
+def test_ipc_pair_error_prefix_and_empty_prefix():
+    """오류 값 접두어(`vendor_ipc.error_prefix`, 기본 placeholder `VIPC_E_`)로 시작하는 낱말은 다른 IPC 이름이 아니다. 요청 접두어
+    설정이 비면 사이를 보지 않는다(대문자 식별자 모양으로 추측해 진짜 단서를 버리지 않는다) — 단계 2b 확인 리뷰 N6의 두 재현."""
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     from triagelib import problem
 
-    q = "AP SETUP_DATA_CALL은 XIPC_DATA_CALL_REQ (token=0x3e0) 로 받음"
-    assert not problem._paired("SETUP_DATA_CALL", "0x3e0", q, "")
-    assert problem._paired("XIPC_DATA_CALL_REQ", "0x3e0", q, "")
-    assert problem._paired("XIPC_SETUP", "0x0de", "XIPC_SETUP [slot 1] 2회 (token=0x0de)", "")
+    assert problem._paired("VIPC_SETUP_DATA", "0x0de", "VIPC_SETUP_DATA 실패 VIPC_E_TIMEOUT (token=0x0de)", "VIPC_", "VIPC_E_")
+    q = "VIPC_SETUP_DATA 응답 cause REQUESTED_SERVICE_OPTION_NOT_SUBSCRIBED (token=0x0de)"
+    assert problem._paired("VIPC_SETUP_DATA", "0x0de", q, "", "")
+    assert problem._paired("VIPC_SETUP_DATA", "0x0de", q, "VIPC_", "VIPC_E_")
+    assert not problem._paired("SETUP_DATA_CALL", "0x3e0", "SETUP_DATA_CALL은 VIPC_DATA_CALL_REQ (token=0x3e0)", "VIPC_", "VIPC_E_")
+
+
+def test_error_prefix_recorded_and_used_by_check():
+    issue = dict(ISSUE, comments=[{"body": "CP: VIPC_SETUP_DATA 실패 VIPC_E_TIMEOUT (token=0x0de) 재시도 없음"}])
+    job = tmp("tt-problem-") / KEY
+    _problem(job, issue, tc=None)
+    side = json.loads((job / "problem-input.json").read_text(encoding="utf-8"))
+    assert (side["ipc_prefix"], side["ipc_error_prefix"]) == ("VIPC_", "VIPC_E_")
+    out = _output(rounds={"count": 1, "last_from_comment": None, "same_failure": "unknown"}, clues=[
+        _clue(1, "VIPC_SETUP_DATA", "0x0de", "VIPC_SETUP_DATA 실패 VIPC_E_TIMEOUT (token=0x0de)")])
+    assert _check(job, out, 0)["clues"] == 1
 
 
 @pytest.mark.parametrize("tc,note", [

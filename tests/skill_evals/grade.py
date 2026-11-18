@@ -3582,10 +3582,6 @@ def _token_key(token) -> tuple | None:
         return None
 
 
-def _quote_tokens(text) -> set:
-    return {_token_key(m) for m in re.findall(r"(?<![A-Za-z0-9_])(?:0[xX][0-9A-Fa-f]{1,8}|[0-9]{1,10})(?![A-Za-z0-9_])", str(text or ""))}
-
-
 def pb_clue_match(want: dict, got: dict) -> bool:
     """기대 단서 하나와 검사를 통과한 단서 하나(`problem.json` `clues[]`)가 같은가: 코멘트 번호·종류·`side`(적혀 있으면),
     ipc는 이름·token 값, ipc_name은 이름과 token 없음, log_line은 인용에 기대 글(`contains`)이 든 것. stale은 따로 본다."""
@@ -3605,7 +3601,11 @@ def pb_rows(expect: dict, rec: dict | None) -> list[tuple[bool, str]]:
     모두 실패. 칸 값만 본다(문장 품질은 보지 않는다).
     - 유형: 첫 칸이 `types` 가운데 하나, 나머지는 `types`·`allowed_types` 안. 범위 밖이 하나라도 있으면 실패(D02).
     - 단서: 기대 단서가 모두 있고(stale·side까지), 모든 단서가 기대나 `allowed_clues` 가운데 하나에 맞는다. `absent_tokens`는
-      token 칸과 인용 글 둘 다에서 찾는다(D03).
+      token 칸만 본다 — token 칸이 맞는 ipc 단서의 인용에 정정 문장이 함께 있어도 떨어뜨리지 않는다(확인 리뷰 N5). 정정 전 값을
+      log_line·ipc_name으로 넣은 단서는 기대·허용 밖이라 이미 실패다.
+    - 칸 값 행(있을 때): `hypotheses_absent`는 가설이 1개 이상일 때만 통과, `unknown_mentions`는 묶음마다 낱말 하나가
+      `unknown`에 든다. `modules_any`·`modules_all`과 `unknown_mentions`는 **약한 행**이다 — 글 속 낱말을 모으거나 고정 문구를
+      쓰면 통과할 수 있다(근거에 그렇게 적는다).
     - 회차: `count`·`last_from_comment`·`same_failure`가 허용 값 안(D07)."""
     n = 6 if any(k in expect for k in PB_FIELD_KEYS) else 5
     if not rec:
@@ -3629,7 +3629,7 @@ def pb_rows(expect: dict, rec: dict | None) -> list[tuple[bool, str]]:
     extra = [b for c, b in zip(clues, brief)
              if not any(pb_clue_match(w, c) and bool(c.get("stale")) == w["stale"] for w in wanted + allowed)]
     bad = [b for c, b in zip(clues, brief) for t in expect.get("absent_tokens") or []
-           if _token_key(c.get("token")) == _token_key(t) or _token_key(t) in _quote_tokens(c.get("quote"))]
+           if _token_key(c.get("token")) == _token_key(t)]
     cl = (not missing and not extra and not bad,
           f"없는 기대 단서={missing} 기대·허용 밖 단서={extra} 없어야 할 token 단서={bad}; clues={brief}"[:1400])
     dropped = rec.get("dropped") or []
@@ -3642,14 +3642,20 @@ def pb_rows(expect: dict, rec: dict | None) -> list[tuple[bool, str]]:
         if expect.get("modules_any") and not any(any(w in m for m in modules) for w in expect["modules_any"]):
             probs.append(f"modules에 {expect['modules_any']} 중 하나 없음")
         probs += [f"modules에 {w} 없음" for w in expect.get("modules_all") or [] if not any(w in m for m in modules)]
-        probs += [f"hypotheses에 {w}" for w in expect.get("hypotheses_absent") or [] if w in hyps]
-        if len(rec.get("unknown") or []) < expect.get("unknown_min", 0):
-            probs.append(f"unknown {len(rec.get('unknown') or [])}개 < {expect['unknown_min']}")
-        rows.append((not probs, f"{probs or '맞음'}; modules={modules} unknown={len(rec.get('unknown') or [])}"))
+        if expect.get("hypotheses_absent"):
+            if not rec.get("hypotheses"):
+                probs.append("hypotheses 없음(빈 가설은 통과가 아니다)")
+            probs += [f"hypotheses에 {w}" for w in expect["hypotheses_absent"] if w in hyps]
+        unk = " ".join(str(u) for u in rec.get("unknown") or [])
+        probs += [f"unknown에 {group} 중 하나 없음" for group in expect.get("unknown_mentions") or []
+                  if not any(w.lower() in unk.lower() for w in group)]
+        weak = [k for k in ("modules_any", "modules_all", "unknown_mentions") if k in expect]
+        rows.append((not probs, f"{probs or '맞음'}; modules={modules} unknown={len(rec.get('unknown') or [])}"
+                     + (f" — 약한 행({'·'.join(weak)}: 낱말 모으기·고정 문구로도 통과할 수 있다)" if weak else "")))
     return rows
 
 
-PB_FIELD_KEYS = ("modules_any", "modules_all", "hypotheses_absent", "unknown_min")
+PB_FIELD_KEYS = ("modules_any", "modules_all", "hypotheses_absent", "unknown_mentions")
 
 
 def pb_record(run_dir: Path, job: Path, name: str):

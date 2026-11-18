@@ -3417,7 +3417,7 @@
         "symptom.types 첫 칸이 DATA-003이고 그 밖의 유형은 없다",
         "first_analysis가 false다",
         "rounds가 count 1·last_from_comment null 또는 1·same_failure unknown다",
-        "clues가 3번 VIPC_PDN_CONNECT token 0x0de(ipc) side cp이다 — 그 밖의 단서는 없다(token 0x0d0은 칸에도 인용에도 없다)",
+        "clues가 3번 VIPC_PDN_CONNECT token 0x0de(ipc) side cp이다(더 있어도 되는 것: 4번 SETUP_DATA_CALL 이름만(ipc_name, token null) side ap) — 그 밖의 단서는 없다(token 칸에 0x0d0이 없다)",
         "검사에서 버린 단서(dropped)가 0이다"
       ],
       "problem_expect": {
@@ -3449,6 +3449,16 @@
         ],
         "absent_tokens": [
           "0x0d0"
+        ],
+        "allowed_clues": [
+          {
+            "comment": 4,
+            "kind": "ipc_name",
+            "name": "SETUP_DATA_CALL",
+            "token": null,
+            "side": "ap",
+            "stale": false
+          }
         ]
       },
       "files": []
@@ -3537,7 +3547,7 @@
         "rounds가 count 2·last_from_comment 3·same_failure no다",
         "clues가 2번 VIPC_SETUP_DATA token 0x0de(ipc) side cp stale, 4번 로그 줄 'CreateConnectionProcessor: Connection failed'(log_line) side ap이다 — 그 밖의 단서는 없다",
         "검사에서 버린 단서(dropped)가 0이다",
-        "칸 값: modules에 call 또는 ims이 있다, hypotheses에 VIPC_SETUP_DATA(앞 회차 결론)이 없다"
+        "칸 값: modules에 call 또는 ims이 있다, hypotheses가 1개 이상이고 VIPC_SETUP_DATA(앞 회차 결론)이 없다 (약한 행 — 낱말 모으기·고정 문구로도 통과할 수 있다)"
       ],
       "problem_expect": {
         "types": [
@@ -3713,7 +3723,7 @@
         "rounds가 count 1·last_from_comment null 또는 1·same_failure unknown다",
         "clues가 2번 로그 줄 'Service MODEM has died'(log_line) side ap이다 — 그 밖의 단서는 없다",
         "검사에서 버린 단서(dropped)가 0이다",
-        "칸 값: unknown이 1개 이상이다"
+        "칸 값: unknown에 (CP|모뎀) 그리고 (AP|HAL|RIL)가 든다 (약한 행 — 낱말 모으기·고정 문구로도 통과할 수 있다)"
       ],
       "problem_expect": {
         "types": [
@@ -3742,7 +3752,17 @@
             "stale": false
           }
         ],
-        "unknown_min": 1
+        "unknown_mentions": [
+          [
+            "CP",
+            "모뎀"
+          ],
+          [
+            "AP",
+            "HAL",
+            "RIL"
+          ]
+        ]
       },
       "files": []
     },
@@ -3964,8 +3984,9 @@
         "symptom.types 첫 칸이 DATA-002이고 그 밖의 유형은 없다",
         "first_analysis가 false다",
         "rounds가 count 3·last_from_comment 13·same_failure no다",
-        "clues가 15번 로그 줄 'onDisconnected reason=LOST_CONNECTION'(log_line) side ap, 5번 VIPC_SETUP_DATA token 0x0a4(ipc) side cp stale, 9번 VIPC_SETUP_DATA token 0x1b7(ipc) side cp stale이다(더 있어도 되는 것: 3번 로그 줄 'SETUP_DATA_CALL error 2'(log_line) side ap stale) — 그 밖의 단서는 없다(token 0x0a1은 칸에도 인용에도 없다)",
-        "검사에서 버린 단서(dropped)가 0이다"
+        "clues가 15번 로그 줄 'onDisconnected reason=LOST_CONNECTION'(log_line) side ap, 5번 VIPC_SETUP_DATA token 0x0a4(ipc) side cp stale, 9번 VIPC_SETUP_DATA token 0x1b7(ipc) side cp stale이다(더 있어도 되는 것: 3번 로그 줄 'SETUP_DATA_CALL error 2'(log_line) side ap stale) — 그 밖의 단서는 없다(token 칸에 0x0a1이 없다)",
+        "검사에서 버린 단서(dropped)가 0이다",
+        "칸 값: unknown에 (망|network) 그리고 (CP|모뎀)가 든다 (약한 행 — 낱말 모으기·고정 문구로도 통과할 수 있다)"
       ],
       "problem_expect": {
         "types": [
@@ -4019,6 +4040,16 @@
         ],
         "absent_tokens": [
           "0x0a1"
+        ],
+        "unknown_mentions": [
+          [
+            "망",
+            "network"
+          ],
+          [
+            "CP",
+            "모뎀"
+          ]
         ]
       },
       "files": []
@@ -4098,7 +4129,7 @@
         "symptom.types 첫 칸이 DATA-003이고 그 밖의 유형은 없다",
         "first_analysis가 false다",
         "rounds가 count 1·last_from_comment null 또는 1·same_failure unknown다",
-        "clues가 3번 VIPC_DATA_CALL_CNF token 0x3e1(ipc) side cp, 2번 로그 줄 'SETUP_DATA_CALL error 2'(log_line) side ap이다(더 있어도 되는 것: 3번 VIPC_DATA_CALL_REQ token 0x3e0(ipc) side cp) — 그 밖의 단서는 없다",
+        "clues가 3번 VIPC_DATA_CALL_CNF token 0x3e1(ipc) side cp, 2번 로그 줄 'SETUP_DATA_CALL error 2'(log_line) side ap이다(더 있어도 되는 것: 3번 VIPC_DATA_CALL_REQ token 0x3e0(ipc) side cp, 2번 로그 줄 'SETUP_DATA_CALL,reason=NORMAL'(log_line) side ap) — 그 밖의 단서는 없다",
         "검사에서 버린 단서(dropped)가 0이다"
       ],
       "problem_expect": {
@@ -4143,6 +4174,13 @@
             "token": "0x3e0",
             "side": "cp",
             "stale": false
+          },
+          {
+            "comment": 2,
+            "kind": "log_line",
+            "contains": "SETUP_DATA_CALL,reason=NORMAL",
+            "side": "ap",
+            "stale": false
           }
         ]
       },
@@ -4171,7 +4209,7 @@
         "rounds가 count 1·last_from_comment null 또는 1·same_failure unknown다",
         "clues가 2번 로그 줄 'ImsPhoneCallTracker'(log_line) side ap, 3번 로그 줄 'onDeregistered'(log_line) side ap, 4번 로그 줄 'tearDown'(log_line) side ap이다 — 그 밖의 단서는 없다",
         "검사에서 버린 단서(dropped)가 0이다",
-        "칸 값: modules에 call·ims·data이 모두 있다"
+        "칸 값: modules에 call·ims·data이 모두 있다 (약한 행 — 낱말 모으기·고정 문구로도 통과할 수 있다)"
       ],
       "problem_expect": {
         "types": [
@@ -4251,7 +4289,7 @@
         "symptom.types 첫 칸이 DATA-003이고 그 밖의 유형은 없다",
         "first_analysis가 true다",
         "rounds가 count 1·last_from_comment null 또는 1·same_failure unknown다",
-        "로그에서 찾을 단서가 글에 없어 clues가 비었다(token 0x999은 칸에도 인용에도 없다)",
+        "로그에서 찾을 단서가 글에 없어 clues가 비었다(token 칸에 0x999이 없다)",
         "검사에서 버린 단서(dropped)가 0이다"
       ],
       "problem_expect": {

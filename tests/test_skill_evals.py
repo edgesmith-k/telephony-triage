@@ -1916,6 +1916,9 @@ def test_problem_instructions_do_not_contain_eval_answers():
     skill = REPO / "plugin" / "skills" / "telephony-triage"
     docs = "\n".join(p.read_text(encoding="utf-8") for p in [skill / "SKILL.md", *sorted((skill / "reference").rglob("*.md"))])
     folded, lower = " ".join(docs.split()), docs.lower()
+    raw = re.sub(r"(?s)```.*?```", "", (skill / "reference" / "problem.md").read_text(encoding="utf-8"))   # 형식 예시 블록 제외
+    problem = " ".join(raw.split())
+    quoted_phrases = [q for line in raw.splitlines() for q in re.findall(r'"([^"]{4,80})"', line)]
     by_id = {e["id"]: e for e in _entries()}
     for eid in sorted(grader.PB_EVALS):
         t = yaml.safe_load((EVALS / "jira" / f"MOCK-{9000 + eid}.yaml").read_text(encoding="utf-8"))
@@ -1929,6 +1932,32 @@ def test_problem_instructions_do_not_contain_eval_answers():
             for line in text.splitlines():
                 line = " ".join(re.sub(r"<[^>]+>|\{noformat\}", " ", line).split())
                 assert len(line) < 12 or line not in folded, (eid, line)
+            folded_text = " ".join(text.split())
+            for quoted in quoted_phrases:          # 거꾸로: 지시문의 따옴표 구절이 평가 글에 있으면 실패
+                assert quoted not in folded_text, (eid, quoted)
+            for phrase in _phrases(text):           # 줄의 일부인 구절도(확인 리뷰 N1) — 문제 파악 지시문에
+                edge = r"(?<![A-Za-z0-9_-])" if phrase[0].isascii() else ""     # 영문은 낱말 경계(--failed-step의 failed 제외)
+                assert not re.search(edge + re.escape(phrase) + edge.replace("<", ""), problem), (eid, phrase)
+
+
+HANGUL_MIN, LATIN_MIN = 8, 8     # 구절 길이 기준: 한글·영문 글자 수(공백·밑줄 제외). 영문을 6으로 하면 흔한 한 낱말·칸
+                                 # 이름(unknown·network·symptom)이 거짓 경보라 8로 올렸다(확인 리뷰 N1 반영 때)
+
+
+def _phrases(text: str) -> set[str]:
+    """글의 구절: 이어진 한글 낱말(또는 영문 낱말)을 각 낱말에서 시작해 글자 수가 기준에 처음 닿을 때까지 이은 것.
+    짧은 창이 지시문에 없으면 그것을 품은 긴 구절도 없으므로 가장 짧은 창만 본다."""
+    out = set()
+    for pattern, least in ((r"[가-힣]+(?:[ 	]+[가-힣]+)*", HANGUL_MIN), (r"[A-Za-z_]+(?:[ 	]+[A-Za-z_]+)*", LATIN_MIN)):
+        for run in re.findall(pattern, text):
+            words = run.split()
+            for i in range(len(words)):
+                n, j = 0, i
+                while j < len(words) and n < least:
+                    n, j = n + len(words[j].replace("_", "")), j + 1
+                if n >= least:
+                    out.add(" ".join(words[i:j]))
+    return out
 
 
 def _pb_golden(entry: dict, ticket: dict) -> dict:
@@ -1947,8 +1976,9 @@ def _pb_golden(entry: dict, ticket: dict) -> dict:
             "symptom": {"text": "합성 정답", "types": [] if x.get("not_in_db") else x["types"][:1],
                         "not_in_db": bool(x.get("not_in_db"))},
             "rounds": {"count": r["count"][0], "last_from_comment": r["last_from_comment"][0], "same_failure": r["same_failure"][0]},
-            "clues": clues, "hypotheses": [], "modules": list(x.get("modules_all") or x.get("modules_any", [])[:1]),
-            "unknown": ["합성"] * x.get("unknown_min", 0)}
+            "clues": clues, "hypotheses": ["합성 가설"] if x.get("hypotheses_absent") else [],
+            "modules": list(x.get("modules_all") or x.get("modules_any", [])[:1]),
+            "unknown": [" ".join(g[0] for g in x["unknown_mentions"])] if x.get("unknown_mentions") else []}
 
 
 def test_problem_expectations_pass_through_real_check():
@@ -1982,9 +2012,15 @@ def test_problem_expectations_pass_through_real_check():
             assert grader.pb_rows(x, wide)[0][0] is False, key
         extra = {"comment": 1, "kind": "log_line", "name": None, "token": None, "quote": "합성", "side": "ap", "stale": False}
         assert grader.pb_rows(x, {**rec, "clues": rec["clues"] + [extra]})[3][0] is False, key   # 기대·허용 밖 단서(D03)
-        if x.get("absent_tokens"):       # 없어야 할 token이 인용에만 있어도 단서 행 실패
-            bad = {**extra, "quote": f"앞 시도 (token={x['absent_tokens'][0]})"}
+        if x.get("absent_tokens"):       # 없어야 할 token은 token 칸만 본다(확인 리뷰 N5)
+            ipcs = [c for c in rec["clues"] if c["kind"] == "ipc"]
+            if ipcs:                      # token 칸이 맞는 ipc의 인용에 정정 전 token이 함께 있어도 통과
+                quoted = {**ipcs[0], "quote": f"{x['absent_tokens'][0]} 아님, " + ipcs[0]["quote"]}
+                assert grader.pb_rows(x, {**rec, "clues": [quoted if c is ipcs[0] else c for c in rec["clues"]]})[3][0], key
+            bad = {**ipcs[0], "token": x["absent_tokens"][0]} if ipcs else {**extra, "token": x["absent_tokens"][0]}
             assert grader.pb_rows(x, {**rec, "clues": rec["clues"] + [bad]})[3][0] is False, key
+        if x.get("hypotheses_absent"):    # 빈 가설은 칸 값 행 실패(확인 리뷰 N2)
+            assert grader.pb_rows(x, {**rec, "hypotheses": []})[5][0] is False, key
 
 
 def test_unjudged_variant_db_has_slow_cause():

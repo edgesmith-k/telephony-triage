@@ -50,9 +50,6 @@ TIME_RE = re.compile(r"[0-9TZ:.+\- /]{4,40}")              # Jira 작성 시각 
 QUOTE_TOKEN = re.compile(r"(?<![A-Za-z0-9_])(?:0[xX][0-9A-Fa-f]{1,8}|[0-9]{1,10})(?![A-Za-z0-9_])")
 QUOTE_NAME = re.compile(r"[A-Za-z0-9_.:-]+")
 QUOTE_MARK = re.compile(r"(?m)^[ \t]*(?:>[ \t]?)+")          # 줄머리 인용 표식(입력 md의 `> `, Jira 인용 `>`)
-# 짝 검사에서 "다른 IPC 메시지 이름"으로 보는 모양: 설정 접두어(`vendor_ipc.request_prefix`)로 시작하는 낱말, 접두어가 비면
-# 대문자·밑줄 식별자(`ABC_DEF`)
-IPC_SHAPE = r"[A-Z][A-Z0-9]*_[A-Z0-9_]+"
 INCOMPLETE = "(이 목록은 불완전하다 — 표에서 Fail 스텝을 읽지 못해 빠졌을 수 있다. 아래 \"TC의 Fail 줄\" 절이 맞다)"
 NEXT_FIX = "problem-output.json을 고쳐 다시 check-output --for problem"
 NEXT_INPUT = "triage.py problem <KEY>를 다시 실행해 입력을 새로 만든다"
@@ -244,7 +241,7 @@ def _history(raw: dict, masker, letters: _Letters) -> list[str]:
 
 
 def build_input(raw: dict, cfg: dict, db: Path, key: str, failed_step=None, steps_file=None,
-                source_sha256: str | None = None, ipc_prefix: str = "") -> tuple[str, dict, dict]:
+                source_sha256: str | None = None, ipc_prefix: str = "", ipc_error_prefix: str = "") -> tuple[str, dict, dict]:
     """→ (problem-input.md 글, problem-input.json 대조 자료, 출력 요약). 모든 글은 한 마스커로 가린다(같은 값이면 같은 표지)."""
     db_cfg = compat.load_db_config(db)
     masker = masking.for_db(db_cfg)
@@ -310,6 +307,7 @@ def build_input(raw: dict, cfg: dict, db: Path, key: str, failed_step=None, step
             "description": description,
             "comments": [{"n": c["n"], "text": c["text"]} for c in shown], "comments_total": total,
             "types": [t for t, _ in types], "mask_off": masking.is_off(db_cfg), "ipc_prefix": ipc_prefix,
+            "ipc_error_prefix": ipc_error_prefix,
             "mask_allow": [str(p) for p in ((db_cfg.get("mask") or {}).get("allow_patterns") or [])]}
     out = {"input": INPUT_MD, "output": OUTPUT_FILE, "comments": total, "omitted": omitted,
            "steps": sum(1 for line in steps if line.startswith("- ")), "types": len(types), "bytes": len(text.encode("utf-8"))}
@@ -329,10 +327,9 @@ def cmd_problem(args, defaults: dict) -> int:
             source_sha = _sha(Path(source).read_bytes())
             if raw.get("key") and str(raw["key"]) != args.key:
                 raise _Stop(USAGE, "사용 오류", err=f"Jira 응답의 키가 {args.key}와 다르다")
-            prefix = platforms.load(defaults, getattr(args, "platform_name", None),
-                                    require_enabled=False).vendor_ipc.request_prefix
+            vipc = platforms.load(defaults, getattr(args, "platform_name", None), require_enabled=False).vendor_ipc
             text, side, out = build_input(raw, args.platform_cfg, db, args.key, args.failed_step, args.steps_file,
-                                         source_sha, prefix)
+                                         source_sha, vipc.request_prefix, vipc.error_prefix)
         except (jira_fields.UsageError, trackers.TrackerConfigError, issuedb.IssueDbError, yamlio.YamlFileError,
                 platforms.PlatformConfigError, OSError, ValueError) as exc:
             raise _Stop(USAGE, "설정 오류", err=masking.mask_brief(str(exc), 300)) from None
@@ -428,24 +425,26 @@ def _names(text: str) -> set[str]:
     return {p for w in QUOTE_NAME.findall(text) for p in (w.rstrip(".:"), *re.split(r"[.:]+", w)) if p}
 
 
-def _paired(name: str, token: str, quote: str, prefix: str = "") -> bool:
+def _paired(name: str, token: str, quote: str, prefix: str = "", error_prefix: str = "") -> bool:
     """`ipc`: 인용에서 그 이름 뒤에 처음 나오는, 준 token과 같은 모양(16진/10진)의 값이 준 token인가(같은 메시지의 짝).
-    모양이 다른 숫자(`2회 재시도`·`[slot 1]`)는 건너뛴다. 이름과 그 token 사이에 **다른 IPC 메시지 이름**(`prefix`로 시작하는
-    낱말, 접두어가 비면 대문자·밑줄 식별자)이 끼어 있으면 그 token은 그 메시지의 것이다 — AP 이름에 CP token을 붙여 바꿔 쓴
-    단서(`SETUP_DATA_CALL은 … VIPC_DATA_CALL_REQ (token=0x3e0)`)를 막는다."""
+    모양이 다른 숫자(`2회 재시도`·`[slot 1]`)는 건너뛴다. 이름과 그 token 사이에 **다른 IPC 메시지 이름**(요청 접두어 `prefix`로
+    시작하는 낱말, 오류 값 접두어 `error_prefix`로 시작하는 낱말은 빼고)이 끼어 있으면 그 token은 그 메시지의 것이다 — AP 이름에
+    CP token을 붙여 바꿔 쓴 단서(`SETUP_DATA_CALL은 … VIPC_DATA_CALL_REQ (token=0x3e0)`)를 막는다. 요청 접두어 설정이 비면 사이를
+    보지 않는다(이름 모양으로 추측하면 `… cause REQUESTED_SERVICE_OPTION_NOT_SUBSCRIBED (token=…)` 같은 진짜 단서를 버린다)."""
     want = _token_value(token)
-    other = re.compile(r"(?<![A-Za-z0-9_])" + (re.escape(prefix) + r"[A-Za-z0-9_]+" if prefix else IPC_SHAPE))
+    other = re.compile(r"(?<![A-Za-z0-9_])" + re.escape(prefix) + r"[A-Za-z0-9_]+") if prefix else None
     for m in QUOTE_NAME.finditer(quote):
         if name in _names(m.group()):
             first = next((t for t in QUOTE_TOKEN.finditer(quote, m.end()) if _token_value(t.group())[0] == want[0]), None)
             if first is None or _token_value(first.group()) != want:
                 continue
-            if not any(o.group() not in (name, m.group()) for o in other.finditer(quote, m.end(), first.start())):
+            between = [o.group() for o in other.finditer(quote, m.end(), first.start())] if other else []
+            if not any(w not in (name, m.group()) and not (error_prefix and w.startswith(error_prefix)) for w in between):
                 return True
     return False
 
 
-def _clue_problem(c: dict, sources: dict, prefix: str = "") -> str | None:
+def _clue_problem(c: dict, sources: dict, prefix: str = "", error_prefix: str = "") -> str | None:
     """단서를 버릴 사유(없으면 None). 인용은 줄머리 인용 표식을 떼고 공백을 접어 그 코멘트(가린 글)에서 찾고, 이름·token은
     인용에서 뽑은 값과 **값으로** 비교한다(부분 문자열이 아니다)."""
     src = sources.get(c["comment"])
@@ -465,7 +464,7 @@ def _clue_problem(c: dict, sources: dict, prefix: str = "") -> str | None:
     tokens = [{_token_value(v) for v in QUOTE_TOKEN.findall(t)} for t in (quote, src)]
     if c["token"] and not all(_token_value(c["token"]) in t for t in tokens):
         return "token 값이 인용 안에 없음"
-    if c["kind"] == "ipc" and not _paired(c["name"].rstrip(".:"), c["token"], quote, prefix):
+    if c["kind"] == "ipc" and not _paired(c["name"].rstrip(".:"), c["token"], quote, prefix, error_prefix):
         return "이름 뒤 첫 token이 그 token이 아님"
     if len(quote) < lookat.TEXT_MIN and c["kind"] != "ipc":     # ipc는 이름·token을 값으로 확인했다
         return f"인용이 너무 짧음({lookat.TEXT_MIN}자 미만)"
@@ -523,7 +522,7 @@ def check(job: Path, env: dict) -> tuple[int, dict]:
     last = data["rounds"]["last_from_comment"]
     kept, dropped = [], []
     for c in data["clues"]:
-        why = _clue_problem(c, sources, str(side.get("ipc_prefix") or ""))
+        why = _clue_problem(c, sources, str(side.get("ipc_prefix") or ""), str(side.get("ipc_error_prefix") or ""))
         if why:
             dropped.append({"clue": c, "reason": why})
             continue
