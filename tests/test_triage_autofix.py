@@ -261,8 +261,8 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
     dec = done["decision"]
     assert dec == {"state": "accepted", "reason": "anchored_top",
                    "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
-                   "location": {"state": "confirmed", "source": "look_at", "kind": "near"}}, dec
-    assert _report_line(out, "- 판단:") == ("- 판단: 원인 채택 — DATA-001-01 (실패 지점: 담당자가 지정한 기준 줄·확인됨, "
+                   "location": {"state": "found", "source": "look_at", "kind": "near"}}, dec     # 글자 일치 한 곳 = 찾음
+    assert _report_line(out, "- 판단:") == ("- 판단: 원인 채택 — DATA-001-01 (실패 지점: 담당자가 지정한 기준 줄·찾음, "
                                           "자격 검사 전)")
     assert "(관측된 규칙 일치" not in _report_line(out, "- 분류 후보:")
     (out / "deep-output.md").write_text("요약: 사용자 설정이 아니라 망 거절로 보인다\n근거:\n"

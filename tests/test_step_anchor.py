@@ -124,6 +124,8 @@ def test_location_state_per_anchor_source():
     assert loc(look_at, {"hits": 1, "how": "ipc"}) == {"state": "confirmed", "source": "look_at", "kind": "point"}
     assert loc(look_at, {"hits": 1, "how": "token"}) == {"state": "confirmed", "source": "look_at", "kind": "point"}
     assert loc(look_at, {"hits": 3, "how": "text"}) == {"state": "multiple", "source": "look_at", "kind": "near"}
+    # 글자 일치는 한 곳이어도 found — 확인된 실패 지점(confirmed)이 아니다(포털 확실한 일치는 confirmed만 본다)
+    assert loc(look_at, {"hits": 1, "how": "text"}) == {"state": "found", "source": "look_at", "kind": "near"}
     for src in ("steps_file", "step_order"):
         assert loc({"source": src, "fail": _t("5:30:20")}) == {"state": "found", "source": src, "kind": "range"}
 

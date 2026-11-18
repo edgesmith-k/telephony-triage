@@ -50,7 +50,8 @@ def decision_line(dec: dict, has_candidates: bool) -> str:
     `counter`(심층 분석이 다른 원인을 냄)가 있으면 꼬리를 붙인다."""
     if dec.get("state") == "accepted":
         loc = dec.get("location") or {}
-        where = f"{_SOURCE_LABEL.get(loc.get('source'), loc.get('source'))}·{_LOCATION_LABEL.get(loc.get('state'), loc.get('state'))}"
+        state = "찾음" if loc.get("kind") == "near" and loc.get("state") == "found" else _LOCATION_LABEL.get(loc.get("state"), loc.get("state"))
+        where = f"{_SOURCE_LABEL.get(loc.get('source'), loc.get('source'))}·{state}"
         text = f"원인 채택 — {(dec.get('selected') or {}).get('cause')} (실패 지점: {where}, 자격 검사 전)"
     else:
         text = f"원인 보류 — {HELD_REASON.get(dec.get('reason'), dec.get('reason'))}" + (
