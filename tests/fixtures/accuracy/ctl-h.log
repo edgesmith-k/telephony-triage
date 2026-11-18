@@ -1,0 +1,13 @@
+-- [합성] 분석 정확도 조합 로그. 시드 fixture 줄과 합성 VIPC_ 줄을 시각만 옮겨 이어 붙였다(tests/helpers/make_accuracy_fixtures.py).
+11-14 10:00:00.000  1301  1330 D RILJ    : Service SIM has died. [PHONE0]
+11-14 10:00:00.000  1301  1331 D RILJ    : Service MODEM has died. [PHONE0]
+11-14 10:00:00.000  1301  1332 D RILJ    : Service VOICE has died. [PHONE0]
+11-14 10:00:00.000  1301  1333 D RILJ    : Service NETWORK has died. [PHONE0]
+11-14 10:00:00.000  1301  1334 D RILJ    : Service DATA has died. [PHONE0]
+11-14 10:00:00.000  1301  1335 D RILJ    : Service IMS has died. [PHONE0]
+11-14 10:00:00.000  1301  1336 D RILJ    : Service MESSAGING has died. [PHONE0]
+11-14 10:00:00.064  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]
+11-14 10:00:00.070  1301  1331 D RILJ    : [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: ON [PHONE0]
+11-14 10:00:00.073  1301  1330 D RILJ    : [9703]< DATA_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_NOT_SEARCHING_OP, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdentityNr{nci: <CELL#1>, pci: <CELL#2>, tac: <CELL#3>, nrarfcn: 9000, bands: [BAND_41]}), registeredPlmn: 00101} [PHONE0]
+11-14 10:00:00.159  1301  1301 D SST-0   : pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {1=true, 2=false} hasRilVoiceRadioTechnologyChanged = false hasRilDataRadioTechnologyChanged = {1=false, 2=false} hasDataTransportPreferenceChanged = false hasChanged = true hasVoiceRoamingOn = false hasVoiceRoamingOff = false hasDataRoamingOn =false hasDataRoamingOff = false hasLocationChanged = false has4gHandoff = false hasMultiApnSupport = false hasLostMultiApnSupport = false hasCssIndicatorChanged = false hasNrFrequencyRangeChanged = false hasNrStateChanged = false hasAirplaneModeOnlChanged = false
+11-14 10:00:00.160  1301  1301 D SST-0   : updateCarrierDisplayName: radio is on but out of service, set plmn='No service'

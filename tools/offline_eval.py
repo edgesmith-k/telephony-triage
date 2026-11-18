@@ -22,6 +22,24 @@
         failed_step: ""           # 선택. 실패 스텝 한 줄(보조 정보, 후보 동점 정렬의 키워드 보너스·후보 없음 힌트에만 쓴다)
         expect: DATA-001-01       # 정답 원인 ID 또는 unresolved
         negative_control: true    # 선택. 대조군(일부러 틀린 라벨 등): 돌리고 판정은 보이되 지표의 분모·분자에서 뺀다
+        steps_file: tc.html       # 선택. --steps-file로 넘긴다(라벨셋 기준 상대 경로)
+        sim_slot: "1"             # 선택. 이슈 메타의 SIM 슬롯(--issue-meta sim_slot)
+
+조건별 실행(선택, 분석 정확도 단계 1): 문서에 `conditions: [no_time, time, look_at]`가 있으면 항목마다 그 조건을 따로 돌린다.
+항목이 가진 조건만 돈다 — `no_time`(시각 없음: `occurred_at`을 넘기지 않고 `--answer time=full`, 포털이 시각 없이 주는 것과 같은
+경로)은 늘, `time`(발생 시각만)은 `occurred_at`이 있을 때, `look_at`(정답 기준 줄을 `--look-at`으로, 시각 없이 — 단계 4가 자동으로
+찾아야 할 것을 사람이 넣은 경우)은 항목 `look_at`이 있을 때. 이때 `occurred_at`은 필수가 아니고 연도는 `year`(항목·문서) 또는
+`occurred_at`에서 온다. 항목 필드 더: `look_at`(기준 줄), `fail_at`(정답 실패 줄의 시각, 타임존 있는 ISO — 기준 위치 정답 판정),
+`fail_line`(그 줄 원문, 표시용), `first_analysis: true`(첫 분석 — 단서 없음 사례), 그 밖(`issue_file`·`pair`)은 읽지 않는 기록용.
+`conditions`가 없으면 예전처럼 항목마다 한 번(`occurred_at` 필수) 돈다.
+
+채택(단계 사이 비교용 정의): `analysis.json`에 `decision`이 있으면 `state: accepted`일 때 `selected.cause`, 없으면 1위 후보가
+원인을 갖고 C=1일 때 그 원인. 채택 지표(대조군·표본내·오류 제외, 조건별): 맞는 채택·틀린 채택·보류·답변률(채택÷평가)·옳은 보류
+(정답 unresolved인데 보류)·보류 중 raw 1위가 정답이던 수·기준 위치 정답(기준(`step_anchor.source`가 look_at·log_marker·
+steps_file·step_order)을 쓴 실행에서 잡힌 실패 시각 = `fail_at`)·첫 분석 보류율.
+`--portal <dir>`(선택): `<dir>/portal/screener.py`(포털 소스 — 체크아웃이 아니라 `git archive`로 푼 사본)의 `classify`·
+`confident_match`(대표 원인 정보는 포털 `_cause_info`)를 그대로 불러 실행마다 포털 카드 판정·대표 원인·확실한 일치를 열로 낸다
+(포털 규칙을 복제하지 않는다. 표시 전 검사(`safe_to_show`)는 돌리지 않는다). 없으면 그 열은 "미측정".
 
 지표(대조군 제외 — `negative_control: true` 항목은 `controls`로 따로 세고 표에 `대조군(<판정>)`으로 보인다. **표본내**
 항목 — 로그가 그 이슈 DB의 `*/fixtures/` 아래 파일(시그니처를 만들 때 쓴 fixture 자체)이거나, 항목 `key`가 그 DB에 이미
@@ -69,6 +87,10 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 UNRESOLVED = "unresolved"
+CONDITIONS = ("no_time", "time", "look_at")
+ANCHORED = ("look_at", "log_marker", "steps_file", "step_order")    # 기준이 있는 `step_anchor.source`
+HEADER = ("규칙 동작 확인용 — 조합 로그는 시드 줄로 만든 표본 안 자료, 정확도 수치가 아님. 표본내 자동 제외(DB fixtures/ 자체·"
+          "DB에 기록된 키)는 이 조합 로그를 가리지 못한다(로그가 DB 밖 사본이고 키가 DB에 없다).")
 
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 from common import history  # noqa: E402
@@ -116,8 +138,11 @@ def load_labelset(path: Path) -> dict:
         raise EvalError(f"라벨셋을 읽을 수 없습니다: {path} ({exc})")
     if not isinstance(doc, dict) or not isinstance(doc.get("items"), list) or not doc["items"]:
         raise EvalError("라벨셋에 items 목록이 필요합니다.")
+    conds = doc.get("conditions")
+    if conds is not None and (not isinstance(conds, list) or not conds or set(conds) - set(CONDITIONS)):
+        raise EvalError(f"conditions는 {', '.join(CONDITIONS)} 중 하나 이상의 목록이어야 합니다.")
     for i, item in enumerate(doc["items"], 1):
-        for field in ("key", "logs", "occurred_at", "expect"):
+        for field in ("key", "logs", "expect") + (() if conds else ("occurred_at",)):
             if not item.get(field):
                 raise EvalError(f"items[{i}]에 {field}가 없습니다.")
         if not isinstance(item["logs"], list):
@@ -141,19 +166,61 @@ def _recorded_keys(db: Path) -> frozenset[str]:
     return frozenset(p.stem for p in Path(db).glob("*/*/issues/*.yaml"))
 
 
-def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work: Path) -> dict:
-    """analyze와 같은 드라이버(`triage.py run --offline-db`)로 파서 → 매처를 돌린다."""
+def _same_instant(a, b) -> bool:
+    try:
+        return datetime.fromisoformat(str(a)) == datetime.fromisoformat(str(b))
+    except (TypeError, ValueError):
+        return False
+
+
+def _adopted(analysis: dict) -> tuple[str | None, str]:
+    """(채택한 원인 | None, 근거): `decision`이 있으면 그 값(단계 2부터), 없으면 1위 후보가 원인을 갖고 C=1."""
+    dec = analysis.get("decision")
+    if isinstance(dec, dict):
+        return ((dec.get("selected") or {}).get("cause") if dec.get("state") == "accepted" else None), "decision"
+    top = (analysis.get("candidates") or [{}])[0]
+    return (top.get("cause") if top.get("cause") and top.get("C") == 1 else None), "top"
+
+
+def _portal_column(screener, proc, root: Path, db: Path, work: Path) -> dict:
+    """포털의 선별 분류(`classify`)·대표 원인(`_cause_info` — 이슈 DB 조회)·확실한 일치(`confident_match`)를 그대로 부른다."""
+    try:
+        c = screener.classify(proc.returncode, proc.stdout.encode("utf-8"), False)
+        errors: list = []
+        cfg = {"plugin_root": str(root), "screen_db": str(db), "data_dir": str(work)}
+        primary = screener._cause_info(cfg, c["primary"], errors) if c["primary"] else None
+        res = {"verdict": c["verdict"], "primary": primary,
+               "evidence": [str(x) for x in (c["data"] or {}).get("must_show") or []]}
+        return {"verdict": c["verdict"], "reason": c["reason"], "primary": (primary or {}).get("cause"),
+                "confident": screener.confident_match(res), "errors": errors}
+    except Exception as exc:     # 포털 코드가 이 환경에서 못 도는 것은 열에 그대로 남긴다(통과로 보이지 않게)
+        return {"error": f"{type(exc).__name__}: {exc}"[:200]}
+
+
+def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work: Path,
+                  condition: str | None = None, screener=None) -> dict:
+    """analyze와 같은 드라이버(`triage.py run --offline-db`)로 파서 → 매처를 돌린다. condition이 None이면 예전 실행(발생 시각)."""
     key = str(item["key"])
     logs = [str((base / p).resolve()) for p in item["logs"]]
     job = work / f"{len(list(work.iterdir())):03d}-{key}"
     job.mkdir(parents=True)
-    meta = {"key": key, "occurred_at": str(item["occurred_at"]), "sw": item.get("sw", ""),
+    meta = {"key": key, "sw": item.get("sw", ""),
             "summary": item.get("summary", ""), "description": item.get("description", "")}
+    if condition in (None, "time"):
+        meta["occurred_at"] = str(item["occurred_at"])
     if item.get("failed_step"):
         meta["failed_step"] = str(item["failed_step"])
+    if item.get("sim_slot") not in (None, ""):
+        meta["sim_slot"] = str(item["sim_slot"])
     meta_path = job / "issue_input.json"
     meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
     args = ["run", key, "--offline-db", str(db), "--out", str(job), "--logs", *logs, "--issue-meta", str(meta_path)]
+    if condition in ("no_time", "look_at"):
+        args += ["--answer", "time=full"]
+    if condition == "look_at":
+        args += ["--look-at", str(item["look_at"])]
+    if item.get("steps_file"):
+        args += ["--steps-file", str((base / str(item["steps_file"])).resolve())]
     minutes = item.get("minutes", doc.get("minutes"))
     if minutes:
         args += ["--minutes", str(minutes)]
@@ -167,10 +234,14 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
               "in_sample": in_fixture or in_db,
               "in_sample_reason": "fixture" if in_fixture else "db-record" if in_db else None,
               "logs_sha256": [hashlib.sha256(Path(p).read_bytes()).hexdigest() if Path(p).is_file() else None for p in logs],
-              "backend": None, "external": None}
+              "backend": None, "external": None,
+              "condition": condition, "adopted": None, "adopted_from": None, "anchor": None, "anchor_ok": None,
+              "first_analysis": bool(item.get("first_analysis")), "portal": None}
     try:
         year = item.get("year") or doc.get("year")
         if not year:
+            if not item.get("occurred_at"):
+                raise ValueError("year도 occurred_at도 없다")
             occurred = datetime.fromisoformat(str(item["occurred_at"]))
             year = (occurred.astimezone(ZoneInfo(str(tz))) if tz and occurred.tzinfo else occurred).year
     except (ValueError, ZoneInfoNotFoundError) as exc:
@@ -178,6 +249,8 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
         return result
     args += ["--year", str(year)]
     proc = _script(root, "triage.py", args)
+    if screener is not None:
+        result["portal"] = _portal_column(screener, proc, root, db, work)
     if proc.returncode != 0:
         result["error"] = f"triage 종료 {proc.returncode}: {proc.stderr.strip()[:200]}"
         return result
@@ -198,6 +271,12 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     candidates = analysis.get("candidates") or []
     result["top3"] = [c["cause"] for c in candidates[:3]]
     result["top"] = result["top3"][0] if result["top3"] else None
+    result["adopted"], result["adopted_from"] = _adopted(analysis)
+    sa = analysis.get("step_anchor") or {}
+    if sa:
+        result["anchor"] = {"source": sa.get("source"), "fail": (sa.get("span") or [None, None])[-1]}
+    if sa.get("source") in ANCHORED and item.get("fail_at"):
+        result["anchor_ok"] = _same_instant(result["anchor"]["fail"], item["fail_at"])
     # 정답·미스를 단정하지 못하는 이유 [(오류 문구, 오탐 확정 때 경고 문구)]: 판정 불가 유형·원인(unjudged)과 관측 불완전
     # (observation). 둘 다 있으면 둘 다 기록한다
     unsure: list[tuple[str, str]] = []
@@ -224,7 +303,7 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
         notes.append("; ".join(w for _, w in unsure) + " — 원인 후보가 있어 오탐은 확정")
     elif unsure:   # 판정 못 한 유형·원인, 못 본 이벤트가 1위·후보를 바꿀 수 있다 → 정답·미스를 단정하지 않는다(분모 제외)
         result["error"] = "; ".join(e for e, _ in unsure)
-        result["top"], result["top3"] = None, []
+        result["top"], result["top3"], result["adopted"] = None, [], None
     if notes:
         result["warning"] = "; ".join(notes)
     return result
@@ -261,6 +340,8 @@ def summarize(results: list[dict], include_in_sample: bool = False) -> dict:
         return round(num / den, 4) if den else None
 
     counted = [r for r in results if not _excluded(r, include_in_sample)]
+    adopted = [r for r in scored if r.get("adopted")]
+    first = [r for r in scored if r.get("first_analysis")]
     return {
         "total": len(results),
         "controls": len(controls),          # 지표 제외(돌리기는 한다)
@@ -279,6 +360,17 @@ def summarize(results: list[dict], include_in_sample: bool = False) -> dict:
         "top1_accuracy": rate(sum(r["top"] == r["expect"] for r in positive), len(positive)),
         "top3_inclusion": rate(sum(r["expect"] in r["top3"] for r in positive), len(positive)),
         "false_positive_rate": rate(sum(r["verdict"] == "오탐" for r in negative), len(negative)),
+        # 채택 지표(머리말 "채택"): 평가된 것(scored) 기준
+        "accepted_correct": sum(r["adopted"] == r["expect"] for r in adopted),
+        "accepted_wrong": sum(r["adopted"] != r["expect"] for r in adopted),
+        "held": len(scored) - len(adopted),
+        "answer_rate": rate(len(adopted), len(scored)),
+        "correct_hold": sum(not r.get("adopted") and r["expect"] == UNRESOLVED for r in scored),
+        "held_top_right": sum(not r.get("adopted") and r["expect"] != UNRESOLVED and r["top"] == r["expect"] for r in scored),
+        "anchor_runs": sum(r.get("anchor_ok") is not None for r in scored),
+        "anchor_correct": sum(r.get("anchor_ok") is True for r in scored),
+        "first_total": len(first),
+        "first_hold_rate": rate(sum(not r.get("adopted") for r in first), len(first)),
     }
 
 
@@ -286,19 +378,53 @@ def _pct(value: float | None) -> str:
     return "-" if value is None else f"{value * 100:.1f}%"
 
 
+def _table(rows: list[tuple]) -> list[str]:
+    widths = [max(len(row[i]) for row in rows) for i in range(len(rows[0]))]
+    lines = ["  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)).rstrip() for row in rows]
+    lines.insert(1, "  ".join("-" * w for w in widths))
+    return lines
+
+
+def _notes(results: list[dict]) -> list[str]:
+    tag = lambda r: r["key"] + (f"[{r['condition']}]" if r.get("condition") else "")    # noqa: E731
+    return ([f"오류 {tag(r)}: {r['error']}" for r in results if r["error"]]
+            + [f"경고 {tag(r)}: {r['warning']}" for r in results if r.get("warning")])
+
+
+def _portal_cells(p: dict | None) -> tuple[str, str, str]:
+    if p is None:
+        return "미측정", "미측정", "미측정"
+    if p.get("error"):
+        return "오류", "오류", "오류"
+    return (p["verdict"] + (f"({p['reason']})" if p.get("reason") else ""), p.get("primary") or "-",
+            "예" if p["confident"] else "아니오")
+
+
+def render_conditions(results: list[dict], by_condition: dict) -> str:
+    """조건별 표(사례마다 한 줄)와 채택 지표. 포털 열은 --portal이 없으면 "미측정"."""
+    lines = [HEADER]
+    for cond, s in by_condition.items():
+        rows = [("키", "정답", "raw 1위", "채택", "판정", "기준 위치", "포털 판정", "포털 대표 원인", "확실한 일치")]
+        runs = [r for r in results if r.get("condition") == cond]
+        for r in runs:
+            where = "-" if r.get("anchor_ok") is None else "맞음" if r["anchor_ok"] else "틀림"
+            rows.append((r["key"], r["expect"], r["top"] or "-", r.get("adopted") or "보류",
+                         "오류" if r["error"] else r["verdict"], where, *_portal_cells(r.get("portal"))))
+        lines += ["", f"[조건 {cond}] 평가 {s['evaluated']}/전체 {s['total']}, 오류 {s['errors']}", *_table(rows), *_notes(runs),
+                  f"채택: 맞음 {s['accepted_correct']} · 틀림 {s['accepted_wrong']} · 보류 {s['held']} · 답변률 {_pct(s['answer_rate'])}",
+                  f"보류: 옳은 보류(정답 unresolved) {s['correct_hold']} · 보류 중 raw 1위가 정답 {s['held_top_right']}",
+                  f"기준 위치 정답 {s['anchor_correct']}/{s['anchor_runs']}(기준을 쓴 실행) · 첫 분석 보류율 "
+                  f"{_pct(s['first_hold_rate'])}({s['first_total']}건)",
+                  f"raw: 1위 정확도 {_pct(s['top1_accuracy'])} · 상위 3 포함률 {_pct(s['top3_inclusion'])} · "
+                  f"오탐률 {_pct(s['false_positive_rate'])}"]
+    return "\n".join(lines)
+
+
 def render(results: list[dict], summary: dict) -> str:
     rows = [("키", "정답", "1위", "판정")]
     for r in results:
         rows.append((r["key"], r["expect"], r["top"] or "-", "오류" if r["error"] else r["verdict"]))
-    widths = [max(len(row[i]) for row in rows) for i in range(4)]
-    lines = ["  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)).rstrip() for row in rows]
-    lines.insert(1, "  ".join("-" * w for w in widths))
-    for r in results:
-        if r["error"]:
-            lines.append(f"오류 {r['key']}: {r['error']}")
-    for r in results:
-        if r.get("warning"):
-            lines.append(f"경고 {r['key']}: {r['warning']}")
+    lines = _table(rows) + _notes(results)
     lines += [
         "",
         f"평가 {summary['evaluated']}/전체 {summary['total']}"
@@ -330,6 +456,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", default=None, help="이슈 DB 경로 (없으면 라벨셋의 db)")
     parser.add_argument("--plugin-root", default=None)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--portal", metavar="dir", default=None,
+                        help="포털 소스 사본(<dir>/portal/screener.py, git archive로 푼 것) — 실행마다 포털 카드 판정 열을 낸다")
     parser.add_argument("--include-in-sample", action="store_true",
                         help="표본내 항목(로그가 이슈 DB fixtures/ 자체이거나 키가 DB에 기록된 이슈)도 지표에 넣는다 — 도구 동작 확인용, 정확도 측정 아님")
     args = parser.parse_args(argv)
@@ -357,9 +485,23 @@ def main(argv: list[str] | None = None) -> int:
                 "labelset_sha256": hashlib.sha256(label_path.read_bytes()).hexdigest(),
                 "python": platform.python_version(),
                 "argv": list(sys.argv[1:] if argv is None else argv)}
+        screener = None
+        if args.portal:
+            sys.path.insert(0, str(Path(args.portal).resolve()))
+            try:
+                from portal import screener     # noqa: E402 — 포털 판정 규칙을 복제하지 않고 그대로 부른다
+            except Exception as exc:            # 다른 의존성 때문에 안 되면 우회하지 않고 멈춘다
+                raise EvalError(f"포털 소스를 불러올 수 없습니다: {args.portal} ({type(exc).__name__}: {exc})")
+            meta["portal"] = {"path": str(Path(args.portal).resolve())}
+        conds = doc.get("conditions")
+        has = {"no_time": lambda i: True, "time": lambda i: bool(i.get("occurred_at")), "look_at": lambda i: bool(i.get("look_at"))}
         work = Path(tempfile.mkdtemp(prefix="tt-offline-eval-"))
         try:
-            results = [evaluate_item(root, db, base, doc, item, work) for item in doc["items"]]
+            if conds:
+                results = [evaluate_item(root, db, base, doc, item, work, c, screener)
+                           for item in doc["items"] for c in conds if has[c](item)]
+            else:
+                results = [evaluate_item(root, db, base, doc, item, work, screener=screener) for item in doc["items"]]
         finally:
             shutil.rmtree(work, ignore_errors=True)
     except EvalError as exc:
@@ -370,8 +512,13 @@ def main(argv: list[str] | None = None) -> int:
             shutil.rmtree(temp_root, ignore_errors=True)
 
     summary = summarize(results, include_in_sample=args.include_in_sample)
+    by_condition = {c: summarize([r for r in results if r["condition"] == c], include_in_sample=args.include_in_sample)
+                    for c in conds or []}
     if args.json:
-        print(json.dumps({"meta": meta, "summary": summary, "items": results}, ensure_ascii=False, indent=1))
+        out = {"meta": meta, "summary": summary, "items": results}
+        if conds:       # 조건별 지표. summary는 모든 실행을 합친 것(종료 코드 판단용)
+            out["by_condition"] = by_condition
+        print(json.dumps(out, ensure_ascii=False, indent=1))
     else:
         def s(g: dict) -> str:
             return "-" if not g["sha"] else g["sha"][:12] + ("+dirty" if g["dirty"] else "")
@@ -379,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
         pr = meta["plugin_root"]
         print(f"meta: 플러그인 {s(meta['plugin_repo'])} · DB {s(meta['db'])} · 플러그인 루트 {pr['path']}"
               f"{'(임시)' if pr['temporary'] else ''} · 라벨셋 sha256 {meta['labelset_sha256'][:12]} · Python {meta['python']}")
-        print(render(results, summary))
+        print(render_conditions(results, by_condition) if conds else render(results, summary))
     if not summary["evaluated"]:     # 전부 오류인 평가를 정상 완료(0)로 보이지 않는다
         print("평가 가능한 항목 없음 — 전부 오류·대조군·표본내(지표 없음, 통과 아님)", file=sys.stderr)
         return 1

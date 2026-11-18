@@ -1,0 +1,197 @@
+# 생성 파일 — tests/helpers/make_accuracy_fixtures.py. 손으로 고치지 않는다.
+# db는 적지 않는다: 시드 DB(--seed-db)를 --db로 준다. 규칙 동작 확인용 표본 안 자료(정확도 수치가 아님).
+tz: Asia/Seoul
+year: 2026
+conditions:
+- no_time
+- time
+- look_at
+items:
+- key: MMX-1
+  logs:
+  - mmx.log
+  expect: unresolved
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:04:00.620  2101  2141 D RILJ    : [0410]< SETUP_DATA_CALL error 2 [PHONE0]'
+  fail_at: '2026-11-14T10:04:00.620+09:00'
+  occurred_at: '2026-11-14T10:04:00+09:00'
+  look_at: '11-14 10:04:00.620  2101  2141 D RILJ    : [0410]< SETUP_DATA_CALL error 2 [PHONE0]'
+- key: XM-1
+  logs:
+  - xm.log
+  expect: unresolved
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:00:00.620  2101  2141 D RILJ    : [0410]< SETUP_DATA_CALL error 2 [PHONE0]'
+  fail_at: '2026-11-14T10:00:00.620+09:00'
+  occurred_at: '2026-11-14T10:00:00+09:00'
+  look_at: '11-14 10:00:00.620  2101  2141 D RILJ    : [0410]< SETUP_DATA_CALL error 2 [PHONE0]'
+- key: MXM-1
+  logs:
+  - mxm.log
+  expect: unresolved
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.620  2101  2141 D RILJ    : [0410]< SETUP_DATA_CALL error 2 [PHONE0]'
+  fail_at: '2026-11-14T10:02:00.620+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: '11-14 10:02:00.620  2101  2141 D RILJ    : [0410]< SETUP_DATA_CALL error 2 [PHONE0]'
+- key: MMH-1
+  logs:
+  - mmh.log
+  expect: NETWORK-001-08
+  summary: 서비스 없음
+  fail_line: '11-14 10:04:00.000  1301  1331 D RILJ    : Service MODEM has died. [PHONE0]'
+  fail_at: '2026-11-14T10:04:00.000+09:00'
+  occurred_at: '2026-11-14T10:04:00+09:00'
+  look_at: '11-14 10:04:00.000  1301  1331 D RILJ    : Service MODEM has died. [PHONE0]'
+- key: CTLM-1
+  logs:
+  - ctl-m.log
+  expect: NETWORK-001-03
+  summary: 서비스 없음
+  fail_line: '11-14 10:00:00.061  1301  1301 D SST-0   : set service state as POWER_OFF'
+  fail_at: '2026-11-14T10:00:00.061+09:00'
+  occurred_at: '2026-11-14T10:00:00+09:00'
+  look_at: '11-14 10:00:00.061  1301  1301 D SST-0   : set service state as POWER_OFF'
+- key: D12R-1
+  logs:
+  - ctl-d12r.log
+  expect: DATA-002-01
+  summary: 데이터 끊김
+  fail_line: '11-14 10:00:00.020  2101  2101 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-156-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=AIRPLANE_MODE_ON'
+  fail_at: '2026-11-14T10:00:00.020+09:00'
+  occurred_at: '2026-11-14T10:00:00+09:00'
+  look_at: '11-14 10:00:00.020  2101  2101 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-156-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=AIRPLANE_MODE_ON'
+- key: C15-1
+  logs:
+  - ctl-c15.log
+  expect: CALL-001-02
+  summary: 발신 실패
+  fail_line: '11-14 10:00:15.080   912   952 D Telecom : CreateConnectionProcessor: Connection failed: (DisconnectCause [ Code: (ERROR) Label: (Radio off) Description: (Turn off airplane mode to make a
+    call.) Reason: (ServiceState.STATE_POWER_OFF, POWER_OFF) Tone: (27)  TelephonyCause: 17/-1 ImsReasonInfo: null]): CSW.hCCC(cap/cast)@E-AgM'
+  fail_at: '2026-11-14T10:00:15.080+09:00'
+  occurred_at: '2026-11-14T10:00:15+09:00'
+  look_at: 'CreateConnectionProcessor: Connection failed: (DisconnectCause [ Code: (ERROR) Label: (Radio off)'
+- key: HAL-1
+  logs:
+  - ctl-h.log
+  expect: NETWORK-001-08
+  summary: 서비스 없음
+  fail_line: '11-14 10:00:00.000  1301  1331 D RILJ    : Service MODEM has died. [PHONE0]'
+  fail_at: '2026-11-14T10:00:00.000+09:00'
+  occurred_at: '2026-11-14T10:00:00+09:00'
+  look_at: '11-14 10:00:00.000  1301  1331 D RILJ    : Service MODEM has died. [PHONE0]'
+- key: TC-1
+  logs:
+  - tc-shape.log
+  expect: unresolved
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.620  2101  2141 D RILJ    : [0410]< SETUP_DATA_CALL error 2 [PHONE0]'
+  fail_at: '2026-11-14T10:02:00.620+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: '11-14 10:02:00.620  2101  2141 D RILJ    : [0410]< SETUP_DATA_CALL error 2 [PHONE0]'
+  failed_step: Step 5 데이터 연결 확인 FAIL
+- key: RECOVER-1
+  logs:
+  - recover.log
+  expect: DATA-003-01
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:00:00.624  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.'
+  fail_at: '2026-11-14T10:00:00.624+09:00'
+  occurred_at: '2026-11-14T10:00:00+09:00'
+  look_at: '11-14 10:00:00.624  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.'
+- key: TOKSAME-1
+  logs:
+  - token.log
+  expect: unresolved
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.594   900   910 D RIL     : [RX] VIPC_SETUP_DATA, RSP, token=0x0de, len=8, Error(VIPC_E_DEMO_FAILURE)'
+  fail_at: '2026-11-14T10:02:00.594+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: VIPC_SETUP_DATA (token=0x0de)
+  issue_file: issues/TOKSAME-1.yaml
+- key: TOKNAME-1
+  logs:
+  - token.log
+  expect: unresolved
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.594   900   910 D RIL     : [RX] VIPC_SETUP_DATA, RSP, token=0x0de, len=8, Error(VIPC_E_DEMO_FAILURE)'
+  fail_at: '2026-11-14T10:02:00.594+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: VIPC_SETUP_DATA (token=0x0de)
+  issue_file: issues/TOKNAME-1.yaml
+- key: TOKONLY-1
+  logs:
+  - token-nameonly.log
+  expect: unresolved
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.594   900   910 D RIL     : [RX] VIPC_SETUP_DATA, RSP, token=0x0d2, len=8, Error(VIPC_E_DEMO_FAILURE)'
+  fail_at: '2026-11-14T10:02:00.594+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: VIPC_SETUP_DATA (token=0x0d2)
+  issue_file: issues/TOKONLY-1.yaml
+- key: DUAL-1
+  logs:
+  - dual-sim.log
+  expect: unresolved
+  summary: SIM2 데이터 연결 실패
+  fail_line: '11-14 10:01:00.594   900   910 D RIL     : ipc[1][RX] VIPC_SETUP_DATA, RSP, token=0x0de, len=8, Error(VIPC_E_DEMO_FAILURE)'
+  fail_at: '2026-11-14T10:01:00.594+09:00'
+  occurred_at: '2026-11-14T10:01:00+09:00'
+  look_at: VIPC_SETUP_DATA (token=0x0de)
+  sim_slot: '1'
+  issue_file: issues/DUAL-1.yaml
+- key: RETEST-1
+  logs:
+  - retest.log
+  expect: unresolved
+  summary: 데이터 연결 실패(재시험)
+  fail_line: '11-14 10:02:00.594   900   910 D RIL     : [RX] VIPC_SETUP_DATA, RSP, token=0x1a2, len=8, Error(VIPC_E_DEMO_FAILURE)'
+  fail_at: '2026-11-14T10:02:00.594+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: VIPC_SETUP_DATA (token=0x1a2)
+  issue_file: issues/RETEST-1.yaml
+- key: RETESTX-1
+  logs:
+  - retest-elsewhere.log
+  expect: unresolved
+  summary: 데이터 연결 실패(재시험)
+  fail_line: '11-14 10:02:00.594   900   910 D RIL     : [RX] VIPC_SETUP_DATA, RSP, token=0x1a2, len=8, Error(VIPC_E_DEMO_FAILURE)'
+  fail_at: '2026-11-14T10:02:00.594+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: VIPC_SETUP_DATA (token=0x1a2)
+  issue_file: issues/RETESTX-1.yaml
+- key: PAIRFAIL-1
+  logs:
+  - pair-fail.log
+  expect: DATA-003-01
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.624  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.'
+  fail_at: '2026-11-14T10:02:00.624+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: '11-14 10:02:00.624  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.'
+  pair: PAIRPASS-1
+- key: PAIRPASS-1
+  logs:
+  - pair-pass.log
+  expect: unresolved
+  summary: 같은 TC의 pass 로그
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  pair: PAIRFAIL-1
+- key: FIRSTTC-1
+  logs:
+  - tc-shape.log
+  expect: unresolved
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.620  2101  2141 D RILJ    : [0410]< SETUP_DATA_CALL error 2 [PHONE0]'
+  fail_at: '2026-11-14T10:02:00.620+09:00'
+  failed_step: 데이터 연결 FAIL
+  first_analysis: true
+- key: FIRSTH-1
+  logs:
+  - mmh.log
+  expect: NETWORK-001-08
+  summary: 서비스 없음
+  fail_line: '11-14 10:04:00.000  1301  1331 D RILJ    : Service MODEM has died. [PHONE0]'
+  fail_at: '2026-11-14T10:04:00.000+09:00'
+  failed_step: 망 등록 FAIL
+  first_analysis: true
