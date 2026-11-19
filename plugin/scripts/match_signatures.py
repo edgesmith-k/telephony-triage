@@ -501,9 +501,9 @@ def _reference_input(reference: dict | None, db) -> tuple[list[dict], dict | Non
     묶음 `{refs[], problem?, comment_adopt?}`(triage.py, 단계 5-2). 문제 파악 유형은 스냅샷 DB에 있는 것만 남긴다 — 값은 문자열
     비교에만 쓴다(정규식·경로로 쓰지 않는다)."""
     if not reference:
-        return [], None, False
+        return [], None, True
     if "kind" in reference:
-        return [reference], None, False
+        return [reference], None, True
     refs = [r for r in reference.get("refs") or [] if isinstance(r, dict) and r.get("kind") in ("line", "range")]
     problem = reference.get("problem")
     if isinstance(problem, dict):
@@ -512,7 +512,7 @@ def _reference_input(reference: dict | None, db) -> tuple[list[dict], dict | Non
                    "not_in_db": problem.get("not_in_db") is True}
     else:
         problem = None
-    return refs, problem, reference.get("comment_adopt") is True
+    return refs, problem, reference.get("comment_adopt") is not False     # 기본 참(eligibility.decide·설정과 같게)
 
 
 

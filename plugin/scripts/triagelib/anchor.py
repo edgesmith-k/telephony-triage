@@ -240,9 +240,16 @@ class AnchorMixin:
                 return
         conf = userconfig.get(self.cfg, "eligibility") or {}
         conf = conf if isinstance(conf, dict) else {}
+
+        def switch(key: str) -> bool:     # 참·거짓 값만 받는다 — 글자 "false" 등은 경고하고 기본(참)
+            value = conf.get(key, True)
+            if isinstance(value, bool):
+                return value
+            self.warn(f"설정 eligibility.{key} 값이 참·거짓(true/false)이 아니라 기본값 true로 본다")
+            return True
         sym = doc.get("symptom") if isinstance(doc.get("symptom"), dict) else {}
         problem = None
-        if conf.get("use_problem_types", True) is not False:
+        if switch("use_problem_types"):
             problem = {"types": [t for t in sym.get("types") or [] if isinstance(t, str)][:pb.TYPES_MAX],
                        "not_in_db": sym.get("not_in_db") is True}
         refs, dropped, seen = [], [], set()
@@ -272,7 +279,7 @@ class AnchorMixin:
             refs.append({"kind": "line", "source": "comment", "comment": c.get("comment"), "clue": c["kind"],
                          "how": found.get("how"), "places": found.get("places") or 1, "lines": found.get("place") or []})
             self.clue_rows.append({"where": where, "clue": c["kind"], "ts": found.get("ts"), "places": refs[-1]["places"]})
-        self.problem_use = {"problem": problem, "comment_adopt": conf.get("comment_adopt", True) is not False, "refs": refs,
+        self.problem_use = {"problem": problem, "comment_adopt": switch("comment_adopt"), "refs": refs,
                             "dropped": dropped}
 
     def clue_location(self, via: dict | None) -> dict | None:

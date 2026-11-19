@@ -446,8 +446,10 @@ def test_reference_input_keeps_db_types_only():
                                                 "problem": {"types": ["DATA-003", "NOPE-9", 3], "not_in_db": False},
                                                 "comment_adopt": True}, Db())
     assert (len(refs), problem, adopt) == (1, {"types": ["DATA-003"], "not_in_db": False}, True)
-    assert ms._reference_input(point(16, 120), Db()) == ([point(16, 120)], None, False)
-    assert ms._reference_input({"refs": [], "comment_adopt": "yes"}, Db()) == ([], None, False)
+    assert ms._reference_input(point(16, 120), Db()) == ([point(16, 120)], None, True)
+    # 리뷰 P2-2: 키가 없으면 참(eligibility.decide·설정 기본과 같게), 거짓은 False만
+    assert ms._reference_input({"refs": []}, Db()) == ([], None, True)
+    assert ms._reference_input({"refs": [], "comment_adopt": False}, Db()) == ([], None, False)
 
 
 # triage.py run(오프라인)으로 problem.json 읽기: 같은 입력 해시일 때만, stale 단서 안 씀, 로그에 없는 단서는 버리고 기록, 설정 스위치
@@ -572,6 +574,11 @@ def test_run_config_switches(seed_db):
     assert "실패 지점: Jira 코멘트·단서 위치(확정 아님)" in (out / "report.md").read_text(encoding="utf-8")
     a, _ = _problem_run(seed_db, "off", "cluepos.log", [IPC_CLUE], root=plugin_root(eligibility={"comment_adopt": False}))
     assert (a["decision"]["state"], a["decision"]["check"]["why"]) == ("held", "comment_unconfirmed")
+    # 리뷰 P2-2: 참·거짓이 아닌 값(글자 "false")은 경고하고 기본(참) — 몰래 참·거짓으로 읽지 않는다
+    a, out = _problem_run(seed_db, "strfalse", "cluepos.log", [IPC_CLUE], root=plugin_root(eligibility={"comment_adopt": "false"}))
+    assert a["decision"]["state"] == "accepted", a["decision"]
+    assert any("eligibility.comment_adopt" in w for w in a["warnings"]), a["warnings"]
+    assert json.loads((out / "reference.json").read_text(encoding="utf-8"))["comment_adopt"] is True
     near = "ConnectingState: setupData: accessNetwork=EUTRAN, isSatellite=false"
     a, _ = _problem_run(seed_db, "near", "nearpos.log", [], look_at=near)
     assert (a["decision"]["state"], a["decision"]["selected"]["cause"]) == ("accepted", "DATA-003-01")
