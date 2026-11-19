@@ -119,7 +119,8 @@ def test_example_commented_values_equal_defaults():
     # placeholder 기본과 같다. trace(선택, FR-23)는 예시로 기본 정규식 둘째를 적었다 — 양식에 키가 있고 검증을 통과한다
     from common import ipcseq
     assert prof.vendor_ipc.trace == (ipcseq.DEFAULT_TRACE[1],) and default.vendor_ipc.trace == ()
-    assert dataclasses.replace(prof.vendor_ipc, trace=()) == default.vendor_ipc
+    assert prof.vendor_ipc.slot == (r"^ipc\[(\d)\]",) and default.vendor_ipc.slot == ()     # slot(선택)도 예시 하나
+    assert dataclasses.replace(prof.vendor_ipc, trace=(), slot=()) == default.vendor_ipc
     assert ipcseq.patterns(prof.vendor_ipc) == [ipcseq.fill(ipcseq.DEFAULT_TRACE[1])]
     assert [t for t, _ in prof.ril_vendor.layers] == ["VRIL_HAL", "VRIL_SOCK"] and default.ril_vendor is None
 

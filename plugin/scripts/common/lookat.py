@@ -25,7 +25,7 @@ _HEAD = re.compile(r"^\s*(?:\d{4}-)?\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?
                    r"|\s+[VDIWEFA]/[^(]+?\(\s*\d+\):)?")
 # 대괄호는 시각 모양만 뗀다(`[TX]`·`[IpcCtx_0]`는 IPC 정규식이 쓴다, P2 21): `[  12.345]`·`[14:32:11.001]`
 _BRACKET_TS = re.compile(r"\[\s*\d+\.\d+\s*\]|\[\d{1,2}:\d{2}:\d{2}(?:\.\d+)?\]")
-_TOKEN = re.compile(r"(?i)\btoken\s*[=:]\s*(0x[0-9A-Fa-f]{1,8}|\d{1,10})\b")    # 괄호 없이 써도 읽는다(P2 22)
+_TOKEN = re.compile(r"(?i)\btoken\s*[=:(]\s*(0x[0-9A-Fa-f]{1,8}|\d{1,10})\b")   # 괄호 없이·`Token(0x2FE)`도 읽는다(P2 22, 단계 3)
 _BARE_TOKEN = re.compile(r"0[xX][0-9A-Fa-f]{1,8}|\d{1,10}")    # 글 전체가 token 값(16진 또는 10진 숫자만)
 # `common.modulefilter._TOKEN_FOLD`의 사본 — run·explore 경로는 modulefilter를 import하지 않는다(test_modulefilter). 바꾸면 둘 다
 _TOKEN_FOLD = re.compile(r"<[A-Z][A-Z0-9_]*#\d+>|<HEXDUMP \d+B>|<REDACTED:[A-Z0-9]+>")
@@ -43,7 +43,8 @@ def fold(text) -> str:
 
 
 def query(text, prefix: str = "VIPC_") -> dict:
-    """입력 → `{text(정리한 글), name, token(int|None)}`. 이름은 접두어+단어 문자, token은 `token=`·`token:`·글 전체가 `0x…`이거나 10진 숫자만."""
+    """입력 → `{text(정리한 글), name, token(int|None)}`. 이름은 접두어+단어 문자, token은 `token=`·`token:`·`token(`(대소문자 무시)·
+    글 전체가 `0x…`이거나 10진 숫자만."""
     body = clean(text)
     m = re.search(r"\b(" + re.escape(prefix) + r"\w+)", body)     # = modulefilter.ipc_re_for(prefix)
     t = _TOKEN.search(body)
@@ -52,12 +53,15 @@ def query(text, prefix: str = "VIPC_") -> dict:
     return {"text": body, "name": m.group(1) if m else None, "token": token}
 
 
-def ipc_hits(q: dict, records: list[dict]) -> list[int]:
-    """token이 있을 때: 이름도 있으면 이름과 token이 같은 레코드, 이름이 없으면 token이 같은 레코드의 위치."""
+def ipc_hits(q: dict, records: list[dict], slot: int | None = None) -> list[int]:
+    """token이 있을 때: 이름도 있으면 이름과 token이 같은 레코드, 이름이 없으면 token이 같은 레코드의 위치.
+    `slot`(요청 SIM 슬롯)이 있으면 `phone_id`가 그 슬롯이거나 None(슬롯 모름)인 레코드만. 없으면 슬롯을 가리지 않고 모두 —
+    두 슬롯에 다 맞아도 고르지 않는다(모호 처리는 뒤 단계)."""
     if q.get("token") is None:
         return []
     return [n for n, r in enumerate(records)
-            if r.get("token") == q["token"] and (q.get("name") is None or r.get("name") == q["name"])]
+            if r.get("token") == q["token"] and (q.get("name") is None or r.get("name") == q["name"])
+            and (slot is None or r.get("phone_id") in (slot, None))]
 
 
 def needle(q: dict) -> str | None:
