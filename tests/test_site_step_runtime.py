@@ -134,6 +134,10 @@ def oc(tmp_path):
     (plug / "scripts" / "config.py").write_text(
         "import json, sys\nif sys.argv[1:2] == ['check']:\n    print(json.dumps({'read_roots': []})); sys.exit(0)\n"
         "print(json.dumps({'counts': {'ok': 13}, 'rows': []}))\n", encoding="utf-8")
+    (plug / "scripts" / "common").mkdir()
+    (plug / "scripts" / "common" / "oc_adapter.py").write_text(      # selftest만(tt-oc guard-python·script-python 행)
+        "import json, sys\nprint(json.dumps({'python': sys.executable, 'guard': None, 'scripts': None, 'read': 'allow'}))\n",
+        encoding="utf-8")
     for d in (work, managed, proj / ".opencode" / "plugins"):
         d.mkdir(parents=True)
     (proj / "opencode.json").write_text(json.dumps(CONFIG_OK), encoding="utf-8")

@@ -692,8 +692,8 @@ def test_doctor_detects_removed_or_changed_guard_plugin(env):
 
 
 def test_doctor_detects_changed_plugin_scripts_and_old_install(env):
-    (env["plug"] / "scripts" / "common").mkdir()
-    (env["plug"] / "scripts" / "common" / "oc_adapter.py").write_text("# sed -i\n", encoding="utf-8")
+    adapter = env["plug"] / "scripts" / "common" / "oc_adapter.py"
+    adapter.write_text(adapter.read_text(encoding="utf-8") + "# sed -i\n", encoding="utf-8")
     code, rows = _doctor_rows(env)
     assert code == 2 and "scripts/**/*.py" in rows["integrity"]["detail"]
     write_meta(env["proj"], env["plug"], env["work"])
