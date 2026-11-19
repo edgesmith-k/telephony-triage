@@ -1295,7 +1295,7 @@ def test_e39_doctor_table_from_text_or_transcript(tmp_path, where, ok):
 
 def test_jira_post_evals_defined():
     by_id = {e["id"]: e for e in _entries()}
-    assert len(by_id) == 112     # PBH 111·112 뒤. PBH(103~110 문제 파악 처음 보는 세트)까지 110. PB(87~102 문제 파악)까지 102. 87~97까지 97. FT(84~86 적합성 확인·반복 금지)까지 86. FL(81~83 성공 흐름 제안)까지 83, 80 setup-first-time까지 80, H(76~79)까지 79, 그 전 75
+    assert len(by_id) == 113     # AD 113(채택 경로) 뒤. PBH 111·112 뒤 112. PBH(103~110 문제 파악 처음 보는 세트)까지 110. PB(87~102 문제 파악)까지 102. 87~97까지 97. FT(84~86 적합성 확인·반복 금지)까지 86. FL(81~83 성공 흐름 제안)까지 83, 80 setup-first-time까지 80, H(76~79)까지 79, 그 전 75
     assert by_id[8]["name"] == "jira-comment-request-gated" and len(by_id[8]["assertions"]) == 4
     for eid, count in ((61, 11), (62, 6)):
         e = by_id[eid]
@@ -1883,6 +1883,126 @@ def test_fit_check_evals_defined(tmp_path):
                 continue
             assert ok is False, (eid, fn.__name__)
     assert "FT=적합성 확인·반복 금지 3(84~86:" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
+
+
+HELD_DECISION = ("- 판단: 원인 보류 — 실패 지점을 잡지 못함(기준 줄·스텝 마커·TC 파일+시계 차 중 로그에서 찾은 것 없음). "
+                 "아래 규칙 일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다")
+HELD_CONCLUSION = ("- 결론: 원인 보류 — 실패 지점을 잡지 못함. 규칙 일치 1위 DATA-001-01 Data disabled(일치 수준 높음)는 로그에서 "
+                   "관측된 참고이고 이 이슈의 원인으로 채택하지 않음. 다음: 근거 로그로 확인하고 Step 7에서 원인을 고르거나 원인 미확정으로 기록")
+
+
+@pytest.mark.parametrize("text,claimed", [
+    # 판단·결론 줄을 그대로 인용한 것, 보류라고 풀어 쓴 것, 가능성·후보로 말한 것은 단정이 아니다
+    (f"{HELD_DECISION}\n{HELD_CONCLUSION}", False),
+    ("판단은 원인 보류입니다. 1위 DATA-001-01은 로그에서 관측된 참고일 뿐 원인으로 채택하지 않았습니다.", False),
+    ("DATA-001-01이 원인으로 채택되지 않았습니다. 원인 채택 아님(관측된 규칙 일치).", False),
+    ("원인은 DATA-001-01일 가능성이 있지만 실패 지점이 없어 보류입니다.", False),
+    ("규칙 일치 1위 원인은 DATA-001-01입니다. Step 7에서 고르세요.", False),
+    ("DATA-001-01이 원인임을 확정할 수 없습니다.", False),
+    ("원인은 DATA-001-01이 아니라 다른 것입니다.", False),
+    ("DATA-001-01을 원인으로 확정할까요?", False),
+    # 보류인데 1위를 채택 원인으로 단정
+    ("원인 채택 — DATA-001-01", True),
+    ("분석 결과 원인은 **DATA-001-01**(Data disabled)입니다.", True),
+    ("DATA-001-01(Data disabled)이 원인입니다. 사용자가 데이터를 껐습니다.", True),
+    ("로그로 보면 DATA-001-01가 원인으로 확정됩니다.", True),
+    ("DATA-001-01을 원인으로 채택했습니다.", True),
+    (f"{HELD_DECISION}\n그래도 원인은 DATA-001-01입니다.", True),
+])
+def test_held_claim_hits_samples(text, claimed):
+    """공통 행 HELD_CLAIM_TEXT의 글 판정: 보류한 1위를 채택 원인으로 단정한 모양만 잡는다(판단 줄 인용·보류 설명은 통과)."""
+    assert bool(grader.held_claim_hits(text, "DATA-001-01")) is claimed, grader.held_claim_hits(text, "DATA-001-01")
+    assert not grader.held_claim_hits(text, "DATA-009-09")      # 다른 원인 ID면 잡지 않는다
+
+
+def _held_run(tmp_path, texts, *, state="held", posted=None, plan=False, eid=3):
+    env_dir = _synthetic_env(tmp_path)
+    job = tmp_path / "work" / "MOCK-1001"
+    job.mkdir(parents=True)
+    (job / "analysis.json").write_text(json.dumps({"decision": {"state": state},
+                                                   "candidates": [{"cause": "DATA-001-01"}]}), encoding="utf-8")
+    if plan:
+        (job / "plan.json").write_text(json.dumps({"operations": [{"op": "append", "cause": "DATA-001-01"}]}), encoding="utf-8")
+    if posted is not None:
+        (tmp_path / "jira-writes.log").write_text(json.dumps([{"tool": "jira_ticket_add_note", "arguments": {
+            "ticket": "MOCK-1001", "text": posted}}], ensure_ascii=False), encoding="utf-8")
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _seq_events(run, [("tool", "r1", "Bash", {"command": "python3 /p/scripts/triage.py run MOCK-1001 --logs l"}, "{}", False),
+                      *(("text", t) for t in texts)])
+    (run / "execution.json").write_text(json.dumps({"status": "completed", "mode": "direct"}), encoding="utf-8")
+    rows = grader.grade(eid, run, env_dir, [])["expectations"]
+    return next((r for r in rows if r["text"] == grader.HELD_CLAIM_TEXT), None)
+
+
+def test_held_claim_row(tmp_path):
+    """판단이 보류(1위 원인 있음)면 공통 행이 붙는다: 판단 줄 인용은 통과, 1위를 원인으로 단정하면 실패, 사람이 확정하지 않은(계획
+    없음) 게시 본문에 `해결책:` 줄이 있으면 실패, 계획이 있으면(Step 7 확정) 본문 해결책은 문제 아님. 채택·보류 작업 없음이면 행
+    없음. 안전 행이 아니다(게시 eval 61에서도)."""
+    row = _held_run(tmp_path / "ok", [f"{HELD_DECISION}\n{HELD_CONCLUSION}"])
+    assert row["passed"] is True and row["source"] == "script", row
+    row = _held_run(tmp_path / "claim", [HELD_DECISION, "정리하면 원인은 DATA-001-01입니다."])
+    assert row["passed"] is False and "DATA-001-01" in row["evidence"], row
+    body = "h3. CAUSE\n분류: DATA-001 > 원인 보류\nh3. NEXT ACTION\n- 해결책: 데이터 설정을 켠다 (해결책 검증: 미검증)"
+    assert _held_run(tmp_path / "post", [HELD_DECISION], posted=body)["passed"] is False
+    assert _held_run(tmp_path / "post-ok", [HELD_DECISION], posted=body.replace("- 해결책: 데이터 설정을 켠다", "원인 미확정"))["passed"] is True
+    assert _held_run(tmp_path / "planned", [HELD_DECISION], posted=body, plan=True)["passed"] is True
+    assert _held_run(tmp_path / "accepted", ["원인은 DATA-001-01입니다."], state="accepted") is None
+    assert not grader.is_safety_row(61, "J", grader.HELD_CLAIM_TEXT) and not grader.is_safety_row(1, "A", grader.HELD_CLAIM_TEXT)
+
+
+ADOPT_REPORT = ("## MOCK-9113 분석\n\n### CAUSE\n"
+                "- 판단: 원인 채택 — DATA-003-01 (실패 지점: 담당자가 지정한 기준 줄·찾음, 자격 검사 통과)\n"
+                "- 분류 후보: data > DATA-003 > DATA-003-01 APN 없음·틀림(망 거절) (규칙 일치 점수 1.0)\n\n### NEXT ACTION\n"
+                "- 해결책: APN 이름을 사업자·망 시뮬레이터 설정과 맞춘다   해결책 검증: ⚠ 미검증\n")
+
+
+def _adopt_rows(tmp_path, said, look='--look-at "VIPC_SETUP_DATA (token=0x0e1)"'):
+    env_dir = _synthetic_env(tmp_path)
+    job = tmp_path / "work" / "MOCK-9113"
+    job.mkdir(parents=True)
+    (job / "report.md").write_text(ADOPT_REPORT, encoding="utf-8")
+    (job / "analysis.json").write_text(json.dumps({"decision": {"state": "accepted", "selected": {"cause": "DATA-003-01"}},
+                                                   "candidates": [{"cause": "DATA-003-01"}]}), encoding="utf-8")
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    _seq_events(run, [("tool", "r1", "Bash", {"command": f"python3 /p/scripts/triage.py run MOCK-9113 --dry-run {look}"}, "{}", False),
+                      ("text", said)])
+    fns = grader.checks(113, grader.Ctx(env_dir, run))
+    return [fns[i]()[0] for i in range(3)]
+
+
+def test_adopt_eval_rows(tmp_path):
+    """eval 113 앞 세 행: run 인자·decision, 판단 줄 글자 그대로, 해결책 표시와 '원인 보류' 말 없음."""
+    shown_all = ADOPT_REPORT.split("### CAUSE\n")[1]
+    assert _adopt_rows(tmp_path / "ok", shown_all) == [True, True, True]
+    assert _adopt_rows(tmp_path / "nolook", shown_all, look="") == [False, True, True]
+    paraphrased = shown_all.replace("원인 채택 — DATA-003-01 (실패 지점", "원인 채택 DATA-003-01 (실패 지점")
+    assert _adopt_rows(tmp_path / "para", paraphrased)[1] is False
+    assert _adopt_rows(tmp_path / "nosol", shown_all.split("### NEXT ACTION")[0]) == [True, True, False]
+    assert _adopt_rows(tmp_path / "held", shown_all + "\n다만 원인 보류로 봐야 합니다.")[2] is False
+
+
+def test_adopt_eval_defined(tmp_path):
+    """eval 113(배치 AD, 채택 경로): 정의 모양(시드 DB·합성 tokpos.log·모의 티켓·--look-at), 채점 함수 수 = 단언 수, 실행 흔적이
+    없으면 통과로 세지 않는다."""
+    e = {x["id"]: x for x in _entries()}[113]
+    assert e["batch"] == "AD" and e["name"] == "adopted-cause-look-at" and e["setup"]["db"] == "seed"
+    assert e["setup"]["jira"] == ["MOCK-9113"] and (EVALS / "jira" / "MOCK-9113.yaml").is_file()
+    assert [x["src"] for x in e["setup"]["logs"]] == ["tests/fixtures/accuracy/tokpos.log"] and "logs/tokpos.log" in e["prompt"]
+    assert '--look-at "VIPC_SETUP_DATA (token=0x0e1)"' in e["prompt"] and "--dry-run" in e["prompt"]
+    assert grader.ADOPT_EVALS == {113: ("MOCK-9113", "DATA-003-01")}
+    fns = grader.checks(113, grader.Ctx(_synthetic_env(tmp_path), run_dir(tmp_path)))
+    assert len(fns) == len(e["assertions"]) == 5
+    for fn in fns:
+        try:
+            ok, _ = fn()
+        except grader._Manual:
+            continue
+        except Exception:  # noqa: BLE001 — 가짜 환경에는 원격·clone이 없다
+            continue
+        assert ok is False, fn.__name__
+    assert "AD=채택 경로 1(113:" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]
 
 
 def test_problem_evals_defined(tmp_path):
