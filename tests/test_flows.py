@@ -450,13 +450,20 @@ def test_cli_masks_output_lines_and_reports_steps():
 # -- triage ---------------------------------------------------------------------------------------
 
 
+def _empty_home(work: Path) -> dict:
+    """사용자 HOME의 `~/.telephony-triage/config.yaml`(사내 PC 실제 config)이 결과에 섞이지 않게 빈 홈을 준다."""
+    home = work / "home"
+    home.mkdir(exist_ok=True)
+    return {"HOME": home, "USERPROFILE": home, "TELEPHONY_TRIAGE_HOME": home / ".telephony-triage"}
+
+
 def _triage(db: Path, out: Path, rows=RAW) -> dict:
     log = _log(out.parent / f"{out.name}.log", rows)
     meta = out.parent / f"{out.name}.meta.json"
     meta.write_text(json.dumps({"key": "MOCK-7001", "occurred_at": "2026-11-10T12:00:01+00:00", "summary": "data"}),
                     encoding="utf-8")
     return run_json("triage.py", ["run", "MOCK-7001", "--offline-db", db, "--out", out, "--logs", log, "--issue-meta", meta,
-                                  "--tz", "UTC", "--year", "2026"], env={"TT_SCHEMA_CHECK": "1"})
+                                  "--tz", "UTC", "--year", "2026"], env={"TT_SCHEMA_CHECK": "1", **_empty_home(out.parent)})
 
 
 def _sample_with_flow(work: Path, flow_step: str | None = None) -> Path:
@@ -717,7 +724,7 @@ def _eval_run(eid: int, work: Path) -> tuple[Path, Path, dict, str]:
     [key] = setup["jira"]
     analysis = run_json("triage.py", ["run", key, "--offline-db", db, "--out", work / "out", "--logs", log, "--issue-file",
                                       EVALS / "jira" / f"{key}.yaml", "--tz", "Asia/Seoul", "--year", "2026"],
-                        env={"TT_SCHEMA_CHECK": "1"})
+                        env={"TT_SCHEMA_CHECK": "1", **_empty_home(work)})
     return db, log, analysis, (work / "out" / "report.md").read_text(encoding="utf-8")
 
 

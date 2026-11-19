@@ -545,6 +545,12 @@ def _top3(candidates: list[dict]) -> list[dict]:
     return [{k: c.get(k) for k in ("type", "cause", "score", "confidence")} for c in candidates[:3]]
 
 
+def _decision(analysis: dict) -> dict:
+    """`{decision: {state, reason}}`(판단이 있으면) — held면 top_candidates 1위는 채택 원인이 아니라 관측된 규칙 일치다."""
+    dec = analysis.get("decision") or {}
+    return {"decision": {"state": dec.get("state"), "reason": dec.get("reason")}} if dec else {}
+
+
 def _log_paths(events: dict) -> list[str]:
     return [f for f in (events.get("input") or {}).get("files") or [] if isinstance(f, str)]
 
@@ -566,7 +572,8 @@ def _deep_skill(job, key, cfg, analysis, events, candidates, src, inputs, env):
     tl_rel = f"{FOLDER}/deep/{TIMELINE_FILE}"
     timeline = {"path": tl_rel, "sha256": _sha256(data), "lines": kept, "total": total}
     skill_input = {"events_json": str(job / "events.json"), "log_paths": _log_paths(events), "top_candidates": _top3(candidates),
-                   "issue_summary": (analysis.get("issue") or {}).get("summary"), "timeline": str(job / tl_rel)}
+                   **_decision(analysis), "issue_summary": (analysis.get("issue") or {}).get("summary"),
+                   "timeline": str(job / tl_rel)}
     record = {"skill": name, "path": r.get("path"), "at": _now(), "timeline": timeline,
               "inputs": inputs, "env": env}
     if r.get("path"):
@@ -634,7 +641,7 @@ def _deep_module(args, job, key, p, cfg, analysis, events, candidates, state, in
     tl_rel = f"{FOLDER}/deep/{TIMELINE_FILE}"
     module = f"{p}/{fetched.module}"
     deep_input = {"schema_version": 1, "key": analysis.get("key"), "platform": p, "module": module, "sha": fetched.sha,
-                  "type_id": cand0.get("type"), "top_candidates": _top3(candidates),
+                  "type_id": cand0.get("type"), "top_candidates": _top3(candidates), **_decision(analysis),
                   "issue_summary": (analysis.get("issue") or {}).get("summary"), "occurred_at": around,
                   "events": "events.json", "timeline": tl_rel, "log_paths": _log_paths(events)}
     record = {"module": module, "sha": fetched.sha, "at": _now(),

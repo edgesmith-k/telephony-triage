@@ -36,6 +36,7 @@ DEEP_READ = ["ofono/_common/layers.md", "ofono/_common/components.md", "ofono/da
              "ofono/data/references/DATA-001.md"]
 C0_KEYS = ["schema_version", "key", "platform", "module", "sha", "type_id", "top_candidates", "issue_summary", "occurred_at",
            "events", "timeline", "log_paths"]
+C0_HELD_KEYS = [*C0_KEYS[:7], "decision", *C0_KEYS[7:]]     # 판단이 있는 실제 run(단계 5): 1위가 보류인지 모듈 스킬에 알린다
 
 # -- JOB·실행 도우미 ------------------------------------------------------------------------------
 
@@ -195,11 +196,11 @@ def test_deep_c0_parity(tmp_path):
     assert out["module"] == "ofono/data"
     want = json.loads((case_dir / "files" / "deep-input.json").read_text(encoding="utf-8"))
     got = json.loads((job / "deep-input.json").read_text(encoding="utf-8"))
-    assert list(got) == list(want) == C0_KEYS
+    assert list(got) == list(want) == C0_HELD_KEYS and got["decision"]["state"] == "held"
     assert re.fullmatch(r"[0-9a-f]{40}", got["sha"])
     assert got["timeline"].endswith("module-skill/deep/timeline.md") or got["timeline"] == "module-skill/deep/timeline.md"
     assert len(got["log_paths"]) == 1 and Path(got["log_paths"][0]).is_absolute() and got["log_paths"][0].endswith("source.log")
-    for k in C0_KEYS:
+    for k in C0_HELD_KEYS:
         if k not in ("sha", "timeline", "log_paths", "events"):
             assert got[k] == want[k], k
     view = (job / "module-skill" / "deep" / "timeline.md").read_bytes()

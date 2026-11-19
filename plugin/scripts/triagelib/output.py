@@ -366,8 +366,9 @@ def _fit_hold(analysis: dict, fields: dict) -> str | None:
     return cause
 
 
-def _hold_lines(report: Path, cause: str) -> list[str]:
+def _hold_lines(report: Path, cause: str, held: bool = False) -> list[str]:
     """결론·해결책 줄을 보류로 고친다(탐색 줄과 달리 1위 확정·`검증됨`을 권하지 않게). 다시 불러도 같다(이미 고친 해결책 줄은 그대로).
+    판단이 이미 보류(`held`)면 리포트에 해결책 줄이 없다(report.py가 싣지 않는다) — 없어도 실패가 아니다.
     못 고친 줄 이름 목록(줄 없음·쓰기 실패)."""
     failed = []
     if not rep.rewrite_line(report, rep.CONCLUSION_PREFIX, [rep.CONCLUSION_PREFIX + rep.FIT_HOLD_CONCLUSION.format(cause=cause)]):
@@ -379,7 +380,7 @@ def _hold_lines(report: Path, cause: str) -> list[str]:
         if not rep.rewrite_line(report, rep.RESOLUTION_PREFIX,
                                 [f"{rep.FIT_HOLD_RESOLUTION}{body}{rep.RESOLUTION_CHECK}{rep.FIT_HOLD_CHECK}"]):
             failed.append("해결책 줄")
-    elif rep.current_line(report, rep.FIT_HOLD_RESOLUTION) is None:      # 이미 보류로 고친 줄이면 실패가 아니다
+    elif not held and rep.current_line(report, rep.FIT_HOLD_RESOLUTION) is None:      # 이미 보류로 고친 줄이면 실패가 아니다
         failed.append("해결책 줄")
     return failed
 
@@ -598,7 +599,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     lines = _render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp)
     _rewrite(report, prefix, lines, KEEP_SUB)
     hold = _fit_hold(analysis, fields) if purpose == "explore" else None
-    unwritten = _hold_lines(report, hold) if hold else []
+    unwritten = _hold_lines(report, hold, (analysis.get("decision") or {}).get("state") == "held") if hold else []
     if unwritten:
         print(WARN_HOLD.format(what="·".join(unwritten)), file=sys.stderr)
     if hold:

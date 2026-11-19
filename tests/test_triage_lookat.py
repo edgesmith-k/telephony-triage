@@ -53,9 +53,10 @@ def test_ipc_line_with_reused_token_picks_nearest_and_moves_window():
     assert sa == {"source": "look_at", "span": [None, "2026-09-20T05:33:05.400Z"], "issue_gap_min": 0.9,
                   "look": {"hits": 4, "picked": 4}}                            # 이름+token 같은 REQ·RSP 두 쌍, Jira에 가까운 것
     assert "step" not in sa                                                    # 기준 줄은 TC 스텝이 아니다(P1 8)
-    # 일치 4줄 = 요청 두 곳(REQ·RSP 쌍)이지만 붙여 넣은 줄의 시각(14:33:05.000)과 같은 곳이 하나라 그곳(단계 5 §8-5) → 한 곳 확인
+    # 일치 4줄 = 요청 두 곳(REQ·RSP 쌍)이지만 붙여 넣은 줄의 시각(14:33:05.000)과 같은 곳이 하나라 그곳(단계 5 §8-5). CP 점 채택은
+    # 응답 뒤 2초 안 첫 사건일 뿐 같은 요청이라는 근거가 없어 found/point(리뷰 P1-1 — 포털이 본 분석을 건너뛰지 않게)
     assert done["decision"]["state"] == "accepted" and done["decision"]["location"] == {
-        "state": "confirmed", "source": "look_at", "kind": "point"}
+        "state": "found", "source": "look_at", "kind": "point"}
     assert done["decision"]["check"]["why"] == "cp_point"
     assert off["decision"]["reason"] == "no_reference"
     assert done["logs"]["window"] == {"start": "2026-09-20T05:32:35.400Z", "end": "2026-09-20T05:38:05.400Z"}

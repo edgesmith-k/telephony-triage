@@ -40,8 +40,6 @@ FIT_HOLD_RESOLUTION, FIT_HOLD_CHECK = "- 해결책(1위 기준, 보류됨): ", "
 # 판단 줄(analysis.json `decision`, 단계 4) — 렌더와 check-output(보류·반대 의견으로 고침)이 같이 쓴다
 DECISION_PREFIX = "- 판단: "
 HELD_REASON = issuepost.HELD_REASON
-HELD_SHORT = {"no_reference": "실패 지점 없음", "fit_check": "1위 부적합", "symptom_not_found": "실패 지점에 아는 증상 없음",
-              "ambiguous": "실패 지점 모호", "ineligible": "자격 검사 불통과"}     # 보류된 해결책 줄의 검증 칸
 _LOCATION_LABEL = {"confirmed": "확인됨", "found": "찾음(구간)", "multiple": "여러 곳", "none": "없음"}
 HELD_TAIL = " (관측된 규칙 일치 — 채택 안 함)"
 
@@ -64,7 +62,7 @@ def decision_line(dec: dict, cands: list) -> str:
     채택하지 않았다는 말. `counter`(심층 분석이 다른 원인을 냄)가 있으면 꼬리를 붙인다."""
     if dec.get("state") == "accepted":
         loc = dec.get("location") or {}
-        state = ("단서 위치(확정 아님)" if loc.get("source") == "comment" else "찾음" if loc.get("kind") == "near"
+        state = ("단서 위치(확정 아님)" if loc.get("source") == "comment" else "찾음" if loc.get("kind") != "range"
                  and loc.get("state") == "found" else _LOCATION_LABEL.get(loc.get("state"), loc.get("state")))
         where = f"{_SOURCE_LABEL.get(loc.get('source'), loc.get('source'))}·{state}"
         n = selected_rank(dec, cands)
@@ -1020,8 +1018,10 @@ class ReportMixin:
                          f"{HELD_TAIL if (dec or {}).get('state') == 'held' or selected_rank(dec, cands) else ''}")
             masked = "" if self.masker().off else "마스킹, "       # 끔 DB면 "마스킹"이라 쓰지 않는다
             sel = cands[selected_rank(dec, cands) or 0]      # 근거 로그는 채택 원인(1위가 아닐 수 있다, 단계 5) 것
+            held = (dec or {}).get("state") == "held"      # 보류면 근거는 관측된 일치일 뿐(모델이 채택 원인으로 읽지 않게)
             ana.append(f"- 근거 로그 ({masked}슬롯 phone {','.join(map(str, sel['phones'])) or '?'}"
-                       f"{'' if sel is top else ', 채택 원인 ' + str(sel['cause'])}):")
+                       f"{'' if sel is top else ', 채택 원인 ' + str(sel['cause'])}"
+                       f"{', 관측된 규칙 일치 — 원인 채택 아님' if held else ''}):")
             ana += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ×{e['_count']}" if e.get("_count") else "")
                       + (f" ({e['_ref']})" if e.get("_ref") else "")
                       for e in sel["evidence"]]
@@ -1123,9 +1123,7 @@ class ReportMixin:
         top = cands[selected_rank(dec, cands) or 0] if cands else None     # 채택 원인(1위가 아닐 수 있다, 단계 5) 기준
         if top and top["cause"]:
             if (dec or {}).get("state") == "held":
-                # 보류(단계 4): 탐색 적합성 확인 보류(`output._hold_lines`)와 같은 모양 — 1위 해결책을 권하지 않는다(Jira 본문은 해결책 없음)
-                held = HELD_SHORT.get(dec.get("reason"), dec.get("reason"))
-                nxt.append(f"{FIT_HOLD_RESOLUTION}{top.get('resolution') or '-'}{RESOLUTION_CHECK}보류({held})")
+                # 보류: 1위 해결책 줄을 싣지 않는다(모델이 읽는 글에 보류한 원인의 해결책을 두지 않는다 — Jira 본문도 해결책 없음)
                 nxt.append(f"- 수정 상태(1위 기준, 보류됨): {top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
             else:
                 verified = "검증됨" if top.get("resolution_verification") == "verified" else "⚠ 미검증"

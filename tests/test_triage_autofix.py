@@ -54,7 +54,7 @@ def _unresolved() -> dict:
 
 
 def _report_line(out: Path, prefix: str) -> str:
-    return next(line for line in (out / "report.md").read_text(encoding="utf-8").splitlines() if line.startswith(prefix))
+    return next((line for line in (out / "report.md").read_text(encoding="utf-8").splitlines() if line.startswith(prefix)), None)
 
 
 # -- F-AUTO -------------------------------------------------------------------------------------------------
@@ -193,9 +193,9 @@ def test_unfit_top_holds_with_reason_and_next_check_then_rerun_carries_prior():
     # FR-02(P2): 보류면 결론·해결책 줄도 1위 확정·`검증됨`을 권하지 않는다(판정·후보 순위는 그대로)
     assert _report_line(out, "- 결론:") == ("- 결론: 채택 후보 DATA-001-01가 증상과 맞지 않아 보류(탐색 분석 참조). "
                                          "다음: Step 7에서 보류를 고르거나 근거 로그 확인")
-    held = _report_line(out, "- 해결책")       # 발생 시각만이라 run이 이미 보류(실패 지점 없음) — 사유는 앞 것이 남는다
-    assert held.startswith("- 해결책(1위 기준, 보류됨): ") and held.endswith("   해결책 검증: 보류(실패 지점 없음)"), held
-    assert not any(x.startswith("- 해결책: ") for x in (out / "report.md").read_text(encoding="utf-8").splitlines())
+    # 발생 시각만이라 run이 이미 보류(실패 지점 없음) — 보류면 해결책 줄 자체가 없고, 없는 것은 못 고친 것이 아니다
+    assert _report_line(out, "- 해결책") is None
+    assert "fit_hold_unwritten" not in json.loads((out / "check-output.json").read_text(encoding="utf-8"))["explore"]
     assert json.loads((out / "check-output.json").read_text(encoding="utf-8"))["explore"]["fit_hold"] == "DATA-001-01"
     assert json.loads((out / "analysis.json").read_text(encoding="utf-8"))["candidates"][0]["C"] == 1
 
@@ -225,7 +225,7 @@ def test_fit_hold_is_recorded_even_when_lines_cannot_be_rewritten_and_survives_r
     assert proc.returncode == 0 and "경고: 1위 보류를 report.md 결론 줄에 쓰지 못했다" in proc.stderr, proc.stderr
     rec = json.loads((out / "check-output.json").read_text(encoding="utf-8"))["explore"]
     assert rec["fit_hold"] == "DATA-001-01" and rec["fit_hold_unwritten"] == ["결론 줄"], rec
-    assert _report_line(out, "- 해결책").startswith("- 해결책(1위 기준, 보류됨): ")        # 고칠 수 있는 줄은 고쳤다
+    assert _report_line(out, "- 해결책") is None       # 판단이 이미 보류라 해결책 줄이 없다(못 쓴 줄은 결론 줄만)
     # 탐색 줄 재작성이 실패해 TODO가 남은 상황을 흉내 내고 다시 검사(형식 불일치 → _fail이 기록을 새로 쓴다)
     text = report.read_text(encoding="utf-8")
     report.write_text(text.replace(_report_line(out, "- 탐색 분석"), pending), encoding="utf-8")

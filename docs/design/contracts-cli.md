@@ -284,7 +284,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
     - category
     - type
     - cause
-  - location(실패 지점: 기준 줄 ipc·token 일치 1개·로그 FAIL 마커 1개면 confirmed, 기준 줄 글자 일치는 한 곳이어도 found, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). 앵커 없이 문제 파악 단서(problem.json)만 로그에서 찾았으면 source comment·state found(확정 아님, 단서 일치 여러 곳이면 multiple). 채택이면 자격 검사 결과로 다시 정한다: 근거 줄 same_line·cp_point는 confirmed/point, 조건 줄로만 맞은 same_line은 found(kind 그대로), range는 log_marker FAIL 마커 1개일 때만 confirmed, comment 출처는 늘 found. model은 계약에만(단계 6~7))
+  - location(실패 지점: 기준 줄 ipc·token 일치 1개·로그 FAIL 마커 1개면 confirmed, 기준 줄 글자 일치는 한 곳이어도 found, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). 앵커 없이 문제 파악 단서(problem.json)만 로그에서 찾았으면 source comment·state found(확정 아님, 단서 일치 여러 곳이면 multiple). 채택이면 자격 검사 결과로 다시 정한다: confirmed/point는 근거 줄 same_line(기준 줄이 붙은 사건의 증상·원인 근거 줄이거나 같은 RIL 요청)만, cp_point는 found/point, range·조건 줄로만 맞은 same_line은 found(kind 그대로), comment 출처는 늘 found. model은 계약에만(단계 6~7))
     - state: none | found | confirmed | multiple
     - source: look_at | log_marker | steps_file | step_order | comment | model | null
     - kind(기준 줄 ipc·token 일치 point, 글자 일치 near(한 곳이어도 found), 마커·steps-file 구간 range): point | near | range | null

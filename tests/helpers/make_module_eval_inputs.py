@@ -285,6 +285,7 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
             "type_id": candidates[0].get("type"),
             "top_candidates": [{k: c.get(k) for k in ("type", "cause", "score", "confidence")}
                                for c in candidates[:3]],
+            **({"decision": {k: analysis["decision"].get(k) for k in ("state", "reason")}} if analysis.get("decision") else {}),
             "issue_summary": issue.get("summary"),
             "occurred_at": issue.get("occurred_at"),
             "events": "events.json",

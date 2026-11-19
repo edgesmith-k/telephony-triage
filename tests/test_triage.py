@@ -1060,7 +1060,7 @@ def test_decision_reason_priority_and_candidates_untouched():
     before = json.dumps(cands)
     assert driver._decision(cands, anchor, elig) == {"state": "accepted", "reason": "anchored_top",
                                                      "selected": {"category": "ims", "type": "IMS-001", "cause": "IMS-001-01"},
-                                                     "location": anchor["location"], **extra}
+                                                     "location": {**anchor["location"], "state": "found"}, **extra}  # 구간 채택은 found
     assert json.dumps(cands) == before
 
 
@@ -1078,12 +1078,12 @@ def test_held_report_lines_keep_prefixes_and_conclusion_shape():
     assert "DATA-001-01" in lines[i + 1].split(". 다음:")[0]
     assert lines[i + 2].startswith("- 분류 후보: data > DATA-001 > DATA-001-01 ")
     assert lines[i + 2].endswith(" (관측된 규칙 일치 — 채택 안 함)")
-    # NEXT ACTION: 해결책·수정 상태는 적합성 확인 보류와 같은 모양(1위 해결책을 권하지 않는다 — Jira 본문은 해결책 없음)
+    # NEXT ACTION: 보류면 1위 해결책 줄을 싣지 않는다(모델이 읽는 글에 보류한 원인의 해결책을 두지 않는다 — Jira 본문도 해결책 없음)
     top = analysis["candidates"][0]
-    assert not any(x.startswith(("- 해결책: ", "- 수정 상태: ")) for x in lines)
-    res = next(x for x in lines if x.startswith("- 해결책(1위 기준, 보류됨): "))
-    assert res.endswith("   해결책 검증: 보류(실패 지점 없음)") and res.count("검증됨") == 0
+    assert not any(x.startswith(("- 해결책", "- 수정 상태: ")) for x in lines)
     assert any(x.startswith("- 수정 상태(1위 기준, 보류됨): ") for x in lines), top
+    # 근거 로그 머리 줄: 보류면 관측된 일치일 뿐 채택 원인이 아니다
+    assert next(x for x in lines if x.startswith("- 근거 로그 (")).endswith(", 관측된 규칙 일치 — 원인 채택 아님):")
 
 
 def _analyzer_report(cfg: dict) -> str:

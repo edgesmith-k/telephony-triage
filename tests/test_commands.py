@@ -28,7 +28,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import SAMPLE, git, git_db, plugin_root, run, run_json  # noqa: E402
+from runner import SAMPLE, git, git_db, plugin_root, run, run_json, tmp  # noqa: E402
 from workspace import Workspace  # noqa: E402
 
 COMMANDS = REPO / "plugin" / "commands"
@@ -411,9 +411,15 @@ def test_validate_changes_are_read_only():
 # -- offline_eval ------------------------------------------------------------------------------------
 
 
-def _offline(*args: str) -> subprocess.CompletedProcess:
+def _offline(*args: str, default_root: bool = False) -> subprocess.CompletedProcess:
+    """사내 레포(`plugin/site-defaults.yaml` 있음)·사용자 HOME config와 무관하게: 루트를 안 주면 세션 헬퍼 루트를 주고,
+    사용자 홈(HOME·USERPROFILE·TELEPHONY_TRIAGE_HOME)은 빈 임시 폴더로 둔다. 기본 루트 고르기를 보는 시험만 `default_root=True`."""
+    if not default_root and "--plugin-root" not in args:
+        args = (*args, "--plugin-root", str(plugin_root()))
+    home = str(tmp("tt-offline-home-"))
+    env = {**os.environ, "HOME": home, "USERPROFILE": home, "TELEPHONY_TRIAGE_HOME": str(Path(home) / ".telephony-triage")}
     return subprocess.run([sys.executable, str(REPO / "tools" / "offline_eval.py"), *args],
-                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+                          capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
 
 
 def test_offline_eval_prints_accuracy_table_on_synthetic_labelset():
@@ -445,7 +451,7 @@ def test_offline_eval_prints_accuracy_table_on_synthetic_labelset():
 
 @pytest.mark.skipif((REPO / "plugin" / "site-defaults.yaml").exists(), reason="plugin/site-defaults.yaml 있음: 기본 루트가 plugin/(사내)")
 def test_offline_eval_default_root_is_temporary_helper_root_without_site_defaults():
-    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json", "--include-in-sample")
+    proc = _offline(str(REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"), "--json", "--include-in-sample", default_root=True)
     assert proc.returncode == 0, proc.stderr
     meta = json.loads(proc.stdout)["meta"]
     root = Path(meta["plugin_root"]["path"])
