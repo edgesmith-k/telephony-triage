@@ -18,4 +18,4 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 3. IPC `Error(VIPC_E_*)`이거나 카드 SW `6A82`("찾을 수 없음") → `모뎀·망`(카드에 애플릿 없음). `__ofono_error_not_found`는 증상이다(없으면: gril 응답 `(sw1=…,sw2=…)`·`src/dbus.c:__ofono_error_*`. SW·IPC 결과 값이 있을 때만 정한다).
 4. 다른 클라이언트 채널이 열린 동안 `ExampleOpenChannel`이 `__ofono_error_busy`면 → `관리 데몬`(SIM 구성요소).
 5. 실패 응답의 `(sw1=0x00,sw2=0x00,(null))`은 SW 미전달이다. 가려진 덤프에서 SW를 짐작하지 않는다.
-6. 1위 원인과 비교한다: 맞으면 `1위와 같음`, 아니면 `<원인 ID> — <근거>`. 입력 `decision.state`가 `held`면 1위는 채택된 원인이 아니라 관측된 규칙 일치다(원인으로 단정하지 않는다).
+6. 1위 원인과 비교한다: 맞으면 `1위와 같음`, 아니면 `<원인 ID> — <근거>`. `decision.state`=held면 1위는 채택 아님.
