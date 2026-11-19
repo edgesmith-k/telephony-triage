@@ -116,6 +116,8 @@ platform:                    # 이미 있는 블록
       dump_func: "<덤프 함수>"     # oFono 블록만(oFono가 기본 플랫폼이면 platform: 바로 아래)
 ```
 
+선택 키 둘은 다섯 키와 따로 본다: `trace`(IPC 메시지 줄 정규식 목록, `TODO(SITE:S9)`)와 `slot`(IPC 메시지 줄에서만 쓰는 SIM 슬롯 정규식 목록, 그룹 1 = 슬롯 번호, `TODO(SITE:S20)`). `slot`은 사내 IPC 줄에 슬롯 표기가 있을 때만 적는다 — 없으면 그 줄의 `log.phone_id` 규칙 값을 쓴다. 형식은 `site-defaults.example.yaml`의 `vendor_ipc` 주석에 있다.
+
 **oFono 덤프 함수.** 한 메시지를 여러 줄에 잘라 찍는 oFono 덤프 함수의 이름(`<이름>() ` 뒤가 조각)을 oFono 블록 `dump_func`에 적는다(식별자 모양, 생략·`null`은 placeholder `example_dump`). 마스커는 이 이름의 줄만 이어 갈린 IMSI·ICCID를 가린다 — 값이 없으면 사내 로그의 갈린 값을 잇지 못한다.
 
 ②의 값은 반입 전 이 레포가 그 기능을 쓰고 있었을 때(설정·이슈 DB 선언·코드에 든 값) 같은 값으로 맞추는 것이다. 쓰지 않았으면 비워 두어도 출력이 반입 전과 같고, 켤 때 그 사내 보완 항목(`TODO(SITE:S9)`·`S24`·`S25`)에서 처음 채운다.

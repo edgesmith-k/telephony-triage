@@ -34,11 +34,29 @@ def test_query_reads_name_and_token_loosely():
     assert L.query("12345678901")["token"] is None                             # 10자리를 넘으면 token 아님
 
 
+def test_query_token_forms_are_one_value():
+    """단계 3: `Token(0x2FE)`·`token (0x2fe)`·`TOKEN: 766`·`token=0x02FE`가 같은 token. 닫는 괄호는 보지 않는다."""
+    for text in ("VIPC_X Token(0x2FE)", "VIPC_X token (0x2fe", "VIPC_X TOKEN: 766", "VIPC_X token=0x02FE"):
+        assert L.query(text)["token"] == 0x2FE, text
+    assert L.query("VIPC_X tokens(0x2FE)")["token"] is None        # 낱말 경계 — `tokens(`는 token 아님
+
+
 def test_ipc_hits_name_and_token_or_token_only():
     recs = [{"name": "VIPC_A", "token": 1}, {"name": "VIPC_B", "token": 1}, {"name": "VIPC_A", "token": 2}]
     assert L.ipc_hits({"name": "VIPC_A", "token": 1}, recs) == [0]
     assert L.ipc_hits({"name": None, "token": 1}, recs) == [0, 1]
     assert L.ipc_hits({"name": "VIPC_A", "token": None}, recs) == []
+
+
+def test_ipc_hits_slot_filters_but_keeps_unknown_slot():
+    """요청 슬롯이 있으면 그 슬롯이거나 슬롯 모름(None)만. 없으면 두 슬롯 모두 — 고르지 않는다(모호 처리는 뒤 단계)."""
+    recs = [{"name": "VIPC_A", "token": 1, "phone_id": 0}, {"name": "VIPC_A", "token": 1, "phone_id": 1},
+            {"name": "VIPC_A", "token": 1, "phone_id": None}, {"name": "VIPC_A", "token": 1}]
+    q = {"name": "VIPC_A", "token": 1}
+    assert L.ipc_hits(q, recs) == [0, 1, 2, 3]
+    assert L.ipc_hits(q, recs, slot=1) == [1, 2, 3]
+    assert L.ipc_hits(q, recs, slot=0) == [0, 2, 3]
+    assert L.ipc_hits(q, recs, slot=2) == [2, 3]
 
 
 def test_text_match_folds_mask_numbers_and_needs_eight_chars():
