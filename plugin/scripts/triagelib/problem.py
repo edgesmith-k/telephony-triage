@@ -511,14 +511,20 @@ def _line_clues(where, text: str, name_re, error_prefix: str) -> list[dict]:
     return out
 
 
+_HEX = r"(0x[0-9A-Fa-f]{1,8})(?![A-Za-z0-9_])"
+TOKEN_HEX = re.compile(r"(?i)\btoken(?:은|는|이|가)?\s*[=:(]?\s*" + _HEX)          # `token 0x0e1`·`token은 0x0aa`(바로 뒤 값만)
+NOT_BUT = re.compile(r"(?i)(0x[0-9A-Fa-f]{1,8}|[0-9]{1,10})\s*(?:가|이)?\s*아니라\s*(?:token\s*[=:(]?\s*)?"
+                     r"(0x[0-9A-Fa-f]{1,8}|[0-9]{1,10})(?![A-Za-z0-9_])")              # 정정 "A가 아니라 B"
+
+
 def _token_values(text: str) -> set[int]:
-    """정정·여러 요청 알아보기용 token 값(숫자): `token[=:(]` 값, 그리고 `token` 낱말 뒤 같은 줄의 16진 값(`token은 0x0aa가 아니라
-    0x0e1`). 이름 없이 적은 값도 센다."""
+    """정정·여러 요청 알아보기용 token 값(숫자): `token` 낱말 **바로 뒤** 값(`token=225`·`token(0x0e1)`·`token은 0x0aa` — 이름 없이
+    적은 값 포함)과, `token` 낱말이 든 줄의 정정 "A가 아니라 B"의 두 값. 같은 줄의 다른 16진 값(`cause 0x1b`·`len=0x08`)은 세지 않는다."""
     out = {_token_value(t.group(1))[1] for t in IPC_TOKEN.finditer(text)}
+    out |= {_token_value(t.group(1))[1] for t in TOKEN_HEX.finditer(text)}
     for line in text.splitlines():
-        at = line.casefold().find("token")
-        if at >= 0:
-            out |= {_token_value(v)[1] for v in QUOTE_TOKEN.findall(line, at) if v[:2].lower() == "0x"}
+        if "token" in line.casefold():
+            out |= {_token_value(v)[1] for m in NOT_BUT.finditer(line) for v in m.groups()}
     return out
 
 
@@ -532,7 +538,8 @@ def extract_clues(comments: list[str], description: str, prefix: str, error_pref
       ponytail: 재시험 낱말 없이 다시 돈 회차는 못 가른다(옛 token이 새 로그에 없으면 로그 쪽에서 버려진다) — 사내 낱말로 보완.
     - 같은 단서(ipc 이름·token 값 — `225` = `0xe1`, log_line 접은 글)는 최근 것 하나, `CLUES_MAX`를 넘으면 `over`.
     - 이번 회차 글에 서로 다른 token 값이 둘 이상이면(정정 "0x0aa가 아니라 0x0e1"·정상과 실패를 함께 적음) `conflict: true` —
-      어느 것이 실패인지 글로는 못 가리므로 부른 쪽이 보류한다."""
+      어느 것이 실패인지 글로는 못 가리므로 부른 쪽이 보류한다. 관문에서 버린 이번 회차 단서 수는 `invalid`(부른 쪽이 보류에 센다).
+    - ponytail: 실패를 문장으로만 적고 다른 token을 "참고"로 적으면(N9) 그 참고 token 하나가 단서가 된다 — 글 뜻은 읽지 않는다."""
     words = [str(w).casefold() for w in retest_words if str(w).strip()]
     b = max((n for n, t in enumerate(comments, first) if any(w in str(t).casefold() for w in words)), default=0)
     sources = {n: str(t or "") for n, t in enumerate(comments, first)}

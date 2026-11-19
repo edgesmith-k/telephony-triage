@@ -48,6 +48,11 @@ def _clue_text(c: dict, pb) -> tuple[str | None, str | None]:
     return None, None
 
 
+def _stamp_unmet(stamp: str | None, found: dict) -> bool:
+    """붙인 줄의 시각이 있는데 찾은 곳에 그 시각의 줄이 없다(`stamp: none`, 읽지 못한 시각 — 찾기 결과에 `stamp`가 없을 때도)."""
+    return bool(stamp) and bool(found.get("hits")) and found.get("stamp") in ("none", None)
+
+
 def _outside(lines: list[dict], window) -> bool:
     """찾은 단서 줄(`{ts}`)이 모두 명시 기준의 분석 구간(시작, 끝) 밖인가. 구간이 없거나 시각을 못 읽으면 False."""
     lo, hi = (_parse_ts(x) for x in window) if window else (None, None)
@@ -264,7 +269,7 @@ class AnchorMixin:
         refs, dropped = [], []
         for (c, _, stamp), found in zip(todo, founds):
             where = "설명" if c.get("comment") == "description" else f"코멘트 {c.get('comment')}번"
-            if stamp and found.get("hits") and found.get("stamp") in ("none", None):
+            if _stamp_unmet(stamp, found):
                 found = {"hits": 0, "why": "붙인 줄의 시각이 이 로그에 없음"}
             if not found.get("hits"):
                 why = _clip(found.get("why") or "일치하는 줄 없음", 60)
@@ -280,7 +285,7 @@ class AnchorMixin:
                                    "origin": origin})
         if auto is not None:
             parts = [f"{name} {n}" for name, n in (("옛 회차", auto["old_round"]), ("상한", auto["over"]),
-                                                   ("로그에 없음", len(dropped))) if n]
+                                                   ("모양 안 맞음", auto.get("invalid", 0)), ("로그에 없음", len(dropped))) if n]
             if parts:
                 self.warn("코멘트 단서(스크립트) 버림: " + " · ".join(parts))
             if auto.get("conflict") and todo:
@@ -289,7 +294,8 @@ class AnchorMixin:
                 return
         # 찾았는데 확인 못 한 단서(dropped)·글의 token 충돌(conflict)이 있으면 자격 검사가 단서 판정 전체를 보류한다
         self.problem_use = {"problem": problem, "comment_adopt": switch("comment_adopt"), "refs": refs,
-                            "dropped": dropped, **({"conflict": True} if (auto or {}).get("conflict") else {})}
+                            "dropped": dropped, **({"conflict": True} if (auto or {}).get("conflict") else {}),
+                            **({"invalid": auto["invalid"]} if (auto or {}).get("invalid") else {})}
 
     def fresh_problem(self, pb) -> dict | None:
         """이번 이슈 입력(과 `--steps-file`)으로 만든 `problem.json` 내용 | None(없음 — 있는데 못 쓰면 경고)."""

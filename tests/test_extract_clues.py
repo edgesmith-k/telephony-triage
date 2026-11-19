@@ -119,6 +119,26 @@ def test_two_token_values_in_this_round_are_a_conflict():
         assert _x(comments)[1]["conflict"] is True, comments
     assert _x(["VIPC_A (token=0x0e1)", "VIPC_A token=225 다시 확인"])[1]["conflict"] is False      # 같은 값(10진·16진)
     assert _x(["VIPC_A (token=0x0aa) 실패. 재시험 요청", "VIPC_A (token=0x0e1)"])[1]["conflict"] is False   # 옛 회차는 안 셈
+    # 확인 리뷰 P2: token 바로 뒤 값만 센다 — 같은 줄의 다른 16진 값(원인 값·길이)은 정정이 아니다
+    for text in ("VIPC_A (token=0x0e1) 실패, token 처리 중 0xdead 오류", "VIPC_A (token=0x0e1) 실패 (cause 0x1b)",
+                 "[RX] VIPC_A, RSP, token=0x0e1, len=0x08, Error(VIPC_E_X)"):
+        assert _x([text])[1]["conflict"] is False, text
+
+
+def test_stamp_unmet_guard_and_invalid_stamp_is_none(seed_db):
+    """시각 규칙의 두 안전장치: 찾기 결과에 `stamp`가 없어도(읽지 못한 시각) 버리고, parse_logcat은 읽을 수 없는 시각을 `none`으로 낸다."""
+    from triagelib import anchor
+    assert anchor._stamp_unmet("11-14 10:02:00.624", {"hits": 1}) is True               # 결과에 stamp 칸 없음
+    assert anchor._stamp_unmet("11-14 10:02:00.624", {"hits": 1, "stamp": "none"}) is True
+    assert anchor._stamp_unmet("11-14 10:02:00.624", {"hits": 1, "stamp": "many"}) is False
+    assert anchor._stamp_unmet(None, {"hits": 1}) is False and anchor._stamp_unmet("x", {"hits": 0}) is False
+    from common import lookat
+    look = tmp("tt-clue-look-") / "look-at.json"
+    for stamp, want in (("02-30 10:02:00.624", "none"), ("11-14 25:02:00.624", "none"), ("11-14 10:02:00.624", "same")):
+        look.write_text(json.dumps({"look_at": lookat.clean(LINE), "ref": None, "stamp": stamp}), encoding="utf-8")
+        found = run_json("parse_logcat.py", ["ipc", LOG, "--find", look, "--rules", seed_db / "parser-rules", "--tz", "Asia/Seoul",
+                                             "--year", "2026"])["find"]
+        assert (found["hits"], found["stamp"]) == (1, want), stamp
 
 
 def test_comment_numbers_follow_skipped_old_comments():
@@ -164,6 +184,16 @@ def test_comment_total_must_come_from_the_source_used_and_order_must_be_known():
     t = _text({"comments": newest_first, "comments_page": {"startAt": 0, "total": 2}})
     assert t["comments"] == ["옛", "새"] and not any(k in t for k in ("comments_unchecked", "comments_partial"))
     assert _text({"fields": {"comment": {"comments": [{"body": "x"}]}}})["comments_unchecked"] == "total"
+    # 확인 리뷰 P1-2: 작성 시각이 같은 값이 있거나 일부만 있으면 순서를 증명할 수 없다(어느 출처든) — 시각이 전혀 없는
+    # fields.comment(Jira 원본·포털)만 받은 순서를 믿는다
+    tie = [{"body": "새", "created": "2026-11-14T12:00:00+0900"}, {"body": "재시험", "created": "2026-11-14T11:00:00+0900"},
+           {"body": "옛", "created": "2026-11-14T11:00:00+0900"}]
+    assert _text({"comments": tie, "comments_page": {"total": 3}})["comments_unchecked"] == "order"
+    assert _text({"fields": {"comment": {"total": 3, "comments": tie}}})["comments_unchecked"] == "order"
+    some = [{"body": "a", "created": "2026-11-14T11:00:00+0900"}, {"body": "b"}]
+    assert _text({"fields": {"comment": {"total": 2, "comments": some}}})["comments_unchecked"] == "order"
+    t = _text({"fields": {"comment": {"total": 2, "comments": [{"body": "a"}, {"body": "b"}]}}})
+    assert t["comments"] == ["a", "b"] and "comments_unchecked" not in t
     assert _text({"fields": {"comment": {"total": 2, "comments": []}}})["comments_partial"] == {"total": 2, "read": 0}
 
 
@@ -413,3 +443,45 @@ def test_marker_reference_and_clue_outside_its_window_conflict(seed_db, name, co
     refs = json.loads((out / "reference.json").read_text(encoding="utf-8"))["refs"]
     assert [r.get("outside", False) for r in refs if r["source"] == "comment"] == ([True] if name == "outside" else
                                                                                    [False] if name == "same" else [])
+
+
+# -- 확인 리뷰(8de39b2f) 재현: 관문에서 버린 실패 단서 + 참고 줄, 같은 작성 시각, 좁힌 token 세기 ---------------------------
+
+T = lambda hm: f"2026-11-14T{hm}.000+0900"
+CONFIRM = [      # (이름, 로그 종류, 티켓 덮어쓰기 | 코멘트, 기대 (state, cause|reason, why))
+    ("P1 관문 탈락 실패 ipc + 참고 줄", None, ["로그", "실패: VIPC_SETUP_DATA(id 0x2) token=0x0e1 응답 실패\n참고 시험 전 상태:\n" + NET],
+     ("held", "ambiguous", "sources")),
+    ("P1b 사이에 다른 IPC 이름 + 참고 token", "0x0aa",
+     ["VIPC_SETUP_DATA 다음 VIPC_DEACT_DATA token=0x0e1 에서 실패, 참고: VIPC_SETUP_DATA (token=0x0aa)는 정상 요청"], ("held", None, None)),
+    ("P1c 짧은 실패 인용 + 참고 줄", None, ["로그", "실패:\n11-14 10:02:00.624 x\n참고:\n" + NET], ("held", "ambiguous", "sources")),
+    ("N8 token 뒤 무관한 16진", None, ["VIPC_SETUP_DATA (token=0x0e1) 실패, token 처리 중 0xdead 오류"], ("accepted", "DATA-003-01", "cp_point")),
+    ("N8b cause 16진", None, ["VIPC_SETUP_DATA (token=0x0e1) 실패 (cause 0x1b)"], ("accepted", "DATA-003-01", "cp_point")),
+    ("N8c RSP 줄의 16진 len", None, ["로그", "[RX] VIPC_SETUP_DATA, RSP, token=0x0e1, len=0x08, Error(VIPC_E_DEMO_FAILURE)"],
+     ("accepted", "DATA-003-01", "cp_point")),
+]
+
+
+@pytest.mark.parametrize("name,variant,comments,expect", CONFIRM, ids=[r[0].split()[0] for r in CONFIRM])
+def test_confirm_review_repros(seed_db, name, variant, comments, expect):
+    log = _variant(name.split()[0], variant) if variant else None
+    a, _ = _run(seed_db, "cf-" + name.split()[0], comments=comments, log=log)
+    d = a["decision"]
+    got = (d["state"], (d["selected"] or {}).get("cause") if d["state"] == "accepted" else d["reason"], d["check"]["why"])
+    assert got[0] == expect[0] and (expect[1] is None or got[1:] == expect[1:]), (name, d, a["warnings"])
+    if name.startswith("P1 "):
+        assert any("모양 안 맞음" in w for w in a["warnings"]), a["warnings"]
+
+
+@pytest.mark.parametrize("name,ticket", [
+    ("N5b 같은 작성 시각(fields.comment, 최신순)", {"fields": {"comment": {"total": 3, "startAt": 0, "comments": [
+        {"body": "새 로그 올립니다", "created": T("12:00:00")}, {"body": "재시험 요청", "created": T("11:00:00")},
+        {"body": "VIPC_SETUP_DATA (token=0x0aa) 실패", "created": T("11:00:00")}]}}}),
+    ("N5c 같은 작성 시각(맨 위 목록, 최신순)", {"comments_page": {"total": 3, "startAt": 0}, "comments": [
+        {"body": "새 로그 올립니다", "created": T("12:00:00")}, {"body": "재시험 요청", "created": T("11:00:00")},
+        {"body": "VIPC_SETUP_DATA (token=0x0aa) 실패", "created": T("11:00:00")}]}),
+], ids=["N5b", "N5c"])
+def test_equal_created_times_extract_nothing(seed_db, name, ticket):
+    fields = {"summary": "데이터 연결 실패", "description": "시험 중 실패했습니다.", **(ticket.get("fields") or {})}
+    a, _ = _run(seed_db, "cf-" + name.split()[0], ticket={"key": "CLUE-1", **ticket, "fields": fields}, log=_variant(name.split()[0], "0x0aa"))
+    assert a["decision"]["reason"] == "no_reference", a["decision"]
+    assert any("전체 수·순서를 알 수 없다" in w for w in a["warnings"]), a["warnings"]

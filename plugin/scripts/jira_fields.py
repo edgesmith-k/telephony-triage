@@ -190,8 +190,9 @@ def _created(obj) -> datetime | None:
     return parse_time(value, timezone.utc) if isinstance(value, str) else None
 
 
-def comment_source(raw, cfg: dict) -> tuple[str | None, list[tuple[object, object]], bool]:
-    """(쓴 경로 | None, `(코멘트 객체 | None, 본문)` 목록, 작성 시각이 모두 있어 그 순서로 정렬했는가). 경로는 field_map `comments`,
+def comment_source(raw, cfg: dict) -> tuple[str | None, list[tuple[object, object]], bool | None]:
+    """(쓴 경로 | None, `(코멘트 객체 | None, 본문)` 목록, 순서: True = 작성 시각이 모두 있고 서로 달라 그 순서로 정렬함, False = 작성
+    시각 없음(받은 순서), None = 일부만 있거나 같은 시각이 있어 순서를 증명할 수 없음). 경로는 field_map `comments`,
     그다음 트래커 기본값 중 값이 있는 첫 것, 빈 본문은 뺀다. 객체는 본문 경로의 부모(`x[].body` → `x[]`의 항목)이고, 짝을 맞출
     수 없으면 None(작성자·시각 없음). 작성 시각(`created`)이 모두 있으면 오래된 것부터 정렬한다(최신순으로 돌려주는 도구 대비)."""
     fmap = (cfg.get("tracker") or {}).get("field_map") or {}
@@ -212,9 +213,12 @@ def comment_source(raw, cfg: dict) -> tuple[str | None, list[tuple[object, objec
             owners = [None] * len(value)
         rows = [(o, v) for o, v in zip(owners, value) if _text(v)]
         times = [_created(o) for o, _ in rows]
-        dated = bool(rows) and all(t is not None for t in times)
+        known = [t for t in times if t is not None]
+        if known and (len(known) < len(times) or len(set(known)) < len(known)):
+            return path, rows, None       # 작성 시각이 일부만 있거나 같은 값이 있다 — 순서를 증명할 수 없다
+        dated = bool(rows) and len(known) == len(times)
         if dated:
-            rows = [r for _, r in sorted(zip(times, rows), key=lambda x: x[0])]     # 같은 시각은 받은 순서(안정 정렬)
+            rows = [r for _, r in sorted(zip(times, rows), key=lambda x: x[0])]
         return path, rows, dated
     return None, [], False
 
@@ -224,13 +228,14 @@ def comment_rows(raw, cfg: dict) -> list[tuple[object, object]]:
     return comment_source(raw, cfg)[1]
 
 
-def _comment_order(raw, path: str | None, read: int, dated: bool) -> dict:
+def _comment_order(raw, path: str | None, read: int, dated: bool | None) -> dict:
     """받은 코멘트가 전부·작성 순인지(코멘트 단서 자동 추출의 전제). 전체 수(`total`)·건너뛴 수(`startAt`, 없으면 0)는 **쓴 코멘트와
     같은 출처**에서 읽는다: `fields.comment.comments[]`면 `fields.comment`, 맨 위 `comments[]`(Jira 코멘트 도구 응답 — jira_bridge가
     `comments_page`에 남긴다)면 `comments_page`.
     - `startAt + 읽은 수 != total` → `{comments_partial: {total, read}}`(최근 코멘트가 빠졌거나 수가 안 맞음 — 뽑지 않는다)
     - `== total`이고 startAt > 0 → `{comments_skipped: startAt}`(오래된 것만 빠짐 — 포털 크기 상한, 번호를 Jira 순번에)
-    - total 없음 → `{comments_unchecked: "total"}`, 맨 위 목록인데 작성 시각이 없음(순서 모름) → `{comments_unchecked: "order"}`
+    - total 없음 → `{comments_unchecked: "total"}`. 순서 모름 → `{comments_unchecked: "order"}`: 작성 시각이 일부만 있거나 같은 값이
+      있음(어느 출처든), 맨 위 목록인데 작성 시각이 없음. 시각이 전혀 없는 `fields.comment`(Jira 원본·포털)는 받은 순서를 믿는다
     코멘트가 없으면 `fields.comment.total` > 0일 때만 일부만 읽음."""
     if path is None:
         total = lookup(raw, "fields.comment.total")
@@ -242,7 +247,9 @@ def _comment_order(raw, path: str | None, read: int, dated: bool) -> dict:
     start = start if type(start) is int and start > 0 else 0
     if type(total) is not int:
         return {"comments_unchecked": "total"}
-    if not container and not dated:
+    # 순서: 작성 시각이 모두 있고 서로 다르면 그 순서. 시각이 전혀 없으면 Jira 원본 모양(`fields.comment` — 오래된 것부터, 포털도
+    # 이 모양으로 준다)만 받은 순서를 믿고, 맨 위 목록(도구마다 순서가 다를 수 있음)이나 시각이 일부·같은 값이면 순서 모름
+    if dated is None or (not container and not dated):
         return {"comments_unchecked": "order"}
     if start + read != total:
         return {"comments_partial": {"total": total, "read": read}}

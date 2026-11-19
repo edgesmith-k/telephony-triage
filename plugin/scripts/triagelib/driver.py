@@ -865,7 +865,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             use = self.problem_use or {}
             bundle = {"refs": ([self.reference] if self.reference else []) + use.get("refs", []),
                       "problem": use.get("problem"), "comment_adopt": use.get("comment_adopt", True),
-                      "dropped": use.get("dropped", []), **({"conflict": True} if use.get("conflict") else {})}
+                      "dropped": use.get("dropped", []), **({"conflict": True} if use.get("conflict") else {}),
+                      **({"invalid": use["invalid"]} if use.get("invalid") else {})}
             ref = self.job / REFERENCE_FILE
             ref.write_text(json.dumps(bundle, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
             argv += ["--reference", ref]
