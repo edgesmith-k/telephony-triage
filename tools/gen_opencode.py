@@ -16,7 +16,7 @@ CLI:
     python3 tools/gen_opencode.py install --dest <OpenCode 프로젝트 폴더> --plugin-root <설치된 plugin/>
             --work-root <작업 루트> (--gateway-url <URL> --model <모델 ID> | --provider-model <provider>/<모델>)
             [--issue-db <clone> ...] [--jira-read-tool <OpenCode 이름> ...] [--allow-publish] [--explore-model <provider>/<모델>]
-            [--force]
+            [--opencode <opencode 바이너리>] [--force]
         <dest>/opencode.json(템플릿 렌더링)·<dest>/tt-oc.json(래퍼가 읽는 경로)과 <dest>/.opencode/{agents,commands,plugins}/를
         쓴다. `tt-oc --project <dest>`로
         실행한다. 이미 있는 파일이 다르면 --force 없이는 쓰지 않는다.
@@ -33,7 +33,9 @@ CLI:
         더한다(마지막 규칙이 이긴다). Jira 읽기 관문(`config.py set opencode.jira_read open`)을 연 뒤 tt-oc에서 실제로 읽으려면
         필요하다(관리 설정 `/etc/opencode`의 `jira_*` deny는 관리자 몫).
         `--allow-publish`를 주면 tt-oc.json에 `"publish": "open"`을 쓴다(`tt-oc publish` — 사람이 터미널에서 승인하는 이슈 DB
-        게시). 주지 않으면 그 키를 쓰지 않는다(닫힘). 이미 설치한 곳을 열거나 닫으려면 같은 install을 `--force`로 다시 한다
+        게시). 주지 않으면 그 키를 쓰지 않는다(닫힘). `--opencode`(없으면 `TT_OPENCODE`, 그것도 없으면 PATH의 opencode)의 절대 경로를
+        `--version`이 고정 버전일 때만 tt-oc.json `opencode_bin`에 남긴다(tt-oc가 TT_OPENCODE 다음으로 쓴다 — PATH의 opencode가
+        스스로 업데이트돼도 고정 바이너리를 쓴다). `--opencode`를 줬는데 버전이 다르면 종료 2, 기본값이면 기록하지 않고 알린다. 이미 설치한 곳을 열거나 닫으려면 같은 install을 `--force`로 다시 한다
         (tt-oc.json은 설치 지문 대상 밖이라 지문은 그대로다).
         `--explore-model <provider>/<모델>`은 탐색 분석 하위 에이전트(`tt-explore`, analyze Step 5-2)만 쓸 모델을
         `.opencode/agents/tt-explore.md` frontmatter `model:`로 쓴다(주지 않으면 그 줄이 없어 세션 모델을 이어받는다). `gw/<모델>`이면
@@ -289,7 +291,7 @@ def add_jira_reads(config: dict, names: list[str]) -> dict:
 
 def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[str] = (),
                   jira_read: list[str] = (), allow_publish: bool = False, provider_model: str | None = None,
-                  explore_model: str | None = None) -> dict[Path, str]:
+                  explore_model: str | None = None, opencode_bin: str | None = None) -> dict[Path, str]:
     template = json.loads((OC / "opencode.json.template").read_text(encoding="utf-8"))
     meta = {"version": 1, "opencode": OPENCODE_VERSION, "plugin_root": values["@@PLUGIN_ROOT@@"],
             "work_root": values["@@WORK_ROOT@@"], "issue_dbs": issue_dbs, "model": values["@@MODEL_ID@@"]}
@@ -299,6 +301,8 @@ def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[st
         meta["publish"] = "open"         # 없으면 닫힘(tt-oc publish). install은 tt-oc.json을 통째로 다시 쓴다
     if explore_model:
         meta["explore_model"] = explore_model
+    if opencode_bin:
+        meta["opencode_bin"] = opencode_bin
     config = render_config(template, values, issue_dbs)
     if provider_model:                   # 내장 provider: provider 블록 없이 model·small_model만(A232 — 키·주소는 전역 설정 몫)
         config["model"] = config["small_model"] = provider_model
@@ -406,6 +410,28 @@ def work_root_problems(work: str, plugin: str) -> list[str]:
     return out
 
 
+def pinned_opencode(explicit: str | None) -> tuple[str | None, str]:
+    """(기록할 opencode 절대 경로 또는 None, 알림). `--opencode`가 없으면 `TT_OPENCODE`, PATH의 opencode. 고정 버전일 때만 경로를
+    돌려준다. `--opencode`를 줬는데 없거나 버전이 다르면 UsageError."""
+    import shutil
+    raw = explicit or os.environ.get("TT_OPENCODE") or "opencode"
+    found = shutil.which(raw)
+    ver = ""
+    if found:
+        try:
+            r = subprocess.run([found, *OCV.VERSION_ARGS], env={**os.environ, **OCV.CHILD_ENV}, stdin=subprocess.DEVNULL,
+                               capture_output=True, text=True, timeout=60, check=False)
+            ver = ((r.stdout or "").strip().splitlines()[-1:] or [""])[0] if r.returncode == 0 else ""
+        except (OSError, subprocess.SubprocessError):
+            pass
+    if ver == OPENCODE_VERSION:
+        return os.path.abspath(found), ""
+    why = f"{raw}: " + (f"버전 {ver or '읽지 못함'}(고정 {OPENCODE_VERSION})" if found else "찾지 못함")
+    if explicit:
+        raise UsageError(f"--opencode {why}")
+    return None, f"opencode 경로를 기록하지 않았다({why}) — tt-oc는 TT_OPENCODE·PATH에서 찾는다. 고정 버전 경로를 남기려면 --opencode"
+
+
 def cmd_install(a) -> int:
     plugin = _abs_dir(a.plugin_root, "--plugin-root")
     if not (Path(plugin) / "scripts" / "guard.py").is_file():
@@ -445,8 +471,9 @@ def cmd_install(a) -> int:
     bad = jira_read_problems(jira_read)
     if bad:
         raise UsageError("; ".join(bad))
+    opencode_bin, oc_note = pinned_opencode(a.opencode)
     files = install_files(dest, values, dbs, read_roots(plugin), jira_read, a.allow_publish, a.provider_model,
-                          a.explore_model)
+                          a.explore_model, opencode_bin)
     differ = [str(p) for p, text in files.items() if p.exists() and p.read_text(encoding="utf-8") != text]
     if differ and not a.force:
         raise UsageError(f"이미 있는 파일과 다르다(--force로 덮어쓴다): {differ}")
@@ -473,6 +500,8 @@ def cmd_install(a) -> int:
                       "next": f"opencode/bin/tt-oc --project {dest} doctor"}, ensure_ascii=False))
     for line in off:                # stdout은 JSON 한 줄 그대로
         print(f"[gen_opencode] 꺼짐: {line}", file=sys.stderr)
+    if oc_note:
+        print(f"[gen_opencode] {oc_note}", file=sys.stderr)
     print(f"[gen_opencode] 지금 상태: 게시 {'열림' if a.allow_publish else '닫힘'} · Jira 읽기 도구 {len(jira_read)}개 · "
           f"탐색 분석 모델 {a.explore_model or '세션 모델'}",
           file=sys.stderr)
@@ -501,6 +530,8 @@ def main(argv=None) -> int:
                         "이미 설치한 곳을 열거나 닫으려면 같은 install을 --force로 다시 한다")
     p.add_argument("--explore-model",
                    help="탐색 분석 하위 에이전트(tt-explore)만 쓸 <provider>/<모델>. 주지 않으면 세션 모델. gw/<모델>이면 gw provider에 더한다")
+    p.add_argument("--opencode", help=f"tt-oc가 쓸 opencode {OPENCODE_VERSION} 바이너리(없으면 TT_OPENCODE·PATH). 고정 버전일 때만 "
+                                       "tt-oc.json에 절대 경로를 남긴다")
     p.add_argument("--force", action="store_true")
     try:
         a = ap.parse_args(argv)

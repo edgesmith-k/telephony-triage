@@ -12,6 +12,8 @@ OpenCode 호출을 Claude Code PreToolUse/PostToolUse hook 입력 JSON과 **같�
         → stdout {"replace": str|null}   (오류로 끝난 MCP 호출의 오류 글 — 모델 요청 직전 `experimental.chat.messages.transform`)
     python3 <plugin>/scripts/common/oc_adapter.py env-check
         → stdout {"refused": [환경변수 이름]}
+    python3 <plugin>/scripts/common/oc_adapter.py selftest   (tt-oc doctor `guard-python`·`script-python` 행)
+        → stdout {"python": 실행 파일, "guard": 못 불러온 모듈|null, "scripts": 못 불러온 모듈|null, "read": before의 read 결정}
 
 종료 코드는 0이다. 0이 아니거나·시그널·시간 초과·JSON이 아니면 플러그인이 거부(before)·오류 문구(after)로 닫는다.
 
@@ -1162,6 +1164,26 @@ def error(payload: dict, env: dict | None = None, servers: list[str] | None = No
     return {"replace": None}
 
 
+def selftest() -> dict:
+    """이 python으로 guard가 도는지(tt-oc doctor). guard는 의존성(PyYAML 등)이 없어도 import는 되고 판정만 빠지므로
+    `guard.IMPORT_ERROR`로 본다. 플러그인 스크립트 쪽은 jsonschema도 본다. 읽기 호출 하나를 실제 `before`에 넣어 허용되는지도
+    본다(쓰기·네트워크 없음)."""
+    def missing(exc):
+        return None if exc is None else (getattr(exc, "name", None) or f"{type(exc).__name__}: {exc}")
+
+    import guard
+    guard_err = guard.IMPORT_ERROR
+    scripts_err = guard_err
+    if scripts_err is None:
+        try:
+            import jsonschema  # noqa: F401
+        except ImportError as exc:
+            scripts_err = exc
+    skill = PLUGIN_ROOT / "skills" / "telephony-triage" / "SKILL.md"
+    read = before({"tool": "read", "args": {"filePath": str(skill)}, "directory": os.getcwd()})["decision"]
+    return {"python": sys.executable, "guard": missing(guard_err), "scripts": missing(scripts_err), "read": read}
+
+
 # -- CLI -----------------------------------------------------------------------------------------------
 
 
@@ -1172,10 +1194,13 @@ def main(argv: list[str] | None = None) -> int:
     except (AttributeError, ValueError):
         pass
     mode = argv[0] if argv else ""
-    if mode not in ("before", "after", "error", "env-check", "gate"):
-        print("usage: oc_adapter.py (before | after | error | env-check | gate)  # stdin: OpenCode 도구 호출 JSON",
+    if mode not in ("before", "after", "error", "env-check", "gate", "selftest"):
+        print("usage: oc_adapter.py (before | after | error | env-check | gate | selftest)  # stdin: OpenCode 도구 호출 JSON",
               file=sys.stderr)
         return 2
+    if mode == "selftest":
+        print(json.dumps(selftest(), ensure_ascii=False))
+        return 0
     if mode == "env-check":
         print(json.dumps({"refused": refused_env()}))
         return 0

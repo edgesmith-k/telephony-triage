@@ -51,9 +51,9 @@ WRITE_BASH = ("git push *", "gh *", "*opencode *", "*db_pr.py publish*", "*db_pr
               "*db_pr.py request-review*", "*issue_post.py approve*", "*skill_patch.py*--apply*", "*module_eval.py*")
 
 
-def run_gen(*args, cwd=REPO):
+def run_gen(*args, cwd=REPO, env=None):
     return subprocess.run([sys.executable, str(REPO / "tools" / "gen_opencode.py"), *args], cwd=cwd,
-                          capture_output=True, text=True, check=False)
+                          capture_output=True, text=True, check=False, env=env)
 
 
 # -- 커맨드 생성(골든) ---------------------------------------------------------------------------------------------------
@@ -302,6 +302,7 @@ def test_install_renders_everything(roots):
     assert cfg["model"] == "gw/glm-x" and cfg["provider"]["gw"]["options"]["baseURL"] == "http://localhost:9/v1"
     meta = json.loads((proj / "tt-oc.json").read_text(encoding="utf-8"))
     integrity = meta.pop("integrity")
+    meta.pop("opencode_bin", None)       # 이 호스트에 고정 버전 opencode가 있으면 남는다(test_install_records_pinned_opencode)
     assert meta == {"version": 1, "opencode": gen_opencode.OPENCODE_VERSION, "plugin_root": str(roots / "plug"), "work_root": str(roots / "work"),
                     "issue_dbs": [str(roots / "dbA"), str(roots / "dbB")], "model": "glm-x"}
     # 설치 지문(리뷰 P1: guard 플러그인 삭제·adapter 수정을 tt-oc doctor가 찾는다): tt-oc.json 말고 설치한 모든 파일
@@ -387,6 +388,31 @@ def test_install_allow_publish_writes_key_only_when_given(roots):
     r = subprocess.run([sys.executable, str(REPO / "tools" / "gen_opencode.py"), "install", "--help"], capture_output=True,
                        text=True, encoding="utf-8", env={**os.environ, "PYTHONIOENCODING": "utf-8", "COLUMNS": "400"}, check=False)
     assert r.returncode == 0 and "--allow-publish" in r.stdout and '"publish": "open"' in r.stdout and "--force" in r.stdout
+
+
+def test_install_records_pinned_opencode(roots):
+    """install은 고정 버전 opencode의 절대 경로만 tt-oc.json `opencode_bin`에 남긴다(PATH의 opencode가 스스로 업데이트돼도 tt-oc가
+    고정 바이너리를 쓴다). --opencode로 준 것이 다른 버전이면 종료 2, 기본값(TT_OPENCODE·PATH)이 다르면 남기지 않고 알린다."""
+    stub = roots / "oc"
+    stub.write_text(f"#!{sys.executable}\nimport os\nprint(os.environ.get('STUB_VERSION', '{gen_opencode.OPENCODE_VERSION}'))\n",
+                    encoding="utf-8")
+    stub.chmod(0o755)
+
+    def meta():
+        return json.loads((roots / "proj" / "tt-oc.json").read_text(encoding="utf-8"))
+
+    assert _install(roots, "--opencode", str(stub)).returncode == 0
+    assert meta()["opencode_bin"] == str(stub)
+    r = run_gen("install", "--dest", str(roots / "proj"), "--plugin-root", str(roots / "plug"), "--work-root", str(roots / "work"),
+                "--gateway-url", "http://localhost:9/v1", "--model", "glm-x", "--force",
+                env={**os.environ, "TT_OPENCODE": str(stub), "STUB_VERSION": "2.3.0"})
+    assert r.returncode == 0 and "opencode_bin" not in meta() and "opencode 경로를 기록하지 않았다" in r.stderr, r.stderr
+    r = _install(roots, "--force", "--opencode", str(stub))
+    assert r.returncode == 0 and meta()["opencode_bin"] == str(stub)
+    r = run_gen("install", "--dest", str(roots / "proj"), "--plugin-root", str(roots / "plug"), "--work-root", str(roots / "work"),
+                "--gateway-url", "http://localhost:9/v1", "--model", "glm-x", "--force", "--opencode", str(stub),
+                env={**os.environ, "STUB_VERSION": "2.3.0"})
+    assert r.returncode == 2 and "2.3.0" in r.stderr and meta()["opencode_bin"] == str(stub), r.stderr
 
 
 def test_install_provider_model_builtin_provider(roots):

@@ -94,6 +94,10 @@ def env(tmp_path):
     (plug / "scripts" / "config.py").write_text(
         "import json, os, sys\nprint(json.dumps({'counts': {'ok': 1}}))\nsys.exit(int(os.environ.get('STUB_DOCTOR_EXIT', '0')))\n",
         encoding="utf-8")
+    (plug / "scripts" / "common").mkdir()
+    (plug / "scripts" / "common" / "oc_adapter.py").write_text(      # selftest만(guard-python·script-python 행)
+        "import json, sys\nprint(json.dumps({'python': sys.executable, 'guard': None, 'scripts': None, 'read': 'allow'}))\n",
+        encoding="utf-8")
     (proj / "opencode.json").write_text("{}", encoding="utf-8")
     (proj / ".opencode" / "plugins").mkdir(parents=True)
     (proj / ".opencode" / "plugins" / "tt-guard.js").write_text("// guard\n", encoding="utf-8")
@@ -261,7 +265,7 @@ def test_doctor_subcommand(env):
     assert r.returncode == 0, r.stdout
     rows = json.loads(r.stdout)["rows"]
     assert [x["check"] for x in rows] == ["env", "project-git", "instructions", "integrity", "opencode-version",
-                                          "opencode-config", "config-doctor", "git", "gateway-key"]
+                                          "guard-python", "script-python", "opencode-config", "config-doctor", "git", "gateway-key"]
     # 시험 설치의 opencode.json은 {}라 게이트웨이 행은 읽지 못함 warn 하나(막지 않는다). git 행은 호스트 git이 2.38 미만이면
     # warn이다(Ubuntu 22.04의 git 2.34 — CI site-rehearsal). 판정 자체는 test_git_safe_env_for_children_doctor_row_and_publish가 본다.
     status = {x["check"]: x["status"] for x in rows}
@@ -816,6 +820,52 @@ def test_child_env_drops_stale_lock_owner(env, monkeypatch):
     mod = _load("tt_oc", TTOC)
     monkeypatch.setenv("TT_LOCK_OWNER", "stale")
     assert "TT_LOCK_OWNER" not in mod.child_env({"plugin_root": "/p", "work_root": "/w"})
+
+
+def test_child_env_guard_python_is_wrapper_python_unless_set(env, monkeypatch):
+    """guard(tt-guard.js)는 TT_PYTHON(없으면 PATH의 python3)으로 어댑터를 돌린다 — 의존성이 venv에만 있는 곳에서 tt-oc와 다른
+    python이 되지 않게 tt-oc가 자기 python을 넘긴다. 사용자가 정한 값은 그대로."""
+    mod = _load("tt_oc", TTOC)
+    meta = {"plugin_root": "/p", "work_root": "/w"}
+    monkeypatch.delenv("TT_PYTHON", raising=False)
+    assert mod.child_env(meta)["TT_PYTHON"] == sys.executable
+    monkeypatch.setenv("TT_PYTHON", "/opt/py/bin/python3")
+    assert mod.child_env(meta)["TT_PYTHON"] == "/opt/py/bin/python3"
+
+
+def test_doctor_guard_python_without_yaml_fails(tmp_path):
+    """guard가 쓰는 python에 PyYAML이 없으면(의존성은 venv에만, PATH의 python3은 시스템 것) doctor가 모듈 이름으로 실패한다.
+    실제 oc_adapter.py selftest를 yaml import가 깨진 python으로 돌린다."""
+    mod = _load("tt_oc", TTOC)
+    (tmp_path / "yaml.py").write_text("raise ModuleNotFoundError(\"No module named 'yaml'\", name='yaml')\n", encoding="utf-8")
+    meta = {"plugin_root": str(REPO / "plugin"), "work_root": str(tmp_path)}
+    base = {**os.environ, "TT_PYTHON": sys.executable}
+    ok = {r["check"]: r for r in mod.python_rows(tmp_path, meta, base)}
+    assert ok["guard-python"]["status"] == "ok", ok
+    rows = {r["check"]: r for r in mod.python_rows(tmp_path, meta, {**base, "PYTHONPATH": str(tmp_path)})}
+    assert rows["guard-python"]["status"] == "fail" and "yaml 모듈이 없다" in rows["guard-python"]["detail"], rows
+    assert sys.executable in rows["guard-python"]["detail"]
+    rows = {r["check"]: r for r in mod.python_rows(tmp_path, meta, {**base, "TT_PYTHON": str(tmp_path / "none")})}
+    assert rows["guard-python"]["status"] == "fail" and "실행하지 못했다" in rows["guard-python"]["detail"], rows
+
+
+def test_recorded_opencode_used_and_version_change_flagged(env):
+    """install이 tt-oc.json에 남긴 opencode(opencode_bin)를 TT_OPENCODE·--opencode가 없으면 쓴다(PATH의 opencode가 스스로
+    업데이트돼도). 그 바이너리의 버전이 바뀌면 doctor가 "기록한 opencode가 바뀌었다"로 실패한다."""
+    write_meta(env["proj"], env["plug"], env["work"], opencode_bin=str(env["stub"]))
+    base = {k: v for k, v in env["env"].items() if k != "TT_OPENCODE"}
+
+    def doctor(**extra):
+        r = subprocess.run([sys.executable, str(TTOC), "--project", str(env["proj"]), "doctor", "--json"],
+                           env={**base, **extra}, capture_output=True, text=True, timeout=60, check=False)
+        return r.returncode, {x["check"]: x for x in json.loads(r.stdout)["rows"]}
+
+    code, rows = doctor()
+    assert rows["opencode-version"]["status"] == "ok" and calls(env)[0]["args"] == ["--version"], rows
+    code, rows = doctor(STUB_VERSION="2.3.0")
+    assert code == 2 and rows["opencode-version"]["status"] == "fail"
+    detail = rows["opencode-version"]["detail"]
+    assert "설치 때 기록한 opencode" in detail and "직접 실행하지 않는다" in detail, detail
 
 
 def test_git_safe_env_for_children_doctor_row_and_publish(env, monkeypatch):

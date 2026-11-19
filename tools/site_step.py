@@ -1162,9 +1162,15 @@ def runtime_check(target: str | None, project: str | None, managed_dir: Path, ji
     env = dict(os.environ)
     if target == "claude-gateway":
         return runtime_claude_gateway(env)
+    tt = _load_tt_oc()
+    try:            # tt-oc와 같은 순서: TT_OPENCODE > 설치 때 기록한 경로(tt-oc.json opencode_bin) > PATH
+        meta = tt.load_project(project)[1]
+    except tt.Refused:
+        meta = {}
+    opencode = tt.opencode_choice(None, env, meta)
     if jira:
-        return runtime_opencode_jira(project, env.get("TT_OPENCODE") or "opencode", jira, missing_key, env)
-    return runtime_opencode(project, env.get("TT_OPENCODE") or "opencode", managed_dir, env)
+        return runtime_opencode_jira(project, opencode, jira, missing_key, env)
+    return runtime_opencode(project, opencode, managed_dir, env)
 
 
 def main(argv: list[str] | None = None) -> int:

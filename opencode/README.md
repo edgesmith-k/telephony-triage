@@ -61,6 +61,10 @@ python3 tools/site_step.py runtime-check opencode --project <dest>   # 사내 �
   프롬프트에 자동으로 붙이므로 `tt-oc`가 시작하지 않는다(사용자 결정 ⑤). `~/.claude/CLAUDE.md`는 `tt-oc`가
   `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1`로 끈다.
 - `plugin/commands`를 고치면 `python3 tools/gen_opencode.py`로 다시 만든다(`--check`가 골든 테스트).
+- `install`은 고정 버전(1.19.5) opencode의 절대 경로를 `tt-oc.json` `opencode_bin`에 남긴다(`--opencode <경로>`, 없으면
+  `TT_OPENCODE`·PATH에서 찾고 버전이 다르면 남기지 않는다). `tt-oc`는 `--opencode` > `TT_OPENCODE` > 남긴 경로 > PATH 순으로 쓴다.
+  **고정한 opencode를 직접 실행하지 않는다** — 직접 띄우면 스스로 새 버전으로 바뀔 수 있고(`tt-oc`는 자동 업데이트를 끄고 돌린다),
+  그러면 `tt-oc doctor`의 `opencode-version` 행이 "설치 때 기록한 opencode가 바뀌었다"로 실패한다.
 
 ## 실행
 
@@ -70,6 +74,11 @@ opencode/bin/tt-oc --project <dest> -s <세션> -- 2          # 질문에 답하
 ```
 
 - `--pure`·`--auto`·`--attach`·`-i`·`--agent`·`--model`과 설정을 덮는 `OPENCODE_*` 환경 변수는 거부한다.
+- guard는 `tt-oc`를 실행한 python을 쓴다(`TT_PYTHON`을 따로 정하지 않았으면 tt-oc가 자기 python을 넘긴다. venv python이면 그 venv를
+  PATH 앞에 둬서 모델이 돌리는 `python3` 스크립트도 같은 venv). 의존성(PyYAML·jsonschema)이 있는 python으로 `tt-oc`를 실행한다 —
+  `tt-oc doctor`의 `guard-python`·`script-python` 행이 그 python으로 guard를 실제로 돌려 본다.
+- 셸 별칭(alias)은 `setsid`·`nohup`·포털 시작 스크립트에서 풀리지 않는다. 그렇게 띄울 때는 `<venv>/bin/python <레포>/opencode/bin/tt-oc …`처럼
+  실제 경로를 쓴다(`.bashrc`의 `TT_OPENCODE`도 그 환경에서는 안 읽힐 수 있다 — install이 남긴 경로가 그때 쓰인다).
 - 사전 점검(버전 = `oc_version.OPENCODE_VERSION`, `snapshot:false`·bash 허용 목록 등 실제 설정, 설치 지문, 자동 지시 파일, `config.py doctor`)이 실패하면
   시작하지 않는다.
 - bash는 분석 스크립트(`python3 "<plugin>/scripts/<이름>.py" …`, 절대 경로)와 읽기 명령(ls·cat·head·tail·grep·find·git log 등)만
