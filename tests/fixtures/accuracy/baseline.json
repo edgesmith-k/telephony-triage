@@ -182,6 +182,79 @@
    "anchor_missed": 0,
    "first_total": 0,
    "first_hold_rate": null
+  },
+  "comments": {
+   "total": 9,
+   "controls": 0,
+   "in_sample": 0,
+   "include_in_sample": false,
+   "evaluated": 9,
+   "errors": 0,
+   "unjudged_errors": 0,
+   "observation_errors": 0,
+   "error_rate": 0.0,
+   "type_only": 0,
+   "positive": 3,
+   "negative": 6,
+   "positive_total": 3,
+   "negative_total": 6,
+   "top1_accuracy": 0.0,
+   "top3_inclusion": 1.0,
+   "false_positive_rate": 0.8333,
+   "accepted_correct": 2,
+   "accepted_wrong": 0,
+   "held": 7,
+   "held_reasons": {
+    "no_candidate": 1,
+    "no_reference": 5,
+    "symptom_not_found": 1
+   },
+   "answer_rate": 0.2222,
+   "location_confirmed": 0,
+   "location_found": 3,
+   "correct_hold": 6,
+   "held_top_right": 0,
+   "anchor_runs": 0,
+   "anchor_correct": 0,
+   "anchor_missed": 0,
+   "first_total": 0,
+   "first_hold_rate": null
+  },
+  "look_at+comments": {
+   "total": 8,
+   "controls": 0,
+   "in_sample": 0,
+   "include_in_sample": false,
+   "evaluated": 8,
+   "errors": 0,
+   "unjudged_errors": 0,
+   "observation_errors": 0,
+   "error_rate": 0.0,
+   "type_only": 0,
+   "positive": 2,
+   "negative": 6,
+   "positive_total": 2,
+   "negative_total": 6,
+   "top1_accuracy": 1.0,
+   "top3_inclusion": 1.0,
+   "false_positive_rate": 0.8333,
+   "accepted_correct": 2,
+   "accepted_wrong": 0,
+   "held": 6,
+   "held_reasons": {
+    "no_candidate": 1,
+    "symptom_not_found": 5
+   },
+   "answer_rate": 0.25,
+   "location_confirmed": 5,
+   "location_found": 2,
+   "correct_hold": 6,
+   "held_top_right": 0,
+   "anchor_runs": 8,
+   "anchor_correct": 6,
+   "anchor_missed": 0,
+   "first_total": 0,
+   "first_hold_rate": null
   }
  },
  "runs": [
@@ -1010,6 +1083,36 @@
    "held_cause": null
   },
   {
+   "key": "TOKSAME-1",
+   "condition": "comments",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
+  },
+  {
+   "key": "TOKSAME-1",
+   "condition": "look_at+comments",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
+  },
+  {
    "key": "TOKNAME-1",
    "condition": "no_time",
    "expect": "unresolved",
@@ -1072,6 +1175,36 @@
   {
    "key": "TOKNAME-1",
    "condition": "look_at+problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
+  },
+  {
+   "key": "TOKNAME-1",
+   "condition": "comments",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TOKNAME-1",
+   "condition": "look_at+comments",
    "expect": "unresolved",
    "top": "NETWORK-001-03",
    "top3": [
@@ -1160,6 +1293,36 @@
    "held_cause": null
   },
   {
+   "key": "TOKONLY-1",
+   "condition": "comments",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TOKONLY-1",
+   "condition": "look_at+comments",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
+  },
+  {
    "key": "DUAL-1",
    "condition": "no_time",
    "expect": "unresolved",
@@ -1225,6 +1388,32 @@
    "held_cause": null
   },
   {
+   "key": "DUAL-1",
+   "condition": "comments",
+   "expect": "unresolved",
+   "top": null,
+   "top3": [],
+   "adopted": null,
+   "verdict": "정답",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": "locations",
+   "held_cause": null
+  },
+  {
+   "key": "DUAL-1",
+   "condition": "look_at+comments",
+   "expect": "unresolved",
+   "top": null,
+   "top3": [],
+   "adopted": null,
+   "verdict": "정답",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "locations",
+   "held_cause": null
+  },
+  {
    "key": "RETEST-1",
    "condition": "no_time",
    "expect": "unresolved",
@@ -1300,6 +1489,36 @@
    "held_cause": null
   },
   {
+   "key": "RETEST-1",
+   "condition": "comments",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "RETEST-1",
+   "condition": "look_at+comments",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
+  },
+  {
    "key": "RETESTX-1",
    "condition": "no_time",
    "expect": "unresolved",
@@ -1362,6 +1581,36 @@
   {
    "key": "RETESTX-1",
    "condition": "look_at+problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
+  },
+  {
+   "key": "RETESTX-1",
+   "condition": "comments",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "RETESTX-1",
+   "condition": "look_at+comments",
    "expect": "unresolved",
    "top": "NETWORK-001-03",
    "top3": [
@@ -1640,6 +1889,38 @@
    "held_cause": null
   },
   {
+   "key": "TOKPOS-1",
+   "condition": "comments",
+   "expect": "DATA-003-01",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03",
+    "DATA-003-01"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "상위3",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TOKPOS-1",
+   "condition": "look_at+comments",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01",
+    "NETWORK-001-03"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": false,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
    "key": "TOKONLYPOS-1",
    "condition": "no_time",
    "expect": "DATA-003-01",
@@ -1706,6 +1987,38 @@
   {
    "key": "TOKONLYPOS-1",
    "condition": "look_at+problem",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01",
+    "NETWORK-001-03"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": false,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TOKONLYPOS-1",
+   "condition": "comments",
+   "expect": "DATA-003-01",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03",
+    "DATA-003-01"
+   ],
+   "adopted": null,
+   "verdict": "상위3",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TOKONLYPOS-1",
+   "condition": "look_at+comments",
    "expect": "DATA-003-01",
    "top": "DATA-003-01",
    "top3": [
@@ -1834,6 +2147,22 @@
   {
    "key": "CLUEPOS-1",
    "condition": "problem",
+   "expect": "DATA-003-01",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03",
+    "DATA-003-01"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "상위3",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "CLUEPOS-1",
+   "condition": "comments",
    "expect": "DATA-003-01",
    "top": "NETWORK-001-03",
    "top3": [

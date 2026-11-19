@@ -352,7 +352,7 @@ def test_explore_timeline_is_not_a_cache_file_and_is_reproduced_on_a_hit():
     assert done["timeline"] == "timeline.md" and done["lines"] == done["total"] > 0
     made = (job / "timeline.md").read_bytes()
     cache = json.loads((job / "analysis-cache.json").read_text(encoding="utf-8"))
-    assert "timeline" not in cache["files"] and cache["format"] == 8 and cache["core"]["explore_input"]["limit"] == 200
+    assert "timeline" not in cache["files"] and cache["format"] == 9 and cache["core"]["explore_input"]["limit"] == 200
     second = _run(ws, "--answer", "time=2026-09-27T18:02:03+09:00", logs=log)                                      # 타임라인을 만든 뒤에도 적중
     assert second["reuse"] == {"hit": True, "run": 1}
     assert not (job / "timeline.md").exists() and (job / "explore-input.json").is_file()   # run은 이전 타임라인을 지운다

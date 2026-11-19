@@ -20,6 +20,7 @@
      logcat: {tz, year},                        # parse_logcat --tz/--year 값 (year_source: tracker일 때 발생 연도)
      sim_slot, components[], text: {summary, description, comments[], comments_total},   # 마스킹됨
                                                 # --comments last:N면 뒤에서 N개, --comment-chars면 하나당 N자
+                                                # comments_partial {total, read} | comments_skipped: n — `_comment_order`
      missing[], missing_question, meta_out}
 `missing_question`: 빈 항목을 사용자에게 묻는 고정 문구(빈 항목만, 필드 순서). 빈 항목이 없으면 null.
 필수/선택은 `--db`의 `schema/issue.schema.json` `required` 기준(현재 필수 model·platform_version, 선택 sw·carrier·발생 시각).
@@ -183,10 +184,12 @@ def _text(value) -> str:
 
 def comment_rows(raw, cfg: dict) -> list[tuple[object, object]]:
     """코멘트 `(코멘트 객체 | None, 본문)` 목록 — `extract`와 `triage.py problem`이 같이 쓴다(같은 경로·같은 번호).
-    경로는 field_map `comments` 또는 트래커 기본값 중 값이 있는 첫 것(`_first`), 빈 본문은 뺀다. 객체는 본문 경로의 부모
+    경로는 field_map `comments`, 그다음 트래커 기본값 중 값이 있는 첫 것, 빈 본문은 뺀다. 객체는 본문 경로의 부모
     (`x[].body` → `x[]`의 항목)이고, 짝을 맞출 수 없으면 None(작성자·시각 없음)."""
     fmap = (cfg.get("tracker") or {}).get("field_map") or {}
-    paths = [fmap["comments"]] if fmap.get("comments") else list(trackers.of(cfg).text_defaults["comments"])
+    paths = list(trackers.of(cfg).text_defaults["comments"])
+    if fmap.get("comments"):     # 사내 경로가 먼저, 그 값이 없는 문서(포털 선별 파일의 `fields.comment` 등)는 트래커 기본 경로로
+        paths = [fmap["comments"]] + [x for x in paths if x != fmap["comments"]]
     for path in paths:
         value = lookup(raw, path)
         if value in (None, "", []):
@@ -201,6 +204,20 @@ def comment_rows(raw, cfg: dict) -> list[tuple[object, object]]:
             owners = [None] * len(value)
         return [(o, v) for o, v in zip(owners, value) if _text(v)]
     return []
+
+
+def _comment_order(raw, read: int) -> dict:
+    """Jira 쪽 코멘트 수 `fields.comment.total`과 앞에서 건너뛴 수 `startAt`(없으면 0)으로 받은 코멘트가 어디까지인지:
+    `startAt + 읽은 수 < total`이면 최근 코멘트가 빠졌다 → `{comments_partial: {total, read}}`(코멘트 단서를 뽑지 않는다).
+    `== total`이고 startAt > 0이면 오래된 것만 빠졌다(포털 크기 상한) → `{comments_skipped: startAt}`(코멘트 번호를 Jira 순번에
+    맞춘다). 그 밖(total 없음·더 많이 받음 — 다른 경로에서 전부 받음)은 `{}`."""
+    total, start = lookup(raw, "fields.comment.total"), lookup(raw, "fields.comment.startAt")
+    start = start if type(start) is int and start > 0 else 0
+    if type(total) is not int:
+        return {}
+    if start + read < total:
+        return {"comments_partial": {"total": total, "read": read}}
+    return {"comments_skipped": start} if start and start + read == total else {}
 
 
 def comment_budget(spec: str) -> int | None:
@@ -279,6 +296,7 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
 
     comments = [body for _, body in comment_rows(raw, cfg)]
     total = len(comments)
+    order = _comment_order(raw, total)
     if last is not None:
         comments = comments[-last:] if last else []
     masked = [masker(_text(c)) for c in comments]
@@ -289,6 +307,7 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
         "description": masker(_text(texts("description"))),
         "comments": masked,
         "comments_total": total,
+        **order,
     }
 
     slot = lookup(raw, fmap["sim_slot"]) if fmap.get("sim_slot") else None

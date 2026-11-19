@@ -47,7 +47,7 @@
 | `parse` | `<logcat>... (--around <ISO 시각> \| --between <ISO 시작> <ISO 끝> \| --full) [--minutes <MINUTES>] --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--mask] [--no-external]` | `--around`: 발생 시각 (타임존 있는 ISO); `--between`: 명시 구간 (타임존 있는 ISO 둘, 시작 ≤ 끝); `--full`: 파일 전체; `--minutes`: 기본 5; `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--mask`: extractor 전에 줄 단위 마스킹; `--no-external`: 외부 파서 끔 (분석 디버그용) |
 | `markers` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--step-events]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--step-events`: 이슈 DB step_events 규칙의 로그 흔적(step_events[{rule, ts, seq, label}])을 더한다 |
 | `flows` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>]` | `--rules`: <db>/parser-rules (흐름은 <db>/<category>/flows/); `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도 |
-| `ipc` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--find <look-at.json>]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--find`: 기준 줄 찾기: triage.py가 쓴 {look_at, ref} 파일(원문 글은 인자로 받지 않는다). records 대신 find를 낸다 |
+| `ipc` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--find <look-at.json>]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--find`: 기준 줄 찾기: triage.py가 쓴 {look_at, ref} 파일(원문 글은 인자로 받지 않는다). records 대신 find를 낸다 ({finds: […]} 파일이면 finds[]) |
 | `extract-bugreport` | `<zip\|txt> --out <dir>` |  |
 | `cut` | `<logcat>... (--evidence <match.json> \| --around <ISO 시각>) [--cause <원인 ID>] [--seconds <SECONDS>] --out <file> [--rules <RULES>] [--context <CONTEXT>] [--max-lines <MAX_LINES>] [--tz <IANA>] [--year <YYYY>]` | `--evidence`: match_signatures.py 출력 (--cause 원인 후보의 근거); `--around`: 지정 시각 (타임존 있는 ISO); `--cause`: --evidence에서 근거를 쓸 원인 (--evidence에 필수); `--seconds`: --around 앞뒤 초, 기본 30; `--rules`: <db>/parser-rules (mask.allow_patterns·마스킹 끔을 읽는다); `--context`: 기본 20; `--max-lines`: 기본 100 |
 | `mask-copy` | `<logcat>... --out <dir> [--rules <RULES>] [--max-bytes <MAX_BYTES>]` | `--out`: 사본 디렉토리(<작업 디렉토리>/logs-masked); `--rules`: <db>/parser-rules (mask.allow_patterns·마스킹 끔을 읽는다); `--max-bytes`: 이보다 큰 파일은 사본을 만들지 않는다(경고 mask-copy-skipped, 기본 67108864), 기본 67108864 |
@@ -288,10 +288,16 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
     - state: none | found | confirmed | multiple
     - source: look_at | log_marker | steps_file | step_order | comment | model | null
     - kind(기준 줄 ipc·token 일치 point, 글자 일치 near(한 곳이어도 found), 마커·steps-file 구간 range): point | near | range | null
-  - check?(자격 검사 요약(표시 전용): why(세부 사유 — same_line|cp_point|near|range|near_without_symptom|range_end_unknown|range_without_symptom|no_event_at_reference|typeless_failure_within_link|same_line_typeless|no_event_in_range|no_allowed_event_near|not_in_db|comment_unconfirmed|locations|slots|sources|multiple_events|absence_unverified|cause_after_event|no_cause_before_event|cause_unjudged|cause_not_in_candidates, 기준 없으면 null), checked(기준에 붙어 검사한 사건 수), total(실패 사건 수 — 유형 없는 파생 오류 이벤트 포함))
+  - check?(자격 검사 요약(표시 전용): why(세부 사유 — same_line|cp_point|near|range|near_without_symptom|range_end_unknown|range_without_symptom|no_event_at_reference|typeless_failure_within_link|same_line_typeless|no_event_in_range|no_allowed_event_near|not_in_db|comment_unconfirmed|locations|slots|sources|multiple_events|absence_unverified|cause_after_event|no_cause_before_event|cause_unjudged|cause_not_in_candidates, 기준 없으면 null), checked(기준에 붙어 검사한 사건 수), total(실패 사건 수 — 유형 없는 파생 오류 이벤트 포함), via?(명시 기준 없이 코멘트 단서로 사건을 잡았을 때만 그 단서: comment(코멘트 번호|description), clue(ipc|ipc_name|log_line), how(ipc|token|text), places, origin(script = 스크립트가 코멘트에서 뽑음, problem = 문제 파악 problem.json)))
     - why
     - checked
     - total
+    - via?
+      - comment
+      - clue: ipc | ipc_name | log_line
+      - how
+      - places
+      - origin: script | problem
   - events?[≤3](유형 사건(증상 시그니처 1회 충족, 기준에 붙은 것 먼저 그다음 시각 순) {type, at, line(f:L), phone, absence(증상 시그니처에 must_not_match), ref(기준에 붙음), result: adopted|held|observed, cause(붙은 원인 1순위|null), why(원인이 안 붙은 이유|null), gap_s(사건 시각 − 붙은 원인 근거 마지막 줄, 초)}. 전체는 JOB/eligibility.json)
     - type
     - at

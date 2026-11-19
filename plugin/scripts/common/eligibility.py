@@ -239,7 +239,7 @@ def decide(events: list[dict], refs: list[dict], link_ms: int = DEFAULT_LINK_MS,
     if isinstance(got, dict):
         return got
     ref = clue_refs[next(i for i, o in enumerate(clues) if o is got)]
-    res = {**_adopt(got[1], got[2]), "via": {k: ref.get(k) for k in ("comment", "clue", "how", "places")}}
+    res = {**_adopt(got[1], got[2]), "via": {k: ref.get(k) for k in ("comment", "clue", "how", "places", "origin")}}
     if res["state"] == "accepted" and not comment_adopt:     # 코멘트 지점 채택을 끈 설정 — 붙은 사건은 싣고 보류
         return {**_held("ineligible", "comment_unconfirmed", got[1]), "via": res["via"]}
     return res     # 보류면 실제 사유(원인이 실패 뒤·안 나옴 미확인·구간 원인 다름 등)를 그대로

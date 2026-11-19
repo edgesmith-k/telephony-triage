@@ -103,7 +103,8 @@ def _decision(candidates: list[dict], anchor: dict | None, elig: dict | None, cl
     (`clue_location` — source comment, state found)이고 판정은 자격 검사가 한다."""
     location = dict((anchor or {}).get("location") or clue_location or NO_LOCATION)
     elig = elig or {}
-    extra = {"check": {"why": elig.get("why"), "checked": elig.get("checked", 0), "total": elig.get("total", 0)},
+    extra = {"check": {"why": elig.get("why"), "checked": elig.get("checked", 0), "total": elig.get("total", 0),
+                       **({"via": elig["via"]} if elig.get("via") else {})},     # 사건이 붙은 코멘트 단서(출처 origin)
              "events": (elig.get("events") or [])[:eligibility.EVENTS_MAX], "events_total": elig.get("events_total", 0)}
     picked = next((c for c in candidates if elig.get("cause") and c["cause"] == elig["cause"]), None)
     if not candidates:

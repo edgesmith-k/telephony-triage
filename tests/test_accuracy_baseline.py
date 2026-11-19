@@ -105,6 +105,23 @@ def test_stage5_problem_input_answer_upper_bound():
     assert all(r["held_cause"] == r["expect"] for r in held) and not any(r["adopted"] for r in off["runs"]), held
 
 
+def test_comment_clues_adopt_only_right_and_look_at_turns_them_off():
+    """코멘트 단서 자동 추출(모델 없음, issue_file이 있는 항목): comments 조건은 틀린 채택 0, 맞는 채택 TOKPOS·CLUEPOS(token·기준 줄
+    없이 코멘트만)이고 재시험 사례(RETEST·RETESTX)는 단서 없음으로 보류. look_at+comments는 자동 추출이 꺼져 항목마다 look_at과
+    같다. 실패 지점은 코멘트 출처라 confirmed가 없다(found만)."""
+    now = _current()
+    s = now["by_condition"]["comments"]
+    assert s["accepted_wrong"] == 0 and s["location_confirmed"] == 0, s
+    runs = [r for r in now["runs"] if r["condition"] == "comments"]
+    assert sorted(r["key"] for r in runs if r["adopted"]) == ["CLUEPOS-1", "TOKPOS-1"]
+    assert all(r["adopted"] == r["expect"] for r in runs if r["adopted"])
+    assert {r["key"]: r["held_why"] for r in runs if r["key"].startswith("RETEST")} == {"RETEST-1": None, "RETESTX-1": None}
+    look = {r["key"]: r for r in now["runs"] if r["condition"] == "look_at"}
+    both = [r for r in now["runs"] if r["condition"] == "look_at+comments"]
+    assert both and all({k: r[k] for k in ROW if k != "condition"} == {k: look[r["key"]][k] for k in ROW if k != "condition"}
+                        for r in both)
+
+
 if __name__ == "__main__" and "--update" in sys.argv:
     try:
         BASELINE.write_text(json.dumps(current(), ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")

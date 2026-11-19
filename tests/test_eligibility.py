@@ -570,7 +570,7 @@ def test_run_reads_problem_only_for_same_input_and_fresh_clues(seed_db):
     assert d["location"] == {"state": "found", "source": "comment", "kind": "point"}
     bundle = json.loads((out / "reference.json").read_text(encoding="utf-8"))
     assert bundle["refs"][0]["source"] == "comment" and bundle["comment_adopt"] is True
-    assert "- 단서 위치: 코멘트 2번 단서(ipc) 로그에서 찾음" in (out / "report.md").read_text(encoding="utf-8")
+    assert "- 단서 위치: 코멘트 2번 단서(ipc, 문제 파악) 로그에서 찾음" in (out / "report.md").read_text(encoding="utf-8")
     # 가설·모듈·모름·side·회차는 판정에 쓰지 않는다: 그 칸만 다른 problem.json은 기준·판정이 같다
     noise = {"hypotheses": ["NETWORK-001 비행기 모드가 원인"], "modules": ["data"], "unknown": ["CP 로그 없음"],
              "rounds": {"count": 3, "last_from_comment": 1, "same_failure": "no"}}
@@ -633,7 +633,9 @@ def test_run_clue_text_quotes_newline_mask_token_and_dedup(seed_db):
     bundle = json.loads((out / "reference.json").read_text(encoding="utf-8"))
     assert [r["comment"] for r in bundle["refs"]] == [3] and [x["comment"] for x in bundle["dropped"]] == [4]
     trace = [json.loads(x) for x in (out / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
-    assert sum(1 for r in trace if r.get("step") == "3-clue") == 2          # 3번·4번만(5번은 3번과 같은 글)
+    assert sum(1 for r in trace if r.get("step") == "3-clue") == 1          # 로그는 한 번만 읽는다
+    finds = json.loads((out / "clue-at.json").read_text(encoding="utf-8"))["finds"]
+    assert len(finds) == 2                                                  # 3번·4번만(5번은 3번과 같은 글)
     name = {"comment": 2, "kind": "ipc_name", "name": "VIPC_SETUP_DATA", "token": None, "quote": "VIPC_SETUP_DATA 실패",
             "side": "cp", "stale": False}
     a, _ = _problem_run(seed_db, "name", "cluepos.log", [name])
