@@ -859,7 +859,7 @@ def test_empty_refused_env_dropped_and_guard_reason_shown(tmp_path, monkeypatch)
     rows = {r["check"]: r for r in mod.python_rows(tmp_path, meta, {**os.environ, "TT_PYTHON": sys.executable})}
     detail = rows["guard-python"]["detail"]
     assert rows["guard-python"]["status"] == "fail" and "guard가 읽기 호출을 거부한다" in detail, rows
-    assert "설정을 덮는 환경변수(OPENCODE_CONFIG)" in detail and "pip install" not in detail, detail
+    assert "설정을 덮는 환경변수(OPENCODE_CONFIG, " in detail and "pip install" not in detail, detail
     monkeypatch.delenv("OPENCODE_CONFIG")
     monkeypatch.delenv("OPENCODE_EXPERIMENTAL_PLAN_MODE")
     rows = {r["check"]: r for r in mod.python_rows(tmp_path, meta, {**os.environ, "TT_PYTHON": sys.executable})}
