@@ -284,10 +284,10 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
     - category
     - type
     - cause
-  - location(실패 지점: 기준 줄 일치 1개·로그 FAIL 마커 1개면 confirmed, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). comment·model은 계약에만(단계 5~7))
+  - location(실패 지점: 기준 줄 ipc·token 일치 1개·로그 FAIL 마커 1개면 confirmed, 기준 줄 글자 일치는 한 곳이어도 found, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). comment·model은 계약에만(단계 5~7))
     - state: none | found | confirmed | multiple
     - source: look_at | log_marker | steps_file | step_order | comment | model | null
-    - kind(기준 줄 ipc·token 일치 point, 글자 일치 near, 마커·steps-file 구간 range): point | near | range | null
+    - kind(기준 줄 ipc·token 일치 point, 글자 일치 near(한 곳이어도 found), 마커·steps-file 구간 range): point | near | range | null
   - counter?(accepted이고 심층 분석 의견의 원인 ID가 채택 원인과 다를 때만(check-output --for deep))
     - cause
 - candidates?[≤3]
