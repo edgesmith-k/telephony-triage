@@ -94,6 +94,33 @@ def test_decimal_and_hex_token_are_one_clue_and_cap_counts_over():
     assert len(clues) == pb.CLUES_MAX and drop["over"] == 2 and clues[0]["token"] == "12"
 
 
+def test_script_clue_passes_the_same_gate_as_model_clues():
+    """이름 뒤 첫 token이 다른 IPC 메시지의 것이면(`VIPC_A 요청 후 VIPC_B (token=…)`) 관문 `_clue_problem`이 버린다."""
+    clues, drop = _x(["VIPC_A 요청 후 VIPC_B (token=0x10) 실패"])
+    assert [(c["name"], c["token"]) for c in clues] == [("VIPC_B", "0x10")] and drop["invalid"] == 1
+
+
+def test_ipc_on_a_stamped_line_keeps_the_stamp():
+    """리뷰 P1-2: 시각이 붙은 IPC 로그 줄에서 뽑은 ipc 단서는 그 시각을 인용에 남긴다 — 그 시각의 줄이 로그에 있어야 쓴다
+    (모델 단서도 인용이 시각 붙은 줄이면 같다)."""
+    from triagelib import anchor
+    rsp = "11-14 09:30:00.594   900   910 D RIL     : [RX] VIPC_SETUP_DATA, RSP, token=0x0e1, len=8, Error(VIPC_E_DEMO_FAILURE)"
+    for line in (rsp, rsp + " pad" * 80):
+        [c] = _x([line])[0]
+        assert c["kind"] == "ipc" and anchor._clue_text(c, pb) == ("VIPC_SETUP_DATA (token=0x0e1)", "11-14 09:30:00.594")
+    assert anchor._clue_text(_x(["VIPC_SETUP_DATA (token=0x0e1) 실패"])[0][0], pb)[1] is None
+
+
+def test_two_token_values_in_this_round_are_a_conflict():
+    """리뷰 P1-3: 이번 회차 글에 서로 다른 token 값이 둘 이상이면(이름 없이 적은 값 포함) conflict — 정정·정상과 실패를 함께 적음."""
+    for comments in (["정정: VIPC_SETUP_DATA token=0x0aa이 아니라 token=0x0e1 입니다"],
+                     ["실패: VIPC_SETUP_DATA (token=0x0aa)", "정정: token은 0x0aa가 아니라 0x0e1 입니다"],
+                     ["VIPC_A (token=0x0dd) 정상, VIPC_A (token=0x0e1) 실패"]):
+        assert _x(comments)[1]["conflict"] is True, comments
+    assert _x(["VIPC_A (token=0x0e1)", "VIPC_A token=225 다시 확인"])[1]["conflict"] is False      # 같은 값(10진·16진)
+    assert _x(["VIPC_A (token=0x0aa) 실패. 재시험 요청", "VIPC_A (token=0x0e1)"])[1]["conflict"] is False   # 옛 회차는 안 셈
+
+
 def test_comment_numbers_follow_skipped_old_comments():
     clues, _ = _x(["VIPC_A (token=1)", "VIPC_A (token=2)"], first=6)
     assert _keys(clues) == [(7, "ipc", "2"), (6, "ipc", "1")]
@@ -122,14 +149,27 @@ def test_partial_and_skipped_comments_from_total_and_start_at():
     assert t["comments_partial"] == {"total": 3, "read": 2}
     t = _text({"fields": {"comment": {"total": 2, **page}}})
     assert "comments_partial" not in t and "comments_skipped" not in t
-    # 다른 경로(맨 위 comments[])에서 전부 받았으면 fields.comment 페이지와 무관
+    t = _text({"fields": {"comment": {"startAt": 1, "total": 2, **page}}})     # 받은 것이 더 많다 — 수가 안 맞으면 일부만 읽음과 같게
+    assert t["comments_partial"] == {"total": 2, "read": 2}
+
+
+def test_comment_total_must_come_from_the_source_used_and_order_must_be_known():
+    """PR #170 리뷰 P1-4: 전체 수는 실제로 쓴 코멘트와 같은 출처에서만(맨 위 `comments[]`는 jira_bridge가 남긴 `comments_page`),
+    맨 위 목록은 작성 시각이 있어야(최신순으로 주는 도구) — 아니면 `comments_unchecked`(뽑지 않음). 작성 시각이 있으면 그 순서로."""
+    page = {"comments": [{"body": "c3"}, {"body": "c4"}]}
     t = _text({"comments": [{"body": f"c{n}"} for n in range(1, 5)], "fields": {"comment": {"startAt": 2, "total": 4, **page}}})
-    assert len(t["comments"]) == 4 and "comments_partial" not in t and "comments_skipped" not in t
+    assert len(t["comments"]) == 4 and t["comments_unchecked"] == "total"          # fields.comment의 total은 다른 출처
+    assert _text({"comments": [{"body": "a"}], "comments_page": {"total": 1}})["comments_unchecked"] == "order"   # 시각 없음
+    newest_first = [{"body": "새", "created": "2026-11-14T13:00:00+0900"}, {"body": "옛", "created": "2026-11-14T11:00:00+0900"}]
+    t = _text({"comments": newest_first, "comments_page": {"startAt": 0, "total": 2}})
+    assert t["comments"] == ["옛", "새"] and not any(k in t for k in ("comments_unchecked", "comments_partial"))
+    assert _text({"fields": {"comment": {"comments": [{"body": "x"}]}}})["comments_unchecked"] == "total"
+    assert _text({"fields": {"comment": {"total": 2, "comments": []}}})["comments_partial"] == {"total": 2, "read": 0}
 
 
 def test_custom_comments_path_falls_back_to_jira_native():
     cfg = {**CFG, "tracker": {**CFG["tracker"], "field_map": {"comments": "fields.custom_notes[].text"}}}
-    assert _text({"fields": {"comment": {"comments": [{"body": "포털이 준 코멘트"}]}}}, cfg)["comments"] == ["포털이 준 코멘트"]
+    assert _text({"fields": {"comment": {"total": 1, "comments": [{"body": "포털이 준 코멘트"}]}}}, cfg)["comments"] == ["포털이 준 코멘트"]
     assert _text({"fields": {"custom_notes": [{"text": "사내 경로"}], "comment": {"comments": [{"body": "x"}]}}}, cfg)["comments"] \
         == ["사내 경로"]
 
@@ -145,21 +185,23 @@ def seed_db() -> Path:
 
 
 def _run(db: Path, name: str, fields: dict | None = None, comments: list[str] | None = None, problem: dict | None = None,
-         look_at: str | None = None, root: Path | None = None, sha: str = "same") -> tuple[dict, Path]:
-    """--issue-file(발생 시각 칸 없음)로 run. problem이 있으면 그 단서로 problem.json을 둔다(sha "same"이면 이번 입력 해시)."""
+         look_at: str | None = None, root: Path | None = None, sha: str = "same", log: Path | None = None,
+         ticket: dict | None = None) -> tuple[dict, Path]:
+    """--issue-file(발생 시각 칸 없음)로 run. problem이 있으면 그 단서로 problem.json을 둔다(sha "same"이면 이번 입력 해시).
+    `ticket`을 주면 그 모양 그대로(코멘트 모양 시험)."""
     out = tmp("tt-clue-") / name
     out.mkdir(parents=True)
     issue = out.parent / f"{name}.issue.yaml"
-    ticket = {"key": "CLUE-1", "fields": fields or {"summary": "데이터 연결 실패", "description": "시험 중 실패했습니다."}}
-    if comments is not None:
-        ticket["comments"] = [{"body": b} for b in comments]
+    ticket = ticket or {"key": "CLUE-1", "fields": dict(fields or {"summary": "데이터 연결 실패", "description": "시험 중 실패했습니다."})}
+    if comments is not None:      # 포털·Jira 모양(전체 수 있음, 작성 순)
+        ticket["fields"]["comment"] = {"startAt": 0, "total": len(comments), "comments": [{"body": b} for b in comments]}
     issue.write_text(yaml.safe_dump(ticket, allow_unicode=True, sort_keys=False), encoding="utf-8")
     if problem is not None:
         doc = {"schema_version": 1, "key": "CLUE-1", "origin": "정답 입력",
                "source_sha256": hashlib.sha256(issue.read_bytes()).hexdigest() if sha == "same" else sha,
                "symptom": {"text": "", "types": [], "not_in_db": False}, **problem}
         (out / "problem.json").write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
-    args = ["run", "CLUE-1", "--offline-db", db, "--out", out, "--logs", LOG, "--issue-file", issue,
+    args = ["run", "CLUE-1", "--offline-db", db, "--out", out, "--logs", log or LOG, "--issue-file", issue,
             "--tz", "Asia/Seoul", "--year", "2026", *(["--look-at", look_at] if look_at else [])]
     return run_json("triage.py", args, root=root), out
 
@@ -237,7 +279,7 @@ def test_long_pasted_line_is_found_by_its_first_300_chars(seed_db):
 # 설계 메모 M4 합성 티켓: (이름, 코멘트, Jira 코멘트 필드(일부만 읽음), 기대 (state, cause, reason)). 채택 쪽으로 틀리지 않는다.
 M4 = [
     ("정상+실패 한 줄", ["로그 첨부", "VIPC_SETUP_DATA (token=0x0dd) 는 정상 응답이고, 실패는 VIPC_SETUP_DATA (token=0x0e1) 입니다."], None,
-     ("accepted", "DATA-003-01", "anchored_top")),
+     ("held", None, "ineligible")),     # 정상 token 단서가 성공 응답이라 보류(token 값 둘이라 어차피 보류 — 리뷰 P0·P1-3, 전에는 맞게 채택)
     ("정상 token만 이름 뒤", ["로그 첨부", "VIPC_SETUP_DATA (token=0x0dd) 정상, 다음 시도 token=0x0e1 실패"], None,
      ("held", None, "ineligible")),
     ("결과 코멘트에 재시험 낱말", ["로그 첨부", "1차: VIPC_SETUP_DATA (token=0x0dd) 실패. 재시험 요청합니다.",
@@ -263,3 +305,74 @@ def test_synthetic_tickets_never_adopt_wrong(seed_db, name, comments, jira, expe
         assert any("일부만 읽어(전체 3개 중 2개)" in w for w in a["warnings"]), a["warnings"]
     if name == "오래된 코멘트만 빠짐":       # 코멘트 번호는 Jira 순번(앞 1개 건너뜀)
         assert a["decision"]["check"]["via"]["comment"] == 3
+
+
+# -- PR #170 독립 리뷰 재현(틀린 채택 길) — 고친 뒤 모두 보류 ---------------------------------------------------------
+
+def _variant(name: str, token: str) -> Path:
+    """tokpos.log + 10:00:00.010/.030 실패 IPC 요청·응답(token) — 0x0aa면 NETWORK 사건 앞 다른 실패, 0x0e1이면 같은 token 두 곳.
+    시험 안에서 만드는 임시 로그(커밋하지 않는다)."""
+    out = []
+    for line in LOG.read_text(encoding="utf-8").splitlines():
+        out.append(line)
+        if line.startswith("11-14 10:00:00.004"):
+            out += [f"11-14 10:00:00.010   900   910 D RIL     : [TX] VIPC_SETUP_DATA, REQ, token={token}, len=24",
+                    f"11-14 10:00:00.030   900   910 D RIL     : [RX] VIPC_SETUP_DATA, RSP, token={token}, len=8, "
+                    "Error(VIPC_E_DEMO_FAILURE)"]
+    path = tmp("tt-clue-log-") / f"{name}.log"
+    path.write_text("\n".join(out) + "\n", encoding="utf-8")
+    return path
+
+
+NET = next(x for x in LOG.read_text(encoding="utf-8").splitlines() if x.startswith("11-14 10:00:00.062"))   # NETWORK 사건 줄
+RSP_0E1 = "11-14 09:30:00.594   900   910 D RIL     : [RX] VIPC_SETUP_DATA, RSP, token=0x0e1, len=8, Error(VIPC_E_DEMO_FAILURE)"
+REVIEW = [      # (이름, 로그 종류, 코멘트, 기대 (state, reason, why))
+    ("C1 시각 붙은 IPC 줄, 그 시각 로그에 없음", None, ["로그", RSP_0E1], ("held", "no_reference", None)),
+    ("C1c 시각 붙은 IPC 줄, 다른 실패의 같은 token", "0x0aa",
+     ["로그", RSP_0E1.replace("09:30:00.594", "09:00:00.030").replace("0x0e1", "0x0aa")], ("held", "no_reference", None)),
+    ("C2 정정(이름+틀린 token 먼저)", "0x0aa", ["로그", "정정: VIPC_SETUP_DATA token=0x0aa이 아니라 token=0x0e1 입니다"],
+     ("held", "ambiguous", "sources")),
+    ("C2b 정정이 이름 없이", "0x0aa", ["로그", "실패: VIPC_SETUP_DATA (token=0x0aa)", "정정: token은 0x0aa가 아니라 0x0e1 입니다"],
+     ("held", "ambiguous", "sources")),
+    ("C5b 없는 날짜(02-30)", None, ["로그", LINE.replace("11-14 10:02", "02-30 10:02")], ("held", "no_reference", None)),
+    ("C5c 없는 시각(25시)", None, ["로그", LINE.replace("10:02:00.624", "25:02:00.624")], ("held", "no_reference", None)),
+    ("D4 실패 단서 로그에 없음 + 참고 줄", None, ["로그", "실패는 VIPC_SETUP_DATA (token=0x0f7) 입니다. 참고로 시험 전 상태:\n" + NET],
+     ("held", "ambiguous", "sources")),
+    ("D4b 실패 token 두 곳 + 참고 줄", "0x0e1", ["로그", "실패는 VIPC_SETUP_DATA (token=0x0e1) 입니다. 참고로 시험 전 상태:\n" + NET],
+     ("held", "ambiguous", "locations")),
+    ("D4c 성공 응답 + 참고 줄", None, ["로그", "VIPC_SETUP_DATA (token=0x0dd) 응답 정상인데 실패. 참고:\n" + NET],
+     ("held", "ineligible", "no_event_at_reference")),
+    ("D4d 실패 줄 시각 틀림 + 참고 줄", None,
+     ["로그", "실패 줄:\n" + LINE.replace("10:02:00.624", "10:02:09.624") + "\n시험 전:\n" + NET], ("held", "ambiguous", "sources")),
+    ("D4e 실패는 앞 코멘트, 최근은 참고 줄만", None, ["로그", "VIPC_SETUP_DATA (token=0x0f7) 실패", "비교용 정상 구간 로그:\n" + NET],
+     ("held", "ambiguous", "sources")),
+]
+
+
+@pytest.mark.parametrize("name,variant,comments,expect", REVIEW, ids=[r[0].split()[0] for r in REVIEW])
+def test_review_repros_are_held(seed_db, name, variant, comments, expect):
+    log = _variant(name.split()[0], variant) if variant else None
+    a, _ = _run(seed_db, "rv-" + name.split()[0], comments=comments, log=log)
+    d = a["decision"]
+    assert (d["state"], d["reason"], d["check"]["why"]) == expect, (name, d, a["warnings"])
+
+
+def test_model_clue_with_stamped_ipc_quote_obeys_the_stamp_rule(seed_db):
+    model = {"comment": 2, "kind": "ipc", "name": "VIPC_SETUP_DATA", "token": "0x0e1", "quote": RSP_0E1, "side": "cp", "stale": False}
+    a, _ = _run(seed_db, "rv-model", comments=["로그", RSP_0E1], problem={"clues": [model]})
+    assert a["decision"]["reason"] == "no_reference"
+    assert "코멘트 2번 단서, 로그에서 못 찾음(붙인 줄의 시각이 이 로그에 없음)" in a["warnings"]
+
+
+@pytest.mark.parametrize("name,ticket", [
+    ("C8c 전체 수 없는 맨 위 목록", {"comments": [{"body": "VIPC_SETUP_DATA (token=0x0aa) 실패"}]}),
+    ("C8d 최신순으로 준 목록(시각 없음)", {"fields": {"comment": {"total": 3, "startAt": 0}},
+                                         "comments": [{"body": "새 로그 올립니다 VIPC_SETUP_DATA (token=0x0e1) 실패"},
+                                                      {"body": "재시험 부탁드립니다"}, {"body": "VIPC_SETUP_DATA (token=0x0aa) 실패"}]}),
+], ids=["C8c", "C8d"])
+def test_review_comment_shapes_without_total_or_order_extract_nothing(seed_db, name, ticket):
+    fields = {"summary": "데이터 연결 실패", "description": "시험 중 실패했습니다.", **(ticket.get("fields") or {})}
+    a, _ = _run(seed_db, "rv-" + name.split()[0], ticket={"key": "CLUE-1", **ticket, "fields": fields},
+                log=_variant(name.split()[0], "0x0aa"))
+    assert a["decision"]["reason"] == "no_reference", a["decision"]
+    assert any("안 씀 — Jira 코멘트의 전체 수·순서를 알 수 없다" in w for w in a["warnings"]), a["warnings"]

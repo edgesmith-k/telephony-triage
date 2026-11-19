@@ -498,7 +498,8 @@ def _line_clues(where, text: str, name_re, error_prefix: str) -> list[dict]:
             if error_prefix and m.group().startswith(error_prefix):      # 오류 값(`VIPC_E_…`)은 메시지 이름이 아니다
                 continue
             t = IPC_TOKEN.search(line, m.end())
-            quote = (line if len(line) <= QUOTE_MAX else line[m.start():t.end()]) if t else ""
+            # 시각이 붙은 줄은 시각까지 인용한다(`_clue_text`가 그 시각으로 "그 시각의 줄이 로그에 있는가"를 본다)
+            quote = (line if len(line) <= QUOTE_MAX else _log_quote(line) if lookat.stamp(line) else line[m.start():t.end()])                 if t else ""
             if t and len(quote) <= QUOTE_MAX:
                 ipcs.append({"comment": where, "kind": "ipc", "name": m.group(), "token": t.group(1), "quote": quote,
                              "side": "unknown", "stale": False})
@@ -510,6 +511,17 @@ def _line_clues(where, text: str, name_re, error_prefix: str) -> list[dict]:
     return out
 
 
+def _token_values(text: str) -> set[int]:
+    """정정·여러 요청 알아보기용 token 값(숫자): `token[=:(]` 값, 그리고 `token` 낱말 뒤 같은 줄의 16진 값(`token은 0x0aa가 아니라
+    0x0e1`). 이름 없이 적은 값도 센다."""
+    out = {_token_value(t.group(1))[1] for t in IPC_TOKEN.finditer(text)}
+    for line in text.splitlines():
+        at = line.casefold().find("token")
+        if at >= 0:
+            out |= {_token_value(v)[1] for v in QUOTE_TOKEN.findall(line, at) if v[:2].lower() == "0x"}
+    return out
+
+
 def extract_clues(comments: list[str], description: str, prefix: str, error_prefix: str = "",
                   retest_words=RETEST_WORDS, first: int = 1) -> tuple[list[dict], dict]:
     """Jira 글(가린 코멘트 작성 순·설명) → (단서 — 최근 코멘트부터, 버림 수 `{old_round, over, invalid}`). 모델 단서와 같은 모양
@@ -518,19 +530,22 @@ def extract_clues(comments: list[str], description: str, prefix: str, error_pref
     센다). 설명은 없어도 된다(포털 선별 파일은 코멘트만).
     - 회차 경계: 재시험 낱말(대소문자 무시 부분 일치)이 든 마지막 코멘트 b. b와 그 앞(설명 포함)의 후보는 버리고 수만 센다.
       ponytail: 재시험 낱말 없이 다시 돈 회차는 못 가른다(옛 token이 새 로그에 없으면 로그 쪽에서 버려진다) — 사내 낱말로 보완.
-    - 같은 단서(ipc 이름·token 값 — `225` = `0xe1`, log_line 접은 글)는 최근 것 하나, `CLUES_MAX`를 넘으면 `over`."""
+    - 같은 단서(ipc 이름·token 값 — `225` = `0xe1`, log_line 접은 글)는 최근 것 하나, `CLUES_MAX`를 넘으면 `over`.
+    - 이번 회차 글에 서로 다른 token 값이 둘 이상이면(정정 "0x0aa가 아니라 0x0e1"·정상과 실패를 함께 적음) `conflict: true` —
+      어느 것이 실패인지 글로는 못 가리므로 부른 쪽이 보류한다."""
     words = [str(w).casefold() for w in retest_words if str(w).strip()]
     b = max((n for n, t in enumerate(comments, first) if any(w in str(t).casefold() for w in words)), default=0)
     sources = {n: str(t or "") for n, t in enumerate(comments, first)}
     sources["description"] = str(description or "")
     name_re = re.compile(r"(?<![A-Za-z0-9_])" + re.escape(prefix) + r"[A-Za-z0-9_]+") if prefix else None
-    drop = {"old_round": 0, "over": 0, "invalid": 0}
-    clues, seen = [], set()
+    drop = {"old_round": 0, "over": 0, "invalid": 0, "conflict": False}
+    clues, seen, values = [], set(), set()
     for where in [*range(first + len(comments) - 1, first - 1, -1), "description"]:
         found = _line_clues(where, sources[where], name_re, error_prefix)
         if (where == "description" and (b or first > 1)) or (where != "description" and where <= b):
             drop["old_round"] += len(found)
             continue
+        values |= _token_values(sources[where])
         for c in found:
             if _clue_problem(c, sources, prefix, error_prefix):
                 drop["invalid"] += 1
@@ -543,6 +558,7 @@ def extract_clues(comments: list[str], description: str, prefix: str, error_pref
                 drop["over"] += 1
             else:
                 clues.append(c)
+    drop["conflict"] = len(values) > 1
     return clues, drop
 
 

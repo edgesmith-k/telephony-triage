@@ -444,7 +444,11 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
             rank = {c["cause"]: n for n, c in enumerate(candidates) if c["cause"]}
             occ = occurrences(events_doc, evaluator, db, compiled, rank)
             refs, problem, adopt = _reference_input(reference, db)
-            elig = {**eligibility.summary(eligibility.decide(occ, refs, problem=problem, comment_adopt=adopt), occ),
+            bundle = reference if isinstance(reference, dict) and "kind" not in reference else {}
+            # 로그에서 찾았는데 못 쓴 단서·글의 token 충돌 — 단서만으로는 채택하지 않는다(common.eligibility.decide)
+            unconfirmed = len(bundle.get("dropped") or []) + (1 if bundle.get("conflict") is True else 0)
+            elig = {**eligibility.summary(eligibility.decide(occ, refs, problem=problem, comment_adopt=adopt,
+                                                             unconfirmed=unconfirmed), occ),
                     "reference": reference}
     finally:
         if own:

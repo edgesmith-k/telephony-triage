@@ -1139,7 +1139,7 @@ def _find_one(look: dict, *, records: list[dict], lines: list[dict], texts: list
     by_line = {r["i"]: r for r in records}
     places = lookat.group_places([_hit_item(i, lines[i], by_line.get(i), spec.success) for i in found],
                                  prof.ril_vendor.link_ms if prof.ril_vendor else lookat.PAIR_MS)
-    stamp = logtime.normalize_ts(look.get("stamp"), tz, year) if look.get("stamp") else None
+    stamp = logtime.normalize_ts(look.get("stamp"), tz, year) if look.get("stamp") else None     # 없는 날짜·시각이면 None → none
     same = [p for p in places if stamp is not None and any(logtime.parse_ts(x["ts"]) == stamp for x in p)]
     if len(same) == 1:     # 붙여 넣은 줄의 시각과 같은 곳이 하나 → 그곳(같은 단말 로그 시계, §8-5)
         places = same
@@ -1161,7 +1161,7 @@ def _find_one(look: dict, *, records: list[dict], lines: list[dict], texts: list
                 "places": len(places),
                 "place": [{k2: v for k2, v in x.items() if k2 != "i"}
                           for x in (places[0] if len(places) == 1 else next(p for p in places if any(x["i"] == n for x in p)))],
-                **({"stamp": "same" if len(same) == 1 else "many" if same else "none"} if stamp is not None else {})}
+                **({"stamp": "same" if len(same) == 1 else "many" if same else "none"} if look.get("stamp") else {})}
 
 
 def _hit_item(i: int, line: dict, rec: dict | None, success: str | None = None) -> dict:

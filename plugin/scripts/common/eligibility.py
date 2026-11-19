@@ -28,7 +28,8 @@
   실패 지점은 found(driver). 허용 유형으로 고른 CP 점·근처·구간 채택은 모두 found라 유형 거르기가 confirmed를 만들지 않는다.
 - 여러 곳(`places` > 1) ambiguous/locations, 슬롯 둘 이상 ambiguous/slots, 출처끼리 다른 사건 ambiguous/sources.
 - 출처: 명시 기준(look_at·마커·steps-file)이 있으면 그것이 정한다 — 단서는 명시 기준과 다른 사건을 가리킬 때만 ambiguous/sources로
-  만든다. 단서만 있으면 단서가 정하되, `comment_adopt`가 거짓이면(기본 참, Y1 허용) 붙은 사건을 싣고 ineligible/comment_unconfirmed로 보류한다.
+  만든다. 단서만 있으면 단서가 모두 확인될 때만 정하되(하나라도 보류·로그에서 못 씀이면 보류 — `decide`), `comment_adopt`가
+  거짓이면(기본 참, Y1 허용) 붙은 사건을 싣고 ineligible/comment_unconfirmed로 보류한다.
 - 문제 파악이 "DB에 없는 증상"(`not_in_db`)이면 기준이 있어도 symptom_not_found/not_in_db(다른 사건의 원인으로 대신하지 않는다).
 사유 우선순위: no_candidate → no_reference → symptom_not_found → ambiguous → ineligible → cause_unjudged·cause_unconfirmed → accepted.
 """
@@ -215,9 +216,12 @@ def _pick(outcomes: list[tuple]) -> dict | tuple:
 
 
 def decide(events: list[dict], refs: list[dict], link_ms: int = DEFAULT_LINK_MS, problem: dict | None = None,
-           comment_adopt: bool = True) -> dict:
+           comment_adopt: bool = True, unconfirmed: int = 0) -> dict:
     """사건 목록 + 기준(0개 이상, 단서는 `source: comment`) + 문제 파악(`{types, not_in_db}` — types는 부른 쪽이 DB에 있는 것만
-    남긴다, 없으면 None) → `{state, reason, why, cause, events(붙은 사건)}`. 후보 없음(no_candidate)은 부른 쪽이 먼저 본다."""
+    남긴다, 없으면 None) → `{state, reason, why, cause, events(붙은 사건)}`. 후보 없음(no_candidate)은 부른 쪽이 먼저 본다.
+    단서만 있을 때는 단서가 **모두** 확인돼야 정한다: 단서 하나라도 보류(여러 곳·성공 응답·사건 없음·근처 유형 없음 등)면 그 사유로,
+    로그에서 찾았는데 못 쓴 단서(`unconfirmed` — 로그에 없음·시각 규칙으로 버림, 글의 token 충돌)가 있으면 ambiguous/sources로
+    보류한다(찾기 전에 버린 옛 회차·상한 넘침은 세지 않는다)."""
     if not refs:
         return _held("no_reference", None)
     if problem and problem.get("not_in_db"):
@@ -238,6 +242,12 @@ def decide(events: list[dict], refs: list[dict], link_ms: int = DEFAULT_LINK_MS,
     got = _pick(clues)
     if isinstance(got, dict):
         return got
+    held = [o for o in clues if o[0] != "events"]
+    if held:      # 실패 단서는 못 확인하고 참고로 붙인 다른 단서만 사건을 잡은 경우 등 — 그 단서로 채택하지 않는다
+        best = min(held, key=lambda o: _HELD_ORDER.index(o[1]))
+        return _held(best[1], best[2], got[1])
+    if unconfirmed:
+        return _held("ambiguous", "sources", got[1])
     ref = clue_refs[next(i for i, o in enumerate(clues) if o is got)]
     res = {**_adopt(got[1], got[2]), "via": {**{k: ref.get(k) for k in ("comment", "clue", "how", "places")},
                                                 **({"origin": ref["origin"]} if ref.get("origin") else {})}}     # 단서 출처 script|problem

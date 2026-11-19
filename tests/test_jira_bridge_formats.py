@@ -127,6 +127,26 @@ def test_bridge_comments_free_text_is_saved_not_scanner_error():
     assert saved["fields"]["summary"] == "데이터 안 됨" and saved["comments_format"] == "text"
 
 
+def test_bridge_keeps_comment_page_total_for_clue_extraction():
+    """코멘트 도구 응답의 전체 수·건너뛴 수를 `comments_page`로 남긴다(같은 출처 — jira_fields가 일부만 읽었는지 본다). 뒤이은
+    get_issue에도 남고, 자유 텍스트 응답(전체 수 모름)이면 지운다."""
+    home = _home()
+    raw_path = home / "work" / "MOCK-1001" / "issue_raw.json"
+    page = {"startAt": 0, "total": 2, "comments": [{"body": "a", "created": "2026-11-14T11:00:00+0900"},
+                                                   {"body": "b", "created": "2026-11-14T10:00:00+0900"}]}
+    _hook(home, COMMENTS_TOOL, json.dumps(page))
+    assert json.loads(raw_path.read_text(encoding="utf-8"))["comments_page"] == {"startAt": 0, "total": 2}
+    _hook(home, ISSUE_TOOL, json.dumps({"key": "MOCK-1001", "fields": {"summary": "s"}}))
+    saved = json.loads(raw_path.read_text(encoding="utf-8"))
+    assert saved["comments_page"] == {"startAt": 0, "total": 2}
+    import jira_fields
+    cfg = {"tracker": {"kind": "jira", "timezone": "Asia/Seoul"}, "logcat": {"timezone": "Asia/Seoul"}}
+    text = jira_fields.extract(saved, cfg, None, "mcp")["text"]
+    assert text["comments"] == ["b", "a"] and not any(k in text for k in ("comments_partial", "comments_unchecked"))   # 작성 순
+    _hook(home, COMMENTS_TOOL, "자유 텍스트 코멘트")
+    assert "comments_page" not in json.loads(raw_path.read_text(encoding="utf-8"))
+
+
 def test_bridge_issue_free_text_is_refused_with_shape_only():
     home = _home()
     text = f"MOCK-1001 데이터 안 됨: setup: failed imsi={IMSI}"

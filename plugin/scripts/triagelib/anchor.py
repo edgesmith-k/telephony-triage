@@ -39,7 +39,8 @@ def _clue_text(c: dict, pb) -> tuple[str | None, str | None]:
     name, token, quote = c.get("name"), c.get("token"), c.get("quote")
     ok_name = isinstance(name, str) and pb.NAME_RE.fullmatch(name)
     if c.get("kind") == "ipc" and ok_name and isinstance(token, str) and pb.TOKEN_RE.fullmatch(token):
-        return f"{name} (token={token})", None
+        # 인용이 시각 붙은 로그 줄이면 그 시각도 — 그 시각의 줄이 로그에 있어야 쓴다(다른 로그·이전 회차의 같은 token을 막는다)
+        return f"{name} (token={token})", lookat.stamp(quote) if isinstance(quote, str) else None
     if c.get("kind") == "ipc_name" and ok_name:
         return name, None
     if c.get("kind") == "log_line" and isinstance(quote, str) and 0 < len(quote) <= pb.QUOTE_MAX:
@@ -253,7 +254,7 @@ class AnchorMixin:
         refs, dropped = [], []
         for (c, _, stamp), found in zip(todo, founds):
             where = "설명" if c.get("comment") == "description" else f"코멘트 {c.get('comment')}번"
-            if stamp and found.get("hits") and found.get("stamp") == "none":
+            if stamp and found.get("hits") and found.get("stamp") in ("none", None):
                 found = {"hits": 0, "why": "붙인 줄의 시각이 이 로그에 없음"}
             if not found.get("hits"):
                 why = _clip(found.get("why") or "일치하는 줄 없음", 60)
@@ -271,10 +272,13 @@ class AnchorMixin:
                                                    ("로그에 없음", len(dropped))) if n]
             if parts:
                 self.warn("코멘트 단서(스크립트) 버림: " + " · ".join(parts))
+            if auto.get("conflict") and todo:
+                self.warn("코멘트에 서로 다른 token 값이 여럿이라(정정·정상과 실패를 함께 적음 등) 코멘트 단서로는 채택하지 않는다")
             if not todo:      # 찾을 단서가 없었다 — 기준 없음과 같다(reference.json을 쓰지 않는다)
                 return
+        # 찾았는데 확인 못 한 단서(dropped)·글의 token 충돌(conflict)이 있으면 자격 검사가 단서 판정 전체를 보류한다
         self.problem_use = {"problem": problem, "comment_adopt": switch("comment_adopt"), "refs": refs,
-                            "dropped": dropped}
+                            "dropped": dropped, **({"conflict": True} if (auto or {}).get("conflict") else {})}
 
     def fresh_problem(self, pb) -> dict | None:
         """이번 이슈 입력(과 `--steps-file`)으로 만든 `problem.json` 내용 | None(없음 — 있는데 못 쓰면 경고)."""
@@ -310,7 +314,8 @@ class AnchorMixin:
     def comment_clues(self, pb, conf: dict, switch) -> tuple[list[dict], dict | None]:
         """`JOB/issue.json` 코멘트·설명(가린 글)에서 스크립트로 뽑은 단서 → (단서, 버림 수). 쓰지 않으면 ([], None):
         설정 `eligibility.comment_clues` 거짓, 이슈 글 없음(오프라인 `--issue-meta`), `--look-at` 있음(뽑힌 수만 경고),
-        Jira 코멘트를 일부만 읽음(`text.comments_partial` — 최근 코멘트가 빠졌을 수 있어 회차를 못 가린다, 경고)."""
+        Jira 코멘트를 일부만 읽음(`text.comments_partial` — 최근 코멘트가 빠졌을 수 있어 회차를 못 가린다, 경고), 코멘트의 전체 수나
+        순서를 모름(`text.comments_unchecked` — 뽑힌 수만 경고)."""
         if not switch("comment_clues"):
             return [], None
         try:
@@ -326,6 +331,7 @@ class AnchorMixin:
                 self.warn(f"Jira 코멘트를 일부만 읽어(전체 {part.get('total')}개 중 {part.get('read')}개) 코멘트 단서를 뽑지 "
                           "않았다 — 최근 코멘트가 빠졌을 수 있다")
             return [], None
+        unchecked = text.get("comments_unchecked")
         words = conf.get("retest_words", pb.RETEST_WORDS)
         if not (isinstance(words, list) and all(isinstance(w, str) for w in words)):
             if "retest_words" in conf:
@@ -336,9 +342,10 @@ class AnchorMixin:
         clues, drop = pb.extract_clues([str(c) for c in text.get("comments") or []], str(text.get("description") or ""),
                                        vipc.request_prefix, vipc.error_prefix, words,
                                        first=skipped + 1 if type(skipped) is int and skipped > 0 else 1)
-        if look_at:
+        if look_at or unchecked:
             if clues:
-                self.warn(f"코멘트 단서 {len(clues)}개 안 씀 — 기준 줄(--look-at)을 썼다")
+                self.warn(f"코멘트 단서 {len(clues)}개 안 씀 — " + ("기준 줄(--look-at)을 썼다" if look_at else
+                          "Jira 코멘트의 전체 수·순서를 알 수 없다(코멘트 total·작성 시각 없음)"))
             return [], None
         return clues, drop
 

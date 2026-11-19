@@ -11,3 +11,6 @@ comments:
 - author: mock.cp
   created: 2026-11-14T13:00:00+0900
   body: '1차 시험: VIPC_SETUP_DATA (token=0x0de) 실패. 재시험 요청합니다.'
+comments_page:
+  startAt: 0
+  total: 2

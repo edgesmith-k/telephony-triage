@@ -315,7 +315,9 @@ def build(out: Path) -> list[Path]:
                                                  "customfield_10001": item.get("occurred_at", "").replace("+09:00", "+0900"),
                                                  "customfield_10006": item.get("sim_slot", "0")},
                   "comments": [{"author": "mock.tester", "created": "2026-11-14T11:00:00+0900", "body": "로그 첨부했습니다."},
-                               {"author": "mock.cp", "created": "2026-11-14T13:00:00+0900", "body": case["comment"]}]}
+                               {"author": "mock.cp", "created": "2026-11-14T13:00:00+0900", "body": case["comment"]}],
+                  # Jira 코멘트 도구 응답의 전체 수(jira_bridge가 남기는 모양) — 코멘트 단서 자동 추출은 전부 읽었을 때만
+                  "comments_page": {"startAt": 0, "total": 2}}
         path = out / item["issue_file"]
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(yaml.safe_dump(ticket, allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")
