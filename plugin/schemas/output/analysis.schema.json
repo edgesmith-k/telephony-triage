@@ -93,13 +93,13 @@
       "selected": {"type": ["object", "null"], "description": "accepted면 채택 원인 후보의 {category, type, cause}(selected ∈ candidates — 1위가 아니면 report.md 판단 줄에 \"규칙 일치 n위\", --top 밖이면 후보 끝에 붙는다), held면 null", "required": ["category", "type", "cause"], "additionalProperties": false, "properties": {"category": {"type": ["string", "null"]}, "type": {"type": "string"}, "cause": {"type": "string"}}},
       "location": {
        "type": "object",
-       "description": "실패 지점: 기준 줄 일치 1개·로그 FAIL 마커 1개면 confirmed, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). comment·model은 계약에만(단계 5~7)",
+       "description": "실패 지점: 기준 줄 ipc·token 일치 1개·로그 FAIL 마커 1개면 confirmed, 기준 줄 글자 일치는 한 곳이어도 found, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). comment·model은 계약에만(단계 5~7)",
        "additionalProperties": false,
        "required": ["state", "source", "kind"],
        "properties": {
         "state": {"enum": ["none", "found", "confirmed", "multiple"]},
         "source": {"enum": ["look_at", "log_marker", "steps_file", "step_order", "comment", "model", null]},
-        "kind": {"enum": ["point", "near", "range", null], "description": "기준 줄 ipc·token 일치 point, 글자 일치 near, 마커·steps-file 구간 range"}
+        "kind": {"enum": ["point", "near", "range", null], "description": "기준 줄 ipc·token 일치 point, 글자 일치 near(한 곳이어도 found), 마커·steps-file 구간 range"}
        },
        "if": {"properties": {"state": {"const": "none"}}},
        "then": {"properties": {"source": {"const": null}, "kind": {"const": null}}},

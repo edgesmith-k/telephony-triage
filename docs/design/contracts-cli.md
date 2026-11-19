@@ -284,10 +284,10 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
     - category
     - type
     - cause
-  - location(실패 지점: 기준 줄 일치 1개·로그 FAIL 마커 1개면 confirmed, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). comment·model은 계약에만(단계 5~7))
+  - location(실패 지점: 기준 줄 ipc·token 일치 1개·로그 FAIL 마커 1개면 confirmed, 기준 줄 글자 일치는 한 곳이어도 found, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). comment·model은 계약에만(단계 5~7))
     - state: none | found | confirmed | multiple
     - source: look_at | log_marker | steps_file | step_order | comment | model | null
-    - kind(기준 줄 ipc·token 일치 point, 글자 일치 near, 마커·steps-file 구간 range): point | near | range | null
+    - kind(기준 줄 ipc·token 일치 point, 글자 일치 near(한 곳이어도 found), 마커·steps-file 구간 range): point | near | range | null
   - check?(자격 검사 요약(표시 전용): why(세부 사유 — same_line|cp_point|range|near_without_symptom|range_end_unknown|range_without_symptom|no_event_at_reference|typeless_failure_within_link|same_line_typeless|no_event_in_range|locations|slots|sources|multiple_events|absence_unverified|cause_after_event|no_cause_before_event|cause_unjudged|cause_not_in_candidates, 기준 없으면 null), checked(기준에 붙어 검사한 사건 수), total(실패 사건 수 — 유형 없는 파생 오류 이벤트 포함))
     - why
     - checked
