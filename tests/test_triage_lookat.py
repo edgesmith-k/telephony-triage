@@ -53,6 +53,9 @@ def test_ipc_line_with_reused_token_picks_nearest_and_moves_window():
     assert sa == {"source": "look_at", "span": [None, "2026-09-20T05:33:05.400Z"], "issue_gap_min": 0.9,
                   "look": {"hits": 4, "picked": 4}}                            # 이름+token 같은 REQ·RSP 두 쌍, Jira에 가까운 것
     assert "step" not in sa                                                    # 기준 줄은 TC 스텝이 아니다(P1 8)
+    assert done["decision"]["state"] == "accepted" and done["decision"]["location"] == {      # 일치 여럿 = multiple(채택 유지)
+        "state": "multiple", "source": "look_at", "kind": "point"}
+    assert off["decision"]["reason"] == "no_reference"
     assert done["logs"]["window"] == {"start": "2026-09-20T05:32:35.400Z", "end": "2026-09-20T05:38:05.400Z"}
     assert _causes(done) == ["DATA-001-01"]                                    # IMS(14:30)는 구간 밖
     assert json.loads((job / "match_meta.json").read_text(encoding="utf-8"))["occurred_at"] == "2026-09-20T05:33:05.400Z"
@@ -94,6 +97,17 @@ def test_token_only_without_jira_time_picks_last_and_lists_all_hits():
     nearer, _ = _offline("near", "--look-at", "0x0de", occurred="2026-09-20T14:30:00+09:00")
     assert nearer["step_anchor"]["span"][1] == "2026-09-20T05:30:05.000Z" and nearer["step_anchor"]["look"]["picked"] == 1
     assert _causes(nearer)[0] == "IMS-001-01"
+
+
+def test_single_ipc_line_is_confirmed_point_location():
+    """단계 4: 이름·token이 하나뿐인 IPC 기준 줄(일치 1개) → 실패 지점 confirmed·point, 1위 원인이 있으면 채택."""
+    done, job = _offline("ipc1", "--look-at", "VIPC_DEACT_DATA (token=0x0df) requested")
+    assert done["step_anchor"]["look"] == {"hits": 1, "picked": 1}, done["step_anchor"]
+    assert done["decision"] == {"state": "accepted", "reason": "anchored_top",
+                                "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
+                                "location": {"state": "confirmed", "source": "look_at", "kind": "point"}}
+    assert "- 판단: 원인 채택 — DATA-001-01 (실패 지점: 담당자가 지정한 기준 줄·확인됨, 자격 검사 전)" in \
+        (job / "report.md").read_text(encoding="utf-8")
 
 
 def test_not_found_and_short_text_fall_back_with_warning():

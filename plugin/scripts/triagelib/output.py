@@ -28,6 +28,7 @@ import sys
 from pathlib import Path
 
 from common import evidence, masking, provenance, shown
+from common.fixtures import CAUSE_ID
 from common.exitcodes import CHECK_FAILED, OK, USAGE
 
 from . import report as rep
@@ -64,6 +65,9 @@ SKILL_LABEL = "근거 원문 검사(events.json 기준)"
 WARN_REWRITE = "경고: report.md 줄을 고치지 못했다"
 WARN_HOLD = "경고: 1위 보류를 report.md {what}에 쓰지 못했다 — check-output 기록(fit_hold)·Jira 본문은 보류로 남긴다"
 HOLD_KEEP = ("fit_hold", "fit_hold_unwritten")     # 탐색 기록을 새로 써도 이어받는다(보류로 고친 줄은 다음 run까지 남는다)
+WARN_DECISION = "경고: analysis.json 판단(decision)을 고치지 못했다({why})"
+# 분석 스킬 의견 `<원인 ID> — <근거>`의 앞 ID. 백틱·굵게로 감싸거나 조사(`ID와`)가 붙어도 잡고, 숫자가 더 붙은 것은 아니다
+OPINION_ID = re.compile(rf"\s*[`*]*({CAUSE_ID})(?!\d)")
 
 
 class _Stop(Exception):
@@ -380,6 +384,83 @@ def _hold_lines(report: Path, cause: str) -> list[str]:
     return failed
 
 
+def _read_analysis(job: Path) -> tuple[dict | None, str | None]:
+    """analysis.json(일반 파일만) → (내용, 읽은 바이트의 sha256). 없거나 못 읽으면 (None, None)."""
+    path = job / "analysis.json"
+    try:
+        raw = path.read_bytes() if _kind(path) == "file" else None
+        return (json.loads(raw), _sha(raw)) if raw is not None else (None, None)
+    except (OSError, ValueError):
+        return None, None
+
+
+def _rebase_module_inputs(job: Path, old: str, new: str) -> bool:
+    """module-skill.json 기록 중 `inputs["analysis.json"]`이 고치기 전 해시인 것을 새 해시로 바꾼다 — 판단만 고친 analysis.json
+    때문에 뒤 검사가 그 기록을 "이전 분석 것"으로 보고 근거 원문 검사를 건너뛰지 않게. 고칠 것을 못 썼으면 False."""
+    path = job / MODULE_RECORD
+    msj = _load(path)
+    if not isinstance(msj, dict):
+        return True
+    hit = [rec["inputs"] for rec in msj.values() if isinstance(rec, dict) and isinstance(rec.get("inputs"), dict)
+           and rec["inputs"].get("analysis.json") == old]
+    for inputs in hit:
+        inputs["analysis.json"] = new
+    if hit:
+        try:
+            _write_atomic(path, (json.dumps(msj, ensure_ascii=False, indent=1) + "\n").encode("utf-8"))
+        except OSError:
+            print(f"경고: {MODULE_RECORD}의 analysis.json 해시를 고치지 못했다", file=sys.stderr)
+            return False
+    return True
+
+
+def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, hold: bool = False,
+                     opinion: str | None = None) -> dict:
+    """analysis.json `decision`을 고친다(단계 4): 탐색 적합성 확인 보류(`hold`)면 채택 → held/fit_check(counter 없앰), 심층 분석
+    의견의 원인 ID가 채택 원인과 다르면 `counter`만 붙인다(상태·사유 그대로). 이미 보류면 사유를 바꾸지 않는다(앞 사유가 우선).
+    decision 없는 옛 JOB은 그대로. 4KB 압축 → 스키마 검사(TT_SCHEMA_CHECK) → 처음 읽은 뒤 바뀌지 않았는지 해시 대조 → 원자 쓰기 →
+    module-skill.json 입력 해시 갱신 → report.md `- 판단:` 줄 재작성 → (작업 디렉토리 JOB이면) 리포트 표시 기록을 새 줄로 다시 남긴다.
+    check-output 기록에 더할 칸: 판단을 못 고쳤으면 `decision_unwritten: <사유>`, module-skill.json 해시를 못 고쳤으면
+    `module_inputs_unwritten: true`(판단은 썼다). 고칠 것이 없거나 다 썼으면 {}."""
+    dec = analysis.get("decision")
+    if not isinstance(dec, dict) or dec.get("state") != "accepted":
+        return {}
+    if hold:
+        new = {"state": "held", "reason": "fit_check", "selected": None, "location": dec.get("location")}
+    else:
+        m = OPINION_ID.match(opinion or "")
+        selected = (dec.get("selected") or {}).get("cause")
+        if not m or m.group(1) == selected or (dec.get("counter") or {}).get("cause") == m.group(1):
+            return {}
+        new = {**dec, "counter": {"cause": m.group(1)}}
+    result = rep.fit({**analysis, "decision": new})     # counter가 붙어도 4KB 안(판단은 줄이지 않는다)
+    why = None
+    violation = rep.schema_violation(result)
+    if violation:
+        why, detail = "스키마 위반", violation
+    elif _read_analysis(job)[1] != read_sha:
+        why = detail = "검사 중 analysis.json이 바뀌었다"
+    if why:
+        print(WARN_DECISION.format(why=detail), file=sys.stderr)
+        return {"decision_unwritten": why}
+    data = (rep.dumps(result) + "\n").encode("utf-8")
+    try:
+        _write_atomic(job / "analysis.json", data)
+    except OSError:
+        print(WARN_DECISION.format(why="쓰기 실패"), file=sys.stderr)
+        return {"decision_unwritten": "쓰기 실패"}
+    extra = {} if not read_sha or _rebase_module_inputs(job, read_sha, _sha(data)) else {"module_inputs_unwritten": True}
+    report = job / "report.md"
+    if not rep.rewrite_line(report, rep.DECISION_PREFIX, [rep.decision_line(new, bool(analysis.get("candidates")))]):
+        print(WARN_REWRITE, file=sys.stderr)
+        return {**extra, "decision_unwritten": "report.md 판단 줄"}
+    if not args.out:    # run이 남긴 리포트 표시 의무(같은 key)를 고친 줄로 바꾼다 — 옛 "원인 채택" 줄을 보이라고 하지 않게
+        shown.record(job.parent, "triage", "report", job.name, key=f"report:{job.name}#{analysis.get('run')}",
+                     lines=shown.report_core(report.read_text(encoding="utf-8")), must_show=result.get("must_show") or [],
+                     path=str(job.absolute() / "report.md"))
+    return extra
+
+
 def _skipped(args, job: Path, purpose: str, env: dict) -> int:
     report, prefix = job / "report.md", PREFIX[purpose]
     reason = masking.mask_brief(args.skipped, 120)
@@ -414,10 +495,11 @@ def _mode(job: Path, purpose: str, analysis: dict) -> tuple[str, object]:
     return "skill", None
 
 
-def _preconditions(job: Path, purpose: str) -> dict:
+def _preconditions(job: Path, purpose: str) -> tuple[dict, str | None]:
+    """(analysis.json 내용, 그 바이트의 sha256 — 판단을 고쳐 쓰기 직전 대조용)."""
     report = job / "report.md"
     current = rep.current_line(report, PREFIX[purpose])
-    analysis = _load(job / "analysis.json")
+    analysis, read_sha = _read_analysis(job)
     if not isinstance(analysis, dict):
         raise _Stop(USAGE, "작업 없음", NEXT_CHECK_NA, "analysis.json이 없다")
     if not current or "TODO(LLM)" not in current:
@@ -428,7 +510,7 @@ def _preconditions(job: Path, purpose: str) -> dict:
             raise _Stop(USAGE, "작업 없음", NEXT_CHECK_NA, "심층 분석 해당 없음")
     elif _kind(job / EXPLORE_INPUT_FILE) != "file" or (analysis.get("explore") or {}).get("when") == "never":
         raise _Stop(USAGE, "작업 없음", NEXT_CHECK_NA, "탐색 분석 해당 없음")
-    return analysis
+    return analysis, read_sha
 
 
 def _fail(job: Path, purpose: str, env: dict, reason: str, label: str, sha: str | None, args) -> int:
@@ -442,7 +524,7 @@ def _fail(job: Path, purpose: str, env: dict, reason: str, label: str, sha: str 
 
 
 def _check(args, job: Path, purpose: str, env: dict) -> int:
-    analysis = _preconditions(job, purpose)
+    analysis, read_sha = _preconditions(job, purpose)
     out_path = job / OUTPUT_FILE[purpose]
     kind = _kind(out_path)
     if kind == "link":
@@ -516,12 +598,18 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     unwritten = _hold_lines(report, hold) if hold else []
     if unwritten:
         print(WARN_HOLD.format(what="·".join(unwritten)), file=sys.stderr)
+    if hold:
+        dec_extra = _decision_update(args, job, analysis, read_sha, hold=True)
+    elif purpose == "deep":
+        dec_extra = _decision_update(args, job, analysis, read_sha, opinion=fields.get("분석 스킬 의견"))
+    else:
+        dec_extra = {}
 
     counts = {k: (res or {}).get(k, 0) for k in ("fabricated", "weak", "raw")}
     n = (res or {}).get("n", 0)
     _record(job, purpose, {"mode": mode, "at": _now(), "env": env, "output_sha256": sha, "source": src_rel if res else None,
                            "quotes": n, **counts, **({"fit_hold": hold} if hold else {}),
-                           **({"fit_hold_unwritten": unwritten} if unwritten else {})})
+                           **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra})
     head = masking.mask_brief(lines[0], 300, off=off)     # 끔 DB: report.md 줄과 같은 글자(꼭 보일 줄 대조가 어긋나지 않게)
     fab = [sub.lstrip()] if counts["fabricated"] else []
     # 심층 분석은 결과 줄(첫 줄)을 늘 보인다 — 탐색은 지어낸 인용이 있을 때만(B2-6)

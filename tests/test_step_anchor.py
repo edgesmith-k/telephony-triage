@@ -105,6 +105,31 @@ def test_find_span_prefers_failed_step_start_and_closest_fail():
     assert span["fail"] == _t("5:30:20")
 
 
+def test_location_state_per_anchor_source():
+    """단계 4 `decision.location`: 출처별 상태·kind(contracts.md `decision`). FAIL 마커 수는 find_span의 `n`."""
+    from types import SimpleNamespace
+    from triagelib.anchor import AnchorMixin
+    marks = [_mk("5:30:00", "5", "start"), _mk("5:30:20", "5", "fail"), _mk("5:40:00", "5", "start"), _mk("5:40:20", "5", "fail")]
+    one, _ = stepanchor.find_span(marks[:2], "Step 5", None, True)
+    two, _ = stepanchor.find_span(marks, "Step 5", None, True)
+    start_only, _ = stepanchor.find_span(marks[:1], "Step 5", None, True)
+    assert (one["n"], two["n"], "n" in start_only) == (1, 2, False)
+
+    def loc(span, look=None):
+        return AnchorMixin.location(SimpleNamespace(look_result=look), span)
+    assert loc(one) == {"state": "confirmed", "source": "log_marker", "kind": "range"}
+    assert loc(two) == {"state": "multiple", "source": "log_marker", "kind": "range"}
+    assert loc(start_only) == {"state": "found", "source": "log_marker", "kind": "range"}
+    look_at = {"source": "look_at", "fail": _t("5:30:20")}
+    assert loc(look_at, {"hits": 1, "how": "ipc"}) == {"state": "confirmed", "source": "look_at", "kind": "point"}
+    assert loc(look_at, {"hits": 1, "how": "token"}) == {"state": "confirmed", "source": "look_at", "kind": "point"}
+    assert loc(look_at, {"hits": 3, "how": "text"}) == {"state": "multiple", "source": "look_at", "kind": "near"}
+    # 글자 일치는 한 곳이어도 found — 확인된 실패 지점(confirmed)이 아니다(포털 확실한 일치는 confirmed만 본다)
+    assert loc(look_at, {"hits": 1, "how": "text"}) == {"state": "found", "source": "look_at", "kind": "near"}
+    for src in ("steps_file", "step_order"):
+        assert loc({"source": src, "fail": _t("5:30:20")}) == {"state": "found", "source": src, "kind": "range"}
+
+
 def test_find_span_start_fallback_to_previous_marker_of_any_step():
     marks = [_mk("5:30:10", "3", "pass"), _mk("5:33:30", "5", "fail")]       # Step 5 START 없음
     span, _ = stepanchor.find_span(marks, "Step 5", None, True)
@@ -281,6 +306,8 @@ def _strip(a: dict) -> dict:
 def test_marker_anchor_with_failed_step_moves_window_and_top_candidate():
     off, _ = _offline("off", "--failed-step", STEP, "--answer", "anchor=off", root=MARKER_ROOT)
     assert _causes(off)[0] == "IMS-001-01" and off["step_anchor"] == {"source": "issue"}     # 오늘의 동작
+    assert off["decision"] == {"state": "held", "reason": "no_reference", "selected": None,      # 단계 4: 기준 없음 → 보류
+                               "location": {"state": "none", "source": None, "kind": None}}
     assert off["logs"]["window"] == {"start": "2026-09-20T05:26:00.000Z", "end": "2026-09-20T05:36:00.000Z"}
 
     done, job = _offline("on", "--failed-step", STEP, root=MARKER_ROOT)
@@ -288,9 +315,13 @@ def test_marker_anchor_with_failed_step_moves_window_and_top_candidate():
     sa = done["step_anchor"]
     assert sa["source"] == "log_marker" and sa["step"] == "Step 5" and "step_from" not in sa
     assert sa["span"] == ["2026-09-20T05:33:00.000Z", "2026-09-20T05:33:30.000Z"]
+    assert done["decision"] == {"state": "accepted", "reason": "anchored_top",
+                                "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
+                                "location": {"state": "confirmed", "source": "log_marker", "kind": "range"}}
     assert done["logs"]["window"] == {"start": "2026-09-20T05:32:00.000Z", "end": "2026-09-20T05:34:00.000Z"}
     assert done["issue"]["failed_step"]["text"] == STEP and done["request_hash"] != off["request_hash"]
     report = (job / "report.md").read_text(encoding="utf-8")
+    assert "- 판단: 원인 채택 — DATA-001-01 (실패 지점: 로그 스텝 마커·확인됨, 자격 검사 전)" in report
     assert "- 실패 스텝 구간 (log_marker): Step 5 2026-09-20T05:33:00.000Z ~ 2026-09-20T05:33:30.000Z → 분석 범위 " \
         "2026-09-20T05:32:00.000Z ~ 2026-09-20T05:34:00.000Z (Jira 발생 시각 2026-09-20T14:31:00+09:00 / 2.5분 차이)" in report
     assert "S/C에 쓰지 않음; 단어 겹침 가산·순위 참고·분석 범위" in report
@@ -333,6 +364,8 @@ def test_steps_file_anchor_on_markerless_log_and_no_raw_text_in_job_files():
     assert sa["source"] == "steps_file" and sa["span"] == ["2026-09-20T05:33:00.000Z", "2026-09-20T05:33:30.000Z"]
     assert done["issue"]["failed_step"] == {"text": "5 | 데이터 켜기", "source": "steps_file"}
     assert done["logs"]["window"] == {"start": "2026-09-20T05:32:00.000Z", "end": "2026-09-20T05:34:00.000Z"}
+    assert done["decision"]["state"] == "accepted" and done["decision"]["location"] == {
+        "state": "found", "source": "steps_file", "kind": "range"}
     for path in (p for p in job.rglob("*") if p.is_file()):
         text = path.read_text(encoding="utf-8", errors="replace")
         assert "2026-09-20 14:33:00" not in text and "14:33:30" not in text.replace("T05:33:30", "") \

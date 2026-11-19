@@ -74,6 +74,27 @@ def _observation_summary(events: dict) -> dict | None:
             "errors": [{"code": e.get("code"), "error": _clip(e.get("error"), 80)} for e in other[:1] + ext[:1]]}
 
 
+NO_LOCATION = {"state": "none", "source": None, "kind": None}
+
+
+def _decision(candidates: list[dict], anchor: dict | None) -> dict:
+    """판단 상태(단계 4): 1위 후보(`candidates[0]`)만 본다 — 후보 목록·순서·점수는 그대로. 사유는 처음 맞는 것:
+    후보 없음 → 1위 원인 판정 불가 → 1위 원인 미확인 → 실패 지점(앵커) 없음 → 채택. `fit_check`(적합성 확인 보류)와
+    `counter`(심층 분석 반대 의견)는 check-output만 붙인다."""
+    location = dict((anchor or {}).get("location") or NO_LOCATION)
+    top = candidates[0] if candidates else None
+    if top is None:
+        reason = "no_candidate"
+    elif top["cause"] is None:
+        reason = "cause_unjudged" if top.get("_cause_unjudged") else "cause_unconfirmed"
+    elif anchor is None:
+        reason = "no_reference"
+    else:
+        return {"state": "accepted", "reason": "anchored_top",
+                "selected": {"category": top.get("category"), "type": top["type"], "cause": top["cause"]}, "location": location}
+    return {"state": "held", "reason": reason, "selected": None, "location": location}
+
+
 def _unjudged_label(u: dict) -> str:
     """`판정 불가 유형 N개` 또는 `판정 불가 유형 N·원인 M개`."""
     return f"판정 불가 유형 {u['count']}" + (f"·원인 {u['cause_count']}개" if u.get("cause_count") else "개")
@@ -1205,6 +1226,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         self.steps_member = _clip(self.masker()(member), 120) if member else None
         return {
             "around": around, "anchor": anchor, "outside": outside, "candidates": candidates,
+            "decision": _decision(candidates, anchor),
             "pending_causes": [{"cause": p["cause"], "title": _clip(p.get("title"), 50)}
                                for p in match.get("pending_causes") or []][:TOP],
             "no_candidate": no_candidate, "unjudged": unjudged, "observation": observation, "code": code_out,

@@ -271,6 +271,8 @@ def test_triage_aligns_failure_window_by_step_order_without_any_clock():
     done, job = _offline(db, _zip(tmp("tt-zip-") / "att.zip"))
     sa = done["step_anchor"]
     assert sa["source"] == "step_order" and sa["step"] == "7 | 데이터 연결 확인"
+    assert done["decision"]["state"] == "accepted" and done["decision"]["location"] == {
+        "state": "found", "source": "step_order", "kind": "range"}
     assert sa["order"] == {"matched": 4, "observable": 4, "missed": 0,
                            "last": {"step": "6 | 모바일 데이터 켜기", "ts": "2026-09-20T05:32:50.000Z"}}
     assert "clock" not in sa

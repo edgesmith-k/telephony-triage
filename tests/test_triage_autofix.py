@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -192,8 +193,8 @@ def test_unfit_top_holds_with_reason_and_next_check_then_rerun_carries_prior():
     # FR-02(P2): 보류면 결론·해결책 줄도 1위 확정·`검증됨`을 권하지 않는다(판정·후보 순위는 그대로)
     assert _report_line(out, "- 결론:") == ("- 결론: 1위 DATA-001-01가 증상과 맞지 않아 보류(탐색 분석 참조). "
                                          "다음: Step 7에서 보류를 고르거나 근거 로그 확인")
-    held = _report_line(out, "- 해결책")
-    assert held.startswith("- 해결책(1위 기준, 보류됨): ") and held.endswith("   해결책 검증: 보류(1위 부적합)"), held
+    held = _report_line(out, "- 해결책")       # 발생 시각만이라 run이 이미 보류(실패 지점 없음) — 사유는 앞 것이 남는다
+    assert held.startswith("- 해결책(1위 기준, 보류됨): ") and held.endswith("   해결책 검증: 보류(실패 지점 없음)"), held
     assert not any(x.startswith("- 해결책: ") for x in (out / "report.md").read_text(encoding="utf-8").splitlines())
     assert json.loads((out / "check-output.json").read_text(encoding="utf-8"))["explore"]["fit_hold"] == "DATA-001-01"
     assert json.loads((out / "analysis.json").read_text(encoding="utf-8"))["candidates"][0]["C"] == 1
@@ -236,7 +237,70 @@ def test_fit_hold_is_recorded_even_when_lines_cannot_be_rewritten_and_survives_r
     analysis = json.loads((out / "analysis.json").read_text(encoding="utf-8"))
     nxt = issue_post.classify(analysis, None, hold)["next"]
     assert hold == "DATA-001-01" and nxt[0] == "원인 미확정 — 추가 로그·재현 정보 필요", nxt
+    assert analysis["decision"]["state"] == "held"          # 단계 4: 기준 없이 돈 새 JOB은 이미 보류 — 해결책을 싣지 않는다
+    assert nxt == ["원인 미확정 — 추가 로그·재현 정보 필요"], nxt
+    old = {k: v for k, v in analysis.items() if k != "decision"}     # decision 없는 옛 JOB은 예전처럼 보류된 해결책
+    nxt = issue_post.classify(old, None, hold)["next"]
     assert any(x.startswith("해결책(1위 기준, 보류됨): ") and x.endswith("(해결책 검증: 보류(1위 부적합))") for x in nxt), nxt
+
+
+# 기준 줄(글자 일치 1개) — 단계 4에서 1위를 채택하게 하는 실패 지점
+LOOK = "notifyDataEnabledChanged: enabled=false"
+
+
+def test_decision_state_follows_deep_counter_then_fit_hold():
+    """단계 4 상태 전달(Y10 "채택을 심층이 반박" — 모델 능력 검증이 아니다): 기준 줄로 채택된 1위를 ① 심층 분석 의견이 다른
+    원인 ID로 반박하면 `counter`만 붙고 채택은 그대로, ② 탐색 적합성 확인이 보류하면 held/fit_check로 내려가고 counter가
+    없어진다. analysis.json(스키마 검사 통과)·report.md `- 판단:` 줄·Jira 본문 분류가 같이 바뀌고 후보 목록은 그대로다."""
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    import issue_post
+    item = _confirmed()
+    out = tmp("tt-dec-") / "x"
+    root = plugin_root(analyzers={"data": {"skill": "mock-data-analyzer", "when": "ask"}})
+    done = _run(item, out, "--explore", "--look-at", LOOK, root=root)
+    dec = done["decision"]
+    assert dec == {"state": "accepted", "reason": "anchored_top",
+                   "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
+                   "location": {"state": "found", "source": "look_at", "kind": "near"}}, dec     # 글자 일치 한 곳 = 찾음
+    assert _report_line(out, "- 판단:") == ("- 판단: 원인 채택 — DATA-001-01 (실패 지점: 담당자가 지정한 기준 줄·찾음, "
+                                          "자격 검사 전)")
+    assert "(관측된 규칙 일치" not in _report_line(out, "- 분류 후보:")
+    (out / "deep-output.md").write_text("요약: 사용자 설정이 아니라 망 거절로 보인다\n근거:\n"
+                                        "분석 스킬 의견: DATA-001-02 — 망 거절 흔적\n규칙 제안:\n- 없음\n", encoding="utf-8")
+    analysis = out / "analysis.json"
+
+    def turn_start() -> os.stat_result:
+        """포털은 턴 시작 뒤 바뀐 analysis.json만 읽는다(`read_safe(..., since)`) — 시작 시각을 1시간 앞으로 돌려 둔다."""
+        old = analysis.stat()
+        os.utime(analysis, ns=(old.st_atime_ns, old.st_mtime_ns - 3600 * 10**9))
+        return analysis.stat()
+
+    before = turn_start()
+    run_json("triage.py", ["check-output", item["key"], "--for", "deep", "--out", out], root=root)
+    after = json.loads(analysis.read_text(encoding="utf-8"))
+    now = analysis.stat()
+    assert now.st_mtime_ns > before.st_mtime_ns and now.st_ino != before.st_ino     # 원자적 교체(새 파일), mtime 갱신
+    assert not list(out.glob(".analysis.json.tmp-*"))
+    assert after["decision"] == {**dec, "counter": {"cause": "DATA-001-02"}}
+    assert after["candidates"] == done["candidates"]
+    assert _report_line(out, "- 판단:").endswith("자격 검사 전) · 모델 검토 의견이 다름(DATA-001-02) — 확인 필요")
+    assert issue_post.classify(after, None)["cls"].endswith("DATA-001-01 Data disabled")      # 채택은 그대로
+
+    run_json("triage.py", ["explore", item["key"], "--out", out], root=root)
+    (out / "explore-output.md").write_text("가설 없음: 1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다\n"
+                                           "다음 확인: radio 로그\n", encoding="utf-8")
+    before = turn_start()
+    run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", out], root=root)
+    held = json.loads(analysis.read_text(encoding="utf-8"))
+    now = analysis.stat()
+    assert now.st_mtime_ns > before.st_mtime_ns and now.st_ino != before.st_ino
+    assert held["decision"] == {"state": "held", "reason": "fit_check", "selected": None, "location": dec["location"]}
+    assert held["candidates"] == done["candidates"]
+    assert _report_line(out, "- 판단:") == ("- 판단: 원인 보류 — 탐색 분석 적합성 확인에서 1위가 증상과 맞지 않음. 아래 규칙 "
+                                          "일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다")
+    cl = issue_post.classify(held, None, issue_post.fit_hold_of(out / "check-output.json"))
+    assert cl["cls"] == "data > DATA-001 > 원인 보류 — 탐색 분석 적합성 확인에서 1위가 증상과 맞지 않음", cl
+    assert not any("해결책" in x for x in cl["next"]), cl["next"]
 
 
 def test_prior_skips_output_changed_after_check():
@@ -333,4 +397,47 @@ def test_auto_scan_result_survives_reuse_cache_hit():
     assert second["reuse"]["hit"] is True, second["reuse"]
     assert second["step_anchor"] == first["step_anchor"] and first["step_anchor"]["time_candidates"]
     assert "증상 시각 후보" in _report_line(ws.job_dir("MOCK-9005"), "- 기준 시각 없음")
+    ws.json("triage.py", ["release", "MOCK-9005"])
+
+
+def test_fit_hold_rewrites_report_obligation_and_reuse_keeps_decision(monkeypatch):
+    """P1-1: 작업 디렉토리 JOB에서 탐색 적합성 확인이 판단을 보류로 바꾸면, run이 남긴 리포트 표시 의무(같은 key)를 고친 줄로
+    다시 남긴다 — show_guard가 옛 "원인 채택" 줄을 보이라고 하지 않는다. 캐시 적중(재사용)이면 판단·판단 줄이 같다(P2-7)."""
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    from common import shown
+    ws = Workspace()
+    log = tmp("tt-dec-shown-") / "roaming.log"
+    log.write_bytes((REPO / "tests/fixtures/logs/data-roaming-disabled.log").read_bytes())
+    args = ["run", "MOCK-9005", "--dry-run", "--issue-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
+            "--logs", log, "--code", "skip", "--explore", "--look-at", "DataRoamingEnabled changed to false"]
+    first = ws.json("triage.py", args)
+    job = ws.job_dir("MOCK-9005")
+    old = next(x for x in (job / "report.md").read_text(encoding="utf-8").splitlines() if x.startswith("- 판단:"))
+    assert first["decision"]["state"] == "accepted" and old.startswith("- 판단: 원인 채택 — "), first["decision"]
+    again = ws.json("triage.py", args)
+    assert again["reuse"]["hit"] is True and again["decision"] == first["decision"]
+    assert old in (job / "report.md").read_text(encoding="utf-8").splitlines()
+    ws.json("triage.py", ["explore", "MOCK-9005"])
+    (job / "explore-output.md").write_text("가설 없음: 1위 부적합 — 증상 시각과 근거 시각이 다르다\n다음 확인: radio 로그\n",
+                                           encoding="utf-8")
+    ws.json("triage.py", ["check-output", "MOCK-9005", "--for", "explore"])
+    new = next(x for x in (job / "report.md").read_text(encoding="utf-8").splitlines() if x.startswith("- 판단:"))
+    assert new.startswith("- 판단: 원인 보류 — 탐색 분석 적합성 확인")
+    key = f"report:MOCK-9005#{again['run']}"
+    recs = [json.loads(x) for x in (job.parent / ".shown" / "log.jsonl").read_text(encoding="utf-8").splitlines()
+            if x.strip() and json.loads(x).get("key") == key]
+    assert len(recs) >= 2 and old in recs[0]["lines"]
+    ob = shown._obligation("report", key, 0, 1, recs[-1])
+    gap = shown.missing(ob, [])
+    assert new in gap and old not in gap
+    assert not any(x.endswith(old[2:]) for x in gap)
+    # run 기록·check-output 기록을 두 Bash 호출에 순서대로 고정하면 열린 리포트 의무는 하나이고, 그 줄은 새 보류 줄이다
+    pair = [recs[0], recs[-1]]
+    assert pair[0]["script"] == "triage" and pair[1]["script"] == "triage"
+    seq = [{"kind": "tool", "name": "Bash", "id": f"b{k}", "input": {"command": cmd}, "result": "{}", "error": False}
+           for k, cmd in enumerate(["python3 triage.py run MOCK-9005", "python3 triage.py check-output MOCK-9005 --for explore"])]
+    monkeypatch.setattr(shown, "anchor", lambda s, r: list(enumerate(r)))
+    live = [ob for ob in shown.record_obligations(seq, pair) if ob.open and ob.kind == "report"]
+    assert len(live) == 1 and live[0].start == 1, [(ob.key, ob.start) for ob in live]
+    assert new in live[0].lines and old not in live[0].lines
     ws.json("triage.py", ["release", "MOCK-9005"])

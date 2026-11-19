@@ -23,7 +23,7 @@ PLATFORM_ANSWER = "platform_answer"   # 상태 키: 이 작업 플랫폼을 `--a
 STATE_SCHEMA = 2                 # 2: `job` 절(로그·실행 이력·재사용 캐시 요약)이 있다. 스키마 표시가 없는 파일은 job = {}
 CACHE_FILE = "analysis-cache.json"
 EXTRACTOR_CODES = ("pattern-timeout", "pattern-error")   # events.json observation의 extractor 오류 코드(parse_logcat.EXTRACTOR_CODES와 같다)
-CACHE_FORMAT = 5                 # 캐시 형식·`core` 구조를 바꾸면 올린다(plugin 해시에 들어가 이전 캐시가 무효가 된다). 2: 타임라인은 캐시 파일이 아니다. 3: core.unjudged. 4: core.attrs.look·look_note. 5: core.observation·core.attrs.time_candidates(같은 배포)
+CACHE_FORMAT = 6                 # 캐시 형식·`core` 구조를 바꾸면 올린다(plugin 해시에 들어가 이전 캐시가 무효가 된다). 2: 타임라인은 캐시 파일이 아니다. 3: core.unjudged. 4: core.attrs.look·look_note. 5: core.observation·core.attrs.time_candidates(같은 배포). 6: core.decision·anchor.location
 RUNS_KEEP = 10                   # state.job.runs(실행 이력)에 남기는 수
 RUN_DIRS_KEEP = 5                # JOB/runs/<n>/(이전 analysis.json·report.md 보관)에 남기는 수
 RUNS_DIR = "runs"

@@ -277,6 +277,19 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
     - files?
     - skipped?
   - uncollected_tags?[≤3]({tag(≤40), lines, warn}; 후보 없음·1위 C=0일 때만, 파서 규칙에 없는 태그 힌트)
+- decision(판단 상태(단계 4, 1위 후보만 본다 — 후보 목록·순서·점수는 그대로). 사유는 처음 맞는 것: 후보 없음(no_candidate) → 1위 원인 판정 불가(cause_unjudged) → 1위 원인 미확인(cause_unconfirmed) → 실패 지점 없음(no_reference) → 채택(anchored_top). fit_check는 check-output(탐색 적합성 확인 보류)만 쓴다. 4KB 압축 시 빼지 않는다)
+  - state: accepted | held
+  - reason: anchored_top | no_reference | no_candidate | cause_unconfirmed | cause_unjudged | fit_check
+  - selected(accepted면 1위 후보의 {category, type, cause}, held면 null)
+    - category
+    - type
+    - cause
+  - location(실패 지점: 기준 줄 ipc·token 일치 1개·로그 FAIL 마커 1개면 confirmed, 기준 줄 글자 일치는 한 곳이어도 found, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). comment·model은 계약에만(단계 5~7))
+    - state: none | found | confirmed | multiple
+    - source: look_at | log_marker | steps_file | step_order | comment | model | null
+    - kind(기준 줄 ipc·token 일치 point, 글자 일치 near(한 곳이어도 found), 마커·steps-file 구간 range): point | near | range | null
+  - counter?(accepted이고 심층 분석 의견의 원인 ID가 채택 원인과 다를 때만(check-output --for deep))
+    - cause
 - candidates?[≤3]
   - type
   - cause
