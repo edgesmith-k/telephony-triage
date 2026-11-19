@@ -78,14 +78,15 @@ NO_LOCATION = {"state": "none", "source": None, "kind": None}
 
 
 def _adopted_location(location: dict, why: str | None, cond_line: bool = False) -> dict:
-    """채택이면 실패 지점 상태를 자격 검사 결과로 정한다: 기준 줄 자체가 실패 사건(`same_line`·`cp_point`)이면 confirmed/point,
-    구간(`range`)은 FAIL 마커 1개일 때만 confirmed, 그 밖(근처 등)은 found. `same_line`이어도 창 안 조건 줄로만 붙었으면
-    (`cond_line`) found·kind 그대로 — 되풀이되는 조건 줄을 글자로 짚은 것일 수 있다. comment 출처는 늘 found("한 곳에서 찾았다" ≠
-    "이번 실패 지점을 확인했다" — 포털 확실한 일치는 accepted + confirmed만 본다)."""
-    if why == "cp_point" or (why == "same_line" and not cond_line):
+    """채택이면 실패 지점 상태를 자격 검사 결과로 정한다: confirmed/point는 기준 줄 자체가 붙은 사건의 증상·원인 근거 줄이거나 같은
+    RIL 요청일 때(`same_line`, 조건 줄로만 붙은 `cond_line`이 아님)만이다 — 포털은 accepted + confirmed면 본 분석을 건너뛴다.
+    `cp_point`는 found/point(IPC 응답 뒤 2초 안 첫 사건 — 같은 요청이라는 근거가 없다), 구간(`range`)은 found·kind 그대로(FAIL
+    마커는 스텝을 감쌀 뿐 실패 사건 줄이 아니고, 스텝 안에 복구된 일시 실패가 있을 수 있다), 조건 줄로만 붙은 `same_line`은
+    found·kind 그대로(되풀이되는 조건 줄을 글자로 짚은 것일 수 있다), 그 밖(근처 등)도 found. comment 출처는 늘 found."""
+    if why == "same_line" and not cond_line:
         out = {**location, "state": "confirmed", "kind": "point"}
-    elif why == "range" and location.get("source") == "log_marker" and location.get("state") == "confirmed":
-        out = dict(location)
+    elif why == "cp_point":
+        out = {**location, "state": "found", "kind": "point"}
     else:
         out = {**location, "state": "found"}
     if out.get("source") == "comment":

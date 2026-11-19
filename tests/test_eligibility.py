@@ -146,9 +146,41 @@ def test_merge_same_type_within_one_second():
     out = el.merge([ev("DATA-003", 10, ["D1"]), ev("DATA-003", 10.002, ["D1"], line=(0, 2)), ev("DATA-003", 12, ["D1"])])
     assert len(out) == 2 and out[0]["lines"] == {(0, 1), (0, 2)}
     assert len(el.merge([ev("DATA-003", 10), ev("DATA-003", 10.5, phone=1)])) == 2     # 다른 슬롯은 따로
+    assert len(el.merge([ev("DATA-003", 10, phone=None), ev("DATA-003", 10.5, phone=1)])) == 2   # 리뷰 P0: 모름은 모름끼리만
+    assert len(el.merge([ev("DATA-003", 10, phone=None), ev("DATA-003", 10.5, phone=None)])) == 1
     # 첫 사건 시각부터 1초 — 0.8초 간격 사슬은 셋째에서 끊긴다, 합친 사건의 gap_s는 합친 시각(가장 늦은 것) 기준(리뷰 P2-4)
     out = el.merge([ev("DATA-003", 10, ["D1"]), ev("DATA-003", 10.8, line=(0, 2)), ev("DATA-003", 11.6, line=(0, 3))])
     assert [len(e["lines"]) for e in out] == [2, 1] and out[0]["gap_s"] == pytest.approx(0.9)
+
+
+def test_merge_of_different_causes_is_held_not_pooled():
+    """리뷰 P0: 0.6초 안 같은 유형 두 실패(IMS PDN·인터넷 PDN)의 원인이 다르면 합쳐도 원인을 섞어 고르지 않는다 — 기준이 붙으면 보류."""
+    ims, apn = ev("DATA-003", 100.0, ["D-IMS"], line=(0, 10)), ev("DATA-003", 100.6, ["D-APN"], line=(0, 20))
+    apn["causes"] = [(1, "D-APN", 0.1)]                   # 순위가 낮은 원인이라도 옆 실패의 1위 원인을 채택하면 안 된다
+    m = el.merge([ims, apn])
+    assert len(m) == 1 and m[0].get("mixed")
+    assert outcome(el.decide(m, [point(20, 100.6)])) == ("held", "ambiguous", "multiple_events")
+    # 한쪽만 원인이 붙어도 섞지 않는다(DNC 평가 두 줄 0.5초: 인터넷 DATA_DISABLED에 붙은 원인을 IMS 줄 기준으로 채택하던 것)
+    half = el.merge([ev("DATA-001", 10, ["D1"]), ev("DATA-001", 10.5, [], line=(0, 2))])
+    assert half[0].get("mixed") and outcome(el.decide(half, [point(2, 10.5)])) == ("held", "ambiguous", "multiple_events")
+    same = el.merge([ev("DATA-003", 10, ["D1"]), ev("DATA-003", 10.002, ["D1", "D2"], line=(0, 2))])
+    assert not same[0].get("mixed") and outcome(el.decide(same, [point(2, 10.002)])) == ("accepted", "anchored_top", "D1")
+
+
+def test_same_line_shared_by_events_with_different_causes_is_held():
+    """리뷰 P2-1: 한 기준 줄이 유형 사건 둘의 근거이고 1순위 원인이 다르면 첫 사건을 조용히 고르지 않는다."""
+    a = ev("DATA-003", 100, ["D1"], line=(0, 10))
+    a["lines"] |= {(0, 12)}
+    b = ev("NETWORK-001", 101, ["N3"], line=(0, 12))
+    assert outcome(el.decide([a, b], [point(12, 101)])) == ("held", "ambiguous", "multiple_events")
+    c = ev("NETWORK-001", 101, ["D1"], line=(0, 12))
+    assert outcome(el.decide([a, c], [point(12, 101)])) == ("accepted", "anchored_top", "D1")    # 같은 원인이면 채택
+
+
+def test_cp_point_success_response_is_not_a_failure():
+    """리뷰 P1-1: 기준 IPC 응답이 성공 값이면 기준 자체가 실패가 아니다 — 2초 안 다른 실패를 붙이지 않는다."""
+    ok = point(4, 199, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 222, "ok": True})
+    assert outcome(el.decide(EVENTS, [ok])) == ("held", "ineligible", "no_event_at_reference")
 
 
 def test_same_line_prefers_evidence_over_window_lines():
@@ -249,6 +281,20 @@ def test_pasted_stamp_picks_the_same_place(seed_db):
     assert _find(seed_db, log, line, stamp="11-14 09:00:00.000")["places"] == 2       # 다른 시각이면 그대로 여러 곳
 
 
+def test_success_response_reference_is_not_adopted(seed_db):
+    """리뷰 P1-1 회귀(실제 경로): 성공 응답(VIPC_E_OK) 줄을 기준으로 주면 기준 자체가 실패가 아니다 — 2초 안 다른 요청의 실패
+    (10:02:00.6 SETUP 실패, DATA-003-01)를 붙이지 않는다."""
+    src = (maf.OUT / "y10" / "Y10-SAMETOKEN.log").read_text(encoding="utf-8").splitlines()
+    ok = "11-14 10:02:00.020   900   910 D RIL     : [RX] VIPC_SETUP_DATA, RSP, token=0x0f0, len=8, Error(VIPC_E_OK)"
+    k = next(i for i, x in enumerate(src) if x.startswith("11-14 10:02:00.500"))
+    log = tmp("tt-elig-ok-") / "ok.log"
+    log.write_text("".join(x + "\n" for x in src[:k] + [ok] + src[k:]), encoding="utf-8", newline="\n")
+    found = _find(seed_db, log, ok, stamp=lookat.stamp(ok))
+    assert found["places"] == 1 and found["place"][0]["ipc"].get("ok") is True, found
+    e = _eligibility(seed_db, log, {"kind": "line", "source": "look_at", "places": 1, "lines": found["place"]})["eligibility"]
+    assert (e["state"], e["reason"], e["why"]) == ("held", "ineligible", "no_event_at_reference"), e
+
+
 def test_adopted_cause_outside_top_is_appended(seed_db):
     """H18: 자르기 전 순위로 판정하고, 채택 원인이 --top 밖이면 후보 끝에 붙이고 omitted에서 뺀다(selected ∈ candidates)."""
     log = maf.OUT / "mmh.log"
@@ -287,6 +333,20 @@ def test_cause_only_in_extended_end_does_not_crash(seed_db, ln):
         out = _eligibility(seed_db, REG / "crash-stopiteration.log", _line_ref(ln), top=top)
         e = out["eligibility"]
         assert e["state"] == "held" or e["cause"] in [c["cause"] for c in out["candidates"]], (ln, top, e)
+
+
+def test_reference_on_merged_neighbour_failure_is_held(seed_db):
+    """리뷰 P0 회귀(실제 경로): 0.5초 안 DNC 평가 거부 두 줄(인터넷 DATA_DISABLED, IMS NO_SUITABLE_DATA_PROFILE)을 같은 유형이라
+    합쳐도, IMS 줄 기준에 인터넷 줄의 원인(DATA-001-01)을 채택하지 않는다 — 두 실패 중 어느 것인지 모르므로 보류."""
+    log = tmp("tt-elig-mix-") / "mix.log"
+    log.write_text("".join(x + "\n" for x in (REG / "merge-diffcause.log").read_text(encoding="utf-8").splitlines()
+                           if " DPM-0 " not in x), encoding="utf-8", newline="\n")     # IMS 실패의 원인 줄(DPM)이 없는 모양
+    line = log.read_text(encoding="utf-8").splitlines()[-1]
+    for path in (log, REG / "merge-diffcause.log"):
+        found = _find(seed_db, path, line, stamp=lookat.stamp(line))
+        e = _eligibility(seed_db, path, {"kind": "line", "source": "look_at", "places": found["places"],
+                                         "lines": found["place"]})["eligibility"]
+        assert (e["state"], e["reason"], e["why"]) == ("held", "ambiguous", "multiple_events"), (path.name, e)
 
 
 def test_absence_end_is_parse_window_end(seed_db):
@@ -374,7 +434,8 @@ def test_adopted_location_follows_eligibility():
                 "cause": "DATA-001-01" if state == "accepted" else None, **extra}
         return driver._decision(cands, {"location": location}, elig)["location"]
     assert loc(text, "same_line") == {"state": "confirmed", "source": "look_at", "kind": "point"}
-    assert loc({**text, "kind": "point", "state": "confirmed"}, "cp_point")["state"] == "confirmed"
+    # 리뷰 P1-1: CP 점은 응답 뒤 2초 안 첫 사건일 뿐 같은 요청이라는 근거가 없다 → found/point
+    assert loc({**text, "kind": "point", "state": "confirmed"}, "cp_point") == {**text, "kind": "point", "state": "found"}
     assert loc(text, "near_symptom") == text                                   # 근처 채택(5-2) = 찾음
     point_loc = {"state": "confirmed", "source": "look_at", "kind": "point"}
     assert loc(point_loc, "near_symptom") == {**point_loc, "state": "found"}  # 마지막 갈래: confirmed가 들어와도 found
@@ -383,7 +444,7 @@ def test_adopted_location_follows_eligibility():
     assert loc(point_loc, "same_line", cond_line=True) == {**point_loc, "state": "found"}
     assert loc(text, "near_without_symptom", state="held") == text            # 보류는 앵커 기준 그대로
     marker = {"state": "confirmed", "source": "log_marker", "kind": "range"}
-    assert loc(marker, "range") == marker
+    assert loc(marker, "range") == {**marker, "state": "found"}      # 리뷰 P2-2: FAIL 마커는 실패 사건 줄이 아니다
     assert loc({**marker, "source": "steps_file", "state": "found"}, "range")["state"] == "found"
     assert loc({**marker, "source": "steps_file"}, "range")["state"] == "found"   # confirmed여도 log_marker가 아니면 found
     assert loc({"state": "confirmed", "source": "comment", "kind": "point"}, "same_line")["state"] == "found"

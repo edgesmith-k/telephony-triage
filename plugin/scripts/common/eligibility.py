@@ -6,18 +6,22 @@
 원인(`absence_unverified`)을 싣는다.
 
 기준(`reference`, `triage.py`가 `JOB/reference.json`에 쓴다):
-- `{kind: line, source: look_at, places, lines[{line_ref, ts, phone, ipc?: {dir, name, token}, ril?: {serial, pid, paired_ts}}]}`
+- `{kind: line, source: look_at, places, lines[{line_ref, ts, phone, ipc?: {dir, name, token, ok?}, ril?: {serial, pid, paired_ts}}]}`
+  (`ok: true` = 그 IPC 줄 결과가 성공 값 `vendor_ipc.success`)
 - `{kind: range, source: log_marker|steps_file|step_order, places, start, fail}`
 
 기준 종류는 "기준 줄 자체가 실패 사건인가"로 나눈다:
 - 점(같은 줄): 기준 줄이 사건의 증상 줄·붙은 원인 줄·그 충족 구간에서 증상·붙은 원인 조건에 맞는 줄(§8-1) 중 하나이거나
   같은 RIL 요청(같은 pid·슬롯·serial + 짝 시각) → 그 사건. 근거 줄·같은 요청으로 못 찾고 조건 줄로만 붙어 채택하면 why는
-  same_line 그대로, 결과에 `cond_line: true`(driver가 실패 지점을 confirmed로 올리지 않는다).
-- 점(CP token): 기준이 벤더 IPC 줄 → 같은 요청의 RSP(없으면 REQ) 뒤 `link_ms`(기본 `DEFAULT_LINK_MS` 2초) 안 같은 슬롯(또는 모름)
-  첫 유형 사건. 유형 없는 실패만 있으면 symptom_not_found, 없으면 ineligible/no_event_at_reference.
+  same_line 그대로, 결과에 `cond_line: true`(driver가 실패 지점을 confirmed로 올리지 않는다). 그 줄에 유형 사건이 여럿이고 1순위
+  원인이 서로 다르면 ambiguous/multiple_events.
+- 점(CP token): 기준이 벤더 IPC 줄 → 기준 응답(RSP, 없으면 REQ)이 성공 값이면 ineligible/no_event_at_reference(기준 자체가 실패가
+  아니다), 아니면 그 뒤 `link_ms`(기본 `DEFAULT_LINK_MS` 2초) 안 같은 슬롯(또는 모름) 첫 유형 사건. 유형 없는 실패만 있으면
+  symptom_not_found, 없으면 ineligible/no_event_at_reference. 붙인 사건이 같은 요청이라는 근거는 없어 실패 지점은 found(driver).
 - 근처(그 밖의 AP 줄): 문제 파악 유형이 있어야 붙인다 — 5-1은 problem.json을 읽지 않으므로 늘 ineligible/near_without_symptom.
 - 구간: 로그 FAIL 마커(START, 없으면 FAIL−120초 ~ FAIL) 안 유형 사건 전부 — 채택 원인이 모두 같을 때만. steps-file 시각 구간은
   문제 파악 유형이 있어야(5-1은 ineligible/range_without_symptom), 스텝 순서·START만은 채택 안 함(ineligible/range_end_unknown).
+  FAIL 마커는 스텝을 감쌀 뿐 실패 사건 줄이 아니라 채택해도 실패 지점은 found(driver).
 - 여러 곳(`places` > 1) ambiguous/locations, 슬롯 둘 이상 ambiguous/slots, 출처끼리 다른 사건 ambiguous/sources.
 사유 우선순위: no_candidate → no_reference → symptom_not_found → ambiguous → ineligible → cause_unjudged·cause_unconfirmed → accepted.
 """
@@ -47,19 +51,26 @@ def ref_key(line_ref) -> tuple | None:
     return None
 
 
+def _top(e: dict) -> str | None:
+    return min(e["causes"])[1] if e["causes"] else None
+
+
 def merge(events: list[dict]) -> list[dict]:
-    """시각 순 사건 목록에서 같은 유형·같은 슬롯(또는 모름) 사건이 첫 사건 시각부터 `MERGE_SEC` 안이면 하나로 합친다(합친 시각에서
-    다시 재지 않아 사슬처럼 늘어나지 않는다). 합친 사건 시각은 가장 늦은 것, 원인 간격(`gap_s`)은 그 시각 기준으로 다시 잰다."""
+    """시각 순 사건 목록에서 같은 유형·같은 슬롯(모름은 모름끼리만) 사건이 첫 사건 시각부터 `MERGE_SEC` 안이면 하나로 합친다(합친
+    시각에서 다시 재지 않아 사슬처럼 늘어나지 않는다). 합친 사건 시각은 가장 늦은 것, 원인 간격(`gap_s`)은 그 시각 기준으로 다시 잰다.
+    합친 사건들의 1순위 붙은 원인이 서로 다르면(한쪽만 원인이 붙은 것도) 같은 실패를 두 시그니처가 잡은 것인지 따로 난 두 실패인지
+    모른다 — `mixed`를 표시해 기준이 붙으면 ambiguous/multiple_events로 보류한다(옆 실패의 원인을 기준 사건 원인으로 채택하지 않게)."""
     out: list[dict] = []
     first: dict[int, datetime] = {}
     for e in events:
-        prev = next((m for m in reversed(out) if e["type"] and m["type"] == e["type"]
-                     and (m.get("phone") == e.get("phone") or None in (m.get("phone"), e.get("phone")))
+        prev = next((m for m in reversed(out) if e["type"] and m["type"] == e["type"] and m.get("phone") == e.get("phone")
                      and (e["at"] - first[id(m)]).total_seconds() <= MERGE_SEC), None)
         if prev is None:
             first[id(e)] = e["at"]
             out.append(e)
             continue
+        if _top(prev) != _top(e):
+            prev["mixed"] = True
         at = max(prev["at"], e["at"])
         causes = [(c[0], c[1], round(c[2] + (at - x["at"]).total_seconds(), 3)) for x in (prev, e) for c in x["causes"]]
         prev["at"] = at
@@ -89,6 +100,8 @@ def _adopt(evs: list[dict], why: str) -> dict:
     """붙은 사건 → 채택(원인 1순위가 모두 같을 때만) 또는 보류."""
     if any(e["absence_bad"] for e in evs):     # 증상의 안 나옴을 확인 못 함 — 붙은 원인이 있어도 사건 자체가 미확인(먼저 보류)
         return _held("ineligible", "absence_unverified", evs)
+    if any(e.get("mixed") for e in evs):       # 1초 안 같은 유형 사건들의 원인이 다름(merge) — 어느 실패인지 모른다
+        return _held("ambiguous", "multiple_events", evs)
     picks = [e["causes"][0][1] if e["causes"] else None for e in evs]
     if None in picks:
         e = evs[picks.index(None)]
@@ -121,6 +134,8 @@ def _attach_line(ref: dict, events: list[dict], link_ms: int) -> tuple:
     ipc = [x for x in lines if x.get("ipc")]
     if ipc:     # CP 점: 같은 요청의 RSP(없으면 REQ) 뒤 link_ms 안 같은 슬롯(또는 모름) 실패 사건
         base = next((x for x in ipc if x["ipc"].get("dir") == "rsp"), ipc[0])
+        if base["ipc"].get("ok"):      # 기준 응답이 성공 값(`vendor_ipc.success`) — 기준 줄 자체가 실패가 아니다
+            return "held", "ineligible", "no_event_at_reference"
         t0, slot = ts(base["ts"]), base.get("phone")
         win = [e for e in events if t0 <= e["at"] <= t0 + timedelta(milliseconds=link_ms)
                and (slot is None or e.get("phone") in (slot, None))]
@@ -137,8 +152,10 @@ def _attach_line(ref: dict, events: list[dict], link_ms: int) -> tuple:
     why = "same_line"
     if not same:
         same, why = [e for e in events if e.get("cond_lines", set()) & refs], "same_line" + _COND
-    if same:    # 점(같은 줄·같은 RIL 요청)
+    if same:    # 점(같은 줄·같은 RIL 요청) — 한 줄에 유형 사건이 여럿이고 1순위 원인이 다르면 고르지 않는다
         typed = [e for e in same if e["type"]]
+        if len({e["causes"][0][1] if e["causes"] else None for e in typed}) > 1:
+            return "held", "ambiguous", "multiple_events"
         return ("events", typed[:1], why) if typed else ("held", "symptom_not_found", "same_line_typeless")
     return "held", "ineligible", "near_without_symptom"     # 근처: 문제 파악 유형이 있어야 붙인다(5-2)
 

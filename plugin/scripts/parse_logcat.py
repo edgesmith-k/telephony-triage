@@ -1121,7 +1121,7 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
     if how == "text":      # 본문 일치는 줄 레코드의 슬롯
         slots = [lines[i].get("phone_id") for i in found]
     by_line = {r["i"]: r for r in records}
-    places = lookat.group_places([_hit_item(i, lines[i], by_line.get(i)) for i in found],
+    places = lookat.group_places([_hit_item(i, lines[i], by_line.get(i), spec.success) for i in found],
                                  prof.ril_vendor.link_ms if prof.ril_vendor else lookat.PAIR_MS)
     stamp = logtime.normalize_ts(look.get("stamp"), args.tz, args.year) if look.get("stamp") else None
     same = [p for p in places if stamp is not None and any(logtime.parse_ts(x["ts"]) == stamp for x in p)]
@@ -1149,12 +1149,14 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
     return result
 
 
-def _hit_item(i: int, line: dict, rec: dict | None) -> dict:
-    """기준 줄 일치 한 줄 → 자격 검사 입력 `{i, line_ref, ts, phone, ipc?: {dir, name, token}, ril?: {serial, pid, paired_ts}}`.
-    IPC 레코드면 그 슬롯, RIL serial이 숫자일 때만 `ril`(가린 serial은 같은 요청으로 보지 않는다)."""
+def _hit_item(i: int, line: dict, rec: dict | None, success: str | None = None) -> dict:
+    """기준 줄 일치 한 줄 → 자격 검사 입력 `{i, line_ref, ts, phone, ipc?: {dir, name, token, ok?}, ril?: {serial, pid, paired_ts}}`.
+    IPC 레코드면 그 슬롯(결과가 성공 값 `success`면 `ok: true`), RIL serial이 숫자일 때만 `ril`(가린 serial은 같은 요청으로 보지 않는다)."""
     item = {"i": i, "line_ref": line.get("line_ref"), "ts": line["ts"], "phone": line.get("phone_id")}
     if rec is not None:
         item["ipc"] = {k: rec.get(k) for k in ("dir", "name", "token")}
+        if success and rec.get("result") == success:
+            item["ipc"]["ok"] = True
         item["phone"] = rec.get("phone_id")
     ril = line.get("ril") or {}
     if type(ril.get("serial")) is int:
