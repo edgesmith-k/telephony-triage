@@ -231,7 +231,7 @@ PROMPT_TEMPLATE = """너는 telephony-triage 모듈 문서 평가의 격리된 �
 - 규칙·파일 변경은 `규칙 제안:` 칸에 제안만 한다. 고쳤다·추가했다고 쓰지 않는다.
 {EXTRA_RULES}"""
 TASKS = {
-    "deep": "이슈 DB 매칭이 1위 후보를 냈다(deep-input.json의 top_candidates). 로그로 처음 실패한 층과 데몬을 확인하고 1위 원인과 같은지 판단한다.",
+    "deep": "이슈 DB 매칭이 1위 후보를 냈다(deep-input.json의 top_candidates — decision.state가 held면 채택된 원인이 아니라 관측된 규칙 일치다). 로그로 처음 실패한 층과 데몬을 확인하고 1위 원인과 같은지 판단한다.",
     "explore": "이슈 DB에 맞는 규칙이 없다(analysis.json의 explore). 타임라인으로 처음 실패한 층과 데몬을 찾는다.",
 }
 INPUT_LISTS = {

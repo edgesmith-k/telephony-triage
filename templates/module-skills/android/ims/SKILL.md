@@ -20,4 +20,4 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 3. 401 뒤 등록 성공 → 정상 인증 절차.
 4. IMS PDN(DN `IMS`)이 붙어 있으면 data는 원인이 아니다.
 5. `ImsReasonInfo` 121은 서비스 없음의 결과다. 그 앞 무선 상태를 본다.
-6. 1위와 비교: 같으면 `1위와 같음`, 다르면 `<원인 ID> — <근거>`.
+6. 1위와 비교: 같으면 `1위와 같음`, 다르면 `<원인 ID> — <근거>`. 입력 `decision.state`가 `held`면 1위는 채택된 원인이 아니라 관측된 규칙 일치다(원인으로 단정하지 않는다).

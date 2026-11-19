@@ -21,4 +21,4 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 4. 미등록 dial 뒤 `LAST_CALL_FAIL_CAUSE … causeCode:`는 결과다. RILJ·벤더 RIL로 답하지 않는다.
 5. 실패 앞에 `UNSOL_MODEM_RESTART`·무선 `UNAVAILABLE`이 있으면 모뎀 쪽이다(modem 문서).
 6. UT·부가서비스(`OEM_REQ_IMS_*`)는 RILJ 요청이 없는 것이 정상이다.
-7. 1위와 비교: 같으면 `1위와 같음`, 다르면 `<원인 ID> — <근거>`.
+7. 1위와 비교: 같으면 `1위와 같음`, 다르면 `<원인 ID> — <근거>`. 입력 `decision.state`가 `held`면 1위는 채택된 원인이 아니라 관측된 규칙 일치다(원인으로 단정하지 않는다).

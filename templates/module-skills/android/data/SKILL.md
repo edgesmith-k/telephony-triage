@@ -22,4 +22,4 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 5. 끊김: `DEACTIVATE_DATA_CALL`·`RADIO_POWER` 요청 없이 목록에서 빠짐 → 모뎀·망(전한 벤더 RIL). AT 중계 `AT+CFUN=0` 뒤면 `곁가지(<태그>)`.
 6. 재시도 예약이 로그 끝 뒤면 재시도는 판단 않는다.
 7. 다른 요청 오류(`SIM_IO`, `NOTIFY_IMS_DATA_NETWORK error 6`)는 시각·요청이 이어질 때만.
-8. 1위와 비교: 같으면 `1위와 같음`, 다르면 `<원인 ID> — <근거>`.
+8. 1위와 비교: 같으면 `1위와 같음`, 다르면 `<원인 ID> — <근거>`. 입력 `decision.state`가 `held`면 1위는 채택된 원인이 아니라 관측된 규칙 일치다(원인으로 단정하지 않는다).

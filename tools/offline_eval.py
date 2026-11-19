@@ -285,6 +285,8 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     dec = analysis.get("decision")
     if isinstance(dec, dict) and dec.get("state") == "held":
         result["held_reason"] = dec.get("reason")
+    if isinstance(dec, dict):      # 실패 지점 상태(포털은 accepted + confirmed면 본 분석을 건너뛴다)
+        result["location"] = (dec.get("location") or {}).get("state")
     sa = analysis.get("step_anchor") or {}
     if sa:
         result["anchor"] = {"source": sa.get("source"), "fail": (sa.get("span") or [None, None])[-1]}
@@ -385,6 +387,9 @@ def summarize(results: list[dict], include_in_sample: bool = False) -> dict:
         # 보류 사유(decision.reason)별 수 — decision 없는 결과(1위 기준 채택)의 보류는 `top`
         "held_reasons": dict(sorted(Counter(r.get("held_reason") or "top" for r in scored if not r.get("adopted")).items())),
         "answer_rate": rate(len(adopted), len(scored)),
+        # 실패 지점 상태별 수(decision.location.state) — confirmed가 넓어지면 기준값 시험이 깨지게
+        "location_confirmed": sum(r.get("location") == "confirmed" for r in scored),
+        "location_found": sum(r.get("location") == "found" for r in scored),
         "correct_hold": sum(not r.get("adopted") and r["expect"] == UNRESOLVED for r in scored),
         "held_top_right": sum(not r.get("adopted") and r["expect"] != UNRESOLVED and r["top"] == r["expect"] for r in scored),
         "anchor_runs": sum(r.get("anchor_ok") is not None for r in scored),
