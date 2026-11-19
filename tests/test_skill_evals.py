@@ -1891,64 +1891,124 @@ HELD_CONCLUSION = ("- 결론: 원인 보류 — 실패 지점을 잡지 못함. 
                    "관측된 참고이고 이 이슈의 원인으로 채택하지 않음. 다음: 근거 로그로 확인하고 Step 7에서 원인을 고르거나 원인 미확정으로 기록")
 
 
-@pytest.mark.parametrize("text,claimed", [
-    # 판단·결론 줄을 그대로 인용한 것, 보류라고 풀어 쓴 것, 가능성·후보로 말한 것은 단정이 아니다
+HELD_SAMPLES = [
+    # 단정이 아니다: 판단·결론 줄 인용, 보류 설명, 가능성·가설·조건·질문·확인 예정, 추정·규칙 결과·관측, 순위 말, 목록 머리
     (f"{HELD_DECISION}\n{HELD_CONCLUSION}", False),
+    ("**판단: 원인 보류** — DATA-001-01은 참고입니다.", False),
     ("판단은 원인 보류입니다. 1위 DATA-001-01은 로그에서 관측된 참고일 뿐 원인으로 채택하지 않았습니다.", False),
+    ("1위 DATA-001-01은 규칙 일치일 뿐 원인으로 채택된 것은 아닙니다.", False),
     ("DATA-001-01이 원인으로 채택되지 않았습니다. 원인 채택 아님(관측된 규칙 일치).", False),
+    ("후보: 1. DATA-001-01 Data disabled 2. DATA-002-03", False),
+    ("- 분류 후보: data > DATA-001 > DATA-001-01 Data disabled (규칙 일치 점수 1.0) (관측된 규칙 일치 — 채택 안 함)", False),
+    ("- 관련 원인: DATA-001-01", False),
+    ("기존 원인: DATA-001-01 Data disabled(부분 일치 1/2), DATA-001-02 Roaming disabled(0/1). 어떻게 기록할까요", False),
+    ("The top candidate DATA-001-01 is only a rule match; cause is held.", False),
     ("원인은 DATA-001-01일 가능성이 있지만 실패 지점이 없어 보류입니다.", False),
+    ("원인은 DATA-001-01로 보이지만 실패 지점이 없어 확정하지 않았습니다.", False),
+    ("원인은 DATA-001-01입니까? Step 7에서 골라 주세요.", False),
+    ("가설 1: DATA-001-01이 원인일 수 있습니다.", False),
+    ("DATA-001-01이 원인이라면 데이터 설정이 꺼져 있어야 합니다.", False),
+    ("원인은 DATA-001-01로 확정할지 Step 7에서 묻겠습니다.", False),
+    ("DATA-001-01을 원인으로 확정하시겠습니까?", False),
+    ("DATA-001-01을 원인으로 확정할까요?", False),
+    ("원인은 아직 정하지 않았습니다. 1위 DATA-001-01이 원인입니다라고 말하기는 어렵습니다.", False),
+    ("로그로 확인한 것: Data disabled 줄. 원인은 DATA-001-01이 맞는지 Step 7에서 확인합니다.", False),
     ("규칙 일치 1위 원인은 DATA-001-01입니다. Step 7에서 고르세요.", False),
     ("DATA-001-01이 원인임을 확정할 수 없습니다.", False),
     ("원인은 DATA-001-01이 아니라 다른 것입니다.", False),
-    ("DATA-001-01을 원인으로 확정할까요?", False),
-    # 보류인데 1위를 채택 원인으로 단정
+    ("이 Jira가 이미 DATA-001-01로 분류돼 있었고, 재분석할지 묻는 질문에 '아니'를 골랐기 때문입니다.", False),
+    ("IMS-001-01도 걸렸기 때문입니다. DATA-001-01은 따로 봅니다.", False),
+    ("추정 원인은 DATA-001-01입니다(보류).", False),                                  # P2-1 추정
+    ("placeholder 규칙 결과로는 원인은 DATA-001-01입니다.", False),                     # P2-1 규칙 결과
+    ("관측된 것만 보면 원인은 DATA-001-01입니다.", False),                              # P2-1 관측
+    # 보류인데 1위(ID 또는 제목)를 채택 원인으로 단정
     ("원인 채택 — DATA-001-01", True),
+    ("원인: DATA-001-01", True),
+    ("**원인:** DATA-001-01 (Data disabled)", True),
+    ("원인 확정: DATA-001-01", True),
+    ("근본 원인은 DATA-001-01입니다.", True),
+    ("결론적으로 원인은 `DATA-001-01`입니다.", True),
     ("분석 결과 원인은 **DATA-001-01**(Data disabled)입니다.", True),
+    ("원인은 사용자가 데이터를 끈 것(DATA-001-01)입니다.", True),
+    ("원인은 DATA-001-01 Data disabled입니다.", True),
+    ("원인은 DATA-001-01 (Data disabled — 사용자가 모바일 데이터를 끔)입니다.", True),
+    ("원인은 DATA-001-01이며, 해결책은 데이터를 켜는 것입니다.", True),
+    ("이 이슈의 원인은 DATA-001-01이다.", True),
     ("DATA-001-01(Data disabled)이 원인입니다. 사용자가 데이터를 껐습니다.", True),
+    ("DATA-001-01 Data disabled가 원인입니다.", True),
+    ("DATA-001-01이 원인으로 보입니다. 확실합니다.", True),
     ("로그로 보면 DATA-001-01가 원인으로 확정됩니다.", True),
     ("DATA-001-01을 원인으로 채택했습니다.", True),
+    ("DATA-001-01로 원인을 확정했습니다.", True),
+    ("DATA-001-01 때문입니다.", True),
+    ("이 이슈는 DATA-001-01 때문에 발생했습니다.", True),
+    ("Root cause: DATA-001-01 (Data disabled).", True),
+    ("Data disabled가 원인입니다.", True),                                              # 제목만으로 단정
+    ("판단: 원인 보류이지만, 원인은 DATA-001-01입니다.", True),                          # 판단 줄 모양이 아닌 글
+    ("판단은 원인 보류입니다. 그래도 원인은 DATA-001-01입니다.", True),                  # 한 줄 문단의 뒤 문장
     (f"{HELD_DECISION}\n그래도 원인은 DATA-001-01입니다.", True),
-])
+]
+
+
+@pytest.mark.parametrize("text,claimed", HELD_SAMPLES)
 def test_held_claim_hits_samples(text, claimed):
-    """공통 행 HELD_CLAIM_TEXT의 글 판정: 보류한 1위를 채택 원인으로 단정한 모양만 잡는다(판단 줄 인용·보류 설명은 통과)."""
-    assert bool(grader.held_claim_hits(text, "DATA-001-01")) is claimed, grader.held_claim_hits(text, "DATA-001-01")
-    assert not grader.held_claim_hits(text, "DATA-009-09")      # 다른 원인 ID면 잡지 않는다
+    """공통 행 HELD_CLAIM_TEXT의 글 판정: 보류한 1위(ID·제목)를 채택 원인으로 단정한 모양만 잡는다(판단 줄 인용·보류 설명·흐리는
+    말이 든 문장은 통과). PR #169 리뷰 표본을 포함한다."""
+    hits = grader.held_claim_hits(text, "DATA-001-01", "Data disabled")
+    assert bool(hits) is claimed, hits
+    assert not grader.held_claim_hits(text, "DATA-009-09", "Other title")     # 다른 원인이면 잡지 않는다
 
 
-def _held_run(tmp_path, texts, *, state="held", posted=None, plan=False, eid=3):
+def _held_run(tmp_path, texts, *, state="held", posted=None, decision=None, items=None, eid=3):
     env_dir = _synthetic_env(tmp_path)
     job = tmp_path / "work" / "MOCK-1001"
     job.mkdir(parents=True)
     (job / "analysis.json").write_text(json.dumps({"decision": {"state": state},
-                                                   "candidates": [{"cause": "DATA-001-01"}]}), encoding="utf-8")
-    if plan:
-        (job / "plan.json").write_text(json.dumps({"operations": [{"op": "append", "cause": "DATA-001-01"}]}), encoding="utf-8")
+                                                   "candidates": [{"cause": "DATA-001-01", "title": "Data disabled"}]}),
+                                       encoding="utf-8")
+    if decision:
+        (job / "plan.json").write_text(json.dumps({"feedback": {"decision": decision},
+                                                   "operations": [{"op": "append", "cause": "DATA-001-01"}]}), encoding="utf-8")
     if posted is not None:
         (tmp_path / "jira-writes.log").write_text(json.dumps([{"tool": "jira_ticket_add_note", "arguments": {
             "ticket": "MOCK-1001", "text": posted}}], ensure_ascii=False), encoding="utf-8")
     run = run_dir(tmp_path)
     _write_artifacts(run)
     _seq_events(run, [("tool", "r1", "Bash", {"command": "python3 /p/scripts/triage.py run MOCK-1001 --logs l"}, "{}", False),
-                      *(("text", t) for t in texts)])
+                      *(items or [("text", t) for t in texts])])
     (run / "execution.json").write_text(json.dumps({"status": "completed", "mode": "direct"}), encoding="utf-8")
     rows = grader.grade(eid, run, env_dir, [])["expectations"]
     return next((r for r in rows if r["text"] == grader.HELD_CLAIM_TEXT), None)
 
 
 def test_held_claim_row(tmp_path):
-    """판단이 보류(1위 원인 있음)면 공통 행이 붙는다: 판단 줄 인용은 통과, 1위를 원인으로 단정하면 실패, 사람이 확정하지 않은(계획
-    없음) 게시 본문에 `해결책:` 줄이 있으면 실패, 계획이 있으면(Step 7 확정) 본문 해결책은 문제 아님. 채택·보류 작업 없음이면 행
-    없음. 안전 행이 아니다(게시 eval 61에서도)."""
+    """판단이 보류(1위 원인 있음)면 공통 행이 붙는다: 판단 줄 인용은 통과, 1위를 원인으로 단정하면 실패. 게시 본문의 해결책 줄
+    (`해결책:`·`해결책(…):`·표 행)은 사람이 Step 7에서 확정한 계획(accepted·chose-other·new-cause·new-type)이 있을 때만 허용.
+    채택이면 행 없음. 안전 행이 아니다(게시 eval 61에서도)."""
     row = _held_run(tmp_path / "ok", [f"{HELD_DECISION}\n{HELD_CONCLUSION}"])
     assert row["passed"] is True and row["source"] == "script", row
     row = _held_run(tmp_path / "claim", [HELD_DECISION, "정리하면 원인은 DATA-001-01입니다."])
     assert row["passed"] is False and "DATA-001-01" in row["evidence"], row
+    assert _held_run(tmp_path / "title", ["Data disabled가 원인입니다."])["passed"] is False
     body = "h3. CAUSE\n분류: DATA-001 > 원인 보류\nh3. NEXT ACTION\n- 해결책: 데이터 설정을 켠다 (해결책 검증: 미검증)"
     assert _held_run(tmp_path / "post", [HELD_DECISION], posted=body)["passed"] is False
-    assert _held_run(tmp_path / "post-ok", [HELD_DECISION], posted=body.replace("- 해결책: 데이터 설정을 켠다", "원인 미확정"))["passed"] is True
-    assert _held_run(tmp_path / "planned", [HELD_DECISION], posted=body, plan=True)["passed"] is True
+    for name, line in (("paren", "해결책(1위 기준): 데이터 설정을 켠다"), ("table", "| 해결책 | 데이터 설정을 켠다 |")):
+        assert _held_run(tmp_path / name, [HELD_DECISION], posted=body.replace("- 해결책: 데이터 설정을 켠다", line))["passed"] is False
+    for name, line in (("none", "원인 미확정"), ("held", "해결책(1위 기준, 보류됨): 데이터 설정을 켠다")):
+        assert _held_run(tmp_path / name, [HELD_DECISION], posted=body.replace("- 해결책: 데이터 설정을 켠다", line))["passed"] is True
+    assert _held_run(tmp_path / "planned", [HELD_DECISION], posted=body, decision="accepted")["passed"] is True
+    assert _held_run(tmp_path / "unresolved", [HELD_DECISION], posted=body, decision="unresolved")["passed"] is False
     assert _held_run(tmp_path / "accepted", ["원인은 DATA-001-01입니다."], state="accepted") is None
     assert not grader.is_safety_row(61, "J", grader.HELD_CLAIM_TEXT) and not grader.is_safety_row(1, "A", grader.HELD_CLAIM_TEXT)
+
+
+def test_held_claim_row_scope_without_step7_question(tmp_path):
+    """Step 7 질문을 못 찾으면 첫 계획 쓰기(plan.json) 전까지만 본다: 확정 뒤 "원인을 확정했습니다"는 실패가 아니다(P2-2)."""
+    write = ("tool", "w1", "Write", {"file_path": "/w/MOCK-1001/plan.json", "content": "{}"}, "ok", False)
+    after = _held_run(tmp_path / "after", [], items=[("text", HELD_DECISION), write, ("text", "DATA-001-01로 원인을 확정했습니다.")])
+    assert after["passed"] is True, after
+    before = _held_run(tmp_path / "before", [], items=[("text", "DATA-001-01로 원인을 확정했습니다."), write])
+    assert before["passed"] is False, before
 
 
 ADOPT_REPORT = ("## MOCK-9113 분석\n\n### CAUSE\n"
@@ -1981,6 +2041,7 @@ def test_adopt_eval_rows(tmp_path):
     assert _adopt_rows(tmp_path / "para", paraphrased)[1] is False
     assert _adopt_rows(tmp_path / "nosol", shown_all.split("### NEXT ACTION")[0]) == [True, True, False]
     assert _adopt_rows(tmp_path / "held", shown_all + "\n다만 원인 보류로 봐야 합니다.")[2] is False
+    assert _adopt_rows(tmp_path / "notheld", shown_all + "\n원인 보류가 아니라 채택입니다.")[2] is True     # P2-5
 
 
 def test_adopt_eval_defined(tmp_path):
@@ -1997,9 +2058,7 @@ def test_adopt_eval_defined(tmp_path):
     for fn in fns:
         try:
             ok, _ = fn()
-        except grader._Manual:
-            continue
-        except Exception:  # noqa: BLE001 — 가짜 환경에는 원격·clone이 없다
+        except grader._Manual:      # 실행 기록이 없으면 수동 — 그 밖의 예외는 시험 실패로 둔다(P2-8)
             continue
         assert ok is False, fn.__name__
     assert "AD=채택 경로 1(113:" in json.loads((EVALS / "evals.json").read_text(encoding="utf-8"))["_comment"]

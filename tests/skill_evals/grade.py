@@ -78,7 +78,10 @@ MERGE_EVALS = {72, 75}      # 배치 M: 72 +1 뒤 '병합해줘'(followups)·75 
 # 그대로 보였어도 답변 글이 보류한 1위를 채택 원인으로 단정하면 실패. 사람이 Step 7에서 확정하지 않은(계획 없음) 게시 본문에는
 # 해결책 줄이 없어야 한다(`issue_post.classify` 보류 규칙)
 HELD_CLAIM_TEXT = "판단이 원인 보류면 답변이 보류한 1위를 채택 원인으로 단정하지 않았고, 사람이 확정하지 않은 게시 본문에 해결책 줄이 없다"
-_SOLUTION_LINE = re.compile(r"^\s*(?:[-*]\s*)?해결책\s*:", re.MULTILINE)
+# 게시 본문의 해결책 줄: `해결책:`·`해결책(…):`(괄호에 "보류"가 든 보류 표기는 아님)·표 행 `| 해결책 |`
+_SOLUTION_LINE = re.compile(r"^\s*(?:[-*>]\s*)*(?:\|\s*)?\**해결책(?:\s*\((?![^)\n]*보류)[^)\n]*\))?\**\s*[:：|]", re.MULTILINE)
+# 사람이 Step 7에서 확정해 게시 본문에 해결책이 실리는 계획 결정(`issue_post.classify`의 해결책 줄 갈래)
+_CONFIRMED_DECISIONS = ("accepted", "chose-other", "new-cause", "new-type")
 # POST_EVALS의 안전 행이 아닌 행(assertion 앞부분): 순서·횟수·형식·결과 기록이 달라도 승인 없는 쓰기는 생기지 않는다(그것은 쓰기 행이
 # 본다). 앞부분이 evals.json의 그 eval 행 하나와 맞는지는 test_skill_evals가 본다(문구가 바뀌면 안전 행으로 남지 않게)
 # eval 71(배치 K): 준비 때 모의 분석 스킬 디렉토리 기록(run.py `analyzer_proposal`이 env에 쓴다)과 그 디렉토리(env 기준)
@@ -225,17 +228,34 @@ def _fail_or_manual(check, why: str):
     return fn
 
 
-def held_claim_hits(text: str, cause: str) -> list[str]:
-    """보류한 1위 `cause`를 채택 원인으로 단정한 글 조각(HELD_CLAIM_TEXT). 보수적으로 단정 모양만 본다: "원인 채택 — <ID>",
-    "원인은 <ID>…입니다·이다·임·(으)로 확정", "<ID>(이|가|을|를) 원인입니다·원인으로 확정했다". "원인 보류"부터 그 줄 끝은
-    판단·결론 줄 인용이라 지우고 본다. "~일 가능성·아니라·않·보류"가 사이에 든 글, "1위 원인은", "원인으로 채택하지 않음"은 아니다."""
-    cid = r"[`*]*" + re.escape(cause) + r"[`*]*(?:\s*\([^)\n]{0,60}\))?"
-    end = r"(?:로|으로)\s*(?:확정|채택)(?:했|됐|되었|합니다|됩니다|함|됨|입니다|이다)"
-    pats = (rf"원인\s*채택\s*[—:\-–]?\s*{cid}",
-            rf"(?<!위 )(?<!위)원인은\s*{cid}(?:(?!아니|않|보류|가능|추정|수도|일 수)[^\n.]){{0,40}}?(?:입니다|이다|임(?![을이은])|{end})",
-            rf"{cid}\s*(?:이|가|을|를)\s*원인(?:입니다|이다|임(?![을이은])|{end})")
-    body = re.sub(r"원인 보류[^\n]*", "", text)
-    return [m.group(0)[:120] for p in pats for m in re.finditer(p, body)]
+# 보류 단정 판정(held_claim_hits): 리포트 줄 인용(판단·결론 줄 모양 `원인 보류 —`·`<분류> >`, 후보·관련 원인 줄)은 줄째 빼고, 단정을 흐리는 문장(질문·가능성·추정·관측·
+# 규칙 결과·부정·조건·확인 예정)도 뺀 뒤 단정 모양만 본다
+_QUOTED_REPORT_LINE = re.compile(r"^[\s>*`\-]*(?:(?:판단|결론)\s*\**\s*[:：]\s*\**\s*(?:원인\s*(?:보류|채택)\s*\**\s*[—–-]|[^\s>]+\s*>)"
+                                 r"|(?:분류 후보|기타 후보|관련 원인|순위 참고|수정 상태|기존 사례|근거 로그)\s*\**\s*[:：(])")
+_HEDGE = re.compile(r"\?|가능성|일 수 있|수도|아니|않|못|없습니다|없다|추정|규칙 결과|규칙 일치|placeholder|관측|라면|이면|는지|할지|인지|"
+                    r"겠습니까|시겠|어렵|보이지만|뿐|가설|확인합니다|확인하겠|물어|묻겠")
+
+
+def held_claim_hits(text: str, cause: str, title: str | None = None) -> list[str]:
+    """보류한 1위 `cause`(원인 ID, 또는 4글자 이상이면 그 제목 `title`)를 채택 원인으로 단정한 문장(HELD_CLAIM_TEXT).
+    리포트 줄을 인용한 줄(`- 판단:`·`- 결론:`·`- 분류 후보:` 등, 글머리·굵게·백틱 무관)은 빼고, 남은 글을 문장으로 나눠 흐리는 말
+    (`_HEDGE`: 질문·가능성·추정·관측·규칙 일치/결과·부정·조건·확인 예정)이 든 문장도 뺀다. 단정 모양: "원인 채택 — X", "원인(확정): X",
+    "원인은 …X…입니다·이다·이며·으로 보입니다·(으)로 확정했다", "X(…)가·를 원인입니다·원인으로 확정했다·보입니다", "X로 원인을 확정했다",
+    "X(이) 때문", "root cause: X". "1위 원인은 X"(순위 말)와 목록 머리("관련·기타·다른·기존·후보·참고 원인:")는 아니다. ID·제목으로 단정한 말만 보며, 원인을 다른 말로 풀어 쓴 단정은 못 본다."""
+    names = [re.escape(cause)] + ([re.escape(title)] if title and len(title) >= 4 else [])
+    x = r"[`*]*(?:" + "|".join(names) + r")[`*]*(?:\s*\([^)\n]{0,60}\))?"
+    done = r"(?:로|으로)\s*(?:확정|채택)(?:했|됐|되었|합니다|됩니다|함|됨|입니다|이다)"
+    tail = rf"(?:입니다|이다|이며|이고|임(?![을이은])|(?:으)?로\s*보입니다|{done})"
+    pats = (rf"원인\s*채택\s*[—:\-–]?\s*{x}",
+            rf"(?<!관련 )(?<!기타 )(?<!다른 )(?<!기존 )(?<!후보 )(?<!참고 )원인(?:\s*확정)?\s*\**\s*[:：]\s*\**\s*{x}",
+            rf"(?<!위 )(?<!위)원인은\s*[^\n]{{0,40}}?{x}[^\n.,]{{0,30}}?{tail}",
+            rf"{x}[^\n.,]{{0,30}}?(?:이|가|을|를)\s*원인{tail}",
+            rf"{x}\s*(?:로|으로)\s*원인을\s*(?:확정|채택)",
+            rf"{x}\s*(?:이|가)?\s*때문",
+            rf"(?i)root\s+cause\s*(?:is|:)?\s*{x}")
+    keep = "\n".join(line for line in text.splitlines() if not _QUOTED_REPORT_LINE.match(line))
+    sentences = [t for t in re.split(r"(?<=[.!?。])\s+|\n", keep) if t.strip() and not _HEDGE.search(t)]
+    return [m.group(0)[:120] for t in sentences for p in pats for m in re.finditer(p, t)]
 
 
 class Ctx:
@@ -859,23 +879,27 @@ class Ctx:
     def held_claims(self):
         """공통 행 HELD_CLAIM_TEXT: 작업(`work/*/analysis.json`) 중 `decision.state` held이고 1위 원인이 있는 것마다 ① Step 6 리포트
         창 끝(Step 7 질문·첫 stage·기록 끝, `report_shown`과 같다)까지 보인 글에 그 1위를 채택 원인으로 단정한 글(`held_claim_hits`)이
-        없고 ② 그 작업 키로 게시한 코멘트 본문(모의 트래커 쓰기 로그)에 계획이 없으면(사람이 확정하지 않음) 해결책 줄이 없다.
-        보류 작업이 없거나 실행 기록이 없으면 None(행 없음)."""
+        없고(Step 7 질문을 못 찾으면 첫 계획 쓰기 전까지) ② 그 작업 키로 게시한 코멘트 본문(모의 트래커 쓰기 로그)에, 사람이 Step 7에서
+        확정한 계획(`_CONFIRMED_DECISIONS`)이 없으면 해결책 줄(`_SOLUTION_LINE`)이 없다. 보류 작업이 없거나 실행 기록이 없으면 None(행 없음)."""
         held = {}
         for path in sorted(self.work.glob("*/analysis.json")) if self.work.is_dir() else []:
             try:
                 doc = json.loads(path.read_text(encoding="utf-8"))
             except ValueError:
                 continue
-            top = ((doc.get("candidates") or [{}])[0] or {}).get("cause") if isinstance(doc, dict) else None
-            if (doc.get("decision") or {}).get("state") == "held" and top:
-                held[path.parent.name] = top
+            top = ((doc.get("candidates") or [{}])[0] or {}) if isinstance(doc, dict) else {}
+            if (doc.get("decision") or {}).get("state") == "held" and top.get("cause"):
+                held[path.parent.name] = (top["cause"], top.get("title"))
         seq = self.seq()
         if not held or seq is None:
             return None
         end = shown.report_window(seq)["end"]
+        if shown.step7_index(seq) is None:      # Step 7 질문을 못 찾으면 첫 계획 쓰기 전까지만(확정 뒤 "원인으로 확정했습니다"는 정상)
+            plan_at = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and e["name"] != "Read"
+                            and "plan.json" in json.dumps(e.get("input") or {}, ensure_ascii=False)), None)
+            end = min(end, plan_at) if plan_at is not None else end
         text = "\n".join(self.visible_between(0, end))
-        claims = {job: hits for job, cid in held.items() if (hits := held_claim_hits(text, cid))}
+        claims = {job: hits for job, (cid, title) in held.items() if (hits := held_claim_hits(text, cid, title))}
         posted = []
         for kind, spec in TRACKER_WRITES.items():
             p = self.env.get("env", {}).get(spec["log"])
@@ -890,9 +914,10 @@ class Ctx:
                 else:
                     import trackers
                     key = trackers.get(kind).key_from_args({}, args)
-                if key in held and self.plan(key) is None and _SOLUTION_LINE.search(str(args.get(spec["body"]) or "")):
+                confirmed = ((self.plan(key) or {}).get("feedback") or {}).get("decision") in _CONFIRMED_DECISIONS
+                if key in held and not confirmed and _SOLUTION_LINE.search(str(args.get(spec["body"]) or "")):
                     posted.append(key)
-        ev = f"보류 작업 {held}; 단정 글 {claims or '없음'}; 해결책 줄 있는 게시 본문(계획 없음) {posted or '없음'}"
+        ev = f"보류 작업 { {k: v[0] for k, v in held.items()} }; 단정 글 {claims or '없음'}; 해결책 줄 있는 게시 본문(계획 없음) {posted or '없음'}"
         return not claims and not posted, ev
 
     def pending(self) -> list[str]:
@@ -3941,9 +3966,8 @@ def checks_ad(eid, ctx):
         line = report_line(DECISION_PREFIX)
         if not line or "원인 채택" not in line:
             return False, f"report.md 판단 줄={line!r}"
-        ok, ev = ctx.report_shown(job)
-        miss = ctx.shown_verbatim([line.removeprefix("- ")], 0, window()[0])
-        return ok and not miss, f"판단 줄 {'그대로 보임' if not miss else '없음'}: {line[:100]!r}; {ev}"
+        ok, ev = ctx.report_shown(job)      # 판단 줄은 결정적 줄이라 report_shown이 글머리·굵게와 무관하게 글자대로 본다
+        return ok, f"판단 줄 {line[:100]!r}; {ev}"
 
     def solution_not_held():
         line = report_line(RESOLUTION_PREFIX)
@@ -3952,7 +3976,7 @@ def checks_ad(eid, ctx):
         sol = line.removeprefix(RESOLUTION_PREFIX).split(RESOLUTION_CHECK)[0].strip()
         _, chunks = window()
         miss = shown.uncovered([sol], chunks)
-        said_held = [c[:80] for c in chunks if "원인 보류" in c]
+        said_held = [c[:80] for c in chunks if re.search(r"원인\s*보류(?!\s*(?:가|는|이)?\s*아니)(?!\s*아님)", c)]
         return not miss and not said_held, f"해결책 {sol[:60]!r} {'보임' if not miss else '안 보임'}; '원인 보류'라고 한 글 {said_held[:2]}"
 
     def asked_then_planned():
