@@ -4964,7 +4964,7 @@ def grade(eid: int, run_dir: Path, env_dir: Path, assertions: list[str], budget:
     if eid not in MERGE_EVALS:
         ok, ev = ctx.no_merge()
         rows.append({"text": NO_MERGE_TEXT, "passed": ok, "evidence": ev[:500], "source": "script"})
-    held = ctx.held_claims()
+    held = getattr(ctx, "held_claims", lambda: None)()     # 가짜 Ctx(시험)에는 없을 수 있다
     if held is not None:
         rows.append({"text": HELD_CLAIM_TEXT, "passed": held[0], "evidence": held[1][:500], "source": "script"})
     rows += [budget_row] if budget_row else []
