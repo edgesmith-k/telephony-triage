@@ -448,6 +448,23 @@ def test_problem_types_make_near_and_steps_file_range_eligible():
         ("held", "ineligible", "near_without_symptom")
 
 
+def test_adoption_picked_by_problem_types_is_never_confirmed():
+    """리뷰 P1-2: 허용 유형이 고른 사건(CP 점 2초 안·구간)은 유형 없이는 다른 사건이 붙었을 수 있다 — 채택해도 실패 지점은 found.
+    허용 유형은 CP 점·근처·구간에서만 쓰고 셋 다 found라 따로 표시하지 않는다(같은 줄 점은 유형으로 거르지 않는다)."""
+    from triagelib import driver
+    net = {"types": ["NETWORK-001"], "not_in_db": False}
+    cands = [{"category": "network", "type": "NETWORK-001", "cause": "N3"}]
+    ipc = point(4, 199, ipc={"dir": "rsp", "name": "VIPC_X", "token": 1})
+    evs = [ev("DATA-003", 199.3, ["D1"], line=(0, 30)), ev("NETWORK-001", 200.5, ["N3"], line=(0, 31))]
+    cases = ((evs, ipc, {"state": "confirmed", "source": "look_at", "kind": "point"}),
+             ([ev("DATA-003", 105, ["D1"], line=(0, 5)), ev("NETWORK-001", 110, ["N3"], line=(0, 7))], rng("log_marker", 100, 130),
+              {"state": "confirmed", "source": "log_marker", "kind": "range"}))
+    for events, ref, location in cases:
+        d = el.decide(events, [ref], problem=net)
+        assert outcome(d) == ("accepted", "anchored_top", "N3")
+        assert driver._decision(cands, {"location": location}, el.summary(d, events))["location"]["state"] == "found"
+
+
 def test_problem_not_in_db_holds_and_no_reference_stays():
     """`not_in_db`면 기준이 있어도 다른 사건의 원인으로 대신하지 않는다. 기준이 전혀 없으면 유형이 있어도 no_reference."""
     nid = {"types": [], "not_in_db": True}
@@ -631,7 +648,8 @@ def test_run_config_switches(seed_db):
     d = a["decision"]
     assert (d["state"], d["selected"]["cause"], d["location"]) == \
         ("accepted", "DATA-003-01", {"state": "found", "source": "comment", "kind": "point"})
-    assert "실패 지점: Jira 코멘트·단서 위치(확정 아님)" in (out / "report.md").read_text(encoding="utf-8")
+    line = next(x for x in (out / "report.md").read_text(encoding="utf-8").splitlines() if x.startswith("- 판단: "))
+    assert "(코멘트 단서 기준, 실패 지점 확정 아님" in line and "자격 검사 통과" not in line, line     # 판정처럼 읽히지 않게
     a, _ = _problem_run(seed_db, "off", "cluepos.log", [IPC_CLUE], root=plugin_root(eligibility={"comment_adopt": False}))
     assert (a["decision"]["state"], a["decision"]["check"]["why"]) == ("held", "comment_unconfirmed")
     # 리뷰 P2-2: 참·거짓이 아닌 값(글자 "false")은 경고하고 기본(참) — 몰래 참·거짓으로 읽지 않는다
