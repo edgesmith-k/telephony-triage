@@ -14,10 +14,10 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게(10/06 사용자). 사용자 승인 대상(이슈 DB push, main 병합·태그 등 지시 없는 외부 동작)은 사용자에게.
 
-## 진행 상태 (11/14)
+## 진행 상태 (11/19)
 
-- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강·H 완료. 사내 마지막 반입 **import-20261103**(`77e2827`). 태그 `import-20261109`·`b`는 미반입.
-- 다음 묶음 **import-20261115**(태그·반입은 사용자, 사내 §8). 11/13 종합 리뷰: 반입해 사내 보완을 이어 가도 된다(P0 0).
+- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강·H 완료. 사내 마지막 반입 **import-20261117**(`46eadb4c`, 11/17). `import-20261119`(`a97053de`)는 push만 하고 반입 보류(11/19).
+- 다음 묶음: 분석 정확도 단계 3·4 병합 뒤(사용자 승인). 진행 기록은 사외 장부(레포 밖).
 - 모델 Sonnet 5.5 기준. `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서(`docs/book/`)는 스냅샷, 정본은 `docs/TEAM_GUIDE.md`.
 
@@ -33,15 +33,11 @@
 
 ## 사내로 넘긴 것
 
-- **재반입 노트 (import-20261115 = import-20261103(`77e2827`) 이후 전부)**
-  - guard 판정이 바뀌었다(`08-safety.md §9`): base push·병합 계열(규칙 6·11)과 규칙 5(`ci_mode: actions`)는 거부→ask, Claude의 Approve·리뷰 기각·자동 병합 켜기·보호 변경·`refs/remotes` 위조는 새로 거부. 팀 배포 전 `site_step.py check S-4a` `s4a.protection_guard` 통과. §8대로 사내 대상 eval 12개 모두 다시. S1 확인 전인데 site-defaults `tracker.isolation_confirmed: true`면 `false`로.
-  - 새 DB는 마스킹 끔(SITE_INSTALL §9, 스킬 eval 없음). 가리는 DB만 S13을 새 방법으로 다시, 그 전엔 사내 로그를 DB에 안 넣는다.
-  - S-5 `offline_eval`은 이슈 DB에 이미 있는 키도 표본내로 뺀다. 옛 판으로 `summary`까지 한 대기 작업은 PR 본문에 메모 원문이 남는다 → `summary` 다시나 `discard`. `issue_db.path`가 이슈 DB clone이 아니면(빈 값·상대 경로·`issue-db.config.yaml` 없음) `db_pr`·`db_verify`가 git 전에 종료 2. #112·#113 변경은 표시 기록 블록(`render_markdown`·`shown.record`)에 닿지 않는다.
-  - `platform.ril.vendor`를 두었으면 벤더 HAL 짝(`hal`)이 바뀔 수 있다 → `db_regress`로 확인(#109). S-0이 `site_step` 첫 단계(#102). 직접 입력한 소스 경로는 개인 `code_profiles`에 자동 저장(#106).
-  - 그 밖(#80 모듈 스킬 레포·+1 병합, #85 스냅샷 overlay, #86 Android 17 태그·RIL·슬롯, #87 OpenCode, #90·#95·#98 마스킹): 파일별 영향·관리자 할 일(`site-defaults.yaml`의 `analyzers.*.inputs`·`max_tokens_hint`·`issue_db.merge` 지우기)은 `MODULE_SKILLS_RESULT.md` "반입 노트"(#80까지). #114 백엔드 0.1.5: 첫 분석은 캐시 없이 돈다, `min_version`은 그대로. #117: plan·DB 영향 없음. 사내 DB는 schema PR 전까지 항목 `ref` 든 계획을 종료 2로 거부. #118: data 규칙 `NOT_IN_SERVICE`(등록 상실 뒤)→모뎀·망. #119: Android 합성 벤더 줄 꼴만(규칙 불변).
-  - #121 정밀 탐색(`--deep`): 명시 요청 때만, 효과 미확인. `deep.md`는 사내 스냅샷에 새로 만들고(없으면 `--site-overlay` 종료 1) 플러그인 배포 뒤 모듈 레포에 올린다. #122: `import_draft --label` 필수. `tracker.read_tools`에 쓰기형 도구 이름 거부(doctor `tracker` warn). 경계 검사 15~20자리·이슈 DB hook 교체는 SITE_INSTALL §8. `docs/development` 22개는 `docs/history`로 옮김(dry-run 지움 약 41). OpenCode는 첫 설치(`opencode/README.md`: `tt-oc publish`, git ≥ 2.38, 모델이 낸 명령을 붙여 넣지 않는다). #123·#125~#135: 탐색 `--with <모듈>`(보조 모듈 줄 절), report 네 칸, `import_draft --status`, Android 시드, 흐름 점검·제안 줄, 마스킹 끔. `set-flow-step`·oFono 글자 버전은 DB schema PR 뒤.
-  - OpenCode: install --force 재설치(+ --explore-model), 관리 설정 task는 새 객체 또는 문자열 deny
-  - 사내 읽기(1103 대비, KB): S-0 −18.2·S-1 +8.3·S-2 +6.9·S-3 +12.4·S-4 +5.2·S-4a +1.1·S-5 +0.3·S-6 0·S-7 +2.1.
+- **재반입 노트 (다음 묶음 = 사내 마지막 반입 import-20261117 `46eadb4c` 이후)**. 옛 노트(1115)는 `docs/history/reimport-notes.md`.
+  - #155 OpenCode 탐색 하위 에이전트(`tt-explore`): `install --force`(+ 선택 `--explore-model`), 관리 설정 task는 새 객체 또는 문자열 deny. `triage.md` 약 +450B.
+  - #156 기준값 도구(시험·평가 도구만). #157·#158 문제 파악(`--problem-only`, 새 흐름 — 기존 analyze 불변). #159 TC `Fail (사유)` 읽기(TC를 준 분석의 실패 스텝 읽기가 바뀜). #160 실행 권한.
+  - guard 바뀜(문제 파악 기록 파일 보호, `tt-explore` task만 허용): §8 규칙상 사내 eval 12개 전부지만 11/19 사용자 승인으로 생략(그 12개가 지나는 길 불변).
+  - 병합되면 함께 들어갈 것: #161 analyze 인자 설명, #162 시험 격리(사내 레포·HOME), #163 줄 읽기(선택 사내 설정 `vendor_ipc.slot` = S20), 단계 4 판단 상태(**포털 PR과 같이 설치**, 입력이 바뀌는 eval은 재측정 승인 필요).
 - 재실행할 eval 수는 재반입 노트가 정한다(`pending.json` `site`, S-2; 사내 모델이 다르면 +7). 단계별 확인 항목·반입 뒤 후보(RF·R-36~47)는 history 11/13. S-7: usage_stats format 2·`--transcripts` 허용 여부. 시그니처 필드 선언은 결정 (v)대로.
 - 사내 IMS는 별도 APK(11/12): IMS 줄·규칙·문서는 AOSP 기준·소스만 — S-1에서 먼저.
 
