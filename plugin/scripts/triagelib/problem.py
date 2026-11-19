@@ -474,6 +474,7 @@ def _clue_problem(c: dict, sources: dict, prefix: str = "", error_prefix: str = 
 # --- 코멘트 단서 자동 추출(모델 없이 — `run`이 새 problem.json이 없을 때 쓴다) ------------------------------------------
 
 RETEST_WORDS = ("retest", "re-test", "재시험", "재테스트")      # 공개 기본값 — 사내 낱말은 설정 `eligibility.retest_words`
+HALF_MASK = re.compile(r"<[A-Z][A-Z0-9_]*(?:#\d*|:[A-Z0-9]*| \d*B?)?$")     # 잘린 끝의 마스킹 토큰 앞부분(`<APN#1`·`<HEXDUMP 1`)
 IPC_TOKEN = re.compile(r"(?i)\btoken\s*[=:(]\s*(0x[0-9A-Fa-f]{1,8}|[0-9]{1,10})(?![A-Za-z0-9_])")     # lookat `_TOKEN`의 ASCII판
 
 
@@ -482,9 +483,8 @@ def _log_quote(line: str) -> str:
     if len(line) <= QUOTE_MAX:
         return line
     cut = line[:QUOTE_MAX]
-    if cut.rfind("<") > cut.rfind(">"):
-        cut = cut[:cut.rfind("<")]
-    return cut.rstrip()
+    half = HALF_MASK.search(cut)
+    return (cut[:half.start()] if half else cut).rstrip()
 
 
 def _line_clues(where, text: str, name_re, error_prefix: str) -> list[dict]:

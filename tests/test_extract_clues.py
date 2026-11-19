@@ -82,6 +82,9 @@ def test_long_line_uses_first_300_chars_and_drops_half_mask_token():
     head = " ".join(LINE.split())[:40]
     cut = head + "a" * (pb.QUOTE_MAX - len(head) - 3) + "<APN#12> tail"       # 300자 경계가 마스킹 토큰 가운데
     assert _x([cut])[0][0]["quote"] == cut[:pb.QUOTE_MAX - 3].rstrip()
+    # RIL 응답 표시 `<`는 마스킹 토큰이 아니다(측정 M3에서 찾은 결함: `[1434]<` 뒤를 다 잘라 버렸다)
+    ril = "11-14 10:02:00.052  1301  1330 D RILJ    : [1434]< DATA_REGISTRATION_STATE RegStateResult{" + "regState: REG_DENIED, " * 20
+    assert _x([ril])[0][0]["quote"] == " ".join(ril.split())[:pb.QUOTE_MAX].rstrip()
 
 
 def test_decimal_and_hex_token_are_one_clue_and_cap_counts_over():
