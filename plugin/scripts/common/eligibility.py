@@ -11,7 +11,8 @@
 
 기준 종류는 "기준 줄 자체가 실패 사건인가"로 나눈다:
 - 점(같은 줄): 기준 줄이 사건의 증상 줄·붙은 원인 줄·그 충족 구간에서 증상·붙은 원인 조건에 맞는 줄(§8-1) 중 하나이거나
-  같은 RIL 요청(같은 pid·슬롯·serial + 짝 시각) → 그 사건.
+  같은 RIL 요청(같은 pid·슬롯·serial + 짝 시각) → 그 사건. 근거 줄·같은 요청으로 못 찾고 조건 줄로만 붙어 채택하면 why는
+  same_line 그대로, 결과에 `cond_line: true`(driver가 실패 지점을 confirmed로 올리지 않는다).
 - 점(CP token): 기준이 벤더 IPC 줄 → 같은 요청의 RSP(없으면 REQ) 뒤 `link_ms`(기본 `DEFAULT_LINK_MS` 2초) 안 같은 슬롯(또는 모름)
   첫 유형 사건. 유형 없는 실패만 있으면 symptom_not_found, 없으면 ineligible/no_event_at_reference.
 - 근처(그 밖의 AP 줄): 문제 파악 유형이 있어야 붙인다 — 5-1은 problem.json을 읽지 않으므로 늘 ineligible/near_without_symptom.
@@ -32,6 +33,7 @@ RANGE_PRE_SEC = 120         # 로그 FAIL 마커에 START가 없을 때 구간 �
 MERGE_SEC = 1.0             # 같은 유형·슬롯 사건이 이만큼 안이면 한 사건(유형의 다른 시그니처가 같은 실패를 따로 잡은 것, §8-4)
 EVENTS_MAX = 3              # analysis.json `decision.events[]` 상한(전체는 JOB/eligibility.json)
 _HELD_ORDER = ("symptom_not_found", "ambiguous", "ineligible")
+_COND = ":cond"             # 내부 표시: 기준 줄이 사건의 증상·원인 근거 줄이 아니라 창 안 조건 줄(§8-1)로만 맞음
 
 
 def ts(value) -> datetime:
@@ -130,10 +132,14 @@ def _attach_line(ref: dict, events: list[dict], link_ms: int) -> tuple:
     refs = {k for k in (ref_key(x.get("line_ref")) for x in lines) if k}
     rils = [{**x["ril"], "phone": x.get("phone"), "ts": x["ts"]} for x in lines if x.get("ril")]
     # 근거 줄(증상·원인)이 기준 줄인 사건을 먼저, 없을 때만 창 안 조건 줄(§8-1) — 앞 사건 창이 뒤 사건 증상 줄을 덮어도 뒤 사건으로
-    same = [e for e in events if (e["lines"] | e.get("cause_lines", set())) & refs or (rils and _same_ril(e, rils))]         or [e for e in events if e.get("cond_lines", set()) & refs]
+    # 조건 줄로만 붙으면 채택해도 실패 지점은 found(자주 되풀이되는 조건 줄을 글자로 짚은 것일 수 있다 — `_COND` 표시, decide가 뗀다)
+    same = [e for e in events if (e["lines"] | e.get("cause_lines", set())) & refs or (rils and _same_ril(e, rils))]
+    why = "same_line"
+    if not same:
+        same, why = [e for e in events if e.get("cond_lines", set()) & refs], "same_line" + _COND
     if same:    # 점(같은 줄·같은 RIL 요청)
         typed = [e for e in same if e["type"]]
-        return ("events", typed[:1], "same_line") if typed else ("held", "symptom_not_found", "same_line_typeless")
+        return ("events", typed[:1], why) if typed else ("held", "symptom_not_found", "same_line_typeless")
     return "held", "ineligible", "near_without_symptom"     # 근처: 문제 파악 유형이 있어야 붙인다(5-2)
 
 
@@ -167,7 +173,11 @@ def decide(events: list[dict], refs: list[dict], link_ms: int = DEFAULT_LINK_MS)
     if len({tuple(id(e) for e in o[1]) for o in got}) > 1:
         return _held("ambiguous", "sources", [e for o in got for e in o[1]])
     if got:
-        return _adopt(got[0][1], got[0][2])
+        why = got[0][2]
+        dec = _adopt(got[0][1], why.removesuffix(_COND))
+        if why.endswith(_COND) and dec["state"] == "accepted":
+            dec["cond_line"] = True      # 조건 줄로만 붙은 채택 — driver가 실패 지점을 confirmed로 올리지 않는다
+        return dec
     best = min(outcomes, key=lambda o: _HELD_ORDER.index(o[1]))
     return _held(best[1], best[2])
 
@@ -199,7 +209,7 @@ def summary(dec: dict, events: list[dict]) -> dict:
     typed = [e for e in events if e["type"]]
     order = [e for e in dec["events"]] + [e for e in typed if id(e) not in attached]
     return {"state": dec["state"], "reason": dec["reason"], "why": dec["why"], "cause": dec["cause"],
-            "checked": len(dec["events"]), "total": len(events), "events_total": len(typed),
+            **({"cond_line": True} if dec.get("cond_line") else {}), "checked": len(dec["events"]), "total": len(events), "events_total": len(typed),
             "events": [event_row(e, attached, result) for e in order]}
 
 

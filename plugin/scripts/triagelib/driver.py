@@ -77,11 +77,12 @@ def _observation_summary(events: dict) -> dict | None:
 NO_LOCATION = {"state": "none", "source": None, "kind": None}
 
 
-def _adopted_location(location: dict, why: str | None) -> dict:
+def _adopted_location(location: dict, why: str | None, cond_line: bool = False) -> dict:
     """채택이면 실패 지점 상태를 자격 검사 결과로 정한다: 기준 줄 자체가 실패 사건(`same_line`·`cp_point`)이면 confirmed/point,
-    구간(`range`)은 FAIL 마커 1개일 때만 confirmed, 그 밖(근처 등)은 found. comment 출처는 늘 found("한 곳에서 찾았다" ≠
+    구간(`range`)은 FAIL 마커 1개일 때만 confirmed, 그 밖(근처 등)은 found. `same_line`이어도 창 안 조건 줄로만 붙었으면
+    (`cond_line`) found·kind 그대로 — 되풀이되는 조건 줄을 글자로 짚은 것일 수 있다. comment 출처는 늘 found("한 곳에서 찾았다" ≠
     "이번 실패 지점을 확인했다" — 포털 확실한 일치는 accepted + confirmed만 본다)."""
-    if why in ("same_line", "cp_point"):
+    if why == "cp_point" or (why == "same_line" and not cond_line):
         out = {**location, "state": "confirmed", "kind": "point"}
     elif why == "range" and location.get("source") == "log_marker" and location.get("state") == "confirmed":
         out = dict(location)
@@ -110,7 +111,7 @@ def _decision(candidates: list[dict], anchor: dict | None, elig: dict | None) ->
     elif elig.get("state") == "accepted" and picked:
         return {"state": "accepted", "reason": "anchored_top",
                 "selected": {"category": picked.get("category"), "type": picked["type"], "cause": picked["cause"]},
-                "location": _adopted_location(location, elig.get("why")), **extra}
+                "location": _adopted_location(location, elig.get("why"), elig.get("cond_line") is True), **extra}
     elif elig.get("state") == "accepted":      # 채택 원인이 후보에 없다(매처는 순위 원인만 붙이므로 정상 입력에선 없음) — 보류
         reason, extra["check"]["why"] = "ineligible", "cause_not_in_candidates"
     else:

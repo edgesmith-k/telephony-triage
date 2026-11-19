@@ -78,6 +78,21 @@ def test_same_line_counts_condition_lines_in_window_and_same_ril_request():
     assert outcome(el.decide([hidden], [ref])) == ("held", "ineligible", "near_without_symptom")   # 가린 serial은 다른 요청
 
 
+def test_condition_line_fallback_adopts_but_location_stays_found():
+    """리뷰 P2-3: 기준 줄이 창 안 조건 줄로만 맞으면 채택(why same_line)은 하되 실패 지점은 found·kind 그대로(포털이 확실한
+    일치로 보고 본 분석을 건너뛰지 않게). 근거 줄로 맞으면 confirmed/point."""
+    from triagelib import driver
+    cands = [{"category": "network", "type": "NETWORK-001", "cause": "N8"}]
+    text = {"state": "found", "source": "look_at", "kind": "near"}
+    e = ev("NETWORK-001", 120, ["N8"], line=(0, 16), cond_lines={(0, 14)})
+    by_cond = el.summary(el.decide([e], [point(14, 119)]), [e])
+    assert (by_cond["state"], by_cond["why"], by_cond.get("cond_line")) == ("accepted", "same_line", True)
+    assert driver._decision(cands, {"location": text}, by_cond)["location"] == text
+    by_line = el.summary(el.decide([e], [point(16, 120)]), [e])
+    assert (by_line["why"], "cond_line" in by_line) == ("same_line", False)
+    assert driver._decision(cands, {"location": text}, by_line)["location"] == {**text, "state": "confirmed", "kind": "point"}
+
+
 def test_cp_point_links_two_seconds_after_response_same_slot():
     ipc = lambda sec, slot=None: point(4, sec, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 222}, phone=slot)  # noqa: E731
     assert outcome(el.decide(EVENTS, [ipc(199)])) == ("accepted", "anchored_top", "D1")
@@ -354,15 +369,21 @@ def test_adopted_location_follows_eligibility():
     cands = [{"category": "data", "type": "DATA-001", "cause": "DATA-001-01"}]
     text = {"state": "found", "source": "look_at", "kind": "near"}
 
-    def loc(location, why, state="accepted"):
+    def loc(location, why, state="accepted", **extra):
         elig = {"state": state, "reason": "anchored_top" if state == "accepted" else "ineligible", "why": why,
-                "cause": "DATA-001-01" if state == "accepted" else None}
+                "cause": "DATA-001-01" if state == "accepted" else None, **extra}
         return driver._decision(cands, {"location": location}, elig)["location"]
     assert loc(text, "same_line") == {"state": "confirmed", "source": "look_at", "kind": "point"}
     assert loc({**text, "kind": "point", "state": "confirmed"}, "cp_point")["state"] == "confirmed"
     assert loc(text, "near_symptom") == text                                   # 근처 채택(5-2) = 찾음
+    point_loc = {"state": "confirmed", "source": "look_at", "kind": "point"}
+    assert loc(point_loc, "near_symptom") == {**point_loc, "state": "found"}  # 마지막 갈래: confirmed가 들어와도 found
+    # 리뷰 P2-3: 창 안 조건 줄로만 붙은 채택(cond_line)은 found·kind 그대로 — 글자 일치(near)가 point로 바뀌지 않는다
+    assert loc(text, "same_line", cond_line=True) == text
+    assert loc(point_loc, "same_line", cond_line=True) == {**point_loc, "state": "found"}
     assert loc(text, "near_without_symptom", state="held") == text            # 보류는 앵커 기준 그대로
     marker = {"state": "confirmed", "source": "log_marker", "kind": "range"}
     assert loc(marker, "range") == marker
     assert loc({**marker, "source": "steps_file", "state": "found"}, "range")["state"] == "found"
+    assert loc({**marker, "source": "steps_file"}, "range")["state"] == "found"   # confirmed여도 log_marker가 아니면 found
     assert loc({"state": "confirmed", "source": "comment", "kind": "point"}, "same_line")["state"] == "found"
