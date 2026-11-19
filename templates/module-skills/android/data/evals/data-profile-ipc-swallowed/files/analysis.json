@@ -33,6 +33,36 @@
   "events": 30,
   "masked": null
  },
+ "decision": {
+  "state": "held",
+  "reason": "no_reference",
+  "selected": null,
+  "location": {
+   "state": "none",
+   "source": null,
+   "kind": null
+  },
+  "check": {
+   "why": null,
+   "checked": 0,
+   "total": 2
+  },
+  "events": [
+   {
+    "type": "DATA-001",
+    "at": "2026-10-15T07:05:12.415000+00:00",
+    "line": "f0:L21",
+    "phone": 0,
+    "absence": true,
+    "ref": false,
+    "result": "observed",
+    "cause": null,
+    "why": "absence_unverified",
+    "gap_s": null
+   }
+  ],
+  "events_total": 1
+ },
  "candidates": [
   {
    "type": "DATA-001",

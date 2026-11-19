@@ -12,6 +12,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
 from pathlib import Path
 
+from common import eligibility
 from common.exitcodes import USAGE
 
 SCRIPTS = Path(__file__).resolve().parents[1]
@@ -23,7 +24,7 @@ PLATFORM_ANSWER = "platform_answer"   # 상태 키: 이 작업 플랫폼을 `--a
 STATE_SCHEMA = 2                 # 2: `job` 절(로그·실행 이력·재사용 캐시 요약)이 있다. 스키마 표시가 없는 파일은 job = {}
 CACHE_FILE = "analysis-cache.json"
 EXTRACTOR_CODES = ("pattern-timeout", "pattern-error")   # events.json observation의 extractor 오류 코드(parse_logcat.EXTRACTOR_CODES와 같다)
-CACHE_FORMAT = 5                 # 캐시 형식·`core` 구조를 바꾸면 올린다(plugin 해시에 들어가 이전 캐시가 무효가 된다). 2: 타임라인은 캐시 파일이 아니다. 3: core.unjudged. 4: core.attrs.look·look_note. 5: core.observation·core.attrs.time_candidates(같은 배포)
+CACHE_FORMAT = 9                 # 캐시 형식·`core` 구조를 바꾸면 올린다(plugin 해시에 들어가 이전 캐시가 무효가 된다). 2: 타임라인은 캐시 파일이 아니다. 3: core.unjudged. 4: core.attrs.look·look_note. 5: core.observation·core.attrs.time_candidates(같은 배포). 6: core.decision·anchor.location. 7: decision.check·events·events_total(자격 검사). 8: problem.json 읽기(단서 기준·location comment). 9: 코멘트 단서 자동 추출(attrs.clues origin)
 RUNS_KEEP = 10                   # state.job.runs(실행 이력)에 남기는 수
 RUN_DIRS_KEEP = 5                # JOB/runs/<n>/(이전 analysis.json·report.md 보관)에 남기는 수
 RUNS_DIR = "runs"
@@ -40,7 +41,7 @@ PARTIAL_ANALYSIS_MAX, PARTIAL_REPORT_MAX, FIND_TEXT_ITEMS = 3, 1200, 9
 # 성공 흐름 점검 (04-parser-matching.md §5.13): analysis.json `flows[]` ≤ 3, report.md 절 ≤ 1,200 B(흐름당 인스턴스 ≤ 3)
 FLOW_ANALYSIS_MAX, FLOW_REPORT_MAX, FLOW_PER_FLOW = 3, 1200, 3
 SEARCH_LIMIT = 3
-ERROR_EVENT_RE = re.compile(r"(error|timeout|no_response|reject|fail|denied|lost)", re.IGNORECASE)
+ERROR_EVENT_RE = eligibility.ERROR_EVENT_RE      # 파생 오류 이벤트 이름(자격 검사의 유형 없는 실패 사건과 같은 식)
 # 0 값 오류 칸(`errorCode=0`·`RejectCause: 0`·`result=0`·`error(0)`)은 오류가 아니다. 오류 문구 판정(ERROR_EVENT_RE) 전에
 # 지운다 — report 타임라인 줄 고르기와 모듈 보기 hot 표시가 같이 쓴다(H C1+D R13, 두 플랫폼). `<접두>ErrorCode`(벤더 접두)도 같다
 ZERO_VALUE_RE = re.compile(r"(?i)\b(?:RejectCause|reject\s*cause|\w*errorCode|rejectCode|error|result|"
@@ -61,6 +62,9 @@ TIMELINE_FILE = "timeline.md"
 # (17-platforms §10). 스킬 디렉토리 기준 경로는 `reference/platforms/<플랫폼>/<파일>`
 PLATFORM_REFS_DIR = ("skills", "telephony-triage", "reference", "platforms")
 LOOK_FILE = "look-at.json"      # `--look-at`(가린 글)·기준 시각 → `parse_logcat ipc --find`(원문을 인자로 넘기지 않는다)
+CLUE_FILE = "clue-at.json"     # 코멘트 단서(가린 글) 모두 → `parse_logcat ipc --find {finds: […]}` 한 번(단계 5-2)
+REFERENCE_FILE = "reference.json"     # 자격 검사 기준(앵커 → `match_signatures.py --reference`, 단계 5)
+ELIGIBILITY_FILE = "eligibility.json" # 자격 검사 사건 전부·판정(매처 출력 `eligibility`, 스크립트만 쓴다 — guard 규칙 12)
 EXPLORE_INPUT_FILE = "explore-input.json"   # `triage.py explore`의 입력(마스킹된 값만). run이 쓰고, 탐색 동의 뒤 subcommand가 읽는다
 MUST_SHOW_MAX = 6                # render_report가 모으는 must_show 상한
 MUST_SHOW_FIT = 4                # fit이 마지막에 남기는 수
@@ -102,8 +106,9 @@ NEXT_CHECK_FAILED = "리포트 줄은 생략으로 고쳐 두었다 — 고쳐 �
 NEXT_CHECK_NA = "리포트 줄은 그대로 둔다 — Step 6로 계속"
 MODULE_RECORD_DIR = "module-skill"
 # 새 run이 지우는 이전 실행 산출물(B2 §7.4) — 폴더 MODULE_RECORD_DIR도 지운다
-STALE_FILES = (TIMELINE_FILE, EXPLORE_INPUT_FILE, LOOK_FILE, "module-skill.json", "deep-input.json", "skill-input.json", "check-output.json",
-               "deep-output.md", "explore-output.md")
+# eligibility.json은 match.json처럼 매처가 돌 때마다 새로 쓰고(캐시 적중이면 그 실행 것을 그대로 쓴다) 여기 넣지 않는다 — driver.match
+STALE_FILES = (TIMELINE_FILE, EXPLORE_INPUT_FILE, LOOK_FILE, CLUE_FILE, REFERENCE_FILE, "module-skill.json", "deep-input.json", "skill-input.json",
+               "check-output.json", "deep-output.md", "explore-output.md")
 _HOT_LEVELS = {"W", "E", "F"}
 _TOKEN_RE = re.compile(r"[0-9A-Za-z가-힣_]{2,}")
 

@@ -186,6 +186,9 @@ OK_OFFLINE = {
                     "evidence": [{"ts": "t", "tag": "RILJ", "msg": "m", "event": "e"}],
                     "fix_judgement": None, "fix_message": None, "related": []}],
     "code": {"skipped": True}, "files": {"report": "r"}, "truncated": False,
+    "decision": {"state": "accepted", "reason": "anchored_top",
+                 "selected": {"category": "call", "type": "CALL-001", "cause": "CALL-001-01"},
+                 "location": {"state": "confirmed", "source": "look_at", "kind": "point"}},
 }
 NEEDS_INPUT = {"status": "needs_input", "key": "EVAL-1", "lock_owner": None,
                "needs_input": {"kind": "time", "question": "q", "options": [], "answer": "--answer time=<값>",
@@ -213,6 +216,47 @@ def test_analysis_schema_rejects_added_keys(triage, monkeypatch, where):
     target["surprise"] = 1
     message = triage.schema_violation(doc)
     assert message and message.startswith("[telephony-triage] analysis 스키마 위반: ") and "surprise" in message
+
+
+ACCEPTED = {"state": "accepted", "reason": "anchored_top",
+            "selected": {"category": "call", "type": "CALL-001", "cause": "CALL-001-01"},
+            "location": {"state": "confirmed", "source": "look_at", "kind": "point"}}
+HELD = {"state": "held", "reason": "no_reference", "selected": None, "location": {"state": "none", "source": None, "kind": None}}
+
+
+@pytest.mark.parametrize("decision", [ACCEPTED, {**ACCEPTED, "counter": {"cause": "CALL-001-02"}}, HELD,
+                                      {**HELD, "reason": "fit_check", "location": ACCEPTED["location"]}],
+                         ids=["accepted", "counter", "held", "fit_check"])
+def test_analysis_schema_accepts_decision(triage, monkeypatch, decision):
+    monkeypatch.setenv("TT_SCHEMA_CHECK", "1")
+    assert triage.schema_violation({**OK_OFFLINE, "decision": decision}) is None
+
+
+def test_analysis_schema_requires_decision(triage, monkeypatch):
+    """run은 늘 decision을 쓴다(단계 4) — 없는 ok 출력은 스키마 위반."""
+    monkeypatch.setenv("TT_SCHEMA_CHECK", "1")
+    doc = {k: v for k, v in OK_OFFLINE.items() if k != "decision"}
+    assert "decision" in (triage.schema_violation(doc) or "")
+
+
+@pytest.mark.parametrize("decision", [
+    {**ACCEPTED, "selected": None},                                            # accepted ⇒ selected
+    {**ACCEPTED, "reason": "no_reference"},                                    # accepted ⇒ anchored_top
+    {**HELD, "selected": ACCEPTED["selected"]},                                # held ⇒ selected null
+    {**HELD, "reason": "anchored_top"},
+    {**HELD, "counter": {"cause": "CALL-001-02"}},                             # held ⇒ counter 없음
+    {**HELD, "location": ACCEPTED["location"]},                                # no_reference ⇒ location none
+    {**ACCEPTED, "location": {"state": "none", "source": "look_at", "kind": None}},   # none ⇔ source null
+    {**ACCEPTED, "location": {"state": "found", "source": None, "kind": "range"}},
+    {**ACCEPTED, "location": {"state": "found", "source": "comment_line", "kind": "range"}},
+    {**ACCEPTED, "selected": {"category": "call", "type": "CALL-001", "cause": "CALL-001-02"}},   # ≠ candidates[0]
+], ids=["acc-null", "acc-reason", "held-selected", "held-reason", "held-counter", "noref-loc", "none-source", "found-null",
+        "bad-source", "acc-not-top"])
+def test_analysis_schema_rejects_decision_invariant_violations(triage, monkeypatch, decision):
+    """단계 4 불변식(스키마 allOf if/then, selected = candidates[0]은 코드 검사): 어기면 run이 종료 2로 멈춘다."""
+    monkeypatch.setenv("TT_SCHEMA_CHECK", "1")
+    message = triage.schema_violation({**OK_OFFLINE, "decision": decision})
+    assert message and message.startswith("[telephony-triage] analysis 스키마 위반: ") and "decision" in message, message
 
 
 def test_analysis_schema_check_is_off_without_env_and_loud_without_jsonschema(triage, monkeypatch):

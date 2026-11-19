@@ -471,6 +471,104 @@ def _clue_problem(c: dict, sources: dict, prefix: str = "", error_prefix: str = 
     return None
 
 
+# --- 코멘트 단서 자동 추출(모델 없이 — `run`이 새 problem.json이 없을 때 쓴다) ------------------------------------------
+
+RETEST_WORDS = ("retest", "re-test", "재시험", "재테스트")      # 공개 기본값 — 사내 낱말은 설정 `eligibility.retest_words`
+HALF_MASK = re.compile(r"<[A-Z][A-Z0-9_]*(?:#\d*|:[A-Z0-9]*| \d*B?)?$")     # 잘린 끝의 마스킹 토큰 앞부분(`<APN#1`·`<HEXDUMP 1`)
+IPC_TOKEN = re.compile(r"(?i)\btoken\s*[=:(]\s*(0x[0-9A-Fa-f]{1,8}|[0-9]{1,10})(?![A-Za-z0-9_])")     # lookat `_TOKEN`의 ASCII판
+
+
+def _log_quote(line: str) -> str:
+    """logcat 줄 인용: 앞 `QUOTE_MAX`자(시각 포함). 잘린 끝의 반쪽 마스킹 토큰(`<AP`)은 뗀다(로그 쪽 접은 토큰과 안 맞으므로)."""
+    if len(line) <= QUOTE_MAX:
+        return line
+    cut = line[:QUOTE_MAX]
+    half = HALF_MASK.search(cut)
+    return (cut[:half.start()] if half else cut).rstrip()
+
+
+def _line_clues(where, text: str, name_re, error_prefix: str) -> list[dict]:
+    """글 한 개 → 단서 후보(줄 순서). 한 줄 안에서 `<요청 접두어>이름` 뒤 첫 `token[=:(]` 값이 있으면 ipc(그 줄은 log_line으로
+    안 뽑음), 없고 인용 표식을 뗀 줄이 logcat 시각으로 시작하면 log_line. 이름만(token 없음)·시각 없는 줄은 뽑지 않는다."""
+    out = []
+    for raw in str(text or "").splitlines():
+        line = _unquote(raw)
+        ipcs = []
+        for m in name_re.finditer(line) if name_re and line else ():
+            if error_prefix and m.group().startswith(error_prefix):      # 오류 값(`VIPC_E_…`)은 메시지 이름이 아니다
+                continue
+            t = IPC_TOKEN.search(line, m.end())
+            # 시각이 붙은 줄은 시각까지 인용한다(`_clue_text`가 그 시각으로 "그 시각의 줄이 로그에 있는가"를 본다)
+            quote = (line if len(line) <= QUOTE_MAX else _log_quote(line) if lookat.stamp(line) else line[m.start():t.end()])                 if t else ""
+            if t and len(quote) <= QUOTE_MAX:
+                ipcs.append({"comment": where, "kind": "ipc", "name": m.group(), "token": t.group(1), "quote": quote,
+                             "side": "unknown", "stale": False})
+        if ipcs:
+            out += ipcs
+        elif lookat.stamp(line):
+            out.append({"comment": where, "kind": "log_line", "name": None, "token": None, "quote": _log_quote(line),
+                        "side": "unknown", "stale": False})
+    return out
+
+
+_HEX = r"(0x[0-9A-Fa-f]{1,8})(?![A-Za-z0-9_])"
+TOKEN_HEX = re.compile(r"(?i)\btoken(?:은|는|이|가)?\s*[=:(]?\s*" + _HEX)          # `token 0x0e1`·`token은 0x0aa`(바로 뒤 값만)
+NOT_BUT = re.compile(r"(?i)(0x[0-9A-Fa-f]{1,8}|[0-9]{1,10})\s*(?:가|이)?\s*아니라\s*(?:token\s*[=:(]?\s*)?"
+                     r"(0x[0-9A-Fa-f]{1,8}|[0-9]{1,10})(?![A-Za-z0-9_])")              # 정정 "A가 아니라 B"
+
+
+def _token_values(text: str) -> set[int]:
+    """정정·여러 요청 알아보기용 token 값(숫자): `token` 낱말 **바로 뒤** 값(`token=225`·`token(0x0e1)`·`token은 0x0aa` — 이름 없이
+    적은 값 포함)과, `token` 낱말이 든 줄의 정정 "A가 아니라 B"의 두 값. 같은 줄의 다른 16진 값(`cause 0x1b`·`len=0x08`)은 세지 않는다."""
+    out = {_token_value(t.group(1))[1] for t in IPC_TOKEN.finditer(text)}
+    out |= {_token_value(t.group(1))[1] for t in TOKEN_HEX.finditer(text)}
+    for line in text.splitlines():
+        if "token" in line.casefold():
+            out |= {_token_value(v)[1] for m in NOT_BUT.finditer(line) for v in m.groups()}
+    return out
+
+
+def extract_clues(comments: list[str], description: str, prefix: str, error_prefix: str = "",
+                  retest_words=RETEST_WORDS, first: int = 1) -> tuple[list[dict], dict]:
+    """Jira 글(가린 코멘트 작성 순·설명) → (단서 — 최근 코멘트부터, 버림 수 `{old_round, over, invalid}`). 모델 단서와 같은 모양
+    `{comment, kind, name, token, quote, side, stale}`이고 `_clue_problem`(모델 단서와 같은 관문)을 통과한 것만 낸다. 코멘트 번호는
+    `first`부터(오래된 코멘트를 건너뛰고 받았으면 Jira 순번에 맞춘다 — 그때 설명은 건너뛴 코멘트의 재시험 앞일 수 있어 옛 회차로
+    센다). 설명은 없어도 된다(포털 선별 파일은 코멘트만).
+    - 회차 경계: 재시험 낱말(대소문자 무시 부분 일치)이 든 마지막 코멘트 b. b와 그 앞(설명 포함)의 후보는 버리고 수만 센다.
+      ponytail: 재시험 낱말 없이 다시 돈 회차는 못 가른다(옛 token이 새 로그에 없으면 로그 쪽에서 버려진다) — 사내 낱말로 보완.
+    - 같은 단서(ipc 이름·token 값 — `225` = `0xe1`, log_line 접은 글)는 최근 것 하나, `CLUES_MAX`를 넘으면 `over`.
+    - 이번 회차 글에 서로 다른 token 값이 둘 이상이면(정정 "0x0aa가 아니라 0x0e1"·정상과 실패를 함께 적음) `conflict: true` —
+      어느 것이 실패인지 글로는 못 가리므로 부른 쪽이 보류한다. 관문에서 버린 이번 회차 단서 수는 `invalid`(부른 쪽이 보류에 센다).
+    - ponytail: 실패를 문장으로만 적고 다른 token을 "참고"로 적으면(N9) 그 참고 token 하나가 단서가 된다 — 글 뜻은 읽지 않는다."""
+    words = [str(w).casefold() for w in retest_words if str(w).strip()]
+    b = max((n for n, t in enumerate(comments, first) if any(w in str(t).casefold() for w in words)), default=0)
+    sources = {n: str(t or "") for n, t in enumerate(comments, first)}
+    sources["description"] = str(description or "")
+    name_re = re.compile(r"(?<![A-Za-z0-9_])" + re.escape(prefix) + r"[A-Za-z0-9_]+") if prefix else None
+    drop = {"old_round": 0, "over": 0, "invalid": 0, "conflict": False}
+    clues, seen, values = [], set(), set()
+    for where in [*range(first + len(comments) - 1, first - 1, -1), "description"]:
+        found = _line_clues(where, sources[where], name_re, error_prefix)
+        if (where == "description" and (b or first > 1)) or (where != "description" and where <= b):
+            drop["old_round"] += len(found)
+            continue
+        values |= _token_values(sources[where])
+        for c in found:
+            if _clue_problem(c, sources, prefix, error_prefix):
+                drop["invalid"] += 1
+                continue
+            key = (c["kind"], c["name"], _token_value(c["token"])[1] if c["token"] else lookat.fold(c["quote"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            if len(clues) >= CLUES_MAX:
+                drop["over"] += 1
+            else:
+                clues.append(c)
+    drop["conflict"] = len(values) > 1
+    return clues, drop
+
+
 def _mask_all(value, masker):
     if isinstance(value, str):
         return masker(value)

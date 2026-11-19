@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import platforms
 from common import compat, failedstep, lookat, stepanchor, userconfig
 from common import logtime as lc
 
-from .core import LOOK_FILE, NeedsInput, _clip
+from .core import CLUE_FILE, LOOK_FILE, NeedsInput, _clip
 
 
 def _parse_ts(text: str | None) -> datetime | None:
@@ -26,6 +28,38 @@ def _parse_ts(text: str | None) -> datetime | None:
 def _num(x: float):
     """정수로 떨어지면 int, 아니면 float (JSON에 180.0 대신 180)."""
     return int(x) if float(x).is_integer() else x
+
+
+def _clue_text(c: dict, pb) -> tuple[str | None, str | None]:
+    """problem.json 단서 → (찾을 글, 붙여 넣은 줄의 logcat 시각|None). 모양이 틀린 단서는 (None, None) — check-output이 이미
+    걸렀지만 파일이 바뀌었을 수 있어 같은 식(`NAME_RE`·`TOKEN_RE`·`QUOTE_MAX`)으로 다시 본다."""
+    n = c.get("comment")
+    if not (n == "description" or (type(n) is int and n >= 1)):     # 경고·리포트의 "코멘트 n번"이 깨지지 않게
+        return None, None
+    name, token, quote = c.get("name"), c.get("token"), c.get("quote")
+    ok_name = isinstance(name, str) and pb.NAME_RE.fullmatch(name)
+    if c.get("kind") == "ipc" and ok_name and isinstance(token, str) and pb.TOKEN_RE.fullmatch(token):
+        # 인용이 시각 붙은 로그 줄이면 그 시각도 — 그 시각의 줄이 로그에 있어야 쓴다(다른 로그·이전 회차의 같은 token을 막는다)
+        return f"{name} (token={token})", lookat.stamp(quote) if isinstance(quote, str) else None
+    if c.get("kind") == "ipc_name" and ok_name:
+        return name, None
+    if c.get("kind") == "log_line" and isinstance(quote, str) and 0 < len(quote) <= pb.QUOTE_MAX:
+        return lookat.clean(quote), lookat.stamp(quote)
+    return None, None
+
+
+def _stamp_unmet(stamp: str | None, found: dict) -> bool:
+    """붙인 줄의 시각이 있는데 찾은 곳에 그 시각의 줄이 없다(`stamp: none`, 읽지 못한 시각 — 찾기 결과에 `stamp`가 없을 때도)."""
+    return bool(stamp) and bool(found.get("hits")) and found.get("stamp") in ("none", None)
+
+
+def _outside(lines: list[dict], window) -> bool:
+    """찾은 단서 줄(`{ts}`)이 모두 명시 기준의 분석 구간(시작, 끝) 밖인가. 구간이 없거나 시각을 못 읽으면 False."""
+    lo, hi = (_parse_ts(x) for x in window) if window else (None, None)
+    stamps = [_parse_ts(x.get("ts")) for x in lines]
+    if lo is None or hi is None or not stamps or None in stamps:
+        return False
+    return all(t < lo or t > hi for t in stamps)
 
 
 def _step_label(step) -> str:
@@ -110,6 +144,7 @@ class AnchorMixin:
         없다)이 있거나 `--steps-file`이 있을 때만 `parse_logcat markers`를 돌린다. 앵커의 실패 시각이 로그 범위 밖이면 경고하고
         다음 출처로 넘어간다. steps-file의 원문 줄은 이 프로세스 안에서 시각만 뽑고 버린다."""
         self.anchor_off = self.answer("anchor") == "off"
+        self.reference = None
         if self.anchor_off:
             if self.look_inputs()["at"]:
                 self.warn("기준 줄(--look-at)은 --answer anchor=off라 쓰지 않았다")
@@ -138,6 +173,8 @@ class AnchorMixin:
         anchor = {"source": span["source"], "step": span.get("step"), "step_from": span["step_from"],
                   "start": lc.format_ts(span["start"]) if span.get("start") else None, "fail": lc.format_ts(fail),
                   "window": (lc.format_ts(start), lc.format_ts(end))}
+        anchor["location"] = self.location(span)
+        self.reference = self.reference_of(span)
         if span.get("order"):
             anchor["order"] = span["order"]
         if jira_at:
@@ -151,13 +188,221 @@ class AnchorMixin:
                           f"기준으로 분석했다(끄기: --answer anchor=off){hint}")     # 경고만 낸다. 구간은 바꾸지 않는다
         return anchor
 
+    def location(self, span: dict) -> dict:
+        """실패 지점 `{state, source, kind}`(analysis.json `decision.location`). 기준 줄은 ipc·token 일치(point) 1개면 confirmed,
+        글자 일치(near) 1개면 found("한 곳에서 찾았다"이지 "이번 실패 지점을 확인했다"가 아니다), 여럿이면 multiple(곳 수는 같은
+        요청으로 묶은 뒤). 로그 마커는 FAIL 1개 confirmed·여럿 multiple·START만 found. steps-file 시각·스텝 순서는 found(구간).
+        채택이면 `driver._decision`이 자격 검사 결과로 다시 정한다. 앵커가 없으면 이 함수를 부르지 않는다(`NO_LOCATION`)."""
+        src = span["source"]
+        if src == "look_at":     # 같은 요청(IPC REQ→RSP·RIL 짝)으로 묶은 곳 수
+            look = self.look_result or {}
+            text = look.get("how") == "text"
+            return {"state": "multiple" if look.get("places") != 1 else "found" if text else "confirmed", "source": src,
+                    "kind": "near" if text else "point"}
+        if src == "log_marker" and span.get("fail") is not None:
+            return {"state": "confirmed" if span.get("n") == 1 else "multiple", "source": src, "kind": "range"}
+        return {"state": "found", "source": src, "kind": "range"}
+
+    def reference_of(self, span: dict) -> dict:
+        """자격 검사 기준(`match_signatures.py --reference`, `common.eligibility`). 기준 줄은 `{kind: line, source, places, lines[]}`
+        (lines = 고른 곳의 줄 `{line_ref, ts, phone, ipc?, ril?}`), 마커·steps-file은 `{kind: range, source, places, start, fail}`
+        (places = 맞는 FAIL 마커 수, START만이면 fail null)."""
+        src = span["source"]
+        if src == "look_at":
+            return {"kind": "line", "source": src, "places": (self.look_result or {}).get("places") or 1,
+                    "lines": self.look_place}
+        return {"kind": "range", "source": src, "places": span.get("n") or 1,
+                "start": lc.format_ts(span["start"]) if span.get("start") else None,
+                "fail": lc.format_ts(span["fail"]) if span.get("fail") else None}
+
+    def problem_refs(self, logs: list[Path], tz: str | None, year: int | None, window=None) -> None:
+        """Jira 단서 → 자격 검사 입력 `self.problem_use`
+        `{problem: {types, not_in_db}|None, comment_adopt, refs[단서 기준], dropped[{comment, kind, why}]}` | None.
+
+        단서 출처는 둘 중 하나다. ① 같은 JOB의 문제 파악 결과(`problem.json`, 단계 5-2)가 이번 이슈 입력으로 만든 것(해시 일치)이면
+        그것만: `symptom.types`·`not_in_db`(설정 `eligibility.use_problem_types`가 거짓이면 둘 다 안 씀)와 `stale: false` 단서 —
+        hypotheses·modules·unknown·side·rounds는 판정에 쓰지 않는다. ② 없거나 낡았으면 `JOB/issue.json` 코멘트(가린 글)에서
+        스크립트로 뽑은 단서(`problem.extract_clues`, 유형 없음 — 설정 `eligibility.comment_clues`, 기본 참). `--look-at`이 있으면
+        ②는 쓰지 않는다(개수만 경고 한 줄). 단서는 `parse_logcat ipc --find`(기준 줄과 같은 찾기 — 값은 문자열 비교만, 정규식·경로·
+        명령으로 쓰지 않는다) 한 번으로 모두 찾는다: ipc = 이름+token, ipc_name = 이름 본문 일치, log_line = 인용 본문 일치.
+        logcat 시각이 붙은 log_line은 그 시각의 줄이 로그에 있어야 쓴다(다른 로그·이전 회차 로그에서 붙인 줄을 본문만으로 잡지
+        않게). 로그에 없는 단서는 버리고 `dropped`에 남긴다 — ①은 단서마다 경고, ②는 버림 요약 한 줄. 명시 기준(앵커)의 분석
+        구간 `window`(시작, 끝)가 있고 찾은 단서 줄이 모두 그 밖이면 `outside: true`(자격 검사가 명시 기준과 다른 사건으로 본다 — H07).
+        `--answer anchor=off`면 안 읽는다."""
+        from . import problem as pb      # 지연 import(문제 파악 모듈은 Jira·플랫폼 모듈을 끌어온다)
+
+        self.problem_use, self.clue_rows = None, []
+        if self.anchor_off:
+            return
+        conf = userconfig.get(self.cfg, "eligibility") or {}
+        conf = conf if isinstance(conf, dict) else {}
+
+        def switch(key: str) -> bool:     # 참·거짓 값만 받는다 — 글자 "false" 등은 경고하고 기본(참)
+            value = conf.get(key, True)
+            if isinstance(value, bool):
+                return value
+            self.warn(f"설정 eligibility.{key} 값이 참·거짓(true/false)이 아니라 기본값 true로 본다")
+            return True
+        doc = self.fresh_problem(pb)
+        problem, auto = None, None
+        if doc is not None:
+            sym = doc.get("symptom") if isinstance(doc.get("symptom"), dict) else {}
+            if switch("use_problem_types"):
+                problem = {"types": [t for t in sym.get("types") or [] if isinstance(t, str)][:pb.TYPES_MAX],
+                           "not_in_db": sym.get("not_in_db") is True}
+            clues = doc.get("clues") if isinstance(doc.get("clues"), list) else []
+        else:
+            clues, auto = self.comment_clues(pb, conf, switch)
+            if auto is None:
+                return
+        todo, seen = [], set()
+        for c in clues[:pb.CLUES_MAX]:
+            if not isinstance(c, dict) or c.get("stale") is not False:     # 이전 회차 단서(stale)는 쓰지 않는다(H03)
+                continue
+            text, stamp = _clue_text(c, pb)
+            if text is None or (text, stamp) in seen:      # 같은 찾을 글은 한 번만(같은 곳을 두 단서로 세지 않게)
+                continue
+            seen.add((text, stamp))
+            todo.append((c, text, stamp))
+        founds = self.find_clues(logs, tz, year, [(text, stamp) for _, text, stamp in todo])
+        origin = "스크립트" if auto is not None else "문제 파악"
+        refs, dropped = [], []
+        for (c, _, stamp), found in zip(todo, founds):
+            where = "설명" if c.get("comment") == "description" else f"코멘트 {c.get('comment')}번"
+            if _stamp_unmet(stamp, found):
+                found = {"hits": 0, "why": "붙인 줄의 시각이 이 로그에 없음"}
+            if not found.get("hits"):
+                why = _clip(found.get("why") or "일치하는 줄 없음", 60)
+                dropped.append({"comment": c.get("comment"), "kind": c["kind"], "why": why})
+                if auto is None:      # 스크립트 단서는 아래 요약 한 줄로만
+                    self.warn(f"{where} 단서, 로그에서 못 찾음({why})")
+                continue
+            refs.append({"kind": "line", "source": "comment", "comment": c.get("comment"), "clue": c["kind"],
+                         "how": found.get("how"), "places": found.get("places") or 1, "lines": found.get("place") or [],
+                         "origin": "script" if auto is not None else "problem",
+                         **({"outside": True} if _outside(found.get("place") or [], window) else {})})
+            self.clue_rows.append({"where": where, "clue": c["kind"], "ts": found.get("ts"), "places": refs[-1]["places"],
+                                   "origin": origin})
+        if auto is not None:
+            parts = [f"{name} {n}" for name, n in (("옛 회차", auto["old_round"]), ("상한", auto["over"]),
+                                                   ("모양 안 맞음", auto.get("invalid", 0)), ("로그에 없음", len(dropped))) if n]
+            if parts:
+                self.warn("코멘트 단서(스크립트) 버림: " + " · ".join(parts))
+            if auto.get("conflict") and todo:
+                self.warn("코멘트에 서로 다른 token 값이 여럿이라(정정·정상과 실패를 함께 적음 등) 코멘트 단서로는 채택하지 않는다")
+            if not todo:      # 찾을 단서가 없었다 — 기준 없음과 같다(reference.json을 쓰지 않는다)
+                return
+        # 찾았는데 확인 못 한 단서(dropped)·글의 token 충돌(conflict)이 있으면 자격 검사가 단서 판정 전체를 보류한다
+        self.problem_use = {"problem": problem, "comment_adopt": switch("comment_adopt"), "refs": refs,
+                            "dropped": dropped, **({"conflict": True} if (auto or {}).get("conflict") else {}),
+                            **({"invalid": auto["invalid"]} if (auto or {}).get("invalid") else {})}
+
+    def fresh_problem(self, pb) -> dict | None:
+        """이번 이슈 입력(과 `--steps-file`)으로 만든 `problem.json` 내용 | None(없음 — 있는데 못 쓰면 경고)."""
+        path = self.job / pb.RESULT_FILE
+        if path.is_symlink() or not path.is_file():
+            return None
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            doc = None
+        if not isinstance(doc, dict) or doc.get("schema_version") != 1:
+            self.warn("문제 파악 결과(problem.json)를 읽지 못해 쓰지 않았다")
+            return None
+        if not self.issue_sha:      # 해시 기록 전(이전 버전)에 Jira 원문을 읽고 지운 작업
+            self.warn("이 작업에는 이슈 입력 해시 기록이 없어 문제 파악 결과(problem.json)를 쓰지 않았다 — "
+                      "Jira를 다시 읽고 triage.py problem부터 다시")
+            return None
+        if doc.get("source_sha256") != self.issue_sha:
+            self.warn("문제 파악 결과(problem.json)가 이번 이슈 입력으로 만든 것이 아니라 쓰지 않았다 — triage.py problem부터 다시")
+            return None
+        steps = getattr(self.args, "steps_file", None)
+        if steps:       # TC 파일을 주었으면 문제 파악 때의 TC 파일과도 같아야 한다(TC의 실패 줄·사유가 문제 파악 입력이다)
+            try:
+                sha = hashlib.sha256(Path(steps).expanduser().read_bytes()).hexdigest()
+            except OSError:
+                sha = None
+            if sha is None or doc.get("steps_sha256") != sha:
+                self.warn("문제 파악 결과(problem.json)가 이번 TC 파일(--steps-file)로 만든 것이 아니라 쓰지 않았다 — "
+                          "같은 --steps-file로 triage.py problem부터 다시")
+                return None
+        return doc
+
+    def comment_clues(self, pb, conf: dict, switch) -> tuple[list[dict], dict | None]:
+        """`JOB/issue.json` 코멘트·설명(가린 글)에서 스크립트로 뽑은 단서 → (단서, 버림 수). 쓰지 않으면 ([], None):
+        설정 `eligibility.comment_clues` 거짓, 이슈 글 없음(오프라인 `--issue-meta`), `--look-at` 있음(뽑힌 수만 경고),
+        Jira 코멘트를 일부만 읽음(`text.comments_partial` — 최근 코멘트가 빠졌을 수 있어 회차를 못 가린다, 경고), 코멘트의 전체 수나
+        순서를 모름(`text.comments_unchecked` — 뽑힌 수만 경고)."""
+        if not switch("comment_clues"):
+            return [], None
+        try:
+            text = json.loads((self.job / "issue.json").read_text(encoding="utf-8")).get("text")
+        except (OSError, ValueError, AttributeError):
+            return [], None
+        if not isinstance(text, dict) or not (text.get("comments") or text.get("description")):
+            return [], None
+        look_at = bool(self.look_inputs()["at"])
+        part = text.get("comments_partial")
+        if isinstance(part, dict):
+            if not look_at:
+                self.warn(f"Jira 코멘트를 일부만 읽어(전체 {part.get('total')}개 중 {part.get('read')}개) 코멘트 단서를 뽑지 "
+                          "않았다 — 최근 코멘트가 빠졌을 수 있다")
+            return [], None
+        unchecked = text.get("comments_unchecked")
+        words = conf.get("retest_words", pb.RETEST_WORDS)
+        if not (isinstance(words, list) and all(isinstance(w, str) for w in words)):
+            if "retest_words" in conf:
+                self.warn("설정 eligibility.retest_words 값이 글자 목록이 아니라 기본 재시험 낱말로 본다")
+            words = pb.RETEST_WORDS
+        vipc = platforms.load(self.defaults, getattr(self.args, "platform_name", None), require_enabled=False).vendor_ipc
+        skipped = text.get("comments_skipped")
+        clues, drop = pb.extract_clues([str(c) for c in text.get("comments") or []], str(text.get("description") or ""),
+                                       vipc.request_prefix, vipc.error_prefix, words,
+                                       first=skipped + 1 if type(skipped) is int and skipped > 0 else 1)
+        if look_at or unchecked:
+            if clues:
+                self.warn(f"코멘트 단서 {len(clues)}개 안 씀 — " + ("기준 줄(--look-at)을 썼다" if look_at else
+                          "Jira 코멘트의 전체 수·순서를 알 수 없다(코멘트 total·작성 시각 없음)"))
+            return [], None
+        return clues, drop
+
+    def find_clues(self, logs: list[Path], tz: str | None, year: int | None, texts: list[tuple[str, str | None]]) -> list[dict]:
+        """단서 찾을 글 `(글, 붙인 줄의 logcat 시각|None)` 목록 → 찾기 결과 목록(같은 순서). 로그는 한 번만 읽는다
+        (`parse_logcat ipc --find JOB/clue-at.json`의 `{finds: […]}`, trace 단계 `3-clue`)."""
+        if not texts:
+            return []
+        path = self.job / CLUE_FILE
+        path.write_text(json.dumps({"finds": [{"look_at": t, "ref": None, **({"stamp": st} if st else {})} for t, st in texts]},
+                                   ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+        argv = ["ipc", *logs, "--rules", self.snap / "parser-rules", "--find", path]
+        argv += (["--tz", tz] if tz else []) + (["--year", year] if year else [])
+        _, data, _ = self.run.call("3-clue", "parse_logcat.py", argv)
+        for w in (data or {}).get("warnings") or []:
+            self.warn(_clip(w.get("message"), 120))
+        founds = (data or {}).get("finds") or []
+        return [f if isinstance(f, dict) else {} for f in founds] + [{}] * (len(texts) - len(founds))
+
+    def clue_location(self, via: dict | None) -> dict | None:
+        """앵커 없이 단서만 찾았을 때의 실패 지점(analysis.json `decision.location`): source comment, state found(확정 아님) —
+        단서 일치가 여러 곳이면 multiple. kind는 사건이 붙은 단서(`via`, 없으면 첫 단서) 기준 ipc·token 일치 point·글자 일치 near.
+        단서가 없으면 None."""
+        refs = (self.problem_use or {}).get("refs") or []
+        if not refs:
+            return None
+        ref = via or refs[0]
+        many = (ref.get("places") or 1) > 1 if via else any((r.get("places") or 1) > 1 for r in refs)
+        return {"state": "multiple" if many else "found", "source": "comment",
+                "kind": "near" if ref.get("how") == "text" else "point"}
+
     def look_inputs(self) -> dict:
         """`--look-at`·`--look-note`(선택, 원문)를 이 프로세스에서 이슈 DB 설정대로 가린 값 `{at, note}`(없으면 None).
         원문은 여기서만 쓴다 — 하위 스크립트에는 가린 값을 담은 `JOB/look-at.json` 경로만 넘긴다(trace.jsonl에 원문 없음)."""
         if self._look is None:
             at, note = getattr(self.args, "look_at", None), getattr(self.args, "look_note", None)
-            self._look = {"at": (lookat.clean(self.masker(log_lines=True)(at)) or None) if at else None,
-                          "note": (" ".join(self.masker()(note).split()) or None) if note else None}
+            masked = self.masker(log_lines=True)(at) if at else None
+            self._look = {"at": (lookat.clean(masked) or None) if at else None,
+                          "note": (" ".join(self.masker()(note).split()) or None) if note else None,
+                          "stamp": lookat.stamp(masked)}     # 붙여 넣은 줄의 logcat 시각(같은 곳 고르기, 단계 5)
         return self._look
 
     def look_span(self, logs: list[Path], tz: str | None, year: int | None, jira_at) -> dict | None:
@@ -167,7 +412,9 @@ class AnchorMixin:
         if not text:
             return None
         path = self.job / LOOK_FILE
-        path.write_text(json.dumps({"look_at": text, "ref": lc.format_ts(jira_at) if jira_at else None}, ensure_ascii=False)
+        stamp = self.look_inputs()["stamp"]
+        path.write_text(json.dumps({"look_at": text, "ref": lc.format_ts(jira_at) if jira_at else None,
+                                    **({"stamp": stamp} if stamp else {})}, ensure_ascii=False)
                         + "\n", encoding="utf-8", newline="\n")
         argv = ["ipc", *logs, "--rules", self.snap / "parser-rules", "--find", path]
         argv += (["--tz", tz] if tz else []) + (["--year", year] if year else [])
@@ -179,7 +426,8 @@ class AnchorMixin:
             self.look_result = {"hits": 0, "why": _clip(found.get("why") or "결과 없음", 60)}
             self.warn(f"기준 줄을 로그에서 못 찾음({self.look_result['why']}) — 다음 출처로 분석 구간을 정했다")
             return None
-        self.look_result = {k: found.get(k) for k in ("hits", "picked", "pick", "how", "ts", "line", "at")}
+        self.look_result = {k: found.get(k) for k in ("hits", "picked", "pick", "how", "ts", "line", "at", "places")}
+        self.look_place = found.get("place") or []      # 자격 검사 기준 줄(reference_of) — 캐시·analysis.json에는 안 나간다
         ts = stepanchor._ts(found["ts"])
         return {"source": "look_at", "step": None, "step_from": None, "start": None, "fail": ts, "end": ts}
 

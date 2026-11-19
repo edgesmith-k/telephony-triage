@@ -101,7 +101,7 @@ def test_analysis_is_small_deterministic_and_writes_report_and_trace():
     assert "(f0:L" in report
     analysis = json.loads(raw)
     assert all(set(e) <= {"ts", "tag", "msg", "event"} for c in analysis["candidates"] for e in c["evidence"])
-    assert "line_ref" not in raw.decode("utf-8") and "_ref" not in raw.decode("utf-8")
+    assert "line_ref" not in raw.decode("utf-8") and '_ref"' not in raw.decode("utf-8")      # 키 `_ref`(값 no_reference는 괜찮다)
     trace = [json.loads(line) for line in (work / "a" / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
     scripts = [row.get("script") for row in trace if row.get("script")]
     assert "parse_logcat.py" in scripts and "match_signatures.py" in scripts
@@ -1014,10 +1014,76 @@ def test_fit_worst_case_with_ask_notes_stays_within_4kb():
               "must_show": must, "candidates": [{"cause": f"C-{i}", "evidence": [dict(big) for _ in range(10)]} for i in range(3)],
               "analyzer": {"skill": "s" * 40, "when": "ask", **driver._ask_note("ask", "5-1")},
               "explore": {"reason": "cause_unconfirmed", "when": "ask", **driver._ask_note("ask", "5-2")}}
+    decision = {"state": "accepted", "reason": "anchored_top",       # 단계 4 판단의 가장 긴 모양(counter까지)
+                "selected": {"category": "c" * 20, "type": "ABCDEFGHIJ-001", "cause": "ABCDEFGHIJ-001-01"},
+                "location": {"state": "confirmed", "source": "log_marker", "kind": "range"},
+                "counter": {"cause": "ABCDEFGHIJ-001-02"}, "check": {"why": "multiple_events", "checked": 3, "total": 120},
+                "events": [{"type": "ABCDEFGHIJ-001", "at": "2026-09-20T05:30:00.000000+00:00", "line": "f12:L123456", "phone": 1,
+                            "absence": True, "ref": True, "result": "adopted", "cause": "ABCDEFGHIJ-001-01",
+                            "why": "no_cause_before_event", "gap_s": 12.345}] * 3, "events_total": 42}
+    result["decision"] = json.loads(json.dumps(decision))
+    result["candidates"][0].update({**decision["selected"], "C": 1})      # 채택 원인 = 1위(C=1) 후보
     out = triage.fit(result)
     assert len(triage.dumps(out).encode("utf-8")) + 1 <= 4096 and out["truncated"] is False
+    # 4KB 압축은 판단의 사건(events)만 가장 먼저 줄인다 — 상태·사유·selected·counter·check·events_total은 그대로
+    assert {k: v for k, v in out["decision"].items() if k != "events"} == {k: v for k, v in decision.items() if k != "events"}
+    assert out["decision"]["events"] == []
+    # 1위 후보도 남는다(포털은 selected가 C=1 후보 안에 없으면 판단 형식 오류로 본다) — 근거 줄만 줄인다
+    top = out["candidates"][0]
+    assert {k: top[k] for k in ("category", "type", "cause")} == decision["selected"] and top["C"] == 1 and top["evidence"]
     assert out["explore"]["note"] == driver.ASK_NOTE.format(step="5-2") and out["analyzer"]["note"].endswith("(SKILL 5-1)")
     assert driver._ask_note("always", "5-2") == {} and driver._ask_note("never", "5-1") == {}
+
+
+def test_decision_reason_priority_and_candidates_untouched():
+    """단계 5-1 사유 우선순위(처음 맞는 것): 후보 없음 → 기준 없음 → 자격 검사 사유 → 채택. 채택 원인은 후보 중 자격 검사가
+    고른 것(1위가 아닐 수 있다). 후보 목록·순서는 그대로, 자격 검사 칸(check·events·events_total)은 늘 싣는다."""
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    from triagelib import driver
+    anchor = {"source": "log_marker", "location": {"state": "confirmed", "source": "log_marker", "kind": "range"}}
+    top = {"type": "DATA-001", "cause": "DATA-001-01", "category": "data", "score": 1.0}
+    other = {"type": "IMS-001", "cause": "IMS-001-01", "category": "ims", "score": 0.5}
+    none = {"state": "none", "source": None, "kind": None}
+    row = {"type": "IMS-001", "at": "t", "line": "f0:L1", "phone": 0, "absence": False, "ref": True, "result": "adopted",
+           "cause": "IMS-001-01", "why": None, "gap_s": 0.1}
+    elig = {"state": "accepted", "reason": "anchored_top", "why": "range", "cause": "IMS-001-01", "checked": 1, "total": 9,
+            "events_total": 5, "events": [row] * 5}
+    extra = {"check": {"why": "range", "checked": 1, "total": 9}, "events": [row] * 3, "events_total": 5}
+    assert driver._decision([], anchor, elig) == {"state": "held", "reason": "no_candidate", "selected": None,
+                                                  "location": anchor["location"], **extra}
+    assert driver._decision([], None, None)["location"] == none
+    assert driver._decision([top, other], None, elig)["reason"] == "no_reference"       # 기준 없음이 자격 검사보다 먼저
+    held = {**elig, "state": "held", "reason": "ambiguous", "why": "locations", "cause": None}
+    assert driver._decision([top, other], anchor, held)["reason"] == "ambiguous"
+    assert driver._decision([top, other], anchor, None)["reason"] == "cause_unconfirmed"   # 자격 검사 결과 없음(옛 매처)
+    cands = [top, other]
+    before = json.dumps(cands)
+    assert driver._decision(cands, anchor, elig) == {"state": "accepted", "reason": "anchored_top",
+                                                     "selected": {"category": "ims", "type": "IMS-001", "cause": "IMS-001-01"},
+                                                     "location": {**anchor["location"], "state": "found"}, **extra}  # 구간 채택은 found
+    assert json.dumps(cands) == before
+
+
+def test_held_report_lines_keep_prefixes_and_conclusion_shape():
+    """보류(기준 없음)면 `- 판단:` 줄이 결론 바로 앞, 결론은 `. 다음:` 구조 그대로, `- 분류 후보:` 머리말은 그대로 두고 꼬리만."""
+    doc, items = _items()
+    out = tmp("tt-triage-") / "x"
+    analysis = _offline(items[0], doc, out)
+    assert analysis["decision"]["reason"] == "no_reference" and analysis["candidates"][0]["C"] == 1
+    lines = (out / "report.md").read_text(encoding="utf-8").splitlines()
+    i = next(n for n, x in enumerate(lines) if x.startswith("- 판단: "))
+    assert lines[i] == ("- 판단: 원인 보류 — 실패 지점을 잡지 못함(기준 줄·스텝 마커·TC 파일+시계 차 중 로그에서 찾은 것 없음). "
+                        "아래 규칙 일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다")
+    assert lines[i + 1].startswith("- 결론: 원인 보류 — 실패 지점을 잡지 못함") and ". 다음: 근거 로그로 확인하고 Step 7" in lines[i + 1]
+    assert "DATA-001-01" in lines[i + 1].split(". 다음:")[0]
+    assert lines[i + 2].startswith("- 분류 후보: data > DATA-001 > DATA-001-01 ")
+    assert lines[i + 2].endswith(" (관측된 규칙 일치 — 채택 안 함)")
+    # NEXT ACTION: 보류면 1위 해결책 줄을 싣지 않는다(모델이 읽는 글에 보류한 원인의 해결책을 두지 않는다 — Jira 본문도 해결책 없음)
+    top = analysis["candidates"][0]
+    assert not any(x.startswith(("- 해결책", "- 수정 상태: ")) for x in lines)
+    assert any(x.startswith("- 수정 상태(1위 기준, 보류됨): ") for x in lines), top
+    # 근거 로그 머리 줄: 보류면 관측된 일치일 뿐 채택 원인이 아니다
+    assert next(x for x in lines if x.startswith("- 근거 로그 (")).endswith(", 관측된 규칙 일치 — 원인 채택 아님):")
 
 
 def _analyzer_report(cfg: dict) -> str:
@@ -1055,7 +1121,7 @@ def test_report_groups_lines_into_the_four_jira_sections():
     for item in items:                      # 원인 일치(C=1)·원인 미확인 각 1건
         picked.setdefault(item["expect"] if item["expect"] == "unresolved" else "matched", item)
     assert set(picked) == {"matched", "unresolved"}
-    want = {"PROBLEM": ["- 이슈: "], "CAUSE": ["- 결론: ", "- 분류 후보: ", "- 원인: TODO(LLM)"],
+    want = {"PROBLEM": ["- 이슈: "], "CAUSE": ["- 판단: ", "- 결론: ", "- 분류 후보: ", "- 원인: TODO(LLM)"],
             "NEXT ACTION": ["- 열린 PR: "], "ANALYSIS": ["- 로그 범위: ", "- 코드 위치: ", "- 기타 후보: ", "- 심층 분석"]}
     for kind, item in picked.items():
         out = tmp("tt-triage-") / kind

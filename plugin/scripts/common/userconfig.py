@@ -82,6 +82,8 @@ def from_site_defaults(defaults: dict) -> dict:
         out["explore"] = copy.deepcopy(defaults["explore"])
     if defaults.get("failed_step"):  # 실패 스텝 앵커 설정(마커 패턴 포함, 07-workflow.md §Step 3)
         out["failed_step"] = copy.deepcopy(defaults["failed_step"])
+    if defaults.get("eligibility"):  # 자격 검사 스위치(단계 5-2 — comment_adopt·use_problem_types, 02-config.md). 사용자 config가 덮는다
+        out["eligibility"] = copy.deepcopy(defaults["eligibility"])
     if defaults.get("module_skills"):   # 모듈 스킬 레포 (MODULE_SKILLS_PLAN_IMPL §2.1). 최상위 공통 키
         out["module_skills"] = copy.deepcopy(defaults["module_skills"])
     ghe = defaults.get("ghe") or {}
@@ -921,7 +923,7 @@ def runtime_problems(defaults: dict | None) -> list[str]:
 # 이 밖의 키(오타 등 — 읽지 않으므로 값이 무시된다)를 경고한다. 새 최상위 키를 읽게 되면 여기에 더한다(빠지면 doctor에 헛 warn).
 TOP_KEYS = frozenset((
     "schema", "issue_db", "synthetic_allowed", "tracker", "ghe", "logcat", "parser", "platform", "platforms",
-    "external_parsers", "analyzers", "explore", "failed_step", "guard", "runtime", "retention_days", "module_skills", "code",
+    "external_parsers", "analyzers", "explore", "failed_step", "eligibility", "guard", "runtime", "retention_days", "module_skills", "code",
     "user", "plugin", "code_profiles", "recent_code_roots", "log_dir", "work_dir", "reviewer", "opencode", "jira"))
 
 

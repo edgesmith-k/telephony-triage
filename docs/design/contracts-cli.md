@@ -47,7 +47,7 @@
 | `parse` | `<logcat>... (--around <ISO 시각> \| --between <ISO 시작> <ISO 끝> \| --full) [--minutes <MINUTES>] --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--mask] [--no-external]` | `--around`: 발생 시각 (타임존 있는 ISO); `--between`: 명시 구간 (타임존 있는 ISO 둘, 시작 ≤ 끝); `--full`: 파일 전체; `--minutes`: 기본 5; `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--mask`: extractor 전에 줄 단위 마스킹; `--no-external`: 외부 파서 끔 (분석 디버그용) |
 | `markers` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--step-events]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--step-events`: 이슈 DB step_events 규칙의 로그 흔적(step_events[{rule, ts, seq, label}])을 더한다 |
 | `flows` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>]` | `--rules`: <db>/parser-rules (흐름은 <db>/<category>/flows/); `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도 |
-| `ipc` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--find <look-at.json>]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--find`: 기준 줄 찾기: triage.py가 쓴 {look_at, ref} 파일(원문 글은 인자로 받지 않는다). records 대신 find를 낸다 |
+| `ipc` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--find <look-at.json>]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--find`: 기준 줄 찾기: triage.py가 쓴 {look_at, ref} 파일(원문 글은 인자로 받지 않는다). records 대신 find를 낸다 ({finds: […]} 파일이면 finds[]) |
 | `extract-bugreport` | `<zip\|txt> --out <dir>` |  |
 | `cut` | `<logcat>... (--evidence <match.json> \| --around <ISO 시각>) [--cause <원인 ID>] [--seconds <SECONDS>] --out <file> [--rules <RULES>] [--context <CONTEXT>] [--max-lines <MAX_LINES>] [--tz <IANA>] [--year <YYYY>]` | `--evidence`: match_signatures.py 출력 (--cause 원인 후보의 근거); `--around`: 지정 시각 (타임존 있는 ISO); `--cause`: --evidence에서 근거를 쓸 원인 (--evidence에 필수); `--seconds`: --around 앞뒤 초, 기본 30; `--rules`: <db>/parser-rules (mask.allow_patterns·마스킹 끔을 읽는다); `--context`: 기본 20; `--max-lines`: 기본 100 |
 | `mask-copy` | `<logcat>... --out <dir> [--rules <RULES>] [--max-bytes <MAX_BYTES>]` | `--out`: 사본 디렉토리(<작업 디렉토리>/logs-masked); `--rules`: <db>/parser-rules (mask.allow_patterns·마스킹 끔을 읽는다); `--max-bytes`: 이보다 큰 파일은 사본을 만들지 않는다(경고 mask-copy-skipped, 기본 67108864), 기본 67108864 |
@@ -71,7 +71,7 @@
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `[--db <DB>] --events <json> [--issue-meta <json>] [--regress] [--no-feedback-weight] [--top <TOP>] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--top`: 후보 수. types·causes는 충족된 것만, pending은 N개 (0이면 전부), 기본 3; `--json`: JSON 출력 (항상 JSON) |
+| — | `[--db <DB>] --events <json> [--issue-meta <json>] [--regress] [--no-feedback-weight] [--reference <json>] [--top <TOP>] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--reference`: 자격 검사 기준(triage.py가 쓴 JOB/reference.json — 기준 하나 또는 {refs, problem, comment_adopt}). 없으면 eligibility는 no_reference; `--top`: 후보 수. types·causes는 충족된 것만, pending은 N개 (0이면 전부), 기본 3; `--json`: JSON 출력 (항상 JSON) |
 
 ## `db_search.py`
 
@@ -277,7 +277,42 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
     - files?
     - skipped?
   - uncollected_tags?[≤3]({tag(≤40), lines, warn}; 후보 없음·1위 C=0일 때만, 파서 규칙에 없는 태그 힌트)
-- candidates?[≤3]
+- decision(판단 상태(단계 5 자격 검사 — 실패 지점(기준)의 사건에 실제로 붙는 원인만 채택, 후보 목록·순서·점수는 그대로). 사유는 처음 맞는 것: 후보 없음(no_candidate) → 실패 지점 없음(no_reference) → 실패 지점에 DB 증상 사건 없음(symptom_not_found) → 여러 곳·사건마다 다른 원인(ambiguous) → 근처 줄·구간 끝 모름·안 나옴 미확인(ineligible) → 원인 판정 불가(cause_unjudged)·원인 미확인(cause_unconfirmed) → 채택(anchored_top: 기준 있음 + 자격 통과). fit_check는 check-output(탐색 적합성 확인 보류)만 쓴다. 4KB 압축 시 events만 줄인다(1개 → 0개, events_total은 남김))
+  - state: accepted | held
+  - reason: anchored_top | no_reference | no_candidate | cause_unconfirmed | cause_unjudged | fit_check | symptom_not_found | ambiguous | ineligible
+  - selected(accepted면 채택 원인 후보의 {category, type, cause}(selected ∈ candidates — 1위가 아니면 report.md 판단 줄에 "규칙 일치 n위", --top 밖이면 후보 끝에 붙는다), held면 null)
+    - category
+    - type
+    - cause
+  - location(실패 지점: 기준 줄 ipc·token 일치 1개·로그 FAIL 마커 1개면 confirmed, 기준 줄 글자 일치는 한 곳이어도 found, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). 앵커 없이 문제 파악 단서(problem.json)만 로그에서 찾았으면 source comment·state found(확정 아님, 단서 일치 여러 곳이면 multiple). 채택이면 자격 검사 결과로 다시 정한다: confirmed/point는 근거 줄 same_line(기준 줄이 붙은 사건의 증상·원인 근거 줄이거나 같은 RIL 요청)만, cp_point는 found/point, range·조건 줄로만 맞은 same_line은 found(kind 그대로), comment 출처는 늘 found. model은 계약에만(단계 6~7))
+    - state: none | found | confirmed | multiple
+    - source: look_at | log_marker | steps_file | step_order | comment | model | null
+    - kind(기준 줄 ipc·token 일치 point, 글자 일치 near(한 곳이어도 found), 마커·steps-file 구간 range): point | near | range | null
+  - check?(자격 검사 요약(표시 전용): why(세부 사유 — same_line|cp_point|near|range|near_without_symptom|range_end_unknown|range_without_symptom|no_event_at_reference|typeless_failure_within_link|same_line_typeless|no_event_in_range|no_allowed_event_near|not_in_db|comment_unconfirmed|locations|slots|sources|multiple_events|absence_unverified|cause_after_event|no_cause_before_event|cause_unjudged|cause_not_in_candidates, 기준 없으면 null), checked(기준에 붙어 검사한 사건 수), total(실패 사건 수 — 유형 없는 파생 오류 이벤트 포함), via?(명시 기준 없이 코멘트 단서로 사건을 잡았을 때만 그 단서: comment(코멘트 번호|description), clue(ipc|ipc_name|log_line), how(ipc|token|text), places, origin(script = 스크립트가 코멘트에서 뽑음, problem = 문제 파악 problem.json)))
+    - why
+    - checked
+    - total
+    - via?
+      - comment
+      - clue: ipc | ipc_name | log_line
+      - how
+      - places
+      - origin: script | problem
+  - events?[≤3](유형 사건(증상 시그니처 1회 충족, 기준에 붙은 것 먼저 그다음 시각 순) {type, at, line(f:L), phone, absence(증상 시그니처에 must_not_match), ref(기준에 붙음), result: adopted|held|observed, cause(붙은 원인 1순위|null), why(원인이 안 붙은 이유|null), gap_s(사건 시각 − 붙은 원인 근거 마지막 줄, 초)}. 전체는 JOB/eligibility.json)
+    - type
+    - at
+    - line
+    - phone
+    - absence
+    - ref
+    - result: adopted | held | observed
+    - cause
+    - why
+    - gap_s
+  - events_total?(유형 사건 수(events가 4KB 압축으로 줄어도 남는다))
+  - counter?(accepted이고 심층 분석 의견의 원인 ID가 채택 원인과 다를 때만(check-output --for deep))
+    - cause
+- candidates?[≤4](규칙 일치 상위 3 — 채택 원인이 그 밖이면 4번째로 붙는다(decision.selected ∈ candidates))
   - type
   - cause
   - matched_conditions?(원인+증상 시그니처가 맞춘 조건 수(특이도) — 동점 3차 정렬 키·표시용, 점수 불변)

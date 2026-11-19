@@ -19,6 +19,10 @@
    "confidence": "high"
   }
  ],
+ "decision": {
+  "state": "held",
+  "reason": "no_reference"
+ },
  "issue_summary": "VoLTE 통화가 안 됨 (합성)",
  "occurred_at": "2026-08-23T12:03:25+00:00",
  "events": "events.json",

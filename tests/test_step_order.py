@@ -271,6 +271,10 @@ def test_triage_aligns_failure_window_by_step_order_without_any_clock():
     done, job = _offline(db, _zip(tmp("tt-zip-") / "att.zip"))
     sa = done["step_anchor"]
     assert sa["source"] == "step_order" and sa["step"] == "7 | 데이터 연결 확인"
+    # 단계 5-1: 스텝 순서 구간은 끝을 몰라 채택하지 않는다(H08) — 보류, 구간·위치는 그대로
+    dec = done["decision"]
+    assert (dec["state"], dec["reason"], dec["check"]["why"]) == ("held", "ineligible", "range_end_unknown")
+    assert dec["location"] == {"state": "found", "source": "step_order", "kind": "range"}
     assert sa["order"] == {"matched": 4, "observable": 4, "missed": 0,
                            "last": {"step": "6 | 모바일 데이터 켜기", "ts": "2026-09-20T05:32:50.000Z"}}
     assert "clock" not in sa

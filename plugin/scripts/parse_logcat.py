@@ -21,7 +21,10 @@
       placeholder)으로 읽어 `{schema, records[{i, ts, dir, name, token, result, line_ref, phone_id}], total, truncated, coverage,
       warnings}`(상한 20000, 맞은 줄만 마스킹)를 낸다. `phone_id`는 `vendor_ipc.slot`(선택)이 맞으면 그 값, 아니면 줄 레코드의 슬롯.
       `--find`는 `triage.py run --look-at`이 쓴 파일로 기준 줄을 찾아 records 대신
-      `find {how: ipc|token|text|null, hits, picked, pick: only|nearest|last, ts, line, at[], slots | why}`를 낸다(`common.lookat`).
+      `find {how: ipc|token|text|null, hits, picked, pick: only|nearest|last, ts, line, at[], slots, places, place[], stamp? | why}`를
+      낸다(`common.lookat`). `places`는 같은 요청(IPC REQ→RSP, RIL serial 짝)으로 묶은 곳 수, `place`는 한 곳의 줄
+      `{line_ref, ts, phone, ipc?, ril?}`(자격 검사 입력). 붙여 넣은 줄의 시각(`stamp`)과 같은 곳이 하나면 그곳만 남긴다
+      (`stamp: same`, 여럿 `many`, 없음 `none`). 파일이 `{finds: [찾기, …]}`(≤ 20, 코멘트 단서)면 로그를 한 번만 읽고 `finds[]`를 낸다.
   extract-bugreport <zip|txt> --out <dir>
       bugreport에서 logcat 섹션(기본 system/radio/main)과 빌드 정보(build.json)만 꺼낸다.
   cut <logcat...> (--evidence <match.json> --cause <원인 ID> | --around <ISO 시각> [--seconds 30]) --out <file>
@@ -1035,12 +1038,14 @@ def run_flows(args, defaults: dict, profile: platforms.PlatformProfile | None = 
 
 # -- ipc ---------------------------------------------------------------------
 
+FINDS_MAX = 20      # `--find {finds: […]}` 한 번에 찾는 수(코멘트 단서 상한 10의 여유)
+
 
 def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = None) -> dict:
     """벤더 IPC 메시지 줄 레코드(11/16 설계 §1, `common.ipcseq`)와 기준 줄 찾기(`--find`, §2). `parse` 출력은 구간·tags.yaml로
     잘려 있어 쓰지 않고, 전체 로그의 백엔드 줄 레코드에서 벤더 IPC 태그 줄(`backend.is_vendor_ipc`, tags.yaml `ipc: vendor` 반영)만
     본다. 정규식은 원 줄에 돌리고(시간 상한 `matcher.pattern_timeout_ms`) 맞은 줄만 가린 뒤 가린 글에서 값을 다시 뽑는다(마커와 같다).
-    `--find <json>`: `triage.py`가 쓴 `JOB/look-at.json`(`{look_at: 가린 글, ref: 기준 시각|null, slot?: 요청 SIM 슬롯|null}`)으로
+    `--find <json>`: `triage.py`가 쓴 `JOB/look-at.json`(`{look_at: 가린 글, ref: 기준 시각|null, slot?: 요청 SIM 슬롯|null, stamp?: 붙여 넣은 줄의 logcat 시각}`)으로
     찾고 `records` 대신 `find {how, hits, picked, pick, ts, line, at[], slots | why}`를 낸다 — 원문 글은 인자로 받지 않는다
     (trace.jsonl에 남지 않게). `slot`이 있으면 IPC·본문 일치 모두 그 슬롯이거나 슬롯 모름인 것만, `slots`는 슬롯별 일치 수."""
     paths, rules_dir = [Path(p) for p in args.logs], Path(args.rules)
@@ -1049,16 +1054,21 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
         backend = backend.apply_rules(parser_rules.load(rules_dir))
     except parser_rules.RulesError as exc:
         raise UsageError(f"파서 규칙 오류: {exc}") from exc
-    spec = (profile or _profile(defaults, db_cfg)).vendor_ipc
+    prof = profile or _profile(defaults, db_cfg)
+    spec = prof.vendor_ipc
     look = None
     if args.find:
         try:
             look = json.loads(Path(args.find).read_text(encoding="utf-8"))
-            if not isinstance(look, dict) or not isinstance(look.get("look_at"), str):
-                raise ValueError("look_at")
-            if look.get("slot") is not None and (type(look["slot"]) is not int or look["slot"] < 0):
-                raise ValueError("slot")
-        except (OSError, ValueError) as exc:
+            many = look.get("finds") if isinstance(look, dict) and "finds" in look else None
+            if many is not None and not (isinstance(many, list) and len(many) <= FINDS_MAX):
+                raise ValueError("finds")
+            for one in many if many is not None else [look]:
+                if not isinstance(one, dict) or not isinstance(one.get("look_at"), str):
+                    raise ValueError("look_at")
+                if one.get("slot") is not None and (type(one["slot"]) is not int or one["slot"] < 0):
+                    raise ValueError("slot")
+        except (OSError, ValueError, AttributeError) as exc:
             raise UsageError(f"--find 파일을 읽지 못했습니다({exc}): {args.find}") from exc
     raw, log_text, warnings = _raw_line_records(backend, paths, args.tz, args.year, "ipc-nul")
     stamps = [r["ts"] for r in raw if r.get("ts")]       # 범위는 줄 레코드의 처음·끝(backend.coverage 전체 파싱을 다시 하지 않는다)
@@ -1094,6 +1104,17 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
         result["truncated"] = len(records) > ipcseq.RECORD_MAX
         result["records"] = records[-ipcseq.RECORD_MAX:]     # 넘으면 앞을 버린다(실패는 보통 로그 끝쪽)
         return result
+    ctx = {"records": records, "lines": lines, "texts": texts, "mask": mask, "prof": prof, "tz": args.tz, "year": args.year}
+    if "finds" in look:      # 코멘트 단서 여러 개: 로그 읽기·가리기는 한 번, 찾기만 단서마다
+        result["finds"] = [_find_one(one, **ctx) for one in look["finds"]]
+    else:
+        result["find"] = _find_one(look, **ctx)
+    return result
+
+
+def _find_one(look: dict, *, records: list[dict], lines: list[dict], texts: list[str], mask, prof, tz, year) -> dict:
+    """기준 줄·단서 하나 찾기(`run_ipc --find`) → `find {how, hits, …} | {how: null, hits: 0, why}`."""
+    spec = prof.vendor_ipc
     q = lookat.query(look["look_at"], spec.request_prefix)
     picks = lookat.ipc_hits(q, records, look.get("slot"))
     found, how = [records[k]["i"] for k in picks], "ipc" if q["name"] else "token"
@@ -1110,27 +1131,52 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
                 why = f"token {look['look_at'][:12]}인 IPC 줄 없음 — {lookat.TEXT_MIN}자 미만 글은 본문으로 찾지 않는다"
             else:
                 why = f"기준 줄이 짧아({lookat.TEXT_MIN}자 미만) 찾지 않았다 — token=222 꼴로 적으면 token으로 찾습니다"
-            result["find"] = {"how": None, "hits": 0, "why": why}
-            return result
+            return {"how": None, "hits": 0, "why": why}
     if not found:
-        result["find"] = {"how": None, "hits": 0, "why": "일치하는 줄 없음"}
-        return result
-    times = [logtime.parse_ts(lines[n]["ts"]) for n in found]
+        return {"how": None, "hits": 0, "why": "일치하는 줄 없음"}
+    if how == "text":      # 본문 일치는 줄 레코드의 슬롯
+        slots = [lines[i].get("phone_id") for i in found]
+    by_line = {r["i"]: r for r in records}
+    places = lookat.group_places([_hit_item(i, lines[i], by_line.get(i), spec.success) for i in found],
+                                 prof.ril_vendor.link_ms if prof.ril_vendor else lookat.PAIR_MS)
+    stamp = logtime.normalize_ts(look.get("stamp"), tz, year) if look.get("stamp") else None     # 없는 날짜·시각이면 None → none
+    same = [p for p in places if stamp is not None and any(logtime.parse_ts(x["ts"]) == stamp for x in p)]
+    if len(same) == 1:     # 붙여 넣은 줄의 시각과 같은 곳이 하나 → 그곳(같은 단말 로그 시계, §8-5)
+        places = same
+    pool = [x["i"] for x in places[0]] if len(places) == 1 else found
+    times = [logtime.parse_ts(lines[n]["ts"]) for n in pool]
     ref = look.get("ref")
     try:
         ref = logtime.parse_ts(ref) if ref else None
     except ValueError:
         ref = None
     k, way = lookat.pick(times, ref)
-    n = found[k]
-    if how == "text":      # 본문 일치는 줄 레코드의 슬롯
-        slots = [lines[i].get("phone_id") for i in found]
-    result["find"] = {"how": how, "hits": len(found), "picked": k + 1, "pick": way, "ts": lines[n]["ts"],
-                      "line": " ".join(mask(n).split())[:200],
-                      "at": [lines[i]["ts"] for i in found[:lookat.AT_MAX]],
-                      # 슬롯별 일치 수(`"null"` = 슬롯 모름) — 두 슬롯에 다 맞아도 여기서는 고르지 않는다(뒤 단계가 본다)
-                      "slots": {("null" if s is None else str(s)): c for s, c in Counter(slots).items()}}
-    return result
+    n = pool[k]
+    return {"how": how, "hits": len(found), "picked": found.index(n) + 1, "pick": way, "ts": lines[n]["ts"],
+                "line": " ".join(mask(n).split())[:200],
+                "at": [lines[i]["ts"] for i in found[:lookat.AT_MAX]],
+                # 슬롯별 일치 수(`"null"` = 슬롯 모름) — 두 슬롯에 다 맞아도 여기서는 고르지 않는다(뒤 단계가 본다)
+                "slots": {("null" if s is None else str(s)): c for s, c in Counter(slots).items()},
+                # 자격 검사 입력: 같은 요청으로 묶은 곳 수와, 한 곳이면 그 줄들(여럿이면 고른 줄이 든 곳)
+                "places": len(places),
+                "place": [{k2: v for k2, v in x.items() if k2 != "i"}
+                          for x in (places[0] if len(places) == 1 else next(p for p in places if any(x["i"] == n for x in p)))],
+                **({"stamp": "same" if len(same) == 1 else "many" if same else "none"} if look.get("stamp") else {})}
+
+
+def _hit_item(i: int, line: dict, rec: dict | None, success: str | None = None) -> dict:
+    """기준 줄 일치 한 줄 → 자격 검사 입력 `{i, line_ref, ts, phone, ipc?: {dir, name, token, ok?}, ril?: {serial, pid, paired_ts}}`.
+    IPC 레코드면 그 슬롯(결과가 성공 값 `success`면 `ok: true`), RIL serial이 숫자일 때만 `ril`(가린 serial은 같은 요청으로 보지 않는다)."""
+    item = {"i": i, "line_ref": line.get("line_ref"), "ts": line["ts"], "phone": line.get("phone_id")}
+    if rec is not None:
+        item["ipc"] = {k: rec.get(k) for k in ("dir", "name", "token")}
+        if success and rec.get("result") == success:
+            item["ipc"]["ok"] = True
+        item["phone"] = rec.get("phone_id")
+    ril = line.get("ril") or {}
+    if type(ril.get("serial")) is int:
+        item["ril"] = {"serial": ril["serial"], "pid": line.get("pid"), "paired_ts": ril.get("paired_ts")}
+    return item
 
 
 # -- extract-bugreport --------------------------------------------------------
@@ -1473,7 +1519,8 @@ def build_parser() -> argparse.ArgumentParser:
     i.add_argument("--tz", metavar="IANA", default=None, help="연도 없는 logcat 시각의 타임존 (IANA)")
     i.add_argument("--year", metavar="YYYY", type=int, default=None, help="첫 줄의 연도")
     i.add_argument("--find", metavar="look-at.json", default=None,
-                   help="기준 줄 찾기: triage.py가 쓴 {look_at, ref} 파일(원문 글은 인자로 받지 않는다). records 대신 find를 낸다")
+                   help="기준 줄 찾기: triage.py가 쓴 {look_at, ref} 파일(원문 글은 인자로 받지 않는다). records 대신 find를 낸다 "
+                        "({finds: […]} 파일이면 finds[])")
 
     b = sub.add_parser("extract-bugreport", parents=[common], help="bugreport → logcat 섹션")
     b.add_argument("bugreport", metavar="zip|txt")

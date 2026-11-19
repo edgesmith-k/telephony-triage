@@ -135,7 +135,7 @@ def find_span(markers, failed_text, jira_at, allow_without_step: bool = True,
               max_span_sec: int = DEFAULT_WINDOW["max_span_sec"]):
     """마커 목록에서 실패 스텝의 구간을 찾는다. `(span | None, warnings)`.
 
-    span: `{source: "log_marker", step, step_from: "failed_step"|"marker", start, fail, end}`. 시각은 UTC datetime,
+    span: `{source: "log_marker", step, step_from: "failed_step"|"marker", start, fail, end, n?}`(n = 맞는 FAIL 마커 수, FAIL이 있을 때만). 시각은 UTC datetime,
     `start`는 없을 수 있다. FAIL 마커가 있으면 `fail == end`, 시작만 있으면(`fail: None`) `end`는 다음 마커 시각
     (없으면 `start + max_span_sec`)이다. 실패 스텝을 모르면 `allow_without_step`일 때만 FAIL 마커 자체를 쓴다."""
     jira_at = _ts(jira_at) if jira_at else None
@@ -169,7 +169,7 @@ def find_span(markers, failed_text, jira_at, allow_without_step: bool = True,
         if start is None and idx > 0:
             start = rows[idx - 1][0]
         return {"source": "log_marker", "step": step, "step_from": "failed_step" if have_step else "marker",
-                "start": start, "fail": fail_t, "end": fail_t}, warnings
+                "start": start, "fail": fail_t, "end": fail_t, "n": len(fails)}, warnings     # n: 맞는 FAIL 마커 수(위치 상태)
     if not have_step:
         return None, warnings
 

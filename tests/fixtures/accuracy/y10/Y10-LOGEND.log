@@ -1,0 +1,8 @@
+-- [합성] 분석 정확도 조합 로그. 시드 fixture 줄과 합성 VIPC_ 줄을 시각만 옮겨 이어 붙였다(tests/helpers/make_accuracy_fixtures.py).
+11-14 10:05:19.600  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0
+11-14 10:05:19.603  1301  1301 D SST-0   : setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0], IMS reg state=false, pending radio off=false
+11-14 10:05:19.604  1301  1301 D SST-0   : powerOffRadioSafely: due to AIRPLANE_MODE_ON
+11-14 10:05:19.650  1301  1301 D RILJ    : [0230]> HANGUP gsmIndex = 1 [PHONE0]
+11-14 10:05:19.700   912   952 D Telecom : ConnectionServiceWrapper: CS -> TC[cap]: setDisconnected TC@2_1 DisconnectCause [ Code: (LOCAL) Label: () Description: () Reason: (LOCAL) Tone: (27)  TelephonyCause: 3/-1 ImsReasonInfo: null]: CSW.sDc(cap)@Aig
+11-14 10:05:19.701   912   952 V Telecom : Call: setState ACTIVE -> DISCONNECTED: CSW.sDc(cap)@Aig
+11-14 10:05:19.703   912   952 I Telecom : CallLogManager: onCallStateChanged: call=TC@2, newState=DISCONNECTED, disconnectCause=LOCAL: CSW.sDc(cap)@Aig
