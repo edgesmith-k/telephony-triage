@@ -19,4 +19,4 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 2. IMS 경로 `ImsSmsDispatcher` → 벤더 IMS `[sms]` → `onSendSmsResult … status=2|3|4`(오류) → 첫 실패는 벤더 IMS. `VIPC_*SMS*`가 없으면 모뎀까지 가지 않았다. (없으면: ImsSmsDispatcher `sendSms failed. Falling back to PSTN.` — 결과뿐이라 층을 정하지 않는다)
 3. 뒤따른 CS `SEND_SMS` 성공은 IMS 실패를 가린다. 처음 실패를 답한다.
 4. `sendSms failed. Falling back to PSTN.`은 결과다. 그 앞 줄을 본다.
-5. 1위와 비교: 같으면 `1위와 같음`, 다르면 `<원인 ID> — <근거>`. 입력 `decision.state`가 `held`면 1위는 채택된 원인이 아니라 관측된 규칙 일치다(원인으로 단정하지 않는다).
+5. 1위와 비교: 같으면 `1위와 같음`, 다르면 `<원인 ID> — <근거>`. `decision.state`=held면 1위는 채택 아님.

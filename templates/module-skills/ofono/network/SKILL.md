@@ -18,4 +18,4 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 3. 실패 앞에 `org.ofono.Modem` Online=false·`RADIO_POWER (0)`·`RADIO_STATE_CHANGED (state: OFF)`·네트워크 구성요소 `RADIO_OFF`가 있으면 그 뒤 조회 실패는 `원인 아님(정상 동작)`.
 4. `NOT_REGISTERED … RejectCause=0`이 길게 이어지면 망을 찾는 중이지 거절이 아니다.
 5. 관리 데몬 warn·`Load data failed`는 위로 보인 증상이다.
-6. 1위 원인과 비교한다: 맞으면 `1위와 같음`, 아니면 `<원인 ID> — <근거>`. 입력 `decision.state`가 `held`면 1위는 채택된 원인이 아니라 관측된 규칙 일치다(원인으로 단정하지 않는다).
+6. 1위 원인과 비교한다: 맞으면 `1위와 같음`, 아니면 `<원인 ID> — <근거>`. `decision.state`=held면 1위는 채택 아님.
