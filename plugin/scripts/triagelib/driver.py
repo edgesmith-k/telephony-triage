@@ -1198,7 +1198,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         info, logs, version, code, tz, year = (ctx[k] for k in ("info", "logs", "version", "code", "tz", "year"))
         warn0 = len(self.warnings)
         anchor = self.step_anchor(logs, tz, year, info)
-        self.problem_refs(logs, tz, year)
+        self.problem_refs(logs, tz, year, anchor["window"] if anchor else None)
         around = anchor["fail"] if anchor else self.occurred(info, logs, tz, year)
         events_path = self.job / "events.json"
         if around is None and anchor is None and self.full_events is not None:     # occurred()의 전체 파싱과 같은 인자

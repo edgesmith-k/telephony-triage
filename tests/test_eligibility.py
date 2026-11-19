@@ -510,6 +510,9 @@ def test_clue_only_decision_needs_every_clue_confirmed():
     assert outcome(held) == ("held", "ambiguous", "sources") and [e["type"] for e in held["events"]] == ["NETWORK-001"]
     assert outcome(el.decide(EVENTS, [], unconfirmed=2)) == ("held", "no_reference", None)
     assert outcome(el.decide(EVENTS, [point(16, 120), many], unconfirmed=1)) == ("accepted", "anchored_top", "N3")   # 명시 기준
+    # 명시 기준 + 분석 구간 밖에서 찾은 단서(사건 목록에 없음) = 다른 사건(H07)
+    far = clue(point(1, -900, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 0xAA}, phone=None), outside=True)
+    assert outcome(el.decide(EVENTS, [point(16, 120), far])) == ("held", "ambiguous", "sources")
 
 
 def test_clue_keeps_real_hold_reason_whether_comment_adopt_or_not():

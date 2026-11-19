@@ -27,7 +27,8 @@
   (ineligible/range_end_unknown). 같은 줄 점은 유형으로 거르지 않는다. FAIL 마커는 스텝을 감쌀 뿐 실패 사건 줄이 아니라 채택해도
   실패 지점은 found(driver). 허용 유형으로 고른 CP 점·근처·구간 채택은 모두 found라 유형 거르기가 confirmed를 만들지 않는다.
 - 여러 곳(`places` > 1) ambiguous/locations, 슬롯 둘 이상 ambiguous/slots, 출처끼리 다른 사건 ambiguous/sources.
-- 출처: 명시 기준(look_at·마커·steps-file)이 있으면 그것이 정한다 — 단서는 명시 기준과 다른 사건을 가리킬 때만 ambiguous/sources로
+- 출처: 명시 기준(look_at·마커·steps-file)이 있으면 그것이 정한다 — 단서는 명시 기준과 다른 사건을 가리킬 때(분석 구간 밖에서
+  찾은 단서 `outside: true` 포함)만 ambiguous/sources로
   만든다. 단서만 있으면 단서가 모두 확인될 때만 정하되(하나라도 보류·로그에서 못 씀이면 보류 — `decide`), `comment_adopt`가
   거짓이면(기본 참, Y1 허용) 붙은 사건을 싣고 ineligible/comment_unconfirmed로 보류한다.
 - 문제 파악이 "DB에 없는 증상"(`not_in_db`)이면 기준이 있어도 symptom_not_found/not_in_db(다른 사건의 원인으로 대신하지 않는다).
@@ -236,7 +237,8 @@ def decide(events: list[dict], refs: list[dict], link_ms: int = DEFAULT_LINK_MS,
             return got
         mine = {id(e) for e in got[1]}
         other = [e for o in clues if o[0] == "events" for e in o[1] if id(e) not in mine]
-        if other:
+        # 분석 구간 밖에서 찾은 단서(`outside` — 그 사건은 구간 밖이라 사건 목록에 없다)도 다른 사건을 가리킨다(H07)
+        if other or any(r.get("outside") is True for r in clue_refs):
             return _held("ambiguous", "sources", got[1] + other)
         return _adopt(got[1], got[2])
     got = _pick(clues)

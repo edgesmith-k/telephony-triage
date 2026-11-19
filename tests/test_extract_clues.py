@@ -376,3 +376,40 @@ def test_review_comment_shapes_without_total_or_order_extract_nothing(seed_db, n
                 log=_variant(name.split()[0], "0x0aa"))
     assert a["decision"]["reason"] == "no_reference", a["decision"]
     assert any("안 씀 — Jira 코멘트의 전체 수·순서를 알 수 없다" in w for w in a["warnings"]), a["warnings"]
+
+
+# 명시 기준(로그 마커) + 분석 구간 밖 사건을 가리키는 단서 → 다른 사건(H07, 리뷰 cases3 M2·M3). 로그에 없는 단서는 마커가 정한다.
+MARKER = {"marker_patterns": [r"^(?:TestRunner|Automation)\s*:\s*\[?(?i:step)\s*(?P<step>\d+)\]?\s*(?:[:-]\s*.*?\s)?(?P<status>START|PASS|FAIL)\b"],
+          "marker_status": {"start": ["start"], "pass": ["pass"], "fail": ["fail"]}, "anchor_without_step": True,
+          "window": {"pre_sec": 60, "post_sec": 30, "fail_only_pre_sec": 120, "max_span_sec": 900}, "disagree_minutes": 10,
+          "steps_file_tz": None, "clock_offset": None}
+
+
+def _marker_log() -> Path:
+    """0x0aa 변형(10:00 다른 실패) + Step 3 START 10:01:30 · FAIL 10:02:00.700(10:02 DATA 실패를 감싼다)."""
+    out = []
+    for line in _variant("mk", "0x0aa").read_text(encoding="utf-8").splitlines():
+        if line.startswith("11-14 10:02:00.000"):
+            out.append("11-14 10:01:30.000  3000  3000 I TestRunner: Step 3 START")
+        out.append(line)
+        if line.startswith("11-14 10:02:00.624"):
+            out.append("11-14 10:02:00.700  3000  3000 I TestRunner: Step 3 FAIL")
+    path = tmp("tt-clue-log-") / "marker.log"
+    path.write_text("\n".join(out) + "\n", encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize("name,comment,expect", [
+    ("same", "VIPC_SETUP_DATA (token=0x0e1) 실패", ("accepted", "anchored_top", "range")),
+    ("outside", "VIPC_SETUP_DATA (token=0x0aa) 실패", ("held", "ambiguous", "sources")),
+    ("notinlog", "VIPC_SETUP_DATA (token=0x0f7) 실패", ("accepted", "anchored_top", "range")),
+], ids=["same", "outside", "notinlog"])
+def test_marker_reference_and_clue_outside_its_window_conflict(seed_db, name, comment, expect):
+    root = plugin_root(failed_step=MARKER)
+    a, out = _run(seed_db, "mk-" + name, comments=[comment], log=_marker_log(), root=root)
+    assert a["step_anchor"]["source"] == "log_marker"
+    d = a["decision"]
+    assert (d["state"], d["reason"], d["check"]["why"]) == expect, (d, a["warnings"])
+    refs = json.loads((out / "reference.json").read_text(encoding="utf-8"))["refs"]
+    assert [r.get("outside", False) for r in refs if r["source"] == "comment"] == ([True] if name == "outside" else
+                                                                                   [False] if name == "same" else [])

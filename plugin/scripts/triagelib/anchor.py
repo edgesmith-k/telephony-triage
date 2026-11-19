@@ -48,6 +48,15 @@ def _clue_text(c: dict, pb) -> tuple[str | None, str | None]:
     return None, None
 
 
+def _outside(lines: list[dict], window) -> bool:
+    """찾은 단서 줄(`{ts}`)이 모두 명시 기준의 분석 구간(시작, 끝) 밖인가. 구간이 없거나 시각을 못 읽으면 False."""
+    lo, hi = (_parse_ts(x) for x in window) if window else (None, None)
+    stamps = [_parse_ts(x.get("ts")) for x in lines]
+    if lo is None or hi is None or not stamps or None in stamps:
+        return False
+    return all(t < lo or t > hi for t in stamps)
+
+
 def _step_label(step) -> str:
     """마커의 스텝 값 → 표시 이름(번호만이면 `Step N`)."""
     text = str(step or "").strip()
@@ -201,7 +210,7 @@ class AnchorMixin:
                 "start": lc.format_ts(span["start"]) if span.get("start") else None,
                 "fail": lc.format_ts(span["fail"]) if span.get("fail") else None}
 
-    def problem_refs(self, logs: list[Path], tz: str | None, year: int | None) -> None:
+    def problem_refs(self, logs: list[Path], tz: str | None, year: int | None, window=None) -> None:
         """Jira 단서 → 자격 검사 입력 `self.problem_use`
         `{problem: {types, not_in_db}|None, comment_adopt, refs[단서 기준], dropped[{comment, kind, why}]}` | None.
 
@@ -212,7 +221,8 @@ class AnchorMixin:
         ②는 쓰지 않는다(개수만 경고 한 줄). 단서는 `parse_logcat ipc --find`(기준 줄과 같은 찾기 — 값은 문자열 비교만, 정규식·경로·
         명령으로 쓰지 않는다) 한 번으로 모두 찾는다: ipc = 이름+token, ipc_name = 이름 본문 일치, log_line = 인용 본문 일치.
         logcat 시각이 붙은 log_line은 그 시각의 줄이 로그에 있어야 쓴다(다른 로그·이전 회차 로그에서 붙인 줄을 본문만으로 잡지
-        않게). 로그에 없는 단서는 버리고 `dropped`에 남긴다 — ①은 단서마다 경고, ②는 버림 요약 한 줄.
+        않게). 로그에 없는 단서는 버리고 `dropped`에 남긴다 — ①은 단서마다 경고, ②는 버림 요약 한 줄. 명시 기준(앵커)의 분석
+        구간 `window`(시작, 끝)가 있고 찾은 단서 줄이 모두 그 밖이면 `outside: true`(자격 검사가 명시 기준과 다른 사건으로 본다 — H07).
         `--answer anchor=off`면 안 읽는다."""
         from . import problem as pb      # 지연 import(문제 파악 모듈은 Jira·플랫폼 모듈을 끌어온다)
 
@@ -264,7 +274,8 @@ class AnchorMixin:
                 continue
             refs.append({"kind": "line", "source": "comment", "comment": c.get("comment"), "clue": c["kind"],
                          "how": found.get("how"), "places": found.get("places") or 1, "lines": found.get("place") or [],
-                         "origin": "script" if auto is not None else "problem"})
+                         "origin": "script" if auto is not None else "problem",
+                         **({"outside": True} if _outside(found.get("place") or [], window) else {})})
             self.clue_rows.append({"where": where, "clue": c["kind"], "ts": found.get("ts"), "places": refs[-1]["places"],
                                    "origin": origin})
         if auto is not None:
