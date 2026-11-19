@@ -833,6 +833,39 @@ def test_child_env_guard_python_is_wrapper_python_unless_set(env, monkeypatch):
     assert mod.child_env(meta)["TT_PYTHON"] == "/opt/py/bin/python3"
 
 
+def test_child_env_puts_venv_bin_first_only_in_venv(monkeypatch):
+    """venv python으로 돌면 그 bin을 자식 PATH 앞에 둔다(모델 bash의 python3 스크립트도 같은 venv). venv가 아니면 PATH 그대로."""
+    mod = _load("tt_oc", TTOC)
+    meta = {"plugin_root": "/p", "work_root": "/w"}
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.setattr(mod.sys, "executable", "/v/bin/python")
+    monkeypatch.setattr(mod.sys, "prefix", "/v")
+    monkeypatch.setattr(mod.sys, "base_prefix", "/usr")
+    assert mod.child_env(meta)["PATH"] == os.pathsep.join([str(Path("/v/bin")), "/usr/bin"])
+    monkeypatch.setattr(mod.sys, "base_prefix", "/v")
+    assert mod.child_env(meta)["PATH"] == "/usr/bin"
+
+
+def test_empty_refused_env_dropped_and_guard_reason_shown(tmp_path, monkeypatch):
+    """값이 빈 OPENCODE_CONFIG는 tt-oc 점검을 통과하지만 어댑터는 이름만 있어도 모든 도구를 거부한다(첫 읽기부터 막힘).
+    child_env는 그것을 빼고, 그래도 guard가 읽기를 거부하면 doctor guard-python 행이 guard의 이유를 그대로 보인다."""
+    mod = _load("tt_oc", TTOC)
+    monkeypatch.setenv("OPENCODE_CONFIG", "")
+    monkeypatch.setenv("OPENCODE_EXPERIMENTAL_PLAN_MODE", "")
+    assert mod.refused_env(os.environ) == []
+    child = mod.child_env({"plugin_root": "/p", "work_root": "/w"})
+    assert "OPENCODE_CONFIG" not in child and "OPENCODE_EXPERIMENTAL_PLAN_MODE" not in child
+    meta = {"plugin_root": str(REPO / "plugin"), "work_root": str(tmp_path)}
+    rows = {r["check"]: r for r in mod.python_rows(tmp_path, meta, {**os.environ, "TT_PYTHON": sys.executable})}
+    detail = rows["guard-python"]["detail"]
+    assert rows["guard-python"]["status"] == "fail" and "guard가 읽기 호출을 거부한다" in detail, rows
+    assert "설정을 덮는 환경변수(OPENCODE_CONFIG)" in detail and "pip install" not in detail, detail
+    monkeypatch.delenv("OPENCODE_CONFIG")
+    monkeypatch.delenv("OPENCODE_EXPERIMENTAL_PLAN_MODE")
+    rows = {r["check"]: r for r in mod.python_rows(tmp_path, meta, {**os.environ, "TT_PYTHON": sys.executable})}
+    assert rows["guard-python"]["status"] == "ok", rows
+
+
 def test_doctor_guard_python_without_yaml_fails(tmp_path):
     """guard가 쓰는 python에 PyYAML이 없으면(의존성은 venv에만, PATH의 python3은 시스템 것) doctor가 모듈 이름으로 실패한다.
     실제 oc_adapter.py selftest를 yaml import가 깨진 python으로 돌린다."""
@@ -865,7 +898,11 @@ def test_recorded_opencode_used_and_version_change_flagged(env):
     code, rows = doctor(STUB_VERSION="2.3.0")
     assert code == 2 and rows["opencode-version"]["status"] == "fail"
     detail = rows["opencode-version"]["detail"]
-    assert "설치 때 기록한 opencode" in detail and "직접 실행하지 않는다" in detail, detail
+    assert "설치 때 기록한 opencode" in detail and "바뀌었다" in detail and "직접 실행하지 않는다" in detail, detail
+    write_meta(env["proj"], env["plug"], env["work"], opencode_bin=str(env["tmp"] / "gone" / "opencode"))
+    code, rows = doctor()
+    detail = rows["opencode-version"]["detail"]
+    assert code == 2 and "가 없다(지워졌거나 옮겨졌다)" in detail and "바뀌었다" not in detail, detail
 
 
 def test_git_safe_env_for_children_doctor_row_and_publish(env, monkeypatch):

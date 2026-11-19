@@ -76,7 +76,9 @@ opencode/bin/tt-oc --project <dest> -s <세션> -- 2          # 질문에 답하
 - `--pure`·`--auto`·`--attach`·`-i`·`--agent`·`--model`과 설정을 덮는 `OPENCODE_*` 환경 변수는 거부한다.
 - guard는 `tt-oc`를 실행한 python을 쓴다(`TT_PYTHON`을 따로 정하지 않았으면 tt-oc가 자기 python을 넘긴다. venv python이면 그 venv를
   PATH 앞에 둬서 모델이 돌리는 `python3` 스크립트도 같은 venv). 의존성(PyYAML·jsonschema)이 있는 python으로 `tt-oc`를 실행한다 —
-  `tt-oc doctor`의 `guard-python`·`script-python` 행이 그 python으로 guard를 실제로 돌려 본다.
+  `tt-oc doctor`의 `guard-python`·`script-python` 행이 그 python으로 guard를 실제로 돌려 본다. venv는 `--work-root` 밖에 둔다
+  (작업 루트는 모델이 쓸 수 있다 — 그 안의 venv면 모델이 guard가 불러오는 모듈을 바꿀 수 있다).
+- 값이 빈 `OPENCODE_*` 거부 변수(예: `export OPENCODE_CONFIG=`)는 tt-oc가 자식 환경에서 뺀다(guard는 이름만 있어도 모든 도구를 거부한다).
 - 셸 별칭(alias)은 `setsid`·`nohup`·포털 시작 스크립트에서 풀리지 않는다. 그렇게 띄울 때는 `<venv>/bin/python <레포>/opencode/bin/tt-oc …`처럼
   실제 경로를 쓴다(`.bashrc`의 `TT_OPENCODE`도 그 환경에서는 안 읽힐 수 있다 — install이 남긴 경로가 그때 쓰인다).
 - 사전 점검(버전 = `oc_version.OPENCODE_VERSION`, `snapshot:false`·bash 허용 목록 등 실제 설정, 설치 지문, 자동 지시 파일, `config.py doctor`)이 실패하면

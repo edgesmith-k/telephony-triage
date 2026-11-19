@@ -200,6 +200,11 @@ def child_env(meta: dict) -> dict:
         env["TT_PYTHON"] = sys.executable
     if sys.prefix != sys.base_prefix:
         env["PATH"] = os.pathsep.join(filter(None, (str(Path(sys.executable).parent), env.get("PATH"))))
+    # 값이 빈 거부 변수(예: `export OPENCODE_CONFIG=`)는 위 사전 점검(`refused_env`)을 통과하지만 어댑터는 이름만 있어도 모든 도구를
+    # 거부한다(첫 읽기부터 막힘). 지운 것과 같게 자식에 넘기지 않는다 — 1.19.5는 대부분 빈 값을 없는 것으로 읽고,
+    # OPENCODE_CONFIG_DIR·OPENCODE_TEST_HOME은 `??`로 읽어 빈 값이 다른 폴더를 가리키는데 지우면 기본 동작이다
+    for k in [k for k, v in env.items() if v == "" and (k in REFUSED_ENV or k.startswith(REFUSED_ENV_PREFIX))]:
+        del env[k]
     return env
 
 
@@ -341,30 +346,40 @@ def git_row(env: dict) -> dict:
             "작업 루트에 만든 bare 모양 폴더를 git이 레포로 읽을 수 있다. git 2.38 이상을 쓴다"}
 
 
-PYTHON_ROLES = (("guard-python", "보호 장치(guard)", "guard가 시작하지 못하면 모든 도구 호출이, 모듈이 없으면 파일 쓰기·Jira 호출이 막힌다"),
-                ("script-python", "모델이 bash로 돌리는 플러그인 스크립트", "플러그인 스크립트가 돌지 않는다"))
+# (행, 누가 쓰나, 시작하지 못하면, 모듈이 없으면)
+PYTHON_ROLES = (("guard-python", "보호 장치(guard)", "모든 도구 호출이 막힌다", "파일 쓰기·Jira 호출이 막히고 guard 규칙이 빠진다"),
+                ("script-python", "모델이 bash로 돌리는 플러그인 스크립트", "플러그인 스크립트가 돌지 않는다",
+                 "플러그인 스크립트가 돌지 않는다"))
 
 
 def python_rows(proj: Path, meta: dict, env: dict) -> list[dict]:
     """guard-python: tt-guard.js와 같은 python(`TT_PYTHON`, 없으면 python3), script-python: 자식 PATH의 python3으로
-    `oc_adapter.py selftest`를 실제로 돌려 의존성과 읽기 허용을 본다(config.py doctor는 이 래퍼의 python으로 돌아 이것을 못 본다)."""
+    `oc_adapter.py selftest`를 실제로 돌려 의존성과 읽기 허용을 본다(config.py doctor는 이 래퍼의 python으로 돌아 이것을 못 본다).
+    guard가 읽기를 거부하면 그 이유를 그대로 보인다."""
     adapter = Path(meta["plugin_root"]) / "scripts" / "common" / "oc_adapter.py"
     rows = []
-    for (check, who, effect), py in zip(PYTHON_ROLES, (env.get("TT_PYTHON") or "python3", "python3")):
+    for (check, who, fatal, partial), py in zip(PYTHON_ROLES, (env.get("TT_PYTHON") or "python3", "python3")):
+        head = f"{who}가 쓰는 python({py})"
         try:
             r = _run([py, str(adapter), "selftest"], cwd=proj, env=env, timeout=60)
-            out = _read_json_text(r.stdout) if r.returncode == 0 else None
-            tail = " ".join((r.stderr or "").strip().splitlines()[-1:])[:200]
-            gone = out and (out.get("guard") or (out.get("scripts") if check == "script-python" else None))
-            why = (f"로 guard를 시작하지 못했다(종료 {r.returncode}{': ' + tail if tail else ''})" if out is None
-                   else f"에 {gone} 모듈이 없다" if gone
-                   else f"로 돌린 guard가 읽기 호출을 허용하지 않는다({out.get('read')})"
-                   if check == "guard-python" and out.get("read") != "allow" else None)
         except (OSError, subprocess.TimeoutExpired) as exc:
-            out, why = None, f"을 실행하지 못했다({type(exc).__name__})"
-        rows.append({"check": check, "status": "ok", "detail": f"{out.get('python') or py} — 의존성 있음"} if why is None else
-                    {"check": check, "status": "fail", "detail": f"{who}가 쓰는 python({py}){why} — {effect}. 그 python에 "
-                     "의존성(pip install PyYAML jsonschema)을 설치하거나, 의존성이 있는 python으로 tt-oc를 실행한다"})
+            rows.append({"check": check, "status": "fail", "detail": f"{head}을 실행하지 못했다({type(exc).__name__}) — {fatal}. "
+                         "그 python이 있는지 확인하거나 TT_PYTHON을 의존성이 있는 python 경로로 정한다"})
+            continue
+        out = _read_json_text(r.stdout) if r.returncode == 0 else None
+        gone = out and (out.get("guard") or (out.get("scripts") if check == "script-python" else None))
+        if out is None:
+            tail = " ".join((r.stderr or "").strip().splitlines()[-1:])[:300]
+            detail = f"{head}로 guard를 시작하지 못했다(종료 {r.returncode}{': ' + tail if tail else ''}) — {fatal}. 이 오류를 고친다"
+        elif gone:
+            detail = (f"{head}에 {gone} 모듈이 없다 — {partial}. 그 python에 의존성(pip install PyYAML jsonschema)을 설치하거나, "
+                      "의존성이 있는 python으로 tt-oc를 실행한다")
+        elif check == "guard-python" and out.get("read") != "allow":
+            detail = f"guard가 읽기 호출을 거부한다 — 모든 도구 호출이 막힐 수 있다. guard가 준 이유: {out.get('reason') or out.get('read')}"
+        else:
+            rows.append({"check": check, "status": "ok", "detail": f"{out.get('python') or py} — 의존성 있음"})
+            continue
+        rows.append({"check": check, "status": "fail", "detail": detail})
     return rows
 
 
@@ -391,9 +406,12 @@ def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
     ver_row, ran = version_row(oc, env)
     recorded = meta.get("opencode_bin")
     if ver_row["status"] == "fail" and recorded and os.path.abspath(oc) == recorded:
-        ver_row["detail"] += (f" — 설치 때 기록한 opencode({recorded})가 바뀌었다(직접 실행해 자동 업데이트된 경우 등). 고정 버전 "
-                              f"{PINNED}을 다시 받아 그 경로에 두거나 gen_opencode.py install --opencode <{PINNED} 경로> --force로 "
-                              "다시 기록한다. 고정한 바이너리는 직접 실행하지 않는다(tt-oc로만)")
+        fix = (f"고정 버전 {PINNED}을 그 경로에 다시 두거나 gen_opencode.py install --opencode <{PINNED} 경로> --force로 다시 "
+               "기록한다")
+        ver_row["detail"] += (f" — 설치 때 기록한 opencode({recorded})가 없다(지워졌거나 옮겨졌다). {fix}"
+                              if not os.path.exists(recorded) else
+                              f" — 설치 때 기록한 opencode({recorded})가 바뀌었다(직접 실행해 자동 업데이트된 경우 등). {fix}. "
+                              "고정한 바이너리는 직접 실행하지 않는다(tt-oc로만)")
     rows.append(ver_row)
     rows += python_rows(proj, meta, env)
     if not ran:

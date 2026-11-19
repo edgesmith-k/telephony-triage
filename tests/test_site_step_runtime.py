@@ -195,6 +195,18 @@ def test_opencode_all_ok_with_project_and_managed(oc):
     assert oc_run(oc, env={"TT_OC_PROJECT": str(oc["proj"])}).returncode == 0
 
 
+def test_opencode_uses_recorded_binary_like_tt_oc(oc):
+    """runtime-check도 tt-oc와 같은 순서로 opencode를 고른다: TT_OPENCODE가 없으면 install이 남긴 경로(tt-oc.json opencode_bin)를
+    PATH보다 먼저 쓴다(PATH의 opencode가 스스로 업데이트돼도)."""
+    meta_path = oc["proj"] / "tt-oc.json"
+    stub = Path(oc["env"]["PATH"].split(os.pathsep)[0]) / "opencode"
+    meta_path.write_text(json.dumps({**json.loads(meta_path.read_text(encoding="utf-8")), "opencode_bin": str(stub)}),
+                         encoding="utf-8")
+    r = oc_run(oc, "--project", str(oc["proj"]), env={"PATH": "/nonexistent-bin" + os.pathsep + "/usr/bin" + os.pathsep + "/bin"})
+    assert rows_of(r.stdout)["opencode-version"][0] == "ok", r.stdout + r.stderr
+    assert ["--version"] in stub_calls(oc)
+
+
 def test_opencode_jira_check_without_opencode_or_bad_key_fails_without_record(oc):
     """`--jira`: opencode가 없거나 키 형식이 틀리면 실행하지 않고 실패 행(종료 1) — 통과 기록을 쓰지 않는다(모델 호출 없음)."""
     home = oc["tmp"] / "tt-home"
