@@ -471,6 +471,74 @@ def _clue_problem(c: dict, sources: dict, prefix: str = "", error_prefix: str = 
     return None
 
 
+# --- 코멘트 단서 자동 추출(시제품, 설계 메모 DESIGN-AUTO-CLUE-1120 (A)) -----------------------------------------
+
+RETEST_WORDS = ("retest", "re-test", "재시험", "재테스트")      # 공개 기본값(사내 `eligibility.retest_words`로 바꿈)
+_IPC_TOKEN = re.compile(r"(?i)\btoken\s*[=:(]\s*(0x[0-9A-Fa-f]{1,8}|[0-9]{1,10})(?![A-Za-z0-9_])")   # = lookat._TOKEN
+LOG_LINE_MIN, LOG_LINE_MAX = 8, 300
+
+
+def extract_clues(comments: list[str], description: str, prefix: str, error_prefix: str = "",
+                  retest_words=RETEST_WORDS, reported_total: int | None = None) -> tuple[list[dict], dict]:
+    """Jira 글(가린 코멘트 작성 순·설명) → (단서 목록 최근 코멘트부터, 버림 요약). 모델 단서와 같은 모양
+    `{comment, kind, name, token, quote, side, stale}`이고 `_clue_problem`(모델 단서와 같은 관문)을 통과한 것만.
+    - 일부만 읽음(`reported_total` > 읽은 수): 추출 안 함(`partial`).
+    - 회차 경계: 재시험 낱말이 든 마지막 코멘트 b — b와 그 앞(설명 포함)은 버리고 후보 수만 센다(`old_round`).
+    - ipc: 한 줄 안 `<prefix>이름` + 그 뒤 첫 `token[=:(]` 값(error_prefix 낱말은 이름 아님). 같은 줄에 ipc가 있으면 log_line 안 뽑음.
+    - log_line: 인용 표식 뗀 줄이 logcat 시각으로 시작하고 8~300자.
+    - 같은 단서는 최근 것 하나, `CLUES_MAX` 넘으면 `over`, 관문 탈락은 `invalid`."""
+    drop = {"partial": False, "old_round": 0, "over": 0, "invalid": 0}
+    if reported_total is not None and reported_total > len(comments):
+        drop["partial"] = True
+        return [], drop
+    words = [w.casefold() for w in retest_words if w]
+    b = max((n for n, t in enumerate(comments, 1) if any(w in str(t).casefold() for w in words)), default=0)
+    sources = {n: str(t or "") for n, t in enumerate(comments, 1)}
+    sources["description"] = description or ""
+    name_re = re.compile(r"(?<![A-Za-z0-9_])" + re.escape(prefix) + r"[A-Za-z0-9_]+") if prefix else None
+
+    def candidates(where, text):
+        out = []
+        for raw_line in str(text or "").splitlines():
+            line = _unquote(raw_line)
+            ipcs = []
+            for m in (name_re.finditer(line) if name_re and line else ()):
+                if error_prefix and m.group().startswith(error_prefix):
+                    continue
+                t = _IPC_TOKEN.search(line, m.end())
+                if t:
+                    quote = line if len(line) <= QUOTE_MAX else line[m.start(): t.end()]
+                    ipcs.append({"comment": where, "kind": "ipc", "name": m.group(), "token": t.group(1), "quote": quote,
+                                 "side": "unknown", "stale": False})
+            if ipcs:
+                out += ipcs
+            elif line and lookat.stamp(line) and LOG_LINE_MIN <= len(line):
+                # 시제품 규칙 변경(M3 a): 300자 넘는 줄은 버리지 않고 앞 300자(시각 포함)만 — 여전히 원문의 부분 글이다
+                out.append({"comment": where, "kind": "log_line", "name": None, "token": None, "quote": line[:LOG_LINE_MAX].rstrip(),
+                            "side": "unknown", "stale": False})
+        return out
+
+    clues, seen = [], set()
+    for where, text in [(n, comments[n - 1]) for n in range(len(comments), 0, -1)] + [("description", description)]:
+        found = candidates(where, text)
+        if b and (where == "description" or where <= b):
+            drop["old_round"] += len(found)
+            continue
+        for c in found:
+            key = (c["kind"], c["name"], _token_value(c["token"]) if c["token"] else lookat.fold(c["quote"]))
+            if key in seen:
+                continue
+            if _clue_problem(c, sources, prefix, error_prefix):
+                drop["invalid"] += 1
+                continue
+            seen.add(key)
+            if len(clues) >= CLUES_MAX:
+                drop["over"] += 1
+                continue
+            clues.append(c)
+    return clues, drop
+
+
 def _mask_all(value, masker):
     if isinstance(value, str):
         return masker(value)

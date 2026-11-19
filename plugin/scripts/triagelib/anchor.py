@@ -211,33 +211,8 @@ class AnchorMixin:
         from . import problem as pb      # 지연 import(문제 파악 모듈은 Jira·플랫폼 모듈을 끌어온다)
 
         self.problem_use, self.clue_rows = None, []
-        path = self.job / pb.RESULT_FILE
-        if self.anchor_off or path.is_symlink() or not path.is_file():
+        if self.anchor_off:
             return
-        try:
-            doc = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            doc = None
-        if not isinstance(doc, dict) or doc.get("schema_version") != 1:
-            self.warn("문제 파악 결과(problem.json)를 읽지 못해 쓰지 않았다")
-            return
-        if not self.issue_sha:      # 해시 기록 전(이전 버전)에 Jira 원문을 읽고 지운 작업
-            self.warn("이 작업에는 이슈 입력 해시 기록이 없어 문제 파악 결과(problem.json)를 쓰지 않았다 — "
-                      "Jira를 다시 읽고 triage.py problem부터 다시")
-            return
-        if doc.get("source_sha256") != self.issue_sha:
-            self.warn("문제 파악 결과(problem.json)가 이번 이슈 입력으로 만든 것이 아니라 쓰지 않았다 — triage.py problem부터 다시")
-            return
-        steps = getattr(self.args, "steps_file", None)
-        if steps:       # TC 파일을 주었으면 문제 파악 때의 TC 파일과도 같아야 한다(TC의 실패 줄·사유가 문제 파악 입력이다)
-            try:
-                sha = hashlib.sha256(Path(steps).expanduser().read_bytes()).hexdigest()
-            except OSError:
-                sha = None
-            if sha is None or doc.get("steps_sha256") != sha:
-                self.warn("문제 파악 결과(problem.json)가 이번 TC 파일(--steps-file)로 만든 것이 아니라 쓰지 않았다 — "
-                          "같은 --steps-file로 triage.py problem부터 다시")
-                return
         conf = userconfig.get(self.cfg, "eligibility") or {}
         conf = conf if isinstance(conf, dict) else {}
 
@@ -247,13 +222,19 @@ class AnchorMixin:
                 return value
             self.warn(f"설정 eligibility.{key} 값이 참·거짓(true/false)이 아니라 기본값 true로 본다")
             return True
-        sym = doc.get("symptom") if isinstance(doc.get("symptom"), dict) else {}
-        problem = None
-        if switch("use_problem_types"):
-            problem = {"types": [t for t in sym.get("types") or [] if isinstance(t, str)][:pb.TYPES_MAX],
-                       "not_in_db": sym.get("not_in_db") is True}
+        doc = self._fresh_problem(pb)
+        problem, auto = None, None
+        if doc is not None:
+            sym = doc.get("symptom") if isinstance(doc.get("symptom"), dict) else {}
+            if switch("use_problem_types"):
+                problem = {"types": [t for t in sym.get("types") or [] if isinstance(t, str)][:pb.TYPES_MAX],
+                           "not_in_db": sym.get("not_in_db") is True}
+            clues = doc.get("clues") if isinstance(doc.get("clues"), list) else []
+        else:       # 시제품: 새 problem.json이 없으면 Jira 코멘트에서 스크립트로 단서를 뽑는다(설계 메모 (A))
+            clues, auto = self._comment_clues(pb, conf, switch)
+            if auto is None:
+                return
         refs, dropped, seen = [], [], set()
-        clues = doc.get("clues") if isinstance(doc.get("clues"), list) else []
         for c in clues[:pb.CLUES_MAX]:
             if not isinstance(c, dict) or c.get("stale") is not False:     # 이전 회차 단서(stale)는 쓰지 않는다(H03)
                 continue
@@ -271,16 +252,81 @@ class AnchorMixin:
             for w in (data or {}).get("warnings") or []:
                 self.warn(_clip(w.get("message"), 120))
             found = (data or {}).get("find") or {}
+            if auto is not None and stamp and found.get("hits") and found.get("stamp") != "same":
+                # 시제품 규칙(M3 d): 붙인 줄의 logcat 시각이 이 로그에 없으면 다른 로그·다른 회차의 줄일 수 있다 — 본문만으로 잡지 않는다
+                found = {"hits": 0, "why": "붙인 줄의 시각이 이 로그에 없음"}
             if not found.get("hits"):
                 why = _clip(found.get("why") or "일치하는 줄 없음", 60)
                 dropped.append({"comment": c.get("comment"), "kind": c["kind"], "why": why})
-                self.warn(f"{where} 단서, 로그에서 못 찾음({why})")
+                if auto is None:      # 스크립트 단서는 한 줄 요약으로만(아래)
+                    self.warn(f"{where} 단서, 로그에서 못 찾음({why})")
                 continue
             refs.append({"kind": "line", "source": "comment", "comment": c.get("comment"), "clue": c["kind"],
                          "how": found.get("how"), "places": found.get("places") or 1, "lines": found.get("place") or []})
-            self.clue_rows.append({"where": where, "clue": c["kind"], "ts": found.get("ts"), "places": refs[-1]["places"]})
+            self.clue_rows.append({"where": where, "clue": c["kind"], "ts": found.get("ts"), "places": refs[-1]["places"],
+                                   "origin": "스크립트" if auto is not None else "문제 파악"})
+        if auto is not None:
+            parts = [f"{k} {v}" for k, v in (("옛 회차", auto["old_round"]), ("상한", auto["over"]),
+                                             ("로그에 없음", len(dropped))) if v]
+            if parts:
+                self.warn("코멘트 단서(스크립트) 버림: " + " · ".join(parts))
         self.problem_use = {"problem": problem, "comment_adopt": switch("comment_adopt"), "refs": refs,
-                            "dropped": dropped}
+                            "dropped": dropped, "origin": "script" if auto is not None else "model"}
+
+    def _fresh_problem(self, pb) -> dict | None:
+        """해시가 맞는 problem.json 내용 | None(없거나 낡음 — 낡음은 경고)."""
+        path = self.job / pb.RESULT_FILE
+        if path.is_symlink() or not path.is_file():
+            return None
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            doc = None
+        if not isinstance(doc, dict) or doc.get("schema_version") != 1:
+            self.warn("문제 파악 결과(problem.json)를 읽지 못해 쓰지 않았다")
+            return None
+        if not self.issue_sha:      # 해시 기록 전(이전 버전)에 Jira 원문을 읽고 지운 작업
+            self.warn("이 작업에는 이슈 입력 해시 기록이 없어 문제 파악 결과(problem.json)를 쓰지 않았다 — "
+                      "Jira를 다시 읽고 triage.py problem부터 다시")
+            return None
+        if doc.get("source_sha256") != self.issue_sha:
+            self.warn("문제 파악 결과(problem.json)가 이번 이슈 입력으로 만든 것이 아니라 쓰지 않았다 — triage.py problem부터 다시")
+            return None
+        steps = getattr(self.args, "steps_file", None)
+        if steps:       # TC 파일을 주었으면 문제 파악 때의 TC 파일과도 같아야 한다(TC의 실패 줄·사유가 문제 파악 입력이다)
+            try:
+                sha = hashlib.sha256(Path(steps).expanduser().read_bytes()).hexdigest()
+            except OSError:
+                sha = None
+            if sha is None or doc.get("steps_sha256") != sha:
+                self.warn("문제 파악 결과(problem.json)가 이번 TC 파일(--steps-file)로 만든 것이 아니라 쓰지 않았다 — "
+                          "같은 --steps-file로 triage.py problem부터 다시")
+                return None
+        return doc
+
+    def _comment_clues(self, pb, conf: dict, switch) -> tuple[list[dict], dict | None]:
+        """시제품: JOB/issue.json 코멘트(가린 글)에서 단서 자동 추출. (단서, 버림 요약) — 쓰지 않으면 ([], None)."""
+        if not switch("comment_clues"):
+            return [], None
+        try:
+            text = (json.loads((self.job / "issue.json").read_text(encoding="utf-8")).get("text") or {})
+        except (OSError, ValueError, AttributeError):
+            return [], None
+        comments = [str(c) for c in text.get("comments") or []]
+        if not comments and not text.get("description"):
+            return [], None
+        if self.look_inputs()["at"]:
+            self.warn("기준 줄(--look-at)이 있어 코멘트 단서 자동 추출은 쓰지 않았다")
+            return [], None
+        import platforms
+        vipc = platforms.load(self.defaults, self.platform if self.platform != userconfig.TOP_PROFILE else None,
+                              require_enabled=False).vendor_ipc
+        words = conf.get("retest_words") if isinstance(conf.get("retest_words"), list) else pb.RETEST_WORDS
+        part = text.get("comments_partial")
+        if isinstance(part, dict):
+            self.warn(f"Jira 코멘트를 일부만 읽어(전체 {part.get('total')}개 중 {part.get('read')}개) 코멘트 단서 자동 추출을 하지 않았다")
+            return [], None
+        return pb.extract_clues(comments, str(text.get("description") or ""), vipc.request_prefix, vipc.error_prefix, words)
 
     def clue_location(self, via: dict | None) -> dict | None:
         """앵커 없이 단서만 찾았을 때의 실패 지점(analysis.json `decision.location`): source comment, state found(확정 아님) —

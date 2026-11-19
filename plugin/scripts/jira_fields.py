@@ -203,6 +203,14 @@ def comment_rows(raw, cfg: dict) -> list[tuple[object, object]]:
     return []
 
 
+def _partial(raw) -> dict:
+    """시제품: Jira가 알린 코멘트 수(`fields.comment.total`)가 받은 코멘트 객체 수보다 크면 `{comments_partial: {total, read}}`
+    (최근 코멘트가 빠졌을 수 있다 — 자동 단서 추출을 하지 않는다)."""
+    total, got = lookup(raw, "fields.comment.total"), lookup(raw, "fields.comment.comments")
+    read = len(got) if isinstance(got, list) else 0
+    return {"comments_partial": {"total": total, "read": read}} if type(total) is int and total > read else {}
+
+
 def comment_budget(spec: str) -> int | None:
     """`all` → None(전부), `last:N` → N. 결정적 절삭이다(뒤에서 N개)."""
     if spec == "all":
@@ -289,6 +297,7 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
         "description": masker(_text(texts("description"))),
         "comments": masked,
         "comments_total": total,
+        **_partial(raw),
     }
 
     slot = lookup(raw, fmap["sim_slot"]) if fmap.get("sim_slot") else None

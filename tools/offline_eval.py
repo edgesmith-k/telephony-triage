@@ -97,8 +97,9 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 UNRESOLVED = "unresolved"
-CONDITIONS = ("no_time", "time", "look_at", "problem", "look_at+problem")
-WITH_LOOK = ("look_at", "look_at+problem")
+CONDITIONS = ("no_time", "time", "look_at", "problem", "look_at+problem", "comments", "look_at+comments")
+WITH_LOOK = ("look_at", "look_at+problem", "look_at+comments")
+WITH_COMMENTS = ("comments", "look_at+comments")    # 시제품: --issue-file(코멘트 포함, 발생 시각 칸은 뺌)로 돈다
 ANCHORED = ("look_at", "log_marker", "steps_file", "step_order")    # 기준이 있는 `step_anchor.source`
 HEADER = ("규칙 동작 확인용 — 조합 로그는 시드 줄로 만든 표본 안 자료, 정확도 수치가 아님. 표본내 자동 제외(DB fixtures/ 자체·"
           "DB에 기록된 키)는 이 조합 로그를 가리지 못한다(로그가 DB 밖 사본이고 키가 DB에 없다).\n"
@@ -235,6 +236,14 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
         answer["source_sha256"] = hashlib.sha256(meta_path.read_bytes()).hexdigest()
         (job / "problem.json").write_text(json.dumps(answer, ensure_ascii=False), encoding="utf-8")
     args = ["run", key, "--offline-db", str(db), "--out", str(job), "--logs", *logs, "--issue-meta", str(meta_path)]
+    if condition in WITH_COMMENTS:      # 시제품: 항목 issue_file(없으면 제목·설명·슬롯만)의 사본, 발생 시각 칸은 뺀다(no_time과 같은 조건)
+        issue = (yaml.safe_load((base / str(item["issue_file"])).read_text(encoding="utf-8")) if item.get("issue_file")
+                 else {"key": key, "fields": {"summary": meta["summary"], "description": meta["description"],
+                                              **({"customfield_10006": meta["sim_slot"]} if "sim_slot" in meta else {})}})
+        (issue.get("fields") or {}).pop("customfield_10001", None)
+        issue_path = job / "issue_input.yaml"
+        issue_path.write_text(yaml.safe_dump(issue, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        args = args[:-2] + ["--issue-file", str(issue_path)] + (["--failed-step", meta["failed_step"]] if meta.get("failed_step") else [])
     if condition in WITH_LOOK:
         args += ["--look-at", str(item["look_at"])]
     if item.get("steps_file"):
@@ -542,7 +551,8 @@ def main(argv: list[str] | None = None) -> int:
         if conds and args.condition:
             conds = [c for c in conds if c in args.condition]
         has = {"no_time": lambda i: True, "time": lambda i: bool(i.get("occurred_at")), "look_at": lambda i: bool(i.get("look_at")),
-               "problem": lambda i: bool(i.get("problem")), "look_at+problem": lambda i: bool(i.get("look_at") and i.get("problem"))}
+               "problem": lambda i: bool(i.get("problem")), "look_at+problem": lambda i: bool(i.get("look_at") and i.get("problem")),
+               "comments": lambda i: True, "look_at+comments": lambda i: bool(i.get("look_at"))}
         work = Path(tempfile.mkdtemp(prefix="tt-offline-eval-"))
         try:
             if conds:
