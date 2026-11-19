@@ -346,10 +346,13 @@ def git_row(env: dict) -> dict:
             "작업 루트에 만든 bare 모양 폴더를 git이 레포로 읽을 수 있다. git 2.38 이상을 쓴다"}
 
 
-# (행, 누가 쓰나, 시작하지 못하면, 모듈이 없으면)
-PYTHON_ROLES = (("guard-python", "보호 장치(guard)", "모든 도구 호출이 막힌다", "파일 쓰기·Jira 호출이 막히고 guard 규칙이 빠진다"),
+# (행, 누가 쓰나, 시작하지 못하면, 모듈이 없으면, python을 실행하지 못했을 때 고치는 법)
+PYTHON_ROLES = (("guard-python", "보호 장치(guard)", "모든 도구 호출이 막힌다", "파일 쓰기·Jira 호출이 막히고 guard 규칙이 빠진다",
+                 "TT_PYTHON을 의존성이 있는 python 경로로 정하거나, 의존성이 있는 venv의 python으로 tt-oc를 실행한다"),
                 ("script-python", "모델이 bash로 돌리는 플러그인 스크립트", "플러그인 스크립트가 돌지 않는다",
-                 "플러그인 스크립트가 돌지 않는다"))
+                 "플러그인 스크립트가 돌지 않는다",
+                 "의존성이 있는 venv의 python으로 tt-oc를 실행하거나(그 bin이 PATH 앞에 온다), PATH의 python3이 의존성이 있는 "
+                 "python이 되게 한다"))
 
 
 def python_rows(proj: Path, meta: dict, env: dict) -> list[dict]:
@@ -358,13 +361,13 @@ def python_rows(proj: Path, meta: dict, env: dict) -> list[dict]:
     guard가 읽기를 거부하면 그 이유를 그대로 보인다."""
     adapter = Path(meta["plugin_root"]) / "scripts" / "common" / "oc_adapter.py"
     rows = []
-    for (check, who, fatal, partial), py in zip(PYTHON_ROLES, (env.get("TT_PYTHON") or "python3", "python3")):
+    for (check, who, fatal, partial, fix), py in zip(PYTHON_ROLES, (env.get("TT_PYTHON") or "python3", "python3")):
         head = f"{who}가 쓰는 python({py})"
         try:
             r = _run([py, str(adapter), "selftest"], cwd=proj, env=env, timeout=60)
         except (OSError, subprocess.TimeoutExpired) as exc:
-            rows.append({"check": check, "status": "fail", "detail": f"{head}을 실행하지 못했다({type(exc).__name__}) — {fatal}. "
-                         "그 python이 있는지 확인하거나 TT_PYTHON을 의존성이 있는 python 경로로 정한다"})
+            rows.append({"check": check, "status": "fail",
+                         "detail": f"{head}을 실행하지 못했다({type(exc).__name__}) — {fatal}. {fix}"})
             continue
         out = _read_json_text(r.stdout) if r.returncode == 0 else None
         gone = out and (out.get("guard") or (out.get("scripts") if check == "script-python" else None))

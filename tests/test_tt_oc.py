@@ -880,6 +880,12 @@ def test_doctor_guard_python_without_yaml_fails(tmp_path):
     assert sys.executable in rows["guard-python"]["detail"]
     rows = {r["check"]: r for r in mod.python_rows(tmp_path, meta, {**base, "TT_PYTHON": str(tmp_path / "none")})}
     assert rows["guard-python"]["status"] == "fail" and "실행하지 못했다" in rows["guard-python"]["detail"], rows
+    assert "TT_PYTHON을" in rows["guard-python"]["detail"]
+    # script-python은 자식 PATH의 python3이다 — TT_PYTHON으로는 고쳐지지 않으므로 그 안내를 하지 않는다
+    rows = {r["check"]: r for r in mod.python_rows(tmp_path, meta, {**base, "PATH": str(tmp_path / "nobin")})}
+    detail = rows["script-python"]["detail"]
+    assert rows["script-python"]["status"] == "fail" and "실행하지 못했다" in detail and "TT_PYTHON" not in detail, rows
+    assert "PATH의 python3" in detail and rows["guard-python"]["status"] == "ok", rows
 
 
 def test_recorded_opencode_used_and_version_change_flagged(env):
