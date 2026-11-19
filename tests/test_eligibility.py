@@ -184,6 +184,18 @@ def test_cp_point_success_response_is_not_a_failure():
     assert outcome(el.decide(EVENTS, [ok])) == ("held", "ineligible", "no_event_at_reference")
 
 
+def test_cp_point_window_with_different_causes_is_held():
+    """리뷰 P2-1: CP 점 2초 창 안 유형 사건들의 1순위 원인이 다르면(한쪽만 있어도) 첫 사건을 고르지 않는다(합치기·같은 줄과 같은 규칙).
+    V2: 슬롯 모름 사건(원인 Y)이 먼저, 슬롯 0 사건(원인 X)이 뒤 — 슬롯 0 기준에 Y를 채택하지 않는다."""
+    ipc = point(4, 199, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 222}, phone=0)
+    v2 = [ev("DATA-003", 199.3, ["Y"], line=(0, 30), phone=None), ev("DATA-003", 199.8, ["X"], line=(0, 31), phone=0)]
+    assert outcome(el.decide(v2, [ipc])) == ("held", "ambiguous", "multiple_events")
+    half = [ev("DATA-003", 199.3, ["X"], line=(0, 30)), ev("NETWORK-001", 199.8, [], line=(0, 31), after=["N3"])]
+    assert outcome(el.decide(half, [ipc])) == ("held", "ambiguous", "multiple_events")
+    same = [ev("DATA-003", 199.3, ["X"], line=(0, 30)), ev("NETWORK-001", 199.8, ["X"], line=(0, 31))]
+    assert outcome(el.decide(same, [ipc])) == ("accepted", "anchored_top", "X")
+
+
 def test_same_line_prefers_evidence_over_window_lines():
     """리뷰 P0-1: 앞 사건 창(cond_lines)이 뒤 사건의 증상 줄을 덮어도, 그 줄이 근거인 뒤 사건을 고른다."""
     early = ev("CALL-002", 10, ["C2"], line=(0, 3), cond_lines={(0, 9)})

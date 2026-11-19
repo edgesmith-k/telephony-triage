@@ -67,7 +67,10 @@ def merge(events: list[dict]) -> list[dict]:
     """시각 순 사건 목록에서 같은 유형·같은 슬롯(모름은 모름끼리만) 사건이 첫 사건 시각부터 `MERGE_SEC` 안이면 하나로 합친다(합친
     시각에서 다시 재지 않아 사슬처럼 늘어나지 않는다). 합친 사건 시각은 가장 늦은 것, 원인 간격(`gap_s`)은 그 시각 기준으로 다시 잰다.
     합친 사건들의 1순위 붙은 원인이 서로 다르면(한쪽만 원인이 붙은 것도) 같은 실패를 두 시그니처가 잡은 것인지 따로 난 두 실패인지
-    모른다 — `mixed`를 표시해 기준이 붙으면 ambiguous/multiple_events로 보류한다(옆 실패의 원인을 기준 사건 원인으로 채택하지 않게)."""
+    모른다 — `mixed`를 표시해 기준이 붙으면 ambiguous/multiple_events로 보류한다(옆 실패의 원인을 기준 사건 원인으로 채택하지 않게).
+    한쪽만 원인이 붙은 경우도 보류하는 것은 일부러 고른 손해다: 틀린 채택 재현(0.5초 간격)과 정상 합치기(1~3ms)가 간격만 다르고
+    ms 문턱을 정할 사내 근거가 없다 — 에뮬레이터 캡처 4건(d70b·d81·d77e·d32g)이 이 때문에 채택을 잃는다(자기 기준 유지
+    161→155/166). 사내 자료로 다시 본다."""
     out: list[dict] = []
     first: dict[int, datetime] = {}
     for e in events:
@@ -151,6 +154,8 @@ def _attach_line(ref: dict, events: list[dict], link_ms: int, allowed: set | Non
         win = [e for e in events if t0 <= e["at"] <= t0 + timedelta(milliseconds=link_ms)
                and (slot is None or e.get("phone") in (slot, None))]
         typed = [e for e in win if e["type"] and (allowed is None or e["type"] in allowed)]
+        if len({_top(e) for e in typed}) > 1:     # 창 안 (허용) 유형 사건들의 1순위 원인이 다르면(한쪽만 있어도) 첫 사건을 고르지 않는다
+            return "held", "ambiguous", "multiple_events"
         if typed:
             return "events", typed[:1], "cp_point"
         return ("held", "symptom_not_found", "typeless_failure_within_link") if win else \
@@ -166,7 +171,7 @@ def _attach_line(ref: dict, events: list[dict], link_ms: int, allowed: set | Non
     if same:    # 점(같은 줄·같은 RIL 요청) — 유형으로 거르지 않는다(사용자가 그 줄을 가리켰다). 한 줄에 유형 사건이 여럿이고
                 # 1순위 원인이 다르면 고르지 않는다
         typed = [e for e in same if e["type"]]
-        if len({e["causes"][0][1] if e["causes"] else None for e in typed}) > 1:
+        if len({_top(e) for e in typed}) > 1:
             return "held", "ambiguous", "multiple_events"
         return ("events", typed[:1], why) if typed else ("held", "symptom_not_found", "same_line_typeless")
     if allowed is None:

@@ -26,6 +26,8 @@
     "no_reference": 23
    },
    "answer_rate": 0.0,
+   "location_confirmed": 0,
+   "location_found": 0,
    "correct_hold": 12,
    "held_top_right": 7,
    "anchor_runs": 0,
@@ -60,6 +62,8 @@
     "no_reference": 21
    },
    "answer_rate": 0.0,
+   "location_confirmed": 0,
+   "location_found": 0,
    "correct_hold": 11,
    "held_top_right": 11,
    "anchor_runs": 0,
@@ -95,6 +99,8 @@
     "symptom_not_found": 8
    },
    "answer_rate": 0.45,
+   "location_confirmed": 10,
+   "location_found": 9,
    "correct_hold": 10,
    "held_top_right": 1,
    "anchor_runs": 20,
@@ -131,6 +137,8 @@
     "symptom_not_found": 1
    },
    "answer_rate": 0.125,
+   "location_confirmed": 0,
+   "location_found": 4,
    "correct_hold": 12,
    "held_top_right": 7,
    "anchor_runs": 0,
@@ -165,6 +173,8 @@
     "symptom_not_found": 8
    },
    "answer_rate": 0.5,
+   "location_confirmed": 10,
+   "location_found": 9,
    "correct_hold": 10,
    "held_top_right": 0,
    "anchor_runs": 20,
@@ -1869,6 +1879,8 @@
      "symptom_not_found": 1
     },
     "answer_rate": 0.0,
+    "location_confirmed": 0,
+    "location_found": 4,
     "correct_hold": 12,
     "held_top_right": 7,
     "anchor_runs": 0,
