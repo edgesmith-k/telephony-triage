@@ -474,6 +474,8 @@ def _clue_problem(c: dict, sources: dict, prefix: str = "", error_prefix: str = 
 # --- 코멘트 단서 자동 추출(모델 없이 — `run`이 새 problem.json이 없을 때 쓴다) ------------------------------------------
 
 RETEST_WORDS = ("retest", "re-test", "재시험", "재테스트")      # 공개 기본값 — 사내 낱말은 설정 `eligibility.retest_words`
+QUOTE_BLOCK = re.compile(r"(?is)\{quote\}.*?(?:\{quote\}|\Z)")      # Jira 인용 블록(한 줄 안·여러 줄, 닫히지 않으면 글 끝까지)
+QUOTE_LINE = re.compile(r"^\s*(?:bq\.|>)")                           # Jira `bq.`·메일 `>` 인용 줄
 HALF_MASK = re.compile(r"<[A-Z][A-Z0-9_]*(?:#\d*|:[A-Z0-9]*| \d*B?)?$")     # 잘린 끝의 마스킹 토큰 앞부분(`<APN#1`·`<HEXDUMP 1`)
 IPC_TOKEN = re.compile(r"(?i)\btoken\s*[=:(]\s*(0x[0-9A-Fa-f]{1,8}|[0-9]{1,10})(?![A-Za-z0-9_])")     # lookat `_TOKEN`의 ASCII판
 
@@ -487,12 +489,26 @@ def _log_quote(line: str) -> str:
     return (cut[:half.start()] if half else cut).rstrip()
 
 
+def _own_text(text) -> str:
+    """자동 추출용 이번 글: `{quote}…{quote}` 블록을 지우고 `bq.`·`>`로 시작하는 줄을 뺀다(인용한 옛 회차 글에서 단서·token 값을
+    뽑지 않는다 — C-2). 모델 단서 대조(`_clue_problem`)는 따로 `_unquote`로 인용 표식만 뗀다."""
+    return "\n".join(x for x in QUOTE_BLOCK.sub(" ", str(text or "")).splitlines() if not QUOTE_LINE.match(x))
+
+
+def _retest(text, words) -> bool:
+    """재시험 낱말: 영어(ASCII) 낱말은 앞뒤가 영문자가 아닐 때만(`pretest`·`retesting`은 아님, Python `\\b`는 한글을 낱말 글자로 봐
+    "Retest결과"를 놓친다), 한글 낱말은 포함 비교."""
+    t = str(text or "").casefold()
+    return any(re.search(r"(?<![a-z])" + re.escape(w) + r"(?![a-z])", t) if w.isascii() else w in t for w in words)
+
+
 def _line_clues(where, text: str, name_re, error_prefix: str) -> list[dict]:
     """글 한 개 → 단서 후보(줄 순서). 한 줄 안에서 `<요청 접두어>이름` 뒤 첫 `token[=:(]` 값이 있으면 ipc(그 줄은 log_line으로
-    안 뽑음), 없고 인용 표식을 뗀 줄이 logcat 시각으로 시작하면 log_line. 이름만(token 없음)·시각 없는 줄은 뽑지 않는다."""
+    안 뽑음), 없고 줄이 logcat 시각으로 시작하면 log_line. 이름만(token 없음)·시각 없는 줄은 뽑지 않는다. 인용은 부른 쪽이 먼저
+    뺀다(`_own_text`)."""
     out = []
     for raw in str(text or "").splitlines():
-        line = _unquote(raw)
+        line = _fold(raw)
         ipcs = []
         for m in name_re.finditer(line) if name_re and line else ():
             if error_prefix and m.group().startswith(error_prefix):      # 오류 값(`VIPC_E_…`)은 메시지 이름이 아니다
@@ -534,16 +550,17 @@ def extract_clues(comments: list[str], description: str, prefix: str, error_pref
     `{comment, kind, name, token, quote, side, stale}`이고 `_clue_problem`(모델 단서와 같은 관문)을 통과한 것만 낸다. 코멘트 번호는
     `first`부터(오래된 코멘트를 건너뛰고 받았으면 Jira 순번에 맞춘다 — 그때 설명은 건너뛴 코멘트의 재시험 앞일 수 있어 옛 회차로
     센다). 설명은 없어도 된다(포털 선별 파일은 코멘트만).
-    - 회차 경계: 재시험 낱말(대소문자 무시 부분 일치)이 든 마지막 코멘트 b. b와 그 앞(설명 포함)의 후보는 버리고 수만 센다.
+    - 인용(`{quote}` 블록·`bq.`·`>` 줄)은 단서·token 값 세기에서 뺀다(`_own_text`). 회차 경계는 인용 안 낱말도 본다(옛 회차를 더 버리는 쪽).
+    - 회차 경계: 재시험 낱말(대소문자 무시, 영어 낱말은 낱말 단위 — `_retest`)이 든 마지막 코멘트 b. b와 그 앞(설명 포함)의 후보는 버리고 수만 센다.
       ponytail: 재시험 낱말 없이 다시 돈 회차는 못 가른다(옛 token이 새 로그에 없으면 로그 쪽에서 버려진다) — 사내 낱말로 보완.
     - 같은 단서(ipc 이름·token 값 — `225` = `0xe1`, log_line 접은 글)는 최근 것 하나, `CLUES_MAX`를 넘으면 `over`.
     - 이번 회차 글에 서로 다른 token 값이 둘 이상이면(정정 "0x0aa가 아니라 0x0e1"·정상과 실패를 함께 적음) `conflict: true` —
       어느 것이 실패인지 글로는 못 가리므로 부른 쪽이 보류한다. 관문에서 버린 이번 회차 단서 수는 `invalid`(부른 쪽이 보류에 센다).
     - ponytail: 실패를 문장으로만 적고 다른 token을 "참고"로 적으면(N9) 그 참고 token 하나가 단서가 된다 — 글 뜻은 읽지 않는다."""
     words = [str(w).casefold() for w in retest_words if str(w).strip()]
-    b = max((n for n, t in enumerate(comments, first) if any(w in str(t).casefold() for w in words)), default=0)
-    sources = {n: str(t or "") for n, t in enumerate(comments, first)}
-    sources["description"] = str(description or "")
+    b = max((n for n, t in enumerate(comments, first) if _retest(t, words)), default=0)
+    sources = {n: _own_text(t) for n, t in enumerate(comments, first)}
+    sources["description"] = _own_text(description)
     name_re = re.compile(r"(?<![A-Za-z0-9_])" + re.escape(prefix) + r"[A-Za-z0-9_]+") if prefix else None
     drop = {"old_round": 0, "over": 0, "invalid": 0, "conflict": False}
     clues, seen, values = [], set(), set()

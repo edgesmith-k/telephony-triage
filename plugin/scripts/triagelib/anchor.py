@@ -292,8 +292,10 @@ class AnchorMixin:
                 self.warn("코멘트에 서로 다른 token 값이 여럿이라(정정·정상과 실패를 함께 적음 등) 코멘트 단서로는 채택하지 않는다")
             if not todo:      # 찾을 단서가 없었다 — 기준 없음과 같다(reference.json을 쓰지 않는다)
                 return
-        # 찾았는데 확인 못 한 단서(dropped)·글의 token 충돌(conflict)이 있으면 자격 검사가 단서 판정 전체를 보류한다
-        self.problem_use = {"problem": problem, "comment_adopt": switch("comment_adopt"), "refs": refs,
+        # 찾았는데 확인 못 한 단서(dropped)·글의 token 충돌(conflict)이 있으면 자격 검사가 단서 판정 전체를 보류한다.
+        # comment_adopt는 문제 파악 단서만 — 스크립트 단서는 위치 후보로만 쓰고 채택 자리에서 comment_unconfirmed로 보류(A474, D1).
+        # ponytail: 스위치는 새로 두지 않는다 — 사내 측정 뒤 필요하면 `script_clue_adopt`
+        self.problem_use = {"problem": problem, "comment_adopt": switch("comment_adopt") and auto is None, "refs": refs,
                             "dropped": dropped, **({"conflict": True} if (auto or {}).get("conflict") else {}),
                             **({"invalid": auto["invalid"]} if (auto or {}).get("invalid") else {})}
 

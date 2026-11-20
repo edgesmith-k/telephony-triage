@@ -201,15 +201,16 @@
    "top1_accuracy": 0.0,
    "top3_inclusion": 1.0,
    "false_positive_rate": 0.8333,
-   "accepted_correct": 2,
+   "accepted_correct": 0,
    "accepted_wrong": 0,
-   "held": 7,
+   "held": 9,
    "held_reasons": {
+    "ineligible": 2,
     "no_candidate": 1,
     "no_reference": 5,
     "symptom_not_found": 1
    },
-   "answer_rate": 0.2222,
+   "answer_rate": 0.0,
    "location_confirmed": 0,
    "location_found": 3,
    "correct_hold": 6,
@@ -1897,12 +1898,12 @@
     "NETWORK-001-03",
     "DATA-003-01"
    ],
-   "adopted": "DATA-003-01",
+   "adopted": null,
    "verdict": "상위3",
    "anchor_ok": null,
    "error": null,
-   "held_why": null,
-   "held_cause": null
+   "held_why": "comment_unconfirmed",
+   "held_cause": "DATA-003-01"
   },
   {
    "key": "TOKPOS-1",
@@ -2169,12 +2170,12 @@
     "NETWORK-001-03",
     "DATA-003-01"
    ],
-   "adopted": "DATA-003-01",
+   "adopted": null,
    "verdict": "상위3",
    "anchor_ok": null,
    "error": null,
-   "held_why": null,
-   "held_cause": null
+   "held_why": "comment_unconfirmed",
+   "held_cause": "DATA-003-01"
   },
   {
    "key": "CPX-1",

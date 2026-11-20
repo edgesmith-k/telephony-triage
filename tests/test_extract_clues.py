@@ -241,14 +241,25 @@ def _verdict(a: dict) -> tuple:
     return d["state"], (d["selected"] or {}).get("cause"), d["reason"], d["check"]["why"]
 
 
+def _ref_cause(out: Path) -> str | None:
+    """기준에 붙은 사건의 원인(보류여도 — JOB/eligibility.json 전체, analysis.json은 4KB 압축으로 사건을 뺄 수 있다)."""
+    return next((e["cause"] for e in json.loads((out / "eligibility.json").read_text(encoding="utf-8"))["events"] if e["ref"]), None)
+
+
+HELD_SCRIPT = ("held", None, "ineligible", "comment_unconfirmed")     # 스크립트 단서는 위치 후보로만(R3, A474 — 옛 기대는 채택)
+
+
 FAIL = "CP 확인: VIPC_SETUP_DATA (token=0x0e1) 에서 실패했습니다."
 IPC = {"comment": 2, "kind": "ipc", "name": "VIPC_SETUP_DATA", "token": "0x0e1", "quote": "VIPC_SETUP_DATA (token=0x0e1)",
        "side": "cp", "stale": False}
 
 
-def test_script_clue_adopts_found_location_and_reports_origin(seed_db):
+def test_script_clue_is_a_location_candidate_and_reports_origin(seed_db):
+    """R3(A474, D1): 스크립트가 코멘트에서 뽑은 단서는 실패 지점 후보로만 — 붙은 사건(원인 후보 DATA-003-01)을 싣고 보류한다.
+    comment_adopt 설정(기본 참)과 상관없다. 문제 파악 단서(problem.json)는 그대로 채택(test_eligibility)."""
     a, out = _run(seed_db, "auto", comments=["로그 첨부했습니다.", FAIL])
-    assert _verdict(a) == ("accepted", "DATA-003-01", "anchored_top", "cp_point")
+    assert _verdict(a) == HELD_SCRIPT and _ref_cause(out) == "DATA-003-01"
+    assert json.loads((out / "reference.json").read_text(encoding="utf-8"))["comment_adopt"] is False
     d = a["decision"]
     assert d["location"] == {"state": "found", "source": "comment", "kind": "point"}       # 코멘트 출처는 확정이 아니다
     assert d["check"]["via"] == {"comment": 2, "clue": "ipc", "how": "ipc", "places": 1, "origin": "script"}
@@ -258,8 +269,8 @@ def test_script_clue_adopts_found_location_and_reports_origin(seed_db):
     # 끄면 단서 없음(no_reference), 설명만 있고 코멘트 없는 티켓·코멘트만 있고 설명 없는 티켓(포털 선별 파일)
     a, _ = _run(seed_db, "off", comments=["로그 첨부했습니다.", FAIL], root=plugin_root(eligibility={"comment_clues": False}))
     assert a["decision"]["reason"] == "no_reference"
-    a, _ = _run(seed_db, "nodesc", fields={"summary": "데이터 연결 실패"}, comments=[FAIL])
-    assert _verdict(a)[:2] == ("accepted", "DATA-003-01")
+    a, out = _run(seed_db, "nodesc", fields={"summary": "데이터 연결 실패"}, comments=[FAIL])
+    assert _verdict(a) == HELD_SCRIPT and _ref_cause(out) == "DATA-003-01"
 
 
 def test_fresh_problem_json_wins_over_script_clues(seed_db):
@@ -318,11 +329,11 @@ M4 = [
                                      "정정: 실패한 건 VIPC_SETUP_DATA (token=0x0f7) 입니다."], None, ("held", None, "ineligible")),
     ("코멘트 일부만 읽음", None, {"total": 3, "comments": [{"body": "로그 첨부"}, {"body": FAIL}]}, ("held", None, "no_reference")),
     ("오래된 코멘트만 빠짐", None, {"startAt": 1, "total": 3, "comments": [{"body": "로그 첨부"}, {"body": FAIL}]},
-     ("accepted", "DATA-003-01", "anchored_top")),
+     ("held", None, "ineligible")),     # R3: 스크립트 단서는 보류(옛 기대 채택)
     ("CP 시계 시각 정상 줄", ["로그 첨부", "11-14 19:01:00.110  2101  2101 D DNC-0   : Internet data state changed from "
                                            "DISCONNECTED to CONNECTED."], None, ("held", None, "no_reference")),
     ("가린 10진 token", ["로그 첨부", "CP 확인: VIPC_SETUP_DATA (token=<NUM#1>) 실패"], None, ("held", None, "no_reference")),
-    ("10진 token(로그는 16진)", ["로그 첨부", "CP 확인: VIPC_SETUP_DATA (token=225) 실패"], None, ("accepted", "DATA-003-01", "anchored_top")),
+    ("10진 token(로그는 16진)", ["로그 첨부", "CP 확인: VIPC_SETUP_DATA (token=225) 실패"], None, ("held", None, "ineligible")),     # R3
 ]
 
 
@@ -454,10 +465,11 @@ CONFIRM = [      # (이름, 로그 종류, 티켓 덮어쓰기 | 코멘트, 기�
     ("P1b 사이에 다른 IPC 이름 + 참고 token", "0x0aa",
      ["VIPC_SETUP_DATA 다음 VIPC_DEACT_DATA token=0x0e1 에서 실패, 참고: VIPC_SETUP_DATA (token=0x0aa)는 정상 요청"], ("held", None, None)),
     ("P1c 짧은 실패 인용 + 참고 줄", None, ["로그", "실패:\n11-14 10:02:00.624 x\n참고:\n" + NET], ("held", "ambiguous", "sources")),
-    ("N8 token 뒤 무관한 16진", None, ["VIPC_SETUP_DATA (token=0x0e1) 실패, token 처리 중 0xdead 오류"], ("accepted", "DATA-003-01", "cp_point")),
-    ("N8b cause 16진", None, ["VIPC_SETUP_DATA (token=0x0e1) 실패 (cause 0x1b)"], ("accepted", "DATA-003-01", "cp_point")),
+    # N8: 무관한 16진은 token 충돌이 아니다 — 스크립트 단서라 채택 대신 comment_unconfirmed(R3, 옛 기대 채택 DATA-003-01 cp_point)
+    ("N8 token 뒤 무관한 16진", None, ["VIPC_SETUP_DATA (token=0x0e1) 실패, token 처리 중 0xdead 오류"], ("held", "ineligible", "comment_unconfirmed")),
+    ("N8b cause 16진", None, ["VIPC_SETUP_DATA (token=0x0e1) 실패 (cause 0x1b)"], ("held", "ineligible", "comment_unconfirmed")),
     ("N8c RSP 줄의 16진 len", None, ["로그", "[RX] VIPC_SETUP_DATA, RSP, token=0x0e1, len=0x08, Error(VIPC_E_DEMO_FAILURE)"],
-     ("accepted", "DATA-003-01", "cp_point")),
+     ("held", "ineligible", "comment_unconfirmed")),
 ]
 
 
@@ -485,3 +497,82 @@ def test_equal_created_times_extract_nothing(seed_db, name, ticket):
     a, _ = _run(seed_db, "cf-" + name.split()[0], ticket={"key": "CLUE-1", **ticket, "fields": fields}, log=_variant(name.split()[0], "0x0aa"))
     assert a["decision"]["reason"] == "no_reference", a["decision"]
     assert any("전체 수·순서를 알 수 없다" in w for w in a["warnings"]), a["warnings"]
+
+
+# -- 11/20 종합 리뷰 수정(설계 v2 R3·R4·R5·R7) ------------------------------------------------------------------------
+
+OLD = "VIPC_SETUP_DATA (token=0x0aa) 실패"
+
+
+@pytest.mark.parametrize("body", [
+    "{quote}" + OLD + "{quote}\n위 증상은 이번엔 안 보이고, 다른 지점에서 실패합니다.",
+    "앞 글 {quote}" + OLD + "{quote} 은 이번엔 안 보임",
+    "{QUOTE}\n" + OLD + "\n{quote}\n다른 지점에서 실패",
+    "다른 지점에서 실패\n{quote}\n" + OLD,                 # 닫히지 않은 인용은 글 끝까지
+    "bq. " + OLD + "\n다른 지점에서 실패",
+    "> " + OLD + "\n다른 지점에서 실패",
+    "  >> " + OLD,
+], ids=["block", "inline", "multiline", "unclosed", "bq", "gt", "nested-gt"])
+def test_quoted_text_is_not_a_clue(body):
+    """R4(C-2): 인용한 옛 회차 글(`{quote}` 블록·`bq.`·`>` 줄)에서는 단서를 뽑지 않는다(재시험 요청 뒤 코멘트가 옛 실패를 인용)."""
+    clues, drop = _x([OLD, "수정 SW로 재시험 요청드립니다.", body])
+    assert clues == [] and not drop["conflict"] and drop["invalid"] == 0, (clues, drop)
+
+
+def test_quoted_token_is_not_counted_as_a_conflict_and_mid_line_gt_is_text():
+    """R4: 인용 안 token 값은 이번 글의 token 충돌(`conflict`)로 세지 않는다. 줄 가운데 `>`는 인용이 아니다."""
+    clues, drop = _x(["{quote}" + OLD + "{quote}\nVIPC_SETUP_DATA (token=0x0e1) 에서 실패"])
+    assert _keys(clues) == [(1, "ipc", "0x0e1")] and not drop["conflict"]
+    clues, drop = _x(["> " + OLD + "\nVIPC_SETUP_DATA (token=0x0e1) 에서 실패"])
+    assert _keys(clues) == [(1, "ipc", "0x0e1")] and not drop["conflict"]
+    assert _keys(_x(["결과 > VIPC_SETUP_DATA (token=0x0e1) 실패"])[0]) == [(1, "ipc", "0x0e1")]
+
+
+def test_retest_word_is_a_whole_english_word():
+    """R7(C-11): 영어 재시험 낱말은 낱말 단위 — `pretest`·`retesting`은 회차 경계가 아니다. 한글이 바로 붙은 `Retest결과`는 경계
+    (Python `\\b`는 한글을 낱말 글자로 봐 놓친다). 한글 낱말은 포함 비교 그대로."""
+    for word in ("pretest", "retesting"):
+        clues, drop = _x([f"{word} 결과 VIPC_SETUP_DATA (token=0x0e1) 실패"])
+        assert _keys(clues) == [(1, "ipc", "0x0e1")] and drop["old_round"] == 0, word
+    for word in ("Retest결과", "RETEST", "re-test", "재시험결과"):
+        clues, drop = _x([OLD, f"{word} 공유", "VIPC_SETUP_DATA (token=0x0e1) 실패"])
+        assert _keys(clues) == [(3, "ipc", "0x0e1")] and drop["old_round"] == 1, word
+
+
+def test_resorted_comment_page_with_start_at_is_partial():
+    """R7(C-7): 작성 시각으로 다시 정렬했으면 startAt > 0일 때 건너뛴 것이 옛 것인지 모른다(최신순으로 페이지를 주는 도구) —
+    `comments_skipped` 대신 `comments_partial`(뽑지 않는다). 시각 없는 `fields.comment`(오래된 것부터)는 그대로 skipped."""
+    newest_first = [{"body": OLD, "created": "2026-11-14T09:00:00+0900"}, {"body": "로그 첨부", "created": "2026-11-14T08:00:00+0900"}]
+    for raw in ({"comments": newest_first, "comments_page": {"startAt": 2, "total": 4}},
+                {"fields": {"comment": {"startAt": 2, "total": 4, "comments": newest_first}}}):
+        t = _text(raw)
+        assert t["comments_partial"] == {"total": 4, "read": 2} and "comments_skipped" not in t, raw
+    assert _text({"fields": {"comment": {"startAt": 2, "total": 4, "comments": [{"body": "c3"}, {"body": "c4"}]}}})["comments_skipped"] == 2
+
+
+def test_reference_only_log_line_is_held_with_its_candidate(seed_db):
+    """R3 재현(Codex reference-only): 참고 구간이라 적은 줄이 단서가 돼도 스크립트 단서는 채택하지 않는다 — 그 지점 사건
+    (NETWORK-001-03)을 원인 후보로 싣고 보류. 옛 결과는 accepted NETWORK-001-03."""
+    a, out = _run(seed_db, "refonly", comments=["이번 실패는 데이터 연결 실패입니다. 아래는 시험 전 참고 구간이며 이번 실패 지점이 아닙니다.\n"
+                                                 + NET])
+    assert _verdict(a) == ("held", None, "ineligible", "comment_unconfirmed") and _ref_cause(out) == "NETWORK-001-03"
+
+
+def test_submitter_note_is_kept_apart_from_clues(seed_db):
+    """R5: 포털이 넘긴 제출자 참고 글(`fields.tt_note`)은 issue.json `text.note`·analysis.json `issue.note`(판단 근거 아님 표시)로만
+    가고 단서 추출은 읽지 않는다(옛 포털은 설명 칸으로 보내 단서가 됐다 — C-3)."""
+    note = "그래도 분석을 요청한 이유: VIPC_SETUP_DATA (token=0x0e1) 는 정상인데 왜 연결이 안 되는지"
+    a, out = _run(seed_db, "note", fields={"summary": "데이터 연결 실패", "tt_note": note}, comments=["로그 첨부했습니다."])
+    assert a["decision"]["reason"] == "no_reference", a["decision"]
+    assert json.loads((out / "issue.json").read_text(encoding="utf-8"))["text"]["note"] == note
+    assert a["issue"]["note"].startswith("제출자 참고(판단 근거·단서 아님): 그래도 분석을")
+    a, _ = _run(seed_db, "nonote", comments=["로그 첨부했습니다."])
+    assert "note" not in a["issue"]
+    # 포털 NOTE_MAX(2000자)까지 잘리지 않고 issue.json에 간다. analysis.json은 4KB 예산 안에서만(넘으면 fit이 600자로 줄이고 뺀다)
+    long = "앞 안내. 제출자 이유: " + "x" * 1980 + " 끝"
+    a, out = _run(seed_db, "longnote", fields={"summary": "데이터 연결 실패", "tt_note": long[:2000]}, comments=["로그 첨부했습니다."])
+    assert json.loads((out / "issue.json").read_text(encoding="utf-8"))["text"]["note"] == long[:2000]
+    from triagelib import driver
+    got = (a["issue"].get("note") or driver.NOTE_LABEL).removesuffix("…")
+    assert (driver.NOTE_LABEL + long[:2000]).startswith(got) and driver.NOTE_MAX == 2000
+    assert len(got) >= 590, len(got)      # 옛 240자 상한보다 길게 간다(4KB에서 줄어도 600자)

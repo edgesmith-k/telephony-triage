@@ -233,7 +233,8 @@ def _comment_order(raw, path: str | None, read: int, dated: bool | None) -> dict
     같은 출처**에서 읽는다: `fields.comment.comments[]`면 `fields.comment`, 맨 위 `comments[]`(Jira 코멘트 도구 응답 — jira_bridge가
     `comments_page`에 남긴다)면 `comments_page`.
     - `startAt + 읽은 수 != total` → `{comments_partial: {total, read}}`(최근 코멘트가 빠졌거나 수가 안 맞음 — 뽑지 않는다)
-    - `== total`이고 startAt > 0 → `{comments_skipped: startAt}`(오래된 것만 빠짐 — 포털 크기 상한, 번호를 Jira 순번에)
+    - `== total`이고 startAt > 0 → `{comments_skipped: startAt}`(오래된 것만 빠짐 — 포털 크기 상한, 번호를 Jira 순번에). 단 작성
+      시각으로 다시 정렬했으면(받은 순서가 오래된 것부터라는 보장이 없다 — 최신순 페이지) `comments_partial`
     - total 없음 → `{comments_unchecked: "total"}`. 순서 모름 → `{comments_unchecked: "order"}`: 작성 시각이 일부만 있거나 같은 값이
       있음(어느 출처든), 맨 위 목록인데 작성 시각이 없음. 시각이 전혀 없는 `fields.comment`(Jira 원본·포털)는 받은 순서를 믿는다
     코멘트가 없으면 `fields.comment.total` > 0일 때만 일부만 읽음."""
@@ -251,7 +252,7 @@ def _comment_order(raw, path: str | None, read: int, dated: bool | None) -> dict
     # 이 모양으로 준다)만 받은 순서를 믿고, 맨 위 목록(도구마다 순서가 다를 수 있음)이나 시각이 일부·같은 값이면 순서 모름
     if dated is None or (not container and not dated):
         return {"comments_unchecked": "order"}
-    if start + read != total:
+    if start + read != total or (dated and start):     # 작성 시각으로 다시 정렬했으면 건너뛴 것이 옛 것인지 모른다(최신순 페이지, C-7)
         return {"comments_partial": {"total": total, "read": read}}
     return {"comments_skipped": start} if start else {}
 
@@ -345,6 +346,8 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
         "comments": masked,
         "comments_total": total,
         **order,
+        # 제출자 참고 글(포털이 `fields.tt_note`로 넘긴다) — 모델 참고용, 단서 추출·실패 스텝 찾기는 읽지 않는다
+        **({"note": masker(note)} if (note := _text(lookup(raw, "fields.tt_note"))) else {}),
     }
 
     slot = lookup(raw, fmap["sim_slot"]) if fmap.get("sim_slot") else None

@@ -322,8 +322,13 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     if isinstance(dec, dict) and dec.get("state") == "held":
         result["held_reason"] = dec.get("reason")
         result["held_why"] = (dec.get("check") or {}).get("why")
-        # 보류여도 기준에 붙은 사건의 원인(코멘트 지점 보류 등 — 채택했다면 무엇이었나)
-        result["held_cause"] = next((e.get("cause") for e in dec.get("events") or [] if e.get("ref")), None)
+        # 보류여도 기준에 붙은 사건의 원인(코멘트 지점 보류 등 — 채택했다면 무엇이었나). analysis.json `decision.events`는 4KB
+        # 압축(작업 경로 길이에 따라 다름)으로 빠질 수 있어 전체인 JOB/eligibility.json을 먼저 본다
+        try:
+            evs = json.loads((job / "eligibility.json").read_text(encoding="utf-8")).get("events")
+        except (OSError, ValueError, AttributeError):
+            evs = None
+        result["held_cause"] = next((e.get("cause") for e in evs or dec.get("events") or [] if e.get("ref")), None)
     if isinstance(dec, dict):      # 실패 지점 상태(포털은 accepted + confirmed면 본 분석을 건너뛴다)
         result["location"] = (dec.get("location") or {}).get("state")
     sa = analysis.get("step_anchor") or {}

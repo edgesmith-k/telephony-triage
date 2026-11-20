@@ -33,7 +33,8 @@
 - 출처: 명시 기준(look_at·마커·steps-file)이 있으면 그것이 정한다 — 단서는 명시 기준과 다른 사건을 가리킬 때(분석 구간 밖에서
   찾은 단서 `outside: true` 포함)만 ambiguous/sources로
   만든다. 단서만 있으면 단서가 모두 확인될 때만 정하되(하나라도 보류·로그에서 못 씀이면 보류 — `decide`), `comment_adopt`가
-  거짓이면(기본 참, Y1 허용) 붙은 사건을 싣고 ineligible/comment_unconfirmed로 보류한다.
+  거짓이면(기본 참 — 문제 파악 단서만, 스크립트 단서는 보류(A474): 부른 쪽이 스크립트 단서면 거짓을 준다) 붙은 사건을 싣고
+  ineligible/comment_unconfirmed로 보류한다.
 - 문제 파악이 "DB에 없는 증상"(`not_in_db`)이면 기준이 있어도 symptom_not_found/not_in_db(다른 사건의 원인으로 대신하지 않는다).
 - 세는 실패(`_fails`): 유형 사건 + RIL 요청 실패(`parser_rules.RESERVED_EVENTS` — ril_error·ril_timeout·ril_no_response). 벤더 IPC
   이벤트·추출기 파생 이벤트(Data disallowed 평가 줄 등)는 세지 않는다(`total`에는 남는다 — 기준 IPC 자신의 오류 줄이 늘 창 안에

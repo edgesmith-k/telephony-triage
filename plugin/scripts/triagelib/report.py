@@ -398,6 +398,9 @@ def fit(result: dict) -> dict:
         steps.append(lambda c=c: c.update(evidence=[{**e, "msg": _clip(e.get("msg"), 80)} for e in c["evidence"]]))
     for c in others:
         steps.append(lambda c=c: c.update(evidence=[]))
+    # 제출자 참고 글(모델 참고용, issue.json `text.note`에는 다 남는다): 600자 → 뺌
+    steps += [lambda: (result.get("issue") or {}).get("note") and result["issue"].update(note=_clip(result["issue"]["note"], 600)),
+              lambda: (result.get("issue") or {}).pop("note", None)]
     steps.insert(0, lambda: _drop_read_only_hint_if_shown(result))
     steps.insert(1, lambda: result.update(read_only_hint=_clip(result.get("read_only_hint"), 100))
                  if result.get("read_only_hint") else None)
