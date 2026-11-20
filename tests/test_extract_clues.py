@@ -678,6 +678,31 @@ def test_retest_plan_sentence_is_not_a_round_boundary():
         assert clues == [] and drop["old_round"] == 1, done
 
 
+# 리뷰(1bb528a7) 변형 14개: 계획 표시는 재시험 낱말이 든 조각(쉼표·`—`·`;`·"했는데"로도 나눈다)에서만, 결과 낱말이 있으면 경계
+RETEST_VARIANTS = [
+    ("수정 빌드 나오면 10.5.1 재시험 잡겠음.", False),
+    ("다음 재시험 때는 APN을 원래 상태로 두고 돌리겠습니다.", False),
+    ("재시험했는데 또 FAIL, 다음 빌드에서 다시 해 보겠음", True),
+    ("재시험 결과 동일하게 FAIL 재현, 로그 확인 부탁드리겠습니다", True),
+    ("재시험 시 detach 되면서 FAIL 재현", True),
+    ("재시험 결과 FAIL. 로그 확인 부탁드리겠습니다.", True),
+    ("Retested on new build, still FAIL, will check modem log", True),
+    ("Retest with next build: FAIL again", True),
+    ("Retest per test plan 3: FAIL", True),
+    ("재시험 결과 PASS 되면 close 예정이었으나 FAIL 재현", True),
+    ("재테스트 완료 — 같은 증상(attach 실패) 재현됨, 내일 모뎀 로그 받아 보겠습니다", True),
+    ("재시험 필요", True),
+    ("will retest tomorrow", False),
+    ("retest scheduled for next week", False),
+    ("다음 빌드 나오면 재시험하겠습니다", False),
+]
+
+
+@pytest.mark.parametrize("text,boundary", RETEST_VARIANTS)
+def test_retest_plan_piece_variants(text, boundary):
+    assert pb._retest(text, [w.casefold() for w in pb.RETEST_WORDS]) is boundary
+
+
 def test_all_comments_skipped_is_skipped_not_partial():
     """sim1120 P1-4(D3): 포털이 긴 마지막 코멘트 때문에 코멘트를 하나도 넘기지 않으면(startAt == total, 0개) `comments_partial`이 아니라
     `comments_skipped`(전부)다. 일부만 빠진 0개(startAt < total)는 그대로 partial."""

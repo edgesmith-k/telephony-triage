@@ -410,3 +410,9 @@ def test_failure_detail_line_with_same_step_number_is_not_a_second_step():
     assert [(r["number"], r["status"]) for r in rows] == [(1, "pass"), (2, "fail")]
     retry = failedstep.parse_steps("\n".join(["1 | attach | PASS", "2 | data on | PASS", "2 | data on (retry) | FAIL"]))
     assert [(r["number"], r["status"]) for r in retry] == [(1, "pass"), (2, "pass"), (2, "fail")]
+    # 바로 앞 스텝과만 비교한다 — 떨어져 다시 나온 같은 번호(재시도 회차)는 스텝이다(리뷰 1bb528a7)
+    head = "No | Message | Verdict\n"
+    rerun = failedstep.parse_steps(head + "1 | on | PASS\n2 | attach | PASS\n1 | on | PASS\n2 | attach | FAIL\n")
+    assert [(r["number"], r["status"]) for r in rerun] == [(1, "pass"), (2, "pass"), (1, "pass"), (2, "fail")]
+    twice = failedstep.parse_steps(head + "1 | on | PASS\n2 | attach | FAIL\n1 | on | PASS\n2 | attach | FAIL\n")
+    assert [(r["number"], r["status"]) for r in twice] == [(1, "pass"), (2, "fail"), (1, "pass"), (2, "fail")]

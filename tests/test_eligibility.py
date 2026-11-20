@@ -720,6 +720,13 @@ def test_clue_only_decision_needs_every_clue_confirmed():
     assert outcome(held) == ("held", "ambiguous", "sources") and held["events"] == []
     part = el.decide(EVENTS, [good, ok_rsp])                              # 한 단서 보류 + 다른 단서 사건(S-18a·S-20 모양)
     assert part["events"] == [] and el.summary(part, EVENTS)["events"][0]["ref"] is False
+    # 두 단서가 서로 다른 사건(ambiguous/sources, 사건 실음) + 다른 단서 보류·버림 → 사건을 싣지 않는다(리뷰 1bb528a7 M1)
+    ipc = clue(point(4, 199, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 0xE3}, phone=None))
+    two = el.decide(EVENTS, [good, ipc])
+    assert outcome(two) == ("held", "ambiguous", "sources") and len(two["events"]) == 2
+    for refs, unconfirmed in (([good, ipc, ok_rsp], 0), ([good, ipc], 1)):
+        got = el.decide(EVENTS, refs, unconfirmed=unconfirmed)
+        assert outcome(got) == ("held", "ambiguous", "sources") and got["events"] == [], unconfirmed
     assert outcome(el.decide(EVENTS, [], unconfirmed=2)) == ("held", "no_reference", None)
     assert outcome(el.decide(EVENTS, [point(16, 120), many], unconfirmed=1)) == ("accepted", "anchored_top", "N3")   # 명시 기준
     # 명시 기준 + 분석 구간 밖에서 찾은 단서(사건 목록에 없음) = 다른 사건(H07)

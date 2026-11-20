@@ -496,22 +496,26 @@ def _own_text(text) -> str:
     return "\n".join(x for x in QUOTE_BLOCK.sub(" ", str(text or "")).splitlines() if not QUOTE_LINE.match(x))
 
 
-# 앞으로의 계획 문장 표시(재시험 "잡겠음"·"나오면 재시험"·"다음 재시험 때"·"will retest"·"retest 예정") — 그 문장의 재시험 낱말은
-# 회차 경계가 아니다(sim1120 S-02·S-05·S-22). ponytail: 낱말 휴리스틱 — 계획 표시가 없는 문장(지난 일·결과)만 경계로 본다.
-# 계획 표시 없이 쓴 계획("재시험 필요")은 그대로 경계이고, 계획 표시와 지난 결과를 한 문장에 쓰면 경계를 놓친다. 사내 글로 다시 본다
-RETEST_PLAN = re.compile(r"(?i)\bwill\b|\bgoing to\b|\bplan(?:s|ned|ning)?\b|\bschedul|\bnext\b|예정|나오면|되면|겠|"
-                         r"다음\s*(?:번\s*)?(?:재시험|재테스트|회차)")
-_SENTENCE = re.compile(r"(?<=[.!?。])\s+|\n")
+# 앞으로의 계획 표시(재시험 "잡겠음"·"나오면 재시험"·"다음 재시험 때"·"will retest"·"retest scheduled") — 재시험 낱말이 든 조각에 이것이
+# 있고 결과 낱말(`RETEST_RESULT`)이 없으면 그 낱말은 회차 경계가 아니다(sim1120 S-02·S-05·S-22). 조각 = 문장(`.!?` 뒤)·줄·쉼표·`;`·
+# `—`·"했는데"로 나눈 것("재시험했는데 또 FAIL, 다음 빌드에서 다시 해 보겠음"의 앞 조각은 지난 일). 영어 계획 표시는 재시험 낱말 바로
+# 곁에서만 본다. ponytail: 낱말 휴리스틱 — 계획 표시 없이 쓴 계획("재시험 필요")은 그대로 경계, 사내 글로 다시 본다
+RETEST_PLAN = re.compile(r"(?i)겠|나오면|되면(?!서)|예정|다음\s*(?:번\s*)?(?:재시험|재테스트|회차)|\bwill\s+re-?test|\bgoing\s+to\s+re-?test|"
+                         r"\bplan(?:s|ned)?\s+to\s+re-?test|\bre-?test\w*\s+(?:is\s+|was\s+)?(?:planned|scheduled)|"
+                         r"\bre-?test\w*\s+(?:with|on)\s+(?:the\s+)?next")
+RETEST_RESULT = re.compile(r"(?i)(?<![a-z])(?:fail|pass)|재현|동일|같은 증상|실패|성공")
+_PIECE = re.compile(r"(?<=[.!?。])\s+|\n|[,;，]|—|했는데")
 
 
 def _retest(text, words) -> bool:
-    """재시험 낱말이 든 지난 일 문장이 있나. 영어(ASCII) 낱말은 앞이 영문자가 아니고 뒤는 활용형(`s`·`ed`·`ing`)까지 — `pretest`는
+    """재시험 낱말이 든 지난 일 조각이 있나. 영어(ASCII) 낱말은 앞이 영문자가 아니고 뒤는 활용형(`s`·`ed`·`ing`)까지 — `pretest`는
     아님, `retested`·`retesting`은 맞음. Python `\\b`는 한글을 낱말 글자로 봐 "Retest결과"를 놓친다(여기선 맞음). 한글 낱말은 포함
-    비교. 앞으로의 계획 문장(`RETEST_PLAN`, 문장 = `.!?` 뒤 공백·줄바꿈으로 나눈 조각)의 낱말은 세지 않는다."""
+    비교. 앞으로의 계획 조각(`RETEST_PLAN` 있고 `RETEST_RESULT` 없음)의 낱말은 세지 않는다."""
     def hit(t: str) -> bool:
         return any(re.search(r"(?<![a-z])" + re.escape(w) + r"(?:s|ed|ing)?(?![a-z])", t) if w.isascii() else w in t
                    for w in words)
-    return any(hit(s) and not RETEST_PLAN.search(s) for s in _SENTENCE.split(str(text or "").casefold()))
+    return any(hit(s) and (RETEST_RESULT.search(s) or not RETEST_PLAN.search(s))
+               for s in _PIECE.split(str(text or "").casefold()))
 
 
 def _line_clues(where, text: str, name_re, error_prefix: str) -> list[dict]:

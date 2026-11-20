@@ -53,14 +53,14 @@
      "description": "앵커(기준 줄·실패 스텝)·실패 스텝·시계 정렬·스텝 순서 시도·기준 줄 입력·시각 답 full·시각 입력 없는 전체 분석이 있을 때만",
      "required": ["source"],
      "properties": {
-      "outside_errors": {"type": "integer", "description": "앵커가 있고 Jira 발생 시각이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음"},
-      "source": {"enum": ["look_at", "log_marker", "steps_file", "step_order", "issue", "symptom_scan", "none"]},
+      "outside_errors": {"type": "integer", "description": "앵커가 있고 입력한 발생 시각(`--answer time=`·`--issue-meta`, Jira 칸 값 아님)이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음"},
+      "source": {"enum": ["look_at", "log_marker", "steps_file", "step_order", "issue", "symptom_scan", "none"], "description": "issue = 입력한 발생 시각(`--answer time=`·`--issue-meta` occurred_at) 기준, Jira 발생 시각 칸은 쓰지 않음(D4)"},
       "step": {"type": "string", "description": "≤80, 4KB 압축 시 40. look_at(기준 줄)이면 없음"},
       "step_from": {"const": "marker", "description": "마커의 스텝을 쓴 경우만"},
       "span": {"type": "array", "description": "[시작|null, 실패]"},
       "issue_gap_min": {},
       "focus": {"type": "array", "maxItems": 3, "description": "유형 ID"},
-      "time_candidates": {"type": "array", "maxItems": 3, "description": "앵커(기준 줄을 줬으나 로그에서 못 찾은 경우 포함)·Jira 시각·time 답이 다 없어 묻지 않고 로그 전체를 봤을 때(source symptom_scan)만: 증상 시그니처가 충족된 시각 후보 {ts, type}(이른 순, 없으면 빈 목록)", "items": {"type": "object", "required": ["ts", "type"], "properties": {"ts": {"type": "string"}, "type": {"type": "string"}}, "additionalProperties": false}},
+      "time_candidates": {"type": "array", "maxItems": 3, "description": "앵커(기준 줄을 줬으나 로그에서 못 찾은 경우 포함)·입력한 발생 시각·time 답이 다 없어 묻지 않고 로그 전체를 봤을 때(source symptom_scan)만: 증상 시그니처가 충족된 시각 후보 {ts, type}(이른 순, 없으면 빈 목록)", "items": {"type": "object", "required": ["ts", "type"], "properties": {"ts": {"type": "string"}, "type": {"type": "string"}}, "additionalProperties": false}},
       "clock": {"type": "object", "description": "{mode: manual|none, offset_sec?(manual), reason?(none, \"시계 차 모름\"; 4KB 압축 시 먼저 뺌)}"},
       "order": {"type": "object", "description": "{matched, observable, missed, last{step(≤40), ts}(step_order일 때, 4KB 압축 시 가장 먼저 뺌), reason?(앵커를 못 정해 issue로 돌아갈 때)}"},
       "look": {"type": "object", "description": "--look-at을 줬을 때만: hits(로그에서 일치한 줄 수, 못 찾으면 0), picked?(고른 순번, 1부터). 4KB 압축 시 flows 다음으로 뺌", "required": ["hits"], "properties": {"hits": {"type": "integer"}, "picked": {"type": "integer"}}, "additionalProperties": false}

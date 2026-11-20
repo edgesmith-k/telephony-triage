@@ -664,7 +664,8 @@ class AnchorMixin:
         elif self.time_candidates is not None:     # 시각 입력이 없어 묻지 않고 로그 전체를 봤다 — 찾은 증상 시각 후보(≤3)
             out = {"source": "symptom_scan", "time_candidates": [dict(t) for t in self.time_candidates]}
         elif self.failed_step or self.clock or self.order_fail or self.look_result:
-            out = {"source": "issue" if info.get("occurred_at") and not self.answer("time") else "symptom_scan"}
+            # `issue` = 입력한 발생 시각(`--answer time=`·`--issue-meta` occurred_at, `given_time`) — Jira 칸 값은 아니다(D4)
+            out = {"source": "issue" if info.get("occurred_at") or self.answer("time") else "symptom_scan"}
         else:
             return None
         if anchor and anchor.get("order"):

@@ -377,6 +377,12 @@ def test_full_run_asks_for_jira_and_reads_what_the_bridge_saved():
     assert done["status"] == "ok" and done["issue"]["origin"] == "mcp"
     assert done["candidates"][0]["cause"] == "DATA-001-01"
     assert not raw.exists(), "추출 뒤 원문은 지운다(--consume)"
+    # D4(리뷰 1bb528a7 M7): 이전 판 extract가 메타에 넣은 Jira 시각은 이슈를 다시 읽지 않는 재실행에서도 지운다(매처 근접 중심 아님)
+    meta = ws.job_dir("MOCK-1001") / "issue_meta.json"
+    meta.write_text(json.dumps({**json.loads(meta.read_text(encoding="utf-8")), "occurred_at": "2026-09-20T05:30:00+00:00"}),
+                    encoding="utf-8")
+    again = ws.json("triage.py", args + ["--refresh"])
+    assert again["status"] == "ok" and "occurred_at" not in json.loads(meta.read_text(encoding="utf-8"))
     ws.json("triage.py", ["release", "MOCK-1001"])
 
 

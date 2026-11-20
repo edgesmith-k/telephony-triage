@@ -30,7 +30,7 @@ _ref_label = events.ref_label   # report.md 전용 `f<순번>:L<줄>`
 MODEL_PICK = "모델이 코멘트에서 고른 지점(담당자 지정 아님)"     # `--look-at-source model`(decision.location.source model)
 # 기준 줄을 못 찾았을 때 분석 구간을 정한 출처(`step_anchor.source`) · 후보가 여럿일 때 고른 방식(`common.lookat.pick`)
 _SOURCE_LABEL = {"log_marker": "로그 스텝 마커", "steps_file": "steps-file 시각", "step_order": "steps-file 스텝 순서",
-                 "issue": "Jira 발생 시각", "symptom_scan": "증상 시각", "none": "로그 전체", None: "Jira 발생 시각",
+                 "issue": "입력한 발생 시각", "symptom_scan": "증상 시각", "none": "로그 전체", None: "입력한 발생 시각",
                  "look_at": "담당자가 지정한 기준 줄", "comment": "Jira 코멘트", "model": MODEL_PICK}
 _PICK_LABEL = {"nearest": "발생 시각에 가장 가까운 것", "last": "기준 시각이 없어 마지막 것"}
 # 결론·해결책 줄 모양 — 렌더(아래)와 check-output 적합성 확인 보류 재작성(`output._fit_hold`)이 같이 쓴다. 결론 줄은 `. 다음:`
@@ -405,7 +405,8 @@ def _drop_read_only_hint_if_shown(result: dict) -> None:
 
 
 # 4KB 맞춤에서 경고를 3줄로 줄일 때 먼저 남기는 경고(판정·위치 후보를 다르게 읽게 하는 것, sim1120 P1-2) — 늘 나오는 경고가 먼저 잘린다
-KEY_WARNING = re.compile(r"슬롯|단서\(스크립트\) 버림|단서, 로그에서 못 찾음|단서를 (?:쓰지 못했다|뽑지 않았다)|마지막 댓글이 길어|token 값이 여럿|"
+# (슬롯 불일치는 경고가 아니라 must_show 줄이라 여기 넣지 않는다)
+KEY_WARNING = re.compile(r"단서\(스크립트\) 버림|단서, 로그에서 못 찾음|단서를 (?:쓰지 못했다|뽑지 않았다)|마지막 댓글이 길어|token 값이 여럿|"
                          r"범위 밖|구간 밖|기준 줄을 로그에서 못 찾음")
 NOTE_GONE = "issue.json text.note 참고"     # 4KB 맞춤에서 뺀 제출자 참고 글 자리
 NOTE_FIT = 200      # 4KB 맞춤 첫 단계의 제출자 참고 글 길이(머리말 포함) — 짧은 사용자 메모 뒤 포털 Jira 안내 줄까지 남는 길이
@@ -992,7 +993,7 @@ class ReportMixin:
             lines.append(add(13, f"{PULL_SKIPPED}: {_clip(r['snapshot']['pull_skipped_reason'], MUST_SHOW_CLIP - len(PULL_SKIPPED) - 2)}"))
         iss = r.get("issue") or {}       # 마스킹된 Jira 요약(jira_fields)
         # Jira 발생 시각 칸 값은 표시만 한다(로그와 다른 시계 — D4). `--issue-meta`의 시각은 분석 기준이다
-        when = "Jira 발생 시각 칸(분석에 안 씀)" if getattr(self, "jira_time_unused", False) else "발생 시각"
+        when = "Jira 발생 시각 칸(분석에 안 씀)" if getattr(self, "jira_time_unused", False) else "입력한 발생 시각"
         known = [f"{name} {iss[k]}" for name, k in (("SW", "sw"), (when, "occurred_at")) if iss.get(k)]
         prob.append(f"- 이슈: {self.key} — {iss.get('summary') or '요약 없음'}" + (f" ({', '.join(known)})" if known else ""))
         # 기준 시각 없음 줄은 must_show(3.5 — 재분석 뒤·실패 스텝 앞, FR-04): 포털이 모르는 머리말로 보고 확실한 일치에서 뺀다

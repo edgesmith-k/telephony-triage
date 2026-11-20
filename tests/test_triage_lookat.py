@@ -121,8 +121,14 @@ def test_not_found_and_short_text_fall_back_with_warning():
     done, job = _offline("miss", "--look-at", "this line is nowhere in the log")
     assert done["step_anchor"] == {"source": "issue", "look": {"hits": 0}} and "IMS-001-01" in _causes(done)
     assert any(w.startswith("기준 줄을 로그에서 못 찾음(일치하는 줄 없음)") for w in done["warnings"])
-    assert "- 기준 줄: 로그에서 못 찾음(일치하는 줄 없음) — 분석 구간은 Jira 발생 시각 기준" in \
-        (job / "report.md").read_text(encoding="utf-8")
+    md = (job / "report.md").read_text(encoding="utf-8")
+    assert "- 기준 줄: 로그에서 못 찾음(일치하는 줄 없음) — 분석 구간은 입력한 발생 시각 기준" in md
+    assert "(입력한 발생 시각 2026-09-20" in md      # `--issue-meta` 시각은 입력한 시각이다(Jira 칸 값 아님)
+    # 시각을 `--answer time=`으로 줬을 때도 "입력한 발생 시각" 기준이다(증상 시각 스캔 아님, 리뷰 1bb528a7)
+    given, gjob = _offline("miss-given", "--look-at", "this line is nowhere in the log",
+                           "--answer", "time=2026-09-20T14:34:00+09:00", occurred=None)
+    assert given["step_anchor"] == {"source": "issue", "look": {"hits": 0}}, given.get("step_anchor")
+    assert "분석 구간은 입력한 발생 시각 기준" in (gjob / "report.md").read_text(encoding="utf-8")
     short, _ = _offline("short", "--look-at", "VIPC")
     assert short["step_anchor"]["look"] == {"hits": 0} and any("8자 미만" in w for w in short["warnings"])
     off, _ = _offline("anchoroff", "--look-at", LINE, "--answer", "anchor=off")

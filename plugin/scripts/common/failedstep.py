@@ -429,7 +429,7 @@ def parse_steps(text, cfg=None) -> list[dict]:
     표 머리(스텝·결과 열 이름이 2개 이상 맞는 첫 줄, `cfg.steps_columns`)가 있으면 그 뒤 줄만 스텝으로 보고(번호 열이 있으면
     첫 칸이 번호인 줄만) 칸 수가 머리와 같을 때 열 위치를 쓴다. 없으면 `|`·탭·공백 2칸 이상으로 나누고 상태는 마지막
     PASS/FAIL 칸(또는 마지막 칸의 끝 낱말)이다. 칸 전체 일치가 없으면 사유 붙은 판정(`Fail (사유)`)을 본다.
-    PASS/FAIL이 없거나 이름이 빈 줄, 번호 없는 합계 줄(`Total | FAIL`), 앞 줄과 번호·판정이 같은 줄(실패 요약)은 스텝이 아니다.
+    PASS/FAIL이 없거나 이름이 빈 줄, 번호 없는 합계 줄(`Total | FAIL`), 바로 앞 스텝과 번호·판정이 같은 줄(실패 요약)은 스텝이 아니다.
     `time_raw`는 줄의 시각 표기(최대 2개, 공백으로 이은 원문)다 — 밖으로 내보내지 말고 시각을 뽑는 데만 쓴다.
     첫 FAIL 뒤의 줄은 호출자(`read_steps`)가 버린다."""
     from . import stepanchor
@@ -441,19 +441,16 @@ def parse_steps(text, cfg=None) -> list[dict]:
     split = _split_cells(text)
     header, header_n, start = _find_header(split, cols)      # 표 머리: 이 줄 앞(요약 표 등)은 스텝으로 보지 않는다
     rows: list[dict] = []
-    seen: set = set()
     for cells in split[start:]:
         if not cells:
             continue
         row = _step_row(cells, header, header_n, pass_w, fail_w, stepanchor)
         if row is None:
             continue
-        # 앞 줄과 번호·판정이 같은 줄은 같은 스텝의 요약이다(결과 HTML 끝 `Failure detail`의 "Step 2: … verdict: FAIL", sim1120
-        # P2-2) — 하나로 센다. 번호가 같아도 판정이 다르면(PASS 뒤 재시도 FAIL) 따로 둔다
-        if row["number"] is not None:
-            if (row["number"], row["status"]) in seen:
-                continue
-            seen.add((row["number"], row["status"]))
+        # 바로 앞 스텝과 번호·판정이 같은 줄은 같은 스텝의 요약이다(결과 HTML 끝 `Failure detail`의 "Step 2: … verdict: FAIL", sim1120
+        # P2-2) — 하나로 센다. 떨어져 다시 나온 같은 번호(재시도 회차 `1P 2P 1P 2F`)는 따로 둔다
+        if rows and row["number"] is not None and (row["number"], row["status"]) == (rows[-1]["number"], rows[-1]["status"]):
+            continue
         row["index"] = len(rows)
         rows.append(row)
         if len(rows) >= MAX_STEPS:

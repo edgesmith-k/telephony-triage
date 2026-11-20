@@ -90,6 +90,8 @@ def test_level_and_tag_head_without_time_is_body_search():
     assert L.clean("D RILJ    : Service DATA has died. [PHONE0]") == "RILJ : Service DATA has died. [PHONE0]"
     assert L.clean("radio  9995 10049 D RILJ    : Service DATA") == "RILJ : Service DATA"
     assert L.clean("Phone-0 : setAllowedNetworkTypes: subId=1") == "Phone-0 : setAllowedNetworkTypes: subId=1"
+    # 시각 머리를 뗀 줄은 남은 메시지 앞(`E radio: …`)을 레벨로 떼지 않는다(리뷰 1bb528a7)
+    assert L.clean("11-21 06:42:42.000  1001  1002 D SST     : E radio: off pollState") == "E radio: off pollState"
     texts = ["RILJ: Service DATA has died. [PHONE0]", "Phone-0: setAllowedNetworkTypes: subId=1, reason=user"]
     for line, want in (("D RILJ    : Service DATA has died.", [0]), ("Phone-0 : setAllowedNetworkTypes: subId=1", [1])):
         assert L.text_hits(L.needle(L.query(line)), texts) == want, line

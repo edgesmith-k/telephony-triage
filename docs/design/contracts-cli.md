@@ -247,14 +247,14 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 - plan?(analysis-only면 {exists, source, pr_number}만. choice resume이면 next(Step 7 없이 기존 계획으로 Step 8))
 - issue?(failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보. submitter_note(있을 때만 — 포털이 넘긴 제출자 참고 글 `제출자 참고(판단 근거·단서 아님): …`, ≤2000자+머리말, 4KB 압축 때 가장 먼저 머리말 포함 200자, 다른 후보 근거를 다 빼기 전에 80자, 마지막 단계에서 `issue.json text.note 참고`; 판단 근거·단서가 아니다. 이슈 DB 레코드 note와 다르다))
 - step_anchor?(앵커(기준 줄·실패 스텝)·실패 스텝·시계 정렬·스텝 순서 시도·기준 줄 입력·시각 답 full·시각 입력 없는 전체 분석이 있을 때만)
-  - outside_errors?(앵커가 있고 Jira 발생 시각이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음)
-  - source: look_at | log_marker | steps_file | step_order | issue | symptom_scan | none
+  - outside_errors?(앵커가 있고 입력한 발생 시각(`--answer time=`·`--issue-meta`, Jira 칸 값 아님)이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음)
+  - source(issue = 입력한 발생 시각(`--answer time=`·`--issue-meta` occurred_at) 기준, Jira 발생 시각 칸은 쓰지 않음(D4)): look_at | log_marker | steps_file | step_order | issue | symptom_scan | none
   - step?(≤80, 4KB 압축 시 40. look_at(기준 줄)이면 없음)
   - step_from?(마커의 스텝을 쓴 경우만): "marker"
   - span?([시작|null, 실패])
   - issue_gap_min?
   - focus?[≤3](유형 ID)
-  - time_candidates?[≤3](앵커(기준 줄을 줬으나 로그에서 못 찾은 경우 포함)·Jira 시각·time 답이 다 없어 묻지 않고 로그 전체를 봤을 때(source symptom_scan)만: 증상 시그니처가 충족된 시각 후보 {ts, type}(이른 순, 없으면 빈 목록))
+  - time_candidates?[≤3](앵커(기준 줄을 줬으나 로그에서 못 찾은 경우 포함)·입력한 발생 시각·time 답이 다 없어 묻지 않고 로그 전체를 봤을 때(source symptom_scan)만: 증상 시그니처가 충족된 시각 후보 {ts, type}(이른 순, 없으면 빈 목록))
     - ts
     - type
   - clock?({mode: manual|none, offset_sec?(manual), reason?(none, "시계 차 모름"; 4KB 압축 시 먼저 뺌)})

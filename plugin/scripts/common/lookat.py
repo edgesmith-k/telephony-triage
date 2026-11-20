@@ -45,8 +45,10 @@ _TOKEN_FOLD = re.compile(r"<[A-Z][A-Z0-9_]*#\d+>|<HEXDUMP \d+B>|<REDACTED:[A-Z0-
 def clean(text) -> str:
     """앞의 logcat 머리(시각 없이 붙인 레벨 머리 포함)·대괄호 시각을 떼고 공백을 한 칸으로. ponytail: syslog(oFono) 머리는 떼지
     않는다 — 메시지 부분을 붙이면 찾는다."""
-    text = _HEAD.sub("", str(text or ""), count=1)
-    text = _LEVEL_HEAD.sub("", text, count=1)
+    raw = str(text or "")
+    text = _HEAD.sub("", raw, count=1)
+    if text == raw:      # 시각 머리를 뗐으면 남은 것은 메시지다 — 메시지 앞 `E radio: …`를 레벨로 떼지 않는다
+        text = _LEVEL_HEAD.sub("", text, count=1)
     return " ".join(_BRACKET_TS.sub(" ", text).split())
 
 
