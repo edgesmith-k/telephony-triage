@@ -1,4 +1,4 @@
-"""자격 검사(단계 5): 기준(실패 지점)이 가리키는 실패 사건에 실제로 붙는 원인만 채택한다 — 순수 함수, 표준 라이브러리만.
+"""자격 검사(단계 5): 기준(실패 지점)이 가리키는 실패 사건에 실제로 붙는 원인만 채택한다 — 순수 함수(예약 이벤트 이름만 parser_rules).
 
 사건 목록(`occurrences`)은 매처(`match_signatures.occurrences`)가 만든다. 사건 = 유형 시그니처 1회 충족(유형 있음) 또는 파생 오류
 이벤트(`ERROR_EVENT_RE`, 유형 없음). 사건 시각(`at`) = 증상 근거 중 가장 늦은 줄. 유형 사건에는 붙은 원인(`causes`: 근거가 전부
@@ -16,23 +16,36 @@
   same_line 그대로, 결과에 `cond_line: true`(driver가 실패 지점을 confirmed로 올리지 않는다). 그 줄에 유형 사건이 여럿이고 1순위
   원인이 서로 다르면 ambiguous/multiple_events.
 - 점(CP token): 기준이 벤더 IPC 줄 → 기준 응답(RSP, 없으면 REQ)이 성공 값이면 ineligible/no_event_at_reference(기준 자체가 실패가
-  아니다), 아니면 그 뒤 `link_ms`(기본 `DEFAULT_LINK_MS` 2초) 안 같은 슬롯(또는 모름) 첫 유형 사건. 유형 없는 실패만 있으면
-  symptom_not_found, 없으면 ineligible/no_event_at_reference. 붙인 사건이 같은 요청이라는 근거는 없어 실패 지점은 found(driver).
+  아니다), 아니면 그 뒤 `link_ms`(기본 `DEFAULT_LINK_MS` 2초) 안 같은 슬롯(또는 모름) **첫 세는 실패**가 유형 사건일 때만 그 사건.
+  첫 세는 실패가 유형 없음(기준 요청 자신이 DB에 없는 오류로 실패)이거나 세는 실패 없이 유형 없는 실패만 있으면
+  symptom_not_found/typeless_failure_within_link, 실패가 없으면 ineligible/no_event_at_reference. 붙인 사건이 같은 요청이라는
+  근거는 없어 실패 지점은 found(driver).
 - 근처(그 밖의 AP 줄): 문제 파악 유형이 있어야 붙인다 — 5-1은 problem.json을 읽지 않으므로 늘 ineligible/near_without_symptom.
-- 구간: 로그 FAIL 마커(START, 없으면 FAIL−120초 ~ FAIL) 안 유형 사건 전부 — 채택 원인이 모두 같을 때만. steps-file 시각 구간은
+- 구간: 로그 FAIL 마커(START, 없으면 FAIL−120초 ~ FAIL) 안 유형 사건 전부 — 채택 원인이 모두 같을 때만. 구간 안 **마지막(FAIL에
+  가장 가까운) 세는 실패**가 유형 없음이면 symptom_not_found/typeless_failure_in_range(스텝의 실제 실패가 DB에 없는 오류). steps-file 시각 구간은
   문제 파악 유형이 있어야(5-1은 ineligible/range_without_symptom), 스텝 순서·START만은 채택 안 함(ineligible/range_end_unknown).
   FAIL 마커는 스텝을 감쌀 뿐 실패 사건 줄이 아니라 채택해도 실패 지점은 found(driver).
 - 여러 곳(`places` > 1) ambiguous/locations, 슬롯 둘 이상 ambiguous/slots, 출처끼리 다른 사건 ambiguous/sources.
+- 세는 실패(`_fails`): 유형 사건 + RIL 요청 실패(`parser_rules.RESERVED_EVENTS` — ril_error·ril_timeout·ril_no_response). 벤더 IPC
+  이벤트·추출기 파생 이벤트(Data disallowed 평가 줄 등)는 세지 않는다(`total`에는 남는다 — 기준 IPC 자신의 오류 줄이 늘 창 안에
+  있다). 흡수: RIL 실패 뒤 `ABSORB_SEC` 안에 같은 슬롯(또는 모름) 유형 사건이 오면 그 RIL 실패는 그 사건의 RIL 쪽 줄로 보고 세지
+  않는다(RILJ 오류 응답 바로 뒤 DNC 실패 — 정상 모양).
 사유 우선순위: no_candidate → no_reference → symptom_not_found → ambiguous → ineligible → cause_unjudged·cause_unconfirmed → accepted.
 """
 
 from __future__ import annotations
 
 import re
+from bisect import bisect_left, bisect_right
 from datetime import datetime, timedelta
+
+from .parser_rules import RESERVED_EVENTS
 
 ERROR_EVENT_RE = re.compile(r"(error|timeout|no_response|reject|fail|denied|lost)", re.IGNORECASE)   # 파생 오류 이벤트 이름
 DEFAULT_LINK_MS = 2000      # = platforms.base.DEFAULT_LINK_MS (CP 점 → 사건 붙임 창)
+# ponytail: 고정 문턱 — 공개 에뮬레이터 캡처 275개의 RILJ SETUP_DATA_CALL error 188개가 모두 1~185ms(중앙값 3ms) 안에 DNC 실패로
+# 이어지고 사이 새 요청 0건(11/20 설계 리뷰). 사내 S-5에서 다시 잰다. RIL serial ↔ 사건 연결이 생기면 그것으로 바꾼다.
+ABSORB_SEC = 0.5            # RIL 요청 실패 → 같은 실패의 유형 사건(흡수) 창
 RANGE_PRE_SEC = 120         # 로그 FAIL 마커에 START가 없을 때 구간 시작 = FAIL − 120초
 MERGE_SEC = 1.0             # 같은 유형·슬롯 사건이 이만큼 안이면 한 사건(유형의 다른 시그니처가 같은 실패를 따로 잡은 것, §8-4)
 EVENTS_MAX = 3              # analysis.json `decision.events[]` 상한(전체는 JOB/eligibility.json)
@@ -131,6 +144,18 @@ def _same_ril(e: dict, rils: list[dict]) -> bool:
     return False
 
 
+def _fails(events: list[dict]) -> list[dict]:
+    """세는 실패(시각 순): 유형 사건 + RIL 요청 실패. RIL 실패 뒤 `ABSORB_SEC` 안 같은 슬롯(또는 모름) 유형 사건이 있으면 그 RIL
+    실패는 빼고(그 사건의 RIL 쪽 줄), 벤더 IPC·추출기 파생 이벤트는 세지 않는다."""
+    f = sorted((e for e in events if e["type"] or e.get("name") in RESERVED_EVENTS), key=lambda e: e["at"])   # 합친 사건은 시각이 늦어진다
+    ats = [e["at"] for e in f]
+
+    def absorbed(e) -> bool:
+        lo, hi = bisect_left(ats, e["at"]), bisect_right(ats, e["at"] + timedelta(seconds=ABSORB_SEC))
+        return any(n["type"] and (e.get("phone") is None or n.get("phone") in (e.get("phone"), None)) for n in f[lo:hi])
+    return [e for e in f if e["type"] or not absorbed(e)]
+
+
 def _attach_line(ref: dict, events: list[dict], link_ms: int) -> tuple:
     """기준 줄(한 곳) → ('events', [사건], why) | ('held', reason, why)."""
     lines = ref.get("lines") or []
@@ -145,6 +170,10 @@ def _attach_line(ref: dict, events: list[dict], link_ms: int) -> tuple:
         typed = [e for e in win if e["type"]]
         if len({_top(e) for e in typed}) > 1:     # 창 안 유형 사건들의 1순위 원인이 다르면(한쪽만 있어도) 첫 사건을 고르지 않는다
             return "held", "ambiguous", "multiple_events"
+        inwin = {id(e) for e in win}
+        fails = [e for e in _fails(events) if id(e) in inwin]
+        if fails and not fails[0]["type"]:     # 기준 요청 자신이 DB에 없는 오류로 실패 — 뒤 다른 요청의 사건을 붙이지 않는다
+            return "held", "symptom_not_found", "typeless_failure_within_link"
         if typed:
             return "events", typed[:1], "cp_point"
         return ("held", "symptom_not_found", "typeless_failure_within_link") if win else \
@@ -172,6 +201,9 @@ def _attach_range(ref: dict, events: list[dict]) -> tuple:
         return "held", "ineligible", "range_without_symptom"     # TC 파일 시각 구간: 문제 파악 유형이 있어야(5-2)
     fail = ts(ref["fail"])
     lo = ts(ref["start"]) if ref.get("start") else fail - timedelta(seconds=RANGE_PRE_SEC)
+    last = [e for e in _fails(events) if lo <= e["at"] <= fail][-1:]
+    if last and not last[0]["type"]:     # FAIL에 가장 가까운 실패가 DB에 없는 오류 — 앞 스텝 조작의 사건을 채택하지 않는다
+        return "held", "symptom_not_found", "typeless_failure_in_range"
     inside = [e for e in events if e["type"] and lo <= e["at"] <= fail]
     return ("events", inside, "range") if inside else ("held", "symptom_not_found", "no_event_in_range")
 

@@ -55,13 +55,14 @@ def test_baseline_matches_current_code():
         "지금 코드의 요약이 기준값과 다르다 — 의도한 변화면 python3 tests/test_accuracy_baseline.py --update 후 diff를 PR에 보인다"
 
 
-STAGE5_CORRECT = ["C15-1", "CTLM-1", "D12R-1", "HAL-1", "MMH-1", "PAIRFAIL-1", "RECOVER-1", "TOKONLYPOS-1", "TOKPOS-1"]
+STAGE5_CORRECT = ["C15-1", "CTLM-1", "D12R-1", "HAL-1", "MMH-1", "PAIRFAIL-1", "RECOVER-1", "TOKONLYPOS-1", "TOKPOS-1",
+                  "TPEVAL-1", "TPRERR-1", "TPVRF-1"]
 
 
 def test_stage5_holds_without_reference_and_adopts_only_eligible():
     """단계 4·5-1 완료 기준: 기준(실패 지점)이 없는 no_time·time 조건은 채택 0(전부 보류, 사유 기록). 기준 줄이 있는 look_at은
-    자격 검사를 통과한 것만 채택한다 — 틀린 채택 0, 단계 4의 맞는 채택 7건(이름 그대로) + 새 양성 token 점 2건, NEARPOS(AP 줄
-    인용)는 problem.json 없이 보류. 기준값(baseline.json)과 같음은 위 시험이 본다."""
+    자격 검사를 통과한 것만 채택한다 — 틀린 채택 0, 단계 4의 맞는 채택 7건(이름 그대로) + 새 양성 token 점 2건 + R1 양성 3건
+    (TPRERR·TPEVAL·TPVRF), R1 음성(CPX·CPXD)과 NEARPOS(AP 줄 인용)는 problem.json 없이 보류. 기준값(baseline.json)과 같음은 위 시험이 본다."""
     now = _current()
     runs = {c: [r for r in now["runs"] if r["condition"] == c] for c in ("no_time", "time", "look_at")}
     assert runs["no_time"] and runs["time"] and runs["look_at"]
