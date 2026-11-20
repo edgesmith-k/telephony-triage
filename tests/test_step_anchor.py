@@ -667,20 +667,30 @@ def test_sim1121_tc_html_fail_time_reaches_clock_and_range_checks():
 
 def test_steps_file_pattern_fallback_only_without_table_and_warns_when_no_time():
     """표로 FAIL 스텝을 못 읽을 때의 대체 경로(failed_step_patterns)는 표(열 이름 줄)가 없을 때만 — 표를 읽었는데 FAIL 스텝이 없으면
-    요약 표 `Verdict | FAIL`·번호 없는 프리앰블 `P | … | FAIL` 줄을 패턴으로 잡아 실패 지점으로 정하지 않는다("FAIL 스텝을 찾지
-    못했다" 경고와 결과가 같은 쪽). 실패 스텝 줄에 시각이 없으면 조용히 끝내지 않고 "TC 실패 스텝에 시각 없음" 경고."""
+    다른 줄을 패턴으로 잡아 실패 지점으로 정하지 않는다("FAIL 스텝을 찾지 못했다" 경고와 결과가 같은 쪽). 번호를 못 읽은 FAIL 줄
+    (번호 없는 줄·프리앰블 `P`)은 확인 리뷰 P1부터 표가 직접 실패 스텝으로 읽는다(요약 표 `Verdict | FAIL`은 표 머리 앞이라 안 읽는다).
+    실패 스텝 줄에 시각이 없으면 조용히 끝내지 않고 "TC 실패 스텝에 시각 없음" 경고."""
     from common import failedstep
     from triagelib import anchor
     d = tmp("tt-steps-fallback-")
     log = _markerless(d)
     steps = d / "steps.txt"
-    for name, text in (("summary", "Verdict | FAIL\nNo | Step | Result\n4 | 망 등록 | PASS\n데이터 켜기 | FAIL | 2026-09-20 14:33:30\n"),
-                       ("preamble", "Step | Time | Message / Action | Verdict\n1 | 2026-09-20 14:32:00 | 망 등록 | PASS\n"
-                                    "P | 2026-09-20 14:33:30 | 프리앰블 등록 | FAIL\n")):
+    for name, text, step in (
+            ("summary", "Verdict | FAIL\nNo | Step | Result\n4 | 망 등록 | PASS\n데이터 켜기 | FAIL | 2026-09-20 14:33:30\n",
+             "데이터 켜기"),
+            ("preamble", "Step | Time | Message / Action | Verdict\n1 | 2026-09-20 14:32:00 | 망 등록 | PASS\n"
+                         "P | 2026-09-20 14:33:30 | 프리앰블 등록 | FAIL\n", "프리앰블 등록")):
         steps.write_text(text, encoding="utf-8")
         done, _ = _offline(name, "--steps-file", steps, "--clock-offset", "0", logs=(log,))
-        assert done["step_anchor"].get("source") != "steps_file", name
-        assert any(w.startswith(failedstep.NOT_FOUND) for w in done["warnings"]), name
+        assert (done["step_anchor"]["source"], done["step_anchor"]["step"]) == ("steps_file", step), name
+        assert done["step_anchor"]["span"][1] == "2026-09-20T05:33:30.000Z", name
+        assert not any(w.startswith(failedstep.NOT_FOUND) for w in done.get("warnings") or []), name
+    # 표는 있는데 FAIL 줄을 스텝으로 못 읽었다(번호·이름 칸이 빔) — 패턴 3이 이 줄에 맞아도 실패 지점으로 정하지 않는다
+    steps.write_text("No | Step | Time | Result\n1 | 망 등록 | 2026-09-20 14:32:00 | PASS\n | | 2026-09-20 14:33:30 | FAIL\n",
+                     encoding="utf-8")
+    done, _ = _offline("lost", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+    assert (done.get("step_anchor") or {}).get("source") != "steps_file"
+    assert any(w.startswith(failedstep.NOT_FOUND) and w.endswith("스텝으로 못 읽은 FAIL·INCONC 줄 1개") for w in done["warnings"])
     steps.write_text("실패 스텝: 7. 데이터 켜기 2026-09-20 14:33:30\n", encoding="utf-8")      # 표 없음 → 패턴 경로
     done, _ = _offline("pattern", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
     assert done["step_anchor"]["source"] == "steps_file" and done["step_anchor"]["span"][1] == "2026-09-20T05:33:30.000Z"
@@ -701,3 +711,18 @@ def test_tc_warning_header_is_masked_in_run_warnings():
     done, _ = _offline("mask", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
     warns = [w for w in done["warnings"] if "열 이름" in w]
     assert warns and all("10.1.2.3" not in w and "<IP#" in w for w in warns), warns
+
+
+def test_substep_fail_row_anchors_and_matches_shown_step():
+    """확인 리뷰 P1: 하위 스텝 번호(`2.1`) FAIL 줄도 표의 실패 스텝으로 분석 구간을 정하고, 화면에 보이는 실패 스텝(issue.failed_step,
+    read_steps_file)과 앵커 스텝이 같은 글이다 — 전에는 표가 이 줄을 버리고 대체 경로도 끊겨 구간을 못 정했다."""
+    d = tmp("tt-substep-")
+    log = _markerless(d)
+    steps = d / "steps.txt"
+    steps.write_text("No | Step | Time | Result\n1 | 망 등록 | 2026-09-20 14:32:00 | PASS\n"
+                     "2.1 | 데이터 켜기 | 2026-09-20 14:33:30 | FAIL\n", encoding="utf-8")
+    done, _ = _offline("substep", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+    sa = done["step_anchor"]
+    assert sa["source"] == "steps_file" and sa["span"][1] == "2026-09-20T05:33:30.000Z"
+    assert sa["step"] == done["issue"]["failed_step"]["text"] == "데이터 켜기"
+    assert not any("찾지 못했다" in w for w in done.get("warnings") or [])

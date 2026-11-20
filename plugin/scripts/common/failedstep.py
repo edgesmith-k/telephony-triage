@@ -380,7 +380,8 @@ def _words(mapping, defaults: dict, key: str) -> set[str]:
 # `Fail - 사유`. `Fail-safe`·`Failover`·`Passive`는 판정이 아니다.
 _REASON_RE = re.compile(r"\s*(?:\(.*\)|\[.*\])$|\s*:|\s+-\s")
 # 번호 없이 이름이 이 단어 그대로인 줄은 합계 줄이다(`Total | FAIL`) — 스텝이 아니다.
-_SUMMARY_NAMES = {"total", "overall", "overall result", "result", "summary", "verdict", "합계", "종합", "최종 결과"}
+_SUMMARY_NAMES = {"total", "overall", "overall result", "overall verdict", "final result", "final verdict", "result", "summary",
+                  "verdict", "합계", "종합", "최종 결과", "종합 판정", "최종 판정"}
 
 
 def _verdicts(conf) -> dict[str, set[str]]:
@@ -515,15 +516,17 @@ def parse_steps(text, cfg=None) -> list[dict]:
         def col(kind):
             return [c[h[kind]] for c, h in lined if c[h[kind]]]
         if "number" in header and lined and not any(stepanchor.step_number(v) is not None for v in col("number")):
-            # 번호 열로 본 칸에 번호가 든 줄이 하나도 없다(`Step | Description | Result`의 Step 열에 Init·Attach) — 이름 열이다
-            header = {**{k: v for k, v in header.items() if k != "number"}, "name": header["number"]}
+            # 번호 열로 본 칸에 번호가 든 줄이 하나도 없다(`Step | Description | Result`의 Step 열에 Init·Attach) — 번호 열이 아니다.
+            # 이름 열이 따로 없을 때만 그 칸을 이름 열로 본다(있으면 `Message / Action`을 `P`·`1.2`로 덮지 않는다)
+            header = {**{k: v for k, v in header.items() if k != "number"},
+                      **({} if "name" in header else {"name": header["number"]})}
         elif "number" not in header and "name" in header and _bare_numbers(col("name"), stepanchor):
             # 이름 열로 본 칸이 번호뿐이다(설정 열 이름에 `step`이 이름 쪽에만 있는 `Step | … | Message / Action`) — 번호 열로 보고
             # 남은 칸에서 이름 열을 낱말 포함으로 다시 찾는다
             norm = [" ".join(c.split()).casefold() for c in split[start - 1]]
             name = next((i for i, c in enumerate(norm) if i not in header.values() and _contains_kind(c, cols, ["name"])), None)
-            header = {**{k: v for k, v in header.items() if k != "name"}, "number": header["name"],
-                      **({"name": name} if name is not None else {})}
+            # 이름 열로 쓸 칸이 없으면 다른 칸(`Remark`·`횟수`)을 이름으로 고르지 않는다 — 번호 칸을 이름 자리로 두어 이름이 빈다(표시는 번호만)
+            header = {**header, "number": header["name"], **({"name": name} if name is not None else {})}
         compact = compact_of(header)
     rows: list[dict] = []
     for cells in split[start:]:
@@ -549,6 +552,7 @@ def _step_row(cells, header, at, verdicts, stepanchor) -> dict | None:
     if not cells:
         return None
     aligned = at is not None
+    full = header
     if aligned:
         header = at
     status = None
@@ -572,6 +576,10 @@ def _step_row(cells, header, at, verdicts, stepanchor) -> dict | None:
             if status:
                 st_idx = idx
                 break
+    off = aligned and st_idx is not None and "status" in header and st_idx != header["status"]
+    if off and cells[header["status"]].strip(_STATUS_STRIP):
+        # 판정이 판정 열 밖에 있고 판정 열에는 다른 값(`데이터 켜기 | FAIL | 시각`) — 머리를 따르지 않는 줄이라 열 위치를 쓰지 않는다
+        return _step_row([c for c in cells if c], full, None, verdicts, stepanchor)
     body = list(cells)
     if status is None:      # 칸이 나뉘지 않은 한 줄: "Step 5: 데이터 켜기 FAIL", 번호가 있으면 "Step 5: 데이터 켜기 Fail (timeout)"도
         tokens = cells[-1].split()
@@ -586,8 +594,10 @@ def _step_row(cells, header, at, verdicts, stepanchor) -> dict | None:
             return None
         body[-1] = " ".join(tokens[:cut]).rstrip(_STATUS_STRIP + "|")
         st_idx = None
-    if header and "number" in header and stepanchor.step_number(cells[header["number"] if aligned else 0]) is None:
-        return None         # 요약 표 등: 번호 열이 있는 표에서는 번호가 있는 줄만 스텝
+    if (header and "number" in header and status == "pass"
+            and stepanchor.step_number(cells[header["number"] if aligned else 0]) is None):
+        return None         # 요약 표 등: 번호 열이 있는 표에서 번호를 못 읽은 PASS 줄은 스텝이 아니다
+    # FAIL·INCONC 줄은 번호를 못 읽어도(`2.1`·`4a`·`TC-01`·`PA`) 번호 없음으로 받는다 — 실패 자리를 버리지 않는다(합계 줄은 아래 이름으로 거른다)
     time_cells = []
     if aligned and ("start" in header or "end" in header):
         time_cells = [cells[header[k]] for k in ("start", "end") if k in header]
@@ -595,7 +605,9 @@ def _step_row(cells, header, at, verdicts, stepanchor) -> dict | None:
     if aligned and "name" in header and st_idx is not None:
         number = stepanchor.step_number(cells[header["number"]]) if "number" in header else None
         name = cells[header["name"]]
-        if number is None:
+        if number is not None and header.get("number") == header["name"]:      # 번호 칸이 이름 자리도 맡았다 — 이름은 빈다
+            name = stepanchor._LEAD_RE.sub("", name, count=1)
+        elif number is None:
             number = stepanchor.step_number(name)
             name = stepanchor._LEAD_RE.sub("", name, count=1) if number is not None else name
     else:
@@ -609,8 +621,8 @@ def _step_row(cells, header, at, verdicts, stepanchor) -> dict | None:
             body[0] = stepanchor._LEAD_RE.sub("", body[0], count=1)
         name = " | ".join(c for c in body if c)
     name = " ".join(str(name).split())
-    if not name or (number is None and name.strip(_STATUS_STRIP).casefold() in _SUMMARY_NAMES):
-        return None
+    if (not name and number is None) or (number is None and name.strip(_STATUS_STRIP).casefold() in _SUMMARY_NAMES):
+        return None         # 이름도 번호도 없는 줄, 합계 줄. 번호만 있는 줄(`Step | Result`의 `2 | FAIL`)은 받는다
     return {"number": number, "name_raw": name, "status": status, "time_raw": times}
 
 
@@ -636,9 +648,13 @@ def _times(text: str, stepanchor) -> str | None:
 
 def label(row: dict, masker: Callable[[str], str]) -> str:
     """스텝 한 줄의 표시 이름(마스킹·정규화 ≤ 80자): `5 | 데이터 켜기` 형식(번호 없으면 이름만)."""
-    number = row.get("number")
-    raw = f"{number} | {row.get('name_raw')}" if number is not None else str(row.get("name_raw") or "")
-    return normalize(masker(raw), 80)
+    return normalize(masker(_row_text(row)), 80)
+
+
+def _row_text(row: dict) -> str:
+    """`번호 | 이름`(번호 없으면 이름, 이름 없으면 번호)."""
+    number, name = row.get("number"), str(row.get("name_raw") or "")
+    return name if number is None else f"{number} | {name}" if name else str(number)
 
 
 def _unreadable(why) -> str:
@@ -689,26 +705,30 @@ def not_found_warning(text, rows: list[dict], cfg=None) -> str:
     """FAIL 스텝을 못 찾았을 때의 경고: 읽은 표의 첫 줄(열 이름만, ≤ 80자)과 판정을 읽은 스텝 수 — 양식이 다른지 사람이 볼 수 있게."""
     head = header_line(text, cfg)
     head = f"읽은 표의 첫 줄(열 이름): {normalize(head, 80)}" if head else "열 이름 줄(번호·이름·판정 열)을 찾지 못함"
-    return f"{NOT_FOUND} — {head}, 판정을 읽은 스텝 {len(rows)}줄"
+    split = _split_cells(text)
+    _, _, start = _header(split, cfg)
+    verdicts = _verdicts(cfg if isinstance(cfg, dict) else {})
+    lost = sum(1 for cells in split[start:] if any(_status_of(c, verdicts) in ("fail", "inconc") for c in cells if c))
+    # 포털 경고 표가 "스텝으로 못 읽은 FAIL 줄"로 PASS 안내와 가른다
+    return f"{NOT_FOUND} — {head}, 판정을 읽은 스텝 {len(rows)}줄" + (f", 스텝으로 못 읽은 FAIL·INCONC 줄 {lost}개" if lost else "")
 
 
 def read_steps_file(path, patterns: Iterable[str] | None, cfg=None) -> tuple[str | None, str | None]:
     """`(실패 스텝 원문 | None, 경고 | None)`. 읽지 못하면 `(None, "steps-file을 읽지 못했다(<사유>) — …")`.
 
-    `patterns`가 먼저이고, 맞는 줄이 없으면 표의 FAIL 스텝(`번호 | 이름`)으로 대신한다."""
+    분석 앵커(`triagelib.anchor.steps_file_span`)와 같은 줄을 고른다: 표의 실패 스텝(`번호 | 이름`, `_pick_failed`)이 먼저, 표(열 이름
+    줄)가 없을 때만 `patterns`에 맞는 줄. 표를 읽었는데 실패 스텝이 없으면 None(요약 표·프리앰블 줄을 패턴으로 잡지 않는다)."""
     text, why, _ = read_source(path)
     if text is None:
         return None, _unreadable(why)
-    step, warns = from_text(_after_header(text, cfg), patterns)
-    if step:
-        return step, (warns[0] if warns else None)
     rows = parse_steps(text, cfg)
     failed, _ = _pick_failed(rows)
-    fail = rows[failed] if failed is not None else None
-    if fail is not None:
-        number = fail.get("number")
-        return (f"{number} | {fail['name_raw']}" if number is not None else fail["name_raw"]), (warns[0] if warns else None)
-    return None, (warns[0] if warns else None)
+    if failed is not None:
+        return _row_text(rows[failed]), None
+    if header_line(text, cfg) is not None:
+        return None, None
+    step, warns = from_text(text, patterns)
+    return step or None, (warns[0] if warns else None)
 
 
 def auto_from(field_value, description, test_steps, patterns, masker: Callable[[str], str]):

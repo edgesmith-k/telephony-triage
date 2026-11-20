@@ -500,9 +500,11 @@ def test_old_forms_still_read():
     """리뷰 P1-4: 옛 양식 — `Step` 열에 이름(Init·Attach)이 든 표, 한 줄 요약 표 `Failed Step | Step 3 | Verdict | FAIL`이 스텝 표
     앞에 있는 HTML, Jira 위키 표 `||No||Step||…||`(머리와 줄의 빈 칸 수가 다르다), 열 순서가 바뀐 `Step | No | Result`,
     번호 열이 첫 칸이 아닌 `Time | No | Step | Result`."""
+    # Step 열에 번호가 없으면 번호 열이 아니다 — 이름 열(Description·Action)이 따로 있으면 그 열이 이름(확인 리뷰 P2-2), 없으면 Step 열
     assert _fail_of("Step | Description | Result\nAttach | UE sends attach | PASS\nPDN connect | UE sends PDN | FAIL\n") \
-        == (None, "PDN connect")
-    assert _fail_of("Step | Action | Result\nInit | Power | PASS\nAttach | Send | FAIL\n") == (None, "Attach")
+        == (None, "UE sends PDN")
+    assert _fail_of("Step | Action | Result\nInit | Power | PASS\nAttach | Send | FAIL\n") == (None, "Send")
+    assert _fail_of("Step | Time | Result\nInit | 10:00:01 | PASS\nAttach | 10:00:02 | FAIL\n") == (None, "Attach")
     html = ("<table><tr><td>Failed Step</td><td>Step 3</td><td>Verdict</td><td>FAIL</td></tr></table><table>"
             "<tr><td>No</td><td>Step</td><td>Time</td><td>Result</td></tr>"
             "<tr><td>1</td><td>Power</td><td>10:00:00.000</td><td>PASS</td></tr>"
@@ -513,6 +515,8 @@ def test_old_forms_still_read():
     summary = html.replace("<td>Failed Step</td><td>Step 3</td><td>Verdict</td><td>FAIL</td>",      # 요약 칸 순서가 달라도
                            "<td>Verdict</td><td>FAIL</td><td>Failed Step</td><td>Step 3</td>")
     assert _fail_of(failedstep.html_to_lines(summary.encode())[0]) == (3, "PDN")
+    # 판정 값 칸(`FAIL`)이 든 요약 줄은 표의 첫 줄이 아니다 — 대체 경로를 끊는 기준·경고의 열 이름도 실제 스텝 표의 것
+    assert failedstep.header_line(failedstep.html_to_lines(summary.encode())[0]) == "No | Step | Time | Result"
     assert _fail_of("||No||Step||Expected||Result||\n|1|Power on|UE on|PASS|\n|2|Attach|Accept|FAIL|\n") == (2, "Attach")
     assert _fail_of("Step | No | Result\nPower | 1 | PASS\nAttach | 2 | FAIL\n") == (2, "Attach")
     rows = failedstep.parse_steps("Time | No | Step | Result\n10:00:00.000 | 1 | Power | PASS\n10:00:05.000 | 2 | Attach | FAIL\n")
@@ -550,7 +554,74 @@ def test_sim1121_tc_html_with_site_columns_written_before_step_number():
            "steps_columns": {"number": ["no", "#", "step no", "번호"], "name": ["step", "action", "name", "description", "절차", "내용", "항목"],
                              "status": ["result", "status", "verdict", "결과", "판정"], "start": ["start", "start time", "시작"],
                              "end": ["end", "end time", "종료", "time", "시각"]}}
-    for name, want in (("sim-oneline-fail.html", (4, "00:08:22.164")), ("sim-inconc.html", (2, "17:47:25.100"))):
+    for name, want in (("sim-oneline-fail.html", (4, "RRCConnectionSetupComplete / ATTACH REQUEST / PDN CONNECTIVITY REQUEST",
+                                                  "00:08:22.164")),
+                       ("sim-inconc.html", (2, "Wait SIP REGISTER on PSI=2", "17:47:25.100"))):
         rows, failed, _, _ = failedstep.read_steps(TC_HTML / name, old)
-        assert failed is not None and (rows[failed]["number"], rows[failed]["time_raw"]) == want, name
-        assert not rows[failed]["name_raw"].isdigit(), name
+        assert failed is not None, name
+        assert (rows[failed]["number"], rows[failed]["name_raw"], rows[failed]["time_raw"]) == want, name
+
+
+# -- sim1121 확인 리뷰: 번호를 못 읽은 FAIL 줄·이름 열 바로잡기·합계 줄 -------------------------------------------
+
+
+def test_fail_row_without_readable_number_is_kept():
+    """확인 리뷰 P1: 하위 스텝 번호(`2.1`·`4a`·`TC-01`)·후처리(`PA`)처럼 번호를 못 읽은 FAIL·INCONC 줄은 버리지 않고 번호 없음으로
+    받는다(이름·시각은 그대로). 번호를 못 읽은 PASS 줄은 전처럼 스텝이 아니다. 화면 표시(read_steps_file)도 같은 줄·같은 글이다."""
+    path = Path(tempfile.mkdtemp()) / "steps.txt"
+    for number in ("2.1", "4a", "TC-01"):
+        path.write_text(f"No | Step | Time | Result\n1 | Power | 10:00:01 | PASS\n1.5 | Check | 10:00:02 | PASS\n"
+                        f"{number} | PDN | 10:00:03 | FAIL\n", encoding="utf-8")
+        rows, failed, warnings, _ = failedstep.read_steps(path)
+        assert [(r["number"], r["name_raw"], r["status"]) for r in rows] == [(1, "Power", "pass"), (None, "PDN", "fail")], number
+        assert rows[failed]["time_raw"] == "10:00:03" and warnings == [], number
+        assert failedstep.read_steps_file(path, PATTERNS) == ("PDN", None) == (failedstep.label(rows[failed], _masker()), None)
+    path.write_text("Step | Time | Dir | Message / Action | Key IEs / Note | Verdict\n1 | 10:00:01.000 | -- | Attach | | PASS\n"
+                    "PA | 10:00:09.000 | -- | Release | | INCONC\n", encoding="utf-8")
+    rows, failed, _, _ = failedstep.read_steps(path)
+    assert (rows[failed]["number"], rows[failed]["name_raw"], rows[failed]["status"]) == (None, "Release", "inconc")
+    # 표의 실패 스텝이 패턴보다 먼저(분석 앵커와 같은 순서) — 표가 없을 때만 패턴
+    path.write_text("No | Step | Result\n1 | Power | PASS\n2 | Attach | FAIL\n", encoding="utf-8")
+    assert failedstep.read_steps_file(path, PATTERNS) == ("2 | Attach", None)
+    path.write_text("실패 스텝: 7. 데이터 켜기\n", encoding="utf-8")
+    assert failedstep.read_steps_file(path, PATTERNS)[0] == "7 | 데이터 켜기"
+
+
+def test_not_found_counts_fail_rows_not_read_as_steps():
+    """확인 리뷰 P1: 그래도 FAIL 스텝을 못 고르면 "스텝으로 못 읽은 FAIL·INCONC 줄 N개"를 붙여 PASS뿐인 TC와 가른다."""
+    path = Path(tempfile.mkdtemp()) / "steps.txt"
+    path.write_text("No | Step | Time | Result\n1 | Power | 10:00:01 | PASS\n | | 10:00:05 | FAIL\n", encoding="utf-8")
+    _, failed, warnings, _ = failedstep.read_steps(path)
+    assert failed is None and warnings == [
+        f"{failedstep.NOT_FOUND} — 읽은 표의 첫 줄(열 이름): No | Step | Time | Result, 판정을 읽은 스텝 1줄, "
+        "스텝으로 못 읽은 FAIL·INCONC 줄 1개"]
+    assert failedstep.read_steps_file(path, PATTERNS) == (None, None)      # 표가 있으면 패턴 3이 이 줄에 맞아도 화면에 안 낸다(분석과 같게)
+
+
+def test_number_column_without_numbers_keeps_existing_name_column():
+    """확인 리뷰 P2-2: 번호 열로 본 칸(`Step`)에 번호가 하나도 없을 때 이름 열(`Message / Action`)이 따로 있으면 그 열을 그대로 둔다 —
+    표시 이름이 `P`·`1.2`가 되지 않는다."""
+    rows = failedstep.parse_steps("Step | Time | Message / Action | Verdict\nP | 10:00:00 | Preamble | PASS\n"
+                                  "1.2 | 10:00:02 | PDN | FAIL\n")
+    assert [(r["number"], r["name_raw"], r["status"]) for r in rows] == [(None, "Preamble", "pass"), (None, "PDN", "fail")]
+
+
+def test_name_column_not_guessed_when_none_left():
+    """확인 리뷰 P2-3: 이름 열로 본 칸이 번호뿐인데 다른 이름 열이 없으면 아무 칸(`Remark`·`횟수`)이나 이름으로 고르지 않는다 —
+    이름은 비고 표시는 번호만(`2`)."""
+    old = {"steps_columns": {"number": ["no", "#", "step no", "번호"], "name": ["step", "action", "name", "항목"],
+                             "status": ["result", "verdict", "결과"], "end": ["end", "time"]}}
+    for text, cfg in (("Step | Time | Remark | Result\n1 | 10:00:01 | ok | PASS\n2 | 10:00:02 | x | FAIL\n", None),
+                      ("Step | Time | Remark | Result\n1 | 10:00:01 | ok | PASS\n2 | 10:00:02 | x | FAIL\n", old),
+                      ("항목 | 횟수 | 결과\n1 | 3 | 통과\n2 | 5 | 실패\n", None)):
+        rows = failedstep.parse_steps(text, cfg)
+        idx, _ = failedstep._pick_failed(rows)
+        assert (rows[idx]["number"], rows[idx]["name_raw"]) == (2, ""), text
+        assert failedstep.label(rows[idx], _masker()) == "2", text
+
+
+def test_final_verdict_row_is_summary_not_step():
+    """확인 리뷰: 스텝 열이 모두 글자인 표 뒤의 합계 줄(`Final Verdict | FAIL`·`종합 판정 | 실패`)은 실패 스텝이 아니다."""
+    for tail in ("Final Verdict | FAIL", "Overall Verdict | FAIL", "종합 판정 | 실패", "Final Result | FAIL"):
+        rows = failedstep.parse_steps(f"Step | Result\nAttach | PASS\nPDN connect | PASS\n{tail}\n")
+        assert failedstep._pick_failed(rows) == (None, None), tail
