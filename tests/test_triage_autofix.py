@@ -454,3 +454,15 @@ def test_fit_hold_rewrites_report_obligation_and_reuse_keeps_decision(monkeypatc
     assert len(live) == 1 and live[0].start == 1, [(ob.key, ob.start) for ob in live]
     assert new in live[0].lines and old not in live[0].lines
     ws.json("triage.py", ["release", "MOCK-9005"])
+
+
+def test_look_at_found_only_by_word_order_is_never_confirmed():
+    """sim1121 리뷰 P1-3: 사람이 대충 적은 기준 줄을 낱말 순서로만 찾았으면(찾기 방식 words) 채택이어도 실패 지점을 확정(confirmed)으로
+    올리지 않는다 — 모델이 고른 줄처럼 found·near. 줄 그대로 붙인 기준 줄은 지금처럼 확정까지 간다(대조)."""
+    item = _confirmed()
+    item = {**item, "logs": [str(padded_log((LABELSET.parent / p).resolve())) for p in item["logs"]]}
+    exact = _run(item, tmp("tt-loose-") / "exact", "--look-at", "notifyDataEnabledChanged: enabled=false")
+    loose = _run(item, tmp("tt-loose-") / "loose", "--look-at", "DSMGR-0 notifyDataEnabledChanged reason=USER")
+    assert exact["decision"]["location"] == {"state": "confirmed", "source": "look_at", "kind": "point"}
+    assert loose["decision"]["state"] == exact["decision"]["state"] == "accepted"
+    assert loose["decision"]["location"] == {"state": "found", "source": "look_at", "kind": "near"}

@@ -188,6 +188,8 @@ class AnchorMixin:
                   "start": lc.format_ts(span["start"]) if span.get("start") else None, "fail": lc.format_ts(fail),
                   "window": (lc.format_ts(start), lc.format_ts(end))}
         anchor["location"] = self.location(span)
+        if span["source"] == "look_at" and (self.look_result or {}).get("how") == "words":
+            anchor["loose"] = True      # 낱말 순서로만 찾은 기준 줄 — 채택이어도 확정(confirmed)으로 올리지 않는다(driver._decision)
         self.reference = self.reference_of(span)
         if span.get("order"):
             anchor["order"] = span["order"]
@@ -210,7 +212,7 @@ class AnchorMixin:
         src = span["source"]
         if src == "look_at":     # 같은 요청(IPC REQ→RSP·RIL 짝)으로 묶은 곳 수
             look = self.look_result or {}
-            text = look.get("how") == "text"
+            text = look.get("how") in ("text", "words")     # 글자 일치(낱말 순서 일치 포함)는 near — 한 곳이어도 found
             if self.look_inputs().get("source") == "model":     # 모델이 고른 줄: 문제 파악 단서처럼 확정으로 올리지 않는다(Y1)
                 return {"state": "multiple" if look.get("places") != 1 else "found", "source": "model",
                         "kind": "near" if text else "point"}
@@ -417,7 +419,7 @@ class AnchorMixin:
         ref = via or refs[0]
         many = (ref.get("places") or 1) > 1 if via else any((r.get("places") or 1) > 1 for r in refs)
         return {"state": "multiple" if many else "found", "source": "comment",
-                "kind": "near" if ref.get("how") == "text" else "point"}
+                "kind": "near" if ref.get("how") in ("text", "words") else "point"}
 
     def look_inputs(self) -> dict:
         """`--look-at`·`--look-note`(선택, 원문)를 이 프로세스에서 이슈 DB 설정대로 가린 값 `{at, note}`(없으면 None).
@@ -576,9 +578,12 @@ class AnchorMixin:
             text, _ = failedstep.read_lines(steps_file)     # 읽지 못한 경고는 resolve_failed_step이 이미 냈다
             if text is None:
                 return None
+            # 표(열 이름 줄)를 읽었는데 FAIL 스텝이 없으면 패턴으로 다른 줄을 잡지 않는다 — "FAIL 스텝을 찾지 못했다" 경고와 같은
+            # 쪽으로(요약 표 `Verdict | FAIL`·번호 없는 프리앰블 `P | … | FAIL` 줄을 실패 지점으로 정하지 않게, sim1121 리뷰)
+            if failedstep.header_line(text, conf) is not None:
+                return None
             patterns = userconfig.get(self.cfg, "tracker.failed_step_patterns") or []
-            # 표 머리 뒤에서만 찾는다 — 요약 표 `Verdict | FAIL` 줄을 먼저 잡지 않게(화면의 read_steps_file과 같은 읽기, sim1121)
-            step, line = failedstep.find_line(failedstep._after_header(text, conf), patterns)
+            step, line = failedstep.find_line(text, patterns)
             if step is None:        # 패턴에도 맞는 줄이 없다 — FAIL 스텝을 못 찾은 경고는 read_steps가 이미 냈다
                 return None
             label = failedstep.normalize(self.masker()(failedstep.numbered(step, line) or ""), 80)

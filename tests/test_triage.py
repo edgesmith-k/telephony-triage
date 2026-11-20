@@ -1175,7 +1175,7 @@ def test_absent_failed_step_is_byte_identical_even_with_steps_file_without_fail_
     doc, items = _items()
     steps = tmp("tt-steps-") / "steps.txt"
     steps.write_text("1. 전원 켜기\n2. 설정 열기\n", encoding="utf-8")
-    warn = f"{failedstep.NOT_FOUND} — 표 머리(번호·이름·판정 열)를 찾지 못함, 판정을 읽은 스텝 0줄"
+    warn = f"{failedstep.NOT_FOUND} — 열 이름 줄(번호·이름·판정 열)을 찾지 못함, 판정을 읽은 스텝 0줄"
     for item in (items[0], next(i for i in items if i["expect"] == "unresolved")):
         work = tmp("tt-triage-")
         plain = _offline_with(item, doc, work / "a")

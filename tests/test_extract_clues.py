@@ -794,3 +794,52 @@ def test_look_at_not_found_keeps_comment_clues(seed_db):
     assert any(w.startswith("기준 줄을 로그에서 못 찾음") for w in a["warnings"]) and not any("안 씀" in w for w in a["warnings"])
     a, out = _run(seed_db, "look-clock", comments=comments, look_at="16:50:42")
     assert _verdict(a) == HELD_SCRIPT and anchor.LOOK_TIME_ONLY in a["warnings"]
+    # 리뷰 P2-7: 기준 시각 없음 줄도 "입력 없음"이 아니라 "시각만 있어 안 씀"(경고와 같은 말)
+    _, out = _run(seed_db, "look-clock-only", comments=["로그 첨부했습니다."], look_at="16:50:42")
+    md = (out / "report.md").read_text(encoding="utf-8")
+    assert "기준 시각 없음(시각 입력 없음·기준 줄은 시각만 있어 안 씀)" in md and "시각·기준 줄 입력 없음" not in md
+
+
+def test_sim1121_key_warnings_survive_4kb_fit():
+    """sim1121 리뷰: 새 중요 경고 3개(기준 줄에 시각만·FAIL 스텝을 찾지 못했다·TC 실패 스텝에 시각 없음)는 4KB 맞춤에서 경고를
+    3줄로 줄일 때 늘 나오는 경고보다 먼저 남는다."""
+    from common import failedstep
+    from triagelib import anchor, report
+    key = [anchor.LOOK_TIME_ONLY, f"{failedstep.NOT_FOUND} — 열 이름 줄(번호·이름·판정 열)을 찾지 못함, 판정을 읽은 스텝 0줄",
+           anchor.NO_STEP_TIME]
+    result = {"warnings": [f"흔한 경고 {i} " + "가" * 200 for i in range(6)] + key, "must_show": [], "candidates": [],
+              "decision": {}, "issue": {"submitter_note": "나" * 3000}, "files": {"report": "report.md"}}
+    out = report.fit(result)
+    assert [w[:12] for w in out["warnings"]] == [w[:12] for w in key]
+
+
+def test_look_at_clock_compares_printed_time_not_converted(seed_db):
+    """sim1121 리뷰 P2-5: 날짜 없는 시각은 시간대를 바꾸지 않고 로그 줄에 찍힌 시각 글과 비교한다 — 줄마다 `+0000`이 찍힌 로그를
+    `--tz Asia/Seoul`로 읽어도 적은 `10:02:00.624`가 그 줄을 고른다(바꿔 비교하면 19:02라 못 고른다)."""
+    from common import lookat
+    d = tmp("tt-clock-zone-")
+    log = d / "zone.log"
+    log.write_text("".join(f"11-14 {t} +0000  2101  2101 D DNC-0   : onDataStallReestablishInternet: {w}\n"
+                           for t, w in (("10:02:00.624", "a"), ("10:05:00.100", "b"))), encoding="utf-8")
+    look = d / "look-at.json"
+    at = "10:02:00.624 DNC-0 onDataStallReestablishInternet"
+    look.write_text(json.dumps({"look_at": lookat.clean(at), "ref": None, "stamp": lookat.clock(at)}), encoding="utf-8")
+    f = run_json("parse_logcat.py", ["ipc", log, "--find", look, "--rules", seed_db / "parser-rules", "--tz", "Asia/Seoul",
+                                     "--year", "2026"])["find"]
+    assert (f["hits"], f["ts"], f["stamp"]) == (2, "2026-11-14T10:02:00.624Z", "same")
+
+
+def test_comment_clue_is_not_matched_by_word_order(seed_db):
+    """sim1121 리뷰 P1-3: 낱말 순서 일치는 사람이 적은 기준 줄에만 — 코멘트 단서(`finds`)는 줄 그대로만 찾는다."""
+    d = tmp("tt-clue-words-")
+    log = d / "w.log"
+    log.write_text("11-14 10:02:00.624  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DN-1], cause=NO_SERVICE\n",
+                   encoding="utf-8")
+    look = d / "look-at.json"
+    text = "DNC-0 onDataNetworkSetupDataFailed cause=NO_SERVICE"
+    look.write_text(json.dumps({"finds": [{"look_at": text, "ref": None}]}), encoding="utf-8")
+    args = ["ipc", log, "--find", look, "--rules", seed_db / "parser-rules", "--tz", "Asia/Seoul", "--year", "2026"]
+    assert run_json("parse_logcat.py", args)["finds"][0]["hits"] == 0
+    look.write_text(json.dumps({"look_at": text, "ref": None}), encoding="utf-8")
+    f = run_json("parse_logcat.py", args)["find"]
+    assert (f["hits"], f["how"]) == (1, "words")

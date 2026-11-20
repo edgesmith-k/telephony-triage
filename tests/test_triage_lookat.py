@@ -250,3 +250,14 @@ def test_decision_line_names_ambiguous_detail_and_not_a_bug():
            "location": loc, "check": {"why": "same_line"}, "events": [{"ref": True, "cause": "DATA-001-01", "not_a_bug": True}]}
     assert rp.decision_line(nab, []).endswith(" · " + rp.NOT_A_BUG_NOTE + "DATA-001-01")
     assert rp.not_a_bug_cause(nab, "DATA-001-01") and not rp.not_a_bug_cause(nab, "DATA-002-01")
+
+
+def test_location_of_word_order_look_is_near_and_never_confirmed():
+    """sim1121 리뷰 P1-3: 낱말 순서로만 찾은 기준 줄(how words)은 한 곳이어도 found·near — ipc·token 일치만 confirmed·point."""
+    from types import SimpleNamespace
+    from triagelib.anchor import AnchorMixin
+    span = {"source": "look_at"}
+    for how, want in (("words", ("found", "near")), ("text", ("found", "near")), ("ipc", ("confirmed", "point"))):
+        me = SimpleNamespace(look_result={"how": how, "places": 1}, look_inputs=lambda: {})
+        loc = AnchorMixin.location(me, span)
+        assert (loc["state"], loc["kind"]) == want, how

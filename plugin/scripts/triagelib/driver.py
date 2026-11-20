@@ -81,15 +81,16 @@ def _observation_summary(events: dict) -> dict | None:
 NO_LOCATION = {"state": "none", "source": None, "kind": None}
 
 
-def _adopted_location(location: dict, why: str | None, cond_line: bool = False) -> dict:
+def _adopted_location(location: dict, why: str | None, cond_line: bool = False, loose: bool = False) -> dict:
     """채택이면 실패 지점 상태를 자격 검사 결과로 정한다: confirmed/point는 기준 줄 자체가 붙은 사건의 증상·원인 근거 줄이거나 같은
     RIL 요청일 때(`same_line`, 조건 줄로만 붙은 `cond_line`이 아님)만이다 — 포털은 accepted + confirmed면 본 분석을 건너뛴다.
     `cp_point`는 found/point(IPC 응답 뒤 2초 안 첫 사건 — 같은 요청이라는 근거가 없다), 구간(`range`)은 found·kind 그대로(FAIL
     마커는 스텝을 감쌀 뿐 실패 사건 줄이 아니고, 스텝 안에 복구된 일시 실패가 있을 수 있다), 조건 줄로만 붙은 `same_line`은
     found·kind 그대로(되풀이되는 조건 줄을 글자로 짚은 것일 수 있다), 그 밖(근처 등)도 found. 문제 파악 허용 유형은 CP 점·근처·
     구간에서만 사건을 고르므로 유형 거르기로 고른 채택도 늘 found다. comment 출처는 늘 found("한 곳에서 찾았다" ≠ "이번 실패
-    지점을 확인했다"). 모델이 코멘트에서 고른 기준 줄(`--look-at-source model`, source model)도 같다."""
-    if location.get("source") in ("comment", "model"):      # kind는 단서 찾기 방식(ipc·token point, 글자 near) 그대로
+    지점을 확인했다"). 모델이 코멘트에서 고른 기준 줄(`--look-at-source model`, source model)과 낱말 순서로만 찾은 기준 줄
+    (`loose`, 찾기 방식 words — 사람이 대충 적은 줄의 낱말이 그 줄에 순서대로 있을 뿐이다)도 같다."""
+    if location.get("source") in ("comment", "model") or loose:      # kind는 단서 찾기 방식(ipc·token point, 글자 near) 그대로
         return {**location, "state": "found"}
     if why == "same_line" and not cond_line:
         return {**location, "state": "confirmed", "kind": "point"}
@@ -118,7 +119,8 @@ def _decision(candidates: list[dict], anchor: dict | None, elig: dict | None, cl
     elif elig.get("state") == "accepted" and picked:
         return {"state": "accepted", "reason": "anchored_top",
                 "selected": {"category": picked.get("category"), "type": picked["type"], "cause": picked["cause"]},
-                "location": _adopted_location(location, elig.get("why"), elig.get("cond_line") is True), **extra}
+                "location": _adopted_location(location, elig.get("why"), elig.get("cond_line") is True,
+                                              (anchor or {}).get("loose") is True), **extra}
     elif elig.get("state") == "accepted":      # 채택 원인이 후보에 없다(매처는 순위 원인만 붙이므로 정상 입력에선 없음) — 보류
         reason, extra["check"]["why"] = "ineligible", "cause_not_in_candidates"
     else:

@@ -114,6 +114,10 @@ def test_loosely_typed_line_colonless_ellipsis_and_word_order():
               "DNC-0: onDataNetworkSetupDataFailed: [DataNetwork: DN-2], cause=NO_SERVICE(0x1), retry=10000",
               "DNC-1: onDataNetworkSetupDataFailed: cause=RADIO_NOT_AVAILABLE(0x10001)"]
     assert hits("DNC-0 onDataNetworkSetupDataFailed cause=RADIO_NOT_AVAILABLE(0x10001)", failed) == [0]
+    # 찾기 방식: 줄 그대로·콜론 없음·`...` 생략은 text, 낱말 순서로만 맞으면 words(확정으로 올리지 않는다), 끄면(코멘트 단서) 없음
+    words = L.needle(L.query("DNC-0 onDataNetworkSetupDataFailed cause=RADIO_NOT_AVAILABLE(0x10001)"))
+    assert L.text_find(words, failed) == ([0], "words") and L.text_find(words, failed, loose=False) == ([], "text")
+    assert L.text_find(L.needle(L.query("DNC-0 onDataStallReestablishInternet")), stall) == ([0], "text")
     # 음성: 낱말이 다른 낱말 한가운데(`setup`이 `onDataNetworkSetup…`)면 안 맞고, 순서가 바뀌거나 값이 다르면 안 맞는다
     assert hits("DNC-0 setup data failed", failed) == []
     assert hits("cause=RADIO_NOT_AVAILABLE(0x10001) DNC-0 onDataNetworkSetupDataFailed", failed) == []
@@ -129,6 +133,6 @@ def test_clock_without_date_is_cut_and_kept_for_picking():
     assert L.clean("16:50:42") == "" and L.clock("16:50:42") == "16:50:42"
     assert L.clock("11-10 22:18:58.695 radio 1 2 D DNC-0: x") is None and L.stamp("22:18:58.695 x") is None
     assert L.clean("12:03:44.123  1234  1300 D DNC-0   : msg here") == "DNC-0 : msg here"
-    t = datetime(2026, 11, 10, 16, 50, 42, 480000)
-    assert L.same_clock("16:50:42", t) and L.same_clock("16:50:42.48", t) and L.same_clock("16:50:42.480", t)
-    assert not L.same_clock("16:50:42.481", t) and not L.same_clock("16:50:43", t)
+    t = "16:50:42.480"      # 로그 줄에 찍힌 시각 글(시간대를 바꾸지 않은 그대로)
+    assert L.same_clock("16:50:42", t) and L.same_clock("16:50:42.48", t) and L.same_clock("16:50:42.4800", t)
+    assert not L.same_clock("16:50:42.481", t) and not L.same_clock("16:50:43", t) and not L.same_clock("16:50:42.5", t)

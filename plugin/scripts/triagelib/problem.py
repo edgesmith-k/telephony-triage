@@ -162,7 +162,8 @@ def _fail_lines(text: str, cfg: dict, masker, fail_name: str | None = None) -> l
     낱말 fail이 든 나머지 줄(`fail-safe check` 같은 스텝 이름) — 이런 줄이 많아도 진짜 Fail 줄이 밀려나지 않게."""
     compiled, _warns = failedstep._compile(userconfig.get(cfg, "tracker.failed_step_patterns") or [])
     conf = userconfig.get(cfg, "failed_step") or {}
-    words = {k: failedstep._words(conf.get("steps_status"), failedstep.DEFAULT_STEPS_STATUS, k) for k in ("pass", "fail")}
+    verdicts = failedstep._verdicts(conf)
+    words = {"pass": verdicts["pass"], "fail": verdicts["fail"] | verdicts["inconc"]}     # INCONC 줄도 둘레를 싣는다
     rows = [line[: failedstep.MAX_LINE_CHARS] for line in text.splitlines()]
 
     def verdict(line: str) -> bool:

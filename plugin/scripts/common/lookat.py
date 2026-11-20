@@ -74,11 +74,14 @@ def clock(text) -> str | None:
     return m.group(1) if m else None
 
 
-def same_clock(clock_text: str, local: datetime) -> bool:
-    """날짜 없는 시각 `clock_text`가 로그 줄의 현지 시각 `local`과 같은가 — 적은 자리수까지만 비교한다(`16:50:42`는 그 1초 전체)."""
-    hms, _, frac = clock_text.partition(".")
-    h, m, s = (int(x) for x in hms.split(":"))
-    return (local.hour, local.minute, local.second) == (h, m, s) and f"{local.microsecond:06d}".startswith(frac[:6])
+def same_clock(clock_text: str, line_clock: str) -> bool:
+    """날짜 없는 시각 `clock_text`가 로그 줄에 찍힌 시각 글 `line_clock`(`HH:MM:SS(.fff)`, 시간대를 바꾸지 않은 그대로)과 같은가 —
+    적은 자리수까지만 비교한다(`16:50:42`는 그 1초 전체)."""
+    def split(t):
+        hms, _, frac = t.partition(".")
+        return tuple(int(x) for x in hms.split(":")), frac
+    (want, frac), (got, got_frac) = split(clock_text), split(line_clock)
+    return want == got and got_frac.ljust(len(frac), "0").startswith(frac)
 
 
 def fold(text) -> str:
@@ -129,30 +132,36 @@ def _tagless(hay: str) -> str:
     return hay.replace(": ", " ", 1)
 
 
-def text_hits(needle_text: str, texts: list[str], masked=None) -> list[int] | None:
+def text_hits(needle_text: str, texts: list[str], masked=None, loose: bool = True) -> list[int] | None:
+    """`text_find`의 위치만."""
+    return text_find(needle_text, texts, masked, loose)[0]
+
+
+def text_find(needle_text: str, texts: list[str], masked=None, loose: bool = True) -> tuple[list[int] | None, str]:
     """`needle_text`(접은 글)가 든 줄의 위치. 먼저 가장 긴 마스킹 밖 조각으로 원 줄을 거르고, 걸린 줄만 `masked(i)`(그 줄을
     가린 글, 없으면 원 줄)로 접어 확인한다 — 원문 사본 줄의 값도 입력처럼 가려 비교한다. 그 조각이 `PIECE_MIN`자보다 짧으면
     (값이 거의 다 가려진 글) 엉뚱한 줄에 붙지 않게 찾지 않고 None.
 
     사람이 대충 적은 줄도 찾는다(sim1121): 태그 뒤 `:`를 뺀 `태그 메시지`, 중간을 `...`·`…`로 줄인 글(앞뒤 조각을 순서대로).
-    그래도 없을 때만 낱말이 줄 안에 순서대로 다 있는 줄(낱말은 낱말 경계에서 시작해야 한다 — `setup`이 `onDataSetup`에 붙지
-    않게). 여러 줄이 맞으면 고르기·모호 표시는 호출자(`pick`·`group_places`)가 한다."""
+    그래도 없을 때만(`loose`) 낱말이 줄 안에 순서대로 다 있는 줄(낱말은 낱말 경계에서 시작해야 한다 — `setup`이 `onDataSetup`에
+    붙지 않게) — 찾기 방식 `words`로 따로 알린다(확정으로 올리지 않는다). 여러 줄이 맞으면 고르기·모호 표시는 호출자(`pick`·
+    `group_places`)가 한다. → `(위치 | None, "text" | "words")`."""
     parts = [p.strip() for p in _ELLIPSIS.split(needle_text) if p.strip()]
     piece = max((s.strip() for p in parts for s in p.split("<m>")), key=len, default="")
     if len(piece) < PIECE_MIN:
-        return None
+        return None, "text"
     key = max((s for p in parts for w in p.split() for s in w.split("<m>")), key=len)     # 모든 방식이 꼭 담는 조각(사전 거르기)
     words = [re.compile(r"(?<![0-9a-z])" + re.escape(w)) for p in parts for w in p.split()]
-    out, loose = [], []
+    out, by_words = [], []
     for i, text in enumerate(texts):
         if key not in _COLON_GAP.sub(":", " ".join(text.split())).casefold():
             continue
         hay = fold(masked(i) if masked else text)
         if _in_order(parts, hay) or _in_order(parts, _tagless(hay)):
             out.append(i)
-        elif len(words) > 1 and not out and _words_in_order(words, hay):
-            loose.append(i)
-    return out or loose
+        elif loose and len(words) > 1 and not out and _words_in_order(words, hay):
+            by_words.append(i)
+    return (out, "text") if out or not by_words else (by_words, "words")
 
 
 def _words_in_order(words: list[re.Pattern], hay: str) -> bool:

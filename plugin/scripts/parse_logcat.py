@@ -1104,16 +1104,19 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
         result["truncated"] = len(records) > ipcseq.RECORD_MAX
         result["records"] = records[-ipcseq.RECORD_MAX:]     # 넘으면 앞을 버린다(실패는 보통 로그 끝쪽)
         return result
-    ctx = {"records": records, "lines": lines, "texts": texts, "mask": mask, "prof": prof, "tz": args.tz, "year": args.year}
+    ctx = {"records": records, "lines": lines, "texts": texts, "mask": mask, "prof": prof, "tz": args.tz, "year": args.year,
+           "paths": paths}
     if "finds" in look:      # 코멘트 단서 여러 개: 로그 읽기·가리기는 한 번, 찾기만 단서마다
-        result["finds"] = [_find_one(one, **ctx) for one in look["finds"]]
+        result["finds"] = [_find_one(one, **ctx, loose=False) for one in look["finds"]]     # 코멘트 단서는 낱말 순서 일치 안 함
     else:
         result["find"] = _find_one(look, **ctx)
     return result
 
 
-def _find_one(look: dict, *, records: list[dict], lines: list[dict], texts: list[str], mask, prof, tz, year) -> dict:
-    """기준 줄·단서 하나 찾기(`run_ipc --find`) → `find {how, hits, …} | {how: null, hits: 0, why}`."""
+def _find_one(look: dict, *, records: list[dict], lines: list[dict], texts: list[str], mask, prof, tz, year, paths=(),
+              loose: bool = True) -> dict:
+    """기준 줄·단서 하나 찾기(`run_ipc --find`) → `find {how, hits, …} | {how: null, hits: 0, why}`. how는 ipc·token·text, 낱말
+    순서로만 맞았으면 words(`loose`일 때만 — 사람이 적은 기준 줄. 코멘트 단서는 끈다)."""
     spec = prof.vendor_ipc
     q = lookat.query(look["look_at"], spec.request_prefix)
     picks = lookat.ipc_hits(q, records, look.get("slot"))
@@ -1121,7 +1124,7 @@ def _find_one(look: dict, *, records: list[dict], lines: list[dict], texts: list
     slots = [records[k]["phone_id"] for k in picks]
     if not found:
         how, text = "text", lookat.needle(q)
-        found = None if text is None else lookat.text_hits(text, texts, mask)
+        found, how = (None, how) if text is None else lookat.text_find(text, texts, mask, loose)
         if found and look.get("slot") is not None:      # 요청 슬롯: 줄 레코드 슬롯이 그 슬롯이거나 모름인 줄만(IPC 일치와 같게)
             found = [i for i in found if lines[i].get("phone_id") in (look["slot"], None)]
         if found is None:      # 짧거나 거의 다 가려진 글은 본문으로 찾지 않는다(엉뚱한 줄에 붙지 않게)
@@ -1134,15 +1137,15 @@ def _find_one(look: dict, *, records: list[dict], lines: list[dict], texts: list
             return {"how": None, "hits": 0, "why": why}
     if not found:
         return {"how": None, "hits": 0, "why": "일치하는 줄 없음"}
-    if how == "text":      # 본문 일치는 줄 레코드의 슬롯
+    if how in ("text", "words"):      # 본문 일치는 줄 레코드의 슬롯
         slots = [lines[i].get("phone_id") for i in found]
     by_line = {r["i"]: r for r in records}
     places = lookat.group_places([_hit_item(i, lines[i], by_line.get(i), spec.success) for i in found],
                                  prof.ril_vendor.link_ms if prof.ril_vendor else lookat.PAIR_MS)
     raw_stamp = look.get("stamp")
-    if raw_stamp and lookat.CLOCK_ONLY.fullmatch(raw_stamp):     # 날짜 없는 시각: 로그 시간대의 현지 시각으로 비교(적은 자리수까지)
-        zone = logtime.get_tz(tz)
-        same = [p for p in places if any(lookat.same_clock(raw_stamp, logtime.parse_ts(x["ts"]).astimezone(zone)) for x in p)]
+    if raw_stamp and lookat.CLOCK_ONLY.fullmatch(raw_stamp):     # 날짜 없는 시각: 로그 줄에 찍힌 시각 글과 비교(적은 자리수까지)
+        clocks = _line_clocks(paths, [x for p in places for x in p], lines, tz)
+        same = [p for p in places if any(lookat.same_clock(raw_stamp, clocks[x["i"]]) for x in p if clocks.get(x["i"]))]
     else:
         stamp = logtime.normalize_ts(raw_stamp, tz, year) if raw_stamp else None     # 없는 날짜·시각이면 None → none
         same = [p for p in places if stamp is not None and any(logtime.parse_ts(x["ts"]) == stamp for x in p)]
@@ -1168,6 +1171,33 @@ def _find_one(look: dict, *, records: list[dict], lines: list[dict], texts: list
                 "place": [{k2: v for k2, v in x.items() if k2 != "i"}
                           for x in (places[0] if len(places) == 1 else next(p for p in places if any(x["i"] == n for x in p)))],
                 **({"stamp": "same" if len(same) == 1 else "many" if same else "none"} if look.get("stamp") else {})}
+
+
+_LINE_CLOCK = re.compile(r"\d{1,2}:\d{2}:\d{2}(?:\.\d+)?")
+
+
+def _line_clocks(paths, items: list[dict], lines: list[dict], tz) -> dict[int, str]:
+    """일치 줄마다 그 줄 원문 앞(40자)에 찍힌 시각 글 — 시간대를 바꾸지 않은 그대로(`+0000`이 찍힌 로그도 적힌 시각과 같게).
+    줄 위치를 모르는 레코드(외부 파서)는 로그 시간대의 현지 시각으로 대신한다. ponytail: 그 파일을 한 번 더 읽는다(기준 줄에
+    날짜 없는 시각이 있을 때만)."""
+    want: dict[int, set[int]] = {}
+    for x in items:
+        key = evt.ref_key(lines[x["i"]].get("line_ref"))
+        if key is not None:
+            want.setdefault(key[0], set()).add(key[1])
+    raw: dict[tuple[int, int], str] = {}
+    for f, nos in want.items():
+        if 0 <= f < len(paths):
+            with logtime.open_log(paths[f]) as fh:
+                for no, text in enumerate(fh, 1):
+                    if no in nos:
+                        raw[(f, no)] = text[:40]
+    out: dict[int, str] = {}
+    for x in items:
+        key = evt.ref_key(lines[x["i"]].get("line_ref"))
+        m = _LINE_CLOCK.search(raw.get(key, "")) if key is not None else None
+        out[x["i"]] = m.group(0) if m else logtime.parse_ts(x["ts"]).astimezone(logtime.get_tz(tz)).strftime("%H:%M:%S.%f")
+    return out
 
 
 def _hit_item(i: int, line: dict, rec: dict | None, success: str | None = None) -> dict:

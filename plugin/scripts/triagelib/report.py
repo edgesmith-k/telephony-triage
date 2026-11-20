@@ -407,7 +407,8 @@ def _drop_read_only_hint_if_shown(result: dict) -> None:
 # 4KB 맞춤에서 경고를 3줄로 줄일 때 먼저 남기는 경고(판정·위치 후보를 다르게 읽게 하는 것, sim1120 P1-2) — 늘 나오는 경고가 먼저 잘린다
 # (슬롯 불일치는 경고가 아니라 must_show 줄이라 여기 넣지 않는다)
 KEY_WARNING = re.compile(r"단서\(스크립트\) 버림|단서, 로그에서 못 찾음|단서를 (?:쓰지 못했다|뽑지 않았다)|마지막 댓글이 길어|token 값이 여럿|"
-                         r"범위 밖|구간 밖|기준 줄을 로그에서 못 찾음|기준 줄에 시각만|FAIL 스텝을 찾지 못했다|TC 실패 스텝에 시각 없음")
+                         r"범위 밖|구간 밖|기준 줄을 로그에서 못 찾음|기준 줄에 시각만|FAIL 스텝을 찾지 못했다|TC 실패 스텝에 시각 없음|"
+                         r"^steps-file에 FAIL 스텝이 없어 INCONC")
 NOTE_GONE = "issue.json text.note 참고"     # 4KB 맞춤에서 뺀 제출자 참고 글 자리
 NOTE_FIT = 200      # 4KB 맞춤 첫 단계의 제출자 참고 글 길이(머리말 포함) — 짧은 사용자 메모 뒤 포털 Jira 안내 줄까지 남는 길이
 # 다른 후보 근거를 빼기 전 한 번 더 줄이는 길이(머리말 포함): 머리말 21자 + 포털이 메모 끝에 붙이는 Jira 안내 줄
@@ -1001,7 +1002,9 @@ class ReportMixin:
             prob.append(add(3.5, "기준 시각 없음 — 로그 전체를 봄"))
         elif not anchor and self.time_candidates is not None:     # 앵커·Jira 시각·시각 답이 없어 묻지 않고 전체를 봤다
             seen = ", ".join(f"{t['ts']} {t['type']}" for t in self.time_candidates)
-            why = "시각 입력 없음·기준 줄 못 찾음" if self.look_result else "시각·기준 줄 입력 없음"
+            why = ("시각 입력 없음·기준 줄 못 찾음" if self.look_result else
+                   "시각 입력 없음·기준 줄은 시각만 있어 안 씀" if getattr(self.args, "look_at", None) and not self.look_inputs()["at"]
+                   else "시각·기준 줄 입력 없음")
             prob.append(add(3.5, f"기준 시각 없음({why}) — 로그 전체를 봄. 증상 시각 후보 {len(self.time_candidates)}개"
                                  + (f": {seen}" if seen else "")))
         if self.failed_step:

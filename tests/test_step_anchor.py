@@ -665,17 +665,39 @@ def test_sim1121_tc_html_fail_time_reaches_clock_and_range_checks():
     assert any(w.startswith("장비 시각 미사용") for w in done["warnings"]), done["warnings"]
 
 
-def test_steps_file_pattern_fallback_skips_summary_table_and_warns_when_no_time():
-    """표로 FAIL 스텝을 못 읽을 때의 대체 경로(failed_step_patterns)는 표 머리 뒤에서만 찾는다 — 요약 표 `Verdict | FAIL`(시각 없음)을
-    먼저 잡지 않는다. 실패 스텝 줄에 시각이 없으면 조용히 끝내지 않고 "TC 실패 스텝에 시각 없음" 경고."""
+def test_steps_file_pattern_fallback_only_without_table_and_warns_when_no_time():
+    """표로 FAIL 스텝을 못 읽을 때의 대체 경로(failed_step_patterns)는 표(열 이름 줄)가 없을 때만 — 표를 읽었는데 FAIL 스텝이 없으면
+    요약 표 `Verdict | FAIL`·번호 없는 프리앰블 `P | … | FAIL` 줄을 패턴으로 잡아 실패 지점으로 정하지 않는다("FAIL 스텝을 찾지
+    못했다" 경고와 결과가 같은 쪽). 실패 스텝 줄에 시각이 없으면 조용히 끝내지 않고 "TC 실패 스텝에 시각 없음" 경고."""
+    from common import failedstep
     from triagelib import anchor
     d = tmp("tt-steps-fallback-")
     log = _markerless(d)
-    steps = d / "steps.txt"       # 번호 없는 FAIL 줄은 번호 열이 있는 표에서 스텝이 아니다 → 패턴 경로
-    steps.write_text("Verdict | FAIL\nNo | Step | Result\n4 | 망 등록 | PASS\n데이터 켜기 | FAIL | 2026-09-20 14:33:30\n",
-                     encoding="utf-8")
-    done, _ = _offline("fallback", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+    steps = d / "steps.txt"
+    for name, text in (("summary", "Verdict | FAIL\nNo | Step | Result\n4 | 망 등록 | PASS\n데이터 켜기 | FAIL | 2026-09-20 14:33:30\n"),
+                       ("preamble", "Step | Time | Message / Action | Verdict\n1 | 2026-09-20 14:32:00 | 망 등록 | PASS\n"
+                                    "P | 2026-09-20 14:33:30 | 프리앰블 등록 | FAIL\n")):
+        steps.write_text(text, encoding="utf-8")
+        done, _ = _offline(name, "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+        assert done["step_anchor"].get("source") != "steps_file", name
+        assert any(w.startswith(failedstep.NOT_FOUND) for w in done["warnings"]), name
+    steps.write_text("실패 스텝: 7. 데이터 켜기 2026-09-20 14:33:30\n", encoding="utf-8")      # 표 없음 → 패턴 경로
+    done, _ = _offline("pattern", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
     assert done["step_anchor"]["source"] == "steps_file" and done["step_anchor"]["span"][1] == "2026-09-20T05:33:30.000Z"
-    steps.write_text("No | Step | Result\n4 | 망 등록 | PASS\n5 | 데이터 켜기 | FAIL\n", encoding="utf-8")
-    done, _ = _offline("no-time", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
-    assert anchor.NO_STEP_TIME in done["warnings"] and done["step_anchor"].get("source") != "steps_file"
+    for name, text in (("no-time", "No | Step | Result\n4 | 망 등록 | PASS\n5 | 데이터 켜기 | FAIL\n"),
+                       ("pattern-no-time", "실패 스텝: 7. 데이터 켜기\n")):
+        steps.write_text(text, encoding="utf-8")
+        done, _ = _offline(name, "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+        assert anchor.NO_STEP_TIME in done["warnings"] and done["step_anchor"].get("source") != "steps_file", name
+
+
+def test_tc_warning_header_is_masked_in_run_warnings():
+    """FAIL 스텝을 못 찾은 경고에 실린 표 첫 줄(TC 원문)은 이슈 DB 설정대로 가려서 낸다(샘플 DB는 IP를 가린다) — 표 앵커 경로와
+    스텝 순서 경로 둘 다."""
+    d = tmp("tt-steps-mask-")
+    log = _markerless(d)
+    steps = d / "steps.txt"
+    steps.write_text("No | Step | Server 10.1.2.3 | Result\n1 | 망 등록 | x | PASS\n", encoding="utf-8")
+    done, _ = _offline("mask", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+    warns = [w for w in done["warnings"] if "열 이름" in w]
+    assert warns and all("10.1.2.3" not in w and "<IP#" in w for w in warns), warns

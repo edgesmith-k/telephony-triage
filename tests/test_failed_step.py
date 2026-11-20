@@ -444,13 +444,13 @@ def test_not_found_always_warns_with_header_read():
     """FAIL 스텝을 못 찾으면 늘 경고한다 — PASS 줄이 하나도 없어도(전에는 조용히 0). 읽은 표 머리를 남겨 양식 차이를 볼 수 있게."""
     _, failed, warnings, _ = failedstep.read_steps(TC_HTML / "sim-pass.html")
     assert failed is None and warnings == [
-        "steps-file에서 FAIL 스텝을 찾지 못했다 — 읽은 표 머리: Step | Time | Dir | Message / Action | Key IEs / Note | Verdict, "
-        "판정을 읽은 스텝 3줄"]
+        "steps-file에서 FAIL 스텝을 찾지 못했다 — 읽은 표의 첫 줄(열 이름): Step | Time | Dir | Message / Action | Key IEs / Note | "
+        "Verdict, 판정을 읽은 스텝 3줄"]
     path = Path(tempfile.mkdtemp()) / "odd.html"
     path.write_text("<table><tr><th>Seq</th><th>Event</th><th>Outcome</th></tr><tr><td>1</td><td>x</td><td>bad</td></tr>"
                     "</table>", encoding="utf-8")
     _, failed, warnings, _ = failedstep.read_steps(path)
-    assert failed is None and warnings == [f"{failedstep.NOT_FOUND} — 표 머리(번호·이름·판정 열)를 찾지 못함, 판정을 읽은 스텝 0줄"]
+    assert failed is None and warnings == [f"{failedstep.NOT_FOUND} — 열 이름 줄(번호·이름·판정 열)을 찾지 못함, 판정을 읽은 스텝 0줄"]
 
 
 def test_empty_cells_keep_column_positions():
@@ -474,3 +474,83 @@ def test_header_word_match_does_not_turn_data_rows_into_header():
     assert _expected_steps(rows) == [(1, "Attach", "pass"), (2, "Verify result", "pass"), (3, "Data call", "fail")]
     assert _expected_steps(failedstep.parse_steps("Step | Result\n1. Attach | PASS\n데이터 켜기 | FAIL\n")) == \
         [(1, "Attach", "pass"), (None, "데이터 켜기", "fail")]
+
+
+# -- sim1121 리뷰: 열 이름 고르는 순서·옛 양식·INCONC -------------------------------------------------------
+
+
+def _fail_of(text):
+    rows = failedstep.parse_steps(text)
+    idx, _ = failedstep._pick_failed(rows)
+    return (rows[idx]["number"], rows[idx]["name_raw"]) if idx is not None else None
+
+
+def test_exact_column_name_wins_over_contained_one():
+    """리뷰 P0-1: 한 줄 안에서 칸 전체가 열 이름인 칸(`Result`·`결과`·`Verdict`)을 먼저 정하고, 낱말 포함(`Expected Result`·
+    `기대 결과`·`Expected Verdict`)은 못 정한 열에만 — 기대값 칸이 판정 열이 되어 FAIL을 놓치거나 기대값 NG 줄을 고르지 않게."""
+    assert _fail_of("No | Step | Expected Result | Result\n1 | Power | OK | PASS\n2 | Attach | OK | FAIL\n3 | Detach | OK | PASS\n") \
+        == (2, "Attach")
+    assert _fail_of("No | Step | Expected Result | Result\n1 | Power | OK | PASS\n2 | Bad APN | NG | PASS\n3 | Attach | OK | FAIL\n") \
+        == (3, "Attach")
+    assert _fail_of("번호 | 절차 | 기대 결과 | 결과\n1 | 전원 | 성공 | 통과\n2 | 데이터 | 성공 | 실패\n") == (2, "데이터")
+    assert _fail_of("Step | Action | Expected Verdict | Verdict\n1 | Power | PASS | PASS\n2 | Attach | PASS | FAIL\n") == (2, "Attach")
+
+
+def test_old_forms_still_read():
+    """리뷰 P1-4: 옛 양식 — `Step` 열에 이름(Init·Attach)이 든 표, 한 줄 요약 표 `Failed Step | Step 3 | Verdict | FAIL`이 스텝 표
+    앞에 있는 HTML, Jira 위키 표 `||No||Step||…||`(머리와 줄의 빈 칸 수가 다르다), 열 순서가 바뀐 `Step | No | Result`,
+    번호 열이 첫 칸이 아닌 `Time | No | Step | Result`."""
+    assert _fail_of("Step | Description | Result\nAttach | UE sends attach | PASS\nPDN connect | UE sends PDN | FAIL\n") \
+        == (None, "PDN connect")
+    assert _fail_of("Step | Action | Result\nInit | Power | PASS\nAttach | Send | FAIL\n") == (None, "Attach")
+    html = ("<table><tr><td>Failed Step</td><td>Step 3</td><td>Verdict</td><td>FAIL</td></tr></table><table>"
+            "<tr><td>No</td><td>Step</td><td>Time</td><td>Result</td></tr>"
+            "<tr><td>1</td><td>Power</td><td>10:00:00.000</td><td>PASS</td></tr>"
+            "<tr><td>3</td><td>PDN</td><td>10:00:02.000</td><td>FAIL</td></tr></table>")
+    rows = failedstep.parse_steps(failedstep.html_to_lines(html.encode())[0])
+    assert [(r["number"], r["name_raw"], r["status"], r["time_raw"]) for r in rows] == \
+        [(1, "Power", "pass", "10:00:00.000"), (3, "PDN", "fail", "10:00:02.000")]
+    summary = html.replace("<td>Failed Step</td><td>Step 3</td><td>Verdict</td><td>FAIL</td>",      # 요약 칸 순서가 달라도
+                           "<td>Verdict</td><td>FAIL</td><td>Failed Step</td><td>Step 3</td>")
+    assert _fail_of(failedstep.html_to_lines(summary.encode())[0]) == (3, "PDN")
+    assert _fail_of("||No||Step||Expected||Result||\n|1|Power on|UE on|PASS|\n|2|Attach|Accept|FAIL|\n") == (2, "Attach")
+    assert _fail_of("Step | No | Result\nPower | 1 | PASS\nAttach | 2 | FAIL\n") == (2, "Attach")
+    rows = failedstep.parse_steps("Time | No | Step | Result\n10:00:00.000 | 1 | Power | PASS\n10:00:05.000 | 2 | Attach | FAIL\n")
+    assert [(r["number"], r["name_raw"], r["time_raw"]) for r in rows] == \
+        [(1, "Power", "10:00:00.000"), (2, "Attach", "10:00:05.000")]
+
+
+def test_long_row_keeps_verdict_cell_past_500_chars():
+    """긴 IE 칸(500자 넘는 줄) 뒤의 판정 칸이 잘리지 않는다(칸 나누기 줄 상한 4000자)."""
+    rows = failedstep.parse_steps("No | Step | Note | Result\n1 | Power | ok | PASS\n2 | Attach | " + "x" * 600 + " | FAIL\n")
+    assert [(r["number"], r["status"]) for r in rows] == [(1, "pass"), (2, "fail")]
+
+
+def test_inconc_only_when_no_fail():
+    """리뷰 P1-2: FAIL이 있으면 첫 FAIL(앞의 INCONC는 경고만), FAIL이 없을 때만 첫 INCONC를 실패 스텝으로 쓰고 그렇다고 경고한다.
+    "N개 있다" 경고는 고른 판정의 수만 센다."""
+    path = Path(tempfile.mkdtemp()) / "steps.txt"
+    path.write_text("No | Step | Result\n1 | Power | PASS\n2 | Optional | INCONC\n3 | Attach | FAIL\n", encoding="utf-8")
+    rows, failed, warnings, _ = failedstep.read_steps(path)
+    assert (rows[failed]["number"], rows[failed]["status"]) == (3, "fail")
+    assert warnings == ["steps-file의 첫 FAIL 앞에 INCONC 스텝이 있다 — 첫 FAIL을 실패 스텝으로 썼다"]
+    path.write_text("No | Step | Result\n1 | Power | PASS\n2 | Register | INCONC\n3 | Retry | INCONC\n", encoding="utf-8")
+    rows, failed, warnings, _ = failedstep.read_steps(path)
+    assert (rows[failed]["number"], rows[failed]["status"]) == (2, "inconc")
+    assert warnings == [failedstep.INCONC_USED, "steps-file에 INCONC 스텝이 2개 있다 — 첫 번째를 실패 스텝으로 썼다"]
+    assert failedstep.read_steps_file(path, [])[0] == "2 | Register"
+    _, failed, warnings, _ = failedstep.read_steps(TC_HTML / "sim-inconc.html")
+    assert failed is not None and warnings == [failedstep.INCONC_USED]
+
+
+def test_sim1121_tc_html_with_site_columns_written_before_step_number():
+    """사내 site-defaults.yaml이 옛 열 이름(`step`이 이름 쪽에만, 판정 단어에 inconc 키 없음)이어도 장비 결과 HTML을 읽는다 — 이름
+    열로 본 `Step` 칸이 번호뿐이면 번호 열로 보고 이름 열(`Message / Action`)을 다시 찾는다."""
+    old = {"steps_status": {"pass": ["pass", "passed", "ok", "성공", "통과"], "fail": ["fail", "failed", "ng", "실패"]},
+           "steps_columns": {"number": ["no", "#", "step no", "번호"], "name": ["step", "action", "name", "description", "절차", "내용", "항목"],
+                             "status": ["result", "status", "verdict", "결과", "판정"], "start": ["start", "start time", "시작"],
+                             "end": ["end", "end time", "종료", "time", "시각"]}}
+    for name, want in (("sim-oneline-fail.html", (4, "00:08:22.164")), ("sim-inconc.html", (2, "17:47:25.100"))):
+        rows, failed, _, _ = failedstep.read_steps(TC_HTML / name, old)
+        assert failed is not None and (rows[failed]["number"], rows[failed]["time_raw"]) == want, name
+        assert not rows[failed]["name_raw"].isdigit(), name
