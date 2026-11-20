@@ -512,7 +512,8 @@ OLD = "VIPC_SETUP_DATA (token=0x0aa) 실패"
     "bq. " + OLD + "\n다른 지점에서 실패",
     "> " + OLD + "\n다른 지점에서 실패",
     "  >> " + OLD,
-], ids=["block", "inline", "multiline", "unclosed", "bq", "gt", "nested-gt"])
+    "{quote:1차 시험 결과}" + OLD + "{quote}\n다른 지점에서 실패",       # 제목 붙은 인용
+], ids=["block", "inline", "multiline", "unclosed", "bq", "gt", "nested-gt", "titled"])
 def test_quoted_text_is_not_a_clue(body):
     """R4(C-2): 인용한 옛 회차 글(`{quote}` 블록·`bq.`·`>` 줄)에서는 단서를 뽑지 않는다(재시험 요청 뒤 코멘트가 옛 실패를 인용)."""
     clues, drop = _x([OLD, "수정 SW로 재시험 요청드립니다.", body])
@@ -529,12 +530,12 @@ def test_quoted_token_is_not_counted_as_a_conflict_and_mid_line_gt_is_text():
 
 
 def test_retest_word_is_a_whole_english_word():
-    """R7(C-11): 영어 재시험 낱말은 낱말 단위 — `pretest`·`retesting`은 회차 경계가 아니다. 한글이 바로 붙은 `Retest결과`는 경계
-    (Python `\\b`는 한글을 낱말 글자로 봐 놓친다). 한글 낱말은 포함 비교 그대로."""
-    for word in ("pretest", "retesting"):
+    """R7(C-11): 영어 재시험 낱말은 낱말 단위 — `pretest`는 회차 경계가 아니고 활용형(`retests`·`retested`·`retesting`)은 경계.
+    한글이 바로 붙은 `Retest결과`도 경계(Python `\\b`는 한글을 낱말 글자로 봐 놓친다). 한글 낱말은 포함 비교 그대로."""
+    for word in ("pretest", "pretested", "retester"):
         clues, drop = _x([f"{word} 결과 VIPC_SETUP_DATA (token=0x0e1) 실패"])
         assert _keys(clues) == [(1, "ipc", "0x0e1")] and drop["old_round"] == 0, word
-    for word in ("Retest결과", "RETEST", "re-test", "재시험결과"):
+    for word in ("Retest결과", "RETEST", "re-test", "retested", "retesting", "Retests", "재시험결과"):
         clues, drop = _x([OLD, f"{word} 공유", "VIPC_SETUP_DATA (token=0x0e1) 실패"])
         assert _keys(clues) == [(3, "ipc", "0x0e1")] and drop["old_round"] == 1, word
 
@@ -560,19 +561,65 @@ def test_reference_only_log_line_is_held_with_its_candidate(seed_db):
 
 def test_submitter_note_is_kept_apart_from_clues(seed_db):
     """R5: 포털이 넘긴 제출자 참고 글(`fields.tt_note`)은 issue.json `text.note`·analysis.json `issue.note`(판단 근거 아님 표시)로만
-    가고 단서 추출은 읽지 않는다(옛 포털은 설명 칸으로 보내 단서가 됐다 — C-3)."""
+    가고 단서 추출은 읽지 않는다(옛 포털은 설명 칸으로 보내 단서가 됐다 — C-3). analysis.json 칸 이름은 `submitter_note`(이슈 DB
+    레코드 note와 다르게)."""
     note = "그래도 분석을 요청한 이유: VIPC_SETUP_DATA (token=0x0e1) 는 정상인데 왜 연결이 안 되는지"
     a, out = _run(seed_db, "note", fields={"summary": "데이터 연결 실패", "tt_note": note}, comments=["로그 첨부했습니다."])
     assert a["decision"]["reason"] == "no_reference", a["decision"]
     assert json.loads((out / "issue.json").read_text(encoding="utf-8"))["text"]["note"] == note
-    assert a["issue"]["note"].startswith("제출자 참고(판단 근거·단서 아님): 그래도 분석을")
+    from triagelib import report as rep
+    # 4KB를 넘으면 가장 먼저 짧은 표시로 바뀐다(작업 경로 길이에 따라 — 근거·판단 사건보다 먼저)
+    assert a["issue"]["submitter_note"].startswith("제출자 참고(판단 근거·단서 아님): 그래도 분석을")         or a["issue"]["submitter_note"] == rep.NOTE_GONE
     a, _ = _run(seed_db, "nonote", comments=["로그 첨부했습니다."])
-    assert "note" not in a["issue"]
+    assert "submitter_note" not in a["issue"]
     # 포털 NOTE_MAX(2000자)까지 잘리지 않고 issue.json에 간다. analysis.json은 4KB 예산 안에서만(넘으면 fit이 600자로 줄이고 뺀다)
     long = "앞 안내. 제출자 이유: " + "x" * 1980 + " 끝"
     a, out = _run(seed_db, "longnote", fields={"summary": "데이터 연결 실패", "tt_note": long[:2000]}, comments=["로그 첨부했습니다."])
     assert json.loads((out / "issue.json").read_text(encoding="utf-8"))["text"]["note"] == long[:2000]
     from triagelib import driver
-    got = (a["issue"].get("note") or driver.NOTE_LABEL).removesuffix("…")
-    assert (driver.NOTE_LABEL + long[:2000]).startswith(got) and driver.NOTE_MAX == 2000
-    assert len(got) >= 590, len(got)      # 옛 240자 상한보다 길게 간다(4KB에서 줄어도 600자)
+    got = a["issue"]["submitter_note"].removesuffix("…")
+    assert got == rep.NOTE_GONE or ((driver.NOTE_LABEL + long[:2000]).startswith(got) and len(got) >= 590), got[:80]
+    assert driver.NOTE_MAX == 2000       # 포털 NOTE_MAX(옛 상한 240자)
+
+
+def test_fit_drops_submitter_note_before_events_and_evidence():
+    """리뷰 P1: 4KB 맞춤은 제출자 참고 글을 가장 먼저 줄이고(600자 → `issue.json text.note 참고`) 그 뒤에 판단 사건을 줄인다 —
+    줄여도 기준에 붙은 사건(ref)은 남고 1위 근거는 그대로다. `truncated`는 넣은 뒤에도 4096B 안."""
+    from triagelib import report as rep
+
+    ev = [{"ts": f"t{i}", "tag": "T", "msg": "m" * 60} for i in range(6)]
+
+    def result(note_len: int, warn: int = 0) -> dict:
+        return {"issue": {"summary": "s", "submitter_note": "n" * note_len},
+                "candidates": [{"cause": "DATA-003-01", "evidence": list(ev)}, {"cause": "NETWORK-001-03", "evidence": list(ev)}],
+                "decision": {"state": "held", "reason": "ineligible", "events": [
+                    {"type": "NETWORK-001", "ref": False, "cause": "NETWORK-001-03"},
+                    {"type": "DATA-003", "ref": True, "cause": "DATA-003-01"},
+                    {"type": "DATA-003", "ref": False, "cause": "DATA-003-01"}]},
+                "files": {"report": "r"}, "must_show": [], "warnings": ["w" * warn] if warn else []}
+    out = rep.fit(result(3000))
+    assert len(out["issue"]["submitter_note"]) == 600 and len(out["candidates"][1]["evidence"]) == 6
+    assert [e["ref"] for e in out["decision"]["events"]] == [False, True, False]     # 글을 줄이면 맞아 사건·근거는 그대로
+    out = rep.fit(result(3000, warn=2400))
+    assert out["issue"]["submitter_note"] == rep.NOTE_GONE and len(out["decision"]["events"]) == 3
+    out = rep.fit(result(3000, warn=3000))
+    assert [e["ref"] for e in out["decision"]["events"]] == [True] and len(out["candidates"][0]["evidence"]) == 6   # ref 사건은 남는다
+    assert len(rep.dumps(out).encode("utf-8")) + 1 <= rep.ANALYSIS_MAX
+    # truncated 자리: 키 없이 4096B에 딱 맞는 결과도 키를 넣은 뒤 4096B를 넘지 않는다(옛 코드는 넣고 나서 넘었다)
+    base = {"files": {"report": "r"}, "must_show": [], "warnings": [""]}
+    tight = {**base, "warnings": ["x" * (rep.ANALYSIS_MAX - 1 - len(rep.dumps(base).encode("utf-8")))]}
+    assert len(rep.dumps(tight).encode("utf-8")) + 1 == rep.ANALYSIS_MAX
+    out = rep.fit(tight)
+    assert len(rep.dumps(out).encode("utf-8")) + 1 <= rep.ANALYSIS_MAX and out["truncated"] is False
+
+
+def test_script_clue_hold_line_names_the_candidate_like_the_portal():
+    """리뷰 P1: 스크립트 단서 보류(comment_unconfirmed, via.origin script)의 판단 줄은 포털 카드와 같은 문구 — 후보는 ref 사건 원인."""
+    from triagelib import report as rep
+
+    dec = {"state": "held", "reason": "ineligible", "check": {"why": "comment_unconfirmed", "via": {"origin": "script"}},
+           "events": [{"ref": False, "cause": "NETWORK-001-03"}, {"ref": True, "cause": "DATA-003-01"}]}
+    assert "(코멘트에서 자동으로 찾은 지점 — 그 지점의 원인 후보 DATA-003-01, 확인 필요)" in rep.decision_line(dec, [])
+    assert "(코멘트에서 자동으로 찾은 지점 — 확인 필요)" in rep.decision_line({**dec, "events": []}, [])
+    model = {**dec, "check": {"why": "comment_unconfirmed", "via": {"origin": "problem"}}}      # 문제 파악 단서 + comment_adopt 끔
+    assert "코멘트에 적힌 위치라" in rep.decision_line(model, [])

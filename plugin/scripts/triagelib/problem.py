@@ -474,7 +474,8 @@ def _clue_problem(c: dict, sources: dict, prefix: str = "", error_prefix: str = 
 # --- 코멘트 단서 자동 추출(모델 없이 — `run`이 새 problem.json이 없을 때 쓴다) ------------------------------------------
 
 RETEST_WORDS = ("retest", "re-test", "재시험", "재테스트")      # 공개 기본값 — 사내 낱말은 설정 `eligibility.retest_words`
-QUOTE_BLOCK = re.compile(r"(?is)\{quote\}.*?(?:\{quote\}|\Z)")      # Jira 인용 블록(한 줄 안·여러 줄, 닫히지 않으면 글 끝까지)
+# Jira 인용 블록(한 줄 안·여러 줄, 닫히지 않으면 글 끝까지, 제목 붙은 `{quote:제목}` 포함). ponytail: 그 밖의 모양({noformat} 등)은 사내 측정 뒤
+QUOTE_BLOCK = re.compile(r"(?is)\{quote(?::[^}]*)?\}.*?(?:\{quote\}|\Z)")
 QUOTE_LINE = re.compile(r"^\s*(?:bq\.|>)")                           # Jira `bq.`·메일 `>` 인용 줄
 HALF_MASK = re.compile(r"<[A-Z][A-Z0-9_]*(?:#\d*|:[A-Z0-9]*| \d*B?)?$")     # 잘린 끝의 마스킹 토큰 앞부분(`<APN#1`·`<HEXDUMP 1`)
 IPC_TOKEN = re.compile(r"(?i)\btoken\s*[=:(]\s*(0x[0-9A-Fa-f]{1,8}|[0-9]{1,10})(?![A-Za-z0-9_])")     # lookat `_TOKEN`의 ASCII판
@@ -496,10 +497,10 @@ def _own_text(text) -> str:
 
 
 def _retest(text, words) -> bool:
-    """재시험 낱말: 영어(ASCII) 낱말은 앞뒤가 영문자가 아닐 때만(`pretest`·`retesting`은 아님, Python `\\b`는 한글을 낱말 글자로 봐
-    "Retest결과"를 놓친다), 한글 낱말은 포함 비교."""
+    """재시험 낱말: 영어(ASCII) 낱말은 앞이 영문자가 아니고 뒤는 활용형(`s`·`ed`·`ing`)까지 — `pretest`는 아님, `retested`·
+    `retesting`은 맞음. Python `\\b`는 한글을 낱말 글자로 봐 "Retest결과"를 놓친다(여기선 맞음). 한글 낱말은 포함 비교."""
     t = str(text or "").casefold()
-    return any(re.search(r"(?<![a-z])" + re.escape(w) + r"(?![a-z])", t) if w.isascii() else w in t for w in words)
+    return any(re.search(r"(?<![a-z])" + re.escape(w) + r"(?:s|ed|ing)?(?![a-z])", t) if w.isascii() else w in t for w in words)
 
 
 def _line_clues(where, text: str, name_re, error_prefix: str) -> list[dict]:
