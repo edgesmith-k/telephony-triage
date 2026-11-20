@@ -106,6 +106,24 @@ def test_stage5_problem_input_answer_upper_bound():
     assert all(r["held_cause"] == r["expect"] for r in held) and not any(r["adopted"] for r in off["runs"]), held
 
 
+def test_comment_clues_are_location_candidates_and_look_at_turns_them_off():
+    """코멘트 단서 자동 추출(모델 없음, issue_file이 있는 항목): 스크립트 단서는 위치 후보로만(R3, A474) — comments 조건 채택 0.
+    TOKPOS·CLUEPOS(token·기준 줄 없이 코멘트만)는 그 지점 사건의 원인(정답)을 싣고 comment_unconfirmed로 보류(옛 기대는 그 둘 채택),
+    재시험 사례(RETEST·RETESTX)는 단서 없음으로 보류. look_at+comments는 자동 추출이 꺼져 항목마다 look_at과 같다. 실패 지점은
+    코멘트 출처라 confirmed가 없다(found만)."""
+    now = _current()
+    s = now["by_condition"]["comments"]
+    assert (s["accepted_correct"], s["accepted_wrong"], s["location_confirmed"]) == (0, 0, 0), s
+    runs = [r for r in now["runs"] if r["condition"] == "comments"]
+    held = [r for r in runs if r["held_why"] == "comment_unconfirmed"]
+    assert sorted(r["key"] for r in held) == ["CLUEPOS-1", "TOKPOS-1"] and all(r["held_cause"] == r["expect"] for r in held), held
+    assert {r["key"]: r["held_why"] for r in runs if r["key"].startswith("RETEST")} == {"RETEST-1": None, "RETESTX-1": None}
+    look = {r["key"]: r for r in now["runs"] if r["condition"] == "look_at"}
+    both = [r for r in now["runs"] if r["condition"] == "look_at+comments"]
+    assert both and all({k: r[k] for k in ROW if k != "condition"} == {k: look[r["key"]][k] for k in ROW if k != "condition"}
+                        for r in both)
+
+
 if __name__ == "__main__" and "--update" in sys.argv:
     try:
         BASELINE.write_text(json.dumps(current(), ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")

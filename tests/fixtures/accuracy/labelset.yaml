@@ -8,6 +8,8 @@ conditions:
 - look_at
 - problem
 - look_at+problem
+- comments
+- look_at+comments
 items:
 - key: MMX-1
   logs:

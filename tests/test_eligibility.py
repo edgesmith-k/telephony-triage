@@ -705,6 +705,25 @@ def test_clue_ipc_point_and_comment_adopt_switch():
         ("held", "symptom_not_found", "other_failure_first")     # 2초 안 첫 실패가 허용 유형이 아님(R1 — 옛 기대 typeless_failure_within_link)
 
 
+def test_clue_only_decision_needs_every_clue_confirmed():
+    """PR #170 리뷰 P0: 단서만 있을 때 단서 하나라도 확인 못 하면(보류 결과, 로그에서 찾았는데 못 씀) 단서 판정 전체를 보류한다 —
+    실패 단서는 못 찾고 참고로 붙인 다른 줄만 사건을 잡아 그 원인으로 채택하던 길(재현 D4·D4b~e). 출처(script·problem) 무관,
+    명시 기준이 있으면 지금 규칙 그대로."""
+    good = clue(point(16, 120))                                           # NETWORK-001 사건 줄(참고 줄)
+    many = clue(point(4, 199, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 0xE3}, phone=None), places=2)
+    ok_rsp = clue(point(4, 199, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 0xE3, "ok": True}, phone=None))
+    assert outcome(el.decide(EVENTS, [good])) == ("accepted", "anchored_top", "N3")
+    assert outcome(el.decide(EVENTS, [many, good])) == ("held", "ambiguous", "locations")
+    assert outcome(el.decide(EVENTS, [good, ok_rsp])) == ("held", "ineligible", "no_event_at_reference")
+    held = el.decide(EVENTS, [good], unconfirmed=1)                      # 로그에 없음·시각 규칙으로 버림·token 충돌
+    assert outcome(held) == ("held", "ambiguous", "sources") and [e["type"] for e in held["events"]] == ["NETWORK-001"]
+    assert outcome(el.decide(EVENTS, [], unconfirmed=2)) == ("held", "no_reference", None)
+    assert outcome(el.decide(EVENTS, [point(16, 120), many], unconfirmed=1)) == ("accepted", "anchored_top", "N3")   # 명시 기준
+    # 명시 기준 + 분석 구간 밖에서 찾은 단서(사건 목록에 없음) = 다른 사건(H07)
+    far = clue(point(1, -900, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 0xAA}, phone=None), outside=True)
+    assert outcome(el.decide(EVENTS, [point(16, 120), far])) == ("held", "ambiguous", "sources")
+
+
 def test_clue_keeps_real_hold_reason_whether_comment_adopt_or_not():
     """리뷰 P1-1: 단서 사건의 원인이 실패 뒤에만 있으면 comment_adopt와 무관하게 그 사유(comment_unconfirmed로 가리지 않는다)."""
     for adopt in (False, True):
@@ -779,7 +798,7 @@ def test_run_reads_problem_only_for_same_input_and_fresh_clues(seed_db):
     assert d["location"] == {"state": "found", "source": "comment", "kind": "point"}
     bundle = json.loads((out / "reference.json").read_text(encoding="utf-8"))
     assert bundle["refs"][0]["source"] == "comment" and bundle["comment_adopt"] is True
-    assert "- 단서 위치: 코멘트 2번 단서(ipc) 로그에서 찾음" in (out / "report.md").read_text(encoding="utf-8")
+    assert "- 단서 위치: 코멘트 2번 단서(ipc, 문제 파악) 로그에서 찾음" in (out / "report.md").read_text(encoding="utf-8")
     # 가설·모듈·모름·side·회차는 판정에 쓰지 않는다: 그 칸만 다른 problem.json은 기준·판정이 같다
     noise = {"hypotheses": ["NETWORK-001 비행기 모드가 원인"], "modules": ["data"], "unknown": ["CP 로그 없음"],
              "rounds": {"count": 3, "last_from_comment": 1, "same_failure": "no"}}
@@ -840,11 +859,16 @@ def test_run_clue_text_quotes_newline_mask_token_and_dedup(seed_db):
     odd = {**line, "comment": 4, "quote": 'x "quoted" (.*) [a-z]+ \\ $HOME; rm -rf'}
     a, out = _problem_run(seed_db, "text", "cluepos.log", [line, odd, {**line, "comment": 5}])
     d = a["decision"]
-    assert (d["state"], d["location"]) == ("accepted", {"state": "found", "source": "comment", "kind": "near"})
+    # 로그에서 못 찾은 단서(4번)가 있으면 찾은 단서만으로 채택하지 않는다(PR #170 리뷰 P0) — 4번이 없으면 채택
+    assert (d["state"], d["reason"], d["check"]["why"], d["location"]) ==         ("held", "ambiguous", "sources", {"state": "found", "source": "comment", "kind": "near"})
     bundle = json.loads((out / "reference.json").read_text(encoding="utf-8"))
     assert [r["comment"] for r in bundle["refs"]] == [3] and [x["comment"] for x in bundle["dropped"]] == [4]
+    a, _ = _problem_run(seed_db, "text1", "cluepos.log", [line, {**line, "comment": 5}])
+    assert (a["decision"]["state"], a["decision"]["location"]["kind"]) == ("accepted", "near")
     trace = [json.loads(x) for x in (out / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
-    assert sum(1 for r in trace if r.get("step") == "3-clue") == 2          # 3번·4번만(5번은 3번과 같은 글)
+    assert sum(1 for r in trace if r.get("step") == "3-clue") == 1          # 로그는 한 번만 읽는다
+    finds = json.loads((out / "clue-at.json").read_text(encoding="utf-8"))["finds"]
+    assert len(finds) == 2                                                  # 3번·4번만(5번은 3번과 같은 글)
     name = {"comment": 2, "kind": "ipc_name", "name": "VIPC_SETUP_DATA", "token": None, "quote": "VIPC_SETUP_DATA 실패",
             "side": "cp", "stale": False}
     a, _ = _problem_run(seed_db, "name", "cluepos.log", [name])

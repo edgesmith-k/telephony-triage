@@ -271,22 +271,31 @@ def bridge(event: dict, cfg: dict, kind: str) -> str:
         issue = data.get("issue") if isinstance(data, dict) and isinstance(data.get("issue"), dict) else data
         if not isinstance(issue, dict):
             return "telephony-triage: Jira 응답이 객체가 아니라 저장하지 않았다(원문은 표시하지 않는다)."
-        comments, comments_format = raw.get("comments"), raw.get("comments_format")
+        comments, comments_format, page = raw.get("comments"), raw.get("comments_format"), raw.get("comments_page")
         raw = dict(issue)
         raw.setdefault("key", key)      # 키가 응답 밖(도구 입력)에서 온 트래커도 extract가 같은 키를 본다
         if comments and not raw.get("comments"):
             raw["comments"] = comments
             if comments_format:
                 raw["comments_format"] = comments_format
+            if page:
+                raw["comments_page"] = page
     elif shape == "text":       # 자유 텍스트 코멘트 응답: 한 덩어리를 코멘트 1건으로(extract가 마스킹한다)
         raw.setdefault("key", key)
         raw["comments"] = [{"body": data["text"]}]
         raw["comments_format"] = "text"
+        raw.pop("comments_page", None)      # 전체 수를 모른다 — 코멘트 단서 자동 추출을 하지 않는다
     else:
         comments = data.get("comments") if isinstance(data, dict) else data
         raw.setdefault("key", key)
         raw["comments"] = comments if isinstance(comments, list) else [comments]
         raw.pop("comments_format", None)
+        # 코멘트 도구 응답의 전체 수·건너뛴 수(같은 출처) — jira_fields가 일부만 읽었는지 본다(없으면 자동 추출 안 함)
+        page = {k: data[k] for k in ("total", "startAt") if isinstance(data, dict) and type(data.get(k)) is int}
+        if page:
+            raw["comments_page"] = page
+        else:
+            raw.pop("comments_page", None)
     raw_path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8", newline="\n")
     try:
         raw_path.chmod(0o600)

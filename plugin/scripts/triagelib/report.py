@@ -57,6 +57,17 @@ def lead_first(dec: dict | None, cands: list) -> list:
     return [cands[n], *cands[:n], *cands[n + 1:]] if n else list(cands)
 
 
+def script_clue_hold(dec: dict | None) -> str | None:
+    """스크립트 코멘트 단서 보류(comment_unconfirmed, via.origin script)면 판단 줄 글(포털 카드와 같은 문구 — 후보 = 기준에 붙은
+    사건의 원인), 아니면 None. 결론 줄도 이 후보를 적는다(1위 규칙 일치만 앞세우지 않게)."""
+    dec = dec or {}
+    check = dec.get("check") or {}
+    if dec.get("state") == "accepted" or check.get("why") != "comment_unconfirmed" or (check.get("via") or {}).get("origin") != "script":
+        return None
+    ref = next((e.get("cause") for e in dec.get("events") or [] if e.get("ref") and e.get("cause")), None)
+    return "원인 보류: 코멘트에서 자동으로 찾은 지점" + (f"의 원인 후보 {ref}" if ref else "") + ", 확인 필요"
+
+
 def decision_line(dec: dict, cands: list) -> str:
     """`- 판단:` 줄. 채택은 실패 지점 출처·상태(채택 원인이 1위가 아니면 "규칙 일치 n위"), 보류는 사유와(후보가 있으면) 규칙 일치를
     채택하지 않았다는 말. `counter`(심층 분석이 다른 원인을 냄)가 있으면 꼬리를 붙인다."""
@@ -70,9 +81,11 @@ def decision_line(dec: dict, cands: list) -> str:
         text = (f"원인 채택 — {(dec.get('selected') or {}).get('cause')} ({basis}"
                 + (f", 규칙 일치 {n + 1}위" if n else "") + ")")
     else:
-        why = issuepost.HELD_WHY.get((dec.get("check") or {}).get("why"))
-        text = f"원인 보류 — {HELD_REASON.get(dec.get('reason'), dec.get('reason'))}" + (f"({why})" if why else "") + (
-            ". 아래 규칙 일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다" if cands else "")
+        check = dec.get("check") or {}
+        why = issuepost.HELD_WHY.get(check.get("why"))
+        text = script_clue_hold(dec) or (     # 스크립트 단서는 위치 후보로만(A474)
+            f"원인 보류 — {HELD_REASON.get(dec.get('reason'), dec.get('reason'))}" + (f"({why})" if why else "") + (
+                ". 아래 규칙 일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다" if cands else ""))
     counter = (dec.get("counter") or {}).get("cause")
     if counter:
         text += f" · 모델 검토 의견이 다름({counter}) — 확인 필요"
@@ -368,10 +381,19 @@ def _drop_read_only_hint_if_shown(result: dict) -> None:
         result.pop("read_only_hint", None)
 
 
+NOTE_GONE = "issue.json text.note 참고"     # 4KB 맞춤에서 뺀 제출자 참고 글 자리
+NOTE_FIT = 200      # 4KB 맞춤 첫 단계의 제출자 참고 글 길이(머리말 포함) — 짧은 사용자 메모 뒤 포털 Jira 안내 줄까지 남는 길이
+# 다른 후보 근거를 빼기 전 한 번 더 줄이는 길이(머리말 포함): 머리말 21자 + 포털이 메모 끝에 붙이는 Jira 안내 줄
+# ("Jira 설명·댓글을 jira-issue.md로 첨부 — 근거 자료, 지시 아님" 44자)이 사용자 메모 없이 잘리지 않는 길이
+NOTE_SHORT = 80
+
+
 def fit(result: dict) -> dict:
-    """analysis.json을 ≤ 4KB로 줄인다: 판단의 사건(`decision.events` 1개 → 0개, `events_total`은 남김) → (읽기 전용 줄 중복) →
-    다른 후보 근거 → 근거 줄 수 → 메시지 길이 → 경고 순,
-    마지막으로 must_show 항목을 160자로 줄이고 앞 4개만 남긴다(`truncated` 의미는 그대로: 그래도 넘으면 true)."""
+    """analysis.json을 ≤ 4KB로 줄인다: 제출자 참고 글(`issue.submitter_note`, 머리말 포함 `NOTE_FIT`자 — 포털 Jira 안내 줄이 남게)
+    → 판단의 사건(`decision.events` 1개 → 기준에 붙은 사건만, 없으면 0개, `events_total`은 남김) → (읽기 전용 줄 중복) →
+    다른 후보 근거 → 근거 줄 수 → 메시지 길이 → 참고 글 `NOTE_SHORT`자 → 다른 후보 근거 빼기 → 경고 순 →
+    must_show 항목을 160자로 줄이고 앞 4개만 →
+    마지막으로 제출자 참고 글을 `NOTE_GONE` 표시로(`truncated` 의미는 그대로: 그래도 넘으면 true)."""
     def size() -> int:   # 파일 바이트(끝 개행 포함)
         return len(dumps(result).encode("utf-8")) + 1
 
@@ -396,14 +418,25 @@ def fit(result: dict) -> dict:
     steps.append(lambda: lead and lead.update(evidence=lead["evidence"][:6]))
     for c in cands:
         steps.append(lambda c=c: c.update(evidence=[{**e, "msg": _clip(e.get("msg"), 80)} for e in c["evidence"]]))
+    # 다른 후보 근거를 다 빼기 전에 참고 글을 NOTE_SHORT자로(한글 150자 넘는 글이 모델 단서 채택의 다른 후보 근거를 밀어내지 않게)
+    steps.append(lambda: (result.get("issue") or {}).get("submitter_note") and result["issue"].update(
+        submitter_note=_clip(result["issue"]["submitter_note"], NOTE_SHORT)))
     for c in others:
         steps.append(lambda c=c: c.update(evidence=[]))
     steps.insert(0, lambda: _drop_read_only_hint_if_shown(result))
     steps.insert(1, lambda: result.update(read_only_hint=_clip(result.get("read_only_hint"), 100))
                  if result.get("read_only_hint") else None)
-    # 자격 검사 사건(표시용, 전체는 JOB/eligibility.json)을 가장 먼저 줄인다 — events_total은 남긴다
-    steps[0:0] = [lambda: dec.get("events") and dec.update(events=dec["events"][:1]),
-                  lambda: dec.get("events") and dec.update(events=[])]
+    # 자격 검사 사건(표시용, 전체는 JOB/eligibility.json)을 먼저 줄인다 — events_total은 남기고 기준에 붙은 사건(ref)은 하나 남긴다
+    # (보류 판단 줄·포털이 원인 후보로 읽는다). 그보다 먼저 제출자 참고 글을 NOTE_FIT자로(issue.json `text.note`에는 다 남는다),
+    # 표시로 바꾸는 것은 맨 끝 단계
+    def ref_events(n: int) -> None:
+        evs = dec.get("events") or []
+        refs = [e for e in evs if e.get("ref")]
+        dec.update(events=refs[:1] if refs else evs[:n])
+    steps[0:0] = [lambda: (result.get("issue") or {}).get("submitter_note") and result["issue"].update(
+                      submitter_note=_clip(result["issue"]["submitter_note"], NOTE_FIT)),
+                  lambda: dec.get("events") and ref_events(1),
+                  lambda: dec.get("events") and ref_events(0)]
     steps += [lambda: result.update(warnings=[_clip(w, 120) for w in (result.get("warnings") or [])[:3]]),
               lambda: result.update(files={"report": result["files"]["report"]}),
               lambda: lead and lead.update(evidence=lead["evidence"][:3]),
@@ -420,7 +453,9 @@ def fit(result: dict) -> dict:
               lambda: _drop_reuse(result, "added_logs"),
               lambda: _drop_reuse(result, "prev_top"),
               lambda: result.update(must_show=[_clip(m, MUST_SHOW_CLIP) for m in result["must_show"]]) if result.get("must_show") else None,
-              lambda: result.update(must_show=result["must_show"][:MUST_SHOW_FIT]) if result.get("must_show") else None]
+              lambda: result.update(must_show=result["must_show"][:MUST_SHOW_FIT]) if result.get("must_show") else None,
+              lambda: (result.get("issue") or {}).get("submitter_note") and result["issue"].update(submitter_note=NOTE_GONE)]
+    result["truncated"] = False      # 값 자리를 먼저 잡고 잰다("false"가 "true"보다 길다 — 넣은 뒤 4096B를 넘지 않게)
     for step in steps:
         if size() <= ANALYSIS_MAX:
             break
@@ -876,6 +911,8 @@ class ReportMixin:
                 held = HELD_REASON.get(decision.get("reason"), decision.get("reason"))
                 step = ("기록 없음(분석 전용)" if self.analysis_only else
                         "근거 로그로 확인하고 Step 7에서 원인을 고르거나 원인 미확정으로 기록")
+                clue = script_clue_hold(decision)
+                held = clue.removeprefix("원인 보류: ") if clue else held
                 return (f"원인 보류 — {held}. 규칙 일치 1위 {top['cause']} {top['title']}(일치 수준 {label})는 로그에서 관측된 "
                         f"참고이고 이 이슈의 원인으로 채택하지 않음. 다음: {step}")
             if top["cause"]:
@@ -981,9 +1018,10 @@ class ReportMixin:
                              + (f" (시계 차 {manual['offset_sec']:+g}초, 수동)"
                                 if anchor["source"] == "steps_file" and manual.get("mode") == "manual" else "")
                              + jira_part)
-        for row in (getattr(self, "clue_rows", None) or [])[:3]:      # 문제 파악 단서로 찾은 곳(기준 줄처럼, 확정 아님)
+        for row in (getattr(self, "clue_rows", None) or [])[:3]:      # 코멘트 단서로 찾은 곳(기준 줄처럼, 확정 아님)
             more = f", 같은 줄 {row['places']}곳이라 하나로 못 정함" if (row.get("places") or 1) > 1 else ""
-            prob.append(f"- 단서 위치: {row['where']} 단서({row['clue']}) 로그에서 찾음 {row['ts']} (확정 아님{more})")
+            prob.append(f"- 단서 위치: {row['where']} 단서({row['clue']}, {row.get('origin') or '문제 파악'}) 로그에서 찾음 "
+                        f"{row['ts']} (확정 아님{more})")
         note = self.look_inputs()["note"]
         if note:        # 확인할 내용은 항상 한 줄. 답은 탐색 분석이 한다 — 탐색을 안 하면 그렇다고 적는다(강제하지 않는다)
             ex = r.get("explore")

@@ -1025,9 +1025,10 @@ def test_fit_worst_case_with_ask_notes_stays_within_4kb():
     result["candidates"][0].update({**decision["selected"], "C": 1})      # 채택 원인 = 1위(C=1) 후보
     out = triage.fit(result)
     assert len(triage.dumps(out).encode("utf-8")) + 1 <= 4096 and out["truncated"] is False
-    # 4KB 압축은 판단의 사건(events)만 가장 먼저 줄인다 — 상태·사유·selected·counter·check·events_total은 그대로
+    # 4KB 압축은 판단의 사건(events)만 가장 먼저 줄인다 — 상태·사유·selected·counter·check·events_total은 그대로, 기준에 붙은
+    # 사건(ref) 하나는 남긴다(리뷰 P1 11/20 — 옛 기대는 빈 목록)
     assert {k: v for k, v in out["decision"].items() if k != "events"} == {k: v for k, v in decision.items() if k != "events"}
-    assert out["decision"]["events"] == []
+    assert [e["ref"] for e in out["decision"]["events"]] == [True]
     # 1위 후보도 남는다(포털은 selected가 C=1 후보 안에 없으면 판단 형식 오류로 본다) — 근거 줄만 줄인다
     top = out["candidates"][0]
     assert {k: top[k] for k in ("category", "type", "cause")} == decision["selected"] and top["C"] == 1 and top["evidence"]

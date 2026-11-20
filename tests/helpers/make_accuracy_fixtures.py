@@ -12,8 +12,8 @@
 - `problems/<KEY>.json`: 문제 파악 결과의 **정답 입력**(라벨에서 손으로 쓴 problem.json 모양 — 모델 출력 아님, 단계 5-2 조건
   `problem`·`look_at+problem`의 "정답 입력일 때의 상한"). 입력 해시(`source_sha256`)는 `offline_eval.py`가 실행 때 찍는다.
 - `y10/<사례>.log`·`y10/y10.json`: 자격 검사 합성 6건(단계 5)과 기준·기대 결과 — 라벨셋 밖, `tests/test_eligibility.py`가 돈다
-- `issues/<KEY>.yaml`: 코멘트가 필요한 사례의 Jira 글(`triage.py --issue-file` 모의 티켓 형식). **지금 코드는 선별에서 코멘트를
-  쓰지 않아 읽히지 않는다** — 단계 4가 쓸 입력을 미리 고정해 둔다.
+- `issues/<KEY>.yaml`: 코멘트가 필요한 사례의 Jira 글(`triage.py --issue-file` 모의 티켓 형식). 조건 `comments`·`look_at+comments`
+  (코멘트 단서 자동 추출)가 이 파일로 돈다(`offline_eval.py`가 발생 시각 칸을 빼서 넘긴다).
 
 `--seed-db DIR`: 시드 계획 다섯 개를 새 뼈대(`tools/make_db_skeleton.py`)에 `db_add.py apply`로 차례로 적용한 이슈 DB를 DIR에
 만든다(git·검증 없이 — 라벨셋을 돌릴 DB. 커밋하지 않는다).
@@ -42,7 +42,7 @@ OUT = REPO / "tests" / "fixtures" / "accuracy"
 YEAR, TZ, DAY = 2026, "+09:00", "11-14"
 STAMP = re.compile(r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3})(.*)$")
 HEAD = "-- [합성] 분석 정확도 조합 로그. 시드 fixture 줄과 합성 VIPC_ 줄을 시각만 옮겨 이어 붙였다(tests/helpers/make_accuracy_fixtures.py)."
-CONDITIONS = ["no_time", "time", "look_at", "problem", "look_at+problem"]
+CONDITIONS = ["no_time", "time", "look_at", "problem", "look_at+problem", "comments", "look_at+comments"]
 NOT_GENERATED = {"baseline.json"}     # 이 폴더에 있지만 생성기가 만들지 않는 것(tests/test_accuracy_baseline.py --update)
 
 
@@ -368,7 +368,9 @@ def build(out: Path) -> list[Path]:
                                                  "customfield_10001": item.get("occurred_at", "").replace("+09:00", "+0900"),
                                                  "customfield_10006": item.get("sim_slot", "0")},
                   "comments": [{"author": "mock.tester", "created": "2026-11-14T11:00:00+0900", "body": "로그 첨부했습니다."},
-                               {"author": "mock.cp", "created": "2026-11-14T13:00:00+0900", "body": case["comment"]}]}
+                               {"author": "mock.cp", "created": "2026-11-14T13:00:00+0900", "body": case["comment"]}],
+                  # Jira 코멘트 도구 응답의 전체 수(jira_bridge가 남기는 모양) — 코멘트 단서 자동 추출은 전부 읽었을 때만
+                  "comments_page": {"startAt": 0, "total": 2}}
         path = out / item["issue_file"]
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(yaml.safe_dump(ticket, allow_unicode=True, sort_keys=False), encoding="utf-8", newline="\n")

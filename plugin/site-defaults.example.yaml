@@ -241,14 +241,19 @@ explore:
 #   remote: https://<GHE 호스트>/<owner>/<repo>.git   # TODO(SITE:S33) 주소·partial clone 지원·사용자 PC git 버전(≥2.25)
 #   base_branch: main
 
-# 자격 검사(단계 5-2): 문제 파악 결과(JOB/problem.json)를 원인 채택 판정에 어떻게 쓸지 (02-config.md). 사용자 config가 덮는다.
+# 자격 검사(단계 5-2): 문제 파악 결과(JOB/problem.json)·Jira 코멘트 단서를 원인 채택 판정에 어떻게 쓸지 (02-config.md). 사용자 config가 덮는다.
 eligibility:
-  comment_adopt: true         # 기준 줄·마커 없이 코멘트 단서로만 찾은 실패 지점에서 원인을 채택할지(사용자 결정 Y1: 허용).
+  comment_adopt: true         # 기준 줄·마커 없이 문제 파악 단서로만 찾은 실패 지점에서 원인을 채택할지(사용자 결정 Y1: 허용).
+                              # 스크립트가 코멘트에서 뽑은 단서는 이 값과 상관없이 위치 후보로만(보류, A474)
                               # 채택해도 실패 지점은 found(단서 위치, 확정 아님)라 확실한 일치가 아니고 본 분석을 건너뛰지 않는다.
                               # false면 그 사건을 싣고 원인 보류(ineligible/comment_unconfirmed)
   use_problem_types: true     # 문제 파악의 증상 유형(symptom.types·not_in_db)으로 근처·TC 파일 구간·FAIL 마커 구간·IPC 점의 사건을 거를지.
                               # 첫 실패(구간은 FAIL에 가장 가까운 실패)가 그 유형일 때만 채택 — 다른 유형 실패를 건너뛰지 않는다.
                               # 사내 모델이 유형을 자주 틀리면 false — 그때는 5-1처럼 근처·TC 파일 구간은 보류
+  comment_clues: true         # problem.json이 없을 때 Jira 코멘트에서 단서(IPC 이름+token, logcat 시각이 붙은 줄)를 스크립트로
+                              # 뽑아 쓸지. --look-at이 있으면 쓰지 않는다. false면 5-2처럼 problem.json 단서만
+  retest_words: [retest, re-test, 재시험, 재테스트]   # 공개 기본값 — 사내 코멘트의 재시험 표현을 보고 맞춘다. 이 낱말이 든 마지막 코멘트와 그 앞의 단서는
+                              # 이전 회차로 보고 버린다(대소문자 무시 부분 일치). 낱말 없이 다시 돈 회차는 못 가른다
 
 # 분석 환경 출처 기록(module-skill.json·check-output.json·이슈 DB 커밋 꼬리말의 label). 선택, 이 파일에서만 읽는다.
 # runtime: {label: <사내 실행 환경 이름>}   # TODO(SITE:S35) 출처 기록용(선택) — 영숫자·._ +-, 40자 이하

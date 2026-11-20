@@ -444,10 +444,15 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
             rank = {c["cause"]: n for n, c in enumerate(candidates) if c["cause"]}
             occ = occurrences(events_doc, evaluator, db, compiled, rank)
             refs, problem, adopt = _reference_input(reference, db)
+            bundle = reference if isinstance(reference, dict) and "kind" not in reference else {}
+            # 로그에서 찾았는데 못 쓴 단서·관문에서 버린 이번 회차 단서·글의 token 충돌 — 단서만으로는 채택하지 않는다(eligibility.decide)
+            invalid = bundle.get("invalid")
+            unconfirmed = (len(bundle.get("dropped") or []) + (1 if bundle.get("conflict") is True else 0)
+                           + (invalid if type(invalid) is int and invalid > 0 else 0))
             pr = _collection_rules(db)      # ril.yaml category 목록(근처 창 거르기)
             cats = {r["category"] for r in (*pr.requests.values(), *pr.unsolicited.values())} if pr else None
             elig = {**eligibility.summary(eligibility.decide(occ, refs, problem=problem, comment_adopt=adopt,
-                                                             ril_categories=cats), occ),
+                                                             unconfirmed=unconfirmed, ril_categories=cats), occ),
                     "reference": reference}
     finally:
         if own:

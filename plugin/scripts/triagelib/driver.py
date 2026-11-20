@@ -28,6 +28,9 @@ MASKED_DIR = "logs-masked"       # 원문 마스킹 사본(parse_logcat.py mask-
 
 # 5-1·5-2 질문 대기(when: ask) 동안의 한 줄 안내(analysis.json `analyzer.note`·`explore.note`): 답 전에 원문을 열어 보는 일을 막는
 # 안내일 뿐이다(guard 규칙 10은 통째 읽기만 막는다).
+NOTE_LABEL = "제출자 참고(판단 근거·단서 아님): "     # analysis.json issue.submitter_note 머리(R5)
+# ponytail: 포털 NOTE_MAX(2000자)와 맞춘 값 — 머리말은 세지 않는다. analysis.json 4KB 예산을 넘으면 fit이 먼저 200자, 다른 후보 근거를 빼기 전 80자로 줄이고 마지막에 표시로 바꾼다
+NOTE_MAX = 2000
 ASK_NOTE = "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL {step})"
 
 
@@ -103,7 +106,8 @@ def _decision(candidates: list[dict], anchor: dict | None, elig: dict | None, cl
     (`clue_location` — source comment, state found)이고 판정은 자격 검사가 한다."""
     location = dict((anchor or {}).get("location") or clue_location or NO_LOCATION)
     elig = elig or {}
-    extra = {"check": {"why": elig.get("why"), "checked": elig.get("checked", 0), "total": elig.get("total", 0)},
+    extra = {"check": {"why": elig.get("why"), "checked": elig.get("checked", 0), "total": elig.get("total", 0),
+                       **({"via": elig["via"]} if elig.get("via") else {})},     # 사건이 붙은 코멘트 단서(출처 origin)
              "events": (elig.get("events") or [])[:eligibility.EVENTS_MAX], "events_total": elig.get("events_total", 0)}
     picked = next((c for c in candidates if elig.get("cause") and c["cause"] == elig["cause"]), None)
     if not candidates:
@@ -535,6 +539,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                              "platform_version": info["platform_version"], "sim_slot": info["sim_slot"],
                              "summary": _clip(info["summary"], 160),
                              "description": _clip(text.get("description"), 240),
+                             # 제출자 참고 글 — 모델이 판단 근거로 읽지 않게 값에 표시를 붙인다(SKILL.md는 바이트 한도라 설명 줄을 못 더함)
+                             **({"submitter_note": NOTE_LABEL + _clip(text["note"], NOTE_MAX)} if text.get("note") else {}),
                              "comments": len(text.get("comments") or []), "missing": info["missing"]}
         self.out_failed_step()
         return info
@@ -864,7 +870,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             use = self.problem_use or {}
             bundle = {"refs": ([self.reference] if self.reference else []) + use.get("refs", []),
                       "problem": use.get("problem"), "comment_adopt": use.get("comment_adopt", True),
-                      "dropped": use.get("dropped", [])}
+                      "dropped": use.get("dropped", []), **({"conflict": True} if use.get("conflict") else {}),
+                      **({"invalid": use["invalid"]} if use.get("invalid") else {})}
             ref = self.job / REFERENCE_FILE
             ref.write_text(json.dumps(bundle, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
             argv += ["--reference", ref]
@@ -1197,7 +1204,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         info, logs, version, code, tz, year = (ctx[k] for k in ("info", "logs", "version", "code", "tz", "year"))
         warn0 = len(self.warnings)
         anchor = self.step_anchor(logs, tz, year, info)
-        self.problem_refs(logs, tz, year)
+        self.problem_refs(logs, tz, year, anchor["window"] if anchor else None)
         around = anchor["fail"] if anchor else self.occurred(info, logs, tz, year)
         events_path = self.job / "events.json"
         if around is None and anchor is None and self.full_events is not None:     # occurred()의 전체 파싱과 같은 인자

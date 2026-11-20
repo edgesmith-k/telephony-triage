@@ -47,7 +47,7 @@
 | `parse` | `<logcat>... (--around <ISO 시각> \| --between <ISO 시작> <ISO 끝> \| --full) [--minutes <MINUTES>] --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--mask] [--no-external]` | `--around`: 발생 시각 (타임존 있는 ISO); `--between`: 명시 구간 (타임존 있는 ISO 둘, 시작 ≤ 끝); `--full`: 파일 전체; `--minutes`: 기본 5; `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--mask`: extractor 전에 줄 단위 마스킹; `--no-external`: 외부 파서 끔 (분석 디버그용) |
 | `markers` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--step-events]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--step-events`: 이슈 DB step_events 규칙의 로그 흔적(step_events[{rule, ts, seq, label}])을 더한다 |
 | `flows` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>]` | `--rules`: <db>/parser-rules (흐름은 <db>/<category>/flows/); `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도 |
-| `ipc` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--find <look-at.json>]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--find`: 기준 줄 찾기: triage.py가 쓴 {look_at, ref} 파일(원문 글은 인자로 받지 않는다). records 대신 find를 낸다 |
+| `ipc` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--find <look-at.json>]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--find`: 기준 줄 찾기: triage.py가 쓴 {look_at, ref} 파일(원문 글은 인자로 받지 않는다). records 대신 find를 낸다 ({finds: […]} 파일이면 finds[]) |
 | `extract-bugreport` | `<zip\|txt> --out <dir>` |  |
 | `cut` | `<logcat>... (--evidence <match.json> \| --around <ISO 시각>) [--cause <원인 ID>] [--seconds <SECONDS>] --out <file> [--rules <RULES>] [--context <CONTEXT>] [--max-lines <MAX_LINES>] [--tz <IANA>] [--year <YYYY>]` | `--evidence`: match_signatures.py 출력 (--cause 원인 후보의 근거); `--around`: 지정 시각 (타임존 있는 ISO); `--cause`: --evidence에서 근거를 쓸 원인 (--evidence에 필수); `--seconds`: --around 앞뒤 초, 기본 30; `--rules`: <db>/parser-rules (mask.allow_patterns·마스킹 끔을 읽는다); `--context`: 기본 20; `--max-lines`: 기본 100 |
 | `mask-copy` | `<logcat>... --out <dir> [--rules <RULES>] [--max-bytes <MAX_BYTES>]` | `--out`: 사본 디렉토리(<작업 디렉토리>/logs-masked); `--rules`: <db>/parser-rules (mask.allow_patterns·마스킹 끔을 읽는다); `--max-bytes`: 이보다 큰 파일은 사본을 만들지 않는다(경고 mask-copy-skipped, 기본 67108864), 기본 67108864 |
@@ -245,7 +245,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 - read_only_hint?(mode: read-only일 때만, config.py check 사유 메시지, ≤200바이트, 4KB 압축 시 100)
 - snapshot?
 - plan?(analysis-only면 {exists, source, pr_number}만. choice resume이면 next(Step 7 없이 기존 계획으로 Step 8))
-- issue?(failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보)
+- issue?(failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보. submitter_note(있을 때만 — 포털이 넘긴 제출자 참고 글 `제출자 참고(판단 근거·단서 아님): …`, ≤2000자+머리말, 4KB 압축 때 가장 먼저 머리말 포함 200자, 다른 후보 근거를 다 빼기 전에 80자, 마지막 단계에서 `issue.json text.note 참고`; 판단 근거·단서가 아니다. 이슈 DB 레코드 note와 다르다))
 - step_anchor?(앵커(기준 줄·실패 스텝)·실패 스텝·시계 정렬·스텝 순서 시도·기준 줄 입력·시각 답 full·시각 입력 없는 전체 분석이 있을 때만)
   - outside_errors?(앵커가 있고 Jira 발생 시각이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음)
   - source: look_at | log_marker | steps_file | step_order | issue | symptom_scan | none
@@ -284,14 +284,20 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
     - category
     - type
     - cause
-  - location(실패 지점: 기준 줄 ipc·token 일치 1개·로그 FAIL 마커 1개면 confirmed, 기준 줄 글자 일치는 한 곳이어도 found, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). 앵커 없이 문제 파악 단서(problem.json)만 로그에서 찾았으면 source comment·state found(확정 아님, 단서 일치 여러 곳이면 multiple). 채택이면 자격 검사 결과로 다시 정한다: confirmed/point는 근거 줄 same_line(기준 줄이 붙은 사건의 증상·원인 근거 줄이거나 같은 RIL 요청)만, cp_point는 found/point, range·조건 줄로만 맞은 same_line은 found(kind 그대로), comment 출처는 늘 found. model은 계약에만(단계 6~7))
+  - location(실패 지점: 기준 줄 ipc·token 일치 1개·로그 FAIL 마커 1개면 confirmed, 기준 줄 글자 일치는 한 곳이어도 found, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). 앵커 없이 Jira 단서(문제 파악 problem.json 단서, 없으면 스크립트가 코멘트에서 뽑은 단서 — 스크립트 단서는 채택하지 않는 위치 후보)만 로그에서 찾았으면 source comment·state found(확정 아님, 단서 일치 여러 곳이면 multiple). 채택이면 자격 검사 결과로 다시 정한다: confirmed/point는 근거 줄 same_line(기준 줄이 붙은 사건의 증상·원인 근거 줄이거나 같은 RIL 요청)만, cp_point는 found/point, range·조건 줄로만 맞은 same_line은 found(kind 그대로), comment 출처는 늘 found. model은 계약에만(단계 6~7))
     - state: none | found | confirmed | multiple
     - source: look_at | log_marker | steps_file | step_order | comment | model | null
     - kind(기준 줄 ipc·token 일치 point, 글자 일치 near(한 곳이어도 found), 마커·steps-file 구간 range): point | near | range | null
-  - check?(자격 검사 요약(표시 전용): why(세부 사유 — same_line|cp_point|near|range|near_without_symptom|range_end_unknown|range_without_symptom|no_event_at_reference|typeless_failure_within_link|typeless_failure_in_range|typeless_failure_near|other_failure_first|other_failure_last|same_line_typeless|no_event_in_range|no_allowed_event_near|not_in_db|comment_unconfirmed|locations|slots|sources|multiple_events|absence_unverified|cause_after_event|no_cause_before_event|cause_unjudged|cause_not_in_candidates, 기준 없으면 null), checked(기준에 붙어 검사한 사건 수), total(실패 사건 수 — 유형 없는 파생 오류 이벤트 포함))
+  - check?(자격 검사 요약(표시 전용): why(세부 사유 — same_line|cp_point|near|range|near_without_symptom|range_end_unknown|range_without_symptom|no_event_at_reference|typeless_failure_within_link|typeless_failure_in_range|typeless_failure_near|other_failure_first|other_failure_last|same_line_typeless|no_event_in_range|no_allowed_event_near|not_in_db|comment_unconfirmed|locations|slots|sources|multiple_events|absence_unverified|cause_after_event|no_cause_before_event|cause_unjudged|cause_not_in_candidates, 기준 없으면 null), checked(기준에 붙어 검사한 사건 수), total(실패 사건 수 — 유형 없는 파생 오류 이벤트 포함), via?(명시 기준 없이 코멘트 단서로 사건을 잡았을 때만 그 단서: comment(코멘트 번호|description), clue(ipc|ipc_name|log_line), how(ipc|token|text), places, origin(script = 스크립트가 코멘트에서 뽑음, problem = 문제 파악 problem.json)))
     - why
     - checked
     - total
+    - via?
+      - comment
+      - clue: ipc | ipc_name | log_line
+      - how
+      - places
+      - origin: script | problem
   - events?[≤3](유형 사건(증상 시그니처 1회 충족, 기준에 붙은 것 먼저 그다음 시각 순) {type, at, line(f:L), phone, absence(증상 시그니처에 must_not_match), ref(기준에 붙음), result: adopted|held|observed, cause(붙은 원인 1순위|null), why(원인이 안 붙은 이유|null), gap_s(사건 시각 − 붙은 원인 근거 마지막 줄, 초)}. 전체는 JOB/eligibility.json)
     - type
     - at

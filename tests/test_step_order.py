@@ -362,8 +362,8 @@ def test_fit_drops_order_last_before_clock_reason_before_focus():
     import importlib
     triage = importlib.import_module("triage")
 
-    def make(n: int) -> dict:
-        return {"issue": {"summary": "s" * n}, "files": {"report": "r"},
+    def make(n: int) -> dict:     # fit처럼 `truncated: false` 자리를 넣고 잰다(fit이 그 칸을 먼저 잡는다)
+        return {"issue": {"summary": "s" * n}, "files": {"report": "r"}, "truncated": False,
                 "step_anchor": {"source": "step_order", "step": "7", "focus": ["DATA-001"],
                                 "order": {"matched": 4, "observable": 4, "missed": 0,
                                           "last": {"step": "6 | " + "가" * 30, "ts": "2026-09-20T05:32:50.000Z"}},
