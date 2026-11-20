@@ -443,7 +443,11 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
         if not regress:     # 자격 검사: --top으로 자르기 전 순위로(H18)
             rank = {c["cause"]: n for n, c in enumerate(candidates) if c["cause"]}
             occ = occurrences(events_doc, evaluator, db, compiled, rank)
-            elig = {**eligibility.summary(eligibility.decide(occ, [reference] if reference else []), occ),
+            refs, problem, adopt = _reference_input(reference, db)
+            pr = _collection_rules(db)      # ril.yaml category 목록(근처 창 거르기)
+            cats = {r["category"] for r in (*pr.requests.values(), *pr.unsolicited.values())} if pr else None
+            elig = {**eligibility.summary(eligibility.decide(occ, refs, problem=problem, comment_adopt=adopt,
+                                                             ril_categories=cats), occ),
                     "reference": reference}
     finally:
         if own:
@@ -493,6 +497,26 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
 
 
 # -- 자격 검사 사건 목록 (단계 5, common/eligibility.py) ---------------------------------------------------------
+
+
+def _reference_input(reference: dict | None, db) -> tuple[list[dict], dict | None, bool]:
+    """`--reference` → (기준 목록, 문제 파악 `{types, not_in_db}`|None, comment_adopt). 파일은 기준 하나(`kind` 있음, 5-1 모양)나
+    묶음 `{refs[], problem?, comment_adopt?}`(triage.py, 단계 5-2). 문제 파악 유형은 스냅샷 DB에 있는 것만 남긴다 — 값은 문자열
+    비교에만 쓴다(정규식·경로로 쓰지 않는다)."""
+    if not reference:
+        return [], None, True
+    if "kind" in reference:
+        return [reference], None, True
+    refs = [r for r in reference.get("refs") or [] if isinstance(r, dict) and r.get("kind") in ("line", "range")]
+    problem = reference.get("problem")
+    if isinstance(problem, dict):
+        known = {t.id for t in db.types}
+        problem = {"types": [t for t in problem.get("types") or [] if isinstance(t, str) and t in known],
+                   "not_in_db": problem.get("not_in_db") is True}
+    else:
+        problem = None
+    return refs, problem, reference.get("comment_adopt") is not False     # 기본 참(eligibility.decide·설정과 같게)
+
 
 
 def _at(res) -> datetime:
@@ -599,11 +623,14 @@ def occurrences(events_doc: dict, evaluator: Evaluator, db, compiled: dict, rank
                 item["gap_s"] = item["causes"][0][2] if item["causes"] else None
                 out.append(item)
         typed_lines = {k for e in out for k in e["lines"]}
+        rules = _collection_rules(db)       # RIL 실패의 요청 category(ril.yaml) — 자격 검사 근처 창이 허용 유형 category로 거른다
         for raw in evaluator.events:      # 유형 없는 실패 사건: 파생 오류 이벤트(유형 사건 근거 줄은 뺀다)
             name, key = raw.get("event"), eligibility.ref_key(raw.get("line_ref"))
             if name and eligibility.ERROR_EVENT_RE.search(str(name)) and key not in typed_lines:
                 out.append({"type": None, "at": _parse_iso(raw["ts"], "event"), "lines": {key} - {None}, "raw": [raw],
                             "phone": raw.get("phone_id"), "name": str(name), "causes": [], "after": [], "absence_unverified": [],
+                            **({"ril_category": rules.ril_category(str((raw.get("fields") or {}).get("request")))}
+                               if rules and name in parser_rules.RESERVED_EVENTS else {}),
                             "absence": False, "absence_bad": False, "gap_s": None, "unjudged": False,
                             "cause_lines": set(), "cond_lines": set()})
     finally:
@@ -800,7 +827,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--regress", action="store_true")
     parser.add_argument("--no-feedback-weight", action="store_true")
     parser.add_argument("--reference", metavar="json", default=None,
-                        help="자격 검사 기준(triage.py가 쓴 JOB/reference.json). 없으면 eligibility는 no_reference")
+                        help="자격 검사 기준(triage.py가 쓴 JOB/reference.json — 기준 하나 또는 {refs, problem, comment_adopt}). 없으면 eligibility는 no_reference")
     parser.add_argument("--top", type=int, default=3,
                         help="후보 수. types·causes는 충족된 것만, pending은 N개 (0이면 전부)")
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")

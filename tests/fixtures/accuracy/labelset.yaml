@@ -6,6 +6,8 @@ conditions:
 - no_time
 - time
 - look_at
+- problem
+- look_at+problem
 items:
 - key: MMX-1
   logs:
@@ -16,6 +18,7 @@ items:
   fail_at: '2026-11-14T10:04:00.620+09:00'
   occurred_at: '2026-11-14T10:04:00+09:00'
   look_at: '11-14 10:04:00.620  2101  2141 D RILJ    : [0410]< SETUP_DATA_CALL error 2 [PHONE0]'
+  problem: problems/MMX-1.json
 - key: XM-1
   logs:
   - xm.log
@@ -25,6 +28,7 @@ items:
   fail_at: '2026-11-14T10:00:00.620+09:00'
   occurred_at: '2026-11-14T10:00:00+09:00'
   look_at: '11-14 10:00:00.620  2101  2141 D RILJ    : [0410]< SETUP_DATA_CALL error 2 [PHONE0]'
+  problem: problems/XM-1.json
 - key: MXM-1
   logs:
   - mxm.log
@@ -34,6 +38,7 @@ items:
   fail_at: '2026-11-14T10:02:00.620+09:00'
   occurred_at: '2026-11-14T10:02:00+09:00'
   look_at: '11-14 10:02:00.620  2101  2141 D RILJ    : [0410]< SETUP_DATA_CALL error 2 [PHONE0]'
+  problem: problems/MXM-1.json
 - key: MMH-1
   logs:
   - mmh.log
@@ -43,6 +48,7 @@ items:
   fail_at: '2026-11-14T10:04:00.000+09:00'
   occurred_at: '2026-11-14T10:04:00+09:00'
   look_at: '11-14 10:04:00.000  1301  1331 D RILJ    : Service MODEM has died. [PHONE0]'
+  problem: problems/MMH-1.json
 - key: CTLM-1
   logs:
   - ctl-m.log
@@ -52,6 +58,7 @@ items:
   fail_at: '2026-11-14T10:00:00.061+09:00'
   occurred_at: '2026-11-14T10:00:00+09:00'
   look_at: '11-14 10:00:00.061  1301  1301 D SST-0   : set service state as POWER_OFF'
+  problem: problems/CTLM-1.json
 - key: D12R-1
   logs:
   - ctl-d12r.log
@@ -61,6 +68,7 @@ items:
   fail_at: '2026-11-14T10:00:00.020+09:00'
   occurred_at: '2026-11-14T10:00:00+09:00'
   look_at: '11-14 10:00:00.020  2101  2101 D DNC-0   : onDataNetworkDisconnected: [DataNetwork: DN-156-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=AIRPLANE_MODE_ON'
+  problem: problems/D12R-1.json
 - key: C15-1
   logs:
   - ctl-c15.log
@@ -71,6 +79,7 @@ items:
   fail_at: '2026-11-14T10:00:15.080+09:00'
   occurred_at: '2026-11-14T10:00:15+09:00'
   look_at: 'CreateConnectionProcessor: Connection failed: (DisconnectCause [ Code: (ERROR) Label: (Radio off)'
+  problem: problems/C15-1.json
 - key: HAL-1
   logs:
   - ctl-h.log
@@ -80,6 +89,7 @@ items:
   fail_at: '2026-11-14T10:00:00.000+09:00'
   occurred_at: '2026-11-14T10:00:00+09:00'
   look_at: '11-14 10:00:00.000  1301  1331 D RILJ    : Service MODEM has died. [PHONE0]'
+  problem: problems/HAL-1.json
 - key: TC-1
   logs:
   - tc-shape.log
@@ -90,6 +100,7 @@ items:
   occurred_at: '2026-11-14T10:02:00+09:00'
   look_at: '11-14 10:02:00.620  2101  2141 D RILJ    : [0410]< SETUP_DATA_CALL error 2 [PHONE0]'
   failed_step: Step 5 데이터 연결 확인 FAIL
+  problem: problems/TC-1.json
 - key: RECOVER-1
   logs:
   - recover.log
@@ -99,6 +110,7 @@ items:
   fail_at: '2026-11-14T10:00:00.624+09:00'
   occurred_at: '2026-11-14T10:00:00+09:00'
   look_at: '11-14 10:00:00.624  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.'
+  problem: problems/RECOVER-1.json
 - key: TOKSAME-1
   logs:
   - token.log
@@ -109,6 +121,7 @@ items:
   occurred_at: '2026-11-14T10:02:00+09:00'
   look_at: VIPC_SETUP_DATA (token=0x0de)
   issue_file: issues/TOKSAME-1.yaml
+  problem: problems/TOKSAME-1.json
 - key: TOKNAME-1
   logs:
   - token.log
@@ -119,6 +132,7 @@ items:
   occurred_at: '2026-11-14T10:02:00+09:00'
   look_at: VIPC_SETUP_DATA (token=0x0de)
   issue_file: issues/TOKNAME-1.yaml
+  problem: problems/TOKNAME-1.json
 - key: TOKONLY-1
   logs:
   - token-nameonly.log
@@ -129,6 +143,7 @@ items:
   occurred_at: '2026-11-14T10:02:00+09:00'
   look_at: VIPC_SETUP_DATA (token=0x0d2)
   issue_file: issues/TOKONLY-1.yaml
+  problem: problems/TOKONLY-1.json
 - key: DUAL-1
   logs:
   - dual-sim.log
@@ -140,6 +155,7 @@ items:
   look_at: VIPC_SETUP_DATA (token=0x0de)
   sim_slot: '1'
   issue_file: issues/DUAL-1.yaml
+  problem: problems/DUAL-1.json
 - key: RETEST-1
   logs:
   - retest.log
@@ -150,6 +166,7 @@ items:
   occurred_at: '2026-11-14T10:02:00+09:00'
   look_at: VIPC_SETUP_DATA (token=0x1a2)
   issue_file: issues/RETEST-1.yaml
+  problem: problems/RETEST-1.json
 - key: RETESTX-1
   logs:
   - retest-elsewhere.log
@@ -160,6 +177,7 @@ items:
   occurred_at: '2026-11-14T10:02:00+09:00'
   look_at: VIPC_SETUP_DATA (token=0x1a2)
   issue_file: issues/RETESTX-1.yaml
+  problem: problems/RETESTX-1.json
 - key: PAIRFAIL-1
   logs:
   - pair-fail.log
@@ -170,6 +188,7 @@ items:
   occurred_at: '2026-11-14T10:02:00+09:00'
   look_at: '11-14 10:02:00.624  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.'
   pair: PAIRPASS-1
+  problem: problems/PAIRFAIL-1.json
 - key: PAIRPASS-1
   logs:
   - pair-pass.log
@@ -177,6 +196,7 @@ items:
   summary: 같은 TC의 pass 로그
   occurred_at: '2026-11-14T10:02:00+09:00'
   pair: PAIRFAIL-1
+  problem: problems/PAIRPASS-1.json
 - key: FIRSTTC-1
   logs:
   - tc-shape.log
@@ -186,6 +206,7 @@ items:
   fail_at: '2026-11-14T10:02:00.620+09:00'
   failed_step: 데이터 연결 FAIL
   first_analysis: true
+  problem: problems/FIRSTTC-1.json
 - key: FIRSTH-1
   logs:
   - mmh.log
@@ -195,6 +216,7 @@ items:
   fail_at: '2026-11-14T10:04:00.000+09:00'
   failed_step: 망 등록 FAIL
   first_analysis: true
+  problem: problems/FIRSTH-1.json
 - key: TOKPOS-1
   logs:
   - tokpos.log
@@ -205,6 +227,7 @@ items:
   occurred_at: '2026-11-14T10:02:00+09:00'
   look_at: VIPC_SETUP_DATA (token=0x0e1)
   issue_file: issues/TOKPOS-1.yaml
+  problem: problems/TOKPOS-1.json
 - key: TOKONLYPOS-1
   logs:
   - tokonlypos.log
@@ -215,6 +238,7 @@ items:
   occurred_at: '2026-11-14T10:02:00+09:00'
   look_at: VIPC_SETUP_DATA
   issue_file: issues/TOKONLYPOS-1.yaml
+  problem: problems/TOKONLYPOS-1.json
 - key: NEARPOS-1
   logs:
   - nearpos.log
@@ -224,6 +248,7 @@ items:
   fail_at: '2026-11-14T10:02:00.624+09:00'
   occurred_at: '2026-11-14T10:02:00+09:00'
   look_at: 'ConnectingState: setupData: accessNetwork=EUTRAN, isSatellite=false'
+  problem: problems/NEARPOS-1.json
 - key: CLUEPOS-1
   logs:
   - cluepos.log
@@ -233,6 +258,7 @@ items:
   fail_at: '2026-11-14T10:02:00.624+09:00'
   occurred_at: '2026-11-14T10:02:00+09:00'
   issue_file: issues/CLUEPOS-1.yaml
+  problem: problems/CLUEPOS-1.json
 - key: CPX-1
   logs:
   - cp-typeless.log

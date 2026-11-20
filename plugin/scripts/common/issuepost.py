@@ -56,12 +56,19 @@ HELD_WHY = {"near_without_symptom": "지정한 줄이 실패 줄이 아님 — �
             "no_event_at_reference": "지정한 IPC 줄 뒤 2초 안에 실패가 없음",
             "typeless_failure_within_link": "지정한 IPC 줄 뒤 2초 안 첫 실패가 이슈 DB 증상과 맞지 않음",
             "typeless_failure_in_range": "실패 구간의 마지막 실패가 이슈 DB 증상과 맞지 않음",
+            "typeless_failure_near": "지정한 줄 뒤 첫 실패가 이슈 DB 증상과 맞지 않음",
+            "other_failure_first": "지정한 줄 뒤 첫 실패가 문제 파악 증상 종류와 다름",
+            "other_failure_last": "실패 구간의 마지막 실패가 문제 파악 증상 종류와 다름",
             "same_line_typeless": "지정한 줄의 실패가 이슈 DB 증상과 맞지 않음",
             "no_event_in_range": "실패 구간 안에 이슈 DB 증상과 맞는 실패가 없음",
             "locations": "같은 줄이 로그 여러 곳에 있음", "slots": "두 SIM 슬롯에 모두 맞음",
             "sources": "기준마다 다른 실패를 가리킴", "multiple_events": "구간 안 실패마다 원인이 다름",
             "cause_after_event": "원인 근거가 실패 뒤에만 있음", "no_cause_before_event": "실패 전에 맞는 원인이 없음",
-            "cause_not_in_candidates": "자격 검사가 고른 원인이 후보 목록에 없음"}
+            "cause_not_in_candidates": "자격 검사가 고른 원인이 후보 목록에 없음",
+            # 문제 파악 입력(단계 5-2)
+            "not_in_db": "문제 파악에서 이 증상이 이슈 DB에 없다고 봄 — 다른 실패의 원인으로 대신하지 않음",
+            "no_allowed_event_near": "지정한 줄 근처(5분 안)에 문제 파악 증상 종류의 실패가 없음",
+            "comment_unconfirmed": "코멘트에 적힌 위치라 원인 채택은 사람 확인 필요"}
 SECTION_MAX = {"PROBLEM": 600, "CAUSE": 1000, "NEXT ACTION": 800, "ANALYSIS": 1600}
 BODY_MAX = 4000
 

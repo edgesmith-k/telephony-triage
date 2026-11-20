@@ -108,6 +108,80 @@
    "anchor_missed": 0,
    "first_total": 0,
    "first_hold_rate": null
+  },
+  "problem": {
+   "total": 24,
+   "controls": 0,
+   "in_sample": 0,
+   "include_in_sample": false,
+   "evaluated": 24,
+   "errors": 0,
+   "unjudged_errors": 0,
+   "observation_errors": 0,
+   "error_rate": 0.0,
+   "type_only": 0,
+   "positive": 12,
+   "negative": 12,
+   "positive_total": 12,
+   "negative_total": 12,
+   "top1_accuracy": 0.5833,
+   "top3_inclusion": 1.0,
+   "false_positive_rate": 0.9167,
+   "accepted_correct": 3,
+   "accepted_wrong": 0,
+   "held": 21,
+   "held_reasons": {
+    "ambiguous": 1,
+    "no_candidate": 1,
+    "no_reference": 18,
+    "symptom_not_found": 1
+   },
+   "answer_rate": 0.125,
+   "location_confirmed": 0,
+   "location_found": 4,
+   "correct_hold": 12,
+   "held_top_right": 7,
+   "anchor_runs": 0,
+   "anchor_correct": 0,
+   "anchor_missed": 0,
+   "first_total": 2,
+   "first_hold_rate": 1.0
+  },
+  "look_at+problem": {
+   "total": 20,
+   "controls": 0,
+   "in_sample": 0,
+   "include_in_sample": false,
+   "evaluated": 20,
+   "errors": 0,
+   "unjudged_errors": 0,
+   "observation_errors": 0,
+   "error_rate": 0.0,
+   "type_only": 0,
+   "positive": 10,
+   "negative": 10,
+   "positive_total": 10,
+   "negative_total": 10,
+   "top1_accuracy": 1.0,
+   "top3_inclusion": 1.0,
+   "false_positive_rate": 0.8,
+   "accepted_correct": 10,
+   "accepted_wrong": 0,
+   "held": 10,
+   "held_reasons": {
+    "no_candidate": 2,
+    "symptom_not_found": 8
+   },
+   "answer_rate": 0.5,
+   "location_confirmed": 10,
+   "location_found": 9,
+   "correct_hold": 10,
+   "held_top_right": 0,
+   "anchor_runs": 20,
+   "anchor_correct": 17,
+   "anchor_missed": 0,
+   "first_total": 0,
+   "first_hold_rate": null
   }
  },
  "runs": [
@@ -122,7 +196,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "MMX-1",
@@ -135,7 +211,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "MMX-1",
@@ -146,7 +224,37 @@
    "adopted": null,
    "verdict": "정답",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": "same_line_typeless",
+   "held_cause": null
+  },
+  {
+   "key": "MMX-1",
+   "condition": "problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "MMX-1",
+   "condition": "look_at+problem",
+   "expect": "unresolved",
+   "top": null,
+   "top3": [],
+   "adopted": null,
+   "verdict": "정답",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "same_line_typeless",
+   "held_cause": null
   },
   {
    "key": "XM-1",
@@ -159,7 +267,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "XM-1",
@@ -172,7 +282,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "XM-1",
@@ -185,7 +297,39 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": "same_line_typeless",
+   "held_cause": null
+  },
+  {
+   "key": "XM-1",
+   "condition": "problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "XM-1",
+   "condition": "look_at+problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "same_line_typeless",
+   "held_cause": null
   },
   {
    "key": "MXM-1",
@@ -198,7 +342,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "MXM-1",
@@ -211,7 +357,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "MXM-1",
@@ -224,7 +372,39 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": "same_line_typeless",
+   "held_cause": null
+  },
+  {
+   "key": "MXM-1",
+   "condition": "problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "MXM-1",
+   "condition": "look_at+problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "same_line_typeless",
+   "held_cause": null
   },
   {
    "key": "MMH-1",
@@ -238,7 +418,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "MMH-1",
@@ -252,7 +434,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "MMH-1",
@@ -265,7 +449,40 @@
    "adopted": "NETWORK-001-08",
    "verdict": "1위",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "MMH-1",
+   "condition": "problem",
+   "expect": "NETWORK-001-08",
+   "top": "NETWORK-001-08",
+   "top3": [
+    "NETWORK-001-08",
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "MMH-1",
+   "condition": "look_at+problem",
+   "expect": "NETWORK-001-08",
+   "top": "NETWORK-001-08",
+   "top3": [
+    "NETWORK-001-08"
+   ],
+   "adopted": "NETWORK-001-08",
+   "verdict": "1위",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "CTLM-1",
@@ -278,7 +495,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "CTLM-1",
@@ -291,7 +510,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "CTLM-1",
@@ -304,7 +525,39 @@
    "adopted": "NETWORK-001-03",
    "verdict": "1위",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "CTLM-1",
+   "condition": "problem",
+   "expect": "NETWORK-001-03",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "CTLM-1",
+   "condition": "look_at+problem",
+   "expect": "NETWORK-001-03",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": "NETWORK-001-03",
+   "verdict": "1위",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "D12R-1",
@@ -317,7 +570,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "D12R-1",
@@ -330,7 +585,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "D12R-1",
@@ -343,7 +600,39 @@
    "adopted": "DATA-002-01",
    "verdict": "1위",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "D12R-1",
+   "condition": "problem",
+   "expect": "DATA-002-01",
+   "top": "DATA-002-01",
+   "top3": [
+    "DATA-002-01"
+   ],
+   "adopted": null,
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "D12R-1",
+   "condition": "look_at+problem",
+   "expect": "DATA-002-01",
+   "top": "DATA-002-01",
+   "top3": [
+    "DATA-002-01"
+   ],
+   "adopted": "DATA-002-01",
+   "verdict": "1위",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "C15-1",
@@ -356,7 +645,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "C15-1",
@@ -369,7 +660,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "C15-1",
@@ -382,7 +675,39 @@
    "adopted": "CALL-001-02",
    "verdict": "1위",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "C15-1",
+   "condition": "problem",
+   "expect": "CALL-001-02",
+   "top": "CALL-001-02",
+   "top3": [
+    "CALL-001-02"
+   ],
+   "adopted": null,
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "C15-1",
+   "condition": "look_at+problem",
+   "expect": "CALL-001-02",
+   "top": "CALL-001-02",
+   "top3": [
+    "CALL-001-02"
+   ],
+   "adopted": "CALL-001-02",
+   "verdict": "1위",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "HAL-1",
@@ -395,7 +720,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "HAL-1",
@@ -408,7 +735,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "HAL-1",
@@ -421,7 +750,39 @@
    "adopted": "NETWORK-001-08",
    "verdict": "1위",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "HAL-1",
+   "condition": "problem",
+   "expect": "NETWORK-001-08",
+   "top": "NETWORK-001-08",
+   "top3": [
+    "NETWORK-001-08"
+   ],
+   "adopted": null,
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "HAL-1",
+   "condition": "look_at+problem",
+   "expect": "NETWORK-001-08",
+   "top": "NETWORK-001-08",
+   "top3": [
+    "NETWORK-001-08"
+   ],
+   "adopted": "NETWORK-001-08",
+   "verdict": "1위",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TC-1",
@@ -434,7 +795,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TC-1",
@@ -447,7 +810,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TC-1",
@@ -460,7 +825,39 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": "same_line_typeless",
+   "held_cause": null
+  },
+  {
+   "key": "TC-1",
+   "condition": "problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TC-1",
+   "condition": "look_at+problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "same_line_typeless",
+   "held_cause": null
   },
   {
    "key": "RECOVER-1",
@@ -473,7 +870,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "RECOVER-1",
@@ -486,7 +885,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "RECOVER-1",
@@ -499,7 +900,39 @@
    "adopted": "DATA-003-01",
    "verdict": "1위",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "RECOVER-1",
+   "condition": "problem",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01"
+   ],
+   "adopted": null,
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "RECOVER-1",
+   "condition": "look_at+problem",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKSAME-1",
@@ -512,7 +945,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKSAME-1",
@@ -525,7 +960,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKSAME-1",
@@ -538,7 +975,39 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
+  },
+  {
+   "key": "TOKSAME-1",
+   "condition": "problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
+  },
+  {
+   "key": "TOKSAME-1",
+   "condition": "look_at+problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
   },
   {
    "key": "TOKNAME-1",
@@ -551,7 +1020,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKNAME-1",
@@ -564,7 +1035,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKNAME-1",
@@ -577,7 +1050,39 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
+  },
+  {
+   "key": "TOKNAME-1",
+   "condition": "problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TOKNAME-1",
+   "condition": "look_at+problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
   },
   {
    "key": "TOKONLY-1",
@@ -590,7 +1095,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKONLY-1",
@@ -603,7 +1110,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKONLY-1",
@@ -616,7 +1125,39 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
+  },
+  {
+   "key": "TOKONLY-1",
+   "condition": "problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": "locations",
+   "held_cause": null
+  },
+  {
+   "key": "TOKONLY-1",
+   "condition": "look_at+problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
   },
   {
    "key": "DUAL-1",
@@ -627,7 +1168,9 @@
    "adopted": null,
    "verdict": "정답",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "DUAL-1",
@@ -638,7 +1181,9 @@
    "adopted": null,
    "verdict": "정답",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "DUAL-1",
@@ -649,7 +1194,35 @@
    "adopted": null,
    "verdict": "정답",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": "locations",
+   "held_cause": null
+  },
+  {
+   "key": "DUAL-1",
+   "condition": "problem",
+   "expect": "unresolved",
+   "top": null,
+   "top3": [],
+   "adopted": null,
+   "verdict": "정답",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": "locations",
+   "held_cause": null
+  },
+  {
+   "key": "DUAL-1",
+   "condition": "look_at+problem",
+   "expect": "unresolved",
+   "top": null,
+   "top3": [],
+   "adopted": null,
+   "verdict": "정답",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "locations",
+   "held_cause": null
   },
   {
    "key": "RETEST-1",
@@ -662,7 +1235,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "RETEST-1",
@@ -675,7 +1250,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "RETEST-1",
@@ -688,7 +1265,39 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
+  },
+  {
+   "key": "RETEST-1",
+   "condition": "problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "RETEST-1",
+   "condition": "look_at+problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
   },
   {
    "key": "RETESTX-1",
@@ -701,7 +1310,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "RETESTX-1",
@@ -714,7 +1325,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "RETESTX-1",
@@ -727,7 +1340,39 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
+  },
+  {
+   "key": "RETESTX-1",
+   "condition": "problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "RETESTX-1",
+   "condition": "look_at+problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
   },
   {
    "key": "PAIRFAIL-1",
@@ -741,7 +1386,9 @@
    "adopted": null,
    "verdict": "상위3",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "PAIRFAIL-1",
@@ -755,7 +1402,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "PAIRFAIL-1",
@@ -768,7 +1417,40 @@
    "adopted": "DATA-003-01",
    "verdict": "1위",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "PAIRFAIL-1",
+   "condition": "problem",
+   "expect": "DATA-003-01",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03",
+    "DATA-003-01"
+   ],
+   "adopted": null,
+   "verdict": "상위3",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "PAIRFAIL-1",
+   "condition": "look_at+problem",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "PAIRPASS-1",
@@ -781,7 +1463,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "PAIRPASS-1",
@@ -794,7 +1478,24 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "PAIRPASS-1",
+   "condition": "problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "FIRSTTC-1",
@@ -807,7 +1508,24 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "FIRSTTC-1",
+   "condition": "problem",
+   "expect": "unresolved",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "FIRSTH-1",
@@ -821,7 +1539,25 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "FIRSTH-1",
+   "condition": "problem",
+   "expect": "NETWORK-001-08",
+   "top": "NETWORK-001-08",
+   "top3": [
+    "NETWORK-001-08",
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKPOS-1",
@@ -835,7 +1571,9 @@
    "adopted": null,
    "verdict": "상위3",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKPOS-1",
@@ -849,7 +1587,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKPOS-1",
@@ -863,7 +1603,41 @@
    "adopted": "DATA-003-01",
    "verdict": "1위",
    "anchor_ok": false,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TOKPOS-1",
+   "condition": "problem",
+   "expect": "DATA-003-01",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03",
+    "DATA-003-01"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "상위3",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TOKPOS-1",
+   "condition": "look_at+problem",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01",
+    "NETWORK-001-03"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": false,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKONLYPOS-1",
@@ -877,7 +1651,9 @@
    "adopted": null,
    "verdict": "상위3",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKONLYPOS-1",
@@ -891,7 +1667,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TOKONLYPOS-1",
@@ -905,7 +1683,41 @@
    "adopted": "DATA-003-01",
    "verdict": "1위",
    "anchor_ok": false,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TOKONLYPOS-1",
+   "condition": "problem",
+   "expect": "DATA-003-01",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03",
+    "DATA-003-01"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "상위3",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TOKONLYPOS-1",
+   "condition": "look_at+problem",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01",
+    "NETWORK-001-03"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": false,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "NEARPOS-1",
@@ -919,7 +1731,9 @@
    "adopted": null,
    "verdict": "상위3",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "NEARPOS-1",
@@ -933,7 +1747,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "NEARPOS-1",
@@ -947,7 +1763,41 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": false,
-   "error": null
+   "error": null,
+   "held_why": "near_without_symptom",
+   "held_cause": null
+  },
+  {
+   "key": "NEARPOS-1",
+   "condition": "problem",
+   "expect": "DATA-003-01",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03",
+    "DATA-003-01"
+   ],
+   "adopted": null,
+   "verdict": "상위3",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "NEARPOS-1",
+   "condition": "look_at+problem",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01",
+    "NETWORK-001-03"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": false,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "CLUEPOS-1",
@@ -961,7 +1811,9 @@
    "adopted": null,
    "verdict": "상위3",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "CLUEPOS-1",
@@ -975,7 +1827,25 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "CLUEPOS-1",
+   "condition": "problem",
+   "expect": "DATA-003-01",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03",
+    "DATA-003-01"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "상위3",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "CPX-1",
@@ -989,7 +1859,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "CPX-1",
@@ -1003,7 +1875,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "CPX-1",
@@ -1016,7 +1890,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
   },
   {
    "key": "CPXD-1",
@@ -1030,7 +1906,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "CPXD-1",
@@ -1044,7 +1922,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "CPXD-1",
@@ -1057,7 +1937,9 @@
    "adopted": null,
    "verdict": "오탐",
    "anchor_ok": true,
-   "error": null
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
   },
   {
    "key": "TPRERR-1",
@@ -1071,7 +1953,9 @@
    "adopted": null,
    "verdict": "상위3",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TPRERR-1",
@@ -1085,7 +1969,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TPRERR-1",
@@ -1099,7 +1985,9 @@
    "adopted": "DATA-003-01",
    "verdict": "1위",
    "anchor_ok": false,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TPEVAL-1",
@@ -1113,7 +2001,9 @@
    "adopted": null,
    "verdict": "상위3",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TPEVAL-1",
@@ -1127,7 +2017,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TPEVAL-1",
@@ -1141,7 +2033,9 @@
    "adopted": "DATA-003-01",
    "verdict": "1위",
    "anchor_ok": false,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TPVRF-1",
@@ -1155,7 +2049,9 @@
    "adopted": null,
    "verdict": "상위3",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TPVRF-1",
@@ -1169,7 +2065,9 @@
    "adopted": null,
    "verdict": "1위",
    "anchor_ok": null,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   },
   {
    "key": "TPVRF-1",
@@ -1183,7 +2081,419 @@
    "adopted": "DATA-003-01",
    "verdict": "1위",
    "anchor_ok": false,
-   "error": null
+   "error": null,
+   "held_why": null,
+   "held_cause": null
   }
- ]
+ ],
+ "comment_adopt_off": {
+  "by_condition": {
+   "problem": {
+    "total": 24,
+    "controls": 0,
+    "in_sample": 0,
+    "include_in_sample": false,
+    "evaluated": 24,
+    "errors": 0,
+    "unjudged_errors": 0,
+    "observation_errors": 0,
+    "error_rate": 0.0,
+    "type_only": 0,
+    "positive": 12,
+    "negative": 12,
+    "positive_total": 12,
+    "negative_total": 12,
+    "top1_accuracy": 0.5833,
+    "top3_inclusion": 1.0,
+    "false_positive_rate": 0.9167,
+    "accepted_correct": 0,
+    "accepted_wrong": 0,
+    "held": 24,
+    "held_reasons": {
+     "ambiguous": 1,
+     "ineligible": 3,
+     "no_candidate": 1,
+     "no_reference": 18,
+     "symptom_not_found": 1
+    },
+    "answer_rate": 0.0,
+    "location_confirmed": 0,
+    "location_found": 4,
+    "correct_hold": 12,
+    "held_top_right": 7,
+    "anchor_runs": 0,
+    "anchor_correct": 0,
+    "anchor_missed": 0,
+    "first_total": 2,
+    "first_hold_rate": 1.0
+   }
+  },
+  "runs": [
+   {
+    "key": "MMX-1",
+    "condition": "problem",
+    "expect": "unresolved",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03"
+    ],
+    "adopted": null,
+    "verdict": "오탐",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "XM-1",
+    "condition": "problem",
+    "expect": "unresolved",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03"
+    ],
+    "adopted": null,
+    "verdict": "오탐",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "MXM-1",
+    "condition": "problem",
+    "expect": "unresolved",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03"
+    ],
+    "adopted": null,
+    "verdict": "오탐",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "MMH-1",
+    "condition": "problem",
+    "expect": "NETWORK-001-08",
+    "top": "NETWORK-001-08",
+    "top3": [
+     "NETWORK-001-08",
+     "NETWORK-001-03"
+    ],
+    "adopted": null,
+    "verdict": "1위",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "CTLM-1",
+    "condition": "problem",
+    "expect": "NETWORK-001-03",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03"
+    ],
+    "adopted": null,
+    "verdict": "1위",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "D12R-1",
+    "condition": "problem",
+    "expect": "DATA-002-01",
+    "top": "DATA-002-01",
+    "top3": [
+     "DATA-002-01"
+    ],
+    "adopted": null,
+    "verdict": "1위",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "C15-1",
+    "condition": "problem",
+    "expect": "CALL-001-02",
+    "top": "CALL-001-02",
+    "top3": [
+     "CALL-001-02"
+    ],
+    "adopted": null,
+    "verdict": "1위",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "HAL-1",
+    "condition": "problem",
+    "expect": "NETWORK-001-08",
+    "top": "NETWORK-001-08",
+    "top3": [
+     "NETWORK-001-08"
+    ],
+    "adopted": null,
+    "verdict": "1위",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "TC-1",
+    "condition": "problem",
+    "expect": "unresolved",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03"
+    ],
+    "adopted": null,
+    "verdict": "오탐",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "RECOVER-1",
+    "condition": "problem",
+    "expect": "DATA-003-01",
+    "top": "DATA-003-01",
+    "top3": [
+     "DATA-003-01"
+    ],
+    "adopted": null,
+    "verdict": "1위",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "TOKSAME-1",
+    "condition": "problem",
+    "expect": "unresolved",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03"
+    ],
+    "adopted": null,
+    "verdict": "오탐",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": "typeless_failure_within_link",
+    "held_cause": null
+   },
+   {
+    "key": "TOKNAME-1",
+    "condition": "problem",
+    "expect": "unresolved",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03"
+    ],
+    "adopted": null,
+    "verdict": "오탐",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "TOKONLY-1",
+    "condition": "problem",
+    "expect": "unresolved",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03"
+    ],
+    "adopted": null,
+    "verdict": "오탐",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": "locations",
+    "held_cause": null
+   },
+   {
+    "key": "DUAL-1",
+    "condition": "problem",
+    "expect": "unresolved",
+    "top": null,
+    "top3": [],
+    "adopted": null,
+    "verdict": "정답",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": "locations",
+    "held_cause": null
+   },
+   {
+    "key": "RETEST-1",
+    "condition": "problem",
+    "expect": "unresolved",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03"
+    ],
+    "adopted": null,
+    "verdict": "오탐",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "RETESTX-1",
+    "condition": "problem",
+    "expect": "unresolved",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03"
+    ],
+    "adopted": null,
+    "verdict": "오탐",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "PAIRFAIL-1",
+    "condition": "problem",
+    "expect": "DATA-003-01",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03",
+     "DATA-003-01"
+    ],
+    "adopted": null,
+    "verdict": "상위3",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "PAIRPASS-1",
+    "condition": "problem",
+    "expect": "unresolved",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03"
+    ],
+    "adopted": null,
+    "verdict": "오탐",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "FIRSTTC-1",
+    "condition": "problem",
+    "expect": "unresolved",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03"
+    ],
+    "adopted": null,
+    "verdict": "오탐",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "FIRSTH-1",
+    "condition": "problem",
+    "expect": "NETWORK-001-08",
+    "top": "NETWORK-001-08",
+    "top3": [
+     "NETWORK-001-08",
+     "NETWORK-001-03"
+    ],
+    "adopted": null,
+    "verdict": "1위",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "TOKPOS-1",
+    "condition": "problem",
+    "expect": "DATA-003-01",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03",
+     "DATA-003-01"
+    ],
+    "adopted": null,
+    "verdict": "상위3",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": "comment_unconfirmed",
+    "held_cause": "DATA-003-01"
+   },
+   {
+    "key": "TOKONLYPOS-1",
+    "condition": "problem",
+    "expect": "DATA-003-01",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03",
+     "DATA-003-01"
+    ],
+    "adopted": null,
+    "verdict": "상위3",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": "comment_unconfirmed",
+    "held_cause": "DATA-003-01"
+   },
+   {
+    "key": "NEARPOS-1",
+    "condition": "problem",
+    "expect": "DATA-003-01",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03",
+     "DATA-003-01"
+    ],
+    "adopted": null,
+    "verdict": "상위3",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": null,
+    "held_cause": null
+   },
+   {
+    "key": "CLUEPOS-1",
+    "condition": "problem",
+    "expect": "DATA-003-01",
+    "top": "NETWORK-001-03",
+    "top3": [
+     "NETWORK-001-03",
+     "DATA-003-01"
+    ],
+    "adopted": null,
+    "verdict": "상위3",
+    "anchor_ok": null,
+    "error": null,
+    "held_why": "comment_unconfirmed",
+    "held_cause": "DATA-003-01"
+   }
+  ]
+ }
 }

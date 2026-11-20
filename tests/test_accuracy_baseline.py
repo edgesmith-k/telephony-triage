@@ -24,18 +24,25 @@ import make_accuracy_fixtures as maf  # noqa: E402
 from runner import cleanup_tmp, plugin_root, tmp  # noqa: E402
 
 BASELINE = maf.OUT / "baseline.json"
-ROW = ("key", "condition", "expect", "top", "top3", "adopted", "verdict", "anchor_ok", "error")
+ROW = ("key", "condition", "expect", "top", "top3", "adopted", "verdict", "anchor_ok", "error", "held_why", "held_cause")
+
+
+def _eval(root: Path, db: Path, *extra: str) -> dict:
+    proc = subprocess.run([sys.executable, str(REPO / "tools" / "offline_eval.py"), str(maf.OUT / "labelset.yaml"), "--json",
+                           "--db", str(db), "--plugin-root", str(root), *extra],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)
+    return {"by_condition": out["by_condition"], "runs": [{k: r.get(k) for k in ROW} for r in out["items"]]}
 
 
 def current() -> dict:
     root = plugin_root()     # 명시 루트(SITE_PATHS 제외 복사본) — 사내 레포에서도 같은 결과
     db = maf.build_seed_db(tmp("tt-accuracy-db-") / "db", root)
-    proc = subprocess.run([sys.executable, str(REPO / "tools" / "offline_eval.py"), str(maf.OUT / "labelset.yaml"), "--json",
-                           "--db", str(db), "--plugin-root", str(root)],
-                          capture_output=True, text=True, encoding="utf-8", errors="replace")
-    assert proc.returncode == 0, proc.stderr
-    out = json.loads(proc.stdout)
-    return {"by_condition": out["by_condition"], "runs": [{k: r.get(k) for k in ROW} for r in out["items"]]}
+    out = _eval(root, db)
+    # 코멘트 지점 채택을 끈 problem 조건(보고용) — 기본은 사용자 결정 Y1: 허용(`eligibility.comment_adopt: true`)
+    out["comment_adopt_off"] = _eval(plugin_root(eligibility={"comment_adopt": False}), db, "--condition", "problem")
+    return out
 
 
 @functools.cache
@@ -55,8 +62,8 @@ def test_baseline_matches_current_code():
         "지금 코드의 요약이 기준값과 다르다 — 의도한 변화면 python3 tests/test_accuracy_baseline.py --update 후 diff를 PR에 보인다"
 
 
-STAGE5_CORRECT = ["C15-1", "CTLM-1", "D12R-1", "HAL-1", "MMH-1", "PAIRFAIL-1", "RECOVER-1", "TOKONLYPOS-1", "TOKPOS-1",
-                  "TPEVAL-1", "TPRERR-1", "TPVRF-1"]
+STAGE5_CORRECT = ["C15-1", "CTLM-1", "D12R-1", "HAL-1", "MMH-1", "PAIRFAIL-1", "RECOVER-1", "TOKONLYPOS-1", "TOKPOS-1"]
+R1_CORRECT = ["TPEVAL-1", "TPRERR-1", "TPVRF-1"]      # R1 양성(problem.json 없음 — look_at+problem 조건 밖)
 
 
 def test_stage5_holds_without_reference_and_adopts_only_eligible():
@@ -69,12 +76,34 @@ def test_stage5_holds_without_reference_and_adopts_only_eligible():
     assert [r["key"] for c in ("no_time", "time") for r in runs[c] if r["adopted"] is not None] == []
     adopted = [r for r in runs["look_at"] if r["adopted"]]
     assert all(r["adopted"] == r["expect"] for r in adopted), adopted
-    assert sorted(r["key"] for r in adopted) == STAGE5_CORRECT
+    assert sorted(r["key"] for r in adopted) == sorted(STAGE5_CORRECT + R1_CORRECT)
     for cond in ("no_time", "time"):
         s = now["by_condition"][cond]
         assert (s["accepted_correct"], s["accepted_wrong"], s["held"]) == (0, 0, s["evaluated"]), (cond, s)
         assert set(s["held_reasons"]) <= {"no_reference", "no_candidate", "cause_unconfirmed", "cause_unjudged"}, s
         assert s["held_reasons"].get("no_reference"), s
+
+
+def test_stage5_problem_input_answer_upper_bound():
+    """단계 5-2 완료 기준(정답 입력 problem.json — 라벨에서 손으로 쓴 것, "정답 입력일 때의 상한"): look_at+problem은 틀린 채택
+    0·look_at의 맞는 채택 그대로 + NEARPOS(AP 줄 인용 → 문제 파악 유형으로 근처 사건). problem(기준 줄 없음)은 코멘트 단서만이고
+    `eligibility.comment_adopt` 기본(참, Y1 허용)에서 TOKPOS·TOKONLYPOS·CLUEPOS 3건만 맞게 채택(3/0/21). 끈 실행(보고용)은 그 3건이
+    ineligible(comment_unconfirmed)로 보류된다."""
+    now = _current()
+    runs = {c: [r for r in now["runs"] if r["condition"] == c] for c in ("look_at+problem", "problem")}
+    adopted = [r for r in runs["look_at+problem"] if r["adopted"]]
+    assert all(r["adopted"] == r["expect"] for r in adopted), adopted
+    assert sorted(r["key"] for r in adopted) == sorted(STAGE5_CORRECT + ["NEARPOS-1"])
+    adopted = [r for r in runs["problem"] if r["adopted"]]
+    assert sorted(r["key"] for r in adopted) == ["CLUEPOS-1", "TOKONLYPOS-1", "TOKPOS-1"]
+    assert all(r["adopted"] == r["expect"] for r in adopted), adopted
+    s = now["by_condition"]["problem"]
+    assert (s["accepted_correct"], s["accepted_wrong"], s["held"]) == (3, 0, 21), s
+    # 끈 실행: 그 3건은 붙은 사건의 원인이 정답인 채로 보류(comment_unconfirmed)
+    off = now["comment_adopt_off"]
+    held = [r for r in off["runs"] if r["held_why"] == "comment_unconfirmed"]
+    assert sorted(r["key"] for r in held) == ["CLUEPOS-1", "TOKONLYPOS-1", "TOKPOS-1"]
+    assert all(r["held_cause"] == r["expect"] for r in held) and not any(r["adopted"] for r in off["runs"]), held
 
 
 if __name__ == "__main__" and "--update" in sys.argv:

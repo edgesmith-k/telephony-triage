@@ -82,32 +82,33 @@ def _adopted_location(location: dict, why: str | None, cond_line: bool = False) 
     RIL 요청일 때(`same_line`, 조건 줄로만 붙은 `cond_line`이 아님)만이다 — 포털은 accepted + confirmed면 본 분석을 건너뛴다.
     `cp_point`는 found/point(IPC 응답 뒤 2초 안 첫 사건 — 같은 요청이라는 근거가 없다), 구간(`range`)은 found·kind 그대로(FAIL
     마커는 스텝을 감쌀 뿐 실패 사건 줄이 아니고, 스텝 안에 복구된 일시 실패가 있을 수 있다), 조건 줄로만 붙은 `same_line`은
-    found·kind 그대로(되풀이되는 조건 줄을 글자로 짚은 것일 수 있다), 그 밖(근처 등)도 found. comment 출처는 늘 found."""
+    found·kind 그대로(되풀이되는 조건 줄을 글자로 짚은 것일 수 있다), 그 밖(근처 등)도 found. 문제 파악 허용 유형은 CP 점·근처·
+    구간에서만 사건을 고르므로 유형 거르기로 고른 채택도 늘 found다. comment 출처는 늘 found("한 곳에서 찾았다" ≠ "이번 실패
+    지점을 확인했다")."""
+    if location.get("source") == "comment":      # kind는 단서 찾기 방식(ipc·token point, 글자 near) 그대로
+        return {**location, "state": "found"}
     if why == "same_line" and not cond_line:
-        out = {**location, "state": "confirmed", "kind": "point"}
-    elif why == "cp_point":
-        out = {**location, "state": "found", "kind": "point"}
-    else:
-        out = {**location, "state": "found"}
-    if out.get("source") == "comment":
-        out["state"] = "found"
-    return out
+        return {**location, "state": "confirmed", "kind": "point"}
+    if why == "cp_point":
+        return {**location, "state": "found", "kind": "point"}
+    return {**location, "state": "found"}
 
 
-def _decision(candidates: list[dict], anchor: dict | None, elig: dict | None) -> dict:
+def _decision(candidates: list[dict], anchor: dict | None, elig: dict | None, clue_location: dict | None = None) -> dict:
     """판단 상태(단계 5): 자격 검사(`match.json` → `eligibility`, `common.eligibility`)가 기준 사건에 붙은 원인만 채택한다 — 후보
     목록·순서·점수는 그대로(채택 원인이 --top 밖이면 매처가 후보 끝에 붙였다). 사유는 처음 맞는 것: 후보 없음 → 실패 지점(앵커)
     없음 → 자격 검사 사유(symptom_not_found → ambiguous → ineligible → cause_unjudged·cause_unconfirmed) → 채택.
     `check`·`events[]`(≤3, 붙은 사건 먼저)·`events_total`은 표시용(전체는 JOB/eligibility.json). `fit_check`(적합성 확인 보류)와
-    `counter`(심층 분석 반대 의견)는 check-output만 붙인다."""
-    location = dict((anchor or {}).get("location") or NO_LOCATION)
+    `counter`(심층 분석 반대 의견)는 check-output만 붙인다. 앵커가 없고 문제 파악 단서만 로그에서 찾았으면 실패 지점은 그 단서
+    (`clue_location` — source comment, state found)이고 판정은 자격 검사가 한다."""
+    location = dict((anchor or {}).get("location") or clue_location or NO_LOCATION)
     elig = elig or {}
     extra = {"check": {"why": elig.get("why"), "checked": elig.get("checked", 0), "total": elig.get("total", 0)},
              "events": (elig.get("events") or [])[:eligibility.EVENTS_MAX], "events_total": elig.get("events_total", 0)}
     picked = next((c for c in candidates if elig.get("cause") and c["cause"] == elig["cause"]), None)
     if not candidates:
         reason = "no_candidate"
-    elif anchor is None:
+    elif anchor is None and clue_location is None:
         reason = "no_reference"
     elif elig.get("state") == "accepted" and picked:
         return {"state": "accepted", "reason": "anchored_top",
@@ -151,6 +152,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         self.look_result: dict | None = None     # 기준 줄 찾기 결과 {hits, picked, pick, how, ts, line, at, places} | {hits: 0, why}
         self.look_place: list = []               # 기준 줄 찾기의 고른 곳 줄(자격 검사 기준, anchor.reference_of)
         self.reference: dict | None = None       # 자격 검사 기준(step_anchor가 정함, match_signatures --reference)
+        self.issue_sha: str | None = None        # 이번 실행이 읽은 이슈 입력 파일의 sha256(problem.json source_sha256과 대조)
+        self.problem_use: dict | None = None     # problem.json에서 자격 검사에 쓰는 것(anchor.problem_refs) | None
+        self.clue_rows: list[dict] = []          # 로그에서 찾은 문제 파악 단서 {where, clue, ts, places}(report.md 한 줄씩)
         self.clock_offset: float | None = None   # 장비 시각 → 단말 시각 시계 차(초). --clock-offset > failed_step.clock_offset
         self._steps = None                       # read_steps 결과 캐시 (steps-file은 한 번만 읽는다)
         self.order_fail: dict | None = None      # 스텝 순서 정렬을 시도했으나 앵커를 못 정한 이유 {matched, observable, missed, reason}
@@ -462,6 +466,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         meta_path = self.job / "issue_meta.json"
         if self.offline and a.issue_meta:
             meta = json.loads(Path(a.issue_meta).read_text(encoding="utf-8"))
+            self.issue_sha = hashlib.sha256(Path(a.issue_meta).read_bytes()).hexdigest()
             masker = self.masker()
             auto = None
             if meta.get("failed_step"):
@@ -505,7 +510,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                      "읽은 뒤 같은 명령을 다시 실행한다.", [],
                              tool=self.jira_tool("get_issue"), comments_tool=self.jira_tool("get_comments"),
                              save_to=str(raw_default), **extra)
-        if source is not None:
+        if source is not None:     # 문제 파악(problem.json source_sha256)과 같은 입력인지 대조할 해시 — --consume이 지우기 전에
+            self.issue_sha = self.state.data["issue_sha256"] = hashlib.sha256(Path(source).read_bytes()).hexdigest()
             argv = ["extract", source, "--origin", origin, "--db", self.snap, "--meta-out", meta_path]
             if origin == "mcp":
                 argv.append("--consume")   # 원문을 work_dir에 남기지 않는다 (08-safety.md §8.1)
@@ -514,6 +520,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                                  encoding="utf-8", newline="\n")
             self.state.data["issue_done"] = True
             self.state.save()
+        else:
+            self.issue_sha = self.state.data.get("issue_sha256")
         data = json.loads((self.job / "issue.json").read_text(encoding="utf-8"))
         if data.get("key") and data["key"] != self.key:
             raise Fail(USAGE, f"Jira 응답의 키({data['key']})가 {self.key}와 다르다.")
@@ -852,9 +860,13 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             (self.job / REFERENCE_FILE).unlink(missing_ok=True)
         if regress:
             argv.append("--regress")
-        elif self.reference:
+        elif self.reference or self.problem_use:     # {refs: 명시 기준 + 단서, problem, comment_adopt, dropped}(단계 5-2)
+            use = self.problem_use or {}
+            bundle = {"refs": ([self.reference] if self.reference else []) + use.get("refs", []),
+                      "problem": use.get("problem"), "comment_adopt": use.get("comment_adopt", True),
+                      "dropped": use.get("dropped", [])}
             ref = self.job / REFERENCE_FILE
-            ref.write_text(json.dumps(self.reference, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+            ref.write_text(json.dumps(bundle, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
             argv += ["--reference", ref]
         _, data, _ = self.run.call("4-match" if not regress else "2-time", "match_signatures.py", argv)
         elig = data.pop("eligibility", None)
@@ -1185,6 +1197,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         info, logs, version, code, tz, year = (ctx[k] for k in ("info", "logs", "version", "code", "tz", "year"))
         warn0 = len(self.warnings)
         anchor = self.step_anchor(logs, tz, year, info)
+        self.problem_refs(logs, tz, year)
         around = anchor["fail"] if anchor else self.occurred(info, logs, tz, year)
         events_path = self.job / "events.json"
         if around is None and anchor is None and self.full_events is not None:     # occurred()의 전체 파싱과 같은 인자
@@ -1241,7 +1254,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         flows, flow_lines = self.flows(logs, tz, year, around, events, version, [c["cause"] for c in candidates if c["cause"]],
                                        top)
         code_out = self.resolve_code(code, version, candidates)
-        decision = _decision(candidates, anchor, match.get("eligibility"))
+        decision = _decision(candidates, anchor, match.get("eligibility"), self.clue_location((match.get("eligibility") or {}).get("via")))
         analyzer = self.analyzer(lead_first(decision, candidates))     # 심층 분석 카테고리: 채택 원인(없으면 1위)
         explore = self.explore(lead_first(decision, candidates))     # 적합성 확인도 채택 원인 기준
         explore_input = self.explore_input(around, anchor) if explore and explore["when"] != "never" else None
@@ -1283,7 +1296,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                      **({"uncollected_tags": uncollected} if uncollected else {})},
             "warnings_core": self.warnings[warn0:], "extra_warnings": extra_warnings,
             "attrs": {"clock": self.clock, "order_fail": self.order_fail, "order_evidence": self.order_evidence,
-                      "focus": self.focus, "steps_member": self.steps_member, "look": self.look_result,
+                      "focus": self.focus, "steps_member": self.steps_member, "look": self.look_result, "clues": self.clue_rows,
                       "time_candidates": self.time_candidates},
         }
 

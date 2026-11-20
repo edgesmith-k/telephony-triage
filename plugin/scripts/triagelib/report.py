@@ -64,9 +64,10 @@ def decision_line(dec: dict, cands: list) -> str:
         loc = dec.get("location") or {}
         state = ("찾음" if loc.get("kind") != "range" and loc.get("state") == "found"
                  else _LOCATION_LABEL.get(loc.get("state"), loc.get("state")))
-        where = f"{_SOURCE_LABEL.get(loc.get('source'), loc.get('source'))}·{state}"
         n = selected_rank(dec, cands)
-        text = (f"원인 채택 — {(dec.get('selected') or {}).get('cause')} (실패 지점: {where}, 자격 검사 통과"
+        basis = ("코멘트 단서 기준, 실패 지점 확정 아님" if loc.get("source") == "comment"     # 판정처럼 읽히지 않게(단계 5-2)
+                 else f"실패 지점: {_SOURCE_LABEL.get(loc.get('source'), loc.get('source'))}·{state}, 자격 검사 통과")
+        text = (f"원인 채택 — {(dec.get('selected') or {}).get('cause')} ({basis}"
                 + (f", 규칙 일치 {n + 1}위" if n else "") + ")")
     else:
         why = issuepost.HELD_WHY.get((dec.get("check") or {}).get("why"))
@@ -980,6 +981,9 @@ class ReportMixin:
                              + (f" (시계 차 {manual['offset_sec']:+g}초, 수동)"
                                 if anchor["source"] == "steps_file" and manual.get("mode") == "manual" else "")
                              + jira_part)
+        for row in (getattr(self, "clue_rows", None) or [])[:3]:      # 문제 파악 단서로 찾은 곳(기준 줄처럼, 확정 아님)
+            more = f", 같은 줄 {row['places']}곳이라 하나로 못 정함" if (row.get("places") or 1) > 1 else ""
+            prob.append(f"- 단서 위치: {row['where']} 단서({row['clue']}) 로그에서 찾음 {row['ts']} (확정 아님{more})")
         note = self.look_inputs()["note"]
         if note:        # 확인할 내용은 항상 한 줄. 답은 탐색 분석이 한다 — 탐색을 안 하면 그렇다고 적는다(강제하지 않는다)
             ex = r.get("explore")

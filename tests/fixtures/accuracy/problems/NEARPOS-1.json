@@ -1,0 +1,13 @@
+{
+ "schema_version": 1,
+ "key": "NEARPOS-1",
+ "origin": "정답 입력",
+ "symptom": {
+  "text": "데이터 연결 실패",
+  "types": [
+   "DATA-003"
+  ],
+  "not_in_db": false
+ },
+ "clues": []
+}
