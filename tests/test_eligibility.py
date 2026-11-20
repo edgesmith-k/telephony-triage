@@ -77,6 +77,8 @@ def test_same_line_counts_condition_lines_in_window_and_same_ril_request():
     assert outcome(el.decide([e], [ref])) == ("accepted", "anchored_top", "D1")
     hidden = ev("DATA-003", 120, ["D1"], line=(0, 16), raw=[{**raw, "ril": {**raw["ril"], "serial": "<CRED#1>"}}])
     assert outcome(el.decide([hidden], [ref])) == ("held", "ineligible", "near_without_symptom")   # 가린 serial은 다른 요청
+    far = point(9, 300, ril={"serial": 410, "pid": 2101, "paired_ts": "2026-11-14T01:05:01+00:00"})
+    assert outcome(el.decide([e], [far])) == ("held", "ineligible", "near_without_symptom")   # 짝 시각이 다르면 serial 재사용(C-17)
 
 
 def test_condition_line_fallback_adopts_but_location_stays_found():
@@ -102,6 +104,28 @@ def test_cp_point_links_two_seconds_after_response_same_slot():
     assert outcome(el.decide(EVENTS, [ipc(197)])) == ("held", "ineligible", "no_event_at_reference")   # 3초 뒤는 안 붙는다
     other = [ev("DATA-003", 200, ["D1"], line=(0, 30), phone=1)]
     assert outcome(el.decide(other, [ipc(199, slot=0)])) == ("held", "ineligible", "no_event_at_reference")   # 다른 슬롯
+
+
+def test_first_counted_failure_decides_cp_point_and_range():
+    """R1(C-1): 기준 뒤 첫(구간은 FAIL에 가장 가까운) 세는 실패가 유형 없음이면 다른 요청의 유형 사건을 채택하지 않는다. 세는 실패 =
+    유형 사건 + RIL 요청 실패(ril_error·ril_timeout·ril_no_response). 벤더 IPC·추출기 파생 이벤트는 세지 않고, RIL 실패 뒤 0.5초 안
+    같은 슬롯(또는 모름) 유형 사건이 오면 그 사건의 RIL 쪽 줄로 보고 세지 않는다(흡수)."""
+    ipc = point(4, 199, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 222})
+    other = ev("DATA-003", 200.5, ["D2"], line=(0, 30), phone=None)
+    for name in ("ril_error", "ril_timeout", "ril_no_response"):
+        own = ev(None, 199.1, line=(0, 5), name=name)
+        assert outcome(el.decide([own, other], [ipc])) == ("held", "symptom_not_found", "typeless_failure_within_link"), name
+    assert outcome(el.decide([ev(None, 199.1, line=(0, 5), name="ril_error"), ev("DATA-003", 199.4, ["D1"], line=(0, 30))],
+                             [ipc])) == ("accepted", "anchored_top", "D1")       # 0.3초 뒤 유형 사건: 흡수
+    anyslot = point(4, 199, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 222}, phone=None)
+    assert outcome(el.decide([ev(None, 199.1, line=(0, 5), name="ril_error"), ev("DATA-003", 199.4, ["D1"], line=(0, 30), phone=1)],
+                             [anyslot])) == ("held", "symptom_not_found", "typeless_failure_within_link")   # 다른 슬롯은 흡수 안 함
+    for name in ("vendor_ipc_error", "vendor_request_failed", "data_evaluation_rejected"):
+        assert outcome(el.decide([ev(None, 199.1, line=(0, 5), name=name), other], [ipc])) == ("accepted", "anchored_top", "D2"), name
+    net = ev("NETWORK-001", 100, ["N3"], line=(0, 10))
+    late, early = ev(None, 125, line=(0, 20), name="ril_error"), ev(None, 95, line=(0, 2), name="ril_error")
+    assert outcome(el.decide([net, late], [rng("log_marker", 90, 130)])) == ("held", "symptom_not_found", "typeless_failure_in_range")
+    assert outcome(el.decide([early, net], [rng("log_marker", 90, 130)])) == ("accepted", "anchored_top", "N3")   # FAIL에 가까운 것이 유형
 
 
 def test_near_line_is_held_without_problem_types():
@@ -362,6 +386,96 @@ def test_reference_on_merged_neighbour_failure_is_held(seed_db):
         assert (e["state"], e["reason"], e["why"]) == ("held", "ambiguous", "multiple_events"), (path.name, e)
 
 
+def _range_kst(start: float, fail: float) -> dict:
+    base = datetime(2026, 11, 14, tzinfo=KST)
+    return {"kind": "range", "source": "log_marker", "places": 1, "start": (base + timedelta(seconds=start)).isoformat(),
+            "fail": (base + timedelta(seconds=fail)).isoformat()}
+
+
+def _mk_tc(work: Path) -> Path:
+    """mk_tc(C-1(c)): 스텝 안 비행기 모드 켬·끔 뒤 데이터 연결이 DB에 없는 오류(RILJ error 2)로 실패, FAIL 마커 구간."""
+    m = maf.minute
+    return _write(work / "mk_tc.log", maf.build_log([(maf.M, m(0)), (maf.OFF, m(0.5)), ("X", m(1.5)), (maf.M, m(3))]))
+
+
+def _write(log: Path, lines: list[str]) -> Path:
+    log.write_text("".join(x + "\n" for x in lines), encoding="utf-8", newline="\n")
+    return log
+
+
+def _mk_f(work: Path) -> Path:
+    """M1: FAIL 마커 구간 안 APN 실패 하나(정답 DATA-003-01)."""
+    return _write(work / "mk_f.log", maf.build_log([(maf.M, maf.minute(0)), (maf.F, maf.minute(2)), (maf.M, maf.minute(3))]))
+
+
+TOK = "VIPC_SETUP_DATA (token=0x0e1)"
+R1_CASES = [   # (이름, 로그, 기준 줄 글 | 구간(START초, FAIL초), 기대) — 재현 C:/hw/rv1120/design-review/s3.sh·s4.sh(11/20)
+    ("cp_typeless", "cp-typeless.log", "VIPC_SETUP_DATA (token=0x0de)", ("held", "symptom_not_found", "typeless_failure_within_link")),
+    ("cp_dualsim", "cp-dualsim.log", "VIPC_SETUP_DATA (token=0x0de)", ("held", "symptom_not_found", "typeless_failure_within_link")),
+    ("mk_tc", _mk_tc, (maf.minute(0) - 5, maf.minute(1.5) + 10), ("held", "symptom_not_found", "typeless_failure_in_range")),
+    ("tokpos", "tokpos.log", TOK, ("accepted", "anchored_top", "DATA-003-01")),
+    ("tp_rerr", "tp-rerr.log", TOK, ("accepted", "anchored_top", "DATA-003-01")),
+    ("tp_rerr_mk", "tp-rerr.log", (maf.minute(2) - 1, maf.minute(2) + 5), ("accepted", "anchored_top", "DATA-003-01")),
+    ("tp_eval", "tp-eval.log", TOK, ("accepted", "anchored_top", "DATA-003-01")),
+    ("tp_eval_mk", "tp-eval.log", (maf.minute(2) - 1, maf.minute(2) + 5), ("accepted", "anchored_top", "DATA-003-01")),
+    ("tp_vrf", "tp-vrf.log", TOK, ("accepted", "anchored_top", "DATA-003-01")),
+    ("M1", _mk_f, (maf.minute(2) - 30, maf.minute(2) + 5), ("accepted", "anchored_top", "DATA-003-01")),
+]
+
+
+@pytest.mark.parametrize(("name", "log", "ref", "expect"), R1_CASES, ids=[c[0] for c in R1_CASES])
+def test_r1_named_repros(seed_db, name, log, ref, expect):
+    """R1 이름 붙은 재현(실제 경로): 음성은 보류(기준 요청 자신이 DB에 없는 오류로 실패 — 다른 요청의 인증 실패·앞 스텝 비행기 모드를
+    채택하지 않는다), 양성은 채택(RILJ 오류 응답 바로 뒤 DNC 실패, 평가 줄 "Data disallowed", 벤더 완료 줄 result≠0이 있어도)."""
+    _r1(seed_db, name, log, ref, expect)
+
+
+def _r1(seed_db, name, log, ref, expect, types=None):
+    path = log(tmp("tt-elig-r1-")) if callable(log) else maf.OUT / log
+    if isinstance(ref, str):
+        found = _find(seed_db, path, ref, stamp=lookat.stamp(ref))
+        ref = {"kind": "line", "source": "look_at", "places": found["places"], "lines": found["place"]}
+    else:
+        ref = _range_kst(*ref)
+    if types:       # 문제 파악 유형(단계 5-2 reference.json 묶음 모양)
+        ref = {"refs": [ref], "problem": {"types": types, "not_in_db": False}, "comment_adopt": True}
+    e = _eligibility(seed_db, path, ref)["eligibility"]
+    assert (e["state"], e["reason"], e["cause"] if e["state"] == "accepted" else e["why"]) == expect, (name, e)
+
+
+def _near_x_then_f(work: Path) -> Path:
+    """near_x_then_f(C-1(b)): X 요청이 10:02:00.620 RILJ error 2(DB에 없음)로 실패, 2분 뒤 다른 요청(0420)이 APN 없음으로 실패."""
+    t2 = maf.minute(2)
+    return _write(work / "near_x_then_f.log", sorted(
+        maf.segment(maf.M, maf.minute(0)) + maf.segment("X", t2) + maf._rename(maf.segment(maf.F, t2 + 120), "0420", "DN-130-C"),
+        key=lambda x: maf.STAMP.match(x).group(1)))
+
+
+def _f_then_m(work: Path) -> Path:
+    """f_then_m(C-6): token 0x0e1 APN 실패(DATA-003) 0.17초 뒤 비행기 모드 사건(NETWORK-001)."""
+    t2 = maf.minute(2)
+    return _write(work / "f_then_m.log", sorted(maf.segment(maf.F, t2, "0x0e1") + maf.segment(maf.M, t2 + 0.7),
+                                                key=lambda x: maf.STAMP.match(x).group(1)))
+
+
+NEAR = "11-14 10:02:00.502  2101  2101 D DN-120-C: ConnectingState: setupData: accessNetwork=EUTRAN, isSatellite=false"
+NEAR0 = "11-14 10:02:00.000  2101  2101 D DNC-0   : onAddNetworkRequest"
+R1_PROBLEM_CASES = [    # 문제 파악 유형이 있을 때(근처·허용 유형) — 재현 C:/hw/rv1120/v4.sh·design-review/s3.sh·s4.sh
+    ("near_x_then_f", _near_x_then_f, NEAR, ["DATA-003"], ("held", "symptom_not_found", "typeless_failure_near")),
+    ("f_then_m", _f_then_m, TOK, ["NETWORK-001"], ("held", "symptom_not_found", "other_failure_first")),
+    ("tokpos_near", "tokpos.log", NEAR, ["DATA-003"], ("accepted", "anchored_top", "DATA-003-01")),
+    ("tp_rerr_near", "tp-rerr.log", NEAR, ["DATA-003"], ("accepted", "anchored_top", "DATA-003-01")),
+    ("tp_eval_near0", "tp-eval.log", NEAR0, ["DATA-003"], ("accepted", "anchored_top", "DATA-003-01")),
+]
+
+
+@pytest.mark.parametrize(("name", "log", "ref", "types", "expect"), R1_PROBLEM_CASES, ids=[c[0] for c in R1_PROBLEM_CASES])
+def test_r1_named_repros_with_problem_types(seed_db, name, log, ref, types, expect):
+    """R1 근처·허용 유형: 근처 첫 실패가 DB에 없는 오류면 2분 뒤 허용 유형 사건을, 첫 실패가 허용 밖 유형이면 그 뒤 허용 유형 사건을
+    채택하지 않는다(C-1(b)·C-6). 양성은 RILJ 오류 응답 뒤 DNC 실패·평가 줄이 있어도 채택."""
+    _r1(seed_db, name, log, ref, expect, types)
+
+
 def test_absence_end_is_parse_window_end(seed_db):
     """리뷰 P1-1: 부분 파싱(--full 아님)이면 안 나옴 확인 끝은 min(로그 끝, 이번 파싱 창 끝) — 창 밖은 확인한 것으로 세지 않는다.
     통화 끊김(10:05:19.7) 뒤 로그는 10:07까지 이어지지만 창이 10:05:21에 끝나면 원인의 '없어야 할 줄'을 확인하지 못했다."""
@@ -445,10 +559,13 @@ def clue(ref: dict, **kw) -> dict:
 
 
 def test_problem_types_make_near_and_steps_file_range_eligible():
-    """§2.2: 근처·TC 파일 시각 구간은 문제 파악 유형이 있어야 붙는다 — 허용 유형만, 같은 줄 점은 유형으로 거르지 않는다."""
+    """§2.2: 근처·TC 파일 시각 구간은 문제 파악 유형이 있어야 붙는다 — 허용 유형만, 같은 줄 점은 유형으로 거르지 않는다.
+    R1(11/20): 근처 첫 실패·구간 마지막 실패가 허용 밖 유형이면 건너뛰지 않고 보류(옛 기대 no_allowed_event_near·채택)."""
     assert outcome(el.decide(EVENTS, [point(99, 150)], problem=D3)) == ("accepted", "anchored_top", "D1")
-    assert outcome(el.decide(EVENTS, [point(99, 150)], problem={"types": ["CALL-001"], "not_in_db": False})) == \
-        ("held", "symptom_not_found", "no_allowed_event_near")
+    call = {"types": ["CALL-001"], "not_in_db": False}
+    assert outcome(el.decide(EVENTS, [point(99, 150)], problem=call)) == ("held", "symptom_not_found", "other_failure_first")
+    assert outcome(el.decide(EVENTS, [rng("log_marker", 100, 210)], problem=call)) == \
+        ("held", "symptom_not_found", "other_failure_last")
     assert outcome(el.decide(EVENTS, [point(99, 600)], problem=D3)) == ("held", "symptom_not_found", "no_allowed_event_near")
     assert outcome(el.decide(EVENTS, [rng("steps_file", 150, 210)], problem=D3)) == ("accepted", "anchored_top", "D1")
     # 구간 안 NETWORK-001(N3)은 허용 유형이 아니라 빠진다 — 거르지 않으면 원인이 둘(multiple_events)
@@ -467,7 +584,11 @@ def test_adoption_picked_by_problem_types_is_never_confirmed():
     net = {"types": ["NETWORK-001"], "not_in_db": False}
     cands = [{"category": "network", "type": "NETWORK-001", "cause": "N3"}]
     ipc = point(4, 199, ipc={"dir": "rsp", "name": "VIPC_X", "token": 1})
-    evs = [ev("DATA-003", 199.3, ["D1"], line=(0, 30)), ev("NETWORK-001", 200.5, ["N3"], line=(0, 31))]
+    # R1(C-6): 첫 실패가 허용 밖 유형(DATA-003)이면 허용 유형으로 건너뛰어 뒤 NETWORK 사건을 채택하지 않는다(옛 기대는 채택 N3)
+    first_other = [ev("DATA-003", 199.3, ["D1"], line=(0, 30)), ev("NETWORK-001", 200.5, ["N3"], line=(0, 31))]
+    assert outcome(el.decide(first_other, [ipc], problem=net)) == ("held", "symptom_not_found", "other_failure_first")
+    evs = [ev("NETWORK-001", 199.3, ["N3"], line=(0, 31)), ev("DATA-003", 200.5, ["D1"], line=(0, 30))]
+    assert outcome(el.decide(evs, [ipc])) == ("held", "ambiguous", "multiple_events")     # 유형 없이는 원인이 둘
     cases = ((evs, ipc, {"state": "confirmed", "source": "look_at", "kind": "point"}),
              ([ev("DATA-003", 105, ["D1"], line=(0, 5)), ev("NETWORK-001", 110, ["N3"], line=(0, 7))], rng("log_marker", 100, 130),
               {"state": "confirmed", "source": "log_marker", "kind": "range"}))
@@ -493,7 +614,7 @@ def test_clue_ipc_point_and_comment_adopt_switch():
     assert [e["type"] for e in held["events"]] == ["DATA-003"]          # 붙은 사건은 싣는다
     assert outcome(el.decide(EVENTS, [ipc], problem=D3)) == ("accepted", "anchored_top", "D1")
     assert outcome(el.decide(EVENTS, [ipc], problem={"types": ["CALL-001"], "not_in_db": False}, comment_adopt=True)) == \
-        ("held", "symptom_not_found", "typeless_failure_within_link")     # 2초 안 사건이 허용 유형이 아님
+        ("held", "symptom_not_found", "other_failure_first")     # 2초 안 첫 실패가 허용 유형이 아님(R1 — 옛 기대 typeless_failure_within_link)
 
 
 def test_clue_keeps_real_hold_reason_whether_comment_adopt_or_not():
@@ -586,6 +707,8 @@ def test_run_reads_problem_only_for_same_input_and_fresh_clues(seed_db):
 
     a, _ = _problem_run(seed_db, "stale", "cluepos.log", [{**IPC_CLUE, "stale": True}])
     assert a["decision"]["reason"] == "no_reference"                                     # 이전 회차 단서는 안 쓴다(H03)
+    a, _ = _problem_run(seed_db, "nostale", "cluepos.log", [{k: v for k, v in IPC_CLUE.items() if k != "stale"}])
+    assert a["decision"]["reason"] == "no_reference"         # stale 칸이 없는 단서도 안 쓴다 — false만 이번 회차(C-17)
 
     a, out = _problem_run(seed_db, "missing", "cluepos.log", [{**IPC_CLUE, "token": "0x0ff"}])
     assert a["decision"]["reason"] == "no_reference"
