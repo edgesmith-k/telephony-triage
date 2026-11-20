@@ -427,14 +427,53 @@ R1_CASES = [   # (이름, 로그, 기준 줄 글 | 구간(START초, FAIL초), �
 def test_r1_named_repros(seed_db, name, log, ref, expect):
     """R1 이름 붙은 재현(실제 경로): 음성은 보류(기준 요청 자신이 DB에 없는 오류로 실패 — 다른 요청의 인증 실패·앞 스텝 비행기 모드를
     채택하지 않는다), 양성은 채택(RILJ 오류 응답 바로 뒤 DNC 실패, 평가 줄 "Data disallowed", 벤더 완료 줄 result≠0이 있어도)."""
+    _r1(seed_db, name, log, ref, expect)
+
+
+def _r1(seed_db, name, log, ref, expect, types=None):
     path = log(tmp("tt-elig-r1-")) if callable(log) else maf.OUT / log
     if isinstance(ref, str):
-        found = _find(seed_db, path, ref)
+        found = _find(seed_db, path, ref, stamp=lookat.stamp(ref))
         ref = {"kind": "line", "source": "look_at", "places": found["places"], "lines": found["place"]}
     else:
         ref = _range_kst(*ref)
+    if types:       # 문제 파악 유형(단계 5-2 reference.json 묶음 모양)
+        ref = {"refs": [ref], "problem": {"types": types, "not_in_db": False}, "comment_adopt": True}
     e = _eligibility(seed_db, path, ref)["eligibility"]
     assert (e["state"], e["reason"], e["cause"] if e["state"] == "accepted" else e["why"]) == expect, (name, e)
+
+
+def _near_x_then_f(work: Path) -> Path:
+    """near_x_then_f(C-1(b)): X 요청이 10:02:00.620 RILJ error 2(DB에 없음)로 실패, 2분 뒤 다른 요청(0420)이 APN 없음으로 실패."""
+    t2 = maf.minute(2)
+    return _write(work / "near_x_then_f.log", sorted(
+        maf.segment(maf.M, maf.minute(0)) + maf.segment("X", t2) + maf._rename(maf.segment(maf.F, t2 + 120), "0420", "DN-130-C"),
+        key=lambda x: maf.STAMP.match(x).group(1)))
+
+
+def _f_then_m(work: Path) -> Path:
+    """f_then_m(C-6): token 0x0e1 APN 실패(DATA-003) 0.17초 뒤 비행기 모드 사건(NETWORK-001)."""
+    t2 = maf.minute(2)
+    return _write(work / "f_then_m.log", sorted(maf.segment(maf.F, t2, "0x0e1") + maf.segment(maf.M, t2 + 0.7),
+                                                key=lambda x: maf.STAMP.match(x).group(1)))
+
+
+NEAR = "11-14 10:02:00.502  2101  2101 D DN-120-C: ConnectingState: setupData: accessNetwork=EUTRAN, isSatellite=false"
+NEAR0 = "11-14 10:02:00.000  2101  2101 D DNC-0   : onAddNetworkRequest"
+R1_PROBLEM_CASES = [    # 문제 파악 유형이 있을 때(근처·허용 유형) — 재현 C:/hw/rv1120/v4.sh·design-review/s3.sh·s4.sh
+    ("near_x_then_f", _near_x_then_f, NEAR, ["DATA-003"], ("held", "symptom_not_found", "typeless_failure_near")),
+    ("f_then_m", _f_then_m, TOK, ["NETWORK-001"], ("held", "symptom_not_found", "other_failure_first")),
+    ("tokpos_near", "tokpos.log", NEAR, ["DATA-003"], ("accepted", "anchored_top", "DATA-003-01")),
+    ("tp_rerr_near", "tp-rerr.log", NEAR, ["DATA-003"], ("accepted", "anchored_top", "DATA-003-01")),
+    ("tp_eval_near0", "tp-eval.log", NEAR0, ["DATA-003"], ("accepted", "anchored_top", "DATA-003-01")),
+]
+
+
+@pytest.mark.parametrize(("name", "log", "ref", "types", "expect"), R1_PROBLEM_CASES, ids=[c[0] for c in R1_PROBLEM_CASES])
+def test_r1_named_repros_with_problem_types(seed_db, name, log, ref, types, expect):
+    """R1 근처·허용 유형: 근처 첫 실패가 DB에 없는 오류면 2분 뒤 허용 유형 사건을, 첫 실패가 허용 밖 유형이면 그 뒤 허용 유형 사건을
+    채택하지 않는다(C-1(b)·C-6). 양성은 RILJ 오류 응답 뒤 DNC 실패·평가 줄이 있어도 채택."""
+    _r1(seed_db, name, log, ref, expect, types)
 
 
 def test_absence_end_is_parse_window_end(seed_db):
@@ -520,10 +559,13 @@ def clue(ref: dict, **kw) -> dict:
 
 
 def test_problem_types_make_near_and_steps_file_range_eligible():
-    """§2.2: 근처·TC 파일 시각 구간은 문제 파악 유형이 있어야 붙는다 — 허용 유형만, 같은 줄 점은 유형으로 거르지 않는다."""
+    """§2.2: 근처·TC 파일 시각 구간은 문제 파악 유형이 있어야 붙는다 — 허용 유형만, 같은 줄 점은 유형으로 거르지 않는다.
+    R1(11/20): 근처 첫 실패·구간 마지막 실패가 허용 밖 유형이면 건너뛰지 않고 보류(옛 기대 no_allowed_event_near·채택)."""
     assert outcome(el.decide(EVENTS, [point(99, 150)], problem=D3)) == ("accepted", "anchored_top", "D1")
-    assert outcome(el.decide(EVENTS, [point(99, 150)], problem={"types": ["CALL-001"], "not_in_db": False})) == \
-        ("held", "symptom_not_found", "no_allowed_event_near")
+    call = {"types": ["CALL-001"], "not_in_db": False}
+    assert outcome(el.decide(EVENTS, [point(99, 150)], problem=call)) == ("held", "symptom_not_found", "other_failure_first")
+    assert outcome(el.decide(EVENTS, [rng("log_marker", 100, 210)], problem=call)) == \
+        ("held", "symptom_not_found", "other_failure_last")
     assert outcome(el.decide(EVENTS, [point(99, 600)], problem=D3)) == ("held", "symptom_not_found", "no_allowed_event_near")
     assert outcome(el.decide(EVENTS, [rng("steps_file", 150, 210)], problem=D3)) == ("accepted", "anchored_top", "D1")
     # 구간 안 NETWORK-001(N3)은 허용 유형이 아니라 빠진다 — 거르지 않으면 원인이 둘(multiple_events)
@@ -542,7 +584,11 @@ def test_adoption_picked_by_problem_types_is_never_confirmed():
     net = {"types": ["NETWORK-001"], "not_in_db": False}
     cands = [{"category": "network", "type": "NETWORK-001", "cause": "N3"}]
     ipc = point(4, 199, ipc={"dir": "rsp", "name": "VIPC_X", "token": 1})
-    evs = [ev("DATA-003", 199.3, ["D1"], line=(0, 30)), ev("NETWORK-001", 200.5, ["N3"], line=(0, 31))]
+    # R1(C-6): 첫 실패가 허용 밖 유형(DATA-003)이면 허용 유형으로 건너뛰어 뒤 NETWORK 사건을 채택하지 않는다(옛 기대는 채택 N3)
+    first_other = [ev("DATA-003", 199.3, ["D1"], line=(0, 30)), ev("NETWORK-001", 200.5, ["N3"], line=(0, 31))]
+    assert outcome(el.decide(first_other, [ipc], problem=net)) == ("held", "symptom_not_found", "other_failure_first")
+    evs = [ev("NETWORK-001", 199.3, ["N3"], line=(0, 31)), ev("DATA-003", 200.5, ["D1"], line=(0, 30))]
+    assert outcome(el.decide(evs, [ipc])) == ("held", "ambiguous", "multiple_events")     # 유형 없이는 원인이 둘
     cases = ((evs, ipc, {"state": "confirmed", "source": "look_at", "kind": "point"}),
              ([ev("DATA-003", 105, ["D1"], line=(0, 5)), ev("NETWORK-001", 110, ["N3"], line=(0, 7))], rng("log_marker", 100, 130),
               {"state": "confirmed", "source": "log_marker", "kind": "range"}))
@@ -568,7 +614,7 @@ def test_clue_ipc_point_and_comment_adopt_switch():
     assert [e["type"] for e in held["events"]] == ["DATA-003"]          # 붙은 사건은 싣는다
     assert outcome(el.decide(EVENTS, [ipc], problem=D3)) == ("accepted", "anchored_top", "D1")
     assert outcome(el.decide(EVENTS, [ipc], problem={"types": ["CALL-001"], "not_in_db": False}, comment_adopt=True)) == \
-        ("held", "symptom_not_found", "typeless_failure_within_link")     # 2초 안 사건이 허용 유형이 아님
+        ("held", "symptom_not_found", "other_failure_first")     # 2초 안 첫 실패가 허용 유형이 아님(R1 — 옛 기대 typeless_failure_within_link)
 
 
 def test_clue_keeps_real_hold_reason_whether_comment_adopt_or_not():
@@ -661,6 +707,8 @@ def test_run_reads_problem_only_for_same_input_and_fresh_clues(seed_db):
 
     a, _ = _problem_run(seed_db, "stale", "cluepos.log", [{**IPC_CLUE, "stale": True}])
     assert a["decision"]["reason"] == "no_reference"                                     # 이전 회차 단서는 안 쓴다(H03)
+    a, _ = _problem_run(seed_db, "nostale", "cluepos.log", [{k: v for k, v in IPC_CLUE.items() if k != "stale"}])
+    assert a["decision"]["reason"] == "no_reference"         # stale 칸이 없는 단서도 안 쓴다 — false만 이번 회차(C-17)
 
     a, out = _problem_run(seed_db, "missing", "cluepos.log", [{**IPC_CLUE, "token": "0x0ff"}])
     assert a["decision"]["reason"] == "no_reference"

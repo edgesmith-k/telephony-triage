@@ -19,12 +19,14 @@
 - 점(CP token): 기준이 벤더 IPC 줄 → 기준 응답(RSP, 없으면 REQ)이 성공 값이면 ineligible/no_event_at_reference(기준 자체가 실패가
   아니다), 아니면 그 뒤 `link_ms`(기본 `DEFAULT_LINK_MS` 2초) 안 같은 슬롯(또는 모름) 첫 유형 사건(허용 유형이 있으면 그 유형만).
   창 안 첫 세는 실패가 유형 없음(기준 요청 자신이 DB에 없는 오류로 실패)이거나 세는 실패 없이 유형 없는 실패만 있으면
-  symptom_not_found/typeless_failure_within_link, 실패가 없으면 ineligible/no_event_at_reference. 붙인 사건이 같은 요청이라는
+  symptom_not_found/typeless_failure_within_link, 첫 세는 실패가 허용 밖 유형이면 symptom_not_found/other_failure_first(허용 유형으로
+  건너뛰어 뒤 사건을 고르지 않는다), 실패가 없으면 ineligible/no_event_at_reference. 붙인 사건이 같은 요청이라는
   근거는 없어 실패 지점은 found(driver).
-- 근처(그 밖의 AP 줄): 문제 파악 유형(`allowed`)이 있을 때만 기준 시각부터 `NEAR_SEC` 안 허용 유형 첫 사건(없으면
-  symptom_not_found/no_allowed_event_near), 유형이 없으면 ineligible/near_without_symptom.
+- 근처(그 밖의 AP 줄): 문제 파악 유형(`allowed`)이 있을 때만 기준 시각부터 `NEAR_SEC` 안 같은 슬롯(또는 모름) 첫 세는 실패가
+  허용 유형이면 그 사건(첫 실패가 유형 없음 → symptom_not_found/typeless_failure_near, 허용 밖 유형 → other_failure_first, 실패
+  없음 → no_allowed_event_near), 유형이 없으면 ineligible/near_without_symptom.
 - 구간: 로그 FAIL 마커(START, 없으면 FAIL−120초 ~ FAIL) 안 유형 사건(허용 유형이 있으면 그 유형만) 전부 — 채택 원인이 모두 같을
-  때만(구간 안 마지막 세는 실패가 유형 없음이면 symptom_not_found/typeless_failure_in_range). steps-file 시각 구간은 문제 파악 유형이 있어야(없으면 ineligible/range_without_symptom), 스텝 순서·START만은 채택 안 함
+  때만(구간 안 마지막 세는 실패가 유형 없음이면 symptom_not_found/typeless_failure_in_range, 허용 밖 유형이면 other_failure_last). steps-file 시각 구간은 문제 파악 유형이 있어야(없으면 ineligible/range_without_symptom), 스텝 순서·START만은 채택 안 함
   (ineligible/range_end_unknown). 같은 줄 점은 유형으로 거르지 않는다. FAIL 마커는 스텝을 감쌀 뿐 실패 사건 줄이 아니라 채택해도
   실패 지점은 found(driver). 허용 유형으로 고른 CP 점·근처·구간 채택은 모두 found라 유형 거르기가 confirmed를 만들지 않는다.
 - 여러 곳(`places` > 1) ambiguous/locations, 슬롯 둘 이상 ambiguous/slots, 출처끼리 다른 사건 ambiguous/sources.
@@ -183,6 +185,8 @@ def _attach_line(ref: dict, events: list[dict], link_ms: int, allowed: set | Non
         fails = [e for e in _fails(events) if id(e) in inwin]
         if fails and not fails[0]["type"]:     # 기준 요청 자신이 DB에 없는 오류로 실패 — 뒤 다른 요청의 사건을 붙이지 않는다
             return "held", "symptom_not_found", "typeless_failure_within_link"
+        if fails and allowed is not None and fails[0]["type"] not in allowed:     # 첫 실패가 다른 유형 — 허용 유형으로 건너뛰지 않는다
+            return "held", "symptom_not_found", "other_failure_first"
         if typed:
             return "events", typed[:1], "cp_point"
         return ("held", "symptom_not_found", "typeless_failure_within_link") if win else \
@@ -204,8 +208,17 @@ def _attach_line(ref: dict, events: list[dict], link_ms: int, allowed: set | Non
     if allowed is None:
         return "held", "ineligible", "near_without_symptom"     # 근처: 문제 파악 유형이 있어야 붙인다
     t0 = min(ts(x["ts"]) for x in lines) if lines else None
-    near = [e for e in events if t0 and e["type"] in allowed and t0 <= e["at"] <= t0 + timedelta(seconds=NEAR_SEC)]
-    return ("events", near[:1], "near") if near else ("held", "symptom_not_found", "no_allowed_event_near")
+    slot = next((x.get("phone") for x in lines if x.get("phone") is not None), None)
+    win = {id(e) for e in events if t0 and t0 <= e["at"] <= t0 + timedelta(seconds=NEAR_SEC)
+           and (slot is None or e.get("phone") in (slot, None))}     # IPC 점처럼 기준 슬롯(또는 모름)만
+    fails = [e for e in _fails(events) if id(e) in win]
+    if not fails:
+        return "held", "symptom_not_found", "no_allowed_event_near"
+    if not fails[0]["type"]:     # 기준 뒤 첫 실패가 DB에 없는 오류 — 몇 분 뒤 다른 요청의 허용 유형 사건을 고르지 않는다
+        return "held", "symptom_not_found", "typeless_failure_near"
+    if fails[0]["type"] not in allowed:
+        return "held", "symptom_not_found", "other_failure_first"
+    return "events", fails[:1], "near"
 
 
 def _attach_range(ref: dict, events: list[dict], allowed: set | None = None) -> tuple:
@@ -218,6 +231,8 @@ def _attach_range(ref: dict, events: list[dict], allowed: set | None = None) -> 
     last = [e for e in _fails(events) if lo <= e["at"] <= fail][-1:]
     if last and not last[0]["type"]:     # FAIL에 가장 가까운 실패가 DB에 없는 오류 — 앞 스텝 조작의 사건을 채택하지 않는다
         return "held", "symptom_not_found", "typeless_failure_in_range"
+    if last and allowed is not None and last[0]["type"] not in allowed:     # FAIL에 가장 가까운 실패가 다른 유형
+        return "held", "symptom_not_found", "other_failure_last"
     inside = [e for e in events if e["type"] and (allowed is None or e["type"] in allowed) and lo <= e["at"] <= fail]
     return ("events", inside, "range") if inside else ("held", "symptom_not_found", "no_event_in_range")
 
