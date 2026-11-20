@@ -14,6 +14,7 @@ import platforms
 import trackers
 from common import compat, eligibility, evidence, failedstep, issuedb, lookat, masking, stepanchor, userconfig
 from common import flows as flowlib
+from common import logtime as lc
 from common.exitcodes import CHECK_FAILED, USAGE
 
 from .anchor import AnchorMixin, _parse_ts
@@ -87,8 +88,8 @@ def _adopted_location(location: dict, why: str | None, cond_line: bool = False) 
     마커는 스텝을 감쌀 뿐 실패 사건 줄이 아니고, 스텝 안에 복구된 일시 실패가 있을 수 있다), 조건 줄로만 붙은 `same_line`은
     found·kind 그대로(되풀이되는 조건 줄을 글자로 짚은 것일 수 있다), 그 밖(근처 등)도 found. 문제 파악 허용 유형은 CP 점·근처·
     구간에서만 사건을 고르므로 유형 거르기로 고른 채택도 늘 found다. comment 출처는 늘 found("한 곳에서 찾았다" ≠ "이번 실패
-    지점을 확인했다")."""
-    if location.get("source") == "comment":      # kind는 단서 찾기 방식(ipc·token point, 글자 near) 그대로
+    지점을 확인했다"). 모델이 코멘트에서 고른 기준 줄(`--look-at-source model`, source model)도 같다."""
+    if location.get("source") in ("comment", "model"):      # kind는 단서 찾기 방식(ipc·token point, 글자 near) 그대로
         return {**location, "state": "found"}
     if why == "same_line" and not cond_line:
         return {**location, "state": "confirmed", "kind": "point"}
@@ -156,6 +157,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         self.look_result: dict | None = None     # 기준 줄 찾기 결과 {hits, picked, pick, how, ts, line, at, places} | {hits: 0, why}
         self.look_place: list = []               # 기준 줄 찾기의 고른 곳 줄(자격 검사 기준, anchor.reference_of)
         self.reference: dict | None = None       # 자격 검사 기준(step_anchor가 정함, match_signatures --reference)
+        self.jira_time_unused = False            # Jira 발생 시각 칸 값이 있었으나 분석에 쓰지 않았다(D4) — report.md 표시
         self.issue_sha: str | None = None        # 이번 실행이 읽은 이슈 입력 파일의 sha256(problem.json source_sha256과 대조)
         self.problem_use: dict | None = None     # problem.json에서 자격 검사에 쓰는 것(anchor.problem_refs) | None
         self.clue_rows: list[dict] = []          # 로그에서 찾은 문제 파악 단서 {where, clue, ts, places}(report.md 한 줄씩)
@@ -531,11 +533,18 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             raise Fail(USAGE, f"Jira 응답의 키({data['key']})가 {self.key}와 다르다.")
         self.apply_failed_step(data, meta_path)
         text = data.get("text") or {}
-        info = {"key": self.key, "origin": data.get("origin"), "occurred_at": data.get("occurred_at"),
+        # Jira 발생 시각 칸은 로그와 다른 시계(장비·PC)의 값이다 — 분석 구간·근접 중심·기준 줄 고르기에 쓰지 않고 표시만 한다(D4).
+        # 분석 기준 시각은 사용자가 준 시각(`--answer time=`)·TC 파일·기준 줄·단서뿐(`AnchorMixin.given_time`)
+        self.jira_time_unused = bool(data.get("occurred_at"))
+        if meta_path.is_file():     # 이전 판 extract가 메타에 넣은 Jira 시각(매처 근접 중심)도 뺀다 — 준 시각은 write_meta가 다시 쓴다
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            if meta.pop("occurred_at", None) is not None:
+                meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
+        info = {"key": self.key, "origin": data.get("origin"), "occurred_at": None,
                 "sw": (data.get("issue") or {}).get("sw"), "platform_version": (data.get("issue") or {}).get("platform_version") or data.get("platform_version_all"),
                 "sim_slot": data.get("sim_slot"), "summary": text.get("summary") or "", "missing": data.get("missing") or [],
                 "logcat": data.get("logcat") or {}, "jira_block": data.get("issue") or {}}
-        self.out["issue"] = {"origin": info["origin"], "occurred_at": info["occurred_at"], "sw": info["sw"],
+        self.out["issue"] = {"origin": info["origin"], "occurred_at": data.get("occurred_at"), "sw": info["sw"],
                              "platform_version": info["platform_version"], "sim_slot": info["sim_slot"],
                              "summary": _clip(info["summary"], 160),
                              "description": _clip(text.get("description"), 240),
@@ -840,20 +849,21 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
     def outside_errors(self, info: dict, logs: list[Path], tz: str | None, year: int | None, anchor: dict | None,
                        cov: dict) -> dict | None:
-        """앵커 구간 밖 Jira 발생 시각 근처의 오류 이벤트(근거·점수에 쓰지 않는다, 리포트 안내용).
-        Jira 시각이 분석 구간 밖이고 로그 범위 안일 때만 마스킹 파싱을 한 번 더 한다(파일은 쓰지 않는다)."""
-        jira_at = _parse_ts(info.get("occurred_at"))
+        """앵커 구간 밖 입력한 발생 시각(`given_time` — Jira 칸 값 아님) 근처의 오류 이벤트(근거·점수에 쓰지 않는다, 리포트 안내용).
+        그 시각이 분석 구간 밖이고 로그 범위 안일 때만 마스킹 파싱을 한 번 더 한다(파일은 쓰지 않는다)."""
+        jira_at = self.given_time(info, tz, year)
         if not anchor or jira_at is None:
             return None
         start, end = _parse_ts(anchor["window"][0]), _parse_ts(anchor["window"][1])
         first, last = stepanchor._ts(cov.get("first_ts")), stepanchor._ts(cov.get("last_ts"))
         if start is None or end is None or (start <= jira_at <= end) or not (first and last and first <= jira_at <= last):
             return None
-        data = self.parse(logs, info["occurred_at"], tz, year, None, step="3-parse-outside")
+        at = lc.format_ts(jira_at)
+        data = self.parse(logs, at, tz, year, None, step="3-parse-outside")
         errors = [self.error_row(e) for e in (data or {}).get("events") or []
                   if e.get("event") and ERROR_EVENT_RE.search(str(e["event"]))
                   and not ((t := _parse_ts(e.get("ts"))) and start <= t <= end)]    # 분석 범위 안의 이벤트는 이미 근거 후보다
-        return {"at": info["occurred_at"], "total": len(errors), "rows": errors[:3]}
+        return {"at": at, "total": len(errors), "rows": errors[:3]}
 
     def match(self, events: Path, meta: Path | None, out: Path, regress: bool = False) -> dict:
         """매처를 돌려 `out`(match.json)에 쓴다. 분석 모드는 자격 검사 기준(`self.reference`)을 `JOB/reference.json`으로 넘기고,
@@ -890,9 +900,24 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
     # Step 4·5 --------------------------------------------------------------------------------------
 
+    def cause_entry(self, cause_id: str) -> dict:
+        """원인 하나의 `db_search.py` 항목(없으면 {}). 같은 실행 안에서는 한 번만 부른다."""
+        cache = self.__dict__.setdefault("_cause_entries", {})
+        if cause_id not in cache:
+            _, data, _ = self.run.call("4-db", "db_search.py", [cause_id, "--db", self.snap, "--limit", 1])
+            cache[cause_id] = next((r for r in (data or {}).get("results") or [] if r.get("id") == cause_id), {})
+        return cache[cause_id]
+
+    def mark_not_a_bug(self, decision: dict) -> None:
+        """기준 사건(ref)의 원인이 이슈 DB에서 버그 아님(`fix.status: not-a-bug` 또는 `resolution_type: user-setting` — 시험·설정 조작이
+        만든 동작, 포털 `not_a_bug`와 같은 기준)이면 그 사건에 `not_a_bug: true`(판단 줄·포털이 "시험 조작으로 알려진 규칙"으로 보인다)."""
+        for e in decision.get("events") or []:
+            entry = self.cause_entry(e["cause"]) if e.get("ref") and e.get("cause") else {}
+            if (entry.get("fix") or {}).get("status") == "not-a-bug" or entry.get("resolution_type") == "user-setting":
+                e["not_a_bug"] = True
+
     def cause_info(self, cause_id: str) -> dict:
-        _, data, _ = self.run.call("4-db", "db_search.py", [cause_id, "--db", self.snap, "--limit", 1])
-        entry = next((r for r in (data or {}).get("results") or [] if r.get("id") == cause_id), {})
+        entry = self.cause_entry(cause_id)
         fix = entry.get("fix") or {}
         return {"resolution": _clip(entry.get("resolution"), 120),
                 "resolution_verification": entry.get("resolution_verification"),
@@ -1046,7 +1071,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         look, found = self.look_inputs(), self.look_result or {}
         if look["at"] or look["note"]:      # 타임라인 머리: 기준 줄(사용자 입력)·찾은 시각·일치 위치, 확인할 내용
             out["look_at"] = {"line": look["at"], "note": look["note"], "ts": found.get("ts"), "hits": found.get("hits"),
-                              "at": found.get("at")}
+                              "at": found.get("at"), **({"source": "model"} if look.get("source") else {})}
         return out
 
     # 실행 ------------------------------------------------------------------------------------------
@@ -1262,6 +1287,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                        top)
         code_out = self.resolve_code(code, version, candidates)
         decision = _decision(candidates, anchor, match.get("eligibility"), self.clue_location((match.get("eligibility") or {}).get("via")))
+        self.mark_not_a_bug(decision)
         analyzer = self.analyzer(lead_first(decision, candidates))     # 심층 분석 카테고리: 채택 원인(없으면 1위)
         explore = self.explore(lead_first(decision, candidates))     # 적합성 확인도 채택 원인 기준
         explore_input = self.explore_input(around, anchor) if explore and explore["when"] != "never" else None

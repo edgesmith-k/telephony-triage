@@ -281,6 +281,6 @@ class CacheMixin:
             parts.append([anchor["source"], list(anchor["window"])])
         look = self.look_inputs()
         if look["at"] or look["note"]:
-            parts.append(["look", look["at"], look["note"]])
+            parts.append(["look", look["at"], look["note"]] + ([look["source"]] if look.get("source") else []))
         h.update(json.dumps(parts, ensure_ascii=False).encode())
         return h.hexdigest()[:16]

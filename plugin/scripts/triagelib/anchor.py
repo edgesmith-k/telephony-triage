@@ -136,6 +136,16 @@ class AnchorMixin:
         options.append({"value": "<YYYY>", "label": "직접 입력"})
         raise NeedsInput("year", "연도 없는 logcat의 연도를 정한다(logcat.year_source: ask).", options)
 
+    def given_time(self, info: dict, tz: str | None, year: int | None) -> datetime | None:
+        """사용자가 준 분석 기준 시각: `--answer time=<시각>`(full 아님) > `--issue-meta`의 `occurred_at`(손으로 쓴 메타). Jira 발생
+        시각 칸은 로그와 다른 시계의 값이라 쓰지 않는다(D4 — `driver.jira`가 `info.occurred_at`을 비운다). 없거나 못 읽으면 None."""
+        t = self.answer("time")
+        if t and t != "full":
+            dt = lc.normalize_ts(t, tz, year)
+            if dt is not None:
+                return dt
+        return _parse_ts(info.get("occurred_at"))
+
     def step_anchor(self, logs: list[Path], tz: str | None, year: int | None, info: dict) -> dict | None:
         """분석 구간 앵커(기준 줄 > 로그 마커 > steps-file) → `{source, step, step_from, start, fail, window}` | None.
 
@@ -157,7 +167,7 @@ class AnchorMixin:
             self.clock_offset = stepanchor.parse_offset(conf["clock_offset"])
             if self.clock_offset is None:
                 self.warn(f"failed_step.clock_offset 형식이 맞지 않아 쓰지 않았다({str(conf['clock_offset'])[:40]})")
-        jira_at = _parse_ts(info.get("occurred_at"))
+        jira_at = self.given_time(info, tz, year)      # 여러 곳 중 고르기·시각만 있는 TC 날짜·차이 경고의 기준(Jira 칸 값 아님)
         span = self.look_span(logs, tz, year, jira_at) or self.marker_span(logs, tz, year, conf, jira_at)
         if span is None:
             return None
@@ -182,9 +192,9 @@ class AnchorMixin:
             anchor["issue_gap_min"] = round(gap, 1)
             limit = conf.get("disagree_minutes", stepanchor.DEFAULT_DISAGREE_MINUTES)
             if isinstance(limit, (int, float)) and not isinstance(limit, bool) and gap > limit:
-                hint = " (Jira 시각이 장비 시각이면 시계 차 때문일 수 있다)" if span["source"] in ("steps_file", "step_order") else ""
+                hint = " (입력한 시각이 장비 시각이면 시계 차 때문일 수 있다)" if span["source"] in ("steps_file", "step_order") else ""
                 what = "기준 줄" if span["source"] == "look_at" else "실패 스텝"
-                self.warn(f"Jira 발생 시각과 {what} 시각이 {gap:.0f}분 다르다 — {'스텝' if what == '실패 스텝' else what} 시각 "
+                self.warn(f"입력한 발생 시각과 {what} 시각이 {gap:.0f}분 다르다 — {'스텝' if what == '실패 스텝' else what} 시각 "
                           f"기준으로 분석했다(끄기: --answer anchor=off){hint}")     # 경고만 낸다. 구간은 바꾸지 않는다
         return anchor
 
@@ -197,6 +207,9 @@ class AnchorMixin:
         if src == "look_at":     # 같은 요청(IPC REQ→RSP·RIL 짝)으로 묶은 곳 수
             look = self.look_result or {}
             text = look.get("how") == "text"
+            if self.look_inputs().get("source") == "model":     # 모델이 고른 줄: 문제 파악 단서처럼 확정으로 올리지 않는다(Y1)
+                return {"state": "multiple" if look.get("places") != 1 else "found", "source": "model",
+                        "kind": "near" if text else "point"}
             return {"state": "multiple" if look.get("places") != 1 else "found" if text else "confirmed", "source": src,
                     "kind": "near" if text else "point"}
         if src == "log_marker" and span.get("fail") is not None:
@@ -341,9 +354,14 @@ class AnchorMixin:
             text = json.loads((self.job / "issue.json").read_text(encoding="utf-8")).get("text")
         except (OSError, ValueError, AttributeError):
             return [], None
+        look_at = bool(self.look_inputs()["at"])
+        if isinstance(text, dict) and not text.get("comments") and type(text.get("comments_skipped")) is int and not look_at:
+            # 코멘트를 하나도 못 받았다(앞을 모두 건너뜀 — 포털이 8KB 넘는 마지막 코멘트 때문에 넘기지 않음, D3). 일부만 읽음과 다르다
+            # 포털이 이 머리("마지막 댓글이 길어")로 알아본다(포털 fix/sim-1121) — 머리를 바꾸면 포털 표도 같이
+            self.warn(f"마지막 댓글이 길어 포털이 댓글을 넘기지 않음(Jira 코멘트 {text['comments_skipped']}개 모두 못 받음) — 코멘트 "
+                      "단서를 쓰지 못했다. 실패 지점(기준 줄)을 직접 넣거나 문제 파악으로")
         if not isinstance(text, dict) or not (text.get("comments") or text.get("description")):
             return [], None
-        look_at = bool(self.look_inputs()["at"])
         part = text.get("comments_partial")
         if isinstance(part, dict):
             if not look_at:
@@ -405,6 +423,8 @@ class AnchorMixin:
             self._look = {"at": (lookat.clean(masked) or None) if at else None,
                           "note": (" ".join(self.masker()(note).split()) or None) if note else None,
                           "stamp": lookat.stamp(masked)}     # 붙여 넣은 줄의 logcat 시각(같은 곳 고르기, 단계 5)
+            if at and getattr(self.args, "look_at_source", None) == "model":      # 모델이 코멘트에서 고른 줄(담당자 지정 아님)
+                self._look["source"] = "model"
         return self._look
 
     def look_span(self, logs: list[Path], tz: str | None, year: int | None, jira_at) -> dict | None:
@@ -513,7 +533,7 @@ class AnchorMixin:
         summary = {k: info[k] for k in ("matched", "observable", "missed")}
         if result is None:
             self.order_fail = {**summary, "reason": info["reason"]}
-            self.warn(f"스텝 순서 정렬 안 함: {info['reason']} — Jira 발생 시각 기준으로 분석했다")
+            self.warn(f"스텝 순서 정렬 안 함: {info['reason']}")      # 다음 출처(입력한 시각 또는 로그 전체)는 리포트 줄이 말한다
             return None
         evidence = [(labels[k], ts, lab) for k, ts, lab in info["evidence"]]
         self.order_evidence = evidence
@@ -613,9 +633,9 @@ class AnchorMixin:
         options = [{"value": ts, "label": f"{ts} {tid}"} for ts, tid in times[:3]]
         cov = full.get("coverage") or {}
         jumps = len(cov.get("clock_anomalies") or [])
-        question = ("Jira에 발생 시각이 없다. 증상 시그니처가 충족된 시각 후보에서 고르거나, 시각 없이 로그 전체로 분석한다."
+        question = ("분석 기준 시각이 없다(Jira 발생 시각 칸은 쓰지 않는다). 증상 시그니처가 충족된 시각 후보에서 고르거나, 시각 없이 로그 전체로 분석한다."
                     if options else
-                    "Jira에 발생 시각이 없다 — 후보가 없으니 시각을 답하거나 '시각 없이 로그 전체'를 고른다.")
+                    "분석 기준 시각이 없다 — 후보가 없으니 시각을 답하거나 '시각 없이 로그 전체'를 고른다.")
         options.append({"value": "full", "label": "시각 없이 로그 전체"})
         # 읽을 수 없는 답을 준 경우만 다시 묻는다(사용자가 시각을 주려 했다)
         question = (f"답한 시각 '{_clip(bad, 60)}'을 읽지 못했다 — 후보 값 그대로, ISO 8601(예: 2026-09-20T14:32:00+09:00), "

@@ -18,7 +18,7 @@
   "reason": "no_reference"
  },
  "issue_summary": "발신이 바로 끊김 (합성)",
- "occurred_at": "2026-09-21T10:10:05+00:00",
+ "occurred_at": "2026-09-21T10:10:05.000Z",
  "events": "events.json",
  "timeline": "timeline.md",
  "log_paths": [

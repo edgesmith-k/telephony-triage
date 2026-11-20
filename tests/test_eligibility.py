@@ -716,7 +716,10 @@ def test_clue_only_decision_needs_every_clue_confirmed():
     assert outcome(el.decide(EVENTS, [many, good])) == ("held", "ambiguous", "locations")
     assert outcome(el.decide(EVENTS, [good, ok_rsp])) == ("held", "ineligible", "no_event_at_reference")
     held = el.decide(EVENTS, [good], unconfirmed=1)                      # 로그에 없음·시각 규칙으로 버림·token 충돌
-    assert outcome(held) == ("held", "ambiguous", "sources") and [e["type"] for e in held["events"]] == ["NETWORK-001"]
+    # 단서 하나라도 버림이면 다른 단서가 잡은 사건을 기준 사건으로 싣지 않는다(sim1120 P2-7 — 옛 기대 ["NETWORK-001"])
+    assert outcome(held) == ("held", "ambiguous", "sources") and held["events"] == []
+    part = el.decide(EVENTS, [good, ok_rsp])                              # 한 단서 보류 + 다른 단서 사건(S-18a·S-20 모양)
+    assert part["events"] == [] and el.summary(part, EVENTS)["events"][0]["ref"] is False
     assert outcome(el.decide(EVENTS, [], unconfirmed=2)) == ("held", "no_reference", None)
     assert outcome(el.decide(EVENTS, [point(16, 120), many], unconfirmed=1)) == ("accepted", "anchored_top", "N3")   # 명시 기준
     # 명시 기준 + 분석 구간 밖에서 찾은 단서(사건 목록에 없음) = 다른 사건(H07)

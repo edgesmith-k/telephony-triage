@@ -294,7 +294,7 @@ def test_triage_aligns_failure_window_by_step_order_without_any_clock():
     assert "- 시험 절차: zip 안 run_01/report.html" in report
     # Jira 발생 시각은 분석 범위 밖: 그 근처 오류 이벤트는 개수·표본만 알리고 근거·점수에는 쓰지 않는다
     assert sa["outside_errors"] == 2 and "outside_errors" not in json.dumps(done["candidates"])
-    assert "- 분석 범위 밖 오류 이벤트 (Jira 발생 시각 " in report and "ims_registration_failed" in report
+    assert "- 분석 범위 밖 오류 이벤트 (입력한 발생 시각 " in report and "ims_registration_failed" in report     # --issue-meta 시각(D4 문구)
     assert "근거·점수에 쓰지 않음): 2건" in report
     # 끄면(anchor=off) 오늘의 동작: Jira 시각 ±5분 → IMS-001-01이 1위
     off, off_job = _offline(db, _zip(tmp("tt-zip-") / "att.zip"), "--answer", "anchor=off")
@@ -323,7 +323,7 @@ def test_triage_falls_back_to_jira_window_when_no_step_events_in_db():
     done, job = _offline(SAMPLE, _zip(tmp("tt-zip-") / "att.zip"))
     assert done["step_anchor"] == {"source": "issue", "order": {"matched": 0, "observable": 0, "missed": 0,
                                                               "reason": "관측 가능한 PASS 스텝 없음"}}
-    assert "스텝 순서 정렬 안 함: 관측 가능한 PASS 스텝 없음 — Jira 발생 시각 기준으로 분석했다" in done["warnings"]
+    assert "스텝 순서 정렬 안 함: 관측 가능한 PASS 스텝 없음" in done["warnings"]     # "Jira 발생 시각 기준" 꼬리는 D4로 뺌
     assert done["logs"]["window"] == {"start": "2026-09-20T05:26:00.000Z", "end": "2026-09-20T05:36:00.000Z"}
     assert _causes(done)[0] == "IMS-001-01" and not (job / "match_meta.json").exists()
     steps = [json.loads(line).get("step") for line in (job / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
@@ -346,7 +346,7 @@ def test_triage_order_failure_reasons_fall_back_with_warning():
     done = run_json("triage.py", ["run", KEY, "--offline-db", db, "--out", out, "--logs", short, "--issue-meta", meta, *TZ,
                                   "--steps-file", _paste(tmp("tt-paste-") / "p.txt")])
     assert done["step_anchor"]["source"] == "issue" and done["step_anchor"]["order"]["reason"] == "마지막 관측 가능 스텝 미발견"
-    assert "스텝 순서 정렬 안 함: 마지막 관측 가능 스텝 미발견 — Jira 발생 시각 기준으로 분석했다" in done["warnings"]
+    assert "스텝 순서 정렬 안 함: 마지막 관측 가능 스텝 미발견" in done["warnings"]
 
 
 def test_triage_without_steps_file_has_no_clock_order_or_markers_call():

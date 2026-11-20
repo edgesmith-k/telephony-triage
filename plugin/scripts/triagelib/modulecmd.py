@@ -265,14 +265,15 @@ def _limit(cfg: dict) -> int:
 
 
 def _around(job: Path, analysis: dict):
-    issue = analysis.get("issue") or {}
+    """타임라인 중심(앵커가 없을 때): `issue_meta.json`의 시각 — 사용자가 준 `time` 답(`write_meta`)이나 `--issue-meta` 값. analysis.json
+    `issue.occurred_at`(Jira 발생 시각 칸, 표시만)은 쓰지 않는다(D4)."""
     meta = {}
     try:
         if (job / "issue_meta.json").is_file():
             meta = json.loads((job / "issue_meta.json").read_text("utf-8"))
     except (OSError, ValueError):
         meta = {}
-    return issue.get("occurred_at") or (meta.get("occurred_at") if isinstance(meta, dict) else None)
+    return meta.get("occurred_at") if isinstance(meta, dict) else None
 
 
 def _generic_timeline(key: str, events: dict, around, limit: int) -> tuple[str, int, int]:

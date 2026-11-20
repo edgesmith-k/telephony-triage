@@ -264,8 +264,11 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
     assert {k: v for k, v in dec.items() if k in ("state", "reason", "selected", "location", "counter")} == {"state": "accepted", "reason": "anchored_top",
                    "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
                    "location": {"state": "confirmed", "source": "look_at", "kind": "point"}}, dec     # 글자 일치지만 같은 줄 채택
+    # DATA-001-01(모바일 데이터 꺼짐)은 샘플 DB에서 버그 아님 — 판단 줄 끝 표시와 해결책 앞말(sim1120 P2-7·S-25)
     assert _report_line(out, "- 판단:") == ("- 판단: 원인 채택 — DATA-001-01 (실패 지점: 담당자가 지정한 기준 줄·확인됨, "
-                                          "자격 검사 통과)")
+                                          "자격 검사 통과) · 이슈 DB에서 버그 아님(시험 절차·설정 조작이 만든 동작으로 알려진 규칙)인 "
+                                          "기준 사건 원인: DATA-001-01")
+    assert _report_line(out, "- 해결책:").startswith("- 해결책: 시험 절차 문제면 해당 없음 — ")
     assert "(관측된 규칙 일치" not in _report_line(out, "- 분류 후보:")
     (out / "deep-output.md").write_text("요약: 사용자 설정이 아니라 망 거절로 보인다\n근거:\n"
                                         "분석 스킬 의견: DATA-001-02 — 망 거절 흔적\n규칙 제안:\n- 없음\n", encoding="utf-8")
@@ -285,7 +288,7 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
     assert not list(out.glob(".analysis.json.tmp-*"))
     assert after["decision"] == {**dec, "counter": {"cause": "DATA-001-02"}}
     assert after["candidates"] == done["candidates"]
-    assert _report_line(out, "- 판단:").endswith("자격 검사 통과) · 모델 검토 의견이 다름(DATA-001-02) — 확인 필요")
+    assert _report_line(out, "- 판단:").endswith("기준 사건 원인: DATA-001-01 · 모델 검토 의견이 다름(DATA-001-02) — 확인 필요")
     assert issue_post.classify(after, None)["cls"].endswith("DATA-001-01 Data disabled")      # 채택은 그대로
 
     run_json("triage.py", ["explore", item["key"], "--out", out], root=root)
@@ -304,7 +307,8 @@ def test_decision_state_follows_deep_counter_then_fit_hold():
     assert held["decision"]["events"][0]["result"] == "held"
     assert held["candidates"] == done["candidates"]
     assert _report_line(out, "- 판단:") == ("- 판단: 원인 보류 — 탐색 분석 적합성 확인에서 채택 원인이 증상과 맞지 않음. 아래 규칙 "
-                                          "일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다")
+                                          "일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다 · 이슈 DB에서 버그 아님"
+                                          "(시험 절차·설정 조작이 만든 동작으로 알려진 규칙)인 기준 사건 원인: DATA-001-01")
     cl = issue_post.classify(held, None, issue_post.fit_hold_of(out / "check-output.json"))
     assert cl["cls"] == "data > DATA-001 > 원인 보류 — 탐색 분석 적합성 확인에서 채택 원인이 증상과 맞지 않음", cl
     assert not any("해결책" in x for x in cl["next"]), cl["next"]

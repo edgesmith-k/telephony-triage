@@ -496,11 +496,22 @@ def _own_text(text) -> str:
     return "\n".join(x for x in QUOTE_BLOCK.sub(" ", str(text or "")).splitlines() if not QUOTE_LINE.match(x))
 
 
+# 앞으로의 계획 문장 표시(재시험 "잡겠음"·"나오면 재시험"·"다음 재시험 때"·"will retest"·"retest 예정") — 그 문장의 재시험 낱말은
+# 회차 경계가 아니다(sim1120 S-02·S-05·S-22). ponytail: 낱말 휴리스틱 — 계획 표시가 없는 문장(지난 일·결과)만 경계로 본다.
+# 계획 표시 없이 쓴 계획("재시험 필요")은 그대로 경계이고, 계획 표시와 지난 결과를 한 문장에 쓰면 경계를 놓친다. 사내 글로 다시 본다
+RETEST_PLAN = re.compile(r"(?i)\bwill\b|\bgoing to\b|\bplan(?:s|ned|ning)?\b|\bschedul|\bnext\b|예정|나오면|되면|겠|"
+                         r"다음\s*(?:번\s*)?(?:재시험|재테스트|회차)")
+_SENTENCE = re.compile(r"(?<=[.!?。])\s+|\n")
+
+
 def _retest(text, words) -> bool:
-    """재시험 낱말: 영어(ASCII) 낱말은 앞이 영문자가 아니고 뒤는 활용형(`s`·`ed`·`ing`)까지 — `pretest`는 아님, `retested`·
-    `retesting`은 맞음. Python `\\b`는 한글을 낱말 글자로 봐 "Retest결과"를 놓친다(여기선 맞음). 한글 낱말은 포함 비교."""
-    t = str(text or "").casefold()
-    return any(re.search(r"(?<![a-z])" + re.escape(w) + r"(?:s|ed|ing)?(?![a-z])", t) if w.isascii() else w in t for w in words)
+    """재시험 낱말이 든 지난 일 문장이 있나. 영어(ASCII) 낱말은 앞이 영문자가 아니고 뒤는 활용형(`s`·`ed`·`ing`)까지 — `pretest`는
+    아님, `retested`·`retesting`은 맞음. Python `\\b`는 한글을 낱말 글자로 봐 "Retest결과"를 놓친다(여기선 맞음). 한글 낱말은 포함
+    비교. 앞으로의 계획 문장(`RETEST_PLAN`, 문장 = `.!?` 뒤 공백·줄바꿈으로 나눈 조각)의 낱말은 세지 않는다."""
+    def hit(t: str) -> bool:
+        return any(re.search(r"(?<![a-z])" + re.escape(w) + r"(?:s|ed|ing)?(?![a-z])", t) if w.isascii() else w in t
+                   for w in words)
+    return any(hit(s) and not RETEST_PLAN.search(s) for s in _SENTENCE.split(str(text or "").casefold()))
 
 
 def _line_clues(where, text: str, name_re, error_prefix: str) -> list[dict]:
@@ -552,7 +563,7 @@ def extract_clues(comments: list[str], description: str, prefix: str, error_pref
     `first`부터(오래된 코멘트를 건너뛰고 받았으면 Jira 순번에 맞춘다 — 그때 설명은 건너뛴 코멘트의 재시험 앞일 수 있어 옛 회차로
     센다). 설명은 없어도 된다(포털 선별 파일은 코멘트만).
     - 인용(`{quote}` 블록·`bq.`·`>` 줄)은 단서·token 값 세기에서 뺀다(`_own_text`). 회차 경계는 인용 안 낱말도 본다(옛 회차를 더 버리는 쪽).
-    - 회차 경계: 재시험 낱말(대소문자 무시, 영어 낱말은 낱말 단위 — `_retest`)이 든 마지막 코멘트 b. b와 그 앞(설명 포함)의 후보는 버리고 수만 센다.
+    - 회차 경계: 재시험 낱말(대소문자 무시, 영어 낱말은 낱말 단위, 앞으로의 계획 문장 안 낱말은 빼고 — `_retest`)이 든 마지막 코멘트 b. b와 그 앞(설명 포함)의 후보는 버리고 수만 센다.
       ponytail: 재시험 낱말 없이 다시 돈 회차는 못 가른다(옛 token이 새 로그에 없으면 로그 쪽에서 버려진다) — 사내 낱말로 보완.
     - 같은 단서(ipc 이름·token 값 — `225` = `0xe1`, log_line 접은 글)는 최근 것 하나, `CLUES_MAX`를 넘으면 `over`.
     - 이번 회차 글에 서로 다른 token 값이 둘 이상이면(정정 "0x0aa가 아니라 0x0e1"·정상과 실패를 함께 적음) `conflict: true` —

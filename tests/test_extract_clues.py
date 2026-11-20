@@ -559,7 +559,10 @@ def test_reference_only_log_line_is_held_with_its_candidate(seed_db):
     assert _verdict(a) == ("held", None, "ineligible", "comment_unconfirmed") and _ref_cause(out) == "NETWORK-001-03"
     # 확인 리뷰 P2: 판단 줄은 그 후보를, 결론 줄도 그 후보를 한 번 적는다(1위 규칙 일치만 앞세우지 않게)
     md = (out / "report.md").read_text(encoding="utf-8").splitlines()
-    assert "- 판단: 원인 보류: 코멘트에서 자동으로 찾은 지점의 원인 후보 NETWORK-001-03, 확인 필요" in md
+    # NETWORK-001-03(비행기 모드 켬)은 시드 DB에서 버그 아님 — 판단 줄 끝에 그 표시(sim1120 P2-7, decision.events[].not_a_bug)
+    assert ("- 판단: 원인 보류: 코멘트에서 자동으로 찾은 지점의 원인 후보 NETWORK-001-03, 확인 필요 · 이슈 DB에서 버그 아님(시험 절차·"
+            "설정 조작이 만든 동작으로 알려진 규칙)인 기준 사건 원인: NETWORK-001-03") in md
+    assert next(e for e in a["decision"]["events"] if e["ref"])["not_a_bug"] is True
     concl = next(x for x in md if x.startswith("- 결론: "))
     assert concl.startswith("- 결론: 원인 보류 — 코멘트에서 자동으로 찾은 지점의 원인 후보 NETWORK-001-03, 확인 필요. 규칙 일치 1위"), concl
 
@@ -660,3 +663,72 @@ def test_script_clue_hold_line_names_the_candidate_like_the_portal():
     assert rep.decision_line({**dec, "events": []}, []) == "- 판단: 원인 보류: 코멘트에서 자동으로 찾은 지점, 확인 필요"
     model = {**dec, "check": {"why": "comment_unconfirmed", "via": {"origin": "problem"}}}      # 문제 파악 단서 + comment_adopt 끔
     assert "코멘트에 적힌 위치라" in rep.decision_line(model, [])
+
+
+def test_retest_plan_sentence_is_not_a_round_boundary():
+    """sim1120 P2-8(S-02·S-05·S-22): 앞으로의 계획 문장("재시험 잡겠음"·"나오면 재시험"·"다음 재시험 때"·"will retest"·"retest 예정")의
+    재시험 낱말은 회차 경계가 아니다. 지난 일·결과 문장("Retest 했는데"·"재시험했고 PASS")은 그대로 경계(ponytail 휴리스틱)."""
+    clue = "VIPC_SETUP_DATA (token=0x0e1) 실패"
+    for plan in ("수정 빌드 나오면 10.5.1 재시험 잡겠음.", "이 이슈는 수정 빌드 나오면 재시험.", "다음 재시험 때는 APN을 원래 상태로 두고 돌리겠습니다.",
+                 "We will retest on the next build.", "retest 예정"):
+        clues, drop = _x([clue, plan])
+        assert _keys(clues) == [(1, "ipc", "0x0e1")] and drop["old_round"] == 0, plan
+    for done in ("Retest 했는데 결과 동일합니다.", "사내 기준으로 고치고 재시험했고 PASS입니다.", "수정 빌드 나오면 재시험. Retest 결과: 같은 증상"):
+        clues, drop = _x([clue, done])
+        assert clues == [] and drop["old_round"] == 1, done
+
+
+def test_all_comments_skipped_is_skipped_not_partial():
+    """sim1120 P1-4(D3): 포털이 긴 마지막 코멘트 때문에 코멘트를 하나도 넘기지 않으면(startAt == total, 0개) `comments_partial`이 아니라
+    `comments_skipped`(전부)다. 일부만 빠진 0개(startAt < total)는 그대로 partial."""
+    assert _text({"fields": {"comment": {"startAt": 5, "total": 5, "comments": []}}})["comments_skipped"] == 5
+    t = _text({"fields": {"comment": {"startAt": 0, "total": 5, "comments": []}}})
+    assert t["comments_partial"] == {"total": 5, "read": 0} and "comments_skipped" not in t
+
+
+def _run_args(db: Path, name: str, ticket: dict, *extra) -> tuple[dict, Path]:
+    out = tmp("tt-clue-") / name
+    out.mkdir(parents=True)
+    issue = out.parent / f"{name}.issue.yaml"
+    issue.write_text(yaml.safe_dump(ticket, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return run_json("triage.py", ["run", "CLUE-1", "--offline-db", db, "--out", out, "--logs", LOG, "--issue-file", issue,
+                                  "--tz", "Asia/Seoul", "--year", "2026", *extra]), out
+
+
+def test_jira_time_field_is_shown_but_not_used_for_the_window(seed_db):
+    """D4(sim1120): Jira 발생 시각 칸은 로그와 다른 시계(장비·PC)라 분석 구간·근접 중심에 쓰지 않는다 — 표시만("분석에 안 씀").
+    사용자가 준 시각(`--answer time=`)은 지금처럼 기준 시각이다."""
+    ticket = {"key": "CLUE-1", "fields": {"summary": "데이터 연결 실패", "customfield_10001": "2026-11-14T09:00:00+0900"}}
+    a, out = _run_args(seed_db, "jira-time", ticket)
+    assert a["issue"]["occurred_at"] == "2026-11-14T00:00:00+00:00"                 # 값은 표시용으로 남는다
+    assert a["step_anchor"]["source"] == "symptom_scan" and not (a["logs"].get("window") or {}).get("start")   # 로그 전체
+    assert "occurred_at" not in json.loads((out / "issue_meta.json").read_text(encoding="utf-8"))   # 매처 근접 중심 아님
+    md = (out / "report.md").read_text(encoding="utf-8")
+    assert "(Jira 발생 시각 칸(분석에 안 씀) 2026-11-14T00:00:00+00:00)" in md and "Jira 발생 시각 기준" not in md
+    given, out2 = _run_args(seed_db, "given-time", ticket, "--answer", "time=2026-11-14T10:02:00+09:00")
+    assert given["logs"]["window"]["start"] == "2026-11-14T00:57:00.000Z"            # 준 시각 ±5분
+    assert json.loads((out2 / "issue_meta.json").read_text(encoding="utf-8"))["occurred_at"] == "2026-11-14T01:02:00.000Z"
+
+
+def test_no_comments_from_portal_warns_with_portal_head(seed_db):
+    """D3·sim1120 항목 6: 포털이 긴 마지막 코멘트 때문에 코멘트를 하나도 넘기지 않으면(startAt == total) 경고 하나 — 포털이 머리
+    "마지막 댓글이 길어"로 알아본다. 4KB 맞춤에서 먼저 남는 경고다(KEY_WARNING)."""
+    ticket = {"key": "CLUE-1", "fields": {"summary": "데이터 연결 실패",
+                                          "comment": {"startAt": 3, "total": 3, "comments": []}}}
+    a, _ = _run_args(seed_db, "no-comments", ticket)
+    warns = [w for w in a.get("warnings") or [] if w.startswith("마지막 댓글이 길어")]
+    assert len(warns) == 1 and "3개" in warns[0] and "일부만 읽어" not in " ".join(a.get("warnings") or [])
+
+
+def test_model_picked_look_at_is_labelled_and_never_confirmed(seed_db):
+    """sim1120 항목 4: `--look-at-source model`(모델이 코멘트에서 고른 줄)이면 실패 지점 출처가 model이고 확정(confirmed)으로 올리지
+    않는다. 판단은 채택될 수 있다(문제 파악 단서와 같게, Y1). 기본(user)은 지금처럼 담당자 지정."""
+    ticket = {"key": "CLUE-1", "fields": {"summary": "데이터 연결 실패"}}
+    line = NET[:200]      # --look-at ≤300자(앞부분만 붙여도 본문 일치로 찾는다)
+    user, _ = _run_args(seed_db, "look-user", ticket, "--look-at", line)
+    model, out = _run_args(seed_db, "look-model", ticket, "--look-at", line, "--look-at-source", "model")
+    assert user["decision"]["location"]["source"] == "look_at"
+    assert model["decision"]["location"]["source"] == "model" and model["decision"]["location"]["state"] != "confirmed"
+    assert model["decision"]["state"] == user["decision"]["state"] and model["request_hash"] != user["request_hash"]
+    md = (out / "report.md").read_text(encoding="utf-8")
+    assert "- 기준 줄(모델이 코멘트에서 고른 지점(담당자 지정 아님)): 로그에서 찾음" in md and "담당자가 지정한 기준 줄" not in md

@@ -116,7 +116,7 @@ def test_location_state_per_anchor_source():
     assert (one["n"], two["n"], "n" in start_only) == (1, 2, False)
 
     def loc(span, look=None):
-        return AnchorMixin.location(SimpleNamespace(look_result=look), span)
+        return AnchorMixin.location(SimpleNamespace(look_result=look, look_inputs=dict), span)
     assert loc(one) == {"state": "confirmed", "source": "log_marker", "kind": "range"}
     assert loc(two) == {"state": "multiple", "source": "log_marker", "kind": "range"}
     assert loc(start_only) == {"state": "found", "source": "log_marker", "kind": "range"}
@@ -330,7 +330,7 @@ def test_marker_anchor_with_failed_step_moves_window_and_top_candidate():
             "그 태그가 수집되지 않았거나 로그가 일찍 끝남)"
             in report)
     assert "- 실패 스텝 구간 (log_marker): Step 5 2026-09-20T05:33:00.000Z ~ 2026-09-20T05:33:30.000Z → 분석 범위 " \
-        "2026-09-20T05:32:00.000Z ~ 2026-09-20T05:34:00.000Z (Jira 발생 시각 2026-09-20T14:31:00+09:00 / 2.5분 차이)" in report
+        "2026-09-20T05:32:00.000Z ~ 2026-09-20T05:34:00.000Z (입력한 발생 시각과 2.5분 차이)" in report
     assert "S/C에 쓰지 않음; 단어 겹침 가산·순위 참고·분석 범위" in report
     # Jira 시각은 가까우므로 경고 없음. issue_meta.json은 그대로, 매처는 match_meta.json(발생 시각 = 스텝 실패 시각)을 쓴다
     assert not any("분 다르다" in w for w in done.get("warnings") or [])
@@ -478,7 +478,8 @@ def test_jira_time_disagreement_warns_but_anchor_still_wins():
     done, job = _offline("far", "--failed-step", STEP, occurred="2026-09-20T14:10:00+09:00", root=MARKER_ROOT)
     assert done["step_anchor"]["source"] == "log_marker" and _causes(done) == ["DATA-001-01"]
     warns = [w for w in done["warnings"] if "분 다르다" in w]
-    assert warns == ["Jira 발생 시각과 실패 스텝 시각이 24분 다르다 — 스텝 시각 기준으로 분석했다(끄기: --answer anchor=off)"]
+    # --issue-meta의 시각은 손으로 준 기준 시각이라 지금처럼 잰다(Jira 칸 값은 D4로 재지 않는다 — 문구 "입력한 발생 시각")
+    assert warns == ["입력한 발생 시각과 실패 스텝 시각이 24분 다르다 — 스텝 시각 기준으로 분석했다(끄기: --answer anchor=off)"]
     assert done["step_anchor"]["issue_gap_min"] == 23.5
     assert "23.5분 차이" in (job / "report.md").read_text(encoding="utf-8")
     off, _ = _offline("far-off", "--failed-step", STEP, "--answer", "anchor=off", occurred="2026-09-20T14:10:00+09:00",

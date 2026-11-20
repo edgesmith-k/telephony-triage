@@ -32,7 +32,9 @@
 `failed_step {text, source}`(`--failed-step`·`--steps-file`까지 반영한 최종 값, source는 cli|field|description|test_steps|steps_file),
 `issue.failed_step`(그 값의 text), `warnings[]`. 보조 정보일 뿐이며 `missing`에 넣지 않는다.
 `--failed-step <한 줄>`·`--steps-file <파일>`은 record 흐름이 쓴다(우선순위 cli > 자동 > steps-file, 모두 마스킹 후 정규화).
-`--meta-out`이면 `match_signatures.py --issue-meta` 입력 `{key, occurred_at, sw, summary, description}`을 쓴다(`failed_step`·`platform_version`·`sim_slot`은 있을 때만 더한다).
+`--meta-out`이면 `match_signatures.py --issue-meta` 입력 `{key, sw, summary, description}`을 쓴다(`failed_step`·`platform_version`·`sim_slot`은 있을 때만 더한다).
+Jira 발생 시각 칸(`occurred_at`)은 메타에 넣지 않는다 — 로그와 다른 시계(장비·PC)의 값이라 분석 구간·근접 중심에 쓰지 않는다(D4).
+출력 `occurred_at`·`issue.occurred_on`(기록용 날짜)은 그대로다.
 `--consume`이면 읽은 원본 파일을 지운다(원문을 work_dir에 남기지 않기 위해서다, 08-safety.md §8.1).
 
 `field_map` 경로 표기: 점으로 잇고, 목록은 `[]`로 펼친다(`fields.components[].name`). 경로가 비었거나
@@ -237,10 +239,13 @@ def _comment_order(raw, path: str | None, read: int, dated: bool | None) -> dict
       시각으로 다시 정렬했으면(받은 순서가 오래된 것부터라는 보장이 없다 — 최신순 페이지) `comments_partial`
     - total 없음 → `{comments_unchecked: "total"}`. 순서 모름 → `{comments_unchecked: "order"}`: 작성 시각이 일부만 있거나 같은 값이
       있음(어느 출처든), 맨 위 목록인데 작성 시각이 없음. 시각이 전혀 없는 `fields.comment`(Jira 원본·포털)는 받은 순서를 믿는다
-    코멘트가 없으면 `fields.comment.total` > 0일 때만 일부만 읽음."""
+    코멘트가 없으면 `fields.comment.total` > 0일 때만: `startAt == total`(앞을 모두 건너뛰고 0개 — 포털이 긴 마지막 코멘트 때문에
+    코멘트를 넘기지 않은 모양)이면 `{comments_skipped: total}`, 그 밖은 일부만 읽음."""
     if path is None:
-        total = lookup(raw, "fields.comment.total")
-        return {"comments_partial": {"total": total, "read": 0}} if type(total) is int and total > 0 else {}
+        total, start = lookup(raw, "fields.comment.total"), lookup(raw, "fields.comment.startAt")
+        if type(total) is not int or total <= 0:
+            return {}
+        return {"comments_skipped": total} if start == total else {"comments_partial": {"total": total, "read": 0}}
     container = path.split("[]")[0].rpartition(".")[0]
     page = lookup(raw, container) if container else raw.get("comments_page")
     page = page if isinstance(page, dict) else {}
@@ -470,8 +475,6 @@ def main(argv: list[str] | None = None) -> int:
             pv = result["issue"].get("platform_version") or result.get("platform_version_all")
             if pv:
                 meta["platform_version"] = pv
-            if result["occurred_at"]:
-                meta["occurred_at"] = result["occurred_at"]
             if result.get("sim_slot"):
                 meta["sim_slot"] = result["sim_slot"]
             fs = result.get("failed_step") or result.get("failed_step_auto")

@@ -18,7 +18,7 @@
   "reason": "no_reference"
  },
  "issue_summary": "데이터가 연결되지 않음 (합성)",
- "occurred_at": "2026-09-20T15:10:02+00:00",
+ "occurred_at": "2026-09-20T15:10:02.000Z",
  "events": "events.json",
  "timeline": "timeline.md",
  "log_paths": [

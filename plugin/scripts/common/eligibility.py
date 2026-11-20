@@ -32,7 +32,8 @@
 - 여러 곳(`places` > 1) ambiguous/locations, 슬롯 둘 이상 ambiguous/slots, 출처끼리 다른 사건 ambiguous/sources.
 - 출처: 명시 기준(look_at·마커·steps-file)이 있으면 그것이 정한다 — 단서는 명시 기준과 다른 사건을 가리킬 때(분석 구간 밖에서
   찾은 단서 `outside: true` 포함)만 ambiguous/sources로
-  만든다. 단서만 있으면 단서가 모두 확인될 때만 정하되(하나라도 보류·로그에서 못 씀이면 보류 — `decide`), `comment_adopt`가
+  만든다. 단서만 있으면 단서가 모두 확인될 때만 정하되(하나라도 보류·로그에서 못 씀이면 보류하고 다른 단서가 잡은 사건은
+  기준 사건으로 싣지 않는다 — `decide`), `comment_adopt`가
   거짓이면(기본 참 — 문제 파악 단서만, 스크립트 단서는 보류(A474): 부른 쪽이 스크립트 단서면 거짓을 준다) 붙은 사건을 싣고
   ineligible/comment_unconfirmed로 보류한다.
 - 문제 파악이 "DB에 없는 증상"(`not_in_db`)이면 기준이 있어도 symptom_not_found/not_in_db(다른 사건의 원인으로 대신하지 않는다).
@@ -317,14 +318,16 @@ def decide(events: list[dict], refs: list[dict], link_ms: int = DEFAULT_LINK_MS,
             return _held("ambiguous", "sources", got[1] + other)
         return _adopt(got[1], got[2])
     got = _pick(clues)
-    if isinstance(got, dict):
-        return got
     held = [o for o in clues if o[0] != "events"]
+    # 단서 하나라도 보류·버림(못 쓴 단서·token 충돌)이면 다른 단서가 잡은 사건을 기준 사건으로 싣지 않는다 — 그 사건의 원인이 위치
+    # 후보로 보이면 시험 조작·참고로 붙인 다른 사건을 가리킨다(sim1120 P2-7 S-18a·S-20). 사건은 관측(observed)으로만 남는다
+    if isinstance(got, dict):
+        return {**got, "events": []} if held or unconfirmed else got
     if held:      # 실패 단서는 못 확인하고 참고로 붙인 다른 단서만 사건을 잡은 경우 등 — 그 단서로 채택하지 않는다
         best = min(held, key=lambda o: _HELD_ORDER.index(o[1]))
-        return _held(best[1], best[2], got[1])
+        return _held(best[1], best[2])
     if unconfirmed:
-        return _held("ambiguous", "sources", got[1])
+        return _held("ambiguous", "sources")
     ref = clue_refs[next(i for i, o in enumerate(clues) if o is got)]
     res = {**_adopt(got[1], got[2]), "via": {**{k: ref.get(k) for k in ("comment", "clue", "how", "places")},
                                                 **({"origin": ref["origin"]} if ref.get("origin") else {})}}     # 단서 출처 script|problem

@@ -75,6 +75,8 @@ class Env:
         if explore:
             analysis["explore"] = {"reason": "no_candidate" if not cands else "cause_unconfirmed", "when": "ask"}
         (job / "analysis.json").write_text(json.dumps(analysis, ensure_ascii=False), encoding="utf-8")
+        # 타임라인 중심 = 사용자가 준 시각(issue_meta.json — run의 write_meta). analysis.issue.occurred_at(Jira 칸)은 중심이 아니다(D4)
+        (job / "issue_meta.json").write_text(json.dumps({"key": KEY, "occurred_at": "2026-09-20T05:32:10Z"}), encoding="utf-8")
         ev = {"events": list(EVENTS if events is None else events),
               "input": {"files": ["/abs/source.log"], "window": {"start": "2026-09-20T05:27:00Z", "end": "2026-09-20T05:37:00Z"}}}
         (job / "events.json").write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
@@ -182,7 +184,8 @@ def _c0_deep_job(tmp_path: Path, src: Path) -> tuple[Path, Path, dict, Path]:
     parse = case.get("parse") or {}
     proc = run("triage.py", ["run", case["key"], "--offline-db", db, "--logs", log, "--issue-file", tmp_path / "issue.yaml",
                              "--out", job, "--platform", "ofono", "--tz", parse["tz"], "--year", parse["year"],
-                             "--minutes", parse.get("minutes", 5)], root=root, env={"TELEPHONY_TRIAGE_HOME": home})
+                             "--minutes", parse.get("minutes", 5), "--answer", f"time={case['issue']['occurred_at']}"],
+               root=root, env={"TELEPHONY_TRIAGE_HOME": home})       # 입력 생성기와 같다(Jira 칸 시각은 쓰지 않는다, D4)
     assert proc.returncode == 0, proc.stderr
     proc = run("triage.py", ["module", case["key"], "--for", "deep", "--out", job, "--platform", "ofono"], root=root,
                env={"TELEPHONY_TRIAGE_HOME": home})

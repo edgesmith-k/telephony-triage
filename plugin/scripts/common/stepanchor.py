@@ -156,7 +156,7 @@ def find_span(markers, failed_text, jira_at, allow_without_step: bool = True,
     fails = [(i, t, m) for i, (t, m) in enumerate(rows) if m["status"] == "fail" and matches(m)]
     if fails:
         if len(fails) > 1:
-            warnings.append(f"FAIL 마커 {len(fails)}개 — Jira 발생 시각에 가장 가까운 것(없으면 첫 번째)을 골랐다")
+            warnings.append(f"FAIL 마커 {len(fails)}개 — 입력한 발생 시각에 가장 가까운 것(없으면 첫 번째)을 골랐다")
         pick = _closest([(t, {"i": i, "m": m}) for i, t, m in fails], jira_at)
         fail_t, ref = pick
         idx, marker = ref["i"], ref["m"]
@@ -267,7 +267,7 @@ def steps_file_times(line, tz, year, ref_dt=None):
     """실패 스텝 줄(원문)에서 시각 최대 2개 → `(start | None, fail | None)` (UTC datetime).
 
     첫 시각이 시작, 둘째가 실패이고 하나뿐이면 실패 시각이다. 오프셋 있는 ISO는 그대로, 오프셋 없는 ISO와
-    logcat 스탬프(`MM-DD HH:MM:SS(.mmm)`)는 `tz`·`year`로, 시각만(`HH:MM:SS`)은 `ref_dt`(Jira 발생 시각 또는
+    logcat 스탬프(`MM-DD HH:MM:SS(.mmm)`)는 `tz`·`year`로, 시각만(`HH:MM:SS`)은 `ref_dt`(입력한 발생 시각 또는
     로그 첫 시각)의 날짜를 쓰고 `ref_dt`보다 12시간 넘게 앞서면 하루 뒤로 본다. 줄 원문은 돌려주지 않는다."""
     from common import logtime
 

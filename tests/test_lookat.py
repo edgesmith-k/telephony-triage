@@ -82,3 +82,14 @@ def test_pick_nearest_or_last():
     assert L.pick(times, t0 + timedelta(minutes=4)) == (1, "nearest")
     assert L.pick(times, t0 + timedelta(minutes=1, seconds=30)) == (0, "nearest")   # 같은 거리면 앞
     assert L.pick(times, None) == (2, "last")                                       # 기준 시각 없음 → 마지막(P2 23)
+
+
+def test_level_and_tag_head_without_time_is_body_search():
+    """sim1120 S-11·S-39: 시각 없이 레벨·태그 머리(`D RILJ    : …`, `9995 10049 D RILJ : …`)를 붙여도, `태그 :`처럼 `:` 앞에
+    공백이 있어도 `태그: 메시지` 줄을 찾는다. 레벨만 떼고 태그는 본문으로 남긴다(`Phone-0 : …`)."""
+    assert L.clean("D RILJ    : Service DATA has died. [PHONE0]") == "RILJ : Service DATA has died. [PHONE0]"
+    assert L.clean("radio  9995 10049 D RILJ    : Service DATA") == "RILJ : Service DATA"
+    assert L.clean("Phone-0 : setAllowedNetworkTypes: subId=1") == "Phone-0 : setAllowedNetworkTypes: subId=1"
+    texts = ["RILJ: Service DATA has died. [PHONE0]", "Phone-0: setAllowedNetworkTypes: subId=1, reason=user"]
+    for line, want in (("D RILJ    : Service DATA has died.", [0]), ("Phone-0 : setAllowedNetworkTypes: subId=1", [1])):
+        assert L.text_hits(L.needle(L.query(line)), texts) == want, line

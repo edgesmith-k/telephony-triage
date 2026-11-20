@@ -24,7 +24,7 @@
   "reason": "no_reference"
  },
  "issue_summary": "VoLTE 통화가 안 됨 (합성)",
- "occurred_at": "2026-08-23T12:03:25+00:00",
+ "occurred_at": "2026-08-23T12:03:25.000Z",
  "events": "events.json",
  "timeline": "timeline.md",
  "log_paths": [

@@ -65,7 +65,7 @@ def test_ipc_line_with_reused_token_picks_nearest_and_moves_window():
     assert done["request_hash"] != off["request_hash"]
     report = (job / "report.md").read_text(encoding="utf-8")
     assert ("- 기준 줄: 로그에서 찾음 2026-09-20T05:33:05.400Z (일치 4개 중 4번째 — 발생 시각에 가장 가까운 것) → 분석 범위 "
-            "2026-09-20T05:32:35.400Z ~ 2026-09-20T05:38:05.400Z (Jira 발생 시각 2026-09-20T14:34:00+09:00 / 0.9분 차이)") in report
+            "2026-09-20T05:32:35.400Z ~ 2026-09-20T05:38:05.400Z (입력한 발생 시각과 0.9분 차이)") in report
     assert "실패 스텝 구간" not in report and "스텝 미상" not in report
     # 원문은 하위 스크립트 인자·trace·상태에 남지 않는다 — 경로만(P1 5). 짧은 token은 가린 값에도 남는다
     calls = [r for r in _trace(job) if r.get("step") == "3-lookat"]
@@ -212,3 +212,35 @@ def test_fit_drops_look_right_after_flows():
     dropped = fit(json.loads(json.dumps({**base, "notes": ["n" * 4100]})))
     assert "look" not in dropped["step_anchor"] and dropped["truncated"] is True
     assert len(dumps(kept).encode("utf-8")) + 1 <= 4096
+
+
+def test_fit_keeps_every_reference_event_and_key_warnings_first():
+    """sim1120 P1-1·P1-2: 4KB 맞춤이 기준 사건(ref)을 하나만 남기면 원인이 갈린 것을 포털이 모른다(S-26) — 모두(≤3) 남긴다.
+    경고를 3줄로 줄일 때 늘 나오는 경고보다 단서 버림·token 충돌·범위 밖 경고를 먼저 남긴다(S-13)."""
+    ev = lambda cause, ref: {"type": "DATA-002", "at": "2026-11-10T08:26:01+00:00", "line": "f0:L1", "phone": 0, "absence": False,
+                             "ref": ref, "result": "held" if ref else "observed", "cause": cause, "why": None, "gap_s": 0.0}
+    usual = ["steps-file에 FAIL 스텝이 2개 있다", "장비 시각 미사용: 시계 정렬 불가(시계 차 모름)", "스텝 순서 정렬 안 함: x"]
+    key = ["코멘트 단서(스크립트) 버림: 로그에 없음 1", "코멘트에 서로 다른 token 값이 여럿이라 코멘트 단서로는 채택하지 않는다"]
+    result = {"files": {"report": "r"}, "warnings": usual + key, "notes": ["n" * 300] * 12,
+              "decision": {"state": "held", "reason": "ambiguous", "events": [ev("DATA-002-03", True), ev("DATA-003-01", True),
+                                                                                ev("DATA-003-01", False)]}}
+    out = fit(result)        # notes는 fit이 줄이지 않는다 — 모든 단계를 지나도 넘친다(줄이는 순서만 본다)
+    assert out["truncated"] is True
+    assert [e["cause"] for e in out["decision"]["events"]] == ["DATA-002-03", "DATA-003-01"]
+    assert out["warnings"][:2] == key and out["warnings"][2] == usual[0]
+
+
+def test_decision_line_names_ambiguous_detail_and_not_a_bug():
+    """sim1120 P2-6: ambiguous 세부 사유를 뭉뚱그리지 않는다(지점은 하나인데 원인이 갈린 multiple_events). P2-7: 기준 사건 원인이 이슈 DB
+    에서 버그 아님이면 판단 줄에 그 표시. 채택 원인이 버그 아님이면 해결책 앞에 "시험 절차 문제면 해당 없음"(S-25, report.not_a_bug_cause)."""
+    from triagelib import report as rp
+    loc = {"state": "found", "source": "look_at", "kind": "near"}
+    multi = rp.decision_line({"state": "held", "reason": "ambiguous", "location": loc,
+                              "check": {"why": "multiple_events"}, "events": []}, [])
+    assert multi.startswith("- 판단: 원인 보류 — 실패 지점은 정했으나 그 지점의 사건들 원인이 서로 다름(")
+    src = rp.decision_line({"state": "held", "reason": "ambiguous", "location": loc, "check": {"why": "sources"}}, [])
+    assert src.startswith("- 판단: 원인 보류 — 실패 지점을 하나로 정하지 못함(기준마다 다른 실패를 가리킴)")
+    nab = {"state": "accepted", "reason": "anchored_top", "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
+           "location": loc, "check": {"why": "same_line"}, "events": [{"ref": True, "cause": "DATA-001-01", "not_a_bug": True}]}
+    assert rp.decision_line(nab, []).endswith(" · " + rp.NOT_A_BUG_NOTE + "DATA-001-01")
+    assert rp.not_a_bug_cause(nab, "DATA-001-01") and not rp.not_a_bug_cause(nab, "DATA-002-01")

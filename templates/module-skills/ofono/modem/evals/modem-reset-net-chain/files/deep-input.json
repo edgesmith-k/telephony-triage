@@ -18,7 +18,7 @@
   "reason": "no_reference"
  },
  "issue_summary": "5G 설정이 안 되고 망이 잠시 끊김 (합성)",
- "occurred_at": "2026-09-21T10:50:05+00:00",
+ "occurred_at": "2026-09-21T10:50:05.000Z",
  "events": "events.json",
  "timeline": "timeline.md",
  "log_paths": [

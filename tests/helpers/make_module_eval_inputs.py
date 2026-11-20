@@ -184,6 +184,11 @@ def _issue_yaml(case: dict, module: str = "data") -> str:
     return json.dumps(doc, ensure_ascii=False, indent=1) + "\n"     # JSON은 YAML의 부분집합
 
 
+def _given_time(job: Path):
+    """분석이 쓴 기준 시각(`issue_meta.json` occurred_at — `--answer time=`) — 모듈 타임라인 중심과 같은 값."""
+    return json.loads((job / "issue_meta.json").read_text(encoding="utf-8")).get("occurred_at")
+
+
 def _run(runner, root: Path, args: list, home: Path, what: str):
     proc = runner.run("triage.py", args, root=root, env={"TELEPHONY_TRIAGE_HOME": home})
     if proc.returncode != 0:
@@ -213,7 +218,9 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
     parse = case.get("parse") or {}
     args = ["run", case["key"], "--offline-db", db, "--logs", work / "logs" / "source.log",
             "--issue-file", work / "issue.yaml", "--out", job, "--platform", platform,
-            "--tz", parse["tz"], "--year", parse["year"], "--minutes", parse.get("minutes", 5)]
+            "--tz", parse["tz"], "--year", parse["year"], "--minutes", parse.get("minutes", 5),
+            # case의 발생 시각은 AP 로그 시계로 쓴 값 — Jira 칸은 분석 기준으로 쓰지 않으므로(D4) 사용자가 준 시각으로 넘긴다
+            "--answer", f"time={case['issue']['occurred_at']}"]
     _run(runner, root, args, home, name)
     analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
     events = json.loads((job / "events.json").read_text(encoding="utf-8"))
@@ -246,7 +253,7 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
             raise GenError(f"{name}: deep case인데 explore-input.json이 생겼다")
         explore_bytes = None
         # CLI만으로는 deep에 타임라인이 없다 → 같은 report.timeline 경로를 임시 입력으로 탄다
-        explore_input.write_text(json.dumps({"around": (analysis.get("issue") or {}).get("occurred_at"),
+        explore_input.write_text(json.dumps({"around": _given_time(job),
                                              "failed_step": None, "limit": EXPLORE_LIMIT, "anchor": None},
                                             ensure_ascii=False), encoding="utf-8")
     else:
@@ -287,7 +294,7 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
                                for c in candidates[:3]],
             **({"decision": {k: analysis["decision"].get(k) for k in ("state", "reason")}} if analysis.get("decision") else {}),
             "issue_summary": issue.get("summary"),
-            "occurred_at": issue.get("occurred_at"),
+            "occurred_at": _given_time(job),      # = triagelib.modulecmd._around(사용자가 준 시각 — Jira 칸 아님, D4)
             "events": "events.json",
             "timeline": "timeline.md",
             "log_paths": ["source.log"],

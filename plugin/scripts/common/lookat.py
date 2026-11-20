@@ -28,6 +28,11 @@ PIECE_MIN = 4                    # 부분 일치 사전 필터: 마스킹 토큰
 _HEAD = re.compile(r"^\s*(?:\d{4}-)?\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:\s*(?:Z|[+-]\d{2}:?\d{2}))?"
                    r"(?:\s+(?:[A-Za-z0-9_.]+\s+)?\d+\s+\d+\s+[VDIWEFA]\s+(?:[^:]|::)+?\s*:(?=\s|$)"
                    r"|\s+[VDIWEFA]/[^(]+?\(\s*\d+\):)?")
+# 시각 없이 붙인 줄의 머리: `[uid] pid tid L ` 또는 `L `(로그 레벨 한 글자) 뒤에 `태그 :`가 오는 모양(`D RILJ    : …`, sim1120 S-11).
+# 레벨까지만 떼고 `태그 :`는 남긴다 — 비교 글이 `태그: 메시지`라 태그도 본문의 일부다(`Phone-0 : …`는 그대로 찾는다, S-39)
+_LEVEL_HEAD = re.compile(r"^\s*(?:(?:[A-Za-z0-9_.]+\s+)?\d+\s+\d+\s+)?[VDIWEFA]\s+(?=[^\s:]+\s*:(?:\s|$))")
+# 태그와 `:` 사이 공백(logcat threadtime은 태그를 공백으로 채운다 — `RILJ    : `). 비교 전에 양쪽에서 접는다
+_COLON_GAP = re.compile(r"\s+:")
 # 대괄호는 시각 모양만 뗀다(`[TX]`·`[IpcCtx_0]`는 IPC 정규식이 쓴다, P2 21): `[  12.345]`·`[14:32:11.001]`
 _BRACKET_TS = re.compile(r"\[\s*\d+\.\d+\s*\]|\[\d{1,2}:\d{2}:\d{2}(?:\.\d+)?\]")
 _TOKEN = re.compile(r"(?i)\btoken\s*[=:(]\s*(0x[0-9A-Fa-f]{1,8}|\d{1,10})\b")   # 괄호 없이·`Token(0x2FE)`도 읽는다(P2 22, 단계 3)
@@ -38,8 +43,10 @@ _TOKEN_FOLD = re.compile(r"<[A-Z][A-Z0-9_]*#\d+>|<HEXDUMP \d+B>|<REDACTED:[A-Z0-
 
 
 def clean(text) -> str:
-    """앞의 logcat 머리·대괄호 시각을 떼고 공백을 한 칸으로. ponytail: syslog(oFono) 머리는 떼지 않는다 — 메시지 부분을 붙이면 찾는다."""
+    """앞의 logcat 머리(시각 없이 붙인 레벨 머리 포함)·대괄호 시각을 떼고 공백을 한 칸으로. ponytail: syslog(oFono) 머리는 떼지
+    않는다 — 메시지 부분을 붙이면 찾는다."""
     text = _HEAD.sub("", str(text or ""), count=1)
+    text = _LEVEL_HEAD.sub("", text, count=1)
     return " ".join(_BRACKET_TS.sub(" ", text).split())
 
 
@@ -50,8 +57,8 @@ def stamp(text) -> str | None:
 
 
 def fold(text) -> str:
-    """비교용: 마스킹 토큰을 번호 없이 접고 공백 정리·대소문자 무시."""
-    return " ".join(_TOKEN_FOLD.sub("<M>", str(text or "")).split()).casefold()
+    """비교용: 마스킹 토큰을 번호 없이 접고 공백 정리(`태그 :`의 `:` 앞 공백은 뺀다)·대소문자 무시."""
+    return _COLON_GAP.sub(":", " ".join(_TOKEN_FOLD.sub("<M>", str(text or "")).split())).casefold()
 
 
 def query(text, prefix: str = "VIPC_") -> dict:
@@ -91,7 +98,7 @@ def text_hits(needle_text: str, texts: list[str], masked=None) -> list[int] | No
         return None
     out = []
     for i, text in enumerate(texts):
-        if piece in " ".join(text.split()).casefold() and needle_text in fold(masked(i) if masked else text):
+        if piece in _COLON_GAP.sub(":", " ".join(text.split())).casefold() and needle_text in fold(masked(i) if masked else text):
             out.append(i)
     return out
 

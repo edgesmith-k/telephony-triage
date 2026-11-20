@@ -72,7 +72,7 @@
 `lock`(release-other|take-over|stop) · `plan`(resume|new) · `issue`(MCP 호출 후 재실행) ·
 `year`(YYYY) · `reanalyze`(yes|no) · `open_pr`(continue|stop) · `logs`(`--logs`로 재실행) ·
 `code`(프로필|경로|skip) · `code_confirm`(yes|skip) · `time`(ISO 시각) · `window`(full|keep) ·
-`anchor`(off: 실패 스텝 앵커를 쓰지 않고 Jira 발생 시각 기준 범위로 분석, 아래) · `platform`(켠 플랫폼 이름, 아래).
+`anchor`(off: 실패 스텝 앵커를 쓰지 않고 입력한 발생 시각(없으면 로그 전체) 기준으로 분석, 아래) · `platform`(켠 플랫폼 이름, 아래).
 
 플랫폼 정하기(17-platforms §11, 켠 플랫폼 2개 이상·`--offline-db` 아님일 때만 — 하나면 아무것도 읽지 않는다): lock·JOB 전에
 `triagelib/pick.py`가 로그 형식(`platforms/sniff.py`)·Jira 대응표(site `platform.detect.tracker_field`, 기본 꺼짐)·이어 하는 작업으로
@@ -91,9 +91,9 @@ KEY의 가장 늦은 활동인 동안(답한 뒤 다른 플랫폼 작업이 묻�
 실패 스텝 앵커(선택): 실패 스텝이 **어디를(시간 범위)·무엇을(우선 유형)** 볼지 정하고, **왜(S/C)** 는 로그 시그니처가 정한다.
 앵커 우선순위 `--answer anchor=off`(끔) > 기준 줄(`--look-at`) > 로그 스텝 마커(`failed_step.marker_patterns`가 있을 때 `parse_logcat markers`, 기본 꺼짐) >
 `--steps-file`의 스텝 시각(**수동 시계 차 `--clock-offset`이 있을 때만**) > `--steps-file`의 스텝 순서(`step_order`: PASS 스텝의
-흔적을 이슈 DB `step_events` 규칙으로 로그에서 찾아 마지막 일치 뒤를 실패 구간으로 본다, 시계 불필요) > Jira 발생 시각(±`--minutes`) >
+흔적을 이슈 DB `step_events` 규칙으로 로그에서 찾아 마지막 일치 뒤를 실패 구간으로 본다, 시계 불필요) > 입력한 발생 시각(`--answer time=`·`--issue-meta`, ±`--minutes` — Jira 발생 시각 칸은 쓰지 않는다, D4) >
 증상 시각 스캔(`--answer time`). 시험 장비 시계는 단말 logcat 시계와 다를 수 있어, 시계 차를 모르면 장비 시각은 쓰지 않는다(경고).
-마커·steps-file 앵커는 분석 범위와 근접 보너스의 중심에서 Jira 시각을 대신한다(`JOB/match_meta.json`, `issue_meta.json`은 그대로).
+마커·steps-file 앵커는 분석 범위와 근접 보너스의 중심에서 입력한 시각을 대신한다(`JOB/match_meta.json`, `issue_meta.json`은 그대로).
 앵커 시각이 로그 범위 밖이면 경고하고 다음 출처로 넘어간다. 실패 스텝 문구는 앵커와 무관하게 우선 유형·키워드에 쓴다.
 앵커가 없고 마커 패턴·steps-file도 없으면 출력은 이전과 같다.
 
@@ -165,6 +165,9 @@ def build_parser() -> argparse.ArgumentParser:
                                           "없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다")
     p.add_argument("--look-at", metavar="기준 줄", help="기준 줄(선택, ≤300자): 로그 줄 또는 `<IPC 이름> (token=0x…)`. 로그에서 찾으면 "
                                                     "그 줄 시각 둘레로 분석 구간을 잡는다. 마스킹해서만 쓴다")
+    p.add_argument("--look-at-source", choices=("user", "model"), default="user",
+                   help="기준 줄을 누가 골랐나(기본 user = 담당자). model = 모델이 Jira 코멘트에서 고른 줄 — 리포트·analysis.json에 "
+                        "'모델이 코멘트에서 고른 지점'(decision.location.source model)으로 적고 실패 지점을 확정(confirmed)으로 올리지 않는다")
     p.add_argument("--look-note", metavar="확인할 내용", help="확인할 내용(선택, ≤300자): 리포트·탐색 타임라인 머리에 싣는 사용자 질문. "
                                                          "마스킹해서만 쓴다. 있으면 1위 C=1이어도 적합성 확인(fit_check)을 연다"
                                                          "(explore.when: never·--no-explore 제외)")

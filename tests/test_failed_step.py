@@ -398,3 +398,15 @@ def test_summary_row_is_not_failed_step():
     path.write_text(text, encoding="utf-8")
     steps, failed, warnings, _ = failedstep.read_steps(path)
     assert failed == 1 and warnings == []
+
+
+def test_failure_detail_line_with_same_step_number_is_not_a_second_step():
+    """sim1120 P2-2: 결과 HTML 끝 `Failure detail`의 "Step 2: … Preliminary verdict: FAIL"은 같은 번호·판정의 요약이라 스텝으로 세지
+    않는다 — "FAIL 스텝 2개" 경고가 없다. 번호가 같아도 판정이 다르면(PASS 뒤 재시도 FAIL) 둘 다 스텝이다."""
+    text = "\n".join(["No | Time | Message | Description | Verdict", "1 | 06:42:42.000 | - | Apply profile | PASS",
+                      "2 | 06:42:51.000 | - | ICMP echo to UE x10 | FAIL",
+                      "Step 2: ICMP echo 10 sent, 0 replied within 2 s timeout. Preliminary verdict: FAIL"])
+    rows = failedstep.parse_steps(text)
+    assert [(r["number"], r["status"]) for r in rows] == [(1, "pass"), (2, "fail")]
+    retry = failedstep.parse_steps("\n".join(["1 | attach | PASS", "2 | data on | PASS", "2 | data on (retry) | FAIL"]))
+    assert [(r["number"], r["status"]) for r in retry] == [(1, "pass"), (2, "pass"), (2, "fail")]
