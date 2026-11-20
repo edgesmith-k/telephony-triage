@@ -110,6 +110,7 @@ class AnchorMixin:
         없다)이 있거나 `--steps-file`이 있을 때만 `parse_logcat markers`를 돌린다. 앵커의 실패 시각이 로그 범위 밖이면 경고하고
         다음 출처로 넘어간다. steps-file의 원문 줄은 이 프로세스 안에서 시각만 뽑고 버린다."""
         self.anchor_off = self.answer("anchor") == "off"
+        self.reference = None
         if self.anchor_off:
             if self.look_inputs()["at"]:
                 self.warn("기준 줄(--look-at)은 --answer anchor=off라 쓰지 않았다")
@@ -139,6 +140,7 @@ class AnchorMixin:
                   "start": lc.format_ts(span["start"]) if span.get("start") else None, "fail": lc.format_ts(fail),
                   "window": (lc.format_ts(start), lc.format_ts(end))}
         anchor["location"] = self.location(span)
+        self.reference = self.reference_of(span)
         if span.get("order"):
             anchor["order"] = span["order"]
         if jira_at:
@@ -154,25 +156,40 @@ class AnchorMixin:
 
     def location(self, span: dict) -> dict:
         """실패 지점 `{state, source, kind}`(analysis.json `decision.location`). 기준 줄은 ipc·token 일치(point) 1개면 confirmed,
-        글자 일치(near) 1개면 found("한 곳에서 찾았다"이지 "이번 실패 지점을 확인했다"가 아니다), 여럿이면 multiple. 로그 마커는 FAIL 1개 confirmed·여럿 multiple·START만 found. steps-file 시각·
-        스텝 순서는 found(구간). 앵커가 없으면 이 함수를 부르지 않는다(`NO_LOCATION`)."""
+        글자 일치(near) 1개면 found("한 곳에서 찾았다"이지 "이번 실패 지점을 확인했다"가 아니다), 여럿이면 multiple(곳 수는 같은
+        요청으로 묶은 뒤). 로그 마커는 FAIL 1개 confirmed·여럿 multiple·START만 found. steps-file 시각·스텝 순서는 found(구간).
+        채택이면 `driver._decision`이 자격 검사 결과로 다시 정한다. 앵커가 없으면 이 함수를 부르지 않는다(`NO_LOCATION`)."""
         src = span["source"]
-        if src == "look_at":
+        if src == "look_at":     # 같은 요청(IPC REQ→RSP·RIL 짝)으로 묶은 곳 수
             look = self.look_result or {}
             text = look.get("how") == "text"
-            return {"state": "multiple" if look.get("hits") != 1 else "found" if text else "confirmed", "source": src,
+            return {"state": "multiple" if look.get("places") != 1 else "found" if text else "confirmed", "source": src,
                     "kind": "near" if text else "point"}
         if src == "log_marker" and span.get("fail") is not None:
             return {"state": "confirmed" if span.get("n") == 1 else "multiple", "source": src, "kind": "range"}
         return {"state": "found", "source": src, "kind": "range"}
+
+    def reference_of(self, span: dict) -> dict:
+        """자격 검사 기준(`match_signatures.py --reference`, `common.eligibility`). 기준 줄은 `{kind: line, source, places, lines[]}`
+        (lines = 고른 곳의 줄 `{line_ref, ts, phone, ipc?, ril?}`), 마커·steps-file은 `{kind: range, source, places, start, fail}`
+        (places = 맞는 FAIL 마커 수, START만이면 fail null)."""
+        src = span["source"]
+        if src == "look_at":
+            return {"kind": "line", "source": src, "places": (self.look_result or {}).get("places") or 1,
+                    "lines": self.look_place}
+        return {"kind": "range", "source": src, "places": span.get("n") or 1,
+                "start": lc.format_ts(span["start"]) if span.get("start") else None,
+                "fail": lc.format_ts(span["fail"]) if span.get("fail") else None}
 
     def look_inputs(self) -> dict:
         """`--look-at`·`--look-note`(선택, 원문)를 이 프로세스에서 이슈 DB 설정대로 가린 값 `{at, note}`(없으면 None).
         원문은 여기서만 쓴다 — 하위 스크립트에는 가린 값을 담은 `JOB/look-at.json` 경로만 넘긴다(trace.jsonl에 원문 없음)."""
         if self._look is None:
             at, note = getattr(self.args, "look_at", None), getattr(self.args, "look_note", None)
-            self._look = {"at": (lookat.clean(self.masker(log_lines=True)(at)) or None) if at else None,
-                          "note": (" ".join(self.masker()(note).split()) or None) if note else None}
+            masked = self.masker(log_lines=True)(at) if at else None
+            self._look = {"at": (lookat.clean(masked) or None) if at else None,
+                          "note": (" ".join(self.masker()(note).split()) or None) if note else None,
+                          "stamp": lookat.stamp(masked)}     # 붙여 넣은 줄의 logcat 시각(같은 곳 고르기, 단계 5)
         return self._look
 
     def look_span(self, logs: list[Path], tz: str | None, year: int | None, jira_at) -> dict | None:
@@ -182,7 +199,9 @@ class AnchorMixin:
         if not text:
             return None
         path = self.job / LOOK_FILE
-        path.write_text(json.dumps({"look_at": text, "ref": lc.format_ts(jira_at) if jira_at else None}, ensure_ascii=False)
+        stamp = self.look_inputs()["stamp"]
+        path.write_text(json.dumps({"look_at": text, "ref": lc.format_ts(jira_at) if jira_at else None,
+                                    **({"stamp": stamp} if stamp else {})}, ensure_ascii=False)
                         + "\n", encoding="utf-8", newline="\n")
         argv = ["ipc", *logs, "--rules", self.snap / "parser-rules", "--find", path]
         argv += (["--tz", tz] if tz else []) + (["--year", year] if year else [])
@@ -194,7 +213,8 @@ class AnchorMixin:
             self.look_result = {"hits": 0, "why": _clip(found.get("why") or "결과 없음", 60)}
             self.warn(f"기준 줄을 로그에서 못 찾음({self.look_result['why']}) — 다음 출처로 분석 구간을 정했다")
             return None
-        self.look_result = {k: found.get(k) for k in ("hits", "picked", "pick", "how", "ts", "line", "at")}
+        self.look_result = {k: found.get(k) for k in ("hits", "picked", "pick", "how", "ts", "line", "at", "places")}
+        self.look_place = found.get("place") or []      # 자격 검사 기준 줄(reference_of) — 캐시·analysis.json에는 안 나간다
         ts = stepanchor._ts(found["ts"])
         return {"source": "look_at", "step": None, "step_from": None, "start": None, "fail": ts, "end": ts}
 

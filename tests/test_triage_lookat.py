@@ -18,7 +18,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
-from runner import SAMPLE, plugin_root, run, run_json, tmp  # noqa: E402
+from runner import SAMPLE, padded_log, plugin_root, run, run_json, tmp  # noqa: E402
 from triagelib.report import fit, dumps  # noqa: E402
 
 KEY = "MOCK-9001"
@@ -48,13 +48,16 @@ def _trace(job: Path) -> list[dict]:
 def test_ipc_line_with_reused_token_picks_nearest_and_moves_window():
     off, _ = _offline("off")
     assert "IMS-001-01" in _causes(off) and "step_anchor" not in off              # 오늘의 동작(Jira ±5분에 둘 다)
-    done, job = _offline("on", "--look-at", LINE)
+    done, job = _offline("on", "--look-at", LINE, logs=(padded_log(LOG),))    # '없어야 할 줄' 확인을 채운 사본(채택 경로, P1-2)
     sa = done["step_anchor"]
     assert sa == {"source": "look_at", "span": [None, "2026-09-20T05:33:05.400Z"], "issue_gap_min": 0.9,
                   "look": {"hits": 4, "picked": 4}}                            # 이름+token 같은 REQ·RSP 두 쌍, Jira에 가까운 것
     assert "step" not in sa                                                    # 기준 줄은 TC 스텝이 아니다(P1 8)
-    assert done["decision"]["state"] == "accepted" and done["decision"]["location"] == {      # 일치 여럿 = multiple(채택 유지)
-        "state": "multiple", "source": "look_at", "kind": "point"}
+    # 일치 4줄 = 요청 두 곳(REQ·RSP 쌍)이지만 붙여 넣은 줄의 시각(14:33:05.000)과 같은 곳이 하나라 그곳(단계 5 §8-5). CP 점 채택은
+    # 응답 뒤 2초 안 첫 사건일 뿐 같은 요청이라는 근거가 없어 found/point(리뷰 P1-1 — 포털이 본 분석을 건너뛰지 않게)
+    assert done["decision"]["state"] == "accepted" and done["decision"]["location"] == {
+        "state": "found", "source": "look_at", "kind": "point"}
+    assert done["decision"]["check"]["why"] == "cp_point"
     assert off["decision"]["reason"] == "no_reference"
     assert done["logs"]["window"] == {"start": "2026-09-20T05:32:35.400Z", "end": "2026-09-20T05:38:05.400Z"}
     assert _causes(done) == ["DATA-001-01"]                                    # IMS(14:30)는 구간 밖
@@ -70,7 +73,8 @@ def test_ipc_line_with_reused_token_picks_nearest_and_moves_window():
     assert len(calls) == 1 and args[0] == "ipc" and args[args.index("--find") + 1].endswith("look-at.json")
     assert not any("VIPC_SETUP_DATA" in json.dumps(r) for r in _trace(job))
     look = json.loads((job / "look-at.json").read_text(encoding="utf-8"))
-    assert look == {"look_at": "[TX] VIPC_SETUP_DATA, REQ, token=0x0de, len=24", "ref": "2026-09-20T05:34:00.000Z"}
+    assert look == {"look_at": "[TX] VIPC_SETUP_DATA, REQ, token=0x0de, len=24", "ref": "2026-09-20T05:34:00.000Z",
+                    "stamp": "09-20 14:33:05.000"}      # 붙여 넣은 줄의 시각(같은 곳 고르기) — 로그 시각이라 원문 값이 아니다
     assert len(json.dumps(done, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) + 1 <= 4096
 
 
@@ -100,13 +104,16 @@ def test_token_only_without_jira_time_picks_last_and_lists_all_hits():
 
 
 def test_single_ipc_line_is_confirmed_point_location():
-    """단계 4: 이름·token이 하나뿐인 IPC 기준 줄(일치 1개) → 실패 지점 confirmed·point, 1위 원인이 있으면 채택."""
+    """단계 4: 이름·token이 하나뿐인 IPC 기준 줄(일치 1개) → 실패 지점 confirmed·point. 단계 5-1: 그 요청 뒤 2초 안에 실패
+    사건이 없으면(이 로그의 데이터 꺼짐 판정은 요청보다 앞) 1위가 있어도 채택하지 않는다."""
     done, job = _offline("ipc1", "--look-at", "VIPC_DEACT_DATA (token=0x0df) requested")
     assert done["step_anchor"]["look"] == {"hits": 1, "picked": 1}, done["step_anchor"]
-    assert done["decision"] == {"state": "accepted", "reason": "anchored_top",
-                                "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
-                                "location": {"state": "confirmed", "source": "look_at", "kind": "point"}}
-    assert "- 판단: 원인 채택 — DATA-001-01 (실패 지점: 담당자가 지정한 기준 줄·확인됨, 자격 검사 전)" in \
+    dec = done["decision"]
+    assert {k: dec[k] for k in ("state", "reason", "selected", "location")} == {
+        "state": "held", "reason": "ineligible", "selected": None,
+        "location": {"state": "confirmed", "source": "look_at", "kind": "point"}}
+    assert dec["check"]["why"] == "no_event_at_reference" and _causes(done)[0] == "DATA-001-01"
+    assert "- 판단: 원인 보류 — 실패 지점과 규칙 일치를 이을 수 없음(지정한 IPC 줄 뒤 2초 안에 실패가 없음)" in \
         (job / "report.md").read_text(encoding="utf-8")
 
 

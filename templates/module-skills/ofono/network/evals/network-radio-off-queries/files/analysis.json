@@ -42,7 +42,14 @@
    "state": "none",
    "source": null,
    "kind": null
-  }
+  },
+  "check": {
+   "why": null,
+   "checked": 0,
+   "total": 1
+  },
+  "events": [],
+  "events_total": 0
  },
  "no_candidate": {
   "search_hits": [

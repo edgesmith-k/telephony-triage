@@ -359,15 +359,16 @@ def _rewrite(report: Path, prefix: str, lines: list[str], keep_sub: tuple[str, .
 def _fit_hold(analysis: dict, fields: dict) -> str | None:
     """FR-02: 적합성 확인(`explore.reason: fit_check`)이 가설 없이 끝났으면(1위 부적합 보류) 보류한 1위 원인 ID, 아니면 None.
     감지는 구조(사유·빈 가설)만 보고 판정(C·순위)은 바꾸지 않는다. report.md 재작성 성패와 무관하다(기록·Jira는 이것으로 정한다)."""
-    top = (analysis.get("candidates") or [None])[0]
+    top = (rep.lead_first(analysis.get("decision"), analysis.get("candidates") or []) or [None])[0]   # 채택 원인(없으면 1위)
     cause = top.get("cause") if isinstance(top, dict) else None
     if fields["hyps"] or (analysis.get("explore") or {}).get("reason") != "fit_check" or not cause:
         return None
     return cause
 
 
-def _hold_lines(report: Path, cause: str) -> list[str]:
+def _hold_lines(report: Path, cause: str, held: bool = False) -> list[str]:
     """결론·해결책 줄을 보류로 고친다(탐색 줄과 달리 1위 확정·`검증됨`을 권하지 않게). 다시 불러도 같다(이미 고친 해결책 줄은 그대로).
+    판단이 이미 보류(`held`)면 리포트에 해결책 줄이 없다(report.py가 싣지 않는다) — 없어도 실패가 아니다.
     못 고친 줄 이름 목록(줄 없음·쓰기 실패)."""
     failed = []
     if not rep.rewrite_line(report, rep.CONCLUSION_PREFIX, [rep.CONCLUSION_PREFIX + rep.FIT_HOLD_CONCLUSION.format(cause=cause)]):
@@ -379,7 +380,7 @@ def _hold_lines(report: Path, cause: str) -> list[str]:
         if not rep.rewrite_line(report, rep.RESOLUTION_PREFIX,
                                 [f"{rep.FIT_HOLD_RESOLUTION}{body}{rep.RESOLUTION_CHECK}{rep.FIT_HOLD_CHECK}"]):
             failed.append("해결책 줄")
-    elif rep.current_line(report, rep.FIT_HOLD_RESOLUTION) is None:      # 이미 보류로 고친 줄이면 실패가 아니다
+    elif not held and rep.current_line(report, rep.FIT_HOLD_RESOLUTION) is None:      # 이미 보류로 고친 줄이면 실패가 아니다
         failed.append("해결책 줄")
     return failed
 
@@ -417,7 +418,8 @@ def _rebase_module_inputs(job: Path, old: str, new: str) -> bool:
 def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, hold: bool = False,
                      opinion: str | None = None) -> dict:
     """analysis.json `decision`을 고친다(단계 4): 탐색 적합성 확인 보류(`hold`)면 채택 → held/fit_check(counter 없앰), 심층 분석
-    의견의 원인 ID가 채택 원인과 다르면 `counter`만 붙인다(상태·사유 그대로). 이미 보류면 사유를 바꾸지 않는다(앞 사유가 우선).
+    의견의 원인 ID가 채택 원인과 다르면 `counter`만 붙인다(상태·사유 그대로). 상태·사유·selected·counter와 (보류면) 사건의
+    `result: adopted → held`만 바꾸고 나머지 자격 검사 칸(`check`·`events_total`)은 그대로 둔다. 이미 보류면 사유를 바꾸지 않는다(앞 사유가 우선).
     decision 없는 옛 JOB은 그대로. 4KB 압축 → 스키마 검사(TT_SCHEMA_CHECK) → 처음 읽은 뒤 바뀌지 않았는지 해시 대조 → 원자 쓰기 →
     module-skill.json 입력 해시 갱신 → report.md `- 판단:` 줄 재작성 → (작업 디렉토리 JOB이면) 리포트 표시 기록을 새 줄로 다시 남긴다.
     check-output 기록에 더할 칸: 판단을 못 고쳤으면 `decision_unwritten: <사유>`, module-skill.json 해시를 못 고쳤으면
@@ -426,14 +428,16 @@ def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, h
     if not isinstance(dec, dict) or dec.get("state") != "accepted":
         return {}
     if hold:
-        new = {"state": "held", "reason": "fit_check", "selected": None, "location": dec.get("location")}
+        new = {**{k: v for k, v in dec.items() if k != "counter"}, "state": "held", "reason": "fit_check", "selected": None,
+               "events": [{**e, "result": "held"} if isinstance(e, dict) and e.get("result") == "adopted" else e
+                          for e in dec.get("events") or []]}     # 붙은 사건도 채택 → 보류(observed는 그대로)
     else:
         m = OPINION_ID.match(opinion or "")
         selected = (dec.get("selected") or {}).get("cause")
         if not m or m.group(1) == selected or (dec.get("counter") or {}).get("cause") == m.group(1):
             return {}
         new = {**dec, "counter": {"cause": m.group(1)}}
-    result = rep.fit({**analysis, "decision": new})     # counter가 붙어도 4KB 안(판단은 줄이지 않는다)
+    result = rep.fit({**analysis, "decision": new})     # 4KB를 넘으면 판단의 사건(events)부터 준다 — 상태·사유·counter는 그대로
     why = None
     violation = rep.schema_violation(result)
     if violation:
@@ -451,7 +455,7 @@ def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, h
         return {"decision_unwritten": "쓰기 실패"}
     extra = {} if not read_sha or _rebase_module_inputs(job, read_sha, _sha(data)) else {"module_inputs_unwritten": True}
     report = job / "report.md"
-    if not rep.rewrite_line(report, rep.DECISION_PREFIX, [rep.decision_line(new, bool(analysis.get("candidates")))]):
+    if not rep.rewrite_line(report, rep.DECISION_PREFIX, [rep.decision_line(new, analysis.get("candidates") or [])]):
         print(WARN_REWRITE, file=sys.stderr)
         return {**extra, "decision_unwritten": "report.md 판단 줄"}
     if not args.out:    # run이 남긴 리포트 표시 의무(같은 key)를 고친 줄로 바꾼다 — 옛 "원인 채택" 줄을 보이라고 하지 않게
@@ -595,7 +599,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     lines = _render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp)
     _rewrite(report, prefix, lines, KEEP_SUB)
     hold = _fit_hold(analysis, fields) if purpose == "explore" else None
-    unwritten = _hold_lines(report, hold) if hold else []
+    unwritten = _hold_lines(report, hold, (analysis.get("decision") or {}).get("state") == "held") if hold else []
     if unwritten:
         print(WARN_HOLD.format(what="·".join(unwritten)), file=sys.stderr)
     if hold:

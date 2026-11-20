@@ -1,0 +1,70 @@
+{
+ "Y10-LOGEND": {
+  "ref": [
+   "text",
+   "Call: setState ACTIVE -> DISCONNECTED"
+  ],
+  "expect": [
+   "held",
+   "ineligible",
+   "absence_unverified"
+  ]
+ },
+ "Y10-RECOVER": {
+  "ref": [
+   "text",
+   "Internet data state changed from DISCONNECTED to CONNECTED."
+  ],
+  "expect": [
+   "held",
+   "ineligible",
+   "near_without_symptom"
+  ]
+ },
+ "Y10-SAMETOKEN": {
+  "ref": [
+   "text",
+   "VIPC_SETUP_DATA (token=0x0e5)"
+  ],
+  "expect": [
+   "held",
+   "ambiguous",
+   "locations"
+  ]
+ },
+ "Y10-SAMECAUSE": {
+  "ref": [
+   "range",
+   36090.0,
+   36180
+  ],
+  "expect": [
+   "accepted",
+   "anchored_top",
+   "DATA-003-01"
+  ]
+ },
+ "Y10-DIFFCAUSE": {
+  "ref": [
+   "range",
+   36090.0,
+   36180
+  ],
+  "expect": [
+   "held",
+   "ambiguous",
+   "multiple_events"
+  ]
+ },
+ "Y10-AFTER": {
+  "ref": [
+   "text",
+   "pollStateDone: hasRegistered = false hasDeregistered = true"
+  ],
+  "expect": [
+   "held",
+   "cause_unconfirmed",
+   "cause_after_event"
+  ]
+ }
+}

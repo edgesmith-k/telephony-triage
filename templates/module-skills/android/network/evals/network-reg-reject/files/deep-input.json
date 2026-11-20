@@ -13,6 +13,10 @@
    "confidence": "high"
   }
  ],
+ "decision": {
+  "state": "held",
+  "reason": "no_reference"
+ },
  "issue_summary": "서비스 안 됨 (합성)",
  "occurred_at": "2026-08-22T11:00:32+00:00",
  "events": "events.json",

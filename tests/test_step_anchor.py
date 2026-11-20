@@ -121,11 +121,12 @@ def test_location_state_per_anchor_source():
     assert loc(two) == {"state": "multiple", "source": "log_marker", "kind": "range"}
     assert loc(start_only) == {"state": "found", "source": "log_marker", "kind": "range"}
     look_at = {"source": "look_at", "fail": _t("5:30:20")}
-    assert loc(look_at, {"hits": 1, "how": "ipc"}) == {"state": "confirmed", "source": "look_at", "kind": "point"}
-    assert loc(look_at, {"hits": 1, "how": "token"}) == {"state": "confirmed", "source": "look_at", "kind": "point"}
-    assert loc(look_at, {"hits": 3, "how": "text"}) == {"state": "multiple", "source": "look_at", "kind": "near"}
+    assert loc(look_at, {"hits": 1, "places": 1, "how": "ipc"}) == {"state": "confirmed", "source": "look_at", "kind": "point"}
+    # 같은 요청의 REQ·RSP 두 줄은 한 곳(단계 5) — 일치 줄 수가 아니라 묶은 곳 수로 본다
+    assert loc(look_at, {"hits": 2, "places": 1, "how": "token"}) == {"state": "confirmed", "source": "look_at", "kind": "point"}
+    assert loc(look_at, {"hits": 3, "places": 3, "how": "text"}) == {"state": "multiple", "source": "look_at", "kind": "near"}
     # 글자 일치는 한 곳이어도 found — 확인된 실패 지점(confirmed)이 아니다(포털 확실한 일치는 confirmed만 본다)
-    assert loc(look_at, {"hits": 1, "how": "text"}) == {"state": "found", "source": "look_at", "kind": "near"}
+    assert loc(look_at, {"hits": 1, "places": 1, "how": "text"}) == {"state": "found", "source": "look_at", "kind": "near"}
     for src in ("steps_file", "step_order"):
         assert loc({"source": src, "fail": _t("5:30:20")}) == {"state": "found", "source": src, "kind": "range"}
 
@@ -306,8 +307,9 @@ def _strip(a: dict) -> dict:
 def test_marker_anchor_with_failed_step_moves_window_and_top_candidate():
     off, _ = _offline("off", "--failed-step", STEP, "--answer", "anchor=off", root=MARKER_ROOT)
     assert _causes(off)[0] == "IMS-001-01" and off["step_anchor"] == {"source": "issue"}     # 오늘의 동작
-    assert off["decision"] == {"state": "held", "reason": "no_reference", "selected": None,      # 단계 4: 기준 없음 → 보류
-                               "location": {"state": "none", "source": None, "kind": None}}
+    assert {k: off["decision"][k] for k in ("state", "reason", "selected", "location")} == {      # 단계 4: 기준 없음 → 보류
+        "state": "held", "reason": "no_reference", "selected": None, "location": {"state": "none", "source": None, "kind": None}}
+    assert off["decision"]["check"] == {"why": None, "checked": 0, "total": 4}
     assert off["logs"]["window"] == {"start": "2026-09-20T05:26:00.000Z", "end": "2026-09-20T05:36:00.000Z"}
 
     done, job = _offline("on", "--failed-step", STEP, root=MARKER_ROOT)
@@ -315,13 +317,18 @@ def test_marker_anchor_with_failed_step_moves_window_and_top_candidate():
     sa = done["step_anchor"]
     assert sa["source"] == "log_marker" and sa["step"] == "Step 5" and "step_from" not in sa
     assert sa["span"] == ["2026-09-20T05:33:00.000Z", "2026-09-20T05:33:30.000Z"]
-    assert done["decision"] == {"state": "accepted", "reason": "anchored_top",
-                                "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
-                                "location": {"state": "confirmed", "source": "log_marker", "kind": "range"}}
+    # 단계 5-1: 구간 안 DATA-001 사건은 증상 시그니처가 "RILJ SETUP_DATA_CALL 없음"(must_not_match)에 기댄다. 이 로그에는 RILJ
+    # 줄이 하나도 없고(수집 안 된 태그) 마지막 증상 근거 뒤로 창(60초)만큼 이어지지도 않아 "없음"을 확인 못 한다 → 보류
+    assert {k: done["decision"][k] for k in ("state", "reason", "selected", "location")} == {
+        "state": "held", "reason": "ineligible", "selected": None,
+        "location": {"state": "confirmed", "source": "log_marker", "kind": "range"}}
+    assert done["decision"]["check"]["why"] == "absence_unverified" and done["decision"]["events"][0]["absence"] is True
     assert done["logs"]["window"] == {"start": "2026-09-20T05:32:00.000Z", "end": "2026-09-20T05:34:00.000Z"}
     assert done["issue"]["failed_step"]["text"] == STEP and done["request_hash"] != off["request_hash"]
     report = (job / "report.md").read_text(encoding="utf-8")
-    assert "- 판단: 원인 채택 — DATA-001-01 (실패 지점: 로그 스텝 마커·확인됨, 자격 검사 전)" in report
+    assert ("- 판단: 원인 보류 — 실패 지점과 규칙 일치를 이을 수 없음('이 줄이 없어야 함' 조건을 확인할 수 없음 — "
+            "그 태그가 수집되지 않았거나 로그가 일찍 끝남)"
+            in report)
     assert "- 실패 스텝 구간 (log_marker): Step 5 2026-09-20T05:33:00.000Z ~ 2026-09-20T05:33:30.000Z → 분석 범위 " \
         "2026-09-20T05:32:00.000Z ~ 2026-09-20T05:34:00.000Z (Jira 발생 시각 2026-09-20T14:31:00+09:00 / 2.5분 차이)" in report
     assert "S/C에 쓰지 않음; 단어 겹침 가산·순위 참고·분석 범위" in report
@@ -364,8 +371,10 @@ def test_steps_file_anchor_on_markerless_log_and_no_raw_text_in_job_files():
     assert sa["source"] == "steps_file" and sa["span"] == ["2026-09-20T05:33:00.000Z", "2026-09-20T05:33:30.000Z"]
     assert done["issue"]["failed_step"] == {"text": "5 | 데이터 켜기", "source": "steps_file"}
     assert done["logs"]["window"] == {"start": "2026-09-20T05:32:00.000Z", "end": "2026-09-20T05:34:00.000Z"}
-    assert done["decision"]["state"] == "accepted" and done["decision"]["location"] == {
-        "state": "found", "source": "steps_file", "kind": "range"}
+    # 단계 5-1: TC 파일 시각 구간은 문제 파악 유형이 있어야 채택한다 — problem.json 없이는 보류(구간·위치는 그대로)
+    dec = done["decision"]
+    assert (dec["state"], dec["reason"], dec["check"]["why"]) == ("held", "ineligible", "range_without_symptom")
+    assert dec["location"] == {"state": "found", "source": "steps_file", "kind": "range"}
     for path in (p for p in job.rglob("*") if p.is_file()):
         text = path.read_text(encoding="utf-8", errors="replace")
         assert "2026-09-20 14:33:00" not in text and "14:33:30" not in text.replace("T05:33:30", "") \

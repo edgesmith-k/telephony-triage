@@ -59,7 +59,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import builds, compat, dbpath, flows, issuedb, parser_rules, site_defaults, stepanchor  # noqa: E402
+from common import builds, compat, dbpath, eligibility, flows, issuedb, parser_rules, site_defaults, stepanchor  # noqa: E402
 from common import compiled as compiled_cache  # noqa: E402
 from common.exitcodes import OK, USAGE  # noqa: E402
 from common.patterns import DEFAULT_TIMEOUT_MS  # noqa: E402
@@ -300,8 +300,11 @@ def run(args) -> dict:
         compiled = compiled_cache.compile_signatures(db)
     except SignatureError as exc:
         raise UsageError(f"시그니처 오류: {exc}") from exc
+    reference = _load_json(args.reference, "--reference") if getattr(args, "reference", None) else None
+    if reference is not None and not isinstance(reference, dict):
+        raise UsageError("--reference는 JSON 객체여야 합니다.")
     return match(events_doc, db, compiled, regress=bool(args.regress), jira=jira,
-                 no_feedback_weight=args.no_feedback_weight, top=args.top)
+                 no_feedback_weight=args.no_feedback_weight, top=args.top, reference=reference)
 
 
 def _range(events_doc: dict, regress: bool):
@@ -348,7 +351,7 @@ def evaluator_for(events_doc: dict, db: issuedb.IssueDb) -> Evaluator:
 
 def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: bool, jira: dict | None = None,
           no_feedback_weight: bool = False, top: int = 0, acceptance: dict | None = None,
-          evaluator: Evaluator | None = None) -> dict:
+          evaluator: Evaluator | None = None, reference: dict | None = None) -> dict:
     """마스킹된 이벤트 문서 하나를 이슈 DB에 매칭한다 (`db_regress`·`db_verify`가 직접 부른다).
     `compiled`는 `common/compiled.py`의 `compile_signatures()` 결과. `evaluator`를 주면(회귀·검증 모드에서
     같은 이벤트로 다른 시그니처도 평가할 때, `evaluator_for()`) 그것을 쓰고 닫지 않는다."""
@@ -436,6 +439,12 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
         candidates.sort(key=_rank_key)
         partial = None if regress else _partials(evaluator, db, compiled, candidates, types_out, causes_out,
                                                  acceptance, occurred)
+        elig = None
+        if not regress:     # 자격 검사: --top으로 자르기 전 순위로(H18)
+            rank = {c["cause"]: n for n, c in enumerate(candidates) if c["cause"]}
+            occ = occurrences(events_doc, evaluator, db, compiled, rank)
+            elig = {**eligibility.summary(eligibility.decide(occ, [reference] if reference else []), occ),
+                    "reference": reference}
     finally:
         if own:
             evaluator.close()
@@ -447,6 +456,13 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
         omitted = {"types": len(types_out) - len(kept_types), "causes": len(causes_out) - len(kept_causes),
                    "pending_causes": max(0, len(pending) - top), "candidates": max(0, len(candidates) - top)}
         types_out, causes_out, pending = kept_types, kept_causes, pending[:top]
+    shown = candidates[:top] if top else candidates
+    if elig and elig["cause"] and all(c["cause"] != elig["cause"] for c in shown):
+        # 채택 원인이 --top 밖이면 후보 끝에 붙인다(selected ∈ candidates) — 잘린 수에서 뺀다
+        add = [c for c in candidates if c["cause"] == elig["cause"]][:1]
+        shown = shown + add
+        if omitted and add:
+            omitted["candidates"] -= 1
     result = {
         "schema": OUTPUT_SCHEMA,
         "mode": "regress" if regress else "analysis",
@@ -455,7 +471,7 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
         "bonus": use_bonus,
         "feedback_weight": use_feedback,
         "issue": {k: jira.get(k) for k in ("key", "occurred_at", "sw") if k in jira},
-        "candidates": candidates[:top] if top else candidates,
+        "candidates": shown,
         "pending_causes": pending,
         "types": types_out,
         "causes": causes_out,
@@ -471,7 +487,129 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
         result["step_focus"] = {"types": list(focus_map), "by": focus_map}
     if omitted is not None:
         result["omitted"] = omitted
+    if elig is not None:
+        result["eligibility"] = elig
     return result
+
+
+# -- 자격 검사 사건 목록 (단계 5, common/eligibility.py) ---------------------------------------------------------
+
+
+def _at(res) -> datetime:
+    return max(_parse_iso(e["ts"], "evidence") for e in res.evidence)
+
+
+def _keys(evidence) -> set:
+    return {k for k in (eligibility.ref_key(e.get("line_ref")) for e in evidence) if k}
+
+
+def _cond_lines(evaluator: Evaluator, sig, res, at: datetime) -> set:
+    """그 충족 구간 안·사건 시각 `at` 이하(같은 슬롯 또는 모름)에서 시그니처 양성 조건에 맞는 모든 줄 — 근거는 조건마다 첫 줄 하나뿐이라
+    (§8-1). `at` 뒤 줄은 뒤 사건의 증상일 수 있어 넣지 않는다(앞 사건 창이 뒤 실패 줄을 덮는 경우)."""
+    a, b = res.window[0], min(res.window[1], at)
+    phones = {e["phone_id"] for e in res.evidence if e.get("phone_id") is not None}
+    out = set()
+    for c in sig.positives:
+        hits = evaluator.lines(c.pattern) if c.kind == "match" else evaluator.matching_events(c)   # 충족했으니 캐시에 있다
+        for i in hits:
+            if a <= evaluator.dts[i] <= b and (not phones or evaluator.events[i].get("phone_id") in phones | {None}):
+                out |= _keys([evaluator.events[i]])
+    return out
+
+
+def _unverifiable_negatives(evaluator: Evaluator, db, compiled: dict) -> set:
+    """배제 패턴 중 앞 낱말이 수집 태그인데 그 태그 줄이 이벤트에 하나도 없는 것(`_absence_basis`와 같은 판정)."""
+    rules = _collection_rules(db)
+    if rules is None:
+        return set()
+    tags = {str(e.get("tag") or "") for e in evaluator.events}
+    return {p for sigs in compiled.values() for sig in sigs for p in sig.negatives
+            if (a := _literal_anchor(p)) and not any(t.startswith(a) for t in tags)
+            and any(rules.tag_category(x) for x in (a, a + "-0", a + "0"))}
+
+
+def occurrences(events_doc: dict, evaluator: Evaluator, db, compiled: dict, rank: dict) -> list[dict]:
+    """자격 검사 사건 목록(`common.eligibility` 모양, 시각 순, 같은 유형 1초 안은 합침). 유형마다 증상 시그니처 충족을 전부 사건으로
+    내고(후보 판정처럼 첫 짝만 쓰지 않는다), 원인 충족마다 규칙 2(근거 전부 ≤ 사건 시각)와 "그 뒤 첫 호환 사건 하나에만 붙음"(§8-2)을
+    본다. 분석 끝을 시그니처 창 최대치만큼 늘려 로그 끝 구간 실패도 따로 잡는다(§8-3, 사건 목록에만 — 후보 판정은 그대로).
+    안 나옴: 마지막 양성 근거 뒤로 window_sec만큼 로그가 이어지고, 관측 오류 없고, 배제 태그가 수집됐을 때만(§8-6).
+    `rank`: 원인 → 자르기 전 후보 순위(붙은 원인이 여럿이면 앞 순위가 먼저)."""
+    cov = events_doc.get("coverage") or {}
+    window = (events_doc.get("input") or {}).get("window") or {}
+    ends = [_parse_iso(x, "coverage") for x in (cov.get("last_ts"), window.get("end")) if x]
+    last = min(ends) if cov.get("last_ts") else None     # 안 나옴은 이번에 읽은 곳까지만 본 것으로 센다(부분 파싱 창 밖은 미확인)
+    obs_ok = (events_doc.get("observation") or {}).get("complete", True) is not False
+    bad_neg = _unverifiable_negatives(evaluator, db, compiled)
+
+    def absence_ok(sig, res) -> bool:
+        return bool(obs_ok and last and _at(res) + timedelta(seconds=sig.window_sec) <= last
+                    and not set(sig.negatives) & bad_neg)
+
+    out: list[dict] = []
+    hi = evaluator.hi
+    if hi is not None:
+        evaluator.hi = hi + timedelta(seconds=max((g.window_sec for sigs in compiled.values() for g in sigs), default=0))
+    try:
+        for itype in db.types:
+            if not itype.active:
+                continue
+            errors: list[dict] = []
+            syms = _all_satisfied(evaluator, compiled[itype.id], None, errors)
+            if not syms:
+                continue
+            sig_of = {g.key: g for owner_id in [itype.id, *(c.id for c in itype.causes)] for g in compiled.get(owner_id) or []}
+            cause_res = {c.id: _all_satisfied(evaluator, compiled[c.id], None, errors)    # 후보 순위에 있는 원인만(늘린 끝에서만
+                         for c in itype.causes if c.active and not c.pending and c.id in rank}  # 충족한 원인은 후보가 아니다)
+            sym_at = [(_at(s), s) for s in syms]
+
+            def owner(r, sym_at=sym_at):     # 원인 1회 충족이 붙는 사건 = 근거 마지막 줄 이후 첫 호환 사건(§8-2)
+                rl = _at(r)
+                return min((a for a, s2 in sym_at if a >= rl and _compatible(s2, r)), default=None)
+
+            seen = set()
+            for at, s in sym_at:
+                last_line = max(s.evidence, key=lambda e: e["ts"])
+                if (at, eligibility.ref_key(last_line.get("line_ref"))) in seen:
+                    continue
+                seen.add((at, eligibility.ref_key(last_line.get("line_ref"))))
+                phones = {e["phone_id"] for e in s.evidence if e.get("phone_id") is not None}
+                sig = sig_of[s.key]
+                item = {"type": itype.id, "at": at, "lines": _keys(s.evidence),
+                        "raw": [events_doc["events"][e["event_index"]] for e in s.evidence],
+                        "phone": next(iter(phones)) if len(phones) == 1 else None,
+                        "absence": bool(sig.negatives), "absence_bad": bool(sig.negatives) and not absence_ok(sig, s),
+                        "cause_lines": set(), "cond_lines": _cond_lines(evaluator, sig, s, at),
+                        "causes": [], "after": [], "absence_unverified": [], "gap_s": None, "unjudged": bool(errors)}
+                for cid, results in cause_res.items():
+                    comp = [r for r in results if _compatible(s, r)]
+                    good = [r for r in comp if _at(r) <= at and owner(r) == at]
+                    bad = [r for r in good if sig_of[r.key].negatives and not absence_ok(sig_of[r.key], r)]
+                    if bad and len(bad) == len(good):
+                        item["absence_unverified"].append(cid)
+                        continue
+                    good = [r for r in good if r not in bad]
+                    if good:
+                        for r in good:
+                            item["cause_lines"] |= _keys(r.evidence)
+                            item["cond_lines"] |= _cond_lines(evaluator, sig_of[r.key], r, at)
+                        item["causes"].append((rank.get(cid, 999), cid, round(min((at - _at(r)).total_seconds() for r in good), 3)))
+                    elif any(owner(r) is None for r in comp):
+                        item["after"].append(cid)       # 이 사건 뒤에만 관측(다른 사건 몫이면 넣지 않음)
+                item["causes"].sort()
+                item["gap_s"] = item["causes"][0][2] if item["causes"] else None
+                out.append(item)
+        typed_lines = {k for e in out for k in e["lines"]}
+        for raw in evaluator.events:      # 유형 없는 실패 사건: 파생 오류 이벤트(유형 사건 근거 줄은 뺀다)
+            name, key = raw.get("event"), eligibility.ref_key(raw.get("line_ref"))
+            if name and eligibility.ERROR_EVENT_RE.search(str(name)) and key not in typed_lines:
+                out.append({"type": None, "at": _parse_iso(raw["ts"], "event"), "lines": {key} - {None}, "raw": [raw],
+                            "phone": raw.get("phone_id"), "name": str(name), "causes": [], "after": [], "absence_unverified": [],
+                            "absence": False, "absence_bad": False, "gap_s": None, "unjudged": False,
+                            "cause_lines": set(), "cond_lines": set()})
+    finally:
+        evaluator.hi = hi
+    out.sort(key=lambda e: (e["at"], e["type"] is None))
+    return eligibility.merge(out)
 
 
 def _clip(text: str, n: int) -> str:
@@ -661,6 +799,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--issue-meta", metavar="json", default=None)
     parser.add_argument("--regress", action="store_true")
     parser.add_argument("--no-feedback-weight", action="store_true")
+    parser.add_argument("--reference", metavar="json", default=None,
+                        help="자격 검사 기준(triage.py가 쓴 JOB/reference.json). 없으면 eligibility는 no_reference")
     parser.add_argument("--top", type=int, default=3,
                         help="후보 수. types·causes는 충족된 것만, pending은 N개 (0이면 전부)")
     parser.add_argument("--json", action="store_true", help="JSON 출력 (항상 JSON)")

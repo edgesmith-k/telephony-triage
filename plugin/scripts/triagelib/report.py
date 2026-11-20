@@ -35,27 +35,43 @@ _PICK_LABEL = {"nearest": "발생 시각에 가장 가까운 것", "last": "기�
 # 앞까지가 결론이다(포털이 그 앞만 남긴다 — 그 앞에 Step 7을 쓰지 않는다)
 CONCLUSION_PREFIX = "- 결론: "
 RESOLUTION_PREFIX, RESOLUTION_CHECK = "- 해결책: ", "   해결책 검증: "
-FIT_HOLD_CONCLUSION = "1위 {cause}가 증상과 맞지 않아 보류(탐색 분석 참조). 다음: Step 7에서 보류를 고르거나 근거 로그 확인"
+FIT_HOLD_CONCLUSION = "채택 후보 {cause}가 증상과 맞지 않아 보류(탐색 분석 참조). 다음: Step 7에서 보류를 고르거나 근거 로그 확인"
 FIT_HOLD_RESOLUTION, FIT_HOLD_CHECK = "- 해결책(1위 기준, 보류됨): ", "보류(1위 부적합)"
 # 판단 줄(analysis.json `decision`, 단계 4) — 렌더와 check-output(보류·반대 의견으로 고침)이 같이 쓴다
 DECISION_PREFIX = "- 판단: "
 HELD_REASON = issuepost.HELD_REASON
-HELD_SHORT = {"no_reference": "실패 지점 없음", "fit_check": "1위 부적합"}     # 보류된 해결책 줄의 검증 칸
 _LOCATION_LABEL = {"confirmed": "확인됨", "found": "찾음(구간)", "multiple": "여러 곳", "none": "없음"}
 HELD_TAIL = " (관측된 규칙 일치 — 채택 안 함)"
 
 
-def decision_line(dec: dict, has_candidates: bool) -> str:
-    """`- 판단:` 줄. 채택은 실패 지점 출처·상태와 "자격 검사 전", 보류는 사유와(후보가 있으면) 규칙 일치를 채택하지 않았다는 말.
-    `counter`(심층 분석이 다른 원인을 냄)가 있으면 꼬리를 붙인다."""
+def selected_rank(dec: dict | None, cands: list) -> int | None:
+    """채택이면 채택 원인의 후보 순번(0부터), 아니면 None."""
+    cause = ((dec or {}).get("selected") or {}).get("cause") if (dec or {}).get("state") == "accepted" else None
+    return next((n for n, c in enumerate(cands) if cause and c.get("cause") == cause), None)
+
+
+def lead_first(dec: dict | None, cands: list) -> list:
+    """채택 원인을 맨 앞으로 옮긴 후보 목록(나머지 순서 그대로). 채택이 아니거나 1위면 그대로 — 심층 분석 입력·적합성 보류·
+    리포트 근거가 "1위" 대신 채택 원인을 보게 한다."""
+    n = selected_rank(dec, cands)
+    return [cands[n], *cands[:n], *cands[n + 1:]] if n else list(cands)
+
+
+def decision_line(dec: dict, cands: list) -> str:
+    """`- 판단:` 줄. 채택은 실패 지점 출처·상태(채택 원인이 1위가 아니면 "규칙 일치 n위"), 보류는 사유와(후보가 있으면) 규칙 일치를
+    채택하지 않았다는 말. `counter`(심층 분석이 다른 원인을 냄)가 있으면 꼬리를 붙인다."""
     if dec.get("state") == "accepted":
         loc = dec.get("location") or {}
-        state = "찾음" if loc.get("kind") == "near" and loc.get("state") == "found" else _LOCATION_LABEL.get(loc.get("state"), loc.get("state"))
+        state = ("찾음" if loc.get("kind") != "range" and loc.get("state") == "found"
+                 else _LOCATION_LABEL.get(loc.get("state"), loc.get("state")))
         where = f"{_SOURCE_LABEL.get(loc.get('source'), loc.get('source'))}·{state}"
-        text = f"원인 채택 — {(dec.get('selected') or {}).get('cause')} (실패 지점: {where}, 자격 검사 전)"
+        n = selected_rank(dec, cands)
+        text = (f"원인 채택 — {(dec.get('selected') or {}).get('cause')} (실패 지점: {where}, 자격 검사 통과"
+                + (f", 규칙 일치 {n + 1}위" if n else "") + ")")
     else:
-        text = f"원인 보류 — {HELD_REASON.get(dec.get('reason'), dec.get('reason'))}" + (
-            ". 아래 규칙 일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다" if has_candidates else "")
+        why = issuepost.HELD_WHY.get((dec.get("check") or {}).get("why"))
+        text = f"원인 보류 — {HELD_REASON.get(dec.get('reason'), dec.get('reason'))}" + (f"({why})" if why else "") + (
+            ". 아래 규칙 일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다" if cands else "")
     counter = (dec.get("counter") or {}).get("cause")
     if counter:
         text += f" · 모델 검토 의견이 다름({counter}) — 확인 필요"
@@ -352,36 +368,44 @@ def _drop_read_only_hint_if_shown(result: dict) -> None:
 
 
 def fit(result: dict) -> dict:
-    """analysis.json을 ≤ 4KB로 줄인다: (읽기 전용 줄 중복) → 다른 후보 근거 → 근거 줄 수 → 메시지 길이 → 경고 순,
+    """analysis.json을 ≤ 4KB로 줄인다: 판단의 사건(`decision.events` 1개 → 0개, `events_total`은 남김) → (읽기 전용 줄 중복) →
+    다른 후보 근거 → 근거 줄 수 → 메시지 길이 → 경고 순,
     마지막으로 must_show 항목을 160자로 줄이고 앞 4개만 남긴다(`truncated` 의미는 그대로: 그래도 넘으면 true)."""
     def size() -> int:   # 파일 바이트(끝 개행 포함)
         return len(dumps(result).encode("utf-8")) + 1
 
     cands = result.get("candidates") or []
+    dec = result.get("decision") or {}
+    # 채택 원인(1위가 아닐 수 있다, 단계 5)의 근거를 1위 자리처럼 지킨다 — 나머지(others)부터 준다
+    lead = cands[selected_rank(dec, cands) or 0] if cands else None
+    others = [c for c in cands if c is not lead]
     # 성공 흐름(§5.13, 표시 전용 보조 칸): 후보 근거보다 먼저 — flows[1:] → 전체
     steps = [lambda: result.get("flows") and result.update(flows=result["flows"][:1]),
              lambda: result.pop("flows", None),
              lambda: (result.get("step_anchor") or {}).pop("look", None),     # 기준 줄 일치 수(리포트 줄에 같은 내용)
              lambda: _drop_prior_hyps(result),          # 이전 탐색 가설(이전 report.md·runs/에 남아 있다)
              lambda: result.pop("prior", None)]
-    for c in cands[1:]:
+    for c in others:
         steps.append(lambda c=c: c.update(evidence=c["evidence"][:2]))
     # C′ 부분 일치(§5.12): 다른 후보 근거 다음, 1위 근거·must_show 줄이기 전에 partial[1:] → missing 40자 → partial 전체
     steps += [lambda: result.get("partial") and result.update(partial=result["partial"][:1]),
               lambda: result.get("partial") and result.update(partial=[
                   {**p, "missing": [_clip(m, 40) for m in p.get("missing") or []]} for p in result["partial"]]),
               lambda: result.pop("partial", None)]
-    steps.append(lambda: cands and cands[0].update(evidence=cands[0]["evidence"][:6]))
+    steps.append(lambda: lead and lead.update(evidence=lead["evidence"][:6]))
     for c in cands:
         steps.append(lambda c=c: c.update(evidence=[{**e, "msg": _clip(e.get("msg"), 80)} for e in c["evidence"]]))
-    for c in cands[1:]:
+    for c in others:
         steps.append(lambda c=c: c.update(evidence=[]))
     steps.insert(0, lambda: _drop_read_only_hint_if_shown(result))
     steps.insert(1, lambda: result.update(read_only_hint=_clip(result.get("read_only_hint"), 100))
                  if result.get("read_only_hint") else None)
+    # 자격 검사 사건(표시용, 전체는 JOB/eligibility.json)을 가장 먼저 줄인다 — events_total은 남긴다
+    steps[0:0] = [lambda: dec.get("events") and dec.update(events=dec["events"][:1]),
+                  lambda: dec.get("events") and dec.update(events=[])]
     steps += [lambda: result.update(warnings=[_clip(w, 120) for w in (result.get("warnings") or [])[:3]]),
               lambda: result.update(files={"report": result["files"]["report"]}),
-              lambda: cands and cands[0].update(evidence=cands[0]["evidence"][:3]),
+              lambda: lead and lead.update(evidence=lead["evidence"][:3]),
               lambda: _trim_error_events(result),
               lambda: (result.get("unjudged") or {}).pop("types", None),
               lambda: (result.get("unjudged") or {}).pop("causes", None),
@@ -611,13 +635,12 @@ ANALYSIS_SCHEMA =SCRIPTS.parent / "schemas" / "output" / "analysis.schema.json"
 
 
 def _decision_mismatch(result: dict) -> str | None:
-    """스키마로 못 쓰는 불변식: accepted면 `selected`가 `candidates[0]`의 category·type·cause와 같다."""
+    """스키마로 못 쓰는 불변식: accepted면 `selected`가 후보 하나의 category·type·cause와 같다(selected ∈ candidates, 단계 5)."""
     dec = result.get("decision")
     if not isinstance(dec, dict) or dec.get("state") != "accepted":
         return None
-    top = (result.get("candidates") or [{}])[0]
-    if {k: top.get(k) for k in ("category", "type", "cause")} != dec.get("selected"):
-        return "[telephony-triage] analysis 스키마 위반: decision/selected: candidates[0]과 다르다"
+    if all({k: c.get(k) for k in ("category", "type", "cause")} != dec.get("selected") for c in result.get("candidates") or []):
+        return "[telephony-triage] analysis 스키마 위반: decision/selected: candidates에 없다"
     return None
 
 
@@ -843,6 +866,11 @@ class ReportMixin:
         if cands:
             top = cands[0]
             label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])
+            n = selected_rank(decision, cands)
+            if n:       # 실패 지점에 붙은 원인이 1위가 아니다(단계 5) — 그 원인으로 맺는다
+                sel = cands[n]
+                return (f"{sel.get('category')} > {sel['type']} > {sel['cause']} {sel['title']} — 실패 지점에 붙은 원인(규칙 일치 "
+                        f"{n + 1}위, 1위 {top['cause'] or top['type']}는 관측된 참고). 다음: {nxt}")
             if top["cause"] and (decision or {}).get("state") == "held":
                 held = HELD_REASON.get(decision.get("reason"), decision.get("reason"))
                 step = ("기록 없음(분석 전용)" if self.analysis_only else
@@ -969,7 +997,7 @@ class ReportMixin:
         # 한 문장 결론(종합 리뷰 A): 머리 알림(분석 전용·읽기 전용·실패 스텝·시계) 다음, 후보 줄 바로 앞. must_show 아님(새 정보 없음)
         dec = r.get("decision")
         if dec:      # 판단 줄(단계 4): 결론 바로 앞. 옛 캐시·결과처럼 decision이 없으면 줄이 없다
-            cause_l.append(decision_line(dec, bool(cands)))
+            cause_l.append(decision_line(dec, cands))
         cause_l.append(CONCLUSION_PREFIX + self._conclusion(cands, unjudged, r.get("observation"), dec))
         if cands:
             top = cands[0]
@@ -984,12 +1012,16 @@ class ReportMixin:
                          f"(규칙 일치 점수 {top['score']}, 일치 조건 {top.get('matched_conditions', len(top['evidence']))}개, "
                          f"일치 수준 {label} — 진단 확신도 아님"
                          f"{'' if top['C'] else (', 유형 일치·원인 판정 불가' if top.get('_cause_unjudged') else ', 유형 일치·원인 미확인')})"
-                         f"{HELD_TAIL if (dec or {}).get('state') == 'held' else ''}")
+                         f"{HELD_TAIL if (dec or {}).get('state') == 'held' or selected_rank(dec, cands) else ''}")
             masked = "" if self.masker().off else "마스킹, "       # 끔 DB면 "마스킹"이라 쓰지 않는다
-            ana.append(f"- 근거 로그 ({masked}슬롯 phone {','.join(map(str, top['phones'])) or '?'}):")
+            sel = cands[selected_rank(dec, cands) or 0]      # 근거 로그는 채택 원인(1위가 아닐 수 있다, 단계 5) 것
+            held = (dec or {}).get("state") == "held"      # 보류면 근거는 관측된 일치일 뿐(모델이 채택 원인으로 읽지 않게)
+            ana.append(f"- 근거 로그 ({masked}슬롯 phone {','.join(map(str, sel['phones'])) or '?'}"
+                       f"{'' if sel is top else ', 채택 원인 ' + str(sel['cause'])}"
+                       f"{', 관측된 규칙 일치 — 원인 채택 아님' if held else ''}):")
             ana += [f"  - {e['ts']} {e['tag']} {e['msg']}" + (f" ×{e['_count']}" if e.get("_count") else "")
                       + (f" ({e['_ref']})" if e.get("_ref") else "")
-                      for e in top["evidence"]]
+                      for e in sel["evidence"]]
             basis = (r.get("_partial") or {}).get("absence_basis")
             if basis:      # must_not_match에 기대는 시그니처: 그 줄이 빌드에서 사라져도 같은 결과(판정 불변, must_show 아님)
                 ana.append(f"  - 없음 근거 포함: must_not_match {basis['pattern']} — 이 줄이 빌드에서 사라져도 같은 결과")
@@ -1085,12 +1117,10 @@ class ReportMixin:
                 roots = ", ".join(map(str, roots)) if isinstance(roots, (list, tuple)) else roots
                 ana.append(add(12, f"코드 분석 트리 자동 선택: {roots} ({self.platform_label} "
                                      f"{code.get('tree_version') or '?'}) — 다른 트리는 --code로 지정"))
-        if cands and cands[0]["cause"]:
-            top = cands[0]
+        top = cands[selected_rank(dec, cands) or 0] if cands else None     # 채택 원인(1위가 아닐 수 있다, 단계 5) 기준
+        if top and top["cause"]:
             if (dec or {}).get("state") == "held":
-                # 보류(단계 4): 탐색 적합성 확인 보류(`output._hold_lines`)와 같은 모양 — 1위 해결책을 권하지 않는다(Jira 본문은 해결책 없음)
-                held = HELD_SHORT.get(dec.get("reason"), dec.get("reason"))
-                nxt.append(f"{FIT_HOLD_RESOLUTION}{top.get('resolution') or '-'}{RESOLUTION_CHECK}보류({held})")
+                # 보류: 1위 해결책 줄을 싣지 않는다(모델이 읽는 글에 보류한 원인의 해결책을 두지 않는다 — Jira 본문도 해결책 없음)
                 nxt.append(f"- 수정 상태(1위 기준, 보류됨): {top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
             else:
                 verified = "검증됨" if top.get("resolution_verification") == "verified" else "⚠ 미검증"
@@ -1100,7 +1130,7 @@ class ReportMixin:
                 cause_l.append(f"- 다른 버전 원인 ({self.platform_label} {', '.join(top['_version_mismatch'])})")
             cause_l.append(f"- 기존 사례: Jira {top.get('issue_count') or 0}건 ({', '.join(top.get('issue_recent') or []) or '-'})")
             cause_l.append(f"- 관련 원인: {', '.join(top['related']) or '없음'}")
-        others = [f"{c['cause'] or c['type']} (규칙 일치 점수 {c['score']})" for c in cands[1:]]
+        others = [f"{c['cause'] or c['type']} (규칙 일치 점수 {c['score']})" for c in cands if c is not top]   # 채택 원인 뺀 나머지
         ana.append(f"- 기타 후보: {', '.join(others) or '없음'}")
         if r.get("pending_causes"):
             cause_l.append("- 참고: 시그니처 없는 기존 원인: " + ", ".join(p["cause"] for p in r["pending_causes"]))
@@ -1110,7 +1140,7 @@ class ReportMixin:
         elif analyzer and analyzer.get("when") == "never":
             # 설정 키 경로: 기본 플랫폼은 최상위 analyzers, 그 밖은 platforms.<p>.analyzers (17-platforms §10)
             at = "" if self.platform == userconfig.TOP_PROFILE else f"platforms.{self.platform}."
-            ana.append(f"- 심층 분석 생략: {at}analyzers.{cands[0].get('category')}.when: never")
+            ana.append(f"- 심층 분석 생략: {at}analyzers.{(top or cands[0]).get('category')}.when: never")
         elif analyzer and analyzer.get("category"):     # 모듈 스킬: 동의 뒤 `module --for deep`가 받는다
             ana.append(DEEP_MODULE_PENDING.format(platform=self.platform, category=analyzer["category"], key=self.key))
         elif analyzer:

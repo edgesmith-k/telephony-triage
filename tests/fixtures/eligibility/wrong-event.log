@@ -1,0 +1,11 @@
+-- synthetic
+11-14 10:00:10.500   912   952 V Telecom : Call: setState DIALING -> ACTIVE: CSW.sA(cap)@AUM
+11-14 10:00:30.900  1301  1301 D SST-0   : setRadioPower power false forEmergencyCall false forceApply false reason 0
+11-14 10:00:31.000   912   952 D Telecom : ConnectionServiceWrapper: CS -> TC[cap]: setDisconnected TC@2_1 DisconnectCause [ Code: (LOCAL) Label: () Description: () Reason: (LOCAL) Tone: (27)  TelephonyCause: 3/-1 ImsReasonInfo: null]: CSW.sDc(cap)@Aig
+11-14 10:00:31.001   912   952 V Telecom : Call: setState ACTIVE -> DISCONNECTED: CSW.sDc(cap)@Aig
+11-14 10:00:32.000   912   952 V Telecom : Call: setState DIALING -> ACTIVE: CSW.sA(cap)@AUM
+11-14 10:00:35.031   912   952 D Telecom : ConnectionServiceWrapper: TC -> CS[cap]: disconnect TC@3_1: TSI.eC(a)@Afg
+11-14 10:00:35.100   912   952 D Telecom : ConnectionServiceWrapper: CS -> TC[cap]: setDisconnected TC@3_1 DisconnectCause [ Code: (LOCAL) Label: () Description: () Reason: (LOCAL) Tone: (27)  TelephonyCause: 3/-1 ImsReasonInfo: null]: CSW.sDc(cap)@Aig
+11-14 10:00:35.101   912   952 V Telecom : Call: setState ACTIVE -> DISCONNECTED: CSW.sDc(cap)@Aig
+11-14 10:00:36.000   912   952 I Telecom : CallLogManager: onCallStateChanged: call=TC@3, newState=DISCONNECTED, disconnectCause=LOCAL: CSW.sDc(cap)@Aig
+11-14 10:00:50.000   912   952 I Telecom : CallLogManager: filler

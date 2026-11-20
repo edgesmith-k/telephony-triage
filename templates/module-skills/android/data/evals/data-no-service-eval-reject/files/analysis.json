@@ -35,13 +35,45 @@
  },
  "decision": {
   "state": "held",
-  "reason": "cause_unconfirmed",
+  "reason": "no_reference",
   "selected": null,
   "location": {
    "state": "none",
    "source": null,
    "kind": null
-  }
+  },
+  "check": {
+   "why": null,
+   "checked": 0,
+   "total": 3
+  },
+  "events": [
+   {
+    "type": "DATA-001",
+    "at": "2026-11-10T17:18:08.157000+00:00",
+    "line": "f0:L5",
+    "phone": 0,
+    "absence": true,
+    "ref": false,
+    "result": "observed",
+    "cause": null,
+    "why": "absence_unverified",
+    "gap_s": null
+   },
+   {
+    "type": "DATA-001",
+    "at": "2026-11-10T17:18:23.260000+00:00",
+    "line": "f0:L18",
+    "phone": 0,
+    "absence": true,
+    "ref": false,
+    "result": "observed",
+    "cause": null,
+    "why": "absence_unverified",
+    "gap_s": null
+   }
+  ],
+  "events_total": 2
  },
  "candidates": [
   {

@@ -7,7 +7,7 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 
 # Android data — 심층 분석 절차
 
-1위 후보 로그에서 **처음 실패한 층과 구성요소**를 찾아 1위 원인과 비교한다. 순위는 스크립트가 정하고 이 답은 의견이다.
+1위 후보 로그에서 **처음 실패한 층과 구성요소**를 찾는다. 순위는 스크립트가 정하고 이 답은 의견이다.
 
 ## 입력
 
@@ -22,4 +22,4 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 5. 끊김: `DEACTIVATE_DATA_CALL`·`RADIO_POWER` 요청 없이 목록에서 빠짐 → 모뎀·망(전한 벤더 RIL). AT 중계 `AT+CFUN=0` 뒤면 `곁가지(<태그>)`.
 6. 재시도 예약이 로그 끝 뒤면 재시도는 판단 않는다.
 7. 다른 요청 오류(`SIM_IO`, `NOTIFY_IMS_DATA_NETWORK error 6`)는 시각·요청이 이어질 때만.
-8. 1위와 비교: 같으면 `1위와 같음`, 다르면 `<원인 ID> — <근거>`.
+8. 1위와 비교: 같으면 `1위와 같음`, 다르면 `<원인 ID> — <근거>`. `decision.state`=held면 1위는 채택 아님.

@@ -302,6 +302,10 @@ def classify(a: dict, plan: dict | None, fit_hold: str | None = None) -> dict:
         out["confirm"] = "자동 분석 1위 후보 — 사람이 확정하지 않음"
         dec = a.get("decision")      # 단계 4 판단. 없는 옛 JOB은 아래 1위 기준 그대로
         held = dec.get("reason") if isinstance(dec, dict) and dec.get("state") == "held" else None
+        if isinstance(dec, dict) and dec.get("state") == "accepted":     # 채택 원인(1위가 아닐 수 있다, 단계 5)
+            top = next((c for c in cands if c.get("cause") == (dec.get("selected") or {}).get("cause")), top)
+            if top is not None and cands and top is not cands[0]:
+                out["confirm"] = f"자동 분석 채택 후보(규칙 일치 {cands.index(top) + 1}위) — 사람이 확정하지 않음"
         if top:
             out["cand"] = top
             if top.get("cause") and top.get("C") and held:      # 보류: 1위는 관측된 참고일 뿐, 해결책은 싣지 않는다
@@ -313,7 +317,7 @@ def classify(a: dict, plan: dict | None, fit_hold: str | None = None) -> dict:
                 out["cls"] = f"{top.get('category')} > {top.get('type')} > {top['cause']} {top.get('title') or ''}".rstrip()
                 out["lines"].append(_score(top))
                 if fit_hold == top["cause"]:
-                    out["lines"].append("탐색 분석 적합성 확인: 1위가 증상과 맞지 않아 보류")
+                    out["lines"].append("탐색 분석 적합성 확인: 채택 후보가 증상과 맞지 않아 보류")
                 if top.get("resolution") and fit_hold == top["cause"]:
                     out["next"].append(f"해결책(1위 기준, 보류됨): {top['resolution']} (해결책 검증: 보류(1위 부적합))")
                 elif top.get("resolution"):

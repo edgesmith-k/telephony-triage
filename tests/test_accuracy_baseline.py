@@ -55,14 +55,21 @@ def test_baseline_matches_current_code():
         "지금 코드의 요약이 기준값과 다르다 — 의도한 변화면 python3 tests/test_accuracy_baseline.py --update 후 diff를 PR에 보인다"
 
 
-def test_stage4_holds_without_reference_and_adopts_anchored_top():
-    """단계 4 완료 기준: 기준(실패 지점)이 없는 no_time·time 조건은 채택 0(전부 보류, 사유 기록), 기준 줄이 있는 look_at은
-    지금처럼 원인 있는 1위를 채택한다. raw 1위·상위 3·판정은 판단과 무관하다 — 기준값(baseline.json)과 같음은 위 시험이 본다."""
+STAGE5_CORRECT = ["C15-1", "CTLM-1", "D12R-1", "HAL-1", "MMH-1", "PAIRFAIL-1", "RECOVER-1", "TOKONLYPOS-1", "TOKPOS-1",
+                  "TPEVAL-1", "TPRERR-1", "TPVRF-1"]
+
+
+def test_stage5_holds_without_reference_and_adopts_only_eligible():
+    """단계 4·5-1 완료 기준: 기준(실패 지점)이 없는 no_time·time 조건은 채택 0(전부 보류, 사유 기록). 기준 줄이 있는 look_at은
+    자격 검사를 통과한 것만 채택한다 — 틀린 채택 0, 단계 4의 맞는 채택 7건(이름 그대로) + 새 양성 token 점 2건 + R1 양성 3건
+    (TPRERR·TPEVAL·TPVRF), R1 음성(CPX·CPXD)과 NEARPOS(AP 줄 인용)는 problem.json 없이 보류. 기준값(baseline.json)과 같음은 위 시험이 본다."""
     now = _current()
     runs = {c: [r for r in now["runs"] if r["condition"] == c] for c in ("no_time", "time", "look_at")}
     assert runs["no_time"] and runs["time"] and runs["look_at"]
     assert [r["key"] for c in ("no_time", "time") for r in runs[c] if r["adopted"] is not None] == []
-    assert all(r["adopted"] == r["top"] for r in runs["look_at"])
+    adopted = [r for r in runs["look_at"] if r["adopted"]]
+    assert all(r["adopted"] == r["expect"] for r in adopted), adopted
+    assert sorted(r["key"] for r in adopted) == STAGE5_CORRECT
     for cond in ("no_time", "time"):
         s = now["by_condition"][cond]
         assert (s["accepted_correct"], s["accepted_wrong"], s["held"]) == (0, 0, s["evaluated"]), (cond, s)

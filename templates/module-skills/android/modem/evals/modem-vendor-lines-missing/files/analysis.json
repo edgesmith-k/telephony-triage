@@ -35,13 +35,33 @@
  },
  "decision": {
   "state": "held",
-  "reason": "cause_unconfirmed",
+  "reason": "no_reference",
   "selected": null,
   "location": {
    "state": "none",
    "source": null,
    "kind": null
-  }
+  },
+  "check": {
+   "why": null,
+   "checked": 0,
+   "total": 3
+  },
+  "events": [
+   {
+    "type": "DATA-002",
+    "at": "2026-08-28T17:00:15+00:00",
+    "line": "f0:L8",
+    "phone": 0,
+    "absence": true,
+    "ref": false,
+    "result": "observed",
+    "cause": null,
+    "why": "no_cause_before_event",
+    "gap_s": null
+   }
+  ],
+  "events_total": 1
  },
  "candidates": [
   {

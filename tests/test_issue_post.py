@@ -443,7 +443,7 @@ def test_fit_check_hold_marks_resolution_held_without_plan():
     render(ws, "--fill", fill(ws, FILL))
     body = post_md(ws)
     assert f"* 해결책(1위 기준, 보류됨): {top['resolution']} (해결책 검증: 보류(1위 부적합))" in body
-    assert "* 원인 미확정 — 추가 로그·재현 정보 필요" in body and "* 탐색 분석 적합성 확인: 1위가 증상과 맞지 않아 보류" in body
+    assert "* 원인 미확정 — 추가 로그·재현 정보 필요" in body and "* 탐색 분석 적합성 확인: 채택 후보가 증상과 맞지 않아 보류" in body
     assert f"* 해결책: {top['resolution']}" not in body
     co.write_text(json.dumps({"explore": {"mode": "explore", "fit_hold": "OTHER-001-01"}}), encoding="utf-8")
     render(ws, "--fill", fill(ws, FILL))
@@ -456,8 +456,9 @@ def test_held_decision_reports_cause_held_without_resolution():
     ws = shared()
     analysis = json.loads(_SAVED["analysis.json"])
     top = analysis["candidates"][0]
-    assert analysis["decision"] == {"state": "held", "reason": "no_reference", "selected": None,
-                                    "location": {"state": "none", "source": None, "kind": None}}, analysis["decision"]
+    assert {k: analysis["decision"][k] for k in ("state", "reason", "selected", "location")} == {
+        "state": "held", "reason": "no_reference", "selected": None,
+        "location": {"state": "none", "source": None, "kind": None}}, analysis["decision"]
     render(ws, "--fill", fill(ws, FILL))
     body = post_md(ws)
     assert f"{top['type']} > 원인 보류 — 실패 지점을 잡지 못함(기준 줄·스텝 마커·TC 파일+시계 차 중 로그에서 찾은 것 없음)" in body
