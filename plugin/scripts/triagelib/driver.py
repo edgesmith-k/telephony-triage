@@ -29,7 +29,7 @@ MASKED_DIR = "logs-masked"       # 원문 마스킹 사본(parse_logcat.py mask-
 # 5-1·5-2 질문 대기(when: ask) 동안의 한 줄 안내(analysis.json `analyzer.note`·`explore.note`): 답 전에 원문을 열어 보는 일을 막는
 # 안내일 뿐이다(guard 규칙 10은 통째 읽기만 막는다).
 NOTE_LABEL = "제출자 참고(판단 근거·단서 아님): "     # analysis.json issue.submitter_note 머리(R5)
-# ponytail: 포털 NOTE_MAX(2000자)와 맞춘 값 — 머리말은 세지 않는다. analysis.json 4KB 예산을 넘으면 fit이 먼저 200자로 줄이고 마지막에 표시로 바꾼다
+# ponytail: 포털 NOTE_MAX(2000자)와 맞춘 값 — 머리말은 세지 않는다. analysis.json 4KB 예산을 넘으면 fit이 먼저 200자, 다른 후보 근거를 빼기 전 80자로 줄이고 마지막에 표시로 바꾼다
 NOTE_MAX = 2000
 ASK_NOTE = "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL {step})"
 

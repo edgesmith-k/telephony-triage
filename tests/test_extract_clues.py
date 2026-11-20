@@ -557,6 +557,11 @@ def test_reference_only_log_line_is_held_with_its_candidate(seed_db):
     a, out = _run(seed_db, "refonly", comments=["이번 실패는 데이터 연결 실패입니다. 아래는 시험 전 참고 구간이며 이번 실패 지점이 아닙니다.\n"
                                                  + NET])
     assert _verdict(a) == ("held", None, "ineligible", "comment_unconfirmed") and _ref_cause(out) == "NETWORK-001-03"
+    # 확인 리뷰 P2: 판단 줄은 그 후보를, 결론 줄도 그 후보를 한 번 적는다(1위 규칙 일치만 앞세우지 않게)
+    md = (out / "report.md").read_text(encoding="utf-8").splitlines()
+    assert "- 판단: 원인 보류: 코멘트에서 자동으로 찾은 지점의 원인 후보 NETWORK-001-03, 확인 필요" in md
+    concl = next(x for x in md if x.startswith("- 결론: "))
+    assert concl.startswith("- 결론: 원인 보류 — 코멘트에서 자동으로 찾은 지점의 원인 후보 NETWORK-001-03, 확인 필요. 규칙 일치 1위"), concl
 
 
 def test_submitter_note_is_kept_apart_from_clues(seed_db):
@@ -602,7 +607,7 @@ def test_fit_drops_submitter_note_before_events_and_evidence():
     assert [e["ref"] for e in out["decision"]["events"]] == [False, True, False]     # 글을 줄이면 맞아 사건·근거는 그대로
     out = rep.fit(result(3000, warn=3000))
     assert [e["ref"] for e in out["decision"]["events"]] == [True] and len(out["candidates"][0]["evidence"]) == 6   # ref 사건은 남는다
-    assert len(out["issue"]["submitter_note"]) == rep.NOTE_FIT                       # 200자는 근거보다 오래 남는다
+    assert len(out["issue"]["submitter_note"]) == rep.NOTE_SHORT                     # 다른 후보 근거를 빼기 전에 80자로
     assert len(rep.dumps(out).encode("utf-8")) + 1 <= rep.ANALYSIS_MAX
     stuck = {**result(3000), "issue": {"summary": "s" * 3900, "submitter_note": "n" * 3000}}     # 줄일 수 없는 칸이 큼
     assert rep.fit(stuck)["issue"]["submitter_note"] == rep.NOTE_GONE
@@ -614,13 +619,44 @@ def test_fit_drops_submitter_note_before_events_and_evidence():
     assert len(rep.dumps(out).encode("utf-8")) + 1 <= rep.ANALYSIS_MAX and out["truncated"] is False
 
 
+def test_fit_shortens_note_again_before_other_candidate_evidence_goes():
+    """확인 리뷰 P2(11/20): 다른 후보 근거를 다 빼기 전에 참고 글을 머리말 포함 `NOTE_SHORT`(80)자로 한 번 더 줄인다 — 줄일 칸을
+    키워 가며 참고 글이 처음 80자가 되는 자리에서 다른 후보 근거가 아직 남아 있다(단계 순서가 바뀌면 이미 비어 있다)."""
+    from triagelib import report as rep
+
+    ev = [{"ts": f"t{i}", "tag": "T", "msg": "m" * 60} for i in range(6)]
+    for n in range(1500, 4000, 4):
+        out = rep.fit({"issue": {"summary": "s" * n, "submitter_note": "n" * 3000},
+                       "candidates": [{"cause": "DATA-003-01", "evidence": list(ev)}, {"cause": "NETWORK-001-03", "evidence": list(ev)}],
+                       "decision": {"state": "held", "reason": "ineligible", "events": []},
+                       "files": {"report": "r"}, "must_show": [], "warnings": []})
+        if len(out["issue"]["submitter_note"]) <= rep.NOTE_SHORT:
+            break
+    assert len(out["issue"]["submitter_note"]) == rep.NOTE_SHORT and out["candidates"][1]["evidence"], n
+
+
+@pytest.mark.parametrize("n", [150, 300])
+def test_korean_note_does_not_push_out_other_candidate_evidence(seed_db, n):
+    """확인 리뷰 P2(r3b_note_mid.sh 모양): 한글 참고 글 150자 이상 + 모델 단서 채택이면 4KB 맞춤이 다른 후보 근거를 다 빼기 전에
+    참고 글을 80자로 줄인다(옛 순서는 근거 0줄, 글 171·200자)."""
+    from triagelib import driver
+    from triagelib import report as rep
+    note = "가" * n
+    a, _ = _run(seed_db, f"mid{n}", fields={"summary": "데이터 연결 실패", "description": "시험 중 실패했습니다.", "tt_note": note},
+                comments=["로그 첨부", FAIL], problem={"symptom": {"text": "x", "types": ["DATA-003"], "not_in_db": False}, "clues": [IPC]})
+    assert (a["decision"]["state"], a["decision"]["selected"]["cause"]) == ("accepted", "DATA-003-01"), a["decision"]
+    others = [c for c in a["candidates"] if c["cause"] != "DATA-003-01"]
+    got = a["issue"]["submitter_note"]
+    assert got.startswith(driver.NOTE_LABEL) and (all(c["evidence"] for c in others) or len(got) <= rep.NOTE_SHORT), (others, len(got))
+
+
 def test_script_clue_hold_line_names_the_candidate_like_the_portal():
     """리뷰 P1: 스크립트 단서 보류(comment_unconfirmed, via.origin script)의 판단 줄은 포털 카드와 같은 문구 — 후보는 ref 사건 원인."""
     from triagelib import report as rep
 
     dec = {"state": "held", "reason": "ineligible", "check": {"why": "comment_unconfirmed", "via": {"origin": "script"}},
            "events": [{"ref": False, "cause": "NETWORK-001-03"}, {"ref": True, "cause": "DATA-003-01"}]}
-    assert "(코멘트에서 자동으로 찾은 지점 — 그 지점의 원인 후보 DATA-003-01, 확인 필요)" in rep.decision_line(dec, [])
-    assert "(코멘트에서 자동으로 찾은 지점 — 확인 필요)" in rep.decision_line({**dec, "events": []}, [])
+    assert rep.decision_line(dec, ["c"]) == "- 판단: 원인 보류: 코멘트에서 자동으로 찾은 지점의 원인 후보 DATA-003-01, 확인 필요"
+    assert rep.decision_line({**dec, "events": []}, []) == "- 판단: 원인 보류: 코멘트에서 자동으로 찾은 지점, 확인 필요"
     model = {**dec, "check": {"why": "comment_unconfirmed", "via": {"origin": "problem"}}}      # 문제 파악 단서 + comment_adopt 끔
     assert "코멘트에 적힌 위치라" in rep.decision_line(model, [])
