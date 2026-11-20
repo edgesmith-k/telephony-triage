@@ -236,6 +236,56 @@ def _shift(lines: list[str], needle: str, sec: float) -> list[str]:
     return sorted(out, key=lambda x: STAMP.match(x).group(1))
 
 
+def _rename(lines: list[str], serial: str, dn: str) -> list[str]:
+    """다른 요청으로: RIL serial·DataNetwork 이름만 바꾼다."""
+    return [x.replace("[0410]", f"[{serial}]").replace("DN-120-C", dn) for x in lines]
+
+
+def _retimed(lines: list[str], needle: str, starts: list[float]) -> list[str]:
+    """needle이 든 첫 줄을 starts 시각마다 한 줄씩(시각만 바꾼 사본)."""
+    tail = STAMP.match(next(x for x in lines if needle in x)).group(2)
+    return [_at(s) + tail for s in starts]
+
+
+TOKPOS = [(M, minute(0)), (OK, minute(1), "0x0dd", "VIPC_E_OK"), (F, minute(2), "0x0e1"), (M, minute(3))]
+
+
+def _first_fail_logs() -> dict[str, list[str]]:
+    """R1(첫 세는 실패) 기준값 사례: 음성 — 기준 IPC 요청이 DB에 없는 오류(RILJ `error 2`)로 실패하고 0.9초 뒤 다른 요청(serial
+    0411·token 0x0df)이 인증 실패(DATA-003-02, 슬롯 없는 DN 줄)로 실패(`cp-typeless`, 듀얼 SIM 변형 `cp-dualsim` — X는 SIM2, IPC 줄은
+    슬롯 없음). 양성 — tokpos 변형: RILJ `error 44` 응답 바로 뒤 DNC 실패(`tp-rerr`, 흡수), 평가 줄 "Data disallowed"가 실패 앞뒤에
+    (`tp-eval`, 추출기 파생 이벤트는 세지 않음), 벤더 완료 줄 `OnIpcComplete … result=2`(`tp-vrf`, 벤더 IPC 이벤트는 세지 않음)."""
+    t2 = minute(2)
+    auth = _rename(segment(AUTH, t2 + 0.9, "0x0df"), "0411", "DN-121-C")
+    x1 = [x.replace("[PHONE0]", "[PHONE1]") for x in segment("X", t2, "0x0de")]
+    tok = build_log(TOKPOS)
+    now = [x.startswith(_at(t2)[:11]) for x in tok]     # 10:02 실패 조각 줄만 바꾼다
+    rerr = [x[:18] + "  2101  2141 D RILJ    : [0410]< SETUP_DATA_CALL error 44 [PHONE0]" if n and "< SETUP_DATA_CALL" in x
+            else x.replace("resultCode=RESULT_SUCCESS", "resultCode=RESULT_ERROR_ILLEGAL_STATE") if n else x
+            for x, n in zip(tok, now)]
+    ok = segment(OK, minute(1))
+    ev = _retimed(ok, "Data disallowed reasons", [t2 + 0.002, t2 + 0.700]) + _retimed(ok, "Data allowed reason", [t2 + 0.003])
+    vrf = [f"{_at(t2 + 0.596)}   900   910 D RIL     : [IpcCtx_0] OnIpcComplete Request ID=17, result=2"]
+    srt = lambda lines: sorted(lines, key=lambda x: STAMP.match(x).group(1))  # noqa: E731
+    return {"cp-typeless": srt(segment(M, minute(0)) + segment("X", t2, "0x0de") + auth),
+            "cp-dualsim": srt(segment(M, minute(0)) + x1 + auth),
+            "tp-rerr": rerr, "tp-eval": srt(tok + ev), "tp-vrf": srt(tok + vrf)}
+
+
+CASES += [
+    {"name": "cp-typeless", "key": "CPX-1", "expect": "unresolved", "fail": "token=0x0de, len=8, Error(VIPC_E_DEMO_FAILURE)",
+     "look": "VIPC_SETUP_DATA (token=0x0de)", "summary": "데이터 연결 실패"},
+    {"name": "cp-dualsim", "key": "CPXD-1", "expect": "unresolved", "fail": "token=0x0de, len=8, Error(VIPC_E_DEMO_FAILURE)",
+     "look": "VIPC_SETUP_DATA (token=0x0de)", "summary": "SIM2 데이터 연결 실패"},
+    {"name": "tp-rerr", "key": "TPRERR-1", "expect": "DATA-003-01", "fail": "onDataNetworkSetupDataFailed:",
+     "look": "VIPC_SETUP_DATA (token=0x0e1)", "summary": "데이터 연결 실패"},
+    {"name": "tp-eval", "key": "TPEVAL-1", "expect": "DATA-003-01", "fail": "onDataNetworkSetupDataFailed:",
+     "look": "VIPC_SETUP_DATA (token=0x0e1)", "summary": "데이터 연결 실패"},
+    {"name": "tp-vrf", "key": "TPVRF-1", "expect": "DATA-003-01", "fail": "onDataNetworkSetupDataFailed:",
+     "look": "VIPC_SETUP_DATA (token=0x0e1)", "summary": "데이터 연결 실패"},
+]
+
+
 def y10_cases() -> list[tuple[str, list[str], dict]]:
     """자격 검사 합성 6건(Y10, 시제품 11/19) `(이름, 로그 줄, {ref, expect})`. ref = ["text", 기준 줄] | ["range", START초, FAIL초]
     (로그 FAIL 마커 구간, 11-14 00:00 기준). expect = [state, reason, 채택이면 원인·보류면 check.why] — problem.json 없는 5-1 기준
@@ -275,9 +325,12 @@ def build(out: Path) -> list[Path]:
     """조합 로그·코멘트·라벨셋을 out 아래에 쓰고 쓴 파일 목록을 낸다."""
     logs: dict[str, list[str]] = {}
     items = []
+    built = _first_fail_logs()
     for case in CASES:
         if case.get("segs"):
             logs[case["name"]] = build_log(case["segs"])
+        elif case["name"] in built:
+            logs[case["name"]] = built[case["name"]]
         lines = logs[case["name"]]
         item = {"key": case["key"], "logs": [f"{case['name']}.log"], "expect": case["expect"], "summary": case["summary"]}
         if case.get("fail"):

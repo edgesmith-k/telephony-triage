@@ -77,6 +77,8 @@ def test_same_line_counts_condition_lines_in_window_and_same_ril_request():
     assert outcome(el.decide([e], [ref])) == ("accepted", "anchored_top", "D1")
     hidden = ev("DATA-003", 120, ["D1"], line=(0, 16), raw=[{**raw, "ril": {**raw["ril"], "serial": "<CRED#1>"}}])
     assert outcome(el.decide([hidden], [ref])) == ("held", "ineligible", "near_without_symptom")   # 가린 serial은 다른 요청
+    far = point(9, 300, ril={"serial": 410, "pid": 2101, "paired_ts": "2026-11-14T01:05:01+00:00"})
+    assert outcome(el.decide([e], [far])) == ("held", "ineligible", "near_without_symptom")   # 짝 시각이 다르면 serial 재사용(C-17)
 
 
 def test_condition_line_fallback_adopts_but_location_stays_found():
@@ -102,6 +104,28 @@ def test_cp_point_links_two_seconds_after_response_same_slot():
     assert outcome(el.decide(EVENTS, [ipc(197)])) == ("held", "ineligible", "no_event_at_reference")   # 3초 뒤는 안 붙는다
     other = [ev("DATA-003", 200, ["D1"], line=(0, 30), phone=1)]
     assert outcome(el.decide(other, [ipc(199, slot=0)])) == ("held", "ineligible", "no_event_at_reference")   # 다른 슬롯
+
+
+def test_first_counted_failure_decides_cp_point_and_range():
+    """R1(C-1): 기준 뒤 첫(구간은 FAIL에 가장 가까운) 세는 실패가 유형 없음이면 다른 요청의 유형 사건을 채택하지 않는다. 세는 실패 =
+    유형 사건 + RIL 요청 실패(ril_error·ril_timeout·ril_no_response). 벤더 IPC·추출기 파생 이벤트는 세지 않고, RIL 실패 뒤 0.5초 안
+    같은 슬롯(또는 모름) 유형 사건이 오면 그 사건의 RIL 쪽 줄로 보고 세지 않는다(흡수)."""
+    ipc = point(4, 199, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 222})
+    other = ev("DATA-003", 200.5, ["D2"], line=(0, 30), phone=None)
+    for name in ("ril_error", "ril_timeout", "ril_no_response"):
+        own = ev(None, 199.1, line=(0, 5), name=name)
+        assert outcome(el.decide([own, other], [ipc])) == ("held", "symptom_not_found", "typeless_failure_within_link"), name
+    assert outcome(el.decide([ev(None, 199.1, line=(0, 5), name="ril_error"), ev("DATA-003", 199.4, ["D1"], line=(0, 30))],
+                             [ipc])) == ("accepted", "anchored_top", "D1")       # 0.3초 뒤 유형 사건: 흡수
+    anyslot = point(4, 199, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 222}, phone=None)
+    assert outcome(el.decide([ev(None, 199.1, line=(0, 5), name="ril_error"), ev("DATA-003", 199.4, ["D1"], line=(0, 30), phone=1)],
+                             [anyslot])) == ("held", "symptom_not_found", "typeless_failure_within_link")   # 다른 슬롯은 흡수 안 함
+    for name in ("vendor_ipc_error", "vendor_request_failed", "data_evaluation_rejected"):
+        assert outcome(el.decide([ev(None, 199.1, line=(0, 5), name=name), other], [ipc])) == ("accepted", "anchored_top", "D2"), name
+    net = ev("NETWORK-001", 100, ["N3"], line=(0, 10))
+    late, early = ev(None, 125, line=(0, 20), name="ril_error"), ev(None, 95, line=(0, 2), name="ril_error")
+    assert outcome(el.decide([net, late], [rng("log_marker", 90, 130)])) == ("held", "symptom_not_found", "typeless_failure_in_range")
+    assert outcome(el.decide([early, net], [rng("log_marker", 90, 130)])) == ("accepted", "anchored_top", "N3")   # FAIL에 가까운 것이 유형
 
 
 def test_near_line_is_held_without_problem_types():
@@ -360,6 +384,57 @@ def test_reference_on_merged_neighbour_failure_is_held(seed_db):
         e = _eligibility(seed_db, path, {"kind": "line", "source": "look_at", "places": found["places"],
                                          "lines": found["place"]})["eligibility"]
         assert (e["state"], e["reason"], e["why"]) == ("held", "ambiguous", "multiple_events"), (path.name, e)
+
+
+def _range_kst(start: float, fail: float) -> dict:
+    base = datetime(2026, 11, 14, tzinfo=KST)
+    return {"kind": "range", "source": "log_marker", "places": 1, "start": (base + timedelta(seconds=start)).isoformat(),
+            "fail": (base + timedelta(seconds=fail)).isoformat()}
+
+
+def _mk_tc(work: Path) -> Path:
+    """mk_tc(C-1(c)): 스텝 안 비행기 모드 켬·끔 뒤 데이터 연결이 DB에 없는 오류(RILJ error 2)로 실패, FAIL 마커 구간."""
+    m = maf.minute
+    return _write(work / "mk_tc.log", maf.build_log([(maf.M, m(0)), (maf.OFF, m(0.5)), ("X", m(1.5)), (maf.M, m(3))]))
+
+
+def _write(log: Path, lines: list[str]) -> Path:
+    log.write_text("".join(x + "\n" for x in lines), encoding="utf-8", newline="\n")
+    return log
+
+
+def _mk_f(work: Path) -> Path:
+    """M1: FAIL 마커 구간 안 APN 실패 하나(정답 DATA-003-01)."""
+    return _write(work / "mk_f.log", maf.build_log([(maf.M, maf.minute(0)), (maf.F, maf.minute(2)), (maf.M, maf.minute(3))]))
+
+
+TOK = "VIPC_SETUP_DATA (token=0x0e1)"
+R1_CASES = [   # (이름, 로그, 기준 줄 글 | 구간(START초, FAIL초), 기대) — 재현 C:/hw/rv1120/design-review/s3.sh·s4.sh(11/20)
+    ("cp_typeless", "cp-typeless.log", "VIPC_SETUP_DATA (token=0x0de)", ("held", "symptom_not_found", "typeless_failure_within_link")),
+    ("cp_dualsim", "cp-dualsim.log", "VIPC_SETUP_DATA (token=0x0de)", ("held", "symptom_not_found", "typeless_failure_within_link")),
+    ("mk_tc", _mk_tc, (maf.minute(0) - 5, maf.minute(1.5) + 10), ("held", "symptom_not_found", "typeless_failure_in_range")),
+    ("tokpos", "tokpos.log", TOK, ("accepted", "anchored_top", "DATA-003-01")),
+    ("tp_rerr", "tp-rerr.log", TOK, ("accepted", "anchored_top", "DATA-003-01")),
+    ("tp_rerr_mk", "tp-rerr.log", (maf.minute(2) - 1, maf.minute(2) + 5), ("accepted", "anchored_top", "DATA-003-01")),
+    ("tp_eval", "tp-eval.log", TOK, ("accepted", "anchored_top", "DATA-003-01")),
+    ("tp_eval_mk", "tp-eval.log", (maf.minute(2) - 1, maf.minute(2) + 5), ("accepted", "anchored_top", "DATA-003-01")),
+    ("tp_vrf", "tp-vrf.log", TOK, ("accepted", "anchored_top", "DATA-003-01")),
+    ("M1", _mk_f, (maf.minute(2) - 30, maf.minute(2) + 5), ("accepted", "anchored_top", "DATA-003-01")),
+]
+
+
+@pytest.mark.parametrize(("name", "log", "ref", "expect"), R1_CASES, ids=[c[0] for c in R1_CASES])
+def test_r1_named_repros(seed_db, name, log, ref, expect):
+    """R1 이름 붙은 재현(실제 경로): 음성은 보류(기준 요청 자신이 DB에 없는 오류로 실패 — 다른 요청의 인증 실패·앞 스텝 비행기 모드를
+    채택하지 않는다), 양성은 채택(RILJ 오류 응답 바로 뒤 DNC 실패, 평가 줄 "Data disallowed", 벤더 완료 줄 result≠0이 있어도)."""
+    path = log(tmp("tt-elig-r1-")) if callable(log) else maf.OUT / log
+    if isinstance(ref, str):
+        found = _find(seed_db, path, ref)
+        ref = {"kind": "line", "source": "look_at", "places": found["places"], "lines": found["place"]}
+    else:
+        ref = _range_kst(*ref)
+    e = _eligibility(seed_db, path, ref)["eligibility"]
+    assert (e["state"], e["reason"], e["cause"] if e["state"] == "accepted" else e["why"]) == expect, (name, e)
 
 
 def test_absence_end_is_parse_window_end(seed_db):
