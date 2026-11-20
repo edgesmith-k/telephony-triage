@@ -4020,8 +4020,11 @@ def checks_ad(eid, ctx):
         need_seq()
         ops = (ctx.plan(job) or {}).get("operations", [])
         s7 = ctx.step7_index()
-        ok = s7 is not None and {"op": "append", "cause": cause} in ops
-        return ok, f"Step 7 질문 seq={s7}; operations={json.dumps(ops, ensure_ascii=False)[:300]}"
+        # 순서(F4): 첫 계획 쓰기(db_pr stage — checks_fl과 같은 기준)가 Step 7 질문 뒤 — 질문 전 stage가 있으면 실패
+        before, after = (ctx._bash_index(_STAGE, 0, s7), ctx._bash_index(_STAGE, s7)) if s7 is not None else ([], [])
+        ok = s7 is not None and not before and bool(after) and {"op": "append", "cause": cause} in ops
+        return ok, (f"Step 7 질문 seq={s7}, 질문 전 stage {before[:2]}, 뒤 첫 stage {after[:1]}; "
+                    f"operations={json.dumps(ops, ensure_ascii=False)[:300]}")
 
     def none_remote_lock():
         need_seq()

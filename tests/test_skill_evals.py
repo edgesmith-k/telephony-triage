@@ -2066,6 +2066,24 @@ def _adopt_rows(tmp_path, said, look='--look-at "VIPC_SETUP_DATA (token=0x0e1)"'
     return [fns[i]()[0] for i in range(3)]
 
 
+def test_adopt_eval_asked_then_planned_checks_order(tmp_path):
+    """eval 113 넷째 행(F4): 계획 쓰기(db_pr stage)가 Step 7 질문 뒤여야 한다 — 순서를 뒤집은 합성 기록(stage 먼저, 질문 나중)은 실패,
+    질문 전·뒤에 stage가 둘 다 있어도 실패. 모델 호출 없음."""
+    stage = _bash("s", STAGE_CMD.replace("MOCK-1", "MOCK-9113"), "EXIT 0")
+    ask = _ask("q", "어떻게 기록할까요?", STEP7)
+
+    def row(name, items):
+        ctx = _vis_ctx(tmp_path, items, name)
+        (ctx.work / "MOCK-9113").mkdir(parents=True)
+        (ctx.work / "MOCK-9113" / "plan.json").write_text(json.dumps({"operations": [{"op": "append", "cause": "DATA-003-01"}]}),
+                                                          encoding="utf-8")
+        return grader.checks(113, ctx)[3]()[0]
+    assert row("ok", [ask, stage]) is True
+    assert row("reversed", [stage, ask]) is False
+    assert row("both", [stage, ask, _bash("s2", STAGE_CMD.replace("MOCK-1", "MOCK-9113"), "EXIT 0")]) is False
+    assert row("noask", [stage]) is False
+
+
 def test_adopt_eval_rows(tmp_path):
     """eval 113 앞 세 행: run 인자·decision, 판단 줄 글자 그대로, 해결책 표시와 '원인 보류' 말 없음."""
     shown_all = ADOPT_REPORT.split("### CAUSE\n")[1]
