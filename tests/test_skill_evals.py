@@ -2082,6 +2082,7 @@ def test_adopt_eval_asked_then_planned_checks_order(tmp_path):
     assert row("reversed", [stage, ask]) is False
     assert row("both", [stage, ask, _bash("s2", STAGE_CMD.replace("MOCK-1", "MOCK-9113"), "EXIT 0")]) is False
     assert row("noask", [stage]) is False
+    assert row("nostage", [ask]) is False          # 질문만 있고 계획 쓰기(stage) 없음
 
 
 def test_adopt_eval_rows(tmp_path):
