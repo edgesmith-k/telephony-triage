@@ -626,11 +626,14 @@ def occurrences(events_doc: dict, evaluator: Evaluator, db, compiled: dict, rank
                 item["gap_s"] = item["causes"][0][2] if item["causes"] else None
                 out.append(item)
         typed_lines = {k for e in out for k in e["lines"]}
+        rules = _collection_rules(db)       # RIL 실패의 요청 category(ril.yaml) — 자격 검사는 data 요청 실패만 센다
         for raw in evaluator.events:      # 유형 없는 실패 사건: 파생 오류 이벤트(유형 사건 근거 줄은 뺀다)
             name, key = raw.get("event"), eligibility.ref_key(raw.get("line_ref"))
             if name and eligibility.ERROR_EVENT_RE.search(str(name)) and key not in typed_lines:
                 out.append({"type": None, "at": _parse_iso(raw["ts"], "event"), "lines": {key} - {None}, "raw": [raw],
                             "phone": raw.get("phone_id"), "name": str(name), "causes": [], "after": [], "absence_unverified": [],
+                            **({"ril_category": rules.ril_category(str((raw.get("fields") or {}).get("request")))}
+                               if rules and name in parser_rules.RESERVED_EVENTS else {}),
                             "absence": False, "absence_bad": False, "gap_s": None, "unjudged": False,
                             "cause_lines": set(), "cond_lines": set()})
     finally:
