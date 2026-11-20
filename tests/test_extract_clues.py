@@ -695,6 +695,8 @@ RETEST_VARIANTS = [
     ("will retest tomorrow", False),
     ("retest scheduled for next week", False),
     ("다음 빌드 나오면 재시험하겠습니다", False),
+    # 결과 낱말 없이 조각 나누기(쉼표)로만 경계가 되는 경우 — 나누기를 지우면 "겠" 때문에 계획으로 읽는다
+    ("재시험해 봤는데 attach 안 됨, 다음 빌드에서 다시 해 보겠음", True),
 ]
 
 
