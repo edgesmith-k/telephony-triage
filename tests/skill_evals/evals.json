@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=병합 2(72 +1 뒤 병합해줘·75 +1 관문), H=모듈 스킬 레포·출력 검사 4(76~79), W9=setup 2(58 재점검 doctor 표·80 첫 사용자 setup), FL=성공 흐름 제안 3(81 새 원인 flow_step·82 set-flow-step·83 put-flow 문구 고치기), FT=적합성 확인·반복 금지 3(84~86: 84 확신 일치 짧은 판단·85 부적합 보류·86 재실행 prior), PB=문제 파악 18(87~102·104·109: --problem-only, 시드 DB, 기대값 `problem_expect`를 grade.py checks_pb가 problem.json과 대조 — 첫 유형·허용 밖 유형/단서 실패·회차 세 칸. 98~102는 리뷰어가 줄거리·기대값을 정함), PBH=문제 파악 처음 보는 세트 8(103·105~108·110~112: 지시문 작성자가 보지 않은 글타래 — 104·109는 지시문을 고칠 때 보아 PB로 옮김, 채점은 PB와 같음 — 지시문을 고칠 때 열지 않는다). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=병합 2(72 +1 뒤 병합해줘·75 +1 관문), H=모듈 스킬 레포·출력 검사 4(76~79), W9=setup 2(58 재점검 doctor 표·80 첫 사용자 setup), FL=성공 흐름 제안 3(81 새 원인 flow_step·82 set-flow-step·83 put-flow 문구 고치기), FT=적합성 확인·반복 금지 3(84~86: 84 규칙 일치 높음·판단 보류 짧은 판단·85 부적합 보류·86 재실행 prior), PB=문제 파악 18(87~102·104·109: --problem-only, 시드 DB, 기대값 `problem_expect`를 grade.py checks_pb가 problem.json과 대조 — 첫 유형·허용 밖 유형/단서 실패·회차 세 칸. 98~102는 리뷰어가 줄거리·기대값을 정함), PBH=문제 파악 처음 보는 세트 8(103·105~108·110~112: 지시문 작성자가 보지 않은 글타래 — 104·109는 지시문을 고칠 때 보아 PB로 옮김, 채점은 PB와 같음 — 지시문을 고칠 때 열지 않는다), AD=채택 경로 1(113: 앞사람 CP 코멘트의 token을 사용자가 --look-at으로 줌, 시드 DB·tokpos.log → decision accepted — 판단 줄 그대로·해결책 표시·Step 7 질문)). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -3230,7 +3230,7 @@
       "id": 84,
       "name": "fit-check-confirmed-short",
       "batch": "FT",
-      "design": "1위 C=1(확신 일치, DATA-001-01 Data disabled)인데 `--explore` 세션 — 스킬이 `triage.py run`에 `--explore`를 넘겨 `explore.reason: fit_check`를 받고, 묻지 않고 `triage.py explore` → 적합성 확인. 1위가 증상·시각·슬롯을 설명하고 모순이 없는 쉬운 사례라 추가 조회(`--look-at` 재실행·`db_search`) 없이 같은 턴에 가설 1 = 1위로 짧게 끝내고 `check-output` → Step 7(11/17 F-FIT, explore.md 종합 판단 5번)",
+      "design": "1위 C=1(규칙 일치 높음, DATA-001-01 Data disabled)이지만 실패 지점이 없어 판단은 `원인 보류`(no_reference)인 `--explore` 세션 — 스킬이 `triage.py run`에 `--explore`를 넘겨 `explore.reason: fit_check`를 받고, 묻지 않고 `triage.py explore` → 적합성 확인. 1위가 증상·시각·슬롯을 설명하고 모순이 없는 쉬운 사례라 추가 조회(`--look-at` 재실행·`db_search`) 없이 같은 턴에 가설 1 = 1위로 짧게 끝내고 `check-output` → Step 7(11/17 F-FIT, explore.md 종합 판단 5번)",
       "prompt": "MOCK-9084 로그 분석해줘 --dry-run --explore. 데이터가 안 붙는대. 로그: logs/data-disabled.log",
       "setup": {
         "jira": [
@@ -4996,6 +4996,42 @@
           "sim"
         ]
       },
+      "files": []
+    },
+    {
+      "id": 113,
+      "name": "adopted-cause-look-at",
+      "batch": "AD",
+      "design": "채택 경로(단계 5). 단계 4부터 후보가 있는 기존 eval은 모두 판단이 `원인 보류`라 채택 리포트를 다루는 eval이 없다. 합성 로그 tokpos.log(단계 5 양성 TOKPOS-1과 같은 로그)와, 앞사람 CP 코멘트가 실패 지점 `VIPC_SETUP_DATA (token=0x0e1)`을 적은 모의 Jira. 분석 흐름은 코멘트의 token을 스스로 기준 줄로 쓰지 않으므로(그것은 탐색·문제 파악 흐름) 사용자가 그 token을 `--look-at`으로 준다. 스킬은 받은 옵션을 run에 그대로 넘기고, 기준 줄이 실패 사건에 닿아 `decision.state: accepted`(DATA-003-01, anchored_top)가 된다(`--look-at` 없이는 no_reference 보류). 리포트 판단 줄 `원인 채택 — DATA-003-01 …`을 글자 그대로, 해결책 줄을 보이고 '보류'라고 말하지 않으며, 채택이어도 Step 7에서 분류를 묻는다. 시드 DB(`setup.db: seed`)",
+      "prompt": "MOCK-9113 로그 분석해줘 --dry-run --look-at \"VIPC_SETUP_DATA (token=0x0e1)\". 데이터 연결이 실패한대. --look-at은 CP가 코멘트에 적은 실패 지점이야. 로그: logs/tokpos.log",
+      "setup": {
+        "db": "seed",
+        "jira": [
+          "MOCK-9113"
+        ],
+        "logs": [
+          {
+            "src": "tests/fixtures/accuracy/tokpos.log",
+            "as": "tokpos.log"
+          }
+        ]
+      },
+      "user_replies": [
+        "분류 제안(DATA-003-01 APN 없음·틀림)에는 '예'.",
+        "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다.",
+        "심층 분석(mock-data-analyzer)이나 탐색 분석 실행 여부를 물으면 '아니오'.",
+        "note 한 줄 초안을 보여주면 그대로 승인한다.",
+        "확인 화면에서는 '승인'.",
+        "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
+      ],
+      "expected_output": "triage.py run … --look-at \"VIPC_SETUP_DATA (token=0x0e1)\" → analysis.json decision {state: accepted, reason: anchored_top, selected DATA-003-01} → Step 7 전에 리포트(판단 `원인 채택 — DATA-003-01 (실패 지점: 담당자가 지정한 기준 줄·찾음, 자격 검사 통과)`, `- 해결책: APN 이름을 사업자·망 시뮬레이터 설정과 맞춘다 … ⚠ 미검증`)를 보임 → Step 7 1위 수락 → append {cause: DATA-003-01} 계획 → 확인 화면 → dry-run이라 원격·PR 없음, lock 없음.",
+      "assertions": [
+        "triage.py run에 --look-at(token 0x0e1)을 그대로 넘겼고 analysis.json decision.state가 accepted, selected.cause가 DATA-003-01이다",
+        "Step 7 전에 리포트를 보였고 판단 줄 `원인 채택 — DATA-003-01 …`이 글자 그대로 있다",
+        "리포트의 해결책(APN 이름을 맞춘다)을 보였고 채택된 원인을 '원인 보류'라고 말하지 않았다",
+        "채택이어도 Step 7에서 분류를 물었고 계획 operations에 append {cause: DATA-003-01}이 있다",
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+      ],
       "files": []
     }
   ]
