@@ -125,6 +125,28 @@ def test_first_counted_failure_decides_cp_point_and_range():
     late, early = ev(None, 125, line=(0, 20), name="ril_error"), ev(None, 95, line=(0, 2), name="ril_error")
     assert outcome(el.decide([net, late], [rng("log_marker", 90, 130)])) == ("held", "symptom_not_found", "typeless_failure_in_range")
     assert outcome(el.decide([early, net], [rng("log_marker", 90, 130)])) == ("accepted", "anchored_top", "N3")   # FAIL에 가까운 것이 유형
+    # 흡수는 RIL 실패 **뒤** 유형 사건만(앞 사건은 흡수하지 않는다 — 변이 M12)
+    just_after = ev(None, 125.2, line=(0, 21), name="ril_error")
+    assert outcome(el.decide([ev("NETWORK-001", 125, ["N3"], line=(0, 10)), just_after], [rng("log_marker", 90, 130)])) == \
+        ("held", "symptom_not_found", "typeless_failure_in_range")
+
+
+def test_counted_ril_failures_are_data_requests_in_the_window():
+    """리뷰 P1·P2(11/20): data 요청의 RIL 실패만 센다(ril.yaml category — 매처가 `ril_category`를 싣는다, 없으면 data). 흡수는 창 안
+    사건으로만 본다(슬롯 모르는 RIL 실패를 창 밖 다른 슬롯 사건이 흡수하지 않는다). IPC 점은 RSP 바로 앞 0.5초의 유형 없는 실패도
+    본다(벤더가 RSP 줄을 자기 요청 RIL 오류 뒤에 찍는 모양)."""
+    ipc = point(4, 199, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 222})
+    other = ev("DATA-003", 200.5, ["D2"], line=(0, 30), phone=None)
+    held = ("held", "symptom_not_found", "typeless_failure_within_link")
+    for cat, want in (("data", held), (None, held), ("network", ("accepted", "anchored_top", "D2")),
+                      ("sim", ("accepted", "anchored_top", "D2"))):
+        own = ev(None, 199.1, line=(0, 5), name="ril_error", ril_category=cat)
+        assert outcome(el.decide([own, other], [ipc])) == want, cat
+    slot_free = ev(None, 199.1, line=(0, 5), name="ril_error", phone=None)
+    other_slot = ev("DATA-003", 199.3, ["D9"], line=(0, 29), phone=1)        # 창(슬롯 0) 밖 — 흡수하지 않는다
+    assert outcome(el.decide([slot_free, other_slot, other], [ipc])) == held
+    assert outcome(el.decide([ev(None, 198.8, line=(0, 5), name="ril_error"), other], [ipc])) == held      # RSP 0.2초 앞
+    assert outcome(el.decide([ev(None, 198.4, line=(0, 5), name="ril_error"), other], [ipc])) == ("accepted", "anchored_top", "D2")
 
 
 def test_near_line_is_held_without_problem_types():
