@@ -223,13 +223,18 @@ def _attach_line(ref: dict, events: list[dict], link_ms: int, allowed: set | Non
         return "held", "ineligible", "near_without_symptom"     # 근처: 문제 파악 유형이 있어야 붙인다
     t0 = min(ts(x["ts"]) for x in lines) if lines else None
     slot = next((x.get("phone") for x in lines if x.get("phone") is not None), None)
-    win = [e for e in events if t0 and t0 <= e["at"] <= t0 + timedelta(seconds=NEAR_SEC)
-           and (slot is None or e.get("phone") in (slot, None))]     # IPC 점처럼 기준 슬롯(또는 모름)만
+    # IPC 점처럼 기준 슬롯(또는 모름)만. 기준 바로 앞(ABSORB_SEC) 유형 없는 실패도 넣는다 — 짚은 줄이 자기 요청 RIL 오류 뒤 AP 줄
+    # (onSetupResponse resultCode=RESULT_ERROR_…·DisconnectedState)이면 그 오류가 창 밖이라 몇 분 뒤 다른 요청을 고르게 된다(리뷰 P0)
+    win = [e for e in events if t0 and (t0 <= e["at"] or (not e["type"] and t0 - timedelta(seconds=ABSORB_SEC) <= e["at"]))
+           and e["at"] <= t0 + timedelta(seconds=NEAR_SEC) and (slot is None or e.get("phone") in (slot, None))]
     fails = _fails(win)
     if not fails:
         return "held", "symptom_not_found", "no_allowed_event_near"
     if not fails[0]["type"]:     # 기준 뒤 첫 실패가 DB에 없는 오류 — 몇 분 뒤 다른 요청의 허용 유형 사건을 고르지 않는다
         return "held", "symptom_not_found", "typeless_failure_near"
+    # ponytail: 허용 밖 첫·마지막 실패는 보류(설계대로) — 공개 캡처에 합성 기준을 둔 측정(11/20 리뷰)에서 근처 51/304·구간 68/323이
+    # 이 규칙으로 보류됐다(대부분 DATA-002 끊김 뒤 DATA-001 평가 거부, 비행기 모드로 DATA-002+NETWORK-001 동시). 기준 위치를 합성한
+    # 숫자라 사내 비율은 다를 수 있다 — 사내 S-5에서 잰다
     if fails[0]["type"] not in allowed:
         return "held", "symptom_not_found", "other_failure_first"
     return "events", fails[:1], "near"

@@ -480,10 +480,24 @@ def _f_then_m(work: Path) -> Path:
                                                 key=lambda x: maf.STAMP.match(x).group(1)))
 
 
+NA622 = "11-14 10:02:00.622  2101  2101 D DN-120-C: ConnectingState: onSetupResponse: resultCode=RESULT_ERROR_INVALID_ARG, response=null"
+NA623 = "11-14 10:02:00.623  2101  2101 D DN-120-C: DisconnectedState: Data network disconnected. mEverConnected=false"
+
+
+def _near_after(work: Path) -> Path:
+    """리뷰 P0(t5.sh): near_x_then_f에 X 요청 RIL 오류(10:02:00.620) **뒤** AP 줄 둘(onSetupResponse 오류·DisconnectedState)을 넣는다."""
+    lines = _near_x_then_f(work).read_text(encoding="utf-8").splitlines()
+    i = next(i for i, x in enumerate(lines) if "[0410]< SETUP_DATA_CALL error 2" in x)
+    return _write(work / "near_after2.log", lines[:i + 1] + [NA622, NA623] + lines[i + 1:])
+
+
 NEAR = "11-14 10:02:00.502  2101  2101 D DN-120-C: ConnectingState: setupData: accessNetwork=EUTRAN, isSatellite=false"
 NEAR0 = "11-14 10:02:00.000  2101  2101 D DNC-0   : onAddNetworkRequest"
 R1_PROBLEM_CASES = [    # 문제 파악 유형이 있을 때(근처·허용 유형) — 재현 C:/hw/rv1120/v4.sh·design-review/s3.sh·s4.sh
     ("near_x_then_f", _near_x_then_f, NEAR, ["DATA-003"], ("held", "symptom_not_found", "typeless_failure_near")),
+    ("na2_622", _near_after, NA622, ["DATA-003"], ("held", "symptom_not_found", "typeless_failure_near")),     # 오류 뒤 줄(P0)
+    ("na2_623", _near_after, NA623, ["DATA-003"], ("held", "symptom_not_found", "typeless_failure_near")),
+    ("na2_502", _near_after, NEAR, ["DATA-003"], ("held", "symptom_not_found", "typeless_failure_near")),
     ("f_then_m", _f_then_m, TOK, ["NETWORK-001"], ("held", "symptom_not_found", "other_failure_first")),
     ("tokpos_near", "tokpos.log", NEAR, ["DATA-003"], ("accepted", "anchored_top", "DATA-003-01")),
     ("tp_rerr_near", "tp-rerr.log", NEAR, ["DATA-003"], ("accepted", "anchored_top", "DATA-003-01")),
@@ -618,6 +632,18 @@ def test_adoption_picked_by_problem_types_is_never_confirmed():
         d = el.decide(events, [ref], problem=net)
         assert outcome(d) == ("accepted", "anchored_top", "N3")
         assert driver._decision(cands, {"location": location}, el.summary(d, events))["location"]["state"] == "found"
+
+
+def test_near_window_filters_slot_and_sees_own_ril_error_just_before():
+    """리뷰(11/20): 근처 창은 기준 슬롯(또는 모름)만(변이 M4), 기준 바로 앞 0.5초의 유형 없는 실패도 본다(P0 — 자기 요청 RIL 오류 뒤
+    AP 줄을 짚은 경우). 0.5초보다 앞 오류는 기준과 무관하다고 본다."""
+    other_slot = ev("DATA-003", 160, ["D9"], line=(0, 29), phone=1)
+    mine = ev("DATA-003", 200, ["D1"], line=(0, 30), phone=0)
+    assert outcome(el.decide([other_slot, mine], [point(99, 150)], problem=D3)) == ("accepted", "anchored_top", "D1")
+    held = ("held", "symptom_not_found", "typeless_failure_near")
+    assert outcome(el.decide([ev(None, 149.8, line=(0, 5), name="ril_error"), mine], [point(99, 150)], problem=D3)) == held
+    assert outcome(el.decide([ev(None, 149.4, line=(0, 5), name="ril_error"), mine], [point(99, 150)], problem=D3)) == \
+        ("accepted", "anchored_top", "D1")
 
 
 def test_problem_not_in_db_holds_and_no_reference_stays():
