@@ -131,23 +131,24 @@ def test_first_counted_failure_decides_cp_point_and_range():
         ("held", "symptom_not_found", "typeless_failure_in_range")
 
 
-def test_counted_ril_failures_are_data_requests_in_the_window():
-    """리뷰 P1·P2(11/20): data 요청의 RIL 실패만 센다(ril.yaml category — 매처가 `ril_category`를 싣는다, 없으면 data). 흡수는 창 안
+def test_counted_ril_failures_are_every_request_in_the_window():
+    """확인 리뷰(11/20): IPC 점·구간은 모든 category·오류 값의 RIL 실패를 센다(통화·SMS 요청 실패, REQUEST_NOT_SUPPORTED). 흡수는 창 안
     사건으로만 본다(슬롯 모르는 RIL 실패를 창 밖 다른 슬롯 사건이 흡수하지 않는다). IPC 점은 RSP 바로 앞 0.5초의 유형 없는 실패도
     본다(벤더가 RSP 줄을 자기 요청 RIL 오류 뒤에 찍는 모양)."""
     ipc = point(4, 199, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 222})
     other = ev("DATA-003", 200.5, ["D2"], line=(0, 30), phone=None)
     held = ("held", "symptom_not_found", "typeless_failure_within_link")
-    for cat, want in (("data", held), (None, held), ("network", ("accepted", "anchored_top", "D2")),
-                      ("sim", ("accepted", "anchored_top", "D2"))):
+    for cat in ("data", None, "call", "sms", "pdn"):
         own = ev(None, 199.1, line=(0, 5), name="ril_error", ril_category=cat)
-        assert outcome(el.decide([own, other], [ipc])) == want, cat
+        assert outcome(el.decide([own, other], [ipc])) == held, cat
+    sms = ev(None, 125, line=(0, 5), name="ril_error", ril_category="sms")     # 구간: FAIL 앞 마지막 실패가 SEND_SMS
+    assert outcome(el.decide([ev("CALL-001", 100, ["C1"], line=(0, 30)), sms], [rng("log_marker", 90, 130)])) ==         ("held", "symptom_not_found", "typeless_failure_in_range")
     slot_free = ev(None, 199.1, line=(0, 5), name="ril_error", phone=None)
     other_slot = ev("DATA-003", 199.3, ["D9"], line=(0, 29), phone=1)        # 창(슬롯 0) 밖 — 흡수하지 않는다
     assert outcome(el.decide([slot_free, other_slot, other], [ipc])) == held
     assert outcome(el.decide([ev(None, 198.8, line=(0, 5), name="ril_error"), other], [ipc])) == held      # RSP 0.2초 앞
     unsupported = ev(None, 199.1, line=(0, 5), name="ril_error", raw=[{"fields": {"error": "REQUEST_NOT_SUPPORTED"}}])
-    assert outcome(el.decide([unsupported, other], [ipc])) == ("accepted", "anchored_top", "D2")   # 지원 안 함은 안 센다
+    assert outcome(el.decide([unsupported, other], [ipc])) == held      # 지원 안 함도 센다(짚은 요청 자신일 수 있다)
     assert outcome(el.decide([ev(None, 198.4, line=(0, 5), name="ril_error"), other], [ipc])) == ("accepted", "anchored_top", "D2")
 
 

@@ -26,8 +26,8 @@
   문제 파악 유형이 있어야(5-1은 ineligible/range_without_symptom), 스텝 순서·START만은 채택 안 함(ineligible/range_end_unknown).
   FAIL 마커는 스텝을 감쌀 뿐 실패 사건 줄이 아니라 채택해도 실패 지점은 found(driver).
 - 여러 곳(`places` > 1) ambiguous/locations, 슬롯 둘 이상 ambiguous/slots, 출처끼리 다른 사건 ambiguous/sources.
-- 세는 실패(`_fails`): 유형 사건 + data RIL 요청 실패(`parser_rules.RESERVED_EVENTS` — ril_error·ril_timeout·ril_no_response, 그 요청의
-  ril.yaml category가 data인 것만 — 매처가 `ril_category`를 싣는다). 창은 기준 바로 앞 `ABSORB_SEC`의 유형 없는 실패까지(자기 요청
+- 세는 실패(`_fails`): 유형 사건 + RIL 요청 실패(`parser_rules.RESERVED_EVENTS` — ril_error·ril_timeout·ril_no_response, 모든
+  category·오류 값 — 보류 쪽이 안전하다). 창은 기준 바로 앞 `ABSORB_SEC`의 유형 없는 실패까지(자기 요청
   RIL 오류 뒤 줄을 짚은 경우). 벤더 IPC
   이벤트·추출기 파생 이벤트(Data disallowed 평가 줄 등)는 세지 않는다(`total`에는 남는다 — 기준 IPC 자신의 오류 줄이 늘 창 안에
   있다). 흡수: RIL 실패 뒤 `ABSORB_SEC` 안에 같은 슬롯(또는 모름) 유형 사건이 오면 그 RIL 실패는 그 사건의 RIL 쪽 줄로 보고 세지
@@ -50,7 +50,6 @@ DEFAULT_LINK_MS = 2000      # = platforms.base.DEFAULT_LINK_MS (CP 점 → 사�
 # 이어지고 사이 새 요청 0건(11/20 설계 리뷰). 사내 S-5에서 다시 잰다. RIL serial ↔ 사건 연결이 생기면 그것으로 바꾼다.
 # 남는 위험: 0.5초 안 다른 요청의 유형 사건도 흡수하고, 여러 RIL 실패가 사건 하나에 흡수될 수 있다(캡처에선 사이 새 요청 0건).
 ABSORB_SEC = 0.5            # RIL 요청 실패 → 같은 실패의 유형 사건(흡수) 창, 기준 바로 앞 자기 요청 RIL 오류를 볼 창
-RIL_CATEGORY = "data"       # 세는 RIL 요청 실패의 ril.yaml category
 RANGE_PRE_SEC = 120         # 로그 FAIL 마커에 START가 없을 때 구간 시작 = FAIL − 120초
 MERGE_SEC = 1.0             # 같은 유형·슬롯 사건이 이만큼 안이면 한 사건(유형의 다른 시그니처가 같은 실패를 따로 잡은 것, §8-4)
 EVENTS_MAX = 3              # analysis.json `decision.events[]` 상한(전체는 JOB/eligibility.json)
@@ -150,16 +149,12 @@ def _same_ril(e: dict, rils: list[dict]) -> bool:
 
 
 def _ril_fail(e: dict) -> bool:
-    """세는 RIL 요청 실패: 예약 이벤트이고 그 요청의 ril.yaml category가 data(매처가 `ril_category`를 싣는다 — 없으면 data로 본다).
-    ponytail: 이 도구 범위가 data connection이라 data 요청만 센다(사내 ril.yaml이 넓으면 SIGNAL_STRENGTH·SIM_OPEN_CHANNEL 같은
-    관계없는 오류로 과보류) — 사내 S-5에서 넓힐지 잰다."""
-    # REQUEST_NOT_SUPPORTED는 모뎀이 그 요청을 지원하지 않는다는 뜻이지 짚은 요청의 실패가 아니다
-    return (e.get("name") in RESERVED_EVENTS and e.get("ril_category", RIL_CATEGORY) in (RIL_CATEGORY, None)
-            and all((r.get("fields") or {}).get("error") != "REQUEST_NOT_SUPPORTED" for r in e.get("raw") or []))
+    """세는 RIL 요청 실패: 예약 이벤트(모든 category·오류 값 — 통화·SMS 이슈의 DIAL·SEND_SMS 실패, REQUEST_NOT_SUPPORTED도 센다)."""
+    return e.get("name") in RESERVED_EVENTS
 
 
 def _fails(events: list[dict]) -> list[dict]:
-    """세는 실패(시각 순): 유형 사건 + data RIL 요청 실패. 부른 쪽이 준 창 안 사건만 본다 — RIL 실패 **뒤** `ABSORB_SEC` 안 같은
+    """세는 실패(시각 순): 유형 사건 + RIL 요청 실패. 부른 쪽이 준 창 안 사건만 본다 — RIL 실패 **뒤** `ABSORB_SEC` 안 같은
     슬롯(또는 모름) 유형 사건이 창 안에 있으면 그 RIL 실패는 빼고(그 사건의 RIL 쪽 줄), 벤더 IPC·추출기 파생 이벤트는 세지 않는다."""
     f = sorted((e for e in events if e["type"] or _ril_fail(e)), key=lambda e: e["at"])   # 합친 사건은 시각이 늦어진다
     ats = [e["at"] for e in f]
