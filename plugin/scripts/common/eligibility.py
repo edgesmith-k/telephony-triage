@@ -36,8 +36,8 @@
   거짓이면(기본 참 — 문제 파악 단서만, 스크립트 단서는 보류(A474): 부른 쪽이 스크립트 단서면 거짓을 준다) 붙은 사건을 싣고
   ineligible/comment_unconfirmed로 보류한다.
 - 문제 파악이 "DB에 없는 증상"(`not_in_db`)이면 기준이 있어도 symptom_not_found/not_in_db(다른 사건의 원인으로 대신하지 않는다).
-- 세는 실패(`_fails`): 유형 사건 + data RIL 요청 실패(`parser_rules.RESERVED_EVENTS` — ril_error·ril_timeout·ril_no_response, 그 요청의
-  ril.yaml category가 data인 것만 — 매처가 `ril_category`를 싣는다). 창은 기준 바로 앞 `ABSORB_SEC`의 유형 없는 실패까지(자기 요청
+- 세는 실패(`_fails`): 유형 사건 + RIL 요청 실패(`parser_rules.RESERVED_EVENTS` — ril_error·ril_timeout·ril_no_response, 모든
+  category·오류 값). 근처만 허용 유형 접두어와 같은 ril.yaml category의 요청 실패를 센다(`_near_cats`). 창은 기준 바로 앞 `ABSORB_SEC`의 유형 없는 실패까지(자기 요청
   RIL 오류 뒤 줄을 짚은 경우). 벤더 IPC
   이벤트·추출기 파생 이벤트(Data disallowed 평가 줄 등)는 세지 않는다(`total`에는 남는다 — 기준 IPC 자신의 오류 줄이 늘 창 안에
   있다). 흡수: RIL 실패 뒤 `ABSORB_SEC` 안에 같은 슬롯(또는 모름) 유형 사건이 오면 그 RIL 실패는 그 사건의 RIL 쪽 줄로 보고 세지
@@ -61,7 +61,6 @@ NEAR_SEC = 300              # 근처 기준 → 허용 유형 첫 사건 창(= l
 # 이어지고 사이 새 요청 0건(11/20 설계 리뷰). 사내 S-5에서 다시 잰다. RIL serial ↔ 사건 연결이 생기면 그것으로 바꾼다.
 # 남는 위험: 0.5초 안 다른 요청의 유형 사건도 흡수하고, 여러 RIL 실패가 사건 하나에 흡수될 수 있다(캡처에선 사이 새 요청 0건).
 ABSORB_SEC = 0.5            # RIL 요청 실패 → 같은 실패의 유형 사건(흡수) 창, 기준 바로 앞 자기 요청 RIL 오류를 볼 창
-RIL_CATEGORY = "data"       # 세는 RIL 요청 실패의 ril.yaml category
 RANGE_PRE_SEC = 120         # 로그 FAIL 마커에 START가 없을 때 구간 시작 = FAIL − 120초
 MERGE_SEC = 1.0             # 같은 유형·슬롯 사건이 이만큼 안이면 한 사건(유형의 다른 시그니처가 같은 실패를 따로 잡은 것, §8-4)
 EVENTS_MAX = 3              # analysis.json `decision.events[]` 상한(전체는 JOB/eligibility.json)
@@ -164,18 +163,24 @@ def _same_ril(e: dict, rils: list[dict]) -> bool:
 
 
 def _ril_fail(e: dict) -> bool:
-    """세는 RIL 요청 실패: 예약 이벤트이고 그 요청의 ril.yaml category가 data(매처가 `ril_category`를 싣는다 — 없으면 data로 본다).
-    ponytail: 이 도구 범위가 data connection이라 data 요청만 센다(사내 ril.yaml이 넓으면 SIGNAL_STRENGTH·SIM_OPEN_CHANNEL 같은
-    관계없는 오류로 과보류) — 사내 S-5에서 넓힐지 잰다."""
-    # REQUEST_NOT_SUPPORTED는 모뎀이 그 요청을 지원하지 않는다는 뜻이지 짚은 요청의 실패가 아니다
-    return (e.get("name") in RESERVED_EVENTS and e.get("ril_category", RIL_CATEGORY) in (RIL_CATEGORY, None)
-            and all((r.get("fields") or {}).get("error") != "REQUEST_NOT_SUPPORTED" for r in e.get("raw") or []))
+    """세는 RIL 요청 실패: 예약 이벤트(모든 category·오류 값 — 통화·SMS 이슈의 DIAL·SEND_SMS 실패, REQUEST_NOT_SUPPORTED도 센다).
+    남는 위험: REQUEST_NOT_SUPPORTED도 세서 공개 캡처 근처 9/352가 과보류(SET_USER_DATA_ENABLED 오류가 기준 줄 바로 앞) — 보류 쪽이 안전."""
+    return e.get("name") in RESERVED_EVENTS
 
 
-def _fails(events: list[dict]) -> list[dict]:
-    """세는 실패(시각 순): 유형 사건 + data RIL 요청 실패. 부른 쪽이 준 창 안 사건만 본다 — RIL 실패 **뒤** `ABSORB_SEC` 안 같은
+def _near_cats(allowed: set, ril_categories: set | None) -> set | None:
+    """근처에서 세는 RIL 요청 실패의 category: 허용 유형 접두어를 소문자로(DATA-003 → data, CALL-001 → call). 그 값이 ril.yaml
+    category에 없거나 category 목록을 모르면 None(모든 category를 센다 — 사내 키가 달라도 조용히 0이 되지 않게).
+    ponytail: 접두어 ↔ category 대응은 시드 규칙(유형 ID 접두어 = ril.yaml category 이름) — 사내 S-5에서 확인한다."""
+    cats = {t.split("-")[0].lower() for t in allowed}
+    return cats if ril_categories and cats <= ril_categories else None
+
+
+def _fails(events: list[dict], cats: set | None = None) -> list[dict]:
+    """세는 실패(시각 순): 유형 사건 + RIL 요청 실패(`cats`가 있으면 그 category와 category 모름만). 부른 쪽이 준 창 안 사건만 본다 — RIL 실패 **뒤** `ABSORB_SEC` 안 같은
     슬롯(또는 모름) 유형 사건이 창 안에 있으면 그 RIL 실패는 빼고(그 사건의 RIL 쪽 줄), 벤더 IPC·추출기 파생 이벤트는 세지 않는다."""
-    f = sorted((e for e in events if e["type"] or _ril_fail(e)), key=lambda e: e["at"])   # 합친 사건은 시각이 늦어진다
+    f = sorted((e for e in events if e["type"] or (_ril_fail(e) and (cats is None or e.get("ril_category") in cats | {None}))),
+               key=lambda e: e["at"])   # 합친 사건은 시각이 늦어진다
     ats = [e["at"] for e in f]
 
     def absorbed(e) -> bool:
@@ -184,8 +189,10 @@ def _fails(events: list[dict]) -> list[dict]:
     return [e for e in f if e["type"] or not absorbed(e)]
 
 
-def _attach_line(ref: dict, events: list[dict], link_ms: int, allowed: set | None = None) -> tuple:
-    """기준 줄(한 곳) → ('events', [사건], why) | ('held', reason, why). `allowed` = 문제 파악 허용 유형(없으면 None)."""
+def _attach_line(ref: dict, events: list[dict], link_ms: int, allowed: set | None = None,
+                 ril_categories: set | None = None) -> tuple:
+    """기준 줄(한 곳) → ('events', [사건], why) | ('held', reason, why). `allowed` = 문제 파악 허용 유형(없으면 None),
+    `ril_categories` = ril.yaml category 목록(근처 거르기, 모르면 None)."""
     lines = ref.get("lines") or []
     ipc = [x for x in lines if x.get("ipc")]
     if ipc:     # CP 점: 같은 요청의 RSP(없으면 REQ) 뒤 link_ms 안 같은 슬롯(또는 모름) 실패 사건
@@ -232,7 +239,7 @@ def _attach_line(ref: dict, events: list[dict], link_ms: int, allowed: set | Non
     # (onSetupResponse resultCode=RESULT_ERROR_…·DisconnectedState)이면 그 오류가 창 밖이라 몇 분 뒤 다른 요청을 고르게 된다(리뷰 P0)
     win = [e for e in events if t0 and (t0 <= e["at"] or (not e["type"] and t0 - timedelta(seconds=ABSORB_SEC) <= e["at"]))
            and e["at"] <= t0 + timedelta(seconds=NEAR_SEC) and (slot is None or e.get("phone") in (slot, None))]
-    fails = _fails(win)
+    fails = _fails(win, _near_cats(allowed, ril_categories))     # 근처 창이 길어(300초) 다른 기능 요청 실패는 뺀다
     if not fails:
         return "held", "symptom_not_found", "no_allowed_event_near"
     if not fails[0]["type"]:     # 기준 뒤 첫 실패가 DB에 없는 오류 — 몇 분 뒤 다른 요청의 허용 유형 사건을 고르지 않는다
@@ -261,7 +268,7 @@ def _attach_range(ref: dict, events: list[dict], allowed: set | None = None) -> 
     return ("events", inside, "range") if inside else ("held", "symptom_not_found", "no_event_in_range")
 
 
-def _outcome(ref: dict, events: list[dict], link_ms: int, allowed: set | None) -> tuple:
+def _outcome(ref: dict, events: list[dict], link_ms: int, allowed: set | None, ril_categories: set | None) -> tuple:
     slots = {x.get("phone") for x in ref.get("lines") or []} - {None}
     if (ref.get("places") or 1) > 1:
         return "held", "ambiguous", "locations"
@@ -269,7 +276,7 @@ def _outcome(ref: dict, events: list[dict], link_ms: int, allowed: set | None) -
         return "held", "ambiguous", "slots"
     if ref["kind"] == "range":
         return _attach_range(ref, events, allowed)
-    return _attach_line(ref, events, ref.get("link_ms") or link_ms, allowed)
+    return _attach_line(ref, events, ref.get("link_ms") or link_ms, allowed, ril_categories)
 
 
 def _pick(outcomes: list[tuple]) -> dict | tuple:
@@ -284,9 +291,10 @@ def _pick(outcomes: list[tuple]) -> dict | tuple:
 
 
 def decide(events: list[dict], refs: list[dict], link_ms: int = DEFAULT_LINK_MS, problem: dict | None = None,
-           comment_adopt: bool = True, unconfirmed: int = 0) -> dict:
+           comment_adopt: bool = True, unconfirmed: int = 0, ril_categories: set | None = None) -> dict:
     """사건 목록 + 기준(0개 이상, 단서는 `source: comment`) + 문제 파악(`{types, not_in_db}` — types는 부른 쪽이 DB에 있는 것만
-    남긴다, 없으면 None) → `{state, reason, why, cause, events(붙은 사건)}`. 후보 없음(no_candidate)은 부른 쪽이 먼저 본다.
+    남긴다, 없으면 None) + `ril_categories`(ril.yaml category 목록 — 근처 거르기, 매처가 준다) → `{state, reason, why, cause,
+    events(붙은 사건)}`. 후보 없음(no_candidate)은 부른 쪽이 먼저 본다.
     단서만 있을 때는 단서가 **모두** 확인돼야 정한다: 단서 하나라도 보류(여러 곳·성공 응답·사건 없음·근처 유형 없음 등)면 그 사유로,
     로그에서 찾았는데 못 쓴 단서(`unconfirmed` — 로그에 없음·시각 규칙으로 버림, 글의 token 충돌)가 있으면 ambiguous/sources로
     보류한다(찾기 전에 버린 옛 회차·상한 넘침은 세지 않는다)."""
@@ -295,9 +303,9 @@ def decide(events: list[dict], refs: list[dict], link_ms: int = DEFAULT_LINK_MS,
     if problem and problem.get("not_in_db"):
         return _held("symptom_not_found", "not_in_db")
     allowed = set(problem["types"]) if problem and problem.get("types") else None
-    explicit = [_outcome(r, events, link_ms, allowed) for r in refs if r.get("source") != "comment"]
+    explicit = [_outcome(r, events, link_ms, allowed, ril_categories) for r in refs if r.get("source") != "comment"]
     clue_refs = [r for r in refs if r.get("source") == "comment"]
-    clues = [_outcome(r, events, link_ms, allowed) for r in clue_refs]
+    clues = [_outcome(r, events, link_ms, allowed, ril_categories) for r in clue_refs]
     if explicit:    # 명시 기준이 정한다 — 단서는 다른 사건을 가리킬 때만 모호로
         got = _pick(explicit)
         if isinstance(got, dict):

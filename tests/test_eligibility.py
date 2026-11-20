@@ -132,23 +132,24 @@ def test_first_counted_failure_decides_cp_point_and_range():
         ("held", "symptom_not_found", "typeless_failure_in_range")
 
 
-def test_counted_ril_failures_are_data_requests_in_the_window():
-    """리뷰 P1·P2(11/20): data 요청의 RIL 실패만 센다(ril.yaml category — 매처가 `ril_category`를 싣는다, 없으면 data). 흡수는 창 안
+def test_counted_ril_failures_are_every_request_in_the_window():
+    """확인 리뷰(11/20): IPC 점·구간은 모든 category·오류 값의 RIL 실패를 센다(통화·SMS 요청 실패, REQUEST_NOT_SUPPORTED). 흡수는 창 안
     사건으로만 본다(슬롯 모르는 RIL 실패를 창 밖 다른 슬롯 사건이 흡수하지 않는다). IPC 점은 RSP 바로 앞 0.5초의 유형 없는 실패도
     본다(벤더가 RSP 줄을 자기 요청 RIL 오류 뒤에 찍는 모양)."""
     ipc = point(4, 199, ipc={"dir": "rsp", "name": "VIPC_SETUP_DATA", "token": 222})
     other = ev("DATA-003", 200.5, ["D2"], line=(0, 30), phone=None)
     held = ("held", "symptom_not_found", "typeless_failure_within_link")
-    for cat, want in (("data", held), (None, held), ("network", ("accepted", "anchored_top", "D2")),
-                      ("sim", ("accepted", "anchored_top", "D2"))):
+    for cat in ("data", None, "call", "sms", "pdn"):
         own = ev(None, 199.1, line=(0, 5), name="ril_error", ril_category=cat)
-        assert outcome(el.decide([own, other], [ipc])) == want, cat
+        assert outcome(el.decide([own, other], [ipc])) == held, cat
+    sms = ev(None, 125, line=(0, 5), name="ril_error", ril_category="sms")     # 구간: FAIL 앞 마지막 실패가 SEND_SMS
+    assert outcome(el.decide([ev("CALL-001", 100, ["C1"], line=(0, 30)), sms], [rng("log_marker", 90, 130)])) ==         ("held", "symptom_not_found", "typeless_failure_in_range")
     slot_free = ev(None, 199.1, line=(0, 5), name="ril_error", phone=None)
     other_slot = ev("DATA-003", 199.3, ["D9"], line=(0, 29), phone=1)        # 창(슬롯 0) 밖 — 흡수하지 않는다
     assert outcome(el.decide([slot_free, other_slot, other], [ipc])) == held
     assert outcome(el.decide([ev(None, 198.8, line=(0, 5), name="ril_error"), other], [ipc])) == held      # RSP 0.2초 앞
     unsupported = ev(None, 199.1, line=(0, 5), name="ril_error", raw=[{"fields": {"error": "REQUEST_NOT_SUPPORTED"}}])
-    assert outcome(el.decide([unsupported, other], [ipc])) == ("accepted", "anchored_top", "D2")   # 지원 안 함은 안 센다
+    assert outcome(el.decide([unsupported, other], [ipc])) == held      # 지원 안 함도 센다(짚은 요청 자신일 수 있다)
     assert outcome(el.decide([ev(None, 198.4, line=(0, 5), name="ril_error"), other], [ipc])) == ("accepted", "anchored_top", "D2")
 
 
@@ -646,6 +647,43 @@ def test_near_window_filters_slot_and_sees_own_ril_error_just_before():
     assert outcome(el.decide([ev(None, 149.8, line=(0, 5), name="ril_error"), mine], [point(99, 150)], problem=D3)) == held
     assert outcome(el.decide([ev(None, 149.4, line=(0, 5), name="ril_error"), mine], [point(99, 150)], problem=D3)) == \
         ("accepted", "anchored_top", "D1")
+
+
+def test_near_counts_ril_failures_of_the_allowed_type_category():
+    """확인 리뷰(11/20): 근처(300초)만 허용 유형 접두어와 같은 ril.yaml category의 RIL 실패를 센다(DATA-003 → data). 그 값이
+    category 목록에 없거나 목록을 모르면 모든 category를 센다(사내 키가 달라도 조용히 0이 되지 않게). category 모름은 센다."""
+    cats = {"data", "call", "sms"}
+    mine = ev("DATA-003", 200, ["D1"], line=(0, 30))
+    held = ("held", "symptom_not_found", "typeless_failure_near")
+    rf = lambda cat: ev(None, 160, line=(0, 5), name="ril_error", ril_category=cat)  # noqa: E731
+    near = lambda evs, prob, rc=cats: outcome(el.decide(evs, [point(99, 150)], problem=prob, ril_categories=rc))  # noqa: E731
+    assert near([rf("call"), mine], D3) == ("accepted", "anchored_top", "D1")        # 통화 요청 실패는 데이터 근처에서 안 센다
+    assert near([rf("data"), mine], D3) == held
+    assert near([rf(None), mine], D3) == held                                        # category 모름
+    c1 = {"types": ["CALL-001"], "not_in_db": False}
+    assert near([rf("call"), ev("CALL-001", 200, ["C1"], line=(0, 30))], c1) == held   # 통화 이슈는 DIAL 실패를 센다
+    assert near([rf("pdn"), mine], D3, {"pdn", "call"}) == held                       # data 키가 없는 ril.yaml — 모두 센다
+    assert near([rf("call"), mine], D3, None) == held                                 # 목록 모름 — 모두 센다
+
+
+def _dial_err(work: Path) -> Path:
+    """tokpos에 기준(10:01:04.900 복구 줄) 뒤 DIAL 요청·오류(10:01:30, DB에 없음)를 넣는다 — APN 실패(10:02:00.6)보다 0.5초 넘게 앞."""
+    lines = (maf.OUT / "tokpos.log").read_text(encoding="utf-8").splitlines()
+    i = next(i for i, x in enumerate(lines) if x.startswith("11-14 10:02:00.000"))
+    return _write(work / "dial_err.log", lines[:i] + [DIAL_REQ, DIAL_ERR] + lines[i:])
+
+
+DIAL_REQ = "11-14 10:01:30.000  2101  2141 D RILJ    : [0420]> DIAL [PHONE0]"
+DIAL_ERR = "11-14 10:01:30.002  2101  2141 D RILJ    : [0420]< DIAL error 2 [PHONE0]"
+DSRM = "11-14 10:01:04.900  2101  2101 D DSRM-0  : getRecoveryAction: RECOVERY_ACTION_GET_DATA_CALL_LIST"
+
+
+@pytest.mark.parametrize(("types", "expect"), [(["DATA-003"], ("accepted", "anchored_top", "DATA-003-01")),
+                                               (["CALL-001"], ("held", "symptom_not_found", "typeless_failure_near"))])
+def test_near_real_path_dial_error_carries_call_category(seed_db, types, expect):
+    """변이 M19(실제 경로): 매처가 DIAL 오류에 시드 ril.yaml category `call`을 싣는다 — 데이터 근처는 그 실패를 세지 않아 APN 실패를
+    채택하고, 통화 근처는 센다(못 실으면 category 모름이라 데이터 근처도 보류)."""
+    _r1(seed_db, "dial_err", _dial_err, DSRM, expect, types)
 
 
 def test_problem_not_in_db_holds_and_no_reference_stays():

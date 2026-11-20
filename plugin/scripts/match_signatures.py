@@ -449,8 +449,10 @@ def match(events_doc: dict, db: issuedb.IssueDb, compiled: dict, *, regress: boo
             invalid = bundle.get("invalid")
             unconfirmed = (len(bundle.get("dropped") or []) + (1 if bundle.get("conflict") is True else 0)
                            + (invalid if type(invalid) is int and invalid > 0 else 0))
+            pr = _collection_rules(db)      # ril.yaml category 목록(근처 창 거르기)
+            cats = {r["category"] for r in (*pr.requests.values(), *pr.unsolicited.values())} if pr else None
             elig = {**eligibility.summary(eligibility.decide(occ, refs, problem=problem, comment_adopt=adopt,
-                                                             unconfirmed=unconfirmed), occ),
+                                                             unconfirmed=unconfirmed, ril_categories=cats), occ),
                     "reference": reference}
     finally:
         if own:
@@ -626,7 +628,7 @@ def occurrences(events_doc: dict, evaluator: Evaluator, db, compiled: dict, rank
                 item["gap_s"] = item["causes"][0][2] if item["causes"] else None
                 out.append(item)
         typed_lines = {k for e in out for k in e["lines"]}
-        rules = _collection_rules(db)       # RIL 실패의 요청 category(ril.yaml) — 자격 검사는 data 요청 실패만 센다
+        rules = _collection_rules(db)       # RIL 실패의 요청 category(ril.yaml) — 자격 검사 근처 창이 허용 유형 category로 거른다
         for raw in evaluator.events:      # 유형 없는 실패 사건: 파생 오류 이벤트(유형 사건 근거 줄은 뺀다)
             name, key = raw.get("event"), eligibility.ref_key(raw.get("line_ref"))
             if name and eligibility.ERROR_EVENT_RE.search(str(name)) and key not in typed_lines:
