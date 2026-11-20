@@ -1,34 +1,34 @@
 {
  "by_condition": {
   "no_time": {
-   "total": 24,
+   "total": 29,
    "controls": 0,
    "in_sample": 0,
    "include_in_sample": false,
-   "evaluated": 24,
+   "evaluated": 29,
    "errors": 0,
    "unjudged_errors": 0,
    "observation_errors": 0,
    "error_rate": 0.0,
    "type_only": 0,
-   "positive": 12,
-   "negative": 12,
-   "positive_total": 12,
-   "negative_total": 12,
-   "top1_accuracy": 0.5833,
+   "positive": 15,
+   "negative": 14,
+   "positive_total": 15,
+   "negative_total": 14,
+   "top1_accuracy": 0.4667,
    "top3_inclusion": 1.0,
-   "false_positive_rate": 0.9167,
+   "false_positive_rate": 0.9286,
    "accepted_correct": 0,
    "accepted_wrong": 0,
-   "held": 24,
+   "held": 29,
    "held_reasons": {
     "no_candidate": 1,
-    "no_reference": 23
+    "no_reference": 28
    },
    "answer_rate": 0.0,
    "location_confirmed": 0,
    "location_found": 0,
-   "correct_hold": 12,
+   "correct_hold": 14,
    "held_top_right": 7,
    "anchor_runs": 0,
    "anchor_correct": 0,
@@ -37,35 +37,35 @@
    "first_hold_rate": 1.0
   },
   "time": {
-   "total": 22,
+   "total": 27,
    "controls": 0,
    "in_sample": 0,
    "include_in_sample": false,
-   "evaluated": 22,
+   "evaluated": 27,
    "errors": 0,
    "unjudged_errors": 0,
    "observation_errors": 0,
    "error_rate": 0.0,
    "type_only": 0,
-   "positive": 11,
-   "negative": 11,
-   "positive_total": 11,
-   "negative_total": 11,
+   "positive": 14,
+   "negative": 13,
+   "positive_total": 14,
+   "negative_total": 13,
    "top1_accuracy": 1.0,
    "top3_inclusion": 1.0,
-   "false_positive_rate": 0.9091,
+   "false_positive_rate": 0.9231,
    "accepted_correct": 0,
    "accepted_wrong": 0,
-   "held": 22,
+   "held": 27,
    "held_reasons": {
     "no_candidate": 1,
-    "no_reference": 21
+    "no_reference": 26
    },
    "answer_rate": 0.0,
    "location_confirmed": 0,
    "location_found": 0,
-   "correct_hold": 11,
-   "held_top_right": 11,
+   "correct_hold": 13,
+   "held_top_right": 14,
    "anchor_runs": 0,
    "anchor_correct": 0,
    "anchor_missed": 0,
@@ -73,38 +73,38 @@
    "first_hold_rate": null
   },
   "look_at": {
-   "total": 20,
+   "total": 25,
    "controls": 0,
    "in_sample": 0,
    "include_in_sample": false,
-   "evaluated": 20,
+   "evaluated": 25,
    "errors": 0,
    "unjudged_errors": 0,
    "observation_errors": 0,
    "error_rate": 0.0,
    "type_only": 0,
-   "positive": 10,
-   "negative": 10,
-   "positive_total": 10,
-   "negative_total": 10,
+   "positive": 13,
+   "negative": 12,
+   "positive_total": 13,
+   "negative_total": 12,
    "top1_accuracy": 1.0,
    "top3_inclusion": 1.0,
-   "false_positive_rate": 0.8,
-   "accepted_correct": 9,
+   "false_positive_rate": 0.8333,
+   "accepted_correct": 12,
    "accepted_wrong": 0,
-   "held": 11,
+   "held": 13,
    "held_reasons": {
     "ineligible": 1,
     "no_candidate": 2,
-    "symptom_not_found": 8
+    "symptom_not_found": 10
    },
-   "answer_rate": 0.45,
-   "location_confirmed": 10,
-   "location_found": 9,
-   "correct_hold": 10,
+   "answer_rate": 0.48,
+   "location_confirmed": 12,
+   "location_found": 12,
+   "correct_hold": 12,
    "held_top_right": 1,
-   "anchor_runs": 20,
-   "anchor_correct": 17,
+   "anchor_runs": 25,
+   "anchor_correct": 19,
    "anchor_missed": 0,
    "first_total": 0,
    "first_hold_rate": null
@@ -2172,6 +2172,244 @@
    "adopted": "DATA-003-01",
    "verdict": "상위3",
    "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "CPX-1",
+   "condition": "no_time",
+   "expect": "unresolved",
+   "top": "DATA-003-02",
+   "top3": [
+    "DATA-003-02",
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "CPX-1",
+   "condition": "time",
+   "expect": "unresolved",
+   "top": "DATA-003-02",
+   "top3": [
+    "DATA-003-02",
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "CPX-1",
+   "condition": "look_at",
+   "expect": "unresolved",
+   "top": "DATA-003-02",
+   "top3": [
+    "DATA-003-02"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
+  },
+  {
+   "key": "CPXD-1",
+   "condition": "no_time",
+   "expect": "unresolved",
+   "top": "DATA-003-02",
+   "top3": [
+    "DATA-003-02",
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "CPXD-1",
+   "condition": "time",
+   "expect": "unresolved",
+   "top": "DATA-003-02",
+   "top3": [
+    "DATA-003-02",
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "CPXD-1",
+   "condition": "look_at",
+   "expect": "unresolved",
+   "top": "DATA-003-02",
+   "top3": [
+    "DATA-003-02"
+   ],
+   "adopted": null,
+   "verdict": "오탐",
+   "anchor_ok": true,
+   "error": null,
+   "held_why": "typeless_failure_within_link",
+   "held_cause": null
+  },
+  {
+   "key": "TPRERR-1",
+   "condition": "no_time",
+   "expect": "DATA-003-01",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03",
+    "DATA-003-01"
+   ],
+   "adopted": null,
+   "verdict": "상위3",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TPRERR-1",
+   "condition": "time",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01",
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TPRERR-1",
+   "condition": "look_at",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01",
+    "NETWORK-001-03"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": false,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TPEVAL-1",
+   "condition": "no_time",
+   "expect": "DATA-003-01",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03",
+    "DATA-003-01"
+   ],
+   "adopted": null,
+   "verdict": "상위3",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TPEVAL-1",
+   "condition": "time",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01",
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TPEVAL-1",
+   "condition": "look_at",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01",
+    "NETWORK-001-03"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": false,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TPVRF-1",
+   "condition": "no_time",
+   "expect": "DATA-003-01",
+   "top": "NETWORK-001-03",
+   "top3": [
+    "NETWORK-001-03",
+    "DATA-003-01"
+   ],
+   "adopted": null,
+   "verdict": "상위3",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TPVRF-1",
+   "condition": "time",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01",
+    "NETWORK-001-03"
+   ],
+   "adopted": null,
+   "verdict": "1위",
+   "anchor_ok": null,
+   "error": null,
+   "held_why": null,
+   "held_cause": null
+  },
+  {
+   "key": "TPVRF-1",
+   "condition": "look_at",
+   "expect": "DATA-003-01",
+   "top": "DATA-003-01",
+   "top3": [
+    "DATA-003-01",
+    "NETWORK-001-03"
+   ],
+   "adopted": "DATA-003-01",
+   "verdict": "1위",
+   "anchor_ok": false,
    "error": null,
    "held_why": null,
    "held_cause": null

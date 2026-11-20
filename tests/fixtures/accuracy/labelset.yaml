@@ -261,3 +261,48 @@ items:
   occurred_at: '2026-11-14T10:02:00+09:00'
   issue_file: issues/CLUEPOS-1.yaml
   problem: problems/CLUEPOS-1.json
+- key: CPX-1
+  logs:
+  - cp-typeless.log
+  expect: unresolved
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.594   900   910 D RIL     : [RX] VIPC_SETUP_DATA, RSP, token=0x0de, len=8, Error(VIPC_E_DEMO_FAILURE)'
+  fail_at: '2026-11-14T10:02:00.594+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: VIPC_SETUP_DATA (token=0x0de)
+- key: CPXD-1
+  logs:
+  - cp-dualsim.log
+  expect: unresolved
+  summary: SIM2 데이터 연결 실패
+  fail_line: '11-14 10:02:00.594   900   910 D RIL     : [RX] VIPC_SETUP_DATA, RSP, token=0x0de, len=8, Error(VIPC_E_DEMO_FAILURE)'
+  fail_at: '2026-11-14T10:02:00.594+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: VIPC_SETUP_DATA (token=0x0de)
+- key: TPRERR-1
+  logs:
+  - tp-rerr.log
+  expect: DATA-003-01
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.624  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.'
+  fail_at: '2026-11-14T10:02:00.624+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: VIPC_SETUP_DATA (token=0x0e1)
+- key: TPEVAL-1
+  logs:
+  - tp-eval.log
+  expect: DATA-003-01
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.624  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.'
+  fail_at: '2026-11-14T10:02:00.624+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: VIPC_SETUP_DATA (token=0x0e1)
+- key: TPVRF-1
+  logs:
+  - tp-vrf.log
+  expect: DATA-003-01
+  summary: 데이터 연결 실패
+  fail_line: '11-14 10:02:00.624  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.'
+  fail_at: '2026-11-14T10:02:00.624+09:00'
+  occurred_at: '2026-11-14T10:02:00+09:00'
+  look_at: VIPC_SETUP_DATA (token=0x0e1)
