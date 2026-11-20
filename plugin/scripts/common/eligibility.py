@@ -164,7 +164,9 @@ def _ril_fail(e: dict) -> bool:
     """세는 RIL 요청 실패: 예약 이벤트이고 그 요청의 ril.yaml category가 data(매처가 `ril_category`를 싣는다 — 없으면 data로 본다).
     ponytail: 이 도구 범위가 data connection이라 data 요청만 센다(사내 ril.yaml이 넓으면 SIGNAL_STRENGTH·SIM_OPEN_CHANNEL 같은
     관계없는 오류로 과보류) — 사내 S-5에서 넓힐지 잰다."""
-    return e.get("name") in RESERVED_EVENTS and e.get("ril_category", RIL_CATEGORY) in (RIL_CATEGORY, None)
+    # REQUEST_NOT_SUPPORTED는 모뎀이 그 요청을 지원하지 않는다는 뜻이지 짚은 요청의 실패가 아니다
+    return (e.get("name") in RESERVED_EVENTS and e.get("ril_category", RIL_CATEGORY) in (RIL_CATEGORY, None)
+            and all((r.get("fields") or {}).get("error") != "REQUEST_NOT_SUPPORTED" for r in e.get("raw") or []))
 
 
 def _fails(events: list[dict]) -> list[dict]:
