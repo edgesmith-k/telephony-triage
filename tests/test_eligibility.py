@@ -146,6 +146,8 @@ def test_counted_ril_failures_are_data_requests_in_the_window():
     other_slot = ev("DATA-003", 199.3, ["D9"], line=(0, 29), phone=1)        # 창(슬롯 0) 밖 — 흡수하지 않는다
     assert outcome(el.decide([slot_free, other_slot, other], [ipc])) == held
     assert outcome(el.decide([ev(None, 198.8, line=(0, 5), name="ril_error"), other], [ipc])) == held      # RSP 0.2초 앞
+    unsupported = ev(None, 199.1, line=(0, 5), name="ril_error", raw=[{"fields": {"error": "REQUEST_NOT_SUPPORTED"}}])
+    assert outcome(el.decide([unsupported, other], [ipc])) == ("accepted", "anchored_top", "D2")   # 지원 안 함은 안 센다
     assert outcome(el.decide([ev(None, 198.4, line=(0, 5), name="ril_error"), other], [ipc])) == ("accepted", "anchored_top", "D2")
 
 
