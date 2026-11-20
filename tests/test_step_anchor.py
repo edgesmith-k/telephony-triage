@@ -651,3 +651,31 @@ def test_triage_reports_focus_types_in_step_anchor_and_report():
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def test_sim1121_tc_html_fail_time_reaches_clock_and_range_checks():
+    """sim1121 P0(ROOTCAUSE 2·5): 장비 결과 HTML(요약 표 `Verdict | FAIL`이 스텝 표 앞)의 FAIL 스텝 시각을 읽어 시계 차 검사·로그 범위
+    검사까지 간다 — 전에는 표를 못 읽고 대체 경로가 요약 줄을 잡아 아무 경고 없이 앵커를 버렸다."""
+    d = tmp("tt-sim-tc-")
+    log = _markerless(d)
+    tc = REPO / "tests" / "fixtures" / "tc-html" / "sim-oneline-fail.html"
+    done, _ = _offline("sim-tc-off", "--steps-file", tc, "--clock-offset", "0", logs=(log,))
+    assert any(w.startswith("steps-file의 실패 시각(") and "로그 범위 밖" in w for w in done["warnings"]), done["warnings"]
+    done, _ = _offline("sim-tc-none", "--steps-file", tc, logs=(log,))
+    assert any(w.startswith("장비 시각 미사용") for w in done["warnings"]), done["warnings"]
+
+
+def test_steps_file_pattern_fallback_skips_summary_table_and_warns_when_no_time():
+    """표로 FAIL 스텝을 못 읽을 때의 대체 경로(failed_step_patterns)는 표 머리 뒤에서만 찾는다 — 요약 표 `Verdict | FAIL`(시각 없음)을
+    먼저 잡지 않는다. 실패 스텝 줄에 시각이 없으면 조용히 끝내지 않고 "TC 실패 스텝에 시각 없음" 경고."""
+    from triagelib import anchor
+    d = tmp("tt-steps-fallback-")
+    log = _markerless(d)
+    steps = d / "steps.txt"       # 번호 없는 FAIL 줄은 번호 열이 있는 표에서 스텝이 아니다 → 패턴 경로
+    steps.write_text("Verdict | FAIL\nNo | Step | Result\n4 | 망 등록 | PASS\n데이터 켜기 | FAIL | 2026-09-20 14:33:30\n",
+                     encoding="utf-8")
+    done, _ = _offline("fallback", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+    assert done["step_anchor"]["source"] == "steps_file" and done["step_anchor"]["span"][1] == "2026-09-20T05:33:30.000Z"
+    steps.write_text("No | Step | Result\n4 | 망 등록 | PASS\n5 | 데이터 켜기 | FAIL\n", encoding="utf-8")
+    done, _ = _offline("no-time", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+    assert anchor.NO_STEP_TIME in done["warnings"] and done["step_anchor"].get("source") != "steps_file"

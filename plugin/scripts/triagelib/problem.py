@@ -289,7 +289,7 @@ def build_input(raw: dict, cfg: dict, db: Path, key: str, failed_step=None, step
         md.append("코멘트 없음")
     md += ["", "## TC", *steps]
     for w in step_warns + [w for w in fs.get("warnings") or [] if w not in step_warns]:
-        md.append(f"- 경고: {w}")
+        md.append(f"- 경고: {masker(w)}")      # TC 경고에는 읽은 표 머리(TC 원문)가 실린다
     if around:
         md += ["", f"## TC의 Fail 줄 (가린 원문, 앞뒤 {FAIL_AROUND}줄 — 판정 뒤 사유는 여기서 본다)", *around]
     if fs.get("test_steps"):

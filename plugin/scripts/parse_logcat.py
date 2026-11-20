@@ -1139,11 +1139,17 @@ def _find_one(look: dict, *, records: list[dict], lines: list[dict], texts: list
     by_line = {r["i"]: r for r in records}
     places = lookat.group_places([_hit_item(i, lines[i], by_line.get(i), spec.success) for i in found],
                                  prof.ril_vendor.link_ms if prof.ril_vendor else lookat.PAIR_MS)
-    stamp = logtime.normalize_ts(look.get("stamp"), tz, year) if look.get("stamp") else None     # 없는 날짜·시각이면 None → none
-    same = [p for p in places if stamp is not None and any(logtime.parse_ts(x["ts"]) == stamp for x in p)]
+    raw_stamp = look.get("stamp")
+    if raw_stamp and lookat.CLOCK_ONLY.fullmatch(raw_stamp):     # 날짜 없는 시각: 로그 시간대의 현지 시각으로 비교(적은 자리수까지)
+        zone = logtime.get_tz(tz)
+        same = [p for p in places if any(lookat.same_clock(raw_stamp, logtime.parse_ts(x["ts"]).astimezone(zone)) for x in p)]
+    else:
+        stamp = logtime.normalize_ts(raw_stamp, tz, year) if raw_stamp else None     # 없는 날짜·시각이면 None → none
+        same = [p for p in places if stamp is not None and any(logtime.parse_ts(x["ts"]) == stamp for x in p)]
     if len(same) == 1:     # 붙여 넣은 줄의 시각과 같은 곳이 하나 → 그곳(같은 단말 로그 시계, §8-5)
         places = same
-    pool = [x["i"] for x in places[0]] if len(places) == 1 else found
+    # 같은 시각의 곳이 여럿이면 그 안에서만 고른다(곳 수 `places`는 그대로 — 모호함은 남긴다)
+    pool = [x["i"] for x in places[0]] if len(places) == 1 else sorted(x["i"] for p in same for x in p) if same else found
     times = [logtime.parse_ts(lines[n]["ts"]) for n in pool]
     ref = look.get("ref")
     try:

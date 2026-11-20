@@ -27,6 +27,7 @@ FAILED_STEP_MAX = 200
 TEST_STEPS_MAX = 1000
 MAX_LINES = 500            # 줄 단위 검색 상한 (정규식 비용 제한)
 MAX_LINE_CHARS = 500
+SPLIT_LINE_CHARS = 4000    # 표 칸 나누기의 줄 상한(정규식 검색이 아니라 길게 둔다 — 긴 IE 칸 뒤의 판정 칸이 잘리지 않게)
 MAX_FILE_BYTES = 1024 * 1024
 SOURCES = ("cli", "field", "description", "test_steps", "steps_file")
 HTML_MAX_BYTES = 5 * 1024 * 1024    # html·zip 멤버 한 개의 상한
@@ -34,9 +35,13 @@ ZIP_MAX_BYTES = 20 * 1024 * 1024    # zip 파일 크기·읽는 총량 상한
 ZIP_MAX_MEMBERS = 2000
 MAX_STEPS = 500
 MAX_SCAN_LINES = 5000
-DEFAULT_STEPS_STATUS = {"pass": ["pass", "passed", "ok", "성공", "통과"], "fail": ["fail", "failed", "ng", "실패"]}
+# INCONC(판정 불가)도 시험이 멈춘 자리라 실패 스텝으로 본다(3GPP 적합성 시험 장비의 세 판정 PASS·FAIL·INCONC)
+DEFAULT_STEPS_STATUS = {"pass": ["pass", "passed", "ok", "성공", "통과"],
+                        "fail": ["fail", "failed", "ng", "실패", "inconc", "inconclusive"]}
+# `step`은 번호 열과 이름 열 둘 다의 후보다: 번호 열이 비어 있으면 번호(`Step | Time | … | Message / Action`), 이미 있으면
+# 이름(`No | Step | Result`). 이름 열이 따로 없으면 이름 열로 본다(`_find_header`)
 DEFAULT_STEPS_COLUMNS = {
-    "number": ["no", "#", "step no", "번호"],
+    "number": ["no", "#", "step no", "번호", "step"],
     "name": ["step", "action", "name", "description", "절차", "내용", "항목"],
     "status": ["result", "status", "verdict", "결과", "판정"],
     "start": ["start", "start time", "시작"],
@@ -147,7 +152,8 @@ def _lines_from_bytes(data: bytes, suffix: str) -> tuple[str | None, str | None]
         if suffix in (".csv", ".tsv"):
             delim = "\t" if suffix == ".tsv" else ","
             rows = csv.reader(io.StringIO(text, newline=""), delimiter=delim)
-            return "\n".join(" | ".join(c.strip() for c in row if c.strip()) for row in rows), None
+            # 빈 칸도 자리로 남긴다(표 머리와 열 위치를 맞추게, HTML과 같다)
+            return "\n".join(" | ".join(c.strip() for c in row) for row in rows if any(c.strip() for c in row)), None
         return text, None
     except UnicodeDecodeError:
         return None, "인코딩을 알 수 없음"
@@ -187,14 +193,13 @@ class _HtmlLines(HTMLParser):
 
     def _end_cell(self) -> None:
         if self._cell is not None and self._row is not None:
-            cell = " ".join("".join(self._cell).split())
-            if cell:
-                self._row.append(cell)
+            # 빈 칸도 자리로 남긴다 — 버리면 뒤 칸이 앞으로 당겨져 표 머리와 열 위치가 어긋난다(sim1121 TC 결과 HTML)
+            self._row.append(" ".join("".join(self._cell).split()))
         self._cell = None
 
     def _end_row(self) -> None:
         self._end_cell()
-        if self._row:
+        if self._row and any(self._row):
             self.lines.append(" | ".join(self._row))
         self._row = None
 
@@ -395,29 +400,49 @@ def _status_of(cell: str, pass_w: set[str], fail_w: set[str], reason: bool = Fal
 
 
 def _split_cells(text) -> list[list[str]]:
-    return [[c.strip() for c in _CELL_SPLIT.split(line[:MAX_LINE_CHARS]) if c.strip()]
+    """줄마다 칸 목록. 빈 칸(`a |  | b`)은 자리로 남긴다 — 표 머리와 칸 수를 맞출 때만 쓰고, 맞지 않는 줄은 `_step_row`가 뺀다."""
+    return [[c.strip() for c in _CELL_SPLIT.split(line[:SPLIT_LINE_CHARS].strip())]
             for line in str(text or "").splitlines()[:MAX_SCAN_LINES]]
 
 
+HEAD_CELL_MAX = 30      # 낱말 포함으로 열 이름을 볼 칸의 최대 길이(표 머리 칸은 짧다 — 데이터 칸이 머리로 잡히지 않게)
+
+
+def _col_kind(cell: str, cols: dict, found: dict) -> str | None:
+    """칸 하나의 열 종류. 칸 전체가 열 이름이면 그것, 아니면 열 이름이 낱말로 들어 있는 짧은 칸(`Message / Action`·
+    `Test Result`). 숫자가 든 칸(`Step 3`)은 낱말 포함으로 보지 않는다(데이터 줄이 표 머리로 잡히지 않게)."""
+    c = " ".join(cell.split()).casefold()
+    free = [k for k in cols if k not in found]
+    hit = next((k for k in free if c in cols[k]), None)
+    if hit is None and c and len(c) <= HEAD_CELL_MAX and not any(ch.isdigit() for ch in c):
+        hit = next((k for k in free if any(re.search(r"(?<!\w)" + re.escape(w) + r"(?!\w)", c) for w in cols[k])), None)
+    return hit
+
+
 def _find_header(split, cols) -> tuple[dict | None, int, int]:
-    """표 머리(상태 열을 포함해 열 이름이 2개 이상 맞는 첫 줄) → `(열 위치, 칸 수, 머리 다음 줄 위치)`. 없으면 `(None, 0, 0)`."""
+    """표 머리(상태 열을 포함해 열 이름이 2개 이상 맞는 첫 줄) → `(열 위치, 칸 수, 머리 다음 줄 위치)`. 없으면 `(None, 0, 0)`.
+    번호 열로 본 칸이 이름 열 이름이기도 하고(`Step`) 이름 열이 따로 없으면 그 칸을 이름 열로 본다."""
     for pos, cells in enumerate(split):
         found: dict[str, int] = {}
         for idx, cell in enumerate(cells):
-            for kind, words in cols.items():
-                if kind not in found and cell.casefold() in words:
-                    found[kind] = idx
-                    break
+            kind = _col_kind(cell, cols, found)
+            if kind:
+                found[kind] = idx
         if len(found) >= 2 and "status" in found:
+            if "number" in found and "name" not in found and _col_kind(cells[found["number"]], {"name": cols["name"]}, {}):
+                found["name"] = found.pop("number")
             return found, len(cells), pos + 1
     return None, 0, 0
 
 
+def _cols(cfg) -> dict:
+    conf = cfg if isinstance(cfg, dict) else {}
+    return {k: _words(conf.get("steps_columns"), DEFAULT_STEPS_COLUMNS, k) for k in DEFAULT_STEPS_COLUMNS}
+
+
 def _after_header(text, cfg=None) -> str:
     """표 머리가 있으면 그 다음 줄부터의 텍스트(요약 표의 `Overall result | FAIL` 같은 줄을 패턴이 먼저 잡지 않도록), 없으면 그대로."""
-    conf = cfg if isinstance(cfg, dict) else {}
-    cols = {k: _words(conf.get("steps_columns"), DEFAULT_STEPS_COLUMNS, k) for k in DEFAULT_STEPS_COLUMNS}
-    header, _, start = _find_header(_split_cells(text), cols)
+    header, _, start = _find_header(_split_cells(text), _cols(cfg))
     if header is None:
         return str(text or "")
     return "\n".join(str(text).splitlines()[start:])
@@ -437,12 +462,11 @@ def parse_steps(text, cfg=None) -> list[dict]:
     conf = cfg if isinstance(cfg, dict) else {}
     pass_w = _words(conf.get("steps_status"), DEFAULT_STEPS_STATUS, "pass")
     fail_w = _words(conf.get("steps_status"), DEFAULT_STEPS_STATUS, "fail")
-    cols = {k: _words(conf.get("steps_columns"), DEFAULT_STEPS_COLUMNS, k) for k in DEFAULT_STEPS_COLUMNS}
     split = _split_cells(text)
-    header, header_n, start = _find_header(split, cols)      # 표 머리: 이 줄 앞(요약 표 등)은 스텝으로 보지 않는다
+    header, header_n, start = _find_header(split, _cols(conf))      # 표 머리: 이 줄 앞(요약 표 등)은 스텝으로 보지 않는다
     rows: list[dict] = []
     for cells in split[start:]:
-        if not cells:
+        if not any(cells):
             continue
         row = _step_row(cells, header, header_n, pass_w, fail_w, stepanchor)
         if row is None:
@@ -460,6 +484,10 @@ def parse_steps(text, cfg=None) -> list[dict]:
 
 def _step_row(cells, header, header_n, pass_w, fail_w, stepanchor) -> dict | None:
     aligned = bool(header) and len(cells) == header_n
+    if not aligned:         # 칸 수가 머리와 다르면 열 위치를 쓰지 않는다 — 빈 칸은 자리 노릇을 못 하니 뺀다
+        cells = [c for c in cells if c]
+        if not cells:
+            return None
     status = None
     st_idx = None
     if aligned and "status" in header:
@@ -495,7 +523,7 @@ def _step_row(cells, header, header_n, pass_w, fail_w, stepanchor) -> dict | Non
             return None
         body[-1] = " ".join(tokens[:cut]).rstrip(_STATUS_STRIP + "|")
         st_idx = None
-    if header and "number" in header and stepanchor.step_number(cells[0]) is None:
+    if header and "number" in header and stepanchor.step_number(cells[header["number"] if aligned else 0]) is None:
         return None         # 요약 표 등: 번호 열이 있는 표에서는 번호가 있는 줄만 스텝
     time_cells = []
     if aligned and ("start" in header or "end" in header):
@@ -563,9 +591,21 @@ def read_steps(path, cfg=None) -> tuple[list[dict], int | None, list[str], str |
         if extra:
             warnings.append(f"steps-file에 FAIL 스텝이 {extra + 1}개 있다 — 시험은 첫 FAIL에서 멈추므로 첫 번째만 썼다")
         rows = rows[: failed + 1]
-    elif rows:
-        warnings.append("steps-file에서 FAIL 스텝을 찾지 못했다")
+    else:       # 읽었는데 FAIL이 없으면 늘 알린다(PASS 줄이 하나도 없어도) — 조용히 실패 스텝 없음이 되지 않게
+        warnings.append(not_found_warning(text, rows, cfg))
     return rows, failed, warnings, member
+
+
+NOT_FOUND = "steps-file에서 FAIL 스텝을 찾지 못했다"     # 포털이 이 머리로 알아본다(screener `steps_missing`) — 바꾸면 포털도
+
+
+def not_found_warning(text, rows: list[dict], cfg=None) -> str:
+    """FAIL 스텝을 못 찾았을 때의 경고: 읽은 표 머리(열 이름만, ≤ 80자)와 판정을 읽은 스텝 수 — 양식이 다른지 사람이 볼 수 있게."""
+    split = _split_cells(text)
+    header, _, start = _find_header(split, _cols(cfg))
+    head = (f"읽은 표 머리: {normalize(' | '.join(c for c in split[start - 1] if c), 80)}" if header
+            else "표 머리(번호·이름·판정 열)를 찾지 못함")
+    return f"{NOT_FOUND} — {head}, 판정을 읽은 스텝 {len(rows)}줄"
 
 
 def read_steps_file(path, patterns: Iterable[str] | None, cfg=None) -> tuple[str | None, str | None]:

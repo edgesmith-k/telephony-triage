@@ -416,3 +416,61 @@ def test_failure_detail_line_with_same_step_number_is_not_a_second_step():
     assert [(r["number"], r["status"]) for r in rerun] == [(1, "pass"), (2, "pass"), (1, "pass"), (2, "fail")]
     twice = failedstep.parse_steps(head + "1 | on | PASS\n2 | attach | FAIL\n1 | on | PASS\n2 | attach | FAIL\n")
     assert [(r["number"], r["status"]) for r in twice] == [(1, "pass"), (2, "fail"), (1, "pass"), (2, "fail")]
+
+
+# -- sim1121 TC 결과 HTML(합성 장비 보고서 모양) -------------------------------------------------------
+
+TC_HTML = REPO / "tests" / "fixtures" / "tc-html"
+
+
+def test_sim1121_tc_html_fail_step_number_name_and_time():
+    """sim1121 P0: 열 이름 `Message / Action`(낱말 포함)·번호 열 `Step`·빈 `<td>`·INCONC. 요약 표 `Verdict | FAIL`이 스텝 표 앞에
+    있어도 스텝 표의 FAIL 줄을 번호·이름·장비 시각으로 읽는다. 한 줄 표와 줄마다 나눈 표 둘 다."""
+    want = {"sim-oneline-fail.html": (4, "RRCConnectionSetupComplete / ATTACH REQUEST / PDN CONNECTIVITY REQUEST", "00:08:22.164"),
+            "sim-multiline-fail.html": (8, "PDU SESSION ESTABLISHMENT REQUEST", "17:21:00.360"),
+            "sim-inconc.html": (2, "Wait SIP REGISTER on PSI=2", "17:47:25.100")}       # INCONC도 시험이 멈춘 자리
+    for name, (number, step, clock) in want.items():
+        rows, failed, warnings, _ = failedstep.read_steps(TC_HTML / name)
+        assert failed is not None, (name, warnings)
+        row = rows[failed]
+        assert (row["number"], row["name_raw"], row["time_raw"]) == (number, step, clock), name
+        assert not any(w.startswith(failedstep.NOT_FOUND) for w in warnings), name
+        assert failedstep.read_steps_file(TC_HTML / name, PATTERNS)[0].startswith(f"{number} | "), name
+    rows, failed, _, _ = failedstep.read_steps(TC_HTML / "sim-oneline-fail.html")
+    assert [(r["number"], r["status"]) for r in rows] == [(4, "fail")]      # P·PA·`-` 줄은 스텝 판정이 아니다(PASS는 FAIL 뒤)
+
+
+def test_not_found_always_warns_with_header_read():
+    """FAIL 스텝을 못 찾으면 늘 경고한다 — PASS 줄이 하나도 없어도(전에는 조용히 0). 읽은 표 머리를 남겨 양식 차이를 볼 수 있게."""
+    _, failed, warnings, _ = failedstep.read_steps(TC_HTML / "sim-pass.html")
+    assert failed is None and warnings == [
+        "steps-file에서 FAIL 스텝을 찾지 못했다 — 읽은 표 머리: Step | Time | Dir | Message / Action | Key IEs / Note | Verdict, "
+        "판정을 읽은 스텝 3줄"]
+    path = Path(tempfile.mkdtemp()) / "odd.html"
+    path.write_text("<table><tr><th>Seq</th><th>Event</th><th>Outcome</th></tr><tr><td>1</td><td>x</td><td>bad</td></tr>"
+                    "</table>", encoding="utf-8")
+    _, failed, warnings, _ = failedstep.read_steps(path)
+    assert failed is None and warnings == [f"{failedstep.NOT_FOUND} — 표 머리(번호·이름·판정 열)를 찾지 못함, 판정을 읽은 스텝 0줄"]
+
+
+def test_empty_cells_keep_column_positions():
+    """빈 `<td>`·빈 CSV 칸을 버리면 칸 수가 머리와 달라 열 위치를 못 쓰고 이름에 다른 열(`Dir`)이 섞인다 — 자리로 남긴다."""
+    html = ("<table><tr><th>No</th><th>Time</th><th>Dir</th><th>Step</th><th>Note</th><th>Result</th></tr>"
+            "<tr><td>1</td><td>10:00:01.000</td><td>UE-&gt;SS</td><td>Attach</td><td>ok</td><td>PASS</td></tr>"
+            "<tr><td>2</td><td>10:00:09.500</td><td>UE-&gt;SS</td><td>Data call</td><td></td><td>FAIL</td></tr></table>")
+    assert [(r["number"], r["name_raw"], r["status"], r["time_raw"]) for r in failedstep.parse_steps(failedstep.html_to_lines(
+        html.encode())[0])] == [(1, "Attach", "pass", "10:00:01.000"), (2, "Data call", "fail", "10:00:09.500")]
+    path = Path(tempfile.mkdtemp()) / "steps.csv"
+    path.write_text("No,Time,Dir,Step,Note,Result\n1,10:00:01,UE->SS,Attach,ok,PASS\n2,10:00:09,UE->SS,Data call,,FAIL\n",
+                    encoding="utf-8")
+    rows, failed, _, _ = failedstep.read_steps(path)
+    assert (rows[failed]["number"], rows[failed]["name_raw"]) == (2, "Data call")
+
+
+def test_header_word_match_does_not_turn_data_rows_into_header():
+    """낱말 포함 비교는 숫자 없는 짧은 칸만 — 머리 없는 줄 `Step 3 | Verify result | PASS`가 표 머리로 잡히지 않는다. 이름 열이 따로
+    없는 `Step | Result`는 전처럼 `Step`이 이름 열이다."""
+    rows = failedstep.parse_steps("Step 1 | Attach | PASS\nStep 2 | Verify result | PASS\nStep 3 | Data call | FAIL\n")
+    assert _expected_steps(rows) == [(1, "Attach", "pass"), (2, "Verify result", "pass"), (3, "Data call", "fail")]
+    assert _expected_steps(failedstep.parse_steps("Step | Result\n1. Attach | PASS\n데이터 켜기 | FAIL\n")) == \
+        [(1, "Attach", "pass"), (None, "데이터 켜기", "fail")]

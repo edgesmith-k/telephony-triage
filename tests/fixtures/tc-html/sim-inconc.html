@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Test Report IMS-REG-403</title>
+<style>body{font-family:Arial,sans-serif;font-size:12px}table{border-collapse:collapse;margin:8px 0}td,th{border:1px solid #999;padding:2px 6px}th{background:#ddd}.FAIL{color:#c00;font-weight:bold}.PASS{color:#070}.INCONC{color:#b60;font-weight:bold}</style>
+</head><body>
+<h1>Test Report - IMS-REG-403</h1>
+<table class="summary">
+<tr><th>Test Case</th><td>IMS-REG-403</td></tr>
+<tr><th>Title</th><td>Initial registration rejected with 403 / UE behaviour</td></tr>
+<tr><th>Spec</th><td>3GPP TS 34.229-1 based (TC number to be confirmed)</td></tr>
+<tr><th>Test Station</th><td>SS-C</td></tr>
+<tr><th>Operator</th><td>JHP</td></tr>
+<tr><th>Date</th><td>2026-11-10</td></tr>
+<tr><th>Start Time</th><td>17:45:40</td></tr>
+<tr><th>End Time</th><td>17:47:31</td></tr>
+<tr><th>Verdict</th><td class="INCONC">INCONC</td></tr>
+<tr><th>Failure Reason</th><td>Step 2: No REGISTER received within 60 s - test body not executed</td></tr>
+</table>
+<h2>Test Conditions</h2><table class="params"><tr><th>Item</th><th>Value</th></tr>
+<tr><td>RAT / Band</td><td>NR SA / n41</td></tr>
+<tr><td>Internet PDU session</td><td>PSI=1, DNN epc.tmobile.com</td></tr>
+<tr><td>IMS PDU session</td><td>second PDU session, DNN epc.tmobile.com</td></tr>
+<tr><td>P-CSCF discovery</td><td>pre-configured in UE</td></tr>
+<tr><td>SS response to REGISTER</td><td>403 Forbidden</td></tr>
+<tr><td>Operator setup (test plan step 0)</td><td>default-only APN &#x27;TEST-defonly&#x27; set as preferred</td></tr>
+<tr><td>Test USIM</td><td>Test USIM set 1 (IMSI xxxx)</td></tr>
+</table>
+<h2>Test Steps</h2><table class="steps"><tr><th>Step</th><th>Time</th><th>Dir</th><th>Message / Action</th><th>Key IEs / Note</th><th>Verdict</th></tr>
+<tr><td>P</td><td>17:45:53.923</td><td>UE-&gt;SS</td><td>PDU SESSION RELEASE REQUEST</td><td>PSI=1, 5GSM cause #36 Regular deactivation</td><td>-</td></tr>
+<tr><td>P</td><td>17:45:53.951</td><td>SS-&gt;UE</td><td>PDU SESSION RELEASE COMMAND</td><td>PSI=1</td><td>-</td></tr>
+<tr><td>P</td><td>17:45:56.939</td><td>UE-&gt;SS</td><td>PDU SESSION ESTABLISHMENT REQUEST</td><td>PSI=1, DNN=epc.tmobile.com</td><td>-</td></tr>
+<tr><td>P</td><td>17:45:56.962</td><td>SS-&gt;UE</td><td>PDU SESSION ESTABLISHMENT ACCEPT</td><td>PSI=1</td><td>-</td></tr>
+<tr><td>1</td><td>17:46:25.079</td><td>UE-&gt;SS</td><td>PDU SESSION ESTABLISHMENT REQUEST (IMS)</td><td>PSI=2, DNN=epc.tmobile.com</td><td class="PASS">PASS</td></tr>
+<tr><td>1a</td><td>17:46:25.098</td><td>SS-&gt;UE</td><td>PDU SESSION ESTABLISHMENT ACCEPT</td><td>PSI=2</td><td>-</td></tr>
+<tr><td>2</td><td>17:47:25.100</td><td>--</td><td>Wait SIP REGISTER on PSI=2</td><td>timeout (60 s)</td><td class="INCONC">INCONC</td></tr>
+<tr><td>3</td><td>-</td><td>SS-&gt;UE</td><td>SIP 403 Forbidden</td><td>not executed</td><td>-</td></tr>
+<tr><td>4</td><td>-</td><td>--</td><td>Check UE behaviour after 403</td><td>not executed</td><td>-</td></tr>
+<tr><td>PA</td><td>17:47:30.210</td><td>--</td><td>Postamble</td><td>active PDU sessions at end: PSI=1, PSI=2</td><td>-</td></tr>
+</table>
+<h2>Log Notes</h2><pre>[17:46:25.098] INFO: PDU session PSI=2 established
+[17:47:25.100] WARN: no SIP message from UE (60 s)
+[17:47:30.210] INFO: PSI=2 not released by UE</pre>
+</body></html>

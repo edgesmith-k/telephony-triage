@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Test Report OP-DATA-ROAM-03</title>
+<style>body{font-family:Arial,sans-serif;font-size:12px}table{border-collapse:collapse;margin:8px 0}td,th{border:1px solid #999;padding:2px 6px}th{background:#ddd}.FAIL{color:#c00;font-weight:bold}.PASS{color:#070}.INCONC{color:#a60;font-weight:bold}</style>
+</head><body>
+<h1>Test Report - OP-DATA-ROAM-03</h1>
+<table class="summary">
+<tr><th>Test Case</th><td>OP-DATA-ROAM-03</td></tr>
+<tr><th>Title</th><td>Data roaming OFF - no PDU session on roaming partner network</td></tr>
+<tr><th>Spec</th><td>Operator device requirements (data roaming), NR SA</td></tr>
+<tr><th>Test Station</th><td>SS-A</td></tr>
+<tr><th>Operator</th><td>SJL</td></tr>
+<tr><th>Date</th><td>2026-11-10</td></tr>
+<tr><th>Start Time</th><td>17:20:31.200</td></tr>
+<tr><th>End Time</th><td>17:22:41.200</td></tr>
+<tr><th>Verdict</th><td class="FAIL">FAIL</td></tr>
+<tr><th>Failure Reason</th><td>UE initiated PDU session on VPLMN with data roaming disabled</td></tr></table>
+<h2>Test Conditions</h2><table class="params"><tr><th>Item</th><th>Value</th></tr>
+<tr><td>RAT / Band</td><td>NR SA / n41</td></tr>
+<tr><td>Cell 1</td><td>HPLMN, TAC 8514</td></tr>
+<tr><td>Cell 2</td><td>VPLMN (national roaming partner profile), same MCC as HPLMN</td></tr>
+<tr><td>Cell 2 network name (CUC)</td><td>Full: T-Mobile / Short: TMOBILE</td></tr>
+<tr><td>DNN</td><td>epc.tmobile.com</td></tr>
+<tr><td>UE setting</td><td>Data roaming: OFF (set before Step 1)</td></tr>
+<tr><td>Test USIM</td><td>IMSI 310260xxxxxxxxx</td></tr>
+</table>
+<h2>Test Steps</h2><table class="steps"><tr><th>Step</th><th>Time</th><th>Dir</th><th>Message / Action</th><th>Key IEs / Note</th><th>Verdict</th></tr>
+<tr><td>P</td><td>17:20:31.200</td><td>--</td><td>Cell 1 ON, UE registered, PDU session 1 active</td><td></td><td>-</td></tr>
+<tr><td>1</td><td>17:20:37.180</td><td>--</td><td>Operator: Mobile data OFF</td><td>MMI</td><td>-</td></tr>
+<tr><td>3</td><td>17:20:45.100</td><td>--</td><td>Cell 1 OFF, Cell 2 ON</td><td></td><td>-</td></tr>
+<tr><td>4</td><td>17:20:45.900</td><td>UE-&gt;SS</td><td>REGISTRATION REQUEST</td><td>type: mobility registration updating</td><td>-</td></tr>
+<tr><td>5</td><td>17:20:46.150</td><td>SS-&gt;UE</td><td>REGISTRATION ACCEPT</td><td>5GS reg result: 3GPP access</td><td>-</td></tr>
+<tr><td>6</td><td>17:20:46.300</td><td>SS-&gt;UE</td><td>CONFIGURATION UPDATE COMMAND</td><td>Full name for network: T-Mobile; Short: TMOBILE</td><td>-</td></tr>
+<tr><td>7</td><td>17:21:00.300</td><td>--</td><td>Operator: Mobile data ON (data roaming stays OFF)</td><td>MMI</td><td>-</td></tr>
+<tr><td>8</td><td>17:21:00.360</td><td>UE-&gt;SS</td><td>PDU SESSION ESTABLISHMENT REQUEST</td><td>PSI 1, DNN epc.tmobile.com, PDU type IPv4</td><td class="FAIL">FAIL</td></tr>
+<tr><td>9</td><td>17:21:00.380</td><td>SS-&gt;UE</td><td>PDU SESSION ESTABLISHMENT ACCEPT</td><td>SS accepts (script continues)</td><td>-</td></tr>
+<tr><td>PA</td><td>17:22:00.400</td><td>--</td><td>Cell 2 OFF, Cell 1 ON</td><td></td><td>-</td></tr>
+<tr><td>PA</td><td>17:22:01.450</td><td>UE-&gt;SS</td><td>REGISTRATION REQUEST</td><td>mobility registration updating</td><td>-</td></tr>
+</table>
+<h2>Log Notes</h2><pre>[17:21:00.360] WARN: Step 8 not expected: UE data roaming setting reported OFF by operator</pre>
+</body></html>

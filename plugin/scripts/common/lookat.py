@@ -37,6 +37,11 @@ _COLON_GAP = re.compile(r"\s+:")
 _BRACKET_TS = re.compile(r"\[\s*\d+\.\d+\s*\]|\[\d{1,2}:\d{2}:\d{2}(?:\.\d+)?\]")
 _TOKEN = re.compile(r"(?i)\btoken\s*[=:(]\s*(0x[0-9A-Fa-f]{1,8}|\d{1,10})\b")   # 괄호 없이·`Token(0x2FE)`도 읽는다(P2 22, 단계 3)
 _STAMP = re.compile(r"^\s*((?:\d{4}-)?\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3,9})")    # = logtime.STAMP(연도·시각 부분)
+# 날짜 없이 앞에 적은 시각(`22:18:58.695 pcscf=[]`, sim1121) — 떼어 같은 시각 줄 고르기에만 쓴다(`clock`·`same_clock`)
+_CLOCK = re.compile(r"^\s*\[?(\d{1,2}:\d{2}:\d{2}(?:\.\d{1,9})?)\]?(?=\s|$)")
+CLOCK_ONLY = re.compile(r"\d{1,2}:\d{2}:\d{2}(?:\.\d{1,9})?")
+# 사람이 중간을 줄여 적은 표시(`< SETUP_DATA_CALL ... retry=-1`) — 이 앞뒤 조각을 순서대로 찾는다
+_ELLIPSIS = re.compile(r"…|\.{3,}")
 _BARE_TOKEN = re.compile(r"0[xX][0-9A-Fa-f]{1,8}|\d{1,10}")    # 글 전체가 token 값(16진 또는 10진 숫자만)
 # `common.modulefilter._TOKEN_FOLD`의 사본 — run·explore 경로는 modulefilter를 import하지 않는다(test_modulefilter). 바꾸면 둘 다
 _TOKEN_FOLD = re.compile(r"<[A-Z][A-Z0-9_]*#\d+>|<HEXDUMP \d+B>|<REDACTED:[A-Z0-9]+>")
@@ -47,6 +52,8 @@ def clean(text) -> str:
     않는다 — 메시지 부분을 붙이면 찾는다."""
     raw = str(text or "")
     text = _HEAD.sub("", raw, count=1)
+    if text == raw:
+        raw = text = _CLOCK.sub("", raw, count=1)
     if text == raw:      # 시각 머리를 뗐으면 남은 것은 메시지다 — 메시지 앞 `E radio: …`를 레벨로 떼지 않는다
         text = _LEVEL_HEAD.sub("", text, count=1)
     return " ".join(_BRACKET_TS.sub(" ", text).split())
@@ -56,6 +63,22 @@ def stamp(text) -> str | None:
     """붙여 넣은 줄 앞의 logcat 시각(`[YYYY-]MM-DD HH:MM:SS.mmm`) 글. 없으면 None — `clean`이 떼기 전에 부른다."""
     m = _STAMP.match(str(text or ""))
     return m.group(1) if m else None
+
+
+def clock(text) -> str | None:
+    """붙여 넣은 줄 앞의 날짜 없는 시각(`HH:MM:SS(.mmm)`) 글. 날짜가 붙은 logcat 시각이면 None(`stamp`가 읽는다)."""
+    raw = str(text or "")
+    if _STAMP.match(raw):
+        return None
+    m = _CLOCK.match(raw)
+    return m.group(1) if m else None
+
+
+def same_clock(clock_text: str, local: datetime) -> bool:
+    """날짜 없는 시각 `clock_text`가 로그 줄의 현지 시각 `local`과 같은가 — 적은 자리수까지만 비교한다(`16:50:42`는 그 1초 전체)."""
+    hms, _, frac = clock_text.partition(".")
+    h, m, s = (int(x) for x in hms.split(":"))
+    return (local.hour, local.minute, local.second) == (h, m, s) and f"{local.microsecond:06d}".startswith(frac[:6])
 
 
 def fold(text) -> str:
@@ -91,18 +114,55 @@ def needle(q: dict) -> str | None:
     return text if len(text) >= TEXT_MIN else None
 
 
+def _in_order(parts: list[str], hay: str) -> bool:
+    pos = 0
+    for part in parts:
+        k = hay.find(part, pos)
+        if k < 0:
+            return False
+        pos = k + len(part)
+    return True
+
+
+def _tagless(hay: str) -> str:
+    """`태그: 메시지` → `태그 메시지`(사람이 태그 뒤 `:`를 빼고 적은 줄 `DNC-0 onDataStall…`, sim1121)."""
+    return hay.replace(": ", " ", 1)
+
+
 def text_hits(needle_text: str, texts: list[str], masked=None) -> list[int] | None:
     """`needle_text`(접은 글)가 든 줄의 위치. 먼저 가장 긴 마스킹 밖 조각으로 원 줄을 거르고, 걸린 줄만 `masked(i)`(그 줄을
     가린 글, 없으면 원 줄)로 접어 확인한다 — 원문 사본 줄의 값도 입력처럼 가려 비교한다. 그 조각이 `PIECE_MIN`자보다 짧으면
-    (값이 거의 다 가려진 글) 엉뚱한 줄에 붙지 않게 찾지 않고 None."""
-    piece = max(needle_text.split("<m>"), key=len).strip()
+    (값이 거의 다 가려진 글) 엉뚱한 줄에 붙지 않게 찾지 않고 None.
+
+    사람이 대충 적은 줄도 찾는다(sim1121): 태그 뒤 `:`를 뺀 `태그 메시지`, 중간을 `...`·`…`로 줄인 글(앞뒤 조각을 순서대로).
+    그래도 없을 때만 낱말이 줄 안에 순서대로 다 있는 줄(낱말은 낱말 경계에서 시작해야 한다 — `setup`이 `onDataSetup`에 붙지
+    않게). 여러 줄이 맞으면 고르기·모호 표시는 호출자(`pick`·`group_places`)가 한다."""
+    parts = [p.strip() for p in _ELLIPSIS.split(needle_text) if p.strip()]
+    piece = max((s.strip() for p in parts for s in p.split("<m>")), key=len, default="")
     if len(piece) < PIECE_MIN:
         return None
-    out = []
+    key = max((s for p in parts for w in p.split() for s in w.split("<m>")), key=len)     # 모든 방식이 꼭 담는 조각(사전 거르기)
+    words = [re.compile(r"(?<![0-9a-z])" + re.escape(w)) for p in parts for w in p.split()]
+    out, loose = [], []
     for i, text in enumerate(texts):
-        if piece in _COLON_GAP.sub(":", " ".join(text.split())).casefold() and needle_text in fold(masked(i) if masked else text):
+        if key not in _COLON_GAP.sub(":", " ".join(text.split())).casefold():
+            continue
+        hay = fold(masked(i) if masked else text)
+        if _in_order(parts, hay) or _in_order(parts, _tagless(hay)):
             out.append(i)
-    return out
+        elif len(words) > 1 and not out and _words_in_order(words, hay):
+            loose.append(i)
+    return out or loose
+
+
+def _words_in_order(words: list[re.Pattern], hay: str) -> bool:
+    pos = 0
+    for w in words:
+        m = w.search(hay, pos)
+        if m is None:
+            return False
+        pos = m.end()
+    return True
 
 
 def pick(times: list[datetime], ref: datetime | None) -> tuple[int, str]:

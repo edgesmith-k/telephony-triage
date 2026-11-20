@@ -1169,17 +1169,23 @@ def _offline_with(item: dict, doc: dict, out: Path, *extra, meta_extra: dict | N
 
 
 def test_absent_failed_step_is_byte_identical_even_with_steps_file_without_fail_line():
+    """FAIL 줄이 없는 steps-file은 실패 스텝 없음과 같다 — 다만 sim1121 P0부터는 "FAIL 스텝을 찾지 못했다" 경고 한 줄은 늘 남긴다
+    (조용히 0이 되지 않게). 그 경고 말고는 같다."""
+    from common import failedstep
     doc, items = _items()
     steps = tmp("tt-steps-") / "steps.txt"
     steps.write_text("1. 전원 켜기\n2. 설정 열기\n", encoding="utf-8")
+    warn = f"{failedstep.NOT_FOUND} — 표 머리(번호·이름·판정 열)를 찾지 못함, 판정을 읽은 스텝 0줄"
     for item in (items[0], next(i for i in items if i["expect"] == "unresolved")):
         work = tmp("tt-triage-")
         plain = _offline_with(item, doc, work / "a")
         withfile = _offline_with(item, doc, work / "b", "--steps-file", steps)
-        strip = lambda r: {k: v for k, v in r.items() if k not in ("generated_at", "files")}  # noqa: E731
+        strip = lambda r: {k: v for k, v in r.items() if k not in ("generated_at", "files", "warnings")}  # noqa: E731
         assert strip(plain) == strip(withfile)
+        assert [w for w in withfile["warnings"] if w not in plain.get("warnings", [])] == [warn]
         assert "failed_step" not in json.dumps(plain) and "failed_step" not in (work / "a" / "issue_meta.json").read_text()
-        assert (work / "a" / "report.md").read_bytes() == (work / "b" / "report.md").read_bytes()
+        reports = [(work / n / "report.md").read_text(encoding="utf-8") for n in ("a", "b")]
+        assert reports[0] == re.sub(r"(?:; )?" + re.escape(warn), "", reports[1]).replace("- 경고: \n", "").replace("- 경고: ; ", "- 경고: ")
         assert (work / "a" / "issue_meta.json").read_bytes() == (work / "b" / "issue_meta.json").read_bytes()
         for n in ("a", "b"):
             if (work / n / "explore-input.json").exists():

@@ -14,6 +14,10 @@ from common import logtime as lc
 
 from .core import CLUE_FILE, LOOK_FILE, NeedsInput, _clip
 
+# 중요 경고(report.KEY_WARNING) — 머리를 바꾸면 포털 경고 표(web.WARN_NOTE)도 같이(두 레포 맞춤 시험 test_real_plugin)
+NO_STEP_TIME = "TC 실패 스텝에 시각 없음 — TC 시각으로 분석 구간을 정하지 못해 다음 출처로 정했다"
+LOOK_TIME_ONLY = "기준 줄에 시각만 있어 로그에서 찾지 않았다 — 태그와 메시지 일부를 같이 적으면 그 줄을 찾는다"
+
 
 def _parse_ts(text: str | None) -> datetime | None:
     if not text:
@@ -354,7 +358,8 @@ class AnchorMixin:
             text = json.loads((self.job / "issue.json").read_text(encoding="utf-8")).get("text")
         except (OSError, ValueError, AttributeError):
             return [], None
-        look_at = bool(self.look_inputs()["at"])
+        # 기준 줄을 로그에서 **찾았을 때만** 코멘트 단서를 버린다 — 넣었지만 못 찾았으면 단서가 다음 기준이다(sim1121 S-15)
+        look_at = bool((self.look_result or {}).get("hits"))
         if isinstance(text, dict) and not text.get("comments") and type(text.get("comments_skipped")) is int and not look_at:
             # 코멘트를 하나도 못 받았다(앞을 모두 건너뜀 — 포털이 8KB 넘는 마지막 코멘트 때문에 넘기지 않음, D3). 일부만 읽음과 다르다
             # 포털이 이 머리("마지막 댓글이 길어")로 알아본다(포털 fix/sim-1121) — 머리를 바꾸면 포털 표도 같이
@@ -422,7 +427,8 @@ class AnchorMixin:
             masked = self.masker(log_lines=True)(at) if at else None
             self._look = {"at": (lookat.clean(masked) or None) if at else None,
                           "note": (" ".join(self.masker()(note).split()) or None) if note else None,
-                          "stamp": lookat.stamp(masked)}     # 붙여 넣은 줄의 logcat 시각(같은 곳 고르기, 단계 5)
+                          # 붙여 넣은 줄의 logcat 시각, 없으면 앞의 날짜 없는 시각(`HH:MM:SS.mmm`) — 같은 곳 고르기(단계 5)
+                          "stamp": lookat.stamp(masked) or lookat.clock(masked)}
             if at and getattr(self.args, "look_at_source", None) == "model":      # 모델이 코멘트에서 고른 줄(담당자 지정 아님)
                 self._look["source"] = "model"
         return self._look
@@ -432,6 +438,8 @@ class AnchorMixin:
         결과 요약은 `self.look_result`(`{hits, picked, pick, how, ts, line, at}` | `{hits: 0, why}`)에 둔다."""
         text = self.look_inputs()["at"]
         if not text:
+            if getattr(self.args, "look_at", None) and self.look_inputs()["stamp"]:     # 시각만 적은 기준 줄(`16:50:42`)
+                self.warn(LOOK_TIME_ONLY)
             return None
         path = self.job / LOOK_FILE
         stamp = self.look_inputs()["stamp"]
@@ -506,7 +514,7 @@ class AnchorMixin:
         """steps-file의 스텝 순서를 로그의 흔적과 맞춰 실패 구간을 정한다(장비 시각을 쓰지 않는다). 못 정하면 None(경고)."""
         steps, fidx, warns, _ = self.steps_info()
         for w in warns:
-            self.warn(w)
+            self.warn(self.masker()(w))     # FAIL 못 찾음 경고에는 읽은 표 머리(TC 원문)가 실린다
         if not fidx:            # FAIL 스텝이 없거나 앞선 PASS 스텝이 없으면 순서로 정할 것이 없다
             return None
         masker = self.masker()
@@ -560,7 +568,7 @@ class AnchorMixin:
     def steps_file_span(self, steps_file, tz, year, conf: dict, jira_at, first, inside) -> dict | None:
         steps, fidx, warns, _ = self.steps_info()
         for w in warns:
-            self.warn(w)
+            self.warn(self.masker()(w))     # FAIL 못 찾음 경고에는 읽은 표 머리(TC 원문)가 실린다
         row = steps[fidx] if fidx is not None else None
         if row is not None:      # 표의 FAIL 스텝(첫 FAIL = 마지막으로 실행된 스텝)의 시각
             line, label = row.get("time_raw"), failedstep.label(row, self.masker())
@@ -569,9 +577,13 @@ class AnchorMixin:
             if text is None:
                 return None
             patterns = userconfig.get(self.cfg, "tracker.failed_step_patterns") or []
-            step, line = failedstep.find_line(text, patterns)
+            # 표 머리 뒤에서만 찾는다 — 요약 표 `Verdict | FAIL` 줄을 먼저 잡지 않게(화면의 read_steps_file과 같은 읽기, sim1121)
+            step, line = failedstep.find_line(failedstep._after_header(text, conf), patterns)
+            if step is None:        # 패턴에도 맞는 줄이 없다 — FAIL 스텝을 못 찾은 경고는 read_steps가 이미 냈다
+                return None
             label = failedstep.normalize(self.masker()(failedstep.numbered(step, line) or ""), 80)
         if not line:
+            self.warn(NO_STEP_TIME)
             return None
         zone = conf.get("steps_file_tz") or tz or userconfig.get(self.cfg, "logcat.timezone")
         ref = jira_at or first
@@ -581,6 +593,7 @@ class AnchorMixin:
             self.warn(f"steps-file 시각을 해석하지 못했다({exc}) — 앵커 없이 진행")
             return None
         if fail is None:
+            self.warn(NO_STEP_TIME)
             return None
         if self.clock_offset is None:       # 장비 시계와 단말 시계는 다를 수 있다 — 맞출 수 없으면 쓰지 않는다
             self.clock = {"mode": "none", "reason": "시계 차 모름"}

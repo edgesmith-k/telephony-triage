@@ -759,3 +759,38 @@ def test_model_picked_look_at_is_labelled_and_never_confirmed(seed_db):
     assert model["decision"]["state"] == user["decision"]["state"] and model["request_hash"] != user["request_hash"]
     md = (out / "report.md").read_text(encoding="utf-8")
     assert "- 기준 줄(모델이 코멘트에서 고른 지점(담당자 지정 아님)): 로그에서 찾음" in md and "담당자가 지정한 기준 줄" not in md
+
+
+def test_look_at_clock_without_date_picks_same_time_place(seed_db):
+    """sim1121: 기준 줄 앞 날짜 없는 시각은 같은 시각의 곳을 고른다(로그 시간대 현지 시각, 적은 자리수까지). 같은 시각의 곳이
+    여럿이면 그 안에서만 고르고 곳 수는 그대로(모호함은 남긴다). 시각이 없으면 전처럼 마지막."""
+    from common import lookat
+    d = tmp("tt-clock-pick-")
+    log = d / "clock.log"
+    log.write_text("".join(f"11-14 {t}  2101  2101 D DNC-0   : onDataStallReestablishInternet: {w}\n"
+                           for t, w in (("10:02:00.624", "a"), ("10:02:00.624", "b"), ("10:05:00.100", "c"), ("10:07:00.000", "d"))),
+                   encoding="utf-8")
+    look = d / "look-at.json"
+
+    def find(at):
+        look.write_text(json.dumps({"look_at": lookat.clean(at), "ref": None,
+                                    **({"stamp": lookat.clock(at)} if lookat.clock(at) else {})}), encoding="utf-8")
+        return run_json("parse_logcat.py", ["ipc", log, "--find", look, "--rules", seed_db / "parser-rules", "--tz", "Asia/Seoul",
+                                            "--year", "2026"])["find"]
+    f = find("10:05:00.100 DNC-0 onDataStallReestablishInternet")
+    assert (f["hits"], f["places"], f["ts"], f["stamp"]) == (4, 1, "2026-11-14T01:05:00.100Z", "same")   # 한 곳으로 좁힘
+    f = find("10:02:00 DNC-0 onDataStallReestablishInternet")      # 초까지만 적었다 — 그 1초 안의 두 곳
+    assert (f["places"], f["ts"], f["stamp"]) == (4, "2026-11-14T01:02:00.624Z", "many")
+    assert find("DNC-0 onDataStallReestablishInternet")["ts"] == "2026-11-14T01:07:00.000Z"      # 시각 없음 → 마지막
+
+
+def test_look_at_not_found_keeps_comment_clues(seed_db):
+    """S-15(sim1121): 기준 줄을 넣었어도 로그에서 **못 찾았으면** 코멘트 단서를 버리지 않는다(다음 기준). 시각만 적은 기준 줄은
+    찾지 않고 그렇다고 알린다."""
+    from triagelib import anchor
+    comments = ["로그 첨부했습니다.", FAIL]
+    a, out = _run(seed_db, "look-miss", comments=comments, look_at="DNC-7 onNoSuchMessageAnywhere cause=NONE")
+    assert _verdict(a) == HELD_SCRIPT and _ref_cause(out) == "DATA-003-01"
+    assert any(w.startswith("기준 줄을 로그에서 못 찾음") for w in a["warnings"]) and not any("안 씀" in w for w in a["warnings"])
+    a, out = _run(seed_db, "look-clock", comments=comments, look_at="16:50:42")
+    assert _verdict(a) == HELD_SCRIPT and anchor.LOOK_TIME_ONLY in a["warnings"]

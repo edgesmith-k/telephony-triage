@@ -23,3 +23,6 @@ pattern:url-host opencode/* ^https://opencode\.ai$
 
 # 가짜 Anthropic 서버(127.0.0.1 loopback만) 선택 실행 테스트 — 계획 I C2i·C3i
 pattern:url-host tests/test_claude_child.py ^http://127\.0\.0\.1$
+
+# 합성 TC 결과 HTML의 3GPP 규격 절 번호(36.508 4.5.2.3)는 IP 주소가 아니다
+pattern:ip-address tests/fixtures/tc-html/* ^4\.5\.2\.3$
