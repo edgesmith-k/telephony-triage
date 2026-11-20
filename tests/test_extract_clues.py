@@ -567,24 +567,24 @@ def test_submitter_note_is_kept_apart_from_clues(seed_db):
     a, out = _run(seed_db, "note", fields={"summary": "데이터 연결 실패", "tt_note": note}, comments=["로그 첨부했습니다."])
     assert a["decision"]["reason"] == "no_reference", a["decision"]
     assert json.loads((out / "issue.json").read_text(encoding="utf-8"))["text"]["note"] == note
-    from triagelib import report as rep
-    # 4KB를 넘으면 가장 먼저 짧은 표시로 바뀐다(작업 경로 길이에 따라 — 근거·판단 사건보다 먼저)
-    assert a["issue"]["submitter_note"].startswith("제출자 참고(판단 근거·단서 아님): 그래도 분석을")         or a["issue"]["submitter_note"] == rep.NOTE_GONE
+    # 200자 안 참고 글은 근거·판단 사건을 줄여서라도 남는다(긴 작업 경로에서도 — 리뷰 11/20, 포털 Jira 안내 줄이 모델에 가게)
+    assert a["issue"]["submitter_note"] == "제출자 참고(판단 근거·단서 아님): " + note, a["issue"]
     a, _ = _run(seed_db, "nonote", comments=["로그 첨부했습니다."])
     assert "submitter_note" not in a["issue"]
-    # 포털 NOTE_MAX(2000자)까지 잘리지 않고 issue.json에 간다. analysis.json은 4KB 예산 안에서만(넘으면 fit이 600자로 줄이고 뺀다)
+    # 포털 NOTE_MAX(2000자)까지 잘리지 않고 issue.json에 간다. analysis.json은 4KB 맞춤 첫 단계에서 머리말 포함 200자
     long = "앞 안내. 제출자 이유: " + "x" * 1980 + " 끝"
     a, out = _run(seed_db, "longnote", fields={"summary": "데이터 연결 실패", "tt_note": long[:2000]}, comments=["로그 첨부했습니다."])
     assert json.loads((out / "issue.json").read_text(encoding="utf-8"))["text"]["note"] == long[:2000]
     from triagelib import driver
-    got = a["issue"]["submitter_note"].removesuffix("…")
-    assert got == rep.NOTE_GONE or ((driver.NOTE_LABEL + long[:2000]).startswith(got) and len(got) >= 590), got[:80]
+    from triagelib import report as rep
+    assert a["issue"]["submitter_note"] == rep._clip(driver.NOTE_LABEL + long[:2000], rep.NOTE_FIT), a["issue"]["submitter_note"][:80]
     assert driver.NOTE_MAX == 2000       # 포털 NOTE_MAX(옛 상한 240자)
 
 
 def test_fit_drops_submitter_note_before_events_and_evidence():
-    """리뷰 P1: 4KB 맞춤은 제출자 참고 글을 가장 먼저 줄이고(600자 → `issue.json text.note 참고`) 그 뒤에 판단 사건을 줄인다 —
-    줄여도 기준에 붙은 사건(ref)은 남고 1위 근거는 그대로다. `truncated`는 넣은 뒤에도 4096B 안."""
+    """리뷰 P1(11/20 두 번): 4KB 맞춤은 제출자 참고 글을 가장 먼저 머리말 포함 200자로 줄이고(포털 맨 앞 Jira 안내 줄이 남게) 그 뒤에
+    판단 사건·근거를 줄인다 — 줄여도 기준에 붙은 사건(ref)은 남는다. 다 줄여도 넘을 때만 마지막에 `issue.json text.note 참고` 표시.
+    `truncated`는 넣은 뒤에도 4096B 안."""
     from triagelib import report as rep
 
     ev = [{"ts": f"t{i}", "tag": "T", "msg": "m" * 60} for i in range(6)]
@@ -598,13 +598,14 @@ def test_fit_drops_submitter_note_before_events_and_evidence():
                     {"type": "DATA-003", "ref": False, "cause": "DATA-003-01"}]},
                 "files": {"report": "r"}, "must_show": [], "warnings": ["w" * warn] if warn else []}
     out = rep.fit(result(3000))
-    assert len(out["issue"]["submitter_note"]) == 600 and len(out["candidates"][1]["evidence"]) == 6
+    assert len(out["issue"]["submitter_note"]) == rep.NOTE_FIT and len(out["candidates"][1]["evidence"]) == 6
     assert [e["ref"] for e in out["decision"]["events"]] == [False, True, False]     # 글을 줄이면 맞아 사건·근거는 그대로
-    out = rep.fit(result(3000, warn=2400))
-    assert out["issue"]["submitter_note"] == rep.NOTE_GONE and len(out["decision"]["events"]) == 3
     out = rep.fit(result(3000, warn=3000))
     assert [e["ref"] for e in out["decision"]["events"]] == [True] and len(out["candidates"][0]["evidence"]) == 6   # ref 사건은 남는다
+    assert len(out["issue"]["submitter_note"]) == rep.NOTE_FIT                       # 200자는 근거보다 오래 남는다
     assert len(rep.dumps(out).encode("utf-8")) + 1 <= rep.ANALYSIS_MAX
+    stuck = {**result(3000), "issue": {"summary": "s" * 3900, "submitter_note": "n" * 3000}}     # 줄일 수 없는 칸이 큼
+    assert rep.fit(stuck)["issue"]["submitter_note"] == rep.NOTE_GONE
     # truncated 자리: 키 없이 4096B에 딱 맞는 결과도 키를 넣은 뒤 4096B를 넘지 않는다(옛 코드는 넣고 나서 넘었다)
     base = {"files": {"report": "r"}, "must_show": [], "warnings": [""]}
     tight = {**base, "warnings": ["x" * (rep.ANALYSIS_MAX - 1 - len(rep.dumps(base).encode("utf-8")))]}

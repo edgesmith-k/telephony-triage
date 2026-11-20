@@ -374,13 +374,14 @@ def _drop_read_only_hint_if_shown(result: dict) -> None:
 
 
 NOTE_GONE = "issue.json text.note 참고"     # 4KB 맞춤에서 뺀 제출자 참고 글 자리
+NOTE_FIT = 200      # 4KB 맞춤 첫 단계의 제출자 참고 글 길이(머리말 포함) — 포털이 맨 앞에 두는 Jira 안내 줄이 남는 길이
 
 
 def fit(result: dict) -> dict:
-    """analysis.json을 ≤ 4KB로 줄인다: 제출자 참고 글(`issue.submitter_note` 600자 → `NOTE_GONE` 표시) → 판단의 사건(`decision.events`
-    1개 → 기준에 붙은 사건만, 없으면 0개, `events_total`은 남김) → (읽기 전용 줄 중복) →
-    다른 후보 근거 → 근거 줄 수 → 메시지 길이 → 경고 순,
-    마지막으로 must_show 항목을 160자로 줄이고 앞 4개만 남긴다(`truncated` 의미는 그대로: 그래도 넘으면 true)."""
+    """analysis.json을 ≤ 4KB로 줄인다: 제출자 참고 글(`issue.submitter_note`, 머리말 포함 `NOTE_FIT`자 — 포털의 맨 앞 Jira 안내 줄이 남게)
+    → 판단의 사건(`decision.events` 1개 → 기준에 붙은 사건만, 없으면 0개, `events_total`은 남김) → (읽기 전용 줄 중복) →
+    다른 후보 근거 → 근거 줄 수 → 메시지 길이 → 경고 순 → must_show 항목을 160자로 줄이고 앞 4개만 →
+    마지막으로 제출자 참고 글을 `NOTE_GONE` 표시로(`truncated` 의미는 그대로: 그래도 넘으면 true)."""
     def size() -> int:   # 파일 바이트(끝 개행 포함)
         return len(dumps(result).encode("utf-8")) + 1
 
@@ -411,14 +412,14 @@ def fit(result: dict) -> dict:
     steps.insert(1, lambda: result.update(read_only_hint=_clip(result.get("read_only_hint"), 100))
                  if result.get("read_only_hint") else None)
     # 자격 검사 사건(표시용, 전체는 JOB/eligibility.json)을 먼저 줄인다 — events_total은 남기고 기준에 붙은 사건(ref)은 하나 남긴다
-    # (보류 판단 줄·포털이 원인 후보로 읽는다). 그보다 먼저 제출자 참고 글(issue.json `text.note`에는 다 남는다): 600자 → 짧은 표시
+    # (보류 판단 줄·포털이 원인 후보로 읽는다). 그보다 먼저 제출자 참고 글을 NOTE_FIT자로(issue.json `text.note`에는 다 남는다),
+    # 표시로 바꾸는 것은 맨 끝 단계
     def ref_events(n: int) -> None:
         evs = dec.get("events") or []
         refs = [e for e in evs if e.get("ref")]
         dec.update(events=refs[:1] if refs else evs[:n])
     steps[0:0] = [lambda: (result.get("issue") or {}).get("submitter_note") and result["issue"].update(
-                      submitter_note=_clip(result["issue"]["submitter_note"], 600)),
-                  lambda: (result.get("issue") or {}).get("submitter_note") and result["issue"].update(submitter_note=NOTE_GONE),
+                      submitter_note=_clip(result["issue"]["submitter_note"], NOTE_FIT)),
                   lambda: dec.get("events") and ref_events(1),
                   lambda: dec.get("events") and ref_events(0)]
     steps += [lambda: result.update(warnings=[_clip(w, 120) for w in (result.get("warnings") or [])[:3]]),
@@ -437,7 +438,8 @@ def fit(result: dict) -> dict:
               lambda: _drop_reuse(result, "added_logs"),
               lambda: _drop_reuse(result, "prev_top"),
               lambda: result.update(must_show=[_clip(m, MUST_SHOW_CLIP) for m in result["must_show"]]) if result.get("must_show") else None,
-              lambda: result.update(must_show=result["must_show"][:MUST_SHOW_FIT]) if result.get("must_show") else None]
+              lambda: result.update(must_show=result["must_show"][:MUST_SHOW_FIT]) if result.get("must_show") else None,
+              lambda: (result.get("issue") or {}).get("submitter_note") and result["issue"].update(submitter_note=NOTE_GONE)]
     result["truncated"] = False      # 값 자리를 먼저 잡고 잰다("false"가 "true"보다 길다 — 넣은 뒤 4096B를 넘지 않게)
     for step in steps:
         if size() <= ANALYSIS_MAX:

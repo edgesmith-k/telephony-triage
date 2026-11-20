@@ -245,7 +245,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 - read_only_hint?(mode: read-only일 때만, config.py check 사유 메시지, ≤200바이트, 4KB 압축 시 100)
 - snapshot?
 - plan?(analysis-only면 {exists, source, pr_number}만. choice resume이면 next(Step 7 없이 기존 계획으로 Step 8))
-- issue?(failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보. submitter_note(있을 때만 — 포털이 넘긴 제출자 참고 글 `제출자 참고(판단 근거·단서 아님): …`, ≤2000자+머리말, 4KB 압축 때 가장 먼저 600자 → `issue.json text.note 참고`; 판단 근거·단서가 아니다. 이슈 DB 레코드 note와 다르다))
+- issue?(failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보. submitter_note(있을 때만 — 포털이 넘긴 제출자 참고 글 `제출자 참고(판단 근거·단서 아님): …`, ≤2000자+머리말, 4KB 압축 때 가장 먼저 머리말 포함 200자, 마지막 단계에서 `issue.json text.note 참고`; 판단 근거·단서가 아니다. 이슈 DB 레코드 note와 다르다))
 - step_anchor?(앵커(기준 줄·실패 스텝)·실패 스텝·시계 정렬·스텝 순서 시도·기준 줄 입력·시각 답 full·시각 입력 없는 전체 분석이 있을 때만)
   - outside_errors?(앵커가 있고 Jira 발생 시각이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음)
   - source: look_at | log_marker | steps_file | step_order | issue | symptom_scan | none
