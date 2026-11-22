@@ -381,10 +381,11 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - moved?
 - analyzer?({skill, when, note?} 설치 분석 스킬(레거시·prefer: skill) | {category, when, note?} 모듈 스킬 | {error, when} 설정 오류 (note: when ask일 때만 답 전 안내))
 - explore?({reason: no_candidate|cause_unconfirmed|fit_check(1위 C=1, run --explore·explore.when: always·--look-note(확인할 내용)일 때만 — 끄는 쪽이 이긴다: never·--no-explore면 열지 않는다), when: ask|always|never, note?: when ask일 때만 답 전 안내}(run은 타임라인을 만들지 않는다))
-- prior?(재실행일 때 이전 실행이 남긴 것(hyps·none·unfit·looked 중 하나라도 있을 때만, 4KB 압축 시 hyps → 전체 순으로 뺀다): top(직전 1위 원인|유형), hyps[≤3](근거 원문 검사를 통과한(원문에 없는 인용 0, 검사 건너뜀 아님) 이전 탐색 가설 머리와 반대 근거, ≤120), none(이전 탐색 `가설 없음` 이유, ≤120), unfit(이전 탐색이 가설을 세우고도 `1위 판단: 부적합`으로 보류한 `<원인 ID> — <이유>`, ≤120), looked[≤3](이전 실행의 가린 기준 줄, ≤80))
+- prior?(재실행일 때 이전 실행이 남긴 것(hyps·none·unfit·looked 중 하나라도 있을 때만, 4KB 압축 시 hyps → 전체 순으로 뺀다): top(직전 1위 원인|유형), hyps[≤3](근거 원문 검사를 통과한(원문에 없는 인용 0, 검사 건너뜀 아님) 이전 탐색 가설 머리와 반대 근거, ≤120), none(이전 탐색 `가설 없음` 이유, ≤120), unfit(이전 탐색의 1위 부적합 보류 `<원인 ID> — <이유>`, ≤120), looked[≤3](이전 실행의 가린 기준 줄, ≤80))
   - top?
   - hyps?[≤3]
   - none?
+  - unfit?
   - looked?[≤3]
 - warnings?
 - notes?(잔여 worktree·도구 브랜치 안내 등)
