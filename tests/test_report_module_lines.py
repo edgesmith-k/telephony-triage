@@ -269,7 +269,7 @@ def test_select_rows_picks_event_rows_before_error_rows_on_short_log():
     """CP-1(S-10 모양): 짧은 로그에 발생 시각을 가운데로 주면 접지 않는 창(±60초·로그 끝 60초)이 로그 거의 전체를 덮어 접기가
     꺼진다. 그때 발생 시각 근처 E 줄 반복이 상한을 채워 로그 끝 이벤트 줄(재등록)이 빠지면 안 된다 — 이벤트 줄을 W/E 줄보다 먼저."""
     ev = [_ev(ts=f"2026-11-06T10:{s // 60:02d}:{s % 60:02d}.000Z", tag="RILJ", msg="Unsupported band type 0", phone_id=0,
-              line_ref={"file_index": 0, "line_no": s}) for s in range(0, 150)]
+              line_ref={"file_index": 0, "line_no": s}) for s in range(150)]
     for k, s in enumerate((10, 11, 12, 168, 169, 170)):      # 로그 앞·끝 이벤트 줄(발생 시각에서 80초 넘게 떨어짐)
         ev.append(_ev(ts=f"2026-11-06T10:{s // 60:02d}:{s % 60:02d}.000Z", tag="SST-0", msg=f"state {k}", phone_id=0, level="D",
                       line_ref={"file_index": 0, "line_no": 500 + k}, event="network_service_state"))
