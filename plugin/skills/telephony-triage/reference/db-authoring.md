@@ -49,7 +49,7 @@ op 필수 키 (`op` 외, plan.schema.json 기준):
 - `resolution`은 **행동 지시 1~2문장**, "~한다"로 끝. 워크어라운드면 앞에 `[WA]`. `resolution_type`은 스키마 enum.
 - `fix.status`는 `open | fix-submitted | wont-fix | not-a-bug`로만 시작한다. `fix-submitted`면 `ref`+`fixed_in`(브랜치 필수). **`fixed`로 시작할 수 없다.**
 - `resolution_verification`은 새 원인·`resolution`이 바뀐 원인 모두 `unverified`. `verified`는 같은 계획의 `verify-resolution`(근거 Jira 또는 `resolved` fixture)뿐이다. 기록 대상 Jira 자신을 근거로 쓰지 않는다. **사용자 진술만 있으면 unverified + method `근거: 사용자 진술`.** 미검증 해결책은 리포트·README에 "⚠ 미검증".
-- **시그니처**: 증상용·원인용 분리. 새 유형·원인은 판별 시그니처 필수(예외: record에서 사용자가 명시한 원인 `signatures_pending` — 매칭 불가, 해결책 unverified 고정). **새 유형의 증상 시그니처는 예외 없음.** 마스킹된 로그에서 실제 확인한 문구로만 쓴다(`.*error.*`·마스킹될 값·`<CELL#1>` 토큰 번호 고정 금지). 반복되는 복잡한 패턴은 extractor + `must_event`. 매처는 마스킹 뒤 텍스트에 돈다.
+- **시그니처**: 증상용·원인용 분리. 새 유형·원인은 판별 시그니처 필수(예외: record에서 사용자가 명시한 원인 `signatures_pending` — 매칭 불가, 해결책 unverified 고정). **새 유형의 증상 시그니처는 예외 없음.** 마스킹된 로그에서 실제 확인한 문구로만 쓴다(`.*error.*`·마스킹될 값·`<CELL#1>` 토큰 번호 고정 금지). 반복되는 복잡한 패턴은 extractor + `must_event`. 매처는 마스킹 뒤 글에 돈다.
   **근거 줄 하나에만 기대지 않기**(빠지면 미매칭, `must_not_match` 근거면 오매칭): 다른 층 줄로 하나 더 — 있음은 시그니처 OR(증상도 그 줄이면 증상도, 원인 줄은 증상과 같은 슬롯·window), 없음은 일어남을 보이는 줄을 `must_not_match` 항목에. R1~R5는 결합을 못 보니 첫 줄 없는 로그를 `extra`로 넣어 analyze로 본다. `db_lint --advice`는 참고.
   `must_*`는 AND·시그니처끼리는 OR, `fields` 값은 정규식 fullmatch(부분 일치는 `.*X.*`), `same_phone`(기본 true)은 DDS처럼 슬롯을 가로지르는 원인만 false, `sequence`는 항목 `id` 순서.
   `min_count: N`(must_match 객체·must_event)=N건 이상, `sequence_within_sec: T`=sequence 간격≤T초 — 둘 다 DB `issue-db.config.yaml` `signature_features`에 선언된 경우만(없으면 `db_lint` `signature-feature` 오류, 선언은 메인테이너).

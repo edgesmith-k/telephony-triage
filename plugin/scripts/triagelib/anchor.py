@@ -502,7 +502,7 @@ class AnchorMixin:
                 self.warn(f"스텝 마커의 실패 시각({lc.format_ts(span['fail'] or span['end'])})이 로그 범위 밖이라 쓰지 않았다")
                 span = None
         if span is None and steps_file:
-            span = self.steps_file_span(steps_file, tz, year, conf, jira_at, first, inside, last)
+            span = self.steps_file_span(steps_file, tz, year, conf, jira_at, first, inside, last, bool(data.get("yearless")))
         if span is None and steps_file:
             span = self.step_order_span(data, step_rules, conf, last)
         return span
@@ -570,11 +570,14 @@ class AnchorMixin:
         if fs and fs.get("source") != "steps_file" and not stepanchor.same_step(row_label, fs["text"]):
             self.warn(f"실패 스텝({fs['source']})과 steps-file의 FAIL 스텝이 다르다 — 구간은 steps-file 순서로 정했다")
 
-    def tc_date_ref(self, steps_file, conf: dict, zone, first, last, times: list):
-        """TC 머리 날짜(`failedstep.head_date`, 이름표 줄만)로 스텝 시각 기준 → 그 날짜(steps-file 시간대) 0시 UTC | None(못 읽음·
-        로그 해와 2년 넘게 다름). `times`(첫 스텝부터 실패 스텝까지 시각 칸 원문)의 시각이 앞보다 1시간 넘게 작아질 때마다(자정 넘김)
-        하루씩 올린다 — 머리에 시작 시각이 있으면 그것이 첫 비교값(RP-11). 머리 날짜가 로그 첫~끝 날짜에 없으면 `TC_DATE_DIFF` 경고
-        (시계 차를 몰라도 낸다 — 하루 넘는 차이는 시계 차가 아니다)."""
+    def tc_date_ref(self, steps_file, conf: dict, zone, first, last, times: list, yearless: bool = False):
+        """TC 머리 날짜(`failedstep.head_date`, 이름표 줄만)로 스텝 시각 기준 → 그 날짜(steps-file 시간대)의 실패 행 첫 시각 UTC | None
+        (못 읽음·로그 해 ±1년 밖). `times`(첫 스텝부터 실패 스텝까지 시각 칸 원문)의 시각이 앞보다 1시간 넘게 작아질 때마다(자정
+        넘김) 하루씩 올린다 — 머리 시작 이름표 줄에 시각이 있으면 그것이 첫 비교값(RP-11, 다른 이름표 줄의 시각은 쓰지 않는다 CP-6).
+        기준을 실패 행 첫 시각으로 두면 행 안의 넘김(시작 23:59:50, 실패 00:00:20)은 `steps_file_times`의 12시간 규칙이 맞춘다(CP-5).
+        머리 날짜가 로그 첫~끝 날짜에 없으면 `TC_DATE_DIFF` 경고(시계 차를 몰라도 낸다 — 하루 넘는 차이는 시계 차가 아니다. ±1년 밖이어도
+        경고는 낸다 CP-7). `yearless`(로그 줄에 연도가 없어 `--year`로 읽음)면 월·일만 비교하고 로그의 해를 쓴다 — 가정한 해와 TC 해가
+        달라도 같은 날이다(oFono 확인 P1-1)."""
         text, _ = failedstep.read_lines(steps_file)
         got = failedstep.head_date(text, conf) if text is not None else None
         if got is None:
@@ -584,26 +587,38 @@ class AnchorMixin:
             local = lc.get_tz(zone)
         except ValueError:      # 알 수 없는 타임존 — steps_file_times가 같은 경고를 낸다
             return None
-        if first and abs(y - first.astimezone(local).year) > 1:      # 해가 동떨어지면 시험 날짜가 아니다
-            return None
+        fit = None
         if first and last:
             days = sorted({first.astimezone(local).date(), last.astimezone(local).date()})
-            if not days[0] <= datetime(y, mo, d).date() <= days[-1]:
+            for yy in sorted({days[0].year, days[-1].year}) if yearless else (y,):
+                try:
+                    tc_day = datetime(yy, mo, d).date()
+                except ValueError:      # 2-29를 평년으로
+                    continue
+                if days[0] <= tc_day <= days[-1]:
+                    fit = yy
+                    break
+            if fit is None:
                 span = days[0].isoformat() + (f"~{days[-1].isoformat()}" if days[-1] != days[0] else "")
                 self.warn(TC_DATE_DIFF.format(tc=f"{y:04d}-{mo:02d}-{d:02d}", log=span))
+        if fit is not None:
+            y = fit
+        elif first and abs(y - first.astimezone(local).year) > 1:      # 해가 동떨어지면 시험 날짜가 아니다(경고는 위에서 냈다)
+            return None
         prev = clock[0] * 3600 + clock[1] * 60 + clock[2] if clock else None
-        wraps = 0
+        wraps, sec = 0, 0
         for raw in times:
             m = _CLOCK_RE.search(str(raw or ""))
             if not m:
+                sec = 0
                 continue
             sec = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
             if prev is not None and sec < prev - 3600:      # ponytail: 1시간 넘게 거꾸로 가면 자정 넘김으로 본다(스텝 순서 흔들림은 무시)
                 wraps += 1
             prev = sec
-        return (datetime(y, mo, d, tzinfo=local) + timedelta(days=wraps)).astimezone(timezone.utc)
+        return (datetime(y, mo, d, tzinfo=local) + timedelta(days=wraps, seconds=sec)).astimezone(timezone.utc)
 
-    def steps_file_span(self, steps_file, tz, year, conf: dict, jira_at, first, inside, last=None) -> dict | None:
+    def steps_file_span(self, steps_file, tz, year, conf: dict, jira_at, first, inside, last=None, yearless=False) -> dict | None:
         steps, fidx, warns, _ = self.steps_info()
         for w in warns:
             self.warn(self.masker()(w))     # FAIL 못 찾음 경고에는 읽은 표 머리(TC 원문)가 실린다
@@ -625,7 +640,7 @@ class AnchorMixin:
             label = failedstep.normalize(self.masker()(failedstep.numbered(step, line) or ""), 80)
         zone = conf.get("steps_file_tz") or tz or userconfig.get(self.cfg, "logcat.timezone")
         times = [r.get("time_raw") for r in steps[: fidx + 1]] if row is not None else [line]
-        tc_ref = self.tc_date_ref(steps_file, conf, zone, first, last, times)
+        tc_ref = self.tc_date_ref(steps_file, conf, zone, first, last, times, yearless)
         if not line:
             self.warn(NO_STEP_TIME)
             return None

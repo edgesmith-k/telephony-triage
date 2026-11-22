@@ -243,7 +243,8 @@ def test_select_rows_folds_repeated_plain_rows_but_keeps_every_event_row():
     items, _ = report.select_rows(rows, None, 200)
     assert len(items) == 94 and all("fold" not in r for r in items)
     # RP-5: 발생 시각 ±60초 안의 줄은 접지 않고, 그 밖의 반복은 발생 시각에 가장 가까운 한 줄로 접는다
-    items, _ = report.select_rows(rows, "2026-11-06T10:20:30Z", 10)
+    # (CP-1 뒤 이벤트 4줄이 먼저 자리를 차지하므로 상한을 13으로 — 이벤트 4 + 창 안 6 + 접은 대표 3)
+    items, _ = report.select_rows(rows, "2026-11-06T10:20:30Z", 13)
     band = [r for r in items if r["msg"] == "Unsupported band type 0"]
     assert [(r["ts"][11:19], "fold" in r) for r in band] == [("10:19:00", True), ("10:20:00", False), ("10:21:00", False)]
 
@@ -262,6 +263,21 @@ def test_select_rows_keeps_few_repeats_and_log_end_rows():
     assert [r["ts"][11:19] for r in items if r["msg"] == "spam" and "fold" not in r] == ["10:40:00", "10:40:20", "10:40:40"]
     assert [r["fold"]["n"] for r in items if "fold" in r] == [29]
     assert report.FOLD_MIN == 10 and report.FOLD_KEEP_SEC == 60
+
+
+def test_select_rows_picks_event_rows_before_error_rows_on_short_log():
+    """CP-1(S-10 모양): 짧은 로그에 발생 시각을 가운데로 주면 접지 않는 창(±60초·로그 끝 60초)이 로그 거의 전체를 덮어 접기가
+    꺼진다. 그때 발생 시각 근처 E 줄 반복이 상한을 채워 로그 끝 이벤트 줄(재등록)이 빠지면 안 된다 — 이벤트 줄을 W/E 줄보다 먼저."""
+    ev = [_ev(ts=f"2026-11-06T10:{s // 60:02d}:{s % 60:02d}.000Z", tag="RILJ", msg="Unsupported band type 0", phone_id=0,
+              line_ref={"file_index": 0, "line_no": s}) for s in range(0, 150)]
+    for k, s in enumerate((10, 11, 12, 168, 169, 170)):      # 로그 앞·끝 이벤트 줄(발생 시각에서 80초 넘게 떨어짐)
+        ev.append(_ev(ts=f"2026-11-06T10:{s // 60:02d}:{s % 60:02d}.000Z", tag="SST-0", msg=f"state {k}", phone_id=0, level="D",
+                      line_ref={"file_index": 0, "line_no": 500 + k}, event="network_service_state"))
+    rows = report.merge_rows({"events": ev})
+    for limit in (20, 10):
+        items, total = report.select_rows(rows, "2026-11-06T10:01:30Z", limit)
+        assert total == 156 and len(items) == limit
+        assert sorted(r["msg"] for r in items if r["marks"]) == [f"state {k}" for k in range(6)]
 
 
 def test_split_on_ofono_fixture():

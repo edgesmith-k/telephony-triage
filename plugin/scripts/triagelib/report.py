@@ -253,8 +253,9 @@ def merge_rows(events: dict) -> list[dict]:
 
 
 def select_rows(rows: list[dict], around: str | None, limit: int) -> tuple[list[dict], int]:
-    """줄 수가 넘치면 이벤트·W/E/F·오류 문구 줄을 먼저, 그다음 나머지를 발생 시각에 가까운 순으로 고르고 합친 순서로
-    다시 늘어놓는다(결정적) → (남긴 줄, 전체 줄 수).
+    """줄 수가 넘치면 이벤트 줄, W/E/F·오류 문구 줄, 나머지 순으로(같은 등급 안에서는 발생 시각에 가까운 순) 고르고 합친
+    순서로 다시 늘어놓는다(결정적) → (남긴 줄, 전체 줄 수). 이벤트 줄을 W/E 줄보다 먼저 두는 것은 짧은 로그에서 접지 않는 창이
+    로그 전체를 덮어 발생 시각 근처 오류 반복이 로그 끝 이벤트를 밀어내지 않게 하려는 것이다(CP-1, S-10).
 
     넘칠 때는 이벤트 표시(`marks`)가 없는 같은 줄(슬롯·레벨·태그·메시지)이 `FOLD_MIN`번 이상 되풀이되면 접는다(sim1122 F3 — 같은
     오류 문구 반복이 상한을 채워 로그 끝 이벤트 줄이 빠졌다). 먼저 뽑힐 한 줄만 남기고 그 줄 사본에 `fold: {n, first, last}`(접은 줄
@@ -272,7 +273,8 @@ def select_rows(rows: list[dict], around: str | None, limit: int) -> tuple[list[
         return bool(row["marks"]) or (row["level"] or "") in _HOT_LEVELS or is_error_text(row["msg"])
 
     if total > limit:
-        order = sorted(range(total), key=lambda i: (not hot(items[i]), dist(items[i]), str(items[i]["ts"]), i))
+        order = sorted(range(total), key=lambda i: (not items[i]["marks"], not hot(items[i]), dist(items[i]),
+                                                     str(items[i]["ts"]), i))
         stamps = [_parse_ts(r["ts"]) for r in items]
         end = max((t for t in stamps if t), default=None)
 
@@ -848,7 +850,14 @@ class ReportMixin:
             run_no = self.reuse["run"] if hit else seq     # 결과를 계산한 실행 번호
             reuse = self.reuse_out(candidates, parts, runs) if self.reuse else None
         decision = core.get("decision")
-        held = prior_unfit_hold(decision, getattr(self, "prior", None))     # RP-6: 앞 실행의 1위 부적합 표시(캐시 core 밖, 실행마다)
+        prior = getattr(self, "prior", None)
+        if (prior or {}).get("unfit") and "logs" in ((getattr(self, "reuse", None) or {}).get("changed") or []):
+            # CP-3: 로그를 바꿔 다시 돌렸으면 옛 로그 때의 부적합 표시로 보류하지 않는다(state에서도 지운다)
+            # ponytail: 오프라인은 로그 변화를 모른다(self.reuse 없음) — 같은 --out에 새 로그로 다시 돌리면 남는다. 문제가 되면 로그 sha를 기록에 남겨 비교
+            prior = {k: v for k, v in prior.items() if k != "unfit"}
+            self.prior = prior = prior if set(prior) - {"top"} else None
+            (self.state.job.get("prior_explore") or {}).pop("unfit", None)
+        held = prior_unfit_hold(decision, prior)     # RP-6: 앞 실행의 1위 부적합 표시(캐시 core 밖, 실행마다)
         if held:
             decision = held
             self.warnings.append(PRIOR_UNFIT_WARN.format(cause=core["decision"]["selected"]["cause"]))
@@ -1185,8 +1194,8 @@ class ReportMixin:
             if top.get("clock_flags"):
                 # sim1122 F6: 두 해석(버퍼 덤프 이어 붙임 / 같은 프로세스 기록의 시계 변경)을 같이 적고, 가를 단서(역행 앞뒤 pid)를 센다
                 back = r.get("_clock_backward") or {}
-                pid = (f", 로그 전체 역행 {back['known']}곳(앞뒤 같은 pid {back['same']}·tid {back.get('same_tid', 0)})"
-                       if back.get("known") else "")
+                tid = f"·tid {back.get('same_tid', 0)}" if back.get("known_tid", 1) else ""     # tid를 모르면(oFono) 수를 쓰지 않는다
+                pid = f", 로그 전체 역행 {back['known']}곳(앞뒤 같은 pid {back['same']}{tid})" if back.get("known") else ""
                 ana.append(add(8, "시계 이상 구간의 근거: 1위의 순서·시간창 판정은 시각 재정렬 기준이라 신뢰가 낮다 — 버퍼 덤프를 이어 "
                                     f"붙였거나 단말 시계가 바뀜(NITZ·재부팅){pid} [{', '.join(top['clock_flags'])}]"))
                 ana.append(f"  - {CLOCK_SPLIT}")

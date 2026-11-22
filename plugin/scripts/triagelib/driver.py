@@ -134,11 +134,13 @@ def _unjudged_label(u: dict) -> str:
 
 
 def _backward_pids(anomalies: list) -> dict:
-    """로그 전체 시계 이상 가운데 역행 수 `n`, 앞뒤 줄 pid를 아는 것 `known`, 그중 같은 pid `same`·같은 tid `same_tid`."""
+    """로그 전체 시계 이상 가운데 역행 수 `n`, 앞뒤 줄 pid를 아는 것 `known`, 그중 같은 pid `same`·같은 tid `same_tid`, 앞뒤 tid를
+    아는 것 `known_tid`(oFono는 tid가 없어 0 — 리포트가 tid 수를 빼는 근거)."""
     back = [a for a in anomalies if isinstance(a, dict) and a.get("kind") == "backward"]
     known = [a for a in back if isinstance(a.get("same_pid"), bool)]
     return {"n": len(back), "known": len(known), "same": sum(1 for a in known if a["same_pid"]),
-            "same_tid": sum(1 for a in known if a.get("same_tid") is True)}
+            "same_tid": sum(1 for a in known if a.get("same_tid") is True),
+            "known_tid": sum(1 for a in known if isinstance(a.get("same_tid"), bool))}
 
 
 class Driver(AnchorMixin, CacheMixin, ReportMixin):
@@ -1126,15 +1128,24 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         그 뒤 바뀌지 않은(기록 `output_sha256` == 지금 파일) `explore-output.md`의 가설 머리·반대 근거·`가설 없음` 이유.
         hyps는 근거 원문 검사를 했고(`source`) 원문에 없는 인용이 0일 때만(검사 건너뜀·`fabricated` > 0이면 뺀다).
         unfit = 1위 부적합 보류(`fit_hold` — 가설 없음 또는 `1위 판단: 부적합`)면 `<원인 ID> — <이유>`(≤120). 뒤 검사 기록에 보류가 없어도
-        그 검사가 `1위 판단: 적합`이 아니면 앞 unfit을 남긴다. 같은 원인이 다시 채택되면 `report.prior_unfit_hold`가 보류로 바꾼다(RP-6).
+        그 검사가 그 원인에 `1위 판단: 적합`(ID 없음 또는 그 ID — CP-4)이 아니면 앞 unfit을 남긴다. 같은 원인이 다시 채택되면
+        `report.prior_unfit_hold`가 보류로 바꾼다(RP-6).
         hyps·none·unfit은 state `job.prior_explore`에도 남겨 산출물이 지워진 뒤(질문 턴·다음 실행)에도 넘긴다 — 새 검사 기록이 있으면
-        그것으로 바꾸고, 그 검사가 실패했거나 출력이 바뀌었으면 지운다. top 말고 아무것도 없으면 None(키가 없다)."""
+        그것으로 바꾸고, 그 검사가 실패했거나 출력이 바뀌었으면 지운다. 오프라인(state 파일 없음)은 앞 실행 `analysis.json`의
+        `prior.unfit`을 앞 unfit으로 본다(CP-2 — 아니면 한 번만 넘어갔다). top 말고 아무것도 없으면 None(키가 없다)."""
         def regular(path: Path) -> bool:
             try:
                 return stat.S_ISREG(os.lstat(path).st_mode)
             except OSError:
                 return False
 
+        if self.offline and regular(self.job / "analysis.json"):      # 오프라인은 state가 실행마다 비어 있다
+            try:
+                unfit = ((json.loads((self.job / "analysis.json").read_text(encoding="utf-8")) or {}).get("prior") or {}).get("unfit")
+            except (OSError, ValueError, AttributeError):
+                unfit = None
+            if isinstance(unfit, str) and unfit:
+                self.state.job["prior_explore"] = {"unfit": unfit}
         runs = self.state.job.get("runs") or []
         top = (runs[-1].get("top") or {}) if runs else {}
         out: dict = {"top": top.get("cause") or top.get("type")}
@@ -1173,7 +1184,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                              .rstrip(" —"), 120) if isinstance(rec.get("fit_hold"), str) else None}
                     judged = {k: v for k, v in judged.items() if v} or None
             old_unfit = (self.state.job.get("prior_explore") or {}).get("unfit")
-            if old_unfit and not (judged or {}).get("unfit") and rec.get("top_fit") != "적합":
+            cleared = rec.get("top_fit") == "적합" and rec.get("top_fit_cause") in (None, old_unfit and old_unfit.split(" — ", 1)[0])
+            if old_unfit and not (judged or {}).get("unfit") and not cleared:
                 judged = {**(judged or {}), "unfit": old_unfit}     # 모델이 `적합`이라고 다시 적을 때까지 남긴다
             if judged:
                 self.state.job["prior_explore"] = judged

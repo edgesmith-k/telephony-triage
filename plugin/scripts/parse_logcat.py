@@ -938,8 +938,10 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
     warnings: list[dict] = [{"code": "marker-pattern", "message": w} for w in warn_texts]
 
     coverage = backend.coverage(paths, args.tz, args.year)
-    coverage.pop("stats", None)
+    stats = coverage.pop("stats", None) or {}
     coverage = {"first_ts": coverage["first_ts"], "last_ts": coverage["last_ts"]}
+    # 연도 없는 줄이 있으면(first_month은 그런 줄만 센다) 로그의 해는 --year로 가정한 것 — TC 날짜는 월·일만 비교한다(triagelib.anchor)
+    yearless = any(f.get("first_month") for f in stats.get("files") or [])
     markers: list[dict] = []
     total = 0
     timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
@@ -980,7 +982,7 @@ def run_markers(args, defaults: dict, profile: platforms.PlatformProfile | None 
         warnings.append({"code": "markers-truncated",
                          "message": f"마커 {total}개 중 앞의 {len(markers)}개만 냈습니다."})
     result = {"schema": OUTPUT_SCHEMA, "markers": markers, "total": total, "truncated": truncated,
-              "coverage": coverage, "warnings": warnings}
+              "coverage": coverage, "warnings": warnings, **({"yearless": True} if yearless else {})}
     if getattr(args, "step_events", False):
         hits = _step_event_hits(raw_records, step_specs, paths, rules_dir, db_cfg, coverage, timeout_ms, warnings) \
             if any(step_specs) else []

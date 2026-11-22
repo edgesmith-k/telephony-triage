@@ -483,7 +483,8 @@ _HEAD_NOT_TEST = re.compile(r"(?i)generat|print|report\s*date|firmware|version|\
 
 def head_date(text, cfg=None) -> tuple[tuple[int, int, int], tuple[int, int, int] | None] | None:
     """TC 머리(스텝 표 머리 줄 앞)에서 이름표 줄의 날짜 → `((년, 월, 일), (시, 분, 초) | None)` | None(표 머리 없음·이름표 줄 날짜 없음).
-    이름표는 시작(Start·Begin·시작) > 시험일(Test date) > 날짜(Date·일시) 순, 출력일·펌웨어·버전 줄은 보지 않는다(sim1122 F5·RP-3)."""
+    이름표는 시작(Start·Begin·시작) > 시험일(Test date) > 날짜(Date·일시) 순, 출력일·펌웨어·버전 줄은 보지 않는다(sim1122 F5·RP-3).
+    시각은 시작 이름표 줄에서 읽었을 때만 돌려준다(CP-6)."""
     header, _, start = _header(_split_cells(text), cfg)
     if header is None:
         return None
@@ -498,7 +499,8 @@ def head_date(text, cfg=None) -> tuple[tuple[int, int, int], tuple[int, int, int
                     datetime(y, mo, d)
                 except ValueError:
                     continue
-                clock = (int(m.group(4)), int(m.group(5)), int(m.group(6) or 0)) if m.group(4) else None
+                # 시각은 시작 이름표 줄에서만 — 종료·저장 시각(End Date·Date)을 첫 비교값으로 쓰면 없는 자정 넘김을 센다(CP-6)
+                clock = (int(m.group(4)), int(m.group(5)), int(m.group(6) or 0)) if m.group(4) and label is _HEAD_LABELS[0] else None
                 if clock and not (clock[0] < 24 and clock[1] < 60 and clock[2] < 60):
                     clock = None
                 return (y, mo, d), clock

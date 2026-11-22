@@ -778,7 +778,8 @@ def test_tc_head_non_test_dates_do_not_move_steps_or_warn():
 
 def test_tc_date_ref_moves_a_day_when_step_times_wrap_past_midnight(tmp_path):
     """RP-11: 머리 날짜만 있고 스텝 시각이 앞 스텝보다 1시간 넘게 작아지면(자정 넘김) 기준 날짜를 하루 올린다. 머리 시작 시각도 첫
-    비교값이다. 로그 해와 2년 넘게 다른 날짜는 쓰지 않는다."""
+    비교값이다. 기준은 그 날짜의 실패 행 첫 시각이다(CP-5 — 행 안의 넘김은 steps_file_times가 맞춘다). 로그 해 ±1년 밖 날짜는
+    기준으로 쓰지 않고 날짜 차이 경고만 낸다(CP-7). 실제 스텝 표 경로는 아래 `test_tc_head_date_real_path_*`."""
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     from triagelib.anchor import AnchorMixin
 
@@ -795,11 +796,61 @@ def test_tc_date_ref_moves_a_day_when_step_times_wrap_past_midnight(tmp_path):
     last = datetime(2026, 11, 13, 15, 10, tzinfo=timezone.utc)       # 다음 날 00:10 KST
     fake = Fake()
     ref = fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["23:58:10", "00:02:30"])
-    assert ref == datetime(2026, 11, 13, 15, 0, tzinfo=timezone.utc) and fake.warned == []      # 11-14 0시 KST
+    assert ref == datetime(2026, 11, 13, 15, 2, 30, tzinfo=timezone.utc) and fake.warned == []      # 11-14 00:02:30 KST
     assert stepanchor.steps_file_times("00:02:30", "Asia/Seoul", 2026, ref)[1] == datetime(2026, 11, 13, 15, 2, 30, tzinfo=timezone.utc)
-    assert fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["23:58:10", "23:59:30"]) == datetime(2026, 11, 12, 15, 0,
+    assert fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["23:58:10", "23:59:30"]) == datetime(2026, 11, 13, 14, 59, 30,
                                                                                                       tzinfo=timezone.utc)
     tc.write_text("Start | 2026-11-13 23:55:00\nNo | Step | Result | Time\n1 | b | FAIL | 00:02:30\n", encoding="utf-8")
-    assert fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["00:02:30"]) == datetime(2026, 11, 13, 15, 0, tzinfo=timezone.utc)
+    assert fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["00:02:30"]) == datetime(2026, 11, 13, 15, 2, 30, tzinfo=timezone.utc)
     tc.write_text("Start | 2023-11-13\nNo | Step | Result | Time\n1 | b | FAIL | 00:02:30\n", encoding="utf-8")
-    assert fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["00:02:30"]) is None and fake.warned == []
+    assert fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["00:02:30"]) is None
+    assert fake.warned == ["TC 날짜와 로그 날짜가 다름: TC 2023-11-13, 로그 2026-11-13~2026-11-14 — 다른 날의 TC·로그일 수 있다"
+                           "(같은 시험의 것인지 확인)"]                                         # CP-7: 버리되 알린다
+
+
+def _tc_html_head(rows: str, fail_time: str = "14:33:30", pass_time: str = "14:33:00") -> str:
+    return (f"<html><body><table>{rows}</table><table><tr><th>No</th><th>Step</th><th>Result</th><th>Time</th></tr>"
+            f"<tr><td>4</td><td>준비</td><td>PASS</td><td>{pass_time}</td></tr>"
+            f"<tr><td>5</td><td>데이터 켜기</td><td>FAIL</td><td>{fail_time}</td></tr></table></body></html>")
+
+
+def test_tc_head_date_real_path_yearless_log_read_as_other_year_keeps_tc_anchor():
+    """oFono 확인 P1-1(android logcat도 연도가 없어 같은 코드): 연도 없는 로그를 `--year`로 다른 해(2027)로 읽어도 TC 머리 날짜
+    2026-09-20과 월·일이 같으면 같은 날이다 — 거짓 "TC 날짜와 로그 날짜가 다름" 경고 없이 TC 기준을 쓰고 로그의 해를 붙인다.
+    월·일이 다르면 그대로 경고한다."""
+    d = tmp("tt-tcdate-year-")
+    log = _markerless(d)
+    tc = d / "tc.html"
+    tc.write_text(_tc_html("2026/09/20 14:30:00"), encoding="utf-8")
+    done, _ = _offline("tc-year", "--steps-file", tc, "--clock-offset", "0", "--year", "2027", logs=(log,),
+                       occurred="2027-09-20T14:31:00+09:00")
+    assert not any(w.startswith("TC 날짜와 로그 날짜가 다름") for w in done.get("warnings") or []), done["warnings"]
+    assert done["step_anchor"]["source"] == "steps_file" and done["step_anchor"]["span"][1] == "2027-09-20T05:33:30.000Z"
+    tc.write_text(_tc_html("2026/09/21 14:30:00"), encoding="utf-8")
+    other, _ = _offline("tc-year-other", "--steps-file", tc, "--clock-offset", "0", "--year", "2027", logs=(log,),
+                        occurred="2027-09-20T14:31:00+09:00")
+    assert ("TC 날짜와 로그 날짜가 다름: TC 2026-09-21, 로그 2027-09-20 — 다른 날의 TC·로그일 수 있다(같은 시험의 것인지 확인)"
+            in other["warnings"]), other["warnings"]
+
+
+def test_tc_head_date_real_path_wrap_inside_fail_row_and_end_label_clock():
+    """CP-5: 실패 행 안에서 자정을 넘기면(시작 23:59:50, 실패 00:00:20) 실패 시각을 다음 날로 잡는다(전에는 하루 앞으로 잡아 로그
+    범위 밖). CP-6: 시작이 아닌 이름표 줄(End Date)의 시각은 자정 넘김의 첫 비교값으로 쓰지 않는다(전에는 없는 넘김을 셌다)."""
+    d = tmp("tt-tcdate-wrap-")
+    stamps = ["09-20 23:59:30", "09-20 23:59:40", "09-20 23:59:50", "09-21 00:00:00", "09-21 00:00:10", "09-21 00:00:20",
+              "09-21 00:00:30", "09-21 00:00:40", "09-21 00:00:50", "09-21 00:01:00", "09-21 00:01:10", "09-21 00:01:20"]
+    lines = _markerless(d).read_text(encoding="utf-8").splitlines()
+    log = d / "midnight.log"
+    log.write_text("".join(f"{t}{line[14:]}\n" for t, line in zip(stamps, lines)), encoding="utf-8", newline="\n")
+    tc = d / "wrap.html"
+    tc.write_text(_tc_html_head("<tr><th>Start</th><td>2026/09/20</td></tr>", "23:59:50 00:00:20", "23:59:40"), encoding="utf-8")
+    done, _ = _offline("tc-wrap", "--steps-file", tc, "--clock-offset", "0", logs=(log,), occurred="2026-09-21T00:00:20+09:00")
+    sa = done["step_anchor"]
+    assert sa["source"] == "steps_file" and sa["span"][1] == "2026-09-20T15:00:20.000Z", (sa, done.get("warnings"))
+    end = d / "end.html"
+    end.write_text(_tc_html_head("<tr><th>Start</th><td>14:30:00</td></tr><tr><th>End Date</th><td>2026/09/20 16:05:00</td></tr>"),
+                   encoding="utf-8")
+    done, _ = _offline("tc-end", "--steps-file", end, "--clock-offset", "0", logs=(_markerless(d),))
+    sa = done["step_anchor"]
+    assert sa["source"] == "steps_file" and sa["span"][1] == "2026-09-20T05:33:30.000Z", (sa, done.get("warnings"))
+    assert not any("로그 범위 밖" in w for w in done.get("warnings") or [])

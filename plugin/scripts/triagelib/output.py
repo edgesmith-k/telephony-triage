@@ -77,6 +77,8 @@ WARN_FIT_UNREAD = ("  - 경고: 1위 판단 칸을 읽지 못함 — `1위 판�
                    "그대로)")
 WARN_FIT_OTHER = ("  - 경고: 1위 판단의 부적합 원인({got})이 채택 원인 {cause}와 맞지 않아 보류하지 않았다(`1위 판단: {cause} …`로 "
                   "다시 확인)")
+WARN_FIT_RELEASE = ("  - 경고: 1위 판단 적합 — 앞 실행 부적합 원인 {cause}의 보류(prior.unfit)는 이번 결과에 그대로다(같은 인자로 run을 "
+                    "다시 하면 보류가 풀린다)")
 # 확인할 내용 줄(report.py) 꼬리: 탐색 검사 뒤 답 자리를 가리킨다(F7)
 QUESTION_PREFIX = "- 확인할 내용(사용자 질문): "
 QUESTION_PENDING = " — 탐색 분석(동의 뒤)에서 답한다"
@@ -428,6 +430,11 @@ def _fit_subs(analysis: dict, fields: dict, hold: str | None) -> list[str]:
         out = [line]
         if fit_check and tf["fit"] == "부적합" and not hold and cause:
             out.append(WARN_FIT_OTHER.format(got=tf.get("cause") or "ID 없음", cause=cause))
+        unfit = str((analysis.get("prior") or {}).get("unfit") or "").split(" — ", 1)[0].strip()
+        dec = analysis.get("decision") or {}
+        if (unfit and tf["fit"] == "적합" and tf.get("cause") in (None, unfit) and dec.get("state") == "held"
+                and dec.get("reason") == "fit_check"):      # CP-3: 이번 run을 막은 앞 부적합 — 다음 run(driver.read_prior)이 푼다
+            out.append(WARN_FIT_RELEASE.format(cause=unfit))
         return out
     if (fields["hyps"] and cause and fit_check and (analysis.get("decision") or {}).get("state") == "accepted"):
         return [WARN_NO_FIT.format(cause=cause)]
@@ -699,6 +706,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     _record(job, purpose, {"mode": mode, "at": _now(), "env": env, "output_sha256": sha, "source": src_rel if res else None,
                            "quotes": n, **counts, **({"fit_hold": hold} if hold else {}),
                            **({"top_fit": fields["top_fit"]["fit"] or "읽지 못함"} if fields.get("top_fit") else {}),
+                           **({"top_fit_cause": fields["top_fit"]["cause"]} if (fields.get("top_fit") or {}).get("cause") else {}),
                            **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra})
     head = masking.mask_brief(lines[0], 300, off=off)     # 끔 DB: report.md 줄과 같은 글자(꼭 보일 줄 대조가 어긋나지 않게)
     fab = [sub.lstrip()] if counts["fabricated"] or before else []     # 앞 검사의 불일치도 보일 의무(RP-14)

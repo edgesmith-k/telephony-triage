@@ -487,6 +487,9 @@ def test_clock_anomaly_same_pid_clue():
     got = logtime.coverage([[line(50, 7, 1), line(10, 7, 2), line(20, 8), line(5, 9)], [line(30, None), line(1, 3)]])
     assert [(a["delta_sec"], a.get("same_pid"), a.get("same_tid")) for a in got["clock_anomalies"]] == [
         (-40.0, True, False), (-15.0, False, None), (-29.0, None, None)]
+    # oFono 확인 P2-4: pid 0(oFono 파서가 pid 없는 줄에 넣는 값)은 모름 — 같은 pid로 세지 않는다
+    got = logtime.coverage([[line(50, 0), line(10, 0)], [line(50, 0, 0), line(10, 7, 0)]])
+    assert [(a.get("same_pid"), a.get("same_tid")) for a in got["clock_anomalies"]] == [(None, None), (None, None)]
 
 
 # -- bugreport ---------------------------------------------------------------
