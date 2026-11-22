@@ -1724,7 +1724,7 @@
               "resultCode=\\w+",
               "cause=\\w+"
             ],
-            "suspect": "모뎀·RIL·DataServiceManager"
+            "suspect": "망 거절 cause면 망·장비 설정이나 모뎀 요청(모뎀 로그로 가름), cause 없이 실패면 모뎀·RIL·DataServiceManager"
           },
           {
             "id": "link-properties",
