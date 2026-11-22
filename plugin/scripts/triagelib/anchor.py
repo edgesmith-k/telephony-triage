@@ -18,6 +18,7 @@ from .core import CLUE_FILE, LOOK_FILE, NeedsInput, _clip
 NO_STEP_TIME = "TC 실패 스텝에 시각 없음 — TC 시각으로 분석 구간을 정하지 못해 다음 출처로 정했다"
 # sim1122 F5: TC 머리 날짜가 로그 날짜 범위에 없다(다른 날 로그·TC). 포털이 이 머리로 고른다 — 바꾸면 포털도
 TC_DATE_DIFF = "TC 날짜와 로그 날짜가 다름: TC {tc}, 로그 {log} — 다른 날의 TC·로그일 수 있다(같은 시험의 것인지 확인)"
+_CLOCK_RE = re.compile(r"(?<![\d:.\-])(\d{1,2}):(\d{2}):(\d{2})(?![\d:])")     # 스텝 칸의 시각만(자정 넘김 세기)
 LOOK_TIME_ONLY = "기준 줄에 시각만 있어 로그에서 찾지 않았다 — 태그와 메시지 일부를 같이 적으면 그 줄을 찾는다"
 
 
@@ -569,9 +570,11 @@ class AnchorMixin:
         if fs and fs.get("source") != "steps_file" and not stepanchor.same_step(row_label, fs["text"]):
             self.warn(f"실패 스텝({fs['source']})과 steps-file의 FAIL 스텝이 다르다 — 구간은 steps-file 순서로 정했다")
 
-    def tc_date_ref(self, steps_file, conf: dict, zone, first, last):
-        """TC 머리 날짜(`failedstep.head_date`)를 steps-file 시간대의 UTC 시각으로(시각이 없으면 그날 0시) | None(못 읽음).
-        로그 첫~끝 날짜(같은 시간대)에 그 날짜가 없으면 `TC_DATE_DIFF` 경고 — 시계 차를 몰라도 낸다(하루 넘는 차이는 시계 차가 아니다)."""
+    def tc_date_ref(self, steps_file, conf: dict, zone, first, last, times: list):
+        """TC 머리 날짜(`failedstep.head_date`, 이름표 줄만)로 스텝 시각 기준 → 그 날짜(steps-file 시간대) 0시 UTC | None(못 읽음·
+        로그 해와 2년 넘게 다름). `times`(첫 스텝부터 실패 스텝까지 시각 칸 원문)의 시각이 앞보다 1시간 넘게 작아질 때마다(자정 넘김)
+        하루씩 올린다 — 머리에 시작 시각이 있으면 그것이 첫 비교값(RP-11). 머리 날짜가 로그 첫~끝 날짜에 없으면 `TC_DATE_DIFF` 경고
+        (시계 차를 몰라도 낸다 — 하루 넘는 차이는 시계 차가 아니다)."""
         text, _ = failedstep.read_lines(steps_file)
         got = failedstep.head_date(text, conf) if text is not None else None
         if got is None:
@@ -581,13 +584,24 @@ class AnchorMixin:
             local = lc.get_tz(zone)
         except ValueError:      # 알 수 없는 타임존 — steps_file_times가 같은 경고를 낸다
             return None
-        ref = datetime(y, mo, d, *(clock or (0, 0, 0)), tzinfo=local).astimezone(timezone.utc)
+        if first and abs(y - first.astimezone(local).year) > 1:      # 해가 동떨어지면 시험 날짜가 아니다
+            return None
         if first and last:
             days = sorted({first.astimezone(local).date(), last.astimezone(local).date()})
-            if not days[0] <= ref.astimezone(local).date() <= days[-1]:
+            if not days[0] <= datetime(y, mo, d).date() <= days[-1]:
                 span = days[0].isoformat() + (f"~{days[-1].isoformat()}" if days[-1] != days[0] else "")
                 self.warn(TC_DATE_DIFF.format(tc=f"{y:04d}-{mo:02d}-{d:02d}", log=span))
-        return ref
+        prev = clock[0] * 3600 + clock[1] * 60 + clock[2] if clock else None
+        wraps = 0
+        for raw in times:
+            m = _CLOCK_RE.search(str(raw or ""))
+            if not m:
+                continue
+            sec = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
+            if prev is not None and sec < prev - 3600:      # ponytail: 1시간 넘게 거꾸로 가면 자정 넘김으로 본다(스텝 순서 흔들림은 무시)
+                wraps += 1
+            prev = sec
+        return (datetime(y, mo, d, tzinfo=local) + timedelta(days=wraps)).astimezone(timezone.utc)
 
     def steps_file_span(self, steps_file, tz, year, conf: dict, jira_at, first, inside, last=None) -> dict | None:
         steps, fidx, warns, _ = self.steps_info()
@@ -610,7 +624,8 @@ class AnchorMixin:
                 return None
             label = failedstep.normalize(self.masker()(failedstep.numbered(step, line) or ""), 80)
         zone = conf.get("steps_file_tz") or tz or userconfig.get(self.cfg, "logcat.timezone")
-        tc_ref = self.tc_date_ref(steps_file, conf, zone, first, last)
+        times = [r.get("time_raw") for r in steps[: fidx + 1]] if row is not None else [line]
+        tc_ref = self.tc_date_ref(steps_file, conf, zone, first, last, times)
         if not line:
             self.warn(NO_STEP_TIME)
             return None

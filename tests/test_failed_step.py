@@ -638,3 +638,9 @@ def test_head_date_reads_tc_head_before_step_table():
     assert failedstep.head_date("Start | 2026/13/40\n" + table) is None                     # 없는 날짜
     assert failedstep.head_date(table + "End | 2026/11/13\n") is None                      # 표 뒤는 머리가 아니다
     assert failedstep.head_date("Start 2026/11/13\n1 2 3\n") is None                       # 표 머리 없음
+    # RP-3: 이름표 줄의 날짜만 — 출력일·펌웨어·빌드 버전, 이름표 없는 날짜는 쓰지 않는다. 이름표는 시작 > 시험일 > 날짜
+    for head in ("Firmware 2024.12.3\nStart | 14:30:00\n", "Report generated 2026-11-20 09:00\nStart | 10:20:00\n",
+                 "Build 2026.3.1\n", "Report Date 2026-11-20\n", "Printed 2026-11-20\n", "2026-11-13\n", "Tool v1000.1.1\n"):
+        assert failedstep.head_date(head + table) is None, head
+    assert failedstep.head_date("Date 2026-11-20\nTest date 2026-11-14\nBegin 2026-11-13\n" + table) == ((2026, 11, 13), None)
+    assert failedstep.head_date("Date 2026-11-20\nTest date: 2026-11-14\n" + table) == ((2026, 11, 14), None)

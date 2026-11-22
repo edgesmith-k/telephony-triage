@@ -200,7 +200,9 @@ def test_unfit_top_holds_with_reason_and_next_check_then_rerun_carries_prior():
     assert json.loads((out / "analysis.json").read_text(encoding="utf-8"))["candidates"][0]["C"] == 1
 
     again = _run(item, out, "--explore")                                  # 재실행(답글 턴): 이전 판단을 넘긴다
-    assert again["prior"] == {"none": "1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다"}, again.get("prior")
+    # RP-6: 가설 없음 보류도 unfit으로 넘긴다(같은 원인이 다시 채택되면 run이 보류한다 — 여기선 run이 이미 보류)
+    assert again["prior"] == {"none": "1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다",
+                              "unfit": "DATA-001-01 — 1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다"}, again.get("prior")
     assert not (out / "explore-output.md").exists()                      # 추린 뒤에 지웠다(drop_stale_records)
     third = _run(item, out, "--explore")                                  # 검사 기록도 지워졌으니 다시 넘기지 않는다
     assert "prior" not in third
@@ -506,6 +508,37 @@ def test_unfit_mark_holds_accepted_top_even_with_hypotheses_and_carries_to_next_
     again = _run(item, held, "--explore", "--look-at", LOOK, "--look-note", "재시도가 오는지")
     assert again["prior"]["unfit"] == "DATA-001-01 — 데이터 꺼짐은 이번 실패 시각과 맞지 않는다", again["prior"]
     assert again["prior"]["hyps"] == ["시험 장비 설정이 실패를 만들었다 — 반대: 장비 로그 없음"]
+    # RP-6: 같은 원인이 다시 채택되면 run이 보류한다(모델이 다시 적지 않아도) — 판단 줄·경고에 이유
+    assert (again["decision"]["state"], again["decision"]["reason"], again["decision"]["selected"]) == ("held", "fit_check", None)
+    assert "앞 실행에서 모델이 1위 판단 부적합으로 표시한 원인 DATA-001-01가 다시 채택돼 보류했다(prior.unfit)" in again["warnings"]
+    assert _report_line(held, "- 판단:").startswith("- 판단: 원인 보류 — 탐색 분석 적합성 확인에서")
+    assert again["candidates"][0]["cause"] == "DATA-001-01" and again["candidates"][0]["C"] == 1      # 판정·순위는 그대로
+
+    # RP-1: 원인 ID를 함께 적은 형식도 부적합으로 읽는다
+    for name, tail in (("id", "1위 판단: DATA-001-01 부적합 — 시각이 다르다\n"), ("paren", "1위 판단(DATA-001-01): 부적합.\n")):
+        job = accepted_job(name)
+        hyp_output(job, tail)
+        assert "warning" not in run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", job])
+        assert json.loads((job / "analysis.json").read_text(encoding="utf-8"))["decision"]["state"] == "held", name
+    # RP-7: 부적합으로 적은 원인이 채택 원인과 다르면 보류하지 않고 경고
+    other = accepted_job("other")
+    hyp_output(other, "1위 판단: DATA-002-01 부적합 — 다른 원인\n")
+    checked = run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", other])
+    assert checked["warning"] == ("- 경고: 1위 판단의 부적합 원인(DATA-002-01)이 채택 원인 DATA-001-01와 맞지 않아 보류하지 않았다"
+                                  "(`1위 판단: DATA-001-01 …`로 다시 확인)")
+    assert json.loads((other / "analysis.json").read_text(encoding="utf-8"))["decision"]["state"] == "accepted"
+    # 못 읽은 칸은 "칸 없음"이 아니라 "읽지 못함"
+    bad = accepted_job("bad")
+    hyp_output(bad, "1위 판단: 맞지 않음\n")
+    checked = run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", bad])
+    assert checked["warning"].startswith("- 경고: 1위 판단 칸을 읽지 못함 — ")
+    assert json.loads((bad / "check-output.json").read_text(encoding="utf-8"))["explore"]["top_fit"] == "읽지 못함"
+    # RP-15: 가설 없음 + 적합이면 보류 이유를 밝힌다
+    none = accepted_job("none")
+    (none / "explore-output.md").write_text("가설 없음: 근거 줄이 없다\n다음 확인: radio 로그\n1위 판단: 적합 — 아마\n", encoding="utf-8")
+    run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", none])
+    assert _report_line(none, "  - 1위 판단(모델): ") == ("  - 1위 판단(모델): 적합 — 아마 → 가설 없음이라 1위 DATA-001-01 보류"
+                                                      "(1위 판단 '적합'과 맞지 않음 — 탐색 출력 확인)")
 
     plain = accepted_job("plain")
     hyp_output(plain, "")
@@ -521,3 +554,36 @@ def test_unfit_mark_holds_accepted_top_even_with_hypotheses_and_carries_to_next_
     assert "warning" not in checked and _report_line(fit, "  - 경고:") is None
     assert json.loads((fit / "analysis.json").read_text(encoding="utf-8"))["decision"]["state"] == "accepted"
     assert _report_line(fit, "  - 1위 판단(모델): ") == "  - 1위 판단(모델): 적합 — 데이터 꺼짐 줄이 실패 직전"
+
+
+def test_prior_unfit_survives_unmarked_check_until_marked_fit(tmp_path):
+    """RP-6: 앞 실행의 `prior.unfit`은 뒤 검사가 1위 판단 칸 없이 끝나도 남고, `1위 판단: 적합`이라고 다시 적으면 지운다
+    (오프라인 실행은 state를 쓰지 않으므로 read_prior를 직접 부른다). 같은 원인이 채택되면 run 판단이 보류로 바뀐다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import hashlib
+
+    from triagelib import report
+    from triagelib.cache import State
+    from triagelib.driver import Driver
+    drv = Driver.__new__(Driver)
+    drv.job = tmp_path
+    drv.state = State(tmp_path / "triage-state.json")
+    drv.state.job["prior_explore"] = {"unfit": "DATA-001-01 — 시각이 다르다"}
+
+    def checked(text: str, top_fit: str | None) -> dict | None:
+        (tmp_path / "explore-output.md").write_text(text, encoding="utf-8")
+        rec = {"mode": "explore", "output_sha256": hashlib.sha256(text.encode()).hexdigest(), "source": "timeline.md",
+               "fabricated": 0, **({"top_fit": top_fit} if top_fit else {})}
+        (tmp_path / "check-output.json").write_text(json.dumps({"explore": rec}), encoding="utf-8")
+        return drv.read_prior()
+
+    hyp = "가설 1: x\n로그로 확인:\n- 10:00:00.000 - E t m\n코드로 추정: 없음\n반대 근거: 없음\n다음 확인: y\n"
+    assert checked(hyp, None)["unfit"] == "DATA-001-01 — 시각이 다르다"             # 칸 없이 검사해도 남는다
+    assert "unfit" not in (checked(hyp + "1위 판단: DATA-001-01 적합 — 맞다\n", "적합") or {})
+    accepted = {"state": "accepted", "reason": "anchored_top", "selected": {"cause": "DATA-001-01"}, "counter": {"cause": "X"},
+                "events": [{"result": "adopted"}, {"result": "observed"}]}
+    held = report.prior_unfit_hold(accepted, {"unfit": "DATA-001-01 — 시각이 다르다"})
+    assert held == {"state": "held", "reason": "fit_check", "selected": None,
+                    "events": [{"result": "held"}, {"result": "observed"}]}
+    assert report.prior_unfit_hold(accepted, {"unfit": "DATA-002-01 — x"}) is None
+    assert report.prior_unfit_hold({**accepted, "state": "held"}, {"unfit": "DATA-001-01 — x"}) is None

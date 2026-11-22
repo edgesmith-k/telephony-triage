@@ -123,8 +123,8 @@ def normalize_ts(value, tz_name: str | None, year: int | None) -> datetime | Non
 
 
 def coverage(files: list[list]) -> dict:
-    """파일 시각 범위와 시계 이상. 이상 판정은 파일마다 파일 순서로 한다. 줄 객체는 `dt`(UTC)와, 있으면 `pid`를 쓴다
-    (앞뒤 줄 모두 pid가 있으면 이상 항목에 `same_pid`)."""
+    """파일 시각 범위와 시계 이상. 이상 판정은 파일마다 파일 순서로 한다. 줄 객체는 `dt`(UTC)와, 있으면 `pid`·`tid`를 쓴다
+    (앞뒤 줄 모두 값이 있으면 이상 항목에 `same_pid`·`same_tid`)."""
     first = last = None
     anomalies: list[dict] = []
     for lines in files:
@@ -143,9 +143,10 @@ def coverage(files: list[list]) -> dict:
                     kind = "jump"
                 if kind:
                     item = {"ts": format_ts(line.dt), "kind": kind, "delta_sec": round(delta, 3)}
-                    pids = (getattr(prev_line, "pid", None), getattr(line, "pid", None))
-                    if None not in pids:    # 앞뒤 줄이 같은 프로세스인가(시계 변경 대 덤프 이어 붙임을 가를 단서, sim1122 F6)
-                        item["same_pid"] = pids[0] == pids[1]
+                    for key in ("pid", "tid"):     # 앞뒤 줄이 같은 프로세스·스레드인가(단서일 뿐, sim1122 F6·RP-9)
+                        pair = (getattr(prev_line, key, None), getattr(line, key, None))
+                        if None not in pair:
+                            item[f"same_{key}"] = pair[0] == pair[1]
                     anomalies.append(item)
             prev, prev_line = line.dt, line
     return {

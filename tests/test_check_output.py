@@ -543,7 +543,9 @@ def test_evidence_record_on_work_dir_job(tmp_path, capsys, monkeypatch):
     code, data2, _ = check(job, out=False, capsys=capsys)
     assert code == 0
     recs = [r for r in _shown(work) if r["kind"] == "evidence"]
-    assert len(recs) == 2 and recs[1]["lines"] == [data2["line"].removesuffix("…")]
+    # RP-14: 앞 검사의 원문에 없는 인용(1)은 고친 뒤에도 보일 의무에 남는다(근거 검사 줄 끝 "앞 검사 원문에 없음 1")
+    assert len(recs) == 2 and recs[1]["lines"] == [data2["line"].removesuffix("…"), data2["evidence"]]
+    assert data2["evidence"].endswith(output.FAB_BEFORE.format(n=1))
     # 같은 key의 두 기록을 순서대로 고정하면 열린 의무는 둘째(결과 줄) 하나다
     seq = [{"kind": "tool", "name": "Bash", "id": f"b{k}", "input": {"command": f"python3 triage.py check-output {KEY} --for deep"},
             "result": "{}", "error": False} for k in range(2)]
@@ -750,6 +752,13 @@ def test_question_line_points_to_answer_after_explore_check(tmp_path, capsys):
     (bad / "explore-output.md").write_text("가설 1: 칸이 모자란 가설\n", encoding="utf-8")
     assert check(bad, "explore", capsys=capsys)[0] == 1
     assert _line(bad, QUESTION) == QUESTION + output.QUESTION_SKIPPED
+    # RP-8: `triage.py explore` 재실행 뒤 다시 검사하면 꼬리도 이번 결과로 바뀐다(통과 → 실패, 생략 → 통과)
+    report.rewrite_line(job / "report.md", "- 탐색 분석", [EXPLORE_PENDING])
+    (job / "explore-output.md").write_text("가설 1: 칸이 모자란 가설\n", encoding="utf-8")
+    assert check(job, "explore", capsys=capsys)[0] == 1 and _line(job, QUESTION) == QUESTION + output.QUESTION_SKIPPED
+    report.rewrite_line(skipped / "report.md", "- 탐색 분석", [EXPLORE_PENDING])
+    (skipped / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
+    assert check(skipped, "explore", capsys=capsys)[0] == 0 and _line(skipped, QUESTION) == QUESTION + output.QUESTION_DONE
     # 꼬리가 다른 줄(never·--no-explore 안내)은 고치지 않는다
     other = make_job(tmp_path / "other", "explore", "plain")
     keep = f"{QUESTION} — 탐색 분석 안 함 — 확인할 내용은 답하지 않음(근거 로그로 직접 확인)"

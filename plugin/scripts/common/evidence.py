@@ -12,6 +12,8 @@ from __future__ import annotations
 import difflib
 import re
 
+from .fixtures import CAUSE_ID
+
 FIELDS_DEEP = ("원인 층", "원인 데몬", "근거", "반대 근거", "분석 스킬 의견", "규칙 제안")
 FIELDS_SKILL = ("요약", "근거", "분석 스킬 의견", "규칙 제안")
 LIST_FIELDS = ("근거", "규칙 제안")
@@ -94,15 +96,23 @@ NONE_RX = _label_rx("가설 없음")
 EXPLORE_OPTIONAL = ("원인 층", "원인 데몬")
 EXPLORE_TAIL = ("가장 유력", "규칙 제안")
 EXPLORE_RX = {f: _label_rx(f) for f in EXPLORE_FIELDS[1:] + EXPLORE_OPTIONAL + EXPLORE_TAIL}
-# sim1122 F2: `1위 판단: 적합|부적합|모름 — <이유>`(1위 후보가 이번 실패를 설명하는지, 선택 칸, 출력 어디에 있어도 첫 줄). 없거나 값이
-# 셋이 아니면 None — 형식 실패로 만들지 않는다(check-output이 경고 줄만 남긴다)
-TOP_FIT_RX = re.compile(r"^\s*(?:[-*]\s*)?\**\s*1위\s*판단\s*\**\s*[:：]\s*\**\s*(부적합|적합|모름)(?=$|[\s—–:,(*])\**\s*(?:[—–:-]\s*)?(.*)$")
+# sim1122 F2: `1위 판단: <원인 ID> 적합|부적합|모름 — <이유>`(채택 원인이 이번 실패를 설명하는지, 선택 칸, 출력 어디에 있어도 첫
+# `1위 판단` 줄). ID는 값 앞·머리 괄호(`1위 판단(<ID>):`)·없음(옛 형식) 모두 읽고, 값 뒤 문장부호도 받는다. 형식 실패로 만들지 않는다
+TOP_FIT_HEAD_RX = re.compile(r"^\s*(?:[-*]\s*)?\**\s*1위\s*판단")
+_ID = r"[`*\[(<]*(" + CAUSE_ID + r")(?!\d)[`*\])>]*"
+TOP_FIT_RX = re.compile(r"^\s*(?:[-*]\s*)?\**\s*1위\s*판단\s*(?:" + _ID + r")?\s*\**\s*[:：]\s*\**\s*(?:" + _ID + r"\s*[:：]?\s*)?"
+                        r"(부적합|적합|모름)(?=$|[\s—–:,.(*!])\**[.!]?\s*(?:[—–:-]\s*)?(.*)$")
 
 
 def top_fit(lines: list[str]) -> dict | None:
-    """`1위 판단:` 칸 → {"fit": 적합|부적합|모름, "why": 이유} | None."""
-    m = next((m for line in lines if (m := TOP_FIT_RX.match(line))), None)
-    return {"fit": m.group(1), "why": m.group(2).strip()} if m else None
+    """`1위 판단` 칸 → {"fit": 적합|부적합|모름, "cause": 원인 ID | None, "why": 이유} | 줄은 있는데 못 읽으면 {"fit": None, …} | None."""
+    head = next((line for line in lines if TOP_FIT_HEAD_RX.match(line)), None)
+    if head is None:
+        return None
+    m = TOP_FIT_RX.match(head)
+    if not m:
+        return {"fit": None, "cause": None, "why": ws(head)[:120]}
+    return {"fit": m.group(3), "cause": m.group(1) or m.group(2), "why": m.group(4).strip()}
 
 
 def _top_fit_key(lines: list[str]) -> dict:
@@ -462,7 +472,7 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
     """인용 목록 판정 → {"n", "fabricated", "weak", "raw", "first", "verdicts"}. `verdicts`는 항목별 판정
     (ok | weak | fabricated | raw, 입력 순서 — check-output이 가설별로 나눈다).
 
-    `〔script` 메모를 인용한 항목은 지어낸 것으로 센다. `raw_items`(check-output 마스킹이 바꾼 항목 = 원문 값이 든 인용,
+    `〔script…〕` 메모만 인용한 항목은 지어낸 것으로 센다(줄 끝 메모까지 복사한 인용은 메모를 떼고 본다). `raw_items`(check-output 마스킹이 바꾼 항목 = 원문 값이 든 인용,
     설치 스킬 모드만)는 `raw`로 세고 지어낸 것으로 세지 않는다. 원문이 256KB보다 크면 먼저 인용 조각마다 원문 한 줄 안에
     **토큰 경계를 두고**(`_has_token`, 행마다 `_low` — 공백·대소문자·`=`/`:` 둘레 차이만 허용) 있는지 보고, 모두 있으면 ok다
     (FR-01: 부분 문자열만 보면 `status=10`→`status=1`·`disconnected`→`connected` 같은 변조를 ok로 봤다). 아니면 조각이 든
@@ -481,9 +491,10 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
     for i, item in enumerate(items):
         if i in raw_items:
             verdict = "raw"
-        elif "〔script" in item:
-            verdict = "fabricated"
+        elif "〔script" in SCRIPT_NOTE_RX.sub("", item) or not SCRIPT_NOTE_RX.sub("", item).strip():
+            verdict = "fabricated"          # 메모만(또는 닫히지 않은 메모를) 인용했다
         else:
+            item = SCRIPT_NOTE_RX.sub("", item).rstrip()      # 줄 끝 메모까지 복사한 인용은 본 줄로 판정한다(sim1122 RP-13)
             parts = _quote_parts(item, tags)
             if big and parts and all(_has_token(low_lines, _low(p)) for p in parts):
                 verdict = "ok"

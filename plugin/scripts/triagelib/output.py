@@ -71,13 +71,19 @@ HOLD_KEEP = ("fit_hold", "fit_hold_unwritten")     # 탐색 기록을 새로 써
 WARN_DECISION = "경고: analysis.json 판단(decision)을 고치지 못했다({why})"
 TOP_FIT_SUB = "  - 1위 판단(모델): {fit}{why}"
 TOP_FIT_HELD = " → 1위 {cause} 채택을 보류로 바꿨다"
+TOP_FIT_NONE_HELD = " → 가설 없음이라 1위 {cause} 보류(1위 판단 '{fit}'과 맞지 않음 — 탐색 출력 확인)"
 WARN_NO_FIT = "  - 경고: 1위 판단 칸 없음 — 1위 {cause} 채택은 그대로다(탐색 가설이 1위와 맞는지 확인)"
+WARN_FIT_UNREAD = ("  - 경고: 1위 판단 칸을 읽지 못함 — `1위 판단: <원인 ID> 적합|부적합|모름 — <이유>` 형식이 아니다(1위 {cause} 판단은 "
+                   "그대로)")
+WARN_FIT_OTHER = ("  - 경고: 1위 판단의 부적합 원인({got})이 채택 원인 {cause}와 맞지 않아 보류하지 않았다(`1위 판단: {cause} …`로 "
+                  "다시 확인)")
 # 확인할 내용 줄(report.py) 꼬리: 탐색 검사 뒤 답 자리를 가리킨다(F7)
 QUESTION_PREFIX = "- 확인할 내용(사용자 질문): "
 QUESTION_PENDING = " — 탐색 분석(동의 뒤)에서 답한다"
 QUESTION_DONE = " — 답: 아래 탐색 분석 줄(가설 1의 로그로 확인·반대 근거)과 `- 원인:`·다음 확인 줄"
 QUESTION_DONE_NONE = " — 답: 아래 탐색 분석 줄(가설 없음 이유·다음 확인)과 `- 원인:` 줄"
 QUESTION_SKIPPED = " — 탐색 분석 생략이라 답하지 않음(근거 로그로 직접 확인)"
+QUESTION_TAILS = (QUESTION_PENDING, QUESTION_DONE, QUESTION_DONE_NONE, QUESTION_SKIPPED)
 FAB_BEFORE = " · 앞 검사 원문에 없음 {n}(다시 검사해도 지우지 않음)"
 # 분석 스킬 의견 `<원인 ID> — <근거>`의 앞 ID. 백틱·굵게로 감싸거나 조사(`ID와`)가 붙어도 잡고, 숫자가 더 붙은 것은 아니다
 OPINION_ID = re.compile(rf"\s*[`*]*({CAUSE_ID})(?!\d)")
@@ -386,35 +392,55 @@ def _top_cause(analysis: dict) -> str | None:
     return top.get("cause") if isinstance(top, dict) else None
 
 
+def _unfit_applies(analysis: dict, tf: dict | None) -> bool:
+    """`1위 판단`의 부적합이 채택 원인(없으면 순위 1위)에 해당하나(RP-1·RP-7): 적은 ID가 그 원인과 같을 때, ID 없이 쓴 옛 형식은
+    그 원인이 순위 1위일 때만(모델이 보는 "1위"는 `분류 후보:` 줄의 순위 1위다)."""
+    if not tf or tf.get("fit") != "부적합":
+        return False
+    cause = _top_cause(analysis)
+    rank1 = ((analysis.get("candidates") or [{}])[0] or {}).get("cause")
+    return bool(cause) and (tf.get("cause") == cause if tf.get("cause") else cause == rank1)
+
+
 def _fit_hold(analysis: dict, fields: dict) -> str | None:
-    """FR-02: 적합성 확인(`explore.reason: fit_check`)이 가설 없이 끝났거나 모델이 `1위 판단: 부적합`을 적었으면(가설이 있어도,
-    sim1122 F2) 보류한 1위 원인 ID, 아니면 None. 감지는 구조(사유·빈 가설·판단 칸)만 보고 판정(C·순위)은 바꾸지 않는다.
+    """FR-02: 적합성 확인(`explore.reason: fit_check`)이 가설 없이 끝났거나 모델이 채택 원인에 `1위 판단: <ID> 부적합`을 적었으면
+    (가설이 있어도, sim1122 F2) 보류한 원인 ID, 아니면 None. 감지는 구조(사유·빈 가설·판단 칸)만 보고 판정(C·순위)은 바꾸지 않는다.
     report.md 재작성 성패와 무관하다(기록·Jira는 이것으로 정한다)."""
     cause = _top_cause(analysis)
-    unfit = (fields.get("top_fit") or {}).get("fit") == "부적합"
-    if (fields["hyps"] and not unfit) or (analysis.get("explore") or {}).get("reason") != "fit_check" or not cause:
+    if (analysis.get("explore") or {}).get("reason") != "fit_check" or not cause:
         return None
-    return cause
+    return cause if not fields["hyps"] or _unfit_applies(analysis, fields.get("top_fit")) else None
 
 
 def _fit_subs(analysis: dict, fields: dict, hold: str | None) -> list[str]:
-    """탐색 줄 아래 1위 판단 하위 줄(칸이 있을 때), 또는 적합성 확인·채택·가설 있음인데 칸이 없으면 경고 하위 줄."""
+    """탐색 줄 아래 1위 판단 하위 줄(읽었을 때)과 경고 하위 줄: 칸을 못 읽음, 부적합으로 적은 원인이 채택 원인이 아님,
+    적합성 확인·채택·가설 있음인데 칸이 없음."""
     tf = fields.get("top_fit")
+    cause = _top_cause(analysis)
+    fit_check = (analysis.get("explore") or {}).get("reason") == "fit_check"
+    if tf and tf["fit"] is None:
+        return [WARN_FIT_UNREAD.format(cause=cause or "-")] if fit_check else []
     if tf:
         why = f" — {_one(tf['why'])}" if tf["why"] else ""
-        return [TOP_FIT_SUB.format(fit=tf["fit"], why=why) + (TOP_FIT_HELD.format(cause=hold) if hold else "")]
-    cause = _top_cause(analysis)
-    if (fields["hyps"] and cause and (analysis.get("explore") or {}).get("reason") == "fit_check"
-            and (analysis.get("decision") or {}).get("state") == "accepted"):
+        line = TOP_FIT_SUB.format(fit=(f"{tf['cause']} " if tf.get("cause") else "") + tf["fit"], why=why)
+        if hold:
+            line += TOP_FIT_HELD.format(cause=hold) if tf["fit"] == "부적합" else TOP_FIT_NONE_HELD.format(cause=hold, fit=tf["fit"])
+        out = [line]
+        if fit_check and tf["fit"] == "부적합" and not hold and cause:
+            out.append(WARN_FIT_OTHER.format(got=tf.get("cause") or "ID 없음", cause=cause))
+        return out
+    if (fields["hyps"] and cause and fit_check and (analysis.get("decision") or {}).get("state") == "accepted"):
         return [WARN_NO_FIT.format(cause=cause)]
     return []
 
 
 def _question_tail(report: Path, tail: str) -> None:
-    """확인할 내용 줄의 꼬리 `탐색 분석(동의 뒤)에서 답한다`를 바꾼다(F7). 그 꼬리가 아니면(never·--no-explore·이미 고침) 그대로."""
+    """확인할 내용 줄의 꼬리를 이번 탐색 결과로 바꾼다(F7·RP-8 — 다시 검사해도 갱신). 꼬리가 탐색 안내(`QUESTION_TAILS`)가 아니면
+    (never·--no-explore) 그대로."""
     line = rep.current_line(report, QUESTION_PREFIX)
-    if line and line.endswith(QUESTION_PENDING) and not rep.rewrite_line(
-            report, QUESTION_PREFIX, [line[: -len(QUESTION_PENDING)] + tail], keep_sub=("  - ",)):
+    old = next((t for t in QUESTION_TAILS if line and line.endswith(t)), None)
+    if old and old != tail and not rep.rewrite_line(
+            report, QUESTION_PREFIX, [line[: -len(old)] + tail], keep_sub=("  - ",)):
         print(WARN_REWRITE, file=sys.stderr)
 
 
@@ -641,7 +667,8 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
             it = iter(res["verdicts"])
             fab_by_hyp = [[next(it) for _ in h["로그로 확인"]].count("fabricated") for h in fields["hyps"]]
     old = _load(job / RECORD)
-    sub = _evidence_sub(mode, res, src_skip, _fab_before(old.get(purpose) if isinstance(old, dict) else None))
+    before = _fab_before(old.get(purpose) if isinstance(old, dict) else None)
+    sub = _evidence_sub(mode, res, src_skip, before)
 
     report, prefix = job / "report.md", PREFIX[purpose]
     current = rep.current_line(report, prefix)
@@ -671,14 +698,14 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     n = (res or {}).get("n", 0)
     _record(job, purpose, {"mode": mode, "at": _now(), "env": env, "output_sha256": sha, "source": src_rel if res else None,
                            "quotes": n, **counts, **({"fit_hold": hold} if hold else {}),
-                           **({"top_fit": fields["top_fit"]["fit"]} if fields.get("top_fit") else {}),
+                           **({"top_fit": fields["top_fit"]["fit"] or "읽지 못함"} if fields.get("top_fit") else {}),
                            **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra})
     head = masking.mask_brief(lines[0], 300, off=off)     # 끔 DB: report.md 줄과 같은 글자(꼭 보일 줄 대조가 어긋나지 않게)
-    fab = [sub.lstrip()] if counts["fabricated"] else []
+    fab = [sub.lstrip()] if counts["fabricated"] or before else []     # 앞 검사의 불일치도 보일 의무(RP-14)
     # 심층 분석은 결과 줄(첫 줄)을 늘 보인다 — 탐색은 지어낸 인용이 있을 때만(B2-6)
     _obligation(args, job, purpose, [head.removesuffix("…")] + fab if purpose == "deep" else fab)
     args.trace_extra = {"fabricated": counts["fabricated"]} if res else {}     # F9: 다시 검사해도 trace에 검사마다 수가 남는다
-    warn = next((s.strip() for s in subs if s.startswith(WARN_NO_FIT[:16])), None)
+    warn = next((s.strip() for s in subs if s.startswith("  - 경고: 1위 판단")), None)
     _emit({"line": head, "evidence": sub.lstrip(), "quotes": n, **counts, **({"warning": warn} if warn else {})})
     return OK
 

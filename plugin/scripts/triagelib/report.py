@@ -7,6 +7,7 @@ import json
 import os
 import re
 import stat
+from collections import Counter
 from datetime import timedelta
 from pathlib import Path
 
@@ -44,8 +45,11 @@ DECISION_PREFIX = "- 판단: "
 HELD_REASON = issuepost.HELD_REASON
 _LOCATION_LABEL = {"confirmed": "확인됨", "found": "찾음(구간)", "multiple": "여러 곳", "none": "없음"}
 HELD_TAIL = " (관측된 규칙 일치 — 채택 안 함)"
-CLOCK_SPLIT = ("시계 역행 가르기: 역행 앞뒤 줄이 같은 pid·tid로 이어지면 같은 프로세스가 쓰던 중 시계가 바뀐 쪽(NITZ·재부팅), pid가 "
-               "바뀌면 버퍼별 덤프를 이어 붙인 쪽 — 근거 (f:L) 위치로 순서 확인(어느 쪽인지 단정하지 않는다)")
+# 타임라인 반복 접기(select_rows): 이만큼 되풀이된 줄만 접고, 발생 시각·로그 끝에서 이 초 안의 줄은 접지 않는다
+# ponytail: 고정값 — 회차가 길거나 짧은 시험에서 부족하면 explore 설정으로 뺀다
+FOLD_MIN, FOLD_KEEP_SEC = 10, 60
+CLOCK_SPLIT = ("시계 역행 가르기(pid·tid가 같은지만으로는 못 가른다 — 단서일 뿐): 역행 뒤 구간이 앞 구간 시각을 다시 지나는지, 같은 "
+               "시각·문장 줄이 두 번 나오는지, `beginning of` 줄 수, 시각 설정 줄이 있는지 — 근거 (f:L) 위치로 순서 확인")
 NOT_A_BUG_NOTE = "이슈 DB에서 버그 아님(시험 절차·설정 조작이 만든 동작으로 알려진 규칙)인 기준 사건 원인: "
 # 채택 원인이 버그 아님이면 해결책 앞에 붙인다 — DB 해결책은 단말 조치인데 시험 절차가 만든 동작이면 할 일이 아니다(sim1120 S-25)
 NOT_A_BUG_RESOLUTION = "시험 절차 문제면 해당 없음 — "
@@ -54,6 +58,21 @@ NOT_A_BUG_RESOLUTION = "시험 절차 문제면 해당 없음 — "
 AMBIGUOUS_REASON = {"sources": "실패 지점을 하나로 정하지 못함", "locations": "실패 지점을 하나로 정하지 못함",
                     "slots": "실패 지점의 SIM 슬롯을 하나로 정하지 못함",
                     "multiple_events": "실패 지점은 정했으나 그 지점의 사건들 원인이 서로 다름"}
+
+
+PRIOR_UNFIT_WARN = "앞 실행에서 모델이 1위 판단 부적합으로 표시한 원인 {cause}가 다시 채택돼 보류했다(prior.unfit)"
+
+
+def prior_unfit_hold(decision: dict | None, prior: dict | None) -> dict | None:
+    """RP-6: 채택 원인이 앞 실행의 `prior.unfit` 원인과 같으면 check-output 보류와 같은 모양의 보류 판단(held/fit_check, 붙은 사건
+    adopted → held, counter 없앰), 아니면 None. 판정·순위·자격 검사 칸은 그대로다."""
+    unfit = str((prior or {}).get("unfit") or "")
+    cause = ((decision or {}).get("selected") or {}).get("cause") if (decision or {}).get("state") == "accepted" else None
+    if not cause or unfit.split(" — ", 1)[0].strip() != cause:
+        return None
+    return {**{k: v for k, v in decision.items() if k != "counter"}, "state": "held", "reason": "fit_check", "selected": None,
+            "events": [{**e, "result": "held"} if isinstance(e, dict) and e.get("result") == "adopted" else e
+                       for e in decision.get("events") or []]}
 
 
 def selected_rank(dec: dict | None, cands: list) -> int | None:
@@ -237,9 +256,10 @@ def select_rows(rows: list[dict], around: str | None, limit: int) -> tuple[list[
     """줄 수가 넘치면 이벤트·W/E/F·오류 문구 줄을 먼저, 그다음 나머지를 발생 시각에 가까운 순으로 고르고 합친 순서로
     다시 늘어놓는다(결정적) → (남긴 줄, 전체 줄 수).
 
-    넘칠 때는 이벤트 표시(`marks`)가 없는 같은 줄(슬롯·레벨·태그·메시지)의 반복을 접는다(sim1122 F3 — 같은 오류 문구 반복이
-    상한을 채워 로그 끝 이벤트 줄이 빠졌다). 먼저 뽑힐 한 줄만 남기고 그 줄 사본에 `fold: {n, first, last}`(접은 줄 수·시각 범위)를
-    붙인다. 이벤트 줄은 같은 문구여도 접지 않는다(다른 시각의 같은 사건). `merge_rows`의 행은 바꾸지 않는다."""
+    넘칠 때는 이벤트 표시(`marks`)가 없는 같은 줄(슬롯·레벨·태그·메시지)이 `FOLD_MIN`번 이상 되풀이되면 접는다(sim1122 F3 — 같은
+    오류 문구 반복이 상한을 채워 로그 끝 이벤트 줄이 빠졌다). 먼저 뽑힐 한 줄만 남기고 그 줄 사본에 `fold: {n, first, last}`(접은 줄
+    수·시각 범위)를 붙인다. 접지 않는 줄: 이벤트 줄(다른 시각의 같은 사건), 반복이 적은 줄(회차마다 나오는 상태 줄), 발생 시각
+    ±`FOLD_KEEP_SEC`와 로그 끝 `FOLD_KEEP_SEC` 안의 줄(RP-5). `merge_rows`의 행은 바꾸지 않는다."""
     items = list(rows)
     total = len(items)
     center = _parse_ts(around)
@@ -253,12 +273,23 @@ def select_rows(rows: list[dict], around: str | None, limit: int) -> tuple[list[
 
     if total > limit:
         order = sorted(range(total), key=lambda i: (not hot(items[i]), dist(items[i]), str(items[i]["ts"]), i))
+        stamps = [_parse_ts(r["ts"]) for r in items]
+        end = max((t for t in stamps if t), default=None)
+
+        def key_of(i: int):
+            row, t = items[i], stamps[i]
+            near = t and ((center and abs((t - center).total_seconds()) <= FOLD_KEEP_SEC)
+                          or (end and (end - t).total_seconds() <= FOLD_KEEP_SEC))
+            return None if row["marks"] or near else (row["phone"], row["level"], row["tag"], row["msg"])
+
+        keys = [key_of(i) for i in range(total)]
+        many = {k for k, n in Counter(k for k in keys if k is not None).items() if n >= FOLD_MIN}
         keep: list[int] = []
         rep_of: dict[tuple, int] = {}
         folded: dict[int, list] = {}
         for i in order:
             row = items[i]
-            key = None if row["marks"] else (row["phone"], row["level"], row["tag"], row["msg"])
+            key = keys[i] if keys[i] in many else None
             if key is not None and key in rep_of:
                 folded.setdefault(rep_of[key], []).append(str(row["ts"] or ""))
                 continue
@@ -439,7 +470,7 @@ def _drop_read_only_hint_if_shown(result: dict) -> None:
 # (슬롯 불일치는 경고가 아니라 must_show 줄이라 여기 넣지 않는다)
 KEY_WARNING = re.compile(r"단서\(스크립트\) 버림|단서, 로그에서 못 찾음|단서를 (?:쓰지 못했다|뽑지 않았다)|마지막 댓글이 길어|token 값이 여럿|"
                          r"범위 밖|구간 밖|기준 줄을 로그에서 못 찾음|기준 줄에 시각만|FAIL 스텝을 찾지 못했다|TC 실패 스텝에 시각 없음|"
-                         r"^steps-file에 FAIL 스텝이 없어 INCONC")
+                         r"^steps-file에 FAIL 스텝이 없어 INCONC|^TC 날짜와 로그 날짜가 다름")
 NOTE_GONE = "issue.json text.note 참고"     # 4KB 맞춤에서 뺀 제출자 참고 글 자리
 NOTE_FIT = 200      # 4KB 맞춤 첫 단계의 제출자 참고 글 길이(머리말 포함) — 짧은 사용자 메모 뒤 포털 Jira 안내 줄까지 남는 길이
 # 다른 후보 근거를 빼기 전 한 번 더 줄이는 길이(머리말 포함): 머리말 21자 + 포털이 메모 끝에 붙이는 Jira 안내 줄
@@ -816,6 +847,11 @@ class ReportMixin:
             seq = (runs[-1]["n"] if runs else 0) + 1
             run_no = self.reuse["run"] if hit else seq     # 결과를 계산한 실행 번호
             reuse = self.reuse_out(candidates, parts, runs) if self.reuse else None
+        decision = core.get("decision")
+        held = prior_unfit_hold(decision, getattr(self, "prior", None))     # RP-6: 앞 실행의 1위 부적합 표시(캐시 core 밖, 실행마다)
+        if held:
+            decision = held
+            self.warnings.append(PRIOR_UNFIT_WARN.format(cause=core["decision"]["selected"]["cause"]))
         result = {
             "status": "ok", "key": self.key,
             "platform": self.platform_out(),   # android가 아니거나 암묵 선택과 다를 때만(K8·D5)
@@ -830,7 +866,7 @@ class ReportMixin:
             "existing": self.out.get("existing"), "open_prs": self.out.get("open_prs"),
             "build": self.out.get("build"),
             "logs": core["logs"],
-            "decision": core.get("decision"),
+            "decision": decision,
             "candidates": candidates,
             "pending_causes": core["pending_causes"],
             "unjudged": core.get("unjudged"),
@@ -1149,7 +1185,8 @@ class ReportMixin:
             if top.get("clock_flags"):
                 # sim1122 F6: 두 해석(버퍼 덤프 이어 붙임 / 같은 프로세스 기록의 시계 변경)을 같이 적고, 가를 단서(역행 앞뒤 pid)를 센다
                 back = r.get("_clock_backward") or {}
-                pid = f", 역행 {back['known']}곳 중 앞뒤 같은 pid {back['same']}곳" if back.get("known") else ""
+                pid = (f", 로그 전체 역행 {back['known']}곳(앞뒤 같은 pid {back['same']}·tid {back.get('same_tid', 0)})"
+                       if back.get("known") else "")
                 ana.append(add(8, "시계 이상 구간의 근거: 1위의 순서·시간창 판정은 시각 재정렬 기준이라 신뢰가 낮다 — 버퍼 덤프를 이어 "
                                     f"붙였거나 단말 시계가 바뀜(NITZ·재부팅){pid} [{', '.join(top['clock_flags'])}]"))
                 ana.append(f"  - {CLOCK_SPLIT}")

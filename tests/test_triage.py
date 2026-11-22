@@ -2049,12 +2049,13 @@ def test_clock_flagged_top_candidate_is_must_shown():
     assert top["cause"] == "DATA-001-01" and top["clock_flags"] == ["clock_anomaly", "line_order"]
     line = next(m for m in analysis["must_show"] if m.startswith("시계 이상 구간의 근거:"))
     assert len(line) <= 160 and line.endswith("[clock_anomaly, line_order]") and f"- {line}" in report
-    # sim1122 F6: 두 해석(덤프 이어 붙임·시계 변경)과 가를 단서(역행 앞뒤 pid가 같은지 — 두 줄 모두 pid 1234)를 같이 적는다
-    assert "버퍼 덤프를 이어 붙였거나 단말 시계가 바뀜(NITZ·재부팅), 역행 1곳 중 앞뒤 같은 pid 1곳 [" in line, line
-    assert f"- {line}\n  - 시계 역행 가르기: 역행 앞뒤 줄이 같은 pid·tid로 이어지면" in report
+    # sim1122 F6·RP-9: 두 해석(덤프 이어 붙임·시계 변경)과 단서(로그 전체 역행의 앞뒤 pid·tid 같은 수 — 두 줄 모두 1234·1244)를
+    # 같이 적고, 하위 줄은 pid만으로는 못 가른다고 밝힌 볼 것 목록이다
+    assert "버퍼 덤프를 이어 붙였거나 단말 시계가 바뀜(NITZ·재부팅), 로그 전체 역행 1곳(앞뒤 같은 pid 1·tid 1) [" in line, line
+    assert f"- {line}\n  - 시계 역행 가르기(pid·tid가 같은지만으로는 못 가른다 — 단서일 뿐): " in report
     other, _ = _run_custom([REJECTED_LINE.format("14:30:10.000"),
-                            OFF_LINE.format("14:30:02.000").replace("1234  1244", "4321  4322")], "MOCK-7425")
-    assert any("역행 1곳 중 앞뒤 같은 pid 0곳" in m for m in other["must_show"]), other["must_show"]
+                            OFF_LINE.format("14:30:02.000").replace("1234  1244", "1234  4322")], "MOCK-7425")
+    assert any("로그 전체 역행 1곳(앞뒤 같은 pid 1·tid 0)" in m for m in other["must_show"]), other["must_show"]
     order = [m.split(":")[0] for m in analysis["must_show"]]
     assert order.index("시계 이상 구간의 근거") < order.index("로그 범위")
     plain, _ = _run_custom([OFF_LINE.format("14:30:00.000"), REJECTED_LINE.format("14:30:02.000")], "MOCK-7421")

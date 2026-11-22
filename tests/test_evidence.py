@@ -373,10 +373,17 @@ def test_check_quotes_made_up_tag_prefix_of_message_word_is_weak():
 
 
 def test_top_fit_field_is_optional_and_word_bounded():
-    """sim1122 F2: `1위 판단:` 칸 — 출력 어디에 있어도 첫 줄, 값은 적합·부적합·모름만(`적합하지 않음` 같은 글은 칸이 아니다)."""
+    """sim1122 F2·RP-1: `1위 판단` 칸 — 출력 어디에 있어도 첫 줄, 값은 적합·부적합·모름. 원인 ID는 값 앞·머리 괄호·없음 모두 읽고,
+    값 뒤 문장부호도 받는다. `1위 판단` 줄인데 값을 못 읽으면 `fit: None`(칸 없음과 다르다)."""
     hyp = "가설 1: x\n로그로 확인:\n- 10:00:00.000 - E t m\n코드로 추정: 없음\n반대 근거: 없음\n다음 확인: y\n"
-    assert evidence.parse_explore(hyp + "\n1위 판단: 부적합 — 슬롯이 다르다\n")["top_fit"] == {"fit": "부적합", "why": "슬롯이 다르다"}
-    assert evidence.parse_explore("**1위 판단**: 적합\n" + hyp)["top_fit"] == {"fit": "적합", "why": ""}
+    got = evidence.parse_explore(hyp + "\n1위 판단: 부적합 — 슬롯이 다르다\n")["top_fit"]
+    assert got == {"fit": "부적합", "cause": None, "why": "슬롯이 다르다"}
+    assert evidence.parse_explore("**1위 판단**: 적합\n" + hyp)["top_fit"] == {"fit": "적합", "cause": None, "why": ""}
     assert evidence.parse_explore("가설 없음: z\n다음 확인: w\n1위 판단: 모름(로그 부족)\n")["top_fit"]["fit"] == "모름"
-    assert "top_fit" not in evidence.parse_explore(hyp + "1위 판단: 적합하지 않음\n")
+    for line in ("1위 판단: DATA-001-01 부적합 — x", "1위 판단(DATA-001-01): 부적합.", "1위 판단: `DATA-001-01`: 부적합",
+                 "- 1위 판단 [DATA-001-01]: 부적합 - x"):
+        got = evidence.parse_explore(hyp + line + "\n")["top_fit"]
+        assert (got["fit"], got["cause"]) == ("부적합", "DATA-001-01"), line
+    for line in ("1위 판단: 적합하지 않음", "1위 판단: 맞지 않음"):
+        assert evidence.parse_explore(hyp + line + "\n")["top_fit"]["fit"] is None, line
     assert "top_fit" not in evidence.parse_explore(hyp)

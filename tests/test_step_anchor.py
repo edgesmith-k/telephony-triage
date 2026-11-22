@@ -746,6 +746,8 @@ def test_tc_head_date_dates_time_only_steps_and_warns_when_log_is_another_day():
     other.write_text(_tc_html("2026/09/21 14:30:00"), encoding="utf-8")
     done, _ = _offline("tc-other", "--steps-file", other, "--clock-offset", "0", logs=(log,))
     assert warn in done["warnings"], done["warnings"]
+    from triagelib import report as rep        # 4KB 맞춤에서 먼저 남기는 중요 경고(포털 경고 표와 같은 항목)
+    assert rep.KEY_WARNING.search(warn)
     assert any("로그 범위 밖" in w for w in done["warnings"]) and done["step_anchor"]["source"] == "issue"
     none, _ = _offline("tc-other-none", "--steps-file", other, logs=(log,))     # 시계 차 모름: 장비 시각은 안 쓰지만 날짜 차는 알린다
     assert warn in none["warnings"] and none["step_anchor"]["clock"] == {"mode": "none", "reason": "시계 차 모름"}
@@ -755,3 +757,49 @@ def test_tc_head_date_dates_time_only_steps_and_warns_when_log_is_another_day():
         ok, _ = _offline(f"tc-{name}", "--steps-file", tc, "--clock-offset", "0", logs=(log,))
         assert ok["step_anchor"]["source"] == "steps_file", (name, ok["step_anchor"])
         assert not any(w.startswith("TC 날짜와 로그 날짜가 다름") for w in ok.get("warnings") or []), name
+
+
+def test_tc_head_non_test_dates_do_not_move_steps_or_warn():
+    """RP-3 재현: 머리의 출력일·펌웨어 버전(이름표가 시험 날짜가 아닌 줄)을 시험 날짜로 읽어 맞던 앵커를 잃고 "다른 날" 경고를 거짓으로
+    냈다. 이름표 줄의 날짜만 쓰므로 지금과 같다(로그 첫 날짜를 붙여 앵커)."""
+    d = tmp("tt-tcdate-fake-")
+    log = _markerless(d)
+    table = ("<table><tr><th>No</th><th>Step</th><th>Result</th><th>Time</th></tr>"
+             "<tr><td>4</td><td>준비</td><td>PASS</td><td>14:33:00</td></tr>"
+             "<tr><td>5</td><td>데이터 켜기</td><td>FAIL</td><td>14:33:30</td></tr></table>")
+    for name, head in (("printed", "<p>Report generated 2026-09-27 09:00</p><p>Start 14:30:00</p>"),
+                       ("fw", "<p>Firmware 2024.12.3</p><p>Start 14:30:00</p>")):
+        tc = d / f"{name}.html"
+        tc.write_text(f"<html><body>{head}{table}</body></html>", encoding="utf-8")
+        ok, _ = _offline(f"tc-{name}", "--steps-file", tc, "--clock-offset", "0", logs=(log,))
+        assert ok["step_anchor"]["source"] == "steps_file", (name, ok["step_anchor"], ok.get("warnings"))
+        assert not any(w.startswith("TC 날짜와 로그 날짜가 다름") for w in ok.get("warnings") or []), name
+
+
+def test_tc_date_ref_moves_a_day_when_step_times_wrap_past_midnight(tmp_path):
+    """RP-11: 머리 날짜만 있고 스텝 시각이 앞 스텝보다 1시간 넘게 작아지면(자정 넘김) 기준 날짜를 하루 올린다. 머리 시작 시각도 첫
+    비교값이다. 로그 해와 2년 넘게 다른 날짜는 쓰지 않는다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from triagelib.anchor import AnchorMixin
+
+    class Fake(AnchorMixin):
+        def __init__(self):
+            self.warned = []
+
+        def warn(self, text):
+            self.warned.append(text)
+
+    tc = tmp_path / "tc.txt"
+    tc.write_text("Start | 2026-11-13\nNo | Step | Result | Time\n1 | a | PASS | 23:58:10\n2 | b | FAIL | 00:02:30\n", encoding="utf-8")
+    first = datetime(2026, 11, 13, 14, 50, tzinfo=timezone.utc)      # 23:50 KST
+    last = datetime(2026, 11, 13, 15, 10, tzinfo=timezone.utc)       # 다음 날 00:10 KST
+    fake = Fake()
+    ref = fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["23:58:10", "00:02:30"])
+    assert ref == datetime(2026, 11, 13, 15, 0, tzinfo=timezone.utc) and fake.warned == []      # 11-14 0시 KST
+    assert stepanchor.steps_file_times("00:02:30", "Asia/Seoul", 2026, ref)[1] == datetime(2026, 11, 13, 15, 2, 30, tzinfo=timezone.utc)
+    assert fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["23:58:10", "23:59:30"]) == datetime(2026, 11, 12, 15, 0,
+                                                                                                      tzinfo=timezone.utc)
+    tc.write_text("Start | 2026-11-13 23:55:00\nNo | Step | Result | Time\n1 | b | FAIL | 00:02:30\n", encoding="utf-8")
+    assert fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["00:02:30"]) == datetime(2026, 11, 13, 15, 0, tzinfo=timezone.utc)
+    tc.write_text("Start | 2023-11-13\nNo | Step | Result | Time\n1 | b | FAIL | 00:02:30\n", encoding="utf-8")
+    assert fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["00:02:30"]) is None and fake.warned == []

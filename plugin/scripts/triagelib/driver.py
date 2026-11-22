@@ -134,10 +134,11 @@ def _unjudged_label(u: dict) -> str:
 
 
 def _backward_pids(anomalies: list) -> dict:
-    """시계 이상 가운데 역행 수 `n`과 앞뒤 줄 pid를 아는 것 `known`·그중 같은 pid `same`."""
+    """로그 전체 시계 이상 가운데 역행 수 `n`, 앞뒤 줄 pid를 아는 것 `known`, 그중 같은 pid `same`·같은 tid `same_tid`."""
     back = [a for a in anomalies if isinstance(a, dict) and a.get("kind") == "backward"]
     known = [a for a in back if isinstance(a.get("same_pid"), bool)]
-    return {"n": len(back), "known": len(known), "same": sum(1 for a in known if a["same_pid"])}
+    return {"n": len(back), "known": len(known), "same": sum(1 for a in known if a["same_pid"]),
+            "same_tid": sum(1 for a in known if a.get("same_tid") is True)}
 
 
 class Driver(AnchorMixin, CacheMixin, ReportMixin):
@@ -1124,7 +1125,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         top = 직전 실행 1위(state `job.runs`), looked = 이전 실행의 가린 기준 줄(state), hyps·none = `check-output`을 통과했고
         그 뒤 바뀌지 않은(기록 `output_sha256` == 지금 파일) `explore-output.md`의 가설 머리·반대 근거·`가설 없음` 이유.
         hyps는 근거 원문 검사를 했고(`source`) 원문에 없는 인용이 0일 때만(검사 건너뜀·`fabricated` > 0이면 뺀다).
-        unfit = 가설이 있는데 1위 부적합 보류(`fit_hold`, `1위 판단: 부적합`)면 `<원인 ID> — <이유>`(≤120 — 가설 없음이면 none이 그 이유다).
+        unfit = 1위 부적합 보류(`fit_hold` — 가설 없음 또는 `1위 판단: 부적합`)면 `<원인 ID> — <이유>`(≤120). 뒤 검사 기록에 보류가 없어도
+        그 검사가 `1위 판단: 적합`이 아니면 앞 unfit을 남긴다. 같은 원인이 다시 채택되면 `report.prior_unfit_hold`가 보류로 바꾼다(RP-6).
         hyps·none·unfit은 state `job.prior_explore`에도 남겨 산출물이 지워진 뒤(질문 턴·다음 실행)에도 넘긴다 — 새 검사 기록이 있으면
         그것으로 바꾸고, 그 검사가 실패했거나 출력이 바뀌었으면 지운다. top 말고 아무것도 없으면 None(키가 없다)."""
         def regular(path: Path) -> bool:
@@ -1166,10 +1168,13 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                                          if h.get("반대 근거") not in (None, "", "없음") else ""), 120)
                                        for h in fields.get("hyps") or []][:3] if checked else [],
                               "none": _clip(fields.get("none"), 120),
-                              # sim1122 F2: 1위 부적합 보류(가설이 있어도)는 다음 실행에도 넘긴다 — 재실행 뒤 1위가 말없이 다시 채택되지 않게
+                              # sim1122 F2·RP-6: 1위 부적합 보류는 다음 실행에도 넘긴다 — 같은 원인이 다시 채택되면 run이 보류한다
                               "unfit": _clip(f"{rec['fit_hold']} — {(fields.get('top_fit') or {}).get('why') or fields.get('none') or ''}"
-                                             .rstrip(" —"), 120) if isinstance(rec.get("fit_hold"), str) and fields.get("hyps") else None}
+                                             .rstrip(" —"), 120) if isinstance(rec.get("fit_hold"), str) else None}
                     judged = {k: v for k, v in judged.items() if v} or None
+            old_unfit = (self.state.job.get("prior_explore") or {}).get("unfit")
+            if old_unfit and not (judged or {}).get("unfit") and rec.get("top_fit") != "적합":
+                judged = {**(judged or {}), "unfit": old_unfit}     # 모델이 `적합`이라고 다시 적을 때까지 남긴다
             if judged:
                 self.state.job["prior_explore"] = judged
             else:
