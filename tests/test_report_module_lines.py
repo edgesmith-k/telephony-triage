@@ -211,6 +211,40 @@ def test_merge_rows_events_without_line_ref_join_matching_slot():
     assert text.startswith("10:00:00.000 p1 E RIL SETUP_DATA_CALL failed")
 
 
+def test_select_rows_folds_repeated_plain_rows_but_keeps_every_event_row():
+    """sim1122 F3(S-10): 같은 오류 문구 반복(이벤트 표시 없음)이 상한을 채워 로그 끝 이벤트 줄이 빠졌다. 넘칠 때 같은 줄 반복은
+    먼저 뽑힐 한 줄로 접고(스크립트 메모 `〔script …〕`, 근거 검사는 떼고 본다), 이벤트 줄은 같은 문구여도 접지 않는다."""
+    ev = []
+    for i in range(30):          # 이벤트 없는 E 줄 세 문장이 열 번씩 되풀이 — 시각은 이벤트보다 앞
+        for j, msg in enumerate(("Unsupported band type 0", "Unsupported unknown band.", "Invalid cell ID")):
+            ev.append(_ev(ts=f"2026-11-06T10:{i:02d}:{j:02d}.000Z", tag="RILJ", msg=msg, phone_id=0,
+                          line_ref={"file_index": 0, "line_no": 3 * i + j}))
+    for k in range(4):           # 로그 끝 이벤트 줄: 같은 문구 두 번(다른 시각의 같은 사건)
+        ev.append(_ev(ts=f"2026-11-06T11:00:{k:02d}.000Z", tag="SST-0", msg="pollStateDone: hasRegistered = true" if k % 2
+                      else "detach", phone_id=0, level="D", line_ref={"file_index": 0, "line_no": 500 + k}, event=f"e{k % 2}"))
+    rows = report.merge_rows({"events": ev})
+    items, total = report.select_rows(rows, None, 10)      # time=full: 거리 0, 우선 줄을 시각순으로
+    assert total == 94 and len(items) == 7
+    assert [r["msg"] for r in items if r["marks"]] == ["detach", "pollStateDone: hasRegistered = true"] * 2
+    plain = [r for r in items if not r["marks"]]
+    assert [(r["msg"], r["fold"]["n"]) for r in plain] == [("Unsupported band type 0", 29), ("Unsupported unknown band.", 29),
+                                                             ("Invalid cell ID", 29)]
+    assert all("fold" not in r for r in rows)                # merge_rows의 행은 바꾸지 않는다(근거 원문·모듈 필터가 같이 쓴다)
+    text = report.render_timeline("K", {"events": ev}, items, total, None, 10)
+    assert "- 줄: 7/94 (이벤트·경고·오류 줄 우선, 발생 시각에 가까운 순으로 골랐다, 같은 줄 반복 87줄은 접었다)" in text
+    line = next(t for t in text.splitlines() if "Unsupported band type 0" in t)
+    assert line == "10:00:00.000 p0 E RILJ Unsupported band type 0  〔script 같은 줄 29번 더 접음(10:01:00.000~10:29:00.000)〕"
+    from common import evidence
+    source, tags = evidence.source_text(text)
+    assert evidence.check_quotes(["10:00:00.000 p0 E RILJ Unsupported band type 0"], source, tags)["fabricated"] == 0
+    # 상한 안이면 접지 않는다(지금과 같다)
+    items, _ = report.select_rows(rows, None, 200)
+    assert len(items) == 94 and all("fold" not in r for r in items)
+    # 발생 시각이 있으면 그에 가장 가까운 한 줄이 남는다
+    items, _ = report.select_rows(rows, "2026-11-06T10:20:30Z", 10)
+    assert next(r for r in items if r["msg"] == "Unsupported band type 0")["ts"] == "2026-11-06T10:20:00.000Z"
+
+
 def test_split_on_ofono_fixture():
     path = REPO / "templates" / "module-skills" / "ofono" / "data" / "evals" / "data-apn-auth-reject" / "files" / "events.json"
     ev = json.loads(path.read_text(encoding="utf-8"))

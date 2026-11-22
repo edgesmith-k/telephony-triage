@@ -726,3 +726,32 @@ def test_substep_fail_row_anchors_and_matches_shown_step():
     assert sa["source"] == "steps_file" and sa["span"][1] == "2026-09-20T05:33:30.000Z"
     assert sa["step"] == done["issue"]["failed_step"]["text"] == "데이터 켜기"
     assert not any("찾지 못했다" in w for w in done.get("warnings") or [])
+
+
+def _tc_html(head_date: str | None, fail_time: str = "14:33:30") -> str:
+    head = (f"<table><tr><th>Report ID</th><td>RPT-20260921-0001</td></tr><tr><th>Start</th><td>{head_date}</td></tr></table>"
+            if head_date else "")
+    return (f"<html><body>{head}<table><tr><th>No</th><th>Step</th><th>Result</th><th>Time</th></tr>"
+            f"<tr><td>4</td><td>준비</td><td>PASS</td><td>14:33:00</td></tr>"
+            f"<tr><td>5</td><td>데이터 켜기</td><td>FAIL</td><td>{fail_time}</td></tr></table></body></html>")
+
+
+def test_tc_head_date_dates_time_only_steps_and_warns_when_log_is_another_day():
+    """sim1122 F5(S-04·S-25): 스텝 칸이 시각만이면 예전엔 로그 첫 날짜를 붙여 다른 날 TC를 같은 날로 봤다. TC 머리 날짜(Start)가
+    읽히면 그 날짜를 쓰고, 로그 날짜 범위 밖이면 `TC 날짜와 로그 날짜가 다름` 경고(시계 차를 몰라도). 머리 날짜가 없으면 지금과 같다."""
+    d = tmp("tt-tcdate-")
+    log = _markerless(d)
+    warn = "TC 날짜와 로그 날짜가 다름: TC 2026-09-21, 로그 2026-09-20 — 다른 날의 TC·로그일 수 있다(같은 시험의 것인지 확인)"
+    other = d / "other.html"
+    other.write_text(_tc_html("2026/09/21 14:30:00"), encoding="utf-8")
+    done, _ = _offline("tc-other", "--steps-file", other, "--clock-offset", "0", logs=(log,))
+    assert warn in done["warnings"], done["warnings"]
+    assert any("로그 범위 밖" in w for w in done["warnings"]) and done["step_anchor"]["source"] == "issue"
+    none, _ = _offline("tc-other-none", "--steps-file", other, logs=(log,))     # 시계 차 모름: 장비 시각은 안 쓰지만 날짜 차는 알린다
+    assert warn in none["warnings"] and none["step_anchor"]["clock"] == {"mode": "none", "reason": "시계 차 모름"}
+    for name, head in (("same", "2026-09-20"), ("nohead", None)):      # 같은 날이거나 머리 날짜가 없으면 지금과 같다(앵커)
+        tc = d / f"{name}.html"
+        tc.write_text(_tc_html(head), encoding="utf-8")
+        ok, _ = _offline(f"tc-{name}", "--steps-file", tc, "--clock-offset", "0", logs=(log,))
+        assert ok["step_anchor"]["source"] == "steps_file", (name, ok["step_anchor"])
+        assert not any(w.startswith("TC 날짜와 로그 날짜가 다름") for w in ok.get("warnings") or []), name

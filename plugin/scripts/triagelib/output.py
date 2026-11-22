@@ -6,8 +6,11 @@ Claude가 쓴 `JOB/deep-output.md`·`JOB/explore-output.md`를 받아:
 3. 근거 원문 검사: 인용이 준 타임라인(모듈 뷰·`JOB/timeline.md`, 설치 스킬이면 events.json 전체 행)에 있는지.
 4. report.md의 5-1·5-2 줄(과 `  - ` 아래 줄)을 쓴다 — `TODO(LLM)`이 남은 줄만 고친다. 모델은 그 줄을 고치지 않는다.
    탐색 가설 줄에는 그 가설의 원문에 없는 인용 수 `[근거 불일치 N]`(N>0일 때만).
-   적합성 확인(`fit_check`)이 가설 없이 끝나면(1위 부적합 보류) 결론·해결책 줄도 보류로 고치고 기록에 `fit_hold: <원인 ID>`
-   (줄을 못 고쳐도 기록은 남기고 `fit_hold_unwritten`·stderr 경고. 뒤 검사·생략·실패 기록도 fit_hold를 이어받는다).
+   적합성 확인(`fit_check`)이 가설 없이 끝나거나 `1위 판단: 부적합`이면(가설이 있어도, sim1122 F2) 1위 부적합 보류 — 결론·해결책 줄도
+   보류로 고치고 기록에 `fit_hold: <원인 ID>`(줄을 못 고쳐도 기록은 남기고 `fit_hold_unwritten`·stderr 경고. 뒤 검사·생략·실패 기록도
+   fit_hold를 이어받는다). 적합성 확인·채택·가설 있음인데 `1위 판단` 칸이 없으면 채택은 그대로 두고 경고 하위 줄(`WARN_NO_FIT`).
+5. 확인할 내용(사용자 질문) 줄 꼬리를 탐색 결과를 가리키게 고친다(통과면 답 자리, 생략·실패면 답 안 함, F7).
+6. 같은 실행에서 다시 검사하면 앞 검사의 원문에 없는 인용 수를 `fabricated_before`로 이어받는다(F9 — 고쳐 다시 검사해도 지우지 않는다).
 
 `--skipped "<사유>"`: 실행하지 않았거나 실패 — 줄을 "생략: <사유>"로(이미 스크립트가 쓴 생략·해당 없음·받기 실패 줄이면 그대로).
 기록 `JOB/check-output.json[purpose]`(스크립트만 쓴다, guard 규칙 12)와 trace `checked` 행(`core.trace_event`). 표시 의무: 작업 디렉토리 JOB이면 검사마다 `evidence` 기록
@@ -66,6 +69,16 @@ WARN_REWRITE = "경고: report.md 줄을 고치지 못했다"
 WARN_HOLD = "경고: 1위 보류를 report.md {what}에 쓰지 못했다 — check-output 기록(fit_hold)·Jira 본문은 보류로 남긴다"
 HOLD_KEEP = ("fit_hold", "fit_hold_unwritten")     # 탐색 기록을 새로 써도 이어받는다(보류로 고친 줄은 다음 run까지 남는다)
 WARN_DECISION = "경고: analysis.json 판단(decision)을 고치지 못했다({why})"
+TOP_FIT_SUB = "  - 1위 판단(모델): {fit}{why}"
+TOP_FIT_HELD = " → 1위 {cause} 채택을 보류로 바꿨다"
+WARN_NO_FIT = "  - 경고: 1위 판단 칸 없음 — 1위 {cause} 채택은 그대로다(탐색 가설이 1위와 맞는지 확인)"
+# 확인할 내용 줄(report.py) 꼬리: 탐색 검사 뒤 답 자리를 가리킨다(F7)
+QUESTION_PREFIX = "- 확인할 내용(사용자 질문): "
+QUESTION_PENDING = " — 탐색 분석(동의 뒤)에서 답한다"
+QUESTION_DONE = " — 답: 아래 탐색 분석 줄(가설 1의 로그로 확인·반대 근거)과 `- 원인:`·다음 확인 줄"
+QUESTION_DONE_NONE = " — 답: 아래 탐색 분석 줄(가설 없음 이유·다음 확인)과 `- 원인:` 줄"
+QUESTION_SKIPPED = " — 탐색 분석 생략이라 답하지 않음(근거 로그로 직접 확인)"
+FAB_BEFORE = " · 앞 검사 원문에 없음 {n}(다시 검사해도 지우지 않음)"
 # 분석 스킬 의견 `<원인 ID> — <근거>`의 앞 ID. 백틱·굵게로 감싸거나 조사(`ID와`)가 붙어도 잡고, 숫자가 더 붙은 것은 아니다
 OPINION_ID = re.compile(rf"\s*[`*]*({CAUSE_ID})(?!\d)")
 
@@ -127,11 +140,22 @@ def _record(job: Path, purpose: str, entry: dict) -> None:
     old = data.get(purpose)
     if isinstance(old, dict) and old.get("fit_hold") and "fit_hold" not in entry:   # 다시 검사·생략·실패해도 보류는 이어 간다
         entry = {**entry, **{k: old[k] for k in HOLD_KEEP if k in old}}
+    before = _fab_before(old)
+    if before and "fabricated_before" not in entry:      # F9: 앞 검사의 원문에 없는 인용 수는 다시 검사·생략·실패해도 남긴다
+        entry = {**entry, "fabricated_before": before}
     data[purpose] = entry
     try:
         _write_atomic(path, (json.dumps(data, ensure_ascii=False, indent=1) + "\n").encode("utf-8"))
     except OSError:
         print(f"경고: {RECORD}를 쓰지 못했다", file=sys.stderr)
+
+
+def _fab_before(old) -> int:
+    """앞 기록까지의 원문에 없는 인용 수(가장 큰 값). 기록이 없거나 숫자가 아니면 0."""
+    if not isinstance(old, dict):
+        return 0
+    vals = [v for v in (old.get("fabricated"), old.get("fabricated_before")) if isinstance(v, int) and not isinstance(v, bool)]
+    return max(vals, default=0)
 
 
 def _obligation(args, job: Path, purpose: str, lines: list[str]) -> None:
@@ -330,13 +354,14 @@ def _render(purpose: str, mode: str, head: str, fields: dict, sub: str, fab_by_h
             + ([f"  - 근거: {quotes}"] if fields["근거"] else []) + [sub])
 
 
-def _evidence_sub(mode: str, res: dict | None, skipped: str | None) -> str:
+def _evidence_sub(mode: str, res: dict | None, skipped: str | None, before: int = 0) -> str:
     if mode == "skill":
         lead = "  - " + SKILL_LABEL + ": "
     else:
         lead = EVIDENCE_SUB.format(text="")
+    tail = FAB_BEFORE.format(n=before) if before else ""
     if skipped:
-        return f"{lead}건너뜀({skipped})"
+        return f"{lead}건너뜀({skipped}){tail}"
     text = f"인용 {res['n']}개 중 원문에 없음 {res['fabricated']}"
     if res["weak"]:
         text += f" · 약함 {res['weak']}"
@@ -344,7 +369,7 @@ def _evidence_sub(mode: str, res: dict | None, skipped: str | None) -> str:
         text += f" · 원문 로그 인용 {res['raw']}개(검사 밖)"
     if res["fabricated"]:
         text += f" ({res['first']}…)"
-    return lead + text
+    return lead + text + tail
 
 
 # --- 본체 ------------------------------------------------------------------------------------------------
@@ -356,14 +381,41 @@ def _rewrite(report: Path, prefix: str, lines: list[str], keep_sub: tuple[str, .
     return ok
 
 
-def _fit_hold(analysis: dict, fields: dict) -> str | None:
-    """FR-02: 적합성 확인(`explore.reason: fit_check`)이 가설 없이 끝났으면(1위 부적합 보류) 보류한 1위 원인 ID, 아니면 None.
-    감지는 구조(사유·빈 가설)만 보고 판정(C·순위)은 바꾸지 않는다. report.md 재작성 성패와 무관하다(기록·Jira는 이것으로 정한다)."""
+def _top_cause(analysis: dict) -> str | None:
     top = (rep.lead_first(analysis.get("decision"), analysis.get("candidates") or []) or [None])[0]   # 채택 원인(없으면 1위)
-    cause = top.get("cause") if isinstance(top, dict) else None
-    if fields["hyps"] or (analysis.get("explore") or {}).get("reason") != "fit_check" or not cause:
+    return top.get("cause") if isinstance(top, dict) else None
+
+
+def _fit_hold(analysis: dict, fields: dict) -> str | None:
+    """FR-02: 적합성 확인(`explore.reason: fit_check`)이 가설 없이 끝났거나 모델이 `1위 판단: 부적합`을 적었으면(가설이 있어도,
+    sim1122 F2) 보류한 1위 원인 ID, 아니면 None. 감지는 구조(사유·빈 가설·판단 칸)만 보고 판정(C·순위)은 바꾸지 않는다.
+    report.md 재작성 성패와 무관하다(기록·Jira는 이것으로 정한다)."""
+    cause = _top_cause(analysis)
+    unfit = (fields.get("top_fit") or {}).get("fit") == "부적합"
+    if (fields["hyps"] and not unfit) or (analysis.get("explore") or {}).get("reason") != "fit_check" or not cause:
         return None
     return cause
+
+
+def _fit_subs(analysis: dict, fields: dict, hold: str | None) -> list[str]:
+    """탐색 줄 아래 1위 판단 하위 줄(칸이 있을 때), 또는 적합성 확인·채택·가설 있음인데 칸이 없으면 경고 하위 줄."""
+    tf = fields.get("top_fit")
+    if tf:
+        why = f" — {_one(tf['why'])}" if tf["why"] else ""
+        return [TOP_FIT_SUB.format(fit=tf["fit"], why=why) + (TOP_FIT_HELD.format(cause=hold) if hold else "")]
+    cause = _top_cause(analysis)
+    if (fields["hyps"] and cause and (analysis.get("explore") or {}).get("reason") == "fit_check"
+            and (analysis.get("decision") or {}).get("state") == "accepted"):
+        return [WARN_NO_FIT.format(cause=cause)]
+    return []
+
+
+def _question_tail(report: Path, tail: str) -> None:
+    """확인할 내용 줄의 꼬리 `탐색 분석(동의 뒤)에서 답한다`를 바꾼다(F7). 그 꼬리가 아니면(never·--no-explore·이미 고침) 그대로."""
+    line = rep.current_line(report, QUESTION_PREFIX)
+    if line and line.endswith(QUESTION_PENDING) and not rep.rewrite_line(
+            report, QUESTION_PREFIX, [line[: -len(QUESTION_PENDING)] + tail], keep_sub=("  - ",)):
+        print(WARN_REWRITE, file=sys.stderr)
 
 
 def _hold_lines(report: Path, cause: str, held: bool = False) -> list[str]:
@@ -478,6 +530,8 @@ def _skipped(args, job: Path, purpose: str, env: dict) -> int:
         _emit({"kept": masking.mask_brief(current, 300)})
         return OK
     _record(job, purpose, {"skipped": reason, "at": _now(), "env": env})
+    if purpose == "explore":
+        _question_tail(report, QUESTION_SKIPPED)
     _obligation(args, job, purpose, [])
     _emit({"line": masking.mask_brief(line, 300), "skipped": reason})
     return OK
@@ -519,7 +573,8 @@ def _preconditions(job: Path, purpose: str) -> tuple[dict, str | None]:
 
 def _fail(job: Path, purpose: str, env: dict, reason: str, label: str, sha: str | None, args) -> int:
     report = job / "report.md"
-    _rewrite(report, PREFIX[purpose], [SKIPPED[purpose].format(reason=label)])
+    if _rewrite(report, PREFIX[purpose], [SKIPPED[purpose].format(reason=label)]) and purpose == "explore":
+        _question_tail(report, QUESTION_SKIPPED)
     _record(job, purpose, {"error": label, "at": _now(), "env": env, "output_sha256": sha})
     _obligation(args, job, purpose, [])
     print(label, file=sys.stderr)
@@ -585,7 +640,8 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
         if purpose == "explore":        # verdicts는 `_quotes` 순서 = 가설 순서대로 `로그로 확인`을 이어 붙인 것
             it = iter(res["verdicts"])
             fab_by_hyp = [[next(it) for _ in h["로그로 확인"]].count("fabricated") for h in fields["hyps"]]
-    sub = _evidence_sub(mode, res, src_skip)
+    old = _load(job / RECORD)
+    sub = _evidence_sub(mode, res, src_skip, _fab_before(old.get(purpose) if isinstance(old, dict) else None))
 
     report, prefix = job / "report.md", PREFIX[purpose]
     current = rep.current_line(report, prefix)
@@ -596,9 +652,11 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     else:
         name = (rec or {}).get("skill") or (analysis.get("analyzer") or {}).get("skill") or "-"
         default = f"{DEEP_PREFIX} ({name}): "
-    lines = _render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp)
-    _rewrite(report, prefix, lines, KEEP_SUB)
     hold = _fit_hold(analysis, fields) if purpose == "explore" else None
+    subs = _fit_subs(analysis, fields, hold) if purpose == "explore" else []
+    lines = _render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp) + subs
+    if _rewrite(report, prefix, lines, KEEP_SUB) and purpose == "explore":
+        _question_tail(report, QUESTION_DONE if fields["hyps"] else QUESTION_DONE_NONE)
     unwritten = _hold_lines(report, hold, (analysis.get("decision") or {}).get("state") == "held") if hold else []
     if unwritten:
         print(WARN_HOLD.format(what="·".join(unwritten)), file=sys.stderr)
@@ -613,12 +671,15 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     n = (res or {}).get("n", 0)
     _record(job, purpose, {"mode": mode, "at": _now(), "env": env, "output_sha256": sha, "source": src_rel if res else None,
                            "quotes": n, **counts, **({"fit_hold": hold} if hold else {}),
+                           **({"top_fit": fields["top_fit"]["fit"]} if fields.get("top_fit") else {}),
                            **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra})
     head = masking.mask_brief(lines[0], 300, off=off)     # 끔 DB: report.md 줄과 같은 글자(꼭 보일 줄 대조가 어긋나지 않게)
     fab = [sub.lstrip()] if counts["fabricated"] else []
     # 심층 분석은 결과 줄(첫 줄)을 늘 보인다 — 탐색은 지어낸 인용이 있을 때만(B2-6)
     _obligation(args, job, purpose, [head.removesuffix("…")] + fab if purpose == "deep" else fab)
-    _emit({"line": head, "evidence": sub.lstrip(), "quotes": n, **counts})
+    args.trace_extra = {"fabricated": counts["fabricated"]} if res else {}     # F9: 다시 검사해도 trace에 검사마다 수가 남는다
+    warn = next((s.strip() for s in subs if s.startswith(WARN_NO_FIT[:16])), None)
+    _emit({"line": head, "evidence": sub.lstrip(), "quotes": n, **counts, **({"warning": warn} if warn else {})})
     return OK
 
 
@@ -636,5 +697,5 @@ def cmd_check_output(args, defaults: dict) -> int:
         _emit({"reason": stop.reason, **stop.extra, **({"next": stop.next} if stop.next else {})})
         code = stop.code
     if job is not None:     # 사유 글은 싣지 않는다(있는지만)
-        trace_event(job, "checked", purpose=purpose, skipped=skipped, exit=code)
+        trace_event(job, "checked", purpose=purpose, skipped=skipped, exit=code, **getattr(args, "trace_extra", {}))
     return code

@@ -716,3 +716,70 @@ def test_old_job_without_decision_leaves_analysis_untouched(tmp_path, capsys, mo
     assert code == 0 and "판단" not in err
     assert (job / "analysis.json").read_bytes() == raw and (job / "module-skill.json").read_bytes() == msj
     assert "decision_unwritten" not in _rec(job, "deep")
+
+
+# -- sim1122 F7·F9: 확인할 내용 줄 꼬리, 다시 검사해도 남는 근거 불일치 --------------------------------------------
+
+QUESTION = "- 확인할 내용(사용자 질문): 재시도가 오는지"
+
+
+def _question_job(base: Path) -> Path:
+    job = make_job(base, "explore", "plain")
+    text = (job / "report.md").read_text(encoding="utf-8")
+    text = text.replace("- 분류 후보: DATA-001-01\n",
+                        f"- 분류 후보: DATA-001-01\n{QUESTION}{output.QUESTION_PENDING}\n  - 질문 아래 줄은 그대로\n")
+    (job / "report.md").write_text(text, encoding="utf-8")
+    return job
+
+
+def test_question_line_points_to_answer_after_explore_check(tmp_path, capsys):
+    job = _question_job(tmp_path)
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
+    assert check(job, "explore", capsys=capsys)[0] == 0
+    assert _line(job, QUESTION) == QUESTION + output.QUESTION_DONE
+    assert "  - 질문 아래 줄은 그대로" in (job / "report.md").read_text(encoding="utf-8")
+    none = _question_job(tmp_path / "none")
+    (none / "explore-output.md").write_text("가설 없음: 실패 구간 로그가 없다\n다음 확인: 실패 시각 앞뒤 30초 로그\n", encoding="utf-8")
+    assert check(none, "explore", capsys=capsys)[0] == 0
+    assert _line(none, QUESTION) == QUESTION + output.QUESTION_DONE_NONE
+    # 생략(--skipped)·형식 실패는 답하지 않는다고 적는다
+    skipped = _question_job(tmp_path / "skip")
+    assert check(skipped, "explore", skipped="사용자가 하지 않음", capsys=capsys)[0] == 0
+    assert _line(skipped, QUESTION) == QUESTION + output.QUESTION_SKIPPED
+    bad = _question_job(tmp_path / "bad")
+    (bad / "explore-output.md").write_text("가설 1: 칸이 모자란 가설\n", encoding="utf-8")
+    assert check(bad, "explore", capsys=capsys)[0] == 1
+    assert _line(bad, QUESTION) == QUESTION + output.QUESTION_SKIPPED
+    # 꼬리가 다른 줄(never·--no-explore 안내)은 고치지 않는다
+    other = make_job(tmp_path / "other", "explore", "plain")
+    keep = f"{QUESTION} — 탐색 분석 안 함 — 확인할 내용은 답하지 않음(근거 로그로 직접 확인)"
+    (other / "report.md").write_text(_report(EXPLORE_PENDING, []) + keep + "\n", encoding="utf-8")
+    (other / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
+    assert check(other, "explore", capsys=capsys)[0] == 0 and _line(other, QUESTION) == keep
+
+
+def test_recheck_keeps_earlier_fabricated_count(tmp_path, capsys):
+    """VERIFY-B 5: `triage.py explore`를 다시 돌려 고친 출력으로 다시 검사해도 앞 검사의 원문에 없는 인용 수는 지우지 않는다."""
+    job = make_job(tmp_path, "explore", "plain")
+    (job / "trace.jsonl").write_text("", encoding="utf-8")
+    (job / "explore-output.md").write_text(_explore_out([("모뎀 펌웨어 오류", [FAKE])]), encoding="utf-8")
+    assert check(job, "explore", capsys=capsys)[1]["fabricated"] == 1
+    report_md = job / "report.md"      # `triage.py explore` 재실행이 탐색 줄을 다시 TODO로 돌린다
+    report.rewrite_line(report_md, "- 탐색 분석", [EXPLORE_PENDING])
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and data["fabricated"] == 0
+    assert data["evidence"] == "- 근거 원문 검사: 인용 1개 중 원문에 없음 0" + output.FAB_BEFORE.format(n=1)
+    rec = _rec(job, "explore")
+    assert rec["fabricated"] == 0 and rec["fabricated_before"] == 1
+    rows = [json.loads(x) for x in (job / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [r.get("fabricated") for r in rows] == [1, 0]
+    # 그 뒤 생략으로 바꿔도 이어 간다
+    report.rewrite_line(report_md, "- 탐색 분석", [EXPLORE_PENDING])
+    assert check(job, "explore", skipped="그만", capsys=capsys)[0] == 0
+    assert _rec(job, "explore")["fabricated_before"] == 1
+    # 처음 검사는 표시가 없다(기록도 없음)
+    fresh = make_job(tmp_path / "fresh", "explore", "plain")
+    (fresh / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
+    assert "앞 검사" not in check(fresh, "explore", capsys=capsys)[1]["evidence"]
+    assert "fabricated_before" not in _rec(fresh, "explore")

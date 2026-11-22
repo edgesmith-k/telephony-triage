@@ -133,6 +133,13 @@ def _unjudged_label(u: dict) -> str:
     return f"판정 불가 유형 {u['count']}" + (f"·원인 {u['cause_count']}개" if u.get("cause_count") else "개")
 
 
+def _backward_pids(anomalies: list) -> dict:
+    """시계 이상 가운데 역행 수 `n`과 앞뒤 줄 pid를 아는 것 `known`·그중 같은 pid `same`."""
+    back = [a for a in anomalies if isinstance(a, dict) and a.get("kind") == "backward"]
+    known = [a for a in back if isinstance(a.get("same_pid"), bool)]
+    return {"n": len(back), "known": len(known), "same": sum(1 for a in known if a["same_pid"])}
+
+
 class Driver(AnchorMixin, CacheMixin, ReportMixin):
     def __init__(self, args, defaults: dict):
         self.args = args
@@ -1117,7 +1124,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         top = 직전 실행 1위(state `job.runs`), looked = 이전 실행의 가린 기준 줄(state), hyps·none = `check-output`을 통과했고
         그 뒤 바뀌지 않은(기록 `output_sha256` == 지금 파일) `explore-output.md`의 가설 머리·반대 근거·`가설 없음` 이유.
         hyps는 근거 원문 검사를 했고(`source`) 원문에 없는 인용이 0일 때만(검사 건너뜀·`fabricated` > 0이면 뺀다).
-        hyps·none은 state `job.prior_explore`에도 남겨 산출물이 지워진 뒤(질문 턴·다음 실행)에도 넘긴다 — 새 검사 기록이 있으면
+        unfit = 가설이 있는데 1위 부적합 보류(`fit_hold`, `1위 판단: 부적합`)면 `<원인 ID> — <이유>`(≤120 — 가설 없음이면 none이 그 이유다).
+        hyps·none·unfit은 state `job.prior_explore`에도 남겨 산출물이 지워진 뒤(질문 턴·다음 실행)에도 넘긴다 — 새 검사 기록이 있으면
         그것으로 바꾸고, 그 검사가 실패했거나 출력이 바뀌었으면 지운다. top 말고 아무것도 없으면 None(키가 없다)."""
         def regular(path: Path) -> bool:
             try:
@@ -1157,7 +1165,10 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                     judged = {"hyps": [_clip(h["가설"] + (f" — 반대: {h['반대 근거']}"
                                                          if h.get("반대 근거") not in (None, "", "없음") else ""), 120)
                                        for h in fields.get("hyps") or []][:3] if checked else [],
-                              "none": _clip(fields.get("none"), 120)}
+                              "none": _clip(fields.get("none"), 120),
+                              # sim1122 F2: 1위 부적합 보류(가설이 있어도)는 다음 실행에도 넘긴다 — 재실행 뒤 1위가 말없이 다시 채택되지 않게
+                              "unfit": _clip(f"{rec['fit_hold']} — {(fields.get('top_fit') or {}).get('why') or fields.get('none') or ''}"
+                                             .rstrip(" —"), 120) if isinstance(rec.get("fit_hold"), str) and fields.get("hyps") else None}
                     judged = {k: v for k, v in judged.items() if v} or None
             if judged:
                 self.state.job["prior_explore"] = judged
@@ -1330,6 +1341,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                      "masked": getattr(self, "masked", None),
                      **({"uncollected_tags": uncollected} if uncollected else {})},
             "warnings_core": self.warnings[warn0:], "extra_warnings": extra_warnings,
+            # 시계 역행 수와 그중 앞뒤 줄 pid가 같은 수(리포트 시계 이상 줄의 단서, analysis.json에는 안 나간다 — sim1122 F6)
+            "clock_backward": _backward_pids(cov.get("clock_anomalies") or []),
             "attrs": {"clock": self.clock, "order_fail": self.order_fail, "order_evidence": self.order_evidence,
                       "focus": self.focus, "steps_member": self.steps_member, "look": self.look_result, "clues": self.clue_rows,
                       "time_candidates": self.time_candidates},

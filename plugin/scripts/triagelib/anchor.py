@@ -16,6 +16,8 @@ from .core import CLUE_FILE, LOOK_FILE, NeedsInput, _clip
 
 # 중요 경고(report.KEY_WARNING) — 머리를 바꾸면 포털 경고 표(web.WARN_NOTE)도 같이(두 레포 맞춤 시험 test_real_plugin)
 NO_STEP_TIME = "TC 실패 스텝에 시각 없음 — TC 시각으로 분석 구간을 정하지 못해 다음 출처로 정했다"
+# sim1122 F5: TC 머리 날짜가 로그 날짜 범위에 없다(다른 날 로그·TC). 포털이 이 머리로 고른다 — 바꾸면 포털도
+TC_DATE_DIFF = "TC 날짜와 로그 날짜가 다름: TC {tc}, 로그 {log} — 다른 날의 TC·로그일 수 있다(같은 시험의 것인지 확인)"
 LOOK_TIME_ONLY = "기준 줄에 시각만 있어 로그에서 찾지 않았다 — 태그와 메시지 일부를 같이 적으면 그 줄을 찾는다"
 
 
@@ -499,7 +501,7 @@ class AnchorMixin:
                 self.warn(f"스텝 마커의 실패 시각({lc.format_ts(span['fail'] or span['end'])})이 로그 범위 밖이라 쓰지 않았다")
                 span = None
         if span is None and steps_file:
-            span = self.steps_file_span(steps_file, tz, year, conf, jira_at, first, inside)
+            span = self.steps_file_span(steps_file, tz, year, conf, jira_at, first, inside, last)
         if span is None and steps_file:
             span = self.step_order_span(data, step_rules, conf, last)
         return span
@@ -567,7 +569,27 @@ class AnchorMixin:
         if fs and fs.get("source") != "steps_file" and not stepanchor.same_step(row_label, fs["text"]):
             self.warn(f"실패 스텝({fs['source']})과 steps-file의 FAIL 스텝이 다르다 — 구간은 steps-file 순서로 정했다")
 
-    def steps_file_span(self, steps_file, tz, year, conf: dict, jira_at, first, inside) -> dict | None:
+    def tc_date_ref(self, steps_file, conf: dict, zone, first, last):
+        """TC 머리 날짜(`failedstep.head_date`)를 steps-file 시간대의 UTC 시각으로(시각이 없으면 그날 0시) | None(못 읽음).
+        로그 첫~끝 날짜(같은 시간대)에 그 날짜가 없으면 `TC_DATE_DIFF` 경고 — 시계 차를 몰라도 낸다(하루 넘는 차이는 시계 차가 아니다)."""
+        text, _ = failedstep.read_lines(steps_file)
+        got = failedstep.head_date(text, conf) if text is not None else None
+        if got is None:
+            return None
+        (y, mo, d), clock = got
+        try:
+            local = lc.get_tz(zone)
+        except ValueError:      # 알 수 없는 타임존 — steps_file_times가 같은 경고를 낸다
+            return None
+        ref = datetime(y, mo, d, *(clock or (0, 0, 0)), tzinfo=local).astimezone(timezone.utc)
+        if first and last:
+            days = sorted({first.astimezone(local).date(), last.astimezone(local).date()})
+            if not days[0] <= ref.astimezone(local).date() <= days[-1]:
+                span = days[0].isoformat() + (f"~{days[-1].isoformat()}" if days[-1] != days[0] else "")
+                self.warn(TC_DATE_DIFF.format(tc=f"{y:04d}-{mo:02d}-{d:02d}", log=span))
+        return ref
+
+    def steps_file_span(self, steps_file, tz, year, conf: dict, jira_at, first, inside, last=None) -> dict | None:
         steps, fidx, warns, _ = self.steps_info()
         for w in warns:
             self.warn(self.masker()(w))     # FAIL 못 찾음 경고에는 읽은 표 머리(TC 원문)가 실린다
@@ -587,11 +609,12 @@ class AnchorMixin:
             if step is None:        # 패턴에도 맞는 줄이 없다 — FAIL 스텝을 못 찾은 경고는 read_steps가 이미 냈다
                 return None
             label = failedstep.normalize(self.masker()(failedstep.numbered(step, line) or ""), 80)
+        zone = conf.get("steps_file_tz") or tz or userconfig.get(self.cfg, "logcat.timezone")
+        tc_ref = self.tc_date_ref(steps_file, conf, zone, first, last)
         if not line:
             self.warn(NO_STEP_TIME)
             return None
-        zone = conf.get("steps_file_tz") or tz or userconfig.get(self.cfg, "logcat.timezone")
-        ref = jira_at or first
+        ref = tc_ref or jira_at or first
         try:
             start, fail = stepanchor.steps_file_times(line, zone, year or (ref.year if ref else None), ref)
         except ValueError as exc:       # 알 수 없는 타임존

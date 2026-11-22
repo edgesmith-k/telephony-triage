@@ -466,3 +466,58 @@ def test_look_at_found_only_by_word_order_is_never_confirmed():
     assert exact["decision"]["location"] == {"state": "confirmed", "source": "look_at", "kind": "point"}
     assert loose["decision"]["state"] == exact["decision"]["state"] == "accepted"
     assert loose["decision"]["location"] == {"state": "found", "source": "look_at", "kind": "near"}
+
+
+def test_unfit_mark_holds_accepted_top_even_with_hypotheses_and_carries_to_next_run():
+    """sim1122 F2(S-03): 기준 줄로 채택된 1위를 모델이 `1위 판단: 부적합`으로 적으면 다른 가설이 있어도 보류(held/fit_check)로
+    바뀌고 결론·해결책·판단 줄이 보류에 맞는다. 표시는 다음 실행 `prior.unfit`으로 넘어간다. 칸이 없으면 채택 그대로 + 경고 줄,
+    `적합`이면 채택 그대로(경고 없음). 확인할 내용 줄 꼬리는 답 자리를 가리킨다(F7)."""
+    item = _confirmed()
+    item = {**item, "logs": [str(padded_log((LABELSET.parent / p).resolve())) for p in item["logs"]]}
+
+    def accepted_job(name: str) -> Path:
+        out = tmp(f"tt-unfit-{name}-") / "x"
+        done = _run(item, out, "--explore", "--look-at", LOOK, "--look-note", "재시도가 오는지")
+        assert done["decision"]["state"] == "accepted" and done["explore"]["reason"] == "fit_check", done["decision"]
+        run_json("triage.py", ["explore", item["key"], "--out", out])
+        return out
+
+    def hyp_output(out: Path, tail: str) -> None:
+        quote = next(line for line in (out / "timeline.md").read_text(encoding="utf-8").splitlines() if line[:2].isdigit())
+        (out / "explore-output.md").write_text(
+            "가설 1: 시험 장비 설정이 실패를 만들었다\n로그로 확인:\n- " + quote + "\n코드로 추정: 코드 근거 없음\n"
+            "반대 근거: 장비 로그 없음\n다음 확인: 장비 담당에게 셀 설정 확인 후 같은 조건으로 재시험\n" + tail, encoding="utf-8")
+
+    held = accepted_job("held")
+    hyp_output(held, "\n1위 판단: 부적합 — 데이터 꺼짐은 이번 실패 시각과 맞지 않는다\n")
+    checked = run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", held])
+    assert "warning" not in checked
+    analysis = json.loads((held / "analysis.json").read_text(encoding="utf-8"))
+    assert (analysis["decision"]["state"], analysis["decision"]["reason"]) == ("held", "fit_check")
+    assert _report_line(held, "- 판단:").startswith("- 판단: 원인 보류 — 탐색 분석 적합성 확인에서")
+    assert _report_line(held, "- 결론:").startswith("- 결론: 채택 후보 DATA-001-01가 증상과 맞지 않아 보류")
+    assert _report_line(held, "- 해결책(1위 기준, 보류됨): ").endswith("해결책 검증: 보류(1위 부적합)")
+    assert _report_line(held, "  - 1위 판단(모델): ") == ("  - 1위 판단(모델): 부적합 — 데이터 꺼짐은 이번 실패 시각과 맞지 않는다 "
+                                                      "→ 1위 DATA-001-01 채택을 보류로 바꿨다")
+    assert _report_line(held, "- 확인할 내용(사용자 질문): ").endswith("— 답: 아래 탐색 분석 줄(가설 1의 로그로 확인·반대 근거)과 "
+                                                                 "`- 원인:`·다음 확인 줄")
+    rec = json.loads((held / "check-output.json").read_text(encoding="utf-8"))["explore"]
+    assert rec["fit_hold"] == "DATA-001-01" and rec["top_fit"] == "부적합" and rec["fabricated"] == 0
+    again = _run(item, held, "--explore", "--look-at", LOOK, "--look-note", "재시도가 오는지")
+    assert again["prior"]["unfit"] == "DATA-001-01 — 데이터 꺼짐은 이번 실패 시각과 맞지 않는다", again["prior"]
+    assert again["prior"]["hyps"] == ["시험 장비 설정이 실패를 만들었다 — 반대: 장비 로그 없음"]
+
+    plain = accepted_job("plain")
+    hyp_output(plain, "")
+    checked = run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", plain])
+    assert checked["warning"] == "- 경고: 1위 판단 칸 없음 — 1위 DATA-001-01 채택은 그대로다(탐색 가설이 1위와 맞는지 확인)"
+    assert json.loads((plain / "analysis.json").read_text(encoding="utf-8"))["decision"]["state"] == "accepted"
+    assert _report_line(plain, "  - 경고: 1위 판단 칸 없음") is not None
+    assert "fit_hold" not in json.loads((plain / "check-output.json").read_text(encoding="utf-8"))["explore"]
+
+    fit = accepted_job("fit")
+    hyp_output(fit, "1위 판단: 적합 — 데이터 꺼짐 줄이 실패 직전\n")
+    checked = run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", fit])
+    assert "warning" not in checked and _report_line(fit, "  - 경고:") is None
+    assert json.loads((fit / "analysis.json").read_text(encoding="utf-8"))["decision"]["state"] == "accepted"
+    assert _report_line(fit, "  - 1위 판단(모델): ") == "  - 1위 판단(모델): 적합 — 데이터 꺼짐 줄이 실패 직전"

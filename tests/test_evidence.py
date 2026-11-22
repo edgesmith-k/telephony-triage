@@ -370,3 +370,13 @@ def test_check_quotes_made_up_tag_prefix_of_message_word_is_weak():
     res = evidence.check_quotes(["15:10:01.200 - E SET SETUP_DATA_CALL fail cause=AUTH",
                                  "15:10:01.200 - E vrild SETUP_DATA_CALL fail cause=AUTH"], source, tags)
     assert res["verdicts"] == ["weak", "ok"]
+
+
+def test_top_fit_field_is_optional_and_word_bounded():
+    """sim1122 F2: `1위 판단:` 칸 — 출력 어디에 있어도 첫 줄, 값은 적합·부적합·모름만(`적합하지 않음` 같은 글은 칸이 아니다)."""
+    hyp = "가설 1: x\n로그로 확인:\n- 10:00:00.000 - E t m\n코드로 추정: 없음\n반대 근거: 없음\n다음 확인: y\n"
+    assert evidence.parse_explore(hyp + "\n1위 판단: 부적합 — 슬롯이 다르다\n")["top_fit"] == {"fit": "부적합", "why": "슬롯이 다르다"}
+    assert evidence.parse_explore("**1위 판단**: 적합\n" + hyp)["top_fit"] == {"fit": "적합", "why": ""}
+    assert evidence.parse_explore("가설 없음: z\n다음 확인: w\n1위 판단: 모름(로그 부족)\n")["top_fit"]["fit"] == "모름"
+    assert "top_fit" not in evidence.parse_explore(hyp + "1위 판단: 적합하지 않음\n")
+    assert "top_fit" not in evidence.parse_explore(hyp)

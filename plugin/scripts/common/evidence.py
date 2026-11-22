@@ -94,6 +94,20 @@ NONE_RX = _label_rx("가설 없음")
 EXPLORE_OPTIONAL = ("원인 층", "원인 데몬")
 EXPLORE_TAIL = ("가장 유력", "규칙 제안")
 EXPLORE_RX = {f: _label_rx(f) for f in EXPLORE_FIELDS[1:] + EXPLORE_OPTIONAL + EXPLORE_TAIL}
+# sim1122 F2: `1위 판단: 적합|부적합|모름 — <이유>`(1위 후보가 이번 실패를 설명하는지, 선택 칸, 출력 어디에 있어도 첫 줄). 없거나 값이
+# 셋이 아니면 None — 형식 실패로 만들지 않는다(check-output이 경고 줄만 남긴다)
+TOP_FIT_RX = re.compile(r"^\s*(?:[-*]\s*)?\**\s*1위\s*판단\s*\**\s*[:：]\s*\**\s*(부적합|적합|모름)(?=$|[\s—–:,(*])\**\s*(?:[—–:-]\s*)?(.*)$")
+
+
+def top_fit(lines: list[str]) -> dict | None:
+    """`1위 판단:` 칸 → {"fit": 적합|부적합|모름, "why": 이유} | None."""
+    m = next((m for line in lines if (m := TOP_FIT_RX.match(line))), None)
+    return {"fit": m.group(1), "why": m.group(2).strip()} if m else None
+
+
+def _top_fit_key(lines: list[str]) -> dict:
+    got = top_fit(lines)
+    return {"top_fit": got} if got else {}
 
 
 def ws(text: str) -> str:
@@ -161,7 +175,7 @@ def parse_fields(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> dict | Non
 
 def explore_parse(text: str) -> tuple[dict | None, str | None]:
     """탐색 출력 → ({"none", "next", "hyps": [{n, 가설, 원인 층, 원인 데몬, 로그로 확인: [...], 코드로 추정, 반대 근거, 다음 확인}],
-    "top": str|None, "rules": [...]}, None) 또는 (None, 사유).
+    "top": str|None, "rules": [...], "top_fit"?: {fit, why}(칸이 있을 때만)}, None) 또는 (None, 사유).
 
     `가설 n: …` 블록마다 다섯 칸(`EXPLORE_FIELDS`)이 순서대로 있어야 한다. `원인 층`·`원인 데몬`(가설 머리와 `로그로 확인` 사이)은
     선택이고 없으면 None, `n`은 머리의 번호(없으면 None). 마지막 가설 뒤 `가장 유력:`·`규칙 제안:`은 꼬리(선택)다. 블록이 없으면
@@ -178,7 +192,8 @@ def explore_parse(text: str) -> tuple[dict | None, str | None]:
                     if EXPLORE_RX["다음 확인"].match(line)), None)
         if nxt is None:
             return None, "가설 없음 뒤 `다음 확인` 칸 없음"
-        return {"none": NONE_RX.match(lines[none_at]).group(1).strip(), "next": nxt, "hyps": [], "top": None, "rules": []}, None
+        return ({"none": NONE_RX.match(lines[none_at]).group(1).strip(), "next": nxt, "hyps": [], "top": None, "rules": [],
+                 **_top_fit_key(lines)}, None)
     tail_at = next((i for i in range(starts[-1] + 1, len(lines)) if any(EXPLORE_RX[t].match(lines[i]) for t in EXPLORE_TAIL)),
                    len(lines))
     hyps = []
@@ -216,7 +231,7 @@ def explore_parse(text: str) -> tuple[dict | None, str | None]:
     if r_at is not None:
         block = [EXPLORE_RX["규칙 제안"].match(tail[r_at]).group(1).strip(), *tail[r_at + 1:]]
         rules = [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
-    return {"none": None, "next": None, "hyps": hyps, "top": top, "rules": rules}, None
+    return {"none": None, "next": None, "hyps": hyps, "top": top, "rules": rules, **_top_fit_key(lines)}, None
 
 
 def parse_explore(text: str) -> dict | None:

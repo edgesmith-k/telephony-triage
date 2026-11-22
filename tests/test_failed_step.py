@@ -625,3 +625,16 @@ def test_final_verdict_row_is_summary_not_step():
     for tail in ("Final Verdict | FAIL", "Overall Verdict | FAIL", "종합 판정 | 실패", "Final Result | FAIL"):
         rows = failedstep.parse_steps(f"Step | Result\nAttach | PASS\nPDN connect | PASS\n{tail}\n")
         assert failedstep._pick_failed(rows) == (None, None), tail
+
+
+def test_head_date_reads_tc_head_before_step_table():
+    """sim1122 F5: 스텝 표 머리 앞(TC 머리)의 날짜. Start·시작 줄이 먼저, 구분자 없는 ID 숫자는 날짜가 아니다."""
+    table = "No | Step | Result | Time\n1 | 준비 | PASS | 10:20:44\n2 | 켜기 | FAIL | 10:21:22\n"
+    assert failedstep.head_date("Report ID | RPT-20261113-0021\nStart | 2026/11/13 10:20:41\n" + table) == ((2026, 11, 13),
+                                                                                                         (10, 20, 41))
+    assert failedstep.head_date("Printed 2026-11-20\n시작: 2026.11.13\n" + table) == ((2026, 11, 13), None)
+    assert failedstep.head_date("시험일 2026년 11월 3일\n" + table) == ((2026, 11, 3), None)
+    assert failedstep.head_date("Report ID | RPT-20261113-0021\n" + table) is None          # ID 숫자뿐
+    assert failedstep.head_date("Start | 2026/13/40\n" + table) is None                     # 없는 날짜
+    assert failedstep.head_date(table + "End | 2026/11/13\n") is None                      # 표 뒤는 머리가 아니다
+    assert failedstep.head_date("Start 2026/11/13\n1 2 3\n") is None                       # 표 머리 없음

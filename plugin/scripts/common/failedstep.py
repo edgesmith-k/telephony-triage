@@ -19,6 +19,7 @@ import io
 import re
 import zipfile
 import zlib
+from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from collections.abc import Callable, Iterable
@@ -469,6 +470,34 @@ def header_line(text, cfg=None) -> str | None:
     split = _split_cells(text)
     header, _, start = _header(split, cfg)
     return " | ".join(c for c in split[start - 1] if c) if header else None
+
+
+# TC 머리(스텝 표 앞 줄)의 날짜: `2026/11/13`·`2026-11-13`·`2026.11.13`·`2026년 11월 13일`, 뒤에 시각(`10:20:41`)이 있으면 같이.
+# 구분자가 없는 숫자(`RPT-20261113-0021` 같은 ID)는 날짜로 보지 않는다
+_HEAD_DATE_RE = re.compile(r"(?<![\d.\-/])(\d{4})(?:[-/.]|\s*년\s*)(\d{1,2})(?:[-/.]|\s*월\s*)(\d{1,2})(?:\s*일)?(?!\d)"
+                           r"(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?")
+_HEAD_START_RE = re.compile(r"(?i)\b(?:start|begin)|시작")
+
+
+def head_date(text, cfg=None) -> tuple[tuple[int, int, int], tuple[int, int, int] | None] | None:
+    """TC 머리(스텝 표 머리 줄 앞)의 날짜 → `((년, 월, 일), (시, 분, 초) | None)` | None(표 머리 없음·날짜 없음·잘못된 날짜).
+    시작(Start·Begin·시작) 낱말이 있는 줄의 날짜를 먼저, 없으면 첫 날짜(sim1122 F5 — 스텝 칸이 시각만이면 이 날짜를 붙인다)."""
+    header, _, start = _header(_split_cells(text), cfg)
+    if header is None:
+        return None
+    head = str(text or "").splitlines()[: start - 1]
+    hits = [(bool(_HEAD_START_RE.search(line)), m) for line in head for m in _HEAD_DATE_RE.finditer(line)]
+    for _, m in sorted(hits, key=lambda h: not h[0]):
+        y, mo, d = (int(m.group(i)) for i in (1, 2, 3))
+        try:
+            datetime(y, mo, d)
+        except ValueError:
+            continue
+        clock = (int(m.group(4)), int(m.group(5)), int(m.group(6) or 0)) if m.group(4) else None
+        if clock and not (clock[0] < 24 and clock[1] < 60 and clock[2] < 60):
+            clock = None
+        return (y, mo, d), clock
+    return None
 
 
 def _after_header(text, cfg=None) -> str:

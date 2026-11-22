@@ -474,6 +474,20 @@ def test_clock_anomalies():
     assert data["coverage"]["clock_anomalies"] == []
 
 
+def test_clock_anomaly_same_pid_clue():
+    """sim1122 F6: 시계 이상 항목의 `same_pid` — 앞뒤 줄 pid가 같은지(시계 변경 대 덤프 이어 붙임을 가를 단서). pid를 모르면 키 없음."""
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    from common import logtime
+
+    def line(sec, pid):
+        return SimpleNamespace(dt=datetime(2026, 9, 24, 1, 0, sec, tzinfo=timezone.utc), pid=pid)
+
+    got = logtime.coverage([[line(50, 7), line(10, 7), line(20, 8), line(5, 9)], [line(30, None), line(1, 3)]])
+    assert [(a["delta_sec"], a.get("same_pid")) for a in got["clock_anomalies"]] == [(-40.0, True), (-15.0, False), (-29.0, None)]
+
+
 # -- bugreport ---------------------------------------------------------------
 
 
