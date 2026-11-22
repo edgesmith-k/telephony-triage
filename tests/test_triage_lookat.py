@@ -258,6 +258,6 @@ def test_location_of_word_order_look_is_near_and_never_confirmed():
     from triagelib.anchor import AnchorMixin
     span = {"source": "look_at"}
     for how, want in (("words", ("found", "near")), ("text", ("found", "near")), ("ipc", ("confirmed", "point"))):
-        me = SimpleNamespace(look_result={"how": how, "places": 1}, look_inputs=lambda: {})
+        me = SimpleNamespace(look_result={"how": how, "places": 1}, look_inputs=dict)
         loc = AnchorMixin.location(me, span)
         assert (loc["state"], loc["kind"]) == want, how
