@@ -6,7 +6,8 @@
   `OPENCODE_PERMISSION`이 설정 deny를, `OPENCODE_CONFIG_CONTENT`가 `snapshot:false`를 이겼다 — 계획 I x3b·x4).
 - 사전 점검(`doctor`): opencode 버전 = `PINNED`, 프로젝트 폴더(`gen_opencode.py install` 결과)가 git 레포 밖, `opencode debug config`의
   `snapshot:false`·`share:"disabled"`·`autoupdate:false`·`permission["*"]:"deny"`·`permission.task:{"*":"deny","tt-explore":"allow"}`
-  (또는 통째로 `"deny"`), `config.py doctor` 통과.
+  (또는 통째로 `"deny"`), `config.py doctor` 통과, guard가 쓰는 python(`TT_PYTHON` — 이 래퍼가 자기 python으로
+  채운다)과 자식 PATH의 python3이 `oc_adapter.py selftest`를 통과(`guard-python`·`script-python`).
   하나라도 실패하면 시작하지 않는다(종료 코드 2). 예외(warn, 시작함): doctor의 fail이 `module_skills` 행뿐이면 "모듈 문서 받기는
   실패할 수 있음"(B2 R22), `config.py check --roots`의 `read_roots`가 설치한 external_directory 허용 밖이면 다시 설치 안내(R21),
   게이트웨이 키 환경 변수(opencode.json `apiKey`의 `{env:…}`)가 없거나 baseURL이 `…/v1`로 끝나지 않으면(`gateway-key`·`gateway-url`),
@@ -29,6 +30,8 @@
 CLI:
     tt-oc --project <dir> [--timeout 초] [--first-timeout 초] [-s <세션>] [--command tt-<이름>] [--work-dir <dir>]... [--delete-session] [--json]
           [--opencode <바이너리>] -- <메시지...>
+
+opencode는 `--opencode` > `TT_OPENCODE` > 설치 때 기록한 경로(tt-oc.json `opencode_bin`) > PATH 순으로 고른다.
     tt-oc --project <dir> doctor [--json]
     tt-oc --project <dir> publish [--job <작업 키>]
 
@@ -190,7 +193,26 @@ def child_env(meta: dict) -> dict:
                 "CLAUDE_PLUGIN_ROOT": meta["plugin_root"], "TT_PLUGIN_ROOT": meta["plugin_root"]})
     if meta.get("model"):
         env["TT_MODEL"] = str(meta["model"])
+    # guard(tt-guard.js)는 `TT_PYTHON`(없으면 PATH의 python3)으로 어댑터를 돌린다. 의존성(PyYAML 등)을 venv에만 설치한 곳에서
+    # tt-oc를 venv python으로 돌려도 PATH의 python3는 시스템 것일 수 있다 — guard도 이 래퍼와 같은 python을 쓰게 한다(사용자가
+    # 정한 값은 그대로). venv면 그 bin을 PATH 앞에 둔다(activate와 같다): 모델 bash의 `python3 <플러그인 스크립트>`도 같은 venv
+    if not env.get("TT_PYTHON"):
+        env["TT_PYTHON"] = sys.executable
+    if sys.prefix != sys.base_prefix:
+        env["PATH"] = os.pathsep.join(filter(None, (str(Path(sys.executable).parent), env.get("PATH"))))
+    # 값이 빈 거부 변수(예: `export OPENCODE_CONFIG=`)는 위 사전 점검(`refused_env`)을 통과하지만 어댑터는 이름만 있어도 모든 도구를
+    # 거부한다(첫 읽기부터 막힘). 지운 것과 같게 자식에 넘기지 않는다 — 1.19.5는 대부분 빈 값을 없는 것으로 읽고,
+    # OPENCODE_CONFIG_DIR·OPENCODE_TEST_HOME은 `??`로 읽어 빈 값이 다른 폴더를 가리키는데 지우면 기본 동작이다
+    for k in [k for k, v in env.items() if v == "" and (k in REFUSED_ENV or k.startswith(REFUSED_ENV_PREFIX))]:
+        del env[k]
     return env
+
+
+def opencode_choice(arg, env, meta: dict) -> str:
+    """쓸 opencode: `--opencode` > `TT_OPENCODE` > 설치 때 기록한 경로(tt-oc.json `opencode_bin`, `gen_opencode.py install`) >
+    PATH의 opencode. `tools/site_step.py runtime-check opencode`도 쓴다."""
+    raw = arg or env.get("TT_OPENCODE") or meta.get("opencode_bin") or "opencode"
+    return shutil.which(raw, path=env.get("PATH")) or raw
 
 
 def instruction_files(proj: Path, env: dict) -> list[Path]:
@@ -324,6 +346,46 @@ def git_row(env: dict) -> dict:
             "작업 루트에 만든 bare 모양 폴더를 git이 레포로 읽을 수 있다. git 2.38 이상을 쓴다"}
 
 
+# (행, 누가 쓰나, 시작하지 못하면, 모듈이 없으면, python을 실행하지 못했을 때 고치는 법)
+PYTHON_ROLES = (("guard-python", "보호 장치(guard)", "모든 도구 호출이 막힌다", "파일 쓰기·Jira 호출이 막히고 guard 규칙이 빠진다",
+                 "TT_PYTHON을 의존성이 있는 python 경로로 정하거나, 의존성이 있는 venv의 python으로 tt-oc를 실행한다"),
+                ("script-python", "모델이 bash로 돌리는 플러그인 스크립트", "플러그인 스크립트가 돌지 않는다",
+                 "플러그인 스크립트가 돌지 않는다",
+                 "의존성이 있는 venv의 python으로 tt-oc를 실행하거나(그 bin이 PATH 앞에 온다), PATH의 python3이 의존성이 있는 "
+                 "python이 되게 한다"))
+
+
+def python_rows(proj: Path, meta: dict, env: dict) -> list[dict]:
+    """guard-python: tt-guard.js와 같은 python(`TT_PYTHON`, 없으면 python3), script-python: 자식 PATH의 python3으로
+    `oc_adapter.py selftest`를 실제로 돌려 의존성과 읽기 허용을 본다(config.py doctor는 이 래퍼의 python으로 돌아 이것을 못 본다).
+    guard가 읽기를 거부하면 그 이유를 그대로 보인다."""
+    adapter = Path(meta["plugin_root"]) / "scripts" / "common" / "oc_adapter.py"
+    rows = []
+    for (check, who, fatal, partial, fix), py in zip(PYTHON_ROLES, (env.get("TT_PYTHON") or "python3", "python3")):
+        head = f"{who}가 쓰는 python({py})"
+        try:
+            r = _run([py, str(adapter), "selftest"], cwd=proj, env=env, timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            rows.append({"check": check, "status": "fail",
+                         "detail": f"{head}을 실행하지 못했다({type(exc).__name__}) — {fatal}. {fix}"})
+            continue
+        out = _read_json_text(r.stdout) if r.returncode == 0 else None
+        gone = out and (out.get("guard") or (out.get("scripts") if check == "script-python" else None))
+        if out is None:
+            tail = " ".join((r.stderr or "").strip().splitlines()[-1:])[:300]
+            detail = f"{head}로 guard를 시작하지 못했다(종료 {r.returncode}{': ' + tail if tail else ''}) — {fatal}. 이 오류를 고친다"
+        elif gone:
+            detail = (f"{head}에 {gone} 모듈이 없다 — {partial}. 그 python에 의존성(pip install PyYAML jsonschema)을 설치하거나, "
+                      "의존성이 있는 python으로 tt-oc를 실행한다")
+        elif check == "guard-python" and out.get("read") != "allow":
+            detail = f"guard가 읽기 호출을 거부한다 — 모든 도구 호출이 막힐 수 있다. guard가 준 이유: {out.get('reason') or out.get('read')}"
+        else:
+            rows.append({"check": check, "status": "ok", "detail": f"{out.get('python') or py} — 의존성 있음"})
+            continue
+        rows.append({"check": check, "status": "fail", "detail": detail})
+    return rows
+
+
 def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
     """점검 행 [{check, status(ok|fail|warn|skip), detail}]. warn·skip은 막지 않는다(skip = 이 도구가 점검하지 않는 항목 — 통과
     표시가 아니다, 예: 내장 provider의 gateway-key). 앞 단계가 실패해도 할 수 있는 점검은 한다(실패로 건너뛴 것은 fail로 남긴다)."""
@@ -345,7 +407,16 @@ def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
         "설치 뒤 바뀌었거나 없다: " + ", ".join(changed) + " — 바꾼 적이 없으면 보고하고, 플러그인을 갱신했으면 "
         "tools/gen_opencode.py install --force로 다시 설치한다")
     ver_row, ran = version_row(oc, env)
+    recorded = meta.get("opencode_bin")
+    if ver_row["status"] == "fail" and recorded and os.path.abspath(oc) == recorded:
+        fix = (f"고정 버전 {PINNED}을 그 경로에 다시 두거나 gen_opencode.py install --opencode <{PINNED} 경로> --force로 다시 "
+               "기록한다")
+        ver_row["detail"] += (f" — 설치 때 기록한 opencode({recorded})가 없다(지워졌거나 옮겨졌다). {fix}"
+                              if not os.path.exists(recorded) else
+                              f" — 설치 때 기록한 opencode({recorded})가 바뀌었다(직접 실행해 자동 업데이트된 경우 등). {fix}. "
+                              "고정한 바이너리는 직접 실행하지 않는다(tt-oc로만)")
     rows.append(ver_row)
+    rows += python_rows(proj, meta, env)
     if not ran:
         return rows + [{"check": "opencode-config", "status": "fail", "detail": "건너뜀(opencode 실행 실패)"}]
     try:
@@ -1261,7 +1332,7 @@ def _read_json_text(text: str):
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="tt-oc", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--project")
-    ap.add_argument("--opencode", default=os.environ.get("TT_OPENCODE") or "opencode")
+    ap.add_argument("--opencode", help="쓸 opencode. 없으면 TT_OPENCODE, 설치 때 기록한 경로(tt-oc.json opencode_bin), PATH 순")
     ap.add_argument("--timeout", type=float, default=1800.0)
     ap.add_argument("--first-timeout", type=float, default=None,
                     help=f"첫 응답 시한(초, 0 = 끔). 없으면 TT_OC_FIRST_TIMEOUT, 그것도 없으면 {FIRST_RESPONSE_TIMEOUT:.0f}")
@@ -1310,8 +1381,9 @@ def main(argv=None) -> int:
         return 2
     if a.action == "publish":         # opencode·preflight와 무관(opencode를 돌리지 않는다)
         return publish_main(a, proj, meta)
-    oc = shutil.which(a.opencode) or a.opencode
+    oc = opencode_choice(a.opencode, os.environ, meta)
     env = child_env(meta)
+    env["TT_OPENCODE"] = oc        # 플러그인 스크립트(job_status 런타임 줄)가 보는 opencode도 같은 것
     rows = preflight(oc, proj, meta, env)
     failed = [r for r in rows if r["status"] == "fail"]    # warn 행(module-skills·read-roots)은 막지 않는다
     if a.action == "doctor":
