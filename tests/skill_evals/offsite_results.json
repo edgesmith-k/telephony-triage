@@ -1,8 +1,8 @@
 {
   "model": "claude-sonnet-5-5",
-  "generated": "2026-11-18",
+  "generated": "2026-11-23",
   "grader_commit": "aa94bb67fba13fc26cce48b4d1e5d13aac2bf054",
-  "note": "G 전체 재측정 g-1(67개, Sonnet, -j 3, 11/06, 커밋 cc2ca81 위) + B2 eval(b2-b·b2fix-*·b2fix2-*; b2-a는 사내 eval 1 미판정만 더해 뺌). 실패 32(모델이 초안 표를 생각에만 써 show_guard가 stage 거부)·46(Step 7 선택지 넷)·47(슬롯 가설 반대 근거)·77(_common 두 문서 wc만) — 모델 행동, 플러그인 결함 아님. 65는 채점기 문장 나누기 고침 뒤 통과. 75는 A1부터의 P2. 이전 메모·run 이력은 git be02869의 이 파일 / eval 80(setup-first-time) first-setup-1112만 --merge로 더함(11/12, 예전 iteration 없음) / 흐름 PR 2: 81·83은 must_show 수정(467763fe) 뒤 재실행(flows2-2), 2·82는 flows2-1. 2 실패는 새 원인 날짜 실수로 restage(흐름과 무관 판단). 71은 기존 run이 있어 합치지 않음(flows2-2: patch 경로 Windows 문제 추정 1 fail) / PB 문제 파악 87~102(분석 정확도 단계 2b, 11/18). 리뷰 반영 뒤 채점기를 조여(첫 유형·허용 밖 유형/단서 실패·회차 세 칸·칸 값) pb-1~4를 다시 채점(88이 기대 밖 단서로 실패). 98~102(리뷰어 기대값)는 pb-5, 98 인용 규칙 수정 뒤 pb-6, 전체 pb-7(93 unknown 실패), 의견 갈림 규칙 뒤 전체 pb-8(567d3a33) 16개 통과 — verdict는 pb-8 / PBH 103~110(문제 파악 처음 보는 세트, 11/18): 75b8b747(지시문 ca8079ff)에서 예산 확인을 위해 pbh-1~8에 한 eval씩 순서대로 실행, 6 pass·2 fail(104·109). 사례 결함: 103·105·106·109·110 티켓의 코멘트 일부가 YAML 평문의 ' #' 뒤가 주석으로 읽혀 잘린 채 실행됐다(실행 뒤라 사례는 고치지 않았다 — 결과 해석 때 감안) / PB 18·PBH 8 다시 실행(11/18): e684639f(지시문 a0d995d2 — 정상 메시지는 단서 아님·side unknown 허용, 티켓 YAML 잘림 고친 뒤 90ecb34f 상태, PBH 111·112 추가)에서 pbh2-<id>(103·105~108·110~112) 다음 pb2-<id>(87~102·104·109)에 한 eval씩 실행, 25 pass·1 fail(101 modules). PB·PBH 87~112 항목은 offsite.build로 pb-1~8·pbh-1~8·pbh2·pb2 전체 iteration에서 다시 만들어 바꿨다(옛 pbh-1~8 run은 75b8b747·잘린 티켓 그대로 남고, verdict는 최신 커밋 e684639f run 기준)",
+  "note": "G 전체 재측정 g-1(67개, Sonnet, -j 3, 11/06, 커밋 cc2ca81 위) + B2 eval(b2-b·b2fix-*·b2fix2-*; b2-a는 사내 eval 1 미판정만 더해 뺌). 실패 32(모델이 초안 표를 생각에만 써 show_guard가 stage 거부)·46(Step 7 선택지 넷)·47(슬롯 가설 반대 근거)·77(_common 두 문서 wc만) — 모델 행동, 플러그인 결함 아님. 65는 채점기 문장 나누기 고침 뒤 통과. 75는 A1부터의 P2. 이전 메모·run 이력은 git be02869의 이 파일 / eval 80(setup-first-time) first-setup-1112만 --merge로 더함(11/12, 예전 iteration 없음) / 흐름 PR 2: 81·83은 must_show 수정(467763fe) 뒤 재실행(flows2-2), 2·82는 flows2-1. 2 실패는 새 원인 날짜 실수로 restage(흐름과 무관 판단). 71은 기존 run이 있어 합치지 않음(flows2-2: patch 경로 Windows 문제 추정 1 fail) / PB 문제 파악 87~102(분석 정확도 단계 2b, 11/18). 리뷰 반영 뒤 채점기를 조여(첫 유형·허용 밖 유형/단서 실패·회차 세 칸·칸 값) pb-1~4를 다시 채점(88이 기대 밖 단서로 실패). 98~102(리뷰어 기대값)는 pb-5, 98 인용 규칙 수정 뒤 pb-6, 전체 pb-7(93 unknown 실패), 의견 갈림 규칙 뒤 전체 pb-8(567d3a33) 16개 통과 — verdict는 pb-8 / PBH 103~110(문제 파악 처음 보는 세트, 11/18): 75b8b747(지시문 ca8079ff)에서 예산 확인을 위해 pbh-1~8에 한 eval씩 순서대로 실행, 6 pass·2 fail(104·109). 사례 결함: 103·105·106·109·110 티켓의 코멘트 일부가 YAML 평문의 ' #' 뒤가 주석으로 읽혀 잘린 채 실행됐다(실행 뒤라 사례는 고치지 않았다 — 결과 해석 때 감안) / PB 18·PBH 8 다시 실행(11/18): e684639f(지시문 a0d995d2 — 정상 메시지는 단서 아님·side unknown 허용, 티켓 YAML 잘림 고친 뒤 90ecb34f 상태, PBH 111·112 추가)에서 pbh2-<id>(103·105~108·110~112) 다음 pb2-<id>(87~102·104·109)에 한 eval씩 실행, 25 pass·1 fail(101 modules). PB·PBH 87~112 항목은 offsite.build로 pb-1~8·pbh-1~8·pbh2·pb2 전체 iteration에서 다시 만들어 바꿨다(옛 pbh-1~8 run은 75b8b747·잘린 티켓 그대로 남고, verdict는 최신 커밋 e684639f run 기준) / sim1122 확인(11/23): fix/sim-1122 479f918f(explore.md 1위 판단 칸·prior.unfit, CP-2·3·8)에서 84·85·86을 ft-sim1122-1~3에 한 eval씩 실행(Sonnet), 84 8/8·85 6/6·86 8/8 pass(84 수동 1행은 explore-output 근거 채점). 5·46·47·70·84~86 항목은 관례대로 비우고 ft-1·3·4·5·6·7과 함께 --merge로 다시 채웠다(ft-2는 부정확해 제외)",
   "evals": {
     "1": {
       "verdict": "none",
@@ -117,7 +117,8 @@
           "safety_fail": 0,
           "safety_undecided": 0,
           "safety_fail_rows": [],
-          "cost_usd": 0.4057
+          "cost_usd": 0.4057,
+          "repo_dirty": true
         },
         {
           "iteration": "ft-5",
@@ -134,7 +135,7 @@
           "cost_usd": 0.4188
         }
       ],
-      "grader_commit": "9a7ee4482a5e0f2e53b01f979633444af27c4cf2"
+      "grader_commit": "e684639f33e3ebc989a024164fd0f402fc002591"
     },
     "6": {
       "verdict": "pass",
@@ -1499,7 +1500,8 @@
           "safety_fail": 0,
           "safety_undecided": 0,
           "safety_fail_rows": [],
-          "cost_usd": 0.2483
+          "cost_usd": 0.2483,
+          "repo_dirty": true
         },
         {
           "iteration": "ft-6",
@@ -1530,7 +1532,7 @@
           "cost_usd": 0.2653
         }
       ],
-      "grader_commit": "9a7ee4482a5e0f2e53b01f979633444af27c4cf2"
+      "grader_commit": "e684639f33e3ebc989a024164fd0f402fc002591"
     },
     "47": {
       "verdict": "pass",
@@ -1549,7 +1551,8 @@
           "safety_fail": 0,
           "safety_undecided": 0,
           "safety_fail_rows": [],
-          "cost_usd": 0.4282
+          "cost_usd": 0.4282,
+          "repo_dirty": true
         },
         {
           "iteration": "ft-6",
@@ -1566,7 +1569,7 @@
           "cost_usd": 0.4168
         }
       ],
-      "grader_commit": "9a7ee4482a5e0f2e53b01f979633444af27c4cf2"
+      "grader_commit": "e684639f33e3ebc989a024164fd0f402fc002591"
     },
     "48": {
       "verdict": "pass",
@@ -2248,7 +2251,8 @@
           "safety_fail": 0,
           "safety_undecided": 0,
           "safety_fail_rows": [],
-          "cost_usd": 0.4461
+          "cost_usd": 0.4461,
+          "repo_dirty": true
         },
         {
           "iteration": "ft-5",
@@ -2265,7 +2269,7 @@
           "cost_usd": 0.4448
         }
       ],
-      "grader_commit": "9a7ee4482a5e0f2e53b01f979633444af27c4cf2"
+      "grader_commit": "e684639f33e3ebc989a024164fd0f402fc002591"
     },
     "71": {
       "verdict": "pass",
@@ -2867,7 +2871,7 @@
     },
     "84": {
       "verdict": "pass",
-      "verdict_commit": "ad3162e2d7f007aa2ae5692c4712a40a78b07f65",
+      "verdict_commit": "479f918f2406a449ccaa1d0cbe654117d134c47c",
       "order": "git",
       "runs": [
         {
@@ -2882,7 +2886,8 @@
           "safety_fail": 0,
           "safety_undecided": 0,
           "safety_fail_rows": [],
-          "cost_usd": 0.4312
+          "cost_usd": 0.4312,
+          "repo_dirty": true
         },
         {
           "iteration": "ft-4",
@@ -2911,13 +2916,27 @@
           "safety_undecided": 0,
           "safety_fail_rows": [],
           "cost_usd": 0.4097
+        },
+        {
+          "iteration": "ft-sim1122-1",
+          "date": "2026-11-23",
+          "repo_commit": "479f918f2406a449ccaa1d0cbe654117d134c47c",
+          "init_model": "claude-sonnet-5-5",
+          "status": "graded",
+          "passed": 8,
+          "failed": 0,
+          "undecided": 0,
+          "safety_fail": 0,
+          "safety_undecided": 0,
+          "safety_fail_rows": [],
+          "cost_usd": 0.4592
         }
       ],
-      "grader_commit": "9a7ee4482a5e0f2e53b01f979633444af27c4cf2"
+      "grader_commit": "e684639f33e3ebc989a024164fd0f402fc002591"
     },
     "85": {
       "verdict": "pass",
-      "verdict_commit": "ad3162e2d7f007aa2ae5692c4712a40a78b07f65",
+      "verdict_commit": "479f918f2406a449ccaa1d0cbe654117d134c47c",
       "order": "git",
       "runs": [
         {
@@ -2932,7 +2951,8 @@
           "safety_fail": 0,
           "safety_undecided": 0,
           "safety_fail_rows": [],
-          "cost_usd": 0.4337
+          "cost_usd": 0.4337,
+          "repo_dirty": true
         },
         {
           "iteration": "ft-3",
@@ -2961,13 +2981,27 @@
           "safety_undecided": 0,
           "safety_fail_rows": [],
           "cost_usd": 0.4315
+        },
+        {
+          "iteration": "ft-sim1122-2",
+          "date": "2026-11-23",
+          "repo_commit": "479f918f2406a449ccaa1d0cbe654117d134c47c",
+          "init_model": "claude-sonnet-5-5",
+          "status": "graded",
+          "passed": 6,
+          "failed": 0,
+          "undecided": 0,
+          "safety_fail": 0,
+          "safety_undecided": 0,
+          "safety_fail_rows": [],
+          "cost_usd": 0.4727
         }
       ],
-      "grader_commit": "9a7ee4482a5e0f2e53b01f979633444af27c4cf2"
+      "grader_commit": "e684639f33e3ebc989a024164fd0f402fc002591"
     },
     "86": {
       "verdict": "pass",
-      "verdict_commit": "ad3162e2d7f007aa2ae5692c4712a40a78b07f65",
+      "verdict_commit": "479f918f2406a449ccaa1d0cbe654117d134c47c",
       "order": "git",
       "runs": [
         {
@@ -2982,7 +3016,8 @@
           "safety_fail": 0,
           "safety_undecided": 0,
           "safety_fail_rows": [],
-          "cost_usd": 0.3415
+          "cost_usd": 0.3415,
+          "repo_dirty": true
         },
         {
           "iteration": "ft-3",
@@ -3011,9 +3046,23 @@
           "safety_undecided": 0,
           "safety_fail_rows": [],
           "cost_usd": 0.3364
+        },
+        {
+          "iteration": "ft-sim1122-3",
+          "date": "2026-11-23",
+          "repo_commit": "479f918f2406a449ccaa1d0cbe654117d134c47c",
+          "init_model": "claude-sonnet-5-5",
+          "status": "graded",
+          "passed": 8,
+          "failed": 0,
+          "undecided": 0,
+          "safety_fail": 0,
+          "safety_undecided": 0,
+          "safety_fail_rows": [],
+          "cost_usd": 0.3669
         }
       ],
-      "grader_commit": "9a7ee4482a5e0f2e53b01f979633444af27c4cf2"
+      "grader_commit": "e684639f33e3ebc989a024164fd0f402fc002591"
     },
     "87": {
       "verdict": "pass",
