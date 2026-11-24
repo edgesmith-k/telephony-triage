@@ -32,6 +32,8 @@
 
 ## 일반 판단 규칙
 
+**정상 먼저** (11/25 기준선 다시 잡음, 플러그인 reference/explore.md의 0.): 실패 가설 전에 넷을 본다 — ① 회복 창(실패 뒤 같은 창의 회복 줄: `LOADED`·`handleImsRegistered`·`State=COMPLETE`, data는 `Internet data state changed from DISCONNECTED to CONNECTED.`) ② 살아 있는 요청이 없을 때 풀린 throttle(풀림 ≠ 다시 요청) ③ 아무것도 안 한 throttle(`onDataProfileUnthrottled: Nothing to unthrottle.`) ④ 설계상 정상인 조회·indication(`getRecoveryAction: RECOVERY_ACTION_GET_DATA_CALL_LIST` 등). 맞으면 `가설 N: 정상(설계상 정상 동작) — <이유>`·`원인 층: 원인 아님(정상 동작)`, `로그로 확인`은 그 회복·no-op·정상 줄 자체다. 그 줄이 없으면 정상 가설을 쓰지 않는다(실제 고장을 정상으로 덮지 않게). 실패가 되풀이되거나 회복이 다른 슬롯·요청이면 정상이 아니다. 문구는 받은 줄만 인용하고 없으면 말로.
+
 **위에서 본 오류는 시각·이름으로 한 층씩 내려가 처음 실패한 층을 찾는다.** 그 층이 원인 후보이고 위 층들은 증상이다.
 근거는 수 ms 안의 아래 층 줄, `failed`, ⇒ `ril_error`·`ril_timeout`·`ril_no_response` 표시다. 아래 층 줄이 없으면
 "그 층 로그 없음"이라고 쓰고 원인을 지어내지 않는다 — 로그 수준·수집 범위 탓일 수 있다.

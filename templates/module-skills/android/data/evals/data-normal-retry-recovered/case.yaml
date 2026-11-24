@@ -21,6 +21,6 @@ expect:
   accept:
     - layer: '원인\s*아님|정상'
       daemon: '없음|알 수 없음|DNC|DRM|DataNetworkController|DataRetryManager'
-      evidence: ['DISCONNECTED to CONNECTED', 'INSUFFICIENT_RESOURCES']
+      evidence: ['DISCONNECTED to CONNECTED']     # 정상 먼저 규칙: 로그로 확인은 회복 줄 자체(첫 실패 줄은 요구하지 않는다, 11/25)
   trap:
     - layer: '^\s*(모뎀|망|벤더|RILJ|RIL HAL|프레임워크)'

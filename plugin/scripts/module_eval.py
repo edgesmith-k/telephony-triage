@@ -127,13 +127,13 @@ ARM_PINS = {
     "ofono/pre/platforms/ofono/log-guide.md": "77c7a06551ab1bc1ae6309ad2a01eb33b3654856ce2d08f4d4659a69e63eaa6a",
     "ofono/pre/explore-rules.md": "6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8",
     "ofono/post/platforms/ofono/log-guide.md": "3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1",
-    "ofono/post/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
+    "ofono/post/explore-rules.md": "6d0e0d1b37acbf74ed6979a3bde24aebc97bc30762197b9a54098d039d8b35db",     # 11/25 정상 먼저(0.) 더해 다시 얼림
     # Android(H C1+D S12, 11/05 ④ 뒤 얼림 — tests/fixtures/module-arms/README.md 표)
     "android/pre/log-tags.md": "9820b909b15c148515e1265d5dd067d28e2f6e2c244470b7787dec2d469828db",
     "android/pre/ril-requests.md": "e3d078dbeadb6505ab62131e1b0cde83be959e2bc110c994ba43f90d2dda352d",
     "android/pre/fail-causes.md": "0077483d5c4ff0cb2b5e01873659f76a57acaa1f2f97949db1e9da756019e9cd",
     "android/pre/explore-rules.md": "6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8",
-    "android/post/explore-rules.md": "c9847aadd3844fb5cb1a8cb9905772010dd8b44c600f2907b5c781ca8cda0b80",
+    "android/post/explore-rules.md": "6d0e0d1b37acbf74ed6979a3bde24aebc97bc30762197b9a54098d039d8b35db",     # 11/25 정상 먼저(0.) 더해 다시 얼림
 }
 # 플랫폼별 자료는 레지스트리(`platforms.<p>.SPEC.template`, 17-platforms §10-3)에서 — 이 파일은 플랫폼 이름을 모른다(종합 리뷰 H①).
 _TEMPLATE_METAS = platforms.template_metas()

@@ -410,6 +410,7 @@ def _decision_tokens_altered(part: str, files_text: str, tags: re.Pattern | None
 def evidence_check(item: str, files_text: str, tags) -> tuple[str, list[tuple[str, int, int]]]:
     """근거 항목 하나의 판정: ok | weak | fabricated, 부분별 (판정, 최장 일치 길이, 길이). 결정 토큰이 바뀐 인용은 fabricated다."""
     worst, detail = "ok", []
+    files_text = QUOTE_CHARS_RX.sub("", files_text)      # 인용 쪽(`_quote_parts`)과 같이 따옴표를 뗀다 — `a:"State"` 줄을 그대로 인용해도 지어낸 것이 되던 것
     for part in _quote_parts(item, tags):
         n = len(part)
         if n < 12:
@@ -491,6 +492,7 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
     없으면 weak다(`_head_ok`, F-A01-min).
     """
     from common import masking
+    source = QUOTE_CHARS_RX.sub("", source)      # 인용 쪽과 같이 따옴표를 뗀다(행 찾기·머리 대조·`evidence_check`가 같은 글을 본다)
     big = len(source) > BIG_SOURCE
     rows = source.split("\n")
     ws_rows = [ws(row) for row in rows]

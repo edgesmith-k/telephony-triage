@@ -387,3 +387,16 @@ def test_top_fit_field_is_optional_and_word_bounded():
     for line in ("1위 판단: 적합하지 않음", "1위 판단: 맞지 않음"):
         assert evidence.parse_explore(hyp + line + "\n")["top_fit"]["fit"] is None, line
     assert "top_fit" not in evidence.parse_explore(hyp)
+
+
+def test_exact_quote_of_line_with_double_quotes_is_ok():
+    """원문 줄에 `"`가 있으면(oFono dbus_trace `a:"State", variant("active")`) 그대로 인용해도 ok — 인용 쪽만 따옴표를 떼서
+    최장 일치가 끊기고 지어낸 것으로 보던 것(11/25 모듈 eval 재측정에서 발견). 값을 바꾼 인용은 그대로 잡는다."""
+    src = ('10:20:06.404 p0 I ofonod dbus_trace signal - i:org.ofono.VoiceCall m:PropertyChanged p:/ril_0/voicecall01 '
+           'a:"State", variant("active")')
+    tags = evidence.source_text(src)[1]
+    good = 'dbus_trace signal - i:org.ofono.VoiceCall m:PropertyChanged p:/ril_0/voicecall01 a:"State", variant("active")'
+    assert evidence.evidence_check(good, src, tags)[0] == "ok"
+    assert evidence.check_quotes(["10:20:06.404 p0 I ofonod " + good + " — 통화 active"], src, tags)["verdicts"] == ["ok"]
+    bad = good.replace("active", "disconnected")
+    assert evidence.check_quotes([bad], src, tags)["verdicts"] != ["ok"]
