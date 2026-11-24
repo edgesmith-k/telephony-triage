@@ -279,8 +279,9 @@ class AnchorMixin:
                 return
         todo, seen = [], set()
         for c in clues[:pb.CLUES_MAX]:
-            if not isinstance(c, dict) or c.get("stale") is not False:     # 이전 회차 단서(stale)는 쓰지 않는다(H03)
-                continue
+            if not isinstance(c, dict) or (c.get("stale") is not False and not (
+                    c.get("stale") is True and lookat.stamp(c.get("quote") or ""))):
+                continue    # 이전 회차 단서(stale)는 쓰지 않는다(H03) — 날짜 붙은 인용 줄은 그 시각이 이 로그에 있을 때만 쓴다(A592)
             text, stamp = _clue_text(c, pb)
             if text is None or (text, stamp) in seen:      # 같은 찾을 글은 한 번만(같은 곳을 두 단서로 세지 않게)
                 continue
@@ -288,11 +289,14 @@ class AnchorMixin:
             todo.append((c, text, stamp))
         founds = self.find_clues(logs, tz, year, [(text, stamp) for _, text, stamp in todo])
         origin = "스크립트" if auto is not None else "문제 파악"
-        refs, dropped = [], []
+        refs, dropped, old_missed = [], [], 0
         for (c, _, stamp), found in zip(todo, founds):
             where = "설명" if c.get("comment") == "description" else f"코멘트 {c.get('comment')}번"
             if _stamp_unmet(stamp, found):
                 found = {"hits": 0, "why": "붙인 줄의 시각이 이 로그에 없음"}
+            if not found.get("hits") and c.get("stale") is True:
+                old_missed += 1     # 옛 회차 인용이 이 로그 것이 아니다 — 찾기 전 옛 회차 버림과 같다(다른 단서를 보류시키지 않는다)
+                continue
             if not found.get("hits"):
                 why = _clip(found.get("why") or "일치하는 줄 없음", 60)
                 dropped.append({"comment": c.get("comment"), "kind": c["kind"], "why": why})
@@ -306,7 +310,7 @@ class AnchorMixin:
             self.clue_rows.append({"where": where, "clue": c["kind"], "ts": found.get("ts"), "places": refs[-1]["places"],
                                    "origin": origin})
         if auto is not None:
-            parts = [f"{name} {n}" for name, n in (("옛 회차", auto["old_round"]), ("상한", auto["over"]),
+            parts = [f"{name} {n}" for name, n in (("옛 회차", auto["old_round"] + old_missed), ("상한", auto["over"]),
                                                    ("모양 안 맞음", auto.get("invalid", 0)), ("로그에 없음", len(dropped))) if n]
             if parts:
                 self.warn("코멘트 단서(스크립트) 버림: " + " · ".join(parts))

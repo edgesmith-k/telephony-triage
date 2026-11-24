@@ -843,3 +843,34 @@ def test_comment_clue_is_not_matched_by_word_order(seed_db):
     look.write_text(json.dumps({"look_at": text, "ref": None}), encoding="utf-8")
     f = run_json("parse_logcat.py", args)["find"]
     assert (f["hits"], f["how"]) == (1, "words")
+
+
+def test_old_round_dated_log_line_is_kept_for_log_to_decide():
+    """사내 A592: 분석 로그가 최근 회차 것이 아닐 수 있다(실패 줄을 인용한 코멘트가 다른 날 로그를 가리키고, 마지막 코멘트는 시각 없는 재시험 회신).
+    날짜 붙은 logcat 인용은 옛 회차여도 남기고(그 시각의 줄이 로그에 있어야 쓰인다), 날짜 없는 단서·글의 token 값은 옛 회차면 버린다."""
+    old = f"로그 보니\n{LINE}\n여기서 실패. 그리고 10:02:00에 VIPC_SETUP_DATA (token=0x0de) 실패"
+    clues, drop = _x([old, "Retested with new SW, same fail"])
+    assert [(c["comment"], c["kind"]) for c in clues] == [(1, "log_line")] and clues[0]["quote"].startswith("11-14 10:02:00.624")
+    assert drop["old_round"] == 1 and drop["conflict"] is False      # 날짜 없는 ipc 는 버림, 옛 회차 token 값은 충돌에 안 셈
+
+
+def test_old_round_dated_clue_is_used_when_its_stamp_is_in_this_log(seed_db):
+    """A592: 옛 회차(마지막 재시험 회신 앞)의 날짜 붙은 인용 줄 — 스크립트·문제 파악(stale) 모두 그 시각이 이 로그에 있으면 쓰고, 없으면
+    버린다. 날짜 없는 stale 단서는 그대로 안 쓴다."""
+    other = LINE.replace("10:02:00.624", "19:02:00.624")
+    retest = "Retested with new SW, same fail"
+    a, _ = _run(seed_db, "old-auto", comments=["로그 첨부", LINE, retest])
+    assert a["decision"]["check"]["via"] == {"comment": 2, "clue": "log_line", "how": "text", "places": 1, "origin": "script"}
+    a, _ = _run(seed_db, "old-auto-other", comments=["로그 첨부", other, retest])
+    assert a["decision"]["reason"] == "no_reference" and "코멘트 단서(스크립트) 버림: 옛 회차 1" in a["warnings"]
+    # 다른 로그를 인용한 옛 회차 줄은 이번 회차 단서를 보류시키지 않는다(dropped에 안 넣음)
+    a, out = _run(seed_db, "old-other-plus-new", comments=["로그 첨부", other, retest, LINE])
+    assert a["decision"]["check"]["via"]["comment"] == 4
+    assert json.loads((out / "reference.json").read_text(encoding="utf-8"))["dropped"] == []
+    model = {"comment": 2, "kind": "log_line", "name": None, "token": None, "quote": LINE, "side": "ap", "stale": True}
+    a, _ = _run(seed_db, "old-model", comments=["로그 첨부", LINE, retest], problem={"clues": [model]})
+    assert a["decision"]["check"]["via"]["origin"] == "problem"
+    a, _ = _run(seed_db, "old-model-other", comments=["로그 첨부", other, retest], problem={"clues": [{**model, "quote": other}]})
+    assert a["decision"]["reason"] == "no_reference"
+    a, _ = _run(seed_db, "old-model-ipc", comments=["로그 첨부", FAIL, retest], problem={"clues": [{**IPC, "stale": True}]})
+    assert a["decision"]["reason"] == "no_reference"

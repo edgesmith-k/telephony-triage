@@ -569,6 +569,7 @@ def extract_clues(comments: list[str], description: str, prefix: str, error_pref
     센다). 설명은 없어도 된다(포털 선별 파일은 코멘트만).
     - 인용(`{quote}` 블록·`bq.`·`>` 줄)은 단서·token 값 세기에서 뺀다(`_own_text`). 회차 경계는 인용 안 낱말도 본다(옛 회차를 더 버리는 쪽).
     - 회차 경계: 재시험 낱말(대소문자 무시, 영어 낱말은 낱말 단위, 앞으로의 계획 문장 안 낱말은 빼고 — `_retest`)이 든 마지막 코멘트 b. b와 그 앞(설명 포함)의 후보는 버리고 수만 센다.
+      단 날짜 붙은 logcat 시각(`lookat.stamp`)으로 시작하는 인용은 남긴다 — 부른 쪽이 그 시각의 줄이 분석 로그에 있을 때만 쓴다(A592).
       ponytail: 재시험 낱말 없이 다시 돈 회차는 못 가른다(옛 token이 새 로그에 없으면 로그 쪽에서 버려진다) — 사내 낱말로 보완.
     - 같은 단서(ipc 이름·token 값 — `225` = `0xe1`, log_line 접은 글)는 최근 것 하나, `CLUES_MAX`를 넘으면 `over`.
     - 이번 회차 글에 서로 다른 token 값이 둘 이상이면(정정 "0x0aa가 아니라 0x0e1"·정상과 실패를 함께 적음) `conflict: true` —
@@ -584,9 +585,15 @@ def extract_clues(comments: list[str], description: str, prefix: str, error_pref
     for where in [*range(first + len(comments) - 1, first - 1, -1), "description"]:
         found = _line_clues(where, sources[where], name_re, error_prefix)
         if (where == "description" and (b or first > 1)) or (where != "description" and where <= b):
-            drop["old_round"] += len(found)
-            continue
-        values |= _token_values(sources[where])
+            # 날짜 붙은 logcat 줄 인용은 회차와 상관없이 남긴다 — 그 시각의 줄이 분석 로그에 있어야 쓰이므로(anchor `_stamp_unmet`)
+            # 어느 회차 로그인지는 로그가 가린다. 분석 로그가 최근 회차 것이 아닐 때 그 회차 단서를 살린다(사내 A592, 사용자 결정)
+            dated = [c for c in found if lookat.stamp(c["quote"])]
+            drop["old_round"] += len(found) - len(dated)
+            if not dated:
+                continue
+            found = [{**c, "stale": True} for c in dated]   # 로그에 없으면 부른 쪽이 옛 회차로 조용히 버린다(dropped 아님)
+        else:
+            values |= _token_values(sources[where])     # 정정·충돌은 이번 회차 글로만 본다
         for c in found:
             if _clue_problem(c, sources, prefix, error_prefix):
                 drop["invalid"] += 1
