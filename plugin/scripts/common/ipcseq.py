@@ -107,23 +107,43 @@ def record(m: re.Match, i: int, ts, line_ref=None, phone_id=None) -> dict:
             "phone_id": phone_id}
 
 
-def no_response(records: list[dict], until: str | None, timeout_ms: int) -> list[dict]:
+NO_RESPONSE_MAX = 20
+
+
+def no_response(records: list[dict], until, timeout_ms: int) -> list[dict]:
     """응답 없는 REQ(표시 전용 `ipc_no_response`, 판정·점수에 쓰지 않는다): token이 있는 REQ마다 뒤에 같은 name·token·슬롯(한쪽이 모르면
-    같다고 본다)의 RSP가 없고 관측 끝 `until`이 REQ 시각 + `timeout_ms` 이상일 때만. RSP는 같은 열쇠의 가장 늦게 열린 REQ와 짝짓는다
-    (token이 다시 쓰여도 먼 REQ를 닫지 않게). token 없는 REQ는 짝지을 수 없어 내지 않는다."""
-    end = logtime.parse_ts(until) if until else None
-    if end is None:
-        return []
-    open_reqs: list[dict] = []
-    for r in sorted(records, key=lambda r: (str(r["ts"]), r["i"])):
+    같다고 본다)의 RSP가 없고 그 파일의 관측 끝이 REQ 시각 + `timeout_ms` 이상일 때만(앞에서 `NO_RESPONSE_MAX`개).
+    - 순서는 파일 안 줄 순서(`line_ref`: 파일 순번, 줄 번호)다 — 시계가 뒤로 뛰어도 REQ·RSP가 뒤집히지 않는다.
+    - `until`: 파일 순번 → 관측 끝 ISO(dict) 또는 모든 파일에 같은 값(str).
+    - RSP는 같은 열쇠(name, token)에 열린 REQ 중 슬롯이 맞는 가장 이른 것(FIFO)을 닫는다.
+    - RSP가 하나도 짝지어지지 않았으면(REQ는 있는데) 형식이 안 맞는다고 보고 아무것도 내지 않는다.
+    token 없는 REQ는 짝지을 수 없어 내지 않는다."""
+    def where(r):
+        ref = r.get("line_ref") or {}
+        return (ref.get("file_index") or 0, ref.get("line_no") or 0, r["i"])
+
+    open_reqs: dict[tuple, list[dict]] = {}
+    paired = 0
+    for r in sorted(records, key=where):
         if r["token"] is None or r["dir"] not in ("req", "rsp"):
             continue
+        queue = open_reqs.setdefault((r["name"], r["token"]), [])
         if r["dir"] == "req":
-            open_reqs.append(r)
+            queue.append(r)
             continue
-        hit = next((q for q in reversed(open_reqs) if (q["name"], q["token"]) == (r["name"], r["token"])
-                    and (None in (q["phone_id"], r["phone_id"]) or q["phone_id"] == r["phone_id"])), None)
-        if hit is not None:
-            open_reqs.remove(hit)
+        k = next((k for k, q in enumerate(queue) if None in (q["phone_id"], r["phone_id"]) or q["phone_id"] == r["phone_id"]), None)
+        if k is not None:
+            queue.pop(k)
+            paired += 1
+    if not paired:
+        return []
     wait = timedelta(milliseconds=timeout_ms)
-    return [q for q in open_reqs if logtime.parse_ts(q["ts"]) + wait <= end]
+    out = []
+    for q in sorted((q for queue in open_reqs.values() for q in queue), key=where):
+        end = until.get(where(q)[0]) if isinstance(until, dict) else until
+        end, start = (logtime.parse_ts(end) if end else None), (logtime.parse_ts(q["ts"]) if q["ts"] else None)
+        if end is not None and start is not None and start + wait <= end:
+            out.append(q)
+            if len(out) >= NO_RESPONSE_MAX:
+                break
+    return out

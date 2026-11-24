@@ -263,26 +263,43 @@ def test_find_rejects_bad_slot_value():
 
 # -- 응답 없는 IPC REQ (`ipc_no_response`, 표시 전용) ----------------------------------------------------------
 
-def _rec(i, ts, d, name="VIPC_SETUP_DATA", token=0x0DE, phone=None):
+def _rec(i, ts, d, name="VIPC_SETUP_DATA", token=0x0DE, phone=None, f=0):
     return {"i": i, "ts": f"2026-09-20T05:33:{ts}Z", "dir": d, "name": name, "token": token, "result": None,
-            "line_ref": {"file_index": 0, "line_no": i + 1}, "phone_id": phone}
+            "line_ref": {"file_index": f, "line_no": i + 1}, "phone_id": phone}
 
 
 UNTIL = "2026-09-20T05:33:40.000Z"
+PAIR = [_rec(90, "00.000", "req", name="VIPC_PING", token=1), _rec(91, "00.100", "rsp", name="VIPC_PING", token=1)]
+
+
+def _nr(recs, until=UNTIL, wait=30000):
+    return [r["i"] for r in ipcseq.no_response(PAIR + recs, until, wait)]
 
 
 def test_no_response_pairs_by_name_token_and_slot():
-    nr = ipcseq.no_response
-    assert nr([_rec(0, "05.000", "req"), _rec(1, "05.400", "rsp")], UNTIL, 30000) == []                 # 짝 → 표시 없음
-    assert nr([_rec(0, "05.000", "req")], "2026-09-20T05:33:30.000Z", 30000) == []                     # 기다림 전에 로그 끝
-    assert [r["i"] for r in nr([_rec(0, "05.000", "req")], UNTIL, 30000)] == [0]                       # 기다림 지나도 없음
-    assert nr([_rec(0, "05.000", "req", token=None)], UNTIL, 30000) == []                              # token 없음: 짝 못 지음
-    assert [r["i"] for r in nr([_rec(0, "05.000", "req", phone=0), _rec(1, "05.400", "rsp", phone=1)], UNTIL, 30000)] == [0]
-    assert nr([_rec(0, "05.000", "req", phone=0), _rec(1, "05.400", "rsp")], UNTIL, 30000) == []        # 슬롯 모름은 같다고 본다
-    assert [r["i"] for r in nr([_rec(0, "05.000", "req"), _rec(1, "05.400", "rsp", name="VIPC_OTHER")], UNTIL, 30000)] == [0]
-    # 같은 token을 다시 쓴 REQ: RSP는 가장 늦은 REQ를 닫는다 — 앞 REQ만 응답 없음
-    assert [r["i"] for r in nr([_rec(0, "01.000", "req"), _rec(1, "05.000", "req"), _rec(2, "05.400", "rsp")], UNTIL, 30000)] == [0]
-    assert nr([_rec(0, "05.000", "req")], None, 30000) == []
+    assert _nr([_rec(0, "05.000", "req"), _rec(1, "05.400", "rsp")]) == []                 # 짝 → 표시 없음
+    assert _nr([_rec(0, "05.000", "req")], "2026-09-20T05:33:30.000Z") == []              # 기다림 전에 로그 끝
+    assert _nr([_rec(0, "05.000", "req")]) == [0]                                          # 기다림 지나도 없음
+    assert _nr([_rec(0, "05.000", "req", token=None)]) == []                               # token 없음: 짝 못 지음
+    assert _nr([_rec(0, "05.000", "req", phone=0), _rec(1, "05.400", "rsp", phone=1)]) == [0]
+    assert _nr([_rec(0, "05.000", "req", phone=0), _rec(1, "05.400", "rsp")]) == []         # 슬롯 모름은 같다고 본다
+    assert _nr([_rec(0, "05.000", "req"), _rec(1, "05.400", "rsp", name="VIPC_OTHER")]) == [0]
+    # 같은 token의 REQ 둘: RSP는 가장 이른 REQ를 닫는다(FIFO) — 뒤 REQ가 응답 없음
+    assert _nr([_rec(0, "01.000", "req"), _rec(1, "05.000", "req"), _rec(2, "05.400", "rsp")]) == [1]
+    assert _nr([_rec(0, "05.000", "req")], None) == []
+
+
+def test_no_response_line_order_per_file_end_cap_and_format_guard():
+    # 시계가 뒤로 뛰어도 줄 순서로 짝짓는다: REQ(줄 1, 05초) 뒤 RSP(줄 2, 04초)는 짝
+    assert _nr([_rec(0, "05.000", "req"), _rec(1, "04.000", "rsp")]) == []
+    # 파일별 관측 끝: 파일 1은 10초에 끝났으면 기다림(30초) 전이라 내지 않는다, 파일 0은 40초까지라 낸다
+    ends = {0: UNTIL, 1: "2026-09-20T05:33:10.000Z"}
+    assert _nr([_rec(0, "05.000", "req"), _rec(1, "05.000", "req", token=7, f=1)], ends) == [0]
+    # 상한 NO_RESPONSE_MAX
+    many = [_rec(k, "01.000", "req", token=100 + k) for k in range(30)]
+    assert len(_nr(many)) == ipcseq.NO_RESPONSE_MAX == 20
+    # 짝지어진 RSP가 하나도 없으면(형식이 안 맞음) 내지 않는다
+    assert ipcseq.no_response([_rec(0, "05.000", "req"), _rec(1, "06.000", "req", token=9)], UNTIL, 30000) == []
 
 
 NR_LOG = [
@@ -325,3 +342,18 @@ def test_config_timeout_key_is_checked(value):
     with pytest.raises(platforms.PlatformConfigError, match="timeout_ms"):
         platforms._vendor_ipc({"timeout_ms": value}, "platform.vendor_ipc")
     assert platforms._vendor_ipc({"timeout_ms": 1500}, "b").timeout_ms == 1500 and vendor_ipc.DEFAULT.timeout_ms is None
+
+
+def test_no_response_mark_is_display_only_for_row_selection():
+    """ipc_no_response는 `marks`가 아니라 `notes`: 넘칠 때 고르는 줄(select_rows)이 표시가 있든 없든 같고 줄 끝에만 찍힌다."""
+    from triagelib import report
+
+    filler = [f"09-20 14:33:{10 + k:02d}.000   900   910 D RIL     : vendor service heartbeat {k}" for k in range(20)]
+    out = _parse(NR_LOG[:4] + filler + NR_LOG[4:])
+    assert out["ipc_no_response"]
+    bare = {k: v for k, v in out.items() if k != "ipc_no_response"}
+    pick = [[r["msg"] for r in report.select_rows(report.merge_rows(ev), "2026-09-20T05:33:30.000Z", 4)[0]] for ev in (out, bare)]
+    assert pick[0] == pick[1]
+    row = next(r for r in report.merge_rows(out) if "VIPC_SETUP_DATA" in str(r["msg"]))
+    assert row["marks"] == [] and row["notes"][0].startswith("ipc_no_response(")
+    assert report.row_line(row).endswith("⇒ " + row["notes"][0])

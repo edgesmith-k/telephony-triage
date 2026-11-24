@@ -213,7 +213,8 @@ def merge_rows(events: dict) -> list[dict]:
 
     그리지 않는 키도 싣는다: `idx`(합친 순서), `cat`(이벤트 없는 첫 기록의 category_hint, 없으면 처음 나온 hint),
     `ril`(그 기록의 ril 또는 None), `pid`, `line_ref`. 모듈 타임라인·후보 계산(`module`)과 근거 검사가 같은 줄을 쓴다.
-    parse 최상위 `ipc_no_response`(응답 없는 벤더 IPC REQ, 표시 전용)는 그 줄 위치의 행에 `ipc_no_response(…)` 표시로 붙인다.
+    parse 최상위 `ipc_no_response`(응답 없는 벤더 IPC REQ, 표시 전용)는 그 줄 위치의 행 `notes`에 `ipc_no_response(…)`로 붙인다 —
+    `marks`가 아니라 줄 고르기·모듈 hot/noise·후보 수에 쓰지 않고 `row_line`이 줄 끝에만 찍는다.
     """
     rows: dict[tuple, dict] = {}
     out: list[dict] = []
@@ -256,8 +257,9 @@ def merge_rows(events: dict) -> list[dict]:
             token = item.get("token")
             fields = f"ipc={item.get('name')},timeout_ms={item.get('timeout_ms')}" + (f",token={hex(token)}" if type(token) is int else "")
             mark = f"ipc_no_response({_clip(fields, 80)})"
-            if mark not in row["marks"]:
-                row["marks"].append(mark)
+            notes = row.setdefault("notes", [])    # marks가 아니다: 줄 고르기·모듈 hot/noise·후보 수에 들지 않고 줄 끝에만 찍힌다
+            if mark not in notes:
+                notes.append(mark)
     return out
 
 
@@ -319,8 +321,9 @@ def row_line(row: dict, clip: int | None = 160) -> str:
     phone = "-" if row["phone"] is None else f"p{row['phone']}"
     msg = _clip(row["msg"], clip) if clip is not None else " ".join(str(row["msg"] or "").split())
     line = f"{clock} {phone} {row['level'] or '-'} {row['tag'] or '-'} {msg}"
-    if row["marks"]:
-        line += "  ⇒ " + "; ".join(row["marks"])
+    marks = list(row["marks"]) + list(row.get("notes") or ())
+    if marks:
+        line += "  ⇒ " + "; ".join(marks)
     return line
 
 

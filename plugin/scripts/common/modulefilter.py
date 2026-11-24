@@ -454,8 +454,9 @@ def _line(r: dict, note: str | None = None) -> str:
     clock = ts[11:23] if len(ts) >= 23 and ts[10] == "T" else ts
     phone = "-" if r.get("phone") is None else f"p{r['phone']}"
     line = f"{clock} {phone} {r.get('level') or '-'} {r.get('tag') or '-'} {_clip(r.get('msg'), 160)}"
-    if r.get("marks"):
-        line += "  ⇒ " + "; ".join(r["marks"])
+    marks = list(r.get("marks") or ()) + list(r.get("notes") or ())      # notes = 표시 전용(ipc_no_response), 고르기에 안 쓴다
+    if marks:
+        line += "  ⇒ " + "; ".join(marks)
     return line + ("  " + _SCRIPT_NOTE.format(note) if note else "")
 
 

@@ -637,8 +637,7 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
                          timeout_ms=timeout_ms, errors=errors, dropped=dropped, unextracted=unextracted,
                          window=post_window)
     uncollected = uncollected_tags(dropped, events, masker)
-    ends = [t for t in (coverage["last_ts"], logtime.format_ts(window[1]) if window else None) if t]
-    until = min(ends) if coverage["last_ts"] else None      # 관측 끝: 로그 끝과 분석 구간 끝 중 이른 쪽(구간 밖 RSP는 못 본다)
+    until = logtime.format_ts(window[1]) if window else None      # 관측 끝 상한: 분석 구간 끝(파일별 끝은 ipc_no_response)
     # 표시 전용이라 정규식 경고(시간 초과 등)도 parse 경고·관측 상태에 더하지 않는다 — 분석 출력이 이전과 같다
     no_rsp = ipc_no_response(events, backend, (profile or _profile(defaults, db_cfg)).vendor_ipc, db_cfg, rules, until, [])
     for error in errors:
@@ -1139,12 +1138,20 @@ def ipc_no_response(events: list[dict], backend, spec, db_cfg: dict, rules: pars
                     warnings: list[dict]) -> list[dict]:
     """parse 출력의 벤더 IPC 줄 중 응답 없는 REQ(최상위 `ipc_no_response`, 표시 전용 — events[]·매칭·점수·자격 검사에 넣지 않는다).
     줄은 이미 가린 parse 레코드라 정규식도 값도 그 글에서 본다. 기다림은 site `vendor_ipc.timeout_ms`, 없으면 ril.yaml 요청
-    timeout 중 가장 긴 값(없으면 `IPC_WAIT_MS`). `until` = 관측 끝(로그 끝과 분석 구간 끝 중 이른 쪽 — 구간 밖 RSP는 못 본다)."""
+    timeout 중 가장 긴 값(없으면 `IPC_WAIT_MS`). 관측 끝은 파일마다 그 파일 마지막 줄 시각, `until`(분석 구간 끝)이 있으면 그보다
+    늦지 않게 — 구간 밖 RSP는 못 보고, 먼저 끝난 파일의 REQ를 다른 파일 시각으로 재지 않는다."""
     lines = [e for e in events if e.get("event") is None]
+    ends: dict = {}
+    for e in lines:
+        f, ts = (e.get("line_ref") or {}).get("file_index") or 0, e.get("ts")
+        if ts and str(ts) > str(ends.get(f) or ""):
+            ends[f] = str(ts)
+    if until:
+        ends = {f: min(t, until) for f, t in ends.items()}
     records = _ipc_records(lines, backend, spec, db_cfg, lambda n: str(lines[n]["msg"]), warnings) or []
     wait = spec.timeout_ms or max((int(r["timeout_ms"]) for r in rules.requests.values()), default=IPC_WAIT_MS)
     return [{"line_ref": r["line_ref"], "ts": r["ts"], "name": r["name"], "token": r["token"], "phone_id": r["phone_id"],
-             "timeout_ms": wait} for r in ipcseq.no_response(records, until, wait) if r["line_ref"] is not None]
+             "timeout_ms": wait} for r in ipcseq.no_response(records, ends, wait) if r["line_ref"] is not None]
 
 
 def _find_one(look: dict, *, records: list[dict], lines: list[dict], texts: list[str], mask, prof, tz, year, paths=(),
