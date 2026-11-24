@@ -12,7 +12,8 @@
   logcat 스탬프는 `--answer time=`과 같은 변환(`logtime.normalize_ts`, 스탬프는 run의 `--tz`·`--year`). 오프셋 없는 ISO는 사용
   오류(로그 시간대를 짐작하지 않는다). 시계 차(`--clock-offset`)는 시험 장비 시각에만 쓰므로 쓰지 않는다. `--span 초`면 `--at` ±초/2 안의 줄만(줄·바이트 상한 그대로,
   `--lines`와 함께면 둘 다 — 적은 쪽). 거르기(좁히기만): `--tag`, `--slot N`(슬롯 모름 줄은 남긴다), `--cat`(tags.yaml 그 카테고리 태그),
-  `--grep`(가린 사본의 `태그: 메시지`에, ≤200자, `matcher.pattern_timeout_ms` 시간 상한).
+  `--grep`(가린 사본의 `태그: 메시지`에, ≤200자, `matcher.pattern_timeout_ms` 시간 상한, `--span`이 없으면 분석 범위
+  `input.window` 안만).
 - `JOB/window-<n>.md`를 쓰고 `JOB/windows.json`(스크립트만 쓴다 — guard 규칙 12)에 `{path, sha256, at, lines, tags}`를 더한다.
   check-output이 sha가 맞는 구간을 근거 원문에 더한다(`output._windows`). 작업당 `WINDOWS_MAX`개, 새 run이 지운다.
 - 탐색(`JOB/timeline.md`가 있고 `explore.when`이 never 아님)이나 심층 분석(`module-skill.json`에 deep 기록)을 시작한 뒤에만.
@@ -246,6 +247,10 @@ def _run(args, defaults: dict) -> dict:
         lo, hi = logtime.format_ts(at - half), logtime.format_ts(at + half)
         recs = [r for r in recs if lo <= r["ts"] <= hi]
         n_lines = n_lines if args.lines is not None else LINES_MAX      # `--span`만이면 구간 안 줄을 상한까지
+    elif args.grep:      # `--span` 없는 `--grep`은 로그 전체가 아니라 분석 범위(events.json input.window) 안만 찾는다
+        win = (ev.get("input") or {}).get("window") or {}
+        if win.get("start") and win.get("end"):
+            recs = [r for r in recs if win["start"] <= r["ts"] <= win["end"]]
     recs = sorted(_narrow(args, recs, rules_dir, db_cfg), key=lambda r: (r["ts"], evt.ref_key(r.get("line_ref")) or (0, 0)))
     lines = _pick(recs, at_s, n_lines)
     if not lines:

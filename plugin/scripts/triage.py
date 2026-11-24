@@ -218,7 +218,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tag", action="append", metavar="TAG", help="이 태그 줄만(여러 번 쓸 수 있다). 없으면 모든 태그")
     p.add_argument("--slot", type=int, metavar="N", help="이 슬롯(phone_id) 줄만 — 슬롯 모름 줄은 남긴다")
     p.add_argument("--cat", metavar="카테고리", help="tags.yaml에서 이 카테고리로 매핑된 태그 줄만")
-    p.add_argument("--grep", metavar="정규식", help="가린 사본의 `태그: 메시지`에 맞는 줄만(≤200자, 시간 상한)")
+    p.add_argument("--grep", metavar="정규식", help="가린 사본의 `태그: 메시지`에 맞는 줄만(≤200자, 시간 상한). --span이 없으면 분석 범위 안에서만 찾는다")
     p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
     p = sub.add_parser("release", parents=[common])
     p.add_argument("key", metavar="KEY")

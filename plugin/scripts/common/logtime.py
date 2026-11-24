@@ -106,8 +106,10 @@ def normalize_ts(value, tz_name: str | None, year: int | None) -> datetime | Non
     if not isinstance(value, str) or not value.strip():
         return None
     text = value.strip()
-    try:     # `+0900`(콜론 없는 오프셋)은 3.11부터만 fromisoformat이 읽는다 — 3.10(사내)에서도 같게 콜론을 넣는다
-        dt = datetime.fromisoformat(re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", text.replace("Z", "+00:00")))
+    try:     # `+0900`(콜론 없는 오프셋)과 3·6자리가 아닌 초 소수는 3.11부터만 fromisoformat이 읽는다 — 3.10(사내)에서도 같게
+        iso = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", text.replace("Z", "+00:00"))
+        iso = re.sub(r"(\d:\d{2})\.(\d+)", lambda m: f"{m.group(1)}.{(m.group(2) + '00000')[:6]}", iso)
+        dt = datetime.fromisoformat(iso)
     except ValueError:
         match = STAMP_RE.fullmatch(text)
         if not match:

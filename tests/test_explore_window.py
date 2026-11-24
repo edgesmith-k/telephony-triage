@@ -175,3 +175,23 @@ def test_no_flow_file_keeps_timeline_bytes(tmp_path):
     assert report.flow_brief(tmp_path, EVENTS) == [] and report.flow_head([]) == []
     before = report.timeline(KEY, EVENTS, "2026-09-20T05:32:09Z", 200)
     assert report.timeline(KEY, EVENTS, "2026-09-20T05:32:09Z", 200, flows=report.flow_head(report.flow_brief(tmp_path, EVENTS))) == before
+
+
+def test_grep_without_span_stays_inside_analysis_window():
+    """리뷰 7: `--span` 없는 `--grep`은 로그 전체가 아니라 분석 범위(events.json input.window) 안만 찾는다."""
+    job = _job()
+    path = job / "events.json"
+    ev = json.loads(path.read_text(encoding="utf-8"))
+    ev["input"]["window"] = {"start": "2026-09-20T05:33:10.000Z", "end": "2026-09-20T05:34:00.000Z"}   # HIDDEN(05:33:05)은 밖
+    path.write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
+    assert _window(job, "--at", AT, "--grep", r"carrier link \w+", expect=1)["reason"] == "줄 없음"
+    assert _window(job, "--at", AT, "--grep", r"carrier link \w+", "--span", 60)["lines"] == 1
+
+
+def test_normalize_ts_reads_any_fraction_width():
+    """리뷰 7: 3.10 fromisoformat은 초 소수 3·6자리만 읽는다 — 1·2·4·5·7자리도 6자리로 맞춰 읽는다."""
+    from common import logtime
+
+    for text, want in (("05:33:05.5Z", "05:33:05.500"), ("05:33:05.12Z", "05:33:05.120"), ("05:33:05.1234Z", "05:33:05.123"),
+                       ("14:33:05.12345+0900", "05:33:05.123"), ("05:33:05.1234567Z", "05:33:05.123"), ("05:33:05Z", "05:33:05.000")):
+        assert logtime.format_ts(logtime.normalize_ts("2026-09-20T" + text, "UTC", 2026))[11:23] == want, text
