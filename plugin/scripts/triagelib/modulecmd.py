@@ -276,8 +276,8 @@ def _around(job: Path, analysis: dict):
     return meta.get("occurred_at") if isinstance(meta, dict) else None
 
 
-def _generic_timeline(key: str, events: dict, around, limit: int) -> tuple[str, int, int]:
-    text, kept, total = report.timeline(key, events, around, limit, None, None)
+def _generic_timeline(key: str, events: dict, around, limit: int, flows: list[str] = ()) -> tuple[str, int, int]:
+    text, kept, total = report.timeline(key, events, around, limit, None, None, flows=flows)
     return (text if events.get("mask_off") else masking.redact(text, events.get("mask_allow") or [])[0]), kept, total
 
 
@@ -524,8 +524,9 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
     allow = events.get("mask_allow") or []
     rows = report.merge_rows(events)
     items, total = report.select_rows(rows, spec.get("around"), limit)
+    flows = report.flow_head(report.flow_brief(job, events, spec.get("around")))
     text = report.render_timeline(key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
-                                  spec.get("anchor"), spec.get("look_at"))
+                                  spec.get("anchor"), spec.get("look_at"), flows)
     text = text if events.get("mask_off") else masking.redact(text, allow)[0]
     if text.encode("utf-8") != tl:
         raise nojob(f"{TIMELINE_FILE}가 events.json과 맞지 않는다 — triage.py explore를 다시")
@@ -535,7 +536,7 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
             if anchor.get("fail") and r.get("ts") == anchor.get("fail")][:5]
     return {"spec": spec, "items": items, "kept": len(items), "total": total, "center": center,
             "center_source": ("기준 줄" if anchor.get("source") == "look_at" else "실패 스텝") if anchor.get("fail") else "발생 시각",
-            "pins": pins, "allow": allow,
+            "pins": pins, "allow": allow, "flows": flows,
             "mask_off": bool(events.get("mask_off"))}
 
 
@@ -568,7 +569,8 @@ def _deep_skill(job, key, cfg, analysis, events, candidates, src, inputs, env):
         r = {"path": None, "base": None, "why": "skillpath 없음"}
     name = src.get("skill")
     around = _around(job, analysis)
-    text, kept, total = _generic_timeline(key, events, around, _limit(cfg))
+    text, kept, total = _generic_timeline(key, events, around, _limit(cfg),
+                                          report.flow_head(report.flow_brief(job, events, around)))
     data = text.encode("utf-8")
     tl_rel = f"{FOLDER}/deep/{TIMELINE_FILE}"
     timeline = {"path": tl_rel, "sha256": _sha256(data), "lines": kept, "total": total}
@@ -606,6 +608,8 @@ def _deep_module(args, job, key, p, cfg, analysis, events, candidates, state, in
     around = _around(job, analysis)
     view = _has_filter(fetched.doc, p)
     modem = _modem_dir(fetched.doc, p)
+    brief = report.flow_brief(job, events, around)       # 흐름 판정 요약(flow.json 있을 때만, 표시 전용)
+    flows = report.flow_head(brief)
     lib = importlib.import_module("common.modulefilter") if view or (modem and not args.also) else None
     ev = None
     if lib is not None:
@@ -620,11 +624,12 @@ def _deep_module(args, job, key, p, cfg, analysis, events, candidates, state, in
             "op": "view", "mode": "deep", "events": str(job / "events.json"), "key": key, "module": fetched.module,
             "center": None, "center_source": "근거", "evidence": ev, "pins": ev, "allow": allow,
             "mask_off": bool(events.get("mask_off")), "cap_rows": limit,
-            "cap_bytes": VIEW_CAPS["deep"][1], "with_modem": bool(args.also), "modules": fetched.doc, "platform": p}, args), ctx)
+            "cap_bytes": VIEW_CAPS["deep"][1], "with_modem": bool(args.also), "modules": fetched.doc, "platform": p,
+            **({"flow_head": flows} if flows else {})}, args), ctx)
         text, stats = res["text"], res.get("stats") or {}
         kept, total, center = stats.get("kept", 0), stats.get("pool", 0), stats.get("center")
     else:
-        text, kept, total = _generic_timeline(key, events, around, limit)
+        text, kept, total = _generic_timeline(key, events, around, limit, flows)
         center = around
     also, also_why, ask_also = [], [], None
     if lib is not None and not args.also and modem and modem != fetched.module and f"{p}/{modem}/SKILL.md" in fetched.tree:
@@ -644,7 +649,8 @@ def _deep_module(args, job, key, p, cfg, analysis, events, candidates, state, in
     deep_input = {"schema_version": 1, "key": analysis.get("key"), "platform": p, "module": module, "sha": fetched.sha,
                   "type_id": cand0.get("type"), "top_candidates": _top3(candidates), **_decision(analysis),
                   "issue_summary": (analysis.get("issue") or {}).get("summary"), "occurred_at": around,
-                  "events": "events.json", "timeline": tl_rel, "log_paths": _log_paths(events)}
+                  "events": "events.json", "timeline": tl_rel, "log_paths": _log_paths(events),
+                  **({"flows": brief} if brief else {})}
     record = {"module": module, "sha": fetched.sha, "at": _now(),
               "files": [m for m in _files_meta(purpose, files) if not m["path"].endswith("/" + TIMELINE_FILE)],
               "timeline": {"path": tl_rel, "sha256": _sha256(data), "lines": kept, "total": total},
@@ -864,7 +870,8 @@ def _explore_view_payload(job, key, p, d, explore, doc, center=None, source=None
     return {"op": "view", "mode": "explore", "events": str(job / "events.json"), "key": key, "module": d,
             "center": center or explore["center"], "center_source": source or explore["center_source"], "evidence": [],
             "pins": explore["pins"], "allow": explore["allow"], "mask_off": bool(explore.get("mask_off")), "cap_rows": cap_rows,
-            "cap_bytes": cap_bytes, "with_modem": False, "modules": doc, "platform": p, **({"with_module": with_} if with_ else {})}
+            "cap_bytes": cap_bytes, "with_modem": False, "modules": doc, "platform": p, **({"with_module": with_} if with_ else {}),
+            **({"flow_head": explore["flows"]} if explore.get("flows") else {})}
 
 
 def _explore_lines(module, sha, kept, total, stats) -> list[str]:

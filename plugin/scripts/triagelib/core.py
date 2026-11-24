@@ -66,6 +66,10 @@ CLUE_FILE = "clue-at.json"     # 코멘트 단서(가린 글) 모두 → `parse_
 REFERENCE_FILE = "reference.json"     # 자격 검사 기준(앵커 → `match_signatures.py --reference`, 단계 5)
 ELIGIBILITY_FILE = "eligibility.json" # 자격 검사 사건 전부·판정(매처 출력 `eligibility`, 스크립트만 쓴다 — guard 규칙 12)
 EXPLORE_INPUT_FILE = "explore-input.json"   # `triage.py explore`의 입력(마스킹된 값만). run이 쓰고, 탐색 동의 뒤 subcommand가 읽는다
+# `triage.py window`(5-1·5-2 근거 구간): JOB/window-<n>.md와 그 기록(스크립트만 쓴다 — guard 규칙 12). check-output이 sha가 맞는 구간을
+# 근거 원문에 더한다. 작업당 WINDOWS_MAX개
+WINDOW_RECORD, WINDOW_FILE, WINDOWS_MAX = "windows.json", "window-{n}.md", 6
+WINDOW_NAME_RE = re.compile(r"window-[1-9]\d*\.md")
 MUST_SHOW_MAX = 6                # render_report가 모으는 must_show 상한
 MUST_SHOW_FIT = 4                # fit이 마지막에 남기는 수
 MUST_SHOW_CLIP = 160
@@ -108,7 +112,8 @@ MODULE_RECORD_DIR = "module-skill"
 # 새 run이 지우는 이전 실행 산출물(B2 §7.4) — 폴더 MODULE_RECORD_DIR도 지운다
 # eligibility.json은 match.json처럼 매처가 돌 때마다 새로 쓰고(캐시 적중이면 그 실행 것을 그대로 쓴다) 여기 넣지 않는다 — driver.match
 STALE_FILES = (TIMELINE_FILE, EXPLORE_INPUT_FILE, LOOK_FILE, CLUE_FILE, REFERENCE_FILE, "module-skill.json", "deep-input.json", "skill-input.json",
-               "check-output.json", "deep-output.md", "explore-output.md")
+               "check-output.json", "deep-output.md", "explore-output.md", WINDOW_RECORD,
+               *(WINDOW_FILE.format(n=n) for n in range(1, WINDOWS_MAX + 1)))
 _HOT_LEVELS = {"W", "E", "F"}
 _TOKEN_RE = re.compile(r"[0-9A-Za-z가-힣_]{2,}")
 

@@ -32,6 +32,7 @@ EVENTS = (IPC_ERROR, REQUEST_FAILED)
 KEYS = ("context", "complete", "request_prefix", "error_prefix", "success")
 TRACE_KEY = "trace"     # 선택 6번째 키: IPC 메시지 줄 정규식 목록(`common.ipcseq`, 다섯 키 규칙과 무관)
 SLOT_KEY = "slot"       # 선택 7번째 키: IPC 메시지 줄의 SIM 슬롯 정규식 목록(그룹 1 = 슬롯 번호, 다섯 키 규칙과 무관)
+TIMEOUT_KEY = "timeout_ms"   # 선택 8번째 키: REQ 뒤 RSP를 기다리는 ms(표시 전용 `ipc_no_response` 표시, 없으면 ril.yaml 요청 timeout 중 가장 긴 값)
 VALUE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 
 
@@ -45,6 +46,7 @@ class Spec:
     success: str = "VIPC_E_OK"                   # 성공 결과 값 전체(error_prefix로 시작, 이벤트로 내지 않는다)
     trace: tuple = ()                            # IPC 메시지 줄 정규식(`common.ipcseq`). 비면 placeholder 기본 둘
     slot: tuple = ()                             # IPC 메시지 줄 SIM 슬롯 정규식(그룹 1). 비면 줄 레코드의 `phone_id`
+    timeout_ms: int | None = None                # REQ 응답 대기(`ipc_no_response` 표시). None이면 ril.yaml 요청 timeout 중 가장 긴 값
 
     @cached_property
     def request_re(self) -> re.Pattern:

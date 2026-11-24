@@ -672,7 +672,8 @@ def uncollected(spec: Spec, rows: list[dict], module: str, limit: int = 5) -> li
     return out
 
 
-def render(key: str, platform: str, module: str, mode: str, view_rows, other_rows, stats: dict, mask_off: bool = False) -> str:
+def render(key: str, platform: str, module: str, mode: str, view_rows, other_rows, stats: dict, mask_off: bool = False,
+           flow_head=()) -> str:
     """보기 글(SHA 없음 — 생성기와 `module`이 같은 바이트를 낸다)."""
     kind = "심층" if mode == "deep" else "탐색"
     win = stats.get("window")
@@ -691,6 +692,7 @@ def render(key: str, platform: str, module: str, mode: str, view_rows, other_row
     if stats.get("weak"):
         top = sorted(stats.get("hot_modules", {}).items(), key=lambda kv: (-kv[1], kv[0]))[0]
         head.append(f"- 모듈 신호 약함: ±15초에 이 모듈 경고·오류 줄이 없고 {top[0]}에 {top[1]}줄이 있다")
+    head += [str(x) for x in flow_head]      # 흐름 판정 요약(`report.flow_head`, flow.json 있을 때만 — 없으면 이전과 같은 바이트)
     head += ["- 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.", ""]
     body = [v["line"] for v in view_rows]
     text = "\n".join(head + body) + "\n"
@@ -735,7 +737,8 @@ def _view_op(payload: dict) -> dict:
         mrows = []
     stats.update(center=center, center_source=source, window=list(window) if window else None,
                  uncollected=uncollected(spec, rows, module))
-    text = render(payload.get("key") or "", spec.platform, module, mode, picked, oth, stats, bool(payload.get("mask_off")))
+    text = render(payload.get("key") or "", spec.platform, module, mode, picked, oth, stats, bool(payload.get("mask_off")),
+                  payload.get("flow_head") or ())
     if mrows:
         text += "\n## 모뎀 모듈 줄\n" + "\n".join(v["line"] for v in mrows) + "\n"
     extra = payload.get("with_module")

@@ -235,7 +235,8 @@ def test_explore_subagent_prompt():
     scripts = [k for k in allows if k.startswith("python3 ")]
     assert sorted(scripts) == sorted(["python3 *triage.py* run *--look-at*", "python3 *triage.py* module *--for explore*--module *",
                                       "python3 *triage.py* module *--module *--for explore*",
-                                      "python3 *triage.py* check-output *--for explore*", "python3 *db_search.py*"])
+                                      "python3 *triage.py* check-output *--for explore*", "python3 *db_search.py*",
+                                      "python3 *triage.py* window *"])
 
     def decide(cmd):                                   # 1.19.5 규칙 평가: 마지막으로 맞는 패턴이 이긴다
         return [v for k, v in bash.items() if gen_opencode.OCV.wildcard_match(k, cmd)][-1]
@@ -243,7 +244,8 @@ def test_explore_subagent_prompt():
     s = '"/p/scripts/'
     for cmd in (f'python3 {s}triage.py" run K-1 --look-at "x"', f'python3 {s}triage.py" module K-1 --for explore --module a/data',
                 f'python3 {s}triage.py" module K-1 --module a/data --for explore --deep', f'python3 {s}db_search.py" C-1 --db x',
-                f'python3 {s}triage.py" check-output K-1 --for explore', "grep -rn x /code", "cat /w/K-1/timeline.md"):
+                f'python3 {s}triage.py" check-output K-1 --for explore', "grep -rn x /code", "cat /w/K-1/timeline.md",
+                f'python3 {s}triage.py" window K-1 --at 2026-09-20T05:33:05Z'):
         assert decide(cmd) == "allow", cmd
     for cmd in (f'python3 {s}triage.py" explore K-1', f'python3 {s}triage.py" module K-1 --for explore',   # 부모 몫(묻기 포함)
                 f'python3 {s}triage.py" check-output K-1 --for deep', f'python3 {s}db_pr.py" publish', "find . -fls x",

@@ -16,8 +16,9 @@ token: `0x` 16진·10진 모두 int. 숫자는 끝까지 잡고(자르지 않는
 from __future__ import annotations
 
 import re
+from datetime import timedelta
 
-from . import vendor_ipc
+from . import logtime, vendor_ipc
 
 RECORD_MAX = 20000
 GROUPS = ("name", "token", "dir", "kind", "result")   # 허용 이름 그룹(`name` 필수)
@@ -104,3 +105,25 @@ def record(m: re.Match, i: int, ts, line_ref=None, phone_id=None) -> dict:
     return {"i": i, "ts": ts, "dir": _DIR.get(kind) or _DIR.get(way), "name": groups["name"],
             "token": token_value(groups.get("token")), "result": groups.get("result") or None, "line_ref": line_ref,
             "phone_id": phone_id}
+
+
+def no_response(records: list[dict], until: str | None, timeout_ms: int) -> list[dict]:
+    """응답 없는 REQ(표시 전용 `ipc_no_response`, 판정·점수에 쓰지 않는다): token이 있는 REQ마다 뒤에 같은 name·token·슬롯(한쪽이 모르면
+    같다고 본다)의 RSP가 없고 관측 끝 `until`이 REQ 시각 + `timeout_ms` 이상일 때만. RSP는 같은 열쇠의 가장 늦게 열린 REQ와 짝짓는다
+    (token이 다시 쓰여도 먼 REQ를 닫지 않게). token 없는 REQ는 짝지을 수 없어 내지 않는다."""
+    end = logtime.parse_ts(until) if until else None
+    if end is None:
+        return []
+    open_reqs: list[dict] = []
+    for r in sorted(records, key=lambda r: (str(r["ts"]), r["i"])):
+        if r["token"] is None or r["dir"] not in ("req", "rsp"):
+            continue
+        if r["dir"] == "req":
+            open_reqs.append(r)
+            continue
+        hit = next((q for q in reversed(open_reqs) if (q["name"], q["token"]) == (r["name"], r["token"])
+                    and (None in (q["phone_id"], r["phone_id"]) or q["phone_id"] == r["phone_id"])), None)
+        if hit is not None:
+            open_reqs.remove(hit)
+    wait = timedelta(milliseconds=timeout_ms)
+    return [q for q in open_reqs if logtime.parse_ts(q["ts"]) + wait <= end]

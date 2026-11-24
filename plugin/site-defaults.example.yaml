@@ -201,6 +201,8 @@ platform:
   #                                  # 먼저, 없거나 안 맞으면 줄의 phone_id(위 log.phone_id 규칙). log.phone_id와는 따로다
   #                                  # trace와 달리 {prefix}·{error_prefix}를 채우지 않는다 — 쓰면 오류, 접두어는 글자 그대로
   #     - '^ipc\[(\d)\]'             # `ipc[1][RX] VIPC_X, RSP, …` 꼴(합성 예) — 사내 IPC 줄의 슬롯 표기는 사내에서 채운다
+  #   timeout_ms: null               # 선택(1 이상 정수, 예 30000). REQ 뒤 같은 name·token RSP를 기다리는 ms — 넘도록 없으면 타임라인
+  #                                  # 표시 `⇒ ipc_no_response(…)`(표시 전용, 점수·판정 무관). null·생략이면 ril.yaml 요청 timeout 중 가장 긴 값
   # bugreport:                       # TODO(SITE:S21) dumpstate 섹션 헤더
   #   wanted_buffers: [system, radio, main]          # ^[a-z]+$, 출력 파일 순서
   #   section_regex: '^------ (?P<title>.+?) \((?P<cmd>logcat\b[^)]*)\) ------\s*$'   # (?P<cmd>) 필수

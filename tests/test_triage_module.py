@@ -975,3 +975,48 @@ def test_ask_switch_offers_only_modules_with_explore():
     joined = modulecmd._ask_switch("data", stats, [], joined=True)        # --with로 받은 실행: 같이 보기 없음
     assert joined["options"] == ["그대로 data", "sim — 9줄", "network — 7줄"]
     assert modulecmd._ask_switch("data", {"hot_modules": {}}, [])["options"] == ["그대로 data"]
+
+
+# -- 흐름 판정 요약(flow.json 있을 때만, 표시 전용) ----------------------------------------------------------------
+
+FLOW_DOC = {"schema": 1, "warnings": [], "flows": [{
+    "flow": "data/setup", "title": "데이터 연결", "platform_versions": [], "then": None, "truncated": False,
+    "steps": [{"id": "req", "title": "요청", "suspect": "x"}, {"id": "resp", "title": "응답", "suspect": "y"}],
+    "instances": [{"key": "datad", "start_ts": "2026-09-20T05:32:08.000Z", "line_ref": None, "restarts": 0, "later_step": None,
+                   "end": None, "notes": [], "then": None,
+                   "steps": [{"id": "req", "verdict": "ok", "detail": "", "line_ref": None, "ts": "2026-09-20T05:32:08.000Z",
+                              "bad_count": 0},
+                             {"id": "resp", "verdict": "값이상", "detail": "", "line_ref": None, "ts": "2026-09-20T05:32:09.000Z",
+                              "bad_count": 1}]}]}]}
+FLOW_HEAD = "- 흐름 판정(스크립트 기대 순서, 데이터): 데이터 연결(data/setup) datad: 벗어남 — 첫 벗어난 단계 응답(resp) 값이상 05:32:09.000"
+
+
+def _flow_file(env):
+    env.job.mkdir(exist_ok=True)
+    (env.job / "flow.json").write_text(json.dumps(FLOW_DOC, ensure_ascii=False), encoding="utf-8")
+
+
+def test_deep_input_and_timeline_carry_flow_brief(env):
+    _flow_file(env)
+    job = env.make_job()
+    code, _out, err = env.module()
+    assert code == 0, err
+    deep_input = json.loads((job / "deep-input.json").read_text(encoding="utf-8"))
+    assert list(deep_input) == [*C0_KEYS, "flows"]
+    assert deep_input["flows"] == [{"flow": "data/setup", "key": "datad", "result": "벗어남", "at": "2026-09-20T05:32:09.000Z",
+                                    "step": "resp", "title": "응답", "verdict": "값이상", "flow_title": "데이터 연결"}]
+    assert FLOW_HEAD in (job / "module-skill" / "deep" / "timeline.md").read_text(encoding="utf-8").split("\n")
+
+
+def test_explore_timeline_and_view_carry_flow_head(env):
+    env.url = mr.build(env.tmp / "remote2")
+    env.user({"module_skills": {"remote": env.url}})
+    _flow_file(env)
+    android_events = [{"ts": "2026-09-20T05:32:09.000Z", "tag": "DCM-1", "msg": "setup failed", "level": "E",
+                       "category_hint": "data"}]
+    job = env.make_job(events=android_events, platform="android", explore=True)
+    assert FLOW_HEAD in (job / "timeline.md").read_text(encoding="utf-8").split("\n")
+    code, out, err = env.module("explore", "--module", "android/data", platform="android")     # timeline.md 재계산과 맞는다
+    assert code == 0, err
+    view = (job / "module-skill" / "explore" / "timeline.md").read_text(encoding="utf-8").split("\n")
+    assert FLOW_HEAD in view and view.index(FLOW_HEAD) < next(i for i, x in enumerate(view) if x.startswith("- 형식:"))

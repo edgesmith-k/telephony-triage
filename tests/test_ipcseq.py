@@ -259,3 +259,69 @@ def test_find_text_hits_respect_slot():
 def test_find_rejects_bad_slot_value():
     proc = _find(None, {**LOOK, "slot": "1"}, expect=2)
     assert proc.returncode == 2 and "slot" in proc.stderr
+
+
+# -- 응답 없는 IPC REQ (`ipc_no_response`, 표시 전용) ----------------------------------------------------------
+
+def _rec(i, ts, d, name="VIPC_SETUP_DATA", token=0x0DE, phone=None):
+    return {"i": i, "ts": f"2026-09-20T05:33:{ts}Z", "dir": d, "name": name, "token": token, "result": None,
+            "line_ref": {"file_index": 0, "line_no": i + 1}, "phone_id": phone}
+
+
+UNTIL = "2026-09-20T05:33:40.000Z"
+
+
+def test_no_response_pairs_by_name_token_and_slot():
+    nr = ipcseq.no_response
+    assert nr([_rec(0, "05.000", "req"), _rec(1, "05.400", "rsp")], UNTIL, 30000) == []                 # 짝 → 표시 없음
+    assert nr([_rec(0, "05.000", "req")], "2026-09-20T05:33:30.000Z", 30000) == []                     # 기다림 전에 로그 끝
+    assert [r["i"] for r in nr([_rec(0, "05.000", "req")], UNTIL, 30000)] == [0]                       # 기다림 지나도 없음
+    assert nr([_rec(0, "05.000", "req", token=None)], UNTIL, 30000) == []                              # token 없음: 짝 못 지음
+    assert [r["i"] for r in nr([_rec(0, "05.000", "req", phone=0), _rec(1, "05.400", "rsp", phone=1)], UNTIL, 30000)] == [0]
+    assert nr([_rec(0, "05.000", "req", phone=0), _rec(1, "05.400", "rsp")], UNTIL, 30000) == []        # 슬롯 모름은 같다고 본다
+    assert [r["i"] for r in nr([_rec(0, "05.000", "req"), _rec(1, "05.400", "rsp", name="VIPC_OTHER")], UNTIL, 30000)] == [0]
+    # 같은 token을 다시 쓴 REQ: RSP는 가장 늦은 REQ를 닫는다 — 앞 REQ만 응답 없음
+    assert [r["i"] for r in nr([_rec(0, "01.000", "req"), _rec(1, "05.000", "req"), _rec(2, "05.400", "rsp")], UNTIL, 30000)] == [0]
+    assert nr([_rec(0, "05.000", "req")], None, 30000) == []
+
+
+NR_LOG = [
+    "09-20 14:33:00.000   900   910 D RIL     : [TX] VIPC_RADIO_POWER, REQ, token=0x001, len=4",
+    "09-20 14:33:00.050   900   910 D RIL     : [RX] VIPC_RADIO_POWER, RSP, token=0x001, len=4, Error(VIPC_E_OK)",
+    "09-20 14:33:01.000   900   910 D RIL     : [TX] VIPC_SETUP_DATA, REQ, token=0x0de, len=24",
+    "09-20 14:33:02.000   900   910 D RIL     : [TX] VIPC_GET_X, REQ, len=24",
+    "09-20 14:33:40.000   900   910 D RIL     : vendor service heartbeat",
+]
+
+
+def _parse(lines, root=None) -> dict:
+    log = tmp("tt-ipc-nr-") / "a.log"
+    log.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return run_json("parse_logcat.py", ["parse", log, "--full", "--rules", RULES, *TZ, "--mask"], root=root)
+
+
+def test_parse_marks_unanswered_req_on_timeline_only():
+    from common import parser_rules
+    from triagelib import report
+
+    out = _parse(NR_LOG)
+    assert out["ipc_no_response"] == [{"line_ref": {"file_index": 0, "line_no": 3}, "ts": "2026-09-20T05:33:01.000Z",
+                                       "name": "VIPC_SETUP_DATA", "token": 0x0DE, "phone_id": None, "timeout_ms": 30000}]
+    assert not any("no_response" in str(e.get("event")) for e in out["events"])          # 이벤트가 아니다(매칭·자격 검사 밖)
+    assert "ipc_no_response" not in parser_rules.RESERVED_EVENTS        # 자격 검사 `_fails`·매처는 events[]만 본다
+    text = report.timeline("K", out, None, 200)[0]
+    assert ("05:33:01.000 - D RIL [TX] VIPC_SETUP_DATA, REQ, token=0x0de, len=24  ⇒ "
+            "ipc_no_response(ipc=VIPC_SETUP_DATA,timeout_ms=30000,token=0xde)") in text
+    assert "ipc_no_response" not in next(x for x in text.split("\n") if "VIPC_GET_X" in x)    # token 없는 REQ
+    short = _parse(NR_LOG[:4] + ["09-20 14:33:20.000   900   910 D RIL     : vendor service heartbeat"])
+    assert "ipc_no_response" not in short                                                   # 기다림 전에 로그 끝: 키 없음
+    site = _parse(NR_LOG[:4] + ["09-20 14:33:20.000   900   910 D RIL     : vendor service heartbeat"],
+                  root=plugin_root("ipc-wait", platform={"name": "android", "vendor_ipc": {"timeout_ms": 5000}}))
+    assert [r["timeout_ms"] for r in site["ipc_no_response"]] == [5000]                    # site 기다림
+
+
+@pytest.mark.parametrize("value", [0, -1, "30000", True, 1.5])
+def test_config_timeout_key_is_checked(value):
+    with pytest.raises(platforms.PlatformConfigError, match="timeout_ms"):
+        platforms._vendor_ipc({"timeout_ms": value}, "platform.vendor_ipc")
+    assert platforms._vendor_ipc({"timeout_ms": 1500}, "b").timeout_ms == 1500 and vendor_ipc.DEFAULT.timeout_ms is None

@@ -637,6 +637,10 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
                          timeout_ms=timeout_ms, errors=errors, dropped=dropped, unextracted=unextracted,
                          window=post_window)
     uncollected = uncollected_tags(dropped, events, masker)
+    ends = [t for t in (coverage["last_ts"], logtime.format_ts(window[1]) if window else None) if t]
+    until = min(ends) if coverage["last_ts"] else None      # 관측 끝: 로그 끝과 분석 구간 끝 중 이른 쪽(구간 밖 RSP는 못 본다)
+    # 표시 전용이라 정규식 경고(시간 초과 등)도 parse 경고·관측 상태에 더하지 않는다 — 분석 출력이 이전과 같다
+    no_rsp = ipc_no_response(events, backend, (profile or _profile(defaults, db_cfg)).vendor_ipc, db_cfg, rules, until, [])
     for error in errors:
         warnings.append({"code": "pattern-timeout",
                          "message": f"extractor {error['extractor']}: {error['error']}"})
@@ -707,6 +711,8 @@ def run_parse(args, plugin_root: Path, defaults: dict, profile: platforms.Platfo
         out["mask_off"] = True
     if uncollected:      # 최상위, 있을 때만(없으면 출력이 이전과 같다)
         out["uncollected_tags"] = uncollected
+    if no_rsp:           # 같은 규칙: 응답 없는 벤더 IPC REQ(타임라인 ⇒ 표시 전용, triagelib.report.merge_rows)
+        out["ipc_no_response"] = no_rsp
     if unextracted:      # 같은 규칙: 수집 태그 W/E/F 줄인데 이벤트로 추출 안 된 줄 (후보 없음 힌트, 분류·점수에 안 씀)
         rows = sorted(unextracted.items(), key=lambda kv: (-kv[1], kv[0]))[:UNCOLLECTED_TOP]
         out["unextracted_warn"] = {"lines": sum(unextracted.values()),
@@ -1078,29 +1084,11 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
     lines = [r for r in raw if r.get("event") is None]
     texts = [f"{r['tag']}: {r['msg']}" for r in lines]
     mask = _line_masker(db_cfg, log_text, lines, texts)      # markers·flows와 같은 모양(`태그: 메시지`)으로 가린다
-    flags = [backend.is_vendor_ipc(r.get("tag") or "") for r in lines]
-    records: list[dict] = []
-    if any(f is None for f in flags):
+    records = _ipc_records(lines, backend, spec, db_cfg, lambda n: mask(n).split(": ", 1)[-1], warnings)
+    if records is None:
+        records = []
         warnings.append({"code": "ipc-unsupported",
                          "message": "파서 백엔드가 벤더 IPC 태그를 알려 주지 않아(is_vendor_ipc) IPC 메시지 줄을 읽지 않았습니다."})
-    else:
-        idx = [n for n, f in enumerate(flags) if f]
-        timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
-        hits = _first_hits([str(lines[n]["msg"]) for n in idx], [re.compile(p) for p in ipcseq.patterns(spec)], timeout_ms,
-                           "ipc-pattern", "IPC 정규식", warnings)      # 정규식은 메시지에 돈다(태그 제외)
-        msgs: list[str] = []     # 레코드마다 값을 뽑은 가린 메시지(슬롯 규칙도 여기에 돈다)
-        for k in sorted(hits):
-            n = idx[k]
-            m = hits[k].search(mask(n).split(": ", 1)[-1])       # 값은 가린 글(의 메시지 부분)에서만 뽑는다
-            if m:
-                msgs.append(m.string)
-                records.append(ipcseq.record(m, n, lines[n]["ts"], lines[n].get("line_ref"), lines[n].get("phone_id")))
-        if spec.slot and records:      # IPC 줄 전용 슬롯 규칙(`vendor_ipc.slot`)이 맞으면 줄 레코드의 phone_id보다 먼저
-            for k, rx in _first_hits(msgs, [re.compile(p) for p in spec.slot], timeout_ms, "ipc-pattern",
-                                     "IPC 슬롯 정규식", warnings).items():
-                slot = ipcseq.slot_value(rx.search(msgs[k]))
-                if slot is not None:
-                    records[k]["phone_id"] = slot
     result = {"schema": OUTPUT_SCHEMA, "total": len(records), "coverage": coverage, "warnings": warnings}
     if look is None:
         result["truncated"] = len(records) > ipcseq.RECORD_MAX
@@ -1113,6 +1101,50 @@ def run_ipc(args, defaults: dict, profile: platforms.PlatformProfile | None = No
     else:
         result["find"] = _find_one(look, **ctx)
     return result
+
+
+def _ipc_records(lines: list[dict], backend, spec, db_cfg: dict, masked_msg, warnings: list[dict]) -> list[dict] | None:
+    """벤더 IPC 태그 줄(`backend.is_vendor_ipc`) → `common.ipcseq` 레코드. 정규식은 `lines`의 메시지에 돌리고(시간 상한
+    `matcher.pattern_timeout_ms`) 값은 `masked_msg(줄 순번)`(가린 메시지)에서만 뽑는다. 백엔드가 태그를 모르면 None."""
+    flags = [backend.is_vendor_ipc(r.get("tag") or "") for r in lines]
+    if any(f is None for f in flags):
+        return None
+    records: list[dict] = []
+    idx = [n for n, f in enumerate(flags) if f]
+    if not idx:
+        return records
+    timeout_ms = int((db_cfg.get("matcher") or {}).get("pattern_timeout_ms", DEFAULT_TIMEOUT_MS))
+    hits = _first_hits([str(lines[n]["msg"]) for n in idx], [re.compile(p) for p in ipcseq.patterns(spec)], timeout_ms,
+                       "ipc-pattern", "IPC 정규식", warnings)      # 정규식은 메시지에 돈다(태그 제외)
+    msgs: list[str] = []     # 레코드마다 값을 뽑은 가린 메시지(슬롯 규칙도 여기에 돈다)
+    for k in sorted(hits):
+        n = idx[k]
+        m = hits[k].search(masked_msg(n))       # 값은 가린 글(의 메시지 부분)에서만 뽑는다
+        if m:
+            msgs.append(m.string)
+            records.append(ipcseq.record(m, n, lines[n]["ts"], lines[n].get("line_ref"), lines[n].get("phone_id")))
+    if spec.slot and records:      # IPC 줄 전용 슬롯 규칙(`vendor_ipc.slot`)이 맞으면 줄 레코드의 phone_id보다 먼저
+        for k, rx in _first_hits(msgs, [re.compile(p) for p in spec.slot], timeout_ms, "ipc-pattern",
+                                 "IPC 슬롯 정규식", warnings).items():
+            slot = ipcseq.slot_value(rx.search(msgs[k]))
+            if slot is not None:
+                records[k]["phone_id"] = slot
+    return records
+
+
+IPC_WAIT_MS = 30000     # `vendor_ipc.timeout_ms`도 ril.yaml 요청도 없을 때의 응답 대기(ril.yaml 가장 긴 기본 요청 timeout과 같다)
+
+
+def ipc_no_response(events: list[dict], backend, spec, db_cfg: dict, rules: parser_rules.Rules, until: str | None,
+                    warnings: list[dict]) -> list[dict]:
+    """parse 출력의 벤더 IPC 줄 중 응답 없는 REQ(최상위 `ipc_no_response`, 표시 전용 — events[]·매칭·점수·자격 검사에 넣지 않는다).
+    줄은 이미 가린 parse 레코드라 정규식도 값도 그 글에서 본다. 기다림은 site `vendor_ipc.timeout_ms`, 없으면 ril.yaml 요청
+    timeout 중 가장 긴 값(없으면 `IPC_WAIT_MS`). `until` = 관측 끝(로그 끝과 분석 구간 끝 중 이른 쪽 — 구간 밖 RSP는 못 본다)."""
+    lines = [e for e in events if e.get("event") is None]
+    records = _ipc_records(lines, backend, spec, db_cfg, lambda n: str(lines[n]["msg"]), warnings) or []
+    wait = spec.timeout_ms or max((int(r["timeout_ms"]) for r in rules.requests.values()), default=IPC_WAIT_MS)
+    return [{"line_ref": r["line_ref"], "ts": r["ts"], "name": r["name"], "token": r["token"], "phone_id": r["phone_id"],
+             "timeout_ms": wait} for r in ipcseq.no_response(records, until, wait) if r["line_ref"] is not None]
 
 
 def _find_one(look: dict, *, records: list[dict], lines: list[dict], texts: list[str], mask, prof, tz, year, paths=(),

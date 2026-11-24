@@ -3,7 +3,8 @@
 Claude가 쓴 `JOB/deep-output.md`·`JOB/explore-output.md`를 받아:
 1. `mask_pii`와 같은 마스킹을 하고 마스킹한 글을 그 파일에 다시 쓴다(뒤 Step 7은 마스킹된 글만 본다).
 2. 고정 칸과 UTF-8 바이트 한도를 본다(한 칸 768바이트 = 한글 약 250자).
-3. 근거 원문 검사: 인용이 준 타임라인(모듈 뷰·`JOB/timeline.md`, 설치 스킬이면 events.json 전체 행)에 있는지.
+3. 근거 원문 검사: 인용이 준 타임라인(모듈 뷰·`JOB/timeline.md`, 설치 스킬이면 events.json 전체 행)이나 `triage.py window` 구간
+   (`JOB/windows.json` 기록과 sha256이 같은 `window-<n>.md`만 — 바뀌었거나 없으면 빼고 경고·`windows_excluded`)에 있는지.
 4. report.md의 5-1·5-2 줄(과 `  - ` 아래 줄)을 쓴다 — `TODO(LLM)`이 남은 줄만 고친다. 모델은 그 줄을 고치지 않는다.
    탐색 가설 줄에는 그 가설의 원문에 없는 인용 수 `[근거 불일치 N]`(N>0일 때만).
    적합성 확인(`fit_check`)이 가설 없이 끝나거나 `1위 판단: 부적합`이면(가설이 있어도, sim1122 F2) 1위 부적합 보류 — 결론·해결책 줄도
@@ -51,6 +52,8 @@ from .core import (
     OUTPUT_MAX_BYTES,
     QUOTES_MAX,
     TIMELINE_FILE,
+    WINDOW_NAME_RE,
+    WINDOW_RECORD,
     _now,
     trace_event,
 )
@@ -274,6 +277,24 @@ def _source(job: Path, purpose: str, mode: str, rec, events: dict | None) -> tup
     parts.append(evidence.event_rows_text(events))
     srcs.append("events.json")
     return srcs, "\n".join(parts), None
+
+
+def _windows(job: Path) -> tuple[list[str], list[str], list[str]]:
+    """`triage.py window` 기록의 구간 중 지금 파일 sha256이 기록과 같은 것 → (JOB 기준 이름들, 본문들, 뺀 이름들(바뀜·없음))."""
+    data = _load(job / WINDOW_RECORD)
+    names, texts, bad = [], [], []
+    for w in (data.get("windows") if isinstance(data, dict) else None) or []:
+        name = w.get("path") if isinstance(w, dict) else None
+        if not isinstance(name, str) or not WINDOW_NAME_RE.fullmatch(name):
+            continue
+        path = job / name
+        raw = path.read_bytes() if _kind(path) == "file" else None
+        if raw is None or _sha(raw) != w.get("sha256"):
+            bad.append(name)
+            continue
+        names.append(name)
+        texts.append(raw.decode("utf-8", "replace"))
+    return names, texts, bad
 
 
 # --- 칸 검사 ---------------------------------------------------------------------------------------------
@@ -629,6 +650,12 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     allow = [p for p in (events or {}).get("mask_allow") or [] if isinstance(p, str)]
     off = bool((events or {}).get("mask_off"))      # 마스킹 끔 DB의 events면 출력을 바꾸지 않는다(08-safety §8)
     src_rel, src_text, src_skip = _source(job, purpose, mode, rec, events)
+    win_names, win_texts, win_bad = _windows(job)       # `triage.py window` 구간도 근거 원문(sha가 맞는 것만)
+    if win_bad:
+        print(f"경고: 구간 파일이 기록과 달라(바뀜·없음) 근거 원문에서 뺐다: {', '.join(win_bad)}", file=sys.stderr)
+    if src_text is not None and win_texts:
+        src_text = "\n".join([src_text, *win_texts])
+        src_rel = ([src_rel] if isinstance(src_rel, str) else list(src_rel or [])) + win_names
 
     # 1~3. 마스킹 → 다시 쓰기 → residual
     raw_bytes = out_path.read_bytes()
@@ -714,7 +741,8 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     _obligation(args, job, purpose, [head.removesuffix("…")] + fab if purpose == "deep" else fab)
     args.trace_extra = {"fabricated": counts["fabricated"]} if res else {}     # F9: 다시 검사해도 trace에 검사마다 수가 남는다
     warn = next((s.strip() for s in subs if s.startswith("  - 경고: 1위 판단")), None)
-    _emit({"line": head, "evidence": sub.lstrip(), "quotes": n, **counts, **({"warning": warn} if warn else {})})
+    _emit({"line": head, "evidence": sub.lstrip(), "quotes": n, **counts, **({"warning": warn} if warn else {}),
+           **({"windows_excluded": win_bad} if win_bad else {})})
     return OK
 
 

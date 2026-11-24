@@ -213,6 +213,7 @@ def merge_rows(events: dict) -> list[dict]:
 
     그리지 않는 키도 싣는다: `idx`(합친 순서), `cat`(이벤트 없는 첫 기록의 category_hint, 없으면 처음 나온 hint),
     `ril`(그 기록의 ril 또는 None), `pid`, `line_ref`. 모듈 타임라인·후보 계산(`module`)과 근거 검사가 같은 줄을 쓴다.
+    parse 최상위 `ipc_no_response`(응답 없는 벤더 IPC REQ, 표시 전용)는 그 줄 위치의 행에 `ipc_no_response(…)` 표시로 붙인다.
     """
     rows: dict[tuple, dict] = {}
     out: list[dict] = []
@@ -249,6 +250,14 @@ def merge_rows(events: dict) -> list[dict]:
             row["phone"] = e.get("phone_id")
         if row["pid"] is None:
             row["pid"] = e.get("pid")
+    for item in events.get("ipc_no_response") or ():     # 응답 없는 벤더 IPC REQ(parse 최상위, 표시 전용 — 이벤트가 아니다)
+        row = rows.get(_row_key({"line_ref": item.get("line_ref")})) if isinstance(item, dict) else None
+        if row is not None:
+            token = item.get("token")
+            fields = f"ipc={item.get('name')},timeout_ms={item.get('timeout_ms')}" + (f",token={hex(token)}" if type(token) is int else "")
+            mark = f"ipc_no_response({_clip(fields, 80)})"
+            if mark not in row["marks"]:
+                row["marks"].append(mark)
     return out
 
 
@@ -332,7 +341,8 @@ def _look_head(look: dict | None) -> list[str]:
 
 
 def render_timeline(key: str, events: dict, items: list[dict], total: int, around: str | None, limit: int,
-                    failed_step: str | None = None, anchor: dict | None = None, look: dict | None = None) -> str:
+                    failed_step: str | None = None, anchor: dict | None = None, look: dict | None = None,
+                    flows: list[str] = ()) -> str:
     window = (events.get("input") or {}).get("window") or {}
     folded = sum((row.get("fold") or {}).get("n", 0) for row in items)
     head = [f"# {key} 탐색 타임라인", "",
@@ -342,6 +352,7 @@ def render_timeline(key: str, events: dict, items: list[dict], total: int, aroun
             *([f"- 실패 스텝 구간({anchor['source']}): {_step_label(anchor.get('step'))} {anchor['start'] or '?'} ~ {anchor['fail']}"]
               if anchor and anchor.get("source") != "look_at" else []),
             *_look_head(look),
+            *flows,
             f"- 줄: {len(items)}/{total}" + (" (이벤트·경고·오류 줄 우선, 발생 시각에 가까운 순으로 골랐다"
                                               + (f", 같은 줄 반복 {folded}줄은 접었다" if folded else "") + ")" if total > limit else ""),
             "- 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드)", ""]
@@ -359,13 +370,14 @@ def _fold_note(row: dict) -> str:
 
 
 def timeline(key: str, events: dict, around: str | None, limit: int,
-             failed_step: str | None = None, anchor: dict | None = None, look: dict | None = None) -> tuple[str, int, int]:
+             failed_step: str | None = None, anchor: dict | None = None, look: dict | None = None,
+             flows: list[str] = ()) -> tuple[str, int, int]:
     """마스킹된 `events.json`을 줄 단위 타임라인으로 줄인다 → (본문, 남긴 줄, 전체 줄).
 
-    = `merge_rows` → `select_rows` → `render_timeline`(모듈 뷰·`module`의 재계산이 같은 단계를 쓴다).
+    = `merge_rows` → `select_rows` → `render_timeline`(모듈 뷰·`module`의 재계산이 같은 단계를 쓴다). `flows` = `flow_head` 글머리표.
     """
     items, total = select_rows(merge_rows(events), around, limit)
-    return render_timeline(key, events, items, total, around, limit, failed_step, anchor, look), len(items), total
+    return render_timeline(key, events, items, total, around, limit, failed_step, anchor, look, flows), len(items), total
 
 
 def current_line(report, prefix: str) -> str | None:
@@ -762,6 +774,54 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
             break
         lines += block
     return analysis, lines + cut_line
+
+
+FLOW_BRIEF_MAX = FLOW_ANALYSIS_MAX     # 5-1·5-2 입력의 흐름 판정 요약 수(analysis.json flows[]와 같은 상한)
+FLOW_RESULT = {"값이상": "벗어남", "없음": "벗어남", "로그끝": "판단 못 함", "-": "판단 못 함"}
+
+
+def flow_brief(job, events: dict, around: str | None = None) -> list[dict]:
+    """`JOB/flow.json`(있을 때만, 표시 전용) → 5-1·5-2 입력의 흐름 판정 요약 ≤ 3 `{flow, key, result, step?, title?, verdict?, at}`.
+    `flow_section`과 같이 분석 범위 안에서 시작한 인스턴스만, 벗어난 것 먼저·발생 시각에 가까운 순. result = 정상(선택 단계 줄 없음 포함)·
+    벗어남(첫 벗어난 단계가 값이상·없음)·판단 못 함(로그끝·`-`). at = 그 단계 줄 시각, 없으면 앞 단계가 지난 시각, 없으면 시작 줄 시각.
+    파일이 없거나 못 읽으면 [] — 그때 타임라인·입력 파일은 이전과 같은 바이트다."""
+    try:
+        doc = json.loads((Path(job) / "flow.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    window = (events.get("input") or {}).get("window") or {}
+    lo, hi = _parse_ts(window.get("start")), _parse_ts(window.get("end"))
+    at0 = _parse_ts(around)
+    rows = []
+    for f in (doc.get("flows") or []) if isinstance(doc, dict) else []:
+        for inst in f.get("instances") or []:
+            t = _parse_ts(inst.get("start_ts"))
+            if t is None or (lo and t < lo) or (hi and t > hi):
+                continue
+            k = None if _optional_none(inst) is not None else next(
+                (k for k, s in enumerate(inst["steps"]) if s["verdict"] != "ok"), None)
+            item = {"flow": f["flow"], "key": inst.get("key"), "result": "정상", "at": inst.get("start_ts")}
+            if k is not None:
+                step, info = inst["steps"][k], f["steps"][k]
+                prev = next((s.get("ts") for s in reversed(inst["steps"][:k]) if s.get("ts")), None)
+                item.update(result=FLOW_RESULT.get(step["verdict"], "판단 못 함"), step=step["id"], title=info.get("title"),
+                            verdict=step["verdict"], at=step.get("ts") or prev or inst.get("start_ts"))
+            rows.append((item["result"] != "벗어남", abs((t - at0).total_seconds()) if at0 else 0.0, t, item, f.get("title")))
+    rows.sort(key=lambda r: r[:3])
+    return [{**item, "flow_title": title} for *_, item, title in rows[:FLOW_BRIEF_MAX]]
+
+
+def flow_head(brief: list[dict]) -> list[str]:
+    """타임라인 머리 글머리표(데이터 — 근거 원문 검사는 행 문법 줄만 보므로 인용 대상이 아니다). 없으면 []."""
+    out = []
+    for b in brief:
+        at = str(b.get("at") or "?")
+        clock = at[11:23] if len(at) >= 23 and at[10] == "T" else at
+        what = (f"첫 벗어난 단계 {b.get('title') or b.get('step')}({b.get('step')}) {b.get('verdict')} {clock}"
+                if b.get("step") else f"끝까지 정상(시작 {clock})")
+        out.append(_clip(f"- 흐름 판정(스크립트 기대 순서, 데이터): {b.get('flow_title') or b['flow']}({b['flow']}) "
+                         f"{b.get('key') or '-'}: {b['result']} — {what}", 240))
+    return out
 
 
 ANALYSIS_SCHEMA =SCRIPTS.parent / "schemas" / "output" / "analysis.schema.json"

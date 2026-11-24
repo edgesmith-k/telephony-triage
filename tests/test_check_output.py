@@ -792,3 +792,49 @@ def test_recheck_keeps_earlier_fabricated_count(tmp_path, capsys):
     (fresh / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
     assert "앞 검사" not in check(fresh, "explore", capsys=capsys)[1]["evidence"]
     assert "fabricated_before" not in _rec(fresh, "explore")
+
+
+# --- triage.py window 구간(근거 원문에 더함) ------------------------------------------------------------------
+
+WIN_ROW = "15:10:01.900 p0 E hiddend carrier link lost on rmnet_data3 after reject"     # 타임라인에 없는 줄(버려진 태그)
+
+
+def _window(job: Path, n: int = 1, rows=(WIN_ROW,), record: bool = True) -> Path:
+    path = job / f"window-{n}.md"
+    path.write_text("\n".join([f"# {KEY} 로그 구간 {n}", "", "- 중심: x", "", *rows, ""]), encoding="utf-8")
+    if record:
+        rec = job / core.WINDOW_RECORD
+        old = json.loads(rec.read_text(encoding="utf-8"))["windows"] if rec.is_file() else []
+        rec.write_text(json.dumps({"windows": [*old, {"path": path.name, "sha256": _sha(path), "at": "x", "lines": len(rows),
+                                                      "tags": []}]}), encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize("purpose, mode", [("deep", "module"), ("explore", "plain"), ("explore", "explore"), ("deep", "skill")])
+def test_window_lines_count_as_source(tmp_path, capsys, purpose, mode):
+    """`triage.py window` 구간의 줄은 근거 원문이다(없으면 `[근거 불일치]` 오탐). 기록 source에 구간 이름이 붙는다."""
+    job = make_job(tmp_path, purpose, mode)
+    _window(job)
+    out = _deep_out([Q1, WIN_ROW]) if mode == "module" else (
+        _skill_out([WIN_ROW]) if mode == "skill" else _explore_out([("망 인증 거절", [Q1, WIN_ROW])]))
+    (job / output.OUTPUT_FILE[purpose]).write_text(out, encoding="utf-8")
+    code, data, err = check(job, purpose, capsys=capsys)
+    assert code == 0 and data["fabricated"] == 0, (data, err)
+    assert "window-1.md" in _rec(job, purpose)["source"] and "windows_excluded" not in data
+
+
+def test_window_changed_or_unrecorded_is_not_source(tmp_path, capsys):
+    job = make_job(tmp_path, "explore", "plain")
+    _window(job).write_text("바꾼 글\n" + WIN_ROW + "\n", encoding="utf-8")     # 기록 뒤 바뀜: 빼고 경고
+    _window(job, 2, rows=("15:10:01.950 p0 E otherd not recorded either",), record=False)    # 기록에 없음: 보지 않는다
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1, WIN_ROW])]), encoding="utf-8")
+    code, data, err = check(job, "explore", capsys=capsys)
+    assert code == 0 and data["fabricated"] == 1 and data["windows_excluded"] == ["window-1.md"]
+    assert "구간 파일이 기록과 달라" in err and _rec(job, "explore")["source"] == "timeline.md"
+
+
+def test_no_window_record_output_unchanged(tmp_path, capsys):
+    job = make_job(tmp_path, "explore", "plain")
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and set(data) == {"line", "evidence", "quotes", "fabricated", "weak", "raw"}

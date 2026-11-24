@@ -28,6 +28,6 @@
 ## 공통
 
 - `ask_also`·`ask_switch`: 사전 결정 플래그(`--(no-)analyzer`·`--(no-)explore`)로 시작한 세션은 묻지 않고 받지 않는다. 그 밖은 묻는다.
-- 읽는 것: `read`의 파일, `input`, `module` 출력 `timeline.path`(설치 스킬이면 그 절차가 `input`으로 부르는 파일)만. 폴더 훑기 금지. `WD/_module-skills/`·`JOB/module-skill*`·`skill-input.json`과 deep-input.json은 스크립트 기록이라 고치지 않는다. 관리 clone에 git을 쓰지 않는다.
+- 읽는 것: `read`의 파일, `input`, `module` 출력 `timeline.path`(설치 스킬이면 그 절차가 `input`으로 부르는 파일)만. 타임라인에 없는 줄이 필요하면(5-1·5-2) 로그·사본 대신 `S/triage.py window <KEY> --at <ISO, UTC>`를 몇 번만 부르고 그 출력 `path`를 읽는다. 머리 `흐름 판정`은 스크립트의 기대 순서 판정 — 갈라진 단계를 짚는 기대 근거다. 폴더 훑기 금지. `WD/_module-skills/`·`JOB/module-skill*`·`skill-input.json`과 deep-input.json은 스크립트 기록이라 고치지 않는다. 관리 clone에 git을 쓰지 않는다.
 - 근거는 받은 파일에 있는 줄을 글자 그대로만. `〔script …〕`는 스크립트 메모라 근거가 아니다.
 - `check-output`이 마스킹·칸·한도(한 칸 768바이트)·근거 원문 검사를 하고 report 줄을 쓴다. 종료 1이면 줄이 "생략: 출력 형식 불일치"로 바뀐다 — 고쳐 쓰지 않는다. `check-output` 직후 다음 글에 출력의 `line`과 `evidence`(근거 원문 검사 줄)를 다음 질문 전에 그대로 보인다.

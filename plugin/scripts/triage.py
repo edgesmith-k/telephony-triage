@@ -53,6 +53,9 @@
   순서는 이전 로그 뒤에 붙여 `f<순번>`이 안 바뀐다. 이미 있는 경로는 조용히, 내용(sha256)이 같은 다른 경로는 경고하고 건너뛴다. 이전 로그가 없거나
   `--offline-db`면 종료 코드 2. 로그 부분 해시가 바뀌어 Step 3~5를 합친 로그로 모두 다시 계산하고, 이전 `analysis.json`·`report.md`는
   `JOB/runs/<n>/`에 보관한다(최근 5개). `events.json`·`match.json`은 보관하지 않는다.
+- `triage.py window <KEY> --at <시각> [--lines N] [--span 초] [--tag T …] [--slot N] [--cat C] [--grep RX] [--out <dir>]`: 탐색·심층 분석을
+  시작한 뒤 타임라인에 없는 줄이 필요할 때 마스킹 사본(`JOB/logs-masked/`)에서 그 시각 둘레 줄(기본 모든 태그·40줄, 상한 200줄)을 타임라인 줄 모양으로 `JOB/window-<n>.md`에 쓰고
+  `JOB/windows.json`(스크립트만 쓴다)에 남긴다. check-output이 sha가 맞는 구간을 근거 원문에 더한다(`triagelib/window.py`, 작업당 6개).
 - 읽지 않는 파일: `events.json`(파서 출력), `match.json`(매처 출력, `parse_logcat cut --evidence` 입력),
   `issue.json`(마스킹된 Jira 추출 전체 — 코멘트 원문이 필요할 때만 읽는다), `issue_meta.json`, `triage-state.json`, `analysis-cache.json`.
 
@@ -126,7 +129,8 @@ from triagelib.core import (ANALYSIS_MAX, EXPLORE_DONE_LINE, EXPLORE_INPUT_FILE,
                             TIMELINE_FILE, Fail, NeedsInput, Runner, Stopped, _clip, _now, trace_event)
 from triagelib import pick  # noqa: E402
 from triagelib.driver import Driver  # noqa: E402
-from triagelib.report import _unique_evidence, dumps, fit, schema_violation, timeline  # noqa: E402,F401 — 테스트가 쓴다
+from triagelib.report import (_unique_evidence, dumps, fit, flow_brief, flow_head, schema_violation,  # noqa: E402,F401 — 테스트가 쓴다
+                              timeline)
 
 
 # -- CLI ------------------------------------------------------------------------------------------
@@ -203,6 +207,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("key", metavar="KEY")
     p.add_argument("--for", dest="purpose", choices=("deep", "explore", "problem"), required=True)
     p.add_argument("--skipped", metavar="사유", help="실행하지 않았거나 실패: report 줄을 '생략: <사유>'로")
+    p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
+    p = sub.add_parser("window", parents=[common])
+    p.add_argument("key", metavar="KEY")
+    p.add_argument("--at", metavar="시각", required=True,
+                   help="중심 시각(--answer time=과 같은 형식·변환: 오프셋 없는 ISO·logcat 스탬프는 run의 --tz. 타임라인 시각은 UTC)")
+    p.add_argument("--lines", type=int, metavar="N", help="줄 수(기본 40, 상한 200)")
+    p.add_argument("--span", type=float, metavar="초", help="--at ±초/2 안의 줄만(≤3600, --lines와 함께면 적은 쪽)")
+    p.add_argument("--tag", action="append", metavar="TAG", help="이 태그 줄만(여러 번 쓸 수 있다). 없으면 모든 태그")
+    p.add_argument("--slot", type=int, metavar="N", help="이 슬롯(phone_id) 줄만 — 슬롯 모름 줄은 남긴다")
+    p.add_argument("--cat", metavar="카테고리", help="tags.yaml에서 이 카테고리로 매핑된 태그 줄만")
+    p.add_argument("--grep", metavar="정규식", help="가린 사본의 `태그: 메시지`에 맞는 줄만(≤200자, 시간 상한)")
     p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
     p = sub.add_parser("release", parents=[common])
     p.add_argument("key", metavar="KEY")
@@ -298,7 +313,7 @@ def _explore(args, cfg: dict, job: Path) -> int:
         print(f"탐색 입력을 읽지 못했다({exc}) — 이 키로 /telephony-triage:analyze를 다시 실행한다", file=sys.stderr)
         return USAGE
     text, kept, total = timeline(args.key, events, spec.get("around"), limit, spec.get("failed_step"), spec.get("anchor"),
-                                 spec.get("look_at"))
+                                 spec.get("look_at"), flow_head(flow_brief(job, events, spec.get("around"))))
     # 마스킹 전 JOB이어도 남은 값은 가린다(B2-25). 마스킹 끔 DB의 events(`mask_off`)면 가리지 않는다(08-safety §8)
     text, redacted = (text, {}) if events.get("mask_off") else masking.redact(text, events.get("mask_allow") or [])
     (job / TIMELINE_FILE).write_text(text, encoding="utf-8", newline="\n")
@@ -384,7 +399,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args.platform_name, args.platform_cfg = platform_session.resolve(defaults, args.platform)
     except (platforms.PlatformConfigError, yamlio.YamlFileError) as exc:
-        if args.cmd in ("module", "check-output", "problem"):       # 늘 JSON 한 줄(B1 §4.2)
+        if args.cmd in ("module", "check-output", "problem", "window"):       # 늘 JSON 한 줄(B1 §4.2)
             _emit({"reason": "설정 오류"})
         print(str(exc), file=sys.stderr)
         return USAGE
@@ -397,6 +412,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "check-output":
         from triagelib import output
         return output.cmd_check_output(args, defaults)
+    if args.cmd == "window":
+        from triagelib import window
+        return window.cmd_window(args, defaults)
     if args.cmd == "release":
         return cmd_release(args, defaults)
     if args.cmd == "explore":

@@ -26,6 +26,7 @@ permission:
     "python3 *triage.py* module *--for explore*--module *": allow
     "python3 *triage.py* module *--module *--for explore*": allow
     "python3 *triage.py* check-output *--for explore*": allow
+    "python3 *triage.py* window *": allow
     "python3 *db_search.py*": allow
     "find *-exec*": deny
     "find *-ok*": deny
@@ -54,8 +55,9 @@ Steps:
 1. Read `@@PLUGIN_ROOT@@/skills/telephony-triage/reference/explore.md` and follow "종합 판단", "읽는 것", "쓰는 것" and
    "일반 판단 규칙" exactly ("언제" and "다음" are the triage agent's). With module `read` files, read them in order as
    `module-skills.md` 5-2 step 3 says (the last one is the timeline, not `JOB/timeline.md`); without, `JOB/timeline.md`.
-2. Never run `triage.py explore` or `module` without `--module`. You may run `run … --look-at` and, for a different module
-   (종합 판단 4), `module <KEY> --for explore --module <p>/<module>` with the given --with/--deep. If a script asks a question
+2. Never run `triage.py explore` or `module` without `--module`. You may run `run … --look-at`, `window <KEY> --at …`
+   (explore.md "읽는 것") and, for a different module (종합 판단 4), `module <KEY> --for explore --module <p>/<module>` with
+   the given --with/--deep. If a script asks a question
    (`pick` null, `ask_switch`, exit 2), do not ask: put it verbatim in the final answer and stop.
 3. Write `JOB/explore-output.md` with the edit tool, then run `python3 "S/triage.py" check-output <KEY> --for explore`.
 4. Final answer, nothing else: the check-output report lines verbatim, the `심층 분석 권장: …` or `심층 분석 불필요: …` line, and
