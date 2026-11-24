@@ -344,7 +344,7 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
         comments = comments[-last:] if last else []
     masked = [masker(_text(c)) for c in comments]
     if chars:
-        masked = [m if len(m) <= chars else m[: chars - 1] + "…" for m in masked]
+        masked = [m if len(m) <= chars else masking.clip(m, chars - 1) + "…" for m in masked]
     text = {
         "summary": masker(_text(texts("summary"))),
         "description": masker(_text(texts("description"))),

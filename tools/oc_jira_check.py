@@ -10,7 +10,9 @@ get_issue·get_comments → opencode.json `mcp` 서버의 OpenCode 이름 `<서�
 - tools-offered: 읽기 도구가 모델 요청의 도구 목록에 있다(없으면 OpenCode 권한 deny·MCP 연결 실패 — 설치 설정·관리 설정 확인).
 - success-isolation(get_issue)·comments-isolation(get_comments): 모델이 본 글이 jira_bridge 격리 문구(원문은 `<work_dir>/<KEY>/
   issue_raw.json`에만, 모델에는 마스킹된 요약 — Claude Code와 같은 `jira_bridge.py`)이고 그 파일이 이번 실행에 쓰였다.
-- success-masking·comments-masking: `masking.residual(모델이 본 글) == {}`.
+- success-masking·comments-masking: `masking.residual(모델이 읽는 글, log_lines=False) == {}` — 브리지가 Jira 글을 가리는 기준
+  (`jira_fields.extract`: 로그 줄 전용 규칙 없음)과 같다. 모델이 읽는 글은 격리 문구 머리 줄과 요약 JSON의 문자열 값이다(JSON 따옴표·
+  이스케이프·브리지가 정한 필드 이름 `"key":`가 규칙에 걸리지 않게 — `model_text`).
 - error-path(없는 티켓): 오류 본문이 모델에 갔는지. 숨김(`Jira 오류(본문 숨김)`)·jira_bridge 문구면 pass, 본문이 갔으면 warn(남은
   식별자 종류·개수만, 글은 적지 않는다). `--missing-key`가 없으면 skip.
 - permission(정보): 설치 설정(`opencode debug config`)이 읽기 도구를 허용하는지 — 아니면 tt-oc에서 실제로 쓰려면 다시 설치해야 한다.
@@ -261,6 +263,27 @@ def _kinds(counts: dict) -> str:
     return ", ".join(f"{k} {v}" for k, v in sorted(counts.items())) or "없음"
 
 
+def model_text(seen: str) -> str:
+    """모델이 읽는 글: jira_bridge 격리 문구면 머리 줄 + 요약 JSON의 문자열 값(필드마다 줄), 아니면 그대로."""
+    head, _, body = seen.partition("\n")
+    try:
+        data = json.loads(body) if seen.startswith(BRIDGE_SAVED) else None
+    except ValueError:
+        data = None
+    if data is None:
+        return seen
+    out = [head]
+
+    def walk(o):
+        if isinstance(o, str):
+            out.append(o)
+        elif isinstance(o, (dict, list)):
+            for v in (o.values() if isinstance(o, dict) else o):
+                walk(v)
+    walk(data)
+    return "\n".join(out)
+
+
 def isolation_rows(label: str, seen: str | None, key: str, work_dir: Path, started: float) -> tuple[list[dict], Path | None]:
     """모델이 본 글이 jira_bridge 격리 문구인지 + 원문 파일, 그리고 마스킹 잔여. (행 2개, 원문 파일)."""
     from common import masking
@@ -269,9 +292,9 @@ def isolation_rows(label: str, seen: str | None, key: str, work_dir: Path, start
     if seen is None:
         return [_row(iso, "fail", "모델이 이 호출의 결과를 받지 못했다(호출이 안 됐거나 실행이 끝나지 않음)"),
                 _row(mask, "fail", "건너뜀(결과 없음)")], None
-    counts = masking.residual(seen)
+    counts = masking.residual(model_text(seen), log_lines=False)
     mask_row = _row(mask, "pass" if not counts else "fail",
-                    "모델이 본 글에 남은 식별자 없음(masking.residual == {})" if not counts
+                    "모델이 본 글에 남은 식별자 없음(masking.residual(…, log_lines=False) == {}, 브리지와 같은 Jira 기준)" if not counts
                     else f"모델이 본 글에 마스킹 안 된 식별자: {_kinds(counts)}")
     if not seen.startswith(BRIDGE_SAVED):
         return [_row(iso, "fail", f"jira_bridge 격리 문구가 아니다: {_first_line(seen)}"), mask_row], None
@@ -311,7 +334,7 @@ def error_row(seen: str | None, state: dict | None) -> dict:
                                           "Jira에 없는 키로 다시 돌린다")
     if seen.startswith(OWN_PREFIX):
         return _row("error-path", "pass", f"본문 없음 — jira_bridge 문구: {_first_line(seen)} (OpenCode 상태 {status})")
-    counts = masking.residual(seen)
+    counts = masking.residual(seen, log_lines=False)
     return _row("error-path", "warn", f"오류 본문이 모델에 갔다(OpenCode 상태 {status}, {len(seen)}자) — 마스킹 안 된 식별자: "
                                        f"{_kinds(counts)}")
 
@@ -430,7 +453,7 @@ def check(tt, project: str | None, opencode: str, key: str, missing: str | None,
             run_env = {**child, oc_adapter.JIRA_GATE_ENV: "open", "TT_OC_GUARD_LOG": str(tmp / "oc-guard.log")}
             no_proxy = ",".join(x for x in (run_env.get("NO_PROXY"), "127.0.0.1,localhost") if x)
             run_env.update({"NO_PROXY": no_proxy, "no_proxy": no_proxy})
-            cmd = [oc, "run", "--format", "json", "--agent", tt.AGENT, "--",
+            cmd = [oc, "run", "--format", "json", "--dir", str(tmp), "--agent", tt.AGENT, "--",   # --dir 없으면 1.19.5가 시작 전에 죽는다(사내 A588)
                    "telephony-triage runtime-check: Jira 읽기 확인(가짜 모델)"]
             events, code = run_session(tt, cmd, tmp, run_env)
             offered = fake.offered()
