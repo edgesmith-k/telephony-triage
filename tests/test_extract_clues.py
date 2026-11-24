@@ -874,3 +874,15 @@ def test_old_round_dated_clue_is_used_when_its_stamp_is_in_this_log(seed_db):
     assert a["decision"]["reason"] == "no_reference"
     a, _ = _run(seed_db, "old-model-ipc", comments=["로그 첨부", FAIL, retest], problem={"clues": [{**IPC, "stale": True}]})
     assert a["decision"]["reason"] == "no_reference"
+
+
+def test_quote_cut_inside_token_is_dropped_even_if_value_elsewhere():
+    """코덱스 지적: 인용을 `token=0x0de`의 중간(`0x0d`)에서 잘랐는데 같은 코멘트 다른 곳에 `0x0d`가 있으면 통과하던 것 —
+    값은 인용이 놓인 원문 자리 안에서 온전해야 한다."""
+    src = {2: "VIPC_SETUP_DATA (token=0x0de) 실패, Other value 0x0d"}
+    cut = {"comment": 2, "kind": "ipc", "name": "VIPC_SETUP_DATA", "token": "0x0d", "quote": "VIPC_SETUP_DATA (token=0x0d"}
+    assert pb._clue_problem(cut, src, "VIPC_", "VIPC_E_") == "인용이 원문의 값 중간에서 잘림"
+    whole = {**cut, "token": "0x0de", "quote": "VIPC_SETUP_DATA (token=0x0de)"}
+    assert pb._clue_problem(whole, src, "VIPC_", "VIPC_E_") is None
+    name_cut = {**whole, "name": "VIPC_SETUP_DA", "quote": "VIPC_SETUP_DA"}
+    assert pb._clue_problem(name_cut, {2: "VIPC_SETUP_DATA 실패, VIPC_SETUP_DA (token=0x0de)"}, "VIPC_", "VIPC_E_") is not None

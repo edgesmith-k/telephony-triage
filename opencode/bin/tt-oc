@@ -727,9 +727,9 @@ def read_child(oc: str, sid: str, proj: Path, env: dict) -> list[dict] | None:
 
 def add_children(res: dict, children: list[tuple[str, list[dict] | None]], step_limit: int | None) -> dict:
     """하위 세션(tt-explore) 판정을 합친다: 막힌 호출·직접 실행 명령·guard 경고·오류·토큰을 더하고(`children`에 세션별 요약),
-    막힌 하위 호출은 막힌 호출(종료 3), 하위 스텝 한도는 `step-limit`, 읽지 못한 하위 세션은 오류다(판정하지 못한 것을 통과로 두지 않는다)."""
+    막힌 하위 호출은 막힌 호출(종료 3), 하위 스텝 한도는 `step-limit`, 하위 출력 잘림은 `length`, 읽지 못한 하위 세션은 오류다(판정하지 못한 것을 통과로 두지 않는다)."""
     res["children"] = []
-    hit = False
+    hit = cut_any = False
     for sid, events in children:
         if events is None:
             res["errors"].append(f"error: 하위 세션 {sid}을 읽지 못했다(opencode export) — 하위 에이전트의 막힌 호출·토큰을 판정하지 못했다")
@@ -742,14 +742,18 @@ def add_children(res: dict, children: list[tuple[str, list[dict] | None]], step_
         res["errors"] += c["errors"]
         for k in res["tokens"]:
             res["tokens"][k] += c["tokens"][k]
-        limit = c["outcome"] == "step-limit"
-        hit = hit or limit
+        limit, cut = c["outcome"] == "step-limit", c["outcome"] == "length"
+        hit, cut_any = hit or limit, cut_any or cut
+        if cut:
+            res["notes"].append(f"하위 에이전트({sid})의 출력이 한도(finish=length)에서 잘렸다 — 탐색 분석이 끝나지 않았다")
         if limit:
             res["notes"].append(f"하위 에이전트({sid})가 스텝 한도({step_limit})에 닿았다 — 탐색 분석이 끝나지 않았을 수 있다")
         res["children"].append({"session": sid, "read": True, "steps": c["steps"], "tokens": c["tokens"],
                                 "blocked": len(c["blocked"]), "finish": c["finish"], "step_limit": limit})
     if res["outcome"] in ("ok", "blocked", "no-final-text", "step-limit") and any(e.startswith("error: ") for e in res["errors"]):
         res["outcome"] = "error"
+    elif res["outcome"] in ("ok", "blocked") and cut_any:     # 잘린 하위 출력을 끝난 탐색으로 두지 않는다
+        res["outcome"] = "length"
     elif res["outcome"] in ("ok", "blocked") and hit:
         res["outcome"] = "step-limit"
     elif res["outcome"] == "ok" and res["blocked"]:

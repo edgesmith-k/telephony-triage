@@ -445,6 +445,21 @@ def _paired(name: str, token: str, quote: str, prefix: str = "", error_prefix: s
     return False
 
 
+def _whole_in_place(src: str, quote: str, name: str | None, token: str | None) -> bool:
+    """인용이 원문에 놓인 자리(여럿이면 어느 하나) 안에 이름·token이 **원문 기준으로** 온전히 있는가. 인용 끝에서 값을 잘라
+    (`token=0x0de` → `0x0d`) 만든 단서가, 같은 코멘트 다른 곳의 같은 값(`Other value 0x0d`) 때문에 통과하지 않게 한다."""
+    nrx = re.compile(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])") if name else None
+    want = _token_value(token) if token else None
+    i = src.find(quote)
+    while i >= 0:
+        j = i + len(quote)      # finditer에 endpos를 주면 뒤를 못 보므로 시작만 주고 끝은 직접 본다
+        if (nrx is None or any(m.end() <= j for m in nrx.finditer(src, i))) and (
+                want is None or any(m.end() <= j and _token_value(m.group()) == want for m in QUOTE_TOKEN.finditer(src, i))):
+            return True
+        i = src.find(quote, i + 1)
+    return False
+
+
 def _clue_problem(c: dict, sources: dict, prefix: str = "", error_prefix: str = "") -> str | None:
     """단서를 버릴 사유(없으면 None). 인용은 줄머리 인용 표식을 떼고 공백을 접어 그 코멘트(가린 글)에서 찾고, 이름·token은
     인용에서 뽑은 값과 **값으로** 비교한다(부분 문자열이 아니다)."""
@@ -465,6 +480,8 @@ def _clue_problem(c: dict, sources: dict, prefix: str = "", error_prefix: str = 
     tokens = [{_token_value(v) for v in QUOTE_TOKEN.findall(t)} for t in (quote, src)]
     if c["token"] and not all(_token_value(c["token"]) in t for t in tokens):
         return "token 값이 인용 안에 없음"
+    if (c["name"] or c["token"]) and not _whole_in_place(src, quote, c["name"].rstrip(".:") if c["name"] else None, c["token"]):
+        return "인용이 원문의 값 중간에서 잘림"
     if c["kind"] == "ipc" and not _paired(c["name"].rstrip(".:"), c["token"], quote, prefix, error_prefix):
         return "이름 뒤 첫 token이 그 token이 아님"
     if len(quote) < lookat.TEXT_MIN and c["kind"] != "ipc":     # ipc는 이름·token을 값으로 확인했다

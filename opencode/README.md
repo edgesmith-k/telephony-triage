@@ -163,7 +163,7 @@ analyze의 탐색 분석(Step 5-2, 맞는 규칙이 없을 때 원인 가설을 
   새 객체(`tt-explore`만 허용)다.
 - `tt-oc`는 하위 세션도 판정한다. 1.19.5 `run --format json`은 하위 세션 이벤트를 내보내지 않아서, task 결과에 든 하위 세션 ID로
   `opencode export`를 읽는다. 하위의 막힌 호출은 막힌 호출(종료 3, 메시지에 `하위 <세션>`), 토큰은 합계에 더하고(세션별은 `--json`의
-  `children`), 하위 스텝 한도(`tt-explore.md` `steps:`)에 닿으면 `step-limit`, 하위 세션을 읽지 못하면 오류(종료 1)다.
+  `children`), 하위 스텝 한도(`tt-explore.md` `steps:`)에 닿으면 `step-limit`, 하위 출력이 한도에서 잘리면 `length`, 하위 세션을 읽지 못하면 오류(종료 1)다.
   `--delete-session`은 하위 세션도 지운다.
 - 출처 기록(`TT_MODEL`)은 세션 모델 이름이다. 탐색 분석을 다른 모델이 했어도 기록에는 세션 모델로 남는다.
 

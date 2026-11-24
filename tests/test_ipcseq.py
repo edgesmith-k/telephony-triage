@@ -375,3 +375,12 @@ def test_ipc_head_bullet_only_with_entries():
     assert report.timeline("K", bare, None, 200, flows=report.ipc_head(bare))[0] == report.timeline("K", bare, None, 200)[0]
     many = {**out, "ipc_no_response": [{**out["ipc_no_response"][0], "name": f"VIPC_X{k}"} for k in range(7)]}
     assert report.ipc_head(many)[0].startswith("- 응답 없는 IPC 요청 7개: ") and report.ipc_head(many)[0].endswith("VIPC_X4, …")
+
+
+def test_find_text_hits_use_ipc_slot_rule():
+    """코덱스 지적: 본문 찾기로 넘어가도 IPC 줄은 `vendor_ipc.slot`으로 읽은 슬롯을 쓴다 — slot=0이면 슬롯 1 실패 응답을 고르지 않는다."""
+    look = {"look_at": "VIPC_SETUP_DATA, RSP", "ref": None}
+    zero = _find(_slot_root(), {**look, "slot": 0})
+    assert zero["how"] == "text" and zero["slots"] == {"0": 1} and "VIPC_E_OK" in zero["line"]
+    one = _find(_slot_root(), {**look, "slot": 1})
+    assert one["slots"] == {"1": 1} and "VIPC_E_DEMO_FAILURE" in one["line"]

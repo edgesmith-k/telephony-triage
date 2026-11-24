@@ -651,6 +651,9 @@ def test_child_session_judged_like_main():
                                 "reasoning": 2}, "blocked": 1, "finish": "stop", "step_limit": False}]
     res = mod.add_children(mod.judge(main, 0), [("ses_kid1", kid)], step_limit=2)
     assert res["outcome"] == "step-limit" and any("스텝 한도(2)" in n for n in res["notes"])
+    cut = kid[:-1] + [{**kid[-1], V.EV_PART: {**kid[-1][V.EV_PART], "reason": "length"}}]
+    res = mod.add_children(mod.judge(main, 0), [("ses_kid1", cut)], step_limit=40)     # 하위 출력 잘림 → 부모도 length(종료 1)
+    assert res["outcome"] == "length" and mod.EXIT["length"] == 1 and any("finish=length" in n for n in res["notes"])
     res = mod.add_children(mod.judge(main, 0), [("ses_kid1", None)], step_limit=40)
     assert res["outcome"] == "error" and res["children"] == [{"session": "ses_kid1", "read": False}]
     assert any("opencode export" in e for e in res["errors"])

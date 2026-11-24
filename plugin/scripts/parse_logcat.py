@@ -1163,11 +1163,13 @@ def _find_one(look: dict, *, records: list[dict], lines: list[dict], texts: list
     picks = lookat.ipc_hits(q, records, look.get("slot"))
     found, how = [records[k]["i"] for k in picks], "ipc" if q["name"] else "token"
     slots = [records[k]["phone_id"] for k in picks]
+    by_line = {r["i"]: r for r in records}
+    slot_of = lambda i: by_line[i]["phone_id"] if i in by_line else lines[i].get("phone_id")    # IPC 줄은 IPC 슬롯 규칙이 먼저
     if not found:
         how, text = "text", lookat.needle(q)
         found, how = (None, how) if text is None else lookat.text_find(text, texts, mask, loose)
         if found and look.get("slot") is not None:      # 요청 슬롯: 줄 레코드 슬롯이 그 슬롯이거나 모름인 줄만(IPC 일치와 같게)
-            found = [i for i in found if lines[i].get("phone_id") in (look["slot"], None)]
+            found = [i for i in found if slot_of(i) in (look["slot"], None)]
         if found is None:      # 짧거나 거의 다 가려진 글은 본문으로 찾지 않는다(엉뚱한 줄에 붙지 않게)
             if text is not None:
                 why = "값이 가려져 본문으로는 못 찾음 — token이나 다른 줄로"
@@ -1178,9 +1180,8 @@ def _find_one(look: dict, *, records: list[dict], lines: list[dict], texts: list
             return {"how": None, "hits": 0, "why": why}
     if not found:
         return {"how": None, "hits": 0, "why": "일치하는 줄 없음"}
-    if how in ("text", "words"):      # 본문 일치는 줄 레코드의 슬롯
-        slots = [lines[i].get("phone_id") for i in found]
-    by_line = {r["i"]: r for r in records}
+    if how in ("text", "words"):      # 본문 일치: IPC 줄은 IPC 레코드 슬롯, 그 밖은 줄 레코드의 슬롯
+        slots = [slot_of(i) for i in found]
     places = lookat.group_places([_hit_item(i, lines[i], by_line.get(i), spec.success) for i in found],
                                  prof.ril_vendor.link_ms if prof.ril_vendor else lookat.PAIR_MS)
     raw_stamp = look.get("stamp")
