@@ -172,10 +172,17 @@ def _parse(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> tuple[dict | Non
             block = [rest, *lines[i + 1:end]]
             out[f] = [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
             if f == "규칙 제안":
+                out[f] = _same_line_rule(rest) + out[f]
                 rule_block = range(i, end)
         else:
             out[f] = rest
     return out, lines, rule_block
+
+
+def _same_line_rule(rest: str) -> list[str]:
+    """`규칙 제안: [이슈 DB] …`처럼 칸 이름 줄에 바로 쓴 제안 하나(목록 기호 없이). 비었거나 `없음`이거나 목록 줄이면 []."""
+    rest = (rest or "").strip()
+    return [] if not rest or ITEM_RX.match(rest) or rest.strip("`*. ") == "없음" else [rest]
 
 
 def parse_fields(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> dict | None:
@@ -240,7 +247,7 @@ def explore_parse(text: str) -> tuple[dict | None, str | None]:
     r_at = next((i for i, line in enumerate(tail) if EXPLORE_RX["규칙 제안"].match(line)), None)
     if r_at is not None:
         block = [EXPLORE_RX["규칙 제안"].match(tail[r_at]).group(1).strip(), *tail[r_at + 1:]]
-        rules = [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
+        rules = _same_line_rule(block[0]) + [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
     return {"none": None, "next": None, "hyps": hyps, "top": top, "rules": rules, **_top_fit_key(lines)}, None
 
 

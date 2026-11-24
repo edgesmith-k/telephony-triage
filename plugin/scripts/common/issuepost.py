@@ -41,6 +41,7 @@ FORBIDDEN_WORDS = {"delete", "remove", "transition", "assign", "update", "edit",
 
 SECTIONS = ("PROBLEM", "CAUSE", "NEXT ACTION", "ANALYSIS")
 # analysis.json `decision.reason`(보류) 문구 — report.md `- 판단:`·결론 줄과 Jira 본문 분류가 같이 쓴다
+NORMAL_HOLD_REASON = "탐색 분석이 채택 원인의 줄을 설계상 정상 동작으로 봄"     # fit_check 보류 중 정상(check-output fit_hold_reason)
 HELD_REASON = {"no_reference": "실패 지점을 잡지 못함(기준 줄·스텝 마커·TC 파일+시계 차 중 로그에서 찾은 것 없음)",
                "no_candidate": "맞는 후보 없음", "cause_unconfirmed": "유형만 일치, 원인 미확인",
                "cause_unjudged": "원인 판정 불가(시그니처 시간 초과·오류)",

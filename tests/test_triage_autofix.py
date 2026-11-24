@@ -682,6 +682,8 @@ def test_normal_hypothesis_one_holds_fit_check_only_with_quoted_line():
     """정상 가설(explore.md 종합 판단 0): 적합성 확인에서 가설 1이 `정상`이고 `로그로 확인` 인용이 원문에 있으면 1위 채택을 보류한다
     (부적합 보류와 같은 길 — 판단 held/fit_check, 결론·해결책 줄 보류). 인용이 원문에 없으면 정상으로 보지 않고 `[정상 근거 없음]`,
     채택 그대로(1위 판단 칸 없음 경고)."""
+    import issue_post
+
     item = _padded()
     held = _accepted_job(item, "normal")
     quote = next(line for line in (held / "timeline.md").read_text(encoding="utf-8").splitlines() if line[:2].isdigit())
@@ -690,9 +692,23 @@ def test_normal_hypothesis_one_holds_fit_check_only_with_quoted_line():
     analysis = json.loads((held / "analysis.json").read_text(encoding="utf-8"))
     assert (analysis["decision"]["state"], analysis["decision"]["reason"]) == ("held", "fit_check")
     assert _report_line(held, "  - 1위 판단(모델): ").endswith("→ 가설 1이 정상(설계상 정상 동작)이라 1위 DATA-001-01 보류")
-    assert _report_line(held, "- 결론:").startswith("- 결론: 채택 후보 DATA-001-01가 증상과 맞지 않아 보류")
+    # 리뷰 4: 정상 보류는 부적합 문구가 아니다 — 결론·해결책·Jira·다음 실행 경고 모두
+    assert _report_line(held, "- 결론:") == ("- 결론: 채택 후보 DATA-001-01는 탐색 분석이 설계상 정상 동작으로 봄 — 채택 보류(탐색 분석 "
+                                            "참조). 다음: Step 7에서 보류를 고르거나 근거 로그 확인")
+    assert _report_line(held, "- 해결책(1위 기준, 보류됨): ").endswith("해결책 검증: 보류(탐색 분석이 설계상 정상 동작으로 봄)")
     rec = json.loads((held / "check-output.json").read_text(encoding="utf-8"))["explore"]
-    assert rec["fit_hold"] == "DATA-001-01" and rec["normal"] == [1]
+    assert rec["fit_hold"] == "DATA-001-01" and rec["normal"] == [1] and rec["fit_hold_reason"] == "normal"
+    analysis = json.loads((held / "analysis.json").read_text(encoding="utf-8"))
+    cl = issue_post.classify({**analysis, "decision": {**analysis["decision"], "state": "accepted"}}, None,
+                             issue_post.fit_hold_of(held / "check-output.json"), issue_post.fit_hold_normal(held / "check-output.json"))
+    assert "탐색 분석 적합성 확인: 설계상 정상 동작으로 봐 채택 보류" in cl["lines"]
+    assert any(x.endswith("(해결책 검증: 보류(탐색 분석이 설계상 정상 동작으로 봄))") for x in cl["next"])
+    assert _report_line(held, "- 판단:").startswith("- 판단: 원인 보류 — 탐색 분석이 채택 원인의 줄을 설계상 정상 동작으로 봄")
+    cls = issue_post.classify(analysis, None, issue_post.fit_hold_of(held / "check-output.json"), True)["cls"]
+    assert cls.endswith("원인 보류 — 탐색 분석이 채택 원인의 줄을 설계상 정상 동작으로 봄"), cls
+    again = _run(item, held, *UNFIT_ARGS)
+    assert again["prior"]["unfit"] == "DATA-001-01 — 탐색 분석이 설계상 정상 동작으로 봄"
+    assert "앞 실행에서 탐색 분석이 설계상 정상 동작으로 봄 원인 DATA-001-01가 다시 채택돼 보류했다(prior.unfit)" in again["warnings"]
     bare = _accepted_job(item, "normal-bare")                 # 1위 판단 칸이 없어도 정상 보류(하위 줄로 알린다)
     _normal_output(bare, quote)
     run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", bare])
@@ -704,3 +720,32 @@ def test_normal_hypothesis_one_holds_fit_check_only_with_quoted_line():
     assert _report_line(fake, "  - 가설 1 [근거 불일치 1] [정상 근거 없음]: 정상(설계상 정상 동작)")
     assert _report_line(fake, "  - 경고: 1위 판단 칸 없음")
     assert "normal" not in json.loads((fake / "check-output.json").read_text(encoding="utf-8"))["explore"]
+
+
+
+def test_normal_needs_ok_quote_and_follows_most_likely():
+    """리뷰 2·3: 정상 근거는 원문 검사 `ok`만(원문에 없는 짧은 `LOADED`는 약함이라 정상 아님). `가장 유력: N`이면 그 가설로 보류를
+    정한다 — 가설 2가 정상이면 보류, 가설 1이 정상이어도 가장 유력이 가설 2(실패)면 보류하지 않는다."""
+    item = _padded()
+    weak = _accepted_job(item, "normal-weak")
+    _normal_output(weak, "LOADED")
+    run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", weak])
+    assert json.loads((weak / "analysis.json").read_text(encoding="utf-8"))["decision"]["state"] == "accepted"
+    assert _report_line(weak, "  - 가설 1 [정상 근거 없음]: 정상(설계상 정상 동작)")
+    quote = next(line for line in (weak / "timeline.md").read_text(encoding="utf-8").splitlines() if line[:2].isdigit())
+    fail = ("가설 {n}: 시험 장비 설정이 실패를 만들었다\n로그로 확인:\n- " + quote + "\n코드로 추정: 코드 근거 없음\n"
+            "반대 근거: 장비 로그 없음\n다음 확인: 장비 담당에게 셀 설정 확인\n")
+
+    def normal(n):
+        return (f"가설 {n}: 정상(설계상 정상 동작) — 회복 줄이 있다\n로그로 확인:\n- " + quote + "\n코드로 추정: 코드 근거 없음\n"
+                "반대 근거: 되풀이 여부 모름\n다음 확인: 재시험\n")
+    two = _accepted_job(item, "normal-two")
+    (two / "explore-output.md").write_text(fail.format(n=1) + normal(2) + "가장 유력: 2\n", encoding="utf-8")
+    run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", two])
+    assert json.loads((two / "analysis.json").read_text(encoding="utf-8"))["decision"]["state"] == "held"
+    assert _report_line(two, "  - 가설 2이 정상") == "  - 가설 2이 정상(설계상 정상 동작, 근거 줄 원문 확인)이라 1위 DATA-001-01 채택을 보류로 바꿨다"
+    one = _accepted_job(item, "normal-one")
+    (one / "explore-output.md").write_text(normal(1) + fail.format(n=2) + "가장 유력: 2\n", encoding="utf-8")
+    run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", one])
+    assert json.loads((one / "analysis.json").read_text(encoding="utf-8"))["decision"]["state"] == "accepted"
+    assert "fit_hold" not in json.loads((one / "check-output.json").read_text(encoding="utf-8"))["explore"]

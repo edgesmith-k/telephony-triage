@@ -860,7 +860,7 @@ def test_explore_rule_proposals_reach_report_only_when_grounded(tmp_path, capsys
     text = (job / "report.md").read_text(encoding="utf-8").split("\n")
     assert f"  - 규칙 제안 (탐색): {RULE_OK}" in text and f"  - 규칙 제안 (탐색): {RULE_PLAIN}" in text
     assert not any("modem firmware" in t for t in text)                       # 근거 문구가 원문에 없다
-    assert "  - 규칙 제안 (탐색) 1개 뺌: 근거가 원문에서 확인되지 않음(확인 안 된 줄로는 제안하지 않는다)" in text
+    assert "  - 탐색 출력의 제안 1개는 근거가 원문에서 확인되지 않아 뺐다" in text            # Step 7이 고르지 않게 `규칙 제안` 낱말 없음
     rec = _rec(job, "explore")
     assert (rec["rules"], rec["rules_dropped"]) == (2, 1)
 
@@ -871,7 +871,7 @@ def test_rule_without_basis_dropped_when_any_quote_fabricated_and_none_skipped(t
                                            encoding="utf-8")
     check(job, "explore", capsys=capsys)
     text = (job / "report.md").read_text(encoding="utf-8")
-    assert "규칙 제안 (탐색): " not in text and "규칙 제안 (탐색) 1개 뺌" in text      # [근거 불일치] 가설이 있으면 근거 없는 제안은 뺀다
+    assert "규칙 제안" not in text and "제안 1개는 근거가" in text      # [근거 불일치] 가설이 있으면 근거 없는 제안은 뺀다
     none = make_job(tmp_path / "n", "explore", "plain")
     (none / "explore-output.md").write_text(_with_rules(_explore_out([("망 인증 거절", [Q1])]), ["없음"]), encoding="utf-8")
     check(none, "explore", capsys=capsys)
@@ -886,3 +886,34 @@ def test_deep_rule_proposals_use_same_lines(tmp_path, capsys):
     text = (job / "report.md").read_text(encoding="utf-8").split("\n")
     i = text.index(f"  - 규칙 제안 (심층): {RULE_OK}")
     assert text[i - 1] == "  - 근거 원문 검사: 인용 2개 중 원문에 없음 0" and text[i + 1] == SUB
+
+
+def test_rule_proposals_need_ok_verdict_and_a_ran_check_and_same_line_item(tmp_path, capsys):
+    """리뷰 2·5: 근거 문구가 약함(원문에 없는 짧은 낱말)이면 뺀다. 근거 없는 제안은 원문 검사를 실제로 했을 때만(인용 없음이면 뺀다).
+    `규칙 제안: [이슈 DB] …`처럼 칸 이름 줄에 바로 쓴 제안도 항목 하나다(탐색·심층 같은 파서)."""
+    weak = "[이슈 DB] update-signature DATA-001-01 — 근거: LOADED"
+    job = make_job(tmp_path, "explore", "plain")
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]).rstrip("\n") + f"\n규칙 제안: {RULE_PLAIN}\n- {weak}\n",
+                                           encoding="utf-8")
+    check(job, "explore", capsys=capsys)
+    text = (job / "report.md").read_text(encoding="utf-8").split("\n")
+    assert f"  - 규칙 제안 (탐색): {RULE_PLAIN}" in text and not any("LOADED" in t for t in text)
+    assert (_rec(job, "explore")["rules"], _rec(job, "explore")["rules_dropped"]) == (1, 1)
+    deep = make_job(tmp_path / "d")
+    (deep / "deep-output.md").write_text(_deep_out([Q1, Q2]).replace("규칙 제안:\n- 없음", f"규칙 제안: {RULE_OK}"), encoding="utf-8")
+    check(deep, capsys=capsys)
+    assert f"  - 규칙 제안 (심층): {RULE_OK}" in (deep / "report.md").read_text(encoding="utf-8").split("\n")
+    bare = make_job(tmp_path / "b")                         # 인용 없음: 원문 검사를 안 했다 — 근거 없는 제안은 싣지 않는다
+    (bare / "deep-output.md").write_text(_deep_out([]).replace("규칙 제안:\n- 없음", f"규칙 제안:\n- {RULE_PLAIN}"), encoding="utf-8")
+    check(bare, capsys=capsys)
+    assert "규칙 제안 (심층): " not in (bare / "report.md").read_text(encoding="utf-8")
+
+
+def test_same_line_rule_item_parses_in_both_paths():
+    from common import evidence
+
+    deep = evidence.parse_fields(_deep_out([Q1]).replace("규칙 제안:\n- 없음", f"규칙 제안: {RULE_PLAIN}"))
+    assert deep["규칙 제안"] == [RULE_PLAIN]
+    assert evidence.parse_fields(_deep_out([Q1]).replace("규칙 제안:\n- 없음", "규칙 제안: 없음"))["규칙 제안"] == []
+    exp = evidence.parse_explore(_explore_out([("망 인증 거절", [Q1])]) + f"규칙 제안: {RULE_PLAIN}\n- {RULE_OK}\n")
+    assert exp["rules"] == [RULE_PLAIN, RULE_OK]

@@ -22,7 +22,7 @@ from .cache import CacheMixin, State, _digest, _file_sha
 from .core import (ELIGIBILITY_FILE, ERROR_EVENT_RE, EXPLORE_MAX_LINES, EXTRACTOR_CODES, EXPLORE_WHEN, PLATFORM_ANSWER, Fail, NeedsInput,
                    MODULE_RECORD_DIR, Runner, SEARCH_LIMIT, SNAPSHOT_DIR, STALE_FILES, STATE_FILE, Stopped, TOP, _clip,
                    FIND_TEXT_ITEMS, PARTIAL_ANALYSIS_MAX, REFERENCE_FILE)
-from .report import ReportMixin, _ref_label, _unique_evidence, flow_section, lead_first
+from .report import NORMAL_HOLD_WHY, ReportMixin, _ref_label, _unique_evidence, flow_section, lead_first
 
 MASKED_DIR = "logs-masked"       # 원문 마스킹 사본(parse_logcat.py mask-copy, 종합 리뷰 G①) — 모델이 읽을 대상
 
@@ -1180,7 +1180,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                        for h in fields.get("hyps") or []][:3] if checked else [],
                               "none": _clip(fields.get("none"), 120),
                               # sim1122 F2·RP-6: 1위 부적합 보류는 다음 실행에도 넘긴다 — 같은 원인이 다시 채택되면 run이 보류한다
-                              "unfit": _clip(f"{rec['fit_hold']} — {(fields.get('top_fit') or {}).get('why') or fields.get('none') or ''}"
+                              "unfit": _clip(f"{rec['fit_hold']} — {NORMAL_HOLD_WHY}" if rec.get("fit_hold_reason") == "normal"
+                                             else f"{rec['fit_hold']} — {(fields.get('top_fit') or {}).get('why') or fields.get('none') or ''}"
                                              .rstrip(" —"), 120) if isinstance(rec.get("fit_hold"), str) else None}
                     judged = {k: v for k, v in judged.items() if v} or None
             old_unfit = (self.state.job.get("prior_explore") or {}).get("unfit")

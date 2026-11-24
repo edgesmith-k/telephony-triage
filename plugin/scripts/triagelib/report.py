@@ -40,6 +40,12 @@ CONCLUSION_PREFIX = "- 결론: "
 RESOLUTION_PREFIX, RESOLUTION_CHECK = "- 해결책: ", "   해결책 검증: "
 FIT_HOLD_CONCLUSION = "채택 후보 {cause}가 증상과 맞지 않아 보류(탐색 분석 참조). 다음: Step 7에서 보류를 고르거나 근거 로그 확인"
 FIT_HOLD_RESOLUTION, FIT_HOLD_CHECK = "- 해결책(1위 기준, 보류됨): ", "보류(1위 부적합)"
+# 정상 보류(`fit_hold_reason: normal`): 탐색 분석이 그 줄을 설계상 정상 동작으로 봤다 — 부적합 문구와 따로
+NORMAL_HOLD_WHY = "탐색 분석이 설계상 정상 동작으로 봄"
+FIT_HOLD_NORMAL_CONCLUSION = ("채택 후보 {cause}는 " + NORMAL_HOLD_WHY + " — 채택 보류(탐색 분석 참조). 다음: Step 7에서 보류를 "
+                              "고르거나 근거 로그 확인")
+FIT_HOLD_NORMAL_CHECK = "보류(" + NORMAL_HOLD_WHY + ")"
+NORMAL_HOLD_REASON = issuepost.NORMAL_HOLD_REASON
 # 판단 줄(analysis.json `decision`, 단계 4) — 렌더와 check-output(보류·반대 의견으로 고침)이 같이 쓴다
 DECISION_PREFIX = "- 판단: "
 HELD_REASON = issuepost.HELD_REASON
@@ -61,6 +67,7 @@ AMBIGUOUS_REASON = {"sources": "실패 지점을 하나로 정하지 못함", "l
 
 
 PRIOR_UNFIT_WARN = "앞 실행에서 모델이 1위 판단 부적합으로 표시한 원인 {cause}가 다시 채택돼 보류했다(prior.unfit)"
+PRIOR_NORMAL_WARN = "앞 실행에서 " + NORMAL_HOLD_WHY + " 원인 {cause}가 다시 채택돼 보류했다(prior.unfit)"
 
 
 def prior_unfit_hold(decision: dict | None, prior: dict | None) -> dict | None:
@@ -99,7 +106,7 @@ def script_clue_hold(dec: dict | None) -> str | None:
     return "원인 보류: 코멘트에서 자동으로 찾은 지점" + (f"의 원인 후보 {ref}" if ref else "") + ", 확인 필요"
 
 
-def decision_line(dec: dict, cands: list) -> str:
+def decision_line(dec: dict, cands: list, normal: bool = False) -> str:
     """`- 판단:` 줄. 채택은 실패 지점 출처·상태(채택 원인이 1위가 아니면 "규칙 일치 n위"), 보류는 사유와(후보가 있으면) 규칙 일치를
     채택하지 않았다는 말. `counter`(심층 분석이 다른 원인을 냄)가 있으면 꼬리를 붙인다."""
     if dec.get("state") == "accepted":
@@ -117,6 +124,8 @@ def decision_line(dec: dict, cands: list) -> str:
         why = issuepost.HELD_WHY.get(check.get("why"))
         reason = (AMBIGUOUS_REASON.get(check.get("why")) if dec.get("reason") == "ambiguous" else None) or \
             HELD_REASON.get(dec.get("reason"), dec.get("reason"))
+        if normal and dec.get("reason") == "fit_check":      # 정상 보류(check-output `fit_hold_reason: normal`)
+            reason = NORMAL_HOLD_REASON
         text = script_clue_hold(dec) or (     # 스크립트 단서는 위치 후보로만(A474)
             f"원인 보류 — {reason}" + (f"({why})" if why else "") + (
                 ". 아래 규칙 일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다" if cands else ""))
@@ -923,7 +932,9 @@ class ReportMixin:
         held = prior_unfit_hold(decision, prior)     # RP-6: 앞 실행의 1위 부적합 표시(캐시 core 밖, 실행마다)
         if held:
             decision = held
-            self.warnings.append(PRIOR_UNFIT_WARN.format(cause=core["decision"]["selected"]["cause"]))
+            normal = str(prior.get("unfit") or "").partition(" — ")[2].startswith(NORMAL_HOLD_WHY)   # driver가 정상 보류에 쓴 이유
+            self.warnings.append((PRIOR_NORMAL_WARN if normal else PRIOR_UNFIT_WARN).format(
+                cause=core["decision"]["selected"]["cause"]))
         result = {
             "status": "ok", "key": self.key,
             "platform": self.platform_out(),   # android가 아니거나 암묵 선택과 다를 때만(K8·D5)

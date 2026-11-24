@@ -234,7 +234,13 @@ def fit_hold_of(path: Path) -> str | None:
     return hold if isinstance(hold, str) else None
 
 
-def classify(a: dict, plan: dict | None, fit_hold: str | None = None) -> dict:
+def fit_hold_normal(path: Path) -> bool:
+    """`check-output.json` explore 기록의 보류 사유가 정상(`fit_hold_reason: normal` — 탐색 분석이 설계상 정상 동작으로 봄)인가."""
+    rec = ((_read(path, "check-output.json") or {}).get("explore") or {})
+    return isinstance(rec, dict) and rec.get("fit_hold_reason") == "normal"
+
+
+def classify(a: dict, plan: dict | None, fit_hold: str | None = None, normal: bool = False) -> dict:
     """CAUSE·NEXT ACTION의 결정적 내용. `cand`는 본문이 가리키는 후보(근거 로그·해결책 출처). `fit_hold`: 탐색 적합성 확인이
     보류한 1위 원인 ID(`check-output.json` explore) — 계획 없음이면 그 해결책을 보류로 적고 원인 미확정으로 본다(FR-02).
     계획 없음이고 `decision.state`가 held면(단계 4) 분류를 "원인 보류 — <사유>"로, 1위는 관측된 참고로만 적고 해결책은 싣지 않는다
@@ -309,17 +315,20 @@ def classify(a: dict, plan: dict | None, fit_hold: str | None = None) -> dict:
         if top:
             out["cand"] = top
             if top.get("cause") and top.get("C") and held:      # 보류: 1위는 관측된 참고일 뿐, 해결책은 싣지 않는다
-                out["cls"] = (f"{top.get('category')} > {top.get('type')} > 원인 보류 — "
-                              f"{issuepost.HELD_REASON.get(held, held)}")
+                why = (issuepost.NORMAL_HOLD_REASON if normal and held == "fit_check" and fit_hold == top.get("cause")
+                       else issuepost.HELD_REASON.get(held, held))
+                out["cls"] = f"{top.get('category')} > {top.get('type')} > 원인 보류 — {why}"
                 out["lines"] += [f"규칙 일치 1위 {_cand_name(top)} {top.get('title') or ''}".rstrip()
                                  + " — 로그에서 관측된 참고, 이 이슈의 원인으로 채택 안 함", _score(top)]
             elif top.get("cause") and top.get("C"):
                 out["cls"] = f"{top.get('category')} > {top.get('type')} > {top['cause']} {top.get('title') or ''}".rstrip()
                 out["lines"].append(_score(top))
                 if fit_hold == top["cause"]:
-                    out["lines"].append("탐색 분석 적합성 확인: 채택 후보가 증상과 맞지 않아 보류")
+                    out["lines"].append("탐색 분석 적합성 확인: " + ("설계상 정상 동작으로 봐 채택 보류" if normal
+                                                                    else "채택 후보가 증상과 맞지 않아 보류"))
                 if top.get("resolution") and fit_hold == top["cause"]:
-                    out["next"].append(f"해결책(1위 기준, 보류됨): {top['resolution']} (해결책 검증: 보류(1위 부적합))")
+                    out["next"].append(f"해결책(1위 기준, 보류됨): {top['resolution']} (해결책 검증: "
+                                       f"{'보류(탐색 분석이 설계상 정상 동작으로 봄)' if normal else '보류(1위 부적합)'})")
                 elif top.get("resolution"):
                     out["resolved"] = True
                     out["next"].append(f"해결책: {top['resolution']} (해결책 검증: "
@@ -356,7 +365,7 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
     fields = dict(jira_doc.get("issue") or {})
     fields.setdefault("platform_version", jira_doc.get("platform_version_all"))   # 다중 선택 버전 칸이면 이은 값
     note = ((plan or {}).get("issue") or {}).get("note")
-    cl = classify(a, plan, fit_hold_of(job.path("check-output.json")))
+    cl = classify(a, plan, fit_hold_of(job.path("check-output.json")), fit_hold_normal(job.path("check-output.json")))
     s = {name: [] for name in issuepost.SECTIONS}
     # PROBLEM
     s["PROBLEM"].append(_line(f"{job.tracker.label}: {job.tracker.display(job.key)}"))

@@ -7,10 +7,12 @@ Claude가 쓴 `JOB/deep-output.md`·`JOB/explore-output.md`를 받아:
    (`JOB/windows.json` 기록과 sha256이 같은 `window-<n>.md`만 — 바뀌었거나 없으면 빼고 경고·`windows_excluded`)에 있는지.
 4. report.md의 5-1·5-2 줄(과 `  - ` 아래 줄)을 쓴다 — `TODO(LLM)`이 남은 줄만 고친다. 모델은 그 줄을 고치지 않는다.
    탐색 가설 줄에는 그 가설의 원문에 없는 인용 수 `[근거 불일치 N]`(N>0일 때만).
-   정상 가설(`가설 N: 정상(설계상 정상 동작) — <이유>`)은 `로그로 확인` 인용 하나 이상이 원문에 있을 때만 정상으로 본다 — 없으면
-   그 가설 줄에 `[정상 근거 없음]`. 적합성 확인에서 가설 1이 (근거 있는) 정상이면 1위 채택을 보류한다(아래 5와 같은 보류).
+   정상 가설(`가설 N: 정상(설계상 정상 동작) — <이유>`)은 `로그로 확인` 인용 하나 이상이 원문 검사 `ok`일 때만 정상으로 본다(약함은
+   아니다) — 아니면 그 가설 줄에 `[정상 근거 없음]`. 적합성 확인에서 고른 가설(`가장 유력: N`, 없으면 1)이 정상이면 1위 채택을
+   보류한다(아래 5와 같은 보류, 기록 `fit_hold_reason: normal` — 부적합 보류는 `unfit`).
    `규칙 제안:`(deep 칸·탐색 꼬리)은 `  - 규칙 제안 (심층|탐색): <줄>` 하위 줄로 쓴다(SKILL Step 7이 묻는다). `— 근거: <문구>`가 있으면
-   그 문구가 원문에 있을 때만, 없으면 출력에 원문에 없는 인용이 하나도 없을 때만 싣고 나머지는 뺀 수만 한 줄로 적는다.
+   그 문구가 원문 검사 `ok`일 때만, 없으면 근거 원문 검사를 실제로 했고 원문에 없는 인용이 하나도 없을 때만 싣는다. 뺀 것은 수만
+   한 줄로 적는다(그 줄에는 Step 7이 고르지 않게 `규칙 제안` 낱말을 쓰지 않는다).
    적합성 확인(`fit_check`)이 가설 없이 끝나거나 `1위 판단: 부적합`이면(가설이 있어도, sim1122 F2) 1위 부적합 보류 — 결론·해결책 줄도
    보류로 고치고 기록에 `fit_hold: <원인 ID>`(줄을 못 고쳐도 기록은 남기고 `fit_hold_unwritten`·stderr 경고. 뒤 검사·생략·실패 기록도
    fit_hold를 이어받는다). 적합성 확인·채택·가설 있음인데 `1위 판단` 칸이 없으면 채택은 그대로 두고 경고 하위 줄(`WARN_NO_FIT`).
@@ -74,7 +76,7 @@ EVENTS_MAX = 64 << 20
 SKILL_LABEL = "근거 원문 검사(events.json 기준)"
 WARN_REWRITE = "경고: report.md 줄을 고치지 못했다"
 WARN_HOLD = "경고: 1위 보류를 report.md {what}에 쓰지 못했다 — check-output 기록(fit_hold)·Jira 본문은 보류로 남긴다"
-HOLD_KEEP = ("fit_hold", "fit_hold_unwritten")     # 탐색 기록을 새로 써도 이어받는다(보류로 고친 줄은 다음 run까지 남는다)
+HOLD_KEEP = ("fit_hold", "fit_hold_reason", "fit_hold_unwritten")     # 탐색 기록을 새로 써도 이어받는다(보류로 고친 줄은 다음 run까지 남는다)
 WARN_DECISION = "경고: analysis.json 판단(decision)을 고치지 못했다({why})"
 TOP_FIT_SUB = "  - 1위 판단(모델): {fit}{why}"
 TOP_FIT_HELD = " → 1위 {cause} 채택을 보류로 바꿨다"
@@ -97,11 +99,12 @@ FAB_BEFORE = " · 앞 검사 원문에 없음 {n}(다시 검사해도 지우지 
 # 정상 가설(설계상 정상 동작, explore.md 종합 판단 0): 머리가 `정상`으로 시작한다. 근거 인용이 원문에 없으면 정상으로 보지 않는다
 NORMAL_RX = re.compile(r"^[`*\s]*정상(?:\s*\(|\s*[—–:-]|\s*$)")
 NORMAL_BAD = " [정상 근거 없음]"
-TOP_FIT_NORMAL_HELD = " → 가설 1이 정상(설계상 정상 동작)이라 1위 {cause} 보류"
-NORMAL_HELD_SUB = "  - 가설 1이 정상(설계상 정상 동작, 근거 줄 원문 확인)이라 1위 {cause} 채택을 보류로 바꿨다"
+TOP_FIT_NORMAL_HELD = " → 가설 {n}이 정상(설계상 정상 동작)이라 1위 {cause} 보류"
+NORMAL_HELD_SUB = "  - 가설 {n}이 정상(설계상 정상 동작, 근거 줄 원문 확인)이라 1위 {cause} 채택을 보류로 바꿨다"
+TOP_NUM_RX = re.compile(r"^[`*\s]*(?:가설\s*)?#?(\d+)(?!\d)")      # `가장 유력: 2`·`가설 2` (module_eval.TOP_NUM_RX와 같은 읽기)
 # 규칙 제안 하위 줄(SKILL Step 7 `규칙 제안` 질문이 report.md에서 읽는다). 근거 원문 확인이 안 된 제안은 싣지 않는다
 RULE_SUB = "  - 규칙 제안 ({kind}): {text}"
-RULE_DROPPED = "  - 규칙 제안 ({kind}) {n}개 뺌: 근거가 원문에서 확인되지 않음(확인 안 된 줄로는 제안하지 않는다)"
+RULE_DROPPED = "  - {kind} 출력의 제안 {n}개는 근거가 원문에서 확인되지 않아 뺐다"
 RULE_KIND = {"deep": "심층", "explore": "탐색"}
 RULE_BASIS_RX = re.compile(r"\s[—–]\s*근거\s*[:：]\s*(.+)$")
 RULES_MAX, RULE_CLIP = 5, 300
@@ -443,15 +446,27 @@ def _unfit_applies(analysis: dict, tf: dict | None) -> bool:
 
 
 def _normal_flags(fields: dict, per_hyp: list[list[str]] | None) -> tuple[list[bool], list[bool]]:
-    """가설마다 (정상으로 봄, 정상이라 적었지만 근거 없음). 정상으로 봄 = 머리가 정상이고 `로그로 확인` 중 하나 이상이 원문에 있다
-    (`per_hyp` = 가설별 인용 판정. 원문 검사를 못 했으면 None — 그때는 정상으로 보지 않는다)."""
+    """가설마다 (정상으로 봄, 정상이라 적었지만 근거 없음). 정상으로 봄 = 머리가 정상이고 `로그로 확인` 중 하나 이상이 원문 검사
+    `ok`다(약함 `weak`은 아니다 — 원문에 없는 짧은 낱말도 weak가 된다). `per_hyp` = 가설별 인용 판정, 원문 검사를 못 했으면 None."""
     ok, bad = [], []
     for k, h in enumerate(fields.get("hyps") or []):
         claim = bool(NORMAL_RX.match(h["가설"] or ""))
-        found = bool(per_hyp) and any(v != "fabricated" for v in per_hyp[k])
+        found = bool(per_hyp) and "ok" in per_hyp[k]
         ok.append(claim and found)
         bad.append(claim and not found)
     return ok, bad
+
+
+def _picked(fields: dict) -> int:
+    """적합성 확인에서 본 가설 번호(0부터): `가장 유력: N`이 있는 가설 번호면 그것, 아니면 0(가설 1)."""
+    m = TOP_NUM_RX.match(str(fields.get("top") or ""))
+    k = int(m.group(1)) - 1 if m else 0
+    return k if 0 <= k < len(fields.get("hyps") or []) else 0
+
+
+def _hold_reason(analysis: dict, fields: dict) -> str:
+    """보류 사유: 가설 없음·`1위 판단: 부적합`이면 unfit, 그 밖(고른 가설이 정상)은 normal."""
+    return "unfit" if not fields["hyps"] or _unfit_applies(analysis, fields.get("top_fit")) else "normal"
 
 
 def _fit_hold(analysis: dict, fields: dict, normal1: bool = False) -> str | None:
@@ -476,7 +491,8 @@ def _fit_subs(analysis: dict, fields: dict, hold: str | None, normal1: bool = Fa
         why = f" — {_one(tf['why'])}" if tf["why"] else ""
         line = TOP_FIT_SUB.format(fit=(f"{tf['cause']} " if tf.get("cause") else "") + tf["fit"], why=why)
         if hold:
-            line += (TOP_FIT_HELD.format(cause=hold) if tf["fit"] == "부적합" else TOP_FIT_NORMAL_HELD.format(cause=hold)
+            n = _picked(fields) + 1
+            line += (TOP_FIT_HELD.format(cause=hold) if tf["fit"] == "부적합" else TOP_FIT_NORMAL_HELD.format(n=n, cause=hold)
                      if normal1 and fields["hyps"] else TOP_FIT_NONE_HELD.format(cause=hold, fit=tf["fit"]))
         out = [line]
         if fit_check and tf["fit"] == "부적합" and not hold and cause:
@@ -488,24 +504,25 @@ def _fit_subs(analysis: dict, fields: dict, hold: str | None, normal1: bool = Fa
             out.append(WARN_FIT_RELEASE.format(cause=unfit))
         return out
     if hold and normal1:
-        return [NORMAL_HELD_SUB.format(cause=hold)]
+        return [NORMAL_HELD_SUB.format(n=_picked(fields) + 1, cause=hold)]
     if (fields["hyps"] and cause and fit_check and (analysis.get("decision") or {}).get("state") == "accepted"):
         return [WARN_NO_FIT.format(cause=cause)]
     return []
 
 
-def _rule_subs(purpose: str, items, source: str | None, tags, any_fab: bool) -> tuple[list[str], int, int]:
-    """`규칙 제안` 항목 → (report 하위 줄, 실은 수, 뺀 수). `없음`은 건너뛴다. `— 근거: <문구>`가 있으면 그 문구가 원문(`source`)에
-    있을 때만, 없으면 출력 전체에 원문에 없는 인용이 없을 때만(`any_fab` 거짓) 싣는다 — 근거 불일치 가설에서 나온 제안을 막는다."""
+def _rule_subs(purpose: str, items, source: str | None, tags, res: dict | None) -> tuple[list[str], int, int]:
+    """`규칙 제안` 항목 → (report 하위 줄, 실은 수, 뺀 수). `없음`은 건너뛴다. `— 근거: <문구>`가 있으면 그 문구가 원문(`source`)
+    검사 `ok`일 때만, 없으면 근거 원문 검사(`res`)를 실제로 했고 원문에 없는 인용이 없을 때만 싣는다 — 근거 불일치 가설에서 나온
+    제안·검사를 건너뛴 출력의 제안을 막는다."""
     kind, kept, dropped = RULE_KIND[purpose], [], 0
     for item in [_one(x) for x in items or []][:RULES_MAX]:
         if not item or item.strip("`*. ") == "없음":
             continue
         m = RULE_BASIS_RX.search(item)
         if m:
-            ok = source is not None and evidence.check_quotes([m.group(1)], source, tags)["fabricated"] == 0
+            ok = source is not None and evidence.check_quotes([m.group(1)], source, tags)["verdicts"] == ["ok"]
         else:
-            ok = not any_fab
+            ok = res is not None and not res.get("fabricated")
         if ok:
             kept.append(RULE_SUB.format(kind=kind, text=item if len(item) <= RULE_CLIP else item[:RULE_CLIP - 1] + "…"))
         else:
@@ -523,19 +540,21 @@ def _question_tail(report: Path, tail: str) -> None:
         print(WARN_REWRITE, file=sys.stderr)
 
 
-def _hold_lines(report: Path, cause: str, held: bool = False) -> list[str]:
+def _hold_lines(report: Path, cause: str, held: bool = False, normal: bool = False) -> list[str]:
     """결론·해결책 줄을 보류로 고친다(탐색 줄과 달리 1위 확정·`검증됨`을 권하지 않게). 다시 불러도 같다(이미 고친 해결책 줄은 그대로).
     판단이 이미 보류(`held`)면 리포트에 해결책 줄이 없다(report.py가 싣지 않는다) — 없어도 실패가 아니다.
     못 고친 줄 이름 목록(줄 없음·쓰기 실패)."""
     failed = []
-    if not rep.rewrite_line(report, rep.CONCLUSION_PREFIX, [rep.CONCLUSION_PREFIX + rep.FIT_HOLD_CONCLUSION.format(cause=cause)]):
+    conclusion = rep.FIT_HOLD_NORMAL_CONCLUSION if normal else rep.FIT_HOLD_CONCLUSION
+    if not rep.rewrite_line(report, rep.CONCLUSION_PREFIX, [rep.CONCLUSION_PREFIX + conclusion.format(cause=cause)]):
         failed.append("결론 줄")
     line = rep.current_line(report, rep.RESOLUTION_PREFIX)
     if line:
         body = line[len(rep.RESOLUTION_PREFIX):]
         body = body.rpartition(rep.RESOLUTION_CHECK)[0] or body
         if not rep.rewrite_line(report, rep.RESOLUTION_PREFIX,
-                                [f"{rep.FIT_HOLD_RESOLUTION}{body}{rep.RESOLUTION_CHECK}{rep.FIT_HOLD_CHECK}"]):
+                                [f"{rep.FIT_HOLD_RESOLUTION}{body}{rep.RESOLUTION_CHECK}"
+                                 f"{rep.FIT_HOLD_NORMAL_CHECK if normal else rep.FIT_HOLD_CHECK}"]):
             failed.append("해결책 줄")
     elif not held and rep.current_line(report, rep.FIT_HOLD_RESOLUTION) is None:      # 이미 보류로 고친 줄이면 실패가 아니다
         failed.append("해결책 줄")
@@ -573,7 +592,7 @@ def _rebase_module_inputs(job: Path, old: str, new: str) -> bool:
 
 
 def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, hold: bool = False,
-                     opinion: str | None = None) -> dict:
+                     opinion: str | None = None, normal: bool = False) -> dict:
     """analysis.json `decision`을 고친다(단계 4): 탐색 적합성 확인 보류(`hold`)면 채택 → held/fit_check(counter 없앰), 심층 분석
     의견의 원인 ID가 채택 원인과 다르면 `counter`만 붙인다(상태·사유 그대로). 상태·사유·selected·counter와 (보류면) 사건의
     `result: adopted → held`만 바꾸고 나머지 자격 검사 칸(`check`·`events_total`)은 그대로 둔다. 이미 보류면 사유를 바꾸지 않는다(앞 사유가 우선).
@@ -612,7 +631,7 @@ def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, h
         return {"decision_unwritten": "쓰기 실패"}
     extra = {} if not read_sha or _rebase_module_inputs(job, read_sha, _sha(data)) else {"module_inputs_unwritten": True}
     report = job / "report.md"
-    if not rep.rewrite_line(report, rep.DECISION_PREFIX, [rep.decision_line(new, analysis.get("candidates") or [])]):
+    if not rep.rewrite_line(report, rep.DECISION_PREFIX, [rep.decision_line(new, analysis.get("candidates") or [], normal)]):
         print(WARN_REWRITE, file=sys.stderr)
         return {**extra, "decision_unwritten": "report.md 판단 줄"}
     if not args.out:    # run이 남긴 리포트 표시 의무(같은 key)를 고친 줄로 바꾼다 — 옛 "원인 채택" 줄을 보이라고 하지 않게
@@ -753,7 +772,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
             per_hyp = [[next(it) for _ in h["로그로 확인"]] for h in fields["hyps"]]
             fab_by_hyp = [v.count("fabricated") for v in per_hyp]
     normal_ok, normal_bad = _normal_flags(fields, per_hyp) if purpose == "explore" else ([], [])
-    normal1 = bool(normal_ok) and normal_ok[0]
+    normal1 = bool(normal_ok) and normal_ok[_picked(fields)]       # `가장 유력: N`이 있으면 그 가설, 없으면 가설 1
     old = _load(job / RECORD)
     before = _fab_before(old.get(purpose) if isinstance(old, dict) else None)
     sub = _evidence_sub(mode, res, src_skip, before)
@@ -770,15 +789,17 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     hold = _fit_hold(analysis, fields, normal1) if purpose == "explore" else None
     subs = _fit_subs(analysis, fields, hold, normal1) if purpose == "explore" else []
     rule_lines, rules_kept, rules_dropped = _rule_subs(purpose, fields.get("rules" if purpose == "explore" else "규칙 제안"),
-                                                       source, tags, bool((res or {}).get("fabricated")))
+                                                       source, tags, res)
+    reason = _hold_reason(analysis, fields) if hold else None
     lines = _render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp, normal_bad) + subs + rule_lines
     if _rewrite(report, prefix, lines, KEEP_SUB) and purpose == "explore":
         _question_tail(report, QUESTION_DONE if fields["hyps"] else QUESTION_DONE_NONE)
-    unwritten = _hold_lines(report, hold, (analysis.get("decision") or {}).get("state") == "held") if hold else []
+    unwritten = (_hold_lines(report, hold, (analysis.get("decision") or {}).get("state") == "held", reason == "normal")
+                 if hold else [])
     if unwritten:
         print(WARN_HOLD.format(what="·".join(unwritten)), file=sys.stderr)
     if hold:
-        dec_extra = _decision_update(args, job, analysis, read_sha, hold=True)
+        dec_extra = _decision_update(args, job, analysis, read_sha, hold=True, normal=reason == "normal")
     elif purpose == "deep":
         dec_extra = _decision_update(args, job, analysis, read_sha, opinion=fields.get("분석 스킬 의견"))
     else:
@@ -787,7 +808,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     counts = {k: (res or {}).get(k, 0) for k in ("fabricated", "weak", "raw")}
     n = (res or {}).get("n", 0)
     _record(job, purpose, {"mode": mode, "at": _now(), "env": env, "output_sha256": sha, "source": src_rel if res else None,
-                           "quotes": n, **counts, **({"fit_hold": hold} if hold else {}),
+                           "quotes": n, **counts, **({"fit_hold": hold, "fit_hold_reason": reason} if hold else {}),
                            **({"top_fit": fields["top_fit"]["fit"] or "읽지 못함"} if fields.get("top_fit") else {}),
                            **({"top_fit_cause": fields["top_fit"]["cause"]} if (fields.get("top_fit") or {}).get("cause") else {}),
                            **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra,
