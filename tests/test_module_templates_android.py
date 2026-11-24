@@ -50,6 +50,13 @@ CASES = [
     ("network", "network-oos-recover-no-reject", "explore", None),
     ("data", "data-profile-invalid-after-apn-change", "explore", None),
     ("data", "data-no-service-eval-reject", "explore", None),
+    # 11/24 정상 가설 묶음(A2): 정상 넷(회복 창·요청 없는 throttle 풀림·no-op throttle·설계상 조회), 정상처럼 보이는 실패, 규칙 제안
+    ("data", "data-normal-retry-recovered", "explore", None),
+    ("data", "data-normal-unthrottle-no-request", "explore", None),
+    ("data", "data-normal-unthrottle-noop", "explore", None),
+    ("data", "data-normal-recovery-query", "explore", None),
+    ("data", "data-recovered-other-slot-still-failing", "explore", None),
+    ("data", "data-rule-proposal-unsigned-cause", "explore", None),
 ]
 
 # run별 with arm 문서 합 한도(C1D 보정 §2.3). 파일별 상한은 skillcheck.CAPS(test_module_templates test_size_caps)

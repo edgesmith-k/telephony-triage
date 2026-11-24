@@ -1,0 +1,27 @@
+# 합성 case (11/24 정상 가설 묶음 A2). 정상처럼 보이는 실패: 회복 줄(CONNECTED)은 슬롯 0이고 이슈 슬롯 1은 같은 사유로 두 번 실패한다. 함정: 회복 줄을 보고 정상으로 답함. files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+schema_version: 2
+name: data-recovered-other-slot-still-failing
+kind: explore
+synthetic: true
+key: MOCK-9833
+issue:
+  summary: 'SIM 2 데이터가 연결되지 않음 (합성)'
+  description: 'SIM 2(슬롯 1)로 데이터를 켰는데 연결되지 않습니다. SIM 1은 됩니다. 합성 case.'
+  occurred_at: '2026-11-20T14:00:01+0000'
+  platform_version: '17'
+  sim_slot: '1'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  accept:
+    - layer: '모뎀|망'
+      daemon: '모뎀|망|RIL$|RIL[ (]|RILJ|없음|알 수 없음'
+      evidence: ['SERVICE_OPTION_NOT_SUBSCRIBED']
+  trap:
+    - layer: '^\s*원인\s*아님'
+    - label: '^\s*정상'

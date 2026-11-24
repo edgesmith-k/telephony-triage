@@ -1,0 +1,100 @@
+{
+ "status": "ok",
+ "key": "MOCK-9832",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-11-20T13:00:05+00:00",
+  "sw": null,
+  "platform_version": "17",
+  "sim_slot": "0",
+  "summary": "데이터 중 data call 목록 조회 로그가 반복됨 (합성)",
+  "description": "데이터를 쓰는 중 RECOVERY_ACTION_GET_DATA_CALL_LIST 로그가 찍힙니다. 이상 동작인지 확인해 주세요. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-11-20T12:55:05.000Z",
+   "end": "2026-11-20T13:05:05.000Z"
+  },
+  "range": [
+   "2026-11-20T13:00:00.100Z",
+   "2026-11-20T13:00:35.000Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 4,
+  "masked": null
+ },
+ "decision": {
+  "state": "held",
+  "reason": "no_candidate",
+  "selected": null,
+  "location": {
+   "state": "none",
+   "source": null,
+   "kind": null
+  },
+  "check": {
+   "why": null,
+   "checked": 0,
+   "total": 0
+  },
+  "events": [],
+  "events_total": 0
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "DATA-002",
+    "kind": "type",
+    "title": "데이터 연결이 사용자 조작으로 끊김"
+   },
+   {
+    "id": "DATA-001",
+    "kind": "type",
+    "title": "SETUP_DATA_CALL이 발생하지 않음"
+   },
+   {
+    "id": "DATA-001-01",
+    "kind": "cause",
+    "title": "Data disabled"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0
+ },
+ "partial": [
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "signature": "DATA-001/no-setup-data-call-request",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ],
+   "at": []
+  }
+ ],
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-11-20T13:00:00.100Z ~ 2026-11-20T13:00:35.000Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}
