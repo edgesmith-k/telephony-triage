@@ -917,3 +917,18 @@ def test_same_line_rule_item_parses_in_both_paths():
     assert evidence.parse_fields(_deep_out([Q1]).replace("규칙 제안:\n- 없음", "규칙 제안: 없음"))["규칙 제안"] == []
     exp = evidence.parse_explore(_explore_out([("망 인증 거절", [Q1])]) + f"규칙 제안: {RULE_PLAIN}\n- {RULE_OK}\n")
     assert exp["rules"] == [RULE_PLAIN, RULE_OK]
+
+
+@pytest.mark.parametrize("purpose", ["deep", "explore"])
+def test_none_with_reason_is_not_a_proposal(tmp_path, capsys, purpose):
+    """확인 리뷰 C: `없음`·`해당 없음`으로 시작하면(뒤 설명 무엇이든) 제안이 아니다 — 같은 줄·목록 모두, deep·탐색 모두."""
+    for k, block in enumerate(("규칙 제안: 없음 (새 규칙 필요 없음)\n", "규칙 제안:\n- 없음 — 시그니처가 이미 있다\n- `해당 없음`\n")):
+        job = make_job(tmp_path / f"{purpose}{k}", purpose, "module" if purpose == "deep" else "plain")
+        if purpose == "deep":
+            (job / "deep-output.md").write_text(_deep_out([Q1, Q2]).replace("규칙 제안:\n- 없음\n", block), encoding="utf-8")
+        else:
+            (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]) + block, encoding="utf-8")
+        check(job, purpose, capsys=capsys)
+        text = (job / "report.md").read_text(encoding="utf-8")
+        assert "규칙 제안" not in text and "제안 " not in text.split("근거 원문 검사")[-1].split("\n")[1], (purpose, k)
+        assert "rules" not in _rec(job, purpose) and "rules_dropped" not in _rec(job, purpose)

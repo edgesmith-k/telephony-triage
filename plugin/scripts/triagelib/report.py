@@ -823,6 +823,28 @@ def flow_brief(job, events: dict, around: str | None = None) -> list[dict]:
     return [{**item, "flow_title": title} for *_, item, title in rows[:FLOW_BRIEF_MAX]]
 
 
+IPC_HEAD_MAX = 5
+
+
+def ipc_head(events: dict) -> list[str]:
+    """parse `ipc_no_response`가 있으면 머리 글머리표 하나(데이터 — 인용 대상 아님, 앞 `IPC_HEAD_MAX`개 시각·이름), 없으면 [].
+    그 REQ 줄이 줄 고르기에서 빠져도 모델이 알고 `window --at`으로 볼 수 있게."""
+    items = [x for x in (events or {}).get("ipc_no_response") or () if isinstance(x, dict)]
+    if not items:
+        return []
+
+    def one(x):
+        ts = str(x.get("ts") or "?")
+        return f"{ts[11:23] if len(ts) >= 23 and ts[10] == 'T' else ts} {_clip(str(x.get('name') or '?'), 60)}"
+    more = ", …" if len(items) > IPC_HEAD_MAX else ""
+    return [_clip(f"- 응답 없는 IPC 요청 {len(items)}개: " + ", ".join(one(x) for x in items[:IPC_HEAD_MAX]) + more, 400)]
+
+
+def head_notes(job, events: dict, around=None) -> list[str]:
+    """타임라인·모듈 보기 머리의 스크립트 글머리표: 흐름 판정 + 응답 없는 IPC 요청(둘 다 없으면 [])."""
+    return flow_head(flow_brief(job, events, around)) + ipc_head(events)
+
+
 def flow_head(brief: list[dict]) -> list[str]:
     """타임라인 머리 글머리표(데이터 — 근거 원문 검사는 행 문법 줄만 보므로 인용 대상이 아니다). 없으면 []."""
     out = []
@@ -926,13 +948,14 @@ class ReportMixin:
         if (prior or {}).get("unfit") and "logs" in ((getattr(self, "reuse", None) or {}).get("changed") or []):
             # CP-3: 로그를 바꿔 다시 돌렸으면 옛 로그 때의 부적합 표시로 보류하지 않는다(state에서도 지운다)
             # ponytail: 오프라인은 로그 변화를 모른다(self.reuse 없음) — 같은 --out에 새 로그로 다시 돌리면 남는다. 문제가 되면 로그 sha를 기록에 남겨 비교
-            prior = {k: v for k, v in prior.items() if k != "unfit"}
+            prior = {k: v for k, v in prior.items() if k not in ("unfit", "unfit_reason")}
             self.prior = prior = prior if set(prior) - {"top"} else None
             (self.state.job.get("prior_explore") or {}).pop("unfit", None)
+            (self.state.job.get("prior_explore") or {}).pop("unfit_reason", None)
         held = prior_unfit_hold(decision, prior)     # RP-6: 앞 실행의 1위 부적합 표시(캐시 core 밖, 실행마다)
         if held:
             decision = held
-            normal = str(prior.get("unfit") or "").partition(" — ")[2].startswith(NORMAL_HOLD_WHY)   # driver가 정상 보류에 쓴 이유
+            normal = prior.get("unfit_reason") == "normal"      # 정상 보류(앞 check-output fit_hold_reason, 없으면 unfit)
             self.warnings.append((PRIOR_NORMAL_WARN if normal else PRIOR_UNFIT_WARN).format(
                 cause=core["decision"]["selected"]["cause"]))
         result = {
@@ -1078,7 +1101,8 @@ class ReportMixin:
             lines += text
         return lines
 
-    def _conclusion(self, cands: list, unjudged: dict, observation: dict | None = None, decision: dict | None = None) -> str:
+    def _conclusion(self, cands: list, unjudged: dict, observation: dict | None = None, decision: dict | None = None,
+                    normal: bool = False) -> str:
         """결론 한 줄(후보 줄 바로 앞, `CONCLUSION_PREFIX` 뒤 글): 분류 결과 한 문장과 다음 행동. 판정은 아래 줄들과 같다(새 정보 없음) — 엔지니어가 이 줄만
         보고 다음 행동을 고르게. 규칙 일치 수준은 진단 확신이 아니다. 관측 불완전(`observation`)이면 후보 없음·원인 미확인
         결론에 "못 읽은 줄이 있다"와 새 유형·원인 등록 전 확인을 붙인다(막지는 않는다, FR-03). 1위에 원인이 있어도 판단이 보류
@@ -1093,7 +1117,7 @@ class ReportMixin:
                 return (f"{sel.get('category')} > {sel['type']} > {sel['cause']} {sel['title']} — 실패 지점에 붙은 원인(규칙 일치 "
                         f"{n + 1}위, 1위 {top['cause'] or top['type']}는 관측된 참고). 다음: {nxt}")
             if top["cause"] and (decision or {}).get("state") == "held":
-                held = HELD_REASON.get(decision.get("reason"), decision.get("reason"))
+                held = NORMAL_HOLD_REASON if normal else HELD_REASON.get(decision.get("reason"), decision.get("reason"))
                 step = ("기록 없음(분석 전용)" if self.analysis_only else
                         "근거 로그로 확인하고 Step 7에서 원인을 고르거나 원인 미확정으로 기록")
                 clue = script_clue_hold(decision)
@@ -1228,8 +1252,8 @@ class ReportMixin:
         # 한 문장 결론(종합 리뷰 A): 머리 알림(분석 전용·읽기 전용·실패 스텝·시계) 다음, 후보 줄 바로 앞. must_show 아님(새 정보 없음)
         dec = r.get("decision")
         if dec:      # 판단 줄(단계 4): 결론 바로 앞. 옛 캐시·결과처럼 decision이 없으면 줄이 없다
-            cause_l.append(decision_line(dec, cands))
-        cause_l.append(CONCLUSION_PREFIX + self._conclusion(cands, unjudged, r.get("observation"), dec))
+            cause_l.append(decision_line(dec, cands, issuepost.normal_hold(r)))
+        cause_l.append(CONCLUSION_PREFIX + self._conclusion(cands, unjudged, r.get("observation"), dec, issuepost.normal_hold(r)))
         if cands:
             top = cands[0]
             label = {"high": "높음", "medium": "중간", "low": "낮음"}.get(top["confidence"], top["confidence"])

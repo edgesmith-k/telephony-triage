@@ -1141,11 +1141,12 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
         if self.offline and regular(self.job / "analysis.json"):      # 오프라인은 state가 실행마다 비어 있다
             try:
-                unfit = ((json.loads((self.job / "analysis.json").read_text(encoding="utf-8")) or {}).get("prior") or {}).get("unfit")
+                old = (json.loads((self.job / "analysis.json").read_text(encoding="utf-8")) or {}).get("prior") or {}
+                unfit, why = old.get("unfit"), old.get("unfit_reason")
             except (OSError, ValueError, AttributeError):
-                unfit = None
+                unfit = why = None
             if isinstance(unfit, str) and unfit:
-                self.state.job["prior_explore"] = {"unfit": unfit}
+                self.state.job["prior_explore"] = {"unfit": unfit, **({"unfit_reason": why} if why == "normal" else {})}
         runs = self.state.job.get("runs") or []
         top = (runs[-1].get("top") or {}) if runs else {}
         out: dict = {"top": top.get("cause") or top.get("type")}
@@ -1182,12 +1183,16 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                               # sim1122 F2·RP-6: 1위 부적합 보류는 다음 실행에도 넘긴다 — 같은 원인이 다시 채택되면 run이 보류한다
                               "unfit": _clip(f"{rec['fit_hold']} — {NORMAL_HOLD_WHY}" if rec.get("fit_hold_reason") == "normal"
                                              else f"{rec['fit_hold']} — {(fields.get('top_fit') or {}).get('why') or fields.get('none') or ''}"
-                                             .rstrip(" —"), 120) if isinstance(rec.get("fit_hold"), str) else None}
+                                             .rstrip(" —"), 120) if isinstance(rec.get("fit_hold"), str) else None,
+                              "unfit_reason": "normal" if isinstance(rec.get("fit_hold"), str) and rec.get("fit_hold_reason") == "normal"
+                              else None}
                     judged = {k: v for k, v in judged.items() if v} or None
             old_unfit = (self.state.job.get("prior_explore") or {}).get("unfit")
             cleared = rec.get("top_fit") == "적합" and rec.get("top_fit_cause") in (None, old_unfit and old_unfit.split(" — ", 1)[0])
             if old_unfit and not (judged or {}).get("unfit") and not cleared:
-                judged = {**(judged or {}), "unfit": old_unfit}     # 모델이 `적합`이라고 다시 적을 때까지 남긴다
+                old_why = (self.state.job.get("prior_explore") or {}).get("unfit_reason")
+                judged = {**(judged or {}), "unfit": old_unfit,      # 모델이 `적합`이라고 다시 적을 때까지 남긴다
+                          **({"unfit_reason": old_why} if old_why == "normal" else {})}
             if judged:
                 self.state.job["prior_explore"] = judged
             else:

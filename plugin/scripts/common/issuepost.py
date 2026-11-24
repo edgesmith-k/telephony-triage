@@ -42,6 +42,18 @@ FORBIDDEN_WORDS = {"delete", "remove", "transition", "assign", "update", "edit",
 SECTIONS = ("PROBLEM", "CAUSE", "NEXT ACTION", "ANALYSIS")
 # analysis.json `decision.reason`(보류) 문구 — report.md `- 판단:`·결론 줄과 Jira 본문 분류가 같이 쓴다
 NORMAL_HOLD_REASON = "탐색 분석이 채택 원인의 줄을 설계상 정상 동작으로 봄"     # fit_check 보류 중 정상(check-output fit_hold_reason)
+def normal_hold(analysis: dict, rec: dict | None = None) -> bool:
+    """판단이 적합성 확인 보류(held/fit_check)이고 그 사유가 정상(탐색 분석이 설계상 정상 동작으로 봄)인가 — 한 곳의 판단.
+    이번 check-output 기록(`rec`, explore)에 보류가 있으면 그 `fit_hold_reason`, 없으면(다시 run해 기록이 지워짐) 앞 실행에서 넘어온
+    `prior.unfit_reason`(없으면 unfit — 옛 기록)."""
+    dec = (analysis or {}).get("decision") or {}
+    if dec.get("state") != "held" or dec.get("reason") != "fit_check":
+        return False
+    if isinstance(rec, dict) and rec.get("fit_hold"):
+        return rec.get("fit_hold_reason") == "normal"
+    return ((analysis or {}).get("prior") or {}).get("unfit_reason") == "normal"
+
+
 HELD_REASON = {"no_reference": "실패 지점을 잡지 못함(기준 줄·스텝 마커·TC 파일+시계 차 중 로그에서 찾은 것 없음)",
                "no_candidate": "맞는 후보 없음", "cause_unconfirmed": "유형만 일치, 원인 미확인",
                "cause_unjudged": "원인 판정 불가(시그니처 시간 초과·오류)",

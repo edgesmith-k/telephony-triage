@@ -179,10 +179,13 @@ def _parse(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> tuple[dict | Non
     return out, lines, rule_block
 
 
+RULE_NONE_RX = re.compile(r"^[\s*`]*(?:해당\s*)?없음")     # `없음`·`해당 없음`(뒤 설명 무엇이든) = 제안 아님
+
+
 def _same_line_rule(rest: str) -> list[str]:
-    """`규칙 제안: [이슈 DB] …`처럼 칸 이름 줄에 바로 쓴 제안 하나(목록 기호 없이). 비었거나 `없음`이거나 목록 줄이면 []."""
+    """`규칙 제안: [이슈 DB] …`처럼 칸 이름 줄에 바로 쓴 제안 하나(목록 기호 없이). 비었거나 `없음`·`해당 없음`이거나 목록 줄이면 []."""
     rest = (rest or "").strip()
-    return [] if not rest or ITEM_RX.match(rest) or rest.strip("`*. ") == "없음" else [rest]
+    return [] if not rest or ITEM_RX.match(rest) or RULE_NONE_RX.match(rest) else [rest]
 
 
 def parse_fields(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> dict | None:

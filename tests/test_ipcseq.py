@@ -357,3 +357,21 @@ def test_no_response_mark_is_display_only_for_row_selection():
     row = next(r for r in report.merge_rows(out) if "VIPC_SETUP_DATA" in str(r["msg"]))
     assert row["marks"] == [] and row["notes"][0].startswith("ipc_no_response(")
     assert report.row_line(row).endswith("⇒ " + row["notes"][0])
+
+
+
+def test_ipc_head_bullet_only_with_entries():
+    """확인 리뷰 E: 응답 없는 REQ가 있으면 타임라인 머리에 글머리표 하나(데이터, 인용 대상 아님), 없으면 머리가 바이트 그대로."""
+    from common import evidence
+    from triagelib import report
+
+    out = _parse(NR_LOG)
+    bare = {k: v for k, v in out.items() if k != "ipc_no_response"}
+    head = report.ipc_head(out)
+    assert head == ["- 응답 없는 IPC 요청 1개: 05:33:01.000 VIPC_SETUP_DATA"]
+    text = report.timeline("K", out, None, 200, flows=head)[0]
+    assert head[0] in text.split("\n") and head[0] not in evidence.source_text(text)[0]
+    assert report.ipc_head(bare) == []
+    assert report.timeline("K", bare, None, 200, flows=report.ipc_head(bare))[0] == report.timeline("K", bare, None, 200)[0]
+    many = {**out, "ipc_no_response": [{**out["ipc_no_response"][0], "name": f"VIPC_X{k}"} for k in range(7)]}
+    assert report.ipc_head(many)[0].startswith("- 응답 없는 IPC 요청 7개: ") and report.ipc_head(many)[0].endswith("VIPC_X4, …")

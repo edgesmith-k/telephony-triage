@@ -99,8 +99,9 @@ FAB_BEFORE = " · 앞 검사 원문에 없음 {n}(다시 검사해도 지우지 
 # 정상 가설(설계상 정상 동작, explore.md 종합 판단 0): 머리가 `정상`으로 시작한다. 근거 인용이 원문에 없으면 정상으로 보지 않는다
 NORMAL_RX = re.compile(r"^[`*\s]*정상(?:\s*\(|\s*[—–:-]|\s*$)")
 NORMAL_BAD = " [정상 근거 없음]"
-TOP_FIT_NORMAL_HELD = " → 가설 {n}이 정상(설계상 정상 동작)이라 1위 {cause} 보류"
-NORMAL_HELD_SUB = "  - 가설 {n}이 정상(설계상 정상 동작, 근거 줄 원문 확인)이라 1위 {cause} 채택을 보류로 바꿨다"
+TOP_FIT_NORMAL_HELD = " → {n}번 가설이 정상(설계상 정상 동작)이라 1위 {cause} 보류"
+NORMAL_HELD_SUB = "  - {n}번 가설이 정상(설계상 정상 동작, 근거 줄 원문 확인)이라 1위 {cause} 채택을 보류로 바꿨다"
+WARN_TOP_NUM = "  - 경고: `가장 유력: {top}`을 가설 번호로 읽지 못해(없는 번호) 1번 가설로 적합성 확인을 봤다"
 TOP_NUM_RX = re.compile(r"^[`*\s]*(?:가설\s*)?#?(\d+)(?!\d)")      # `가장 유력: 2`·`가설 2` (module_eval.TOP_NUM_RX와 같은 읽기)
 # 규칙 제안 하위 줄(SKILL Step 7 `규칙 제안` 질문이 report.md에서 읽는다). 근거 원문 확인이 안 된 제안은 싣지 않는다
 RULE_SUB = "  - 규칙 제안 ({kind}): {text}"
@@ -457,11 +458,18 @@ def _normal_flags(fields: dict, per_hyp: list[list[str]] | None) -> tuple[list[b
     return ok, bad
 
 
+def _top_index(fields: dict) -> int | None:
+    """`가장 유력: N`이 있는 가설 번호면 0부터의 순번, 칸이 없으면 0, 있는데 못 읽거나 없는 번호면 None."""
+    if not str(fields.get("top") or "").strip():
+        return 0
+    m = TOP_NUM_RX.match(str(fields["top"]))
+    k = int(m.group(1)) - 1 if m else -1
+    return k if 0 <= k < len(fields.get("hyps") or []) else None
+
+
 def _picked(fields: dict) -> int:
-    """적합성 확인에서 본 가설 번호(0부터): `가장 유력: N`이 있는 가설 번호면 그것, 아니면 0(가설 1)."""
-    m = TOP_NUM_RX.match(str(fields.get("top") or ""))
-    k = int(m.group(1)) - 1 if m else 0
-    return k if 0 <= k < len(fields.get("hyps") or []) else 0
+    """적합성 확인에서 본 가설 번호(0부터): `가장 유력: N`이 있는 가설 번호면 그것, 아니면 0(가설 1 — 못 읽으면 경고 하위 줄)."""
+    return _top_index(fields) or 0
 
 
 def _hold_reason(analysis: dict, fields: dict) -> str:
@@ -485,6 +493,12 @@ def _fit_subs(analysis: dict, fields: dict, hold: str | None, normal1: bool = Fa
     tf = fields.get("top_fit")
     cause = _top_cause(analysis)
     fit_check = (analysis.get("explore") or {}).get("reason") == "fit_check"
+    warn_top = ([WARN_TOP_NUM.format(top=_one(fields.get("top"))[:40])]
+                if fit_check and fields["hyps"] and _top_index(fields) is None else [])
+    return warn_top + _fit_subs_main(analysis, fields, hold, normal1, tf, cause, fit_check)
+
+
+def _fit_subs_main(analysis, fields, hold, normal1, tf, cause, fit_check) -> list[str]:
     if tf and tf["fit"] is None:
         return [WARN_FIT_UNREAD.format(cause=cause or "-")] if fit_check else []
     if tf:
@@ -516,7 +530,7 @@ def _rule_subs(purpose: str, items, source: str | None, tags, res: dict | None) 
     제안·검사를 건너뛴 출력의 제안을 막는다."""
     kind, kept, dropped = RULE_KIND[purpose], [], 0
     for item in [_one(x) for x in items or []][:RULES_MAX]:
-        if not item or item.strip("`*. ") == "없음":
+        if not item or evidence.RULE_NONE_RX.match(item):     # `없음`·`해당 없음`(뒤 설명 무엇이든)은 제안이 아니다
             continue
         m = RULE_BASIS_RX.search(item)
         if m:

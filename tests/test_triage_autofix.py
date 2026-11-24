@@ -691,7 +691,7 @@ def test_normal_hypothesis_one_holds_fit_check_only_with_quoted_line():
     run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", held])
     analysis = json.loads((held / "analysis.json").read_text(encoding="utf-8"))
     assert (analysis["decision"]["state"], analysis["decision"]["reason"]) == ("held", "fit_check")
-    assert _report_line(held, "  - 1위 판단(모델): ").endswith("→ 가설 1이 정상(설계상 정상 동작)이라 1위 DATA-001-01 보류")
+    assert _report_line(held, "  - 1위 판단(모델): ").endswith("→ 1번 가설이 정상(설계상 정상 동작)이라 1위 DATA-001-01 보류")
     # 리뷰 4: 정상 보류는 부적합 문구가 아니다 — 결론·해결책·Jira·다음 실행 경고 모두
     assert _report_line(held, "- 결론:") == ("- 결론: 채택 후보 DATA-001-01는 탐색 분석이 설계상 정상 동작으로 봄 — 채택 보류(탐색 분석 "
                                             "참조). 다음: Step 7에서 보류를 고르거나 근거 로그 확인")
@@ -709,10 +709,21 @@ def test_normal_hypothesis_one_holds_fit_check_only_with_quoted_line():
     again = _run(item, held, *UNFIT_ARGS)
     assert again["prior"]["unfit"] == "DATA-001-01 — 탐색 분석이 설계상 정상 동작으로 봄"
     assert "앞 실행에서 탐색 분석이 설계상 정상 동작으로 봄 원인 DATA-001-01가 다시 채택돼 보류했다(prior.unfit)" in again["warnings"]
+    # 확인 리뷰 A: 다시 run하면 check-output 기록은 지워지고 판단은 prior.unfit에서 다시 만든다 — 사유는 prior.unfit_reason 하나로
+    assert again["prior"]["unfit_reason"] == "normal" and not (held / "check-output.json").exists()
+    assert _report_line(held, "- 판단:").startswith("- 판단: 원인 보류 — 탐색 분석이 채택 원인의 줄을 설계상 정상 동작으로 봄")
+    assert _report_line(held, "- 결론:").startswith("- 결론: 원인 보류 — 탐색 분석이 채택 원인의 줄을 설계상 정상 동작으로 봄")
+    rerun = json.loads((held / "analysis.json").read_text(encoding="utf-8"))
+    path = held / "check-output.json"
+    assert issue_post.classify(rerun, None, issue_post.fit_hold_of(path), issue_post.fit_hold_normal(path, rerun))["cls"].endswith(
+        "원인 보류 — 탐색 분석이 채택 원인의 줄을 설계상 정상 동작으로 봄")
+    old = {**rerun, "prior": {k: v for k, v in rerun["prior"].items() if k != "unfit_reason"}}      # 옛 기록 = unfit
+    assert issue_post.classify(old, None, None, issue_post.fit_hold_normal(path, old))["cls"].endswith(
+        "탐색 분석 적합성 확인에서 채택 원인이 증상과 맞지 않음")
     bare = _accepted_job(item, "normal-bare")                 # 1위 판단 칸이 없어도 정상 보류(하위 줄로 알린다)
     _normal_output(bare, quote)
     run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", bare])
-    assert _report_line(bare, "  - 가설 1이 정상") == "  - 가설 1이 정상(설계상 정상 동작, 근거 줄 원문 확인)이라 1위 DATA-001-01 채택을 보류로 바꿨다"
+    assert _report_line(bare, "  - 1번 가설이 정상") == "  - 1번 가설이 정상(설계상 정상 동작, 근거 줄 원문 확인)이라 1위 DATA-001-01 채택을 보류로 바꿨다"
     fake = _accepted_job(item, "normal-fake")                 # 인용이 원문에 없음: 정상으로 보지 않는다
     _normal_output(fake, "10:00:31.000 p0 D DNC-0 Internet data state changed from DISCONNECTED to CONNECTED.")
     run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", fake])
@@ -743,7 +754,12 @@ def test_normal_needs_ok_quote_and_follows_most_likely():
     (two / "explore-output.md").write_text(fail.format(n=1) + normal(2) + "가장 유력: 2\n", encoding="utf-8")
     run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", two])
     assert json.loads((two / "analysis.json").read_text(encoding="utf-8"))["decision"]["state"] == "held"
-    assert _report_line(two, "  - 가설 2이 정상") == "  - 가설 2이 정상(설계상 정상 동작, 근거 줄 원문 확인)이라 1위 DATA-001-01 채택을 보류로 바꿨다"
+    assert _report_line(two, "  - 2번 가설이 정상") == "  - 2번 가설이 정상(설계상 정상 동작, 근거 줄 원문 확인)이라 1위 DATA-001-01 채택을 보류로 바꿨다"
+    bad = _accepted_job(item, "normal-badtop")              # 없는 번호: 1번 가설로 보고 경고 하위 줄(조용히 넘어가지 않는다)
+    (bad / "explore-output.md").write_text(normal(1) + fail.format(n=2) + "가장 유력: 7\n", encoding="utf-8")
+    run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", bad])
+    assert json.loads((bad / "analysis.json").read_text(encoding="utf-8"))["decision"]["state"] == "held"
+    assert _report_line(bad, "  - 경고: `가장 유력: 7`") == "  - 경고: `가장 유력: 7`을 가설 번호로 읽지 못해(없는 번호) 1번 가설로 적합성 확인을 봤다"
     one = _accepted_job(item, "normal-one")
     (one / "explore-output.md").write_text(normal(1) + fail.format(n=2) + "가장 유력: 2\n", encoding="utf-8")
     run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", one])

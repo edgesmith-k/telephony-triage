@@ -129,7 +129,7 @@ from triagelib.core import (ANALYSIS_MAX, EXPLORE_DONE_LINE, EXPLORE_INPUT_FILE,
                             TIMELINE_FILE, Fail, NeedsInput, Runner, Stopped, _clip, _now, trace_event)
 from triagelib import pick  # noqa: E402
 from triagelib.driver import Driver  # noqa: E402
-from triagelib.report import (_unique_evidence, dumps, fit, flow_brief, flow_head, schema_violation,  # noqa: E402,F401 — 테스트가 쓴다
+from triagelib.report import (_unique_evidence, dumps, fit, flow_brief, flow_head, head_notes, schema_violation,  # noqa: E402,F401 — 테스트가 쓴다
                               timeline)
 
 
@@ -314,7 +314,7 @@ def _explore(args, cfg: dict, job: Path) -> int:
         print(f"탐색 입력을 읽지 못했다({exc}) — 이 키로 /telephony-triage:analyze를 다시 실행한다", file=sys.stderr)
         return USAGE
     text, kept, total = timeline(args.key, events, spec.get("around"), limit, spec.get("failed_step"), spec.get("anchor"),
-                                 spec.get("look_at"), flow_head(flow_brief(job, events, spec.get("around"))))
+                                 spec.get("look_at"), head_notes(job, events, spec.get("around")))
     # 마스킹 전 JOB이어도 남은 값은 가린다(B2-25). 마스킹 끔 DB의 events(`mask_off`)면 가리지 않는다(08-safety §8)
     text, redacted = (text, {}) if events.get("mask_off") else masking.redact(text, events.get("mask_allow") or [])
     (job / TIMELINE_FILE).write_text(text, encoding="utf-8", newline="\n")

@@ -524,7 +524,7 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
     allow = events.get("mask_allow") or []
     rows = report.merge_rows(events)
     items, total = report.select_rows(rows, spec.get("around"), limit)
-    flows = report.flow_head(report.flow_brief(job, events, spec.get("around")))
+    flows = report.head_notes(job, events, spec.get("around"))
     text = report.render_timeline(key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
                                   spec.get("anchor"), spec.get("look_at"), flows)
     text = text if events.get("mask_off") else masking.redact(text, allow)[0]
@@ -570,7 +570,7 @@ def _deep_skill(job, key, cfg, analysis, events, candidates, src, inputs, env):
     name = src.get("skill")
     around = _around(job, analysis)
     text, kept, total = _generic_timeline(key, events, around, _limit(cfg),
-                                          report.flow_head(report.flow_brief(job, events, around)))
+                                          report.head_notes(job, events, around))
     data = text.encode("utf-8")
     tl_rel = f"{FOLDER}/deep/{TIMELINE_FILE}"
     timeline = {"path": tl_rel, "sha256": _sha256(data), "lines": kept, "total": total}
@@ -609,7 +609,7 @@ def _deep_module(args, job, key, p, cfg, analysis, events, candidates, state, in
     view = _has_filter(fetched.doc, p)
     modem = _modem_dir(fetched.doc, p)
     brief = report.flow_brief(job, events, around)       # 흐름 판정 요약(flow.json 있을 때만, 표시 전용)
-    flows = report.flow_head(brief)
+    flows = report.flow_head(brief) + report.ipc_head(events)
     lib = importlib.import_module("common.modulefilter") if view or (modem and not args.also) else None
     ev = None
     if lib is not None:

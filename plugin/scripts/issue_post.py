@@ -234,9 +234,12 @@ def fit_hold_of(path: Path) -> str | None:
     return hold if isinstance(hold, str) else None
 
 
-def fit_hold_normal(path: Path) -> bool:
-    """`check-output.json` explore 기록의 보류 사유가 정상(`fit_hold_reason: normal` — 탐색 분석이 설계상 정상 동작으로 봄)인가."""
+def fit_hold_normal(path: Path, analysis: dict | None = None) -> bool:
+    """보류 사유가 정상(탐색 분석이 설계상 정상 동작으로 봄)인가. `analysis`가 있으면 `issuepost.normal_hold`(이번 check-output
+    기록, 없으면 `prior.unfit_reason`)로, 없으면 check-output 기록의 `fit_hold_reason`만 본다."""
     rec = ((_read(path, "check-output.json") or {}).get("explore") or {})
+    if analysis is not None:
+        return issuepost.normal_hold(analysis, rec if isinstance(rec, dict) else None)
     return isinstance(rec, dict) and rec.get("fit_hold_reason") == "normal"
 
 
@@ -315,8 +318,7 @@ def classify(a: dict, plan: dict | None, fit_hold: str | None = None, normal: bo
         if top:
             out["cand"] = top
             if top.get("cause") and top.get("C") and held:      # 보류: 1위는 관측된 참고일 뿐, 해결책은 싣지 않는다
-                why = (issuepost.NORMAL_HOLD_REASON if normal and held == "fit_check" and fit_hold == top.get("cause")
-                       else issuepost.HELD_REASON.get(held, held))
+                why = issuepost.NORMAL_HOLD_REASON if normal and held == "fit_check" else issuepost.HELD_REASON.get(held, held)
                 out["cls"] = f"{top.get('category')} > {top.get('type')} > 원인 보류 — {why}"
                 out["lines"] += [f"규칙 일치 1위 {_cand_name(top)} {top.get('title') or ''}".rstrip()
                                  + " — 로그에서 관측된 참고, 이 이슈의 원인으로 채택 안 함", _score(top)]
@@ -365,7 +367,8 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
     fields = dict(jira_doc.get("issue") or {})
     fields.setdefault("platform_version", jira_doc.get("platform_version_all"))   # 다중 선택 버전 칸이면 이은 값
     note = ((plan or {}).get("issue") or {}).get("note")
-    cl = classify(a, plan, fit_hold_of(job.path("check-output.json")), fit_hold_normal(job.path("check-output.json")))
+    rec_path = job.path("check-output.json")
+    cl = classify(a, plan, fit_hold_of(rec_path), fit_hold_normal(rec_path, a) or fit_hold_normal(rec_path))
     s = {name: [] for name in issuepost.SECTIONS}
     # PROBLEM
     s["PROBLEM"].append(_line(f"{job.tracker.label}: {job.tracker.display(job.key)}"))
