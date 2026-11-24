@@ -68,8 +68,9 @@
 ## 일반 판단 규칙
 
 **위에서 본 오류는 시각·이름으로 한 층씩 내려가 처음 실패한 층을 찾는다.** 그 층이 원인 후보이고 위 층들은 증상이다.
-근거는 수 ms 안의 아래 층 줄, `failed`, ⇒ `ril_error`·`ril_timeout`·`ril_no_response`·`ipc_no_response` 표시다. 아래 층 줄이 없으면
+근거는 수 ms 안의 아래 층 줄, `failed`, ⇒ `ril_error`·`ril_timeout`·`ril_no_response` 표시다. 아래 층 줄이 없으면
 "그 층 로그 없음"이라고 쓰고 원인을 지어내지 않는다 — 로그 수준·수집 범위 탓일 수 있다.
+벤더 IPC의 ⇒ `ipc_no_response`(응답 없는 REQ)도 같은 아래 층 근거다.
 
 ## 다음 (Step 7)
 
