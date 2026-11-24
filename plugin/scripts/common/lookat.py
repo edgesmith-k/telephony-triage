@@ -24,10 +24,11 @@ TEXT_MIN = 8                     # 부분 일치로 찾는 최소 글자 수(접
 AT_MAX = 8                       # 보이는 일치 시각 수(token은 다시 쓰일 수 있어 모든 위치를 보인다)
 PIECE_MIN = 4                    # 부분 일치 사전 필터: 마스킹 토큰 밖 조각 중 가장 긴 것이 이보다 짧으면 찾지 않는다
 
-# 앞의 logcat 머리: `[YYYY-]MM-DD HH:MM:SS.mmm [uid] pid tid L Tag:`(threadtime) 또는 `… L/Tag( pid):`(time)
+# 앞의 logcat 머리: `[YYYY-]MM-DD HH:MM:SS.mmm [uid] pid tid L Tag:`(threadtime) 또는 `… L/Tag( pid):`(time). 태그(`t1`·`t2`)는
+# 남긴다 — 비교 글이 `태그: 메시지`이고 `DNC-0`·`DNC-1`처럼 태그가 슬롯을 가른다(코덱스 K02, 시각 없는 줄 `_LEVEL_HEAD`와 같게)
 _HEAD = re.compile(r"^\s*(?:\d{4}-)?\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:\s*(?:Z|[+-]\d{2}:?\d{2}))?"
-                   r"(?:\s+(?:[A-Za-z0-9_.]+\s+)?\d+\s+\d+\s+[VDIWEFA]\s+(?:[^:]|::)+?\s*:(?=\s|$)"
-                   r"|\s+[VDIWEFA]/[^(]+?\(\s*\d+\):)?")
+                   r"(?:\s+(?:[A-Za-z0-9_.]+\s+)?\d+\s+\d+\s+[VDIWEFA]\s+(?P<t1>(?:[^:]|::)+?)\s*:(?=\s|$)"
+                   r"|\s+[VDIWEFA]/(?P<t2>[^(]+?)\(\s*\d+\):)?")
 # 시각 없이 붙인 줄의 머리: `[uid] pid tid L ` 또는 `L `(로그 레벨 한 글자) 뒤에 `태그 :`가 오는 모양(`D RILJ    : …`, sim1120 S-11).
 # 레벨까지만 떼고 `태그 :`는 남긴다 — 비교 글이 `태그: 메시지`라 태그도 본문의 일부다(`Phone-0 : …`는 그대로 찾는다, S-39)
 _LEVEL_HEAD = re.compile(r"^\s*(?:(?:[A-Za-z0-9_.]+\s+)?\d+\s+\d+\s+)?[VDIWEFA]\s+(?=[^\s:]+\s*:(?:\s|$))")
@@ -48,10 +49,10 @@ _TOKEN_FOLD = re.compile(r"<[A-Z][A-Z0-9_]*#\d+>|<HEXDUMP \d+B>|<REDACTED:[A-Z0-
 
 
 def clean(text) -> str:
-    """앞의 logcat 머리(시각 없이 붙인 레벨 머리 포함)·대괄호 시각을 떼고 공백을 한 칸으로. ponytail: syslog(oFono) 머리는 떼지
+    """앞의 logcat 머리(시각 없이 붙인 레벨 머리 포함)·대괄호 시각을 떼고(태그는 `태그: `로 남긴다) 공백을 한 칸으로. ponytail: syslog(oFono) 머리는 떼지
     않는다 — 메시지 부분을 붙이면 찾는다."""
     raw = str(text or "")
-    text = _HEAD.sub("", raw, count=1)
+    text = _HEAD.sub(lambda m: f"{(m['t1'] or m['t2']).strip()}: " if (m["t1"] or m["t2"]) else "", raw, count=1)
     if text == raw:
         raw = text = _CLOCK.sub("", raw, count=1)
     if text == raw:      # 시각 머리를 뗐으면 남은 것은 메시지다 — 메시지 앞 `E radio: …`를 레벨로 떼지 않는다

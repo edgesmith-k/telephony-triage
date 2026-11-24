@@ -1127,7 +1127,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         top = 직전 실행 1위(state `job.runs`), looked = 이전 실행의 가린 기준 줄(state), hyps·none = `check-output`을 통과했고
         그 뒤 바뀌지 않은(기록 `output_sha256` == 지금 파일) `explore-output.md`의 가설 머리·반대 근거·`가설 없음` 이유.
         hyps는 근거 원문 검사를 했고(`source`) 원문에 없는 인용이 0일 때만(검사 건너뜀·`fabricated` > 0이면 뺀다).
-        unfit = 1위 부적합 보류(`fit_hold` — 가설 없음 또는 `1위 판단: 부적합`)면 `<원인 ID> — <이유>`(≤120). 뒤 검사 기록에 보류가 없어도
+        unfit = 1위 부적합 보류(`fit_hold` — 가설 없음 또는 `1위 판단: 부적합`)면 `<원인 ID> — <이유>`(≤120, hyps와 같은 조건). 뒤 검사 기록에 보류가 없어도
         그 검사가 그 원인에 `1위 판단: 적합`(ID 없음 또는 그 ID — CP-4)이 아니면 앞 unfit을 남긴다. 같은 원인이 다시 채택되면
         `report.prior_unfit_hold`가 보류로 바꾼다(RP-6).
         hyps·none·unfit은 state `job.prior_explore`에도 남겨 산출물이 지워진 뒤(질문 턴·다음 실행)에도 넘긴다 — 새 검사 기록이 있으면
@@ -1141,8 +1141,10 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
         if self.offline and regular(self.job / "analysis.json"):      # 오프라인은 state가 실행마다 비어 있다
             try:
-                old = (json.loads((self.job / "analysis.json").read_text(encoding="utf-8")) or {}).get("prior") or {}
+                whole = json.loads((self.job / "analysis.json").read_text(encoding="utf-8")) or {}
+                old = whole.get("prior") or {}
                 unfit, why = old.get("unfit"), old.get("unfit_reason")
+                self.offline_prev_hash = whole.get("request_hash")     # 입력(로그 등)이 바뀌었으면 assemble이 unfit을 지운다(K06)
             except (OSError, ValueError, AttributeError):
                 unfit = why = None
             if isinstance(unfit, str) and unfit:
@@ -1176,6 +1178,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                     # weak는 남긴다(정밀도만 다른 정상 인용 오탐 여지). `가설 없음` 이유는 인용이 없어 그대로 넘긴다.
                     # 구버전 check-output 기록(source·fabricated 키 없음)은 검사 불명으로 보고 탈락시킨다(의도한 fail-closed, 비용은 탐색 1회)
                     checked = bool(rec.get("source")) and rec.get("fabricated") == 0
+                    trusted = checked or not fields.get("hyps")      # 가설 없음(인용 없음)은 검사할 인용이 없다
                     judged = {"hyps": [_clip(h["가설"] + (f" — 반대: {h['반대 근거']}"
                                                          if h.get("반대 근거") not in (None, "", "없음") else ""), 120)
                                        for h in fields.get("hyps") or []][:3] if checked else [],
@@ -1183,9 +1186,10 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                               # sim1122 F2·RP-6: 1위 부적합 보류는 다음 실행에도 넘긴다 — 같은 원인이 다시 채택되면 run이 보류한다
                               "unfit": _clip(f"{rec['fit_hold']} — {NORMAL_HOLD_WHY}" if rec.get("fit_hold_reason") == "normal"
                                              else f"{rec['fit_hold']} — {(fields.get('top_fit') or {}).get('why') or fields.get('none') or ''}"
-                                             .rstrip(" —"), 120) if isinstance(rec.get("fit_hold"), str) else None,
-                              "unfit_reason": "normal" if isinstance(rec.get("fit_hold"), str) and rec.get("fit_hold_reason") == "normal"
-                              else None}
+                                             .rstrip(" —"), 120) if isinstance(rec.get("fit_hold"), str) and trusted else None,
+                              # 코덱스 K04: 지어낸 인용이 있는 검토의 부적합·정상 판단도 가설처럼 넘기지 않는다(이번 실행 보류는 그대로)
+                              "unfit_reason": "normal" if isinstance(rec.get("fit_hold"), str) and trusted
+                              and rec.get("fit_hold_reason") == "normal" else None}
                     judged = {k: v for k, v in judged.items() if v} or None
             old_unfit = (self.state.job.get("prior_explore") or {}).get("unfit")
             cleared = rec.get("top_fit") == "적합" and rec.get("top_fit_cause") in (None, old_unfit and old_unfit.split(" — ", 1)[0])

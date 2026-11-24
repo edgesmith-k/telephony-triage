@@ -400,3 +400,18 @@ def test_exact_quote_of_line_with_double_quotes_is_ok():
     assert evidence.check_quotes(["10:20:06.404 p0 I ofonod " + good + " — 통화 active"], src, tags)["verdicts"] == ["ok"]
     bad = good.replace("active", "disconnected")
     assert evidence.check_quotes([bad], src, tags)["verdicts"] != ["ok"]
+
+
+def test_empty_quote_is_not_ok_and_unit_number_change_is_caught():
+    """코덱스 K03: 따옴표·생략표·머리만 남은 인용(`...`, 빈 따옴표)은 확인한 것이 없어 ok가 아니다(정상 근거로 안 쓴다).
+    K07: 단위가 붙은 숫자(`5000ms`→`9999ms`, `30s`→`60s`)를 바꾼 인용은 지어낸 것이다."""
+    src = "15:10:01.200 p0 E vrild RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM"
+    tags = evidence.source_text(src)[1]
+    for empty in ("...", "…", '""', "15:10:01.200 p0 E vrild ..."):
+        assert evidence.check_quotes([empty], src, tags)["verdicts"] == ["weak"], empty
+    assert evidence.check_quotes(["RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM"], src, tags)["verdicts"] == ["ok"]
+    src = "15:10:01.200 p0 E DN-default-2 retry after 5000ms for data connection, timer 30s"
+    tags = evidence.source_text(src)[1]
+    assert evidence.check_quotes(["retry after 5000ms for data connection"], src, tags)["verdicts"] == ["ok"]
+    assert evidence.check_quotes(["retry after 9999ms for data connection"], src, tags)["verdicts"] == ["fabricated"]
+    assert evidence.check_quotes(["for data connection, timer 60s"], src, tags)["verdicts"] == ["fabricated"]

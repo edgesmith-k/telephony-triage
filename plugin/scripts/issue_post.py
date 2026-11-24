@@ -412,7 +412,9 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
     logs = a.get("logs") or {}
     rng = logs.get("range")
     if isinstance(rng, list) and len(rng) == 2 and not any(m.startswith("로그 범위") for m in must):
-        s["ANALYSIS"].append(_line(f"로그 범위: {rng[0]} ~ {rng[1]} ({IN_RANGE.get(logs.get('in_range'), '불명')})"))
+        span = ("기준 시각이 없어 포함 여부는 보지 않음" if logs.get("in_range") is True and not logs.get("window")    # K08
+                else IN_RANGE.get(logs.get("in_range"), "불명"))
+        s["ANALYSIS"].append(_line(f"로그 범위: {rng[0]} ~ {rng[1]} ({span})"))
     if "must_show" not in omit:
         s["ANALYSIS"] += [_line(f"주의: {m}") for m in must]
     if (a.get("code") or {}).get("skipped", True):

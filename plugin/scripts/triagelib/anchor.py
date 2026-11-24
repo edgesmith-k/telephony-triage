@@ -461,6 +461,10 @@ class AnchorMixin:
         for w in (data or {}).get("warnings") or []:
             self.warn(_clip(w.get("message"), 120))
         found = (data or {}).get("find") or {}
+        # 날짜 붙은 logcat 시각의 줄이 이 로그에 없다 — 코멘트 단서와 같은 규칙(다른 날·다른 로그의 줄을 본문만으로 잡지 않게, 코덱스 K01).
+        # 날짜 없는 시각(`16:50:42`)은 장비 시계일 수 있어 지금처럼 같은 시각 고르기에만 쓴다
+        if not lookat.CLOCK_ONLY.fullmatch(stamp or "") and _stamp_unmet(stamp, found):
+            found = {"hits": 0, "why": "붙인 줄의 시각이 이 로그에 없음"}
         if not found.get("hits"):
             self.look_result = {"hits": 0, "why": _clip(found.get("why") or "결과 없음", 60)}
             self.warn(f"기준 줄을 로그에서 못 찾음({self.look_result['why']}) — 다음 출처로 분석 구간을 정했다")

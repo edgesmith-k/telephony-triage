@@ -209,6 +209,12 @@ def test_unfit_top_holds_with_reason_and_next_check_then_rerun_carries_prior():
     # 가설 없음 이유(none)는 검사 기록이 있을 때만 넘긴다(그대로)
     third = _run(item, out, "--explore")
     assert third["prior"] == {"unfit": again["prior"]["unfit"]}, third.get("prior")
+    # 코덱스 K06: 오프라인도 로그를 바꿔 다시 돌리면 옛 로그 때의 부적합 표시를 쓰지 않는다(앞 analysis.json 입력 해시와 비교)
+    src = (LABELSET.parent / item["logs"][0]).resolve()
+    changed = out.parent / ("changed-" + src.name)
+    changed.write_bytes(src.read_bytes() + b"\n")
+    fourth = _run({**item, "logs": [str(changed), *item["logs"][1:]]}, out, "--explore")
+    assert "unfit" not in (fourth.get("prior") or {}), fourth.get("prior")
 
 
 def test_fit_hold_is_recorded_even_when_lines_cannot_be_rewritten_and_survives_recheck():
@@ -765,3 +771,30 @@ def test_normal_needs_ok_quote_and_follows_most_likely():
     run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", one])
     assert json.loads((one / "analysis.json").read_text(encoding="utf-8"))["decision"]["state"] == "accepted"
     assert "fit_hold" not in json.loads((one / "check-output.json").read_text(encoding="utf-8"))["explore"]
+
+
+def test_prior_unfit_not_carried_from_check_with_fabricated_quotes(tmp_path):
+    """코덱스 K04: 원문에 없는 인용이 있는 검토의 1위 부적합·정상 판단은 가설처럼 다음 실행에 넘기지 않는다(그 실행의 보류는 그대로).
+    인용이 0개면(가설 없음) 검사할 것이 없어 지금처럼 넘긴다."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import hashlib
+
+    from triagelib.cache import State
+    from triagelib.driver import Driver
+    drv = Driver.__new__(Driver)
+    drv.job = tmp_path
+    drv.state, drv.offline = State(tmp_path / "triage-state.json"), False
+    text = ("가설 1: x\n로그로 확인:\n- 10:00:00.000 - E t m\n코드로 추정: 없음\n반대 근거: 없음\n다음 확인: y\n"
+            "1위 판단: DATA-001-01 부적합 — 정상 종료\n")
+
+    def prior(fabricated: int, reason: str = "unfit") -> dict:
+        (tmp_path / "explore-output.md").write_text(text, encoding="utf-8")
+        rec = {"mode": "explore", "output_sha256": hashlib.sha256(text.encode()).hexdigest(), "source": "timeline.md",
+               "fabricated": fabricated, "fit_hold": "DATA-001-01", "fit_hold_reason": reason, "top_fit": "부적합"}
+        (tmp_path / "check-output.json").write_text(json.dumps({"explore": rec}), encoding="utf-8")
+        drv.state.job.pop("prior_explore", None)
+        return drv.read_prior() or {}
+
+    assert "unfit" not in prior(1) and "unfit_reason" not in prior(1, "normal")
+    assert prior(0)["unfit"] == "DATA-001-01 — 정상 종료"
+    assert prior(0, "normal")["unfit_reason"] == "normal"

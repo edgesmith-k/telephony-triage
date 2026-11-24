@@ -73,7 +73,7 @@ def test_ipc_line_with_reused_token_picks_nearest_and_moves_window():
     assert len(calls) == 1 and args[0] == "ipc" and args[args.index("--find") + 1].endswith("look-at.json")
     assert not any("VIPC_SETUP_DATA" in json.dumps(r) for r in _trace(job))
     look = json.loads((job / "look-at.json").read_text(encoding="utf-8"))
-    assert look == {"look_at": "[TX] VIPC_SETUP_DATA, REQ, token=0x0de, len=24", "ref": "2026-09-20T05:34:00.000Z",
+    assert look == {"look_at": "RIL: [TX] VIPC_SETUP_DATA, REQ, token=0x0de, len=24", "ref": "2026-09-20T05:34:00.000Z",
                     "stamp": "09-20 14:33:05.000"}      # 붙여 넣은 줄의 시각(같은 곳 고르기) — 로그 시각이라 원문 값이 아니다
     assert len(json.dumps(done, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) + 1 <= 4096
 
@@ -261,3 +261,29 @@ def test_location_of_word_order_look_is_near_and_never_confirmed():
         me = SimpleNamespace(look_result={"how": how, "places": 1}, look_inputs=dict)
         loc = AnchorMixin.location(me, span)
         assert (loc["state"], loc["kind"]) == want, how
+
+
+def test_pasted_line_from_other_day_or_other_tag_is_not_found():
+    """코덱스 K01·K02: 본문이 같아도 붙인 줄의 날짜 붙은 시각이 이 로그에 없으면 못 찾음(코멘트 단서와 같은 규칙 — 다른 날·다른
+    로그의 줄을 확인된 실패 지점으로 삼지 않게). 태그가 다른 줄(`DNC-0` ↔ `DNC-1`)은 같은 글이 아니다. 날짜 없는 시각은 장비 시계일
+    수 있어 지금처럼 본문으로 찾는다."""
+    other_day, _ = _offline("otherday", "--look-at", LINE.replace("09-20 14:33:05.000", "09-19 14:33:05.000"))
+    assert other_day["step_anchor"]["look"] == {"hits": 0}, other_day["step_anchor"]
+    assert any("붙인 줄의 시각이 이 로그에 없음" in w for w in other_day["warnings"])
+    assert other_day["decision"]["state"] != "accepted"
+    clock, _ = _offline("clockonly", "--look-at", "14:00:00.000 [TX] VIPC_SETUP_DATA, REQ, token=0x0de, len=24")
+    assert clock["step_anchor"]["look"]["hits"] == 4, clock["step_anchor"]
+    body = " 1234  1244 I {tag}: [PHONE0] onEvaluateNetworkRequests: reason=DATA_ENABLED_CHANGED"
+    same, _ = _offline("sametag", "--look-at", "09-20 14:33:06.000 " + body.format(tag="DNC-0"))
+    assert same["step_anchor"]["look"]["hits"] == 1, same["step_anchor"]
+    other, _ = _offline("othertag", "--look-at", "09-20 14:33:06.000 " + body.format(tag="DNC-1"))
+    assert other["step_anchor"]["look"] == {"hits": 0}, other["step_anchor"]
+
+
+def test_log_range_line_does_not_claim_occurrence_without_reference_time():
+    """코덱스 K08(Q19): 기준 시각이 없으면 로그 범위 줄에 "발생 시각 포함"을 쓰지 않는다(비교한 것이 없다)."""
+    done, job = _offline("notime", occurred=None)
+    assert done["logs"]["window"] is None and done["logs"]["in_range"] is True
+    report = (job / "report.md").read_text(encoding="utf-8")
+    assert "(발생 시각 포함)" not in report
+    assert "기준 시각이 없어 포함 여부는 보지 않음" in report

@@ -17,9 +17,9 @@ UTC = timezone.utc
 
 def test_clean_strips_logcat_head_and_time_brackets_only():
     assert L.clean("09-20 14:33:05.000   900   910 D RIL     : [TX] VIPC_SETUP_DATA, REQ, token=0x0de") \
-        == "[TX] VIPC_SETUP_DATA, REQ, token=0x0de"
-    assert L.clean("2026-09-20 14:33:05.000 +0900 1000 1234 1244 I DNC-0: a  b") == "a b"        # 연도·zone·uid
-    assert L.clean("09-20 14:33:05.000 D/RIL( 1234): [RX] x") == "[RX] x"                        # time 형식
+        == "RIL: [TX] VIPC_SETUP_DATA, REQ, token=0x0de"          # 태그는 남긴다(코덱스 K02 — 비교 글이 `태그: 메시지`)
+    assert L.clean("2026-09-20 14:33:05.000 +0900 1000 1234 1244 I DNC-0: a  b") == "DNC-0: a b"        # 연도·zone·uid
+    assert L.clean("09-20 14:33:05.000 D/RIL( 1234): [RX] x") == "RIL: [RX] x"                        # time 형식
     assert L.clean("[  12.345] [IpcCtx_0] OnIpcComplete [14:32:11.001] ok") == "[IpcCtx_0] OnIpcComplete ok"   # P2 21
     assert L.clean("  plain   text ") == "plain text" and L.clean(None) == ""
 
@@ -91,7 +91,7 @@ def test_level_and_tag_head_without_time_is_body_search():
     assert L.clean("radio  9995 10049 D RILJ    : Service DATA") == "RILJ : Service DATA"
     assert L.clean("Phone-0 : setAllowedNetworkTypes: subId=1") == "Phone-0 : setAllowedNetworkTypes: subId=1"
     # 시각 머리를 뗀 줄은 남은 메시지 앞(`E radio: …`)을 레벨로 떼지 않는다(리뷰 1bb528a7)
-    assert L.clean("11-21 06:42:42.000  1001  1002 D SST     : E radio: off pollState") == "E radio: off pollState"
+    assert L.clean("11-21 06:42:42.000  1001  1002 D SST     : E radio: off pollState") == "SST: E radio: off pollState"
     texts = ["RILJ: Service DATA has died. [PHONE0]", "Phone-0: setAllowedNetworkTypes: subId=1, reason=user"]
     for line, want in (("D RILJ    : Service DATA has died.", [0]), ("Phone-0 : setAllowedNetworkTypes: subId=1", [1])):
         assert L.text_hits(L.needle(L.query(line)), texts) == want, line

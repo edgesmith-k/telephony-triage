@@ -52,6 +52,8 @@ DECISION_TOKEN_RX = re.compile(
     r"\b(?:error|err|errno|cause|code|reason|status|state|result|rat|fail_cause|failcause|rc|ret)\b\s*[=:]?\s*[-A-Za-z0-9_]+(?:\(\d+\))?|"
     r"\b[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?=[-A-Za-z0-9_<])[-A-Za-z0-9_.<>#]+(?:\(\d+\))?(?::\d+(?![-A-Za-z0-9_.<>#=:]))?(?![-A-Za-z0-9_.<>#=])|"
     r"\b[A-Za-z_][A-Za-z0-9_]*\s*:\s*(?=[-A-Za-z0-9_<])[-A-Za-z0-9_.<>#]+(?:\(\d+\))?(?![-A-Za-z0-9_.<>#=:])|"
+    # 코덱스 K07: 단위가 붙은 숫자(재시도 간격·제한 시간·신호 세기 — `5000ms`→`9999ms` 변조). 띄어쓰기까지 원문 그대로여야 한다
+    r"\b\d+(?:\.\d+)?\s?(?:ms|msec|millis|s|sec|secs|seconds?|min|mins|minutes?|dbm|db)(?![A-Za-z0-9_])|"
     r"\b(?:failed|failure|fail|succeeded|success|rejected|reject|accepted|timeout|timed out|denied|disconnected|connected|"
     + "|".join(NEGATION_WORDS) + r"|true|false|enabled|disabled|null|none)\b",
     re.IGNORECASE)
@@ -426,6 +428,8 @@ def evidence_check(item: str, files_text: str, tags) -> tuple[str, list[tuple[st
         detail.append((verdict, m, n))
         if verdict == "fabricated" or (verdict == "weak" and worst == "ok"):
             worst = verdict
+    if not detail:      # 따옴표·생략표만 남은 인용(`...`·`""`·시각과 `...`)은 확인한 것이 없다 — ok가 아니다(코덱스 K03, 정상 근거로 안 쓴다)
+        worst = "weak"
     return worst, detail
 
 

@@ -945,9 +945,12 @@ class ReportMixin:
             reuse = self.reuse_out(candidates, parts, runs) if self.reuse else None
         decision = core.get("decision")
         prior = getattr(self, "prior", None)
-        if (prior or {}).get("unfit") and "logs" in ((getattr(self, "reuse", None) or {}).get("changed") or []):
-            # CP-3: 로그를 바꿔 다시 돌렸으면 옛 로그 때의 부적합 표시로 보류하지 않는다(state에서도 지운다)
-            # ponytail: 오프라인은 로그 변화를 모른다(self.reuse 없음) — 같은 --out에 새 로그로 다시 돌리면 남는다. 문제가 되면 로그 sha를 기록에 남겨 비교
+        request_hash = request_hash or self.request_hash(logs, core["around"], anchor)
+        prev_hash = getattr(self, "offline_prev_hash", None)
+        if (prior or {}).get("unfit") and ("logs" in ((getattr(self, "reuse", None) or {}).get("changed") or [])
+                                           or (self.offline and prev_hash != request_hash)):
+            # CP-3: 로그를 바꿔 다시 돌렸으면 옛 로그 때의 부적합 표시로 보류하지 않는다(state에서도 지운다).
+            # 오프라인은 reuse가 없어 앞 analysis.json의 입력 해시와 비교한다(코덱스 K06 — 로그 말고 기준 줄·답이 바뀌어도 지운다)
             prior = {k: v for k, v in prior.items() if k not in ("unfit", "unfit_reason")}
             self.prior = prior = prior if set(prior) - {"top"} else None
             (self.state.job.get("prior_explore") or {}).pop("unfit", None)
@@ -962,7 +965,7 @@ class ReportMixin:
             "status": "ok", "key": self.key,
             "platform": self.platform_out(),   # android가 아니거나 암묵 선택과 다를 때만(K8·D5)
             "generated_at": _now(),
-            "request_hash": request_hash or self.request_hash(logs, core["around"], anchor),
+            "request_hash": request_hash,
             "run": run_no, "reuse": reuse,
             "mode": self.out.get("mode", "offline" if self.offline else "write"),
             "read_only_reasons": self.out.get("read_only_reasons"),
@@ -1351,6 +1354,8 @@ class ReportMixin:
             ana.append(add(11, "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): " + tags))
         in_range = {True: "발생 시각 포함", "partial": "일부만 포함", False: "로그 범위 밖",
                     None: "해석한 줄 없음(형식·인코딩)"}.get(logs["in_range"], "?")
+        if logs["in_range"] is True and not logs.get("window"):     # 비교할 구간이 없다(코덱스 K08·Q19 — 포함으로 보이지 않게)
+            in_range = "기준 시각이 없어 포함 여부는 보지 않음"
         range_text = (f"로그 범위: {logs['range'][0]} ~ {logs['range'][1]} ({in_range}), "
                       f"시계 이상 {'있음' if logs['clock_anomalies'] else '없음'}")
         if not cands or not cands[0]["C"] or logs["in_range"] is not True or logs["clock_anomalies"]:
