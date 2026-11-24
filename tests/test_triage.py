@@ -658,7 +658,7 @@ def test_skill_md_drives_triage():
 REF_FILE_MAX = 16 * 1024    # reference/*.md 전부(하위 폴더 platforms/ 제외) 한 개
 FLOWS = {   # 한 흐름에서 읽는 문서(SKILL.md 말고는 reference/<이름>.md) 합 한도. 값 = 정할 때 합 x1.05를 KiB로 올림
     "analyze 최악": (("SKILL.md", "rules", "module-skills", "explore", "write-flow", "db-authoring", "skill-patch", "post"),
-                   64 * 1024),     # 11/24 63→64: explore.md·module-skills.md에 window·흐름 판정 줄 +700B(사용자 확인 필요)
+                   66 * 1024),     # 11/24 63→66: explore.md·module-skills.md에 window·흐름 판정·정상 가설·규칙 제안 +2,322B(사용자 확인 필요)
     "record": (("rules", "record", "write-flow", "db-authoring"), 46 * 1024),
     "verify-fix": (("rules", "verify", "write-flow", "db-authoring"), 45 * 1024),
     "로그 해석": (("SKILL.md", "rules", "log-tags", "ril-requests", "fail-causes"), 27 * 1024),

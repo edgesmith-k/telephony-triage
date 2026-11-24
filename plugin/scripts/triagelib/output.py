@@ -7,6 +7,10 @@ Claude가 쓴 `JOB/deep-output.md`·`JOB/explore-output.md`를 받아:
    (`JOB/windows.json` 기록과 sha256이 같은 `window-<n>.md`만 — 바뀌었거나 없으면 빼고 경고·`windows_excluded`)에 있는지.
 4. report.md의 5-1·5-2 줄(과 `  - ` 아래 줄)을 쓴다 — `TODO(LLM)`이 남은 줄만 고친다. 모델은 그 줄을 고치지 않는다.
    탐색 가설 줄에는 그 가설의 원문에 없는 인용 수 `[근거 불일치 N]`(N>0일 때만).
+   정상 가설(`가설 N: 정상(설계상 정상 동작) — <이유>`)은 `로그로 확인` 인용 하나 이상이 원문에 있을 때만 정상으로 본다 — 없으면
+   그 가설 줄에 `[정상 근거 없음]`. 적합성 확인에서 가설 1이 (근거 있는) 정상이면 1위 채택을 보류한다(아래 5와 같은 보류).
+   `규칙 제안:`(deep 칸·탐색 꼬리)은 `  - 규칙 제안 (심층|탐색): <줄>` 하위 줄로 쓴다(SKILL Step 7이 묻는다). `— 근거: <문구>`가 있으면
+   그 문구가 원문에 있을 때만, 없으면 출력에 원문에 없는 인용이 하나도 없을 때만 싣고 나머지는 뺀 수만 한 줄로 적는다.
    적합성 확인(`fit_check`)이 가설 없이 끝나거나 `1위 판단: 부적합`이면(가설이 있어도, sim1122 F2) 1위 부적합 보류 — 결론·해결책 줄도
    보류로 고치고 기록에 `fit_hold: <원인 ID>`(줄을 못 고쳐도 기록은 남기고 `fit_hold_unwritten`·stderr 경고. 뒤 검사·생략·실패 기록도
    fit_hold를 이어받는다). 적합성 확인·채택·가설 있음인데 `1위 판단` 칸이 없으면 채택은 그대로 두고 경고 하위 줄(`WARN_NO_FIT`).
@@ -90,6 +94,17 @@ QUESTION_DONE_NONE = " — 답: 아래 탐색 분석 줄(가설 없음 이유·�
 QUESTION_SKIPPED = " — 탐색 분석 생략이라 답하지 않음(근거 로그로 직접 확인)"
 QUESTION_TAILS = (QUESTION_PENDING, QUESTION_DONE, QUESTION_DONE_NONE, QUESTION_SKIPPED)
 FAB_BEFORE = " · 앞 검사 원문에 없음 {n}(다시 검사해도 지우지 않음)"
+# 정상 가설(설계상 정상 동작, explore.md 종합 판단 0): 머리가 `정상`으로 시작한다. 근거 인용이 원문에 없으면 정상으로 보지 않는다
+NORMAL_RX = re.compile(r"^[`*\s]*정상(?:\s*\(|\s*[—–:-]|\s*$)")
+NORMAL_BAD = " [정상 근거 없음]"
+TOP_FIT_NORMAL_HELD = " → 가설 1이 정상(설계상 정상 동작)이라 1위 {cause} 보류"
+NORMAL_HELD_SUB = "  - 가설 1이 정상(설계상 정상 동작, 근거 줄 원문 확인)이라 1위 {cause} 채택을 보류로 바꿨다"
+# 규칙 제안 하위 줄(SKILL Step 7 `규칙 제안` 질문이 report.md에서 읽는다). 근거 원문 확인이 안 된 제안은 싣지 않는다
+RULE_SUB = "  - 규칙 제안 ({kind}): {text}"
+RULE_DROPPED = "  - 규칙 제안 ({kind}) {n}개 뺌: 근거가 원문에서 확인되지 않음(확인 안 된 줄로는 제안하지 않는다)"
+RULE_KIND = {"deep": "심층", "explore": "탐색"}
+RULE_BASIS_RX = re.compile(r"\s[—–]\s*근거\s*[:：]\s*(.+)$")
+RULES_MAX, RULE_CLIP = 5, 300
 # 분석 스킬 의견 `<원인 ID> — <근거>`의 앞 ID. 백틱·굵게로 감싸거나 조사(`ID와`)가 붙어도 잡고, 숫자가 더 붙은 것은 아니다
 OPINION_ID = re.compile(rf"\s*[`*]*({CAUSE_ID})(?!\d)")
 
@@ -362,15 +377,17 @@ def _one(text) -> str:
     return " ".join(str(text or "").split())
 
 
-def _render(purpose: str, mode: str, head: str, fields: dict, sub: str, fab_by_hyp: list[int] | None = None) -> list[str]:
-    """report 줄. `fab_by_hyp`(탐색, 가설별 원문에 없는 인용 수)가 0보다 크면 그 가설 줄에 `[근거 불일치 N]`."""
+def _render(purpose: str, mode: str, head: str, fields: dict, sub: str, fab_by_hyp: list[int] | None = None,
+            normal_bad: list[bool] | None = None) -> list[str]:
+    """report 줄. `fab_by_hyp`(탐색, 가설별 원문에 없는 인용 수)가 0보다 크면 그 가설 줄에 `[근거 불일치 N]`, `normal_bad`(정상이라고
+    적었는데 원문에 있는 인용이 없음)면 `[정상 근거 없음]`."""
     if purpose == "explore":
         if not fields["hyps"]:
             return [f"{head}가설 없음: {_one(fields['none'])} / 다음 확인: {_one(fields['next'])}", sub]
         out = [f"{head}가설 {len(fields['hyps'])}개 — 점수·분류·검증에 쓰지 않는다"]
         for i, h in enumerate(fields["hyps"], 1):
             k = fab_by_hyp[i - 1] if fab_by_hyp else 0
-            mark = f" [근거 불일치 {k}]" if k else ""
+            mark = (f" [근거 불일치 {k}]" if k else "") + (NORMAL_BAD if normal_bad and normal_bad[i - 1] else "")
             out.append(f"  - 가설 {i}{mark}: {_one(h['가설'])} / 로그로 확인: {' | '.join(_one(q) for q in h['로그로 확인'])} / "
                        f"코드로 추정: {_one(h['코드로 추정'])} / 반대 근거: {_one(h['반대 근거'])} / 다음 확인: {_one(h['다음 확인'])}")
         return out + [sub]
@@ -425,17 +442,29 @@ def _unfit_applies(analysis: dict, tf: dict | None) -> bool:
     return bool(cause) and (tf.get("cause") == cause if tf.get("cause") else cause == rank1)
 
 
-def _fit_hold(analysis: dict, fields: dict) -> str | None:
+def _normal_flags(fields: dict, per_hyp: list[list[str]] | None) -> tuple[list[bool], list[bool]]:
+    """가설마다 (정상으로 봄, 정상이라 적었지만 근거 없음). 정상으로 봄 = 머리가 정상이고 `로그로 확인` 중 하나 이상이 원문에 있다
+    (`per_hyp` = 가설별 인용 판정. 원문 검사를 못 했으면 None — 그때는 정상으로 보지 않는다)."""
+    ok, bad = [], []
+    for k, h in enumerate(fields.get("hyps") or []):
+        claim = bool(NORMAL_RX.match(h["가설"] or ""))
+        found = bool(per_hyp) and any(v != "fabricated" for v in per_hyp[k])
+        ok.append(claim and found)
+        bad.append(claim and not found)
+    return ok, bad
+
+
+def _fit_hold(analysis: dict, fields: dict, normal1: bool = False) -> str | None:
     """FR-02: 적합성 확인(`explore.reason: fit_check`)이 가설 없이 끝났거나 모델이 채택 원인에 `1위 판단: <ID> 부적합`을 적었으면
     (가설이 있어도, sim1122 F2) 보류한 원인 ID, 아니면 None. 감지는 구조(사유·빈 가설·판단 칸)만 보고 판정(C·순위)은 바꾸지 않는다.
     report.md 재작성 성패와 무관하다(기록·Jira는 이것으로 정한다)."""
     cause = _top_cause(analysis)
     if (analysis.get("explore") or {}).get("reason") != "fit_check" or not cause:
         return None
-    return cause if not fields["hyps"] or _unfit_applies(analysis, fields.get("top_fit")) else None
+    return cause if not fields["hyps"] or normal1 or _unfit_applies(analysis, fields.get("top_fit")) else None
 
 
-def _fit_subs(analysis: dict, fields: dict, hold: str | None) -> list[str]:
+def _fit_subs(analysis: dict, fields: dict, hold: str | None, normal1: bool = False) -> list[str]:
     """탐색 줄 아래 1위 판단 하위 줄(읽었을 때)과 경고 하위 줄: 칸을 못 읽음, 부적합으로 적은 원인이 채택 원인이 아님,
     적합성 확인·채택·가설 있음인데 칸이 없음."""
     tf = fields.get("top_fit")
@@ -447,7 +476,8 @@ def _fit_subs(analysis: dict, fields: dict, hold: str | None) -> list[str]:
         why = f" — {_one(tf['why'])}" if tf["why"] else ""
         line = TOP_FIT_SUB.format(fit=(f"{tf['cause']} " if tf.get("cause") else "") + tf["fit"], why=why)
         if hold:
-            line += TOP_FIT_HELD.format(cause=hold) if tf["fit"] == "부적합" else TOP_FIT_NONE_HELD.format(cause=hold, fit=tf["fit"])
+            line += (TOP_FIT_HELD.format(cause=hold) if tf["fit"] == "부적합" else TOP_FIT_NORMAL_HELD.format(cause=hold)
+                     if normal1 and fields["hyps"] else TOP_FIT_NONE_HELD.format(cause=hold, fit=tf["fit"]))
         out = [line]
         if fit_check and tf["fit"] == "부적합" and not hold and cause:
             out.append(WARN_FIT_OTHER.format(got=tf.get("cause") or "ID 없음", cause=cause))
@@ -457,9 +487,30 @@ def _fit_subs(analysis: dict, fields: dict, hold: str | None) -> list[str]:
                 and dec.get("reason") == "fit_check"):      # CP-3: 이번 run을 막은 앞 부적합 — 다음 run(driver.read_prior)이 푼다
             out.append(WARN_FIT_RELEASE.format(cause=unfit))
         return out
+    if hold and normal1:
+        return [NORMAL_HELD_SUB.format(cause=hold)]
     if (fields["hyps"] and cause and fit_check and (analysis.get("decision") or {}).get("state") == "accepted"):
         return [WARN_NO_FIT.format(cause=cause)]
     return []
+
+
+def _rule_subs(purpose: str, items, source: str | None, tags, any_fab: bool) -> tuple[list[str], int, int]:
+    """`규칙 제안` 항목 → (report 하위 줄, 실은 수, 뺀 수). `없음`은 건너뛴다. `— 근거: <문구>`가 있으면 그 문구가 원문(`source`)에
+    있을 때만, 없으면 출력 전체에 원문에 없는 인용이 없을 때만(`any_fab` 거짓) 싣는다 — 근거 불일치 가설에서 나온 제안을 막는다."""
+    kind, kept, dropped = RULE_KIND[purpose], [], 0
+    for item in [_one(x) for x in items or []][:RULES_MAX]:
+        if not item or item.strip("`*. ") == "없음":
+            continue
+        m = RULE_BASIS_RX.search(item)
+        if m:
+            ok = source is not None and evidence.check_quotes([m.group(1)], source, tags)["fabricated"] == 0
+        else:
+            ok = not any_fab
+        if ok:
+            kept.append(RULE_SUB.format(kind=kind, text=item if len(item) <= RULE_CLIP else item[:RULE_CLIP - 1] + "…"))
+        else:
+            dropped += 1
+    return kept + ([RULE_DROPPED.format(kind=kind, n=dropped)] if dropped else []), len(kept), dropped
 
 
 def _question_tail(report: Path, tail: str) -> None:
@@ -691,15 +742,18 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
         before = _quotes(purpose, _parse(purpose, mode, raw))
         if len(before) == len(quotes):
             raw_items = frozenset(i for i, (a, b) in enumerate(zip(before, quotes)) if a != b)
-    res = fab_by_hyp = None
+    res = fab_by_hyp = per_hyp = None
+    source, tags = evidence.source_text(src_text) if src_skip is None and src_text is not None else (None, None)
     if not quotes:
         src_skip = "인용 없음"
     elif src_skip is None:
-        source, tags = evidence.source_text(src_text)
         res = evidence.check_quotes(quotes, source, tags, raw_items=raw_items)
         if purpose == "explore":        # verdicts는 `_quotes` 순서 = 가설 순서대로 `로그로 확인`을 이어 붙인 것
             it = iter(res["verdicts"])
-            fab_by_hyp = [[next(it) for _ in h["로그로 확인"]].count("fabricated") for h in fields["hyps"]]
+            per_hyp = [[next(it) for _ in h["로그로 확인"]] for h in fields["hyps"]]
+            fab_by_hyp = [v.count("fabricated") for v in per_hyp]
+    normal_ok, normal_bad = _normal_flags(fields, per_hyp) if purpose == "explore" else ([], [])
+    normal1 = bool(normal_ok) and normal_ok[0]
     old = _load(job / RECORD)
     before = _fab_before(old.get(purpose) if isinstance(old, dict) else None)
     sub = _evidence_sub(mode, res, src_skip, before)
@@ -713,9 +767,11 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     else:
         name = (rec or {}).get("skill") or (analysis.get("analyzer") or {}).get("skill") or "-"
         default = f"{DEEP_PREFIX} ({name}): "
-    hold = _fit_hold(analysis, fields) if purpose == "explore" else None
-    subs = _fit_subs(analysis, fields, hold) if purpose == "explore" else []
-    lines = _render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp) + subs
+    hold = _fit_hold(analysis, fields, normal1) if purpose == "explore" else None
+    subs = _fit_subs(analysis, fields, hold, normal1) if purpose == "explore" else []
+    rule_lines, rules_kept, rules_dropped = _rule_subs(purpose, fields.get("rules" if purpose == "explore" else "규칙 제안"),
+                                                       source, tags, bool((res or {}).get("fabricated")))
+    lines = _render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp, normal_bad) + subs + rule_lines
     if _rewrite(report, prefix, lines, KEEP_SUB) and purpose == "explore":
         _question_tail(report, QUESTION_DONE if fields["hyps"] else QUESTION_DONE_NONE)
     unwritten = _hold_lines(report, hold, (analysis.get("decision") or {}).get("state") == "held") if hold else []
@@ -734,7 +790,9 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
                            "quotes": n, **counts, **({"fit_hold": hold} if hold else {}),
                            **({"top_fit": fields["top_fit"]["fit"] or "읽지 못함"} if fields.get("top_fit") else {}),
                            **({"top_fit_cause": fields["top_fit"]["cause"]} if (fields.get("top_fit") or {}).get("cause") else {}),
-                           **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra})
+                           **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra,
+                           **({"normal": [i + 1 for i, v in enumerate(normal_ok) if v]} if any(normal_ok) else {}),
+                           **({"rules": rules_kept} if rules_kept else {}), **({"rules_dropped": rules_dropped} if rules_dropped else {})})
     head = masking.mask_brief(lines[0], 300, off=off)     # 끔 DB: report.md 줄과 같은 글자(꼭 보일 줄 대조가 어긋나지 않게)
     fab = [sub.lstrip()] if counts["fabricated"] or before else []     # 앞 검사의 불일치도 보일 의무(RP-14)
     # 심층 분석은 결과 줄(첫 줄)을 늘 보인다 — 탐색은 지어낸 인용이 있을 때만(B2-6)

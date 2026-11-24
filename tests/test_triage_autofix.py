@@ -669,3 +669,38 @@ def test_prior_unfit_dropped_when_workspace_rerun_has_new_logs():
     again = ws.json("triage.py", [*base, "--logs", other])                 # state에서도 지웠다
     assert again["decision"]["state"] == "accepted" and "unfit" not in (again.get("prior") or {}), again.get("prior")
     ws.json("triage.py", ["release", "MOCK-9005"])
+
+
+def _normal_output(out: Path, quote: str, tail: str = "") -> None:
+    (out / "explore-output.md").write_text(
+        "가설 1: 정상(설계상 정상 동작) — 실패 뒤 같은 창에 회복 줄이 있다\n원인 층: 원인 아님(정상 동작)\n로그로 확인:\n- " + quote +
+        "\n코드로 추정: 코드 근거 없음\n반대 근거: 실패가 되풀이되는지는 이 구간만으로 모른다\n다음 확인: 같은 조건 재시험에서 실패가 다시 나는지\n"
+        + tail, encoding="utf-8")
+
+
+def test_normal_hypothesis_one_holds_fit_check_only_with_quoted_line():
+    """정상 가설(explore.md 종합 판단 0): 적합성 확인에서 가설 1이 `정상`이고 `로그로 확인` 인용이 원문에 있으면 1위 채택을 보류한다
+    (부적합 보류와 같은 길 — 판단 held/fit_check, 결론·해결책 줄 보류). 인용이 원문에 없으면 정상으로 보지 않고 `[정상 근거 없음]`,
+    채택 그대로(1위 판단 칸 없음 경고)."""
+    item = _padded()
+    held = _accepted_job(item, "normal")
+    quote = next(line for line in (held / "timeline.md").read_text(encoding="utf-8").splitlines() if line[:2].isdigit())
+    _normal_output(held, quote, "1위 판단: 적합 — 1위 문구가 보인다\n")
+    run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", held])
+    analysis = json.loads((held / "analysis.json").read_text(encoding="utf-8"))
+    assert (analysis["decision"]["state"], analysis["decision"]["reason"]) == ("held", "fit_check")
+    assert _report_line(held, "  - 1위 판단(모델): ").endswith("→ 가설 1이 정상(설계상 정상 동작)이라 1위 DATA-001-01 보류")
+    assert _report_line(held, "- 결론:").startswith("- 결론: 채택 후보 DATA-001-01가 증상과 맞지 않아 보류")
+    rec = json.loads((held / "check-output.json").read_text(encoding="utf-8"))["explore"]
+    assert rec["fit_hold"] == "DATA-001-01" and rec["normal"] == [1]
+    bare = _accepted_job(item, "normal-bare")                 # 1위 판단 칸이 없어도 정상 보류(하위 줄로 알린다)
+    _normal_output(bare, quote)
+    run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", bare])
+    assert _report_line(bare, "  - 가설 1이 정상") == "  - 가설 1이 정상(설계상 정상 동작, 근거 줄 원문 확인)이라 1위 DATA-001-01 채택을 보류로 바꿨다"
+    fake = _accepted_job(item, "normal-fake")                 # 인용이 원문에 없음: 정상으로 보지 않는다
+    _normal_output(fake, "10:00:31.000 p0 D DNC-0 Internet data state changed from DISCONNECTED to CONNECTED.")
+    run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", fake])
+    assert json.loads((fake / "analysis.json").read_text(encoding="utf-8"))["decision"]["state"] == "accepted"
+    assert _report_line(fake, "  - 가설 1 [근거 불일치 1] [정상 근거 없음]: 정상(설계상 정상 동작)")
+    assert _report_line(fake, "  - 경고: 1위 판단 칸 없음")
+    assert "normal" not in json.loads((fake / "check-output.json").read_text(encoding="utf-8"))["explore"]
