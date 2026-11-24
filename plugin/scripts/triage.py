@@ -211,7 +211,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("window", parents=[common])
     p.add_argument("key", metavar="KEY")
     p.add_argument("--at", metavar="시각", required=True,
-                   help="중심 시각(--answer time=과 같은 형식·변환: 오프셋 없는 ISO·logcat 스탬프는 run의 --tz. 타임라인 시각은 UTC)")
+                   help="중심 시각: 타임라인 줄 시각 HH:MM:SS[.mmm](UTC, 날짜는 분석 범위에서) · Z·오프셋 있는 ISO · logcat "
+                        "스탬프 MM-DD HH:MM:SS.mmm(run의 --tz). 오프셋 없는 ISO는 오류")
     p.add_argument("--lines", type=int, metavar="N", help="줄 수(기본 40, 상한 200)")
     p.add_argument("--span", type=float, metavar="초", help="--at ±초/2 안의 줄만(≤3600, --lines와 함께면 적은 쪽)")
     p.add_argument("--tag", action="append", metavar="TAG", help="이 태그 줄만(여러 번 쓸 수 있다). 없으면 모든 태그")

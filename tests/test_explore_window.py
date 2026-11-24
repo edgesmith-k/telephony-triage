@@ -97,10 +97,12 @@ def test_window_skips_raw_only_files_and_new_run_drops_windows():
 
 
 def test_window_at_uses_time_answer_conversion_and_filters():
-    """`--at`은 `--answer time=`과 같은 변환(오프셋 없는 ISO·logcat 스탬프는 run의 --tz Asia/Seoul) — 출력은 UTC."""
+    """`--at`: 타임라인 시각만(UTC, 분석 범위 날짜)·오프셋 있는 ISO·logcat 스탬프(run의 --tz Asia/Seoul) — 출력은 UTC.
+    오프셋 없는 ISO는 사용 오류(로그 시간대를 짐작하지 않는다)."""
     job = _job()
-    for at in ("2026-09-20T14:33:05", "09-20 14:33:05.000", "2026-09-20 14:33:05.000 +0900", AT):
+    for at in ("05:33:05.000", "09-20 14:33:05.000", "2026-09-20 14:33:05.000 +0900", "2026-09-20T14:33:05+0900", AT):
         assert _window(job, "--at", at, "--lines", 2)["at"] == "2026-09-20T05:33:05.000Z", at
+    assert "Z 또는 오프셋" in run("triage.py", ["window", KEY, "--out", job, "--at", "2026-09-20T05:33:05"]).stderr
     job = _job()
     span = _window(job, "--at", AT, "--span", 1)            # ±0.5초: 05:33:04.5~05:33:05.5
     rows = [x for x in (job / span["window"]).read_text(encoding="utf-8").split("\n") if evidence.ROW_RX.match(x)]
@@ -121,6 +123,20 @@ def test_window_slot_and_category_filters():
     rows = [x for x in (job / cat["window"]).read_text(encoding="utf-8").split("\n") if evidence.ROW_RX.match(x)]
     assert rows and all(x.split(" ")[3] == "RIL" for x in rows)
     assert _window(job, "--at", AT, "--cat", "nosuchcat", expect=1)["reason"] == "줄 없음"
+
+
+def test_parse_at_clock_uses_window_date_across_midnight():
+    from triagelib.window import parse_at
+
+    ev = {"input": {"tz": "Asia/Seoul", "year": 2026,
+                    "window": {"start": "2026-09-20T23:58:00.000Z", "end": "2026-09-21T00:03:00.000Z"}}}
+    assert parse_at("23:59:01.5", ev)[0].isoformat() == "2026-09-20T23:59:01.500000+00:00"
+    assert parse_at("00:01:00", ev)[0].isoformat() == "2026-09-21T00:01:00+00:00"       # 자정 뒤 날
+    assert parse_at("12:00:00", ev)[0] is None and "안에 없다" in parse_at("12:00:00", ev)[1]
+    assert parse_at("2026-09-20T23:59:01", ev)[0] is None                                 # 오프셋 없는 ISO
+    long = {"input": {"window": None}, "coverage": {"first_ts": "2026-09-20T00:00:00.000Z", "last_ts": "2026-09-22T00:00:00.000Z"}}
+    assert parse_at("10:00:00", long)[0] is None and "여럿" in parse_at("10:00:00", long)[1]    # 날이 둘 이상: 모호
+    assert parse_at("25:00:00", ev)[0] is None and parse_at("10:00:00", {"input": {}})[0] is None
 
 
 # -- 흐름 판정 요약 ---------------------------------------------------------------------------------------------

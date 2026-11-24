@@ -7,8 +7,10 @@
 - 줄은 모든 사본·모든 태그(`--tag`로 좁힐 수 있다)의 백엔드 줄 레코드를 run과 같은 시각 변환(`events.json input.tz·year`, 사본은 원본
   mtime)으로 읽어 시각순으로 `--at` 둘레 N줄(기본 40, 상한 200, 본문 24KB)을 타임라인과 같은 줄 모양(`report.row_line`: 시각(UTC) 슬롯
   레벨 태그 메시지, 160자에서 자름)으로 낸다. `masking.redact`로 한 번 더 거른다(마스킹 끔 DB면 그대로).
-- `--at`은 `--answer time=`과 같은 변환(`logtime.normalize_ts`: 오프셋 있는 ISO, 없으면 run의 `--tz`·`--year`로 읽는 ISO·logcat 스탬프).
-  시계 차(`--clock-offset`)는 시험 장비 시각에만 쓰므로 여기서도 쓰지 않는다. `--span 초`면 `--at` ±초/2 안의 줄만(줄·바이트 상한 그대로,
+- `--at`(`parse_at`): 타임라인 줄의 시각만(`HH:MM:SS[.mmm]`)이면 UTC로 읽고 날짜는 분석 범위(`events.json input.window`, 없으면
+  `coverage`)에서 그 시각이 범위 안에 드는 날 — 자정을 넘는 범위면 드는 날이 하나일 때만, 없거나 여럿이면 사용 오류. 오프셋 있는 ISO와
+  logcat 스탬프는 `--answer time=`과 같은 변환(`logtime.normalize_ts`, 스탬프는 run의 `--tz`·`--year`). 오프셋 없는 ISO는 사용
+  오류(로그 시간대를 짐작하지 않는다). 시계 차(`--clock-offset`)는 시험 장비 시각에만 쓰므로 쓰지 않는다. `--span 초`면 `--at` ±초/2 안의 줄만(줄·바이트 상한 그대로,
   `--lines`와 함께면 둘 다 — 적은 쪽). 거르기(좁히기만): `--tag`, `--slot N`(슬롯 모름 줄은 남긴다), `--cat`(tags.yaml 그 카테고리 태그),
   `--grep`(가린 사본의 `태그: 메시지`에, ≤200자, `matcher.pattern_timeout_ms` 시간 상한).
 - `JOB/window-<n>.md`를 쓰고 `JOB/windows.json`(스크립트만 쓴다 — guard 규칙 12)에 `{path, sha256, at, lines, tags}`를 더한다.
@@ -28,7 +30,7 @@ import json
 import os
 import re
 import sys
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from common import events as evt
@@ -43,12 +45,51 @@ LINES_DEFAULT, LINES_MAX, BYTES_MAX, SPAN_MAX, GREP_MAX = 40, 200, 24576, 3600, 
 TAG_OK = re.compile(r"^[A-Za-z0-9_.:/@-]{1,64}$")
 CAT_OK = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 NEXT = "타임라인 줄만으로 계속한다(로그 원문·사본을 grep·Read하지 않는다)"
+CLOCK_RE = re.compile(r"(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?")
+OFFSET_RE = re.compile(r"(?:Z|[+-]\d{2}:?\d{2})$")
 
 
 class _Stop(Exception):
     def __init__(self, code: int, reason: str, detail: str):
         super().__init__(reason)
         self.code, self.reason, self.detail = code, reason, detail
+
+
+def parse_at(value, ev: dict):
+    """`--at` → (UTC datetime, None) 또는 (None, 사용 오류 문구). 규칙은 모듈 머리말 `--at`."""
+    text = str(value or "").strip()
+    inp = ev.get("input") or {}
+    m = CLOCK_RE.fullmatch(text)
+    if m:
+        win = inp.get("window") or {}
+        cov = ev.get("coverage") or {}
+        try:
+            lo = logtime.parse_ts(win.get("start") or cov.get("first_ts"))
+            hi = logtime.parse_ts(win.get("end") or cov.get("last_ts"))
+        except (TypeError, ValueError, AttributeError):
+            return None, "시각만 쓴 --at은 분석 범위의 날짜로 읽는데 범위를 모른다 — 날짜와 Z를 붙인 ISO로"
+        h, mi, s, frac = int(m.group(1)), int(m.group(2)), int(m.group(3)), (m.group(4) or "").ljust(6, "0")
+        if h > 23 or mi > 59 or s > 59:
+            return None, f"--at 시각 형식: {masking.mask_brief(text, 30)}"
+        hits = []
+        day = lo.date()
+        while day <= hi.date():
+            t = datetime(day.year, day.month, day.day, h, mi, s, int(frac), tzinfo=timezone.utc)
+            if lo <= t <= hi:
+                hits.append(t)
+            day += timedelta(days=1)
+        if len(hits) == 1:
+            return hits[0], None
+        span = f"{logtime.format_ts(lo)} ~ {logtime.format_ts(hi)}"
+        return None, (f"--at {text}(UTC)이 분석 범위 {span} 안에 없다" if not hits else
+                      f"--at {text}(UTC)에 맞는 날이 분석 범위 {span}에 여럿이다 — 날짜와 Z를 붙인 ISO로")
+    if logtime.STAMP_RE.fullmatch(text):
+        dt = logtime.normalize_ts(text, inp.get("tz"), inp.get("year"))      # logcat 스탬프: `--answer time=`과 같은 변환
+    elif not OFFSET_RE.search(text):
+        return None, "--at ISO 시각에 Z 또는 오프셋을 붙인다(타임라인 시각은 UTC) — 시각만(HH:MM:SS.mmm)이면 분석 범위 날짜의 UTC"
+    else:
+        dt = logtime.normalize_ts(text, inp.get("tz"), inp.get("year"))
+    return (dt, None) if dt is not None else (None, f"--at 시각 형식: {masking.mask_brief(text, 60)}")
 
 
 def _load(path: Path):
@@ -173,11 +214,9 @@ def _run(args, defaults: dict) -> dict:
     analysis, ev = _load(job / "analysis.json"), _load(job / "events.json")
     if not isinstance(analysis, dict) or not isinstance(ev, dict):
         raise _Stop(USAGE, "작업 없음", "analysis.json·events.json을 읽지 못했다 — /telephony-triage:analyze를 다시")
-    inp = ev.get("input") or {}
-    at = logtime.normalize_ts(args.at, inp.get("tz"), inp.get("year"))      # `--answer time=`과 같은 변환(run의 tz·year)
+    at, why = parse_at(args.at, ev)
     if at is None:
-        raise _Stop(USAGE, "사용 오류", "--at은 ISO 시각(오프셋 없으면 로그 시간대 — 타임라인 시각은 UTC라 Z를 붙인다) 또는 logcat "
-                                     f"스탬프 MM-DD HH:MM:SS.mmm: {masking.mask_brief(args.at, 60)}")
+        raise _Stop(USAGE, "사용 오류", why)
     if not _started(job, analysis):
         raise _Stop(CHECK_FAILED, "해당 없음", "탐색 분석(triage.py explore)이나 심층 분석(module --for deep)을 시작한 뒤에만 쓴다")
     record = _load(job / WINDOW_RECORD)
