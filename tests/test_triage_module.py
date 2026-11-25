@@ -1140,22 +1140,24 @@ def _explore_out(env):
 def test_explore_next_names_module_command_when_51_skipped(env):
     env.make_job(candidates=C0_CANDS, explore=True, extra=SKIPPED_51)
     out = _explore_out(env)
-    assert out["next"] == (f"`S/triage.py module {KEY} --for explore --platform ofono --out {env.job}`부터 — "
-                           "출력 read를 그 순서로 모두 읽는다(module-skills.md 5-2)")
+    assert out["next"] == (triage.REFS_NEXT + " / " + f"`S/triage.py module {KEY} --for explore --platform ofono --out {env.job}`부터 — "
+                           "출력 read를 그 순서로 모두 읽는다(module-skills.md 5-2)")     # refs 읽기 → 모듈 문서 받기 순서
 
 
 def test_explore_next_keeps_51_first_when_deep_pending(env):
     env.make_job(candidates=C0_CANDS, explore=True,
                  extra={"analyzer": {"category": "data", "when": "ask"}})
     out = _explore_out(env)
-    assert out["next"].startswith("5-1(심층 분석)을 하기로 했으면 먼저 끝낸 뒤 `S/triage.py module ")
+    assert out["next"].startswith(triage.REFS_NEXT + " / 5-1(심층 분석)을 하기로 했으면 먼저 끝낸 뒤 `S/triage.py module ")
     assert env.module()[0] == 0                       # 5-1 받음 → 남은 것은 5-2 모듈 문서뿐
-    assert _explore_out(env)["next"].startswith(f"`S/triage.py module {KEY} --for explore")
+    assert _explore_out(env)["next"].startswith(triage.REFS_NEXT + f" / `S/triage.py module {KEY} --for explore")
 
 
 def test_explore_next_absent_when_already_fetched_or_no_remote(env):
     env.make_job(candidates=C0_CANDS, explore=True, extra=SKIPPED_51)
     assert env.module("explore", "--module", "ofono/data")[0] == 0
-    assert "next" not in _explore_out(env)
-    env.user({})
-    assert "next" not in _explore_out(env)
+    assert _explore_out(env)["next"] == triage.REFS_NEXT          # 모듈 문서는 받았다 — refs 읽기만
+    env.make_job(candidates=C0_CANDS, platform="android", explore=True, extra=SKIPPED_51)
+    assert env.module("explore", "--module", "android/data", platform="android")[0] == 0
+    code, out, _ = env.call("explore", KEY, "--out", env.job)
+    assert code == 0 and "next" not in out and "refs" not in out          # android 기본: refs 없음·받음 → next 없음

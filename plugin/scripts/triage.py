@@ -401,14 +401,19 @@ def _explore(args, cfg: dict, job: Path, defaults: dict, emit: bool = True) -> i
         out.update(platform=platform, refs=_platform_refs(args, platform))
     if redacted:
         out["mask_warnings"] = redacted
+    # 출력 `next`(run과 같은 문자열, 할 일을 " / "로 잇는다): refs 읽기(eval 73-e) → 모듈 문서 받기(eval 77). 둘 다 없으면 키 없음
+    todo = [REFS_NEXT] if out.get("refs") else []
     if userconfig.module_skills(cfg) is not None:      # 5-2 모듈 문서를 받을 수 있다(B2-4). 없으면 출력이 이전과 같다
         out["module_skills"] = True
-        nxt = _module_next(args, job, platform)
-        if nxt:
-            out["next"] = nxt
+        todo.append(_module_next(args, job, platform))
+    if any(todo):
+        out["next"] = " / ".join(t for t in todo if t)
     if emit:
         _emit(out)
     return OK
+
+
+REFS_NEXT = "먼저 출력 refs의 파일을 모두 읽는다(플랫폼 로그 안내, explore.md 읽는 것 5)"
 
 
 def _module_next(args, job: Path, platform: str) -> str | None:
