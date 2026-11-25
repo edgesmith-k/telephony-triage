@@ -224,3 +224,15 @@ def test_jira_cause_has_investigation_on_top_or_below(tmp_path, capsys):
     assert cause[0].startswith("분류: 후보 없음")
     inv_at = next(i for i, t in enumerate(cause) if t.startswith("조사 결론 (LLM, 근거 부족): "))
     assert "실패한 검증: 책임 층" in cause[inv_at] and not any(t.startswith("실패 이유") for t in cause)     # Jira는 이름만
+
+
+def test_compare_eval_scores_recorded_outputs_only():
+    """비교 eval 틀(모델 실행 없음): 합성 case 2개로 변경 전·뒤 층 정답률·원인 줄 인용률·근거 부족 비율을 센다."""
+    sys.path.insert(0, str(REPO / "tools"))
+    import investigate_eval
+    res = investigate_eval.run(REPO / "tests" / "fixtures" / "investigate-eval", ["before", "after"])
+    assert res["n"] == 2 and res["arms"]["before"]["insufficient"] == "2/2" and res["arms"]["before"]["layer_correct"] == "0/2"
+    after = res["arms"]["after"]
+    assert (after["layer_correct"], after["cause_cited"], after["identified_correct"], after["identified_wrong"],
+            after["insufficient"]) == ("2/2", "2/2", "1/2", "0/2", "1/2")
+    assert all(c["synthetic"] for c in res["cases"])

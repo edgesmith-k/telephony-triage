@@ -71,8 +71,8 @@ QUICK_TOKENS = ("## push 전 확인:", "게시 전 확인:", "triage.py", "--dra
 KIND_NAME = {"push": "push 확인 화면", "post": "게시 확인 화면", "report": "분석 리포트", "draft": "초안 검증표",
              "patch": "스킬 제안 patch 안내", "evidence": "check-output 결과 줄(심층 분석·근거 원문 검사)"}
 OBJ = {"push": "을", "post": "을", "report": "를", "draft": "를", "patch": "를", "evidence": "을"}      # 목적격 조사
-# Step 5 질문(동의·스크립트가 쓴 모듈 문서 질문 `ask`): 리포트를 보이기 전에 묻는다
-EXPLORE_Q = re.compile(r"(심층|탐색)\s*분석[^\n]*(할까요|실행할까|진행할까|\?)|모듈 문서[^\n]*(볼까요|바꿀까요)")
+# Step 5 질문(동의·스크립트가 쓴 모듈 문서 질문 `ask`, 조사 모드 한 질문 `조사할까요?`): 리포트를 보이기 전에 묻는다
+EXPLORE_Q = re.compile(r"(심층|탐색)\s*분석[^\n]*(할까요|실행할까|진행할까|\?)|모듈 문서[^\n]*(볼까요|바꿀까요)|조사할까요")
 NOTE = "[telephony-triage] 표시 안내"
 TRUNCATED = [False]      # 마지막 load_text가 끝부분만 읽었는가
 

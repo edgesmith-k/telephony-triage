@@ -19,6 +19,9 @@ Claude가 쓴 `JOB/deep-output.md`·`JOB/explore-output.md`를 받아:
    fit_hold를 이어받는다). 적합성 확인·채택·가설 있음인데 `1위 판단` 칸이 없으면 채택은 그대로 두고 경고 하위 줄(`WARN_NO_FIT`).
 5. 확인할 내용(사용자 질문) 줄 꼬리를 탐색 결과를 가리키게 고친다(통과면 답 자리, 생략·실패면 답 안 함, F7).
 6. 같은 실행에서 다시 검사하면 앞 검사의 원문에 없는 인용 수를 `fabricated_before`로 이어받는다(F9 — 고쳐 다시 검사해도 지우지 않는다).
+7. 조사 모드(analysis.json `investigate.mode`, run이 판정)면 탐색 가장 유력 가설(없으면 1)에 검증 게이트 6개(`_investigation`)를 보고
+   결과를 analysis.json·기록 `investigation`에, 조사 결론 줄을 report.md CAUSE 칸에 쓴다(통과면 맨 위, 근거 부족이면 결론 줄 아래).
+   점수·분류·decision은 바꾸지 않는다.
 
 `--skipped "<사유>"`: 실행하지 않았거나 실패 — 줄을 "생략: <사유>"로(이미 스크립트가 쓴 생략·해당 없음·받기 실패 줄이면 그대로).
 기록 `JOB/check-output.json[purpose]`(스크립트만 쓴다, guard 규칙 12)와 trace `checked` 행(`core.trace_event`). 표시 의무: 작업 디렉토리 JOB이면 검사마다 `evidence` 기록

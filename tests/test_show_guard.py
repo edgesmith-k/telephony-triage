@@ -1184,7 +1184,8 @@ def test_module_questions_do_not_block_like_explore_questions(tmp_path):
     import show_guard
     run = _job(tmp_path)
     for q in ("어느 모듈 문서로 볼까요? (모듈 신호 줄 수: data 12 · network 7)",
-              "고른 모듈 문서의 신호가 약합니다. 다른 모듈 문서로 바꿀까요? (모듈 신호 줄 수: sim 9 · data 2)"):
+              "고른 모듈 문서의 신호가 약합니다. 다른 모듈 문서로 바꿀까요? (모듈 신호 줄 수: sim 9 · data 2)",
+              "조사할까요? (심층 분석 뒤 탐색 분석, 토큰 추가 사용)"):      # 조사 모드 한 질문(11/25)
         assert show_guard.EXPLORE_Q.search(q)
         assert stop(write(tmp_path, prompt("p"), run, say(q)), q) is None          # 리포트 전 질문(Step 5)은 막지 않는다
     also = "모뎀 모듈 문서도 함께 볼까요? (모뎀 신호: mgmtd 2줄)"
