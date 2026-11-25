@@ -75,6 +75,22 @@ def timeline_center(spec: dict | None) -> tuple[list[str], str | None]:
     return [], "없음 (실패 스텝·코멘트 단서·증상 시각 후보가 없어 로그 맨 앞부터 골랐다 — 실패 지점이 뒤에 있으면 빠졌을 수 있다)"
 
 
+def view_center(spec: dict | None) -> tuple:
+    """탐색 모듈 보기(`modulefilter`)의 중심 하나와 출처(머리 `중심: <시각> (<출처>)`) — `timeline_center`와 같은 기준. 모듈 보기는
+    중심을 하나만 받으므로 증상 시각 후보가 여럿이면 중심 없음으로 두고 출처에 그렇다고 적는다. 앵커·발생 시각은 이전과 같은 글."""
+    spec = spec if isinstance(spec, dict) else {}
+    ref, src = ref_from(spec)
+    if ref:
+        return ref, {"anchor": "기준 줄" if (spec.get("anchor") or {}).get("source") == "look_at" else "실패 스텝",
+                     "look_at": "기준 줄", "clue": "코멘트 단서, 확정 아님", "around": "발생 시각"}[src]
+    guess = timeline_center(spec)[0]
+    if len(guess) == 1:
+        return guess[0], "증상 시각 후보, 스크립트 추정이라 확정 아님"
+    if guess:
+        return None, f"증상 시각 후보 {len(guess)}개 {', '.join(guess)} — 하나로 못 정해 중심 없음, 스크립트 추정이라 확정 아님"
+    return None, "없음 — 실패 스텝·코멘트 단서·증상 시각 후보가 없다"
+
+
 def guess_of(spec: dict | None, analysis: dict | None = None) -> list[str]:
     """추정 기준 = 증상 시각 후보(`time_candidates`, ≤3 — explore-input.json, 없으면 analysis.json `step_anchor`). 확정 기준이 없을
     때만 쓴다(`window.centers`). 표시 전용 — 게이트 4(실패 뒤 흔적)는 추정 기준을 쓰지 않는다."""

@@ -156,3 +156,21 @@ def test_center_rules_and_unchanged_bytes():
     small, n = report.select_rows(rows, None, 100)                 # 상한 아래면 고르지 않는다 — 머리 글도 없다(이전과 같은 바이트)
     ev = {"input": {}}
     assert report.render_timeline("K", ev, small, n, None, 100) == report.render_timeline("K", ev, small, n, None, 100, basis="없음")
+
+
+def test_view_center_keeps_old_values_for_anchor_and_time_input():
+    """모듈 보기 중심(`summary.view_center`): 앵커 실패 시각·발생 시각만 있는 기존 경우는 예전 식과 같은 값(보기 바이트 그대로)."""
+    def old(spec):
+        anchor = spec.get("anchor") or {}
+        return (anchor.get("fail") or spec.get("around"),
+                ("기준 줄" if anchor.get("source") == "look_at" else "실패 스텝") if anchor.get("fail") else "발생 시각")
+
+    t = "2026-09-20T05:32:10Z"
+    for spec in ({"around": t}, {"around": t, "anchor": {"source": "steps_file", "fail": t}},
+                 {"around": t, "anchor": {"source": "look_at", "fail": t}},
+                 {"around": t, "anchor": {"source": "step_order", "fail": t}, "time_candidates": [{"ts": "x"}]}):
+        assert summary.view_center(spec) == old(spec), spec
+    one = summary.view_center({"time_candidates": [{"ts": t, "type": "A"}]})
+    assert one == (t, "증상 시각 후보, 스크립트 추정이라 확정 아님")
+    many = summary.view_center({"time_candidates": [{"ts": t}, {"ts": "2026-09-20T05:40:00Z"}]})
+    assert many[0] is None and "하나로 못 정해 중심 없음" in many[1] and "확정 아님" in many[1]

@@ -1065,3 +1065,23 @@ def test_explore_timeline_and_view_carry_flow_head(env):
     assert code == 0, err
     view = (job / "module-skill" / "explore" / "timeline.md").read_text(encoding="utf-8").split("\n")
     assert FLOW_HEAD in view and view.index(FLOW_HEAD) < next(i for i, x in enumerate(view) if x.startswith("- 형식:"))
+
+
+def test_explore_view_centers_on_comment_clue_without_time_input(env):
+    """시각 입력 없이 코멘트 단서(`clue_at`)만 있으면 모듈 보기 중심도 본 타임라인과 같은 단서 시각이다(`summary.view_center`) —
+    줄 상한(150)을 넘는 긴 보기에서 뒤쪽 실패 줄 둘레가 남고, 머리 출처에 "확정 아님"이 드러난다."""
+    env.url = mr.build(env.tmp / "remote2")
+    env.user({"module_skills": {"remote": env.url}})
+    events = [{"ts": f"2026-09-20T05:{27 + i * 2 // 60:02d}:{i * 2 % 60:02d}.000Z", "tag": "DCM-1",
+               "msg": "setup failed FINAL" if i == 280 else f"setup failed step {i}", "level": "E", "category_hint": "data"}
+              for i in range(300)]
+    job = env.make_job(events=events, platform="android", extra={"explore": {"reason": "cause_unconfirmed", "when": "ask"}})
+    fail = "2026-09-20T05:36:20.000Z"
+    (job / core.EXPLORE_INPUT_FILE).write_text(json.dumps({"around": None, "failed_step": None, "limit": 200, "anchor": None,
+                                                           "clue_at": fail}), encoding="utf-8")
+    assert env.call("explore", KEY, "--out", job, "--platform", "android")[0] == 0
+    code, out, err = env.module("explore", "--module", "android/data", platform="android")
+    assert code == 0 and out["timeline"]["view"] is True, err
+    view = (job / "module-skill" / "explore" / "timeline.md").read_text(encoding="utf-8")
+    assert "setup failed FINAL" in view                      # 고치기 전: 중심 없음 → 앞쪽 150줄만
+    assert f"중심: {fail} (코멘트 단서, 확정 아님)" in view

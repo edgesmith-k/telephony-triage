@@ -539,12 +539,11 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
     if text.encode("utf-8") != tl:
         raise nojob(f"{TIMELINE_FILE}가 events.json과 맞지 않는다 — triage.py explore를 다시")
     anchor = spec.get("anchor") or {}
-    center = anchor.get("fail") or spec.get("around")
+    center, center_source = summary.view_center(spec)      # 본 타임라인과 같은 기준(모듈 보기는 중심 하나)
     pins = [{"ts": r.get("ts"), "tag": r.get("tag"), "msg": r.get("msg")} for r in rows
             if anchor.get("fail") and r.get("ts") == anchor.get("fail")][:5]
     return {"spec": spec, "items": items, "kept": len(items), "total": total, "center": center,
-            "center_source": ("기준 줄" if anchor.get("source") == "look_at" else "실패 스텝") if anchor.get("fail") else "발생 시각",
-            "pins": pins, "allow": allow, "flows": flows,
+            "center_source": center_source, "pins": pins, "allow": allow, "flows": flows,
             "mask_off": bool(events.get("mask_off"))}
 
 
