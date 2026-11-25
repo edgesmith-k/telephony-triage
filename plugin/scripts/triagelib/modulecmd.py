@@ -528,20 +528,22 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
     inputs[TIMELINE_FILE] = _sha256(tl)
     allow = events.get("mask_allow") or []
     rows = report.merge_rows(events)
-    items, total = report.select_rows(rows, spec.get("around"), limit)
+    from triagelib import summary
+    centers, basis = summary.timeline_center(spec)      # `triage._explore`와 같은 중심·머리
+    items, total = report.select_rows(rows, centers, limit)
     flows = report.head_notes(job, events, spec.get("around"))
     text = report.render_timeline(key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
-                                  spec.get("anchor"), spec.get("look_at"), flows, spec.get("anomaly"), spec.get("summary"))
+                                  spec.get("anchor"), spec.get("look_at"), flows, spec.get("anomaly"), spec.get("summary"),
+                                  basis)
     text = text if events.get("mask_off") else masking.redact(text, allow)[0]
     if text.encode("utf-8") != tl:
         raise nojob(f"{TIMELINE_FILE}가 events.json과 맞지 않는다 — triage.py explore를 다시")
     anchor = spec.get("anchor") or {}
-    center = anchor.get("fail") or spec.get("around")
+    center, center_source = summary.view_center(spec)      # 본 타임라인과 같은 기준(모듈 보기는 중심 하나)
     pins = [{"ts": r.get("ts"), "tag": r.get("tag"), "msg": r.get("msg")} for r in rows
             if anchor.get("fail") and r.get("ts") == anchor.get("fail")][:5]
     return {"spec": spec, "items": items, "kept": len(items), "total": total, "center": center,
-            "center_source": ("기준 줄" if anchor.get("source") == "look_at" else "실패 스텝") if anchor.get("fail") else "발생 시각",
-            "pins": pins, "allow": allow, "flows": flows,
+            "center_source": center_source, "pins": pins, "allow": allow, "flows": flows,
             "mask_off": bool(events.get("mask_off"))}
 
 
@@ -579,8 +581,8 @@ def _deep_summary(job: Path, key: str, cfg: dict, defaults: dict, analysis: dict
     cap = summary.cap_of(cfg)
     kept = spec.get("summary") if isinstance(spec, dict) else None
     found = (kept if isinstance(kept, dict) and kept.get("cap") == cap and kept.get("groups")
-             else summary.safe(job, events, analysis, defaults, summary.ref_of(spec, around), cap,
-                               guess=summary.guess_of(spec, analysis), after_sec=summary.after_of(cfg)))
+             else summary.labeled(summary.safe(job, events, analysis, defaults, summary.ref_of(spec, around), cap,
+                                               guess=summary.guess_of(spec, analysis), after_sec=summary.after_of(cfg)), spec))
     if not found:
         return None, False
     try:

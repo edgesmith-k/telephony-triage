@@ -26,7 +26,8 @@
   로그 한 곳에서만 찾았으면 그 시각 `clue_at`). `run`은 타임라인을 만들지 않고 이전 `timeline.md`·입력 파일을 지운다 — 다만 탐색을 시작한
   뒤(`timeline.md`가 있던 작업) 다시 한 run이 새 입력 파일을 쓰면 끝에 같은 `explore`로 타임라인을 다시 만든다(출력은 run JSON 하나).
 - `triage.py explore <KEY> [--out <dir>]`: 사용자가 탐색 분석에 동의한 뒤(또는 `--explore`·`explore.when: always`) `JOB/explore-input.json`과
-  `events.json`으로 `JOB/timeline.md`(마스킹된 요약 타임라인, 줄 수 상한 기본 200)를 만들고 `report.md`의 탐색 분석 줄을 갱신한다.
+  `events.json`으로 `JOB/timeline.md`(마스킹된 요약 타임라인, 줄 수 상한 기본 200 — 넘치면 요약과 같은 기준 시각 둘레를 고른다,
+  `summary.timeline_center`)를 만들고 `report.md`의 탐색 분석 줄을 갱신한다.
   출력 `{timeline, lines, total}`. 작업 플랫폼이 기본(android)이 아니면 `platform`과 `refs`(그 플랫폼 탐색 지식 문서, 스킬 디렉토리 기준
   `reference/platforms/<p>/*.md`, 없으면 빈 목록)를 더한다(17-platforms §10). 종료 코드 1 = 해당 없음(입력 파일 없음), 2 = 사용 오류·
   `events.json` 없음. lock은 쓰지 않고 trace에는 `explore` 정보 행만 덧붙인다. 타임라인은 `masking.redact`로 한 번 더 가리고, 가린 것이 있으면 `mask_warnings`
@@ -317,9 +318,9 @@ def _anomaly(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, ite
         return None
     analysis = analysis if isinstance(analysis, dict) else {}
     try:      # 표시 전용 — 사본 읽기·고르기가 실패해도 탐색 타임라인은 지금처럼 만든다
-        found = window.anomaly(job, events, analysis, defaults, summary.ref_of(spec), summary.after_of(cfg),
-                               _int_setting(cfg, "explore.anomaly_max_lines", 80, 400), shown_keys(items), recs,
-                               summary.guess_of(spec, analysis))
+        found = summary.labeled(window.anomaly(job, events, analysis, defaults, summary.ref_of(spec), summary.after_of(cfg),
+                                               _int_setting(cfg, "explore.anomaly_max_lines", 80, 400), shown_keys(items), recs,
+                                               summary.guess_of(spec, analysis)), spec)
     except Exception as exc:  # noqa: BLE001
         print(f"경고: 이상 줄 절을 만들지 못해 뺐다({type(exc).__name__})", file=sys.stderr)
         return None
@@ -334,8 +335,8 @@ def _summary(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, rec
     except (OSError, ValueError):
         return None
     analysis = analysis if isinstance(analysis, dict) else {}
-    return summary.safe(job, events, analysis, defaults, summary.ref_of(spec), summary.cap_of(cfg), recs, skipped,
-                        summary.guess_of(spec, analysis), summary.after_of(cfg))
+    return summary.labeled(summary.safe(job, events, analysis, defaults, summary.ref_of(spec), summary.cap_of(cfg), recs,
+                                        skipped, summary.guess_of(spec, analysis), summary.after_of(cfg)), spec)
 
 
 def _copy_records(job: Path, defaults: dict, events: dict):
@@ -365,7 +366,9 @@ def _explore(args, cfg: dict, job: Path, defaults: dict, emit: bool = True) -> i
     except (OSError, ValueError) as exc:
         print(f"탐색 입력을 읽지 못했다({exc}) — 이 키로 /telephony-triage:analyze를 다시 실행한다", file=sys.stderr)
         return USAGE
-    items, total = select_rows(merge_rows(events), spec.get("around"), limit)
+    from triagelib import summary
+    centers, basis = summary.timeline_center(spec)      # 요약·이상 줄 절과 같은 기준(`modulecmd._explore_inputs`도 이것)
+    items, total = select_rows(merge_rows(events), centers, limit)
     kept = len(items)
     # 이상 줄 절·전체 모양 요약(표시 전용)은 explore-input.json `anomaly`·`summary`에 남긴다 — `module`의 재계산(E1)·모듈 보기가
     # 같은 줄을 쓴다
@@ -378,7 +381,7 @@ def _explore(args, cfg: dict, job: Path, defaults: dict, emit: bool = True) -> i
         input_path.write_text(json.dumps(spec, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
     text = render_timeline(args.key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
                            spec.get("anchor"), spec.get("look_at"), head_notes(job, events, spec.get("around")),
-                           spec.get("anomaly"), spec.get("summary"))
+                           spec.get("anomaly"), spec.get("summary"), basis)
     # 마스킹 전 JOB이어도 남은 값은 가린다(B2-25). 마스킹 끔 DB의 events(`mask_off`)면 가리지 않는다(08-safety §8)
     text, redacted = (text, {}) if events.get("mask_off") else masking.redact(text, events.get("mask_allow") or [])
     (job / TIMELINE_FILE).write_text(text, encoding="utf-8", newline="\n")
