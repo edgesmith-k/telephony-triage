@@ -646,6 +646,10 @@ def test_flow_hint_put_flow_only_when_later_step_line_appeared():
                     "다음 망 검증 줄이 나와 문구가 바뀌었을 수 있다" + PUT_TAIL)
     for version in ("17", None, "Android 16"):                       # 버전이 같거나 모르면 없다
         assert _hint(worded, ("data-setup",), version) == [], version
+    # 뒤 단계가 진행된 없음: "찾지 못함 — 뒤 단계 진행됨"으로 쓰고 의심되는 곳을 붙이지 않는다(제안 줄은 그대로)
+    lines = _lines(worded, ("data-setup",), "16")
+    assert "연결 줄을 로그에서 찾지 못함 — 뒤 단계(망 검증)는 진행됨" in lines[1] and "줄이 로그에 없음" not in lines[1]
+    assert not any("의심되는 곳" in x for x in lines) and lines[2].strip() == line
     assert _check(_normal()[:3] + [TICK])[0]["instances"][0]["later_step"] is None
     assert _hint(_normal()[:3] + [TICK], ("data-setup",), "16") == [], "뒤 단계 줄이 없으면 실제로 멈춘 것일 수 있다"
     silent = RADIO[:3] + [TICK]                                      # RIL 응답 없음(모뎀 무응답)

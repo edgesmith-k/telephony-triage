@@ -559,7 +559,7 @@ note: {{선택, 한 줄}}
 | fixed 또는 fix-submitted, 같은 브랜치 규칙이 없거나 파싱 불가, `fixed_in`에 빌드 없음, Jira SW 없음 | 판단 불가 | 두 값을 나란히 보여주고 사용자에게 판단을 맡긴다 |
 | fix-submitted, Jira SW < fixed_in | 수정 대기 빌드 | "수정 CL 반영 전 빌드. 업데이트 후 verify-fix 권고" |
 | fix-submitted, Jira SW ≥ fixed_in | **수정 미흡 의심** | "수정 반영 빌드에서 발생. verify-fix 실패 가능성" |
-| open | 미수정 | "미수정 원인. 기존 Jira N건" |
+| open | 수정 기록 없음(이 빌드에 수정이 들어갔는지 판정 아님) | "이슈 DB에 수정 기록 없음(이 빌드 판정 아님). 기존 Jira N건" |
 
 - **회귀 의심**(fixed): Step 7에서 사용자 확인 후 `update-fix` op로 `fix.status`를 `open`으로 되돌릴지 묻는다.
 - **수정 미흡 의심**(fix-submitted): 원인 시그니처가 충족(C=1)됐으면 재발 근거가 이미 있으므로, Step 7에서 두 선택지를 준다: "`update-fix` → open + 실패 이력 기록"(`history: {result: failed, build, issue}`. 이 로그를 `recurrence` fixture로 추가할지 함께 묻는다) / "이 로그로 `verify-fix` 실행". C=0이면 verify-fix만 제안한다.
