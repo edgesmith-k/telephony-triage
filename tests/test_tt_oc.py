@@ -62,6 +62,8 @@ if args[:1] == ["run"]:
 sys.exit(9)
 '''
 
+AGENT_MD = '---\ndescription: x\npermission: {"*": "deny", "read": "allow"}\n---\nbody\n'
+
 CONFIG_OK = {"snapshot": False, "share": "disabled", "autoupdate": False,
              "permission": {"*": "deny", "task": "deny", "bash": {"*": "deny", "python3 *": "allow"}}}
 
@@ -101,6 +103,9 @@ def env(tmp_path):
     (proj / "opencode.json").write_text("{}", encoding="utf-8")
     (proj / ".opencode" / "plugins").mkdir(parents=True)
     (proj / ".opencode" / "plugins" / "tt-guard.js").write_text("// guard\n", encoding="utf-8")
+    (proj / ".opencode" / "agents").mkdir()
+    for agent in ("triage", "tt-explore"):          # 설치가 에이전트에 둔 설치 permission(gen_opencode agent_permission)
+        (proj / ".opencode" / "agents" / f"{agent}.md").write_text(AGENT_MD, encoding="utf-8")
     write_meta(proj, plug, work)
     stub = tmp_path / "opencode"
     stub.write_text(STUB.replace("#!/usr/bin/env python3", "#!" + sys.executable, 1).replace("__PINNED__", PINNED),
@@ -755,13 +760,18 @@ def test_doctor_star_deny_must_be_first_permission_key(env):
     perm = CONFIG_OK["permission"]
     env["cfg"].write_text(json.dumps({**CONFIG_OK, "permission": {"edit": "deny", "external_directory": {"*": "deny"}, **perm}}),
                           encoding="utf-8")
+    code, rows = _doctor_rows(env)       # 에이전트에 설치 permission이 있으면 에이전트 규칙이 뒤에 붙어 이긴다(1.19.5 실험)
+    assert code == 0 and rows["opencode-config"]["status"] == "ok" and "agent-permission" not in rows, rows
+    (env["proj"] / ".opencode" / "agents" / "tt-explore.md").write_text("---\ndescription: x\npermission:\n  task: deny\n---\n",
+                                                                         encoding="utf-8")      # 이전 설치
     code, rows = _doctor_rows(env)
     detail = rows["opencode-config"]["detail"]
     assert code == 2 and rows["opencode-config"]["status"] == "fail"
-    assert "edit, external_directory" in detail and '"*": "allow"' in detail
+    assert "edit, external_directory" in detail and "install --force" in detail
+    assert rows["agent-permission"]["status"] == "warn" and "install --force" in rows["agent-permission"]["detail"]
     env["cfg"].write_text(json.dumps({**CONFIG_OK, "permission": {**perm, "edit": "deny"}}), encoding="utf-8")
-    code, rows = _doctor_rows(env)
-    assert code == 0 and rows["opencode-config"]["status"] == "ok", rows["opencode-config"]
+    code, rows = _doctor_rows(env)       # "*"가 첫 키면 막히지는 않지만 이전 설치는 warn(전역 전용 허용이 열린다 — I-4)
+    assert code == 0 and rows["opencode-config"]["status"] == "ok" and rows["agent-permission"]["status"] == "warn"
 
 
 @pytest.mark.parametrize("evs,code,outcome", [
@@ -999,7 +1009,7 @@ def test_finish_reason_length_step_limit_and_zero_tokens(env):
     r = tt(env, "--", "x")
     assert r.returncode == 1 and "outcome: length" in r.stdout and "finish: length" in r.stdout and "finish=length" in r.stdout
     agents = env["proj"] / ".opencode" / "agents"
-    agents.mkdir(parents=True)
+    agents.mkdir(parents=True, exist_ok=True)
     (agents / "triage.md").write_text("---\ndescription: x\nmode: primary\nsteps: 3\n---\nbody\n", encoding="utf-8")
     write_meta(env["proj"], env["plug"], env["work"])
     events(env, [*[e for _ in range(2) for e in (ev("step_start"), tool("bash"), step("tool-calls"))], *final("최대 스텝")])

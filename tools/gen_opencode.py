@@ -26,6 +26,8 @@ CLI:
         마다 하나씩 펼친다(없으면 뺀다). 게이트웨이 키는 설정에 쓰지 않는다(`{env:TT_GATEWAY_API_KEY}`).
         `config.py check --roots`의 `read_roots`(풀린 설치 스킬 SKILL.md 폴더 등) 중 플러그인·작업·이슈 DB 밖인 폴더는
         `external_directory`에 읽기 allow로 더한다(B2 R21 — 설정을 바꾸면 다시 설치, `tt-oc doctor`가 경고).
+        설치 permission은 `.opencode/agents/`의 두 에이전트 frontmatter에도 통째로 둔다(같은 키는 에이전트 것 — `agent_permission`,
+        사용자 전역 OpenCode 설정의 permission 키 순서에 흔들리지 않게).
         `<dest>`는 git 레포 밖이어야 한다: `edit` 패턴(`@@*_REL@@` = 앞 `/`를 뗀 절대 경로)은 worktree `/` 기준이다.
         `--work-root`(모델이 쓸 수 있는 곳)가 홈·Python 사용자 site·플러그인·이 레포이거나 그것을 품으면(사용자 site·플러그인·
         레포는 그 안이어도) 거부한다(실제 경로로 비교, 종료 2).
@@ -289,6 +291,21 @@ def add_jira_reads(config: dict, names: list[str]) -> dict:
     return config
 
 
+AGENT_PERMISSION = re.compile(r"^permission:\n(?:[ \t]+.*\n)+", re.MULTILINE)
+
+
+def agent_permission(text: str, perm: dict) -> str:
+    """에이전트 frontmatter `permission`을 설치 permission 통째 + 에이전트 고유 키(같은 키는 에이전트 것)로 바꾼다. 1.19.5는
+    설정 permission을 키 순서대로 규칙으로 펼치는데, 전역 설정에만 있던 키는 합칠 때 프로젝트의 `"*": "deny"` 앞에 와(그 deny가
+    설치한 허용을 이긴다) 전역 전용 허용 키는 그 뒤에 온다(설치 deny를 이긴다). 에이전트 규칙은 설정 규칙 뒤에 붙으므로 여기 둔
+    `"*": "deny"`와 허용 목록이 전역 키 순서와 상관없이 마지막에 이긴다(실험: `opencode debug agent triage`)."""
+    m = AGENT_PERMISSION.search(text, 0, text.find("\n---\n", 4) + 1)         # frontmatter 안에서만
+    if not m:
+        raise UsageError("opencode/agents/*.md frontmatter에 permission 블록이 없다")
+    own = yaml.safe_load(m.group(0))["permission"]
+    return text[:m.start()] + "permission: " + json.dumps({**perm, **own}, ensure_ascii=False) + "\n" + text[m.end():]
+
+
 def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[str] = (),
                   jira_read: list[str] = (), allow_publish: bool = False, provider_model: str | None = None,
                   explore_model: str | None = None, opencode_bin: str | None = None) -> dict[Path, str]:
@@ -320,6 +337,8 @@ def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[st
         for src in sorted((OC / sub).glob("*")) if (OC / sub).is_dir() else []:
             if src.is_file():
                 files[dest / ".opencode" / sub / src.name] = _sub(src.read_text(encoding="utf-8"), values)
+    for p in [p for p in files if p.parent.name == "agents"]:
+        files[p] = agent_permission(files[p], config["permission"])
     if explore_model:                    # 없으면 model 줄이 없다 = 세션 모델을 이어받는다(1.19.5 실험)
         p = dest / ".opencode" / "agents" / "tt-explore.md"
         if files.get(p, "").count(EXPLORE_MODE) != 1:

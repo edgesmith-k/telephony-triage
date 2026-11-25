@@ -82,8 +82,10 @@ opencode/bin/tt-oc --project <dest> -s <세션> -- 2          # 질문에 답하
 - 셸 별칭(alias)은 `setsid`·`nohup`·포털 시작 스크립트에서 풀리지 않는다. 그렇게 띄울 때는 `<venv>/bin/python <레포>/opencode/bin/tt-oc …`처럼
   실제 경로를 쓴다(`.bashrc`의 `TT_OPENCODE`도 그 환경에서는 안 읽힐 수 있다 — install이 남긴 경로가 그때 쓰인다).
 - 사전 점검(버전 = `oc_version.OPENCODE_VERSION`, `snapshot:false`·bash 허용 목록 등 실제 설정, 설치 지문, 자동 지시 파일, `config.py doctor`)이 실패하면
-  시작하지 않는다. 합친 설정의 `permission`에서 `"*"`가 첫 키가 아니어도 실패다 — 전역 OpenCode 설정의 permission 키가 순서를
-  뒤집어 설치가 넣은 허용이 모두 막힌 상태다. 사용자가 전역 설정을 백업한 뒤 그 permission 맨 앞에 `"*": "allow"`를 넣는다.
+  시작하지 않는다. 설치는 설치 permission을 두 에이전트 frontmatter에도 둔다 — OpenCode 1.19.5는 에이전트 규칙을 설정 규칙 뒤에
+  붙이므로, 사용자 전역 OpenCode 설정의 permission 키가 합친 설정의 `"*": "deny"`를 뒤로 밀거나 전역에만 있는 허용을 더해도
+  설치 규칙이 이긴다. 그 전에 설치한 곳은 doctor `agent-permission` 행이 warn이고, 전역 키 때문에 `"*"`가 첫 키가 아니면
+  `opencode-config`가 fail이다(설치가 넣은 허용이 모두 막힌 상태) — 둘 다 `install --force`로 다시 설치하면 풀린다.
 - bash는 분석 스크립트(`python3 "<plugin>/scripts/<이름>.py" …`, 절대 경로)와 읽기 명령(ls·cat·head·tail·grep·find·git log 등)만
   돈다(`oc_adapter.py` 허용 목록 — 셸 펼침·파일 리디렉션·대입·스크립트 파일·`python3 -c`·중첩 `opencode`/`claude`는 거부).
   `TT_LOCK_OWNER=` 대입도 거부라 analyze 작업의 `db_pr`·`db_verify`는 lock owner를 작업 상태(`triage-state.json`)에서 읽는다(`dbpr/lock.py`). 생성 커맨드 안내(`gen_opencode.LOCK_NOTE`)가 접두를 붙이지 말라고 하고, 그래도 붙이면 거부 사유가 "접두만 빼고 같은 명령"을 알린다(`[telephony-triage] retry without TT_LOCK_OWNER=` — 에이전트 규칙 6에 적힌 예외, 다시 돌렸으면 tt-oc는 막힌 호출로 세지 않는다).

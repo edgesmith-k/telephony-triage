@@ -6,7 +6,8 @@
   `OPENCODE_PERMISSION`이 설정 deny를, `OPENCODE_CONFIG_CONTENT`가 `snapshot:false`를 이겼다 — 계획 I x3b·x4).
 - 사전 점검(`doctor`): opencode 버전 = `PINNED`, 프로젝트 폴더(`gen_opencode.py install` 결과)가 git 레포 밖, `opencode debug config`의
   `snapshot:false`·`share:"disabled"`·`autoupdate:false`·`permission["*"]:"deny"`·`permission.task:{"*":"deny","tt-explore":"allow"}`
-  (또는 통째로 `"deny"`), `permission`의 첫 키가 `"*"`(전역 설정 키가 앞에 오면 `"*": "deny"`가 설치한 허용을 모두 이긴다),
+  (또는 통째로 `"deny"`), 에이전트(triage·tt-explore) frontmatter에 설치 permission이 있는지(없으면 이전 설치 — `agent-permission` warn,
+  그때 `permission`의 첫 키가 `"*"`가 아니면 fail: 전역 설정 키가 앞에 와 `"*": "deny"`가 설치한 허용을 모두 이긴다),
   `config.py doctor` 통과, guard가 쓰는 python(`TT_PYTHON` — 이 래퍼가 자기 python으로
   채운다)과 자식 PATH의 python3이 `oc_adapter.py selftest`를 통과(`guard-python`·`script-python`).
   하나라도 실패하면 시작하지 않는다(종료 코드 2). 예외(warn, 시작함): doctor의 fail이 `module_skills` 행뿐이면 "모듈 문서 받기는
@@ -294,6 +295,16 @@ def config_problems(cfg: dict) -> list[str]:
     return out
 
 
+def agent_has_permission(proj: Path, agent: str) -> bool:
+    """설치가 에이전트 frontmatter에 설치 permission(첫 키 `"*": "deny"`)을 한 줄 JSON으로 뒀는지(gen_opencode `agent_permission`)."""
+    try:
+        head = (proj / ".opencode" / "agents" / f"{agent}.md").read_text(encoding="utf-8").split("\n---", 1)[0]
+        m = re.search(r"^permission: (\{.*\})$", head, re.MULTILINE)
+        return bool(m) and list(json.loads(m.group(1)).items())[:1] == [("*", "deny")]
+    except (OSError, ValueError):
+        return False
+
+
 def version_row(oc: str, env: dict) -> tuple[dict, bool]:
     """(`opencode-version` 행, 실행했는지). 버전 = `PINNED`일 때만 ok. `tools/site_step.py runtime-check opencode`도 쓴다."""
     try:
@@ -418,6 +429,11 @@ def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
                               "고정한 바이너리는 직접 실행하지 않는다(tt-oc로만)")
     rows.append(ver_row)
     rows += python_rows(proj, meta, env)
+    agents_ok = all(agent_has_permission(proj, a) for a in (AGENT, OCV.TASK_AGENT))
+    if not agents_ok:
+        rows.append({"check": "agent-permission", "status": "warn", "detail": "이전 설치: 에이전트(triage·tt-explore)에 설치 "
+                     "permission이 없다 — 전역 OpenCode 설정에 permission 키가 있으면 설치가 넣은 허용이 막히거나(키 순서) 전역에만 "
+                     "있는 허용이 이 프로젝트에서도 열린다. tools/gen_opencode.py install --force로 다시 설치한다"})
     if not ran:
         return rows + [{"check": "opencode-config", "status": "fail", "detail": "건너뜀(opencode 실행 실패)"}]
     try:
@@ -431,14 +447,14 @@ def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
     elif isinstance(cfg, dict):
         wrong = config_problems(cfg)
         # OpenCode는 permission을 키 순서대로 규칙으로 펼치고 마지막 일치를 쓴다. 전역 설정에만 있던 키가 합칠 때 앞에 오면
-        # 프로젝트의 "*": "deny"가 그 뒤로 가 설치가 넣은 허용(external_directory·bash·read)을 모두 이긴다(1.19.5 사내 재현)
+        # 프로젝트의 "*": "deny"가 그 뒤로 가 설치가 넣은 허용(external_directory·bash·read)을 모두 이긴다(1.19.5 사내 재현).
+        # 에이전트에 설치 permission을 둔 설치(gen_opencode `agent_permission`)는 에이전트 규칙이 뒤에 붙어 상관없다
         perm = cfg.get("permission") if isinstance(cfg.get("permission"), dict) else {}
         keys = list(perm)
-        if perm.get("*") == "deny" and keys[0] != "*":
-            wrong.append(f'permission["*"]가 첫 키가 아니다(앞에 온 키: {", ".join(keys[:keys.index("*")])}) — 전역 OpenCode 설정'
-                         "(보통 ~/.config/opencode/opencode.json, 위치는 opencode debug paths의 config)의 permission 키가 순서를 "
-                         "뒤집어 설치가 넣은 허용이 모두 막힌다. "
-                         '그 파일을 백업한 뒤 permission 맨 앞에 "*": "allow" 한 줄을 사용자가 직접 넣는다')
+        if perm.get("*") == "deny" and keys[0] != "*" and not agents_ok:
+            wrong.append(f'permission["*"]가 첫 키가 아니다(앞에 온 키: {", ".join(keys[:keys.index("*")])}) — 전역 OpenCode 설정의 '
+                         "permission 키가 순서를 뒤집어 설치가 넣은 허용이 모두 막힌다. tools/gen_opencode.py install --force로 "
+                         "다시 설치하면 풀린다(agent-permission 행)")
         state = TASK_STATE_TEXT.get(OCV.task_rule_state((cfg.get("permission") or {}).get("task")), "")
         row("opencode-config", not wrong, f"snapshot:false·share:disabled·autoupdate:false·허용 목록·{state}" if not wrong
             else "설정 불일치: " + ", ".join(wrong))
