@@ -112,13 +112,16 @@ EXPLORE_RX = {f: _label_rx(f) for f in EXPLORE_FIELDS[1:] + EXPLORE_OPTIONAL + E
 CHAIN_LABELS = ("기대 체인", "첫 갈라짐", "찾았는데 없음", "메커니즘 재계산", "책임 경계")
 CHAIN_RX = {f: _label_rx(f) for f in CHAIN_LABELS}
 STEP_NUM_RX = re.compile(r"(\d+)")
-# 일치 칸: 앞부분만 본다(`false — 재요청 없음`·`**불일치**.`). 불일치를 일치보다 먼저. 기호 ❌✗ = false, ✅✓ = true
-_VERDICT_RX = re.compile(r"^(불일치|거짓|false|일치|참|true)", re.IGNORECASE)
-_VERDICT = {"불일치": "false", "거짓": "false", "false": "false", "일치": "true", "참": "true", "true": "true"}
-# 관측 칸이 인용인가: 따옴표·앞뒤 `(window-n)`·`[…]` 표시를 뗀 뒤 시각(`HH:MM:SS`, logcat `MM-DD HH:MM:SS`, ISO 날짜+시각)으로 시작할 때만.
+# 일치 칸: 앞부분만 본다(`false — 재요청 없음`·`**불일치**.`). 불일치를 일치보다 먼저. 기호 ❌✗×·X = false, ✅✓○·O = true,
+# `아니오`·`아니요` = false(11/25 R-07). 못 읽으면 `?`(명시한 `모름`과 다르다 — check-output이 그 칸을 형식 경고로 가리킨다)
+_VERDICT_RX = re.compile(r"^(불일치|거짓|false|아니오|아니요|일치|참|true|o|○|x|×)(?![a-z])", re.IGNORECASE)
+_VERDICT = {"불일치": "false", "거짓": "false", "false": "false", "아니오": "false", "아니요": "false", "x": "false", "×": "false",
+            "일치": "true", "참": "true", "true": "true", "o": "true", "○": "true"}
+# 관측 칸이 인용인가: 따옴표·앞뒤 `(window-n)`·`[…]` 표시를 뗀 뒤 시각(`HH:MM:SS`, logcat `MM-DD HH:MM:SS`, ISO 날짜+시각, syslog
+# `Mon DD HH:MM:SS`)으로 시작할 때만.
 # `없음(찾은 곳 …)`·`찾지 못함`·`—`·`N/A`·`미관측`처럼 시각이 없는 칸은 인용이 아니다(원문에 없음·약함으로 세지 않는다)
 _OBS_TAG_RX = re.compile(r"^\s*[(\[][^()\[\]]{0,40}[)\]]\s*|\s*[(\[]window-\d+(?:\.md)?[)\]]\s*$", re.IGNORECASE)
-_OBS_TIME_RX = re.compile(r"^(?:\d{4}-\d{2}-\d{2}[T ]|\d{2}-\d{2}\s+)?\d{2}:\d{2}:\d{2}")
+_OBS_TIME_RX = re.compile(r"^(?:\d{4}-\d{2}-\d{2}[T ]|\d{2}-\d{2}\s+|[A-Z][a-z]{2}\s+\d{1,2}\s+)?\d{2}:\d{2}:\d{2}")   # 끝: syslog `Sep 20`
 # sim1122 F2: `1위 판단: <원인 ID> 적합|부적합|모름 — <이유>`(채택 원인이 이번 실패를 설명하는지, 선택 칸, 출력 어디에 있어도 첫
 # `1위 판단` 줄). ID는 값 앞·머리 괄호(`1위 판단(<ID>):`)·없음(옛 형식) 모두 읽고, 값 뒤 문장부호도 받는다. 형식 실패로 만들지 않는다
 TOP_FIT_HEAD_RX = re.compile(r"^\s*(?:[-*]\s*)?\**\s*1위\s*판단")
@@ -340,8 +343,10 @@ def _verdict(cell: str) -> str:
         return "false"
     if s.startswith(("✅", "✓")):
         return "true"
+    if s.startswith("모름"):
+        return "모름"
     m = _VERDICT_RX.match(s)
-    return _VERDICT[m.group(1).lower()] if m else "모름"
+    return _VERDICT[m.group(1).lower()] if m else "?"
 
 
 def _chain_row(cells: list[str], cols: dict | None) -> dict | None:
@@ -639,19 +644,21 @@ def _raw_rxs() -> tuple[tuple, dict]:
     return _RAW_RXS
 
 
+def raw_stamp(line: str) -> dict | None:
+    """원문 모양 한 줄의 정규식 칸(`year`·`mon`|`bmon`·`day`·`h`·`mi`·`s`·`frac`·`zone`·`level`·`tag`|`ident`·`sev`·`msg` 중 있는 것).
+    모양이 다르면 None. check-output 게이트가 인용 시각을 읽는다(logcat·oFono ISO·BSD·BusyBox 같은 식)."""
+    s = ws(QUOTE_CHARS_RX.sub("", line or ""))
+    return next((m.groupdict() for rx in _raw_rxs()[0] if (m := rx.match(s))), None)
+
+
 def _raw_fields(line: str) -> dict | None:
     """원문 모양 한 줄 → {time, level, tag, msg}(시각은 로그에 적힌 그대로, 레벨 없는 syslog는 `-`). 모양이 다르면 None."""
-    s = ws(QUOTE_CHARS_RX.sub("", line or ""))
-    rxs, sev = _raw_rxs()
-    for rx in rxs:
-        m = rx.match(s)
-        if not m:
-            continue
-        g = m.groupdict()
-        level = g.get("level") or sev.get(g.get("sev") or "", "-")
-        return {"time": f"{g['h']}:{g['mi']}:{g['s']}" + (f".{g['frac']}" if g.get("frac") else ""), "level": level,
-                "tag": (g.get("tag") or g.get("ident") or "").strip(), "msg": g.get("msg") or ""}
-    return None
+    g = raw_stamp(line)
+    if g is None:
+        return None
+    level = g.get("level") or _raw_rxs()[1].get(g.get("sev") or "", "-")
+    return {"time": f"{g['h']}:{g['mi']}:{g['s']}" + (f".{g['frac']}" if g.get("frac") else ""), "level": level,
+            "tag": (g.get("tag") or g.get("ident") or "").strip(), "msg": g.get("msg") or ""}
 
 
 def raw_row(line: str) -> str | None:

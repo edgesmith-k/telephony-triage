@@ -387,8 +387,10 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
     # CAUSE
     s["CAUSE"].append(_line(f"분류: {cl['cls']} — {cl['confirm']}"))
     s["CAUSE"] += [_line(t) for t in cl["lines"]]
-    inv = a.get("investigation")      # 조사 결론(check-output 게이트): 검증 통과면 CAUSE 맨 위, 근거 부족이면 분류 줄 아래
+    # 조사 결론(check-output 게이트): 통과면 CAUSE 맨 위, 근거 부족이면 분류 줄 아래. analysis.json이 아니라 check-output 기록에서 읽는다
+    # (R-11: analysis.json은 모델이 고쳐 쓸 수 있고 check-output.json은 guard가 막는다)
     explore_rec = (_read(rec_path, "check-output.json") or {}).get("explore") or {}
+    inv = explore_rec.get("investigation") if isinstance(explore_rec, dict) else None
     if isinstance(inv, dict) and isinstance(explore_rec, dict) and inv.get("explore_sha") == explore_rec.get("output_sha256"):     # 지금 탐색 검사의 결론만
         cands = [c for c in a.get("candidates") or [] if isinstance(c, dict)]
         rows = [_line(t.lstrip(" -")) for t in issuepost.investigation_lines(inv, cands[0] if cands else None, why=False)]

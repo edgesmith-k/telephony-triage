@@ -104,8 +104,8 @@ def test_all_gates_pass_is_identified_on_top_of_cause(tmp_path, capsys):
     assert [g["name"] for g in inv["gate"]] == ["인용 원문", "첫 어긋남", "책임 층", "실패 뒤 흔적", "숫자 메커니즘", "외부 근거"]
     assert inv["explore_sha"] == _sha(job / "explore-output.md")
     rows = _cause_rows(job)
-    assert rows[0].startswith("- 조사 결론 (LLM, 검증 통과): vrild가 SETUP_DATA_CALL을 인증 실패로 끝냄 / 첫 어긋남: 단계 2")
-    assert "책임 층: CP 내부 / 근거 줄: identified" in rows[0] and rows[2:] == CAUSE_HEAD[1:]     # 기존 칸·순서 그대로
+    assert rows[0].startswith("- 조사 결론 (LLM, 인용·형식 확인): vrild가 SETUP_DATA_CALL을 인증 실패로 끝냄 / 첫 어긋남: 단계 2")
+    assert rows[0].endswith("책임 층: CP 내부") and rows[3:] == CAUSE_HEAD[1:]     # 설명·보류 하위 줄 뒤 기존 칸·순서 그대로
     rec = json.loads((job / "check-output.json").read_text(encoding="utf-8"))["explore"]
     assert rec["investigation"] == inv
     assert report.schema_violation(json.loads((job / "analysis.json").read_text(encoding="utf-8"))) is None
@@ -156,9 +156,9 @@ def test_cp_conclusion_without_cp_tag_quote_fails_gate_6(tmp_path, capsys):
     rows = ["| 1 | SETUP 요청이 나간다 | AP 내부 | log:15:10:00 | " + Q0 + " | true |",
             "| 2 | SETUP 응답이 성공 | CP 내부 | spec:x | " + Q_W + " | false |"]
     _data, inv = _run(_job(tmp_path / "a"), _out(quotes=(Q_W, Q_AFTER), rows=rows), capsys)
-    assert _failed(inv) == ["외부 근거"] and "CP 태그 줄 없음" in inv["gate"][5]["why"]
+    assert _failed(inv) == ["외부 근거"] and inv["gate"][5]["why"] == "결론 쪽(CP) 태그 줄 인용 없음"
     _data, inv = _run(_job(tmp_path / "b", cp_mark=False), _out(), capsys)      # tags.yaml에 CP 표시가 없다
-    assert _failed(inv) == ["외부 근거"] and inv["gate"][5]["why"] == "tags.yaml에 CP/망 표시 없음"
+    assert _failed(inv) == ["외부 근거"] and inv["gate"][5]["why"] == "사내 태그 설정에 CP/망 표시 없음(설정 전)"
 
 
 def test_window_after_reference_counts_as_looking_after(tmp_path, capsys):
@@ -209,7 +209,7 @@ def test_recheck_replaces_the_investigation_line(tmp_path, capsys):
     _data, inv = _run(job, _out(), capsys)
     rows = _cause_rows(job)
     assert inv["status"] == "identified" and sum(r.startswith(issuepost.INVESTIGATION_PREFIX) for r in rows) == 1
-    assert rows[0].startswith("- 조사 결론 (LLM, 검증 통과)")
+    assert rows[0].startswith("- 조사 결론 (LLM, 인용·형식 확인)")
 
 
 def test_rule_top_c0_differs_moves_under_as_observed_match(tmp_path, capsys):
@@ -217,7 +217,8 @@ def test_rule_top_c0_differs_moves_under_as_observed_match(tmp_path, capsys):
     job = _job(tmp_path, cands=[top])
     _data, inv = _run(job, _out(), capsys)
     assert json.loads((job / "analysis.json").read_text(encoding="utf-8"))["investigate"] == {"mode": True, "reason": "1위 C=0"}
-    assert _cause_rows(job)[1] == ("  - 관측된 규칙 일치: data > DATA-001 > 원인 미확인 — 규칙 1위(원인 일치 없음), 조사 결론과 다름")
+    assert _cause_rows(job)[2] == ("  - 관측된 규칙 일치: data > DATA-001 > 원인 미확인 — 규칙 1위(원인 일치 없음), 조사 결론과 같다고 "
+                                   "확인되지 않음")
 
 
 def test_jira_cause_has_investigation_on_top_or_below(tmp_path, capsys):
@@ -226,10 +227,15 @@ def test_jira_cause_has_investigation_on_top_or_below(tmp_path, capsys):
     fake = types.SimpleNamespace(path=lambda n: job / n, tracker=trackers.get("jira"), key="MOCK-9076", db_cfg={})
     a = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
     cause = [i["text"] for i in issue_post.build(fake, a, None, None, set())[0]["CAUSE"]]
-    assert cause[0].startswith("조사 결론 (LLM, 검증 통과): ") and cause[2].startswith("분류: 후보 없음")
-    assert not any("Step 7" in t for t in cause) and "규칙 판정은 보류, 조사 결론은 검증 통과" in cause[1]     # 리뷰 L6
-    a["investigation"] = {**a["investigation"], "status": "insufficient_evidence",
-                          "gate": [{**g, "ok": g["name"] != "책임 층"} for g in a["investigation"]["gate"]]}
+    assert cause[0].startswith("조사 결론 (LLM, 인용·형식 확인): ") and cause[3].startswith("분류: 후보 없음")
+    assert cause[1] == issuepost.INVESTIGATION_NOTE.lstrip(" -")
+    assert not any("Step 7" in t for t in cause) and cause[2].startswith("규칙 판정은 보류 — ")     # 리뷰 L6
+    path = job / "check-output.json"           # R-11: Jira는 check-output 기록의 investigation을 읽는다
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    inv = rec["explore"]["investigation"]
+    rec["explore"]["investigation"] = {**inv, "status": "insufficient_evidence",
+                                       "gate": [{**g, "ok": g["name"] != "책임 층"} for g in inv["gate"]]}
+    path.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
     cause = [i["text"] for i in issue_post.build(fake, a, None, None, set())[0]["CAUSE"]]
     assert cause[0].startswith("분류: 후보 없음")
     inv_at = next(i for i, t in enumerate(cause) if t.startswith("조사 결론 (LLM, 근거 부족): "))
@@ -270,12 +276,15 @@ def test_skipped_or_failed_explore_clears_old_investigation(tmp_path, capsys):
 
 
 def test_jira_ignores_investigation_of_another_explore_output(tmp_path, capsys):
-    """리뷰 M1: analysis.json investigation의 explore_sha가 지금 탐색 검사 기록과 다르면 Jira 본문에 싣지 않는다."""
+    """리뷰 M1: 기록 investigation의 explore_sha가 지금 탐색 검사 기록(output_sha256)과 다르면 Jira 본문에 싣지 않는다."""
     job = _job(tmp_path)
     _run(job, _out(), capsys)
     fake = types.SimpleNamespace(path=lambda n: job / n, tracker=trackers.get("jira"), key="MOCK-9076", db_cfg={})
     a = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
-    a["investigation"]["explore_sha"] = "0" * 64
+    path = job / "check-output.json"
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    rec["explore"]["investigation"]["explore_sha"] = "0" * 64
+    path.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
     cause = [i["text"] for i in issue_post.build(fake, a, None, None, set())[0]["CAUSE"]]
     assert not any(t.startswith("조사 결론") for t in cause)
 
@@ -328,4 +337,224 @@ def test_number_unit_and_explore_question_and_report_core_patterns():
     assert all(rx.search(t) for t in ("5 sec 뒤", "10 seconds", "3 times", "5s", "300ms", "2 min", "5초", "3회"))
     assert show_guard.EXPLORE_Q.search("조사할까요? (심층 분석 뒤 탐색 분석, 토큰 추가 사용)")
     assert not show_guard.EXPLORE_Q.search("다른 원인을 더 조사할까요?")
-    assert shown.REPORT_CORE.match("- 조사 결론 (LLM, 검증 통과): x")
+    assert shown.REPORT_CORE.match("- 조사 결론 (LLM, 인용·형식 확인): x")
+
+
+# --- 11/25 리뷰 고침(조각 ② 판정, R-02~R-27) ---------------------------------------------------------------------
+# 틀린 결론이 통과하던 입력과, 지침대로 쓴 맞는 결론이 떨어지던 입력(사내 모델이 흔히 쓰는 모양)을 남긴다
+
+def _copy(job: Path, lines) -> None:
+    """마스킹 사본(`logs-masked/radio.log`)과 analysis.json `logs.masked` 기록."""
+    (job / "logs-masked").mkdir(exist_ok=True)
+    (job / "logs-masked" / "radio.log").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    a = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    a["logs"] = {**a["logs"], "masked": {"dir": "logs-masked", "files": ["radio.log"], "skipped": []}}
+    (job / "analysis.json").write_text(json.dumps(a, ensure_ascii=False), encoding="utf-8")
+
+
+def _rec(job: Path) -> dict:
+    return json.loads((job / "check-output.json").read_text(encoding="utf-8"))["explore"]
+
+
+ABSENT_ROWS = ["| 1 | SETUP 요청이 나간다 | AP 내부 | log:15:10:00 | " + Q0 + " | true |",
+               "| 2 | 인증 실패 뒤 SETUP을 다시 보낸다 | CP 내부 | spec:x | 없음(찾은 곳: logs-masked 15:10:02 뒤) | false |"]
+ABSENT = ("찾았는데 없음:", "- `SETUP_DATA_CALL` 재요청 — logs-masked 15:10:02 뒤 grep")
+ISO_Q1 = "2026-09-20T15:10:01.200Z host vrild[7]: RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM"
+
+
+def test_r02_unrelated_true_quotes_and_absent_observation_is_not_identified(tmp_path, capsys):
+    """R-02: "달이 파랗다" 가설 + 무관한 진짜 인용 2줄 + 관측 `없음` → 통과하던 것. 가장 이른 false 단계의 관측이 원문 확인 인용도
+    셀 수 있는 `찾았는데 없음`도 아니면 첫 어긋남 실패, 형식 경고가 그 칸을 가리킨다."""
+    rows = ["| 1 | 달이 파랗게 빛난다 | AP 내부 | spec:x | 없음 | false |"]
+    data, inv = _run(_job(tmp_path), _out(layer="AP 내부", quotes=(Q0, Q_AFTER), rows=rows, claim="단계 1 — 달이 파랗지 않음",
+                                          head="달이 파랗다"), capsys)
+    assert inv["status"] == "insufficient_evidence" and _failed(inv) == ["첫 어긋남"], inv["gate"]
+    assert any("단계 1" in w and "관측" in w and "찾았는데 없음" in w for w in data["format_warnings"]), data
+
+
+def test_r02_absence_counted_zero_after_reference_passes_and_found_word_fails(tmp_path, capsys):
+    """R-02 (나): 관측 `없음` + `찾았는데 없음` 낱말이 사본에서 기준 시각 뒤 0건이면 통과(기준 앞 줄은 세지 않는다), 있으면 실패하고 건수."""
+    job = _job(tmp_path / "zero")
+    _copy(job, [ISO_Q1])                                      # 기준(15:10:02) 앞 줄만
+    _data, inv = _run(job, _out(rows=ABSENT_ROWS, extra=ABSENT), capsys)
+    assert inv["status"] == "identified", inv["gate"]
+    job = _job(tmp_path / "found")
+    _copy(job, [ISO_Q1, "2026-09-20T15:10:05.000Z host vrild[7]: RIL_REQUEST_SETUP_DATA_CALL retry 1"])
+    _data, inv = _run(job, _out(rows=ABSENT_ROWS, extra=ABSENT), capsys)
+    assert _failed(inv) == ["첫 어긋남"] and "1건" in inv["gate"][1]["why"], inv["gate"]
+    job = _job(tmp_path / "nocopy")                           # 사본 없음: 근거 원문(타임라인)으로 센다 — SETUP_DATA_CALL은 기준 앞뿐
+    _data, inv = _run(job, _out(rows=ABSENT_ROWS, extra=ABSENT), capsys)
+    assert inv["status"] == "identified", inv["gate"]
+
+
+def test_r03_fabricated_quote_in_first_check_blocks_identified_on_recheck(tmp_path, capsys):
+    """R-03: 첫 검사에 지어낸 인용(+형식 경고) → 그 줄만 빼고 다시 검사해도 통과 못 한다."""
+    from tests.test_check_output import FAKE
+    job = _job(tmp_path)
+    data, _inv = _run(job, _out(quotes=(Q1, "15:10:09.000 p0 E ofonod " + FAKE, Q_AFTER), claim="단계 3 — x"), capsys)
+    assert data["fabricated"] == 1 and data["format_warnings"]
+    _data, inv = _run(job, _out(), capsys)
+    assert _failed(inv) == ["인용 원문"] and inv["gate"][0]["why"].startswith("앞 검사에 원문에 없는 인용 1"), inv["gate"]
+
+
+def test_r03_cause_layer_field_is_optional_no_warning():
+    """R-03: `원인 층`은 선택 칸이고 기대는 게이트가 없다 — 없다고 경고하지 않는다(다시 검사가 늘 열리던 것)."""
+    from common import evidence
+    from triagelib import output
+    fields = evidence.parse_explore(_out())
+    assert fields["hyps"][0]["원인 층"] is None and output._chain_warnings(fields, True) == []
+
+
+def test_r04_bsd_syslog_and_zoneless_iso_quotes_count_for_gates_4_and_6(tmp_path, capsys):
+    """R-04: oFono BSD syslog·BusyBox·시간대 없는 ISO 모양 인용의 시각·태그를 게이트 4·6이 읽고, 관측 칸의 그 모양 줄도 인용으로 센다."""
+    shapes = {"bsd": ("Sep 20 15:10:01.200 host vrild[7]: RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM",
+                      "Sep 20 15:10:03.400 host datad[9]: network manager daemon state=disconnected reason=pdn_reject"),
+              "busybox": ("Sep 20 15:10:01.200 host daemon.err vrild[7]: RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM",
+                          "Sep 20 15:10:03.400 host daemon.info datad[9]: network manager daemon state=disconnected reason=pdn_reject"),
+              "iso": ("2026-09-20T15:10:01.200 host vrild[7]: RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM",
+                      "2026-09-20T15:10:03.400 host datad[9]: network manager daemon state=disconnected reason=pdn_reject")}
+    for name, (q1, q_after) in shapes.items():
+        job = _job(tmp_path / name)
+        _copy(job, [q1, q_after])
+        rows = ["| 1 | SETUP 요청이 나간다 | AP 내부 | log:15:10:00 | " + Q0 + " | true |",
+                "| 2 | SETUP 응답이 성공 | CP 내부 | spec:3GPP 24.301 | " + q1 + " | false |"]
+        data, inv = _run(job, _out(quotes=(q1, q_after), rows=rows), capsys)
+        assert data["fabricated"] == 0 and data["quotes"] == 4, (name, data)          # 관측 칸 2줄도 인용
+        assert inv["status"] == "identified", (name, inv["gate"])
+
+
+def test_r05_quote_over_field_limit_is_clipped_not_dropped(tmp_path, capsys):
+    """R-05: 768바이트 넘는 사본 줄을 그대로 인용해도 출력 전체를 버리지 않는다 — 앞부분 + `…`로 대조, 리포트 줄도 앞부분만."""
+    long_line = "2026-09-20T15:10:03.500Z host datad[9]: dump " + " ".join(f"apn{i}=internet.example" for i in range(60))
+    job = _job(tmp_path)
+    _copy(job, [long_line])
+    data, inv = _run(job, _out(quotes=(Q1, long_line)), capsys)
+    assert data["fabricated"] == 0 and inv["status"] == "identified", (data, inv["gate"])
+    line = next(r for r in (job / "report.md").read_text(encoding="utf-8").split("\n") if r.startswith("  - 가설 1"))
+    assert " …" in line and long_line not in line
+
+
+def test_r06_rule_and_module_basis_found_only_in_masked_copy(tmp_path, capsys):
+    """R-06: 규칙 제안·[모듈] 줄의 근거가 사본에만 있어도(타임라인 밖) 사본 대조로 확인돼 실린다."""
+    basis = "policy table refreshed for interface rmnet_data9 entries=12"
+    job = _job(tmp_path)
+    _copy(job, [ISO_Q1, f"2026-09-20T15:10:04.000Z host datad[9]: {basis}"])
+    extra = ("규칙 제안:", f"- [이슈 DB] add-parser-rule file=tags.yaml rule={{tag: datad}} — 근거: {basis}",
+             f"- [모듈] android/data 층 경로 — 정책 표 갱신 줄부터 본다 — 근거: {basis}")
+    _run(job, _out(extra=extra), capsys)
+    rec = _rec(job)
+    assert rec["rules"] == 2 and rec["module_lines"] == [1] and "rules_dropped" not in rec, rec
+
+
+def test_r07_o_x_verdicts_and_cp_abbreviation_read_as_list_values(tmp_path, capsys):
+    """R-07: 일치 칸 O/X, 기대 주체 `CP`·`AP`(뜻이 하나인 줄임)를 읽는다."""
+    rows = ["| 1 | SETUP 요청이 나간다 | AP | log:15:10:00 | " + Q0 + " | O |",
+            "| 2 | SETUP 응답이 성공 | CP | spec:x | " + Q1 + " | X |"]
+    data, inv = _run(_job(tmp_path), _out(rows=rows), capsys)
+    assert inv["status"] == "identified" and "format_warnings" not in data, (inv["gate"], data)
+    from common import evidence
+    assert [evidence._verdict(v) for v in ("○", "×", "아니오", "아니요 — 재요청 없음", "ok?")] == ["true", "false", "false", "false", "?"]
+
+
+def test_r07_unreadable_subject_or_verdict_warning_points_at_the_cell(tmp_path, capsys):
+    """R-07: 기대 주체가 목록 밖(`모뎀(CP)` — 모호한 줄임은 읽지 않는다)·머리 행 없음·일치 칸 못 읽음 → 형식 경고가 그 칸을 가리킨다."""
+    rows = ["| 1 | SETUP 요청이 나간다 | AP 내부 | log:15:10:00 | " + Q0 + " | true |",
+            "| 2 | SETUP 응답이 성공 | 모뎀(CP) | spec:x | " + Q1 + " | false |"]
+    data, inv = _run(_job(tmp_path / "a"), _out(rows=rows), capsys)
+    assert _failed(inv) == ["책임 층"] and any("단계 2" in w and "`모뎀(CP)`" in w for w in data["format_warnings"]), data
+    data, inv = _run(_job(tmp_path / "b"), _out(table=""), capsys)               # 머리 행 없음(6열 자료 행)
+    assert any("단계 2" in w and "`기대 주체`" in w for w in data["format_warnings"]), data
+    rows[1] = rows[1].replace("모뎀(CP)", "CP 내부").replace("| false |", "| 아님 |")
+    data, inv = _run(_job(tmp_path / "c"), _out(rows=rows), capsys)
+    assert any("단계 2" in w and "`일치`" in w for w in data["format_warnings"]), data
+
+
+def test_r08_outer_gate_reasons_split_marker_missing_vs_quote_missing(tmp_path, capsys):
+    rows = ["| 1 | SETUP 요청이 나간다 | AP 내부 | log:15:10:00 | " + Q0 + " | true |",
+            "| 2 | SETUP 응답이 성공 | CP 내부 | spec:x | " + Q_W + " | false |"]
+    _data, inv = _run(_job(tmp_path / "a"), _out(quotes=(Q_W, Q_AFTER), rows=rows), capsys)
+    assert _failed(inv) == ["외부 근거"] and inv["gate"][5]["why"] == "결론 쪽(CP) 태그 줄 인용 없음"
+    _data, inv = _run(_job(tmp_path / "b", cp_mark=False), _out(), capsys)
+    assert _failed(inv) == ["외부 근거"] and inv["gate"][5]["why"] == "사내 태그 설정에 CP/망 표시 없음(설정 전)"
+
+
+def test_r09_identified_investigation_accepts_first_check_and_trap_lines(tmp_path, capsys):
+    """R-09 결정 2: 판단은 보류(조사 모드)여도 이번 조사 결론이 identified면 첫 점검·함정 줄을 받는다. 아니면 빼고 이유는 원인 미확정."""
+    rules = [f"[모듈] android/data {slot} — 한 줄 — 근거: {Q_AFTER}" for slot in ("첫 점검", "함정", "층 경로")]
+    ok = _job(tmp_path / "ok")
+    _run(ok, _out(extra=("규칙 제안:", *[f"- {r}" for r in rules])), capsys)
+    assert _rec(ok)["investigation"]["status"] == "identified" and _rec(ok)["module_lines"] == [1, 2, 3]
+    low = _job(tmp_path / "low")
+    _run(low, _out(quotes=(Q1,), extra=("규칙 제안:", *[f"- {r}" for r in rules], "- [모듈] 형식 틀림")), capsys)
+    rec = _rec(low)
+    assert rec["module_lines"] == [3] and rec["rules_dropped"] == 3 and rec["rules_dropped_why"] == {"형식": 1, "원인 미확정": 2}
+    text = (low / "report.md").read_text(encoding="utf-8")
+    assert "  - 탐색 출력의 제안 3개를 뺐다 — 형식 1 · 원인 미확정(첫 점검·함정) 2" in text
+
+
+def test_r11_jira_reads_investigation_from_check_output_record_not_analysis(tmp_path, capsys):
+    """R-11: analysis.json은 모델이 고쳐 쓸 수 있다 — Jira 본문은 check-output 기록의 investigation을 쓴다."""
+    job = _job(tmp_path)
+    _run(job, _out(quotes=(Q1,)), capsys)                    # 근거 부족
+    a = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    a["investigation"] = {**a["investigation"], "status": "identified", "gate": [{**g, "ok": True} for g in a["investigation"]["gate"]]}
+    fake = types.SimpleNamespace(path=lambda n: job / n, tracker=trackers.get("jira"), key="MOCK-9076", db_cfg={})
+    cause = [i["text"] for i in issue_post.build(fake, a, None, None, set())[0]["CAUSE"]]
+    assert cause[0].startswith("분류: 후보 없음") and any(t.startswith("조사 결론 (LLM, 근거 부족): ") for t in cause)
+
+
+def test_r15_no_confirmed_reference_uses_earliest_quote_not_pass(tmp_path, capsys):
+    """R-15: 확정 기준 시각이 없으면 "해당 없음" 통과가 아니라 가장 이른 원문 확인 인용 시각 뒤 줄·구간이 있어야 한다."""
+    rows = ["| 1 | SETUP 응답이 성공 | CP 내부 | spec:x | " + Q1 + " | false |"]
+    for name, quotes, want in (("one", (Q1,), ["실패 뒤 흔적"]), ("two", (Q1, Q_AFTER), [])):
+        job = _job(tmp_path / name)
+        (job / "explore-input.json").write_text(json.dumps({"limit": 200}), encoding="utf-8")
+        _data, inv = _run(job, _out(quotes=quotes, rows=rows, claim="단계 1 — CP 인증 실패"), capsys)
+        assert _failed(inv) == want, (name, inv["gate"])
+
+
+def test_r16_normal_conclusion_is_marked_not_asked_for_more_logs(tmp_path, capsys):
+    """R-16: 가장 유력이 정상이고 정상 근거 줄이 원문 확인이면 investigation.normal, 문구는 "정상 동작으로 보임"(로그 더 확인 안내 없음)."""
+    rows = ["| 1 | 재시도 뒤 연결된다 | AP 내부 | log:15:10:03 | " + Q_AFTER + " | true |"]
+    job = _job(tmp_path)
+    _data, inv = _run(job, _out(head="정상(설계상 정상 동작) — 거절 뒤 망 관리자가 상태를 정리", quotes=(Q_AFTER,), rows=rows, claim="없음"),
+                      capsys)
+    assert inv["normal"] is True and inv["status"] == "insufficient_evidence"
+    text = "\n".join(_cause_rows(job))
+    assert "- 조사 결론 (LLM, 정상 동작으로 보임): " in text and "원인 조사 대상 아님" in text and "로그를 더 확인" not in text
+    _data, inv = _run(_job(tmp_path / "plain"), _out(), capsys)
+    assert "normal" not in inv
+
+
+def test_r17_elapsed_time_in_hypothesis_head_alone_needs_no_recompute(tmp_path, capsys):
+    """R-17: 숫자 메커니즘 대상은 가장 이른 false 단계의 `기대` 칸뿐 — 가설 머리의 "40초 뒤"만으로 실패하지 않는다."""
+    _data, inv = _run(_job(tmp_path), _out(head="vrild가 attach 40초 뒤 SETUP_DATA_CALL을 인증 실패로 끝냄"), capsys)
+    assert inv["status"] == "identified" and inv["gate"][4]["why"].startswith("해당 없음"), inv["gate"]
+
+
+def test_r24_same_as_rule_top_only_when_candidate_check_says_match(tmp_path, capsys):
+    """R-24: 원인 글에 ID가 들었다는 것만으로 "규칙 1위와 같음"이 아니다 — `후보 확인`에서 그 ID가 `맞음`일 때만."""
+    top = {**OK_KEYS["candidates"][0], "C": 0}
+    head = "DATA-001-01이 아니라 vrild가 SETUP_DATA_CALL을 인증 실패로 끝냄"
+    job = _job(tmp_path / "a", cands=[top])
+    _run(job, _out(head=head), capsys)
+    rows = _cause_rows(job)
+    assert "같음" not in rows[0] and any(r.startswith("  - 관측된 규칙 일치: data > DATA-001 > DATA-001-01") for r in rows)
+    job = _job(tmp_path / "b", cands=[top])
+    _run(job, _out(head=head, extra=("후보 확인:", f"- DATA-001-01: 맞음 — {Q1}")), capsys)
+    assert _cause_rows(job)[0].endswith("(규칙 1위 DATA-001-01와 같음)")
+
+
+def test_r27_unreadable_top_pick_in_investigate_mode_is_a_format_warning(tmp_path, capsys):
+    data, _inv = _run(_job(tmp_path), _out(extra=("가장 유력: 둘째 가설",)), capsys)
+    assert any("가장 유력" in w for w in data["format_warnings"]), data
+
+
+def test_r02_label_says_quotes_and_format_checked_with_one_note(tmp_path, capsys):
+    """R-02 결정 1: 표시 `인용·형식 확인` + 설명 한 문장(바로 아래 한 번). 사람이 보는 글에 status 값(identified)을 쓰지 않는다."""
+    job = _job(tmp_path)
+    _run(job, _out(), capsys)
+    rows = _cause_rows(job)
+    assert rows[0].startswith("- 조사 결론 (LLM, 인용·형식 확인): ") and "identified" not in rows[0]
+    assert rows[1] == ("  - 스크립트가 확인한 것은 인용한 로그 줄이 실제로 있는지와 단계표가 맞는지다. 원인이 맞는지는 사람이 확인한다.")
+    assert sum(issuepost.INVESTIGATION_NOTE.strip() in r for r in rows) == 1

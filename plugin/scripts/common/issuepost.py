@@ -66,34 +66,44 @@ def investigate_mode(analysis: dict) -> dict:
 
 
 INVESTIGATION_PREFIX = "- 조사 결론 (LLM, "
-INVESTIGATION_LABEL = {"identified": "검증 통과", "insufficient_evidence": "근거 부족"}
+# 사람이 보는 표시(값 status는 그대로). 통과는 "검증 통과"가 아니다 — 스크립트는 인용이 원문에 있는지와 단계표 형식만 본다(11/25 결정 1)
+INVESTIGATION_LABEL = {"identified": "인용·형식 확인", "insufficient_evidence": "근거 부족"}
+INVESTIGATION_NOTE = "  - 스크립트가 확인한 것은 인용한 로그 줄이 실제로 있는지와 단계표가 맞는지다. 원인이 맞는지는 사람이 확인한다."
+INVESTIGATION_NORMAL_LABEL = "정상 동작으로 보임"
+INVESTIGATION_NORMAL = "정상 동작으로 보임(회복 줄 원문 확인) — 원인 조사 대상 아님"
 
 
 def investigation_lines(inv: dict, top: dict | None = None, why: bool = True) -> list[str]:
-    """조사 결론(analysis.json `investigation`) → report.md 줄(머리 `- `, 하위 `  - `). Jira 본문(`issue_post`)은 앞 기호를 떼고 같은 글을
-    쓴다. 머리: 원인 한 줄·첫 어긋남(단계와 기대)·책임 층·근거 줄 상태·실패한 검증. 검증 통과이고 규칙 1위(`top`, C=0)가 있으면
-    같은 원인이면 머리 꼬리에, 다르면 `관측된 규칙 일치` 하위 줄로 적는다. 근거 부족은 결론이 아니라고 하위 줄에 밝히고, `why`면
-    실패한 검증의 이유도 하위 줄로(Jira 본문은 CAUSE 칸 상한 때문에 이름만)."""
+    """조사 결론(check-output 기록 `investigation`) → report.md 줄(머리 `- `, 하위 `  - `). Jira 본문(`issue_post`)은 앞 기호를 떼고 같은
+    글을 쓴다. 머리: 원인 한 줄·첫 어긋남(단계와 기대)·책임 층·실패한 검증. 통과(인용·형식 확인)면 바로 아래 설명 한 줄
+    (`INVESTIGATION_NOTE`)을 한 번, 규칙 1위(`top`, C=0)가 있으면 `후보 확인`이 그 ID를 맞음이라 했을 때(`top_match`)만 머리 꼬리에
+    같다고, 아니면 `관측된 규칙 일치` 하위 줄로 적는다. 근거 부족은 결론이 아니라고 하위 줄에 밝히고, `why`면 실패한 검증의 이유도
+    하위 줄로(Jira 본문은 CAUSE 칸 상한 때문에 이름만). `normal`(가장 유력이 정상, 근거 줄 원문 확인)이면 게이트 대신
+    `INVESTIGATION_NORMAL` — 로그를 더 확인하라고 하지 않는다."""
     ok = inv.get("status") == "identified"
-    head = f"{INVESTIGATION_PREFIX}{INVESTIGATION_LABEL.get(inv.get('status'), '근거 부족')}): "
+    normal = bool(inv.get("normal")) and not ok
+    head = f"{INVESTIGATION_PREFIX}{INVESTIGATION_NORMAL_LABEL if normal else INVESTIGATION_LABEL.get(inv.get('status'), '근거 부족')}): "
     if inv.get("hyp") is None:
         return [head + "가설 없음 — 원인 보류 그대로"]
+    if normal:
+        return [head + f"{inv.get('cause')} / {INVESTIGATION_NORMAL}", "  - 원인은 보류 그대로 — 점수·분류·이슈 DB 기록은 그대로다"]
     fd = inv.get("first_divergence") or {}
     failed = [g for g in inv.get("gate") or [] if not g.get("ok")]
     out = [head + f"{inv.get('cause')} / 첫 어긋남: " + (f"단계 {fd.get('step')} — {fd.get('expect')}" if fd else "없음")
-           + f" / 책임 층: {inv.get('layer') or '없음'} / 근거 줄: {inv.get('status')}"
+           + f" / 책임 층: {inv.get('layer') or '없음'}"
            + (f" / 실패한 검증: {', '.join(str(g.get('name')) for g in failed)}" if failed else "")]
+    if ok:
+        out.append(INVESTIGATION_NOTE)
     if why and failed:
         out.append("  - 실패 이유: " + "; ".join(f"{g.get('name')} — {g.get('why')}" for g in failed))
     cause = (top or {}).get("cause")
     if ok and top:
-        if cause and cause in str(inv.get("cause") or ""):
+        if cause and inv.get("top_match"):
             out[0] += f" (규칙 1위 {cause}와 같음)"
         else:
             out.append(f"  - 관측된 규칙 일치: {top.get('category')} > {top.get('type')} > {cause or '원인 미확인'} — 규칙 1위"
-                       "(원인 일치 없음), 조사 결론과 다름")
-    out.append("  - 규칙 판정은 보류, 조사 결론은 검증 통과 — 점수·분류·이슈 DB 기록은 그대로다. 이 원인으로 기록하려면 분류할 때 "
-               "새 원인을 고른다" if ok else
+                       "(원인 일치 없음), 조사 결론과 같다고 확인되지 않음")
+    out.append("  - 규칙 판정은 보류 — 점수·분류·이슈 DB 기록은 그대로다. 이 원인으로 기록하려면 분류할 때 새 원인을 고른다" if ok else
                "  - 근거가 모자라 결론으로 쓰지 않는다 — 원인은 보류 그대로. 실패한 검증을 보고 로그를 더 확인한다")
     return out
 
