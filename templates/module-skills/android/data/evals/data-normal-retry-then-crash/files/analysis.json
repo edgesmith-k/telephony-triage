@@ -1,0 +1,108 @@
+{
+ "status": "ok",
+ "key": "MOCK-9835",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-11-20T10:00:01+00:00",
+  "sw": null,
+  "platform_version": "17",
+  "sim_slot": "0",
+  "summary": "데이터 연결 실패 뒤 데이터가 끊김 (합성)",
+  "description": "로그에 SETUP_DATA_CALL 실패가 찍혔고, 잠시 뒤 데이터가 끊겼다는 보고가 있습니다. 원인을 확인해 주세요. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-11-20T09:55:01.000Z",
+   "end": "2026-11-20T10:05:01.000Z"
+  },
+  "range": [
+   "2026-11-20T10:00:00.100Z",
+   "2026-11-20T10:06:12.500Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 10,
+  "masked": null,
+  "uncollected_tags": [
+   {
+    "tag": "AndroidRuntime",
+    "lines": 6,
+    "warn": 6
+   }
+  ]
+ },
+ "decision": {
+  "state": "held",
+  "reason": "no_candidate",
+  "selected": null,
+  "location": {
+   "state": "none",
+   "source": null,
+   "kind": null
+  },
+  "check": {
+   "why": null,
+   "checked": 0,
+   "total": 0
+  },
+  "events": [],
+  "events_total": 0
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "DATA-002",
+    "kind": "type",
+    "title": "데이터 연결이 사용자 조작으로 끊김"
+   },
+   {
+    "id": "DATA-001",
+    "kind": "type",
+    "title": "SETUP_DATA_CALL이 발생하지 않음"
+   },
+   {
+    "id": "DATA-001-01",
+    "kind": "cause",
+    "title": "Data disabled"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0
+ },
+ "partial": [
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "signature": "DATA-001/no-setup-data-call-request",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ],
+   "at": []
+  }
+ ],
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "warnings": [
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-11-20T10:00:00.100Z ~ 2026-11-20T10:06:12.500Z (일부만 포함), 시계 이상 없음",
+  "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): AndroidRuntime 6줄(W/E 6)"
+ ],
+ "truncated": false
+}

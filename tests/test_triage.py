@@ -878,7 +878,8 @@ def test_explore_setting_flows_from_site_defaults_and_skill_points_to_reference(
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     from common import userconfig
     defaults = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))
-    assert userconfig.merged(defaults, user={})["explore"] == {"when": "ask", "timeline_max_lines": 200}
+    assert userconfig.merged(defaults, user={})["explore"] == {"when": "ask", "timeline_max_lines": 200,
+                                                               "anomaly_max_lines": 80, "after_sec": 600}
     skill = (REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md").read_text(encoding="utf-8")
     assert "explore.md" in skill and "timeline.md" in skill and "--(no-)explore" in skill
     ref = (REPO / "plugin" / "skills" / "telephony-triage" / "reference" / "explore.md").read_text(encoding="utf-8")

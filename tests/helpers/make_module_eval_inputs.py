@@ -406,7 +406,11 @@ def module_view(job: Path, case: dict, kind: str, platform: str, module: str, an
     result = modulefilter.build(payload)
     if "text" not in result:
         raise GenError(f"{case['key']}: 모듈 보기 실패 {result}")
-    return result["text"]
+    if kind == "deep":
+        return result["text"]
+    from triagelib import report      # = modulecmd: 탐색 모듈 보기 끝에 explore가 고른 이상 줄 절
+    anomaly = json.loads((job / "explore-input.json").read_text(encoding="utf-8")).get("anomaly")
+    return report.with_anomaly(result["text"], anomaly)
 
 
 def _case_size(case_dir: Path) -> None:

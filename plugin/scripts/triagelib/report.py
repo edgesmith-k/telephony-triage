@@ -354,7 +354,7 @@ def _look_head(look: dict | None) -> list[str]:
 
 def render_timeline(key: str, events: dict, items: list[dict], total: int, around: str | None, limit: int,
                     failed_step: str | None = None, anchor: dict | None = None, look: dict | None = None,
-                    flows: list[str] = ()) -> str:
+                    flows: list[str] = (), anomaly: dict | None = None) -> str:
     window = (events.get("input") or {}).get("window") or {}
     folded = sum((row.get("fold") or {}).get("n", 0) for row in items)
     head = [f"# {key} 탐색 타임라인", "",
@@ -368,17 +368,44 @@ def render_timeline(key: str, events: dict, items: list[dict], total: int, aroun
             f"- 줄: {len(items)}/{total}" + (" (이벤트·경고·오류 줄 우선, 발생 시각에 가까운 순으로 골랐다"
                                               + (f", 같은 줄 반복 {folded}줄은 접었다" if folded else "") + ")" if total > limit else ""),
             "- 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드)", ""]
-    return "\n".join(head + [row_line(row) + _fold_note(row) for row in items]) + "\n"
+    return "\n".join(head + [row_line(row) + _fold_note(row) for row in items] + anomaly_lines(anomaly)) + "\n"
 
 
-def _fold_note(row: dict) -> str:
+def shown_keys(items: list[dict]) -> set:
+    """본 타임라인 줄의 (시각, 태그, 메시지) — 이상 줄 절(`window.anomaly`)이 같은 줄을 다시 싣지 않게."""
+    return {(r.get("ts"), r.get("tag"), " ".join(str(r.get("msg") or "").split())) for r in items}
+
+
+def anomaly_lines(anomaly: dict | None) -> list[str]:
+    """탐색 타임라인 끝의 이상 줄 절(`explore-input.json` `anomaly` = `window.anomaly` 결과, 표시 전용). 고른 줄이 없으면 []."""
+    rows = (anomaly.get("rows") if isinstance(anomaly, dict) else None) or []
+    rows = [{k: r.get(k) for k in ("ts", "phone", "level", "tag", "msg", "fold")} for r in rows if isinstance(r, dict)]
+    if not rows:
+        return []
+    lo, hi = (anomaly.get("range") or [None, None])[:2]
+    more = (f" (분석 구간 끝과 기준 시각 {anomaly['ref']} 뒤 {anomaly['after_sec']}초 중 늦은 쪽까지)"
+            if anomaly.get("ref") and lo and hi else "")
+    return ["", "## 이상 줄: W/E/F 레벨과 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름)", "",
+            f"- 범위: {lo or '로그 처음'} ~ {hi or '로그 끝'}{more}. 위 타임라인에 이미 있는 줄은 뺐다.",
+            f"- 줄: {len(rows)}. 프레임을 뺀 후보 {anomaly.get('candidates', len(rows))}줄에서 F, 예외·crash 머리, E, W 순으로, 같은 등급은 "
+            "기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다", "",
+            *[row_line({**r, "marks": []}) + _fold_note(r, "비슷한") for r in rows]]
+
+
+def with_anomaly(text: str, anomaly: dict | None) -> str:
+    """모듈 보기(탐색) 글 끝에 같은 이상 줄 절을 붙인다(줄이 없으면 그대로)."""
+    lines = anomaly_lines(anomaly)
+    return text.rstrip("\n") + "\n" + "\n".join(lines) + "\n" if lines else text
+
+
+def _fold_note(row: dict, word: str = "같은") -> str:
     """`select_rows`가 접은 반복의 스크립트 메모(근거 검사 `SCRIPT_NOTE_RX`가 떼고 본다 — 인용은 줄 본문만 맞으면 된다)."""
     fold = row.get("fold")
     if not fold:
         return ""
     clock = [str(t)[11:23] if len(str(t)) >= 23 and str(t)[10] == "T" else str(t) for t in (fold["first"], fold["last"])]
     span = clock[0] if clock[0] == clock[1] else f"{clock[0]}~{clock[1]}"
-    return f"  〔script 같은 줄 {fold['n']}번 더 접음({span})〕"
+    return f"  〔script {word} 줄 {fold['n']}번 더 접음({span})〕"
 
 
 def timeline(key: str, events: dict, around: str | None, limit: int,

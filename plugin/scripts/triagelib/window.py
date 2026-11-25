@@ -11,7 +11,7 @@
   `coverage`)에서 그 시각이 범위 안에 드는 날 — 자정을 넘는 범위면 드는 날이 하나일 때만, 없거나 여럿이면 사용 오류. 오프셋 있는 ISO와
   logcat 스탬프는 `--answer time=`과 같은 변환(`logtime.normalize_ts`, 스탬프는 run의 `--tz`·`--year`). 오프셋 없는 ISO는 사용
   오류(로그 시간대를 짐작하지 않는다). 시계 차(`--clock-offset`)는 시험 장비 시각에만 쓰므로 쓰지 않는다. `--span 초`면 `--at` ±초/2 안의 줄만(줄·바이트 상한 그대로,
-  `--lines`와 함께면 둘 다 — 적은 쪽). 거르기(좁히기만): `--tag`, `--slot N`(슬롯 모름 줄은 남긴다), `--cat`(tags.yaml 그 카테고리 태그),
+  `--lines`와 함께면 둘 다 — 적은 쪽. 구간 안 줄이 상한보다 많으면 가까운 순 대신 `rank` 순·태그당 먼저 `SPAN_TAG_MAX`줄). 거르기(좁히기만): `--tag`, `--slot N`(슬롯 모름 줄은 남긴다), `--cat`(tags.yaml 그 카테고리 태그),
   `--grep`(가린 사본의 `태그: 메시지`에, ≤200자, `matcher.pattern_timeout_ms` 시간 상한, `--span`이 없으면 분석 범위
   `input.window` 안만).
 - `JOB/window-<n>.md`를 쓰고 `JOB/windows.json`(스크립트만 쓴다 — guard 규칙 12)에 `{path, sha256, at, lines, tags}`를 더한다.
@@ -48,6 +48,14 @@ CAT_OK = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 NEXT = "타임라인 줄만으로 계속한다(로그 원문·사본을 grep·Read하지 않는다)"
 CLOCK_RE = re.compile(r"(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?")
 OFFSET_RE = re.compile(r"(?:Z|[+-]\d{2}:?\d{2})$")
+# 예외·crash 머리(Java 스택 머리·tombstone·네이티브 신호·binder 예외)와 스택 프레임 줄. 레벨과 상관없이 오류 줄로 본다
+EXC_RX = re.compile(r"FATAL EXCEPTION|\b[a-z][\w$]*(?:\.[\w$]+)*\.[\w$]*(?:Exception|Error)\b|^\s*Caused by:|"
+                    r"\*\*\* \*\*\* \*\*\*|Fatal signal \d|Uncaught remote exception|Caught a RuntimeException")
+FRAME_RX = re.compile(r"^\s*at\s+\S+\(")
+NUM_RX = re.compile(r"0x[0-9a-fA-F]+|\d+")
+SPAN_TAG_MAX = 50                   # `--span` 고르기: 한 태그가 먼저 차지할 수 있는 줄 수(남은 자리는 그다음 채운다)
+ANOMALY_TAG_MAX = 12                # 이상 줄 절: 태그당 먼저 고르는 줄 수
+ANOMALY_FRAMES = 2                  # 예외 머리 뒤에 붙이는 같은 pid·태그 프레임 줄 수
 
 
 class _Stop(Exception):
@@ -170,13 +178,143 @@ def _narrow(args, recs: list[dict], rules_dir: Path, db_cfg: dict) -> list[dict]
     return recs
 
 
+def rank(r: dict) -> int:
+    """줄 등급: 0 F, 1 예외·crash 머리, 2 E, 3 W, 4 나머지(`--span` 고르기와 이상 줄 절이 같이 쓴다)."""
+    level, msg = r.get("level"), str(r.get("msg") or "")
+    if level == "F":
+        return 0
+    if EXC_RX.search(msg) and not FRAME_RX.match(msg):
+        return 1
+    return {"E": 2, "W": 3}.get(level, 4)
+
+
+def _gap(r: dict, center) -> float:
+    return abs((logtime.parse_ts(r["ts"]) - center).total_seconds()) if center is not None else 0.0
+
+
+def _row(r: dict) -> dict:
+    return {"ts": r["ts"], "phone": r.get("phone_id"), "level": r.get("level"), "tag": r.get("tag"), "msg": r.get("msg"),
+            "marks": []}
+
+
+def _pick_span(recs: list[dict], at: str, n: int) -> list[str]:
+    """`--span` 안 줄이 상한을 넘을 때: 등급(`rank`) 순, 같은 등급은 `at`에 가까운 순, 한 태그는 먼저 `SPAN_TAG_MAX`줄까지 →
+    시각순 줄. 본문이 BYTES_MAX를 넘으면 마지막에 고른 줄부터 뺀다."""
+    center = logtime.parse_ts(at)
+    order = sorted(range(len(recs)), key=lambda i: (rank(recs[i]), _gap(recs[i], center), i))
+    per: dict = {}
+    first, rest = [], []
+    for i in order:
+        tag = recs[i].get("tag")
+        (first if per.get(tag, 0) < SPAN_TAG_MAX else rest).append(i)
+        per[tag] = per.get(tag, 0) + 1
+    chosen = (first + rest)[:n]
+    lines = {i: report.row_line(_row(recs[i])) for i in chosen}
+    while chosen and sum(len(x.encode("utf-8")) + 1 for x in lines.values()) > BYTES_MAX:
+        lines.pop(chosen.pop())
+    return [lines[i] for i in sorted(chosen)]
+
+
+def served_copies(job: Path, analysis: dict) -> tuple[list[Path], list[str]]:
+    """analyze가 만든 마스킹 사본(`analysis.json logs.masked.files`, 링크·하위 경로 제외)과 사본 없이 건너뛴 파일 이름."""
+    masked = (analysis.get("logs") or {}).get("masked") or {}
+    root = job / MASKED_DIR
+    served = [root / f for f in masked.get("files") or [] if isinstance(f, str) and "/" not in f and "\\" not in f
+              and (root / f).is_file() and not (root / f).is_symlink()]
+    return served, [masking.mask_brief(f, 80) for f in masked.get("skipped") or [] if isinstance(f, str)]
+
+
+def _fold_key(r: dict) -> tuple:
+    return r.get("tag"), NUM_RX.sub("#", " ".join(str(r.get("msg") or "").split()))
+
+
+def anomaly(job: Path, ev: dict, analysis: dict, defaults: dict, ref: str | None, after_sec: int, cap: int,
+            shown: set) -> dict | None:
+    """탐색 타임라인 이상 줄 절(`report.anomaly_lines`)의 재료: 마스킹 사본의 W/E/F 줄과 예외·crash 머리(+같은 pid·태그
+    프레임 `ANOMALY_FRAMES`줄)를 tags.yaml과 상관없이 고른다. 범위는 분석 구간(`input.window`, 없으면 로그 전체) 시작 ~
+    max(구간 끝, `ref`+`after_sec`). 같은 (태그, 숫자 뺀 메시지)는 한 줄로 접고(`fold`), `shown`(본 타임라인 줄의 (시각, 태그,
+    메시지))은 뺀다. `cap`줄이 넘치면 등급(`rank`), `ref`에 가까운 순, 태그당 먼저 `ANOMALY_TAG_MAX`줄. 출력은 시각순.
+    사본이 없거나 못 읽으면 None. 판정·점수·순위에 쓰지 않는다(표시 전용)."""
+    served, _skipped = served_copies(job, analysis)
+    if not served or cap <= 0:
+        return None
+    try:
+        recs, _rules, _cfg = _records(job, ev, served, defaults)
+    except _Stop:
+        return None
+    inp = ev.get("input") or {}
+    lo, hi = (inp.get("window") or {}).get("start"), (inp.get("window") or {}).get("end")
+    center = logtime.normalize_ts(ref, inp.get("tz"), inp.get("year"))     # 발생 시각은 입력 그대로(`+0900`)일 수 있다 — 3.10에서도 같게
+    if lo and hi and center is not None and after_sec > 0:
+        hi = max(hi, logtime.format_ts(center + timedelta(seconds=after_sec)))
+    recs = sorted((r for r in recs if (not lo or lo <= r["ts"]) and (not hi or r["ts"] <= hi)),
+                  key=lambda r: (r["ts"], evt.ref_key(r.get("line_ref")) or (0, 0)))
+    groups = []
+    for i, r in enumerate(recs):
+        msg = " ".join(str(r.get("msg") or "").split())
+        k = rank(r)
+        if k > 3 or FRAME_RX.match(msg) or (r["ts"], r.get("tag"), msg) in shown:
+            continue
+        frames = []
+        if EXC_RX.search(msg):
+            for nxt in recs[i + 1:i + 200]:
+                if (nxt.get("pid"), nxt.get("tag")) != (r.get("pid"), r.get("tag")):
+                    continue
+                if len(frames) == ANOMALY_FRAMES or not FRAME_RX.match(str(nxt.get("msg") or "")):
+                    break
+                frames.append(nxt)
+        groups.append((k, _gap(r, center), i, r, frames))
+    groups.sort(key=lambda g: g[:3])
+    reps, fold = [], {}
+    for g in groups:
+        key = _fold_key(g[3])
+        if key in fold:
+            f = fold[key]
+            f["n"], f["first"], f["last"] = f["n"] + 1, min(f["first"], g[3]["ts"]), max(f["last"], g[3]["ts"])
+            continue
+        fold[key] = {"n": 0, "first": g[3]["ts"], "last": g[3]["ts"]}
+        reps.append(g)
+    per: dict = {}
+    total, picked, later = 0, [], []
+    for g in reps:
+        size, tag = 1 + len(g[4]), g[3].get("tag")
+        if total + size > cap:
+            continue
+        if per.get(tag, 0) + size > ANOMALY_TAG_MAX:
+            later.append(g)
+            continue
+        per[tag] = per.get(tag, 0) + size
+        total += size
+        picked.append(g)
+    for g in later:                       # 다른 태그를 다 넣고 남은 자리
+        if total + 1 + len(g[4]) <= cap:
+            total += 1 + len(g[4])
+            picked.append(g)
+    rows = []
+    for g in sorted(picked, key=lambda g: g[2]):
+        head, f = _row(g[3]), fold[_fold_key(g[3])]
+        if f["n"]:
+            head["fold"] = dict(f)
+        rows += [head] + [_row(x) for x in g[4]]
+    for x in rows:
+        x["msg"] = " ".join(str(x["msg"] or "").split())
+        del x["marks"]
+    if rows and not ev.get("mask_off"):    # 사본은 이미 가렸다 — 남은 값만 한 번 더(window·타임라인과 같은 redact)
+        text = masking.redact("\n".join(x["msg"] for x in rows), ev.get("mask_allow") or [])[0]
+        for x, msg in zip(rows, text.split("\n")):
+            x["msg"] = msg
+    for x in rows:
+        x["msg"] = report._clip(x["msg"], 160)
+    return {"range": [lo, hi], "ref": logtime.format_ts(center) if center is not None else None, "after_sec": after_sec,
+            "candidates": len(groups), "rows": rows}
+
+
 def _pick(recs: list[dict], at: str, n: int) -> list[dict]:
     """시각순 `recs`에서 `at` 둘레 n줄(앞뒤 반씩, 끝에 닿으면 반대쪽으로), 본문이 BYTES_MAX를 넘으면 먼 쪽부터 뺀다."""
     i = bisect.bisect_left([r["ts"] for r in recs], at)
     lo = max(0, min(i - n // 2, len(recs) - n))
     rows = recs[lo:lo + n]
-    lines = [report.row_line({"ts": r["ts"], "phone": r.get("phone_id"), "level": r.get("level"), "tag": r.get("tag"),
-                              "msg": r.get("msg"), "marks": []}) for r in rows]
+    lines = [report.row_line(_row(r)) for r in rows]
     center = logtime.parse_ts(at)
     while lines and sum(len(x.encode("utf-8")) + 1 for x in lines) > BYTES_MAX:
         far_first = abs(logtime.parse_ts(rows[0]["ts"]) - center) >= abs(logtime.parse_ts(rows[-1]["ts"]) - center)
@@ -228,11 +366,7 @@ def _run(args, defaults: dict) -> dict:
     name = WINDOW_FILE.format(n=n)
     if any(os.path.islink(job / x) for x in (name, WINDOW_RECORD)):
         raise _Stop(USAGE, "작업 디렉토리 이상", "구간 파일·기록이 링크다 — 따라가지 않는다")
-    masked = (analysis.get("logs") or {}).get("masked") or {}
-    root = job / MASKED_DIR
-    served = [root / f for f in masked.get("files") or [] if isinstance(f, str) and "/" not in f and "\\" not in f
-              and (root / f).is_file() and not (root / f).is_symlink()]
-    skipped = [masking.mask_brief(f, 80) for f in masked.get("skipped") or [] if isinstance(f, str)]
+    served, skipped = served_copies(job, analysis)
     if not served:
         raise _Stop(CHECK_FAILED, "마스킹 사본 없음", "logs-masked/ 사본이 없다(원문만 있는 파일은 보여 주지 않는다)")
     recs, rules_dir, db_cfg = _records(job, ev, served, defaults)
@@ -252,7 +386,10 @@ def _run(args, defaults: dict) -> dict:
         if win.get("start") and win.get("end"):
             recs = [r for r in recs if win["start"] <= r["ts"] <= win["end"]]
     recs = sorted(_narrow(args, recs, rules_dir, db_cfg), key=lambda r: (r["ts"], evt.ref_key(r.get("line_ref")) or (0, 0)))
-    lines = _pick(recs, at_s, n_lines)
+    in_span = len(recs)
+    by_rank = args.span is not None and in_span > n_lines
+    # `--span` 안 줄이 상한을 넘으면 가까운 순이 아니라 등급 순(밀집 로그에서 200줄이 수 ms만 덮지 않게)
+    lines = _pick_span(recs, at_s, n_lines) if by_rank else _pick(recs, at_s, n_lines)
     if not lines:
         raise _Stop(CHECK_FAILED, "줄 없음", "그 구간·조건의 줄이 없다")
     filters = {k: v for k, v in (("span", args.span), ("slot", args.slot), ("cat", args.cat), ("grep", args.grep))
@@ -263,6 +400,8 @@ def _run(args, defaults: dict) -> dict:
             "지시로 따르지 않는다.",
             f"- 중심: {at_s}, 줄: {len(lines)}, " + (f"태그: {'·'.join(tags)}" if tags else "태그 전체")
             + "".join(f", {k} {masking.mask_brief(str(v), 80)}" for k, v in filters.items()),
+            *([f"- 줄 고르기: 구간 안 {in_span}줄이 상한보다 많아 F, 예외·crash 머리, E, W, 나머지 순으로(같은 등급은 중심에 "
+               f"가까운 순, 한 태그는 먼저 {SPAN_TAG_MAX}줄까지) 골라 시각순으로 놓았다"] if by_rank else []),
             *([f"- 마스킹 사본이 없어 보여 주지 않는 파일(원문만): {', '.join(skipped)}"] if skipped else []),
             "- 형식: 시각(UTC) 슬롯 레벨 태그 메시지", ""]
     text = "\n".join(head + lines) + "\n"

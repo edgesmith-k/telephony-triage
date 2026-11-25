@@ -526,7 +526,7 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
     items, total = report.select_rows(rows, spec.get("around"), limit)
     flows = report.head_notes(job, events, spec.get("around"))
     text = report.render_timeline(key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
-                                  spec.get("anchor"), spec.get("look_at"), flows)
+                                  spec.get("anchor"), spec.get("look_at"), flows, spec.get("anomaly"))
     text = text if events.get("mask_off") else masking.redact(text, allow)[0]
     if text.encode("utf-8") != tl:
         raise nojob(f"{TIMELINE_FILE}가 events.json과 맞지 않는다 — triage.py explore를 다시")
@@ -831,7 +831,7 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
         lib = importlib.import_module("common.modulefilter")
         res = _view_or_fail(purpose, _filter(lib, _explore_view_payload(job, key, p, d, explore, fetched.doc,
                                                                         deep=args.deep, with_=w), args), ctx)
-        data = res["text"].encode("utf-8")
+        data = report.with_anomaly(res["text"], explore["spec"].get("anomaly")).encode("utf-8")   # 이상 줄 절(JOB/timeline.md와 같은 줄)
         stats = res.get("stats") or {}
         files[TIMELINE_FILE] = data
         tl_path = job / FOLDER / "explore" / TIMELINE_FILE
@@ -937,7 +937,7 @@ def _explore_at(args, job, key, p, events, explore, inputs, env, ctx):
     lib = importlib.import_module("common.modulefilter")
     res = _view_or_fail(purpose, _filter(lib, _explore_view_payload(job, key, p, d, explore, doc, args.at, "--at",
                                                                     deep=bool(rec.get("deep")), with_=w), args), ctx)
-    data, stats = res["text"].encode("utf-8"), res.get("stats") or {}
+    data, stats = report.with_anomaly(res["text"], explore["spec"].get("anomaly")).encode("utf-8"), res.get("stats") or {}
     files = {}
     for path in folder.rglob("*"):
         if path.is_file() and not path.is_symlink() and path.name != TIMELINE_FILE:

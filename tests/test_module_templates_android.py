@@ -57,6 +57,7 @@ CASES = [
     ("data", "data-normal-recovery-query", "explore", None),
     ("data", "data-recovered-other-slot-still-failing", "explore", None),
     ("data", "data-rule-proposal-unsigned-cause", "explore", None),
+    ("data", "data-normal-retry-then-crash", "explore", None),     # 11/25 이상 줄 절: 회복 뒤 규칙 밖 태그의 예외
 ]
 
 # run별 with arm 문서 합 한도(C1D 보정 §2.3). 파일별 상한은 skillcheck.CAPS(test_module_templates test_size_caps)

@@ -130,7 +130,7 @@ from triagelib.core import (ANALYSIS_MAX, EXPLORE_DONE_LINE, EXPLORE_INPUT_FILE,
 from triagelib import pick  # noqa: E402
 from triagelib.driver import Driver  # noqa: E402
 from triagelib.report import (_unique_evidence, dumps, fit, flow_brief, flow_head, head_notes, schema_violation,  # noqa: E402,F401 — 테스트가 쓴다
-                              timeline)
+                              merge_rows, render_timeline, select_rows, shown_keys, timeline)
 
 
 # -- CLI ------------------------------------------------------------------------------------------
@@ -291,12 +291,31 @@ def cmd_explore(args, defaults: dict) -> int:
     if not job.is_dir():
         print(f"작업 디렉토리가 없다: {job} — 이 키로 /telephony-triage:analyze를 먼저 실행한다", file=sys.stderr)
         return USAGE
-    code = _explore(args, cfg, job)
+    code = _explore(args, cfg, job, defaults)
     trace_event(job, "explore", exit=code)
     return code
 
 
-def _explore(args, cfg: dict, job: Path) -> int:
+def _int_setting(cfg: dict, key: str, default: int, top: int) -> int:
+    value = userconfig.get(cfg, key, default)
+    return value if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= top else default
+
+
+def _anomaly(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, items: list) -> dict | None:
+    """이상 줄 절 재료(`window.anomaly`): 기준 시각 = 실패 스텝·기준 줄 시각 > 기준 줄 찾은 시각 > 발생 시각."""
+    from triagelib import window
+    try:
+        analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    ref = (spec.get("anchor") or {}).get("fail") or (spec.get("look_at") or {}).get("ts") or spec.get("around")
+    found = window.anomaly(job, events, analysis if isinstance(analysis, dict) else {}, defaults, ref,
+                           _int_setting(cfg, "explore.after_sec", 600, 3600),
+                           _int_setting(cfg, "explore.anomaly_max_lines", 80, 400), shown_keys(items))
+    return found if found and found["rows"] else None
+
+
+def _explore(args, cfg: dict, job: Path, defaults: dict) -> int:
     input_path, events_path = job / EXPLORE_INPUT_FILE, job / "events.json"
     if not input_path.is_file():
         print(f"탐색 분석 해당 없음: {EXPLORE_INPUT_FILE}가 없다(후보 확정·explore.when: never·run 전)", file=sys.stderr)
@@ -313,8 +332,18 @@ def _explore(args, cfg: dict, job: Path) -> int:
     except (OSError, ValueError) as exc:
         print(f"탐색 입력을 읽지 못했다({exc}) — 이 키로 /telephony-triage:analyze를 다시 실행한다", file=sys.stderr)
         return USAGE
-    text, kept, total = timeline(args.key, events, spec.get("around"), limit, spec.get("failed_step"), spec.get("anchor"),
-                                 spec.get("look_at"), head_notes(job, events, spec.get("around")))
+    items, total = select_rows(merge_rows(events), spec.get("around"), limit)
+    kept = len(items)
+    # 이상 줄 절(표시 전용)은 explore-input.json `anomaly`에 남긴다 — `module`의 재계산(E1)·모듈 보기가 같은 줄을 쓴다
+    found = _anomaly(job, cfg, defaults, spec, events, items)
+    if found != spec.get("anomaly"):
+        spec = {k: v for k, v in spec.items() if k != "anomaly"}
+        if found:
+            spec["anomaly"] = found
+        input_path.write_text(json.dumps(spec, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
+    text = render_timeline(args.key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
+                           spec.get("anchor"), spec.get("look_at"), head_notes(job, events, spec.get("around")),
+                           spec.get("anomaly"))
     # 마스킹 전 JOB이어도 남은 값은 가린다(B2-25). 마스킹 끔 DB의 events(`mask_off`)면 가리지 않는다(08-safety §8)
     text, redacted = (text, {}) if events.get("mask_off") else masking.redact(text, events.get("mask_allow") or [])
     (job / TIMELINE_FILE).write_text(text, encoding="utf-8", newline="\n")
