@@ -942,3 +942,60 @@ def test_a4_word_only_in_rules_uses_all_copies_and_says_so(tmp_path, capsys):
     _d, inv = _run(job, _out(rows=ABSENT_ROWS, extra=("찾았는데 없음:", "- `DEACTIVATE_DATA_CALL` 요청 — logs-masked 15:10:02 뒤")),
                    capsys)
     assert inv["status"] == "identified" and "전체 사본" in inv["gate"][1]["why"], inv["gate"]
+
+
+# --- 반입 8 A1~A3: 구간 파일 날짜·규칙 1위와 같음·`예입니다` --------------------------------------------------------------
+
+def _window_at(job: Path, at: str, rows) -> None:
+    _window(job, rows=rows)
+    rec = json.loads((job / "windows.json").read_text(encoding="utf-8"))
+    rec["windows"][-1]["at"] = at
+    (job / "windows.json").write_text(json.dumps(rec), encoding="utf-8")
+
+
+def test_a1_window_of_another_day_is_not_after_failure(tmp_path, capsys):
+    """A1: 구간 파일 줄은 날짜 없는 UTC 시각이라 전날을 중심(`at`)으로 받은 구간도 분석 범위 날짜로 읽혀 게이트 4를 통과했다 —
+    기록 `at`의 날짜로 읽는다. 같은 줄을 당일 중심으로 받았으면 통과, `at`을 못 읽는 옛 기록은 지금처럼."""
+    rows = ("15:10:01.900 p0 E hiddend carrier link lost", "15:10:05.000 p0 I hiddend carrier link back")
+    for name, at, want in (("day-before", "2026-09-19T15:10:03.000Z", ["실패 뒤 흔적"]),
+                           ("same-day", "2026-09-20T15:10:03.000Z", []), ("old", "x", [])):
+        job = _job(tmp_path / name)
+        _window_at(job, at, rows)
+        _data, inv = _run(job, _out(quotes=(Q1,)), capsys)
+        assert _failed(inv) == want, (name, inv["gate"])
+
+
+def test_a1_window_rows_take_the_day_nearest_to_center_across_midnight():
+    """A1: 자정을 넘는 구간이면 각 줄은 중심(`at`)에 가장 가까운 날로 읽는다."""
+    from triagelib import output
+    at = "2026-09-20T23:59:59.000Z"
+    assert output._window_row_ts("00:00:03.000 p0 I x y", at, None).isoformat().startswith("2026-09-21T00:00:03")
+    assert output._window_row_ts("23:59:50.000 p0 I x y", at, None).isoformat().startswith("2026-09-20T23:59:50")
+
+
+def test_a2_same_as_rule_top_needs_source_confirmed_basis(tmp_path, capsys):
+    """A2: `후보 확인`의 근거가 `찾았는데 없음`뿐이거나 약한(weak) 인용이어도 "규칙 1위와 같음"이 붙었다 — 근거 인용이 원문 확인(ok)일
+    때만. 같은 항목에 ok 인용이면 붙는다."""
+    top = {**OK_KEYS["candidates"][0], "C": 0}
+    weak = Q1.replace("15:10:01.200", "15:10:01.900")         # 메시지는 맞고 시각이 다른 행(머리 불일치 → 약함)
+    for name, why, same in (("absent", "찾았는데 없음: `SETUP_DATA_CALL` 재요청 — logs-masked 15:10:02 뒤", False),
+                            ("weak", weak, False), ("ok", Q1, True)):
+        job = _job(tmp_path / name, cands=[top])
+        data, inv = _run(job, _out(extra=("후보 확인:", f"- DATA-001-01: 맞음 — {why}")), capsys)
+        assert inv["status"] == "identified" and data["weak"] == (name == "weak"), (name, data, inv["gate"])
+        assert ("top_match" in inv) is same and _cause_rows(job)[0].endswith("(규칙 1위 DATA-001-01와 같음)") is same, (name, data)
+
+
+def test_a3_yes_answer_forms_with_copula(tmp_path, capsys):
+    """A3: `예입니다`·`예이다`·`예임`·`예요`·`예 입니다`는 답 `예`다. `예상`·`예외`·`예정`·`예시`는 계속 답이 아니다."""
+    from triagelib import output
+    for tail in ("예입니다", "예이다.", "예임", "예요", "예 입니다", "**예입니다**"):
+        mech = f"메커니즘 재계산: 01.2-00.1 = 1.1초 → 고치면 결과가 뒤집히나: {tail}"
+        assert output.FLIP_RX.search(mech).group(1) == "예", tail
+        assert output.FLIP_TAIL_RX.search(f"재계산: 1.1초 — {tail}").group(1) == "예", tail
+    for tail in ("예상하기 어려움", "예외 발생", "예정", "예시: 1초"):
+        assert not output.FLIP_RX.search(f"고치면 결과가 뒤집히나: {tail}"), tail
+        assert not output.FLIP_TAIL_RX.search(f"재계산: 1.1초 — {tail}"), tail
+    _d, inv = _run(_job(tmp_path), _out(rows=NUM_ROWS, extra=("메커니즘 재계산: 01.2-00.1 = 1.1초 → 고치면 결과가 뒤집히나: 예입니다",)),
+                   capsys)
+    assert _failed(inv) == [], inv["gate"]

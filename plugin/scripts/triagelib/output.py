@@ -137,8 +137,10 @@ LAYER_ABBR_RX = re.compile(r"^(AP-CP|CP-망|AP|CP)\s*(?:\([^()]*\))?$")
 # `첫 갈라짐` 번호: 맨 앞 `단계 N`·`N단계`·선두 숫자만(`없음…`이나 문장 속 숫자는 None — 시각 `13:05`를 단계로 읽지 않게)
 CLAIM_STEP_RX = re.compile(r"^[\s`*]*(?:단계\s*#?\s*(\d+)|#?(\d+)\s*단계|#?(\d+)(?!\d|:))")
 # `→ 고치면 결과가 뒤집히나: 예|아니오` 답(뒤 설명 허용). 틀 그대로 `예|아니오`면 group(2)가 있다(값 없음)
-FLIP_RX = re.compile(r"뒤집히나\s*[?？]?\s*[:：]?\s*[`*]*\s*(아니오|아니요|예(?![가-힣]))(\s*[|/]\s*(?:아니오|아니요|예))?")
-FLIP_TAIL_RX = re.compile(r"(아니오|아니요|(?<![가-힣])예)[\s`*.)\]]*$")      # `뒤집히나`가 없는 옛 꼴: 끝의 답
+# 답 `예` 뒤 한글은 `예입니다`·`예이다`·`예임`·`예요`(사이 공백 허용)만 — `예상`·`예외`·`예정`·`예시`는 답이 아니다(A3)
+YES = r"예(?=(?:\s*(?:입니다|이다|임|요))?(?![가-힣]))"
+FLIP_RX = re.compile(rf"뒤집히나\s*[?？]?\s*[:：]?\s*[`*]*\s*(아니오|아니요|{YES})(\s*[|/]\s*(?:아니오|아니요|예))?")
+FLIP_TAIL_RX = re.compile(r"(아니오|아니요|(?<![가-힣])예)(?:\s*(?:입니다|이다|임|요))?[\s`*.)\]]*$")      # `뒤집히나`가 없는 옛 꼴: 끝의 답
 # 분석 스킬 의견 `<원인 ID> — <근거>`의 앞 ID. 백틱·굵게로 감싸거나 조사(`ID와`)가 붙어도 잡고, 숫자가 더 붙은 것은 아니다
 OPINION_ID = re.compile(rf"\s*[`*]*({CAUSE_ID})(?!\d)")
 
@@ -645,7 +647,7 @@ def _ref(job: Path, events: dict | None):
 def _after_ref(job: Path, ok_quotes: list[str], events: dict | None, ref) -> tuple[bool, str]:
     """게이트 4: 기준 시각(`_ref`) 뒤 줄을 ok로 인용했거나, sha가 맞는 window 구간의 마지막 줄 시각이 기준보다 뒤다(그 뒤 줄이 실제로
     있을 때만 — 같은 시각은 아니다, `--span` 유무와 무관). 확정 기준이 없으면 통과가 아니라 가장 유력 가설의 ok 인용 중 가장 이른
-    시각을 기준으로 본다(R-15). 인용 시각은 `_quote_ts` — 사본에서 다른 날 줄만 가리키는 행 모양 인용은 `_check`가 이미 약함으로
+    시각을 기준으로 본다(R-15). 구간 파일 줄의 날짜는 구간 기록 `at`으로 정한다(`_window_row_ts`, A1). 인용 시각은 `_quote_ts` — 사본에서 다른 날 줄만 가리키는 행 모양 인용은 `_check`가 이미 약함으로
     낮춰 ok 인용에 없다(A5, `_quote_at`)."""
     note = ""
     times = [t for q in ok_quotes if (t := _quote_ts(q, events)) is not None]
@@ -656,11 +658,29 @@ def _after_ref(job: Path, ok_quotes: list[str], events: dict | None, ref) -> tup
         note = "(기준 시각 없음 — 가장 이른 인용 뒤)"
     if any(t > ref for t in times):
         return True, note
-    for text in _windows(job)[1]:
+    rec = _load(job / WINDOW_RECORD)
+    ats = {w.get("path"): w.get("at") for w in (rec.get("windows") if isinstance(rec, dict) else None) or [] if isinstance(w, dict)}
+    for name, text in zip(*_windows(job)[:2]):
         rows = [line for line in text.split("\n") if evidence.ROW_RX.match(line)]
-        if rows and (t := _quote_ts(rows[-1], events)) is not None and t > ref:
+        if rows and (t := _window_row_ts(rows[-1], ats.get(name), events)) is not None and t > ref:
             return True, note
     return False, "기준 시각 뒤 줄 인용·구간 없음(실패 뒤를 보지 않음)" + note
+
+
+def _window_row_ts(row: str, at, events: dict | None):
+    """A1: 구간 파일 행 시각(날짜 없는 UTC) → 구간 기록 `at`(ISO, 날짜 포함)에 가장 가까운 날의 그 시각(자정을 넘는 구간도). `at`을
+    못 읽는 옛 기록은 `_quote_ts`(분석 범위의 날짜)."""
+    from triagelib import window
+    center = logtime.normalize_ts(at, None, None) if isinstance(at, str) else None
+    m = window.CLOCK_RE.match(row)
+    if center is None or not m:
+        return _quote_ts(row, events)
+    try:
+        t = center.replace(hour=int(m.group(1)), minute=int(m.group(2)), second=int(m.group(3)),
+                           microsecond=int((m.group(4) or "").ljust(6, "0")))
+    except ValueError:
+        return None
+    return min((t + timedelta(days=d) for d in (-1, 0, 1)), key=lambda c: abs(c - center))
 
 
 def _absent_span(events: dict | None, low, span_sec: float):
@@ -1476,6 +1496,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
             raw_items = frozenset(i for i, (a, b) in enumerate(zip(before, quotes)) if a != b)
     res = fab_by_hyp = per_hyp = chain_v = alts = None
     check_bad: set = set()
+    check_ok: set = set()       # A2: `후보 확인` 근거 인용이 원문 확인(ok)인 항목 — "규칙 1위와 같음"은 이것만
     source, tags = evidence.source_text(src_text) if src_skip is None and src_text is not None else (None, None)
     # R-06: 규칙 제안·[모듈] 줄의 `근거:` 문구도 사본에서 찾는다(인용만 넘기면 사본에만 있는 근거가 "근거 불일치"로 빠졌다)
     bases = ([m.group(1) for x in fields.get("rules") or [] if (m := RULE_BASIS_RX.search(_one(x)))]
@@ -1507,6 +1528,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
         else:                           # 심층: `근거` 뒤 verdicts가 `후보 확인` 인용 항목 순서
             tail = res["verdicts"][len(fields.get("근거") or []):]
         check_bad = {i for (i, _w), v in zip(_check_quoted(fields), tail) if v == "fabricated"}
+        check_ok = {i for (i, _w), v in zip(_check_quoted(fields), tail) if v == "ok"}
     normal_ok, normal_bad = _normal_flags(fields, per_hyp) if purpose == "explore" else ([], [])
     normal1 = bool(normal_ok) and normal_ok[_picked(fields)]       # `가장 유력: N`이 있으면 그 가설, 없으면 가설 1
     old = _load(job / RECORD)
@@ -1533,11 +1555,12 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
         inv = {**inv, "status": "insufficient_evidence", "normal": True}
     top = (analysis.get("candidates") or [None])[0]
     if inv and inv["status"] == "identified" and isinstance(top, dict) and (top.get("cause") or top.get("type")):
-        # R-24: 규칙 1위와 같음은 `후보 확인`이 그 ID를 맞음(근거 원문 확인)이라 했을 때만. C-3b: 1위가 유형만(원인 미확인)이면
+        # R-24: 규칙 1위와 같음은 `후보 확인`이 그 ID를 맞음이라 했고 그 근거 인용이 원문 확인(ok)일 때만(A2 — `찾았는데 없음`뿐·약함·
+        # 검사 건너뜀은 아니다). C-3b: 1위가 유형만(원인 미확인)이면
         # 그 유형의 원인 ID(`<유형>-NN`, near_causes가 주는 것)가 맞음일 때도 — 값은 같다고 본 원인 ID(줄에 그 ID를 적는다)
         same = (lambda c: c == top["cause"]) if top.get("cause") else (lambda c: str(c).startswith(f"{top['type']}-"))
         hit = next((c["cause"] for i, c in enumerate(fields.get(evidence.CHECK_FIELD) or [])
-                    if same(c["cause"]) and c["verdict"] == "맞음" and i not in check_bad), None)
+                    if same(c["cause"]) and c["verdict"] == "맞음" and i in check_ok), None)
         if hit:
             inv["top_match"] = hit
     # skill_patch --module과 같은 보류 기준 + 결정 2(R-09): 이번 조사 결론이 identified면 첫 점검·함정도 받는다
