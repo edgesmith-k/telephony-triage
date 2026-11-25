@@ -1027,7 +1027,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         """조사 모드(`issuepost.investigate_mode`)일 때만 analysis.json `near_causes`(≤ 3, 표시 전용 — 탐색 분석이 대조할 DB 원인 후보):
         부분 일치(match.json `partial[]` 순서, 맞은 조건 0개 `0/N`은 뺌) 다음에 낱말 검색 결과 — 후보 없음의 설명 기반 검색
         (`no_candidate.search_hits`, `hits`)이 있으면 그것을, 없으면 가린 이슈 요약 문장 한 번의 `db_search`(검색 자체 순위)를 붙인다.
-        ID로 겹친 것, 이미 후보(`candidates`)인 유형·원인과 그 유형의 원인을 빼고, 유형과 그 원인이 같이 있으면 원인만 남긴다.
+        조건이 하나라도 맞은 부분 일치 원인은 그 유형이 이미 후보(1위 C=0)여도 남긴다 — 탐색이 `후보 확인`으로 없는 조건을 대조할
+        대상이다(11/25 재검토: 빼면 어느 단계도 대조하지 않는다). 낱말 검색 결과는 ID로 겹친 것, 이미 후보(`candidates`)인 유형·원인과
+        그 유형의 원인을 빼고, 유형과 그 원인이 같이 있으면 원인만 남긴다.
         검색만 걸린 항목은 `note`로 로그 대조를 안 했다고 밝힌다. 남는 것이 없으면 빈 목록(키를 쓰지 않는다). 점수·순위·decision·
         match.json은 그대로다."""
         if not issuepost.investigate_mode({"candidates": candidates, "decision": decision})["mode"]:
@@ -1035,13 +1037,14 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         have = {c.get("type") for c in candidates} | {c.get("cause") for c in candidates}
         found: list[tuple] = []
 
-        def add(ident, **extra) -> None:      # 원인 ID `X-NNN-NN`의 유형은 앞 `X-NNN`(plan.schema causeId·typeId)
-            if ident and ident not in have and ident[:-3] not in have and all(f[0] != ident for f in found):
+        def add(ident, partial=False, **extra) -> None:      # 원인 ID `X-NNN-NN`의 유형은 앞 `X-NNN`(plan.schema causeId·typeId)
+            known = not partial and (ident in have or ident[:-3] in have)
+            if ident and not known and all(f[0] != ident for f in found):
                 found.append((ident, extra))
 
         for p in match.get("partial") or []:
             if not str(p.get("matched") or "").startswith("0/"):
-                add(p.get("cause") or p["type"], matched=p["matched"],
+                add(p.get("cause") or p["type"], partial=bool(p.get("cause")), matched=p["matched"],
                     missing=[_clip(m["desc"], 40) for m in p.get("missing") or []][:3],
                     at=sorted({h["ts"] for h in p.get("hits") or [] if h.get("ts")})[:3])
         summary = " ".join(self.masker()(str(info.get("summary") or "")).split())      # 검색·trace에는 가린 글만

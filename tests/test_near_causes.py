@@ -39,14 +39,16 @@ def _offline(tmp_path: Path, lines: list[str], summary: str, monkeypatch, db: Pa
     return result, out
 
 
-def test_c0_run_drops_causes_already_in_candidates_and_partial(tmp_path, monkeypatch):
-    """1위 C=0(유형 DATA-001, 원인 미확인): 부분 일치 DATA-001-01(1/2)·DATA-001-02(0/1)와 검색 결과는 모두 이미 후보인 유형 DATA-001과
-    그 원인이라 near_causes에서 빠지고(R-18 — analysis.json `partial`에 그대로 있다) 키가 없다. 11/25 전 기대(첫 칸 DATA-001-01)는
-    리뷰 5-F4가 짚은 중복이다. match·순위·decision은 near_causes와 무관."""
+def test_c0_run_keeps_partly_matched_cause_of_top_type_and_drops_noise(tmp_path, monkeypatch):
+    """1위 C=0(유형 DATA-001, 원인 미확인): 조건이 하나 맞은 DATA-001-01(1/2)은 남는다 — 탐색이 `후보 확인`으로 없는 조건을 대조할
+    대상(11/25 재검토: R-18 고침이 이것까지 빼서 어느 단계도 대조하지 않게 됐다). 맞은 조건 0개 DATA-001-02(0/1)와, 이미 후보인 유형
+    DATA-001의 낱말 검색 결과는 빠진다(R-18, 리뷰 5-F4). match·순위·decision은 near_causes와 무관."""
     lines = [x for x in DATA_LOG.read_text(encoding="utf-8").splitlines(keepends=True) if "DSMGR" not in x]
     result, out = _offline(tmp_path, lines, "데이터가 연결되지 않음 SETUP_DATA_CALL 요청 없음", monkeypatch)
     assert result["candidates"][0]["C"] == 0 and result["investigate"]["mode"] is True
-    assert [c["type"] for c in result["candidates"]] == ["DATA-001"] and "near_causes" not in result
+    assert [c["type"] for c in result["candidates"]] == ["DATA-001"]
+    assert [(n["id"], n["matched"]) for n in result["near_causes"]] == [("DATA-001-01", "1/2")], result["near_causes"]
+    assert result["near_causes"][0]["missing"] and "note" not in result["near_causes"][0]
     assert result["partial"][0]["cause"] == "DATA-001-01" and result["partial"][0]["matched"] == "1/2"
     match = json.loads((out / "match.json").read_text(encoding="utf-8"))
     assert [c["cause"] for c in match["candidates"]] == [c["cause"] for c in result["candidates"]]
