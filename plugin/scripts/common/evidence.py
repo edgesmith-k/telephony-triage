@@ -599,50 +599,93 @@ def source_text(timeline_text: str) -> tuple[str, re.Pattern | None]:
     return "\n".join(rows), tag_rx(sorted(tags, key=lambda t: (-len(t), t)))
 
 
-# 마스킹 사본(원문 모양) 한 줄: logcat `MM-DD HH:MM:SS.mmm PID TID L TAG: msg`, syslog `Mon DD HH:MM:SS host fac.lvl tag[pid]: msg`
-LOGCAT_LINE_RX = re.compile(r"^(?:\d{4}-)?\d{2}-\d{2}\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s+\d+\s+\d+\s+([VDIWEFA])\s+(\S+?)\s*:\s?(.*)$")
-SYSLOG_LINE_RX = re.compile(r"^[A-Z][a-z]{2}\s+\d{1,2}\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s+\S+\s+\S+\.[a-z]+\s+([^\s\[:]+)(?:\[\d+\])?:\s?(.*)$")
+def _raw_rxs() -> tuple[tuple[re.Pattern, ...], dict]:
+    """파서와 같은 원문 줄 정규식(Android threadtime·time, oFono ISO·BSD·BusyBox)과 BusyBox 등급→레벨 표. 지연 import(`event_rows_text`처럼)."""
+    global _RAW_RXS
+    if _RAW_RXS is None:
+        from platforms.android import logcat
+        from platforms.ofono import journal
+        _RAW_RXS = ((logcat.THREADTIME_RE, logcat.TIME_RE, journal.ISO_RE, journal.BSD_RE, journal.BUSYBOX_RE),
+                    journal.SEVERITY_LEVEL)
+    return _RAW_RXS
+
+
+_RAW_RXS = None
+
+
+def _raw_fields(line: str) -> dict | None:
+    """원문 모양 한 줄 → {time, level, tag, msg}(시각은 로그에 적힌 그대로, 레벨 없는 syslog는 `-`). 모양이 다르면 None."""
+    s = ws(QUOTE_CHARS_RX.sub("", line or ""))
+    rxs, sev = _raw_rxs()
+    for rx in rxs:
+        m = rx.match(s)
+        if not m:
+            continue
+        g = m.groupdict()
+        level = g.get("level") or sev.get(g.get("sev") or "", "-")
+        return {"time": f"{g['h']}:{g['mi']}:{g['s']}" + (f".{g['frac']}" if g.get("frac") else ""), "level": level,
+                "tag": (g.get("tag") or g.get("ident") or "").strip(), "msg": g.get("msg") or ""}
+    return None
 
 
 def raw_row(line: str) -> str | None:
-    """사본 한 줄(또는 그 모양으로 적은 인용) → 행 문법 `시각 - 레벨 태그 메시지`(시각은 로그에 적힌 그대로, 슬롯 `-`, syslog 레벨 `-`).
+    """사본 한 줄(또는 그 모양으로 적은 인용) → 행 문법 `시각 - 레벨 태그 메시지`(시각은 로그에 적힌 그대로, 슬롯 `-`).
     모양이 다르면 None. 사본 줄과 원문 모양 인용을 같은 식으로 바꿔 머리(시각·레벨·태그) 대조가 같은 칸끼리 되게 한다."""
-    s = ws(QUOTE_CHARS_RX.sub("", line or ""))
-    m = LOGCAT_LINE_RX.match(s)
-    if m:
-        return f"{m.group(1)} - {m.group(2)} {m.group(3)} {m.group(4)}"
-    m = SYSLOG_LINE_RX.match(s)
-    return f"{m.group(1)} - - {m.group(2)} {m.group(3)}" if m else None
+    f = _raw_fields(line)
+    return f"{f['time']} - {f['level']} {f['tag']} {f['msg']}".rstrip() if f else None
 
 
-COPY_ROWS_PER_QUOTE = 50   # 인용마다 사본에서 근거 원문에 더하는 줄 수
+COPY_ROWS_PER_QUOTE = 50    # 인용마다 사본에서 낱말을 많이 함께 가진 줄
+COPY_ROWS_EXACT_MAX = 200   # 인용 메시지 조각이 그대로 든 줄(위 상한 밖에 늘 더한다, 이만큼까지)
+
+
+def _copy_want(q: str) -> tuple[set, list[str], str | None]:
+    """인용 하나 → (찾을 낱말, 그대로 찾을 메시지 조각, 인용 시각)."""
+    f = _raw_fields(q)
+    if f:
+        parts, qt = [p.strip() for p in ELLIPSIS_RX.split(ws(f["msg"])) if p.strip()], f["time"]
+    else:
+        parts, head = _quote_parts(q, None), _quote_head(q, None)
+        qt, tag = head.get("time"), head.get("tag")
+        if tag and parts and parts[0].startswith(tag + " "):      # 행 모양 인용의 태그 칸은 원문 줄에 `태그:`로 있다
+            parts[0] = parts[0][len(tag) + 1:]
+    keys = set()
+    for part in parts:
+        words = _WORD_RX.findall(part)
+        keys.update(words or ([part] if len(part) >= 4 else []))
+    return keys, [p for p in parts if len(p) >= 8], qt
 
 
 def copy_rows(texts: list[str], quotes: list[str]) -> str:
-    """마스킹 사본 글(`texts`)에서 인용마다 그 인용의 8자 이상 낱말(없으면 4자 이상 조각)을 가장 많이 함께 가진 줄
-    (`COPY_ROWS_PER_QUOTE`줄까지)을 골라 `raw_row`로 바꾼 행들. 사본 전체를 행으로 바꾸지 않고 낱말 정규식 한 번으로 찾는다
-    (큰 사본에서도 인용 수만큼만). 고른 줄과 인용의 대조(값 바꿈·지어냄)는 `check_quotes`가 한다."""
-    want = []
-    for q in quotes:
-        keys = set()
-        for part in _quote_parts(raw_row(q) or q, None):
-            words = _WORD_RX.findall(part)
-            keys.update(words or ([part] if len(part) >= 4 else []))
-        want.append(keys)
-    every = set().union(*want) if want else set()
+    """마스킹 사본 글(`texts`)에서 인용마다 고른 줄을 `raw_row`로 바꾼 행들:
+    - 인용 메시지 조각(8자 이상)이 그대로 든 줄은 늘(`COPY_ROWS_EXACT_MAX`줄까지),
+    - 그 밖에 인용의 8자 이상 낱말(없으면 4자 이상 조각)을 가장 많이 함께 가진 줄 `COPY_ROWS_PER_QUOTE`줄.
+    둘 다 같은 순위면 인용과 시각이 같은 줄, 그다음 앞 줄. 후보 줄은 낱말 정규식 한 번으로 찾고(큰 사본에서도 인용 수만큼만),
+    줄마다 낱말은 하나씩 `in`으로 센다(겹치는 낱말도). 고른 줄과 인용의 대조(값 바꿈·지어냄)는 `check_quotes`가 한다."""
+    want = [_copy_want(q) for q in quotes]
+    every = set().union(*(k for k, _f, _t in want)) if want else set()
     if not every:
         return ""
     rx = re.compile("|".join(map(re.escape, sorted(every, key=len, reverse=True))))
-    hits: dict[tuple[int, int], set] = {}           # (사본 순번, 줄 시작) → 그 줄에서 맞은 낱말
+    lines: dict[tuple[int, int], str] = {}          # (사본 순번, 줄 시작) → 줄(낱말이 하나라도 든 줄만)
     for k, text in enumerate(texts):
         for m in rx.finditer(text):
-            hits.setdefault((k, text.rfind("\n", 0, m.start()) + 1), set()).add(m.group(0))
+            a = text.rfind("\n", 0, m.start()) + 1
+            if (k, a) not in lines:
+                b = text.find("\n", a)
+                lines[(k, a)] = text[a:b if b >= 0 else len(text)]
     out: dict[str, None] = {}
-    for keys in want:
-        scored = sorted(((len(found & keys), pos) for pos, found in hits.items() if found & keys), key=lambda x: (-x[0], x[1]))
-        for _n, (k, a) in scored[:COPY_ROWS_PER_QUOTE]:
-            b = texts[k].find("\n", a)
-            row = raw_row(texts[k][a:b if b >= 0 else len(texts[k])])
+    for keys, frags, qt in want:
+        exact, scored = [], []
+        for pos, line in lines.items():
+            other = not qt or qt not in line[:48]       # 시각이 인용과 다른 줄은 같은 순위에서 뒤로
+            if frags and all(f in line for f in frags):
+                exact.append((other, pos))
+            elif n := sum(1 for w in keys if w in line):
+                scored.append((-n, other, pos))
+        picked = [x[-1] for x in sorted(exact)[:COPY_ROWS_EXACT_MAX]] + [x[-1] for x in sorted(scored)[:COPY_ROWS_PER_QUOTE]]
+        for pos in picked:
+            row = raw_row(lines[pos])
             if row:
                 out[row] = None
     return "\n".join(out)
@@ -682,7 +725,8 @@ def _part_rows(parts: list[str], rows: list[str], ws_rows: list[str]) -> list[st
     return out
 
 
-def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[int] = frozenset()) -> dict:
+def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[int] = frozenset(),
+                 alts: list[str | None] | None = None) -> dict:
     """인용 목록 판정 → {"n", "fabricated", "weak", "raw", "first", "verdicts"}. `verdicts`는 항목별 판정
     (ok | weak | fabricated | raw, 입력 순서 — check-output이 가설별로 나눈다).
 
@@ -692,7 +736,8 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
     (FR-01: 부분 문자열만 보면 `status=10`→`status=1`·`disconnected`→`connected` 같은 변조를 ok로 봤다). 아니면 조각이 든
     행(조각마다 최대 300행)과 8자 이상 낱말을 공유하는 행(최대 300행)으로 `evidence_check`를 돈다.
     ok인 인용이 시각이나 슬롯 머리(레벨·태그는 그와 함께 적었을 때만)를 적었으면 머리까지 맞는 행이 원문 전체에 있어야 ok,
-    없으면 weak다(`_head_ok`, F-A01-min).
+    없으면 weak다(`_head_ok`, F-A01-min). `alts[i]`(있으면, 탐색의 원문 모양 인용을 `raw_row`로 바꾼 것)는 인용이 ok가 아닐 때
+    한 번 더 판정해 나은 쪽(ok > weak > fabricated)을 쓴다.
     """
     from common import masking
     source = QUOTE_CHARS_RX.sub("", source)      # 인용 쪽과 같이 따옴표를 뗀다(행 찾기·머리 대조·`evidence_check`가 같은 글을 본다)
@@ -703,6 +748,22 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
     # 행마다 `_low` 뒤 잇기 — 통째로 하면 `=`/`:` 둘레 공백 제거가 개행을 넘는다. 조각·토큰엔 개행이 없어 일치는 한 줄 안이다
     low_lines = "\n".join(_low_folded(w) for w in ws_rows) if big else ""
     res = {"n": len(items), "fabricated": 0, "weak": 0, "raw": 0, "first": None, "verdicts": []}
+
+    def judge(item: str) -> str:
+        parts = _quote_parts(item, tags)
+        if big and parts and all(_has_token(low_lines, _low(p)) for p in parts):
+            verdict = "ok"
+        else:
+            # ponytail: 공백 말고도 표기가 다른 인용은 축소 검색(조각이 든 행 + 8자 이상 낱말 공유 첫 300행)에 기대므로, 그 밖의 줄을 인용하면 여전히 fabricated 오탐
+            text = source if not big else "\n".join(dict.fromkeys(
+                _part_rows(parts, rows, ws_rows) + _subset(_WORD_RX.findall(" ".join(parts)), rows).split("\n")))
+            verdict = evidence_check(item, text, tags)[0]
+        # F-A01-min: 메시지는 맞는데 적은 머리(시각·슬롯·태그)가 맞는 행이 없으면 약함(fabricated는 정밀도만 다른 정상 시각에서 오탐)
+        if verdict == "ok" and not _head_ok(_quote_head(item, tags), parts, rows, ws_lines, tags):
+            verdict = "weak"
+        return verdict
+
+    rank = {"ok": 0, "weak": 1, "fabricated": 2}
     for i, item in enumerate(items):
         if i in raw_items:
             verdict = "raw"
@@ -710,17 +771,10 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
             verdict = "fabricated"          # 메모만(또는 닫히지 않은 메모를) 인용했다
         else:
             item = SCRIPT_NOTE_RX.sub("", item).rstrip()      # 줄 끝 메모까지 복사한 인용은 본 줄로 판정한다(sim1122 RP-13)
-            parts = _quote_parts(item, tags)
-            if big and parts and all(_has_token(low_lines, _low(p)) for p in parts):
-                verdict = "ok"
-            else:
-                # ponytail: 공백 말고도 표기가 다른 인용은 축소 검색(조각이 든 행 + 8자 이상 낱말 공유 첫 300행)에 기대므로, 그 밖의 줄을 인용하면 여전히 fabricated 오탐
-                text = source if not big else "\n".join(dict.fromkeys(
-                    _part_rows(parts, rows, ws_rows) + _subset(_WORD_RX.findall(" ".join(parts)), rows).split("\n")))
-                verdict = evidence_check(item, text, tags)[0]
-            # F-A01-min: 메시지는 맞는데 적은 머리(시각·슬롯·태그)가 맞는 행이 없으면 약함(fabricated는 정밀도만 다른 정상 시각에서 오탐)
-            if verdict == "ok" and not _head_ok(_quote_head(item, tags), parts, rows, ws_lines, tags):
-                verdict = "weak"
+            verdict = judge(item)
+            alt = SCRIPT_NOTE_RX.sub("", (alts[i] if alts and i < len(alts) else None) or "").rstrip()
+            if verdict != "ok" and alt and alt != item:
+                verdict = min(verdict, judge(alt), key=rank.__getitem__)
         res["verdicts"].append(verdict)
         if verdict != "ok":
             res[verdict] += 1

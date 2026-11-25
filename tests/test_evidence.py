@@ -418,3 +418,65 @@ def test_empty_quote_is_not_ok_and_unit_number_change_is_caught():
     assert evidence.check_quotes(["retry after 5000ms for data connection"], src, tags)["verdicts"] == ["ok"]
     assert evidence.check_quotes(["retry after 9999ms for data connection"], src, tags)["verdicts"] == ["fabricated"]
     assert evidence.check_quotes(["for data connection, timer 60s"], src, tags)["verdicts"] == ["fabricated"]
+
+
+# --- 탐색 사본 줄(`copy_rows`·`raw_row`, 11/25 리뷰) — check-output 탐색과 같은 순서로 판정한다 -------------------------------
+
+COPY_TL = "10:00:00.000 p0 D RILJ [0001]> SETUP_DATA_CALL apn=ims\n"
+
+
+def _copy_check(copy: str, quotes: list[str]) -> list[str]:
+    extra = evidence.copy_rows([copy], quotes)
+    src, tags = evidence.source_text(COPY_TL + "\n" + extra)
+    return evidence.check_quotes(quotes, src, tags, alts=[evidence.raw_row(q) for q in quotes])["verdicts"]
+
+
+def test_copy_rows_keeps_verbatim_line_behind_many_similar_lines():
+    """낱말이 같은 재시도 줄 60개(`error 6`) 뒤의 진짜 줄(`error 2`)도 근거 원문에 든다 — 메시지 조각이 그대로 든 줄은 상한 밖에 늘.
+    값을 바꾼 인용은 그대로 지어낸 것이다."""
+    lines = [f"11-17 09:{i // 60:02d}:{i % 60:02d}.000  1000  1001 E RILJ    : [0{i:03d}]< SETUP_DATA_CALL error 6 apn=internet"
+             for i in range(60)]
+    real = "11-17 09:59:59.000  1000  1001 E RILJ    : [0999]< SETUP_DATA_CALL error 2 apn=internet"
+    copy = "\n".join(lines + [real]) + "\n"
+    for q in (real, "09:59:59.000 - E RILJ [0999]< SETUP_DATA_CALL error 2 apn=internet", "SETUP_DATA_CALL error 2 apn=internet"):
+        assert _copy_check(copy, [q]) == ["ok"], q
+    assert _copy_check(copy, [real.replace("error 2", "error 9")]) == ["fabricated"]
+
+
+def test_copy_rows_prefers_same_time_among_ties():
+    """시각만 다른 같은 메시지 100줄 중 81번째를 시각과 함께 인용하면 그 줄이 근거 원문에 든다(같은 순위에서 시각이 같은 줄 먼저)."""
+    lines = [f"11-17 09:{i // 60:02d}:{i % 60:02d}.000  1000  1001 W DataNetworkController: [PHONE0] onDataStall: no data activity"
+             for i in range(100)]
+    assert _copy_check("\n".join(lines) + "\n", [lines[80]]) == ["ok"]
+
+
+def test_raw_row_reads_parser_formats():
+    """`raw_row`는 파서 정규식으로 읽는다: logcat threadtime(uid·연도·시간대 칸)·`-v time`, oFono journal ISO·syslog BSD·BusyBox."""
+    want = "09:59:59.000 - E RILJ [0999]< SETUP_DATA_CALL error 2"
+    for line in ("11-17 09:59:59.000  1000  1001 E RILJ    : [0999]< SETUP_DATA_CALL error 2",
+                 "11-17 09:59:59.000 E/RILJ    ( 1000): [0999]< SETUP_DATA_CALL error 2",
+                 "11-17 09:59:59.000  radio  1000  1001 E RILJ    : [0999]< SETUP_DATA_CALL error 2",
+                 "11-17 09:59:59.000 +0900  1000  1001 E RILJ    : [0999]< SETUP_DATA_CALL error 2",
+                 "2026-11-17 09:59:59.000  1000  1001 E RILJ    : [0999]< SETUP_DATA_CALL error 2"):
+        assert evidence.raw_row(line) == want, line
+    ofono = REPO / "tests" / "fixtures" / "logs" / "ofono"
+    iso = (ofono / "journal-iso.log").read_text(encoding="utf-8").split("\n")[1]
+    bsd = (ofono / "syslog-bsd.log").read_text(encoding="utf-8").split("\n")[1]
+    busy = (ofono / "syslog-busybox.log").read_text(encoding="utf-8").split("\n")[2]
+    assert evidence.raw_row(iso) == "14:32:10.200000 - - daemon-a data connect failed: reason=PLACEHOLDER_REASON"
+    assert evidence.raw_row(bsd) == "14:32:11 - - daemon-b call setup failed: cause=PLACEHOLDER"
+    assert evidence.raw_row(busy) == "14:50:00.400 - D ofonod [0,0001]< RIL_REQUEST_SETUP_DATA_CALL failed GENERIC_FAILURE"
+    for line in (iso, bsd):
+        assert _copy_check(line + "\n", [line]) == ["ok"], line
+    assert evidence.raw_row("단말 재부팅: 확인됨") is None
+
+
+def test_check_quotes_alt_keeps_better_verdict():
+    """`alts`(원문 모양 인용을 행 문법으로 바꾼 것)는 인용이 ok가 아닐 때만 한 번 더 보고 나은 쪽을 쓴다 — 바꾼 쪽이 슬롯 `-`라
+    약해져도 원래 인용이 맞으면 ok."""
+    src, tags = evidence.source_text("10:00:00.000 p0 D RILJ [0001]> SETUP_DATA_CALL apn=ims profile=default\n")
+    q = "11-17 10:00:00.000  1000  1001 D RILJ    : [0001]> SETUP_DATA_CALL apn=ims profile=default"
+    assert evidence.check_quotes([evidence.raw_row(q)], src, tags)["verdicts"] == ["weak"]       # 바꾼 쪽만 보면 약함
+    assert evidence.check_quotes([q], src, tags, alts=[evidence.raw_row(q)])["verdicts"] == ["ok"]
+    assert evidence.check_quotes([q.replace("apn=ims", "apn=xyz")], src, tags,
+                                 alts=[evidence.raw_row(q.replace("apn=ims", "apn=xyz"))])["verdicts"] == ["fabricated"]

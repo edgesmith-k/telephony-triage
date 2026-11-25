@@ -193,6 +193,40 @@ def test_grep_without_span_searches_whole_log():
     assert _window(job, "--at", AT, "--grep", r"carrier link \w+", "--span", 60)["lines"] == 1
 
 
+def test_parse_at_clock_falls_back_to_whole_log_and_grep_timeout_suggests_span(monkeypatch):
+    """11/25 리뷰: 시각만 쓴 `--at`이 분석 범위 밖이면 로그 전체(coverage)에서 날을 찾는다(탐색은 구간 밖 사본 줄도 본다).
+    `--grep` 시간 초과 안내는 `--span`으로 좁히는 길도 준다."""
+    import types
+
+    from common import patterns
+    from triagelib import window
+
+    ev = {"input": {"window": {"start": "2026-09-20T05:33:10.000Z", "end": "2026-09-20T05:34:00.000Z"}},
+          "coverage": {"first_ts": "2026-09-20T05:00:00.000Z", "last_ts": "2026-09-20T06:00:00.000Z"}}
+    assert window.parse_at("05:33:30", ev)[0].isoformat() == "2026-09-20T05:33:30+00:00"
+    assert window.parse_at("05:10:00", ev)[0].isoformat() == "2026-09-20T05:10:00+00:00"       # 분석 범위 밖, 로그 안
+    assert "안에 없다" in window.parse_at("07:00:00", ev)[1]
+
+    class Slow:
+        def __init__(self, *_a):
+            pass
+
+        def __enter__(self):
+            raise patterns.PatternTimeout("(a+)+$", 1)
+
+        def __exit__(self, *_a):
+            return False
+
+    monkeypatch.setattr(patterns, "PatternRunner", Slow)
+    args = types.SimpleNamespace(tag=None, slot=None, cat=None, grep="(a+)+$")
+    try:
+        window._narrow(args, [{"tag": "T", "msg": "aaa"}], Path("."), {})
+    except window._Stop as stop:
+        assert "--span" in stop.detail
+    else:
+        raise AssertionError("시간 초과가 사용 오류가 아니다")
+
+
 def test_normalize_ts_reads_any_fraction_width():
     """리뷰 7: 3.10 fromisoformat은 초 소수 3·6자리만 읽는다 — 1·2·4·5·7자리도 6자리로 맞춰 읽는다."""
     from common import logtime

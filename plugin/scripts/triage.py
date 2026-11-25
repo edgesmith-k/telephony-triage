@@ -213,14 +213,14 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("window", parents=[common])
     p.add_argument("key", metavar="KEY")
     p.add_argument("--at", metavar="시각", required=True,
-                   help="중심 시각: 타임라인 줄 시각 HH:MM:SS[.mmm](UTC, 날짜는 분석 범위에서) · Z·오프셋 있는 ISO · logcat "
-                        "스탬프 MM-DD HH:MM:SS.mmm(run의 --tz). 오프셋 없는 ISO는 오류")
+                   help="중심 시각: 타임라인 줄 시각 HH:MM:SS[.mmm](UTC, 날짜는 분석 범위, 없으면 로그 전체에서) · Z·오프셋 있는 ISO(window 머리 시각) · "
+                        "사본의 logcat 스탬프 MM-DD HH:MM:SS.mmm 그대로(run의 --tz). 오프셋 없는 ISO는 오류")
     p.add_argument("--lines", type=int, metavar="N", help="줄 수(기본 40, 상한 200)")
     p.add_argument("--span", type=float, metavar="초", help="--at ±초/2 안의 줄만(≤3600, --lines와 함께면 적은 쪽)")
     p.add_argument("--tag", action="append", metavar="TAG", help="이 태그 줄만(여러 번 쓸 수 있다). 없으면 모든 태그")
     p.add_argument("--slot", type=int, metavar="N", help="이 슬롯(phone_id) 줄만 — 슬롯 모름 줄은 남긴다")
     p.add_argument("--cat", metavar="카테고리", help="tags.yaml에서 이 카테고리로 매핑된 태그 줄만")
-    p.add_argument("--grep", metavar="정규식", help="가린 사본의 `태그: 메시지`에 맞는 줄만(≤200자, 시간 상한). --span이 없으면 분석 범위 안에서만 찾는다")
+    p.add_argument("--grep", metavar="정규식", help="가린 사본의 `태그: 메시지`에 맞는 줄만(≤200자, 시간 상한). --span이 없으면 로그 전체에서 찾는다")
     p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
     p = sub.add_parser("summary", parents=[common])
     p.add_argument("key", metavar="KEY")

@@ -7,8 +7,8 @@
 - 줄은 모든 사본·모든 태그(`--tag`로 좁힐 수 있다)의 백엔드 줄 레코드를 run과 같은 시각 변환(`events.json input.tz·year`, 사본은 원본
   mtime)으로 읽어 시각순으로 `--at` 둘레 N줄(기본 40, 상한 200, 본문 24KB)을 타임라인과 같은 줄 모양(`report.row_line`: 시각(UTC) 슬롯
   레벨 태그 메시지, 160자에서 자름)으로 낸다. `masking.redact`로 한 번 더 거른다(마스킹 끔 DB면 그대로).
-- `--at`(`parse_at`): 타임라인 줄의 시각만(`HH:MM:SS[.mmm]`)이면 UTC로 읽고 날짜는 분석 범위(`events.json input.window`, 없으면
-  `coverage`)에서 그 시각이 범위 안에 드는 날 — 자정을 넘는 범위면 드는 날이 하나일 때만, 없거나 여럿이면 사용 오류. 오프셋 있는 ISO와
+- `--at`(`parse_at`): 타임라인 줄의 시각만(`HH:MM:SS[.mmm]`)이면 UTC로 읽고 날짜는 분석 범위(`events.json input.window`)에서,
+  거기 없으면 로그 전체(`coverage`)에서 그 시각이 드는 날 — 드는 날이 하나일 때만, 없거나 여럿이면 사용 오류. 오프셋 있는 ISO와
   logcat 스탬프는 `--answer time=`과 같은 변환(`logtime.normalize_ts`, 스탬프는 run의 `--tz`·`--year`). 오프셋 없는 ISO는 사용
   오류(로그 시간대를 짐작하지 않는다). 시계 차(`--clock-offset`)는 시험 장비 시각에만 쓰므로 쓰지 않는다. `--span 초`면 `--at` ±초/2 안의 줄만(줄·바이트 상한 그대로,
   `--lines`와 함께면 둘 다 — 적은 쪽. 구간 안 줄이 상한보다 많으면 가까운 순 대신 `ranked` 순). 거르기(좁히기만): `--tag`, `--slot N`(슬롯 모름 줄은 남긴다), `--cat`(tags.yaml 그 카테고리 태그),
@@ -78,26 +78,31 @@ def parse_at(value, ev: dict):
     if m:
         win = inp.get("window") or {}
         cov = ev.get("coverage") or {}
-        try:
-            lo = logtime.parse_ts(win.get("start") or cov.get("first_ts"))
-            hi = logtime.parse_ts(win.get("end") or cov.get("last_ts"))
-        except (TypeError, ValueError, AttributeError):
-            return None, "시각만 쓴 --at은 분석 범위의 날짜로 읽는데 범위를 모른다 — 날짜와 Z를 붙인 ISO로"
         h, mi, s, frac = int(m.group(1)), int(m.group(2)), int(m.group(3)), (m.group(4) or "").ljust(6, "0")
         if h > 23 or mi > 59 or s > 59:
             return None, f"--at 시각 형식: {masking.mask_brief(text, 30)}"
-        hits = []
-        day = lo.date()
-        while day <= hi.date():
-            t = datetime(day.year, day.month, day.day, h, mi, s, int(frac), tzinfo=timezone.utc)
-            if lo <= t <= hi:
-                hits.append(t)
-            day += timedelta(days=1)
+        hits, span = [], None
+        # 분석 범위에서 먼저, 거기 없으면 로그 전체(coverage)에서 — 탐색은 분석 구간 밖도 본다(사본 grep으로 찾은 시각)
+        for start, end in ((win.get("start"), win.get("end")), (cov.get("first_ts"), cov.get("last_ts"))):
+            try:
+                lo, hi = logtime.parse_ts(start), logtime.parse_ts(end)
+            except (TypeError, ValueError, AttributeError):
+                continue
+            span = f"{logtime.format_ts(lo)} ~ {logtime.format_ts(hi)}"
+            day = lo.date()
+            while day <= hi.date():
+                t = datetime(day.year, day.month, day.day, h, mi, s, int(frac), tzinfo=timezone.utc)
+                if lo <= t <= hi:
+                    hits.append(t)
+                day += timedelta(days=1)
+            if hits:
+                break
+        if span is None:
+            return None, "시각만 쓴 --at은 분석 범위의 날짜로 읽는데 범위를 모른다 — 날짜와 Z를 붙인 ISO로"
         if len(hits) == 1:
             return hits[0], None
-        span = f"{logtime.format_ts(lo)} ~ {logtime.format_ts(hi)}"
-        return None, (f"--at {text}(UTC)이 분석 범위 {span} 안에 없다" if not hits else
-                      f"--at {text}(UTC)에 맞는 날이 분석 범위 {span}에 여럿이다 — 날짜와 Z를 붙인 ISO로")
+        return None, (f"--at {text}(UTC)이 로그 범위 {span} 안에 없다" if not hits else
+                      f"--at {text}(UTC)에 맞는 날이 범위 {span}에 여럿이다 — 날짜와 Z를 붙인 ISO로")
     if logtime.STAMP_RE.fullmatch(text):
         dt = logtime.normalize_ts(text, inp.get("tz"), inp.get("year"))      # logcat 스탬프: `--answer time=`과 같은 변환
     elif not OFFSET_RE.search(text):
@@ -200,7 +205,7 @@ def _narrow(args, recs: list[dict], rules_dir: Path, db_cfg: dict) -> list[dict]
             with PatternRunner([f"{r.get('tag')}: {r.get('msg')}" for r in recs], timeout_ms) as runner:
                 hit = set(runner.search(args.grep))
         except PatternTimeout:
-            raise _Stop(USAGE, "사용 오류", f"--grep 정규식 시간 초과({timeout_ms}ms) — 더 좁은 식으로") from None
+            raise _Stop(USAGE, "사용 오류", f"--grep 정규식 시간 초과({timeout_ms}ms) — 더 좁은 식으로, 또는 --span 초로 시각 둘레만") from None
         except PatternError as exc:
             raise _Stop(USAGE, "사용 오류", f"--grep 정규식 오류: {exc}") from None
         recs = [r for k, r in enumerate(recs) if k in hit]
