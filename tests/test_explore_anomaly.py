@@ -330,19 +330,24 @@ def test_window_grep_whole_log_and_call_cap():
     assert core.WINDOWS_MAX >= 50
 
 
-def test_guard_allows_ranged_reads_of_masked_copy_but_not_dumps(tmp_path):
-    """사본 `grep -n`·`sed -n a,bp`는 통과, 통째 출력(cat)은 계속 거부(규칙 10). 가드는 바꾸지 않았다 — 지침이 그 길을 쓰므로 고정한다."""
+def test_guard_allows_ranged_reads_of_masked_copy_but_not_dumps(monkeypatch):
+    """사본 `grep -n`·`sed -n a,bp`는 통과, 통째 출력(cat)은 계속 거부(규칙 10). 가드는 바꾸지 않았다 — 지침이 그 길을 쓰므로 고정한다.
+    판정은 test_hooks의 guard 시험과 같은 작업공간(설정 있음)·같은 함수(`guard.judge`)로 본다."""
+    from workspace import Workspace
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    import guard as g
+    ws = Workspace()
+    for k, v in ws.env().items():
+        monkeypatch.setenv(k, str(v))
     job = _job()
     copy = next((job / "logs-masked").iterdir())
 
     def judge(cmd):
-        event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(job)}
-        proc = run("guard.py", [], cwd=job, env={"TELEPHONY_TRIAGE_HOME": tmp_path}, stdin=json.dumps(event))
-        assert proc.returncode == 0, proc.stderr
-        return json.loads(proc.stdout)["hookSpecificOutput"]["permissionDecision"] if proc.stdout.strip() else None
+        out, _ = g.judge({"tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(job)}, str(ws.root))
+        return out and out["hookSpecificOutput"]["permissionDecision"]
 
-    assert judge(f"grep -n EMM_ACCESS_BARRED logs-masked/{copy.name}") is None
-    assert judge(f"sed -n '100,180p' logs-masked/{copy.name}") is None
+    assert judge(f"grep -n EMM_ACCESS_BARRED logs-masked/{copy.name}") in (None, "allow")
+    assert judge(f"sed -n '100,180p' logs-masked/{copy.name}") in (None, "allow")
     assert judge(f"cat logs-masked/{copy.name}") == "deny"
 
 
