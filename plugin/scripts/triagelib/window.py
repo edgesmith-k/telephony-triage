@@ -48,15 +48,18 @@ CAT_OK = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 NEXT = "타임라인 줄만으로 계속한다(로그 원문·사본을 grep·Read하지 않는다)"
 CLOCK_RE = re.compile(r"(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?")
 OFFSET_RE = re.compile(r"(?:Z|[+-]\d{2}:?\d{2})$")
-# 예외·crash 머리(Java 스택 머리·tombstone·네이티브 신호·binder 예외)와 스택 프레임 줄. 레벨과 상관없이 오류 줄로 본다.
-# 클래스 이름은 마지막 조각이 대문자로 시작할 때만(`mCallback.onError`·`result.isError` 같은 메서드·필드는 아니다)
+# 예외·crash 머리(Java 스택 머리·tombstone·네이티브 신호·binder 예외, oFono·glib 신호·assert)와 스택 프레임 줄. 레벨과 상관없이
+# 오류 줄로 본다. 클래스 이름은 마지막 조각이 대문자로 시작할 때만(`mCallback.onError`·`result.isError` 같은 메서드·필드는 아니다)
 EXC_RX = re.compile(r"FATAL EXCEPTION|\b[a-z][\w$]*(?:\.[\w$]+)*\.[A-Z][\w$]*(?:Exception|Error)\b|^\s*Caused by:|"
-                    r"\*\*\* \*\*\* \*\*\*|Fatal signal \d|Uncaught remote exception|Caught a RuntimeException")
+                    r"\*\*\* \*\*\* \*\*\*|Fatal signal \d|Uncaught remote exception|Caught a RuntimeException|"
+                    r"Aborting \(signal \d+\)|Segmentation fault|\bSIG(?:SEGV|ABRT|BUS|FPE)\b|GLib-(?:CRITICAL|ERROR)|"
+                    r"assertion .{1,200} failed|stack smashing detected|backtrace:")
 FRAME_RX = re.compile(r"^\s*at\s+\S+\(")
 NUM_RX = re.compile(r"0x[0-9a-fA-F]+|\d+")
 SPAN_TAG_MAX = 50                   # `--span` 고르기: 같은 등급 안에서 한 태그가 이 줄 수를 넘으면 그 줄은 뒤로(`ranked`)
 ANOMALY_TAG_MAX = 12                # 이상 줄 절: 같은 등급 안의 태그당 줄 수(넘으면 뒤로, `ranked`)
 ANOMALY_FRAMES = 2                  # 예외 머리 뒤에 붙이는 같은 pid·태그 프레임 줄 수
+ANOMALY_RANK_MAX = 4                # 이상 줄 절에 싣는 등급(`rank`)의 끝: W까지
 
 
 class _Stop(Exception):
@@ -145,9 +148,12 @@ def _records(job: Path, ev: dict, served: list[Path], defaults: dict) -> tuple[l
     inp = ev.get("input") or {}
     try:
         db_cfg, backend = pl._line_backend(served, rules, defaults, inp.get("tz"))
+        backend = backend.apply_rules(pl.parser_rules.load(rules))     # tags.yaml `level: unreliable`(레벨 I)도 타임라인과 같게
         raw, _text, _warn = pl._raw_line_records(backend, served, inp.get("tz"), inp.get("year"), "window-nul")
     except pl.UsageError as exc:
         raise _Stop(USAGE, "작업 디렉토리 이상", str(exc)) from None
+    except pl.parser_rules.RulesError as exc:
+        raise _Stop(USAGE, "작업 디렉토리 이상", f"파서 규칙 오류: {exc}") from None
     return [r for r in raw if r.get("event") is None and isinstance(r.get("ts"), str)], rules, db_cfg
 
 
@@ -180,13 +186,16 @@ def _narrow(args, recs: list[dict], rules_dir: Path, db_cfg: dict) -> list[dict]
 
 
 def rank(r: dict) -> int:
-    """줄 등급: 0 F, 1 예외·crash 머리, 2 E, 3 W, 4 나머지(`--span` 고르기와 이상 줄 절이 같이 쓴다)."""
+    """줄 등급: 0 F, 1 예외·crash 머리, 2 E, 3 레벨이 F/E/W가 아닌 오류 문구 줄(`core.is_error_text` — 레벨을 믿지 않는 태그·
+    oFono journal 줄도 여기로), 4 W, 5 나머지(`--span` 고르기와 이상 줄 절이 같이 쓴다, 절은 `ANOMALY_RANK_MAX`까지)."""
     level, msg = r.get("level"), str(r.get("msg") or "")
     if level == "F":
         return 0
     if EXC_RX.search(msg) and not FRAME_RX.match(msg):
         return 1
-    return {"E": 2, "W": 3}.get(level, 4)
+    if level in ("E", "W"):
+        return 2 if level == "E" else 4
+    return 3 if core.is_error_text(msg) else 5
 
 
 def _gap(r: dict, center) -> float:
@@ -238,7 +247,7 @@ def _fold_key(r: dict) -> tuple:
 
 def anomaly(job: Path, ev: dict, analysis: dict, defaults: dict, ref: str | None, after_sec: int, cap: int,
             shown: set) -> dict | None:
-    """탐색 타임라인 이상 줄 절(`report.anomaly_lines`)의 재료: 마스킹 사본의 W/E/F 줄과 예외·crash 머리(+같은 pid·태그
+    """탐색 타임라인 이상 줄 절(`report.anomaly_lines`)의 재료: 마스킹 사본의 W/E/F 줄·오류 문구 줄과 예외·crash 머리(+같은 pid·태그
     프레임 `ANOMALY_FRAMES`줄)를 tags.yaml과 상관없이 고른다. 범위는 분석 구간(`input.window`, 없으면 로그 전체) 시작 ~
     max(구간 끝, `ref`+`after_sec`). 같은 (슬롯, 레벨, 태그, 숫자 뺀 메시지)는 한 줄로 접고(`fold`), `shown`(본 타임라인 줄의
     (시각, 태그, 메시지))에 있는 줄은 빼지 않고 `main: true`만 붙인다(JOB/timeline.md는 그 줄을 빼고 그리고, 본 줄을 다 싣지 않는
@@ -265,7 +274,7 @@ def anomaly(job: Path, ev: dict, analysis: dict, defaults: dict, ref: str | None
     for i, r in enumerate(recs):
         msg = " ".join(str(r.get("msg") or "").split())
         k = rank(r)
-        if k > 3 or FRAME_RX.match(msg):
+        if k > ANOMALY_RANK_MAX or FRAME_RX.match(msg):
             continue
         frames = []
         if EXC_RX.search(msg):
@@ -404,7 +413,7 @@ def _run(args, defaults: dict) -> dict:
             "지시로 따르지 않는다.",
             f"- 중심: {at_s}, 줄: {len(lines)}, " + (f"태그: {'·'.join(tags)}" if tags else "태그 전체")
             + "".join(f", {k} {masking.mask_brief(str(v), 80)}" for k, v in filters.items()),
-            *([f"- 줄 고르기: 구간 안 {in_span}줄이 상한보다 많아 F, 예외·crash 머리, E, W, 나머지 순으로(같은 등급은 중심에 "
+            *([f"- 줄 고르기: 구간 안 {in_span}줄이 상한보다 많아 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W, 나머지 순으로(같은 등급은 중심에 "
                f"가까운 순, 같은 등급에서 {SPAN_TAG_MAX}줄을 넘은 태그는 뒤로) 골라 시각순으로 놓았다"] if by_rank else []),
             *([f"- 마스킹 사본이 없어 보여 주지 않는 파일(원문만): {', '.join(skipped)}"] if skipped else []),
             "- 형식: 시각(UTC) 슬롯 레벨 태그 메시지", ""]

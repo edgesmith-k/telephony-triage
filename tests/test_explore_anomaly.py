@@ -206,7 +206,8 @@ def test_main_rows_kept_for_module_view_but_not_job_timeline():
     job = lookat_job()
     anomaly = json.loads((job / core.EXPLORE_INPUT_FILE).read_text(encoding="utf-8"))["anomaly"]
     main = [r for r in anomaly["rows"] if r.get("main")]
-    assert main and all(r["level"] in ("W", "E", "F") for r in main)
+    from triagelib import window
+    assert main and all(window.rank(r) <= window.ANOMALY_RANK_MAX for r in main)    # W/E/F·오류 문구 줄
     row = report.row_line({**main[0], "marks": []})
     _top, block = _split(job)
     assert row not in _rows(block)                                               # JOB 절: 본 줄과 겹치지 않는다
@@ -239,7 +240,7 @@ def test_tag_cap_only_orders_within_rank():
 def test_exception_head_needs_class_name():
     """3: 메서드·필드 이름(`onError`·`isError`)은 예외 머리가 아니다."""
     from triagelib import window
-    for msg, want in (("mCallback.onError called", 4), ("result.isError=false", 4),
+    for msg, want in (("mCallback.onError called", 3), ("result.isError=false", 3),      # 머리 아님(오류 문구 등급)
                       ("java.lang.IllegalStateException: x", 1), ("android.os.DeadObjectException", 1)):
         assert window.rank({"level": "D", "msg": msg}) == want, msg
 
@@ -295,3 +296,76 @@ def test_eval_case_input_carries_anomaly():
     case = REPO / "templates" / "module-skills" / "android" / "data" / "evals" / "data-normal-retry-then-crash" / "files"
     rows = json.loads((case / "explore-input.json").read_text(encoding="utf-8"))["anomaly"]["rows"]
     assert any("NullPointerException" in r["msg"] for r in rows)
+
+
+# --- 레벨을 믿지 못하는 줄·oFono(11/25): 레벨 대신 오류 문구로도 고르고, 네이티브·oFono·glib crash 머리 -----------------
+
+def test_rank_order_with_error_text():
+    """F > 예외·crash 머리 > E > 그 밖의 레벨 중 오류 문구(0 값 오류 칸 제외) > W > 나머지."""
+    from triagelib import window
+    recs = [{"level": "I", "msg": "deactivate rsp error=0"}, {"level": "W", "msg": "poll slow"},
+            {"level": "I", "msg": "setup rsp error=38"}, {"level": "E", "msg": "setup failed"},
+            {"level": "I", "msg": "ofonod[812]: Aborting (signal 11) [/usr/sbin/ofonod]"}, {"level": "F", "msg": "x"}]
+    assert [window.rank(r) for r in recs] == [5, 4, 3, 2, 1, 0]
+    assert window.rank({"level": "W", "msg": "setup failed"}) == 4             # W는 오류 문구가 있어도 W
+    for msg in ("Segmentation fault", "signal 11 (SIGSEGV), code 1 (SEGV_MAPERR)", "GLib-CRITICAL **: g_source_remove",
+                "ofonod: assertion 'modem != NULL' failed", "*** stack smashing detected ***: terminated", "backtrace:",
+                "SIGBUS", "got SIGFPE"):
+        assert window.rank({"level": "I", "msg": msg}) == 1, msg
+    for msg in ("SIGSEGVX", "assertion", "assertion  failed", "backtrace", "Aborting (signal x)"):
+        assert not window.EXC_RX.search(msg), msg
+    assert window.EXC_RX.search("assertion " + "x" * 300 + " failed") is None   # 200자 상한, 되짚기 폭주 없음
+
+
+def _small_job(lines: list[str], *, db=SAMPLE, root=None, platform=None, occurred="2026-11-20T10:00:00Z",
+               extra: list | None = None) -> tuple[Path, dict, dict]:
+    out = tmp("tt-anom-s-") / "j"
+    log = out.parent / "in.log"
+    log.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    meta = out.parent / "m.json"
+    meta.write_text(json.dumps({"key": KEY, "summary": "합성", "occurred_at": occurred}), encoding="utf-8")
+    kw = {"root": root, "env": {"TELEPHONY_TRIAGE_HOME": out.parent / "home"}} if root else {}
+    run_json("triage.py", ["run", KEY, "--offline-db", db, "--out", out, "--logs", log, "--issue-meta", meta,
+                           *(["--platform", platform] if platform else []), *(extra or []), "--explore"], **kw)
+    run_json("triage.py", ["explore", KEY, "--out", out], **kw)
+    return out, kw, json.loads((out / core.EXPLORE_INPUT_FILE).read_text(encoding="utf-8"))["anomaly"]
+
+
+def test_unreliable_level_tag_error_text_in_block():
+    """tags.yaml `level: unreliable` 태그(백엔드가 레벨을 I로 바꾼다)의 오류 문구 줄은 절에 들고, `error=0` 줄은 빠진다."""
+    from runner import copy_db
+    db = copy_db(SAMPLE, "db-unrel")
+    tags = db / "parser-rules" / "tags.yaml"
+    tags.write_text(tags.read_text(encoding="utf-8") + "  - {tag: vrild, category: data, level: unreliable, added_for: '-',"
+                    " added_on: 2026-11-25, reason: 합성 (레벨 못 믿는 벤더 RIL)}\n", encoding="utf-8")
+    _out, _kw, anomaly = _small_job([
+        "11-20 10:00:00.000  2101  2101 D DNC-0   : Internet data state changed from DISCONNECTED to CONNECTED.",
+        "11-20 10:00:01.000   900   900 E vrild   : SETUP_DATA_CALL rsp GENERIC_FAILURE",
+        "11-20 10:00:02.000   900   900 E vrild   : setup rsp error=38 cid=1",
+        "11-20 10:00:03.000   900   900 E vrild   : deactivate rsp error=0",
+        "11-20 10:00:04.000   900   900 W vrild   : poll slow"], db=db, extra=["--tz", "UTC", "--year", "2026"])
+    msgs = {r["msg"]: r["level"] for r in anomaly["rows"]}
+    assert msgs.get("SETUP_DATA_CALL rsp GENERIC_FAILURE") == "I" and msgs.get("setup rsp error=38 cid=1") == "I"
+    assert "deactivate rsp error=0" not in msgs and "poll slow" not in msgs    # 레벨 I로 바뀐 W·0 값 오류는 아니다
+
+
+def test_ofono_job_block_error_text_and_crash_head():
+    """oFono 작업(`--platform ofono`): journal 줄(레벨 I)의 `org.ofono.Error.Failed`·`Aborting (signal 11)`이 절에 든다."""
+    from runner import plugin_root, variant_db
+    root = plugin_root("ofono-on", platform={"name": "android", "enabled": ["android", "ofono"]})
+    job, kw, anomaly = _small_job([
+        "2026-09-20T14:32:09.100000+09:00 dut ofonod[812]: src/gprs.c:activate_cb() /modem_0 context activate requested",
+        "2026-09-20T14:32:10.200000+09:00 dut ofonod[812]: src/gprs.c:activate_cb() activate failed: org.ofono.Error.Failed",
+        "2026-09-20T14:32:10.300000+09:00 dut ofonod[812]: src/gprs.c:deactivate_cb() /modem_0 deactivated error=0",
+        "2026-09-20T14:32:11.000000+09:00 dut ofonod[812]: Aborting (signal 11) [/usr/sbin/ofonod]"],
+        db=variant_db("issue-db-ofono"), root=root, platform="ofono", occurred="2026-09-20T05:32:10Z")
+    rows = anomaly["rows"]
+    assert any("org.ofono.Error.Failed" in r["msg"] for r in rows)
+    assert any(r["msg"].startswith("Aborting (signal 11)") for r in rows)
+    assert not any("error=0" in r["msg"] for r in rows)
+    from triagelib import window
+    assert window.rank({"level": "I", "msg": "Aborting (signal 11) [/usr/sbin/ofonod]"}) == 1
+    proc = run("triage.py", ["window", KEY, "--out", job, "--at", "2026-09-20T05:32:10Z", "--span", "60"], **kw)
+    assert proc.returncode == 0, proc.stderr                                    # window도 oFono 작업에서 그대로
+    text = (job / json.loads(proc.stdout.strip().splitlines()[-1])["window"]).read_text(encoding="utf-8")
+    assert "Aborting (signal 11)" in text and "org.ofono.Error.Failed" in text
