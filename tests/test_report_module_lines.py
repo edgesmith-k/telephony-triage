@@ -399,3 +399,14 @@ def test_user_rerun_without_flag_does_not_inherit_analyzer():
              env={"TELEPHONY_TRIAGE_HOME": work / "home"})
     analysis, _ = _run_c0(REMOTE, work=work)
     assert analysis["analyzer"] == {"skipped": "조사 모드", "when": "never"}
+
+
+@pytest.mark.parametrize("analyzer, forced", [({"category": "data", "when": "ask"}, True),
+                                              ({"category": "data", "when": "never"}, False),     # C-6: 설정 never는 --analyzer 표시가 아니다
+                                              ({"skipped": "조사 모드", "when": "never"}, False)])
+def test_prior_forced_analyzer_ignores_config_never(tmp_path, analyzer, forced):
+    from triagelib.driver import Driver
+    (tmp_path / "analysis.json").write_text(json.dumps({"investigate": {"mode": True}, "analyzer": analyzer}), encoding="utf-8")
+    drv = Driver.__new__(Driver)
+    drv.job = tmp_path
+    assert drv.prior_forced_analyzer() is forced

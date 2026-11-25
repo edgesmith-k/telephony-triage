@@ -1193,7 +1193,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                 return False
             prev = json.loads(path.read_text(encoding="utf-8")) or {}
             ana = prev.get("analyzer")
-            return bool((prev.get("investigate") or {}).get("mode")) and isinstance(ana, dict) and bool(ana.get("category"))
+            return bool((prev.get("investigate") or {}).get("mode")) and isinstance(ana, dict) and bool(ana.get("category")) \
+                and ana.get("when") != "never"      # 설정 never는 조사 모드에서도 category 모양이다(C-6)
         except (OSError, ValueError, AttributeError):
             return False
 
