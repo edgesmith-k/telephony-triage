@@ -205,6 +205,8 @@ def _record(job: Path, purpose: str, entry: dict) -> None:
     old = data.get(purpose)
     if isinstance(old, dict) and old.get("fit_hold") and "fit_hold" not in entry:   # 다시 검사·생략·실패해도 보류는 이어 간다
         entry = {**entry, **{k: old[k] for k in HOLD_KEEP if k in old}}
+    if isinstance(old, dict) and old.get("mech_no") and "investigation" not in entry and "mech_no" not in entry:
+        entry = {**entry, "mech_no": old["mech_no"]}      # eval 46: 생략·실패한 검사 사이에도 이어 간다(다음 검사가 판단)
     before = _fab_before(old)
     if before and "fabricated_before" not in entry:      # F9: 앞 검사의 원문에 없는 인용 수는 다시 검사·생략·실패해도 남긴다
         entry = {**entry, "fabricated_before": before}
@@ -554,6 +556,8 @@ OUTER_SIDES = {"CP 내부": ("cp",), "CP-망 경계": ("cp", "net"), "망": ("ne
 CP_CATEGORIES, NET_CATEGORIES = ("modem",), ("nas",)    # TODO(SITE:S9) 사내 tags.yaml의 모뎀·망 거절(NAS) 카테고리 이름
 SIDE_LABEL = {"cp": "CP", "net": "망"}
 INV_CAUSE_MAX, INV_WHY_MAX, INV_EXPECT_MAX = 120, 80, 80
+# eval 46: 재계산 '아니오'를 받은 같은 가설이 그 줄만 지워 다시 오면(숫자 기대가 없으면 재계산은 필수가 아니라 통과하던 것) 실패를 이어받는다
+MECH_NO_CARRIED = "앞 검사에서 이 가설의 재계산 답이 아니오 — 그 줄만 지움(가설을 고치거나 재계산을 다시 쓴다)"
 
 
 def _layer(value) -> str | None:
@@ -952,8 +956,9 @@ def _outer(events: dict | None, ok_quotes: list[str], layer: str | None, default
 
 def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: dict | None, defaults: dict | None = None,
                    platform: str | None = None, before: int = 0, texts: list[str] | None = None,
-                   after_sec: int = 600) -> tuple[dict, list[str]]:
+                   after_sec: int = 600, mech_no: str | None = None) -> tuple[dict, list[str]]:
     """조사 결론 게이트 6개 → (analysis.json·check-output 기록 `investigation`, 형식 경고). 하나라도 실패면 insufficient_evidence.
+    `mech_no` = 앞 검사에서 재계산 답이 '아니오'였던 가설 머리(같은 머리인데 이번에 재계산 줄이 없으면 그 실패를 이어받는다, eval 46).
     `before` = 앞 검사의 원문에 없는 인용 수(있으면 게이트 1 실패, R-03), `texts` = 마스킹 사본 글(`찾았는데 없음` 세기 — 없으면
     셀 수 없어 게이트 2 실패), `after_sec` = `explore.after_sec`(`찾았는데 없음` 세는 구간 최소 길이, C-1)."""
     hyps = fields.get("hyps") or []
@@ -1022,7 +1027,9 @@ def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: 
     reply = answer.group(1) if answer else None
     numeric = NUM_UNIT_RX.search((first or {}).get("기대") or "")     # R-17: 가장 이른 false 단계의 `기대` 칸만(가설 머리의 경과 시간은 아님)
     # 외부 리뷰 1125 지적 3: 명시적 `아니오`는 숫자 기대와 상관없이 실패, 숫자 기대면 계산 숫자와 명시적 `예`가 있어야 한다
-    why = ("재계산 답이 아니오(고쳐도 안 뒤집힘)" if reply in ("아니오", "아니요") else "" if not numeric
+    carried = bool(mech_no) and mech_no == (_one(h["가설"])[:INV_CAUSE_MAX] or None) and not mech.strip()
+    why = ("재계산 답이 아니오(고쳐도 안 뒤집힘)" if reply in ("아니오", "아니요")
+           else MECH_NO_CARRIED if carried else "" if not numeric
            else "숫자 기대인데 메커니즘 재계산 없음" if not mech.strip() else "재계산 답이 틀 그대로" if flip and flip.group(2)
            else "재계산 답 없음(예/아니오)" if reply != "예" else "재계산에 계산 내용(숫자) 없음" if not re.search(r"\d", mech) else "")
     add("숫자 메커니즘", not why, why or ("" if numeric else "해당 없음(숫자 기대 없음)"))
@@ -1619,9 +1626,13 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     subs = _fit_subs(analysis, fields, hold, normal1) if purpose == "explore" else []
     investigating = purpose == "explore" and (analysis.get("investigate") or {}).get("mode")     # 조사 모드(run이 판정)
     from triagelib import summary
+    mech_before = (old.get(purpose) or {}).get("mech_no") if isinstance(old, dict) and isinstance(old.get(purpose), dict) else None
     inv, inv_warns = (_investigation(job, fields, per_hyp, chain_v, sha, events, getattr(args, "tt_defaults", None),
                                      analysis.get("platform"), before, copies,
-                                     summary.after_of(getattr(args, "platform_cfg", None) or {})) if investigating else (None, []))
+                                     summary.after_of(getattr(args, "platform_cfg", None) or {}),
+                                     mech_before if isinstance(mech_before, str) else None) if investigating else (None, []))
+    mech_g = next((g for g in (inv or {}).get("gate") or [] if g["name"] == "숫자 메커니즘"), None)
+    mech_no = inv["cause"] if mech_g and not mech_g["ok"] and mech_g["why"].startswith(("재계산 답이 아니오", MECH_NO_CARRIED[:12])) else None
     if inv and normal1:     # R-16: 가장 유력이 정상이고 정상 근거 줄이 원문 확인 — 원인 조사 대상 아님(상태는 근거 부족 그대로)
         inv = {**inv, "status": "insufficient_evidence", "normal": True}
     top = (analysis.get("candidates") or [None])[0]
@@ -1682,7 +1693,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
                            **({"top_fit": fields["top_fit"]["fit"] or "읽지 못함"} if fields.get("top_fit") else {}),
                            **({"top_fit_cause": fields["top_fit"]["cause"]} if (fields.get("top_fit") or {}).get("cause") else {}),
                            **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra, **inv_extra,
-                           **({"investigation": inv} if inv else {}),
+                           **({"investigation": inv} if inv else {}), **({"mech_no": mech_no} if mech_no else {}),
                            **({"normal": [i + 1 for i, v in enumerate(normal_ok) if v]} if any(normal_ok) else {}),
                            **unknown, **({"rules": rules_kept} if rules_kept else {}), **({"rules_dropped": rules_dropped, "rules_dropped_why": rules_why} if rules_dropped else {}),
                            **({modulelines.KEPT_KEY: module_lines} if module_lines is not None else {}),
