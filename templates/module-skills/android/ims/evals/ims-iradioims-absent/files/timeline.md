@@ -14,6 +14,8 @@
 11:47:20.411 - D RilRequest [0527]< NOTIFY_IMS_DATA_NETWORK error: com.android.internal.telephony.CommandException: REQUEST_NOT_SUPPORTED  〔script 모양 1줄〕
 11:47:23.140 p0 E RILJ Unable to complete updateImsRegistrationInfo because service IMS is not available. [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
 11:46:05.631 p0 E RILJ Unable to complete updateAllowedImsServices because service IMS is not available. [PHONE0]  〔script 모양 1줄〕
+11:46:02.115 - W Telephony registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1  〔script 모양 1줄〕
+11:46:02.114 - W Telephony registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1  〔script 모양 1줄〕
 11:47:20.411 p0 D RILJ [0527]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]  〔script 모양 1줄〕
 11:47:20.409 - V RIL ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0e07 len=12  〔script 모양 1줄〕
 11:47:23.051 - V RIL ipc[0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=96  〔script 모양 1줄, 기준 뒤 첫 등장〕
@@ -28,8 +30,6 @@
 11:47:20.404 p0 D RILJ [0527]> NOTIFY_IMS_DATA_NETWORK accessNetwork=NGRAN dataNetworkState=CONNECTING physicalTransportType=WWAN physicalNetworkSlotIndex=0 [PHONE0]  〔script 모양 1줄〕
 11:47:20.402 - D ImsPhone [0] handleImsRegistering: onImsMmTelProgressing imsRadioTech=WWAN  〔script 모양 1줄〕
 11:46:05.630 - V SatelliteController satelliteConfigParser is not ready  〔script 모양 1줄〕
-11:46:02.115 - W Telephony registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1  〔script 모양 1줄〕
-11:46:02.114 - W Telephony registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1  〔script 모양 1줄〕
 
 ## 본 타임라인
 
@@ -46,12 +46,10 @@
 ## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
 
 - 범위: 2026-10-15T11:42:23.000Z ~ 2026-10-15T11:57:23.000Z (분석 구간 끝과 기준 시각 2026-10-15T11:47:23.000Z 뒤 600초 중 늦은 쪽까지).
-- 줄: 7. 프레임을 뺀 후보 7줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+- 줄: 5. 프레임을 뺀 후보 5줄에서 F, 예외·crash 머리, E, 레벨을 믿지 않는 줄의 오류 문구, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
 
 11:46:02.114 - W Telephony registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
 11:46:02.115 - W Telephony registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1
 11:46:05.631 p0 E RILJ Unable to complete updateAllowedImsServices because service IMS is not available. [PHONE0]
-11:47:20.409 - V RIL ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0e07 len=12
-11:47:20.411 p0 D RILJ [0527]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]
 11:47:20.411 - D RilRequest [0527]< NOTIFY_IMS_DATA_NETWORK error: com.android.internal.telephony.CommandException: REQUEST_NOT_SUPPORTED
 11:47:23.140 p0 E RILJ Unable to complete updateImsRegistrationInfo because service IMS is not available. [PHONE0]

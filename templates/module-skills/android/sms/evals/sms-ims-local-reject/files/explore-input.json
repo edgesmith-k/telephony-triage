@@ -19,24 +19,8 @@
   ],
   "ref": "2026-08-25T14:00:21.000Z",
   "after_sec": 600,
-  "candidates": 9,
+  "candidates": 7,
   "rows": [
-   {
-    "ts": "2026-08-25T14:00:04.114Z",
-    "phone": null,
-    "level": "V",
-    "tag": "RIL",
-    "msg": "ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0205 len=12",
-    "main": true
-   },
-   {
-    "ts": "2026-08-25T14:00:07.135Z",
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
-    "msg": "[0305]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]",
-    "main": true
-   },
    {
     "ts": "2026-08-25T14:00:20.050Z",
     "phone": null,

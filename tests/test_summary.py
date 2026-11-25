@@ -215,3 +215,15 @@ def test_candidate_check_quotes_are_grounded(tmp_path, capsys):
     code, data, err = tc.check(old, capsys=capsys)
     assert code == 0 and data["quotes"] == 2 and data["fabricated"] == 0, (data, err)
     assert "[근거 불일치]" not in (old / "report.md").read_text(encoding="utf-8")
+
+
+def test_w_before_ref_still_ahead_of_new_info_lines(monkeypatch):
+    """window.rank 번호가 바뀌어도(W = `window.W_RANK`) 기준 앞 W 모양이 기준 뒤 처음 나온 I 모양보다 앞(오류 쪽 등급 먼저)."""
+    from triagelib import window
+    recs = [{"ts": "2026-11-20T09:59:00.000Z", "level": "W", "tag": "A", "msg": "poll slow", "phone_id": None},
+            {"ts": "2026-11-20T10:00:05.000Z", "level": "I", "tag": "B", "msg": "state idle", "phone_id": None},
+            {"ts": "2026-11-20T10:00:06.000Z", "level": "D", "tag": "C", "msg": "rsp error 2", "phone_id": None}]
+    monkeypatch.setattr(window, "served_copies", lambda job, analysis: ([Path("x.log")], []))
+    monkeypatch.setattr(window, "_records", lambda job, ev, served, defaults: (recs, None, {}))
+    got = summary.groups(Path("."), {"mask_off": True}, {}, {}, "2026-11-20T10:00:00Z", 10)
+    assert [g["tag"] for g in got["groups"]] == ["A", "C", "B"]              # W, I/D 오류 문구, 기준 뒤 첫 등장

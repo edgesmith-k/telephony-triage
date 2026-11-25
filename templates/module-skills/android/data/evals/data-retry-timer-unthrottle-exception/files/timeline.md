@@ -35,9 +35,8 @@
 ## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
 
 - 범위: 2026-11-20T12:55:01.000Z ~ 2026-11-20T13:10:01.000Z (분석 구간 끝과 기준 시각 2026-11-20T13:00:01.000Z 뒤 600초 중 늦은 쪽까지).
-- 줄: 9. 프레임을 뺀 후보 7줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+- 줄: 8. 프레임을 뺀 후보 6줄에서 F, 예외·crash 머리, E, 레벨을 믿지 않는 줄의 오류 문구, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
 
-13:00:00.302 p0 D DNC-0 onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=INSUFFICIENT_RESOURCES(0x1a), retryDelayMillis=299999ms.
 13:02:10.000 - E AndroidRuntime FATAL EXCEPTION: main  〔script 비슷한 줄 1번 더 접음(13:02:10.000~13:05:00.311)〕
 13:02:10.000 - E AndroidRuntime Process: com.android.settings, PID: 3300
 13:02:10.000 - E AndroidRuntime java.lang.IllegalStateException: Fragment not attached to a context.

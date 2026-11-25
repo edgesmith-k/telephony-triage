@@ -3,57 +3,6 @@
  "failed_step": null,
  "limit": 200,
  "anchor": null,
- "anomaly": {
-  "range": [
-   "2026-09-21T10:35:05.000Z",
-   "2026-09-21T10:50:05.000Z"
-  ],
-  "ref": "2026-09-21T10:40:05.000Z",
-  "after_sec": 600,
-  "candidates": 5,
-  "rows": [
-   {
-    "ts": "2026-09-21T10:40:05.000Z",
-    "phone": null,
-    "level": "D",
-    "tag": "vrild",
-    "msg": "mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=40",
-    "main": true
-   },
-   {
-    "ts": "2026-09-21T10:40:05.001Z",
-    "phone": null,
-    "level": "D",
-    "tag": "imsd",
-    "msg": "[SLOT_0][V] 5110 [SUB_0] ind <- OEM_UNSOL_IMS_EXAMPLE_REG_FAIL(3100) : [example-code : 403]",
-    "main": true
-   },
-   {
-    "ts": "2026-09-21T10:40:05.003Z",
-    "phone": null,
-    "level": "D",
-    "tag": "ofonod",
-    "msg": "src/ims.c:example_reg_fail_notify() fail_code = 403",
-    "main": true
-   },
-   {
-    "ts": "2026-09-21T10:40:05.004Z",
-    "phone": 0,
-    "level": "I",
-    "tag": "ofonod",
-    "msg": "[0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=403",
-    "main": true
-   },
-   {
-    "ts": "2026-09-21T10:40:05.006Z",
-    "phone": null,
-    "level": "D",
-    "tag": "imsd",
-    "msg": "[SLOT_0][I] 5102 [ExampleImsRegistration] exampleRegistrationFailed() code=403",
-    "main": true
-   }
-  ]
- },
  "summary": {
   "ref": "2026-09-21T10:40:05.000Z",
   "range": [

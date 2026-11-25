@@ -12,25 +12,6 @@
   }
  ],
  "around_alt": [],
- "anomaly": {
-  "range": [
-   "2026-11-10T21:54:21.000Z",
-   "2026-11-10T22:09:21.000Z"
-  ],
-  "ref": "2026-11-10T21:59:21.000Z",
-  "after_sec": 600,
-  "candidates": 1,
-  "rows": [
-   {
-    "ts": "2026-11-10T21:59:20.531Z",
-    "phone": 0,
-    "level": "D",
-    "tag": "DNC-0",
-    "msg": "onDataNetworkDisconnected: [DataNetwork: DN-106-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=DATA_PROFILE_INVALID",
-    "main": true
-   }
-  ]
- },
  "summary": {
   "ref": "2026-11-10T21:59:21.000Z",
   "range": [

@@ -47,6 +47,16 @@
   ],
   "groups": [
    {
+    "ts": "2026-08-28T17:00:45.000Z",
+    "last": "2026-08-28T17:00:45.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "ImsPhoneCallTracker",
+    "msg": "[0] call ended: cause=65535",
+    "after": true
+   },
+   {
     "ts": "2026-08-28T17:00:25.000Z",
     "last": "2026-08-28T17:00:25.000Z",
     "n": 1,
@@ -64,16 +74,6 @@
     "level": "I",
     "tag": "DNC-0",
     "msg": "onEvaluateNetworkRequests: reason=RETRY_SCHEDULED",
-    "after": true
-   },
-   {
-    "ts": "2026-08-28T17:00:45.000Z",
-    "last": "2026-08-28T17:00:45.000Z",
-    "n": 1,
-    "phone": null,
-    "level": "W",
-    "tag": "ImsPhoneCallTracker",
-    "msg": "[0] call ended: cause=65535",
     "after": true
    },
    {

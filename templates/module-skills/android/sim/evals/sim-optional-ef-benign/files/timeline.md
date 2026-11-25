@@ -51,10 +51,8 @@
 ## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
 
 - 범위: 2026-10-16T08:25:14.000Z ~ 2026-10-16T08:40:14.000Z (분석 구간 끝과 기준 시각 2026-10-16T08:30:14.000Z 뒤 600초 중 늦은 쪽까지).
-- 줄: 5. 프레임을 뺀 후보 7줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+- 줄: 3. 프레임을 뺀 후보 3줄에서 F, 예외·crash 머리, E, 레벨을 믿지 않는 줄의 오류 문구, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
 
-08:30:14.760 - V RIL ipc[0][RX] VIPC_EXAMPLE_CARD_IO, RSP Error(VIPC_E_FAILURE) seq=0x0c40 len=12  〔script 비슷한 줄 1번 더 접음(08:30:14.760~08:30:15.931)〕
-08:30:14.763 p0 D RILJ [0233]< SIM_IO error 2 [PHONE0]  〔script 비슷한 줄 1번 더 접음(08:30:14.763~08:30:15.932)〕
 08:30:14.764 - D RilRequest [0233]< SIM_IO error: com.android.internal.telephony.CommandException: GENERIC_FAILURE
 08:30:14.766 - E UsimFH exception caught from EVENT_GET_RECORD_SIZE
 08:30:15.934 - E SIMRecords [SIMRecords-0] Exception in fetching EF_CSP data com.android.internal.telephony.CommandException: GENERIC_FAILURE

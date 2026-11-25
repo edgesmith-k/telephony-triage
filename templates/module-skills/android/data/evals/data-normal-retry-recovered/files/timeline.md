@@ -31,10 +31,3 @@
 10:00:05.320 p0 D RILJ [0401]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] <APN#1>, 1, 00101, <APN#1>, default | supl, IPV4V6, prefer…
 10:00:05.420 p0 D RILJ [0401]< SETUP_DATA_CALL DataCallResponse: { cause=NONE(0x0) retry=-1 cid=1 linkStatus=2 protocolType=2 ifname=rmnet0 addresses=[<IP#1>/64] dnses=[<IP#2>] gatew…
 10:00:05.430 p0 D DNC-0 Internet data state changed from DISCONNECTED to CONNECTED.  ⇒ data_internet_state_changed(from=DISCONNECTED,to=CONNECTED)
-
-## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
-
-- 범위: 2026-11-20T09:55:01.000Z ~ 2026-11-20T10:10:01.000Z (분석 구간 끝과 기준 시각 2026-11-20T10:00:01.000Z 뒤 600초 중 늦은 쪽까지).
-- 줄: 1. 프레임을 뺀 후보 1줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
-
-10:00:00.302 p0 D DNC-0 onDataNetworkSetupDataFailed: [DataNetwork: DN-100-C, <APN#1>, state=null], cause=INSUFFICIENT_RESOURCES(0x1a), retryDelayMillis=-1ms.

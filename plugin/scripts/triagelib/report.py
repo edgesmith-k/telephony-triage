@@ -399,7 +399,7 @@ def anomaly_lines(anomaly: dict | None, skip_main: bool = True) -> list[str]:
     return ["", "## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)", "",
             f"- 범위: {lo or '로그 처음'} ~ {hi or '로그 끝'}{more}."
             + (" 위 타임라인에 이미 있는 줄은 뺐다(예외 머리와 프레임은 남김)." if skip_main else ""),
-            f"- 줄: {len(rows)}. 프레임을 뺀 후보 {anomaly.get('candidates', len(rows))}줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 "
+            f"- 줄: {len(rows)}. 프레임을 뺀 후보 {anomaly.get('candidates', len(rows))}줄에서 F, 예외·crash 머리, E, 레벨을 믿지 않는 줄의 오류 문구, W 순으로, 같은 등급은 "
             "기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다", "",
             *[row_line(x) + _fold_note(x, "비슷한") for x in map(_anomaly_row, rows)]]
 

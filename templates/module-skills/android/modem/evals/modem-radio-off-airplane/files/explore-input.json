@@ -19,7 +19,7 @@
   ],
   "ref": "2026-11-10T16:14:05.000Z",
   "after_sec": 600,
-  "candidates": 9,
+  "candidates": 5,
   "rows": [
    {
     "ts": "2026-11-10T16:14:05.381Z",
@@ -32,30 +32,6 @@
      "first": "2026-11-10T16:14:05.381Z",
      "last": "2026-11-10T16:14:05.381Z"
     },
-    "main": true
-   },
-   {
-    "ts": "2026-11-10T16:14:05.384Z",
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
-    "msg": "[0269]< OPERATOR error 1 [PHONE0]",
-    "main": true
-   },
-   {
-    "ts": "2026-11-10T16:14:05.387Z",
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
-    "msg": "[0271]< DATA_REGISTRATION_STATE error 1 [PHONE0]",
-    "main": true
-   },
-   {
-    "ts": "2026-11-10T16:14:05.395Z",
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
-    "msg": "[0273]< VOICE_REGISTRATION_STATE error 1 [PHONE0]",
     "main": true
    },
    {
@@ -78,14 +54,6 @@
     "level": "E",
     "tag": "SST-0",
     "msg": "handlePollStateResult: RIL returned RADIO_NOT_AVAILABLE.",
-    "main": true
-   },
-   {
-    "ts": "2026-11-10T16:14:05.423Z",
-    "phone": 0,
-    "level": "D",
-    "tag": "SST-0",
-    "msg": "pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…",
     "main": true
    }
   ]

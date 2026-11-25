@@ -12,33 +12,6 @@
   }
  ],
  "around_alt": [],
- "anomaly": {
-  "range": [
-   "2026-11-10T17:13:24.000Z",
-   "2026-11-10T17:28:24.000Z"
-  ],
-  "ref": "2026-11-10T17:18:24.000Z",
-  "after_sec": 600,
-  "candidates": 2,
-  "rows": [
-   {
-    "ts": "2026-11-10T17:18:08.117Z",
-    "phone": 0,
-    "level": "D",
-    "tag": "SST-0",
-    "msg": "pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…",
-    "main": true
-   },
-   {
-    "ts": "2026-11-10T17:18:23.257Z",
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
-    "msg": "[1090]< SET_USER_DATA_ENABLED error 6 [PHONE0]",
-    "main": true
-   }
-  ]
- },
  "summary": {
   "ref": "2026-11-10T17:18:24.000Z",
   "range": [

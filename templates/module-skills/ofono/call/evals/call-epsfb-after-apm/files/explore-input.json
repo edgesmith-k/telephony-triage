@@ -3,25 +3,6 @@
  "failed_step": null,
  "limit": 200,
  "anchor": null,
- "anomaly": {
-  "range": [
-   "2026-09-22T09:35:20.000Z",
-   "2026-09-22T09:50:20.000Z"
-  ],
-  "ref": "2026-09-22T09:40:20.000Z",
-  "after_sec": 600,
-  "candidates": 1,
-  "rows": [
-   {
-    "ts": "2026-09-22T09:40:21.431Z",
-    "phone": null,
-    "level": "I",
-    "tag": "imsd",
-    "msg": "[SLOT_0][I] 6104 EPSFB failed, notify to ExampleImsCallManager",
-    "main": true
-   }
-  ]
- },
  "summary": {
   "ref": "2026-09-22T09:40:20.000Z",
   "range": [

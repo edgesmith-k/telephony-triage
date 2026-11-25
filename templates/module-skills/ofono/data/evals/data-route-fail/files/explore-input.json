@@ -53,6 +53,15 @@
     "msg": "netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002"
    },
    {
+    "ts": "2026-09-20T15:20:06.000Z",
+    "last": "2026-09-20T15:20:06.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "datad",
+    "msg": "connectivity check failed profile_id=1[./src/check_example.cxx +40]"
+   },
+   {
     "ts": "2026-09-20T15:20:06.200Z",
     "last": "2026-09-20T15:20:06.200Z",
     "n": 1,
@@ -61,15 +70,6 @@
     "tag": "vrild",
     "msg": "signal strength report: level=4 placeholder",
     "after": true
-   },
-   {
-    "ts": "2026-09-20T15:20:06.000Z",
-    "last": "2026-09-20T15:20:06.000Z",
-    "n": 1,
-    "phone": null,
-    "level": "W",
-    "tag": "datad",
-    "msg": "connectivity check failed profile_id=1[./src/check_example.cxx +40]"
    },
    {
     "ts": "2026-09-20T15:20:01.726Z",

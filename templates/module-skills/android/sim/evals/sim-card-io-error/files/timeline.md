@@ -15,6 +15,7 @@
 10:00:21.040 - E UiccController com.android.internal.telephony.CommandException: GENERIC_FAILURE  〔script 모양 2줄, 10:00:21.040~10:00:29.040, 기준 뒤 첫 등장〕
 10:00:21.040 - E UiccController Error getting ICC status. RIL_REQUEST_GET_ICC_STATUS should never return an error  〔script 모양 2줄, 10:00:21.040~10:00:29.040, 기준 뒤 첫 등장〕
 10:00:05.121 - E VRIL reply to client token 301  〔script 모양 2줄, 10:00:05.121~10:00:23.500〕
+10:00:30.000 p0 W SubscriptionManagerService no subscription for slot: iccid=<ICCID#1> [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:21.020 - V RIL ipc[0][RX] VIPC_EXAMPLE_CARD_STATE, RSP Error(VIPC_E_FAILURE) seq=0x0210 len=12  〔script 모양 2줄, 10:00:21.020~10:00:29.020, 기준 뒤 첫 등장〕
 10:00:21.022 - I RIL [ExampleIccService_0] sim status end errorCode=2  〔script 모양 2줄, 10:00:21.022~10:00:29.022, 기준 뒤 첫 등장〕
 10:00:21.030 p0 D RILJ [0320]< GET_SIM_STATUS error 2 [PHONE0]  〔script 모양 2줄, 10:00:21.030~10:00:29.030, 기준 뒤 첫 등장〕
@@ -22,7 +23,6 @@
 10:00:04.114 - V RIL ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0201 len=12  〔script 모양 1줄〕
 10:00:21.024 - D VRIL-SVC getIccCardStatus response: serial 320  〔script 모양 2줄, 10:00:21.024~10:00:29.024, 기준 뒤 첫 등장〕
 10:00:23.000 - D UiccController Broadcasting intent ACTION_SIM_STATE_CHANGED ABSENT reason null for phone: 0 sub: -1  〔script 모양 1줄, 기준 뒤 첫 등장〕
-10:00:30.000 p0 W SubscriptionManagerService no subscription for slot: iccid=<ICCID#1> [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:20.009 - V RIL ipc[0][RX] <HEXDUMP 16B>  〔script 모양 2줄, 10:00:20.009~10:00:28.009〕
 10:00:20.008 - V RIL ipc[0][TX] VIPC_EXAMPLE_CARD_STATE, REQ seq=0x0210 len=8  〔script 모양 2줄, 10:00:20.008~10:00:28.008〕
 10:00:20.006 - I RIL [ExampleIccService_0] sim status begin  〔script 모양 2줄, 10:00:20.006~10:00:28.006〕

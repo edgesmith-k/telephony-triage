@@ -3,7 +3,7 @@
 마스킹 사본(`JOB/logs-masked/`, `window._records`와 같은 읽기·시각 변환) **전체**(분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이)의
 줄을 (슬롯, 레벨, 태그, 숫자·hex를 `#`로 바꾼 메시지)(`window._fold_key`) 모양으로 묶는다. 모양마다 첫 줄(예시, 160자, `masking.redact`)·
 횟수·처음·마지막 시각, 표시 `기준 뒤 첫 등장`(첫 시각 > 기준 시각)·`분석 구간 밖`(모든 줄이 `input.window` 밖). 순서: F, 예외·crash 머리,
-E, W(`window.rank`, 같은 등급은 기준 뒤 첫 등장 먼저) → 기준 뒤 첫 등장 → 나머지, 같은 묶음은 한 태그 `TAG_MAX` 모양까지 먼저,
+E, 레벨 못 믿는 줄의 오류 문구, W, 그 밖 I/D 오류 문구(`window.rank`, `window.TEXT_RANK`까지, 같은 등급은 기준 뒤 첫 등장 먼저) → 기준 뒤 첫 등장 → 나머지, 같은 묶음은 한 태그 `TAG_MAX` 모양까지 먼저,
 그다음 기준 시각에 가까운 순(기준이 없으면 첫 등장 순). 상한 `explore.summary_max_groups`(기본 60, 0~200, 0=끔)와 `BYTES_MAX`. 스택 프레임 줄(`at …(`)은 세지 않는다(머리가 대표).
 결정적이다. 판정·점수·순위·매칭에 쓰지 않는다.
 
@@ -67,7 +67,7 @@ def groups(job: Path, ev: dict, analysis: dict, defaults: dict, ref, cap: int) -
     def item(g):
         k = window.rank(g["r"])
         after = ref_s is not None and g["r"]["ts"] > ref_s
-        tier = 0 if k <= 3 else 1 if after else 2
+        tier = 0 if k <= window.TEXT_RANK else 1 if after else 2      # 오류 쪽 등급(F~I/D 오류 문구) 먼저
         return (tier, k if tier == 0 else 0, not after), g["gap"], g["i"], g["r"].get("tag"), 1, g
 
     # 같은 묶음 안에서 한 태그가 TAG_MAX 모양을 넘으면 그 모양은 뒤로(`window.ranked` — 숫자 아닌 글자만 다른 잡음 태그가 밀지 않게)

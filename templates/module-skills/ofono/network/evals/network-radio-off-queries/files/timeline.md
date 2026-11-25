@@ -12,10 +12,10 @@
 - 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
 
 10:00:21.722 - E vrild chan 2: empty reply body, nothing to encode  〔script 모양 1줄, 기준 뒤 첫 등장〕
+10:00:21.731 - I mgmtd load network info failed: Load data failed err: Operation failed path/example_net.go:24  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:21.723 p0 D ofonod [0,0632]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:21.724 p0 D ofonod [0,0633]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:21.725 - I ofonod src/network.c:current_operator_callback() Error during current operator  〔script 모양 1줄, 기준 뒤 첫 등장〕
-10:00:21.731 - I mgmtd load network info failed: Load data failed err: Operation failed path/example_net.go:24  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:21.616 p0 I ofonod [0,UNSOL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED (state: OFF)  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:21.617 p0 I ofonod src/modem.c:modem_change_state() /ril_0 online false  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:21.618 - I networkd [SUB_0] radio state changed: RADIO_OFF [ExampleNet.cpp+12]  〔script 모양 1줄, 기준 뒤 첫 등장〕
@@ -54,10 +54,7 @@
 ## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
 
 - 범위: 2026-09-22T09:55:20.000Z ~ 2026-09-22T10:10:20.000Z (분석 구간 끝과 기준 시각 2026-09-22T10:00:20.000Z 뒤 600초 중 늦은 쪽까지).
-- 줄: 5. 프레임을 뺀 후보 5줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+- 줄: 2. 프레임을 뺀 후보 2줄에서 F, 예외·crash 머리, E, 레벨을 믿지 않는 줄의 오류 문구, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
 
 10:00:21.722 - E vrild chan 2: empty reply body, nothing to encode
-10:00:21.723 p0 D ofonod [0,0632]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE
-10:00:21.724 p0 D ofonod [0,0633]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE
-10:00:21.725 - I ofonod src/network.c:current_operator_callback() Error during current operator
 10:00:21.731 - I mgmtd load network info failed: Load data failed err: Operation failed path/example_net.go:24

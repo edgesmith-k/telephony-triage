@@ -241,7 +241,7 @@ def test_tag_cap_only_orders_within_rank():
 def test_exception_head_needs_class_name():
     """3: 메서드·필드 이름(`onError`·`isError`)은 예외 머리가 아니다."""
     from triagelib import window
-    for msg, want in (("mCallback.onError called", 3), ("result.isError=false", 3),      # 머리 아님(오류 문구 등급)
+    for msg, want in (("mCallback.onError called", 5), ("result.isError=false", 5),      # 머리 아님(I/D 오류 문구 등급)
                       ("java.lang.IllegalStateException: x", 1), ("android.os.DeadObjectException", 1)):
         assert window.rank({"level": "D", "msg": msg}) == want, msg
 
@@ -302,12 +302,14 @@ def test_eval_case_input_carries_anomaly():
 # --- 레벨을 믿지 못하는 줄·oFono(11/25): 레벨 대신 오류 문구로도 고르고, 네이티브·oFono·glib crash 머리 -----------------
 
 def test_rank_order_with_error_text():
-    """F > 예외·crash 머리 > E > 그 밖의 레벨 중 오류 문구(0 값 오류 칸 제외) > W > 나머지."""
+    """F > 예외·crash 머리 > E > 레벨 못 믿는 줄(`_weak`)의 오류 문구(0 값 오류 칸 제외) > W > 그 밖 I/D 오류 문구 > 나머지."""
     from triagelib import window
-    recs = [{"level": "I", "msg": "deactivate rsp error=0"}, {"level": "W", "msg": "poll slow"},
-            {"level": "I", "msg": "setup rsp error=38"}, {"level": "E", "msg": "setup failed"},
+    recs = [{"level": "I", "msg": "deactivate rsp error=0", "_weak": True}, {"level": "D", "msg": "setup rsp error=38"},
+            {"level": "W", "msg": "poll slow"}, {"level": "I", "msg": "setup rsp error=38", "_weak": True},
+            {"level": "E", "msg": "setup failed"},
             {"level": "I", "msg": "ofonod[812]: Aborting (signal 11) [/usr/sbin/ofonod]"}, {"level": "F", "msg": "x"}]
-    assert [window.rank(r) for r in recs] == [5, 4, 3, 2, 1, 0]
+    assert [window.rank(r) for r in recs] == [6, 5, 4, 3, 2, 1, 0]
+    assert window.ANOMALY_RANK_MAX == window.W_RANK < window.TEXT_RANK          # 절은 W까지, I/D 오류 문구는 요약·--span만
     assert window.rank({"level": "W", "msg": "setup failed"}) == 4             # W는 오류 문구가 있어도 W
     for msg in ("Segmentation fault", "signal 11 (SIGSEGV), code 1 (SEGV_MAPERR)", "GLib-CRITICAL **: g_source_remove",
                 "ofonod: assertion 'modem != NULL' failed", "*** stack smashing detected ***: terminated", "backtrace:",
@@ -449,3 +451,95 @@ def test_tt_explore_reads_masked_copies_only():
     assert decide("grep -n EMM_ACCESS_BARRED /w/K-1/logs-masked/a.log") == "allow"
     assert decide("sed -n '1,5p' /w/K-1/logs-masked/a.log") == "deny"
     assert "JOB/logs-masked/" in body and "read tool" in body and "Never read raw logs" in body
+
+
+# --- 독립 리뷰 반영(11/25): 약한 레벨만 오류 문구 등급, 본 줄은 같은 등급 뒤로, 네이티브 프레임, _Stop 경고 -------------------
+
+def _anomaly_of(monkeypatch, recs, shown=frozenset(), cap=80):
+    """`window.anomaly`를 레코드로 직접 — 사본 읽기(`served_copies`·`_records`)만 바꾼다."""
+    from triagelib import window
+    monkeypatch.setattr(window, "served_copies", lambda job, analysis: ([Path("x.log")], []))
+    monkeypatch.setattr(window, "_records", lambda job, ev, served, defaults: (recs, None, {}))
+    return window.anomaly(Path("."), {"mask_off": True}, {}, {}, "2026-11-20T10:00:00Z", 0, cap, set(shown))
+
+
+def _rec(sec, level, tag, msg, pid=1, **kw):
+    return {"ts": f"2026-11-20T10:00:{sec:02d}.000Z", "level": level, "tag": tag, "msg": msg, "pid": pid, "phone_id": None,
+            "line_ref": {"file_index": 0, "line_no": sec + 1}, **kw}
+
+
+def test_only_weak_level_error_text_enters_block(monkeypatch):
+    """1: 레벨을 믿는 I/D 줄의 오류 문구(`RILJ … error 1`)는 절에 싣지 않는다(잡음) — 레벨 못 믿는 줄만. `_weak`는 출력에 없다."""
+    rows = _anomaly_of(monkeypatch, [_rec(1, "D", "RILJ", "[0350]< GET_CURRENT_CALLS error 1 [PHONE0]"),
+                                     _rec(2, "I", "vrild", "setup rsp error=38", _weak=True),
+                                     _rec(3, "W", "X", "poll slow")])["rows"]
+    assert [r["tag"] for r in rows] == ["vrild", "X"] and not any("_weak" in r for r in rows)
+
+
+def test_mark_weak_uses_backend_and_ofono_levelless_files():
+    """1: `_mark_weak` — 백엔드 `_level_unreliable` 태그, oFono 레벨 없는 형식 파일(줄이 모두 I). severity 있는 파일의 I 줄은 아니다."""
+    from triagelib import window
+
+    class Ofono:
+        platform = "ofono"
+
+        @staticmethod
+        def _level_unreliable(*tags):
+            return "vendord" in tags
+
+    recs = [{"tag": "ofonod", "level": "I", "line_ref": {"file_index": 0}},
+            {"tag": "ofonod", "level": "I", "line_ref": {"file_index": 1}},
+            {"tag": "ofonod", "level": "E", "line_ref": {"file_index": 1}},
+            {"tag": "vendord/sub", "level": "I", "line_ref": {"file_index": 1}}]
+    window._mark_weak(Ofono(), recs)
+    assert [bool(r.get("_weak")) for r in recs] == [True, False, False, True]
+
+    class Android:
+        platform = "android"
+
+        @staticmethod
+        def _level_unreliable(*tags):
+            return tags == ("vrild",)
+
+    recs = [{"tag": "vrild", "level": "I"}, {"tag": "RILJ", "level": "I"}]
+    window._mark_weak(Android(), recs)
+    assert [bool(r.get("_weak")) for r in recs] == [True, False]
+
+
+def test_main_rows_yield_within_same_rank(monkeypatch):
+    """3: 같은 등급이면 본 타임라인에 이미 보이는 줄(`main`)이 예산을 먼저 먹지 않는다(기준에 더 가까워도)."""
+    near, far = _rec(1, "E", "A", "near fail"), _rec(30, "E", "B", "far fail")
+    rows = _anomaly_of(monkeypatch, [near, far], shown={(near["ts"], "A", "near fail")}, cap=1)["rows"]
+    assert [r["msg"] for r in rows] == ["far fail"]
+    rows = _anomaly_of(monkeypatch, [near, _rec(30, "W", "B", "far warn")], shown={(near["ts"], "A", "near fail")}, cap=1)["rows"]
+    assert [r["msg"] for r in rows] == ["near fail"]                                # 다른 등급은 그대로(E가 W보다 앞)
+
+
+def test_native_frames_and_ofono_backtrace(monkeypatch):
+    """4·5: 네이티브 프레임(`#00 pc`·`#0  0x… in`)은 머리 뒤에 붙고 따로 고르지 않는다. oFono `+++ backtrace +++`·glib 모양 머리."""
+    from triagelib import window
+    for msg in ("#00 pc 000000000004e0c4  /apex/com.android.runtime/lib64/bionic/libc.so (abort+164)",
+                "      #01 pc 00000000000123a5  /vendor/lib64/libril.so", "#0  0x00007f3a2b in g_main_loop_run ()",
+                "#1  0x0000aaaa"):
+        assert window.FRAME_RX.match(msg) and window.rank({"level": "F", "msg": msg}) == 0, msg
+    for msg in ("++++++++ backtrace ++++++++", "GLib-GIO-CRITICAL **: g_dbus_x: assertion 'x' failed",
+                "Assertion `modem' failed.", "ofonod: assertion failed"):
+        assert window.rank({"level": "I", "msg": msg}) == 1, msg
+    rows = _anomaly_of(monkeypatch, [_rec(1, "F", "DEBUG", "backtrace:", pid=7),
+                                     _rec(2, "F", "DEBUG", "      #00 pc 000000000004e0c4  /apex/libc.so (abort+164)", pid=7),
+                                     _rec(3, "F", "DEBUG", "      #01 pc 00000000000123a5  /vendor/lib64/libril.so", pid=7),
+                                     _rec(4, "F", "DEBUG", "      #02 pc 000000000006789b  /vendor/lib64/libril.so", pid=7)])
+    assert [r["msg"].split()[0] for r in rows["rows"]] == ["backtrace:", "#00", "#01"] and rows["candidates"] == 1
+
+
+def test_anomaly_stop_warns_on_stderr(monkeypatch, capsys):
+    """6: 사본 읽기 실패(`_Stop`, 파서 규칙 오류 포함)로 절을 뺄 때 stderr 경고 한 줄."""
+    from triagelib import window
+
+    def stop(*_a):
+        raise window._Stop(2, "작업 디렉토리 이상", "파서 규칙 오류: bad")
+
+    monkeypatch.setattr(window, "served_copies", lambda job, analysis: ([Path("x.log")], []))
+    monkeypatch.setattr(window, "_records", stop)
+    assert window.anomaly(Path("."), {}, {}, {}, None, 0, 80, set()) is None
+    assert "이상 줄 절을 만들지 못해" in capsys.readouterr().err

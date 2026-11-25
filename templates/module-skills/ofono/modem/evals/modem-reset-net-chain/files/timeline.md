@@ -11,11 +11,11 @@
 - 범위: 2026-09-21T10:50:00.010Z ~ 2026-09-21T10:50:08.010Z, 줄 31, 모양 26개 중 26개. 기준 시각: 2026-09-21T10:50:05.000Z
 - 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
 
+10:50:05.025 - I mgmtd load rat mode failed slot=0: Operation failed path/example_net.go:48  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:50:05.020 - D vrild mux [ch0][RX] VIPC_EXAMPLE_RAT_MODE, RSP Error(VIPC_E_FAILURE) seq=0x0241 len=12  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:50:05.022 p0 D ofonod [0,0511]< RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE failed GENERIC_FAILURE  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:50:05.022 - I ofonod src/radio-settings.c:radio_rat_mode_query_callback() Error during radio access mode query  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:50:05.023 p0 I ofonod src/dbus.c:__ofono_error_failed() dbus_trace err return - i:org.ofono.RadioSettings m:GetProperties p:/ril_0  〔script 모양 1줄, 기준 뒤 첫 등장〕
-10:50:05.025 - I mgmtd load rat mode failed slot=0: Operation failed path/example_net.go:48  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:50:05.002 p0 I mgmtd dbus -> org.ofono.RadioSettings.GetProperties on /ril_0 path/example_dbus.go:36  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:50:05.004 p0 I ofonod dbus_trace method call - i:org.ofono.RadioSettings m:GetProperties p:/ril_0 a:no args  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:50:05.005 - D ofonod drivers/rilmodem/radio-settings.c:ril_query_rat_mode()  〔script 모양 1줄, 기준 뒤 첫 등장〕

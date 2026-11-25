@@ -10,55 +10,8 @@
   ],
   "ref": "2026-09-22T10:10:20.000Z",
   "after_sec": 600,
-  "candidates": 11,
+  "candidates": 4,
   "rows": [
-   {
-    "ts": "2026-09-22T10:10:19.458Z",
-    "phone": null,
-    "level": "D",
-    "tag": "vrild",
-    "msg": "mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP Error(VIPC_E_NO_SUCH_ELEMENT) seq=0x08d4 len=12, 35 ms",
-    "fold": {
-     "n": 1,
-     "first": "2026-09-22T10:10:19.458Z",
-     "last": "2026-09-22T10:10:21.456Z"
-    },
-    "main": true
-   },
-   {
-    "ts": "2026-09-22T10:10:19.460Z",
-    "phone": 0,
-    "level": "D",
-    "tag": "ofonod",
-    "msg": "[0,0745]< RIL_REQUEST_SIM_OPEN_CHANNEL failed NO_SUCH_ELEMENT",
-    "fold": {
-     "n": 1,
-     "first": "2026-09-22T10:10:19.460Z",
-     "last": "2026-09-22T10:10:21.458Z"
-    },
-    "main": true
-   },
-   {
-    "ts": "2026-09-22T10:10:19.461Z",
-    "phone": null,
-    "level": "D",
-    "tag": "ofonod",
-    "msg": "drivers/rilmodem/sim.c:example_open_channel_cb() reply failure: NO_SUCH_ELEMENT",
-    "main": true
-   },
-   {
-    "ts": "2026-09-22T10:10:19.462Z",
-    "phone": null,
-    "level": "I",
-    "tag": "ofonod",
-    "msg": "src/dbus.c:__ofono_error_not_found() m:ExampleOpenChannel i:org.ofono.SimManager",
-    "fold": {
-     "n": 1,
-     "first": "2026-09-22T10:10:19.462Z",
-     "last": "2026-09-22T10:10:21.459Z"
-    },
-    "main": true
-   },
    {
     "ts": "2026-09-22T10:10:19.463Z",
     "phone": null,
@@ -122,6 +75,15 @@
     "msg": "GetEID call error: Failed to get EID path/example_sim.go:12"
    },
    {
+    "ts": "2026-09-22T10:10:19.464Z",
+    "last": "2026-09-22T10:10:21.460Z",
+    "n": 2,
+    "phone": null,
+    "level": "W",
+    "tag": "simd",
+    "msg": "tid:36 ExampleSim.cpp(38):ExampleGetEid > GetEID FAILED"
+   },
+   {
     "ts": "2026-09-22T10:10:19.462Z",
     "last": "2026-09-22T10:10:21.459Z",
     "n": 2,
@@ -176,15 +138,6 @@
     "tag": "mgmtd",
     "msg": "ui tick",
     "after": true
-   },
-   {
-    "ts": "2026-09-22T10:10:19.464Z",
-    "last": "2026-09-22T10:10:21.460Z",
-    "n": 2,
-    "phone": null,
-    "level": "W",
-    "tag": "simd",
-    "msg": "tid:36 ExampleSim.cpp(38):ExampleGetEid > GetEID FAILED"
    },
    {
     "ts": "2026-09-22T10:10:19.459Z",

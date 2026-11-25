@@ -48,11 +48,3 @@
 17:18:23.258 p0 D DSM-C-0 notifyUserDataEnabledComplete. result = 1
 17:18:23.260 p0 D DNC-0 Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: NOT_IN_SERVICE DATA_NETWORK_TRANSPORT_NOT_ALLOWED SERVICE_OPTION_NOT_SUPPORTE…  ⇒ data_evaluation_rejected(reasons=NOT_IN_SERVICE DATA_NETWORK_TRANSPORT_NOT_ALLOWED SERVICE_OPTION_NOT_SU…)
 17:18:23.260 p0 D DNC-0 Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: NOT_IN_SERVICE SERVICE_OPTION_NOT_SUPPORTED, candidate profile=null, time=17:…  ⇒ data_evaluation_rejected(reasons=NOT_IN_SERVICE SERVICE_OPTION_NOT_SUPPORTED)
-
-## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
-
-- 범위: 2026-11-10T17:13:24.000Z ~ 2026-11-10T17:28:24.000Z (분석 구간 끝과 기준 시각 2026-11-10T17:18:24.000Z 뒤 600초 중 늦은 쪽까지).
-- 줄: 2. 프레임을 뺀 후보 2줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
-
-17:18:08.117 p0 D SST-0 pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…
-17:18:23.257 p0 D RILJ [1090]< SET_USER_DATA_ENABLED error 6 [PHONE0]

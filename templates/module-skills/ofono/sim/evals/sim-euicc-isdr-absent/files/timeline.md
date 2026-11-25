@@ -13,13 +13,13 @@
 
 10:10:19.463 - E simd tid:36 ExampleSim.cpp(32):ExampleChannelOpen > openChannel: Application not found (aid <AID#1>, slot 0)  〔script 모양 1줄〕
 10:10:19.468 - I mgmtd GetEID call error: Failed to get EID path/example_sim.go:12  〔script 모양 1줄〕
+10:10:19.464 - W simd tid:36 ExampleSim.cpp(38):ExampleGetEid > GetEID FAILED  〔script 모양 2줄, 10:10:19.464~10:10:21.460〕
 10:10:19.462 - I ofonod src/dbus.c:__ofono_error_not_found() m:ExampleOpenChannel i:org.ofono.SimManager  〔script 모양 2줄, 10:10:19.462~10:10:21.459〕
 10:10:19.461 - D ofonod drivers/rilmodem/sim.c:example_open_channel_cb() reply failure: NO_SUCH_ELEMENT  〔script 모양 1줄〕
 10:10:19.460 p0 D ofonod [0,0745]< RIL_REQUEST_SIM_OPEN_CHANNEL failed NO_SUCH_ELEMENT  〔script 모양 2줄, 10:10:19.460~10:10:21.458〕
 10:10:19.458 - D vrild mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP Error(VIPC_E_NO_SUCH_ELEMENT) seq=0x08d4 len=12, 35 ms  〔script 모양 2줄, 10:10:19.458~10:10:21.456〕
 10:10:21.418 - I simd tid:36 ExampleSim.cpp(44):ExampleChannelOpen > open channel aid <AID#1> (retry)  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:10:22.418 - I mgmtd ui tick  〔script 모양 1줄, 기준 뒤 첫 등장〕
-10:10:19.464 - W simd tid:36 ExampleSim.cpp(38):ExampleGetEid > GetEID FAILED  〔script 모양 2줄, 10:10:19.464~10:10:21.460〕
 10:10:19.459 - I vrild [ExampleIccService_1] open-channel answer: no session, sw1 : 6A, sw2 : 82  〔script 모양 2줄, 10:10:19.459~10:10:21.457〕
 10:10:19.459 - I vrild [IpcCtx_2] OnIpcComplete Request ID=93, result=17 -> chan 2 reply sent, 0 waiters, took 37 ms  〔script 모양 1줄〕
 10:10:19.423 - D vrild mux [ch1][TX] VIPC_EXAMPLE_CARD_OPEN seq=0x08d4 len=20  〔script 모양 2줄, 10:10:19.423~10:10:21.421〕
@@ -60,12 +60,8 @@
 ## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
 
 - 범위: 2026-09-22T10:05:20.000Z ~ 2026-09-22T10:20:20.000Z (분석 구간 끝과 기준 시각 2026-09-22T10:10:20.000Z 뒤 600초 중 늦은 쪽까지).
-- 줄: 7. 프레임을 뺀 후보 11줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+- 줄: 3. 프레임을 뺀 후보 4줄에서 F, 예외·crash 머리, E, 레벨을 믿지 않는 줄의 오류 문구, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
 
-10:10:19.458 - D vrild mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP Error(VIPC_E_NO_SUCH_ELEMENT) seq=0x08d4 len=12, 35 ms  〔script 비슷한 줄 1번 더 접음(10:10:19.458~10:10:21.456)〕
-10:10:19.460 p0 D ofonod [0,0745]< RIL_REQUEST_SIM_OPEN_CHANNEL failed NO_SUCH_ELEMENT  〔script 비슷한 줄 1번 더 접음(10:10:19.460~10:10:21.458)〕
-10:10:19.461 - D ofonod drivers/rilmodem/sim.c:example_open_channel_cb() reply failure: NO_SUCH_ELEMENT
-10:10:19.462 - I ofonod src/dbus.c:__ofono_error_not_found() m:ExampleOpenChannel i:org.ofono.SimManager  〔script 비슷한 줄 1번 더 접음(10:10:19.462~10:10:21.459)〕
 10:10:19.463 - E simd tid:36 ExampleSim.cpp(32):ExampleChannelOpen > openChannel: Application not found (aid <AID#1>, slot 0)
 10:10:19.464 - W simd tid:36 ExampleSim.cpp(38):ExampleGetEid > GetEID FAILED  〔script 비슷한 줄 1번 더 접음(10:10:19.464~10:10:21.460)〕
 10:10:19.468 - I mgmtd GetEID call error: Failed to get EID path/example_sim.go:12

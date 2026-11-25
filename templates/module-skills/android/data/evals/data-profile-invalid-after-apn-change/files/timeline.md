@@ -58,10 +58,3 @@
 21:59:20.531 p0 D DNC-0 IMS data state changed from CONNECTED to DISCONNECTED.
 21:59:23.535 p0 D DPM-0 Can't find any data profile that can satisfy [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_VCN_MANAGED&NOT_BANDWI…
 21:59:23.535 p0 D DNC-0 Data evaluation: evaluation reason:RETRY_AFTER_DISCONNECTED, Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, candidate profile=null, time=21:59:23.535, netw…  ⇒ data_evaluation_rejected(reasons=NO_SUITABLE_DATA_PROFILE)
-
-## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
-
-- 범위: 2026-11-10T21:54:21.000Z ~ 2026-11-10T22:09:21.000Z (분석 구간 끝과 기준 시각 2026-11-10T21:59:21.000Z 뒤 600초 중 늦은 쪽까지).
-- 줄: 1. 프레임을 뺀 후보 1줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
-
-21:59:20.531 p0 D DNC-0 onDataNetworkDisconnected: [DataNetwork: DN-106-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=DATA_PROFILE_INVALID

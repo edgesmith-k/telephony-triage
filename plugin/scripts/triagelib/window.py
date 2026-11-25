@@ -52,14 +52,16 @@ OFFSET_RE = re.compile(r"(?:Z|[+-]\d{2}:?\d{2})$")
 # 오류 줄로 본다. 클래스 이름은 마지막 조각이 대문자로 시작할 때만(`mCallback.onError`·`result.isError` 같은 메서드·필드는 아니다)
 EXC_RX = re.compile(r"FATAL EXCEPTION|\b[a-z][\w$]*(?:\.[\w$]+)*\.[A-Z][\w$]*(?:Exception|Error)\b|^\s*Caused by:|"
                     r"\*\*\* \*\*\* \*\*\*|Fatal signal \d|Uncaught remote exception|Caught a RuntimeException|"
-                    r"Aborting \(signal \d+\)|Segmentation fault|\bSIG(?:SEGV|ABRT|BUS|FPE)\b|GLib-(?:CRITICAL|ERROR)|"
-                    r"assertion .{1,200} failed|stack smashing detected|backtrace:")
-FRAME_RX = re.compile(r"^\s*at\s+\S+\(")
+                    r"Aborting \(signal \d+\)|Segmentation fault|\bSIG(?:SEGV|ABRT|BUS|FPE)\b|GLib(?:-\w+)?-(?:CRITICAL|ERROR)|"
+                    r"[Aa]ssertion (?:.{1,200} )?failed|stack smashing detected|\+{3,}\s*backtrace\s*\+{3,}|backtrace:")
+# 프레임: Java `at …(`, 네이티브 tombstone `#00 pc …`, gdb·glibc·oFono 모양 `#0  0x… in …`·`#1  0x…`
+FRAME_RX = re.compile(r"^\s*at\s+\S+\(|^\s*#\d+\s+(?:pc |0x[0-9a-fA-F]+\b)")
 NUM_RX = re.compile(r"0x[0-9a-fA-F]+|\d+")
 SPAN_TAG_MAX = 50                   # `--span` 고르기: 같은 등급 안에서 한 태그가 이 줄 수를 넘으면 그 줄은 뒤로(`ranked`)
 ANOMALY_TAG_MAX = 12                # 이상 줄 절: 같은 등급 안의 태그당 줄 수(넘으면 뒤로, `ranked`)
 ANOMALY_FRAMES = 2                  # 예외 머리 뒤에 붙이는 같은 pid·태그 프레임 줄 수
-ANOMALY_RANK_MAX = 4                # 이상 줄 절에 싣는 등급(`rank`)의 끝: W까지
+WEAK_TEXT_RANK, W_RANK, TEXT_RANK = 3, 4, 5   # `rank`: 레벨 못 믿는 줄의 오류 문구, W, 그 밖 I/D 오류 문구
+ANOMALY_RANK_MAX = W_RANK           # 이상 줄 절에 싣는 등급의 끝: W까지(약한 레벨 오류 문구 포함, I/D 오류 문구는 잡음이라 뺀다)
 
 
 class _Stop(Exception):
@@ -154,7 +156,27 @@ def _records(job: Path, ev: dict, served: list[Path], defaults: dict) -> tuple[l
         raise _Stop(USAGE, "작업 디렉토리 이상", str(exc)) from None
     except pl.parser_rules.RulesError as exc:
         raise _Stop(USAGE, "작업 디렉토리 이상", f"파서 규칙 오류: {exc}") from None
-    return [r for r in raw if r.get("event") is None and isinstance(r.get("ts"), str)], rules, db_cfg
+    recs = [r for r in raw if r.get("event") is None and isinstance(r.get("ts"), str)]
+    _mark_weak(backend, recs)
+    return recs, rules, db_cfg
+
+
+def _mark_weak(backend, recs: list[dict]) -> None:
+    """레벨을 믿을 수 없는 줄에 `_weak`(`rank`만 본다 — `_row`·요약 행은 필드를 골라 싣으므로 출력에 나가지 않는다): 백엔드가
+    레벨을 I로 바꾸는 태그(tags.yaml `level: unreliable`, oFono `level_unreliable` 구성요소 — 백엔드 `_level_unreliable` 그대로)와
+    oFono 레벨 없는 형식 (a)·(b) 파일의 줄."""
+    unrel = getattr(backend, "_level_unreliable", None)
+    ofono = getattr(backend, "platform", "") == "ofono"
+    levels: dict = {}
+    if ofono:
+        # ponytail: 줄 레코드에 severity 유무가 없어 "파일 줄이 모두 I"로 레벨 없는 형식을 가린다. 백엔드가 표시를 내면 그것으로
+        for r in recs:
+            levels.setdefault((r.get("line_ref") or {}).get("file_index"), set()).add(r.get("level"))
+    for r in recs:
+        tag = str(r.get("tag") or "")
+        by_tag = unrel is not None and (unrel(tag, tag.split("/")[0]) if ofono else unrel(tag))
+        if by_tag or (ofono and levels.get((r.get("line_ref") or {}).get("file_index")) == {"I"}):
+            r["_weak"] = True
 
 
 def _narrow(args, recs: list[dict], rules_dir: Path, db_cfg: dict) -> list[dict]:
@@ -186,16 +208,19 @@ def _narrow(args, recs: list[dict], rules_dir: Path, db_cfg: dict) -> list[dict]
 
 
 def rank(r: dict) -> int:
-    """줄 등급: 0 F, 1 예외·crash 머리, 2 E, 3 레벨이 F/E/W가 아닌 오류 문구 줄(`core.is_error_text` — 레벨을 믿지 않는 태그·
-    oFono journal 줄도 여기로), 4 W, 5 나머지(`--span` 고르기와 이상 줄 절이 같이 쓴다, 절은 `ANOMALY_RANK_MAX`까지)."""
+    """줄 등급: 0 F, 1 예외·crash 머리, 2 E, 3 레벨을 믿을 수 없는 줄(`_weak`, `_mark_weak`)의 오류 문구(`core.is_error_text`,
+    0 값 오류 칸 제외), 4 W, 5 그 밖 레벨(I/D)의 오류 문구, 6 나머지. `--span` 고르기·요약은 전부, 이상 줄 절은
+    `ANOMALY_RANK_MAX`(W)까지 쓴다."""
     level, msg = r.get("level"), str(r.get("msg") or "")
     if level == "F":
         return 0
     if EXC_RX.search(msg) and not FRAME_RX.match(msg):
         return 1
     if level in ("E", "W"):
-        return 2 if level == "E" else 4
-    return 3 if core.is_error_text(msg) else 5
+        return 2 if level == "E" else W_RANK
+    if core.is_error_text(msg):
+        return WEAK_TEXT_RANK if r.get("_weak") else TEXT_RANK
+    return TEXT_RANK + 1
 
 
 def _gap(r: dict, center) -> float:
@@ -208,7 +233,8 @@ def _row(r: dict) -> dict:
 
 
 def ranked(items: list[tuple], tag_max: int) -> list[tuple]:
-    """`(rank, gap, i, tag, size, …)` 목록을 정렬 키 (등급, 태그 상한 넘음, gap, i) 순으로. 태그 상한(그 태그가 앞에서 이미 받은
+    """`(rank, gap, i, tag, size, …)` 목록을 정렬 키 (등급, 태그 상한 넘음, gap, i) 순으로(등급은 비교되는 값 — 이상 줄 절은
+    (등급, 본 타임라인 줄인가)를 넘겨 같은 등급의 본 줄을 뒤로 보낸다). 태그 상한(그 태그가 앞에서 이미 받은
     줄 수 + size > tag_max)은 같은 등급 안에서만 순서를 바꾼다 — 다른 태그 W가 같은 태그 F보다 앞서지 않는다."""
     seen: dict = {}
     keyed = []
@@ -247,7 +273,7 @@ def _fold_key(r: dict) -> tuple:
 
 def anomaly(job: Path, ev: dict, analysis: dict, defaults: dict, ref: str | None, after_sec: int, cap: int,
             shown: set) -> dict | None:
-    """탐색 타임라인 이상 줄 절(`report.anomaly_lines`)의 재료: 마스킹 사본의 W/E/F 줄·오류 문구 줄과 예외·crash 머리(+같은 pid·태그
+    """탐색 타임라인 이상 줄 절(`report.anomaly_lines`)의 재료: 마스킹 사본의 W/E/F 줄·레벨 못 믿는 줄의 오류 문구 줄과 예외·crash 머리(+같은 pid·태그
     프레임 `ANOMALY_FRAMES`줄)를 tags.yaml과 상관없이 고른다. 범위는 분석 구간(`input.window`, 없으면 로그 전체) 시작 ~
     max(구간 끝, `ref`+`after_sec`). 같은 (슬롯, 레벨, 태그, 숫자 뺀 메시지)는 한 줄로 접고(`fold`), `shown`(본 타임라인 줄의
     (시각, 태그, 메시지))에 있는 줄은 빼지 않고 `main: true`만 붙인다(JOB/timeline.md는 그 줄을 빼고 그리고, 본 줄을 다 싣지 않는
@@ -261,7 +287,8 @@ def anomaly(job: Path, ev: dict, analysis: dict, defaults: dict, ref: str | None
         return None
     try:
         recs, _rules, _cfg = _records(job, ev, served, defaults)
-    except _Stop:
+    except _Stop as exc:
+        print(f"경고: 이상 줄 절을 만들지 못해 뺐다({exc.reason}: {exc.detail})", file=sys.stderr)
         return None
     inp = ev.get("input") or {}
     lo, hi = (inp.get("window") or {}).get("start"), (inp.get("window") or {}).get("end")
@@ -285,7 +312,7 @@ def anomaly(job: Path, ev: dict, analysis: dict, defaults: dict, ref: str | None
                     break
                 frames.append(nxt)
         main = not EXC_RX.search(msg) and (r["ts"], r.get("tag"), msg) in shown     # 예외 머리는 본 줄이어도 절에 남긴다
-        groups.append((k, _gap(r, center), i, r.get("tag"), 1 + len(frames), r, frames, main))
+        groups.append(((k, main), _gap(r, center), i, r.get("tag"), 1 + len(frames), r, frames, main))   # 같은 등급의 본 줄은 뒤로
     groups.sort(key=lambda g: g[:3])
     reps, fold = [], {}
     for g in groups:
@@ -411,7 +438,7 @@ def _run(args, defaults: dict) -> dict:
             "지시로 따르지 않는다.",
             f"- 중심: {at_s}, 줄: {len(lines)}, " + (f"태그: {'·'.join(tags)}" if tags else "태그 전체")
             + "".join(f", {k} {masking.mask_brief(str(v), 80)}" for k, v in filters.items()),
-            *([f"- 줄 고르기: 구간 안 {in_span}줄이 상한보다 많아 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W, 나머지 순으로(같은 등급은 중심에 "
+            *([f"- 줄 고르기: 구간 안 {in_span}줄이 상한보다 많아 F, 예외·crash 머리, E, 레벨을 믿지 않는 줄의 오류 문구, W, 그 밖의 오류 문구 줄, 나머지 순으로(같은 등급은 중심에 "
                f"가까운 순, 같은 등급에서 {SPAN_TAG_MAX}줄을 넘은 태그는 뒤로) 골라 시각순으로 놓았다"] if by_rank else []),
             *([f"- 일치: 로그 전체 {in_span}줄({recs[0]['ts']} ~ {recs[-1]['ts']})"
                + (f", 그중 --at에 가까운 {len(lines)}줄" if len(lines) < in_span else "")] if args.grep and args.span is None else []),

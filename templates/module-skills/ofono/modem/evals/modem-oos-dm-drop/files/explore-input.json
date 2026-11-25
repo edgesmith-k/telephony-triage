@@ -58,6 +58,15 @@
     "msg": "Fail to write diag packet to host"
    },
    {
+    "ts": "2026-09-22T09:50:13.153Z",
+    "last": "2026-09-22T09:50:21.153Z",
+    "n": 3,
+    "phone": null,
+    "level": "W",
+    "tag": "vrild",
+    "msg": "diag packet dropped: host not reading, write fail"
+   },
+   {
     "ts": "2026-09-22T09:50:21.753Z",
     "last": "2026-09-22T09:50:21.753Z",
     "n": 1,
@@ -66,15 +75,6 @@
     "tag": "mgmtd",
     "msg": "data and call unavailable: no service path/example_net.go:12",
     "after": true
-   },
-   {
-    "ts": "2026-09-22T09:50:13.153Z",
-    "last": "2026-09-22T09:50:21.153Z",
-    "n": 3,
-    "phone": null,
-    "level": "W",
-    "tag": "vrild",
-    "msg": "diag packet dropped: host not reading, write fail"
    },
    {
     "ts": "2026-09-22T09:50:11.153Z",

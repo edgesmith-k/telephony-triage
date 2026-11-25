@@ -12,6 +12,7 @@
 - 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
 
 12:00:05.121 - E VRIL reply to client token 303  〔script 모양 3줄, 12:00:05.121~12:03:50.011〕
+12:03:29.600 - W ImsPhoneCallTracker [0] call ended: cause=17  〔script 모양 1줄, 기준 뒤 첫 등장〕
 12:03:29.000 p0 D RILJ [0341]> LAST_CALL_FAIL_CAUSE [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
 12:03:29.400 p0 D RILJ [0341]< LAST_CALL_FAIL_CAUSE com.android.internal.telephony.LastCallFailCause@5d3c2a1 causeCode: 17 vendorCause: null [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
 12:00:15.000 - D ImsPhone [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnec…  〔script 모양 1줄〕
@@ -21,7 +22,6 @@
 12:03:25.504 - D VRIL-SVC RadioVoiceProxy::dial: serial 340  〔script 모양 1줄, 기준 뒤 첫 등장〕
 12:03:26.700 p0 D RILJ [0340]< DIAL [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
 12:03:28.700 p0 D RILJ [UNSL]< UNSOL_RESPONSE_CALL_STATE_CHANGED [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
-12:03:29.600 - W ImsPhoneCallTracker [0] call ended: cause=17  〔script 모양 1줄, 기준 뒤 첫 등장〕
 12:03:25.000 - I GsmCdmaPhone [0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, is…  〔script 모양 1줄〕
 12:00:06.128 - V RIL route rsp type=0001 id=0x0703 svc=5 msg=4009  〔script 모양 3줄, 12:00:06.128~12:03:50.611〕
 12:00:14.901 - V RIL ipc[0][RX] <HEXDUMP 16B>  〔script 모양 2줄, 12:00:14.901~12:03:50.311〕
