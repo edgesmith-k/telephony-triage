@@ -133,7 +133,9 @@ class CacheMixin:
                              "answers": {k: v for k, v in sorted(self.state.answers.items()) if k in ANSWER_KEYS},
                              # --(no-)explore는 1위 C=1의 fit_check(core.explore)를 바꾼다(--no-explore는 always를 끈다).
                              # 없으면 해시가 이전과 같다
-                             **({"explore": a.explore} if getattr(a, "explore", None) is not None else {})}),
+                             **({"explore": a.explore} if getattr(a, "explore", None) is not None else {}),
+                             # --analyzer는 조사 모드의 5-1 건너뜀(core.analyzer)을 끈다. 없으면(--no-analyzer 포함) 해시가 이전과 같다
+                             **({"analyzer": True} if getattr(a, "analyzer", None) else {})}),
         }
 
     def reuse_check(self, parts: dict, request_hash: str) -> dict | None:

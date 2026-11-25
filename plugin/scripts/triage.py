@@ -182,6 +182,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--explore", action=argparse.BooleanOptionalAction, default=None,
                    help="스킬 --(no-)explore 그대로. --explore면 1위 C=1이어도 적합성 확인(explore.reason fit_check)을 연다"
                         "(explore.when: never면 열지 않는다). --no-explore면 explore.when: always여도 열지 않는다")
+    p.add_argument("--analyzer", action=argparse.BooleanOptionalAction, default=None,
+                   help="스킬 --(no-)analyzer 그대로. --analyzer면 조사 모드에서도 모듈 문서 심층 분석(5-1)을 낸다"
+                        "(없으면 조사 모드는 5-1을 건너뛰고 탐색 분석이 모듈 문서를 읽는다). --no-analyzer는 run 출력을 바꾸지 않는다")
     p = sub.add_parser("explore", parents=[common])
     p.add_argument("key", metavar="KEY")
     p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")

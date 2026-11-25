@@ -17,7 +17,7 @@ from common.eligibility import EVENTS_MAX
 from common.exitcodes import USAGE
 
 from .anchor import _parse_ts, _step_label
-from .core import (ANALYSIS_MAX, AUTO_CODE_NOTE, EXTRACTOR_CODES, CARRY_PARTS, DEEP_CONFIG_ERROR, DEEP_MODULE_PENDING, ERROR_EVENT_RE,
+from .core import (ANALYSIS_MAX, AUTO_CODE_NOTE, EXTRACTOR_CODES, CARRY_PARTS, DEEP_CONFIG_ERROR, DEEP_INVESTIGATE_SKIPPED, DEEP_MODULE_PENDING, ERROR_EVENT_RE,
                    ERROR_FIELDS, EXPLORE_INPUT_FILE, EXPLORE_PENDING_LINE, Fail, is_error_text, MUST_SHOW_CLIP, MUST_SHOW_FIT, MUST_SHOW_MAX, PULL_SKIPPED, SCRIPTS, SEARCH_LIMIT,
                    _HOT_LEVELS, _TOKEN_RE, _clip, _now, PARTIAL_REPORT_MAX, FLOW_ANALYSIS_MAX, FLOW_PER_FLOW,
                    FLOW_REPORT_MAX)
@@ -1531,6 +1531,8 @@ class ReportMixin:
         analyzer = r.get("analyzer")
         if analyzer and analyzer.get("error"):      # {error, when: never}: 설정 오류는 never 줄보다 먼저(B2-3)
             ana.append(DEEP_CONFIG_ERROR.format(problem=analyzer["error"]))
+        elif analyzer and analyzer.get("skipped"):  # {skipped: 조사 모드, when: never}: 설정 never가 아니다
+            ana.append(DEEP_INVESTIGATE_SKIPPED)
         elif analyzer and analyzer.get("when") == "never":
             # 설정 키 경로: 기본 플랫폼은 최상위 analyzers, 그 밖은 platforms.<p>.analyzers (17-platforms §10)
             at = "" if self.platform == userconfig.TOP_PROFILE else f"platforms.{self.platform}."

@@ -518,7 +518,8 @@ def _missing(platform: str, x: str, sha: str) -> ModuleError:
 def materialise(state, *, purpose, module=None, category=None, type_id=None, also=False, deep=False, extra=()) -> Fetched:
     """B1 §5.4 H–L on state.sha: 모듈 찾기 → blob 재해시·글 점검 → (lock 확인) ff-only → (lock 확인) sparse.
     `deep`(explore 정밀 탐색): EXPLORE_FILES 뒤에 `{m}/deep.md`. `extra`(모듈 이름들): 주 모듈·모뎀 뒤에 deep이면 `{m}/SKILL.md`,
-    explore면 `{m}/explore.md`를 더 받는다(트리에 없거나 `EXTRA_MAX`를 넘으면 그 모듈은 건너뛴다 — 받은 것은 `Fetched.extra`)."""
+    explore면 `{m}/explore.md`를 더 받는다(트리에 없거나 `EXTRA_MAX`를 넘으면 그 모듈은 건너뛴다 — 받은 것은 `Fetched.extra`).
+    explore에 `type_id`(·`category`)를 주면(5-1을 건너뛴 조사 모드) 그 카테고리 모듈의 `references/<type_id>.md`를 끝에 더 받는다."""
     _step("H", state)
     p, sha, tree = state.platform, state.sha, state.tree
     block = (state.doc.get("platforms") or {}).get(p)
@@ -580,6 +581,19 @@ def materialise(state, *, purpose, module=None, category=None, type_id=None, als
         dirs.append(f"{p}/{x}")
         got.append(x)
         used += len(data)
+    if purpose == "explore" and isinstance(type_id, str) and TYPE_RE.fullmatch(type_id):
+        # 5-1을 건너뛴 조사 모드: 1위 유형 참고 문서(1위 카테고리 모듈의 references/<ID>.md)를 보조 문서로 — 없으면 뺀다
+        hits = [d for d, b in mods.items() if isinstance(b, dict) and b.get("db_category") == category]
+        path = f"{p}/{hits[0]}/references/{type_id}.md" if len(hits) == 1 else None
+        if path in tree:
+            data = _blob(work, clone, by_path[path])
+            found = skillcheck.check_text(path, data)
+            if found:
+                skipped.append(f"보조 문서 {path} 점검({found[0]['check']})에 걸려 건너뜀")
+            else:
+                files.append((path, data))
+                if f"{p}/{hits[0]}" not in dirs:
+                    dirs.append(f"{p}/{hits[0]}")
     _step("J", state)
     state.lock.check()
     rc, _, err = _git(work, clone, "merge", "--ff-only", "-q", sha)
