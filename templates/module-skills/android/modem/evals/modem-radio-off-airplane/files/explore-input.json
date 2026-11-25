@@ -57,5 +57,490 @@
     "main": true
    }
   ]
+ },
+ "summary": {
+  "ref": "2026-11-10T16:14:05.000Z",
+  "range": [
+   "2026-11-10T16:14:05.342Z",
+   "2026-11-10T16:14:32.766Z"
+  ],
+  "lines": 55,
+  "shapes": 47,
+  "window": [
+   "2026-11-10T16:09:05.000Z",
+   "2026-11-10T16:19:05.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-11-10T16:14:05.422Z",
+    "last": "2026-11-10T16:14:05.422Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "handlePollStateResult exception java.lang.IllegalStateException: Service not connected.",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.422Z",
+    "last": "2026-11-10T16:14:05.422Z",
+    "n": 1,
+    "phone": 0,
+    "level": "E",
+    "tag": "SST-0",
+    "msg": "handlePollStateResult: RIL returned an error where it must succeed: java.lang.IllegalStateException: Service not connected.",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.381Z",
+    "last": "2026-11-10T16:14:05.381Z",
+    "n": 2,
+    "phone": 0,
+    "level": "E",
+    "tag": "RILJ",
+    "msg": "getImsRegistrationState not supported on service NETWORK > 2.2. [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.422Z",
+    "last": "2026-11-10T16:14:05.422Z",
+    "n": 1,
+    "phone": 0,
+    "level": "E",
+    "tag": "SST-0",
+    "msg": "handlePollStateResult: RIL returned RADIO_NOT_AVAILABLE.",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.342Z",
+    "last": "2026-11-10T16:14:05.342Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "setRadioPower power false forEmergencyCall false forceApply false reason 0",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.345Z",
+    "last": "2026-11-10T16:14:05.345Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0], IMS reg state=false, pending radio off…",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.345Z",
+    "last": "2026-11-10T16:14:05.345Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "setPowerStateToDesired: powerOffRadioSafely()",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.346Z",
+    "last": "2026-11-10T16:14:05.346Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "powerOffRadioSafely: due to AIRPLANE_MODE_ON",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.346Z",
+    "last": "2026-11-10T16:14:05.346Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "powerOffRadioSafely: Data is active on phone 1. Wait for all data disconnect.",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.350Z",
+    "last": "2026-11-10T16:14:05.350Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0265]> DEACTIVATE_DATA_CALL cid = 1 reason = SHUTDOWN [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.352Z",
+    "last": "2026-11-10T16:14:05.352Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0266]> NOTIFY_IMS_DATA_NETWORK accessNetwork=NGRAN dataNetworkState=DISCONNECTING physicalTransportType=WWAN physicalNetworkSlotIndex=0 [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.367Z",
+    "last": "2026-11-10T16:14:05.367Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0265]< DEACTIVATE_DATA_CALL [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.368Z",
+    "last": "2026-11-10T16:14:05.375Z",
+    "n": 2,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0266]< NOTIFY_IMS_DATA_NETWORK [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.368Z",
+    "last": "2026-11-10T16:14:05.368Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[UNSL]< UNSOL_DATA_CALL_LIST_CHANGED [] [convertToString] [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.374Z",
+    "last": "2026-11-10T16:14:05.374Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0267]> NOTIFY_IMS_DATA_NETWORK accessNetwork=NGRAN dataNetworkState=DISCONNECTED physicalTransportType=WWAN physicalNetworkSlotIndex=0 [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.379Z",
+    "last": "2026-11-10T16:14:05.379Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.375Z",
+    "last": "2026-11-10T16:14:05.375Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "onAnyDataNetworkExistingChanged: anyData=false anyCellularData=false",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.375Z",
+    "last": "2026-11-10T16:14:05.375Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "EVENT_ALL_DATA_DISCONNECTED",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.375Z",
+    "last": "2026-11-10T16:14:05.375Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "Data disconnected for all phones, turn radio off now.",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.380Z",
+    "last": "2026-11-10T16:14:05.382Z",
+    "n": 2,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.381Z",
+    "last": "2026-11-10T16:14:05.382Z",
+    "n": 2,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[UNSL]< UNSOL_RESPONSE_IMS_NETWORK_STATE_CHANGED [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.381Z",
+    "last": "2026-11-10T16:14:32.766Z",
+    "n": 2,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[UNSL]< UNSOL_RESPONSE_SIM_STATUS_CHANGED [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.381Z",
+    "last": "2026-11-10T16:14:32.766Z",
+    "n": 2,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0268]< RADIO_POWER [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.381Z",
+    "last": "2026-11-10T16:14:32.766Z",
+    "n": 2,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[UNSL]< UNSOL_UICC_SUBSCRIPTION_STATUS_CHANGED {0} [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.381Z",
+    "last": "2026-11-10T16:14:05.381Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "pollState: modemTriggered=true, radioState=1",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.382Z",
+    "last": "2026-11-10T16:14:05.382Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.383Z",
+    "last": "2026-11-10T16:14:05.383Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0269]> OPERATOR [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.384Z",
+    "last": "2026-11-10T16:14:05.384Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0269]< OPERATOR error 1 [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.384Z",
+    "last": "2026-11-10T16:14:05.384Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0270]> QUERY_NETWORK_SELECTION_MODE [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.384Z",
+    "last": "2026-11-10T16:14:05.384Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "EVENT_RADIO_POWER_OFF_DONE",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.385Z",
+    "last": "2026-11-10T16:14:05.385Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0271]> DATA_REGISTRATION_STATE [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.385Z",
+    "last": "2026-11-10T16:14:05.385Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "getDataRegistrationState: overrideHalVersion=null [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.387Z",
+    "last": "2026-11-10T16:14:05.387Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0273]> VOICE_REGISTRATION_STATE [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.387Z",
+    "last": "2026-11-10T16:14:05.387Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "getVoiceRegistrationState: overrideHalVersion=null [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.387Z",
+    "last": "2026-11-10T16:14:05.387Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0270]< QUERY_NETWORK_SELECTION_MODE {0} [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.387Z",
+    "last": "2026-11-10T16:14:05.387Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0271]< DATA_REGISTRATION_STATE error 1 [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.395Z",
+    "last": "2026-11-10T16:14:05.395Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0273]< VOICE_REGISTRATION_STATE error 1 [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.422Z",
+    "last": "2026-11-10T16:14:05.422Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "set service state as POWER_OFF",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.422Z",
+    "last": "2026-11-10T16:14:05.447Z",
+    "n": 2,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "Could not set ServiceState channel number. CellIdentity null",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.423Z",
+    "last": "2026-11-10T16:14:05.423Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.424Z",
+    "last": "2026-11-10T16:14:05.424Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "RAT switched NR_SA -> Unknown at cell -1",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.445Z",
+    "last": "2026-11-10T16:14:05.445Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "notifyVoiceRegStateRilRadioTechnologyChanged: vrs=3 rat=0",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.447Z",
+    "last": "2026-11-10T16:14:05.447Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "EVENT_POLL_STATE_NETWORK_SELECTION_MODE",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:32.761Z",
+    "last": "2026-11-10T16:14:32.761Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "setRadioPower power true forEmergencyCall false forceApply false reason 0",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:32.761Z",
+    "last": "2026-11-10T16:14:32.761Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=true, getRadioState=0, mRadioPowerOffReasons=[], IMS reg state=false, pending radio off=f…",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:32.763Z",
+    "last": "2026-11-10T16:14:32.763Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0285]> RADIO_POWER on = true forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:32.766Z",
+    "last": "2026-11-10T16:14:32.766Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: ON [PHONE0]",
+    "after": true
+   }
+  ]
  }
 }

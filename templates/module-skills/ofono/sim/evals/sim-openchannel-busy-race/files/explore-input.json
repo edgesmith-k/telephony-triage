@@ -37,5 +37,201 @@
     "main": true
    }
   ]
+ },
+ "summary": {
+  "ref": "2026-09-22T10:20:20.000Z",
+  "range": [
+   "2026-09-22T10:20:18.072Z",
+   "2026-09-22T10:20:21.172Z"
+  ],
+  "lines": 20,
+  "shapes": 20,
+  "window": [
+   "2026-09-22T10:15:20.000Z",
+   "2026-09-22T10:25:20.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-09-22T10:20:18.185Z",
+    "last": "2026-09-22T10:20:18.185Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "simd",
+    "msg": "tid:9 ExampleSim.cpp(62):ExampleChannelOpen > open channel failed: Operation already in progress"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.188Z",
+    "last": "2026-09-22T10:20:18.188Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "mgmtd",
+    "msg": "GetEID call error: eUICC example timeout path/example_sim.go:24"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.186Z",
+    "last": "2026-09-22T10:20:18.186Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "simd",
+    "msg": "tid:9 ExampleSim.cpp(68):ExampleGetEid > GetEID failed: ExampleEuiccNoResponse (eUICC example timeout)"
+   },
+   {
+    "ts": "2026-09-22T10:20:21.172Z",
+    "last": "2026-09-22T10:20:21.172Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "ui tick",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T10:20:18.603Z",
+    "last": "2026-09-22T10:20:18.603Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "simd",
+    "msg": "tid:42 ExampleSim.cpp(80):ExampleChannelClose > channel 1 closed"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.602Z",
+    "last": "2026-09-22T10:20:18.602Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0858]< RIL_REQUEST_SIM_CLOSE_CHANNEL"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.572Z",
+    "last": "2026-09-22T10:20:18.572Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0858]> RIL_REQUEST_SIM_CLOSE_CHANNEL 1"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.225Z",
+    "last": "2026-09-22T10:20:18.225Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "simd",
+    "msg": "tid:42 ExampleSim.cpp(74):ExampleChannelOpen > channel 1 opened"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.224Z",
+    "last": "2026-09-22T10:20:18.224Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0857]< RIL_REQUEST_SIM_OPEN_CHANNEL {1}"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.223Z",
+    "last": "2026-09-22T10:20:18.223Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "[ExampleIccService_1] open-channel answer: session 1, sw1 : 90, sw2 : 00"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.222Z",
+    "last": "2026-09-22T10:20:18.222Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP OK(VIPC_OK) seq=0x09e7 len=12"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.184Z",
+    "last": "2026-09-22T10:20:18.184Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/dbus.c:__ofono_error_busy() m:ExampleOpenChannel i:org.ofono.SimManager"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.183Z",
+    "last": "2026-09-22T10:20:18.183Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "src/sim.c:example_open_channel() /ril_0 aid <AID#2> while channel open in progress"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.182Z",
+    "last": "2026-09-22T10:20:18.182Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "simd",
+    "msg": "tid:9 ExampleSim.cpp(56):ExampleChannelOpen > GetEID: open channel aid <AID#2>"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.176Z",
+    "last": "2026-09-22T10:20:18.176Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "mux [ch1][TX] VIPC_EXAMPLE_CARD_OPEN seq=0x09e7 len=20"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.175Z",
+    "last": "2026-09-22T10:20:18.175Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "client fd 9 VCHAN_2 REQUEST: SIM_OPEN_CHANNEL (20 bytes)"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.174Z",
+    "last": "2026-09-22T10:20:18.174Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0857]> RIL_REQUEST_SIM_OPEN_CHANNEL (AID:<AID#1>) (P2:0)"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.173Z",
+    "last": "2026-09-22T10:20:18.173Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "src/sim.c:example_open_channel() /ril_0 aid <AID#1>"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.172Z",
+    "last": "2026-09-22T10:20:18.172Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "simd",
+    "msg": "tid:42 ExampleSim.cpp(50):ExampleChannelOpen > profile list: open channel aid <AID#1>"
+   },
+   {
+    "ts": "2026-09-22T10:20:18.072Z",
+    "last": "2026-09-22T10:20:18.072Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "GetEID requested from settings path/example_sim.go:36"
+   }
+  ]
  }
 }

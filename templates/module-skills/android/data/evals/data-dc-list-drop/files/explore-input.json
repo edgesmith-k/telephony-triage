@@ -13,5 +13,128 @@
  ],
  "around_alt": [
   "2026-09-03T11:00:20.031Z"
- ]
+ ],
+ "summary": {
+  "ref": "2026-09-03T11:00:20.000Z",
+  "range": [
+   "2026-09-03T11:00:01.000Z",
+   "2026-09-03T11:00:40.000Z"
+  ],
+  "lines": 11,
+  "shapes": 11,
+  "window": [
+   "2026-09-03T10:55:20.000Z",
+   "2026-09-03T11:05:20.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-09-03T11:00:20.001Z",
+    "last": "2026-09-03T11:00:20.001Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "RIL",
+    "msg": "[ExamplePdnService_0] update pdn PdnCtx cid=2 state=disconnected link=down",
+    "after": true
+   },
+   {
+    "ts": "2026-09-03T11:00:20.010Z",
+    "last": "2026-09-03T11:00:20.010Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[UNSL]< UNSOL_DATA_CALL_LIST_UPDATED [SetupDataCallResult{cause: NONE, suggestedRetryTime: 0, cid: 1, active: 2, type: IPV4V6, ifname: rmnet0}] [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-09-03T11:00:20.020Z",
+    "last": "2026-09-03T11:00:20.020Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "DN-101-C",
+    "msg": "ConnectedState: onDataStateChanged: PDN inactive reported by WWAN data service.",
+    "after": true
+   },
+   {
+    "ts": "2026-09-03T11:00:20.021Z",
+    "last": "2026-09-03T11:00:20.021Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "DN-101-C",
+    "msg": "DisconnectedState: Data network disconnected. mEverConnected=true",
+    "after": true
+   },
+   {
+    "ts": "2026-09-03T11:00:20.030Z",
+    "last": "2026-09-03T11:00:20.030Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onDataNetworkDisconnected: [DataNetwork: DN-101-C, <APN#1>, state=null], cause=NONE(0x0)(0), tearDownReason=NONE",
+    "after": true
+   },
+   {
+    "ts": "2026-09-03T11:00:20.031Z",
+    "last": "2026-09-03T11:00:20.031Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Internet data state changed from CONNECTED to DISCONNECTED.",
+    "after": true
+   },
+   {
+    "ts": "2026-09-03T11:00:20.040Z",
+    "last": "2026-09-03T11:00:20.040Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DRM-0",
+    "msg": "retry scheduled in 30000ms",
+    "after": true
+   },
+   {
+    "ts": "2026-09-03T11:00:25.000Z",
+    "last": "2026-09-03T11:00:25.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Re-evaluating 1 unsatisfied network requests in 1 groups, [INTERNET|NOT_RESTRICTED|TRUSTED]-CELLULAR due to DATA_NETWORK_DISCONNECTED",
+    "after": true
+   },
+   {
+    "ts": "2026-09-03T11:00:40.000Z",
+    "last": "2026-09-03T11:00:40.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "route rsp type=0001 id=0x0703 svc=5 msg=4009",
+    "after": true
+   },
+   {
+    "ts": "2026-09-03T11:00:20.000Z",
+    "last": "2026-09-03T11:00:20.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "RIL",
+    "msg": "[IpcCtx_0] rx frame unsol id=2"
+   },
+   {
+    "ts": "2026-09-03T11:00:01.000Z",
+    "last": "2026-09-03T11:00:01.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Internet data state changed from DISCONNECTED to CONNECTED."
+   }
+  ]
+ }
 }

@@ -6,6 +6,22 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): datad2 · src/lte.c · drivers/rilmodem/gprs.c · drivers/rilmodem/lte.c · SETUP_DATA_CALL
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
+## 전체 로그 모양 요약 (마스킹 사본 전체, 분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이 스크립트가 셈)
+
+- 범위: 2026-09-20T15:30:00.000Z ~ 2026-09-20T15:30:04.500Z, 줄 8, 모양 8개 중 8개. 기준 시각: 2026-09-20T15:30:04.000Z
+- 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
+
+15:30:04.100 - E ofonod src/gprs.c:pri_activate_callback() Activating context failed with error: Unknown error  〔script 모양 1줄, 기준 뒤 첫 등장〕
+15:30:04.120 - W datad activate result: failed profile_id=1 retry in 10s[./src/call_example.cxx +30]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+15:30:04.500 - I mgmtd dbus signal org.ofono.ConnectionContext.PropertyChanged Active=false path/example_dbus.go:84  〔script 모양 1줄, 기준 뒤 첫 등장〕
+15:30:01.100 p0 D ofonod drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating  〔script 모양 1줄〕
+15:30:01.050 - I mgmtd dbus call org.ofono.ConnectionContext.SetProperty Active=true path/example_dbus.go:72  〔script 모양 1줄〕
+15:30:01.000 - I datad profile select: apn=internet.example auth=NONE profile_id=1[./src/apn_example.cxx +20]  〔script 모양 1줄〕
+15:30:00.300 - I vrild signal strength report: level=2 placeholder  〔script 모양 1줄〕
+15:30:00.000 - I mgmtd dbus signal org.ofono.NetworkRegistration.PropertyChanged Strength path/example_dbus.go:96  〔script 모양 1줄〕
+
+## 본 타임라인
+
 15:30:01.000 - I datad profile select: apn=internet.example auth=NONE profile_id=1[./src/apn_example.cxx +20]
 15:30:01.050 - I mgmtd dbus call org.ofono.ConnectionContext.SetProperty Active=true path/example_dbus.go:72
 15:30:01.100 p0 D ofonod drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating

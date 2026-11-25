@@ -199,6 +199,7 @@ def test_deep_c0_parity(tmp_path):
     assert out["module"] == "ofono/data"
     want = json.loads((case_dir / "files" / "deep-input.json").read_text(encoding="utf-8"))
     got = json.loads((job / "deep-input.json").read_text(encoding="utf-8"))
+    assert got.pop("summary") == "summary.md" and (job / "summary.md").is_file()   # 실사용만(case 타임라인 머리에 같은 요약 절)
     assert list(got) == list(want) == C0_HELD_KEYS and got["decision"]["state"] == "held"
     assert re.fullmatch(r"[0-9a-f]{40}", got["sha"])
     assert got["timeline"].endswith("module-skill/deep/timeline.md") or got["timeline"] == "module-skill/deep/timeline.md"
@@ -241,18 +242,40 @@ def test_rerun_same_sha_is_byte_identical(env):
 
 
 def test_deep_also_signal_and_also(env):
-    # 신호 구간은 1위 근거(실패 표시 줄)로 정한다(modulefilter.deep_window): 그 앞뒤에 모뎀 데몬 줄이 있으면 묻는다
+    # 신호 구간은 1위 근거(실패 표시 줄)로 정한다(modulefilter.deep_window): 그 앞뒤에 모뎀 데몬 줄이 있으면 묻지 않고 받는다(11/25)
     cands = [{"type": "DATA-001", "cause": "DATA-001-01", "score": 9, "confidence": "high", "category": "data",
               "evidence": [{k: EVENTS[1][k] for k in ("ts", "tag", "msg", "event")}]}]
     job = env.make_job(events=EVENTS + [MODEM_EVENT], candidates=cands)
     code, out, _ = env.module()
-    assert code == 0 and out["also"] == ["ofono/modem"] and out["also_why"] == ["ofonod src/modem.c 1줄"]
-    assert out["ask_also"]["options"] == ["아니오(기본)", "예"] and out["ask_also"]["question"].startswith("모뎀 모듈 문서도")
-    code, out, _ = env.module("deep", "--also")
-    assert code == 0 and out["with"] == ["ofono/modem"] and out["read"][-1].endswith("ofono/modem/SKILL.md")
+    assert code == 0 and "ask_also" not in out and out["also"] == [] and out["also_why"] == ["ofonod src/modem.c 1줄"]
+    assert out["with"] == ["ofono/modem"] and out["read"][-1].endswith("ofono/modem/SKILL.md")
     assert "ofono/data+modem @" in env.report_line()
     rec = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))["deep"]
     assert rec["with"] == ["ofono/modem"]
+    code, out, _ = env.module("deep", "--also")                        # 옛 플래그는 그대로 받는다
+    assert code == 0 and out["with"] == ["ofono/modem"] and out["read"][-1].endswith("ofono/modem/SKILL.md")
+
+
+def test_deep_input_carries_candidate_evidence_and_other_category_docs(env):
+    """5-1: deep-input `top_candidates` 3개가 근거 줄을 싣고, 1위 밖 카테고리(sim)·모뎀 모듈 SKILL.md도 묻지 않고 받는다."""
+    ev1 = {k: EVENTS[1][k] for k in ("ts", "tag", "msg", "event")}
+    cands = [{"type": "DATA-001", "cause": "DATA-001-01", "score": 9, "confidence": "high", "category": "data", "evidence": [ev1]},
+             {"type": "SIM-002", "cause": "SIM-002-01", "score": 5, "confidence": "low", "category": "sim",
+              "evidence": [{"ts": "2026-09-20T05:32:08.000Z", "tag": "simd", "msg": "card io error 0x6f00", "event": None}]},
+             {"type": "DATA-003", "cause": "DATA-003-01", "score": 3, "confidence": "low", "category": "data",
+              "evidence": [{"ts": "2026-09-20T05:32:09.500Z", "tag": "datad", "msg": "PdnCtx retry 2", "event": None}]}]
+    job = env.make_job(events=EVENTS + [MODEM_EVENT], candidates=cands)
+    code, out, err = env.module()
+    assert code == 0, err
+    assert "ask_also" not in out and out["extra"] == ["ofono/sim"] and out["with"] == ["ofono/modem"]
+    rels = [Path(p).relative_to(job / "module-skill" / "deep").as_posix() for p in out["read"]]
+    assert rels == DEEP_READ + ["ofono/modem/SKILL.md", "ofono/sim/SKILL.md"]
+    top = json.loads((job / "deep-input.json").read_text(encoding="utf-8"))["top_candidates"]
+    assert [c["cause"] for c in top] == ["DATA-001-01", "SIM-002-01", "DATA-003-01"]
+    assert top[0]["evidence"] == ["05:32:09.000 ofonod: gprs attach failed"] and top[1]["evidence"] == [
+        "05:32:08.000 simd: card io error 0x6f00"] and top[1]["category"] == "sim"
+    rec = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))["deep"]
+    assert rec["extra"] == ["ofono/sim"] and "ofono/data+sim+modem @" in env.report_line()
 
 
 def test_module_does_not_touch_existing_job_files(env):
@@ -902,14 +925,18 @@ def test_explore_with_adds_aux_section(env):
 
 
 def test_explore_with_ask_switch(env):
-    """약한 신호(주 모듈 오류 줄 없음)면 `ask_switch`에 같이 보기 하나, `--with` 실행에는 없다."""
+    """약한 신호(주 모듈 오류 줄 없음)면 묻지 않고(`ask_switch` 없음) 신호 있는 다른 모듈(sim)의 explore.md와 줄(`--with`)을 더한다.
+    `--with`로 받은 실행은 그대로."""
     env.make_job(events=[dict(WITH_EVENTS[0], level="I", msg="setup request"), WITH_EVENTS[1]], platform="android",
                  explore=True)
     code, out, err = env.module(*WITH_ARGS, platform="android")
     assert code == 0, err
-    assert out["ask_switch"]["options"] == ["그대로 data", "sim — 1줄", "data + sim 같이 보기"]
+    assert "ask_switch" not in out and out["with"] == ["android/sim"] and out["extra"] == ["android/sim"]
+    assert out["read"][-2].endswith("android/sim/explore.md") and out["read"][-1].endswith("timeline.md")
+    assert "SIMSVC sim state ABSENT" in Path(out["timeline"]["path"]).read_text(encoding="utf-8")
+    assert "data+sim" in env.report_line("- 탐색 분석")
     code, out, err = env.module(*WITH_ARGS, "--with", "sim", platform="android")
-    assert code == 0 and out["ask_switch"]["options"] == ["그대로 data", "sim — 1줄"], err
+    assert code == 0 and "ask_switch" not in out and "extra" not in out and out["with"] == ["android/sim"], err
 
 
 def test_explore_with_at_keeps_with(env):

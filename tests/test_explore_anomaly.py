@@ -91,8 +91,15 @@ def _job(time: str = "2026-11-20T10:00:00+00:00") -> Path:
     return out
 
 
+def no_summary(text: str) -> str:
+    """머리의 전체 로그 모양 요약 절(`## 전체 로그 모양 요약` ~ `## 본 타임라인` 뒤 빈 줄)을 뺀 글 — 요약이 없을 때와 같은 바이트."""
+    start, end = text.find("## 전체 로그 모양 요약"), text.find("## 본 타임라인\n\n")
+    return text[:start] + text[end + len("## 본 타임라인\n\n"):] if start >= 0 else text
+
+
 def _split(job: Path) -> tuple[str, str]:
-    main, sep, block = (job / core.TIMELINE_FILE).read_text(encoding="utf-8").partition("\n" + HEAD)
+    """(본 타임라인 — 머리의 요약 절은 뺀다, 이상 줄 절)."""
+    main, sep, block = no_summary((job / core.TIMELINE_FILE).read_text(encoding="utf-8")).partition("\n" + HEAD)
     return main, sep + block
 
 
@@ -178,7 +185,7 @@ def test_no_masked_copy_leaves_timeline_as_before():
     shutil.copytree(job, other)
     spec_path = other / core.EXPLORE_INPUT_FILE
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
-    spec.pop("anomaly")
+    spec.pop("anomaly"), spec.pop("summary")
     spec_path.write_text(json.dumps(spec, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     before = spec_path.read_bytes()
     shutil.rmtree(other / "logs-masked")

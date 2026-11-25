@@ -36,5 +36,227 @@
     "msg": "registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1"
    }
   ]
+ },
+ "summary": {
+  "ref": "2026-11-10T16:21:58.000Z",
+  "range": [
+   "2026-11-10T16:21:57.433Z",
+   "2026-11-10T16:21:57.504Z"
+  ],
+  "lines": 23,
+  "shapes": 23,
+  "window": [
+   "2026-11-10T16:16:58.000Z",
+   "2026-11-10T16:26:58.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-11-10T16:21:57.504Z",
+    "last": "2026-11-10T16:21:57.504Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "Telephony",
+    "msg": "registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.504Z",
+    "last": "2026-11-10T16:21:57.504Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "Telephony",
+    "msg": "registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.503Z",
+    "last": "2026-11-10T16:21:57.503Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "PhoneInterfaceManager",
+    "msg": "setVoiceServiceStateOverride: subId=1, phone=Handler (com.android.internal.telephony.GsmCdmaPhone) {10e2691}, hasService=false, callingPackage=com.android.serv…"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.449Z",
+    "last": "2026-11-10T16:21:57.449Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "Phone-0",
+    "msg": "isImsRegistered =false"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.448Z",
+    "last": "2026-11-10T16:21:57.448Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "PhoneSwitcher",
+    "msg": "Found an active subscription"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.448Z",
+    "last": "2026-11-10T16:21:57.448Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmCdmaPhone",
+    "msg": "[0] EVENT_SUBSCRIPTIONS_CHANGED"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.448Z",
+    "last": "2026-11-10T16:21:57.448Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "PhoneInterfaceManager",
+    "msg": "unregisterMmTelCapabilityCallback: 1 is inactive, ignoring unregister."
+   },
+   {
+    "ts": "2026-11-10T16:21:57.448Z",
+    "last": "2026-11-10T16:21:57.448Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "PhoneInterfaceManager",
+    "msg": "unregisterImsRegistrationCallback: 1is inactive, ignoring unregister."
+   },
+   {
+    "ts": "2026-11-10T16:21:57.446Z",
+    "last": "2026-11-10T16:21:57.446Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "SubscriptionListener.onSubscriptionInfoChanged"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.445Z",
+    "last": "2026-11-10T16:21:57.445Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "MultiSimSettingController",
+    "msg": "updateDefaultValues: change: 0"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.445Z",
+    "last": "2026-11-10T16:21:57.445Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "TNP",
+    "msg": "Subscription changed."
+   },
+   {
+    "ts": "2026-11-10T16:21:57.445Z",
+    "last": "2026-11-10T16:21:57.445Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "TNP",
+    "msg": "reevaluateNetworkRequests: subscription changed."
+   },
+   {
+    "ts": "2026-11-10T16:21:57.444Z",
+    "last": "2026-11-10T16:21:57.444Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0023]< ENABLE_UICC_APPLICATIONS [PHONE0]"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.444Z",
+    "last": "2026-11-10T16:21:57.444Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[UNSL]< UNSOL_UICC_APPLICATIONS_ENABLEMENT_CHANGED false [PHONE0]"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.443Z",
+    "last": "2026-11-10T16:21:57.443Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DSMGR-0",
+    "msg": "mIsDataEnabled=true, prevDataEnabled=true"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.443Z",
+    "last": "2026-11-10T16:21:57.443Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "MultiSimSettingController",
+    "msg": "onSubscriptionsChanged"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.443Z",
+    "last": "2026-11-10T16:21:57.443Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "MultiSimSettingController",
+    "msg": "updateDefaults"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.442Z",
+    "last": "2026-11-10T16:21:57.442Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0023]> ENABLE_UICC_APPLICATIONS false [PHONE0]"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.442Z",
+    "last": "2026-11-10T16:21:57.442Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DSMGR-0",
+    "msg": "handleSubscriptionChanged: 1 reevaluating data enabled"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.439Z",
+    "last": "2026-11-10T16:21:57.439Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "TelephonyProvider",
+    "msg": "callingUid=1001 update([content://telephony/siminfo/1, uicc_applications_enabled=0, null]) = 1"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.433Z",
+    "last": "2026-11-10T16:21:57.433Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "SMSVC",
+    "msg": "setUiccApplicationsEnabled: subId=1, enabled=false, calling package=null"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.433Z",
+    "last": "2026-11-10T16:21:57.433Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "SMSVC",
+    "msg": "updateUserIdToAvailableSubs: {-10000=[1]}"
+   },
+   {
+    "ts": "2026-11-10T16:21:57.433Z",
+    "last": "2026-11-10T16:21:57.433Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "MultiSimSettingController",
+    "msg": "notifySubscriptionInfoChanged"
+   }
+  ]
  }
 }

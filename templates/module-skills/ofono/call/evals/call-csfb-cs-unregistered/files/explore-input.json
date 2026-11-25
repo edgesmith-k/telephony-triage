@@ -2,5 +2,234 @@
  "around": "2026-09-23T10:10:05.000Z",
  "failed_step": null,
  "limit": 200,
- "anchor": null
+ "anchor": null,
+ "summary": {
+  "ref": "2026-09-23T10:10:05.000Z",
+  "range": [
+   "2026-09-23T10:10:00.010Z",
+   "2026-09-23T10:10:06.200Z"
+  ],
+  "lines": 25,
+  "shapes": 22,
+  "window": [
+   "2026-09-23T10:05:05.000Z",
+   "2026-09-23T10:15:05.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-09-23T10:10:05.002Z",
+    "last": "2026-09-23T10:10:05.002Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "dbus -> org.ofono.VoiceCallManager.Dial on /ril_0 path/example_dbus.go:48",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.004Z",
+    "last": "2026-09-23T10:10:05.004Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "dbus_trace method call - i:org.ofono.VoiceCallManager m:Dial p:/ril_0 a:\"<MSISDN#1>\", \"default\"",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.005Z",
+    "last": "2026-09-23T10:10:05.005Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "src/voicecall.c:manager_dial() dialing",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.006Z",
+    "last": "2026-09-23T10:10:05.006Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0351]> RIL_REQUEST_DIAL (<MSISDN#1>,0)",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.007Z",
+    "last": "2026-09-23T10:10:05.007Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "client fd 9 VCHAN_1 REQUEST: DIAL (40 bytes)",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.008Z",
+    "last": "2026-09-23T10:10:05.008Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "[ExampleCallService_0] dial start",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.008Z",
+    "last": "2026-09-23T10:10:05.008Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "[IpcCtx_0] track seq 0x0351",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.008Z",
+    "last": "2026-09-23T10:10:05.008Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "mux [ch0][TX] VIPC_EXAMPLE_CALL_START, REQ seq=0x0351 len=36",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.090Z",
+    "last": "2026-09-23T10:10:05.090Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "mux [ch0][RX] VIPC_EXAMPLE_CALL_START, RSP OK(VIPC_OK) seq=0x0351 len=12",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.091Z",
+    "last": "2026-09-23T10:10:05.091Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "[IpcCtx_0] OnIpcComplete Request ID=10, result=0",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.093Z",
+    "last": "2026-09-23T10:10:05.093Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "[0,0351]< RIL_REQUEST_DIAL",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.400Z",
+    "last": "2026-09-23T10:10:05.400Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "mux [ch0][RX] VIPC_EXAMPLE_CALL_IND ind len=8",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.402Z",
+    "last": "2026-09-23T10:10:05.402Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,UNSOL]< RIL_UNSOL_RESPONSE_CALL_STATE_CHANGED",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.410Z",
+    "last": "2026-09-23T10:10:05.410Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0352]> RIL_REQUEST_LAST_CALL_FAIL_CAUSE",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.430Z",
+    "last": "2026-09-23T10:10:05.430Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "[0,0352]< RIL_REQUEST_LAST_CALL_FAIL_CAUSE",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.432Z",
+    "last": "2026-09-23T10:10:05.432Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "dbus_trace signal - i:org.ofono.VoiceCallManager m:CallRemoved p:/ril_0",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.000Z",
+    "last": "2026-09-23T10:10:05.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "call dial requested number=<MSISDN#1> path/example_call.go:24"
+   },
+   {
+    "ts": "2026-09-23T10:10:00.010Z",
+    "last": "2026-09-23T10:10:06.010Z",
+    "n": 3,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "ui tick"
+   },
+   {
+    "ts": "2026-09-23T10:10:00.200Z",
+    "last": "2026-09-23T10:10:06.200Z",
+    "n": 2,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "[ExampleRegService_0] signal update lte rsrp=-95"
+   },
+   {
+    "ts": "2026-09-23T10:10:01.500Z",
+    "last": "2026-09-23T10:10:01.500Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,UNSOL]< IMS_UNSOL_CAPABILITIES voiceOverLteCapable=0, emerOverLteCapable=1 smsOverLteCapable=0, utOverLteCapable=1"
+   },
+   {
+    "ts": "2026-09-23T10:10:01.002Z",
+    "last": "2026-09-23T10:10:01.002Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "[ExampleRegService_0] Voice RegState=NOT_REGISTERED, RejectCause=17"
+   },
+   {
+    "ts": "2026-09-23T10:10:01.000Z",
+    "last": "2026-09-23T10:10:01.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "[ExampleRegService_0] Data RegState=REGISTERED, RejectCause=0"
+   }
+  ]
+ }
 }

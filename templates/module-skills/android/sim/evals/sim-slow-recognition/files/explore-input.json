@@ -11,5 +11,144 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "summary": {
+  "ref": "2026-09-05T08:00:14.000Z",
+  "range": [
+   "2026-09-05T08:00:05.000Z",
+   "2026-09-05T08:00:20.000Z"
+  ],
+  "lines": 13,
+  "shapes": 13,
+  "window": [
+   "2026-09-05T07:55:14.000Z",
+   "2026-09-05T08:05:14.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-09-05T08:00:14.010Z",
+    "last": "2026-09-05T08:00:14.010Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][RX] VIPC_EXAMPLE_CARD_STATE, RSP OK(VIPC_OK) seq=0x0210 len=40",
+    "after": true
+   },
+   {
+    "ts": "2026-09-05T08:00:14.012Z",
+    "last": "2026-09-05T08:00:14.012Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "RIL",
+    "msg": "[ExampleIccService_0] sim status end errorCode=0",
+    "after": true
+   },
+   {
+    "ts": "2026-09-05T08:00:14.014Z",
+    "last": "2026-09-05T08:00:14.014Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-SVC",
+    "msg": "getIccCardStatus response: serial 320",
+    "after": true
+   },
+   {
+    "ts": "2026-09-05T08:00:14.020Z",
+    "last": "2026-09-05T08:00:14.020Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0320]< GET_SIM_STATUS [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-09-05T08:00:14.100Z",
+    "last": "2026-09-05T08:00:14.100Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "UiccController",
+    "msg": "Broadcasting intent ACTION_SIM_STATE_CHANGED READY reason null for phone: 0 sub: 1",
+    "after": true
+   },
+   {
+    "ts": "2026-09-05T08:00:15.500Z",
+    "last": "2026-09-05T08:00:15.500Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "UiccController",
+    "msg": "Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 1",
+    "after": true
+   },
+   {
+    "ts": "2026-09-05T08:00:20.000Z",
+    "last": "2026-09-05T08:00:20.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "route rsp type=0001 id=0x0703 svc=5 msg=4009",
+    "after": true
+   },
+   {
+    "ts": "2026-09-05T08:00:05.260Z",
+    "last": "2026-09-05T08:00:05.260Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0321]< GET_SIGNAL_STRENGTH [PHONE0]"
+   },
+   {
+    "ts": "2026-09-05T08:00:05.200Z",
+    "last": "2026-09-05T08:00:05.200Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0321]> GET_SIGNAL_STRENGTH [PHONE0]"
+   },
+   {
+    "ts": "2026-09-05T08:00:05.008Z",
+    "last": "2026-09-05T08:00:05.008Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][TX] VIPC_EXAMPLE_CARD_STATE, REQ seq=0x0210 len=8"
+   },
+   {
+    "ts": "2026-09-05T08:00:05.006Z",
+    "last": "2026-09-05T08:00:05.006Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "RIL",
+    "msg": "[ExampleIccService_0] sim status begin"
+   },
+   {
+    "ts": "2026-09-05T08:00:05.004Z",
+    "last": "2026-09-05T08:00:05.004Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-SVC",
+    "msg": "RadioSimProxy::getIccCardStatus: serial 320"
+   },
+   {
+    "ts": "2026-09-05T08:00:05.000Z",
+    "last": "2026-09-05T08:00:05.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0320]> GET_SIM_STATUS [PHONE0]"
+   }
+  ]
+ }
 }

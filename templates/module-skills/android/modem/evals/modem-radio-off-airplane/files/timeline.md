@@ -7,6 +7,61 @@
 - 모듈 신호 약함: ±15초에 이 모듈 경고·오류 줄이 없고 network에 5줄이 있다
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
+## 전체 로그 모양 요약 (마스킹 사본 전체, 분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이 스크립트가 셈)
+
+- 범위: 2026-11-10T16:14:05.342Z ~ 2026-11-10T16:14:32.766Z, 줄 55, 모양 47개 중 47개. 기준 시각: 2026-11-10T16:14:05.000Z
+- 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
+
+16:14:05.422 p0 D SST-0 handlePollStateResult exception java.lang.IllegalStateException: Service not connected.  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.422 p0 E SST-0 handlePollStateResult: RIL returned an error where it must succeed: java.lang.IllegalStateException: Service not connected.  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.381 p0 E RILJ getImsRegistrationState not supported on service NETWORK > 2.2. [PHONE0]  〔script 모양 2줄, 16:14:05.381~16:14:05.381, 기준 뒤 첫 등장〕
+16:14:05.422 p0 E SST-0 handlePollStateResult: RIL returned RADIO_NOT_AVAILABLE.  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.342 p0 D SST-0 setRadioPower power false forEmergencyCall false forceApply false reason 0  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.345 p0 D SST-0 setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=false, getRadioState=1, mRadioPowerOffReasons=[0], IMS reg state=false, pending radio off…  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.345 p0 D SST-0 setPowerStateToDesired: powerOffRadioSafely()  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.346 p0 D SST-0 powerOffRadioSafely: due to AIRPLANE_MODE_ON  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.346 p0 D SST-0 powerOffRadioSafely: Data is active on phone 1. Wait for all data disconnect.  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.350 p0 D RILJ [0265]> DEACTIVATE_DATA_CALL cid = 1 reason = SHUTDOWN [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.352 p0 D RILJ [0266]> NOTIFY_IMS_DATA_NETWORK accessNetwork=NGRAN dataNetworkState=DISCONNECTING physicalTransportType=WWAN physicalNetworkSlotIndex=0 [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.367 p0 D RILJ [0265]< DEACTIVATE_DATA_CALL [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.368 p0 D RILJ [0266]< NOTIFY_IMS_DATA_NETWORK [PHONE0]  〔script 모양 2줄, 16:14:05.368~16:14:05.375, 기준 뒤 첫 등장〕
+16:14:05.368 p0 D RILJ [UNSL]< UNSOL_DATA_CALL_LIST_CHANGED [] [convertToString] [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.374 p0 D RILJ [0267]> NOTIFY_IMS_DATA_NETWORK accessNetwork=NGRAN dataNetworkState=DISCONNECTED physicalTransportType=WWAN physicalNetworkSlotIndex=0 [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.379 p0 D RILJ [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.375 p0 D SST-0 onAnyDataNetworkExistingChanged: anyData=false anyCellularData=false  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.375 p0 D SST-0 EVENT_ALL_DATA_DISCONNECTED  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.375 p0 D SST-0 Data disconnected for all phones, turn radio off now.  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.380 p0 D RILJ [UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]  〔script 모양 2줄, 16:14:05.380~16:14:05.382, 기준 뒤 첫 등장〕
+16:14:05.381 p0 D RILJ [UNSL]< UNSOL_RESPONSE_IMS_NETWORK_STATE_CHANGED [PHONE0]  〔script 모양 2줄, 16:14:05.381~16:14:05.382, 기준 뒤 첫 등장〕
+16:14:05.381 p0 D RILJ [UNSL]< UNSOL_RESPONSE_SIM_STATUS_CHANGED [PHONE0]  〔script 모양 2줄, 16:14:05.381~16:14:32.766, 기준 뒤 첫 등장〕
+16:14:05.381 p0 D RILJ [0268]< RADIO_POWER [PHONE0]  〔script 모양 2줄, 16:14:05.381~16:14:32.766, 기준 뒤 첫 등장〕
+16:14:05.381 p0 D RILJ [UNSL]< UNSOL_UICC_SUBSCRIPTION_STATUS_CHANGED {0} [PHONE0]  〔script 모양 2줄, 16:14:05.381~16:14:32.766, 기준 뒤 첫 등장〕
+16:14:05.381 p0 D SST-0 pollState: modemTriggered=true, radioState=1  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.382 p0 D RILJ [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.383 p0 D RILJ [0269]> OPERATOR [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.384 p0 D RILJ [0269]< OPERATOR error 1 [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.384 p0 D RILJ [0270]> QUERY_NETWORK_SELECTION_MODE [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.384 p0 D SST-0 EVENT_RADIO_POWER_OFF_DONE  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.385 p0 D RILJ [0271]> DATA_REGISTRATION_STATE [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.385 p0 D RILJ getDataRegistrationState: overrideHalVersion=null [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.387 p0 D RILJ [0273]> VOICE_REGISTRATION_STATE [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.387 p0 D RILJ getVoiceRegistrationState: overrideHalVersion=null [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.387 p0 D RILJ [0270]< QUERY_NETWORK_SELECTION_MODE {0} [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.387 p0 D RILJ [0271]< DATA_REGISTRATION_STATE error 1 [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.395 p0 D RILJ [0273]< VOICE_REGISTRATION_STATE error 1 [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.422 p0 D SST-0 set service state as POWER_OFF  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.422 p0 D SST-0 Could not set ServiceState channel number. CellIdentity null  〔script 모양 2줄, 16:14:05.422~16:14:05.447, 기준 뒤 첫 등장〕
+16:14:05.423 p0 D SST-0 pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.424 p0 D SST-0 RAT switched NR_SA -> Unknown at cell -1  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.445 p0 D SST-0 notifyVoiceRegStateRilRadioTechnologyChanged: vrs=3 rat=0  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:05.447 p0 D SST-0 EVENT_POLL_STATE_NETWORK_SELECTION_MODE  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:32.761 p0 D SST-0 setRadioPower power true forEmergencyCall false forceApply false reason 0  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:32.761 p0 D SST-0 setPowerStateToDesired: mDeviceShuttingDown=false, mDesiredPowerState=true, getRadioState=0, mRadioPowerOffReasons=[], IMS reg state=false, pending radio off=f…  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:32.763 p0 D RILJ [0285]> RADIO_POWER on = true forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:14:32.766 p0 D RILJ [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: ON [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+
+## 본 타임라인
+
 16:14:05.379 p0 D RILJ [0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]
 16:14:05.381 p0 D RILJ [0268]< RADIO_POWER [PHONE0]
 16:14:05.381 p0 E RILJ getImsRegistrationState not supported on service NETWORK > 2.2. [PHONE0]  〔script: 같은 줄 ×2〕

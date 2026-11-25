@@ -10,7 +10,11 @@
    "type": "NETWORK-001",
    "cause": "NETWORK-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "network",
+   "evidence": [
+    "11:00:32.000 NRM-C-0: onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=DENIED ne…"
+   ]
   }
  ],
  "decision": {

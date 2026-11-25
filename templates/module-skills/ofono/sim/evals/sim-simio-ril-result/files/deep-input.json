@@ -10,7 +10,12 @@
    "type": "SIM-001",
    "cause": "SIM-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "sim",
+   "evidence": [
+    "09:10:21.409 vrild: [IpcCtx_2] OnIpcComplete Request ID=58, result=2 -> chan 2 reply sent, 0 waiters, took 49 ms",
+    "09:10:21.411 ofonod: [0,0263]< RIL_REQUEST_SIM_IO failed GENERIC_FAILURE"
+   ]
   }
  ],
  "decision": {

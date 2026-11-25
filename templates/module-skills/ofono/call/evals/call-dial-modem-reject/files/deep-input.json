@@ -10,7 +10,12 @@
    "type": "CALL-001",
    "cause": "CALL-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "call",
+   "evidence": [
+    "10:10:05.413 ofonod: [0,0301]< RIL_REQUEST_DIAL failed GENERIC_FAILURE",
+    "10:10:05.410 vrild: mux [ch0][RX] VIPC_EXAMPLE_CALL_START, RSP Error(VIPC_E_FAILURE) seq=0x0131 len=12"
+   ]
   }
  ],
  "decision": {

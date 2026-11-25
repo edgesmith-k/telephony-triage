@@ -6,6 +6,33 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): datad2 · src/lte.c · drivers/rilmodem/gprs.c · drivers/rilmodem/lte.c · DEACTIVATE_DATA_CALL
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
+## 전체 로그 모양 요약 (마스킹 사본 전체, 분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이 스크립트가 셈)
+
+- 범위: 2026-09-22T09:00:00.010Z ~ 2026-09-22T09:00:03.200Z, 줄 27, 모양 19개 중 19개. 기준 시각: 2026-09-22T09:00:02.000Z
+- 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
+
+09:00:02.002 p0 I ofonod dbus_trace method call - i:org.ofono.ConnectionContext m:SetProperty p:/ril_0/context1 a:"Active", variant(true)  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:00:02.003 p0 D ofonod drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:00:02.004 p0 I ofonod [0,0021]> RIL_REQUEST_SETUP_DATA_CALL 16,1,<APN#1>,0,IP  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:00:02.005 - D vrild client fd 9 VCHAN_1 REQUEST: SETUP_DATA_CALL (120 bytes)  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:00:02.006 - D vrild [IpcCtx_0] track seq 0x0221  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:00:02.006 - D vrild mux [ch0][TX] VIPC_EXAMPLE_PDN_UP, REQ seq=0x0221 len=96  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:00:02.610 - D vrild mux [ch0][RX] VIPC_EXAMPLE_PDN_UP, RSP OK(VIPC_OK) seq=0x0221 len=64  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:00:02.611 - I vrild [IpcCtx_0] OnIpcComplete Request ID=27, result=0  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:00:02.613 p0 D ofonod [0,0021]< RIL_REQUEST_SETUP_DATA_CALL {status=0,retry=-1,cid=1,active=2,type=IP,ifname=rmnet0}  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:00:02.615 - I ofonod src/gprs.c:pri_activate_callback() context 1 active on rmnet0  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:00:02.616 p0 I ofonod dbus_trace signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"Active", variant(true)  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:00:02.000 p0 I mgmtd dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1 path/example_dbus.go:12  〔script 모양 1줄〕
+09:00:01.002 - D datad add apn entry, profile id : 2, apn : ims, type : ims[./src/apn_example.cxx +42]  〔script 모양 2줄, 09:00:01.002~09:00:01.452〕
+09:00:01.002 - D datad apn list loaded, size: 2[./src/apn_example.cxx +42]  〔script 모양 2줄, 09:00:01.002~09:00:01.452〕
+09:00:01.001 - D datad add apn entry, profile id : 1, apn : <APN#2>, type : internet[./src/apn_example.cxx +42]  〔script 모양 2줄, 09:00:01.001~09:00:01.451〕
+09:00:01.001 - D datad set ia profile id = 1[./src/ia_example.cxx +10]  〔script 모양 2줄, 09:00:01.001~09:00:01.451〕
+09:00:01.000 - D datad sync apn list, size: 2[./src/apn_example.cxx +42]  〔script 모양 2줄, 09:00:01.000~09:00:01.450〕
+09:00:00.200 - I vrild [ExampleRegService_0] signal update lte rsrp=-95  〔script 모양 3줄, 09:00:00.200~09:00:03.200〕
+09:00:00.010 - I mgmtd ui tick  〔script 모양 2줄, 09:00:00.010~09:00:03.010〕
+
+## 본 타임라인
+
 09:00:01.000 - D datad sync apn list, size: 2[./src/apn_example.cxx +42]  〔script: 같은 줄 ×2〕
 09:00:01.001 - D datad add apn entry, profile id : 1, apn : <APN#2>, type : internet[./src/apn_example.cxx +42]
 09:00:01.001 - D datad set ia profile id = 1[./src/ia_example.cxx +10]  〔script: 같은 줄 ×2〕

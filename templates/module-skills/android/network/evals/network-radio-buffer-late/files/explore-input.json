@@ -29,5 +29,134 @@
     "msg": "java.time.DateTimeException: No network time available"
    }
   ]
+ },
+ "summary": {
+  "ref": "2026-10-16T06:12:33.000Z",
+  "range": [
+   "2026-10-16T06:12:31.207Z",
+   "2026-10-16T06:12:33.920Z"
+  ],
+  "lines": 12,
+  "shapes": 12,
+  "window": [
+   "2026-10-16T06:07:33.000Z",
+   "2026-10-16T06:17:33.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-10-16T06:12:33.912Z",
+    "last": "2026-10-16T06:12:33.912Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "BestClock",
+    "msg": "java.time.DateTimeException: No network time available",
+    "after": true
+   },
+   {
+    "ts": "2026-10-16T06:12:33.904Z",
+    "last": "2026-10-16T06:12:33.904Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "[VrilRouter] reply msg=2204 to ExampleRegService_0",
+    "after": true
+   },
+   {
+    "ts": "2026-10-16T06:12:33.911Z",
+    "last": "2026-10-16T06:12:33.911Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "CellularNetworkService",
+    "msg": "No access tech specific info passes for RegStateResult",
+    "after": true
+   },
+   {
+    "ts": "2026-10-16T06:12:33.913Z",
+    "last": "2026-10-16T06:12:33.913Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0612]< VOICE_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_NOT_SEARCHING_OP, rat: UNKNOWN, reasonForDenial: NONE, cellIdentity: CellIdentity.noinit(f…",
+    "after": true
+   },
+   {
+    "ts": "2026-10-16T06:12:33.914Z",
+    "last": "2026-10-16T06:12:33.914Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "NRM-C-0",
+    "msg": "onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=CS transportType=WWAN registrationState=NOT_REG_OR_SEARCHING roamingT…",
+    "after": true
+   },
+   {
+    "ts": "2026-10-16T06:12:33.920Z",
+    "last": "2026-10-16T06:12:33.920Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0611]< QUERY_NETWORK_SELECTION_MODE {0} [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-10-16T06:12:31.281Z",
+    "last": "2026-10-16T06:12:31.281Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "VRIL-IMS",
+    "msg": "[adapter] stack start sim=0 type=1 slot=1"
+   },
+   {
+    "ts": "2026-10-16T06:12:31.275Z",
+    "last": "2026-10-16T06:12:31.275Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "SatelliteController",
+    "msg": "EVENT_RADIO_STATE_CHANGED: radioState=1"
+   },
+   {
+    "ts": "2026-10-16T06:12:31.262Z",
+    "last": "2026-10-16T06:12:31.262Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "VRIL",
+    "msg": "radio state changed: newState=RADIO_ON"
+   },
+   {
+    "ts": "2026-10-16T06:12:31.208Z",
+    "last": "2026-10-16T06:12:31.208Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "VRIL",
+    "msg": "[UNSL]< OEM_UNSOL_RADIO_STATE_CHANGED [SUB1]"
+   },
+   {
+    "ts": "2026-10-16T06:12:31.208Z",
+    "last": "2026-10-16T06:12:31.208Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "VRIL",
+    "msg": "radio state changed: newState=RADIO_OFF"
+   },
+   {
+    "ts": "2026-10-16T06:12:31.207Z",
+    "last": "2026-10-16T06:12:31.207Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL",
+    "msg": "unsol received for slot 1"
+   }
+  ]
  }
 }

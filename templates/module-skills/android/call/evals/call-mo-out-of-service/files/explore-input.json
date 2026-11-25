@@ -11,5 +11,173 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "summary": {
+  "ref": "2026-11-12T01:07:19.000Z",
+  "range": [
+   "2026-11-12T01:06:53.968Z",
+   "2026-11-12T01:07:19.737Z"
+  ],
+  "lines": 16,
+  "shapes": 16,
+  "window": [
+   "2026-11-12T01:02:19.000Z",
+   "2026-11-12T01:12:19.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-11-12T01:07:19.392Z",
+    "last": "2026-11-12T01:07:19.392Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "Telecom",
+    "msg": "UserCallIntentProcessor: processOutgoingCallIntent videoState = 0: TSI.pC(cgat)@AgI🔒",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.408Z",
+    "last": "2026-11-12T01:07:19.408Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "Telecom",
+    "msg": "Call: setState NEW -> CONNECTING: TSI.pC->CM.fOCP->CM.sOCPA->CM.sOPA.iCA->CM.dSPA->CM.dMRFC->CM.mROC->CM.pASP(cgat)@AgI_1_0_0_0_0_0_0🔒",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.440Z",
+    "last": "2026-11-12T01:07:19.440Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "Telecom",
+    "msg": "CreateConnectionProcessor: Trying attempt CallAttemptRecord(ComponentInfo{com.android.phone/com.android.services.telephony.TelephonyConnectionService}, 1, User…",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.728Z",
+    "last": "2026-11-12T01:07:19.728Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "Telecom",
+    "msg": "ConnectionServiceWrapper: CS -> TC[cap]: handleCreateConnectionComplete TC@4_1: ((SBC.oSC)->CS.crCo->H.CS.crCo->H.CS.crCo.pICR)->CSW.hCCC(cap/cast)@E-E-AgM_0_0…",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.728Z",
+    "last": "2026-11-12T01:07:19.728Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "Telecom",
+    "msg": "CreateConnectionProcessor: Connection failed: (DisconnectCause [ Code: (ERROR) Label: (Cellular network not available) Description: (Mobile network not availab…",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.730Z",
+    "last": "2026-11-12T01:07:19.730Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "Telecom",
+    "msg": "CreateConnectionProcessor: attemptNextPhoneAccount, no more accounts, failing: ((SBC.oSC)->CS.crCo->H.CS.crCo->H.CS.crCo.pICR)->CSW.hCCC(cap/cast)@E-E-AgM_0_0_…",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.730Z",
+    "last": "2026-11-12T01:07:19.730Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "Telecom",
+    "msg": "Call: handleCreateConnectionFailure; callid=TC@4, disconnectCause=DisconnectCause [ Code: (ERROR) Label: (Cellular network not available) Description: (Mobile …",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.735Z",
+    "last": "2026-11-12T01:07:19.735Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "Telecom",
+    "msg": "Call: setState CONNECTING -> DISCONNECTED: ((SBC.oSC)->CS.crCo->H.CS.crCo->H.CS.crCo.pICR)->CSW.hCCC(cap/cast)@E-E-AgM_0_0_0_0🔒",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.737Z",
+    "last": "2026-11-12T01:07:19.737Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "Telecom",
+    "msg": "CallLogManager: onCallStateChanged: call=TC@4, newState=DISCONNECTED, disconnectCause=ERROR: ((SBC.oSC)->CS.crCo->H.CS.crCo->H.CS.crCo.pICR)->CSW.hCCC(cap/cast…",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:06:54.045Z",
+    "last": "2026-11-12T01:06:54.045Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmCdmaPhone",
+    "msg": "[0] getCsCallRadioTech, current vrs=1, vrat=20"
+   },
+   {
+    "ts": "2026-11-12T01:06:53.985Z",
+    "last": "2026-11-12T01:06:53.985Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "updateCarrierDisplayName: radio is on but out of service, set plmn='No service'"
+   },
+   {
+    "ts": "2026-11-12T01:06:53.984Z",
+    "last": "2026-11-12T01:06:53.984Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…"
+   },
+   {
+    "ts": "2026-11-12T01:06:53.983Z",
+    "last": "2026-11-12T01:06:53.983Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "Poll ServiceState done: newSS={mVoiceRegState=1(OUT_OF_SERVICE), mDataRegState=1(OUT_OF_SERVICE), mChannelNumber=9000, duplexMode()=0, mCellBandwidths=[], mOpe…"
+   },
+   {
+    "ts": "2026-11-12T01:06:53.976Z",
+    "last": "2026-11-12T01:06:53.976Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0280]< VOICE_REGISTRATION_STATE RegStateResult{regState: NOT_REG_MT_NOT_SEARCHING_OP, rat: NR, reasonForDenial: NONE, cellIdentity: CellIdentity.nr(CellIdenti…"
+   },
+   {
+    "ts": "2026-11-12T01:06:53.974Z",
+    "last": "2026-11-12T01:06:53.974Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0280]> VOICE_REGISTRATION_STATE [PHONE0]"
+   },
+   {
+    "ts": "2026-11-12T01:06:53.968Z",
+    "last": "2026-11-12T01:06:53.968Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]"
+   }
+  ]
+ }
 }

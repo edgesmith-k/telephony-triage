@@ -11,5 +11,247 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "summary": {
+  "ref": "2026-11-12T01:14:31.000Z",
+  "range": [
+   "2026-11-12T01:14:30.705Z",
+   "2026-11-12T01:14:33.802Z"
+  ],
+  "lines": 27,
+  "shapes": 25,
+  "window": [
+   "2026-11-12T01:09:31.000Z",
+   "2026-11-12T01:19:31.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-11-12T01:14:33.801Z",
+    "last": "2026-11-12T01:14:33.801Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "IdleState.processMessage: processing EVENT_RELEASE_WAKELOCK",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:14:33.802Z",
+    "last": "2026-11-12T01:14:33.802Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "IdleState.processMessage: EVENT_RELEASE_WAKELOCK: mWakeLock released",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:14:30.707Z",
+    "last": "2026-11-12T01:14:30.800Z",
+    "n": 2,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "DeliveringState.enter: entering DeliveringState"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.800Z",
+    "last": "2026-11-12T01:14:30.800Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "Deleted 1 rows from raw table."
+   },
+   {
+    "ts": "2026-11-12T01:14:30.800Z",
+    "last": "2026-11-12T01:14:30.800Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "WaitingState.processMessage: processing EVENT_BROADCAST_COMPLETE"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.800Z",
+    "last": "2026-11-12T01:14:30.800Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "WaitingState.exit: leaving WaitingState"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.800Z",
+    "last": "2026-11-12T01:14:30.800Z",
+    "n": 2,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "DeliveringState.exit: leaving DeliveringState"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.800Z",
+    "last": "2026-11-12T01:14:30.800Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "DeliveringState.processMessage: processing EVENT_RETURN_TO_IDLE"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.723Z",
+    "last": "2026-11-12T01:14:30.723Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "GsmInboundSmsHandler::CarrierServicesSmsFilter",
+    "msg": "getCarrierAppPackageForFiltering: Unable to find carrierPackages: [] or systemPackages: [], id: -<NUM#1>"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.717Z",
+    "last": "2026-11-12T01:14:30.717Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0341]< SMS_ACKNOWLEDGE [PHONE0]"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.716Z",
+    "last": "2026-11-12T01:14:30.716Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0341]> SMS_ACKNOWLEDGE success = true cause = 0 [PHONE0]"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.705Z",
+    "last": "2026-11-12T01:14:30.705Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[UNSL]< UNSOL_RESPONSE_NEW_SMS [PHONE0]"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.800Z",
+    "last": "2026-11-12T01:14:30.800Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "IdleState.enter: entering IdleState"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.791Z",
+    "last": "2026-11-12T01:14:30.791Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "Ordered broadcast completed for android.provider.Telephony.SMS_RECEIVED in: 13 ms"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.791Z",
+    "last": "2026-11-12T01:14:30.791Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "successful broadcast, deleting from raw table."
+   },
+   {
+    "ts": "2026-11-12T01:14:30.770Z",
+    "last": "2026-11-12T01:14:30.770Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "Ordered broadcast completed for android.provider.Telephony.SMS_DELIVER in: 39 ms"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.732Z",
+    "last": "2026-11-12T01:14:30.732Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "WaitingState.enter: entering WaitingState"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.732Z",
+    "last": "2026-11-12T01:14:30.732Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "WaitingState.processMessage: processing EVENT_RETURN_TO_IDLE"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.732Z",
+    "last": "2026-11-12T01:14:30.732Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "WaitingState.processMessage: processing EVENT_UPDATE_TRACKER"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.729Z",
+    "last": "2026-11-12T01:14:30.729Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "Delivering SMS to: com.google.android.apps.messaging com.google.android.apps.messaging.shared.receiver.SmsDeliverReceiver, {x-message-id:-<NUM#1>}"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.716Z",
+    "last": "2026-11-12T01:14:30.716Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "DeliveringState.processMessage: processing EVENT_BROADCAST_SMS"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.715Z",
+    "last": "2026-11-12T01:14:30.715Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "addTrackerToRawTable: URI of new row: content://sms/raw/7, {x-message-id:-<NUM#1>}"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.707Z",
+    "last": "2026-11-12T01:14:30.707Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "IdleState.exit: acquired wakelock, leaving IdleState"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.707Z",
+    "last": "2026-11-12T01:14:30.707Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "DeliveringState.processMessage: processing EVENT_NEW_SMS"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.706Z",
+    "last": "2026-11-12T01:14:30.706Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "IdleState.processMessage: processing EVENT_NEW_SMS"
+   }
+  ]
+ }
 }

@@ -58,9 +58,9 @@ LAYER_NAMES = ("관리 데몬", "D-Bus", "ofonod", "벤더 RIL(<데몬>)", "모�
                "원인 아님(정상 동작)")
 OFONO_MODULES = ("data", "sim", "network", "call", "sms", "ims", "modem")
 # 한 run with arm 모듈 문서 합 한도(C1D 보정 §2.3, C-F6). 파일별 상한은 skillcheck.CAPS(test_size_caps)
-DEEP_RUN_BUDGET, ALSO_RUN_BUDGET, EXPLORE_RUN_BUDGET = 11850, 12874, 9700
+DEEP_RUN_BUDGET, ALSO_RUN_BUDGET, EXPLORE_RUN_BUDGET = 12450, 13474, 9700      # deep·also +600: analyzer.md 후보 확인·순서 절(11/25 사용자 승인)
 # 채점기 칸 이름(C0 설계 §9.1). module_eval이 있으면 그 FIELDS와도 같아야 한다
-FIELDS = ("원인 층", "원인 데몬", "근거", "반대 근거", "분석 스킬 의견", "규칙 제안")
+FIELDS = ("원인 층", "원인 데몬", "근거", "반대 근거", "후보 확인", "규칙 제안")      # 11/25: 분석 스킬 의견 → 후보 확인
 SKILL_DESCRIPTION = "telephony-triage Step 5-1에서 triage.py module 출력으로만 읽는다"
 
 

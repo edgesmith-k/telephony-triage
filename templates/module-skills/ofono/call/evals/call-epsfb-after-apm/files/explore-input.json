@@ -2,5 +2,166 @@
  "around": "2026-09-22T09:40:20.000Z",
  "failed_step": null,
  "limit": 200,
- "anchor": null
+ "anchor": null,
+ "summary": {
+  "ref": "2026-09-22T09:40:20.000Z",
+  "range": [
+   "2026-09-22T09:40:17.630Z",
+   "2026-09-22T09:40:22.419Z"
+  ],
+  "lines": 16,
+  "shapes": 15,
+  "window": [
+   "2026-09-22T09:35:20.000Z",
+   "2026-09-22T09:45:20.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-09-22T09:40:21.429Z",
+    "last": "2026-09-22T09:40:21.429Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=28",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:40:21.430Z",
+    "last": "2026-09-22T09:40:21.430Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][D] 6102 slot0: OEM_UNSOL_IMS_EXAMPLE_REGISTRATION parsed -> [state : 0] sid 0",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:40:21.431Z",
+    "last": "2026-09-22T09:40:21.431Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 6103 registered:0",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:40:21.431Z",
+    "last": "2026-09-22T09:40:21.431Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 6104 EPSFB failed, notify to ExampleImsCallManager",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:40:21.459Z",
+    "last": "2026-09-22T09:40:21.459Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,UNSOL]< IMS_UNSOL_PDN_DEACTIVATE apn_class:1",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:40:21.460Z",
+    "last": "2026-09-22T09:40:21.460Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "src/ims.c:example_pdn_deactivate() apn_class:1",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:40:21.461Z",
+    "last": "2026-09-22T09:40:21.461Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0414]> RIL_REQUEST_DEACTIVATE_DATA_CALL (14,2)",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:40:21.462Z",
+    "last": "2026-09-22T09:40:21.462Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,UNSOL]< IMS_UNSOL_CAPABILITIES voiceOverLteCapable=0, emerOverLteCapable=1 smsOverLteCapable=0",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:40:21.463Z",
+    "last": "2026-09-22T09:40:21.463Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "src/ims.c:ims_set_voice_capable() /ril_0 voice capable 0",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:40:21.539Z",
+    "last": "2026-09-22T09:40:21.539Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0414]< RIL_REQUEST_DEACTIVATE_DATA_CALL",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:40:21.719Z",
+    "last": "2026-09-22T09:40:21.719Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "ui volte icon off path/example_ui.go:24",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:40:18.419Z",
+    "last": "2026-09-22T09:40:22.419Z",
+    "n": 2,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "ui tick"
+   },
+   {
+    "ts": "2026-09-22T09:40:17.649Z",
+    "last": "2026-09-22T09:40:17.649Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0412]< IMS_REQUEST_EXAMPLE_APM"
+   },
+   {
+    "ts": "2026-09-22T09:40:17.631Z",
+    "last": "2026-09-22T09:40:17.631Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][D] 6101 slot0 <- ofonod: IMS_REQUEST_EXAMPLE_APM serial 0412, apm on"
+   },
+   {
+    "ts": "2026-09-22T09:40:17.630Z",
+    "last": "2026-09-22T09:40:17.630Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0412]> IMS_REQUEST_EXAMPLE_APM apm_on:1"
+   }
+  ]
+ }
 }

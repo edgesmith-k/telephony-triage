@@ -6,6 +6,25 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): SETUP_DATA_CALL · DEACTIVATE_DATA_CALL · SET_INITIAL_ATTACH_APN · SET_DATA_PROFILE · SET_USER_DATA_ENABLED
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
+## 전체 로그 모양 요약 (마스킹 사본 전체, 분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이 스크립트가 셈)
+
+- 범위: 2026-09-03T11:00:01.000Z ~ 2026-09-03T11:00:40.000Z, 줄 11, 모양 11개 중 11개. 기준 시각: 2026-09-03T11:00:20.000Z
+- 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
+
+11:00:20.001 - I RIL [ExamplePdnService_0] update pdn PdnCtx cid=2 state=disconnected link=down  〔script 모양 1줄, 기준 뒤 첫 등장〕
+11:00:20.010 p0 D RILJ [UNSL]< UNSOL_DATA_CALL_LIST_UPDATED [SetupDataCallResult{cause: NONE, suggestedRetryTime: 0, cid: 1, active: 2, type: IPV4V6, ifname: rmnet0}] [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+11:00:20.020 - D DN-101-C ConnectedState: onDataStateChanged: PDN inactive reported by WWAN data service.  〔script 모양 1줄, 기준 뒤 첫 등장〕
+11:00:20.021 - D DN-101-C DisconnectedState: Data network disconnected. mEverConnected=true  〔script 모양 1줄, 기준 뒤 첫 등장〕
+11:00:20.030 p0 D DNC-0 onDataNetworkDisconnected: [DataNetwork: DN-101-C, <APN#1>, state=null], cause=NONE(0x0)(0), tearDownReason=NONE  〔script 모양 1줄, 기준 뒤 첫 등장〕
+11:00:20.031 p0 D DNC-0 Internet data state changed from CONNECTED to DISCONNECTED.  〔script 모양 1줄, 기준 뒤 첫 등장〕
+11:00:20.040 p0 D DRM-0 retry scheduled in 30000ms  〔script 모양 1줄, 기준 뒤 첫 등장〕
+11:00:25.000 p0 D DNC-0 Re-evaluating 1 unsatisfied network requests in 1 groups, [INTERNET|NOT_RESTRICTED|TRUSTED]-CELLULAR due to DATA_NETWORK_DISCONNECTED  〔script 모양 1줄, 기준 뒤 첫 등장〕
+11:00:40.000 - V RIL route rsp type=0001 id=0x0703 svc=5 msg=4009  〔script 모양 1줄, 기준 뒤 첫 등장〕
+11:00:20.000 - I RIL [IpcCtx_0] rx frame unsol id=2  〔script 모양 1줄〕
+11:00:01.000 p0 D DNC-0 Internet data state changed from DISCONNECTED to CONNECTED.  〔script 모양 1줄〕
+
+## 본 타임라인
+
 11:00:01.000 p0 D DNC-0 Internet data state changed from DISCONNECTED to CONNECTED.  ⇒ data_internet_state_changed(from=DISCONNECTED,to=CONNECTED)
 11:00:20.001 - I RIL [ExamplePdnService_0] update pdn PdnCtx cid=2 state=disconnected link=down
 11:00:20.010 p0 D RILJ [UNSL]< UNSOL_DATA_CALL_LIST_UPDATED [SetupDataCallResult{cause: NONE, suggestedRetryTime: 0, cid: 1, active: 2, type: IPV4V6, ifname: rmnet0}] [PHONE0]

@@ -50,7 +50,9 @@ def _window(job: Path, *extra, expect=0):
 
 def test_window_serves_dropped_tag_lines_in_timeline_form():
     job = _job()
-    main, _, block = (job / "timeline.md").read_text(encoding="utf-8").partition("\n## 이상 줄")
+    sys.path.insert(0, str(REPO / "tests"))
+    from test_explore_anomaly import no_summary
+    main, _, block = no_summary((job / "timeline.md").read_text(encoding="utf-8")).partition("\n## 이상 줄")
     assert HIDDEN_ROW not in main and HIDDEN_ROW in block      # 파서가 버린 줄(tags.yaml 밖): 본 줄엔 없고 이상 줄 절(E)에만
     out = _window(job, "--at", AT, "--lines", 6)
     assert out == {"window": "window-1.md", "path": str(job / "window-1.md"), "lines": 6, "at": "2026-09-20T05:33:05.000Z",

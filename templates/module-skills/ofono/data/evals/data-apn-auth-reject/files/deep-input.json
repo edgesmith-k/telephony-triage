@@ -10,7 +10,12 @@
    "type": "DATA-001",
    "cause": "DATA-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "data",
+   "evidence": [
+    "15:10:01.910 ofonod: [0,0012]< RIL_REQUEST_SETUP_DATA_CALL failed GENERIC_FAILURE",
+    "15:10:01.900 vrild: SETUP_DATA_CALL rsp: pdp fail cause=USER_AUTHENTICATION(29)"
+   ]
   }
  ],
  "decision": {

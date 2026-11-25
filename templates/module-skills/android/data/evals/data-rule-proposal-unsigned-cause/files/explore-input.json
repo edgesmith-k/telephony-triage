@@ -11,5 +11,47 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "summary": {
+  "ref": "2026-11-20T15:00:01.000Z",
+  "range": [
+   "2026-11-20T15:00:00.100Z",
+   "2026-11-20T15:00:20.502Z"
+  ],
+  "lines": 6,
+  "shapes": 3,
+  "window": [
+   "2026-11-20T14:55:01.000Z",
+   "2026-11-20T15:05:01.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-11-20T15:00:00.302Z",
+    "last": "2026-11-20T15:00:20.502Z",
+    "n": 2,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onDataNetworkSetupDataFailed: [DataNetwork: DN-300-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms."
+   },
+   {
+    "ts": "2026-11-20T15:00:00.300Z",
+    "last": "2026-11-20T15:00:20.500Z",
+    "n": 2,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0600]< SETUP_DATA_CALL DataCallResponse: { cause=MISSING_UNKNOWN_APN(0x1b) retry=-1 cid=-1 linkStatus=0 protocolType=2 ifname=null addresses=[] dnses=[] gatew…"
+   },
+   {
+    "ts": "2026-11-20T15:00:00.100Z",
+    "last": "2026-11-20T15:00:20.300Z",
+    "n": 2,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0600]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] <APN#1>, 1, 00101, <APN#1>, default | supl, IPV4V6, prefer…"
+   }
+  ]
+ }
 }

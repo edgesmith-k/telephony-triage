@@ -10,7 +10,12 @@
    "type": "NETWORK-001",
    "cause": "NETWORK-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "network",
+   "evidence": [
+    "10:50:05.020 vrild: mux [ch0][RX] VIPC_EXAMPLE_RAT_MODE, RSP Error(VIPC_E_FAILURE) seq=0x0241 len=12",
+    "10:50:05.022 ofonod: [0,0511]< RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE failed GENERIC_FAILURE"
+   ]
   }
  ],
  "decision": {

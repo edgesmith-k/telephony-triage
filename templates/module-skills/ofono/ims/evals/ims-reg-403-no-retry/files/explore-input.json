@@ -2,5 +2,152 @@
  "around": "2026-09-21T10:40:05.000Z",
  "failed_step": null,
  "limit": 200,
- "anchor": null
+ "anchor": null,
+ "summary": {
+  "ref": "2026-09-21T10:40:05.000Z",
+  "range": [
+   "2026-09-21T10:40:00.010Z",
+   "2026-09-21T10:40:25.012Z"
+  ],
+  "lines": 27,
+  "shapes": 14,
+  "window": [
+   "2026-09-21T10:35:05.000Z",
+   "2026-09-21T10:45:05.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-09-21T10:40:05.001Z",
+    "last": "2026-09-21T10:40:05.001Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][V] 5110 [SUB_0] ind <- OEM_UNSOL_IMS_EXAMPLE_REG_FAIL(3100) : [example-code : 403]",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:40:05.003Z",
+    "last": "2026-09-21T10:40:05.003Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "src/ims.c:example_reg_fail_notify() fail_code = 403",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:40:05.004Z",
+    "last": "2026-09-21T10:40:05.004Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=403",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:40:05.006Z",
+    "last": "2026-09-21T10:40:05.006Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 5102 [ExampleImsRegistration] exampleRegistrationFailed() code=403",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:40:05.007Z",
+    "last": "2026-09-21T10:40:25.012Z",
+    "n": 3,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 5103 [ExampleImsRegistration] registered:0 VoPS=1",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:40:10.010Z",
+    "last": "2026-09-21T10:40:25.010Z",
+    "n": 4,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 5104 [ExampleImsRegistration] exampleTriggerRegistering() NOT SENT (blocked after 403)",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:40:05.000Z",
+    "last": "2026-09-21T10:40:05.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=40"
+   },
+   {
+    "ts": "2026-09-21T10:40:00.010Z",
+    "last": "2026-09-21T10:40:18.010Z",
+    "n": 4,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "ui tick"
+   },
+   {
+    "ts": "2026-09-21T10:40:00.200Z",
+    "last": "2026-09-21T10:40:18.200Z",
+    "n": 4,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "[ExampleRegService_0] signal update lte rsrp=-90"
+   },
+   {
+    "ts": "2026-09-21T10:40:02.090Z",
+    "last": "2026-09-21T10:40:02.090Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_REQ, RSP OK(VIPC_OK) seq=0x0201 len=12"
+   },
+   {
+    "ts": "2026-09-21T10:40:02.021Z",
+    "last": "2026-09-21T10:40:02.021Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "mux [ch0][TX] VIPC_EXAMPLE_IMS_REG_REQ, REQ seq=0x0201 len=48"
+   },
+   {
+    "ts": "2026-09-21T10:40:02.020Z",
+    "last": "2026-09-21T10:40:02.020Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][D] 5111 [SUB_0] req -> OEM_REQ_IMS_EXAMPLE_REGISTER len=48"
+   },
+   {
+    "ts": "2026-09-21T10:40:02.010Z",
+    "last": "2026-09-21T10:40:02.010Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 5101 [ExampleImsRegistration] exampleTriggerRegistering() SENT"
+   },
+   {
+    "ts": "2026-09-21T10:40:01.000Z",
+    "last": "2026-09-21T10:40:21.000Z",
+    "n": 3,
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "IMSD 0: <HEXDUMP 32B>"
+   }
+  ]
+ }
 }

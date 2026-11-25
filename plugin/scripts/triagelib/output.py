@@ -4,7 +4,8 @@ Claude가 쓴 `JOB/deep-output.md`·`JOB/explore-output.md`를 받아:
 1. `mask_pii`와 같은 마스킹을 하고 마스킹한 글을 그 파일에 다시 쓴다(뒤 Step 7은 마스킹된 글만 본다).
 2. 고정 칸과 UTF-8 바이트 한도를 본다(한 칸 768바이트 = 한글 약 250자).
 3. 근거 원문 검사: 인용이 준 타임라인(모듈 뷰·`JOB/timeline.md`, 설치 스킬이면 events.json 전체 행)이나 `triage.py window` 구간
-   (`JOB/windows.json` 기록과 sha256이 같은 `window-<n>.md`만 — 바뀌었거나 없으면 빼고 경고·`windows_excluded`)에 있는지.
+   (`JOB/windows.json` 기록과 sha256이 같은 `window-<n>.md`만 — 바뀌었거나 없으면 빼고 경고·`windows_excluded`), `triage.py summary`·5-1이 쓴
+   `summary.md`(`summary.json` sha가 같을 때만)에 있는지.
 4. report.md의 5-1·5-2 줄(과 `  - ` 아래 줄)을 쓴다 — `TODO(LLM)`이 남은 줄만 고친다. 모델은 그 줄을 고치지 않는다.
    탐색 가설 줄에는 그 가설의 원문에 없는 인용 수 `[근거 불일치 N]`(N>0일 때만).
    정상 가설(`가설 N: 정상(설계상 정상 동작) — <이유>`)은 `로그로 확인` 인용 하나 이상이 원문 검사 `ok`일 때만 정상으로 본다(약함은
@@ -325,6 +326,17 @@ def _windows(job: Path) -> tuple[list[str], list[str], list[str]]:
     return names, texts, bad
 
 
+def _summary_source(job: Path, names: list, texts: list, bad: list) -> tuple[list, list, list]:
+    """`JOB/summary.md`(전체 로그 모양 요약)를 sha 기록 `summary.json`과 같을 때만 근거 원문에 더한다(window 구간과 같은 규칙)."""
+    rec = _load(job / "summary.json")
+    if not isinstance(rec, dict) or rec.get("path") != "summary.md":
+        return names, texts, bad
+    raw = (job / "summary.md").read_bytes() if _kind(job / "summary.md") == "file" else None
+    if raw is None or _sha(raw) != rec.get("sha256"):
+        return names, texts, bad + ["summary.md"]
+    return names + ["summary.md"], texts + [raw.decode("utf-8", "replace")], bad
+
+
 # --- 칸 검사 ---------------------------------------------------------------------------------------------
 
 def _b(text) -> int:
@@ -361,6 +373,9 @@ def _caps(purpose: str, mode: str, fields: dict, text: str) -> str | None:
     for name in single:
         if _b(fields[name]) > FIELD_MAX_BYTES:
             return name
+    checks = fields.get(evidence.CHECK_FIELD) or []
+    if len(checks) > QUOTES_MAX or any(_b(c["why"]) > FIELD_MAX_BYTES for c in checks):
+        return evidence.CHECK_FIELD
     return None
 
 
@@ -448,11 +463,18 @@ def _render(purpose: str, mode: str, head: str, fields: dict, sub: str, fab_by_h
         return out + [sub]
     quotes = " | ".join(_one(q) for q in fields["근거"])
     if mode == "module":
-        first = (f"{head}원인 층 {_one(fields['원인 층'])} · 원인 데몬 {_one(fields['원인 데몬'])} / 분석 스킬 의견: "
-                 f"{_one(fields['분석 스킬 의견'])}")
-        return [first, f"  - 근거: {quotes}", f"  - 반대 근거: {_one(fields['반대 근거'])}", sub]
+        checks = fields.get(evidence.CHECK_FIELD) or []
+        tail = (f"후보 확인: {' · '.join(c['cause'] + ' ' + c['verdict'] for c in checks)}" if checks
+                else f"분석 스킬 의견: {_one(fields['분석 스킬 의견'])}")      # 옛 모듈 레포 형식(한 줄)
+        first = f"{head}원인 층 {_one(fields['원인 층'])} · 원인 데몬 {_one(fields['원인 데몬'])} / {tail}"
+        return [first, f"  - 근거: {quotes}", f"  - 반대 근거: {_one(fields['반대 근거'])}",
+                *([f"  - 후보 확인: {' | '.join(_check_one(c) for c in checks)}"] if checks else []), sub]
     return ([f"{head}{_one(fields['요약'])} / 분석 스킬 의견: {_one(fields['분석 스킬 의견'])}"]
             + ([f"  - 근거: {quotes}"] if fields["근거"] else []) + [sub])
+
+
+def _check_one(c: dict) -> str:
+    return f"{c['cause']} {c['verdict']}" + (f" — {_one(c['why'])}" if c["why"] else "")
 
 
 def _evidence_sub(mode: str, res: dict | None, skipped: str | None, before: int = 0) -> str:
@@ -788,6 +810,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     off = bool((events or {}).get("mask_off"))      # 마스킹 끔 DB의 events면 출력을 바꾸지 않는다(08-safety §8)
     src_rel, src_text, src_skip = _source(job, purpose, mode, rec, events)
     win_names, win_texts, win_bad = _windows(job)       # `triage.py window` 구간도 근거 원문(sha가 맞는 것만)
+    win_names, win_texts, win_bad = _summary_source(job, win_names, win_texts, win_bad)
     if win_bad:
         print(f"경고: 구간 파일이 기록과 달라(바뀜·없음) 근거 원문에서 뺐다: {', '.join(win_bad)}", file=sys.stderr)
     if src_text is not None and win_texts:

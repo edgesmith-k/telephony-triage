@@ -81,6 +81,10 @@ class Fetched:
     tree: frozenset = frozenset()
     warnings: list = field(default_factory=list)
     with_modem: str | None = None
+    extra: list = field(default_factory=list)      # deep: 받은 다른 후보 카테고리 모듈(`{m}/SKILL.md`)
+
+
+EXTRA_MAX = 12288       # deep `extra` 문서 합 상한(바이트) — 넘는 모듈은 받지 않는다(받은 것만 `Fetched.extra`)
 
 
 def _step(name: str, state=None) -> None:
@@ -511,9 +515,10 @@ def _missing(platform: str, x: str, sha: str) -> ModuleError:
                        {"module": f"{platform}/{x}", "sha": sha})
 
 
-def materialise(state, *, purpose, module=None, category=None, type_id=None, also=False, deep=False) -> Fetched:
+def materialise(state, *, purpose, module=None, category=None, type_id=None, also=False, deep=False, extra=()) -> Fetched:
     """B1 §5.4 H–L on state.sha: 모듈 찾기 → blob 재해시·글 점검 → (lock 확인) ff-only → (lock 확인) sparse.
-    `deep`(explore 정밀 탐색): EXPLORE_FILES 뒤에 `{m}/deep.md`."""
+    `deep`(explore 정밀 탐색): EXPLORE_FILES 뒤에 `{m}/deep.md`. `extra`(모듈 이름들): 주 모듈·모뎀 뒤에 deep이면 `{m}/SKILL.md`,
+    explore면 `{m}/explore.md`를 더 받는다(트리에 없거나 `EXTRA_MAX`를 넘으면 그 모듈은 건너뛴다 — 받은 것은 `Fetched.extra`)."""
     _step("H", state)
     p, sha, tree = state.platform, state.sha, state.tree
     block = (state.doc.get("platforms") or {}).get(p)
@@ -558,6 +563,22 @@ def materialise(state, *, purpose, module=None, category=None, type_id=None, als
             where = f"{f['path']}:{f['line']}" if "line" in f else f["path"]
             raise ModuleError(2, f"점검({f['check']})", masking.mask_brief(where, 160))
         files.append((path, data))
+    got, used = [], 0
+    for x in extra:
+        path = f"{p}/{x}/{'SKILL' if purpose == 'deep' else 'explore'}.md"
+        if x in (m, modem) or x in got or x not in mods or path not in tree:
+            continue
+        data = _blob(work, clone, by_path[path])
+        if used + len(data) > EXTRA_MAX:
+            continue
+        found = skillcheck.check_text(path, data)
+        if found:
+            f = found[0]
+            raise ModuleError(2, f"점검({f['check']})", masking.mask_brief(f"{f['path']}:{f['line']}" if "line" in f else f["path"], 160))
+        files.append((path, data))
+        dirs.append(f"{p}/{x}")
+        got.append(x)
+        used += len(data)
     _step("J", state)
     state.lock.check()
     rc, _, err = _git(work, clone, "merge", "--ff-only", "-q", sha)
@@ -579,7 +600,7 @@ def materialise(state, *, purpose, module=None, category=None, type_id=None, als
     if _out(work, clone, "status", "--porcelain=v1", "-z", "--ignored=matching", "--untracked-files=all", what="sparse"):
         raise ModuleError(2, "sparse", "작업 트리가 깨끗하지 않다")
     return Fetched(p, m, sha, files, state.modules_yaml, state.doc, tree, list(state.warnings),
-                   modem if modem and modem != m else None)
+                   modem if modem and modem != m else None, got)
 
 
 def fetch(work_dir, remote, base, *, lock, platform, purpose, module=None, category=None, type_id=None,

@@ -354,7 +354,7 @@ def _look_head(look: dict | None) -> list[str]:
 
 def render_timeline(key: str, events: dict, items: list[dict], total: int, around: str | None, limit: int,
                     failed_step: str | None = None, anchor: dict | None = None, look: dict | None = None,
-                    flows: list[str] = (), anomaly: dict | None = None) -> str:
+                    flows: list[str] = (), anomaly: dict | None = None, summary: dict | None = None) -> str:
     window = (events.get("input") or {}).get("window") or {}
     folded = sum((row.get("fold") or {}).get("n", 0) for row in items)
     head = [f"# {key} 탐색 타임라인", "",
@@ -368,7 +368,8 @@ def render_timeline(key: str, events: dict, items: list[dict], total: int, aroun
             f"- 줄: {len(items)}/{total}" + (" (이벤트·경고·오류 줄 우선, 발생 시각에 가까운 순으로 골랐다"
                                               + (f", 같은 줄 반복 {folded}줄은 접었다" if folded else "") + ")" if total > limit else ""),
             "- 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드)", ""]
-    return "\n".join(head + [row_line(row) + _fold_note(row) for row in items] + anomaly_lines(anomaly)) + "\n"
+    return "\n".join(head + _summary_head(summary) + [row_line(row) + _fold_note(row) for row in items]
+                     + anomaly_lines(anomaly)) + "\n"
 
 
 def shown_keys(items: list[dict]) -> set:
@@ -407,6 +408,56 @@ def with_anomaly(text: str, anomaly: dict | None) -> str:
     """모듈 보기(탐색) 글 끝에 같은 이상 줄 절을 붙인다 — 본 줄을 다 싣지 않는 보기라 `main` 줄도 싣는다(줄이 없으면 그대로)."""
     lines = anomaly_lines(anomaly, skip_main=False)
     return text.rstrip("\n") + "\n" + "\n".join(lines) + "\n" if lines else text
+
+
+def _clock(ts) -> str:
+    ts = str(ts or "?")
+    return ts[11:23] if len(ts) >= 23 and ts[10] == "T" else ts
+
+
+def summary_rows(summary: dict | None) -> list[str]:
+    """요약 모양 줄(타임라인 줄 문법 — 근거로 인용할 수 있다): 첫 줄의 시각·슬롯·레벨·태그·예시 메시지와 꼬리 스크립트 메모
+    `〔script 모양 N줄[, 처음~마지막][, 기준 뒤 첫 등장][, 분석 구간 밖]〕`(1줄이면 시각 없음). 손상된 원소는 건너뛴다(E1이 바이트 불일치로 안내한다)."""
+    out = []
+    for g in (summary.get("groups") or []) if isinstance(summary, dict) else []:
+        if not isinstance(g, dict):
+            continue
+        flags = (", 기준 뒤 첫 등장" if g.get("after") else "") + (", 분석 구간 밖" if g.get("outside") else "")
+        line = row_line({"ts": g.get("ts"), "phone": g.get("phone"), "level": g.get("level"), "tag": g.get("tag"),
+                         "msg": g.get("msg"), "marks": []})
+        span = "" if g.get("n") == 1 else f", {_clock(g.get('ts'))}~{_clock(g.get('last'))}"
+        out.append(f"{line}  〔script 모양 {g.get('n')}줄{span}{flags}〕")
+    return out
+
+
+def summary_lines(summary: dict | None) -> list[str]:
+    """전체 로그 모양 요약 절(`summary.groups` 결과 = `explore-input.json` `summary`, 표시 전용). 모양이 없으면 []."""
+    rows = summary_rows(summary)
+    if not rows:
+        return []
+    rng = summary.get("range")
+    lo, hi = (rng[0], rng[1]) if isinstance(rng, list) and len(rng) == 2 else (None, None)
+    return ["## 전체 로그 모양 요약 (마스킹 사본 전체, 분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이 스크립트가 셈)", "",
+            f"- 범위: {lo or '?'} ~ {hi or '?'}, 줄 {summary.get('lines')}, 모양 {summary.get('shapes')}개 중 {len(rows)}개. "
+            f"기준 시각: {summary.get('ref') or '없음'}",
+            "- 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), "
+            "기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다", "", *rows]
+
+
+def _summary_head(summary: dict | None) -> list[str]:
+    block = summary_lines(summary)
+    return block + ["", "## 본 타임라인", ""] if block else []
+
+
+def with_summary(text: str, summary: dict | None) -> str:
+    """모듈 보기·심층 타임라인 머리(`- 형식:` 줄과 뒤 빈 줄 다음)에 요약 절을 넣는다. 요약이 없거나 그 줄이 없으면 그대로."""
+    head = _summary_head(summary)
+    lines = text.split("\n")
+    at = next((i + 1 for i, line in enumerate(lines) if line.startswith("- 형식:")), None)
+    if not head or at is None:
+        return text
+    at += 1 if at < len(lines) and lines[at] == "" else 0
+    return "\n".join(lines[:at] + head + lines[at:])
 
 
 def _fold_note(row: dict, word: str = "같은") -> str:
