@@ -105,7 +105,7 @@ NONE_RX = _label_rx("가설 없음")
 # 탐색 출력 계약(실사용 `explore.md`) = 가설마다 EXPLORE_FIELDS 다섯 칸. 모듈 eval은 같은 계약에 **선택 칸**을 더 쓴다 — 가설 머리와
 # `로그로 확인` 사이의 `원인 층`·`원인 데몬`, 마지막 가설 뒤 꼬리 `가장 유력`·`규칙 제안`. check-output은 그 칸을 읽되 쓰지 않는다.
 EXPLORE_OPTIONAL = ("원인 층", "원인 데몬")
-EXPLORE_TAIL = ("가장 유력", "규칙 제안")
+EXPLORE_TAIL = ("가장 유력", "규칙 제안", CHECK_FIELD)     # 후보 확인: 조사 모드 near_causes 대조(반입 7 B-2)
 EXPLORE_RX = {f: _label_rx(f) for f in EXPLORE_FIELDS[1:] + EXPLORE_OPTIONAL + EXPLORE_TAIL}
 # 11/25 기대 체인(explore.md 쓰는 것): 가설 블록 안 어디에 있어도 읽는 선택 칸. `기대 체인:` 뒤 표 행(`| 단계 | 기대 | 기대 근거 |
 # 관측 줄 | 일치 |`), `찾았는데 없음:` 뒤 목록, 나머지는 한 줄. 없으면 None. 형식 실패로 만들지 않는다(check-output이 경고만 낸다)
@@ -238,6 +238,29 @@ def _opinion(checks: list[dict]) -> str:
 RULE_NONE_RX = re.compile(r"^[\s*`]*(?:해당\s*)?없음")     # `없음`·`해당 없음`(뒤 설명 무엇이든) = 제안 아님
 
 
+# 반입 7 A-1 모듈 학습 제안(탐색 `규칙 제안` 목록 안): `[모듈] <플랫폼>/<모듈> <칸> — <한 줄> — 근거: <마스킹된 줄>`. 칸 → (모듈 문서,
+# 절 제목 낱말 — `skill_patch.py --module`이 이 낱말로 절을 찾고 없으면 파일 끝에 만든다). 첫 점검·함정은 원인이 확정됐을 때만 싣는다
+MODULE_TAG = "[모듈]"
+MODULE_SLOTS = {"첫 점검": ("explore.md", "증상별 첫 점검"), "함정": ("explore.md", "함정"), "층 경로": ("explore.md", "층 경로"),
+                "판독 주의": ("explore.md", "판독 주의"), "코드 경로": ("deep.md", "코드 경로"), "버전 차이": ("deep.md", "버전별 차이")}
+MODULE_CONFIRMED_ONLY = ("첫 점검", "함정")
+MODULE_RULE_RX = re.compile(r"^\[모듈\]\s+([a-z][a-z0-9_]*)/([a-z][a-z0-9_-]*)\s+(.+?)\s+[—–]\s+(.+?)\s+[—–]\s*근거\s*[:：]\s*(.+)$")
+
+
+def module_rule(item: str) -> dict | None:
+    """규칙 제안 항목 하나 → `[모듈]`이 아니면 None, 형식이 틀리거나 모르는 칸이면 `{"error": 사유}`, 맞으면
+    `{platform, module, slot, text, basis}`(모두 앞뒤 공백 없이, `text`·`basis`는 받은 글 그대로)."""
+    item = (item or "").strip()
+    if not item.startswith(MODULE_TAG):
+        return None
+    m = MODULE_RULE_RX.match(item)
+    if not m:
+        return {"error": "형식 오류"}
+    if m.group(3) not in MODULE_SLOTS:
+        return {"error": f"모르는 칸 {m.group(3)[:20]}"}
+    return dict(zip(("platform", "module", "slot", "text", "basis"), (g.strip() for g in m.groups())))
+
+
 def _same_line_rule(rest: str) -> list[str]:
     """`규칙 제안: [이슈 DB] …`처럼 칸 이름 줄에 바로 쓴 제안 하나(목록 기호 없이). 비었거나 `없음`·`해당 없음`이거나 목록 줄이면 []."""
     rest = (rest or "").strip()
@@ -251,10 +274,10 @@ def parse_fields(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> dict | Non
 
 def explore_parse(text: str) -> tuple[dict | None, str | None]:
     """탐색 출력 → ({"none", "next", "hyps": [{n, 가설, 원인 층, 원인 데몬, 로그로 확인: [...], 코드로 추정, 반대 근거, 다음 확인}],
-    "top": str|None, "rules": [...], "top_fit"?: {fit, why}(칸이 있을 때만)}, None) 또는 (None, 사유).
+    "top": str|None, "rules": [...], "top_fit"?: {fit, why}, "후보 확인"?: [{cause, verdict, why}](칸이 있을 때만)}, None) 또는 (None, 사유).
 
     `가설 n: …` 블록마다 다섯 칸(`EXPLORE_FIELDS`)이 순서대로 있어야 한다. `원인 층`·`원인 데몬`(가설 머리와 `로그로 확인` 사이)은
-    선택이고 없으면 None, `n`은 머리의 번호(없으면 None). 가설마다 `chain_fields`(기대 체인 칸, 블록 어디든)를 더한다. 마지막 가설 뒤 `가장 유력:`·`규칙 제안:`은 꼬리(선택)다. 블록이 없으면
+    선택이고 없으면 None, `n`은 머리의 번호(없으면 None). 가설마다 `chain_fields`(기대 체인 칸, 블록 어디든)를 더한다. 마지막 가설 뒤 `가장 유력:`·`규칙 제안:`·`후보 확인:`은 꼬리(선택, 칸마다 다음 꼬리 칸 전까지)다. 블록이 없으면
     `가설 없음: <이유>`와 `다음 확인:`이 있어야 한다. 칸 밖 줄(빈 줄·설명)은 무시한다. 실사용 check-output과 모듈 eval이 같은 함수를 쓴다.
     """
     m = FENCE_RX.match(text or "")
@@ -269,7 +292,7 @@ def explore_parse(text: str) -> tuple[dict | None, str | None]:
         if nxt is None:
             return None, "가설 없음 뒤 `다음 확인` 칸 없음"
         return ({"none": NONE_RX.match(lines[none_at]).group(1).strip(), "next": nxt, "hyps": [], "top": None, "rules": [],
-                 **_top_fit_key(lines)}, None)
+                 **_top_fit_key(lines), **_tail(lines[none_at + 1:])[1]}, None)
     tail_at = next((i for i in range(starts[-1] + 1, len(lines)) if any(EXPLORE_RX[t].match(lines[i]) for t in EXPLORE_TAIL)),
                    len(lines))
     hyps = []
@@ -303,12 +326,27 @@ def explore_parse(text: str) -> tuple[dict | None, str | None]:
         hyps.append({**hyp, **chain_fields(block)})
     tail = lines[tail_at:]
     top = next((EXPLORE_RX["가장 유력"].match(line).group(1).strip() for line in tail if EXPLORE_RX["가장 유력"].match(line)), None)
-    rules: list[str] = []
-    r_at = next((i for i, line in enumerate(tail) if EXPLORE_RX["규칙 제안"].match(line)), None)
-    if r_at is not None:
-        block = [EXPLORE_RX["규칙 제안"].match(tail[r_at]).group(1).strip(), *tail[r_at + 1:]]
-        rules = _same_line_rule(block[0]) + [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
-    return {"none": None, "next": None, "hyps": hyps, "top": top, "rules": rules, **_top_fit_key(lines)}, None
+    rules, checks = _tail(tail)
+    return {"none": None, "next": None, "hyps": hyps, "top": top, "rules": rules, **_top_fit_key(lines), **checks}, None
+
+
+def _tail(tail: list[str]) -> tuple[list[str], dict]:
+    """꼬리 줄 → (규칙 제안 항목, `{후보 확인: [{cause, verdict, why}]}` | {}). 칸마다 다음 꼬리 칸(`EXPLORE_TAIL`) 전까지 읽는다."""
+    heads = [i for i, line in enumerate(tail) if any(EXPLORE_RX[t].match(line) for t in EXPLORE_TAIL)]
+
+    def block(name: str) -> list[str] | None:
+        at = next((i for i in heads if EXPLORE_RX[name].match(tail[i])), None)
+        if at is None:
+            return None
+        end = next((i for i in heads if i > at), len(tail))
+        return [EXPLORE_RX[name].match(tail[at]).group(1).strip(), *tail[at + 1:end]]
+
+    rules, checks = block("규칙 제안"), block(CHECK_FIELD)
+    rules = _same_line_rule(rules[0]) + [im.group(1).strip() for line in rules if (im := ITEM_RX.match(line))] if rules else []
+    if checks is None:
+        return rules, {}
+    items = [im.group(1).strip() for line in checks[1:] if (im := ITEM_RX.match(line))]
+    return rules, {CHECK_FIELD: _checks(items or ([checks[0]] if checks[0] and CHECK_ITEM_RX.match(checks[0]) else []))}
 
 
 def _cells(line: str) -> list[str] | None:
