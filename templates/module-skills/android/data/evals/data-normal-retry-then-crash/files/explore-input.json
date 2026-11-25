@@ -1,0 +1,230 @@
+{
+ "around": "2026-11-20T10:00:01.000Z",
+ "failed_step": null,
+ "limit": 200,
+ "anchor": null,
+ "partial": [
+  {
+   "signature": "DATA-001/no-setup-data-call-request",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ]
+  }
+ ],
+ "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-11-20T09:55:01.000Z",
+   "2026-11-20T10:10:01.000Z"
+  ],
+  "ref": "2026-11-20T10:00:01.000Z",
+  "after_sec": 600,
+  "candidates": 5,
+  "rows": [
+   {
+    "ts": "2026-11-20T10:00:40.210Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "FATAL EXCEPTION: main"
+   },
+   {
+    "ts": "2026-11-20T10:00:40.210Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "Process: com.android.phone, PID: 2101"
+   },
+   {
+    "ts": "2026-11-20T10:00:40.210Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "java.lang.NullPointerException: Attempt to invoke virtual method 'int android.net.LinkProperties.getMtu()' on a null object reference"
+   },
+   {
+    "ts": "2026-11-20T10:00:40.210Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "at com.android.internal.telephony.data.DataNetwork.updateLinkProperties(DataNetwork.java:2214)"
+   },
+   {
+    "ts": "2026-11-20T10:00:40.210Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "at com.android.internal.telephony.data.DataNetwork$ConnectedState.processMessage(DataNetwork.java:1290)"
+   },
+   {
+    "ts": "2026-11-20T10:06:12.500Z",
+    "phone": null,
+    "level": "E",
+    "tag": "JavaBinder",
+    "msg": "*** Uncaught remote exception! (Exceptions are not yet supported across processes.)"
+   },
+   {
+    "ts": "2026-11-20T10:06:12.500Z",
+    "phone": null,
+    "level": "E",
+    "tag": "JavaBinder",
+    "msg": "java.lang.IllegalStateException: telephony service is not running"
+   },
+   {
+    "ts": "2026-11-20T10:06:12.500Z",
+    "phone": null,
+    "level": "E",
+    "tag": "JavaBinder",
+    "msg": "at com.android.server.TelephonyRegistry.notifyDataConnectionForSubscriber(TelephonyRegistry.java:1876)"
+   },
+   {
+    "ts": "2026-11-20T10:06:12.500Z",
+    "phone": null,
+    "level": "E",
+    "tag": "JavaBinder",
+    "msg": "at android.os.Binder.execTransact(Binder.java:1310)"
+   }
+  ]
+ },
+ "summary": {
+  "ref": "2026-11-20T10:00:01.000Z",
+  "range": [
+   "2026-11-20T10:00:00.100Z",
+   "2026-11-20T10:06:12.500Z"
+  ],
+  "lines": 19,
+  "shapes": 13,
+  "window": [
+   "2026-11-20T09:55:01.000Z",
+   "2026-11-20T10:10:01.000Z"
+  ],
+  "cap": 60,
+  "after_sec": 600,
+  "groups": [
+   {
+    "ts": "2026-11-20T10:00:40.210Z",
+    "last": "2026-11-20T10:00:40.210Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "FATAL EXCEPTION: main",
+    "after": true
+   },
+   {
+    "ts": "2026-11-20T10:00:40.210Z",
+    "last": "2026-11-20T10:00:40.210Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "java.lang.NullPointerException: Attempt to invoke virtual method 'int android.net.LinkProperties.getMtu()' on a null object reference",
+    "after": true
+   },
+   {
+    "ts": "2026-11-20T10:00:40.210Z",
+    "last": "2026-11-20T10:00:40.210Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "Process: com.android.phone, PID: 2101",
+    "after": true
+   },
+   {
+    "ts": "2026-11-20T10:06:12.500Z",
+    "last": "2026-11-20T10:06:12.500Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "JavaBinder",
+    "msg": "*** Uncaught remote exception! (Exceptions are not yet supported across processes.)",
+    "after": true
+   },
+   {
+    "ts": "2026-11-20T10:06:12.500Z",
+    "last": "2026-11-20T10:06:12.500Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "JavaBinder",
+    "msg": "java.lang.IllegalStateException: telephony service is not running",
+    "after": true
+   },
+   {
+    "ts": "2026-11-20T10:00:00.302Z",
+    "last": "2026-11-20T10:00:00.302Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onDataNetworkSetupDataFailed: [DataNetwork: DN-100-C, <APN#1>, state=null], cause=INSUFFICIENT_RESOURCES(0x1a), retryDelayMillis=-1ms."
+   },
+   {
+    "ts": "2026-11-20T10:00:00.310Z",
+    "last": "2026-11-20T10:00:00.310Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DRM-0",
+    "msg": "retry scheduled in 5000ms"
+   },
+   {
+    "ts": "2026-11-20T10:00:00.300Z",
+    "last": "2026-11-20T10:00:00.300Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0400]< SETUP_DATA_CALL DataCallResponse: { cause=INSUFFICIENT_RESOURCES(0x1a) retry=-1 cid=-1 linkStatus=0 protocolType=2 ifname=null addresses=[] dnses=[] ga…"
+   },
+   {
+    "ts": "2026-11-20T10:00:00.106Z",
+    "last": "2026-11-20T10:00:05.320Z",
+    "n": 2,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0400]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] <APN#1>, 1, 00101, <APN#1>, default | supl, IPV4V6, prefer…"
+   },
+   {
+    "ts": "2026-11-20T10:00:00.104Z",
+    "last": "2026-11-20T10:00:00.104Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onSetupDataNetwork: dataProfile=[DataProfile=[ApnSetting] <APN#1>, 1, 00101, <APN#1>, default | supl, IPV4V6, preferred=true], retryEntry=null, allowed reason=…"
+   },
+   {
+    "ts": "2026-11-20T10:00:00.100Z",
+    "last": "2026-11-20T10:00:00.100Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onAddNetworkRequest: added [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED Re…"
+   },
+   {
+    "ts": "2026-11-20T10:00:05.420Z",
+    "last": "2026-11-20T10:00:05.420Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0401]< SETUP_DATA_CALL DataCallResponse: { cause=NONE(0x0) retry=-1 cid=1 linkStatus=2 protocolType=2 ifname=rmnet0 addresses=[<IP#1>/64] dnses=[<IP#2>] gatew…",
+    "after": true
+   },
+   {
+    "ts": "2026-11-20T10:00:05.430Z",
+    "last": "2026-11-20T10:00:05.430Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Internet data state changed from DISCONNECTED to CONNECTED.",
+    "after": true
+   }
+  ]
+ }
+}

@@ -50,10 +50,19 @@ CASES = [
     ("network", "network-oos-recover-no-reject", "explore", None),
     ("data", "data-profile-invalid-after-apn-change", "explore", None),
     ("data", "data-no-service-eval-reject", "explore", None),
+    # 11/24 정상 가설 묶음(A2): 정상 넷(회복 창·요청 없는 throttle 풀림·no-op throttle·설계상 조회), 정상처럼 보이는 실패, 규칙 제안
+    ("data", "data-normal-retry-recovered", "explore", None),
+    ("data", "data-normal-unthrottle-no-request", "explore", None),
+    ("data", "data-normal-unthrottle-noop", "explore", None),
+    ("data", "data-normal-recovery-query", "explore", None),
+    ("data", "data-recovered-other-slot-still-failing", "explore", None),
+    ("data", "data-rule-proposal-unsigned-cause", "explore", None),
+    ("data", "data-normal-retry-then-crash", "explore", None),     # 11/25 이상 줄 절: 회복 뒤 규칙 밖 태그의 예외
+    ("data", "data-retry-timer-unthrottle-exception", "explore", None),     # 11/25 기대 체인: retry 299999ms 뒤 예외, 재요청 없음
 ]
 
 # run별 with arm 문서 합 한도(C1D 보정 §2.3). 파일별 상한은 skillcheck.CAPS(test_module_templates test_size_caps)
-DEEP_RUN_BUDGET, ALSO_RUN_BUDGET, EXPLORE_RUN_BUDGET = 10450, 11474, 8900
+DEEP_RUN_BUDGET, ALSO_RUN_BUDGET, EXPLORE_RUN_BUDGET = 11050, 12074, 8900      # deep·also +600: analyzer.md 후보 확인·순서 절(11/25 사용자 승인)
 # 모듈마다 references(모뎀은 없음 — deep은 증상 모듈 + also)
 REFERENCES = {"data": "DATA-001", "sim": "SIM-001", "network": "NETWORK-001", "call": "CALL-001", "sms": "SMS-001",
               "ims": "IMS-001"}
@@ -119,7 +128,7 @@ def test_android_analyzer_identical():
     assert len(set(bodies.values())) == 1
     block = bodies["data"].split("```", 2)[1]
     assert [m.group(1) for m in re.finditer(r"(?m)^([^\s:-][^:\n]*?):", block)] == [
-        "원인 층", "원인 데몬", "근거", "반대 근거", "분석 스킬 의견", "규칙 제안"]
+        "원인 층", "원인 데몬", "근거", "반대 근거", "후보 확인", "규칙 제안"]
     layer_line = next(ln for ln in block.splitlines() if ln.startswith("원인 층:"))
     for name in LAYER_NAMES:
         assert name in layer_line, name

@@ -550,3 +550,20 @@ def test_check_run_session_matches_tt_oc_run_opencode(tmp_path, monkeypatch):
     assert cj.run_session(tt, ["x"], tmp_path, {}) == ([], None)
     # 3차 R2-P3-3: 첫 응답 시한은 끈다 — 멈춤은 RUN_TIMEOUT 하나라 행의 "시간 초과(…초)"가 실제 멈춘 시한이다
     assert seen["first_timeout"] == 0 and seen["timeout"] == cj.RUN_TIMEOUT
+
+
+def test_check_masking_reads_model_strings_with_bridge_basis():
+    """사내 A589: 잔류 검사가 JSON 글 그대로를 보면 브리지가 정한 필드 이름 `"key": "<티켓 키>"`가 CRED(키 문맥)로 잡히고,
+    로그 줄 전용 규칙(base64 모양)은 브리지가 쓰지 않는데 점검만 돌렸다. 모델이 읽는 문자열 값을 브리지와 같은 기준으로 본다."""
+    import oc_jira_check as cj
+    shown = {"key": "MOCK-1048", "saved_to": "/w/MOCK-1048/issue_raw.json",
+             "summary": "데이터 안 됨", "last_comments": ["path /a/AbCdEf123GhIjK456LmNoP789qRsT/x 확인"]}
+    seen = cj.BRIDGE_SAVED + "(모델에 보이지 않음). 아래는 마스킹된 요약이다.\n" + json.dumps(shown, ensure_ascii=False, indent=1)
+    text = cj.model_text(seen)
+    assert '"key"' not in text and "MOCK-1048" in text and "데이터 안 됨" in text
+    from common import masking
+    assert masking.residual(seen)            # 옛 방식이면 걸렸다(CRED 키 문맥·B64 로그 규칙)
+    assert masking.residual(text, log_lines=False) == {}
+    leak = seen.replace("데이터 안 됨", "imsi=450081234567890")
+    assert masking.residual(cj.model_text(leak), log_lines=False) == {"IMSI": 1}   # 실제 남은 값은 그대로 잡는다
+    assert cj.model_text("raw body") == "raw body"

@@ -1,0 +1,1 @@
+{"status": "ok", "investigate": {"mode": true, "reason": "후보 없음"}, "investigation": {"status": "identified", "hyp": 1, "cause": "vrild가 SETUP_DATA_CALL을 인증 실패로 끝냄", "layer": "CP 내부", "first_divergence": {"step": 2, "expect": "SETUP 응답이 성공"}, "gate": [], "explore_sha": "0"}}

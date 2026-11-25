@@ -61,6 +61,10 @@ python3 tools/site_step.py runtime-check opencode --project <dest>   # 사내 �
   프롬프트에 자동으로 붙이므로 `tt-oc`가 시작하지 않는다(사용자 결정 ⑤). `~/.claude/CLAUDE.md`는 `tt-oc`가
   `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT=1`로 끈다.
 - `plugin/commands`를 고치면 `python3 tools/gen_opencode.py`로 다시 만든다(`--check`가 골든 테스트).
+- `install`은 고정 버전(1.19.5) opencode의 절대 경로를 `tt-oc.json` `opencode_bin`에 남긴다(`--opencode <경로>`, 없으면
+  `TT_OPENCODE`·PATH에서 찾고 버전이 다르면 남기지 않는다). `tt-oc`는 `--opencode` > `TT_OPENCODE` > 남긴 경로 > PATH 순으로 쓴다.
+  **고정한 opencode를 직접 실행하지 않는다** — 직접 띄우면 스스로 새 버전으로 바뀔 수 있고(`tt-oc`는 자동 업데이트를 끄고 돌린다),
+  그러면 `tt-oc doctor`의 `opencode-version` 행이 "설치 때 기록한 opencode가 바뀌었다"로 실패한다.
 
 ## 실행
 
@@ -70,6 +74,13 @@ opencode/bin/tt-oc --project <dest> -s <세션> -- 2          # 질문에 답하
 ```
 
 - `--pure`·`--auto`·`--attach`·`-i`·`--agent`·`--model`과 설정을 덮는 `OPENCODE_*` 환경 변수는 거부한다.
+- guard는 `tt-oc`를 실행한 python을 쓴다(`TT_PYTHON`을 따로 정하지 않았으면 tt-oc가 자기 python을 넘긴다. venv python이면 그 venv를
+  PATH 앞에 둬서 모델이 돌리는 `python3` 스크립트도 같은 venv). 의존성(PyYAML·jsonschema)이 있는 python으로 `tt-oc`를 실행한다 —
+  `tt-oc doctor`의 `guard-python`·`script-python` 행이 그 python으로 guard를 실제로 돌려 본다. venv는 `--work-root` 밖에 둔다
+  (작업 루트는 모델이 쓸 수 있다 — 그 안의 venv면 모델이 guard가 불러오는 모듈을 바꿀 수 있다).
+- 값이 빈 `OPENCODE_*` 거부 변수(예: `export OPENCODE_CONFIG=`)는 tt-oc가 자식 환경에서 뺀다(guard는 이름만 있어도 모든 도구를 거부한다).
+- 셸 별칭(alias)은 `setsid`·`nohup`·포털 시작 스크립트에서 풀리지 않는다. 그렇게 띄울 때는 `<venv>/bin/python <레포>/opencode/bin/tt-oc …`처럼
+  실제 경로를 쓴다(`.bashrc`의 `TT_OPENCODE`도 그 환경에서는 안 읽힐 수 있다 — install이 남긴 경로가 그때 쓰인다).
 - 사전 점검(버전 = `oc_version.OPENCODE_VERSION`, `snapshot:false`·bash 허용 목록 등 실제 설정, 설치 지문, 자동 지시 파일, `config.py doctor`)이 실패하면
   시작하지 않는다.
 - bash는 분석 스크립트(`python3 "<plugin>/scripts/<이름>.py" …`, 절대 경로)와 읽기 명령(ls·cat·head·tail·grep·find·git log 등)만
@@ -121,10 +132,11 @@ analyze의 탐색 분석(Step 5-2, 맞는 규칙이 없을 때 원인 가설을 
 한다. Claude Code 쪽 동작은 바뀌지 않았다(같은 세션에서 한다). 순서는 이렇다.
 
 1. 메인 에이전트가 `explore.md` "언제"대로 실행할지 정하고(플래그·설정, 필요하면 사용자에게 묻기, 로그 범위 밖이면 먼저 알림),
-   `triage.py explore <KEY>`와 모듈 문서가 있으면 `module --for explore`를 돌린다. 모듈 고르기·같이 보기(`ask_switch`)·받기 실패·
+   `triage.py explore <KEY>`와 모듈 문서가 있으면 `module --for explore`를 돌린다. 모듈 고르기·받기 실패·
    정밀 탐색(`--deep`) 질문도 모두 메인 에이전트가 사용자에게 묻는다(`module-skills.md` 5-2).
 2. 메인 에이전트가 `task` 도구로 `tt-explore`를 부른다. 하위 에이전트는 앞선 대화를 보지 못하고, 메인 에이전트가 넘긴 값(작업 키·작업
-   폴더·분석 사유·고른 모듈과 `--with`·`--deep`·모듈 출력의 `read` 파일·사용자가 준 기준 줄과 시각)만 받는다. `explore.md`대로
+   폴더·분석 사유·고른 모듈과 `--deep`·모듈 출력의 `read` 파일·5-1을 했으면 report.md의 `- 심층 분석` 줄·사용자가 준 기준 줄과
+   시각)만 받는다. `explore.md`대로
    가설을 세워 `explore-output.md`를 쓰고 `check-output`을 돌린 뒤 그 결과 줄을 돌려준다. 사용자에게 묻지 않는다 — 스크립트가
    질문을 내면 그 질문을 답에 그대로 넣고 멈춘다.
 3. 메인 에이전트는 받은 줄을 그대로 보이고 평소 흐름을 잇는다(Step 6 리포트, Step 7은 `explore.md` "다음"대로). 답에
@@ -152,7 +164,7 @@ analyze의 탐색 분석(Step 5-2, 맞는 규칙이 없을 때 원인 가설을 
   새 객체(`tt-explore`만 허용)다.
 - `tt-oc`는 하위 세션도 판정한다. 1.19.5 `run --format json`은 하위 세션 이벤트를 내보내지 않아서, task 결과에 든 하위 세션 ID로
   `opencode export`를 읽는다. 하위의 막힌 호출은 막힌 호출(종료 3, 메시지에 `하위 <세션>`), 토큰은 합계에 더하고(세션별은 `--json`의
-  `children`), 하위 스텝 한도(`tt-explore.md` `steps:`)에 닿으면 `step-limit`, 하위 세션을 읽지 못하면 오류(종료 1)다.
+  `children`), 하위 스텝 한도(`tt-explore.md` `steps:`)에 닿으면 `step-limit`, 하위 출력이 한도에서 잘리면 `length`, 하위가 마지막 글·정상 종료 없이 끝나면 `no-final-text`, 하위 세션을 읽지 못하면 오류(종료 1)다.
   `--delete-session`은 하위 세션도 지운다.
 - 출처 기록(`TT_MODEL`)은 세션 모델 이름이다. 탐색 분석을 다른 모델이 했어도 기록에는 세션 모델로 남는다.
 

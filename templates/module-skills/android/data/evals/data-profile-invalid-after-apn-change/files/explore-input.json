@@ -1,5 +1,5 @@
 {
- "around": "2026-11-10T21:59:21+00:00",
+ "around": "2026-11-10T21:59:21.000Z",
  "failed_step": null,
  "limit": 200,
  "anchor": null,
@@ -11,5 +11,222 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "summary": {
+  "ref": "2026-11-10T21:59:21.000Z",
+  "range": [
+   "2026-11-10T21:59:20.519Z",
+   "2026-11-10T21:59:23.535Z"
+  ],
+  "lines": 22,
+  "shapes": 22,
+  "window": [
+   "2026-11-10T21:54:21.000Z",
+   "2026-11-10T22:09:21.000Z"
+  ],
+  "cap": 60,
+  "after_sec": 600,
+  "groups": [
+   {
+    "ts": "2026-11-10T21:59:20.531Z",
+    "last": "2026-11-10T21:59:20.531Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onDataNetworkDisconnected: [DataNetwork: DN-106-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=DATA_PROFILE_INVALID"
+   },
+   {
+    "ts": "2026-11-10T21:59:20.531Z",
+    "last": "2026-11-10T21:59:20.531Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Internet link status changed to INACTIVE"
+   },
+   {
+    "ts": "2026-11-10T21:59:20.531Z",
+    "last": "2026-11-10T21:59:20.531Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Internet data state changed from CONNECTED to DISCONNECTED."
+   },
+   {
+    "ts": "2026-11-10T21:59:20.531Z",
+    "last": "2026-11-10T21:59:20.531Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "IMS data state changed from CONNECTED to DISCONNECTED."
+   },
+   {
+    "ts": "2026-11-10T21:59:20.530Z",
+    "last": "2026-11-10T21:59:20.530Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "DN-106-C",
+    "msg": "DisconnectedState: All network requests detached."
+   },
+   {
+    "ts": "2026-11-10T21:59:20.528Z",
+    "last": "2026-11-10T21:59:20.528Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[2694]< DEACTIVATE_DATA_CALL [PHONE0]"
+   },
+   {
+    "ts": "2026-11-10T21:59:20.528Z",
+    "last": "2026-11-10T21:59:20.528Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "DN-106-C",
+    "msg": "DisconnectingState: onDeactivateResponse: resultCode=RESULT_SUCCESS"
+   },
+   {
+    "ts": "2026-11-10T21:59:20.528Z",
+    "last": "2026-11-10T21:59:20.528Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "DN-106-C",
+    "msg": "DisconnectingState: onDataStateChanged: PDN disconnected reported by WWAN data service. requireExplicitDisconnect false"
+   },
+   {
+    "ts": "2026-11-10T21:59:20.528Z",
+    "last": "2026-11-10T21:59:20.528Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "DN-106-C",
+    "msg": "DisconnectedState: Data network disconnected. mEverConnected=true"
+   },
+   {
+    "ts": "2026-11-10T21:59:20.527Z",
+    "last": "2026-11-10T21:59:20.527Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[2693]< SET_DATA_PROFILE [PHONE0]"
+   },
+   {
+    "ts": "2026-11-10T21:59:20.527Z",
+    "last": "2026-11-10T21:59:20.527Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[2694]> DEACTIVATE_DATA_CALL cid = 22 reason = NORMAL [PHONE0]"
+   },
+   {
+    "ts": "2026-11-10T21:59:20.526Z",
+    "last": "2026-11-10T21:59:20.526Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[2693]> SET_DATA_PROFILE with data profiles : [PHONE0]"
+   },
+   {
+    "ts": "2026-11-10T21:59:20.525Z",
+    "last": "2026-11-10T21:59:20.525Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DRM-0",
+    "msg": "Remove all retry and throttling entries, reason=DATA_PROFILES_CHANGED"
+   },
+   {
+    "ts": "2026-11-10T21:59:20.525Z",
+    "last": "2026-11-10T21:59:20.525Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Re-evaluating 1 existing data networks due to DATA_PROFILES_CHANGED"
+   },
+   {
+    "ts": "2026-11-10T21:59:20.525Z",
+    "last": "2026-11-10T21:59:20.525Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Evaluated [DataNetwork: DN-106-C, <APN#1>, state=ConnectedState], Data evaluation: evaluation reason:DATA_PROFILES_CHANGED, Data disallowed reasons: DATA_PROFI…"
+   },
+   {
+    "ts": "2026-11-10T21:59:20.525Z",
+    "last": "2026-11-10T21:59:20.525Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "tearDownGracefully: Safe to tear down [DataNetwork: DN-106-C, <APN#1>, state=ConnectedState]"
+   },
+   {
+    "ts": "2026-11-10T21:59:20.525Z",
+    "last": "2026-11-10T21:59:20.525Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "DN-106-C",
+    "msg": "ConnectedState: onTearDown: reason=DATA_PROFILE_INVALID"
+   },
+   {
+    "ts": "2026-11-10T21:59:20.524Z",
+    "last": "2026-11-10T21:59:20.524Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DPM-0",
+    "msg": "updateDataProfilesAtModem: set 3 data profiles."
+   },
+   {
+    "ts": "2026-11-10T21:59:20.522Z",
+    "last": "2026-11-10T21:59:20.522Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DPM-0",
+    "msg": "Data profiles changed."
+   },
+   {
+    "ts": "2026-11-10T21:59:20.519Z",
+    "last": "2026-11-10T21:59:20.519Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DPM-0",
+    "msg": "Update data profiles due to APN db updated."
+   },
+   {
+    "ts": "2026-11-10T21:59:23.535Z",
+    "last": "2026-11-10T21:59:23.535Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DPM-0",
+    "msg": "Can't find any data profile that can satisfy [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_VCN_MANAGED&NOT_BANDWI…",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T21:59:23.535Z",
+    "last": "2026-11-10T21:59:23.535Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Data evaluation: evaluation reason:RETRY_AFTER_DISCONNECTED, Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, candidate profile=null, time=21:59:23.535, netw…",
+    "after": true
+   }
+  ]
+ }
 }

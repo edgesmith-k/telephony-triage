@@ -1,6 +1,191 @@
 {
- "around": "2026-09-22T09:50:21+00:00",
+ "around": "2026-09-22T09:50:21.000Z",
  "failed_step": null,
  "limit": 200,
- "anchor": null
+ "anchor": null,
+ "anomaly": {
+  "range": [
+   "2026-09-22T09:45:21.000Z",
+   "2026-09-22T10:00:21.000Z"
+  ],
+  "ref": "2026-09-22T09:50:21.000Z",
+  "after_sec": 600,
+  "candidates": 4,
+  "rows": [
+   {
+    "ts": "2026-09-22T09:50:13.154Z",
+    "phone": null,
+    "level": "E",
+    "tag": "vrild",
+    "msg": "Fail to write diag packet to host",
+    "main": true
+   },
+   {
+    "ts": "2026-09-22T09:50:21.153Z",
+    "phone": null,
+    "level": "W",
+    "tag": "vrild",
+    "msg": "diag packet dropped: host not reading, write fail",
+    "fold": {
+     "n": 2,
+     "first": "2026-09-22T09:50:13.153Z",
+     "last": "2026-09-22T09:50:21.153Z"
+    },
+    "main": true
+   }
+  ]
+ },
+ "summary": {
+  "ref": "2026-09-22T09:50:21.000Z",
+  "range": [
+   "2026-09-22T09:50:11.153Z",
+   "2026-09-22T09:50:24.153Z"
+  ],
+  "lines": 24,
+  "shapes": 15,
+  "window": [
+   "2026-09-22T09:45:21.000Z",
+   "2026-09-22T10:00:21.000Z"
+  ],
+  "cap": 60,
+  "after_sec": 600,
+  "groups": [
+   {
+    "ts": "2026-09-22T09:50:13.154Z",
+    "last": "2026-09-22T09:50:13.154Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "vrild",
+    "msg": "Fail to write diag packet to host"
+   },
+   {
+    "ts": "2026-09-22T09:50:13.153Z",
+    "last": "2026-09-22T09:50:21.153Z",
+    "n": 3,
+    "phone": null,
+    "level": "W",
+    "tag": "vrild",
+    "msg": "diag packet dropped: host not reading, write fail"
+   },
+   {
+    "ts": "2026-09-22T09:50:11.153Z",
+    "last": "2026-09-22T09:50:23.153Z",
+    "n": 5,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "mux [ch1][RX] VIPC_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)"
+   },
+   {
+    "ts": "2026-09-22T09:50:21.753Z",
+    "last": "2026-09-22T09:50:21.753Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "data and call unavailable: no service path/example_net.go:12",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:50:19.453Z",
+    "last": "2026-09-22T09:50:19.453Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/gprs.c:gprs_netreg_update() attached 0"
+   },
+   {
+    "ts": "2026-09-22T09:50:19.364Z",
+    "last": "2026-09-22T09:50:19.364Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "drivers/rilmodem/gprs.c:ril_data_reg_cb() Data RegState=NOT_REGISTERED, RejectCause=0"
+   },
+   {
+    "ts": "2026-09-22T09:50:19.363Z",
+    "last": "2026-09-22T09:50:19.363Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0527]< RIL_REQUEST_DATA_REGISTRATION_STATE"
+   },
+   {
+    "ts": "2026-09-22T09:50:19.354Z",
+    "last": "2026-09-22T09:50:19.354Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0527]> RIL_REQUEST_DATA_REGISTRATION_STATE"
+   },
+   {
+    "ts": "2026-09-22T09:50:11.155Z",
+    "last": "2026-09-22T09:50:19.353Z",
+    "n": 2,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,UNSOL]< UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED"
+   },
+   {
+    "ts": "2026-09-22T09:50:12.153Z",
+    "last": "2026-09-22T09:50:24.153Z",
+    "n": 3,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "ui tick"
+   },
+   {
+    "ts": "2026-09-22T09:50:15.253Z",
+    "last": "2026-09-22T09:50:15.253Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 8101 registered:0 VoPS=0 RAT:NONE"
+   },
+   {
+    "ts": "2026-09-22T09:50:11.164Z",
+    "last": "2026-09-22T09:50:11.164Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "drivers/rilmodem/network-registration.c:ril_creg_cb() Voice RegState=NOT_REGISTERED, RejectCause=0"
+   },
+   {
+    "ts": "2026-09-22T09:50:11.163Z",
+    "last": "2026-09-22T09:50:11.163Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0526]< RIL_REQUEST_VOICE_REGISTRATION_STATE"
+   },
+   {
+    "ts": "2026-09-22T09:50:11.156Z",
+    "last": "2026-09-22T09:50:11.156Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0526]> RIL_REQUEST_VOICE_REGISTRATION_STATE"
+   },
+   {
+    "ts": "2026-09-22T09:50:11.154Z",
+    "last": "2026-09-22T09:50:11.154Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "[ExampleRegService_1] out-of-service flag set (oos=1)"
+   }
+  ]
+ }
 }

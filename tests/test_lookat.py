@@ -17,9 +17,9 @@ UTC = timezone.utc
 
 def test_clean_strips_logcat_head_and_time_brackets_only():
     assert L.clean("09-20 14:33:05.000   900   910 D RIL     : [TX] VIPC_SETUP_DATA, REQ, token=0x0de") \
-        == "[TX] VIPC_SETUP_DATA, REQ, token=0x0de"
-    assert L.clean("2026-09-20 14:33:05.000 +0900 1000 1234 1244 I DNC-0: a  b") == "a b"        # 연도·zone·uid
-    assert L.clean("09-20 14:33:05.000 D/RIL( 1234): [RX] x") == "[RX] x"                        # time 형식
+        == "RIL: [TX] VIPC_SETUP_DATA, REQ, token=0x0de"          # 태그는 남긴다(코덱스 K02 — 비교 글이 `태그: 메시지`)
+    assert L.clean("2026-09-20 14:33:05.000 +0900 1000 1234 1244 I DNC-0: a  b") == "DNC-0: a b"        # 연도·zone·uid
+    assert L.clean("09-20 14:33:05.000 D/RIL( 1234): [RX] x") == "RIL: [RX] x"                        # time 형식
     assert L.clean("[  12.345] [IpcCtx_0] OnIpcComplete [14:32:11.001] ok") == "[IpcCtx_0] OnIpcComplete ok"   # P2 21
     assert L.clean("  plain   text ") == "plain text" and L.clean(None) == ""
 
@@ -82,3 +82,57 @@ def test_pick_nearest_or_last():
     assert L.pick(times, t0 + timedelta(minutes=4)) == (1, "nearest")
     assert L.pick(times, t0 + timedelta(minutes=1, seconds=30)) == (0, "nearest")   # 같은 거리면 앞
     assert L.pick(times, None) == (2, "last")                                       # 기준 시각 없음 → 마지막(P2 23)
+
+
+def test_level_and_tag_head_without_time_is_body_search():
+    """sim1120 S-11·S-39: 시각 없이 레벨·태그 머리(`D RILJ    : …`, `9995 10049 D RILJ : …`)를 붙여도, `태그 :`처럼 `:` 앞에
+    공백이 있어도 `태그: 메시지` 줄을 찾는다. 레벨만 떼고 태그는 본문으로 남긴다(`Phone-0 : …`)."""
+    assert L.clean("D RILJ    : Service DATA has died. [PHONE0]") == "RILJ : Service DATA has died. [PHONE0]"
+    assert L.clean("radio  9995 10049 D RILJ    : Service DATA") == "RILJ : Service DATA"
+    assert L.clean("Phone-0 : setAllowedNetworkTypes: subId=1") == "Phone-0 : setAllowedNetworkTypes: subId=1"
+    # 시각 머리를 뗀 줄은 남은 메시지 앞(`E radio: …`)을 레벨로 떼지 않는다(리뷰 1bb528a7)
+    assert L.clean("11-21 06:42:42.000  1001  1002 D SST     : E radio: off pollState") == "SST: E radio: off pollState"
+    texts = ["RILJ: Service DATA has died. [PHONE0]", "Phone-0: setAllowedNetworkTypes: subId=1, reason=user"]
+    for line, want in (("D RILJ    : Service DATA has died.", [0]), ("Phone-0 : setAllowedNetworkTypes: subId=1", [1])):
+        assert L.text_hits(L.needle(L.query(line)), texts) == want, line
+
+
+def test_loosely_typed_line_colonless_ellipsis_and_word_order():
+    """sim1121 P0(ROOTCAUSE 4): 사람이 대충 적은 기준 줄 — 태그 뒤 `:`를 뺀 `태그 메시지`, 중간을 `...`·`…`로 줄인 글(앞뒤 조각이
+    순서대로), 중간을 말없이 뺀 글(낱말이 순서대로, 낱말 경계에서 시작). 엉뚱한 줄은 안 맞는다(음성)."""
+    def hits(line, texts):
+        return L.text_hits(L.needle(L.query(line)), texts)
+    stall = ["DNC-0: onDataStallReestablishInternet: Tear down data networks", "DNC-1: onDataStallReestablishInternet: x",
+             "DSRM-0: broadcastDataStallDetected"]
+    assert hits("DNC-0 onDataStallReestablishInternet", stall) == [0]
+    calls = ["RILJ: [2729]< SETUP_DATA_CALL DataCallResponse: { cause=X retry=-1 cid=-1",
+             "RILJ: [2730]< SETUP_DATA_CALL DataCallResponse: { cause=X retry=5000 cid=-1",
+             "RILJ: [2728]> SETUP_DATA_CALL,reason=NORMAL retry=-1"]
+    for line in ("2026-11-11 16:20:33.541 < SETUP_DATA_CALL ... retry=-1", "< SETUP_DATA_CALL … retry=-1"):
+        assert hits(line, calls) == [0], line
+    failed = ["DNC-0: onDataNetworkSetupDataFailed: [DataNetwork: DN-1], cause=RADIO_NOT_AVAILABLE(0x10001), retry=10000",
+              "DNC-0: onDataNetworkSetupDataFailed: [DataNetwork: DN-2], cause=NO_SERVICE(0x1), retry=10000",
+              "DNC-1: onDataNetworkSetupDataFailed: cause=RADIO_NOT_AVAILABLE(0x10001)"]
+    assert hits("DNC-0 onDataNetworkSetupDataFailed cause=RADIO_NOT_AVAILABLE(0x10001)", failed) == [0]
+    # 찾기 방식: 줄 그대로·콜론 없음·`...` 생략은 text, 낱말 순서로만 맞으면 words(확정으로 올리지 않는다), 끄면(코멘트 단서) 없음
+    words = L.needle(L.query("DNC-0 onDataNetworkSetupDataFailed cause=RADIO_NOT_AVAILABLE(0x10001)"))
+    assert L.text_find(words, failed) == ([0], "words") and L.text_find(words, failed, loose=False) == ([], "text")
+    assert L.text_find(L.needle(L.query("DNC-0 onDataStallReestablishInternet")), stall) == ([0], "text")
+    # 음성: 낱말이 다른 낱말 한가운데(`setup`이 `onDataNetworkSetup…`)면 안 맞고, 순서가 바뀌거나 값이 다르면 안 맞는다
+    assert hits("DNC-0 setup data failed", failed) == []
+    assert hits("cause=RADIO_NOT_AVAILABLE(0x10001) DNC-0 onDataNetworkSetupDataFailed", failed) == []
+    assert hits("DNC-0 onDataStallReestablishInternet result=ok", stall) == []
+    # 줄 그대로 맞는 곳이 있으면 낱말 순서로만 맞는 줄은 더하지 않는다
+    assert hits("DNC-0 onDataStall", ["DNC-0: onDataStall x", "DNC-0: y onDataStall"]) == [0]
+
+
+def test_clock_without_date_is_cut_and_kept_for_picking():
+    """날짜 없는 앞 시각(`22:18:58.695 pcscf=[]`)은 떼어 본문으로 찾고 시각은 같은 곳 고르기에만(`clock`·`same_clock`)."""
+    assert L.clean("22:18:58.695 pcscf=[]") == "pcscf=[]" and L.clock("22:18:58.695 pcscf=[]") == "22:18:58.695"
+    assert L.clean("[22:18:58] x y z w") == "x y z w" and L.clock("[22:18:58] x") == "22:18:58"
+    assert L.clean("16:50:42") == "" and L.clock("16:50:42") == "16:50:42"
+    assert L.clock("11-10 22:18:58.695 radio 1 2 D DNC-0: x") is None and L.stamp("22:18:58.695 x") is None
+    assert L.clean("12:03:44.123  1234  1300 D DNC-0   : msg here") == "DNC-0 : msg here"
+    t = "16:50:42.480"      # 로그 줄에 찍힌 시각 글(시간대를 바꾸지 않은 그대로)
+    assert L.same_clock("16:50:42", t) and L.same_clock("16:50:42.48", t) and L.same_clock("16:50:42.4800", t)
+    assert not L.same_clock("16:50:42.481", t) and not L.same_clock("16:50:43", t) and not L.same_clock("16:50:42.5", t)

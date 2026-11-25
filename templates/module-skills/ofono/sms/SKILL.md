@@ -18,4 +18,4 @@ description: telephony-triage Step 5-1에서 triage.py module 출력으로만 �
 3. 그 요청의 벤더 RIL 줄이 하나도 없으면 → `그 층 로그 없음(벤더 RIL)`. 신호 세기 같은 잡음 줄은 그 요청이 기록됐다는 증거가 아니다.
 4. IMS 길: IMS 구성요소 `ExampleImsSmsSender::sendSms] failed`가 IMS IPC TX 없이 나오면 → `곁가지(<데몬>)`.
 5. 재시도 횟수·간격은 참고만 한다. SMSC는 토큰이라 값으로 판단하지 않는다.
-6. 1위 원인과 비교한다: 맞으면 `1위와 같음`, 아니면 `<원인 ID> — <근거>`.
+6. 1위 원인과 비교한다: 맞으면 `1위와 같음`, 아니면 `<원인 ID> — <근거>`. `decision.state`=held면 1위는 채택 아님.

@@ -1,0 +1,7 @@
+-- [합성] telephony-triage module-skills eval log (정상 가설 묶음 A2). 줄 모양은 레포 fixture(data-normal-setup.log·data-setup-auth-failure.log·data-profile-invalid-after-apn-change)의 AOSP 문구만, 벤더 줄 없음.
+11-20 15:00:00.100  2101  2141 D RILJ    : [0600]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] <APN#1>, 1, 00101, <APN#1>, default | supl, IPV4V6, preferred=true] [PHONE0]
+11-20 15:00:00.300  2101  2141 D RILJ    : [0600]< SETUP_DATA_CALL DataCallResponse: { cause=MISSING_UNKNOWN_APN(0x1b) retry=-1 cid=-1 linkStatus=0 protocolType=2 ifname=null addresses=[] dnses=[] gateways=[] pcscf=[] mtu=0} [PHONE0]
+11-20 15:00:00.302  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-300-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.
+11-20 15:00:20.300  2101  2141 D RILJ    : [0601]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] <APN#1>, 1, 00101, <APN#1>, default | supl, IPV4V6, preferred=true] [PHONE0]
+11-20 15:00:20.500  2101  2141 D RILJ    : [0601]< SETUP_DATA_CALL DataCallResponse: { cause=MISSING_UNKNOWN_APN(0x1b) retry=-1 cid=-1 linkStatus=0 protocolType=2 ifname=null addresses=[] dnses=[] gateways=[] pcscf=[] mtu=0} [PHONE0]
+11-20 15:00:20.502  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-301-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.

@@ -122,11 +122,16 @@ def _skill_out(quotes, summary="망이 PDN 인증을 거절했다") -> str:
                       "규칙 제안:", "- 없음", ""])
 
 
-def _explore_out(hyps) -> str:
+CHAIN_OK = ("기대 체인:", "| 단계 | 기대 | 기대 근거 | 관측 줄 | 일치 |", "|---|---|---|---|---|",
+            "| 1 | 망이 PDN을 받아 준다 | spec:3GPP 24.301 | 없음(찾은 곳: 타임라인 전체) | 모름 |")
+
+
+def _explore_out(hyps, chain=CHAIN_OK) -> str:
+    """가설 블록들. 기대 체인(11/25)은 가설마다 붙인다 — 형식 경고 없는 출력(`chain=()`면 옛 형식)."""
     out = []
     for i, (h, quotes) in enumerate(hyps, 1):
         out += [f"가설 {i}: {h}", "로그로 확인:", *[f"- {q}" for q in quotes], "코드로 추정: 코드 근거 없음", "반대 근거: 없음",
-                "다음 확인: 망 측 거절 사유 로그"]
+                "다음 확인: 망 측 거절 사유 로그", *chain]
     return "\n".join(out) + "\n"
 
 
@@ -543,7 +548,9 @@ def test_evidence_record_on_work_dir_job(tmp_path, capsys, monkeypatch):
     code, data2, _ = check(job, out=False, capsys=capsys)
     assert code == 0
     recs = [r for r in _shown(work) if r["kind"] == "evidence"]
-    assert len(recs) == 2 and recs[1]["lines"] == [data2["line"].removesuffix("…")]
+    # RP-14: 앞 검사의 원문에 없는 인용(1)은 고친 뒤에도 보일 의무에 남는다(근거 검사 줄 끝 "앞 검사 원문에 없음 1")
+    assert len(recs) == 2 and recs[1]["lines"] == [data2["line"].removesuffix("…"), data2["evidence"]]
+    assert data2["evidence"].endswith(output.FAB_BEFORE.format(n=1))
     # 같은 key의 두 기록을 순서대로 고정하면 열린 의무는 둘째(결과 줄) 하나다
     seq = [{"kind": "tool", "name": "Bash", "id": f"b{k}", "input": {"command": f"python3 triage.py check-output {KEY} --for deep"},
             "result": "{}", "error": False} for k in range(2)]
@@ -610,3 +617,478 @@ def test_runtime_label_from_site_defaults(tmp_path, capsys, monkeypatch):
 
 def test_evidence_parsers_used_are_the_shared_ones():
     assert output.evidence is evidence and evidence.FIELDS_DEEP[0] == "원인 층"
+
+
+# --- 단계 4 판단(decision) 고치기 ---------------------------------------------------------------------------
+
+ACCEPTED = {"state": "accepted", "reason": "anchored_top",
+            "selected": {"category": "data", "type": "DATA-001", "cause": "DATA-001-01"},
+            "location": {"state": "confirmed", "source": "look_at", "kind": "point"}}
+
+
+# analysis 스키마 `ok`의 필수 키(합성 JOB을 완전한 run 출력으로 만들 때)
+OK_KEYS = {"status": "ok", "generated_at": "2026-09-20T06:00:00+00:00", "request_hash": "0123456789abcdef", "mode": "offline",
+           "logs": {"files": ["a.log"], "range": ["t0", "t1"], "in_range": True, "events": 4}, "code": {"skipped": True},
+           "files": {"report": "r"}, "truncated": False,
+           "candidates": [{"type": "DATA-001", "cause": "DATA-001-01", "category": "data", "score": 1.0, "confidence": "high",
+                           "S": 1, "C": 1, "evidence": []}]}
+
+
+def _decision_job(base: Path, decision=ACCEPTED, full: bool = False) -> Path:
+    """탐색 모듈 기록(입력 해시에 analysis.json)이 있는 JOB에 심층 분석(설치 스킬)·판단을 더한다 — 둘 다 TODO 줄.
+    full이면 analysis.json이 스키마 `ok`의 필수 키를 다 갖춘 run 출력이다(판단만 스키마를 어길 수 있게)."""
+    job = make_job(base, "explore", "explore")
+    analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    analysis.update(analyzer={"skill": "mock-data-analyzer", "when": "ask"}, **({"decision": decision} if decision else {}),
+                    **(OK_KEYS if full else {}))
+    (job / "analysis.json").write_text(json.dumps(analysis, ensure_ascii=False), encoding="utf-8")
+    msj = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))
+    msj["explore"]["inputs"]["analysis.json"] = _sha(job / "analysis.json")
+    (job / "module-skill.json").write_text(json.dumps(msj, ensure_ascii=False), encoding="utf-8")
+    (job / "report.md").write_text("\n".join(["# MOCK-9076 분석 리포트", "", report.decision_line(decision or ACCEPTED, [{}]),
+                                              "- 분류 후보: DATA-001-01", SKILL_PENDING, EXPLORE_PENDING, SUB,
+                                              "- 기타 후보: 없음", ""]), encoding="utf-8")
+    return job
+
+
+def test_opinion_id_shapes():
+    m = lambda s: (output.OPINION_ID.match(s) or [None, None])[1]     # noqa: E731
+    assert m("DATA-001-02 — 망 거절") == "DATA-001-02" and m("  `DATA-001-02` — x") == "DATA-001-02"
+    assert m("**DATA-001-02** — x") == "DATA-001-02" and m("DATA-001-02와 같은 망 거절") == "DATA-001-02"
+    assert m("DATA-001-021 — x") is None and m("1위와 같음") is None and m("해당 없음(후보 없음)") is None
+
+
+def test_deep_counter_rebases_module_inputs_so_later_explore_check_uses_its_view(tmp_path, capsys, monkeypatch):
+    """P2-1: 섞인 순서(module --for explore → check-output deep이 counter로 analysis.json을 다시 씀 → check-output explore)에서
+    탐색 기록의 입력 해시를 새 analysis.json으로 옮겨, 탐색 검사가 기록한 모듈 보기로 근거를 검사한다(건너뛰거나 다른 원문 아님)."""
+    monkeypatch.delenv("TT_SCHEMA_CHECK")          # 합성 analysis.json(필수 키 없음)이라 스키마 검사는 끈다
+    job = _decision_job(tmp_path)
+    before = _sha(job / "analysis.json")
+    (job / "deep-output.md").write_text(_skill_out([Q1]).replace("DATA-001-01 — 1위와 같음", "**DATA-001-02** — 망 거절"),
+                                        encoding="utf-8")
+    code, _, err = check(job, "deep", capsys=capsys)
+    assert code == 0 and "판단" not in err, err
+    analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    assert analysis["decision"] == {**ACCEPTED, "counter": {"cause": "DATA-001-02"}}
+    after = _sha(job / "analysis.json")
+    assert after != before
+    msj = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))
+    assert msj["explore"]["inputs"]["analysis.json"] == after
+    assert _line(job, "- 판단:").endswith("· 모델 검토 의견이 다름(DATA-001-02) — 확인 필요")
+    assert "decision_unwritten" not in _rec(job, "deep")
+    (job / "explore-output.md").write_text(_explore_out([("망 거절", [Q2])]), encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and data["fabricated"] == 0 and _rec(job, "explore")["source"] == "module-skill/explore/timeline.md"
+
+
+def test_decision_not_written_on_schema_violation_or_changed_file(tmp_path, capsys, monkeypatch):
+    """P2-2·P2-3: 판단이 불변식을 어기거나(TT_SCHEMA_CHECK — 완전한 run 출력에 accepted인데 selected null) 검사 중 analysis.json이
+    바뀌었으면 쓰지 않고 경고, 기록에 `decision_unwritten`. report.md 판단 줄도 그대로. module-skill.json 해시를 못 고치면
+    판단은 쓰고 `module_inputs_unwritten`."""
+    sound = json.loads((_decision_job(tmp_path / "ok", full=True) / "analysis.json").read_text(encoding="utf-8"))
+    assert report.schema_violation(sound) is None                       # 판단만 바꾸면 위반이 되는 완전한 출력
+    job = _decision_job(tmp_path / "bad", decision={**ACCEPTED, "selected": None}, full=True)
+    raw = (job / "analysis.json").read_bytes()
+    judge = _line(job, "- 판단:")
+    (job / "deep-output.md").write_text(_skill_out([Q1]).replace("DATA-001-01 — 1위와 같음", "DATA-001-02 — 망 거절"),
+                                        encoding="utf-8")
+    code, _, err = check(job, "deep", capsys=capsys)
+    assert code == 0 and "판단(decision)을 고치지 못했다" in err and "decision" in err, err
+    assert (job / "analysis.json").read_bytes() == raw and _line(job, "- 판단:") == judge
+    assert _rec(job, "deep")["decision_unwritten"] == "스키마 위반"
+    # 처음 읽은 뒤 바뀐 파일: 쓰지 않는다
+    job = _decision_job(tmp_path / "race", full=True)
+    raw = (job / "analysis.json").read_bytes()
+    analysis = json.loads(raw)
+    (job / "analysis.json").write_text(json.dumps({**analysis, "truncated": True}), encoding="utf-8")
+    changed = (job / "analysis.json").read_bytes()
+    out = output._decision_update(_args(job, "deep"), job, analysis, hashlib.sha256(raw).hexdigest(), opinion="DATA-001-02 — x")
+    assert out == {"decision_unwritten": "검사 중 analysis.json이 바뀌었다"} and (job / "analysis.json").read_bytes() == changed
+    # module-skill.json 해시 갱신 실패: 판단은 쓰고 따로 남긴다
+    (job / "analysis.json").write_bytes(raw)
+    monkeypatch.setattr(output, "_rebase_module_inputs", lambda *a: False)
+    out = output._decision_update(_args(job, "deep"), job, analysis, hashlib.sha256(raw).hexdigest(), opinion="DATA-001-02 — x")
+    assert out == {"module_inputs_unwritten": True}
+    assert json.loads((job / "analysis.json").read_text(encoding="utf-8"))["decision"]["counter"] == {"cause": "DATA-001-02"}
+
+
+def test_old_job_without_decision_leaves_analysis_untouched(tmp_path, capsys, monkeypatch):
+    """decision 없는 옛 JOB: 심층 의견이 달라도 check-output은 analysis.json·판단 줄을 건드리지 않는다(기록도 없음)."""
+    monkeypatch.delenv("TT_SCHEMA_CHECK")
+    job = _decision_job(tmp_path, decision=None)
+    raw, msj = (job / "analysis.json").read_bytes(), (job / "module-skill.json").read_bytes()
+    (job / "deep-output.md").write_text(_skill_out([Q1]).replace("DATA-001-01 — 1위와 같음", "DATA-001-02 — 망 거절"),
+                                        encoding="utf-8")
+    code, _, err = check(job, "deep", capsys=capsys)
+    assert code == 0 and "판단" not in err
+    assert (job / "analysis.json").read_bytes() == raw and (job / "module-skill.json").read_bytes() == msj
+    assert "decision_unwritten" not in _rec(job, "deep")
+
+
+# -- sim1122 F7·F9: 확인할 내용 줄 꼬리, 다시 검사해도 남는 근거 불일치 --------------------------------------------
+
+QUESTION = "- 확인할 내용(사용자 질문): 재시도가 오는지"
+
+
+def _question_job(base: Path) -> Path:
+    job = make_job(base, "explore", "plain")
+    text = (job / "report.md").read_text(encoding="utf-8")
+    text = text.replace("- 분류 후보: DATA-001-01\n",
+                        f"- 분류 후보: DATA-001-01\n{QUESTION}{output.QUESTION_PENDING}\n  - 질문 아래 줄은 그대로\n")
+    (job / "report.md").write_text(text, encoding="utf-8")
+    return job
+
+
+def test_question_line_points_to_answer_after_explore_check(tmp_path, capsys):
+    job = _question_job(tmp_path)
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
+    assert check(job, "explore", capsys=capsys)[0] == 0
+    assert _line(job, QUESTION) == QUESTION + output.QUESTION_DONE
+    assert "  - 질문 아래 줄은 그대로" in (job / "report.md").read_text(encoding="utf-8")
+    none = _question_job(tmp_path / "none")
+    (none / "explore-output.md").write_text("가설 없음: 실패 구간 로그가 없다\n다음 확인: 실패 시각 앞뒤 30초 로그\n", encoding="utf-8")
+    assert check(none, "explore", capsys=capsys)[0] == 0
+    assert _line(none, QUESTION) == QUESTION + output.QUESTION_DONE_NONE
+    # 생략(--skipped)·형식 실패는 답하지 않는다고 적는다
+    skipped = _question_job(tmp_path / "skip")
+    assert check(skipped, "explore", skipped="사용자가 하지 않음", capsys=capsys)[0] == 0
+    assert _line(skipped, QUESTION) == QUESTION + output.QUESTION_SKIPPED
+    bad = _question_job(tmp_path / "bad")
+    (bad / "explore-output.md").write_text("가설 1: 칸이 모자란 가설\n", encoding="utf-8")
+    assert check(bad, "explore", capsys=capsys)[0] == 1
+    assert _line(bad, QUESTION) == QUESTION + output.QUESTION_SKIPPED
+    # RP-8: `triage.py explore` 재실행 뒤 다시 검사하면 꼬리도 이번 결과로 바뀐다(통과 → 실패, 생략 → 통과)
+    report.rewrite_line(job / "report.md", "- 탐색 분석", [EXPLORE_PENDING])
+    (job / "explore-output.md").write_text("가설 1: 칸이 모자란 가설\n", encoding="utf-8")
+    assert check(job, "explore", capsys=capsys)[0] == 1 and _line(job, QUESTION) == QUESTION + output.QUESTION_SKIPPED
+    report.rewrite_line(skipped / "report.md", "- 탐색 분석", [EXPLORE_PENDING])
+    (skipped / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
+    assert check(skipped, "explore", capsys=capsys)[0] == 0 and _line(skipped, QUESTION) == QUESTION + output.QUESTION_DONE
+    # 꼬리가 다른 줄(never·--no-explore 안내)은 고치지 않는다
+    other = make_job(tmp_path / "other", "explore", "plain")
+    keep = f"{QUESTION} — 탐색 분석 안 함 — 확인할 내용은 답하지 않음(근거 로그로 직접 확인)"
+    (other / "report.md").write_text(_report(EXPLORE_PENDING, []) + keep + "\n", encoding="utf-8")
+    (other / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
+    assert check(other, "explore", capsys=capsys)[0] == 0 and _line(other, QUESTION) == keep
+
+
+def test_recheck_keeps_earlier_fabricated_count(tmp_path, capsys):
+    """VERIFY-B 5: `triage.py explore`를 다시 돌려 고친 출력으로 다시 검사해도 앞 검사의 원문에 없는 인용 수는 지우지 않는다."""
+    job = make_job(tmp_path, "explore", "plain")
+    (job / "trace.jsonl").write_text("", encoding="utf-8")
+    (job / "explore-output.md").write_text(_explore_out([("모뎀 펌웨어 오류", [FAKE])]), encoding="utf-8")
+    assert check(job, "explore", capsys=capsys)[1]["fabricated"] == 1
+    report_md = job / "report.md"      # `triage.py explore` 재실행이 탐색 줄을 다시 TODO로 돌린다
+    report.rewrite_line(report_md, "- 탐색 분석", [EXPLORE_PENDING])
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and data["fabricated"] == 0
+    assert data["evidence"] == "- 근거 원문 검사: 인용 1개 중 원문에 없음 0" + output.FAB_BEFORE.format(n=1)
+    rec = _rec(job, "explore")
+    assert rec["fabricated"] == 0 and rec["fabricated_before"] == 1
+    rows = [json.loads(x) for x in (job / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [r.get("fabricated") for r in rows] == [1, 0]
+    # 그 뒤 생략으로 바꿔도 이어 간다
+    report.rewrite_line(report_md, "- 탐색 분석", [EXPLORE_PENDING])
+    assert check(job, "explore", skipped="그만", capsys=capsys)[0] == 0
+    assert _rec(job, "explore")["fabricated_before"] == 1
+    # 처음 검사는 표시가 없다(기록도 없음)
+    fresh = make_job(tmp_path / "fresh", "explore", "plain")
+    (fresh / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
+    assert "앞 검사" not in check(fresh, "explore", capsys=capsys)[1]["evidence"]
+    assert "fabricated_before" not in _rec(fresh, "explore")
+
+
+# --- triage.py window 구간(근거 원문에 더함) ------------------------------------------------------------------
+
+WIN_ROW = "15:10:01.900 p0 E hiddend carrier link lost on rmnet_data3 after reject"     # 타임라인에 없는 줄(버려진 태그)
+
+
+def _window(job: Path, n: int = 1, rows=(WIN_ROW,), record: bool = True) -> Path:
+    path = job / f"window-{n}.md"
+    path.write_text("\n".join([f"# {KEY} 로그 구간 {n}", "", "- 중심: x", "", *rows, ""]), encoding="utf-8")
+    if record:
+        rec = job / core.WINDOW_RECORD
+        old = json.loads(rec.read_text(encoding="utf-8"))["windows"] if rec.is_file() else []
+        rec.write_text(json.dumps({"windows": [*old, {"path": path.name, "sha256": _sha(path), "at": "x", "lines": len(rows),
+                                                      "tags": []}]}), encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize("purpose, mode", [("deep", "module"), ("explore", "plain"), ("explore", "explore"), ("deep", "skill")])
+def test_window_lines_count_as_source(tmp_path, capsys, purpose, mode):
+    """`triage.py window` 구간의 줄은 근거 원문이다(없으면 `[근거 불일치]` 오탐). 기록 source에 구간 이름이 붙는다."""
+    job = make_job(tmp_path, purpose, mode)
+    _window(job)
+    out = _deep_out([Q1, WIN_ROW]) if mode == "module" else (
+        _skill_out([WIN_ROW]) if mode == "skill" else _explore_out([("망 인증 거절", [Q1, WIN_ROW])]))
+    (job / output.OUTPUT_FILE[purpose]).write_text(out, encoding="utf-8")
+    code, data, err = check(job, purpose, capsys=capsys)
+    assert code == 0 and data["fabricated"] == 0, (data, err)
+    assert "window-1.md" in _rec(job, purpose)["source"] and "windows_excluded" not in data
+
+
+def test_window_changed_or_unrecorded_is_not_source(tmp_path, capsys):
+    job = make_job(tmp_path, "explore", "plain")
+    _window(job).write_text("바꾼 글\n" + WIN_ROW + "\n", encoding="utf-8")     # 기록 뒤 바뀜: 빼고 경고
+    _window(job, 2, rows=("15:10:01.950 p0 E otherd not recorded either",), record=False)    # 기록에 없음: 보지 않는다
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1, WIN_ROW])]), encoding="utf-8")
+    code, data, err = check(job, "explore", capsys=capsys)
+    assert code == 0 and data["fabricated"] == 1 and data["windows_excluded"] == ["window-1.md"]
+    assert "구간 파일이 기록과 달라" in err and _rec(job, "explore")["source"] == "timeline.md"
+
+
+def test_no_window_record_output_unchanged(tmp_path, capsys):
+    job = make_job(tmp_path, "explore", "plain")
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and set(data) == {"line", "evidence", "quotes", "fabricated", "weak", "raw"}
+
+
+# --- 규칙 제안 하위 줄(SKILL Step 7이 report.md에서 읽는다) ---------------------------------------------------
+
+RULE_OK = "[이슈 DB] add-parser-rule file=extractors.yaml rule={id: x} — 근거: RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM"
+RULE_FAKE = "[이슈 DB] add-parser-rule file=tags.yaml rule={tag: X} — 근거: modem firmware crashed with assertion"
+RULE_PLAIN = "[이슈 DB] update-signature DATA-001-01 — must_match에 거절 사유를 더한다"
+
+
+def _with_rules(text: str, rules) -> str:
+    return text.rstrip("\n") + "\n규칙 제안:\n" + "".join(f"- {r}\n" for r in rules)
+
+
+def test_explore_rule_proposals_reach_report_only_when_grounded(tmp_path, capsys):
+    job = make_job(tmp_path, "explore", "plain")
+    (job / "explore-output.md").write_text(_with_rules(_explore_out([("망 인증 거절", [Q1])]), [RULE_OK, RULE_FAKE, RULE_PLAIN]),
+                                           encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and data["fabricated"] == 0
+    text = (job / "report.md").read_text(encoding="utf-8").split("\n")
+    assert f"  - 규칙 제안 (탐색): {RULE_OK}" in text and f"  - 규칙 제안 (탐색): {RULE_PLAIN}" in text
+    assert not any("modem firmware" in t for t in text)                       # 근거 문구가 원문에 없다
+    assert "  - 탐색 출력의 제안 1개를 뺐다 — 근거 불일치(원문에서 확인 안 됨) 1" in text       # Step 7이 고르지 않게 `규칙 제안` 낱말 없음
+    rec = _rec(job, "explore")
+    assert (rec["rules"], rec["rules_dropped"]) == (2, 1)
+
+
+def test_rule_without_basis_dropped_when_any_quote_fabricated_and_none_skipped(tmp_path, capsys):
+    job = make_job(tmp_path, "explore", "plain")
+    (job / "explore-output.md").write_text(_with_rules(_explore_out([("모뎀 펌웨어 오류", [FAKE])]), [RULE_PLAIN, "없음"]),
+                                           encoding="utf-8")
+    check(job, "explore", capsys=capsys)
+    text = (job / "report.md").read_text(encoding="utf-8")
+    assert "규칙 제안" not in text and "제안 1개를 뺐다 — 근거 불일치" in text      # [근거 불일치] 가설이 있으면 근거 없는 제안은 뺀다
+    none = make_job(tmp_path / "n", "explore", "plain")
+    (none / "explore-output.md").write_text(_with_rules(_explore_out([("망 인증 거절", [Q1])]), ["없음"]), encoding="utf-8")
+    check(none, "explore", capsys=capsys)
+    assert "규칙 제안" not in (none / "report.md").read_text(encoding="utf-8") and "rules" not in _rec(none, "explore")
+
+
+def test_deep_rule_proposals_use_same_lines(tmp_path, capsys):
+    job = make_job(tmp_path)
+    out = _deep_out([Q1, Q2]).replace("규칙 제안:\n- 없음", f"규칙 제안:\n- {RULE_OK}")
+    (job / "deep-output.md").write_text(out, encoding="utf-8")
+    assert check(job, capsys=capsys)[0] == 0
+    text = (job / "report.md").read_text(encoding="utf-8").split("\n")
+    i = text.index(f"  - 규칙 제안 (심층): {RULE_OK}")
+    assert text[i - 1] == "  - 근거 원문 검사: 인용 2개 중 원문에 없음 0" and text[i + 1] == SUB
+
+
+def test_rule_proposals_need_ok_verdict_and_a_ran_check_and_same_line_item(tmp_path, capsys):
+    """리뷰 2·5: 근거 문구가 약함(원문에 없는 짧은 낱말)이면 뺀다. 근거 없는 제안은 원문 검사를 실제로 했을 때만(인용 없음이면 뺀다).
+    `규칙 제안: [이슈 DB] …`처럼 칸 이름 줄에 바로 쓴 제안도 항목 하나다(탐색·심층 같은 파서)."""
+    weak = "[이슈 DB] update-signature DATA-001-01 — 근거: LOADED"
+    job = make_job(tmp_path, "explore", "plain")
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]).rstrip("\n") + f"\n규칙 제안: {RULE_PLAIN}\n- {weak}\n",
+                                           encoding="utf-8")
+    check(job, "explore", capsys=capsys)
+    text = (job / "report.md").read_text(encoding="utf-8").split("\n")
+    assert f"  - 규칙 제안 (탐색): {RULE_PLAIN}" in text and not any("LOADED" in t for t in text)
+    assert (_rec(job, "explore")["rules"], _rec(job, "explore")["rules_dropped"]) == (1, 1)
+    deep = make_job(tmp_path / "d")
+    (deep / "deep-output.md").write_text(_deep_out([Q1, Q2]).replace("규칙 제안:\n- 없음", f"규칙 제안: {RULE_OK}"), encoding="utf-8")
+    check(deep, capsys=capsys)
+    assert f"  - 규칙 제안 (심층): {RULE_OK}" in (deep / "report.md").read_text(encoding="utf-8").split("\n")
+    bare = make_job(tmp_path / "b")                         # 인용 없음: 원문 검사를 안 했다 — 근거 없는 제안은 싣지 않는다
+    (bare / "deep-output.md").write_text(_deep_out([]).replace("규칙 제안:\n- 없음", f"규칙 제안:\n- {RULE_PLAIN}"), encoding="utf-8")
+    check(bare, capsys=capsys)
+    assert "규칙 제안 (심층): " not in (bare / "report.md").read_text(encoding="utf-8")
+
+
+def test_same_line_rule_item_parses_in_both_paths():
+    from common import evidence
+
+    deep = evidence.parse_fields(_deep_out([Q1]).replace("규칙 제안:\n- 없음", f"규칙 제안: {RULE_PLAIN}"))
+    assert deep["규칙 제안"] == [RULE_PLAIN]
+    assert evidence.parse_fields(_deep_out([Q1]).replace("규칙 제안:\n- 없음", "규칙 제안: 없음"))["규칙 제안"] == []
+    exp = evidence.parse_explore(_explore_out([("망 인증 거절", [Q1])]) + f"규칙 제안: {RULE_PLAIN}\n- {RULE_OK}\n")
+    assert exp["rules"] == [RULE_PLAIN, RULE_OK]
+
+
+@pytest.mark.parametrize("purpose", ["deep", "explore"])
+def test_none_with_reason_is_not_a_proposal(tmp_path, capsys, purpose):
+    """확인 리뷰 C: `없음`·`해당 없음`으로 시작하면(뒤 설명 무엇이든) 제안이 아니다 — 같은 줄·목록 모두, deep·탐색 모두."""
+    for k, block in enumerate(("규칙 제안: 없음 (새 규칙 필요 없음)\n", "규칙 제안:\n- 없음 — 시그니처가 이미 있다\n- `해당 없음`\n")):
+        job = make_job(tmp_path / f"{purpose}{k}", purpose, "module" if purpose == "deep" else "plain")
+        if purpose == "deep":
+            (job / "deep-output.md").write_text(_deep_out([Q1, Q2]).replace("규칙 제안:\n- 없음\n", block), encoding="utf-8")
+        else:
+            (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])]) + block, encoding="utf-8")
+        check(job, purpose, capsys=capsys)
+        text = (job / "report.md").read_text(encoding="utf-8")
+        assert "규칙 제안" not in text and "제안 " not in text.split("근거 원문 검사")[-1].split("\n")[1], (purpose, k)
+        assert "rules" not in _rec(job, purpose) and "rules_dropped" not in _rec(job, purpose)
+
+
+# -- 11/25 기대 체인(explore.md 쓰는 것): 형식 경고 · 다시 검사 한 번 · 관측 줄 원문 검사 ---------------------------------------
+
+def _chain(rows, claim=None, extra=()):
+    head = ["기대 체인:", "| 단계 | 기대 | 기대 근거 | 관측 줄 | 일치 |", "|---|---|---|---|---|"]
+    return (*head, *[f"| {n} | {e} | log:15:10:0{n} | {o} | {v} |" for n, e, o, v in rows],
+            *([f"첫 갈라짐: {claim}"] if claim else []), *extra)
+
+
+Q0 = "15:10:00.100 p0 I ofonod src/gprs.c:gprs_attach() attach requested apn=internet"
+CHAIN_FALSE2 = [(1, "SETUP 요청이 나간다", Q0, "true"),
+                (2, "SETUP 응답이 성공", Q1, "false"),
+                (3, "데이터 연결", "없음(찾은 곳: 타임라인 15:10:03~)", "false")]
+
+
+def test_explore_chain_parses_new_fields_and_old_format_still_parses():
+    text = _explore_out([("망 인증 거절", [Q1])], _chain(CHAIN_FALSE2, "단계 2 — 망이 PDN 거절",
+                                                      ("찾았는데 없음:", "- 재요청 — window --at 15:10:05", "책임 경계: CP-망 경계")))
+    h = evidence.parse_explore(text)["hyps"][0]
+    assert [r["단계"] for r in h["기대 체인"]] == [1, 2, 3] and [r["일치"] for r in h["기대 체인"]] == ["true", "false", "false"]
+    assert h["첫 갈라짐"].startswith("단계 2") and h["찾았는데 없음"] == ["재요청 — window --at 15:10:05"]
+    assert h["책임 경계"] == "CP-망 경계" and h["로그로 확인"] == [Q1]
+    assert evidence.chain_quotes(h) == [CHAIN_FALSE2[0][2], Q1]            # `없음(찾은 곳…)`은 인용이 아니다
+    old = evidence.parse_explore(_explore_out([("망 인증 거절", [Q1])], ()))
+    assert old["hyps"][0]["기대 체인"] is None and old["hyps"][0]["로그로 확인"] == [Q1]
+
+
+def test_explore_chain_warnings(tmp_path, capsys):
+    cases = {
+        "missing": (_explore_out([("망 인증 거절", [Q1])], ()), "`기대 체인:` 표 없음"),
+        "not_earliest": (_explore_out([("망 인증 거절", [Q1])], _chain(CHAIN_FALSE2, "단계 3 — 연결 안 됨")),
+                         "첫 갈라짐 단계 3 ≠ 표의 가장 이른 false 단계 2"),
+        "timer": ("가설 1: 재시도 타이머가 늦게 풀림\n원인 층: 프레임워크\n" + _explore_out([("x", [Q1])],
+                  _chain(CHAIN_FALSE2, "단계 2"))[len("가설 1: x\n"):], "`메커니즘 재계산:` 없음"),
+    }
+    for name, (text, needle) in cases.items():
+        job = make_job(tmp_path / name, "explore", "plain")
+        (job / "explore-output.md").write_text(text, encoding="utf-8")
+        code, data, _ = check(job, "explore", capsys=capsys)
+        assert code == 0 and any(needle in w for w in data["format_warnings"]), (name, data)
+        assert data["next"] == output.FORMAT_NEXT
+        assert any(t.startswith("  - 형식 경고(탐색, 판정 아님): ") and needle in t
+                   for t in (job / "report.md").read_text(encoding="utf-8").split("\n")), name
+    # 올바른 표본: 가장 이른 false = 첫 갈라짐, 원인 층 있음, 타이머 낱말 + 메커니즘 재계산 예 → 경고 없음
+    good = ("가설 1: 재시도 간격 뒤 망 거절\n원인 층: 망 — 거절\n책임 경계: CP-망 경계\n"
+            + _explore_out([("x", [Q1])], _chain(CHAIN_FALSE2, "단계 2 — 망이 거절",
+                           ("메커니즘 재계산: 15:10:00 + 1s = 15:10:01 → 고치면 결과가 뒤집히나: 예",)))[len("가설 1: x\n"):])
+    job = make_job(tmp_path / "good", "explore", "plain")
+    (job / "explore-output.md").write_text(good, encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and "format_warnings" not in data and "next" not in data and data["fabricated"] == 0
+    assert data["quotes"] == 3                                               # 로그로 확인 1 + 관측 줄 2
+    assert "첫 갈라짐: 단계 2 — 망이 거절" in _line(job, "  - 가설 1")
+
+
+def test_explore_chain_observed_quote_goes_through_evidence_check(tmp_path, capsys):
+    job = make_job(tmp_path, "explore", "plain")
+    rows = [(1, "SETUP 응답", "15:10:09.000 p0 E ofonod " + FAKE, "false")]
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])], _chain(rows, "단계 1")), encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and data["fabricated"] == 1 and data["quotes"] == 2
+    assert _line(job, "  - 가설 1").startswith("  - 가설 1 [근거 불일치 1]: ")
+
+
+def test_explore_format_warning_allows_one_recheck(tmp_path, capsys):
+    job = make_job(tmp_path, "explore", "plain")
+    out = job / "explore-output.md"
+    out.write_text(_explore_out([("망 인증 거절", [Q1])], ()), encoding="utf-8")
+    assert check(job, "explore", capsys=capsys)[1]["format_warnings"]
+    out.write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")          # 고쳐 쓴 뒤 한 번 더
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and "format_warnings" not in data and _rec(job, "explore")["format_recheck"] is True
+    assert not any(t.startswith("  - 형식 경고") for t in (job / "report.md").read_text(encoding="utf-8").split("\n"))
+    code, data, _ = check(job, "explore", capsys=capsys)                              # 세 번째는 평소처럼 막힌다
+    assert code == 2 and data["reason"] == "작업 없음"
+
+
+def test_explore_chain_quote_only_time_led_cells():
+    """확인 리뷰 2: 관측 칸은 (따옴표·`(window-n)`를 뗀 뒤) 시각으로 시작할 때만 인용이다 — 나머지는 원문 검사에 넣지 않는다."""
+    rows = [(1, "a", "`(window-1) 15:10:01.200 p0 E vrild x`", "true"), (2, "b", "11-20 13:05:00.311 E x", "false"),
+            (3, "c", "찾지 못함(window 15:10:05)", "false"), (4, "d", "—", "모름"), (5, "e", "N/A", "모름"),
+            (6, "f", "미관측", "모름"), (7, "g", "없음(찾은 곳: 타임라인)", "모름"), (8, "h", "SETUP_DATA_CALL 응답 없음", "false")]
+    h = evidence.parse_explore(_explore_out([("x", [Q1])], _chain(rows, "단계 2")))["hyps"][0]
+    assert evidence.chain_quotes(h) == ["15:10:01.200 p0 E vrild x", "11-20 13:05:00.311 E x"]
+
+
+def test_explore_chain_headers_columns_and_verdicts():
+    """확인 리뷰 3·5·7: 단계 번호 없는 행은 건너뛴다, 머리 행 이름으로 열을 찾는다(6열), 일치 앞부분·기호, 전각 세로줄, 표 중간 빈 줄."""
+    text = "\n".join(["가설 1: x", "로그로 확인:", f"- {Q1}", "코드로 추정: 코드 근거 없음", "반대 근거: 없음", "다음 확인: y",
+                      "기대 체인:", "| **단계** | 기대 | 기대 근거 | 담당 | 관측 줄 | 일치 |", "|-|-|-|-|-|-|", "| # | | | | | |",
+                      "| 1 | 요청 | log:a | AP | 15:10:00.100 p0 I ofonod x | **불일치**. 재요청 없음 |",
+                      "", "｜ 2 ｜ 응답 ｜ spec:b ｜ CP ｜ 없음 ｜ ✅ ｜",
+                      "| 3 | 연결 | log:c | AP | 없음 | False — 끊김 |", "| 4 | 끝 | log:d | AP | 없음 | ❌ |",
+                      "| 5 | 끝 | log:d | AP | 없음 | 일치 |", "첫 갈라짐: 1단계 — 재요청 없음"])
+    h = evidence.parse_explore(text)["hyps"][0]
+    rows = h["기대 체인"]
+    assert [r["단계"] for r in rows] == [1, 2, 3, 4, 5]
+    assert [r["일치"] for r in rows] == ["false", "true", "false", "false", "true"]
+    assert rows[0]["관측"] == "15:10:00.100 p0 I ofonod x" and rows[0]["근거"] == "log:a" and rows[1]["기대"] == "응답"
+    assert output._chain_warnings({"hyps": [{**h, "원인 층": "프레임워크"}], "top": None}) == []      # `1단계` = 단계 1
+
+
+def test_explore_chain_claim_number_and_flip_answer():
+    """확인 리뷰 6·8·9·10: 첫 갈라짐 번호는 맨 앞만(`없음`·문장 속 시각은 None), 틀 그대로 `예|아니오`, 뒤 설명 있는 답,
+    768B 넘는 칸, 순화한 문구."""
+    base = {"가설": "재시도 타이머", "원인 층": "프레임워크", "기대 체인": [{"단계": 2, "기대": "a", "근거": "b", "관측": "없음", "일치": "false"}]}
+    warn = lambda **kw: output._chain_warnings({"hyps": [{**base, **kw}], "top": None})      # noqa: E731
+    mech = "299999ms → 13:05:00 → 고치면 결과가 뒤집히나: "
+    assert warn(**{"첫 갈라짐": "없음 — 13:05:00에 재요청 없음", "메커니즘 재계산": mech + "예"})[0].startswith("가설 1: 표의 첫 false가 단계 2인데")
+    assert warn(**{"첫 갈라짐": "13:05:00 재요청 없음(단계 2)", "메커니즘 재계산": mech + "예"})[0].startswith("가설 1: 표의 첫 false가")
+    assert warn(**{"첫 갈라짐": "단계 2", "메커니즘 재계산": mech + "예 — 재요청이 제때 나간다"}) == []
+    assert warn(**{"첫 갈라짐": "2", "메커니즘 재계산": mech + "예|아니오"}) == ["가설 1: 메커니즘 재계산의 답이 틀 그대로(`예|아니오`) — 예나 아니오 하나만"]
+    got = warn(**{"첫 갈라짐": "단계 2", "메커니즘 재계산": mech + "아니오 (간격이 달라도 같은 예외)"})
+    assert got == ["가설 1: 메커니즘 재계산이 '아니오'(고쳐도 결과가 안 뒤집힘)인데 가장 유력 — 재계산으로는 원인이 뒷받침되지 않음 — "
+                   "가장 유력을 다시 본다"]
+    big = {**base["기대 체인"][0], "관측": "x" * 800}
+    assert warn(**{"첫 갈라짐": "단계 2", "메커니즘 재계산": mech + "예", "기대 체인": [big]}) == [
+        f"가설 1: 기대 체인 단계 2의 칸이 {core.FIELD_MAX_BYTES}바이트를 넘음 — 줄여 쓴다"]
+
+
+def test_explore_recheck_failure_keeps_first_result(tmp_path, capsys):
+    """확인 리뷰 1: 형식 경고 뒤 다시 검사가 실패(칸 형식)해도 첫 검사의 리포트 줄·확인할 내용·기록을 덮지 않는다."""
+    job = make_job(tmp_path, "explore", "plain")
+    out = job / "explore-output.md"
+    out.write_text(_explore_out([("망 인증 거절", [Q1])], ()), encoding="utf-8")
+    first = check(job, "explore", capsys=capsys)[1]
+    assert first["format_warnings"]
+    report_before = (job / "report.md").read_text(encoding="utf-8")
+    rec_before = _rec(job, "explore")
+    out.write_text("가설 1: 칸이 모자란 다시 쓰기\n", encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and data == {"kept": output.RECHECK_KEPT, "recheck_error": "출력 형식 불일치(칸)"}
+    assert (job / "report.md").read_text(encoding="utf-8") == report_before
+    rec = _rec(job, "explore")
+    assert rec == {**rec_before, "format_recheck": True, "recheck_error": "출력 형식 불일치(칸)"}
+    assert check(job, "explore", capsys=capsys)[0] == 2                     # 다시 검사는 한 번뿐
+
+
+def test_explore_old_format_report_unchanged_but_warning_line(tmp_path, capsys):
+    """확인 리뷰 11: 옛 형식(기대 체인 없음) 출력의 report 줄은 형식 경고 하위 줄 하나만 빼면 기대 체인 전과 같다."""
+    job = make_job(tmp_path, "explore", "explore")
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1, Q2]), ("APN 설정 오류", [Q2])], ()), encoding="utf-8")
+    assert check(job, "explore", capsys=capsys)[0] == 0
+    text = (job / "report.md").read_text(encoding="utf-8").split("\n")
+    i = text.index(next(t for t in text if t.startswith("- 탐색 분석")))
+    warn = [t for t in text[i:] if t.startswith("  - 형식 경고(탐색, 판정 아님): ")]
+    assert len(warn) == 1
+    block = [t for t in text[i:i + 6] if t not in warn]
+    assert block == ["- 탐색 분석 (추정, timeline.md 4/4줄): 가설 2개 — 점수·분류·검증에 쓰지 않는다",
+                     f"  - 가설 1: 망 인증 거절 / 로그로 확인: {Q1} | {Q2} / 코드로 추정: 코드 근거 없음 / 반대 근거: 없음 / "
+                     "다음 확인: 망 측 거절 사유 로그",
+                     "  - 가설 2: APN 설정 오류 / 로그로 확인: " + Q2 + " / 코드로 추정: 코드 근거 없음 / 반대 근거: 없음 / "
+                     "다음 확인: 망 측 거절 사유 로그",
+                     "  - 근거 원문 검사: 인용 3개 중 원문에 없음 0", SUB]

@@ -1,6 +1,168 @@
 {
- "around": "2026-09-20T15:20:06+00:00",
+ "around": "2026-09-20T15:20:06.000Z",
  "failed_step": null,
  "limit": 200,
- "anchor": null
+ "anchor": null,
+ "anomaly": {
+  "range": [
+   "2026-09-20T15:15:06.000Z",
+   "2026-09-20T15:30:06.000Z"
+  ],
+  "ref": "2026-09-20T15:20:06.000Z",
+  "after_sec": 600,
+  "candidates": 2,
+  "rows": [
+   {
+    "ts": "2026-09-20T15:20:01.724Z",
+    "phone": null,
+    "level": "I",
+    "tag": "datad2",
+    "msg": "netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002",
+    "main": true
+   },
+   {
+    "ts": "2026-09-20T15:20:06.000Z",
+    "phone": null,
+    "level": "W",
+    "tag": "datad",
+    "msg": "connectivity check failed profile_id=1[./src/check_example.cxx +40]",
+    "main": true
+   }
+  ]
+ },
+ "summary": {
+  "ref": "2026-09-20T15:20:06.000Z",
+  "range": [
+   "2026-09-20T15:20:00.000Z",
+   "2026-09-20T15:20:06.200Z"
+  ],
+  "lines": 13,
+  "shapes": 13,
+  "window": [
+   "2026-09-20T15:15:06.000Z",
+   "2026-09-20T15:30:06.000Z"
+  ],
+  "cap": 60,
+  "after_sec": 600,
+  "groups": [
+   {
+    "ts": "2026-09-20T15:20:01.724Z",
+    "last": "2026-09-20T15:20:01.724Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "datad2",
+    "msg": "netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002"
+   },
+   {
+    "ts": "2026-09-20T15:20:06.000Z",
+    "last": "2026-09-20T15:20:06.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "datad",
+    "msg": "connectivity check failed profile_id=1[./src/check_example.cxx +40]"
+   },
+   {
+    "ts": "2026-09-20T15:20:06.200Z",
+    "last": "2026-09-20T15:20:06.200Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "signal strength report: level=4 placeholder",
+    "after": true
+   },
+   {
+    "ts": "2026-09-20T15:20:01.726Z",
+    "last": "2026-09-20T15:20:01.726Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "datad2",
+    "msg": "default route not installed for rmnet0"
+   },
+   {
+    "ts": "2026-09-20T15:20:01.720Z",
+    "last": "2026-09-20T15:20:01.720Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/gprs.c:pri_activate_callback() context 1 active on rmnet0"
+   },
+   {
+    "ts": "2026-09-20T15:20:01.710Z",
+    "last": "2026-09-20T15:20:01.710Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "[0,0021]< RIL_REQUEST_SETUP_DATA_CALL {status=0,retry=-1,cid=1,active=2,type=IP,ifname=rmnet0}"
+   },
+   {
+    "ts": "2026-09-20T15:20:01.700Z",
+    "last": "2026-09-20T15:20:01.700Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "SETUP_DATA_CALL rsp: ok cid=1 ifname=rmnet0"
+   },
+   {
+    "ts": "2026-09-20T15:20:01.150Z",
+    "last": "2026-09-20T15:20:01.150Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "SETUP_DATA_CALL sent to modem cid=1"
+   },
+   {
+    "ts": "2026-09-20T15:20:01.120Z",
+    "last": "2026-09-20T15:20:01.120Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "[0,0021]> RIL_REQUEST_SETUP_DATA_CALL 16,1,internet.example,0,IP"
+   },
+   {
+    "ts": "2026-09-20T15:20:01.100Z",
+    "last": "2026-09-20T15:20:01.100Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating"
+   },
+   {
+    "ts": "2026-09-20T15:20:01.050Z",
+    "last": "2026-09-20T15:20:01.050Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "dbus call org.ofono.ConnectionContext.SetProperty Active=true path/example_dbus.go:72"
+   },
+   {
+    "ts": "2026-09-20T15:20:01.000Z",
+    "last": "2026-09-20T15:20:01.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "datad",
+    "msg": "profile select: apn=internet.example auth=NONE profile_id=1[./src/apn_example.cxx +20]"
+   },
+   {
+    "ts": "2026-09-20T15:20:00.000Z",
+    "last": "2026-09-20T15:20:00.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "dbus signal org.ofono.NetworkRegistration.PropertyChanged Strength path/example_dbus.go:96"
+   }
+  ]
+ }
 }

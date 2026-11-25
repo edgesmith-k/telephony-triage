@@ -1,0 +1,1 @@
+{"status": "ok", "investigate": {"mode": true, "reason": "1위 C=0"}, "investigation": {"status": "insufficient_evidence", "hyp": 1, "cause": "DataNetworkController가 실패 뒤 재시도를 잡지 않음", "layer": "AP 내부", "first_divergence": {"step": 1, "expect": "실패 뒤 재시도 예약"}, "gate": [{"name": "실패 뒤 흔적", "ok": false, "why": "기준 시각 뒤 줄 인용·구간 없음(실패 뒤를 보지 않음)"}], "explore_sha": "0"}}

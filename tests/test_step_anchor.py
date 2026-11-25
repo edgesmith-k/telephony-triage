@@ -105,6 +105,32 @@ def test_find_span_prefers_failed_step_start_and_closest_fail():
     assert span["fail"] == _t("5:30:20")
 
 
+def test_location_state_per_anchor_source():
+    """단계 4 `decision.location`: 출처별 상태·kind(contracts.md `decision`). FAIL 마커 수는 find_span의 `n`."""
+    from types import SimpleNamespace
+    from triagelib.anchor import AnchorMixin
+    marks = [_mk("5:30:00", "5", "start"), _mk("5:30:20", "5", "fail"), _mk("5:40:00", "5", "start"), _mk("5:40:20", "5", "fail")]
+    one, _ = stepanchor.find_span(marks[:2], "Step 5", None, True)
+    two, _ = stepanchor.find_span(marks, "Step 5", None, True)
+    start_only, _ = stepanchor.find_span(marks[:1], "Step 5", None, True)
+    assert (one["n"], two["n"], "n" in start_only) == (1, 2, False)
+
+    def loc(span, look=None):
+        return AnchorMixin.location(SimpleNamespace(look_result=look, look_inputs=dict), span)
+    assert loc(one) == {"state": "confirmed", "source": "log_marker", "kind": "range"}
+    assert loc(two) == {"state": "multiple", "source": "log_marker", "kind": "range"}
+    assert loc(start_only) == {"state": "found", "source": "log_marker", "kind": "range"}
+    look_at = {"source": "look_at", "fail": _t("5:30:20")}
+    assert loc(look_at, {"hits": 1, "places": 1, "how": "ipc"}) == {"state": "confirmed", "source": "look_at", "kind": "point"}
+    # 같은 요청의 REQ·RSP 두 줄은 한 곳(단계 5) — 일치 줄 수가 아니라 묶은 곳 수로 본다
+    assert loc(look_at, {"hits": 2, "places": 1, "how": "token"}) == {"state": "confirmed", "source": "look_at", "kind": "point"}
+    assert loc(look_at, {"hits": 3, "places": 3, "how": "text"}) == {"state": "multiple", "source": "look_at", "kind": "near"}
+    # 글자 일치는 한 곳이어도 found — 확인된 실패 지점(confirmed)이 아니다(포털 확실한 일치는 confirmed만 본다)
+    assert loc(look_at, {"hits": 1, "places": 1, "how": "text"}) == {"state": "found", "source": "look_at", "kind": "near"}
+    for src in ("steps_file", "step_order"):
+        assert loc({"source": src, "fail": _t("5:30:20")}) == {"state": "found", "source": src, "kind": "range"}
+
+
 def test_find_span_start_fallback_to_previous_marker_of_any_step():
     marks = [_mk("5:30:10", "3", "pass"), _mk("5:33:30", "5", "fail")]       # Step 5 START 없음
     span, _ = stepanchor.find_span(marks, "Step 5", None, True)
@@ -281,6 +307,9 @@ def _strip(a: dict) -> dict:
 def test_marker_anchor_with_failed_step_moves_window_and_top_candidate():
     off, _ = _offline("off", "--failed-step", STEP, "--answer", "anchor=off", root=MARKER_ROOT)
     assert _causes(off)[0] == "IMS-001-01" and off["step_anchor"] == {"source": "issue"}     # 오늘의 동작
+    assert {k: off["decision"][k] for k in ("state", "reason", "selected", "location")} == {      # 단계 4: 기준 없음 → 보류
+        "state": "held", "reason": "no_reference", "selected": None, "location": {"state": "none", "source": None, "kind": None}}
+    assert off["decision"]["check"] == {"why": None, "checked": 0, "total": 4}
     assert off["logs"]["window"] == {"start": "2026-09-20T05:26:00.000Z", "end": "2026-09-20T05:36:00.000Z"}
 
     done, job = _offline("on", "--failed-step", STEP, root=MARKER_ROOT)
@@ -288,11 +317,20 @@ def test_marker_anchor_with_failed_step_moves_window_and_top_candidate():
     sa = done["step_anchor"]
     assert sa["source"] == "log_marker" and sa["step"] == "Step 5" and "step_from" not in sa
     assert sa["span"] == ["2026-09-20T05:33:00.000Z", "2026-09-20T05:33:30.000Z"]
+    # 단계 5-1: 구간 안 DATA-001 사건은 증상 시그니처가 "RILJ SETUP_DATA_CALL 없음"(must_not_match)에 기댄다. 이 로그에는 RILJ
+    # 줄이 하나도 없고(수집 안 된 태그) 마지막 증상 근거 뒤로 창(60초)만큼 이어지지도 않아 "없음"을 확인 못 한다 → 보류
+    assert {k: done["decision"][k] for k in ("state", "reason", "selected", "location")} == {
+        "state": "held", "reason": "ineligible", "selected": None,
+        "location": {"state": "confirmed", "source": "log_marker", "kind": "range"}}
+    assert done["decision"]["check"]["why"] == "absence_unverified" and done["decision"]["events"][0]["absence"] is True
     assert done["logs"]["window"] == {"start": "2026-09-20T05:32:00.000Z", "end": "2026-09-20T05:34:00.000Z"}
     assert done["issue"]["failed_step"]["text"] == STEP and done["request_hash"] != off["request_hash"]
     report = (job / "report.md").read_text(encoding="utf-8")
+    assert ("- 판단: 원인 보류 — 실패 지점과 규칙 일치를 이을 수 없음('이 줄이 없어야 함' 조건을 확인할 수 없음 — "
+            "그 태그가 수집되지 않았거나 로그가 일찍 끝남)"
+            in report)
     assert "- 실패 스텝 구간 (log_marker): Step 5 2026-09-20T05:33:00.000Z ~ 2026-09-20T05:33:30.000Z → 분석 범위 " \
-        "2026-09-20T05:32:00.000Z ~ 2026-09-20T05:34:00.000Z (Jira 발생 시각 2026-09-20T14:31:00+09:00 / 2.5분 차이)" in report
+        "2026-09-20T05:32:00.000Z ~ 2026-09-20T05:34:00.000Z (입력한 발생 시각과 2.5분 차이)" in report
     assert "S/C에 쓰지 않음; 단어 겹침 가산·순위 참고·분석 범위" in report
     # Jira 시각은 가까우므로 경고 없음. issue_meta.json은 그대로, 매처는 match_meta.json(발생 시각 = 스텝 실패 시각)을 쓴다
     assert not any("분 다르다" in w for w in done.get("warnings") or [])
@@ -333,6 +371,10 @@ def test_steps_file_anchor_on_markerless_log_and_no_raw_text_in_job_files():
     assert sa["source"] == "steps_file" and sa["span"] == ["2026-09-20T05:33:00.000Z", "2026-09-20T05:33:30.000Z"]
     assert done["issue"]["failed_step"] == {"text": "5 | 데이터 켜기", "source": "steps_file"}
     assert done["logs"]["window"] == {"start": "2026-09-20T05:32:00.000Z", "end": "2026-09-20T05:34:00.000Z"}
+    # 단계 5-1: TC 파일 시각 구간은 문제 파악 유형이 있어야 채택한다 — problem.json 없이는 보류(구간·위치는 그대로)
+    dec = done["decision"]
+    assert (dec["state"], dec["reason"], dec["check"]["why"]) == ("held", "ineligible", "range_without_symptom")
+    assert dec["location"] == {"state": "found", "source": "steps_file", "kind": "range"}
     for path in (p for p in job.rglob("*") if p.is_file()):
         text = path.read_text(encoding="utf-8", errors="replace")
         assert "2026-09-20 14:33:00" not in text and "14:33:30" not in text.replace("T05:33:30", "") \
@@ -436,7 +478,8 @@ def test_jira_time_disagreement_warns_but_anchor_still_wins():
     done, job = _offline("far", "--failed-step", STEP, occurred="2026-09-20T14:10:00+09:00", root=MARKER_ROOT)
     assert done["step_anchor"]["source"] == "log_marker" and _causes(done) == ["DATA-001-01"]
     warns = [w for w in done["warnings"] if "분 다르다" in w]
-    assert warns == ["Jira 발생 시각과 실패 스텝 시각이 24분 다르다 — 스텝 시각 기준으로 분석했다(끄기: --answer anchor=off)"]
+    # --issue-meta의 시각은 손으로 준 기준 시각이라 지금처럼 잰다(Jira 칸 값은 D4로 재지 않는다 — 문구 "입력한 발생 시각")
+    assert warns == ["입력한 발생 시각과 실패 스텝 시각이 24분 다르다 — 스텝 시각 기준으로 분석했다(끄기: --answer anchor=off)"]
     assert done["step_anchor"]["issue_gap_min"] == 23.5
     assert "23.5분 차이" in (job / "report.md").read_text(encoding="utf-8")
     off, _ = _offline("far-off", "--failed-step", STEP, "--answer", "anchor=off", occurred="2026-09-20T14:10:00+09:00",
@@ -608,3 +651,206 @@ def test_triage_reports_focus_types_in_step_anchor_and_report():
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def test_sim1121_tc_html_fail_time_reaches_clock_and_range_checks():
+    """sim1121 P0(ROOTCAUSE 2·5): 장비 결과 HTML(요약 표 `Verdict | FAIL`이 스텝 표 앞)의 FAIL 스텝 시각을 읽어 시계 차 검사·로그 범위
+    검사까지 간다 — 전에는 표를 못 읽고 대체 경로가 요약 줄을 잡아 아무 경고 없이 앵커를 버렸다."""
+    d = tmp("tt-sim-tc-")
+    log = _markerless(d)
+    tc = REPO / "tests" / "fixtures" / "tc-html" / "sim-oneline-fail.html"
+    done, _ = _offline("sim-tc-off", "--steps-file", tc, "--clock-offset", "0", logs=(log,))
+    assert any(w.startswith("steps-file의 실패 시각(") and "로그 범위 밖" in w for w in done["warnings"]), done["warnings"]
+    done, _ = _offline("sim-tc-none", "--steps-file", tc, logs=(log,))
+    assert any(w.startswith("장비 시각 미사용") for w in done["warnings"]), done["warnings"]
+
+
+def test_steps_file_pattern_fallback_only_without_table_and_warns_when_no_time():
+    """표로 FAIL 스텝을 못 읽을 때의 대체 경로(failed_step_patterns)는 표(열 이름 줄)가 없을 때만 — 표를 읽었는데 FAIL 스텝이 없으면
+    다른 줄을 패턴으로 잡아 실패 지점으로 정하지 않는다("FAIL 스텝을 찾지 못했다" 경고와 결과가 같은 쪽). 번호를 못 읽은 FAIL 줄
+    (번호 없는 줄·프리앰블 `P`)은 확인 리뷰 P1부터 표가 직접 실패 스텝으로 읽는다(요약 표 `Verdict | FAIL`은 표 머리 앞이라 안 읽는다).
+    실패 스텝 줄에 시각이 없으면 조용히 끝내지 않고 "TC 실패 스텝에 시각 없음" 경고."""
+    from common import failedstep
+    from triagelib import anchor
+    d = tmp("tt-steps-fallback-")
+    log = _markerless(d)
+    steps = d / "steps.txt"
+    for name, text, step in (
+            ("summary", "Verdict | FAIL\nNo | Step | Result\n4 | 망 등록 | PASS\n데이터 켜기 | FAIL | 2026-09-20 14:33:30\n",
+             "데이터 켜기"),
+            ("preamble", "Step | Time | Message / Action | Verdict\n1 | 2026-09-20 14:32:00 | 망 등록 | PASS\n"
+                         "P | 2026-09-20 14:33:30 | 프리앰블 등록 | FAIL\n", "프리앰블 등록")):
+        steps.write_text(text, encoding="utf-8")
+        done, _ = _offline(name, "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+        assert (done["step_anchor"]["source"], done["step_anchor"]["step"]) == ("steps_file", step), name
+        assert done["step_anchor"]["span"][1] == "2026-09-20T05:33:30.000Z", name
+        assert not any(w.startswith(failedstep.NOT_FOUND) for w in done.get("warnings") or []), name
+    # 표는 있는데 FAIL 줄을 스텝으로 못 읽었다(번호·이름 칸이 빔) — 패턴 3이 이 줄에 맞아도 실패 지점으로 정하지 않는다
+    steps.write_text("No | Step | Time | Result\n1 | 망 등록 | 2026-09-20 14:32:00 | PASS\n | | 2026-09-20 14:33:30 | FAIL\n",
+                     encoding="utf-8")
+    done, _ = _offline("lost", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+    assert (done.get("step_anchor") or {}).get("source") != "steps_file"
+    assert any(w.startswith(failedstep.NOT_FOUND) and w.endswith("스텝으로 못 읽은 FAIL·INCONC 줄 1개") for w in done["warnings"])
+    steps.write_text("실패 스텝: 7. 데이터 켜기 2026-09-20 14:33:30\n", encoding="utf-8")      # 표 없음 → 패턴 경로
+    done, _ = _offline("pattern", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+    assert done["step_anchor"]["source"] == "steps_file" and done["step_anchor"]["span"][1] == "2026-09-20T05:33:30.000Z"
+    for name, text in (("no-time", "No | Step | Result\n4 | 망 등록 | PASS\n5 | 데이터 켜기 | FAIL\n"),
+                       ("pattern-no-time", "실패 스텝: 7. 데이터 켜기\n")):
+        steps.write_text(text, encoding="utf-8")
+        done, _ = _offline(name, "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+        assert anchor.NO_STEP_TIME in done["warnings"] and done["step_anchor"].get("source") != "steps_file", name
+
+
+def test_tc_warning_header_is_masked_in_run_warnings():
+    """FAIL 스텝을 못 찾은 경고에 실린 표 첫 줄(TC 원문)은 이슈 DB 설정대로 가려서 낸다(샘플 DB는 IP를 가린다) — 표 앵커 경로와
+    스텝 순서 경로 둘 다."""
+    d = tmp("tt-steps-mask-")
+    log = _markerless(d)
+    steps = d / "steps.txt"
+    steps.write_text("No | Step | Server 10.1.2.3 | Result\n1 | 망 등록 | x | PASS\n", encoding="utf-8")
+    done, _ = _offline("mask", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+    warns = [w for w in done["warnings"] if "열 이름" in w]
+    assert warns and all("10.1.2.3" not in w and "<IP#" in w for w in warns), warns
+
+
+def test_substep_fail_row_anchors_and_matches_shown_step():
+    """확인 리뷰 P1: 하위 스텝 번호(`2.1`) FAIL 줄도 표의 실패 스텝으로 분석 구간을 정하고, 화면에 보이는 실패 스텝(issue.failed_step,
+    read_steps_file)과 앵커 스텝이 같은 글이다 — 전에는 표가 이 줄을 버리고 대체 경로도 끊겨 구간을 못 정했다."""
+    d = tmp("tt-substep-")
+    log = _markerless(d)
+    steps = d / "steps.txt"
+    steps.write_text("No | Step | Time | Result\n1 | 망 등록 | 2026-09-20 14:32:00 | PASS\n"
+                     "2.1 | 데이터 켜기 | 2026-09-20 14:33:30 | FAIL\n", encoding="utf-8")
+    done, _ = _offline("substep", "--steps-file", steps, "--clock-offset", "0", logs=(log,))
+    sa = done["step_anchor"]
+    assert sa["source"] == "steps_file" and sa["span"][1] == "2026-09-20T05:33:30.000Z"
+    assert sa["step"] == done["issue"]["failed_step"]["text"] == "데이터 켜기"
+    assert not any("찾지 못했다" in w for w in done.get("warnings") or [])
+
+
+def _tc_html(head_date: str | None, fail_time: str = "14:33:30") -> str:
+    head = (f"<table><tr><th>Report ID</th><td>RPT-20260921-0001</td></tr><tr><th>Start</th><td>{head_date}</td></tr></table>"
+            if head_date else "")
+    return (f"<html><body>{head}<table><tr><th>No</th><th>Step</th><th>Result</th><th>Time</th></tr>"
+            f"<tr><td>4</td><td>준비</td><td>PASS</td><td>14:33:00</td></tr>"
+            f"<tr><td>5</td><td>데이터 켜기</td><td>FAIL</td><td>{fail_time}</td></tr></table></body></html>")
+
+
+def test_tc_head_date_dates_time_only_steps_and_warns_when_log_is_another_day():
+    """sim1122 F5(S-04·S-25): 스텝 칸이 시각만이면 예전엔 로그 첫 날짜를 붙여 다른 날 TC를 같은 날로 봤다. TC 머리 날짜(Start)가
+    읽히면 그 날짜를 쓰고, 로그 날짜 범위 밖이면 `TC 날짜와 로그 날짜가 다름` 경고(시계 차를 몰라도). 머리 날짜가 없으면 지금과 같다."""
+    d = tmp("tt-tcdate-")
+    log = _markerless(d)
+    warn = "TC 날짜와 로그 날짜가 다름: TC 2026-09-21, 로그 2026-09-20 — 다른 날의 TC·로그일 수 있다(같은 시험의 것인지 확인)"
+    other = d / "other.html"
+    other.write_text(_tc_html("2026/09/21 14:30:00"), encoding="utf-8")
+    done, _ = _offline("tc-other", "--steps-file", other, "--clock-offset", "0", logs=(log,))
+    assert warn in done["warnings"], done["warnings"]
+    from triagelib import report as rep        # 4KB 맞춤에서 먼저 남기는 중요 경고(포털 경고 표와 같은 항목)
+    assert rep.KEY_WARNING.search(warn)
+    assert any("로그 범위 밖" in w for w in done["warnings"]) and done["step_anchor"]["source"] == "issue"
+    none, _ = _offline("tc-other-none", "--steps-file", other, logs=(log,))     # 시계 차 모름: 장비 시각은 안 쓰지만 날짜 차는 알린다
+    assert warn in none["warnings"] and none["step_anchor"]["clock"] == {"mode": "none", "reason": "시계 차 모름"}
+    for name, head in (("same", "2026-09-20"), ("nohead", None)):      # 같은 날이거나 머리 날짜가 없으면 지금과 같다(앵커)
+        tc = d / f"{name}.html"
+        tc.write_text(_tc_html(head), encoding="utf-8")
+        ok, _ = _offline(f"tc-{name}", "--steps-file", tc, "--clock-offset", "0", logs=(log,))
+        assert ok["step_anchor"]["source"] == "steps_file", (name, ok["step_anchor"])
+        assert not any(w.startswith("TC 날짜와 로그 날짜가 다름") for w in ok.get("warnings") or []), name
+
+
+def test_tc_head_non_test_dates_do_not_move_steps_or_warn():
+    """RP-3 재현: 머리의 출력일·펌웨어 버전(이름표가 시험 날짜가 아닌 줄)을 시험 날짜로 읽어 맞던 앵커를 잃고 "다른 날" 경고를 거짓으로
+    냈다. 이름표 줄의 날짜만 쓰므로 지금과 같다(로그 첫 날짜를 붙여 앵커)."""
+    d = tmp("tt-tcdate-fake-")
+    log = _markerless(d)
+    table = ("<table><tr><th>No</th><th>Step</th><th>Result</th><th>Time</th></tr>"
+             "<tr><td>4</td><td>준비</td><td>PASS</td><td>14:33:00</td></tr>"
+             "<tr><td>5</td><td>데이터 켜기</td><td>FAIL</td><td>14:33:30</td></tr></table>")
+    for name, head in (("printed", "<p>Report generated 2026-09-27 09:00</p><p>Start 14:30:00</p>"),
+                       ("fw", "<p>Firmware 2024.12.3</p><p>Start 14:30:00</p>")):
+        tc = d / f"{name}.html"
+        tc.write_text(f"<html><body>{head}{table}</body></html>", encoding="utf-8")
+        ok, _ = _offline(f"tc-{name}", "--steps-file", tc, "--clock-offset", "0", logs=(log,))
+        assert ok["step_anchor"]["source"] == "steps_file", (name, ok["step_anchor"], ok.get("warnings"))
+        assert not any(w.startswith("TC 날짜와 로그 날짜가 다름") for w in ok.get("warnings") or []), name
+
+
+def test_tc_date_ref_moves_a_day_when_step_times_wrap_past_midnight(tmp_path):
+    """RP-11: 머리 날짜만 있고 스텝 시각이 앞 스텝보다 1시간 넘게 작아지면(자정 넘김) 기준 날짜를 하루 올린다. 머리 시작 시각도 첫
+    비교값이다. 기준은 그 날짜의 실패 행 첫 시각이다(CP-5 — 행 안의 넘김은 steps_file_times가 맞춘다). 로그 해 ±1년 밖 날짜는
+    기준으로 쓰지 않고 날짜 차이 경고만 낸다(CP-7). 실제 스텝 표 경로는 아래 `test_tc_head_date_real_path_*`."""
+    sys.path.insert(0, str(REPO / "plugin" / "scripts"))
+    from triagelib.anchor import AnchorMixin
+
+    class Fake(AnchorMixin):
+        def __init__(self):
+            self.warned = []
+
+        def warn(self, text):
+            self.warned.append(text)
+
+    tc = tmp_path / "tc.txt"
+    tc.write_text("Start | 2026-11-13\nNo | Step | Result | Time\n1 | a | PASS | 23:58:10\n2 | b | FAIL | 00:02:30\n", encoding="utf-8")
+    first = datetime(2026, 11, 13, 14, 50, tzinfo=timezone.utc)      # 23:50 KST
+    last = datetime(2026, 11, 13, 15, 10, tzinfo=timezone.utc)       # 다음 날 00:10 KST
+    fake = Fake()
+    ref = fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["23:58:10", "00:02:30"])
+    assert ref == datetime(2026, 11, 13, 15, 2, 30, tzinfo=timezone.utc) and fake.warned == []      # 11-14 00:02:30 KST
+    assert stepanchor.steps_file_times("00:02:30", "Asia/Seoul", 2026, ref)[1] == datetime(2026, 11, 13, 15, 2, 30, tzinfo=timezone.utc)
+    assert fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["23:58:10", "23:59:30"]) == datetime(2026, 11, 13, 14, 59, 30,
+                                                                                                      tzinfo=timezone.utc)
+    tc.write_text("Start | 2026-11-13 23:55:00\nNo | Step | Result | Time\n1 | b | FAIL | 00:02:30\n", encoding="utf-8")
+    assert fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["00:02:30"]) == datetime(2026, 11, 13, 15, 2, 30, tzinfo=timezone.utc)
+    tc.write_text("Start | 2023-11-13\nNo | Step | Result | Time\n1 | b | FAIL | 00:02:30\n", encoding="utf-8")
+    assert fake.tc_date_ref(tc, {}, "Asia/Seoul", first, last, ["00:02:30"]) is None
+    assert fake.warned == ["TC 날짜와 로그 날짜가 다름: TC 2023-11-13, 로그 2026-11-13~2026-11-14 — 다른 날의 TC·로그일 수 있다"
+                           "(같은 시험의 것인지 확인)"]                                         # CP-7: 버리되 알린다
+
+
+def _tc_html_head(rows: str, fail_time: str = "14:33:30", pass_time: str = "14:33:00") -> str:
+    return (f"<html><body><table>{rows}</table><table><tr><th>No</th><th>Step</th><th>Result</th><th>Time</th></tr>"
+            f"<tr><td>4</td><td>준비</td><td>PASS</td><td>{pass_time}</td></tr>"
+            f"<tr><td>5</td><td>데이터 켜기</td><td>FAIL</td><td>{fail_time}</td></tr></table></body></html>")
+
+
+def test_tc_head_date_real_path_yearless_log_read_as_other_year_keeps_tc_anchor():
+    """oFono 확인 P1-1(android logcat도 연도가 없어 같은 코드): 연도 없는 로그를 `--year`로 다른 해(2027)로 읽어도 TC 머리 날짜
+    2026-09-20과 월·일이 같으면 같은 날이다 — 거짓 "TC 날짜와 로그 날짜가 다름" 경고 없이 TC 기준을 쓰고 로그의 해를 붙인다.
+    월·일이 다르면 그대로 경고한다."""
+    d = tmp("tt-tcdate-year-")
+    log = _markerless(d)
+    tc = d / "tc.html"
+    tc.write_text(_tc_html("2026/09/20 14:30:00"), encoding="utf-8")
+    done, _ = _offline("tc-year", "--steps-file", tc, "--clock-offset", "0", "--year", "2027", logs=(log,),
+                       occurred="2027-09-20T14:31:00+09:00")
+    assert not any(w.startswith("TC 날짜와 로그 날짜가 다름") for w in done.get("warnings") or []), done["warnings"]
+    assert done["step_anchor"]["source"] == "steps_file" and done["step_anchor"]["span"][1] == "2027-09-20T05:33:30.000Z"
+    tc.write_text(_tc_html("2026/09/21 14:30:00"), encoding="utf-8")
+    other, _ = _offline("tc-year-other", "--steps-file", tc, "--clock-offset", "0", "--year", "2027", logs=(log,),
+                        occurred="2027-09-20T14:31:00+09:00")
+    assert ("TC 날짜와 로그 날짜가 다름: TC 2026-09-21, 로그 2027-09-20 — 다른 날의 TC·로그일 수 있다(같은 시험의 것인지 확인)"
+            in other["warnings"]), other["warnings"]
+
+
+def test_tc_head_date_real_path_wrap_inside_fail_row_and_end_label_clock():
+    """CP-5: 실패 행 안에서 자정을 넘기면(시작 23:59:50, 실패 00:00:20) 실패 시각을 다음 날로 잡는다(전에는 하루 앞으로 잡아 로그
+    범위 밖). CP-6: 시작이 아닌 이름표 줄(End Date)의 시각은 자정 넘김의 첫 비교값으로 쓰지 않는다(전에는 없는 넘김을 셌다)."""
+    d = tmp("tt-tcdate-wrap-")
+    stamps = ["09-20 23:59:30", "09-20 23:59:40", "09-20 23:59:50", "09-21 00:00:00", "09-21 00:00:10", "09-21 00:00:20",
+              "09-21 00:00:30", "09-21 00:00:40", "09-21 00:00:50", "09-21 00:01:00", "09-21 00:01:10", "09-21 00:01:20"]
+    lines = _markerless(d).read_text(encoding="utf-8").splitlines()
+    log = d / "midnight.log"
+    log.write_text("".join(f"{t}{line[14:]}\n" for t, line in zip(stamps, lines)), encoding="utf-8", newline="\n")
+    tc = d / "wrap.html"
+    tc.write_text(_tc_html_head("<tr><th>Start</th><td>2026/09/20</td></tr>", "23:59:50 00:00:20", "23:59:40"), encoding="utf-8")
+    done, _ = _offline("tc-wrap", "--steps-file", tc, "--clock-offset", "0", logs=(log,), occurred="2026-09-21T00:00:20+09:00")
+    sa = done["step_anchor"]
+    assert sa["source"] == "steps_file" and sa["span"][1] == "2026-09-20T15:00:20.000Z", (sa, done.get("warnings"))
+    end = d / "end.html"
+    end.write_text(_tc_html_head("<tr><th>Start</th><td>14:30:00</td></tr><tr><th>End Date</th><td>2026/09/20 16:05:00</td></tr>"),
+                   encoding="utf-8")
+    done, _ = _offline("tc-end", "--steps-file", end, "--clock-offset", "0", logs=(_markerless(d),))
+    sa = done["step_anchor"]
+    assert sa["source"] == "steps_file" and sa["span"][1] == "2026-09-20T05:33:30.000Z", (sa, done.get("warnings"))
+    assert not any("로그 범위 밖" in w for w in done.get("warnings") or [])

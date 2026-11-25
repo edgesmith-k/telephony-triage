@@ -1,0 +1,6 @@
+-- [합성] telephony-triage module-skills eval log (정상 가설 묶음 A2). 줄 모양은 레포 fixture(data-normal-setup.log·data-setup-auth-failure.log·data-profile-invalid-after-apn-change)의 AOSP 문구만, 벤더 줄 없음.
+11-20 11:00:00.100  2101  2101 D DNC-0   : Internet data state changed from CONNECTED to DISCONNECTED.
+11-20 11:00:00.101  2101  2101 D DN-106-C: DisconnectedState: All network requests detached.
+11-20 11:00:10.000  2101  2101 D DPM-0   : Data profiles changed.
+11-20 11:00:10.001  2101  2101 D DRM-0   : Remove all retry and throttling entries, reason=DATA_PROFILES_CHANGED
+11-20 11:00:10.002  2101  2101 D DNC-0   : Re-evaluating 0 existing data networks due to DATA_PROFILES_CHANGED

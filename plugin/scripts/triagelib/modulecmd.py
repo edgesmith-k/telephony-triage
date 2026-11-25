@@ -6,7 +6,8 @@
 - deep: 1위 후보 카테고리의 출처(`userconfig.deep_source`)가 `skill`이면 설치 스킬 `SKILL.md`를 찾아(`skillpath.resolve`)
   `skill-input.json`·타임라인을 쓰고 `{skill, read, base, input, timeline}`(못 찾으면 종료 1 `설치 스킬 못 찾음`).
   `module`이면 관리 clone에서 받아 `JOB/module-skill/deep/`·`deep-input.json`·`module-skill.json`을 쓴다.
-- explore: `--module`이 없으면 모듈 후보를 세어(IMPL §2.3 규칙 1~4) 하나면 고르고, 둘 이상이면 `pick: null`과 질문을 낸다.
+- explore: `--module`이 없으면 모듈 후보를 세어(IMPL §2.3 규칙 1~4) 하나면 고르고, 둘 이상이면 1위가 뚜렷할 때(`_lead`: 2위 줄 수의
+  2배 이상·힌트와 맞음, 까닭은 `pick.why`)만 고르고 아니면 `pick: null`과 질문을 낸다.
   `--at`은 받은 사본으로 타임라인 중심만 다시 잡는다(받기·lock 없음).
 
 stdout은 언제나 JSON 한 줄(≤ 4,096B), 실패면 `{"reason", "next", …}`와 stderr `<reason>: <detail>` 한 줄. 원격 URL은 내지 않는다.
@@ -265,18 +266,19 @@ def _limit(cfg: dict) -> int:
 
 
 def _around(job: Path, analysis: dict):
-    issue = analysis.get("issue") or {}
+    """타임라인 중심(앵커가 없을 때): `issue_meta.json`의 시각 — 사용자가 준 `time` 답(`write_meta`)이나 `--issue-meta` 값. analysis.json
+    `issue.occurred_at`(Jira 발생 시각 칸, 표시만)은 쓰지 않는다(D4)."""
     meta = {}
     try:
         if (job / "issue_meta.json").is_file():
             meta = json.loads((job / "issue_meta.json").read_text("utf-8"))
     except (OSError, ValueError):
         meta = {}
-    return issue.get("occurred_at") or (meta.get("occurred_at") if isinstance(meta, dict) else None)
+    return meta.get("occurred_at") if isinstance(meta, dict) else None
 
 
-def _generic_timeline(key: str, events: dict, around, limit: int) -> tuple[str, int, int]:
-    text, kept, total = report.timeline(key, events, around, limit, None, None)
+def _generic_timeline(key: str, events: dict, around, limit: int, flows: list[str] = ()) -> tuple[str, int, int]:
+    text, kept, total = report.timeline(key, events, around, limit, None, None, flows=flows)
     return (text if events.get("mask_off") else masking.redact(text, events.get("mask_allow") or [])[0]), kept, total
 
 
@@ -424,8 +426,8 @@ def _run(args, defaults: dict, seen: dict):
         inputs["events.json"] = _sha256(raw)
     except (OSError, ValueError):
         raise nojob("analysis.json·events.json을 읽지 못했다 — /telephony-triage:analyze를 다시") from None
-    candidates = [c for c in (analysis.get("candidates") or []) if isinstance(c, dict)]
-    explore = None
+    candidates = report.lead_first(analysis.get("decision"), [c for c in (analysis.get("candidates") or []) if isinstance(c, dict)])
+    explore = None      # 채택 원인이 1위가 아니면 그 원인이 맨 앞(심층 분석 대상·카테고리·top_candidates)
     if purpose == "deep":
         if not candidates:
             raise _fail(purpose, 1, "분석 후보 없음", "1위 후보가 없다", ctx)
@@ -450,7 +452,7 @@ def _run(args, defaults: dict, seen: dict):
             probs = userconfig.analyzer_problems(defaults, user, platform=p)
             if probs:
                 raise _fail(purpose, 2, "설정 오류", probs[0], ctx)
-            return _deep_skill(job, key, cfg, analysis, events, candidates, src, inputs, env)
+            return _deep_skill(job, key, cfg, defaults, analysis, events, candidates, src, inputs, env)
         probs = userconfig.module_skills_problems(defaults, user) + userconfig.analyzer_problems(defaults, user, platform=p)
         if probs:
             raise _fail(purpose, 2, "설정 오류", probs[0], ctx)
@@ -479,12 +481,16 @@ def _run(args, defaults: dict, seen: dict):
         raise _fail(purpose, 2, "git 버전", f"git {'.'.join(map(str, ver)) if ver else '없음'} — 2.25 이상 필요", ctx)
     if not _paths_ok(job, purpose):
         raise _fail(purpose, 2, "작업 디렉토리 이상", "모듈 기록 경로가 링크이거나 디렉토리가 아니다", ctx)
+    # 심층 타임라인 머리 요약은 사본 전체를 읽는다 — clone lock(30초 대기) 밖에서 먼저 만든다
+    found, written = (_deep_summary(job, key, cfg, defaults, analysis, events, _around(job, analysis)) if purpose == "deep"
+                      else (None, False))
     try:
         userconfig.ensure_private_dir(work)
         with moduleskills.clone_lock(work) as lk:
             state = moduleskills.prepare(work, ms["remote"], ms["base_branch"], lock=lk, platform=p)
             if purpose == "deep":
-                return _deep_module(args, job, key, p, cfg, analysis, events, candidates, state, inputs, env, ctx)
+                return _deep_module(args, job, key, p, cfg, (found, written), analysis, events, candidates, state, inputs,
+                                    env, ctx)
             return _explore_module(args, job, key, p, cfg, analysis, events, explore, state, inputs, env, ctx)
     except moduleskills.ModuleError as exc:
         _drop_explore(job, purpose)
@@ -523,8 +529,9 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
     allow = events.get("mask_allow") or []
     rows = report.merge_rows(events)
     items, total = report.select_rows(rows, spec.get("around"), limit)
+    flows = report.head_notes(job, events, spec.get("around"))
     text = report.render_timeline(key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
-                                  spec.get("anchor"), spec.get("look_at"))
+                                  spec.get("anchor"), spec.get("look_at"), flows, spec.get("anomaly"), spec.get("summary"))
     text = text if events.get("mask_off") else masking.redact(text, allow)[0]
     if text.encode("utf-8") != tl:
         raise nojob(f"{TIMELINE_FILE}가 events.json과 맞지 않는다 — triage.py explore를 다시")
@@ -534,22 +541,67 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
             if anchor.get("fail") and r.get("ts") == anchor.get("fail")][:5]
     return {"spec": spec, "items": items, "kept": len(items), "total": total, "center": center,
             "center_source": ("기준 줄" if anchor.get("source") == "look_at" else "실패 스텝") if anchor.get("fail") else "발생 시각",
-            "pins": pins, "allow": allow,
+            "pins": pins, "allow": allow, "flows": flows,
             "mask_off": bool(events.get("mask_off"))}
 
 
 # -- deep ------------------------------------------------------------------------------------------
 
 
-def _top3(candidates: list[dict]) -> list[dict]:
-    return [{k: c.get(k) for k in ("type", "cause", "score", "confidence")} for c in candidates[:3]]
+TOP_EVIDENCE, TOP_CLIP = 5, 200
+
+
+def _top3(candidates: list[dict], events: dict | None = None) -> list[dict]:
+    """후보 ≤3개의 ID·점수와 근거 줄(analysis.json 후보 `evidence`, ≤5줄, `시각 태그: 메시지`, 200자, `masking.redact`) — 5-1이
+    후보마다 맞는지 대조한다(`analyzer.md` `후보 확인`). 표시 전용."""
+    out = []
+    mask = not (events or {}).get("mask_off")
+    allow = (events or {}).get("mask_allow") or []
+    for c in candidates[:3]:
+        lines = [f"{report._clock(e.get('ts'))} {e.get('tag') or '-'}: {' '.join(str(e.get('msg') or '').split())}"
+                 for e in (c.get("evidence") or [])[:TOP_EVIDENCE] if isinstance(e, dict)]
+        if lines and mask:
+            lines = masking.redact("\n".join(lines), allow)[0].split("\n")
+        out.append({**{k: c.get(k) for k in ("type", "cause", "score", "confidence")}, "category": c.get("category"),
+                    "evidence": [report._clip(x, TOP_CLIP) for x in lines]})
+    return out
+
+
+def _deep_summary(job: Path, key: str, cfg: dict, defaults: dict, analysis: dict, events: dict,
+                  around) -> tuple[dict | None, bool]:
+    """5-1 타임라인 머리의 전체 로그 모양 요약(기준 시각은 탐색과 같다 — explore-input.json이 없으면 발생 시각)과 `JOB/summary.md`를
+    썼는지. explore-input.json에 같은 상한의 `summary`가 있으면 사본을 다시 읽지 않고 그것을 쓴다. 만들지 못하면 (None, False)."""
+    from triagelib import summary
+    try:
+        spec = _load(job / EXPLORE_INPUT_FILE)[0] if (job / EXPLORE_INPUT_FILE).is_file() else None
+    except (OSError, ValueError):
+        spec = None
+    cap = summary.cap_of(cfg)
+    kept = spec.get("summary") if isinstance(spec, dict) else None
+    found = (kept if isinstance(kept, dict) and kept.get("cap") == cap and kept.get("groups")
+             else summary.safe(job, events, analysis, defaults, summary.ref_of(spec, around), cap,
+                               guess=summary.guess_of(spec, analysis), after_sec=summary.after_of(cfg)))
+    if not found:
+        return None, False
+    try:
+        summary.write(job, key, found, bool(events.get("mask_off")))
+    except OSError:
+        print("경고: JOB/summary.md를 쓰지 못했다(타임라인 머리의 요약은 그대로)", file=sys.stderr)
+        return found, False
+    return found, True
+
+
+def _decision(analysis: dict) -> dict:
+    """`{decision: {state, reason}}`(판단이 있으면) — held면 top_candidates 1위는 채택 원인이 아니라 관측된 규칙 일치다."""
+    dec = analysis.get("decision") or {}
+    return {"decision": {"state": dec.get("state"), "reason": dec.get("reason")}} if dec else {}
 
 
 def _log_paths(events: dict) -> list[str]:
     return [f for f in (events.get("input") or {}).get("files") or [] if isinstance(f, str)]
 
 
-def _deep_skill(job, key, cfg, analysis, events, candidates, src, inputs, env):
+def _deep_skill(job, key, cfg, defaults, analysis, events, candidates, src, inputs, env):
     """B2 §5.4 S: 설치 스킬 SKILL.md(받기·lock·git 없음). 못 찾아도 입력 파일·타임라인·기록은 쓴다."""
     purpose, cand0 = "deep", candidates[0]
     ctx = {"job": job}
@@ -561,12 +613,16 @@ def _deep_skill(job, key, cfg, analysis, events, candidates, src, inputs, env):
         r = {"path": None, "base": None, "why": "skillpath 없음"}
     name = src.get("skill")
     around = _around(job, analysis)
-    text, kept, total = _generic_timeline(key, events, around, _limit(cfg))
-    data = text.encode("utf-8")
+    text, kept, total = _generic_timeline(key, events, around, _limit(cfg),
+                                          report.head_notes(job, events, around))
+    found, written = _deep_summary(job, key, cfg, defaults, analysis, events, around)
+    data = report.with_summary(text, found).encode("utf-8")
     tl_rel = f"{FOLDER}/deep/{TIMELINE_FILE}"
     timeline = {"path": tl_rel, "sha256": _sha256(data), "lines": kept, "total": total}
-    skill_input = {"events_json": str(job / "events.json"), "log_paths": _log_paths(events), "top_candidates": _top3(candidates),
-                   "issue_summary": (analysis.get("issue") or {}).get("summary"), "timeline": str(job / tl_rel)}
+    skill_input = {"events_json": str(job / "events.json"), "log_paths": _log_paths(events),
+                   "top_candidates": _top3(candidates, events), **_decision(analysis),
+                   "issue_summary": (analysis.get("issue") or {}).get("summary"), "timeline": str(job / tl_rel),
+                   **({"summary": str(job / "summary.md")} if written else {})}
     record = {"skill": name, "path": r.get("path"), "at": _now(), "timeline": timeline,
               "inputs": inputs, "env": env}
     if r.get("path"):
@@ -589,16 +645,31 @@ def _deep_skill(job, key, cfg, analysis, events, candidates, src, inputs, env):
                 "input": str(job / SKILL_INPUT), "timeline": tl_out}, "", None
 
 
-def _deep_module(args, job, key, p, cfg, analysis, events, candidates, state, inputs, env, ctx):
+def _deep_module(args, job, key, p, cfg, summarised, analysis, events, candidates, state, inputs, env, ctx):
+    """5-1 모듈 문서: 1위 카테고리 모듈(SKILL·analyzer·유형 reference) + 다른 후보 카테고리 모듈의 SKILL.md(`extra`, ≤2) + 모뎀 신호가
+    있으면 모뎀 SKILL.md(묻지 않는다 — `--also`는 신호 없이도 받는다). 타임라인 머리에 전체 로그 모양 요약."""
     purpose, cand0 = "deep", candidates[0]
-    fetched = moduleskills.materialise(state, purpose="deep", category=cand0.get("category"), type_id=cand0.get("type"),
-                                       also=args.also)
+    found, written = summarised         # `_deep_summary`(lock 밖에서 `_run`이 만든다)
+    mods = ((state.doc.get("platforms") or {}).get(p) or {}).get("modules") or {}
+
+    def by_cat(cat):
+        hits = [d for d, b in mods.items() if isinstance(b, dict) and b.get("db_category") == cat]
+        return hits[0] if len(hits) == 1 else None
+
+    main = by_cat(cand0.get("category"))
+    extra = []
+    for c in candidates[1:3]:
+        m = by_cat(c.get("category"))
+        if main and m and m != main and m not in extra:
+            extra.append(m)
     allow = events.get("mask_allow") or []
     limit = _limit(cfg)
     around = _around(job, analysis)
-    view = _has_filter(fetched.doc, p)
-    modem = _modem_dir(fetched.doc, p)
-    lib = importlib.import_module("common.modulefilter") if view or (modem and not args.also) else None
+    view = _has_filter(state.doc, p)
+    modem = _modem_dir(state.doc, p)
+    brief = report.flow_brief(job, events, around)       # 흐름 판정 요약(flow.json 있을 때만, 표시 전용)
+    flows = report.flow_head(brief) + report.ipc_head(events)
+    lib = importlib.import_module("common.modulefilter") if view or modem else None
     ev = None
     if lib is not None:
         try:
@@ -606,55 +677,62 @@ def _deep_module(args, job, key, p, cfg, analysis, events, candidates, state, in
         except (OSError, ValueError):
             match = {}
         ev = lib.deep_evidence(match if isinstance(match, dict) else {}, cand0) or list(cand0.get("evidence") or [])
+    also, also_why = bool(args.also), []
+    if lib is not None and not also and main and modem and modem != main and f"{p}/{modem}/SKILL.md" in state.tree:
+        sig = _filter(lib, {"op": "also", "events": str(job / "events.json"), "evidence": ev, "module": main,
+                            "modules": state.doc, "platform": p}, args)
+        if not sig.get("error") and int(sig.get("rows") or 0) >= 1:     # 모뎀 신호: 묻지 않고 받는다(11/25)
+            also = True
+            also_why = [_why_label(k, n) for k, n in (sig.get("why") or [])[:3]]
+    fetched = moduleskills.materialise(state, purpose="deep", category=cand0.get("category"), type_id=cand0.get("type"),
+                                       also=also, extra=extra)
     stats = None
     if view:
         res = _view_or_fail(purpose, _filter(lib, {
             "op": "view", "mode": "deep", "events": str(job / "events.json"), "key": key, "module": fetched.module,
             "center": None, "center_source": "근거", "evidence": ev, "pins": ev, "allow": allow,
             "mask_off": bool(events.get("mask_off")), "cap_rows": limit,
-            "cap_bytes": VIEW_CAPS["deep"][1], "with_modem": bool(args.also), "modules": fetched.doc, "platform": p}, args), ctx)
+            "cap_bytes": VIEW_CAPS["deep"][1], "with_modem": also, "modules": fetched.doc, "platform": p,
+            **({"flow_head": flows} if flows else {})}, args), ctx)
         text, stats = res["text"], res.get("stats") or {}
         kept, total, center = stats.get("kept", 0), stats.get("pool", 0), stats.get("center")
     else:
-        text, kept, total = _generic_timeline(key, events, around, limit)
+        text, kept, total = _generic_timeline(key, events, around, limit, flows)
         center = around
-    also, also_why, ask_also = [], [], None
-    if lib is not None and not args.also and modem and modem != fetched.module and f"{p}/{modem}/SKILL.md" in fetched.tree:
-        sig = _filter(lib, {"op": "also", "events": str(job / "events.json"), "evidence": ev, "module": fetched.module,
-                            "modules": fetched.doc, "platform": p}, args)
-        if not sig.get("error") and int(sig.get("rows") or 0) >= 1:
-            also = [f"{p}/{modem}"]
-            also_why = [_why_label(k, n) for k, n in (sig.get("why") or [])[:3]]
-            ask_also = {"question": f"모뎀 모듈 문서도 함께 볼까요? (모뎀 신호: {', '.join(also_why) or str(sig['rows']) + '줄'})",
-                        "options": ["아니오(기본)", "예"]}
-    data = text.encode("utf-8")
+    data = report.with_summary(text, found).encode("utf-8")
     files = dict(fetched.files)
     files["modules.yaml"] = fetched.modules_yaml
     files[TIMELINE_FILE] = data
     tl_rel = f"{FOLDER}/deep/{TIMELINE_FILE}"
     module = f"{p}/{fetched.module}"
+    extra_out = [f"{p}/{m}" for m in fetched.extra]
     deep_input = {"schema_version": 1, "key": analysis.get("key"), "platform": p, "module": module, "sha": fetched.sha,
-                  "type_id": cand0.get("type"), "top_candidates": _top3(candidates),
+                  "type_id": cand0.get("type"), "top_candidates": _top3(candidates, events), **_decision(analysis),
                   "issue_summary": (analysis.get("issue") or {}).get("summary"), "occurred_at": around,
-                  "events": "events.json", "timeline": tl_rel, "log_paths": _log_paths(events)}
+                  "events": "events.json", "timeline": tl_rel, "log_paths": _log_paths(events),
+                  **({"flows": brief} if brief else {}), **({"summary": "summary.md"} if written else {})}
     record = {"module": module, "sha": fetched.sha, "at": _now(),
               "files": [m for m in _files_meta(purpose, files) if not m["path"].endswith("/" + TIMELINE_FILE)],
               "timeline": {"path": tl_rel, "sha256": _sha256(data), "lines": kept, "total": total},
               "inputs": inputs, "center": center, "with": [f"{p}/{fetched.with_modem}"] if fetched.with_modem else [],
               "env": env, "warnings": fetched.warnings,
               "checks": {"passed": list(moduleskills.CHECKS_PASSED), "skipped": dict(moduleskills.CHECKS_SKIPPED)}}
+    if extra_out:
+        record["extra"] = extra_out
     _locked_write(state, job, purpose, files, record, deep_input=deep_input)
     read = [str(job / FOLDER / "deep" / rel) for rel, _ in fetched.files]
-    out = {"module": module, "sha": fetched.sha, "read": read, "also": also, "input": str(job / DEEP_INPUT),
+    out = {"module": module, "sha": fetched.sha, "read": read, "also": [], "input": str(job / DEEP_INPUT),
            "timeline": {"path": str(job / tl_rel), "lines": kept, "total": total, "view": bool(view)}}
     if fetched.with_modem:
         out["with"] = [f"{p}/{fetched.with_modem}"]
-    if also:
-        out.update(also_why=also_why, ask_also=ask_also)
-    line = C("DEEP_MODULE_FETCHED").format(module=module + ("+modem" if fetched.with_modem else ""), sha7=fetched.sha[:7])
+    if also_why:
+        out["also_why"] = also_why
+    if extra_out:
+        out["extra"] = extra_out
+    names = "".join(f"+{m}" for m in fetched.extra) + ("+modem" if fetched.with_modem else "")
+    line = C("DEEP_MODULE_FETCHED").format(module=module + names, sha7=fetched.sha[:7])
     lines = [line] + ([_sub_line(stats)] if stats is not None else [])
     return _success(job, purpose, out, lines, fetched.warnings)
-
 
 def _locked_write(state, job, purpose, files, record, **kw) -> None:
     state.lock.check()
@@ -674,12 +752,12 @@ def _success(job, purpose, out, lines, warnings):
 
 def _hints(job: Path, cfg: dict, analysis: dict, by_cat: dict[str, str]) -> tuple[list[tuple[str, str]], list[str]]:
     """IMPL §2.3 규칙 4 → [(dir, label)], hints_unmapped(≤3)."""
-    cands = [c for c in analysis.get("candidates") or [] if isinstance(c, dict)]
+    cands = report.lead_first(analysis.get("decision"), [c for c in analysis.get("candidates") or [] if isinstance(c, dict)])
     found: list[tuple[str, str]] = []
     reason = (analysis.get("explore") or {}).get("reason")
     if reason in ("cause_unconfirmed", "fit_check") and cands and cands[0].get("type"):
-        found.append((str(cands[0]["type"]), f"1위 유형 {cands[0]['type']}"
-                      + ("(원인 미확인)" if reason == "cause_unconfirmed" else "(적합성 확인)")))
+        found.append((str(cands[0]["type"]), (f"1위 유형 {cands[0]['type']}(원인 미확인)" if reason == "cause_unconfirmed"
+                                              else f"채택 후보 유형 {cands[0]['type']}(적합성 확인)")))
     try:
         match = json.loads((job / "match.json").read_text("utf-8")) if (job / "match.json").is_file() else {}
     except (OSError, ValueError):
@@ -756,6 +834,17 @@ def rank(counts: dict, hints: list[tuple[str, str]], order: list[str], tree, pla
     return out, missing
 
 
+def _lead(cands: list[dict]) -> str | None:
+    """R-20: 1위 줄 수가 2위의 2배 이상이고 힌트와 어긋나지 않으면(힌트 받은 후보가 있으면 1위가 그중 하나) 묻지 않고 고른다 —
+    고른 까닭 한 줄(`pick.why`). 아니면 None(지금처럼 묻는다)."""
+    # ponytail: 줄 수 비율 하나로 자른다 — 뚜렷한데 묻거나 애매한데 고르는 일이 잦으면 신호 종류별 가중을 둔다
+    a, b = cands[0], cands[1]
+    if a["lines"] == 0 or a["lines"] < 2 * b["lines"] or (not a["hint"] and any(c["hint"] for c in cands)):
+        return None
+    name = lambda c: c["module"].split("/", 1)[1]      # noqa: E731
+    return f"{name(a)} {a['lines']}줄 — 2위 {name(b)} {b['lines']}줄의 2배 이상" + (", 요약과 맞음" if a["hint"] else "")
+
+
 def ask_text(cands: list[dict]) -> dict:
     counts = " · ".join(f"{c['module'].split('/', 1)[1]} {c['lines']}" for c in cands)
     return {"question": f"어느 모듈 문서로 볼까요? (모듈 신호 줄 수: {counts})",
@@ -768,6 +857,7 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
     doc = state.doc
     mods = ((doc.get("platforms") or {}).get(p) or {}).get("modules") or {}
     cands_out: list[dict] = []
+    why = None
     if args.module:
         d, by = args.module.split("/", 1)[1], "user"
     else:
@@ -794,7 +884,7 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
             d, by = args.choose, "choose"
         elif not cands_out:
             raise _fail(purpose, 1, "모듈 후보 없음", "모듈 신호 줄도 요약 힌트도 없다", ctx)
-        elif len(cands_out) == 1:
+        elif len(cands_out) == 1 or (why := _lead(cands_out)):
             d, by = cands_out[0]["module"].split("/", 1)[1], "auto"
         else:
             return OK, {"pick": None, "sha": state.sha, "candidates": cands_out, "missing": missing[:5],
@@ -806,19 +896,27 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
     if w and (w == d or w not in mods or not _has_filter(doc, p)):     # 같은 사용 오류: 기록·report 줄 그대로
         raise _fail(purpose, 2, "사용 오류", f"--with {w}: 주 모듈과 다르고 modules.yaml에 있으며 filter가 있어야 한다",
                     module=f"{p}/{d}", sha=state.sha)
-    fetched = moduleskills.materialise(state, purpose="explore", module=d, deep=args.deep)
-    view = _has_filter(fetched.doc, p)
-    stats = None
+    view = _has_filter(doc, p)
+    stats, res, auto = None, None, []
+    if view:
+        lib = importlib.import_module("common.modulefilter")
+        res = _view_or_fail(purpose, _filter(lib, _explore_view_payload(job, key, p, d, explore, doc,
+                                                                        deep=args.deep, with_=w), args), ctx)
+        stats = res.get("stats") or {}
+        if stats.get("weak") and not w:     # 약한 신호: 묻지 않고 신호 있는 다른 모듈 ≤2개의 explore.md와 1위의 줄(--with)을 더한다
+            auto = _hot(d, stats, state.tree, p)[:2]
+            if auto:
+                w = auto[0]
+                res = _view_or_fail(purpose, _filter(lib, _explore_view_payload(job, key, p, d, explore, doc,
+                                                                                deep=args.deep, with_=w), args), ctx)
+                stats = res.get("stats") or {}
+    fetched = moduleskills.materialise(state, purpose="explore", module=d, deep=args.deep, extra=auto)
     files = {rel: blob for rel, blob in fetched.files}
     files["modules.yaml"] = fetched.modules_yaml
     read = [str(job / FOLDER / "explore" / rel) for rel, _ in fetched.files]
     tl_record = None
     if view:
-        lib = importlib.import_module("common.modulefilter")
-        res = _view_or_fail(purpose, _filter(lib, _explore_view_payload(job, key, p, d, explore, fetched.doc,
-                                                                        deep=args.deep, with_=w), args), ctx)
-        data = res["text"].encode("utf-8")
-        stats = res.get("stats") or {}
+        data = _explore_text(res["text"], explore["spec"]).encode("utf-8")   # 요약·이상 줄 절(JOB/timeline.md와 같은 줄)
         files[TIMELINE_FILE] = data
         tl_path = job / FOLDER / "explore" / TIMELINE_FILE
         kept, total = stats.get("kept", 0), stats.get("pool", 0)
@@ -838,17 +936,24 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
         record["deep"] = True
     if w:
         record["with"] = [f"{p}/{w}"]
+    if fetched.extra:
+        record["extra"] = [f"{p}/{x}" for x in fetched.extra]
     _locked_write(state, job, purpose, files, record)
-    out = {"module": module, "sha": fetched.sha, "read": read, "also": [], "pick": {"by": by}}
+    out = {"module": module, "sha": fetched.sha, "read": read, "also": [], "pick": {"by": by, **({"why": why} if why else {})}}
     if w:
         out["with"] = record["with"]
+    if fetched.extra:
+        out["extra"] = record["extra"]
     if cands_out:
         out["candidates"] = cands_out
     out["timeline"] = {"path": str(tl_path), "lines": kept, "total": total, "view": bool(view)}
-    if stats and stats.get("weak"):
-        out["ask_switch"] = _ask_switch(d, stats, cands_out, tree=state.tree, platform=p, deep=args.deep, joined=bool(w))
     return _success(job, purpose, out, _explore_lines(module + (f"+{w}" if w else ""), fetched.sha, kept, total, stats),
                     fetched.warnings)
+
+
+def _explore_text(text: str, spec: dict) -> str:
+    """탐색 모듈 보기 글: 머리에 전체 모양 요약, 끝에 이상 줄 절(`explore-input.json`의 `summary`·`anomaly`, JOB/timeline.md와 같은 줄)."""
+    return report.with_summary(report.with_anomaly(text, spec.get("anomaly")), spec.get("summary"))
 
 
 def _explore_view_payload(job, key, p, d, explore, doc, center=None, source=None, deep=False, with_=None) -> dict:
@@ -856,7 +961,8 @@ def _explore_view_payload(job, key, p, d, explore, doc, center=None, source=None
     return {"op": "view", "mode": "explore", "events": str(job / "events.json"), "key": key, "module": d,
             "center": center or explore["center"], "center_source": source or explore["center_source"], "evidence": [],
             "pins": explore["pins"], "allow": explore["allow"], "mask_off": bool(explore.get("mask_off")), "cap_rows": cap_rows,
-            "cap_bytes": cap_bytes, "with_modem": False, "modules": doc, "platform": p, **({"with_module": with_} if with_ else {})}
+            "cap_bytes": cap_bytes, "with_modem": False, "modules": doc, "platform": p, **({"with_module": with_} if with_ else {}),
+            **({"flow_head": explore["flows"]} if explore.get("flows") else {})}
 
 
 def _explore_lines(module, sha, kept, total, stats) -> list[str]:
@@ -864,18 +970,11 @@ def _explore_lines(module, sha, kept, total, stats) -> list[str]:
     return [line] + ([_sub_line(stats)] if stats is not None else [])
 
 
-def _ask_switch(d: str, stats: dict, cands: list[dict], tree=None, platform: str | None = None, deep=False,
-                joined=False) -> dict:
-    """약한 신호일 때 바꿀 모듈 질문. `tree`(받은 레포 트리)를 주면 `<p>/<m>/explore.md`(`deep`이면 `deep.md`도)가 있는 모듈만 권한다(H C1+D R40).
-    `--with`로 받은 실행(`joined`)이 아니면 1위 모듈과 같이 보기(`--with`)도 하나 낸다."""
-    need = ("explore.md", "deep.md") if deep else ("explore.md",)
-    hot = sorted(((k, v) for k, v in (stats.get("hot_modules") or {}).items() if k != d and NAME_OK.fullmatch(str(k))
-                  and (tree is None or all(f"{platform}/{k}/{n}" in tree for n in need))),
-                 key=lambda kv: (-kv[1], kv[0]))
-    shown = " · ".join(f"{k} {v}" for k, v in hot[:3])
-    others = [f"{k} — {v}줄" for k, v in hot[:2]]
-    return {"question": f"고른 모듈 문서의 신호가 약합니다. 다른 모듈 문서로 바꿀까요? (모듈 신호 줄 수: {shown})",
-            "options": [f"그대로 {d}"] + others + ([f"{d} + {hot[0][0]} 같이 보기"] if hot and not joined else [])}
+def _hot(d: str, stats: dict, tree, platform: str) -> list[str]:
+    """약한 신호일 때 더 볼 다른 모듈: 보기 `hot_modules`(±15초 경고·오류 줄 수) 중 `<p>/<m>/explore.md`가 있는 것, 줄 수 내림·이름순."""
+    return [k for k, _v in sorted(((k, v) for k, v in (stats.get("hot_modules") or {}).items()
+                                   if k != d and NAME_OK.fullmatch(str(k)) and f"{platform}/{k}/explore.md" in tree),
+                                  key=lambda kv: (-kv[1], kv[0]))]
 
 
 def _explore_at(args, job, key, p, events, explore, inputs, env, ctx):
@@ -922,7 +1021,7 @@ def _explore_at(args, job, key, p, events, explore, inputs, env, ctx):
     lib = importlib.import_module("common.modulefilter")
     res = _view_or_fail(purpose, _filter(lib, _explore_view_payload(job, key, p, d, explore, doc, args.at, "--at",
                                                                     deep=bool(rec.get("deep")), with_=w), args), ctx)
-    data, stats = res["text"].encode("utf-8"), res.get("stats") or {}
+    data, stats = _explore_text(res["text"], explore["spec"]).encode("utf-8"), res.get("stats") or {}
     files = {}
     for path in folder.rglob("*"):
         if path.is_file() and not path.is_symlink() and path.name != TIMELINE_FILE:
@@ -942,7 +1041,5 @@ def _explore_at(args, job, key, p, events, explore, inputs, env, ctx):
            "timeline": {"path": str(folder / TIMELINE_FILE), "lines": kept, "total": total, "view": True}, "at": args.at}
     if w:
         out["with"] = rec["with"]
-    if stats.get("weak"):
-        out["ask_switch"] = _ask_switch(d, stats, [], joined=bool(w))
     return _success(job, purpose, out, _explore_lines(args.module + (f"+{w}" if w else ""), rec.get("sha") or "", kept,
                                                       total, stats), [])

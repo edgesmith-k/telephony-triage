@@ -1,0 +1,50 @@
+{
+ "around": "2026-11-20T13:00:05.000Z",
+ "failed_step": null,
+ "limit": 200,
+ "anchor": null,
+ "partial": [
+  {
+   "signature": "DATA-001/no-setup-data-call-request",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ]
+  }
+ ],
+ "around_alt": [],
+ "summary": {
+  "ref": "2026-11-20T13:00:05.000Z",
+  "range": [
+   "2026-11-20T13:00:00.100Z",
+   "2026-11-20T13:00:35.000Z"
+  ],
+  "lines": 3,
+  "shapes": 2,
+  "window": [
+   "2026-11-20T12:55:05.000Z",
+   "2026-11-20T13:10:05.000Z"
+  ],
+  "cap": 60,
+  "after_sec": 600,
+  "groups": [
+   {
+    "ts": "2026-11-20T13:00:05.000Z",
+    "last": "2026-11-20T13:00:35.000Z",
+    "n": 2,
+    "phone": 0,
+    "level": "D",
+    "tag": "DSRM-0",
+    "msg": "getRecoveryAction: RECOVERY_ACTION_GET_DATA_CALL_LIST"
+   },
+   {
+    "ts": "2026-11-20T13:00:00.100Z",
+    "last": "2026-11-20T13:00:00.100Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Internet data state changed from DISCONNECTED to CONNECTED."
+   }
+  ]
+ }
+}

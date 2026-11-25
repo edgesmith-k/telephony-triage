@@ -1,0 +1,13 @@
+{
+ "schema_version": 1,
+ "key": "D12R-1",
+ "origin": "정답 입력",
+ "symptom": {
+  "text": "데이터 끊김",
+  "types": [
+   "DATA-002"
+  ],
+  "not_in_db": false
+ },
+ "clues": []
+}

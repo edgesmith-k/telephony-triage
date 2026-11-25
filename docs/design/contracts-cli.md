@@ -47,7 +47,7 @@
 | `parse` | `<logcat>... (--around <ISO 시각> \| --between <ISO 시작> <ISO 끝> \| --full) [--minutes <MINUTES>] --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--mask] [--no-external]` | `--around`: 발생 시각 (타임존 있는 ISO); `--between`: 명시 구간 (타임존 있는 ISO 둘, 시작 ≤ 끝); `--full`: 파일 전체; `--minutes`: 기본 5; `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--mask`: extractor 전에 줄 단위 마스킹; `--no-external`: 외부 파서 끔 (분석 디버그용) |
 | `markers` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--step-events]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--step-events`: 이슈 DB step_events 규칙의 로그 흔적(step_events[{rule, ts, seq, label}])을 더한다 |
 | `flows` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>]` | `--rules`: <db>/parser-rules (흐름은 <db>/<category>/flows/); `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도 |
-| `ipc` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--find <look-at.json>]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--find`: 기준 줄 찾기: triage.py가 쓴 {look_at, ref} 파일(원문 글은 인자로 받지 않는다). records 대신 find를 낸다 |
+| `ipc` | `<logcat>... --rules <db/parser-rules> [--tz <IANA>] [--year <YYYY>] [--find <look-at.json>]` | `--rules`: <db>/parser-rules; `--tz`: 연도 없는 logcat 시각의 타임존 (IANA); `--year`: 첫 줄의 연도; `--find`: 기준 줄 찾기: triage.py가 쓴 {look_at, ref} 파일(원문 글은 인자로 받지 않는다). records 대신 find를 낸다 ({finds: […]} 파일이면 finds[]) |
 | `extract-bugreport` | `<zip\|txt> --out <dir>` |  |
 | `cut` | `<logcat>... (--evidence <match.json> \| --around <ISO 시각>) [--cause <원인 ID>] [--seconds <SECONDS>] --out <file> [--rules <RULES>] [--context <CONTEXT>] [--max-lines <MAX_LINES>] [--tz <IANA>] [--year <YYYY>]` | `--evidence`: match_signatures.py 출력 (--cause 원인 후보의 근거); `--around`: 지정 시각 (타임존 있는 ISO); `--cause`: --evidence에서 근거를 쓸 원인 (--evidence에 필수); `--seconds`: --around 앞뒤 초, 기본 30; `--rules`: <db>/parser-rules (mask.allow_patterns·마스킹 끔을 읽는다); `--context`: 기본 20; `--max-lines`: 기본 100 |
 | `mask-copy` | `<logcat>... --out <dir> [--rules <RULES>] [--max-bytes <MAX_BYTES>]` | `--out`: 사본 디렉토리(<작업 디렉토리>/logs-masked); `--rules`: <db>/parser-rules (mask.allow_patterns·마스킹 끔을 읽는다); `--max-bytes`: 이보다 큰 파일은 사본을 만들지 않는다(경고 mask-copy-skipped, 기본 67108864), 기본 67108864 |
@@ -71,7 +71,7 @@
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `[--db <DB>] --events <json> [--issue-meta <json>] [--regress] [--no-feedback-weight] [--top <TOP>] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--top`: 후보 수. types·causes는 충족된 것만, pending은 N개 (0이면 전부), 기본 3; `--json`: JSON 출력 (항상 JSON) |
+| — | `[--db <DB>] --events <json> [--issue-meta <json>] [--regress] [--no-feedback-weight] [--reference <json>] [--top <TOP>] [--json] [--plugin-root <PLUGIN_ROOT>]` | `--reference`: 자격 검사 기준(triage.py가 쓴 JOB/reference.json — 기준 하나 또는 {refs, problem, comment_adopt}). 없으면 eligibility는 no_reference; `--top`: 후보 수. types·causes는 충족된 것만, pending은 N개 (0이면 전부), 기본 3; `--json`: JSON 출력 (항상 JSON) |
 
 ## `db_search.py`
 
@@ -182,11 +182,13 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| `run` | `<KEY> [--logs <logcat\|bugreport>... \| --more-logs <logcat\|bugreport>...] [--issue-raw <json> \| --issue-file <yaml> \| --issue-meta <json>] [--code <프로필\|경로\|skip>] [--dry-run] [--analysis-only] [--answer <kind=값>]... [--tz <TZ>] [--year <YEAR>] [--minutes <MINUTES>] [--refresh] [--offline-db <db>] [--out <dir>] [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>] [--look-at <기준 줄>] [--look-note <확인할 내용>] [--explore]` | `--more-logs`: 이전 분석의 로그 뒤에 로그를 더해 다시 분석(RF-7). --logs와 함께 못 쓴다; `--analysis-only`: 이슈 DB에 기록하지 않는 분석 전용(cleanup·기존 계획·열린 PR 건너뜀, ok면 lock 해제). --dry-run과 함께 못 쓴다; `--refresh`: 같은 세션에서도 스냅샷을 다시 만들고, 같은 입력의 분석 재사용(analysis-cache.json)도 끈다; `--failed-step`: 실패 스텝 한 줄(선택, 보조 정보). 마스킹해서만 쓴다; `--steps-file`: 시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행; `--clock-offset`: 시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값). 예: +3m, -90s, +00:03:00, 180. 없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다; `--look-at`: 기준 줄(선택, ≤300자): 로그 줄 또는 `<IPC 이름> (token=0x…)`. 로그에서 찾으면 그 줄 시각 둘레로 분석 구간을 잡는다. 마스킹해서만 쓴다; `--look-note`: 확인할 내용(선택, ≤300자): 리포트·탐색 타임라인 머리에 싣는 사용자 질문. 마스킹해서만 쓴다. 있으면 1위 C=1이어도 적합성 확인(fit_check)을 연다(explore.when: never·--no-explore 제외); `--explore`: 스킬 --(no-)explore 그대로. --explore면 1위 C=1이어도 적합성 확인(explore.reason fit_check)을 연다(explore.when: never면 열지 않는다). --no-explore면 explore.when: always여도 열지 않는다 |
+| `run` | `<KEY> [--logs <logcat\|bugreport>... \| --more-logs <logcat\|bugreport>...] [--issue-raw <json> \| --issue-file <yaml> \| --issue-meta <json>] [--code <프로필\|경로\|skip>] [--dry-run] [--analysis-only] [--answer <kind=값>]... [--tz <TZ>] [--year <YEAR>] [--minutes <MINUTES>] [--refresh] [--offline-db <db>] [--out <dir>] [--failed-step <한 줄>] [--steps-file <파일>] [--clock-offset <±시간>] [--look-at <기준 줄>] [--look-at-source {user,model}] [--look-note <확인할 내용>] [--explore]` | `--more-logs`: 이전 분석의 로그 뒤에 로그를 더해 다시 분석(RF-7). --logs와 함께 못 쓴다; `--analysis-only`: 이슈 DB에 기록하지 않는 분석 전용(cleanup·기존 계획·열린 PR 건너뜀, ok면 lock 해제). --dry-run과 함께 못 쓴다; `--refresh`: 같은 세션에서도 스냅샷을 다시 만들고, 같은 입력의 분석 재사용(analysis-cache.json)도 끈다; `--failed-step`: 실패 스텝 한 줄(선택, 보조 정보). 마스킹해서만 쓴다; `--steps-file`: 시험 절차 첨부 파일(txt/csv/html/zip, 선택). 읽지 못하면 경고만 내고 진행; `--clock-offset`: 시험 장비 시각 → 단말 logcat 시각 시계 차(단말 = 장비 + 값). 예: +3m, -90s, +00:03:00, 180. 없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다; `--look-at`: 기준 줄(선택, ≤300자): 로그 줄 또는 `<IPC 이름> (token=0x…)`. 로그에서 찾으면 그 줄 시각 둘레로 분석 구간을 잡는다. 마스킹해서만 쓴다; `--look-at-source`: 기준 줄을 누가 골랐나(기본 user = 담당자). model = 모델이 Jira 코멘트에서 고른 줄 — 리포트·analysis.json에 '모델이 코멘트에서 고른 지점'(decision.location.source model)으로 적고 실패 지점을 확정(confirmed)으로 올리지 않는다, 기본 user; `--look-note`: 확인할 내용(선택, ≤300자): 리포트·탐색 타임라인 머리에 싣는 사용자 질문. 마스킹해서만 쓴다. 있으면 1위 C=1이어도 적합성 확인(fit_check)을 연다(explore.when: never·--no-explore 제외); `--explore`: 스킬 --(no-)explore 그대로. --explore면 1위 C=1이어도 적합성 확인(explore.reason fit_check)을 연다(explore.when: never면 열지 않는다). --no-explore면 explore.when: always여도 열지 않는다 |
 | `explore` | `<KEY> [--out <dir>]` | `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
 | `problem` | `<KEY> [--issue-raw <json> \| --issue-file <yaml>] [--failed-step <한 줄>] [--steps-file <파일>] [--offline-db <db>] [--out <dir>]` | `--issue-raw`: Jira 응답 원문(없으면 JOB/issue_raw.json). 지우지 않는다; `--failed-step`: 실패 스텝 한 줄(선택). 마스킹해서만 쓴다; `--steps-file`: 시험 절차 첨부 파일(TC, 선택); `--offline-db`: 이슈 DB(없으면 스냅샷 또는 config issue_db.path); `--out`: JOB 디렉토리(없으면 <work_dir>/<KEY>) |
 | `module` | `<KEY> --for {deep,explore} [--module <p/dir>] [--choose <top\|dir>] [--also] [--with <dir>] [--at <ISO>] [--deep] [--out <dir>]` | `--for`: deep = 5-1 심층 분석 문서, explore = 5-2 탐색 문서; `--module`: explore: 이 모듈로(후보 계산 없이). deep에는 못 쓴다; `--choose`: explore: 질문 없이 고른다(top = 1위 후보, dir = 모듈 디렉토리 이름); `--also`: deep: 모뎀 모듈 문서도 같은 SHA로 함께 받는다; `--with`: explore --module\|--choose: 이 모듈의 줄도 타임라인 끝 '보조 모듈 줄' 절에 붙인다(문서는 주 모듈만); `--at`: explore --module: 받은 사본으로 타임라인 중심만 다시 잡는다(받기 없음); `--deep`: explore: 정밀 탐색(사용자가 요청할 때만) — 모듈 deep.md도 받고 (모듈 필터가 있을 때) 보기 상한을 넓힌다(~96KB); `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
 | `check-output` | `<KEY> --for {deep,explore,problem} [--skipped <사유>] [--out <dir>]` | `--skipped`: 실행하지 않았거나 실패: report 줄을 '생략: <사유>'로; `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
+| `window` | `<KEY> --at <시각> [--lines <N>] [--span <초>] [--tag <TAG>]... [--slot <N>] [--cat <카테고리>] [--grep <정규식>] [--out <dir>]` | `--at`: 중심 시각: 타임라인 줄 시각 HH:MM:SS[.mmm](UTC, 날짜는 분석 범위, 없으면 로그 전체에서) · Z·오프셋 있는 ISO(window 머리 시각) · 사본의 logcat 스탬프 MM-DD HH:MM:SS.mmm 그대로(run의 --tz). 오프셋 없는 ISO는 오류; `--lines`: 줄 수(기본 40, 상한 200); `--span`: --at ±초/2 안의 줄만(≤3600, --lines와 함께면 적은 쪽); `--tag`: 이 태그 줄만(여러 번 쓸 수 있다). 없으면 모든 태그; `--slot`: 이 슬롯(phone_id) 줄만 — 슬롯 모름 줄은 남긴다; `--cat`: tags.yaml에서 이 카테고리로 매핑된 태그 줄만; `--grep`: 가린 사본의 `태그: 메시지`에 맞는 줄만(≤200자, 시간 상한). --span이 없으면 로그 전체에서 찾는다; `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
+| `summary` | `<KEY> [--out <dir>]` | `--out`: `run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>) |
 | `release` | `<KEY>` |  |
 
 ## `issue_post.py`
@@ -203,7 +205,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `<KEY> [--skill-dir <SK>] --name <analyzer.skill> [--source <SRC>] [--apply] [--sha <sha256>] [--platform <이름>] [--plugin-root <PLUGIN_ROOT>] [--json]` | `key`: 작업 키; `--skill-dir`: 분석 스킬 디렉토리(5-1 Skill 결과의 `Base directory for this skill:`). patch를 만들 때 필수; `--name`: 분석 스킬 이름(`analyzers.<카테고리>.skill`); `--source`: patch를 만들 때만: 분석 스킬 소스 폴더(없으면 config analyzers.<카테고리>.source). --apply와 함께 못 쓴다; `--apply`: 만든 patch를 스킬 소스 워킹 트리에 git apply(사용자가 '적용'을 고른 뒤에만, 커밋·push 없음); `--sha`: --apply: 보인 patch의 sha256(`스킬 소스 적용 대기:` 줄); `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: JSON 출력(기본은 사용자에게 보일 줄) |
+| — | `<KEY> [--skill-dir <SK>] [--name <analyzer.skill>] [--source <SRC>] [--apply] [--sha <sha256>] [--module] [--line <N[,N]>] [--pr] [--platform <이름>] [--plugin-root <PLUGIN_ROOT>] [--json]` | `key`: 작업 키; `--skill-dir`: 분석 스킬 디렉토리(5-1 Skill 결과의 `Base directory for this skill:`). patch를 만들 때 필수; `--name`: 분석 스킬 이름(`analyzers.<카테고리>.skill`). --module·--pr 밖에서 필수; `--source`: patch를 만들 때만: 분석 스킬 소스 폴더(없으면 config analyzers.<카테고리>.source). --apply와 함께 못 쓴다; `--apply`: 만든 patch를 스킬 소스 워킹 트리에 git apply(사용자가 '적용'을 고른 뒤에만, 커밋·push 없음); `--sha`: --apply: 보인 patch의 sha256(`스킬 소스 적용 대기:` 줄). --pr: 보인 변경 해시; `--module`: 5-2 `[모듈]` 제안 줄(--line)을 모듈 스킬 레포 최신 base 임시 clone에 넣은 patch(PR 없음); `--line`: --module: explore-output.md `- [모듈]` 줄 번호(1부터, 쉼표로 여럿); `--pr`: --module로 만든 patch를 tt-module/<KEY>-<n> 브랜치로 push하고 PR(사용자가 고른 뒤에만, --sha 필수); `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: JSON 출력(기본은 사용자에게 보일 줄) |
 
 ## `job_status.py`
 
@@ -245,16 +247,16 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 - read_only_hint?(mode: read-only일 때만, config.py check 사유 메시지, ≤200바이트, 4KB 압축 시 100)
 - snapshot?
 - plan?(analysis-only면 {exists, source, pr_number}만. choice resume이면 next(Step 7 없이 기존 계획으로 Step 8))
-- issue?(failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보)
+- issue?(failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보. submitter_note(있을 때만 — 포털이 넘긴 제출자 참고 글 `제출자 참고(판단 근거·단서 아님): …`, ≤2000자+머리말, 4KB 압축 때 가장 먼저 머리말 포함 200자, 다른 후보 근거를 다 빼기 전에 80자, 마지막 단계에서 `issue.json text.note 참고`; 판단 근거·단서가 아니다. 이슈 DB 레코드 note와 다르다))
 - step_anchor?(앵커(기준 줄·실패 스텝)·실패 스텝·시계 정렬·스텝 순서 시도·기준 줄 입력·시각 답 full·시각 입력 없는 전체 분석이 있을 때만)
-  - outside_errors?(앵커가 있고 Jira 발생 시각이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음)
-  - source: look_at | log_marker | steps_file | step_order | issue | symptom_scan | none
+  - outside_errors?(앵커가 있고 입력한 발생 시각(`--answer time=`·`--issue-meta`, Jira 칸 값 아님)이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음)
+  - source(issue = 입력한 발생 시각(`--answer time=`·`--issue-meta` occurred_at) 기준, Jira 발생 시각 칸은 쓰지 않음(D4)): look_at | log_marker | steps_file | step_order | issue | symptom_scan | none
   - step?(≤80, 4KB 압축 시 40. look_at(기준 줄)이면 없음)
   - step_from?(마커의 스텝을 쓴 경우만): "marker"
   - span?([시작|null, 실패])
   - issue_gap_min?
   - focus?[≤3](유형 ID)
-  - time_candidates?[≤3](앵커(기준 줄을 줬으나 로그에서 못 찾은 경우 포함)·Jira 시각·time 답이 다 없어 묻지 않고 로그 전체를 봤을 때(source symptom_scan)만: 증상 시그니처가 충족된 시각 후보 {ts, type}(이른 순, 없으면 빈 목록))
+  - time_candidates?[≤3](앵커(기준 줄을 줬으나 로그에서 못 찾은 경우 포함)·입력한 발생 시각·time 답이 다 없어 묻지 않고 로그 전체를 봤을 때(source symptom_scan)만: 증상 시그니처가 충족된 시각 후보 {ts, type}(이른 순, 없으면 빈 목록))
     - ts
     - type
   - clock?({mode: manual|none, offset_sec?(manual), reason?(none, "시계 차 모름"; 4KB 압축 시 먼저 뺌)})
@@ -277,7 +279,43 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
     - files?
     - skipped?
   - uncollected_tags?[≤3]({tag(≤40), lines, warn}; 후보 없음·1위 C=0일 때만, 파서 규칙에 없는 태그 힌트)
-- candidates?[≤3]
+- decision(판단 상태(단계 5 자격 검사 — 실패 지점(기준)의 사건에 실제로 붙는 원인만 채택, 후보 목록·순서·점수는 그대로). 사유는 처음 맞는 것: 후보 없음(no_candidate) → 실패 지점 없음(no_reference) → 실패 지점에 DB 증상 사건 없음(symptom_not_found) → 여러 곳·사건마다 다른 원인(ambiguous) → 근처 줄·구간 끝 모름·안 나옴 미확인(ineligible) → 원인 판정 불가(cause_unjudged)·원인 미확인(cause_unconfirmed) → 채택(anchored_top: 기준 있음 + 자격 통과). fit_check는 check-output(탐색 적합성 확인 보류)만 쓴다. 4KB 압축 시 events만 줄인다(기준 사건은 원인마다 하나씩(≤3) 남기고 그 밖은 1개 → 0개, events_total은 남김))
+  - state: accepted | held
+  - reason: anchored_top | no_reference | no_candidate | cause_unconfirmed | cause_unjudged | fit_check | symptom_not_found | ambiguous | ineligible
+  - selected(accepted면 채택 원인 후보의 {category, type, cause}(selected ∈ candidates — 1위가 아니면 report.md 판단 줄에 "규칙 일치 n위", --top 밖이면 후보 끝에 붙는다), held면 null)
+    - category
+    - type
+    - cause
+  - location(실패 지점: 기준 줄 ipc·token 일치 1개·로그 FAIL 마커 1개면 confirmed, 기준 줄 글자 일치는 한 곳이어도 found, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). 앵커 없이 Jira 단서(문제 파악 problem.json 단서, 없으면 스크립트가 코멘트에서 뽑은 단서 — 스크립트 단서는 채택하지 않는 위치 후보)만 로그에서 찾았으면 source comment·state found(확정 아님, 단서 일치 여러 곳이면 multiple). 채택이면 자격 검사 결과로 다시 정한다: confirmed/point는 근거 줄 same_line(기준 줄이 붙은 사건의 증상·원인 근거 줄이거나 같은 RIL 요청)만, cp_point는 found/point, range·조건 줄로만 맞은 same_line은 found(kind 그대로), comment 출처는 늘 found. model = `run --look-at-source model`(모델이 코멘트에서 고른 기준 줄 — 기준 줄과 같이 판정하되 confirmed로 올리지 않는다, 채택이어도 found))
+    - state: none | found | confirmed | multiple
+    - source: look_at | log_marker | steps_file | step_order | comment | model | null
+    - kind(기준 줄 ipc·token 일치 point, 글자 일치 near(한 곳이어도 found), 마커·steps-file 구간 range): point | near | range | null
+  - check?(자격 검사 요약(표시 전용): why(세부 사유 — same_line|cp_point|near|range|near_without_symptom|range_end_unknown|range_without_symptom|no_event_at_reference|typeless_failure_within_link|typeless_failure_in_range|typeless_failure_near|other_failure_first|other_failure_last|same_line_typeless|no_event_in_range|no_allowed_event_near|not_in_db|comment_unconfirmed|locations|slots|sources|multiple_events|absence_unverified|cause_after_event|no_cause_before_event|cause_unjudged|cause_not_in_candidates, 기준 없으면 null), checked(기준에 붙어 검사한 사건 수), total(실패 사건 수 — 유형 없는 파생 오류 이벤트 포함), via?(명시 기준 없이 코멘트 단서로 사건을 잡았을 때만 그 단서: comment(코멘트 번호|description), clue(ipc|ipc_name|log_line), how(ipc|token|text), places, origin(script = 스크립트가 코멘트에서 뽑음, problem = 문제 파악 problem.json)))
+    - why
+    - checked
+    - total
+    - via?
+      - comment
+      - clue: ipc | ipc_name | log_line
+      - how
+      - places
+      - origin: script | problem
+  - events?[≤3](유형 사건(증상 시그니처 1회 충족, 기준에 붙은 것 먼저 그다음 시각 순) {type, at, line(f:L), phone, absence(증상 시그니처에 must_not_match), ref(기준에 붙음), result: adopted|held|observed, cause(붙은 원인 1순위|null), why(원인이 안 붙은 이유|null), gap_s(사건 시각 − 붙은 원인 근거 마지막 줄, 초), not_a_bug?(기준 사건이고 그 원인이 이슈 DB에서 버그 아님 — fix.status not-a-bug 또는 resolution_type user-setting일 때만 true)}. 전체는 JOB/eligibility.json. 명시 기준 없이 단서만 있을 때 단서 하나라도 보류·버림이면 기준 사건이 없다(ref 모두 false))
+    - type
+    - at
+    - line
+    - phone
+    - absence
+    - ref
+    - result: adopted | held | observed
+    - cause
+    - why
+    - gap_s
+    - not_a_bug?: true
+  - events_total?(유형 사건 수(events가 4KB 압축으로 줄어도 남는다))
+  - counter?(accepted이고 심층 분석 의견의 원인 ID가 채택 원인과 다를 때만(check-output --for deep))
+    - cause
+- candidates?[≤4](규칙 일치 상위 3 — 채택 원인이 그 밖이면 4번째로 붙는다(decision.selected ∈ candidates))
   - type
   - cause
   - matched_conditions?(원인+증상 시그니처가 맞춘 조건 수(특이도) — 동점 3차 정렬 키·표시용, 점수 불변)
@@ -329,6 +367,13 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - blocked_by?
   - at?[≤3]
   - code?[≤3]
+- near_causes?[≤3](조사 모드(investigate.mode)일 때만 DB 원인 후보(표시 전용, 판정·점수·순위 아님, 반입 7 B-1): 부분 일치(partial 순서, 맞은 조건 0개 제외) 다음 낱말 검색 결과(no_candidate.search_hits가 있으면 그것, 없으면 가린 이슈 요약 문장 한 번의 db_search), ID로 중복 제거, 낱말 검색 결과는 이미 candidates인 유형·원인과 그 유형의 원인 제외(조건이 맞은 부분 일치 원인은 남김), 유형과 그 원인이 같이 있으면 원인만. {id(원인 또는 유형 ID), title?(≤60자), matched?("m/n"), missing?[≤3 없는 조건 ≤40자], at?[≤3 맞은 시각], note?(검색만 걸림: 낱말 일치만(로그 대조 안 함))}; 4KB 압축 시 조사 결론 줄이기 다음 near_causes[1:] → 전체 제거)
+  - id
+  - title?
+  - matched?
+  - missing?[≤3]
+  - at?[≤3]
+  - note?: "낱말 일치만(로그 대조 안 함)"
 - flows?[≤3](성공 흐름 점검(판정·점수 아님, S/C 불변; 이슈 DB에 흐름 파일이 있을 때만, 04-parser-matching.md §5.13). 분석 범위 안 인스턴스 중 벗어난 것 먼저·발생 시각에 가까운 순 {flow: "<category>/<id>", key(시작 줄 태그), step?(멈춘 단계 id, 끝까지 ok면 없음), verdict: ok|값이상|없음|로그끝|-, at?(f:L), causes?[≤3 멈춘 단계가 값이상·없음일 때만, 그 단계에 flow_step이 걸린 active 원인 ID — 매칭 후보 순위 먼저]}; 4KB 압축 시 다른 후보 근거보다 먼저 flows[1:] → 전체 제거)
   - flow
   - key
@@ -345,12 +390,31 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - moved?
 - analyzer?({skill, when, note?} 설치 분석 스킬(레거시·prefer: skill) | {category, when, note?} 모듈 스킬 | {error, when} 설정 오류 (note: when ask일 때만 답 전 안내))
 - explore?({reason: no_candidate|cause_unconfirmed|fit_check(1위 C=1, run --explore·explore.when: always·--look-note(확인할 내용)일 때만 — 끄는 쪽이 이긴다: never·--no-explore면 열지 않는다), when: ask|always|never, note?: when ask일 때만 답 전 안내}(run은 타임라인을 만들지 않는다))
-- prior?(재실행일 때 이전 실행이 남긴 것(hyps·none·looked 중 하나라도 있을 때만, 4KB 압축 시 hyps → 전체 순으로 뺀다): top(직전 1위 원인|유형), hyps[≤3](근거 원문 검사를 통과한(원문에 없는 인용 0, 검사 건너뜀 아님) 이전 탐색 가설 머리와 반대 근거, ≤120), none(이전 탐색 `가설 없음` 이유, ≤120), looked[≤3](이전 실행의 가린 기준 줄, ≤80))
+- investigate?(조사 모드(run이 `issuepost.investigate_mode`로 판정 — 포털·check-output은 이 칸을 읽는다): mode(1위 후보가 없거나 1위 C=0이면 true), reason?(mode true일 때만 후보 없음|1위 C=0))
+  - mode
+  - reason?: 후보 없음 | 1위 C=0
+- investigation?(조사 결론(조사 모드에서 `check-output --for explore`가 쓴다, run은 쓰지 않는다 — LLM 탐색 결론의 스크립트 검증 게이트 결과, 점수·분류·decision과 별개): status(identified = 게이트 6개 모두 통과|insufficient_evidence), hyp(가장 유력, 없으면 1 — 가설 없음이면 null), cause(가설 머리 ≤120자|null), layer(책임 경계 AP 내부|AP-CP 경계|CP 내부|CP-망 경계|망|환경|모름|null), first_divergence({step, expect ≤80자}|null — 첫 갈라짐 단계 표의 행), gate[{name, ok, why}](인용 원문·첫 어긋남·책임 층·실패 뒤 흔적·숫자 메커니즘·외부 근거, why ≤80자), explore_sha(검사한 explore-output.md sha256), normal(true만 — 가장 유력이 정상이고 정상 근거 줄이 원문 확인, status는 insufficient_evidence), top_match(같다고 본 원인 ID — 탐색 `후보 확인`이 규칙 1위 ID(1위가 유형만이면 그 유형의 원인 ID)를 맞음이라 함, `규칙 1위와 같음` 표시))
+  - status: identified | insufficient_evidence
+  - hyp?
+  - cause?
+  - layer?
+  - first_divergence?
+  - gate[]
+    - name
+    - ok
+    - why
+  - explore_sha
+  - normal?: true
+  - top_match?
+- prior?(재실행일 때 이전 실행이 남긴 것(hyps·none·unfit·looked 중 하나라도 있을 때만, 4KB 압축 시 hyps → 전체 순으로 뺀다): top(직전 1위 원인|유형), hyps[≤3](근거 원문 검사를 통과한(원문에 없는 인용 0, 검사 건너뜀 아님) 이전 탐색 가설 머리와 반대 근거, ≤120), none(이전 탐색 `가설 없음` 이유, ≤120), unfit(이전 탐색의 1위 부적합 보류 `<원인 ID> — <이유>`, ≤120), unfit_reason?(unfit의 보류 사유 normal(탐색 분석이 설계상 정상 동작으로 봄)|unfit, 없으면 unfit — 옛 기록), looked[≤3](이전 실행의 가린 기준 줄, ≤80))
   - top?
   - hyps?[≤3]
   - none?
+  - unfit?
+  - unfit_reason?: normal | unfit
   - looked?[≤3]
 - warnings?
+- next?(탐색 중 다시 한 run(타임라인을 다시 만든 경우)이 모듈 보기·심층 분석(5-1) 결과도 지웠을 때만: 다시 받을 명령·답에 다시 적을 줄 안내(run 출력에만 — analysis.json에는 없다))
 - notes?(잔여 worktree·도구 브랜치 안내 등)
 - lock_owner?
 - lock_released?(analysis-only가 ok로 끝나 lock을 풀었을 때만(lock_owner 없음)): true

@@ -1,0 +1,13 @@
+{
+ "schema_version": 1,
+ "key": "PAIRPASS-1",
+ "origin": "정답 입력",
+ "symptom": {
+  "text": "같은 TC의 pass 로그",
+  "types": [
+   "DATA-003"
+  ],
+  "not_in_db": false
+ },
+ "clues": []
+}

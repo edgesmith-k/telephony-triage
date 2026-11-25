@@ -1,5 +1,5 @@
 {
- "around": "2026-09-04T12:02:01+00:00",
+ "around": "2026-09-04T12:02:01.000Z",
  "failed_step": null,
  "limit": 200,
  "anchor": null,
@@ -19,5 +19,125 @@
  ],
  "around_alt": [
   "2026-09-04T12:02:00.000Z"
- ]
+ ],
+ "anomaly": {
+  "range": [
+   "2026-09-04T11:57:01.000Z",
+   "2026-09-04T12:12:01.000Z"
+  ],
+  "ref": "2026-09-04T12:02:01.000Z",
+  "after_sec": 600,
+  "candidates": 1,
+  "rows": [
+   {
+    "ts": "2026-09-04T12:02:01.400Z",
+    "phone": null,
+    "level": "W",
+    "tag": "ImsPhoneCallTracker",
+    "msg": "[0] onCallStartFailed reasonCode=ImsReasonInfo :: {1014 : CODE_SIP_SERVICE_UNAVAILABLE, 503, null}",
+    "main": true
+   }
+  ]
+ },
+ "summary": {
+  "ref": "2026-09-04T12:02:01.000Z",
+  "range": [
+   "2026-09-04T12:00:10.000Z",
+   "2026-09-04T12:02:10.000Z"
+  ],
+  "lines": 9,
+  "shapes": 9,
+  "window": [
+   "2026-09-04T11:57:01.000Z",
+   "2026-09-04T12:12:01.000Z"
+  ],
+  "cap": 60,
+  "after_sec": 600,
+  "groups": [
+   {
+    "ts": "2026-09-04T12:02:01.400Z",
+    "last": "2026-09-04T12:02:01.400Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "ImsPhoneCallTracker",
+    "msg": "[0] onCallStartFailed reasonCode=ImsReasonInfo :: {1014 : CODE_SIP_SERVICE_UNAVAILABLE, 503, null}",
+    "after": true
+   },
+   {
+    "ts": "2026-09-04T12:02:01.300Z",
+    "last": "2026-09-04T12:02:01.300Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "VRIL-IMS",
+    "msg": "[call] Received INVITE response status-code=503 slot=0",
+    "after": true
+   },
+   {
+    "ts": "2026-09-04T12:02:00.100Z",
+    "last": "2026-09-04T12:02:00.100Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-IMS",
+    "msg": "[call] Sending INVITE to <MSISDN#1> slot=0"
+   },
+   {
+    "ts": "2026-09-04T12:02:00.000Z",
+    "last": "2026-09-04T12:02:00.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "GsmCdmaPhone",
+    "msg": "[0] useImsForCall=true, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isP…"
+   },
+   {
+    "ts": "2026-09-04T12:02:10.000Z",
+    "last": "2026-09-04T12:02:10.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "route rsp type=0001 id=0x0703 svc=5 msg=4009",
+    "after": true
+   },
+   {
+    "ts": "2026-09-04T12:00:11.100Z",
+    "last": "2026-09-04T12:00:11.100Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsPhone",
+    "msg": "[0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN"
+   },
+   {
+    "ts": "2026-09-04T12:00:11.005Z",
+    "last": "2026-09-04T12:00:11.005Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "VRIL-IMS",
+    "msg": "[reg] ind <- OEM_UNSOL_IMS_REGISTRATION state=1 feature=mmtel status-code=200"
+   },
+   {
+    "ts": "2026-09-04T12:00:11.000Z",
+    "last": "2026-09-04T12:00:11.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=208"
+   },
+   {
+    "ts": "2026-09-04T12:00:10.000Z",
+    "last": "2026-09-04T12:00:10.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ImsResolver",
+    "msg": "bound to mock ImsService [PHONE0]"
+   }
+  ]
+ }
 }

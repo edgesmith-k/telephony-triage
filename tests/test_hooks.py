@@ -570,6 +570,48 @@ def test_guard_merge_and_skill_apply_ask_direct_gh_merge_asks():
     assert decision(guard(ws, "Write", {"file_path": str(copy), "content": "x"}, ws.base)) is None
 
 
+def test_guard_module_patch_pr_records_and_temp_clone():
+    """모듈 학습(반입 7 A-3): `skill_patch.py --pr`은 ask, `--module`(patch만)은 판정 없음. `module-suggestions/` 기록은 직접
+    쓰거나 지우면 거부. 임시 clone `JOB/skill-wt`에서 직접 git push·commit은 거부(규칙 12 (a)), 읽기 git은 통과."""
+    ws = shared()
+    S = f'python3 "{ws.root}/scripts/skill_patch.py"'
+    for cmd in (f"{S} MOCK-1 --pr --sha {'c' * 64}", f"{S} MOCK-1 --module --pr --sha {'c' * 64} --json"):
+        out = bash(ws, cmd, ws.base)
+        assert decision(out) == "ask" and "skill_patch.py --pr" in out["permissionDecisionReason"], cmd
+    assert decision(bash(ws, f"{S} MOCK-1 --module --line 1,2", ws.base)) is None
+    job = ws.work / "MOCK-1"
+    for target in (job / "module-suggestions" / "module.patch", job / "module-suggestions" / "module.meta.json",
+                   job / "module-suggestions" / "pr-body.md"):
+        out = guard(ws, "Write", {"file_path": str(target), "content": "{}"}, ws.base)
+        assert decision(out) == "deny" and "skill_patch.py --module만" in out["permissionDecisionReason"], target
+        assert decision(bash(ws, f"rm -f {target}", ws.base)) == "deny", target
+    wt = job / "skill-wt"
+    for cmd in (f"git -C {wt} push origin HEAD:refs/heads/tt-module/MOCK-1-9", f"cd {wt} && git push",
+                f"git -C {wt} commit -qm x"):
+        out = bash(ws, cmd, ws.base)
+        assert decision(out) == "deny" and "규칙 12" in out["permissionDecisionReason"], cmd
+    assert decision(bash(ws, f"git -C {wt} log --oneline -1", ws.base)) is None
+
+
+def test_guard_record_folder_swap_asks():
+    """R-10: 기록 폴더(`JOB/module-suggestions`·`JOB/skill-suggestions`·`WORK/.shown`)나 그 상위(JOB·WORK와 그 위)를 통째로
+    바꾸는 mv·rm -r·cp -r·rsync·tar -C·unzip -d·ln은 ask(폴더 안 파일 쓰기는 그대로 거부). 다른 곳·폴더 안 사본은 판정 없음."""
+    ws = shared()
+    job = ws.work / "MOCK-1"
+    for d in (job / "module-suggestions", job / "skill-suggestions", ws.work / ".shown", job, ws.work, ws.work.parent):
+        for cmd in (f"mv /tmp/x {d}", f"mv {d} /tmp/old", f"rm -rf {d}", f"rm -r -f {d}", f"cp -r /tmp/x {d}",
+                    f"cp -a /tmp/x/. {d}", f"rsync -a /tmp/x/ {d}/", f"tar -xf /tmp/x.tar -C {d}",
+                    f"unzip -o /tmp/x.zip -d {d}", f"ln -sfn /tmp/x {d}"):
+            out = bash(ws, cmd, ws.base)
+            assert decision(out) == "ask" and "기록 폴더" in out["permissionDecisionReason"], cmd
+    for cmd in (f"cp /tmp/x {job}/", f"cp /tmp/x {job / 'module-suggestions'}"):    # 대상 폴더에 파일 넣기도
+        assert decision(bash(ws, cmd, ws.base)) == "ask", cmd
+    for cmd in ("rm -rf /tmp/x", "mv /tmp/a /tmp/b", f"cp -r /tmp/x {job / 'skill-suggestions' / 'a'}",
+                f"rm -rf {job / 'skill-suggestions' / 'a'}", f"cp /tmp/x {ws.work}/", f"ls -R {job}",
+                f"rm -f {job / 'notes.txt'}", f"mkdir -p {job / 'skill-suggestions' / 'a'}"):
+        assert decision(bash(ws, cmd, ws.base)) is None, cmd
+
+
 def test_guard_module_eval_asks():
     """모듈 eval: `module_eval.py`는 자식 `claude -p`를 띄워 비용이 든다 — `--dry-run`·`--probe-restricted`까지 모든 호출이
     ask(낱말 그물: 이름 `module_eval` + 낱말 `module`, 규칙 7). `--module`이 없는 `--help`는 판정할 것이 없다."""
@@ -3468,14 +3510,15 @@ def test_guard_module_records_denied_copies_and_notes_pass():
     ws = shared()
     job = ws.work / "MOCK-1"
     for rel in ("module-skill.json", "deep-input.json", "skill-input.json", "check-output.json",
-                "problem-input.json", "problem.json", "module-skill/deep/ofono/data/SKILL.md"):
+                "problem-input.json", "problem.json", "eligibility.json", "windows.json", "window-1.md", "window-12.md",
+                "summary.md", "summary.json", "module-skill/deep/ofono/data/SKILL.md"):
         out = guard(ws, "Write", {"file_path": str(job / rel), "content": "x"}, ws.base)
         assert decision(out) == "deny" and "만 쓴다" in _reason(out) and "규칙 12" in _reason(out), rel
         for cmd in (f"echo x > {job / rel}", f"rm -f {job / rel}"):
             assert decision(bash(ws, cmd, ws.base)) == "deny", cmd
     assert decision(bash(ws, f"rm -rf {job}/module-skill", ws.base)) == "deny"
     for rel in ("skill-suggestions/ofono/data/SKILL.md", "notes.md", "deep-output.md", "explore-output.md",
-                "problem-output.json"):
+                "problem-output.json", "window-0.md", "window-notes.md", "sub/window-1.md", "sub/summary.md"):
         assert decision(guard(ws, "Write", {"file_path": str(job / rel), "content": "x"}, ws.base)) is None, rel
 
 

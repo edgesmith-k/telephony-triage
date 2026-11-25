@@ -275,7 +275,7 @@ def _tree(schema: dict, node: dict, depth: int) -> list[str]:
         if "const" in prop:
             text += ": " + json.dumps(prop["const"], ensure_ascii=False)
         elif "enum" in prop:
-            text += ": " + " | ".join(str(v) for v in prop["enum"])
+            text += ": " + " | ".join("null" if v is None else str(v) for v in prop["enum"])
         lines.append("  " * depth + f"- {text}")
         if child.get("properties"):
             lines += _tree(schema, child, depth + 1)

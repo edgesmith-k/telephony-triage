@@ -201,6 +201,8 @@ platform:
   #                                  # 먼저, 없거나 안 맞으면 줄의 phone_id(위 log.phone_id 규칙). log.phone_id와는 따로다
   #                                  # trace와 달리 {prefix}·{error_prefix}를 채우지 않는다 — 쓰면 오류, 접두어는 글자 그대로
   #     - '^ipc\[(\d)\]'             # `ipc[1][RX] VIPC_X, RSP, …` 꼴(합성 예) — 사내 IPC 줄의 슬롯 표기는 사내에서 채운다
+  #   timeout_ms: null               # 선택(1 이상 정수, 예 30000). REQ 뒤 같은 name·token RSP를 기다리는 ms — 넘도록 없으면 타임라인
+  #                                  # 표시 `⇒ ipc_no_response(…)`(표시 전용, 점수·판정 무관). null·생략이면 ril.yaml 요청 timeout 중 가장 긴 값
   # bugreport:                       # TODO(SITE:S21) dumpstate 섹션 헤더
   #   wanted_buffers: [system, radio, main]          # ^[a-z]+$, 출력 파일 순서
   #   section_regex: '^------ (?P<title>.+?) \((?P<cmd>logcat\b[^)]*)\) ------\s*$'   # (?P<cmd>) 필수
@@ -234,12 +236,29 @@ explore:
   when: ask                            # ask(기본)=필요할 때 묻기 | always=묻지 않고 실행, 확신 일치(C=1)에도 적합성 확인(토큰 증가) | never=안 함.
                                        # 끄는 쪽이 이긴다: never면 --explore여도 안 하고, --no-explore면 always여도 안 한다
   timeline_max_lines: 200              # JOB/timeline.md 줄 수 상한 (20~1000)
+  anomaly_max_lines: 80                # 타임라인 끝 "이상 줄" 절(마스킹 사본의 W/E/F·예외 줄, 태그 규칙 무관) 줄 수 상한 (0~400, 0=끔). 위 상한과 따로 센다
+  after_sec: 600                       # 이상 줄 절 범위를 기준 시각(실패·기준 줄·발생 시각) 뒤 몇 초까지 넓힐지 (0~3600)
+  summary_max_groups: 60               # 타임라인 머리 "전체 로그 모양 요약"(사본 전체, 실패 뒤 포함) 모양 수 상한 (0~200, 0=끔). 표시 전용
 
 # 모듈 스킬 레포(①탐색·②심층 분석 모듈 문서, MODULE_SKILLS_PLAN_IMPL §2.1). 최상위 키 — 플랫폼별이 아니다(레포 하나 안에 <플랫폼>/이 있다).
 # 비워 두면 모듈 문서를 쓰지 않는다(지금 출력 그대로). 받기는 동의 뒤 triage.py module만 한다.
 # module_skills:
 #   remote: https://<GHE 호스트>/<owner>/<repo>.git   # TODO(SITE:S33) 주소·partial clone 지원·사용자 PC git 버전(≥2.25)
 #   base_branch: main
+
+# 자격 검사(단계 5-2): 문제 파악 결과(JOB/problem.json)·Jira 코멘트 단서를 원인 채택 판정에 어떻게 쓸지 (02-config.md). 사용자 config가 덮는다.
+eligibility:
+  comment_adopt: true         # 기준 줄·마커 없이 문제 파악 단서로만 찾은 실패 지점에서 원인을 채택할지(사용자 결정 Y1: 허용).
+                              # 스크립트가 코멘트에서 뽑은 단서는 이 값과 상관없이 위치 후보로만(보류, A474)
+                              # 채택해도 실패 지점은 found(단서 위치, 확정 아님)라 확실한 일치가 아니고 본 분석을 건너뛰지 않는다.
+                              # false면 그 사건을 싣고 원인 보류(ineligible/comment_unconfirmed)
+  use_problem_types: true     # 문제 파악의 증상 유형(symptom.types·not_in_db)으로 근처·TC 파일 구간·FAIL 마커 구간·IPC 점의 사건을 거를지.
+                              # 첫 실패(구간은 FAIL에 가장 가까운 실패)가 그 유형일 때만 채택 — 다른 유형 실패를 건너뛰지 않는다.
+                              # 사내 모델이 유형을 자주 틀리면 false — 그때는 5-1처럼 근처·TC 파일 구간은 보류
+  comment_clues: true         # problem.json이 없을 때 Jira 코멘트에서 단서(IPC 이름+token, logcat 시각이 붙은 줄)를 스크립트로
+                              # 뽑아 쓸지. --look-at이 있으면 쓰지 않는다. false면 5-2처럼 problem.json 단서만
+  retest_words: [retest, re-test, 재시험, 재테스트]   # 공개 기본값 — 사내 코멘트의 재시험 표현을 보고 맞춘다. 이 낱말이 든 마지막 코멘트와 그 앞의 단서는
+                              # 이전 회차로 보고 버린다(대소문자 무시 부분 일치). 낱말 없이 다시 돈 회차는 못 가른다
 
 # 분석 환경 출처 기록(module-skill.json·check-output.json·이슈 DB 커밋 꼬리말의 label). 선택, 이 파일에서만 읽는다.
 # runtime: {label: <사내 실행 환경 이름>}   # TODO(SITE:S35) 출처 기록용(선택) — 영숫자·._ +-, 40자 이하
@@ -263,9 +282,9 @@ failed_step:
   clock_offset: null
 
   # 시험 절차(report.html·zip·붙여넣기) 읽기와 스텝 순서 정렬. TODO(SITE:S22) 사내 리포트의 열 이름·상태 낱말에 맞춘다
-  steps_status: {pass: [pass, passed, ok, 성공, 통과], fail: [fail, failed, ng, 실패]}   # casefold 비교
+  steps_status: {pass: [pass, passed, ok, 성공, 통과], fail: [fail, failed, ng, 실패], inconc: [inconc, inconclusive]}   # casefold 비교. inconc는 FAIL이 없을 때만 실패 스텝
   steps_columns:                  # 표 머리 열 이름(casefold 비교). 상태 열과 다른 열 하나 이상이 맞는 첫 줄이 머리
-    number: ['no', '#', step no, 번호]      # YAML에서 no·yes·on·off는 따옴표로 감싼다(안 그러면 불리언이 된다)
+    number: ['no', '#', step no, 번호, step]      # step은 이름 열 후보이기도 하다. YAML에서 no·yes·on·off는 따옴표로 감싼다(안 그러면 불리언이 된다)
     name: [step, action, name, description, 절차, 내용, 항목]
     status: [result, status, verdict, 결과, 판정]
     start: [start, start time, 시작]

@@ -127,6 +127,26 @@ def test_bridge_comments_free_text_is_saved_not_scanner_error():
     assert saved["fields"]["summary"] == "데이터 안 됨" and saved["comments_format"] == "text"
 
 
+def test_bridge_keeps_comment_page_total_for_clue_extraction():
+    """코멘트 도구 응답의 전체 수·건너뛴 수를 `comments_page`로 남긴다(같은 출처 — jira_fields가 일부만 읽었는지 본다). 뒤이은
+    get_issue에도 남고, 자유 텍스트 응답(전체 수 모름)이면 지운다."""
+    home = _home()
+    raw_path = home / "work" / "MOCK-1001" / "issue_raw.json"
+    page = {"startAt": 0, "total": 2, "comments": [{"body": "a", "created": "2026-11-14T11:00:00+0900"},
+                                                   {"body": "b", "created": "2026-11-14T10:00:00+0900"}]}
+    _hook(home, COMMENTS_TOOL, json.dumps(page))
+    assert json.loads(raw_path.read_text(encoding="utf-8"))["comments_page"] == {"startAt": 0, "total": 2}
+    _hook(home, ISSUE_TOOL, json.dumps({"key": "MOCK-1001", "fields": {"summary": "s"}}))
+    saved = json.loads(raw_path.read_text(encoding="utf-8"))
+    assert saved["comments_page"] == {"startAt": 0, "total": 2}
+    import jira_fields
+    cfg = {"tracker": {"kind": "jira", "timezone": "Asia/Seoul"}, "logcat": {"timezone": "Asia/Seoul"}}
+    text = jira_fields.extract(saved, cfg, None, "mcp")["text"]
+    assert text["comments"] == ["b", "a"] and not any(k in text for k in ("comments_partial", "comments_unchecked"))   # 작성 순
+    _hook(home, COMMENTS_TOOL, "자유 텍스트 코멘트")
+    assert "comments_page" not in json.loads(raw_path.read_text(encoding="utf-8"))
+
+
 def test_bridge_issue_free_text_is_refused_with_shape_only():
     home = _home()
     text = f"MOCK-1001 데이터 안 됨: setup: failed imsi={IMSI}"
@@ -135,3 +155,39 @@ def test_bridge_issue_free_text_is_refused_with_shape_only():
     assert "tracker.tools.get_issue" in shown
     assert IMSI not in shown and "데이터 안 됨" not in shown and "setup" not in shown
     assert not (home / "work" / "MOCK-1001").exists()
+
+
+@pytest.mark.parametrize("tool,response", [
+    (ISSUE_TOOL, {"error": "Issue does not exist or you do not have permission to see it."}),
+    (ISSUE_TOOL, {"errorMessages": ["Issue does not exist"], "errors": {}}),
+    (COMMENTS_TOOL, {"error": "not found", "key": "MOCK-1001"}),
+])
+def test_bridge_error_shaped_response_is_not_saved_as_issue(tool, response):
+    """오류를 정상 결과로 준 MCP(사내 A589: 없는 키의 원문이 `{error}`뿐인데 '읽힌 이슈'로 저장됐다): 저장하지 않고 자체 문구만."""
+    home = _home()
+    shown = _hook(home, tool, json.dumps(response))
+    assert shown.startswith("telephony-triage: Jira가 오류 응답을 돌려줘 저장하지 않았다(키 ")
+    assert "does not exist" not in shown and "not found" not in shown
+    assert not (home / "work" / "MOCK-1001").exists()
+
+
+def test_bridge_error_like_key_inside_real_issue_is_still_saved():
+    home = _home()
+    shown = _hook(home, ISSUE_TOOL, json.dumps({"key": "MOCK-1001", "fields": {"summary": "s"}, "errors": {}}))
+    assert shown.startswith("telephony-triage: Jira 응답 원문은 파일로만 저장했다")
+    assert (home / "work" / "MOCK-1001" / "issue_raw.json").is_file()
+
+
+def test_brief_cut_never_leaves_token_piece():
+    """요약 200자·설명 400자·코멘트 자름이 토큰 가운데를 끊으면 `<CRED` 조각이 다시 값으로 잡혔다(사내 A589)."""
+    from common import masking
+    for n in range(186, 200):
+        head = "x" * n
+        home = _home()
+        desc = head + " password=hunter2secret " + head + f" imsi={IMSI} tail"
+        shown = _hook(home, ISSUE_TOOL, json.dumps({"key": "MOCK-1001", "fields": {"summary": desc, "description": desc}}))
+        brief = json.loads(shown.split("\n", 1)[1])
+        for field in ("summary", "description"):
+            assert masking.residual(brief[field], log_lines=False) == {}, (n, field, brief[field][-30:])
+    assert masking.clip("ab <CRED#12>", 8) == "ab " and masking.clip("ab <CRED#12>", 12) == "ab <CRED#12>"
+    assert masking.clip("a <HEXDUMP 12B>", 9) == "a " and masking.clip("a < b", 4) == "a < "

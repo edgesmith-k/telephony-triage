@@ -33,6 +33,23 @@
   "events": 56,
   "masked": null
  },
+ "decision": {
+  "state": "held",
+  "reason": "no_candidate",
+  "selected": null,
+  "location": {
+   "state": "none",
+   "source": null,
+   "kind": null
+  },
+  "check": {
+   "why": null,
+   "checked": 0,
+   "total": 0
+  },
+  "events": [],
+  "events_total": 0
+ },
  "no_candidate": {
   "search_hits": [
    {
@@ -67,12 +84,28 @@
    "at": []
   }
  ],
+ "near_causes": [
+  {
+   "id": "NETWORK-001-01",
+   "title": "망 등록 거절",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  },
+  {
+   "id": "SMS-001-01",
+   "title": "전송 요청이 만들어지지 않음",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  }
+ ],
  "code": {
   "skipped": true
  },
  "explore": {
   "reason": "no_candidate",
   "when": "ask"
+ },
+ "investigate": {
+  "mode": true,
+  "reason": "후보 없음"
  },
  "warnings": [
   "형식을 모르는 줄 1개를 건너뛰었습니다."

@@ -1,5 +1,5 @@
 {
- "around": "2026-10-15T11:47:23+00:00",
+ "around": "2026-10-15T11:47:23.000Z",
  "failed_step": null,
  "limit": 200,
  "anchor": null,
@@ -11,5 +11,249 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-10-15T11:42:23.000Z",
+   "2026-10-15T11:57:23.000Z"
+  ],
+  "ref": "2026-10-15T11:47:23.000Z",
+  "after_sec": 600,
+  "candidates": 5,
+  "rows": [
+   {
+    "ts": "2026-10-15T11:46:02.114Z",
+    "phone": null,
+    "level": "W",
+    "tag": "Telephony",
+    "msg": "registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1"
+   },
+   {
+    "ts": "2026-10-15T11:46:02.115Z",
+    "phone": null,
+    "level": "W",
+    "tag": "Telephony",
+    "msg": "registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1"
+   },
+   {
+    "ts": "2026-10-15T11:46:05.631Z",
+    "phone": 0,
+    "level": "E",
+    "tag": "RILJ",
+    "msg": "Unable to complete updateAllowedImsServices because service IMS is not available. [PHONE0]",
+    "main": true
+   },
+   {
+    "ts": "2026-10-15T11:47:20.411Z",
+    "phone": null,
+    "level": "D",
+    "tag": "RilRequest",
+    "msg": "[0527]< NOTIFY_IMS_DATA_NETWORK error: com.android.internal.telephony.CommandException: REQUEST_NOT_SUPPORTED"
+   },
+   {
+    "ts": "2026-10-15T11:47:23.140Z",
+    "phone": 0,
+    "level": "E",
+    "tag": "RILJ",
+    "msg": "Unable to complete updateImsRegistrationInfo because service IMS is not available. [PHONE0]",
+    "main": true
+   }
+  ]
+ },
+ "summary": {
+  "ref": "2026-10-15T11:47:23.000Z",
+  "range": [
+   "2026-10-15T11:46:02.114Z",
+   "2026-10-15T11:47:23.141Z"
+  ],
+  "lines": 20,
+  "shapes": 19,
+  "window": [
+   "2026-10-15T11:42:23.000Z",
+   "2026-10-15T11:57:23.000Z"
+  ],
+  "cap": 60,
+  "after_sec": 600,
+  "groups": [
+   {
+    "ts": "2026-10-15T11:47:20.411Z",
+    "last": "2026-10-15T11:47:20.411Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "RilRequest",
+    "msg": "[0527]< NOTIFY_IMS_DATA_NETWORK error: com.android.internal.telephony.CommandException: REQUEST_NOT_SUPPORTED"
+   },
+   {
+    "ts": "2026-10-15T11:47:23.140Z",
+    "last": "2026-10-15T11:47:23.140Z",
+    "n": 1,
+    "phone": 0,
+    "level": "E",
+    "tag": "RILJ",
+    "msg": "Unable to complete updateImsRegistrationInfo because service IMS is not available. [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-10-15T11:46:05.631Z",
+    "last": "2026-10-15T11:46:05.631Z",
+    "n": 1,
+    "phone": 0,
+    "level": "E",
+    "tag": "RILJ",
+    "msg": "Unable to complete updateAllowedImsServices because service IMS is not available. [PHONE0]"
+   },
+   {
+    "ts": "2026-10-15T11:46:02.115Z",
+    "last": "2026-10-15T11:46:02.115Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "Telephony",
+    "msg": "registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1"
+   },
+   {
+    "ts": "2026-10-15T11:46:02.114Z",
+    "last": "2026-10-15T11:46:02.114Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "Telephony",
+    "msg": "registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1"
+   },
+   {
+    "ts": "2026-10-15T11:47:20.411Z",
+    "last": "2026-10-15T11:47:20.411Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0527]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]"
+   },
+   {
+    "ts": "2026-10-15T11:47:20.409Z",
+    "last": "2026-10-15T11:47:20.409Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0e07 len=12"
+   },
+   {
+    "ts": "2026-10-15T11:47:20.409Z",
+    "last": "2026-10-15T11:47:23.051Z",
+    "n": 2,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "<HEXDUMP 12B>"
+   },
+   {
+    "ts": "2026-10-15T11:47:23.051Z",
+    "last": "2026-10-15T11:47:23.051Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=96",
+    "after": true
+   },
+   {
+    "ts": "2026-10-15T11:47:23.053Z",
+    "last": "2026-10-15T11:47:23.053Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "VRIL",
+    "msg": "[indFilter] clientId=4 indication=4410 filtered=false",
+    "after": true
+   },
+   {
+    "ts": "2026-10-15T11:47:23.054Z",
+    "last": "2026-10-15T11:47:23.054Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "[ImsService_0] ims registration indication: TRUE",
+    "after": true
+   },
+   {
+    "ts": "2026-10-15T11:47:23.054Z",
+    "last": "2026-10-15T11:47:23.054Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "RIL",
+    "msg": "[IpcCtx_0] rx frame unsol id=1",
+    "after": true
+   },
+   {
+    "ts": "2026-10-15T11:47:23.071Z",
+    "last": "2026-10-15T11:47:23.071Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-SVC",
+    "msg": "RadioNetworkProxy::getOperator: serial 531",
+    "after": true
+   },
+   {
+    "ts": "2026-10-15T11:47:23.072Z",
+    "last": "2026-10-15T11:47:23.072Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsPhone",
+    "msg": "[0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN",
+    "after": true
+   },
+   {
+    "ts": "2026-10-15T11:47:23.141Z",
+    "last": "2026-10-15T11:47:23.141Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DIC-0",
+    "msg": "ServiceState updated, isRoaming=false",
+    "after": true
+   },
+   {
+    "ts": "2026-10-15T11:47:20.410Z",
+    "last": "2026-10-15T11:47:20.410Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-NETWORK",
+    "msg": "network reg info request domain=2"
+   },
+   {
+    "ts": "2026-10-15T11:47:20.404Z",
+    "last": "2026-10-15T11:47:20.404Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0527]> NOTIFY_IMS_DATA_NETWORK accessNetwork=NGRAN dataNetworkState=CONNECTING physicalTransportType=WWAN physicalNetworkSlotIndex=0 [PHONE0]"
+   },
+   {
+    "ts": "2026-10-15T11:47:20.402Z",
+    "last": "2026-10-15T11:47:20.402Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsPhone",
+    "msg": "[0] handleImsRegistering: onImsMmTelProgressing imsRadioTech=WWAN"
+   },
+   {
+    "ts": "2026-10-15T11:46:05.630Z",
+    "last": "2026-10-15T11:46:05.630Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "SatelliteController",
+    "msg": "satelliteConfigParser is not ready"
+   }
+  ]
+ }
 }

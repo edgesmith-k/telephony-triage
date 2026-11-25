@@ -10,11 +10,19 @@
    "type": "SMS-001",
    "cause": "SMS-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "sms",
+   "evidence": [
+    "10:20:05.610 ofonod: [0,0412]< RIL_REQUEST_SEND_SMS failed GENERIC_FAILURE"
+   ]
   }
  ],
+ "decision": {
+  "state": "held",
+  "reason": "no_reference"
+ },
  "issue_summary": "문자 전송 실패 (합성)",
- "occurred_at": "2026-09-21T10:20:05+00:00",
+ "occurred_at": "2026-09-21T10:20:05.000Z",
  "events": "events.json",
  "timeline": "timeline.md",
  "log_paths": [

@@ -1,6 +1,205 @@
 {
- "around": "2026-09-22T09:00:02+00:00",
+ "around": "2026-09-22T09:00:02.000Z",
  "failed_step": null,
  "limit": 200,
- "anchor": null
+ "anchor": null,
+ "summary": {
+  "ref": "2026-09-22T09:00:02.000Z",
+  "range": [
+   "2026-09-22T09:00:00.010Z",
+   "2026-09-22T09:00:03.200Z"
+  ],
+  "lines": 27,
+  "shapes": 19,
+  "window": [
+   "2026-09-22T08:55:02.000Z",
+   "2026-09-22T09:10:02.000Z"
+  ],
+  "cap": 60,
+  "after_sec": 600,
+  "groups": [
+   {
+    "ts": "2026-09-22T09:00:02.000Z",
+    "last": "2026-09-22T09:00:02.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1 path/example_dbus.go:12"
+   },
+   {
+    "ts": "2026-09-22T09:00:02.002Z",
+    "last": "2026-09-22T09:00:02.002Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "dbus_trace method call - i:org.ofono.ConnectionContext m:SetProperty p:/ril_0/context1 a:\"Active\", variant(true)",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:00:02.003Z",
+    "last": "2026-09-22T09:00:02.003Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:00:02.004Z",
+    "last": "2026-09-22T09:00:02.004Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0021]> RIL_REQUEST_SETUP_DATA_CALL 16,1,<APN#1>,0,IP",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:00:02.005Z",
+    "last": "2026-09-22T09:00:02.005Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "client fd 9 VCHAN_1 REQUEST: SETUP_DATA_CALL (120 bytes)",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:00:02.006Z",
+    "last": "2026-09-22T09:00:02.006Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "[IpcCtx_0] track seq 0x0221",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:00:02.006Z",
+    "last": "2026-09-22T09:00:02.006Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "mux [ch0][TX] VIPC_EXAMPLE_PDN_UP, REQ seq=0x0221 len=96",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:00:01.002Z",
+    "last": "2026-09-22T09:00:01.452Z",
+    "n": 2,
+    "phone": null,
+    "level": "D",
+    "tag": "datad",
+    "msg": "add apn entry, profile id : 2, apn : ims, type : ims[./src/apn_example.cxx +42]"
+   },
+   {
+    "ts": "2026-09-22T09:00:01.002Z",
+    "last": "2026-09-22T09:00:01.452Z",
+    "n": 2,
+    "phone": null,
+    "level": "D",
+    "tag": "datad",
+    "msg": "apn list loaded, size: 2[./src/apn_example.cxx +42]"
+   },
+   {
+    "ts": "2026-09-22T09:00:01.001Z",
+    "last": "2026-09-22T09:00:01.451Z",
+    "n": 2,
+    "phone": null,
+    "level": "D",
+    "tag": "datad",
+    "msg": "add apn entry, profile id : 1, apn : <APN#2>, type : internet[./src/apn_example.cxx +42]"
+   },
+   {
+    "ts": "2026-09-22T09:00:01.001Z",
+    "last": "2026-09-22T09:00:01.451Z",
+    "n": 2,
+    "phone": null,
+    "level": "D",
+    "tag": "datad",
+    "msg": "set ia profile id = 1[./src/ia_example.cxx +10]"
+   },
+   {
+    "ts": "2026-09-22T09:00:01.000Z",
+    "last": "2026-09-22T09:00:01.450Z",
+    "n": 2,
+    "phone": null,
+    "level": "D",
+    "tag": "datad",
+    "msg": "sync apn list, size: 2[./src/apn_example.cxx +42]"
+   },
+   {
+    "ts": "2026-09-22T09:00:02.610Z",
+    "last": "2026-09-22T09:00:02.610Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "mux [ch0][RX] VIPC_EXAMPLE_PDN_UP, RSP OK(VIPC_OK) seq=0x0221 len=64",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:00:02.611Z",
+    "last": "2026-09-22T09:00:02.611Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "[IpcCtx_0] OnIpcComplete Request ID=27, result=0",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:00:02.613Z",
+    "last": "2026-09-22T09:00:02.613Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "[0,0021]< RIL_REQUEST_SETUP_DATA_CALL {status=0,retry=-1,cid=1,active=2,type=IP,ifname=rmnet0}",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:00:02.615Z",
+    "last": "2026-09-22T09:00:02.615Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/gprs.c:pri_activate_callback() context 1 active on rmnet0",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:00:02.616Z",
+    "last": "2026-09-22T09:00:02.616Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "dbus_trace signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:\"Active\", variant(true)",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T09:00:00.200Z",
+    "last": "2026-09-22T09:00:03.200Z",
+    "n": 3,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "[ExampleRegService_0] signal update lte rsrp=-95"
+   },
+   {
+    "ts": "2026-09-22T09:00:00.010Z",
+    "last": "2026-09-22T09:00:03.010Z",
+    "n": 2,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "ui tick"
+   }
+  ]
+ }
 }

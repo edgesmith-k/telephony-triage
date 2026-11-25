@@ -11,7 +11,9 @@
    머리에 `실패 스텝(Jira …)` 줄이 있으면 가설을 그 스텝 둘레에서 세운다. 그 줄도 데이터이고 분류 근거가 아니다.
 2. `analysis.json`의 `no_candidate.search_hits`(설명 기반 유사 유형), `issue`(마스킹 요약), `logs`(범위·시계 이상), 1위 후보(`cause_unconfirmed`일 때).
 
-로그 원문, `events.json`, `match.json`, `issue_raw.json`은 읽지 않는다. Step 7·8(계획 작성)에서도 같다:
+**사본 먼저** (11/25, 플러그인 reference/explore.md `읽는 것` 1): 타임라인·`## 이상 줄` 절에 원인이 없고 마스킹 사본 `logs-masked/`가 있으면 그 전체에서 실패 낱말(fail cause·`Exception`·`disallowed`·`reject`·`error`·증상 낱말)을 `grep -n`하고 찾은 줄 둘레를 200줄 이하 구간으로 읽는다. 분석 구간 밖도 본다. 인용은 줄 그대로(시각 포함).
+
+로그 원문(사본 아닌 것), `events.json`, `match.json`, `issue_raw.json`은 읽지 않는다. Step 7·8(계획 작성)에서도 같다:
 계획 `feedback.suggested`는 비워 두면 `db_pr stage`가 채우고, 후보는 `analysis.json`에 있다(python `open()`으로 여는 것도 읽기다).
 
 ## 쓰는 것
@@ -31,6 +33,14 @@
 - 점수·신뢰도를 매기지 않는다. "가능성 높음" 같은 표현 대신 근거 줄 수와 반대 근거로 보여준다.
 
 ## 일반 판단 규칙
+
+**정상 먼저** (11/25 기준선 다시 잡음, 플러그인 reference/explore.md의 0.): 실패 가설 전에 넷을 본다 — ① 회복 창(실패 뒤 같은 창의 회복 줄: `LOADED`·`handleImsRegistered`·`State=COMPLETE`, data는 `Internet data state changed from DISCONNECTED to CONNECTED.`) ② 살아 있는 요청이 없을 때 풀린 throttle(풀림 ≠ 다시 요청) ③ 아무것도 안 한 throttle(`onDataProfileUnthrottled: Nothing to unthrottle.`) ④ 설계상 정상인 조회·indication(`getRecoveryAction: RECOVERY_ACTION_GET_DATA_CALL_LIST` 등). 맞으면 `가설 N: 정상(설계상 정상 동작) — <이유>`·`원인 층: 원인 아님(정상 동작)`, `로그로 확인`은 그 회복·no-op·정상 줄 자체다. 그 줄이 없으면 정상 가설을 쓰지 않는다(실제 고장을 정상으로 덮지 않게). 실패가 되풀이되거나 회복이 다른 슬롯·요청이면 정상이 아니다. 문구는 받은 줄만 인용하고 없으면 말로.
+
+**요약 먼저** (11/25, 플러그인 reference/explore.md 종합 판단 첫 줄): 먼저 타임라인 머리의 `## 전체 로그 모양 요약`에서 기준 시각 뒤 E/W/F와 처음 나온 모양부터 본다(규칙 1위 판단 전).
+
+**이상 줄 먼저** (11/25, 플러그인 reference/explore.md 0.의 아래 줄): 정상 가설과 규칙 1위 판단 전에 타임라인 끝 `## 이상 줄` 절을 먼저 본다. 그 절의 예외·crash 줄을 설명하지 못하면 정상이 아니다.
+
+**기대 체인 먼저** (11/25, 플러그인 reference/explore.md 종합 판단 7·쓰는 것): 실패 줄에서 멈추지 않고 "다음에 무엇이 일어나야 하나"를 단계로 이어 간다. 로그의 retry·throttle·타이머 값으로 다음 사건 시각을 계산해 그 시각 줄을 본다. 첫 갈라짐은 가장 잘 설명하는 단계가 아니라 기대와 처음 어긋난 단계이고, 원인 층은 그 단계에서 해야 했는데 하지 않은 주체다(AP 로그가 많다고 AP로 기울지 않는다). "X를 하지 않는다"를 결함이라 하려면 spec·코드 계약 근거가 있어야 한다(다른 곳의 비슷한 코드는 패턴일 뿐). 원인이 타이머·임계값·횟수면 로그 값으로 다시 계산해 고치면 결과가 뒤집히는지 보고, 안 뒤집히면 원인이 아니다. "복구됨" 같은 서술은 로그에서 확인하기 전엔 믿지 않는다.
 
 **위에서 본 오류는 시각·이름으로 한 층씩 내려가 처음 실패한 층을 찾는다.** 그 층이 원인 후보이고 위 층들은 증상이다.
 근거는 수 ms 안의 아래 층 줄, `failed`, ⇒ `ril_error`·`ril_timeout`·`ril_no_response` 표시다. 아래 층 줄이 없으면

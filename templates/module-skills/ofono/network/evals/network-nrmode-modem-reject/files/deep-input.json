@@ -10,11 +10,20 @@
    "type": "NETWORK-001",
    "cause": "NETWORK-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "network",
+   "evidence": [
+    "09:20:22.270 vrild: mux [ch1][RX] VIPC_EXAMPLE_RAT_MODE, RSP Error(VIPC_E_FAILURE) seq=0x06a2 len=8",
+    "09:20:22.273 ofonod: [0,0348]< RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE failed GENERIC_FAILURE"
+   ]
   }
  ],
+ "decision": {
+  "state": "held",
+  "reason": "no_reference"
+ },
  "issue_summary": "5G(NR) 모드 설정 화면이 비어 있음",
- "occurred_at": "2026-09-22T09:20:20+00:00",
+ "occurred_at": "2026-09-22T09:20:20.000Z",
  "events": "events.json",
  "timeline": "timeline.md",
  "log_paths": [

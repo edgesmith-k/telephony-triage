@@ -48,12 +48,13 @@ def _load_tt_oc():
 V1_KEYS = {"$schema", "model", "small_model", "default_agent", "autoupdate", "share", "snapshot", "instructions", "provider",
            "permission", "mcp"}
 WRITE_BASH = ("git push *", "gh *", "*opencode *", "*db_pr.py publish*", "*db_pr.py merge*",
-              "*db_pr.py request-review*", "*issue_post.py approve*", "*skill_patch.py*--apply*", "*module_eval.py*")
+              "*db_pr.py request-review*", "*issue_post.py approve*", "*skill_patch.py*--apply*", "*skill_patch.py*--pr*",
+              "*module_eval.py*")
 
 
-def run_gen(*args, cwd=REPO):
+def run_gen(*args, cwd=REPO, env=None):
     return subprocess.run([sys.executable, str(REPO / "tools" / "gen_opencode.py"), *args], cwd=cwd,
-                          capture_output=True, text=True, check=False)
+                          capture_output=True, text=True, check=False, env=env)
 
 
 # -- 커맨드 생성(골든) ---------------------------------------------------------------------------------------------------
@@ -194,7 +195,7 @@ def test_agent_prompt():
     text = AGENT.read_text(encoding="utf-8")
     m = re.match(r"---\n(.*?)\n---\n", text, re.DOTALL)
     meta, body = yaml.safe_load(m.group(1)), text[m.end():]
-    assert meta["mode"] == "primary" and isinstance(meta["steps"], int) and 10 <= meta["steps"] <= 100
+    assert meta["mode"] == "primary" and isinstance(meta["steps"], int) and 10 <= meta["steps"] <= 150
     assert all(meta["permission"][t] == "deny" for t in ("webfetch", "todowrite", "skill"))
     # task 규칙은 에이전트에 두지 않는다: 에이전트 규칙은 설정 뒤에 붙어 이기므로, 두면 관리 설정의 task deny를 넘는다
     assert "task" not in meta["permission"]
@@ -212,7 +213,7 @@ def test_agent_prompt():
     # 규칙 11(리뷰 P1-1·P1-2·P2-2): 부모가 "언제"대로 정하고 묻고, explore·module(모듈 질문 포함)을 돌린 **뒤** 고른 값으로
     # tt-explore에 맡긴다. 답은 그대로, 이어서 Step 6(Step 7은 "다음"대로). check-output 줄이 없으면 --skipped, task 실패·없음은 같은 세션
     rule11 = next(l for l in body.splitlines() if l.startswith("11. "))
-    for must in ('"언제"', "module-skills.md", "`triage.py explore`", "--module/--with/--deep", "module `read` files",
+    for must in ('"언제"', "module-skills.md", "`triage.py explore`", "--module/--deep", "module `read` files", "`- 심층 분석` line if 5-1 ran",
                  "look-at/time", "verbatim", "Step 6", '"다음"', "question: ask it, then task again", '--for explore --skipped "<reason>"', "explore here"):
         assert must in rule11, must
     assert rule11.index("`triage.py explore`") < rule11.index('task "tt-explore"') < rule11.index("Step 6")
@@ -224,7 +225,7 @@ def test_explore_subagent_prompt():
     text = EXPLORE.read_text(encoding="utf-8")
     m = re.match(r"---\n(.*?)\n---\n", text, re.DOTALL)
     meta, body = yaml.safe_load(m.group(1)), text[m.end():]
-    assert meta["mode"] == "subagent" and "model" not in meta and 10 <= meta["steps"] <= 60
+    assert meta["mode"] == "subagent" and "model" not in meta and 10 <= meta["steps"] <= 150
     assert gen_opencode.EXPLORE_MODE in text[:m.end()]
     perm = meta["permission"]
     assert all(perm[t] == "deny" for t in ("task", "question", "webfetch", "websearch", "codesearch", "todowrite", "skill"))
@@ -235,7 +236,8 @@ def test_explore_subagent_prompt():
     scripts = [k for k in allows if k.startswith("python3 ")]
     assert sorted(scripts) == sorted(["python3 *triage.py* run *--look-at*", "python3 *triage.py* module *--for explore*--module *",
                                       "python3 *triage.py* module *--module *--for explore*",
-                                      "python3 *triage.py* check-output *--for explore*", "python3 *db_search.py*"])
+                                      "python3 *triage.py* check-output *--for explore*", "python3 *db_search.py*",
+                                      "python3 *triage.py* window *"])
 
     def decide(cmd):                                   # 1.19.5 규칙 평가: 마지막으로 맞는 패턴이 이긴다
         return [v for k, v in bash.items() if gen_opencode.OCV.wildcard_match(k, cmd)][-1]
@@ -243,7 +245,8 @@ def test_explore_subagent_prompt():
     s = '"/p/scripts/'
     for cmd in (f'python3 {s}triage.py" run K-1 --look-at "x"', f'python3 {s}triage.py" module K-1 --for explore --module a/data',
                 f'python3 {s}triage.py" module K-1 --module a/data --for explore --deep', f'python3 {s}db_search.py" C-1 --db x',
-                f'python3 {s}triage.py" check-output K-1 --for explore', "grep -rn x /code", "cat /w/K-1/timeline.md"):
+                f'python3 {s}triage.py" check-output K-1 --for explore', "grep -rn x /code", "cat /w/K-1/timeline.md",
+                f'python3 {s}triage.py" window K-1 --at 2026-09-20T05:33:05Z'):
         assert decide(cmd) == "allow", cmd
     for cmd in (f'python3 {s}triage.py" explore K-1', f'python3 {s}triage.py" module K-1 --for explore',   # 부모 몫(묻기 포함)
                 f'python3 {s}triage.py" check-output K-1 --for deep', f'python3 {s}db_pr.py" publish', "find . -fls x",
@@ -302,6 +305,7 @@ def test_install_renders_everything(roots):
     assert cfg["model"] == "gw/glm-x" and cfg["provider"]["gw"]["options"]["baseURL"] == "http://localhost:9/v1"
     meta = json.loads((proj / "tt-oc.json").read_text(encoding="utf-8"))
     integrity = meta.pop("integrity")
+    meta.pop("opencode_bin", None)       # 이 호스트에 고정 버전 opencode가 있으면 남는다(test_install_records_pinned_opencode)
     assert meta == {"version": 1, "opencode": gen_opencode.OPENCODE_VERSION, "plugin_root": str(roots / "plug"), "work_root": str(roots / "work"),
                     "issue_dbs": [str(roots / "dbA"), str(roots / "dbB")], "model": "glm-x"}
     # 설치 지문(리뷰 P1: guard 플러그인 삭제·adapter 수정을 tt-oc doctor가 찾는다): tt-oc.json 말고 설치한 모든 파일
@@ -387,6 +391,31 @@ def test_install_allow_publish_writes_key_only_when_given(roots):
     r = subprocess.run([sys.executable, str(REPO / "tools" / "gen_opencode.py"), "install", "--help"], capture_output=True,
                        text=True, encoding="utf-8", env={**os.environ, "PYTHONIOENCODING": "utf-8", "COLUMNS": "400"}, check=False)
     assert r.returncode == 0 and "--allow-publish" in r.stdout and '"publish": "open"' in r.stdout and "--force" in r.stdout
+
+
+def test_install_records_pinned_opencode(roots):
+    """install은 고정 버전 opencode의 절대 경로만 tt-oc.json `opencode_bin`에 남긴다(PATH의 opencode가 스스로 업데이트돼도 tt-oc가
+    고정 바이너리를 쓴다). --opencode로 준 것이 다른 버전이면 종료 2, 기본값(TT_OPENCODE·PATH)이 다르면 남기지 않고 알린다."""
+    stub = roots / "oc"
+    stub.write_text(f"#!{sys.executable}\nimport os\nprint(os.environ.get('STUB_VERSION', '{gen_opencode.OPENCODE_VERSION}'))\n",
+                    encoding="utf-8")
+    stub.chmod(0o755)
+
+    def meta():
+        return json.loads((roots / "proj" / "tt-oc.json").read_text(encoding="utf-8"))
+
+    assert _install(roots, "--opencode", str(stub)).returncode == 0
+    assert meta()["opencode_bin"] == str(stub)
+    r = run_gen("install", "--dest", str(roots / "proj"), "--plugin-root", str(roots / "plug"), "--work-root", str(roots / "work"),
+                "--gateway-url", "http://localhost:9/v1", "--model", "glm-x", "--force",
+                env={**os.environ, "TT_OPENCODE": str(stub), "STUB_VERSION": "2.3.0"})
+    assert r.returncode == 0 and "opencode_bin" not in meta() and "opencode 경로를 기록하지 않았다" in r.stderr, r.stderr
+    r = _install(roots, "--force", "--opencode", str(stub))
+    assert r.returncode == 0 and meta()["opencode_bin"] == str(stub)
+    r = run_gen("install", "--dest", str(roots / "proj"), "--plugin-root", str(roots / "plug"), "--work-root", str(roots / "work"),
+                "--gateway-url", "http://localhost:9/v1", "--model", "glm-x", "--force", "--opencode", str(stub),
+                env={**os.environ, "STUB_VERSION": "2.3.0"})
+    assert r.returncode == 2 and "2.3.0" in r.stderr and meta()["opencode_bin"] == str(stub), r.stderr
 
 
 def test_install_provider_model_builtin_provider(roots):

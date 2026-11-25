@@ -1,0 +1,26 @@
+# 합성 case (11/24 정상 가설 묶음 A2). 정상 ③(아무것도 안 한 throttle): 데이터가 붙은 상태에서 unthrottle 줄이 `Nothing to unthrottle.`로 끝난다. 함정: throttle 이상으로 답함. files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+schema_version: 2
+name: data-normal-unthrottle-noop
+kind: explore
+synthetic: true
+key: MOCK-9831
+issue:
+  summary: '데이터 중 unthrottle 로그가 찍힘 (합성)'
+  description: '데이터를 쓰는 중에 onDataProfileUnthrottled 로그가 찍힙니다. throttle 문제가 있는지 확인해 주세요. 합성 case.'
+  occurred_at: '2026-11-20T12:00:00+0000'
+  platform_version: '17'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  accept:
+    - layer: '원인\s*아님|정상'
+      daemon: '없음|알 수 없음|DRM|DataRetryManager'
+      evidence: ['Nothing to unthrottle']
+  trap:
+    - layer: '^\s*(모뎀|망|벤더|RILJ|RIL HAL|프레임워크)'

@@ -7,12 +7,16 @@
    {
     "ts": "2026-09-24T00:59:54.000Z",
     "kind": "backward",
-    "delta_sec": -7.0
+    "delta_sec": -7.0,
+    "same_pid": true,
+    "same_tid": true
    },
    {
     "ts": "2026-09-24T02:59:56.000Z",
     "kind": "jump",
-    "delta_sec": 7201.0
+    "delta_sec": 7201.0,
+    "same_pid": true,
+    "same_tid": true
    }
   ]
  },

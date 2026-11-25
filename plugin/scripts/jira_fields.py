@@ -20,6 +20,7 @@
      logcat: {tz, year},                        # parse_logcat --tz/--year 값 (year_source: tracker일 때 발생 연도)
      sim_slot, components[], text: {summary, description, comments[], comments_total},   # 마스킹됨
                                                 # --comments last:N면 뒤에서 N개, --comment-chars면 하나당 N자
+                                                # comments_partial {total, read} | comments_skipped: n | comments_unchecked — `_comment_order`
      missing[], missing_question, meta_out}
 `missing_question`: 빈 항목을 사용자에게 묻는 고정 문구(빈 항목만, 필드 순서). 빈 항목이 없으면 null.
 필수/선택은 `--db`의 `schema/issue.schema.json` `required` 기준(현재 필수 model·platform_version, 선택 sw·carrier·발생 시각).
@@ -31,7 +32,9 @@
 `failed_step {text, source}`(`--failed-step`·`--steps-file`까지 반영한 최종 값, source는 cli|field|description|test_steps|steps_file),
 `issue.failed_step`(그 값의 text), `warnings[]`. 보조 정보일 뿐이며 `missing`에 넣지 않는다.
 `--failed-step <한 줄>`·`--steps-file <파일>`은 record 흐름이 쓴다(우선순위 cli > 자동 > steps-file, 모두 마스킹 후 정규화).
-`--meta-out`이면 `match_signatures.py --issue-meta` 입력 `{key, occurred_at, sw, summary, description}`을 쓴다(`failed_step`·`platform_version`·`sim_slot`은 있을 때만 더한다).
+`--meta-out`이면 `match_signatures.py --issue-meta` 입력 `{key, sw, summary, description}`을 쓴다(`failed_step`·`platform_version`·`sim_slot`은 있을 때만 더한다).
+Jira 발생 시각 칸(`occurred_at`)은 메타에 넣지 않는다 — 로그와 다른 시계(장비·PC)의 값이라 분석 구간·근접 중심에 쓰지 않는다(D4).
+출력 `occurred_at`·`issue.occurred_on`(기록용 날짜)은 그대로다.
 `--consume`이면 읽은 원본 파일을 지운다(원문을 work_dir에 남기지 않기 위해서다, 08-safety.md §8.1).
 
 `field_map` 경로 표기: 점으로 잇고, 목록은 `[]`로 펼친다(`fields.components[].name`). 경로가 비었거나
@@ -181,26 +184,82 @@ def _text(value) -> str:
     return str(value)
 
 
-def comment_rows(raw, cfg: dict) -> list[tuple[object, object]]:
-    """코멘트 `(코멘트 객체 | None, 본문)` 목록 — `extract`와 `triage.py problem`이 같이 쓴다(같은 경로·같은 번호).
-    경로는 field_map `comments` 또는 트래커 기본값 중 값이 있는 첫 것(`_first`), 빈 본문은 뺀다. 객체는 본문 경로의 부모
-    (`x[].body` → `x[]`의 항목)이고, 짝을 맞출 수 없으면 None(작성자·시각 없음)."""
+CREATED_KEYS = ("created", "created_at")      # 코멘트 작성 시각 칸(있으면 그 순서로 정렬)
+
+
+def _created(obj) -> datetime | None:
+    value = next((obj[k] for k in CREATED_KEYS if isinstance(obj, dict) and obj.get(k)), None)
+    return parse_time(value, timezone.utc) if isinstance(value, str) else None
+
+
+def comment_source(raw, cfg: dict) -> tuple[str | None, list[tuple[object, object]], bool | None]:
+    """(쓴 경로 | None, `(코멘트 객체 | None, 본문)` 목록, 순서: True = 작성 시각이 모두 있고 서로 달라 그 순서로 정렬함, False = 작성
+    시각 없음(받은 순서), None = 일부만 있거나 같은 시각이 있어 순서를 증명할 수 없음). 경로는 field_map `comments`,
+    그다음 트래커 기본값 중 값이 있는 첫 것, 빈 본문은 뺀다. 객체는 본문 경로의 부모(`x[].body` → `x[]`의 항목)이고, 짝을 맞출
+    수 없으면 None(작성자·시각 없음). 작성 시각(`created`)이 모두 있으면 오래된 것부터 정렬한다(최신순으로 돌려주는 도구 대비)."""
     fmap = (cfg.get("tracker") or {}).get("field_map") or {}
-    paths = [fmap["comments"]] if fmap.get("comments") else list(trackers.of(cfg).text_defaults["comments"])
+    paths = list(trackers.of(cfg).text_defaults["comments"])
+    if fmap.get("comments"):     # 사내 경로가 먼저, 그 값이 없는 문서(포털 선별 파일의 `fields.comment` 등)는 트래커 기본 경로로
+        paths = [fmap["comments"]] + [x for x in paths if x != fmap["comments"]]
     for path in paths:
         value = lookup(raw, path)
         if value in (None, "", []):
             continue
         if not isinstance(value, list):
-            return [(None, value)] if value and _text(value) else []
+            return path, ([(None, value)] if value and _text(value) else []), False
         parent, _, leaf = path.rpartition(".")
         owners = None
         if parent.endswith("[]") and not leaf.endswith("[]"):     # lookup이 본문을 꺼낸 항목과 같은 걸러내기
             owners = [o for o in lookup(raw, parent) or [] if isinstance(o, dict) and o.get(leaf) is not None]
         if owners is None or len(owners) != len(value):
             owners = [None] * len(value)
-        return [(o, v) for o, v in zip(owners, value) if _text(v)]
-    return []
+        rows = [(o, v) for o, v in zip(owners, value) if _text(v)]
+        times = [_created(o) for o, _ in rows]
+        known = [t for t in times if t is not None]
+        if known and (len(known) < len(times) or len(set(known)) < len(known)):
+            return path, rows, None       # 작성 시각이 일부만 있거나 같은 값이 있다 — 순서를 증명할 수 없다
+        dated = bool(rows) and len(known) == len(times)
+        if dated:
+            rows = [r for _, r in sorted(zip(times, rows), key=lambda x: x[0])]
+        return path, rows, dated
+    return None, [], False
+
+
+def comment_rows(raw, cfg: dict) -> list[tuple[object, object]]:
+    """코멘트 `(코멘트 객체 | None, 본문)` 목록(작성 순) — `extract`와 `triage.py problem`이 같이 쓴다(같은 경로·같은 번호)."""
+    return comment_source(raw, cfg)[1]
+
+
+def _comment_order(raw, path: str | None, read: int, dated: bool | None) -> dict:
+    """받은 코멘트가 전부·작성 순인지(코멘트 단서 자동 추출의 전제). 전체 수(`total`)·건너뛴 수(`startAt`, 없으면 0)는 **쓴 코멘트와
+    같은 출처**에서 읽는다: `fields.comment.comments[]`면 `fields.comment`, 맨 위 `comments[]`(Jira 코멘트 도구 응답 — jira_bridge가
+    `comments_page`에 남긴다)면 `comments_page`.
+    - `startAt + 읽은 수 != total` → `{comments_partial: {total, read}}`(최근 코멘트가 빠졌거나 수가 안 맞음 — 뽑지 않는다)
+    - `== total`이고 startAt > 0 → `{comments_skipped: startAt}`(오래된 것만 빠짐 — 포털 크기 상한, 번호를 Jira 순번에). 단 작성
+      시각으로 다시 정렬했으면(받은 순서가 오래된 것부터라는 보장이 없다 — 최신순 페이지) `comments_partial`
+    - total 없음 → `{comments_unchecked: "total"}`. 순서 모름 → `{comments_unchecked: "order"}`: 작성 시각이 일부만 있거나 같은 값이
+      있음(어느 출처든), 맨 위 목록인데 작성 시각이 없음. 시각이 전혀 없는 `fields.comment`(Jira 원본·포털)는 받은 순서를 믿는다
+    코멘트가 없으면 `fields.comment.total` > 0일 때만: `startAt == total`(앞을 모두 건너뛰고 0개 — 포털이 긴 마지막 코멘트 때문에
+    코멘트를 넘기지 않은 모양)이면 `{comments_skipped: total}`, 그 밖은 일부만 읽음."""
+    if path is None:
+        total, start = lookup(raw, "fields.comment.total"), lookup(raw, "fields.comment.startAt")
+        if type(total) is not int or total <= 0:
+            return {}
+        return {"comments_skipped": total} if start == total else {"comments_partial": {"total": total, "read": 0}}
+    container = path.split("[]")[0].rpartition(".")[0]
+    page = lookup(raw, container) if container else raw.get("comments_page")
+    page = page if isinstance(page, dict) else {}
+    total, start = page.get("total"), page.get("startAt")
+    start = start if type(start) is int and start > 0 else 0
+    if type(total) is not int:
+        return {"comments_unchecked": "total"}
+    # 순서: 작성 시각이 모두 있고 서로 다르면 그 순서. 시각이 전혀 없으면 Jira 원본 모양(`fields.comment` — 오래된 것부터, 포털도
+    # 이 모양으로 준다)만 받은 순서를 믿고, 맨 위 목록(도구마다 순서가 다를 수 있음)이나 시각이 일부·같은 값이면 순서 모름
+    if dated is None or (not container and not dated):
+        return {"comments_unchecked": "order"}
+    if start + read != total or (dated and start):     # 작성 시각으로 다시 정렬했으면 건너뛴 것이 옛 것인지 모른다(최신순 페이지, C-7)
+        return {"comments_partial": {"total": total, "read": read}}
+    return {"comments_skipped": start} if start else {}
 
 
 def comment_budget(spec: str) -> int | None:
@@ -277,18 +336,23 @@ def extract(raw: dict, cfg: dict, db: Path | None, origin: str, last: int | None
         paths = [fmap[name]] if fmap.get(name) else list(adapter.text_defaults[name])
         return _first(raw, paths)
 
-    comments = [body for _, body in comment_rows(raw, cfg)]
+    source, rows, dated = comment_source(raw, cfg)
+    comments = [body for _, body in rows]
     total = len(comments)
+    order = _comment_order(raw, source, total, dated)
     if last is not None:
         comments = comments[-last:] if last else []
     masked = [masker(_text(c)) for c in comments]
     if chars:
-        masked = [m if len(m) <= chars else m[: chars - 1] + "…" for m in masked]
+        masked = [m if len(m) <= chars else masking.clip(m, chars - 1) + "…" for m in masked]
     text = {
         "summary": masker(_text(texts("summary"))),
         "description": masker(_text(texts("description"))),
         "comments": masked,
         "comments_total": total,
+        **order,
+        # 제출자 참고 글(포털이 `fields.tt_note`로 넘긴다) — 모델 참고용, 단서 추출·실패 스텝 찾기는 읽지 않는다
+        **({"note": masker(note)} if (note := _text(lookup(raw, "fields.tt_note"))) else {}),
     }
 
     slot = lookup(raw, fmap["sim_slot"]) if fmap.get("sim_slot") else None
@@ -411,8 +475,6 @@ def main(argv: list[str] | None = None) -> int:
             pv = result["issue"].get("platform_version") or result.get("platform_version_all")
             if pv:
                 meta["platform_version"] = pv
-            if result["occurred_at"]:
-                meta["occurred_at"] = result["occurred_at"]
             if result.get("sim_slot"):
                 meta["sim_slot"] = result["sim_slot"]
             fs = result.get("failed_step") or result.get("failed_step_auto")

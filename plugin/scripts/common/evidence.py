@@ -1,7 +1,8 @@
 """근거 원문 검사(grounding)와 출력 칸 읽기 — `module_eval`(C0 채점)과 `triage.py check-output`(B2 §6)이 같이 쓴다.
 
 `module_eval.py`에서 옮겼다(동작 그대로). `module_eval`은 같은 이름을 다시 내보낸다.
-- `parse_fields`: 고정 칸(심층 6칸 `FIELDS_DEEP`, 설치 스킬 4칸 `FIELDS_SKILL`)을 순서대로 읽는다.
+- `parse_fields`: 고정 칸(심층 6칸 `FIELDS_DEEP`, 설치 스킬 4칸 `FIELDS_SKILL`)을 순서대로 읽는다. 심층 다섯째 칸 `후보 확인:`(후보마다
+  `- <원인 ID>: 맞음|아님|모름 — <근거>`)은 옛 한 줄 `분석 스킬 의견:`(사내 모듈 레포 옛 형식)도 받는다 — 둘 다 `분석 스킬 의견` 값을 낸다.
 - `parse_explore`: 탐색 출력(`가설 n:` 블록 1~3개, 또는 `가설 없음:`).
 - `source_text`·`event_rows_text`: 검사 원문(타임라인 행 문법 줄만, events.json 전체 행).
 - `evidence_check`·`check_quotes`: 인용이 원문에 있는지(ok | weak | fabricated).
@@ -12,7 +13,16 @@ from __future__ import annotations
 import difflib
 import re
 
-FIELDS_DEEP = ("원인 층", "원인 데몬", "근거", "반대 근거", "분석 스킬 의견", "규칙 제안")
+from .fixtures import CAUSE_ID, TYPE_ID
+
+FIELDS_DEEP = ("원인 층", "원인 데몬", "근거", "반대 근거", "후보 확인", "규칙 제안")
+CHECK_FIELD, OPINION_FIELD = "후보 확인", "분석 스킬 의견"
+# `- DATA-001-01: 맞음 — <근거>`(백틱·굵게·괄호로 감싸도, 원인 미확인 후보는 유형 ID). 앞의 순위(`1위 `·`1.`·`#1`), ID 뒤 괄호
+# 설명(`(1위)`), 구분자 `:`·`—`·`=`·`→`·`-`, 판정 뒤 한글 어미·문장부호(`맞음입니다`·`맞음!`)도 받는다. 판정 뒤 설명은 대시·쌍점 뒤 전부
+CHECK_ITEM_RX = re.compile(r"^[`*\[(<]*(?:(?:\d+\s*위|#\d+|\d+[.)])\s*[:.)]?\s*[`*\[(<]*)?(" + TYPE_ID + r"(?:-\d{2})?)(?!\d)"
+                           r"[`*\])>]*\s*(?:\([^)]{0,40}\))?\s*[:：—–=→-]?\s*\**\s*(맞음|아님|모름)[가-힣]*\**[.!?。]*"
+                           r"(?=$|[\s—–:,.(])\s*(?:[—–:-]\s*)?(.*)$")
+CHECK_NEW_RX = re.compile(r"^\s*(?:[-*]\s*)?\**\s*후보\s*확인\s*\**\s*[:：]")
 FIELDS_SKILL = ("요약", "근거", "분석 스킬 의견", "규칙 제안")
 LIST_FIELDS = ("근거", "규칙 제안")
 EXPLORE_FIELDS = ("가설", "로그로 확인", "코드로 추정", "반대 근거", "다음 확인")
@@ -50,6 +60,8 @@ DECISION_TOKEN_RX = re.compile(
     r"\b(?:error|err|errno|cause|code|reason|status|state|result|rat|fail_cause|failcause|rc|ret)\b\s*[=:]?\s*[-A-Za-z0-9_]+(?:\(\d+\))?|"
     r"\b[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?=[-A-Za-z0-9_<])[-A-Za-z0-9_.<>#]+(?:\(\d+\))?(?::\d+(?![-A-Za-z0-9_.<>#=:]))?(?![-A-Za-z0-9_.<>#=])|"
     r"\b[A-Za-z_][A-Za-z0-9_]*\s*:\s*(?=[-A-Za-z0-9_<])[-A-Za-z0-9_.<>#]+(?:\(\d+\))?(?![-A-Za-z0-9_.<>#=:])|"
+    # 코덱스 K07: 단위가 붙은 숫자(재시도 간격·제한 시간·신호 세기 — `5000ms`→`9999ms` 변조). 띄어쓰기까지 원문 그대로여야 한다
+    r"\b\d+(?:\.\d+)?\s?(?:ms|msec|millis|s|sec|secs|seconds?|min|mins|minutes?|dbm|db)(?![A-Za-z0-9_])|"
     r"\b(?:failed|failure|fail|succeeded|success|rejected|reject|accepted|timeout|timed out|denied|disconnected|connected|"
     + "|".join(NEGATION_WORDS) + r"|true|false|enabled|disabled|null|none)\b",
     re.IGNORECASE)
@@ -86,14 +98,52 @@ def _label_rx(name: str) -> re.Pattern:
 
 
 LABEL_RX = {f: _label_rx(f) for f in dict.fromkeys(FIELDS_DEEP + FIELDS_SKILL)}
+LABEL_RX[CHECK_FIELD] = re.compile(r"^\s*(?:[-*]\s*)?\**\s*(?:후보\s*확인|분석\s*스킬\s*의견)\s*\**\s*[:：]\s*\**\s*(.*)$")
 # `### 가설 1:`·`가설 1 (추정):`·`**가설 1:**`도 머리로 읽는다(모듈 eval 파서와 같은 허용 — 코덱스 리뷰 F4: 두 파서가 달랐다)
 HYP_RX = re.compile(r"^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?\**\s*가설\s*#?(\d+)?\s*(?:\([^)\n]{0,20}\))?\s*\**\s*[:：]\s*\**\s*(.*)$")
 NONE_RX = _label_rx("가설 없음")
 # 탐색 출력 계약(실사용 `explore.md`) = 가설마다 EXPLORE_FIELDS 다섯 칸. 모듈 eval은 같은 계약에 **선택 칸**을 더 쓴다 — 가설 머리와
 # `로그로 확인` 사이의 `원인 층`·`원인 데몬`, 마지막 가설 뒤 꼬리 `가장 유력`·`규칙 제안`. check-output은 그 칸을 읽되 쓰지 않는다.
 EXPLORE_OPTIONAL = ("원인 층", "원인 데몬")
-EXPLORE_TAIL = ("가장 유력", "규칙 제안")
+EXPLORE_TAIL = ("가장 유력", "규칙 제안", CHECK_FIELD)     # 후보 확인: 조사 모드 near_causes 대조(반입 7 B-2)
 EXPLORE_RX = {f: _label_rx(f) for f in EXPLORE_FIELDS[1:] + EXPLORE_OPTIONAL + EXPLORE_TAIL}
+# 11/25 기대 체인(explore.md 쓰는 것): 가설 블록 안 어디에 있어도 읽는 선택 칸. `기대 체인:` 뒤 표 행(`| 단계 | 기대 | 기대 근거 |
+# 관측 줄 | 일치 |`), `찾았는데 없음:` 뒤 목록, 나머지는 한 줄. 없으면 None. 형식 실패로 만들지 않는다(check-output이 경고만 낸다)
+CHAIN_LABELS = ("기대 체인", "첫 갈라짐", "찾았는데 없음", "메커니즘 재계산", "책임 경계")
+CHAIN_RX = {f: _label_rx(f) for f in CHAIN_LABELS}
+STEP_NUM_RX = re.compile(r"(\d+)")
+# 일치 칸: 앞부분만 본다(`false — 재요청 없음`·`**불일치**.`). 불일치를 일치보다 먼저. 기호 ❌✗×·X = false, ✅✓○·O = true,
+# `아니오`·`아니요` = false(11/25 R-07). 못 읽으면 `?`(명시한 `모름`과 다르다 — check-output이 그 칸을 형식 경고로 가리킨다)
+_VERDICT_RX = re.compile(r"^(불일치|거짓|false|아니오|아니요|일치|참|true|o|○|x|×)(?![a-z])", re.IGNORECASE)
+_VERDICT = {"불일치": "false", "거짓": "false", "false": "false", "아니오": "false", "아니요": "false", "x": "false", "×": "false",
+            "일치": "true", "참": "true", "true": "true", "o": "true", "○": "true"}
+# 관측 칸이 인용인가: 따옴표·앞뒤 `(window-n)`·`[…]` 표시를 뗀 뒤 시각(`HH:MM:SS`, logcat `MM-DD HH:MM:SS`, ISO 날짜+시각, syslog
+# `Mon DD HH:MM:SS`)으로 시작할 때만.
+# `없음(찾은 곳 …)`·`찾지 못함`·`—`·`N/A`·`미관측`처럼 시각이 없는 칸은 인용이 아니다(원문에 없음·약함으로 세지 않는다)
+_OBS_TAG_RX = re.compile(r"^\s*[(\[][^()\[\]]{0,40}[)\]]\s*|\s*[(\[]window-\d+(?:\.md)?[)\]]\s*$", re.IGNORECASE)
+_OBS_TIME_RX = re.compile(r"^(?:\d{4}-\d{2}-\d{2}[T ]|\d{2}-\d{2}\s+|[A-Z][a-z]{2}\s+\d{1,2}\s+)?\d{2}:\d{2}:\d{2}")   # 끝: syslog `Sep 20`
+# sim1122 F2: `1위 판단: <원인 ID> 적합|부적합|모름 — <이유>`(채택 원인이 이번 실패를 설명하는지, 선택 칸, 출력 어디에 있어도 첫
+# `1위 판단` 줄). ID는 값 앞·머리 괄호(`1위 판단(<ID>):`)·없음(옛 형식) 모두 읽고, 값 뒤 문장부호도 받는다. 형식 실패로 만들지 않는다
+TOP_FIT_HEAD_RX = re.compile(r"^\s*(?:[-*]\s*)?\**\s*1위\s*판단")
+_ID = r"[`*\[(<]*(" + CAUSE_ID + r")(?!\d)[`*\])>]*"
+TOP_FIT_RX = re.compile(r"^\s*(?:[-*]\s*)?\**\s*1위\s*판단\s*(?:" + _ID + r")?\s*\**\s*[:：]\s*\**\s*(?:" + _ID + r"\s*[:：]?\s*)?"
+                        r"(부적합|적합|모름)(?=$|[\s—–:,.(*!])\**[.!]?\s*(?:[—–:-]\s*)?(.*)$")
+
+
+def top_fit(lines: list[str]) -> dict | None:
+    """`1위 판단` 칸 → {"fit": 적합|부적합|모름, "cause": 원인 ID | None, "why": 이유} | 줄은 있는데 못 읽으면 {"fit": None, …} | None."""
+    head = next((line for line in lines if TOP_FIT_HEAD_RX.match(line)), None)
+    if head is None:
+        return None
+    m = TOP_FIT_RX.match(head)
+    if not m:
+        return {"fit": None, "cause": None, "why": ws(head)[:120]}
+    return {"fit": m.group(3), "cause": m.group(1) or m.group(2), "why": m.group(4).strip()}
+
+
+def _top_fit_key(lines: list[str]) -> dict:
+    got = top_fit(lines)
+    return {"top_fit": got} if got else {}
 
 
 def ws(text: str) -> str:
@@ -134,24 +184,67 @@ def _parse(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> tuple[dict | Non
         return None, lines, None
     idx = [hits[fields[0]][-1]]
     for f in fields[1:]:
-        nxt = next((i for i in hits[f] if i > idx[-1]), None)
-        if nxt is None:
+        later = [i for i in hits[f] if i > idx[-1]]
+        if not later:
             return None, lines, None
+        nxt = later[0]
+        if f == CHECK_FIELD and fields is FIELDS_DEEP:     # `분석 스킬 의견:`과 `후보 확인:`이 다 있으면 새 블록(규칙 제안 앞)
+            rule = next((i for i in hits[fields[-1]] if i > idx[-1]), None)
+            nxt = next((i for i in later if CHECK_NEW_RX.match(lines[i]) and (rule is None or i < rule)), nxt)
         idx.append(nxt)
     label_lines = sorted({i for f in fields for i in hits[f]})
     out: dict = {}
     rule_block = None
     for f, i in zip(fields, idx):
         rest = rx[f].match(lines[i]).group(1).strip()
-        if f in LIST_FIELDS:
+        if f == CHECK_FIELD and fields is FIELDS_DEEP:
+            end = next((j for j in label_lines if j > i), len(lines))
+            items = [im.group(1).strip() if (im := ITEM_RX.match(line)) else line.strip()      # 글머리표 없는 줄도
+                     for line in lines[i + 1:end] if line.strip() and not line.strip().startswith("```")]
+            if not items and rest and CHECK_ITEM_RX.match(rest):      # 라벨 줄에 판정을 같이 쓴 꼴(`후보 확인: X: 아님 — …`)
+                items = [rest]
+            out[f] = _checks(items)
+            read = [c for c in out[f] if c["verdict"] != "?"]
+            out[OPINION_FIELD] = _opinion(read) if read else rest
+        elif f in LIST_FIELDS:
             end = next((j for j in label_lines if j > i), len(lines)) if f == "근거" else len(lines)
             block = [rest, *lines[i + 1:end]]
             out[f] = [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
             if f == "규칙 제안":
+                out[f] = _same_line_rule(rest) + out[f]
                 rule_block = range(i, end)
         else:
             out[f] = rest
     return out, lines, rule_block
+
+
+def _checks(items: list[str]) -> list[dict]:
+    """`후보 확인` 목록 줄 → [{cause, verdict, why}]. 읽지 못한 줄은 `{cause: None, verdict: "?", why: <원문>}`으로 남긴다
+    (check-output이 report에 그대로 싣고 경고한다 — 빈 의견이 조용히 남지 않게)."""
+    out = []
+    for item in items:
+        m = CHECK_ITEM_RX.match(item)
+        out.append({"cause": m.group(1), "verdict": m.group(2), "why": m.group(3).strip()} if m
+                   else {"cause": None, "verdict": "?", "why": item})
+    return out
+
+
+def _opinion(checks: list[dict]) -> str:
+    """후보 확인 → 옛 `분석 스킬 의견` 값: 첫 `맞음` 후보 `<ID> — <근거>`(check-output이 채택 원인과 다르면 counter로 남긴다),
+    맞음이 없으면 `맞는 후보 없음 — <ID 판정; …>`(ID로 시작하지 않는다)."""
+    hit = next((c for c in checks if c["verdict"] == "맞음"), None)
+    if hit:
+        return f"{hit['cause']} — {hit['why']}".rstrip(" —")
+    return "맞는 후보 없음 — " + "; ".join(f"{c['cause']} {c['verdict']}" for c in checks)
+
+
+RULE_NONE_RX = re.compile(r"^[\s*`]*(?:해당\s*)?없음")     # `없음`·`해당 없음`(뒤 설명 무엇이든) = 제안 아님
+
+
+def _same_line_rule(rest: str) -> list[str]:
+    """`규칙 제안: [이슈 DB] …`처럼 칸 이름 줄에 바로 쓴 제안 하나(목록 기호 없이). 비었거나 `없음`·`해당 없음`이거나 목록 줄이면 []."""
+    rest = (rest or "").strip()
+    return [] if not rest or ITEM_RX.match(rest) or RULE_NONE_RX.match(rest) else [rest]
 
 
 def parse_fields(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> dict | None:
@@ -161,10 +254,10 @@ def parse_fields(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> dict | Non
 
 def explore_parse(text: str) -> tuple[dict | None, str | None]:
     """탐색 출력 → ({"none", "next", "hyps": [{n, 가설, 원인 층, 원인 데몬, 로그로 확인: [...], 코드로 추정, 반대 근거, 다음 확인}],
-    "top": str|None, "rules": [...]}, None) 또는 (None, 사유).
+    "top": str|None, "rules": [...], "top_fit"?: {fit, why}, "후보 확인"?: [{cause, verdict, why}](칸이 있을 때만)}, None) 또는 (None, 사유).
 
     `가설 n: …` 블록마다 다섯 칸(`EXPLORE_FIELDS`)이 순서대로 있어야 한다. `원인 층`·`원인 데몬`(가설 머리와 `로그로 확인` 사이)은
-    선택이고 없으면 None, `n`은 머리의 번호(없으면 None). 마지막 가설 뒤 `가장 유력:`·`규칙 제안:`은 꼬리(선택)다. 블록이 없으면
+    선택이고 없으면 None, `n`은 머리의 번호(없으면 None). 가설마다 `chain_fields`(기대 체인 칸, 블록 어디든)를 더한다. 마지막 가설 뒤 `가장 유력:`·`규칙 제안:`·`후보 확인:`은 꼬리(선택, 칸마다 다음 꼬리 칸 전까지)다. 블록이 없으면
     `가설 없음: <이유>`와 `다음 확인:`이 있어야 한다. 칸 밖 줄(빈 줄·설명)은 무시한다. 실사용 check-output과 모듈 eval이 같은 함수를 쓴다.
     """
     m = FENCE_RX.match(text or "")
@@ -178,7 +271,8 @@ def explore_parse(text: str) -> tuple[dict | None, str | None]:
                     if EXPLORE_RX["다음 확인"].match(line)), None)
         if nxt is None:
             return None, "가설 없음 뒤 `다음 확인` 칸 없음"
-        return {"none": NONE_RX.match(lines[none_at]).group(1).strip(), "next": nxt, "hyps": [], "top": None, "rules": []}, None
+        return ({"none": NONE_RX.match(lines[none_at]).group(1).strip(), "next": nxt, "hyps": [], "top": None, "rules": [],
+                 **_top_fit_key(lines), **_tail(lines[none_at + 1:])[1]}, None)
     tail_at = next((i for i in range(starts[-1] + 1, len(lines)) if any(EXPLORE_RX[t].match(lines[i]) for t in EXPLORE_TAIL)),
                    len(lines))
     hyps = []
@@ -201,22 +295,142 @@ def explore_parse(text: str) -> tuple[dict | None, str | None]:
             rest = EXPLORE_RX[f].match(block[hit]).group(1).strip()
             if f == "로그로 확인":
                 end = next((j for j in range(hit + 1, len(block))
-                            if any(EXPLORE_RX[g].match(block[j]) for g in EXPLORE_FIELDS[2:])), len(block))
+                            if any(EXPLORE_RX[g].match(block[j]) for g in EXPLORE_FIELDS[2:])
+                            or any(rx.match(block[j]) for rx in CHAIN_RX.values())), len(block))
                 items = [im.group(1).strip() for line in block[hit + 1:end] if (im := ITEM_RX.match(line))]
                 hyp[f] = ([rest] if rest else []) + items
                 pos = end
             else:
                 hyp[f] = rest
                 pos = hit + 1
-        hyps.append(hyp)
+        hyps.append({**hyp, **chain_fields(block)})
     tail = lines[tail_at:]
     top = next((EXPLORE_RX["가장 유력"].match(line).group(1).strip() for line in tail if EXPLORE_RX["가장 유력"].match(line)), None)
-    rules: list[str] = []
-    r_at = next((i for i, line in enumerate(tail) if EXPLORE_RX["규칙 제안"].match(line)), None)
-    if r_at is not None:
-        block = [EXPLORE_RX["규칙 제안"].match(tail[r_at]).group(1).strip(), *tail[r_at + 1:]]
-        rules = [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
-    return {"none": None, "next": None, "hyps": hyps, "top": top, "rules": rules}, None
+    rules, checks = _tail(tail)
+    return {"none": None, "next": None, "hyps": hyps, "top": top, "rules": rules, **_top_fit_key(lines), **checks}, None
+
+
+def _tail(tail: list[str]) -> tuple[list[str], dict]:
+    """꼬리 줄 → (규칙 제안 항목, `{후보 확인: [{cause, verdict, why}]}` | {}). 칸마다 다음 꼬리 칸(`EXPLORE_TAIL`) 전까지 읽는다."""
+    heads = [i for i, line in enumerate(tail) if any(EXPLORE_RX[t].match(line) for t in EXPLORE_TAIL)]
+
+    def block(name: str) -> list[str] | None:
+        at = next((i for i in heads if EXPLORE_RX[name].match(tail[i])), None)
+        if at is None:
+            return None
+        end = next((i for i in heads if i > at), len(tail))
+        return [EXPLORE_RX[name].match(tail[at]).group(1).strip(), *tail[at + 1:end]]
+
+    rules, checks = block("규칙 제안"), block(CHECK_FIELD)
+    rules = _same_line_rule(rules[0]) + [im.group(1).strip() for line in rules if (im := ITEM_RX.match(line))] if rules else []
+    if checks is None:
+        return rules, {}
+    items = [im.group(1).strip() for line in checks[1:] if (im := ITEM_RX.match(line))]
+    return rules, {CHECK_FIELD: _checks(items or ([checks[0]] if checks[0] and CHECK_ITEM_RX.match(checks[0]) else []))}
+
+
+def _cells(line: str) -> list[str] | None:
+    s = line.strip().replace("｜", "|")       # 전각 세로줄도 칸 구분
+    if not s.startswith("|"):
+        return None
+    s = s[1:-1] if s.endswith("|") and len(s) > 1 else s[1:]
+    return [c.strip() for c in s.split("|")]
+
+
+def _verdict(cell: str) -> str:
+    s = cell.strip().strip("`*_ ").strip()
+    if s.startswith(("❌", "✗")):
+        return "false"
+    if s.startswith(("✅", "✓")):
+        return "true"
+    if s.startswith("모름"):
+        return "모름"
+    m = _VERDICT_RX.match(s)
+    return _VERDICT[m.group(1).lower()] if m else "?"
+
+
+def _chain_row(cells: list[str], cols: dict | None) -> dict | None:
+    """표 행 → {단계, 기대, 주체, 근거, 관측, 일치}. 첫 칸에서 단계 번호를 못 읽으면(머리·구분 행 `| **단계** |`·`| # |`·`|-|-|`) None.
+    머리 행에서 찾은 열 위치(`cols`)가 있고 칸 수가 같거나 더 많으면 그 위치로(더 많으면 관측 칸 안의 `|` — 남는 칸을 관측 칸에
+    이어 붙인다), 아니면 5열 자리(관측 칸의 `|`는 가운데 칸을 이어 붙인다).
+    `주체`(기대 주체 열, 11/25 조사 모드)는 머리 행에 있을 때만, 없으면 ""(옛 5열 표 — 게이트 3 실패로 본다)."""
+    m = STEP_NUM_RX.search(cells[0])
+    if not m:
+        return None
+    if cols and len(cells) > cols["n"]:
+        o, extra = cols["관측"], len(cells) - cols["n"]
+        cells = cells[:o] + [" | ".join(cells[o:o + extra + 1]).strip()] + cells[o + extra + 1:]     # 칸을 나눌 때 뗀 둘레 공백을 되살린다
+    if cols and len(cells) == cols["n"]:
+        pick = {k: cells[i] if i is not None else "" for k, i in cols.items() if k != "n"}
+    elif len(cells) >= 5:
+        pick = {"기대": cells[1], "주체": "", "근거": cells[2], "관측": "|".join(cells[3:-1]).strip(), "일치": cells[-1]}
+    else:
+        return None
+    return {"단계": int(m.group(1)), "기대": pick["기대"], "주체": pick["주체"], "근거": pick["근거"], "관측": pick["관측"],
+            "일치": _verdict(pick["일치"])}
+
+
+def _header_cols(cells: list[str]) -> dict | None:
+    """머리 행이면 열 이름 → 위치(`관측`·`일치`가 있어야 머리로 본다), 아니면 None."""
+    names = [c.strip("`*_ ") for c in cells]
+    find = lambda pred: next((i for i, c in enumerate(names) if pred(c)), None)      # noqa: E731
+    obs, match = find(lambda c: "관측" in c), find(lambda c: "일치" in c)
+    if obs is None or match is None:
+        return None
+    return {"n": len(cells), "기대": find(lambda c: c == "기대"), "주체": find(lambda c: "주체" in c), "근거": find(lambda c: "근거" in c),
+            "관측": obs, "일치": match}
+
+
+def chain_fields(block: list[str]) -> dict:
+    """가설 블록의 `CHAIN_LABELS` 칸(각 첫 줄만). `기대 체인` = [{단계: int, 기대, 주체, 근거, 관측, 일치: true|false|모름}]
+    (`_chain_row` — 단계 번호 없는 행은 건너뛴다. 표 중간 빈 줄은 다음 줄이 `|`면 이어 읽는다), `찾았는데 없음` = 항목 목록."""
+    out: dict = dict.fromkeys(CHAIN_LABELS)
+    for i, line in enumerate(block):
+        f = next((f for f in CHAIN_LABELS if CHAIN_RX[f].match(line)), None)
+        if f is None or out[f] is not None:
+            continue
+        rest = CHAIN_RX[f].match(line).group(1).strip()
+        if f in ("기대 체인", "찾았는데 없음"):
+            got: list = [] if f == "기대 체인" or not rest or RULE_NONE_RX.match(rest) else [rest]
+            cols, seen = None, False
+            for j in range(i + 1, len(block)):
+                nxt = block[j]
+                if not nxt.strip():
+                    following = next((x for x in block[j + 1:] if x.strip()), "")
+                    if seen and not (f == "기대 체인" and following.strip().startswith(("|", "｜"))):
+                        break
+                    continue
+                cells = _cells(nxt) if f == "기대 체인" else None
+                im = ITEM_RX.match(nxt) if f == "찾았는데 없음" else None
+                if f == "기대 체인" and cells is not None:
+                    seen = True
+                    row = _chain_row(cells, cols)
+                    if row is not None:
+                        got.append(row)
+                    elif cols is None:
+                        cols = _header_cols(cells)
+                elif im:
+                    seen = True
+                    got.append(im.group(1).strip())
+                else:
+                    break
+            out[f] = got
+        else:
+            out[f] = rest
+    return out
+
+
+def obs_quote(obs: str) -> str | None:
+    """관측 칸 → 인용(따옴표·앞뒤 표시를 뗀 글)이면 그 글, 시각으로 시작하지 않으면 None."""
+    s = QUOTE_CHARS_RX.sub("", obs).strip()
+    for _ in range(2):
+        s = _OBS_TAG_RX.sub("", s).strip()
+    return s if _OBS_TIME_RX.match(s) else None
+
+
+def chain_quotes(hyp: dict) -> list[str]:
+    """`기대 체인` 관측 칸 중 인용(`obs_quote`) — check-output이 `로그로 확인`과 같은 근거 원문 검사를 한다."""
+    return [q for r in hyp.get("기대 체인") or [] if (q := obs_quote(r["관측"])) is not None]
 
 
 def parse_explore(text: str) -> dict | None:
@@ -375,6 +589,7 @@ def _decision_tokens_altered(part: str, files_text: str, tags: re.Pattern | None
 def evidence_check(item: str, files_text: str, tags) -> tuple[str, list[tuple[str, int, int]]]:
     """근거 항목 하나의 판정: ok | weak | fabricated, 부분별 (판정, 최장 일치 길이, 길이). 결정 토큰이 바뀐 인용은 fabricated다."""
     worst, detail = "ok", []
+    files_text = QUOTE_CHARS_RX.sub("", files_text)      # 인용 쪽(`_quote_parts`)과 같이 따옴표를 뗀다 — `a:"State"` 줄을 그대로 인용해도 지어낸 것이 되던 것
     for part in _quote_parts(item, tags):
         n = len(part)
         if n < 12:
@@ -390,6 +605,8 @@ def evidence_check(item: str, files_text: str, tags) -> tuple[str, list[tuple[st
         detail.append((verdict, m, n))
         if verdict == "fabricated" or (verdict == "weak" and worst == "ok"):
             worst = verdict
+    if not detail:      # 따옴표·생략표만 남은 인용(`...`·`""`·시각과 `...`)은 확인한 것이 없다 — ok가 아니다(코덱스 K03, 정상 근거로 안 쓴다)
+        worst = "weak"
     return worst, detail
 
 
@@ -407,6 +624,135 @@ def source_text(timeline_text: str) -> tuple[str, re.Pattern | None]:
         if len(parts) >= 4 and parts[3] != "-":
             tags.add(parts[3])
     return "\n".join(rows), tag_rx(sorted(tags, key=lambda t: (-len(t), t)))
+
+
+# 원문 줄 정규식(파서와 같은 것 — Android threadtime·time, oFono ISO·BSD·BusyBox)과 등급→레벨 표. common은 플랫폼을 import하지
+# 않으므로(17-platforms §1-2) 위층(`triagelib.output`)이 `platforms.raw_line_patterns()`를 넣어 준다. 넣기 전에는 원문 모양을 읽지 않는다
+_RAW_RXS: tuple[tuple, dict] = ((), {})
+
+
+def set_raw_patterns(patterns: tuple[tuple, dict]) -> None:
+    global _RAW_RXS
+    _RAW_RXS = patterns
+
+
+def raw_patterns_set() -> bool:
+    return bool(_RAW_RXS[0])
+
+
+def _raw_rxs() -> tuple[tuple, dict]:
+    return _RAW_RXS
+
+
+def raw_stamp(line: str) -> dict | None:
+    """원문 모양 한 줄의 정규식 칸(`year`·`mon`|`bmon`·`day`·`h`·`mi`·`s`·`frac`·`zone`·`level`·`tag`|`ident`·`sev`·`msg` 중 있는 것).
+    모양이 다르면 None. check-output 게이트가 인용 시각을 읽는다(logcat·oFono ISO·BSD·BusyBox 같은 식)."""
+    s = ws(QUOTE_CHARS_RX.sub("", line or ""))
+    return next((m.groupdict() for rx in _raw_rxs()[0] if (m := rx.match(s))), None)
+
+
+def _raw_fields(line: str) -> dict | None:
+    """원문 모양 한 줄 → {time, level, tag, msg}(시각은 로그에 적힌 그대로, 레벨 없는 syslog는 `-`). 모양이 다르면 None."""
+    g = raw_stamp(line)
+    if g is None:
+        return None
+    level = g.get("level") or _raw_rxs()[1].get(g.get("sev") or "", "-")
+    return {"time": f"{g['h']}:{g['mi']}:{g['s']}" + (f".{g['frac']}" if g.get("frac") else ""), "level": level,
+            "tag": (g.get("tag") or g.get("ident") or "").strip(), "msg": g.get("msg") or ""}
+
+
+def raw_row(line: str) -> str | None:
+    """사본 한 줄(또는 그 모양으로 적은 인용) → 행 문법 `시각 - 레벨 태그 메시지`(시각은 로그에 적힌 그대로, 슬롯 `-`).
+    모양이 다르면 None. 사본 줄과 원문 모양 인용을 같은 식으로 바꿔 머리(시각·레벨·태그) 대조가 같은 칸끼리 되게 한다."""
+    f = _raw_fields(line)
+    return f"{f['time']} - {f['level']} {f['tag']} {f['msg']}".rstrip() if f else None
+
+
+def _stamp_key(g: dict) -> tuple:
+    """원문 줄 시각 칸 → 비교 키(연도·월·일·시분초·시간대, 소수 자리 뺌). 시간대는 `+09:00`=`+0900`, `Z`=`+0000`으로 접는다."""
+    zone = (g.get("zone") or "").replace(":", "").replace("Z", "+0000")
+    return (g.get("year"), g.get("mon") or g.get("bmon"), int(g["day"]), g["h"], g["mi"], g["s"], zone)
+
+
+def stamp_matches(q: str, copies: list[str]) -> bool | None:
+    """외부 리뷰 1125 지적 1: 원문 모양 인용(`raw_stamp`)이면 시각 칸(날짜·시분초·시간대 — 연도·시간대를 빼거나 더해도 다르다, 소수
+    자리는 짧은 쪽이 긴 쪽의 앞부분이면 같다)이 같고 머리(레벨·태그)·메시지가 맞는 사본 줄이 있나. 원문 모양이 아니면 None(타임라인
+    행 모양 인용은 이 검사 밖). 그래서 ok인 원문 모양 인용의 시각(`output._quote_ts`)은 맞춘 사본 줄의 시각이다."""
+    g = raw_stamp(q)
+    if g is None:
+        return None
+    key, frac, alt = _stamp_key(g), g.get("frac") or "", raw_row(q) or ""
+    head = _quote_head(alt, None)
+    clock = f"{g['h']}:{g['mi']}:{g['s']}"
+    for text in copies:
+        at = text.find(clock)
+        while at >= 0:
+            a, b = text.rfind("\n", 0, at) + 1, text.find("\n", at)
+            b = len(text) if b < 0 else b
+            h = raw_stamp(text[a:b])
+            other = (h or {}).get("frac") or ""
+            if h and _stamp_key(h) == key and (other.startswith(frac) or frac.startswith(other)):
+                row = raw_row(text[a:b]) or ""
+                if _row_head_ok(row, head) and evidence_check(alt, row, None)[0] == "ok":
+                    return True
+            at = text.find(clock, b)
+    return False
+
+
+COPY_ROWS_PER_QUOTE = 50    # 인용마다 사본에서 낱말을 많이 함께 가진 줄
+COPY_ROWS_EXACT_MAX = 200   # 인용 메시지 조각이 그대로 든 줄(위 상한 밖에 늘 더한다, 이만큼까지)
+
+
+def _copy_want(q: str) -> tuple[set, list[str], str | None]:
+    """인용 하나 → (찾을 낱말, 그대로 찾을 메시지 조각, 인용 시각)."""
+    f = _raw_fields(q)
+    if f:
+        parts, qt = [p.strip() for p in ELLIPSIS_RX.split(ws(f["msg"])) if p.strip()], f["time"]
+    else:
+        parts, head = _quote_parts(q, None), _quote_head(q, None)
+        qt, tag = head.get("time"), head.get("tag")
+        if tag and parts and parts[0].startswith(tag + " "):      # 행 모양 인용의 태그 칸은 원문 줄에 `태그:`로 있다
+            parts[0] = parts[0][len(tag) + 1:]
+    keys = set()
+    for part in parts:
+        words = _WORD_RX.findall(part)
+        keys.update(words or ([part] if len(part) >= 4 else []))
+    return keys, [p for p in parts if len(p) >= 8], qt
+
+
+def copy_rows(texts: list[str], quotes: list[str]) -> str:
+    """마스킹 사본 글(`texts`)에서 인용마다 고른 줄을 `raw_row`로 바꾼 행들:
+    - 인용 메시지 조각(8자 이상)이 그대로 든 줄은 늘(`COPY_ROWS_EXACT_MAX`줄까지),
+    - 그 밖에 인용의 8자 이상 낱말(없으면 4자 이상 조각)을 가장 많이 함께 가진 줄 `COPY_ROWS_PER_QUOTE`줄.
+    둘 다 같은 순위면 인용과 시각이 같은 줄, 그다음 앞 줄. 후보 줄은 낱말 정규식 한 번으로 찾고(큰 사본에서도 인용 수만큼만),
+    줄마다 낱말은 하나씩 `in`으로 센다(겹치는 낱말도). 고른 줄과 인용의 대조(값 바꿈·지어냄)는 `check_quotes`가 한다."""
+    want = [_copy_want(q) for q in quotes]
+    every = set().union(*(k for k, _f, _t in want)) if want else set()
+    if not every:
+        return ""
+    rx = re.compile("|".join(map(re.escape, sorted(every, key=len, reverse=True))))
+    lines: dict[tuple[int, int], str] = {}          # (사본 순번, 줄 시작) → 줄(낱말이 하나라도 든 줄만)
+    for k, text in enumerate(texts):
+        for m in rx.finditer(text):
+            a = text.rfind("\n", 0, m.start()) + 1
+            if (k, a) not in lines:
+                b = text.find("\n", a)
+                lines[(k, a)] = text[a:b if b >= 0 else len(text)]
+    out: dict[str, None] = {}
+    for keys, frags, qt in want:
+        exact, scored = [], []
+        for pos, line in lines.items():
+            other = not qt or qt not in line[:48]       # 시각이 인용과 다른 줄은 같은 순위에서 뒤로
+            if frags and all(f in line for f in frags):
+                exact.append((other, pos))
+            elif n := sum(1 for w in keys if w in line):
+                scored.append((-n, other, pos))
+        picked = [x[-1] for x in sorted(exact)[:COPY_ROWS_EXACT_MAX]] + [x[-1] for x in sorted(scored)[:COPY_ROWS_PER_QUOTE]]
+        for pos in picked:
+            row = raw_row(lines[pos])
+            if row:
+                out[row] = None
+    return "\n".join(out)
 
 
 def event_rows_text(events: dict) -> str:
@@ -443,19 +789,23 @@ def _part_rows(parts: list[str], rows: list[str], ws_rows: list[str]) -> list[st
     return out
 
 
-def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[int] = frozenset()) -> dict:
+def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[int] = frozenset(),
+                 alts: list[str | None] | None = None, copies: list[str] | None = None) -> dict:
     """인용 목록 판정 → {"n", "fabricated", "weak", "raw", "first", "verdicts"}. `verdicts`는 항목별 판정
     (ok | weak | fabricated | raw, 입력 순서 — check-output이 가설별로 나눈다).
 
-    `〔script` 메모를 인용한 항목은 지어낸 것으로 센다. `raw_items`(check-output 마스킹이 바꾼 항목 = 원문 값이 든 인용,
+    `〔script…〕` 메모만 인용한 항목은 지어낸 것으로 센다(줄 끝 메모까지 복사한 인용은 메모를 떼고 본다). `raw_items`(check-output 마스킹이 바꾼 항목 = 원문 값이 든 인용,
     설치 스킬 모드만)는 `raw`로 세고 지어낸 것으로 세지 않는다. 원문이 256KB보다 크면 먼저 인용 조각마다 원문 한 줄 안에
     **토큰 경계를 두고**(`_has_token`, 행마다 `_low` — 공백·대소문자·`=`/`:` 둘레 차이만 허용) 있는지 보고, 모두 있으면 ok다
     (FR-01: 부분 문자열만 보면 `status=10`→`status=1`·`disconnected`→`connected` 같은 변조를 ok로 봤다). 아니면 조각이 든
     행(조각마다 최대 300행)과 8자 이상 낱말을 공유하는 행(최대 300행)으로 `evidence_check`를 돈다.
     ok인 인용이 시각이나 슬롯 머리(레벨·태그는 그와 함께 적었을 때만)를 적었으면 머리까지 맞는 행이 원문 전체에 있어야 ok,
-    없으면 weak다(`_head_ok`, F-A01-min).
+    없으면 weak다(`_head_ok`, F-A01-min). `alts[i]`(있으면, 탐색의 원문 모양 인용을 `raw_row`로 바꾼 것)는 인용이 ok가 아닐 때
+    한 번 더 판정해 나은 쪽(ok > weak > fabricated)을 쓴다. `copies`(탐색만, 마스킹 사본 글 — 없으면 [])를 주면 ok인 원문 모양
+    인용은 시각 칸(날짜·시간대 포함)까지 같은 사본 줄이 있어야 ok, 없으면 weak다(`stamp_matches`, 시각을 바꿔 적은 인용과 같은 등급).
     """
     from common import masking
+    source = QUOTE_CHARS_RX.sub("", source)      # 인용 쪽과 같이 따옴표를 뗀다(행 찾기·머리 대조·`evidence_check`가 같은 글을 본다)
     big = len(source) > BIG_SOURCE
     rows = source.split("\n")
     ws_rows = [ws(row) for row in rows]
@@ -463,22 +813,34 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
     # 행마다 `_low` 뒤 잇기 — 통째로 하면 `=`/`:` 둘레 공백 제거가 개행을 넘는다. 조각·토큰엔 개행이 없어 일치는 한 줄 안이다
     low_lines = "\n".join(_low_folded(w) for w in ws_rows) if big else ""
     res = {"n": len(items), "fabricated": 0, "weak": 0, "raw": 0, "first": None, "verdicts": []}
+
+    def judge(item: str) -> str:
+        parts = _quote_parts(item, tags)
+        if big and parts and all(_has_token(low_lines, _low(p)) for p in parts):
+            verdict = "ok"
+        else:
+            # ponytail: 공백 말고도 표기가 다른 인용은 축소 검색(조각이 든 행 + 8자 이상 낱말 공유 첫 300행)에 기대므로, 그 밖의 줄을 인용하면 여전히 fabricated 오탐
+            text = source if not big else "\n".join(dict.fromkeys(
+                _part_rows(parts, rows, ws_rows) + _subset(_WORD_RX.findall(" ".join(parts)), rows).split("\n")))
+            verdict = evidence_check(item, text, tags)[0]
+        # F-A01-min: 메시지는 맞는데 적은 머리(시각·슬롯·태그)가 맞는 행이 없으면 약함(fabricated는 정밀도만 다른 정상 시각에서 오탐)
+        if verdict == "ok" and not _head_ok(_quote_head(item, tags), parts, rows, ws_lines, tags):
+            verdict = "weak"
+        return verdict
+
+    rank = {"ok": 0, "weak": 1, "fabricated": 2}
     for i, item in enumerate(items):
         if i in raw_items:
             verdict = "raw"
-        elif "〔script" in item:
-            verdict = "fabricated"
+        elif "〔script" in SCRIPT_NOTE_RX.sub("", item) or not SCRIPT_NOTE_RX.sub("", item).strip():
+            verdict = "fabricated"          # 메모만(또는 닫히지 않은 메모를) 인용했다
         else:
-            parts = _quote_parts(item, tags)
-            if big and parts and all(_has_token(low_lines, _low(p)) for p in parts):
-                verdict = "ok"
-            else:
-                # ponytail: 공백 말고도 표기가 다른 인용은 축소 검색(조각이 든 행 + 8자 이상 낱말 공유 첫 300행)에 기대므로, 그 밖의 줄을 인용하면 여전히 fabricated 오탐
-                text = source if not big else "\n".join(dict.fromkeys(
-                    _part_rows(parts, rows, ws_rows) + _subset(_WORD_RX.findall(" ".join(parts)), rows).split("\n")))
-                verdict = evidence_check(item, text, tags)[0]
-            # F-A01-min: 메시지는 맞는데 적은 머리(시각·슬롯·태그)가 맞는 행이 없으면 약함(fabricated는 정밀도만 다른 정상 시각에서 오탐)
-            if verdict == "ok" and not _head_ok(_quote_head(item, tags), parts, rows, ws_lines, tags):
+            item = SCRIPT_NOTE_RX.sub("", item).rstrip()      # 줄 끝 메모까지 복사한 인용은 본 줄로 판정한다(sim1122 RP-13)
+            verdict = judge(item)
+            alt = SCRIPT_NOTE_RX.sub("", (alts[i] if alts and i < len(alts) else None) or "").rstrip()
+            if verdict != "ok" and alt and alt != item:
+                verdict = min(verdict, judge(alt), key=rank.__getitem__)
+            if verdict == "ok" and copies is not None and stamp_matches(item, copies) is False:
                 verdict = "weak"
         res["verdicts"].append(verdict)
         if verdict != "ok":

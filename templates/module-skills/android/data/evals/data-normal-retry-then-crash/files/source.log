@@ -1,0 +1,20 @@
+-- [합성] telephony-triage module-skills eval log (이상 줄 절 11/25). 줄 모양은 data-normal-retry-recovered와 AOSP AndroidRuntime·JavaBinder 예외 문구만, 벤더 줄 없음.
+11-20 10:00:00.100  2101  2101 D DNC-0   : onAddNetworkRequest: added [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED RequestorUid: 1000 RequestorPkg: android UnderlyingNetworks: Null] ], mPriority=20, state=UNSATISFIED]
+11-20 10:00:00.104  2101  2101 D DNC-0   : onSetupDataNetwork: dataProfile=[DataProfile=[ApnSetting] <APN#1>, 1, 00101, <APN#1>, default | supl, IPV4V6, preferred=true], retryEntry=null, allowed reason=NORMAL
+11-20 10:00:00.106  2101  2141 D RILJ    : [0400]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] <APN#1>, 1, 00101, <APN#1>, default | supl, IPV4V6, preferred=true] [PHONE0]
+11-20 10:00:00.300  2101  2141 D RILJ    : [0400]< SETUP_DATA_CALL DataCallResponse: { cause=INSUFFICIENT_RESOURCES(0x1a) retry=-1 cid=-1 linkStatus=0 protocolType=2 ifname=null addresses=[] dnses=[] gateways=[] pcscf=[] mtu=0} [PHONE0]
+11-20 10:00:00.302  2101  2101 D DNC-0   : onDataNetworkSetupDataFailed: [DataNetwork: DN-100-C, <APN#1>, state=null], cause=INSUFFICIENT_RESOURCES(0x1a), retryDelayMillis=-1ms.
+11-20 10:00:00.310  2101  2101 D DRM-0   : retry scheduled in 5000ms
+11-20 10:00:05.320  2101  2141 D RILJ    : [0401]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] <APN#1>, 1, 00101, <APN#1>, default | supl, IPV4V6, preferred=true] [PHONE0]
+11-20 10:00:05.420  2101  2141 D RILJ    : [0401]< SETUP_DATA_CALL DataCallResponse: { cause=NONE(0x0) retry=-1 cid=1 linkStatus=2 protocolType=2 ifname=rmnet0 addresses=[<IP#1>/64] dnses=[<IP#2>] gateways=[<IP#3>] pcscf=[] mtu=1500} [PHONE0]
+11-20 10:00:05.430  2101  2101 D DNC-0   : Internet data state changed from DISCONNECTED to CONNECTED.
+11-20 10:00:40.210  2101  2101 E AndroidRuntime: FATAL EXCEPTION: main
+11-20 10:00:40.210  2101  2101 E AndroidRuntime: Process: com.android.phone, PID: 2101
+11-20 10:00:40.210  2101  2101 E AndroidRuntime: java.lang.NullPointerException: Attempt to invoke virtual method 'int android.net.LinkProperties.getMtu()' on a null object reference
+11-20 10:00:40.210  2101  2101 E AndroidRuntime: 	at com.android.internal.telephony.data.DataNetwork.updateLinkProperties(DataNetwork.java:2214)
+11-20 10:00:40.210  2101  2101 E AndroidRuntime: 	at com.android.internal.telephony.data.DataNetwork$ConnectedState.processMessage(DataNetwork.java:1290)
+11-20 10:00:40.210  2101  2101 E AndroidRuntime: 	at com.android.internal.util.StateMachine$SmHandler.processMsg(StateMachine.java:992)
+11-20 10:06:12.500  1500  1688 E JavaBinder: *** Uncaught remote exception!  (Exceptions are not yet supported across processes.)
+11-20 10:06:12.500  1500  1688 E JavaBinder: java.lang.IllegalStateException: telephony service is not running
+11-20 10:06:12.500  1500  1688 E JavaBinder: 	at com.android.server.TelephonyRegistry.notifyDataConnectionForSubscriber(TelephonyRegistry.java:1876)
+11-20 10:06:12.500  1500  1688 E JavaBinder: 	at android.os.Binder.execTransact(Binder.java:1310)

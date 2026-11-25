@@ -474,6 +474,24 @@ def test_clock_anomalies():
     assert data["coverage"]["clock_anomalies"] == []
 
 
+def test_clock_anomaly_same_pid_clue():
+    """sim1122 F6·RP-9: 시계 이상 항목의 `same_pid`·`same_tid` — 앞뒤 줄 pid·tid가 같은지(단서일 뿐). 모르면 키 없음."""
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    from common import logtime
+
+    def line(sec, pid, tid=None):
+        return SimpleNamespace(dt=datetime(2026, 9, 24, 1, 0, sec, tzinfo=timezone.utc), pid=pid, tid=tid)
+
+    got = logtime.coverage([[line(50, 7, 1), line(10, 7, 2), line(20, 8), line(5, 9)], [line(30, None), line(1, 3)]])
+    assert [(a["delta_sec"], a.get("same_pid"), a.get("same_tid")) for a in got["clock_anomalies"]] == [
+        (-40.0, True, False), (-15.0, False, None), (-29.0, None, None)]
+    # oFono 확인 P2-4: pid 0(oFono 파서가 pid 없는 줄에 넣는 값)은 모름 — 같은 pid로 세지 않는다
+    got = logtime.coverage([[line(50, 0), line(10, 0)], [line(50, 0, 0), line(10, 7, 0)]])
+    assert [(a.get("same_pid"), a.get("same_tid")) for a in got["clock_anomalies"]] == [(None, None), (None, None)]
+
+
 # -- bugreport ---------------------------------------------------------------
 
 

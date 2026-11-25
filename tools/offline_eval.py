@@ -31,16 +31,20 @@
 줄을 `--look-at`으로, 시각·답 없이 — 단계 4가 자동으로 찾아야 할 것을 사람이 넣은 경우)은 항목 `look_at`이 있을 때. 이때
 `occurred_at`은 필수가 아니고 연도는 `year`(항목·문서) 또는 `occurred_at`에서 온다. 항목 필드 더: `look_at`(기준 줄), `fail_at`(정답
 실패 줄의 시각, 타임존 있는 ISO — 기준 위치 정답 판정), `fail_line`(그 줄 원문, 기록용 — 표·JSON에 내지 않는다), `first_analysis: true`
-(첫 분석 — 단서 없음 사례), 그 밖(`issue_file`·`pair`)은 읽지 않는 기록용. `conditions`가 없으면 예전처럼 항목마다 한 번
-(`occurred_at` 필수) 돈다. 포털 선별과 다른 입력: 이 도구는 `--issue-meta`(실패 스텝은 메타의 `failed_step` 칸)로 주고, 포털은
-`--issue-file`(Jira 필드)·`--failed-step=`(CLI)·`--platform android`로 준다 — 단계 4에서 코멘트를 읽게 되면 `issue_file`로 도는
-조건이 따로 필요하다.
+(첫 분석 — 단서 없음 사례), `issue_file`(아래 `comments` 조건), `pair`는 읽지 않는 기록용. `problem`(시각 없음 + 문제 파악 결과)·`look_at+problem`(기준 줄 + 문제 파악 결과)은 항목 `problem`(라벨셋 기준 상대 경로의
+**정답 입력** problem.json — 사람이 라벨에서 손으로 쓴 것, 모델 출력 아님)이 있을 때(`look_at+problem`은 `look_at`도): 그 파일을 작업
+폴더 `problem.json`으로 두고 입력 해시(`source_sha256`)를 이번 `--issue-meta` 파일의 것으로 찍어 돈다(단계 5-2, "정답 입력일 때의
+상한"). `comments`(시각 없음 + Jira 코멘트 단서 자동 추출)·`look_at+comments`(기준 줄 + 코멘트 — 자동 추출이 꺼져 look_at과
+같아야 한다)는 항목 `issue_file`(라벨셋 기준 상대 경로의 Jira 티켓 YAML)이 있을 때: 그 사본에서 발생 시각 칸(실행 루트
+site-defaults `tracker.field_map.occurred_at`)을 빼고 `--issue-file`로, 실패 스텝은 `--failed-step`으로 준다(포털 선별과 같은 입력 모양).
+`conditions`가 없으면 예전처럼 항목마다 한 번(`occurred_at` 필수) 돈다. 그 밖 조건은 `--issue-meta`(실패 스텝은 메타의 `failed_step`
+칸)로 준다.
 조건이 있을 때 `--json`의 `summary`는 모든 조건의 실행을 합친 값(종료 코드 판단용)이라 S-5 게이트(`site_checks` s5)에 쓰지 않는다 —
 조건별 값은 `by_condition`.
 
 채택(단계 사이 비교용 정의): `analysis.json`에 `decision`이 있으면 `state: accepted`일 때 `selected.cause`, 없으면 1위 후보가
 원인을 갖고 C=1일 때 그 원인. 채택 지표(대조군·표본내·오류 제외, 조건별): 맞는 채택·틀린 채택·보류·답변률(채택÷평가)·옳은 보류
-(정답 unresolved인데 보류)·보류 중 raw 1위가 정답이던 수·기준 위치 정답(기준(`step_anchor.source`가 look_at·log_marker·
+(정답 unresolved인데 보류)·보류 사유별 수(`held_reasons`: `decision.reason`, decision 없으면 `top`. 실행 행에는 `held_why`(세부 사유)·`held_cause`(기준에 붙은 사건의 원인 — 보류여도))·보류 중 raw 1위가 정답이던 수·기준 위치 정답(기준(`step_anchor.source`가 look_at·log_marker·
 steps_file·step_order)을 쓴 실행에서 잡힌 실패 시각 = `fail_at`. 시각을 읽지 못하면 판정 없음과 항목 경고)·기준 못 잡음
 (`anchor_missed`: look_at 조건이나 `steps_file`로 기준을 요청했는데 기준 없이 돈 실행)·첫 분석 보류율.
 `--portal <dir>`(선택): `<dir>/portal/screener.py`(포털 소스 — 체크아웃이 아니라 `git archive`로 푼 사본)의 `classify`와 실제 카드가
@@ -77,6 +81,7 @@ steps_file·step_order)을 쓴 실행에서 잡힌 실패 시각 = `fail_at`. �
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import functools
 import hashlib
 import json
@@ -93,7 +98,9 @@ import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 UNRESOLVED = "unresolved"
-CONDITIONS = ("no_time", "time", "look_at")
+CONDITIONS = ("no_time", "time", "look_at", "problem", "look_at+problem", "comments", "look_at+comments")
+WITH_LOOK = ("look_at", "look_at+problem", "look_at+comments")
+WITH_COMMENTS = ("comments", "look_at+comments")     # 항목 issue_file(Jira 티켓 모양, 코멘트 포함)을 --issue-file로 준다
 ANCHORED = ("look_at", "log_marker", "steps_file", "step_order")    # 기준이 있는 `step_anchor.source`
 HEADER = ("규칙 동작 확인용 — 조합 로그는 시드 줄로 만든 표본 안 자료, 정확도 수치가 아님. 표본내 자동 제외(DB fixtures/ 자체·"
           "DB에 기록된 키)는 이 조합 로그를 가리지 못한다(로그가 DB 밖 사본이고 키가 DB에 없다).\n"
@@ -157,6 +164,25 @@ def load_labelset(path: Path) -> dict:
         if not isinstance(item["logs"], list):
             raise EvalError(f"items[{i}].logs는 목록이어야 합니다.")
     return doc
+
+
+def _ticket_without_time(path: Path, root: Path) -> dict:
+    """`comments` 조건 입력: 항목 issue_file(Jira 티켓 모양) 사본에서 발생 시각 칸(실행 루트 site-defaults의
+    `tracker.field_map.occurred_at` 경로, 점으로 이은 키만)을 뺀다 — 시각 없이 코멘트만 더한 조건이 되게."""
+    try:
+        ticket = yaml.safe_load(path.read_text(encoding="utf-8"))
+        site = yaml.safe_load((root / "site-defaults.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise EvalError(f"issue_file을 읽을 수 없습니다: {path} ({exc})")
+    if not isinstance(ticket, dict):
+        raise EvalError(f"issue_file이 Jira 티켓 모양이 아닙니다: {path}")
+    *parents, leaf = str(((site.get("tracker") or {}).get("field_map") or {}).get("occurred_at") or "").split(".")
+    node = ticket
+    for name in parents:
+        node = node.get(name) if isinstance(node, dict) else None
+    if isinstance(node, dict):
+        node.pop(leaf, None)
+    return ticket
 
 
 def _under_fixtures(log: Path, db: Path) -> bool:
@@ -225,8 +251,19 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
         meta["sim_slot"] = str(item["sim_slot"])
     meta_path = job / "issue_input.json"
     meta_path.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
-    args = ["run", key, "--offline-db", str(db), "--out", str(job), "--logs", *logs, "--issue-meta", str(meta_path)]
-    if condition == "look_at":
+    if condition in WITH_COMMENTS:      # 코멘트 단서 자동 추출: 티켓 사본에서 발생 시각 칸을 빼서(no_time과 같은 조건) --issue-file로
+        meta_path = job / "issue_input.yaml"
+        meta_path.write_text(yaml.safe_dump(_ticket_without_time(base / str(item["issue_file"]), root), allow_unicode=True,
+                                            sort_keys=False), encoding="utf-8")
+    if condition in ("problem", "look_at+problem"):     # 정답 입력 problem.json — 이번 이슈 입력(메타 파일)의 해시를 찍는다
+        answer = json.loads((base / str(item["problem"])).read_text(encoding="utf-8"))
+        answer["source_sha256"] = hashlib.sha256(meta_path.read_bytes()).hexdigest()
+        (job / "problem.json").write_text(json.dumps(answer, ensure_ascii=False), encoding="utf-8")
+    args = ["run", key, "--offline-db", str(db), "--out", str(job), "--logs", *logs,
+            "--issue-file" if condition in WITH_COMMENTS else "--issue-meta", str(meta_path)]
+    if condition in WITH_COMMENTS and meta.get("failed_step"):     # 메타 파일이 아니라 CLI로(포털과 같은 입력)
+        args += ["--failed-step", meta["failed_step"]]
+    if condition in WITH_LOOK:
         args += ["--look-at", str(item["look_at"])]
     if item.get("steps_file"):
         args += ["--steps-file", str((base / str(item["steps_file"])).resolve())]
@@ -281,6 +318,19 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
     result["top3"] = [c["cause"] for c in candidates[:3]]
     result["top"] = result["top3"][0] if result["top3"] else None
     result["adopted"], result["adopted_from"] = _adopted(analysis)
+    dec = analysis.get("decision")
+    if isinstance(dec, dict) and dec.get("state") == "held":
+        result["held_reason"] = dec.get("reason")
+        result["held_why"] = (dec.get("check") or {}).get("why")
+        # 보류여도 기준에 붙은 사건의 원인(코멘트 지점 보류 등 — 채택했다면 무엇이었나). analysis.json `decision.events`는 4KB
+        # 압축(작업 경로 길이에 따라 다름)으로 빠질 수 있어 전체인 JOB/eligibility.json을 먼저 본다
+        try:
+            evs = json.loads((job / "eligibility.json").read_text(encoding="utf-8")).get("events")
+        except (OSError, ValueError, AttributeError):
+            evs = None
+        result["held_cause"] = next((e.get("cause") for e in evs or dec.get("events") or [] if e.get("ref")), None)
+    if isinstance(dec, dict):      # 실패 지점 상태(포털은 accepted + confirmed면 본 분석을 건너뛴다)
+        result["location"] = (dec.get("location") or {}).get("state")
     sa = analysis.get("step_anchor") or {}
     if sa:
         result["anchor"] = {"source": sa.get("source"), "fail": (sa.get("span") or [None, None])[-1]}
@@ -289,7 +339,7 @@ def evaluate_item(root: Path, db: Path, base: Path, doc: dict, item: dict, work:
         result["anchor_ok"] = _same_instant(result["anchor"]["fail"], item["fail_at"])
         if result["anchor_ok"] is None:
             anchor_note = f"기준 위치 판정 없음(시각 해석 실패·타임존 없음: {result['anchor']['fail']} / {item['fail_at']})"
-    elif item.get("fail_at") and (condition == "look_at" or item.get("steps_file")):
+    elif item.get("fail_at") and (condition in WITH_LOOK or item.get("steps_file")):
         result["anchor_missed"] = True      # 기준을 요청했는데 기준 없이 돌았다(못 찾음)
     # 정답·미스를 단정하지 못하는 이유 [(오류 문구, 오탐 확정 때 경고 문구)]: 판정 불가 유형·원인(unjudged)과 관측 불완전
     # (observation). 둘 다 있으면 둘 다 기록한다
@@ -378,7 +428,12 @@ def summarize(results: list[dict], include_in_sample: bool = False) -> dict:
         "accepted_correct": sum(r["adopted"] == r["expect"] for r in adopted),
         "accepted_wrong": sum(r["adopted"] != r["expect"] for r in adopted),
         "held": len(scored) - len(adopted),
+        # 보류 사유(decision.reason)별 수 — decision 없는 결과(1위 기준 채택)의 보류는 `top`
+        "held_reasons": dict(sorted(Counter(r.get("held_reason") or "top" for r in scored if not r.get("adopted")).items())),
         "answer_rate": rate(len(adopted), len(scored)),
+        # 실패 지점 상태별 수(decision.location.state) — confirmed가 넓어지면 기준값 시험이 깨지게
+        "location_confirmed": sum(r.get("location") == "confirmed" for r in scored),
+        "location_found": sum(r.get("location") == "found" for r in scored),
         "correct_hold": sum(not r.get("adopted") and r["expect"] == UNRESOLVED for r in scored),
         "held_top_right": sum(not r.get("adopted") and r["expect"] != UNRESOLVED and r["top"] == r["expect"] for r in scored),
         "anchor_runs": sum(r.get("anchor_ok") is not None for r in scored),
@@ -431,7 +486,8 @@ def render_conditions(results: list[dict], by_condition: dict) -> str:
                          "오류" if r["error"] else r["verdict"], where, *_portal_cells(r.get("portal"))))
         lines += ["", f"[조건 {cond}] 평가 {s['evaluated']}/전체 {s['total']}, 오류 {s['errors']}", *_table(rows), *_notes(runs),
                   f"채택: 맞음 {s['accepted_correct']} · 틀림 {s['accepted_wrong']} · 보류 {s['held']} · 답변률 {_pct(s['answer_rate'])}",
-                  f"보류: 옳은 보류(정답 unresolved) {s['correct_hold']} · 보류 중 raw 1위가 정답 {s['held_top_right']}",
+                  f"보류: 옳은 보류(정답 unresolved) {s['correct_hold']} · 보류 중 raw 1위가 정답 {s['held_top_right']} · 사유 "
+                  + (", ".join(f"{k} {n}" for k, n in s["held_reasons"].items()) or "-"),
                   f"기준 위치 정답 {s['anchor_correct']}/{s['anchor_runs']}(기준을 쓴 실행) · 기준 못 잡음 {s['anchor_missed']} · 첫 분석 보류율 "
                   f"{_pct(s['first_hold_rate'])}({s['first_total']}건)",
                   f"raw: 1위 정확도 {_pct(s['top1_accuracy'])} · 상위 3 포함률 {_pct(s['top3_inclusion'])} · "
@@ -479,6 +535,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="포털 소스 사본(<dir>/portal/screener.py, git archive로 푼 것) — 실행마다 포털 카드 판정 열을 낸다")
     parser.add_argument("--include-in-sample", action="store_true",
                         help="표본내 항목(로그가 이슈 DB fixtures/ 자체이거나 키가 DB에 기록된 이슈)도 지표에 넣는다 — 도구 동작 확인용, 정확도 측정 아님")
+    parser.add_argument("--condition", action="append", choices=CONDITIONS, default=None,
+                        help="라벨셋 conditions 중 이것만 돈다(여러 번)")
     args = parser.parse_args(argv)
 
     label_path = Path(args.labelset).resolve()
@@ -514,7 +572,12 @@ def main(argv: list[str] | None = None) -> int:
             meta["portal"] = {"path": str(Path(args.portal).resolve()),
                               "screener_sha256": hashlib.sha256(Path(screener.__file__).read_bytes()).hexdigest()}
         conds = doc.get("conditions")
-        has = {"no_time": lambda i: True, "time": lambda i: bool(i.get("occurred_at")), "look_at": lambda i: bool(i.get("look_at"))}
+        if conds and args.condition:
+            conds = [c for c in conds if c in args.condition]
+        has = {"no_time": lambda i: True, "time": lambda i: bool(i.get("occurred_at")), "look_at": lambda i: bool(i.get("look_at")),
+               "problem": lambda i: bool(i.get("problem")), "look_at+problem": lambda i: bool(i.get("look_at") and i.get("problem")),
+               "comments": lambda i: bool(i.get("issue_file")),
+               "look_at+comments": lambda i: bool(i.get("look_at") and i.get("issue_file"))}
         work = Path(tempfile.mkdtemp(prefix="tt-offline-eval-"))
         try:
             if conds:

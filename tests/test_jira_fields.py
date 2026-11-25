@@ -60,7 +60,8 @@ def test_extract_maps_masks_and_converts_time():
     assert len(out["text"]["comments"]) == 2
     assert not raw.exists()                                           # --consume
     m = json.loads(meta.read_text(encoding="utf-8"))
-    assert m["occurred_at"] == out["occurred_at"] and m["sw"] == "MOCKA56_U1_20260915"
+    # Jira 발생 시각 칸은 분석 메타에 넣지 않는다(로그와 다른 시계 — D4). 출력 occurred_at은 그대로(표시·기록 날짜)
+    assert out["occurred_at"] and "occurred_at" not in m and m["sw"] == "MOCKA56_U1_20260915"
     assert "010-1234-5678" not in json.dumps(m, ensure_ascii=False)
 
 
@@ -121,8 +122,8 @@ def test_extract_without_failed_step_fields_adds_no_keys():
                                       "--meta-out", meta], env=_home())
     assert not {"failed_step", "failed_step_auto", "warnings"} & set(out)
     assert "failed_step" not in out["issue"] and "test_steps" not in out["text"]
-    assert set(json.loads(meta.read_text(encoding="utf-8"))) == {"key", "sw", "summary", "description", "occurred_at",
-                                                                  "platform_version", "sim_slot"}   # MOCK-1001은 Android 버전·SIM 슬롯이 있다
+    assert set(json.loads(meta.read_text(encoding="utf-8"))) == {"key", "sw", "summary", "description",
+                                                                  "platform_version", "sim_slot"}   # MOCK-1001은 Android 버전·SIM 슬롯이 있다(발생 시각은 D4로 뺌)
 
 
 def test_meta_out_android_version_only_when_present():

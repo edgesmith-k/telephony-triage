@@ -34,6 +34,23 @@
   "events": 23,
   "masked": null
  },
+ "decision": {
+  "state": "held",
+  "reason": "no_candidate",
+  "selected": null,
+  "location": {
+   "state": "none",
+   "source": null,
+   "kind": null
+  },
+  "check": {
+   "why": null,
+   "checked": 0,
+   "total": 1
+  },
+  "events": [],
+  "events_total": 0
+ },
  "no_candidate": {
   "search_hits": [
    {
@@ -60,12 +77,23 @@
   "error_event_total": 1,
   "unextracted_warn": 1
  },
+ "near_causes": [
+  {
+   "id": "NETWORK-001-01",
+   "title": "NR 모드가 조회되지 않음 (합성)",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  }
+ ],
  "code": {
   "skipped": true
  },
  "explore": {
   "reason": "no_candidate",
   "when": "ask"
+ },
+ "investigate": {
+  "mode": true,
+  "reason": "후보 없음"
  },
  "must_show": [
   "로그 범위: 2026-09-22T10:00:16.546Z ~ 2026-09-22T10:00:22.236Z (일부만 포함), 시계 이상 없음"

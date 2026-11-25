@@ -1,0 +1,208 @@
+{
+ "around": "2026-11-20T13:00:01.000Z",
+ "failed_step": null,
+ "limit": 200,
+ "anchor": null,
+ "partial": [
+  {
+   "signature": "DATA-001/no-setup-data-call-request",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ]
+  }
+ ],
+ "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-11-20T12:55:01.000Z",
+   "2026-11-20T13:10:01.000Z"
+  ],
+  "ref": "2026-11-20T13:00:01.000Z",
+  "after_sec": 600,
+  "candidates": 6,
+  "rows": [
+   {
+    "ts": "2026-11-20T13:02:10.000Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "FATAL EXCEPTION: main",
+    "fold": {
+     "n": 1,
+     "first": "2026-11-20T13:02:10.000Z",
+     "last": "2026-11-20T13:05:00.311Z"
+    }
+   },
+   {
+    "ts": "2026-11-20T13:02:10.000Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "Process: com.android.settings, PID: 3300"
+   },
+   {
+    "ts": "2026-11-20T13:02:10.000Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "java.lang.IllegalStateException: Fragment not attached to a context."
+   },
+   {
+    "ts": "2026-11-20T13:02:10.000Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "at android.app.Fragment.requireContext(Fragment.java:1012)"
+   },
+   {
+    "ts": "2026-11-20T13:05:00.311Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "Process: com.android.phone, PID: 2101"
+   },
+   {
+    "ts": "2026-11-20T13:05:00.311Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "java.lang.IllegalStateException: Attempt to setup data network with a null data profile"
+   },
+   {
+    "ts": "2026-11-20T13:05:00.311Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "at com.android.internal.telephony.data.DataNetworkController.onSetupDataNetwork(DataNetworkController.java:2690)"
+   },
+   {
+    "ts": "2026-11-20T13:05:00.311Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "at com.android.internal.telephony.data.DataNetworkController$1.handleMessage(DataNetworkController.java:1032)"
+   }
+  ]
+ },
+ "summary": {
+  "ref": "2026-11-20T13:00:01.000Z",
+  "range": [
+   "2026-11-20T13:00:00.100Z",
+   "2026-11-20T13:05:00.311Z"
+  ],
+  "lines": 15,
+  "shapes": 11,
+  "window": [
+   "2026-11-20T12:55:01.000Z",
+   "2026-11-20T13:10:01.000Z"
+  ],
+  "cap": 60,
+  "after_sec": 600,
+  "groups": [
+   {
+    "ts": "2026-11-20T13:02:10.000Z",
+    "last": "2026-11-20T13:05:00.311Z",
+    "n": 2,
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "FATAL EXCEPTION: main",
+    "after": true
+   },
+   {
+    "ts": "2026-11-20T13:05:00.311Z",
+    "last": "2026-11-20T13:05:00.311Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "java.lang.IllegalStateException: Attempt to setup data network with a null data profile",
+    "after": true
+   },
+   {
+    "ts": "2026-11-20T13:05:00.311Z",
+    "last": "2026-11-20T13:05:00.311Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "Process: com.android.phone, PID: 2101",
+    "after": true
+   },
+   {
+    "ts": "2026-11-20T13:02:10.000Z",
+    "last": "2026-11-20T13:02:10.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "java.lang.IllegalStateException: Fragment not attached to a context.",
+    "after": true
+   },
+   {
+    "ts": "2026-11-20T13:02:10.000Z",
+    "last": "2026-11-20T13:02:10.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "Process: com.android.settings, PID: 3300",
+    "after": true
+   },
+   {
+    "ts": "2026-11-20T13:00:00.302Z",
+    "last": "2026-11-20T13:00:00.302Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onDataNetworkSetupDataFailed: [DataNetwork: DN-120-C, <APN#1>, state=null], cause=INSUFFICIENT_RESOURCES(0x1a), retryDelayMillis=299999ms."
+   },
+   {
+    "ts": "2026-11-20T13:00:00.310Z",
+    "last": "2026-11-20T13:00:00.310Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DRM-0",
+    "msg": "retry scheduled in 299999ms"
+   },
+   {
+    "ts": "2026-11-20T13:00:00.300Z",
+    "last": "2026-11-20T13:00:00.300Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0500]< SETUP_DATA_CALL DataCallResponse: { cause=INSUFFICIENT_RESOURCES(0x1a) retry=299999 cid=-1 linkStatus=0 protocolType=2 ifname=null addresses=[] dnses=[…"
+   },
+   {
+    "ts": "2026-11-20T13:00:00.106Z",
+    "last": "2026-11-20T13:00:00.106Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0500]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] <APN#1>, 1, 00101, <APN#1>, default | supl, IPV4V6, prefer…"
+   },
+   {
+    "ts": "2026-11-20T13:00:00.104Z",
+    "last": "2026-11-20T13:00:00.104Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onSetupDataNetwork: dataProfile=[DataProfile=[ApnSetting] <APN#1>, 1, 00101, <APN#1>, default | supl, IPV4V6, preferred=true], retryEntry=null, allowed reason=…"
+   },
+   {
+    "ts": "2026-11-20T13:00:00.100Z",
+    "last": "2026-11-20T13:00:00.100Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onAddNetworkRequest: added [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED Re…"
+   }
+  ]
+ }
+}

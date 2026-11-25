@@ -34,6 +34,23 @@
   "events": 25,
   "masked": null
  },
+ "decision": {
+  "state": "held",
+  "reason": "no_candidate",
+  "selected": null,
+  "location": {
+   "state": "none",
+   "source": null,
+   "kind": null
+  },
+  "check": {
+   "why": null,
+   "checked": 0,
+   "total": 0
+  },
+  "events": [],
+  "events_total": 0
+ },
  "no_candidate": {
   "search_hits": [
    {
@@ -56,12 +73,28 @@
   "error_event_total": 0,
   "unextracted_warn": 1
  },
+ "near_causes": [
+  {
+   "id": "IMS-001-01",
+   "title": "IMS 등록 401 거절됨 (합성)",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  },
+  {
+   "id": "SMS-001",
+   "title": "문자가 전송되지 않음 (합성)",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  }
+ ],
  "code": {
   "skipped": true
  },
  "explore": {
   "reason": "no_candidate",
   "when": "ask"
+ },
+ "investigate": {
+  "mode": true,
+  "reason": "후보 없음"
  },
  "must_show": [
   "로그 범위: 2026-09-21T10:30:00.010Z ~ 2026-09-21T10:30:10.000Z (일부만 포함), 시계 이상 없음",

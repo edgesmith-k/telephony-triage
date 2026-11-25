@@ -22,7 +22,9 @@
   `checked`, `v: 2`)도 같은 파일이다(contracts.md §3.2 작업 기록, usage_stats가 센다 — 정보 행은 세지 않는다).
 - `JOB/explore-input.json`: 후보 없음·원인 미확인(1위 C=0)이고 `explore.when`이 `never`가 아닐 때, 또는 1위 C=1이고 `--explore`·
   `explore.when: always`·`--look-note`일 때(`explore.reason: fit_check`, 1위가 증상을 설명하는지 확인 — `never`·`--no-explore`면 아님)만. 탐색 분석 입력(마스킹된 값만:
-  발생 시각·실패 스텝·앵커 머리·줄 수 상한 `explore.timeline_max_lines`, 시각 입력 없이 전체를 봤으면 `time_candidates`). `run`은 타임라인을 만들지 않고 이전 `timeline.md`·입력 파일을 지운다.
+  발생 시각·실패 스텝·앵커 머리·줄 수 상한 `explore.timeline_max_lines`, 시각 입력 없이 전체를 봤으면 `time_candidates`, 코멘트 단서를
+  로그 한 곳에서만 찾았으면 그 시각 `clue_at`). `run`은 타임라인을 만들지 않고 이전 `timeline.md`·입력 파일을 지운다 — 다만 탐색을 시작한
+  뒤(`timeline.md`가 있던 작업) 다시 한 run이 새 입력 파일을 쓰면 끝에 같은 `explore`로 타임라인을 다시 만든다(출력은 run JSON 하나).
 - `triage.py explore <KEY> [--out <dir>]`: 사용자가 탐색 분석에 동의한 뒤(또는 `--explore`·`explore.when: always`) `JOB/explore-input.json`과
   `events.json`으로 `JOB/timeline.md`(마스킹된 요약 타임라인, 줄 수 상한 기본 200)를 만들고 `report.md`의 탐색 분석 줄을 갱신한다.
   출력 `{timeline, lines, total}`. 작업 플랫폼이 기본(android)이 아니면 `platform`과 `refs`(그 플랫폼 탐색 지식 문서, 스킬 디렉토리 기준
@@ -53,6 +55,11 @@
   순서는 이전 로그 뒤에 붙여 `f<순번>`이 안 바뀐다. 이미 있는 경로는 조용히, 내용(sha256)이 같은 다른 경로는 경고하고 건너뛴다. 이전 로그가 없거나
   `--offline-db`면 종료 코드 2. 로그 부분 해시가 바뀌어 Step 3~5를 합친 로그로 모두 다시 계산하고, 이전 `analysis.json`·`report.md`는
   `JOB/runs/<n>/`에 보관한다(최근 5개). `events.json`·`match.json`은 보관하지 않는다.
+- `triage.py window <KEY> --at <시각> [--lines N] [--span 초] [--tag T …] [--slot N] [--cat C] [--grep RX] [--out <dir>]`: 탐색·심층 분석을
+  시작한 뒤 타임라인에 없는 줄이 필요할 때 마스킹 사본(`JOB/logs-masked/`)에서 그 시각 둘레 줄(기본 모든 태그·40줄, 상한 200줄)을 타임라인 줄 모양으로 `JOB/window-<n>.md`에 쓰고
+  `JOB/windows.json`(스크립트만 쓴다)에 남긴다. check-output이 sha가 맞는 구간을 근거 원문에 더한다(`triagelib/window.py`, 작업당 6개).
+- `triage.py summary <KEY> [--out <dir>]`: 마스킹 사본 전체의 줄 모양 요약(F·예외·E·W, 기준 시각 뒤 처음 나온 모양 먼저)을 출력하고
+  `JOB/summary.md`·sha 기록 `JOB/summary.json`(스크립트만 쓴다)에 남긴다. 탐색·심층 타임라인 머리에도 같은 절이 붙는다(`triagelib/summary.py`).
 - 읽지 않는 파일: `events.json`(파서 출력), `match.json`(매처 출력, `parse_logcat cut --evidence` 입력),
   `issue.json`(마스킹된 Jira 추출 전체 — 코멘트 원문이 필요할 때만 읽는다), `issue_meta.json`, `triage-state.json`, `analysis-cache.json`.
 
@@ -72,7 +79,7 @@
 `lock`(release-other|take-over|stop) · `plan`(resume|new) · `issue`(MCP 호출 후 재실행) ·
 `year`(YYYY) · `reanalyze`(yes|no) · `open_pr`(continue|stop) · `logs`(`--logs`로 재실행) ·
 `code`(프로필|경로|skip) · `code_confirm`(yes|skip) · `time`(ISO 시각) · `window`(full|keep) ·
-`anchor`(off: 실패 스텝 앵커를 쓰지 않고 Jira 발생 시각 기준 범위로 분석, 아래) · `platform`(켠 플랫폼 이름, 아래).
+`anchor`(off: 실패 스텝 앵커를 쓰지 않고 입력한 발생 시각(없으면 로그 전체) 기준으로 분석, 아래) · `platform`(켠 플랫폼 이름, 아래).
 
 플랫폼 정하기(17-platforms §11, 켠 플랫폼 2개 이상·`--offline-db` 아님일 때만 — 하나면 아무것도 읽지 않는다): lock·JOB 전에
 `triagelib/pick.py`가 로그 형식(`platforms/sniff.py`)·Jira 대응표(site `platform.detect.tracker_field`, 기본 꺼짐)·이어 하는 작업으로
@@ -91,9 +98,9 @@ KEY의 가장 늦은 활동인 동안(답한 뒤 다른 플랫폼 작업이 묻�
 실패 스텝 앵커(선택): 실패 스텝이 **어디를(시간 범위)·무엇을(우선 유형)** 볼지 정하고, **왜(S/C)** 는 로그 시그니처가 정한다.
 앵커 우선순위 `--answer anchor=off`(끔) > 기준 줄(`--look-at`) > 로그 스텝 마커(`failed_step.marker_patterns`가 있을 때 `parse_logcat markers`, 기본 꺼짐) >
 `--steps-file`의 스텝 시각(**수동 시계 차 `--clock-offset`이 있을 때만**) > `--steps-file`의 스텝 순서(`step_order`: PASS 스텝의
-흔적을 이슈 DB `step_events` 규칙으로 로그에서 찾아 마지막 일치 뒤를 실패 구간으로 본다, 시계 불필요) > Jira 발생 시각(±`--minutes`) >
+흔적을 이슈 DB `step_events` 규칙으로 로그에서 찾아 마지막 일치 뒤를 실패 구간으로 본다, 시계 불필요) > 입력한 발생 시각(`--answer time=`·`--issue-meta`, ±`--minutes` — Jira 발생 시각 칸은 쓰지 않는다, D4) >
 증상 시각 스캔(`--answer time`). 시험 장비 시계는 단말 logcat 시계와 다를 수 있어, 시계 차를 모르면 장비 시각은 쓰지 않는다(경고).
-마커·steps-file 앵커는 분석 범위와 근접 보너스의 중심에서 Jira 시각을 대신한다(`JOB/match_meta.json`, `issue_meta.json`은 그대로).
+마커·steps-file 앵커는 분석 범위와 근접 보너스의 중심에서 입력한 시각을 대신한다(`JOB/match_meta.json`, `issue_meta.json`은 그대로).
 앵커 시각이 로그 범위 밖이면 경고하고 다음 출처로 넘어간다. 실패 스텝 문구는 앵커와 무관하게 우선 유형·키워드에 쓴다.
 앵커가 없고 마커 패턴·steps-file도 없으면 출력은 이전과 같다.
 
@@ -126,7 +133,8 @@ from triagelib.core import (ANALYSIS_MAX, EXPLORE_DONE_LINE, EXPLORE_INPUT_FILE,
                             TIMELINE_FILE, Fail, NeedsInput, Runner, Stopped, _clip, _now, trace_event)
 from triagelib import pick  # noqa: E402
 from triagelib.driver import Driver  # noqa: E402
-from triagelib.report import _unique_evidence, dumps, fit, schema_violation, timeline  # noqa: E402,F401 — 테스트가 쓴다
+from triagelib.report import (_unique_evidence, dumps, fit, flow_brief, flow_head, head_notes, schema_violation,  # noqa: E402,F401 — 테스트가 쓴다
+                              merge_rows, render_timeline, select_rows, shown_keys, timeline)
 
 
 # -- CLI ------------------------------------------------------------------------------------------
@@ -165,6 +173,9 @@ def build_parser() -> argparse.ArgumentParser:
                                           "없으면 steps-file의 장비 시각은 분석 구간에 쓰지 않는다")
     p.add_argument("--look-at", metavar="기준 줄", help="기준 줄(선택, ≤300자): 로그 줄 또는 `<IPC 이름> (token=0x…)`. 로그에서 찾으면 "
                                                     "그 줄 시각 둘레로 분석 구간을 잡는다. 마스킹해서만 쓴다")
+    p.add_argument("--look-at-source", choices=("user", "model"), default="user",
+                   help="기준 줄을 누가 골랐나(기본 user = 담당자). model = 모델이 Jira 코멘트에서 고른 줄 — 리포트·analysis.json에 "
+                        "'모델이 코멘트에서 고른 지점'(decision.location.source model)으로 적고 실패 지점을 확정(confirmed)으로 올리지 않는다")
     p.add_argument("--look-note", metavar="확인할 내용", help="확인할 내용(선택, ≤300자): 리포트·탐색 타임라인 머리에 싣는 사용자 질문. "
                                                          "마스킹해서만 쓴다. 있으면 1위 C=1이어도 적합성 확인(fit_check)을 연다"
                                                          "(explore.when: never·--no-explore 제외)")
@@ -200,6 +211,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("key", metavar="KEY")
     p.add_argument("--for", dest="purpose", choices=("deep", "explore", "problem"), required=True)
     p.add_argument("--skipped", metavar="사유", help="실행하지 않았거나 실패: report 줄을 '생략: <사유>'로")
+    p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
+    p = sub.add_parser("window", parents=[common])
+    p.add_argument("key", metavar="KEY")
+    p.add_argument("--at", metavar="시각", required=True,
+                   help="중심 시각: 타임라인 줄 시각 HH:MM:SS[.mmm](UTC, 날짜는 분석 범위, 없으면 로그 전체에서) · Z·오프셋 있는 ISO(window 머리 시각) · "
+                        "사본의 logcat 스탬프 MM-DD HH:MM:SS.mmm 그대로(run의 --tz). 오프셋 없는 ISO는 오류")
+    p.add_argument("--lines", type=int, metavar="N", help="줄 수(기본 40, 상한 200)")
+    p.add_argument("--span", type=float, metavar="초", help="--at ±초/2 안의 줄만(≤3600, --lines와 함께면 적은 쪽)")
+    p.add_argument("--tag", action="append", metavar="TAG", help="이 태그 줄만(여러 번 쓸 수 있다). 없으면 모든 태그")
+    p.add_argument("--slot", type=int, metavar="N", help="이 슬롯(phone_id) 줄만 — 슬롯 모름 줄은 남긴다")
+    p.add_argument("--cat", metavar="카테고리", help="tags.yaml에서 이 카테고리로 매핑된 태그 줄만")
+    p.add_argument("--grep", metavar="정규식", help="가린 사본의 `태그: 메시지`에 맞는 줄만(≤200자, 시간 상한). --span이 없으면 로그 전체에서 찾는다")
+    p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
+    p = sub.add_parser("summary", parents=[common])
+    p.add_argument("key", metavar="KEY")
     p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
     p = sub.add_parser("release", parents=[common])
     p.add_argument("key", metavar="KEY")
@@ -272,12 +298,57 @@ def cmd_explore(args, defaults: dict) -> int:
     if not job.is_dir():
         print(f"작업 디렉토리가 없다: {job} — 이 키로 /telephony-triage:analyze를 먼저 실행한다", file=sys.stderr)
         return USAGE
-    code = _explore(args, cfg, job)
+    code = _explore(args, cfg, job, defaults)
     trace_event(job, "explore", exit=code)
     return code
 
 
-def _explore(args, cfg: dict, job: Path) -> int:
+def _int_setting(cfg: dict, key: str, default: int, top: int) -> int:
+    value = userconfig.get(cfg, key, default)
+    return value if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= top else default
+
+
+def _anomaly(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, items: list, recs=None) -> dict | None:
+    """이상 줄 절 재료(`window.anomaly`): 기준 시각은 요약과 같다(`summary.ref_of` 확정 기준, 없으면 `summary.guess_of` 증상 시각 후보)."""
+    from triagelib import summary, window
+    try:
+        analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    analysis = analysis if isinstance(analysis, dict) else {}
+    try:      # 표시 전용 — 사본 읽기·고르기가 실패해도 탐색 타임라인은 지금처럼 만든다
+        found = window.anomaly(job, events, analysis, defaults, summary.ref_of(spec), summary.after_of(cfg),
+                               _int_setting(cfg, "explore.anomaly_max_lines", 80, 400), shown_keys(items), recs,
+                               summary.guess_of(spec, analysis))
+    except Exception as exc:  # noqa: BLE001
+        print(f"경고: 이상 줄 절을 만들지 못해 뺐다({type(exc).__name__})", file=sys.stderr)
+        return None
+    return found if found and found["rows"] else None
+
+
+def _summary(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, recs=None, skipped=None) -> dict | None:
+    """전체 로그 모양 요약 재료(`summary.groups`, 기준 시각·범위는 이상 줄 절과 같다). 만들지 못하면 None(경고 한 줄)."""
+    from triagelib import summary
+    try:
+        analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    analysis = analysis if isinstance(analysis, dict) else {}
+    return summary.safe(job, events, analysis, defaults, summary.ref_of(spec), summary.cap_of(cfg), recs, skipped,
+                        summary.guess_of(spec, analysis), summary.after_of(cfg))
+
+
+def _copy_records(job: Path, defaults: dict, events: dict):
+    """이상 줄 절·요약이 같이 쓰는 마스킹 사본 레코드를 한 번만 읽는다 → (레코드 | None, 건너뛴 파일). 실패해도 (None, [])."""
+    from triagelib import summary
+    try:
+        analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+        return summary.records(job, events, analysis if isinstance(analysis, dict) else {}, defaults)
+    except Exception:  # noqa: BLE001 — 표시 전용(두 절이 없을 뿐)
+        return None, []
+
+
+def _explore(args, cfg: dict, job: Path, defaults: dict, emit: bool = True) -> int:
     input_path, events_path = job / EXPLORE_INPUT_FILE, job / "events.json"
     if not input_path.is_file():
         print(f"탐색 분석 해당 없음: {EXPLORE_INPUT_FILE}가 없다(후보 확정·explore.when: never·run 전)", file=sys.stderr)
@@ -294,8 +365,20 @@ def _explore(args, cfg: dict, job: Path) -> int:
     except (OSError, ValueError) as exc:
         print(f"탐색 입력을 읽지 못했다({exc}) — 이 키로 /telephony-triage:analyze를 다시 실행한다", file=sys.stderr)
         return USAGE
-    text, kept, total = timeline(args.key, events, spec.get("around"), limit, spec.get("failed_step"), spec.get("anchor"),
-                                 spec.get("look_at"))
+    items, total = select_rows(merge_rows(events), spec.get("around"), limit)
+    kept = len(items)
+    # 이상 줄 절·전체 모양 요약(표시 전용)은 explore-input.json `anomaly`·`summary`에 남긴다 — `module`의 재계산(E1)·모듈 보기가
+    # 같은 줄을 쓴다
+    recs, skipped = _copy_records(job, defaults, events)      # 사본을 한 번만 읽는다
+    found = {"anomaly": _anomaly(job, cfg, defaults, spec, events, items, recs) if recs else None,
+             "summary": _summary(job, cfg, defaults, spec, events, recs, skipped) if recs else None}
+    if any(found[k] != spec.get(k) for k in found):
+        spec = {k: v for k, v in spec.items() if k not in found}
+        spec.update({k: v for k, v in found.items() if v})
+        input_path.write_text(json.dumps(spec, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
+    text = render_timeline(args.key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
+                           spec.get("anchor"), spec.get("look_at"), head_notes(job, events, spec.get("around")),
+                           spec.get("anomaly"), spec.get("summary"))
     # 마스킹 전 JOB이어도 남은 값은 가린다(B2-25). 마스킹 끔 DB의 events(`mask_off`)면 가리지 않는다(08-safety §8)
     text, redacted = (text, {}) if events.get("mask_off") else masking.redact(text, events.get("mask_allow") or [])
     (job / TIMELINE_FILE).write_text(text, encoding="utf-8", newline="\n")
@@ -314,7 +397,8 @@ def _explore(args, cfg: dict, job: Path) -> int:
         out["mask_warnings"] = redacted
     if userconfig.module_skills(cfg) is not None:      # 5-2 모듈 문서를 받을 수 있다(B2-4). 없으면 출력이 이전과 같다
         out["module_skills"] = True
-    _emit(out)
+    if emit:
+        _emit(out)
     return OK
 
 
@@ -381,7 +465,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args.platform_name, args.platform_cfg = platform_session.resolve(defaults, args.platform)
     except (platforms.PlatformConfigError, yamlio.YamlFileError) as exc:
-        if args.cmd in ("module", "check-output", "problem"):       # 늘 JSON 한 줄(B1 §4.2)
+        if args.cmd in ("module", "check-output", "problem", "window", "summary"):       # 늘 JSON 한 줄(B1 §4.2)
             _emit({"reason": "설정 오류"})
         print(str(exc), file=sys.stderr)
         return USAGE
@@ -394,6 +478,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "check-output":
         from triagelib import output
         return output.cmd_check_output(args, defaults)
+    if args.cmd == "window":
+        from triagelib import window
+        return window.cmd_window(args, defaults)
+    if args.cmd == "summary":
+        from triagelib import summary
+        return summary.cmd_summary(args, defaults)
     if args.cmd == "release":
         return cmd_release(args, defaults)
     if args.cmd == "explore":
@@ -459,6 +549,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"triage.py 내부 오류 — 스크립트 버그다. 이 메시지와 `/telephony-triage:status --doctor` 화면과 "
               f"{trace}(마스킹된 호출 기록, 로그 원문 없음)를 플러그인 관리자에게 전달한다: {message}{tail}", file=sys.stderr)
         return USAGE
+    if getattr(driver, "explored", False) and (driver.job / EXPLORE_INPUT_FILE).is_file():
+        # 탐색 중 다시 한 run(`--look-at` 등)이 지운 탐색 타임라인을 새 explore 입력으로 다시 만든다(출력은 run JSON 하나 그대로)
+        args.key = driver.key
+        trace_event(driver.job, "explore", exit=_explore(args, driver.cfg, driver.job, defaults, emit=False))
+        # C-5: 같이 지운 모듈 보기·5-1 결과는 낡은 결과라 되살리지 않는다 — 다시 받을 것을 `next`로
+        todo = ([f"`triage.py module {driver.key} --for explore --module {driver.dropped_view}`로 모듈 보기를 다시 받는다"]
+                if getattr(driver, "dropped_view", None) else [])
+        if getattr(driver, "dropped_deep", False):
+            todo.append("심층 분석 결과가 지워졌다 — 받은 `- 심층 분석` 줄을 답에 다시 적는다")
+        if todo:
+            result["next"] = " / ".join(todo)
     _emit(result)
     return OK
 

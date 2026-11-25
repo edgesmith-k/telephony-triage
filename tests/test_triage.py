@@ -101,7 +101,7 @@ def test_analysis_is_small_deterministic_and_writes_report_and_trace():
     assert "(f0:L" in report
     analysis = json.loads(raw)
     assert all(set(e) <= {"ts", "tag", "msg", "event"} for c in analysis["candidates"] for e in c["evidence"])
-    assert "line_ref" not in raw.decode("utf-8") and "_ref" not in raw.decode("utf-8")
+    assert "line_ref" not in raw.decode("utf-8") and '_ref"' not in raw.decode("utf-8")      # 키 `_ref`(값 no_reference는 괜찮다)
     trace = [json.loads(line) for line in (work / "a" / "trace.jsonl").read_text(encoding="utf-8").splitlines()]
     scripts = [row.get("script") for row in trace if row.get("script")]
     assert "parse_logcat.py" in scripts and "match_signatures.py" in scripts
@@ -377,6 +377,12 @@ def test_full_run_asks_for_jira_and_reads_what_the_bridge_saved():
     assert done["status"] == "ok" and done["issue"]["origin"] == "mcp"
     assert done["candidates"][0]["cause"] == "DATA-001-01"
     assert not raw.exists(), "추출 뒤 원문은 지운다(--consume)"
+    # D4(리뷰 1bb528a7 M7): 이전 판 extract가 메타에 넣은 Jira 시각은 이슈를 다시 읽지 않는 재실행에서도 지운다(매처 근접 중심 아님)
+    meta = ws.job_dir("MOCK-1001") / "issue_meta.json"
+    meta.write_text(json.dumps({**json.loads(meta.read_text(encoding="utf-8")), "occurred_at": "2026-09-20T05:30:00+00:00"}),
+                    encoding="utf-8")
+    again = ws.json("triage.py", args + ["--refresh"])
+    assert again["status"] == "ok" and "occurred_at" not in json.loads(meta.read_text(encoding="utf-8"))
     ws.json("triage.py", ["release", "MOCK-1001"])
 
 
@@ -597,7 +603,7 @@ def _check_op_summary(path):
 
 
 MODULE_SKILLS_NEEDLES = ("triage.py module", "--for deep", "--for explore", "`read`", "`input`", "timeline.path", "`next`",
-                         "--also", "--choose", "--at", "ask_also", "ask_switch", "check-output", "--skipped", "deep-output.md",
+                         "--also", "--choose", "--at", "`extra`", "`with`", "check-output", "--skipped", "deep-output.md",
                          "explore-output.md", "설치 스킬 못 찾음", "받기 실패", "〔script",
                          "탐색 분석을 내장 줄 모양만으로 할까요, 생략할까요?", "종료 2여도", "--module <p>/<모듈>", "--choose top")
 
@@ -609,10 +615,9 @@ def _check_module_skills_md(path):
         assert needle in text, needle
     for bad in ("Read 도구", "AskUserQuestion", "Bash", "Task 도구", "${CLAUDE_PLUGIN_ROOT}"):
         assert bad not in text, bad
-    assert re.search(r"`ask_also`[^\n]{0,40}\*\*먼저\*\*", text)        # 문서를 읽기 전에 묻는다
-    # FR-08(P6): 플래그로 시작한 세션은 모듈 질문을 묻지도 받지도 않는다(모델이 스스로 골라 더 읽지 않게)
-    flag = next(ln for ln in text.splitlines() if ln.startswith("- `ask_also`·`ask_switch`:"))
-    assert "묻지 않고 받지 않는다" in flag and "스스로 골라" not in text, flag
+    # 11/25: 더 받을 모듈 문서는 스크립트가 고르고 묻지 않는다(옛 ask_also·ask_switch 질문 없음, 모델이 스스로 골라 더 읽지 않게)
+    assert "ask_also" not in text and "ask_switch" not in text and "스스로 골라" not in text
+    assert "스크립트가 고르고 묻지 않는다" in text and "전체 로그 모양 요약" in text
     for m in re.finditer(r"deep-input\.json", text):                    # 읽는 것은 막지 않는다(고치지 않을 뿐)
         near = text[max(0, m.start() - 20):m.end() + 20]
         assert not (re.search(r"열|읽", near) and re.search(r"않|금지", near)), near
@@ -631,6 +636,8 @@ def test_skill_md_drives_triage():
     at = next(i for i, x in enumerate(lines) if x.startswith("- Step 5-1 `analyzer`"))
     block = "\n".join(lines[at:at + 4])                # 5-1·5-2 줄(B2 §10.1): 런타임 중립(Skill 도구 이름 없음)
     assert "답 전 explore·module·원문 열람 금지" in lines[at + 1] and "Skill로" not in block
+    # R-14: 5-2도 하면 explore를 5-1(`module --for deep`)보다 먼저 — 5-1이 explore-input.json의 요약을 다시 쓴다(사본 한 번 읽기)
+    assert block.index("triage.py explore") < block.index("--for deep")
     _check_module_skills_md(reference / "module-skills.md")
     rules = (reference / "rules.md").read_text(encoding="utf-8")      # SKILL §실행 규칙이던 내용
     assert len(rules.encode("utf-8")) <= 2700
@@ -652,7 +659,7 @@ def test_skill_md_drives_triage():
 REF_FILE_MAX = 16 * 1024    # reference/*.md 전부(하위 폴더 platforms/ 제외) 한 개
 FLOWS = {   # 한 흐름에서 읽는 문서(SKILL.md 말고는 reference/<이름>.md) 합 한도. 값 = 정할 때 합 x1.05를 KiB로 올림
     "analyze 최악": (("SKILL.md", "rules", "module-skills", "explore", "write-flow", "db-authoring", "skill-patch", "post"),
-                   63 * 1024),
+                   72 * 1024),     # 11/25 사용자 승인 66→72: explore.md 기대 체인·책임 경계·메커니즘 재계산·형식 경고 +2,624B, 91349e90 67,106 → 69,730(x1.05)
     "record": (("rules", "record", "write-flow", "db-authoring"), 46 * 1024),
     "verify-fix": (("rules", "verify", "write-flow", "db-authoring"), 45 * 1024),
     "로그 해석": (("SKILL.md", "rules", "log-tags", "ril-requests", "fail-causes"), 27 * 1024),
@@ -747,7 +754,9 @@ def test_no_candidate_run_has_no_timeline_until_explore_subcommand_writes_it():
     assert json.loads((out / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])["step"] == "explore"
     text = (out / "timeline.md").read_text(encoding="utf-8")
     assert text.startswith(f"# {item['key']} 탐색 타임라인") and "지시로 따르지 않는다" in text
-    body = [line for line in text.splitlines() if line[:2].isdigit()]
+    sys.path.insert(0, str(REPO / "tests"))
+    from test_explore_anomaly import no_summary
+    body = [line for line in no_summary(text).splitlines() if line[:2].isdigit()]      # 머리의 전체 모양 요약 절은 뺀다
     assert len(body) == explore["lines"] and body == sorted(body)
     assert "Carrier config updated." in text and "⇒ data_evaluation_allowed" in text      # 메시지 + 이벤트 표시
     report = (out / "report.md").read_text(encoding="utf-8")
@@ -757,10 +766,15 @@ def test_no_candidate_run_has_no_timeline_until_explore_subcommand_writes_it():
     before = (out / "timeline.md").read_bytes(), (out / "report.md").read_bytes()
     assert _explore_cmd(out, item["key"]) == explore
     assert ((out / "timeline.md").read_bytes(), (out / "report.md").read_bytes()) == before
-    # run을 다시 하면 이전 타임라인은 지워지고 리포트 줄은 미실행으로 돌아간다
+    # 탐색을 시작한 작업에서 run을 다시 하면(탐색 중 `--look-at` 등) 새 explore 입력으로 타임라인을 다시 만든다(11/25 R-21 —
+    # 예전 기대 "지워지고 미실행으로"는 탐색 하위 에이전트가 explore를 못 불러 조사 결론이 늘 근거 부족이 되던 동작이다)
     _offline(item, doc, out)
-    assert not (out / "timeline.md").exists()
-    assert "- 탐색 분석 (추정): 미실행" in (out / "report.md").read_text(encoding="utf-8")
+    assert (out / "timeline.md").read_bytes() == before[0]                     # 입력이 같으면 같은 바이트
+    assert "- 탐색 분석 (추정): 미실행" not in (out / "report.md").read_text(encoding="utf-8")
+    fresh = tmp("tt-triage-") / "x"                                             # explore 전이면 run은 타임라인을 만들지 않는다
+    _offline(item, doc, fresh)
+    _offline(item, doc, fresh)
+    assert not (fresh / "timeline.md").exists()
 
 
 def test_explore_subcommand_exit_codes():
@@ -872,7 +886,9 @@ def test_explore_setting_flows_from_site_defaults_and_skill_points_to_reference(
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
     from common import userconfig
     defaults = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))
-    assert userconfig.merged(defaults, user={})["explore"] == {"when": "ask", "timeline_max_lines": 200}
+    assert userconfig.merged(defaults, user={})["explore"] == {"when": "ask", "timeline_max_lines": 200,
+                                                               "anomaly_max_lines": 80, "after_sec": 600,
+                                                               "summary_max_groups": 60}
     skill = (REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md").read_text(encoding="utf-8")
     assert "explore.md" in skill and "timeline.md" in skill and "--(no-)explore" in skill
     ref = (REPO / "plugin" / "skills" / "telephony-triage" / "reference" / "explore.md").read_text(encoding="utf-8")
@@ -1014,10 +1030,77 @@ def test_fit_worst_case_with_ask_notes_stays_within_4kb():
               "must_show": must, "candidates": [{"cause": f"C-{i}", "evidence": [dict(big) for _ in range(10)]} for i in range(3)],
               "analyzer": {"skill": "s" * 40, "when": "ask", **driver._ask_note("ask", "5-1")},
               "explore": {"reason": "cause_unconfirmed", "when": "ask", **driver._ask_note("ask", "5-2")}}
+    decision = {"state": "accepted", "reason": "anchored_top",       # 단계 4 판단의 가장 긴 모양(counter까지)
+                "selected": {"category": "c" * 20, "type": "ABCDEFGHIJ-001", "cause": "ABCDEFGHIJ-001-01"},
+                "location": {"state": "confirmed", "source": "log_marker", "kind": "range"},
+                "counter": {"cause": "ABCDEFGHIJ-001-02"}, "check": {"why": "multiple_events", "checked": 3, "total": 120},
+                "events": [{"type": "ABCDEFGHIJ-001", "at": "2026-09-20T05:30:00.000000+00:00", "line": "f12:L123456", "phone": 1,
+                            "absence": True, "ref": True, "result": "adopted", "cause": "ABCDEFGHIJ-001-01",
+                            "why": "no_cause_before_event", "gap_s": 12.345}] * 3, "events_total": 42}
+    result["decision"] = json.loads(json.dumps(decision))
+    result["candidates"][0].update({**decision["selected"], "C": 1})      # 채택 원인 = 1위(C=1) 후보
     out = triage.fit(result)
     assert len(triage.dumps(out).encode("utf-8")) + 1 <= 4096 and out["truncated"] is False
+    # 4KB 압축은 판단의 사건(events)만 가장 먼저 줄인다 — 상태·사유·selected·counter·check·events_total은 그대로, 기준에 붙은
+    # 사건(ref) 하나는 남긴다(리뷰 P1 11/20 — 옛 기대는 빈 목록)
+    assert {k: v for k, v in out["decision"].items() if k != "events"} == {k: v for k, v in decision.items() if k != "events"}
+    assert [e["ref"] for e in out["decision"]["events"]] == [True]
+    # 1위 후보도 남는다(포털은 selected가 C=1 후보 안에 없으면 판단 형식 오류로 본다) — 근거 줄만 줄인다
+    top = out["candidates"][0]
+    assert {k: top[k] for k in ("category", "type", "cause")} == decision["selected"] and top["C"] == 1 and top["evidence"]
     assert out["explore"]["note"] == driver.ASK_NOTE.format(step="5-2") and out["analyzer"]["note"].endswith("(SKILL 5-1)")
     assert driver._ask_note("always", "5-2") == {} and driver._ask_note("never", "5-1") == {}
+
+
+def test_decision_reason_priority_and_candidates_untouched():
+    """단계 5-1 사유 우선순위(처음 맞는 것): 후보 없음 → 기준 없음 → 자격 검사 사유 → 채택. 채택 원인은 후보 중 자격 검사가
+    고른 것(1위가 아닐 수 있다). 후보 목록·순서는 그대로, 자격 검사 칸(check·events·events_total)은 늘 싣는다."""
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    from triagelib import driver
+    anchor = {"source": "log_marker", "location": {"state": "confirmed", "source": "log_marker", "kind": "range"}}
+    top = {"type": "DATA-001", "cause": "DATA-001-01", "category": "data", "score": 1.0}
+    other = {"type": "IMS-001", "cause": "IMS-001-01", "category": "ims", "score": 0.5}
+    none = {"state": "none", "source": None, "kind": None}
+    row = {"type": "IMS-001", "at": "t", "line": "f0:L1", "phone": 0, "absence": False, "ref": True, "result": "adopted",
+           "cause": "IMS-001-01", "why": None, "gap_s": 0.1}
+    elig = {"state": "accepted", "reason": "anchored_top", "why": "range", "cause": "IMS-001-01", "checked": 1, "total": 9,
+            "events_total": 5, "events": [row] * 5}
+    extra = {"check": {"why": "range", "checked": 1, "total": 9}, "events": [row] * 3, "events_total": 5}
+    assert driver._decision([], anchor, elig) == {"state": "held", "reason": "no_candidate", "selected": None,
+                                                  "location": anchor["location"], **extra}
+    assert driver._decision([], None, None)["location"] == none
+    assert driver._decision([top, other], None, elig)["reason"] == "no_reference"       # 기준 없음이 자격 검사보다 먼저
+    held = {**elig, "state": "held", "reason": "ambiguous", "why": "locations", "cause": None}
+    assert driver._decision([top, other], anchor, held)["reason"] == "ambiguous"
+    assert driver._decision([top, other], anchor, None)["reason"] == "cause_unconfirmed"   # 자격 검사 결과 없음(옛 매처)
+    cands = [top, other]
+    before = json.dumps(cands)
+    assert driver._decision(cands, anchor, elig) == {"state": "accepted", "reason": "anchored_top",
+                                                     "selected": {"category": "ims", "type": "IMS-001", "cause": "IMS-001-01"},
+                                                     "location": {**anchor["location"], "state": "found"}, **extra}  # 구간 채택은 found
+    assert json.dumps(cands) == before
+
+
+def test_held_report_lines_keep_prefixes_and_conclusion_shape():
+    """보류(기준 없음)면 `- 판단:` 줄이 결론 바로 앞, 결론은 `. 다음:` 구조 그대로, `- 분류 후보:` 머리말은 그대로 두고 꼬리만."""
+    doc, items = _items()
+    out = tmp("tt-triage-") / "x"
+    analysis = _offline(items[0], doc, out)
+    assert analysis["decision"]["reason"] == "no_reference" and analysis["candidates"][0]["C"] == 1
+    lines = (out / "report.md").read_text(encoding="utf-8").splitlines()
+    i = next(n for n, x in enumerate(lines) if x.startswith("- 판단: "))
+    assert lines[i] == ("- 판단: 원인 보류 — 실패 지점을 잡지 못함(기준 줄·스텝 마커·TC 파일+시계 차 중 로그에서 찾은 것 없음). "
+                        "아래 규칙 일치는 로그에서 관측된 것이고 이 이슈의 원인으로 채택하지 않았다")
+    assert lines[i + 1].startswith("- 결론: 원인 보류 — 실패 지점을 잡지 못함") and ". 다음: 근거 로그로 확인하고 Step 7" in lines[i + 1]
+    assert "DATA-001-01" in lines[i + 1].split(". 다음:")[0]
+    assert lines[i + 2].startswith("- 분류 후보: data > DATA-001 > DATA-001-01 ")
+    assert lines[i + 2].endswith(" (관측된 규칙 일치 — 채택 안 함)")
+    # NEXT ACTION: 보류면 1위 해결책 줄을 싣지 않는다(모델이 읽는 글에 보류한 원인의 해결책을 두지 않는다 — Jira 본문도 해결책 없음)
+    top = analysis["candidates"][0]
+    assert not any(x.startswith(("- 해결책", "- 수정 상태: ")) for x in lines)
+    assert any(x.startswith("- 수정 상태(1위 기준, 보류됨): ") for x in lines), top
+    # 근거 로그 머리 줄: 보류면 관측된 일치일 뿐 채택 원인이 아니다
+    assert next(x for x in lines if x.startswith("- 근거 로그 (")).endswith(", 관측된 규칙 일치 — 원인 채택 아님):")
 
 
 def _analyzer_report(cfg: dict) -> str:
@@ -1055,7 +1138,7 @@ def test_report_groups_lines_into_the_four_jira_sections():
     for item in items:                      # 원인 일치(C=1)·원인 미확인 각 1건
         picked.setdefault(item["expect"] if item["expect"] == "unresolved" else "matched", item)
     assert set(picked) == {"matched", "unresolved"}
-    want = {"PROBLEM": ["- 이슈: "], "CAUSE": ["- 결론: ", "- 분류 후보: ", "- 원인: TODO(LLM)"],
+    want = {"PROBLEM": ["- 이슈: "], "CAUSE": ["- 판단: ", "- 결론: ", "- 분류 후보: ", "- 원인: TODO(LLM)"],
             "NEXT ACTION": ["- 열린 PR: "], "ANALYSIS": ["- 로그 범위: ", "- 코드 위치: ", "- 기타 후보: ", "- 심층 분석"]}
     for kind, item in picked.items():
         out = tmp("tt-triage-") / kind
@@ -1096,17 +1179,23 @@ def _offline_with(item: dict, doc: dict, out: Path, *extra, meta_extra: dict | N
 
 
 def test_absent_failed_step_is_byte_identical_even_with_steps_file_without_fail_line():
+    """FAIL 줄이 없는 steps-file은 실패 스텝 없음과 같다 — 다만 sim1121 P0부터는 "FAIL 스텝을 찾지 못했다" 경고 한 줄은 늘 남긴다
+    (조용히 0이 되지 않게). 그 경고 말고는 같다."""
+    from common import failedstep
     doc, items = _items()
     steps = tmp("tt-steps-") / "steps.txt"
     steps.write_text("1. 전원 켜기\n2. 설정 열기\n", encoding="utf-8")
+    warn = f"{failedstep.NOT_FOUND} — 열 이름 줄(번호·이름·판정 열)을 찾지 못함, 판정을 읽은 스텝 0줄"
     for item in (items[0], next(i for i in items if i["expect"] == "unresolved")):
         work = tmp("tt-triage-")
         plain = _offline_with(item, doc, work / "a")
         withfile = _offline_with(item, doc, work / "b", "--steps-file", steps)
-        strip = lambda r: {k: v for k, v in r.items() if k not in ("generated_at", "files")}  # noqa: E731
+        strip = lambda r: {k: v for k, v in r.items() if k not in ("generated_at", "files", "warnings")}  # noqa: E731
         assert strip(plain) == strip(withfile)
+        assert [w for w in withfile["warnings"] if w not in plain.get("warnings", [])] == [warn]
         assert "failed_step" not in json.dumps(plain) and "failed_step" not in (work / "a" / "issue_meta.json").read_text()
-        assert (work / "a" / "report.md").read_bytes() == (work / "b" / "report.md").read_bytes()
+        reports = [(work / n / "report.md").read_text(encoding="utf-8") for n in ("a", "b")]
+        assert reports[0] == re.sub(r"(?:; )?" + re.escape(warn), "", reports[1]).replace("- 경고: \n", "").replace("- 경고: ; ", "- 경고: ")
         assert (work / "a" / "issue_meta.json").read_bytes() == (work / "b" / "issue_meta.json").read_bytes()
         for n in ("a", "b"):
             if (work / n / "explore-input.json").exists():
@@ -1970,6 +2059,13 @@ def test_clock_flagged_top_candidate_is_must_shown():
     assert top["cause"] == "DATA-001-01" and top["clock_flags"] == ["clock_anomaly", "line_order"]
     line = next(m for m in analysis["must_show"] if m.startswith("시계 이상 구간의 근거:"))
     assert len(line) <= 160 and line.endswith("[clock_anomaly, line_order]") and f"- {line}" in report
+    # sim1122 F6·RP-9: 두 해석(덤프 이어 붙임·시계 변경)과 단서(로그 전체 역행의 앞뒤 pid·tid 같은 수 — 두 줄 모두 1234·1244)를
+    # 같이 적고, 하위 줄은 pid만으로는 못 가른다고 밝힌 볼 것 목록이다
+    assert "버퍼 덤프를 이어 붙였거나 단말 시계가 바뀜(NITZ·재부팅), 로그 전체 역행 1곳(앞뒤 같은 pid 1·tid 1) [" in line, line
+    assert f"- {line}\n  - 시계 역행 가르기(pid·tid가 같은지만으로는 못 가른다 — 단서일 뿐): " in report
+    other, _ = _run_custom([REJECTED_LINE.format("14:30:10.000"),
+                            OFF_LINE.format("14:30:02.000").replace("1234  1244", "1234  4322")], "MOCK-7425")
+    assert any("로그 전체 역행 1곳(앞뒤 같은 pid 1·tid 0)" in m for m in other["must_show"]), other["must_show"]
     order = [m.split(":")[0] for m in analysis["must_show"]]
     assert order.index("시계 이상 구간의 근거") < order.index("로그 범위")
     plain, _ = _run_custom([OFF_LINE.format("14:30:00.000"), REJECTED_LINE.format("14:30:02.000")], "MOCK-7421")

@@ -8,7 +8,7 @@
 | kind | 만드는 파일 |
 |---|---|
 | deep | `events.json`(경로 정규화), `timeline.md`, `deep-input.json`(schema_version 1) |
-| explore | `timeline.md`, `explore-input.json`(run이 쓴 그대로), `analysis.json`(`generated_at`·`request_hash`·`files`·`analyzer`/`explore`의 `note` 뺌, `logs.masked`는 null — 평가 폴더에 사본이 없다) |
+| explore | `timeline.md`, `explore-input.json`(run이 쓰고 explore가 `anomaly`를 더한 그대로), `analysis.json`(`generated_at`·`request_hash`·`files`·`analyzer`/`explore`의 `note` 뺌, `logs.masked`는 null — 평가 폴더에 사본이 없다) |
 
 `templates/module-skills/modules.yaml`에 그 플랫폼의 `common.filter`가 있으면 case `timeline.md`는 모듈 보기다
 (B2 §4.6: `common.modulefilter.build`를 같은 프로세스에서, `triage.py module`과 같은 인자로 — deep은 `match.json`
@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import os
 import shutil
 import sys
 import tempfile
@@ -51,6 +52,7 @@ for _p in (REPO / "plugin" / "scripts", REPO / "tests" / "mocks", REPO / "tests"
         sys.path.insert(0, str(_p))
 
 from common import yamlio
+from triagelib import modulecmd
 
 TEMPLATES = REPO / "templates" / "module-skills"
 VARIANT = "issue-db-ofono-modules"
@@ -184,6 +186,11 @@ def _issue_yaml(case: dict, module: str = "data") -> str:
     return json.dumps(doc, ensure_ascii=False, indent=1) + "\n"     # JSON은 YAML의 부분집합
 
 
+def _given_time(job: Path):
+    """분석이 쓴 기준 시각(`issue_meta.json` occurred_at — `--answer time=`) — 모듈 타임라인 중심과 같은 값."""
+    return json.loads((job / "issue_meta.json").read_text(encoding="utf-8")).get("occurred_at")
+
+
 def _run(runner, root: Path, args: list, home: Path, what: str):
     proc = runner.run("triage.py", args, root=root, env={"TELEPHONY_TRIAGE_HOME": home})
     if proc.returncode != 0:
@@ -213,7 +220,9 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
     parse = case.get("parse") or {}
     args = ["run", case["key"], "--offline-db", db, "--logs", work / "logs" / "source.log",
             "--issue-file", work / "issue.yaml", "--out", job, "--platform", platform,
-            "--tz", parse["tz"], "--year", parse["year"], "--minutes", parse.get("minutes", 5)]
+            "--tz", parse["tz"], "--year", parse["year"], "--minutes", parse.get("minutes", 5),
+            # case의 발생 시각은 AP 로그 시계로 쓴 값 — Jira 칸은 분석 기준으로 쓰지 않으므로(D4) 사용자가 준 시각으로 넘긴다
+            "--answer", f"time={case['issue']['occurred_at']}"]
     _run(runner, root, args, home, name)
     analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
     events = json.loads((job / "events.json").read_text(encoding="utf-8"))
@@ -246,7 +255,7 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
             raise GenError(f"{name}: deep case인데 explore-input.json이 생겼다")
         explore_bytes = None
         # CLI만으로는 deep에 타임라인이 없다 → 같은 report.timeline 경로를 임시 입력으로 탄다
-        explore_input.write_text(json.dumps({"around": (analysis.get("issue") or {}).get("occurred_at"),
+        explore_input.write_text(json.dumps({"around": _given_time(job),
                                              "failed_step": None, "limit": EXPLORE_LIMIT, "anchor": None},
                                             ensure_ascii=False), encoding="utf-8")
     else:
@@ -255,13 +264,17 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
             mismatch(f"{name}: explore.reason {reason} — 기대 {expect['explore_reason']}")
         if not explore_input.is_file():
             raise GenError(f"{name}: explore-input.json이 없다")
-        explore_bytes = explore_input.read_bytes().decode("utf-8")
+        explore_bytes = ""
     _run(runner, root, ["explore", case["key"], "--out", job, "--platform", platform], home, name)
+    if kind == "explore":      # explore가 이상 줄 절(`anomaly`)을 더한 뒤 — 실사용 JOB의 입력 파일과 같다
+        explore_bytes = explore_input.read_bytes().decode("utf-8")
     timeline = (job / "timeline.md").read_bytes().decode("utf-8")
     if view:
         text = module_view(job, case, kind, platform, view_module, analysis, events, explore_bytes, doc, with_modem)
         if text is not None:
-            timeline = text
+            from triagelib import report      # = modulecmd._deep_module: 심층 보기 머리에 전체 로그 모양 요약(explore가 같은 기준으로 셈)
+            timeline = (report.with_summary(text, json.loads(explore_input.read_text(encoding="utf-8")).get("summary"))
+                        if kind == "deep" else text)
     if with_modem:
         signal = modem_signal(job, doc, platform, view_module, analysis)
         if signal < 1:
@@ -283,10 +296,10 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
             "module": f"{platform}/{view_module}",
             "sha": "template",
             "type_id": candidates[0].get("type"),
-            "top_candidates": [{k: c.get(k) for k in ("type", "cause", "score", "confidence")}
-                               for c in candidates[:3]],
+            "top_candidates": modulecmd._top3(candidates, events),      # = triage.py module(후보마다 근거 줄)
+            **({"decision": {k: analysis["decision"].get(k) for k in ("state", "reason")}} if analysis.get("decision") else {}),
             "issue_summary": issue.get("summary"),
-            "occurred_at": issue.get("occurred_at"),
+            "occurred_at": _given_time(job),      # = triagelib.modulecmd._around(사용자가 준 시각 — Jira 칸 아님, D4)
             "events": "events.json",
             "timeline": "timeline.md",
             "log_paths": ["source.log"],
@@ -398,7 +411,9 @@ def module_view(job: Path, case: dict, kind: str, platform: str, module: str, an
     result = modulefilter.build(payload)
     if "text" not in result:
         raise GenError(f"{case['key']}: 모듈 보기 실패 {result}")
-    return result["text"]
+    if kind == "deep":
+        return result["text"]
+    return modulecmd._explore_text(result["text"], json.loads(explore_bytes or "{}"))     # 요약·이상 줄 절
 
 
 def _case_size(case_dir: Path) -> None:
@@ -421,7 +436,9 @@ def generate(dirs: list[Path], validate: bool, templates: Path = TEMPLATES, vari
     import runner
 
     names = {**DB_VARIANTS, **(variants or {})}
-    tmp = Path(tempfile.mkdtemp(prefix="tt-module-inputs-"))
+    # 작업 경로 길이를 TMPDIR(pytest·xdist 세션 폴더)와 무관하게: run의 analysis.json은 절대 경로(`files`)를 넣고 4KB 맞춤(fit)한
+    # 뒤에 여기서 `files`를 뺀다 — 경로가 길면 4KB 경계 case에서 다른 칸(near_causes 등)이 잘려 생성 파일이 환경마다 달라진다
+    tmp = Path(tempfile.mkdtemp(prefix="tt-module-inputs-", dir="/tmp" if os.path.isdir("/tmp") else None))
     try:
         dbs: dict[str, Path] = {}
         for p in sorted({_platform(d) for d in dirs}):

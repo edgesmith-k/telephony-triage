@@ -1724,7 +1724,7 @@
               "resultCode=\\w+",
               "cause=\\w+"
             ],
-            "suspect": "모뎀·RIL·DataServiceManager"
+            "suspect": "단말 APN 설정·망/장비 PDN 설정·모뎀·RIL·DataServiceManager (응답 cause·주소·DNS로 가름)"
           },
           {
             "id": "link-properties",

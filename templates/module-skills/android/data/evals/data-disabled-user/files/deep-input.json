@@ -10,11 +10,20 @@
    "type": "DATA-001",
    "cause": "DATA-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "data",
+   "evidence": [
+    "09:00:23.000 DSMGR-0: notifyDataEnabledChanged: enabled=false, reason=USER, callingPackage=com.android.settings",
+    "09:00:24.900 DNC-0: Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: DATA_DISABLED, candidate profile=null"
+   ]
   }
  ],
+ "decision": {
+  "state": "held",
+  "reason": "no_reference"
+ },
  "issue_summary": "데이터가 연결되지 않음 (합성)",
- "occurred_at": "2026-08-20T09:00:25+00:00",
+ "occurred_at": "2026-08-20T09:00:25.000Z",
  "events": "events.json",
  "timeline": "timeline.md",
  "log_paths": [

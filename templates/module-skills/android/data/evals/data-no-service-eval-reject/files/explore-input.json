@@ -1,5 +1,5 @@
 {
- "around": "2026-11-10T17:18:24+00:00",
+ "around": "2026-11-10T17:18:24.000Z",
  "failed_step": null,
  "limit": 200,
  "anchor": null,
@@ -11,5 +11,184 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "summary": {
+  "ref": "2026-11-10T17:18:24.000Z",
+  "range": [
+   "2026-11-10T17:18:08.117Z",
+   "2026-11-10T17:18:23.260Z"
+  ],
+  "lines": 18,
+  "shapes": 18,
+  "window": [
+   "2026-11-10T17:13:24.000Z",
+   "2026-11-10T17:28:24.000Z"
+  ],
+  "cap": 60,
+  "after_sec": 600,
+  "groups": [
+   {
+    "ts": "2026-11-10T17:18:23.257Z",
+    "last": "2026-11-10T17:18:23.257Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[1090]< SET_USER_DATA_ENABLED error 6 [PHONE0]"
+   },
+   {
+    "ts": "2026-11-10T17:18:08.117Z",
+    "last": "2026-11-10T17:18:08.117Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…"
+   },
+   {
+    "ts": "2026-11-10T17:18:23.260Z",
+    "last": "2026-11-10T17:18:23.260Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: NOT_IN_SERVICE DATA_NETWORK_TRANSPORT_NOT_ALLOWED SERVICE_OPTION_NOT_SUPPORTE…"
+   },
+   {
+    "ts": "2026-11-10T17:18:23.260Z",
+    "last": "2026-11-10T17:18:23.260Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Data evaluation: evaluation reason:DATA_ENABLED_CHANGED, Data disallowed reasons: NOT_IN_SERVICE SERVICE_OPTION_NOT_SUPPORTED, candidate profile=null, time=17:…"
+   },
+   {
+    "ts": "2026-11-10T17:18:23.258Z",
+    "last": "2026-11-10T17:18:23.258Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DSM-C-0",
+    "msg": "notifyUserDataEnabledComplete. result = 1"
+   },
+   {
+    "ts": "2026-11-10T17:18:23.257Z",
+    "last": "2026-11-10T17:18:23.257Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[1090]> SET_USER_DATA_ENABLED enabled=true [PHONE0]"
+   },
+   {
+    "ts": "2026-11-10T17:18:23.257Z",
+    "last": "2026-11-10T17:18:23.257Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onDataEnabledChanged: enabled=true"
+   },
+   {
+    "ts": "2026-11-10T17:18:23.255Z",
+    "last": "2026-11-10T17:18:23.255Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DSMGR-0",
+    "msg": "mIsDataEnabled=true, prevDataEnabled=false"
+   },
+   {
+    "ts": "2026-11-10T17:18:23.255Z",
+    "last": "2026-11-10T17:18:23.255Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DSMGR-0",
+    "msg": "notifyDataEnabledChanged: enabled=true, reason=USER, callingPackage=com.android.phone"
+   },
+   {
+    "ts": "2026-11-10T17:18:23.255Z",
+    "last": "2026-11-10T17:18:23.255Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DSMGR-0",
+    "msg": "notifyDataServiceUserDataEnabled: enabled=true"
+   },
+   {
+    "ts": "2026-11-10T17:18:23.255Z",
+    "last": "2026-11-10T17:18:23.255Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DSM-C-0",
+    "msg": "notifyUserDataEnabled"
+   },
+   {
+    "ts": "2026-11-10T17:18:23.254Z",
+    "last": "2026-11-10T17:18:23.254Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DSMGR-0",
+    "msg": "UserDataEnabled changed to true"
+   },
+   {
+    "ts": "2026-11-10T17:18:23.252Z",
+    "last": "2026-11-10T17:18:23.252Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DSMGR-0",
+    "msg": "Set user data enabled to true on sub 1, changed=true, callingPackage=com.android.phone"
+   },
+   {
+    "ts": "2026-11-10T17:18:08.157Z",
+    "last": "2026-11-10T17:18:08.157Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Data evaluation: evaluation reason:DATA_SERVICE_STATE_CHANGED, Data disallowed reasons: NOT_IN_SERVICE SERVICE_OPTION_NOT_SUPPORTED, candidate profile=null, ti…"
+   },
+   {
+    "ts": "2026-11-10T17:18:08.157Z",
+    "last": "2026-11-10T17:18:08.157Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DSMGR-0",
+    "msg": "handleSubscriptionChanged: 1 reevaluating data enabled"
+   },
+   {
+    "ts": "2026-11-10T17:18:08.157Z",
+    "last": "2026-11-10T17:18:08.157Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DSMGR-0",
+    "msg": "mIsDataEnabled=false, prevDataEnabled=false"
+   },
+   {
+    "ts": "2026-11-10T17:18:08.156Z",
+    "last": "2026-11-10T17:18:08.156Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Data evaluation: evaluation reason:DATA_SERVICE_STATE_CHANGED, Data disallowed reasons: NOT_IN_SERVICE DATA_NETWORK_TRANSPORT_NOT_ALLOWED SERVICE_OPTION_NOT_SU…"
+   },
+   {
+    "ts": "2026-11-10T17:18:08.134Z",
+    "last": "2026-11-10T17:18:08.134Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onServiceStateChanged: [WWAN: NR->NR, HOME->NOT_REG_OR_SEARCHING, TERRESTRIAL->TERRESTRIAL] [WLAN: UNKNOWN->UNKNOWN, UNKNOWN->UNKNOWN, TERRESTRIAL->TERRESTRIAL…"
+   }
+  ]
+ }
 }

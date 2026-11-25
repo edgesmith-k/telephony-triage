@@ -114,8 +114,7 @@ QUESTIONS = [
 @pytest.mark.parametrize("cands", QUESTIONS)
 def test_questions_are_not_5x_questions(cands):
     ask = modulecmd.ask_text(cands)
-    switch = modulecmd._ask_switch("data", {"hot_modules": {"network": 5, "sim": 2}}, cands)
-    texts = [ask["question"], *ask["options"], switch["question"], *switch["options"]]
+    texts = [ask["question"], *ask["options"]]       # 약한 신호 질문(ask_switch)은 11/25에 없앴다
     assert len(ask["options"]) <= 3
     for text in texts:
         assert not modulecmd.FORBIDDEN_ASK.search(text), text

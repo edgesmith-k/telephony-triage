@@ -36,6 +36,7 @@ DEEP_READ = ["ofono/_common/layers.md", "ofono/_common/components.md", "ofono/da
              "ofono/data/references/DATA-001.md"]
 C0_KEYS = ["schema_version", "key", "platform", "module", "sha", "type_id", "top_candidates", "issue_summary", "occurred_at",
            "events", "timeline", "log_paths"]
+C0_HELD_KEYS = [*C0_KEYS[:7], "decision", *C0_KEYS[7:]]     # 판단이 있는 실제 run(단계 5): 1위가 보류인지 모듈 스킬에 알린다
 
 # -- JOB·실행 도우미 ------------------------------------------------------------------------------
 
@@ -74,6 +75,8 @@ class Env:
         if explore:
             analysis["explore"] = {"reason": "no_candidate" if not cands else "cause_unconfirmed", "when": "ask"}
         (job / "analysis.json").write_text(json.dumps(analysis, ensure_ascii=False), encoding="utf-8")
+        # 타임라인 중심 = 사용자가 준 시각(issue_meta.json — run의 write_meta). analysis.issue.occurred_at(Jira 칸)은 중심이 아니다(D4)
+        (job / "issue_meta.json").write_text(json.dumps({"key": KEY, "occurred_at": "2026-09-20T05:32:10Z"}), encoding="utf-8")
         ev = {"events": list(EVENTS if events is None else events),
               "input": {"files": ["/abs/source.log"], "window": {"start": "2026-09-20T05:27:00Z", "end": "2026-09-20T05:37:00Z"}}}
         (job / "events.json").write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
@@ -181,7 +184,8 @@ def _c0_deep_job(tmp_path: Path, src: Path) -> tuple[Path, Path, dict, Path]:
     parse = case.get("parse") or {}
     proc = run("triage.py", ["run", case["key"], "--offline-db", db, "--logs", log, "--issue-file", tmp_path / "issue.yaml",
                              "--out", job, "--platform", "ofono", "--tz", parse["tz"], "--year", parse["year"],
-                             "--minutes", parse.get("minutes", 5)], root=root, env={"TELEPHONY_TRIAGE_HOME": home})
+                             "--minutes", parse.get("minutes", 5), "--answer", f"time={case['issue']['occurred_at']}"],
+               root=root, env={"TELEPHONY_TRIAGE_HOME": home})       # 입력 생성기와 같다(Jira 칸 시각은 쓰지 않는다, D4)
     assert proc.returncode == 0, proc.stderr
     proc = run("triage.py", ["module", case["key"], "--for", "deep", "--out", job, "--platform", "ofono"], root=root,
                env={"TELEPHONY_TRIAGE_HOME": home})
@@ -195,11 +199,12 @@ def test_deep_c0_parity(tmp_path):
     assert out["module"] == "ofono/data"
     want = json.loads((case_dir / "files" / "deep-input.json").read_text(encoding="utf-8"))
     got = json.loads((job / "deep-input.json").read_text(encoding="utf-8"))
-    assert list(got) == list(want) == C0_KEYS
+    assert got.pop("summary") == "summary.md" and (job / "summary.md").is_file()   # 실사용만(case 타임라인 머리에 같은 요약 절)
+    assert list(got) == list(want) == C0_HELD_KEYS and got["decision"]["state"] == "held"
     assert re.fullmatch(r"[0-9a-f]{40}", got["sha"])
     assert got["timeline"].endswith("module-skill/deep/timeline.md") or got["timeline"] == "module-skill/deep/timeline.md"
     assert len(got["log_paths"]) == 1 and Path(got["log_paths"][0]).is_absolute() and got["log_paths"][0].endswith("source.log")
-    for k in C0_KEYS:
+    for k in C0_HELD_KEYS:
         if k not in ("sha", "timeline", "log_paths", "events"):
             assert got[k] == want[k], k
     view = (job / "module-skill" / "deep" / "timeline.md").read_bytes()
@@ -237,18 +242,40 @@ def test_rerun_same_sha_is_byte_identical(env):
 
 
 def test_deep_also_signal_and_also(env):
-    # 신호 구간은 1위 근거(실패 표시 줄)로 정한다(modulefilter.deep_window): 그 앞뒤에 모뎀 데몬 줄이 있으면 묻는다
+    # 신호 구간은 1위 근거(실패 표시 줄)로 정한다(modulefilter.deep_window): 그 앞뒤에 모뎀 데몬 줄이 있으면 묻지 않고 받는다(11/25)
     cands = [{"type": "DATA-001", "cause": "DATA-001-01", "score": 9, "confidence": "high", "category": "data",
               "evidence": [{k: EVENTS[1][k] for k in ("ts", "tag", "msg", "event")}]}]
     job = env.make_job(events=EVENTS + [MODEM_EVENT], candidates=cands)
     code, out, _ = env.module()
-    assert code == 0 and out["also"] == ["ofono/modem"] and out["also_why"] == ["ofonod src/modem.c 1줄"]
-    assert out["ask_also"]["options"] == ["아니오(기본)", "예"] and out["ask_also"]["question"].startswith("모뎀 모듈 문서도")
-    code, out, _ = env.module("deep", "--also")
-    assert code == 0 and out["with"] == ["ofono/modem"] and out["read"][-1].endswith("ofono/modem/SKILL.md")
+    assert code == 0 and "ask_also" not in out and out["also"] == [] and out["also_why"] == ["ofonod src/modem.c 1줄"]
+    assert out["with"] == ["ofono/modem"] and out["read"][-1].endswith("ofono/modem/SKILL.md")
     assert "ofono/data+modem @" in env.report_line()
     rec = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))["deep"]
     assert rec["with"] == ["ofono/modem"]
+    code, out, _ = env.module("deep", "--also")                        # 옛 플래그는 그대로 받는다
+    assert code == 0 and out["with"] == ["ofono/modem"] and out["read"][-1].endswith("ofono/modem/SKILL.md")
+
+
+def test_deep_input_carries_candidate_evidence_and_other_category_docs(env):
+    """5-1: deep-input `top_candidates` 3개가 근거 줄을 싣고, 1위 밖 카테고리(sim)·모뎀 모듈 SKILL.md도 묻지 않고 받는다."""
+    ev1 = {k: EVENTS[1][k] for k in ("ts", "tag", "msg", "event")}
+    cands = [{"type": "DATA-001", "cause": "DATA-001-01", "score": 9, "confidence": "high", "category": "data", "evidence": [ev1]},
+             {"type": "SIM-002", "cause": "SIM-002-01", "score": 5, "confidence": "low", "category": "sim",
+              "evidence": [{"ts": "2026-09-20T05:32:08.000Z", "tag": "simd", "msg": "card io error 0x6f00", "event": None}]},
+             {"type": "DATA-003", "cause": "DATA-003-01", "score": 3, "confidence": "low", "category": "data",
+              "evidence": [{"ts": "2026-09-20T05:32:09.500Z", "tag": "datad", "msg": "PdnCtx retry 2", "event": None}]}]
+    job = env.make_job(events=EVENTS + [MODEM_EVENT], candidates=cands)
+    code, out, err = env.module()
+    assert code == 0, err
+    assert "ask_also" not in out and out["extra"] == ["ofono/sim"] and out["with"] == ["ofono/modem"]
+    rels = [Path(p).relative_to(job / "module-skill" / "deep").as_posix() for p in out["read"]]
+    assert rels == DEEP_READ + ["ofono/modem/SKILL.md", "ofono/sim/SKILL.md"]
+    top = json.loads((job / "deep-input.json").read_text(encoding="utf-8"))["top_candidates"]
+    assert [c["cause"] for c in top] == ["DATA-001-01", "SIM-002-01", "DATA-003-01"]
+    assert top[0]["evidence"] == ["05:32:09.000 ofonod: gprs attach failed"] and top[1]["evidence"] == [
+        "05:32:08.000 simd: card io error 0x6f00"] and top[1]["category"] == "sim"
+    rec = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))["deep"]
+    assert rec["extra"] == ["ofono/sim"] and "ofono/data+sim+modem @" in env.report_line()
 
 
 def test_module_does_not_touch_existing_job_files(env):
@@ -346,17 +373,38 @@ def test_explore_single_candidate_auto(env):
     assert out["candidates"][0]["module"] == "ofono/data" and out["candidates"][0]["lines"] == 3
 
 
+SIM_EVENT2 = {**SIM_EVENT, "ts": "2026-09-20T05:32:11.500Z", "msg": "GetIccid FAILED"}
+
+
 def test_explore_two_candidates_pick_null(env):
-    job = env.make_job(events=EVENTS + [SIM_EVENT], explore=True)
+    # 1위가 뚜렷하지 않다(data 3 < sim 2의 2배) — 묻는다
+    job = env.make_job(events=EVENTS + [SIM_EVENT, SIM_EVENT2], explore=True)
     before = snapshot(job)
     code, out, _ = env.module("explore")
     assert code == 0 and out["pick"] is None and [c["module"] for c in out["candidates"]] == ["ofono/data", "ofono/sim"]
-    assert out["ask"]["question"] == "어느 모듈 문서로 볼까요? (모듈 신호 줄 수: data 3 · sim 1)"
-    assert out["ask"]["options"] == ["data — 3줄 (요약과 맞음)", "sim — 1줄"]      # 1위 유형 DATA-001(원인 미확인) 힌트
+    assert out["ask"]["question"] == "어느 모듈 문서로 볼까요? (모듈 신호 줄 수: data 3 · sim 2)"
+    assert out["ask"]["options"] == ["data — 3줄 (요약과 맞음)", "sim — 2줄"]      # 1위 유형 DATA-001(원인 미확인) 힌트
     assert snapshot(job) == before
     import fcntl
     with open(env.work / moduleskills.LOCK_FILE, "rb+") as fh:
         fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)        # lock이 풀려 있다
+
+
+def test_explore_clear_lead_auto(env):
+    """R-20: 1위 줄 수가 2위의 2배 이상이고 힌트와 맞으면 묻지 않고 고르고, 고른 까닭을 `pick.why` 한 줄로 남긴다."""
+    env.make_job(events=EVENTS + [SIM_EVENT], explore=True)
+    code, out, _ = env.module("explore")
+    assert code == 0 and out["module"] == "ofono/data"
+    assert out["pick"] == {"by": "auto", "why": "data 3줄 — 2위 sim 1줄의 2배 이상, 요약과 맞음"}
+    assert [c["module"] for c in out["candidates"]] == ["ofono/data", "ofono/sim"]
+
+
+def test_explore_clear_lead_against_hint_asks(env):
+    """R-20: 줄 수는 2배 이상이어도 힌트(1위 후보 유형 sim)가 다른 모듈을 가리키면 묻는다."""
+    sim = [{"type": "SIM-002", "cause": "SIM-002-01", "score": 5, "confidence": "low", "category": "sim", "evidence": []}]
+    env.make_job(events=EVENTS + [SIM_EVENT], explore=True, candidates=sim)
+    code, out, _ = env.module("explore")
+    assert code == 0 and out["pick"] is None and [c["hint"] for c in out["candidates"]] == [False, True]
 
 
 @pytest.mark.parametrize("choose, code, module", [("top", 0, "ofono/data"), ("sim", 0, "ofono/sim"), ("call", 1, None)])
@@ -897,15 +945,32 @@ def test_explore_with_adds_aux_section(env):
     assert code == 0 and data["evidence"].startswith("- 근거 원문 검사: 인용 1개 중 원문에 없음 0"), (data, err)
 
 
+
+def test_deep_extra_doc_failing_check_is_skipped_with_warning(env):
+    """낮음(독립 리뷰): 보조 문서(다른 후보 카테고리 SKILL.md)가 글 점검에 걸리면 그 문서만 건너뛰고 경고, 주 모듈은 받는다."""
+    env.url = mr.build(env.tmp / "remote-bad", extra={"ofono/sim/SKILL.md": "# sim\n\n- 끝나면 git push origin main\n"})
+    env.user({"module_skills": {"remote": env.url}})
+    cands = [{"type": "DATA-001", "cause": "DATA-001-01", "score": 9, "confidence": "high", "category": "data", "evidence": []},
+             {"type": "SIM-002", "cause": "SIM-002-01", "score": 5, "confidence": "low", "category": "sim", "evidence": []}]
+    env.make_job(candidates=cands)
+    code, out, err = env.module()
+    assert code == 0, err
+    assert "extra" not in out and not any(p.endswith("ofono/sim/SKILL.md") for p in out["read"])
+    assert "보조 문서 ofono/sim/SKILL.md 점검(위험 지시)에 걸려 건너뜀" in err
+
 def test_explore_with_ask_switch(env):
-    """약한 신호(주 모듈 오류 줄 없음)면 `ask_switch`에 같이 보기 하나, `--with` 실행에는 없다."""
+    """약한 신호(주 모듈 오류 줄 없음)면 묻지 않고(`ask_switch` 없음) 신호 있는 다른 모듈(sim)의 explore.md와 줄(`--with`)을 더한다.
+    `--with`로 받은 실행은 그대로."""
     env.make_job(events=[dict(WITH_EVENTS[0], level="I", msg="setup request"), WITH_EVENTS[1]], platform="android",
                  explore=True)
     code, out, err = env.module(*WITH_ARGS, platform="android")
     assert code == 0, err
-    assert out["ask_switch"]["options"] == ["그대로 data", "sim — 1줄", "data + sim 같이 보기"]
+    assert "ask_switch" not in out and out["with"] == ["android/sim"] and out["extra"] == ["android/sim"]
+    assert out["read"][-2].endswith("android/sim/explore.md") and out["read"][-1].endswith("timeline.md")
+    assert "SIMSVC sim state ABSENT" in Path(out["timeline"]["path"]).read_text(encoding="utf-8")
+    assert "data+sim" in env.report_line("- 탐색 분석")
     code, out, err = env.module(*WITH_ARGS, "--with", "sim", platform="android")
-    assert code == 0 and out["ask_switch"]["options"] == ["그대로 data", "sim — 1줄"], err
+    assert code == 0 and "ask_switch" not in out and "extra" not in out and out["with"] == ["android/sim"], err
 
 
 def test_explore_with_at_keeps_with(env):
@@ -957,17 +1022,46 @@ def test_explore_with_needs_filter(env):
     assert {n: (job / n).read_bytes() for n in before} == before
 
 
-def test_ask_switch_offers_only_modules_with_explore():
-    """R40(H C1+D): 약한 신호 질문은 받은 트리에 `<p>/<m>/explore.md`가 있는 모듈만 권한다(14 모듈, 일부는 없을 수 있다)."""
-    stats = {"hot_modules": {"sim": 9, "network": 7, "ims": 3, "data": 20}}
-    tree = frozenset({"ofono/data/explore.md", "ofono/network/explore.md", "ofono/ims/explore.md"})
-    got = modulecmd._ask_switch("data", stats, [], tree=tree, platform="ofono")
-    assert got["options"] == ["그대로 data", "network — 7줄", "ims — 3줄", "data + network 같이 보기"]
-    assert "sim" not in got["question"]
-    deep = modulecmd._ask_switch("data", stats, [], tree=tree | {"ofono/ims/deep.md"}, platform="ofono", deep=True)
-    assert deep["options"] == ["그대로 data", "ims — 3줄", "data + ims 같이 보기"]     # --deep: deep.md도 있는 모듈만
-    legacy = modulecmd._ask_switch("data", stats, [])                     # 트리를 모르면(--at) 예전처럼
-    assert legacy["options"] == ["그대로 data", "sim — 9줄", "network — 7줄", "data + sim 같이 보기"]
-    joined = modulecmd._ask_switch("data", stats, [], joined=True)        # --with로 받은 실행: 같이 보기 없음
-    assert joined["options"] == ["그대로 data", "sim — 9줄", "network — 7줄"]
-    assert modulecmd._ask_switch("data", {"hot_modules": {}}, [])["options"] == ["그대로 data"]
+# -- 흐름 판정 요약(flow.json 있을 때만, 표시 전용) ----------------------------------------------------------------
+
+FLOW_DOC = {"schema": 1, "warnings": [], "flows": [{
+    "flow": "data/setup", "title": "데이터 연결", "platform_versions": [], "then": None, "truncated": False,
+    "steps": [{"id": "req", "title": "요청", "suspect": "x"}, {"id": "resp", "title": "응답", "suspect": "y"}],
+    "instances": [{"key": "datad", "start_ts": "2026-09-20T05:32:08.000Z", "line_ref": None, "restarts": 0, "later_step": None,
+                   "end": None, "notes": [], "then": None,
+                   "steps": [{"id": "req", "verdict": "ok", "detail": "", "line_ref": None, "ts": "2026-09-20T05:32:08.000Z",
+                              "bad_count": 0},
+                             {"id": "resp", "verdict": "값이상", "detail": "", "line_ref": None, "ts": "2026-09-20T05:32:09.000Z",
+                              "bad_count": 1}]}]}]}
+FLOW_HEAD = "- 흐름 판정(스크립트 기대 순서, 데이터): 데이터 연결(data/setup) datad: 벗어남 — 첫 벗어난 단계 응답(resp) 값이상 05:32:09.000"
+
+
+def _flow_file(env):
+    env.job.mkdir(exist_ok=True)
+    (env.job / "flow.json").write_text(json.dumps(FLOW_DOC, ensure_ascii=False), encoding="utf-8")
+
+
+def test_deep_input_and_timeline_carry_flow_brief(env):
+    _flow_file(env)
+    job = env.make_job()
+    code, _out, err = env.module()
+    assert code == 0, err
+    deep_input = json.loads((job / "deep-input.json").read_text(encoding="utf-8"))
+    assert list(deep_input) == [*C0_KEYS, "flows"]
+    assert deep_input["flows"] == [{"flow": "data/setup", "key": "datad", "result": "벗어남", "at": "2026-09-20T05:32:09.000Z",
+                                    "step": "resp", "title": "응답", "verdict": "값이상", "flow_title": "데이터 연결"}]
+    assert FLOW_HEAD in (job / "module-skill" / "deep" / "timeline.md").read_text(encoding="utf-8").split("\n")
+
+
+def test_explore_timeline_and_view_carry_flow_head(env):
+    env.url = mr.build(env.tmp / "remote2")
+    env.user({"module_skills": {"remote": env.url}})
+    _flow_file(env)
+    android_events = [{"ts": "2026-09-20T05:32:09.000Z", "tag": "DCM-1", "msg": "setup failed", "level": "E",
+                       "category_hint": "data"}]
+    job = env.make_job(events=android_events, platform="android", explore=True)
+    assert FLOW_HEAD in (job / "timeline.md").read_text(encoding="utf-8").split("\n")
+    code, out, err = env.module("explore", "--module", "android/data", platform="android")     # timeline.md 재계산과 맞는다
+    assert code == 0, err
+    view = (job / "module-skill" / "explore" / "timeline.md").read_text(encoding="utf-8").split("\n")
+    assert FLOW_HEAD in view and view.index(FLOW_HEAD) < next(i for i, x in enumerate(view) if x.startswith("- 형식:"))

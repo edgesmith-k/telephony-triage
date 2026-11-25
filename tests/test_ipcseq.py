@@ -259,3 +259,128 @@ def test_find_text_hits_respect_slot():
 def test_find_rejects_bad_slot_value():
     proc = _find(None, {**LOOK, "slot": "1"}, expect=2)
     assert proc.returncode == 2 and "slot" in proc.stderr
+
+
+# -- 응답 없는 IPC REQ (`ipc_no_response`, 표시 전용) ----------------------------------------------------------
+
+def _rec(i, ts, d, name="VIPC_SETUP_DATA", token=0x0DE, phone=None, f=0):
+    return {"i": i, "ts": f"2026-09-20T05:33:{ts}Z", "dir": d, "name": name, "token": token, "result": None,
+            "line_ref": {"file_index": f, "line_no": i + 1}, "phone_id": phone}
+
+
+UNTIL = "2026-09-20T05:33:40.000Z"
+PAIR = [_rec(90, "00.000", "req", name="VIPC_PING", token=1), _rec(91, "00.100", "rsp", name="VIPC_PING", token=1)]
+
+
+def _nr(recs, until=UNTIL, wait=30000):
+    return [r["i"] for r in ipcseq.no_response(PAIR + recs, until, wait)]
+
+
+def test_no_response_pairs_by_name_token_and_slot():
+    assert _nr([_rec(0, "05.000", "req"), _rec(1, "05.400", "rsp")]) == []                 # 짝 → 표시 없음
+    assert _nr([_rec(0, "05.000", "req")], "2026-09-20T05:33:30.000Z") == []              # 기다림 전에 로그 끝
+    assert _nr([_rec(0, "05.000", "req")]) == [0]                                          # 기다림 지나도 없음
+    assert _nr([_rec(0, "05.000", "req", token=None)]) == []                               # token 없음: 짝 못 지음
+    assert _nr([_rec(0, "05.000", "req", phone=0), _rec(1, "05.400", "rsp", phone=1)]) == [0]
+    assert _nr([_rec(0, "05.000", "req", phone=0), _rec(1, "05.400", "rsp")]) == []         # 슬롯 모름은 같다고 본다
+    assert _nr([_rec(0, "05.000", "req"), _rec(1, "05.400", "rsp", name="VIPC_OTHER")]) == [0]
+    # 같은 token의 REQ 둘: RSP는 가장 이른 REQ를 닫는다(FIFO) — 뒤 REQ가 응답 없음
+    assert _nr([_rec(0, "01.000", "req"), _rec(1, "05.000", "req"), _rec(2, "05.400", "rsp")]) == [1]
+    assert _nr([_rec(0, "05.000", "req")], None) == []
+
+
+def test_no_response_line_order_per_file_end_cap_and_format_guard():
+    # 시계가 뒤로 뛰어도 줄 순서로 짝짓는다: REQ(줄 1, 05초) 뒤 RSP(줄 2, 04초)는 짝
+    assert _nr([_rec(0, "05.000", "req"), _rec(1, "04.000", "rsp")]) == []
+    # 파일별 관측 끝: 파일 1은 10초에 끝났으면 기다림(30초) 전이라 내지 않는다, 파일 0은 40초까지라 낸다
+    ends = {0: UNTIL, 1: "2026-09-20T05:33:10.000Z"}
+    assert _nr([_rec(0, "05.000", "req"), _rec(1, "05.000", "req", token=7, f=1)], ends) == [0]
+    # 상한 NO_RESPONSE_MAX
+    many = [_rec(k, "01.000", "req", token=100 + k) for k in range(30)]
+    assert len(_nr(many)) == ipcseq.NO_RESPONSE_MAX == 20
+    # 짝지어진 RSP가 하나도 없으면(형식이 안 맞음) 내지 않는다
+    assert ipcseq.no_response([_rec(0, "05.000", "req"), _rec(1, "06.000", "req", token=9)], UNTIL, 30000) == []
+
+
+NR_LOG = [
+    "09-20 14:33:00.000   900   910 D RIL     : [TX] VIPC_RADIO_POWER, REQ, token=0x001, len=4",
+    "09-20 14:33:00.050   900   910 D RIL     : [RX] VIPC_RADIO_POWER, RSP, token=0x001, len=4, Error(VIPC_E_OK)",
+    "09-20 14:33:01.000   900   910 D RIL     : [TX] VIPC_SETUP_DATA, REQ, token=0x0de, len=24",
+    "09-20 14:33:02.000   900   910 D RIL     : [TX] VIPC_GET_X, REQ, len=24",
+    "09-20 14:33:40.000   900   910 D RIL     : vendor service heartbeat",
+]
+
+
+def _parse(lines, root=None) -> dict:
+    log = tmp("tt-ipc-nr-") / "a.log"
+    log.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return run_json("parse_logcat.py", ["parse", log, "--full", "--rules", RULES, *TZ, "--mask"], root=root)
+
+
+def test_parse_marks_unanswered_req_on_timeline_only():
+    from common import parser_rules
+    from triagelib import report
+
+    out = _parse(NR_LOG)
+    assert out["ipc_no_response"] == [{"line_ref": {"file_index": 0, "line_no": 3}, "ts": "2026-09-20T05:33:01.000Z",
+                                       "name": "VIPC_SETUP_DATA", "token": 0x0DE, "phone_id": None, "timeout_ms": 30000}]
+    assert not any("no_response" in str(e.get("event")) for e in out["events"])          # 이벤트가 아니다(매칭·자격 검사 밖)
+    assert "ipc_no_response" not in parser_rules.RESERVED_EVENTS        # 자격 검사 `_fails`·매처는 events[]만 본다
+    text = report.timeline("K", out, None, 200)[0]
+    assert ("05:33:01.000 - D RIL [TX] VIPC_SETUP_DATA, REQ, token=0x0de, len=24  ⇒ "
+            "ipc_no_response(ipc=VIPC_SETUP_DATA,timeout_ms=30000,token=0xde)") in text
+    assert "ipc_no_response" not in next(x for x in text.split("\n") if "VIPC_GET_X" in x)    # token 없는 REQ
+    short = _parse(NR_LOG[:4] + ["09-20 14:33:20.000   900   910 D RIL     : vendor service heartbeat"])
+    assert "ipc_no_response" not in short                                                   # 기다림 전에 로그 끝: 키 없음
+    site = _parse(NR_LOG[:4] + ["09-20 14:33:20.000   900   910 D RIL     : vendor service heartbeat"],
+                  root=plugin_root("ipc-wait", platform={"name": "android", "vendor_ipc": {"timeout_ms": 5000}}))
+    assert [r["timeout_ms"] for r in site["ipc_no_response"]] == [5000]                    # site 기다림
+
+
+@pytest.mark.parametrize("value", [0, -1, "30000", True, 1.5])
+def test_config_timeout_key_is_checked(value):
+    with pytest.raises(platforms.PlatformConfigError, match="timeout_ms"):
+        platforms._vendor_ipc({"timeout_ms": value}, "platform.vendor_ipc")
+    assert platforms._vendor_ipc({"timeout_ms": 1500}, "b").timeout_ms == 1500 and vendor_ipc.DEFAULT.timeout_ms is None
+
+
+def test_no_response_mark_is_display_only_for_row_selection():
+    """ipc_no_response는 `marks`가 아니라 `notes`: 넘칠 때 고르는 줄(select_rows)이 표시가 있든 없든 같고 줄 끝에만 찍힌다."""
+    from triagelib import report
+
+    filler = [f"09-20 14:33:{10 + k:02d}.000   900   910 D RIL     : vendor service heartbeat {k}" for k in range(20)]
+    out = _parse(NR_LOG[:4] + filler + NR_LOG[4:])
+    assert out["ipc_no_response"]
+    bare = {k: v for k, v in out.items() if k != "ipc_no_response"}
+    pick = [[r["msg"] for r in report.select_rows(report.merge_rows(ev), "2026-09-20T05:33:30.000Z", 4)[0]] for ev in (out, bare)]
+    assert pick[0] == pick[1]
+    row = next(r for r in report.merge_rows(out) if "VIPC_SETUP_DATA" in str(r["msg"]))
+    assert row["marks"] == [] and row["notes"][0].startswith("ipc_no_response(")
+    assert report.row_line(row).endswith("⇒ " + row["notes"][0])
+
+
+
+def test_ipc_head_bullet_only_with_entries():
+    """확인 리뷰 E: 응답 없는 REQ가 있으면 타임라인 머리에 글머리표 하나(데이터, 인용 대상 아님), 없으면 머리가 바이트 그대로."""
+    from common import evidence
+    from triagelib import report
+
+    out = _parse(NR_LOG)
+    bare = {k: v for k, v in out.items() if k != "ipc_no_response"}
+    head = report.ipc_head(out)
+    assert head == ["- 응답 없는 IPC 요청 1개: 05:33:01.000 VIPC_SETUP_DATA"]
+    text = report.timeline("K", out, None, 200, flows=head)[0]
+    assert head[0] in text.split("\n") and head[0] not in evidence.source_text(text)[0]
+    assert report.ipc_head(bare) == []
+    assert report.timeline("K", bare, None, 200, flows=report.ipc_head(bare))[0] == report.timeline("K", bare, None, 200)[0]
+    many = {**out, "ipc_no_response": [{**out["ipc_no_response"][0], "name": f"VIPC_X{k}"} for k in range(7)]}
+    assert report.ipc_head(many)[0].startswith("- 응답 없는 IPC 요청 7개: ") and report.ipc_head(many)[0].endswith("VIPC_X4, …")
+
+
+def test_find_text_hits_use_ipc_slot_rule():
+    """코덱스 지적: 본문 찾기로 넘어가도 IPC 줄은 `vendor_ipc.slot`으로 읽은 슬롯을 쓴다 — slot=0이면 슬롯 1 실패 응답을 고르지 않는다."""
+    look = {"look_at": "VIPC_SETUP_DATA, RSP", "ref": None}
+    zero = _find(_slot_root(), {**look, "slot": 0})
+    assert zero["how"] == "text" and zero["slots"] == {"0": 1} and "VIPC_E_OK" in zero["line"]
+    one = _find(_slot_root(), {**look, "slot": 1})
+    assert one["slots"] == {"1": 1} and "VIPC_E_DEMO_FAILURE" in one["line"]

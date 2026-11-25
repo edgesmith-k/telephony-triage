@@ -297,7 +297,7 @@ def test_before_tracker_config_error_denies_mcp(monkeypatch):
 
 @pytest.mark.parametrize("command", [
     "python3 /p/scripts/db_pr.py publish --job J", "python3 db_pr.py merge --pr 3", "python3 db_pr.py publish --and-merge",
-    "python3 skill_patch.py --apply x", "python3 issue_post.py approve --key MOCK-1", "gh pr edit 3 --add-reviewer bob",
+    "python3 skill_patch.py --apply x", "python3 skill_patch.py K --pr --sha x", "python3 issue_post.py approve --key MOCK-1", "gh pr edit 3 --add-reviewer bob",
     "gh api repos/o/r/pulls/3/requested_reviewers -f reviewers[]=x", "python3 tools/module_eval.py run c1",
     "python3 tools/'module_eval'.py",
 ])

@@ -10,11 +10,19 @@
    "type": "NETWORK-001",
    "cause": "NETWORK-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "network",
+   "evidence": [
+    "11:00:32.000 NRM-C-0: onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=DENIED ne…"
+   ]
   }
  ],
+ "decision": {
+  "state": "held",
+  "reason": "no_reference"
+ },
  "issue_summary": "서비스 안 됨 (합성)",
- "occurred_at": "2026-08-22T11:00:32+00:00",
+ "occurred_at": "2026-08-22T11:00:32.000Z",
  "events": "events.json",
  "timeline": "timeline.md",
  "log_paths": [

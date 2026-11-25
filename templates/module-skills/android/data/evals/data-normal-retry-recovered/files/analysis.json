@@ -1,0 +1,116 @@
+{
+ "status": "ok",
+ "key": "MOCK-9829",
+ "mode": "offline",
+ "issue": {
+  "origin": "file",
+  "occurred_at": "2026-11-20T10:00:01+00:00",
+  "sw": null,
+  "platform_version": "17",
+  "sim_slot": "0",
+  "summary": "로그에 데이터 연결 실패가 찍힘 (합성)",
+  "description": "부팅 직후 로그에 SETUP_DATA_CALL 실패가 보입니다. 데이터는 쓰고 있습니다. 문제인지 확인해 주세요. 합성 case.",
+  "comments": 0,
+  "missing": [
+   "model",
+   "sw"
+  ]
+ },
+ "logs": {
+  "files": [
+   "source.log"
+  ],
+  "window": {
+   "start": "2026-11-20T09:55:01.000Z",
+   "end": "2026-11-20T10:05:01.000Z"
+  },
+  "range": [
+   "2026-11-20T10:00:00.100Z",
+   "2026-11-20T10:00:05.430Z"
+  ],
+  "in_range": "partial",
+  "clock_anomalies": 0,
+  "events": 10,
+  "masked": null
+ },
+ "decision": {
+  "state": "held",
+  "reason": "no_candidate",
+  "selected": null,
+  "location": {
+   "state": "none",
+   "source": null,
+   "kind": null
+  },
+  "check": {
+   "why": null,
+   "checked": 0,
+   "total": 0
+  },
+  "events": [],
+  "events_total": 0
+ },
+ "no_candidate": {
+  "search_hits": [
+   {
+    "id": "MOCK-1104",
+    "kind": "issue",
+    "title": "증상은 DATA-001과 같으나 거부 사유가 로그에 남지 않아 원인 미확정"
+   },
+   {
+    "id": "DATA-002",
+    "kind": "type",
+    "title": "데이터 연결이 사용자 조작으로 끊김"
+   },
+   {
+    "id": "DATA-001",
+    "kind": "type",
+    "title": "SETUP_DATA_CALL이 발생하지 않음"
+   }
+  ],
+  "error_events": [],
+  "error_event_total": 0
+ },
+ "partial": [
+  {
+   "kind": "absent",
+   "type": "DATA-001",
+   "signature": "DATA-001/no-setup-data-call-request",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ],
+   "at": []
+  }
+ ],
+ "near_causes": [
+  {
+   "id": "DATA-002",
+   "title": "데이터 연결이 사용자 조작으로 끊김",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  },
+  {
+   "id": "DATA-001",
+   "title": "SETUP_DATA_CALL이 발생하지 않음",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  }
+ ],
+ "code": {
+  "skipped": true
+ },
+ "explore": {
+  "reason": "no_candidate",
+  "when": "ask"
+ },
+ "investigate": {
+  "mode": true,
+  "reason": "후보 없음"
+ },
+ "warnings": [
+  "형식을 모르는 줄 1개를 건너뛰었습니다."
+ ],
+ "must_show": [
+  "로그 범위: 2026-11-20T10:00:00.100Z ~ 2026-11-20T10:00:05.430Z (일부만 포함), 시계 이상 없음"
+ ],
+ "truncated": false
+}

@@ -291,3 +291,29 @@ def test_parse_logcat_hop(mask):
     grils = [e["ril"]["serial"] for e in on["events"]
              if e["ril"] and e["ril"].get("proto") == "gril" and e["ril"]["dir"] in ("req", "resp")]
     assert grils and all(isinstance(s, int) for s in grils)
+
+
+def test_clock_backward_clue_on_ofono_has_no_tid_count_and_no_pid_for_pidless_lines(tmp_path):
+    """oFono 확인 P2-3·P2-4(실제 run 경로): oFono 줄은 tid가 없어 시계 이상 must_show에 "tid N"을 쓰지 않는다. pid 없는 줄끼리의
+    역행은 같은 pid로 세지 않는다(pid를 아는 역행이 없으면 역행 수 부분이 빠진다)."""
+    import json as _json
+    root = plugin_root("ofono-clock", platform=ON)
+    db = variant_db("issue-db-ofono")
+    lines = ["Sep 20 14:32:09 dut ofonod[812]: src/example.c:example_cb() /modem_0 context activate requested",
+             "Sep 20 14:32:20 dut {a}: retry scheduled: placeholder",
+             "Sep 20 14:32:10.200 dut {b}: data connect failed: reason=PLACEHOLDER_REASON",
+             "Sep 20 14:32:12 dut ofonod[812]: src/example.c:example_cb() /modem_0 context activate done: placeholder"]
+    meta = tmp_path / "meta.json"
+    meta.write_text(_json.dumps({"key": "MOCK-9001", "summary": "data connect fails", "platform_version": "2"}), encoding="utf-8")
+    got = {}
+    for name, (a, b) in (("same", ("daemon-a[901]", "daemon-a[901]")), ("nopid", ("daemon-a", "daemon-a"))):
+        log = tmp_path / f"{name}.log"
+        log.write_text("".join(x.format(a=a, b=b) + "\n" for x in lines), encoding="utf-8", newline="\n")
+        proc = run("triage.py", ["run", "MOCK-9001", "--offline-db", str(db), "--logs", str(log), "--issue-meta", str(meta),
+                                 "--out", str(tmp_path / name), "--platform", "ofono", "--tz", "Asia/Seoul", "--year", "2026",
+                                 "--answer", "time=2026-09-20T14:32:10+09:00"], root=root,
+                   env={"TELEPHONY_TRIAGE_HOME": str(tmp_path / "home")})
+        assert proc.returncode == 0, proc.stderr[-500:]
+        got[name] = next(m for m in _json.loads(proc.stdout)["must_show"] if m.startswith("시계 이상 구간의 근거:"))
+    assert "로그 전체 역행 1곳(앞뒤 같은 pid 1) [" in got["same"] and "tid" not in got["same"], got["same"]
+    assert "로그 전체 역행" not in got["nopid"] and "같은 pid" not in got["nopid"], got["nopid"]

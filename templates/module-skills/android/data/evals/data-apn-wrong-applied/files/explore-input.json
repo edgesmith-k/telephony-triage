@@ -1,5 +1,5 @@
 {
- "around": "2026-09-02T10:00:05+00:00",
+ "around": "2026-09-02T10:00:05.000Z",
  "failed_step": null,
  "limit": 200,
  "anchor": null,
@@ -11,5 +11,208 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "summary": {
+  "ref": "2026-09-02T10:00:05.000Z",
+  "range": [
+   "2026-09-02T10:00:02.000Z",
+   "2026-09-02T10:00:05.400Z"
+  ],
+  "lines": 20,
+  "shapes": 20,
+  "window": [
+   "2026-09-02T09:55:05.000Z",
+   "2026-09-02T10:10:05.000Z"
+  ],
+  "cap": 60,
+  "after_sec": 600,
+  "groups": [
+   {
+    "ts": "2026-09-02T10:00:05.000Z",
+    "last": "2026-09-02T10:00:05.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0412]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6] [PHONE0]"
+   },
+   {
+    "ts": "2026-09-02T10:00:05.004Z",
+    "last": "2026-09-02T10:00:05.004Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-SVC",
+    "msg": "RadioDataProxy::setupDataCall: serial 412",
+    "after": true
+   },
+   {
+    "ts": "2026-09-02T10:00:05.006Z",
+    "last": "2026-09-02T10:00:05.006Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "RIL",
+    "msg": "[ExamplePdnService_0] setup data call begin",
+    "after": true
+   },
+   {
+    "ts": "2026-09-02T10:00:05.300Z",
+    "last": "2026-09-02T10:00:05.300Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "RIL",
+    "msg": "[ExamplePdnService_0] setup data call end errorCode=0 PdnCtx cid=2 state=connected link=up",
+    "after": true
+   },
+   {
+    "ts": "2026-09-02T10:00:05.310Z",
+    "last": "2026-09-02T10:00:05.310Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0412]< SETUP_DATA_CALL DataCallResponse: { cause=NONE(0x0) retry=0 cid=2 linkStatus=2 protocolType=2 ifname=rmnet1 addresses=[<IP#1>/64] } [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-09-02T10:00:05.320Z",
+    "last": "2026-09-02T10:00:05.320Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DSM-C-0",
+    "msg": "onSetupDataCallComplete. resultCode = 0",
+    "after": true
+   },
+   {
+    "ts": "2026-09-02T10:00:05.400Z",
+    "last": "2026-09-02T10:00:05.400Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Internet data state changed from DISCONNECTED to CONNECTED.",
+    "after": true
+   },
+   {
+    "ts": "2026-09-02T10:00:03.262Z",
+    "last": "2026-09-02T10:00:03.262Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DSM-C-0",
+    "msg": "onSetDataProfileComplete. resultCode = 0"
+   },
+   {
+    "ts": "2026-09-02T10:00:03.260Z",
+    "last": "2026-09-02T10:00:03.260Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0411]< SET_DATA_PROFILE [PHONE0]"
+   },
+   {
+    "ts": "2026-09-02T10:00:03.201Z",
+    "last": "2026-09-02T10:00:03.201Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6, preferred=true] [PHONE0]"
+   },
+   {
+    "ts": "2026-09-02T10:00:03.200Z",
+    "last": "2026-09-02T10:00:03.200Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0411]> SET_DATA_PROFILE with data profiles : [PHONE0]"
+   },
+   {
+    "ts": "2026-09-02T10:00:03.160Z",
+    "last": "2026-09-02T10:00:03.160Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0410]< SET_INITIAL_ATTACH_APN [PHONE0]"
+   },
+   {
+    "ts": "2026-09-02T10:00:03.150Z",
+    "last": "2026-09-02T10:00:03.150Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][RX] VIPC_EXAMPLE_ATTACH_PROFILE, RSP OK(VIPC_OK) seq=0x0310 len=12"
+   },
+   {
+    "ts": "2026-09-02T10:00:03.106Z",
+    "last": "2026-09-02T10:00:03.106Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][TX] VIPC_EXAMPLE_ATTACH_PROFILE, REQ seq=0x0310 len=120"
+   },
+   {
+    "ts": "2026-09-02T10:00:03.104Z",
+    "last": "2026-09-02T10:00:03.104Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-SVC",
+    "msg": "RadioDataProxy::setInitialAttachApn: serial 410"
+   },
+   {
+    "ts": "2026-09-02T10:00:03.100Z",
+    "last": "2026-09-02T10:00:03.100Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0410]> SET_INITIAL_ATTACH_APN [DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6] [PHONE0]"
+   },
+   {
+    "ts": "2026-09-02T10:00:03.010Z",
+    "last": "2026-09-02T10:00:03.010Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DPM-0",
+    "msg": "Preferred data profile kept from previous carrier: [DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6, preferred=true]"
+   },
+   {
+    "ts": "2026-09-02T10:00:03.000Z",
+    "last": "2026-09-02T10:00:03.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DPM-0",
+    "msg": "Data profiles updated: [DataProfile=[ApnSetting] DEFAULT <APN#2>, IPV4V6, preferred=false] [DataProfile=[ApnSetting] IMS <APN#3>, IPV4V6, preferred=false]"
+   },
+   {
+    "ts": "2026-09-02T10:00:02.500Z",
+    "last": "2026-09-02T10:00:02.500Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DCM-0",
+    "msg": "Carrier config updated. Config is carrier specific."
+   },
+   {
+    "ts": "2026-09-02T10:00:02.000Z",
+    "last": "2026-09-02T10:00:02.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "UiccController",
+    "msg": "Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 1"
+   }
+  ]
+ }
 }

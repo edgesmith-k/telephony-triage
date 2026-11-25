@@ -10,7 +10,7 @@ site-defaults에 `platform.name`이 없을 때만 쓴다.
   `02-config.md`)을 검증해 `PlatformProfile`로 준다. 기본 플랫폼은 `platform:` 블록 자체, 그 밖 플랫폼은
   `platform.others.<name>` 블록이다. 받는 상수 키는 `SPEC.block_keys`다. `components`(구성요소, 통째로 바뀜)와
   `protocols.<이름>: {kind, ...}`(설정 정의 짝 규칙, `SPEC.protocol_kinds`)는 `PlatformProfile.components`·`protocols`.
-  `vendor_ipc: {context, complete, request_prefix, error_prefix, success, trace?, slot?}`(벤더 IPC 줄의 사내 토큰, 생략 = placeholder,
+  `vendor_ipc: {context, complete, request_prefix, error_prefix, success, trace?, slot?, timeout_ms?}`(벤더 IPC 줄의 사내 토큰, 생략 = placeholder,
   `trace`는 선택 IPC 메시지 줄 정규식 목록, `slot`은 선택 IPC 줄 SIM 슬롯 정규식 목록)는 `PlatformProfile.vendor_ipc`. `dump_func`(oFono 덤프 함수 이름, 생략 = placeholder `example_dump`)는
   `PlatformProfile.dump_func`(`common.dumpjoin`이 갈린 덤프 조각을 잇는 표식).
 - `backend_name(defaults, name)`: 그 플랫폼의 파서 백엔드 이름. `raw_line_finders(defaults)`: 켠 플랫폼의 원문 줄 판별.
@@ -26,6 +26,7 @@ import importlib
 import os
 import pkgutil
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import PurePosixPath, PureWindowsPath
 
@@ -116,6 +117,18 @@ def get(name: str) -> PlatformSpec:
         raise PlatformConfigError(f"{module_name}.SPEC.name이 패키지 이름과 다릅니다: {spec.name!r}")
     _SPECS[name] = spec
     return spec
+
+
+def raw_line_patterns() -> tuple[tuple, dict]:
+    """설치된 플랫폼마다 패키지의 `RAW_LINE_RES`(원문 줄 정규식, 이름 붙은 칸 h·mi·s·frac·level·tag·ident·sev·msg)와
+    `RAW_SEVERITY`(등급 → 레벨)를 모은다(이름순). 핵심 코드는 플랫폼 패키지를 직접 import하지 않고 이것을 쓴다."""
+    rxs, sev = [], {}
+    for name in known():
+        get(name)
+        module = sys.modules[f"{__name__}.{name}"]
+        rxs.extend(getattr(module, "RAW_LINE_RES", ()))
+        sev.update(getattr(module, "RAW_SEVERITY", {}))
+    return tuple(rxs), sev
 
 
 def label(name: str) -> str:
@@ -397,10 +410,14 @@ def _vendor_ipc(raw, base: str) -> _vipc.Spec:
     → `vendor_ipc.Spec`. 값은 식별자 모양 글(`vendor_ipc.VALUE_RE`). 블록을 생략하면(`null`·`{}` 포함) placeholder 기본값,
     블록을 쓰면 다섯 키 모두(일부만 쓰면 나머지가 placeholder로 남아 그 줄 판별이 조용히 0이 된다).
     `trace`(선택, IPC 메시지 줄 정규식 목록 `common.ipcseq`)는 다섯 키 규칙과 따로 본다: 정규식 컴파일·`name` 그룹 필수·길이.
-    `slot`(선택, IPC 메시지 줄의 SIM 슬롯 정규식 목록, TODO(SITE:S20))도 따로 본다: 정규식 컴파일·그룹 1 필수·길이."""
-    node = dict(_mapping(raw, base, (*_vipc.KEYS, _vipc.TRACE_KEY, _vipc.SLOT_KEY)))
+    `slot`(선택, IPC 메시지 줄의 SIM 슬롯 정규식 목록, TODO(SITE:S20))도 따로 본다: 정규식 컴파일·그룹 1 필수·길이.
+    `timeout_ms`(선택, 1 이상 정수)는 REQ 응답 대기 ms(표시 전용 `ipc_no_response`, 없으면 ril.yaml 요청 timeout 중 가장 긴 값)."""
+    node = dict(_mapping(raw, base, (*_vipc.KEYS, _vipc.TRACE_KEY, _vipc.SLOT_KEY, _vipc.TIMEOUT_KEY)))
     lists = {key: (node.pop(key, None), check) for key, check in ((_vipc.TRACE_KEY, _ipcseq.check),
                                                                   (_vipc.SLOT_KEY, _ipcseq.check_slot))}
+    timeout = node.pop(_vipc.TIMEOUT_KEY, None)       # 선택: 응답 대기 ms(표시 전용 `ipc_no_response`), 다섯 키 규칙과 따로
+    if timeout is not None and (type(timeout) is not int or timeout <= 0):
+        raise _err(f"{base}.{_vipc.TIMEOUT_KEY}", f"1 이상 정수(ms)여야 합니다: {timeout!r}")
     for key, value in node.items():
         if not isinstance(value, str) or not _vipc.VALUE_RE.fullmatch(value):
             raise _err(f"{base}.{key}", f"식별자 모양 글(^[A-Za-z][A-Za-z0-9_]*$, 64자 이하)이어야 합니다: {value!r}")
@@ -421,6 +438,8 @@ def _vendor_ipc(raw, base: str) -> _vipc.Spec:
             if problem:
                 raise _err(f"{at}[{i}]", problem)
         node[key] = tuple(items)
+    if timeout is not None:
+        node[_vipc.TIMEOUT_KEY] = timeout
     return _vipc.Spec(**node)
 
 

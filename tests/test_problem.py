@@ -421,3 +421,12 @@ def test_ipc_pair_skips_numbers_of_other_shape():
         _clue(3, "VIPC_A_REQ", "0x222", "VIPC_A_REQ (token=0x111) 응답 후 VIPC_B_REQ (token=0x222)")])
     res = _check(job, out, 0)
     assert res["clues"] == 2 and res["dropped_reasons"] == ["이름 뒤 첫 token이 그 token이 아님"]
+
+
+def test_tc_warning_header_is_masked_in_problem_input():
+    """FAIL 스텝을 못 찾은 경고에 실린 표 첫 줄(TC 원문)도 문제 파악 입력에는 이슈 DB 설정대로 가려서 싣는다(sim1121 리뷰)."""
+    job = tmp("tt-problem-") / KEY
+    _problem(job, tc="No | Step | Server 10.1.2.3 | Result\n1 | Attach | x | PASS\n")
+    text = (job / "problem-input.md").read_text(encoding="utf-8")
+    warn = next(line for line in text.splitlines() if line.startswith("- 경고: steps-file에서 FAIL 스텝을 찾지 못했다"))
+    assert "10.1.2.3" not in text and "<IP#" in warn

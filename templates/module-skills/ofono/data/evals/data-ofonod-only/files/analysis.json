@@ -34,6 +34,23 @@
   "events": 8,
   "masked": null
  },
+ "decision": {
+  "state": "held",
+  "reason": "no_candidate",
+  "selected": null,
+  "location": {
+   "state": "none",
+   "source": null,
+   "kind": null
+  },
+  "check": {
+   "why": null,
+   "checked": 0,
+   "total": 0
+  },
+  "events": [],
+  "events_total": 0
+ },
  "no_candidate": {
   "search_hits": [
    {
@@ -56,12 +73,28 @@
   "error_event_total": 0,
   "unextracted_warn": 2
  },
+ "near_causes": [
+  {
+   "id": "DATA-001-01",
+   "title": "APN 인증 거절 (합성)",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  },
+  {
+   "id": "CALL-001",
+   "title": "발신이 되지 않음 (합성)",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  }
+ ],
  "code": {
   "skipped": true
  },
  "explore": {
   "reason": "no_candidate",
   "when": "ask"
+ },
+ "investigate": {
+  "mode": true,
+  "reason": "후보 없음"
  },
  "must_show": [
   "로그 범위: 2026-09-20T15:30:00.000Z ~ 2026-09-20T15:30:04.500Z (일부만 포함), 시계 이상 없음",

@@ -1,0 +1,27 @@
+# 합성 case (11/25 기대 체인). 첫 SETUP_DATA_CALL이 retry=299999(약 5분)로 실패하고 DRM이 299999ms 뒤 재시도를 잡는다. 그 시각(13:05:00.3)에 phone 프로세스 AndroidRuntime 예외(tags.yaml 밖 태그 — 이상 줄 절에만)가 나고 그 뒤 재요청(SETUP_DATA_CALL)이 없다. 2분 뒤 다른 앱(설정)의 예외는 미끼다. 기대: 기대 체인의 "재시도 시각에 재요청" 단계가 false, 그 예외 인용, 정상·망 거절이 가장 유력이 아님(기대 체인은 채점하지 않는다 — check-output 형식 경고 대상). files/의 source.log 말고는 make_module_eval_inputs.py --write가 만든다
+schema_version: 2
+name: data-retry-timer-unthrottle-exception
+kind: explore
+synthetic: true
+key: MOCK-9836
+issue:
+  summary: '데이터 연결 실패 뒤 다시 붙지 않음 (합성)'
+  description: '첫 SETUP_DATA_CALL이 실패했고 몇 분 기다려도 데이터가 다시 붙지 않았습니다. 시험자 메모: 망이 거절해서 실패, 재시도는 정상. 합성 case.'
+  occurred_at: '2026-11-20T13:00:01+0000'
+  platform_version: '17'
+  sim_slot: '0'
+parse: {tz: UTC, year: 2026, minutes: 5}
+input:
+  explore_input: files/explore-input.json
+  timeline: files/timeline.md
+  analysis: files/analysis.json
+run_expect:
+  explore_reason: no_candidate
+expect:
+  accept:
+    - layer: '프레임워크|텔레포니|AP|앱|phone'
+      daemon: 'DataNetworkController|DNC|DataRetryManager|DRM|com\.android\.phone|phone|AndroidRuntime|알 수 없음'
+      evidence: ['null data profile|Process: com\.android\.phone']
+  trap:
+    - layer: '^\s*(원인\s*아님|모뎀|망|벤더|RIL HAL)'
+    - label: '^\s*정상'

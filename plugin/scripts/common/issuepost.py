@@ -40,6 +40,104 @@ FORBIDDEN_WORDS = {"delete", "remove", "transition", "assign", "update", "edit",
                    "close", "reopen", "worklog", "set", "resolve"}
 
 SECTIONS = ("PROBLEM", "CAUSE", "NEXT ACTION", "ANALYSIS")
+# analysis.json `decision.reason`(보류) 문구 — report.md `- 판단:`·결론 줄과 Jira 본문 분류가 같이 쓴다
+NORMAL_HOLD_REASON = "탐색 분석이 채택 원인의 줄을 설계상 정상 동작으로 봄"     # fit_check 보류 중 정상(check-output fit_hold_reason)
+def normal_hold(analysis: dict, rec: dict | None = None) -> bool:
+    """판단이 적합성 확인 보류(held/fit_check)이고 그 사유가 정상(탐색 분석이 설계상 정상 동작으로 봄)인가 — 한 곳의 판단.
+    이번 check-output 기록(`rec`, explore)에 보류가 있으면 그 `fit_hold_reason`, 없으면(다시 run해 기록이 지워짐) 앞 실행에서 넘어온
+    `prior.unfit_reason`(없으면 unfit — 옛 기록)."""
+    dec = (analysis or {}).get("decision") or {}
+    if dec.get("state") != "held" or dec.get("reason") != "fit_check":
+        return False
+    if isinstance(rec, dict) and rec.get("fit_hold"):
+        return rec.get("fit_hold_reason") == "normal"
+    return ((analysis or {}).get("prior") or {}).get("unfit_reason") == "normal"
+
+
+def investigate_mode(analysis: dict) -> dict:
+    """조사 모드(11/25 A635) 판정 한 곳: 1위 후보가 없거나 1위 C=0(판정 불가 포함)이면 `{mode: true, reason: 후보 없음|1위 C=0}`,
+    아니면(1위 C=1·채택) `{mode: false}`. run이 analysis.json `investigate`로 쓰고, check-output·포털은 그 칸을 읽는다."""
+    cands = [c for c in (analysis or {}).get("candidates") or [] if isinstance(c, dict)]
+    if not cands:
+        return {"mode": True, "reason": "후보 없음"}
+    if ((analysis or {}).get("decision") or {}).get("state") == "accepted" or cands[0].get("C"):
+        return {"mode": False}
+    return {"mode": True, "reason": "1위 C=0"}
+
+
+INVESTIGATION_PREFIX = "- 조사 결론 (LLM, "
+# 사람이 보는 표시(값 status는 그대로). 통과는 "검증 통과"가 아니다 — 스크립트는 인용이 원문에 있는지와 단계표 형식만 본다(11/25 결정 1)
+INVESTIGATION_LABEL = {"identified": "인용·형식 확인", "insufficient_evidence": "근거 부족"}
+INVESTIGATION_NOTE = "  - 스크립트가 확인한 것은 인용한 로그 줄이 실제로 있는지와 단계표가 맞는지다. 원인이 맞는지는 사람이 확인한다."
+INVESTIGATION_NORMAL_LABEL = "정상 동작으로 보임"
+INVESTIGATION_NORMAL = "정상 동작으로 보임(회복 줄 원문 확인) — 원인 조사 대상 아님"
+
+
+def investigation_lines(inv: dict, top: dict | None = None, why: bool = True) -> list[str]:
+    """조사 결론(check-output 기록 `investigation`) → report.md 줄(머리 `- `, 하위 `  - `). Jira 본문(`issue_post`)은 앞 기호를 떼고 같은
+    글을 쓴다. 머리: 원인 한 줄·첫 어긋남(단계와 기대)·책임 층·실패한 검증. 통과(인용·형식 확인)면 바로 아래 설명 한 줄
+    (`INVESTIGATION_NOTE`)을 한 번, 규칙 1위(`top`, C=0)가 있으면 `후보 확인`이 그 ID(1위가 유형만이면 그 유형의 원인 ID)를 맞음이라
+    했을 때(`top_match` = 그 ID)만 머리 꼬리에
+    같다고, 아니면 `관측된 규칙 일치` 하위 줄로 적는다. 근거 부족은 결론이 아니라고 하위 줄에 밝히고, `why`면 실패한 검증의 이유도
+    하위 줄로(Jira 본문은 CAUSE 칸 상한 때문에 이름만). `normal`(가장 유력이 정상, 근거 줄 원문 확인)이면 게이트 대신
+    `INVESTIGATION_NORMAL` — 로그를 더 확인하라고 하지 않는다."""
+    ok = inv.get("status") == "identified"
+    normal = bool(inv.get("normal")) and not ok
+    head = f"{INVESTIGATION_PREFIX}{INVESTIGATION_NORMAL_LABEL if normal else INVESTIGATION_LABEL.get(inv.get('status'), '근거 부족')}): "
+    if inv.get("hyp") is None:
+        return [head + "가설 없음 — 원인 보류 그대로"]
+    if normal:
+        return [head + f"{inv.get('cause')} / {INVESTIGATION_NORMAL}", "  - 원인은 보류 그대로 — 점수·분류·이슈 DB 기록은 그대로다"]
+    fd = inv.get("first_divergence") or {}
+    failed = [g for g in inv.get("gate") or [] if not g.get("ok")]
+    out = [head + f"{inv.get('cause')} / 첫 어긋남: " + (f"단계 {fd.get('step')} — {fd.get('expect')}" if fd else "없음")
+           + f" / 책임 층: {inv.get('layer') or '없음'}"
+           + (f" / 실패한 검증: {', '.join(str(g.get('name')) for g in failed)}" if failed else "")]
+    if ok:
+        out.append(INVESTIGATION_NOTE)
+    if why and failed:
+        out.append("  - 실패 이유: " + "; ".join(f"{g.get('name')} — {g.get('why')}" for g in failed))
+    match = inv.get("top_match")      # 같다고 본 원인 ID(C-3b — 1위가 유형만이면 그 유형의 원인), 옛 기록은 true
+    cause = match if isinstance(match, str) else (top or {}).get("cause")
+    if ok and top:
+        if cause and match:
+            out[0] += f" (규칙 1위 {cause}와 같음)"
+        else:
+            out.append(f"  - 관측된 규칙 일치: {top.get('category')} > {top.get('type')} > {cause or '원인 미확인'} — 규칙 1위"
+                       "(원인 일치 없음), 조사 결론과 같다고 확인되지 않음")
+    out.append("  - 규칙 판정은 보류 — 점수·분류·이슈 DB 기록은 그대로다. 이 원인으로 기록하려면 분류할 때 새 원인을 고른다" if ok else
+               "  - 근거가 모자라 결론으로 쓰지 않는다 — 원인은 보류 그대로. 실패한 검증을 보고 로그를 더 확인한다")
+    return out
+
+
+HELD_REASON = {"no_reference": "실패 지점을 잡지 못함(기준 줄·스텝 마커·TC 파일+시계 차 중 로그에서 찾은 것 없음)",
+               "no_candidate": "맞는 후보 없음", "cause_unconfirmed": "유형만 일치, 원인 미확인",
+               "cause_unjudged": "원인 판정 불가(시그니처 시간 초과·오류)",
+               "fit_check": "탐색 분석 적합성 확인에서 채택 원인이 증상과 맞지 않음",
+               # 자격 검사(단계 5): 실패 지점의 사건에 붙는 원인을 정하지 못함
+               "symptom_not_found": "실패 지점에 이슈 DB 증상과 맞는 실패가 없음",
+               "ambiguous": "실패 지점을 하나로 정하지 못함",
+               "ineligible": "실패 지점과 규칙 일치를 이을 수 없음"}
+# 자격 검사 세부 사유(`decision.check.why`) — report.md `- 판단:` 줄 괄호
+HELD_WHY = {"near_without_symptom": "지정한 줄이 실패 줄이 아님 — 근처 실패를 고르려면 증상 종류(문제 파악)가 필요",
+            "range_end_unknown": "실패 구간의 끝을 모름", "range_without_symptom": "TC 파일 시각 구간은 증상 종류(문제 파악)가 있어야 씀",
+            "absence_unverified": "'이 줄이 없어야 함' 조건을 확인할 수 없음 — 그 태그가 수집되지 않았거나 로그가 일찍 끝남",
+            "no_event_at_reference": "지정한 IPC 줄 뒤 2초 안에 실패가 없음",
+            "typeless_failure_within_link": "지정한 IPC 줄 뒤 2초 안 첫 실패가 이슈 DB 증상과 맞지 않음",
+            "typeless_failure_in_range": "실패 구간의 마지막 실패가 이슈 DB 증상과 맞지 않음",
+            "typeless_failure_near": "지정한 줄 뒤 첫 실패가 이슈 DB 증상과 맞지 않음",
+            "other_failure_first": "지정한 줄 뒤 첫 실패가 문제 파악 증상 종류와 다름",
+            "other_failure_last": "실패 구간의 마지막 실패가 문제 파악 증상 종류와 다름",
+            "same_line_typeless": "지정한 줄의 실패가 이슈 DB 증상과 맞지 않음",
+            "no_event_in_range": "실패 구간 안에 이슈 DB 증상과 맞는 실패가 없음",
+            "locations": "같은 줄이 로그 여러 곳에 있음", "slots": "두 SIM 슬롯에 모두 맞음",
+            "sources": "기준마다 다른 실패를 가리킴", "multiple_events": "같은 줄·1초 안 같은 유형 사건이나 구간 안 사건마다 1순위 원인이 다름",
+            "cause_after_event": "원인 근거가 실패 뒤에만 있음", "no_cause_before_event": "실패 전에 맞는 원인이 없음",
+            "cause_not_in_candidates": "자격 검사가 고른 원인이 후보 목록에 없음",
+            # 문제 파악 입력(단계 5-2)
+            "not_in_db": "문제 파악에서 이 증상이 이슈 DB에 없다고 봄 — 다른 실패의 원인으로 대신하지 않음",
+            "no_allowed_event_near": "지정한 줄 근처(5분 안)에 문제 파악 증상 종류의 실패가 없음",
+            "comment_unconfirmed": "코멘트에 적힌 위치라 원인 채택은 사람 확인 필요"}
 SECTION_MAX = {"PROBLEM": 600, "CAUSE": 1000, "NEXT ACTION": 800, "ANALYSIS": 1600}
 BODY_MAX = 4000
 

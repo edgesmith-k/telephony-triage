@@ -162,7 +162,8 @@ def _fail_lines(text: str, cfg: dict, masker, fail_name: str | None = None) -> l
     낱말 fail이 든 나머지 줄(`fail-safe check` 같은 스텝 이름) — 이런 줄이 많아도 진짜 Fail 줄이 밀려나지 않게."""
     compiled, _warns = failedstep._compile(userconfig.get(cfg, "tracker.failed_step_patterns") or [])
     conf = userconfig.get(cfg, "failed_step") or {}
-    words = {k: failedstep._words(conf.get("steps_status"), failedstep.DEFAULT_STEPS_STATUS, k) for k in ("pass", "fail")}
+    verdicts = failedstep._verdicts(conf)
+    words = {"pass": verdicts["pass"], "fail": verdicts["fail"] | verdicts["inconc"]}     # INCONC 줄도 둘레를 싣는다
     rows = [line[: failedstep.MAX_LINE_CHARS] for line in text.splitlines()]
 
     def verdict(line: str) -> bool:
@@ -289,7 +290,7 @@ def build_input(raw: dict, cfg: dict, db: Path, key: str, failed_step=None, step
         md.append("코멘트 없음")
     md += ["", "## TC", *steps]
     for w in step_warns + [w for w in fs.get("warnings") or [] if w not in step_warns]:
-        md.append(f"- 경고: {w}")
+        md.append(f"- 경고: {masker(w)}")      # TC 경고에는 읽은 표 머리(TC 원문)가 실린다
     if around:
         md += ["", f"## TC의 Fail 줄 (가린 원문, 앞뒤 {FAIL_AROUND}줄 — 판정 뒤 사유는 여기서 본다)", *around]
     if fs.get("test_steps"):
@@ -444,6 +445,21 @@ def _paired(name: str, token: str, quote: str, prefix: str = "", error_prefix: s
     return False
 
 
+def _whole_in_place(src: str, quote: str, name: str | None, token: str | None) -> bool:
+    """인용이 원문에 놓인 자리(여럿이면 어느 하나) 안에 이름·token이 **원문 기준으로** 온전히 있는가. 인용 끝에서 값을 잘라
+    (`token=0x0de` → `0x0d`) 만든 단서가, 같은 코멘트 다른 곳의 같은 값(`Other value 0x0d`) 때문에 통과하지 않게 한다."""
+    nrx = re.compile(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])") if name else None
+    want = _token_value(token) if token else None
+    i = src.find(quote)
+    while i >= 0:
+        j = i + len(quote)      # finditer에 endpos를 주면 뒤를 못 보므로 시작만 주고 끝은 직접 본다
+        if (nrx is None or any(m.end() <= j for m in nrx.finditer(src, i))) and (
+                want is None or any(m.end() <= j and _token_value(m.group()) == want for m in QUOTE_TOKEN.finditer(src, i))):
+            return True
+        i = src.find(quote, i + 1)
+    return False
+
+
 def _clue_problem(c: dict, sources: dict, prefix: str = "", error_prefix: str = "") -> str | None:
     """단서를 버릴 사유(없으면 None). 인용은 줄머리 인용 표식을 떼고 공백을 접어 그 코멘트(가린 글)에서 찾고, 이름·token은
     인용에서 뽑은 값과 **값으로** 비교한다(부분 문자열이 아니다)."""
@@ -464,11 +480,151 @@ def _clue_problem(c: dict, sources: dict, prefix: str = "", error_prefix: str = 
     tokens = [{_token_value(v) for v in QUOTE_TOKEN.findall(t)} for t in (quote, src)]
     if c["token"] and not all(_token_value(c["token"]) in t for t in tokens):
         return "token 값이 인용 안에 없음"
+    if (c["name"] or c["token"]) and not _whole_in_place(src, quote, c["name"].rstrip(".:") if c["name"] else None, c["token"]):
+        return "인용이 원문의 값 중간에서 잘림"
     if c["kind"] == "ipc" and not _paired(c["name"].rstrip(".:"), c["token"], quote, prefix, error_prefix):
         return "이름 뒤 첫 token이 그 token이 아님"
     if len(quote) < lookat.TEXT_MIN and c["kind"] != "ipc":     # ipc는 이름·token을 값으로 확인했다
         return f"인용이 너무 짧음({lookat.TEXT_MIN}자 미만)"
     return None
+
+
+# --- 코멘트 단서 자동 추출(모델 없이 — `run`이 새 problem.json이 없을 때 쓴다) ------------------------------------------
+
+RETEST_WORDS = ("retest", "re-test", "재시험", "재테스트")      # 공개 기본값 — 사내 낱말은 설정 `eligibility.retest_words`
+# Jira 인용 블록(한 줄 안·여러 줄, 닫히지 않으면 글 끝까지, 제목 붙은 `{quote:제목}` 포함). ponytail: 그 밖의 모양({noformat} 등)은 사내 측정 뒤
+QUOTE_BLOCK = re.compile(r"(?is)\{quote(?::[^}]*)?\}.*?(?:\{quote\}|\Z)")
+QUOTE_LINE = re.compile(r"^\s*(?:bq\.|>)")                           # Jira `bq.`·메일 `>` 인용 줄
+HALF_MASK = re.compile(r"<[A-Z][A-Z0-9_]*(?:#\d*|:[A-Z0-9]*| \d*B?)?$")     # 잘린 끝의 마스킹 토큰 앞부분(`<APN#1`·`<HEXDUMP 1`)
+IPC_TOKEN = re.compile(r"(?i)\btoken\s*[=:(]\s*(0x[0-9A-Fa-f]{1,8}|[0-9]{1,10})(?![A-Za-z0-9_])")     # lookat `_TOKEN`의 ASCII판
+
+
+def _log_quote(line: str) -> str:
+    """logcat 줄 인용: 앞 `QUOTE_MAX`자(시각 포함). 잘린 끝의 반쪽 마스킹 토큰(`<AP`)은 뗀다(로그 쪽 접은 토큰과 안 맞으므로)."""
+    if len(line) <= QUOTE_MAX:
+        return line
+    cut = line[:QUOTE_MAX]
+    half = HALF_MASK.search(cut)
+    return (cut[:half.start()] if half else cut).rstrip()
+
+
+def _own_text(text) -> str:
+    """자동 추출용 이번 글: `{quote}…{quote}` 블록을 지우고 `bq.`·`>`로 시작하는 줄을 뺀다(인용한 옛 회차 글에서 단서·token 값을
+    뽑지 않는다 — C-2). 모델 단서 대조(`_clue_problem`)는 따로 `_unquote`로 인용 표식만 뗀다."""
+    return "\n".join(x for x in QUOTE_BLOCK.sub(" ", str(text or "")).splitlines() if not QUOTE_LINE.match(x))
+
+
+# 앞으로의 계획 표시(재시험 "잡겠음"·"나오면 재시험"·"다음 재시험 때"·"will retest"·"retest scheduled") — 재시험 낱말이 든 조각에 이것이
+# 있고 결과 낱말(`RETEST_RESULT`)이 없으면 그 낱말은 회차 경계가 아니다(sim1120 S-02·S-05·S-22). 조각 = 문장(`.!?` 뒤)·줄·쉼표·`;`·
+# `—`·"했는데"로 나눈 것("재시험했는데 또 FAIL, 다음 빌드에서 다시 해 보겠음"의 앞 조각은 지난 일). 영어 계획 표시는 재시험 낱말 바로
+# 곁에서만 본다. ponytail: 낱말 휴리스틱 — 계획 표시 없이 쓴 계획("재시험 필요")은 그대로 경계, 사내 글로 다시 본다
+RETEST_PLAN = re.compile(r"(?i)겠|나오면|되면(?!서)|예정|다음\s*(?:번\s*)?(?:재시험|재테스트|회차)|\bwill\s+re-?test|\bgoing\s+to\s+re-?test|"
+                         r"\bplan(?:s|ned)?\s+to\s+re-?test|\bre-?test\w*\s+(?:is\s+|was\s+)?(?:planned|scheduled)|"
+                         r"\bre-?test\w*\s+(?:with|on)\s+(?:the\s+)?next")
+RETEST_RESULT = re.compile(r"(?i)(?<![a-z])(?:fail|pass)|재현|동일|같은 증상|실패|성공")
+_PIECE = re.compile(r"(?<=[.!?。])\s+|\n|[,;，]|—|했는데")
+
+
+def _retest(text, words) -> bool:
+    """재시험 낱말이 든 지난 일 조각이 있나. 영어(ASCII) 낱말은 앞이 영문자가 아니고 뒤는 활용형(`s`·`ed`·`ing`)까지 — `pretest`는
+    아님, `retested`·`retesting`은 맞음. Python `\\b`는 한글을 낱말 글자로 봐 "Retest결과"를 놓친다(여기선 맞음). 한글 낱말은 포함
+    비교. 앞으로의 계획 조각(`RETEST_PLAN` 있고 `RETEST_RESULT` 없음)의 낱말은 세지 않는다."""
+    def hit(t: str) -> bool:
+        return any(re.search(r"(?<![a-z])" + re.escape(w) + r"(?:s|ed|ing)?(?![a-z])", t) if w.isascii() else w in t
+                   for w in words)
+    return any(hit(s) and (RETEST_RESULT.search(s) or not RETEST_PLAN.search(s))
+               for s in _PIECE.split(str(text or "").casefold()))
+
+
+def _line_clues(where, text: str, name_re, error_prefix: str) -> list[dict]:
+    """글 한 개 → 단서 후보(줄 순서). 한 줄 안에서 `<요청 접두어>이름` 뒤 첫 `token[=:(]` 값이 있으면 ipc(그 줄은 log_line으로
+    안 뽑음), 없고 줄이 logcat 시각으로 시작하면 log_line. 이름만(token 없음)·시각 없는 줄은 뽑지 않는다. 인용은 부른 쪽이 먼저
+    뺀다(`_own_text`)."""
+    out = []
+    for raw in str(text or "").splitlines():
+        line = _fold(raw)
+        ipcs = []
+        for m in name_re.finditer(line) if name_re and line else ():
+            if error_prefix and m.group().startswith(error_prefix):      # 오류 값(`VIPC_E_…`)은 메시지 이름이 아니다
+                continue
+            t = IPC_TOKEN.search(line, m.end())
+            # 시각이 붙은 줄은 시각까지 인용한다(`_clue_text`가 그 시각으로 "그 시각의 줄이 로그에 있는가"를 본다)
+            quote = (line if len(line) <= QUOTE_MAX else _log_quote(line) if lookat.stamp(line) else line[m.start():t.end()])                 if t else ""
+            if t and len(quote) <= QUOTE_MAX:
+                ipcs.append({"comment": where, "kind": "ipc", "name": m.group(), "token": t.group(1), "quote": quote,
+                             "side": "unknown", "stale": False})
+        if ipcs:
+            out += ipcs
+        elif lookat.stamp(line):
+            out.append({"comment": where, "kind": "log_line", "name": None, "token": None, "quote": _log_quote(line),
+                        "side": "unknown", "stale": False})
+    return out
+
+
+_HEX = r"(0x[0-9A-Fa-f]{1,8})(?![A-Za-z0-9_])"
+TOKEN_HEX = re.compile(r"(?i)\btoken(?:은|는|이|가)?\s*[=:(]?\s*" + _HEX)          # `token 0x0e1`·`token은 0x0aa`(바로 뒤 값만)
+NOT_BUT = re.compile(r"(?i)(0x[0-9A-Fa-f]{1,8}|[0-9]{1,10})\s*(?:가|이)?\s*아니라\s*(?:token\s*[=:(]?\s*)?"
+                     r"(0x[0-9A-Fa-f]{1,8}|[0-9]{1,10})(?![A-Za-z0-9_])")              # 정정 "A가 아니라 B"
+
+
+def _token_values(text: str) -> set[int]:
+    """정정·여러 요청 알아보기용 token 값(숫자): `token` 낱말 **바로 뒤** 값(`token=225`·`token(0x0e1)`·`token은 0x0aa` — 이름 없이
+    적은 값 포함)과, `token` 낱말이 든 줄의 정정 "A가 아니라 B"의 두 값. 같은 줄의 다른 16진 값(`cause 0x1b`·`len=0x08`)은 세지 않는다."""
+    out = {_token_value(t.group(1))[1] for t in IPC_TOKEN.finditer(text)}
+    out |= {_token_value(t.group(1))[1] for t in TOKEN_HEX.finditer(text)}
+    for line in text.splitlines():
+        if "token" in line.casefold():
+            out |= {_token_value(v)[1] for m in NOT_BUT.finditer(line) for v in m.groups()}
+    return out
+
+
+def extract_clues(comments: list[str], description: str, prefix: str, error_prefix: str = "",
+                  retest_words=RETEST_WORDS, first: int = 1) -> tuple[list[dict], dict]:
+    """Jira 글(가린 코멘트 작성 순·설명) → (단서 — 최근 코멘트부터, 버림 수 `{old_round, over, invalid}`). 모델 단서와 같은 모양
+    `{comment, kind, name, token, quote, side, stale}`이고 `_clue_problem`(모델 단서와 같은 관문)을 통과한 것만 낸다. 코멘트 번호는
+    `first`부터(오래된 코멘트를 건너뛰고 받았으면 Jira 순번에 맞춘다 — 그때 설명은 건너뛴 코멘트의 재시험 앞일 수 있어 옛 회차로
+    센다). 설명은 없어도 된다(포털 선별 파일은 코멘트만).
+    - 인용(`{quote}` 블록·`bq.`·`>` 줄)은 단서·token 값 세기에서 뺀다(`_own_text`). 회차 경계는 인용 안 낱말도 본다(옛 회차를 더 버리는 쪽).
+    - 회차 경계: 재시험 낱말(대소문자 무시, 영어 낱말은 낱말 단위, 앞으로의 계획 문장 안 낱말은 빼고 — `_retest`)이 든 마지막 코멘트 b. b와 그 앞(설명 포함)의 후보는 버리고 수만 센다.
+      단 날짜 붙은 logcat 시각(`lookat.stamp`)으로 시작하는 인용은 남긴다 — 부른 쪽이 그 시각의 줄이 분석 로그에 있을 때만 쓴다(A592).
+      ponytail: 재시험 낱말 없이 다시 돈 회차는 못 가른다(옛 token이 새 로그에 없으면 로그 쪽에서 버려진다) — 사내 낱말로 보완.
+    - 같은 단서(ipc 이름·token 값 — `225` = `0xe1`, log_line 접은 글)는 최근 것 하나, `CLUES_MAX`를 넘으면 `over`.
+    - 이번 회차 글에 서로 다른 token 값이 둘 이상이면(정정 "0x0aa가 아니라 0x0e1"·정상과 실패를 함께 적음) `conflict: true` —
+      어느 것이 실패인지 글로는 못 가리므로 부른 쪽이 보류한다. 관문에서 버린 이번 회차 단서 수는 `invalid`(부른 쪽이 보류에 센다).
+    - ponytail: 실패를 문장으로만 적고 다른 token을 "참고"로 적으면(N9) 그 참고 token 하나가 단서가 된다 — 글 뜻은 읽지 않는다."""
+    words = [str(w).casefold() for w in retest_words if str(w).strip()]
+    b = max((n for n, t in enumerate(comments, first) if _retest(t, words)), default=0)
+    sources = {n: _own_text(t) for n, t in enumerate(comments, first)}
+    sources["description"] = _own_text(description)
+    name_re = re.compile(r"(?<![A-Za-z0-9_])" + re.escape(prefix) + r"[A-Za-z0-9_]+") if prefix else None
+    drop = {"old_round": 0, "over": 0, "invalid": 0, "conflict": False}
+    clues, seen, values = [], set(), set()
+    for where in [*range(first + len(comments) - 1, first - 1, -1), "description"]:
+        found = _line_clues(where, sources[where], name_re, error_prefix)
+        if (where == "description" and (b or first > 1)) or (where != "description" and where <= b):
+            # 날짜 붙은 logcat 줄 인용은 회차와 상관없이 남긴다 — 그 시각의 줄이 분석 로그에 있어야 쓰이므로(anchor `_stamp_unmet`)
+            # 어느 회차 로그인지는 로그가 가린다. 분석 로그가 최근 회차 것이 아닐 때 그 회차 단서를 살린다(사내 A592, 사용자 결정)
+            dated = [c for c in found if lookat.stamp(c["quote"])]
+            drop["old_round"] += len(found) - len(dated)
+            if not dated:
+                continue
+            found = [{**c, "stale": True} for c in dated]   # 로그에 없으면 부른 쪽이 옛 회차로 조용히 버린다(dropped 아님)
+        else:
+            values |= _token_values(sources[where])     # 정정·충돌은 이번 회차 글로만 본다
+        for c in found:
+            if _clue_problem(c, sources, prefix, error_prefix):
+                drop["invalid"] += 1
+                continue
+            key = (c["kind"], c["name"], _token_value(c["token"])[1] if c["token"] else lookat.fold(c["quote"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            if len(clues) >= CLUES_MAX:
+                drop["over"] += 1
+            else:
+                clues.append(c)
+    drop["conflict"] = len(values) > 1
+    return clues, drop
 
 
 def _mask_all(value, masker):

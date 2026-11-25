@@ -7,6 +7,7 @@ stdin: hook 입력 `{tool_name, tool_input, tool_response, ...}`. `tool_name`이
 1. 응답에서 이슈 키를 찾아 `tracker.key_regex`(스냅샷 또는 사용자 clone의 `issue-db.config.yaml`, 없으면 그 DB 트래커의
    기본 정규식)와 트래커 경로 안전 형식으로 검사한다(트래커 어댑터 `key_from_read`). 대상 판별은 어댑터 `read_action`이고,
    매핑된 도구인데 어댑터가 지원하지 않는 읽기(`unsupported`)면 원문을 대체한다(fail-closed).
+   응답이 오류 객체뿐이면(`error`·`errors`·`errorMessages`와 상태 키만 — 오류를 정상 결과로 주는 MCP) 저장하지 않고 키 이름만 알린다.
 2. 원문을 `<work_dir>/<KEY>/issue_raw.json`(디렉토리 권한 700)에 쓴다. `get_comments` 응답은 같은 파일의 `comments`에 합친다.
    `triage.py run`이 이 파일을 `jira_fields.py extract --consume`으로 읽고 지운다. 응답 형식은 `_payload` 순서
    (structuredContent → 텍스트 블록마다 JSON → 전체 JSON → JSONL → `key`·`fields`·`comments` 키가 있는 YAML 객체 → 텍스트)로
@@ -249,12 +250,24 @@ def bridge_post(event: dict, cfg: dict) -> str:
             f"기록: {job / issuepost.RESULT_FILE}")
 
 
+ERROR_KEYS = frozenset({"error", "errors", "errorMessages"})                       # Jira REST·MCP 오류 응답의 키
+ERROR_ONLY_KEYS = ERROR_KEYS | {"key", "message", "status", "statusCode", "isError", "code"}
+
+
+def _error_shaped(data) -> bool:
+    """응답이 오류 객체뿐인가: 오류 키가 있고 그 밖의 키가 없다(`{"error": …}`, `{"errorMessages": [...], "errors": {}}`)."""
+    return isinstance(data, dict) and bool(ERROR_KEYS & data.keys()) and data.keys() <= ERROR_ONLY_KEYS
+
+
 def bridge(event: dict, cfg: dict, kind: str) -> str:
     response = event.get("tool_response")
     data, shape = _payload(response)
     if kind == "get_issue" and shape == "text":     # 자유 텍스트 이슈 응답: 필드를 읽을 수 없다(원문은 보이지 않는다)
         return (f"telephony-triage: Jira 응답이 JSON이 아니라 저장하지 않았다({_shape_note(response, shape)}) "
                 "— tracker.tools.get_issue가 JSON을 내는 도구인지 확인한다(원문은 표시하지 않는다).")
+    if _error_shaped(data):         # 오류를 정상 결과로 준 MCP(없는 이슈·권한): 이슈로 저장하지 않는다(사내 A589)
+        return (f"telephony-triage: Jira가 오류 응답을 돌려줘 저장하지 않았다(키 {', '.join(sorted(data))}, 본문은 표시하지 않는다) "
+                "— 이슈 키가 맞는지, 읽기 권한이 있는지 확인한다.")
     kre = _key_regex(cfg)
     key = trackers.of(cfg).key_from_read(data, event.get("tool_input") or {}, kre)
     if key is None:
@@ -271,22 +284,31 @@ def bridge(event: dict, cfg: dict, kind: str) -> str:
         issue = data.get("issue") if isinstance(data, dict) and isinstance(data.get("issue"), dict) else data
         if not isinstance(issue, dict):
             return "telephony-triage: Jira 응답이 객체가 아니라 저장하지 않았다(원문은 표시하지 않는다)."
-        comments, comments_format = raw.get("comments"), raw.get("comments_format")
+        comments, comments_format, page = raw.get("comments"), raw.get("comments_format"), raw.get("comments_page")
         raw = dict(issue)
         raw.setdefault("key", key)      # 키가 응답 밖(도구 입력)에서 온 트래커도 extract가 같은 키를 본다
         if comments and not raw.get("comments"):
             raw["comments"] = comments
             if comments_format:
                 raw["comments_format"] = comments_format
+            if page:
+                raw["comments_page"] = page
     elif shape == "text":       # 자유 텍스트 코멘트 응답: 한 덩어리를 코멘트 1건으로(extract가 마스킹한다)
         raw.setdefault("key", key)
         raw["comments"] = [{"body": data["text"]}]
         raw["comments_format"] = "text"
+        raw.pop("comments_page", None)      # 전체 수를 모른다 — 코멘트 단서 자동 추출을 하지 않는다
     else:
         comments = data.get("comments") if isinstance(data, dict) else data
         raw.setdefault("key", key)
         raw["comments"] = comments if isinstance(comments, list) else [comments]
         raw.pop("comments_format", None)
+        # 코멘트 도구 응답의 전체 수·건너뛴 수(같은 출처) — jira_fields가 일부만 읽었는지 본다(없으면 자동 추출 안 함)
+        page = {k: data[k] for k in ("total", "startAt") if isinstance(data, dict) and type(data.get(k)) is int}
+        if page:
+            raw["comments_page"] = page
+        else:
+            raw.pop("comments_page", None)
     raw_path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8", newline="\n")
     try:
         raw_path.chmod(0o600)
@@ -295,7 +317,8 @@ def bridge(event: dict, cfg: dict, kind: str) -> str:
     brief = jira_fields.extract(raw, cfg, None, "mcp", jira_fields.comment_budget(BRIEF_COMMENTS), BRIEF_CHARS)
     text = brief["text"]
     shown = {"key": key, "saved_to": str(raw_path), "occurred_at": brief["occurred_at"], "missing": brief["missing"],
-             "summary": text["summary"][:BRIEF_CHARS], "description": text["description"][:BRIEF_CHARS * 2],
+             "summary": masking.clip(text["summary"], BRIEF_CHARS),
+             "description": masking.clip(text["description"], BRIEF_CHARS * 2),
              "comments_total": text["comments_total"], "last_comments": text["comments"]}
     note = ""
     if kind == "get_comments" and shape == "text":

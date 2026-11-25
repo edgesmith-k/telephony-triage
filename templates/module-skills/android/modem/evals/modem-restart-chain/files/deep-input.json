@@ -10,11 +10,21 @@
    "type": "CALL-001",
    "cause": "CALL-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "call",
+   "evidence": [
+    "16:00:21.000 ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 0, null}, suggestedA…",
+    "16:00:22.000 GsmCdmaPhone: [0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppS…",
+    "16:00:23.400 RILJ: [0343]< LAST_CALL_FAIL_CAUSE com.android.internal.telephony.LastCallFailCause@5d3c2a1 causeCode: 17 vendorCause: null [PHONE0]"
+   ]
   }
  ],
+ "decision": {
+  "state": "held",
+  "reason": "no_reference"
+ },
  "issue_summary": "통화 중 갑자기 서비스 안 됨 (합성)",
- "occurred_at": "2026-08-27T16:00:22+00:00",
+ "occurred_at": "2026-08-27T16:00:22.000Z",
  "events": "events.json",
  "timeline": "timeline.md",
  "log_paths": [

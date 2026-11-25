@@ -1,5 +1,5 @@
 {
- "around": "2026-09-06T16:00:02+00:00",
+ "around": "2026-09-06T16:00:02.000Z",
  "failed_step": null,
  "limit": 200,
  "anchor": null,
@@ -11,5 +11,140 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-09-06T15:55:02.000Z",
+   "2026-09-06T16:10:02.000Z"
+  ],
+  "ref": "2026-09-06T16:00:02.000Z",
+  "after_sec": 600,
+  "candidates": 1,
+  "rows": [
+   {
+    "ts": "2026-09-06T16:00:02.500Z",
+    "phone": 0,
+    "level": "E",
+    "tag": "RILJ",
+    "msg": "serviceDied: Service radio::IRadio/slot1 has died. [PHONE0]",
+    "main": true
+   }
+  ]
+ },
+ "summary": {
+  "ref": "2026-09-06T16:00:02.000Z",
+  "range": [
+   "2026-09-06T16:00:02.000Z",
+   "2026-09-06T16:00:06.000Z"
+  ],
+  "lines": 10,
+  "shapes": 10,
+  "window": [
+   "2026-09-06T15:55:02.000Z",
+   "2026-09-06T16:10:02.000Z"
+  ],
+  "cap": 60,
+  "after_sec": 600,
+  "groups": [
+   {
+    "ts": "2026-09-06T16:00:02.500Z",
+    "last": "2026-09-06T16:00:02.500Z",
+    "n": 1,
+    "phone": 0,
+    "level": "E",
+    "tag": "RILJ",
+    "msg": "serviceDied: Service radio::IRadio/slot1 has died. [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-09-06T16:00:02.510Z",
+    "last": "2026-09-06T16:00:02.510Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0350]< GET_CURRENT_CALLS error 1 [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-09-06T16:00:02.511Z",
+    "last": "2026-09-06T16:00:02.511Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0351]< GET_SIGNAL_STRENGTH error 1 [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-09-06T16:00:02.000Z",
+    "last": "2026-09-06T16:00:02.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0350]> GET_CURRENT_CALLS [PHONE0]"
+   },
+   {
+    "ts": "2026-09-06T16:00:02.010Z",
+    "last": "2026-09-06T16:00:02.010Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0351]> GET_SIGNAL_STRENGTH [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-09-06T16:00:02.600Z",
+    "last": "2026-09-06T16:00:02.600Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "VRIL",
+    "msg": "radio state changed: newState=RADIO_UNAVAILABLE",
+    "after": true
+   },
+   {
+    "ts": "2026-09-06T16:00:04.000Z",
+    "last": "2026-09-06T16:00:04.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "RIL",
+    "msg": "VrilApp::instance",
+    "after": true
+   },
+   {
+    "ts": "2026-09-06T16:00:04.010Z",
+    "last": "2026-09-06T16:00:04.010Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "RIL",
+    "msg": "[IpcCtx_0] OnRequest",
+    "after": true
+   },
+   {
+    "ts": "2026-09-06T16:00:05.000Z",
+    "last": "2026-09-06T16:00:05.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "VRIL",
+    "msg": "radio state changed: newState=RADIO_ON",
+    "after": true
+   },
+   {
+    "ts": "2026-09-06T16:00:06.000Z",
+    "last": "2026-09-06T16:00:06.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "route rsp type=0001 id=0x0703 svc=5 msg=4009",
+    "after": true
+   }
+  ]
+ }
 }

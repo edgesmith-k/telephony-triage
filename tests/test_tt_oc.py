@@ -94,6 +94,10 @@ def env(tmp_path):
     (plug / "scripts" / "config.py").write_text(
         "import json, os, sys\nprint(json.dumps({'counts': {'ok': 1}}))\nsys.exit(int(os.environ.get('STUB_DOCTOR_EXIT', '0')))\n",
         encoding="utf-8")
+    (plug / "scripts" / "common").mkdir()
+    (plug / "scripts" / "common" / "oc_adapter.py").write_text(      # selftest만(guard-python·script-python 행)
+        "import json, sys\nprint(json.dumps({'python': sys.executable, 'guard': None, 'scripts': None, 'read': 'allow'}))\n",
+        encoding="utf-8")
     (proj / "opencode.json").write_text("{}", encoding="utf-8")
     (proj / ".opencode" / "plugins").mkdir(parents=True)
     (proj / ".opencode" / "plugins" / "tt-guard.js").write_text("// guard\n", encoding="utf-8")
@@ -261,7 +265,7 @@ def test_doctor_subcommand(env):
     assert r.returncode == 0, r.stdout
     rows = json.loads(r.stdout)["rows"]
     assert [x["check"] for x in rows] == ["env", "project-git", "instructions", "integrity", "opencode-version",
-                                          "opencode-config", "config-doctor", "git", "gateway-key"]
+                                          "guard-python", "script-python", "opencode-config", "config-doctor", "git", "gateway-key"]
     # 시험 설치의 opencode.json은 {}라 게이트웨이 행은 읽지 못함 warn 하나(막지 않는다). git 행은 호스트 git이 2.38 미만이면
     # warn이다(Ubuntu 22.04의 git 2.34 — CI site-rehearsal). 판정 자체는 test_git_safe_env_for_children_doctor_row_and_publish가 본다.
     status = {x["check"]: x["status"] for x in rows}
@@ -644,9 +648,17 @@ def test_child_session_judged_like_main():
     assert res["blocked"] == [{"tool": "bash", "message": blocked, "session": "ses_kid1"}]
     assert res["tokens"] == {"input": 160, "output": 9, "reasoning": 2}
     assert res["children"] == [{"session": "ses_kid1", "read": True, "steps": 2, "tokens": {"input": 150, "output": 8,
-                                "reasoning": 2}, "blocked": 1, "finish": "stop", "step_limit": False}]
+                                "reasoning": 2}, "blocked": 1, "finish": "stop", "step_limit": False, "outcome": "blocked"}]
     res = mod.add_children(mod.judge(main, 0), [("ses_kid1", kid)], step_limit=2)
     assert res["outcome"] == "step-limit" and any("스텝 한도(2)" in n for n in res["notes"])
+    cut = kid[:-1] + [{**kid[-1], V.EV_PART: {**kid[-1][V.EV_PART], "reason": "length"}}]
+    res = mod.add_children(mod.judge(main, 0), [("ses_kid1", cut)], step_limit=40)     # 하위 출력 잘림 → 부모도 length(종료 1)
+    assert res["outcome"] == "length" and mod.EXIT["length"] == 1 and any("finish=length" in n for n in res["notes"])
+    # 코덱스 K05: 끝맺지 않은 하위(빈 export, 마지막 글·step-finish 없음) → 부모 no-final-text(종료 1)
+    for open_kid in ([], [{"type": V.EV_STEP_START}, {"type": V.EV_TEXT, V.EV_PART: {V.PART_TEXT: "분석을 시작합니다."}}]):
+        res = mod.add_children(mod.judge(main, 0), [("ses_kid1", open_kid)], step_limit=40)
+        assert res["outcome"] == "no-final-text" and mod.EXIT["no-final-text"] == 1, res["outcome"]
+        assert res["children"][0]["outcome"] == "no-final-text" and any("끝맺지 않았다" in n for n in res["notes"])
     res = mod.add_children(mod.judge(main, 0), [("ses_kid1", None)], step_limit=40)
     assert res["outcome"] == "error" and res["children"] == [{"session": "ses_kid1", "read": False}]
     assert any("opencode export" in e for e in res["errors"])
@@ -688,8 +700,8 @@ def test_doctor_detects_removed_or_changed_guard_plugin(env):
 
 
 def test_doctor_detects_changed_plugin_scripts_and_old_install(env):
-    (env["plug"] / "scripts" / "common").mkdir()
-    (env["plug"] / "scripts" / "common" / "oc_adapter.py").write_text("# sed -i\n", encoding="utf-8")
+    adapter = env["plug"] / "scripts" / "common" / "oc_adapter.py"
+    adapter.write_text(adapter.read_text(encoding="utf-8") + "# sed -i\n", encoding="utf-8")
     code, rows = _doctor_rows(env)
     assert code == 2 and "scripts/**/*.py" in rows["integrity"]["detail"]
     write_meta(env["proj"], env["plug"], env["work"])
@@ -816,6 +828,95 @@ def test_child_env_drops_stale_lock_owner(env, monkeypatch):
     mod = _load("tt_oc", TTOC)
     monkeypatch.setenv("TT_LOCK_OWNER", "stale")
     assert "TT_LOCK_OWNER" not in mod.child_env({"plugin_root": "/p", "work_root": "/w"})
+
+
+def test_child_env_guard_python_is_wrapper_python_unless_set(env, monkeypatch):
+    """guard(tt-guard.js)는 TT_PYTHON(없으면 PATH의 python3)으로 어댑터를 돌린다 — 의존성이 venv에만 있는 곳에서 tt-oc와 다른
+    python이 되지 않게 tt-oc가 자기 python을 넘긴다. 사용자가 정한 값은 그대로."""
+    mod = _load("tt_oc", TTOC)
+    meta = {"plugin_root": "/p", "work_root": "/w"}
+    monkeypatch.delenv("TT_PYTHON", raising=False)
+    assert mod.child_env(meta)["TT_PYTHON"] == sys.executable
+    monkeypatch.setenv("TT_PYTHON", "/opt/py/bin/python3")
+    assert mod.child_env(meta)["TT_PYTHON"] == "/opt/py/bin/python3"
+
+
+def test_child_env_puts_venv_bin_first_only_in_venv(monkeypatch):
+    """venv python으로 돌면 그 bin을 자식 PATH 앞에 둔다(모델 bash의 python3 스크립트도 같은 venv). venv가 아니면 PATH 그대로."""
+    mod = _load("tt_oc", TTOC)
+    meta = {"plugin_root": "/p", "work_root": "/w"}
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.setattr(mod.sys, "executable", "/v/bin/python")
+    monkeypatch.setattr(mod.sys, "prefix", "/v")
+    monkeypatch.setattr(mod.sys, "base_prefix", "/usr")
+    assert mod.child_env(meta)["PATH"] == os.pathsep.join([str(Path("/v/bin")), "/usr/bin"])
+    monkeypatch.setattr(mod.sys, "base_prefix", "/v")
+    assert mod.child_env(meta)["PATH"] == "/usr/bin"
+
+
+def test_empty_refused_env_dropped_and_guard_reason_shown(tmp_path, monkeypatch):
+    """값이 빈 OPENCODE_CONFIG는 tt-oc 점검을 통과하지만 어댑터는 이름만 있어도 모든 도구를 거부한다(첫 읽기부터 막힘).
+    child_env는 그것을 빼고, 그래도 guard가 읽기를 거부하면 doctor guard-python 행이 guard의 이유를 그대로 보인다."""
+    mod = _load("tt_oc", TTOC)
+    monkeypatch.setenv("OPENCODE_CONFIG", "")
+    monkeypatch.setenv("OPENCODE_EXPERIMENTAL_PLAN_MODE", "")
+    assert mod.refused_env(os.environ) == []
+    child = mod.child_env({"plugin_root": "/p", "work_root": "/w"})
+    assert "OPENCODE_CONFIG" not in child and "OPENCODE_EXPERIMENTAL_PLAN_MODE" not in child
+    meta = {"plugin_root": str(REPO / "plugin"), "work_root": str(tmp_path)}
+    rows = {r["check"]: r for r in mod.python_rows(tmp_path, meta, {**os.environ, "TT_PYTHON": sys.executable})}
+    detail = rows["guard-python"]["detail"]
+    assert rows["guard-python"]["status"] == "fail" and "guard가 읽기 호출을 거부한다" in detail, rows
+    assert "설정을 덮는 환경변수(OPENCODE_CONFIG, " in detail and "pip install" not in detail, detail
+    monkeypatch.delenv("OPENCODE_CONFIG")
+    monkeypatch.delenv("OPENCODE_EXPERIMENTAL_PLAN_MODE")
+    rows = {r["check"]: r for r in mod.python_rows(tmp_path, meta, {**os.environ, "TT_PYTHON": sys.executable})}
+    assert rows["guard-python"]["status"] == "ok", rows
+
+
+def test_doctor_guard_python_without_yaml_fails(tmp_path):
+    """guard가 쓰는 python에 PyYAML이 없으면(의존성은 venv에만, PATH의 python3은 시스템 것) doctor가 모듈 이름으로 실패한다.
+    실제 oc_adapter.py selftest를 yaml import가 깨진 python으로 돌린다."""
+    mod = _load("tt_oc", TTOC)
+    (tmp_path / "yaml.py").write_text("raise ModuleNotFoundError(\"No module named 'yaml'\", name='yaml')\n", encoding="utf-8")
+    meta = {"plugin_root": str(REPO / "plugin"), "work_root": str(tmp_path)}
+    base = {**os.environ, "TT_PYTHON": sys.executable}
+    ok = {r["check"]: r for r in mod.python_rows(tmp_path, meta, base)}
+    assert ok["guard-python"]["status"] == "ok", ok
+    rows = {r["check"]: r for r in mod.python_rows(tmp_path, meta, {**base, "PYTHONPATH": str(tmp_path)})}
+    assert rows["guard-python"]["status"] == "fail" and "yaml 모듈이 없다" in rows["guard-python"]["detail"], rows
+    assert sys.executable in rows["guard-python"]["detail"]
+    rows = {r["check"]: r for r in mod.python_rows(tmp_path, meta, {**base, "TT_PYTHON": str(tmp_path / "none")})}
+    assert rows["guard-python"]["status"] == "fail" and "실행하지 못했다" in rows["guard-python"]["detail"], rows
+    assert "TT_PYTHON을" in rows["guard-python"]["detail"]
+    # script-python은 자식 PATH의 python3이다 — TT_PYTHON으로는 고쳐지지 않으므로 그 안내를 하지 않는다
+    rows = {r["check"]: r for r in mod.python_rows(tmp_path, meta, {**base, "PATH": str(tmp_path / "nobin")})}
+    detail = rows["script-python"]["detail"]
+    assert rows["script-python"]["status"] == "fail" and "실행하지 못했다" in detail and "TT_PYTHON" not in detail, rows
+    assert "PATH의 python3" in detail and rows["guard-python"]["status"] == "ok", rows
+
+
+def test_recorded_opencode_used_and_version_change_flagged(env):
+    """install이 tt-oc.json에 남긴 opencode(opencode_bin)를 TT_OPENCODE·--opencode가 없으면 쓴다(PATH의 opencode가 스스로
+    업데이트돼도). 그 바이너리의 버전이 바뀌면 doctor가 "기록한 opencode가 바뀌었다"로 실패한다."""
+    write_meta(env["proj"], env["plug"], env["work"], opencode_bin=str(env["stub"]))
+    base = {k: v for k, v in env["env"].items() if k != "TT_OPENCODE"}
+
+    def doctor(**extra):
+        r = subprocess.run([sys.executable, str(TTOC), "--project", str(env["proj"]), "doctor", "--json"],
+                           env={**base, **extra}, capture_output=True, text=True, timeout=60, check=False)
+        return r.returncode, {x["check"]: x for x in json.loads(r.stdout)["rows"]}
+
+    code, rows = doctor()
+    assert rows["opencode-version"]["status"] == "ok" and calls(env)[0]["args"] == ["--version"], rows
+    code, rows = doctor(STUB_VERSION="2.3.0")
+    assert code == 2 and rows["opencode-version"]["status"] == "fail"
+    detail = rows["opencode-version"]["detail"]
+    assert "설치 때 기록한 opencode" in detail and "바뀌었다" in detail and "직접 실행하지 않는다" in detail, detail
+    write_meta(env["proj"], env["plug"], env["work"], opencode_bin=str(env["tmp"] / "gone" / "opencode"))
+    code, rows = doctor()
+    detail = rows["opencode-version"]["detail"]
+    assert code == 2 and "가 없다(지워졌거나 옮겨졌다)" in detail and "바뀌었다" not in detail, detail
 
 
 def test_git_safe_env_for_children_doctor_row_and_publish(env, monkeypatch):

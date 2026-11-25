@@ -106,8 +106,10 @@ def normalize_ts(value, tz_name: str | None, year: int | None) -> datetime | Non
     if not isinstance(value, str) or not value.strip():
         return None
     text = value.strip()
-    try:
-        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    try:     # `+0900`(콜론 없는 오프셋)과 3·6자리가 아닌 초 소수는 3.11부터만 fromisoformat이 읽는다 — 3.10(사내)에서도 같게
+        iso = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", text.replace("Z", "+00:00"))
+        iso = re.sub(r"(\d:\d{2})\.(\d+)", lambda m: f"{m.group(1)}.{(m.group(2) + '00000')[:6]}", iso)
+        dt = datetime.fromisoformat(iso)
     except ValueError:
         match = STAMP_RE.fullmatch(text)
         if not match:
@@ -123,11 +125,12 @@ def normalize_ts(value, tz_name: str | None, year: int | None) -> datetime | Non
 
 
 def coverage(files: list[list]) -> dict:
-    """파일 시각 범위와 시계 이상. 이상 판정은 파일마다 파일 순서로 한다. 줄 객체는 `dt`(UTC)만 쓴다."""
+    """파일 시각 범위와 시계 이상. 이상 판정은 파일마다 파일 순서로 한다. 줄 객체는 `dt`(UTC)와, 있으면 `pid`·`tid`를 쓴다
+    (앞뒤 줄 모두 값이 있고 0이 아니면 이상 항목에 `same_pid`·`same_tid` — 0은 모름으로 본다)."""
     first = last = None
     anomalies: list[dict] = []
     for lines in files:
-        prev = None
+        prev = prev_line = None
         for line in lines:
             if first is None or line.dt < first:
                 first = line.dt
@@ -141,10 +144,13 @@ def coverage(files: list[list]) -> dict:
                 elif delta >= JUMP_THRESHOLD_SEC:
                     kind = "jump"
                 if kind:
-                    anomalies.append(
-                        {"ts": format_ts(line.dt), "kind": kind, "delta_sec": round(delta, 3)}
-                    )
-            prev = line.dt
+                    item = {"ts": format_ts(line.dt), "kind": kind, "delta_sec": round(delta, 3)}
+                    for key in ("pid", "tid"):     # 앞뒤 줄이 같은 프로세스·스레드인가(단서일 뿐, sim1122 F6·RP-9)
+                        pair = (getattr(prev_line, key, None), getattr(line, key, None))
+                        if None not in pair and 0 not in pair:     # 0은 모름(oFono 파서는 pid 없는 줄에 0을 넣는다)
+                            item[f"same_{key}"] = pair[0] == pair[1]
+                    anomalies.append(item)
+            prev, prev_line = line.dt, line
     return {
         "first_ts": format_ts(first) if first else None,
         "last_ts": format_ts(last) if last else None,

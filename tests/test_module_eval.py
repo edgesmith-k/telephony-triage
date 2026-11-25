@@ -1697,9 +1697,9 @@ def test_token_goal_in_gate():
 def test_deep_output_spec_bytes_pinned():
     # F7: deep 출력 형식은 템플릿 시험·층 목록 대조가 글로 쓴다 — 바이트 고정
     assert hashlib.sha256(me.OUTPUT_SPECS["ofono"].encode()).hexdigest() == \
-        "d6ca70b26a6e607585c49de3906f93c6d8c78a52e8ddbde51fff46f40aff2ecb"
+        "7cebd3c07b1753fcc8152d1bea8eedfc21bfbb468b74fdd36b4d5b191c8c6f67"      # 11/25 후보 확인 칸
     assert hashlib.sha256(me.OUTPUT_SPECS["android"].encode()).hexdigest() == \
-        "b810d8defd757a1f4e65ccf0171e6f83a8a4e5d2124ee8e1220ed7026d1d76ff"
+        "9b0d9a7eb75d77cf4df2088eb5b69127264f456a37509f93bac740b4ccbae320"
     for p in ("ofono", "android"):
         ex = me.EXPLORE_SPECS[p]
         assert me.OUTPUT_SPECS[p].split("\n")[0] in ex and "가장 유력: <가설 번호 하나>" in ex and "분석 스킬 의견" not in ex

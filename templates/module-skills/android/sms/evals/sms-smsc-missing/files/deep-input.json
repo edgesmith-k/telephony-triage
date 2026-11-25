@@ -10,11 +10,19 @@
    "type": "SMS-001",
    "cause": "SMS-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "sms",
+   "evidence": [
+    "00:03:05.340 GsmSMSDispatcher: sendSms: isIms()=false mRetryCount=0 mImsRetry=0 mMessageRef=0 mUsesImsServiceForIms=false SS=3 {x-message-id:0}"
+   ]
   }
  ],
+ "decision": {
+  "state": "held",
+  "reason": "no_reference"
+ },
  "issue_summary": "문자 전송 실패 (합성)",
- "occurred_at": "2026-11-11T00:03:05+00:00",
+ "occurred_at": "2026-11-11T00:03:05.000Z",
  "events": "events.json",
  "timeline": "timeline.md",
  "log_paths": [

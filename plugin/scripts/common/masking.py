@@ -766,6 +766,18 @@ def nul_warning(n: int, total: int, where: str) -> str:
     return f"{where}: NUL 든 줄 {n}개(전체 {total}줄 중)를 {NUL_LINE}로 비웠다 — {NUL_HELP}"
 
 
+_PARTIAL_TOKEN = re.compile(r"<(?:[A-Z][A-Z0-9]*(?:#\d*)?|HEXDUMP(?: \d*B?)?|REDACTED(?::[A-Z0-9]*)?)?$")
+
+
+def clip(text: str, limit: int) -> str:
+    """앞 `limit`자. 자른 끝에 걸린 토큰 조각(`<CRED#1>`의 `<CRED`)은 뺀다 — 조각이 다시 값으로 잡히지 않게(사내 A589)."""
+    if len(text) <= limit:
+        return text
+    out = text[:limit]
+    m = _PARTIAL_TOKEN.search(out)
+    return out[:m.start()] if m else out
+
+
 URL_USERINFO = re.compile(r"://[^/@\s]+@")
 
 

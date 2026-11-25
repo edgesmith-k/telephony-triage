@@ -34,6 +34,23 @@
   "events": 31,
   "masked": null
  },
+ "decision": {
+  "state": "held",
+  "reason": "no_candidate",
+  "selected": null,
+  "location": {
+   "state": "none",
+   "source": null,
+   "kind": null
+  },
+  "check": {
+   "why": null,
+   "checked": 0,
+   "total": 5
+  },
+  "events": [],
+  "events_total": 0
+ },
  "no_candidate": {
   "search_hits": [],
   "error_events": [
@@ -83,6 +100,10 @@
  "explore": {
   "reason": "no_candidate",
   "when": "ask"
+ },
+ "investigate": {
+  "mode": true,
+  "reason": "후보 없음"
  },
  "must_show": [
   "로그 범위: 2026-09-22T10:10:19.318Z ~ 2026-09-22T10:10:22.418Z (일부만 포함), 시계 이상 없음"

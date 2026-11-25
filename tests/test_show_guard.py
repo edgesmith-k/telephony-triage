@@ -1184,7 +1184,8 @@ def test_module_questions_do_not_block_like_explore_questions(tmp_path):
     import show_guard
     run = _job(tmp_path)
     for q in ("어느 모듈 문서로 볼까요? (모듈 신호 줄 수: data 12 · network 7)",
-              "고른 모듈 문서의 신호가 약합니다. 다른 모듈 문서로 바꿀까요? (모듈 신호 줄 수: sim 9 · data 2)"):
+              "고른 모듈 문서의 신호가 약합니다. 다른 모듈 문서로 바꿀까요? (모듈 신호 줄 수: sim 9 · data 2)",
+              "조사할까요? (심층 분석 뒤 탐색 분석, 토큰 추가 사용)", "조사할까요?"):      # 조사 모드 한 질문(11/25, 짧은 꼴 R-33)
         assert show_guard.EXPLORE_Q.search(q)
         assert stop(write(tmp_path, prompt("p"), run, say(q)), q) is None          # 리포트 전 질문(Step 5)은 막지 않는다
     also = "모뎀 모듈 문서도 함께 볼까요? (모뎀 신호: mgmtd 2줄)"
@@ -1240,7 +1241,7 @@ def test_deep_rerun_opens_new_obligation_with_head_line(tmp_path):
 
 def test_clean_deep_line_required_at_step7_even_if_it_mentions_deep(tmp_path):
     """b2fix eval 40: 지어낸 인용이 없는 심층 check-output도 결과 줄을 Step 7 질문 전에 보인다 — "심층 분석 … 할까요?"를 담은
-    Step 7 질문도 본다. 5-2 모듈 질문·ask_switch는 보지 않는다."""
+    Step 7 질문도 본다. 5-2 모듈 질문은 보지 않는다."""
     path = write(tmp_path, prompt("p"), bash("c", CHECK_CMD, CLEAN_OUT), say("심층 분석을 마쳤습니다."), extra=CLEAN)
     out = pre("pre-ask", path, ASK, {"question": "어떻게 기록할까요?", "options": STEP7})        # (a)
     assert decision(out) == "deny"

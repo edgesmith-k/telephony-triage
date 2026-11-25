@@ -19,7 +19,7 @@
    "$comment": "required는 fit()이 지우지 않는 최상위 키만이다(triage.py assemble이 null·[]·{} 키를 뺀 뒤 fit). candidates는 후보가 없으면 []라서 빠지고, no_candidate는 후보가 있으면 null이라 빠지므로 required가 아니다. code는 resolve_code가 항상 비어 있지 않은 객체({skipped: true} 이상)를 내고 fit이 건드리지 않는다.",
    "type": "object",
    "additionalProperties": false,
-   "required": ["status", "key", "generated_at", "request_hash", "mode", "logs", "code", "files", "truncated"],
+   "required": ["status", "key", "generated_at", "request_hash", "mode", "logs", "decision", "code", "files", "truncated"],
    "properties": {
     "status": {"const": "ok"},
     "key": {"type": "string"},
@@ -47,20 +47,20 @@
     "read_only_hint": {"type": "string", "description": "mode: read-only일 때만, config.py check 사유 메시지, ≤200바이트, 4KB 압축 시 100"},
     "snapshot": {"type": "object"},
     "plan": {"type": "object", "description": "analysis-only면 {exists, source, pr_number}만. choice resume이면 next(Step 7 없이 기존 계획으로 Step 8)"},
-    "issue": {"type": "object", "description": "failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보"},
+    "issue": {"type": "object", "description": "failed_step {text(≤120, 4KB 압축 시 60), source}는 있을 때만, 보조 정보. submitter_note(있을 때만 — 포털이 넘긴 제출자 참고 글 `제출자 참고(판단 근거·단서 아님): …`, ≤2000자+머리말, 4KB 압축 때 가장 먼저 머리말 포함 200자, 다른 후보 근거를 다 빼기 전에 80자, 마지막 단계에서 `issue.json text.note 참고`; 판단 근거·단서가 아니다. 이슈 DB 레코드 note와 다르다)"},
     "step_anchor": {
      "type": "object",
      "description": "앵커(기준 줄·실패 스텝)·실패 스텝·시계 정렬·스텝 순서 시도·기준 줄 입력·시각 답 full·시각 입력 없는 전체 분석이 있을 때만",
      "required": ["source"],
      "properties": {
-      "outside_errors": {"type": "integer", "description": "앵커가 있고 Jira 발생 시각이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음"},
-      "source": {"enum": ["look_at", "log_marker", "steps_file", "step_order", "issue", "symptom_scan", "none"]},
+      "outside_errors": {"type": "integer", "description": "앵커가 있고 입력한 발생 시각(`--answer time=`·`--issue-meta`, Jira 칸 값 아님)이 분석 범위 밖·로그 범위 안일 때 그 시각 근처의 범위 밖 오류 이벤트 수, 0이면 키 없음, 근거·점수에 쓰지 않음"},
+      "source": {"enum": ["look_at", "log_marker", "steps_file", "step_order", "issue", "symptom_scan", "none"], "description": "issue = 입력한 발생 시각(`--answer time=`·`--issue-meta` occurred_at) 기준, Jira 발생 시각 칸은 쓰지 않음(D4)"},
       "step": {"type": "string", "description": "≤80, 4KB 압축 시 40. look_at(기준 줄)이면 없음"},
       "step_from": {"const": "marker", "description": "마커의 스텝을 쓴 경우만"},
       "span": {"type": "array", "description": "[시작|null, 실패]"},
       "issue_gap_min": {},
       "focus": {"type": "array", "maxItems": 3, "description": "유형 ID"},
-      "time_candidates": {"type": "array", "maxItems": 3, "description": "앵커(기준 줄을 줬으나 로그에서 못 찾은 경우 포함)·Jira 시각·time 답이 다 없어 묻지 않고 로그 전체를 봤을 때(source symptom_scan)만: 증상 시그니처가 충족된 시각 후보 {ts, type}(이른 순, 없으면 빈 목록)", "items": {"type": "object", "required": ["ts", "type"], "properties": {"ts": {"type": "string"}, "type": {"type": "string"}}, "additionalProperties": false}},
+      "time_candidates": {"type": "array", "maxItems": 3, "description": "앵커(기준 줄을 줬으나 로그에서 못 찾은 경우 포함)·입력한 발생 시각·time 답이 다 없어 묻지 않고 로그 전체를 봤을 때(source symptom_scan)만: 증상 시그니처가 충족된 시각 후보 {ts, type}(이른 순, 없으면 빈 목록)", "items": {"type": "object", "required": ["ts", "type"], "properties": {"ts": {"type": "string"}, "type": {"type": "string"}}, "additionalProperties": false}},
       "clock": {"type": "object", "description": "{mode: manual|none, offset_sec?(manual), reason?(none, \"시계 차 모름\"; 4KB 압축 시 먼저 뺌)}"},
       "order": {"type": "object", "description": "{matched, observable, missed, last{step(≤40), ts}(step_order일 때, 4KB 압축 시 가장 먼저 뺌), reason?(앵커를 못 정해 issue로 돌아갈 때)}"},
       "look": {"type": "object", "description": "--look-at을 줬을 때만: hits(로그에서 일치한 줄 수, 못 찾으면 0), picked?(고른 순번, 1부터). 4KB 압축 시 flows 다음으로 뺌", "required": ["hits"], "properties": {"hits": {"type": "integer"}, "picked": {"type": "integer"}}, "additionalProperties": false}
@@ -82,9 +82,44 @@
       "uncollected_tags": {"type": "array", "maxItems": 3, "description": "{tag(≤40), lines, warn}; 후보 없음·1위 C=0일 때만, 파서 규칙에 없는 태그 힌트"}
      }
     },
+    "decision": {
+     "type": "object",
+     "description": "판단 상태(단계 5 자격 검사 — 실패 지점(기준)의 사건에 실제로 붙는 원인만 채택, 후보 목록·순서·점수는 그대로). 사유는 처음 맞는 것: 후보 없음(no_candidate) → 실패 지점 없음(no_reference) → 실패 지점에 DB 증상 사건 없음(symptom_not_found) → 여러 곳·사건마다 다른 원인(ambiguous) → 근처 줄·구간 끝 모름·안 나옴 미확인(ineligible) → 원인 판정 불가(cause_unjudged)·원인 미확인(cause_unconfirmed) → 채택(anchored_top: 기준 있음 + 자격 통과). fit_check는 check-output(탐색 적합성 확인 보류)만 쓴다. 4KB 압축 시 events만 줄인다(기준 사건은 원인마다 하나씩(≤3) 남기고 그 밖은 1개 → 0개, events_total은 남김)",
+     "additionalProperties": false,
+     "required": ["state", "reason", "selected", "location"],
+     "properties": {
+      "state": {"enum": ["accepted", "held"]},
+      "reason": {"enum": ["anchored_top", "no_reference", "no_candidate", "cause_unconfirmed", "cause_unjudged", "fit_check", "symptom_not_found", "ambiguous", "ineligible"]},
+      "selected": {"type": ["object", "null"], "description": "accepted면 채택 원인 후보의 {category, type, cause}(selected ∈ candidates — 1위가 아니면 report.md 판단 줄에 \"규칙 일치 n위\", --top 밖이면 후보 끝에 붙는다), held면 null", "required": ["category", "type", "cause"], "additionalProperties": false, "properties": {"category": {"type": ["string", "null"]}, "type": {"type": "string"}, "cause": {"type": "string"}}},
+      "location": {
+       "type": "object",
+       "description": "실패 지점: 기준 줄 ipc·token 일치 1개·로그 FAIL 마커 1개면 confirmed, 기준 줄 글자 일치는 한 곳이어도 found, 여럿이면 multiple, 로그 START 마커만·steps-file 시각·스텝 순서면 found, 앵커가 없으면 none(source·kind null). 앵커 없이 Jira 단서(문제 파악 problem.json 단서, 없으면 스크립트가 코멘트에서 뽑은 단서 — 스크립트 단서는 채택하지 않는 위치 후보)만 로그에서 찾았으면 source comment·state found(확정 아님, 단서 일치 여러 곳이면 multiple). 채택이면 자격 검사 결과로 다시 정한다: confirmed/point는 근거 줄 same_line(기준 줄이 붙은 사건의 증상·원인 근거 줄이거나 같은 RIL 요청)만, cp_point는 found/point, range·조건 줄로만 맞은 same_line은 found(kind 그대로), comment 출처는 늘 found. model = `run --look-at-source model`(모델이 코멘트에서 고른 기준 줄 — 기준 줄과 같이 판정하되 confirmed로 올리지 않는다, 채택이어도 found)",
+       "additionalProperties": false,
+       "required": ["state", "source", "kind"],
+       "properties": {
+        "state": {"enum": ["none", "found", "confirmed", "multiple"]},
+        "source": {"enum": ["look_at", "log_marker", "steps_file", "step_order", "comment", "model", null]},
+        "kind": {"enum": ["point", "near", "range", null], "description": "기준 줄 ipc·token 일치 point, 글자 일치 near(한 곳이어도 found), 마커·steps-file 구간 range"}
+       },
+       "if": {"properties": {"state": {"const": "none"}}},
+       "then": {"properties": {"source": {"const": null}, "kind": {"const": null}}},
+       "else": {"properties": {"source": {"type": "string"}, "kind": {"type": "string"}}}
+      },
+      "check": {"type": "object", "description": "자격 검사 요약(표시 전용): why(세부 사유 — same_line|cp_point|near|range|near_without_symptom|range_end_unknown|range_without_symptom|no_event_at_reference|typeless_failure_within_link|typeless_failure_in_range|typeless_failure_near|other_failure_first|other_failure_last|same_line_typeless|no_event_in_range|no_allowed_event_near|not_in_db|comment_unconfirmed|locations|slots|sources|multiple_events|absence_unverified|cause_after_event|no_cause_before_event|cause_unjudged|cause_not_in_candidates, 기준 없으면 null), checked(기준에 붙어 검사한 사건 수), total(실패 사건 수 — 유형 없는 파생 오류 이벤트 포함), via?(명시 기준 없이 코멘트 단서로 사건을 잡았을 때만 그 단서: comment(코멘트 번호|description), clue(ipc|ipc_name|log_line), how(ipc|token|text), places, origin(script = 스크립트가 코멘트에서 뽑음, problem = 문제 파악 problem.json))", "additionalProperties": false, "required": ["why", "checked", "total"], "properties": {"why": {"type": ["string", "null"]}, "checked": {"type": "integer"}, "total": {"type": "integer"}, "via": {"type": "object", "additionalProperties": false, "required": ["comment", "clue", "how", "places", "origin"], "properties": {"comment": {"type": ["integer", "string"]}, "clue": {"enum": ["ipc", "ipc_name", "log_line"]}, "how": {"type": ["string", "null"]}, "places": {"type": "integer"}, "origin": {"enum": ["script", "problem"]}}}}},
+      "events": {"type": "array", "maxItems": 3, "description": "유형 사건(증상 시그니처 1회 충족, 기준에 붙은 것 먼저 그다음 시각 순) {type, at, line(f:L), phone, absence(증상 시그니처에 must_not_match), ref(기준에 붙음), result: adopted|held|observed, cause(붙은 원인 1순위|null), why(원인이 안 붙은 이유|null), gap_s(사건 시각 − 붙은 원인 근거 마지막 줄, 초), not_a_bug?(기준 사건이고 그 원인이 이슈 DB에서 버그 아님 — fix.status not-a-bug 또는 resolution_type user-setting일 때만 true)}. 전체는 JOB/eligibility.json. 명시 기준 없이 단서만 있을 때 단서 하나라도 보류·버림이면 기준 사건이 없다(ref 모두 false)", "items": {"type": "object", "additionalProperties": false, "required": ["type", "at", "line", "phone", "absence", "ref", "result", "cause", "why", "gap_s"], "properties": {"type": {"type": "string"}, "at": {"type": "string"}, "line": {"type": ["string", "null"]}, "phone": {"type": ["integer", "null"]}, "absence": {"type": "boolean"}, "ref": {"type": "boolean"}, "result": {"enum": ["adopted", "held", "observed"]}, "cause": {"type": ["string", "null"]}, "why": {"type": ["string", "null"]}, "gap_s": {"type": ["number", "null"]}, "not_a_bug": {"const": true}}}},
+      "events_total": {"type": "integer", "description": "유형 사건 수(events가 4KB 압축으로 줄어도 남는다)"},
+      "counter": {"type": "object", "description": "accepted이고 심층 분석 의견의 원인 ID가 채택 원인과 다를 때만(check-output --for deep)", "additionalProperties": false, "required": ["cause"], "properties": {"cause": {"type": ["string", "null"]}}}
+     },
+     "allOf": [
+      {"if": {"properties": {"state": {"const": "accepted"}}}, "then": {"properties": {"reason": {"const": "anchored_top"}, "selected": {"type": "object"}}}},
+      {"if": {"properties": {"state": {"const": "held"}}}, "then": {"properties": {"reason": {"not": {"const": "anchored_top"}}, "selected": {"const": null}}, "not": {"required": ["counter"]}}},
+      {"if": {"properties": {"reason": {"const": "no_reference"}}}, "then": {"properties": {"location": {"properties": {"state": {"const": "none"}}}}}}
+     ]
+    },
     "candidates": {
      "type": "array",
-     "maxItems": 3,
+     "maxItems": 4,
+     "description": "규칙 일치 상위 3 — 채택 원인이 그 밖이면 4번째로 붙는다(decision.selected ∈ candidates)",
      "items": {"$ref": "#/$defs/candidate"}
     },
     "pending_causes": {"type": "array"},
@@ -101,6 +136,7 @@
      }
     },
     "partial": {"type": "array", "maxItems": 3, "description": "C′ 부분 일치(판정·점수 아님, S/C 불변; 후보 없음·원인 미확인일 때만, 04-parser-matching.md §5.12). {kind: missing|absent|order|window|blocked, type, cause, signature, matched: \"m/n\", missing[≤3 조건 설명], blocked_by?, at[≤3 f:L], code[]?(\"<조건>:<상태>[:<root 키>:<경로>:<줄>]\")}; 4KB 압축 시 partial[1:] → missing 40자 → 전체 제거", "items": {"type": "object", "required": ["kind", "type", "signature", "matched"], "additionalProperties": false, "properties": {"kind": {"enum": ["missing", "absent", "order", "window", "blocked"]}, "type": {"type": "string"}, "cause": {"type": ["string", "null"]}, "signature": {"type": "string"}, "matched": {"type": "string"}, "missing": {"type": "array", "maxItems": 3}, "blocked_by": {"type": "string"}, "at": {"type": "array", "maxItems": 3}, "code": {"type": "array", "maxItems": 3}}}},
+    "near_causes": {"type": "array", "maxItems": 3, "description": "조사 모드(investigate.mode)일 때만 DB 원인 후보(표시 전용, 판정·점수·순위 아님, 반입 7 B-1): 부분 일치(partial 순서, 맞은 조건 0개 제외) 다음 낱말 검색 결과(no_candidate.search_hits가 있으면 그것, 없으면 가린 이슈 요약 문장 한 번의 db_search), ID로 중복 제거, 낱말 검색 결과는 이미 candidates인 유형·원인과 그 유형의 원인 제외(조건이 맞은 부분 일치 원인은 남김), 유형과 그 원인이 같이 있으면 원인만. {id(원인 또는 유형 ID), title?(≤60자), matched?(\"m/n\"), missing?[≤3 없는 조건 ≤40자], at?[≤3 맞은 시각], note?(검색만 걸림: 낱말 일치만(로그 대조 안 함))}; 4KB 압축 시 조사 결론 줄이기 다음 near_causes[1:] → 전체 제거", "items": {"type": "object", "required": ["id"], "additionalProperties": false, "properties": {"id": {"type": "string"}, "title": {"type": "string"}, "matched": {"type": "string"}, "missing": {"type": "array", "maxItems": 3}, "at": {"type": "array", "maxItems": 3}, "note": {"const": "낱말 일치만(로그 대조 안 함)"}}}},
     "flows": {"type": "array", "maxItems": 3, "description": "성공 흐름 점검(판정·점수 아님, S/C 불변; 이슈 DB에 흐름 파일이 있을 때만, 04-parser-matching.md §5.13). 분석 범위 안 인스턴스 중 벗어난 것 먼저·발생 시각에 가까운 순 {flow: \"<category>/<id>\", key(시작 줄 태그), step?(멈춘 단계 id, 끝까지 ok면 없음), verdict: ok|값이상|없음|로그끝|-, at?(f:L), causes?[≤3 멈춘 단계가 값이상·없음일 때만, 그 단계에 flow_step이 걸린 active 원인 ID — 매칭 후보 순위 먼저]}; 4KB 압축 시 다른 후보 근거보다 먼저 flows[1:] → 전체 제거", "items": {"type": "object", "required": ["flow", "key", "verdict"], "additionalProperties": false, "properties": {"flow": {"type": "string"}, "key": {"type": "string"}, "step": {"type": "string"}, "verdict": {"enum": ["ok", "값이상", "없음", "로그끝", "-"]}, "at": {"type": "string"}, "causes": {"type": "array", "maxItems": 3}}}},
     "code": {
      "type": "object",
@@ -116,8 +152,11 @@
     },
     "analyzer": {"type": "object", "description": "{skill, when, note?} 설치 분석 스킬(레거시·prefer: skill) | {category, when, note?} 모듈 스킬 | {error, when} 설정 오류 (note: when ask일 때만 답 전 안내)"},
     "explore": {"type": "object", "description": "{reason: no_candidate|cause_unconfirmed|fit_check(1위 C=1, run --explore·explore.when: always·--look-note(확인할 내용)일 때만 — 끄는 쪽이 이긴다: never·--no-explore면 열지 않는다), when: ask|always|never, note?: when ask일 때만 답 전 안내}(run은 타임라인을 만들지 않는다)"},
-    "prior": {"type": "object", "description": "재실행일 때 이전 실행이 남긴 것(hyps·none·looked 중 하나라도 있을 때만, 4KB 압축 시 hyps → 전체 순으로 뺀다): top(직전 1위 원인|유형), hyps[≤3](근거 원문 검사를 통과한(원문에 없는 인용 0, 검사 건너뜀 아님) 이전 탐색 가설 머리와 반대 근거, ≤120), none(이전 탐색 `가설 없음` 이유, ≤120), looked[≤3](이전 실행의 가린 기준 줄, ≤80)", "properties": {"top": {"type": "string"}, "hyps": {"type": "array", "maxItems": 3}, "none": {"type": "string"}, "looked": {"type": "array", "maxItems": 3}}, "additionalProperties": false},
+    "investigate": {"type": "object", "description": "조사 모드(run이 `issuepost.investigate_mode`로 판정 — 포털·check-output은 이 칸을 읽는다): mode(1위 후보가 없거나 1위 C=0이면 true), reason?(mode true일 때만 후보 없음|1위 C=0)", "required": ["mode"], "properties": {"mode": {"type": "boolean"}, "reason": {"enum": ["후보 없음", "1위 C=0"]}}, "additionalProperties": false},
+    "investigation": {"type": "object", "description": "조사 결론(조사 모드에서 `check-output --for explore`가 쓴다, run은 쓰지 않는다 — LLM 탐색 결론의 스크립트 검증 게이트 결과, 점수·분류·decision과 별개): status(identified = 게이트 6개 모두 통과|insufficient_evidence), hyp(가장 유력, 없으면 1 — 가설 없음이면 null), cause(가설 머리 ≤120자|null), layer(책임 경계 AP 내부|AP-CP 경계|CP 내부|CP-망 경계|망|환경|모름|null), first_divergence({step, expect ≤80자}|null — 첫 갈라짐 단계 표의 행), gate[{name, ok, why}](인용 원문·첫 어긋남·책임 층·실패 뒤 흔적·숫자 메커니즘·외부 근거, why ≤80자), explore_sha(검사한 explore-output.md sha256), normal(true만 — 가장 유력이 정상이고 정상 근거 줄이 원문 확인, status는 insufficient_evidence), top_match(같다고 본 원인 ID — 탐색 `후보 확인`이 규칙 1위 ID(1위가 유형만이면 그 유형의 원인 ID)를 맞음이라 함, `규칙 1위와 같음` 표시)", "required": ["status", "gate", "explore_sha"], "properties": {"status": {"enum": ["identified", "insufficient_evidence"]}, "hyp": {"type": ["integer", "null"]}, "cause": {"type": ["string", "null"]}, "layer": {"type": ["string", "null"]}, "first_divergence": {"type": ["object", "null"]}, "gate": {"type": "array", "items": {"type": "object", "required": ["name", "ok", "why"], "properties": {"name": {"type": "string"}, "ok": {"type": "boolean"}, "why": {"type": "string"}}, "additionalProperties": false}}, "explore_sha": {"type": "string"}, "normal": {"const": true}, "top_match": {"type": "string"}}, "additionalProperties": false},
+    "prior": {"type": "object", "description": "재실행일 때 이전 실행이 남긴 것(hyps·none·unfit·looked 중 하나라도 있을 때만, 4KB 압축 시 hyps → 전체 순으로 뺀다): top(직전 1위 원인|유형), hyps[≤3](근거 원문 검사를 통과한(원문에 없는 인용 0, 검사 건너뜀 아님) 이전 탐색 가설 머리와 반대 근거, ≤120), none(이전 탐색 `가설 없음` 이유, ≤120), unfit(이전 탐색의 1위 부적합 보류 `<원인 ID> — <이유>`, ≤120), unfit_reason?(unfit의 보류 사유 normal(탐색 분석이 설계상 정상 동작으로 봄)|unfit, 없으면 unfit — 옛 기록), looked[≤3](이전 실행의 가린 기준 줄, ≤80)", "properties": {"top": {"type": "string"}, "hyps": {"type": "array", "maxItems": 3}, "none": {"type": "string"}, "unfit": {"type": "string"}, "unfit_reason": {"enum": ["normal", "unfit"]}, "looked": {"type": "array", "maxItems": 3}}, "additionalProperties": false},
     "warnings": {"type": "array"},
+    "next": {"type": "string", "description": "탐색 중 다시 한 run(타임라인을 다시 만든 경우)이 모듈 보기·심층 분석(5-1) 결과도 지웠을 때만: 다시 받을 명령·답에 다시 적을 줄 안내(run 출력에만 — analysis.json에는 없다)"},
     "notes": {"type": "array", "description": "잔여 worktree·도구 브랜치 안내 등"},
     "lock_owner": {"type": "string"},
     "lock_released": {"const": true, "description": "analysis-only가 ok로 끝나 lock을 풀었을 때만(lock_owner 없음)"},
