@@ -570,6 +570,29 @@ def test_guard_merge_and_skill_apply_ask_direct_gh_merge_asks():
     assert decision(guard(ws, "Write", {"file_path": str(copy), "content": "x"}, ws.base)) is None
 
 
+def test_guard_module_patch_pr_records_and_temp_clone():
+    """모듈 학습(반입 7 A-3): `skill_patch.py --pr`은 ask, `--module`(patch만)은 판정 없음. `module-suggestions/` 기록은 직접
+    쓰거나 지우면 거부. 임시 clone `JOB/skill-wt`에서 직접 git push·commit은 거부(규칙 12 (a)), 읽기 git은 통과."""
+    ws = shared()
+    S = f'python3 "{ws.root}/scripts/skill_patch.py"'
+    for cmd in (f"{S} MOCK-1 --pr --sha {'c' * 64}", f"{S} MOCK-1 --module --pr --sha {'c' * 64} --json"):
+        out = bash(ws, cmd, ws.base)
+        assert decision(out) == "ask" and "skill_patch.py --pr" in out["permissionDecisionReason"], cmd
+    assert decision(bash(ws, f"{S} MOCK-1 --module --line 1,2", ws.base)) is None
+    job = ws.work / "MOCK-1"
+    for target in (job / "module-suggestions" / "module.patch", job / "module-suggestions" / "module.meta.json",
+                   job / "module-suggestions" / "pr-body.md"):
+        out = guard(ws, "Write", {"file_path": str(target), "content": "{}"}, ws.base)
+        assert decision(out) == "deny" and "skill_patch.py --module만" in out["permissionDecisionReason"], target
+        assert decision(bash(ws, f"rm -f {target}", ws.base)) == "deny", target
+    wt = job / "skill-wt"
+    for cmd in (f"git -C {wt} push origin HEAD:refs/heads/tt-module/MOCK-1-9", f"cd {wt} && git push",
+                f"git -C {wt} commit -qm x"):
+        out = bash(ws, cmd, ws.base)
+        assert decision(out) == "deny" and "규칙 12" in out["permissionDecisionReason"], cmd
+    assert decision(bash(ws, f"git -C {wt} log --oneline -1", ws.base)) is None
+
+
 def test_guard_module_eval_asks():
     """모듈 eval: `module_eval.py`는 자식 `claude -p`를 띄워 비용이 든다 — `--dry-run`·`--probe-restricted`까지 모든 호출이
     ask(낱말 그물: 이름 `module_eval` + 낱말 `module`, 규칙 7). `--module`이 없는 `--help`는 판정할 것이 없다."""

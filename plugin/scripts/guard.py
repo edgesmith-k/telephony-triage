@@ -26,7 +26,7 @@ TODO(SITE:S3) 플러그인 hook에 보이는 MCP 도구 이름이 `mcp__<server>
 | 8 | 같은 규칙, Bash: clone 본체에서 브랜치·파일을 바꾸는 git·`gh pr checkout`, clone 안으로의 파일 쓰기(리디렉션·tee·cp·rm·`sed -i` 등, 플러그인 스크립트 출력 인자 `--out`·`--preview`·`--meta-out`·`mask_pii --in-place`·`jira_fields extract --consume` — `_script_out_targets`) 거부. migrate 브랜치 생성(깨끗한 트리)과 clone을 고치는 `db_build.py --write`(`--db` 값이 clone 안이거나 `--db` 없이 cwd가 clone 본체)는 ask. 인터프리터 인라인 코드(`python3 -c`·`perl -e`·`python3 - <<EOF` 본문)에 clone 안 경로 낱말이 있거나(기록 경로 ask는 규칙 2행 — 이 ask와 따로 남는다) `ln`의 원본이 clone 안이면 ask(셸 파서는 코드 안 쓰기를 보지 못한다 — `check_inline_code`. `/` 없는 상대 이름은 보지 않는다) | Bash, clone 본체 |
 | 10 | 로그 원문 통독 차단: cat·tac·nl·less·more·bat·strings·zcat·zless·bzcat·xzcat, `head/tail -c`, `unzip -p/-c`가 로그 원문·zip·bugreport·`events*.json`·`issue_raw.json`·`match.json`을 통째로 읽으면 거부(`fixtures/`·`draft/` 제외, 사용자 config와 무관). 인터프리터 인라인 코드가 그 파일 경로를 담으면 ask(`check_inline_code`) | Bash |
 | 11 | 원격 쓰기 확인(거친 판정 — 대상 레포를 풀지 않는다: `-R`·`GH_REPO`·URL·cwd 원격을 보지 않으므로 이슈 DB가 아닌 레포의 gh 병합·쓰기도 ask): **병합 계열**(`gh pr merge`, REST `…/merge`·`…/merges`, GraphQL `mergePullRequest`·`enqueuePullRequest`·`mergeBranch`, 병합 별칭 `gh alias set|import`, MCP 단어 속 `merge`·입력 `action`·`method` merge…)는 ask(`GH_MERGE_ASK`·`MCP_MERGE_ASK` — 병합은 서버 브랜치 보호가 승인 1을 강제한다, 전제 site_checks `s4a.protection_guard`). 그 밖 gh 쓰기(`pr` 읽기 목록 밖 동작, 그룹의 읽기 목록 밖 동작, 모르는 그룹 — 이미 만든 별칭 실행 포함, `api`의 GET 아닌 메서드·필드·`--input`, GraphQL `mutation`·못 읽은 본문)와 비트래커 MCP 쓰기형 도구(`mcptools.is_write`)는 ask. **Claude Approve·리뷰 기각은 거부**(서버가 막지 못한다 — 낱말 수준, `_gh_kind`): 따옴표를 뗀 명령 글·argv·gh가 읽는 파일(`@파일`·`--input`·`$(cat 파일)`·heredoc stdin)에 `approve`·`dismiss`(상태 값 `APPROVED`·`DISMISSED`는 아니다), `gh pr review`의 `-a`·`-a=`·`--approve`·셸 값 옵션(`_gh_review_approves`), REST 리뷰 엔드포인트의 `event=@…`·셸 값·못 읽은 본문, GraphQL 리뷰 mutation의 변수 `event`와 셸 값·못 읽은 본문, MCP 단어 속 approve·dismiss와 동작 칸(`event`·`action`·`method`·`*event`). 그것일 수 있는 꼴도 거부: 셸이 정하는 그룹·`pr`·`alias` 동작·api 엔드포인트 끝 칸, 리뷰·Approve·기각 별칭과 못 읽은 별칭 파일·셸 값·자리 표시(`$1`·`$@`)·셸 별칭(`-s`·`--shell`·`!…`). `GH_JSON_DEPTH_MAX`(64)보다 깊이 중첩한 JSON 본문은 못 읽은 본문이다(Python 판마다 다른 RecursionError에 기대지 않는다). heredoc 본문은 끝 표시를 인용했거나 `$`·백틱·`\\`가 없고 명령 글의 `<<` 수가 찾은 heredoc 수와 같을 때만, stdin(`-`·`@-`)은 그 호출 자신의 heredoc일 때만 읽은 것이다(`_heredoc_known`·`_gh_stdin_known`). 서버 브랜치 보호·ruleset 바꾸기(`…/branches/<b>/protection…`(브랜치에 `/`가 들어도)·`…/rulesets`의 쓰기, 레포 설정 쓰기(REST `repos/<o>/<r>`·`repositories/<id>`)의 `allow_auto_merge`·`delete_branch_on_merge` 켜기(거짓 `false`·`0` 밖 모든 값, `-f`·`-F`·`--input`·JSON 이스케이프), GraphQL `create|update|delete` + `BranchProtectionRule|RepositoryRuleset`)와 `gh repo edit --enable-auto-merge`·`--delete-branch-on-merge`도 거부(`PROTECTION_DENY` — 4-c 뒤 서버 보호가 유일한 병합 장치). PR 자동 병합 켜기(`gh pr merge --auto`·선택자 뒤 따옴표 밖 셸 값, GraphQL `enablePullRequestAutoMerge`, `--auto` 병합 별칭, MCP 단어 속 auto+merge)도 거부(`AUTO_MERGE_DENY` — 원칙 12: 병합은 +1 뒤 요청 시 `db_pr merge`로만 한다. 자동 병합은 +1이 붙는 즉시 승인 SHA 대조·메인테이너 경로 거부 없이 병합한다). approve·dismiss 낱말이 든 gh 호출은 본문·검색어라도 거부된다(`GH_WORD_NOTE`). `pr checkout`·`gh co`(그룹·`pr` 동작 자리)는 clone 본체에서 규칙 8 거부. 동작 별칭(`new`·`ls`·`co`·`remove`)은 풀어 본다. 적용 조건: issue_db.remote·module_skills.remote 원격 값이 있으면(owner/repo로 못 풀어도 — setup 전엔 보지 않는다) | Bash, `mcp__.*` |
-| 12 | 모듈 스킬 관리 clone·기록 보호, 분석 스킬 소스 확인: (a) 관리 clone `<work_dir>/_module-skills/**`·lock `<work_dir>/_module-skills.lock`(경로 조각 `_module-skills`이거나 `_module-skills.`로 시작하면 설정과 무관하게 — `.lock`·`.tmp-*` 포함)과 `<work_dir>/<KEY>/skill-wt/**`(모든 프로필 work_dir — 이름이 잘못된 프로필 포함 — 과 켠 플랫폼의 기본 work_dir)를 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별 + `mv`·`ln`·`rsync --remove-source-files`의 원본)로 바꾸면 거부. 어디서 돌든 git 경로 옵션(`--output`·`-o`·`--output-directory`·config `--file`·`--git-dir`·`--work-tree`·`--separate-git-dir`)이 그 안이나 (b) 기록을 가리키면 거부. git 작업 디렉토리·`--git-dir`·`GIT_DIR`·`--work-tree` 중 하나라도 그 안이면 읽기 목록(`MODULE_GIT_READ`, `branch`·`remote`·`config`·`sparse-checkout`·`worktree`·`stash`는 읽기 꼴만)만 통과하고(`--output*`·`-O`·`--open-files-in-pager`·`--ext-diff`·`--textconv`는 읽기라도 거부) `-c` 덮어쓰기와 나머지(commit·push·stash·reset·checkout·sparse-checkout set·worktree add·fetch·remote set-url·config 쓰기 등)는 거부, 대상이 그 안인 `git clone`·`init`도 거부(이슈 DB 설정과 무관, 받기·갱신은 `triage.py module`만). (b) 스크립트 기록 `<work_dir>/<KEY>/module-skill.json`·`module-skill/**`·`deep-input.json`·`skill-input.json`·`check-output.json`·`problem-input.json`·`problem.json`·`eligibility.json`·`windows.json`·`window-<n>.md`·`summary.md`·`summary.json`(triage.py만 — `deep-output.md`·`explore-output.md`·`problem-output.json`은 Claude가 쓴다)과 `skill-suggestions/<이름>.patch`·`.meta.json`(skill_patch.py만)을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(사본 `skill-suggestions/<이름>/**`는 허용). 상대 경로는 hook 입력 `cwd` 기준. `skill_patch.py --apply`(낱말 그물: 이름 `skill_patch`와 낱말 `apply`)는 `ask`. config `analyzers.<카테고리>.source`(절대 경로, site-defaults·사용자 config의 최상위와 모든 `platforms.<p>.analyzers` 것) 안을 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별)·파일을 바꾸는 git(`CLONE_GIT_SUBS`·commit·push·stash)으로 바꾸면 `ask`(적용은 `skill_patch.py --apply`로만) | Bash, Write/Edit/MultiEdit/NotebookEdit |
+| 12 | 모듈 스킬 관리 clone·기록 보호, 분석 스킬 소스 확인: (a) 관리 clone `<work_dir>/_module-skills/**`·lock `<work_dir>/_module-skills.lock`(경로 조각 `_module-skills`이거나 `_module-skills.`로 시작하면 설정과 무관하게 — `.lock`·`.tmp-*` 포함)과 `<work_dir>/<KEY>/skill-wt/**`(모든 프로필 work_dir — 이름이 잘못된 프로필 포함 — 과 켠 플랫폼의 기본 work_dir)를 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별 + `mv`·`ln`·`rsync --remove-source-files`의 원본)로 바꾸면 거부. 어디서 돌든 git 경로 옵션(`--output`·`-o`·`--output-directory`·config `--file`·`--git-dir`·`--work-tree`·`--separate-git-dir`)이 그 안이나 (b) 기록을 가리키면 거부. git 작업 디렉토리·`--git-dir`·`GIT_DIR`·`--work-tree` 중 하나라도 그 안이면 읽기 목록(`MODULE_GIT_READ`, `branch`·`remote`·`config`·`sparse-checkout`·`worktree`·`stash`는 읽기 꼴만)만 통과하고(`--output*`·`-O`·`--open-files-in-pager`·`--ext-diff`·`--textconv`는 읽기라도 거부) `-c` 덮어쓰기와 나머지(commit·push·stash·reset·checkout·sparse-checkout set·worktree add·fetch·remote set-url·config 쓰기 등)는 거부, 대상이 그 안인 `git clone`·`init`도 거부(이슈 DB 설정과 무관, 받기·갱신은 `triage.py module`만). (b) 스크립트 기록 `<work_dir>/<KEY>/module-skill.json`·`module-skill/**`·`deep-input.json`·`skill-input.json`·`check-output.json`·`problem-input.json`·`problem.json`·`eligibility.json`·`windows.json`·`window-<n>.md`·`summary.md`·`summary.json`(triage.py만 — `deep-output.md`·`explore-output.md`·`problem-output.json`은 Claude가 쓴다)과 `skill-suggestions/<이름>.patch`·`.meta.json`·`module-suggestions/*`(skill_patch.py만)을 파일 도구·Bash 파일 쓰기로 쓰거나 지우면 거부(사본 `skill-suggestions/<이름>/**`는 허용). 상대 경로는 hook 입력 `cwd` 기준. `skill_patch.py --apply`(낱말 그물: 이름 `skill_patch`와 낱말 `apply`)와 `--pr`(낱말 `pr` — 모듈 레포 브랜치 push·PR, 임시 clone은 `skill-wt`라 직접 git 쓰기는 (a)가 거부)은 `ask`. config `analyzers.<카테고리>.source`(절대 경로, site-defaults·사용자 config의 최상위와 모든 `platforms.<p>.analyzers` 것) 안을 파일 도구·Bash 파일 쓰기(규칙 8과 같은 판별)·파일을 바꾸는 git(`CLONE_GIT_SUBS`·commit·push·stash)으로 바꾸면 `ask`(적용은 `skill_patch.py --apply`로만) | Bash, Write/Edit/MultiEdit/NotebookEdit |
 
 (1번은 SessionStart의 `config.py sync-scripts-path`다.)
 
@@ -68,7 +68,7 @@ owner/repo로 풀리지 않으면(file:// 제외) 매번 경고한다.
 **의존성 없음**(`_degraded`): import 실패면 MCP는 거부, gh 호출마다 `_gh_kind`(설정·PyYAML 없이 돈다)의
 거부 종류(Approve·기각·셸이 정한 동작·리뷰 별칭·보호 바꾸기 — `_gh_judged_deny`, `_gh_kind`가 예외면 `guard 내부 오류` 거부)와, 명령 걷기가 예외면 낱말 수준(따옴표를 뗀 명령 글에
 `gh`와 `approve`·`dismiss`·`review … -…a`·보호·ruleset 쓰기·`--enable-auto-merge`·`--delete-branch-on-merge`·`allow_auto_merge`·`delete_branch_on_merge`·`enablePullRequestAutoMerge`·`merge … --auto` — `_text_unjudged_deny`)은 거부, 병합 계열과 Bash의 git·gh·`db_pr.py publish`·`merge`·
-`request-review`·`module_eval.py`·`skill_patch.py --apply`(규칙 7·12와 같은 `word_net`)와 파일 도구는 ask, 그 밖의 Bash는 통과 + 경고.
+`request-review`·`module_eval.py`·`skill_patch.py --apply`·`--pr`(규칙 7·12와 같은 `word_net`)와 파일 도구는 ask, 그 밖의 Bash는 통과 + 경고.
 degraded에서도 경로 조각 `_module-skills`(·`_module-skills.`로 시작) 파일 도구·Bash 쓰기는 ask가 아니라 deny.
 **설정 읽기 오류**(사용자 config·site-defaults YAML 오류 — `Config`)도 의존성 없음과 같은 판정이다(설정을 고치는 Write·doctor를
 막지 않게). **판정 중 예외**(검사 하나 — `_checked`, `_gh_kind`·`_json_obj`, 명령 걷기, `judge` 자체 — `RecursionError` 포함)는 그 호출을
@@ -613,12 +613,13 @@ def _post_record(target: str, conf: Config) -> bool:
 SCRIPT_RECORD_MSGS = {
     "merge": "병합 기록(merge-offer.json)은 db_pr publish·merge만 쓴다. 직접 쓰거나 지우지 않는다 (규칙 7",
     "patch": "스킬 제안 patch·기록(skill-suggestions/<이름>.patch·.meta.json)은 skill_patch.py만 쓴다. 직접 쓰거나 지우지 않는다 (규칙 12",
+    "module": "모듈 학습 patch·기록(module-suggestions/)은 skill_patch.py --module만 쓴다. 직접 쓰거나 지우지 않는다 (규칙 12",
 }
 
 
 def _script_record(target: str, conf: Config) -> str | None:
     """스크립트만 쓰는 기록이면 거부 문구 머리: `<work_dir>/<KEY>/merge-offer.json`, `<work_dir>/<KEY>/skill-suggestions/<이름>.patch`·
-    `<이름>.meta.json`(사본 폴더 `<이름>/<rel>`은 대상이 아니다). target은 `_norm` 경로."""
+    `<이름>.meta.json`(사본 폴더 `<이름>/<rel>`은 대상이 아니다), `<work_dir>/<KEY>/module-suggestions/<파일>`. target은 `_norm` 경로."""
     p = Path(target)
     works = [_norm(w) for w in conf.work_dirs]
     if p.name == "merge-offer.json" and _norm(p.parent.parent) in works:
@@ -626,6 +627,8 @@ def _script_record(target: str, conf: Config) -> str | None:
     if (p.parent.name == "skill-suggestions" and _norm(p.parent.parent.parent) in works
             and (p.name.endswith(".patch") or p.name.endswith(".meta.json"))):
         return SCRIPT_RECORD_MSGS["patch"]
+    if p.parent.name == "module-suggestions" and _norm(p.parent.parent.parent) in works:
+        return SCRIPT_RECORD_MSGS["module"]
     return None
 
 
@@ -4259,6 +4262,8 @@ SKILL_APPLY_ASK = ("skill_patch.py --apply는 분석 스킬 소스의 워킹 트
                    "'적용'을 고른 뒤에만 진행한다 (규칙 12).")
 MODULE_EVAL_ASK = ("module_eval.py는 자식 claude -p를 띄워 비용이 든다(모듈 eval, MODULE_SKILLS_PLAN_IMPL §5.6). "
                    "--dry-run 결과를 보이고 사용자가 실행을 승인한 뒤에만 부른다(규칙 7).")
+MODULE_PR_ASK = ("skill_patch.py --pr은 모듈 스킬 레포에 tt-module 브랜치를 push하고 PR을 만든다(main 아님, 병합은 사람). "
+                 "patch·커밋 메시지·PR 본문을 보이고 사용자가 고른 뒤에만 진행한다 (규칙 12).")
 SKILL_SOURCE_ASK = ("분석 스킬 소스(analyzers.<카테고리>.source)는 skill_patch.py --apply로만 바꾼다. 사용자가 직접 요청한 "
                     "편집일 때만 승인한다 (규칙 12)")
 
@@ -4382,6 +4387,8 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
         dec.ask.append(REVIEW_REQUEST_ASK)
     if conf.user is not None and word_net(command, "skill_patch", "apply"):  # 규칙 12: 분석 스킬 소스 적용
         dec.ask.append(SKILL_APPLY_ASK)
+    if conf.user is not None and word_net(command, "skill_patch", "pr"):     # 규칙 12: 모듈 레포 브랜치 push·PR
+        dec.ask.append(MODULE_PR_ASK)
     if conf.user is not None and word_net(command, "module_eval", "module"):  # 규칙 7: 모듈 eval(유료 자식 실행)
         dec.ask.append(MODULE_EVAL_ASK)
     invs, _ = _walk_or_flat(command, cwd, dec, _keep_roots(conf))
@@ -4603,6 +4610,7 @@ def _degraded(event: dict, why: str, hint: str = INSTALL_HINT) -> tuple[dict | N
                 return _decision("deny", f"{deny} {hint}."), []
             risky = any(n in ("git", "gh") for n in names) or word_net(cmd) or word_net(cmd, "db_pr", "merge") or \
                 word_net(cmd, "db_pr", "request-review") or word_net(cmd, "skill_patch", "apply") or \
+                word_net(cmd, "skill_patch", "pr") or \
                 word_net(cmd, "module_eval", "module") or any(
                 not _expand(t).startswith("/dev/") for i in invs for t in _write_targets(i))   # 파일 쓰기(clone일 수 있다)
         except Exception:  # noqa: BLE001 — 파싱도 못 하면 낱말 수준 거부를 보고 사람에게 넘긴다

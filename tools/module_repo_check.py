@@ -36,22 +36,7 @@ def findings(root: Path, template: bool = False) -> list[str]:
         for f in skillcheck.template_findings(root, platforms.template_metas()):
             where = f"{f['path']}:{f['line']}" if "line" in f else f["path"]
             out.append(f"{where} {f['check']}" + (f"({f['rule']})" if f.get("rule") else ""))
-    for f in skillcheck.check_worktree(root):
-        where = f"{f['path']}:{f['line']}" if "line" in f else f["path"]
-        out.append(f"{where} {f['check']}")
-    path = root / "modules.yaml"
-    if not path.is_file() or path.is_symlink():
-        out.append("modules.yaml modules.yaml 없음")
-        return out
-    try:
-        doc = skillcheck.load_modules_yaml(path.read_bytes())
-    except Exception as exc:  # noqa: BLE001 — ValueError·UnicodeDecodeError·yaml.YAMLError
-        reason = str(exc) if isinstance(exc, ValueError) and not isinstance(exc, UnicodeDecodeError) else type(exc).__name__
-        out.append(f"modules.yaml modules.yaml({reason})")
-        return out
-    for err in skillcheck.validate_modules(doc, strict=True):
-        out.append(f"modules.yaml modules.yaml({err})")
-    return out
+    return out + skillcheck.repo_findings(root)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -205,7 +205,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `<KEY> [--skill-dir <SK>] --name <analyzer.skill> [--source <SRC>] [--apply] [--sha <sha256>] [--platform <이름>] [--plugin-root <PLUGIN_ROOT>] [--json]` | `key`: 작업 키; `--skill-dir`: 분석 스킬 디렉토리(5-1 Skill 결과의 `Base directory for this skill:`). patch를 만들 때 필수; `--name`: 분석 스킬 이름(`analyzers.<카테고리>.skill`); `--source`: patch를 만들 때만: 분석 스킬 소스 폴더(없으면 config analyzers.<카테고리>.source). --apply와 함께 못 쓴다; `--apply`: 만든 patch를 스킬 소스 워킹 트리에 git apply(사용자가 '적용'을 고른 뒤에만, 커밋·push 없음); `--sha`: --apply: 보인 patch의 sha256(`스킬 소스 적용 대기:` 줄); `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: JSON 출력(기본은 사용자에게 보일 줄) |
+| — | `<KEY> [--skill-dir <SK>] [--name <analyzer.skill>] [--source <SRC>] [--apply] [--sha <sha256>] [--module] [--line <N[,N]>] [--pr] [--platform <이름>] [--plugin-root <PLUGIN_ROOT>] [--json]` | `key`: 작업 키; `--skill-dir`: 분석 스킬 디렉토리(5-1 Skill 결과의 `Base directory for this skill:`). patch를 만들 때 필수; `--name`: 분석 스킬 이름(`analyzers.<카테고리>.skill`). --module·--pr 밖에서 필수; `--source`: patch를 만들 때만: 분석 스킬 소스 폴더(없으면 config analyzers.<카테고리>.source). --apply와 함께 못 쓴다; `--apply`: 만든 patch를 스킬 소스 워킹 트리에 git apply(사용자가 '적용'을 고른 뒤에만, 커밋·push 없음); `--sha`: --apply: 보인 patch의 sha256(`스킬 소스 적용 대기:` 줄). --pr: 보인 변경 해시; `--module`: 5-2 `[모듈]` 제안 줄(--line)을 모듈 스킬 레포 최신 base 임시 clone에 넣은 patch(PR 없음); `--line`: --module: explore-output.md `- [모듈]` 줄 번호(1부터, 쉼표로 여럿); `--pr`: --module로 만든 patch를 tt-module/<KEY>-<n> 브랜치로 push하고 PR(사용자가 고른 뒤에만, --sha 필수); `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: JSON 출력(기본은 사용자에게 보일 줄) |
 
 ## `job_status.py`
 

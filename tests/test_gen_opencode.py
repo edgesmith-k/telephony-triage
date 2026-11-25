@@ -48,7 +48,8 @@ def _load_tt_oc():
 V1_KEYS = {"$schema", "model", "small_model", "default_agent", "autoupdate", "share", "snapshot", "instructions", "provider",
            "permission", "mcp"}
 WRITE_BASH = ("git push *", "gh *", "*opencode *", "*db_pr.py publish*", "*db_pr.py merge*",
-              "*db_pr.py request-review*", "*issue_post.py approve*", "*skill_patch.py*--apply*", "*module_eval.py*")
+              "*db_pr.py request-review*", "*issue_post.py approve*", "*skill_patch.py*--apply*", "*skill_patch.py*--pr*",
+              "*module_eval.py*")
 
 
 def run_gen(*args, cwd=REPO, env=None):

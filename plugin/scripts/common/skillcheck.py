@@ -203,6 +203,25 @@ def check_worktree(root: Path) -> list[dict]:
     return findings
 
 
+
+def repo_findings(root: Path) -> list[str]:
+    """`tools/module_repo_check.py`(템플릿 점검 뺀 것)와 같은 줄: `check_worktree` + `modules.yaml` strict 검증. 빈 목록 = 깨끗함.
+    `skill_patch.py --module`이 patch를 적용한 임시 clone에 쓴다."""
+    root = Path(root)
+    out = []
+    for f in check_worktree(root):
+        where = f"{f['path']}:{f['line']}" if "line" in f else f["path"]
+        out.append(f"{where} {f['check']}")
+    path = root / "modules.yaml"
+    if not path.is_file() or path.is_symlink():
+        return out + ["modules.yaml modules.yaml 없음"]
+    try:
+        doc = load_modules_yaml(path.read_bytes())
+    except Exception as exc:  # noqa: BLE001 — ValueError·UnicodeDecodeError·yaml.YAMLError
+        reason = str(exc) if isinstance(exc, ValueError) and not isinstance(exc, UnicodeDecodeError) else type(exc).__name__
+        return out + [f"modules.yaml modules.yaml({reason})"]
+    return out + [f"modules.yaml modules.yaml({err})" for err in validate_modules(doc, strict=True)]
+
 # -- modules.yaml -----------------------------------------------------------------------------------
 
 SCHEMA_MAX = 2

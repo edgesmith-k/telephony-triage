@@ -43,6 +43,24 @@ reason}`(`patch`는 ok일 때만, `reason`은 memo일 때만). ok면 `sha256`, `
 종료 코드: 0 = patch를 만들었다, 1 = 만들지 않았다(메모 — 사본 없음·경로 거부·변경 없음·텍스트 아님·마스킹이 문맥을 바꿈·
 `git apply --check` 실패·`SK` 없음; `--apply`면 적용 안 함), 2 = 사용·환경 오류(`--skill-dir`·`--apply` 둘 다 없음, `--apply`와 `--source`를 함께 줌, site-defaults·사용자 config 없음, 키 형식·플랫폼 불일치, 작업
 디렉토리 없음, 이름이 비거나 점뿐, git 없음, `mask.allow_patterns` 정규식 오류).
+
+**모듈 학습 한 줄(반입 7 A-2·A-3)**:
+
+    skill_patch.py <KEY> --module --line N[,N] [--platform <이름>] [--json]
+    skill_patch.py <KEY> --pr --sha <변경 해시> [--platform <이름>] [--json]
+
+`--module`: `JOB/explore-output.md`의 `- [모듈] <p>/<m> <칸> — <한 줄> — 근거: <줄>`(`common/modulelines`, 번호 = `- [모듈]` 줄
+순서) 중 고른 번호를 읽는다. check-output 기록(`check-output.json` explore)이 이 파일 sha256이고 그 번호를 남겼어야 하고(`module_lines`),
+보류(analysis.json decision held)면 첫 점검·함정은 거부한다. `module_skills.remote` 최신 base를 임시 clone(`JOB/skill-wt`, 끝에 지움 —
+관리 clone `_module-skills`는 읽지도 쓰지도 않는다)하고, 칸의 문서·절(`modulelines.SLOTS` — 제목 낱말로 찾고 없으면 파일 끝에
+`## <칸>`)의 끝에 `- <한 줄>`을 넣는다. 거부: 200자 초과·줄바꿈·`|`·```·제목/목록 기호 시작·위험 지시(DANGER)·이미 있는 줄·없는
+모듈 문서·문서 상한(`skillcheck.CAPS`, "상한 도달, 정리 PR 필요")·마스킹이 문맥을 바꿈·`git apply --check`·module_repo_check.
+통과하면 `JOB/module-suggestions/module.patch`·`module.meta.json`(커밋 메시지 — 출처 키·`Triage-Env` trailer, PR 본문 — 근거 줄·
+"eval 건너뜀(통과 아님), 다음 정기 점검 대상")을 쓰고 안내 줄·파일별 줄 수와 여유 바이트·검사 줄·patch·커밋 메시지·PR 본문을 낸다
+(표시 기록 `kind: patch`, key `module:<KEY>`). 근거 줄은 문서에 넣지 않는다.
+`--pr --sha <H>`: 보인 변경 해시(patch·커밋 메시지·PR 본문)가 같고 아직 PR이 없을 때만, 새 임시 clone에서 patch를 다시 만들어
+같으면 `tt-module/<KEY>-<n>` 브랜치·커밋·`git push origin HEAD:refs/heads/<브랜치>`(main에는 push하지 않는다)·`gh pr create`
+(Approve·병합 안 함). key `module-pr:<KEY>`. 종료 0 = patch·PR을 만들었다, 1 = 메모, 2 = 사용·설정 오류(`module_skills` 없음 포함).
 """
 
 from __future__ import annotations
@@ -54,6 +72,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -62,7 +81,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 
-from common import compat, masking, session_lock, shown, site_defaults, userconfig  # noqa: E402
+from common import compat, ghcli, masking, moduleskills, modulelines, session_lock, shown, site_defaults, skillcheck, userconfig  # noqa: E402,E501
 from common.exitcodes import CHECK_FAILED, OK, USAGE  # noqa: E402
 import platforms  # noqa: E402
 from platforms import session as platform_session  # noqa: E402
@@ -121,7 +140,7 @@ def job_dir(args, defaults: dict) -> tuple[Path, dict]:
     key = tracker.parse_key(args.key) or args.key
     if not tracker.safe_key_re.fullmatch(key) or not re.fullmatch(str(block.get("key_regex") or tracker.default_key_regex), key):
         raise Usage(f"{tracker.label} 키 형식이 아니다: {key}")
-    args._cfg = cfg     # 스킬 소스(analyzers.<카테고리>.source)·이슈 DB clone 경로를 본다
+    args._cfg, args._platform = cfg, name     # 스킬 소스(analyzers.<카테고리>.source)·이슈 DB clone 경로·모듈 플랫폼을 본다
     job = work / key
     if not job.is_dir():
         raise Usage(f"작업 디렉토리가 없다: {job} — analyze를 먼저 한다")
@@ -190,8 +209,11 @@ def _lines(data: bytes, rel: str) -> list[str]:
 
 def file_diff(rel: str, src: Path, dst: Path) -> tuple[str, int, int]:
     """`(diff 글, 더한 줄, 지운 줄)`. 같으면 `("", 0, 0)`."""
-    new = src.read_bytes()
-    old = dst.read_bytes() if dst.exists() else None
+    return bytes_diff(rel, dst.read_bytes() if dst.exists() else None, src.read_bytes())
+
+
+def bytes_diff(rel: str, old: bytes | None, new: bytes) -> tuple[str, int, int]:
+    """`file_diff`의 바이트판(old None = 새 파일)."""
     if old == new:
         return "", 0, 0
     a, b = (_lines(old, rel) if old is not None else []), _lines(new, rel)
@@ -492,17 +514,351 @@ def run_apply(args, defaults: dict) -> tuple[dict, int]:
     return {"status": "applied", "source": str(src), "files": files, "lines": lines}, OK
 
 
+# -- 모듈 학습 한 줄(반입 7 A-2·A-3) ----------------------------------------------------------------------------
+# 5-2 출력의 `- [모듈] <p>/<m> <칸> — <한 줄> — 근거: <줄>`(common/modulelines) 중 고른 줄을 모듈 스킬 레포 최신 base의 임시 clone
+# (`JOB/skill-wt` — guard 규칙 12 (a)가 직접 쓰기·git 쓰기를 거부한다, 실행 끝에 지운다)에서 그 칸 절 끝에 한 줄로 넣는다.
+# 관리 clone(`_module-skills`)은 읽지도 쓰지도 않는다. 근거 줄은 PR 본문에만 싣는다.
+
+MODULE_DIR, MODULE_PATCH, MODULE_META = "module-suggestions", "module.patch", "module.meta.json"
+MODULE_CLONE = "skill-wt"
+MODULE_BRANCH = "tt-module/{key}-{n}"
+LINE_MAX = 200                  # 넣는 한 줄 글자 수 상한(리포트 제안 줄 300자 잘림보다 작게)
+M_GUIDE = "모듈 학습 patch(PR 안 만듦{masked}): {path} — 변경 해시 {sha}"
+M_FILE = "- {rel} +{add} −{rem} (상한 {cap}B, 여유 {left}B)"
+M_CHECKS = ("검사: 형식·위험 지시·이미 있는 줄·상한·module_repo_check·git apply --check 통과. "
+            "eval 건너뜀(통과 아님), 다음 정기 점검 대상")
+M_MEMO = "모듈 학습 patch 없음: {reason}"
+M_PR = "모듈 레포 PR을 만들었다: {url} — 브랜치 {branch}(main은 그대로, 병합은 리뷰어 +1 뒤 사람이 한다)"
+M_PR_MEMO = "모듈 레포 PR 안 만듦: {reason}"
+M_EVAL = "eval 건너뜀(통과 아님), 다음 정기 점검 대상"
+
+
+def _rmtree(path: Path) -> None:
+    """도구가 만든 임시 clone 지우기(링크면 링크만, Windows 읽기 전용 pack 파일 포함)."""
+    def again(fn, p, _exc):
+        os.chmod(p, stat.S_IWRITE)
+        fn(p)
+    if path.is_symlink():
+        path.unlink()
+    elif path.exists():
+        shutil.rmtree(path, **({"onexc": again} if sys.version_info >= (3, 12) else {"onerror": again}))
+
+
+def _mgit(job: Path, cwd: Path | None, *argv: str, timeout: int = moduleskills.LOCAL_TIMEOUT):
+    """굳힌 git(hook·fsmonitor·심볼릭 링크 끔, 자격 증명 든 URL 거부 — moduleskills와 같다) → (rc, out, err)."""
+    return moduleskills._git(job.parent, cwd, *argv, timeout=timeout)
+
+
+def _module_settings(args, defaults: dict) -> dict:
+    probs = userconfig.module_skills_problems(defaults, userconfig.load_user())
+    if probs:
+        raise Usage(f"설정 오류: {probs[0]}")
+    ms = userconfig.module_skills(getattr(args, "_cfg", None) or {})
+    if ms is None:
+        raise Usage("module_skills.remote가 없다 — 모듈 스킬 레포를 설정한 뒤 쓴다")
+    if moduleskills.url_has_password(ms["remote"]):
+        raise Usage(moduleskills.CRED_DETAIL)
+    return ms
+
+
+def _picks(job: Path, args) -> list[dict]:
+    """`--line` 번호의 `[모듈]` 줄. check-output이 검사한 그 파일(sha256)이고 남긴 번호(`modulelines.KEPT_KEY`)여야 한다."""
+    out_path = job / "explore-output.md"
+    if out_path.is_symlink() or not out_path.is_file():
+        raise Memo("explore-output.md가 없다 — 5-2 탐색 분석 뒤에 쓴다")
+    data = out_path.read_bytes()
+    try:
+        rec = (json.loads((job / "check-output.json").read_text(encoding="utf-8")) or {}).get("explore")
+    except (OSError, ValueError, AttributeError):
+        rec = None
+    if not isinstance(rec, dict) or rec.get("output_sha256") != hashlib.sha256(data).hexdigest():
+        raise Memo("explore-output.md가 check-output 검사 결과와 다르다(검사 안 함·검사 뒤 바뀜) — check-output을 다시 한다")
+    kept = rec.get(modulelines.KEPT_KEY)
+    if not isinstance(kept, list):
+        raise Memo("check-output 기록에 [모듈] 줄 검사 결과가 없다 — check-output을 다시 한다")
+    rows = {r["n"]: r for r in modulelines.parse(data.decode("utf-8", "replace"))}
+    try:
+        held = ((json.loads((job / "analysis.json").read_text(encoding="utf-8")) or {}).get("decision") or {}).get("state") == "held"
+    except (OSError, ValueError, AttributeError):
+        held = False
+    picked = []
+    for n in args._lines:
+        row = rows.get(n)
+        if row is None:
+            raise Memo(f"{n}번 [모듈] 줄이 없다")
+        if not row["ok"]:
+            raise Memo(f"{n}번 줄: {row['why']}")
+        if n not in kept:
+            raise Memo(f"{n}번 줄은 check-output이 뺐다(근거가 원문에서 확인되지 않음 등)")
+        if row["platform"] != getattr(args, "_platform", row["platform"]):
+            raise Memo(f"{n}번 줄의 플랫폼({row['platform']})이 이 분석({args._platform})과 다르다")
+        if held and row["slot"] in modulelines.HELD_SLOTS:
+            raise Memo(f"{n}번 줄({row['slot']})은 확정 원인에서만 넣는다 — 이 분석은 1위 보류다")
+        why = _line_problem(row["text"])
+        if why:
+            raise Memo(f"{n}번 줄: {why}")
+        picked.append(row)
+    return picked
+
+
+def _line_problem(text: str) -> str | None:
+    if len(text) > LINE_MAX:
+        return f"한 줄이 {LINE_MAX}자를 넘는다({len(text)}자)"
+    if any(c in text for c in "\r\n\0"):
+        return "줄바꿈이 있다"
+    if "|" in text or "```" in text:
+        return "표·코드 기호(|·```)가 있다"
+    if text.startswith(("#", ">", "-", "*", "+")):
+        return "제목·인용·목록 기호로 시작한다"
+    hit = skillcheck.check_text("line", f"- {text}".encode())
+    if hit:
+        return f"위험 지시({hit[0].get('rule') or hit[0]['check']})"
+    return None
+
+
+def _norm_line(line: str) -> str:
+    return " ".join(line.strip().lstrip("-*+").split())
+
+
+def insert_line(text: str, slot: str, words: tuple[str, ...], line: str) -> str:
+    """`## ` 제목에 `words`가 모두 든 첫 절의 끝(다음 `#`·`##` 제목 앞 마지막 글 줄 뒤)에 `- <line>`을 넣는다. 표 뒤면 빈 줄을 먼저.
+    절이 없으면 파일 끝에 `## <slot>` 절을 만든다. 줄 끝(CRLF)은 파일을 따른다."""
+    nl = "\r\n" if "\r\n" in text else "\n"
+    cr = nl[:-1]
+    bullet = f"- {line}"
+    rows = text.split("\n")
+    bare = [r.rstrip("\r") for r in rows]
+    start = next((i for i, r in enumerate(bare) if re.match(r"##\s", r) and all(w in r for w in words)), None)
+    if start is None:
+        body = text if not text or text.endswith("\n") else text + nl
+        return f"{body}{nl}## {slot}{nl}{nl}{bullet}{nl}"
+    end = next((i for i in range(start + 1, len(rows)) if re.match(r"#{1,2}\s", bare[i])), len(rows))
+    last = max(i for i in range(start, end) if bare[i].strip())
+    add = ["", bullet] if last == start or bare[last].lstrip().startswith("|") else [bullet]
+    rows[last + 1:last + 1] = [a + cr for a in add]
+    return "\n".join(rows)
+
+
+def module_build(job: Path, clone: Path, rows: list[dict], db_cfg: dict) -> dict:
+    """임시 clone에 고른 줄을 넣은 patch(마스킹됨) → clone 워킹 트리에 적용해 둔다. `{patch, files[], masked_added}`. 실패는 Memo."""
+    root = clone.resolve()
+    new_text: dict[str, str] = {}
+    old_bytes: dict[str, bytes] = {}
+    for row in rows:
+        rel = f"{row['platform']}/{row['module']}/{row['doc']}"
+        path = clone / rel
+        if rel not in new_text:
+            if path.is_symlink() or not path.is_file() or not _inside(path.resolve(), root):
+                raise Memo(f"모듈 문서가 없다({rel}) — 새 모듈·문서는 만들지 않는다")
+            old_bytes[rel] = path.read_bytes()
+            try:
+                new_text[rel] = old_bytes[rel].decode("utf-8")
+            except UnicodeDecodeError:
+                raise Memo(f"UTF-8 텍스트가 아니다({rel})") from None
+        if any(_norm_line(ln) == _norm_line(row["text"]) for ln in new_text[rel].split("\n")):
+            raise Memo(f"{row['n']}번 줄은 이미 있다({rel})")
+        new_text[rel] = insert_line(new_text[rel], row["slot"], modulelines.SLOTS[row["slot"]][1], row["text"])
+    pieces, files = [], []
+    for rel in sorted(new_text):
+        text, add, rem = bytes_diff(rel, old_bytes[rel], new_text[rel].encode("utf-8"))
+        pieces.append(text)
+        files.append({"path": rel, "added": add, "removed": rem})
+    raw = "".join(pieces)
+    try:
+        masked = mask_patch(raw, db_cfg)
+    except masking.AllowPatternError as exc:
+        raise Usage(f"mask.allow_patterns 오류: {exc}") from exc
+    bad = changed_context(raw, masked)
+    if bad:
+        raise Memo(f"마스킹이 문맥 줄을 바꿔 모듈 문서에 적용되지 않는다({len(bad)}줄, 예: {bad[0]})")
+    pfile = job / MODULE_DIR / "check.patch.tmp"
+    pfile.write_bytes(masked.encode("utf-8"))
+    try:
+        for argv in (("apply", "--check", str(pfile)), ("apply", str(pfile))):
+            rc, _, err = _mgit(job, clone, *argv)
+            if rc:
+                raise Memo(f"git {' '.join(argv[:-1])} 실패 — {moduleskills.first_fatal(err, rc)}")
+    finally:
+        pfile.unlink(missing_ok=True)
+    for f in files:
+        cap = skillcheck.CAPS[f["path"].rsplit("/", 1)[-1]]
+        size = (clone / f["path"]).stat().st_size
+        if size > cap:
+            raise Memo(f"상한 도달({f['path']} {size}/{cap}B), 정리 PR 필요")
+        f.update(cap=cap, left=cap - size)
+    found = skillcheck.repo_findings(clone)
+    if found:
+        raise Memo(f"module_repo_check {len(found)}건({'; '.join(found[:3])})")
+    added = sum(1 for r, m in zip(raw.split("\n"), masked.split("\n")) if r != m and r.startswith("+") and not r.startswith("+++ "))
+    return {"patch": masked, "files": files, "masked_added": added}
+
+
+def _clone(job: Path, ms: dict) -> Path:
+    dst = job / MODULE_CLONE
+    _rmtree(dst)
+    rc, _, err = _mgit(job, None, "clone", "--quiet", "--no-tags", "--single-branch", "--config", "core.autocrlf=false",
+                       "--config", "core.eol=lf", "--branch", ms["base_branch"],
+                       ms["remote"], str(dst), timeout=moduleskills.NET_TIMEOUT)
+    if rc:
+        raise Memo(f"모듈 레포를 받지 못했다({moduleskills.classify(err)}: {moduleskills.first_fatal(err, rc)})")
+    return dst
+
+
+def _message(key: str, rows: list[dict], trailer: str) -> tuple[str, str]:
+    """(커밋 메시지, PR 본문). 첫 줄이 PR 제목. 근거 줄은 PR 본문에만."""
+    r0 = rows[0]
+    title = f"모듈 학습({key}): {r0['platform']}/{r0['module']} {r0['slot']}" + (f" 외 {len(rows) - 1}줄" if len(rows) > 1 else "")
+    items = [f"- {r['platform']}/{r['module']} {r['doc']} {r['slot']}: {r['text']}" for r in rows]
+    msg = "\n".join([title, "", f"출처 이슈: {key}", *items, "", trailer]) + "\n"
+    body = "\n".join([f"출처 이슈: {key}", "", "모듈·층(문서 절)과 넣은 줄:", *items, "",
+                      "근거 줄(마스킹됨, 문서에는 넣지 않음):", *[f"- {r['basis']}" for r in rows], "", M_EVAL]) + "\n"
+    return msg, body
+
+
+def _change_sha(patch: bytes, msg: str, body: str) -> str:
+    return hashlib.sha256(patch + b"\0" + msg.encode("utf-8") + b"\0" + body.encode("utf-8")).hexdigest()
+
+
+def run_module(args, defaults: dict) -> tuple[dict, int]:
+    job, db_cfg = job_dir(args, defaults)
+    ms = _module_settings(args, defaults)
+    out_dir = job / MODULE_DIR
+    patch_p, meta_p = out_dir / MODULE_PATCH, out_dir / MODULE_META
+    key = f"module:{job.name}"
+    clone = job / MODULE_CLONE
+    try:
+        out_dir.mkdir(exist_ok=True)
+        for stale in (patch_p, meta_p):
+            stale.unlink(missing_ok=True)
+        try:
+            rows = _picks(job, args)
+            built = module_build(job, _clone(job, ms), rows, db_cfg)
+        except OSError as exc:
+            raise Memo(f"파일을 읽거나 쓰지 못했다({type(exc).__name__})") from exc
+    except Memo as exc:
+        line = M_MEMO.format(reason=" ".join(str(exc).split()))
+        shown.record(job.parent, "skill_patch", "patch", job.name, key=key, lines=[line])
+        return {"status": "memo", "reason": str(exc), "files": [], "lines": [line]}, CHECK_FAILED
+    finally:
+        _rmtree(clone)
+    import db_summary   # 커밋 trailer `Triage-Env`(이슈 DB 커밋과 같은 값)
+    msg, body = _message(job.name, rows, db_summary.env_trailer(None, defaults))
+    masker = masking.for_db(db_cfg, msg + body)
+    msg, body = ("\n".join(masker(ln) for ln in s.split("\n")) for s in (msg, body))
+    data = built["patch"].encode("utf-8")
+    sha = _change_sha(data, msg, body)
+    patch_p.write_bytes(data)
+    meta_p.write_text(json.dumps({"remote": ms["remote"], "base": ms["base_branch"], "sha256": sha, "message": msg, "body": body,
+                                  "rows": [{k: r[k] for k in ("n", "platform", "module", "slot", "doc", "text", "basis")}
+                                           for r in rows], "files": built["files"], "pr": None},
+                                 ensure_ascii=False) + "\n", encoding="utf-8")
+    fence = _fence(built["patch"] + msg + body)
+    lines = [M_GUIDE.format(masked="" if masking.is_off(db_cfg) else ", 마스킹됨", path=patch_p.absolute(), sha=sha),
+             *[M_FILE.format(rel=f["path"], add=f["added"], rem=f["removed"], cap=f["cap"], left=f["left"])
+               for f in built["files"]],
+             M_CHECKS + (MASKED_NOTE.format(n=built["masked_added"]) if built["masked_added"] else ""),
+             f"{fence}diff", *built["patch"].rstrip("\n").split("\n"), fence,
+             "커밋 메시지:", fence, *msg.rstrip("\n").split("\n"), fence,
+             "PR 본문:", fence, *body.rstrip("\n").split("\n"), fence]
+    shown.record(job.parent, "skill_patch", "patch", job.name, key=key, lines=lines, path=str(patch_p.absolute()))
+    return {"status": "ok", "patch": str(patch_p.absolute()), "sha256": sha, "files": built["files"], "lines": lines}, OK
+
+
+def _next_branch(job: Path, clone: Path, key: str) -> str:
+    rc, out, err = _mgit(job, clone, "ls-remote", "--heads", "origin", MODULE_BRANCH.format(key=key, n="*"),
+                         timeout=moduleskills.NET_TIMEOUT)
+    if rc:
+        raise Memo(f"원격 브랜치를 읽지 못했다 — {moduleskills.first_fatal(err, rc)}")
+    pre = "refs/heads/" + MODULE_BRANCH.format(key=key, n="")
+    used = [int(ref[len(pre):]) for ref in (ln.split("\t")[-1] for ln in out.splitlines())
+            if ref.startswith(pre) and ref[len(pre):].isdigit()]
+    return MODULE_BRANCH.format(key=key, n=max(used, default=0) + 1)
+
+
+def run_module_pr(args, defaults: dict) -> tuple[dict, int]:
+    job, db_cfg = job_dir(args, defaults)
+    ms = _module_settings(args, defaults)
+    patch_p, meta_p = job / MODULE_DIR / MODULE_PATCH, job / MODULE_DIR / MODULE_META
+    key = f"module-pr:{job.name}"
+
+    def memo(reason: str) -> tuple[dict, int]:
+        line = M_PR_MEMO.format(reason=" ".join(reason.split()))
+        shown.record(job.parent, "skill_patch", "patch", job.name, key=key, lines=[line])
+        return {"status": "memo", "reason": reason, "lines": [line]}, CHECK_FAILED
+
+    if not patch_p.is_file():
+        return memo("patch가 없다 — --module로 patch부터 만든다")
+    try:
+        meta = json.loads(meta_p.read_text(encoding="utf-8"))
+        data = patch_p.read_bytes()
+        sha = _change_sha(data, meta["message"], meta["body"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return memo("patch 기록(meta)이 없거나 깨졌다 — --module로 다시 만든다")
+    if not re.fullmatch(r"[0-9a-f]{64}", args.sha or "") or args.sha != sha or meta.get("sha256") != sha:
+        return memo("보여 준 것과 다르다(변경 해시 불일치) — patch를 다시 보이고 다시 묻는다")
+    if meta.get("pr"):
+        return memo(f"이미 PR을 만들었다(브랜치 {meta['pr'].get('branch')}) — {meta['pr'].get('url') or 'GHE에서 PR 확인'}")
+    if meta.get("remote") != ms["remote"] or meta.get("base") != ms["base_branch"]:
+        return memo("모듈 레포 설정이 patch를 만들 때와 다르다 — --module로 다시 만든다")
+    clone = job / MODULE_CLONE
+    try:
+        try:
+            built = module_build(job, _clone(job, ms), meta["rows"], db_cfg)
+            if built["patch"].encode("utf-8") != data:
+                raise Memo("모듈 레포 main이 바뀌어 patch가 달라졌다 — --module로 다시 만들어 보인다")
+            branch = _next_branch(job, clone, job.name)
+            for argv in (("checkout", "-q", "-b", branch), ("add", "--", *[f["path"] for f in built["files"]]),
+                         ("commit", "-q", "--cleanup=verbatim", "-m", meta["message"])):
+                rc, _, err = _mgit(job, clone, *argv)
+                if rc:
+                    raise Memo(f"git {argv[0]} 실패 — {moduleskills.first_fatal(err, rc)}")
+            commit = _mgit(job, clone, "rev-parse", "HEAD")[1].strip()
+            rc, _, err = _mgit(job, clone, "push", "--quiet", "origin", f"HEAD:refs/heads/{branch}",
+                               timeout=moduleskills.NET_TIMEOUT)
+            if rc:
+                raise Memo(f"push 실패({moduleskills.classify(err)}) — {moduleskills.first_fatal(err, rc)}")
+            meta["pr"] = {"branch": branch, "commit": commit, "url": None}
+            meta_p.write_text(json.dumps(meta, ensure_ascii=False) + "\n", encoding="utf-8")
+            slug = userconfig.repo_slug(ms["remote"])
+            host = (slug[0] if slug else None) or userconfig.get(args._cfg, "issue_db.ghe_host") or None
+            body_p = job / MODULE_DIR / "pr-body.md"        # 여러 줄 본문은 파일로(Windows gh.cmd 인자는 줄바꿈에서 끊긴다)
+            body_p.write_text(meta["body"], encoding="utf-8", newline="\n")
+            proc = ghcli.run(["pr", "create", "--base", ms["base_branch"], "--head", branch, "--title",
+                              meta["message"].split("\n", 1)[0], "--body-file", str(body_p)], host=host, cwd=str(clone),
+                             env={**os.environ, "GH_PROMPT_DISABLED": "1"})
+            url = next((ln.strip() for ln in reversed(proc.stdout.splitlines()) if ln.strip().startswith("http")), None)
+            if proc.returncode != 0 or not url:
+                raise Memo(f"브랜치 {branch}는 push했다 — gh pr create 실패, GHE 웹에서 PR을 만든다: "
+                           f"{masking.mask_brief((proc.stderr or proc.stdout).strip(), 160)}")
+            meta["pr"]["url"] = url
+            meta_p.write_text(json.dumps(meta, ensure_ascii=False) + "\n", encoding="utf-8")
+        except OSError as exc:
+            raise Memo(f"파일을 읽거나 쓰지 못했다({type(exc).__name__})") from exc
+    except Memo as exc:
+        return memo(str(exc))
+    finally:
+        _rmtree(clone)
+    line = M_PR.format(url=url, branch=branch)
+    shown.record(job.parent, "skill_patch", "patch", job.name, key=key, lines=[line], path=url)
+    return {"status": "pr", "url": url, "branch": branch, "commit": commit, "lines": [line]}, OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="skill_patch.py", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("key", metavar="KEY", help="작업 키")
     parser.add_argument("--skill-dir", metavar="SK",
                         help="분석 스킬 디렉토리(5-1 Skill 결과의 `Base directory for this skill:`). patch를 만들 때 필수")
-    parser.add_argument("--name", required=True, metavar="analyzer.skill", help="분석 스킬 이름(`analyzers.<카테고리>.skill`)")
+    parser.add_argument("--name", metavar="analyzer.skill", help="분석 스킬 이름(`analyzers.<카테고리>.skill`). --module·--pr 밖에서 필수")
     parser.add_argument("--source", metavar="SRC", help="patch를 만들 때만: 분석 스킬 소스 폴더(없으면 config analyzers.<카테고리>.source). --apply와 함께 못 쓴다")
     parser.add_argument("--apply", action="store_true",
                         help="만든 patch를 스킬 소스 워킹 트리에 git apply(사용자가 '적용'을 고른 뒤에만, 커밋·push 없음)")
-    parser.add_argument("--sha", metavar="sha256", help="--apply: 보인 patch의 sha256(`스킬 소스 적용 대기:` 줄)")
+    parser.add_argument("--sha", metavar="sha256", help="--apply: 보인 patch의 sha256(`스킬 소스 적용 대기:` 줄). --pr: 보인 변경 해시")
+    parser.add_argument("--module", action="store_true",
+                        help="5-2 `[모듈]` 제안 줄(--line)을 모듈 스킬 레포 최신 base 임시 clone에 넣은 patch(PR 없음)")
+    parser.add_argument("--line", metavar="N[,N]", help="--module: explore-output.md `- [모듈]` 줄 번호(1부터, 쉼표로 여럿)")
+    parser.add_argument("--pr", action="store_true",
+                        help="--module로 만든 patch를 tt-module/<KEY>-<n> 브랜치로 push하고 PR(사용자가 고른 뒤에만, --sha 필수)")
     platform_session.add_arg(parser)
     parser.add_argument("--plugin-root", default=None)
     parser.add_argument("--json", action="store_true", help="JSON 출력(기본은 사용자에게 보일 줄)")
@@ -517,7 +873,19 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     defaults = site_defaults.load_or_exit(Path(args.plugin_root) if args.plugin_root else None)
     try:
-        if args.apply:
+        if args.module or args.pr:
+            if args.apply or args.skill_dir or args.name or args.source:
+                raise Usage("--module·--pr은 --apply·--skill-dir·--name·--source와 함께 쓰지 않는다")
+            if args.pr:
+                doc, code = run_module_pr(args, defaults)
+            else:
+                if not re.fullmatch(r"[1-9]\d{0,2}(,[1-9]\d{0,2})*", args.line or ""):
+                    raise Usage("--module에는 --line N[,N](explore-output.md `- [모듈]` 줄 번호)이 필요하다")
+                args._lines = list(dict.fromkeys(int(x) for x in args.line.split(",")))
+                doc, code = run_module(args, defaults)
+        elif not args.name:
+            raise Usage("--name이 필요하다(분석 스킬 patch) — 모듈 학습은 --module")
+        elif args.apply:
             doc, code = run_apply(args, defaults)
         elif not args.skill_dir:
             raise Usage("--skill-dir가 필요하다(patch 만들기) — 적용은 --apply --sha")
