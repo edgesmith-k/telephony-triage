@@ -444,14 +444,13 @@ def _job_platform(job: Path, selected: str) -> str:
 
 
 def _platform_refs(args, platform: str) -> list[str]:
-    """플러그인에 든 그 플랫폼의 탐색 지식 문서(스킬 디렉토리 기준 경로, 이름순). 없으면 빈 목록."""
+    """플러그인에 든 그 플랫폼의 탐색 지식 문서(절대 경로, 이름순 — 모델이 그대로 Read한다, eval 73). 없으면 빈 목록."""
     if not re.fullmatch(r"[a-z][a-z0-9_]*", platform):
         return []
     root = Path(args.plugin_root) if args.plugin_root else site_defaults.plugin_root()
-    folder = root.joinpath(*PLATFORM_REFS_DIR, platform)
-    skill = root.joinpath(*PLATFORM_REFS_DIR[:2])
+    folder = root.joinpath(*PLATFORM_REFS_DIR, platform).resolve()
     try:
-        return [p.relative_to(skill).as_posix() for p in sorted(folder.glob("*.md")) if p.is_file()]
+        return [p.as_posix() for p in sorted(folder.glob("*.md")) if p.is_file()]
     except OSError:
         return []
 

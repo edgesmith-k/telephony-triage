@@ -96,7 +96,7 @@ def view_center(spec: dict | None) -> tuple:
     if _clue_with_time(spec):
         return spec["around"], f"발생 시각; 코멘트 단서 시각 {ref}도 따로 있음, 확정 아님"
     if ref:
-        return (spec.get("around"), "발생 시각") if src == "clue" and spec.get("around") else             (ref, {"anchor": "기준 줄" if (spec.get("anchor") or {}).get("source") == "look_at" else "실패 스텝",
+        return (spec.get("around"), "발생 시각") if src == "clue" and spec.get("around") else (ref, {"anchor": "기준 줄" if (spec.get("anchor") or {}).get("source") == "look_at" else "실패 스텝",
                    "look_at": "기준 줄", "clue": "코멘트 단서, 확정 아님", "around": "발생 시각"}[src])
     guess = timeline_center(spec)[0]
     if len(guess) == 1:

@@ -1171,7 +1171,7 @@ def test_g4_divergence_observation_far_before_prior_step_fails(tmp_path, capsys)
 
 
 def test_g4_step_one_observation_far_from_reference_is_shown_not_failed(tmp_path, capsys):
-    """G-4 ②: 가장 이른 false가 단계 1(앞 단계 관측 없음)이면 실패시키지 않고, 관측이 기준 시각과 1시간 넘게 떨어졌으면 리포트 조사
+    """G-4 ②: 앞 단계에 시각 있는 원문 확인 관측이 없으면(여기선 가장 이른 false가 단계 1) 실패시키지 않고, 관측이 기준 시각과 1시간 넘게 떨어졌으면 리포트 조사
     결론 하위 줄에 드러낸다(Jira 본문엔 없음). 당일이면 줄 없음."""
     for name, line, far in (("other", DAY_BEFORE, True), ("same", DAY_BEFORE.replace("09-19", "09-20"), False)):
         job = _job(tmp_path / name)
@@ -1182,3 +1182,56 @@ def test_g4_step_one_observation_far_from_reference_is_shown_not_failed(tmp_path
         text = "\n".join(_cause_rows(job))
         assert ("  - 관측이 기준 시각과 24시간 떨어짐 — 같은 시험의 줄인지 확인" in text) is far, text
         assert "관측이 기준 시각과" not in "\n".join(issuepost.investigation_lines(inv, None, why=False))
+
+
+# --- 반입 8 전체 확인 리뷰(C-2·C-3·C-4) --------------------------------------------------------------------------------
+
+def test_c2_added_word_does_not_widen_the_absence_end(tmp_path, capsys):
+    """C-2: 낱말을 하나씩 펼친 뒤 사본을 합쳐 끝을 재서, 낱말 하나(`heartbeat` — main에만, 기준 앞)를 덧붙이면 긴 main 사본이
+    '없음'의 끝을 늘렸다(A4 우회) — 낱말마다 끝을 따로 재고 가장 좁은 범위를 쓴다. radio도 길면 통과(짝)."""
+    two = ("찾았는데 없음:", "- `SETUP_DATA_CALL` `heartbeat` 재요청 — logs-masked 15:10:02 뒤 grep")
+    main = ["2026-09-20T15:09:00.000Z host datad[9]: heartbeat", "2026-09-20T15:25:00.000Z host other[2]: tail"]
+    for name, radio, ok in (("short", RADIO, False), ("long", [*RADIO, "2026-09-20T15:16:00.000Z host vrild[7]: idle"], True)):
+        job = _job(tmp_path / name)
+        _copies(job, {"radio.log": radio, "main.log": main})
+        _d, inv = _run(job, _out(rows=RETRY_ROWS, extra=(*two, RETRY_MECH)), capsys)
+        assert (inv["status"] == "identified") is ok, (name, inv["gate"])
+        assert ok or "미관측" in inv["gate"][1]["why"], (name, inv["gate"])
+
+
+def test_c3_changed_tag_of_row_quote_still_checks_the_copy_date(tmp_path, capsys):
+    """C-3: 행 모양 인용의 태그만 바꾸면(근거 원문 검사는 행 인용의 태그를 보지 않아 ok) 사본 줄을 세지 않아 전날 관측이 날짜 대조를
+    피했다 — 세는 조건에서 태그를 뺀다. 당일 줄이면 통과(짝)."""
+    bad = []
+    for tag in ("linkd", "-", "datad[9]", "datad:"):
+        q = ROW_Q.replace(" datad ", f" {tag} ")
+        rows = [r.replace(ROW_Q, q) for r in DAY_ROWS]
+        out = _out(layer="AP 내부", quotes=(Q0, Q_AFTER), rows=rows, claim="단계 2 — 링크가 끊김", head="링크가 끊겨 연결 실패")
+        for day, ok in (("19", False), ("20", True)):
+            job = _job(tmp_path / f"{tag.strip(':[]9')}{len(tag)}{day}")
+            _copy(job, [ISO_Q1, DAY_BEFORE.replace("09-19", f"09-{day}")])
+            data, inv = _run(job, out, capsys)
+            if data["fabricated"] or (inv["status"] == "identified") is not ok:
+                bad.append((tag, day, data["weak"], [g["name"] for g in inv["gate"] if not g["ok"]]))
+    assert not bad, bad
+
+
+def test_c4_yearless_lines_across_new_year_keep_a_correct_conclusion(tmp_path, capsys):
+    """C-4: 연도 없는 줄(logcat)은 범위 시작의 연도로 읽어, 해를 넘는 로그에서 첫 어긋남 `01-01 00:00:10`이 앞 단계 `12-31 23:59:50`
+    보다 1년 앞선 것으로 읽혀 맞는 결론이 떨어졌다(G-4, 실패 뒤 흔적도) — 연도 없는 줄은 분석 범위(없으면 로그 범위)에 가장 가까운
+    해로 읽는다. 게이트 전체를 돈다. 같은 줄이 정말 1년 전이면(연도를 적은 원문) 그대로 실패."""
+    prev = "12-31 23:59:50.000  1000  1001 I datad: link up on rmnet_data0"
+    lost = "01-01 00:00:10.000  1000  1001 E datad: link monitor lost carrier on rmnet_data0"
+    job = _job(tmp_path)
+    ev = json.loads((job / "events.json").read_text(encoding="utf-8"))
+    ev["input"] = {"tz": "UTC", "window": {"start": "2026-12-31T23:50:00Z", "end": "2027-01-01T00:10:00Z"}}
+    (job / "events.json").write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
+    (job / "explore-input.json").write_text(json.dumps({"limit": 200, "around": "2026-12-31T23:59:55Z"}), encoding="utf-8")
+    _copy(job, [prev, lost])
+    rows = [f"| 1 | 링크가 올라온다 | AP 내부 | log:23:59:50 | {prev} | true |",
+            f"| 2 | 링크가 유지된다 | AP 내부 | spec:x | {lost} | false |"]
+    data, inv = _run(job, _out(layer="AP 내부", quotes=(prev, lost), rows=rows, claim="단계 2 — 링크가 끊김"), capsys)
+    assert data["weak"] == 0 and inv["status"] == "identified", (data, inv["gate"])
+    from triagelib import output
+    assert output._quote_ts(lost, ev).isoformat().startswith("2027-01-01T00:00:10")
+    assert output._quote_ts("2026-01-01T00:00:10.000Z host datad[9]: x", ev).isoformat().startswith("2026-01-01")   # 연도 적힌 줄은 그대로

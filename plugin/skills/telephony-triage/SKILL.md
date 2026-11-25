@@ -51,7 +51,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 - Step 5-1 `analyzer`·5-2 `explore`(있으면): `--no-…`·`never`면 생략, `--analyzer`·`--explore`·`always`면
   실행, 아니면 토큰 추가를 알리고 질문을 그대로 보인다(답 전 explore·module·원문 열람 금지). 둘 다 물으면 "심층 분석과 탐색 분석을 할까요?" 한 질문, `investigate.mode`면 "조사할까요?" 한 번. 5-2면 `S/triage.py explore <KEY>`부터(출력 `next`대로) → 5-1(`analyzer.skill`·`category`)은
   `module-skills.md`를 읽고 `S/triage.py module <KEY> --for deep`(종료 2도 계속) → 5-2.
-  준 파일(`timeline.md` 등)만 그 문서·`explore.md`대로 읽고 칸은 `check-output`이 report.md에 쓴다.
+  준 파일(`timeline.md` 등)만 그 문서·`explore.md`(끝까지)대로 읽고 칸은 `check-output`이 report.md에 쓴다.
 
 ### Step 6. 리포트
 
