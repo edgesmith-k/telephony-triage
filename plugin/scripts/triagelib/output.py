@@ -22,7 +22,8 @@ Claude가 쓴 `JOB/deep-output.md`·`JOB/explore-output.md`를 받아:
 7. 조사 모드(analysis.json `investigate.mode`, run이 판정)면 탐색 가장 유력 가설(없으면 1)에 검증 게이트 6개(`_investigation`)를 보고
    결과를 analysis.json·기록 `investigation`에, 조사 결론 줄을 report.md CAUSE 칸에 쓴다(통과 = 인용·형식 확인이면 맨 위, 근거 부족이면
    결론 줄 아래). 게이트는 인용이 원문에 있는지와 단계표 형식만 본다 — 원인이 맞는지는 사람이 본다(11/25 결정 1). 게이트 2는 가장
-   이른 false 단계의 관측이 원문 확인 인용이거나 사본에서 0건을 센 `찾았는데 없음`이어야 한다. 가장 유력이 정상(근거 줄 원문
+   이른 false 단계의 관측이 원문 확인 인용이거나, 로그·파서 규칙에 있는 낱말을 앞 단계 뒤 `explore.after_sec` 안에서 사본으로 0건 센
+   `찾았는데 없음`이어야 한다. 가장 유력이 정상(근거 줄 원문
    확인)이면 `normal: true`. 점수·분류·decision은 바꾸지 않는다. Jira 본문(`issue_post`)은 이 기록(analysis.json 아님)을 읽는다.
 8. 인용 줄이 한 칸 한도(768바이트)를 넘으면 실패가 아니라 앞부분 + ` …`로 줄여 대조·표시한다(`_clip_quote`).
 
@@ -42,6 +43,7 @@ import os
 import re
 import stat
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 from common import evidence, issuepost, logtime, masking, modulelines, provenance, shown
@@ -609,11 +611,29 @@ def _after_ref(job: Path, ok_quotes: list[str], events: dict | None, ref) -> tup
     return False, "기준 시각 뒤 줄 인용·구간 없음(실패 뒤를 보지 않음)" + note
 
 
-def _absent(word: list[str], texts: list[str], events: dict | None, ref) -> int:
-    """R-02: `찾았는데 없음` 낱말(`word` — 모두 든 줄)이 마스킹 사본(`texts`)에서 기준 시각(`ref`) 뒤, 기준이 없으면 분석 범위
-    (`input.window`, 없으면 전체) 안에 몇 줄 있나(`ABSENT_MAX`에서 멈춘다). 시각을 못 읽는 줄(덤프 이어진 줄 등)은 세지 않는다."""
+def _absent_span(events: dict | None, low, after_sec: int):
+    """`찾았는데 없음`을 세는 구간 (lo, hi, lo 포함 여부): 아래 끝(`low`)이 있으면 (low, low + `after_sec`] — 그 시각의 줄 자체는
+    세지 않는다(C-1), 없으면 분석 범위(`input.window`, 없으면 전체 = None) [시작, 끝]."""
+    if low is not None:
+        return low, low + timedelta(seconds=after_sec), False
     win = ((events or {}).get("input") or {}).get("window") or {}
     lo, hi = (logtime.normalize_ts(win.get(k), None, None) for k in ("start", "end"))
+    return lo, hi, True
+
+
+def _span_text(span) -> str:
+    """센 구간 글(타임라인과 같은 UTC 시각): `15:10:02.000~15:20:02.000`, 분석 범위면 `분석 범위 …`, 범위도 없으면 `로그 전체`."""
+    lo, hi, whole = span
+    if lo is None and hi is None:
+        return "로그 전체"
+    clock = lambda t: logtime.format_ts(t)[11:23] if t is not None else "?"
+    return ("분석 범위 " if whole else "") + f"{clock(lo)}~{clock(hi)}"
+
+
+def _absent(word: list[str], texts: list[str], events: dict | None, span) -> int:
+    """R-02: `찾았는데 없음` 낱말(`word` — 모두 든 줄)이 마스킹 사본(`texts`)의 구간(`_absent_span`) 안에 몇 줄 있나(`ABSENT_MAX`에서
+    멈춘다). 시각을 못 읽는 줄(덤프 이어진 줄 등)은 세지 않는다."""
+    lo, hi, closed = span
     n = 0
     for text in texts:
         at = text.find(word[0])
@@ -622,7 +642,7 @@ def _absent(word: list[str], texts: list[str], events: dict | None, ref) -> int:
             b = len(text) if b < 0 else b
             line = text[a:b]
             if all(w in line for w in word[1:]) and (t := _quote_ts(line, events)) is not None and (
-                    t > ref if ref is not None else (lo is None or t >= lo) and (hi is None or t <= hi)):
+                    lo is None or t > lo or (closed and t == lo)) and (hi is None or t <= hi):
                 n += 1
                 if n >= ABSENT_MAX:
                     return n
@@ -641,25 +661,43 @@ def _absent_words(item: str) -> list[str]:
     return ABSENT_WORD_RX.findall(what) or ASCII_WORD_RX.findall(what)
 
 
-def _first_obs(h: dict, first: dict, verdict: str | None, texts: list[str], events, ref) -> str:
+def _rules_text(events: dict | None) -> str:
+    """이슈 DB 스냅샷의 파서 규칙 파일 글(`events.json rules.path`의 `*.yaml` — tags·extractors·ril 등). 못 읽으면 ""."""
+    path = str(((events or {}).get("rules") or {}).get("path") or "")
+    if not path:
+        return ""
+    try:
+        return "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in sorted(Path(path).glob("*.yaml")) if p.is_file())
+    except OSError:
+        return ""
+
+
+def _first_obs(h: dict, first: dict, verdict: str | None, texts: list[str], events, low, after_sec: int) -> tuple[str, str]:
     """R-02(결정 1): 가장 이른 false 단계의 관측 칸이 근거로 서나 — 원문 확인(ok) 인용이거나, 그 가설의 `찾았는데 없음` 항목 낱말이
-    사본(없으면 근거 원문 행)에서 기준 시각 뒤(기준 없으면 분석 범위) 0건. 그 단계 기대·관측 칸에 낱말이 든 항목만 보고, 없으면 모든
-    항목. 맞으면 "", 아니면 실패 이유."""
+    사본(없으면 근거 원문 행)의 구간(`_absent_span(low)`, C-1)에서 0건. 그 단계 기대·관측 칸에 낱말이 든 항목만 보고, 없으면 모든
+    항목. 낱말은 사본(근거 원문)이나 파서 규칙 글에 한 번이라도 나오는 실제 낱말이어야 한다(C-2 — 없는 낱말은 늘 0건이다).
+    → (실패 이유 | "", 통과 메모 = 센 구간)."""
     if evidence.obs_quote(first["관측"]) is not None:
-        return "" if verdict == "ok" else f"관측 인용이 원문에서 확인되지 않음({verdict or '검사 못 함'})"
+        return ("", "") if verdict == "ok" else (f"관측 인용이 원문에서 확인되지 않음({verdict or '검사 못 함'})", "")
     items = [(i, w) for i in h.get("찾았는데 없음") or [] if (w := _absent_words(i))]
     near = f"{first['기대']} {first['관측']}".lower()
     items = [x for x in items if any(w.lower() in near for w in x[1])] or items
     if not items:
-        return "관측이 원문 확인 인용도, 셀 낱말이 있는 `찾았는데 없음` 항목도 아님"
+        return "관측이 원문 확인 인용도, 셀 낱말이 있는 `찾았는데 없음` 항목도 아님", ""
     if not texts:
-        return "근거 원문이 없어 `찾았는데 없음`을 셀 수 없음"       # 0건을 셌다고 하지 않는다(건너뛴 검사를 통과로 두지 않음)
+        return "근거 원문이 없어 `찾았는데 없음`을 셀 수 없음", ""      # 0건을 셌다고 하지 않는다(건너뛴 검사를 통과로 두지 않음)
+    rules = None
     for _i, word in items:
-        n = _absent(word, texts, events, ref)
+        for w in word:
+            if not any(w in t for t in texts) and w not in (rules := _rules_text(events) if rules is None else rules):
+                return f"`{w[:30]}`은 로그·파서 규칙 어디에도 없는 낱말", ""
+    span = _absent_span(events, low, after_sec)
+    where = _span_text(span)
+    for _i, word in items:
+        n = _absent(word, texts, events, span)
         if n:
-            return (f"`찾았는데 없음`이라 쓴 `{' '.join(word)[:30]}` 줄이 {'기준 시각 뒤' if ref else '분석 범위'}에 "
-                    + (f"{n}건 이상" if n >= ABSENT_MAX else f"{n}건") + " 있음")
-    return ""
+            return f"`찾았는데 없음` `{' '.join(word)[:30]}` 줄이 {where}에 " + (f"{n}건 이상" if n >= ABSENT_MAX else f"{n}건"), ""
+    return "", f"`찾았는데 없음` {where}에 0건"
 
 
 def _vendor_ipc(defaults: dict | None, platform: str | None, rules):
@@ -681,7 +719,9 @@ def _outer(events: dict | None, ok_quotes: list[str], layer: str | None, default
            platform: str | None = None) -> tuple[bool, str]:
     """게이트 6: CP·망 쪽 결론이면 ok 인용 중 그쪽 태그 줄이 하나 이상(`CP-망 경계`는 어느 쪽이든). CP 쪽 = 벤더 IPC 태그
     (`_vendor_ipc`)·`CP_CATEGORIES`, 망 쪽 = `NET_CATEGORIES`. 실패 이유(R-08): 판정할 표시(tags.yaml `ipc` 선언·카테고리, 백엔드 기본
-    벤더 IPC 태그)가 있으면 "결론 쪽(CP) 태그 줄 인용 없음", 표시 자체가 없으면 "사내 태그 설정에 CP/망 표시 없음(설정 전)"."""
+    벤더 IPC 태그)가 있으면 "결론 쪽(CP) 태그 줄 인용 없음", 표시 자체가 없으면 "사내 태그 설정에 CP/망 표시 없음(설정 전)".
+    표시가 백엔드 기본뿐(tags.yaml에 없음)이고 태그 있는 인용이 있으면 "인용한 줄의 태그가 CP 쪽으로 표시돼 있지 않음 — 사내 태그
+    설정 확인"(C-7 — 판정은 같다)."""
     from common import parser_rules
     sides = OUTER_SIDES.get(layer or "")
     if not sides:
@@ -692,7 +732,8 @@ def _outer(events: dict | None, ok_quotes: list[str], layer: str | None, default
         return False, "tags.yaml을 읽지 못함"
     cats = set(rules.tag_exact.values()) | {c for _p, c in rules.tag_regexes}
     vipc, backend_cp = _vendor_ipc(defaults, platform, rules)
-    marked = {"cp": rules.declares("ipc") or bool(cats & set(CP_CATEGORIES)) or backend_cp, "net": bool(cats & set(NET_CATEGORIES))}
+    site = {"cp": rules.declares("ipc") or bool(cats & set(CP_CATEGORIES)), "net": bool(cats & set(NET_CATEGORIES))}
+    marked = {"cp": site["cp"] or backend_cp, "net": site["net"]}
     side = {"cp": lambda t: (bool(vipc(t)) if vipc else rules.tag_attr(t, "ipc") == "vendor") or rules.tag_category(t) in CP_CATEGORIES,
             "net": lambda t: rules.tag_category(t) in NET_CATEGORIES}
     tags = [t for t in map(_quote_tag, ok_quotes) if t]
@@ -700,15 +741,18 @@ def _outer(events: dict | None, ok_quotes: list[str], layer: str | None, default
         return True, ""
     if not any(marked[s] for s in sides):
         return False, "사내 태그 설정에 CP/망 표시 없음(설정 전)"
-    return False, f"결론 쪽({'·'.join(SIDE_LABEL[s] for s in sides)}) 태그 줄 인용 없음"
+    label = '·'.join(SIDE_LABEL[s] for s in sides)
+    if tags and not any(site[s] for s in sides):     # C-7: 표시가 백엔드 기본(placeholder)뿐 — 인용한 CP 줄의 태그가 빠졌을 수 있다
+        return False, f"인용한 줄의 태그가 {label} 쪽으로 표시돼 있지 않음 — 사내 태그 설정 확인"
+    return False, f"결론 쪽({label}) 태그 줄 인용 없음"
 
 
 def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: dict | None, defaults: dict | None = None,
                    platform: str | None = None, before: int = 0, texts: list[str] | None = None,
-                   source: str | None = None) -> tuple[dict, list[str]]:
+                   source: str | None = None, after_sec: int = 600) -> tuple[dict, list[str]]:
     """조사 결론 게이트 6개 → (analysis.json·check-output 기록 `investigation`, 형식 경고). 하나라도 실패면 insufficient_evidence.
     `before` = 앞 검사의 원문에 없는 인용 수(있으면 게이트 1 실패, R-03), `texts` = 마스킹 사본 글(`찾았는데 없음` 세기 — 없으면
-    근거 원문 행 `source`로 센다)."""
+    근거 원문 행 `source`로 센다), `after_sec` = `explore.after_sec`(`찾았는데 없음` 세는 구간 길이, C-1)."""
     hyps = fields.get("hyps") or []
     if not hyps:
         return {"status": "insufficient_evidence", "hyp": None, "cause": None, "layer": None, "first_divergence": None,
@@ -736,18 +780,22 @@ def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: 
         fab, n_ok = verdicts.count("fabricated"), verdicts.count("ok")
         add("인용 원문", not fab and n_ok and not before, f"앞 검사에 원문에 없는 인용 {before}(다시 검사해도 지우지 않음)"
             if before and not fab and n_ok else "" if not fab and n_ok else f"원문에 없음 {fab}, 원문 확인 {n_ok}")
-    obs = ""
+    obs = note = ""
     if first is not None and claim == first["단계"]:
         quoted = [r for r in rows if evidence.obs_quote(r["관측"]) is not None]
-        verdict = dict(zip(map(id, quoted), chain_v[k])).get(id(first)) if chain_v else None
-        obs = _first_obs(h, first, verdict, texts or ([source] if source else []), events, ref)
+        by_row = dict(zip(map(id, quoted), chain_v[k])) if chain_v else {}
+        # C-1: `찾았는데 없음` 아래 끝 = 기준 시각과 그 단계 앞 단계들의 원문 확인 관측 줄 중 가장 늦은 시각 중 늦은 쪽
+        before = [t for r in quoted if r["단계"] < first["단계"] and by_row.get(id(r)) == "ok"
+                  and (t := _quote_ts(r["관측"], events)) is not None]
+        low = max([t for t in (ref, max(before, default=None)) if t is not None], default=None)
+        obs, note = _first_obs(h, first, by_row.get(id(first)), texts or ([source] if source else []), events, low, after_sec)
         if obs:
             obs = f"단계 {first['단계']}: {obs}"
             warns.append(f"가설 {k + 1}: 가장 이른 false {obs} — 관측 줄을 시각부터 원문 그대로 쓰거나, 없음이면 `찾았는데 없음:`에 "
                          "찾은 낱말을 백틱으로(예: - `SETUP_DATA_CALL` 재요청 — logs-masked 15:10:02 뒤 grep)")
     add("첫 어긋남", first is not None and claim == first["단계"] and not obs,
         "기대 체인 표 없음" if not rows else "표에 false 단계 없음" if first is None
-        else obs if claim == first["단계"] else f"첫 갈라짐 {claim or '없음'} ≠ 가장 이른 false 단계 {first['단계']}")
+        else obs or note if claim == first["단계"] else f"첫 갈라짐 {claim or '없음'} ≠ 가장 이른 false 단계 {first['단계']}")
     subject = _layer(first["주체"]) if first else None
     add("책임 층", layer not in (None, "모름") and first is not None and subject == layer,
         "책임 경계 칸 없음·목록 밖" if layer is None else "책임 경계 모름" if layer == "모름" else "첫 갈라짐 단계 없음"
@@ -1345,15 +1393,21 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     hold = _fit_hold(analysis, fields, normal1) if purpose == "explore" else None
     subs = _fit_subs(analysis, fields, hold, normal1) if purpose == "explore" else []
     investigating = purpose == "explore" and (analysis.get("investigate") or {}).get("mode")     # 조사 모드(run이 판정)
+    from triagelib import summary
     inv, inv_warns = (_investigation(job, fields, per_hyp, chain_v, sha, events, getattr(args, "tt_defaults", None),
-                                     analysis.get("platform"), before, copies, source) if investigating else (None, []))
+                                     analysis.get("platform"), before, copies, source,
+                                     summary.after_of(getattr(args, "platform_cfg", None) or {})) if investigating else (None, []))
     if inv and normal1:     # R-16: 가장 유력이 정상이고 정상 근거 줄이 원문 확인 — 원인 조사 대상 아님(상태는 근거 부족 그대로)
         inv = {**inv, "status": "insufficient_evidence", "normal": True}
     top = (analysis.get("candidates") or [None])[0]
-    if inv and inv["status"] == "identified" and isinstance(top, dict) and top.get("cause") and any(
-            c["cause"] == top["cause"] and c["verdict"] == "맞음" and i not in check_bad
-            for i, c in enumerate(fields.get(evidence.CHECK_FIELD) or [])):
-        inv["top_match"] = True     # R-24: 규칙 1위와 같음은 `후보 확인`이 그 ID를 맞음(근거 원문 확인)이라 했을 때만
+    if inv and inv["status"] == "identified" and isinstance(top, dict) and (top.get("cause") or top.get("type")):
+        # R-24: 규칙 1위와 같음은 `후보 확인`이 그 ID를 맞음(근거 원문 확인)이라 했을 때만. C-3b: 1위가 유형만(원인 미확인)이면
+        # 그 유형의 원인 ID(`<유형>-NN`, near_causes가 주는 것)가 맞음일 때도 — 값은 같다고 본 원인 ID(줄에 그 ID를 적는다)
+        same = (lambda c: c == top["cause"]) if top.get("cause") else (lambda c: str(c).startswith(f"{top['type']}-"))
+        hit = next((c["cause"] for i, c in enumerate(fields.get(evidence.CHECK_FIELD) or [])
+                    if same(c["cause"]) and c["verdict"] == "맞음" and i not in check_bad), None)
+        if hit:
+            inv["top_match"] = hit
     # skill_patch --module과 같은 보류 기준 + 결정 2(R-09): 이번 조사 결론이 identified면 첫 점검·함정도 받는다
     confirmed = ((analysis.get("decision") or {}).get("state") == "accepted" and not hold) or bool(inv and inv["status"] == "identified")
     rule_lines, rules_kept, rules_why, module_lines = _rule_subs(

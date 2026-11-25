@@ -393,7 +393,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 - investigate?(조사 모드(run이 `issuepost.investigate_mode`로 판정 — 포털·check-output은 이 칸을 읽는다): mode(1위 후보가 없거나 1위 C=0이면 true), reason?(mode true일 때만 후보 없음|1위 C=0))
   - mode
   - reason?: 후보 없음 | 1위 C=0
-- investigation?(조사 결론(조사 모드에서 `check-output --for explore`가 쓴다, run은 쓰지 않는다 — LLM 탐색 결론의 스크립트 검증 게이트 결과, 점수·분류·decision과 별개): status(identified = 게이트 6개 모두 통과|insufficient_evidence), hyp(가장 유력, 없으면 1 — 가설 없음이면 null), cause(가설 머리 ≤120자|null), layer(책임 경계 AP 내부|AP-CP 경계|CP 내부|CP-망 경계|망|환경|모름|null), first_divergence({step, expect ≤80자}|null — 첫 갈라짐 단계 표의 행), gate[{name, ok, why}](인용 원문·첫 어긋남·책임 층·실패 뒤 흔적·숫자 메커니즘·외부 근거, why ≤80자), explore_sha(검사한 explore-output.md sha256), normal(true만 — 가장 유력이 정상이고 정상 근거 줄이 원문 확인, status는 insufficient_evidence), top_match(true만 — 탐색 `후보 확인`이 규칙 1위 ID를 맞음이라 함, `규칙 1위와 같음` 표시))
+- investigation?(조사 결론(조사 모드에서 `check-output --for explore`가 쓴다, run은 쓰지 않는다 — LLM 탐색 결론의 스크립트 검증 게이트 결과, 점수·분류·decision과 별개): status(identified = 게이트 6개 모두 통과|insufficient_evidence), hyp(가장 유력, 없으면 1 — 가설 없음이면 null), cause(가설 머리 ≤120자|null), layer(책임 경계 AP 내부|AP-CP 경계|CP 내부|CP-망 경계|망|환경|모름|null), first_divergence({step, expect ≤80자}|null — 첫 갈라짐 단계 표의 행), gate[{name, ok, why}](인용 원문·첫 어긋남·책임 층·실패 뒤 흔적·숫자 메커니즘·외부 근거, why ≤80자), explore_sha(검사한 explore-output.md sha256), normal(true만 — 가장 유력이 정상이고 정상 근거 줄이 원문 확인, status는 insufficient_evidence), top_match(같다고 본 원인 ID — 탐색 `후보 확인`이 규칙 1위 ID(1위가 유형만이면 그 유형의 원인 ID)를 맞음이라 함, `규칙 1위와 같음` 표시))
   - status: identified | insufficient_evidence
   - hyp?
   - cause?
@@ -405,7 +405,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
     - why
   - explore_sha
   - normal?: true
-  - top_match?: true
+  - top_match?
 - prior?(재실행일 때 이전 실행이 남긴 것(hyps·none·unfit·looked 중 하나라도 있을 때만, 4KB 압축 시 hyps → 전체 순으로 뺀다): top(직전 1위 원인|유형), hyps[≤3](근거 원문 검사를 통과한(원문에 없는 인용 0, 검사 건너뜀 아님) 이전 탐색 가설 머리와 반대 근거, ≤120), none(이전 탐색 `가설 없음` 이유, ≤120), unfit(이전 탐색의 1위 부적합 보류 `<원인 ID> — <이유>`, ≤120), unfit_reason?(unfit의 보류 사유 normal(탐색 분석이 설계상 정상 동작으로 봄)|unfit, 없으면 unfit — 옛 기록), looked[≤3](이전 실행의 가린 기준 줄, ≤80))
   - top?
   - hyps?[≤3]
@@ -414,6 +414,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - unfit_reason?: normal | unfit
   - looked?[≤3]
 - warnings?
+- next?(탐색 중 다시 한 run(타임라인을 다시 만든 경우)이 모듈 보기·심층 분석(5-1) 결과도 지웠을 때만: 다시 받을 명령·답에 다시 적을 줄 안내(run 출력에만 — analysis.json에는 없다))
 - notes?(잔여 worktree·도구 브랜치 안내 등)
 - lock_owner?
 - lock_released?(analysis-only가 ok로 끝나 lock을 풀었을 때만(lock_owner 없음)): true

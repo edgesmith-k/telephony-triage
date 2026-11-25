@@ -564,3 +564,90 @@ def test_r02_label_says_quotes_and_format_checked_with_one_note(tmp_path, capsys
     assert rows[0].startswith("- 조사 결론 (LLM, 인용·형식 확인): ") and "identified" not in rows[0]
     assert rows[1] == ("  - 스크립트가 확인한 것은 인용한 로그 줄이 실제로 있는지와 단계표가 맞는지다. 원인이 맞는지는 사람이 확인한다.")
     assert sum(issuepost.INVESTIGATION_NOTE.strip() in r for r in rows) == 1
+
+
+# --- 11/25 확인 리뷰 고침(C-1·C-2·C-3b·C-7·C-10) -------------------------------------------------------------------
+# 지침 예시대로 쓴 맞는 결론이 떨어지던 입력과, 지어낸 낱말로 통과하던 입력
+
+FAIL_ROWS = ["| 1 | SETUP 요청이 나간다 | AP 내부 | log:15:10:00 | " + Q0 + " | true |",
+             "| 2 | CP가 인증 실패로 응답한다 | CP 내부 | log:15:10:01 | " + Q1 + " | true |",
+             "| 3 | 인증 실패 뒤 SETUP을 다시 보낸다 | CP 내부 | spec:x | 없음(찾은 곳: logs-masked 15:10:01 뒤) | false |"]
+
+
+def test_c01_absent_word_counts_only_after_sec_window(tmp_path, capsys):
+    """C-1 (가): 기준(15:10:02) 뒤 5초 안 재요청 없음이 맞는데 30분 뒤 다른 요청 한 줄 때문에 떨어지던 것 — 세는 구간은
+    [아래 끝, 아래 끝 + explore.after_sec(600)]. 구간 안 줄은 그대로 실패하고 이유에 센 구간을 적는다."""
+    job = _job(tmp_path / "far")
+    _copy(job, [ISO_Q1, "2026-09-20T15:40:00.000Z host vrild[7]: RIL_REQUEST_SETUP_DATA_CALL apn=internet"])
+    _data, inv = _run(job, _out(rows=ABSENT_ROWS, extra=ABSENT), capsys)
+    assert inv["status"] == "identified", inv["gate"]
+    assert "15:10:02.000~15:20:02.000" in inv["gate"][1]["why"] and "0건" in inv["gate"][1]["why"], inv["gate"]
+    job = _job(tmp_path / "near")
+    _copy(job, [ISO_Q1, "2026-09-20T15:19:00.000Z host vrild[7]: RIL_REQUEST_SETUP_DATA_CALL apn=internet"])
+    _data, inv = _run(job, _out(rows=ABSENT_ROWS, extra=ABSENT), capsys)
+    assert _failed(inv) == ["첫 어긋남"] and "15:10:02.000~15:20:02.000" in inv["gate"][1]["why"], inv["gate"]
+    assert "1건" in inv["gate"][1]["why"] and "15:10:02.000~15:20:02.000" in "\n".join(_cause_rows(job))
+
+
+def test_c01_coarse_occurrence_time_uses_latest_prior_step_quote(tmp_path, capsys):
+    """C-1 (나): 확정 기준이 발생 시각(15:09:30)뿐이고 실패 줄(15:10:01.2)보다 앞이면 실패 줄 자체가 세지던 것 — 아래 끝은
+    가장 이른 false 단계 앞 단계들의 원문 확인 관측 줄 가운데 가장 늦은 시각(그 줄 자체는 세지 않는다). 백틱 없는 낱말·oFono 모양도."""
+    for name, extra, q1 in (("tick", ABSENT, Q1), ("bare", ("찾았는데 없음:", "- SETUP_DATA_CALL 재요청 — logs-masked 15:10:01 뒤"), Q1),
+                            ("bsd", ABSENT, "Sep 20 15:10:01.200 host vrild[7]: RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM")):
+        job = _job(tmp_path / name)
+        (job / "explore-input.json").write_text(json.dumps({"limit": 200, "around": "2026-09-20T15:09:30Z"}), encoding="utf-8")
+        _copy(job, [ISO_Q1] if q1 == Q1 else [q1])
+        rows = [r.replace(Q1, q1) for r in FAIL_ROWS]
+        _d, inv = _run(job, _out(rows=rows, claim="단계 3 — CP가 재요청하지 않음", extra=extra), capsys)
+        assert inv["status"] == "identified", (name, inv["gate"])
+        assert "15:10:01.200~15:20:01.200" in inv["gate"][1]["why"], (name, inv["gate"])
+
+
+def test_c02_made_up_absent_word_is_not_counted_as_absence(tmp_path, capsys):
+    """C-2: 로그 어디에도 없는 낱말은 늘 0건이다 — `찾았는데 없음` 낱말은 사본(없으면 근거 원문)이나 파서 규칙에 있어야 한다."""
+    rows = ["| 1 | 달이 파랗게 빛난다 | AP 내부 | spec:x | 없음 | false |"]
+    data, inv = _run(_job(tmp_path / "moon"), _out(layer="AP 내부", quotes=(Q0, Q_AFTER), rows=rows, claim="단계 1 — 달이 파랗지 않음",
+                                                   head="달이 파랗다", extra=("찾았는데 없음:", "- `blue_moon_glow` — 사본 전체 grep")),
+                     capsys)
+    assert _failed(inv) == ["첫 어긋남"] and "`blue_moon_glow`은 로그·파서 규칙 어디에도 없는 낱말" in inv["gate"][1]["why"], inv["gate"]
+    assert any("단계 1" in w for w in data["format_warnings"]), data
+    job = _job(tmp_path / "rule")        # 로그엔 없지만 파서 규칙(ril.yaml)에 있는 낱말은 실제 낱말이다
+    _copy(job, [ISO_Q1])
+    _d, inv = _run(job, _out(rows=ABSENT_ROWS, extra=("찾았는데 없음:", "- `DEACTIVATE_DATA_CALL` 요청 — logs-masked 15:10:02 뒤")),
+                   capsys)
+    assert inv["status"] == "identified", inv["gate"]
+
+
+def test_c03b_type_only_top_matches_its_cause_in_candidate_check(tmp_path, capsys):
+    """C-3b: 1위가 유형만(원인 없음, C=0)이면 그 유형의 원인 ID가 `후보 확인`에서 맞음일 때 규칙 1위와 같음 — 줄에는 그 원인 ID."""
+    top = {**OK_KEYS["candidates"][0], "cause": None, "C": 0}
+    job = _job(tmp_path / "a", cands=[top])
+    _run(job, _out(extra=("후보 확인:", f"- DATA-001-01: 맞음 — {Q1}")), capsys)
+    rows = _cause_rows(job)
+    assert rows[0].endswith("(규칙 1위 DATA-001-01와 같음)") and not any("관측된 규칙 일치" in r for r in rows), rows
+    fake = types.SimpleNamespace(path=lambda n: job / n, tracker=trackers.get("jira"), key="MOCK-9076", db_cfg={})
+    a = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    assert issue_post.build(fake, a, None, None, set())[0]["CAUSE"][0]["text"].endswith("(규칙 1위 DATA-001-01와 같음)")
+    job = _job(tmp_path / "other", cands=[top])            # 다른 유형의 원인은 아니다
+    _run(job, _out(extra=("후보 확인:", f"- DATA-0010-01: 맞음 — {Q1}")), capsys)
+    assert "같음" not in _cause_rows(job)[0]
+
+
+def test_c07_quoted_cp_line_without_site_mark_says_check_tag_config(tmp_path, capsys):
+    """C-7: Android 기본 벤더 IPC 태그(placeholder `RIL`)만 있고 사내 tags.yaml에 표시가 없는데 실제 CP 줄(vrild)을 인용하면
+    "인용 없음"이 아니라 태그 설정을 보라고 적는다. 판정은 그대로(실패)."""
+    _data, inv = _run(_job(tmp_path, cp_mark=False, platform="android"), _out(), capsys)
+    assert _failed(inv) == ["외부 근거"] and inv["gate"][5]["why"] == "인용한 줄의 태그가 CP 쪽으로 표시돼 있지 않음 — 사내 태그 설정 확인"
+
+
+def test_c10_jira_skips_investigation_when_explore_output_changed(tmp_path, capsys):
+    """C-10: 검사 뒤 explore-output.md가 바뀌면(기록을 손대지 않아도) Jira 본문에 조사 결론을 싣지 않는다."""
+    job = _job(tmp_path)
+    _run(job, _out(), capsys)
+    fake = types.SimpleNamespace(path=lambda n: job / n, tracker=trackers.get("jira"), key="MOCK-9076", db_cfg={})
+    a = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    assert issue_post.build(fake, a, None, None, set())[0]["CAUSE"][0]["text"].startswith("조사 결론")
+    with (job / "explore-output.md").open("a", encoding="utf-8") as f:
+        f.write("가설 2: 나중에 손으로 더한 가설\n")
+    cause = [i["text"] for i in issue_post.build(fake, a, None, None, set())[0]["CAUSE"]]
+    assert not any(t.startswith("조사 결론") for t in cause)

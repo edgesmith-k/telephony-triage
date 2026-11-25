@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import hashlib
 import json
 import re
 import sys
@@ -391,7 +392,9 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
     # (R-11: analysis.json은 모델이 고쳐 쓸 수 있고 check-output.json은 guard가 막는다)
     explore_rec = (_read(rec_path, "check-output.json") or {}).get("explore") or {}
     inv = explore_rec.get("investigation") if isinstance(explore_rec, dict) else None
-    if isinstance(inv, dict) and isinstance(explore_rec, dict) and inv.get("explore_sha") == explore_rec.get("output_sha256"):     # 지금 탐색 검사의 결론만
+    out = job.path("explore-output.md")         # C-10: 지금 explore-output.md(검사가 다시 쓴 바이트)와 같은 출력의 결론만
+    now = hashlib.sha256(out.read_bytes()).hexdigest() if out.is_file() and not out.is_symlink() else None
+    if isinstance(inv, dict) and now and inv.get("explore_sha") == now:
         cands = [c for c in a.get("candidates") or [] if isinstance(c, dict)]
         rows = [_line(t.lstrip(" -")) for t in issuepost.investigation_lines(inv, cands[0] if cands else None, why=False)]
         s["CAUSE"] = rows + s["CAUSE"] if inv.get("status") == "identified" else s["CAUSE"] + rows
