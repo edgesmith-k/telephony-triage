@@ -589,7 +589,8 @@ class Ctx:
     def explore_order(self, filename="timeline.md"):
         """(explore 호출 순번, 질문 순번, `filename` 첫 열람 순번). 순번은 seq 안의 위치, 없으면 None. 기록이 없으면 None.
         질문 = explore 호출 앞의 assistant 텍스트, 또는 모의 `ask_user` 도구 호출의 question 중 '탐색 분석'과
-        '할까요/실행할까/진행할까/할지'가 함께 든 것(plugin 모드 실행자는 질문을 그 도구로 한다, run.py `_rules`)."""
+        '할까요/실행할까/진행할까/할지'가 함께 든 것, 또는 SKILL.md 조사 모드 한 질문 "조사할까요?"(`_is_explore_q`)
+        (plugin 모드 실행자는 질문을 그 도구로 한다, run.py `_rules`)."""
         seq = self.seq()
         if seq is None:
             return None
@@ -599,8 +600,7 @@ class Ctx:
             if e["kind"] == "text":
                 return e["text"]
             return shown.ask_text(e["input"]) if shown._live_ask(e) else ""
-        asked = next((i for i, e in enumerate(seq) if "탐색 분석" in question(e)
-                      and re.search(r"할까요|실행할까|진행할까|할지", question(e)) and (explored is None or i < explored)), None)
+        asked = next((i for i, e in enumerate(seq) if _is_explore_q(question(e)) and (explored is None or i < explored)), None)
         # explore 호출 자신은 아래에서 앞·뒤를 가린다(_opens는 triage 조각을 빼고 같은 호출의 읽기도 센다)
         # 실패한 읽기(파일 없음)는 열람이 아니다 — `cat 틀린경로 | head`는 오류 표시 없이 끝나 결과 글로만 안다(eval 73 i8-1126-b)
         read = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and i != explored
@@ -1482,7 +1482,7 @@ def checks(eid: int, ctx: Ctx) -> list:
         if explored is None:
             return False, "triage.py explore 호출 없음"
         if asked is None:
-            return False, f"explore 호출(순번 {explored}) 앞에 '탐색 분석'+'할까요/실행할까/진행할까'가 든 assistant 텍스트 없음"
+            return False, f"explore 호출(순번 {explored}) 앞에 '탐색 분석'+'할까요/실행할까/진행할까'나 '조사할까요?'가 든 질문 없음"
         return True, f"질문 순번={asked} < explore 호출 순번={explored}"
     if eid == 46:
         return [asked_before_explore, lambda: scope("setup-error.log"), None, None, None, lambda: noplan("MOCK-9046")]
@@ -2916,6 +2916,16 @@ def _expand(tok: str, env: dict, cwd: str | None) -> str | None:
 
 
 _DRIVE_ABS = re.compile(r"^[A-Za-z]:[/\\]")
+
+
+# 조사 모드 한 질문(SKILL.md "`investigate.mode`면 \"조사할까요?\" 한 번"): 괄호 꼬리(심층·탐색·토큰)가 있거나 앞 낱말에 딸리지
+# 않은 짧은 꼴 — "더 조사할까요?"는 아니다. show_guard EXPLORE_Q의 조사 부분과 같은 기준(채점기는 hook을 import하지 않는다)
+_INVESTIGATE_Q = re.compile(r"조사할까요\?\s*\((?:심층|탐색|토큰)|(?<![가-힣]\s)(?<![가-힣])조사할까요\?")
+
+
+def _is_explore_q(text: str) -> bool:
+    """탐색 분석 실행 여부 질문인가: '탐색 분석'+'할까요/실행할까/진행할까/할지', 또는 조사 모드 질문 "조사할까요?"."""
+    return ("탐색 분석" in text and bool(re.search(r"할까요|실행할까|진행할까|할지", text))) or bool(_INVESTIGATE_Q.search(text))
 
 
 _NO_FILE = re.compile(r"No such file or directory|cannot open|cannot access|File does not exist")

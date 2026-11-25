@@ -666,7 +666,10 @@ def test_explore_order_handles_quoted_paths_and_haji_questions(tmp_path, command
     assert (asked, explored, read) == (0, 1, 2)
 
 
-@pytest.mark.parametrize("question,asked", [("탐색 분석을 실행할까요? (토큰 추가 사용)", True), ("코드 경로를 고를까요?", False)])
+@pytest.mark.parametrize("question,asked", [("탐색 분석을 실행할까요? (토큰 추가 사용)", True), ("코드 경로를 고를까요?", False),
+                                             # SKILL.md 조사 모드 한 질문(eval 73 i8-1126-j) — 앞 낱말에 딸린 "더 조사할까요?"는 아니다
+                                             ("## 분석\n- 판단: 원인 보류\n\n조사할까요? (토큰 추가 사용)", True),
+                                             ("조사할까요?", True), ("로그를 더 조사할까요?", False)])
 def test_explore_order_counts_ask_user_tool_question(tmp_path, question, asked):
     """plugin 모드 실행자는 질문을 모의 ask_user 도구로 한다 — 그 question도 질문으로 센다(글이 없어도)."""
     env_dir = _synthetic_env(tmp_path)
@@ -676,6 +679,18 @@ def test_explore_order_counts_ask_user_tool_question(tmp_path, question, asked):
                       ("tool", "e1", "Bash", {"command": "python3 triage.py explore MOCK-9046"}, "ok", False)])
     explored, got, _ = grader.Ctx(env_dir, run).explore_order()
     assert explored == 1 and (got == 0) is asked
+
+
+def test_explore_order_investigate_question_order(tmp_path):
+    """조사 질문 뒤 explore면 질문으로 센다 / 질문 없이 explore 하거나 explore 뒤에만 물으면 질문 없음(e46 1번 실패)."""
+    env_dir = _synthetic_env(tmp_path)
+    q = ("tool", "q1", "mcp__eval-approver__ask_user", {"question": "조사할까요? (토큰 추가 사용)", "options": ["예", "아니오"]}, "예", False)
+    ex = ("tool", "e1", "Bash", {"command": "python3 triage.py explore MOCK-9046"}, "ok", False)
+    for name, events, asked in (("ok", [q, ex], 0), ("none", [ex], None), ("late", [ex, q], None)):
+        run = run_dir(tmp_path / name)
+        _write_artifacts(run)
+        _seq_events(run, events)
+        assert grader.Ctx(env_dir, run).explore_order()[1] == asked, name
 
 
 def test_plugin_rules_route_questions_through_ask_tool(tmp_path):
