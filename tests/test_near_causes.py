@@ -201,16 +201,19 @@ def _near(partial, candidates=(), hits=None, summary="데이터 연결 안 됨 0
 
 def test_near_causes_drop_zero_match_known_candidates_and_type_with_cause():
     p = [{"type": "DATA-001", "cause": "DATA-001-01", "matched": "0/2", "missing": []},          # 맞은 조건 0개: 뺌
-         {"type": "DATA-002", "cause": "DATA-002-01", "matched": "1/2", "missing": [{"desc": "x"}]},   # 이미 후보: 뺌
+         {"type": "DATA-002", "cause": "DATA-002-01", "matched": "1/2", "missing": [{"desc": "x"}]},   # 후보 유형의 원인이어도 조건이 맞았으면 남김
          {"type": "DATA-003", "cause": "DATA-003-02", "matched": "1/3", "missing": []},
          {"type": "SIM-001", "cause": None, "matched": "1/2", "missing": []}]
     cands = [{"type": "DATA-002", "cause": None, "C": 0}]
     search = [{"kind": "type", "id": "DATA-003"}, {"kind": "cause", "id": "DATA-002-05"}, {"kind": "cause", "id": "NET-004-01"},
               {"kind": "issue", "key": "MOCK-1", "cause": "NET-009-01"}]
     got, calls = _near(p, cands, search=search)
-    # DATA-003(유형)은 그 원인 DATA-003-02가 있어 원인만, DATA-002-05는 후보 유형 DATA-002의 원인이라 뺌, 이 이슈 자신의 기록은 뺌
-    assert [n["id"] for n in got] == ["DATA-003-02", "SIM-001", "NET-004-01"]
-    assert got[0]["matched"] == "1/3" and got[2]["note"] == WORDS_ONLY
+    assert [n["id"] for n in got] == ["DATA-002-01", "DATA-003-02", "SIM-001"] and calls == []     # 부분 일치로 3칸이 차면 검색 안 함
+    assert got[0]["matched"] == "1/2" and got[0]["missing"] == ["x"]
+    got, calls = _near(p[:3], cands, search=search)
+    # 낱말 검색: DATA-003(유형)은 그 원인 DATA-003-02가 있어 원인만, DATA-002-05는 후보 유형 DATA-002의 원인이라 뺌, 이 이슈 자신의 기록은 뺌
+    assert [n["id"] for n in got] == ["DATA-002-01", "DATA-003-02", "NET-004-01"]
+    assert got[1]["matched"] == "1/3" and got[2]["note"] == WORDS_ONLY
     assert calls == [("4-near", "데이터 연결 안 됨 <PHONE#1>")]                     # 검색에는 가린 요약(R-31)
 
 
