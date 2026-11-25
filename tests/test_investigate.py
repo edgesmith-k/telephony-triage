@@ -328,4 +328,10 @@ def test_number_unit_and_explore_question_and_report_core_patterns():
     assert all(rx.search(t) for t in ("5 sec 뒤", "10 seconds", "3 times", "5s", "300ms", "2 min", "5초", "3회"))
     assert show_guard.EXPLORE_Q.search("조사할까요? (심층 분석 뒤 탐색 분석, 토큰 추가 사용)")
     assert not show_guard.EXPLORE_Q.search("다른 원인을 더 조사할까요?")
+    # R-33: SKILL.md의 짧은 문구 `조사할까요?`(줄 머리·꾸밈 뒤)와 후보 없음 문구도 Step 5 질문이다. 앞 낱말에 붙은 질문은 아니다
+    for q in ("조사할까요?", "**조사할까요?**", "- 조사할까요? (예/아니오)", "조사할까요? (탐색 분석, 토큰 추가 사용)",
+              "원인을 조사할까요? (심층 분석 뒤 탐색 분석, 토큰 추가 사용)"):
+        assert show_guard.EXPLORE_Q.search(q), q
+    for q in ("이 원인으로 더 조사할까요? (Step 7)", "원인을조사할까요?"):
+        assert not show_guard.EXPLORE_Q.search(q), q
     assert shown.REPORT_CORE.match("- 조사 결론 (LLM, 검증 통과): x")

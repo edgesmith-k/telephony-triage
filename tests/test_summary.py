@@ -308,6 +308,27 @@ def test_explore_reads_copies_once_and_deep_reuses_summary(monkeypatch):
     assert rec["events_sha256"] == output._sha((job / "events.json").read_bytes())
 
 
+def test_deep_before_explore_reads_copies_twice(monkeypatch, tmp_path):
+    """R-14 재현: 5-1(`module --for deep`)을 explore보다 먼저 부르면 explore-input.json에 요약이 없어 5-1이 사본을 읽고, 뒤 explore가
+    또 읽는다(두 번). SKILL.md가 explore를 먼저 부르게 하는 까닭(먼저면 한 번 — 위 시험)."""
+    import argparse
+    import triage
+    from triagelib import window
+    job = tmp_path / "j"
+    shutil.copytree(_job(), job)
+    spec = {k: v for k, v in _spec(job).items() if k not in ("summary", "anomaly")}     # explore 전 모양
+    (job / core.EXPLORE_INPUT_FILE).write_text(json.dumps(spec), encoding="utf-8")
+    calls = []
+    real = window._records
+    monkeypatch.setattr(window, "_records", lambda *a, **k: calls.append(1) or real(*a, **k))
+    events = json.loads((job / "events.json").read_text(encoding="utf-8"))
+    analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    assert modulecmd._deep_summary(job, KEY, {}, _defaults(), analysis, events, None)[0]
+    args = argparse.Namespace(key=KEY, out=str(job), platform_name="android", plugin_root=str(plugin_root()))
+    assert triage._explore(args, {}, job, _defaults()) == 0
+    assert len(calls) == 2
+
+
 def test_summary_source_rejects_other_run(tmp_path):
     """낮음: summary.json의 events.json sha가 지금 것과 다르면(다른 run의 요약) 근거 원문에서 뺀다."""
     other = tmp_path / "j"

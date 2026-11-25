@@ -213,7 +213,7 @@ def test_agent_prompt():
     # 규칙 11(리뷰 P1-1·P1-2·P2-2): 부모가 "언제"대로 정하고 묻고, explore·module(모듈 질문 포함)을 돌린 **뒤** 고른 값으로
     # tt-explore에 맡긴다. 답은 그대로, 이어서 Step 6(Step 7은 "다음"대로). check-output 줄이 없으면 --skipped, task 실패·없음은 같은 세션
     rule11 = next(l for l in body.splitlines() if l.startswith("11. "))
-    for must in ('"언제"', "module-skills.md", "`triage.py explore`", "--module/--with/--deep", "module `read` files",
+    for must in ('"언제"', "module-skills.md", "`triage.py explore`", "--module/--deep", "module `read` files", "`- 심층 분석` line if 5-1 ran",
                  "look-at/time", "verbatim", "Step 6", '"다음"', "question: ask it, then task again", '--for explore --skipped "<reason>"', "explore here"):
         assert must in rule11, must
     assert rule11.index("`triage.py explore`") < rule11.index('task "tt-explore"') < rule11.index("Step 6")
