@@ -92,7 +92,8 @@ def investigation_lines(inv: dict, top: dict | None = None, why: bool = True) ->
         else:
             out.append(f"  - 관측된 규칙 일치: {top.get('category')} > {top.get('type')} > {cause or '원인 미확인'} — 규칙 1위"
                        "(원인 일치 없음), 조사 결론과 다름")
-    out.append("  - 점수·분류·이슈 DB 기록은 그대로다. 채택하면 Step 7에서 새 원인 초안의 출발점으로 쓴다" if ok else
+    out.append("  - 규칙 판정은 보류, 조사 결론은 검증 통과 — 점수·분류·이슈 DB 기록은 그대로다. 이 원인으로 기록하려면 분류할 때 "
+               "새 원인을 고른다" if ok else
                "  - 근거가 모자라 결론으로 쓰지 않는다 — 원인은 보류 그대로. 실패한 검증을 보고 로그를 더 확인한다")
     return out
 

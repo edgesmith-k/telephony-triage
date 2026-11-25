@@ -331,11 +331,15 @@ def _verdict(cell: str) -> str:
 
 def _chain_row(cells: list[str], cols: dict | None) -> dict | None:
     """표 행 → {단계, 기대, 주체, 근거, 관측, 일치}. 첫 칸에서 단계 번호를 못 읽으면(머리·구분 행 `| **단계** |`·`| # |`·`|-|-|`) None.
-    머리 행에서 찾은 열 위치(`cols`)가 있고 칸 수가 같으면 그 위치로, 아니면 5열 자리(관측 칸의 `|`는 가운데 칸을 이어 붙인다).
+    머리 행에서 찾은 열 위치(`cols`)가 있고 칸 수가 같거나 더 많으면 그 위치로(더 많으면 관측 칸 안의 `|` — 남는 칸을 관측 칸에
+    이어 붙인다), 아니면 5열 자리(관측 칸의 `|`는 가운데 칸을 이어 붙인다).
     `주체`(기대 주체 열, 11/25 조사 모드)는 머리 행에 있을 때만, 없으면 ""(옛 5열 표 — 게이트 3 실패로 본다)."""
     m = STEP_NUM_RX.search(cells[0])
     if not m:
         return None
+    if cols and len(cells) > cols["n"]:
+        o, extra = cols["관측"], len(cells) - cols["n"]
+        cells = cells[:o] + [" | ".join(cells[o:o + extra + 1]).strip()] + cells[o + extra + 1:]     # 칸을 나눌 때 뗀 둘레 공백을 되살린다
     if cols and len(cells) == cols["n"]:
         pick = {k: cells[i] if i is not None else "" for k, i in cols.items() if k != "n"}
     elif len(cells) >= 5:

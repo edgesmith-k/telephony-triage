@@ -555,6 +555,19 @@ def _clip_anchor_step(result: dict, limit: int) -> None:
         sa["step"] = _clip(sa["step"], limit)
 
 
+def _trim_investigation(result: dict) -> None:
+    """조사 결론(check-output `investigation`)을 줄인다: 통과한 게이트의 `why`를 비우고 원인 60자·기대 40자로(상태·층·게이트 이름·
+    통과 여부는 그대로 — 포털이 읽는다)."""
+    inv = result.get("investigation")
+    if not isinstance(inv, dict):
+        return
+    inv["gate"] = [{**g, "why": ""} if g.get("ok") else g for g in inv.get("gate") or []]
+    if inv.get("cause"):
+        inv["cause"] = _clip(inv["cause"], 60)
+    if isinstance(inv.get("first_divergence"), dict):
+        inv["first_divergence"] = {**inv["first_divergence"], "expect": _clip(inv["first_divergence"].get("expect"), 40)}
+
+
 def _drop_prior_hyps(result: dict) -> None:
     """`prior.hyps`를 뺀다. 남는 것이 `top`뿐이면 `prior` 전체를 뺀다(계약: hyps·none·looked 중 하나라도 있을 때만)."""
     prior = result.get("prior")
@@ -629,8 +642,9 @@ def fit(result: dict) -> dict:
         submitter_note=_clip(result["issue"]["submitter_note"], NOTE_SHORT)))
     for c in others:
         steps.append(lambda c=c: c.update(evidence=[]))
-    steps.insert(0, lambda: _drop_read_only_hint_if_shown(result))
-    steps.insert(1, lambda: result.update(read_only_hint=_clip(result.get("read_only_hint"), 100))
+    steps.insert(0, lambda: _trim_investigation(result))      # 조사 결론은 근거 줄·must_show보다 먼저 줄인다
+    steps.insert(1, lambda: _drop_read_only_hint_if_shown(result))
+    steps.insert(2, lambda: result.update(read_only_hint=_clip(result.get("read_only_hint"), 100))
                  if result.get("read_only_hint") else None)
     # 자격 검사 사건(표시용, 전체는 JOB/eligibility.json)을 먼저 줄인다 — events_total은 남기고 기준에 붙은 사건(ref)은 원인마다 하나씩(≤3) 남긴다
     # (보류 판단 줄·포털이 원인 후보로 읽는다 — 기준 사건이 여럿이고 원인이 갈리면 포털이 후보를 고르지 않는다, sim1120 P1-1 S-26).

@@ -40,14 +40,14 @@ def _rules(base: Path, cp_mark: bool = True) -> Path:
     return db / "parser-rules"
 
 
-def _job(base: Path, mode: bool = True, cp_mark: bool = True, cands=()) -> Path:
+def _job(base: Path, mode: bool = True, cp_mark: bool = True, cands=(), rows=None, platform: str = "ofono") -> Path:
     """조사 모드 JOB: 스키마 `ok`를 갖춘 analysis.json(후보 없음 판단), CAUSE 칸이 있는 report.md, events.json에 규칙 경로."""
-    job = make_job(base, "explore", "plain")
+    job = make_job(base, "explore", "plain", **({"rows": rows} if rows else {}))
     ev = json.loads((job / "events.json").read_text(encoding="utf-8"))
     ev["rules"] = {"path": str(_rules(base, cp_mark))}
     (job / "events.json").write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
     analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
-    analysis.update(OK_KEYS, candidates=list(cands), decision=HELD, analyzer=None,
+    analysis.update(OK_KEYS, candidates=list(cands), decision=HELD, analyzer=None, platform=platform,
                     investigate=issuepost.investigate_mode({"candidates": list(cands)}) if mode else {"mode": False})
     (job / "analysis.json").write_text(json.dumps({k: v for k, v in analysis.items() if v is not None}, ensure_ascii=False),
                                        encoding="utf-8")
@@ -162,13 +162,22 @@ def test_cp_conclusion_without_cp_tag_quote_fails_gate_6(tmp_path, capsys):
 
 
 def test_window_after_reference_counts_as_looking_after(tmp_path, capsys):
-    job = _job(tmp_path)
-    _window(job)
-    rec = json.loads((job / "windows.json").read_text(encoding="utf-8"))
-    rec["windows"][0]["at"] = "2026-09-20T15:10:05.000Z"
-    (job / "windows.json").write_text(json.dumps(rec), encoding="utf-8")
+    job = _job(tmp_path / "a")
+    _window(job, rows=("15:10:01.900 p0 E hiddend carrier link lost", "15:10:05.000 p0 I hiddend carrier link back"))
     _data, inv = _run(job, _out(quotes=(Q1,)), capsys)
     assert _failed(inv) == []
+
+
+def test_window_counts_only_when_a_line_after_reference_exists(tmp_path, capsys):
+    """리뷰 L4: 구간 기록의 중심(`at`)이 기준 뒤여도 실제 줄이 기준 뒤에 없으면(마지막 줄이 기준과 같은 시각 포함) 인정하지 않는다."""
+    for name, last in (("before", "15:10:01.900"), ("same", "15:10:02.000")):
+        job = _job(tmp_path / name)
+        _window(job, rows=(f"{last} p0 E hiddend carrier link lost",))
+        rec = json.loads((job / "windows.json").read_text(encoding="utf-8"))
+        rec["windows"][0]["at"] = "2026-09-20T15:10:05.000Z"
+        (job / "windows.json").write_text(json.dumps(rec), encoding="utf-8")
+        _data, inv = _run(job, _out(quotes=(Q1,)), capsys)
+        assert _failed(inv) == ["실패 뒤 흔적"], name
 
 
 def test_old_five_column_table_is_gate_3_failure_not_format_error(tmp_path, capsys):
@@ -218,6 +227,7 @@ def test_jira_cause_has_investigation_on_top_or_below(tmp_path, capsys):
     a = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
     cause = [i["text"] for i in issue_post.build(fake, a, None, None, set())[0]["CAUSE"]]
     assert cause[0].startswith("조사 결론 (LLM, 검증 통과): ") and cause[2].startswith("분류: 후보 없음")
+    assert not any("Step 7" in t for t in cause) and "규칙 판정은 보류, 조사 결론은 검증 통과" in cause[1]     # 리뷰 L6
     a["investigation"] = {**a["investigation"], "status": "insufficient_evidence",
                           "gate": [{**g, "ok": g["name"] != "책임 층"} for g in a["investigation"]["gate"]]}
     cause = [i["text"] for i in issue_post.build(fake, a, None, None, set())[0]["CAUSE"]]
@@ -236,3 +246,86 @@ def test_compare_eval_scores_recorded_outputs_only():
     assert (after["layer_correct"], after["cause_cited"], after["identified_correct"], after["identified_wrong"],
             after["insufficient"]) == ("2/2", "2/2", "1/2", "0/2", "1/2")
     assert all(c["synthetic"] for c in res["cases"])
+
+
+# --- 독립 리뷰 반영(M1~M4, L1·L2·L4·L6) ------------------------------------------------------------------------
+
+def test_skipped_or_failed_explore_clears_old_investigation(tmp_path, capsys):
+    """리뷰 M1: 탐색 생략·형식 실패(다시 검사 아님)면 앞 조사 결론 줄과 analysis.json investigation을 지운다."""
+    for name in ("skipped", "failed"):
+        job = _job(tmp_path / name)
+        _run(job, _out(), capsys)
+        rows = (job / "report.md").read_text(encoding="utf-8").split("\n")
+        at = next(i for i, r in enumerate(rows) if r.startswith("- 탐색 분석"))
+        end = next(i for i in range(at + 1, len(rows)) if not rows[i].startswith("  - "))
+        (job / "report.md").write_text("\n".join(rows[:at] + [EXPLORE_PENDING] + rows[end:]), encoding="utf-8")   # 다시 TODO 줄
+        assert any(r.startswith(issuepost.INVESTIGATION_PREFIX) for r in rows)
+        if name == "skipped":
+            check(job, "explore", skipped="안 함", capsys=capsys)
+        else:
+            (job / "explore-output.md").write_text("형식 없음\n", encoding="utf-8")
+            check(job, "explore", capsys=capsys)
+        assert issuepost.INVESTIGATION_PREFIX not in (job / "report.md").read_text(encoding="utf-8"), name
+        assert "investigation" not in json.loads((job / "analysis.json").read_text(encoding="utf-8")), name
+
+
+def test_jira_ignores_investigation_of_another_explore_output(tmp_path, capsys):
+    """리뷰 M1: analysis.json investigation의 explore_sha가 지금 탐색 검사 기록과 다르면 Jira 본문에 싣지 않는다."""
+    job = _job(tmp_path)
+    _run(job, _out(), capsys)
+    fake = types.SimpleNamespace(path=lambda n: job / n, tracker=trackers.get("jira"), key="MOCK-9076", db_cfg={})
+    a = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    a["investigation"]["explore_sha"] = "0" * 64
+    cause = [i["text"] for i in issue_post.build(fake, a, None, None, set())[0]["CAUSE"]]
+    assert not any(t.startswith("조사 결론") for t in cause)
+
+
+def test_cp_side_defaults_to_backend_vendor_ipc_tags(tmp_path, capsys):
+    """리뷰 M2: tags.yaml이 `ipc`를 선언하지 않으면 CP 쪽은 백엔드 기본(Android `VENDOR_IPC_TAGS` = RIL)으로 본다. `CP-망 경계`도 CP
+    태그 하나면 통과."""
+    from tests.test_check_output import ROWS
+    rows = [(ts, "RIL" if tag == "vrild" else tag, lv, msg) for ts, tag, lv, msg in ROWS]
+    q1 = Q1.replace(" vrild ", " RIL ")
+    chain = ["| 1 | SETUP 요청이 나간다 | AP 내부 | log:15:10:00 | " + Q0 + " | true |",
+             "| 2 | SETUP 응답이 성공 | {layer} | spec:x | " + q1 + " | false |"]
+    for layer in ("CP 내부", "CP-망 경계"):
+        job = _job(tmp_path / layer.replace(" ", "_"), cp_mark=False, rows=rows, platform="android")
+        _data, inv = _run(job, _out(layer=layer, quotes=(q1, Q_AFTER), rows=[c.format(layer=layer) for c in chain]), capsys)
+        assert _failed(inv) == [], (layer, inv["gate"])
+
+
+def test_chain_row_with_pipe_in_observed_cell_keeps_header_positions():
+    """리뷰 M3: 머리 행이 있고 칸이 더 많으면(관측 칸 안의 `|`) 남는 칸을 관측 칸에 붙이고 머리 위치로 읽는다."""
+    from common import evidence
+    text = _out(rows=["| 1 | SETUP 응답이 성공 | CP 내부 | spec:x | 15:10:01.200 p0 E vrild a | b | false |"])
+    row = evidence.parse_explore(text)["hyps"][0]["기대 체인"][0]
+    assert (row["주체"], row["근거"], row["관측"], row["일치"]) == ("CP 내부", "spec:x", "15:10:01.200 p0 E vrild a | b", "false")
+
+
+def test_fit_trims_investigation_before_evidence_and_must_show():
+    """리뷰 M4: 4KB를 넘으면 조사 결론(통과한 게이트 why·원인·기대)을 근거 줄·must_show보다 먼저 줄인다."""
+    big = {"ts": "2026-09-20T05:30:00.000Z", "tag": "DNC-0", "msg": "x" * 100, "event": "e"}
+    inv = {"status": "identified", "hyp": 1, "cause": "가" * 120, "layer": "CP 내부",
+           "first_divergence": {"step": 2, "expect": "나" * 80},
+           "gate": [{"name": f"g{i}", "ok": True, "why": "다" * 80} for i in range(6)], "explore_sha": "0" * 64}
+    result = {"files": {"report": "r"}, "must_show": ["로그 범위: " + "라" * 150], "investigation": inv,
+              "candidates": [{"cause": "C-0", "evidence": [dict(big) for _ in range(6)]}]}
+    while len(report.dumps(result).encode("utf-8")) < 4096:
+        result["candidates"][0]["evidence"].append(dict(big))
+    n = len(result["candidates"][0]["evidence"])
+    out = report.fit(json.loads(json.dumps(result)))
+    assert all(g["why"] == "" for g in out["investigation"]["gate"]) and len(out["investigation"]["cause"]) <= 60
+    assert len(out["candidates"][0]["evidence"]) == n and out["must_show"] == result["must_show"]
+
+
+def test_number_unit_and_explore_question_and_report_core_patterns():
+    """리뷰 L1(`번` 빼고 영어 단위), L2(조사 질문은 질문 전체로), L6(조사 결론 줄은 리포트 표시 의무)."""
+    import show_guard
+    from common import shown
+    from triagelib import output
+    rx = output.NUM_UNIT_RX
+    assert not rx.search("2번 단계에서 응답") and not rx.search("5 sets") and not rx.search("3 secondary")
+    assert all(rx.search(t) for t in ("5 sec 뒤", "10 seconds", "3 times", "5s", "300ms", "2 min", "5초", "3회"))
+    assert show_guard.EXPLORE_Q.search("조사할까요? (심층 분석 뒤 탐색 분석, 토큰 추가 사용)")
+    assert not show_guard.EXPLORE_Q.search("다른 원인을 더 조사할까요?")
+    assert shown.REPORT_CORE.match("- 조사 결론 (LLM, 검증 통과): x")

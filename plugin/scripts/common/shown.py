@@ -35,7 +35,7 @@ APPROVED_ARG = re.compile(r"--approved[= ]\s*[\"']?([0-9a-f]{7,64})\b")
 SHA_ARG = re.compile(r"--sha[=\s]+[\"']?([0-9a-f]{64})")
 LINE_KINDS = ("patch", "evidence")   # 줄 의무: 같은 key의 내용이 다른 기록만 닫는다(skill_patch 안내 줄, check-output 근거 원문 검사)
 STEP7_OPTS = ("기록하지 않음", "원인 미확정", "새 원인", "새 유형", "다른 기존 원인")
-REPORT_CORE = re.compile(r"^- (판단|분류 후보|근거 로그|로그 범위|오류·거부·타임아웃|실패 스텝|분석 전용|재분석|설명 기반)")
+REPORT_CORE = re.compile(r"^- (판단|조사 결론|분류 후보|근거 로그|로그 범위|오류·거부·타임아웃|실패 스텝|분석 전용|재분석|설명 기반)")
 STATUS_TOKENS = {"pass": r"pass|통과|✅", "fail": r"fail|실패|❌", "skipped": r"skipped|건너뜀|해당 없음|생략",
                  "needs-approval": r"needs-approval|승인 필요"}
 

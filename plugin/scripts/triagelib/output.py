@@ -39,7 +39,6 @@ import os
 import re
 import stat
 import sys
-from datetime import timedelta
 from pathlib import Path
 
 from common import evidence, issuepost, logtime, masking, provenance, shown
@@ -485,11 +484,13 @@ def _recheck_open(job: Path) -> bool:
 # --- 조사 결론 게이트(11/25 A635, 07-workflow §Step 5-2 조사 모드) ------------------------------------------------
 # analysis.json `investigate.mode`(run이 판정)일 때만 가장 유력(없으면 가설 1)을 본다. 판정은 아래 칸·원문 대조 결과만 쓴다(LLM 판단 아님)
 
-NUM_UNIT_RX = re.compile(r"\d+(?:\.\d+)?\s*(?:ms|s|초|분|회|번(?!째))(?![A-Za-z])")
+# 숫자+시간·횟수 단위(영어는 낱말 경계). `번`은 뺀다(`2번 단계`·`1번 슬롯`처럼 순번에 흔하다)
+NUM_UNIT_RX = re.compile(r"\d+(?:\.\d+)?\s*(?:(?:msec|ms|seconds?|secs?|s|minutes?|mins?|times?)(?![A-Za-z])|초|분|회)")
 QUOTE_TS_RX = re.compile(r"\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})|(?:\d{4}-)?\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3,9}"
                          r"|\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?")
 OUTER_SIDES = {"CP 내부": ("cp",), "CP-망 경계": ("cp", "net"), "망": ("net",)}
-# CP 쪽 = tags.yaml `ipc: vendor` 태그와 아래 카테고리, 망 쪽 = 아래 카테고리. 공개 기본값은 placeholder다
+# CP 쪽 = 플랫폼 백엔드의 벤더 IPC 태그(`is_vendor_ipc` — tags.yaml `ipc: vendor`가 있으면 그것, 없으면 백엔드 기본: Android
+# `VENDOR_IPC_TAGS`, oFono 구성요소 `vendor_ipc`)와 아래 카테고리, 망 쪽 = 아래 카테고리. 카테고리 이름은 placeholder다
 CP_CATEGORIES, NET_CATEGORIES = ("modem",), ("nas",)    # TODO(SITE:S9) 사내 tags.yaml의 모뎀·망 거절(NAS) 카테고리 이름
 SIDE_LABEL = {"cp": "CP", "net": "망"}
 INV_CAUSE_MAX, INV_WHY_MAX, INV_EXPECT_MAX = 120, 80, 80
@@ -517,25 +518,38 @@ def _quote_tag(q: str) -> str | None:
 
 
 def _after_ref(job: Path, ok_quotes: list[str], events: dict | None) -> tuple[bool, str]:
-    """게이트 4: 기준 시각(`explore-input.json` around) 뒤 줄을 ok로 인용했거나, sha가 맞는 window 구간이 기준 뒤를 덮는다."""
+    """게이트 4: 기준 시각(`explore-input.json` around) 뒤 줄을 ok로 인용했거나, sha가 맞는 window 구간의 마지막 줄 시각이 기준보다
+    뒤다(그 뒤 줄이 실제로 있을 때만 — 같은 시각은 아니다, `--span` 유무와 무관)."""
     try:
         ref = logtime.parse_ts(str((_load(job / EXPLORE_INPUT_FILE) or {}).get("around")))
     except ValueError:
         return True, "해당 없음(기준 시각 없음)"
     if any((t := _quote_ts(q, events)) is not None and t > ref for q in ok_quotes):
         return True, ""
-    names = set(_windows(job)[0])
-    for w in (_load(job / WINDOW_RECORD) or {}).get("windows") or []:
-        try:
-            if w.get("path") in names and logtime.parse_ts(w["at"]) + timedelta(seconds=(w.get("span") or 0) / 2) >= ref:
-                return True, ""
-        except (KeyError, TypeError, ValueError):
-            continue
+    for text in _windows(job)[1]:
+        rows = [line for line in text.split("\n") if evidence.ROW_RX.match(line)]
+        if rows and (t := _quote_ts(rows[-1], events)) is not None and t > ref:
+            return True, ""
     return False, "기준 시각 뒤 줄 인용·구간 없음(실패 뒤를 보지 않음)"
 
 
-def _outer(events: dict | None, ok_quotes: list[str], layer: str | None) -> tuple[bool, str]:
-    """게이트 6: CP·망 쪽 결론이면 ok 인용 중 그쪽 태그(`CP_CATEGORIES`·`ipc: vendor`, `NET_CATEGORIES`) 줄이 하나 이상."""
+def _vendor_ipc(defaults: dict | None, platform: str | None, rules):
+    """플랫폼 백엔드의 벤더 IPC 태그 판단(`is_vendor_ipc`, tags.yaml 속성 반영). 백엔드를 못 불러오면 None(tags.yaml만 본다)."""
+    import parser_backends
+    import platforms
+    try:
+        name = platform or platforms.DEFAULT_NAME
+        profile = platforms.load(defaults or {}, name, require_enabled=False)
+        return parser_backends.load(platforms.backend_name(defaults or {}, name)).configure(profile).apply_rules(rules).is_vendor_ipc
+    except Exception:       # noqa: BLE001 — 설정·백엔드 문제면 tags.yaml 표시만으로 판정한다
+        return None
+
+
+def _outer(events: dict | None, ok_quotes: list[str], layer: str | None, defaults: dict | None = None,
+           platform: str | None = None) -> tuple[bool, str]:
+    """게이트 6: CP·망 쪽 결론이면 ok 인용 중 그쪽 태그 줄이 하나 이상(`CP-망 경계`는 어느 쪽이든). CP 쪽 = 벤더 IPC 태그
+    (`_vendor_ipc`)·`CP_CATEGORIES`, 망 쪽 = `NET_CATEGORIES`. 맞는 줄이 없고 tags.yaml에 그쪽 표시(`ipc` 선언·카테고리)도 없으면
+    "tags.yaml에 CP/망 표시 없음"."""
     from common import parser_rules
     sides = OUTER_SIDES.get(layer or "")
     if not sides:
@@ -546,17 +560,19 @@ def _outer(events: dict | None, ok_quotes: list[str], layer: str | None) -> tupl
         return False, "tags.yaml을 읽지 못함"
     cats = set(rules.tag_exact.values()) | {c for _p, c in rules.tag_regexes}
     marked = {"cp": rules.declares("ipc") or bool(cats & set(CP_CATEGORIES)), "net": bool(cats & set(NET_CATEGORIES))}
-    if not any(marked[s] for s in sides):
-        return False, "tags.yaml에 CP/망 표시 없음"
-    side = {"cp": lambda t: rules.tag_attr(t, "ipc") == "vendor" or rules.tag_category(t) in CP_CATEGORIES,
+    vipc = _vendor_ipc(defaults, platform, rules)
+    side = {"cp": lambda t: (bool(vipc(t)) if vipc else rules.tag_attr(t, "ipc") == "vendor") or rules.tag_category(t) in CP_CATEGORIES,
             "net": lambda t: rules.tag_category(t) in NET_CATEGORIES}
     tags = [t for t in map(_quote_tag, ok_quotes) if t]
-    if any(side[s](t) for t in tags for s in sides if marked[s]):
+    if any(side[s](t) for t in tags for s in sides):
         return True, ""
+    if not any(marked[s] for s in sides):
+        return False, "tags.yaml에 CP/망 표시 없음"
     return False, f"{layer} 결론인데 원문 확인된 인용에 {'·'.join(SIDE_LABEL[s] for s in sides)} 태그 줄 없음"
 
 
-def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: dict | None) -> dict:
+def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: dict | None, defaults: dict | None = None,
+                   platform: str | None = None) -> dict:
     """조사 결론 게이트 6개 → analysis.json·check-output 기록 `investigation`. 하나라도 실패면 insufficient_evidence."""
     hyps = fields.get("hyps") or []
     if not hyps:
@@ -601,7 +617,7 @@ def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: 
         add("숫자 메커니즘", mech.strip() and not (flip and flip.group(2)) and not (answer and answer.group(1) != "예"),
             "숫자 기대인데 메커니즘 재계산 없음" if not mech.strip() else "재계산 답이 틀 그대로" if flip and flip.group(2)
             else "재계산 답이 아니오(고쳐도 안 뒤집힘)" if answer and answer.group(1) != "예" else "")
-    add("외부 근거", *_outer(events, ok_quotes, layer))
+    add("외부 근거", *_outer(events, ok_quotes, layer, defaults, platform))
     return {"status": "identified" if all(g["ok"] for g in gate) else "insufficient_evidence", "hyp": k + 1,
             "cause": _one(h["가설"])[:INV_CAUSE_MAX] or None, "layer": layer,
             "first_divergence": {"step": first["단계"], "expect": _one(first["기대"])[:INV_EXPECT_MAX]} if first else None,
@@ -882,18 +898,40 @@ def _save_analysis(job: Path, new: dict, read_sha: str | None, key: str, warn: s
 WARN_INVESTIGATION = "경고: analysis.json 조사 결론(investigation)을 쓰지 못했다({why})"
 
 
+def _without_investigation(rows: list[str]) -> list[str]:
+    """report.md 줄에서 조사 결론 묶음(`- 조사 결론 (LLM, …`과 바로 뒤 `  - ` 줄)을 뺀다."""
+    at = next((i for i, r in enumerate(rows) if r.startswith(issuepost.INVESTIGATION_PREFIX)), None)
+    if at is None:
+        return rows
+    end = at + 1
+    while end < len(rows) and rows[end].startswith("  - "):
+        end += 1
+    return rows[:at] + rows[end:]
+
+
+def _clear_investigation(job: Path) -> None:
+    """탐색 생략·실패(다시 검사 아님): 앞 검사가 남긴 조사 결론을 report.md와 analysis.json에서 지운다(옛 결론이 남지 않게)."""
+    report = job / "report.md"
+    if _kind(report) == "file":
+        rows = report.read_text(encoding="utf-8").split("\n")
+        kept = _without_investigation(rows)
+        if kept != rows:
+            try:
+                _write_atomic(report, "\n".join(kept).encode("utf-8"))
+            except OSError:
+                print(WARN_REWRITE, file=sys.stderr)
+    analysis, sha = _read_analysis(job)
+    if isinstance(analysis, dict) and "investigation" in analysis:
+        _save_analysis(job, {k: v for k, v in analysis.items() if k != "investigation"}, sha, "investigation_unwritten",
+                       WARN_INVESTIGATION)
+
+
 def _place_investigation(report: Path, lines: list[str], top: bool) -> bool:
     """조사 결론 줄(`issuepost.investigation_lines`)을 report.md에 넣는다(앞 검사의 줄은 지운다): 검증 통과면 CAUSE 칸 맨 위,
     근거 부족이면 `- 결론:` 줄 아래(결론처럼 보이지 않게). 넣을 자리가 없거나 못 쓰면 False."""
     if _kind(report) != "file":
         return False
-    rows = report.read_text(encoding="utf-8").split("\n")
-    at = next((i for i, r in enumerate(rows) if r.startswith(issuepost.INVESTIGATION_PREFIX)), None)
-    if at is not None:
-        end = at + 1
-        while end < len(rows) and rows[end].startswith("  - "):
-            end += 1
-        del rows[at:end]
+    rows = _without_investigation(report.read_text(encoding="utf-8").split("\n"))
     i = next((i for i, r in enumerate(rows) if r.startswith("### CAUSE" if top else rep.CONCLUSION_PREFIX)), None)
     if i is None:
         return False
@@ -961,6 +999,7 @@ def _skipped(args, job: Path, purpose: str, env: dict) -> int:
     _record(job, purpose, {"skipped": reason, "at": _now(), "env": env})
     if purpose == "explore":
         _question_tail(report, QUESTION_SKIPPED)
+        _clear_investigation(job)
     _obligation(args, job, purpose, [])
     _emit({"line": masking.mask_brief(line, 300), "skipped": reason})
     return OK
@@ -1014,6 +1053,8 @@ def _fail(job: Path, purpose: str, env: dict, reason: str, label: str, sha: str 
             and purpose == "explore"):
         _question_tail(report, QUESTION_SKIPPED)
     _record(job, purpose, {"error": label, "at": _now(), "env": env, "output_sha256": sha})
+    if purpose == "explore":
+        _clear_investigation(job)
     _obligation(args, job, purpose, [])
     print(label, file=sys.stderr)
     _emit({"reason": reason, "detail": label, "next": NEXT_CHECK_FAILED})
@@ -1143,12 +1184,17 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
         dec_extra = {}
     inv, inv_extra = None, {}
     if purpose == "explore" and (analysis.get("investigate") or {}).get("mode"):     # 조사 모드(run이 판정): 게이트 → report.md·analysis.json
-        inv = _investigation(job, fields, per_hyp, chain_v, sha, events)
+        inv = _investigation(job, fields, per_hyp, chain_v, sha, events, getattr(args, "tt_defaults", None),
+                             analysis.get("platform"))
+        saved, inv_extra = _save_analysis(job, {**analysis, "investigation": inv}, read_sha, "investigation_unwritten",
+                                          WARN_INVESTIGATION)      # analysis.json 먼저(포털이 읽는 기준), 그다음 report.md
         if not _place_investigation(report, issuepost.investigation_lines(inv, (analysis.get("candidates") or [None])[0]),
                                     inv["status"] == "identified"):
             print(WARN_REWRITE, file=sys.stderr)
-        inv_extra = _save_analysis(job, {**analysis, "investigation": inv}, read_sha, "investigation_unwritten",
-                                   WARN_INVESTIGATION)[1]
+        elif not args.out and saved is not None:    # 리포트 표시 의무에 조사 결론 줄을 더한다(`shown.REPORT_CORE`)
+            shown.record(job.parent, "triage", "report", job.name, key=f"report:{job.name}#{analysis.get('run')}",
+                         lines=shown.report_core(report.read_text(encoding="utf-8")), must_show=saved.get("must_show") or [],
+                         path=str(job.absolute() / "report.md"))
 
     counts = {k: (res or {}).get(k, 0) for k in ("fabricated", "weak", "raw")}
     n = (res or {}).get("n", 0)
@@ -1180,6 +1226,7 @@ def cmd_check_output(args, defaults: dict) -> int:
     job = None
     try:
         job = _resolve_job(args, defaults)
+        args.tt_defaults = defaults         # 게이트 6이 플랫폼 백엔드 기본 벤더 IPC 태그를 읽는다
         env = provenance.env_info(cfg=defaults)
         code = _skipped(args, job, purpose, env) if skipped else _check(args, job, purpose, env)
     except _Stop as stop:
