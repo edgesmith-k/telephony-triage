@@ -84,6 +84,10 @@
   "reason": "no_candidate",
   "when": "ask"
  },
+ "investigate": {
+  "mode": true,
+  "reason": "후보 없음"
+ },
  "must_show": [
   "로그 범위: 2026-09-22T10:00:16.546Z ~ 2026-09-22T10:00:22.236Z (일부만 포함), 시계 이상 없음"
  ],

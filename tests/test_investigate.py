@@ -16,7 +16,7 @@ import issue_post  # noqa: E402
 import trackers  # noqa: E402
 from common import issuepost  # noqa: E402
 from tests.test_check_output import EXPLORE_PENDING, OK_KEYS, Q1, _sha, _window, check, make_job  # noqa: E402
-from triagelib import driver, output, report  # noqa: E402
+from triagelib import driver, report  # noqa: E402
 
 SAMPLE_DB = REPO / "tests" / "fixtures" / "issue-db-sample"
 Q0 = "15:10:00.100 p0 I ofonod src/gprs.c:gprs_attach() attach requested apn=internet"

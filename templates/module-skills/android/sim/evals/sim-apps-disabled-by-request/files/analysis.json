@@ -107,6 +107,10 @@
   "reason": "no_candidate",
   "when": "ask"
  },
+ "investigate": {
+  "mode": true,
+  "reason": "후보 없음"
+ },
  "warnings": [
   "형식을 모르는 줄 1개를 건너뛰었습니다."
  ],

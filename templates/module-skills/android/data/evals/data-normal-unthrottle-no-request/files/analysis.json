@@ -115,6 +115,10 @@
   "reason": "cause_unconfirmed",
   "when": "ask"
  },
+ "investigate": {
+  "mode": true,
+  "reason": "1위 C=0"
+ },
  "warnings": [
   "형식을 모르는 줄 1개를 건너뛰었습니다."
  ],
