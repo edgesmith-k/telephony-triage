@@ -34,7 +34,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 1. `--issue-file`이 없으면 config(`S/config.py show --keys work_dir,tracker.tools [--platform <p>]`)의 `get_issue`(있으면 `get_comments`)를 그 스키마대로 부른다. 비어 있으면 추측 말고 멈춘다: `S/config.py doctor --format markdown` 표를 그대로 붙이고 setup 매핑 안내, 연습은 `--dry-run --issue-file <yaml>`. hook이 원문을
    `JOB/issue_raw.json`에 두고 마스킹 요약만 보여준다(`saved_to` 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작(S1 확인)"을 알린다. S1 확인 전엔 guard가 읽기마다 묻는다, 우회 금지). `--issue-file`은
    `--dry-run`·`--analysis-only` 전용.
-2. `S/triage.py run <KEY> --logs <…> [--platform <p>]` + 받은 옵션 그대로(analyzer 외). stdout(=`JOB/analysis.json`)과 `JOB/report.md`만 읽는다.
+2. `S/triage.py run <KEY> --logs <…> [--platform <p>]` + 받은 옵션 그대로. stdout(=`JOB/analysis.json`)과 `JOB/report.md`만 읽는다.
 3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**을 `--answer <kind>=<값>`으로 붙여 같은 명령을 재실행한다.
    `issue`는 1번 도구 재호출 뒤 `--answer` 없이, `logs`는 `--logs`를 붙여 재실행. `stopped`는 이유만.
 4. 종료 코드 1 → 키를 다시 묻는다.

@@ -315,3 +315,62 @@ def test_drop_stale_records_unlinks_links_without_following(tmp_path):
     os.symlink(link_dir, job / "module-skill")
     drv.drop_stale_records()
     assert not (job / "module-skill").exists() and (link_dir / "a").is_file()
+
+
+# --- 조사 모드 5-1 건너뜀(반입 8 할 일 2) ------------------------------------------------------------------------
+
+from runner import SAMPLE  # noqa: E402
+
+C0_LOG = SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log"     # DSMGR 줄을 빼면 1위 DATA-001 C=0
+
+
+def _run_c0(user: dict | None, *extra: str) -> tuple[dict, str]:
+    work = tmp("tt-skip51-")
+    home = work / "home"
+    home.mkdir()
+    if user:
+        (home / "config.yaml").write_text(yaml.safe_dump(user, allow_unicode=True), encoding="utf-8")
+    log = work / "c0.log"
+    log.write_text("".join(x for x in C0_LOG.read_text(encoding="utf-8").splitlines(keepends=True) if "DSMGR" not in x),
+                   encoding="utf-8")
+    meta = work / "meta.json"
+    meta.write_text(json.dumps({"key": "MOCK-9051", "occurred_at": "2026-09-20T14:30:20+09:00", "summary": "data"}),
+                    encoding="utf-8")
+    job = work / "job"
+    run_json("triage.py", ["run", "MOCK-9051", "--offline-db", SAMPLE, "--out", job, "--logs", log, "--issue-meta", meta,
+                           "--tz", "Asia/Seoul", "--year", "2026", *extra], root=plugin_root(), env={"TELEPHONY_TRIAGE_HOME": home})
+    analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    assert analysis["investigate"]["mode"] and analysis["candidates"][0]["C"] == 0
+    return analysis, (job / "report.md").read_text(encoding="utf-8")
+
+
+def _deep_line(text: str) -> str:
+    return next(x for x in text.split("\n") if x.startswith("- 심층 분석"))
+
+
+def test_investigate_module_source_skips_51():
+    """조사 모드 + 모듈 문서 출처 → 5-1을 내지 않는다(never와 같은 모양에 사유), 리포트 줄은 사실대로(실패·미실행 아님)."""
+    analysis, text = _run_c0(REMOTE)
+    assert analysis["analyzer"] == {"skipped": "조사 모드", "when": "never"}
+    assert _deep_line(text) == core.DEEP_INVESTIGATE_SKIPPED
+
+
+def test_investigate_forced_by_analyzer_flag_runs_51():
+    """되돌리는 길: `--analyzer`면 조사 모드에서도 지금처럼 5-1(모듈 문서)."""
+    analysis, text = _run_c0(REMOTE, "--analyzer")
+    assert analysis["analyzer"] == {"category": "data", "when": "ask", "note": NOTE_51}
+    assert _deep_line(text) == core.DEEP_MODULE_PENDING.format(platform="android", category="data", key="MOCK-9051")
+
+
+def test_investigate_registered_skill_source_still_runs_51():
+    """출처가 등록 스킬(`prefer: skill`)이면 조사 모드여도 지금처럼 돈다."""
+    user = {**REMOTE, "analyzers": {"data": {"skill": "mock-data-analyzer", "prefer": "skill"}}}
+    analysis, text = _run_c0(user)
+    assert analysis["analyzer"] == {"skill": "mock-data-analyzer", "when": "ask", "note": NOTE_51}
+    assert _deep_line(text).startswith("- 심층 분석 (mock-data-analyzer): TODO(LLM)")
+
+
+def test_investigate_without_remote_keeps_legacy_skill():
+    """모듈 문서 주소가 없으면(설치 스킬 `analyzers.data.skill`, 예전 Q2) 조사 모드여도 그대로."""
+    analysis, _ = _run_c0(None)
+    assert analysis["analyzer"] == {"skill": "mock-data-analyzer", "when": "ask", "note": NOTE_51}

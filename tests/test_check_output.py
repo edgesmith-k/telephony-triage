@@ -437,6 +437,7 @@ def test_skipped_keeps_script_written_line(tmp_path, capsys):
 @pytest.mark.parametrize("purpose, analyzer, explore_when", [
     ("deep", {"error": "analyzers.data.prefer: …", "when": "never"}, None),
     ("deep", {"skill": "mock-data-analyzer", "when": "never"}, None),
+    ("deep", {"skipped": "조사 모드", "when": "never"}, None),     # 조사 모드 5-1 건너뜀(반입 8): 결과 파일이 있어도 쓰지 않는다
     ("deep", "none", None),
     ("explore", None, "never"),
 ])

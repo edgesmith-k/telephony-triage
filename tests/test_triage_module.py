@@ -1085,3 +1085,36 @@ def test_explore_view_centers_on_comment_clue_without_time_input(env):
     view = (job / "module-skill" / "explore" / "timeline.md").read_text(encoding="utf-8")
     assert "setup failed FINAL" in view                      # 고치기 전: 중심 없음 → 앞쪽 150줄만
     assert f"중심: {fail} (코멘트 단서, 확정 아님)" in view
+
+
+# -- 조사 모드 5-1 건너뜀(반입 8 할 일 2): 1위 유형 참고 문서가 5-2 read 목록에 -----------------------------------------
+
+SKIPPED_51 = {"analyzer": {"skipped": "조사 모드", "when": "never"}}
+C0_CANDS = [{"type": "DATA-001", "cause": None, "score": 5, "confidence": "low", "category": "data", "C": 0, "evidence": []}]
+REF = "ofono/data/references/DATA-001.md"
+
+
+def test_explore_read_adds_top_type_reference_when_51_skipped(env):
+    job = env.make_job(candidates=C0_CANDS, explore=True, extra=SKIPPED_51)
+    code, out, err = env.module("explore", "--module", "ofono/data")
+    assert code == 0, err
+    ref = str(job / "module-skill" / "explore" / REF)
+    assert out["read"][-2:] == [ref, str(job / "timeline.md")]
+    assert (job / "module-skill" / "explore" / REF).read_bytes() == (mr.MOCK / REF).read_bytes()
+    assert f"module-skill/explore/{REF}" in [f["path"] for f in _explore_rec(job)["files"]]
+
+
+def test_explore_read_unchanged_when_51_not_skipped(env):
+    job = env.make_job(candidates=C0_CANDS, explore=True)
+    code, out, err = env.module("explore", "--module", "ofono/data")
+    assert code == 0, err
+    assert len(out["read"]) == 4 and not any("references" in r for r in out["read"])
+
+
+def test_explore_at_keeps_reference_in_read(env):
+    """`--at`(받은 사본으로 중심만 다시)도 같은 read 목록 — 기록의 파일에서 만든다."""
+    job = env.make_job(events=WITH_EVENTS, candidates=C0_CANDS, platform="android", explore=True, extra=SKIPPED_51)
+    assert env.module(*WITH_ARGS, platform="android")[0] == 0
+    code, out, err = env.module(*WITH_ARGS, "--at", "2026-09-20T05:32:08Z", platform="android")
+    assert code == 0, err
+    assert str(job / "module-skill" / "explore" / "android/data/references/DATA-001.md") in out["read"]

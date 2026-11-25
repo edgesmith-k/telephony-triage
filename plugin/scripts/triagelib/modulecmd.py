@@ -912,10 +912,9 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
                 res = _view_or_fail(purpose, _filter(lib, _explore_view_payload(job, key, p, d, explore, doc,
                                                                                 deep=args.deep, with_=w), args), ctx)
                 stats = res.get("stats") or {}
-    fetched = moduleskills.materialise(state, purpose="explore", module=d, deep=args.deep, extra=auto)
+    fetched = moduleskills.materialise(state, purpose="explore", module=d, deep=args.deep, extra=auto, **_skipped_51(analysis))
     files = {rel: blob for rel, blob in fetched.files}
     files["modules.yaml"] = fetched.modules_yaml
-    read = [str(job / FOLDER / "explore" / rel) for rel, _ in fetched.files]
     tl_record = None
     if view:
         data = _explore_text(res["text"], explore["spec"]).encode("utf-8")   # 요약·이상 줄 절(JOB/timeline.md와 같은 줄)
@@ -926,7 +925,7 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
     else:
         tl_path = job / TIMELINE_FILE
         kept, total = explore["kept"], explore["total"]
-    read.append(str(tl_path))
+    read = _explore_read(job / FOLDER / "explore", [rel for rel, _ in fetched.files], tl_path)
     module = f"{p}/{d}"
     record = {"module": module, "sha": fetched.sha, "at": _now(),
               "files": [m for m in _files_meta(purpose, files) if not m["path"].endswith("/" + TIMELINE_FILE)],
@@ -951,6 +950,21 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
     out["timeline"] = {"path": str(tl_path), "lines": kept, "total": total, "view": bool(view)}
     return _success(job, purpose, out, _explore_lines(module + (f"+{w}" if w else ""), fetched.sha, kept, total, stats),
                     fetched.warnings)
+
+
+def _skipped_51(analysis: dict) -> dict:
+    """5-1을 건너뛴 조사 모드(run `analyzer.skipped`)면 1위(채택 원인이 있으면 그것) 유형·카테고리 — `materialise`가 그 유형 참고 문서를
+    5-2 문서에 더한다. 아니면 빈 dict(받는 문서 그대로)."""
+    if not (analysis.get("analyzer") or {}).get("skipped"):
+        return {}
+    cands = report.lead_first(analysis.get("decision"), [c for c in analysis.get("candidates") or [] if isinstance(c, dict)])
+    return {"type_id": cands[0].get("type"), "category": cands[0].get("category")} if cands else {}
+
+
+def _explore_read(folder: Path, rels: list[str], timeline: Path) -> list[str]:
+    """5-2가 읽을 파일 목록(`read`)을 만드는 한 곳: 받은 문서(`materialise`가 고른 순서 — 공통·모듈 explore.md·deep.md·보조
+    모듈·1위 유형 참고 문서) 다음 타임라인. 문서를 더할 때는 `materialise`에서 고른다."""
+    return [str(folder / rel) for rel in rels] + [str(timeline)]
 
 
 def _explore_text(text: str, spec: dict) -> str:
@@ -1037,8 +1051,8 @@ def _explore_at(args, job, key, p, events, explore, inputs, env, ctx):
         _write_set(job, purpose, files, record)
     except OSError as exc:
         raise _fail(purpose, 2, "작업 디렉토리 이상", exc.strerror or type(exc).__name__, ctx) from None
-    read = [str(folder / rel) for rel in (f["path"].split("/", 2)[2] for f in rec.get("files") or [])
-            if rel != "modules.yaml"] + [str(folder / TIMELINE_FILE)]
+    read = _explore_read(folder, [rel for rel in (f["path"].split("/", 2)[2] for f in rec.get("files") or [])
+                                  if rel != "modules.yaml"], folder / TIMELINE_FILE)
     out = {"module": args.module, "sha": rec.get("sha"), "read": read, "also": [], "pick": rec.get("pick") or {"by": "user"},
            "timeline": {"path": str(folder / TIMELINE_FILE), "lines": kept, "total": total, "view": True}, "at": args.at}
     if w:
