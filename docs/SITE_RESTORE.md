@@ -82,7 +82,7 @@ else (
 
 ## ① 재반입과 SITE_PATHS 확인
 
-SITE_INSTALL.md 8절대로 새 묶음을 반입한다(작업 브랜치 → `import_draft.py --check-boundary` → pytest → main에 ff 병합).
+SITE_INSTALL.md 8절대로 새 묶음을 반입한다(작업 브랜치 → `import_draft.py --check-boundary` → pytest → main에 병합).
 
 ```
 git status --short docs/site plugin/site-defaults.yaml SITE_PROFILE.md   # 출력 없음 — SITE_PATHS는 반입이 건드리지 않는다
