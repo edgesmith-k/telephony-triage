@@ -216,7 +216,7 @@ lock·`session.guard`는 각 플랫폼 `work_dir`에 있다(`Lock(work_dir, plat
 ### 10-2. 탐색 지식 (Step 5-2)
 
 - 관례: 플러그인 `skills/telephony-triage/reference/platforms/<p>/*.md`(경로 상수 `triagelib/core.py` `PLATFORM_REFS_DIR`, 코드에 플랫폼 이름 없음). 지금은 `ofono/log-guide.md` 하나(`timeline.md` 줄 모양 — gril trace·D-Bus 덤프 줄·DBG 앞머리 —, 계층 앱 → D-Bus → `ofonod` → RIL → 벤더 RIL → 모뎀, 판단 규칙 "위에서 본 오류는 시각·이름으로 한 층씩 내려가 처음 실패한 층을 찾는다", placeholder·공개 upstream 개념만, 데몬 이름 없음, TODO(SITE:S24~S26), 3,072B 이하 — `tests/test_triage.py`. Android 이름(`_ANDROID_NAMES`, eval 73)은 쓰지 않는다).
-- `triage.py explore` 출력: 작업 플랫폼이 android가 아니면 `{timeline, lines, total}`에 `platform`과 `refs`(그 디렉토리의 `*.md`, 스킬 디렉토리 기준 경로, 이름순, 없으면 `[]`)를 더한다. 작업 플랫폼 = `JOB/analysis.json`의 `platform`(키가 없으면 android), 그 파일을 읽지 못하면 선택 플랫폼 — `--out` 오프라인 작업도 그 작업의 문서를 받는다. android는 키가 없다(출력 불변). `analysis.json`·스키마·분석 재사용 캐시에는 넣지 않는다.
+- `triage.py explore` 출력: 작업 플랫폼이 android가 아니면 `{timeline, lines, total}`에 `platform`과 `refs`(그 디렉토리의 `*.md`, 절대 경로 — 모델이 그대로 읽는다, 이름순, 없으면 `[]`)를 더한다. 작업 플랫폼 = `JOB/analysis.json`의 `platform`(키가 없으면 android), 그 파일을 읽지 못하면 선택 플랫폼 — `--out` 오프라인 작업도 그 작업의 문서를 받는다. android는 키가 없다(출력 불변). `analysis.json`·스키마·분석 재사용 캐시에는 넣지 않는다.
 - 스킬: `reference/explore.md` "읽는 것" 5번 — `platform`이 있으면 `refs` 문서만 읽고 Android 참고 자료(`log-tags.md`·`ril-requests.md`·`fail-causes.md`)는 열지 않는다, `refs`가 비면 그 이슈 DB `SNAP/parser-rules/`만. SKILL.md와 Android 참고 자료 머리말("Android 기준")은 그대로.
 - 새 플랫폼 = `reference/platforms/<p>/` 디렉토리(선택) + site `platforms.<p>.analyzers`(선택). 사이트 지식 스킬 연결은 S-4a(§8).
 
