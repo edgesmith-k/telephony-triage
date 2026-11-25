@@ -42,7 +42,7 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 
-from common import evidence, issuepost, logtime, masking, provenance, shown
+from common import evidence, issuepost, logtime, masking, modulelines, provenance, shown
 from common.fixtures import CAUSE_ID
 from common.exitcodes import CHECK_FAILED, OK, USAGE
 
@@ -785,33 +785,49 @@ def _fit_subs_main(analysis, fields, hold, normal1, tf, cause, fit_check) -> lis
     return []
 
 
-def _rule_subs(purpose: str, items, source: str | None, tags, res: dict | None,
-               confirmed: bool = True) -> tuple[list[str], int, int, list[dict]]:
-    """`규칙 제안` 항목 → (report 하위 줄, 실은 수, 뺀 수, 실은 탐색 `[모듈]` 제안). `없음`은 건너뛴다. `— 근거: <문구>`가 있으면 그
-    문구가 원문(`source`) 검사 `ok`일 때만, 없으면 근거 원문 검사(`res`)를 실제로 했고 원문에 없는 인용이 없을 때만 싣는다 — 근거
-    불일치 가설에서 나온 제안·검사를 건너뛴 출력의 제안을 막는다. 탐색 `[모듈]`(반입 7 A-1, `evidence.module_rule`)은 형식 오류·모르는
-    칸·근거 없음을 빼고, 원인이 확정되지 않았으면(`confirmed` 거짓) 첫 점검·함정 칸도 뺀다. 실은 것은 `{n(실은 [모듈] 순번), platform,
-    module, slot, text, basis, line(explore-output.md 항목 글 그대로 — report 줄은 RULE_CLIP자로 잘린다)}`."""
-    kind, kept, dropped, modules = RULE_KIND[purpose], [], 0, []
-    for raw in (items or [])[:RULES_MAX]:
-        item = _one(raw)
+def _rule_subs(purpose: str, items, source: str | None, tags, res: dict | None, text: str = "",
+               confirmed: bool = True) -> tuple[list[str], int, int, list[int] | None]:
+    """`규칙 제안` 항목 → (report 하위 줄, 실은 수, 뺀 수, 탐색 `[모듈]` 줄 중 실은 번호 | None(그런 줄 없음)). `없음`은 건너뛴다.
+    `— 근거: <문구>`가 있으면 그 문구가 원문(`source`) 검사 `ok`일 때만, 없으면 근거 원문 검사(`res`)를 실제로 했고 원문에 없는
+    인용이 없을 때만 싣는다 — 근거 불일치 가설에서 나온 제안·검사를 건너뛴 출력의 제안을 막는다.
+    탐색 `[모듈]`(반입 7 A-1)은 목록 항목이 아니라 출력 글(`text`)의 `- [모듈]` 줄을 `modulelines.parse`로 읽는다(번호 N = 그 줄 순서,
+    형식이 틀린 줄도 센다 — `skill_patch --module --line N`과 같은 번호). 형식 오류·모르는 칸·근거 원문 불일치를 빼고, 원인이 확정되지
+    않았으면(`confirmed` 거짓) `HELD_SLOTS`(첫 점검·함정)도 뺀다. 실은 줄은 `[모듈 N] …`으로 쓴다."""
+    kind, kept, dropped = RULE_KIND[purpose], [], 0
+
+    def grounded(basis: str) -> bool:
+        return source is not None and evidence.check_quotes([basis], source, tags)["verdicts"] == ["ok"]
+
+    def add(line: str) -> None:
+        kept.append(RULE_SUB.format(kind=kind, text=line if len(line) <= RULE_CLIP else line[:RULE_CLIP - 1] + "…"))
+
+    module_items = 0
+    for item in [_one(x) for x in items or []][:RULES_MAX]:
         if not item or evidence.RULE_NONE_RX.match(item):     # `없음`·`해당 없음`(뒤 설명 무엇이든)은 제안이 아니다
             continue
-        mod = evidence.module_rule(item) if purpose == "explore" else None
+        if purpose == "explore" and item.startswith(modulelines.HEAD[2:]):
+            module_items += 1           # 아래에서 줄 번호로 따로 본다
+            continue
         m = RULE_BASIS_RX.search(item)
         if m:
-            ok = source is not None and evidence.check_quotes([m.group(1)], source, tags)["verdicts"] == ["ok"]
+            ok = grounded(m.group(1))
         else:
             ok = res is not None and not res.get("fabricated")
-        if mod is not None:
-            ok = ok and "error" not in mod and (confirmed or mod["slot"] not in evidence.MODULE_CONFIRMED_ONLY)
         if ok:
-            kept.append(RULE_SUB.format(kind=kind, text=item if len(item) <= RULE_CLIP else item[:RULE_CLIP - 1] + "…"))
-            if mod is not None:
-                modules.append({"n": len(modules) + 1, **mod, "line": str(raw).strip()})
+            add(item)
         else:
             dropped += 1
-    return kept + ([RULE_DROPPED.format(kind=kind, n=dropped)] if dropped else []), len(kept), dropped, modules
+    rows = modulelines.parse(text) if purpose == "explore" else []
+    lines = []
+    for row in rows[:RULES_MAX]:
+        if row["ok"] and grounded(row["basis"]) and (confirmed or row["slot"] not in modulelines.HELD_SLOTS):
+            lines.append(row["n"])
+            add(f"[모듈 {row['n']}]" + row["raw"][len(modulelines.HEAD):])
+        else:
+            dropped += 1
+    dropped += max(0, module_items - len(rows))       # `- ` 없이 쓴 [모듈] 항목(번호가 없어 고를 수 없다)
+    return (kept + ([RULE_DROPPED.format(kind=kind, n=dropped)] if dropped else []), len(kept), dropped,
+            lines if rows or module_items else None)
 
 
 def _question_tail(report: Path, tail: str) -> None:
@@ -1142,9 +1158,9 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     subs = _fit_subs(analysis, fields, hold, normal1) if purpose == "explore" else []
     investigating = purpose == "explore" and (analysis.get("investigate") or {}).get("mode")     # 조사 모드(run이 판정)
     inv = _investigation(job, fields, per_hyp, chain_v, sha, events) if investigating else None
-    confirmed = ((analysis.get("decision") or {}).get("state") == "accepted" and not hold) or (inv or {}).get("status") == "identified"
-    rule_lines, rules_kept, rules_dropped, module_rules = _rule_subs(
-        purpose, fields.get("rules" if purpose == "explore" else "규칙 제안"), source, tags, res, confirmed)
+    confirmed = (analysis.get("decision") or {}).get("state") == "accepted" and not hold     # skill_patch --module과 같은 보류 기준
+    rule_lines, rules_kept, rules_dropped, module_lines = _rule_subs(
+        purpose, fields.get("rules" if purpose == "explore" else "규칙 제안"), source, tags, res, text, confirmed)
     reason = _hold_reason(analysis, fields) if hold else None
     fmt = _chain_warnings(fields) + _check_warnings(analysis, fields) if purpose == "explore" else []
     fmt_text = "; ".join(fmt)
@@ -1182,7 +1198,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
                            **({"investigation": inv} if inv else {}),
                            **({"normal": [i + 1 for i, v in enumerate(normal_ok) if v]} if any(normal_ok) else {}),
                            **({"rules": rules_kept} if rules_kept else {}), **({"rules_dropped": rules_dropped} if rules_dropped else {}),
-                           **({"module_rules": module_rules} if module_rules else {}),
+                           **({modulelines.KEPT_KEY: module_lines} if module_lines is not None else {}),
                            **({"format_warnings": fmt} if fmt else {}), **({"format_recheck": True} if args.recheck else {})})
     head = masking.mask_brief(lines[0], 300, off=off)     # 끔 DB: report.md 줄과 같은 글자(꼭 보일 줄 대조가 어긋나지 않게)
     fab = [sub.lstrip()] if counts["fabricated"] or before else []     # 앞 검사의 불일치도 보일 의무(RP-14)

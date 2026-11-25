@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import subprocess
 import sys
@@ -17,6 +18,7 @@ sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 from runner import SAMPLE, run_json  # noqa: E402
 from tests.test_check_output import Q1  # noqa: E402
 from tests.test_investigate import Q_AFTER, _failed, _job, _out, _run  # noqa: E402
+from common import evidence  # noqa: E402
 from triagelib import output, report  # noqa: E402
 
 DATA_LOG = SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log"
@@ -147,27 +149,31 @@ def _module_tail(*rules: str) -> list[str]:
     return ["규칙 제안:", *[f"- {r}" for r in rules]]
 
 
-def test_module_suggestions_keep_only_grounded_known_slots(tmp_path, capsys):
+def test_module_lines_keep_only_grounded_known_slots(tmp_path, capsys):
+    """[모듈] 줄 번호 N = explore-output.md의 `- [모듈]` 줄 순서(형식 틀린 줄도 센다). 근거 있음·지어냄·모르는 칸·형식 오류 → 1줄만."""
     good = f"[모듈] android/data 층 경로 — vrild 인증 거절은 CP 응답부터 본다 — 근거: {Q1}"
-    rules = (good, f"[모듈] android/data 함정 — 지어낸 근거 — 근거: {FAKE}", f"[모듈] android/data 엉뚱한 칸 — x — 근거: {Q1}",
-             "[모듈] android/data 첫 점검 근거 칸 없음")
+    rules = (f"[모듈] android/data 함정 — 지어낸 근거 — 근거: {FAKE}", f"[모듈] android/data 엉뚱한칸 — x — 근거: {Q1}",
+             "[모듈] android/data 첫 점검 근거 칸 없음", good)
     job = _job(tmp_path)
-    data, _inv = _run(job, _out(extra=_module_tail(*rules)), capsys)
+    _run(job, _out(extra=_module_tail(*rules)), capsys)
     rec = _record(job)
-    assert rec["rules"] == 1 and rec["rules_dropped"] == 3
-    assert rec["module_rules"] == [{"n": 1, "platform": "android", "module": "data", "slot": "층 경로",
-                                    "text": "vrild 인증 거절은 CP 응답부터 본다", "basis": Q1, "line": good}]
+    assert rec["module_lines"] == [4] and rec["rules"] == 1 and rec["rules_dropped"] == 3
+    assert rec["output_sha256"] == hashlib.sha256((job / "explore-output.md").read_bytes()).hexdigest()   # skill_patch가 대조
     rows = (job / "report.md").read_text(encoding="utf-8")
-    assert f"  - 규칙 제안 (탐색): {good}" in rows and "  - 탐색 출력의 제안 3개는 근거가 원문에서 확인되지 않아 뺐다" in rows
+    assert f"  - 규칙 제안 (탐색): [모듈 4] {good[len('[모듈] '):]}" in rows
+    assert "  - 탐색 출력의 제안 3개는 근거가 원문에서 확인되지 않아 뺐다" in rows
+    plain = _job(tmp_path / "none")
+    _run(plain, _out(), capsys)
+    assert "module_lines" not in _record(plain)        # [모듈] 줄이 없으면 키가 없다
 
 
 def test_held_cause_drops_first_check_and_trap_slots(tmp_path, capsys):
-    """원인 보류(조사 결론 근거 부족)면 첫 점검·함정은 빼고 층 경로는 남긴다. 검증 통과면 첫 점검도 싣는다."""
-    rules = [f"[모듈] android/data {slot} — 한 줄 — 근거: {Q_AFTER}" for slot in ("첫 점검", "함정", "층 경로")]
+    """원인 보류(decision held)면 첫 점검·함정은 빼고 층 경로는 남긴다(skill_patch --module과 같은 기준). 확정이면 셋 다."""
+    rules = [f"- [모듈] android/data {slot} — 한 줄 — 근거: {Q_AFTER}" for slot in ("첫 점검", "함정", "층 경로")]
     held = _job(tmp_path / "held")
-    _data, inv = _run(held, _out(quotes=(Q1,), extra=_module_tail(*rules)), capsys)      # 실패 뒤 인용 없음 → 근거 부족
-    assert inv["status"] == "insufficient_evidence"
-    assert [m["slot"] for m in _record(held)["module_rules"]] == ["층 경로"]
-    ok = _job(tmp_path / "ok")
-    _data, inv = _run(ok, _out(extra=_module_tail(*rules)), capsys)
-    assert inv["status"] == "identified" and [m["slot"] for m in _record(ok)["module_rules"]] == ["첫 점검", "함정", "층 경로"]
+    _run(held, _out(extra=["규칙 제안:", *rules]), capsys)
+    assert _record(held)["module_lines"] == [3]
+    source, tags = evidence.source_text(Q_AFTER)
+    lines, kept, dropped, nums = output._rule_subs("explore", [], source, tags, {"fabricated": 0}, "\n".join(rules), True)
+    assert nums == [1, 2, 3] and kept == 3 and dropped == 0 and lines[0].endswith("[모듈 1] android/data 첫 점검 — 한 줄 — 근거: "
+                                                                                    + Q_AFTER)

@@ -238,29 +238,6 @@ def _opinion(checks: list[dict]) -> str:
 RULE_NONE_RX = re.compile(r"^[\s*`]*(?:해당\s*)?없음")     # `없음`·`해당 없음`(뒤 설명 무엇이든) = 제안 아님
 
 
-# 반입 7 A-1 모듈 학습 제안(탐색 `규칙 제안` 목록 안): `[모듈] <플랫폼>/<모듈> <칸> — <한 줄> — 근거: <마스킹된 줄>`. 칸 → (모듈 문서,
-# 절 제목 낱말 — `skill_patch.py --module`이 이 낱말로 절을 찾고 없으면 파일 끝에 만든다). 첫 점검·함정은 원인이 확정됐을 때만 싣는다
-MODULE_TAG = "[모듈]"
-MODULE_SLOTS = {"첫 점검": ("explore.md", "증상별 첫 점검"), "함정": ("explore.md", "함정"), "층 경로": ("explore.md", "층 경로"),
-                "판독 주의": ("explore.md", "판독 주의"), "코드 경로": ("deep.md", "코드 경로"), "버전 차이": ("deep.md", "버전별 차이")}
-MODULE_CONFIRMED_ONLY = ("첫 점검", "함정")
-MODULE_RULE_RX = re.compile(r"^\[모듈\]\s+([a-z][a-z0-9_]*)/([a-z][a-z0-9_-]*)\s+(.+?)\s+[—–]\s+(.+?)\s+[—–]\s*근거\s*[:：]\s*(.+)$")
-
-
-def module_rule(item: str) -> dict | None:
-    """규칙 제안 항목 하나 → `[모듈]`이 아니면 None, 형식이 틀리거나 모르는 칸이면 `{"error": 사유}`, 맞으면
-    `{platform, module, slot, text, basis}`(모두 앞뒤 공백 없이, `text`·`basis`는 받은 글 그대로)."""
-    item = (item or "").strip()
-    if not item.startswith(MODULE_TAG):
-        return None
-    m = MODULE_RULE_RX.match(item)
-    if not m:
-        return {"error": "형식 오류"}
-    if m.group(3) not in MODULE_SLOTS:
-        return {"error": f"모르는 칸 {m.group(3)[:20]}"}
-    return dict(zip(("platform", "module", "slot", "text", "basis"), (g.strip() for g in m.groups())))
-
-
 def _same_line_rule(rest: str) -> list[str]:
     """`규칙 제안: [이슈 DB] …`처럼 칸 이름 줄에 바로 쓴 제안 하나(목록 기호 없이). 비었거나 `없음`·`해당 없음`이거나 목록 줄이면 []."""
     rest = (rest or "").strip()
