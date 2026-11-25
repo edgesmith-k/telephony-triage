@@ -39,7 +39,8 @@
    모듈 문서를 받았으면 `module` 출력 `read`의 마지막 파일이 타임라인이다(`JOB/timeline.md`는 읽지 않는다, `module-skills.md`).
    타임라인·`## 이상 줄` 절에 원인이 없으면 마스킹 사본 `JOB/logs-masked/`(원문 아님) 전체에서 실패 낱말(fail cause·`Exception`·`disallowed`·`reject`·`error`·증상 낱말)을 `grep -n`하고(흔한 낱말은 `grep -c` 먼저나 `-m 50`), 찾은 줄 둘레를 `sed -n 'a,bp'`·Read(200줄 이하, OpenCode는 sed 아닌 read 도구 offset/limit)나 `S/triage.py window <KEY> --at <시각>`(사본의 `MM-DD HH:MM:SS.mmm` 그대로나 window 머리 ISO, syslog 시각은 ISO로, `--grep`은 로그 전체)으로 본 뒤 코드로 간다. 분석 구간 밖도 본다. 인용은 타임라인·window 파일·사본의 줄 그대로(시각 포함).
    머리 `흐름 판정`은 스크립트가 기대 순서로 낸 판정이다 — 갈라진 단계를 짚을 때 기대의 근거로 쓴다(인용 아님).
-2. `analysis.json`의 `no_candidate.search_hits`(설명 기반 유사 유형), `issue`(마스킹 요약), `logs`(범위·시계 이상), 1위 후보(있으면).
+2. `analysis.json`의 `no_candidate.search_hits`(설명 기반 유사 유형), `issue`(마스킹 요약), `logs`(범위·시계 이상), 1위 후보(있으면),
+   `near_causes`(조사 모드 DB 원인 후보: 부분 일치는 맞은 수·없는 조건·맞은 시각, `낱말 일치만`은 로그 대조 안 함). 가설을 먼저 쓰고 그다음 대조한다.
 3. 유사 유형의 증상·원인 시그니처가 필요하면 `S/db_search.py <ID> --db SNAP --limit 3`.
 4. 소스: `code.roots`에서 타임라인 문구로 `grep -rn -m 5`, 필요한 함수만 읽는다. `code.skipped`면 코드 근거 없이 쓴다고 밝힌다.
 5. 플랫폼 지식: `explore` 출력에 `platform`이 있으면(Android 아님) 그 `refs` 문서(스킬 폴더 기준)만 함께 읽는다.
@@ -76,7 +77,8 @@
 - 조사 모드면 check-output이 가장 유력(없으면 1)을 검증한다: 인용이 원문에 있음, `첫 갈라짐` = 가장 이른 false, `책임 경계` = 그 단계 `기대 주체`, 기준 시각 뒤 줄 인용이나 그 뒤 `window`, 기대에 숫자(ms·초·회)가 있으면 `메커니즘 재계산`(답 예), CP·망 결론이면 그쪽 태그 줄 인용. 다 통과해야 리포트 CAUSE 칸에 "조사 결론 (검증 통과)"로 실리고, 아니면 "근거 부족"(원인 보류 그대로).
 - "X를 하지 않는다"를 결함이라고 하려면 spec이나 코드 계약 근거가 있어야 한다. "다른 곳의 비슷한 코드는 X를 한다"는 패턴이지 근거가 아니다. 근거가 없으면 보류하고 `찾았는데 없음:`에 찾은 곳을 적는다.
 - 원인이 타이머·임계값·횟수(throttle·retry 포함)면 `메커니즘 재계산:`을 쓴다. `아니오`(고쳐도 결과가 그대로)면 그것은 원인이 아니다.
-- 선택 칸: 가설 머리 뒤 `원인 층:`·`원인 데몬:`, 끝의 `가장 유력: <번호>`, 맨 끝 `규칙 제안:` 목록(`- [이슈 DB] add-parser-rule file=<tags|extractors|ril>.yaml rule=<YAML 한 줄> — 근거: <마스킹된 문구>` · `- [이슈 DB] update-signature <원인 ID> — <무엇을 왜>` · `- [스킬] references/<파일> — <한 줄>` · `- 없음`). `로그로 확인` 줄에 고정 부분(마스킹 토큰·시각·serial·token을 뺀 글)이 있고 맞는 시그니처가 없으면 그 글을 시그니처 초안 문구로 제안한다. check-output은 근거가 원문에서 확인된 제안만 report.md `규칙 제안 (탐색)` 줄로 쓴다. `fit_check`면 끝에 `1위 판단: <채택 원인 ID> 적합|부적합|모름 — <이유>`(`prior.unfit` 보류면 그 ID).
+- 선택 칸: 가설 머리 뒤 `원인 층:`·`원인 데몬:`, 끝의 `가장 유력: <번호>`, 맨 끝 `규칙 제안:` 목록(`- [이슈 DB] add-parser-rule file=<tags|extractors|ril>.yaml rule=<YAML 한 줄> — 근거: <마스킹된 문구>` · `- [이슈 DB] update-signature <원인 ID> — <무엇을 왜>` · `- [스킬] references/<파일> — <한 줄>` · `- [모듈] <플랫폼>/<모듈> <칸> — <모듈 문서에 더할 한 줄> — 근거: <마스킹된 줄>`(칸: 첫 점검·함정·층 경로·판독 주의·코드 경로·버전 차이, 첫 점검·함정은 원인이 확정됐을 때만) · `- 없음`). `로그로 확인` 줄에 고정 부분(마스킹 토큰·시각·serial·token을 뺀 글)이 있고 맞는 시그니처가 없으면 그 글을 시그니처 초안 문구로 제안한다. check-output은 근거가 원문에서 확인된 제안만 report.md `규칙 제안 (탐색)` 줄로 쓴다. `fit_check`면 끝에 `1위 판단: <채택 원인 ID> 적합|부적합|모름 — <이유>`(`prior.unfit` 보류면 그 ID).
+- `near_causes`가 있으면 끝에 `후보 확인:` 목록: 후보마다 `- <ID>: 맞음|아님|모름 — <근거 줄 그대로 | 찾았는데 없음: <어디서>>`.
 - 한도: 가설마다 인용 1~5줄, 한 칸 768바이트, 전체 16384바이트. `〔script …〕`(스크립트 메모)는 근거로 인용하지 않는다.
 - 쓴 뒤 `S/triage.py check-output <KEY> --for explore`(`mask_pii`·칸·한도·근거 검사).
   출력 JSON에 `format_warnings`가 있으면 `next`대로 그 칸만 고쳐 한 번만 다시 검사한다(판정이 아니라 형식 경고).

@@ -150,6 +150,26 @@
    "at": []
   }
  ],
+ "near_causes": [
+  {
+   "id": "DATA-001-02",
+   "title": "Roaming disabled",
+   "matched": "0/1",
+   "missing": [
+    "must_event data_evaluation_rejected {'r…"
+   ]
+  },
+  {
+   "id": "DATA-002",
+   "title": "데이터 연결이 사용자 조작으로 끊김",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  },
+  {
+   "id": "DATA-002-01",
+   "title": "Airplane mode on",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  }
+ ],
  "code": {
   "skipped": true
  },

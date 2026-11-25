@@ -102,6 +102,21 @@
    "at": []
   }
  ],
+ "near_causes": [
+  {
+   "id": "SMS-001-01",
+   "title": "전송 요청이 만들어지지 않음",
+   "matched": "0/1",
+   "missing": [
+    "must_match 'GsmSMSDispatcher: sendSms: …"
+   ]
+  },
+  {
+   "id": "SMS-001",
+   "title": "SMS가 전송되지 않음",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  }
+ ],
  "code": {
   "skipped": true
  },

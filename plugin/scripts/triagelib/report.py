@@ -608,7 +608,7 @@ NOTE_SHORT = 80
 
 
 def fit(result: dict) -> dict:
-    """analysis.json을 ≤ 4KB로 줄인다: 제출자 참고 글(`issue.submitter_note`, 머리말 포함 `NOTE_FIT`자 — 포털 Jira 안내 줄이 남게)
+    """analysis.json을 ≤ 4KB로 줄인다: 조사 모드 DB 원인 후보(`near_causes[1:]` → 전체) → 제출자 참고 글(`issue.submitter_note`, 머리말 포함 `NOTE_FIT`자 — 포털 Jira 안내 줄이 남게)
     → 판단의 사건(`decision.events` 1개 → 기준에 붙은 사건만(≤3), 없으면 0개, `events_total`은 남김) → (읽기 전용 줄 중복) →
     다른 후보 근거 → 근거 줄 수 → 메시지 길이 → 참고 글 `NOTE_SHORT`자 → 다른 후보 근거 빼기 → 경고(중요 경고 `KEY_WARNING` 먼저) 3줄 순 →
     must_show 항목을 160자로 줄이고 앞 4개만 →
@@ -680,6 +680,9 @@ def fit(result: dict) -> dict:
               lambda: result.update(must_show=[_clip(m, MUST_SHOW_CLIP) for m in result["must_show"]]) if result.get("must_show") else None,
               lambda: result.update(must_show=result["must_show"][:MUST_SHOW_FIT]) if result.get("must_show") else None,
               lambda: (result.get("issue") or {}).get("submitter_note") and result["issue"].update(submitter_note=NOTE_GONE)]
+    # 조사 모드 DB 원인 후보(near_causes, 반입 7 B-1)는 맨 먼저 준다 — 다 뺀 뒤의 나머지는 이 칸이 없을 때와 같다
+    steps[0:0] = [lambda: result.get("near_causes") and result.update(near_causes=result["near_causes"][:1]),
+                  lambda: result.pop("near_causes", None)]
     result["truncated"] = False      # 값 자리를 먼저 잡고 잰다("false"가 "true"보다 길다 — 넣은 뒤 4096B를 넘지 않게)
     for step in steps:
         if size() <= ANALYSIS_MAX:
@@ -1086,6 +1089,7 @@ class ReportMixin:
             "observation": core.get("observation"),
             "no_candidate": core["no_candidate"],
             "partial": core.get("partial"),
+            "near_causes": core.get("near_causes"),
             "flows": core.get("flows"),
             "code": {**core["code"], "auto": True} if self.code_auto and not core["code"].get("skipped") else core["code"],
             "analyzer": core["analyzer"],

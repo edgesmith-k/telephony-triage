@@ -41,6 +41,8 @@ PARTIAL_ANALYSIS_MAX, PARTIAL_REPORT_MAX, FIND_TEXT_ITEMS = 3, 1200, 9
 # 성공 흐름 점검 (04-parser-matching.md §5.13): analysis.json `flows[]` ≤ 3, report.md 절 ≤ 1,200 B(흐름당 인스턴스 ≤ 3)
 FLOW_ANALYSIS_MAX, FLOW_REPORT_MAX, FLOW_PER_FLOW = 3, 1200, 3
 SEARCH_LIMIT = 3
+# 조사 모드 DB 원인 후보 (analysis.json `near_causes`, 반입 7 B-1): 부분 일치 + 요약 문장 검색 합쳐 ≤ 3
+NEAR_MAX, NEAR_WORDS_ONLY = 3, "낱말 일치만(로그 대조 안 함)"
 ERROR_EVENT_RE = eligibility.ERROR_EVENT_RE      # 파생 오류 이벤트 이름(자격 검사의 유형 없는 실패 사건과 같은 식)
 # 0 값 오류 칸(`errorCode=0`·`RejectCause: 0`·`result=0`·`error(0)`)은 오류가 아니다. 오류 문구 판정(ERROR_EVENT_RE) 전에
 # 지운다 — report 타임라인 줄 고르기와 모듈 보기 hot 표시가 같이 쓴다(H C1+D R13, 두 플랫폼). `<접두>ErrorCode`(벤더 접두)도 같다

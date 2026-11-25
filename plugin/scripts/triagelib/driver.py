@@ -12,7 +12,7 @@ from pathlib import Path
 
 import platforms
 import trackers
-from common import compat, eligibility, evidence, failedstep, issuedb, lookat, masking, stepanchor, userconfig
+from common import compat, eligibility, evidence, failedstep, issuedb, issuepost, lookat, masking, stepanchor, userconfig
 from common import flows as flowlib
 from common import logtime as lc
 from common.exitcodes import CHECK_FAILED, USAGE
@@ -21,7 +21,7 @@ from .anchor import AnchorMixin, _parse_ts
 from .cache import CacheMixin, State, _digest, _file_sha
 from .core import (ELIGIBILITY_FILE, ERROR_EVENT_RE, EXPLORE_MAX_LINES, EXTRACTOR_CODES, EXPLORE_WHEN, PLATFORM_ANSWER, Fail, NeedsInput,
                    MODULE_RECORD_DIR, Runner, SEARCH_LIMIT, SNAPSHOT_DIR, STALE_FILES, STATE_FILE, Stopped, TOP, _clip,
-                   FIND_TEXT_ITEMS, PARTIAL_ANALYSIS_MAX, REFERENCE_FILE)
+                   FIND_TEXT_ITEMS, NEAR_MAX, NEAR_WORDS_ONLY, PARTIAL_ANALYSIS_MAX, REFERENCE_FILE)
 from .report import NORMAL_HOLD_WHY, ReportMixin, _ref_label, _unique_evidence, flow_section, lead_first
 
 MASKED_DIR = "logs-masked"       # 원문 마스킹 사본(parse_logcat.py mask-copy, 종합 리뷰 G①) — 모델이 읽을 대상
@@ -1023,6 +1023,32 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                      "log_refs": (res or {}).get("log_refs") or [], "scope": scope})
         return out, extra
 
+    def near_causes(self, info: dict, match: dict, candidates: list, decision: dict) -> list | None:
+        """조사 모드(`issuepost.investigate_mode`)일 때만 analysis.json `near_causes`(≤ 3, 표시 전용 — 탐색 분석이 대조할 DB 원인 후보):
+        부분 일치(match.json `partial[]` 순서) 다음에 이슈 요약 문장 한 번의 `db_search` 결과(검색 자체 순위)를 붙이고 ID로 겹친 것을
+        뺀다. 검색만 걸린 항목은 `note`로 로그 대조를 안 했다고 밝힌다. 점수·순위·decision·match.json은 그대로다."""
+        if not issuepost.investigate_mode({"candidates": candidates, "decision": decision})["mode"]:
+            return None
+        out: list[dict] = []
+
+        def add(ident, **extra) -> None:
+            if ident and len(out) < NEAR_MAX and all(n["id"] != ident for n in out):
+                out.append({k: v for k, v in {"id": ident, "title": _clip(self.cause_entry(ident).get("title"), 60),
+                                              **extra}.items() if v})
+
+        for p in match.get("partial") or []:
+            add(p.get("cause") or p["type"], matched=p["matched"],
+                missing=[_clip(m["desc"], 40) for m in p.get("missing") or []][:3],
+                at=sorted({h["ts"] for h in p.get("hits") or [] if h.get("ts")})[:3])
+        summary = " ".join(str(info.get("summary") or "").split())
+        if summary and len(out) < NEAR_MAX:
+            _, data, _ = self.run.call("4-near", "db_search.py", [summary, "--db", self.snap, "--limit", SEARCH_LIMIT])
+            for r in (data or {}).get("results") or []:
+                if r.get("kind") == "issue" and r.get("key") == self.key:      # 이 이슈 자신의 기록
+                    continue
+                add(r.get("id") if r.get("kind") != "issue" else r.get("cause") or r.get("type"), note=NEAR_WORDS_ONLY)
+        return out
+
     def flows(self, logs: list[Path], tz: str | None, year: int | None, around: str | None, events: dict,
               version: str | None, ranked: list | None = None, top: dict | None = None) -> tuple[list | None, list | None]:
         """성공 흐름 점검 (04-parser-matching.md §5.13, 표시 전용 — S/C·점수 불변): `parse_logcat.py flows`(전체 로그) →
@@ -1328,6 +1354,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         code_out = self.resolve_code(code, version, candidates)
         decision = _decision(candidates, anchor, match.get("eligibility"), self.clue_location((match.get("eligibility") or {}).get("via")))
         self.mark_not_a_bug(decision)
+        near = self.near_causes(info, match, candidates, decision)
         analyzer = self.analyzer(lead_first(decision, candidates))     # 심층 분석 카테고리: 채택 원인(없으면 1위)
         explore = self.explore(lead_first(decision, candidates))     # 적합성 확인도 채택 원인 기준
         explore_input = self.explore_input(around, anchor) if explore and explore["when"] != "never" else None
@@ -1358,7 +1385,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             "pending_causes": [{"cause": p["cause"], "title": _clip(p.get("title"), 50)}
                                for p in match.get("pending_causes") or []][:TOP],
             "no_candidate": no_candidate, "unjudged": unjudged, "observation": observation, "code": code_out,
-            "partial": partial, "partial_report": partial_report, "absence_basis": match.get("absence_basis"),
+            "partial": partial, "partial_report": partial_report, "near_causes": near, "absence_basis": match.get("absence_basis"),
             "partial_unjudged": bool(unjudged) or bool(cause_unjudged), "analyzer": analyzer, "explore": explore,
             "explore_input": explore_input,
             **({"flows": flows, "flow_lines": flow_lines} if flow_lines is not None else {}),
