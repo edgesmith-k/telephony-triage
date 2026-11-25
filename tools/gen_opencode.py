@@ -230,8 +230,8 @@ def _abs_dir(raw: str, what: str, must_exist: bool = True) -> str:
     if must_exist and not p.is_dir():
         raise UsageError(f"{what} 폴더가 없다: {p}")
     s = str(p)
-    if any(c in s for c in "\"*?[]{}\n\r") or "@@" in s:
-        raise UsageError(f"{what} 경로에 쓸 수 없는 글자가 있다(\" * ? [ ] {{ }} 줄바꿈 @@): {s}")
+    if any(c in s for c in "\"*?[]{}\\\n\r") or "@@" in s:      # `\`는 에이전트 frontmatter YAML 문자열을 깨뜨린다(C-8)
+        raise UsageError(f"{what} 경로에 쓸 수 없는 글자가 있다(\" * ? [ ] {{ }} \\ 줄바꿈 @@): {s}")
     return s
 
 
@@ -294,21 +294,33 @@ def add_jira_reads(config: dict, names: list[str]) -> dict:
 AGENT_PERMISSION = re.compile(r"^permission:\n(?:[ \t]+.*\n)+", re.MULTILINE)
 
 
-def agent_permission(text: str, perm: dict) -> str:
+def agent_permission(text: str, perm: dict, managed: dict | None = None) -> str:
     """에이전트 frontmatter `permission`을 설치 permission 통째 + 에이전트 고유 키(같은 키는 에이전트 것)로 바꾼다. 1.19.5는
     설정 permission을 키 순서대로 규칙으로 펼치는데, 전역 설정에만 있던 키는 합칠 때 프로젝트의 `"*": "deny"` 앞에 와(그 deny가
     설치한 허용을 이긴다) 전역 전용 허용 키는 그 뒤에 온다(설치 deny를 이긴다). 에이전트 규칙은 설정 규칙 뒤에 붙으므로 여기 둔
-    `"*": "deny"`와 허용 목록이 전역 키 순서와 상관없이 마지막에 이긴다(실험: `opencode debug agent triage`)."""
+    `"*": "deny"`와 허용 목록이 전역 키 순서와 상관없이 마지막에 이긴다(실험: `opencode debug agent triage`).
+    그 대신 관리 설정(`managed`)의 deny까지 이기므로(확인 리뷰 C-1) OpenCode처럼 관리 설정을 먼저 깊게 합치고(`merge_deep`),
+    에이전트 고유 키에도 관리 설정의 deny는 남긴다(값이 "deny"면 그 키 통째, 객체면 deny 패턴만 — 끝에 붙어 이긴다)."""
     m = AGENT_PERMISSION.search(text, 0, text.find("\n---\n", 4) + 1)         # frontmatter 안에서만
     if not m:
         raise UsageError("opencode/agents/*.md frontmatter에 permission 블록이 없다")
     own = yaml.safe_load(m.group(0))["permission"]
-    return text[:m.start()] + "permission: " + json.dumps({**perm, **own}, ensure_ascii=False) + "\n" + text[m.end():]
+    managed = managed or {}
+    out = OCV.merge_deep(perm, managed)
+    for key, value in own.items():
+        deny = managed.get(key)
+        if deny == "deny":
+            value = "deny"
+        elif isinstance(deny, dict) and isinstance(value, dict):
+            value = OCV.merge_deep(value, {k: v for k, v in deny.items() if v == "deny"})
+        out[key] = value
+    return text[:m.start()] + "permission: " + json.dumps(out, ensure_ascii=False) + "\n" + text[m.end():]
 
 
 def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[str] = (),
                   jira_read: list[str] = (), allow_publish: bool = False, provider_model: str | None = None,
-                  explore_model: str | None = None, opencode_bin: str | None = None) -> dict[Path, str]:
+                  explore_model: str | None = None, opencode_bin: str | None = None,
+                  managed: dict | None = None) -> dict[Path, str]:
     template = json.loads((OC / "opencode.json.template").read_text(encoding="utf-8"))
     meta = {"version": 1, "opencode": OPENCODE_VERSION, "plugin_root": values["@@PLUGIN_ROOT@@"],
             "work_root": values["@@WORK_ROOT@@"], "issue_dbs": issue_dbs, "model": values["@@MODEL_ID@@"]}
@@ -320,6 +332,7 @@ def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[st
         meta["explore_model"] = explore_model
     if opencode_bin:
         meta["opencode_bin"] = opencode_bin
+    meta["managed_permission"] = managed or {}     # tt-oc doctor가 지금 관리 설정과 비교한다(바뀌면 다시 설치)
     config = render_config(template, values, issue_dbs)
     if provider_model:                   # 내장 provider: provider 블록 없이 model·small_model만(A232 — 키·주소는 전역 설정 몫)
         config["model"] = config["small_model"] = provider_model
@@ -338,7 +351,7 @@ def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[st
             if src.is_file():
                 files[dest / ".opencode" / sub / src.name] = _sub(src.read_text(encoding="utf-8"), values)
     for p in [p for p in files if p.parent.name == "agents"]:
-        files[p] = agent_permission(files[p], config["permission"])
+        files[p] = agent_permission(files[p], config["permission"], managed)
     if explore_model:                    # 없으면 model 줄이 없다 = 세션 모델을 이어받는다(1.19.5 실험)
         p = dest / ".opencode" / "agents" / "tt-explore.md"
         if files.get(p, "").count(EXPLORE_MODE) != 1:
@@ -358,8 +371,8 @@ def install_files(dest: Path, values: dict, issue_dbs: list[str], roots: list[st
 
 
 MANAGED_SAMPLE = OC / "managed.json.sample"
-MANAGED_DIR = Path("/etc/opencode")         # 관리 설정(관리자 배포, 다중 방어 — `managed.json.sample`이 예시)
-MANAGED_NAMES = ("opencode.json", "opencode.jsonc")
+MANAGED_DIR = Path(OCV.managed_dir(sys.platform, os.environ))  # 관리 설정(관리자 배포, 다중 방어 — managed.json.sample이 예시)
+MANAGED_NAMES = OCV.MANAGED_NAMES
 
 
 def managed_problems(cfg) -> list[str]:
@@ -491,8 +504,14 @@ def cmd_install(a) -> int:
     if bad:
         raise UsageError("; ".join(bad))
     opencode_bin, oc_note = pinned_opencode(a.opencode)
+    folder = Path(a.managed_dir) if a.managed_dir else MANAGED_DIR
+    try:
+        managed = OCV.managed_permission(folder, json.loads)
+    except (OSError, ValueError) as exc:
+        raise UsageError(f"관리 설정({folder}) 읽기 실패: {type(exc).__name__}: {exc} — 관리자 deny가 빠진 설치를 만들지 않는다. "
+                         "관리자에게 알리고, 고친 뒤 다시 설치한다") from None
     files = install_files(dest, values, dbs, read_roots(plugin), jira_read, a.allow_publish, a.provider_model,
-                          a.explore_model, opencode_bin)
+                          a.explore_model, opencode_bin, managed)
     differ = [str(p) for p, text in files.items() if p.exists() and p.read_text(encoding="utf-8") != text]
     if differ and not a.force:
         raise UsageError(f"이미 있는 파일과 다르다(--force로 덮어쓴다): {differ}")
@@ -552,6 +571,7 @@ def main(argv=None) -> int:
     p.add_argument("--opencode", help=f"tt-oc가 쓸 opencode {OPENCODE_VERSION} 바이너리(없으면 TT_OPENCODE·PATH). 고정 버전일 때만 "
                                        "tt-oc.json에 절대 경로를 남긴다")
     p.add_argument("--force", action="store_true")
+    p.add_argument("--managed-dir", help=argparse.SUPPRESS)   # 시험용(기본 MANAGED_DIR = OpenCode가 읽는 관리 설정 폴더)
     try:
         a = ap.parse_args(argv)
     except SystemExit as exc:

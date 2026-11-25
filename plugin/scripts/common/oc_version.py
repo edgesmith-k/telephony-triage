@@ -9,7 +9,7 @@ RUNTIMES.md §5`, 우회 금지 — `RUNTIME_ADOPTION.md §6`).
 레포 상대 경로 `../../plugin/scripts/common/oc_version.py`로 읽는다), `tools/gen_opencode.py`(버전), `tests/opencode/ocenv.py`(버전).
 `opencode/plugins/tt-guard.js`는 JS라 가져오지 못하므로 시험이 `HOOKS`·`BUILTINS`·버전 주석을 이 파일과 대조한다.
 
-이 파일은 아무것도 import하지 않는다(독립 스크립트·tools·tests가 경로로 바로 읽는다).
+이 파일은 아무것도 import하지 않는다(독립 스크립트·tools·tests가 경로로 바로 읽는다 — JSON 해석은 부르는 쪽이 `loads`로 준다).
 """
 
 # 고정 버전. `tt-oc doctor`·`site_step.py runtime-check opencode`는 `opencode --version`이 이 값과 같을 때만 시작한다.
@@ -109,6 +109,91 @@ def task_rule_state(value):
     if any(last(n) != "deny" for n in TASK_PROBES):
         return None
     return "explore-only" if last(TASK_AGENT) == "allow" else "all-deny"
+
+# -- 관리 설정(관리자가 배포하는 managed config) -----------------------------------------------------------------------------
+# 1.19.5 바이너리에서 확인: 폴더는 darwin `/Library/Application Support/opencode`, win32 `%ProgramData%\opencode`(없으면
+# `C:\ProgramData\opencode`), 그 밖 `/etc/opencode`이고(`OPENCODE_TEST_MANAGED_CONFIG_DIR`가 있으면 그것 — tt-oc는 이 변수를
+# 거부한다), 그 안의 `opencode.json`·`opencode.jsonc`를 이 순서로 사용자·프로젝트 설정 위에 깊게 합친다(`merge_deep`).
+# darwin은 그 뒤 MDM 설정(`ai.opencode.managed`)도 합친다 — 여기서는 읽지 않는다(확인 못 함).
+MANAGED_NAMES = ("opencode.json", "opencode.jsonc")
+
+
+def managed_dir(platform: str, env) -> str:
+    if platform == "darwin":
+        return "/Library/Application Support/opencode"
+    if platform == "win32":
+        return (env.get("ProgramData") or "C:\\ProgramData") + "\\opencode"
+    return "/etc/opencode"
+
+
+def merge_deep(base: dict, over: dict) -> dict:
+    """OpenCode가 설정을 합치는 방식: 둘 다 객체면 안으로 들어가 합치고, 아니면 뒤 값. 있던 키는 제자리, 새 키는 끝에 붙는다."""
+    out = dict(base)
+    for k, v in over.items():
+        out[k] = merge_deep(out[k], v) if isinstance(out.get(k), dict) and isinstance(v, dict) else v
+    return out
+
+
+def managed_permission(folder, loads) -> dict:
+    """관리 설정 폴더(`pathlib.Path`, `loads` = `json.loads`)의 `permission`을 파일 순서대로 합친 것. 파일이 없으면 {}. 읽기 실패·깨진 JSON·객체가 아닌
+    permission은 OSError·ValueError로 올린다(조용히 넘기면 관리자 deny가 빠진 설치가 된다)."""
+    out: dict = {}
+    for name in MANAGED_NAMES:
+        path = folder / name
+        try:
+            text = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            continue
+        cfg = loads(strip_jsonc(text))
+        perm = cfg.get("permission", {}) if isinstance(cfg, dict) else None
+        if not isinstance(perm, dict):
+            raise ValueError(f"{path}: permission이 객체가 아니다")
+        out = merge_deep(out, perm)
+    return out
+
+
+def strip_jsonc(text: str) -> str:
+    """JSONC → JSON: 문자열 밖 `//`·`/* */` 주석과 `}`·`]` 앞 쉼표를 뺀다."""
+    out, i, n = [], 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == '"':
+            j = i + 1
+            while j < n and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            out.append(text[i:j + 1])
+            i = j + 1
+        elif text.startswith("//", i):
+            while i < n and text[i] != "\n":
+                i += 1
+        elif text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = n if end < 0 else end + 2
+        else:
+            out.append(c)
+            i += 1
+    text, out, i = "".join(out), [], 0      # 둘째 차례: 문자열 밖에서 `}`·`]` 바로 앞(공백만 사이) 쉼표를 뺀다
+    n = len(text)
+    while i < n:
+        c = text[i]
+        if c == '"':
+            j = i + 1
+            while j < n and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            out.append(text[i:j + 1])
+            i = j + 1
+            continue
+        if c == ",":
+            j = i + 1
+            while j < n and text[j].isspace():
+                j += 1
+            if j < n and text[j] in "}]":
+                i += 1
+                continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
 
 # -- 플러그인 hook 이름(`opencode/plugins/tt-guard.js`가 구현, 시험이 대조) -------------------------------------------------
 # `tool.execute.after`는 오류로 끝난 MCP 호출에는 돌지 않는다(RUNTIMES.md §5.5) → `experimental.chat.messages.transform`.
