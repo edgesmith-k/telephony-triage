@@ -389,10 +389,10 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - resolved?
   - moved?
 - analyzer?({skill, when, note?} 설치 분석 스킬(레거시·prefer: skill) | {category, when, note?} 모듈 스킬 | {error, when} 설정 오류 | {skipped: 조사 모드, when: never} 조사 모드라 모듈 문서 5-1을 건너뜀(run --analyzer면 내지 않는다) (note: when ask일 때만 답 전 안내))
-- explore?({reason: no_candidate|cause_unconfirmed|fit_check(1위 C=1, run --explore·explore.when: always·--look-note(확인할 내용)일 때만 — 끄는 쪽이 이긴다: never·--no-explore면 열지 않는다), when: ask|always|never, note?: when ask일 때만 답 전 안내}(run은 타임라인을 만들지 않는다))
-- investigate?(조사 모드(run이 `issuepost.investigate_mode`로 판정 — 포털·check-output은 이 칸을 읽는다): mode(1위 후보가 없거나 1위 C=0이면 true), reason?(mode true일 때만 후보 없음|1위 C=0))
+- explore?({reason: no_candidate|cause_unconfirmed(조사 모드 — 후보 있고 채택 안 함)|fit_check(채택, run --explore·explore.when: always·--look-note(확인할 내용)일 때만 — 끄는 쪽이 이긴다: never·--no-explore면 열지 않는다), when: ask|always|never, note?: when ask일 때만 답 전 안내}(run은 타임라인을 만들지 않는다))
+- investigate?(조사 모드(run이 `issuepost.investigate_mode`로 판정 — 포털·check-output은 이 칸을 읽는다): mode(스크립트가 원인을 채택하지 않았으면 true — 탐색 뒤 적합성 보류 held/fit_check는 false), reason?(mode true일 때만 후보 없음|1위 C=0|채택 안 함(1위 C=1 보류)))
   - mode
-  - reason?: 후보 없음 | 1위 C=0
+  - reason?: 후보 없음 | 1위 C=0 | 채택 안 함
 - investigation?(조사 결론(조사 모드에서 `check-output --for explore`가 쓴다, run은 쓰지 않는다 — LLM 탐색 결론의 스크립트 검증 게이트 결과, 점수·분류·decision과 별개): status(identified = 게이트 6개 모두 통과|insufficient_evidence), hyp(가장 유력, 없으면 1 — 가설 없음이면 null), cause(가설 머리 ≤120자|null), layer(책임 경계 AP 내부|AP-CP 경계|CP 내부|CP-망 경계|망|환경|모름|null), first_divergence({step, expect ≤80자}|null — 첫 갈라짐 단계 표의 행), gate[{name, ok, why}](인용 원문·첫 어긋남·책임 층·실패 뒤 흔적·숫자 메커니즘·외부 근거, why ≤80자), explore_sha(검사한 explore-output.md sha256), normal(true만 — 가장 유력이 정상이고 정상 근거 줄이 원문 확인, status는 insufficient_evidence), top_match(같다고 본 원인 ID — 탐색 `후보 확인`이 규칙 1위 ID(1위가 유형만이면 그 유형의 원인 ID)를 맞음이라 했고 그 근거 인용이 원문 확인(ok), `규칙 1위와 같음` 표시), obs_far_h(앞 단계에 시각을 읽을 수 있는 원문 확인 관측이 없고 첫 어긋남 원문 확인 관측 줄이 기준 시각과 1시간 넘게 떨어졌을 때 그 시간 — 실패 아님, 리포트 하위 줄))
   - status: identified | insufficient_evidence
   - hyp?

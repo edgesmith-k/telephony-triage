@@ -89,8 +89,15 @@ def test_investigate_mode_is_decided_once_from_candidates():
     assert issuepost.investigate_mode({"candidates": []}) == {"mode": True, "reason": "후보 없음"}
     assert issuepost.investigate_mode({"candidates": [{"cause": None, "C": 0}]}) == {"mode": True, "reason": "1위 C=0"}
     assert issuepost.investigate_mode({"candidates": [{"cause": "X-001-01", "C": None}]})["mode"] is True     # 판정 불가
-    assert issuepost.investigate_mode({"candidates": [{"cause": "X-001-01", "C": 1}]}) == {"mode": False}
     assert issuepost.investigate_mode({"candidates": [{"C": 0}, {"C": 1}], "decision": {"state": "accepted"}}) == {"mode": False}
+    # 11/27(외부 설계 리뷰 1): 기준은 규칙 일치(C)가 아니라 채택 여부 — 1위 C=1이어도 자격 검사가 보류했으면 조사 모드
+    top = [{"cause": "X-001-01", "C": 1}]
+    assert issuepost.investigate_mode({"candidates": top, "decision": {"state": "accepted"}}) == {"mode": False}
+    for reason in ("no_reference", "ambiguous", "cause_unconfirmed", "symptom_not_found", "ineligible"):
+        got = issuepost.investigate_mode({"candidates": top, "decision": {"state": "held", "reason": reason}})
+        assert got == {"mode": True, "reason": "채택 안 함"}, reason
+    # 탐색 뒤 적합성 보류(held/fit_check — 실행 시점엔 채택, 다시 run하면 prior.unfit이 이어 붙인다)는 조사 모드가 아니다
+    assert issuepost.investigate_mode({"candidates": top, "decision": {"state": "held", "reason": "fit_check"}}) == {"mode": False}
 
 
 # --- 양성 ------------------------------------------------------------------------------------------------------
@@ -1279,4 +1286,101 @@ def test_e77_rewriting_a_no_recompute_as_not_applicable_keeps_the_failure(tmp_pa
     _d, inv = _run(job, _out(extra=("메커니즘 재계산: 01.2-00.1 = 1.1초 → 고치면 결과가 뒤집히나: 예",)), capsys)
     assert inv["status"] == "identified", inv["gate"]
     _d, inv = _run(_job(tmp_path / "first"), _out(rows=NUM_ROWS, extra=("메커니즘 재계산: 해당 없음 — 원인이 타이머가 아니다",)), capsys)
-    assert _failed(inv) == ["숫자 메커니즘"] and inv["gate"][4]["why"] == "재계산 답 없음(예/아니오)", inv["gate"]
+    assert _failed(inv) == ["숫자 메커니즘"] and inv["gate"][4]["why"].startswith("숫자 기대인데 재계산이 해당 없음"), inv["gate"]
+
+
+# --- 11/27 도구 결함 가-1(재계산 규칙 하나)·가-2(정상 가설)·가-3(실패 뒤 흔적)·가-6(다시 부름) ----------------------------------
+
+def test_ga1_not_applicable_is_an_answer_and_warning_says_how(tmp_path, capsys):
+    """가-1: 머리에 retry 낱말만 있고 원인이 숫자 값이 아닌 가설은 `메커니즘 재계산: 해당 없음 — <이유>`로 경고 없이 끝난다(게이트 5도
+    통과 — 숫자 기대 없음). 칸이 없으면 경고가 쓰는 조건과 `해당 없음` 쓰는 법을 알려 준다. 낱말 없는 가설은 칸이 없어도 경고 없음."""
+    head = "retry 뒤 APN 프로필 변환이 틀려 SETUP_DATA_CALL이 거절됨"
+    data, inv = _run(_job(tmp_path / "na"), _out(head=head, extra=("메커니즘 재계산: 해당 없음 — 원인은 프로필 변환이다",)), capsys)
+    assert "format_warnings" not in data and inv["status"] == "identified", (data, inv["gate"])
+    data, _inv = _run(_job(tmp_path / "none"), _out(head=head), capsys)
+    warn = next(w for w in data["format_warnings"] if "메커니즘 재계산:` 없음" in w)
+    assert "`메커니즘 재계산: 해당 없음 — <이유>`" in warn and "숫자 값" in warn, warn
+    data, _inv = _run(_job(tmp_path / "plain"), _out(head="APN 프로필 변환이 틀려 SETUP_DATA_CALL이 거절됨"), capsys)
+    assert not any("메커니즘" in w for w in data.get("format_warnings") or []), data
+
+
+def test_ga1_no_answer_warning_names_both_ways_and_the_carry(tmp_path, capsys):
+    """가-1: 가장 유력의 `아니오` 경고는 두 길(값이 원인이면 가설을 고침, 숫자 값 원인이 아니면 처음부터 `해당 없음`)과, 조사 모드면
+    다시 검사에서 지우거나 바꿔도 이어진다는 것을 말한다. 이어받기 자체(eval 46·77)는 그대로다."""
+    from triagelib import output
+    job = _job(tmp_path)
+    data, inv = _run(job, _out(extra=(NO_MECH,)), capsys)
+    warn = next(w for w in data["format_warnings"] if "'아니오'" in w)
+    assert "가설을 고치고" in warn and "`해당 없음 — <이유>`" in warn and "이어진다" in warn, warn
+    _d, inv = _run(job, _out(extra=("메커니즘 재계산: 해당 없음 — 원인이 재시도 간격이 아니다",)), capsys)
+    assert _failed(inv) == ["숫자 메커니즘"] and inv["gate"][4]["why"] == output.MECH_NO_CARRIED[:output.INV_WHY_MAX], inv["gate"]
+
+
+def test_ga2_all_true_normal_hypothesis_is_not_listed_as_divergence_failure(tmp_path, capsys):
+    """가-2: false 단계가 없는 정상 가설 — 정상 근거 줄이 원문 확인이면 첫 어긋남·책임 층은 `해당 없음(정상 가설)`(실패 이유에 나오지
+    않음), 리포트는 정상 표시, 상태는 근거 부족 그대로. 근거 줄이 원문에 없으면 그 두 게이트의 이유가 "정상 근거 줄 미확인"이다
+    (`false 단계 없음`·`책임 경계 모름`이 아니다). `정상 동작 — …` 머리도 정상 가설로 읽는다."""
+    from triagelib import output
+    rows = ["| 1 | 재시도 뒤 연결된다 | AP 내부 | log:15:10:03 | " + Q_AFTER + " | true |"]
+    for k, head in enumerate(("정상(설계상 정상 동작) — 거절 뒤 망 관리자가 상태를 정리", "정상 동작 — 거절 뒤 망 관리자가 상태를 정리")):
+        job = _job(tmp_path / str(k))
+        _d, inv = _run(job, _out(head=head, layer="모름", quotes=(Q_AFTER,), rows=rows, claim="없음 — 모든 단계 true"), capsys)
+        assert inv.get("normal") is True and inv["status"] == "insufficient_evidence", inv
+        assert {g["name"]: g["why"] for g in inv["gate"] if g["name"] in ("첫 어긋남", "책임 층")} == {
+            "첫 어긋남": "해당 없음(정상 가설)", "책임 층": "해당 없음(정상 가설)"}, inv["gate"]
+        assert "정상 동작으로 보임" in "\n".join(_cause_rows(job))
+    fake = "15:10:04.000 p0 I datad network manager daemon state=connected"
+    _d, inv = _run(_job(tmp_path / "unseen"), _out(head="정상(설계상 정상 동작) — 연결됨", layer="모름", quotes=(fake,),
+                                                  rows=["| 1 | 연결된다 | AP 내부 | log:x | 없음 | true |"], claim="없음"), capsys)
+    assert "normal" not in inv
+    assert {g["why"] for g in inv["gate"] if g["name"] in ("첫 어긋남", "책임 층")} == {output.NORMAL_UNSEEN[:output.INV_WHY_MAX]}
+
+
+def test_ga2_claimed_step_without_false_row_warning_points_to_none_form():
+    """가-2: 표에 false가 없는데 `첫 갈라짐: 단계 N`이면 형식 경고가 정상 가설의 `첫 갈라짐: 없음 — <이유>`를 알려 준다."""
+    from triagelib import output
+    h = {"가설": "정상(설계상 정상 동작) — x", "첫 갈라짐": "단계 1", "로그로 확인": [],
+         "기대 체인": [{"단계": 1, "기대": "a", "근거": "b", "관측": "없음", "일치": "true", "주체": "AP 내부"}]}
+    warns = output._chain_warnings({"hyps": [h], "top": None})
+    assert warns == ["가설 1: 첫 갈라짐 단계 1인데 표에 false 행이 없음 — 정상 가설이면 `첫 갈라짐: 없음 — <이유>`"], warns
+
+
+def test_ga3_log_ending_at_reference_says_so_not_unlooked(tmp_path, capsys):
+    """가-3(2): 로그(`events.coverage.last_ts`)가 기준 시각에서 끝나면 실패 뒤 흔적 게이트는 통과가 아니고, 이유가 "안 봄"이 아니라
+    "로그가 기준 시각에서 끝남 — 실패 뒤 로그가 필요함"이다."""
+    from triagelib import output
+    job = _job(tmp_path)
+    ev = json.loads((job / "events.json").read_text(encoding="utf-8"))
+    ref = output._ref(job, ev)
+    assert ref is not None
+    ev["coverage"] = {**(ev.get("coverage") or {}), "last_ts": ref.isoformat().replace("+00:00", "Z")}
+    (job / "events.json").write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
+    _d, inv = _run(job, _out(quotes=(Q1,)), capsys)
+    gate = next(g for g in inv["gate"] if g["name"] == "실패 뒤 흔적")
+    assert not gate["ok"] and gate["why"].startswith("로그가 기준 시각에서 끝남"), gate
+
+
+def test_ga6_second_check_after_no_warning_is_already_checked_exit_1(tmp_path, capsys):
+    """가-6: 경고 없던 검사 뒤 다시 부르면 이유 `이미 검사함`·종료 1(해당 없음)·next = Step 6로 계속. 작업 없음(2)과 다른 이름이다."""
+    from triagelib import core
+    job = _job(tmp_path)
+    _run(job, _out(), capsys)
+    code, data, _err = check(job, "explore", capsys=capsys)
+    assert (code, data) == (1, {"reason": "이미 검사함", "next": core.NEXT_CHECK_NA}), (code, data)
+
+
+def test_5_held_c1_top_must_be_compared_and_match_points_to_existing_cause(tmp_path, capsys):
+    """외부 설계 리뷰 1·5(11/27): 1위 C=1인데 채택 안 함(조사 모드 `채택 안 함`)이면 탐색이 그 1위 원인을 `후보 확인`으로 이번 실패와
+    대조한다 — 없으면 형식 경고. `맞음`(근거 원문 확인)이면 조사 결론 머리에 "규칙 1위와 같음"이고 기록 안내는 새 원인이 아니라 그
+    기존 원인. 대조하지 않은 채로 통과면 "관측된 규칙 일치"가 "원인은 맞았지만 채택 안 함"이라고 적는다."""
+    top = dict(OK_KEYS["candidates"][0])            # C=1
+    job = _job(tmp_path / "a", cands=[top])
+    assert json.loads((job / "analysis.json").read_text(encoding="utf-8"))["investigate"] == {"mode": True, "reason": "채택 안 함"}
+    data, inv = _run(job, _out(), capsys)
+    assert any(w.startswith("1위 규칙 DATA-001-01가 맞았지만") for w in data["format_warnings"]), data
+    assert any("원인은 맞았지만 채택 안 함" in r for r in _cause_rows(job))
+    job = _job(tmp_path / "b", cands=[top])
+    data, inv = _run(job, _out(extra=("후보 확인:", f"- DATA-001-01: 맞음 — {Q1}")), capsys)
+    assert "format_warnings" not in data and inv["top_match"] == "DATA-001-01", (data, inv)
+    rows = _cause_rows(job)
+    assert rows[0].endswith("(규칙 1위 DATA-001-01와 같음)") and any("그 기존 원인(DATA-001-01)을 고른다" in r for r in rows), rows

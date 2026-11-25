@@ -1088,8 +1088,9 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         return flow_section(data or {}, (events.get("input") or {}).get("window"), around, version, causes, ranked or (), top,
                             flowlib.log_end_sec(config))
 
-    def explore(self, candidates: list[dict]) -> dict | None:
-        """Step 5-2 탐색 분석 해당 여부: 후보 없음·원인 미확인이면 `{reason, when}`, 1위 C=1이면 `run --explore`·`explore.when:
+    def explore(self, candidates: list[dict], decision: dict | None = None) -> dict | None:
+        """Step 5-2 탐색 분석 해당 여부: 조사 모드(`issuepost.investigate_mode` — 스크립트가 원인을 채택하지 않음, 1위 C=1 보류 포함)면
+        `{reason: no_candidate|cause_unconfirmed, when}`, 채택이면 `run --explore`·`explore.when:
         always`·확인할 내용(`--look-note`)이 있을 때만 `fit_check`(적합성 확인), 아니면 None. 끄는 쪽이 이긴다: `never`면
         `--explore`여도, `--no-explore`면 `always`여도 열지 않는다(FR-07). 확인할 내용은 사용자 질문이라 분석 요청으로 본다(FR-16 —
         포털 R1과 같은 논리, 답은 탐색 분석이 한다).
@@ -1100,8 +1101,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         if when not in EXPLORE_WHEN:
             self.warnings.append(f"explore.when 값이 잘못됐다({when}). ask로 본다")
             when = "ask"
-        if candidates and candidates[0]["C"]:
-            # 확신 일치도 탐색을 묻지 않고 하는 세션이면 1위가 증상을 설명하는지 확인할 맥락을 준다. 그 밖은 이전과 같다(묻지 않음)
+        if not issuepost.investigate_mode({"candidates": candidates, "decision": decision})["mode"]:
+            # 확신 일치(채택)도 탐색을 묻지 않고 하는 세션이면 1위가 증상을 설명하는지 확인할 맥락을 준다. 그 밖은 이전과 같다(묻지 않음)
             if when == "never" or self.args.explore is False or (
                     when != "always" and not self.args.explore and not self.look_inputs()["note"]):
                 return None
@@ -1413,7 +1414,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         near = self.near_causes(info, match, candidates, decision, (no_candidate or {}).get("search_hits"))
         analyzer = self.analyzer(lead_first(decision, candidates),     # 심층 분석 카테고리: 채택 원인(없으면 1위)
                                  issuepost.investigate_mode({"candidates": candidates, "decision": decision})["mode"])
-        explore = self.explore(lead_first(decision, candidates))     # 적합성 확인도 채택 원인 기준
+        explore = self.explore(lead_first(decision, candidates), decision)     # 적합성 확인도 채택 원인 기준
         explore_input = self.explore_input(around, anchor) if explore and explore["when"] != "never" else None
         if explore_input is not None and partial:    # 탐색 입력: 부분 일치 앞 3개(키·없는 조건 id)·맞은 근거 시각(보조 중심)
             explore_input["partial"] = [{"signature": p["signature"],

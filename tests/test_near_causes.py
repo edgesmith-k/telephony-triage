@@ -15,7 +15,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
-from runner import SAMPLE, run_json  # noqa: E402
+from runner import SAMPLE, padded_log, run_json  # noqa: E402
 from tests.test_check_output import Q1  # noqa: E402
 from tests.test_investigate import Q_AFTER, _failed, _job, _out, _run  # noqa: E402
 from common import evidence  # noqa: E402
@@ -25,16 +25,19 @@ DATA_LOG = SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log"
 WORDS_ONLY = "낱말 일치만(로그 대조 안 함)"
 
 
-def _offline(tmp_path: Path, lines: list[str], summary: str, monkeypatch, db: Path = SAMPLE) -> tuple[dict, Path]:
+def _offline(tmp_path: Path, lines: list[str], summary: str, monkeypatch, db: Path = SAMPLE, *extra) -> tuple[dict, Path]:
     monkeypatch.setenv("TT_SCHEMA_CHECK", "1")
+    tmp_path.mkdir(parents=True, exist_ok=True)
     log = tmp_path / "radio.log"
     log.write_text("".join(lines), encoding="utf-8")
+    if extra:       # 기준 줄로 채택되는 실행: 자격 검사가 볼 꼬리 줄을 붙인다(runner.padded_log)
+        log = padded_log(log, tmp_path / "radio-padded.log")
     meta = tmp_path / "m.json"
     meta.write_text(json.dumps({"key": "MOCK-1001", "occurred_at": "2026-09-20T14:32:10+09:00", "summary": summary},
                                ensure_ascii=False), encoding="utf-8")
     out = tmp_path / "out"
     result = run_json("triage.py", ["run", "MOCK-1001", "--offline-db", db, "--out", out, "--logs", log,
-                                    "--issue-meta", meta, "--tz", "Asia/Seoul", "--year", "2026"])
+                                    "--issue-meta", meta, "--tz", "Asia/Seoul", "--year", "2026", *extra])
     assert result["status"] == "ok", result
     return result, out
 
@@ -57,10 +60,16 @@ def test_c0_run_keeps_partly_matched_cause_of_top_type_and_drops_noise(tmp_path,
 
 
 def test_c1_run_has_no_near_causes(tmp_path, monkeypatch):
-    result, _out = _offline(tmp_path, DATA_LOG.read_text(encoding="utf-8").splitlines(keepends=True), "데이터 연결 안 됨",
-                            monkeypatch)
-    assert result["candidates"][0]["C"] == 1 and result["investigate"] == {"mode": False}
-    assert "near_causes" not in result
+    """채택(기준 줄로 1위 C=1 채택)이면 조사 모드가 아니라 near_causes가 없다. 같은 로그를 기준 없이 돌리면 1위 C=1이어도 보류라
+    조사 모드(`채택 안 함`, 11/27 외부 설계 리뷰 1)다."""
+    lines = DATA_LOG.read_text(encoding="utf-8").splitlines(keepends=True)
+    result, _out = _offline(tmp_path / "a", lines, "데이터 연결 안 됨", monkeypatch, SAMPLE, "--look-at",
+                            "notifyDataEnabledChanged: enabled=false")
+    assert result["candidates"][0]["C"] == 1 and result["decision"]["state"] == "accepted", result["decision"]
+    assert result["investigate"] == {"mode": False} and "near_causes" not in result
+    held, _out = _offline(tmp_path / "b", lines, "데이터 연결 안 됨", monkeypatch)
+    assert held["candidates"][0]["C"] == 1 and held["decision"]["state"] == "held"
+    assert held["investigate"] == {"mode": True, "reason": "채택 안 함"}
 
 
 def test_empty_db_leaves_key_out(tmp_path, monkeypatch):

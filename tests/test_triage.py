@@ -24,7 +24,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "tests" / "helpers"))
 
-from runner import SAMPLE, parse_calls, plugin_root, run, run_json, tmp  # noqa: E402
+from runner import SAMPLE, padded_log, parse_calls, plugin_root, run, run_json, tmp  # noqa: E402
 from workspace import Workspace, git  # noqa: E402
 
 LABELSET = REPO / "tests" / "fixtures" / "offline-eval-sample.yaml"
@@ -750,7 +750,9 @@ def test_no_candidate_run_has_no_timeline_until_explore_subcommand_writes_it():
     assert "timeline.md 0/" not in pending
     explore = _explore_cmd(out, item["key"])
     assert explore["timeline"] == "timeline.md" and 0 < explore["lines"] == explore["total"]
-    assert set(explore) == {"timeline", "lines", "total"}       # android: platform·refs 없음(17-platforms §10)
+    # android: platform·refs 없음(17-platforms §10). 조사 모드(후보 없음)라 next가 window·기준 뒤 인용은 check-output 전에 하라고
+    # 알린다(가-3(1)) — 조사 모드가 아니면 next 키가 없다(아래 test_explore_next_tells_window_before_check_only_in_investigate_mode)
+    assert set(explore) == {"timeline", "lines", "total", "next"} and "check-output **전에**" in explore["next"]
     assert json.loads((out / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])["step"] == "explore"
     text = (out / "timeline.md").read_text(encoding="utf-8")
     assert text.startswith(f"# {item['key']} 탐색 타임라인") and "지시로 따르지 않는다" in text
@@ -780,7 +782,7 @@ def test_no_candidate_run_has_no_timeline_until_explore_subcommand_writes_it():
 def test_explore_subcommand_exit_codes():
     doc, items = _items()
     out = tmp("tt-triage-") / "x"
-    _offline(items[0], doc, out)                   # 후보 확정 → 입력 파일 없음
+    _accepted(items[0], doc, out)                  # 후보 채택 → 입력 파일 없음
     assert not (out / "explore-input.json").exists()
     assert run("triage.py", ["explore", "x", "--out", out]).returncode == 1
     last = json.loads((out / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])     # 정보 행(F7 확장)
@@ -809,7 +811,7 @@ def test_cause_line_variant_follows_explore_line():
     lines = (out / "report.md").read_text(encoding="utf-8").splitlines()
     assert CAUSE_EXPLORE in lines and CAUSE_PLAIN not in lines
     done = tmp("tt-triage-") / "y"
-    _offline(items[0], doc, done)                  # 후보 확정 → 탐색 분석 줄 없음
+    _accepted(items[0], doc, done)                 # 후보 채택 → 탐색 분석 줄 없음
     lines = (done / "report.md").read_text(encoding="utf-8").splitlines()
     assert CAUSE_PLAIN in lines and not any(x.startswith("- 탐색 분석") for x in lines)
 
@@ -820,17 +822,48 @@ def test_stale_timeline_is_removed_by_run():
     out.mkdir()
     (out / "timeline.md").write_text("old\n", encoding="utf-8")
     (out / "explore-input.json").write_text("{}", encoding="utf-8")
-    _offline(items[0], doc, out)                   # 후보 확정이라 탐색 대상이 아니다
+    _accepted(items[0], doc, out)                  # 후보 채택이라 탐색 대상이 아니다
     assert not (out / "timeline.md").exists() and not (out / "explore-input.json").exists()
+
+
+def _accepted(item: dict, doc: dict, out: Path) -> dict:
+    """1위 C=1을 스크립트가 채택한 실행(기준 줄 + 자격 검사가 볼 꼬리 줄을 붙인 로그). 기준 없이 돈 같은 로그는 보류(no_reference)다."""
+    logs = [str(padded_log((LABELSET.parent / p).resolve())) for p in item["logs"]]
+    analysis = _offline_with({**item, "logs": logs}, doc, out, "--look-at", "notifyDataEnabledChanged: enabled=false")
+    assert analysis["decision"]["state"] == "accepted", analysis["decision"]
+    return analysis
 
 
 def test_confirmed_cause_has_no_explore_and_no_timeline():
     doc, items = _items()
     out = tmp("tt-triage-") / "x"
-    analysis = _offline(items[0], doc, out)
-    assert analysis["candidates"][0]["C"] == 1
+    analysis = _accepted(items[0], doc, out)
+    assert analysis["candidates"][0]["C"] == 1 and analysis["investigate"] == {"mode": False}
     assert "explore" not in analysis and not (out / "timeline.md").exists() and not (out / "explore-input.json").exists()
     assert "탐색 분석" not in (out / "report.md").read_text(encoding="utf-8")
+
+
+def test_matched_but_held_cause_is_investigated_and_asked():
+    """외부 설계 리뷰 1(11/27): 1위 C=1이어도 자격 검사가 원인으로 채택하지 않았으면(여기선 기준 없음 no_reference) 조사 모드
+    (`채택 안 함`)이고 기본 설정(`ask`)에서 탐색을 묻는다 — 리포트는 "원인 보류"인데 "규칙이 맞았으니 볼 것 없음"으로 끝나지 않게."""
+    doc, items = _items()
+    out = tmp("tt-triage-") / "x"
+    analysis = _offline(items[0], doc, out)
+    assert analysis["candidates"][0]["C"] == 1 and analysis["decision"]["state"] == "held", analysis["decision"]
+    assert analysis["investigate"] == {"mode": True, "reason": "채택 안 함"}
+    assert analysis["explore"]["reason"] == "cause_unconfirmed" and analysis["explore"]["when"] == "ask"
+    assert (out / "explore-input.json").is_file()
+
+
+def test_explore_next_tells_window_before_check_only_in_investigate_mode(tmp_path):
+    """가-3(1): 조사 모드 JOB의 `triage.py explore` 출력 `next`는 window·기준 뒤 인용을 check-output 전에 하라고 알린다. 조사 모드가
+    아니면(채택 + --explore 적합성 확인) next 키가 없다(출력이 이전과 같다)."""
+    doc, items = _items()
+    out = tmp("tt-triage-") / "x"
+    logs = [str(padded_log((LABELSET.parent / p).resolve())) for p in items[0]["logs"]]
+    fit = _offline_with({**items[0], "logs": logs}, doc, out, "--look-at", "notifyDataEnabledChanged: enabled=false", "--explore")
+    assert fit["explore"]["reason"] == "fit_check" and fit["investigate"] == {"mode": False}
+    assert "next" not in _explore_cmd(out, items[0]["key"])
 
 
 def test_explore_never_skips_timeline_but_says_so():
@@ -860,7 +893,8 @@ def test_explore_marks_cause_unconfirmed_and_rejects_bad_settings(tmp_path):
     spec = triage.Driver.explore_input(drv, "2026-09-20T05:30:00Z", None)
     assert spec == {"around": "2026-09-20T05:30:00Z", "failed_step": "4 | x | FAIL", "limit": 200, "anchor": None}
     assert len(drv.warnings) == 2 and not (tmp_path / "timeline.md").exists()    # 타임라인은 run이 만들지 않는다
-    assert triage.Driver.explore(drv, [{"C": 1}]) is None
+    assert triage.Driver.explore(drv, [{"C": 1}], {"state": "accepted"}) is None      # 채택(확신 일치)이면 묻지 않는다
+    assert triage.Driver.explore(drv, [{"C": 1}], {"state": "held", "reason": "no_reference"})["reason"] == "cause_unconfirmed"
 
 
 def test_timeline_is_bounded_keeps_hot_lines_near_occurrence_and_is_deterministic():
