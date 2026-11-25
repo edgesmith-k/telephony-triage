@@ -163,7 +163,8 @@ def test_cp_conclusion_without_cp_tag_quote_fails_gate_6(tmp_path, capsys):
 
 def test_window_after_reference_counts_as_looking_after(tmp_path, capsys):
     job = _job(tmp_path / "a")
-    _window(job, rows=("15:10:01.900 p0 E hiddend carrier link lost", "15:10:05.000 p0 I hiddend carrier link back"))
+    _window(job, rows=("15:10:01.900 p0 E hiddend carrier link lost", "15:10:05.000 p0 I hiddend carrier link back"),
+            last="2026-09-20T15:10:05.000Z")
     _data, inv = _run(job, _out(quotes=(Q1,)), capsys)
     assert _failed(inv) == []
 
@@ -172,7 +173,7 @@ def test_window_counts_only_when_a_line_after_reference_exists(tmp_path, capsys)
     """리뷰 L4: 구간 기록의 중심(`at`)이 기준 뒤여도 실제 줄이 기준 뒤에 없으면(마지막 줄이 기준과 같은 시각 포함) 인정하지 않는다."""
     for name, last in (("before", "15:10:01.900"), ("same", "15:10:02.000")):
         job = _job(tmp_path / name)
-        _window(job, rows=(f"{last} p0 E hiddend carrier link lost",))
+        _window(job, rows=(f"{last} p0 E hiddend carrier link lost",), last=f"2026-09-20T{last}Z")
         rec = json.loads((job / "windows.json").read_text(encoding="utf-8"))
         rec["windows"][0]["at"] = "2026-09-20T15:10:05.000Z"
         (job / "windows.json").write_text(json.dumps(rec), encoding="utf-8")
@@ -861,11 +862,11 @@ ROW_Q = "15:10:30.000 - - datad link monitor lost carrier on rmnet_data0"
 
 def test_c4_row_quote_of_another_day_line_is_not_after_failure(tmp_path, capsys):
     """C-4: 행 모양 인용은 시각만 있어 전날 사본 줄도 실패 당일 시각으로 읽혀 '실패 뒤 흔적'이 통과했다 — 머리·메시지가 맞는 사본
-    줄이 있는데 같은 초인 줄이 없으면 그 시각을 쓰지 않는다(인용 ok는 그대로). 같은 메시지가 당일 그 초에도 있으면 통과."""
+    줄이 있는데 같은 초인 줄이 없으면 그 시각을 쓰지 않는다. A5부터 그 인용은 약함(전에는 ok 그대로). 같은 메시지가 당일 그 초에도 있으면 통과."""
     job = _job(tmp_path / "other")
     _copy(job, [ISO_Q1, DAY_BEFORE])
     data, inv = _run(job, _out(quotes=(Q1, ROW_Q)), capsys)
-    assert data["weak"] == 0 and data["fabricated"] == 0, data
+    assert data["weak"] == 1 and data["fabricated"] == 0, data
     assert _failed(inv) == ["실패 뒤 흔적"], inv["gate"]
     job = _job(tmp_path / "same")
     _copy(job, [ISO_Q1, DAY_BEFORE, DAY_BEFORE.replace("09-19", "09-20")])
@@ -880,6 +881,217 @@ def test_c4_row_time_matches_copy_line_across_timezone():
     ev = {"input": {"tz": "Asia/Seoul", "window": {"start": "2026-09-20T15:00:00Z", "end": "2026-09-20T15:30:00Z"}}}
     q = "15:10:30.000 p0 I datad link monitor lost carrier on rmnet_data0"
     line = "{} 00:10:30.000  1000  1001 I datad: link monitor lost carrier on rmnet_data0\n"
-    assert output._row_ts(q, ev, [line.format("09-21")]) == output._quote_ts(q, ev) is not None
-    assert output._row_ts(q, ev, [line.format("09-20")]) is None
-    assert output._row_ts(q, ev, ["unrelated line\n"]) == output._quote_ts(q, ev)        # 맞는 줄 없음: 그대로
+    assert output._quote_at(q, ev, [line.format("09-21")])[0] == output._quote_ts(q, ev) is not None
+    assert output._quote_at(q, ev, [line.format("09-20")])[0] is None
+    assert output._quote_at(q, ev, ["unrelated line\n"]) == (output._quote_ts(q, ev), None)        # 맞는 줄 없음: 그대로
+
+
+# --- 반입 8 외부 리뷰(8d82caee 재현): 다른 날 관측 줄(A5)·다른 사본 끝(A4) — 짝은 날짜·파일만 정상으로 바꾼 같은 입력 -----------------
+
+def _copies(job: Path, files: dict) -> None:
+    """마스킹 사본 여러 개(`{이름: 줄들}`)와 analysis.json `logs.masked` 기록."""
+    (job / "logs-masked").mkdir(exist_ok=True)
+    for name, lines in files.items():
+        (job / "logs-masked" / name).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    a = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    a["logs"] = {**a["logs"], "masked": {"dir": "logs-masked", "files": list(files), "skipped": []}}
+    (job / "analysis.json").write_text(json.dumps(a, ensure_ascii=False), encoding="utf-8")
+
+
+DAY_ROWS = ["| 1 | SETUP 요청이 나간다 | AP 내부 | log:15:10:00 | " + Q0 + " | true |",
+            "| 2 | 링크가 유지된다 | AP 내부 | spec:x | " + ROW_Q + " | false |"]
+
+
+def test_a5_failing_step_observation_from_another_day_is_not_a_divergence(tmp_path, capsys):
+    """A5: 가장 이른 false 단계 관측에 전날 줄을 행 모양(`15:10:30 …`)으로 넣고 당일 후속 줄을 함께 인용하면 모든 게이트를 통과했다
+    — 그 관측은 사본에서 다른 날에만 있어 원문 확인(ok)이 아니고(약함) 게이트 2가 그 이유로 실패. 같은 줄이 당일에 있으면 통과."""
+    out = _out(layer="AP 내부", quotes=(Q0, Q_AFTER), rows=DAY_ROWS, claim="단계 2 — 링크가 끊김", head="링크가 끊겨 연결 실패")
+    job = _job(tmp_path / "other")
+    _copy(job, [ISO_Q1, DAY_BEFORE])
+    data, inv = _run(job, out, capsys)
+    assert data["weak"] == 1 and _failed(inv) == ["첫 어긋남"], (data, inv["gate"])
+    assert "단계 2: 관측 줄이 사본에서는 다른 시각(다른 날)에만 있음" in inv["gate"][1]["why"], inv["gate"]
+    job = _job(tmp_path / "same")
+    _copy(job, [ISO_Q1, DAY_BEFORE.replace("09-19", "09-20")])
+    data, inv = _run(job, out, capsys)
+    assert data["weak"] == 0 and inv["status"] == "identified", (data, inv["gate"])
+
+
+RADIO = ["2026-09-20T15:10:00.100Z host ofonod[3]: attach requested", ISO_Q1,
+         "2026-09-20T15:10:03.400Z host datad[9]: state=disconnected"]
+
+
+def test_a4_absence_end_is_measured_in_copies_where_the_word_appears(tmp_path, capsys):
+    """A4: 낱말(SETUP_DATA_CALL)이 나오는 radio 사본은 실패 뒤 1.4초에서 끝나는데 다른 사본(main)이 길어 '300초 뒤 재요청 없음'이
+    통과했다 — 끝은 낱말(또는 그 줄의 태그)이 나오는 사본으로 잰다. radio가 길면(또는 같은 태그 사본이 길면) 통과."""
+    extra = (*ABSENT, RETRY_MECH)
+    for name, files, ok in (("main-long", {"radio.log": RADIO, "main.log": [TAIL]}, False),
+                            ("radio-long", {"radio.log": [*RADIO, TAIL.replace("datad[9]", "vrild[7]")], "main.log": [TAIL]}, True),
+                            ("same-tag", {"radio.log": RADIO, "radio2.log": ["2026-09-20T15:16:00.000Z host vrild[7]: heartbeat"]},
+                             True)):
+        job = _job(tmp_path / name)
+        _copies(job, files)
+        _d, inv = _run(job, _out(rows=RETRY_ROWS, extra=extra), capsys)
+        assert (inv["status"] == "identified") is ok, (name, inv["gate"])
+        assert ok or "미관측" in inv["gate"][1]["why"], (name, inv["gate"])
+
+
+def test_a4_word_only_in_rules_uses_all_copies_and_says_so(tmp_path, capsys):
+    """A4: 낱말이 어느 사본에도 없고 파서 규칙에만 있으면(아래 끝 줄의 사본도 모름) 지금처럼 모든 사본으로 재고 이유 글에 적는다."""
+    job = _job(tmp_path)
+    _copies(job, {"radio.log": [ISO_Q1], "main.log": [TAIL]})
+    _d, inv = _run(job, _out(rows=ABSENT_ROWS, extra=("찾았는데 없음:", "- `DEACTIVATE_DATA_CALL` 요청 — logs-masked 15:10:02 뒤")),
+                   capsys)
+    assert inv["status"] == "identified" and "전체 사본" in inv["gate"][1]["why"], inv["gate"]
+
+
+# --- 반입 8 A1~A3: 구간 파일 날짜·규칙 1위와 같음·`예입니다` --------------------------------------------------------------
+
+def test_g2_window_end_time_comes_from_the_file_head_not_a_guess(tmp_path, capsys):
+    """G-2(A1을 바꿈): 구간 파일 줄은 날짜가 없다 — 날짜를 추측(분석 범위 날짜·중심에 가까운 날)하지 않고 window가 구간 파일 머리에
+    적은 날짜 포함 끝 시각만 쓴다. `--grep` 구간처럼 중심과 12시간 넘게 떨어진 전날 줄이 끝이면 실패, 당일이면 통과, 머리가 없는 옛
+    구간 파일은 시각을 몰라 세지 않는다."""
+    rows = ("15:10:01.900 p0 E hiddend carrier link lost", "23:50:05.000 p0 I hiddend carrier link back")
+    for name, last, want in (("day-before", "2026-09-19T23:50:05.000Z", ["실패 뒤 흔적"]),
+                             ("same-day", "2026-09-20T23:50:05.000Z", []), ("old", None, ["실패 뒤 흔적"])):
+        job = _job(tmp_path / name)
+        _window(job, rows=rows, last=last)
+        _data, inv = _run(job, _out(quotes=(Q1,)), capsys)
+        assert _failed(inv) == want, (name, inv["gate"])
+        assert name != "old" or "옛 구간 파일" in inv["gate"][3]["why"], inv["gate"]
+
+
+def test_a2_same_as_rule_top_needs_source_confirmed_basis(tmp_path, capsys):
+    """A2: `후보 확인`의 근거가 `찾았는데 없음`뿐이거나 약한(weak) 인용이어도 "규칙 1위와 같음"이 붙었다 — 근거 인용이 원문 확인(ok)일
+    때만. 같은 항목에 ok 인용이면 붙는다."""
+    top = {**OK_KEYS["candidates"][0], "C": 0}
+    weak = Q1.replace("15:10:01.200", "15:10:01.900")         # 메시지는 맞고 시각이 다른 행(머리 불일치 → 약함)
+    for name, why, same in (("absent", "찾았는데 없음: `SETUP_DATA_CALL` 재요청 — logs-masked 15:10:02 뒤", False),
+                            ("weak", weak, False), ("ok", Q1, True)):
+        job = _job(tmp_path / name, cands=[top])
+        data, inv = _run(job, _out(extra=("후보 확인:", f"- DATA-001-01: 맞음 — {why}")), capsys)
+        assert inv["status"] == "identified" and data["weak"] == (name == "weak"), (name, data, inv["gate"])
+        assert ("top_match" in inv) is same and _cause_rows(job)[0].endswith("(규칙 1위 DATA-001-01와 같음)") is same, (name, data)
+
+
+def test_a3_yes_answer_forms_with_copula(tmp_path, capsys):
+    """A3: `예입니다`·`예이다`·`예임`·`예요`·`예 입니다`는 답 `예`다. `예상`·`예외`·`예정`·`예시`는 계속 답이 아니다."""
+    from triagelib import output
+    for tail in ("예입니다", "예이다.", "예임", "예요", "예 입니다", "**예입니다**"):
+        mech = f"메커니즘 재계산: 01.2-00.1 = 1.1초 → 고치면 결과가 뒤집히나: {tail}"
+        assert output.FLIP_RX.search(mech).group(1) == "예", tail
+        assert output.FLIP_TAIL_RX.search(f"재계산: 1.1초 — {tail}").group(1) == "예", tail
+    for tail in ("예상하기 어려움", "예외 발생", "예정", "예시: 1초"):
+        assert not output.FLIP_RX.search(f"고치면 결과가 뒤집히나: {tail}"), tail
+        assert not output.FLIP_TAIL_RX.search(f"재계산: 1.1초 — {tail}"), tail
+    _d, inv = _run(_job(tmp_path), _out(rows=NUM_ROWS, extra=("메커니즘 재계산: 01.2-00.1 = 1.1초 → 고치면 결과가 뒤집히나: 예입니다",)),
+                   capsys)
+    assert _failed(inv) == [], inv["gate"]
+
+
+def test_b1_cited_tags_missing_from_tags_yaml_are_recorded_and_reported(tmp_path, capsys):
+    """반입 8 B1: 원문 확인(ok) 인용 줄의 태그 중 tags.yaml에 없는 것(datad·ofonod — vrild는 있음)을 check-output 기록
+    `parser_unknown_tags`에 인용 순서로 남기고 리포트에 한 줄. 지어낸 인용의 태그는 넣지 않는다. 판정·점수는 그대로."""
+    from tests.test_check_output import FAKE
+    job = _job(tmp_path)
+    _data, inv = _run(job, _out(quotes=(Q1, Q_AFTER, "15:10:09.000 p0 E fakedaemon " + FAKE)), capsys)
+    rec = _rec(job)
+    assert rec["parser_unknown_tags"] == ["datad", "ofonod"], rec
+    line = "  - 파서 설정에 없는 태그가 근거 인용에 쓰임(탐색): datad, ofonod — tags.yaml 추가 검토(사람이 판단, 자동으로 더하지 않음)"
+    assert line in (job / "report.md").read_text(encoding="utf-8").split("\n")
+    job = _job(tmp_path / "known")
+    tags = (job.parent / "db" / "parser-rules" / "tags.yaml")
+    tags.write_text(tags.read_text(encoding="utf-8") + "  - {tag: datad, category: data, added_for: '-', added_on: 2026-11-26, "
+                    "reason: 시험}\n  - {tag: ofonod, category: data, added_for: '-', added_on: 2026-11-26, reason: 시험}\n",
+                    encoding="utf-8")
+    _run(job, _out(), capsys)
+    assert "parser_unknown_tags" not in _rec(job) and "파서 설정에 없는 태그" not in (job / "report.md").read_text(encoding="utf-8")
+
+
+def test_b1_deep_output_tags_are_marked_as_deep(tmp_path, capsys):
+    """반입 8 B1: 5-1(심층) 인용도 같은 기록·줄 — 줄에 `(심층)`. 규칙을 못 읽으면 건너뜀으로 남기고 줄은 쓰지 않는다."""
+    from tests.test_check_output import Q2, _deep_out, check, make_job
+    job = make_job(tmp_path, "deep", "module")
+    ev = json.loads((job / "events.json").read_text(encoding="utf-8"))
+    ev["rules"] = {"path": str(_rules(tmp_path, cp_mark=False))}
+    (job / "events.json").write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
+    msj = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))
+    msj["deep"]["inputs"]["events.json"] = _sha(job / "events.json")      # 규칙 경로를 넣은 events.json으로 기록을 맞춘다
+    (job / "module-skill.json").write_text(json.dumps(msj, ensure_ascii=False), encoding="utf-8")
+    (job / "deep-output.md").write_text(_deep_out([Q1, Q2]), encoding="utf-8")
+    assert check(job, "deep", capsys=capsys)[0] == 0
+    rec = json.loads((job / "check-output.json").read_text(encoding="utf-8"))["deep"]
+    assert rec.get("parser_unknown_tags") == ["vrild"], rec
+    assert "  - 파서 설정에 없는 태그가 근거 인용에 쓰임(심층): vrild — " in (job / "report.md").read_text(encoding="utf-8")
+
+
+# --- 별개 리뷰 1126(G-1·G-3·G-5·G-7·G-8): 입력 모양을 바꾸면 다시 통과하던 길과 반대 방향 짝 ------------------------------------
+
+ROW_Q_ELL = "15:10:30.000 - - datad link … lost carrier on rmnet_data0"     # 첫 조각(`link`)이 8자 미만
+
+
+def test_g1_short_first_fragment_still_checks_the_copy_date(tmp_path, capsys):
+    """G-1: 생략표로 첫 조각을 8자 미만으로 만들면 사본 줄 날짜 대조를 건너뛰어 전날 관측이 통과했다 — 8자 이상인 가장 긴 조각으로
+    찾고 모든 조각이 같은 줄에 순서대로 있는지 본다. `로그로 확인`에 넣어도(게이트 4) 같다. 당일 줄이면 그대로 통과."""
+    rows = [r.replace(ROW_Q, ROW_Q_ELL) for r in DAY_ROWS]
+    out = _out(layer="AP 내부", quotes=(Q0, Q_AFTER), rows=rows, claim="단계 2 — 링크가 끊김", head="링크가 끊겨 연결 실패")
+    for name, line, ok in (("other", DAY_BEFORE, False), ("same", DAY_BEFORE.replace("09-19", "09-20"), True)):
+        job = _job(tmp_path / name)
+        _copy(job, [ISO_Q1, line])
+        data, inv = _run(job, out, capsys)
+        assert (inv["status"] == "identified") is ok and data["weak"] == (not ok), (name, data, inv["gate"])
+    job = _job(tmp_path / "after")
+    _copy(job, [ISO_Q1, DAY_BEFORE])
+    _data, inv = _run(job, _out(quotes=(Q1, ROW_Q_ELL)), capsys)
+    assert _failed(inv) == ["실패 뒤 흔적"], inv["gate"]
+
+
+def test_g3_absent_words_must_appear_together_in_a_copy_line(tmp_path, capsys):
+    """G-3: `찾았는데 없음` 항목에 백틱 낱말이 둘이면 사본 고르기는 하나라도 든 사본, 세기는 모두 든 줄이라 늘 0건·긴 사본으로
+    통과했다 — 낱말 전부가 함께 든 줄이 사본에 있어야 하고(없으면 실패), 끝도 그 줄이 든 사본으로 잰다."""
+    two = ("찾았는데 없음:", "- `SETUP_DATA_CALL` `heartbeat` 재요청 — logs-masked 15:10:02 뒤 grep")
+    job = _job(tmp_path / "apart")
+    _copies(job, {"radio.log": RADIO, "main.log": [TAIL]})
+    _d, inv = _run(job, _out(rows=RETRY_ROWS, extra=(*two, RETRY_MECH)), capsys)
+    assert _failed(inv) == ["첫 어긋남"] and "함께 든 줄이 사본에 없음" in inv["gate"][1]["why"], inv["gate"]
+    together = ("찾았는데 없음:", "- `SETUP_DATA_CALL` `AUTH_FAILURE_ON_EMM` 재요청 — logs-masked 15:10:02 뒤 grep")
+    for name, radio, ok in (("short", RADIO, False), ("long", [*RADIO, TAIL.replace("datad[9]", "vrild[7]")], True)):
+        job = _job(tmp_path / name)
+        _copies(job, {"radio.log": radio, "main.log": [TAIL]})
+        _d, inv = _run(job, _out(rows=RETRY_ROWS, extra=(*together, RETRY_MECH)), capsys)
+        assert (inv["status"] == "identified") is ok, (name, inv["gate"])
+
+
+def test_g5_yearless_copy_line_matches_across_new_year():
+    """G-5: 연도 없는 사본 줄(logcat)은 분석 범위 시작의 연도로 읽혀 해를 넘는 로그에서 맞는 행 인용이 다른 날로(약함) 떨어졌다 —
+    사본 줄에 연도가 없으면 ±1년도 맞춰 본다. 다른 날 줄은 그대로 None."""
+    from triagelib import output
+    output._raw_ready()
+    ev = {"input": {"tz": "UTC", "window": {"start": "2026-12-31T23:55:00Z", "end": "2027-01-01T00:05:00Z"}}}
+    q = "00:00:30.000 p0 I datad link monitor lost carrier on rmnet_data0"
+    line = "{} 00:00:30.000  1000  1001 I datad: link monitor lost carrier on rmnet_data0\n"
+    assert output._quote_at(q, ev, [line.format("01-01")]) == (output._quote_ts(q, ev), 0)
+    assert output._quote_at(q, ev, [line.format("01-02")])[0] is None
+
+
+def test_g7_rules_only_word_measures_the_copy_of_the_lower_end_line(tmp_path, capsys):
+    """G-7: 낱말이 파서 규칙에만 있으면 끝은 아래 끝을 준 앞 단계 인용 줄의 사본으로 잰다 — 그 사본(radio)이 짧으면 다른 사본(main)이
+    길어도 미관측. radio가 길면 통과."""
+    rows = [FAIL_ROWS[0], FAIL_ROWS[1].replace(Q1, ISO_Q1),
+            "| 3 | 인증 실패 뒤 DEACTIVATE를 보낸다 | CP 내부 | spec:x | 없음(찾은 곳: logs-masked 15:10:01 뒤) | false |"]
+    extra = ("찾았는데 없음:", "- `DEACTIVATE_DATA_CALL` 요청 — logs-masked 15:10:01 뒤")
+    for name, radio, ok in (("short", RADIO, False), ("long", [*RADIO, TAIL], True)):
+        job = _job(tmp_path / name)
+        (job / "explore-input.json").write_text(json.dumps({"limit": 200, "around": "2026-09-20T15:09:30Z"}), encoding="utf-8")
+        _copies(job, {"radio.log": radio, "main.log": ["2026-09-20T15:30:00.000Z host other[2]: heartbeat"]})
+        _d, inv = _run(job, _out(rows=rows, claim="단계 3 — CP가 DEACTIVATE를 안 보냄", extra=extra), capsys)
+        assert (inv["status"] == "identified") is ok, (name, inv["gate"])
+        assert ok or "미관측" in inv["gate"][1]["why"], (name, inv["gate"])
+
+
+def test_g8_raw_shape_quote_is_never_other_day_without_rescan(monkeypatch):
+    """G-8: 원문 모양 인용은 `stamp_matches`가 이미 날짜까지 맞췄다 — `_other_day`가 사본을 다시 훑지 않고 False."""
+    from triagelib import output
+    output._raw_ready()
+    monkeypatch.setattr(output, "_quote_at", lambda *a: (_ for _ in ()).throw(AssertionError("사본을 다시 훑음")))
+    assert output._other_day(ISO_Q1, {"input": {"tz": "UTC"}}, [ISO_Q1]) is False

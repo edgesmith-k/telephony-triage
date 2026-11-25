@@ -34,6 +34,8 @@ transcript에서 플러그인 세션(플러그인 스크립트 Bash 호출 또�
 CLI:
     python3 <plugin.scripts_path>/usage_stats.py [--work-dir <dir> | --platform <이름>] [--json] [--transcripts [<dir>]]
                                                  [--plugin-root <dir>]
+    python3 <plugin.scripts_path>/usage_stats.py --tags [--work-dir <dir> | --platform <이름>] [--json]
+    (`--tags`: 지표 대신 `tag_stats` 표 — 근거 인용(원문 확인)에 쓰였는데 tags.yaml에 없는 태그, 반입 8. 이 모드만 작업 키를 낸다)
     (`plugin.scripts_path`는 사용자 config — setup·SessionStart가 설치본 scripts 경로로 맞춘다. 읽기 전용)
     (기본: 선택 플랫폼(`--platform` > TT_PLATFORM > 사용자 config platform > site)의 사용자 config work_dir.
     `--work-dir`와 `--platform`은 함께 쓸 수 없다. `--work-dir`면 site-defaults를 읽지 않는다)
@@ -512,6 +514,70 @@ def transcripts(root: Path) -> dict:
     return out
 
 
+# -- --tags: 근거 인용에 쓰인, 파서 설정(tags.yaml)에 없는 태그(반입 8 B2) ------------------------------------------------
+TAG_PROPOSED_RX = re.compile(r"^  - 규칙 제안 \(.*\badd-parser-rule\b.*?\btag:\s*['\"]?([^\s,'\"}]+)", re.MULTILINE)
+TAG_KEYS_SHOWN = 5
+
+
+def tag_stats(work_dir: Path) -> dict:
+    """작업마다 check-output 기록(`check-output.json`)의 `parser_unknown_tags`(원문 확인 인용 줄의 태그 중 tags.yaml에 없는 것,
+    5-1 `deep`·5-2 `explore`)를 태그별로 모은다 → `{jobs(기록 있는 작업), skipped(태그 대조를 건너뛴 작업), tags[{tag, n(이슈 수),
+    issues(작업 키), deep, explore, uncollected, proposed, adopted}]}`(n 내림차순). uncollected = 그 작업 analysis.json
+    `logs.uncollected_tags`에도 있던 이슈 수, proposed = report.md `규칙 제안` 줄에 그 태그의 `add-parser-rule`이 있던 이슈 수,
+    adopted = plan.json `operations`에 그 태그의 tags.yaml `add-parser-rule`이 있는 이슈 수(계획에 넣은 것 — PR 병합 여부는 보지
+    않는다). 읽기 전용, 로그·report 원문은 내지 않는다."""
+    rows: dict[str, dict] = {}
+    jobs = skipped = 0
+    for d in sorted(work_dir.iterdir()):
+        rec = _json(d / "check-output.json") if d.is_dir() and not d.name.startswith(("_", ".")) else {}
+        if not rec:
+            continue
+        jobs += 1
+        found = {p: [t for t in (rec.get(p) or {}).get("parser_unknown_tags") or [] if isinstance(t, str)]
+                 for p in ("deep", "explore") if isinstance(rec.get(p), dict)}
+        skipped += any((rec.get(p) or {}).get("parser_unknown_tags_skipped") for p in found)
+        if not any(found.values()):
+            continue
+        logs = _json(d / "analysis.json").get("logs")
+        uncollected = {u.get("tag") for u in (logs.get("uncollected_tags") or [] if isinstance(logs, dict) else [])
+                       if isinstance(u, dict)}
+        try:
+            proposed = set(TAG_PROPOSED_RX.findall((d / "report.md").read_text(encoding="utf-8", errors="replace")))
+        except OSError:
+            proposed = set()
+        ops = _json(d / jobstatus.PLAN).get("operations")
+        adopted = {(o.get("rule") or {}).get("tag") for o in (ops if isinstance(ops, list) else [])
+                   if isinstance(o, dict) and o.get("op") == "add-parser-rule" and o.get("file") == "tags.yaml"
+                   and isinstance(o.get("rule"), dict)}
+        for tag in dict.fromkeys(t for ts in found.values() for t in ts):
+            row = rows.setdefault(tag, {"tag": tag, "n": 0, "issues": [], "deep": 0, "explore": 0, "uncollected": 0,
+                                        "proposed": 0, "adopted": 0})
+            row["n"] += 1
+            row["issues"].append(d.name)
+            for p, ts in found.items():
+                row[p] += tag in ts
+            row["uncollected"] += tag in uncollected
+            row["proposed"] += tag in proposed
+            row["adopted"] += tag in adopted
+    return {"jobs": jobs, "skipped": skipped, "tags": sorted(rows.values(), key=lambda r: (-r["n"], r["tag"]))}
+
+
+def tag_lines(t: dict) -> list[str]:
+    """`--tags` 텍스트: 머리 한 줄 + 표(태그가 없으면 없다는 줄)."""
+    head = (f"근거 인용에 쓰였는데 파서 설정(tags.yaml)에 없는 태그 — check-output 기록 있는 작업 {t['jobs']}개"
+            + (f", tags.yaml을 못 읽어 대조를 건너뛴 작업 {t['skipped']}개(세지 않음)" if t["skipped"] else "")
+            + ". tags.yaml에 넣을지는 사람이 판단한다")
+    if not t["tags"]:
+        return [head, "해당 태그 없음"]
+    out = [head, "| 태그 | 인용한 이슈 | 5-1 심층 | 5-2 탐색 | uncollected_tags에도 있음 | 규칙 제안 | 계획에 넣음 | 이슈 키 |",
+           "|---|---|---|---|---|---|---|---|"]
+    for r in t["tags"]:
+        keys = ", ".join(r["issues"][:TAG_KEYS_SHOWN]) + (f" 외 {r['n'] - TAG_KEYS_SHOWN}" if r["n"] > TAG_KEYS_SHOWN else "")
+        out.append(f"| {r['tag']} | {r['n']} | {r['deep']} | {r['explore']} | {r['uncollected']} | {r['proposed']} | "
+                   f"{r['adopted']} | {keys} |")
+    return out
+
+
 def report_lines(s: dict) -> list[str]:
     """텍스트 9줄(집계 대상 줄 뒤, 출력은 모두 10줄). "취소 비율" 낱말은 site_checks PILOT_FIELDS가 본다."""
     def dist(d: dict) -> str:
@@ -563,6 +629,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--transcripts", nargs="?", const="", default=None, metavar="dir",
                         help="Claude Code transcript의 단계별 토큰·대화 질문·재시도 신호도 센다(opt-in, 숫자만). "
                              "기본 $CLAUDE_CONFIG_DIR/projects 또는 ~/.claude/projects")
+    parser.add_argument("--tags", action="store_true",
+                        help="지표 대신: 근거 인용(원문 확인)에 쓰였는데 tags.yaml에 없는 태그를 이슈별로 모은 표(작업 키 포함, 로그 원문 없음)")
     parser.add_argument("--plugin-root", default=None)
     return parser
 
@@ -573,7 +641,8 @@ HELP_SUMMARY = """파일럿 운영 지표(S-7): work_dir의 작업마다 상태 
 스크립트 분석까지(드라이버 done, 탐색·심층 분석 제외)/전체 조사(done 뒤 stage·release·discard까지, 경과 시간)/PR까지 시간(중앙값·평균),
 취소 비율, 드라이버 질문 수, 재시도를 낸다. 개수·시간만 — 작업 키·내용은 내지 않는다.
 텍스트 10줄(첫 줄 집계 대상). --json이면 한 줄 JSON(format 2). --transcripts는 opt-in: Claude Code transcript의 토큰을
-단계별로 세고(읽기 전용, 숫자만), 없으면 tokens null(미측정). 모델·네트워크 호출 없음."""
+단계별로 세고(읽기 전용, 숫자만), 없으면 tokens null(미측정). 모델·네트워크 호출 없음.
+--tags는 지표 대신 근거 인용에 쓰였는데 tags.yaml에 없는 태그를 이슈별로 모은 표(작업 키 포함, 로그 원문 없음, --json 지원)."""
 HELP_EPILOG = """기본 대상: 선택 플랫폼(--platform > TT_PLATFORM > 사용자 config platform > site)의 사용자 config work_dir.
 --work-dir와 --platform은 함께 쓸 수 없다. 상태 판정 규칙(위에서 처음 맞는 것)·JSON 키 전체: 모듈 머리말, contracts.md §3.2.
 팀원마다 뽑은 --json 파일을 합치는 표: python3 tools/team_stats.py <a.json> <b.json> …"""
@@ -604,6 +673,14 @@ def main(argv: list[str] | None = None) -> int:
     if not work_dir.is_dir():
         print(f"work_dir가 없다: {work_dir}", file=sys.stderr)
         return 2
+    if args.tags:
+        if args.transcripts is not None:
+            print("--tags와 --transcripts는 함께 쓸 수 없다", file=sys.stderr)
+            return 2
+        t = tag_stats(work_dir)
+        print(json.dumps({"format": 1, "platform": name, "work_dir": str(work_dir), **t}, ensure_ascii=False) if args.json
+              else "\n".join([f"집계 대상: {target}", *tag_lines(t)]))
+        return 0
     s = stats(work_dir)
     if args.transcripts is not None:
         root = Path(args.transcripts).expanduser() if args.transcripts else \
