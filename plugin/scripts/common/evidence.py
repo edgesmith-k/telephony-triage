@@ -668,6 +668,37 @@ def raw_row(line: str) -> str | None:
     return f"{f['time']} - {f['level']} {f['tag']} {f['msg']}".rstrip() if f else None
 
 
+def _stamp_key(g: dict) -> tuple:
+    """원문 줄 시각 칸 → 비교 키(연도·월·일·시분초·시간대, 소수 자리 뺌). 시간대는 `+09:00`=`+0900`, `Z`=`+0000`으로 접는다."""
+    zone = (g.get("zone") or "").replace(":", "").replace("Z", "+0000")
+    return (g.get("year"), g.get("mon") or g.get("bmon"), int(g["day"]), g["h"], g["mi"], g["s"], zone)
+
+
+def stamp_matches(q: str, copies: list[str]) -> bool | None:
+    """외부 리뷰 1125 지적 1: 원문 모양 인용(`raw_stamp`)이면 시각 칸(날짜·시분초·시간대 — 연도·시간대를 빼거나 더해도 다르다, 소수
+    자리는 짧은 쪽이 긴 쪽의 앞부분이면 같다)이 같고 머리(레벨·태그)·메시지가 맞는 사본 줄이 있나. 원문 모양이 아니면 None(타임라인
+    행 모양 인용은 이 검사 밖). 그래서 ok인 원문 모양 인용의 시각(`output._quote_ts`)은 맞춘 사본 줄의 시각이다."""
+    g = raw_stamp(q)
+    if g is None:
+        return None
+    key, frac, alt = _stamp_key(g), g.get("frac") or "", raw_row(q) or ""
+    head = _quote_head(alt, None)
+    clock = f"{g['h']}:{g['mi']}:{g['s']}"
+    for text in copies:
+        at = text.find(clock)
+        while at >= 0:
+            a, b = text.rfind("\n", 0, at) + 1, text.find("\n", at)
+            b = len(text) if b < 0 else b
+            h = raw_stamp(text[a:b])
+            other = (h or {}).get("frac") or ""
+            if h and _stamp_key(h) == key and (other.startswith(frac) or frac.startswith(other)):
+                row = raw_row(text[a:b]) or ""
+                if _row_head_ok(row, head) and evidence_check(alt, row, None)[0] == "ok":
+                    return True
+            at = text.find(clock, b)
+    return False
+
+
 COPY_ROWS_PER_QUOTE = 50    # 인용마다 사본에서 낱말을 많이 함께 가진 줄
 COPY_ROWS_EXACT_MAX = 200   # 인용 메시지 조각이 그대로 든 줄(위 상한 밖에 늘 더한다, 이만큼까지)
 
@@ -759,7 +790,7 @@ def _part_rows(parts: list[str], rows: list[str], ws_rows: list[str]) -> list[st
 
 
 def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[int] = frozenset(),
-                 alts: list[str | None] | None = None) -> dict:
+                 alts: list[str | None] | None = None, copies: list[str] | None = None) -> dict:
     """인용 목록 판정 → {"n", "fabricated", "weak", "raw", "first", "verdicts"}. `verdicts`는 항목별 판정
     (ok | weak | fabricated | raw, 입력 순서 — check-output이 가설별로 나눈다).
 
@@ -770,7 +801,8 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
     행(조각마다 최대 300행)과 8자 이상 낱말을 공유하는 행(최대 300행)으로 `evidence_check`를 돈다.
     ok인 인용이 시각이나 슬롯 머리(레벨·태그는 그와 함께 적었을 때만)를 적었으면 머리까지 맞는 행이 원문 전체에 있어야 ok,
     없으면 weak다(`_head_ok`, F-A01-min). `alts[i]`(있으면, 탐색의 원문 모양 인용을 `raw_row`로 바꾼 것)는 인용이 ok가 아닐 때
-    한 번 더 판정해 나은 쪽(ok > weak > fabricated)을 쓴다.
+    한 번 더 판정해 나은 쪽(ok > weak > fabricated)을 쓴다. `copies`(탐색만, 마스킹 사본 글 — 없으면 [])를 주면 ok인 원문 모양
+    인용은 시각 칸(날짜·시간대 포함)까지 같은 사본 줄이 있어야 ok, 없으면 weak다(`stamp_matches`, 시각을 바꿔 적은 인용과 같은 등급).
     """
     from common import masking
     source = QUOTE_CHARS_RX.sub("", source)      # 인용 쪽과 같이 따옴표를 뗀다(행 찾기·머리 대조·`evidence_check`가 같은 글을 본다)
@@ -808,6 +840,8 @@ def check_quotes(items: list[str], source: str, tags, *, raw_items: frozenset[in
             alt = SCRIPT_NOTE_RX.sub("", (alts[i] if alts and i < len(alts) else None) or "").rstrip()
             if verdict != "ok" and alt and alt != item:
                 verdict = min(verdict, judge(alt), key=rank.__getitem__)
+            if verdict == "ok" and copies is not None and stamp_matches(item, copies) is False:
+                verdict = "weak"
         res["verdicts"].append(verdict)
         if verdict != "ok":
             res[verdict] += 1
