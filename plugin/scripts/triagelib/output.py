@@ -573,15 +573,26 @@ def _quote_ts(q: str, events: dict | None):
     inp = (events or {}).get("input") or {}
     g = evidence.raw_stamp(s)
     if g:
-        try:
-            # ponytail: 연도 없는 줄의 해 넘김(12월→1월)은 보지 않는다 — 파서(journal·logcat)처럼 앞 줄을 따라가려면 줄 순서가 필요
-            year = g.get("year") or inp.get("year") or str((inp.get("window") or {}).get("start") or "")[:4] or logtime.DEFAULT_YEAR
-            mon = int(g["mon"]) if g.get("mon") else MONTHS.index(g["bmon"]) // 3 + 1
-            stamp = (f"{int(year):04d}-{mon:02d}-{int(g['day']):02d}T{g['h']}:{g['mi']}:{g['s']}"
-                     + (f".{g['frac']}" if g.get("frac") else "") + (g.get("zone") or ""))
-        except (TypeError, ValueError):
-            return None
-        return logtime.normalize_ts(stamp, inp.get("tz"), None)
+        def at(year):
+            try:
+                mon = int(g["mon"]) if g.get("mon") else MONTHS.index(g["bmon"]) // 3 + 1
+                return logtime.normalize_ts(f"{int(year):04d}-{mon:02d}-{int(g['day']):02d}T{g['h']}:{g['mi']}:{g['s']}"
+                                            + (f".{g['frac']}" if g.get("frac") else "") + (g.get("zone") or ""), inp.get("tz"), None)
+            except (TypeError, ValueError):
+                return None
+        year = g.get("year") or inp.get("year") or str((inp.get("window") or {}).get("start") or "")[:4] or logtime.DEFAULT_YEAR
+        t = at(year)
+        if g.get("year") or t is None:
+            return t
+        # C-4: 연도 없는 줄은 분석 범위(없으면 로그 범위)에 가장 가까운 해로(±1년) — 해를 넘는 로그에서 12월·1월 줄을 같은 해로 읽지
+        # 않게. ponytail: 6개월 넘게 이어진 로그면 가까운 해가 틀릴 수 있다(파서처럼 앞 줄을 따라가려면 줄 순서가 필요)
+        win, cov = inp.get("window") or {}, (events or {}).get("coverage") or {}
+        lo, hi = (logtime.normalize_ts(win.get("start") or cov.get("first_ts"), None, None),
+                  logtime.normalize_ts(win.get("end") or cov.get("last_ts"), None, None))
+        if lo is None or hi is None:
+            return t
+        cands = [t] + [c for d in (-1, 1) if (c := at(int(year) + d)) is not None]
+        return min(cands, key=lambda c: 0 if lo <= c <= hi else min(abs(c - lo), abs(c - hi)).total_seconds())
     m = QUOTE_TS_RX.match(s)
     if m and "T" in m.group(0):
         return logtime.normalize_ts(m.group(0), inp.get("tz"), inp.get("year"))
@@ -621,8 +632,7 @@ def _quote_at(q: str, events: dict | None, copies: list[str]) -> tuple:
         while at >= 0 and seen < ROW_TS_MATCH_MAX:
             a, b = text.rfind("\n", 0, at) + 1, text.find("\n", at)
             b = len(text) if b < 0 else b
-            row = evidence.raw_row(text[a:b]) or ""
-            if row.split(" ", 4)[3:4] == [tag] and (lt := _quote_ts(text[a:b], events)) is not None:
+            if (lt := _quote_ts(text[a:b], events)) is not None:     # C-3: 태그는 보지 않는다(태그만 바꿔 대조를 피하지 않게)
                 if any(abs((c - t).total_seconds()) < 1 for c in _year_variants(lt, text[a:b])):
                     return t, k
                 seen += 1
@@ -845,8 +855,16 @@ def _first_obs(h: dict, first: dict, verdict: str | None, texts: list[str], even
     per = [[_word_lines(t, word) for t in texts] for _i, word in items]
     need = _need_sec(first["기대"])
     span = _absent_span(events, low, max(after_sec, need))
-    span_texts, span_note = _span_copies(per, texts, low_copy)
-    first_t, end = _copy_span(span_texts, events)
+    # C-2: 낱말마다 그 낱말의 사본으로 처음·끝을 재고 가장 좁은 범위(처음은 가장 늦게, 끝은 가장 이르게, 하나라도 못 읽으면 None)
+    # — 사본을 합치면 다른 사본에만 있는 낱말 하나를 덧붙여 '없음'의 끝을 늘릴 수 있다
+    spans, notes = [], []
+    for res in per:
+        span_texts, span_note = _span_copies([res], texts, low_copy)
+        spans.append(_copy_span(span_texts, events))
+        notes.append(span_note)
+    span_note = next((n for n in notes if n), "")
+    first_t = None if any(a is None for a, _b in spans) else max(a for a, _b in spans)
+    end = None if any(b is None for _a, b in spans) else min(b for _a, b in spans)
     where = _span_text((span[0], end, False) if low is not None and end is not None and end < span[1] else span)
     for _i, word in items:
         n = _absent(word, texts, events, span)
