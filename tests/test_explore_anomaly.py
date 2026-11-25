@@ -331,7 +331,7 @@ def test_window_grep_whole_log_and_call_cap():
 
 
 def test_guard_allows_ranged_reads_of_masked_copy_but_not_dumps(monkeypatch):
-    """사본 `grep -n`·`sed -n a,bp`는 통과, 통째 출력(cat)은 계속 거부(규칙 10). 가드는 바꾸지 않았다 — 지침이 그 길을 쓰므로 고정한다.
+    """사본 `grep -n`·`sed -n a,bp`는 통과, 원문 통째 출력(cat)은 계속 거부(규칙 10). 가드는 바꾸지 않았다 — 지침이 그 길을 쓰므로 고정한다.
     판정은 test_hooks의 guard 시험과 같은 작업공간(설정 있음)·같은 함수(`guard.judge`)로 본다."""
     from workspace import Workspace
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
@@ -348,7 +348,8 @@ def test_guard_allows_ranged_reads_of_masked_copy_but_not_dumps(monkeypatch):
 
     assert judge(f"grep -n EMM_ACCESS_BARRED logs-masked/{copy.name}") in (None, "allow")
     assert judge(f"sed -n '100,180p' logs-masked/{copy.name}") in (None, "allow")
-    assert judge(f"cat logs-masked/{copy.name}") == "deny"
+    # 통째 출력 거부는 원문 대상이다(사본 통째 읽기는 기존 설계상 허용 — test_hooks `cat logs-masked/x.txt` is None)
+    assert judge(f"cat {job.parent / 'in.log'}") == "deny"
 
 
 def test_tt_explore_reads_masked_copies_only():
