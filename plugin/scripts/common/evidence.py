@@ -599,16 +599,22 @@ def source_text(timeline_text: str) -> tuple[str, re.Pattern | None]:
     return "\n".join(rows), tag_rx(sorted(tags, key=lambda t: (-len(t), t)))
 
 
-def _raw_rxs() -> tuple[tuple[re.Pattern, ...], dict]:
-    """파서와 같은 원문 줄 정규식(Android threadtime·time, oFono ISO·BSD·BusyBox — `platforms.raw_line_patterns`)과 등급→레벨 표. 지연 import."""
+# 원문 줄 정규식(파서와 같은 것 — Android threadtime·time, oFono ISO·BSD·BusyBox)과 등급→레벨 표. common은 플랫폼을 import하지
+# 않으므로(17-platforms §1-2) 위층(`triagelib.output`)이 `platforms.raw_line_patterns()`를 넣어 준다. 넣기 전에는 원문 모양을 읽지 않는다
+_RAW_RXS: tuple[tuple, dict] = ((), {})
+
+
+def set_raw_patterns(patterns: tuple[tuple, dict]) -> None:
     global _RAW_RXS
-    if _RAW_RXS is None:
-        import platforms        # 레지스트리 경유(17-platforms §1-2 — 핵심은 플랫폼 패키지를 직접 import하지 않는다)
-        _RAW_RXS = platforms.raw_line_patterns()
+    _RAW_RXS = patterns
+
+
+def raw_patterns_set() -> bool:
+    return bool(_RAW_RXS[0])
+
+
+def _raw_rxs() -> tuple[tuple, dict]:
     return _RAW_RXS
-
-
-_RAW_RXS = None
 
 
 def _raw_fields(line: str) -> dict | None:

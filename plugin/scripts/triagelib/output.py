@@ -312,9 +312,17 @@ def _source(job: Path, purpose: str, mode: str, rec, events: dict | None) -> tup
     return srcs, "\n".join(parts), None
 
 
+def _raw_ready() -> None:
+    """`evidence.raw_row`가 쓸 원문 줄 정규식을 플랫폼 레지스트리에서 한 번 넣는다(common은 플랫폼을 import하지 않는다)."""
+    if not evidence.raw_patterns_set():
+        import platforms
+        evidence.set_raw_patterns(platforms.raw_line_patterns())
+
+
 def _copy_source(job: Path, analysis: dict, quotes: list[str]) -> tuple[list[str], str]:
     """탐색 인용을 찾을 마스킹 사본 줄(`window.served_copies`, `evidence.copy_rows`) → (JOB 기준 사본 이름들, 행들). 사본이 없으면 ([], "")."""
     from triagelib import window
+    _raw_ready()
     served, _skipped = window.served_copies(job, analysis if isinstance(analysis, dict) else {})
     texts = []
     for path in served:

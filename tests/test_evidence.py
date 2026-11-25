@@ -425,6 +425,12 @@ def test_empty_quote_is_not_ok_and_unit_number_change_is_caught():
 COPY_TL = "10:00:00.000 p0 D RILJ [0001]> SETUP_DATA_CALL apn=ims\n"
 
 
+def setup_module():
+    """check-output(`output._raw_ready`)처럼 플랫폼 레지스트리의 원문 줄 정규식을 넣는다."""
+    import platforms
+    evidence.set_raw_patterns(platforms.raw_line_patterns())
+
+
 def _copy_check(copy: str, quotes: list[str]) -> list[str]:
     extra = evidence.copy_rows([copy], quotes)
     src, tags = evidence.source_text(COPY_TL + "\n" + extra)
