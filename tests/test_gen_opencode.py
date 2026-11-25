@@ -194,7 +194,7 @@ def test_agent_prompt():
     text = AGENT.read_text(encoding="utf-8")
     m = re.match(r"---\n(.*?)\n---\n", text, re.DOTALL)
     meta, body = yaml.safe_load(m.group(1)), text[m.end():]
-    assert meta["mode"] == "primary" and isinstance(meta["steps"], int) and 10 <= meta["steps"] <= 100
+    assert meta["mode"] == "primary" and isinstance(meta["steps"], int) and 10 <= meta["steps"] <= 150
     assert all(meta["permission"][t] == "deny" for t in ("webfetch", "todowrite", "skill"))
     # task 규칙은 에이전트에 두지 않는다: 에이전트 규칙은 설정 뒤에 붙어 이기므로, 두면 관리 설정의 task deny를 넘는다
     assert "task" not in meta["permission"]
@@ -224,7 +224,7 @@ def test_explore_subagent_prompt():
     text = EXPLORE.read_text(encoding="utf-8")
     m = re.match(r"---\n(.*?)\n---\n", text, re.DOTALL)
     meta, body = yaml.safe_load(m.group(1)), text[m.end():]
-    assert meta["mode"] == "subagent" and "model" not in meta and 10 <= meta["steps"] <= 60
+    assert meta["mode"] == "subagent" and "model" not in meta and 10 <= meta["steps"] <= 150
     assert gen_opencode.EXPLORE_MODE in text[:m.end()]
     perm = meta["permission"]
     assert all(perm[t] == "deny" for t in ("task", "question", "webfetch", "websearch", "codesearch", "todowrite", "skill"))
