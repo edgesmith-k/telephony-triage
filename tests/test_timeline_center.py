@@ -101,14 +101,14 @@ def test_symptom_candidates_center_the_timeline_on_the_late_failure():
     guess = [t["ts"] for t in spec["time_candidates"]]
     assert any(g.startswith("2026-09-22T08:40") for g in guess), guess
     assert FAIL in _main(text)                                  # 고치기 전: 맨 앞 200줄(08:00~08:03)만 남아 없었다
-    assert f"- 줄 고른 기준: 증상 시각 후보 {len(guess)}개 {', '.join(guess)} (증상 시각 후보 기준, 스크립트 추정이라 확정 아님." in text
+    assert f"- 줄 고른 기준: 증상 시각 후보 {len(guess)}개 {', '.join(guess)} (증상 시각 후보 기준, 스크립트 추정이라 확정 아님" in text
     assert "(이벤트·경고·오류 줄 우선, 아래 기준에 가까운 순으로 골랐다" in text
     assert "기준: 증상 시각 후보" in text                         # 요약 머리도 같은 기준(추정)
     _e1_same(job)
 
 
 def test_comment_clue_centers_the_timeline_and_heads_say_not_confirmed():
-    fail_ts = f"2026-09-22T08:40:03.500Z"
+    fail_ts = "2026-09-22T08:40:03.500Z"
 
     def clue(spec):
         spec.pop("time_candidates", None)
@@ -147,11 +147,13 @@ def test_center_rules_and_unchanged_bytes():
               "clue_at": "2026-09-22T08:10:00Z"}
     assert summary.timeline_center(anchor) == (["2026-09-22T08:40:00Z"], None)         # 실패 스텝 > 코멘트 단서
     clue = summary.timeline_center({"around": "2026-09-22T08:00:00Z", "clue_at": "2026-09-22T08:10:00Z"})
-    assert clue[0] == ["2026-09-22T08:10:00Z"] and "확정 아님" in clue[1]                  # 코멘트 단서 > 발생 시각(요약과 같다)
+    assert clue[0] == ["2026-09-22T08:10:00Z", "2026-09-22T08:00:00Z"] and "확정 아님" in clue[1]   # 다르면 둘 다(I-1)
+    only = summary.timeline_center({"clue_at": "2026-09-22T08:10:00Z"})
+    assert only[0] == ["2026-09-22T08:10:00Z"] and "확정 아님" in only[1]                 # 시각 입력이 없으면 단서 하나
     rows = [{"ts": f"2026-09-22T08:00:{s:02d}.000Z", "tag": "T", "msg": "m", "level": "D", "phone": None, "marks": ["e"]}
             for s in range(30)]
     items, total = report.select_rows(rows, ["2026-09-22T08:00:05Z", "2026-09-22T08:00:25Z"], 4)
-    assert [r["ts"][17:19] for r in items] == ["04", "05", "06", "25"]      # 가장 가까운 후보까지 거리(같으면 시각순)
+    assert [r["ts"][17:19] for r in items] == ["04", "05", "24", "25"]      # 중심마다 번갈아(가까운 순, 같으면 시각순)
     assert report.select_rows(rows, "2026-09-22T08:00:05Z", 4) == report.select_rows(rows, ["2026-09-22T08:00:05Z"], 4)
     small, n = report.select_rows(rows, None, 100)                 # 상한 아래면 고르지 않는다 — 머리 글도 없다(이전과 같은 바이트)
     ev = {"input": {}}
@@ -174,3 +176,40 @@ def test_view_center_keeps_old_values_for_anchor_and_time_input():
     assert one == (t, "증상 시각 후보, 스크립트 추정이라 확정 아님")
     many = summary.view_center({"time_candidates": [{"ts": t}, {"ts": "2026-09-20T05:40:00Z"}]})
     assert many[0] is None and "하나로 못 정해 중심 없음" in many[1] and "확정 아님" in many[1]
+
+
+def test_time_input_and_different_clue_keep_both_centers():
+    """리뷰 I-1: 입력한 발생 시각(실패 줄 시각)과 다른 코멘트 단서 시각이 함께 있으면 둘 다 중심이다 — 단서 하나로 옮기면 실패 줄이 빠졌다.
+    모듈 보기(중심 하나)는 기준 커밋처럼 발생 시각이 중심이고 출처에 단서 시각을 덧붙인다."""
+    fail_ts, clue_ts = "2026-09-22T08:40:03.500Z", "2026-09-22T08:05:00.000Z"
+
+    def both(spec):
+        spec.pop("time_candidates", None)
+        spec.update(around=fail_ts, clue_at=clue_ts)
+
+    job, text = _variant("both", both)
+    main = _main(text)
+    assert FAIL in main and "08:05:00.000" in main                     # 두 곳 둘레가 다 남는다
+    assert (f"- 줄 고른 기준: 발생 시각 {fail_ts}과 코멘트 단서 시각 {clue_ts} (코멘트 단서는 확정 아님) 두 곳 — "
+            "두 시각 둘레에서 번갈아 골랐다") in text
+    _e1_same(job)
+    spec = {"around": fail_ts, "clue_at": clue_ts}
+    assert summary.view_center(spec) == (fail_ts, f"발생 시각; 코멘트 단서 시각 {clue_ts}도 따로 있음, 확정 아님")
+    assert summary.view_center({"around": fail_ts, "clue_at": fail_ts}) == (fail_ts, "발생 시각")      # 같으면 이전과 같다
+    assert summary.timeline_center({"around": fail_ts, "clue_at": fail_ts}) == ([fail_ts], None)
+
+
+def test_dense_center_does_not_take_the_whole_cap():
+    """리뷰 I-2: 중심이 여럿이면 중심마다 번갈아 고른다 — A 둘레는 초당 10줄, B 둘레는 10초당 1줄이어도 상한을 나눠 쓴다(전에는 199:1)."""
+    def row(sec: float) -> dict:
+        m, s = divmod(sec, 60)
+        return {"ts": f"2026-09-22T08:{int(m):02d}:{s:06.3f}Z", "tag": "T", "msg": f"m{sec}", "level": "D", "phone": None,
+                "marks": ["e"]}
+
+    dense = [row(100 + k / 10) for k in range(1000)]           # 08:01:40~08:03:20, 초당 10줄
+    sparse = [row(1800 + k * 10) for k in range(100)]           # 08:30:00~08:46:30, 10초당 1줄
+    items, _ = report.select_rows(dense + sparse, ["2026-09-22T08:02:30Z", "2026-09-22T08:38:00Z"], 200)
+    near_b = sum(1 for r in items if r["ts"] >= "2026-09-22T08:30")
+    assert len(items) == 200 and 90 <= near_b <= 110, near_b
+    one, _ = report.select_rows(dense + sparse, ["2026-09-22T08:02:30Z"], 200)          # 중심 하나: 이전과 같다
+    assert one == report.select_rows(dense + sparse, "2026-09-22T08:02:30Z", 200)[0]
