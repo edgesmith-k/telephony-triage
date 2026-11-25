@@ -634,7 +634,7 @@ approved_hash: c02651cacb352e7ba15e211b00b717b9a19ff0a4</pre></div>
   <div class="term"><div class="bar"><i></i><i></i><i></i></div><pre><span class="c"># 예상 화면 — 같은 리포트 형식과 점수 공식으로 적은 것(실행 기록 아님)</span>
 - 분류 후보: data &gt; DATA-001 &gt; DATA-001-03 APN 프로파일 없음 (규칙 일치 점수 1.0, 일치 수준 높음 — 진단 확신도 아님)
 - 해결책: 새 SIM 통신사에 맞는 APN 프로파일을 carrier config에 추가한다.   해결책 검증: ⚠ 미검증
-- 수정 상태: open — 미수정 원인. 기존 Jira 1건
+- 수정 상태: open — 이슈 DB에 수정 기록 없음(이 빌드 판정 아님). 기존 Jira 1건
 - 기존 사례: Jira 1건 (MOCK-9002)</pre></div>
   <p>이번 첫 질문은 "DATA-001-03로 분류"입니다. 고르면 작업 계획은 Jira 기록 추가 하나뿐입니다. 새 규칙이 없으므로 R1~R3·R5는 대상이 없어 건너뛰고, 전체 회귀(R4)와 기본 검사는 그대로 실행합니다.</p>
   <p>첫 이슈는 원인을 찾고 등록하는 데 시간이 들었습니다. 두 번째부터는 리포트 첫 줄에 원인과 해결책이 나옵니다. 합성 로그 평가에서 아는 원인 1건을 분석해 PR을 올리고 결과 코멘트까지 게시하는 데 도구가 쓴 시간은 약 3분(179초, <a href="#ch14">14장</a> 14.2)입니다. 사람이 리포트를 읽고 답하는 시간까지 넣은 합성 시나리오 추정은 아는 원인 약 10분, 새 원인 등록 20~30분입니다.</p>
@@ -1686,13 +1686,13 @@ explore: {when: never}          <span class="c"># 탐색 분석: ask(기본) | a
   <p>인자 없는 <code>validate</code>는 다른 일을 합니다. 이슈 DB를 직접 편집한 사람이 push 전에 검사를 돌리는 커맨드입니다(<a href="#ch26">26장</a>).</p>
 
   <h3 id="ch11-5">11.5 분석 중에 보이는 수정 상태<a class="hl" href="#ch11-5" aria-label="링크">#</a></h3>
-  <p>analyze 리포트는 1위 원인의 수정 상태를 Jira의 SW 빌드와 비교해 한 줄로 보입니다. 예: <code>- 수정 상태: open — 미수정 원인. 기존 Jira 1건</code>. 비교 결과는 여섯 가지입니다.</p>
+  <p>analyze 리포트는 1위 원인의 수정 상태를 Jira의 SW 빌드와 비교해 한 줄로 보입니다. 예: <code>- 수정 상태: open — 이슈 DB에 수정 기록 없음(이 빌드 판정 아님). 기존 Jira 1건</code>. 비교 결과는 여섯 가지입니다.</p>
   <div class="panel">
     <div class="panel-head"><b>리포트의 수정 상태 줄</b><span>match_signatures.py fix_judgement</span></div>
     <div class="scroll"><table class="wide">
       <thead><tr><th>원인 상태</th><th>Jira SW와 수정 빌드</th><th>리포트 문구</th><th>분류 때 묻는 것</th></tr></thead>
       <tbody>
-        <tr><td>open</td><td>—</td><td>미수정 원인. 기존 Jira n건</td><td>없음</td></tr>
+        <tr><td>open</td><td>—</td><td>이슈 DB에 수정 기록 없음(이 빌드 판정 아님). 기존 Jira n건</td><td>없음</td></tr>
         <tr><td>fixed</td><td>수정 빌드보다 이전</td><td>…에서 수정됨. 빌드 업데이트 후 재확인 권고</td><td>없음</td></tr>
         <tr><td>fixed</td><td>수정 빌드와 같거나 이후</td><td>…이후(같은 빌드 포함)에서 재발. 회귀 가능성</td><td>open으로 되돌릴지</td></tr>
         <tr><td>fix-submitted</td><td>수정 빌드보다 이전</td><td>수정 CL 반영 전 빌드. 업데이트 후 verify-fix 권고</td><td>없음</td></tr>
@@ -3959,7 +3959,7 @@ score = score × (0.5 + 0.5 × 수락률)</pre></div>
     <div class="scroll"><table class="wide">
       <thead><tr><th>조건</th><th>판단</th><th>리포트 문구</th></tr></thead>
       <tbody>
-        <tr><td>open</td><td><code>unfixed</code></td><td>미수정 원인. 기존 Jira N건</td></tr>
+        <tr><td>open</td><td><code>unfixed</code></td><td>이슈 DB에 수정 기록 없음(이 빌드 판정 아님). 기존 Jira N건</td></tr>
         <tr><td>fixed, Jira SW &lt; 수정 빌드</td><td><code>already-fixed</code></td><td>BUILD_X에서 수정됨. 빌드 업데이트 후 재확인 권고</td></tr>
         <tr><td>fixed, Jira SW ≥ 수정 빌드</td><td><code>regression-suspected</code></td><td>수정 빌드 이후(같은 빌드 포함)에서 재발. 회귀 가능성</td></tr>
         <tr><td>fix-submitted, Jira SW &lt; 수정 빌드</td><td><code>fix-pending-build</code></td><td>수정 CL 반영 전 빌드. 업데이트 후 verify-fix 권고</td></tr>

@@ -246,9 +246,11 @@ def test_fix_judgement_against_fixed_in():
         (cand,) = [c for c in result["candidates"] if c["cause"] == "CALL-001-01"]
         assert cand["fix_judgement"]["judgement"] == judgement, (sw, cand["fix_judgement"])
         assert [r["cause"] for r in cand["related"]] == ["IMS-001-01"]
-    # open 원인은 미수정 + 기존 Jira 건수
+    # open 원인은 unfixed + 기존 Jira 건수. 문구는 "이슈 DB에 수정 기록 없음"이지 이 빌드에 수정이 안 들어갔다는 판정이 아니다
     (ims,) = [c for c in result["candidates"] if c["cause"] == "IMS-001-01"]
     assert ims["fix_judgement"]["judgement"] == "unfixed" and "1건" in ims["fix_judgement"]["message"]
+    assert ims["fix_judgement"]["message"].startswith("이슈 DB에 수정 기록 없음(이 빌드 판정 아님)")
+    assert "미수정" not in ims["fix_judgement"]["message"]
 
 
 def test_fix_submitted_judgement():

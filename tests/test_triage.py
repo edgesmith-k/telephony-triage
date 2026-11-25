@@ -1095,10 +1095,9 @@ def test_held_report_lines_keep_prefixes_and_conclusion_shape():
     assert "DATA-001-01" in lines[i + 1].split(". 다음:")[0]
     assert lines[i + 2].startswith("- 분류 후보: data > DATA-001 > DATA-001-01 ")
     assert lines[i + 2].endswith(" (관측된 규칙 일치 — 채택 안 함)")
-    # NEXT ACTION: 보류면 1위 해결책 줄을 싣지 않는다(모델이 읽는 글에 보류한 원인의 해결책을 두지 않는다 — Jira 본문도 해결책 없음)
-    top = analysis["candidates"][0]
-    assert not any(x.startswith(("- 해결책", "- 수정 상태: ")) for x in lines)
-    assert any(x.startswith("- 수정 상태(1위 기준, 보류됨): ") for x in lines), top
+    # NEXT ACTION: 보류면 1위 해결책·수정 상태 줄을 싣지 않는다(채택 안 한 원인의 수정 상태는 이 이슈의 답이 아니다)
+    assert analysis["candidates"][0]["fix_status"]          # 1위에 수정 상태가 있어도
+    assert not any(x.startswith(("- 해결책", "- 수정 상태")) for x in lines)
     # 근거 로그 머리 줄: 보류면 관측된 일치일 뿐 채택 원인이 아니다
     assert next(x for x in lines if x.startswith("- 근거 로그 (")).endswith(", 관측된 규칙 일치 — 원인 채택 아님):")
 
