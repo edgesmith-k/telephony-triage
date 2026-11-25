@@ -764,10 +764,15 @@ def test_no_candidate_run_has_no_timeline_until_explore_subcommand_writes_it():
     before = (out / "timeline.md").read_bytes(), (out / "report.md").read_bytes()
     assert _explore_cmd(out, item["key"]) == explore
     assert ((out / "timeline.md").read_bytes(), (out / "report.md").read_bytes()) == before
-    # run을 다시 하면 이전 타임라인은 지워지고 리포트 줄은 미실행으로 돌아간다
+    # 탐색을 시작한 작업에서 run을 다시 하면(탐색 중 `--look-at` 등) 새 explore 입력으로 타임라인을 다시 만든다(11/25 R-21 —
+    # 예전 기대 "지워지고 미실행으로"는 탐색 하위 에이전트가 explore를 못 불러 조사 결론이 늘 근거 부족이 되던 동작이다)
     _offline(item, doc, out)
-    assert not (out / "timeline.md").exists()
-    assert "- 탐색 분석 (추정): 미실행" in (out / "report.md").read_text(encoding="utf-8")
+    assert (out / "timeline.md").read_bytes() == before[0]                     # 입력이 같으면 같은 바이트
+    assert "- 탐색 분석 (추정): 미실행" not in (out / "report.md").read_text(encoding="utf-8")
+    fresh = tmp("tt-triage-") / "x"                                             # explore 전이면 run은 타임라인을 만들지 않는다
+    _offline(item, doc, fresh)
+    _offline(item, doc, fresh)
+    assert not (fresh / "timeline.md").exists()
 
 
 def test_explore_subcommand_exit_codes():

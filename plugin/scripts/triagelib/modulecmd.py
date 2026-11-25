@@ -578,7 +578,8 @@ def _deep_summary(job: Path, key: str, cfg: dict, defaults: dict, analysis: dict
     cap = summary.cap_of(cfg)
     kept = spec.get("summary") if isinstance(spec, dict) else None
     found = (kept if isinstance(kept, dict) and kept.get("cap") == cap and kept.get("groups")
-             else summary.safe(job, events, analysis, defaults, summary.ref_of(spec, around), cap))
+             else summary.safe(job, events, analysis, defaults, summary.ref_of(spec, around), cap,
+                               guess=summary.guess_of(spec, analysis), after_sec=summary.after_of(cfg)))
     if not found:
         return None, False
     try:

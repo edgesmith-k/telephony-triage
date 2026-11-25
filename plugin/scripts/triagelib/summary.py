@@ -1,10 +1,15 @@
 """전체 로그 모양 요약(표시 전용) — 탐색 타임라인(`JOB/timeline.md`·모듈 보기)과 심층 타임라인 머리, `triage.py summary`.
 
 마스킹 사본(`JOB/logs-masked/`, `window._records`와 같은 읽기·시각 변환) **전체**(분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이)의
-줄을 (슬롯, 레벨, 태그, 숫자·hex를 `#`로 바꾼 메시지)(`window._fold_key`) 모양으로 묶는다. 모양마다 첫 줄(예시, 160자, `masking.redact`)·
-횟수·처음·마지막 시각, 표시 `기준 뒤 첫 등장`(첫 시각 > 기준 시각)·`분석 구간 밖`(모든 줄이 `input.window` 밖). 순서: F, 예외·crash 머리,
-E, 레벨 못 믿는 줄의 오류 문구, W, 그 밖 I/D 오류 문구(`window.rank`, `window.TEXT_RANK`까지, 같은 등급은 기준 뒤 첫 등장 먼저) → 기준 뒤 첫 등장 → 나머지, 같은 묶음은 한 태그 `TAG_MAX` 모양까지 먼저,
-그다음 기준 시각에 가까운 순(기준이 없으면 첫 등장 순). 상한 `explore.summary_max_groups`(기본 60, 0~200, 0=끔)와 `BYTES_MAX`. 스택 프레임 줄(`at …(`)은 세지 않는다(머리가 대표).
+줄을 (슬롯, 레벨, 숫자 뺀 태그, 숫자·hex를 `#`로 바꾼 메시지)(`window._fold_key`) 모양으로 묶는다. 모양마다 첫 줄(예시, 160자,
+`masking.redact`)·횟수(로그 전체)·처음·마지막 시각, 표시 `기준 뒤 첫 등장`(확정 기준일 때만, 첫 시각 > 기준 시각)·`이상 줄 범위 밖`
+(모든 줄이 `window.span` 밖 — 이상 줄 절과 같은 범위). 기준 시각은 이상 줄 절과 같다: 확정 기준(`ref_of`) 하나, 없으면 증상 시각
+후보(`guess_of`) 전부를 추정 기준으로(`window.centers`, 머리에 어느 쪽인지 적는다). 고르기도 이상 줄 절과 같은 규칙(`window.choose`):
+칸을 기준 둘레(가장 가까운 기준 ±`explore.after_sec`, F~W)·전체 희귀(로그 전체 `window.RARE_MAX`줄 이하, F~W)·예외·crash 머리 몫
+`window.SUMMARY_SHARES`로 나눠 차례로 채우고(남은 몫은 다음 묶음), 남은 칸은 등급순(I/D 오류 문구는 여기). 묶음 안은 한 태그
+`TAG_MAX` 모양 넘음, 구간 밖, 증상 프로세스(본 타임라인 pid) 아님, 희귀 아님, 등급, 기준과의 거리, 첫 등장 순(`window.slot`). 줄은
+고른 순서. 상한 `explore.summary_max_groups`(기본 60, 0~200, 0=끔)와 `BYTES_MAX`. 스택 프레임·덤프 몸통 줄(`window.FRAME_RX`)은
+세지 않는다(머리가 대표).
 결정적이다. 판정·점수·순위·매칭에 쓰지 않는다.
 
 `triage.py summary <KEY> [--out dir]`: 요약을 `JOB/summary.md`에 쓰고 `JOB/summary.json`(스크립트만 쓴다 — guard 규칙 12)에
@@ -25,13 +30,30 @@ from common.exitcodes import CHECK_FAILED, OK, USAGE
 from . import report, window
 
 SUMMARY_FILE, SUMMARY_RECORD = "summary.md", "summary.json"
-GROUPS_DEFAULT, GROUPS_TOP, BYTES_MAX, TAG_MAX = 60, 200, 12288, 8
+GROUPS_DEFAULT, GROUPS_TOP, BYTES_MAX, TAG_MAX, AFTER_DEFAULT = 60, 200, 12288, 8, 600
 
 
 def ref_of(spec: dict | None, fallback=None):
-    """기준 시각 = 실패 스텝·기준 줄 시각 > 기준 줄 찾은 시각 > 발생 시각(`triage._anomaly`와 같다), 없으면 `fallback`."""
+    """확정 기준 시각 = 실패 스텝·기준 줄 시각 > 기준 줄 찾은 시각 > 코멘트 단서 시각(`clue_at` — 단서를 한 곳에서만 찾았을 때) >
+    발생 시각(이상 줄 절 `triage._anomaly`도 이것), 없으면 `fallback`."""
     spec = spec if isinstance(spec, dict) else {}
-    return (spec.get("anchor") or {}).get("fail") or (spec.get("look_at") or {}).get("ts") or spec.get("around") or fallback
+    return ((spec.get("anchor") or {}).get("fail") or (spec.get("look_at") or {}).get("ts") or spec.get("clue_at")
+            or spec.get("around") or fallback)
+
+
+def guess_of(spec: dict | None, analysis: dict | None = None) -> list[str]:
+    """추정 기준 = 증상 시각 후보(`time_candidates`, ≤3 — explore-input.json, 없으면 analysis.json `step_anchor`). 확정 기준이 없을
+    때만 쓴다(`window.centers`). 표시 전용 — 게이트 4(실패 뒤 흔적)는 추정 기준을 쓰지 않는다."""
+    spec = spec if isinstance(spec, dict) else {}
+    found = spec.get("time_candidates") or ((analysis or {}).get("step_anchor") or {}).get("time_candidates") or []
+    return [str(t["ts"]) for t in found if isinstance(t, dict) and t.get("ts")][:3]
+
+
+def after_of(cfg: dict) -> int:
+    """기준 둘레(±초)와 이상 줄 범위 연장 = `explore.after_sec`(기본 600, 0~3600)."""
+    from common import userconfig
+    value = userconfig.get(cfg, "explore.after_sec", AFTER_DEFAULT)
+    return value if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 3600 else AFTER_DEFAULT
 
 
 def records(job: Path, ev: dict, analysis: dict, defaults: dict) -> tuple[list[dict] | None, list[str]]:
@@ -46,9 +68,10 @@ def records(job: Path, ev: dict, analysis: dict, defaults: dict) -> tuple[list[d
 
 
 def groups(job: Path, ev: dict, analysis: dict, defaults: dict, ref, cap: int, recs: list[dict] | None = None,
-           skipped: list[str] | None = None) -> dict | None:
+           skipped: list[str] | None = None, guess=(), after_sec: int = AFTER_DEFAULT) -> dict | None:
     """요약 재료(`explore-input.json` `summary`에 그대로 남긴다). 사본이 없거나 못 읽거나 끔·줄 없음이면 None.
-    `recs`·`skipped`(`records` 결과)를 주면 다시 읽지 않는다(`triage._explore`가 이상 줄 절과 한 번만 읽는다)."""
+    `recs`·`skipped`(`records` 결과)를 주면 다시 읽지 않는다(`triage._explore`가 이상 줄 절과 한 번만 읽는다).
+    `ref`(확정 기준, `ref_of`)가 없으면 `guess`(증상 시각 후보, `guess_of`)를 추정 기준으로 쓴다(`window.centers`)."""
     if cap <= 0:
         return None
     if recs is None:
@@ -56,31 +79,35 @@ def groups(job: Path, ev: dict, analysis: dict, defaults: dict, ref, cap: int, r
     if not recs:
         return None
     inp = ev.get("input") or {}
-    lo, hi = (inp.get("window") or {}).get("start"), (inp.get("window") or {}).get("end")
-    center = logtime.normalize_ts(ref, inp.get("tz"), inp.get("year"))
-    ref_s = logtime.format_ts(center) if center is not None else None
+    cents, sure = window.centers(ref, guess, inp)
+    lo, hi = window.span(inp, cents, after_sec)        # 이상 줄 절과 같은 범위(`분석 구간 밖` 표시)
+    ref_s = logtime.format_ts(cents[0]) if sure else None      # `기준 뒤 첫 등장`은 확정 기준에만
+    pids = window.main_pids(ev)
     recs = sorted(recs, key=lambda r: (r["ts"], window.evt.ref_key(r.get("line_ref")) or (0, 0)))
     found: dict = {}
     for i, r in enumerate(recs):
         if window.FRAME_RX.match(str(r.get("msg") or "")):
             continue
-        g = found.get(window._fold_key(r))
-        inside = not (lo and hi) or lo <= r["ts"] <= hi
+        key = window._fold_key(r)
+        g = found.get(key)
+        inside = (not lo or lo <= r["ts"]) and (not hi or r["ts"] <= hi)
+        proc = r.get("pid") in pids
         if g is None:
-            found[window._fold_key(r)] = {"i": i, "r": r, "n": 1, "last": r["ts"], "gap": window._gap(r, center),
-                                          "inside": inside}
+            found[key] = {"i": i, "r": r, "n": 1, "last": r["ts"], "gap": window._gap(r, cents), "inside": inside,
+                          "proc": proc, "tag": key[2]}
             continue
-        g["n"], g["last"], g["inside"] = g["n"] + 1, r["ts"], g["inside"] or inside
-        g["gap"] = min(g["gap"], window._gap(r, center))
+        g["n"], g["last"], g["inside"], g["proc"] = g["n"] + 1, r["ts"], g["inside"] or inside, g["proc"] or proc
+        if cents:
+            g["gap"] = min(g["gap"], window._gap(r, cents))
 
     def item(g):
         k = window.rank(g["r"])
-        after = ref_s is not None and g["r"]["ts"] > ref_s
-        tier = 0 if k <= window.TEXT_RANK else 1 if after else 2      # 오류 쪽 등급(F~I/D 오류 문구) 먼저
-        return (tier, k if tier == 0 else 0, not after), g["gap"], g["i"], g["r"].get("tag"), 1, g
+        buckets, key = window.slot(k, g["gap"], g["n"], " ".join(str(g["r"].get("msg") or "").split()), g["inside"],
+                                   g["proc"], False, bool(cents) and g["gap"] <= after_sec)
+        return buckets, k, key, g["i"], g["tag"], 1, g
 
-    # 같은 묶음 안에서 한 태그가 TAG_MAX 모양을 넘으면 그 모양은 뒤로(`window.ranked` — 숫자 아닌 글자만 다른 잡음 태그가 밀지 않게)
-    order = [it[5] for it in window.ranked([item(g) for g in found.values()], TAG_MAX)][:cap]
+    # 묶음(기준 둘레·전체 희귀·예외 머리) 몫대로, 묶음 안은 한 태그가 TAG_MAX 모양을 넘으면 뒤로 — I/D 오류 문구(등급 5)는 묶음 밖 나머지
+    order = [it[6] for it in window.choose([item(g) for g in found.values()], cap, window.SUMMARY_SHARES, TAG_MAX)]
     rows = []
     for g in order:
         r = g["r"]
@@ -96,8 +123,9 @@ def groups(job: Path, ev: dict, analysis: dict, defaults: dict, ref, cap: int, r
         x["msg"] = report._clip(x["msg"], 160)
     while rows and sum(len(x.encode("utf-8")) + 1 for x in report.summary_rows({"groups": rows})) > BYTES_MAX:
         rows.pop()
-    return {"ref": ref_s, "range": [recs[0]["ts"], recs[-1]["ts"]], "lines": len(recs), "shapes": len(found),
-            "window": [lo, hi] if lo and hi else None, "cap": cap, **({"skipped": len(skipped)} if skipped else {}),
+    return {"ref": ref_s, **({"guess": [logtime.format_ts(c) for c in cents]} if cents and not sure else {}),
+            "range": [recs[0]["ts"], recs[-1]["ts"]], "lines": len(recs), "shapes": len(found),
+            "window": [lo, hi] if lo and hi else None, "cap": cap, "after_sec": after_sec, **({"skipped": len(skipped)} if skipped else {}),
             "groups": rows}
 
 
@@ -107,10 +135,11 @@ def cap_of(cfg: dict) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= GROUPS_TOP else GROUPS_DEFAULT
 
 
-def safe(job: Path, ev: dict, analysis: dict, defaults: dict, ref, cap: int, recs=None, skipped=None) -> dict | None:
+def safe(job: Path, ev: dict, analysis: dict, defaults: dict, ref, cap: int, recs=None, skipped=None, guess=(),
+         after_sec: int = AFTER_DEFAULT) -> dict | None:
     """`groups`인데 실패해도 예외 대신 None과 stderr 경고 한 줄(표시 전용 — 타임라인은 요약 없이 만든다)."""
     try:
-        found = groups(job, ev, analysis, defaults, ref, cap, recs, skipped)
+        found = groups(job, ev, analysis, defaults, ref, cap, recs, skipped, guess, after_sec)
     except Exception as exc:  # noqa: BLE001
         print(f"경고: 전체 로그 모양 요약을 만들지 못해 뺐다({type(exc).__name__})", file=sys.stderr)
         return None
@@ -143,8 +172,9 @@ def cmd_summary(args, defaults: dict) -> int:
         if any((job / x).is_symlink() for x in (SUMMARY_FILE, SUMMARY_RECORD)):
             raise window._Stop(USAGE, "작업 디렉토리 이상", "요약 파일·기록이 링크다 — 따라가지 않는다")
         from . import modulecmd
-        ref = ref_of(window._load(job / "explore-input.json"), modulecmd._around(job, analysis))
-        found = safe(job, ev, analysis, defaults, ref, cap_of(args.platform_cfg))
+        spec = window._load(job / "explore-input.json")
+        found = safe(job, ev, analysis, defaults, ref_of(spec, modulecmd._around(job, analysis)), cap_of(args.platform_cfg),
+                     guess=guess_of(spec, analysis), after_sec=after_of(args.platform_cfg))
         if not found:
             raise window._Stop(CHECK_FAILED, "해당 없음", "마스킹 사본이 없거나 줄이 없다(또는 explore.summary_max_groups: 0)")
         text = write(job, args.key, found, bool(ev.get("mask_off")))

@@ -394,14 +394,31 @@ def anomaly_lines(anomaly: dict | None, skip_main: bool = True) -> list[str]:
         return []
     rng = anomaly.get("range")
     lo, hi = (rng[0], rng[1]) if isinstance(rng, list) and len(rng) == 2 else (None, None)
-    more = (f" (분석 구간 끝과 기준 시각 {anomaly['ref']} 뒤 {anomaly.get('after_sec')}초 중 늦은 쪽까지)"
-            if anomaly.get("ref") and lo and hi else "")
+    base = anomaly.get("ref") or (anomaly.get("guess") or [None])[-1]
+    more = (f" (분석 구간 끝과 기준 시각 {base} 뒤 {anomaly.get('after_sec')}초 중 늦은 쪽까지)" if base and lo and hi else "")
     return ["", "## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)", "",
             f"- 범위: {lo or '로그 처음'} ~ {hi or '로그 끝'}{more}."
             + (" 위 타임라인에 이미 있는 줄은 뺐다(예외 머리와 프레임은 남김)." if skip_main else ""),
-            f"- 줄: {len(rows)}. 프레임을 뺀 후보 {anomaly.get('candidates', len(rows))}줄에서 F, 예외·crash 머리, E, 레벨을 믿지 않는 줄의 오류 문구, W 순으로, 같은 등급은 "
-            "기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다", "",
+            f"- {_ref_note(anomaly)}",
+            f"- 줄: {len(rows)}. 프레임을 뺀 후보 {anomaly.get('candidates', len(rows))}줄에서 {_pick_note(anomaly, '줄')} "
+            "예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다", "",
             *[row_line(x) + _fold_note(x, "비슷한") for x in map(_anomaly_row, rows)]]
+
+
+def _ref_note(found: dict) -> str:
+    """요약·이상 줄 절 머리의 기준 줄: 확정 기준, 추정 기준(증상 시각 후보), 없음."""
+    if found.get("ref"):
+        return f"기준: {found['ref']}"
+    guess = [str(x) for x in found.get("guess") or []]
+    return (f"기준: 증상 시각 후보 {len(guess)}개(스크립트 추정, 확정 아님): {', '.join(guess)}" if guess else
+            "기준: 없음(로그 전체 — 기준 둘레 몫은 드문 모양에 씀)")
+
+
+def _pick_note(found: dict, unit: str) -> str:
+    """요약·이상 줄 절 머리의 고르기 설명(`window.choose`·`window.slot`과 같은 규칙)."""
+    from .window import RARE_MAX       # window가 report를 import한다 — 여기서만 늦게
+    return (f"기준 앞뒤 {found.get('after_sec')}초 안, 로그 전체에 {RARE_MAX}번 이하 나온 드문 모양, 예외·crash 머리의 세 몫으로 나눠 "
+            f"골랐다(남은 몫은 다음 몫으로). 몫 안은 본 타임라인 프로세스(pid)의 {unit}, 드문 모양, F·예외·E·W 등급, 기준에 가까운 순이다.")
 
 
 def with_anomaly(text: str, anomaly: dict | None) -> str:
@@ -417,12 +434,12 @@ def _clock(ts) -> str:
 
 def summary_rows(summary: dict | None) -> list[str]:
     """요약 모양 줄(타임라인 줄 문법 — 근거로 인용할 수 있다): 첫 줄의 시각·슬롯·레벨·태그·예시 메시지와 꼬리 스크립트 메모
-    `〔script 모양 N줄[, 처음~마지막][, 기준 뒤 첫 등장][, 분석 구간 밖]〕`(1줄이면 시각 없음). 손상된 원소는 건너뛴다(E1이 바이트 불일치로 안내한다)."""
+    `〔script 모양 N줄[, 처음~마지막][, 기준 뒤 첫 등장][, 이상 줄 범위 밖]〕`(1줄이면 시각 없음 — 범위는 `window.span`). 손상된 원소는 건너뛴다(E1이 바이트 불일치로 안내한다)."""
     out = []
     for g in (summary.get("groups") or []) if isinstance(summary, dict) else []:
         if not isinstance(g, dict):
             continue
-        flags = (", 기준 뒤 첫 등장" if g.get("after") else "") + (", 분석 구간 밖" if g.get("outside") else "")
+        flags = (", 기준 뒤 첫 등장" if g.get("after") else "") + (", 이상 줄 범위 밖" if g.get("outside") else "")
         line = row_line({"ts": g.get("ts"), "phone": g.get("phone"), "level": g.get("level"), "tag": g.get("tag"),
                          "msg": g.get("msg"), "marks": []})
         span = "" if g.get("n") == 1 else f", {_clock(g.get('ts'))}~{_clock(g.get('last'))}"
@@ -439,10 +456,10 @@ def summary_lines(summary: dict | None) -> list[str]:
     lo, hi = (rng[0], rng[1]) if isinstance(rng, list) and len(rng) == 2 else (None, None)
     return ["## 전체 로그 모양 요약 (마스킹 사본 전체, 분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이 스크립트가 셈)", "",
             f"- 범위: {lo or '?'} ~ {hi or '?'}, 줄 {summary.get('lines')}, 모양 {summary.get('shapes')}개 중 {len(rows)}개. "
-            f"기준 시각: {summary.get('ref') or '없음'}"
+            f"{_ref_note(summary)}"
             + (f". 마스킹 사본이 없어(크기 상한) 세지 않은 파일 {summary['skipped']}개" if summary.get("skipped") else ""),
-            "- 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), "
-            "기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다", "", *rows]
+            "- 모양은 슬롯·레벨과 숫자를 #로 바꾼 태그·메시지다. 줄 수는 로그 전체에서 셌다. " + _pick_note(summary, "모양")
+            + " 순서는 고른 순서이고 줄은 그 모양의 첫 줄이다", "", *rows]
 
 
 def _summary_head(summary: dict | None) -> list[str]:
@@ -608,7 +625,7 @@ NOTE_SHORT = 80
 
 
 def fit(result: dict) -> dict:
-    """analysis.json을 ≤ 4KB로 줄인다: 조사 모드 DB 원인 후보(`near_causes[1:]` → 전체) → 제출자 참고 글(`issue.submitter_note`, 머리말 포함 `NOTE_FIT`자 — 포털 Jira 안내 줄이 남게)
+    """analysis.json을 ≤ 4KB로 줄인다: 조사 결론(`_trim_investigation`) → 조사 모드 DB 원인 후보(`near_causes[1:]` → 전체) → 제출자 참고 글(`issue.submitter_note`, 머리말 포함 `NOTE_FIT`자 — 포털 Jira 안내 줄이 남게)
     → 판단의 사건(`decision.events` 1개 → 기준에 붙은 사건만(≤3), 없으면 0개, `events_total`은 남김) → (읽기 전용 줄 중복) →
     다른 후보 근거 → 근거 줄 수 → 메시지 길이 → 참고 글 `NOTE_SHORT`자 → 다른 후보 근거 빼기 → 경고(중요 경고 `KEY_WARNING` 먼저) 3줄 순 →
     must_show 항목을 160자로 줄이고 앞 4개만 →
@@ -642,7 +659,8 @@ def fit(result: dict) -> dict:
         submitter_note=_clip(result["issue"]["submitter_note"], NOTE_SHORT)))
     for c in others:
         steps.append(lambda c=c: c.update(evidence=[]))
-    steps.insert(0, lambda: _trim_investigation(result))      # 조사 결론은 근거 줄·must_show보다 먼저 줄인다
+    trim_inv = lambda: _trim_investigation(result)       # noqa: E731 — 조사 결론은 near_causes 다음, 근거 줄·must_show보다 먼저 줄인다
+    steps.insert(0, trim_inv)
     steps.insert(1, lambda: _drop_read_only_hint_if_shown(result))
     steps.insert(2, lambda: result.update(read_only_hint=_clip(result.get("read_only_hint"), 100))
                  if result.get("read_only_hint") else None)
@@ -680,8 +698,10 @@ def fit(result: dict) -> dict:
               lambda: result.update(must_show=[_clip(m, MUST_SHOW_CLIP) for m in result["must_show"]]) if result.get("must_show") else None,
               lambda: result.update(must_show=result["must_show"][:MUST_SHOW_FIT]) if result.get("must_show") else None,
               lambda: (result.get("issue") or {}).get("submitter_note") and result["issue"].update(submitter_note=NOTE_GONE)]
-    # 조사 모드 DB 원인 후보(near_causes, 반입 7 B-1)는 맨 먼저 준다 — 다 뺀 뒤의 나머지는 이 칸이 없을 때와 같다
-    steps[0:0] = [lambda: result.get("near_causes") and result.update(near_causes=result["near_causes"][:1]),
+    # 조사 모드 DB 원인 후보(near_causes, 반입 7 B-1)는 조사 결론 줄이기 다음에 준다 — 다 뺀 뒤의 나머지는 이 칸이 없을 때와 같다
+    # (조사 결론의 통과 게이트 `why`·긴 원인 글보다 대조할 후보 목록이 탐색에 쓸모 있다, 리뷰 1-11)
+    steps.remove(trim_inv)
+    steps[0:0] = [trim_inv, lambda: result.get("near_causes") and result.update(near_causes=result["near_causes"][:1]),
                   lambda: result.pop("near_causes", None)]
     result["truncated"] = False      # 값 자리를 먼저 잡고 잰다("false"가 "true"보다 길다 — 넣은 뒤 4096B를 넘지 않게)
     for step in steps:
@@ -1008,7 +1028,7 @@ class ReportMixin:
         if self.failed_step:     # 실패 스텝이 있으면 구절 전체, 그 토큰, 요약 토큰 순 (마스킹된 값만 쓴다)
             phrase = self.failed_step["text"]
             words = [phrase] + _TOKEN_RE.findall(masking.TOKEN_RE.sub(" ", phrase))
-        for word in words + _TOKEN_RE.findall(info.get("summary") or ""):
+        for word in words + _TOKEN_RE.findall(self.masker()(str(info.get("summary") or ""))):      # 검색·trace에는 가린 글만
             if len(hits) >= SEARCH_LIMIT or word.lower() in seen:
                 continue
             seen.add(word.lower())
