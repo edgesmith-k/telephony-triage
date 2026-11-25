@@ -111,6 +111,29 @@
    ]
   }
  ],
+ "near_causes": [
+  {
+   "id": "DATA-002-01",
+   "title": "Airplane mode on",
+   "matched": "1/2",
+   "missing": [
+    "must_event data_teardown_all {'reason':…"
+   ],
+   "at": [
+    "2026-10-14T15:22:40.272Z"
+   ]
+  },
+  {
+   "id": "DATA-002",
+   "title": "데이터 연결이 사용자 조작으로 끊김",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  },
+  {
+   "id": "DATA-001",
+   "title": "SETUP_DATA_CALL이 발생하지 않음",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  }
+ ],
  "code": {
   "skipped": true
  },
