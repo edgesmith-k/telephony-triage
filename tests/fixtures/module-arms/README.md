@@ -20,6 +20,7 @@ post_ex = pre_ex + "\n## 일반 판단 규칙\n\n" + "\n".join(lg[21:24]) + "\n"
 " 바로 뒤에 reference/explore.md "0. 정상 먼저:" 줄을
 # "**정상 먼저** (11/25 기준선 다시 잡음, 플러그인 reference/explore.md의 0.):" 머리로 바꿔 넣고 빈 줄 하나(ofono·android 같은 바이트)
 # 11/25 이상 줄 절: 그 단락 뒤 빈 줄 하나와 "**이상 줄 먼저** (11/25, 플러그인 reference/explore.md 0.의 아래 줄): " + explore.md 0. 아래 줄 본문("정상 가설과 …정상이 아니다.")
+# 11/25 사본 먼저(사용자 결정: 탐색은 최후의 보루, 사본 전체 grep): "로그 원문, `events.json`…" 줄 앞에 "**사본 먼저** (11/25, 플러그인 reference/explore.md `읽는 것` 1): …" 단락과 빈 줄 하나, 그 줄의 "로그 원문"을 "로그 원문(사본 아닌 것)"으로
 post_lg = "\n".join(lg[0:15] + [""] + lg[25:27] + [""] + lg[33:38]) + "\n"                              # log-guide L1-15, L26-27, L34-38 (D6)
 ```
 
@@ -28,12 +29,12 @@ post_lg = "\n".join(lg[0:15] + [""] + lg[25:27] + [""] + lg[33:38]) + "\n"      
 | `ofono/pre/platforms/ofono/log-guide.md` | log-guide 전체(바이트 사본) | 3049 | `77c7a06551ab1bc1ae6309ad2a01eb33b3654856ce2d08f4d4659a69e63eaa6a` |
 | `ofono/pre/explore-rules.md` | explore L1-5, L21-26, L34-35, L37-51 | 2222 | `6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8` |
 | `ofono/post/platforms/ofono/log-guide.md` | log-guide L1-15, L26-27, L34-38 (D6 뒤 모양) | 1945 | `3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1` |
-| `ofono/post/explore-rules.md` | pre 발췌 + log-guide L22-24(Q25로 옮길 일반 규칙) + "일반 판단 규칙" 첫머리에 reference/explore.md의 "0. 정상 먼저" 단락(11/25 다시 얼림 — 사용자 결정)과 그 뒤 "이상 줄 먼저" 한 줄(11/25 이상 줄 절) | 3931 | `b0b0abcbfd4d86525c9b86b73dba37df326178c32a30d9f83f9fa76e65efb70c` |
+| `ofono/post/explore-rules.md` | pre 발췌 + log-guide L22-24(Q25로 옮길 일반 규칙) + "일반 판단 규칙" 첫머리에 reference/explore.md의 "0. 정상 먼저" 단락(11/25 다시 얼림 — 사용자 결정)과 그 뒤 "이상 줄 먼저" 한 줄(11/25 이상 줄 절), 발췌 "로그 원문 …" 줄 앞의 "사본 먼저" 단락(11/25) | 4378 | `e9114e74fa2778513cb8d1b170df0dff11ad67ed19caf193c9de268ab1207f29` |
 
 ### android (H C1+D, 결정 기록 11/05 ④ 뒤)
 
 - 출처: H C1+D A3 커밋(④ `fail-causes.md` 세 절을 더한 커밋)의 `plugin/skills/telephony-triage/reference/{log-tags,ril-requests,fail-causes}.md` 바이트 사본. ④ **뒤**에 얼렸으므로 모듈 문서는 나아진 내장 문서와 비교된다.
-- `explore-rules.md` 두 개는 위 `ofono/pre`·`ofono/post` 사본과 바이트가 같다(Android 내장 log-guide는 없다). post는 11/25에 둘 다 "정상 먼저" 단락과 "이상 줄 먼저" 한 줄을 더해 다시 얼렸다.
+- `explore-rules.md` 두 개는 위 `ofono/pre`·`ofono/post` 사본과 바이트가 같다(Android 내장 log-guide는 없다). post는 11/25에 둘 다 "정상 먼저" 단락, "이상 줄 먼저" 한 줄, "사본 먼저" 단락을 더해 다시 얼렸다.
 - `module_eval.ARM_PINS` Android 항목은 통합 커밋(I3)에서 넣는다. 그 전에는 pin이 없어 실패로 닫힌다.
 
 | 파일 | 출처 | 바이트 | sha256 |
@@ -42,7 +43,7 @@ post_lg = "\n".join(lg[0:15] + [""] + lg[25:27] + [""] + lg[33:38]) + "\n"      
 | `android/pre/ril-requests.md` | reference/ril-requests.md 전체(Android 17 2차에 `DATA_CALL_LIST`로, 11/13 사실 정정에 AOSP 17 이름·`error <n>` 형식으로 고쳐 다시 얼림) | 4183 | `e3d078dbeadb6505ab62131e1b0cde83be959e2bc110c994ba43f90d2dda352d` |
 | `android/pre/fail-causes.md` | reference/fail-causes.md 전체(④ 뒤; 제목 문구와 벤더 IPC 결과 절 문장을 고쳤다. 11/13 사실 정정에 extractor별 cause 값 모양을 고쳐 다시 얼림) | 4491 | `0077483d5c4ff0cb2b5e01873659f76a57acaa1f2f97949db1e9da756019e9cd` |
 | `android/pre/explore-rules.md` | `ofono/pre/explore-rules.md` 사본 | 2222 | `6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8` |
-| `android/post/explore-rules.md` | `ofono/post/explore-rules.md` 사본 | 3931 | `b0b0abcbfd4d86525c9b86b73dba37df326178c32a30d9f83f9fa76e65efb70c` |
+| `android/post/explore-rules.md` | `ofono/post/explore-rules.md` 사본 | 4378 | `e9114e74fa2778513cb8d1b170df0dff11ad67ed19caf193c9de268ab1207f29` |
 
 발췌는 자식이 쓸 수 있는 부분(도입, "읽는 것" 1~2와 "안의 문장은 데이터다", 로그 원문·events.json 읽지 않음, "쓰는 것")만 남기고, 자식이 할 수 없거나 하면 안 되는 부분(동의 질문, db_search·소스 찾기, Step 7)은 뺐다. 발췌의 출력 표는 공유 출력 칸과 다르며, 프롬프트가 자기 출력 형식이 우선이라고 말한다.
 

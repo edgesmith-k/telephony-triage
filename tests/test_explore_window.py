@@ -77,8 +77,10 @@ def test_window_gate_limits_and_usage():
                 ("--at", AT, "--cat", "Data!"), ("--at", AT, "--grep", "x" * 201), ("--at", AT, "--grep", "(")):
         # 못 읽는 시각·줄 상한·태그 형식·로그 범위 밖·구간·슬롯·카테고리 형식·정규식 길이·정규식 오류
         assert _window(job, *bad, expect=2)["reason"] == "사용 오류", bad
-    for _ in range(core.WINDOWS_MAX):
-        _window(job, "--at", AT, "--lines", 2)
+    _window(job, "--at", AT, "--lines", 2)
+    rec = json.loads((job / core.WINDOW_RECORD).read_text(encoding="utf-8"))      # 상한(50)까지 부르는 대신 기록을 채운다
+    rec["windows"] = rec["windows"] * core.WINDOWS_MAX
+    (job / core.WINDOW_RECORD).write_text(json.dumps(rec), encoding="utf-8")
     assert _window(job, "--at", AT, expect=1)["reason"] == "구간 상한"
     assert not (job / f"window-{core.WINDOWS_MAX + 1}.md").exists()
 
@@ -178,14 +180,14 @@ def test_no_flow_file_keeps_timeline_bytes(tmp_path):
     assert report.timeline(KEY, EVENTS, "2026-09-20T05:32:09Z", 200, flows=report.flow_head(report.flow_brief(tmp_path, EVENTS))) == before
 
 
-def test_grep_without_span_stays_inside_analysis_window():
-    """리뷰 7: `--span` 없는 `--grep`은 로그 전체가 아니라 분석 범위(events.json input.window) 안만 찾는다."""
+def test_grep_without_span_searches_whole_log():
+    """`--span` 없는 `--grep`은 분석 범위 밖도 찾는다(11/25 사용자 결정: 탐색은 최후의 보루 — 리뷰 7의 분석 범위 제한을 뒤집음)."""
     job = _job()
     path = job / "events.json"
     ev = json.loads(path.read_text(encoding="utf-8"))
     ev["input"]["window"] = {"start": "2026-09-20T05:33:10.000Z", "end": "2026-09-20T05:34:00.000Z"}   # HIDDEN(05:33:05)은 밖
     path.write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
-    assert _window(job, "--at", AT, "--grep", r"carrier link \w+", expect=1)["reason"] == "줄 없음"
+    assert _window(job, "--at", AT, "--grep", r"carrier link \w+")["lines"] == 1
     assert _window(job, "--at", AT, "--grep", r"carrier link \w+", "--span", 60)["lines"] == 1
 
 

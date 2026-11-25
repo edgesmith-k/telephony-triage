@@ -68,7 +68,7 @@ ELIGIBILITY_FILE = "eligibility.json" # 자격 검사 사건 전부·판정(매�
 EXPLORE_INPUT_FILE = "explore-input.json"   # `triage.py explore`의 입력(마스킹된 값만). run이 쓰고, 탐색 동의 뒤 subcommand가 읽는다
 # `triage.py window`(5-1·5-2 근거 구간): JOB/window-<n>.md와 그 기록(스크립트만 쓴다 — guard 규칙 12). check-output이 sha가 맞는 구간을
 # 근거 원문에 더한다. 작업당 WINDOWS_MAX개
-WINDOW_RECORD, WINDOW_FILE, WINDOWS_MAX = "windows.json", "window-{n}.md", 6
+WINDOW_RECORD, WINDOW_FILE, WINDOWS_MAX = "windows.json", "window-{n}.md", 50   # 폭주 방지용만(탐색은 최후의 보루 — 11/25 사용자 결정)
 WINDOW_NAME_RE = re.compile(r"window-[1-9]\d*\.md")
 MUST_SHOW_MAX = 6                # render_report가 모으는 must_show 상한
 MUST_SHOW_FIT = 4                # fit이 마지막에 남기는 수

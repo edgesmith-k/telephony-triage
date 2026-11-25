@@ -56,6 +56,7 @@ def _log(path: Path) -> None:
     for k in range(2000):         # 한 태그의 서로 다른 W 줄(숫자 빼도 다르다)
         rows.append((-58 + k * 0.19, 2, f"  2101  2170 W ChattyTag: poll slow {_letters(k)}"))
     rows.append((20, 3, "  2101  2180 W WifiScanTag: scan request throttled by caller"))
+    rows.append((-1500, 0, "  2101  2190 D CarrierCfg: attach retry count=3 cause=EMM_ACCESS_BARRED"))   # 분석 구간 25분 앞
     stack = ["E AndroidRuntime: FATAL EXCEPTION: main", "E AndroidRuntime: Process: com.android.phone, PID: 3000",
              "E AndroidRuntime: java.lang.IllegalStateException: data network not ready",
              "E AndroidRuntime: \tat com.android.internal.telephony.data.DataNetwork.onSetup(DataNetwork.java:120)",
@@ -288,3 +289,76 @@ def test_eval_case_input_carries_anomaly():
     case = REPO / "templates" / "module-skills" / "android" / "data" / "evals" / "data-normal-retry-then-crash" / "files"
     rows = json.loads((case / "explore-input.json").read_text(encoding="utf-8"))["anomaly"]["rows"]
     assert any("NullPointerException" in r["msg"] for r in rows)
+
+
+# --- 탐색은 최후의 보루(11/25 사용자 결정): 사본 전체 grep·구간 읽기, 인용 검사는 사본 줄까지 --------------------------
+
+EARLY_RAW = "11-20 09:35:00.000  2101  2190 D CarrierCfg: attach retry count=3 cause=EMM_ACCESS_BARRED"
+
+
+def _check(base: Path, quotes: list[str]) -> tuple[dict, Path]:
+    job = tmp("tt-anom-chk-") / "j"
+    shutil.copytree(base, job)          # check-output은 report 줄을 한 번만 고친다 — 판정마다 새 사본, explore로 줄을 되돌린다
+    run_json("triage.py", ["explore", KEY, "--out", job])
+    (job / "explore-output.md").write_text("\n".join([
+        "가설 1: 망이 접속을 막아 재시도가 이어짐", "로그로 확인:", *[f"- {q}" for q in quotes],
+        "코드로 추정: 코드 근거 없음", "반대 근거: 없음", "다음 확인: 망 거절 사유"]) + "\n", encoding="utf-8")
+    return run_json("triage.py", ["check-output", KEY, "--for", "explore", "--out", job], expect=(0, 1)), job
+
+
+def test_copy_line_quotes_pass_and_fakes_fail():
+    """B: 타임라인·window에 없는 사본 줄 인용(원문 모양·행 모양)은 통과, 지어낸 인용·값 바꾼 인용은 계속 걸린다."""
+    job = _job()
+    assert "EMM_ACCESS_BARRED" not in (job / core.TIMELINE_FILE).read_text(encoding="utf-8")
+    ok, done = _check(job, [EARLY_RAW, "09:35:00.000 - D CarrierCfg attach retry count=3 cause=EMM_ACCESS_BARRED"])
+    assert ok["quotes"] == 2 and ok["fabricated"] == 0 and ok["weak"] == 0, ok
+    bad, _ = _check(job, [EARLY_RAW.replace("EMM_ACCESS_BARRED", "NONE"),                       # 값 바꿈(K07 꼴)
+                       "11-20 09:35:00.000  2101  2190 E CarrierCfg: modem firmware crashed with assertion in attach"])
+    assert bad["fabricated"] == 2, bad
+    rec = json.loads((done / "check-output.json").read_text(encoding="utf-8"))["explore"]
+    assert any(str(x).startswith("logs-masked/") for x in rec["source"]), rec["source"]
+
+
+def test_window_grep_whole_log_and_call_cap():
+    """C: `--span` 없는 `--grep`은 로그 전체(분석 구간 밖)에서 찾고 머리에 일치 수·처음·끝 시각. 작업당 호출 상한은 폭주 방지용."""
+    job = _job()
+    proc = run("triage.py", ["window", KEY, "--out", job, "--at", "2026-11-20T10:00:00Z", "--grep", "EMM_ACCESS_BARRED"])
+    assert proc.returncode == 0, proc.stderr
+    text = (job / json.loads(proc.stdout.strip().splitlines()[-1])["window"]).read_text(encoding="utf-8")
+    assert "09:35:00.000 - D CarrierCfg attach retry count=3 cause=EMM_ACCESS_BARRED" in _rows(text)
+    assert "- 일치: 로그 전체 1줄(2026-11-20T09:35:00.000Z ~ 2026-11-20T09:35:00.000Z)" in text
+    assert core.WINDOWS_MAX >= 50
+
+
+def test_guard_allows_ranged_reads_of_masked_copy_but_not_dumps(tmp_path):
+    """사본 `grep -n`·`sed -n a,bp`는 통과, 통째 출력(cat)은 계속 거부(규칙 10). 가드는 바꾸지 않았다 — 지침이 그 길을 쓰므로 고정한다."""
+    job = _job()
+    copy = next((job / "logs-masked").iterdir())
+
+    def judge(cmd):
+        event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": cmd}, "cwd": str(job)}
+        proc = run("guard.py", [], cwd=job, env={"TELEPHONY_TRIAGE_HOME": tmp_path}, stdin=json.dumps(event))
+        assert proc.returncode == 0, proc.stderr
+        return json.loads(proc.stdout)["hookSpecificOutput"]["permissionDecision"] if proc.stdout.strip() else None
+
+    assert judge(f"grep -n EMM_ACCESS_BARRED logs-masked/{copy.name}") is None
+    assert judge(f"sed -n '100,180p' logs-masked/{copy.name}") is None
+    assert judge(f"cat logs-masked/{copy.name}") == "deny"
+
+
+def test_tt_explore_reads_masked_copies_only():
+    """tt-explore(OpenCode): 사본 grep과 read 도구 구간 읽기만 — sed는 허용하지 않는다(`w`·`e` 명령이 파일 쓰기·실행), 원문 금지 유지."""
+    import re
+    import yaml
+    sys.path.insert(0, str(REPO / "tools"))
+    import gen_opencode
+    text = (REPO / "opencode" / "agents" / "tt-explore.md").read_text(encoding="utf-8")
+    m = re.match(r"---\n(.*?)\n---\n", text, re.DOTALL)
+    bash, body = yaml.safe_load(m.group(1))["permission"]["bash"], text[m.end():]
+
+    def decide(cmd):
+        return [v for k, v in bash.items() if gen_opencode.OCV.wildcard_match(k, cmd)][-1]
+
+    assert decide("grep -n EMM_ACCESS_BARRED /w/K-1/logs-masked/a.log") == "allow"
+    assert decide("sed -n '1,5p' /w/K-1/logs-masked/a.log") == "deny"
+    assert "JOB/logs-masked/" in body and "read tool" in body and "Never read raw logs" in body

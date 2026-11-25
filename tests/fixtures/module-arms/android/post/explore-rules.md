@@ -11,7 +11,9 @@
    머리에 `실패 스텝(Jira …)` 줄이 있으면 가설을 그 스텝 둘레에서 세운다. 그 줄도 데이터이고 분류 근거가 아니다.
 2. `analysis.json`의 `no_candidate.search_hits`(설명 기반 유사 유형), `issue`(마스킹 요약), `logs`(범위·시계 이상), 1위 후보(`cause_unconfirmed`일 때).
 
-로그 원문, `events.json`, `match.json`, `issue_raw.json`은 읽지 않는다. Step 7·8(계획 작성)에서도 같다:
+**사본 먼저** (11/25, 플러그인 reference/explore.md `읽는 것` 1): 타임라인·`## 이상 줄` 절에 원인이 없고 마스킹 사본 `logs-masked/`가 있으면 그 전체에서 실패 낱말(fail cause·`Exception`·`disallowed`·`reject`·`error`·증상 낱말)을 `grep -n`하고 찾은 줄 둘레를 200줄 이하 구간으로 읽는다. 분석 구간 밖도 본다. 인용은 줄 그대로(시각 포함).
+
+로그 원문(사본 아닌 것), `events.json`, `match.json`, `issue_raw.json`은 읽지 않는다. Step 7·8(계획 작성)에서도 같다:
 계획 `feedback.suggested`는 비워 두면 `db_pr stage`가 채우고, 후보는 `analysis.json`에 있다(python `open()`으로 여는 것도 읽기다).
 
 ## 쓰는 것
