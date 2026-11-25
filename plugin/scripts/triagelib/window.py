@@ -49,6 +49,8 @@ LINES_DEFAULT, LINES_MAX, BYTES_MAX, SPAN_MAX, GREP_MAX = 40, 200, 24576, 3600, 
 TAG_OK = re.compile(r"^[A-Za-z0-9_.:/@-]{1,64}$")
 CAT_OK = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 NEXT = "타임라인 줄만으로 계속한다(로그 원문·사본을 grep·Read하지 않는다)"
+LINE_TS_HEAD = "- 줄 시각(날짜 포함, UTC): "      # 구간 파일 머리 — 고른 줄의 처음 ~ 끝(`output._after_ref`가 읽는다)
+LINE_TS_RE = re.compile(r"^- 줄 시각\(날짜 포함, UTC\): (\S+) ~ (\S+)\r?$", re.MULTILINE)
 CLOCK_RE = re.compile(r"(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?")
 OFFSET_RE = re.compile(r"(?:Z|[+-]\d{2}:?\d{2})$")
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -364,16 +366,16 @@ def ranked(items: list[tuple], tag_max: int) -> list[tuple]:
     return [it for _key, it in sorted(keyed, key=lambda x: x[0])]
 
 
-def _pick_span(recs: list[dict], at: str, n: int) -> list[str]:
-    """`--span` 안 줄이 상한을 넘을 때: `ranked`(등급, 한 태그 `SPAN_TAG_MAX`줄 넘음, `at`에 가까운 순) 앞 n줄 → 시각순 줄.
-    본문이 BYTES_MAX를 넘으면 마지막에 고른 줄부터 뺀다."""
+def _pick_span(recs: list[dict], at: str, n: int) -> list[tuple[str, str]]:
+    """`--span` 안 줄이 상한을 넘을 때: `ranked`(등급, 한 태그 `SPAN_TAG_MAX`줄 넘음, `at`에 가까운 순) 앞 n줄 → 시각순
+    (날짜 포함 시각, 줄). 본문이 BYTES_MAX를 넘으면 마지막에 고른 줄부터 뺀다."""
     center = logtime.parse_ts(at)
     order = ranked([(rank(r), _gap(r, center), i, r.get("tag"), 1) for i, r in enumerate(recs)], SPAN_TAG_MAX)
     chosen = [it[2] for it in order[:n]]
     lines = {i: report.row_line(_row(recs[i])) for i in chosen}
     while chosen and sum(len(x.encode("utf-8")) + 1 for x in lines.values()) > BYTES_MAX:
         lines.pop(chosen.pop())
-    return [lines[i] for i in sorted(chosen)]
+    return [(recs[i]["ts"], lines[i]) for i in sorted(chosen)]
 
 
 def served_copies(job: Path, analysis: dict) -> tuple[list[Path], list[str]]:
@@ -504,8 +506,8 @@ def _zone(job: Path, text: str, local: datetime, recs: list[dict]) -> bool | Non
     return False if any(r["ts"].startswith(prefix) for r in recs) else None
 
 
-def _pick(recs: list[dict], at: str, n: int) -> list[dict]:
-    """시각순 `recs`에서 `at` 둘레 n줄(앞뒤 반씩, 끝에 닿으면 반대쪽으로), 본문이 BYTES_MAX를 넘으면 먼 쪽부터 뺀다."""
+def _pick(recs: list[dict], at: str, n: int) -> list[tuple[str, str]]:
+    """시각순 `recs`에서 `at` 둘레 n줄(앞뒤 반씩, 끝에 닿으면 반대쪽으로) → (날짜 포함 시각, 줄), 본문이 BYTES_MAX를 넘으면 먼 쪽부터 뺀다."""
     i = bisect.bisect_left([r["ts"] for r in recs], at)
     lo = max(0, min(i - n // 2, len(recs) - n))
     rows = recs[lo:lo + n]
@@ -516,7 +518,7 @@ def _pick(recs: list[dict], at: str, n: int) -> list[dict]:
         k = 0 if far_first else -1
         rows.pop(k)
         lines.pop(k)
-    return lines
+    return [(r["ts"], line) for r, line in zip(rows, lines)]
 
 
 def _write(path: Path, data: bytes) -> None:
@@ -584,7 +586,8 @@ def _run(args, defaults: dict) -> dict:
     in_span = len(recs)
     by_rank = args.span is not None and in_span > n_lines
     # `--span` 안 줄이 상한을 넘으면 가까운 순이 아니라 등급 순(밀집 로그에서 200줄이 수 ms만 덮지 않게)
-    lines = _pick_span(recs, at_s, n_lines) if by_rank else _pick(recs, at_s, n_lines)
+    picked = _pick_span(recs, at_s, n_lines) if by_rank else _pick(recs, at_s, n_lines)
+    lines = [line for _ts, line in picked]
     if not lines:
         raise _Stop(CHECK_FAILED, "줄 없음", "그 구간·조건의 줄이 없다")
     filters = {k: v for k, v in (("span", args.span), ("slot", args.slot), ("cat", args.cat), ("grep", args.grep))
@@ -602,6 +605,8 @@ def _run(args, defaults: dict) -> dict:
             *([f"- 일치: 로그 전체 {in_span}줄({recs[0]['ts']} ~ {recs[-1]['ts']})"
                + (f", 그중 --at에 가까운 {len(lines)}줄" if len(lines) < in_span else "")] if args.grep and args.span is None else []),
             *([f"- 마스킹 사본이 없어 보여 주지 않는 파일(원문만): {', '.join(skipped)}"] if skipped else []),
+            # G-2: 줄 시각은 날짜가 없어 check-output 게이트 4가 이 줄(구간 파일 sha 대조 대상)에서 날짜 포함 끝 시각을 읽는다
+            f"{LINE_TS_HEAD}{picked[0][0]} ~ {picked[-1][0]}",
             "- 형식: 시각(UTC) 슬롯 레벨 태그 메시지", ""]
     text = "\n".join(head + lines) + "\n"
     text, redacted = (text, {}) if off else masking.redact(text, ev.get("mask_allow") or [])

@@ -163,7 +163,8 @@ def test_cp_conclusion_without_cp_tag_quote_fails_gate_6(tmp_path, capsys):
 
 def test_window_after_reference_counts_as_looking_after(tmp_path, capsys):
     job = _job(tmp_path / "a")
-    _window(job, rows=("15:10:01.900 p0 E hiddend carrier link lost", "15:10:05.000 p0 I hiddend carrier link back"))
+    _window(job, rows=("15:10:01.900 p0 E hiddend carrier link lost", "15:10:05.000 p0 I hiddend carrier link back"),
+            last="2026-09-20T15:10:05.000Z")
     _data, inv = _run(job, _out(quotes=(Q1,)), capsys)
     assert _failed(inv) == []
 
@@ -172,7 +173,7 @@ def test_window_counts_only_when_a_line_after_reference_exists(tmp_path, capsys)
     """리뷰 L4: 구간 기록의 중심(`at`)이 기준 뒤여도 실제 줄이 기준 뒤에 없으면(마지막 줄이 기준과 같은 시각 포함) 인정하지 않는다."""
     for name, last in (("before", "15:10:01.900"), ("same", "15:10:02.000")):
         job = _job(tmp_path / name)
-        _window(job, rows=(f"{last} p0 E hiddend carrier link lost",))
+        _window(job, rows=(f"{last} p0 E hiddend carrier link lost",), last=f"2026-09-20T{last}Z")
         rec = json.loads((job / "windows.json").read_text(encoding="utf-8"))
         rec["windows"][0]["at"] = "2026-09-20T15:10:05.000Z"
         (job / "windows.json").write_text(json.dumps(rec), encoding="utf-8")
@@ -946,31 +947,18 @@ def test_a4_word_only_in_rules_uses_all_copies_and_says_so(tmp_path, capsys):
 
 # --- 반입 8 A1~A3: 구간 파일 날짜·규칙 1위와 같음·`예입니다` --------------------------------------------------------------
 
-def _window_at(job: Path, at: str, rows) -> None:
-    _window(job, rows=rows)
-    rec = json.loads((job / "windows.json").read_text(encoding="utf-8"))
-    rec["windows"][-1]["at"] = at
-    (job / "windows.json").write_text(json.dumps(rec), encoding="utf-8")
-
-
-def test_a1_window_of_another_day_is_not_after_failure(tmp_path, capsys):
-    """A1: 구간 파일 줄은 날짜 없는 UTC 시각이라 전날을 중심(`at`)으로 받은 구간도 분석 범위 날짜로 읽혀 게이트 4를 통과했다 —
-    기록 `at`의 날짜로 읽는다. 같은 줄을 당일 중심으로 받았으면 통과, `at`을 못 읽는 옛 기록은 지금처럼."""
-    rows = ("15:10:01.900 p0 E hiddend carrier link lost", "15:10:05.000 p0 I hiddend carrier link back")
-    for name, at, want in (("day-before", "2026-09-19T15:10:03.000Z", ["실패 뒤 흔적"]),
-                           ("same-day", "2026-09-20T15:10:03.000Z", []), ("old", "x", [])):
+def test_g2_window_end_time_comes_from_the_file_head_not_a_guess(tmp_path, capsys):
+    """G-2(A1을 바꿈): 구간 파일 줄은 날짜가 없다 — 날짜를 추측(분석 범위 날짜·중심에 가까운 날)하지 않고 window가 구간 파일 머리에
+    적은 날짜 포함 끝 시각만 쓴다. `--grep` 구간처럼 중심과 12시간 넘게 떨어진 전날 줄이 끝이면 실패, 당일이면 통과, 머리가 없는 옛
+    구간 파일은 시각을 몰라 세지 않는다."""
+    rows = ("15:10:01.900 p0 E hiddend carrier link lost", "23:50:05.000 p0 I hiddend carrier link back")
+    for name, last, want in (("day-before", "2026-09-19T23:50:05.000Z", ["실패 뒤 흔적"]),
+                             ("same-day", "2026-09-20T23:50:05.000Z", []), ("old", None, ["실패 뒤 흔적"])):
         job = _job(tmp_path / name)
-        _window_at(job, at, rows)
+        _window(job, rows=rows, last=last)
         _data, inv = _run(job, _out(quotes=(Q1,)), capsys)
         assert _failed(inv) == want, (name, inv["gate"])
-
-
-def test_a1_window_rows_take_the_day_nearest_to_center_across_midnight():
-    """A1: 자정을 넘는 구간이면 각 줄은 중심(`at`)에 가장 가까운 날로 읽는다."""
-    from triagelib import output
-    at = "2026-09-20T23:59:59.000Z"
-    assert output._window_row_ts("00:00:03.000 p0 I x y", at, None).isoformat().startswith("2026-09-21T00:00:03")
-    assert output._window_row_ts("23:59:50.000 p0 I x y", at, None).isoformat().startswith("2026-09-20T23:59:50")
+        assert name != "old" or "옛 구간 파일" in inv["gate"][3]["why"], inv["gate"]
 
 
 def test_a2_same_as_rule_top_needs_source_confirmed_basis(tmp_path, capsys):
@@ -1035,3 +1023,75 @@ def test_b1_deep_output_tags_are_marked_as_deep(tmp_path, capsys):
     rec = json.loads((job / "check-output.json").read_text(encoding="utf-8"))["deep"]
     assert rec.get("parser_unknown_tags") == ["vrild"], rec
     assert "  - 파서 설정에 없는 태그가 근거 인용에 쓰임(심층): vrild — " in (job / "report.md").read_text(encoding="utf-8")
+
+
+# --- 별개 리뷰 1126(G-1·G-3·G-5·G-7·G-8): 입력 모양을 바꾸면 다시 통과하던 길과 반대 방향 짝 ------------------------------------
+
+ROW_Q_ELL = "15:10:30.000 - - datad link … lost carrier on rmnet_data0"     # 첫 조각(`link`)이 8자 미만
+
+
+def test_g1_short_first_fragment_still_checks_the_copy_date(tmp_path, capsys):
+    """G-1: 생략표로 첫 조각을 8자 미만으로 만들면 사본 줄 날짜 대조를 건너뛰어 전날 관측이 통과했다 — 8자 이상인 가장 긴 조각으로
+    찾고 모든 조각이 같은 줄에 순서대로 있는지 본다. `로그로 확인`에 넣어도(게이트 4) 같다. 당일 줄이면 그대로 통과."""
+    rows = [r.replace(ROW_Q, ROW_Q_ELL) for r in DAY_ROWS]
+    out = _out(layer="AP 내부", quotes=(Q0, Q_AFTER), rows=rows, claim="단계 2 — 링크가 끊김", head="링크가 끊겨 연결 실패")
+    for name, line, ok in (("other", DAY_BEFORE, False), ("same", DAY_BEFORE.replace("09-19", "09-20"), True)):
+        job = _job(tmp_path / name)
+        _copy(job, [ISO_Q1, line])
+        data, inv = _run(job, out, capsys)
+        assert (inv["status"] == "identified") is ok and data["weak"] == (not ok), (name, data, inv["gate"])
+    job = _job(tmp_path / "after")
+    _copy(job, [ISO_Q1, DAY_BEFORE])
+    _data, inv = _run(job, _out(quotes=(Q1, ROW_Q_ELL)), capsys)
+    assert _failed(inv) == ["실패 뒤 흔적"], inv["gate"]
+
+
+def test_g3_absent_words_must_appear_together_in_a_copy_line(tmp_path, capsys):
+    """G-3: `찾았는데 없음` 항목에 백틱 낱말이 둘이면 사본 고르기는 하나라도 든 사본, 세기는 모두 든 줄이라 늘 0건·긴 사본으로
+    통과했다 — 낱말 전부가 함께 든 줄이 사본에 있어야 하고(없으면 실패), 끝도 그 줄이 든 사본으로 잰다."""
+    two = ("찾았는데 없음:", "- `SETUP_DATA_CALL` `heartbeat` 재요청 — logs-masked 15:10:02 뒤 grep")
+    job = _job(tmp_path / "apart")
+    _copies(job, {"radio.log": RADIO, "main.log": [TAIL]})
+    _d, inv = _run(job, _out(rows=RETRY_ROWS, extra=(*two, RETRY_MECH)), capsys)
+    assert _failed(inv) == ["첫 어긋남"] and "함께 든 줄이 사본에 없음" in inv["gate"][1]["why"], inv["gate"]
+    together = ("찾았는데 없음:", "- `SETUP_DATA_CALL` `AUTH_FAILURE_ON_EMM` 재요청 — logs-masked 15:10:02 뒤 grep")
+    for name, radio, ok in (("short", RADIO, False), ("long", [*RADIO, TAIL.replace("datad[9]", "vrild[7]")], True)):
+        job = _job(tmp_path / name)
+        _copies(job, {"radio.log": radio, "main.log": [TAIL]})
+        _d, inv = _run(job, _out(rows=RETRY_ROWS, extra=(*together, RETRY_MECH)), capsys)
+        assert (inv["status"] == "identified") is ok, (name, inv["gate"])
+
+
+def test_g5_yearless_copy_line_matches_across_new_year():
+    """G-5: 연도 없는 사본 줄(logcat)은 분석 범위 시작의 연도로 읽혀 해를 넘는 로그에서 맞는 행 인용이 다른 날로(약함) 떨어졌다 —
+    사본 줄에 연도가 없으면 ±1년도 맞춰 본다. 다른 날 줄은 그대로 None."""
+    from triagelib import output
+    output._raw_ready()
+    ev = {"input": {"tz": "UTC", "window": {"start": "2026-12-31T23:55:00Z", "end": "2027-01-01T00:05:00Z"}}}
+    q = "00:00:30.000 p0 I datad link monitor lost carrier on rmnet_data0"
+    line = "{} 00:00:30.000  1000  1001 I datad: link monitor lost carrier on rmnet_data0\n"
+    assert output._quote_at(q, ev, [line.format("01-01")]) == (output._quote_ts(q, ev), 0)
+    assert output._quote_at(q, ev, [line.format("01-02")])[0] is None
+
+
+def test_g7_rules_only_word_measures_the_copy_of_the_lower_end_line(tmp_path, capsys):
+    """G-7: 낱말이 파서 규칙에만 있으면 끝은 아래 끝을 준 앞 단계 인용 줄의 사본으로 잰다 — 그 사본(radio)이 짧으면 다른 사본(main)이
+    길어도 미관측. radio가 길면 통과."""
+    rows = [FAIL_ROWS[0], FAIL_ROWS[1].replace(Q1, ISO_Q1),
+            "| 3 | 인증 실패 뒤 DEACTIVATE를 보낸다 | CP 내부 | spec:x | 없음(찾은 곳: logs-masked 15:10:01 뒤) | false |"]
+    extra = ("찾았는데 없음:", "- `DEACTIVATE_DATA_CALL` 요청 — logs-masked 15:10:01 뒤")
+    for name, radio, ok in (("short", RADIO, False), ("long", [*RADIO, TAIL], True)):
+        job = _job(tmp_path / name)
+        (job / "explore-input.json").write_text(json.dumps({"limit": 200, "around": "2026-09-20T15:09:30Z"}), encoding="utf-8")
+        _copies(job, {"radio.log": radio, "main.log": ["2026-09-20T15:30:00.000Z host other[2]: heartbeat"]})
+        _d, inv = _run(job, _out(rows=rows, claim="단계 3 — CP가 DEACTIVATE를 안 보냄", extra=extra), capsys)
+        assert (inv["status"] == "identified") is ok, (name, inv["gate"])
+        assert ok or "미관측" in inv["gate"][1]["why"], (name, inv["gate"])
+
+
+def test_g8_raw_shape_quote_is_never_other_day_without_rescan(monkeypatch):
+    """G-8: 원문 모양 인용은 `stamp_matches`가 이미 날짜까지 맞췄다 — `_other_day`가 사본을 다시 훑지 않고 False."""
+    from triagelib import output
+    output._raw_ready()
+    monkeypatch.setattr(output, "_quote_at", lambda *a: (_ for _ in ()).throw(AssertionError("사본을 다시 훑음")))
+    assert output._other_day(ISO_Q1, {"input": {"tz": "UTC"}}, [ISO_Q1]) is False
