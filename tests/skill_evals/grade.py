@@ -1873,7 +1873,12 @@ def checks_w4(eid, ctx):
         got = asked(r"심층 분석|mock-data-analyzer")
         if got is None:
             raise _Manual("실행 기록(events.jsonl) 없음")
-        return len(got) == 1, f"심층 분석 질문 {len(got)}개"
+        # 조사 모드(1위 C=0)면 SKILL.md는 5-1을 "조사할까요?" 한 질문으로 묻게 한다 — 그 질문도 심층 분석 질문이다(i8-1126-k).
+        # 같은 질문을 글과 ask_user로 두 번 보이면 한 번(질문 줄 기준)
+        inv = {re.sub(r"\s+", " ", m.group(0)) for t in ctx.visible() if t not in got
+               for m in [re.search(r"조사할까요\?[^\n]*", t)] if m and _INVESTIGATE_Q.search(t)}
+        n = len(got) + len(inv)
+        return n == 1, f"심층 분석 질문 {len(got)}개, 조사 질문 {len(inv)}개"
     def explore_not_asked():
         got = asked(r"탐색 분석|explore")
         order = ctx.explore_order()

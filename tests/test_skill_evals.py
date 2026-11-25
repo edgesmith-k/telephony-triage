@@ -3930,6 +3930,25 @@ def test_e57_explore_not_asked_ignores_hypothesis_adoption_question(tmp_path):
     assert row("c", "심층 분석과 탐색 분석을 할까요? (토큰 추가 사용)") is False
 
 
+def test_e57_analyzer_once_counts_investigate_question(tmp_path):
+    """eval 57 1번 행: 조사 모드의 SKILL.md 한 질문 "조사할까요? (심층 분석 …)"도 심층 분석 질문 한 번이다(i8-1126-k 거짓 실패).
+    질문이 없거나 조사 질문과 심층 질문을 따로 두 번 물으면 실패."""
+    inv_q = "## 분석\n- 판단: 원인 보류\n\n조사할까요? (심층 분석 mock-data-analyzer와 탐색 분석 explore를 실행합니다. 토큰이 추가로 듭니다.)"
+
+    def row(name, *asks):
+        env_dir = _synthetic_env(tmp_path / name)
+        run = run_dir(tmp_path / name)
+        _write_artifacts(run)
+        _seq_events(run, [*(("tool", f"q{k}", "mcp__eval-approver__ask_user", {"question": q, "options": ["예", "아니오"]}, "답", False)
+                            for k, q in enumerate(asks)),
+                          ("tool", "e1", "Bash", {"command": "python3 /p/triage.py explore MOCK-9044"}, "ok", False)])
+        return grader.checks(57, grader.Ctx(env_dir, run))[0]()[0]
+    assert row("a", inv_q) is True
+    assert row("b") is False
+    assert row("c", inv_q, "심층 분석(mock-data-analyzer)을 할까요?") is False
+    assert row("d", inv_q, inv_q) is True       # 같은 질문을 두 번 보인 것은 한 번
+
+
 def _module_run(tmp_path, purpose, key, out, *later, skills=("telephony-triage:telephony-triage",)):
     env_dir = _synthetic_env(tmp_path)
     run = run_dir(tmp_path)
