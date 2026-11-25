@@ -16,6 +16,7 @@
 
 ## 종합 판단 (가설 전)
 
+먼저 타임라인 머리의 전체 모양 요약에서 기준 시각 뒤 E/W/F와 처음 나온 모양부터 본다(규칙 1위 판단 전).
 기준 줄·token 찾기는 도구다. 판단은 받은 자료 전체로:
 0. 정상 먼저: 실패 가설 전에 넷을 본다 — ① 회복 창(실패 뒤 같은 창의 회복 줄: `LOADED`·`handleImsRegistered`·`State=COMPLETE`, data는 `Internet data state changed from DISCONNECTED to CONNECTED.`) ② 살아 있는 요청이 없을 때 풀린 throttle(풀림 ≠ 다시 요청) ③ 아무것도 안 한 throttle(`onDataProfileUnthrottled: Nothing to unthrottle.`) ④ 설계상 정상인 조회·indication(`getRecoveryAction: RECOVERY_ACTION_GET_DATA_CALL_LIST` 등). 맞으면 `가설 N: 정상(설계상 정상 동작) — <이유>`·`원인 층: 원인 아님(정상 동작)`, `로그로 확인`은 그 회복·no-op·정상 줄 자체다. 그 줄이 없으면 정상 가설을 쓰지 않는다(실제 고장을 정상으로 덮지 않게). 실패가 되풀이되거나 회복이 다른 슬롯·요청이면 정상이 아니다. 문구는 받은 줄만 인용하고 없으면 말로.
    - 정상 가설과 규칙 1위 판단 전에 타임라인 끝 `## 이상 줄` 절을 먼저 본다. 그 절의 예외·crash 줄을 설명하지 못하면 정상이 아니다.

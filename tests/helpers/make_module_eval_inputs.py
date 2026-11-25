@@ -51,6 +51,7 @@ for _p in (REPO / "plugin" / "scripts", REPO / "tests" / "mocks", REPO / "tests"
         sys.path.insert(0, str(_p))
 
 from common import yamlio
+from triagelib import modulecmd
 
 TEMPLATES = REPO / "templates" / "module-skills"
 VARIANT = "issue-db-ofono-modules"
@@ -270,7 +271,9 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
     if view:
         text = module_view(job, case, kind, platform, view_module, analysis, events, explore_bytes, doc, with_modem)
         if text is not None:
-            timeline = text
+            from triagelib import report      # = modulecmd._deep_module: 심층 보기 머리에 전체 로그 모양 요약(explore가 같은 기준으로 셈)
+            timeline = (report.with_summary(text, json.loads(explore_input.read_text(encoding="utf-8")).get("summary"))
+                        if kind == "deep" else text)
     if with_modem:
         signal = modem_signal(job, doc, platform, view_module, analysis)
         if signal < 1:
@@ -292,8 +295,7 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
             "module": f"{platform}/{view_module}",
             "sha": "template",
             "type_id": candidates[0].get("type"),
-            "top_candidates": [{k: c.get(k) for k in ("type", "cause", "score", "confidence")}
-                               for c in candidates[:3]],
+            "top_candidates": modulecmd._top3(candidates, events),      # = triage.py module(후보마다 근거 줄)
             **({"decision": {k: analysis["decision"].get(k) for k in ("state", "reason")}} if analysis.get("decision") else {}),
             "issue_summary": issue.get("summary"),
             "occurred_at": _given_time(job),      # = triagelib.modulecmd._around(사용자가 준 시각 — Jira 칸 아님, D4)
@@ -410,8 +412,7 @@ def module_view(job: Path, case: dict, kind: str, platform: str, module: str, an
         raise GenError(f"{case['key']}: 모듈 보기 실패 {result}")
     if kind == "deep":
         return result["text"]
-    from triagelib import report      # = modulecmd: 탐색 모듈 보기 끝에 explore가 고른 이상 줄 절
-    return report.with_anomaly(result["text"], json.loads(explore_bytes or "{}").get("anomaly"))
+    return modulecmd._explore_text(result["text"], json.loads(explore_bytes or "{}"))     # 요약·이상 줄 절
 
 
 def _case_size(case_dir: Path) -> None:

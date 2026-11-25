@@ -10,7 +10,11 @@
    "type": "SMS-001",
    "cause": "SMS-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "sms",
+   "evidence": [
+    "00:03:05.340 GsmSMSDispatcher: sendSms: isIms()=false mRetryCount=0 mImsRetry=0 mMessageRef=0 mUsesImsServiceForIms=false SS=3 {x-message-id:0}"
+   ]
   }
  ],
  "decision": {

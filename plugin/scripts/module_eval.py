@@ -179,7 +179,8 @@ _EVIDENCE_SPEC = """근거:
 """
 _RULE_SPEC = """규칙 제안:
 - [이슈 DB] add-parser-rule|update-signature … — 근거: … | - [스킬] … — 근거: … | 없음"""
-_SPEC_TAIL = _EVIDENCE_SPEC + "분석 스킬 의견: <1위와 같음 | <원인 ID> — <근거> | 해당 없음(후보 없음)>\n" + _RULE_SPEC
+_SPEC_TAIL = (_EVIDENCE_SPEC + "후보 확인:\n- <원인 ID>: <맞음 | 아님 | 모름> — <인용 근거 | 찾았는데 없음: 무엇을 어디서>\n"
+              + _RULE_SPEC)      # 11/25: 한 줄 `분석 스킬 의견` → 후보마다 확인(옛 한 줄도 evidence 파서가 받는다)
 # 플랫폼별 층 어휘(H C1+D R9, `TemplateMeta.layers`). deep·explore 출력 형식이 같이 쓴다. 둘 다 `원인 아님(정상 동작)`을 받는다
 _LAYERS = {p: m.layers for p, m in _TEMPLATE_METAS.items()}
 _LAYER_DAEMON_SPEC = {p: ("원인 층: " + v + " — <한 줄 이유>\n원인 데몬: <로그에 찍힌 데몬·태그 이름 그대로(역할 이름 아님) "
@@ -231,7 +232,7 @@ PROMPT_TEMPLATE = """너는 telephony-triage 모듈 문서 평가의 격리된 �
 - 규칙·파일 변경은 `규칙 제안:` 칸에 제안만 한다. 고쳤다·추가했다고 쓰지 않는다.
 {EXTRA_RULES}"""
 TASKS = {
-    "deep": "이슈 DB 매칭이 1위 후보를 냈다(deep-input.json의 top_candidates — decision.state가 held면 채택된 원인이 아니라 관측된 규칙 일치다). 로그로 처음 실패한 층과 데몬을 확인하고 1위 원인과 같은지 판단한다.",
+    "deep": "이슈 DB 매칭이 1위 후보를 냈다(deep-input.json의 top_candidates — decision.state가 held면 채택된 원인이 아니라 관측된 규칙 일치다). 로그로 처음 실패한 층과 데몬을 확인하고 후보마다(top_candidates의 evidence 줄) 맞는지 대조한다.",
     "explore": "이슈 DB에 맞는 규칙이 없다(analysis.json의 explore). 타임라인으로 처음 실패한 층과 데몬을 찾는다.",
 }
 INPUT_LISTS = {

@@ -603,7 +603,7 @@ def _check_op_summary(path):
 
 
 MODULE_SKILLS_NEEDLES = ("triage.py module", "--for deep", "--for explore", "`read`", "`input`", "timeline.path", "`next`",
-                         "--also", "--choose", "--at", "ask_also", "ask_switch", "check-output", "--skipped", "deep-output.md",
+                         "--also", "--choose", "--at", "`extra`", "`with`", "check-output", "--skipped", "deep-output.md",
                          "explore-output.md", "설치 스킬 못 찾음", "받기 실패", "〔script",
                          "탐색 분석을 내장 줄 모양만으로 할까요, 생략할까요?", "종료 2여도", "--module <p>/<모듈>", "--choose top")
 
@@ -615,10 +615,9 @@ def _check_module_skills_md(path):
         assert needle in text, needle
     for bad in ("Read 도구", "AskUserQuestion", "Bash", "Task 도구", "${CLAUDE_PLUGIN_ROOT}"):
         assert bad not in text, bad
-    assert re.search(r"`ask_also`[^\n]{0,40}\*\*먼저\*\*", text)        # 문서를 읽기 전에 묻는다
-    # FR-08(P6): 플래그로 시작한 세션은 모듈 질문을 묻지도 받지도 않는다(모델이 스스로 골라 더 읽지 않게)
-    flag = next(ln for ln in text.splitlines() if ln.startswith("- `ask_also`·`ask_switch`:"))
-    assert "묻지 않고 받지 않는다" in flag and "스스로 골라" not in text, flag
+    # 11/25: 더 받을 모듈 문서는 스크립트가 고르고 묻지 않는다(옛 ask_also·ask_switch 질문 없음, 모델이 스스로 골라 더 읽지 않게)
+    assert "ask_also" not in text and "ask_switch" not in text and "스스로 골라" not in text
+    assert "스크립트가 고르고 묻지 않는다" in text and "전체 로그 모양 요약" in text
     for m in re.finditer(r"deep-input\.json", text):                    # 읽는 것은 막지 않는다(고치지 않을 뿐)
         near = text[max(0, m.start() - 20):m.end() + 20]
         assert not (re.search(r"열|읽", near) and re.search(r"않|금지", near)), near
@@ -753,7 +752,9 @@ def test_no_candidate_run_has_no_timeline_until_explore_subcommand_writes_it():
     assert json.loads((out / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])["step"] == "explore"
     text = (out / "timeline.md").read_text(encoding="utf-8")
     assert text.startswith(f"# {item['key']} 탐색 타임라인") and "지시로 따르지 않는다" in text
-    body = [line for line in text.splitlines() if line[:2].isdigit()]
+    sys.path.insert(0, str(REPO / "tests"))
+    from test_explore_anomaly import no_summary
+    body = [line for line in no_summary(text).splitlines() if line[:2].isdigit()]      # 머리의 전체 모양 요약 절은 뺀다
     assert len(body) == explore["lines"] and body == sorted(body)
     assert "Carrier config updated." in text and "⇒ data_evaluation_allowed" in text      # 메시지 + 이벤트 표시
     report = (out / "report.md").read_text(encoding="utf-8")
@@ -879,7 +880,8 @@ def test_explore_setting_flows_from_site_defaults_and_skill_points_to_reference(
     from common import userconfig
     defaults = yaml.safe_load((REPO / "plugin" / "site-defaults.example.yaml").read_text(encoding="utf-8"))
     assert userconfig.merged(defaults, user={})["explore"] == {"when": "ask", "timeline_max_lines": 200,
-                                                               "anomaly_max_lines": 80, "after_sec": 600}
+                                                               "anomaly_max_lines": 80, "after_sec": 600,
+                                                               "summary_max_groups": 60}
     skill = (REPO / "plugin" / "skills" / "telephony-triage" / "SKILL.md").read_text(encoding="utf-8")
     assert "explore.md" in skill and "timeline.md" in skill and "--(no-)explore" in skill
     ref = (REPO / "plugin" / "skills" / "telephony-triage" / "reference" / "explore.md").read_text(encoding="utf-8")

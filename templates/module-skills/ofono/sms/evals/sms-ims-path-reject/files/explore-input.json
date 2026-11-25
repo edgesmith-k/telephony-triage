@@ -29,5 +29,195 @@
     "main": true
    }
   ]
+ },
+ "summary": {
+  "ref": "2026-09-21T10:30:05.000Z",
+  "range": [
+   "2026-09-21T10:30:00.010Z",
+   "2026-09-21T10:30:10.000Z"
+  ],
+  "lines": 25,
+  "shapes": 18,
+  "window": [
+   "2026-09-21T10:25:05.000Z",
+   "2026-09-21T10:35:05.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-09-21T10:30:05.011Z",
+    "last": "2026-09-21T10:30:05.011Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "imsd",
+    "msg": "[SLOT_0][E] 4103 [ExampleImsSmsSender::sendSms] failed to build SMS-SUBMIT ref=1",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.018Z",
+    "last": "2026-09-21T10:30:05.018Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "mgmtd",
+    "msg": "sms send error: Operation failed path/example_sms.go:12",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.002Z",
+    "last": "2026-09-21T10:30:05.002Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "dbus -> org.ofono.MessageManager.SendMessage on /ril_0 path/example_dbus.go:24",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.004Z",
+    "last": "2026-09-21T10:30:05.004Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "dbus_trace method call - i:org.ofono.MessageManager m:SendMessage p:/ril_0 a:\"<MSISDN#1>\", <HEXDUMP 20B>",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.005Z",
+    "last": "2026-09-21T10:30:05.005Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "src/sms.c:sms_send_message() queued msg 1, route ims smsOverLteCapable=1",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.006Z",
+    "last": "2026-09-21T10:30:05.006Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/ims.c:example_send_sms() IMS_REQUEST_SEND_SMS ref=1",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.008Z",
+    "last": "2026-09-21T10:30:05.008Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 4101 [ExampleImsSmsManager] exampleOnSendSmsRequest() ref=1",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.009Z",
+    "last": "2026-09-21T10:30:05.009Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 4102 [ExampleImsSmsSender::sendSms] start ref=1 format=3gpp",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.012Z",
+    "last": "2026-09-21T10:30:05.012Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 4104 [ExampleImsSmsManager] exampleSendSmsResult() ref=1 result=FAIL",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.014Z",
+    "last": "2026-09-21T10:30:05.014Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/ims.c:example_sms_result() IMS_UNSOL_SMS_RESULT ref=1 result=1",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.015Z",
+    "last": "2026-09-21T10:30:05.015Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/sms.c:tx_finished() send failed, giving up",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.016Z",
+    "last": "2026-09-21T10:30:05.016Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/dbus.c:__ofono_error_failed() dbus_trace err return - i:org.ofono.MessageManager m:SendMessage p:/ril_0",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:10.000Z",
+    "last": "2026-09-21T10:30:10.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 4105 [ExampleImsRegistration] registered:1 VoPS=1",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.000Z",
+    "last": "2026-09-21T10:30:05.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "sms send requested to=<MSISDN#1> len=20 path/example_sms.go:24"
+   },
+   {
+    "ts": "2026-09-21T10:30:00.010Z",
+    "last": "2026-09-21T10:30:08.010Z",
+    "n": 4,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "ui tick"
+   },
+   {
+    "ts": "2026-09-21T10:30:00.200Z",
+    "last": "2026-09-21T10:30:09.200Z",
+    "n": 4,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "[ExampleRegService_0] signal update lte rsrp=-92"
+   },
+   {
+    "ts": "2026-09-21T10:30:01.000Z",
+    "last": "2026-09-21T10:30:07.000Z",
+    "n": 2,
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "IMSD 0: <HEXDUMP 32B>"
+   },
+   {
+    "ts": "2026-09-21T10:30:01.500Z",
+    "last": "2026-09-21T10:30:01.500Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/ims.c:ims_set_sms_capable() IMS_UNSOL_CAPABILITIES voiceOverLteCapable=1 smsOverLteCapable=1"
+   }
+  ]
  }
 }

@@ -11,5 +11,240 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "summary": {
+  "ref": "2026-10-14T09:41:07.000Z",
+  "range": [
+   "2026-10-14T09:41:06.812Z",
+   "2026-10-14T09:41:09.321Z"
+  ],
+  "lines": 24,
+  "shapes": 23,
+  "window": [
+   "2026-10-14T09:36:07.000Z",
+   "2026-10-14T09:46:07.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-10-14T09:41:07.512Z",
+    "last": "2026-10-14T09:41:07.512Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "VRIL-IMS",
+    "msg": "[adapter] send call forward reason=UNCONDITIONAL slot=0",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T09:41:07.513Z",
+    "last": "2026-10-14T09:41:07.513Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "VRIL-IMS",
+    "msg": "[ril] req -> OEM_REQ_IMS_SET_CALL_FORWARD status=3 reason=0 class=1 toa=129 number=123 time=0 slot=0",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T09:41:07.515Z",
+    "last": "2026-10-14T09:41:07.515Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "[IpcCtx_0] track seq 0x0b12",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T09:41:07.515Z",
+    "last": "2026-10-14T09:41:07.515Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][TX] VIPC_EXAMPLE_IMS_CF, REQ seq=0x0b12 len=64",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T09:41:07.516Z",
+    "last": "2026-10-14T09:41:09.284Z",
+    "n": 2,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "<HEXDUMP 16B>",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T09:41:09.284Z",
+    "last": "2026-10-14T09:41:09.284Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][RX] VIPC_EXAMPLE_IMS_CF, RSP OK(VIPC_OK) seq=0x0b12 len=16",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T09:41:09.286Z",
+    "last": "2026-10-14T09:41:09.286Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL",
+    "msg": "ext client reply clientId=3",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T09:41:09.287Z",
+    "last": "2026-10-14T09:41:09.287Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "[IpcCtx_0] untrack seq 0x0b12",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T09:41:09.289Z",
+    "last": "2026-10-14T09:41:09.289Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "VRIL-IMS",
+    "msg": "[ril] rsp <- OEM_REQ_IMS_SET_CALL_FORWARD status=SUCCESS slot=0",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T09:41:09.291Z",
+    "last": "2026-10-14T09:41:09.291Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-IMS",
+    "msg": "[ut] call forward update result received id=4021 slot=0",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T09:41:09.318Z",
+    "last": "2026-10-14T09:41:09.318Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "[IpcCtx_0] route req id=31 svc=6 msg=1104",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T09:41:09.320Z",
+    "last": "2026-10-14T09:41:09.320Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsPhoneMmiCode",
+    "msg": "onSetComplete: mmi=ImsPhoneMmiCode {State=COMPLETE action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T09:41:09.321Z",
+    "last": "2026-10-14T09:41:09.321Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsPhone",
+    "msg": "[0] onMMIDone: mmi=ImsPhoneMmiCode {State=COMPLETE action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T09:41:06.931Z",
+    "last": "2026-10-14T09:41:06.931Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "CallerInfoAsyncQuery",
+    "msg": "##### onQueryComplete() ##### query complete for token: 0"
+   },
+   {
+    "ts": "2026-10-14T09:41:06.909Z",
+    "last": "2026-10-14T09:41:06.909Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-IMS",
+    "msg": "[ut] route call forward via modem slot=0"
+   },
+   {
+    "ts": "2026-10-14T09:41:06.907Z",
+    "last": "2026-10-14T09:41:06.907Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-IMS",
+    "msg": "[ut] update call forward action=3 condition=0 class=0 time=0"
+   },
+   {
+    "ts": "2026-10-14T09:41:06.905Z",
+    "last": "2026-10-14T09:41:06.905Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsUt",
+    "msg": "updateCallForward :: Ut=com.android.ims.internal.IImsUt$Stub$Proxy, action=3, condition=0, number=[Qb7nW2cY9dLe], serviceClass=0, timeSeconds=0"
+   },
+   {
+    "ts": "2026-10-14T09:41:06.904Z",
+    "last": "2026-10-14T09:41:06.904Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsPhone",
+    "msg": "[0] setCallForwardingOption action=3, reason=0 serviceClass=0"
+   },
+   {
+    "ts": "2026-10-14T09:41:06.903Z",
+    "last": "2026-10-14T09:41:06.903Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsPhoneMmiCode",
+    "msg": "processCode: is CF"
+   },
+   {
+    "ts": "2026-10-14T09:41:06.903Z",
+    "last": "2026-10-14T09:41:06.903Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsPhoneMmiCode",
+    "msg": "processCode: is CF setCallForward"
+   },
+   {
+    "ts": "2026-10-14T09:41:06.902Z",
+    "last": "2026-10-14T09:41:06.902Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsPhone",
+    "msg": "[0] dialInternal: dialing w/ mmi 'ImsPhoneMmiCode {State=PENDING action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}'..."
+   },
+   {
+    "ts": "2026-10-14T09:41:06.840Z",
+    "last": "2026-10-14T09:41:06.840Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "==== vendor status (0) ===="
+   },
+   {
+    "ts": "2026-10-14T09:41:06.812Z",
+    "last": "2026-10-14T09:41:06.812Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-MODEM",
+    "msg": "at-in: ATD*21*123#"
+   }
+  ]
+ }
 }

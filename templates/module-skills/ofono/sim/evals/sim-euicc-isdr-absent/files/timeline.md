@@ -6,6 +6,33 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): src/simfs.c · SIM_IO · GET_SIM_STATUS · GET_SIM_PIN_PUK_RETRIES · SIM_AUTHENTICATION
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
+## 전체 로그 모양 요약 (마스킹 사본 전체, 분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이 스크립트가 셈)
+
+- 범위: 2026-09-22T10:10:19.318Z ~ 2026-09-22T10:10:22.418Z, 줄 26, 모양 19개 중 19개. 기준 시각: 2026-09-22T10:10:20.000Z
+- 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
+
+10:10:19.463 - E simd tid:36 ExampleSim.cpp(32):ExampleChannelOpen > openChannel: Application not found (aid <AID#1>, slot 0)  〔script 모양 1줄〕
+10:10:19.468 - W mgmtd GetEID call error: Failed to get EID path/example_sim.go:12  〔script 모양 1줄〕
+10:10:19.464 - W simd tid:36 ExampleSim.cpp(38):ExampleGetEid > GetEID FAILED  〔script 모양 2줄, 10:10:19.464~10:10:21.460〕
+10:10:21.418 - I simd tid:36 ExampleSim.cpp(44):ExampleChannelOpen > open channel aid <AID#1> (retry)  〔script 모양 1줄, 기준 뒤 첫 등장〕
+10:10:22.418 - I mgmtd ui tick  〔script 모양 1줄, 기준 뒤 첫 등장〕
+10:10:19.462 - I ofonod src/dbus.c:__ofono_error_not_found() m:ExampleOpenChannel i:org.ofono.SimManager  〔script 모양 2줄, 10:10:19.462~10:10:21.459〕
+10:10:19.461 - D ofonod drivers/rilmodem/sim.c:example_open_channel_cb() reply failure: NO_SUCH_ELEMENT  〔script 모양 1줄〕
+10:10:19.460 p0 D ofonod [0,0745]< RIL_REQUEST_SIM_OPEN_CHANNEL failed NO_SUCH_ELEMENT  〔script 모양 2줄, 10:10:19.460~10:10:21.458〕
+10:10:19.459 - I vrild [ExampleIccService_1] open-channel answer: no session, sw1 : 6A, sw2 : 82  〔script 모양 2줄, 10:10:19.459~10:10:21.457〕
+10:10:19.459 - I vrild [IpcCtx_2] OnIpcComplete Request ID=93, result=17 -> chan 2 reply sent, 0 waiters, took 37 ms  〔script 모양 1줄〕
+10:10:19.458 - D vrild mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP Error(VIPC_E_NO_SUCH_ELEMENT) seq=0x08d4 len=12, 35 ms  〔script 모양 2줄, 10:10:19.458~10:10:21.456〕
+10:10:19.423 - D vrild mux [ch1][TX] VIPC_EXAMPLE_CARD_OPEN seq=0x08d4 len=20  〔script 모양 2줄, 10:10:19.423~10:10:21.421〕
+10:10:19.422 - D vrild client fd 9 VCHAN_2 REQUEST: SIM_OPEN_CHANNEL (20 bytes)  〔script 모양 1줄〕
+10:10:19.422 - I vrild [ExampleIccService_1] open-channel start, p2 0x00  〔script 모양 1줄〕
+10:10:19.421 p0 I ofonod [0,0745]> RIL_REQUEST_SIM_OPEN_CHANNEL (AID:<AID#1>) (P2:0)  〔script 모양 2줄, 10:10:19.421~10:10:21.420〕
+10:10:19.420 p0 D ofonod src/sim.c:example_open_channel() /ril_0 aid <AID#1>  〔script 모양 1줄〕
+10:10:19.419 - I simd tid:36 ExampleSim.cpp(26):ExampleChannelOpen > open channel aid <AID#1>  〔script 모양 1줄〕
+10:10:19.418 - I simd tid:36 ExampleSim.cpp(20):ExampleGetEid > GetEID begin  〔script 모양 1줄〕
+10:10:19.318 - I mgmtd GetEID requested from settings path/example_sim.go:36  〔script 모양 1줄〕
+
+## 본 타임라인
+
 10:10:19.318 - I mgmtd GetEID requested from settings path/example_sim.go:36
 10:10:19.418 - I simd tid:36 ExampleSim.cpp(20):ExampleGetEid > GetEID begin
 10:10:19.419 - I simd tid:36 ExampleSim.cpp(26):ExampleChannelOpen > open channel aid <AID#1>

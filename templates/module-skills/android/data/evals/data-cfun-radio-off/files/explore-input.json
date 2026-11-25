@@ -13,5 +13,220 @@
  ],
  "around_alt": [
   "2026-10-14T15:22:40.272Z"
- ]
+ ],
+ "summary": {
+  "ref": "2026-10-14T15:22:40.000Z",
+  "range": [
+   "2026-10-14T15:22:40.118Z",
+   "2026-10-14T15:22:40.333Z"
+  ],
+  "lines": 20,
+  "shapes": 20,
+  "window": [
+   "2026-10-14T15:17:40.000Z",
+   "2026-10-14T15:27:40.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-10-14T15:22:40.118Z",
+    "last": "2026-10-14T15:22:40.118Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-MODEM",
+    "msg": "at-in: AT+CFUN=0",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.226Z",
+    "last": "2026-10-14T15:22:40.226Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-MODEM",
+    "msg": "at-out: AT+CFUN=0",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.231Z",
+    "last": "2026-10-14T15:22:40.231Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "SatelliteController",
+    "msg": "satelliteConfigParser is not ready",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.233Z",
+    "last": "2026-10-14T15:22:40.233Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[UNSL]< UNSOL_DATA_CALL_LIST_UPDATED [SetupDataCallResult{cause: NONE, suggestedRetryTime: 0, cid: 3, active: 0, type: IPV4V6, ifname: rmnet2, addresses: [Link…",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.252Z",
+    "last": "2026-10-14T15:22:40.252Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "DN-7-C",
+    "msg": "ConnectedState: onDataStateChanged: PDN inactive reported by WWAN data service.",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.253Z",
+    "last": "2026-10-14T15:22:40.253Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "DN-7-C",
+    "msg": "DisconnectedState: Data network disconnected. mEverConnected=true",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.266Z",
+    "last": "2026-10-14T15:22:40.266Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.267Z",
+    "last": "2026-10-14T15:22:40.267Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Internet link status changed to INACTIVE",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.268Z",
+    "last": "2026-10-14T15:22:40.268Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onDataNetworkDisconnected: [DataNetwork: DN-7-C, IMS, state=null], cause=NONE(0x0)(0), tearDownReason=NONE",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.268Z",
+    "last": "2026-10-14T15:22:40.268Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "IMS data state changed from CONNECTED to DISCONNECTED.",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.269Z",
+    "last": "2026-10-14T15:22:40.269Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "NRM-C-0",
+    "msg": "onNetworkStateChanged",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.270Z",
+    "last": "2026-10-14T15:22:40.270Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "TNA-7",
+    "msg": "NetworkAgent channel lost",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.271Z",
+    "last": "2026-10-14T15:22:40.271Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "DN-8-C",
+    "msg": "DisconnectedState: All network requests detached.",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.272Z",
+    "last": "2026-10-14T15:22:40.272Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onDataNetworkDisconnected: [DataNetwork: DN-8-C, <APN#1>, state=null], cause=NONE(0x0)(0), tearDownReason=NONE",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.272Z",
+    "last": "2026-10-14T15:22:40.272Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Internet data state changed from CONNECTED to DISCONNECTED.",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.284Z",
+    "last": "2026-10-14T15:22:40.284Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsRegCallbackHelper",
+    "msg": "updateRegistrationState: registration state from REGISTRATION_STATE_REGISTERED to REGISTRATION_STATE_NOT_REGISTERED",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.285Z",
+    "last": "2026-10-14T15:22:40.285Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsPhone",
+    "msg": "[0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 0, null}, suggestedAction=0, disconnecte…",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.331Z",
+    "last": "2026-10-14T15:22:40.331Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "RIL",
+    "msg": "[IpcCtx_0] rx frame unsol id=3",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.332Z",
+    "last": "2026-10-14T15:22:40.332Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-MODEM",
+    "msg": "at-out: OK",
+    "after": true
+   },
+   {
+    "ts": "2026-10-14T15:22:40.333Z",
+    "last": "2026-10-14T15:22:40.333Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-SVC",
+    "msg": "emergencyNumberList indication",
+    "after": true
+   }
+  ]
+ }
 }

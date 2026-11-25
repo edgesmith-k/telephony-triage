@@ -29,5 +29,95 @@
     "main": true
    }
   ]
+ },
+ "summary": {
+  "ref": "2026-09-20T15:30:04.000Z",
+  "range": [
+   "2026-09-20T15:30:00.000Z",
+   "2026-09-20T15:30:04.500Z"
+  ],
+  "lines": 8,
+  "shapes": 8,
+  "window": [
+   "2026-09-20T15:25:04.000Z",
+   "2026-09-20T15:35:04.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-09-20T15:30:04.100Z",
+    "last": "2026-09-20T15:30:04.100Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "ofonod",
+    "msg": "src/gprs.c:pri_activate_callback() Activating context failed with error: Unknown error",
+    "after": true
+   },
+   {
+    "ts": "2026-09-20T15:30:04.120Z",
+    "last": "2026-09-20T15:30:04.120Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "datad",
+    "msg": "activate result: failed profile_id=1 retry in 10s[./src/call_example.cxx +30]",
+    "after": true
+   },
+   {
+    "ts": "2026-09-20T15:30:04.500Z",
+    "last": "2026-09-20T15:30:04.500Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "dbus signal org.ofono.ConnectionContext.PropertyChanged Active=false path/example_dbus.go:84",
+    "after": true
+   },
+   {
+    "ts": "2026-09-20T15:30:01.100Z",
+    "last": "2026-09-20T15:30:01.100Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating"
+   },
+   {
+    "ts": "2026-09-20T15:30:01.050Z",
+    "last": "2026-09-20T15:30:01.050Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "dbus call org.ofono.ConnectionContext.SetProperty Active=true path/example_dbus.go:72"
+   },
+   {
+    "ts": "2026-09-20T15:30:01.000Z",
+    "last": "2026-09-20T15:30:01.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "datad",
+    "msg": "profile select: apn=internet.example auth=NONE profile_id=1[./src/apn_example.cxx +20]"
+   },
+   {
+    "ts": "2026-09-20T15:30:00.300Z",
+    "last": "2026-09-20T15:30:00.300Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "signal strength report: level=2 placeholder"
+   },
+   {
+    "ts": "2026-09-20T15:30:00.000Z",
+    "last": "2026-09-20T15:30:00.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "dbus signal org.ofono.NetworkRegistration.PropertyChanged Strength path/example_dbus.go:96"
+   }
+  ]
  }
 }

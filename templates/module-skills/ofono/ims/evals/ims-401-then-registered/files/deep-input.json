@@ -10,7 +10,12 @@
    "type": "IMS-001",
    "cause": "IMS-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "ims",
+   "evidence": [
+    "09:30:21.305 ofonod: [0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=401",
+    "09:30:21.303 imsd: [SLOT_0][D] 7101 slot0: OEM_UNSOL_IMS_EXAMPLE_REG_FAIL parsed -> [example-code : 401] sid 0"
+   ]
   }
  ],
  "decision": {

@@ -10,7 +10,12 @@
    "type": "SIM-001",
    "cause": "SIM-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "sim",
+   "evidence": [
+    "10:00:21.040 UiccController: Error getting ICC status. RIL_REQUEST_GET_ICC_STATUS should never return an error",
+    "10:00:23.000 UiccController: Broadcasting intent ACTION_SIM_STATE_CHANGED ABSENT reason null for phone: 0 sub: -1"
+   ]
   }
  ],
  "decision": {

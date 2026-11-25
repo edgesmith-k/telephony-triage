@@ -10,7 +10,11 @@
    "type": "IMS-001",
    "cause": "IMS-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "ims",
+   "evidence": [
+    "15:00:15.200 ImsPhone: [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggeste…"
+   ]
   }
  ],
  "decision": {

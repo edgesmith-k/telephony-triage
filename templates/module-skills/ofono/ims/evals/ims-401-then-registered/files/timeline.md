@@ -6,6 +6,36 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): IMS_REQUEST_EXAMPLE_OPER_INFO · IMS_REQUEST_EXAMPLE_APM · IMS_UNSOL_PDN_ACTIVATE · IMS_UNSOL_PDN_DEACTIVATE · IMS_UNSOL_OPERATOR_INFO_QUERY
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
+## 전체 로그 모양 요약 (마스킹 사본 전체, 분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이 스크립트가 셈)
+
+- 범위: 2026-09-22T09:30:20.781Z ~ 2026-09-22T09:30:22.981Z, 줄 24, 모양 22개 중 22개. 기준 시각: 2026-09-22T09:30:20.000Z
+- 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
+
+09:30:20.781 p0 I ofonod [0,0117]> IMS_REQUEST_SET_PDN_INFO  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:20.793 p0 I ofonod [0,0117]< IMS_REQUEST_SET_PDN_INFO  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:20.794 - D ofonod src/ims.c:example_pdn_info_cb() pdn info set  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:20.981 - I mgmtd ui tick  〔script 모양 3줄, 09:30:20.981~09:30:22.981, 기준 뒤 첫 등장〕
+09:30:21.301 - D vrild mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=12  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:21.302 - I vrild [ImsService_1] ims reg ind relayed to client chan 3  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:21.303 - D imsd [SLOT_0][D] 7101 slot0: OEM_UNSOL_IMS_EXAMPLE_REG_FAIL parsed -> [example-code : 401] sid 0  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:21.303 - I imsd [SLOT_0][I] 7102 reg failure reported, fail code: 401  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:21.304 - D imsd [SLOT_0][D] 7103 slot0 -> ofonod: IMS_UNSOL_REG_FAILED (14 bytes)  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:21.305 p0 I ofonod [0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=401  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:21.305 p0 I ofonod src/ims.c:example_reg_fail_notify() /ril_0 fail_code 401  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:21.591 - I imsd [SLOT_0][I] 7104 SIP 401 Unauthorized, register again with credentials  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:22.161 - D vrild mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=28  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:22.162 - D imsd [SLOT_0][D] 7105 slot0: OEM_UNSOL_IMS_EXAMPLE_REGISTRATION parsed -> [state : 1] sid 0  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:22.162 - I imsd [SLOT_0][I] 7106 IMS registration done  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:22.163 - I imsd [SLOT_0][I] 7107 registered:1 [IMS_REG_OK] VoPS:1 RAT:NR  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:22.163 - I vrild [ExampleRegService_1] ims reg state now 1, cache updated  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:22.164 p0 I ofonod [0,UNSOL]< IMS_UNSOL_EXAMPLE_REG_STATE  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:22.165 p0 D ofonod src/ims.c:ofono_ims_status_notify() /ril_0 registered 1  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:22.166 p0 I ofonod [0,UNSOL]< UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:22.167 p0 I ofonod [0,0118]> RIL_REQUEST_DATA_REGISTRATION_STATE  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:22.171 p0 I ofonod [0,0118]< RIL_REQUEST_DATA_REGISTRATION_STATE  〔script 모양 1줄, 기준 뒤 첫 등장〕
+
+## 본 타임라인
+
 09:30:20.781 p0 I ofonod [0,0117]> IMS_REQUEST_SET_PDN_INFO
 09:30:20.793 p0 I ofonod [0,0117]< IMS_REQUEST_SET_PDN_INFO
 09:30:20.794 - D ofonod src/ims.c:example_pdn_info_cb() pdn info set

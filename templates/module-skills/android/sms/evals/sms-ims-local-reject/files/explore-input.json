@@ -51,5 +51,148 @@
     "main": true
    }
   ]
+ },
+ "summary": {
+  "ref": "2026-08-25T14:00:21.000Z",
+  "range": [
+   "2026-08-25T14:00:02.100Z",
+   "2026-08-25T14:00:52.311Z"
+  ],
+  "lines": 24,
+  "shapes": 14,
+  "window": [
+   "2026-08-25T13:55:21.000Z",
+   "2026-08-25T14:05:21.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-08-25T14:00:20.060Z",
+    "last": "2026-08-25T14:00:20.060Z",
+    "n": 1,
+    "phone": 0,
+    "level": "E",
+    "tag": "ImsSmsDispatcher [0]",
+    "msg": "sendSms failed. Falling back to PSTN. Error: null"
+   },
+   {
+    "ts": "2026-08-25T14:00:20.050Z",
+    "last": "2026-08-25T14:00:20.050Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "VRIL-IMS",
+    "msg": "[sms] send rejected: SMS over IMS feature off"
+   },
+   {
+    "ts": "2026-08-25T14:00:05.121Z",
+    "last": "2026-08-25T14:00:52.011Z",
+    "n": 5,
+    "phone": null,
+    "level": "E",
+    "tag": "VRIL",
+    "msg": "reply to client token 305"
+   },
+   {
+    "ts": "2026-08-25T14:00:21.001Z",
+    "last": "2026-08-25T14:00:52.311Z",
+    "n": 4,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][RX] <HEXDUMP 16B>",
+    "after": true
+   },
+   {
+    "ts": "2026-08-25T14:00:24.100Z",
+    "last": "2026-08-25T14:00:24.100Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0702]< SEND_SMS [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-08-25T14:00:20.104Z",
+    "last": "2026-08-25T14:00:20.104Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-SVC",
+    "msg": "RadioMessagingProxy::sendSms: serial 702"
+   },
+   {
+    "ts": "2026-08-25T14:00:20.100Z",
+    "last": "2026-08-25T14:00:20.100Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0702]> SEND_SMS [PHONE0]"
+   },
+   {
+    "ts": "2026-08-25T14:00:20.010Z",
+    "last": "2026-08-25T14:00:20.010Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ImsSmsDispatcher [0]",
+    "msg": "sendSms: token=7 format=3gpp"
+   },
+   {
+    "ts": "2026-08-25T14:00:20.000Z",
+    "last": "2026-08-25T14:00:20.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "SmsDispatchersController",
+    "msg": "sendText: dest=<MSISDN#1> parts=1 [PHONE0]"
+   },
+   {
+    "ts": "2026-08-25T14:00:06.128Z",
+    "last": "2026-08-25T14:00:51.611Z",
+    "n": 4,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "route rsp type=0001 id=0x0703 svc=5 msg=4009"
+   },
+   {
+    "ts": "2026-08-25T14:00:07.135Z",
+    "last": "2026-08-25T14:00:07.135Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0305]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]"
+   },
+   {
+    "ts": "2026-08-25T14:00:04.114Z",
+    "last": "2026-08-25T14:00:04.114Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0205 len=12"
+   },
+   {
+    "ts": "2026-08-25T14:00:03.107Z",
+    "last": "2026-08-25T14:00:03.107Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][TX] <unknown ipc>, REQ seq=0x0205 len=12"
+   },
+   {
+    "ts": "2026-08-25T14:00:02.100Z",
+    "last": "2026-08-25T14:00:02.100Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0305]> NOTIFY_IMS_DATA_NETWORK [PHONE0]"
+   }
+  ]
  }
 }

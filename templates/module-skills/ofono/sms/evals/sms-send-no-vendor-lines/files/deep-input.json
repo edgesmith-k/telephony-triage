@@ -10,7 +10,11 @@
    "type": "SMS-001",
    "cause": "SMS-001-01",
    "score": 1.0,
-   "confidence": "high"
+   "confidence": "high",
+   "category": "sms",
+   "evidence": [
+    "10:20:05.610 ofonod: [0,0412]< RIL_REQUEST_SEND_SMS failed GENERIC_FAILURE"
+   ]
   }
  ],
  "decision": {

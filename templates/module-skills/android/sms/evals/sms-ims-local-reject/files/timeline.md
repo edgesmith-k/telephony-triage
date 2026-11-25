@@ -6,6 +6,28 @@
 - 미수집(modules.yaml 이름 중 이 로그에 없음): GSM_SET_BROADCAST_CONFIG · GSM_BROADCAST_ACTIVATION · IMS_SEND_SMS · SMS_ACKNOWLEDGE · UNSOL_RESPONSE_NEW_SMS
 - 형식: 시각(UTC) 슬롯 레벨 태그 메시지 ⇒ 이벤트(필드). 〔script: …〕는 스크립트 메모이며 근거가 아니다.
 
+## 전체 로그 모양 요약 (마스킹 사본 전체, 분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이 스크립트가 셈)
+
+- 범위: 2026-08-25T14:00:02.100Z ~ 2026-08-25T14:00:52.311Z, 줄 24, 모양 14개 중 14개. 기준 시각: 2026-08-25T14:00:21.000Z
+- 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
+
+14:00:20.060 p0 E ImsSmsDispatcher [0] sendSms failed. Falling back to PSTN. Error: null  〔script 모양 1줄〕
+14:00:20.050 - E VRIL-IMS [sms] send rejected: SMS over IMS feature off  〔script 모양 1줄〕
+14:00:05.121 - E VRIL reply to client token 305  〔script 모양 5줄, 14:00:05.121~14:00:52.011〕
+14:00:21.001 - V RIL ipc[0][RX] <HEXDUMP 16B>  〔script 모양 4줄, 14:00:21.001~14:00:52.311, 기준 뒤 첫 등장〕
+14:00:24.100 p0 D RILJ [0702]< SEND_SMS [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+14:00:20.104 - D VRIL-SVC RadioMessagingProxy::sendSms: serial 702  〔script 모양 1줄〕
+14:00:20.100 p0 D RILJ [0702]> SEND_SMS [PHONE0]  〔script 모양 1줄〕
+14:00:20.010 p0 D ImsSmsDispatcher [0] sendSms: token=7 format=3gpp  〔script 모양 1줄〕
+14:00:20.000 p0 I SmsDispatchersController sendText: dest=<MSISDN#1> parts=1 [PHONE0]  〔script 모양 1줄〕
+14:00:06.128 - V RIL route rsp type=0001 id=0x0703 svc=5 msg=4009  〔script 모양 4줄, 14:00:06.128~14:00:51.611〕
+14:00:07.135 p0 D RILJ [0305]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]  〔script 모양 1줄〕
+14:00:04.114 - V RIL ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0205 len=12  〔script 모양 1줄〕
+14:00:03.107 - V RIL ipc[0][TX] <unknown ipc>, REQ seq=0x0205 len=12  〔script 모양 1줄〕
+14:00:02.100 p0 D RILJ [0305]> NOTIFY_IMS_DATA_NETWORK [PHONE0]  〔script 모양 1줄〕
+
+## 본 타임라인
+
 14:00:04.114 - V RIL ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0205 len=12
 14:00:20.000 p0 I SmsDispatchersController sendText: dest=<MSISDN#1> parts=1 [PHONE0]
 14:00:20.010 p0 D ImsSmsDispatcher [0] sendSms: token=7 format=3gpp

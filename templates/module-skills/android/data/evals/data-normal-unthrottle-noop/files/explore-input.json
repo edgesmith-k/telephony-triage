@@ -11,5 +11,39 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "summary": {
+  "ref": "2026-11-20T12:00:00.000Z",
+  "range": [
+   "2026-11-20T11:59:59.900Z",
+   "2026-11-20T12:00:30.200Z"
+  ],
+  "lines": 3,
+  "shapes": 2,
+  "window": [
+   "2026-11-20T11:55:00.000Z",
+   "2026-11-20T12:05:00.000Z"
+  ],
+  "groups": [
+   {
+    "ts": "2026-11-20T12:00:00.200Z",
+    "last": "2026-11-20T12:00:30.200Z",
+    "n": 2,
+    "phone": 0,
+    "level": "D",
+    "tag": "DRM-0",
+    "msg": "onDataProfileUnthrottled: Nothing to unthrottle.",
+    "after": true
+   },
+   {
+    "ts": "2026-11-20T11:59:59.900Z",
+    "last": "2026-11-20T11:59:59.900Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Internet data state changed from DISCONNECTED to CONNECTED."
+   }
+  ]
+ }
 }

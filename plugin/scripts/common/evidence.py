@@ -1,7 +1,8 @@
 """근거 원문 검사(grounding)와 출력 칸 읽기 — `module_eval`(C0 채점)과 `triage.py check-output`(B2 §6)이 같이 쓴다.
 
 `module_eval.py`에서 옮겼다(동작 그대로). `module_eval`은 같은 이름을 다시 내보낸다.
-- `parse_fields`: 고정 칸(심층 6칸 `FIELDS_DEEP`, 설치 스킬 4칸 `FIELDS_SKILL`)을 순서대로 읽는다.
+- `parse_fields`: 고정 칸(심층 6칸 `FIELDS_DEEP`, 설치 스킬 4칸 `FIELDS_SKILL`)을 순서대로 읽는다. 심층 다섯째 칸 `후보 확인:`(후보마다
+  `- <원인 ID>: 맞음|아님|모름 — <근거>`)은 옛 한 줄 `분석 스킬 의견:`(사내 모듈 레포 옛 형식)도 받는다 — 둘 다 `분석 스킬 의견` 값을 낸다.
 - `parse_explore`: 탐색 출력(`가설 n:` 블록 1~3개, 또는 `가설 없음:`).
 - `source_text`·`event_rows_text`: 검사 원문(타임라인 행 문법 줄만, events.json 전체 행).
 - `evidence_check`·`check_quotes`: 인용이 원문에 있는지(ok | weak | fabricated).
@@ -12,9 +13,13 @@ from __future__ import annotations
 import difflib
 import re
 
-from .fixtures import CAUSE_ID
+from .fixtures import CAUSE_ID, TYPE_ID
 
-FIELDS_DEEP = ("원인 층", "원인 데몬", "근거", "반대 근거", "분석 스킬 의견", "규칙 제안")
+FIELDS_DEEP = ("원인 층", "원인 데몬", "근거", "반대 근거", "후보 확인", "규칙 제안")
+CHECK_FIELD, OPINION_FIELD = "후보 확인", "분석 스킬 의견"
+# `- DATA-001-01: 맞음 — <근거>`(백틱·굵게·괄호로 감싸도, 원인 미확인 후보는 유형 ID). 판정 뒤 설명은 대시·쌍점 뒤 전부
+CHECK_ITEM_RX = re.compile(r"^[`*\[(<]*(" + TYPE_ID + r"(?:-\d{2})?)(?!\d)[`*\])>]*\s*[:：]?\s*\**\s*(맞음|아님|모름)\**"
+                           r"(?=$|[\s—–:,.(])\s*(?:[—–:-]\s*)?(.*)$")
 FIELDS_SKILL = ("요약", "근거", "분석 스킬 의견", "규칙 제안")
 LIST_FIELDS = ("근거", "규칙 제안")
 EXPLORE_FIELDS = ("가설", "로그로 확인", "코드로 추정", "반대 근거", "다음 확인")
@@ -90,6 +95,7 @@ def _label_rx(name: str) -> re.Pattern:
 
 
 LABEL_RX = {f: _label_rx(f) for f in dict.fromkeys(FIELDS_DEEP + FIELDS_SKILL)}
+LABEL_RX[CHECK_FIELD] = re.compile(r"^\s*(?:[-*]\s*)?\**\s*(?:후보\s*확인|분석\s*스킬\s*의견)\s*\**\s*[:：]\s*\**\s*(.*)$")
 # `### 가설 1:`·`가설 1 (추정):`·`**가설 1:**`도 머리로 읽는다(모듈 eval 파서와 같은 허용 — 코덱스 리뷰 F4: 두 파서가 달랐다)
 HYP_RX = re.compile(r"^\s*(?:#{1,6}\s*)?(?:[-*]\s*)?\**\s*가설\s*#?(\d+)?\s*(?:\([^)\n]{0,20}\))?\s*\**\s*[:：]\s*\**\s*(.*)$")
 NONE_RX = _label_rx("가설 없음")
@@ -169,7 +175,11 @@ def _parse(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> tuple[dict | Non
     rule_block = None
     for f, i in zip(fields, idx):
         rest = rx[f].match(lines[i]).group(1).strip()
-        if f in LIST_FIELDS:
+        if f == CHECK_FIELD and fields is FIELDS_DEEP:
+            end = next((j for j in label_lines if j > i), len(lines))
+            out[f] = _checks([im.group(1).strip() for line in lines[i + 1:end] if (im := ITEM_RX.match(line))])
+            out[OPINION_FIELD] = _opinion(out[f]) if out[f] else rest
+        elif f in LIST_FIELDS:
             end = next((j for j in label_lines if j > i), len(lines)) if f == "근거" else len(lines)
             block = [rest, *lines[i + 1:end]]
             out[f] = [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
@@ -179,6 +189,25 @@ def _parse(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> tuple[dict | Non
         else:
             out[f] = rest
     return out, lines, rule_block
+
+
+def _checks(items: list[str]) -> list[dict]:
+    """`후보 확인` 목록 줄 → [{cause, verdict, why}] (읽지 못한 줄은 뺀다)."""
+    out = []
+    for item in items:
+        m = CHECK_ITEM_RX.match(item)
+        if m:
+            out.append({"cause": m.group(1), "verdict": m.group(2), "why": m.group(3).strip()})
+    return out
+
+
+def _opinion(checks: list[dict]) -> str:
+    """후보 확인 → 옛 `분석 스킬 의견` 값: 첫 `맞음` 후보 `<ID> — <근거>`(check-output이 채택 원인과 다르면 counter로 남긴다),
+    맞음이 없으면 `맞는 후보 없음 — <ID 판정; …>`(ID로 시작하지 않는다)."""
+    hit = next((c for c in checks if c["verdict"] == "맞음"), None)
+    if hit:
+        return f"{hit['cause']} — {hit['why']}".rstrip(" —")
+    return "맞는 후보 없음 — " + "; ".join(f"{c['cause']} {c['verdict']}" for c in checks)
 
 
 RULE_NONE_RX = re.compile(r"^[\s*`]*(?:해당\s*)?없음")     # `없음`·`해당 없음`(뒤 설명 무엇이든) = 제안 아님

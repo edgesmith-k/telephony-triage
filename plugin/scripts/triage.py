@@ -56,6 +56,8 @@
 - `triage.py window <KEY> --at <시각> [--lines N] [--span 초] [--tag T …] [--slot N] [--cat C] [--grep RX] [--out <dir>]`: 탐색·심층 분석을
   시작한 뒤 타임라인에 없는 줄이 필요할 때 마스킹 사본(`JOB/logs-masked/`)에서 그 시각 둘레 줄(기본 모든 태그·40줄, 상한 200줄)을 타임라인 줄 모양으로 `JOB/window-<n>.md`에 쓰고
   `JOB/windows.json`(스크립트만 쓴다)에 남긴다. check-output이 sha가 맞는 구간을 근거 원문에 더한다(`triagelib/window.py`, 작업당 6개).
+- `triage.py summary <KEY> [--out <dir>]`: 마스킹 사본 전체의 줄 모양 요약(F·예외·E·W, 기준 시각 뒤 처음 나온 모양 먼저)을 출력하고
+  `JOB/summary.md`·sha 기록 `JOB/summary.json`(스크립트만 쓴다)에 남긴다. 탐색·심층 타임라인 머리에도 같은 절이 붙는다(`triagelib/summary.py`).
 - 읽지 않는 파일: `events.json`(파서 출력), `match.json`(매처 출력, `parse_logcat cut --evidence` 입력),
   `issue.json`(마스킹된 Jira 추출 전체 — 코멘트 원문이 필요할 때만 읽는다), `issue_meta.json`, `triage-state.json`, `analysis-cache.json`.
 
@@ -220,6 +222,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cat", metavar="카테고리", help="tags.yaml에서 이 카테고리로 매핑된 태그 줄만")
     p.add_argument("--grep", metavar="정규식", help="가린 사본의 `태그: 메시지`에 맞는 줄만(≤200자, 시간 상한). --span이 없으면 분석 범위 안에서만 찾는다")
     p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
+    p = sub.add_parser("summary", parents=[common])
+    p.add_argument("key", metavar="KEY")
+    p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
     p = sub.add_parser("release", parents=[common])
     p.add_argument("key", metavar="KEY")
     return parser
@@ -319,6 +324,17 @@ def _anomaly(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, ite
     return found if found and found["rows"] else None
 
 
+def _summary(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict) -> dict | None:
+    """전체 로그 모양 요약 재료(`summary.groups`, 기준 시각은 이상 줄 절과 같다). 만들지 못하면 None(경고 한 줄)."""
+    from triagelib import summary
+    try:
+        analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return summary.safe(job, events, analysis if isinstance(analysis, dict) else {}, defaults, summary.ref_of(spec),
+                        summary.cap_of(cfg))
+
+
 def _explore(args, cfg: dict, job: Path, defaults: dict) -> int:
     input_path, events_path = job / EXPLORE_INPUT_FILE, job / "events.json"
     if not input_path.is_file():
@@ -338,16 +354,16 @@ def _explore(args, cfg: dict, job: Path, defaults: dict) -> int:
         return USAGE
     items, total = select_rows(merge_rows(events), spec.get("around"), limit)
     kept = len(items)
-    # 이상 줄 절(표시 전용)은 explore-input.json `anomaly`에 남긴다 — `module`의 재계산(E1)·모듈 보기가 같은 줄을 쓴다
-    found = _anomaly(job, cfg, defaults, spec, events, items)
-    if found != spec.get("anomaly"):
-        spec = {k: v for k, v in spec.items() if k != "anomaly"}
-        if found:
-            spec["anomaly"] = found
+    # 이상 줄 절·전체 모양 요약(표시 전용)은 explore-input.json `anomaly`·`summary`에 남긴다 — `module`의 재계산(E1)·모듈 보기가
+    # 같은 줄을 쓴다
+    found = {"anomaly": _anomaly(job, cfg, defaults, spec, events, items), "summary": _summary(job, cfg, defaults, spec, events)}
+    if any(found[k] != spec.get(k) for k in found):
+        spec = {k: v for k, v in spec.items() if k not in found}
+        spec.update({k: v for k, v in found.items() if v})
         input_path.write_text(json.dumps(spec, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
     text = render_timeline(args.key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
                            spec.get("anchor"), spec.get("look_at"), head_notes(job, events, spec.get("around")),
-                           spec.get("anomaly"))
+                           spec.get("anomaly"), spec.get("summary"))
     # 마스킹 전 JOB이어도 남은 값은 가린다(B2-25). 마스킹 끔 DB의 events(`mask_off`)면 가리지 않는다(08-safety §8)
     text, redacted = (text, {}) if events.get("mask_off") else masking.redact(text, events.get("mask_allow") or [])
     (job / TIMELINE_FILE).write_text(text, encoding="utf-8", newline="\n")
@@ -433,7 +449,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args.platform_name, args.platform_cfg = platform_session.resolve(defaults, args.platform)
     except (platforms.PlatformConfigError, yamlio.YamlFileError) as exc:
-        if args.cmd in ("module", "check-output", "problem", "window"):       # 늘 JSON 한 줄(B1 §4.2)
+        if args.cmd in ("module", "check-output", "problem", "window", "summary"):       # 늘 JSON 한 줄(B1 §4.2)
             _emit({"reason": "설정 오류"})
         print(str(exc), file=sys.stderr)
         return USAGE
@@ -449,6 +465,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "window":
         from triagelib import window
         return window.cmd_window(args, defaults)
+    if args.cmd == "summary":
+        from triagelib import summary
+        return summary.cmd_summary(args, defaults)
     if args.cmd == "release":
         return cmd_release(args, defaults)
     if args.cmd == "explore":
