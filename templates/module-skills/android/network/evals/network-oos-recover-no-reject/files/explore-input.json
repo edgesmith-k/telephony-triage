@@ -11,5 +11,40 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-11-10T23:14:00.000Z",
+   "2026-11-10T23:29:00.000Z"
+  ],
+  "ref": "2026-11-10T23:19:00.000Z",
+  "after_sec": 600,
+  "candidates": 4,
+  "rows": [
+   {
+    "ts": "2026-11-10T23:18:28.626Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "handlePollStateResult exception java.lang.IllegalStateException: Service not connected.",
+    "fold": {
+     "n": 1,
+     "first": "2026-11-10T23:18:28.626Z",
+     "last": "2026-11-10T23:19:34.723Z"
+    }
+   },
+   {
+    "ts": "2026-11-10T23:18:28.626Z",
+    "phone": 0,
+    "level": "E",
+    "tag": "SST-0",
+    "msg": "handlePollStateResult: RIL returned an error where it must succeed: java.lang.IllegalStateException: Service not connected.",
+    "fold": {
+     "n": 1,
+     "first": "2026-11-10T23:18:28.626Z",
+     "last": "2026-11-10T23:19:34.723Z"
+    }
+   }
+  ]
+ }
 }

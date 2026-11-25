@@ -2,5 +2,32 @@
  "around": "2026-09-20T15:30:04.000Z",
  "failed_step": null,
  "limit": 200,
- "anchor": null
+ "anchor": null,
+ "anomaly": {
+  "range": [
+   "2026-09-20T15:25:04.000Z",
+   "2026-09-20T15:40:04.000Z"
+  ],
+  "ref": "2026-09-20T15:30:04.000Z",
+  "after_sec": 600,
+  "candidates": 2,
+  "rows": [
+   {
+    "ts": "2026-09-20T15:30:04.100Z",
+    "phone": null,
+    "level": "E",
+    "tag": "ofonod",
+    "msg": "src/gprs.c:pri_activate_callback() Activating context failed with error: Unknown error",
+    "main": true
+   },
+   {
+    "ts": "2026-09-20T15:30:04.120Z",
+    "phone": null,
+    "level": "W",
+    "tag": "datad",
+    "msg": "activate result: failed profile_id=1 retry in 10s[./src/call_example.cxx +30]",
+    "main": true
+   }
+  ]
+ }
 }

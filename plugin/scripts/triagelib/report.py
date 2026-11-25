@@ -372,29 +372,40 @@ def render_timeline(key: str, events: dict, items: list[dict], total: int, aroun
 
 
 def shown_keys(items: list[dict]) -> set:
-    """본 타임라인 줄의 (시각, 태그, 메시지) — 이상 줄 절(`window.anomaly`)이 같은 줄을 다시 싣지 않게."""
+    """본 타임라인 줄의 (시각, 태그, 메시지) — 이상 줄 절(`window.anomaly`)이 그 줄에 `main`을 붙인다."""
     return {(r.get("ts"), r.get("tag"), " ".join(str(r.get("msg") or "").split())) for r in items}
 
 
-def anomaly_lines(anomaly: dict | None) -> list[str]:
-    """탐색 타임라인 끝의 이상 줄 절(`explore-input.json` `anomaly` = `window.anomaly` 결과, 표시 전용). 고른 줄이 없으면 []."""
-    rows = (anomaly.get("rows") if isinstance(anomaly, dict) else None) or []
-    rows = [{k: r.get(k) for k in ("ts", "phone", "level", "tag", "msg", "fold")} for r in rows if isinstance(r, dict)]
+def _anomaly_row(r: dict) -> dict:
+    fold = r.get("fold")
+    ok = isinstance(fold, dict) and all(k in fold for k in ("n", "first", "last"))
+    return {"ts": r.get("ts"), "phone": r.get("phone"), "level": r.get("level"), "tag": r.get("tag"), "msg": r.get("msg"),
+            "marks": [], **({"fold": fold} if ok else {})}
+
+
+def anomaly_lines(anomaly: dict | None, skip_main: bool = True) -> list[str]:
+    """탐색 타임라인 끝의 이상 줄 절(`explore-input.json` `anomaly` = `window.anomaly` 결과, 표시 전용). 고른 줄이 없으면 [].
+    `skip_main`(JOB/timeline.md)이면 본 타임라인에 이미 있는 줄(`main`)을 뺀다. 모듈 보기(`with_anomaly`)는 모두 싣는다.
+    손상된 `anomaly`(키·원소 없음)도 예외 없이 읽는다(E1 재계산이 바이트 불일치로 안내한다)."""
+    anomaly = anomaly if isinstance(anomaly, dict) else {}
+    rows = [r for r in anomaly.get("rows") or [] if isinstance(r, dict) and not (skip_main and r.get("main"))]
     if not rows:
         return []
-    lo, hi = (anomaly.get("range") or [None, None])[:2]
-    more = (f" (분석 구간 끝과 기준 시각 {anomaly['ref']} 뒤 {anomaly['after_sec']}초 중 늦은 쪽까지)"
+    rng = anomaly.get("range")
+    lo, hi = (rng[0], rng[1]) if isinstance(rng, list) and len(rng) == 2 else (None, None)
+    more = (f" (분석 구간 끝과 기준 시각 {anomaly['ref']} 뒤 {anomaly.get('after_sec')}초 중 늦은 쪽까지)"
             if anomaly.get("ref") and lo and hi else "")
-    return ["", "## 이상 줄: W/E/F 레벨과 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름)", "",
-            f"- 범위: {lo or '로그 처음'} ~ {hi or '로그 끝'}{more}. 위 타임라인에 이미 있는 줄은 뺐다.",
+    return ["", "## 이상 줄: W/E/F 레벨과 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 빠짐)", "",
+            f"- 범위: {lo or '로그 처음'} ~ {hi or '로그 끝'}{more}."
+            + (" 위 타임라인에 이미 있는 줄은 뺐다(예외 머리와 프레임은 남김)." if skip_main else ""),
             f"- 줄: {len(rows)}. 프레임을 뺀 후보 {anomaly.get('candidates', len(rows))}줄에서 F, 예외·crash 머리, E, W 순으로, 같은 등급은 "
             "기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다", "",
-            *[row_line({**r, "marks": []}) + _fold_note(r, "비슷한") for r in rows]]
+            *[row_line(x) + _fold_note(x, "비슷한") for x in map(_anomaly_row, rows)]]
 
 
 def with_anomaly(text: str, anomaly: dict | None) -> str:
-    """모듈 보기(탐색) 글 끝에 같은 이상 줄 절을 붙인다(줄이 없으면 그대로)."""
-    lines = anomaly_lines(anomaly)
+    """모듈 보기(탐색) 글 끝에 같은 이상 줄 절을 붙인다 — 본 줄을 다 싣지 않는 보기라 `main` 줄도 싣는다(줄이 없으면 그대로)."""
+    lines = anomaly_lines(anomaly, skip_main=False)
     return text.rstrip("\n") + "\n" + "\n".join(lines) + "\n" if lines else text
 
 

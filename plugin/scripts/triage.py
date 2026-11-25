@@ -309,9 +309,13 @@ def _anomaly(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, ite
     except (OSError, ValueError):
         return None
     ref = (spec.get("anchor") or {}).get("fail") or (spec.get("look_at") or {}).get("ts") or spec.get("around")
-    found = window.anomaly(job, events, analysis if isinstance(analysis, dict) else {}, defaults, ref,
-                           _int_setting(cfg, "explore.after_sec", 600, 3600),
-                           _int_setting(cfg, "explore.anomaly_max_lines", 80, 400), shown_keys(items))
+    try:      # 표시 전용 — 사본 읽기·고르기가 실패해도 탐색 타임라인은 지금처럼 만든다
+        found = window.anomaly(job, events, analysis if isinstance(analysis, dict) else {}, defaults, ref,
+                               _int_setting(cfg, "explore.after_sec", 600, 3600),
+                               _int_setting(cfg, "explore.anomaly_max_lines", 80, 400), shown_keys(items))
+    except Exception as exc:  # noqa: BLE001
+        print(f"경고: 이상 줄 절을 만들지 못해 뺐다({type(exc).__name__})", file=sys.stderr)
+        return None
     return found if found and found["rows"] else None
 
 

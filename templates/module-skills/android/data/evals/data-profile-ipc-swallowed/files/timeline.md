@@ -22,3 +22,11 @@
 07:05:12.437 - E RIL waitlist miss seq 0x0d31
 07:05:12.471 - V RIL ipc[0][RX] VIPC_EXAMPLE_PROFILE, RSP Error(VIPC_E_FAILURE) seq=0x0d32 len=12  ⇒ builtin.common.vendor_ipc_error(error=VIPC_E_FAILURE,ipc=VIPC_EXAMPLE_PROFILE)
 07:05:12.472 - E RIL waitlist miss seq 0x0d32
+
+## 이상 줄: W/E/F 레벨과 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 빠짐)
+
+- 범위: 2026-10-15T07:00:12.000Z ~ 2026-10-15T07:15:12.000Z (분석 구간 끝과 기준 시각 2026-10-15T07:05:12.000Z 뒤 600초 중 늦은 쪽까지).
+- 줄: 2. 프레임을 뺀 후보 3줄에서 F, 예외·crash 머리, E, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+
+07:05:12.410 - E VRIL reply to client token 418
+07:05:12.437 - E RIL waitlist miss seq 0x0d31  〔script 비슷한 줄 1번 더 접음(07:05:12.437~07:05:12.472)〕

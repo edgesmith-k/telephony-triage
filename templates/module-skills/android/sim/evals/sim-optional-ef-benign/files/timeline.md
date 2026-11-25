@@ -22,3 +22,12 @@
 08:30:15.934 - E SIMRecords [SIMRecords-0] Exception in fetching EF_CSP data com.android.internal.telephony.CommandException: GENERIC_FAILURE
 08:30:15.937 - D VRIL-SVC RadioSimProxy::iccTransmitApduLogicalChannel
 08:30:18.218 - D UiccController Broadcasting intent ACTION_SIM_STATE_CHANGED LOADED reason null for phone: 0 sub: 2  ⇒ sim_state_changed(state=LOADED)
+
+## 이상 줄: W/E/F 레벨과 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 빠짐)
+
+- 범위: 2026-10-16T08:25:14.000Z ~ 2026-10-16T08:40:14.000Z (분석 구간 끝과 기준 시각 2026-10-16T08:30:14.000Z 뒤 600초 중 늦은 쪽까지).
+- 줄: 3. 프레임을 뺀 후보 3줄에서 F, 예외·crash 머리, E, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+
+08:30:14.764 - D RilRequest [0233]< SIM_IO error: com.android.internal.telephony.CommandException: GENERIC_FAILURE
+08:30:14.766 - E UsimFH exception caught from EVENT_GET_RECORD_SIZE
+08:30:15.934 - E SIMRecords [SIMRecords-0] Exception in fetching EF_CSP data com.android.internal.telephony.CommandException: GENERIC_FAILURE

@@ -2,5 +2,40 @@
  "around": "2026-09-22T10:20:20.000Z",
  "failed_step": null,
  "limit": 200,
- "anchor": null
+ "anchor": null,
+ "anomaly": {
+  "range": [
+   "2026-09-22T10:15:20.000Z",
+   "2026-09-22T10:30:20.000Z"
+  ],
+  "ref": "2026-09-22T10:20:20.000Z",
+  "after_sec": 600,
+  "candidates": 3,
+  "rows": [
+   {
+    "ts": "2026-09-22T10:20:18.185Z",
+    "phone": null,
+    "level": "E",
+    "tag": "simd",
+    "msg": "tid:9 ExampleSim.cpp(62):ExampleChannelOpen > open channel failed: Operation already in progress",
+    "main": true
+   },
+   {
+    "ts": "2026-09-22T10:20:18.186Z",
+    "phone": null,
+    "level": "W",
+    "tag": "simd",
+    "msg": "tid:9 ExampleSim.cpp(68):ExampleGetEid > GetEID failed: ExampleEuiccNoResponse (eUICC example timeout)",
+    "main": true
+   },
+   {
+    "ts": "2026-09-22T10:20:18.188Z",
+    "phone": null,
+    "level": "W",
+    "tag": "mgmtd",
+    "msg": "GetEID call error: eUICC example timeout path/example_sim.go:24",
+    "main": true
+   }
+  ]
+ }
 }

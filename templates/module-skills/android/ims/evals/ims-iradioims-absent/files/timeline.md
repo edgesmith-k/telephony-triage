@@ -16,10 +16,13 @@
 11:47:23.072 - D ImsPhone [0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN  ⇒ ims_registered(transport=WWAN)
 11:47:23.140 p0 E RILJ Unable to complete updateImsRegistrationInfo because service IMS is not available. [PHONE0]
 
-## 이상 줄: W/E/F 레벨과 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름)
+## 이상 줄: W/E/F 레벨과 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 빠짐)
 
-- 범위: 2026-10-15T11:42:23.000Z ~ 2026-10-15T11:57:23.000Z (분석 구간 끝과 기준 시각 2026-10-15T11:47:23.000Z 뒤 600초 중 늦은 쪽까지). 위 타임라인에 이미 있는 줄은 뺐다.
-- 줄: 2. 프레임을 뺀 후보 2줄에서 F, 예외·crash 머리, E, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+- 범위: 2026-10-15T11:42:23.000Z ~ 2026-10-15T11:57:23.000Z (분석 구간 끝과 기준 시각 2026-10-15T11:47:23.000Z 뒤 600초 중 늦은 쪽까지).
+- 줄: 5. 프레임을 뺀 후보 5줄에서 F, 예외·crash 머리, E, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
 
 11:46:02.114 - W Telephony registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
 11:46:02.115 - W Telephony registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1
+11:46:05.631 p0 E RILJ Unable to complete updateAllowedImsServices because service IMS is not available. [PHONE0]
+11:47:20.411 - D RilRequest [0527]< NOTIFY_IMS_DATA_NETWORK error: com.android.internal.telephony.CommandException: REQUEST_NOT_SUPPORTED
+11:47:23.140 p0 E RILJ Unable to complete updateImsRegistrationInfo because service IMS is not available. [PHONE0]

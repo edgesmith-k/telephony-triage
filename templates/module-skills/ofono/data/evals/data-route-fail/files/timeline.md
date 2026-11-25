@@ -16,3 +16,12 @@
 15:20:01.724 - I datad2 netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002
 15:20:01.726 - I datad2 default route not installed for rmnet0
 15:20:06.000 - W datad connectivity check failed profile_id=1[./src/check_example.cxx +40]
+
+## 이상 줄: W/E/F 레벨과 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 빠짐)
+
+- 범위: 2026-09-20T15:15:06.000Z ~ 2026-09-20T15:30:06.000Z (분석 구간 끝과 기준 시각 2026-09-20T15:20:06.000Z 뒤 600초 중 늦은 쪽까지).
+- 줄: 3. 프레임을 뺀 후보 3줄에서 F, 예외·crash 머리, E, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+
+15:20:01.724 - E datad2 netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002
+15:20:01.726 - W datad2 default route not installed for rmnet0
+15:20:06.000 - W datad connectivity check failed profile_id=1[./src/check_example.cxx +40]

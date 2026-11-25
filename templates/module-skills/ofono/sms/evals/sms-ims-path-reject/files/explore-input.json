@@ -2,5 +2,32 @@
  "around": "2026-09-21T10:30:05.000Z",
  "failed_step": null,
  "limit": 200,
- "anchor": null
+ "anchor": null,
+ "anomaly": {
+  "range": [
+   "2026-09-21T10:25:05.000Z",
+   "2026-09-21T10:40:05.000Z"
+  ],
+  "ref": "2026-09-21T10:30:05.000Z",
+  "after_sec": 600,
+  "candidates": 2,
+  "rows": [
+   {
+    "ts": "2026-09-21T10:30:05.011Z",
+    "phone": null,
+    "level": "E",
+    "tag": "imsd",
+    "msg": "[SLOT_0][E] 4103 [ExampleImsSmsSender::sendSms] failed to build SMS-SUBMIT ref=1",
+    "main": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.018Z",
+    "phone": null,
+    "level": "W",
+    "tag": "mgmtd",
+    "msg": "sms send error: Operation failed path/example_sms.go:12",
+    "main": true
+   }
+  ]
+ }
 }

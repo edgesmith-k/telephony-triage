@@ -11,7 +11,7 @@
   `coverage`)에서 그 시각이 범위 안에 드는 날 — 자정을 넘는 범위면 드는 날이 하나일 때만, 없거나 여럿이면 사용 오류. 오프셋 있는 ISO와
   logcat 스탬프는 `--answer time=`과 같은 변환(`logtime.normalize_ts`, 스탬프는 run의 `--tz`·`--year`). 오프셋 없는 ISO는 사용
   오류(로그 시간대를 짐작하지 않는다). 시계 차(`--clock-offset`)는 시험 장비 시각에만 쓰므로 쓰지 않는다. `--span 초`면 `--at` ±초/2 안의 줄만(줄·바이트 상한 그대로,
-  `--lines`와 함께면 둘 다 — 적은 쪽. 구간 안 줄이 상한보다 많으면 가까운 순 대신 `rank` 순·태그당 먼저 `SPAN_TAG_MAX`줄). 거르기(좁히기만): `--tag`, `--slot N`(슬롯 모름 줄은 남긴다), `--cat`(tags.yaml 그 카테고리 태그),
+  `--lines`와 함께면 둘 다 — 적은 쪽. 구간 안 줄이 상한보다 많으면 가까운 순 대신 `ranked` 순). 거르기(좁히기만): `--tag`, `--slot N`(슬롯 모름 줄은 남긴다), `--cat`(tags.yaml 그 카테고리 태그),
   `--grep`(가린 사본의 `태그: 메시지`에, ≤200자, `matcher.pattern_timeout_ms` 시간 상한, `--span`이 없으면 분석 범위
   `input.window` 안만).
 - `JOB/window-<n>.md`를 쓰고 `JOB/windows.json`(스크립트만 쓴다 — guard 규칙 12)에 `{path, sha256, at, lines, tags}`를 더한다.
@@ -48,13 +48,14 @@ CAT_OK = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 NEXT = "타임라인 줄만으로 계속한다(로그 원문·사본을 grep·Read하지 않는다)"
 CLOCK_RE = re.compile(r"(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?")
 OFFSET_RE = re.compile(r"(?:Z|[+-]\d{2}:?\d{2})$")
-# 예외·crash 머리(Java 스택 머리·tombstone·네이티브 신호·binder 예외)와 스택 프레임 줄. 레벨과 상관없이 오류 줄로 본다
-EXC_RX = re.compile(r"FATAL EXCEPTION|\b[a-z][\w$]*(?:\.[\w$]+)*\.[\w$]*(?:Exception|Error)\b|^\s*Caused by:|"
+# 예외·crash 머리(Java 스택 머리·tombstone·네이티브 신호·binder 예외)와 스택 프레임 줄. 레벨과 상관없이 오류 줄로 본다.
+# 클래스 이름은 마지막 조각이 대문자로 시작할 때만(`mCallback.onError`·`result.isError` 같은 메서드·필드는 아니다)
+EXC_RX = re.compile(r"FATAL EXCEPTION|\b[a-z][\w$]*(?:\.[\w$]+)*\.[A-Z][\w$]*(?:Exception|Error)\b|^\s*Caused by:|"
                     r"\*\*\* \*\*\* \*\*\*|Fatal signal \d|Uncaught remote exception|Caught a RuntimeException")
 FRAME_RX = re.compile(r"^\s*at\s+\S+\(")
 NUM_RX = re.compile(r"0x[0-9a-fA-F]+|\d+")
-SPAN_TAG_MAX = 50                   # `--span` 고르기: 한 태그가 먼저 차지할 수 있는 줄 수(남은 자리는 그다음 채운다)
-ANOMALY_TAG_MAX = 12                # 이상 줄 절: 태그당 먼저 고르는 줄 수
+SPAN_TAG_MAX = 50                   # `--span` 고르기: 같은 등급 안에서 한 태그가 이 줄 수를 넘으면 그 줄은 뒤로(`ranked`)
+ANOMALY_TAG_MAX = 12                # 이상 줄 절: 같은 등급 안의 태그당 줄 수(넘으면 뒤로, `ranked`)
 ANOMALY_FRAMES = 2                  # 예외 머리 뒤에 붙이는 같은 pid·태그 프레임 줄 수
 
 
@@ -197,18 +198,24 @@ def _row(r: dict) -> dict:
             "marks": []}
 
 
+def ranked(items: list[tuple], tag_max: int) -> list[tuple]:
+    """`(rank, gap, i, tag, size, …)` 목록을 정렬 키 (등급, 태그 상한 넘음, gap, i) 순으로. 태그 상한(그 태그가 앞에서 이미 받은
+    줄 수 + size > tag_max)은 같은 등급 안에서만 순서를 바꾼다 — 다른 태그 W가 같은 태그 F보다 앞서지 않는다."""
+    seen: dict = {}
+    keyed = []
+    for it in sorted(items, key=lambda t: t[:3]):
+        used = seen.get(it[3], 0)
+        keyed.append(((it[0], used + it[4] > tag_max, it[1], it[2]), it))
+        seen[it[3]] = used + it[4]
+    return [it for _key, it in sorted(keyed, key=lambda x: x[0])]
+
+
 def _pick_span(recs: list[dict], at: str, n: int) -> list[str]:
-    """`--span` 안 줄이 상한을 넘을 때: 등급(`rank`) 순, 같은 등급은 `at`에 가까운 순, 한 태그는 먼저 `SPAN_TAG_MAX`줄까지 →
-    시각순 줄. 본문이 BYTES_MAX를 넘으면 마지막에 고른 줄부터 뺀다."""
+    """`--span` 안 줄이 상한을 넘을 때: `ranked`(등급, 한 태그 `SPAN_TAG_MAX`줄 넘음, `at`에 가까운 순) 앞 n줄 → 시각순 줄.
+    본문이 BYTES_MAX를 넘으면 마지막에 고른 줄부터 뺀다."""
     center = logtime.parse_ts(at)
-    order = sorted(range(len(recs)), key=lambda i: (rank(recs[i]), _gap(recs[i], center), i))
-    per: dict = {}
-    first, rest = [], []
-    for i in order:
-        tag = recs[i].get("tag")
-        (first if per.get(tag, 0) < SPAN_TAG_MAX else rest).append(i)
-        per[tag] = per.get(tag, 0) + 1
-    chosen = (first + rest)[:n]
+    order = ranked([(rank(r), _gap(r, center), i, r.get("tag"), 1) for i, r in enumerate(recs)], SPAN_TAG_MAX)
+    chosen = [it[2] for it in order[:n]]
     lines = {i: report.row_line(_row(recs[i])) for i in chosen}
     while chosen and sum(len(x.encode("utf-8")) + 1 for x in lines.values()) > BYTES_MAX:
         lines.pop(chosen.pop())
@@ -225,16 +232,21 @@ def served_copies(job: Path, analysis: dict) -> tuple[list[Path], list[str]]:
 
 
 def _fold_key(r: dict) -> tuple:
-    return r.get("tag"), NUM_RX.sub("#", " ".join(str(r.get("msg") or "").split()))
+    """접기 키: 슬롯·레벨·태그·숫자 뺀 메시지(다른 SIM 슬롯 실패를 한 줄로 접지 않는다 — `report.merge_rows` F2와 같은 원칙)."""
+    return r.get("phone_id"), r.get("level"), r.get("tag"), NUM_RX.sub("#", " ".join(str(r.get("msg") or "").split()))
 
 
 def anomaly(job: Path, ev: dict, analysis: dict, defaults: dict, ref: str | None, after_sec: int, cap: int,
             shown: set) -> dict | None:
     """탐색 타임라인 이상 줄 절(`report.anomaly_lines`)의 재료: 마스킹 사본의 W/E/F 줄과 예외·crash 머리(+같은 pid·태그
     프레임 `ANOMALY_FRAMES`줄)를 tags.yaml과 상관없이 고른다. 범위는 분석 구간(`input.window`, 없으면 로그 전체) 시작 ~
-    max(구간 끝, `ref`+`after_sec`). 같은 (태그, 숫자 뺀 메시지)는 한 줄로 접고(`fold`), `shown`(본 타임라인 줄의 (시각, 태그,
-    메시지))은 뺀다. `cap`줄이 넘치면 등급(`rank`), `ref`에 가까운 순, 태그당 먼저 `ANOMALY_TAG_MAX`줄. 출력은 시각순.
+    max(구간 끝, `ref`+`after_sec`). 같은 (슬롯, 레벨, 태그, 숫자 뺀 메시지)는 한 줄로 접고(`fold`), `shown`(본 타임라인 줄의
+    (시각, 태그, 메시지))에 있는 줄은 빼지 않고 `main: true`만 붙인다(JOB/timeline.md는 그 줄을 빼고 그리고, 본 줄을 다 싣지 않는
+    모듈 보기는 모두 싣는다 — `report.anomaly_lines`). 예외 머리 묶음(머리+프레임)에는 붙이지 않는다. `cap`줄(저장 기준)이 넘치면
+    `ranked`(등급, 태그당 `ANOMALY_TAG_MAX`줄 넘음, `ref`에 가까운 순). 출력은 시각순.
     사본이 없거나 못 읽으면 None. 판정·점수·순위에 쓰지 않는다(표시 전용)."""
+    # ponytail: 사본 전체를 다시 파싱한다(window 한 번과 같은 비용, 끔 DB는 사본 크기 상한 없음). 느리면 범위(lo~hi)를
+    # `_raw_line_records`에 넘겨 파서가 범위 밖 줄을 건너뛰게 한다
     served, _skipped = served_copies(job, analysis)
     if not served or cap <= 0:
         return None
@@ -253,7 +265,7 @@ def anomaly(job: Path, ev: dict, analysis: dict, defaults: dict, ref: str | None
     for i, r in enumerate(recs):
         msg = " ".join(str(r.get("msg") or "").split())
         k = rank(r)
-        if k > 3 or FRAME_RX.match(msg) or (r["ts"], r.get("tag"), msg) in shown:
+        if k > 3 or FRAME_RX.match(msg):
             continue
         frames = []
         if EXC_RX.search(msg):
@@ -263,39 +275,31 @@ def anomaly(job: Path, ev: dict, analysis: dict, defaults: dict, ref: str | None
                 if len(frames) == ANOMALY_FRAMES or not FRAME_RX.match(str(nxt.get("msg") or "")):
                     break
                 frames.append(nxt)
-        groups.append((k, _gap(r, center), i, r, frames))
+        main = not EXC_RX.search(msg) and (r["ts"], r.get("tag"), msg) in shown     # 예외 머리는 본 줄이어도 절에 남긴다
+        groups.append((k, _gap(r, center), i, r.get("tag"), 1 + len(frames), r, frames, main))
     groups.sort(key=lambda g: g[:3])
     reps, fold = [], {}
     for g in groups:
-        key = _fold_key(g[3])
+        key = _fold_key(g[5])
         if key in fold:
             f = fold[key]
-            f["n"], f["first"], f["last"] = f["n"] + 1, min(f["first"], g[3]["ts"]), max(f["last"], g[3]["ts"])
+            f["n"], f["first"], f["last"] = f["n"] + 1, min(f["first"], g[5]["ts"]), max(f["last"], g[5]["ts"])
             continue
-        fold[key] = {"n": 0, "first": g[3]["ts"], "last": g[3]["ts"]}
+        fold[key] = {"n": 0, "first": g[5]["ts"], "last": g[5]["ts"]}
         reps.append(g)
-    per: dict = {}
-    total, picked, later = 0, [], []
-    for g in reps:
-        size, tag = 1 + len(g[4]), g[3].get("tag")
-        if total + size > cap:
-            continue
-        if per.get(tag, 0) + size > ANOMALY_TAG_MAX:
-            later.append(g)
-            continue
-        per[tag] = per.get(tag, 0) + size
-        total += size
-        picked.append(g)
-    for g in later:                       # 다른 태그를 다 넣고 남은 자리
-        if total + 1 + len(g[4]) <= cap:
-            total += 1 + len(g[4])
+    total, picked = 0, []
+    for g in ranked(reps, ANOMALY_TAG_MAX):
+        if total + g[4] <= cap:
+            total += g[4]
             picked.append(g)
     rows = []
     for g in sorted(picked, key=lambda g: g[2]):
-        head, f = _row(g[3]), fold[_fold_key(g[3])]
+        head, f = _row(g[5]), fold[_fold_key(g[5])]
         if f["n"]:
             head["fold"] = dict(f)
-        rows += [head] + [_row(x) for x in g[4]]
+        if g[7]:
+            head["main"] = True
+        rows += [head] + [_row(x) for x in g[6]]
     for x in rows:
         x["msg"] = " ".join(str(x["msg"] or "").split())
         del x["marks"]
@@ -401,7 +405,7 @@ def _run(args, defaults: dict) -> dict:
             f"- 중심: {at_s}, 줄: {len(lines)}, " + (f"태그: {'·'.join(tags)}" if tags else "태그 전체")
             + "".join(f", {k} {masking.mask_brief(str(v), 80)}" for k, v in filters.items()),
             *([f"- 줄 고르기: 구간 안 {in_span}줄이 상한보다 많아 F, 예외·crash 머리, E, W, 나머지 순으로(같은 등급은 중심에 "
-               f"가까운 순, 한 태그는 먼저 {SPAN_TAG_MAX}줄까지) 골라 시각순으로 놓았다"] if by_rank else []),
+               f"가까운 순, 같은 등급에서 {SPAN_TAG_MAX}줄을 넘은 태그는 뒤로) 골라 시각순으로 놓았다"] if by_rank else []),
             *([f"- 마스킹 사본이 없어 보여 주지 않는 파일(원문만): {', '.join(skipped)}"] if skipped else []),
             "- 형식: 시각(UTC) 슬롯 레벨 태그 메시지", ""]
     text = "\n".join(head + lines) + "\n"

@@ -137,7 +137,7 @@ def test_window_span_ranks_errors_and_caps_chatty_tag():
     assert "줄 고르기: 구간 안" in text
     proc = run("triage.py", ["window", KEY, "--out", job, "--at", "2026-11-20T10:00:00Z", "--span", "600", "--lines", "150"])
     rows = _rows((job / json.loads(proc.stdout.strip().splitlines()[-1])["window"]).read_text(encoding="utf-8"))
-    assert sum("ChattyTag" in r for r in rows) == 50 and any("NoiseTag" in r for r in rows)   # 한 태그가 다 채우지 않는다
+    assert WARN_OTHER in rows and not any("NoiseTag" in r for r in rows)   # 같은 W 등급에서 50줄 넘은 태그는 뒤로, D·I는 W 뒤
 
 
 def test_quote_from_block_passes_evidence_check():
@@ -187,3 +187,104 @@ def test_no_masked_copy_leaves_timeline_as_before():
     assert spec_path.read_bytes() == before                                    # 사본이 없으면 입력 파일도 그대로
     main, _ = _split(job)
     assert (other / core.TIMELINE_FILE).read_text(encoding="utf-8") == main     # 이상 줄 절만 없고 본 타임라인은 같다
+
+
+# --- 확인 리뷰 묶음(11/25): 항목마다 고치기 전 코드에서 실패하는 시험 --------------------------------------------
+
+def test_main_rows_kept_for_module_view_but_not_job_timeline():
+    """1: 본 타임라인 줄은 빼지 않고 `main`만 붙인다 — JOB/timeline.md는 빼고, 모듈 보기(`with_anomaly`)는 싣는다."""
+    sys.path.insert(0, str(REPO / "tests"))
+    from test_explore_window import _job as lookat_job
+    from triagelib import report
+    job = lookat_job()
+    anomaly = json.loads((job / core.EXPLORE_INPUT_FILE).read_text(encoding="utf-8"))["anomaly"]
+    main = [r for r in anomaly["rows"] if r.get("main")]
+    assert main and all(r["level"] in ("W", "E", "F") for r in main)
+    row = report.row_line({**main[0], "marks": []})
+    _top, block = _split(job)
+    assert row not in _rows(block)                                               # JOB 절: 본 줄과 겹치지 않는다
+    view = report.with_anomaly("# 모듈 보기\n", anomaly)
+    assert row in _rows(view) and "이미 있는 줄은 뺐다" not in view              # 모듈 보기: 본 줄을 싣지 않으니 모두
+    head = {"ts": "2026-11-20T10:00:31.000Z", "phone": None, "level": "E", "tag": "AndroidRuntime",
+            "msg": "java.lang.IllegalStateException: x"}                       # 예외 머리는 main이 아니다(그리는 쪽은 그대로)
+    assert report.anomaly_lines({"rows": [head, {**head, "msg": "noise", "main": True}]})[-1].endswith("IllegalStateException: x")
+
+
+def _recs(spec):
+    out = []
+    for k, (tag, level, n) in enumerate(spec):
+        out += [{"ts": f"2026-11-20T10:{k:02d}:{i // 60:02d}.{i % 60:03d}Z".replace(f":{i // 60:02d}.", f":{i // 60 % 60:02d}."),
+                 "tag": tag, "level": level, "msg": f"m {tag} {i}", "phone_id": None} for i in range(n)]
+    return out
+
+
+def test_tag_cap_only_orders_within_rank():
+    """2: 태그 상한은 같은 등급 안에서만 — 한 태그의 F 60줄이 다른 태그 W보다 먼저, E는 다른 태그 D보다 먼저."""
+    from triagelib import window
+    recs = sorted(_recs([("A", "F", 60), ("B", "W", 100), ("C", "E", 5), ("D", "D", 100)]), key=lambda r: r["ts"])
+    rows = window._pick_span(recs, "2026-11-20T10:01:00.000Z", 70)
+    assert sum(" F A " in r for r in rows) == 60 and sum(" E C " in r for r in rows) == 5
+    assert not any(" D D " in r for r in rows)
+    order = window.ranked([(3, 0.0, 0, "x", 1), (0, 9.0, 1, "y", 13), (0, 1.0, 2, "y", 1)], 12)
+    assert [it[2] for it in order] == [2, 1, 0]                                  # 상한 넘은 y의 F도 x의 W보다 앞
+
+
+def test_exception_head_needs_class_name():
+    """3: 메서드·필드 이름(`onError`·`isError`)은 예외 머리가 아니다."""
+    from triagelib import window
+    for msg, want in (("mCallback.onError called", 4), ("result.isError=false", 4),
+                      ("java.lang.IllegalStateException: x", 1), ("android.os.DeadObjectException", 1)):
+        assert window.rank({"level": "D", "msg": msg}) == want, msg
+
+
+def test_fold_key_keeps_slots_and_levels_apart():
+    """4: 다른 SIM 슬롯·레벨의 같은 문구를 한 줄로 접지 않는다(merge_rows F2와 같은 원칙)."""
+    from triagelib import window
+    base = {"tag": "DNC", "level": "E", "msg": "setup failed 3", "phone_id": 0}
+    assert window._fold_key(base) != window._fold_key({**base, "phone_id": 1})
+    assert window._fold_key(base) != window._fold_key({**base, "level": "W"})
+    assert window._fold_key(base) == window._fold_key({**base, "msg": "setup failed 4"})
+
+
+def test_anomaly_failure_does_not_break_explore(monkeypatch, tmp_path, capsys):
+    """5: 이상 줄 고르기에서 예외가 나도 explore는 절 없이 계속한다."""
+    import triage
+    from triagelib import window
+
+    def boom(*_a, **_k):
+        raise RuntimeError("broken copy")
+
+    monkeypatch.setattr(window, "anomaly", boom)
+    (tmp_path / "analysis.json").write_text("{}", encoding="utf-8")
+    assert triage._anomaly(tmp_path, {}, {}, {}, {}, []) is None
+    assert "이상 줄 절을 만들지 못해" in capsys.readouterr().err
+
+
+def test_e1_corrupt_anomaly_is_nojob_not_traceback():
+    """6: 손상된 `anomaly`(range 원소 부족·after_sec·fold 키 없음)는 E1에서 작업 없음 안내다."""
+    job = _job()
+    other = tmp("tt-anom-bad-") / "j"
+    shutil.copytree(job, other)
+    path = other / core.EXPLORE_INPUT_FILE
+    spec = json.loads(path.read_text(encoding="utf-8"))
+    spec["anomaly"] = {"range": ["2026-11-20T09:59:00.000Z"], "ref": "2026-11-20T10:00:00.000Z",
+                       "rows": [{"ts": "2026-11-20T10:00:31.000Z", "fold": {}}, "bad"]}
+    path.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+    events = json.loads((other / "events.json").read_text(encoding="utf-8"))
+
+    class NoJob(Exception):
+        pass
+
+    try:
+        modulecmd._explore_inputs(other, KEY, events, {}, NoJob)
+    except NoJob:
+        pass
+    else:
+        raise AssertionError("손상된 anomaly를 통과시켰다")
+
+
+def test_eval_case_input_carries_anomaly():
+    """7: 모듈 eval case의 explore-input.json은 explore가 `anomaly`를 더한 뒤의 것이다(실사용 JOB과 같다)."""
+    case = REPO / "templates" / "module-skills" / "android" / "data" / "evals" / "data-normal-retry-then-crash" / "files"
+    rows = json.loads((case / "explore-input.json").read_text(encoding="utf-8"))["anomaly"]["rows"]
+    assert any("NullPointerException" in r["msg"] for r in rows)

@@ -2,5 +2,45 @@
  "around": "2026-09-22T10:10:20.000Z",
  "failed_step": null,
  "limit": 200,
- "anchor": null
+ "anchor": null,
+ "anomaly": {
+  "range": [
+   "2026-09-22T10:05:20.000Z",
+   "2026-09-22T10:20:20.000Z"
+  ],
+  "ref": "2026-09-22T10:10:20.000Z",
+  "after_sec": 600,
+  "candidates": 4,
+  "rows": [
+   {
+    "ts": "2026-09-22T10:10:19.463Z",
+    "phone": null,
+    "level": "E",
+    "tag": "simd",
+    "msg": "tid:36 ExampleSim.cpp(32):ExampleChannelOpen > openChannel: Application not found (aid <AID#1>, slot 0)",
+    "main": true
+   },
+   {
+    "ts": "2026-09-22T10:10:19.464Z",
+    "phone": null,
+    "level": "W",
+    "tag": "simd",
+    "msg": "tid:36 ExampleSim.cpp(38):ExampleGetEid > GetEID FAILED",
+    "fold": {
+     "n": 1,
+     "first": "2026-09-22T10:10:19.464Z",
+     "last": "2026-09-22T10:10:21.460Z"
+    },
+    "main": true
+   },
+   {
+    "ts": "2026-09-22T10:10:19.468Z",
+    "phone": null,
+    "level": "W",
+    "tag": "mgmtd",
+    "msg": "GetEID call error: Failed to get EID path/example_sim.go:12",
+    "main": true
+   }
+  ]
+ }
 }

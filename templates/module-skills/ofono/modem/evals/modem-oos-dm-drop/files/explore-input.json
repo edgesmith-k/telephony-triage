@@ -2,5 +2,45 @@
  "around": "2026-09-22T09:50:21.000Z",
  "failed_step": null,
  "limit": 200,
- "anchor": null
+ "anchor": null,
+ "anomaly": {
+  "range": [
+   "2026-09-22T09:45:21.000Z",
+   "2026-09-22T10:00:21.000Z"
+  ],
+  "ref": "2026-09-22T09:50:21.000Z",
+  "after_sec": 600,
+  "candidates": 5,
+  "rows": [
+   {
+    "ts": "2026-09-22T09:50:13.154Z",
+    "phone": null,
+    "level": "E",
+    "tag": "vrild",
+    "msg": "Fail to write diag packet to host",
+    "main": true
+   },
+   {
+    "ts": "2026-09-22T09:50:21.153Z",
+    "phone": null,
+    "level": "W",
+    "tag": "vrild",
+    "msg": "diag packet dropped: host not reading, write fail",
+    "fold": {
+     "n": 2,
+     "first": "2026-09-22T09:50:13.153Z",
+     "last": "2026-09-22T09:50:21.153Z"
+    },
+    "main": true
+   },
+   {
+    "ts": "2026-09-22T09:50:21.753Z",
+    "phone": null,
+    "level": "W",
+    "tag": "mgmtd",
+    "msg": "data and call unavailable: no service path/example_net.go:12",
+    "main": true
+   }
+  ]
+ }
 }

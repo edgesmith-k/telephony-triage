@@ -19,5 +19,24 @@
  ],
  "around_alt": [
   "2026-09-04T12:02:00.000Z"
- ]
+ ],
+ "anomaly": {
+  "range": [
+   "2026-09-04T11:57:01.000Z",
+   "2026-09-04T12:12:01.000Z"
+  ],
+  "ref": "2026-09-04T12:02:01.000Z",
+  "after_sec": 600,
+  "candidates": 1,
+  "rows": [
+   {
+    "ts": "2026-09-04T12:02:01.400Z",
+    "phone": null,
+    "level": "W",
+    "tag": "ImsPhoneCallTracker",
+    "msg": "[0] onCallStartFailed reasonCode=ImsReasonInfo :: {1014 : CODE_SIP_SERVICE_UNAVAILABLE, 503, null}",
+    "main": true
+   }
+  ]
+ }
 }

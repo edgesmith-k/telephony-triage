@@ -8,7 +8,7 @@
 | kind | 만드는 파일 |
 |---|---|
 | deep | `events.json`(경로 정규화), `timeline.md`, `deep-input.json`(schema_version 1) |
-| explore | `timeline.md`, `explore-input.json`(run이 쓴 그대로), `analysis.json`(`generated_at`·`request_hash`·`files`·`analyzer`/`explore`의 `note` 뺌, `logs.masked`는 null — 평가 폴더에 사본이 없다) |
+| explore | `timeline.md`, `explore-input.json`(run이 쓰고 explore가 `anomaly`를 더한 그대로), `analysis.json`(`generated_at`·`request_hash`·`files`·`analyzer`/`explore`의 `note` 뺌, `logs.masked`는 null — 평가 폴더에 사본이 없다) |
 
 `templates/module-skills/modules.yaml`에 그 플랫폼의 `common.filter`가 있으면 case `timeline.md`는 모듈 보기다
 (B2 §4.6: `common.modulefilter.build`를 같은 프로세스에서, `triage.py module`과 같은 인자로 — deep은 `match.json`
@@ -262,8 +262,10 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
             mismatch(f"{name}: explore.reason {reason} — 기대 {expect['explore_reason']}")
         if not explore_input.is_file():
             raise GenError(f"{name}: explore-input.json이 없다")
-        explore_bytes = explore_input.read_bytes().decode("utf-8")
+        explore_bytes = ""
     _run(runner, root, ["explore", case["key"], "--out", job, "--platform", platform], home, name)
+    if kind == "explore":      # explore가 이상 줄 절(`anomaly`)을 더한 뒤 — 실사용 JOB의 입력 파일과 같다
+        explore_bytes = explore_input.read_bytes().decode("utf-8")
     timeline = (job / "timeline.md").read_bytes().decode("utf-8")
     if view:
         text = module_view(job, case, kind, platform, view_module, analysis, events, explore_bytes, doc, with_modem)
@@ -409,8 +411,7 @@ def module_view(job: Path, case: dict, kind: str, platform: str, module: str, an
     if kind == "deep":
         return result["text"]
     from triagelib import report      # = modulecmd: 탐색 모듈 보기 끝에 explore가 고른 이상 줄 절
-    anomaly = json.loads((job / "explore-input.json").read_text(encoding="utf-8")).get("anomaly")
-    return report.with_anomaly(result["text"], anomaly)
+    return report.with_anomaly(result["text"], json.loads(explore_bytes or "{}").get("anomaly"))
 
 
 def _case_size(case_dir: Path) -> None:

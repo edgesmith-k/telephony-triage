@@ -11,5 +11,53 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-10-15T11:42:23.000Z",
+   "2026-10-15T11:57:23.000Z"
+  ],
+  "ref": "2026-10-15T11:47:23.000Z",
+  "after_sec": 600,
+  "candidates": 5,
+  "rows": [
+   {
+    "ts": "2026-10-15T11:46:02.114Z",
+    "phone": null,
+    "level": "W",
+    "tag": "Telephony",
+    "msg": "registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1"
+   },
+   {
+    "ts": "2026-10-15T11:46:02.115Z",
+    "phone": null,
+    "level": "W",
+    "tag": "Telephony",
+    "msg": "registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1"
+   },
+   {
+    "ts": "2026-10-15T11:46:05.631Z",
+    "phone": 0,
+    "level": "E",
+    "tag": "RILJ",
+    "msg": "Unable to complete updateAllowedImsServices because service IMS is not available. [PHONE0]",
+    "main": true
+   },
+   {
+    "ts": "2026-10-15T11:47:20.411Z",
+    "phone": null,
+    "level": "D",
+    "tag": "RilRequest",
+    "msg": "[0527]< NOTIFY_IMS_DATA_NETWORK error: com.android.internal.telephony.CommandException: REQUEST_NOT_SUPPORTED"
+   },
+   {
+    "ts": "2026-10-15T11:47:23.140Z",
+    "phone": 0,
+    "level": "E",
+    "tag": "RILJ",
+    "msg": "Unable to complete updateImsRegistrationInfo because service IMS is not available. [PHONE0]",
+    "main": true
+   }
+  ]
+ }
 }

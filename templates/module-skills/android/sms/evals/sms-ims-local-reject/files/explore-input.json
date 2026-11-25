@@ -11,5 +11,45 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-08-25T13:55:21.000Z",
+   "2026-08-25T14:10:21.000Z"
+  ],
+  "ref": "2026-08-25T14:00:21.000Z",
+  "after_sec": 600,
+  "candidates": 7,
+  "rows": [
+   {
+    "ts": "2026-08-25T14:00:20.050Z",
+    "phone": null,
+    "level": "E",
+    "tag": "VRIL-IMS",
+    "msg": "[sms] send rejected: SMS over IMS feature off",
+    "main": true
+   },
+   {
+    "ts": "2026-08-25T14:00:20.060Z",
+    "phone": 0,
+    "level": "E",
+    "tag": "ImsSmsDispatcher [0]",
+    "msg": "sendSms failed. Falling back to PSTN. Error: null",
+    "main": true
+   },
+   {
+    "ts": "2026-08-25T14:00:22.000Z",
+    "phone": null,
+    "level": "E",
+    "tag": "VRIL",
+    "msg": "reply to client token 702",
+    "fold": {
+     "n": 4,
+     "first": "2026-08-25T14:00:05.121Z",
+     "last": "2026-08-25T14:00:52.011Z"
+    },
+    "main": true
+   }
+  ]
+ }
 }

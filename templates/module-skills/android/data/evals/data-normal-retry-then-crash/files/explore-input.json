@@ -11,5 +11,79 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-11-20T09:55:01.000Z",
+   "2026-11-20T10:10:01.000Z"
+  ],
+  "ref": "2026-11-20T10:00:01.000Z",
+  "after_sec": 600,
+  "candidates": 5,
+  "rows": [
+   {
+    "ts": "2026-11-20T10:00:40.210Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "FATAL EXCEPTION: main"
+   },
+   {
+    "ts": "2026-11-20T10:00:40.210Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "Process: com.android.phone, PID: 2101"
+   },
+   {
+    "ts": "2026-11-20T10:00:40.210Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "java.lang.NullPointerException: Attempt to invoke virtual method 'int android.net.LinkProperties.getMtu()' on a null object reference"
+   },
+   {
+    "ts": "2026-11-20T10:00:40.210Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "at com.android.internal.telephony.data.DataNetwork.updateLinkProperties(DataNetwork.java:2214)"
+   },
+   {
+    "ts": "2026-11-20T10:00:40.210Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "at com.android.internal.telephony.data.DataNetwork$ConnectedState.processMessage(DataNetwork.java:1290)"
+   },
+   {
+    "ts": "2026-11-20T10:06:12.500Z",
+    "phone": null,
+    "level": "E",
+    "tag": "JavaBinder",
+    "msg": "*** Uncaught remote exception! (Exceptions are not yet supported across processes.)"
+   },
+   {
+    "ts": "2026-11-20T10:06:12.500Z",
+    "phone": null,
+    "level": "E",
+    "tag": "JavaBinder",
+    "msg": "java.lang.IllegalStateException: telephony service is not running"
+   },
+   {
+    "ts": "2026-11-20T10:06:12.500Z",
+    "phone": null,
+    "level": "E",
+    "tag": "JavaBinder",
+    "msg": "at com.android.server.TelephonyRegistry.notifyDataConnectionForSubscriber(TelephonyRegistry.java:1876)"
+   },
+   {
+    "ts": "2026-11-20T10:06:12.500Z",
+    "phone": null,
+    "level": "E",
+    "tag": "JavaBinder",
+    "msg": "at android.os.Binder.execTransact(Binder.java:1310)"
+   }
+  ]
+ }
 }

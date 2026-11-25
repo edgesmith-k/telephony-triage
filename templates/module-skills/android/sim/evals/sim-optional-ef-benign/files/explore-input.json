@@ -11,5 +11,38 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-10-16T08:25:14.000Z",
+   "2026-10-16T08:40:14.000Z"
+  ],
+  "ref": "2026-10-16T08:30:14.000Z",
+  "after_sec": 600,
+  "candidates": 3,
+  "rows": [
+   {
+    "ts": "2026-10-16T08:30:14.764Z",
+    "phone": null,
+    "level": "D",
+    "tag": "RilRequest",
+    "msg": "[0233]< SIM_IO error: com.android.internal.telephony.CommandException: GENERIC_FAILURE"
+   },
+   {
+    "ts": "2026-10-16T08:30:14.766Z",
+    "phone": null,
+    "level": "E",
+    "tag": "UsimFH",
+    "msg": "exception caught from EVENT_GET_RECORD_SIZE",
+    "main": true
+   },
+   {
+    "ts": "2026-10-16T08:30:15.934Z",
+    "phone": null,
+    "level": "E",
+    "tag": "SIMRecords",
+    "msg": "[SIMRecords-0] Exception in fetching EF_CSP data com.android.internal.telephony.CommandException: GENERIC_FAILURE"
+   }
+  ]
+ }
 }

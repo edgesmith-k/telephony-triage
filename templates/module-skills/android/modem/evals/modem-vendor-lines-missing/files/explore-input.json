@@ -13,5 +13,24 @@
  ],
  "around_alt": [
   "2026-08-28T17:00:15.000Z"
- ]
+ ],
+ "anomaly": {
+  "range": [
+   "2026-08-28T16:55:15.000Z",
+   "2026-08-28T17:10:15.000Z"
+  ],
+  "ref": "2026-08-28T17:00:15.000Z",
+  "after_sec": 600,
+  "candidates": 1,
+  "rows": [
+   {
+    "ts": "2026-08-28T17:00:45.000Z",
+    "phone": null,
+    "level": "W",
+    "tag": "ImsPhoneCallTracker",
+    "msg": "[0] call ended: cause=65535",
+    "main": true
+   }
+  ]
+ }
 }

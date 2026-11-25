@@ -2,5 +2,32 @@
  "around": "2026-09-22T10:00:20.000Z",
  "failed_step": null,
  "limit": 200,
- "anchor": null
+ "anchor": null,
+ "anomaly": {
+  "range": [
+   "2026-09-22T09:55:20.000Z",
+   "2026-09-22T10:10:20.000Z"
+  ],
+  "ref": "2026-09-22T10:00:20.000Z",
+  "after_sec": 600,
+  "candidates": 2,
+  "rows": [
+   {
+    "ts": "2026-09-22T10:00:21.722Z",
+    "phone": null,
+    "level": "E",
+    "tag": "vrild",
+    "msg": "chan 2: empty reply body, nothing to encode",
+    "main": true
+   },
+   {
+    "ts": "2026-09-22T10:00:21.731Z",
+    "phone": null,
+    "level": "W",
+    "tag": "mgmtd",
+    "msg": "load network info failed: Load data failed err: Operation failed path/example_net.go:24",
+    "main": true
+   }
+  ]
+ }
 }

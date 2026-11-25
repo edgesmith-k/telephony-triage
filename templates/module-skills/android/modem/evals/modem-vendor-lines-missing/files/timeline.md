@@ -18,3 +18,10 @@
 17:00:10.000 p0 D RILJ [0601]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] internet, internet.example, IPV4V6] [PHONE0]  ⇒ ril_no_response(request=SETUP_DATA_CALL,serial=601,timeout_ms=30000)
 17:00:12.000 - I GsmCdmaPhone [0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, is…  ⇒ ims_dial_attempt(ims=false,ims_state=0)
 17:00:12.500 p0 D RILJ [0603]> DIAL [PHONE0]  ⇒ ril_no_response(request=DIAL,serial=603,timeout_ms=10000)
+
+## 이상 줄: W/E/F 레벨과 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 빠짐)
+
+- 범위: 2026-08-28T16:55:15.000Z ~ 2026-08-28T17:10:15.000Z (분석 구간 끝과 기준 시각 2026-08-28T17:00:15.000Z 뒤 600초 중 늦은 쪽까지).
+- 줄: 1. 프레임을 뺀 후보 1줄에서 F, 예외·crash 머리, E, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+
+17:00:45.000 - W ImsPhoneCallTracker [0] call ended: cause=65535

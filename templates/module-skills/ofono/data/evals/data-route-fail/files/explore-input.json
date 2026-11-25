@@ -2,5 +2,40 @@
  "around": "2026-09-20T15:20:06.000Z",
  "failed_step": null,
  "limit": 200,
- "anchor": null
+ "anchor": null,
+ "anomaly": {
+  "range": [
+   "2026-09-20T15:15:06.000Z",
+   "2026-09-20T15:30:06.000Z"
+  ],
+  "ref": "2026-09-20T15:20:06.000Z",
+  "after_sec": 600,
+  "candidates": 3,
+  "rows": [
+   {
+    "ts": "2026-09-20T15:20:01.724Z",
+    "phone": null,
+    "level": "E",
+    "tag": "datad2",
+    "msg": "netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002",
+    "main": true
+   },
+   {
+    "ts": "2026-09-20T15:20:01.726Z",
+    "phone": null,
+    "level": "W",
+    "tag": "datad2",
+    "msg": "default route not installed for rmnet0",
+    "main": true
+   },
+   {
+    "ts": "2026-09-20T15:20:06.000Z",
+    "phone": null,
+    "level": "W",
+    "tag": "datad",
+    "msg": "connectivity check failed profile_id=1[./src/check_example.cxx +40]",
+    "main": true
+   }
+  ]
+ }
 }

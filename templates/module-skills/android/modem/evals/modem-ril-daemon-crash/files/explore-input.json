@@ -11,5 +11,24 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-09-06T15:55:02.000Z",
+   "2026-09-06T16:10:02.000Z"
+  ],
+  "ref": "2026-09-06T16:00:02.000Z",
+  "after_sec": 600,
+  "candidates": 1,
+  "rows": [
+   {
+    "ts": "2026-09-06T16:00:02.500Z",
+    "phone": 0,
+    "level": "E",
+    "tag": "RILJ",
+    "msg": "serviceDied: Service radio::IRadio/slot1 has died. [PHONE0]",
+    "main": true
+   }
+  ]
+ }
 }

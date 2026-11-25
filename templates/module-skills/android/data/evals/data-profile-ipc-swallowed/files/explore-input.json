@@ -11,5 +11,37 @@
    ]
   }
  ],
- "around_alt": []
+ "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-10-15T07:00:12.000Z",
+   "2026-10-15T07:15:12.000Z"
+  ],
+  "ref": "2026-10-15T07:05:12.000Z",
+  "after_sec": 600,
+  "candidates": 3,
+  "rows": [
+   {
+    "ts": "2026-10-15T07:05:12.410Z",
+    "phone": null,
+    "level": "E",
+    "tag": "VRIL",
+    "msg": "reply to client token 418",
+    "main": true
+   },
+   {
+    "ts": "2026-10-15T07:05:12.437Z",
+    "phone": null,
+    "level": "E",
+    "tag": "RIL",
+    "msg": "waitlist miss seq 0x0d31",
+    "fold": {
+     "n": 1,
+     "first": "2026-10-15T07:05:12.437Z",
+     "last": "2026-10-15T07:05:12.472Z"
+    },
+    "main": true
+   }
+  ]
+ }
 }
