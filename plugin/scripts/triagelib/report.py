@@ -282,11 +282,12 @@ def select_rows(rows: list[dict], around, limit: int) -> tuple[list[dict], int]:
     수·시각 범위)를 붙인다. 접지 않는 줄: 이벤트 줄(다른 시각의 같은 사건), 반복이 적은 줄(회차마다 나오는 상태 줄), 발생 시각
     ±`FOLD_KEEP_SEC`와 로그 끝 `FOLD_KEEP_SEC` 안의 줄(RP-5). `merge_rows`의 행은 바꾸지 않는다.
 
-    중심 `around` = 시각 하나(발생 시각) 또는 목록(`summary.timeline_center` — 증상 시각 후보 여럿이면 가장 가까운 것까지), 없으면
-    거리 0(로그 앞부터 시각순)."""
+    중심 `around` = 시각 하나(발생 시각) 또는 목록(`summary.timeline_center`), 없으면 거리 0(로그 앞부터 시각순). 중심이 여럿이면
+    같은 등급 안에서 중심마다 따로 가까운 순으로 줄을 세워 번갈아 고른다(줄이 빽빽한 중심이 상한을 독차지하지 않게, 리뷰 I-2)."""
     items = list(rows)
     total = len(items)
-    cents = [c for c in map(_parse_ts, [around] if around is None or isinstance(around, str) else around) if c]
+    cents = list(dict.fromkeys(c for c in map(_parse_ts, [around] if around is None or isinstance(around, str) else around)
+                               if c))
 
     def gap(ts) -> float:
         return min(abs((ts - c).total_seconds()) for c in cents)
@@ -299,9 +300,22 @@ def select_rows(rows: list[dict], around, limit: int) -> tuple[list[dict], int]:
         return bool(row["marks"]) or (row["level"] or "") in _HOT_LEVELS or is_error_text(row["msg"])
 
     if total > limit:
-        order = sorted(range(total), key=lambda i: (not items[i]["marks"], not hot(items[i]), dist(items[i]),
-                                                     str(items[i]["ts"]), i))
         stamps = [_parse_ts(r["ts"]) for r in items]
+        if len(cents) > 1:
+            tier = [(not r["marks"], not hot(r)) for r in items]
+            order = []
+            for t in sorted(set(tier)):
+                same = [i for i in range(total) if tier[i] == t]
+                lanes = [sorted(same, key=lambda i, c=c: (abs((stamps[i] - c).total_seconds()) if stamps[i] else 0.0,
+                                                          str(items[i]["ts"]), i)) for c in cents]
+                seen: set[int] = set()
+                for i in (i for step in zip(*lanes) for i in step):      # 중심마다 하나씩 번갈아(같은 줄은 한 번만)
+                    if i not in seen:
+                        seen.add(i)
+                        order.append(i)
+        else:
+            order = sorted(range(total), key=lambda i: (not items[i]["marks"], not hot(items[i]), dist(items[i]),
+                                                         str(items[i]["ts"]), i))
         end = max((t for t in stamps if t), default=None)
 
         def key_of(i: int):
