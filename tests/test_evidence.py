@@ -38,7 +38,10 @@ def test_parse_explore_blocks_and_none_form():
     out = evidence.parse_explore(text)
     assert out["none"] is None and len(out["hyps"]) == 2 and out["top"] is None and out["rules"] == []
     assert out["hyps"][0] == {"n": 1, "가설": "망 거절", "원인 층": None, "원인 데몬": None, "로그로 확인": ["q1", "q2"],
-                              "코드로 추정": "gprs.c:10 + 분기", "반대 근거": "없음", "다음 확인": "망 로그"}
+                              "코드로 추정": "gprs.c:10 + 분기", "반대 근거": "없음", "다음 확인": "망 로그",
+                              # 기대 체인 칸(11/25): 없으면 None — 옛 형식도 그대로 통과
+                              "기대 체인": None, "첫 갈라짐": None, "찾았는데 없음": None, "메커니즘 재계산": None,
+                              "책임 경계": None}
     assert out["hyps"][1]["로그로 확인"] == ["q3"]
     assert evidence.parse_explore("가설 없음: 로그 없음\n다음 확인: 30초 로그\n") == {"none": "로그 없음", "next": "30초 로그",
                                                                                 "hyps": [], "top": None, "rules": []}
