@@ -330,18 +330,20 @@ def _verdict(cell: str) -> str:
 
 
 def _chain_row(cells: list[str], cols: dict | None) -> dict | None:
-    """표 행 → {단계, 기대, 근거, 관측, 일치}. 첫 칸에서 단계 번호를 못 읽으면(머리·구분 행 `| **단계** |`·`| # |`·`|-|-|`) None.
-    머리 행에서 찾은 열 위치(`cols`)가 있고 칸 수가 같으면 그 위치로, 아니면 5열 자리(관측 칸의 `|`는 가운데 칸을 이어 붙인다)."""
+    """표 행 → {단계, 기대, 주체, 근거, 관측, 일치}. 첫 칸에서 단계 번호를 못 읽으면(머리·구분 행 `| **단계** |`·`| # |`·`|-|-|`) None.
+    머리 행에서 찾은 열 위치(`cols`)가 있고 칸 수가 같으면 그 위치로, 아니면 5열 자리(관측 칸의 `|`는 가운데 칸을 이어 붙인다).
+    `주체`(기대 주체 열, 11/25 조사 모드)는 머리 행에 있을 때만, 없으면 ""(옛 5열 표 — 게이트 3 실패로 본다)."""
     m = STEP_NUM_RX.search(cells[0])
     if not m:
         return None
     if cols and len(cells) == cols["n"]:
         pick = {k: cells[i] if i is not None else "" for k, i in cols.items() if k != "n"}
     elif len(cells) >= 5:
-        pick = {"기대": cells[1], "근거": cells[2], "관측": "|".join(cells[3:-1]).strip(), "일치": cells[-1]}
+        pick = {"기대": cells[1], "주체": "", "근거": cells[2], "관측": "|".join(cells[3:-1]).strip(), "일치": cells[-1]}
     else:
         return None
-    return {"단계": int(m.group(1)), "기대": pick["기대"], "근거": pick["근거"], "관측": pick["관측"], "일치": _verdict(pick["일치"])}
+    return {"단계": int(m.group(1)), "기대": pick["기대"], "주체": pick["주체"], "근거": pick["근거"], "관측": pick["관측"],
+            "일치": _verdict(pick["일치"])}
 
 
 def _header_cols(cells: list[str]) -> dict | None:
@@ -351,11 +353,12 @@ def _header_cols(cells: list[str]) -> dict | None:
     obs, match = find(lambda c: "관측" in c), find(lambda c: "일치" in c)
     if obs is None or match is None:
         return None
-    return {"n": len(cells), "기대": find(lambda c: c == "기대"), "근거": find(lambda c: "근거" in c), "관측": obs, "일치": match}
+    return {"n": len(cells), "기대": find(lambda c: c == "기대"), "주체": find(lambda c: "주체" in c), "근거": find(lambda c: "근거" in c),
+            "관측": obs, "일치": match}
 
 
 def chain_fields(block: list[str]) -> dict:
-    """가설 블록의 `CHAIN_LABELS` 칸(각 첫 줄만). `기대 체인` = [{단계: int, 기대, 근거, 관측, 일치: true|false|모름}]
+    """가설 블록의 `CHAIN_LABELS` 칸(각 첫 줄만). `기대 체인` = [{단계: int, 기대, 주체, 근거, 관측, 일치: true|false|모름}]
     (`_chain_row` — 단계 번호 없는 행은 건너뛴다. 표 중간 빈 줄은 다음 줄이 `|`면 이어 읽는다), `찾았는데 없음` = 항목 목록."""
     out: dict = {f: None for f in CHAIN_LABELS}
     for i, line in enumerate(block):
@@ -393,7 +396,7 @@ def chain_fields(block: list[str]) -> dict:
     return out
 
 
-def _obs_quote(obs: str) -> str | None:
+def obs_quote(obs: str) -> str | None:
     """관측 칸 → 인용(따옴표·앞뒤 표시를 뗀 글)이면 그 글, 시각으로 시작하지 않으면 None."""
     s = QUOTE_CHARS_RX.sub("", obs).strip()
     for _ in range(2):
@@ -402,8 +405,8 @@ def _obs_quote(obs: str) -> str | None:
 
 
 def chain_quotes(hyp: dict) -> list[str]:
-    """`기대 체인` 관측 칸 중 인용(`_obs_quote`) — check-output이 `로그로 확인`과 같은 근거 원문 검사를 한다."""
-    return [q for r in hyp.get("기대 체인") or [] if (q := _obs_quote(r["관측"])) is not None]
+    """`기대 체인` 관측 칸 중 인용(`obs_quote`) — check-output이 `로그로 확인`과 같은 근거 원문 검사를 한다."""
+    return [q for r in hyp.get("기대 체인") or [] if (q := obs_quote(r["관측"])) is not None]
 
 
 def parse_explore(text: str) -> dict | None:

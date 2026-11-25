@@ -387,6 +387,11 @@ def build(job: Job, a: dict, plan: dict | None, fill: dict | None, omit: set[str
     # CAUSE
     s["CAUSE"].append(_line(f"분류: {cl['cls']} — {cl['confirm']}"))
     s["CAUSE"] += [_line(t) for t in cl["lines"]]
+    inv = a.get("investigation")      # 조사 결론(check-output 게이트): 검증 통과면 CAUSE 맨 위, 근거 부족이면 분류 줄 아래
+    if isinstance(inv, dict):
+        cands = [c for c in a.get("candidates") or [] if isinstance(c, dict)]
+        rows = [_line(t.lstrip(" -")) for t in issuepost.investigation_lines(inv, cands[0] if cands else None, why=False)]
+        s["CAUSE"] = rows + s["CAUSE"] if inv.get("status") == "identified" else s["CAUSE"] + rows
     if fill:
         s["CAUSE"] += [_line(f"{BASIS[c['basis']]} {c['text']}") for c in fill["cause"]]
     else:

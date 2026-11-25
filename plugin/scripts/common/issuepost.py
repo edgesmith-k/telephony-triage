@@ -54,6 +54,49 @@ def normal_hold(analysis: dict, rec: dict | None = None) -> bool:
     return ((analysis or {}).get("prior") or {}).get("unfit_reason") == "normal"
 
 
+def investigate_mode(analysis: dict) -> dict:
+    """조사 모드(11/25 A635) 판정 한 곳: 1위 후보가 없거나 1위 C=0(판정 불가 포함)이면 `{mode: true, reason: 후보 없음|1위 C=0}`,
+    아니면(1위 C=1·채택) `{mode: false}`. run이 analysis.json `investigate`로 쓰고, check-output·포털은 그 칸을 읽는다."""
+    cands = [c for c in (analysis or {}).get("candidates") or [] if isinstance(c, dict)]
+    if not cands:
+        return {"mode": True, "reason": "후보 없음"}
+    if ((analysis or {}).get("decision") or {}).get("state") == "accepted" or cands[0].get("C"):
+        return {"mode": False}
+    return {"mode": True, "reason": "1위 C=0"}
+
+
+INVESTIGATION_PREFIX = "- 조사 결론 (LLM, "
+INVESTIGATION_LABEL = {"identified": "검증 통과", "insufficient_evidence": "근거 부족"}
+
+
+def investigation_lines(inv: dict, top: dict | None = None, why: bool = True) -> list[str]:
+    """조사 결론(analysis.json `investigation`) → report.md 줄(머리 `- `, 하위 `  - `). Jira 본문(`issue_post`)은 앞 기호를 떼고 같은 글을
+    쓴다. 머리: 원인 한 줄·첫 어긋남(단계와 기대)·책임 층·근거 줄 상태·실패한 검증. 검증 통과이고 규칙 1위(`top`, C=0)가 있으면
+    같은 원인이면 머리 꼬리에, 다르면 `관측된 규칙 일치` 하위 줄로 적는다. 근거 부족은 결론이 아니라고 하위 줄에 밝히고, `why`면
+    실패한 검증의 이유도 하위 줄로(Jira 본문은 CAUSE 칸 상한 때문에 이름만)."""
+    ok = inv.get("status") == "identified"
+    head = f"{INVESTIGATION_PREFIX}{INVESTIGATION_LABEL.get(inv.get('status'), '근거 부족')}): "
+    if inv.get("hyp") is None:
+        return [head + "가설 없음 — 원인 보류 그대로"]
+    fd = inv.get("first_divergence") or {}
+    failed = [g for g in inv.get("gate") or [] if not g.get("ok")]
+    out = [head + f"{inv.get('cause')} / 첫 어긋남: " + (f"단계 {fd.get('step')} — {fd.get('expect')}" if fd else "없음")
+           + f" / 책임 층: {inv.get('layer') or '없음'} / 근거 줄: {inv.get('status')}"
+           + (f" / 실패한 검증: {', '.join(str(g.get('name')) for g in failed)}" if failed else "")]
+    if why and failed:
+        out.append("  - 실패 이유: " + "; ".join(f"{g.get('name')} — {g.get('why')}" for g in failed))
+    cause = (top or {}).get("cause")
+    if ok and top:
+        if cause and cause in str(inv.get("cause") or ""):
+            out[0] += f" (규칙 1위 {cause}와 같음)"
+        else:
+            out.append(f"  - 관측된 규칙 일치: {top.get('category')} > {top.get('type')} > {cause or '원인 미확인'} — 규칙 1위"
+                       "(원인 일치 없음), 조사 결론과 다름")
+    out.append("  - 점수·분류·이슈 DB 기록은 그대로다. 채택하면 Step 7에서 새 원인 초안의 출발점으로 쓴다" if ok else
+               "  - 근거가 모자라 결론으로 쓰지 않는다 — 원인은 보류 그대로. 실패한 검증을 보고 로그를 더 확인한다")
+    return out
+
+
 HELD_REASON = {"no_reference": "실패 지점을 잡지 못함(기준 줄·스텝 마커·TC 파일+시계 차 중 로그에서 찾은 것 없음)",
                "no_candidate": "맞는 후보 없음", "cause_unconfirmed": "유형만 일치, 원인 미확인",
                "cause_unjudged": "원인 판정 불가(시그니처 시간 초과·오류)",

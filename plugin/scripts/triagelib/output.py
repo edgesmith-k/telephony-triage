@@ -36,9 +36,10 @@ import os
 import re
 import stat
 import sys
+from datetime import timedelta
 from pathlib import Path
 
-from common import evidence, masking, provenance, shown
+from common import evidence, issuepost, logtime, masking, provenance, shown
 from common.fixtures import CAUSE_ID
 from common.exitcodes import CHECK_FAILED, OK, USAGE
 
@@ -117,7 +118,7 @@ FORMAT_NEXT = ("explore-output.md에서 형식 경고가 가리킨 칸만 고쳐
 FORMAT_CLIP = 600
 RECHECK_KEPT = "첫 검사 결과 유지(다시 검사가 형식·마스킹 검사에서 실패해 리포트 줄을 바꾸지 않았다)"
 TIMER_RX = re.compile(r"타이머|timer|throttl|스로틀|재시도|retry|backoff|임계|threshold|카운터|counter|횟수", re.IGNORECASE)
-BOUNDARIES = ("AP 내부", "AP-CP 경계", "CP 내부", "CP-망 경계", "환경", "모름")
+BOUNDARIES = ("AP 내부", "AP-CP 경계", "CP 내부", "CP-망 경계", "망", "환경", "모름")
 # `첫 갈라짐` 번호: 맨 앞 `단계 N`·`N단계`·선두 숫자만(`없음…`이나 문장 속 숫자는 None — 시각 `13:05`를 단계로 읽지 않게)
 CLAIM_STEP_RX = re.compile(r"^[\s`*]*(?:단계\s*#?\s*(\d+)|#?(\d+)\s*단계|#?(\d+)(?!\d|:))")
 # `→ 고치면 결과가 뒤집히나: 예|아니오` 답(뒤 설명 허용). 틀 그대로 `예|아니오`면 group(2)가 있다(값 없음)
@@ -478,6 +479,132 @@ def _recheck_open(job: Path) -> bool:
     return isinstance(rec, dict) and bool(rec.get("format_warnings")) and not rec.get("format_recheck")
 
 
+# --- 조사 결론 게이트(11/25 A635, 07-workflow §Step 5-2 조사 모드) ------------------------------------------------
+# analysis.json `investigate.mode`(run이 판정)일 때만 가장 유력(없으면 가설 1)을 본다. 판정은 아래 칸·원문 대조 결과만 쓴다(LLM 판단 아님)
+
+NUM_UNIT_RX = re.compile(r"\d+(?:\.\d+)?\s*(?:ms|s|초|분|회|번(?!째))(?![A-Za-z])")
+QUOTE_TS_RX = re.compile(r"\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})|(?:\d{4}-)?\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3,9}"
+                         r"|\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?")
+OUTER_SIDES = {"CP 내부": ("cp",), "CP-망 경계": ("cp", "net"), "망": ("net",)}
+# CP 쪽 = tags.yaml `ipc: vendor` 태그와 아래 카테고리, 망 쪽 = 아래 카테고리. 공개 기본값은 placeholder다
+CP_CATEGORIES, NET_CATEGORIES = ("modem",), ("nas",)    # TODO(SITE:S9) 사내 tags.yaml의 모뎀·망 거절(NAS) 카테고리 이름
+SIDE_LABEL = {"cp": "CP", "net": "망"}
+INV_CAUSE_MAX, INV_WHY_MAX, INV_EXPECT_MAX = 120, 80, 80
+
+
+def _layer(value) -> str | None:
+    """`책임 경계`·기대 주체 칸 → `BOUNDARIES` 값(앞부분 일치, `AP-CP 경계(변환·직렬화)`도), 목록 밖·없음이면 None."""
+    s = str(value or "").lstrip("`* ")
+    return next((b for b in BOUNDARIES if s.startswith(b)), None)
+
+
+def _quote_ts(q: str, events: dict | None):
+    """인용 앞 시각(타임라인 UTC `HH:MM:SS.mmm`, 사본 logcat `MM-DD HH:MM:SS.mmm`, ISO) → UTC datetime, 못 읽으면 None."""
+    from triagelib import window
+    m = QUOTE_TS_RX.match(evidence.obs_quote(q) or "")
+    return window.parse_at(m.group(0), events or {})[0] if m else None
+
+
+def _quote_tag(q: str) -> str | None:
+    """인용의 태그(행 문법 넷째 칸 — 타임라인 줄 그대로, 원문 모양은 `raw_row`로 바꿔서). 못 읽으면 None."""
+    s = evidence.obs_quote(q) or ""
+    row = s if evidence.ROW_RX.match(s) else evidence.raw_row(s)
+    parts = (row or "").split(" ", 4)
+    return parts[3] if len(parts) >= 4 and parts[3] != "-" else None
+
+
+def _after_ref(job: Path, ok_quotes: list[str], events: dict | None) -> tuple[bool, str]:
+    """게이트 4: 기준 시각(`explore-input.json` around) 뒤 줄을 ok로 인용했거나, sha가 맞는 window 구간이 기준 뒤를 덮는다."""
+    try:
+        ref = logtime.parse_ts(str((_load(job / EXPLORE_INPUT_FILE) or {}).get("around")))
+    except ValueError:
+        return True, "해당 없음(기준 시각 없음)"
+    if any((t := _quote_ts(q, events)) is not None and t > ref for q in ok_quotes):
+        return True, ""
+    names = set(_windows(job)[0])
+    for w in (_load(job / WINDOW_RECORD) or {}).get("windows") or []:
+        try:
+            if w.get("path") in names and logtime.parse_ts(w["at"]) + timedelta(seconds=(w.get("span") or 0) / 2) >= ref:
+                return True, ""
+        except (KeyError, TypeError, ValueError):
+            continue
+    return False, "기준 시각 뒤 줄 인용·구간 없음(실패 뒤를 보지 않음)"
+
+
+def _outer(events: dict | None, ok_quotes: list[str], layer: str | None) -> tuple[bool, str]:
+    """게이트 6: CP·망 쪽 결론이면 ok 인용 중 그쪽 태그(`CP_CATEGORIES`·`ipc: vendor`, `NET_CATEGORIES`) 줄이 하나 이상."""
+    from common import parser_rules
+    sides = OUTER_SIDES.get(layer or "")
+    if not sides:
+        return True, "해당 없음(AP·환경 쪽 결론)"
+    try:
+        rules = parser_rules.load(str(((events or {}).get("rules") or {}).get("path") or ""))
+    except Exception:       # noqa: BLE001 — 규칙을 못 읽으면 실패로 둔다(통과로 표시하지 않는다)
+        return False, "tags.yaml을 읽지 못함"
+    cats = set(rules.tag_exact.values()) | {c for _p, c in rules.tag_regexes}
+    marked = {"cp": rules.declares("ipc") or bool(cats & set(CP_CATEGORIES)), "net": bool(cats & set(NET_CATEGORIES))}
+    if not any(marked[s] for s in sides):
+        return False, "tags.yaml에 CP/망 표시 없음"
+    side = {"cp": lambda t: rules.tag_attr(t, "ipc") == "vendor" or rules.tag_category(t) in CP_CATEGORIES,
+            "net": lambda t: rules.tag_category(t) in NET_CATEGORIES}
+    tags = [t for t in map(_quote_tag, ok_quotes) if t]
+    if any(side[s](t) for t in tags for s in sides if marked[s]):
+        return True, ""
+    return False, f"{layer} 결론인데 원문 확인된 인용에 {'·'.join(SIDE_LABEL[s] for s in sides)} 태그 줄 없음"
+
+
+def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: dict | None) -> dict:
+    """조사 결론 게이트 6개 → analysis.json·check-output 기록 `investigation`. 하나라도 실패면 insufficient_evidence."""
+    hyps = fields.get("hyps") or []
+    if not hyps:
+        return {"status": "insufficient_evidence", "hyp": None, "cause": None, "layer": None, "first_divergence": None,
+                "gate": [{"name": "가설", "ok": False, "why": "가설 없음"}], "explore_sha": sha}
+    _raw_ready()
+    k = _picked(fields)
+    h = hyps[k]
+    rows = h.get("기대 체인") or []
+    quotes = h["로그로 확인"] + evidence.chain_quotes(h)
+    verdicts = None if per_hyp is None else per_hyp[k] + chain_v[k]
+    first = next((r for r in rows if r["일치"] == "false"), None)
+    m = CLAIM_STEP_RX.match(h.get("첫 갈라짐") or "")
+    claim = int(next(g for g in m.groups() if g)) if m else None
+    layer = _layer(h.get("책임 경계"))
+    gate: list[dict] = []
+
+    def add(name: str, ok, why: str = "") -> None:
+        gate.append({"name": name, "ok": bool(ok), "why": why[:INV_WHY_MAX]})
+
+    if verdicts is None:
+        add("인용 원문", False, "근거 원문 검사 건너뜀")
+    else:
+        fab, n_ok = verdicts.count("fabricated"), verdicts.count("ok")
+        add("인용 원문", not fab and n_ok, "" if not fab and n_ok else f"원문에 없음 {fab}, 원문 확인 {n_ok}")
+    add("첫 어긋남", first is not None and claim == first["단계"],
+        "기대 체인 표 없음" if not rows else "표에 false 단계 없음" if first is None
+        else "" if claim == first["단계"] else f"첫 갈라짐 {claim or '없음'} ≠ 가장 이른 false 단계 {first['단계']}")
+    subject = _layer(first["주체"]) if first else None
+    add("책임 층", layer not in (None, "모름") and first is not None and subject == layer,
+        "책임 경계 칸 없음·목록 밖" if layer is None else "책임 경계 모름" if layer == "모름" else "첫 갈라짐 단계 없음"
+        if first is None else "기대 주체 칸 없음(옛 형식 표)" if not first["주체"] else ""
+        if subject == layer else f"책임 경계 {layer} ≠ 단계 {first['단계']} 기대 주체 {subject or _one(first['주체'])[:20]}")
+    ok_quotes = [q for q, v in zip(quotes, verdicts or []) if v == "ok"]
+    add("실패 뒤 흔적", *_after_ref(job, ok_quotes, events))
+    mech = h.get("메커니즘 재계산") or ""
+    flip = FLIP_RX.search(mech)
+    answer = None if flip and flip.group(2) else (flip or FLIP_TAIL_RX.search(mech))
+    if not NUM_UNIT_RX.search(f"{(first or {}).get('기대') or ''} {h['가설'] or ''}"):
+        add("숫자 메커니즘", True, "해당 없음(숫자 기대 없음)")
+    else:
+        add("숫자 메커니즘", mech.strip() and not (flip and flip.group(2)) and not (answer and answer.group(1) != "예"),
+            "숫자 기대인데 메커니즘 재계산 없음" if not mech.strip() else "재계산 답이 틀 그대로" if flip and flip.group(2)
+            else "재계산 답이 아니오(고쳐도 안 뒤집힘)" if answer and answer.group(1) != "예" else "")
+    add("외부 근거", *_outer(events, ok_quotes, layer))
+    return {"status": "identified" if all(g["ok"] for g in gate) else "insufficient_evidence", "hyp": k + 1,
+            "cause": _one(h["가설"])[:INV_CAUSE_MAX] or None, "layer": layer,
+            "first_divergence": {"step": first["단계"], "expect": _one(first["기대"])[:INV_EXPECT_MAX]} if first else None,
+            "gate": gate, "explore_sha": sha}
+
+
 # --- 그리기 ----------------------------------------------------------------------------------------------
 
 def _head(current: str | None, prefix: str, default: str) -> str:
@@ -726,6 +853,58 @@ def _rebase_module_inputs(job: Path, old: str, new: str) -> bool:
     return True
 
 
+def _save_analysis(job: Path, new: dict, read_sha: str | None, key: str, warn: str) -> tuple[dict | None, dict]:
+    """analysis.json을 `new`로 바꿔 쓴다: 4KB 맞춤(`rep.fit` — 판단의 사건(events)부터 준다) → 스키마 검사(TT_SCHEMA_CHECK) → 처음
+    읽은 뒤 바뀌지 않았는지 해시 대조 → 원자 쓰기 → module-skill.json 입력 해시 갱신. → (쓴 내용 | None, 기록에 더할 칸 — 못 썼으면
+    `{key: 사유}`, 해시를 못 고쳤으면 `module_inputs_unwritten: true`)."""
+    result = rep.fit(new)
+    why = None
+    violation = rep.schema_violation(result)
+    if violation:
+        why, detail = "스키마 위반", violation
+    elif _read_analysis(job)[1] != read_sha:
+        why = detail = "검사 중 analysis.json이 바뀌었다"
+    if why:
+        print(warn.format(why=detail), file=sys.stderr)
+        return None, {key: why}
+    data = (rep.dumps(result) + "\n").encode("utf-8")
+    try:
+        _write_atomic(job / "analysis.json", data)
+    except OSError:
+        print(warn.format(why="쓰기 실패"), file=sys.stderr)
+        return None, {key: "쓰기 실패"}
+    return result, ({} if not read_sha or _rebase_module_inputs(job, read_sha, _sha(data)) else {"module_inputs_unwritten": True})
+
+
+WARN_INVESTIGATION = "경고: analysis.json 조사 결론(investigation)을 쓰지 못했다({why})"
+
+
+def _place_investigation(report: Path, lines: list[str], top: bool) -> bool:
+    """조사 결론 줄(`issuepost.investigation_lines`)을 report.md에 넣는다(앞 검사의 줄은 지운다): 검증 통과면 CAUSE 칸 맨 위,
+    근거 부족이면 `- 결론:` 줄 아래(결론처럼 보이지 않게). 넣을 자리가 없거나 못 쓰면 False."""
+    if _kind(report) != "file":
+        return False
+    rows = report.read_text(encoding="utf-8").split("\n")
+    at = next((i for i, r in enumerate(rows) if r.startswith(issuepost.INVESTIGATION_PREFIX)), None)
+    if at is not None:
+        end = at + 1
+        while end < len(rows) and rows[end].startswith("  - "):
+            end += 1
+        del rows[at:end]
+    i = next((i for i, r in enumerate(rows) if r.startswith("### CAUSE" if top else rep.CONCLUSION_PREFIX)), None)
+    if i is None:
+        return False
+    i += 1
+    while not top and i < len(rows) and rows[i].startswith("  - "):
+        i += 1
+    rows[i:i] = lines
+    try:
+        _write_atomic(report, "\n".join(rows).encode("utf-8"))
+    except OSError:
+        return False
+    return True
+
+
 def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, hold: bool = False,
                      opinion: str | None = None, normal: bool = False, checks: list | None = None) -> dict:
     """analysis.json `decision`을 고친다(단계 4): 탐색 적합성 확인 보류(`hold`)면 채택 → held/fit_check(counter 없앰), 심층 분석
@@ -750,23 +929,9 @@ def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, h
         if any(c.get("cause") == selected and c.get("verdict") == "맞음" for c in checks or []):
             return {}       # 후보 확인이 채택 원인도 맞음이라 했으면 counter를 붙이지 않는다
         new = {**dec, "counter": {"cause": m.group(1)}}
-    result = rep.fit({**analysis, "decision": new})     # 4KB를 넘으면 판단의 사건(events)부터 준다 — 상태·사유·counter는 그대로
-    why = None
-    violation = rep.schema_violation(result)
-    if violation:
-        why, detail = "스키마 위반", violation
-    elif _read_analysis(job)[1] != read_sha:
-        why = detail = "검사 중 analysis.json이 바뀌었다"
-    if why:
-        print(WARN_DECISION.format(why=detail), file=sys.stderr)
-        return {"decision_unwritten": why}
-    data = (rep.dumps(result) + "\n").encode("utf-8")
-    try:
-        _write_atomic(job / "analysis.json", data)
-    except OSError:
-        print(WARN_DECISION.format(why="쓰기 실패"), file=sys.stderr)
-        return {"decision_unwritten": "쓰기 실패"}
-    extra = {} if not read_sha or _rebase_module_inputs(job, read_sha, _sha(data)) else {"module_inputs_unwritten": True}
+    result, extra = _save_analysis(job, {**analysis, "decision": new}, read_sha, "decision_unwritten", WARN_DECISION)
+    if result is None:
+        return extra
     report = job / "report.md"
     if not rep.rewrite_line(report, rep.DECISION_PREFIX, [rep.decision_line(new, analysis.get("candidates") or [], normal)]):
         print(WARN_REWRITE, file=sys.stderr)
@@ -912,7 +1077,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
         before = _quotes(purpose, _parse(purpose, mode, raw))
         if len(before) == len(quotes):
             raw_items = frozenset(i for i, (a, b) in enumerate(zip(before, quotes)) if a != b)
-    res = fab_by_hyp = per_hyp = alts = None
+    res = fab_by_hyp = per_hyp = chain_v = alts = None
     check_bad: set = set()
     source, tags = evidence.source_text(src_text) if src_skip is None and src_text is not None else (None, None)
     if purpose == "explore" and source is not None and quotes:
@@ -973,6 +1138,14 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
                                      checks=fields.get(evidence.CHECK_FIELD) or [])
     else:
         dec_extra = {}
+    inv, inv_extra = None, {}
+    if purpose == "explore" and (analysis.get("investigate") or {}).get("mode"):     # 조사 모드(run이 판정): 게이트 → report.md·analysis.json
+        inv = _investigation(job, fields, per_hyp, chain_v, sha, events)
+        if not _place_investigation(report, issuepost.investigation_lines(inv, (analysis.get("candidates") or [None])[0]),
+                                    inv["status"] == "identified"):
+            print(WARN_REWRITE, file=sys.stderr)
+        inv_extra = _save_analysis(job, {**analysis, "investigation": inv}, read_sha, "investigation_unwritten",
+                                   WARN_INVESTIGATION)[1]
 
     counts = {k: (res or {}).get(k, 0) for k in ("fabricated", "weak", "raw")}
     n = (res or {}).get("n", 0)
@@ -980,7 +1153,8 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
                            "quotes": n, **counts, **({"fit_hold": hold, "fit_hold_reason": reason} if hold else {}),
                            **({"top_fit": fields["top_fit"]["fit"] or "읽지 못함"} if fields.get("top_fit") else {}),
                            **({"top_fit_cause": fields["top_fit"]["cause"]} if (fields.get("top_fit") or {}).get("cause") else {}),
-                           **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra,
+                           **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra, **inv_extra,
+                           **({"investigation": inv} if inv else {}),
                            **({"normal": [i + 1 for i, v in enumerate(normal_ok) if v]} if any(normal_ok) else {}),
                            **({"rules": rules_kept} if rules_kept else {}), **({"rules_dropped": rules_dropped} if rules_dropped else {}),
                            **({"format_warnings": fmt} if fmt else {}), **({"format_recheck": True} if args.recheck else {})})
@@ -992,6 +1166,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     warn = next((s.strip() for s in subs if s.startswith("  - 경고: 1위 판단")), None)
     _emit({"line": head, "evidence": sub.lstrip(), "quotes": n, **counts, **({"warning": warn} if warn else {}),
            **({"windows_excluded": win_bad} if win_bad else {}), **({"format_warnings": fmt} if fmt else {}),
+           **({"investigation": inv["status"]} if inv else {}),
            **({"next": FORMAT_NEXT} if fmt and not args.recheck else {})})
     return OK
 

@@ -1076,6 +1076,7 @@ class ReportMixin:
             "code": {**core["code"], "auto": True} if self.code_auto and not core["code"].get("skipped") else core["code"],
             "analyzer": core["analyzer"],
             "explore": core["explore"],
+            "investigate": issuepost.investigate_mode({"candidates": candidates, "decision": decision}),
             "prior": getattr(self, "prior", None),      # 재실행: 이전 1위·탐색 가설·기준 줄 조회(캐시 core 밖, 실행마다)
             "warnings": self.warnings + core["extra_warnings"],
             "notes": self.notes,
