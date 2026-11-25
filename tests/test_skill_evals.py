@@ -3642,6 +3642,30 @@ def test_grounding_row_needs_report_line_and_record(tmp_path):
     assert grader.grounding_row(_grounding_env(tmp_path / "f", zero, {**good, "quotes": 0}), "MOCK-9076", "deep", None)()[0] is False
 
 
+def test_grounding_row_accepts_script_added_sources_only(tmp_path):
+    """check-output이 뷰 뒤에 붙이는 출처(window 구간·summary.md, 탐색이면 logs-masked 사본)는 뷰 출처로 본다(eval 76 i8-1126-b가
+    `["module-skill/deep/timeline.md", "summary.md"]`로 거짓 실패). 뷰가 없거나 첫 항목이 아니거나 다른 출처가 섞이면 여전히 실패."""
+    line = "  - 근거 원문 검사: 인용 5개 중 원문에 없음 0"
+    view = "module-skill/deep/timeline.md"
+
+    def row(name, source, purpose="deep"):
+        ctx = _grounding_env(tmp_path / name, line, {"source": source, "quotes": 5})
+        if purpose == "explore":
+            job = ctx.work / "MOCK-9076"
+            (job / "module-skill.json").write_text(json.dumps({"explore": {"timeline": {"path": view}}}), encoding="utf-8")
+            (job / "check-output.json").write_text(json.dumps({"explore": {"source": source, "quotes": 5}}), encoding="utf-8")
+        return grader.grounding_row(ctx, "MOCK-9076", purpose, None)()[0]
+    assert row("a", [view, "summary.md"]) is True
+    assert row("b", [view, "window-1.md", "window-2.md", "summary.md"]) is True
+    assert row("c", [view, "summary.md", "logs-masked/x.log"], "explore") is True
+    assert row("d", ["summary.md", view]) is False                    # 뷰가 첫 출처가 아니다
+    assert row("e", ["timeline.md", "summary.md"]) is False           # 기록된 뷰가 아닌 타임라인
+    assert row("f", [view, "events.json"]) is False                   # 이벤트 원문이 섞였다
+    assert row("g", [view, "logs-masked/x.log"]) is False             # 사본은 탐색에서만 check-output이 붙인다
+    assert row("h", [view, "window-0.md", "../logs/x.log"]) is False
+    assert row("i", []) is False
+
+
 def test_analyzer_called_accepts_read_path_and_fails_without_records(tmp_path):
     env_dir = _synthetic_env(tmp_path)
     run = run_dir(tmp_path)
@@ -3767,6 +3791,76 @@ def test_bash_read_paths_resolves_cd_vars_and_skips_writes():
     assert f("awk 'NR<=40' a; sed -n '/<t>/p' b; cat /j/c>/tmp/x 2>&1", "/r")[0] == ["/r/a", "/r/b", "/j/c"]
 
 
+def test_bash_read_paths_windows_drive_paths_are_absolute():
+    """Git Bash 실행자가 쓰는 `C:/…` 경로는 절대 경로다(eval 76 i8-1126-b: `cd C:/…/MOCK-9076 && head …`를 env 경로에 겹쳐 붙여
+    read 밖으로 거짓 실패). 드라이브 절대 경로가 아니면(`C:x`·중간의 `C:/`) 예전처럼 상대 경로다 — Ubuntu 경로 판정은 그대로."""
+    f = grader.bash_read_paths
+    assert f("cd C:/w/MOCK-9076 && head -c 5000 module-skill/deep/a.md", "C:/hw/env-76") == (
+        ["C:/w/MOCK-9076/module-skill/deep/a.md"], "C:/w/MOCK-9076")
+    assert f(r'cat "C:\w\a.md"', "/r")[0] == ["C:/w/a.md"]
+    # 드라이브 경로로 들어가 다른 곳을 읽으면 그 실제 경로로 센다(진짜 위반은 그대로 잡힌다)
+    assert f("cd C:/w/MOCK-9076 && cat ../_module-skills/ofono/data/SKILL.md", "/r")[0] == ["C:/w/_module-skills/ofono/data/SKILL.md"]
+    assert f("cat C:x.md; cat d/C:/y.md", "/r")[0] == ["/r/C:x.md", "/r/d/C:/y.md"]
+
+
+def test_e76_reads_ok_with_windows_drive_cd(tmp_path):
+    """eval 76 3번 행: read 목록 파일을 `cd C:/…/JOB && head …`로 읽으면 통과, 같은 cd 뒤 _module-skills·read 밖을 읽으면 실패."""
+    job = "C:/eval/work/MOCK-9076"
+
+    def row(name, cmd):
+        ctx = _module_run(tmp_path / name, "deep", "MOCK-9076", _e76_out(job), ("Bash", {"command": cmd}, "ok", False))
+        return grader.checks(76, ctx)[2]()[0]
+    good = (f"cd {job} && for f in module-skill/deep/ofono/_common/layers.md module-skill/deep/ofono/data/SKILL.md "
+            "module-skill/deep/timeline.md deep-input.json; do head -c 5000 $f; done")
+    assert row("a", good) is True
+    assert row("b", good + f"; cd {job} && cat ../_module-skills/ofono/data/SKILL.md") is False
+    assert row("c", f"cd {job} && cat module-skill/deep/ofono/voice/SKILL.md") is False      # read 밖
+
+
+def test_explore_order_skips_failed_reads(tmp_path):
+    """읽기에 실패한 호출(파일 없음)은 열람이 아니다: eval 73 i8-1126-b는 `cat <틀린 경로>/log-guide.md | head -60`이 오류 표시 없이
+    `No such file or directory`로 끝났는데 1번 행이 읽은 것으로 셌다. 실제로 읽은 호출·hook이 막은 Read 시도는 그대로 센다."""
+    guide = "/p/skills/telephony-triage/reference/platforms/ofono/log-guide.md"
+
+    def read_at(name, *after):
+        env_dir = _synthetic_env(tmp_path / name)
+        run = run_dir(tmp_path / name)
+        _write_artifacts(run)
+        _seq_events(run, [("tool", "e1", "Bash", {"command": "python3 /p/triage.py explore MOCK-9073 --platform ofono"}, "ok", False),
+                          *after])
+        return grader.Ctx(env_dir, run).explore_order("log-guide.md")[2]
+    miss = ("tool", "b1", "Bash", {"command": "cat /p/reference/platforms/ofono/log-guide.md | head -60"},
+            "cat: '/p/reference/platforms/ofono/log-guide.md': No such file or directory", False)
+    ok = ("tool", "b2", "Bash", {"command": f"cat {guide} | head -60"}, "# oFono 로그 읽기\n...", False)
+    assert read_at("a", miss) is None
+    assert read_at("b", miss, ok) == 2
+    assert read_at("c", ("tool", "r1", "Read", {"file_path": guide}, "File does not exist.", True)) is None
+    assert read_at("d", ("tool", "r2", "Read", {"file_path": guide}, "PreToolUse:Read hook error: [telephony-triage] 거부", True)) == 1
+    assert read_at("e", ("tool", "r3", "Read", {"file_path": guide}, "1\t# oFono 로그 읽기", False)) == 1
+
+
+def test_e57_explore_not_asked_ignores_hypothesis_adoption_question(tmp_path):
+    """eval 57 2번 행: 탐색 '실행 여부' 질문(explore 호출 앞)만 센다. 탐색 뒤 Step 7의 "탐색 분석 가설 1을 채택할까요?"는 실행 여부
+    질문이 아니다(i8-1126-b 거짓 실패). explore 앞 탐색 질문, 심층 질문에 섞은 탐색 질문은 여전히 실패."""
+    deep_q = "심층 분석(mock-data-analyzer)을 할까요? (토큰이 추가로 듭니다. 탐색 분석은 explore.when: always라 실행합니다.)"
+    adopt_q = "탐색 분석 가설 1(데이터 설정 꺼짐)을 채택할까요?"
+
+    def row(name, *asks_before):
+        env_dir = _synthetic_env(tmp_path / name)
+        run = run_dir(tmp_path / name)
+        _write_artifacts(run)
+
+        def ask(k, q):
+            return ("tool", f"q{k}", "mcp__eval-approver__ask_user", {"question": q, "options": ["예", "아니오"]}, "답", False)
+        _seq_events(run, [*(ask(k, q) for k, q in enumerate(asks_before)),
+                          ("tool", "e1", "Bash", {"command": "python3 /p/triage.py explore MOCK-9044"}, "ok", False),
+                          ("tool", "r1", "Read", {"file_path": "/w/MOCK-9044/timeline.md"}, "x", False), ask(9, adopt_q)])
+        return grader.checks(57, grader.Ctx(env_dir, run))[1]()[0]
+    assert row("a", deep_q) is True
+    assert row("b", deep_q, "탐색 분석을 실행할까요? (토큰 추가 사용)") is False
+    assert row("c", "심층 분석과 탐색 분석을 할까요? (토큰 추가 사용)") is False
+
+
 def _module_run(tmp_path, purpose, key, out, *later, skills=("telephony-triage:telephony-triage",)):
     env_dir = _synthetic_env(tmp_path)
     run = run_dir(tmp_path)
@@ -3784,7 +3878,7 @@ def _e76_out(job):
 
 def test_e76_reads_ok_counts_bash_reads_and_ignores_entry_skill(tmp_path):
     def rows(name, *later, skills=("telephony-triage:telephony-triage",)):
-        job = str(tmp_path / name / "work" / "MOCK-9076")
+        job = (tmp_path / name / "work" / "MOCK-9076").as_posix()      # 실행자는 Git Bash에서도 / 경로를 쓴다(역슬래시는 셸이 먹는다)
         ctx = _module_run(tmp_path / name, "deep", "MOCK-9076", _e76_out(job),
                           *[("Bash", {"command": c.replace("JOB", job)}, "ok", False) for c in later], skills=skills)
         return grader.checks(76, ctx)[2]()[0], grader.no_direct_module_access(ctx)[0]
@@ -3822,7 +3916,7 @@ def test_e76_reads_ok_counts_bash_reads_and_ignores_entry_skill(tmp_path):
 
 def test_e77_reads_ok_bash_reads_and_raw_log(tmp_path):
     def row(name, *later, pre=()):
-        job = str(tmp_path / name / "work" / "MOCK-9077")
+        job = (tmp_path / name / "work" / "MOCK-9077").as_posix()
         ex = f"{job}/module-skill/explore"
         out = {"module": "android/data", "pick": {"by": "auto"},
                "read": [f"{ex}/android/_common/layers.md", f"{ex}/android/data/explore.md", f"{ex}/timeline.md"]}

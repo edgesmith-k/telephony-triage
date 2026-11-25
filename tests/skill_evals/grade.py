@@ -565,14 +565,17 @@ class Ctx:
         asked = next((i for i, e in enumerate(seq) if "탐색 분석" in question(e)
                       and re.search(r"할까요|실행할까|진행할까|할지", question(e)) and (explored is None or i < explored)), None)
         # explore 호출 자신은 아래에서 앞·뒤를 가린다(_opens는 triage 조각을 빼고 같은 호출의 읽기도 센다)
+        # 실패한 읽기(파일 없음)는 열람이 아니다 — `cat 틀린경로 | head`는 오류 표시 없이 끝나 결과 글로만 안다(eval 73 i8-1126-b)
         read = next((i for i, e in enumerate(seq) if e["kind"] == "tool" and i != explored
-                     and self._opens(e["name"], e["input"], (filename,))), None)
+                     and self._opens(e["name"], e["input"], (filename,)) and not _failed_read(e, filename)), None)
         if explored is not None:
             # 같은 Bash 호출 안에서 explore 뒤에 filename을 읽으면 explore 뒤 열람(순번 explored+0.5). 앞이면 인정하지 않는다.
             cmd = _strip_heredocs(str(seq[explored]["input"].get("command", "")))
             m = re.search(r"triage\.py[\"']?\s+explore\b", cmd)
             same = re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep)\b[^\n;&|]*" + re.escape(filename), cmd[m.end():])
             before = re.search(r"\b(cat|head|tail|less|sed|awk|jq|grep)\b[^\n;&|]*" + re.escape(filename), cmd[:m.start()])
+            if _failed_read(seq[explored], filename):
+                before = same = None
             if before and (read is None or read >= explored):
                 read = explored
             elif same and (read is None or read > explored):
@@ -1839,6 +1842,10 @@ def checks_w4(eid, ctx):
         order = ctx.explore_order()
         if got is None or order is None:
             raise _Manual("실행 기록(events.jsonl) 없음")
+        if order[0] is not None:
+            # 실행 여부 질문은 explore 호출 앞에만 있다. 탐색 뒤 Step 7의 "탐색 분석 가설 1을 채택할까요?"(가설 채택 질문)는 아니다
+            before = ctx.visible_between(0, order[0])
+            got = [t for t in got if t in before]
         # 혼입 = 심층 분석을 묻는 물음 문장에 탐색도 묻는 것. "(탐색 분석은 바로 실행합니다.)" 같은 알림은 아니다
         analyzer_q = [t for t in (asked(r"심층 분석|mock-data-analyzer") or []) if is_question(t, r"탐색")]
         return not got and not analyzer_q, f"탐색 질문 {len(got)}개; 심층 분석 질문에 탐색 혼입 {len(analyzer_q)}개"
@@ -2871,6 +2878,24 @@ def _expand(tok: str, env: dict, cwd: str | None) -> str | None:
     return None if "$" in out or "`" in out else out
 
 
+_DRIVE_ABS = re.compile(r"^[A-Za-z]:[/\\]")
+
+
+_NO_FILE = re.compile(r"No such file or directory|cannot open|cannot access|File does not exist")
+
+
+def _failed_read(e: dict, filename: str) -> bool:
+    """그 파일 읽기가 실패한 호출: Read 오류, 또는 Bash 결과에 그 파일 이름과 '파일 없음' 오류가 같은 줄에 있다."""
+    if e.get("name") == "Read":      # hook 거부 등 다른 오류는 그대로 시도로 센다
+        return bool(e.get("error")) and bool(_NO_FILE.search(str(e.get("result") or "")))
+    return any(filename in ln and _NO_FILE.search(ln) for ln in str(e.get("result") or "").splitlines())
+
+
+def _is_abs(path: str) -> bool:
+    """POSIX 절대 경로이거나 Windows 드라이브 절대 경로(`C:/…`, 역슬래시 꼴 포함 — Git Bash에서 실행자가 쓰는 꼴)다. Ubuntu 경로 판정은 그대로다."""
+    return path.startswith("/") or bool(_DRIVE_ABS.match(path))
+
+
 def _resolve(arg: str, env: dict, cwd: str | None) -> list[str]:
     """읽기 인자 → 정규화한 절대 경로들(`for V in A B`의 `$V`는 항목마다 하나). 변수를 못 펴거나 glob·`~`·cwd 모름이면 `?<원문>`."""
     loops = [n for n in {m.group(1) or m.group(2) for m in _VAR_REF.finditer(arg)} if isinstance(env.get(n), tuple)]
@@ -2879,7 +2904,9 @@ def _resolve(arg: str, env: dict, cwd: str | None) -> list[str]:
     val = _expand(arg, env, cwd)
     if val is None or val.startswith("~") or any(ch in val for ch in "*?["):
         return ["?" + arg]
-    if not val.startswith("/"):
+    if _DRIVE_ABS.match(val):
+        val = val.replace("\\", "/")
+    if not _is_abs(val):
         if cwd is None:
             return ["?" + arg]
         val = posixpath.join(cwd, val)
@@ -2983,10 +3010,12 @@ def bash_read_paths(cmd: str, cwd: str | None = None) -> tuple[list[str], str | 
             if verb == "pushd":
                 stack.append(("pushd", cwd))
             val = _expand(args[0], env, cwd) if args else None
-            if val is None or val.startswith("~") or (not val.startswith("/") and cwd is None):
+            if val is not None and _DRIVE_ABS.match(val):
+                val = val.replace("\\", "/")
+            if val is None or val.startswith("~") or (not _is_abs(val) and cwd is None):
                 cwd = None
             else:
-                cwd = posixpath.normpath(val if val.startswith("/") else posixpath.join(cwd, val))
+                cwd = posixpath.normpath(val if _is_abs(val) else posixpath.join(cwd, val))
         elif verb == "popd":
             cwd = stack.pop()[1] if stack and stack[-1][0] == "pushd" else None
         elif verb == "xargs":
@@ -3121,9 +3150,14 @@ def _module_seg_bad(seg: str) -> bool:
     return False
 
 
+_WINDOW_SRC = re.compile(r"window-[1-9]\d*\.md")      # = triagelib core.WINDOW_NAME_RE
+_MASKED_SRC = re.compile(r"logs-masked/[^/]+")         # = window.MASKED_DIR 아래 사본
+
+
 def grounding_row(ctx, job: str, purpose: str, source: str | None):
     """근거 원문 검사 행: 리포트에 `근거 원문 검사…: 인용 n(≥1)개 중 원문에 없음 k`가 있고 `JOB/check-output.json[purpose]`가
-    인용 1개 이상을 기록했으며 그 source가 기록된 뷰(`module-skill.json[purpose].timeline.path`) — source="events.json"이면
+    인용 1개 이상을 기록했으며 그 source가 기록된 뷰(`module-skill.json[purpose].timeline.path`, 목록이면 첫 항목이 뷰이고 나머지는
+    check-output이 붙이는 window·summary.md·탐색의 logs-masked 사본뿐) — source="events.json"이면
     events.json을 포함. `건너뜀(…)`이나 기록 없음은 실패다(건너뛴 검사를 통과로 세지 않는다)."""
     def check():
         report = _read(ctx.work / job / "report.md") or ""
@@ -3134,7 +3168,14 @@ def grounding_row(ctx, job: str, purpose: str, source: str | None):
             src_ok = isinstance(got, list) and "events.json" in got
         else:
             view = ((json.loads(_read(ctx.work / job / "module-skill.json") or "{}").get(purpose) or {}).get("timeline") or {})
-            src_ok = bool(got) and got == view.get("path")
+            if isinstance(got, list):
+                # check-output이 뷰 뒤에 붙이는 출처(triagelib/output.py): sha가 맞는 window 구간·전체 로그 모양 요약 summary.md,
+                # 탐색이면 인용 낱말이 든 마스킹 사본 줄(logs-masked/). 그 밖(events.json·원문 로그 등)이 섞이면 실패다
+                src_ok = bool(got) and got[0] == view.get("path") and all(
+                    isinstance(n, str) and (n == "summary.md" or _WINDOW_SRC.fullmatch(n)
+                                            or (purpose == "explore" and _MASKED_SRC.fullmatch(n))) for n in got[1:])
+            else:
+                src_ok = bool(got) and got == view.get("path")
         ok = bool(hit) and (rec.get("quotes") or 0) >= 1 and src_ok
         skipped = re.search(r"근거 원문 검사(?:\([^)]*\))?: 건너뜀\([^)]*\)", report)
         return ok, (f"리포트 줄={hit.group(0) if hit else (skipped.group(0) if skipped else '없음')}; "
