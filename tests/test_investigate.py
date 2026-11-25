@@ -1262,3 +1262,21 @@ def test_e46_deleting_a_no_recompute_line_does_not_turn_into_identified(tmp_path
     assert _failed(inv) == ["숫자 메커니즘"], inv["gate"]
     _d, inv = _run(_job(tmp_path / "fresh"), _out(), capsys)                   # 처음부터 재계산 없이 쓴 같은 가설은 그대로 통과
     assert inv["status"] == "identified", inv["gate"]
+
+
+def test_e77_rewriting_a_no_recompute_as_not_applicable_keeps_the_failure(tmp_path, capsys):
+    """eval 77: 재계산 '아니오'를 받은 같은 가설이 줄을 지우지 않고 `해당 없음 — …`으로 바꿔 쓰면 게이트 5를 통과했다 — `mech_no`가
+    남은 같은 머리는 답이 `예`(와 계산 숫자)일 때만 새로 판정하고 그 밖(없음·해당 없음·빈 답·틀)은 실패를 이어받는다. `예`와 숫자로
+    다시 쓰면 통과. 처음 검사에서 숫자 기대에 `해당 없음`만 쓰면 원래도 막힌다."""
+    for name, mech in (("na", "메커니즘 재계산: 해당 없음 — 원인이 타이머·임계값이 아니다"),
+                       ("blank", "메커니즘 재계산: 계산할 자료 없음 → 고치면 결과가 뒤집히나: 예|아니오")):
+        job = _job(tmp_path / name)
+        _run(job, _out(extra=(NO_MECH,)), capsys)
+        _d, inv = _run(job, _out(extra=(mech,)), capsys)
+        assert _failed(inv) == ["숫자 메커니즘"] and inv["gate"][4]["why"].startswith("앞 검사에서 이 가설"), (name, inv["gate"])
+    job = _job(tmp_path / "yes")
+    _run(job, _out(extra=(NO_MECH,)), capsys)
+    _d, inv = _run(job, _out(extra=("메커니즘 재계산: 01.2-00.1 = 1.1초 → 고치면 결과가 뒤집히나: 예",)), capsys)
+    assert inv["status"] == "identified", inv["gate"]
+    _d, inv = _run(_job(tmp_path / "first"), _out(rows=NUM_ROWS, extra=("메커니즘 재계산: 해당 없음 — 원인이 타이머가 아니다",)), capsys)
+    assert _failed(inv) == ["숫자 메커니즘"] and inv["gate"][4]["why"] == "재계산 답 없음(예/아니오)", inv["gate"]
