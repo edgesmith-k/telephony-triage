@@ -11,6 +11,7 @@
 - 범위: 2026-11-11T00:02:50.112Z ~ 2026-11-11T00:03:15.347Z, 줄 20, 모양 18개 중 18개. 기준 시각: 2026-11-11T00:03:05.000Z
 - 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
 
+00:02:50.169 p0 D SST-0 pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…  〔script 모양 1줄〕
 00:03:05.170 p0 D RILJ [3209]> GET_SMSC_ADDRESS [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
 00:03:05.171 p0 D RILJ [3209]< GET_SMSC_ADDRESS [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
 00:03:05.171 - D SmsDispatchersController sendTextInternal: messageId=0, uniqueMessageId=4  〔script 모양 1줄, 기준 뒤 첫 등장〕
@@ -21,7 +22,6 @@
 00:03:15.347 p0 D RILJ [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: ON [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
 00:02:50.135 p0 D RILJ [3192]< RADIO_POWER [PHONE0]  〔script 모양 2줄, 00:02:50.135~00:03:15.344〕
 00:02:50.169 p0 D SST-0 set service state as POWER_OFF  〔script 모양 1줄〕
-00:02:50.169 p0 D SST-0 pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…  〔script 모양 1줄〕
 00:02:50.139 p0 D SST-0 EVENT_RADIO_POWER_OFF_DONE  〔script 모양 1줄〕
 00:02:50.135 p0 D RILJ [UNSL]< UNSOL_RESPONSE_RADIO_STATE_CHANGED radioStateChanged: OFF [PHONE0]  〔script 모양 1줄〕
 00:02:50.132 p0 D RILJ [3192]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]  〔script 모양 1줄〕

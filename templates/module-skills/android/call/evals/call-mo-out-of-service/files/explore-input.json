@@ -12,6 +12,57 @@
   }
  ],
  "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-11-12T01:02:19.000Z",
+   "2026-11-12T01:17:19.000Z"
+  ],
+  "ref": "2026-11-12T01:07:19.000Z",
+  "after_sec": 600,
+  "candidates": 5,
+  "rows": [
+   {
+    "ts": "2026-11-12T01:06:53.984Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…",
+    "main": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.728Z",
+    "phone": null,
+    "level": "D",
+    "tag": "Telecom",
+    "msg": "CreateConnectionProcessor: Connection failed: (DisconnectCause [ Code: (ERROR) Label: (Cellular network not available) Description: (Mobile network not availab…",
+    "main": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.730Z",
+    "phone": null,
+    "level": "V",
+    "tag": "Telecom",
+    "msg": "CreateConnectionProcessor: attemptNextPhoneAccount, no more accounts, failing: ((SBC.oSC)->CS.crCo->H.CS.crCo->H.CS.crCo.pICR)->CSW.hCCC(cap/cast)@E-E-AgM_0_0_…",
+    "main": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.730Z",
+    "phone": null,
+    "level": "I",
+    "tag": "Telecom",
+    "msg": "Call: handleCreateConnectionFailure; callid=TC@4, disconnectCause=DisconnectCause [ Code: (ERROR) Label: (Cellular network not available) Description: (Mobile …",
+    "main": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.737Z",
+    "phone": null,
+    "level": "I",
+    "tag": "Telecom",
+    "msg": "CallLogManager: onCallStateChanged: call=TC@4, newState=DISCONNECTED, disconnectCause=ERROR: ((SBC.oSC)->CS.crCo->H.CS.crCo->H.CS.crCo.pICR)->CSW.hCCC(cap/cast…",
+    "main": true
+   }
+  ]
+ },
  "summary": {
   "ref": "2026-11-12T01:07:19.000Z",
   "range": [
@@ -25,6 +76,55 @@
    "2026-11-12T01:12:19.000Z"
   ],
   "groups": [
+   {
+    "ts": "2026-11-12T01:07:19.728Z",
+    "last": "2026-11-12T01:07:19.728Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "Telecom",
+    "msg": "CreateConnectionProcessor: Connection failed: (DisconnectCause [ Code: (ERROR) Label: (Cellular network not available) Description: (Mobile network not availab…",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.730Z",
+    "last": "2026-11-12T01:07:19.730Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "Telecom",
+    "msg": "CreateConnectionProcessor: attemptNextPhoneAccount, no more accounts, failing: ((SBC.oSC)->CS.crCo->H.CS.crCo->H.CS.crCo.pICR)->CSW.hCCC(cap/cast)@E-E-AgM_0_0_…",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.730Z",
+    "last": "2026-11-12T01:07:19.730Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "Telecom",
+    "msg": "Call: handleCreateConnectionFailure; callid=TC@4, disconnectCause=DisconnectCause [ Code: (ERROR) Label: (Cellular network not available) Description: (Mobile …",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:07:19.737Z",
+    "last": "2026-11-12T01:07:19.737Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "Telecom",
+    "msg": "CallLogManager: onCallStateChanged: call=TC@4, newState=DISCONNECTED, disconnectCause=ERROR: ((SBC.oSC)->CS.crCo->H.CS.crCo->H.CS.crCo.pICR)->CSW.hCCC(cap/cast…",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:06:53.984Z",
+    "last": "2026-11-12T01:06:53.984Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…"
+   },
    {
     "ts": "2026-11-12T01:07:19.392Z",
     "last": "2026-11-12T01:07:19.392Z",
@@ -66,36 +166,6 @@
     "after": true
    },
    {
-    "ts": "2026-11-12T01:07:19.728Z",
-    "last": "2026-11-12T01:07:19.728Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "Telecom",
-    "msg": "CreateConnectionProcessor: Connection failed: (DisconnectCause [ Code: (ERROR) Label: (Cellular network not available) Description: (Mobile network not availab…",
-    "after": true
-   },
-   {
-    "ts": "2026-11-12T01:07:19.730Z",
-    "last": "2026-11-12T01:07:19.730Z",
-    "n": 1,
-    "phone": null,
-    "level": "V",
-    "tag": "Telecom",
-    "msg": "CreateConnectionProcessor: attemptNextPhoneAccount, no more accounts, failing: ((SBC.oSC)->CS.crCo->H.CS.crCo->H.CS.crCo.pICR)->CSW.hCCC(cap/cast)@E-E-AgM_0_0_…",
-    "after": true
-   },
-   {
-    "ts": "2026-11-12T01:07:19.730Z",
-    "last": "2026-11-12T01:07:19.730Z",
-    "n": 1,
-    "phone": null,
-    "level": "I",
-    "tag": "Telecom",
-    "msg": "Call: handleCreateConnectionFailure; callid=TC@4, disconnectCause=DisconnectCause [ Code: (ERROR) Label: (Cellular network not available) Description: (Mobile …",
-    "after": true
-   },
-   {
     "ts": "2026-11-12T01:07:19.735Z",
     "last": "2026-11-12T01:07:19.735Z",
     "n": 1,
@@ -103,16 +173,6 @@
     "level": "V",
     "tag": "Telecom",
     "msg": "Call: setState CONNECTING -> DISCONNECTED: ((SBC.oSC)->CS.crCo->H.CS.crCo->H.CS.crCo.pICR)->CSW.hCCC(cap/cast)@E-E-AgM_0_0_0_0🔒",
-    "after": true
-   },
-   {
-    "ts": "2026-11-12T01:07:19.737Z",
-    "last": "2026-11-12T01:07:19.737Z",
-    "n": 1,
-    "phone": null,
-    "level": "I",
-    "tag": "Telecom",
-    "msg": "CallLogManager: onCallStateChanged: call=TC@4, newState=DISCONNECTED, disconnectCause=ERROR: ((SBC.oSC)->CS.crCo->H.CS.crCo->H.CS.crCo.pICR)->CSW.hCCC(cap/cast…",
     "after": true
    },
    {
@@ -132,15 +192,6 @@
     "level": "D",
     "tag": "SST-0",
     "msg": "updateCarrierDisplayName: radio is on but out of service, set plmn='No service'"
-   },
-   {
-    "ts": "2026-11-12T01:06:53.984Z",
-    "last": "2026-11-12T01:06:53.984Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "SST-0",
-    "msg": "pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…"
    },
    {
     "ts": "2026-11-12T01:06:53.983Z",

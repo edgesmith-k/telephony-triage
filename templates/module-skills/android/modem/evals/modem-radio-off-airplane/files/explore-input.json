@@ -19,7 +19,7 @@
   ],
   "ref": "2026-11-10T16:14:05.000Z",
   "after_sec": 600,
-  "candidates": 5,
+  "candidates": 9,
   "rows": [
    {
     "ts": "2026-11-10T16:14:05.381Z",
@@ -32,6 +32,30 @@
      "first": "2026-11-10T16:14:05.381Z",
      "last": "2026-11-10T16:14:05.381Z"
     },
+    "main": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.384Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0269]< OPERATOR error 1 [PHONE0]",
+    "main": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.387Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0271]< DATA_REGISTRATION_STATE error 1 [PHONE0]",
+    "main": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.395Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0273]< VOICE_REGISTRATION_STATE error 1 [PHONE0]",
     "main": true
    },
    {
@@ -54,6 +78,14 @@
     "level": "E",
     "tag": "SST-0",
     "msg": "handlePollStateResult: RIL returned RADIO_NOT_AVAILABLE.",
+    "main": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.423Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…",
     "main": true
    }
   ]
@@ -112,6 +144,46 @@
     "after": true
    },
    {
+    "ts": "2026-11-10T16:14:05.384Z",
+    "last": "2026-11-10T16:14:05.384Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0269]< OPERATOR error 1 [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.387Z",
+    "last": "2026-11-10T16:14:05.387Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0271]< DATA_REGISTRATION_STATE error 1 [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.395Z",
+    "last": "2026-11-10T16:14:05.395Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0273]< VOICE_REGISTRATION_STATE error 1 [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.423Z",
+    "last": "2026-11-10T16:14:05.423Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…",
+    "after": true
+   },
+   {
     "ts": "2026-11-10T16:14:05.342Z",
     "last": "2026-11-10T16:14:05.342Z",
     "n": 1,
@@ -149,16 +221,6 @@
     "level": "D",
     "tag": "SST-0",
     "msg": "powerOffRadioSafely: due to AIRPLANE_MODE_ON",
-    "after": true
-   },
-   {
-    "ts": "2026-11-10T16:14:05.346Z",
-    "last": "2026-11-10T16:14:05.346Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "SST-0",
-    "msg": "powerOffRadioSafely: Data is active on phone 1. Wait for all data disconnect.",
     "after": true
    },
    {
@@ -202,6 +264,16 @@
     "after": true
    },
    {
+    "ts": "2026-11-10T16:14:05.346Z",
+    "last": "2026-11-10T16:14:05.346Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "powerOffRadioSafely: Data is active on phone 1. Wait for all data disconnect.",
+    "after": true
+   },
+   {
     "ts": "2026-11-10T16:14:05.368Z",
     "last": "2026-11-10T16:14:05.368Z",
     "n": 1,
@@ -219,16 +291,6 @@
     "level": "D",
     "tag": "RILJ",
     "msg": "[0267]> NOTIFY_IMS_DATA_NETWORK accessNetwork=NGRAN dataNetworkState=DISCONNECTED physicalTransportType=WWAN physicalNetworkSlotIndex=0 [PHONE0]",
-    "after": true
-   },
-   {
-    "ts": "2026-11-10T16:14:05.379Z",
-    "last": "2026-11-10T16:14:05.379Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
-    "msg": "[0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]",
     "after": true
    },
    {
@@ -259,6 +321,16 @@
     "level": "D",
     "tag": "SST-0",
     "msg": "Data disconnected for all phones, turn radio off now.",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T16:14:05.379Z",
+    "last": "2026-11-10T16:14:05.379Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0268]> RADIO_POWER on = false forEmergencyCall= false preferredForEmergencyCall=false [PHONE0]",
     "after": true
    },
    {
@@ -348,16 +420,6 @@
     "phone": 0,
     "level": "D",
     "tag": "RILJ",
-    "msg": "[0269]< OPERATOR error 1 [PHONE0]",
-    "after": true
-   },
-   {
-    "ts": "2026-11-10T16:14:05.384Z",
-    "last": "2026-11-10T16:14:05.384Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
     "msg": "[0270]> QUERY_NETWORK_SELECTION_MODE [PHONE0]",
     "after": true
    },
@@ -422,26 +484,6 @@
     "after": true
    },
    {
-    "ts": "2026-11-10T16:14:05.387Z",
-    "last": "2026-11-10T16:14:05.387Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
-    "msg": "[0271]< DATA_REGISTRATION_STATE error 1 [PHONE0]",
-    "after": true
-   },
-   {
-    "ts": "2026-11-10T16:14:05.395Z",
-    "last": "2026-11-10T16:14:05.395Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
-    "msg": "[0273]< VOICE_REGISTRATION_STATE error 1 [PHONE0]",
-    "after": true
-   },
-   {
     "ts": "2026-11-10T16:14:05.422Z",
     "last": "2026-11-10T16:14:05.422Z",
     "n": 1,
@@ -459,16 +501,6 @@
     "level": "D",
     "tag": "SST-0",
     "msg": "Could not set ServiceState channel number. CellIdentity null",
-    "after": true
-   },
-   {
-    "ts": "2026-11-10T16:14:05.423Z",
-    "last": "2026-11-10T16:14:05.423Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "SST-0",
-    "msg": "pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…",
     "after": true
    },
    {

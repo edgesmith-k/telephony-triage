@@ -11,6 +11,8 @@
 - 범위: 2026-09-22T09:10:21.247Z ~ 2026-09-22T09:10:22.347Z, 줄 19, 모양 17개 중 17개. 기준 시각: 2026-09-22T09:10:20.000Z
 - 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
 
+09:10:21.411 p0 D ofonod [0,0263]< RIL_REQUEST_SIM_IO failed GENERIC_FAILURE  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:10:21.412 - I ofonod drivers/rilmodem/sim.c:ril_file_info_cb() Reply failure: GENERIC_FAILURE, 00, 00  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:10:21.247 - I mgmtd ui state refresh: airplane_mode=0 path/example_ui.go:12  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:10:21.297 - D vrild mux [ch1][RX] VIPC_EXAMPLE_SIGNAL_IND ind len=16  〔script 모양 2줄, 09:10:21.297~09:10:21.647, 기준 뒤 첫 등장〕
 09:10:21.357 - D ofonod drivers/rilmodem/sim.c:ril_sim_read_info() file 6f46, app_type 2  〔script 모양 1줄, 기준 뒤 첫 등장〕
@@ -23,9 +25,7 @@
 09:10:21.408 - D vrild mux [ch1][RX] VIPC_EXAMPLE_CARD_IO, RSP OK(VIPC_OK) seq=0x05e1 len=258  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:10:21.409 - I vrild [ExampleIccService_1] sim-io reply parsed, 258 bytes  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:10:21.409 - I vrild [IpcCtx_2] OnIpcComplete Request ID=58, result=2 -> chan 2 reply sent, 0 waiters, took 49 ms  〔script 모양 1줄, 기준 뒤 첫 등장〕
-09:10:21.411 p0 D ofonod [0,0263]< RIL_REQUEST_SIM_IO failed GENERIC_FAILURE  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:10:21.411 p0 I ofonod [0,0263]< RIL_REQUEST_SIM_IO (sw1=0x00,sw2=0x00,(null))  〔script 모양 1줄, 기준 뒤 첫 등장〕
-09:10:21.412 - I ofonod drivers/rilmodem/sim.c:ril_file_info_cb() Reply failure: GENERIC_FAILURE, 00, 00  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:10:21.409 - D vrild chan 2 <- reply written  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:10:21.410 - D vrild [IpcCtx_2] untrack seq 0x05e1 (0 in flight)  〔script 모양 1줄, 기준 뒤 첫 등장〕
 

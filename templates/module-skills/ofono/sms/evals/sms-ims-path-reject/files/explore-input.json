@@ -10,7 +10,7 @@
   ],
   "ref": "2026-09-21T10:30:05.000Z",
   "after_sec": 600,
-  "candidates": 2,
+  "candidates": 5,
   "rows": [
    {
     "ts": "2026-09-21T10:30:05.011Z",
@@ -21,9 +21,33 @@
     "main": true
    },
    {
+    "ts": "2026-09-21T10:30:05.012Z",
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 4104 [ExampleImsSmsManager] exampleSendSmsResult() ref=1 result=FAIL",
+    "main": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.015Z",
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/sms.c:tx_finished() send failed, giving up",
+    "main": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.016Z",
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/dbus.c:__ofono_error_failed() dbus_trace err return - i:org.ofono.MessageManager m:SendMessage p:/ril_0",
+    "main": true
+   },
+   {
     "ts": "2026-09-21T10:30:05.018Z",
     "phone": null,
-    "level": "W",
+    "level": "I",
     "tag": "mgmtd",
     "msg": "sms send error: Operation failed path/example_sms.go:12",
     "main": true
@@ -54,11 +78,41 @@
     "after": true
    },
    {
+    "ts": "2026-09-21T10:30:05.012Z",
+    "last": "2026-09-21T10:30:05.012Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 4104 [ExampleImsSmsManager] exampleSendSmsResult() ref=1 result=FAIL",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.015Z",
+    "last": "2026-09-21T10:30:05.015Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/sms.c:tx_finished() send failed, giving up",
+    "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.016Z",
+    "last": "2026-09-21T10:30:05.016Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/dbus.c:__ofono_error_failed() dbus_trace err return - i:org.ofono.MessageManager m:SendMessage p:/ril_0",
+    "after": true
+   },
+   {
     "ts": "2026-09-21T10:30:05.018Z",
     "last": "2026-09-21T10:30:05.018Z",
     "n": 1,
     "phone": null,
-    "level": "W",
+    "level": "I",
     "tag": "mgmtd",
     "msg": "sms send error: Operation failed path/example_sms.go:12",
     "after": true
@@ -124,16 +178,6 @@
     "after": true
    },
    {
-    "ts": "2026-09-21T10:30:05.012Z",
-    "last": "2026-09-21T10:30:05.012Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "imsd",
-    "msg": "[SLOT_0][I] 4104 [ExampleImsSmsManager] exampleSendSmsResult() ref=1 result=FAIL",
-    "after": true
-   },
-   {
     "ts": "2026-09-21T10:30:05.014Z",
     "last": "2026-09-21T10:30:05.014Z",
     "n": 1,
@@ -141,26 +185,6 @@
     "level": "I",
     "tag": "ofonod",
     "msg": "src/ims.c:example_sms_result() IMS_UNSOL_SMS_RESULT ref=1 result=1",
-    "after": true
-   },
-   {
-    "ts": "2026-09-21T10:30:05.015Z",
-    "last": "2026-09-21T10:30:05.015Z",
-    "n": 1,
-    "phone": null,
-    "level": "I",
-    "tag": "ofonod",
-    "msg": "src/sms.c:tx_finished() send failed, giving up",
-    "after": true
-   },
-   {
-    "ts": "2026-09-21T10:30:05.016Z",
-    "last": "2026-09-21T10:30:05.016Z",
-    "n": 1,
-    "phone": 0,
-    "level": "I",
-    "tag": "ofonod",
-    "msg": "src/dbus.c:__ofono_error_failed() dbus_trace err return - i:org.ofono.MessageManager m:SendMessage p:/ril_0",
     "after": true
    },
    {

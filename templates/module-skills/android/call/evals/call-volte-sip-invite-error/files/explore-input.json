@@ -53,16 +53,6 @@
   ],
   "groups": [
    {
-    "ts": "2026-09-04T12:02:01.400Z",
-    "last": "2026-09-04T12:02:01.400Z",
-    "n": 1,
-    "phone": null,
-    "level": "W",
-    "tag": "ImsPhoneCallTracker",
-    "msg": "[0] onCallStartFailed reasonCode=ImsReasonInfo :: {1014 : CODE_SIP_SERVICE_UNAVAILABLE, 503, null}",
-    "after": true
-   },
-   {
     "ts": "2026-09-04T12:02:01.300Z",
     "last": "2026-09-04T12:02:01.300Z",
     "n": 1,
@@ -70,6 +60,16 @@
     "level": "I",
     "tag": "VRIL-IMS",
     "msg": "[call] Received INVITE response status-code=503 slot=0",
+    "after": true
+   },
+   {
+    "ts": "2026-09-04T12:02:01.400Z",
+    "last": "2026-09-04T12:02:01.400Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "ImsPhoneCallTracker",
+    "msg": "[0] onCallStartFailed reasonCode=ImsReasonInfo :: {1014 : CODE_SIP_SERVICE_UNAVAILABLE, 503, null}",
     "after": true
    },
    {

@@ -29,10 +29,10 @@
 15:30:04.120 - W datad activate result: failed profile_id=1 retry in 10s[./src/call_example.cxx +30]
 15:30:04.500 - I mgmtd dbus signal org.ofono.ConnectionContext.PropertyChanged Active=false path/example_dbus.go:84
 
-## 이상 줄: W/E/F 레벨과 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 빠짐)
+## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
 
 - 범위: 2026-09-20T15:25:04.000Z ~ 2026-09-20T15:40:04.000Z (분석 구간 끝과 기준 시각 2026-09-20T15:30:04.000Z 뒤 600초 중 늦은 쪽까지).
-- 줄: 2. 프레임을 뺀 후보 2줄에서 F, 예외·crash 머리, E, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+- 줄: 2. 프레임을 뺀 후보 2줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
 
 15:30:04.100 - E ofonod src/gprs.c:pri_activate_callback() Activating context failed with error: Unknown error
 15:30:04.120 - W datad activate result: failed profile_id=1 retry in 10s[./src/call_example.cxx +30]

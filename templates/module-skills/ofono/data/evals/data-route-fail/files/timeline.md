@@ -11,10 +11,10 @@
 - 범위: 2026-09-20T15:20:00.000Z ~ 2026-09-20T15:20:06.200Z, 줄 13, 모양 13개 중 13개. 기준 시각: 2026-09-20T15:20:06.000Z
 - 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
 
-15:20:01.724 - E datad2 netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002  〔script 모양 1줄〕
-15:20:06.000 - W datad connectivity check failed profile_id=1[./src/check_example.cxx +40]  〔script 모양 1줄〕
-15:20:01.726 - W datad2 default route not installed for rmnet0  〔script 모양 1줄〕
+15:20:01.724 - I datad2 netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002  〔script 모양 1줄〕
 15:20:06.200 - I vrild signal strength report: level=4 placeholder  〔script 모양 1줄, 기준 뒤 첫 등장〕
+15:20:06.000 - W datad connectivity check failed profile_id=1[./src/check_example.cxx +40]  〔script 모양 1줄〕
+15:20:01.726 - I datad2 default route not installed for rmnet0  〔script 모양 1줄〕
 15:20:01.720 - I ofonod src/gprs.c:pri_activate_callback() context 1 active on rmnet0  〔script 모양 1줄〕
 15:20:01.710 p0 D ofonod [0,0021]< RIL_REQUEST_SETUP_DATA_CALL {status=0,retry=-1,cid=1,active=2,type=IP,ifname=rmnet0}  〔script 모양 1줄〕
 15:20:01.700 - I vrild SETUP_DATA_CALL rsp: ok cid=1 ifname=rmnet0  〔script 모양 1줄〕
@@ -38,11 +38,10 @@
 15:20:01.726 - I datad2 default route not installed for rmnet0
 15:20:06.000 - W datad connectivity check failed profile_id=1[./src/check_example.cxx +40]
 
-## 이상 줄: W/E/F 레벨과 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 빠짐)
+## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
 
 - 범위: 2026-09-20T15:15:06.000Z ~ 2026-09-20T15:30:06.000Z (분석 구간 끝과 기준 시각 2026-09-20T15:20:06.000Z 뒤 600초 중 늦은 쪽까지).
-- 줄: 3. 프레임을 뺀 후보 3줄에서 F, 예외·crash 머리, E, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+- 줄: 2. 프레임을 뺀 후보 2줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
 
-15:20:01.724 - E datad2 netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002
-15:20:01.726 - W datad2 default route not installed for rmnet0
+15:20:01.724 - I datad2 netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002
 15:20:06.000 - W datad connectivity check failed profile_id=1[./src/check_example.cxx +40]

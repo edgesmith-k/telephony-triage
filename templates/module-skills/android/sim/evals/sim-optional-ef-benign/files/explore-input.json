@@ -19,8 +19,34 @@
   ],
   "ref": "2026-10-16T08:30:14.000Z",
   "after_sec": 600,
-  "candidates": 3,
+  "candidates": 7,
   "rows": [
+   {
+    "ts": "2026-10-16T08:30:14.760Z",
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][RX] VIPC_EXAMPLE_CARD_IO, RSP Error(VIPC_E_FAILURE) seq=0x0c40 len=12",
+    "fold": {
+     "n": 1,
+     "first": "2026-10-16T08:30:14.760Z",
+     "last": "2026-10-16T08:30:15.931Z"
+    },
+    "main": true
+   },
+   {
+    "ts": "2026-10-16T08:30:14.763Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0233]< SIM_IO error 2 [PHONE0]",
+    "fold": {
+     "n": 1,
+     "first": "2026-10-16T08:30:14.763Z",
+     "last": "2026-10-16T08:30:15.932Z"
+    },
+    "main": true
+   },
    {
     "ts": "2026-10-16T08:30:14.764Z",
     "phone": null,
@@ -89,6 +115,26 @@
     "after": true
    },
    {
+    "ts": "2026-10-16T08:30:14.760Z",
+    "last": "2026-10-16T08:30:15.931Z",
+    "n": 2,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][RX] VIPC_EXAMPLE_CARD_IO, RSP Error(VIPC_E_FAILURE) seq=0x0c40 len=12",
+    "after": true
+   },
+   {
+    "ts": "2026-10-16T08:30:14.763Z",
+    "last": "2026-10-16T08:30:15.932Z",
+    "n": 2,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0233]< SIM_IO error 2 [PHONE0]",
+    "after": true
+   },
+   {
     "ts": "2026-10-16T08:30:14.602Z",
     "last": "2026-10-16T08:30:14.602Z",
     "n": 1,
@@ -136,26 +182,6 @@
     "level": "I",
     "tag": "RIL",
     "msg": "[ExampleEfService_0] sim io begin",
-    "after": true
-   },
-   {
-    "ts": "2026-10-16T08:30:14.760Z",
-    "last": "2026-10-16T08:30:15.931Z",
-    "n": 2,
-    "phone": null,
-    "level": "V",
-    "tag": "RIL",
-    "msg": "ipc[0][RX] VIPC_EXAMPLE_CARD_IO, RSP Error(VIPC_E_FAILURE) seq=0x0c40 len=12",
-    "after": true
-   },
-   {
-    "ts": "2026-10-16T08:30:14.763Z",
-    "last": "2026-10-16T08:30:15.932Z",
-    "n": 2,
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
-    "msg": "[0233]< SIM_IO error 2 [PHONE0]",
     "after": true
    },
    {

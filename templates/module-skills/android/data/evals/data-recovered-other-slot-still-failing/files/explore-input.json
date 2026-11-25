@@ -12,6 +12,30 @@
   }
  ],
  "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-11-20T13:55:01.000Z",
+   "2026-11-20T14:10:01.000Z"
+  ],
+  "ref": "2026-11-20T14:00:01.000Z",
+  "after_sec": 600,
+  "candidates": 2,
+  "rows": [
+   {
+    "ts": "2026-11-20T14:00:00.302Z",
+    "phone": 1,
+    "level": "D",
+    "tag": "DNC-1",
+    "msg": "onDataNetworkSetupDataFailed: [DataNetwork: DN-200-C, <APN#1>, state=null], cause=SERVICE_OPTION_NOT_SUBSCRIBED(0x21), retryDelayMillis=-1ms.",
+    "fold": {
+     "n": 1,
+     "first": "2026-11-20T14:00:00.302Z",
+     "last": "2026-11-20T14:00:10.502Z"
+    },
+    "main": true
+   }
+  ]
+ },
  "summary": {
   "ref": "2026-11-20T14:00:01.000Z",
   "range": [
@@ -26,15 +50,6 @@
   ],
   "groups": [
    {
-    "ts": "2026-11-20T14:00:01.000Z",
-    "last": "2026-11-20T14:00:01.000Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "DNC-0",
-    "msg": "Internet data state changed from DISCONNECTED to CONNECTED."
-   },
-   {
     "ts": "2026-11-20T14:00:00.302Z",
     "last": "2026-11-20T14:00:10.502Z",
     "n": 2,
@@ -42,6 +57,15 @@
     "level": "D",
     "tag": "DNC-1",
     "msg": "onDataNetworkSetupDataFailed: [DataNetwork: DN-200-C, <APN#1>, state=null], cause=SERVICE_OPTION_NOT_SUBSCRIBED(0x21), retryDelayMillis=-1ms."
+   },
+   {
+    "ts": "2026-11-20T14:00:01.000Z",
+    "last": "2026-11-20T14:00:01.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Internet data state changed from DISCONNECTED to CONNECTED."
    },
    {
     "ts": "2026-11-20T14:00:00.300Z",

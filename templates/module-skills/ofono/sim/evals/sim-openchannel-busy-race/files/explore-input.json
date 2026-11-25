@@ -10,8 +10,16 @@
   ],
   "ref": "2026-09-22T10:20:20.000Z",
   "after_sec": 600,
-  "candidates": 3,
+  "candidates": 4,
   "rows": [
+   {
+    "ts": "2026-09-22T10:20:18.184Z",
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/dbus.c:__ofono_error_busy() m:ExampleOpenChannel i:org.ofono.SimManager",
+    "main": true
+   },
    {
     "ts": "2026-09-22T10:20:18.185Z",
     "phone": null,
@@ -31,7 +39,7 @@
    {
     "ts": "2026-09-22T10:20:18.188Z",
     "phone": null,
-    "level": "W",
+    "level": "I",
     "tag": "mgmtd",
     "msg": "GetEID call error: eUICC example timeout path/example_sim.go:24",
     "main": true
@@ -65,18 +73,18 @@
     "last": "2026-09-22T10:20:18.188Z",
     "n": 1,
     "phone": null,
-    "level": "W",
+    "level": "I",
     "tag": "mgmtd",
     "msg": "GetEID call error: eUICC example timeout path/example_sim.go:24"
    },
    {
-    "ts": "2026-09-22T10:20:18.186Z",
-    "last": "2026-09-22T10:20:18.186Z",
+    "ts": "2026-09-22T10:20:18.184Z",
+    "last": "2026-09-22T10:20:18.184Z",
     "n": 1,
     "phone": null,
-    "level": "W",
-    "tag": "simd",
-    "msg": "tid:9 ExampleSim.cpp(68):ExampleGetEid > GetEID failed: ExampleEuiccNoResponse (eUICC example timeout)"
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/dbus.c:__ofono_error_busy() m:ExampleOpenChannel i:org.ofono.SimManager"
    },
    {
     "ts": "2026-09-22T10:20:21.172Z",
@@ -152,13 +160,13 @@
     "msg": "mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP OK(VIPC_OK) seq=0x09e7 len=12"
    },
    {
-    "ts": "2026-09-22T10:20:18.184Z",
-    "last": "2026-09-22T10:20:18.184Z",
+    "ts": "2026-09-22T10:20:18.186Z",
+    "last": "2026-09-22T10:20:18.186Z",
     "n": 1,
     "phone": null,
-    "level": "I",
-    "tag": "ofonod",
-    "msg": "src/dbus.c:__ofono_error_busy() m:ExampleOpenChannel i:org.ofono.SimManager"
+    "level": "W",
+    "tag": "simd",
+    "msg": "tid:9 ExampleSim.cpp(68):ExampleGetEid > GetEID failed: ExampleEuiccNoResponse (eUICC example timeout)"
    },
    {
     "ts": "2026-09-22T10:20:18.183Z",

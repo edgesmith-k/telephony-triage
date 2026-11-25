@@ -19,7 +19,7 @@
   ],
   "ref": "2026-09-06T16:00:02.000Z",
   "after_sec": 600,
-  "candidates": 1,
+  "candidates": 3,
   "rows": [
    {
     "ts": "2026-09-06T16:00:02.500Z",
@@ -27,6 +27,22 @@
     "level": "E",
     "tag": "RILJ",
     "msg": "serviceDied: Service radio::IRadio/slot1 has died. [PHONE0]",
+    "main": true
+   },
+   {
+    "ts": "2026-09-06T16:00:02.510Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0350]< GET_CURRENT_CALLS error 1 [PHONE0]",
+    "main": true
+   },
+   {
+    "ts": "2026-09-06T16:00:02.511Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0351]< GET_SIGNAL_STRENGTH error 1 [PHONE0]",
     "main": true
    }
   ]
@@ -55,16 +71,6 @@
     "after": true
    },
    {
-    "ts": "2026-09-06T16:00:02.010Z",
-    "last": "2026-09-06T16:00:02.010Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
-    "msg": "[0351]> GET_SIGNAL_STRENGTH [PHONE0]",
-    "after": true
-   },
-   {
     "ts": "2026-09-06T16:00:02.510Z",
     "last": "2026-09-06T16:00:02.510Z",
     "n": 1,
@@ -82,6 +88,16 @@
     "level": "D",
     "tag": "RILJ",
     "msg": "[0351]< GET_SIGNAL_STRENGTH error 1 [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-09-06T16:00:02.010Z",
+    "last": "2026-09-06T16:00:02.010Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0351]> GET_SIGNAL_STRENGTH [PHONE0]",
     "after": true
    },
    {

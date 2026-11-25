@@ -19,7 +19,7 @@
   ],
   "ref": "2026-10-15T11:47:23.000Z",
   "after_sec": 600,
-  "candidates": 5,
+  "candidates": 7,
   "rows": [
    {
     "ts": "2026-10-15T11:46:02.114Z",
@@ -41,6 +41,22 @@
     "level": "E",
     "tag": "RILJ",
     "msg": "Unable to complete updateAllowedImsServices because service IMS is not available. [PHONE0]",
+    "main": true
+   },
+   {
+    "ts": "2026-10-15T11:47:20.409Z",
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0e07 len=12",
+    "main": true
+   },
+   {
+    "ts": "2026-10-15T11:47:20.411Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0527]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]",
     "main": true
    },
    {
@@ -102,22 +118,22 @@
     "msg": "Unable to complete updateAllowedImsServices because service IMS is not available. [PHONE0]"
    },
    {
-    "ts": "2026-10-15T11:46:02.115Z",
-    "last": "2026-10-15T11:46:02.115Z",
+    "ts": "2026-10-15T11:47:20.411Z",
+    "last": "2026-10-15T11:47:20.411Z",
     "n": 1,
-    "phone": null,
-    "level": "W",
-    "tag": "Telephony",
-    "msg": "registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1"
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0527]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]"
    },
    {
-    "ts": "2026-10-15T11:46:02.114Z",
-    "last": "2026-10-15T11:46:02.114Z",
+    "ts": "2026-10-15T11:47:20.409Z",
+    "last": "2026-10-15T11:47:20.409Z",
     "n": 1,
     "phone": null,
-    "level": "W",
-    "tag": "Telephony",
-    "msg": "registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1"
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0e07 len=12"
    },
    {
     "ts": "2026-10-15T11:47:23.051Z",
@@ -199,15 +215,6 @@
     "msg": "<HEXDUMP 12B>"
    },
    {
-    "ts": "2026-10-15T11:47:20.411Z",
-    "last": "2026-10-15T11:47:20.411Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
-    "msg": "[0527]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]"
-   },
-   {
     "ts": "2026-10-15T11:47:20.410Z",
     "last": "2026-10-15T11:47:20.410Z",
     "n": 1,
@@ -215,15 +222,6 @@
     "level": "D",
     "tag": "VRIL-NETWORK",
     "msg": "network reg info request domain=2"
-   },
-   {
-    "ts": "2026-10-15T11:47:20.409Z",
-    "last": "2026-10-15T11:47:20.409Z",
-    "n": 1,
-    "phone": null,
-    "level": "V",
-    "tag": "RIL",
-    "msg": "ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0e07 len=12"
    },
    {
     "ts": "2026-10-15T11:47:20.404Z",
@@ -251,6 +249,24 @@
     "level": "V",
     "tag": "SatelliteController",
     "msg": "satelliteConfigParser is not ready"
+   },
+   {
+    "ts": "2026-10-15T11:46:02.115Z",
+    "last": "2026-10-15T11:46:02.115Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "Telephony",
+    "msg": "registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1"
+   },
+   {
+    "ts": "2026-10-15T11:46:02.114Z",
+    "last": "2026-10-15T11:46:02.114Z",
+    "n": 1,
+    "phone": null,
+    "level": "W",
+    "tag": "Telephony",
+    "msg": "registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1"
    }
   ]
  }

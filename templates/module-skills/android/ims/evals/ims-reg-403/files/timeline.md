@@ -12,9 +12,11 @@
 - 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
 
 15:00:05.121 - E VRIL reply to client token 306  〔script 모양 2줄, 15:00:05.121~15:00:16.000〕
+15:00:15.200 - D ImsPhone [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnec…  〔script 모양 2줄, 15:00:15.200~15:00:45.200, 기준 뒤 첫 등장〕
+15:00:07.135 p0 D RILJ [0306]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]  〔script 모양 1줄〕
+15:00:04.114 - V RIL ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0206 len=12  〔script 모양 1줄〕
 15:00:15.100 - V RIL ipc[0][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=208  〔script 모양 2줄, 15:00:15.100~15:00:45.100, 기준 뒤 첫 등장〕
 15:00:15.105 - I VRIL-IMS [reg] ind <- OEM_UNSOL_IMS_REGISTRATION state=0 feature=mmtel status-code=403  〔script 모양 2줄, 15:00:15.105~15:00:45.105, 기준 뒤 첫 등장〕
-15:00:15.200 - D ImsPhone [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {1000 : CODE_REGISTRATION_ERROR, 403, Forbidden}, suggestedAction=0, disconnec…  〔script 모양 2줄, 15:00:15.200~15:00:45.200, 기준 뒤 첫 등장〕
 15:00:14.000 - V RIL ipc[0][RX] <HEXDUMP 16B>  〔script 모양 1줄〕
 15:00:13.450 - I VRIL-IMS [ril] rsp <- OEM_REQ_IMS_ADD_PDN result=SUCCESS  〔script 모양 2줄, 15:00:13.450~15:00:43.450〕
 15:00:13.400 - I VRIL-IMS [ril] req -> OEM_REQ_IMS_ADD_PDN type=ims ip=IPV4V6 addr=<IP#1>  〔script 모양 2줄, 15:00:13.400~15:00:43.400〕
@@ -22,9 +24,7 @@
 15:00:13.000 p0 D ImsManager register: impu=sip:<IMPU#1>@<HOST#1> [PHONE0]  〔script 모양 2줄, 15:00:13.000~15:00:43.000〕
 15:00:11.000 - D DN-7-C onConnected: apn=ims, type=IMS, connected  〔script 모양 1줄〕
 15:00:10.000 p0 D ImsResolver bound to mock ImsService [PHONE0]  〔script 모양 1줄〕
-15:00:07.135 p0 D RILJ [0306]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]  〔script 모양 1줄〕
 15:00:06.128 - V RIL route rsp type=0001 id=0x0703 svc=5 msg=4009  〔script 모양 2줄, 15:00:06.128~15:00:50.000〕
-15:00:04.114 - V RIL ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0206 len=12  〔script 모양 1줄〕
 15:00:03.107 - V RIL ipc[0][TX] <unknown ipc>, REQ seq=0x0206 len=12  〔script 모양 1줄〕
 15:00:02.100 p0 D RILJ [0306]> NOTIFY_IMS_DATA_NETWORK [PHONE0]  〔script 모양 1줄〕
 

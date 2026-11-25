@@ -11,7 +11,11 @@
 - 범위: 2026-09-21T10:10:00.010Z ~ 2026-09-21T10:10:08.010Z, 줄 34, 모양 26개 중 26개. 기준 시각: 2026-09-21T10:10:05.000Z
 - 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
 
-10:10:05.416 - W mgmtd call dial error: Operation failed path/example_call.go:12  〔script 모양 1줄, 기준 뒤 첫 등장〕
+10:10:05.410 - D vrild mux [ch0][RX] VIPC_EXAMPLE_CALL_START, RSP Error(VIPC_E_FAILURE) seq=0x0131 len=12  〔script 모양 1줄, 기준 뒤 첫 등장〕
+10:10:05.413 p0 D ofonod [0,0301]< RIL_REQUEST_DIAL failed GENERIC_FAILURE  〔script 모양 1줄, 기준 뒤 첫 등장〕
+10:10:05.413 - I ofonod drivers/rilmodem/voicecall.c:rild_cb() Dial failed: GENERIC_FAILURE  〔script 모양 1줄, 기준 뒤 첫 등장〕
+10:10:05.414 p0 I ofonod src/dbus.c:__ofono_error_failed() dbus_trace err return - i:org.ofono.VoiceCallManager m:Dial p:/ril_0  〔script 모양 1줄, 기준 뒤 첫 등장〕
+10:10:05.416 - I mgmtd call dial error: Operation failed path/example_call.go:12  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:10:05.002 p0 I mgmtd dbus -> org.ofono.VoiceCallManager.Dial on /ril_0 path/example_dbus.go:48  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:10:05.004 p0 I ofonod dbus_trace method call - i:org.ofono.VoiceCallManager m:Dial p:/ril_0 a:"<MSISDN#1>", "default"  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:10:05.005 - D ofonod src/voicecall.c:manager_dial() dialing  〔script 모양 1줄, 기준 뒤 첫 등장〕
@@ -24,10 +28,6 @@
 10:10:05.008 - D vrild [IpcCtx_0] track seq 0x0131  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:10:05.008 - D vrild mux [ch0][TX] VIPC_EXAMPLE_CALL_START, REQ seq=0x0131 len=36  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:10:05.008 - D vrild <HEXDUMP 16B>  〔script 모양 2줄, 10:10:05.008~10:10:05.410, 기준 뒤 첫 등장〕
-10:10:05.410 - D vrild mux [ch0][RX] VIPC_EXAMPLE_CALL_START, RSP Error(VIPC_E_FAILURE) seq=0x0131 len=12  〔script 모양 1줄, 기준 뒤 첫 등장〕
-10:10:05.413 p0 D ofonod [0,0301]< RIL_REQUEST_DIAL failed GENERIC_FAILURE  〔script 모양 1줄, 기준 뒤 첫 등장〕
-10:10:05.413 - I ofonod drivers/rilmodem/voicecall.c:rild_cb() Dial failed: GENERIC_FAILURE  〔script 모양 1줄, 기준 뒤 첫 등장〕
-10:10:05.414 p0 I ofonod src/dbus.c:__ofono_error_failed() dbus_trace err return - i:org.ofono.VoiceCallManager m:Dial p:/ril_0  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:10:05.411 - D vrild waitlist hit seq 0x0131 svc=2 msg=3001  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:10:05.411 - I vrild [ExampleCallService_0] dial answer  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:10:05.411 - I vrild [IpcCtx_0] OnIpcComplete Request ID=10, result=2  〔script 모양 1줄, 기준 뒤 첫 등장〕

@@ -12,8 +12,8 @@
 - 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
 
 10:20:18.185 - E simd tid:9 ExampleSim.cpp(62):ExampleChannelOpen > open channel failed: Operation already in progress  〔script 모양 1줄〕
-10:20:18.188 - W mgmtd GetEID call error: eUICC example timeout path/example_sim.go:24  〔script 모양 1줄〕
-10:20:18.186 - W simd tid:9 ExampleSim.cpp(68):ExampleGetEid > GetEID failed: ExampleEuiccNoResponse (eUICC example timeout)  〔script 모양 1줄〕
+10:20:18.188 - I mgmtd GetEID call error: eUICC example timeout path/example_sim.go:24  〔script 모양 1줄〕
+10:20:18.184 - I ofonod src/dbus.c:__ofono_error_busy() m:ExampleOpenChannel i:org.ofono.SimManager  〔script 모양 1줄〕
 10:20:21.172 - I mgmtd ui tick  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:20:18.603 - I simd tid:42 ExampleSim.cpp(80):ExampleChannelClose > channel 1 closed  〔script 모양 1줄〕
 10:20:18.602 p0 I ofonod [0,0858]< RIL_REQUEST_SIM_CLOSE_CHANNEL  〔script 모양 1줄〕
@@ -22,7 +22,7 @@
 10:20:18.224 p0 I ofonod [0,0857]< RIL_REQUEST_SIM_OPEN_CHANNEL {1}  〔script 모양 1줄〕
 10:20:18.223 - I vrild [ExampleIccService_1] open-channel answer: session 1, sw1 : 90, sw2 : 00  〔script 모양 1줄〕
 10:20:18.222 - D vrild mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP OK(VIPC_OK) seq=0x09e7 len=12  〔script 모양 1줄〕
-10:20:18.184 - I ofonod src/dbus.c:__ofono_error_busy() m:ExampleOpenChannel i:org.ofono.SimManager  〔script 모양 1줄〕
+10:20:18.186 - W simd tid:9 ExampleSim.cpp(68):ExampleGetEid > GetEID failed: ExampleEuiccNoResponse (eUICC example timeout)  〔script 모양 1줄〕
 10:20:18.183 p0 D ofonod src/sim.c:example_open_channel() /ril_0 aid <AID#2> while channel open in progress  〔script 모양 1줄〕
 10:20:18.182 - I simd tid:9 ExampleSim.cpp(56):ExampleChannelOpen > GetEID: open channel aid <AID#2>  〔script 모양 1줄〕
 10:20:18.176 - D vrild mux [ch1][TX] VIPC_EXAMPLE_CARD_OPEN seq=0x09e7 len=20  〔script 모양 1줄〕
@@ -52,11 +52,12 @@
 10:20:18.225 - I simd tid:42 ExampleSim.cpp(74):ExampleChannelOpen > channel 1 opened
 10:20:18.603 - I simd tid:42 ExampleSim.cpp(80):ExampleChannelClose > channel 1 closed
 
-## 이상 줄: W/E/F 레벨과 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 빠짐)
+## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
 
 - 범위: 2026-09-22T10:15:20.000Z ~ 2026-09-22T10:30:20.000Z (분석 구간 끝과 기준 시각 2026-09-22T10:20:20.000Z 뒤 600초 중 늦은 쪽까지).
-- 줄: 3. 프레임을 뺀 후보 3줄에서 F, 예외·crash 머리, E, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+- 줄: 4. 프레임을 뺀 후보 4줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
 
+10:20:18.184 - I ofonod src/dbus.c:__ofono_error_busy() m:ExampleOpenChannel i:org.ofono.SimManager
 10:20:18.185 - E simd tid:9 ExampleSim.cpp(62):ExampleChannelOpen > open channel failed: Operation already in progress
 10:20:18.186 - W simd tid:9 ExampleSim.cpp(68):ExampleGetEid > GetEID failed: ExampleEuiccNoResponse (eUICC example timeout)
-10:20:18.188 - W mgmtd GetEID call error: eUICC example timeout path/example_sim.go:24
+10:20:18.188 - I mgmtd GetEID call error: eUICC example timeout path/example_sim.go:24

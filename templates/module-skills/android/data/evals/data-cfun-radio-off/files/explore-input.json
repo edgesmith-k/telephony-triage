@@ -14,6 +14,25 @@
  "around_alt": [
   "2026-10-14T15:22:40.272Z"
  ],
+ "anomaly": {
+  "range": [
+   "2026-10-14T15:17:40.000Z",
+   "2026-10-14T15:32:40.000Z"
+  ],
+  "ref": "2026-10-14T15:22:40.000Z",
+  "after_sec": 600,
+  "candidates": 1,
+  "rows": [
+   {
+    "ts": "2026-10-14T15:22:40.270Z",
+    "phone": null,
+    "level": "D",
+    "tag": "TNA-7",
+    "msg": "NetworkAgent channel lost",
+    "main": true
+   }
+  ]
+ },
  "summary": {
   "ref": "2026-10-14T15:22:40.000Z",
   "range": [
@@ -27,6 +46,16 @@
    "2026-10-14T15:27:40.000Z"
   ],
   "groups": [
+   {
+    "ts": "2026-10-14T15:22:40.270Z",
+    "last": "2026-10-14T15:22:40.270Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "TNA-7",
+    "msg": "NetworkAgent channel lost",
+    "after": true
+   },
    {
     "ts": "2026-10-14T15:22:40.118Z",
     "last": "2026-10-14T15:22:40.118Z",
@@ -135,16 +164,6 @@
     "level": "D",
     "tag": "NRM-C-0",
     "msg": "onNetworkStateChanged",
-    "after": true
-   },
-   {
-    "ts": "2026-10-14T15:22:40.270Z",
-    "last": "2026-10-14T15:22:40.270Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "TNA-7",
-    "msg": "NetworkAgent channel lost",
     "after": true
    },
    {

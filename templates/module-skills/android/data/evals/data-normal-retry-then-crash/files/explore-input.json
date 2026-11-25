@@ -19,8 +19,16 @@
   ],
   "ref": "2026-11-20T10:00:01.000Z",
   "after_sec": 600,
-  "candidates": 5,
+  "candidates": 6,
   "rows": [
+   {
+    "ts": "2026-11-20T10:00:00.302Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onDataNetworkSetupDataFailed: [DataNetwork: DN-100-C, <APN#1>, state=null], cause=INSUFFICIENT_RESOURCES(0x1a), retryDelayMillis=-1ms.",
+    "main": true
+   },
    {
     "ts": "2026-11-20T10:00:40.210Z",
     "phone": null,
@@ -152,6 +160,15 @@
     "after": true
    },
    {
+    "ts": "2026-11-20T10:00:00.302Z",
+    "last": "2026-11-20T10:00:00.302Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onDataNetworkSetupDataFailed: [DataNetwork: DN-100-C, <APN#1>, state=null], cause=INSUFFICIENT_RESOURCES(0x1a), retryDelayMillis=-1ms."
+   },
+   {
     "ts": "2026-11-20T10:00:05.420Z",
     "last": "2026-11-20T10:00:05.420Z",
     "n": 1,
@@ -179,15 +196,6 @@
     "level": "D",
     "tag": "DRM-0",
     "msg": "retry scheduled in 5000ms"
-   },
-   {
-    "ts": "2026-11-20T10:00:00.302Z",
-    "last": "2026-11-20T10:00:00.302Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "DNC-0",
-    "msg": "onDataNetworkSetupDataFailed: [DataNetwork: DN-100-C, <APN#1>, state=null], cause=INSUFFICIENT_RESOURCES(0x1a), retryDelayMillis=-1ms."
    },
    {
     "ts": "2026-11-20T10:00:00.300Z",

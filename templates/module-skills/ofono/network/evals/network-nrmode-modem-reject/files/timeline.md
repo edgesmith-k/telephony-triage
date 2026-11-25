@@ -11,8 +11,12 @@
 - 범위: 2026-09-22T09:20:21.963Z ~ 2026-09-22T09:20:23.163Z, 줄 21, 모양 20개 중 20개. 기준 시각: 2026-09-22T09:20:20.000Z
 - 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
 
-09:20:22.278 - W mgmtd dbus call error: Operation failed (GetProperties) path/example_dbus.go:60  〔script 모양 1줄, 기준 뒤 첫 등장〕
-09:20:22.279 - W mgmtd load rat mode failed slot=0 path/example_net.go:36  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:20:22.270 - D vrild mux [ch1][RX] VIPC_EXAMPLE_RAT_MODE, RSP Error(VIPC_E_FAILURE) seq=0x06a2 len=8  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:20:22.273 p0 D ofonod [0,0348]< RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE failed GENERIC_FAILURE  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:20:22.273 - I ofonod src/radio-settings.c:radio_rat_mode_query_callback() Error during radio access mode query  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:20:22.274 - I ofonod src/dbus.c:__ofono_error_failed() m:GetProperties i:org.ofono.RadioSettings  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:20:22.278 - I mgmtd dbus call error: Operation failed (GetProperties) path/example_dbus.go:60  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:20:22.279 - I mgmtd load rat mode failed slot=0 path/example_net.go:36  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:20:21.963 - I mgmtd ui tick  〔script 모양 2줄, 09:20:21.963~09:20:23.163, 기준 뒤 첫 등장〕
 09:20:22.263 p0 I mgmtd dbus -> org.ofono.RadioSettings.GetProperties on /ril_0 path/example_dbus.go:36  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:20:22.264 p0 D ofonod src/radio-settings.c:radio_get_properties() /ril_0  〔script 모양 1줄, 기준 뒤 첫 등장〕
@@ -22,13 +26,9 @@
 09:20:22.266 - I vrild [ExampleRegService_1] begin rat-mode lookup  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:20:22.267 - D vrild [IpcCtx_2] track seq 0x06a2 (1 in flight)  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:20:22.267 - D vrild mux [ch1][TX] VIPC_EXAMPLE_RAT_MODE seq=0x06a2 len=8  〔script 모양 1줄, 기준 뒤 첫 등장〕
-09:20:22.270 - D vrild mux [ch1][RX] VIPC_EXAMPLE_RAT_MODE, RSP Error(VIPC_E_FAILURE) seq=0x06a2 len=8  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:20:22.271 - I vrild [ExampleRegService_1] rat-mode lookup returned  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:20:22.271 - I vrild [IpcCtx_2] OnIpcComplete Request ID=71, result=2 -> chan 2 reply sent, 0 waiters, took 4 ms  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:20:22.271 - D vrild chan 2 <- reply written  〔script 모양 1줄, 기준 뒤 첫 등장〕
-09:20:22.273 p0 D ofonod [0,0348]< RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE failed GENERIC_FAILURE  〔script 모양 1줄, 기준 뒤 첫 등장〕
-09:20:22.273 - I ofonod src/radio-settings.c:radio_rat_mode_query_callback() Error during radio access mode query  〔script 모양 1줄, 기준 뒤 첫 등장〕
-09:20:22.274 - I ofonod src/dbus.c:__ofono_error_failed() m:GetProperties i:org.ofono.RadioSettings  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:20:22.272 - D vrild [IpcCtx_2] untrack seq 0x06a2 (0 in flight)  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:20:22.563 - D vrild mux [ch1][RX] VIPC_EXAMPLE_SIGNAL_IND ind len=16  〔script 모양 1줄, 기준 뒤 첫 등장〕
 

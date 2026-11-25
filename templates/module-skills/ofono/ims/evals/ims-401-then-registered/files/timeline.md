@@ -11,17 +11,17 @@
 - 범위: 2026-09-22T09:30:20.781Z ~ 2026-09-22T09:30:22.981Z, 줄 24, 모양 22개 중 22개. 기준 시각: 2026-09-22T09:30:20.000Z
 - 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
 
-09:30:20.781 p0 I ofonod [0,0117]> IMS_REQUEST_SET_PDN_INFO  〔script 모양 1줄, 기준 뒤 첫 등장〕
-09:30:20.793 p0 I ofonod [0,0117]< IMS_REQUEST_SET_PDN_INFO  〔script 모양 1줄, 기준 뒤 첫 등장〕
-09:30:20.794 - D ofonod src/ims.c:example_pdn_info_cb() pdn info set  〔script 모양 1줄, 기준 뒤 첫 등장〕
-09:30:20.981 - I mgmtd ui tick  〔script 모양 3줄, 09:30:20.981~09:30:22.981, 기준 뒤 첫 등장〕
 09:30:21.301 - D vrild mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=12  〔script 모양 1줄, 기준 뒤 첫 등장〕
-09:30:21.302 - I vrild [ImsService_1] ims reg ind relayed to client chan 3  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:30:21.303 - D imsd [SLOT_0][D] 7101 slot0: OEM_UNSOL_IMS_EXAMPLE_REG_FAIL parsed -> [example-code : 401] sid 0  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:30:21.303 - I imsd [SLOT_0][I] 7102 reg failure reported, fail code: 401  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:30:21.304 - D imsd [SLOT_0][D] 7103 slot0 -> ofonod: IMS_UNSOL_REG_FAILED (14 bytes)  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:30:21.305 p0 I ofonod [0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=401  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:30:21.305 p0 I ofonod src/ims.c:example_reg_fail_notify() /ril_0 fail_code 401  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:20.781 p0 I ofonod [0,0117]> IMS_REQUEST_SET_PDN_INFO  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:20.793 p0 I ofonod [0,0117]< IMS_REQUEST_SET_PDN_INFO  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:20.794 - D ofonod src/ims.c:example_pdn_info_cb() pdn info set  〔script 모양 1줄, 기준 뒤 첫 등장〕
+09:30:20.981 - I mgmtd ui tick  〔script 모양 3줄, 09:30:20.981~09:30:22.981, 기준 뒤 첫 등장〕
+09:30:21.302 - I vrild [ImsService_1] ims reg ind relayed to client chan 3  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:30:21.591 - I imsd [SLOT_0][I] 7104 SIP 401 Unauthorized, register again with credentials  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:30:22.161 - D vrild mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=28  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:30:22.162 - D imsd [SLOT_0][D] 7105 slot0: OEM_UNSOL_IMS_EXAMPLE_REGISTRATION parsed -> [state : 1] sid 0  〔script 모양 1줄, 기준 뒤 첫 등장〕

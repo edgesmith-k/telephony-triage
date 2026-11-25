@@ -11,6 +11,7 @@
 - 범위: 2026-10-14T15:22:40.118Z ~ 2026-10-14T15:22:40.333Z, 줄 20, 모양 20개 중 20개. 기준 시각: 2026-10-14T15:22:40.000Z
 - 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
 
+15:22:40.270 - D TNA-7 NetworkAgent channel lost  〔script 모양 1줄, 기준 뒤 첫 등장〕
 15:22:40.118 - D VRIL-MODEM at-in: AT+CFUN=0  〔script 모양 1줄, 기준 뒤 첫 등장〕
 15:22:40.226 - D VRIL-MODEM at-out: AT+CFUN=0  〔script 모양 1줄, 기준 뒤 첫 등장〕
 15:22:40.231 - V SatelliteController satelliteConfigParser is not ready  〔script 모양 1줄, 기준 뒤 첫 등장〕
@@ -22,7 +23,6 @@
 15:22:40.268 p0 D DNC-0 onDataNetworkDisconnected: [DataNetwork: DN-7-C, IMS, state=null], cause=NONE(0x0)(0), tearDownReason=NONE  〔script 모양 1줄, 기준 뒤 첫 등장〕
 15:22:40.268 p0 D DNC-0 IMS data state changed from CONNECTED to DISCONNECTED.  〔script 모양 1줄, 기준 뒤 첫 등장〕
 15:22:40.269 p0 D NRM-C-0 onNetworkStateChanged  〔script 모양 1줄, 기준 뒤 첫 등장〕
-15:22:40.270 - D TNA-7 NetworkAgent channel lost  〔script 모양 1줄, 기준 뒤 첫 등장〕
 15:22:40.271 - D DN-8-C DisconnectedState: All network requests detached.  〔script 모양 1줄, 기준 뒤 첫 등장〕
 15:22:40.272 p0 D DNC-0 onDataNetworkDisconnected: [DataNetwork: DN-8-C, <APN#1>, state=null], cause=NONE(0x0)(0), tearDownReason=NONE  〔script 모양 1줄, 기준 뒤 첫 등장〕
 15:22:40.272 p0 D DNC-0 Internet data state changed from CONNECTED to DISCONNECTED.  〔script 모양 1줄, 기준 뒤 첫 등장〕
@@ -48,3 +48,10 @@
 15:22:40.272 p0 D DNC-0 Internet data state changed from CONNECTED to DISCONNECTED.  ⇒ data_internet_state_changed(from=CONNECTED,to=DISCONNECTED)
 15:22:40.285 - D ImsPhone [0] handleImsUnregistered: onImsMmTelDisconnected imsReasonInfo=ImsReasonInfo :: {121 : CODE_LOCAL_NETWORK_NO_SERVICE, 0, null}, suggestedAction=0, disconnecte…  ⇒ ims_registration_failed(code=121,extra=0,reason=CODE_LOCAL_NETWORK_NO_SERVICE)
 15:22:40.332 - D VRIL-MODEM at-out: OK
+
+## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
+
+- 범위: 2026-10-14T15:17:40.000Z ~ 2026-10-14T15:32:40.000Z (분석 구간 끝과 기준 시각 2026-10-14T15:22:40.000Z 뒤 600초 중 늦은 쪽까지).
+- 줄: 1. 프레임을 뺀 후보 1줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+
+15:22:40.270 - D TNA-7 NetworkAgent channel lost

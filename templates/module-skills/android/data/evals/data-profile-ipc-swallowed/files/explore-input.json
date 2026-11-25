@@ -19,7 +19,7 @@
   ],
   "ref": "2026-10-15T07:05:12.000Z",
   "after_sec": 600,
-  "candidates": 3,
+  "candidates": 4,
   "rows": [
    {
     "ts": "2026-10-15T07:05:12.410Z",
@@ -40,6 +40,14 @@
      "first": "2026-10-15T07:05:12.437Z",
      "last": "2026-10-15T07:05:12.472Z"
     },
+    "main": true
+   },
+   {
+    "ts": "2026-10-15T07:05:12.471Z",
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][RX] VIPC_EXAMPLE_PROFILE, RSP Error(VIPC_E_FAILURE) seq=0x0d32 len=12",
     "main": true
    }
   ]
@@ -75,6 +83,16 @@
     "level": "E",
     "tag": "RIL",
     "msg": "waitlist miss seq 0x0d31",
+    "after": true
+   },
+   {
+    "ts": "2026-10-15T07:05:12.471Z",
+    "last": "2026-10-15T07:05:12.471Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "ipc[0][RX] VIPC_EXAMPLE_PROFILE, RSP Error(VIPC_E_FAILURE) seq=0x0d32 len=12",
     "after": true
    },
    {
@@ -168,16 +186,6 @@
     "after": true
    },
    {
-    "ts": "2026-10-15T07:05:12.408Z",
-    "last": "2026-10-15T07:05:12.471Z",
-    "n": 6,
-    "phone": null,
-    "level": "V",
-    "tag": "RIL",
-    "msg": "<HEXDUMP 16B>",
-    "after": true
-   },
-   {
     "ts": "2026-10-15T07:05:12.410Z",
     "last": "2026-10-15T07:05:12.410Z",
     "n": 1,
@@ -218,6 +226,16 @@
     "after": true
    },
    {
+    "ts": "2026-10-15T07:05:12.408Z",
+    "last": "2026-10-15T07:05:12.471Z",
+    "n": 6,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "<HEXDUMP 16B>",
+    "after": true
+   },
+   {
     "ts": "2026-10-15T07:05:12.409Z",
     "last": "2026-10-15T07:05:12.409Z",
     "n": 1,
@@ -245,16 +263,6 @@
     "level": "I",
     "tag": "RIL",
     "msg": "[IpcCtx_0] rx frame",
-    "after": true
-   },
-   {
-    "ts": "2026-10-15T07:05:12.471Z",
-    "last": "2026-10-15T07:05:12.471Z",
-    "n": 1,
-    "phone": null,
-    "level": "V",
-    "tag": "RIL",
-    "msg": "ipc[0][RX] VIPC_EXAMPLE_PROFILE, RSP Error(VIPC_E_FAILURE) seq=0x0d32 len=12",
     "after": true
    }
   ]

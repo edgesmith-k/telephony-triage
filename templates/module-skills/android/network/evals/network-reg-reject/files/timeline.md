@@ -13,9 +13,11 @@
 
 11:00:05.121 - E VRIL reply to client token 302  〔script 모양 2줄, 11:00:05.121~11:00:32.500〕
 11:00:42.000 p0 D NRM-C-0 onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=CS transportType=WWAN registrationState=DENIED networkRegistrationSta…  〔script 모양 1줄, 기준 뒤 첫 등장〕
-11:01:02.000 p0 D SST-0 pollStateDone: hasRegistered = false hasDeregistered = false hasDataAttached = {1=false, 2=false} hasDataDetached = {1=false, 2=false} hasDataRegStateChanged =…  〔script 모양 1줄, 기준 뒤 첫 등장〕
 11:00:32.000 p0 D NRM-C-0 onRequestNetworkRegistrationInfoComplete result: 0, info: NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=DENIED networkRegistrationSta…  〔script 모양 2줄, 11:00:32.000~11:01:04.000〕
 11:00:31.050 p0 D RILJ [0330]< DATA_REGISTRATION_STATE RegStateResult{regState: REG_DENIED, rat: LTE, reasonForDenial: 13, cellIdentity: CellIdentityLte:{ mCi=<CELL#1> }, registeredP…  〔script 모양 2줄, 11:00:31.050~11:01:03.050〕
+11:00:07.135 p0 D RILJ [0302]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]  〔script 모양 1줄〕
+11:00:04.114 - V RIL ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0202 len=12  〔script 모양 1줄〕
+11:01:02.000 p0 D SST-0 pollStateDone: hasRegistered = false hasDeregistered = false hasDataAttached = {1=false, 2=false} hasDataDetached = {1=false, 2=false} hasDataRegStateChanged =…  〔script 모양 1줄, 기준 뒤 첫 등장〕
 11:00:31.042 - D VRIL-SVC getDataRegistrationState response: serial 330  〔script 모양 1줄〕
 11:00:31.040 - V RIL ipc[0][RX] VIPC_EXAMPLE_PS_REG, RSP OK(VIPC_OK) seq=0x0220 len=88  〔script 모양 2줄, 11:00:31.040~11:01:03.040〕
 11:00:31.009 - V RIL ipc[0][RX] <HEXDUMP 16B>  〔script 모양 1줄〕
@@ -24,9 +26,7 @@
 11:00:31.004 - D VRIL-SVC RadioNetworkProxy::getDataRegistrationState: serial 330  〔script 모양 1줄〕
 11:00:31.000 p0 D RILJ [0330]> DATA_REGISTRATION_STATE [PHONE0]  〔script 모양 2줄, 11:00:31.000~11:01:03.000〕
 11:00:30.000 p0 D SST-0 pollStateDone: hasRegistered = false hasDeregistered = true hasDataAttached = {1=false, 2=false} hasDataDetached = {1=true, 2=false} hasDataRegStateChanged = {…  〔script 모양 1줄〕
-11:00:07.135 p0 D RILJ [0302]< NOTIFY_IMS_DATA_NETWORK error 6 [PHONE0]  〔script 모양 1줄〕
 11:00:06.128 - V RIL route rsp type=0001 id=0x0703 svc=5 msg=4009  〔script 모양 2줄, 11:00:06.128~11:01:05.000〕
-11:00:04.114 - V RIL ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0202 len=12  〔script 모양 1줄〕
 11:00:03.107 - V RIL ipc[0][TX] <unknown ipc>, REQ seq=0x0202 len=12  〔script 모양 1줄〕
 11:00:02.100 p0 D RILJ [0302]> NOTIFY_IMS_DATA_NETWORK [PHONE0]  〔script 모양 1줄〕
 

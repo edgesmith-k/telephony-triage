@@ -15,9 +15,9 @@
 10:40:05.003 - D ofonod src/ims.c:example_reg_fail_notify() fail_code = 403  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:40:05.004 p0 I ofonod [0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=403  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:40:05.006 - D imsd [SLOT_0][I] 5102 [ExampleImsRegistration] exampleRegistrationFailed() code=403  〔script 모양 1줄, 기준 뒤 첫 등장〕
+10:40:05.000 - D vrild mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=40  〔script 모양 1줄〕
 10:40:05.007 - D imsd [SLOT_0][I] 5103 [ExampleImsRegistration] registered:0 VoPS=1  〔script 모양 3줄, 10:40:05.007~10:40:25.012, 기준 뒤 첫 등장〕
 10:40:10.010 - D imsd [SLOT_0][I] 5104 [ExampleImsRegistration] exampleTriggerRegistering() NOT SENT (blocked after 403)  〔script 모양 4줄, 10:40:10.010~10:40:25.010, 기준 뒤 첫 등장〕
-10:40:05.000 - D vrild mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=40  〔script 모양 1줄〕
 10:40:00.010 - I mgmtd ui tick  〔script 모양 4줄, 10:40:00.010~10:40:18.010〕
 10:40:00.200 - I vrild [ExampleRegService_0] signal update lte rsrp=-90  〔script 모양 4줄, 10:40:00.200~10:40:18.200〕
 10:40:02.090 - D vrild mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_REQ, RSP OK(VIPC_OK) seq=0x0201 len=12  〔script 모양 1줄〕
@@ -39,3 +39,14 @@
 10:40:05.006 - D imsd [SLOT_0][I] 5102 [ExampleImsRegistration] exampleRegistrationFailed() code=403
 10:40:05.007 - D imsd [SLOT_0][I] 5103 [ExampleImsRegistration] registered:0 VoPS=1
 10:40:10.010 - D imsd [SLOT_0][I] 5104 [ExampleImsRegistration] exampleTriggerRegistering() NOT SENT (blocked after 403)
+
+## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
+
+- 범위: 2026-09-21T10:35:05.000Z ~ 2026-09-21T10:50:05.000Z (분석 구간 끝과 기준 시각 2026-09-21T10:40:05.000Z 뒤 600초 중 늦은 쪽까지).
+- 줄: 5. 프레임을 뺀 후보 5줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+
+10:40:05.000 - D vrild mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=40
+10:40:05.001 - D imsd [SLOT_0][V] 5110 [SUB_0] ind <- OEM_UNSOL_IMS_EXAMPLE_REG_FAIL(3100) : [example-code : 403]
+10:40:05.003 - D ofonod src/ims.c:example_reg_fail_notify() fail_code = 403
+10:40:05.004 p0 I ofonod [0,UNSOL]< IMS_UNSOL_REG_FAILED fail_code=403
+10:40:05.006 - D imsd [SLOT_0][I] 5102 [ExampleImsRegistration] exampleRegistrationFailed() code=403

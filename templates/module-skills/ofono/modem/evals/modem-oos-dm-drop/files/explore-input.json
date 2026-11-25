@@ -10,7 +10,7 @@
   ],
   "ref": "2026-09-22T09:50:21.000Z",
   "after_sec": 600,
-  "candidates": 5,
+  "candidates": 4,
   "rows": [
    {
     "ts": "2026-09-22T09:50:13.154Z",
@@ -31,14 +31,6 @@
      "first": "2026-09-22T09:50:13.153Z",
      "last": "2026-09-22T09:50:21.153Z"
     },
-    "main": true
-   },
-   {
-    "ts": "2026-09-22T09:50:21.753Z",
-    "phone": null,
-    "level": "W",
-    "tag": "mgmtd",
-    "msg": "data and call unavailable: no service path/example_net.go:12",
     "main": true
    }
   ]
@@ -70,7 +62,7 @@
     "last": "2026-09-22T09:50:21.753Z",
     "n": 1,
     "phone": null,
-    "level": "W",
+    "level": "I",
     "tag": "mgmtd",
     "msg": "data and call unavailable: no service path/example_net.go:12",
     "after": true

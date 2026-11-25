@@ -10,22 +10,14 @@
   ],
   "ref": "2026-09-20T15:20:06.000Z",
   "after_sec": 600,
-  "candidates": 3,
+  "candidates": 2,
   "rows": [
    {
     "ts": "2026-09-20T15:20:01.724Z",
     "phone": null,
-    "level": "E",
+    "level": "I",
     "tag": "datad2",
     "msg": "netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002",
-    "main": true
-   },
-   {
-    "ts": "2026-09-20T15:20:01.726Z",
-    "phone": null,
-    "level": "W",
-    "tag": "datad2",
-    "msg": "default route not installed for rmnet0",
     "main": true
    },
    {
@@ -56,9 +48,19 @@
     "last": "2026-09-20T15:20:01.724Z",
     "n": 1,
     "phone": null,
-    "level": "E",
+    "level": "I",
     "tag": "datad2",
     "msg": "netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002"
+   },
+   {
+    "ts": "2026-09-20T15:20:06.200Z",
+    "last": "2026-09-20T15:20:06.200Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "signal strength report: level=4 placeholder",
+    "after": true
    },
    {
     "ts": "2026-09-20T15:20:06.000Z",
@@ -74,19 +76,9 @@
     "last": "2026-09-20T15:20:01.726Z",
     "n": 1,
     "phone": null,
-    "level": "W",
+    "level": "I",
     "tag": "datad2",
     "msg": "default route not installed for rmnet0"
-   },
-   {
-    "ts": "2026-09-20T15:20:06.200Z",
-    "last": "2026-09-20T15:20:06.200Z",
-    "n": 1,
-    "phone": null,
-    "level": "I",
-    "tag": "vrild",
-    "msg": "signal strength report: level=4 placeholder",
-    "after": true
    },
    {
     "ts": "2026-09-20T15:20:01.720Z",

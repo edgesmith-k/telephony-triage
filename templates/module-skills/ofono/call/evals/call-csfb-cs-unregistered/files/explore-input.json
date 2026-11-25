@@ -3,6 +3,41 @@
  "failed_step": null,
  "limit": 200,
  "anchor": null,
+ "anomaly": {
+  "range": [
+   "2026-09-23T10:05:05.000Z",
+   "2026-09-23T10:20:05.000Z"
+  ],
+  "ref": "2026-09-23T10:10:05.000Z",
+  "after_sec": 600,
+  "candidates": 3,
+  "rows": [
+   {
+    "ts": "2026-09-23T10:10:01.002Z",
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "[ExampleRegService_0] Voice RegState=NOT_REGISTERED, RejectCause=17",
+    "main": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.410Z",
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0352]> RIL_REQUEST_LAST_CALL_FAIL_CAUSE",
+    "main": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.430Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "[0,0352]< RIL_REQUEST_LAST_CALL_FAIL_CAUSE",
+    "main": true
+   }
+  ]
+ },
  "summary": {
   "ref": "2026-09-23T10:10:05.000Z",
   "range": [
@@ -16,6 +51,35 @@
    "2026-09-23T10:15:05.000Z"
   ],
   "groups": [
+   {
+    "ts": "2026-09-23T10:10:05.410Z",
+    "last": "2026-09-23T10:10:05.410Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "[0,0352]> RIL_REQUEST_LAST_CALL_FAIL_CAUSE",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:05.430Z",
+    "last": "2026-09-23T10:10:05.430Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "[0,0352]< RIL_REQUEST_LAST_CALL_FAIL_CAUSE",
+    "after": true
+   },
+   {
+    "ts": "2026-09-23T10:10:01.002Z",
+    "last": "2026-09-23T10:10:01.002Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "[ExampleRegService_0] Voice RegState=NOT_REGISTERED, RejectCause=17"
+   },
    {
     "ts": "2026-09-23T10:10:05.002Z",
     "last": "2026-09-23T10:10:05.002Z",
@@ -147,26 +211,6 @@
     "after": true
    },
    {
-    "ts": "2026-09-23T10:10:05.410Z",
-    "last": "2026-09-23T10:10:05.410Z",
-    "n": 1,
-    "phone": 0,
-    "level": "I",
-    "tag": "ofonod",
-    "msg": "[0,0352]> RIL_REQUEST_LAST_CALL_FAIL_CAUSE",
-    "after": true
-   },
-   {
-    "ts": "2026-09-23T10:10:05.430Z",
-    "last": "2026-09-23T10:10:05.430Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "ofonod",
-    "msg": "[0,0352]< RIL_REQUEST_LAST_CALL_FAIL_CAUSE",
-    "after": true
-   },
-   {
     "ts": "2026-09-23T10:10:05.432Z",
     "last": "2026-09-23T10:10:05.432Z",
     "n": 1,
@@ -211,15 +255,6 @@
     "level": "I",
     "tag": "ofonod",
     "msg": "[0,UNSOL]< IMS_UNSOL_CAPABILITIES voiceOverLteCapable=0, emerOverLteCapable=1 smsOverLteCapable=0, utOverLteCapable=1"
-   },
-   {
-    "ts": "2026-09-23T10:10:01.002Z",
-    "last": "2026-09-23T10:10:01.002Z",
-    "n": 1,
-    "phone": null,
-    "level": "I",
-    "tag": "vrild",
-    "msg": "[ExampleRegService_0] Voice RegState=NOT_REGISTERED, RejectCause=17"
    },
    {
     "ts": "2026-09-23T10:10:01.000Z",

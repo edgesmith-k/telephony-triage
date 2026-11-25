@@ -13,9 +13,9 @@
 - 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
 
 16:00:02.500 p0 E RILJ serviceDied: Service radio::IRadio/slot1 has died. [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
-16:00:02.010 p0 D RILJ [0351]> GET_SIGNAL_STRENGTH [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
 16:00:02.510 p0 D RILJ [0350]< GET_CURRENT_CALLS error 1 [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
 16:00:02.511 p0 D RILJ [0351]< GET_SIGNAL_STRENGTH error 1 [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
+16:00:02.010 p0 D RILJ [0351]> GET_SIGNAL_STRENGTH [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
 16:00:02.600 - V VRIL radio state changed: newState=RADIO_UNAVAILABLE  〔script 모양 1줄, 기준 뒤 첫 등장〕
 16:00:04.000 - I RIL VrilApp::instance  〔script 모양 1줄, 기준 뒤 첫 등장〕
 16:00:04.010 - I RIL [IpcCtx_0] OnRequest  〔script 모양 1줄, 기준 뒤 첫 등장〕
@@ -33,9 +33,11 @@
 ## 다른 모듈 줄 (±15초, 경고·오류)
 16:00:02.510 p0 D RILJ [0350]< GET_CURRENT_CALLS error 1 [PHONE0]
 
-## 이상 줄: W/E/F 레벨과 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 빠짐)
+## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
 
 - 범위: 2026-09-06T15:55:02.000Z ~ 2026-09-06T16:10:02.000Z (분석 구간 끝과 기준 시각 2026-09-06T16:00:02.000Z 뒤 600초 중 늦은 쪽까지).
-- 줄: 1. 프레임을 뺀 후보 1줄에서 F, 예외·crash 머리, E, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+- 줄: 3. 프레임을 뺀 후보 3줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
 
 16:00:02.500 p0 E RILJ serviceDied: Service radio::IRadio/slot1 has died. [PHONE0]
+16:00:02.510 p0 D RILJ [0350]< GET_CURRENT_CALLS error 1 [PHONE0]
+16:00:02.511 p0 D RILJ [0351]< GET_SIGNAL_STRENGTH error 1 [PHONE0]

@@ -10,7 +10,7 @@
   ],
   "ref": "2026-09-22T10:00:20.000Z",
   "after_sec": 600,
-  "candidates": 2,
+  "candidates": 5,
   "rows": [
    {
     "ts": "2026-09-22T10:00:21.722Z",
@@ -21,9 +21,33 @@
     "main": true
    },
    {
+    "ts": "2026-09-22T10:00:21.723Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "[0,0632]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE",
+    "main": true
+   },
+   {
+    "ts": "2026-09-22T10:00:21.724Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "[0,0633]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE",
+    "main": true
+   },
+   {
+    "ts": "2026-09-22T10:00:21.725Z",
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/network.c:current_operator_callback() Error during current operator",
+    "main": true
+   },
+   {
     "ts": "2026-09-22T10:00:21.731Z",
     "phone": null,
-    "level": "W",
+    "level": "I",
     "tag": "mgmtd",
     "msg": "load network info failed: Load data failed err: Operation failed path/example_net.go:24",
     "main": true
@@ -54,11 +78,41 @@
     "after": true
    },
    {
+    "ts": "2026-09-22T10:00:21.723Z",
+    "last": "2026-09-22T10:00:21.723Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "[0,0632]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T10:00:21.724Z",
+    "last": "2026-09-22T10:00:21.724Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "ofonod",
+    "msg": "[0,0633]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T10:00:21.725Z",
+    "last": "2026-09-22T10:00:21.725Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "ofonod",
+    "msg": "src/network.c:current_operator_callback() Error during current operator",
+    "after": true
+   },
+   {
     "ts": "2026-09-22T10:00:21.731Z",
     "last": "2026-09-22T10:00:21.731Z",
     "n": 1,
     "phone": null,
-    "level": "W",
+    "level": "I",
     "tag": "mgmtd",
     "msg": "load network info failed: Load data failed err: Operation failed path/example_net.go:24",
     "after": true
@@ -141,36 +195,6 @@
     "level": "I",
     "tag": "vrild",
     "msg": "[IpcCtx_2] OnIpcComplete Request ID=86, result=0 -> chan 2 reply sent, 1 waiters, took 2 ms",
-    "after": true
-   },
-   {
-    "ts": "2026-09-22T10:00:21.723Z",
-    "last": "2026-09-22T10:00:21.723Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "ofonod",
-    "msg": "[0,0632]< RIL_REQUEST_SIGNAL_STRENGTH failed INVALID_RESPONSE",
-    "after": true
-   },
-   {
-    "ts": "2026-09-22T10:00:21.724Z",
-    "last": "2026-09-22T10:00:21.724Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "ofonod",
-    "msg": "[0,0633]< RIL_REQUEST_OPERATOR failed INVALID_RESPONSE",
-    "after": true
-   },
-   {
-    "ts": "2026-09-22T10:00:21.725Z",
-    "last": "2026-09-22T10:00:21.725Z",
-    "n": 1,
-    "phone": null,
-    "level": "I",
-    "tag": "ofonod",
-    "msg": "src/network.c:current_operator_callback() Error during current operator",
     "after": true
    },
    {

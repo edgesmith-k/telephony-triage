@@ -12,6 +12,30 @@
   }
  ],
  "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-11-20T14:55:01.000Z",
+   "2026-11-20T15:10:01.000Z"
+  ],
+  "ref": "2026-11-20T15:00:01.000Z",
+  "after_sec": 600,
+  "candidates": 2,
+  "rows": [
+   {
+    "ts": "2026-11-20T15:00:00.302Z",
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "onDataNetworkSetupDataFailed: [DataNetwork: DN-300-C, <APN#1>, state=null], cause=MISSING_UNKNOWN_APN(0x1b), retryDelayMillis=-1ms.",
+    "fold": {
+     "n": 1,
+     "first": "2026-11-20T15:00:00.302Z",
+     "last": "2026-11-20T15:00:20.502Z"
+    },
+    "main": true
+   }
+  ]
+ },
  "summary": {
   "ref": "2026-11-20T15:00:01.000Z",
   "range": [

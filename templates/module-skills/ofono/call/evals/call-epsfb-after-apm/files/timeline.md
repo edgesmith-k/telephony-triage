@@ -11,10 +11,10 @@
 - 범위: 2026-09-22T09:40:17.630Z ~ 2026-09-22T09:40:22.419Z, 줄 16, 모양 15개 중 15개. 기준 시각: 2026-09-22T09:40:20.000Z
 - 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
 
+09:40:21.431 - I imsd [SLOT_0][I] 6104 EPSFB failed, notify to ExampleImsCallManager  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:40:21.429 - D vrild mux [ch1][RX] VIPC_EXAMPLE_IMS_REG_IND ind len=28  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:40:21.430 - D imsd [SLOT_0][D] 6102 slot0: OEM_UNSOL_IMS_EXAMPLE_REGISTRATION parsed -> [state : 0] sid 0  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:40:21.431 - I imsd [SLOT_0][I] 6103 registered:0  〔script 모양 1줄, 기준 뒤 첫 등장〕
-09:40:21.431 - I imsd [SLOT_0][I] 6104 EPSFB failed, notify to ExampleImsCallManager  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:40:21.459 p0 I ofonod [0,UNSOL]< IMS_UNSOL_PDN_DEACTIVATE apn_class:1  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:40:21.460 - D ofonod src/ims.c:example_pdn_deactivate() apn_class:1  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:40:21.461 p0 I ofonod [0,0414]> RIL_REQUEST_DEACTIVATE_DATA_CALL (14,2)  〔script 모양 1줄, 기준 뒤 첫 등장〕
@@ -34,3 +34,10 @@
 09:40:17.649 p0 I ofonod [0,0412]< IMS_REQUEST_EXAMPLE_APM
 09:40:21.431 - I imsd [SLOT_0][I] 6104 EPSFB failed, notify to ExampleImsCallManager
 09:40:21.462 p0 I ofonod [0,UNSOL]< IMS_UNSOL_CAPABILITIES voiceOverLteCapable=0, emerOverLteCapable=1 smsOverLteCapable=0
+
+## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
+
+- 범위: 2026-09-22T09:35:20.000Z ~ 2026-09-22T09:50:20.000Z (분석 구간 끝과 기준 시각 2026-09-22T09:40:20.000Z 뒤 600초 중 늦은 쪽까지).
+- 줄: 1. 프레임을 뺀 후보 1줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+
+09:40:21.431 - I imsd [SLOT_0][I] 6104 EPSFB failed, notify to ExampleImsCallManager

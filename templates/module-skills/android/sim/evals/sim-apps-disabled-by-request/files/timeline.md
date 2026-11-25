@@ -44,10 +44,10 @@
 16:21:57.443 - D MultiSimSettingController updateDefaults
 16:21:57.445 - D MultiSimSettingController updateDefaultValues: change: 0
 
-## 이상 줄: W/E/F 레벨과 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 빠짐)
+## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
 
 - 범위: 2026-11-10T16:16:58.000Z ~ 2026-11-10T16:31:58.000Z (분석 구간 끝과 기준 시각 2026-11-10T16:21:58.000Z 뒤 600초 중 늦은 쪽까지).
-- 줄: 2. 프레임을 뺀 후보 2줄에서 F, 예외·crash 머리, E, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+- 줄: 2. 프레임을 뺀 후보 2줄에서 F, 예외·crash 머리, E, 그 밖의 레벨 중 오류 문구 줄, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
 
 16:21:57.504 - W Telephony registerMmTelCapabilityCallback: registration failed, no ImsService available. Exception: code: 1
 16:21:57.504 - W Telephony registerImsRegistrationCallback: registration failed, no ImsService available. Exception: code: 1
