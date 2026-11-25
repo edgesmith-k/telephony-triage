@@ -308,6 +308,7 @@
 - **`--more-logs <경로…>`**(RF-7, `07-workflow.md §추가 로그 재분석`)는 `job.logs`(이전 분석의 로그) **뒤에** 로그를 붙여 다시 분석한다(기존 `f<순번>` 유지): 이미 있는 경로는 조용히, sha256이 같은 다른 경로는 경고(`more-logs-duplicate: …`)하고 건너뛰며, 합친 목록을 `job.logs`·세션 `logs` 키에 남긴다(`--logs`는 목록을 통째로 바꾼다).
   - 로그 부분 해시가 바뀌어 Step 3~5를 합친 로그 전체로 다시 계산하고(`reuse.changed: [logs]`·`added_logs`), 새로 계산한 결과가 이전 실행과 `request_hash`가 다르면 덮어쓰기 전에 이전 `analysis.json`·`report.md`를 `JOB/runs/<n>/`(n = 이전 실행 번호, 최근 5개만 유지, `events.json`·`match.json` 제외)에 보관한다.
 - `run`은 후보 없음·원인 미확인이면 `analysis.json partial[]`(≤ 3)과 report.md `부분 일치` 절(코드 루트가 있으면 `code_roots.py find-text` 대조 줄, `규칙 제안 (부분 일치):` 줄은 Step 7 질문으로)을 쓴다
+- `run`은 조사 모드(`investigate.mode`)면 `analysis.json near_causes[]`(≤ 3, 표시 전용 — 점수·순위·`decision`·match.json 불변, 반입 7 B-1)를 쓴다: 부분 일치(`partial` 순서) `{id, title, matched, missing[≤3], at[≤3 맞은 시각]}` 다음에 이슈 요약 문장 한 번의 `db_search`(검색 자체 순위, 이 이슈 자신의 Jira 기록 제외) 결과 `{id, title, note: 낱말 일치만(로그 대조 안 함)}`, ID로 중복 제거. 둘 다 없으면 키가 없다. `fit()`은 이 칸을 맨 먼저 준다(`near_causes[1:]` → 전체). report.md(타임라인 머리 포함)에는 싣지 않는다 — 탐색 분석이 `후보 확인:`으로 대조한다
 - `run`은 스냅샷에 성공 흐름 파일(`<category>/flows/*.yaml`)이 있으면 `parse_logcat.py flows`(전체 로그) → `JOB/flow.json` → `analysis.json flows[]`(≤ 3 `{flow, key, step?, verdict, at?, causes?}`, `fit()`은 `partial` 다음에 `flows[1:]` → 전체)와 report.md `흐름 점검` 절(부분 일치 절 다음, ≤ 1,200 B, `04-parser-matching.md §5.13`)을 쓴다. 흐름 파일이 없으면 둘 다 없고 출력이 이전과 같다. 흐름 파일(fixture 제외)은 분석 재사용 해시(`compiled.source_files`)에 들어간다
 
 `job_status.py` 세부
