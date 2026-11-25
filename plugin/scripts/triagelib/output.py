@@ -20,8 +20,11 @@ Claude가 쓴 `JOB/deep-output.md`·`JOB/explore-output.md`를 받아:
 5. 확인할 내용(사용자 질문) 줄 꼬리를 탐색 결과를 가리키게 고친다(통과면 답 자리, 생략·실패면 답 안 함, F7).
 6. 같은 실행에서 다시 검사하면 앞 검사의 원문에 없는 인용 수를 `fabricated_before`로 이어받는다(F9 — 고쳐 다시 검사해도 지우지 않는다).
 7. 조사 모드(analysis.json `investigate.mode`, run이 판정)면 탐색 가장 유력 가설(없으면 1)에 검증 게이트 6개(`_investigation`)를 보고
-   결과를 analysis.json·기록 `investigation`에, 조사 결론 줄을 report.md CAUSE 칸에 쓴다(통과면 맨 위, 근거 부족이면 결론 줄 아래).
-   점수·분류·decision은 바꾸지 않는다.
+   결과를 analysis.json·기록 `investigation`에, 조사 결론 줄을 report.md CAUSE 칸에 쓴다(통과 = 인용·형식 확인이면 맨 위, 근거 부족이면
+   결론 줄 아래). 게이트는 인용이 원문에 있는지와 단계표 형식만 본다 — 원인이 맞는지는 사람이 본다(11/25 결정 1). 게이트 2는 가장
+   이른 false 단계의 관측이 원문 확인 인용이거나 사본에서 0건을 센 `찾았는데 없음`이어야 한다. 가장 유력이 정상(근거 줄 원문
+   확인)이면 `normal: true`. 점수·분류·decision은 바꾸지 않는다. Jira 본문(`issue_post`)은 이 기록(analysis.json 아님)을 읽는다.
+8. 인용 줄이 한 칸 한도(768바이트)를 넘으면 실패가 아니라 앞부분 + ` …`로 줄여 대조·표시한다(`_clip_quote`).
 
 `--skipped "<사유>"`: 실행하지 않았거나 실패 — 줄을 "생략: <사유>"로(이미 스크립트가 쓴 생략·해당 없음·받기 실패 줄이면 그대로).
 기록 `JOB/check-output.json[purpose]`(스크립트만 쓴다, guard 규칙 12)와 trace `checked` 행(`core.trace_event`). 표시 의무: 작업 디렉토리 JOB이면 검사마다 `evidence` 기록
@@ -106,10 +109,13 @@ NORMAL_BAD = " [정상 근거 없음]"
 TOP_FIT_NORMAL_HELD = " → {n}번 가설이 정상(설계상 정상 동작)이라 1위 {cause} 보류"
 NORMAL_HELD_SUB = "  - {n}번 가설이 정상(설계상 정상 동작, 근거 줄 원문 확인)이라 1위 {cause} 채택을 보류로 바꿨다"
 WARN_TOP_NUM = "  - 경고: `가장 유력: {top}`을 가설 번호로 읽지 못해(없는 번호) 1번 가설로 적합성 확인을 봤다"
+WARN_INV_TOP = "`가장 유력: {top}`을 가설 번호로 읽지 못해 가설 1을 조사 결론으로 검사했다 — `가장 유력: <번호>`"
 TOP_NUM_RX = re.compile(r"^[`*\s]*(?:가설\s*)?#?(\d+)(?!\d)")      # `가장 유력: 2`·`가설 2` (module_eval.TOP_NUM_RX와 같은 읽기)
 # 규칙 제안 하위 줄(SKILL Step 7 `규칙 제안` 질문이 report.md에서 읽는다). 근거 원문 확인이 안 된 제안은 싣지 않는다
 RULE_SUB = "  - 규칙 제안 ({kind}): {text}"
-RULE_DROPPED = "  - {kind} 출력의 제안 {n}개는 근거가 원문에서 확인되지 않아 뺐다"
+RULE_DROPPED = "  - {kind} 출력의 제안 {n}개를 뺐다 — {why}"
+# 뺀 이유(R-09 결정 2, 기록 `rules_dropped_why` 키 → 줄 문구). 원인 미확정 = 판단 채택도 조사 결론 identified도 아니라 첫 점검·함정을 안 받음
+RULE_WHY = {"근거 불일치": "근거 불일치(원문에서 확인 안 됨)", "형식": "형식", "원인 미확정": "원인 미확정(첫 점검·함정)"}
 RULE_KIND = {"deep": "심층", "explore": "탐색"}
 RULE_BASIS_RX = re.compile(r"\s[—–]\s*근거\s*[:：]\s*(.+)$")
 RULES_MAX, RULE_CLIP = 5, 300
@@ -121,6 +127,8 @@ FORMAT_CLIP = 600
 RECHECK_KEPT = "첫 검사 결과 유지(다시 검사가 형식·마스킹 검사에서 실패해 리포트 줄을 바꾸지 않았다)"
 TIMER_RX = re.compile(r"타이머|timer|throttl|스로틀|재시도|retry|backoff|임계|threshold|카운터|counter|횟수", re.IGNORECASE)
 BOUNDARIES = ("AP 내부", "AP-CP 경계", "CP 내부", "CP-망 경계", "망", "환경", "모름")
+LAYER_ABBR = {"AP": "AP 내부", "CP": "CP 내부", "AP-CP": "AP-CP 경계", "CP-망": "CP-망 경계"}
+LAYER_ABBR_RX = re.compile(r"^(AP-CP|CP-망|AP|CP)\s*(?:\([^()]*\))?$")
 # `첫 갈라짐` 번호: 맨 앞 `단계 N`·`N단계`·선두 숫자만(`없음…`이나 문장 속 숫자는 None — 시각 `13:05`를 단계로 읽지 않게)
 CLAIM_STEP_RX = re.compile(r"^[\s`*]*(?:단계\s*#?\s*(\d+)|#?(\d+)\s*단계|#?(\d+)(?!\d|:))")
 # `→ 고치면 결과가 뒤집히나: 예|아니오` 답(뒤 설명 허용). 틀 그대로 `예|아니오`면 group(2)가 있다(값 없음)
@@ -322,8 +330,9 @@ def _raw_ready() -> None:
         evidence.set_raw_patterns(platforms.raw_line_patterns())
 
 
-def _copy_source(job: Path, analysis: dict, quotes: list[str]) -> tuple[list[str], str]:
-    """탐색 인용을 찾을 마스킹 사본 줄(`window.served_copies`, `evidence.copy_rows`) → (JOB 기준 사본 이름들, 행들). 사본이 없으면 ([], "")."""
+def _copy_source(job: Path, analysis: dict, quotes: list[str]) -> tuple[list[str], str, list[str]]:
+    """탐색 인용을 찾을 마스킹 사본 줄(`window.served_copies`, `evidence.copy_rows`) → (JOB 기준 사본 이름들, 행들, 사본 글들 — 게이트
+    `찾았는데 없음` 세기가 다시 쓴다). 사본이 없으면 ([], "", [])."""
     from triagelib import window
     _raw_ready()
     served, _skipped = window.served_copies(job, analysis if isinstance(analysis, dict) else {})
@@ -334,7 +343,7 @@ def _copy_source(job: Path, analysis: dict, quotes: list[str]) -> tuple[list[str
         except OSError:
             continue
     rows = evidence.copy_rows(texts, quotes) if texts else ""
-    return ([f"{window.MASKED_DIR}/{p.name}" for p in served] if rows else []), rows
+    return ([f"{window.MASKED_DIR}/{p.name}" for p in served] if rows else []), rows, texts
 
 
 def _windows(job: Path) -> tuple[list[str], list[str], list[str]]:
@@ -386,8 +395,8 @@ def _caps(purpose: str, mode: str, fields: dict, text: str) -> str | None:
         if len(fields["hyps"]) > HYPS_MAX:
             return "가설"
         for hyp in fields["hyps"]:
-            quotes = hyp["로그로 확인"]
-            if not 1 <= len(quotes) <= QUOTES_MAX or any(_b(q) > FIELD_MAX_BYTES for q in quotes):
+            quotes = hyp["로그로 확인"]       # 긴 인용 줄은 `_parse`가 앞부분만 남겼다(R-05)
+            if not 1 <= len(quotes) <= QUOTES_MAX:
                 return "로그로 확인"
             for name in ("가설", "코드로 추정", "반대 근거", "다음 확인"):
                 if _b(hyp[name]) > FIELD_MAX_BYTES:
@@ -397,7 +406,7 @@ def _caps(purpose: str, mode: str, fields: dict, text: str) -> str | None:
         return "전체"
     items = fields["근거"]
     low = 1 if mode == "module" else 0
-    if not low <= len(items) <= QUOTES_MAX or any(_b(q) > FIELD_MAX_BYTES for q in items):
+    if not low <= len(items) <= QUOTES_MAX:
         return "근거"
     single = ("원인 층", "원인 데몬", "반대 근거", "분석 스킬 의견") if mode == "module" else ("요약", "분석 스킬 의견")
     for name in single:
@@ -429,22 +438,42 @@ def _check_quoted(fields: dict) -> list[tuple[int, str]]:
             if c.get("why") and c.get("verdict") != "?" and not NOT_FOUND_RX.match(c["why"])]
 
 
+def _clip_quote(q: str) -> str:
+    """R-05: 한 칸 한도(768바이트)를 넘는 인용 줄은 앞부분만(UTF-8 경계, 낱말이 잘리지 않게 마지막 공백까지) + ` …` — 사본 원문 줄이
+    길어 그대로 인용해도 출력 전체를 버리지 않는다. `…` 뒤는 원문 대조에서 생략으로 읽힌다(앞부분만 대조)."""
+    if _b(q) <= FIELD_MAX_BYTES:
+        return q
+    s = q.encode("utf-8")[:FIELD_MAX_BYTES - 4].decode("utf-8", "ignore")
+    return (s[:s.rfind(" ")] if " " in s else s) + " …"
+
+
 def _parse(purpose: str, mode: str, text: str) -> dict | None:
     if purpose == "explore":
-        return evidence.parse_explore(text)
-    return evidence.parse_fields(text, evidence.FIELDS_DEEP if mode == "module" else evidence.FIELDS_SKILL)
+        fields = evidence.parse_explore(text)
+        for h in (fields or {}).get("hyps") or []:
+            h["로그로 확인"] = [_clip_quote(q) for q in h["로그로 확인"]]
+        return fields
+    fields = evidence.parse_fields(text, evidence.FIELDS_DEEP if mode == "module" else evidence.FIELDS_SKILL)
+    if fields:
+        fields["근거"] = [_clip_quote(q) for q in fields["근거"]]
+    return fields
 
 
-def _chain_warnings(fields: dict) -> list[str]:
-    """기대 체인 형식 경고(기계로 볼 수 있는 것만): 가장 유력(없으면 가설 1)에 표 없음, `첫 갈라짐` 단계가 표의 가장 이른 false가
-    아님(없음·false 없는데 적음), false가 있는데 `원인 층` 없음, `책임 경계` 값이 목록 밖, 타이머·재시도·임계값·횟수 낱말이 든 가설
-    (정상 가설 아님)에 `메커니즘 재계산` 없음, 가장 유력의 메커니즘 재계산이 `아니오`."""
+def _chain_warnings(fields: dict, investigating: bool = False) -> list[str]:
+    """기대 체인 형식 경고(기계로 볼 수 있는 것만): 가장 유력(없으면 가설 1)에 표 없음, `일치` 칸을 못 읽음, `첫 갈라짐` 단계가 표의
+    가장 이른 false가 아님(없음·false 없는데 적음), `책임 경계` 값이 목록 밖, 타이머·재시도·임계값·횟수 낱말이 든 가설(정상 가설
+    아님)에 `메커니즘 재계산` 없음, 가장 유력의 메커니즘 재계산이 `아니오`. 조사 모드(`investigating`)면 게이트 3이 보는 칸도:
+    가장 유력에 false가 있는데 `책임 경계` 없음, 그 단계 `기대 주체`를 못 읽음(열·머리 행 없음)·목록 밖(R-07).
+    `원인 층`은 선택 칸이고 기대는 게이트가 없어 보지 않는다(R-03 — 경고가 다시 검사를 늘 열었다)."""
     out = []
     picked = _picked(fields)
     for k, h in enumerate(fields.get("hyps") or []):
         n, rows = k + 1, h.get("기대 체인") or []
         if k == picked and not rows:
             out.append(f"가설 {n}(가장 유력)에 `기대 체인:` 표 없음 — 실패 줄 다음에 일어나야 할 일을 단계 표로")
+        unread = [str(r["단계"]) for r in rows if r["일치"] == "?"]
+        if unread:
+            out.append(f"가설 {n}: 단계 {', '.join(unread)}의 `일치` 칸을 못 읽음 — true, false, 모름 중 하나")
         first = next((r["단계"] for r in rows if r["일치"] == "false"), None)
         m = CLAIM_STEP_RX.match(h.get("첫 갈라짐") or "")
         claim = int(next(g for g in m.groups() if g)) if m else None
@@ -454,10 +483,16 @@ def _chain_warnings(fields: dict) -> list[str]:
             out.append(f"가설 {n}: 첫 갈라짐 단계 {claim} ≠ 표의 가장 이른 false 단계 {first} — 가장 잘 설명하는 단계가 아니라 가장 이른 false")
         elif first is None and claim is not None and rows:
             out.append(f"가설 {n}: 첫 갈라짐 단계 {claim}인데 표에 false 행이 없음")
-        if first is not None and not h.get("원인 층"):
-            out.append(f"가설 {n}: 첫 갈라짐이 있는데 `원인 층:` 없음 — 단계 {first}에서 해야 했는데 안 한 주체")
-        if h.get("책임 경계") is not None and not h["책임 경계"].lstrip("`* ").startswith(BOUNDARIES):
+        if h.get("책임 경계") is not None and _layer(h["책임 경계"]) is None:
             out.append(f"가설 {n}: `책임 경계`는 {' | '.join(BOUNDARIES)} 중 하나")
+        elif investigating and k == picked and first is not None and h.get("책임 경계") is None:
+            out.append(f"가설 {n}(가장 유력): `책임 경계:` 칸 없음 — 가설 머리 다음 줄에 단계 {first} 기대 주체와 같은 값")
+        row = next((r for r in rows if r["일치"] == "false"), None)
+        if investigating and k == picked and row is not None and not row["주체"]:
+            out.append(f"가설 {n}: 단계 {first}의 `기대 주체` 칸을 못 읽음 — 표 머리 행을 "
+                       "`| 단계 | 기대 | 기대 주체 | 기대 근거 | 관측 줄 | 일치 |` 그대로 쓴다")
+        elif investigating and k == picked and row is not None and _layer(row["주체"]) is None:
+            out.append(f"가설 {n}: 단계 {first} 기대 주체 `{_one(row['주체'])[:20]}`는 목록 밖 — {' | '.join(BOUNDARIES)} 중 하나")
         mech = h.get("메커니즘 재계산")
         if not mech and TIMER_RX.search(h["가설"] or "") and not NORMAL_RX.match(h["가설"] or ""):
             out.append(f"가설 {n}: 타이머·재시도·임계값·횟수 원인인데 `메커니즘 재계산:` 없음 — 로그 값으로 다시 계산하고 고치면 뒤집히나")
@@ -497,8 +532,9 @@ def _recheck_open(job: Path) -> bool:
 
 # 숫자+시간·횟수 단위(영어는 낱말 경계). `번`은 뺀다(`2번 단계`·`1번 슬롯`처럼 순번에 흔하다)
 NUM_UNIT_RX = re.compile(r"\d+(?:\.\d+)?\s*(?:(?:msec|ms|seconds?|secs?|s|minutes?|mins?|times?)(?![A-Za-z])|초|분|회)")
-QUOTE_TS_RX = re.compile(r"\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})|(?:\d{4}-)?\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3,9}"
+QUOTE_TS_RX = re.compile(r"\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?|(?:\d{4}-)?\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3,9}"
                          r"|\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?")
+MONTHS = "JanFebMarAprMayJunJulAugSepOctNovDec"     # syslog `Mon` → 월(`index // 3 + 1`)
 OUTER_SIDES = {"CP 내부": ("cp",), "CP-망 경계": ("cp", "net"), "망": ("net",)}
 # CP 쪽 = 플랫폼 백엔드의 벤더 IPC 태그(`is_vendor_ipc` — tags.yaml `ipc: vendor`가 있으면 그것, 없으면 백엔드 기본: Android
 # `VENDOR_IPC_TAGS`, oFono 구성요소 `vendor_ipc`)와 아래 카테고리, 망 쪽 = 아래 카테고리. 카테고리 이름은 placeholder다
@@ -508,15 +544,34 @@ INV_CAUSE_MAX, INV_WHY_MAX, INV_EXPECT_MAX = 120, 80, 80
 
 
 def _layer(value) -> str | None:
-    """`책임 경계`·기대 주체 칸 → `BOUNDARIES` 값(앞부분 일치, `AP-CP 경계(변환·직렬화)`도), 목록 밖·없음이면 None."""
-    s = str(value or "").lstrip("`* ")
-    return next((b for b in BOUNDARIES if s.startswith(b)), None)
+    """`책임 경계`·기대 주체 칸 → `BOUNDARIES` 값(앞부분 일치, `AP-CP 경계(변환·직렬화)`도), 목록 밖·없음이면 None.
+    칸 전체가 뜻이 하나인 줄임(`AP`·`CP`·`AP-CP`·`CP-망`, 뒤 괄호 설명 허용)이면 그 값(R-07). `모뎀(CP)`·`CP 쪽`처럼 모호하면 읽지 않는다."""
+    s = str(value or "").strip("`* ")
+    m = LAYER_ABBR_RX.match(s)
+    return next((b for b in BOUNDARIES if s.startswith(b)), None) or (LAYER_ABBR[m.group(1)] if m else None)
 
 
 def _quote_ts(q: str, events: dict | None):
-    """인용 앞 시각(타임라인 UTC `HH:MM:SS.mmm`, 사본 logcat `MM-DD HH:MM:SS.mmm`, ISO) → UTC datetime, 못 읽으면 None."""
+    """인용 앞 시각 → UTC datetime, 못 읽으면 None. 원문 모양(logcat·oFono ISO·BSD syslog·BusyBox, R-04)은 그 칸으로 — 연도가 없으면
+    작업 `--year`(없으면 분석 범위 시작의 연도), 시간대가 없으면 작업 tz. 시간대 없는 ISO도 작업 tz. 타임라인 행 `HH:MM:SS.mmm`은 UTC
+    (`window.parse_at`)."""
     from triagelib import window
-    m = QUOTE_TS_RX.match(evidence.obs_quote(q) or "")
+    s = evidence.obs_quote(q) or ""
+    inp = (events or {}).get("input") or {}
+    g = evidence.raw_stamp(s)
+    if g:
+        try:
+            # ponytail: 연도 없는 줄의 해 넘김(12월→1월)은 보지 않는다 — 파서(journal·logcat)처럼 앞 줄을 따라가려면 줄 순서가 필요
+            year = g.get("year") or inp.get("year") or str((inp.get("window") or {}).get("start") or "")[:4] or logtime.DEFAULT_YEAR
+            mon = int(g["mon"]) if g.get("mon") else MONTHS.index(g["bmon"]) // 3 + 1
+            stamp = (f"{int(year):04d}-{mon:02d}-{int(g['day']):02d}T{g['h']}:{g['mi']}:{g['s']}"
+                     + (f".{g['frac']}" if g.get("frac") else "") + (g.get("zone") or ""))
+        except (TypeError, ValueError):
+            return None
+        return logtime.normalize_ts(stamp, inp.get("tz"), None)
+    m = QUOTE_TS_RX.match(s)
+    if m and "T" in m.group(0):
+        return logtime.normalize_ts(m.group(0), inp.get("tz"), inp.get("year"))
     return window.parse_at(m.group(0), events or {})[0] if m else None
 
 
@@ -528,39 +583,105 @@ def _quote_tag(q: str) -> str | None:
     return parts[3] if len(parts) >= 4 and parts[3] != "-" else None
 
 
-def _after_ref(job: Path, ok_quotes: list[str], events: dict | None) -> tuple[bool, str]:
-    """게이트 4: 기준 시각(`explore-input.json` around) 뒤 줄을 ok로 인용했거나, sha가 맞는 window 구간의 마지막 줄 시각이 기준보다
-    뒤다(그 뒤 줄이 실제로 있을 때만 — 같은 시각은 아니다, `--span` 유무와 무관)."""
-    try:
-        ref = logtime.parse_ts(str((_load(job / EXPLORE_INPUT_FILE) or {}).get("around")))
-    except ValueError:
-        return True, "해당 없음(기준 시각 없음)"
+def _ref(job: Path, events: dict | None):
+    """확정 기준 시각(`summary.ref_of` — 실패 스텝·기준 줄·단서 시각·발생 시각, 추정 기준은 아니다) → UTC datetime, 없으면 None."""
+    from triagelib import summary
+    inp = (events or {}).get("input") or {}
+    return logtime.normalize_ts(summary.ref_of(_load(job / EXPLORE_INPUT_FILE)), inp.get("tz"), inp.get("year"))
+
+
+def _after_ref(job: Path, ok_quotes: list[str], events: dict | None, ref) -> tuple[bool, str]:
+    """게이트 4: 기준 시각(`_ref`) 뒤 줄을 ok로 인용했거나, sha가 맞는 window 구간의 마지막 줄 시각이 기준보다 뒤다(그 뒤 줄이 실제로
+    있을 때만 — 같은 시각은 아니다, `--span` 유무와 무관). 확정 기준이 없으면 통과가 아니라 가장 유력 가설의 ok 인용 중 가장 이른
+    시각을 기준으로 본다(R-15)."""
+    note = ""
+    if ref is None:
+        ref = min((t for q in ok_quotes if (t := _quote_ts(q, events)) is not None), default=None)
+        if ref is None:
+            return False, "기준 시각 없음 — 원문 확인된 인용에도 시각이 없음"
+        note = "(기준 시각 없음 — 가장 이른 인용 뒤)"
     if any((t := _quote_ts(q, events)) is not None and t > ref for q in ok_quotes):
-        return True, ""
+        return True, note
     for text in _windows(job)[1]:
         rows = [line for line in text.split("\n") if evidence.ROW_RX.match(line)]
         if rows and (t := _quote_ts(rows[-1], events)) is not None and t > ref:
-            return True, ""
-    return False, "기준 시각 뒤 줄 인용·구간 없음(실패 뒤를 보지 않음)"
+            return True, note
+    return False, "기준 시각 뒤 줄 인용·구간 없음(실패 뒤를 보지 않음)" + note
+
+
+def _absent(word: list[str], texts: list[str], events: dict | None, ref) -> int:
+    """R-02: `찾았는데 없음` 낱말(`word` — 모두 든 줄)이 마스킹 사본(`texts`)에서 기준 시각(`ref`) 뒤, 기준이 없으면 분석 범위
+    (`input.window`, 없으면 전체) 안에 몇 줄 있나(`ABSENT_MAX`에서 멈춘다). 시각을 못 읽는 줄(덤프 이어진 줄 등)은 세지 않는다."""
+    win = ((events or {}).get("input") or {}).get("window") or {}
+    lo, hi = (logtime.normalize_ts(win.get(k), None, None) for k in ("start", "end"))
+    n = 0
+    for text in texts:
+        at = text.find(word[0])
+        while at >= 0:
+            a, b = text.rfind("\n", 0, at) + 1, text.find("\n", at)
+            b = len(text) if b < 0 else b
+            line = text[a:b]
+            if all(w in line for w in word[1:]) and (t := _quote_ts(line, events)) is not None and (
+                    t > ref if ref is not None else (lo is None or t >= lo) and (hi is None or t <= hi)):
+                n += 1
+                if n >= ABSENT_MAX:
+                    return n
+            at = text.find(word[0], b)
+    return n
+
+
+ABSENT_MAX = 1000         # 흔한 낱말이면 큰 사본에서 줄마다 시각을 읽지 않게 여기서 세기를 멈춘다(이유 글은 `1000건 이상`)
+ABSENT_WORD_RX = re.compile(r"`([^`]+)`")
+ASCII_WORD_RX = re.compile(r"[A-Za-z_][\w.:/-]{3,}")
+
+
+def _absent_words(item: str) -> list[str]:
+    """`찾았는데 없음` 항목 `<무엇> — <어디서>`의 셀 낱말: `<무엇>`의 백틱 글, 없으면 영문 낱말(4자 이상). 한글 설명뿐이면 []."""
+    what = evidence.QUOTE_CUT_RX.split(item, maxsplit=1)[0]
+    return ABSENT_WORD_RX.findall(what) or ASCII_WORD_RX.findall(what)
+
+
+def _first_obs(h: dict, first: dict, verdict: str | None, texts: list[str], events, ref) -> str:
+    """R-02(결정 1): 가장 이른 false 단계의 관측 칸이 근거로 서나 — 원문 확인(ok) 인용이거나, 그 가설의 `찾았는데 없음` 항목 낱말이
+    사본(없으면 근거 원문 행)에서 기준 시각 뒤(기준 없으면 분석 범위) 0건. 그 단계 기대·관측 칸에 낱말이 든 항목만 보고, 없으면 모든
+    항목. 맞으면 "", 아니면 실패 이유."""
+    if evidence.obs_quote(first["관측"]) is not None:
+        return "" if verdict == "ok" else f"관측 인용이 원문에서 확인되지 않음({verdict or '검사 못 함'})"
+    items = [(i, w) for i in h.get("찾았는데 없음") or [] if (w := _absent_words(i))]
+    near = f"{first['기대']} {first['관측']}".lower()
+    items = [x for x in items if any(w.lower() in near for w in x[1])] or items
+    if not items:
+        return "관측이 원문 확인 인용도, 셀 낱말이 있는 `찾았는데 없음` 항목도 아님"
+    if not texts:
+        return "근거 원문이 없어 `찾았는데 없음`을 셀 수 없음"       # 0건을 셌다고 하지 않는다(건너뛴 검사를 통과로 두지 않음)
+    for _i, word in items:
+        n = _absent(word, texts, events, ref)
+        if n:
+            return (f"`찾았는데 없음`이라 쓴 `{' '.join(word)[:30]}` 줄이 {'기준 시각 뒤' if ref else '분석 범위'}에 "
+                    + (f"{n}건 이상" if n >= ABSENT_MAX else f"{n}건") + " 있음")
+    return ""
 
 
 def _vendor_ipc(defaults: dict | None, platform: str | None, rules):
-    """플랫폼 백엔드의 벤더 IPC 태그 판단(`is_vendor_ipc`, tags.yaml 속성 반영). 백엔드를 못 불러오면 None(tags.yaml만 본다)."""
+    """플랫폼 백엔드의 벤더 IPC 태그 판단(`is_vendor_ipc`, tags.yaml 속성 반영)과 백엔드 기본 벤더 IPC 태그가 있나 → (판단 | None,
+    기본 있음). 백엔드를 못 불러오면 (None, False)(tags.yaml만 본다)."""
     import parser_backends
     import platforms
     try:
         name = platform or platforms.DEFAULT_NAME
         profile = platforms.load(defaults or {}, name, require_enabled=False)
-        return parser_backends.load(platforms.backend_name(defaults or {}, name)).configure(profile).apply_rules(rules).is_vendor_ipc
+        backend = parser_backends.load(platforms.backend_name(defaults or {}, name)).configure(profile).apply_rules(rules)
     except Exception:       # noqa: BLE001 — 설정·백엔드 문제면 tags.yaml 표시만으로 판정한다
-        return None
+        return None, False
+    # ponytail: reference 백엔드(Android·oFono)의 기본 태그 집합(`TagAttrSet._default`)을 본다 — site 백엔드는 없으면 표시 없음으로
+    return backend.is_vendor_ipc, bool(getattr(getattr(backend, "_vendor_ipc", None), "_default", None))
 
 
 def _outer(events: dict | None, ok_quotes: list[str], layer: str | None, defaults: dict | None = None,
            platform: str | None = None) -> tuple[bool, str]:
     """게이트 6: CP·망 쪽 결론이면 ok 인용 중 그쪽 태그 줄이 하나 이상(`CP-망 경계`는 어느 쪽이든). CP 쪽 = 벤더 IPC 태그
-    (`_vendor_ipc`)·`CP_CATEGORIES`, 망 쪽 = `NET_CATEGORIES`. 맞는 줄이 없고 tags.yaml에 그쪽 표시(`ipc` 선언·카테고리)도 없으면
-    "tags.yaml에 CP/망 표시 없음"."""
+    (`_vendor_ipc`)·`CP_CATEGORIES`, 망 쪽 = `NET_CATEGORIES`. 실패 이유(R-08): 판정할 표시(tags.yaml `ipc` 선언·카테고리, 백엔드 기본
+    벤더 IPC 태그)가 있으면 "결론 쪽(CP) 태그 줄 인용 없음", 표시 자체가 없으면 "사내 태그 설정에 CP/망 표시 없음(설정 전)"."""
     from common import parser_rules
     sides = OUTER_SIDES.get(layer or "")
     if not sides:
@@ -570,25 +691,28 @@ def _outer(events: dict | None, ok_quotes: list[str], layer: str | None, default
     except Exception:       # noqa: BLE001 — 규칙을 못 읽으면 실패로 둔다(통과로 표시하지 않는다)
         return False, "tags.yaml을 읽지 못함"
     cats = set(rules.tag_exact.values()) | {c for _p, c in rules.tag_regexes}
-    marked = {"cp": rules.declares("ipc") or bool(cats & set(CP_CATEGORIES)), "net": bool(cats & set(NET_CATEGORIES))}
-    vipc = _vendor_ipc(defaults, platform, rules)
+    vipc, backend_cp = _vendor_ipc(defaults, platform, rules)
+    marked = {"cp": rules.declares("ipc") or bool(cats & set(CP_CATEGORIES)) or backend_cp, "net": bool(cats & set(NET_CATEGORIES))}
     side = {"cp": lambda t: (bool(vipc(t)) if vipc else rules.tag_attr(t, "ipc") == "vendor") or rules.tag_category(t) in CP_CATEGORIES,
             "net": lambda t: rules.tag_category(t) in NET_CATEGORIES}
     tags = [t for t in map(_quote_tag, ok_quotes) if t]
     if any(side[s](t) for t in tags for s in sides):
         return True, ""
     if not any(marked[s] for s in sides):
-        return False, "tags.yaml에 CP/망 표시 없음"
-    return False, f"{layer} 결론인데 원문 확인된 인용에 {'·'.join(SIDE_LABEL[s] for s in sides)} 태그 줄 없음"
+        return False, "사내 태그 설정에 CP/망 표시 없음(설정 전)"
+    return False, f"결론 쪽({'·'.join(SIDE_LABEL[s] for s in sides)}) 태그 줄 인용 없음"
 
 
 def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: dict | None, defaults: dict | None = None,
-                   platform: str | None = None) -> dict:
-    """조사 결론 게이트 6개 → analysis.json·check-output 기록 `investigation`. 하나라도 실패면 insufficient_evidence."""
+                   platform: str | None = None, before: int = 0, texts: list[str] | None = None,
+                   source: str | None = None) -> tuple[dict, list[str]]:
+    """조사 결론 게이트 6개 → (analysis.json·check-output 기록 `investigation`, 형식 경고). 하나라도 실패면 insufficient_evidence.
+    `before` = 앞 검사의 원문에 없는 인용 수(있으면 게이트 1 실패, R-03), `texts` = 마스킹 사본 글(`찾았는데 없음` 세기 — 없으면
+    근거 원문 행 `source`로 센다)."""
     hyps = fields.get("hyps") or []
     if not hyps:
         return {"status": "insufficient_evidence", "hyp": None, "cause": None, "layer": None, "first_divergence": None,
-                "gate": [{"name": "가설", "ok": False, "why": "가설 없음"}], "explore_sha": sha}
+                "gate": [{"name": "가설", "ok": False, "why": "가설 없음"}], "explore_sha": sha}, []
     _raw_ready()
     k = _picked(fields)
     h = hyps[k]
@@ -599,7 +723,9 @@ def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: 
     m = CLAIM_STEP_RX.match(h.get("첫 갈라짐") or "")
     claim = int(next(g for g in m.groups() if g)) if m else None
     layer = _layer(h.get("책임 경계"))
+    ref = _ref(job, events)
     gate: list[dict] = []
+    warns: list[str] = []
 
     def add(name: str, ok, why: str = "") -> None:
         gate.append({"name": name, "ok": bool(ok), "why": why[:INV_WHY_MAX]})
@@ -608,31 +734,41 @@ def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: 
         add("인용 원문", False, "근거 원문 검사 건너뜀")
     else:
         fab, n_ok = verdicts.count("fabricated"), verdicts.count("ok")
-        add("인용 원문", not fab and n_ok, "" if not fab and n_ok else f"원문에 없음 {fab}, 원문 확인 {n_ok}")
-    add("첫 어긋남", first is not None and claim == first["단계"],
+        add("인용 원문", not fab and n_ok and not before, f"앞 검사에 원문에 없는 인용 {before}(다시 검사해도 지우지 않음)"
+            if before and not fab and n_ok else "" if not fab and n_ok else f"원문에 없음 {fab}, 원문 확인 {n_ok}")
+    obs = ""
+    if first is not None and claim == first["단계"]:
+        quoted = [r for r in rows if evidence.obs_quote(r["관측"]) is not None]
+        verdict = dict(zip(map(id, quoted), chain_v[k])).get(id(first)) if chain_v else None
+        obs = _first_obs(h, first, verdict, texts or ([source] if source else []), events, ref)
+        if obs:
+            obs = f"단계 {first['단계']}: {obs}"
+            warns.append(f"가설 {k + 1}: 가장 이른 false {obs} — 관측 줄을 시각부터 원문 그대로 쓰거나, 없음이면 `찾았는데 없음:`에 "
+                         "찾은 낱말을 백틱으로(예: - `SETUP_DATA_CALL` 재요청 — logs-masked 15:10:02 뒤 grep)")
+    add("첫 어긋남", first is not None and claim == first["단계"] and not obs,
         "기대 체인 표 없음" if not rows else "표에 false 단계 없음" if first is None
-        else "" if claim == first["단계"] else f"첫 갈라짐 {claim or '없음'} ≠ 가장 이른 false 단계 {first['단계']}")
+        else obs if claim == first["단계"] else f"첫 갈라짐 {claim or '없음'} ≠ 가장 이른 false 단계 {first['단계']}")
     subject = _layer(first["주체"]) if first else None
     add("책임 층", layer not in (None, "모름") and first is not None and subject == layer,
         "책임 경계 칸 없음·목록 밖" if layer is None else "책임 경계 모름" if layer == "모름" else "첫 갈라짐 단계 없음"
         if first is None else "기대 주체 칸 없음(옛 형식 표)" if not first["주체"] else ""
         if subject == layer else f"책임 경계 {layer} ≠ 단계 {first['단계']} 기대 주체 {subject or _one(first['주체'])[:20]}")
     ok_quotes = [q for q, v in zip(quotes, verdicts or []) if v == "ok"]
-    add("실패 뒤 흔적", *_after_ref(job, ok_quotes, events))
+    add("실패 뒤 흔적", *_after_ref(job, ok_quotes, events, ref))
     mech = h.get("메커니즘 재계산") or ""
     flip = FLIP_RX.search(mech)
     answer = None if flip and flip.group(2) else (flip or FLIP_TAIL_RX.search(mech))
-    if not NUM_UNIT_RX.search(f"{(first or {}).get('기대') or ''} {h['가설'] or ''}"):
+    if not NUM_UNIT_RX.search((first or {}).get("기대") or ""):      # R-17: 가장 이른 false 단계의 `기대` 칸만(가설 머리의 경과 시간은 아님)
         add("숫자 메커니즘", True, "해당 없음(숫자 기대 없음)")
     else:
         add("숫자 메커니즘", mech.strip() and not (flip and flip.group(2)) and not (answer and answer.group(1) != "예"),
             "숫자 기대인데 메커니즘 재계산 없음" if not mech.strip() else "재계산 답이 틀 그대로" if flip and flip.group(2)
             else "재계산 답이 아니오(고쳐도 안 뒤집힘)" if answer and answer.group(1) != "예" else "")
     add("외부 근거", *_outer(events, ok_quotes, layer, defaults, platform))
-    return {"status": "identified" if all(g["ok"] for g in gate) else "insufficient_evidence", "hyp": k + 1,
-            "cause": _one(h["가설"])[:INV_CAUSE_MAX] or None, "layer": layer,
-            "first_divergence": {"step": first["단계"], "expect": _one(first["기대"])[:INV_EXPECT_MAX]} if first else None,
-            "gate": gate, "explore_sha": sha}
+    return ({"status": "identified" if all(g["ok"] for g in gate) else "insufficient_evidence", "hyp": k + 1,
+             "cause": _one(h["가설"])[:INV_CAUSE_MAX] or None, "layer": layer,
+             "first_divergence": {"step": first["단계"], "expect": _one(first["기대"])[:INV_EXPECT_MAX]} if first else None,
+             "gate": gate, "explore_sha": sha}, warns)
 
 
 # --- 그리기 ----------------------------------------------------------------------------------------------
@@ -802,17 +938,21 @@ def _fit_subs_main(analysis, fields, hold, normal1, tf, cause, fit_check) -> lis
 
 
 def _rule_subs(purpose: str, items, source: str | None, tags, res: dict | None, text: str = "",
-               confirmed: bool = True) -> tuple[list[str], int, int, list[int] | None]:
-    """`규칙 제안` 항목 → (report 하위 줄, 실은 수, 뺀 수, 탐색 `[모듈]` 줄 중 실은 번호 | None(그런 줄 없음)). `없음`은 건너뛴다.
-    `— 근거: <문구>`가 있으면 그 문구가 원문(`source`) 검사 `ok`일 때만, 없으면 근거 원문 검사(`res`)를 실제로 했고 원문에 없는
-    인용이 없을 때만 싣는다 — 근거 불일치 가설에서 나온 제안·검사를 건너뛴 출력의 제안을 막는다.
+               confirmed: bool = True) -> tuple[list[str], int, dict, list[int] | None]:
+    """`규칙 제안` 항목 → (report 하위 줄, 실은 수, 뺀 이유별 수 `{근거 불일치|형식|원인 미확정: n}`(0은 키 없음), 탐색 `[모듈]` 줄 중
+    실은 번호 | None(그런 줄 없음)). `없음`은 건너뛴다.
+    `— 근거: <문구>`가 있으면 그 문구가 원문(`source`) 검사 `ok`일 때만(원문 모양 줄이면 행 문법으로 바꾼 것도 대조), 없으면 근거 원문
+    검사(`res`)를 실제로 했고 원문에 없는 인용이 없을 때만 싣는다 — 근거 불일치 가설에서 나온 제안·검사를 건너뛴 출력의 제안을 막는다.
     탐색 `[모듈]`(반입 7 A-1)은 목록 항목이 아니라 출력 글(`text`)의 `- [모듈]` 줄을 `modulelines.parse`로 읽는다(번호 N = 그 줄 순서,
-    형식이 틀린 줄도 센다 — `skill_patch --module --line N`과 같은 번호). 형식 오류·모르는 칸·근거 원문 불일치를 빼고, 원인이 확정되지
-    않았으면(`confirmed` 거짓) `HELD_SLOTS`(첫 점검·함정)도 뺀다. 실은 줄은 `[모듈 N] …`으로 쓴다."""
-    kind, kept, dropped = RULE_KIND[purpose], [], 0
+    형식이 틀린 줄도 센다 — `skill_patch --module --line N`과 같은 번호). 형식 오류·모르는 칸(형식)·근거 원문 불일치를 빼고, 원인이
+    확정되지 않았으면(`confirmed` 거짓) `HELD_SLOTS`(첫 점검·함정)도 뺀다(원인 미확정). 실은 줄은 `[모듈 N] …`으로 쓴다."""
+    kind, kept, why = RULE_KIND[purpose], [], {}
+
+    def drop(reason: str) -> None:
+        why[reason] = why.get(reason, 0) + 1
 
     def grounded(basis: str) -> bool:
-        return source is not None and evidence.check_quotes([basis], source, tags)["verdicts"] == ["ok"]
+        return source is not None and evidence.check_quotes([basis], source, tags, alts=[evidence.raw_row(basis)])["verdicts"] == ["ok"]
 
     def add(line: str) -> None:
         kept.append(RULE_SUB.format(kind=kind, text=line if len(line) <= RULE_CLIP else line[:RULE_CLIP - 1] + "…"))
@@ -825,24 +965,27 @@ def _rule_subs(purpose: str, items, source: str | None, tags, res: dict | None, 
             module_items += 1           # 아래에서 줄 번호로 따로 본다
             continue
         m = RULE_BASIS_RX.search(item)
-        if m:
-            ok = grounded(m.group(1))
-        else:
-            ok = res is not None and not res.get("fabricated")
-        if ok:
+        if (grounded(m.group(1)) if m else res is not None and not res.get("fabricated")):
             add(item)
         else:
-            dropped += 1
+            drop("근거 불일치")
     rows = modulelines.parse(text) if purpose == "explore" else []
     lines = []
     for row in rows[:RULES_MAX]:
-        if row["ok"] and grounded(row["basis"]) and (confirmed or row["slot"] not in modulelines.HELD_SLOTS):
+        if not row["ok"]:
+            drop("형식")
+        elif not grounded(row["basis"]):
+            drop("근거 불일치")
+        elif not confirmed and row["slot"] in modulelines.HELD_SLOTS:
+            drop("원인 미확정")
+        else:
             lines.append(row["n"])
             add(f"[모듈 {row['n']}]" + row["raw"][len(modulelines.HEAD):])
-        else:
-            dropped += 1
-    dropped += max(0, module_items - len(rows))       # `- ` 없이 쓴 [모듈] 항목(번호가 없어 고를 수 없다)
-    return (kept + ([RULE_DROPPED.format(kind=kind, n=dropped)] if dropped else []), len(kept), dropped,
+    for _ in range(module_items - len(rows)):       # `- ` 없이 쓴 [모듈] 항목(번호가 없어 고를 수 없다)
+        drop("형식")
+    n = sum(why.values())
+    text_why = " · ".join(f"{RULE_WHY[r]} {why[r]}" for r in RULE_WHY if r in why)
+    return (kept + ([RULE_DROPPED.format(kind=kind, n=n, why=text_why)] if n else []), len(kept), why,
             lines if rows or module_items else None)
 
 
@@ -1159,10 +1302,14 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     res = fab_by_hyp = per_hyp = chain_v = alts = None
     check_bad: set = set()
     source, tags = evidence.source_text(src_text) if src_skip is None and src_text is not None else (None, None)
-    if purpose == "explore" and source is not None and quotes:
+    # R-06: 규칙 제안·[모듈] 줄의 `근거:` 문구도 사본에서 찾는다(인용만 넘기면 사본에만 있는 근거가 "근거 불일치"로 빠졌다)
+    bases = ([m.group(1) for x in fields.get("rules") or [] if (m := RULE_BASIS_RX.search(_one(x)))]
+             + [r["basis"] for r in modulelines.parse(text) if r["ok"]]) if purpose == "explore" else []
+    copies: list[str] = []
+    if purpose == "explore" and source is not None and (quotes or bases):
         # 탐색은 마스킹 사본 전체를 grep·구간 읽기 한다(최후의 보루, 11/25) — 인용 낱말이 든 사본 줄을 근거 원문에 더하고,
         # 원문 모양(logcat·syslog) 인용은 같은 행 문법으로 바꾼 것도 대조해 나은 쪽을 쓴다. 원문(사본 아닌 것)은 보지 않는다
-        names, extra = _copy_source(job, analysis, quotes)
+        names, extra, copies = _copy_source(job, analysis, quotes + bases)
         if extra:
             source, tags = evidence.source_text("\n".join([src_text, extra]))
             src_rel = ([src_rel] if isinstance(src_rel, str) else list(src_rel or [])) + names
@@ -1198,13 +1345,24 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     hold = _fit_hold(analysis, fields, normal1) if purpose == "explore" else None
     subs = _fit_subs(analysis, fields, hold, normal1) if purpose == "explore" else []
     investigating = purpose == "explore" and (analysis.get("investigate") or {}).get("mode")     # 조사 모드(run이 판정)
-    inv = (_investigation(job, fields, per_hyp, chain_v, sha, events, getattr(args, "tt_defaults", None), analysis.get("platform"))
-           if investigating else None)
-    confirmed = (analysis.get("decision") or {}).get("state") == "accepted" and not hold     # skill_patch --module과 같은 보류 기준
-    rule_lines, rules_kept, rules_dropped, module_lines = _rule_subs(
+    inv, inv_warns = (_investigation(job, fields, per_hyp, chain_v, sha, events, getattr(args, "tt_defaults", None),
+                                     analysis.get("platform"), before, copies, source) if investigating else (None, []))
+    if inv and normal1:     # R-16: 가장 유력이 정상이고 정상 근거 줄이 원문 확인 — 원인 조사 대상 아님(상태는 근거 부족 그대로)
+        inv = {**inv, "status": "insufficient_evidence", "normal": True}
+    top = (analysis.get("candidates") or [None])[0]
+    if inv and inv["status"] == "identified" and isinstance(top, dict) and top.get("cause") and any(
+            c["cause"] == top["cause"] and c["verdict"] == "맞음" and i not in check_bad
+            for i, c in enumerate(fields.get(evidence.CHECK_FIELD) or [])):
+        inv["top_match"] = True     # R-24: 규칙 1위와 같음은 `후보 확인`이 그 ID를 맞음(근거 원문 확인)이라 했을 때만
+    # skill_patch --module과 같은 보류 기준 + 결정 2(R-09): 이번 조사 결론이 identified면 첫 점검·함정도 받는다
+    confirmed = ((analysis.get("decision") or {}).get("state") == "accepted" and not hold) or bool(inv and inv["status"] == "identified")
+    rule_lines, rules_kept, rules_why, module_lines = _rule_subs(
         purpose, fields.get("rules" if purpose == "explore" else "규칙 제안"), source, tags, res, text, confirmed)
+    rules_dropped = sum(rules_why.values())
     reason = _hold_reason(analysis, fields) if hold else None
-    fmt = _chain_warnings(fields) + _check_warnings(analysis, fields) if purpose == "explore" else []
+    fmt = (_chain_warnings(fields, bool(investigating)) + _check_warnings(analysis, fields) + inv_warns
+           + ([WARN_INV_TOP.format(top=_one(fields.get("top"))[:40])] if investigating and fields["hyps"] and _top_index(fields) is None
+              else [])) if purpose == "explore" else []
     fmt_text = "; ".join(fmt)
     fmt_lines = [FORMAT_SUB.format(text=fmt_text if len(fmt_text) <= FORMAT_CLIP else fmt_text[:FORMAT_CLIP - 1] + "…")] if fmt else []
     lines = (_render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp, normal_bad, check_bad)
@@ -1243,7 +1401,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
                            **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra, **inv_extra,
                            **({"investigation": inv} if inv else {}),
                            **({"normal": [i + 1 for i, v in enumerate(normal_ok) if v]} if any(normal_ok) else {}),
-                           **({"rules": rules_kept} if rules_kept else {}), **({"rules_dropped": rules_dropped} if rules_dropped else {}),
+                           **({"rules": rules_kept} if rules_kept else {}), **({"rules_dropped": rules_dropped, "rules_dropped_why": rules_why} if rules_dropped else {}),
                            **({modulelines.KEPT_KEY: module_lines} if module_lines is not None else {}),
                            **({"format_warnings": fmt} if fmt else {}), **({"format_recheck": True} if args.recheck else {})})
     head = masking.mask_brief(lines[0], 300, off=off)     # 끔 DB: report.md 줄과 같은 글자(꼭 보일 줄 대조가 어긋나지 않게)

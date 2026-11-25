@@ -865,7 +865,7 @@ def test_explore_rule_proposals_reach_report_only_when_grounded(tmp_path, capsys
     text = (job / "report.md").read_text(encoding="utf-8").split("\n")
     assert f"  - 규칙 제안 (탐색): {RULE_OK}" in text and f"  - 규칙 제안 (탐색): {RULE_PLAIN}" in text
     assert not any("modem firmware" in t for t in text)                       # 근거 문구가 원문에 없다
-    assert "  - 탐색 출력의 제안 1개는 근거가 원문에서 확인되지 않아 뺐다" in text            # Step 7이 고르지 않게 `규칙 제안` 낱말 없음
+    assert "  - 탐색 출력의 제안 1개를 뺐다 — 근거 불일치(원문에서 확인 안 됨) 1" in text       # Step 7이 고르지 않게 `규칙 제안` 낱말 없음
     rec = _rec(job, "explore")
     assert (rec["rules"], rec["rules_dropped"]) == (2, 1)
 
@@ -876,7 +876,7 @@ def test_rule_without_basis_dropped_when_any_quote_fabricated_and_none_skipped(t
                                            encoding="utf-8")
     check(job, "explore", capsys=capsys)
     text = (job / "report.md").read_text(encoding="utf-8")
-    assert "규칙 제안" not in text and "제안 1개는 근거가" in text      # [근거 불일치] 가설이 있으면 근거 없는 제안은 뺀다
+    assert "규칙 제안" not in text and "제안 1개를 뺐다 — 근거 불일치" in text      # [근거 불일치] 가설이 있으면 근거 없는 제안은 뺀다
     none = make_job(tmp_path / "n", "explore", "plain")
     (none / "explore-output.md").write_text(_with_rules(_explore_out([("망 인증 거절", [Q1])]), ["없음"]), encoding="utf-8")
     check(none, "explore", capsys=capsys)

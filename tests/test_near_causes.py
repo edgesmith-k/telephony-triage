@@ -158,21 +158,23 @@ def test_module_lines_keep_only_grounded_known_slots(tmp_path, capsys):
     assert rec["output_sha256"] == hashlib.sha256((job / "explore-output.md").read_bytes()).hexdigest()   # skill_patch가 대조
     rows = (job / "report.md").read_text(encoding="utf-8")
     assert f"  - 규칙 제안 (탐색): [모듈 4] {good[len('[모듈] '):]}" in rows
-    assert "  - 탐색 출력의 제안 3개는 근거가 원문에서 확인되지 않아 뺐다" in rows
+    assert "  - 탐색 출력의 제안 3개를 뺐다 — 근거 불일치(원문에서 확인 안 됨) 1 · 형식 2" in rows
+    assert rec["rules_dropped_why"] == {"근거 불일치": 1, "형식": 2}
     plain = _job(tmp_path / "none")
     _run(plain, _out(), capsys)
     assert "module_lines" not in _record(plain)        # [모듈] 줄이 없으면 키가 없다
 
 
 def test_held_cause_drops_first_check_and_trap_slots(tmp_path, capsys):
-    """원인 보류(decision held)면 첫 점검·함정은 빼고 층 경로는 남긴다(skill_patch --module과 같은 기준). 확정이면 셋 다."""
+    """원인 보류(decision held)이고 조사 결론도 identified가 아니면 첫 점검·함정은 빼고 층 경로는 남긴다(11/25 결정 2 — identified면
+    셋 다는 test_investigate R-09). 확정이면 셋 다."""
     rules = [f"- [모듈] android/data {slot} — 한 줄 — 근거: {Q_AFTER}" for slot in ("첫 점검", "함정", "층 경로")]
     held = _job(tmp_path / "held")
-    _run(held, _out(extra=["규칙 제안:", *rules]), capsys)
+    _run(held, _out(quotes=(Q1,), extra=["규칙 제안:", *rules]), capsys)       # 기준 뒤를 안 봐 근거 부족
     assert _record(held)["module_lines"] == [3]
     source, tags = evidence.source_text(Q_AFTER)
-    lines, kept, dropped, nums = output._rule_subs("explore", [], source, tags, {"fabricated": 0}, "\n".join(rules), True)
-    assert nums == [1, 2, 3] and kept == 3 and dropped == 0 and lines[0].endswith("[모듈 1] android/data 첫 점검 — 한 줄 — 근거: "
+    lines, kept, why, nums = output._rule_subs("explore", [], source, tags, {"fabricated": 0}, "\n".join(rules), True)
+    assert nums == [1, 2, 3] and kept == 3 and why == {} and lines[0].endswith("[모듈 1] android/data 첫 점검 — 한 줄 — 근거: "
                                                                                     + Q_AFTER)
 
 
