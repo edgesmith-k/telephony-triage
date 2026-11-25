@@ -324,10 +324,10 @@ from runner import SAMPLE  # noqa: E402
 C0_LOG = SAMPLE / "data/DATA-001-no-setup-data-call/fixtures/DATA-001-01.log"     # DSMGR 줄을 빼면 1위 DATA-001 C=0
 
 
-def _run_c0(user: dict | None, *extra: str) -> tuple[dict, str]:
-    work = tmp("tt-skip51-")
+def _run_c0(user: dict | None, *extra: str, work: Path | None = None) -> tuple[dict, str]:
+    work = work or tmp("tt-skip51-")
     home = work / "home"
-    home.mkdir()
+    home.mkdir(exist_ok=True)
     if user:
         (home / "config.yaml").write_text(yaml.safe_dump(user, allow_unicode=True), encoding="utf-8")
     log = work / "c0.log"
@@ -374,3 +374,28 @@ def test_investigate_without_remote_keeps_legacy_skill():
     """모듈 문서 주소가 없으면(설치 스킬 `analyzers.data.skill`, 예전 Q2) 조사 모드여도 그대로."""
     analysis, _ = _run_c0(None)
     assert analysis["analyzer"] == {"skill": "mock-data-analyzer", "when": "ask", "note": NOTE_51}
+
+
+def test_explore_rerun_with_model_look_at_keeps_forced_analyzer():
+    """탐색 중 다시 한 run(`--look-at-source model --look-at`, explore.md 2·4번 — 하위 에이전트는 시작 플래그를 모른다)은
+    직전 조사 모드 실행의 `--analyzer`를 이어받는다. 아니면 이미 돈 5-1이 "생략: 조사 모드"로 바뀐다."""
+    work = tmp("tt-skip51-rerun-")
+    _run_c0(REMOTE, "--analyzer", work=work)
+    run_json("triage.py", ["explore", "MOCK-9051", "--out", work / "job"], root=plugin_root(),
+             env={"TELEPHONY_TRIAGE_HOME": work / "home"})
+    look = ("--look-at-source", "model", "--look-at", "DCM-0: Carrier config updated. Config is carrier specific.")
+    analysis, text = _run_c0(REMOTE, *look, work=work)
+    assert analysis["analyzer"] == {"category": "data", "when": "ask", "note": NOTE_51}
+    assert _deep_line(text) == core.DEEP_MODULE_PENDING.format(platform="android", category="data", key="MOCK-9051")
+    analysis, _ = _run_c0(REMOTE, "--no-analyzer", *look, work=work)      # 끄는 쪽은 그대로 끈다
+    assert analysis["analyzer"] == {"skipped": "조사 모드", "when": "never"}
+
+
+def test_user_rerun_without_flag_does_not_inherit_analyzer():
+    """사용자가 다시 한 분석(기준 줄 없음·user)은 이어받지 않는다 — 있음/없음 비교가 플래그 하나로 된다."""
+    work = tmp("tt-skip51-cmp-")
+    _run_c0(REMOTE, "--analyzer", work=work)
+    run_json("triage.py", ["explore", "MOCK-9051", "--out", work / "job"], root=plugin_root(),
+             env={"TELEPHONY_TRIAGE_HOME": work / "home"})
+    analysis, _ = _run_c0(REMOTE, work=work)
+    assert analysis["analyzer"] == {"skipped": "조사 모드", "when": "never"}

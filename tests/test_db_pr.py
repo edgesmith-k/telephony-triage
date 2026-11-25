@@ -3107,3 +3107,16 @@ def test_git_is_non_interactive(monkeypatch):
     worktree._git(REPO, "push", "origin", env={"TT_PUBLISH_TOKEN": "x"})
     assert [(kw["stdin"], kw["env"]["GIT_TERMINAL_PROMPT"]) for kw in seen] == [(subprocess.DEVNULL, "0")] * 2
     assert seen[1]["env"]["TT_PUBLISH_TOKEN"] == "x"
+
+
+def test_verify_fix_job_key_with_plus_build_passes_merge_key_check():
+    """빌드에 `+`가 든 verify-fix 작업 키(`verify-fix-<원인 ID>-<sanitize된 build>`, sanitize_build는 `+`를 남긴다)는
+    lock·stage·publish처럼 merge의 키 검사도 통과한다. 경로·옵션 모양은 여전히 거절한다."""
+    from common import buildname, session_lock
+    m = dbmerge()
+    job = "verify-fix-DATA-001-01-" + buildname.sanitize_build("MOCKA56_U1+r2 (eng)")
+    assert "+" in job and session_lock.JOB_KEY_RE.fullmatch(job)
+    m._check_job(job)
+    for bad in ("../x", "-x", "+x", ".x", "_x", "a/b", "a b", ""):
+        with pytest.raises(m.UsageError):
+            m._check_job(bad)

@@ -17,8 +17,9 @@ SNAPSHOT_META = "snapshot.json"   # `<work_dir>/snapshot.json` = {sha, base, at}
 FRESH = timedelta(minutes=10)
 EXPIRE = timedelta(hours=4)
 # 작업 키(`<work_dir>/<작업 키>/` 폴더 이름): 트래커 키(analyze·record) 또는 fix-submit-<원인 ID>·verify-fix-…·verify-res-…·
-# 브랜치 이름 기반 키(contracts.md `db_pr.py` 세부·reference/verify.md). `/`·`\`·선두 `.`·`_`를 막는다(경로 안전)
-JOB_KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+# 브랜치 이름 기반 키(contracts.md `db_pr.py` 세부·reference/verify.md). `/`·`\`·선두 `.`·`_`·`+`·`-`를 막는다(경로 안전).
+# `+`는 `buildname.sanitize_build`가 남기는 글자라 받는다(verify-fix-<원인 ID>-<build> — 브랜치·폴더·셸 낱말에서 특수 문자 아님)
+JOB_KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
 # 개명 전 작업 파일(jira_raw.json·jira.json·jira_meta.json)도 표식으로 본다 — 옛 JOB도 cleanup 대상·원문 잔여로 보이게(방어)
 LEGACY_JOB_FILES = ("jira_raw.json", "jira.json", "jira_meta.json")
 JOB_MARKERS = ("plan.json", "state.json", "trace.jsonl", "issue_raw.json", "triage-state.json",

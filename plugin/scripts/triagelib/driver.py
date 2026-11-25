@@ -1184,6 +1184,19 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         else:
             path.unlink(missing_ok=True)
 
+    def prior_forced_analyzer(self) -> bool:
+        """직전 `analysis.json`이 조사 모드인데 모듈 문서 5-1(`analyzer.category`)을 냈는가 — 조사 모드에서 그 모양은
+        `--analyzer`일 때만 나오니 그 실행이 `--analyzer`였다는 표시다."""
+        path = self.job / "analysis.json"
+        try:
+            if not stat.S_ISREG(os.lstat(path).st_mode):
+                return False
+            prev = json.loads(path.read_text(encoding="utf-8")) or {}
+            ana = prev.get("analyzer")
+            return bool((prev.get("investigate") or {}).get("mode")) and isinstance(ana, dict) and bool(ana.get("category"))
+        except (OSError, ValueError, AttributeError):
+            return False
+
     def read_prior(self) -> dict | None:
         """재실행·답글 턴에 줄 이전 실행의 요약(`analysis.json prior`, 마스킹된 값만) — `drop_stale_records`가 지우기 전에 읽는다.
         top = 직전 실행 1위(state `job.runs`), looked = 이전 실행의 가린 기준 줄(state), hyps·none = `check-output`을 통과했고
@@ -1275,7 +1288,13 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         self.check_key()
         self.open_job()
         self.prior = self.read_prior()       # 이전 탐색 산출물을 지우기 전에 추린다
+        forced = self.prior_forced_analyzer()
         self.drop_stale_records()
+        if forced and self.explored and getattr(self.args, "analyzer", None) is None \
+                and getattr(self.args, "look_at_source", None) == "model":
+            # 탐색 중 다시 한 run(`--look-at-source model`, 하위 에이전트는 시작 플래그를 모른다)은 직전 조사 모드 실행의
+            # `--analyzer`를 이어받는다 — 입력 해시(args)보다 먼저 정해 캐시와 어긋나지 않는다. `--no-analyzer`면 이어받지 않는다
+            self.args.analyzer = True
         if not self.offline:
             self.lock()
             if self.mark_platform_answer():      # 새 lock(State.reset)이 지웠으면 다시 남긴다
