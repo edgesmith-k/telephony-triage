@@ -582,10 +582,14 @@ def materialise(state, *, purpose, module=None, category=None, type_id=None, als
         got.append(x)
         used += len(data)
     if purpose == "explore" and isinstance(type_id, str) and TYPE_RE.fullmatch(type_id):
-        # 5-1을 건너뛴 조사 모드: 1위 유형 참고 문서(1위 카테고리 모듈의 references/<ID>.md)를 보조 문서로 — 없으면 뺀다
+        # 5-1을 건너뛴 조사 모드: 1위 유형 참고 문서(1위 카테고리 모듈의 references/<ID>.md)를 보조 문서로 — 못 넣으면 경고
         hits = [d for d, b in mods.items() if isinstance(b, dict) and b.get("db_category") == category]
         path = f"{p}/{hits[0]}/references/{type_id}.md" if len(hits) == 1 else None
-        if path in tree:
+        if path is None:
+            skipped.append(f"1위 유형 참고 문서 못 넣음(카테고리 {category} 모듈 {len(hits)}개)")
+        elif path not in tree:
+            skipped.append(f"1위 유형 참고 문서 없음({path})")
+        else:
             data = _blob(work, clone, by_path[path])
             found = skillcheck.check_text(path, data)
             if found:
