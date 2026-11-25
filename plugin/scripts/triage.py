@@ -405,7 +405,10 @@ def _explore(args, cfg: dict, job: Path, defaults: dict, emit: bool = True) -> i
     todo = [REFS_NEXT] if out.get("refs") else []
     if userconfig.module_skills(cfg) is not None:      # 5-2 모듈 문서를 받을 수 있다(B2-4). 없으면 출력이 이전과 같다
         out["module_skills"] = True
-        todo.append(_module_next(args, job, platform))
+        nxt = _module_next(args, job, platform)
+        if nxt:      # 받을 모듈 보기가 타임라인이다 — JOB/timeline.md를 읽을 파일처럼 내지 않는다(eval 77, 2/5 run이 그것을 읽음)
+            out.pop("timeline")
+        todo.append(nxt)
     if any(todo):
         out["next"] = " / ".join(t for t in todo if t)
     if emit:
@@ -429,11 +432,12 @@ def _module_next(args, job: Path, platform: str) -> str | None:
     rec = load("module-skill.json")
     if rec.get("explore"):
         return None
-    cmd = f"S/triage.py module {args.key} --for explore" + ("" if platform == userconfig.TOP_PROFILE else f" --platform {platform}")         + (f" --out {args.out}" if args.out else "")
+    cmd = (f"S/triage.py module {args.key} --for explore" + ("" if platform == userconfig.TOP_PROFILE else f" --platform {platform}")
+           + (f" --out {args.out}" if args.out else ""))
     ana = load("analysis.json").get("analyzer")
     deep = isinstance(ana, dict) and not ana.get("error") and ana.get("when") != "never" and not rec.get("deep")
     return (("5-1(심층 분석)을 하기로 했으면 먼저 끝낸 뒤 " if deep else "") + f"`{cmd}`"
-            + ("" if deep else "부터") + " — 출력 read를 그 순서로 모두 읽는다(module-skills.md 5-2)")
+            + ("" if deep else "부터") + " — 출력 read의 파일을 그 순서로 빠짐없이 읽는다(마지막이 타임라인, JOB/timeline.md 대신 — module-skills.md 5-2)")
 
 
 def _job_platform(job: Path, selected: str) -> str:

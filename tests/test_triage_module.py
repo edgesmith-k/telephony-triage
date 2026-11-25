@@ -1141,7 +1141,8 @@ def test_explore_next_names_module_command_when_51_skipped(env):
     env.make_job(candidates=C0_CANDS, explore=True, extra=SKIPPED_51)
     out = _explore_out(env)
     assert out["next"] == (triage.REFS_NEXT + " / " + f"`S/triage.py module {KEY} --for explore --platform ofono --out {env.job}`부터 — "
-                           "출력 read를 그 순서로 모두 읽는다(module-skills.md 5-2)")     # refs 읽기 → 모듈 문서 받기 순서
+                           "출력 read의 파일을 그 순서로 빠짐없이 읽는다(마지막이 타임라인, JOB/timeline.md 대신 — module-skills.md 5-2)")     # refs 읽기 → 모듈 문서 받기 순서
+    assert "timeline" not in out and out["lines"] == out["total"]      # 모듈 보기가 타임라인 — JOB/timeline.md를 읽을 파일로 내지 않는다
 
 
 def test_explore_next_keeps_51_first_when_deep_pending(env):
@@ -1156,7 +1157,8 @@ def test_explore_next_keeps_51_first_when_deep_pending(env):
 def test_explore_next_absent_when_already_fetched_or_no_remote(env):
     env.make_job(candidates=C0_CANDS, explore=True, extra=SKIPPED_51)
     assert env.module("explore", "--module", "ofono/data")[0] == 0
-    assert _explore_out(env)["next"] == triage.REFS_NEXT          # 모듈 문서는 받았다 — refs 읽기만
+    out = _explore_out(env)
+    assert out["next"] == triage.REFS_NEXT and out["timeline"] == "timeline.md"     # 모듈 문서는 받았다 — refs 읽기만, timeline 칸 그대로
     env.make_job(candidates=C0_CANDS, platform="android", explore=True, extra=SKIPPED_51)
     assert env.module("explore", "--module", "android/data", platform="android")[0] == 0
     code, out, _ = env.call("explore", KEY, "--out", env.job)
