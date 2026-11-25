@@ -1151,6 +1151,19 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         지우기 전에 탐색 타임라인이 있었는지(`explored`)를 남긴다 — 탐색 중 다시 한 run이 끝나면 `triage.main`이 같은 explore 입력으로
         타임라인을 다시 만든다(탐색 하위 에이전트는 `explore`를 부를 권한이 없다, 리뷰 4-1)."""
         self.explored = all((self.job / n).is_file() and not (self.job / n).is_symlink() for n in (TIMELINE_FILE, EXPLORE_INPUT_FILE))
+        # C-5: 탐색 중 다시 한 run이 같이 지우는 것 — 모듈 보기(받은 모듈)와 5-1 결과. 낡은 결과라(입력 해시가 바뀐다) 남기지 않고
+        # run 출력 `next`로 다시 받을 것을 알린다(`triage.main`)
+        self.dropped_view = self.dropped_deep = None
+        if self.explored:
+            def rec(name: str) -> dict:
+                try:
+                    data = json.loads((self.job / name).read_text(encoding="utf-8")) if not (self.job / name).is_symlink() else {}
+                except (OSError, ValueError):
+                    return {}
+                return data if isinstance(data, dict) else {}
+            module = (rec("module-skill.json").get("explore") or {}).get("module")
+            self.dropped_view = module if isinstance(module, str) and re.fullmatch(r"[a-z][a-z0-9_]*/[a-z]+", module) else None
+            self.dropped_deep = "deep" in rec("check-output.json") or (self.job / "deep-output.md").is_file()
         for name in STALE_FILES:
             path = self.job / name
             try:
