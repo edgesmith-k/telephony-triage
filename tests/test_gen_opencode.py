@@ -324,6 +324,25 @@ def test_install_renders_everything(roots):
     assert _install(roots, "--issue-db", str(roots / "dbA"), "--issue-db", str(roots / "dbB")).returncode == 0   # 같으면 다시 써도 된다
 
 
+def test_install_puts_install_permission_in_agents(roots):
+    """I-3·I-4(1.19.5 실험): 전역 설정의 permission 키는 합칠 때 프로젝트 `"*": "deny"` 앞(설치 허용이 막힘)에, 전역 전용 허용은
+    그 뒤(설치 deny를 이김)에 온다. 에이전트 규칙은 설정 규칙 뒤에 붙으므로 두 에이전트 frontmatter에 설치 permission 통째
+    (`"*"` 먼저)를 두고, 같은 키는 에이전트 것(tt-explore의 좁은 bash·edit, task deny)을 쓴다."""
+    assert _install(roots, "--jira-read-tool", "jira_get_issue").returncode == 0
+    proj = roots / "proj"
+    perm = json.loads((proj / "opencode.json").read_text(encoding="utf-8"))["permission"]
+    got = {}
+    for name in ("triage", "tt-explore"):
+        text = (proj / ".opencode" / "agents" / f"{name}.md").read_text(encoding="utf-8")
+        got[name] = yaml.safe_load(text.split("---")[1])["permission"]
+        assert list(got[name].items())[0] == ("*", "deny")
+        assert got[name]["external_directory"] == perm["external_directory"] and got[name]["jira_get_issue"] == "allow"
+    own = yaml.safe_load(EXPLORE.read_text(encoding="utf-8").split("---")[1])["permission"]
+    assert got["triage"]["bash"] == perm["bash"] and got["triage"]["webfetch"] == "deny"
+    assert got["tt-explore"]["bash"] == own["bash"] and got["tt-explore"]["task"] == "deny"
+    assert got["tt-explore"]["edit"] == {"*": "deny", f"{str(roots / 'work').lstrip('/')}/**/explore-output.md": "allow"}
+
+
 def test_install_without_clone_drops_clone_rules(roots):
     assert _install(roots).returncode == 0
     cfg = json.loads((roots / "proj" / "opencode.json").read_text(encoding="utf-8"))

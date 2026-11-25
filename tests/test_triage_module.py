@@ -1105,10 +1105,19 @@ def test_explore_read_adds_top_type_reference_when_51_skipped(env):
 
 
 def test_explore_read_unchanged_when_51_not_skipped(env):
-    job = env.make_job(candidates=C0_CANDS, explore=True)
+    env.make_job(candidates=C0_CANDS, explore=True)
     code, out, err = env.module("explore", "--module", "ofono/data")
     assert code == 0, err
     assert len(out["read"]) == 4 and not any("references" in r for r in out["read"])
+
+
+def test_explore_missing_reference_is_warned_not_silent(env):
+    """I-5: 1위 유형 참고 문서가 레포에 없으면 넣지 않고 그 사실을 경고로 알린다(리포트 줄은 "있으면 함께")."""
+    env.make_job(candidates=[{**C0_CANDS[0], "type": "DATA-002"}], explore=True, extra=SKIPPED_51)
+    code, out, err = env.module("explore", "--module", "ofono/data")
+    assert code == 0, err
+    assert not any("references" in r for r in out["read"])
+    assert "1위 유형 참고 문서 없음(ofono/data/references/DATA-002.md)" in err
 
 
 def test_explore_at_keeps_reference_in_read(env):

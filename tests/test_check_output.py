@@ -807,11 +807,12 @@ def test_recheck_keeps_earlier_fabricated_count(tmp_path, capsys):
 WIN_ROW = "15:10:01.900 p0 E hiddend carrier link lost on rmnet_data3 after reject"     # 타임라인에 없는 줄(버려진 태그)
 
 
-def _window(job: Path, n: int = 1, rows=(WIN_ROW,), record: bool = True, last: str | None = None) -> Path:
+def _window(job: Path, n: int = 1, rows=(WIN_ROW,), record: bool = True, last: str | None = None,
+            first: str | None = None) -> Path:
     """구간 파일·기록. `last`(날짜 포함 ISO)면 window가 쓰는 머리 `- 줄 시각(날짜 포함, UTC): … ~ <last>`도(G-2, 게이트 4가 읽는다)."""
     from triagelib import window
     path = job / f"window-{n}.md"
-    head = [f"{window.LINE_TS_HEAD}{last} ~ {last}"] if last else []
+    head = [f"{window.LINE_TS_HEAD}{first or last} ~ {last}"] if last else []
     path.write_text("\n".join([f"# {KEY} 로그 구간 {n}", "", "- 중심: x", *head, "", *rows, ""]), encoding="utf-8")
     if record:
         rec = job / core.WINDOW_RECORD

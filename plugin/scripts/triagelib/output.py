@@ -594,8 +594,8 @@ ROW_TS_MATCH_MAX = 1000   # C-4: 행 모양 인용과 메시지가 같은 사본
 def _quote_at(q: str, events: dict | None, copies: list[str]) -> tuple:
     """A5: 인용이 가리키는 사본 줄 → (UTC 시각 | None, 그 줄이 든 사본 순번 | None). 게이트가 쓰는 인용 시각·사본은 여기서 정한다.
     원문 모양 인용: 시각은 `_quote_ts`(ok면 `evidence.stamp_matches`가 날짜·시간대까지 사본 줄과 맞췄다), 사본은 시각 칸까지 맞는 첫 사본.
-    행 모양 인용(`HH:MM:SS … 슬롯 레벨 태그 메시지`, C-4): 날짜가 없어 다른 날 사본 줄도 실패 당일 시각으로 읽힌다 — 태그·메시지(첫
-    `…` 앞 8자 이상)가 맞는 사본 줄을 찾아(행 시각은 UTC라 사본 줄의 시계 글자와 다를 수 있어 메시지로 찾는다, 레벨은 syslog에 없어
+    행 모양 인용(`HH:MM:SS … 슬롯 레벨 태그 메시지`, C-4): 날짜가 없어 다른 날 사본 줄도 실패 당일 시각으로 읽힌다 — 태그와 메시지의
+    가장 긴 조각(`…`로 나눔, 4자 이상)이 맞는 사본 줄을 찾아(행 시각은 UTC라 사본 줄의 시계 글자와 다를 수 있어 메시지로 찾는다, 레벨은 syslog에 없어
     보지 않는다) 그 줄 시각(`_quote_ts`)이 읽은 시각과 1초 안이면 그 사본, 맞는 줄은 있는데 1초 안인 줄이 하나도 없으면 (None, None)
     (다른 날 줄 — `_check`가 그 인용을 약함으로 낮춘다). 맞는 줄을 못 찾거나 상한에 닿으면 (읽은 시각, None)(맞는 결론을 잘못
     떨어뜨리지 않는 쪽)."""
@@ -609,9 +609,11 @@ def _quote_at(q: str, events: dict | None, copies: list[str]) -> tuple:
         return t, None
     _clock, _slot, _level, tag, msg = (s.split(" ", 4) + [""] * 5)[:5]
     msg = evidence.EVENT_SUFFIX_RX.sub("", evidence.ws(evidence.SCRIPT_NOTE_RX.sub("", msg)))
-    parts = [p.strip() for p in evidence.ELLIPSIS_RX.split(msg) if p.strip()]
-    seg = max(parts, key=len, default="")       # G-1: 첫 조각이 아니라 가장 긴 조각으로 찾는다(짧은 첫 조각으로 대조를 피하지 않게)
-    if len(seg) < 8:
+    # G-1·N-1·N-3: 첫 조각이 아니라 가장 긴 조각(앞뒤 괄호 뗌 — `[…]`, 8자 이상이 없으면 4자 이상)과 태그가 맞는 줄을 센다. 다른
+    # 조각의 순서·있음은 세는 조건에 두지 않는다(두면 조각을 뒤섞거나 이웃 줄을 이어 맞는 줄 0개 → 날짜 대조를 피한다)
+    parts = [p.strip(" []()") for p in evidence.ELLIPSIS_RX.split(msg)]
+    seg = max(parts, key=len, default="")
+    if len(seg) < 4:
         return t, None
     seen = 0
     for k, text in enumerate(copies):
@@ -620,23 +622,12 @@ def _quote_at(q: str, events: dict | None, copies: list[str]) -> tuple:
             a, b = text.rfind("\n", 0, at) + 1, text.find("\n", at)
             b = len(text) if b < 0 else b
             row = evidence.raw_row(text[a:b]) or ""
-            if row.split(" ", 4)[3:4] == [tag] and _in_order(parts, evidence.ws(row)) and (lt := _quote_ts(text[a:b], events)) is not None:
+            if row.split(" ", 4)[3:4] == [tag] and (lt := _quote_ts(text[a:b], events)) is not None:
                 if any(abs((c - t).total_seconds()) < 1 for c in _year_variants(lt, text[a:b])):
                     return t, k
                 seen += 1
             at = text.find(seg, b)
     return (None, None) if 0 < seen < ROW_TS_MATCH_MAX else (t, None)
-
-
-def _in_order(parts: list[str], row: str) -> bool:
-    """G-1: 인용 메시지 조각이 모두 그 줄에 순서대로 있나."""
-    at = 0
-    for p in parts:
-        at = row.find(p, at)
-        if at < 0:
-            return False
-        at += len(p)
-    return True
 
 
 def _year_variants(lt, line: str) -> list:
@@ -698,7 +689,7 @@ def _after_ref(job: Path, ok_quotes: list[str], events: dict | None, ref) -> tup
         elif (t := logtime.normalize_ts(m.group(2), None, None)) is not None and t > ref:
             return True, note
     return False, ("기준 시각 뒤 줄 인용·구간 없음(실패 뒤를 보지 않음)" + note
-                   + (f" — 구간 {unknown}개는 줄 날짜를 몰라 세지 않음(옛 구간 파일)" if unknown else ""))
+                   + (f" — 구간 {unknown}개는 날짜 모름(옛 구간 파일 — window를 다시 받으면 됨)" if unknown else ""))
 
 
 def _absent_span(events: dict | None, low, span_sec: float):
@@ -743,6 +734,8 @@ def _absent(word: list[str], texts: list[str], events: dict | None, span) -> int
 ABSENT_MAX = 1000         # 흔한 낱말이면 큰 사본에서 줄마다 시각을 읽지 않게 여기서 세기를 멈춘다(이유 글은 `1000건 이상`)
 # ponytail: 경험값, 사내 로그로 조정 — 기대 칸에 시간 숫자가 없을 때 '없음'을 믿으려면 아래 끝 뒤 이만큼(초)은 로그가 있어야 한다
 ABSENT_MIN_SEC = 10
+# ponytail: 경험값 — 첫 어긋남 관측이 앞 단계 관측보다 이만큼 넘게 앞서면 다른 날·다른 시험의 줄로 본다(G-4). 원인이 앞서는 정상 경우를 남기려 넉넉히
+OBS_BEFORE_MAX = timedelta(hours=1)
 TIME_UNIT_RX = re.compile(rf"(\d+(?:\.\d+)?)\s*(?:({TIME_EN})(?![A-Za-z0-9])|({TIME_KO}))")   # NUM_UNIT_RX의 시간 단위
 END_SCAN_LINES = 2000     # 사본 끝에서 시각을 읽을 수 있는 줄을 찾아 거슬러 올라가는 줄 수 상한
 ABSENT_WORD_RX = re.compile(r"`([^`]+)`")
@@ -824,7 +817,7 @@ def _first_obs(h: dict, first: dict, verdict: str | None, texts: list[str], even
     """R-02(결정 1): 가장 이른 false 단계의 관측 칸이 근거로 서나 — 원문 확인(ok) 인용이거나, 그 가설의 `찾았는데 없음` 항목 낱말이
     마스킹 사본(`texts`만 — 없으면 셀 수 없어 실패, 외부 리뷰 1125 지적 2)의 구간(`_absent_span(low)`, C-1)에서 0건. 그 단계 기대·
     관측 칸에 낱말이 든 항목만 보고, 없으면 모든 항목. 낱말은 사본이나 파서 규칙 글에 한 번이라도 나오는 실제 낱말이어야 한다(C-2 —
-    없는 낱말은 늘 0건이다). 한 항목의 낱말이 여럿이면 그 낱말이 모두 든 사본 줄이 있어야 한다(G-3 — 세기도 모두 든 줄). 아래 끝이 있으면 구간 길이는 max(`after_sec`, 필요 시간 `_need_sec`)이고, 사본 끝(`_copy_span`)이
+    없는 낱말은 늘 0건이다). 한 항목의 낱말이 여럿이면 낱말마다 따로 본다(N-2 — 있음·0건 세기·끝 재는 사본 모두 낱말 하나씩). 아래 끝이 있으면 구간 길이는 max(`after_sec`, 필요 시간 `_need_sec`)이고, 사본 끝(`_copy_span`)이
     아래 끝 + 필요 시간보다 앞이면 미관측으로 실패한다(지적 2 — 3초 로그로 "300초 뒤 없음"을 믿지 않는다). 아래 끝이 없으면
     분석 범위 전체를 세되 사본이 담는 길이(처음~끝)가 필요 시간보다 짧으면 미관측(C-3). 처음·끝은 그 낱말을 관측할 수 있는 사본
     (`_span_copies`, A4 — `low_copy` = 아래 끝을 준 인용 줄의 사본)으로만 잰다. 관측 인용이 사본에서 다른 날에만 있으면 그 이유(A5).
@@ -838,6 +831,8 @@ def _first_obs(h: dict, first: dict, verdict: str | None, texts: list[str], even
     items = [(i, w) for i in h.get("찾았는데 없음") or [] if (w := _absent_words(i))]
     near = f"{first['기대']} {first['관측']}".lower()
     items = [x for x in items if any(w.lower() in near for w in x[1])] or items
+    # N-2: 한 항목의 낱말 여럿은 낱말마다 따로 센다 — 모두 든 줄만 세면 실패 줄에 함께 든 두 낱말로 재요청 줄을 피한다
+    items = [(i, [w]) for i, word in items for w in word]
     if not items:
         return "관측이 원문 확인 인용도, 셀 낱말이 있는 `찾았는데 없음` 항목도 아님", ""
     if not texts:
@@ -848,9 +843,6 @@ def _first_obs(h: dict, first: dict, verdict: str | None, texts: list[str], even
             if not any(w in t for t in texts) and w not in (rules := _rules_text(events) if rules is None else rules):
                 return f"`{w[:30]}`은 로그·파서 규칙 어디에도 없는 낱말", ""
     per = [[_word_lines(t, word) for t in texts] for _i, word in items]
-    for (_i, word), res in zip(items, per):       # G-3: 낱말 여럿은 한 줄에 함께 있어야 센 0건이 뜻이 있다
-        if len(word) > 1 and not any(found for found, _t in res):
-            return f"`{' '.join(word)[:30]}` 낱말이 함께 든 줄이 사본에 없음(항목을 낱말 하나씩 나눠)", ""
     need = _need_sec(first["기대"])
     span = _absent_span(events, low, max(after_sec, need))
     span_texts, span_note = _span_copies(per, texts, low_copy)
@@ -872,7 +864,8 @@ def _first_obs(h: dict, first: dict, verdict: str | None, texts: list[str], even
 def _unknown_tags(events: dict | None, quotes: list[str], res: dict | None) -> dict:
     """B1: 원문 확인(ok) 인용 줄의 태그(`_quote_tag`) 가운데 이슈 DB 스냅샷 tags.yaml(`events.json rules.path`)에 없는 것(파서가 버리는
     태그인데 근거로 쓰였다) → check-output 기록 칸 `parser_unknown_tags`(인용 순서, 40자·`UNKNOWN_TAGS_MAX`개까지). 규칙을 못 읽으면
-    `parser_unknown_tags_skipped`(없음으로 적지 않는다). 인용 검사를 안 했거나 태그 있는 ok 인용이 없으면 {}."""
+    `parser_unknown_tags_skipped`(없음으로 적지 않는다). 인용 검사를 안 했거나 태그 있는 ok 인용이 없으면 {}. events.json에 그 태그의
+    레코드가 있으면 파서가 이미 읽는 태그라 뺀다(백엔드 기본 벤더 IPC `RIL`·builtin 판별처럼 tags.yaml 밖에서 읽는 태그)."""
     if not res:
         return {}
     _raw_ready()
@@ -887,7 +880,8 @@ def _unknown_tags(events: dict | None, quotes: list[str], res: dict | None) -> d
         rules = None
     if rules is None:
         return {"parser_unknown_tags_skipped": "tags.yaml을 읽지 못함"}
-    out = [t[:40] for t in tags if rules.tag_category(t) is None][:UNKNOWN_TAGS_MAX]
+    read = {e.get("tag") for e in (events or {}).get("events") or [] if isinstance(e, dict)}
+    out = [t[:40] for t in tags if rules.tag_category(t) is None and t not in read][:UNKNOWN_TAGS_MAX]
     return {"parser_unknown_tags": out} if out else {}
 
 
@@ -972,6 +966,7 @@ def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: 
         add("인용 원문", not fab and n_ok and not before, f"앞 검사에 원문에 없는 인용 {before}(다시 검사해도 지우지 않음)"
             if before and not fab and n_ok else "" if not fab and n_ok else f"원문에 없음 {fab}, 원문 확인 {n_ok}")
     obs = note = ""
+    far = None
     if first is not None and claim == first["단계"]:
         quoted = [r for r in rows if evidence.obs_quote(r["관측"]) is not None]
         by_row = dict(zip(map(id, quoted), chain_v[k])) if chain_v else {}
@@ -982,6 +977,13 @@ def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: 
         low = max([t for t in (ref, last[0]) if t is not None], default=None)
         obs, note = _first_obs(h, first, by_row.get(id(first)), texts or [], events, low, after_sec,
                                last[1] if last[0] is not None and low == last[0] else None)
+        # G-4: 원문 확인된 관측 줄의 시각이 앞 단계 관측보다 `OBS_BEFORE_MAX` 넘게 앞서면(다른 날 줄) 첫 어긋남이 아니다. 앞 단계
+        # 관측이 없으면 실패시키지 않고 기준 시각과 그만큼 떨어졌는지만 리포트에 드러낸다(`far`)
+        obs_t = _quote_at(first["관측"], events, texts or [])[0] if not obs and by_row.get(id(first)) == "ok" else None
+        if obs_t is not None and last[0] is not None and obs_t < last[0] - OBS_BEFORE_MAX:
+            obs = f"관측이 앞 단계 관측보다 {_hours(last[0] - obs_t):g}시간 앞섬"
+        elif obs_t is not None and last[0] is None and ref is not None and abs(obs_t - ref) > OBS_BEFORE_MAX:
+            far = _hours(abs(obs_t - ref))
         if obs:
             obs = f"단계 {first['단계']}: {obs}"
             warns.append(f"가설 {k + 1}: 가장 이른 false {obs} — 관측 줄을 시각부터 원문 그대로 쓰거나, 없음이면 `찾았는데 없음:`에 "
@@ -1010,7 +1012,11 @@ def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: 
     return ({"status": "identified" if all(g["ok"] for g in gate) else "insufficient_evidence", "hyp": k + 1,
              "cause": _one(h["가설"])[:INV_CAUSE_MAX] or None, "layer": layer,
              "first_divergence": {"step": first["단계"], "expect": _one(first["기대"])[:INV_EXPECT_MAX]} if first else None,
-             "gate": gate, "explore_sha": sha}, warns)
+             "gate": gate, "explore_sha": sha, **({"obs_far_h": far} if far is not None else {})}, warns)
+
+
+def _hours(d) -> float:
+    return round(d.total_seconds() / 3600, 1)
 
 
 # --- 그리기 ----------------------------------------------------------------------------------------------

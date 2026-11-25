@@ -90,7 +90,7 @@ DEEP_REPO_MISSING = "- 심층 분석: 해당 없음(레포에 {module} 없음 @{
 DEEP_FETCH_FAILED = "- 심층 분석 생략: 모듈 스킬 받기 실패({reason})"
 DEEP_CONFIG_ERROR = "- 심층 분석 생략: 설정 오류({problem})"
 DEEP_SKIPPED = "- 심층 분석 생략: {reason}"
-DEEP_INVESTIGATE_SKIPPED = ("- 심층 분석 생략: 조사 모드 — 모듈 문서는 탐색 분석이 읽는다(1위 유형 참고 문서 포함). "
+DEEP_INVESTIGATE_SKIPPED = ("- 심층 분석 생략: 조사 모드 — 모듈 문서는 탐색 분석이 읽는다(1위 유형 참고 문서가 있으면 함께). "
                             "심층 분석도 하려면 --analyzer로 다시 분석")
 EXPLORE_MODULE_DONE = ("- 탐색 분석 (추정, " + TIMELINE_FILE + " {lines}/{total}줄, 모듈 문서 {module} @{sha7}): "
                        + EXPLORE_HYPOTHESIS)
