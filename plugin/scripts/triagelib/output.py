@@ -785,9 +785,9 @@ def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: 
         quoted = [r for r in rows if evidence.obs_quote(r["관측"]) is not None]
         by_row = dict(zip(map(id, quoted), chain_v[k])) if chain_v else {}
         # C-1: `찾았는데 없음` 아래 끝 = 기준 시각과 그 단계 앞 단계들의 원문 확인 관측 줄 중 가장 늦은 시각 중 늦은 쪽
-        before = [t for r in quoted if r["단계"] < first["단계"] and by_row.get(id(r)) == "ok"
-                  and (t := _quote_ts(r["관측"], events)) is not None]
-        low = max([t for t in (ref, max(before, default=None)) if t is not None], default=None)
+        prior = [t for r in quoted if r["단계"] < first["단계"] and by_row.get(id(r)) == "ok"
+                 and (t := _quote_ts(r["관측"], events)) is not None]
+        low = max([t for t in (ref, max(prior, default=None)) if t is not None], default=None)
         obs, note = _first_obs(h, first, by_row.get(id(first)), texts or ([source] if source else []), events, low, after_sec)
         if obs:
             obs = f"단계 {first['단계']}: {obs}"
