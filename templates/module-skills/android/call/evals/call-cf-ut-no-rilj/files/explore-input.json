@@ -22,10 +22,92 @@
   "shapes": 23,
   "window": [
    "2026-10-14T09:36:07.000Z",
-   "2026-10-14T09:46:07.000Z"
+   "2026-10-14T09:51:07.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
+   {
+    "ts": "2026-10-14T09:41:06.909Z",
+    "last": "2026-10-14T09:41:06.909Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-IMS",
+    "msg": "[ut] route call forward via modem slot=0"
+   },
+   {
+    "ts": "2026-10-14T09:41:06.907Z",
+    "last": "2026-10-14T09:41:06.907Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-IMS",
+    "msg": "[ut] update call forward action=3 condition=0 class=0 time=0"
+   },
+   {
+    "ts": "2026-10-14T09:41:06.905Z",
+    "last": "2026-10-14T09:41:06.905Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsUt",
+    "msg": "updateCallForward :: Ut=com.android.ims.internal.IImsUt$Stub$Proxy, action=3, condition=0, number=[Qb7nW2cY9dLe], serviceClass=0, timeSeconds=0"
+   },
+   {
+    "ts": "2026-10-14T09:41:06.904Z",
+    "last": "2026-10-14T09:41:06.904Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsPhone",
+    "msg": "[0] setCallForwardingOption action=3, reason=0 serviceClass=0"
+   },
+   {
+    "ts": "2026-10-14T09:41:06.903Z",
+    "last": "2026-10-14T09:41:06.903Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsPhoneMmiCode",
+    "msg": "processCode: is CF"
+   },
+   {
+    "ts": "2026-10-14T09:41:06.903Z",
+    "last": "2026-10-14T09:41:06.903Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsPhoneMmiCode",
+    "msg": "processCode: is CF setCallForward"
+   },
+   {
+    "ts": "2026-10-14T09:41:06.902Z",
+    "last": "2026-10-14T09:41:06.902Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "ImsPhone",
+    "msg": "[0] dialInternal: dialing w/ mmi 'ImsPhoneMmiCode {State=PENDING action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}'..."
+   },
+   {
+    "ts": "2026-10-14T09:41:06.840Z",
+    "last": "2026-10-14T09:41:06.840Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "==== vendor status (0) ===="
+   },
+   {
+    "ts": "2026-10-14T09:41:06.812Z",
+    "last": "2026-10-14T09:41:06.812Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "VRIL-MODEM",
+    "msg": "at-in: ATD*21*123#"
+   },
    {
     "ts": "2026-10-14T09:41:07.512Z",
     "last": "2026-10-14T09:41:07.512Z",
@@ -164,87 +246,6 @@
     "level": "D",
     "tag": "CallerInfoAsyncQuery",
     "msg": "##### onQueryComplete() ##### query complete for token: 0"
-   },
-   {
-    "ts": "2026-10-14T09:41:06.909Z",
-    "last": "2026-10-14T09:41:06.909Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "VRIL-IMS",
-    "msg": "[ut] route call forward via modem slot=0"
-   },
-   {
-    "ts": "2026-10-14T09:41:06.907Z",
-    "last": "2026-10-14T09:41:06.907Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "VRIL-IMS",
-    "msg": "[ut] update call forward action=3 condition=0 class=0 time=0"
-   },
-   {
-    "ts": "2026-10-14T09:41:06.905Z",
-    "last": "2026-10-14T09:41:06.905Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "ImsUt",
-    "msg": "updateCallForward :: Ut=com.android.ims.internal.IImsUt$Stub$Proxy, action=3, condition=0, number=[Qb7nW2cY9dLe], serviceClass=0, timeSeconds=0"
-   },
-   {
-    "ts": "2026-10-14T09:41:06.904Z",
-    "last": "2026-10-14T09:41:06.904Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "ImsPhone",
-    "msg": "[0] setCallForwardingOption action=3, reason=0 serviceClass=0"
-   },
-   {
-    "ts": "2026-10-14T09:41:06.903Z",
-    "last": "2026-10-14T09:41:06.903Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "ImsPhoneMmiCode",
-    "msg": "processCode: is CF"
-   },
-   {
-    "ts": "2026-10-14T09:41:06.903Z",
-    "last": "2026-10-14T09:41:06.903Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "ImsPhoneMmiCode",
-    "msg": "processCode: is CF setCallForward"
-   },
-   {
-    "ts": "2026-10-14T09:41:06.902Z",
-    "last": "2026-10-14T09:41:06.902Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "ImsPhone",
-    "msg": "[0] dialInternal: dialing w/ mmi 'ImsPhoneMmiCode {State=PENDING action=* sc=21 sia=123 poundString=[Zx81kQpLm2Vt0aRs]}'..."
-   },
-   {
-    "ts": "2026-10-14T09:41:06.840Z",
-    "last": "2026-10-14T09:41:06.840Z",
-    "n": 1,
-    "phone": null,
-    "level": "V",
-    "tag": "RIL",
-    "msg": "==== vendor status (0) ===="
-   },
-   {
-    "ts": "2026-10-14T09:41:06.812Z",
-    "last": "2026-10-14T09:41:06.812Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "VRIL-MODEM",
-    "msg": "at-in: ATD*21*123#"
    }
   ]
  }

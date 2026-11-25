@@ -43,9 +43,10 @@
   "shapes": 11,
   "window": [
    "2026-08-28T16:55:15.000Z",
-   "2026-08-28T17:05:15.000Z"
+   "2026-08-28T17:10:15.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
    {
     "ts": "2026-08-28T17:00:45.000Z",
@@ -55,36 +56,6 @@
     "level": "W",
     "tag": "ImsPhoneCallTracker",
     "msg": "[0] call ended: cause=65535",
-    "after": true
-   },
-   {
-    "ts": "2026-08-28T17:00:25.000Z",
-    "last": "2026-08-28T17:00:25.000Z",
-    "n": 1,
-    "phone": 0,
-    "level": "I",
-    "tag": "DNC-0",
-    "msg": "onEvaluateNetworkRequests: reason=DATA_SERVICE_STATE_CHANGED",
-    "after": true
-   },
-   {
-    "ts": "2026-08-28T17:00:40.000Z",
-    "last": "2026-08-28T17:01:40.000Z",
-    "n": 5,
-    "phone": 0,
-    "level": "I",
-    "tag": "DNC-0",
-    "msg": "onEvaluateNetworkRequests: reason=RETRY_SCHEDULED",
-    "after": true
-   },
-   {
-    "ts": "2026-08-28T17:01:15.000Z",
-    "last": "2026-08-28T17:01:15.000Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
-    "msg": "[0605]> DATA_CALL_LIST [PHONE0]",
     "after": true
    },
    {
@@ -115,15 +86,6 @@
     "msg": "[0] useImsForCall=false, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, is…"
    },
    {
-    "ts": "2026-08-28T17:00:05.000Z",
-    "last": "2026-08-28T17:01:45.000Z",
-    "n": 8,
-    "phone": 0,
-    "level": "D",
-    "tag": "SST-0",
-    "msg": "pollStateDone: hasRegistered = false hasDeregistered = false hasDataAttached = {1=false, 2=false} hasDataDetached = {1=false, 2=false} hasDataRegStateChanged =…"
-   },
-   {
     "ts": "2026-08-28T17:00:10.000Z",
     "last": "2026-08-28T17:00:10.000Z",
     "n": 1,
@@ -142,6 +104,16 @@
     "msg": "[0] handleImsRegistered: onImsMmTelConnected imsTransportType=WWAN"
    },
    {
+    "ts": "2026-08-28T17:00:25.000Z",
+    "last": "2026-08-28T17:00:25.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "DNC-0",
+    "msg": "onEvaluateNetworkRequests: reason=DATA_SERVICE_STATE_CHANGED",
+    "after": true
+   },
+   {
     "ts": "2026-08-28T17:00:02.000Z",
     "last": "2026-08-28T17:00:02.000Z",
     "n": 1,
@@ -149,6 +121,35 @@
     "level": "D",
     "tag": "DNC-0",
     "msg": "Internet data state changed from DISCONNECTED to CONNECTED."
+   },
+   {
+    "ts": "2026-08-28T17:00:40.000Z",
+    "last": "2026-08-28T17:01:40.000Z",
+    "n": 5,
+    "phone": 0,
+    "level": "I",
+    "tag": "DNC-0",
+    "msg": "onEvaluateNetworkRequests: reason=RETRY_SCHEDULED",
+    "after": true
+   },
+   {
+    "ts": "2026-08-28T17:01:15.000Z",
+    "last": "2026-08-28T17:01:15.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0605]> DATA_CALL_LIST [PHONE0]",
+    "after": true
+   },
+   {
+    "ts": "2026-08-28T17:00:05.000Z",
+    "last": "2026-08-28T17:01:45.000Z",
+    "n": 8,
+    "phone": 0,
+    "level": "D",
+    "tag": "SST-0",
+    "msg": "pollStateDone: hasRegistered = false hasDeregistered = false hasDataAttached = {1=false, 2=false} hasDataDetached = {1=false, 2=false} hasDataRegStateChanged =…"
    }
   ]
  }

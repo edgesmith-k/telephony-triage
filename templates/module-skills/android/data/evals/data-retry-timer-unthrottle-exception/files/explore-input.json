@@ -94,9 +94,10 @@
   "shapes": 11,
   "window": [
    "2026-11-20T12:55:01.000Z",
-   "2026-11-20T13:05:01.000Z"
+   "2026-11-20T13:10:01.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
    {
     "ts": "2026-11-20T13:02:10.000Z",
@@ -106,16 +107,6 @@
     "level": "E",
     "tag": "AndroidRuntime",
     "msg": "FATAL EXCEPTION: main",
-    "after": true
-   },
-   {
-    "ts": "2026-11-20T13:02:10.000Z",
-    "last": "2026-11-20T13:02:10.000Z",
-    "n": 1,
-    "phone": null,
-    "level": "E",
-    "tag": "AndroidRuntime",
-    "msg": "java.lang.IllegalStateException: Fragment not attached to a context.",
     "after": true
    },
    {
@@ -129,16 +120,6 @@
     "after": true
    },
    {
-    "ts": "2026-11-20T13:02:10.000Z",
-    "last": "2026-11-20T13:02:10.000Z",
-    "n": 1,
-    "phone": null,
-    "level": "E",
-    "tag": "AndroidRuntime",
-    "msg": "Process: com.android.settings, PID: 3300",
-    "after": true
-   },
-   {
     "ts": "2026-11-20T13:05:00.311Z",
     "last": "2026-11-20T13:05:00.311Z",
     "n": 1,
@@ -146,6 +127,26 @@
     "level": "E",
     "tag": "AndroidRuntime",
     "msg": "Process: com.android.phone, PID: 2101",
+    "after": true
+   },
+   {
+    "ts": "2026-11-20T13:02:10.000Z",
+    "last": "2026-11-20T13:02:10.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "java.lang.IllegalStateException: Fragment not attached to a context.",
+    "after": true
+   },
+   {
+    "ts": "2026-11-20T13:02:10.000Z",
+    "last": "2026-11-20T13:02:10.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "Process: com.android.settings, PID: 3300",
     "after": true
    },
    {

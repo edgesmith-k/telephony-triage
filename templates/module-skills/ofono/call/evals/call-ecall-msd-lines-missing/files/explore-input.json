@@ -13,10 +13,20 @@
   "shapes": 22,
   "window": [
    "2026-09-23T10:15:05.000Z",
-   "2026-09-23T10:25:05.000Z"
+   "2026-09-23T10:30:05.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
+   {
+    "ts": "2026-09-23T10:20:05.000Z",
+    "last": "2026-09-23T10:20:05.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "call dial requested number=<MSISDN#1> path/example_call.go:24"
+   },
    {
     "ts": "2026-09-23T10:20:05.002Z",
     "last": "2026-09-23T10:20:05.002Z",
@@ -158,6 +168,24 @@
     "after": true
    },
    {
+    "ts": "2026-09-23T10:20:00.200Z",
+    "last": "2026-09-23T10:20:30.200Z",
+    "n": 2,
+    "phone": null,
+    "level": "I",
+    "tag": "vrild",
+    "msg": "[ExampleRegService_0] signal update lte rsrp=-94"
+   },
+   {
+    "ts": "2026-09-23T10:20:00.010Z",
+    "last": "2026-09-23T10:20:47.010Z",
+    "n": 3,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "ui tick"
+   },
+   {
     "ts": "2026-09-23T10:20:46.000Z",
     "last": "2026-09-23T10:20:46.000Z",
     "n": 1,
@@ -206,33 +234,6 @@
     "tag": "ofonod",
     "msg": "dbus_trace signal - i:org.ofono.VoiceCallManager m:CallRemoved p:/ril_0",
     "after": true
-   },
-   {
-    "ts": "2026-09-23T10:20:05.000Z",
-    "last": "2026-09-23T10:20:05.000Z",
-    "n": 1,
-    "phone": null,
-    "level": "I",
-    "tag": "mgmtd",
-    "msg": "call dial requested number=<MSISDN#1> path/example_call.go:24"
-   },
-   {
-    "ts": "2026-09-23T10:20:00.200Z",
-    "last": "2026-09-23T10:20:30.200Z",
-    "n": 2,
-    "phone": null,
-    "level": "I",
-    "tag": "vrild",
-    "msg": "[ExampleRegService_0] signal update lte rsrp=-94"
-   },
-   {
-    "ts": "2026-09-23T10:20:00.010Z",
-    "last": "2026-09-23T10:20:47.010Z",
-    "n": 3,
-    "phone": null,
-    "level": "I",
-    "tag": "mgmtd",
-    "msg": "ui tick"
    }
   ]
  }

@@ -22,7 +22,9 @@
   `checked`, `v: 2`)도 같은 파일이다(contracts.md §3.2 작업 기록, usage_stats가 센다 — 정보 행은 세지 않는다).
 - `JOB/explore-input.json`: 후보 없음·원인 미확인(1위 C=0)이고 `explore.when`이 `never`가 아닐 때, 또는 1위 C=1이고 `--explore`·
   `explore.when: always`·`--look-note`일 때(`explore.reason: fit_check`, 1위가 증상을 설명하는지 확인 — `never`·`--no-explore`면 아님)만. 탐색 분석 입력(마스킹된 값만:
-  발생 시각·실패 스텝·앵커 머리·줄 수 상한 `explore.timeline_max_lines`, 시각 입력 없이 전체를 봤으면 `time_candidates`). `run`은 타임라인을 만들지 않고 이전 `timeline.md`·입력 파일을 지운다.
+  발생 시각·실패 스텝·앵커 머리·줄 수 상한 `explore.timeline_max_lines`, 시각 입력 없이 전체를 봤으면 `time_candidates`, 코멘트 단서를
+  로그 한 곳에서만 찾았으면 그 시각 `clue_at`). `run`은 타임라인을 만들지 않고 이전 `timeline.md`·입력 파일을 지운다 — 다만 탐색을 시작한
+  뒤(`timeline.md`가 있던 작업) 다시 한 run이 새 입력 파일을 쓰면 끝에 같은 `explore`로 타임라인을 다시 만든다(출력은 run JSON 하나).
 - `triage.py explore <KEY> [--out <dir>]`: 사용자가 탐색 분석에 동의한 뒤(또는 `--explore`·`explore.when: always`) `JOB/explore-input.json`과
   `events.json`으로 `JOB/timeline.md`(마스킹된 요약 타임라인, 줄 수 상한 기본 200)를 만들고 `report.md`의 탐색 분석 줄을 갱신한다.
   출력 `{timeline, lines, total}`. 작업 플랫폼이 기본(android)이 아니면 `platform`과 `refs`(그 플랫폼 탐색 지식 문서, 스킬 디렉토리 기준
@@ -307,17 +309,17 @@ def _int_setting(cfg: dict, key: str, default: int, top: int) -> int:
 
 
 def _anomaly(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, items: list, recs=None) -> dict | None:
-    """이상 줄 절 재료(`window.anomaly`): 기준 시각 = 실패 스텝·기준 줄 시각 > 기준 줄 찾은 시각 > 발생 시각."""
-    from triagelib import window
+    """이상 줄 절 재료(`window.anomaly`): 기준 시각은 요약과 같다(`summary.ref_of` 확정 기준, 없으면 `summary.guess_of` 증상 시각 후보)."""
+    from triagelib import summary, window
     try:
         analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    ref = (spec.get("anchor") or {}).get("fail") or (spec.get("look_at") or {}).get("ts") or spec.get("around")
+    analysis = analysis if isinstance(analysis, dict) else {}
     try:      # 표시 전용 — 사본 읽기·고르기가 실패해도 탐색 타임라인은 지금처럼 만든다
-        found = window.anomaly(job, events, analysis if isinstance(analysis, dict) else {}, defaults, ref,
-                               _int_setting(cfg, "explore.after_sec", 600, 3600),
-                               _int_setting(cfg, "explore.anomaly_max_lines", 80, 400), shown_keys(items), recs)
+        found = window.anomaly(job, events, analysis, defaults, summary.ref_of(spec), summary.after_of(cfg),
+                               _int_setting(cfg, "explore.anomaly_max_lines", 80, 400), shown_keys(items), recs,
+                               summary.guess_of(spec, analysis))
     except Exception as exc:  # noqa: BLE001
         print(f"경고: 이상 줄 절을 만들지 못해 뺐다({type(exc).__name__})", file=sys.stderr)
         return None
@@ -325,14 +327,15 @@ def _anomaly(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, ite
 
 
 def _summary(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, recs=None, skipped=None) -> dict | None:
-    """전체 로그 모양 요약 재료(`summary.groups`, 기준 시각은 이상 줄 절과 같다). 만들지 못하면 None(경고 한 줄)."""
+    """전체 로그 모양 요약 재료(`summary.groups`, 기준 시각·범위는 이상 줄 절과 같다). 만들지 못하면 None(경고 한 줄)."""
     from triagelib import summary
     try:
         analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    return summary.safe(job, events, analysis if isinstance(analysis, dict) else {}, defaults, summary.ref_of(spec),
-                        summary.cap_of(cfg), recs, skipped)
+    analysis = analysis if isinstance(analysis, dict) else {}
+    return summary.safe(job, events, analysis, defaults, summary.ref_of(spec), summary.cap_of(cfg), recs, skipped,
+                        summary.guess_of(spec, analysis), summary.after_of(cfg))
 
 
 def _copy_records(job: Path, defaults: dict, events: dict):
@@ -345,7 +348,7 @@ def _copy_records(job: Path, defaults: dict, events: dict):
         return None, []
 
 
-def _explore(args, cfg: dict, job: Path, defaults: dict) -> int:
+def _explore(args, cfg: dict, job: Path, defaults: dict, emit: bool = True) -> int:
     input_path, events_path = job / EXPLORE_INPUT_FILE, job / "events.json"
     if not input_path.is_file():
         print(f"탐색 분석 해당 없음: {EXPLORE_INPUT_FILE}가 없다(후보 확정·explore.when: never·run 전)", file=sys.stderr)
@@ -394,7 +397,8 @@ def _explore(args, cfg: dict, job: Path, defaults: dict) -> int:
         out["mask_warnings"] = redacted
     if userconfig.module_skills(cfg) is not None:      # 5-2 모듈 문서를 받을 수 있다(B2-4). 없으면 출력이 이전과 같다
         out["module_skills"] = True
-    _emit(out)
+    if emit:
+        _emit(out)
     return OK
 
 
@@ -545,6 +549,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"triage.py 내부 오류 — 스크립트 버그다. 이 메시지와 `/telephony-triage:status --doctor` 화면과 "
               f"{trace}(마스킹된 호출 기록, 로그 원문 없음)를 플러그인 관리자에게 전달한다: {message}{tail}", file=sys.stderr)
         return USAGE
+    if getattr(driver, "explored", False) and (driver.job / EXPLORE_INPUT_FILE).is_file():
+        # 탐색 중 다시 한 run(`--look-at` 등)이 지운 탐색 타임라인을 새 explore 입력으로 다시 만든다(출력은 run JSON 하나 그대로)
+        args.key = driver.key
+        trace_event(driver.job, "explore", exit=_explore(args, driver.cfg, driver.job, defaults, emit=False))
     _emit(result)
     return OK
 

@@ -352,10 +352,11 @@ def test_explore_timeline_is_not_a_cache_file_and_is_reproduced_on_a_hit():
     assert done["timeline"] == "timeline.md" and done["lines"] == done["total"] > 0
     made = (job / "timeline.md").read_bytes()
     cache = json.loads((job / "analysis-cache.json").read_text(encoding="utf-8"))
-    assert "timeline" not in cache["files"] and cache["format"] == 9 and cache["core"]["explore_input"]["limit"] == 200
+    assert "timeline" not in cache["files"] and cache["format"] == 10 and cache["core"]["explore_input"]["limit"] == 200
     second = _run(ws, "--answer", "time=2026-09-27T18:02:03+09:00", logs=log)                                      # 타임라인을 만든 뒤에도 적중
     assert second["reuse"] == {"hit": True, "run": 1}
-    assert not (job / "timeline.md").exists() and (job / "explore-input.json").is_file()   # run은 이전 타임라인을 지운다
+    # run은 이전 타임라인을 지우고, 탐색을 시작한 작업이면 새 explore 입력으로 다시 만든다(11/25 R-21 — 예전 기대는 "지운 채")
+    assert (job / "timeline.md").read_bytes() == made and (job / "explore-input.json").is_file()
     again = ws.json("triage.py", ["explore", KEY])
     assert again == done and (job / "timeline.md").read_bytes() == made
     assert "- 탐색 분석 (추정, timeline.md" in (job / "report.md").read_text(encoding="utf-8")
@@ -422,8 +423,10 @@ def test_rerun_with_remote_drops_module_records_on_a_hit():
     (job / "explore-output.md").symlink_to(outside)
     again = _run(ws, "--answer", "time=2026-09-27T18:02:03+09:00", logs=log)
     assert again["reuse"]["hit"] is True
-    assert not any((job / n).exists() or (job / n).is_symlink() for n in (*names, "module-skill", "timeline.md"))
+    assert not any((job / n).exists() or (job / n).is_symlink() for n in (*names, "module-skill"))
     assert outside.read_text(encoding="utf-8") == "keep" and (job / "explore-input.json").is_file()
+    # timeline.md는 지운 뒤 같은 explore 입력으로 다시 만든다(11/25 R-21, 탐색을 시작한 작업) — 링크가 아닌 새 파일
+    assert (job / "timeline.md").is_file() and not (job / "timeline.md").is_symlink()
 
 
 def test_rereading_jira_without_problem_json_keeps_reuse():

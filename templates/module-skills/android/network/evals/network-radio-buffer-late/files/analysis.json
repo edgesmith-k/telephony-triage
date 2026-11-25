@@ -92,21 +92,13 @@
  ],
  "near_causes": [
   {
-   "id": "DATA-001",
-   "title": "SETUP_DATA_CALL이 발생하지 않음",
-   "matched": "0/1",
-   "missing": [
-    "must_event data_evaluation_rejected"
-   ]
-  },
-  {
    "id": "SIM-001-01",
    "title": "UICC 초기화 실패",
    "note": "낱말 일치만(로그 대조 안 함)"
   },
   {
-   "id": "CALL-001",
-   "title": "VoLTE가 동작하지 않음",
+   "id": "IMS-001",
+   "title": "IMS 등록이 되지 않음",
    "note": "낱말 일치만(로그 대조 안 함)"
   }
  ],

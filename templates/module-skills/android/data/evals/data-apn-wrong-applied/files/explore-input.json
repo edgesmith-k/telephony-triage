@@ -22,10 +22,20 @@
   "shapes": 20,
   "window": [
    "2026-09-02T09:55:05.000Z",
-   "2026-09-02T10:05:05.000Z"
+   "2026-09-02T10:10:05.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
+   {
+    "ts": "2026-09-02T10:00:05.000Z",
+    "last": "2026-09-02T10:00:05.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0412]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6] [PHONE0]"
+   },
    {
     "ts": "2026-09-02T10:00:05.004Z",
     "last": "2026-09-02T10:00:05.004Z",
@@ -85,15 +95,6 @@
     "tag": "DNC-0",
     "msg": "Internet data state changed from DISCONNECTED to CONNECTED.",
     "after": true
-   },
-   {
-    "ts": "2026-09-02T10:00:05.000Z",
-    "last": "2026-09-02T10:00:05.000Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
-    "msg": "[0412]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6] [PHONE0]"
    },
    {
     "ts": "2026-09-02T10:00:03.262Z",

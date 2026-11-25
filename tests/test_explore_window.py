@@ -234,3 +234,53 @@ def test_normalize_ts_reads_any_fraction_width():
     for text, want in (("05:33:05.5Z", "05:33:05.500"), ("05:33:05.12Z", "05:33:05.120"), ("05:33:05.1234Z", "05:33:05.123"),
                        ("14:33:05.12345+0900", "05:33:05.123"), ("05:33:05.1234567Z", "05:33:05.123"), ("05:33:05Z", "05:33:05.000")):
         assert logtime.format_ts(logtime.normalize_ts("2026-09-20T" + text, "UTC", 2026))[11:23] == want, text
+
+
+# --- R-30(11/25 리뷰 2-4): `--at` 현지 시각·연도 없는 스탬프·oFono syslog ---------------------------------------------
+
+def test_parse_at_reads_local_clock_year_and_syslog():
+    from triagelib.window import parse_at
+
+    ev = {"input": {"tz": "Asia/Seoul", "year": None,
+                    "window": {"start": "2026-09-20T05:29:00.000Z", "end": "2026-09-20T05:39:00.000Z"}},
+          "coverage": {"first_ts": "2026-09-20T05:00:00.000Z", "last_ts": "2026-09-20T06:00:00.000Z"}}
+    want = "2026-09-20T05:33:05+00:00"
+    assert parse_at("05:33:05", ev)[0].isoformat() == want                         # 타임라인(UTC) 시각
+    assert parse_at("14:33:05", ev)[0].isoformat() == want                         # 사본(현지 KST) 시각 — 예전엔 범위 밖 오류
+    assert parse_at("09-20 14:33:05.000", ev)[0].isoformat() == want               # 연도 없는 스탬프: 범위 첫 시각의 연도(2000 아님)
+    assert parse_at("Sep 20 14:33:05", ev)[0].isoformat() == want                  # oFono syslog(BSD) 모양
+    assert parse_at("Sep 20 14:33:05.25", ev)[0].isoformat() == "2026-09-20T05:33:05.250000+00:00"
+    both = {"input": {"tz": "Asia/Seoul", "window": None},
+            "coverage": {"first_ts": "2026-09-20T00:00:00.000Z", "last_ts": "2026-09-20T23:00:00.000Z"}}
+    dt, why = parse_at("10:00:00", both)            # UTC 10:00·KST 10:00(=01:00Z) 둘 다 로그 안: 가를 수 없어 거부
+    assert dt is None and "어느 쪽인지 모른다" in why and "Z" in why
+    utc = {"input": {"tz": "UTC", "window": None}, "coverage": both["coverage"]}
+    assert parse_at("10:00:00", utc)[0].isoformat() == "2026-09-20T10:00:00+00:00"   # UTC 작업은 예전과 같다
+
+
+def test_window_head_shows_given_and_converted_center():
+    job = _job()
+    out = _window(job, "--at", "14:33:05", "--lines", 2)                   # 작업 tz Asia/Seoul — 사본 시각 그대로
+    assert out["at"] == "2026-09-20T05:33:05.000Z"
+    assert "- 중심: 2026-09-20T05:33:05.000Z (받은 값 14:33:05)" in (job / out["window"]).read_text(encoding="utf-8")
+    same = _window(job, "--at", "2026-09-20T05:33:05.000Z", "--lines", 2)
+    assert "받은 값" not in (job / same["window"]).read_text(encoding="utf-8")
+
+
+# --- R-21(11/25 리뷰 4-1): 탐색 중 `run --look-at`을 다시 해도 탐색 타임라인이 남는다 ------------------------------------
+
+def test_rerun_during_explore_rebuilds_timeline():
+    job = _job()
+    meta, log = job.parent / "m.json", job.parent / "in.log"
+    args = ["run", KEY, "--offline-db", SAMPLE, "--out", job, "--logs", log, "--issue-meta", meta, "--tz", "Asia/Seoul",
+            "--year", "2026", "--explore", "--look-at-source", "model", "--look-at", "carrier link lost on rmnet_data3"]
+    proc = run("triage.py", args)
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["status"] == "ok"                                    # 출력은 run JSON 하나 그대로
+    text = (job / "timeline.md").read_text(encoding="utf-8")
+    assert "기준 줄(모델이 코멘트에서 고른 지점" in text                               # 새 explore 입력(새 기준)으로 다시 만들었다
+    assert core.EXPLORE_DONE_LINE.split("{")[0] in (job / "report.md").read_text(encoding="utf-8")
+    assert _window(job, "--at", AT, "--lines", 2)["lines"] == 2                       # 탐색을 시작한 작업으로 본다
+    fresh = _job(explore=False)                                                        # explore 전이면 run이 만들지 않는다
+    args[5], args[7], args[9] = fresh, fresh.parent / "in.log", fresh.parent / "m.json"
+    assert run("triage.py", args).returncode == 0 and not (fresh / "timeline.md").exists()

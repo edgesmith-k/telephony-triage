@@ -106,24 +106,13 @@
  ],
  "near_causes": [
   {
-   "id": "DATA-002-01",
-   "title": "Airplane mode on",
-   "matched": "1/2",
-   "missing": [
-    "must_event data_teardown_all {'reason':…"
-   ],
-   "at": [
-    "2026-08-28T17:00:15.000Z"
-   ]
-  },
-  {
-   "id": "DATA-001",
-   "title": "SETUP_DATA_CALL이 발생하지 않음",
+   "id": "DATA-001-01",
+   "title": "Data disabled",
    "note": "낱말 일치만(로그 대조 안 함)"
   },
   {
-   "id": "DATA-001-01",
-   "title": "Data disabled",
+   "id": "DATA-001-02",
+   "title": "Roaming disabled",
    "note": "낱말 일치만(로그 대조 안 함)"
   }
  ],

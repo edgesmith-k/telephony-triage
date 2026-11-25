@@ -70,9 +70,10 @@
   "shapes": 19,
   "window": [
    "2026-10-15T11:42:23.000Z",
-   "2026-10-15T11:52:23.000Z"
+   "2026-10-15T11:57:23.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
    {
     "ts": "2026-10-15T11:47:20.411Z",
@@ -137,6 +138,15 @@
     "level": "V",
     "tag": "RIL",
     "msg": "ipc[0][RX] <unknown ipc>, RSP Error(VIPC_E_UNKNOWN_CMD) seq=0x0e07 len=12"
+   },
+   {
+    "ts": "2026-10-15T11:47:20.409Z",
+    "last": "2026-10-15T11:47:23.051Z",
+    "n": 2,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "<HEXDUMP 12B>"
    },
    {
     "ts": "2026-10-15T11:47:23.051Z",
@@ -207,15 +217,6 @@
     "tag": "DIC-0",
     "msg": "ServiceState updated, isRoaming=false",
     "after": true
-   },
-   {
-    "ts": "2026-10-15T11:47:20.409Z",
-    "last": "2026-10-15T11:47:23.051Z",
-    "n": 2,
-    "phone": null,
-    "level": "V",
-    "tag": "RIL",
-    "msg": "<HEXDUMP 12B>"
    },
    {
     "ts": "2026-10-15T11:47:20.410Z",

@@ -89,8 +89,11 @@ def test_groups_flags_fold_slots_and_order():
     got = _spec(_job())["summary"]
     groups = got["groups"]
     late = next(g for g in groups if g["tag"] == "LateTag")
-    assert late["msg"] == EXC and late.get("after") and late.get("outside") and late["n"] == 1     # tags.yaml 밖·실패 뒤 5분
-    assert groups.index(late) < 3                                                    # E·예외 머리가 맨 앞 묶음
+    # tags.yaml 밖·실패 뒤 5분 — 분석 구간(±60초) 밖이지만 이상 줄 절과 같은 범위(구간 ~ 기준+after_sec 600초) 안이라 '범위 밖' 아님
+    assert late["msg"] == EXC and late.get("after") and not late.get("outside") and late["n"] == 1
+    # 11/25 칸 묶음: 기준 둘레 묶음 안은 증상 프로세스(본 타임라인 pid 2101) 모양이 먼저 — 다른 프로세스(3000)의 예외는 그 뒤
+    # (예전 기대 `index < 3`은 등급만 보던 순서다). D/I 모양보다는 앞
+    assert groups.index(late) < min(i for i, g in enumerate(groups) if g["level"] in ("D", "I"))
     noisy = [g for g in groups if g["tag"] == "NoisyPoll"]
     assert len(noisy) == 1 and noisy[0]["n"] == 2000 and noisy[0]["level"] == "W"   # 숫자만 다른 2천 줄 = 한 모양
     slots = sorted(g["phone"] for g in groups if g["tag"] == "RILJ" and "SETUP_DATA_CALL error" in g["msg"])
@@ -99,7 +102,8 @@ def test_groups_flags_fold_slots_and_order():
     assert steady["n"] == 2 and "after" not in steady                                # 기준 앞에도 있으면 '처음 나옴' 아님
     assert not any(g["tag"] == "LateTag" and g["msg"].lstrip().startswith("at ") for g in groups)    # 프레임은 세지 않는다
     levels = [g["level"] for g in groups]
-    assert levels.index("W") > max(i for i, lv in enumerate(levels) if lv == "E")    # F·예외·E 다음 W
+    mine = [g["level"] for g in groups if g["tag"] != "LateTag"]                     # 같은 프로세스 안에서는 등급순: E 다음 W
+    assert mine.index("W") > max(i for i, lv in enumerate(mine) if lv == "E")
     assert max(i for i, lv in enumerate(levels) if lv in ("E", "W")) < min(i for i, lv in enumerate(levels) if lv in ("D", "I"))
     assert got["ref"] == "2026-11-20T10:00:00.000Z" and got["range"][1] >= late["ts"]
 
@@ -121,7 +125,7 @@ def test_summary_in_timeline_head_e1_and_tamper():
     text = (job / core.TIMELINE_FILE).read_text(encoding="utf-8")
     assert text.index("- 형식:") < text.index(HEAD) < text.index("## 본 타임라인") < text.index("## 이상 줄")
     row = next(x for x in text.split("\n") if "LateTag" in x and EXC in x)
-    assert "기준 뒤 첫 등장" in row and "분석 구간 밖" in row and evidence.ROW_RX.match(row)
+    assert "기준 뒤 첫 등장" in row and "범위 밖" not in row and evidence.ROW_RX.match(row)
     events = json.loads((job / "events.json").read_text(encoding="utf-8"))
 
     class NoJob(Exception):
@@ -323,3 +327,26 @@ def test_summary_head_counts_skipped_copies():
     lines = report.summary_lines({"groups": [{"ts": "2026-11-20T10:00:00.000Z", "last": "2026-11-20T10:00:00.000Z", "n": 1,
                                               "phone": None, "level": "E", "tag": "T", "msg": "x"}], "skipped": 2})
     assert "세지 않은 파일 2개" in lines[2]
+
+
+# --- R-15 입력 쪽(11/25 리뷰 5-F1): 코멘트 단서 시각을 explore-input.json `clue_at`에 남기고 기준 순서에 넣는다 -----------------
+
+def test_clue_time_goes_to_explore_input_and_reference_order():
+    import types
+    from triagelib import driver
+    me = types.SimpleNamespace(cfg={}, warnings=[], failed_step=None, time_candidates=None, look_result=None,
+                               look_inputs=lambda: {"at": None, "note": None},
+                               clue_rows=[{"where": "코멘트 2번", "clue": "ipc", "ts": "2026-11-14T01:02:00.624Z", "places": 1}])
+    spec = driver.Driver.explore_input(me, "2026-11-14T01:00:00.000Z", None)
+    assert spec["clue_at"] == "2026-11-14T01:02:00.624Z" and spec["around"] == "2026-11-14T01:00:00.000Z"
+    assert summary.ref_of(spec) == "2026-11-14T01:02:00.624Z"                        # 단서 시각 > 발생 시각
+    assert summary.ref_of({**spec, "look_at": {"ts": "2026-11-14T01:05:00.000Z"}}) == "2026-11-14T01:05:00.000Z"
+    assert summary.ref_of({**spec, "anchor": {"fail": "2026-11-14T01:06:00.000Z"}}) == "2026-11-14T01:06:00.000Z"
+    for rows in ([{**me.clue_rows[0], "places": 2}],                                   # 같은 줄이 여러 곳: 한 곳으로 못 정함
+                 me.clue_rows + [{**me.clue_rows[0], "ts": "2026-11-14T01:09:00.000Z"}],   # 단서마다 다른 시각
+                 []):
+        assert "clue_at" not in driver.Driver.explore_input(types.SimpleNamespace(**{**vars(me), "clue_rows": rows}), None, None)
+    # 확정 기준이 없으면 증상 시각 후보를 추정 기준으로(explore-input.json, 없으면 analysis.json step_anchor)
+    cands = [{"ts": "2026-11-14T01:00:00.000Z", "type": "DATA-001"}]
+    assert summary.guess_of({"time_candidates": cands}) == ["2026-11-14T01:00:00.000Z"]
+    assert summary.guess_of(None, {"step_anchor": {"time_candidates": cands}}) == ["2026-11-14T01:00:00.000Z"]

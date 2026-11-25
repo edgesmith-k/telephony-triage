@@ -24,10 +24,20 @@
   "shapes": 5,
   "window": [
    "2026-11-20T10:55:10.000Z",
-   "2026-11-20T11:05:10.000Z"
+   "2026-11-20T11:10:10.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
+   {
+    "ts": "2026-11-20T11:00:10.000Z",
+    "last": "2026-11-20T11:00:10.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DPM-0",
+    "msg": "Data profiles changed."
+   },
    {
     "ts": "2026-11-20T11:00:10.001Z",
     "last": "2026-11-20T11:00:10.001Z",
@@ -47,15 +57,6 @@
     "tag": "DNC-0",
     "msg": "Re-evaluating 0 existing data networks due to DATA_PROFILES_CHANGED",
     "after": true
-   },
-   {
-    "ts": "2026-11-20T11:00:10.000Z",
-    "last": "2026-11-20T11:00:10.000Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "DPM-0",
-    "msg": "Data profiles changed."
    },
    {
     "ts": "2026-11-20T11:00:00.101Z",

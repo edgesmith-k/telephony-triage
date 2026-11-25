@@ -45,9 +45,10 @@
   "shapes": 15,
   "window": [
    "2026-09-22T09:45:21.000Z",
-   "2026-09-22T09:55:21.000Z"
+   "2026-09-22T10:00:21.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
    {
     "ts": "2026-09-22T09:50:13.154Z",
@@ -68,6 +69,15 @@
     "msg": "diag packet dropped: host not reading, write fail"
    },
    {
+    "ts": "2026-09-22T09:50:11.153Z",
+    "last": "2026-09-22T09:50:23.153Z",
+    "n": 5,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "mux [ch1][RX] VIPC_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)"
+   },
+   {
     "ts": "2026-09-22T09:50:21.753Z",
     "last": "2026-09-22T09:50:21.753Z",
     "n": 1,
@@ -76,15 +86,6 @@
     "tag": "mgmtd",
     "msg": "data and call unavailable: no service path/example_net.go:12",
     "after": true
-   },
-   {
-    "ts": "2026-09-22T09:50:11.153Z",
-    "last": "2026-09-22T09:50:23.153Z",
-    "n": 5,
-    "phone": null,
-    "level": "D",
-    "tag": "vrild",
-    "msg": "mux [ch1][RX] VIPC_EXAMPLE_NO_SERVICE_IND ind len=4 (no cell)"
    },
    {
     "ts": "2026-09-22T09:50:19.453Z",

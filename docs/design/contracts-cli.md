@@ -367,7 +367,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
   - blocked_by?
   - at?[≤3]
   - code?[≤3]
-- near_causes?[≤3](조사 모드(investigate.mode)일 때만 DB 원인 후보(표시 전용, 판정·점수·순위 아님, 반입 7 B-1): 부분 일치(partial 순서) 다음 이슈 요약 문장 한 번의 db_search 결과, ID로 중복 제거. {id(원인 또는 유형 ID), title?(≤60자), matched?("m/n"), missing?[≤3 없는 조건 ≤40자], at?[≤3 맞은 시각], note?(검색만 걸림: 낱말 일치만(로그 대조 안 함))}; 4KB 압축 시 맨 먼저 near_causes[1:] → 전체 제거)
+- near_causes?[≤3](조사 모드(investigate.mode)일 때만 DB 원인 후보(표시 전용, 판정·점수·순위 아님, 반입 7 B-1): 부분 일치(partial 순서, 맞은 조건 0개 제외) 다음 낱말 검색 결과(no_candidate.search_hits가 있으면 그것, 없으면 가린 이슈 요약 문장 한 번의 db_search), ID로 중복 제거, 이미 candidates인 유형·원인과 그 유형의 원인 제외, 유형과 그 원인이 같이 있으면 원인만. {id(원인 또는 유형 ID), title?(≤60자), matched?("m/n"), missing?[≤3 없는 조건 ≤40자], at?[≤3 맞은 시각], note?(검색만 걸림: 낱말 일치만(로그 대조 안 함))}; 4KB 압축 시 조사 결론 줄이기 다음 near_causes[1:] → 전체 제거)
   - id
   - title?
   - matched?

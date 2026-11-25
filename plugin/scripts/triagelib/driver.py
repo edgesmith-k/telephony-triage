@@ -21,7 +21,7 @@ from .anchor import AnchorMixin, _parse_ts
 from .cache import CacheMixin, State, _digest, _file_sha
 from .core import (ELIGIBILITY_FILE, ERROR_EVENT_RE, EXPLORE_MAX_LINES, EXTRACTOR_CODES, EXPLORE_WHEN, PLATFORM_ANSWER, Fail, NeedsInput,
                    MODULE_RECORD_DIR, Runner, SEARCH_LIMIT, SNAPSHOT_DIR, STALE_FILES, STATE_FILE, Stopped, TOP, _clip,
-                   FIND_TEXT_ITEMS, NEAR_MAX, NEAR_WORDS_ONLY, PARTIAL_ANALYSIS_MAX, REFERENCE_FILE)
+                   FIND_TEXT_ITEMS, NEAR_MAX, NEAR_WORDS_ONLY, PARTIAL_ANALYSIS_MAX, REFERENCE_FILE, TIMELINE_FILE, EXPLORE_INPUT_FILE)
 from .report import NORMAL_HOLD_WHY, ReportMixin, _ref_label, _unique_evidence, flow_section, lead_first
 
 MASKED_DIR = "logs-masked"       # 원문 마스킹 사본(parse_logcat.py mask-copy, 종합 리뷰 G①) — 모델이 읽을 대상
@@ -1023,31 +1023,42 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                      "log_refs": (res or {}).get("log_refs") or [], "scope": scope})
         return out, extra
 
-    def near_causes(self, info: dict, match: dict, candidates: list, decision: dict) -> list | None:
+    def near_causes(self, info: dict, match: dict, candidates: list, decision: dict, hits: list | None = None) -> list | None:
         """조사 모드(`issuepost.investigate_mode`)일 때만 analysis.json `near_causes`(≤ 3, 표시 전용 — 탐색 분석이 대조할 DB 원인 후보):
-        부분 일치(match.json `partial[]` 순서) 다음에 이슈 요약 문장 한 번의 `db_search` 결과(검색 자체 순위)를 붙이고 ID로 겹친 것을
-        뺀다. 검색만 걸린 항목은 `note`로 로그 대조를 안 했다고 밝힌다. 점수·순위·decision·match.json은 그대로다."""
+        부분 일치(match.json `partial[]` 순서, 맞은 조건 0개 `0/N`은 뺌) 다음에 낱말 검색 결과 — 후보 없음의 설명 기반 검색
+        (`no_candidate.search_hits`, `hits`)이 있으면 그것을, 없으면 가린 이슈 요약 문장 한 번의 `db_search`(검색 자체 순위)를 붙인다.
+        ID로 겹친 것, 이미 후보(`candidates`)인 유형·원인과 그 유형의 원인을 빼고, 유형과 그 원인이 같이 있으면 원인만 남긴다.
+        검색만 걸린 항목은 `note`로 로그 대조를 안 했다고 밝힌다. 남는 것이 없으면 빈 목록(키를 쓰지 않는다). 점수·순위·decision·
+        match.json은 그대로다."""
         if not issuepost.investigate_mode({"candidates": candidates, "decision": decision})["mode"]:
             return None
-        out: list[dict] = []
+        have = {c.get("type") for c in candidates} | {c.get("cause") for c in candidates}
+        found: list[tuple] = []
 
-        def add(ident, **extra) -> None:
-            if ident and len(out) < NEAR_MAX and all(n["id"] != ident for n in out):
-                out.append({k: v for k, v in {"id": ident, "title": _clip(self.cause_entry(ident).get("title"), 60),
-                                              **extra}.items() if v})
+        def add(ident, **extra) -> None:      # 원인 ID `X-NNN-NN`의 유형은 앞 `X-NNN`(plan.schema causeId·typeId)
+            if ident and ident not in have and ident[:-3] not in have and all(f[0] != ident for f in found):
+                found.append((ident, extra))
 
         for p in match.get("partial") or []:
-            add(p.get("cause") or p["type"], matched=p["matched"],
-                missing=[_clip(m["desc"], 40) for m in p.get("missing") or []][:3],
-                at=sorted({h["ts"] for h in p.get("hits") or [] if h.get("ts")})[:3])
-        summary = " ".join(str(info.get("summary") or "").split())
-        if summary and len(out) < NEAR_MAX:
+            if not str(p.get("matched") or "").startswith("0/"):
+                add(p.get("cause") or p["type"], matched=p["matched"],
+                    missing=[_clip(m["desc"], 40) for m in p.get("missing") or []][:3],
+                    at=sorted({h["ts"] for h in p.get("hits") or [] if h.get("ts")})[:3])
+        summary = " ".join(self.masker()(str(info.get("summary") or "")).split())      # 검색·trace에는 가린 글만
+        if hits:
+            for h in hits:
+                if h.get("kind") != "issue":
+                    add(h.get("id"), note=NEAR_WORDS_ONLY)
+        elif summary and len(found) < NEAR_MAX:
             _, data, _ = self.run.call("4-near", "db_search.py", [summary, "--db", self.snap, "--limit", SEARCH_LIMIT])
             for r in (data or {}).get("results") or []:
                 if r.get("kind") == "issue" and r.get("key") == self.key:      # 이 이슈 자신의 기록
                     continue
                 add(r.get("id") if r.get("kind") != "issue" else r.get("cause") or r.get("type"), note=NEAR_WORDS_ONLY)
-        return out
+        ids = [f[0] for f in found]
+        kept = [f for f in found if not any(i.startswith(f[0] + "-") for i in ids)][:NEAR_MAX]
+        return [{k: v for k, v in {"id": ident, "title": _clip(self.cause_entry(ident).get("title"), 60), **extra}.items() if v}
+                for ident, extra in kept]
 
     def flows(self, logs: list[Path], tz: str | None, year: int | None, around: str | None, events: dict,
               version: str | None, ranked: list | None = None, top: dict | None = None) -> tuple[list | None, list | None]:
@@ -1106,6 +1117,11 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                "anchor": {k: anchor.get(k) for k in ("source", "step", "start", "fail")} if anchor else None}
         if getattr(self, "time_candidates", None):     # 시각 입력 없이 전체를 봤을 때의 증상 시각 후보(사건 후보)
             out["time_candidates"] = [dict(t) for t in self.time_candidates]
+        # 코멘트 단서를 로그 한 곳(한 시각)에서만 찾았으면 그 시각 — 요약·이상 줄 절의 확정 기준(`summary.ref_of`, 발생 시각보다 먼저)
+        clues = getattr(self, "clue_rows", None) or []
+        at = {r.get("ts") for r in clues}
+        if len(at) == 1 and None not in at and all((r.get("places") or 1) == 1 for r in clues):
+            out["clue_at"] = next(iter(at))
         look, found = self.look_inputs(), self.look_result or {}
         if look["at"] or look["note"]:      # 타임라인 머리: 기준 줄(사용자 입력)·찾은 시각·일치 위치, 확인할 내용
             out["look_at"] = {"line": look["at"], "note": look["note"], "ts": found.get("ts"), "hits": found.get("hits"),
@@ -1128,7 +1144,10 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
 
     def drop_stale_records(self) -> None:
         """이전 실행의 탐색·모듈 스킬 산출물은 이번 결과가 아니다(타임라인은 동의 뒤 `explore`가, 모듈 기록은 `module`·
-        `check-output`이 만든다, B2 §7.4). 링크는 따라가지 않고 링크만 지운다. 없으면 아무것도 바꾸지 않는다."""
+        `check-output`이 만든다, B2 §7.4). 링크는 따라가지 않고 링크만 지운다. 없으면 아무것도 바꾸지 않는다.
+        지우기 전에 탐색 타임라인이 있었는지(`explored`)를 남긴다 — 탐색 중 다시 한 run이 끝나면 `triage.main`이 같은 explore 입력으로
+        타임라인을 다시 만든다(탐색 하위 에이전트는 `explore`를 부를 권한이 없다, 리뷰 4-1)."""
+        self.explored = all((self.job / n).is_file() and not (self.job / n).is_symlink() for n in (TIMELINE_FILE, EXPLORE_INPUT_FILE))
         for name in STALE_FILES:
             path = self.job / name
             try:
@@ -1354,7 +1373,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         code_out = self.resolve_code(code, version, candidates)
         decision = _decision(candidates, anchor, match.get("eligibility"), self.clue_location((match.get("eligibility") or {}).get("via")))
         self.mark_not_a_bug(decision)
-        near = self.near_causes(info, match, candidates, decision)
+        near = self.near_causes(info, match, candidates, decision, (no_candidate or {}).get("search_hits"))
         analyzer = self.analyzer(lead_first(decision, candidates))     # 심층 분석 카테고리: 채택 원인(없으면 1위)
         explore = self.explore(lead_first(decision, candidates))     # 적합성 확인도 채택 원인 기준
         explore_input = self.explore_input(around, anchor) if explore and explore["when"] != "never" else None

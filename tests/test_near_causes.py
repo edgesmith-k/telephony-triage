@@ -39,18 +39,15 @@ def _offline(tmp_path: Path, lines: list[str], summary: str, monkeypatch, db: Pa
     return result, out
 
 
-def test_c0_run_lists_partial_then_word_search_causes(tmp_path, monkeypatch):
-    """1위 C=0: 부분 일치 원인이 먼저(맞은 수·없는 조건·맞은 시각), 검색만 걸린 것은 낱말 일치만. match·순위·decision은 near_causes와 무관."""
+def test_c0_run_drops_causes_already_in_candidates_and_partial(tmp_path, monkeypatch):
+    """1위 C=0(유형 DATA-001, 원인 미확인): 부분 일치 DATA-001-01(1/2)·DATA-001-02(0/1)와 검색 결과는 모두 이미 후보인 유형 DATA-001과
+    그 원인이라 near_causes에서 빠지고(R-18 — analysis.json `partial`에 그대로 있다) 키가 없다. 11/25 전 기대(첫 칸 DATA-001-01)는
+    리뷰 5-F4가 짚은 중복이다. match·순위·decision은 near_causes와 무관."""
     lines = [x for x in DATA_LOG.read_text(encoding="utf-8").splitlines(keepends=True) if "DSMGR" not in x]
     result, out = _offline(tmp_path, lines, "데이터가 연결되지 않음 SETUP_DATA_CALL 요청 없음", monkeypatch)
     assert result["candidates"][0]["C"] == 0 and result["investigate"]["mode"] is True
-    near = result["near_causes"]
-    assert 1 <= len(near) <= 3 and len({n["id"] for n in near}) == len(near)
-    first = near[0]
-    assert first["id"] == "DATA-001-01" and first["matched"] == result["partial"][0]["matched"] == "1/2"
-    assert first["missing"] and first["at"] and first["title"] and "note" not in first
-    assert all(n.get("note") == WORDS_ONLY and "matched" not in n for n in near if n["id"] not in
-               {p.get("cause") or p["type"] for p in result["partial"]})
+    assert [c["type"] for c in result["candidates"]] == ["DATA-001"] and "near_causes" not in result
+    assert result["partial"][0]["cause"] == "DATA-001-01" and result["partial"][0]["matched"] == "1/2"
     match = json.loads((out / "match.json").read_text(encoding="utf-8"))
     assert [c["cause"] for c in match["candidates"]] == [c["cause"] for c in result["candidates"]]
     assert [c["score"] for c in match["candidates"]] == [c["score"] for c in result["candidates"]]
@@ -78,7 +75,7 @@ def test_fit_drops_near_causes_first_and_leaves_the_rest_as_without(tmp_path, mo
     lines = [x for x in DATA_LOG.read_text(encoding="utf-8").splitlines(keepends=True) if "DSMGR" not in x]
     base, _out = _offline(tmp_path, lines, "데이터가 연결되지 않음 SETUP_DATA_CALL 요청 없음", monkeypatch)
     base.pop("truncated", None)
-    assert base.pop("near_causes")
+    base.pop("near_causes", None)        # 11/25 R-18: 이 입력은 near_causes가 비어 키가 없다 — 아래에서 직접 넣는다
     near = [{"id": f"DATA-00{i}-01", "title": "t" * 60, "matched": "1/2", "missing": ["m" * 40] * 3,
              "at": ["2026-09-20T05:32:00.000000+00:00"] * 3} for i in range(1, 4)]
     for pad in (0, 2600, 3200, 5000):      # 넘치지 않음 / near_causes[1:]만 / near_causes 전체 / 다른 칸까지
@@ -177,3 +174,45 @@ def test_held_cause_drops_first_check_and_trap_slots(tmp_path, capsys):
     lines, kept, dropped, nums = output._rule_subs("explore", [], source, tags, {"fabricated": 0}, "\n".join(rules), True)
     assert nums == [1, 2, 3] and kept == 3 and dropped == 0 and lines[0].endswith("[모듈 1] android/data 첫 점검 — 한 줄 — 근거: "
                                                                                     + Q_AFTER)
+
+
+# --- R-18(11/25 리뷰 5-F4·2-5·2-6): 잡음·중복 거르기, 후보 없음의 설명 기반 검색 재사용, 검색에는 가린 요약 ----------------------
+
+def _near(partial, candidates=(), hits=None, summary="데이터 연결 안 됨 010-1234-5678", search=()):
+    """`Driver.near_causes`를 가짜 실행기로 — 검색 호출(인자)을 기록한다."""
+    import types
+    from triagelib import driver
+    calls = []
+
+    def call(step, script, argv, **_k):
+        calls.append((step, argv[0]))
+        return 0, {"results": list(search)}, ""
+
+    me = types.SimpleNamespace(run=types.SimpleNamespace(call=call), snap="SNAP", key="MOCK-1",
+                               masker=lambda **_k: (lambda text: text.replace("010-1234-5678", "<PHONE#1>")),
+                               cause_entry=lambda ident: {"title": f"t-{ident}"})
+    got = driver.Driver.near_causes(me, {"summary": summary}, {"partial": list(partial)}, list(candidates), {}, hits)
+    return got, calls
+
+
+def test_near_causes_drop_zero_match_known_candidates_and_type_with_cause():
+    p = [{"type": "DATA-001", "cause": "DATA-001-01", "matched": "0/2", "missing": []},          # 맞은 조건 0개: 뺌
+         {"type": "DATA-002", "cause": "DATA-002-01", "matched": "1/2", "missing": [{"desc": "x"}]},   # 이미 후보: 뺌
+         {"type": "DATA-003", "cause": "DATA-003-02", "matched": "1/3", "missing": []},
+         {"type": "SIM-001", "cause": None, "matched": "1/2", "missing": []}]
+    cands = [{"type": "DATA-002", "cause": None, "C": 0}]
+    search = [{"kind": "type", "id": "DATA-003"}, {"kind": "cause", "id": "DATA-002-05"}, {"kind": "cause", "id": "NET-004-01"},
+              {"kind": "issue", "key": "MOCK-1", "cause": "NET-009-01"}]
+    got, calls = _near(p, cands, search=search)
+    # DATA-003(유형)은 그 원인 DATA-003-02가 있어 원인만, DATA-002-05는 후보 유형 DATA-002의 원인이라 뺌, 이 이슈 자신의 기록은 뺌
+    assert [n["id"] for n in got] == ["DATA-003-02", "SIM-001", "NET-004-01"]
+    assert got[0]["matched"] == "1/3" and got[2]["note"] == WORDS_ONLY
+    assert calls == [("4-near", "데이터 연결 안 됨 <PHONE#1>")]                     # 검색에는 가린 요약(R-31)
+
+
+def test_near_causes_reuse_search_hits_and_empty_means_no_key():
+    hits = [{"id": "DATA-001-02", "kind": "cause", "title": "x"}, {"id": "MOCK-9", "kind": "issue", "title": "y"}]
+    got, calls = _near([], hits=hits)
+    assert [n["id"] for n in got] == ["DATA-001-02"] and calls == []               # 후보 없음 검색 결과를 다시 쓴다(검색 안 함)
+    got, _calls = _near([{"type": "DATA-001", "cause": "DATA-001-01", "matched": "0/1", "missing": []}], summary="")
+    assert got == []                                                                # 남는 것이 없으면 빈 목록(run은 키를 안 쓴다)

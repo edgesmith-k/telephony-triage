@@ -19,7 +19,7 @@ sys.path.insert(0, str(REPO / "plugin" / "scripts"))
 
 from runner import SAMPLE, run, run_json, tmp  # noqa: E402
 from common import evidence  # noqa: E402
-from triagelib import core, modulecmd  # noqa: E402
+from triagelib import core, modulecmd, report  # noqa: E402
 
 KEY = "MOCK-9301"
 HEAD = "## 이상 줄"
@@ -253,6 +253,9 @@ def test_fold_key_keeps_slots_and_levels_apart():
     assert window._fold_key(base) != window._fold_key({**base, "phone_id": 1})
     assert window._fold_key(base) != window._fold_key({**base, "level": "W"})
     assert window._fold_key(base) == window._fold_key({**base, "msg": "setup failed 4"})
+    # 11/25: 0x 없는 8자리 이상 16진수·태그 안 숫자도 접는다(이은 로그의 `DN-138-C`·`DN-140-C`, tombstone 레지스터 값)
+    assert window._fold_key({**base, "tag": "DN-138-C", "msg": "x deadbeef01"}) == window._fold_key(
+        {**base, "tag": "DN-140-C", "msg": "x 00007ffd3c3e"})
 
 
 def test_anomaly_failure_does_not_break_explore(monkeypatch, tmp_path, capsys):
@@ -543,3 +546,104 @@ def test_anomaly_stop_warns_on_stderr(monkeypatch, capsys):
     monkeypatch.setattr(window, "_records", stop)
     assert window.anomaly(Path("."), {}, {}, {}, None, 0, 80, set()) is None
     assert "이상 줄 절을 만들지 못해" in capsys.readouterr().err
+
+
+# --- 5-2 입력 고르기(11/25 A652·A653): 긴 로그에서 요약·이상 줄이 같은 규칙으로 기준 둘레·드문 모양·예외 머리를 남긴다 ----------
+# 사내 반입 5 증상을 지어낸 이름으로 다시 만든다: 잡음 태그 모양 수백 개(각 수천 줄 — 시험 시간 때문에 1천 줄)와 드문 잡음 모양 수백 개
+# 사이에, 기준 +30초·+5분에 본 타임라인 프로세스(pid 1500)가 낸 E 1줄·W 스택(각 모양 x2, 파서 규칙에 없는 태그). 레코드는
+# 시험 안에서 만든다(큰 fixture 파일 없음). 고치기 전 코드는 기준이 없으면 로그 앞 잡음, 있으면 기준에 더 가까운 잡음 E가 칸을 채웠다.
+
+T0 = "2026-11-20T10:00:00.000Z"
+TARGET_E = "requestNetwork failed: slot 0 not ready"
+TARGET_W = "setup aborted, keep retry timer"
+
+
+_LONG: list = []
+
+
+def _long_recs() -> list[dict]:
+    if _LONG:
+        return _LONG[0]          # 고르기는 레코드를 바꾸지 않는다(같은 입력을 여러 번 고른다)
+    from datetime import timedelta
+    from common import logtime
+    t0 = logtime.parse_ts(T0)
+    recs = []
+
+    def add(sec, level, tag, msg, pid):
+        recs.append({"ts": logtime.format_ts(t0 + timedelta(seconds=sec)), "level": level, "tag": tag, "msg": msg, "pid": pid,
+                     "phone_id": None, "line_ref": {"file_index": 0, "line_no": len(recs) + 1}})
+
+    for k in range(300):                  # 흔한 잡음 모양 300개 × 1천 줄(6시간에 고루 — 기준 둘레에도 있다), 태그 40개
+        for i in range(1000):
+            add(-10800 + i * 21.6 + k * 0.05, "EW"[k % 2], f"NoiseSvc{k % 40}", f"poll {_letters(k)} state", 2000 + k % 40)
+    for k in range(400):                  # 드문 잡음 모양 400개(1~2줄, 다른 프로세스) — 사내 로그처럼 E/W 모양 대부분이 드물다
+        for j in range(1 + k % 2):
+            add((k * 557) % 21600 - 10800 + j, "EW"[k % 2], f"RareTag{k % 50}", f"odd {_letters(k + 1000)} seen", 3000 + k)
+    for i in range(4000):                 # 폭주 모양 x4000(기준 +100~140초)
+        add(100 + i * 0.01, "E", "BurstTag", "queue overflow", 4000)
+    add(50, "E", "VendorHal", "firmware assert in modem watchdog", 3500)          # 기준 둘레의 드문 모양(밀려나면 안 된다)
+    for j in range(2):                    # 문제 두 줄(각 모양 x2): 기준 +30초 E, +5분 W 스택 — 본 타임라인 프로세스 1500
+        add(30 + j, "E", "ImsSvcExt", TARGET_E, 1500)
+        add(300 + j, "W", "DcTrackerExt", TARGET_W, 1500)
+        add(300.001 + j, "W", "DcTrackerExt", "java.lang.IllegalStateException: apn context missing", 1500)
+        for f in range(3):
+            add(300.002 + j + f * 0.001, "W", "DcTrackerExt", f"\tat com.example.telephony.DcHelper.step{f}(DcHelper.java:{40 + f})",
+                1500)
+    recs.sort(key=lambda r: r["ts"])
+    _LONG.append(recs)
+    return recs
+
+
+def _long_pick(monkeypatch, ref, guess):
+    """(요약 60칸, 이상 줄 80줄) — 사본 읽기만 바꾸고 `summary.groups`·`window.anomaly`를 그대로 부른다."""
+    from triagelib import summary, window
+    recs = _long_recs()
+    monkeypatch.setattr(window, "served_copies", lambda job, analysis: ([Path("x.log")], []))
+    monkeypatch.setattr(window, "_records", lambda job, ev, served, defaults: (recs, None, {}))
+    ev = {"mask_off": True, "input": {"tz": "UTC", "window": None},
+          "events": [{"pid": 1500, "ts": T0, "tag": "DNC-0", "msg": "x"}, {"pid": 1000, "ts": T0, "tag": "CS", "msg": "y"}]}
+    got = summary.groups(Path("."), ev, {}, {}, ref, 60, guess=guess, after_sec=600)
+    anomaly = window.anomaly(Path("."), ev, {}, {}, ref, 600, 80, set(), guess=guess)
+    return got, anomaly
+
+
+def test_long_log_keeps_symptom_process_lines_with_or_without_reference(monkeypatch):
+    """받아들일 기준(설계 A653): 기준 시각 입력 없음(증상 시각 후보 3개만)·있음 둘 다 두 줄이 요약 60칸 또는 이상 줄 80줄 안,
+    잡음 태그가 80줄을 다 채우지 않고, 폭주(x4000) 모양이 기준 둘레 드문 모양을 밀어내지 않는다. 같은 입력이면 같은 결과."""
+    guess = ["2026-11-20T08:00:00.000Z", T0, "2026-11-20T12:30:00.000Z"]
+    seen = {}
+    for ref, cands in ((None, guess), (T0, ())):
+        got, anomaly = seen[ref] = _long_pick(monkeypatch, ref, cands)
+        groups, rows = got["groups"], anomaly["rows"]
+        assert len(groups) == 60 and sum(1 for r in rows) <= 80
+        for want in (TARGET_E, TARGET_W):
+            assert any(g["msg"] == want for g in groups) or any(r["msg"] == want for r in rows), (ref, want)
+        assert any(r["msg"] == TARGET_E for r in rows) and any(r["msg"] == TARGET_W for r in rows), ref     # 이상 줄 절에도 둘 다
+        assert sum(r["tag"].startswith("NoiseSvc") for r in rows) < 60, ref          # 흔한 잡음 태그가 절을 다 채우지 않는다
+        assert sum(r["msg"] == "queue overflow" for r in rows) == 1 and sum(g["msg"] == "queue overflow" for g in groups) <= 1
+        assert any(r["msg"] == "firmware assert in modem watchdog" for r in rows), ref      # 폭주가 드문 모양을 밀지 않는다
+        assert any(g["msg"] == "firmware assert in modem watchdog" for g in groups), ref
+        assert [r["ts"] for r in rows] == sorted(r["ts"] for r in rows)              # 이상 줄 절은 시각순
+        assert (got.get("guess") == guess and got["ref"] is None) if ref is None else (got["ref"] == T0 and "guess" not in got)
+        assert (anomaly.get("guess") == guess) if ref is None else anomaly["ref"] == T0
+    assert _long_pick(monkeypatch, None, guess) == seen[None]                       # 같은 입력이면 같은 결과
+    assert "- 기준: 2026-11-20T10:00:00.000Z" in report.anomaly_lines(seen[T0][1])
+    assert "기준: 증상 시각 후보 3개(스크립트 추정" in report.summary_lines(seen[None][0])[2]
+    assert any("기준: 증상 시각 후보 3개(스크립트 추정" in x for x in report.anomaly_lines(seen[None][1]))
+
+
+def test_dump_bodies_are_frames_and_hex_folds():
+    """R-12·4-6: ART abort 덤프 몸통(`runtime.cc:761]` 뒤 at·native·스레드 머리·빈 줄)과 tombstone 레지스터 줄은 프레임(세지 않는다),
+    덤프 머리(`Runtime aborting...`)는 남는다. 0x 없는 16진수·태그 안 숫자도 접는다."""
+    from triagelib import window
+    for msg in ("runtime.cc:761]   at android.os.Looper.loop(Looper.java:288)", "runtime.cc:761]   native: #00 pc 0005f4b6  /apex/libc.so",
+                'runtime.cc:761] "binder:612_3" prio=5 tid=33 Native', "runtime.cc:761]   | held mutexes=", "runtime.cc:761] ",
+                "runtime.cc:761]   - waiting on an unknown object", "runtime.cc:761]   (no managed stack frames)",
+                "    rax 00000000000000ab  rbx 00007ffd3c3e9e58  rcx 00007f1d2b2c4e2c  rdx 000000000000000c",
+                "rax 00000000000000ab rbx 00007ffd3c3e9e58", "    x0  00000000000000ab  x1  0000007fd1a2b3c0"):
+        assert window.FRAME_RX.match(msg), msg
+    for msg in ("runtime.cc:761] Runtime aborting...", "signal 6 (SIGABRT), code -1 (SI_QUEUE)", "rax is zero", "cid 1 state 2"):
+        assert not window.FRAME_RX.match(msg), msg
+    base = {"phone_id": None, "level": "E", "tag": "DN-138-C"}
+    assert window._fold_key({**base, "msg": "BuildId: aa1c2bc3d4e5f607"}) == window._fold_key(
+        {**base, "tag": "DN-140-C", "msg": "BuildId: 0b9a8c7d6e5f4a3b"})

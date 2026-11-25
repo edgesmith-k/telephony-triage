@@ -24,10 +24,20 @@
   "shapes": 11,
   "window": [
    "2026-09-03T10:55:20.000Z",
-   "2026-09-03T11:05:20.000Z"
+   "2026-09-03T11:10:20.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
+   {
+    "ts": "2026-09-03T11:00:20.000Z",
+    "last": "2026-09-03T11:00:20.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "RIL",
+    "msg": "[IpcCtx_0] rx frame unsol id=2"
+   },
    {
     "ts": "2026-09-03T11:00:20.001Z",
     "last": "2026-09-03T11:00:20.001Z",
@@ -109,6 +119,15 @@
     "after": true
    },
    {
+    "ts": "2026-09-03T11:00:01.000Z",
+    "last": "2026-09-03T11:00:01.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Internet data state changed from DISCONNECTED to CONNECTED."
+   },
+   {
     "ts": "2026-09-03T11:00:40.000Z",
     "last": "2026-09-03T11:00:40.000Z",
     "n": 1,
@@ -117,24 +136,6 @@
     "tag": "RIL",
     "msg": "route rsp type=0001 id=0x0703 svc=5 msg=4009",
     "after": true
-   },
-   {
-    "ts": "2026-09-03T11:00:20.000Z",
-    "last": "2026-09-03T11:00:20.000Z",
-    "n": 1,
-    "phone": null,
-    "level": "I",
-    "tag": "RIL",
-    "msg": "[IpcCtx_0] rx frame unsol id=2"
-   },
-   {
-    "ts": "2026-09-03T11:00:01.000Z",
-    "last": "2026-09-03T11:00:01.000Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "DNC-0",
-    "msg": "Internet data state changed from DISCONNECTED to CONNECTED."
    }
   ]
  }

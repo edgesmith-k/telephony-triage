@@ -53,9 +53,10 @@
   "shapes": 19,
   "window": [
    "2026-09-22T10:05:20.000Z",
-   "2026-09-22T10:15:20.000Z"
+   "2026-09-22T10:20:20.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
    {
     "ts": "2026-09-22T10:10:19.463Z",
@@ -119,26 +120,6 @@
     "level": "D",
     "tag": "vrild",
     "msg": "mux [ch1][RX] VIPC_EXAMPLE_CARD_OPEN, RSP Error(VIPC_E_NO_SUCH_ELEMENT) seq=0x08d4 len=12, 35 ms"
-   },
-   {
-    "ts": "2026-09-22T10:10:21.418Z",
-    "last": "2026-09-22T10:10:21.418Z",
-    "n": 1,
-    "phone": null,
-    "level": "I",
-    "tag": "simd",
-    "msg": "tid:36 ExampleSim.cpp(44):ExampleChannelOpen > open channel aid <AID#1> (retry)",
-    "after": true
-   },
-   {
-    "ts": "2026-09-22T10:10:22.418Z",
-    "last": "2026-09-22T10:10:22.418Z",
-    "n": 1,
-    "phone": null,
-    "level": "I",
-    "tag": "mgmtd",
-    "msg": "ui tick",
-    "after": true
    },
    {
     "ts": "2026-09-22T10:10:19.459Z",
@@ -229,6 +210,26 @@
     "level": "I",
     "tag": "mgmtd",
     "msg": "GetEID requested from settings path/example_sim.go:36"
+   },
+   {
+    "ts": "2026-09-22T10:10:21.418Z",
+    "last": "2026-09-22T10:10:21.418Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "simd",
+    "msg": "tid:36 ExampleSim.cpp(44):ExampleChannelOpen > open channel aid <AID#1> (retry)",
+    "after": true
+   },
+   {
+    "ts": "2026-09-22T10:10:22.418Z",
+    "last": "2026-09-22T10:10:22.418Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "ui tick",
+    "after": true
    }
   ]
  }

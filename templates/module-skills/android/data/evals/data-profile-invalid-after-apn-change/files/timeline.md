@@ -8,12 +8,10 @@
 
 ## 전체 로그 모양 요약 (마스킹 사본 전체, 분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이 스크립트가 셈)
 
-- 범위: 2026-11-10T21:59:20.519Z ~ 2026-11-10T21:59:23.535Z, 줄 22, 모양 22개 중 22개. 기준 시각: 2026-11-10T21:59:21.000Z
-- 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
+- 범위: 2026-11-10T21:59:20.519Z ~ 2026-11-10T21:59:23.535Z, 줄 22, 모양 22개 중 22개. 기준: 2026-11-10T21:59:21.000Z
+- 모양은 슬롯·레벨과 숫자를 #로 바꾼 태그·메시지다. 줄 수는 로그 전체에서 셌다. 기준 앞뒤 600초 안, 로그 전체에 5번 이하 나온 드문 모양, 예외·crash 머리의 세 몫으로 나눠 골랐다(남은 몫은 다음 몫으로). 몫 안은 본 타임라인 프로세스(pid)의 모양, 드문 모양, F·예외·E·W 등급, 기준에 가까운 순이다. 순서는 고른 순서이고 줄은 그 모양의 첫 줄이다
 
 21:59:20.531 p0 D DNC-0 onDataNetworkDisconnected: [DataNetwork: DN-106-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=DATA_PROFILE_INVALID  〔script 모양 1줄〕
-21:59:23.535 p0 D DPM-0 Can't find any data profile that can satisfy [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_VCN_MANAGED&NOT_BANDWI…  〔script 모양 1줄, 기준 뒤 첫 등장〕
-21:59:23.535 p0 D DNC-0 Data evaluation: evaluation reason:RETRY_AFTER_DISCONNECTED, Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, candidate profile=null, time=21:59:23.535, netw…  〔script 모양 1줄, 기준 뒤 첫 등장〕
 21:59:20.531 p0 D DNC-0 Internet link status changed to INACTIVE  〔script 모양 1줄〕
 21:59:20.531 p0 D DNC-0 Internet data state changed from CONNECTED to DISCONNECTED.  〔script 모양 1줄〕
 21:59:20.531 p0 D DNC-0 IMS data state changed from CONNECTED to DISCONNECTED.  〔script 모양 1줄〕
@@ -33,6 +31,8 @@
 21:59:20.524 p0 D DPM-0 updateDataProfilesAtModem: set 3 data profiles.  〔script 모양 1줄〕
 21:59:20.522 p0 D DPM-0 Data profiles changed.  〔script 모양 1줄〕
 21:59:20.519 p0 D DPM-0 Update data profiles due to APN db updated.  〔script 모양 1줄〕
+21:59:23.535 p0 D DPM-0 Can't find any data profile that can satisfy [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_VCN_MANAGED&NOT_BANDWI…  〔script 모양 1줄, 기준 뒤 첫 등장〕
+21:59:23.535 p0 D DNC-0 Data evaluation: evaluation reason:RETRY_AFTER_DISCONNECTED, Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, candidate profile=null, time=21:59:23.535, netw…  〔script 모양 1줄, 기준 뒤 첫 등장〕
 
 ## 본 타임라인
 

@@ -22,9 +22,10 @@
   "shapes": 16,
   "window": [
    "2026-11-12T01:02:19.000Z",
-   "2026-11-12T01:12:19.000Z"
+   "2026-11-12T01:17:19.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
    {
     "ts": "2026-11-12T01:07:19.728Z",
@@ -116,16 +117,6 @@
     "after": true
    },
    {
-    "ts": "2026-11-12T01:07:19.735Z",
-    "last": "2026-11-12T01:07:19.735Z",
-    "n": 1,
-    "phone": null,
-    "level": "V",
-    "tag": "Telecom",
-    "msg": "Call: setState CONNECTING -> DISCONNECTED: ((SBC.oSC)->CS.crCo->H.CS.crCo->H.CS.crCo.pICR)->CSW.hCCC(cap/cast)@E-E-AgM_0_0_0_0🔒",
-    "after": true
-   },
-   {
     "ts": "2026-11-12T01:06:54.045Z",
     "last": "2026-11-12T01:06:54.045Z",
     "n": 1,
@@ -178,6 +169,16 @@
     "level": "D",
     "tag": "RILJ",
     "msg": "[UNSL]< UNSOL_RESPONSE_NETWORK_STATE_CHANGED [PHONE0]"
+   },
+   {
+    "ts": "2026-11-12T01:07:19.735Z",
+    "last": "2026-11-12T01:07:19.735Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "Telecom",
+    "msg": "Call: setState CONNECTING -> DISCONNECTED: ((SBC.oSC)->CS.crCo->H.CS.crCo->H.CS.crCo.pICR)->CSW.hCCC(cap/cast)@E-E-AgM_0_0_0_0🔒",
+    "after": true
    }
   ]
  }

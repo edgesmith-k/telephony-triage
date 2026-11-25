@@ -49,9 +49,10 @@
   "shapes": 9,
   "window": [
    "2026-09-04T11:57:01.000Z",
-   "2026-09-04T12:07:01.000Z"
+   "2026-09-04T12:12:01.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
    {
     "ts": "2026-09-04T12:02:01.400Z",
@@ -74,16 +75,6 @@
     "after": true
    },
    {
-    "ts": "2026-09-04T12:02:10.000Z",
-    "last": "2026-09-04T12:02:10.000Z",
-    "n": 1,
-    "phone": null,
-    "level": "V",
-    "tag": "RIL",
-    "msg": "route rsp type=0001 id=0x0703 svc=5 msg=4009",
-    "after": true
-   },
-   {
     "ts": "2026-09-04T12:02:00.100Z",
     "last": "2026-09-04T12:02:00.100Z",
     "n": 1,
@@ -100,6 +91,16 @@
     "level": "I",
     "tag": "GsmCdmaPhone",
     "msg": "[0] useImsForCall=true, useOnlyDialedSimEccList=false, isEmergency=false, useImsForEmergency=false, useImsForUt=false, isUt=false, isSuppServiceCode=false, isP…"
+   },
+   {
+    "ts": "2026-09-04T12:02:10.000Z",
+    "last": "2026-09-04T12:02:10.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "V",
+    "tag": "RIL",
+    "msg": "route rsp type=0001 id=0x0703 svc=5 msg=4009",
+    "after": true
    },
    {
     "ts": "2026-09-04T12:00:11.100Z",

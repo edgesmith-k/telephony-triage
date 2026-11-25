@@ -13,10 +13,20 @@
   "shapes": 16,
   "window": [
    "2026-09-22T09:15:02.000Z",
-   "2026-09-22T09:25:02.000Z"
+   "2026-09-22T09:30:02.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
+   {
+    "ts": "2026-09-22T09:20:02.000Z",
+    "last": "2026-09-22T09:20:02.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1 path/example_dbus.go:12"
+   },
    {
     "ts": "2026-09-22T09:20:02.002Z",
     "last": "2026-09-22T09:20:02.002Z",
@@ -146,15 +156,6 @@
     "tag": "ofonod",
     "msg": "[0,UNSOL]< RIL_UNSOL_DATA_CALL_LIST_CHANGED [cid=1 active=2]",
     "after": true
-   },
-   {
-    "ts": "2026-09-22T09:20:02.000Z",
-    "last": "2026-09-22T09:20:02.000Z",
-    "n": 1,
-    "phone": 0,
-    "level": "I",
-    "tag": "mgmtd",
-    "msg": "dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1 path/example_dbus.go:12"
    },
    {
     "ts": "2026-09-22T09:20:00.200Z",

@@ -85,21 +85,18 @@
  ],
  "near_causes": [
   {
-   "id": "DATA-001",
-   "title": "SETUP_DATA_CALL이 발생하지 않음",
-   "matched": "0/1",
-   "missing": [
-    "must_event data_evaluation_rejected"
-   ]
-  },
-  {
    "id": "DATA-002",
    "title": "데이터 연결이 사용자 조작으로 끊김",
    "note": "낱말 일치만(로그 대조 안 함)"
   },
   {
-   "id": "DATA-001-01",
-   "title": "Data disabled",
+   "id": "IMS-001-01",
+   "title": "등록 거절 (403)",
+   "note": "낱말 일치만(로그 대조 안 함)"
+  },
+  {
+   "id": "NETWORK-001-01",
+   "title": "망 등록 거절",
    "note": "낱말 일치만(로그 대조 안 함)"
   }
  ],

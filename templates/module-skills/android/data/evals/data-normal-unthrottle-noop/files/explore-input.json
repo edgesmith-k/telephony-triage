@@ -22,10 +22,20 @@
   "shapes": 2,
   "window": [
    "2026-11-20T11:55:00.000Z",
-   "2026-11-20T12:05:00.000Z"
+   "2026-11-20T12:10:00.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
+   {
+    "ts": "2026-11-20T11:59:59.900Z",
+    "last": "2026-11-20T11:59:59.900Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Internet data state changed from DISCONNECTED to CONNECTED."
+   },
    {
     "ts": "2026-11-20T12:00:00.200Z",
     "last": "2026-11-20T12:00:30.200Z",
@@ -35,15 +45,6 @@
     "tag": "DRM-0",
     "msg": "onDataProfileUnthrottled: Nothing to unthrottle.",
     "after": true
-   },
-   {
-    "ts": "2026-11-20T11:59:59.900Z",
-    "last": "2026-11-20T11:59:59.900Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "DNC-0",
-    "msg": "Internet data state changed from DISCONNECTED to CONNECTED."
    }
   ]
  }

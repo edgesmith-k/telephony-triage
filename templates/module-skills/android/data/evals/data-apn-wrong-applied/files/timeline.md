@@ -8,16 +8,16 @@
 
 ## 전체 로그 모양 요약 (마스킹 사본 전체, 분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이 스크립트가 셈)
 
-- 범위: 2026-09-02T10:00:02.000Z ~ 2026-09-02T10:00:05.400Z, 줄 20, 모양 20개 중 20개. 기준 시각: 2026-09-02T10:00:05.000Z
-- 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
+- 범위: 2026-09-02T10:00:02.000Z ~ 2026-09-02T10:00:05.400Z, 줄 20, 모양 20개 중 20개. 기준: 2026-09-02T10:00:05.000Z
+- 모양은 슬롯·레벨과 숫자를 #로 바꾼 태그·메시지다. 줄 수는 로그 전체에서 셌다. 기준 앞뒤 600초 안, 로그 전체에 5번 이하 나온 드문 모양, 예외·crash 머리의 세 몫으로 나눠 골랐다(남은 몫은 다음 몫으로). 몫 안은 본 타임라인 프로세스(pid)의 모양, 드문 모양, F·예외·E·W 등급, 기준에 가까운 순이다. 순서는 고른 순서이고 줄은 그 모양의 첫 줄이다
 
+10:00:05.000 p0 D RILJ [0412]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6] [PHONE0]  〔script 모양 1줄〕
 10:00:05.004 - D VRIL-SVC RadioDataProxy::setupDataCall: serial 412  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:05.006 - I RIL [ExamplePdnService_0] setup data call begin  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:05.300 - I RIL [ExamplePdnService_0] setup data call end errorCode=0 PdnCtx cid=2 state=connected link=up  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:05.310 p0 D RILJ [0412]< SETUP_DATA_CALL DataCallResponse: { cause=NONE(0x0) retry=0 cid=2 linkStatus=2 protocolType=2 ifname=rmnet1 addresses=[<IP#1>/64] } [PHONE0]  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:05.320 p0 D DSM-C-0 onSetupDataCallComplete. resultCode = 0  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:05.400 p0 D DNC-0 Internet data state changed from DISCONNECTED to CONNECTED.  〔script 모양 1줄, 기준 뒤 첫 등장〕
-10:00:05.000 p0 D RILJ [0412]> SETUP_DATA_CALL,reason=NORMAL,accessNetworkType=EUTRAN,dataProfile=[DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6] [PHONE0]  〔script 모양 1줄〕
 10:00:03.262 p0 D DSM-C-0 onSetDataProfileComplete. resultCode = 0  〔script 모양 1줄〕
 10:00:03.260 p0 D RILJ [0411]< SET_DATA_PROFILE [PHONE0]  〔script 모양 1줄〕
 10:00:03.201 p0 D RILJ [DataProfile=[ApnSetting] DEFAULT <APN#1>, IPV4V6, preferred=true] [PHONE0]  〔script 모양 1줄〕

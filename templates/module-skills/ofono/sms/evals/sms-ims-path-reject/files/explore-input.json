@@ -40,9 +40,10 @@
   "shapes": 18,
   "window": [
    "2026-09-21T10:25:05.000Z",
-   "2026-09-21T10:35:05.000Z"
+   "2026-09-21T10:40:05.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
    {
     "ts": "2026-09-21T10:30:05.011Z",
@@ -93,6 +94,15 @@
     "tag": "ofonod",
     "msg": "src/dbus.c:__ofono_error_failed() dbus_trace err return - i:org.ofono.MessageManager m:SendMessage p:/ril_0",
     "after": true
+   },
+   {
+    "ts": "2026-09-21T10:30:05.000Z",
+    "last": "2026-09-21T10:30:05.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "sms send requested to=<MSISDN#1> len=20 path/example_sms.go:24"
    },
    {
     "ts": "2026-09-21T10:30:05.002Z",
@@ -165,25 +175,6 @@
     "after": true
    },
    {
-    "ts": "2026-09-21T10:30:10.000Z",
-    "last": "2026-09-21T10:30:10.000Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "imsd",
-    "msg": "[SLOT_0][I] 4105 [ExampleImsRegistration] registered:1 VoPS=1",
-    "after": true
-   },
-   {
-    "ts": "2026-09-21T10:30:05.000Z",
-    "last": "2026-09-21T10:30:05.000Z",
-    "n": 1,
-    "phone": null,
-    "level": "I",
-    "tag": "mgmtd",
-    "msg": "sms send requested to=<MSISDN#1> len=20 path/example_sms.go:24"
-   },
-   {
     "ts": "2026-09-21T10:30:00.010Z",
     "last": "2026-09-21T10:30:08.010Z",
     "n": 4,
@@ -218,6 +209,16 @@
     "level": "I",
     "tag": "ofonod",
     "msg": "src/ims.c:ims_set_sms_capable() IMS_UNSOL_CAPABILITIES voiceOverLteCapable=1 smsOverLteCapable=1"
+   },
+   {
+    "ts": "2026-09-21T10:30:10.000Z",
+    "last": "2026-09-21T10:30:10.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 4105 [ExampleImsRegistration] registered:1 VoPS=1",
+    "after": true
    }
   ]
  }
