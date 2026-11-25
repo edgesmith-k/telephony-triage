@@ -119,6 +119,9 @@ TOP_NUM_RX = re.compile(r"^[`*\s]*(?:가설\s*)?#?(\d+)(?!\d)")      # `가장 �
 # 규칙 제안 하위 줄(SKILL Step 7 `규칙 제안` 질문이 report.md에서 읽는다). 근거 원문 확인이 안 된 제안은 싣지 않는다
 RULE_SUB = "  - 규칙 제안 ({kind}): {text}"
 RULE_DROPPED = "  - {kind} 출력의 제안 {n}개를 뺐다 — {why}"
+# B1(반입 8): 원문 확인 인용 줄의 태그 중 tags.yaml에 없는 것 — 사람이 tags.yaml 추가를 판단한다(자동으로 더하지 않는다)
+UNKNOWN_TAGS_SUB = "  - 파서 설정에 없는 태그가 근거 인용에 쓰임({kind}): {tags} — tags.yaml 추가 검토(사람이 판단, 자동으로 더하지 않음)"
+UNKNOWN_TAGS_MAX = 10
 # 뺀 이유(R-09 결정 2, 기록 `rules_dropped_why` 키 → 줄 문구). 원인 미확정 = 판단 채택도 조사 결론 identified도 아니라 첫 점검·함정을 안 받음
 RULE_WHY = {"근거 불일치": "근거 불일치(원문에서 확인 안 됨)", "형식": "형식", "원인 미확정": "원인 미확정(첫 점검·함정)"}
 RULE_KIND = {"deep": "심층", "explore": "탐색"}
@@ -842,6 +845,28 @@ def _first_obs(h: dict, first: dict, verdict: str | None, texts: list[str], even
         got = f"{round((end - first_t).total_seconds(), 1):g}초 분량뿐이라" if first_t and end else "시각을 읽지 못해"
         return f"로그가 {got} '없음'을 확인할 수 없음(미관측, 필요 {need:g}초)", ""
     return "", f"`찾았는데 없음` {where}에 0건" + (f"({span_note})" if span_note else "")
+
+
+def _unknown_tags(events: dict | None, quotes: list[str], res: dict | None) -> dict:
+    """B1: 원문 확인(ok) 인용 줄의 태그(`_quote_tag`) 가운데 이슈 DB 스냅샷 tags.yaml(`events.json rules.path`)에 없는 것(파서가 버리는
+    태그인데 근거로 쓰였다) → check-output 기록 칸 `parser_unknown_tags`(인용 순서, 40자·`UNKNOWN_TAGS_MAX`개까지). 규칙을 못 읽으면
+    `parser_unknown_tags_skipped`(없음으로 적지 않는다). 인용 검사를 안 했거나 태그 있는 ok 인용이 없으면 {}."""
+    if not res:
+        return {}
+    _raw_ready()
+    tags = list(dict.fromkeys(t for q, v in zip(quotes, res["verdicts"]) if v == "ok" and (t := _quote_tag(q))))
+    path = str(((events or {}).get("rules") or {}).get("path") or "")
+    if not tags:
+        return {}
+    from common import parser_rules
+    try:
+        rules = parser_rules.load(path) if path else None
+    except Exception:       # noqa: BLE001 — 규칙을 못 읽으면 건너뜀으로 남긴다
+        rules = None
+    if rules is None:
+        return {"parser_unknown_tags_skipped": "tags.yaml을 읽지 못함"}
+    out = [t[:40] for t in tags if rules.tag_category(t) is None][:UNKNOWN_TAGS_MAX]
+    return {"parser_unknown_tags": out} if out else {}
 
 
 def _vendor_ipc(defaults: dict | None, platform: str | None, rules):
@@ -1568,6 +1593,9 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     rule_lines, rules_kept, rules_why, module_lines = _rule_subs(
         purpose, fields.get("rules" if purpose == "explore" else "규칙 제안"), source, tags, res, text, confirmed)
     rules_dropped = sum(rules_why.values())
+    unknown = _unknown_tags(events, quotes, res)
+    unknown_lines = ([UNKNOWN_TAGS_SUB.format(kind=RULE_KIND[purpose], tags=", ".join(unknown["parser_unknown_tags"]))]
+                     if unknown.get("parser_unknown_tags") else [])
     reason = _hold_reason(analysis, fields) if hold else None
     fmt = (_chain_warnings(fields, bool(investigating)) + _check_warnings(analysis, fields) + inv_warns
            + ([WARN_INV_TOP.format(top=_one(fields.get("top"))[:40])] if investigating and fields["hyps"] and _top_index(fields) is None
@@ -1575,7 +1603,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     fmt_text = "; ".join(fmt)
     fmt_lines = [FORMAT_SUB.format(text=fmt_text if len(fmt_text) <= FORMAT_CLIP else fmt_text[:FORMAT_CLIP - 1] + "…")] if fmt else []
     lines = (_render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp, normal_bad, check_bad)
-             + subs + rule_lines + fmt_lines)
+             + subs + rule_lines + unknown_lines + fmt_lines)
     if _rewrite(report, prefix, lines, KEEP_SUB, pending=not args.recheck) and purpose == "explore":
         _question_tail(report, QUESTION_DONE if fields["hyps"] else QUESTION_DONE_NONE)
     unwritten = (_hold_lines(report, hold, (analysis.get("decision") or {}).get("state") == "held", reason == "normal")
@@ -1610,7 +1638,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
                            **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra, **inv_extra,
                            **({"investigation": inv} if inv else {}),
                            **({"normal": [i + 1 for i, v in enumerate(normal_ok) if v]} if any(normal_ok) else {}),
-                           **({"rules": rules_kept} if rules_kept else {}), **({"rules_dropped": rules_dropped, "rules_dropped_why": rules_why} if rules_dropped else {}),
+                           **unknown, **({"rules": rules_kept} if rules_kept else {}), **({"rules_dropped": rules_dropped, "rules_dropped_why": rules_why} if rules_dropped else {}),
                            **({modulelines.KEPT_KEY: module_lines} if module_lines is not None else {}),
                            **({"format_warnings": fmt} if fmt else {}), **({"format_recheck": True} if args.recheck else {})})
     head = masking.mask_brief(lines[0], 300, off=off)     # 끔 DB: report.md 줄과 같은 글자(꼭 보일 줄 대조가 어긋나지 않게)

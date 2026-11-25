@@ -167,7 +167,9 @@ def test_deep_module_renders_lines_and_record(tmp_path, capsys):
     assert data == {"line": masking.mask_brief(text[i], 300), "evidence": "- 근거 원문 검사: 인용 2개 중 원문에 없음 0",
                     "quotes": 2, "fabricated": 0, "weak": 0, "raw": 0}
     rec = _rec(job)
-    assert set(rec) == {"mode", "at", "env", "output_sha256", "source", "quotes", "fabricated", "weak", "raw"}
+    # 반입 8 B1: 이 JOB의 events.json에는 규칙 경로가 없어 인용 줄 태그 대조를 건너뛰었다고 남는다(없음으로 적지 않는다)
+    assert set(rec) == {"mode", "at", "env", "output_sha256", "source", "quotes", "fabricated", "weak", "raw",
+                        "parser_unknown_tags_skipped"}
     assert rec["mode"] == "module" and rec["source"] == "module-skill/deep/timeline.md" and rec["quotes"] == 2
     assert set(rec["env"]) == {"runtime", "model", "model_defaults", "gateway", "label"}
     assert rec["output_sha256"] == _sha(job / "deep-output.md")

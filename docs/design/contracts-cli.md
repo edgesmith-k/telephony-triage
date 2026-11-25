@@ -217,7 +217,7 @@ stdin: PostToolUse hook 입력 JSON (argparse 없음)
 
 | 서브커맨드 | 사용법 | 옵션 설명 |
 |---|---|---|
-| — | `[--work-dir <WORK_DIR> \| --platform <이름>] [--json] [--transcripts [<dir>]] [--plugin-root <PLUGIN_ROOT>]` | `--work-dir`: 기본: 선택 플랫폼의 사용자 config work_dir; `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: 집계 대상과 수치를 JSON 한 줄로(개수·시간만, 내용 없음); `--transcripts`: Claude Code transcript의 단계별 토큰·대화 질문·재시도 신호도 센다(opt-in, 숫자만). 기본 $CLAUDE_CONFIG_DIR/projects 또는 ~/.claude/projects |
+| — | `[--work-dir <WORK_DIR> \| --platform <이름>] [--json] [--transcripts [<dir>]] [--tags] [--plugin-root <PLUGIN_ROOT>]` | `--work-dir`: 기본: 선택 플랫폼의 사용자 config work_dir; `--platform`: 플랫폼(이슈 DB·파서·설정 묶음). 없으면 TT_PLATFORM > 사용자 config platform > site-defaults platform.name; `--json`: 집계 대상과 수치를 JSON 한 줄로(개수·시간만, 내용 없음); `--transcripts`: Claude Code transcript의 단계별 토큰·대화 질문·재시도 신호도 센다(opt-in, 숫자만). 기본 $CLAUDE_CONFIG_DIR/projects 또는 ~/.claude/projects; `--tags`: 지표 대신: 근거 인용(원문 확인)에 쓰였는데 tags.yaml에 없는 태그를 이슈별로 모은 표(작업 키 포함, 로그 원문 없음) |
 
 ## `triage.py run` → analysis.json 키
 

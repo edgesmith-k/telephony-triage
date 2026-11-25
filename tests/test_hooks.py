@@ -3682,3 +3682,11 @@ def test_guard_inline_interpreter_code_and_symlink_into_clone_ask():
                 f"ln -s {link} {link}2", "perl -e 'print 1'", f"python3 -c \"import json; json.load(open('{clone}'))\" --flag"):
         out = bash(ws, cmd, clone)
         assert decision(out) in (None, "ask") if "import json" in cmd else decision(out) is None, (cmd, out)
+
+
+def test_guard_usage_stats_tags_is_read_only_and_not_blocked():
+    """반입 8 B3: 읽기 전용 집계 `usage_stats.py --tags`(·`--json`)는 guard가 막거나 묻지 않는다."""
+    ws = shared()
+    S = f'python3 "{ws.root}/scripts/usage_stats.py"'
+    for cmd in (f"{S} --tags", f"{S} --tags --json", f"{S} --tags --work-dir {ws.work}"):
+        assert decision(bash(ws, cmd, ws.base)) is None, cmd

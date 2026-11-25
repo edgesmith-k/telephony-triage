@@ -999,3 +999,39 @@ def test_a3_yes_answer_forms_with_copula(tmp_path, capsys):
     _d, inv = _run(_job(tmp_path), _out(rows=NUM_ROWS, extra=("메커니즘 재계산: 01.2-00.1 = 1.1초 → 고치면 결과가 뒤집히나: 예입니다",)),
                    capsys)
     assert _failed(inv) == [], inv["gate"]
+
+
+def test_b1_cited_tags_missing_from_tags_yaml_are_recorded_and_reported(tmp_path, capsys):
+    """반입 8 B1: 원문 확인(ok) 인용 줄의 태그 중 tags.yaml에 없는 것(datad·ofonod — vrild는 있음)을 check-output 기록
+    `parser_unknown_tags`에 인용 순서로 남기고 리포트에 한 줄. 지어낸 인용의 태그는 넣지 않는다. 판정·점수는 그대로."""
+    from tests.test_check_output import FAKE
+    job = _job(tmp_path)
+    _data, inv = _run(job, _out(quotes=(Q1, Q_AFTER, "15:10:09.000 p0 E fakedaemon " + FAKE)), capsys)
+    rec = _rec(job)
+    assert rec["parser_unknown_tags"] == ["datad", "ofonod"], rec
+    line = "  - 파서 설정에 없는 태그가 근거 인용에 쓰임(탐색): datad, ofonod — tags.yaml 추가 검토(사람이 판단, 자동으로 더하지 않음)"
+    assert line in (job / "report.md").read_text(encoding="utf-8").split("\n")
+    job = _job(tmp_path / "known")
+    tags = (job.parent / "db" / "parser-rules" / "tags.yaml")
+    tags.write_text(tags.read_text(encoding="utf-8") + "  - {tag: datad, category: data, added_for: '-', added_on: 2026-11-26, "
+                    "reason: 시험}\n  - {tag: ofonod, category: data, added_for: '-', added_on: 2026-11-26, reason: 시험}\n",
+                    encoding="utf-8")
+    _run(job, _out(), capsys)
+    assert "parser_unknown_tags" not in _rec(job) and "파서 설정에 없는 태그" not in (job / "report.md").read_text(encoding="utf-8")
+
+
+def test_b1_deep_output_tags_are_marked_as_deep(tmp_path, capsys):
+    """반입 8 B1: 5-1(심층) 인용도 같은 기록·줄 — 줄에 `(심층)`. 규칙을 못 읽으면 건너뜀으로 남기고 줄은 쓰지 않는다."""
+    from tests.test_check_output import Q2, _deep_out, check, make_job
+    job = make_job(tmp_path, "deep", "module")
+    ev = json.loads((job / "events.json").read_text(encoding="utf-8"))
+    ev["rules"] = {"path": str(_rules(tmp_path, cp_mark=False))}
+    (job / "events.json").write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
+    msj = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))
+    msj["deep"]["inputs"]["events.json"] = _sha(job / "events.json")      # 규칙 경로를 넣은 events.json으로 기록을 맞춘다
+    (job / "module-skill.json").write_text(json.dumps(msj, ensure_ascii=False), encoding="utf-8")
+    (job / "deep-output.md").write_text(_deep_out([Q1, Q2]), encoding="utf-8")
+    assert check(job, "deep", capsys=capsys)[0] == 0
+    rec = json.loads((job / "check-output.json").read_text(encoding="utf-8"))["deep"]
+    assert rec.get("parser_unknown_tags") == ["vrild"], rec
+    assert "  - 파서 설정에 없는 태그가 근거 인용에 쓰임(심층): vrild — " in (job / "report.md").read_text(encoding="utf-8")
