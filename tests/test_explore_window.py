@@ -62,6 +62,11 @@ def test_window_serves_dropped_tag_lines_in_timeline_form():
     assert len(rows) == 6 and HIDDEN_ROW in rows                                      # 시각(UTC)·슬롯·레벨·태그·메시지
     assert "05:33:05.000 - D RIL [TX] VIPC_SETUP_DATA, REQ, token=0x0de, len=24" in rows   # 타임라인과 같은 시각 변환
     assert rows == sorted(rows)
+    # N-4: 머리의 처음·끝은 첫 줄·마지막 줄의 날짜 포함 시각(게이트 4는 끝을 읽는다)
+    from triagelib import window
+    m = window.LINE_TS_RE.search(text)
+    assert m and (m.group(1), m.group(2)) == ("2026-09-20T" + rows[0][:12] + "Z", "2026-09-20T" + rows[-1][:12] + "Z"), text
+    assert m.group(1) != m.group(2)
     rec = json.loads((job / core.WINDOW_RECORD).read_text(encoding="utf-8"))["windows"]
     assert rec == [{"path": "window-1.md", "sha256": hashlib.sha256((job / "window-1.md").read_bytes()).hexdigest(),
                     "at": "2026-09-20T05:33:05.000Z", "lines": 6, "tags": []}]
