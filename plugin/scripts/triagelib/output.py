@@ -22,9 +22,12 @@ Claude가 쓴 `JOB/deep-output.md`·`JOB/explore-output.md`를 받아:
 7. 조사 모드(analysis.json `investigate.mode`, run이 판정)면 탐색 가장 유력 가설(없으면 1)에 검증 게이트 6개(`_investigation`)를 보고
    결과를 analysis.json·기록 `investigation`에, 조사 결론 줄을 report.md CAUSE 칸에 쓴다(통과 = 인용·형식 확인이면 맨 위, 근거 부족이면
    결론 줄 아래). 게이트는 인용이 원문에 있는지와 단계표 형식만 본다 — 원인이 맞는지는 사람이 본다(11/25 결정 1). 게이트 2는 가장
-   이른 false 단계의 관측이 원문 확인 인용이거나, 로그·파서 규칙에 있는 낱말을 앞 단계 뒤 `explore.after_sec` 안에서 사본으로 0건 센
-   `찾았는데 없음`이어야 한다. 가장 유력이 정상(근거 줄 원문
-   확인)이면 `normal: true`. 점수·분류·decision은 바꾸지 않는다. Jira 본문(`issue_post`)은 이 기록(analysis.json 아님)을 읽는다.
+   이른 false 단계의 관측이 원문 확인 인용이거나, 로그·파서 규칙에 있는 낱말을 앞 단계 뒤 max(`explore.after_sec`, 기대 시간) 안에서
+   사본으로만 0건 센 `찾았는데 없음`이어야 하고, 사본이 아래 끝 + 기대 시간(없으면 10초)까지 없으면(아래 끝이 없으면 사본 길이가 기대
+   시간보다 짧으면) 미관측으로 실패한다. 행 모양 인용의 시각은 사본 줄 시각과 맞지 않으면 쓰지 않는다(`_row_ts`). 원문 모양
+   인용은 날짜·시간대까지 사본 줄과 같아야 원문 확인이다(`evidence.stamp_matches`). 게이트 5는 숫자 기대면 계산 숫자와 명시적 `예`,
+   명시적 `아니오`는 늘 실패(외부 리뷰 1125). 가장 유력이 정상(근거 줄 원문 확인)이면 `normal: true`. 점수·분류·decision은 바꾸지
+   않는다. Jira 본문(`issue_post`)은 이 기록(analysis.json 아님)을 읽는다.
 8. 인용 줄이 한 칸 한도(768바이트)를 넘으면 실패가 아니라 앞부분 + ` …`로 줄여 대조·표시한다(`_clip_quote`).
 
 `--skipped "<사유>"`: 실행하지 않았거나 실패 — 줄을 "생략: <사유>"로(이미 스크립트가 쓴 생략·해당 없음·받기 실패 줄이면 그대로).
@@ -134,8 +137,8 @@ LAYER_ABBR_RX = re.compile(r"^(AP-CP|CP-망|AP|CP)\s*(?:\([^()]*\))?$")
 # `첫 갈라짐` 번호: 맨 앞 `단계 N`·`N단계`·선두 숫자만(`없음…`이나 문장 속 숫자는 None — 시각 `13:05`를 단계로 읽지 않게)
 CLAIM_STEP_RX = re.compile(r"^[\s`*]*(?:단계\s*#?\s*(\d+)|#?(\d+)\s*단계|#?(\d+)(?!\d|:))")
 # `→ 고치면 결과가 뒤집히나: 예|아니오` 답(뒤 설명 허용). 틀 그대로 `예|아니오`면 group(2)가 있다(값 없음)
-FLIP_RX = re.compile(r"뒤집히나\s*[?？]?\s*[:：]?\s*[`*]*\s*(아니오|아니요|예)(\s*[|/]\s*(?:아니오|아니요|예))?")
-FLIP_TAIL_RX = re.compile(r"(아니오|아니요|예)[\s`*.)\]]*$")      # `뒤집히나`가 없는 옛 꼴: 끝의 답
+FLIP_RX = re.compile(r"뒤집히나\s*[?？]?\s*[:：]?\s*[`*]*\s*(아니오|아니요|예(?![가-힣]))(\s*[|/]\s*(?:아니오|아니요|예))?")
+FLIP_TAIL_RX = re.compile(r"(아니오|아니요|(?<![가-힣])예)[\s`*.)\]]*$")      # `뒤집히나`가 없는 옛 꼴: 끝의 답
 # 분석 스킬 의견 `<원인 ID> — <근거>`의 앞 ID. 백틱·굵게로 감싸거나 조사(`ID와`)가 붙어도 잡고, 숫자가 더 붙은 것은 아니다
 OPINION_ID = re.compile(rf"\s*[`*]*({CAUSE_ID})(?!\d)")
 
@@ -532,8 +535,11 @@ def _recheck_open(job: Path) -> bool:
 # --- 조사 결론 게이트(11/25 A635, 07-workflow §Step 5-2 조사 모드) ------------------------------------------------
 # analysis.json `investigate.mode`(run이 판정)일 때만 가장 유력(없으면 가설 1)을 본다. 판정은 아래 칸·원문 대조 결과만 쓴다(LLM 판단 아님)
 
-# 숫자+시간·횟수 단위(영어는 낱말 경계). `번`은 뺀다(`2번 단계`·`1번 슬롯`처럼 순번에 흔하다)
-NUM_UNIT_RX = re.compile(r"\d+(?:\.\d+)?\s*(?:(?:msec|ms|seconds?|secs?|s|minutes?|mins?|times?)(?![A-Za-z])|초|분|회)")
+# 시간 단위(영어는 뒤에 영문자·숫자가 이어지면 단위가 아니다 — `10 s1`·`2h1`. `m` 한 글자는 미터와 섞여 넣지 않는다)
+TIME_EN = r"milliseconds?|msec|ms|hours?|hrs?|h|seconds?|secs?|s|minutes?|mins?"
+TIME_KO = r"밀리초|시간|초|분"
+# 숫자+시간·횟수 단위. `번`은 뺀다(`2번 단계`·`1번 슬롯`처럼 순번에 흔하다)
+NUM_UNIT_RX = re.compile(rf"\d+(?:\.\d+)?\s*(?:(?:{TIME_EN}|times?)(?![A-Za-z0-9])|{TIME_KO}|회)")
 QUOTE_TS_RX = re.compile(r"\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?|(?:\d{4}-)?\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3,9}"
                          r"|\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?")
 MONTHS = "JanFebMarAprMayJunJulAugSepOctNovDec"     # syslog `Mon` → 월(`index // 3 + 1`)
@@ -577,6 +583,39 @@ def _quote_ts(q: str, events: dict | None):
     return window.parse_at(m.group(0), events or {})[0] if m else None
 
 
+ROW_TS_MATCH_MAX = 1000   # C-4: 행 모양 인용과 메시지가 같은 사본 줄을 이만큼 보고도 같은 초를 못 찾으면 판단하지 않는다(시각 그대로)
+
+
+def _row_ts(q: str, events: dict | None, copies: list[str]):
+    """C-4(확인 리뷰 1125): 게이트가 쓰는 인용 시각. 행 모양 인용(`HH:MM:SS … 슬롯 레벨 태그 메시지`)은 날짜가 없어 다른 날 사본 줄도
+    실패 당일 시각으로 읽힌다 — 태그·메시지(첫 `…` 앞 8자 이상)가 맞는 사본 줄을 찾아(행 시각은 UTC라 사본 줄의 시계 글자와 다를 수
+    있어 메시지로 찾는다, 레벨은 syslog에 없어 보지 않는다) 그 줄들 시각(`_quote_ts`)이 있는데 읽은 시각과 1초 안인 줄이 하나도
+    없으면 None(아래 끝·실패 뒤 흔적으로 세지 않는다 — 인용 판정 ok는 그대로). 맞는 줄을 못 찾거나 상한에 닿으면 읽은 시각 그대로
+    (맞는 결론을 잘못 떨어뜨리지 않는 쪽). 원문 모양 인용은 `evidence.stamp_matches`가 이미 사본 시각과 맞췄다."""
+    t = _quote_ts(q, events)
+    s = evidence.obs_quote(q) or ""
+    if t is None or not copies or evidence.raw_stamp(s) is not None or not evidence.ROW_RX.match(s):
+        return t
+    _clock, _slot, _level, tag, msg = (s.split(" ", 4) + [""] * 5)[:5]
+    msg = evidence.EVENT_SUFFIX_RX.sub("", evidence.ws(evidence.SCRIPT_NOTE_RX.sub("", msg)))
+    seg = next((p.strip() for p in evidence.ELLIPSIS_RX.split(msg) if p.strip()), "")
+    if len(seg) < 8:
+        return t
+    seen = 0
+    for text in copies:
+        at = text.find(seg)
+        while at >= 0 and seen < ROW_TS_MATCH_MAX:
+            a, b = text.rfind("\n", 0, at) + 1, text.find("\n", at)
+            b = len(text) if b < 0 else b
+            row = evidence.raw_row(text[a:b]) or ""
+            if row.split(" ", 4)[3:4] == [tag] and (lt := _quote_ts(text[a:b], events)) is not None:
+                if abs((lt - t).total_seconds()) < 1:
+                    return t
+                seen += 1
+            at = text.find(seg, b)
+    return None if 0 < seen < ROW_TS_MATCH_MAX else t
+
+
 def _quote_tag(q: str) -> str | None:
     """인용의 태그(행 문법 넷째 칸 — 타임라인 줄 그대로, 원문 모양은 `raw_row`로 바꿔서). 못 읽으면 None."""
     s = evidence.obs_quote(q) or ""
@@ -592,17 +631,18 @@ def _ref(job: Path, events: dict | None):
     return logtime.normalize_ts(summary.ref_of(_load(job / EXPLORE_INPUT_FILE)), inp.get("tz"), inp.get("year"))
 
 
-def _after_ref(job: Path, ok_quotes: list[str], events: dict | None, ref) -> tuple[bool, str]:
+def _after_ref(job: Path, ok_quotes: list[str], events: dict | None, ref, copies: list[str] = ()) -> tuple[bool, str]:
     """게이트 4: 기준 시각(`_ref`) 뒤 줄을 ok로 인용했거나, sha가 맞는 window 구간의 마지막 줄 시각이 기준보다 뒤다(그 뒤 줄이 실제로
     있을 때만 — 같은 시각은 아니다, `--span` 유무와 무관). 확정 기준이 없으면 통과가 아니라 가장 유력 가설의 ok 인용 중 가장 이른
-    시각을 기준으로 본다(R-15)."""
+    시각을 기준으로 본다(R-15). 인용 시각은 `_row_ts`(행 모양 인용을 사본 줄 시각과 대조, C-4)."""
     note = ""
+    times = [t for q in ok_quotes if (t := _row_ts(q, events, list(copies))) is not None]
     if ref is None:
-        ref = min((t for q in ok_quotes if (t := _quote_ts(q, events)) is not None), default=None)
+        ref = min(times, default=None)
         if ref is None:
             return False, "기준 시각 없음 — 원문 확인된 인용에도 시각이 없음"
         note = "(기준 시각 없음 — 가장 이른 인용 뒤)"
-    if any((t := _quote_ts(q, events)) is not None and t > ref for q in ok_quotes):
+    if any(t > ref for t in times):
         return True, note
     for text in _windows(job)[1]:
         rows = [line for line in text.split("\n") if evidence.ROW_RX.match(line)]
@@ -611,11 +651,11 @@ def _after_ref(job: Path, ok_quotes: list[str], events: dict | None, ref) -> tup
     return False, "기준 시각 뒤 줄 인용·구간 없음(실패 뒤를 보지 않음)" + note
 
 
-def _absent_span(events: dict | None, low, after_sec: int):
-    """`찾았는데 없음`을 세는 구간 (lo, hi, lo 포함 여부): 아래 끝(`low`)이 있으면 (low, low + `after_sec`] — 그 시각의 줄 자체는
+def _absent_span(events: dict | None, low, span_sec: float):
+    """`찾았는데 없음`을 세는 구간 (lo, hi, lo 포함 여부): 아래 끝(`low`)이 있으면 (low, low + `span_sec`] — 그 시각의 줄 자체는
     세지 않는다(C-1), 없으면 분석 범위(`input.window`, 없으면 전체 = None) [시작, 끝]."""
     if low is not None:
-        return low, low + timedelta(seconds=after_sec), False
+        return low, low + timedelta(seconds=span_sec), False
     win = ((events or {}).get("input") or {}).get("window") or {}
     lo, hi = (logtime.normalize_ts(win.get(k), None, None) for k in ("start", "end"))
     return lo, hi, True
@@ -651,6 +691,10 @@ def _absent(word: list[str], texts: list[str], events: dict | None, span) -> int
 
 
 ABSENT_MAX = 1000         # 흔한 낱말이면 큰 사본에서 줄마다 시각을 읽지 않게 여기서 세기를 멈춘다(이유 글은 `1000건 이상`)
+# ponytail: 경험값, 사내 로그로 조정 — 기대 칸에 시간 숫자가 없을 때 '없음'을 믿으려면 아래 끝 뒤 이만큼(초)은 로그가 있어야 한다
+ABSENT_MIN_SEC = 10
+TIME_UNIT_RX = re.compile(rf"(\d+(?:\.\d+)?)\s*(?:({TIME_EN})(?![A-Za-z0-9])|({TIME_KO}))")   # NUM_UNIT_RX의 시간 단위
+END_SCAN_LINES = 2000     # 사본 끝에서 시각을 읽을 수 있는 줄을 찾아 거슬러 올라가는 줄 수 상한
 ABSENT_WORD_RX = re.compile(r"`([^`]+)`")
 ASCII_WORD_RX = re.compile(r"[A-Za-z_][\w.:/-]{3,}")
 
@@ -672,11 +716,41 @@ def _rules_text(events: dict | None) -> str:
         return ""
 
 
+def _need_sec(expect: str) -> float:
+    """`찾았는데 없음`을 믿는 데 필요한 관측 시간(초): 기대 칸의 시간 숫자(`TIME_EN`·`TIME_KO` — 여럿이면 가장 큰 것), 없으면
+    `ABSENT_MIN_SEC`."""
+    def unit(u: str) -> float:
+        if u in ("ms", "msec", "밀리초") or u.startswith("milli"):
+            return 0.001
+        return 3600 if u == "시간" or u[0] == "h" else 60 if u == "분" or u.startswith("min") else 1
+    vals = [float(m.group(1)) * unit(m.group(2) or m.group(3)) for m in TIME_UNIT_RX.finditer(expect or "")]
+    return max(vals, default=ABSENT_MIN_SEC)
+
+
+def _copy_span(texts: list[str], events):
+    """사본이 담는 시간 (처음, 끝)(UTC): 사본마다 머리에서 내려가며·끝에서 거슬러 올라가며 시각을 읽을 수 있는 첫 줄(`END_SCAN_LINES`줄
+    까지, 파일 끝 개행은 한 줄로 세지 않는다)의 시각 — 처음은 가장 이른 것, 끝은 가장 늦은 것, 못 읽으면 None. events.json
+    `coverage`는 사본 없이 건너뛴 파일(상한 초과)까지 담아 세는 글과 다를 수 있어 쓰지 않는다."""
+    # ponytail: 파일 머리·끝 줄이 그 파일의 처음·마지막 시각이라고 본다 — 시각순이 아닌 묶음 파일이면 범위를 짧게 잡는다(미관측 쪽, 보수적)
+    starts, ends = [], []
+    for text in texts:
+        text = text.rstrip("\n")
+        for lines, out in ((text.split("\n", END_SCAN_LINES)[:END_SCAN_LINES], starts),
+                           (text.rsplit("\n", END_SCAN_LINES)[-END_SCAN_LINES:][::-1], ends)):
+            t = next((t for line in lines if (t := _quote_ts(line, events)) is not None), None)
+            if t is not None:
+                out.append(t)
+    return min(starts, default=None), max(ends, default=None)
+
+
 def _first_obs(h: dict, first: dict, verdict: str | None, texts: list[str], events, low, after_sec: int) -> tuple[str, str]:
     """R-02(결정 1): 가장 이른 false 단계의 관측 칸이 근거로 서나 — 원문 확인(ok) 인용이거나, 그 가설의 `찾았는데 없음` 항목 낱말이
-    사본(없으면 근거 원문 행)의 구간(`_absent_span(low)`, C-1)에서 0건. 그 단계 기대·관측 칸에 낱말이 든 항목만 보고, 없으면 모든
-    항목. 낱말은 사본(근거 원문)이나 파서 규칙 글에 한 번이라도 나오는 실제 낱말이어야 한다(C-2 — 없는 낱말은 늘 0건이다).
-    → (실패 이유 | "", 통과 메모 = 센 구간)."""
+    마스킹 사본(`texts`만 — 없으면 셀 수 없어 실패, 외부 리뷰 1125 지적 2)의 구간(`_absent_span(low)`, C-1)에서 0건. 그 단계 기대·
+    관측 칸에 낱말이 든 항목만 보고, 없으면 모든 항목. 낱말은 사본이나 파서 규칙 글에 한 번이라도 나오는 실제 낱말이어야 한다(C-2 —
+    없는 낱말은 늘 0건이다). 아래 끝이 있으면 구간 길이는 max(`after_sec`, 필요 시간 `_need_sec`)이고, 사본 끝(`_copy_span`)이
+    아래 끝 + 필요 시간보다 앞이면 미관측으로 실패한다(지적 2 — 3초 로그로 "300초 뒤 없음"을 믿지 않는다). 아래 끝이 없으면
+    분석 범위 전체를 세되 사본이 담는 길이(처음~끝)가 필요 시간보다 짧으면 미관측(C-3).
+    → (실패 이유 | "", 통과 메모 = 센 구간, 로그 끝에서 잘렸으면 그 끝까지)."""
     if evidence.obs_quote(first["관측"]) is not None:
         return ("", "") if verdict == "ok" else (f"관측 인용이 원문에서 확인되지 않음({verdict or '검사 못 함'})", "")
     items = [(i, w) for i in h.get("찾았는데 없음") or [] if (w := _absent_words(i))]
@@ -685,18 +759,26 @@ def _first_obs(h: dict, first: dict, verdict: str | None, texts: list[str], even
     if not items:
         return "관측이 원문 확인 인용도, 셀 낱말이 있는 `찾았는데 없음` 항목도 아님", ""
     if not texts:
-        return "근거 원문이 없어 `찾았는데 없음`을 셀 수 없음", ""      # 0건을 셌다고 하지 않는다(건너뛴 검사를 통과로 두지 않음)
+        return "사본이 없어 '없음'을 셀 수 없음", ""      # 고른 타임라인 행으로 대신 세지 않는다(건너뛴 검사를 통과로 두지 않음)
     rules = None
     for _i, word in items:
         for w in word:
             if not any(w in t for t in texts) and w not in (rules := _rules_text(events) if rules is None else rules):
                 return f"`{w[:30]}`은 로그·파서 규칙 어디에도 없는 낱말", ""
-    span = _absent_span(events, low, after_sec)
-    where = _span_text(span)
+    need = _need_sec(first["기대"])
+    span = _absent_span(events, low, max(after_sec, need))
+    first_t, end = _copy_span(texts, events)
+    where = _span_text((span[0], end, False) if low is not None and end is not None and end < span[1] else span)
     for _i, word in items:
         n = _absent(word, texts, events, span)
         if n:
             return f"`찾았는데 없음` `{' '.join(word)[:30]}` 줄이 {where}에 " + (f"{n}건 이상" if n >= ABSENT_MAX else f"{n}건"), ""
+    if low is not None and (end is None or end < low + timedelta(seconds=need)):
+        got = f"{max(0.0, round((end - low).total_seconds(), 1)):g}초까지만 있어" if end is not None else "끝 시각을 읽지 못해"
+        return (f"로그가 {logtime.format_ts(low)[11:23]} 뒤 {got} '없음'을 확인할 수 없음(미관측, 필요 {need:g}초)", "")
+    if low is None and (first_t is None or end is None or (end - first_t).total_seconds() < need):    # C-3: 분석 범위 전체를 세도
+        got = f"{round((end - first_t).total_seconds(), 1):g}초 분량뿐이라" if first_t and end else "시각을 읽지 못해"
+        return f"로그가 {got} '없음'을 확인할 수 없음(미관측, 필요 {need:g}초)", ""
     return "", f"`찾았는데 없음` {where}에 0건"
 
 
@@ -749,10 +831,10 @@ def _outer(events: dict | None, ok_quotes: list[str], layer: str | None, default
 
 def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: dict | None, defaults: dict | None = None,
                    platform: str | None = None, before: int = 0, texts: list[str] | None = None,
-                   source: str | None = None, after_sec: int = 600) -> tuple[dict, list[str]]:
+                   after_sec: int = 600) -> tuple[dict, list[str]]:
     """조사 결론 게이트 6개 → (analysis.json·check-output 기록 `investigation`, 형식 경고). 하나라도 실패면 insufficient_evidence.
     `before` = 앞 검사의 원문에 없는 인용 수(있으면 게이트 1 실패, R-03), `texts` = 마스킹 사본 글(`찾았는데 없음` 세기 — 없으면
-    근거 원문 행 `source`로 센다), `after_sec` = `explore.after_sec`(`찾았는데 없음` 세는 구간 길이, C-1)."""
+    셀 수 없어 게이트 2 실패), `after_sec` = `explore.after_sec`(`찾았는데 없음` 세는 구간 최소 길이, C-1)."""
     hyps = fields.get("hyps") or []
     if not hyps:
         return {"status": "insufficient_evidence", "hyp": None, "cause": None, "layer": None, "first_divergence": None,
@@ -786,9 +868,9 @@ def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: 
         by_row = dict(zip(map(id, quoted), chain_v[k])) if chain_v else {}
         # C-1: `찾았는데 없음` 아래 끝 = 기준 시각과 그 단계 앞 단계들의 원문 확인 관측 줄 중 가장 늦은 시각 중 늦은 쪽
         prior = [t for r in quoted if r["단계"] < first["단계"] and by_row.get(id(r)) == "ok"
-                 and (t := _quote_ts(r["관측"], events)) is not None]
+                 and (t := _row_ts(r["관측"], events, texts or [])) is not None]
         low = max([t for t in (ref, max(prior, default=None)) if t is not None], default=None)
-        obs, note = _first_obs(h, first, by_row.get(id(first)), texts or ([source] if source else []), events, low, after_sec)
+        obs, note = _first_obs(h, first, by_row.get(id(first)), texts or [], events, low, after_sec)
         if obs:
             obs = f"단계 {first['단계']}: {obs}"
             warns.append(f"가설 {k + 1}: 가장 이른 false {obs} — 관측 줄을 시각부터 원문 그대로 쓰거나, 없음이면 `찾았는데 없음:`에 "
@@ -802,16 +884,17 @@ def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: 
         if first is None else "기대 주체 칸 없음(옛 형식 표)" if not first["주체"] else ""
         if subject == layer else f"책임 경계 {layer} ≠ 단계 {first['단계']} 기대 주체 {subject or _one(first['주체'])[:20]}")
     ok_quotes = [q for q, v in zip(quotes, verdicts or []) if v == "ok"]
-    add("실패 뒤 흔적", *_after_ref(job, ok_quotes, events, ref))
+    add("실패 뒤 흔적", *_after_ref(job, ok_quotes, events, ref, texts or []))
     mech = h.get("메커니즘 재계산") or ""
     flip = FLIP_RX.search(mech)
     answer = None if flip and flip.group(2) else (flip or FLIP_TAIL_RX.search(mech))
-    if not NUM_UNIT_RX.search((first or {}).get("기대") or ""):      # R-17: 가장 이른 false 단계의 `기대` 칸만(가설 머리의 경과 시간은 아님)
-        add("숫자 메커니즘", True, "해당 없음(숫자 기대 없음)")
-    else:
-        add("숫자 메커니즘", mech.strip() and not (flip and flip.group(2)) and not (answer and answer.group(1) != "예"),
-            "숫자 기대인데 메커니즘 재계산 없음" if not mech.strip() else "재계산 답이 틀 그대로" if flip and flip.group(2)
-            else "재계산 답이 아니오(고쳐도 안 뒤집힘)" if answer and answer.group(1) != "예" else "")
+    reply = answer.group(1) if answer else None
+    numeric = NUM_UNIT_RX.search((first or {}).get("기대") or "")     # R-17: 가장 이른 false 단계의 `기대` 칸만(가설 머리의 경과 시간은 아님)
+    # 외부 리뷰 1125 지적 3: 명시적 `아니오`는 숫자 기대와 상관없이 실패, 숫자 기대면 계산 숫자와 명시적 `예`가 있어야 한다
+    why = ("재계산 답이 아니오(고쳐도 안 뒤집힘)" if reply in ("아니오", "아니요") else "" if not numeric
+           else "숫자 기대인데 메커니즘 재계산 없음" if not mech.strip() else "재계산 답이 틀 그대로" if flip and flip.group(2)
+           else "재계산 답 없음(예/아니오)" if reply != "예" else "재계산에 계산 내용(숫자) 없음" if not re.search(r"\d", mech) else "")
+    add("숫자 메커니즘", not why, why or ("" if numeric else "해당 없음(숫자 기대 없음)"))
     add("외부 근거", *_outer(events, ok_quotes, layer, defaults, platform))
     return ({"status": "identified" if all(g["ok"] for g in gate) else "insufficient_evidence", "hyp": k + 1,
              "cause": _one(h["가설"])[:INV_CAUSE_MAX] or None, "layer": layer,
@@ -1365,7 +1448,8 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     if not quotes:
         src_skip = "인용 없음"
     elif src_skip is None:
-        res = evidence.check_quotes(quotes, source, tags, raw_items=raw_items, alts=alts)
+        res = evidence.check_quotes(quotes, source, tags, raw_items=raw_items, alts=alts,
+                                    copies=copies if purpose == "explore" else None)
         if purpose == "explore":        # verdicts는 `_quotes` 순서 = 가설 순서대로 `로그로 확인`을 이어 붙인 것
             it = iter(res["verdicts"])
             per_hyp = [[next(it) for _ in h["로그로 확인"]] for h in fields["hyps"]]
@@ -1395,7 +1479,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     investigating = purpose == "explore" and (analysis.get("investigate") or {}).get("mode")     # 조사 모드(run이 판정)
     from triagelib import summary
     inv, inv_warns = (_investigation(job, fields, per_hyp, chain_v, sha, events, getattr(args, "tt_defaults", None),
-                                     analysis.get("platform"), before, copies, source,
+                                     analysis.get("platform"), before, copies,
                                      summary.after_of(getattr(args, "platform_cfg", None) or {})) if investigating else (None, []))
     if inv and normal1:     # R-16: 가장 유력이 정상이고 정상 근거 줄이 원문 확인 — 원인 조사 대상 아님(상태는 근거 부족 그대로)
         inv = {**inv, "status": "insufficient_evidence", "normal": True}

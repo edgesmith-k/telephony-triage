@@ -11,7 +11,8 @@ case 하나 = 디렉토리 하나:
 arm마다 센다(분모 = case 수):
 - `layer_correct`: 가장 유력(없으면 가설 1)의 `책임 경계`가 정답 층 — 모델의 층 판단
 - `cause_cited`: 그 가설의 `로그로 확인`·기대 체인 관측 인용에 원인 줄 조각이 있음 — 원인 줄 인용률
-- `identified`·`identified_correct`(통과했고 층도 정답)·`identified_wrong`(통과했는데 층이 틀림 — 잘못된 확정)·`insufficient`
+- `identified`·`identified_correct`(통과했고 층도 정답이고 원인 줄을 인용 — 외부 리뷰 1125 지적 4)·`identified_layer_only`(통과했고
+  층은 정답인데 원인 줄 인용 없음 — 층만 맞힌 것)·`identified_wrong`(통과했는데 층이 틀림 — 잘못된 확정)·`insufficient`
   (`investigation`이 없거나 근거 부족 — 결론 보류)
 사외는 합성 case 2~3개로 틀만 시험한다(`tests/fixtures/investigate-eval/`). 사내는 실제 5~10건(마스킹, SITE_PATHS)으로 돌린다.
 
@@ -29,7 +30,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "plugin" / "scripts
 
 from common import evidence  # noqa: E402
 
-METRICS = ("layer_correct", "cause_cited", "identified", "identified_correct", "identified_wrong", "insufficient")
+METRICS = ("layer_correct", "cause_cited", "identified", "identified_correct", "identified_layer_only", "identified_wrong",
+           "insufficient")
 
 
 def _layer(value) -> str | None:
@@ -46,9 +48,11 @@ def score_case(case: dict, out_text: str, analysis: dict) -> dict:
     inv = analysis.get("investigation") if isinstance(analysis, dict) else None
     identified = isinstance(inv, dict) and inv.get("status") == "identified"
     right = _layer(h.get("책임 경계")) == case["layer"]
-    return {"layer_correct": right, "cause_cited": any(case["cause_line"] in q for q in quotes),
-            "identified": identified, "identified_correct": identified and inv.get("layer") == case["layer"],
-            "identified_wrong": identified and inv.get("layer") != case["layer"], "insufficient": not identified}
+    cited = any(case["cause_line"] in q for q in quotes)
+    layer_ok = identified and inv.get("layer") == case["layer"]
+    return {"layer_correct": right, "cause_cited": cited, "identified": identified, "identified_correct": layer_ok and cited,
+            "identified_layer_only": layer_ok and not cited, "identified_wrong": identified and inv.get("layer") != case["layer"],
+            "insufficient": not identified}
 
 
 def run(cases_dir: Path, arms: list[str]) -> dict:

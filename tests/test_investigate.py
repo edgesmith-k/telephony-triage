@@ -249,8 +249,8 @@ def test_compare_eval_scores_recorded_outputs_only():
     res = investigate_eval.run(REPO / "tests" / "fixtures" / "investigate-eval", ["before", "after"])
     assert res["n"] == 2 and res["arms"]["before"]["insufficient"] == "2/2" and res["arms"]["before"]["layer_correct"] == "0/2"
     after = res["arms"]["after"]
-    assert (after["layer_correct"], after["cause_cited"], after["identified_correct"], after["identified_wrong"],
-            after["insufficient"]) == ("2/2", "2/2", "1/2", "0/2", "1/2")
+    assert (after["layer_correct"], after["cause_cited"], after["identified_correct"], after["identified_layer_only"],
+            after["identified_wrong"], after["insufficient"]) == ("2/2", "2/2", "1/2", "0/2", "0/2", "1/2")
     assert all(c["synthetic"] for c in res["cases"])
 
 
@@ -366,6 +366,7 @@ ABSENT_ROWS = ["| 1 | SETUP 요청이 나간다 | AP 내부 | log:15:10:00 | " +
                "| 2 | 인증 실패 뒤 SETUP을 다시 보낸다 | CP 내부 | spec:x | 없음(찾은 곳: logs-masked 15:10:02 뒤) | false |"]
 ABSENT = ("찾았는데 없음:", "- `SETUP_DATA_CALL` 재요청 — logs-masked 15:10:02 뒤 grep")
 ISO_Q1 = "2026-09-20T15:10:01.200Z host vrild[7]: RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM"
+TAIL = "2026-09-20T15:16:00.000Z host datad[9]: heartbeat"     # 사본이 실패 뒤 몇 분을 담게(지적 2: 짧은 로그의 '없음'은 미관측)
 
 
 def test_r02_unrelated_true_quotes_and_absent_observation_is_not_identified(tmp_path, capsys):
@@ -381,16 +382,16 @@ def test_r02_unrelated_true_quotes_and_absent_observation_is_not_identified(tmp_
 def test_r02_absence_counted_zero_after_reference_passes_and_found_word_fails(tmp_path, capsys):
     """R-02 (나): 관측 `없음` + `찾았는데 없음` 낱말이 사본에서 기준 시각 뒤 0건이면 통과(기준 앞 줄은 세지 않는다), 있으면 실패하고 건수."""
     job = _job(tmp_path / "zero")
-    _copy(job, [ISO_Q1])                                      # 기준(15:10:02) 앞 줄만
+    _copy(job, [ISO_Q1, TAIL])                                # 낱말은 기준(15:10:02) 앞 줄만
     _data, inv = _run(job, _out(rows=ABSENT_ROWS, extra=ABSENT), capsys)
     assert inv["status"] == "identified", inv["gate"]
     job = _job(tmp_path / "found")
     _copy(job, [ISO_Q1, "2026-09-20T15:10:05.000Z host vrild[7]: RIL_REQUEST_SETUP_DATA_CALL retry 1"])
     _data, inv = _run(job, _out(rows=ABSENT_ROWS, extra=ABSENT), capsys)
     assert _failed(inv) == ["첫 어긋남"] and "1건" in inv["gate"][1]["why"], inv["gate"]
-    job = _job(tmp_path / "nocopy")                           # 사본 없음: 근거 원문(타임라인)으로 센다 — SETUP_DATA_CALL은 기준 앞뿐
+    job = _job(tmp_path / "nocopy")         # 사본 없음: 고른 타임라인으로 대신 세지 않는다(지적 2 (a), 전에는 identified)
     _data, inv = _run(job, _out(rows=ABSENT_ROWS, extra=ABSENT), capsys)
-    assert inv["status"] == "identified", inv["gate"]
+    assert _failed(inv) == ["첫 어긋남"] and "사본이 없어" in inv["gate"][1]["why"], inv["gate"]
 
 
 def test_r03_fabricated_quote_in_first_check_blocks_identified_on_recheck(tmp_path, capsys):
@@ -585,8 +586,9 @@ def test_c01_absent_word_counts_only_after_sec_window(tmp_path, capsys):
     job = _job(tmp_path / "near")
     _copy(job, [ISO_Q1, "2026-09-20T15:19:00.000Z host vrild[7]: RIL_REQUEST_SETUP_DATA_CALL apn=internet"])
     _data, inv = _run(job, _out(rows=ABSENT_ROWS, extra=ABSENT), capsys)
-    assert _failed(inv) == ["첫 어긋남"] and "15:10:02.000~15:20:02.000" in inv["gate"][1]["why"], inv["gate"]
-    assert "1건" in inv["gate"][1]["why"] and "15:10:02.000~15:20:02.000" in "\n".join(_cause_rows(job))
+    # 센 구간은 사본 끝(15:19:00)에서 잘린 끝까지 적는다(지적 2 (c))
+    assert _failed(inv) == ["첫 어긋남"] and "15:10:02.000~15:19:00.000" in inv["gate"][1]["why"], inv["gate"]
+    assert "1건" in inv["gate"][1]["why"] and "15:10:02.000~15:19:00.000" in "\n".join(_cause_rows(job))
 
 
 def test_c01_coarse_occurrence_time_uses_latest_prior_step_quote(tmp_path, capsys):
@@ -596,23 +598,24 @@ def test_c01_coarse_occurrence_time_uses_latest_prior_step_quote(tmp_path, capsy
                             ("bsd", ABSENT, "Sep 20 15:10:01.200 host vrild[7]: RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM")):
         job = _job(tmp_path / name)
         (job / "explore-input.json").write_text(json.dumps({"limit": 200, "around": "2026-09-20T15:09:30Z"}), encoding="utf-8")
-        _copy(job, [ISO_Q1] if q1 == Q1 else [q1])
+        _copy(job, [ISO_Q1 if q1 == Q1 else q1, TAIL])
         rows = [r.replace(Q1, q1) for r in FAIL_ROWS]
         _d, inv = _run(job, _out(rows=rows, claim="단계 3 — CP가 재요청하지 않음", extra=extra), capsys)
         assert inv["status"] == "identified", (name, inv["gate"])
-        assert "15:10:01.200~15:20:01.200" in inv["gate"][1]["why"], (name, inv["gate"])
+        assert "15:10:01.200~15:16:00.000" in inv["gate"][1]["why"], (name, inv["gate"])      # 끝은 사본 끝(TAIL)에서 잘림
 
 
 def test_c02_made_up_absent_word_is_not_counted_as_absence(tmp_path, capsys):
-    """C-2: 로그 어디에도 없는 낱말은 늘 0건이다 — `찾았는데 없음` 낱말은 사본(없으면 근거 원문)이나 파서 규칙에 있어야 한다."""
+    """C-2: 로그 어디에도 없는 낱말은 늘 0건이다 — `찾았는데 없음` 낱말은 사본이나 파서 규칙에 있어야 한다."""
     rows = ["| 1 | 달이 파랗게 빛난다 | AP 내부 | spec:x | 없음 | false |"]
-    data, inv = _run(_job(tmp_path / "moon"), _out(layer="AP 내부", quotes=(Q0, Q_AFTER), rows=rows, claim="단계 1 — 달이 파랗지 않음",
-                                                   head="달이 파랗다", extra=("찾았는데 없음:", "- `blue_moon_glow` — 사본 전체 grep")),
-                     capsys)
+    job = _job(tmp_path / "moon")
+    _copy(job, [ISO_Q1, TAIL])
+    data, inv = _run(job, _out(layer="AP 내부", quotes=(Q0, Q_AFTER), rows=rows, claim="단계 1 — 달이 파랗지 않음",
+                               head="달이 파랗다", extra=("찾았는데 없음:", "- `blue_moon_glow` — 사본 전체 grep")), capsys)
     assert _failed(inv) == ["첫 어긋남"] and "`blue_moon_glow`은 로그·파서 규칙 어디에도 없는 낱말" in inv["gate"][1]["why"], inv["gate"]
     assert any("단계 1" in w for w in data["format_warnings"]), data
     job = _job(tmp_path / "rule")        # 로그엔 없지만 파서 규칙(ril.yaml)에 있는 낱말은 실제 낱말이다
-    _copy(job, [ISO_Q1])
+    _copy(job, [ISO_Q1, TAIL])
     _d, inv = _run(job, _out(rows=ABSENT_ROWS, extra=("찾았는데 없음:", "- `DEACTIVATE_DATA_CALL` 요청 — logs-masked 15:10:02 뒤")),
                    capsys)
     assert inv["status"] == "identified", inv["gate"]
@@ -651,3 +654,232 @@ def test_c10_jira_skips_investigation_when_explore_output_changed(tmp_path, caps
         f.write("가설 2: 나중에 손으로 더한 가설\n")
     cause = [i["text"] for i in issue_post.build(fake, a, None, None, set())[0]["CAUSE"]]
     assert not any(t.startswith("조사 결론") for t in cause)
+
+
+# --- 외부 리뷰 1125(코덱스): 틀린 결론을 통과시키던 빈틈 3건과 eval 지표 --------------------------------------------------
+# 리뷰어 각본을 그대로 둔다(고치기 전 코드에서 identified가 나오던 입력). 맞는 결론이 여전히 통과하는 쌍도 둔다.
+
+# 실패(15:10:02) 앞 줄 — 날짜·시간대를 바꿔 적으면 기준 시각 뒤 줄처럼 읽힌다
+EARLY = {"iso": "2026-09-20T15:09:50.000Z host datad[9]: link monitor lost carrier on rmnet_data0",
+         "logcat": "09-20 15:09:50.000  1000  1001 I datad: link monitor lost carrier on rmnet_data0",
+         "logcat_zone": "09-20 15:09:50.000 +0000  1000  1001 I datad: link monitor lost carrier on rmnet_data0",
+         "bsd": "Sep 20 15:09:50.000 host datad[9]: link monitor lost carrier on rmnet_data0",
+         "busybox": "Sep 20 15:09:50.000 host daemon.info datad[9]: link monitor lost carrier on rmnet_data0"}
+FORGED = {"iso": [("2026-09-20T", "2026-09-21T"), ("000Z", "000-09:00")],
+          "logcat": [("09-20 ", "09-21 ")], "logcat_zone": [("09-20 ", "09-21 "), ("+0000", "-0900")],
+          "bsd": [("Sep 20", "Sep 21")], "busybox": [("Sep 20", "Sep 21")]}
+
+
+def test_x1_quote_with_changed_date_or_zone_is_not_source_confirmed(tmp_path, capsys):
+    """지적 1: 사본 줄의 날짜를 다음 날로, 시간대를 `-09:00`으로 바꿔 인용하면 원문 확인(ok)이었고 실패 앞 줄이 '기준 시각 뒤 줄'로
+    세져 identified였다. 날짜·시간대가 맞춘 사본 줄과 다르면 시각을 바꿔 적은 인용과 같은 등급(weak)이고 게이트 4가 떨어진다.
+    날짜·시간대까지 사본 줄 그대로 적은 인용은 그대로 ok."""
+    for name, line in EARLY.items():
+        for k, (old, new) in enumerate(FORGED[name]):
+            job = _job(tmp_path / f"{name}{k}")
+            _copy(job, [ISO_Q1, line])
+            forged = line.replace(old, new)
+            assert forged != line
+            data, inv = _run(job, _out(quotes=(Q1, forged)), capsys)
+            assert data["fabricated"] == 0 and data["weak"] >= 1, (name, forged, data)
+            assert inv["status"] == "insufficient_evidence" and "실패 뒤 흔적" in _failed(inv), (name, forged, inv["gate"])
+        job = _job(tmp_path / f"{name}-exact")          # 그대로 적은 인용: 원문 확인, 실패 앞 줄이라 게이트 4만 떨어진다
+        _copy(job, [ISO_Q1, line])
+        data, inv = _run(job, _out(quotes=(Q1, line)), capsys)
+        assert data["weak"] == 0 and data["fabricated"] == 0, (name, data)
+        assert _failed(inv) == ["실패 뒤 흔적"], (name, inv["gate"])
+
+
+def test_x1_quote_with_exact_date_after_failure_still_passes(tmp_path, capsys):
+    """지적 1 양성: 기준 뒤 사본 줄을 날짜·시간대까지 그대로 인용하면 identified 그대로(logcat·oFono 모양)."""
+    after = {"iso": "2026-09-20T15:10:05.000Z host datad[9]: link monitor lost carrier on rmnet_data0",
+             "logcat": "09-20 15:10:05.000  1000  1001 I datad: link monitor lost carrier on rmnet_data0",
+             "bsd": "Sep 20 15:10:05.000 host datad[9]: link monitor lost carrier on rmnet_data0"}
+    for name, line in after.items():
+        job = _job(tmp_path / name)
+        _copy(job, [ISO_Q1, line])
+        data, inv = _run(job, _out(quotes=(Q1, line)), capsys)
+        assert data["weak"] == 0 and inv["status"] == "identified", (name, data, inv["gate"])
+
+
+def test_x1_logcat_quote_with_changed_clock_is_weak_too(tmp_path, capsys):
+    """지적 1 곁: logcat 모양 인용은 시분초를 바꿔 적어도 ok였다(앞머리를 행 머리로 읽지 못해 시각 대조를 건너뜀) — 이제 weak."""
+    job = _job(tmp_path)
+    _copy(job, [ISO_Q1, EARLY["logcat"]])
+    data, inv = _run(job, _out(quotes=(Q1, EARLY["logcat"].replace("15:09:50", "15:19:50"))), capsys)
+    assert data["weak"] == 1 and "실패 뒤 흔적" in _failed(inv), (data, inv["gate"])
+
+
+# 지적 2: 300초 뒤 재시도를 기대 — 아래 끝(15:10:02) 뒤 사본이 얼마나 있느냐
+RETRY_ROWS = ["| 1 | SETUP 요청이 나간다 | AP 내부 | log:15:10:00 | " + Q0 + " | true |",
+              "| 2 | 인증 실패 뒤 300초(299999ms) 뒤 SETUP을 다시 보낸다 | CP 내부 | spec:x | 없음(찾은 곳: logs-masked 15:10:02 뒤) "
+              "| false |"]
+RETRY_MECH = "메커니즘 재계산: 15:10:02 + 299999ms = 15:15:02 → 고치면 결과가 뒤집히나: 예"
+
+
+def test_x2_absence_needs_log_covering_expected_time(tmp_path, capsys):
+    """지적 2 (b): 약 3초 분량 사본에 "300초 뒤 재시도가 없다"를 넣으면 0건이라 통과했다 — 로그가 아래 끝 + 필요 시간(300초)을
+    담지 않으면 미관측으로 실패. 로그가 그 뒤까지 있고 낱말이 없으면 통과하고 why에 센 구간(로그 끝에서 잘린 끝)을 적는다."""
+    short = ["2026-09-20T15:10:00.100Z host ofonod[3]: attach requested", ISO_Q1,
+             "2026-09-20T15:10:03.400Z host datad[9]: state=disconnected"]
+    job = _job(tmp_path / "short")
+    _copy(job, short)
+    _d, inv = _run(job, _out(rows=RETRY_ROWS, extra=(*ABSENT, RETRY_MECH)), capsys)
+    assert _failed(inv) == ["첫 어긋남"], inv["gate"]
+    assert "미관측" in inv["gate"][1]["why"] and "1.4초" in inv["gate"][1]["why"], inv["gate"]
+    job = _job(tmp_path / "long")
+    _copy(job, [*short, "2026-09-20T15:16:00.000Z host datad[9]: heartbeat"])
+    _d, inv = _run(job, _out(rows=RETRY_ROWS, extra=(*ABSENT, RETRY_MECH)), capsys)
+    assert inv["status"] == "identified", inv["gate"]
+    assert "15:10:02.000~15:16:00.000" in inv["gate"][1]["why"] and "0건" in inv["gate"][1]["why"], inv["gate"]
+
+
+def test_x2_absence_window_grows_to_expected_time(tmp_path, capsys):
+    """지적 2 (b): 기대가 900초면 세는 구간도 900초(after_sec 600으로 자르지 않는다) — 700초 뒤 재요청이 있으면 실패."""
+    rows = [r.replace("300초(299999ms)", "900초") for r in RETRY_ROWS]
+    mech = "메커니즘 재계산: 15:10:02 + 900초 = 15:25:02 → 고치면 결과가 뒤집히나: 예"
+    job = _job(tmp_path)
+    _copy(job, [ISO_Q1, "2026-09-20T15:21:42.000Z host vrild[7]: RIL_REQUEST_SETUP_DATA_CALL apn=internet",
+                "2026-09-20T15:30:00.000Z host datad[9]: heartbeat"])
+    _d, inv = _run(job, _out(rows=rows, extra=(*ABSENT, mech)), capsys)
+    assert _failed(inv) == ["첫 어긋남"] and "15:10:02.000~15:25:02.000" in inv["gate"][1]["why"], inv["gate"]
+    assert "1건" in inv["gate"][1]["why"], inv["gate"]
+
+
+def test_x2_absence_without_masked_copy_is_not_counted(tmp_path, capsys):
+    """지적 2 (a): 사본이 없으면 고른 타임라인 행에서 0건을 셌다 — 이제 '없음'을 셀 수 없어 실패(건너뛴 검사를 통과로 두지 않음)."""
+    _d, inv = _run(_job(tmp_path), _out(rows=ABSENT_ROWS, extra=ABSENT), capsys)
+    assert _failed(inv) == ["첫 어긋남"] and "사본이 없어" in inv["gate"][1]["why"], inv["gate"]
+
+
+def test_x2_no_number_expectation_needs_ten_seconds_of_log(tmp_path, capsys):
+    """지적 2 (b): 기대 칸에 시간 숫자가 없으면 아래 끝 뒤 10초(경험값)는 로그가 있어야 한다."""
+    for end, ok in (("15:10:09.000", False), ("15:10:12.500", True)):
+        job = _job(tmp_path / end.replace(":", ""))
+        _copy(job, [ISO_Q1, f"2026-09-20T{end}Z host datad[9]: heartbeat"])
+        _d, inv = _run(job, _out(rows=ABSENT_ROWS, extra=ABSENT), capsys)
+        assert (inv["status"] == "identified") is ok, (end, inv["gate"])
+
+
+def test_x3_numeric_expectation_needs_numbers_and_explicit_yes(tmp_path, capsys):
+    """지적 3: 숫자 기대에 '계산할 자료 없음'(답 없음)이 통과했다 → 답 없음 실패, 숫자 없는 계산 + 예도 실패, 숫자 + 예는 통과."""
+    rows = ["| 1 | SETUP 요청이 나간다 | AP 내부 | log:15:10:00 | " + Q0 + " | true |",
+            "| 2 | 5초 안에 응답이 성공 | CP 내부 | spec:x | " + Q1 + " | false |"]
+    cases = (("메커니즘 재계산: 계산할 자료 없음", "재계산 답 없음(예/아니오)"),
+             ("메커니즘 재계산: 계산할 자료 없음 → 고치면 결과가 뒤집히나: 예", "재계산에 계산 내용(숫자) 없음"),
+             ("메커니즘 재계산: 01.2-00.1 = 1.1초 → 고치면 결과가 뒤집히나: 예", None))
+    for k, (mech, why) in enumerate(cases):
+        _d, inv = _run(_job(tmp_path / str(k)), _out(rows=rows, extra=(mech,)), capsys)
+        assert _failed(inv) == ([] if why is None else ["숫자 메커니즘"]), (mech, inv["gate"])
+        assert why is None or inv["gate"][4]["why"] == why, (mech, inv["gate"])
+
+
+def test_x3_explicit_no_fails_even_without_numeric_expectation(tmp_path, capsys):
+    """지적 3: 기대 칸에 숫자가 없어도 '고쳐도 안 뒤집힌다: 아니오'를 적으면 그 가설은 원인이 아니다 — 실패. 답 없으면 해당 없음 통과."""
+    _d, inv = _run(_job(tmp_path / "no"), _out(extra=("메커니즘 재계산: 재시도 간격 그대로 → 고치면 결과가 뒤집히나: 아니오",)), capsys)
+    assert _failed(inv) == ["숫자 메커니즘"] and inv["gate"][4]["why"] == "재계산 답이 아니오(고쳐도 안 뒤집힘)", inv["gate"]
+    _d, inv = _run(_job(tmp_path / "none"), _out(), capsys)
+    assert _failed(inv) == [] and inv["gate"][4]["why"] == "해당 없음(숫자 기대 없음)", inv["gate"]
+
+
+def test_x4_identified_correct_needs_cause_line_cited():
+    """지적 4: 층만 맞고 원인 줄을 인용하지 않은 통과는 identified_correct가 아니라 identified_layer_only."""
+    sys.path.insert(0, str(REPO / "tools"))
+    import investigate_eval
+    case = {"layer": "CP 내부", "cause_line": "RIL_REQUEST_SETUP_DATA_CALL fail cause=AUTH_FAILURE_ON_EMM"}
+    analysis = {"investigation": {"status": "identified", "layer": "CP 내부"}}
+    cited = investigate_eval.score_case(case, _out(), analysis)
+    assert cited["identified_correct"] and not cited["identified_layer_only"]
+    rows = ["| 1 | SETUP 요청이 나간다 | AP 내부 | log:15:10:00 | " + Q0 + " | true |",
+            "| 2 | SETUP 응답이 성공 | CP 내부 | spec:x | " + Q_W + " | false |"]
+    bare = investigate_eval.score_case(case, _out(quotes=(Q0, Q_AFTER), rows=rows), analysis)
+    assert not bare["cause_cited"] and not bare["identified_correct"] and bare["identified_layer_only"], bare
+
+
+# --- 확인 리뷰 1125(C-1~C-4, 꼬리 한 줄): 고치기 전 코드에서 통과하던 틀린 결론 ------------------------------------------
+
+NUM_ROWS = ["| 1 | SETUP 요청이 나간다 | AP 내부 | log:15:10:00 | " + Q0 + " | true |",
+            "| 2 | 5초 안에 응답이 성공 | CP 내부 | spec:x | " + Q1 + " | false |"]
+
+
+def test_c1_yes_followed_by_hangul_is_not_an_answer(tmp_path, capsys):
+    """C-1: `예상하기 어려움`의 `예`를 답 `예`로 읽어 숫자 기대 재계산이 통과했다. `예.`·`예,`·`예(…)`·`예 —`·줄 끝 `예`는 답이다."""
+    bad = "메커니즘 재계산: 15:10:01 한 줄 → 고치면 결과가 뒤집히나: 예상하기 어려움(15:10:01 한 줄뿐)"
+    _d, inv = _run(_job(tmp_path / "bad"), _out(rows=NUM_ROWS, extra=(bad,)), capsys)
+    assert _failed(inv) == ["숫자 메커니즘"] and inv["gate"][4]["why"] == "재계산 답 없음(예/아니오)", inv["gate"]
+    for k, tail in enumerate(("예.", "예, 1.1초면 맞음", "예(1.1초)", "예 — 1.1초", "예")):
+        mech = f"메커니즘 재계산: 01.2-00.1 = 1.1초 → 고치면 결과가 뒤집히나: {tail}"
+        _d, inv = _run(_job(tmp_path / f"ok{k}"), _out(rows=NUM_ROWS, extra=(mech,)), capsys)
+        assert _failed(inv) == [], (tail, inv["gate"])
+
+
+def test_c2_hour_and_millisecond_units(tmp_path, capsys):
+    """C-2: `1시간`은 시간 단위가 아니라 필요 시간이 10초였다 — 실패 뒤 15초 사본으로 '1시간 안에 재요청 없음'이 통과. 이제 3600초."""
+    from triagelib import output
+    rows = [r.replace("인증 실패 뒤 SETUP을 다시 보낸다", "1시간 안에 SETUP 재요청") for r in ABSENT_ROWS]
+    mech = "메커니즘 재계산: 15:10:02 + 1시간 = 16:10:02 → 고치면 결과가 뒤집히나: 예"
+    job = _job(tmp_path)
+    _copy(job, [ISO_Q1, "2026-09-20T15:10:17.000Z host datad[9]: heartbeat"])
+    _d, inv = _run(job, _out(rows=rows, extra=(*ABSENT, mech)), capsys)
+    assert _failed(inv) == ["첫 어긋남"] and "필요 3600초" in inv["gate"][1]["why"], inv["gate"]
+    want = {"1시간": 3600, "2 hours": 7200, "1.5h": 5400, "3 hrs": 10800, "500 milliseconds": 0.5, "250밀리초": 0.25,
+            "10 s1 뒤": output.ABSENT_MIN_SEC, "2h1": output.ABSENT_MIN_SEC, "5 m 거리": output.ABSENT_MIN_SEC}
+    assert {k: output._need_sec(k) for k in want} == want
+    rx = output.NUM_UNIT_RX
+    assert all(rx.search(t) for t in ("1시간", "2 hours", "1.5h", "3 hrs", "500 milliseconds", "250밀리초"))
+    assert not any(rx.search(t) for t in ("10 s1", "2h1", "5 m 거리"))
+
+
+def test_c3_no_lower_end_still_needs_log_long_enough(tmp_path, capsys):
+    """C-3: 기준 시각도 앞 단계 인용도 없으면(첫 false가 단계 1) 분석 범위 전체를 세는데, 3초 분량 사본으로 '300초 안에 DEACTIVATE
+    없음'이 통과했다 — 사본 길이가 필요 시간보다 짧으면 미관측. 길면 그대로 통과."""
+    rows = ["| 1 | 300초 안에 DEACTIVATE를 보낸다 | AP 내부 | spec:x | 없음(찾은 곳: logs-masked 전체) | false |"]
+    extra = ("찾았는데 없음:", "- `DEACTIVATE_DATA_CALL` 요청 — logs-masked 전체 grep",
+             "메커니즘 재계산: 300초 타이머 = 300000ms → 고치면 결과가 뒤집히나: 예")
+    for name, lines, ok in (("short", ["2026-09-20T15:10:00.100Z host ofonod[3]: attach requested", ISO_Q1,
+                                       "2026-09-20T15:10:03.400Z host datad[9]: state=disconnected"], False),
+                            ("long", ["2026-09-20T15:10:00.100Z host ofonod[3]: attach requested", ISO_Q1, TAIL], True)):
+        job = _job(tmp_path / name)
+        (job / "explore-input.json").write_text(json.dumps({"limit": 200}), encoding="utf-8")      # 확정 기준 없음
+        _copy(job, lines)
+        _d, inv = _run(job, _out(layer="AP 내부", rows=rows, claim="단계 1 — DEACTIVATE 안 보냄", extra=extra), capsys)
+        assert ("첫 어긋남" not in _failed(inv)) is ok, (name, inv["gate"])
+        assert ok or ("3.3초 분량뿐" in inv["gate"][1]["why"] and "필요 300초" in inv["gate"][1]["why"]), inv["gate"]
+
+
+def test_tail_newline_is_not_counted_as_a_line(tmp_path, capsys):
+    """꼬리 한 줄: 파일 끝 개행을 한 줄로 세어, 시각 줄 뒤 시각 없는 줄 1999줄이면 끝 시각을 못 읽었다."""
+    job = _job(tmp_path)
+    _copy(job, [ISO_Q1, TAIL, *(f"    dump word{i}" for i in range(1999))])
+    _d, inv = _run(job, _out(rows=ABSENT_ROWS, extra=ABSENT), capsys)
+    assert inv["status"] == "identified", inv["gate"]
+
+
+DAY_BEFORE = "2026-09-19T15:10:30.000Z host datad[9]: link monitor lost carrier on rmnet_data0"
+ROW_Q = "15:10:30.000 - - datad link monitor lost carrier on rmnet_data0"
+
+
+def test_c4_row_quote_of_another_day_line_is_not_after_failure(tmp_path, capsys):
+    """C-4: 행 모양 인용은 시각만 있어 전날 사본 줄도 실패 당일 시각으로 읽혀 '실패 뒤 흔적'이 통과했다 — 머리·메시지가 맞는 사본
+    줄이 있는데 같은 초인 줄이 없으면 그 시각을 쓰지 않는다(인용 ok는 그대로). 같은 메시지가 당일 그 초에도 있으면 통과."""
+    job = _job(tmp_path / "other")
+    _copy(job, [ISO_Q1, DAY_BEFORE])
+    data, inv = _run(job, _out(quotes=(Q1, ROW_Q)), capsys)
+    assert data["weak"] == 0 and data["fabricated"] == 0, data
+    assert _failed(inv) == ["실패 뒤 흔적"], inv["gate"]
+    job = _job(tmp_path / "same")
+    _copy(job, [ISO_Q1, DAY_BEFORE, DAY_BEFORE.replace("09-19", "09-20")])
+    _d, inv = _run(job, _out(quotes=(Q1, ROW_Q)), capsys)
+    assert inv["status"] == "identified", inv["gate"]
+
+
+def test_c4_row_time_matches_copy_line_across_timezone():
+    """C-4: 행(UTC) 시각과 사본 줄(현지 시각, 작업 tz로 환산)이 같은 순간이면 그대로 쓴다 — 다른 날 줄만 있으면 None."""
+    from triagelib import output
+    output._raw_ready()
+    ev = {"input": {"tz": "Asia/Seoul", "window": {"start": "2026-09-20T15:00:00Z", "end": "2026-09-20T15:30:00Z"}}}
+    q = "15:10:30.000 p0 I datad link monitor lost carrier on rmnet_data0"
+    line = "{} 00:10:30.000  1000  1001 I datad: link monitor lost carrier on rmnet_data0\n"
+    assert output._row_ts(q, ev, [line.format("09-21")]) == output._quote_ts(q, ev) is not None
+    assert output._row_ts(q, ev, [line.format("09-20")]) is None
+    assert output._row_ts(q, ev, ["unrelated line\n"]) == output._quote_ts(q, ev)        # 맞는 줄 없음: 그대로
