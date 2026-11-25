@@ -4177,6 +4177,47 @@ def check_module_writes(inv: Invocation, conf: Config, dec: Decision) -> None:
             return
 
 
+RECORD_DIRS = ("module-suggestions", "skill-suggestions")      # JOB 아래 기록 폴더(skill_patch.py만 쓴다)
+RECORD_DIR_CMDS = ("mv", "rm", "cp", "install", "rsync", "tar", "unzip", "ln")
+RECORD_DIR_ASK = ("기록 폴더(JOB/module-suggestions·skill-suggestions, work_dir/.shown)나 그 상위(JOB·work_dir와 그 위)를 통째로 "
+                  "바꾸거나 옮기거나 그 안에 넣는다({word}). 스크립트 기록·표시 기록을 바꿔치기할 수 있다 — 사용자가 직접 요청한 "
+                  "정리인지 확인한 뒤 허용한다 (규칙 12).")
+
+
+def _record_dir_level(target: str, conf: Config) -> str | None:
+    """`record`(기록 폴더 자체)·`job`(JOB 폴더)·`above`(work_dir이나 그 위)·None (target은 `_norm` 경로)."""
+    for w in conf.module_work_dirs:
+        if _inside(w, target):
+            return "above"
+        rel = _rel_parts(target, w)
+        if rel and len(rel) == 1:
+            return "record" if rel[0] == ".shown" else "job"
+        if rel and len(rel) == 2 and rel[1] in RECORD_DIRS:
+            return "record"
+    return None
+
+
+def check_record_dirs(inv: Invocation, conf: Config, dec: Decision) -> None:
+    """R-10: 기록 폴더나 그 상위를 통째로 바꾸는 `mv`·`rm -r`·`cp -r`·`rsync`·`tar -x -C`·`unzip -d`·`ln`(대상·이름 바꾸기 원본)은
+    ask. 폴더 안 파일 쓰기는 `_script_record`·`_module_record`가 거부한다 — 이것은 폴더째 바꿔 그 검사를 지나는 길을 막는다.
+    재귀 아닌 `cp`·`install`은 기록 폴더·JOB에 파일을 넣을 때만, 재귀 아닌 `rm`은 보지 않는다(폴더를 못 지운다)."""
+    argv = _drop_redirs(inv.argv)
+    name = _base(argv[0]) if argv else ""
+    if name not in RECORD_DIR_CMDS:
+        return
+    recursive = any(a in ("--recursive", "--archive") or (re.fullmatch(r"-[A-Za-z]+", a) and set(a[1:]) & set("rRa"))
+                    for a in argv[1:])
+    if name == "rm" and not recursive:
+        return
+    wide = recursive or name not in ("cp", "install")
+    for word in _write_targets(inv) + _rename_sources(inv):
+        p = _expand(word)
+        level = _record_dir_level(_norm(Path(p) if Path(p).is_absolute() else inv.cwd / p), conf)
+        if level and (wide or level != "above"):
+            dec.ask.append(RECORD_DIR_ASK.format(word=word))
+            return
+
+
 MODULE_GIT_READ = {"status", "log", "show", "diff", "rev-parse", "rev-list", "ls-files", "ls-tree", "cat-file", "describe",
                    "blame", "grep", "shortlog", "for-each-ref", "merge-base", "name-rev", "show-ref", "help", "version", "var",
                    "check-ignore"}
@@ -4403,6 +4444,7 @@ def check_bash(command: str, cwd: Path, conf: Config, dec: Decision) -> None:
             _checked(dec, "규칙 8", check_clone_writes, inv, conf, dec)
         # 규칙 12 (a)(b): 사용자 config 없이도(이름 기반) — 모듈 표지 관문이 평소 Bash를 건너뛴다
         _checked(dec, "규칙 12", check_module_writes, inv, conf, dec)
+        _checked(dec, "규칙 12", check_record_dirs, inv, conf, dec)     # 기록 폴더째 바꿔치기(R-10) → ask
         if name == "gh":
             _checked(dec, "규칙 11", check_gh, inv, conf, dec, command)
             continue

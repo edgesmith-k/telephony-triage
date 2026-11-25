@@ -51,15 +51,19 @@ reason}`(`patch`는 ok일 때만, `reason`은 memo일 때만). ok면 `sha256`, `
 
 `--module`: `JOB/explore-output.md`의 `- [모듈] <p>/<m> <칸> — <한 줄> — 근거: <줄>`(`common/modulelines`, 번호 = `- [모듈]` 줄
 순서) 중 고른 번호를 읽는다. check-output 기록(`check-output.json` explore)이 이 파일 sha256이고 그 번호를 남겼어야 하고(`module_lines`),
-보류(analysis.json decision held)면 첫 점검·함정은 거부한다. `module_skills.remote` 최신 base를 임시 clone(`JOB/skill-wt`, 끝에 지움 —
+첫 점검·함정은 check-output과 같은 기준 — 판단 채택(analysis.json decision accepted, check-output 기록 fit_hold 없음)이거나
+check-output 기록의 조사 결론(`investigation.status`)이 identified일 때만 받는다(뒤 경우 PR 본문에 "원인이 확정되지 않은 이슈(조사
+결론)에서 나온 제안"). `JOB/module-suggestions`가 심볼릭 링크면 거부. `module_skills.remote` 최신 base를 임시 clone(`JOB/skill-wt`, 끝에 지움 —
 관리 clone `_module-skills`는 읽지도 쓰지도 않는다)하고, 칸의 문서·절(`modulelines.SLOTS` — 제목 낱말로 찾고 없으면 파일 끝에
 `## <칸>`)의 끝에 `- <한 줄>`을 넣는다. 거부: 200자 초과·줄바꿈·`|`·```·제목/목록 기호 시작·위험 지시(DANGER)·이미 있는 줄·없는
 모듈 문서·문서 상한(`skillcheck.CAPS`, "상한 도달, 정리 PR 필요")·마스킹이 문맥을 바꿈·`git apply --check`·module_repo_check.
 통과하면 `JOB/module-suggestions/module.patch`·`module.meta.json`(커밋 메시지 — 출처 키·`Triage-Env` trailer, PR 본문 — 근거 줄·
-"eval 건너뜀(통과 아님), 다음 정기 점검 대상")을 쓰고 안내 줄·파일별 줄 수와 여유 바이트·검사 줄·patch·커밋 메시지·PR 본문을 낸다
-(표시 기록 `kind: patch`, key `module:<KEY>`). 근거 줄은 문서에 넣지 않는다.
-`--pr --sha <H>`: 보인 변경 해시(patch·커밋 메시지·PR 본문)가 같고 아직 PR이 없을 때만, 새 임시 clone에서 patch를 다시 만들어
-같으면 `tt-module/<KEY>-<n>` 브랜치·커밋·`git push origin HEAD:refs/heads/<브랜치>`(main에는 push하지 않는다)·`gh pr create`
+"근거 줄과 이 문장의 관계는 스크립트가 검사하지 않았다", "eval 건너뜀(통과 아님), 다음 정기 점검 대상" — 넣은 줄·근거 줄은
+인라인 코드로 감싸 `@이름` 알림이 가지 않는다)을 쓰고 안내 줄·파일별 줄 수와 여유 바이트·검사 줄·patch·커밋 메시지·PR 본문을 낸다
+(표시 기록 `kind: patch`, key `module:<KEY>`). 근거 줄은 문서에 넣지 않는다. 같은 변경(해시·원격·base)을 다시 만들면 이전 PR
+기록을 그대로 두고 `이미 PR을 만들었다` 줄을 더한다.
+`--pr --sha <H>`: 보인 변경 해시(patch·커밋 메시지·PR 본문)가 같고 아직 PR이 없을 때만, meta의 줄 번호로 `--module`과 같은
+검사·만들기를 새 임시 clone에서 다시 해(meta의 줄·본문은 믿지 않는다) patch와 변경 해시가 같으면 `tt-module/<KEY>-<n>` 브랜치·커밋·`git push origin HEAD:refs/heads/<브랜치>`(main에는 push하지 않는다)·`gh pr create`
 (Approve·병합 안 함). key `module-pr:<KEY>`. 종료 0 = patch·PR을 만들었다, 1 = 메모, 2 = 사용·설정 오류(`module_skills` 없음 포함).
 """
 
@@ -531,6 +535,10 @@ M_MEMO = "모듈 학습 patch 없음: {reason}"
 M_PR = "모듈 레포 PR을 만들었다: {url} — 브랜치 {branch}(main은 그대로, 병합은 리뷰어 +1 뒤 사람이 한다)"
 M_PR_MEMO = "모듈 레포 PR 안 만듦: {reason}"
 M_EVAL = "eval 건너뜀(통과 아님), 다음 정기 점검 대상"
+M_UNCHECKED = "근거 줄과 이 문장의 관계는 스크립트가 검사하지 않았다 — 리뷰어가 확인"
+M_FROM_INV = "원인이 확정되지 않은 이슈(조사 결론)에서 나온 제안"
+M_PR_DONE = "이미 PR을 만들었다(브랜치 {branch}) — {url}"
+M_LINK = "module-suggestions 폴더가 심볼릭 링크다 — 지우고 --module로 다시 만든다"
 
 
 def _rmtree(path: Path) -> None:
@@ -578,9 +586,14 @@ def _picks(job: Path, args) -> list[dict]:
         raise Memo("check-output 기록에 [모듈] 줄 검사 결과가 없다 — check-output을 다시 한다")
     rows = {r["n"]: r for r in modulelines.parse(data.decode("utf-8", "replace"))}
     try:
-        held = ((json.loads((job / "analysis.json").read_text(encoding="utf-8")) or {}).get("decision") or {}).get("state") == "held"
+        state = ((json.loads((job / "analysis.json").read_text(encoding="utf-8")) or {}).get("decision") or {}).get("state")
     except (OSError, ValueError, AttributeError):
-        held = False
+        state = None
+    # check-output과 같은 기준(결정 2): 판단 채택이고 보류(fit_hold) 아님, 또는 check-output 기록의 조사 결론이 identified.
+    # 조사 결론은 analysis.json이 아니라 guard가 지키는 check-output.json에서 읽는다(analysis.json은 모델이 쓸 수 있다)
+    accepted = state == "accepted" and not rec.get("fit_hold")
+    inv = rec.get("investigation")
+    identified = isinstance(inv, dict) and inv.get("status") == "identified"
     picked = []
     for n in args._lines:
         row = rows.get(n)
@@ -588,12 +601,15 @@ def _picks(job: Path, args) -> list[dict]:
             raise Memo(f"{n}번 [모듈] 줄이 없다")
         if not row["ok"]:
             raise Memo(f"{n}번 줄: {row['why']}")
+        if row["slot"] in modulelines.HELD_SLOTS and not accepted:
+            if not identified:
+                raise Memo(f"{n}번 줄({row['slot']})은 확정 원인에서만 넣는다(판단 채택, 또는 조사 결론이 원인을 찾음) — "
+                           "이 분석은 원인 미확정이다")
+            row = {**row, "from_inv": True}
         if n not in kept:
             raise Memo(f"{n}번 줄은 check-output이 뺐다(근거가 원문에서 확인되지 않음 등)")
         if row["platform"] != getattr(args, "_platform", row["platform"]):
             raise Memo(f"{n}번 줄의 플랫폼({row['platform']})이 이 분석({args._platform})과 다르다")
-        if held and row["slot"] in modulelines.HELD_SLOTS:
-            raise Memo(f"{n}번 줄({row['slot']})은 확정 원인에서만 넣는다 — 이 분석은 1위 보류다")
         why = _line_problem(row["text"])
         if why:
             raise Memo(f"{n}번 줄: {why}")
@@ -708,15 +724,42 @@ def _message(key: str, rows: list[dict], trailer: str) -> tuple[str, str]:
     """(커밋 메시지, PR 본문). 첫 줄이 PR 제목. 근거 줄은 PR 본문에만."""
     r0 = rows[0]
     title = f"모듈 학습({key}): {r0['platform']}/{r0['module']} {r0['slot']}" + (f" 외 {len(rows) - 1}줄" if len(rows) > 1 else "")
-    items = [f"- {r['platform']}/{r['module']} {r['doc']} {r['slot']}: {r['text']}" for r in rows]
-    msg = "\n".join([title, "", f"출처 이슈: {key}", *items, "", trailer]) + "\n"
-    body = "\n".join([f"출처 이슈: {key}", "", "모듈·층(문서 절)과 넣은 줄:", *items, "",
-                      "근거 줄(마스킹됨, 문서에는 넣지 않음):", *[f"- {r['basis']}" for r in rows], "", M_EVAL]) + "\n"
+    head = [f"- {r['platform']}/{r['module']} {r['doc']} {r['slot']}: " for r in rows]
+    msg = "\n".join([title, "", f"출처 이슈: {key}", *[h + r["text"] for h, r in zip(head, rows)], "", trailer]) + "\n"
+    body = "\n".join([f"출처 이슈: {key}", "", "모듈·층(문서 절)과 넣은 줄:", *[h + _code(r["text"]) for h, r in zip(head, rows)],
+                      "", "근거 줄(마스킹됨, 문서에는 넣지 않음):", *[f"- {_code(r['basis'])}" for r in rows], M_UNCHECKED,
+                      *([M_FROM_INV] if any(r.get("from_inv") for r in rows) else []), "", M_EVAL]) + "\n"
     return msg, body
+
+
+def _code(text: str) -> str:
+    """PR 본문의 인라인 코드(R-29: `@이름`이 알림을 보내지 않게). 글 안 백틱보다 긴 백틱으로 감싼다."""
+    tick = "`" * (max((len(m) for m in re.findall(r"`+", text)), default=0) + 1)
+    return f"{tick} {text} {tick}"
 
 
 def _change_sha(patch: bytes, msg: str, body: str) -> str:
     return hashlib.sha256(patch + b"\0" + msg.encode("utf-8") + b"\0" + body.encode("utf-8")).hexdigest()
+
+
+def _module_change(job: Path, args, defaults: dict, ms: dict, db_cfg: dict):
+    """`args._lines` 줄 → (rows, built, 커밋 메시지, PR 본문, 변경 해시). `--module`과 `--pr`이 같은 길로 만든다 — `--pr`은 meta의
+    줄·본문을 믿지 않고 explore-output.md·check-output.json에서 다시 만든다(R-10). 임시 clone은 호출자가 지운다."""
+    rows = _picks(job, args)
+    built = module_build(job, _clone(job, ms), rows, db_cfg)
+    import db_summary   # 커밋 trailer `Triage-Env`(이슈 DB 커밋과 같은 값)
+    msg, body = _message(job.name, rows, db_summary.env_trailer(None, defaults))
+    masker = masking.for_db(db_cfg, msg + body)
+    msg, body = ("\n".join(masker(ln) for ln in s.split("\n")) for s in (msg, body))
+    return rows, built, msg, body, _change_sha(built["patch"].encode("utf-8"), msg, body)
+
+
+def _old_meta(meta_p: Path) -> dict:
+    try:
+        meta = json.loads(meta_p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return meta if isinstance(meta, dict) else {}
 
 
 def run_module(args, defaults: dict) -> tuple[dict, int]:
@@ -727,12 +770,14 @@ def run_module(args, defaults: dict) -> tuple[dict, int]:
     key = f"module:{job.name}"
     clone = job / MODULE_CLONE
     try:
+        if out_dir.is_symlink():
+            raise Memo(M_LINK)
         out_dir.mkdir(exist_ok=True)
+        old = _old_meta(meta_p)
         for stale in (patch_p, meta_p):
             stale.unlink(missing_ok=True)
         try:
-            rows = _picks(job, args)
-            built = module_build(job, _clone(job, ms), rows, db_cfg)
+            rows, built, msg, body, sha = _module_change(job, args, defaults, ms, db_cfg)
         except OSError as exc:
             raise Memo(f"파일을 읽거나 쓰지 못했다({type(exc).__name__})") from exc
     except Memo as exc:
@@ -741,16 +786,14 @@ def run_module(args, defaults: dict) -> tuple[dict, int]:
         return {"status": "memo", "reason": str(exc), "files": [], "lines": [line]}, CHECK_FAILED
     finally:
         _rmtree(clone)
-    import db_summary   # 커밋 trailer `Triage-Env`(이슈 DB 커밋과 같은 값)
-    msg, body = _message(job.name, rows, db_summary.env_trailer(None, defaults))
-    masker = masking.for_db(db_cfg, msg + body)
-    msg, body = ("\n".join(masker(ln) for ln in s.split("\n")) for s in (msg, body))
+    # R-28: 같은 변경(해시·원격·base)을 다시 만들면 이전 PR 기록을 그대로 둔다 — --pr이 같은 내용 PR을 또 만들지 않는다
+    same = old.get("sha256") == sha and old.get("remote") == ms["remote"] and old.get("base") == ms["base_branch"]
+    pr = old.get("pr") if same and isinstance(old.get("pr"), dict) else None
     data = built["patch"].encode("utf-8")
-    sha = _change_sha(data, msg, body)
     patch_p.write_bytes(data)
     meta_p.write_text(json.dumps({"remote": ms["remote"], "base": ms["base_branch"], "sha256": sha, "message": msg, "body": body,
                                   "rows": [{k: r[k] for k in ("n", "platform", "module", "slot", "doc", "text", "basis")}
-                                           for r in rows], "files": built["files"], "pr": None},
+                                           for r in rows], "files": built["files"], "pr": pr},
                                  ensure_ascii=False) + "\n", encoding="utf-8")
     fence = _fence(built["patch"] + msg + body)
     lines = [M_GUIDE.format(masked="" if masking.is_off(db_cfg) else ", 마스킹됨", path=patch_p.absolute(), sha=sha),
@@ -759,7 +802,8 @@ def run_module(args, defaults: dict) -> tuple[dict, int]:
              M_CHECKS + (MASKED_NOTE.format(n=built["masked_added"]) if built["masked_added"] else ""),
              f"{fence}diff", *built["patch"].rstrip("\n").split("\n"), fence,
              "커밋 메시지:", fence, *msg.rstrip("\n").split("\n"), fence,
-             "PR 본문:", fence, *body.rstrip("\n").split("\n"), fence]
+             "PR 본문:", fence, *body.rstrip("\n").split("\n"), fence,
+             *([M_PR_DONE.format(branch=pr.get("branch"), url=pr.get("url") or "GHE에서 PR 확인")] if pr else [])]
     shown.record(job.parent, "skill_patch", "patch", job.name, key=key, lines=lines, path=str(patch_p.absolute()))
     return {"status": "ok", "patch": str(patch_p.absolute()), "sha256": sha, "files": built["files"], "lines": lines}, OK
 
@@ -786,29 +830,37 @@ def run_module_pr(args, defaults: dict) -> tuple[dict, int]:
         shown.record(job.parent, "skill_patch", "patch", job.name, key=key, lines=[line])
         return {"status": "memo", "reason": reason, "lines": [line]}, CHECK_FAILED
 
+    if (job / MODULE_DIR).is_symlink():
+        return memo(M_LINK)
     if not patch_p.is_file():
         return memo("patch가 없다 — --module로 patch부터 만든다")
     try:
         meta = json.loads(meta_p.read_text(encoding="utf-8"))
         data = patch_p.read_bytes()
         sha = _change_sha(data, meta["message"], meta["body"])
+        lines = [r["n"] for r in meta["rows"]]
+        if not lines or not all(type(n) is int for n in lines):
+            raise ValueError
     except (OSError, ValueError, KeyError, TypeError):
         return memo("patch 기록(meta)이 없거나 깨졌다 — --module로 다시 만든다")
     if not re.fullmatch(r"[0-9a-f]{64}", args.sha or "") or args.sha != sha or meta.get("sha256") != sha:
         return memo("보여 준 것과 다르다(변경 해시 불일치) — patch를 다시 보이고 다시 묻는다")
-    if meta.get("pr"):
-        return memo(f"이미 PR을 만들었다(브랜치 {meta['pr'].get('branch')}) — {meta['pr'].get('url') or 'GHE에서 PR 확인'}")
+    if isinstance(meta.get("pr"), dict):
+        return memo(M_PR_DONE.format(branch=meta["pr"].get("branch"), url=meta["pr"].get("url") or "GHE에서 PR 확인"))
     if meta.get("remote") != ms["remote"] or meta.get("base") != ms["base_branch"]:
         return memo("모듈 레포 설정이 patch를 만들 때와 다르다 — --module로 다시 만든다")
     clone = job / MODULE_CLONE
     try:
         try:
-            built = module_build(job, _clone(job, ms), meta["rows"], db_cfg)
+            args._lines = lines      # R-10: meta의 줄·본문은 믿지 않는다 — 같은 번호로 --module과 같은 검사를 다시 하고 다시 만든다
+            _, built, msg, body, fresh = _module_change(job, args, defaults, ms, db_cfg)
             if built["patch"].encode("utf-8") != data:
                 raise Memo("모듈 레포 main이 바뀌어 patch가 달라졌다 — --module로 다시 만들어 보인다")
+            if fresh != sha:
+                raise Memo("커밋 메시지·PR 본문이 patch를 만들 때와 다르다(기록·판단·환경이 바뀜) — --module로 다시 만들어 보인다")
             branch = _next_branch(job, clone, job.name)
             for argv in (("checkout", "-q", "-b", branch), ("add", "--", *[f["path"] for f in built["files"]]),
-                         ("commit", "-q", "--cleanup=verbatim", "-m", meta["message"])):
+                         ("commit", "-q", "--cleanup=verbatim", "-m", msg)):
                 rc, _, err = _mgit(job, clone, *argv)
                 if rc:
                     raise Memo(f"git {argv[0]} 실패 — {moduleskills.first_fatal(err, rc)}")
@@ -822,9 +874,9 @@ def run_module_pr(args, defaults: dict) -> tuple[dict, int]:
             slug = userconfig.repo_slug(ms["remote"])
             host = (slug[0] if slug else None) or userconfig.get(args._cfg, "issue_db.ghe_host") or None
             body_p = job / MODULE_DIR / "pr-body.md"        # 여러 줄 본문은 파일로(Windows gh.cmd 인자는 줄바꿈에서 끊긴다)
-            body_p.write_text(meta["body"], encoding="utf-8", newline="\n")
+            body_p.write_text(body, encoding="utf-8", newline="\n")
             proc = ghcli.run(["pr", "create", "--base", ms["base_branch"], "--head", branch, "--title",
-                              meta["message"].split("\n", 1)[0], "--body-file", str(body_p)], host=host, cwd=str(clone),
+                              msg.split("\n", 1)[0], "--body-file", str(body_p)], host=host, cwd=str(clone),
                              env={**os.environ, "GH_PROMPT_DISABLED": "1"})
             url = next((ln.strip() for ln in reversed(proc.stdout.splitlines()) if ln.strip().startswith("http")), None)
             if proc.returncode != 0 or not url:
@@ -844,7 +896,8 @@ def run_module_pr(args, defaults: dict) -> tuple[dict, int]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="skill_patch.py", description=__doc__,
+    # allow_abbrev=False(R-01): guard 규칙 12는 낱말 `apply`·`pr`이 있을 때만 묻는다 — 줄임(--ap)을 받으면 ask 없이 적용된다
+    parser = argparse.ArgumentParser(prog="skill_patch.py", description=__doc__, allow_abbrev=False,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("key", metavar="KEY", help="작업 키")
     parser.add_argument("--skill-dir", metavar="SK",

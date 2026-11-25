@@ -12,7 +12,7 @@ import re
 SLOTS = {"첫 점검": ("explore.md", ("첫 점검",)), "함정": ("explore.md", ("함정",)), "층 경로": ("explore.md", ("층 경로",)),
          "판독 주의": ("explore.md", ("판독 주의",)), "코드 경로": ("deep.md", ("코드 경로",)),
          "버전 차이": ("deep.md", ("버전", "차이"))}
-HELD_SLOTS = ("첫 점검", "함정")       # 확정 원인에서만 — 보류(decision held)면 고르지 않는다
+HELD_SLOTS = ("첫 점검", "함정")       # 확정 원인에서만 — 판단 채택(보류 아님)이거나 조사 결론 identified일 때(결정 2, check-output·skill_patch 같은 기준)
 KEPT_KEY = "module_lines"              # check-output 기록에 남긴 `n` 목록(근거 원문 확인을 통과한 줄)
 HEAD = "- [모듈]"
 LINE_RX = re.compile(r"^- \[모듈\] ([a-z][a-z0-9_]*)/([a-z]+) (\S+(?: \S+)?) [—–] (.+) [—–] 근거\s*[:：]\s*(.+)$")
