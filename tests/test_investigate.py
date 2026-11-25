@@ -1145,7 +1145,7 @@ def test_n2_each_absent_word_is_counted_on_its_own(tmp_path, capsys):
             _copy(job, lines)
             _d, inv = _run(job, _out(rows=ABSENT_ROWS, extra=("찾았는데 없음:", item)), capsys)
             assert (inv["status"] == "identified") is ok, (name, case, inv["gate"])
-            assert ok or "`SETUP_DATA_CALL` 줄이" in inv["gate"][1]["why"] and "1건" in inv["gate"][1]["why"], inv["gate"]
+            assert ok or ("`SETUP_DATA_CALL` 줄이" in inv["gate"][1]["why"] and "1건" in inv["gate"][1]["why"]), inv["gate"]
 
 
 def test_n4_gate_4_reads_the_end_time_of_the_window_head(tmp_path, capsys):
