@@ -13,10 +13,20 @@
   "shapes": 19,
   "window": [
    "2026-09-22T08:55:02.000Z",
-   "2026-09-22T09:05:02.000Z"
+   "2026-09-22T09:10:02.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
+   {
+    "ts": "2026-09-22T09:00:02.000Z",
+    "last": "2026-09-22T09:00:02.000Z",
+    "n": 1,
+    "phone": 0,
+    "level": "I",
+    "tag": "mgmtd",
+    "msg": "dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1 path/example_dbus.go:12"
+   },
    {
     "ts": "2026-09-22T09:00:02.002Z",
     "last": "2026-09-22T09:00:02.002Z",
@@ -78,6 +88,51 @@
     "after": true
    },
    {
+    "ts": "2026-09-22T09:00:01.002Z",
+    "last": "2026-09-22T09:00:01.452Z",
+    "n": 2,
+    "phone": null,
+    "level": "D",
+    "tag": "datad",
+    "msg": "add apn entry, profile id : 2, apn : ims, type : ims[./src/apn_example.cxx +42]"
+   },
+   {
+    "ts": "2026-09-22T09:00:01.002Z",
+    "last": "2026-09-22T09:00:01.452Z",
+    "n": 2,
+    "phone": null,
+    "level": "D",
+    "tag": "datad",
+    "msg": "apn list loaded, size: 2[./src/apn_example.cxx +42]"
+   },
+   {
+    "ts": "2026-09-22T09:00:01.001Z",
+    "last": "2026-09-22T09:00:01.451Z",
+    "n": 2,
+    "phone": null,
+    "level": "D",
+    "tag": "datad",
+    "msg": "add apn entry, profile id : 1, apn : <APN#2>, type : internet[./src/apn_example.cxx +42]"
+   },
+   {
+    "ts": "2026-09-22T09:00:01.001Z",
+    "last": "2026-09-22T09:00:01.451Z",
+    "n": 2,
+    "phone": null,
+    "level": "D",
+    "tag": "datad",
+    "msg": "set ia profile id = 1[./src/ia_example.cxx +10]"
+   },
+   {
+    "ts": "2026-09-22T09:00:01.000Z",
+    "last": "2026-09-22T09:00:01.450Z",
+    "n": 2,
+    "phone": null,
+    "level": "D",
+    "tag": "datad",
+    "msg": "sync apn list, size: 2[./src/apn_example.cxx +42]"
+   },
+   {
     "ts": "2026-09-22T09:00:02.610Z",
     "last": "2026-09-22T09:00:02.610Z",
     "n": 1,
@@ -126,60 +181,6 @@
     "tag": "ofonod",
     "msg": "dbus_trace signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:\"Active\", variant(true)",
     "after": true
-   },
-   {
-    "ts": "2026-09-22T09:00:02.000Z",
-    "last": "2026-09-22T09:00:02.000Z",
-    "n": 1,
-    "phone": 0,
-    "level": "I",
-    "tag": "mgmtd",
-    "msg": "dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1 path/example_dbus.go:12"
-   },
-   {
-    "ts": "2026-09-22T09:00:01.002Z",
-    "last": "2026-09-22T09:00:01.452Z",
-    "n": 2,
-    "phone": null,
-    "level": "D",
-    "tag": "datad",
-    "msg": "add apn entry, profile id : 2, apn : ims, type : ims[./src/apn_example.cxx +42]"
-   },
-   {
-    "ts": "2026-09-22T09:00:01.002Z",
-    "last": "2026-09-22T09:00:01.452Z",
-    "n": 2,
-    "phone": null,
-    "level": "D",
-    "tag": "datad",
-    "msg": "apn list loaded, size: 2[./src/apn_example.cxx +42]"
-   },
-   {
-    "ts": "2026-09-22T09:00:01.001Z",
-    "last": "2026-09-22T09:00:01.451Z",
-    "n": 2,
-    "phone": null,
-    "level": "D",
-    "tag": "datad",
-    "msg": "add apn entry, profile id : 1, apn : <APN#2>, type : internet[./src/apn_example.cxx +42]"
-   },
-   {
-    "ts": "2026-09-22T09:00:01.001Z",
-    "last": "2026-09-22T09:00:01.451Z",
-    "n": 2,
-    "phone": null,
-    "level": "D",
-    "tag": "datad",
-    "msg": "set ia profile id = 1[./src/ia_example.cxx +10]"
-   },
-   {
-    "ts": "2026-09-22T09:00:01.000Z",
-    "last": "2026-09-22T09:00:01.450Z",
-    "n": 2,
-    "phone": null,
-    "level": "D",
-    "tag": "datad",
-    "msg": "sync apn list, size: 2[./src/apn_example.cxx +42]"
    },
    {
     "ts": "2026-09-22T09:00:00.200Z",

@@ -8,9 +8,10 @@
 
 ## 전체 로그 모양 요약 (마스킹 사본 전체, 분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이 스크립트가 셈)
 
-- 범위: 2026-09-22T09:20:00.010Z ~ 2026-09-22T09:20:31.200Z, 줄 23, 모양 16개 중 16개. 기준 시각: 2026-09-22T09:20:02.000Z
-- 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
+- 범위: 2026-09-22T09:20:00.010Z ~ 2026-09-22T09:20:31.200Z, 줄 23, 모양 16개 중 16개. 기준: 2026-09-22T09:20:02.000Z
+- 모양은 슬롯·레벨과 숫자를 #로 바꾼 태그·메시지다. 줄 수는 로그 전체에서 셌다. 기준 앞뒤 600초 안, 로그 전체에 5번 이하 나온 드문 모양, 예외·crash 머리의 세 몫으로 나눠 골랐다(남은 몫은 다음 몫으로). 몫 안은 본 타임라인 프로세스(pid)의 모양, 드문 모양, F·예외·E·W 등급, 기준에 가까운 순이다. 순서는 고른 순서이고 줄은 그 모양의 첫 줄이다
 
+09:20:02.000 p0 I mgmtd dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1 path/example_dbus.go:12  〔script 모양 1줄〕
 09:20:02.002 p0 I ofonod dbus_trace method call - i:org.ofono.ConnectionContext m:SetProperty p:/ril_0/context1 a:"Active", variant(true)  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:20:02.003 p0 D ofonod drivers/rilmodem/gprs-context.c:ril_gprs_context_activate_primary() /ril_0 context 1 activating  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:20:02.004 p0 I ofonod [0,0041]> RIL_REQUEST_SETUP_DATA_CALL 16,1,<APN#1>,0,IP  〔script 모양 1줄, 기준 뒤 첫 등장〕
@@ -24,7 +25,6 @@
 09:20:02.616 p0 I ofonod dbus_trace signal - i:org.ofono.ConnectionContext m:PropertyChanged p:/ril_0/context1 a:"Active", variant(true)  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:20:02.700 - D vrild mux [ch0][RX] VIPC_EXAMPLE_PDN_LIST_IND ind len=24  〔script 모양 1줄, 기준 뒤 첫 등장〕
 09:20:02.702 p0 I ofonod [0,UNSOL]< RIL_UNSOL_DATA_CALL_LIST_CHANGED [cid=1 active=2]  〔script 모양 2줄, 09:20:02.702~09:20:20.702, 기준 뒤 첫 등장〕
-09:20:02.000 p0 I mgmtd dbus -> org.ofono.ConnectionContext.SetProperty on /ril_0/context1 path/example_dbus.go:12  〔script 모양 1줄〕
 09:20:00.200 - I vrild [ExampleRegService_0] signal update lte rsrp=-93  〔script 모양 4줄, 09:20:00.200~09:20:31.200〕
 09:20:00.010 - I mgmtd ui tick  〔script 모양 4줄, 09:20:00.010~09:20:30.010〕
 

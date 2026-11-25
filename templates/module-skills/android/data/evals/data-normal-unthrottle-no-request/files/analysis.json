@@ -106,17 +106,6 @@
  ],
  "near_causes": [
   {
-   "id": "DATA-002-01",
-   "title": "Airplane mode on",
-   "matched": "1/2",
-   "missing": [
-    "must_event data_teardown_all {'reason':…"
-   ],
-   "at": [
-    "2026-11-20T11:00:00.100Z"
-   ]
-  },
-  {
    "id": "DATA-001",
    "title": "SETUP_DATA_CALL이 발생하지 않음",
    "note": "낱말 일치만(로그 대조 안 함)"

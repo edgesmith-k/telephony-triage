@@ -22,30 +22,11 @@
   "shapes": 25,
   "window": [
    "2026-11-12T01:09:31.000Z",
-   "2026-11-12T01:19:31.000Z"
+   "2026-11-12T01:24:31.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
-   {
-    "ts": "2026-11-12T01:14:33.801Z",
-    "last": "2026-11-12T01:14:33.801Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "GsmInboundSmsHandler",
-    "msg": "IdleState.processMessage: processing EVENT_RELEASE_WAKELOCK",
-    "after": true
-   },
-   {
-    "ts": "2026-11-12T01:14:33.802Z",
-    "last": "2026-11-12T01:14:33.802Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "GsmInboundSmsHandler",
-    "msg": "IdleState.processMessage: EVENT_RELEASE_WAKELOCK: mWakeLock released",
-    "after": true
-   },
    {
     "ts": "2026-11-12T01:14:30.707Z",
     "last": "2026-11-12T01:14:30.800Z",
@@ -101,6 +82,24 @@
     "msg": "DeliveringState.processMessage: processing EVENT_RETURN_TO_IDLE"
    },
    {
+    "ts": "2026-11-12T01:14:30.800Z",
+    "last": "2026-11-12T01:14:30.800Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "IdleState.enter: entering IdleState"
+   },
+   {
+    "ts": "2026-11-12T01:14:30.791Z",
+    "last": "2026-11-12T01:14:30.791Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "Ordered broadcast completed for android.provider.Telephony.SMS_RECEIVED in: 13 ms"
+   },
+   {
     "ts": "2026-11-12T01:14:30.723Z",
     "last": "2026-11-12T01:14:30.723Z",
     "n": 1,
@@ -135,24 +134,6 @@
     "level": "D",
     "tag": "RILJ",
     "msg": "[UNSL]< UNSOL_RESPONSE_NEW_SMS [PHONE0]"
-   },
-   {
-    "ts": "2026-11-12T01:14:30.800Z",
-    "last": "2026-11-12T01:14:30.800Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "GsmInboundSmsHandler",
-    "msg": "IdleState.enter: entering IdleState"
-   },
-   {
-    "ts": "2026-11-12T01:14:30.791Z",
-    "last": "2026-11-12T01:14:30.791Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "GsmInboundSmsHandler",
-    "msg": "Ordered broadcast completed for android.provider.Telephony.SMS_RECEIVED in: 13 ms"
    },
    {
     "ts": "2026-11-12T01:14:30.791Z",
@@ -252,6 +233,26 @@
     "level": "D",
     "tag": "GsmInboundSmsHandler",
     "msg": "IdleState.processMessage: processing EVENT_NEW_SMS"
+   },
+   {
+    "ts": "2026-11-12T01:14:33.801Z",
+    "last": "2026-11-12T01:14:33.801Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "IdleState.processMessage: processing EVENT_RELEASE_WAKELOCK",
+    "after": true
+   },
+   {
+    "ts": "2026-11-12T01:14:33.802Z",
+    "last": "2026-11-12T01:14:33.802Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "GsmInboundSmsHandler",
+    "msg": "IdleState.processMessage: EVENT_RELEASE_WAKELOCK: mWakeLock released",
+    "after": true
    }
   ]
  }

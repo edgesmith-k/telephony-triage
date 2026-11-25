@@ -8,8 +8,8 @@
 
 ## 전체 로그 모양 요약 (마스킹 사본 전체, 분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이 스크립트가 셈)
 
-- 범위: 2026-09-22T10:00:16.546Z ~ 2026-09-22T10:00:22.236Z, 줄 22, 모양 20개 중 20개. 기준 시각: 2026-09-22T10:00:20.000Z
-- 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), 기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다
+- 범위: 2026-09-22T10:00:16.546Z ~ 2026-09-22T10:00:22.236Z, 줄 22, 모양 20개 중 20개. 기준: 2026-09-22T10:00:20.000Z
+- 모양은 슬롯·레벨과 숫자를 #로 바꾼 태그·메시지다. 줄 수는 로그 전체에서 셌다. 기준 앞뒤 600초 안, 로그 전체에 5번 이하 나온 드문 모양, 예외·crash 머리의 세 몫으로 나눠 골랐다(남은 몫은 다음 몫으로). 몫 안은 본 타임라인 프로세스(pid)의 모양, 드문 모양, F·예외·E·W 등급, 기준에 가까운 순이다. 순서는 고른 순서이고 줄은 그 모양의 첫 줄이다
 
 10:00:21.722 - E vrild chan 2: empty reply body, nothing to encode  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:21.731 - I mgmtd load network info failed: Load data failed err: Operation failed path/example_net.go:24  〔script 모양 1줄, 기준 뒤 첫 등장〕
@@ -24,8 +24,8 @@
 10:00:21.719 - D vrild client fd 9 VCHAN_2 REQUEST: SIGNAL_STRENGTH (6 bytes)  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:21.720 - D vrild client fd 9 VCHAN_2 REQUEST: OPERATOR (6 bytes)  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:21.721 - I vrild [IpcCtx_2] OnIpcComplete Request ID=86, result=0 -> chan 2 reply sent, 1 waiters, took 2 ms  〔script 모양 2줄, 10:00:21.721~10:00:21.721, 기준 뒤 첫 등장〕
-10:00:22.236 - I mgmtd ui tick  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:17.236 - I chatterd position fix pending  〔script 모양 2줄, 10:00:17.236~10:00:21.836〕
+10:00:22.236 - I mgmtd ui tick  〔script 모양 1줄, 기준 뒤 첫 등장〕
 10:00:16.757 p0 I ofonod [0,0631]< RIL_REQUEST_RADIO_POWER  〔script 모양 1줄〕
 10:00:16.756 - D vrild mux [ch1][RX] VIPC_EXAMPLE_POWER, RSP OK(VIPC_OK) seq=0x07c3 len=8  〔script 모양 1줄〕
 10:00:16.557 - D vrild mux [ch1][TX] VIPC_EXAMPLE_POWER seq=0x07c3 len=8, power=0  〔script 모양 1줄〕
@@ -54,7 +54,8 @@
 ## 이상 줄: W/E/F 레벨, 오류 문구, 예외 (태그 규칙과 상관없이 스크립트가 마스킹 사본에서 고름, 레벨을 믿지 않는 태그는 오류 문구로 고름)
 
 - 범위: 2026-09-22T09:55:20.000Z ~ 2026-09-22T10:10:20.000Z (분석 구간 끝과 기준 시각 2026-09-22T10:00:20.000Z 뒤 600초 중 늦은 쪽까지).
-- 줄: 2. 프레임을 뺀 후보 2줄에서 F, 예외·crash 머리, E, 레벨을 믿지 않는 줄의 오류 문구, W 순으로, 같은 등급은 기준 시각에 가까운 순으로 골랐다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
+- 기준: 2026-09-22T10:00:20.000Z
+- 줄: 2. 프레임을 뺀 후보 2줄에서 기준 앞뒤 600초 안, 로그 전체에 5번 이하 나온 드문 모양, 예외·crash 머리의 세 몫으로 나눠 골랐다(남은 몫은 다음 몫으로). 몫 안은 본 타임라인 프로세스(pid)의 줄, 드문 모양, F·예외·E·W 등급, 기준에 가까운 순이다. 예외 머리 뒤에는 프레임 2줄을 붙이고 숫자만 다른 반복은 접었다. 형식은 위와 같다
 
 10:00:21.722 - E vrild chan 2: empty reply body, nothing to encode
 10:00:21.731 - I mgmtd load network info failed: Load data failed err: Operation failed path/example_net.go:24

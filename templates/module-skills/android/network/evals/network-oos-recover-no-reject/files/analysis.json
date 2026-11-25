@@ -86,21 +86,13 @@
  ],
  "near_causes": [
   {
-   "id": "DATA-001",
-   "title": "SETUP_DATA_CALL이 발생하지 않음",
-   "matched": "0/1",
-   "missing": [
-    "must_event data_evaluation_rejected"
-   ]
-  },
-  {
-   "id": "NETWORK-001",
-   "title": "서비스가 잡히지 않음",
+   "id": "NETWORK-001-01",
+   "title": "망 등록 거절",
    "note": "낱말 일치만(로그 대조 안 함)"
   },
   {
-   "id": "NETWORK-001-01",
-   "title": "망 등록 거절",
+   "id": "SMS-001-01",
+   "title": "전송 요청이 만들어지지 않음",
    "note": "낱말 일치만(로그 대조 안 함)"
   }
  ],

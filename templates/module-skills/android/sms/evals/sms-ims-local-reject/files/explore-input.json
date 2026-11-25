@@ -62,9 +62,10 @@
   "shapes": 14,
   "window": [
    "2026-08-25T13:55:21.000Z",
-   "2026-08-25T14:05:21.000Z"
+   "2026-08-25T14:10:21.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
    {
     "ts": "2026-08-25T14:00:20.060Z",
@@ -122,16 +123,6 @@
     "after": true
    },
    {
-    "ts": "2026-08-25T14:00:24.100Z",
-    "last": "2026-08-25T14:00:24.100Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "RILJ",
-    "msg": "[0702]< SEND_SMS [PHONE0]",
-    "after": true
-   },
-   {
     "ts": "2026-08-25T14:00:20.104Z",
     "last": "2026-08-25T14:00:20.104Z",
     "n": 1,
@@ -166,6 +157,16 @@
     "level": "I",
     "tag": "SmsDispatchersController",
     "msg": "sendText: dest=<MSISDN#1> parts=1 [PHONE0]"
+   },
+   {
+    "ts": "2026-08-25T14:00:24.100Z",
+    "last": "2026-08-25T14:00:24.100Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "RILJ",
+    "msg": "[0702]< SEND_SMS [PHONE0]",
+    "after": true
    },
    {
     "ts": "2026-08-25T14:00:06.128Z",

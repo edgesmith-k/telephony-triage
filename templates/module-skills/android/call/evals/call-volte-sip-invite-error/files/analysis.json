@@ -98,25 +98,6 @@
  ],
  "near_causes": [
   {
-   "id": "CALL-001",
-   "title": "VoLTE가 동작하지 않음",
-   "matched": "1/2",
-   "missing": [
-    "must_event call_fail_cause"
-   ],
-   "at": [
-    "2026-09-04T12:02:00.000Z"
-   ]
-  },
-  {
-   "id": "DATA-001",
-   "title": "SETUP_DATA_CALL이 발생하지 않음",
-   "matched": "0/1",
-   "missing": [
-    "must_event data_evaluation_rejected"
-   ]
-  },
-  {
    "id": "CALL-001-01",
    "title": "IMS 미등록",
    "note": "낱말 일치만(로그 대조 안 함)"

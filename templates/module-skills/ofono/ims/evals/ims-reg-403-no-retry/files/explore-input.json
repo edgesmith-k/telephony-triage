@@ -13,10 +13,20 @@
   "shapes": 14,
   "window": [
    "2026-09-21T10:35:05.000Z",
-   "2026-09-21T10:45:05.000Z"
+   "2026-09-21T10:50:05.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
+   {
+    "ts": "2026-09-21T10:40:05.000Z",
+    "last": "2026-09-21T10:40:05.000Z",
+    "n": 1,
+    "phone": null,
+    "level": "D",
+    "tag": "vrild",
+    "msg": "mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=40"
+   },
    {
     "ts": "2026-09-21T10:40:05.001Z",
     "last": "2026-09-21T10:40:05.001Z",
@@ -58,15 +68,6 @@
     "after": true
    },
    {
-    "ts": "2026-09-21T10:40:05.000Z",
-    "last": "2026-09-21T10:40:05.000Z",
-    "n": 1,
-    "phone": null,
-    "level": "D",
-    "tag": "vrild",
-    "msg": "mux [ch0][RX] VIPC_EXAMPLE_IMS_REG_FAIL_IND ind len=40"
-   },
-   {
     "ts": "2026-09-21T10:40:05.007Z",
     "last": "2026-09-21T10:40:25.012Z",
     "n": 3,
@@ -74,16 +75,6 @@
     "level": "D",
     "tag": "imsd",
     "msg": "[SLOT_0][I] 5103 [ExampleImsRegistration] registered:0 VoPS=1",
-    "after": true
-   },
-   {
-    "ts": "2026-09-21T10:40:10.010Z",
-    "last": "2026-09-21T10:40:25.010Z",
-    "n": 4,
-    "phone": null,
-    "level": "D",
-    "tag": "imsd",
-    "msg": "[SLOT_0][I] 5104 [ExampleImsRegistration] exampleTriggerRegistering() NOT SENT (blocked after 403)",
     "after": true
    },
    {
@@ -148,6 +139,16 @@
     "level": "I",
     "tag": "ofonod",
     "msg": "IMSD 0: <HEXDUMP 32B>"
+   },
+   {
+    "ts": "2026-09-21T10:40:10.010Z",
+    "last": "2026-09-21T10:40:25.010Z",
+    "n": 4,
+    "phone": null,
+    "level": "D",
+    "tag": "imsd",
+    "msg": "[SLOT_0][I] 5104 [ExampleImsRegistration] exampleTriggerRegistering() NOT SENT (blocked after 403)",
+    "after": true
    }
   ]
  }

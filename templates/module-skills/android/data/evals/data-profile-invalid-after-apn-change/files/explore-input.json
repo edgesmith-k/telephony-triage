@@ -22,9 +22,10 @@
   "shapes": 22,
   "window": [
    "2026-11-10T21:54:21.000Z",
-   "2026-11-10T22:04:21.000Z"
+   "2026-11-10T22:09:21.000Z"
   ],
   "cap": 60,
+  "after_sec": 600,
   "groups": [
    {
     "ts": "2026-11-10T21:59:20.531Z",
@@ -34,26 +35,6 @@
     "level": "D",
     "tag": "DNC-0",
     "msg": "onDataNetworkDisconnected: [DataNetwork: DN-106-C, <APN#1>, state=null], cause=LOST_CONNECTION(0x10004)(65540), tearDownReason=DATA_PROFILE_INVALID"
-   },
-   {
-    "ts": "2026-11-10T21:59:23.535Z",
-    "last": "2026-11-10T21:59:23.535Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "DPM-0",
-    "msg": "Can't find any data profile that can satisfy [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_VCN_MANAGED&NOT_BANDWI…",
-    "after": true
-   },
-   {
-    "ts": "2026-11-10T21:59:23.535Z",
-    "last": "2026-11-10T21:59:23.535Z",
-    "n": 1,
-    "phone": 0,
-    "level": "D",
-    "tag": "DNC-0",
-    "msg": "Data evaluation: evaluation reason:RETRY_AFTER_DISCONNECTED, Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, candidate profile=null, time=21:59:23.535, netw…",
-    "after": true
    },
    {
     "ts": "2026-11-10T21:59:20.531Z",
@@ -225,6 +206,26 @@
     "level": "D",
     "tag": "DPM-0",
     "msg": "Update data profiles due to APN db updated."
+   },
+   {
+    "ts": "2026-11-10T21:59:23.535Z",
+    "last": "2026-11-10T21:59:23.535Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DPM-0",
+    "msg": "Can't find any data profile that can satisfy [NetworkRequest [ REQUEST id=1, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_VCN_MANAGED&NOT_BANDWI…",
+    "after": true
+   },
+   {
+    "ts": "2026-11-10T21:59:23.535Z",
+    "last": "2026-11-10T21:59:23.535Z",
+    "n": 1,
+    "phone": 0,
+    "level": "D",
+    "tag": "DNC-0",
+    "msg": "Data evaluation: evaluation reason:RETRY_AFTER_DISCONNECTED, Data disallowed reasons: NO_SUITABLE_DATA_PROFILE, candidate profile=null, time=21:59:23.535, netw…",
+    "after": true
    }
   ]
  }
