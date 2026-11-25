@@ -193,3 +193,25 @@ def test_candidate_check_block_parsed_and_rendered(tmp_path, capsys):
     assert "/ 후보 확인: DATA-001-01 아님 · DATA-002-01 맞음 · SIM-003 모름" in tc._line(job)
     assert "  - 후보 확인: DATA-001-01 아님 — 찾았는데 없음: 인증 줄을 타임라인 머리 요약에서 | DATA-002-01 맞음 — " in text
 
+
+
+def test_candidate_check_quotes_are_grounded(tmp_path, capsys):
+    """`후보 확인` 근거 인용도 근거 원문 검사를 거친다: 지어낸 줄은 그 항목에 `[근거 불일치]`와 전체 불일치 수, 원문 줄은 통과,
+    `찾았는데 없음: …`은 인용으로 세지 않는다. 옛 한 줄 `분석 스킬 의견:`은 인용 수가 `근거` 칸 그대로다."""
+    import test_check_output as tc
+    new = "\n".join(["원인 층: 벤더 RIL(vrild) — 인증 거절", "원인 데몬: vrild", "근거:", f"- {tc.Q1}", "반대 근거: 없음",
+                     "후보 확인:", f"- DATA-001-01: 맞음 — {tc.Q2}", f"- DATA-002-01: 아님 — {tc.FAKE}",
+                     "- SIM-003: 아님 — 찾았는데 없음: SIM 오류 줄을 타임라인 머리 요약에서", "규칙 제안:", "- 없음", ""])
+    job = tc.make_job(tmp_path / "a")
+    (job / "deep-output.md").write_text(new, encoding="utf-8")
+    code, data, err = tc.check(job, capsys=capsys)
+    assert code == 0, err
+    assert data["quotes"] == 3 and data["fabricated"] == 1, data           # 근거 1 + 후보 근거 2(찾았는데 없음 제외)
+    text = (job / "report.md").read_text(encoding="utf-8")
+    assert f"DATA-002-01 아님 [근거 불일치] — {tc.FAKE}" in text and f"DATA-001-01 맞음 — {tc.Q2}" in text
+    assert "SIM-003 아님 — 찾았는데 없음" in text and "  - 근거 원문 검사: 인용 3개 중 원문에 없음 1" in text
+    old = tc.make_job(tmp_path / "b")
+    (old / "deep-output.md").write_text(tc._deep_out([tc.Q1, tc.Q2]), encoding="utf-8")
+    code, data, err = tc.check(old, capsys=capsys)
+    assert code == 0 and data["quotes"] == 2 and data["fabricated"] == 0, (data, err)
+    assert "[근거 불일치]" not in (old / "report.md").read_text(encoding="utf-8")

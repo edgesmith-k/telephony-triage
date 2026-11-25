@@ -380,13 +380,23 @@ def _caps(purpose: str, mode: str, fields: dict, text: str) -> str | None:
 
 
 def _quotes(purpose: str, fields: dict | None) -> list[str]:
-    """인용 목록. 탐색은 가설 순서대로 `로그로 확인` 전부 뒤에 가설 순서대로 `기대 체인` 관측 줄(`evidence.chain_quotes`)."""
+    """근거 원문 검사할 인용: 탐색은 가설 순서대로 `로그로 확인` 전부 뒤에 가설 순서대로 `기대 체인` 관측 줄(`evidence.chain_quotes`),
+    심층은 `근거` 뒤에 `후보 확인` 항목의 근거(`_check_quoted` 순서)."""
     if not fields:
         return []
     if purpose == "explore":
         return ([q for hyp in fields["hyps"] for q in hyp["로그로 확인"]]
                 + [q for hyp in fields["hyps"] for q in evidence.chain_quotes(hyp)])
-    return list(fields.get("근거") or [])
+    return list(fields.get("근거") or []) + [why for _i, why in _check_quoted(fields)]
+
+
+NOT_FOUND_RX = re.compile(r"^[`*\s]*찾았는데\s*없음")     # `후보 확인` 근거 `찾았는데 없음: …`은 인용이 아니다
+
+
+def _check_quoted(fields: dict) -> list[tuple[int, str]]:
+    """`후보 확인` 항목 중 근거를 인용으로 쓴 것 [(항목 번호, 근거)] — 빈 근거·`찾았는데 없음: …`은 뺀다(옛 한 줄 형식이면 [])."""
+    return [(i, c["why"]) for i, c in enumerate(fields.get(evidence.CHECK_FIELD) or [])
+            if c.get("why") and not NOT_FOUND_RX.match(c["why"])]
 
 
 def _parse(purpose: str, mode: str, text: str) -> dict | None:
@@ -447,9 +457,10 @@ def _one(text) -> str:
 
 
 def _render(purpose: str, mode: str, head: str, fields: dict, sub: str, fab_by_hyp: list[int] | None = None,
-            normal_bad: list[bool] | None = None) -> list[str]:
+            normal_bad: list[bool] | None = None, check_bad: set = frozenset()) -> list[str]:
     """report 줄. `fab_by_hyp`(탐색, 가설별 원문에 없는 인용 수)가 0보다 크면 그 가설 줄에 `[근거 불일치 N]`, `normal_bad`(정상이라고
-    적었는데 원문에 있는 인용이 없음)면 `[정상 근거 없음]`."""
+    적었는데 원문에 있는 인용이 없음)면 `[정상 근거 없음]`, `check_bad`(심층 `후보 확인` 항목 번호 — 근거 인용이 원문에 없음)면 그
+    항목에 `[근거 불일치]`."""
     if purpose == "explore":
         if not fields["hyps"]:
             return [f"{head}가설 없음: {_one(fields['none'])} / 다음 확인: {_one(fields['next'])}", sub]
@@ -468,13 +479,14 @@ def _render(purpose: str, mode: str, head: str, fields: dict, sub: str, fab_by_h
                 else f"분석 스킬 의견: {_one(fields['분석 스킬 의견'])}")      # 옛 모듈 레포 형식(한 줄)
         first = f"{head}원인 층 {_one(fields['원인 층'])} · 원인 데몬 {_one(fields['원인 데몬'])} / {tail}"
         return [first, f"  - 근거: {quotes}", f"  - 반대 근거: {_one(fields['반대 근거'])}",
-                *([f"  - 후보 확인: {' | '.join(_check_one(c) for c in checks)}"] if checks else []), sub]
+                *([f"  - 후보 확인: {' | '.join(_check_one(c, i in check_bad) for i, c in enumerate(checks))}"]
+                  if checks else []), sub]
     return ([f"{head}{_one(fields['요약'])} / 분석 스킬 의견: {_one(fields['분석 스킬 의견'])}"]
             + ([f"  - 근거: {quotes}"] if fields["근거"] else []) + [sub])
 
 
-def _check_one(c: dict) -> str:
-    return f"{c['cause']} {c['verdict']}" + (f" — {_one(c['why'])}" if c["why"] else "")
+def _check_one(c: dict, bad: bool = False) -> str:
+    return f"{c['cause']} {c['verdict']}" + (" [근거 불일치]" if bad else "") + (f" — {_one(c['why'])}" if c["why"] else "")
 
 
 def _evidence_sub(mode: str, res: dict | None, skipped: str | None, before: int = 0) -> str:
@@ -852,6 +864,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
         if len(before) == len(quotes):
             raw_items = frozenset(i for i, (a, b) in enumerate(zip(before, quotes)) if a != b)
     res = fab_by_hyp = per_hyp = None
+    check_bad: set = set()
     source, tags = evidence.source_text(src_text) if src_skip is None and src_text is not None else (None, None)
     if not quotes:
         src_skip = "인용 없음"
@@ -862,6 +875,9 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
             per_hyp = [[next(it) for _ in h["로그로 확인"]] for h in fields["hyps"]]
             chain_v = [[next(it) for _ in evidence.chain_quotes(h)] for h in fields["hyps"]]     # 기대 체인 관측 줄(뒤에 붙였다)
             fab_by_hyp = [(a + b).count("fabricated") for a, b in zip(per_hyp, chain_v)]
+        else:                           # 심층: `근거` 뒤 verdicts가 `후보 확인` 인용 항목 순서
+            tail = res["verdicts"][len(fields.get("근거") or []):]
+            check_bad = {i for (i, _w), v in zip(_check_quoted(fields), tail) if v == "fabricated"}
     normal_ok, normal_bad = _normal_flags(fields, per_hyp) if purpose == "explore" else ([], [])
     normal1 = bool(normal_ok) and normal_ok[_picked(fields)]       # `가장 유력: N`이 있으면 그 가설, 없으면 가설 1
     old = _load(job / RECORD)
@@ -885,8 +901,8 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     fmt = _chain_warnings(fields) if purpose == "explore" else []
     fmt_text = "; ".join(fmt)
     fmt_lines = [FORMAT_SUB.format(text=fmt_text if len(fmt_text) <= FORMAT_CLIP else fmt_text[:FORMAT_CLIP - 1] + "…")] if fmt else []
-    lines = (_render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp, normal_bad) + subs + rule_lines
-             + fmt_lines)
+    lines = (_render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp, normal_bad, check_bad)
+             + subs + rule_lines + fmt_lines)
     if _rewrite(report, prefix, lines, KEEP_SUB, pending=not args.recheck) and purpose == "explore":
         _question_tail(report, QUESTION_DONE if fields["hyps"] else QUESTION_DONE_NONE)
     unwritten = (_hold_lines(report, hold, (analysis.get("decision") or {}).get("state") == "held", reason == "normal")
