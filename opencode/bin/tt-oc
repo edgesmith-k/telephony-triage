@@ -6,7 +6,8 @@
   `OPENCODE_PERMISSION`이 설정 deny를, `OPENCODE_CONFIG_CONTENT`가 `snapshot:false`를 이겼다 — 계획 I x3b·x4).
 - 사전 점검(`doctor`): opencode 버전 = `PINNED`, 프로젝트 폴더(`gen_opencode.py install` 결과)가 git 레포 밖, `opencode debug config`의
   `snapshot:false`·`share:"disabled"`·`autoupdate:false`·`permission["*"]:"deny"`·`permission.task:{"*":"deny","tt-explore":"allow"}`
-  (또는 통째로 `"deny"`), `config.py doctor` 통과, guard가 쓰는 python(`TT_PYTHON` — 이 래퍼가 자기 python으로
+  (또는 통째로 `"deny"`), `permission`의 첫 키가 `"*"`(전역 설정 키가 앞에 오면 `"*": "deny"`가 설치한 허용을 모두 이긴다),
+  `config.py doctor` 통과, guard가 쓰는 python(`TT_PYTHON` — 이 래퍼가 자기 python으로
   채운다)과 자식 PATH의 python3이 `oc_adapter.py selftest`를 통과(`guard-python`·`script-python`).
   하나라도 실패하면 시작하지 않는다(종료 코드 2). 예외(warn, 시작함): doctor의 fail이 `module_skills` 행뿐이면 "모듈 문서 받기는
   실패할 수 있음"(B2 R22), `config.py check --roots`의 `read_roots`가 설치한 external_directory 허용 밖이면 다시 설치 안내(R21),
@@ -429,6 +430,15 @@ def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
         row("opencode-config", False, f"debug config 실패(종료 {r.returncode})")
     elif isinstance(cfg, dict):
         wrong = config_problems(cfg)
+        # OpenCode는 permission을 키 순서대로 규칙으로 펼치고 마지막 일치를 쓴다. 전역 설정에만 있던 키가 합칠 때 앞에 오면
+        # 프로젝트의 "*": "deny"가 그 뒤로 가 설치가 넣은 허용(external_directory·bash·read)을 모두 이긴다(1.19.5 사내 재현)
+        perm = cfg.get("permission") if isinstance(cfg.get("permission"), dict) else {}
+        keys = list(perm)
+        if perm.get("*") == "deny" and keys[0] != "*":
+            wrong.append(f'permission["*"]가 첫 키가 아니다(앞에 온 키: {", ".join(keys[:keys.index("*")])}) — 전역 OpenCode 설정'
+                         "(보통 ~/.config/opencode/opencode.json, 위치는 opencode debug paths의 config)의 permission 키가 순서를 "
+                         "뒤집어 설치가 넣은 허용이 모두 막힌다. "
+                         '그 파일을 백업한 뒤 permission 맨 앞에 "*": "allow" 한 줄을 사용자가 직접 넣는다')
         state = TASK_STATE_TEXT.get(OCV.task_rule_state((cfg.get("permission") or {}).get("task")), "")
         row("opencode-config", not wrong, f"snapshot:false·share:disabled·autoupdate:false·허용 목록·{state}" if not wrong
             else "설정 불일치: " + ", ".join(wrong))
