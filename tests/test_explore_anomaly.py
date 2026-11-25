@@ -639,8 +639,8 @@ def test_dump_bodies_are_frames_and_hex_folds():
     for msg in ("runtime.cc:761]   at android.os.Looper.loop(Looper.java:288)", "runtime.cc:761]   native: #00 pc 0005f4b6  /apex/libc.so",
                 'runtime.cc:761] "binder:612_3" prio=5 tid=33 Native', "runtime.cc:761]   | held mutexes=", "runtime.cc:761] ",
                 "runtime.cc:761]   - waiting on an unknown object", "runtime.cc:761]   (no managed stack frames)",
-                "    rax 0000000000000000  rbx 00007ffd3c3e9e58  rcx 00007f1d2b2c4e2c  rdx 0000000000000006",
-                "rax 0000000000000000 rbx 00007ffd3c3e9e58", "    x0  0000000000000000  x1  0000007fd1a2b3c0"):
+                "    rax 00000000000000ab  rbx 00007ffd3c3e9e58  rcx 00007f1d2b2c4e2c  rdx 000000000000000c",
+                "rax 00000000000000ab rbx 00007ffd3c3e9e58", "    x0  00000000000000ab  x1  0000007fd1a2b3c0"):
         assert window.FRAME_RX.match(msg), msg
     for msg in ("runtime.cc:761] Runtime aborting...", "signal 6 (SIGABRT), code -1 (SI_QUEUE)", "rax is zero", "cid 1 state 2"):
         assert not window.FRAME_RX.match(msg), msg
