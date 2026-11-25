@@ -1127,3 +1127,35 @@ def test_explore_at_keeps_reference_in_read(env):
     code, out, err = env.module(*WITH_ARGS, "--at", "2026-09-20T05:32:08Z", platform="android")
     assert code == 0, err
     assert str(job / "module-skill" / "explore" / "android/data/references/DATA-001.md") in out["read"]
+
+
+# -- explore 출력 `next`: 5-2 모듈 문서 받기를 스크립트가 알린다(eval 77 — 5-1이 빠지면 모델이 module --for explore를 건너뜀) --
+
+def _explore_out(env):
+    code, out, err = env.call("explore", KEY, "--out", env.job, "--platform", "ofono")
+    assert code == 0, err
+    return out
+
+
+def test_explore_next_names_module_command_when_51_skipped(env):
+    env.make_job(candidates=C0_CANDS, explore=True, extra=SKIPPED_51)
+    out = _explore_out(env)
+    assert out["next"] == (f"`S/triage.py module {KEY} --for explore --platform ofono --out {env.job}`부터 — "
+                           "출력 read를 그 순서로 모두 읽는다(module-skills.md 5-2)")
+
+
+def test_explore_next_keeps_51_first_when_deep_pending(env):
+    env.make_job(candidates=C0_CANDS, explore=True,
+                 extra={"analyzer": {"category": "data", "when": "ask"}})
+    out = _explore_out(env)
+    assert out["next"].startswith("5-1(심층 분석)을 하기로 했으면 먼저 끝낸 뒤 `S/triage.py module ")
+    assert env.module()[0] == 0                       # 5-1 받음 → 남은 것은 5-2 모듈 문서뿐
+    assert _explore_out(env)["next"].startswith(f"`S/triage.py module {KEY} --for explore")
+
+
+def test_explore_next_absent_when_already_fetched_or_no_remote(env):
+    env.make_job(candidates=C0_CANDS, explore=True, extra=SKIPPED_51)
+    assert env.module("explore", "--module", "ofono/data")[0] == 0
+    assert "next" not in _explore_out(env)
+    env.user({})
+    assert "next" not in _explore_out(env)
