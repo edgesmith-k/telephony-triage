@@ -636,6 +636,8 @@ def test_skill_md_drives_triage():
     at = next(i for i, x in enumerate(lines) if x.startswith("- Step 5-1 `analyzer`"))
     block = "\n".join(lines[at:at + 4])                # 5-1·5-2 줄(B2 §10.1): 런타임 중립(Skill 도구 이름 없음)
     assert "답 전 explore·module·원문 열람 금지" in lines[at + 1] and "Skill로" not in block
+    # R-14: 5-2도 하면 explore를 5-1(`module --for deep`)보다 먼저 — 5-1이 explore-input.json의 요약을 다시 쓴다(사본 한 번 읽기)
+    assert block.index("triage.py explore") < block.index("--for deep")
     _check_module_skills_md(reference / "module-skills.md")
     rules = (reference / "rules.md").read_text(encoding="utf-8")      # SKILL §실행 규칙이던 내용
     assert len(rules.encode("utf-8")) <= 2700

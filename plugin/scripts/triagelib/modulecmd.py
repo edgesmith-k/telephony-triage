@@ -6,7 +6,8 @@
 - deep: 1위 후보 카테고리의 출처(`userconfig.deep_source`)가 `skill`이면 설치 스킬 `SKILL.md`를 찾아(`skillpath.resolve`)
   `skill-input.json`·타임라인을 쓰고 `{skill, read, base, input, timeline}`(못 찾으면 종료 1 `설치 스킬 못 찾음`).
   `module`이면 관리 clone에서 받아 `JOB/module-skill/deep/`·`deep-input.json`·`module-skill.json`을 쓴다.
-- explore: `--module`이 없으면 모듈 후보를 세어(IMPL §2.3 규칙 1~4) 하나면 고르고, 둘 이상이면 `pick: null`과 질문을 낸다.
+- explore: `--module`이 없으면 모듈 후보를 세어(IMPL §2.3 규칙 1~4) 하나면 고르고, 둘 이상이면 1위가 뚜렷할 때(`_lead`: 2위 줄 수의
+  2배 이상·힌트와 맞음, 까닭은 `pick.why`)만 고르고 아니면 `pick: null`과 질문을 낸다.
   `--at`은 받은 사본으로 타임라인 중심만 다시 잡는다(받기·lock 없음).
 
 stdout은 언제나 JSON 한 줄(≤ 4,096B), 실패면 `{"reason", "next", …}`와 stderr `<reason>: <detail>` 한 줄. 원격 URL은 내지 않는다.
@@ -833,6 +834,17 @@ def rank(counts: dict, hints: list[tuple[str, str]], order: list[str], tree, pla
     return out, missing
 
 
+def _lead(cands: list[dict]) -> str | None:
+    """R-20: 1위 줄 수가 2위의 2배 이상이고 힌트와 어긋나지 않으면(힌트 받은 후보가 있으면 1위가 그중 하나) 묻지 않고 고른다 —
+    고른 까닭 한 줄(`pick.why`). 아니면 None(지금처럼 묻는다)."""
+    # ponytail: 줄 수 비율 하나로 자른다 — 뚜렷한데 묻거나 애매한데 고르는 일이 잦으면 신호 종류별 가중을 둔다
+    a, b = cands[0], cands[1]
+    if a["lines"] == 0 or a["lines"] < 2 * b["lines"] or (not a["hint"] and any(c["hint"] for c in cands)):
+        return None
+    name = lambda c: c["module"].split("/", 1)[1]      # noqa: E731
+    return f"{name(a)} {a['lines']}줄 — 2위 {name(b)} {b['lines']}줄의 2배 이상" + (", 요약과 맞음" if a["hint"] else "")
+
+
 def ask_text(cands: list[dict]) -> dict:
     counts = " · ".join(f"{c['module'].split('/', 1)[1]} {c['lines']}" for c in cands)
     return {"question": f"어느 모듈 문서로 볼까요? (모듈 신호 줄 수: {counts})",
@@ -845,6 +857,7 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
     doc = state.doc
     mods = ((doc.get("platforms") or {}).get(p) or {}).get("modules") or {}
     cands_out: list[dict] = []
+    why = None
     if args.module:
         d, by = args.module.split("/", 1)[1], "user"
     else:
@@ -871,7 +884,7 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
             d, by = args.choose, "choose"
         elif not cands_out:
             raise _fail(purpose, 1, "모듈 후보 없음", "모듈 신호 줄도 요약 힌트도 없다", ctx)
-        elif len(cands_out) == 1:
+        elif len(cands_out) == 1 or (why := _lead(cands_out)):
             d, by = cands_out[0]["module"].split("/", 1)[1], "auto"
         else:
             return OK, {"pick": None, "sha": state.sha, "candidates": cands_out, "missing": missing[:5],
@@ -926,7 +939,7 @@ def _explore_module(args, job, key, p, cfg, analysis, events, explore, state, in
     if fetched.extra:
         record["extra"] = [f"{p}/{x}" for x in fetched.extra]
     _locked_write(state, job, purpose, files, record)
-    out = {"module": module, "sha": fetched.sha, "read": read, "also": [], "pick": {"by": by}}
+    out = {"module": module, "sha": fetched.sha, "read": read, "also": [], "pick": {"by": by, **({"why": why} if why else {})}}
     if w:
         out["with"] = record["with"]
     if fetched.extra:

@@ -373,17 +373,38 @@ def test_explore_single_candidate_auto(env):
     assert out["candidates"][0]["module"] == "ofono/data" and out["candidates"][0]["lines"] == 3
 
 
+SIM_EVENT2 = {**SIM_EVENT, "ts": "2026-09-20T05:32:11.500Z", "msg": "GetIccid FAILED"}
+
+
 def test_explore_two_candidates_pick_null(env):
-    job = env.make_job(events=EVENTS + [SIM_EVENT], explore=True)
+    # 1위가 뚜렷하지 않다(data 3 < sim 2의 2배) — 묻는다
+    job = env.make_job(events=EVENTS + [SIM_EVENT, SIM_EVENT2], explore=True)
     before = snapshot(job)
     code, out, _ = env.module("explore")
     assert code == 0 and out["pick"] is None and [c["module"] for c in out["candidates"]] == ["ofono/data", "ofono/sim"]
-    assert out["ask"]["question"] == "어느 모듈 문서로 볼까요? (모듈 신호 줄 수: data 3 · sim 1)"
-    assert out["ask"]["options"] == ["data — 3줄 (요약과 맞음)", "sim — 1줄"]      # 1위 유형 DATA-001(원인 미확인) 힌트
+    assert out["ask"]["question"] == "어느 모듈 문서로 볼까요? (모듈 신호 줄 수: data 3 · sim 2)"
+    assert out["ask"]["options"] == ["data — 3줄 (요약과 맞음)", "sim — 2줄"]      # 1위 유형 DATA-001(원인 미확인) 힌트
     assert snapshot(job) == before
     import fcntl
     with open(env.work / moduleskills.LOCK_FILE, "rb+") as fh:
         fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)        # lock이 풀려 있다
+
+
+def test_explore_clear_lead_auto(env):
+    """R-20: 1위 줄 수가 2위의 2배 이상이고 힌트와 맞으면 묻지 않고 고르고, 고른 까닭을 `pick.why` 한 줄로 남긴다."""
+    env.make_job(events=EVENTS + [SIM_EVENT], explore=True)
+    code, out, _ = env.module("explore")
+    assert code == 0 and out["module"] == "ofono/data"
+    assert out["pick"] == {"by": "auto", "why": "data 3줄 — 2위 sim 1줄의 2배 이상, 요약과 맞음"}
+    assert [c["module"] for c in out["candidates"]] == ["ofono/data", "ofono/sim"]
+
+
+def test_explore_clear_lead_against_hint_asks(env):
+    """R-20: 줄 수는 2배 이상이어도 힌트(1위 후보 유형 sim)가 다른 모듈을 가리키면 묻는다."""
+    sim = [{"type": "SIM-002", "cause": "SIM-002-01", "score": 5, "confidence": "low", "category": "sim", "evidence": []}]
+    env.make_job(events=EVENTS + [SIM_EVENT], explore=True, candidates=sim)
+    code, out, _ = env.module("explore")
+    assert code == 0 and out["pick"] is None and [c["hint"] for c in out["candidates"]] == [False, True]
 
 
 @pytest.mark.parametrize("choose, code, module", [("top", 0, "ofono/data"), ("sim", 0, "ofono/sim"), ("call", 1, None)])
