@@ -76,7 +76,8 @@ INVESTIGATION_NORMAL = "정상 동작으로 보임(회복 줄 원문 확인) —
 def investigation_lines(inv: dict, top: dict | None = None, why: bool = True) -> list[str]:
     """조사 결론(check-output 기록 `investigation`) → report.md 줄(머리 `- `, 하위 `  - `). Jira 본문(`issue_post`)은 앞 기호를 떼고 같은
     글을 쓴다. 머리: 원인 한 줄·첫 어긋남(단계와 기대)·책임 층·실패한 검증. 통과(인용·형식 확인)면 바로 아래 설명 한 줄
-    (`INVESTIGATION_NOTE`)을 한 번, 규칙 1위(`top`, C=0)가 있으면 `후보 확인`이 그 ID를 맞음이라 했을 때(`top_match`)만 머리 꼬리에
+    (`INVESTIGATION_NOTE`)을 한 번, 규칙 1위(`top`, C=0)가 있으면 `후보 확인`이 그 ID(1위가 유형만이면 그 유형의 원인 ID)를 맞음이라
+    했을 때(`top_match` = 그 ID)만 머리 꼬리에
     같다고, 아니면 `관측된 규칙 일치` 하위 줄로 적는다. 근거 부족은 결론이 아니라고 하위 줄에 밝히고, `why`면 실패한 검증의 이유도
     하위 줄로(Jira 본문은 CAUSE 칸 상한 때문에 이름만). `normal`(가장 유력이 정상, 근거 줄 원문 확인)이면 게이트 대신
     `INVESTIGATION_NORMAL` — 로그를 더 확인하라고 하지 않는다."""
@@ -96,9 +97,10 @@ def investigation_lines(inv: dict, top: dict | None = None, why: bool = True) ->
         out.append(INVESTIGATION_NOTE)
     if why and failed:
         out.append("  - 실패 이유: " + "; ".join(f"{g.get('name')} — {g.get('why')}" for g in failed))
-    cause = (top or {}).get("cause")
+    match = inv.get("top_match")      # 같다고 본 원인 ID(C-3b — 1위가 유형만이면 그 유형의 원인), 옛 기록은 true
+    cause = match if isinstance(match, str) else (top or {}).get("cause")
     if ok and top:
-        if cause and inv.get("top_match"):
+        if cause and match:
             out[0] += f" (규칙 1위 {cause}와 같음)"
         else:
             out.append(f"  - 관측된 규칙 일치: {top.get('category')} > {top.get('type')} > {cause or '원인 미확인'} — 규칙 1위"

@@ -252,8 +252,8 @@ def test_parse_at_reads_local_clock_year_and_syslog():
     assert parse_at("Sep 20 14:33:05.25", ev)[0].isoformat() == "2026-09-20T05:33:05.250000+00:00"
     both = {"input": {"tz": "Asia/Seoul", "window": None},
             "coverage": {"first_ts": "2026-09-20T00:00:00.000Z", "last_ts": "2026-09-20T23:00:00.000Z"}}
-    dt, why = parse_at("10:00:00", both)            # UTC 10:00·KST 10:00(=01:00Z) 둘 다 로그 안: 가를 수 없어 거부
-    assert dt is None and "어느 쪽인지 모른다" in why and "Z" in why
+    dt, why = parse_at("10:00:00", both)            # UTC 10:00·KST 10:00(=01:00Z) 둘 다 로그 안: 가를 줄이 없으면 UTC(C-4 — 거부하지 않음)
+    assert dt.isoformat() == "2026-09-20T10:00:00+00:00" and "UTC로 읽음" in why
     utc = {"input": {"tz": "UTC", "window": None}, "coverage": both["coverage"]}
     assert parse_at("10:00:00", utc)[0].isoformat() == "2026-09-20T10:00:00+00:00"   # UTC 작업은 예전과 같다
 
@@ -284,3 +284,59 @@ def test_rerun_during_explore_rebuilds_timeline():
     fresh = _job(explore=False)                                                        # explore 전이면 run이 만들지 않는다
     args[5], args[7], args[9] = fresh, fresh.parent / "in.log", fresh.parent / "m.json"
     assert run("triage.py", args).returncode == 0 and not (fresh / "timeline.md").exists()
+
+
+# --- 11/25 확인 리뷰 고침(C-4·C-5) -------------------------------------------------------------------------------
+
+def test_c04_ambiguous_clock_is_read_not_refused():
+    """C-4: 작업 tz가 UTC가 아니고 로그가 길어 UTC·현지 둘 다 범위 안이면 거부하지 않는다 — 가를 근거가 없으면 UTC(옛 동작),
+    가르는 함수(`pick`)가 현지라 하면 현지 시각. 읽은 쪽은 둘째 값(머리 `중심`에 적는다)."""
+    from triagelib.window import parse_at
+
+    ev = {"input": {"tz": "Asia/Seoul", "window": {"start": "2026-11-10T08:03:00.000Z", "end": "2026-11-10T08:13:00.000Z"}},
+          "coverage": {"first_ts": "2026-11-10T02:00:00.000Z", "last_ts": "2026-11-10T14:00:00.000Z"}}
+    dt, note = parse_at("11:30:00.000", ev)
+    assert dt.isoformat() == "2026-11-10T11:30:00+00:00" and "UTC" in note
+    dt, note = parse_at("11:30:00.000", ev, lambda utc, local: False)
+    assert dt.isoformat() == "2026-11-10T02:30:00+00:00" and "Asia/Seoul" in note
+    assert parse_at("08:09:42.442", ev) == (parse_at("08:09:42.442", ev)[0], None)      # 분석 범위 안(UTC 하나): 적을 것 없음
+
+
+def test_c04_window_reads_clock_by_where_the_line_is():
+    """C-4: 타임라인에 그 시각으로 시작하는 줄이 있으면 UTC, 사본에만 있으면 현지 시각. 머리 `중심`에 어느 쪽으로 읽었는지."""
+    job = _job()
+    path = job / "events.json"
+    ev = json.loads(path.read_text(encoding="utf-8"))
+    ev["input"]["window"] = None
+    ev["coverage"] = {"first_ts": "2026-09-20T00:00:00.000Z", "last_ts": "2026-09-20T23:00:00.000Z"}
+    path.write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
+    out = _window(job, "--at", "05:33:05.000", "--lines", 2)              # 타임라인 줄(UTC)
+    assert out["at"] == "2026-09-20T05:33:05.000Z"
+    assert "UTC로 읽음" in (job / out["window"]).read_text(encoding="utf-8")
+    out = _window(job, "--at", "14:33:05.200", "--lines", 2)              # HIDDEN 줄의 사본(KST) 시각 — 타임라인엔 없다
+    assert out["at"] == "2026-09-20T05:33:05.200Z"
+    assert "Asia/Seoul 현지 시각으로 읽음" in (job / out["window"]).read_text(encoding="utf-8")
+
+
+def test_c05_rerun_during_explore_says_what_to_get_again():
+    """C-5: 탐색 중 run(--look-at)이 지운 모듈 보기·심층 분석(5-1) 결과 — 낡은 결과는 남기지 않고(지운다), run 출력 `next`가
+    모듈 보기를 다시 받는 명령과 받은 심층 분석 줄을 답에 다시 적으라고 알린다."""
+    job = _job()
+    (job / "deep-output.md").write_text("원인 층: x\n", encoding="utf-8")
+    (job / "check-output.json").write_text(json.dumps({"deep": {"mode": "module", "at": "x", "output_sha256": "0"}}),
+                                           encoding="utf-8")
+    (job / "module-skill" / "explore").mkdir(parents=True)
+    (job / "module-skill" / "explore" / "timeline.md").write_text("x\n", encoding="utf-8")
+    (job / "module-skill.json").write_text(json.dumps({"explore": {"module": "android/data", "sha": "a" * 40}}), encoding="utf-8")
+    meta, log = job.parent / "m.json", job.parent / "in.log"
+    out = run_json("triage.py", ["run", KEY, "--offline-db", SAMPLE, "--out", job, "--logs", log, "--issue-meta", meta, "--tz",
+                                 "Asia/Seoul", "--year", "2026", "--explore", "--look-at-source", "model", "--look-at",
+                                 "carrier link lost on rmnet_data3"])
+    assert (job / "timeline.md").is_file() and not (job / "deep-output.md").exists() and not (job / "module-skill").exists()
+    assert f"triage.py module {KEY} --for explore --module android/data" in out["next"] and "- 심층 분석" in out["next"]
+    deep = [x for x in (job / "report.md").read_text(encoding="utf-8").split("\n") if x.startswith("- 심층 분석")]
+    assert all("TODO" in x or "생략" in x for x in deep), deep      # 낡은 5-1 결과가 새 분석 줄로 남지 않는다
+    plain = _job()                                                       # 지울 것이 없었으면 next도 없다
+    out = run_json("triage.py", ["run", KEY, "--offline-db", SAMPLE, "--out", plain, "--logs", plain.parent / "in.log", "--issue-meta",
+                                 plain.parent / "m.json", "--tz", "Asia/Seoul", "--year", "2026", "--explore"])
+    assert "next" not in out

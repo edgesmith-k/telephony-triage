@@ -553,6 +553,13 @@ def main(argv: list[str] | None = None) -> int:
         # 탐색 중 다시 한 run(`--look-at` 등)이 지운 탐색 타임라인을 새 explore 입력으로 다시 만든다(출력은 run JSON 하나 그대로)
         args.key = driver.key
         trace_event(driver.job, "explore", exit=_explore(args, driver.cfg, driver.job, defaults, emit=False))
+        # C-5: 같이 지운 모듈 보기·5-1 결과는 낡은 결과라 되살리지 않는다 — 다시 받을 것을 `next`로
+        todo = ([f"`triage.py module {driver.key} --for explore --module {driver.dropped_view}`로 모듈 보기를 다시 받는다"]
+                if getattr(driver, "dropped_view", None) else [])
+        if getattr(driver, "dropped_deep", False):
+            todo.append("심층 분석 결과가 지워졌다 — 받은 `- 심층 분석` 줄을 답에 다시 적는다")
+        if todo:
+            result["next"] = " / ".join(todo)
     _emit(result)
     return OK
 
