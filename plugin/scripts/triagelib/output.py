@@ -115,10 +115,14 @@ FORMAT_SUB = "  - 형식 경고(탐색, 판정 아님): {text}"
 FORMAT_NEXT = ("explore-output.md에서 형식 경고가 가리킨 칸만 고쳐 쓰고 같은 check-output을 한 번만 다시 실행한다(두 번째 결과는 경고가 "
                "남아도 그대로 쓴다)")
 FORMAT_CLIP = 600
+RECHECK_KEPT = "첫 검사 결과 유지(다시 검사가 형식·마스킹 검사에서 실패해 리포트 줄을 바꾸지 않았다)"
 TIMER_RX = re.compile(r"타이머|timer|throttl|스로틀|재시도|retry|backoff|임계|threshold|카운터|counter|횟수", re.IGNORECASE)
 BOUNDARIES = ("AP 내부", "AP-CP 경계", "CP 내부", "CP-망 경계", "환경", "모름")
-CLAIM_STEP_RX = re.compile(r"단계\s*#?(\d+)|^\D*?(\d+)")
-FLIP_RX = re.compile(r"(아니오|아니요|예)[\s`*.)\]]*$")
+# `첫 갈라짐` 번호: 맨 앞 `단계 N`·`N단계`·선두 숫자만(`없음…`이나 문장 속 숫자는 None — 시각 `13:05`를 단계로 읽지 않게)
+CLAIM_STEP_RX = re.compile(r"^[\s`*]*(?:단계\s*#?\s*(\d+)|#?(\d+)\s*단계|#?(\d+)(?!\d|:))")
+# `→ 고치면 결과가 뒤집히나: 예|아니오` 답(뒤 설명 허용). 틀 그대로 `예|아니오`면 group(2)가 있다(값 없음)
+FLIP_RX = re.compile(r"뒤집히나\s*[?？]?\s*[:：]?\s*[`*]*\s*(아니오|아니요|예)(\s*[|/]\s*(?:아니오|아니요|예))?")
+FLIP_TAIL_RX = re.compile(r"(아니오|아니요|예)[\s`*.)\]]*$")      # `뒤집히나`가 없는 옛 꼴: 끝의 답
 # 분석 스킬 의견 `<원인 ID> — <근거>`의 앞 ID. 백틱·굵게로 감싸거나 조사(`ID와`)가 붙어도 잡고, 숫자가 더 붙은 것은 아니다
 OPINION_ID = re.compile(rf"\s*[`*]*({CAUSE_ID})(?!\d)")
 
@@ -416,8 +420,8 @@ def _chain_warnings(fields: dict) -> list[str]:
         if k == picked and not rows:
             out.append(f"가설 {n}(가장 유력)에 `기대 체인:` 표 없음 — 실패 줄 다음에 일어나야 할 일을 단계 표로")
         first = next((r["단계"] for r in rows if r["일치"] == "false"), None)
-        m = CLAIM_STEP_RX.search(h.get("첫 갈라짐") or "")
-        claim = int(m.group(1) or m.group(2)) if m else None
+        m = CLAIM_STEP_RX.match(h.get("첫 갈라짐") or "")
+        claim = int(next(g for g in m.groups() if g)) if m else None
         if first is not None and claim is None:
             out.append(f"가설 {n}: 표의 첫 false가 단계 {first}인데 `첫 갈라짐: 단계 {first} — …` 칸이 없음")
         elif first is not None and claim != first:
@@ -432,8 +436,15 @@ def _chain_warnings(fields: dict) -> list[str]:
         if not mech and TIMER_RX.search(h["가설"] or "") and not NORMAL_RX.match(h["가설"] or ""):
             out.append(f"가설 {n}: 타이머·재시도·임계값·횟수 원인인데 `메커니즘 재계산:` 없음 — 로그 값으로 다시 계산하고 고치면 뒤집히나")
         flip = FLIP_RX.search(mech or "")
-        if k == picked and flip and flip.group(1) != "예":
-            out.append(f"가설 {n}: 메커니즘 재계산이 '아니오'(고쳐도 결과가 안 뒤집힘)인데 가장 유력 — 원인이 아니다")
+        if flip and flip.group(2):
+            out.append(f"가설 {n}: 메커니즘 재계산의 답이 틀 그대로(`예|아니오`) — 예나 아니오 하나만")
+        answer = None if flip and flip.group(2) else (flip or FLIP_TAIL_RX.search(mech or ""))
+        if k == picked and answer and answer.group(1) != "예":
+            out.append(f"가설 {n}: 메커니즘 재계산이 '아니오'(고쳐도 결과가 안 뒤집힘)인데 가장 유력 — 재계산으로는 원인이 뒷받침되지 "
+                       "않음 — 가장 유력을 다시 본다")
+        big = [r["단계"] for r in rows if any(_b(r[c]) > FIELD_MAX_BYTES for c in ("기대", "근거", "관측", "일치"))]
+        if big:
+            out.append(f"가설 {n}: 기대 체인 단계 {', '.join(map(str, big))}의 칸이 {FIELD_MAX_BYTES}바이트를 넘음 — 줄여 쓴다")
     return out
 
 
@@ -797,6 +808,13 @@ def _preconditions(job: Path, purpose: str) -> tuple[dict, str | None, bool]:
 
 def _fail(job: Path, purpose: str, env: dict, reason: str, label: str, sha: str | None, args) -> int:
     report = job / "report.md"
+    if getattr(args, "recheck", False):     # 형식 경고 뒤 다시 검사가 실패: 첫 검사 결과(리포트 줄·확인할 내용·기록)를 그대로 둔다
+        old = _load(job / RECORD)
+        old = old.get(purpose) if isinstance(old, dict) else None
+        _record(job, purpose, {**(old if isinstance(old, dict) else {}), "format_recheck": True, "recheck_error": label})
+        print(f"{label} — 다시 검사 실패, 첫 검사 결과 유지", file=sys.stderr)
+        _emit({"kept": RECHECK_KEPT, "recheck_error": label})
+        return OK
     if (_rewrite(report, PREFIX[purpose], [SKIPPED[purpose].format(reason=label)], pending=not getattr(args, "recheck", False))
             and purpose == "explore"):
         _question_tail(report, QUESTION_SKIPPED)

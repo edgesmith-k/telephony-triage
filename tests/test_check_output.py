@@ -947,7 +947,8 @@ def _chain(rows, claim=None, extra=()):
             *([f"첫 갈라짐: {claim}"] if claim else []), *extra)
 
 
-CHAIN_FALSE2 = [(1, "SETUP 요청이 나간다", "src/gprs.c:gprs_attach() attach requested apn=internet", "true"),
+Q0 = "15:10:00.100 p0 I ofonod src/gprs.c:gprs_attach() attach requested apn=internet"
+CHAIN_FALSE2 = [(1, "SETUP 요청이 나간다", Q0, "true"),
                 (2, "SETUP 응답이 성공", Q1, "false"),
                 (3, "데이터 연결", "없음(찾은 곳: 타임라인 15:10:03~)", "false")]
 
@@ -994,7 +995,7 @@ def test_explore_chain_warnings(tmp_path, capsys):
 
 def test_explore_chain_observed_quote_goes_through_evidence_check(tmp_path, capsys):
     job = make_job(tmp_path, "explore", "plain")
-    rows = [(1, "SETUP 응답", FAKE, "false")]
+    rows = [(1, "SETUP 응답", "15:10:09.000 p0 E ofonod " + FAKE, "false")]
     (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])], _chain(rows, "단계 1")), encoding="utf-8")
     code, data, _ = check(job, "explore", capsys=capsys)
     assert code == 0 and data["fabricated"] == 1 and data["quotes"] == 2
@@ -1012,3 +1013,82 @@ def test_explore_format_warning_allows_one_recheck(tmp_path, capsys):
     assert not any(t.startswith("  - 형식 경고") for t in (job / "report.md").read_text(encoding="utf-8").split("\n"))
     code, data, _ = check(job, "explore", capsys=capsys)                              # 세 번째는 평소처럼 막힌다
     assert code == 2 and data["reason"] == "작업 없음"
+
+
+def test_explore_chain_quote_only_time_led_cells():
+    """확인 리뷰 2: 관측 칸은 (따옴표·`(window-n)`를 뗀 뒤) 시각으로 시작할 때만 인용이다 — 나머지는 원문 검사에 넣지 않는다."""
+    rows = [(1, "a", "`(window-1) 15:10:01.200 p0 E vrild x`", "true"), (2, "b", "11-20 13:05:00.311 E x", "false"),
+            (3, "c", "찾지 못함(window 15:10:05)", "false"), (4, "d", "—", "모름"), (5, "e", "N/A", "모름"),
+            (6, "f", "미관측", "모름"), (7, "g", "없음(찾은 곳: 타임라인)", "모름"), (8, "h", "SETUP_DATA_CALL 응답 없음", "false")]
+    h = evidence.parse_explore(_explore_out([("x", [Q1])], _chain(rows, "단계 2")))["hyps"][0]
+    assert evidence.chain_quotes(h) == ["15:10:01.200 p0 E vrild x", "11-20 13:05:00.311 E x"]
+
+
+def test_explore_chain_headers_columns_and_verdicts():
+    """확인 리뷰 3·5·7: 단계 번호 없는 행은 건너뛴다, 머리 행 이름으로 열을 찾는다(6열), 일치 앞부분·기호, 전각 세로줄, 표 중간 빈 줄."""
+    text = "\n".join(["가설 1: x", "로그로 확인:", f"- {Q1}", "코드로 추정: 코드 근거 없음", "반대 근거: 없음", "다음 확인: y",
+                      "기대 체인:", "| **단계** | 기대 | 기대 근거 | 담당 | 관측 줄 | 일치 |", "|-|-|-|-|-|-|", "| # | | | | | |",
+                      "| 1 | 요청 | log:a | AP | 15:10:00.100 p0 I ofonod x | **불일치**. 재요청 없음 |",
+                      "", "｜ 2 ｜ 응답 ｜ spec:b ｜ CP ｜ 없음 ｜ ✅ ｜",
+                      "| 3 | 연결 | log:c | AP | 없음 | False — 끊김 |", "| 4 | 끝 | log:d | AP | 없음 | ❌ |",
+                      "| 5 | 끝 | log:d | AP | 없음 | 일치 |", "첫 갈라짐: 1단계 — 재요청 없음"])
+    h = evidence.parse_explore(text)["hyps"][0]
+    rows = h["기대 체인"]
+    assert [r["단계"] for r in rows] == [1, 2, 3, 4, 5]
+    assert [r["일치"] for r in rows] == ["false", "true", "false", "false", "true"]
+    assert rows[0]["관측"] == "15:10:00.100 p0 I ofonod x" and rows[0]["근거"] == "log:a" and rows[1]["기대"] == "응답"
+    assert output._chain_warnings({"hyps": [{**h, "원인 층": "프레임워크"}], "top": None}) == []      # `1단계` = 단계 1
+
+
+def test_explore_chain_claim_number_and_flip_answer():
+    """확인 리뷰 6·8·9·10: 첫 갈라짐 번호는 맨 앞만(`없음`·문장 속 시각은 None), 틀 그대로 `예|아니오`, 뒤 설명 있는 답,
+    768B 넘는 칸, 순화한 문구."""
+    base = {"가설": "재시도 타이머", "원인 층": "프레임워크", "기대 체인": [{"단계": 2, "기대": "a", "근거": "b", "관측": "없음", "일치": "false"}]}
+    warn = lambda **kw: output._chain_warnings({"hyps": [{**base, **kw}], "top": None})      # noqa: E731
+    mech = "299999ms → 13:05:00 → 고치면 결과가 뒤집히나: "
+    assert warn(**{"첫 갈라짐": "없음 — 13:05:00에 재요청 없음", "메커니즘 재계산": mech + "예"})[0].startswith("가설 1: 표의 첫 false가 단계 2인데")
+    assert warn(**{"첫 갈라짐": "13:05:00 재요청 없음(단계 2)", "메커니즘 재계산": mech + "예"})[0].startswith("가설 1: 표의 첫 false가")
+    assert warn(**{"첫 갈라짐": "단계 2", "메커니즘 재계산": mech + "예 — 재요청이 제때 나간다"}) == []
+    assert warn(**{"첫 갈라짐": "2", "메커니즘 재계산": mech + "예|아니오"}) == ["가설 1: 메커니즘 재계산의 답이 틀 그대로(`예|아니오`) — 예나 아니오 하나만"]
+    got = warn(**{"첫 갈라짐": "단계 2", "메커니즘 재계산": mech + "아니오 (간격이 달라도 같은 예외)"})
+    assert got == ["가설 1: 메커니즘 재계산이 '아니오'(고쳐도 결과가 안 뒤집힘)인데 가장 유력 — 재계산으로는 원인이 뒷받침되지 않음 — "
+                   "가장 유력을 다시 본다"]
+    big = {**base["기대 체인"][0], "관측": "x" * 800}
+    assert warn(**{"첫 갈라짐": "단계 2", "메커니즘 재계산": mech + "예", "기대 체인": [big]}) == [
+        f"가설 1: 기대 체인 단계 2의 칸이 {core.FIELD_MAX_BYTES}바이트를 넘음 — 줄여 쓴다"]
+
+
+def test_explore_recheck_failure_keeps_first_result(tmp_path, capsys):
+    """확인 리뷰 1: 형식 경고 뒤 다시 검사가 실패(칸 형식)해도 첫 검사의 리포트 줄·확인할 내용·기록을 덮지 않는다."""
+    job = make_job(tmp_path, "explore", "plain")
+    out = job / "explore-output.md"
+    out.write_text(_explore_out([("망 인증 거절", [Q1])], ()), encoding="utf-8")
+    first = check(job, "explore", capsys=capsys)[1]
+    assert first["format_warnings"]
+    report_before = (job / "report.md").read_text(encoding="utf-8")
+    rec_before = _rec(job, "explore")
+    out.write_text("가설 1: 칸이 모자란 다시 쓰기\n", encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and data == {"kept": output.RECHECK_KEPT, "recheck_error": "출력 형식 불일치(칸)"}
+    assert (job / "report.md").read_text(encoding="utf-8") == report_before
+    rec = _rec(job, "explore")
+    assert rec == {**rec_before, "format_recheck": True, "recheck_error": "출력 형식 불일치(칸)"}
+    assert check(job, "explore", capsys=capsys)[0] == 2                     # 다시 검사는 한 번뿐
+
+
+def test_explore_old_format_report_unchanged_but_warning_line(tmp_path, capsys):
+    """확인 리뷰 11: 옛 형식(기대 체인 없음) 출력의 report 줄은 형식 경고 하위 줄 하나만 빼면 기대 체인 전과 같다."""
+    job = make_job(tmp_path, "explore", "explore")
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1, Q2]), ("APN 설정 오류", [Q2])], ()), encoding="utf-8")
+    assert check(job, "explore", capsys=capsys)[0] == 0
+    text = (job / "report.md").read_text(encoding="utf-8").split("\n")
+    i = text.index(next(t for t in text if t.startswith("- 탐색 분석")))
+    warn = [t for t in text[i:] if t.startswith("  - 형식 경고(탐색, 판정 아님): ")]
+    assert len(warn) == 1
+    block = [t for t in text[i:i + 6] if t not in warn]
+    assert block == ["- 탐색 분석 (추정, timeline.md 4/4줄): 가설 2개 — 점수·분류·검증에 쓰지 않는다",
+                     f"  - 가설 1: 망 인증 거절 / 로그로 확인: {Q1} | {Q2} / 코드로 추정: 코드 근거 없음 / 반대 근거: 없음 / "
+                     "다음 확인: 망 측 거절 사유 로그",
+                     "  - 가설 2: APN 설정 오류 / 로그로 확인: " + Q2 + " / 코드로 추정: 코드 근거 없음 / 반대 근거: 없음 / "
+                     "다음 확인: 망 측 거절 사유 로그",
+                     "  - 근거 원문 검사: 인용 3개 중 원문에 없음 0", SUB]

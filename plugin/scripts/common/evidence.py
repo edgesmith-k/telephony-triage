@@ -109,8 +109,13 @@ EXPLORE_RX = {f: _label_rx(f) for f in EXPLORE_FIELDS[1:] + EXPLORE_OPTIONAL + E
 CHAIN_LABELS = ("기대 체인", "첫 갈라짐", "찾았는데 없음", "메커니즘 재계산", "책임 경계")
 CHAIN_RX = {f: _label_rx(f) for f in CHAIN_LABELS}
 STEP_NUM_RX = re.compile(r"(\d+)")
-_SEP_CELL_RX = re.compile(r"^:?-{2,}:?$")
-_VERDICT = {"true": "true", "참": "true", "일치": "true", "false": "false", "거짓": "false", "불일치": "false"}
+# 일치 칸: 앞부분만 본다(`false — 재요청 없음`·`**불일치**.`). 불일치를 일치보다 먼저. 기호 ❌✗ = false, ✅✓ = true
+_VERDICT_RX = re.compile(r"^(불일치|거짓|false|일치|참|true)", re.IGNORECASE)
+_VERDICT = {"불일치": "false", "거짓": "false", "false": "false", "일치": "true", "참": "true", "true": "true"}
+# 관측 칸이 인용인가: 따옴표·앞뒤 `(window-n)`·`[…]` 표시를 뗀 뒤 시각(`HH:MM:SS`, logcat `MM-DD HH:MM:SS`, ISO 날짜+시각)으로 시작할 때만.
+# `없음(찾은 곳 …)`·`찾지 못함`·`—`·`N/A`·`미관측`처럼 시각이 없는 칸은 인용이 아니다(원문에 없음·약함으로 세지 않는다)
+_OBS_TAG_RX = re.compile(r"^\s*[(\[][^()\[\]]{0,40}[)\]]\s*|\s*[(\[]window-\d+(?:\.md)?[)\]]\s*$", re.IGNORECASE)
+_OBS_TIME_RX = re.compile(r"^(?:\d{4}-\d{2}-\d{2}[T ]|\d{2}-\d{2}\s+)?\d{2}:\d{2}:\d{2}")
 # sim1122 F2: `1위 판단: <원인 ID> 적합|부적합|모름 — <이유>`(채택 원인이 이번 실패를 설명하는지, 선택 칸, 출력 어디에 있어도 첫
 # `1위 판단` 줄). ID는 값 앞·머리 괄호(`1위 판단(<ID>):`)·없음(옛 형식) 모두 읽고, 값 뒤 문장부호도 받는다. 형식 실패로 만들지 않는다
 TOP_FIT_HEAD_RX = re.compile(r"^\s*(?:[-*]\s*)?\**\s*1위\s*판단")
@@ -294,16 +299,51 @@ def explore_parse(text: str) -> tuple[dict | None, str | None]:
 
 
 def _cells(line: str) -> list[str] | None:
-    s = line.strip()
+    s = line.strip().replace("｜", "|")       # 전각 세로줄도 칸 구분
     if not s.startswith("|"):
         return None
     s = s[1:-1] if s.endswith("|") and len(s) > 1 else s[1:]
     return [c.strip() for c in s.split("|")]
 
 
+def _verdict(cell: str) -> str:
+    s = cell.strip().strip("`*_ ").strip()
+    if s.startswith(("❌", "✗")):
+        return "false"
+    if s.startswith(("✅", "✓")):
+        return "true"
+    m = _VERDICT_RX.match(s)
+    return _VERDICT[m.group(1).lower()] if m else "모름"
+
+
+def _chain_row(cells: list[str], cols: dict | None) -> dict | None:
+    """표 행 → {단계, 기대, 근거, 관측, 일치}. 첫 칸에서 단계 번호를 못 읽으면(머리·구분 행 `| **단계** |`·`| # |`·`|-|-|`) None.
+    머리 행에서 찾은 열 위치(`cols`)가 있고 칸 수가 같으면 그 위치로, 아니면 5열 자리(관측 칸의 `|`는 가운데 칸을 이어 붙인다)."""
+    m = STEP_NUM_RX.search(cells[0])
+    if not m:
+        return None
+    if cols and len(cells) == cols["n"]:
+        pick = {k: cells[i] if i is not None else "" for k, i in cols.items() if k != "n"}
+    elif len(cells) >= 5:
+        pick = {"기대": cells[1], "근거": cells[2], "관측": "|".join(cells[3:-1]).strip(), "일치": cells[-1]}
+    else:
+        return None
+    return {"단계": int(m.group(1)), "기대": pick["기대"], "근거": pick["근거"], "관측": pick["관측"], "일치": _verdict(pick["일치"])}
+
+
+def _header_cols(cells: list[str]) -> dict | None:
+    """머리 행이면 열 이름 → 위치(`관측`·`일치`가 있어야 머리로 본다), 아니면 None."""
+    names = [c.strip("`*_ ") for c in cells]
+    find = lambda pred: next((i for i, c in enumerate(names) if pred(c)), None)      # noqa: E731
+    obs, match = find(lambda c: "관측" in c), find(lambda c: "일치" in c)
+    if obs is None or match is None:
+        return None
+    return {"n": len(cells), "기대": find(lambda c: c == "기대"), "근거": find(lambda c: "근거" in c), "관측": obs, "일치": match}
+
+
 def chain_fields(block: list[str]) -> dict:
-    """가설 블록의 `CHAIN_LABELS` 칸(각 첫 줄만). `기대 체인` = [{단계: int|None, 기대, 근거, 관측, 일치: true|false|모름}]
-    (머리·구분 행과 칸이 5개 못 되는 행은 건너뛴다. 관측 칸에 `|`가 들면 가운데 칸을 이어 붙인다), `찾았는데 없음` = 항목 목록."""
+    """가설 블록의 `CHAIN_LABELS` 칸(각 첫 줄만). `기대 체인` = [{단계: int, 기대, 근거, 관측, 일치: true|false|모름}]
+    (`_chain_row` — 단계 번호 없는 행은 건너뛴다. 표 중간 빈 줄은 다음 줄이 `|`면 이어 읽는다), `찾았는데 없음` = 항목 목록."""
     out: dict = {f: None for f in CHAIN_LABELS}
     for i, line in enumerate(block):
         f = next((f for f in CHAIN_LABELS if CHAIN_RX[f].match(line)), None)
@@ -312,20 +352,25 @@ def chain_fields(block: list[str]) -> dict:
         rest = CHAIN_RX[f].match(line).group(1).strip()
         if f in ("기대 체인", "찾았는데 없음"):
             got: list = [] if f == "기대 체인" or not rest or RULE_NONE_RX.match(rest) else [rest]
-            for nxt in block[i + 1:]:
+            cols, seen = None, False
+            for j in range(i + 1, len(block)):
+                nxt = block[j]
                 if not nxt.strip():
-                    if got:
+                    following = next((x for x in block[j + 1:] if x.strip()), "")
+                    if seen and not (f == "기대 체인" and following.strip().startswith(("|", "｜"))):
                         break
                     continue
                 cells = _cells(nxt) if f == "기대 체인" else None
                 im = ITEM_RX.match(nxt) if f == "찾았는데 없음" else None
                 if f == "기대 체인" and cells is not None:
-                    if len(cells) >= 5 and cells[0] != "단계" and not all(_SEP_CELL_RX.match(c) for c in cells if c):
-                        m = STEP_NUM_RX.search(cells[0])
-                        got.append({"단계": int(m.group(1)) if m else None, "기대": cells[1], "근거": cells[2],
-                                    "관측": "|".join(cells[3:-1]).strip(),
-                                    "일치": _VERDICT.get(cells[-1].strip("`* ").lower(), "모름")})
+                    seen = True
+                    row = _chain_row(cells, cols)
+                    if row is not None:
+                        got.append(row)
+                    elif cols is None:
+                        cols = _header_cols(cells)
                 elif im:
+                    seen = True
                     got.append(im.group(1).strip())
                 else:
                     break
@@ -335,10 +380,17 @@ def chain_fields(block: list[str]) -> dict:
     return out
 
 
+def _obs_quote(obs: str) -> str | None:
+    """관측 칸 → 인용(따옴표·앞뒤 표시를 뗀 글)이면 그 글, 시각으로 시작하지 않으면 None."""
+    s = QUOTE_CHARS_RX.sub("", obs).strip()
+    for _ in range(2):
+        s = _OBS_TAG_RX.sub("", s).strip()
+    return s if _OBS_TIME_RX.match(s) else None
+
+
 def chain_quotes(hyp: dict) -> list[str]:
-    """`기대 체인` 관측 칸 중 인용(비었거나 `없음…`·`-`이 아닌 것) — check-output이 `로그로 확인`과 같은 근거 원문 검사를 한다."""
-    return [r["관측"] for r in hyp.get("기대 체인") or []
-            if QUOTE_CHARS_RX.sub("", r["관측"]).strip() not in ("", "-") and not RULE_NONE_RX.match(r["관측"])]
+    """`기대 체인` 관측 칸 중 인용(`_obs_quote`) — check-output이 `로그로 확인`과 같은 근거 원문 검사를 한다."""
+    return [q for r in hyp.get("기대 체인") or [] if (q := _obs_quote(r["관측"])) is not None]
 
 
 def parse_explore(text: str) -> dict | None:
