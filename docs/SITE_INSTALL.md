@@ -219,8 +219,8 @@ git add -A && git commit -m "반입 기준선 (<지금 레포의 label>)"
 **4. 새 묶음 적용** — 작업 브랜치에서 하고, 통과하면 main에 합친다. 작업 브랜치는 main 끝이 아니라 **마지막 재반입 커밋**에서 만든다 — 그 뒤 사내에서 main에 바로 고친 커밋(`사내 수정: …`)이 있어도 반입이 멈추지 않고, 5의 병합 때 함께 남는다.
 ```
 mkdir -p ~/tt-new && unzip -q <경로>/telephony-triage-import-<새 label>.zip -d ~/tt-new
-git log --grep '^재반입 ' -1 --oneline main      # 마지막 재반입 커밋. 아무것도 안 나오면(첫 재반입) 아래 $(…) 대신 main
-git switch -c draft-import/<새 label> $(git log --grep '^재반입 ' -1 --format=%H main)
+git log --grep '^재반입 ' --grep '^반입 기준선' -1 --oneline main   # 마지막 재반입(첫 재반입이면 3의 기준선) 커밋. 아무것도 안 나오면 아래 $(…) 대신 main
+git switch -c draft-import/<새 label> $(git log --grep '^재반입 ' --grep '^반입 기준선' -1 --format=%H main)
 python3 ~/tt-new/tools/import_draft.py ~/tt-new --dest . --label <새 label> --dry-run
 #   "덮어씀 X / 지움 Y / 그대로 Z", SITE_PATHS 경로는 건드리지 않음 — 바뀌는 파일 수가 예상과 맞는지 본다
 python3 ~/tt-new/tools/import_draft.py ~/tt-new --dest . --label <새 label> --check-boundary
@@ -234,7 +234,7 @@ git add -A && git commit -m "재반입 <새 label> (사외 <커밋>)"
 git switch main && git merge --no-edit draft-import/<새 label> && git branch -d draft-import/<새 label>
 rm -rf ~/tt-old ~/tt-new
 ```
-병합은 일반 병합이다(`--ff-only` 아님): 마지막 재반입 뒤 main에 사내 수정 커밋이 없으면 그대로 앞으로 가고, 있으면 병합 커밋이 생기며 사내 수정이 남는다. 같은 줄을 사외도 고쳤으면 충돌로 멈춘다 — 우회하지 말고 충돌 파일 이름을 보고한다. 병합 뒤 `python3 tools/import_draft.py --status`가 `고침`으로 내는 파일은 아직 사외 묶음에 들어가지 않은 사내 수정이다(아래 "사내에서 바로 고친 것").
+병합은 일반 병합이다(`--ff-only` 아님): 마지막 재반입 뒤 main에 사내 수정 커밋이 없으면 그대로 앞으로 가고, 있으면 병합 커밋이 생기며 사내 수정이 남는다. 사내 수정과 같은 줄이나 바로 옆 줄을 사외도 고쳤으면 충돌로 멈춘다 — 우회하지 말고 충돌 파일 이름을 보고한다. 위의 pytest는 병합 전 브랜치(사내 수정이 빠진 상태)에서 돈 것이다 — 병합 커밋이 생겼으면(사내 수정이 합쳐졌으면) main에서 사내 수정이 닿는 시험을 한 번 더 돌린다. 병합 뒤 `python3 tools/import_draft.py --status`가 `고침`으로 내는 파일은 아직 사외 묶음에 들어가지 않은 사내 수정이다(아래 "사내에서 바로 고친 것").
 실패하면 main에 합치지 않는다. `FAILED tests/…::<테스트 이름>` 줄만(사내 이름·경로는 빼고) 사외로 전달한다. 사내 레포에서는 사외 초안 전용 검사(`test_site_paths_are_absent_in_draft`, `test_check_boundary_external`, `test_site_defaults_required`)가 skip으로 나오는 것이 정상이다(import-20261014부터, 마지막 것은 그다음 묶음부터).
 
 반입한 묶음에서 **hook이나 공통 판정이 바뀌었으면**(`plugin/hooks/hooks.json`, `guard.py`, `show_guard.py`, `common/shown.py`, `jira_bridge.py`, 표시 기록을 쓰는 스크립트(`db_pr`·`issue_post`·`db_verify`·`triage`)의 기록 부분, 또는 `SKILL.md`·`reference/rules.md`의 공통 규칙) 사내 대상 eval 12개(`tests/skill_evals/pending.json` `site`)를 **모두** 다시 돌린다. 예외로 표시 보조(`show_guard.py`·`common/shown.py`)의 글만 바뀌었으면 영향받는 eval만(번호는 재반입 노트에 적는다). 그 밖이면 바뀐 흐름의 eval만. 어느 쪽인지는 묶음과 함께 오는 `DRAFT_NOTES.md` "사내로 넘긴 것"의 재반입 노트에 적혀 있다. 생성기 버전(`generator_version`)이 올라간 묶음이면 운영 이슈 DB를 `migrate --to <현재 스키마>`로 맞춘다(`docs/design/06-collaboration.md §6.4` 버전 올림 순서, 운영 DB가 아직 없으면 뼈대 config 한 줄). 새 시그니처 필드(`min_count`·`sequence_within_sec`)는 S37 결과·팀 설치본 통일 뒤에만 DB에 쓴다(`issue-db.config.yaml signature_features`에 선언 — 모르는 플러그인은 분석을 중단한다). 같은 목록의 `mask-off`는 시그니처 필드가 아니다(뼈대가 처음부터 쓴다, 9절 "마스킹 끔"). 이어서 사내 단계는 `claude` → **계속**.
@@ -251,7 +251,7 @@ rm -rf ~/tt-old ~/tt-new
 | `.draft-manifest.json를 읽을 수 없습니다` 또는 `schema=…를 이 도구가 모릅니다`, 종료 2 | 기준선 파일이 손상됨(충돌 표시·잘림·다른 형식) | 레포는 바뀌지 않았다. `git log -- .draft-manifest.json`으로 손상 전 커밋을 찾아 `git restore --source=<커밋> -- .draft-manifest.json` → 다시 실행 |
 | 종료 2 (적용 중 실패) | 도중 실패 | 도구가 되돌린다. 그래도 이상하면 `git reset --hard && git switch main`(1의 커밋으로) |
 
-**사내에서 바로 고친 것** — 사내 전용 코드·값은 `SITE_PATHS` 경로에만 둔다. 공통 파일(사외 파일)은 사외에서 고쳐 다음 묶음으로 받는 것이 기본이지만, 급한 작은 수정은 사내 main에 `사내 수정: <한 줄>` 커밋으로 바로 고쳐도 된다 — 4처럼 마지막 재반입 커밋에서 작업 브랜치를 만들면 다음 반입이 멈추지 않고, 5의 병합에서 그 커밋이 남는다(같은 줄을 사외도 고쳤을 때만 충돌). 고친 것이 버그 수정이면 사외에도 들어가게 `docs/site/to-outside.md`에 사내 이름·값 없이 한 줄 적어 전달한다. 지금 사내에서 고친 사외 파일이 무엇인지는 새 묶음 없이도 볼 수 있다: `python3 tools/import_draft.py --status`(사내 레포의 도구가 이 옵션을 모르는 옛 묶음이면 새로 받은 폴더의 도구로 `python3 <새 초안>/tools/import_draft.py --status --dest .`, 고친 것이 없으면 아무것도 내지 않는다) — 마지막 반입 뒤 사내에서 `고침`·`지움`·`새 파일`인 사외 파일 경로만 낸다(읽기만, 고친 파일이 있으면 종료 1 — 작업 브랜치를 main 끝에서 만들면 그 파일에서 반입이 멈춘다).
+**사내에서 바로 고친 것** — 사내 전용 코드·값은 `SITE_PATHS` 경로에만 둔다. 공통 파일(사외 파일)은 사외에서 고쳐 다음 묶음으로 받는 것이 기본이지만, 급한 작은 수정은 사내 main에 `사내 수정: <한 줄>` 커밋으로 바로 고쳐도 된다 — 4처럼 마지막 재반입 커밋에서 작업 브랜치를 만들면 다음 반입이 멈추지 않고, 5의 병합에서 그 커밋이 남는다(같은 줄이나 바로 옆 줄을 사외도 고쳤을 때만 충돌). 고친 것이 버그 수정이면 사외에도 들어가게 `docs/site/to-outside.md`에 사내 이름·값 없이 한 줄 적어 전달한다. 지금 사내에서 고친 사외 파일이 무엇인지는 새 묶음 없이도 볼 수 있다: `python3 tools/import_draft.py --status`(사내 레포의 도구가 이 옵션을 모르는 옛 묶음이면 새로 받은 폴더의 도구로 `python3 <새 초안>/tools/import_draft.py --status --dest .`, 고친 것이 없으면 아무것도 내지 않는다) — 마지막 반입 뒤 사내에서 `고침`·`지움`·`새 파일`인 사외 파일 경로만 낸다(읽기만, 고친 파일이 있으면 종료 1 — 작업 브랜치를 main 끝에서 만들면 그 파일에서 반입이 멈춘다).
 
 ## 9. 운영 이슈 DB 첫 push (S-4a, 도입 담당자 한 번)
 
