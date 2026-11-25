@@ -749,6 +749,21 @@ def test_preflight_requires_bash_allow_list(env):
     assert code == 2 and 'permission.bash["*"]' in rows["opencode-config"]["detail"]
 
 
+def test_doctor_star_deny_must_be_first_permission_key(env):
+    """1.19.5 사내 재현: 전역 설정 permission의 키(edit·bash·external_directory)가 합친 설정에서 앞에 오면 `"*": "deny"`가 뒤로
+    가 설치가 넣은 허용을 모두 이긴다(규칙은 키 순서대로, 마지막 일치). 값은 맞아도 fail, 앞에 온 키 이름과 조치를 보인다."""
+    perm = CONFIG_OK["permission"]
+    env["cfg"].write_text(json.dumps({**CONFIG_OK, "permission": {"edit": "deny", "external_directory": {"*": "deny"}, **perm}}),
+                          encoding="utf-8")
+    code, rows = _doctor_rows(env)
+    detail = rows["opencode-config"]["detail"]
+    assert code == 2 and rows["opencode-config"]["status"] == "fail"
+    assert "edit, external_directory" in detail and '"*": "allow"' in detail
+    env["cfg"].write_text(json.dumps({**CONFIG_OK, "permission": {**perm, "edit": "deny"}}), encoding="utf-8")
+    code, rows = _doctor_rows(env)
+    assert code == 0 and rows["opencode-config"]["status"] == "ok", rows["opencode-config"]
+
+
 @pytest.mark.parametrize("evs,code,outcome", [
     ([ev("step_start"), tool("bash"), step("tool-calls")], 0, "no-final-text"),
     ([ev("step_start"), ev("text", text="   "), step()], 0, "no-final-text"),

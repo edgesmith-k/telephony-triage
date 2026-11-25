@@ -157,6 +157,10 @@ python3 tools/site_step.py runtime-check opencode --project <dest>
 
 - 프록시·사내 CA: `tt-oc`는 환경을 지우지 않고 opencode에 넘긴다(`HTTPS_PROXY`·`NO_PROXY`·`NODE_EXTRA_CA_CERTS` 등, 거부하는 것은 `OPENCODE_*` 설정 덮기뿐). curl과 같은 셸에서 실행한다 — opencode가 그 변수로 게이트웨이에 닿는지는 3.3 첫 실행에서 본다(닿지 않으면 `no-response`).
 - `tt-oc doctor` 행: `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만), warn `module-skills`·`read-roots`·`gateway-key`(opencode.json `apiKey`의 `{env:…}` 변수가 없거나 빔)·`gateway-url`(baseURL이 `…/v1`로 끝나지 않음, 게이트웨이 경로가 원래 다르면 무시)·`first-timeout`(`TT_OC_FIRST_TIMEOUT`이 0 이상의 유한한 초가 아님 — 실행은 종료 2). fail이면 종료 2.
+- `opencode-config`가 ``permission["*"]가 첫 키가 아니다``로 실패하면: 사용자 전역 OpenCode 설정(보통 `~/.config/opencode/opencode.json`)의
+  `permission`에 `edit`·`bash` 같은 키가 있어, OpenCode가 설정을 합칠 때 설치가 넣은 `"*": "deny"`가 그 키들 뒤로 간 것이다.
+  OpenCode는 마지막으로 맞는 규칙을 쓰므로 이 상태로 돌리면 스킬 문서 읽기를 포함한 허용이 모두 막힌다(1.19.5). 사용자가 그 파일을
+  백업한 뒤 `permission` 맨 앞에 `"*": "allow"` 한 줄을 넣으면 합친 결과에서 `"*"`가 맨 앞으로 오고, 값은 설치한 `deny`가 그대로 이긴다.
 - `runtime-check opencode`: 위 + 관리 설정(없으면 warn) + OpenCode용 사내 확인 0 curl(실행 안 함). fail이면 종료 1.
 - 사내 확인 0(OpenCode)은 OpenAI 호환 모양이다: (a) 토큰 0 `GET <baseURL>/models`에 모델 ID가 있는지(정보 — 게이트웨이가 목록을 안 주면 404여도 된다. 설치 설정은 모델 ID를 `opencode.json` `models`에 고정한다), (b) 선택 `POST <baseURL>/chat/completions` 스트리밍 `tool_calls`(도구 강제), (c) 같은 요청의 자동 선택(`tool_choice: "auto"` — 실제 실행 모양, 도구 호출이 `content` 글로만 나오면 실패). 설치한 `opencode.json`의 baseURL·모델을 채워 보이고 키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다.
 
