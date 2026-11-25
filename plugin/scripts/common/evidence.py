@@ -600,13 +600,11 @@ def source_text(timeline_text: str) -> tuple[str, re.Pattern | None]:
 
 
 def _raw_rxs() -> tuple[tuple[re.Pattern, ...], dict]:
-    """파서와 같은 원문 줄 정규식(Android threadtime·time, oFono ISO·BSD·BusyBox)과 BusyBox 등급→레벨 표. 지연 import(`event_rows_text`처럼)."""
+    """파서와 같은 원문 줄 정규식(Android threadtime·time, oFono ISO·BSD·BusyBox — `platforms.raw_line_patterns`)과 등급→레벨 표. 지연 import."""
     global _RAW_RXS
     if _RAW_RXS is None:
-        from platforms.android import logcat
-        from platforms.ofono import journal
-        _RAW_RXS = ((logcat.THREADTIME_RE, logcat.TIME_RE, journal.ISO_RE, journal.BSD_RE, journal.BUSYBOX_RE),
-                    journal.SEVERITY_LEVEL)
+        import platforms        # 레지스트리 경유(17-platforms §1-2 — 핵심은 플랫폼 패키지를 직접 import하지 않는다)
+        _RAW_RXS = platforms.raw_line_patterns()
     return _RAW_RXS
 
 

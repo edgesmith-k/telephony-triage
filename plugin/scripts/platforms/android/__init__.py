@@ -65,3 +65,6 @@ SPEC = PlatformSpec(
         deep_baseline_note="Android without = 내장 log-tags·ril-requests·fail-causes",
     ),
 )
+
+# 원문 줄 모양(인용을 행 문법으로 바꿀 때 — `platforms.raw_line_patterns`, check-output 사본 대조). 파서와 같은 정규식
+RAW_LINE_RES = (logcat.THREADTIME_RE, logcat.TIME_RE)

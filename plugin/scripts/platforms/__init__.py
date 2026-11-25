@@ -26,6 +26,7 @@ import importlib
 import os
 import pkgutil
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import PurePosixPath, PureWindowsPath
 
@@ -116,6 +117,18 @@ def get(name: str) -> PlatformSpec:
         raise PlatformConfigError(f"{module_name}.SPEC.name이 패키지 이름과 다릅니다: {spec.name!r}")
     _SPECS[name] = spec
     return spec
+
+
+def raw_line_patterns() -> tuple[tuple, dict]:
+    """설치된 플랫폼마다 패키지의 `RAW_LINE_RES`(원문 줄 정규식, 이름 붙은 칸 h·mi·s·frac·level·tag·ident·sev·msg)와
+    `RAW_SEVERITY`(등급 → 레벨)를 모은다(이름순). 핵심 코드는 플랫폼 패키지를 직접 import하지 않고 이것을 쓴다."""
+    rxs, sev = [], {}
+    for name in known():
+        get(name)
+        module = sys.modules[f"{__name__}.{name}"]
+        rxs.extend(getattr(module, "RAW_LINE_RES", ()))
+        sev.update(getattr(module, "RAW_SEVERITY", {}))
+    return tuple(rxs), sev
 
 
 def label(name: str) -> str:

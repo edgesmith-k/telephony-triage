@@ -56,3 +56,7 @@ SPEC = PlatformSpec(
         doc_checks=(template.daemon_table_check, template.dbus_check),
     ),
 )
+
+# 원문 줄 모양(`platforms.raw_line_patterns`)과 BusyBox 등급 → 레벨. 파서와 같은 정규식
+RAW_LINE_RES = (journal.ISO_RE, journal.BSD_RE, journal.BUSYBOX_RE)
+RAW_SEVERITY = journal.SEVERITY_LEVEL

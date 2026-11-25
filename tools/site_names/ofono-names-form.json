@@ -1250,7 +1250,7 @@
    "placeholder": "datad",
    "real": "",
    "kind": "데몬",
-   "count": 93,
+   "count": 91,
    "example_lines": [
     "Sep 20 15:10:01.000 dut daemon.info datad[610]: profile select: apn=internet.example auth=CHAP profile_id=1[./src/apn_example.cxx +20]",
     "Sep 20 15:10:01.930 dut daemon.warn datad[610]: activate result: failed profile_id=1 retry in 10s[./src/call_example.cxx +30]"
@@ -1286,7 +1286,7 @@
    "placeholder": "datad2",
    "real": "",
    "kind": "데몬",
-   "count": 24,
+   "count": 22,
    "example_lines": [
     "Sep 20 15:20:01.724 dut daemon.err datad2[733]: netlink RTM_NEWROUTE failed: err=-17 (File exists) dev=rmnet0 table=1002",
     "Sep 20 15:20:01.726 dut daemon.warn datad2[733]: default route not installed for rmnet0"
@@ -1491,7 +1491,7 @@
    "placeholder": "mgmtd",
    "real": "",
    "kind": "데몬",
-   "count": 269,
+   "count": 267,
    "example_lines": [
     "Sep 23 10:10:00.010 dut local0.info mgmtd[734]: ui tick",
     "Sep 23 10:10:05.000 dut local0.info mgmtd[734]: call dial requested number=<MSISDN#1>  path/example_call.go:24"
