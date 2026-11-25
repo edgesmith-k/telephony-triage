@@ -40,6 +40,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import os
 import shutil
 import sys
 import tempfile
@@ -435,7 +436,9 @@ def generate(dirs: list[Path], validate: bool, templates: Path = TEMPLATES, vari
     import runner
 
     names = {**DB_VARIANTS, **(variants or {})}
-    tmp = Path(tempfile.mkdtemp(prefix="tt-module-inputs-"))
+    # 작업 경로 길이를 TMPDIR(pytest·xdist 세션 폴더)와 무관하게: run의 analysis.json은 절대 경로(`files`)를 넣고 4KB 맞춤(fit)한
+    # 뒤에 여기서 `files`를 뺀다 — 경로가 길면 4KB 경계 case에서 다른 칸(near_causes 등)이 잘려 생성 파일이 환경마다 달라진다
+    tmp = Path(tempfile.mkdtemp(prefix="tt-module-inputs-", dir="/tmp" if os.path.isdir("/tmp") else None))
     try:
         dbs: dict[str, Path] = {}
         for p in sorted({_platform(d) for d in dirs}):
