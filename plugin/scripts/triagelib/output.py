@@ -789,20 +789,20 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
         before = _quotes(purpose, _parse(purpose, mode, raw))
         if len(before) == len(quotes):
             raw_items = frozenset(i for i, (a, b) in enumerate(zip(before, quotes)) if a != b)
-    res = fab_by_hyp = per_hyp = None
+    res = fab_by_hyp = per_hyp = alts = None
     source, tags = evidence.source_text(src_text) if src_skip is None and src_text is not None else (None, None)
     if purpose == "explore" and source is not None and quotes:
         # 탐색은 마스킹 사본 전체를 grep·구간 읽기 한다(최후의 보루, 11/25) — 인용 낱말이 든 사본 줄을 근거 원문에 더하고,
-        # 원문 모양(logcat·syslog) 인용은 같은 행 문법으로 바꿔 대조한다. 원문(사본 아닌 것)은 보지 않는다
+        # 원문 모양(logcat·syslog) 인용은 같은 행 문법으로 바꾼 것도 대조해 나은 쪽을 쓴다. 원문(사본 아닌 것)은 보지 않는다
         names, extra = _copy_source(job, analysis, quotes)
         if extra:
             source, tags = evidence.source_text("\n".join([src_text, extra]))
             src_rel = ([src_rel] if isinstance(src_rel, str) else list(src_rel or [])) + names
-        quotes = [evidence.raw_row(q) or q for q in quotes]
+            alts = [evidence.raw_row(q) for q in quotes]
     if not quotes:
         src_skip = "인용 없음"
     elif src_skip is None:
-        res = evidence.check_quotes(quotes, source, tags, raw_items=raw_items)
+        res = evidence.check_quotes(quotes, source, tags, raw_items=raw_items, alts=alts)
         if purpose == "explore":        # verdicts는 `_quotes` 순서 = 가설 순서대로 `로그로 확인`을 이어 붙인 것
             it = iter(res["verdicts"])
             per_hyp = [[next(it) for _ in h["로그로 확인"]] for h in fields["hyps"]]
