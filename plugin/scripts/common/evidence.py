@@ -357,7 +357,7 @@ def _header_cols(cells: list[str]) -> dict | None:
 def chain_fields(block: list[str]) -> dict:
     """가설 블록의 `CHAIN_LABELS` 칸(각 첫 줄만). `기대 체인` = [{단계: int, 기대, 근거, 관측, 일치: true|false|모름}]
     (`_chain_row` — 단계 번호 없는 행은 건너뛴다. 표 중간 빈 줄은 다음 줄이 `|`면 이어 읽는다), `찾았는데 없음` = 항목 목록."""
-    out: dict = {f: None for f in CHAIN_LABELS}
+    out: dict = dict.fromkeys(CHAIN_LABELS)
     for i, line in enumerate(block):
         f = next((f for f in CHAIN_LABELS if CHAIN_RX[f].match(line)), None)
         if f is None or out[f] is not None:

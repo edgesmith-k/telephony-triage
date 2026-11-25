@@ -179,7 +179,7 @@ def _mark_weak(backend, recs: list[dict]) -> None:
             levels.setdefault((r.get("line_ref") or {}).get("file_index"), set()).add(r.get("level"))
     for r in recs:
         tag = str(r.get("tag") or "")
-        by_tag = unrel is not None and (unrel(tag, tag.split("/")[0]) if ofono else unrel(tag))
+        by_tag = unrel is not None and (unrel(tag, tag.split("/", 1)[0]) if ofono else unrel(tag))
         if by_tag or (ofono and levels.get((r.get("line_ref") or {}).get("file_index")) == {"I"}):
             r["_weak"] = True
 
