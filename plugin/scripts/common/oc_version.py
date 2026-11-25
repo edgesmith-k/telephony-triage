@@ -134,10 +134,17 @@ def merge_deep(base: dict, over: dict) -> dict:
     return out
 
 
+TOOLS_EDIT = ("write", "edit", "patch")       # 옛 `tools` 키에서 edit 권한으로 묶이는 이름(1.19.5 바이너리)
+
+
 def managed_permission(folder, loads) -> dict:
-    """관리 설정 폴더(`pathlib.Path`, `loads` = `json.loads`)의 `permission`을 파일 순서대로 합친 것. 파일이 없으면 {}. 읽기 실패·깨진 JSON·객체가 아닌
-    permission은 OSError·ValueError로 올린다(조용히 넘기면 관리자 deny가 빠진 설치가 된다)."""
+    """관리 설정 폴더(`pathlib.Path`, `loads` = `json.loads`)의 `permission`을 파일 순서대로 합친 것. 파일이 없으면 {}.
+    옛 `tools` 키(도구 이름 → true/false)도 본다. 1.19.5는 모든 설정을 합친 뒤 `tools`를 allow·deny로 바꿔 permission 앞에 두고
+    같은 키는 permission 값을 쓴다 — 그래도 앞에 온 키는 뒤의 `"*": "deny"`에 져서 설치 허용까지 막혔다(D-1 실험). 여기서는 키
+    순서와 상관없이 같은 효과가 나게 false 항목을 deny로 permission 위에 얹는다(더 막는 쪽, true는 allow로 바꾸지 않는다).
+    읽기 실패·깨진 JSON·객체가 아닌 permission·tools는 OSError·ValueError로 올린다(조용히 넘기면 관리자 deny가 빠진 설치가 된다)."""
     out: dict = {}
+    tools: dict = {}
     for name in MANAGED_NAMES:
         path = folder / name
         try:
@@ -145,11 +152,14 @@ def managed_permission(folder, loads) -> dict:
         except FileNotFoundError:
             continue
         cfg = loads(strip_jsonc(text))
-        perm = cfg.get("permission", {}) if isinstance(cfg, dict) else None
-        if not isinstance(perm, dict):
-            raise ValueError(f"{path}: permission이 객체가 아니다")
-        out = merge_deep(out, perm)
-    return out
+        if not isinstance(cfg, dict):
+            raise ValueError(f"{path}: 관리 설정이 JSON 객체가 아니다")
+        perm, more = cfg.get("permission", {}), cfg.get("tools", {})
+        if not isinstance(perm, dict) or not isinstance(more, dict):
+            raise ValueError(f"{path}: 관리 설정의 permission·tools가 객체가 아니다(예: \"permission\": \"deny\") — 이 도구는 "
+                             "객체 모양만 받는다. 키마다 적는 모양으로 바꾼다")
+        out, tools = merge_deep(out, perm), {**tools, **more}
+    return merge_deep(out, {("edit" if k in TOOLS_EDIT else k): "deny" for k, v in tools.items() if v is False})
 
 
 def strip_jsonc(text: str) -> str:

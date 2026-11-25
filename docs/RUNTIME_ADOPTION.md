@@ -161,15 +161,16 @@ python3 tools/site_step.py runtime-check opencode --project <dest>
 - `agent-permission`이 fail이면 `tools/gen_opencode.py install … --force`로 다시 설치한다. 설치는 설치 permission을 에이전트
   (triage·tt-explore) frontmatter에도 둔다. OpenCode 1.19.5는 에이전트 규칙을 설정 규칙(사용자 전역·프로젝트·관리 설정을 합친 것)
   뒤에 붙이므로, 사용자 전역 OpenCode 설정(보통 `~/.config/opencode/opencode.json`)의 `permission` 키 순서에 흔들리지 않는다.
-  그 대신 에이전트 규칙은 관리 설정의 deny도 이기므로, 설치가 그때의 관리 설정 permission을 합쳐 적고 그 값을 `tt-oc.json`에 남긴다.
+  그 대신 에이전트 규칙은 관리 설정의 deny도 이기므로, 설치가 그때의 관리 설정 permission(옛 `tools` 키의 false는 deny로)을 합쳐
+  적고 그 값을 `tt-oc.json`에 남긴다. 관리 설정의 permission·tools는 객체 모양만 받는다(`"permission": "deny"` 같은 문자열이면 설치를 멈춘다).
   doctor는 지금 관리 설정과 비교해, 관리자가 설치 뒤 관리 설정을 바꿨거나 그 기록이 없는 이전 설치면 fail로 낸다.
   - 이전 설치에서 생기는 일(1.19.5 실험): 전역 `permission`에 `edit`·`bash`·`external_directory` 같은 키가 있으면 합칠 때 설치의
     `"*": "deny"`가 그 키들 뒤로 가, **그 키에 설치가 넣은 허용**(플러그인 폴더 읽기, 스크립트 bash, 작업 폴더 쓰기)이 막힌다.
-    read·glob·list·task처럼 전역에 없는 키의 허용은 살아 있다. 전역 `permission`(또는 bash 같은 하위 객체)이 `"*"`로 시작하면
-    전역에만 있는 허용(다른 MCP 도구, 전역 bash 패턴)이 이 프로젝트에서도 열린다.
+    read·glob·list·task처럼 전역에 없는 키의 허용은 살아 있다. 전역 `permission`에 `"*"` 키가 있으면(맨 앞이 아니어도) 그보다
+    뒤에 있는 전역 키의 허용(다른 MCP 도구, 전역 bash 패턴)이 이 프로젝트에서도 열린다.
   - 다시 설치할 수 없어 전역 설정을 고친다면 사용자가 백업한 뒤 고른다. 전역 `permission` 맨 앞에 `"*"` 한 줄을 두면 합친 결과에서
     `"*"`가 맨 앞으로 오고 이 프로젝트에서는 설치한 `deny`가 그 값을 덮지만, 그 값은 **다른 OpenCode 프로젝트의 기본 동작이 된다**:
-    `"allow"`면 기본으로 묻던 것(같은 호출 반복, `.env` 읽기 등)까지 묻지 않고 허용하고, `"ask"`면 모두 묻는다.
+    `"allow"`면 기본으로 묻던 것(작업 폴더 밖 접근, 같은 호출 반복, `.env` 읽기 등)까지 묻지 않고 허용하고, `"ask"`면 모두 묻는다.
     또는 전역 `permission`의 키를 그 키가 필요한 프로젝트의 `opencode.json`으로 옮긴다.
 - `runtime-check opencode`: 위 + 관리 설정(없으면 warn) + OpenCode용 사내 확인 0 curl(실행 안 함). fail이면 종료 1.
 - 사내 확인 0(OpenCode)은 OpenAI 호환 모양이다: (a) 토큰 0 `GET <baseURL>/models`에 모델 ID가 있는지(정보 — 게이트웨이가 목록을 안 주면 404여도 된다. 설치 설정은 모델 ID를 `opencode.json` `models`에 고정한다), (b) 선택 `POST <baseURL>/chat/completions` 스트리밍 `tool_calls`(도구 강제), (c) 같은 요청의 자동 선택(`tool_choice: "auto"` — 실제 실행 모양, 도구 호출이 `content` 글로만 나오면 실패). 설치한 `opencode.json`의 baseURL·모델을 채워 보이고 키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다.

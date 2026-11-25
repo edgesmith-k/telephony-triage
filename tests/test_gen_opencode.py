@@ -377,6 +377,25 @@ def test_install_keeps_managed_denies_in_agents(roots):
     assert meta["managed_permission"] == {**MANAGED_DENIES, "external_directory": {plug_dir: "deny"}}
 
 
+def test_install_turns_managed_tools_false_into_denies(roots):
+    """D-1: 관리 설정이 옛 `tools` 키로 도구를 끄면(false) 1.19.5는 그 키를 permission 앞에 deny로 두어 설치 허용까지 막는다.
+    설치는 같은 효과가 나게 false를 deny로 관리 설정 permission 위에 얹는다(write·edit·patch는 edit). true는 allow로 바꾸지 않는다."""
+    (roots / "managed").mkdir()
+    (roots / "managed" / "opencode.json").write_text(json.dumps({"tools": {
+        "bash": False, "webfetch": False, "mymcp_read": False, "write": False, "grep": True}}), encoding="utf-8")
+    assert _install(roots).returncode == 0
+    proj = roots / "proj"
+    for name in ("triage", "tt-explore"):
+        perm = yaml.safe_load((proj / ".opencode" / "agents" / f"{name}.md").read_text(encoding="utf-8").split("---")[1])["permission"]
+        assert [perm[k] for k in ("bash", "webfetch", "mymcp_read", "edit")] == ["deny"] * 4, name
+        assert perm["grep"] == "allow", name                  # true는 설치 값 그대로(넓히지도 좁히지도 않음)
+    meta = json.loads((proj / "tt-oc.json").read_text(encoding="utf-8"))
+    assert meta["managed_permission"] == {"bash": "deny", "webfetch": "deny", "mymcp_read": "deny", "edit": "deny"}
+    (roots / "managed" / "opencode.json").write_text(json.dumps({"permission": "deny"}), encoding="utf-8")
+    r = _install(roots, "--force")
+    assert r.returncode == 2 and "객체 모양만" in r.stdout + r.stderr          # D-3: 원인을 알 수 있는 문구
+
+
 def test_install_refuses_unreadable_managed_config_and_backslash_paths(roots):
     """관리 설정을 읽지 못하면(깨진 JSON) 설치하지 않는다(관리자 deny가 빠진 설치를 만들지 않는다). 작업 루트 경로의 역슬래시는
     에이전트 frontmatter YAML 문자열을 깨뜨리므로 거부한다(C-8 — 전에는 YAML traceback)."""

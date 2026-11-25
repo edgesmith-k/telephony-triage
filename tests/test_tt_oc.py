@@ -777,6 +777,14 @@ def test_doctor_agent_permission_follows_managed_config(env):
     (managed / "opencode.jsonc").write_text("{broken", encoding="utf-8")
     code, rows = _doctor_rows(env)
     assert code == 2 and "읽기 실패" in rows["agent-permission"]["detail"]
+    (managed / "opencode.jsonc").write_text('{"tools": {"bash": false}}', encoding="utf-8")    # D-1: 옛 tools 키의 false도 바뀜
+    code, rows = _doctor_rows(env)
+    assert code == 2 and "설치 뒤 바뀌었다" in rows["agent-permission"]["detail"]
+    write_meta(env["proj"], env["plug"], env["work"], managed_permission={"task": "deny", "bash": "deny"})
+    assert _doctor_rows(env)[0] == 0
+    (managed / "opencode.jsonc").write_text('{"permission": "deny"}', encoding="utf-8")      # D-3: 원인을 보인다
+    code, rows = _doctor_rows(env)
+    assert code == 2 and "객체 모양만" in rows["agent-permission"]["detail"]
     (managed / "opencode.jsonc").unlink()
     meta = json.loads((env["proj"] / "tt-oc.json").read_text(encoding="utf-8"))
     del meta["managed_permission"]
