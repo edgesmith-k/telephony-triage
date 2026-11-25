@@ -97,7 +97,7 @@ MODULE_TIMELINE_SUB = "  - 모듈 타임라인: {kept}/{pool}줄, 잡음 {noise}
 EVIDENCE_SUB = "  - 근거 원문 검사: {text}"
 DEEP_PREFIX, EXPLORE_PREFIX = "- 심층 분석", "- 탐색 분석"    # rewrite_line·current_line의 prefix
 # check-output 한도(UTF-8 바이트, 한 칸 768바이트 = 한글 약 250자)
-OUTPUT_MAX_BYTES, FIELD_MAX_BYTES, DEEP_MAX_BYTES, EXPLORE_MAX_BYTES, QUOTES_MAX, HYPS_MAX = 16384, 768, 6144, 10240, 5, 3
+OUTPUT_MAX_BYTES, FIELD_MAX_BYTES, DEEP_MAX_BYTES, EXPLORE_MAX_BYTES, QUOTES_MAX, HYPS_MAX = 16384, 768, 6144, 16384, 5, 3   # 탐색 16384: 11/25 기대 체인 표·제한 풀기(사용자 "늘려")
 # 실패 JSON의 `next`(B2-24): 스크립트가 줄을 고친 뒤 모델이 할 일 한 줄
 NEXT_CONTINUE = "리포트 줄은 스크립트가 고쳤다 — 심층 분석 없이 Step 6로 계속"
 NEXT_SKILL_MISSING = ("스킬을 부르는 도구가 있으면 analyzer.skill을 input 파일로 부르고, 없으면 check-output --for deep "
