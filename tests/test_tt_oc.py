@@ -373,6 +373,10 @@ def test_terminal_handoff_prints_owner_hint_not_a_filled_command(env):
         assert cmds == [cmd], cmds
         assert len(notes) == 1 and notes[0].startswith("주의: 터미널에서는 위 1번째 명령의 db_") and \
             f"앞에 TT_LOCK_OWNER={OWN} 를 붙인다 — 작업 루트의 session.lock을 쥔 작업 ABC-1의 owner" in notes[0], notes
+    _state(work, "VF-1+b2", OWN)          # 작업 키에 `+`(빌드 이름 — session_lock.JOB_KEY_RE)
+    _hold_lock(work, "VF-1+b2", OWN)
+    cmds, notes = _cmds_and_notes(_handoff(env, "python3 /p/scripts/db_pr.py snapshot --job VF-1+b2"))
+    assert len(notes) == 1 and "session.lock을 쥔 작업 VF-1+b2의 owner" in notes[0], notes
 
 
 def test_terminal_handoff_hint_only_when_the_lock_owner_matches(env):

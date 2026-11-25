@@ -855,7 +855,7 @@ UNSAFE_PY_ENV = ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONINSPECT", "
                  "PYTHONPYCACHEPREFIX")
 _OWNER_RE = re.compile(r"[0-9a-f]{32}")       # `Lock.acquire`의 uuid4().hex 그대로(7차 R6-P3-3)
 HINT_MAX = 3                                  # 명령 하나에 내는 owner 안내 줄 수 상한(lock 있는 작업 폴더가 많을 때)
-_JOB_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
+_JOB_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,99}")
 
 
 def _lookup_env(root: Path) -> dict:
