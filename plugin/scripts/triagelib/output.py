@@ -312,6 +312,20 @@ def _source(job: Path, purpose: str, mode: str, rec, events: dict | None) -> tup
     return srcs, "\n".join(parts), None
 
 
+def _copy_source(job: Path, analysis: dict, quotes: list[str]) -> tuple[list[str], str]:
+    """탐색 인용을 찾을 마스킹 사본 줄(`window.served_copies`, `evidence.copy_rows`) → (JOB 기준 사본 이름들, 행들). 사본이 없으면 ([], "")."""
+    from triagelib import window
+    served, _skipped = window.served_copies(job, analysis if isinstance(analysis, dict) else {})
+    texts = []
+    for path in served:
+        try:
+            texts.append(path.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+    rows = evidence.copy_rows(texts, quotes) if texts else ""
+    return ([f"{window.MASKED_DIR}/{p.name}" for p in served] if rows else []), rows
+
+
 def _windows(job: Path) -> tuple[list[str], list[str], list[str]]:
     """`triage.py window` 기록의 구간 중 지금 파일 sha256이 기록과 같은 것 → (JOB 기준 이름들, 본문들, 뺀 이름들(바뀜·없음))."""
     data = _load(job / WINDOW_RECORD)
@@ -884,6 +898,14 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     res = fab_by_hyp = per_hyp = None
     check_bad: set = set()
     source, tags = evidence.source_text(src_text) if src_skip is None and src_text is not None else (None, None)
+    if purpose == "explore" and source is not None and quotes:
+        # 탐색은 마스킹 사본 전체를 grep·구간 읽기 한다(최후의 보루, 11/25) — 인용 낱말이 든 사본 줄을 근거 원문에 더하고,
+        # 원문 모양(logcat·syslog) 인용은 같은 행 문법으로 바꿔 대조한다. 원문(사본 아닌 것)은 보지 않는다
+        names, extra = _copy_source(job, analysis, quotes)
+        if extra:
+            source, tags = evidence.source_text("\n".join([src_text, extra]))
+            src_rel = ([src_rel] if isinstance(src_rel, str) else list(src_rel or [])) + names
+        quotes = [evidence.raw_row(q) or q for q in quotes]
     if not quotes:
         src_skip = "인용 없음"
     elif src_skip is None:

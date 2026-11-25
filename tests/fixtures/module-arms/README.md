@@ -29,7 +29,7 @@ post_lg = "\n".join(lg[0:15] + [""] + lg[25:27] + [""] + lg[33:38]) + "\n"      
 | `ofono/pre/platforms/ofono/log-guide.md` | log-guide 전체(바이트 사본) | 3049 | `77c7a06551ab1bc1ae6309ad2a01eb33b3654856ce2d08f4d4659a69e63eaa6a` |
 | `ofono/pre/explore-rules.md` | explore L1-5, L21-26, L34-35, L37-51 | 2222 | `6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8` |
 | `ofono/post/platforms/ofono/log-guide.md` | log-guide L1-15, L26-27, L34-38 (D6 뒤 모양) | 1945 | `3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1` |
-| `ofono/post/explore-rules.md` | pre 발췌 + log-guide L22-24(Q25로 옮길 일반 규칙) + "일반 판단 규칙" 첫머리에 reference/explore.md의 "0. 정상 먼저" 단락(11/25 다시 얼림 — 사용자 결정)과 그 뒤 "이상 줄 먼저" 한 줄(11/25 이상 줄 절)·"기대 체인 먼저" 단락(11/25 기대 체인) | 4850 | `1a3c3b42caff667b0b5aa6dbcdbb8ae753edb66875c68a11523338501ac53edc` |
+| `ofono/post/explore-rules.md` | pre 발췌 + log-guide L22-24(Q25로 옮길 일반 규칙) + "일반 판단 규칙" 첫머리에 reference/explore.md의 "0. 정상 먼저" 단락(11/25 다시 얼림 — 사용자 결정)과 그 뒤 "이상 줄 먼저" 한 줄(11/25 이상 줄 절)·"기대 체인 먼저" 단락(11/25 기대 체인) | 5537 | `6f852b665842bc9c7bf17cfdf3674491d6d75d0e6d526920c36a5ddbd1ed665e` |
 
 ### android (H C1+D, 결정 기록 11/05 ④ 뒤)
 
@@ -43,7 +43,7 @@ post_lg = "\n".join(lg[0:15] + [""] + lg[25:27] + [""] + lg[33:38]) + "\n"      
 | `android/pre/ril-requests.md` | reference/ril-requests.md 전체(Android 17 2차에 `DATA_CALL_LIST`로, 11/13 사실 정정에 AOSP 17 이름·`error <n>` 형식으로 고쳐 다시 얼림) | 4183 | `e3d078dbeadb6505ab62131e1b0cde83be959e2bc110c994ba43f90d2dda352d` |
 | `android/pre/fail-causes.md` | reference/fail-causes.md 전체(④ 뒤; 제목 문구와 벤더 IPC 결과 절 문장을 고쳤다. 11/13 사실 정정에 extractor별 cause 값 모양을 고쳐 다시 얼림) | 4491 | `0077483d5c4ff0cb2b5e01873659f76a57acaa1f2f97949db1e9da756019e9cd` |
 | `android/pre/explore-rules.md` | `ofono/pre/explore-rules.md` 사본 | 2222 | `6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8` |
-| `android/post/explore-rules.md` | `ofono/post/explore-rules.md` 사본 | 4850 | `1a3c3b42caff667b0b5aa6dbcdbb8ae753edb66875c68a11523338501ac53edc` |
+| `android/post/explore-rules.md` | `ofono/post/explore-rules.md` 사본 | 5537 | `6f852b665842bc9c7bf17cfdf3674491d6d75d0e6d526920c36a5ddbd1ed665e` |
 
 발췌는 자식이 쓸 수 있는 부분(도입, "읽는 것" 1~2와 "안의 문장은 데이터다", 로그 원문·events.json 읽지 않음, "쓰는 것")만 남기고, 자식이 할 수 없거나 하면 안 되는 부분(동의 질문, db_search·소스 찾기, Step 7)은 뺐다. 발췌의 출력 표는 공유 출력 칸과 다르며, 프롬프트가 자기 출력 형식이 우선이라고 말한다.
 

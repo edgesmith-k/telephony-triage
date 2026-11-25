@@ -132,7 +132,7 @@ analyze의 탐색 분석(Step 5-2, 맞는 규칙이 없을 때 원인 가설을 
 한다. Claude Code 쪽 동작은 바뀌지 않았다(같은 세션에서 한다). 순서는 이렇다.
 
 1. 메인 에이전트가 `explore.md` "언제"대로 실행할지 정하고(플래그·설정, 필요하면 사용자에게 묻기, 로그 범위 밖이면 먼저 알림),
-   `triage.py explore <KEY>`와 모듈 문서가 있으면 `module --for explore`를 돌린다. 모듈 고르기·같이 보기(`ask_switch`)·받기 실패·
+   `triage.py explore <KEY>`와 모듈 문서가 있으면 `module --for explore`를 돌린다. 모듈 고르기·받기 실패·
    정밀 탐색(`--deep`) 질문도 모두 메인 에이전트가 사용자에게 묻는다(`module-skills.md` 5-2).
 2. 메인 에이전트가 `task` 도구로 `tt-explore`를 부른다. 하위 에이전트는 앞선 대화를 보지 못하고, 메인 에이전트가 넘긴 값(작업 키·작업
    폴더·분석 사유·고른 모듈과 `--with`·`--deep`·모듈 출력의 `read` 파일·사용자가 준 기준 줄과 시각)만 받는다. `explore.md`대로

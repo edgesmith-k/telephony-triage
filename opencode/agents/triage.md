@@ -1,7 +1,7 @@
 ---
 description: telephony-triage analysis agent (OpenCode v1, analysis only)
 mode: primary
-steps: 50
+steps: 100
 permission:
   webfetch: deny
   todowrite: deny

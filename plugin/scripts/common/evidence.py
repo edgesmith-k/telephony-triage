@@ -586,6 +586,55 @@ def source_text(timeline_text: str) -> tuple[str, re.Pattern | None]:
     return "\n".join(rows), tag_rx(sorted(tags, key=lambda t: (-len(t), t)))
 
 
+# 마스킹 사본(원문 모양) 한 줄: logcat `MM-DD HH:MM:SS.mmm PID TID L TAG: msg`, syslog `Mon DD HH:MM:SS host fac.lvl tag[pid]: msg`
+LOGCAT_LINE_RX = re.compile(r"^(?:\d{4}-)?\d{2}-\d{2}\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s+\d+\s+\d+\s+([VDIWEFA])\s+(\S+?)\s*:\s?(.*)$")
+SYSLOG_LINE_RX = re.compile(r"^[A-Z][a-z]{2}\s+\d{1,2}\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s+\S+\s+\S+\.[a-z]+\s+([^\s\[:]+)(?:\[\d+\])?:\s?(.*)$")
+
+
+def raw_row(line: str) -> str | None:
+    """사본 한 줄(또는 그 모양으로 적은 인용) → 행 문법 `시각 - 레벨 태그 메시지`(시각은 로그에 적힌 그대로, 슬롯 `-`, syslog 레벨 `-`).
+    모양이 다르면 None. 사본 줄과 원문 모양 인용을 같은 식으로 바꿔 머리(시각·레벨·태그) 대조가 같은 칸끼리 되게 한다."""
+    s = ws(QUOTE_CHARS_RX.sub("", line or ""))
+    m = LOGCAT_LINE_RX.match(s)
+    if m:
+        return f"{m.group(1)} - {m.group(2)} {m.group(3)} {m.group(4)}"
+    m = SYSLOG_LINE_RX.match(s)
+    return f"{m.group(1)} - - {m.group(2)} {m.group(3)}" if m else None
+
+
+COPY_ROWS_PER_QUOTE = 50   # 인용마다 사본에서 근거 원문에 더하는 줄 수
+
+
+def copy_rows(texts: list[str], quotes: list[str]) -> str:
+    """마스킹 사본 글(`texts`)에서 인용마다 그 인용의 8자 이상 낱말(없으면 4자 이상 조각)을 가장 많이 함께 가진 줄
+    (`COPY_ROWS_PER_QUOTE`줄까지)을 골라 `raw_row`로 바꾼 행들. 사본 전체를 행으로 바꾸지 않고 낱말 정규식 한 번으로 찾는다
+    (큰 사본에서도 인용 수만큼만). 고른 줄과 인용의 대조(값 바꿈·지어냄)는 `check_quotes`가 한다."""
+    want = []
+    for q in quotes:
+        keys = set()
+        for part in _quote_parts(raw_row(q) or q, None):
+            words = _WORD_RX.findall(part)
+            keys.update(words or ([part] if len(part) >= 4 else []))
+        want.append(keys)
+    every = set().union(*want) if want else set()
+    if not every:
+        return ""
+    rx = re.compile("|".join(map(re.escape, sorted(every, key=len, reverse=True))))
+    hits: dict[tuple[int, int], set] = {}           # (사본 순번, 줄 시작) → 그 줄에서 맞은 낱말
+    for k, text in enumerate(texts):
+        for m in rx.finditer(text):
+            hits.setdefault((k, text.rfind("\n", 0, m.start()) + 1), set()).add(m.group(0))
+    out: dict[str, None] = {}
+    for keys in want:
+        scored = sorted(((len(found & keys), pos) for pos, found in hits.items() if found & keys), key=lambda x: (-x[0], x[1]))
+        for _n, (k, a) in scored[:COPY_ROWS_PER_QUOTE]:
+            b = texts[k].find("\n", a)
+            row = raw_row(texts[k][a:b if b >= 0 else len(texts[k])])
+            if row:
+                out[row] = None
+    return "\n".join(out)
+
+
 def event_rows_text(events: dict) -> str:
     """events.json의 합친 행 전부(상한 없음, 메시지 자르지 않음)를 행 문법으로 — 설치 스킬 모드의 검사 원문."""
     from triagelib import report  # common → triagelib는 여기서만(지연 import)
