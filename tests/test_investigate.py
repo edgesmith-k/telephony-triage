@@ -1235,3 +1235,30 @@ def test_c4_yearless_lines_across_new_year_keep_a_correct_conclusion(tmp_path, c
     from triagelib import output
     assert output._quote_ts(lost, ev).isoformat().startswith("2027-01-01T00:00:10")
     assert output._quote_ts("2026-01-01T00:00:10.000Z host datad[9]: x", ev).isoformat().startswith("2026-01-01")   # 연도 적힌 줄은 그대로
+
+
+# --- eval 46(반입 8): 재계산 '아니오'를 적었다가 그 줄만 지우고 다시 검사 --------------------------------------------------------
+
+NO_MECH = "메커니즘 재계산: 재시도 간격 그대로 → 고치면 결과가 뒤집히나: 아니오"
+
+
+def test_e46_deleting_a_no_recompute_line_does_not_turn_into_identified(tmp_path, capsys):
+    """eval 46: 기대 칸에 숫자가 없으면 재계산 줄은 필수가 아니라, '아니오'(근거 부족)를 받은 뒤 그 줄만 지우고 같은 가설로 다시
+    검사하면 identified가 됐다 — 앞 검사에서 같은 가설의 재계산 답이 '아니오'였는데 이번 출력에 재계산이 없으면 그 실패를 이어받는다
+    (기록 `mech_no`). 가설을 바꾸면(머리가 다름) 이어받지 않는다. 숫자 기대면 원래도 막힌다(재계산 없음)."""
+    job = _job(tmp_path / "plain")
+    _d, inv = _run(job, _out(extra=(NO_MECH,)), capsys)
+    assert _failed(inv) == ["숫자 메커니즘"], inv["gate"]
+    _d, inv = _run(job, _out(), capsys)                                         # 그 줄만 지움
+    assert _failed(inv) == ["숫자 메커니즘"] and "앞 검사" in inv["gate"][4]["why"], inv["gate"]
+    assert _rec(job)["mech_no"] == inv["cause"]
+    job = _job(tmp_path / "changed")                                             # 가설(머리)을 바꾸면 이어받지 않는다
+    _run(job, _out(extra=(NO_MECH,)), capsys)
+    _d, inv = _run(job, _out(head="APN 프로필이 없어 SETUP_DATA_CALL이 거절됨"), capsys)
+    assert inv["status"] == "identified", inv["gate"]
+    job = _job(tmp_path / "numeric")                                             # 숫자 기대: 지우면 재계산 없음으로 실패
+    _run(job, _out(rows=NUM_ROWS, extra=(NO_MECH,)), capsys)
+    _d, inv = _run(job, _out(rows=NUM_ROWS), capsys)
+    assert _failed(inv) == ["숫자 메커니즘"], inv["gate"]
+    _d, inv = _run(_job(tmp_path / "fresh"), _out(), capsys)                   # 처음부터 재계산 없이 쓴 같은 가설은 그대로 통과
+    assert inv["status"] == "identified", inv["gate"]

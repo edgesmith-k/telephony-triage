@@ -305,13 +305,14 @@ def agent_permission_problem(meta: dict, managed_dir: Path) -> str | None:
     try:
         now = OCV.managed_permission(managed_dir, json.loads)
     except (OSError, ValueError) as exc:
-        return f"관리 설정({managed_dir}) 읽기 실패: {type(exc).__name__} — 관리자에게 알리고 고친 뒤"
+        return f"관리 설정({managed_dir}) 읽기 실패: {type(exc).__name__}: {str(exc)[:300]} — 관리자에게 알리고 고친 뒤"
     if "managed_permission" not in meta:
         return ("이전 설치: 에이전트(triage·tt-explore)에 설치 permission이 없다 — 전역 OpenCode 설정의 permission에 edit·bash 같은 "
-                "키가 있으면 그 키에 설치가 넣은 허용이 막히고, 전역 permission(또는 bash 같은 하위 객체)이 \"*\"로 시작하면 전역에만 "
-                "있는 허용이 이 프로젝트에서도 열린다")
+                "키가 있으면 그 키에 설치가 넣은 허용이 막히고, 전역 permission에 \"*\" 키가 있으면 그보다 뒤에 있는 전역 키의 "
+                "허용이 이 프로젝트에서도 열린다")
     if meta["managed_permission"] != now:
-        return f"관리 설정({managed_dir})의 permission이 설치 뒤 바뀌었다 — 에이전트에 옮겨 적은 권한이 지금 관리 설정과 다르다"
+        return (f"관리 설정({managed_dir})의 permission·tools가 설치 뒤 바뀌었다 — 에이전트에 옮겨 적은 권한이 지금 관리 설정과 "
+                "다르다")
     return None
 
 
