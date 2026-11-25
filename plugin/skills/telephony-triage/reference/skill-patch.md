@@ -8,3 +8,10 @@
 - 종료 2면 stderr를 그대로 보이고 제안 줄을 메모로 보인 뒤 이어간다(analyze를 멈추지 않는다).
 - `SK`를 모르거나 `SK/<rel>`을 읽지 못하면 스크립트 없이 짐작하지 않는다: 메모로 보이고 사유를 말한다.
 - release·discard 뒤에도 남는다(`db_pr cleanup --older-than`이 폴더째 지울 때까지).
+
+## `[모듈]` 줄
+
+고른 `[모듈]` 줄(N = `explore-output.md`의 `- [모듈]` 줄 순서)은 모듈 레포·`JOB/skill-wt`·`JOB/module-suggestions`에 직접 쓰지 않는다.
+1. `S/skill_patch.py <KEY> --module --line N[,N]` 한 번, 출력 줄 전부(patch·커밋 메시지·PR 본문)를 글자 그대로 보인다.
+2. 종료 0 → "모듈 레포에 PR을 만들까요?"(만들기 / patch만 남김). 만들기 → `S/skill_patch.py <KEY> --pr --sha <변경 해시>` 한 번, 출력 그대로. Approve·병합 안 함.
+3. 종료 1 → 메모를 보이고 이어간다(`상한 도달`이면 정리 PR 먼저). eval은 건너뜀(통과 아님, 정기 점검).

@@ -43,6 +43,24 @@ reason}`(`patch`는 ok일 때만, `reason`은 memo일 때만). ok면 `sha256`, `
 종료 코드: 0 = patch를 만들었다, 1 = 만들지 않았다(메모 — 사본 없음·경로 거부·변경 없음·텍스트 아님·마스킹이 문맥을 바꿈·
 `git apply --check` 실패·`SK` 없음; `--apply`면 적용 안 함), 2 = 사용·환경 오류(`--skill-dir`·`--apply` 둘 다 없음, `--apply`와 `--source`를 함께 줌, site-defaults·사용자 config 없음, 키 형식·플랫폼 불일치, 작업
 디렉토리 없음, 이름이 비거나 점뿐, git 없음, `mask.allow_patterns` 정규식 오류).
+
+**모듈 학습 한 줄(반입 7 A-2·A-3)**:
+
+    skill_patch.py <KEY> --module --line N[,N] [--platform <이름>] [--json]
+    skill_patch.py <KEY> --pr --sha <변경 해시> [--platform <이름>] [--json]
+
+`--module`: `JOB/explore-output.md`의 `- [모듈] <p>/<m> <칸> — <한 줄> — 근거: <줄>`(`common/modulelines`, 번호 = `- [모듈]` 줄
+순서) 중 고른 번호를 읽는다. check-output 기록(`check-output.json` explore)이 이 파일 sha256이고 그 번호를 남겼어야 하고(`module_lines`),
+보류(analysis.json decision held)면 첫 점검·함정은 거부한다. `module_skills.remote` 최신 base를 임시 clone(`JOB/skill-wt`, 끝에 지움 —
+관리 clone `_module-skills`는 읽지도 쓰지도 않는다)하고, 칸의 문서·절(`modulelines.SLOTS` — 제목 낱말로 찾고 없으면 파일 끝에
+`## <칸>`)의 끝에 `- <한 줄>`을 넣는다. 거부: 200자 초과·줄바꿈·`|`·```·제목/목록 기호 시작·위험 지시(DANGER)·이미 있는 줄·없는
+모듈 문서·문서 상한(`skillcheck.CAPS`, "상한 도달, 정리 PR 필요")·마스킹이 문맥을 바꿈·`git apply --check`·module_repo_check.
+통과하면 `JOB/module-suggestions/module.patch`·`module.meta.json`(커밋 메시지 — 출처 키·`Triage-Env` trailer, PR 본문 — 근거 줄·
+"eval 건너뜀(통과 아님), 다음 정기 점검 대상")을 쓰고 안내 줄·파일별 줄 수와 여유 바이트·검사 줄·patch·커밋 메시지·PR 본문을 낸다
+(표시 기록 `kind: patch`, key `module:<KEY>`). 근거 줄은 문서에 넣지 않는다.
+`--pr --sha <H>`: 보인 변경 해시(patch·커밋 메시지·PR 본문)가 같고 아직 PR이 없을 때만, 새 임시 clone에서 patch를 다시 만들어
+같으면 `tt-module/<KEY>-<n>` 브랜치·커밋·`git push origin HEAD:refs/heads/<브랜치>`(main에는 push하지 않는다)·`gh pr create`
+(Approve·병합 안 함). key `module-pr:<KEY>`. 종료 0 = patch·PR을 만들었다, 1 = 메모, 2 = 사용·설정 오류(`module_skills` 없음 포함).
 """
 
 from __future__ import annotations
@@ -592,7 +610,7 @@ def _line_problem(text: str) -> str | None:
         return "표·코드 기호(|·```)가 있다"
     if text.startswith(("#", ">", "-", "*", "+")):
         return "제목·인용·목록 기호로 시작한다"
-    hit = skillcheck.check_text("line", f"- {text}".encode("utf-8"))
+    hit = skillcheck.check_text("line", f"- {text}".encode())
     if hit:
         return f"위험 지시({hit[0].get('rule') or hit[0]['check']})"
     return None

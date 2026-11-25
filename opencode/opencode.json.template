@@ -84,6 +84,7 @@
       "*db_pr.py request-review*": "deny",
       "*issue_post.py approve*": "deny",
       "*skill_patch.py*--apply*": "deny",
+      "*skill_patch.py*--pr*": "deny",
       "*module_eval.py*": "deny"
     },
     "edit": {

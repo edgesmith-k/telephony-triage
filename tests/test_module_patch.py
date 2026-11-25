@@ -123,7 +123,7 @@ def test_module_patch_one_line_at_section_end(e):
     out = proc.stdout.splitlines()
     meta = json.loads((e["job"] / "module-suggestions" / "module.meta.json").read_text(encoding="utf-8"))
     assert out[0].startswith("모듈 학습 patch(PR 안 만듦, 마스킹됨): ") and out[0].endswith(f"변경 해시 {meta['sha256']}")
-    size = len((e["remote_dir"] / "work" / EXPLORE).read_bytes()) + len(f"- {TRAP}\n".encode("utf-8"))
+    size = len((e["remote_dir"] / "work" / EXPLORE).read_bytes()) + len(f"- {TRAP}\n".encode())
     assert out[1] == f"- {EXPLORE} +1 −0 (상한 4096B, 여유 {4096 - size}B)"
     assert "module_repo_check" in out[2] and "eval 건너뜀(통과 아님)" in out[2]
     assert BASIS in proc.stdout and "Triage-Env: " in meta["message"] and f"출처 이슈: {KEY}" in meta["message"]
