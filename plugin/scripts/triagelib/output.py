@@ -557,7 +557,7 @@ CP_CATEGORIES, NET_CATEGORIES = ("modem",), ("nas",)    # TODO(SITE:S9) 사내 t
 SIDE_LABEL = {"cp": "CP", "net": "망"}
 INV_CAUSE_MAX, INV_WHY_MAX, INV_EXPECT_MAX = 120, 80, 80
 # eval 46: 재계산 '아니오'를 받은 같은 가설이 그 줄만 지워 다시 오면(숫자 기대가 없으면 재계산은 필수가 아니라 통과하던 것) 실패를 이어받는다
-MECH_NO_CARRIED = "앞 검사에서 이 가설의 재계산 답이 아니오 — 그 줄만 지움(가설을 고치거나 재계산을 다시 쓴다)"
+MECH_NO_CARRIED = "앞 검사에서 이 가설의 재계산 답이 아니오 — 지우거나 예가 아닌 답으로 바꿈(가설을 고치거나 숫자와 예로 다시)"
 
 
 def _layer(value) -> str | None:
@@ -1027,7 +1027,9 @@ def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: 
     reply = answer.group(1) if answer else None
     numeric = NUM_UNIT_RX.search((first or {}).get("기대") or "")     # R-17: 가장 이른 false 단계의 `기대` 칸만(가설 머리의 경과 시간은 아님)
     # 외부 리뷰 1125 지적 3: 명시적 `아니오`는 숫자 기대와 상관없이 실패, 숫자 기대면 계산 숫자와 명시적 `예`가 있어야 한다
-    carried = bool(mech_no) and mech_no == (_one(h["가설"])[:INV_CAUSE_MAX] or None) and not mech.strip()
+    # eval 77: 지우지 않고 `해당 없음`·빈 답으로 바꿔 써도 이어받는다 — 같은 머리는 답 `예`와 계산 숫자일 때만 새로 판정
+    carried = bool(mech_no) and mech_no == (_one(h["가설"])[:INV_CAUSE_MAX] or None) and not (
+        reply == "예" and not (flip and flip.group(2)) and re.search(r"\d", mech))
     why = ("재계산 답이 아니오(고쳐도 안 뒤집힘)" if reply in ("아니오", "아니요")
            else MECH_NO_CARRIED if carried else "" if not numeric
            else "숫자 기대인데 메커니즘 재계산 없음" if not mech.strip() else "재계산 답이 틀 그대로" if flip and flip.group(2)
