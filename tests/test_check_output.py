@@ -122,11 +122,16 @@ def _skill_out(quotes, summary="망이 PDN 인증을 거절했다") -> str:
                       "규칙 제안:", "- 없음", ""])
 
 
-def _explore_out(hyps) -> str:
+CHAIN_OK = ("기대 체인:", "| 단계 | 기대 | 기대 근거 | 관측 줄 | 일치 |", "|---|---|---|---|---|",
+            "| 1 | 망이 PDN을 받아 준다 | spec:3GPP 24.301 | 없음(찾은 곳: 타임라인 전체) | 모름 |")
+
+
+def _explore_out(hyps, chain=CHAIN_OK) -> str:
+    """가설 블록들. 기대 체인(11/25)은 가설마다 붙인다 — 형식 경고 없는 출력(`chain=()`면 옛 형식)."""
     out = []
     for i, (h, quotes) in enumerate(hyps, 1):
         out += [f"가설 {i}: {h}", "로그로 확인:", *[f"- {q}" for q in quotes], "코드로 추정: 코드 근거 없음", "반대 근거: 없음",
-                "다음 확인: 망 측 거절 사유 로그"]
+                "다음 확인: 망 측 거절 사유 로그", *chain]
     return "\n".join(out) + "\n"
 
 
@@ -932,3 +937,78 @@ def test_none_with_reason_is_not_a_proposal(tmp_path, capsys, purpose):
         text = (job / "report.md").read_text(encoding="utf-8")
         assert "규칙 제안" not in text and "제안 " not in text.split("근거 원문 검사")[-1].split("\n")[1], (purpose, k)
         assert "rules" not in _rec(job, purpose) and "rules_dropped" not in _rec(job, purpose)
+
+
+# -- 11/25 기대 체인(explore.md 쓰는 것): 형식 경고 · 다시 검사 한 번 · 관측 줄 원문 검사 ---------------------------------------
+
+def _chain(rows, claim=None, extra=()):
+    head = ["기대 체인:", "| 단계 | 기대 | 기대 근거 | 관측 줄 | 일치 |", "|---|---|---|---|---|"]
+    return (*head, *[f"| {n} | {e} | log:15:10:0{n} | {o} | {v} |" for n, e, o, v in rows],
+            *([f"첫 갈라짐: {claim}"] if claim else []), *extra)
+
+
+CHAIN_FALSE2 = [(1, "SETUP 요청이 나간다", "src/gprs.c:gprs_attach() attach requested apn=internet", "true"),
+                (2, "SETUP 응답이 성공", Q1, "false"),
+                (3, "데이터 연결", "없음(찾은 곳: 타임라인 15:10:03~)", "false")]
+
+
+def test_explore_chain_parses_new_fields_and_old_format_still_parses():
+    text = _explore_out([("망 인증 거절", [Q1])], _chain(CHAIN_FALSE2, "단계 2 — 망이 PDN 거절",
+                                                      ("찾았는데 없음:", "- 재요청 — window --at 15:10:05", "책임 경계: CP-망 경계")))
+    h = evidence.parse_explore(text)["hyps"][0]
+    assert [r["단계"] for r in h["기대 체인"]] == [1, 2, 3] and [r["일치"] for r in h["기대 체인"]] == ["true", "false", "false"]
+    assert h["첫 갈라짐"].startswith("단계 2") and h["찾았는데 없음"] == ["재요청 — window --at 15:10:05"]
+    assert h["책임 경계"] == "CP-망 경계" and h["로그로 확인"] == [Q1]
+    assert evidence.chain_quotes(h) == [CHAIN_FALSE2[0][2], Q1]            # `없음(찾은 곳…)`은 인용이 아니다
+    old = evidence.parse_explore(_explore_out([("망 인증 거절", [Q1])], ()))
+    assert old["hyps"][0]["기대 체인"] is None and old["hyps"][0]["로그로 확인"] == [Q1]
+
+
+def test_explore_chain_warnings(tmp_path, capsys):
+    cases = {
+        "missing": (_explore_out([("망 인증 거절", [Q1])], ()), "`기대 체인:` 표 없음"),
+        "not_earliest": (_explore_out([("망 인증 거절", [Q1])], _chain(CHAIN_FALSE2, "단계 3 — 연결 안 됨")),
+                         "첫 갈라짐 단계 3 ≠ 표의 가장 이른 false 단계 2"),
+        "timer": ("가설 1: 재시도 타이머가 늦게 풀림\n원인 층: 프레임워크\n" + _explore_out([("x", [Q1])],
+                  _chain(CHAIN_FALSE2, "단계 2"))[len("가설 1: x\n"):], "`메커니즘 재계산:` 없음"),
+    }
+    for name, (text, needle) in cases.items():
+        job = make_job(tmp_path / name, "explore", "plain")
+        (job / "explore-output.md").write_text(text, encoding="utf-8")
+        code, data, _ = check(job, "explore", capsys=capsys)
+        assert code == 0 and any(needle in w for w in data["format_warnings"]), (name, data)
+        assert data["next"] == output.FORMAT_NEXT
+        assert any(t.startswith("  - 형식 경고(탐색, 판정 아님): ") and needle in t
+                   for t in (job / "report.md").read_text(encoding="utf-8").split("\n")), name
+    # 올바른 표본: 가장 이른 false = 첫 갈라짐, 원인 층 있음, 타이머 낱말 + 메커니즘 재계산 예 → 경고 없음
+    good = ("가설 1: 재시도 간격 뒤 망 거절\n원인 층: 망 — 거절\n책임 경계: CP-망 경계\n"
+            + _explore_out([("x", [Q1])], _chain(CHAIN_FALSE2, "단계 2 — 망이 거절",
+                           ("메커니즘 재계산: 15:10:00 + 1s = 15:10:01 → 고치면 결과가 뒤집히나: 예",)))[len("가설 1: x\n"):])
+    job = make_job(tmp_path / "good", "explore", "plain")
+    (job / "explore-output.md").write_text(good, encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and "format_warnings" not in data and "next" not in data and data["fabricated"] == 0
+    assert data["quotes"] == 3                                               # 로그로 확인 1 + 관측 줄 2
+    assert "첫 갈라짐: 단계 2 — 망이 거절" in _line(job, "  - 가설 1")
+
+
+def test_explore_chain_observed_quote_goes_through_evidence_check(tmp_path, capsys):
+    job = make_job(tmp_path, "explore", "plain")
+    rows = [(1, "SETUP 응답", FAKE, "false")]
+    (job / "explore-output.md").write_text(_explore_out([("망 인증 거절", [Q1])], _chain(rows, "단계 1")), encoding="utf-8")
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and data["fabricated"] == 1 and data["quotes"] == 2
+    assert _line(job, "  - 가설 1").startswith("  - 가설 1 [근거 불일치 1]: ")
+
+
+def test_explore_format_warning_allows_one_recheck(tmp_path, capsys):
+    job = make_job(tmp_path, "explore", "plain")
+    out = job / "explore-output.md"
+    out.write_text(_explore_out([("망 인증 거절", [Q1])], ()), encoding="utf-8")
+    assert check(job, "explore", capsys=capsys)[1]["format_warnings"]
+    out.write_text(_explore_out([("망 인증 거절", [Q1])]), encoding="utf-8")          # 고쳐 쓴 뒤 한 번 더
+    code, data, _ = check(job, "explore", capsys=capsys)
+    assert code == 0 and "format_warnings" not in data and _rec(job, "explore")["format_recheck"] is True
+    assert not any(t.startswith("  - 형식 경고") for t in (job / "report.md").read_text(encoding="utf-8").split("\n"))
+    code, data, _ = check(job, "explore", capsys=capsys)                              # 세 번째는 평소처럼 막힌다
+    assert code == 2 and data["reason"] == "작업 없음"

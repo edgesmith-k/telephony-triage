@@ -127,13 +127,13 @@ ARM_PINS = {
     "ofono/pre/platforms/ofono/log-guide.md": "77c7a06551ab1bc1ae6309ad2a01eb33b3654856ce2d08f4d4659a69e63eaa6a",
     "ofono/pre/explore-rules.md": "6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8",
     "ofono/post/platforms/ofono/log-guide.md": "3e36455bcc47d340a9fdcc2cf0ed533ba9453dc3c151903166c1b2133c4622a1",
-    "ofono/post/explore-rules.md": "b0b0abcbfd4d86525c9b86b73dba37df326178c32a30d9f83f9fa76e65efb70c",     # 11/25 정상 먼저(0.)·이상 줄 먼저 더해 다시 얼림
+    "ofono/post/explore-rules.md": "1a3c3b42caff667b0b5aa6dbcdbb8ae753edb66875c68a11523338501ac53edc",     # 11/25 정상 먼저(0.)·이상 줄 먼저·기대 체인 먼저 더해 다시 얼림
     # Android(H C1+D S12, 11/05 ④ 뒤 얼림 — tests/fixtures/module-arms/README.md 표)
     "android/pre/log-tags.md": "9820b909b15c148515e1265d5dd067d28e2f6e2c244470b7787dec2d469828db",
     "android/pre/ril-requests.md": "e3d078dbeadb6505ab62131e1b0cde83be959e2bc110c994ba43f90d2dda352d",
     "android/pre/fail-causes.md": "0077483d5c4ff0cb2b5e01873659f76a57acaa1f2f97949db1e9da756019e9cd",
     "android/pre/explore-rules.md": "6e5e9512c08404089872465262bfc11ab99b58747445d0b2c2296b13be6f83d8",
-    "android/post/explore-rules.md": "b0b0abcbfd4d86525c9b86b73dba37df326178c32a30d9f83f9fa76e65efb70c",     # 11/25 정상 먼저(0.)·이상 줄 먼저 더해 다시 얼림
+    "android/post/explore-rules.md": "1a3c3b42caff667b0b5aa6dbcdbb8ae753edb66875c68a11523338501ac53edc",     # 11/25 정상 먼저(0.)·이상 줄 먼저·기대 체인 먼저 더해 다시 얼림
 }
 # 플랫폼별 자료는 레지스트리(`platforms.<p>.SPEC.template`, 17-platforms §10-3)에서 — 이 파일은 플랫폼 이름을 모른다(종합 리뷰 H①).
 _TEMPLATE_METAS = platforms.template_metas()
@@ -193,12 +193,18 @@ _EXPLORE_TAIL_SPEC = ("로그로 확인:\n- <입력 파일의 줄 그대로, 또
                       "코드로 추정: 코드 근거 없음 (평가 입력에는 소스가 없다 — 이 글자 그대로)\n"
                       "반대 근거: <한 줄 | 없음>\n"
                       "다음 확인: <더 받을 로그·확인할 설정 한 줄>\n")
-EXPLORE_SPECS = {p: ("가설 1: <원인 한 줄>\n" + _LAYER_DAEMON_SPEC[p] + _EXPLORE_TAIL_SPEC
+# 11/25 기대 체인(실사용 `explore.md` 쓰는 것과 같은 칸, check-output 형식 경고 대상). 채점은 하지 않는다 — 실패 줄 다음 사건을 따라가게 한다
+_CHAIN_SPEC = ("기대 체인: (가장 유력 가설엔 꼭, 다른 가설은 선택)\n| 단계 | 기대 | 기대 근거 | 관측 줄 | 일치 |\n"
+               "| 1 | <실패 줄 다음에 일어나야 할 일> | <log:<시각> 등> | <입력 파일의 줄 그대로 또는 없음(찾은 곳: …)> | "
+               "<true, false, 모름 중 하나> |\n"
+               "첫 갈라짐: 단계 <가장 이른 false 번호> — <해야 했는데 하지 않은 주체(= 원인 층)>\n"
+               "메커니즘 재계산: (원인이 타이머·재시도·임계값·횟수일 때만) <로그 값으로 계산> → 고치면 결과가 뒤집히나: 예|아니오\n")
+EXPLORE_SPECS = {p: ("가설 1: <원인 한 줄>\n" + _LAYER_DAEMON_SPEC[p] + _EXPLORE_TAIL_SPEC + _CHAIN_SPEC
                      + "(가설 2·3도 같은 일곱 칸. 층·데몬이 갈리는 다른 설명이 있을 때만 쓴다. 서지 않으면 쓰지 않는다)\n"
                      + "가장 유력: <가설 번호 하나>\n" + _RULE_SPEC) for p in _LAYERS}
 OUTPUT_HEAD = {
     "deep": "마지막 답은 아래 여섯 칸만, 이 순서로, 칸 이름 그대로 쓴다. 칸 밖의 글은 쓰지 않는다.",
-    "explore": "마지막 답은 아래 칸만, 이 순서로, 칸 이름 그대로 쓴다. 가설은 1~3개, 가설마다 일곱 칸(실사용 탐색 출력 다섯 칸 + 원인 층·원인 데몬)이다. 칸 밖의 글은 쓰지 않는다.",
+    "explore": "마지막 답은 아래 칸만, 이 순서로, 칸 이름 그대로 쓴다. 가설은 1~3개, 가설마다 일곱 칸(실사용 탐색 출력 다섯 칸 + 원인 층·원인 데몬)이고 가장 유력 가설엔 기대 체인 칸이 더 붙는다. 칸 밖의 글은 쓰지 않는다.",
 }
 # explore만 받는 공용 규칙(두 arm이 같이 받는다 — 설계 F2: with arm 문서에는 넣지 않는다)
 EXTRA_RULES = {

@@ -1,0 +1,87 @@
+{
+ "around": "2026-11-20T13:00:01.000Z",
+ "failed_step": null,
+ "limit": 200,
+ "anchor": null,
+ "partial": [
+  {
+   "signature": "DATA-001/no-setup-data-call-request",
+   "missing": [
+    "must_event data_evaluation_rejected"
+   ]
+  }
+ ],
+ "around_alt": [],
+ "anomaly": {
+  "range": [
+   "2026-11-20T12:55:01.000Z",
+   "2026-11-20T13:10:01.000Z"
+  ],
+  "ref": "2026-11-20T13:00:01.000Z",
+  "after_sec": 600,
+  "candidates": 6,
+  "rows": [
+   {
+    "ts": "2026-11-20T13:02:10.000Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "FATAL EXCEPTION: main",
+    "fold": {
+     "n": 1,
+     "first": "2026-11-20T13:02:10.000Z",
+     "last": "2026-11-20T13:05:00.311Z"
+    }
+   },
+   {
+    "ts": "2026-11-20T13:02:10.000Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "Process: com.android.settings, PID: 3300"
+   },
+   {
+    "ts": "2026-11-20T13:02:10.000Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "java.lang.IllegalStateException: Fragment not attached to a context."
+   },
+   {
+    "ts": "2026-11-20T13:02:10.000Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "at android.app.Fragment.requireContext(Fragment.java:1012)"
+   },
+   {
+    "ts": "2026-11-20T13:05:00.311Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "Process: com.android.phone, PID: 2101"
+   },
+   {
+    "ts": "2026-11-20T13:05:00.311Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "java.lang.IllegalStateException: Attempt to setup data network with a null data profile"
+   },
+   {
+    "ts": "2026-11-20T13:05:00.311Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "at com.android.internal.telephony.data.DataNetworkController.onSetupDataNetwork(DataNetworkController.java:2690)"
+   },
+   {
+    "ts": "2026-11-20T13:05:00.311Z",
+    "phone": null,
+    "level": "E",
+    "tag": "AndroidRuntime",
+    "msg": "at com.android.internal.telephony.data.DataNetworkController$1.handleMessage(DataNetworkController.java:1032)"
+   }
+  ]
+ }
+}

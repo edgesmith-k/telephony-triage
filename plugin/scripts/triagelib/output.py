@@ -109,6 +109,15 @@ RULE_DROPPED = "  - {kind} 출력의 제안 {n}개는 근거가 원문에서 확
 RULE_KIND = {"deep": "심층", "explore": "탐색"}
 RULE_BASIS_RX = re.compile(r"\s[—–]\s*근거\s*[:：]\s*(.+)$")
 RULES_MAX, RULE_CLIP = 5, 300
+# 11/25 기대 체인 형식 경고(explore.md 쓰는 것): 판정이 아니라 모델에게 고쳐 쓰기를 한 번 청한다(사내 모델이 형식을 놓칠 수 있어 실패로 두지 않는다)
+FORMAT_SUB = "  - 형식 경고(탐색, 판정 아님): {text}"
+FORMAT_NEXT = ("explore-output.md에서 형식 경고가 가리킨 칸만 고쳐 쓰고 같은 check-output을 한 번만 다시 실행한다(두 번째 결과는 경고가 "
+               "남아도 그대로 쓴다)")
+FORMAT_CLIP = 600
+TIMER_RX = re.compile(r"타이머|timer|throttl|스로틀|재시도|retry|backoff|임계|threshold|카운터|counter|횟수", re.IGNORECASE)
+BOUNDARIES = ("AP 내부", "AP-CP 경계", "CP 내부", "CP-망 경계", "환경", "모름")
+CLAIM_STEP_RX = re.compile(r"단계\s*#?(\d+)|^\D*?(\d+)")
+FLIP_RX = re.compile(r"(아니오|아니요|예)[\s`*.)\]]*$")
 # 분석 스킬 의견 `<원인 ID> — <근거>`의 앞 ID. 백틱·굵게로 감싸거나 조사(`ID와`)가 붙어도 잡고, 숫자가 더 붙은 것은 아니다
 OPINION_ID = re.compile(rf"\s*[`*]*({CAUSE_ID})(?!\d)")
 
@@ -356,10 +365,12 @@ def _caps(purpose: str, mode: str, fields: dict, text: str) -> str | None:
 
 
 def _quotes(purpose: str, fields: dict | None) -> list[str]:
+    """인용 목록. 탐색은 가설 순서대로 `로그로 확인` 전부 뒤에 가설 순서대로 `기대 체인` 관측 줄(`evidence.chain_quotes`)."""
     if not fields:
         return []
     if purpose == "explore":
-        return [q for hyp in fields["hyps"] for q in hyp["로그로 확인"]]
+        return ([q for hyp in fields["hyps"] for q in hyp["로그로 확인"]]
+                + [q for hyp in fields["hyps"] for q in evidence.chain_quotes(hyp)])
     return list(fields.get("근거") or [])
 
 
@@ -367,6 +378,45 @@ def _parse(purpose: str, mode: str, text: str) -> dict | None:
     if purpose == "explore":
         return evidence.parse_explore(text)
     return evidence.parse_fields(text, evidence.FIELDS_DEEP if mode == "module" else evidence.FIELDS_SKILL)
+
+
+def _chain_warnings(fields: dict) -> list[str]:
+    """기대 체인 형식 경고(기계로 볼 수 있는 것만): 가장 유력(없으면 가설 1)에 표 없음, `첫 갈라짐` 단계가 표의 가장 이른 false가
+    아님(없음·false 없는데 적음), false가 있는데 `원인 층` 없음, `책임 경계` 값이 목록 밖, 타이머·재시도·임계값·횟수 낱말이 든 가설
+    (정상 가설 아님)에 `메커니즘 재계산` 없음, 가장 유력의 메커니즘 재계산이 `아니오`."""
+    out = []
+    picked = _picked(fields)
+    for k, h in enumerate(fields.get("hyps") or []):
+        n, rows = k + 1, h.get("기대 체인") or []
+        if k == picked and not rows:
+            out.append(f"가설 {n}(가장 유력)에 `기대 체인:` 표 없음 — 실패 줄 다음에 일어나야 할 일을 단계 표로")
+        first = next((r["단계"] for r in rows if r["일치"] == "false"), None)
+        m = CLAIM_STEP_RX.search(h.get("첫 갈라짐") or "")
+        claim = int(m.group(1) or m.group(2)) if m else None
+        if first is not None and claim is None:
+            out.append(f"가설 {n}: 표의 첫 false가 단계 {first}인데 `첫 갈라짐: 단계 {first} — …` 칸이 없음")
+        elif first is not None and claim != first:
+            out.append(f"가설 {n}: 첫 갈라짐 단계 {claim} ≠ 표의 가장 이른 false 단계 {first} — 가장 잘 설명하는 단계가 아니라 가장 이른 false")
+        elif first is None and claim is not None and rows:
+            out.append(f"가설 {n}: 첫 갈라짐 단계 {claim}인데 표에 false 행이 없음")
+        if first is not None and not h.get("원인 층"):
+            out.append(f"가설 {n}: 첫 갈라짐이 있는데 `원인 층:` 없음 — 단계 {first}에서 해야 했는데 안 한 주체")
+        if h.get("책임 경계") is not None and not h["책임 경계"].lstrip("`* ").startswith(BOUNDARIES):
+            out.append(f"가설 {n}: `책임 경계`는 {' | '.join(BOUNDARIES)} 중 하나")
+        mech = h.get("메커니즘 재계산")
+        if not mech and TIMER_RX.search(h["가설"] or "") and not NORMAL_RX.match(h["가설"] or ""):
+            out.append(f"가설 {n}: 타이머·재시도·임계값·횟수 원인인데 `메커니즘 재계산:` 없음 — 로그 값으로 다시 계산하고 고치면 뒤집히나")
+        flip = FLIP_RX.search(mech or "")
+        if k == picked and flip and flip.group(1) != "예":
+            out.append(f"가설 {n}: 메커니즘 재계산이 '아니오'(고쳐도 결과가 안 뒤집힘)인데 가장 유력 — 원인이 아니다")
+    return out
+
+
+def _recheck_open(job: Path) -> bool:
+    """앞 탐색 검사가 형식 경고를 냈고 아직 다시 검사하지 않았나(경고 뒤 한 번만 — `TODO(LLM)`이 없어도 줄을 다시 쓴다)."""
+    data = _load(job / RECORD)
+    rec = data.get("explore") if isinstance(data, dict) else None
+    return isinstance(rec, dict) and bool(rec.get("format_warnings")) and not rec.get("format_recheck")
 
 
 # --- 그리기 ----------------------------------------------------------------------------------------------
@@ -393,7 +443,8 @@ def _render(purpose: str, mode: str, head: str, fields: dict, sub: str, fab_by_h
             k = fab_by_hyp[i - 1] if fab_by_hyp else 0
             mark = (f" [근거 불일치 {k}]" if k else "") + (NORMAL_BAD if normal_bad and normal_bad[i - 1] else "")
             out.append(f"  - 가설 {i}{mark}: {_one(h['가설'])} / 로그로 확인: {' | '.join(_one(q) for q in h['로그로 확인'])} / "
-                       f"코드로 추정: {_one(h['코드로 추정'])} / 반대 근거: {_one(h['반대 근거'])} / 다음 확인: {_one(h['다음 확인'])}")
+                       f"코드로 추정: {_one(h['코드로 추정'])} / 반대 근거: {_one(h['반대 근거'])} / 다음 확인: {_one(h['다음 확인'])}"
+                       + (f" / 첫 갈라짐: {_one(h['첫 갈라짐'])}" if h.get("첫 갈라짐") else ""))
         return out + [sub]
     quotes = " | ".join(_one(q) for q in fields["근거"])
     if mode == "module":
@@ -424,8 +475,8 @@ def _evidence_sub(mode: str, res: dict | None, skipped: str | None, before: int 
 
 # --- 본체 ------------------------------------------------------------------------------------------------
 
-def _rewrite(report: Path, prefix: str, lines: list[str], keep_sub: tuple[str, ...] = ()) -> bool:
-    ok = rep.rewrite_line(report, prefix, lines, keep_sub=keep_sub, only_pending=True)
+def _rewrite(report: Path, prefix: str, lines: list[str], keep_sub: tuple[str, ...] = (), pending: bool = True) -> bool:
+    ok = rep.rewrite_line(report, prefix, lines, keep_sub=keep_sub, only_pending=pending)
     if not ok:
         print(WARN_REWRITE, file=sys.stderr)
     return ok
@@ -691,14 +742,15 @@ def _mode(job: Path, purpose: str, analysis: dict) -> tuple[str, object]:
     return "skill", None
 
 
-def _preconditions(job: Path, purpose: str) -> tuple[dict, str | None]:
-    """(analysis.json 내용, 그 바이트의 sha256 — 판단을 고쳐 쓰기 직전 대조용)."""
+def _preconditions(job: Path, purpose: str) -> tuple[dict, str | None, bool]:
+    """(analysis.json 내용, 그 바이트의 sha256 — 판단을 고쳐 쓰기 직전 대조용, 형식 경고 뒤 다시 검사인가)."""
     report = job / "report.md"
     current = rep.current_line(report, PREFIX[purpose])
     analysis, read_sha = _read_analysis(job)
     if not isinstance(analysis, dict):
         raise _Stop(USAGE, "작업 없음", NEXT_CHECK_NA, "analysis.json이 없다")
-    if not current or "TODO(LLM)" not in current:
+    recheck = bool(current) and "TODO(LLM)" not in current and purpose == "explore" and _recheck_open(job)
+    if not current or ("TODO(LLM)" not in current and not recheck):
         raise _Stop(USAGE, "작업 없음", NEXT_CHECK_NA, "고칠 줄이 없다(이미 쓴 줄은 그대로 둔다)")
     if purpose == "deep":
         ana = analysis.get("analyzer")
@@ -706,12 +758,13 @@ def _preconditions(job: Path, purpose: str) -> tuple[dict, str | None]:
             raise _Stop(USAGE, "작업 없음", NEXT_CHECK_NA, "심층 분석 해당 없음")
     elif _kind(job / EXPLORE_INPUT_FILE) != "file" or (analysis.get("explore") or {}).get("when") == "never":
         raise _Stop(USAGE, "작업 없음", NEXT_CHECK_NA, "탐색 분석 해당 없음")
-    return analysis, read_sha
+    return analysis, read_sha, recheck
 
 
 def _fail(job: Path, purpose: str, env: dict, reason: str, label: str, sha: str | None, args) -> int:
     report = job / "report.md"
-    if _rewrite(report, PREFIX[purpose], [SKIPPED[purpose].format(reason=label)]) and purpose == "explore":
+    if (_rewrite(report, PREFIX[purpose], [SKIPPED[purpose].format(reason=label)], pending=not getattr(args, "recheck", False))
+            and purpose == "explore"):
         _question_tail(report, QUESTION_SKIPPED)
     _record(job, purpose, {"error": label, "at": _now(), "env": env, "output_sha256": sha})
     _obligation(args, job, purpose, [])
@@ -721,7 +774,7 @@ def _fail(job: Path, purpose: str, env: dict, reason: str, label: str, sha: str 
 
 
 def _check(args, job: Path, purpose: str, env: dict) -> int:
-    analysis, read_sha = _preconditions(job, purpose)
+    analysis, read_sha, args.recheck = _preconditions(job, purpose)
     out_path = job / OUTPUT_FILE[purpose]
     kind = _kind(out_path)
     if kind == "link":
@@ -784,7 +837,8 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
         if purpose == "explore":        # verdicts는 `_quotes` 순서 = 가설 순서대로 `로그로 확인`을 이어 붙인 것
             it = iter(res["verdicts"])
             per_hyp = [[next(it) for _ in h["로그로 확인"]] for h in fields["hyps"]]
-            fab_by_hyp = [v.count("fabricated") for v in per_hyp]
+            chain_v = [[next(it) for _ in evidence.chain_quotes(h)] for h in fields["hyps"]]     # 기대 체인 관측 줄(뒤에 붙였다)
+            fab_by_hyp = [(a + b).count("fabricated") for a, b in zip(per_hyp, chain_v)]
     normal_ok, normal_bad = _normal_flags(fields, per_hyp) if purpose == "explore" else ([], [])
     normal1 = bool(normal_ok) and normal_ok[_picked(fields)]       # `가장 유력: N`이 있으면 그 가설, 없으면 가설 1
     old = _load(job / RECORD)
@@ -805,8 +859,12 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     rule_lines, rules_kept, rules_dropped = _rule_subs(purpose, fields.get("rules" if purpose == "explore" else "규칙 제안"),
                                                        source, tags, res)
     reason = _hold_reason(analysis, fields) if hold else None
-    lines = _render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp, normal_bad) + subs + rule_lines
-    if _rewrite(report, prefix, lines, KEEP_SUB) and purpose == "explore":
+    fmt = _chain_warnings(fields) if purpose == "explore" else []
+    fmt_text = "; ".join(fmt)
+    fmt_lines = [FORMAT_SUB.format(text=fmt_text if len(fmt_text) <= FORMAT_CLIP else fmt_text[:FORMAT_CLIP - 1] + "…")] if fmt else []
+    lines = (_render(purpose, mode, _head(current, prefix, default), fields, sub, fab_by_hyp, normal_bad) + subs + rule_lines
+             + fmt_lines)
+    if _rewrite(report, prefix, lines, KEEP_SUB, pending=not args.recheck) and purpose == "explore":
         _question_tail(report, QUESTION_DONE if fields["hyps"] else QUESTION_DONE_NONE)
     unwritten = (_hold_lines(report, hold, (analysis.get("decision") or {}).get("state") == "held", reason == "normal")
                  if hold else [])
@@ -827,7 +885,8 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
                            **({"top_fit_cause": fields["top_fit"]["cause"]} if (fields.get("top_fit") or {}).get("cause") else {}),
                            **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra,
                            **({"normal": [i + 1 for i, v in enumerate(normal_ok) if v]} if any(normal_ok) else {}),
-                           **({"rules": rules_kept} if rules_kept else {}), **({"rules_dropped": rules_dropped} if rules_dropped else {})})
+                           **({"rules": rules_kept} if rules_kept else {}), **({"rules_dropped": rules_dropped} if rules_dropped else {}),
+                           **({"format_warnings": fmt} if fmt else {}), **({"format_recheck": True} if args.recheck else {})})
     head = masking.mask_brief(lines[0], 300, off=off)     # 끔 DB: report.md 줄과 같은 글자(꼭 보일 줄 대조가 어긋나지 않게)
     fab = [sub.lstrip()] if counts["fabricated"] or before else []     # 앞 검사의 불일치도 보일 의무(RP-14)
     # 심층 분석은 결과 줄(첫 줄)을 늘 보인다 — 탐색은 지어낸 인용이 있을 때만(B2-6)
@@ -835,7 +894,8 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     args.trace_extra = {"fabricated": counts["fabricated"]} if res else {}     # F9: 다시 검사해도 trace에 검사마다 수가 남는다
     warn = next((s.strip() for s in subs if s.startswith("  - 경고: 1위 판단")), None)
     _emit({"line": head, "evidence": sub.lstrip(), "quotes": n, **counts, **({"warning": warn} if warn else {}),
-           **({"windows_excluded": win_bad} if win_bad else {})})
+           **({"windows_excluded": win_bad} if win_bad else {}), **({"format_warnings": fmt} if fmt else {}),
+           **({"next": FORMAT_NEXT} if fmt and not args.recheck else {})})
     return OK
 
 

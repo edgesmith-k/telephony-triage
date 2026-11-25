@@ -98,6 +98,13 @@ NONE_RX = _label_rx("가설 없음")
 EXPLORE_OPTIONAL = ("원인 층", "원인 데몬")
 EXPLORE_TAIL = ("가장 유력", "규칙 제안")
 EXPLORE_RX = {f: _label_rx(f) for f in EXPLORE_FIELDS[1:] + EXPLORE_OPTIONAL + EXPLORE_TAIL}
+# 11/25 기대 체인(explore.md 쓰는 것): 가설 블록 안 어디에 있어도 읽는 선택 칸. `기대 체인:` 뒤 표 행(`| 단계 | 기대 | 기대 근거 |
+# 관측 줄 | 일치 |`), `찾았는데 없음:` 뒤 목록, 나머지는 한 줄. 없으면 None. 형식 실패로 만들지 않는다(check-output이 경고만 낸다)
+CHAIN_LABELS = ("기대 체인", "첫 갈라짐", "찾았는데 없음", "메커니즘 재계산", "책임 경계")
+CHAIN_RX = {f: _label_rx(f) for f in CHAIN_LABELS}
+STEP_NUM_RX = re.compile(r"(\d+)")
+_SEP_CELL_RX = re.compile(r"^:?-{2,}:?$")
+_VERDICT = {"true": "true", "참": "true", "일치": "true", "false": "false", "거짓": "false", "불일치": "false"}
 # sim1122 F2: `1위 판단: <원인 ID> 적합|부적합|모름 — <이유>`(채택 원인이 이번 실패를 설명하는지, 선택 칸, 출력 어디에 있어도 첫
 # `1위 판단` 줄). ID는 값 앞·머리 괄호(`1위 판단(<ID>):`)·없음(옛 형식) 모두 읽고, 값 뒤 문장부호도 받는다. 형식 실패로 만들지 않는다
 TOP_FIT_HEAD_RX = re.compile(r"^\s*(?:[-*]\s*)?\**\s*1위\s*판단")
@@ -200,7 +207,7 @@ def explore_parse(text: str) -> tuple[dict | None, str | None]:
     "top": str|None, "rules": [...], "top_fit"?: {fit, why}(칸이 있을 때만)}, None) 또는 (None, 사유).
 
     `가설 n: …` 블록마다 다섯 칸(`EXPLORE_FIELDS`)이 순서대로 있어야 한다. `원인 층`·`원인 데몬`(가설 머리와 `로그로 확인` 사이)은
-    선택이고 없으면 None, `n`은 머리의 번호(없으면 None). 마지막 가설 뒤 `가장 유력:`·`규칙 제안:`은 꼬리(선택)다. 블록이 없으면
+    선택이고 없으면 None, `n`은 머리의 번호(없으면 None). 가설마다 `chain_fields`(기대 체인 칸, 블록 어디든)를 더한다. 마지막 가설 뒤 `가장 유력:`·`규칙 제안:`은 꼬리(선택)다. 블록이 없으면
     `가설 없음: <이유>`와 `다음 확인:`이 있어야 한다. 칸 밖 줄(빈 줄·설명)은 무시한다. 실사용 check-output과 모듈 eval이 같은 함수를 쓴다.
     """
     m = FENCE_RX.match(text or "")
@@ -238,14 +245,15 @@ def explore_parse(text: str) -> tuple[dict | None, str | None]:
             rest = EXPLORE_RX[f].match(block[hit]).group(1).strip()
             if f == "로그로 확인":
                 end = next((j for j in range(hit + 1, len(block))
-                            if any(EXPLORE_RX[g].match(block[j]) for g in EXPLORE_FIELDS[2:])), len(block))
+                            if any(EXPLORE_RX[g].match(block[j]) for g in EXPLORE_FIELDS[2:])
+                            or any(rx.match(block[j]) for rx in CHAIN_RX.values())), len(block))
                 items = [im.group(1).strip() for line in block[hit + 1:end] if (im := ITEM_RX.match(line))]
                 hyp[f] = ([rest] if rest else []) + items
                 pos = end
             else:
                 hyp[f] = rest
                 pos = hit + 1
-        hyps.append(hyp)
+        hyps.append({**hyp, **chain_fields(block)})
     tail = lines[tail_at:]
     top = next((EXPLORE_RX["가장 유력"].match(line).group(1).strip() for line in tail if EXPLORE_RX["가장 유력"].match(line)), None)
     rules: list[str] = []
@@ -254,6 +262,54 @@ def explore_parse(text: str) -> tuple[dict | None, str | None]:
         block = [EXPLORE_RX["규칙 제안"].match(tail[r_at]).group(1).strip(), *tail[r_at + 1:]]
         rules = _same_line_rule(block[0]) + [im.group(1).strip() for line in block if (im := ITEM_RX.match(line))]
     return {"none": None, "next": None, "hyps": hyps, "top": top, "rules": rules, **_top_fit_key(lines)}, None
+
+
+def _cells(line: str) -> list[str] | None:
+    s = line.strip()
+    if not s.startswith("|"):
+        return None
+    s = s[1:-1] if s.endswith("|") and len(s) > 1 else s[1:]
+    return [c.strip() for c in s.split("|")]
+
+
+def chain_fields(block: list[str]) -> dict:
+    """가설 블록의 `CHAIN_LABELS` 칸(각 첫 줄만). `기대 체인` = [{단계: int|None, 기대, 근거, 관측, 일치: true|false|모름}]
+    (머리·구분 행과 칸이 5개 못 되는 행은 건너뛴다. 관측 칸에 `|`가 들면 가운데 칸을 이어 붙인다), `찾았는데 없음` = 항목 목록."""
+    out: dict = {f: None for f in CHAIN_LABELS}
+    for i, line in enumerate(block):
+        f = next((f for f in CHAIN_LABELS if CHAIN_RX[f].match(line)), None)
+        if f is None or out[f] is not None:
+            continue
+        rest = CHAIN_RX[f].match(line).group(1).strip()
+        if f in ("기대 체인", "찾았는데 없음"):
+            got: list = [] if f == "기대 체인" or not rest or RULE_NONE_RX.match(rest) else [rest]
+            for nxt in block[i + 1:]:
+                if not nxt.strip():
+                    if got:
+                        break
+                    continue
+                cells = _cells(nxt) if f == "기대 체인" else None
+                im = ITEM_RX.match(nxt) if f == "찾았는데 없음" else None
+                if f == "기대 체인" and cells is not None:
+                    if len(cells) >= 5 and cells[0] != "단계" and not all(_SEP_CELL_RX.match(c) for c in cells if c):
+                        m = STEP_NUM_RX.search(cells[0])
+                        got.append({"단계": int(m.group(1)) if m else None, "기대": cells[1], "근거": cells[2],
+                                    "관측": "|".join(cells[3:-1]).strip(),
+                                    "일치": _VERDICT.get(cells[-1].strip("`* ").lower(), "모름")})
+                elif im:
+                    got.append(im.group(1).strip())
+                else:
+                    break
+            out[f] = got
+        else:
+            out[f] = rest
+    return out
+
+
+def chain_quotes(hyp: dict) -> list[str]:
+    """`기대 체인` 관측 칸 중 인용(비었거나 `없음…`·`-`이 아닌 것) — check-output이 `로그로 확인`과 같은 근거 원문 검사를 한다."""
+    return [r["관측"] for r in hyp.get("기대 체인") or []
+            if QUOTE_CHARS_RX.sub("", r["관측"]).strip() not in ("", "-") and not RULE_NONE_RX.match(r["관측"])]
 
 
 def parse_explore(text: str) -> dict | None:
