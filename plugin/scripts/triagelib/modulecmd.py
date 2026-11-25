@@ -528,10 +528,13 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
     inputs[TIMELINE_FILE] = _sha256(tl)
     allow = events.get("mask_allow") or []
     rows = report.merge_rows(events)
-    items, total = report.select_rows(rows, spec.get("around"), limit)
+    from triagelib import summary
+    centers, basis = summary.timeline_center(spec)      # `triage._explore`와 같은 중심·머리
+    items, total = report.select_rows(rows, centers, limit)
     flows = report.head_notes(job, events, spec.get("around"))
     text = report.render_timeline(key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
-                                  spec.get("anchor"), spec.get("look_at"), flows, spec.get("anomaly"), spec.get("summary"))
+                                  spec.get("anchor"), spec.get("look_at"), flows, spec.get("anomaly"), spec.get("summary"),
+                                  basis)
     text = text if events.get("mask_off") else masking.redact(text, allow)[0]
     if text.encode("utf-8") != tl:
         raise nojob(f"{TIMELINE_FILE}가 events.json과 맞지 않는다 — triage.py explore를 다시")
@@ -579,8 +582,8 @@ def _deep_summary(job: Path, key: str, cfg: dict, defaults: dict, analysis: dict
     cap = summary.cap_of(cfg)
     kept = spec.get("summary") if isinstance(spec, dict) else None
     found = (kept if isinstance(kept, dict) and kept.get("cap") == cap and kept.get("groups")
-             else summary.safe(job, events, analysis, defaults, summary.ref_of(spec, around), cap,
-                               guess=summary.guess_of(spec, analysis), after_sec=summary.after_of(cfg)))
+             else summary.labeled(summary.safe(job, events, analysis, defaults, summary.ref_of(spec, around), cap,
+                                               guess=summary.guess_of(spec, analysis), after_sec=summary.after_of(cfg)), spec))
     if not found:
         return None, False
     try:
