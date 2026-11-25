@@ -350,8 +350,9 @@ def _summary_source(job: Path, names: list, texts: list, bad: list) -> tuple[lis
     if not isinstance(rec, dict) or rec.get("path") != "summary.md":
         return names, texts, bad
     raw = (job / "summary.md").read_bytes() if _kind(job / "summary.md") == "file" else None
-    if raw is None or _sha(raw) != rec.get("sha256"):
-        return names, texts, bad + ["summary.md"]
+    events = (job / "events.json").read_bytes() if _kind(job / "events.json") == "file" else None
+    if raw is None or _sha(raw) != rec.get("sha256") or events is None or _sha(events) != rec.get("events_sha256"):
+        return names, texts, bad + ["summary.md"]       # 바뀌었거나 다른 run(events.json)의 요약
     return names + ["summary.md"], texts + [raw.decode("utf-8", "replace")], bad
 
 
@@ -414,7 +415,7 @@ NOT_FOUND_RX = re.compile(r"^[`*\s]*찾았는데\s*없음")     # `후보 확인
 def _check_quoted(fields: dict) -> list[tuple[int, str]]:
     """`후보 확인` 항목 중 근거를 인용으로 쓴 것 [(항목 번호, 근거)] — 빈 근거·`찾았는데 없음: …`은 뺀다(옛 한 줄 형식이면 [])."""
     return [(i, c["why"]) for i, c in enumerate(fields.get(evidence.CHECK_FIELD) or [])
-            if c.get("why") and not NOT_FOUND_RX.match(c["why"])]
+            if c.get("why") and c.get("verdict") != "?" and not NOT_FOUND_RX.match(c["why"])]
 
 
 def _parse(purpose: str, mode: str, text: str) -> dict | None:
@@ -500,7 +501,7 @@ def _render(purpose: str, mode: str, head: str, fields: dict, sub: str, fab_by_h
     quotes = " | ".join(_one(q) for q in fields["근거"])
     if mode == "module":
         checks = fields.get(evidence.CHECK_FIELD) or []
-        tail = (f"후보 확인: {' · '.join(c['cause'] + ' ' + c['verdict'] for c in checks)}" if checks
+        tail = (f"후보 확인: {' · '.join((c['cause'] or '?') + ' ' + c['verdict'] for c in checks)}" if checks
                 else f"분석 스킬 의견: {_one(fields['분석 스킬 의견'])}")      # 옛 모듈 레포 형식(한 줄)
         first = f"{head}원인 층 {_one(fields['원인 층'])} · 원인 데몬 {_one(fields['원인 데몬'])} / {tail}"
         return [first, f"  - 근거: {quotes}", f"  - 반대 근거: {_one(fields['반대 근거'])}",
@@ -511,6 +512,8 @@ def _render(purpose: str, mode: str, head: str, fields: dict, sub: str, fab_by_h
 
 
 def _check_one(c: dict, bad: bool = False) -> str:
+    if c["verdict"] == "?":                 # 못 읽은 줄은 원문 그대로(check-output이 stderr에도 경고)
+        return f"? (읽지 못함) {_one(c['why'])}"
     return f"{c['cause']} {c['verdict']}" + (" [근거 불일치]" if bad else "") + (f" — {_one(c['why'])}" if c["why"] else "")
 
 
@@ -716,7 +719,7 @@ def _rebase_module_inputs(job: Path, old: str, new: str) -> bool:
 
 
 def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, hold: bool = False,
-                     opinion: str | None = None, normal: bool = False) -> dict:
+                     opinion: str | None = None, normal: bool = False, checks: list | None = None) -> dict:
     """analysis.json `decision`을 고친다(단계 4): 탐색 적합성 확인 보류(`hold`)면 채택 → held/fit_check(counter 없앰), 심층 분석
     의견의 원인 ID가 채택 원인과 다르면 `counter`만 붙인다(상태·사유 그대로). 상태·사유·selected·counter와 (보류면) 사건의
     `result: adopted → held`만 바꾸고 나머지 자격 검사 칸(`check`·`events_total`)은 그대로 둔다. 이미 보류면 사유를 바꾸지 않는다(앞 사유가 우선).
@@ -736,6 +739,8 @@ def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, h
         selected = (dec.get("selected") or {}).get("cause")
         if not m or m.group(1) == selected or (dec.get("counter") or {}).get("cause") == m.group(1):
             return {}
+        if any(c.get("cause") == selected and c.get("verdict") == "맞음" for c in checks or []):
+            return {}       # 후보 확인이 채택 원인도 맞음이라 했으면 counter를 붙이지 않는다
         new = {**dec, "counter": {"cause": m.group(1)}}
     result = rep.fit({**analysis, "decision": new})     # 4KB를 넘으면 판단의 사건(events)부터 준다 — 상태·사유·counter는 그대로
     why = None
@@ -888,6 +893,10 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     if bad:
         return _fail(job, purpose, env, "출력 형식 불일치", f"출력 형식 불일치({bad} 한도)", sha, args)
 
+    unread = sum(c["verdict"] == "?" for c in fields.get(evidence.CHECK_FIELD) or []) if purpose == "deep" else 0
+    if unread or (purpose == "deep" and mode == "module" and not (fields.get("분석 스킬 의견") or "").strip()):
+        print(f"경고: 후보 확인 칸에서 판정을 읽지 못했다({unread}줄 — report에 원문 그대로)" if unread
+              else "경고: 후보 확인·분석 스킬 의견 칸이 비었다", file=sys.stderr)
     # 근거 원문 검사(설치 스킬만 raw_items: 마스킹이 바꾼 인용 = 준 파일 밖 원문 값)
     quotes = _quotes(purpose, fields)
     raw_items: frozenset[int] = frozenset()
@@ -952,7 +961,8 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     if hold:
         dec_extra = _decision_update(args, job, analysis, read_sha, hold=True, normal=reason == "normal")
     elif purpose == "deep":
-        dec_extra = _decision_update(args, job, analysis, read_sha, opinion=fields.get("분석 스킬 의견"))
+        dec_extra = _decision_update(args, job, analysis, read_sha, opinion=fields.get("분석 스킬 의견"),
+                                     checks=fields.get(evidence.CHECK_FIELD) or [])
     else:
         dec_extra = {}
 

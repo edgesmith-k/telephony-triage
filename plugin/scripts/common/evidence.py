@@ -17,9 +17,12 @@ from .fixtures import CAUSE_ID, TYPE_ID
 
 FIELDS_DEEP = ("원인 층", "원인 데몬", "근거", "반대 근거", "후보 확인", "규칙 제안")
 CHECK_FIELD, OPINION_FIELD = "후보 확인", "분석 스킬 의견"
-# `- DATA-001-01: 맞음 — <근거>`(백틱·굵게·괄호로 감싸도, 원인 미확인 후보는 유형 ID). 판정 뒤 설명은 대시·쌍점 뒤 전부
-CHECK_ITEM_RX = re.compile(r"^[`*\[(<]*(" + TYPE_ID + r"(?:-\d{2})?)(?!\d)[`*\])>]*\s*[:：]?\s*\**\s*(맞음|아님|모름)\**"
+# `- DATA-001-01: 맞음 — <근거>`(백틱·굵게·괄호로 감싸도, 원인 미확인 후보는 유형 ID). 앞의 순위(`1위 `·`1.`·`#1`), ID 뒤 괄호
+# 설명(`(1위)`), 구분자 `:`·`—`·`=`·`→`·`-`, 판정 뒤 한글 어미·문장부호(`맞음입니다`·`맞음!`)도 받는다. 판정 뒤 설명은 대시·쌍점 뒤 전부
+CHECK_ITEM_RX = re.compile(r"^[`*\[(<]*(?:(?:\d+\s*위|#\d+|\d+[.)])\s*[:.)]?\s*[`*\[(<]*)?(" + TYPE_ID + r"(?:-\d{2})?)(?!\d)"
+                           r"[`*\])>]*\s*(?:\([^)]{0,40}\))?\s*[:：—–=→-]?\s*\**\s*(맞음|아님|모름)[가-힣]*\**[.!?。]*"
                            r"(?=$|[\s—–:,.(])\s*(?:[—–:-]\s*)?(.*)$")
+CHECK_NEW_RX = re.compile(r"^\s*(?:[-*]\s*)?\**\s*후보\s*확인\s*\**\s*[:：]")
 FIELDS_SKILL = ("요약", "근거", "분석 스킬 의견", "규칙 제안")
 LIST_FIELDS = ("근거", "규칙 제안")
 EXPLORE_FIELDS = ("가설", "로그로 확인", "코드로 추정", "반대 근거", "다음 확인")
@@ -178,9 +181,13 @@ def _parse(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> tuple[dict | Non
         return None, lines, None
     idx = [hits[fields[0]][-1]]
     for f in fields[1:]:
-        nxt = next((i for i in hits[f] if i > idx[-1]), None)
-        if nxt is None:
+        later = [i for i in hits[f] if i > idx[-1]]
+        if not later:
             return None, lines, None
+        nxt = later[0]
+        if f == CHECK_FIELD and fields is FIELDS_DEEP:     # `분석 스킬 의견:`과 `후보 확인:`이 다 있으면 새 블록(규칙 제안 앞)
+            rule = next((i for i in hits[fields[-1]] if i > idx[-1]), None)
+            nxt = next((i for i in later if CHECK_NEW_RX.match(lines[i]) and (rule is None or i < rule)), nxt)
         idx.append(nxt)
     label_lines = sorted({i for f in fields for i in hits[f]})
     out: dict = {}
@@ -189,8 +196,13 @@ def _parse(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> tuple[dict | Non
         rest = rx[f].match(lines[i]).group(1).strip()
         if f == CHECK_FIELD and fields is FIELDS_DEEP:
             end = next((j for j in label_lines if j > i), len(lines))
-            out[f] = _checks([im.group(1).strip() for line in lines[i + 1:end] if (im := ITEM_RX.match(line))])
-            out[OPINION_FIELD] = _opinion(out[f]) if out[f] else rest
+            items = [im.group(1).strip() if (im := ITEM_RX.match(line)) else line.strip()      # 글머리표 없는 줄도
+                     for line in lines[i + 1:end] if line.strip() and not line.strip().startswith("```")]
+            if not items and rest and CHECK_ITEM_RX.match(rest):      # 라벨 줄에 판정을 같이 쓴 꼴(`후보 확인: X: 아님 — …`)
+                items = [rest]
+            out[f] = _checks(items)
+            read = [c for c in out[f] if c["verdict"] != "?"]
+            out[OPINION_FIELD] = _opinion(read) if read else rest
         elif f in LIST_FIELDS:
             end = next((j for j in label_lines if j > i), len(lines)) if f == "근거" else len(lines)
             block = [rest, *lines[i + 1:end]]
@@ -204,12 +216,13 @@ def _parse(text: str, fields: tuple[str, ...] = FIELDS_DEEP) -> tuple[dict | Non
 
 
 def _checks(items: list[str]) -> list[dict]:
-    """`후보 확인` 목록 줄 → [{cause, verdict, why}] (읽지 못한 줄은 뺀다)."""
+    """`후보 확인` 목록 줄 → [{cause, verdict, why}]. 읽지 못한 줄은 `{cause: None, verdict: "?", why: <원문>}`으로 남긴다
+    (check-output이 report에 그대로 싣고 경고한다 — 빈 의견이 조용히 남지 않게)."""
     out = []
     for item in items:
         m = CHECK_ITEM_RX.match(item)
-        if m:
-            out.append({"cause": m.group(1), "verdict": m.group(2), "why": m.group(3).strip()})
+        out.append({"cause": m.group(1), "verdict": m.group(2), "why": m.group(3).strip()} if m
+                   else {"cause": None, "verdict": "?", "why": item})
     return out
 
 

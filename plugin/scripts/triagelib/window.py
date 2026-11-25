@@ -272,7 +272,7 @@ def _fold_key(r: dict) -> tuple:
 
 
 def anomaly(job: Path, ev: dict, analysis: dict, defaults: dict, ref: str | None, after_sec: int, cap: int,
-            shown: set) -> dict | None:
+            shown: set, recs: list[dict] | None = None) -> dict | None:
     """탐색 타임라인 이상 줄 절(`report.anomaly_lines`)의 재료: 마스킹 사본의 W/E/F 줄·레벨 못 믿는 줄의 오류 문구 줄과 예외·crash 머리(+같은 pid·태그
     프레임 `ANOMALY_FRAMES`줄)를 tags.yaml과 상관없이 고른다. 범위는 분석 구간(`input.window`, 없으면 로그 전체) 시작 ~
     max(구간 끝, `ref`+`after_sec`). 같은 (슬롯, 레벨, 태그, 숫자 뺀 메시지)는 한 줄로 접고(`fold`), `shown`(본 타임라인 줄의
@@ -282,14 +282,18 @@ def anomaly(job: Path, ev: dict, analysis: dict, defaults: dict, ref: str | None
     사본이 없거나 못 읽으면 None. 판정·점수·순위에 쓰지 않는다(표시 전용)."""
     # ponytail: 사본 전체를 다시 파싱한다(window 한 번과 같은 비용, 끔 DB는 사본 크기 상한 없음). 느리면 범위(lo~hi)를
     # `_raw_line_records`에 넘겨 파서가 범위 밖 줄을 건너뛰게 한다
-    served, _skipped = served_copies(job, analysis)
-    if not served or cap <= 0:
+    if cap <= 0:
         return None
-    try:
-        recs, _rules, _cfg = _records(job, ev, served, defaults)
-    except _Stop as exc:
-        print(f"경고: 이상 줄 절을 만들지 못해 뺐다({exc.reason}: {exc.detail})", file=sys.stderr)
         return None
+    if recs is None:        # `recs`(같은 `_records` 결과)를 받으면 다시 읽지 않는다
+        served, _skipped = served_copies(job, analysis)
+        if not served:
+            return None
+        try:
+            recs, _rules, _cfg = _records(job, ev, served, defaults)
+        except _Stop as exc:
+            print(f"경고: 이상 줄 절을 만들지 못해 뺐다({exc.reason}: {exc.detail})", file=sys.stderr)
+            return None
     inp = ev.get("input") or {}
     lo, hi = (inp.get("window") or {}).get("start"), (inp.get("window") or {}).get("end")
     center = logtime.normalize_ts(ref, inp.get("tz"), inp.get("year"))     # 발생 시각은 입력 그대로(`+0900`)일 수 있다 — 3.10에서도 같게

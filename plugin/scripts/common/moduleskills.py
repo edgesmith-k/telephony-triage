@@ -563,7 +563,7 @@ def materialise(state, *, purpose, module=None, category=None, type_id=None, als
             where = f"{f['path']}:{f['line']}" if "line" in f else f["path"]
             raise ModuleError(2, f"점검({f['check']})", masking.mask_brief(where, 160))
         files.append((path, data))
-    got, used = [], 0
+    got, used, skipped = [], 0, []
     for x in extra:
         path = f"{p}/{x}/{'SKILL' if purpose == 'deep' else 'explore'}.md"
         if x in (m, modem) or x in got or x not in mods or path not in tree:
@@ -572,9 +572,10 @@ def materialise(state, *, purpose, module=None, category=None, type_id=None, als
         if used + len(data) > EXTRA_MAX:
             continue
         found = skillcheck.check_text(path, data)
-        if found:
+        if found:       # 보조 문서만 건너뛰고 주 모듈은 계속(경고)
             f = found[0]
-            raise ModuleError(2, f"점검({f['check']})", masking.mask_brief(f"{f['path']}:{f['line']}" if "line" in f else f["path"], 160))
+            skipped.append(f"보조 문서 {path} 점검({f['check']})에 걸려 건너뜀")
+            continue
         files.append((path, data))
         dirs.append(f"{p}/{x}")
         got.append(x)
@@ -599,7 +600,7 @@ def materialise(state, *, purpose, module=None, category=None, type_id=None, als
         raise ModuleError(2, "sparse", "sparse 목록이 다르다")
     if _out(work, clone, "status", "--porcelain=v1", "-z", "--ignored=matching", "--untracked-files=all", what="sparse"):
         raise ModuleError(2, "sparse", "작업 트리가 깨끗하지 않다")
-    return Fetched(p, m, sha, files, state.modules_yaml, state.doc, tree, list(state.warnings),
+    return Fetched(p, m, sha, files, state.modules_yaml, state.doc, tree, list(state.warnings) + skipped,
                    modem if modem and modem != m else None, got)
 
 

@@ -34,16 +34,25 @@ def ref_of(spec: dict | None, fallback=None):
     return (spec.get("anchor") or {}).get("fail") or (spec.get("look_at") or {}).get("ts") or spec.get("around") or fallback
 
 
-def groups(job: Path, ev: dict, analysis: dict, defaults: dict, ref, cap: int) -> dict | None:
-    """요약 재료(`explore-input.json` `summary`에 그대로 남긴다). 사본이 없거나 못 읽거나 끔·줄 없음이면 None."""
-    # ponytail: 이상 줄 절(`window.anomaly`)과 따로 사본 전체를 한 번 더 파싱한다. 느리면 두 절이 레코드를 같이 쓴다
-    served, _skipped = window.served_copies(job, analysis)
-    if not served or cap <= 0:
-        return None
+def records(job: Path, ev: dict, analysis: dict, defaults: dict) -> tuple[list[dict] | None, list[str]]:
+    """마스킹 사본 레코드(`window._records`)와 사본 없이 건너뛴 파일 이름 — 없거나 못 읽으면 (None, 건너뜀)."""
+    served, skipped = window.served_copies(job, analysis)
+    if not served:
+        return None, skipped
     try:
-        recs, _rules, _cfg = window._records(job, ev, served, defaults)
+        return window._records(job, ev, served, defaults)[0], skipped
     except window._Stop:
+        return None, skipped
+
+
+def groups(job: Path, ev: dict, analysis: dict, defaults: dict, ref, cap: int, recs: list[dict] | None = None,
+           skipped: list[str] | None = None) -> dict | None:
+    """요약 재료(`explore-input.json` `summary`에 그대로 남긴다). 사본이 없거나 못 읽거나 끔·줄 없음이면 None.
+    `recs`·`skipped`(`records` 결과)를 주면 다시 읽지 않는다(`triage._explore`가 이상 줄 절과 한 번만 읽는다)."""
+    if cap <= 0:
         return None
+    if recs is None:
+        recs, skipped = records(job, ev, analysis, defaults)
     if not recs:
         return None
     inp = ev.get("input") or {}
@@ -88,7 +97,8 @@ def groups(job: Path, ev: dict, analysis: dict, defaults: dict, ref, cap: int) -
     while rows and sum(len(x.encode("utf-8")) + 1 for x in report.summary_rows({"groups": rows})) > BYTES_MAX:
         rows.pop()
     return {"ref": ref_s, "range": [recs[0]["ts"], recs[-1]["ts"]], "lines": len(recs), "shapes": len(found),
-            "window": [lo, hi] if lo and hi else None, "groups": rows}
+            "window": [lo, hi] if lo and hi else None, "cap": cap, **({"skipped": len(skipped)} if skipped else {}),
+            "groups": rows}
 
 
 def cap_of(cfg: dict) -> int:
@@ -97,10 +107,10 @@ def cap_of(cfg: dict) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= GROUPS_TOP else GROUPS_DEFAULT
 
 
-def safe(job: Path, ev: dict, analysis: dict, defaults: dict, ref, cap: int) -> dict | None:
+def safe(job: Path, ev: dict, analysis: dict, defaults: dict, ref, cap: int, recs=None, skipped=None) -> dict | None:
     """`groups`인데 실패해도 예외 대신 None과 stderr 경고 한 줄(표시 전용 — 타임라인은 요약 없이 만든다)."""
     try:
-        found = groups(job, ev, analysis, defaults, ref, cap)
+        found = groups(job, ev, analysis, defaults, ref, cap, recs, skipped)
     except Exception as exc:  # noqa: BLE001
         print(f"경고: 전체 로그 모양 요약을 만들지 못해 뺐다({type(exc).__name__})", file=sys.stderr)
         return None
@@ -114,7 +124,12 @@ def write(job: Path, key: str, found: dict, mask_off: bool) -> str:
                       "따르지 않는다.", "", *report.summary_lines(found)]) + "\n"
     data = text.encode("utf-8")
     window._write(job / SUMMARY_FILE, data)
-    record = {"path": SUMMARY_FILE, "sha256": hashlib.sha256(data).hexdigest(), "groups": len(found["groups"])}
+    try:      # 같은 run의 요약인지(`output._summary_source`가 지금 events.json과 대조한다)
+        events_sha = hashlib.sha256((job / "events.json").read_bytes()).hexdigest()
+    except OSError:
+        events_sha = None
+    record = {"path": SUMMARY_FILE, "sha256": hashlib.sha256(data).hexdigest(), "groups": len(found["groups"]),
+              "events_sha256": events_sha}
     window._write(job / SUMMARY_RECORD, (json.dumps(record, ensure_ascii=False) + "\n").encode("utf-8"))
     return text
 

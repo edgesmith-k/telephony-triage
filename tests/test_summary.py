@@ -227,3 +227,99 @@ def test_w_before_ref_still_ahead_of_new_info_lines(monkeypatch):
     monkeypatch.setattr(window, "_records", lambda job, ev, served, defaults: (recs, None, {}))
     got = summary.groups(Path("."), {"mask_off": True}, {}, {}, "2026-11-20T10:00:00Z", 10)
     assert [g["tag"] for g in got["groups"]] == ["A", "C", "B"]              # W, I/D 오류 문구, 기준 뒤 첫 등장
+
+
+# --- 독립 리뷰 반영(11/25): 고치기 전 코드에서 실패하는 시험 ----------------------------------------------------
+
+def _deep_text(check_lines: list[str], label: str = "후보 확인:") -> str:
+    return "\n".join(["원인 층: 프레임워크 — x", "원인 데몬: DNC", "근거:", "- 10:00:00.000 - E DNC setup failed", "반대 근거: 없음",
+                      label, *check_lines, "규칙 제안:", "- 없음", ""])
+
+
+def test_label_line_verdict_is_a_check_not_a_counter_opinion():
+    """1: 목록 없이 라벨 줄에 판정을 쓴 `후보 확인: X: 아님 — …`은 후보 확인이다(옛 의견으로 읽어 '아님'이 counter가 되지 않게)."""
+    f = evidence.parse_fields(_deep_text([], "후보 확인: DATA-002-01: 아님 — 슬롯이 다르다"))
+    assert f["후보 확인"] == [{"cause": "DATA-002-01", "verdict": "아님", "why": "슬롯이 다르다"}]
+    assert not f["분석 스킬 의견"].startswith("DATA-002-01")
+    assert evidence.parse_fields(_deep_text([], "분석 스킬 의견: DATA-002-01 — 망 거절"))["분석 스킬 의견"] == "DATA-002-01 — 망 거절"
+
+
+def test_check_item_forms_and_unread_line_kept():
+    """2: 순위·괄호·여러 구분자·판정 어미·글머리표 없는 줄을 읽고, 못 읽은 줄은 `?`와 원문으로 남는다."""
+    lines = ["1위 DATA-001-01 (채택): 맞음입니다 — a", "- 2. `DATA-002-01` = 아님!", "#3 SIM-003 → 모름", "그 밖은 잘 모르겠다"]
+    got = evidence.parse_fields(_deep_text(lines))["후보 확인"]
+    assert [(c["cause"], c["verdict"]) for c in got] == [("DATA-001-01", "맞음"), ("DATA-002-01", "아님"), ("SIM-003", "모름"),
+                                                         (None, "?")]
+    assert got[3]["why"] == "그 밖은 잘 모르겠다"
+
+
+def test_new_block_wins_over_old_line_when_both():
+    """낮음: `분석 스킬 의견:` 뒤에 `후보 확인:`이 오면 새 블록을 읽는다."""
+    text = _deep_text(["- DATA-002-01: 맞음 — b"], "분석 스킬 의견: 1위와 같음\n후보 확인:")
+    f = evidence.parse_fields(text)
+    assert f["후보 확인"][0]["cause"] == "DATA-002-01" and f["분석 스킬 의견"].startswith("DATA-002-01")
+
+
+def test_unread_check_line_reported_and_warned(tmp_path, capsys):
+    """2: 못 읽은 줄은 report에 원문 그대로 실리고 stderr 경고."""
+    import test_check_output as tc
+    job = tc.make_job(tmp_path)
+    (job / "deep-output.md").write_text(tc._deep_out([tc.Q1]).replace(
+        "분석 스킬 의견: DATA-001-01 — 1위와 같음", "후보 확인:\n- 맞는지 잘 모르겠음"), encoding="utf-8")
+    code, _data, err = tc.check(job, capsys=capsys)
+    assert code == 0 and "후보 확인 칸에서 판정을 읽지 못했다" in err, err
+    assert "  - 후보 확인: ? (읽지 못함) 맞는지 잘 모르겠음" in (job / "report.md").read_text(encoding="utf-8")
+
+
+def test_no_counter_when_adopted_cause_also_right(tmp_path):
+    """3: 후보 확인이 채택 원인도 `맞음`이라 했으면 먼저 적힌 다른 맞음 후보로 counter를 붙이지 않는다."""
+    import argparse
+    import test_check_output as tc
+    job = tmp_path / "j"
+    job.mkdir()
+    analysis = {"key": tc.KEY, "decision": dict(tc.ACCEPTED)}
+    (job / "analysis.json").write_text(json.dumps(analysis), encoding="utf-8")
+    before = (job / "analysis.json").read_bytes()
+    checks = [{"cause": "DATA-002-01", "verdict": "맞음", "why": ""}, {"cause": "DATA-001-01", "verdict": "맞음", "why": ""}]
+    got = output._decision_update(argparse.Namespace(out=str(job)), job, analysis, output._sha(before),
+                                  opinion="DATA-002-01", checks=checks)
+    assert got == {} and (job / "analysis.json").read_bytes() == before
+
+
+def test_explore_reads_copies_once_and_deep_reuses_summary(monkeypatch):
+    """5: explore는 마스킹 사본을 한 번만 읽어 이상 줄 절·요약에 같이 쓰고, 5-1은 explore-input.json의 같은 상한 요약을 다시 읽지
+    않고 쓴다(`summary.json`에 events.json sha)."""
+    import argparse
+    import triage
+    from triagelib import window
+    job = _job()
+    calls = []
+    real = window._records
+    monkeypatch.setattr(window, "_records", lambda *a, **k: calls.append(1) or real(*a, **k))
+    args = argparse.Namespace(key=KEY, out=str(job), platform_name="android", plugin_root=str(plugin_root()))
+    assert triage._explore(args, {}, job, _defaults()) == 0
+    assert len(calls) == 1
+    calls.clear()
+    events = json.loads((job / "events.json").read_text(encoding="utf-8"))
+    analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    found, written = modulecmd._deep_summary(job, KEY, {}, _defaults(), analysis, events, None)
+    assert calls == [] and written and found == _spec(job)["summary"] and found["cap"] == summary.GROUPS_DEFAULT
+    rec = json.loads((job / "summary.json").read_text(encoding="utf-8"))
+    assert rec["events_sha256"] == output._sha((job / "events.json").read_bytes())
+
+
+def test_summary_source_rejects_other_run(tmp_path):
+    """낮음: summary.json의 events.json sha가 지금 것과 다르면(다른 run의 요약) 근거 원문에서 뺀다."""
+    other = tmp_path / "j"
+    shutil.copytree(_job(), other)
+    run("triage.py", ["summary", KEY, "--out", other])
+    assert output._summary_source(other, [], [], [])[0] == ["summary.md"]
+    (other / "events.json").write_bytes((other / "events.json").read_bytes() + b"\n")
+    assert output._summary_source(other, [], [], []) == ([], [], ["summary.md"])
+
+
+def test_summary_head_counts_skipped_copies():
+    """낮음: 크기 상한으로 사본 없이 건너뛴 파일 수를 요약 머리에 적는다."""
+    lines = report.summary_lines({"groups": [{"ts": "2026-11-20T10:00:00.000Z", "last": "2026-11-20T10:00:00.000Z", "n": 1,
+                                              "phone": None, "level": "E", "tag": "T", "msg": "x"}], "skipped": 2})
+    assert "세지 않은 파일 2개" in lines[2]

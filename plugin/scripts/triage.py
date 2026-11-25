@@ -306,7 +306,7 @@ def _int_setting(cfg: dict, key: str, default: int, top: int) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= top else default
 
 
-def _anomaly(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, items: list) -> dict | None:
+def _anomaly(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, items: list, recs=None) -> dict | None:
     """이상 줄 절 재료(`window.anomaly`): 기준 시각 = 실패 스텝·기준 줄 시각 > 기준 줄 찾은 시각 > 발생 시각."""
     from triagelib import window
     try:
@@ -317,14 +317,14 @@ def _anomaly(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, ite
     try:      # 표시 전용 — 사본 읽기·고르기가 실패해도 탐색 타임라인은 지금처럼 만든다
         found = window.anomaly(job, events, analysis if isinstance(analysis, dict) else {}, defaults, ref,
                                _int_setting(cfg, "explore.after_sec", 600, 3600),
-                               _int_setting(cfg, "explore.anomaly_max_lines", 80, 400), shown_keys(items))
+                               _int_setting(cfg, "explore.anomaly_max_lines", 80, 400), shown_keys(items), recs)
     except Exception as exc:  # noqa: BLE001
         print(f"경고: 이상 줄 절을 만들지 못해 뺐다({type(exc).__name__})", file=sys.stderr)
         return None
     return found if found and found["rows"] else None
 
 
-def _summary(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict) -> dict | None:
+def _summary(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, recs=None, skipped=None) -> dict | None:
     """전체 로그 모양 요약 재료(`summary.groups`, 기준 시각은 이상 줄 절과 같다). 만들지 못하면 None(경고 한 줄)."""
     from triagelib import summary
     try:
@@ -332,7 +332,17 @@ def _summary(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict) -> 
     except (OSError, ValueError):
         return None
     return summary.safe(job, events, analysis if isinstance(analysis, dict) else {}, defaults, summary.ref_of(spec),
-                        summary.cap_of(cfg))
+                        summary.cap_of(cfg), recs, skipped)
+
+
+def _copy_records(job: Path, defaults: dict, events: dict):
+    """이상 줄 절·요약이 같이 쓰는 마스킹 사본 레코드를 한 번만 읽는다 → (레코드 | None, 건너뛴 파일). 실패해도 (None, [])."""
+    from triagelib import summary
+    try:
+        analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+        return summary.records(job, events, analysis if isinstance(analysis, dict) else {}, defaults)
+    except Exception:  # noqa: BLE001 — 표시 전용(두 절이 없을 뿐)
+        return None, []
 
 
 def _explore(args, cfg: dict, job: Path, defaults: dict) -> int:
@@ -356,7 +366,9 @@ def _explore(args, cfg: dict, job: Path, defaults: dict) -> int:
     kept = len(items)
     # 이상 줄 절·전체 모양 요약(표시 전용)은 explore-input.json `anomaly`·`summary`에 남긴다 — `module`의 재계산(E1)·모듈 보기가
     # 같은 줄을 쓴다
-    found = {"anomaly": _anomaly(job, cfg, defaults, spec, events, items), "summary": _summary(job, cfg, defaults, spec, events)}
+    recs, skipped = _copy_records(job, defaults, events)      # 사본을 한 번만 읽는다
+    found = {"anomaly": _anomaly(job, cfg, defaults, spec, events, items, recs) if recs else None,
+             "summary": _summary(job, cfg, defaults, spec, events, recs, skipped) if recs else None}
     if any(found[k] != spec.get(k) for k in found):
         spec = {k: v for k, v in spec.items() if k not in found}
         spec.update({k: v for k, v in found.items() if v})

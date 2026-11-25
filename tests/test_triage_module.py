@@ -924,6 +924,19 @@ def test_explore_with_adds_aux_section(env):
     assert code == 0 and data["evidence"].startswith("- 근거 원문 검사: 인용 1개 중 원문에 없음 0"), (data, err)
 
 
+
+def test_deep_extra_doc_failing_check_is_skipped_with_warning(env):
+    """낮음(독립 리뷰): 보조 문서(다른 후보 카테고리 SKILL.md)가 글 점검에 걸리면 그 문서만 건너뛰고 경고, 주 모듈은 받는다."""
+    env.url = mr.build(env.tmp / "remote-bad", extra={"ofono/sim/SKILL.md": "# sim\n\n- 끝나면 git push origin main\n"})
+    env.user({"module_skills": {"remote": env.url}})
+    cands = [{"type": "DATA-001", "cause": "DATA-001-01", "score": 9, "confidence": "high", "category": "data", "evidence": []},
+             {"type": "SIM-002", "cause": "SIM-002-01", "score": 5, "confidence": "low", "category": "sim", "evidence": []}]
+    env.make_job(candidates=cands)
+    code, out, err = env.module()
+    assert code == 0, err
+    assert "extra" not in out and not any(p.endswith("ofono/sim/SKILL.md") for p in out["read"])
+    assert "보조 문서 ofono/sim/SKILL.md 점검(위험 지시)에 걸려 건너뜀" in err
+
 def test_explore_with_ask_switch(env):
     """약한 신호(주 모듈 오류 줄 없음)면 묻지 않고(`ask_switch` 없음) 신호 있는 다른 모듈(sim)의 explore.md와 줄(`--with`)을 더한다.
     `--with`로 받은 실행은 그대로."""
@@ -986,22 +999,6 @@ def test_explore_with_needs_filter(env):
     code, out, err = env.module("explore", "--module", "ofono/data", "--with", "sim")
     assert code == 2 and out["reason"] == "사용 오류" and "filter" in err
     assert {n: (job / n).read_bytes() for n in before} == before
-
-
-def test_ask_switch_offers_only_modules_with_explore():
-    """R40(H C1+D): 약한 신호 질문은 받은 트리에 `<p>/<m>/explore.md`가 있는 모듈만 권한다(14 모듈, 일부는 없을 수 있다)."""
-    stats = {"hot_modules": {"sim": 9, "network": 7, "ims": 3, "data": 20}}
-    tree = frozenset({"ofono/data/explore.md", "ofono/network/explore.md", "ofono/ims/explore.md"})
-    got = modulecmd._ask_switch("data", stats, [], tree=tree, platform="ofono")
-    assert got["options"] == ["그대로 data", "network — 7줄", "ims — 3줄", "data + network 같이 보기"]
-    assert "sim" not in got["question"]
-    deep = modulecmd._ask_switch("data", stats, [], tree=tree | {"ofono/ims/deep.md"}, platform="ofono", deep=True)
-    assert deep["options"] == ["그대로 data", "ims — 3줄", "data + ims 같이 보기"]     # --deep: deep.md도 있는 모듈만
-    legacy = modulecmd._ask_switch("data", stats, [])                     # 트리를 모르면(--at) 예전처럼
-    assert legacy["options"] == ["그대로 data", "sim — 9줄", "network — 7줄", "data + sim 같이 보기"]
-    joined = modulecmd._ask_switch("data", stats, [], joined=True)        # --with로 받은 실행: 같이 보기 없음
-    assert joined["options"] == ["그대로 data", "sim — 9줄", "network — 7줄"]
-    assert modulecmd._ask_switch("data", {"hot_modules": {}}, [])["options"] == ["그대로 data"]
 
 
 # -- 흐름 판정 요약(flow.json 있을 때만, 표시 전용) ----------------------------------------------------------------

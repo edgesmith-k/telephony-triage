@@ -1240,7 +1240,7 @@ def test_deep_rerun_opens_new_obligation_with_head_line(tmp_path):
 
 def test_clean_deep_line_required_at_step7_even_if_it_mentions_deep(tmp_path):
     """b2fix eval 40: 지어낸 인용이 없는 심층 check-output도 결과 줄을 Step 7 질문 전에 보인다 — "심층 분석 … 할까요?"를 담은
-    Step 7 질문도 본다. 5-2 모듈 질문·ask_switch는 보지 않는다."""
+    Step 7 질문도 본다. 5-2 모듈 질문은 보지 않는다."""
     path = write(tmp_path, prompt("p"), bash("c", CHECK_CMD, CLEAN_OUT), say("심층 분석을 마쳤습니다."), extra=CLEAN)
     out = pre("pre-ask", path, ASK, {"question": "어떻게 기록할까요?", "options": STEP7})        # (a)
     assert decision(out) == "deny"

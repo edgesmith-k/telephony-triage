@@ -439,7 +439,8 @@ def summary_lines(summary: dict | None) -> list[str]:
     lo, hi = (rng[0], rng[1]) if isinstance(rng, list) and len(rng) == 2 else (None, None)
     return ["## 전체 로그 모양 요약 (마스킹 사본 전체, 분석 구간 밖·실패 뒤 포함, 태그 규칙과 상관없이 스크립트가 셈)", "",
             f"- 범위: {lo or '?'} ~ {hi or '?'}, 줄 {summary.get('lines')}, 모양 {summary.get('shapes')}개 중 {len(rows)}개. "
-            f"기준 시각: {summary.get('ref') or '없음'}",
+            f"기준 시각: {summary.get('ref') or '없음'}"
+            + (f". 마스킹 사본이 없어(크기 상한) 세지 않은 파일 {summary['skipped']}개" if summary.get("skipped") else ""),
             "- 모양은 슬롯·레벨·태그·숫자를 #로 바꾼 메시지다. 순서는 F, 예외·crash 머리, E, W(같은 등급은 기준 뒤 처음 나온 것 먼저), "
             "기준 뒤 처음 나온 모양, 나머지이고 같은 묶음 안은 한 태그 8모양까지 먼저, 기준 시각에 가까운 순이다. 줄은 그 모양의 첫 줄이다", "", *rows]
 

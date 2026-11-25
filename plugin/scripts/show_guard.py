@@ -71,7 +71,7 @@ QUICK_TOKENS = ("## push 전 확인:", "게시 전 확인:", "triage.py", "--dra
 KIND_NAME = {"push": "push 확인 화면", "post": "게시 확인 화면", "report": "분석 리포트", "draft": "초안 검증표",
              "patch": "스킬 제안 patch 안내", "evidence": "check-output 결과 줄(심층 분석·근거 원문 검사)"}
 OBJ = {"push": "을", "post": "을", "report": "를", "draft": "를", "patch": "를", "evidence": "을"}      # 목적격 조사
-# Step 5 질문(동의·스크립트가 쓴 모듈 문서 질문 `ask`·`ask_switch`·`ask_also`): 리포트를 보이기 전에 묻는다
+# Step 5 질문(동의·스크립트가 쓴 모듈 문서 질문 `ask`): 리포트를 보이기 전에 묻는다
 EXPLORE_Q = re.compile(r"(심층|탐색)\s*분석[^\n]*(할까요|실행할까|진행할까|\?)|모듈 문서[^\n]*(볼까요|바꿀까요)")
 NOTE = "[telephony-triage] 표시 안내"
 TRUNCATED = [False]      # 마지막 load_text가 끝부분만 읽었는가
@@ -448,7 +448,7 @@ def mode_pre_ask(inp) -> dict | None:
     obs = obligations(seq, recs)
     ask = shown.ask_text(tool_input)
     found = []
-    # check-output 결과 줄은 Step 5 질문(심층 check-output 바로 뒤 5-2 모듈 질문·ask_switch)에는 보지 않는다 — Stop·다른 질문은
+    # check-output 결과 줄은 Step 5 질문(심층 check-output 바로 뒤 5-2 모듈 질문)에는 보지 않는다 — Stop·다른 질문은
     # 본다. Step 7 질문은 "심층 분석 … 할까요?"를 담아도 본다
     step7 = shown.step7_question(tool_input)
     for ob in _checked(seq, obs, ts, report_ok=step7, evidence_ok=step7 or not EXPLORE_Q.search(ask)):
