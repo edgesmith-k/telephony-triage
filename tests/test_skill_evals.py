@@ -3791,6 +3791,60 @@ def test_bash_read_paths_resolves_cd_vars_and_skips_writes():
     assert f("awk 'NR<=40' a; sed -n '/<t>/p' b; cat /j/c>/tmp/x 2>&1", "/r")[0] == ["/r/a", "/r/b", "/j/c"]
 
 
+def test_bash_read_paths_expands_resolvable_globs(tmp_path):
+    """변수·cwd를 편 glob은 채점 때 파일 시스템에서 펴서 실제로 읽힌 파일로 센다(eval 77 i8-1126-d `cat $D/android/_common/*.md`).
+    펼 수 없거나(정의 안 된 변수) 맞는 파일이 없으면 예전처럼 `?<원문>`."""
+    d = tmp_path / "ex" / "android" / "_common"
+    d.mkdir(parents=True)
+    (d / "layers.md").write_text("x", encoding="utf-8")
+    (d / "components.md").write_text("x", encoding="utf-8")
+    (d / "sub").mkdir()
+    root = (tmp_path / "ex").as_posix()
+    f = grader.bash_read_paths
+    assert f(f'D="{root}"; cat $D/android/_common/*.md', "/r")[0] == [f"{root}/android/_common/components.md",
+                                                                       f"{root}/android/_common/layers.md"]
+    assert f("cat android/_common/*", root)[0] == [f"{root}/android/_common/components.md", f"{root}/android/_common/layers.md"]
+    assert f("cat $UNSET/_common/*.md", "/r")[0] == ["?$UNSET/_common/*.md"]          # 변수를 모르면 세지 않는다
+    assert f(f"cat {root}/android/voice/*.md", "/r")[0] == [f"?{root}/android/voice/*.md"]   # 맞는 파일 없음
+
+
+def test_raw_log_opened_excludes_masked_copy(tmp_path):
+    """마스킹 사본(`JOB/logs-masked/<로그>`) 읽기는 로그 원문 읽기가 아니다(explore.md '읽는 것' 1, eval 47 i8-1126-c·d가
+    `cat logs-masked/e047.log`로 거짓 실패). 입력 로그(env `logs/`)를 읽으면 여전히 원문 읽기다."""
+    def raw(name, *cmds):
+        env_dir = _synthetic_env(tmp_path / name)
+        (env_dir / "logs" / "e047.log").write_text("x", encoding="utf-8")
+        run = run_dir(tmp_path / name)
+        _tool_events(run, *[(("Read", {"file_path": c[5:]}) if c.startswith("READ ") else ("Bash", {"command": c})) + ("ok", False)
+                            for c in cmds])
+        return grader.Ctx(env_dir, run).raw_log_opened("e047.log")
+    job = "/w/work/MOCK-9047"
+    assert raw("a", f"cd {job}; cat timeline.md; cat logs-masked/e047.log") == []
+    assert raw("b", f"grep -n -e reject -e Exception {job}/logs-masked/e047.log | head") == []
+    assert raw("c", f"cd {job}/logs-masked && sed -n 1,40p e047.log") == []
+    assert raw("d", f"READ {job}/logs-masked/e047.log") == []
+    assert raw("e", "cat logs/e047.log") == ["e047.log"]                                   # 입력 로그 원문
+    assert raw("f", "grep -n APN logs/e047.log | head") == ["e047.log"]
+    assert raw("g", f"cat {job}/logs-masked/e047.log; cat logs/e047.log") == ["e047.log"]   # 같은 호출에 원문도
+    assert raw("h", "cat logs/*.log") == ["e047.log"]                                      # glob으로 원문
+    assert raw("i", "READ logs/e047.log") == ["e047.log"]
+    assert raw("j", "python3 -c \"print(open('logs/e047.log').read())\"") == ["e047.log"]
+
+
+def test_e47_scope_accepts_masked_copy_but_not_raw_log(tmp_path):
+    """eval 47 2번 행(scope): explore 뒤 timeline.md와 마스킹 사본을 읽으면 통과, 입력 로그 원문을 읽으면 실패."""
+    def row(name, extra):
+        env_dir = _synthetic_env(tmp_path / name)
+        run = run_dir(tmp_path / name)
+        _write_artifacts(run)
+        _seq_events(run, [("tool", "e1", "Bash", {"command": "python3 /p/triage.py explore MOCK-9047"}, "ok", False),
+                          ("tool", "b1", "Bash", {"command": f"cd /w/MOCK-9047; cat timeline.md; {extra}"}, "x", False)])
+        return grader.checks(47, grader.Ctx(env_dir, run))[1]()[0]
+    assert row("a", "cat logs-masked/e047.log | head -20") is True
+    assert row("b", "echo ok") is True
+    assert row("c", "cat ../../env/logs/e047.log") is False
+
+
 def test_bash_read_paths_windows_drive_paths_are_absolute():
     """Git Bash 실행자가 쓰는 `C:/…` 경로는 절대 경로다(eval 76 i8-1126-b: `cd C:/…/MOCK-9076 && head …`를 env 경로에 겹쳐 붙여
     read 밖으로 거짓 실패). 드라이브 절대 경로가 아니면(`C:x`·중간의 `C:/`) 예전처럼 상대 경로다 — Ubuntu 경로 판정은 그대로."""

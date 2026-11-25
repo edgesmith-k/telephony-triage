@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import glob as globmod
 import hashlib
 import json
 import math
@@ -489,6 +490,42 @@ class Ctx:
         hits = []
         for name, inp in uses:
             hits += self._opens(name, inp, names, chained)
+        return hits
+
+    def raw_log_opened(self, log: str) -> list[str]:
+        """입력 로그 원문(이름 `log`)을 연 호출 수만큼 `[log]`. 마스킹 사본 `JOB/logs-masked/<log>`만 읽은 호출은 원문 읽기가 아니다
+        (explore.md '읽는 것' 1 — 사본 grep·구간 읽기 허용, 금지는 "로그 원문(사본 아닌 것)"). 사본은 경로에 `logs-masked/`가 붙은
+        낱말이거나, cd·변수를 편 읽기 경로(bash_read_paths)가 모두 `logs-masked` 폴더 안일 때다. 판정은 `opened()`(이름 맞춤)에서
+        걸린 호출만 다시 본다 — 그 밖(예: 사본과 원문을 같은 호출에서 읽음, 풀 수 없는 경로)은 예전처럼 원문으로 센다."""
+        uses = self.tool_uses()
+        if uses is None:
+            return self.opened(log)
+        cwd: str | None = str(self.env_dir).replace("\\", "/")
+        hits = []
+        for e in self.seq() or []:
+            if e["kind"] != "tool" or e["name"] not in ("Read", "Bash"):
+                continue
+            inp = e["input"]
+            cmd = str(inp.get("command", "")) if e["name"] == "Bash" else ""
+            paths: list[str] = []
+            if cmd:
+                paths, after = bash_read_paths(cmd, cwd)
+                if not shown.not_run(e):
+                    cwd = after
+            if not self._opens(e["name"], inp, (log,)):
+                continue
+            if e["name"] == "Read":
+                masked = Path(str(inp.get("file_path", "")).replace("\\", "/")).parent.name == "logs-masked"
+            else:
+                body = _strip_heredocs(cmd)
+                occ = [body[:m.start()].endswith("logs-masked/")
+                       for m in re.finditer(r"(?<![\w.-])" + re.escape(log) + r"\b", body)]
+                mine = [p for p in paths if posixpath.basename(p) == log or (p.startswith("?") and log in p)]
+                # 이름이 글자로 안 보이는 읽기(`cat logs/*.log`)는 글자 판정으로 사본이라 하지 않는다 — 경로 판정만
+                other = [p for p in mine if p.startswith("?") or posixpath.basename(posixpath.dirname(p)) != "logs-masked"]
+                masked = not other and ((bool(occ) and all(occ)) or bool(mine))
+            if not masked:
+                hits.append(log)
         return hits
 
     @staticmethod
@@ -1427,7 +1464,7 @@ def checks(eid: int, ctx: Ctx) -> list:
     def scope(log):
         """탐색 분석은 timeline.md만 읽는다: 원본 중간 산출물·로그 원문을 열지 않았다."""
         # match.json도 금지: feedback.suggested는 db_pr stage가 채운다(write-flow.md, explore.md "읽지 않는다")
-        bad = ctx.opened("events.json", "issue_raw.json", "events-full.json", "match.json", log)
+        bad = ctx.opened("events.json", "issue_raw.json", "events-full.json", "match.json") + ctx.raw_log_opened(log)
         order = ctx.explore_order()
         seen = "timeline.md" in ctx.opened("timeline.md") or (order is not None and order[2] is not None)
         after, note = True, ""
@@ -2291,7 +2328,7 @@ def checks_p(eid, ctx):
             ok = explored is not None and read is not None and read > explored and not android
             return ok, f"explore 순번={explored}, log-guide.md 첫 열람 순번={read}, Android 참고 자료 열람={android}"
         def scope():
-            bad = ctx.opened("events.json", "issue_raw.json", "events-full.json", "match.json", "journal-multi.log")
+            bad = ctx.opened("events.json", "issue_raw.json", "events-full.json", "match.json") + ctx.raw_log_opened("journal-multi.log")
             seen = "timeline.md" in ctx.opened("timeline.md", chained=False)   # G10 미적용(11/03 '노트만'): 예전 기준 그대로
             return seen and not bad, f"timeline.md 열람={seen}; 열면 안 되는 파일={sorted(set(bad))}"
         def no_android_names():
@@ -2897,12 +2934,14 @@ def _is_abs(path: str) -> bool:
 
 
 def _resolve(arg: str, env: dict, cwd: str | None) -> list[str]:
-    """읽기 인자 → 정규화한 절대 경로들(`for V in A B`의 `$V`는 항목마다 하나). 변수를 못 펴거나 glob·`~`·cwd 모름이면 `?<원문>`."""
+    """읽기 인자 → 정규화한 절대 경로들(`for V in A B`의 `$V`는 항목마다 하나). 변수를 못 펴거나 `~`·cwd 모름이면 `?<원문>`.
+    glob(`$D/_common/*.md`)은 변수·cwd를 편 절대 패턴을 채점 때 파일 시스템에서 펴 맞는 파일들로 낸다(셸이 편 것과 같다 —
+    그 뒤 파일이 바뀌지 않았다고 본다). 맞는 파일이 없거나(지워진 임시 폴더 등) 펼 수 없으면 예전처럼 `?<원문>`."""
     loops = [n for n in {m.group(1) or m.group(2) for m in _VAR_REF.finditer(arg)} if isinstance(env.get(n), tuple)]
     if loops:
         return [r for item in env[loops[0]] for r in _resolve(arg, {**env, loops[0]: item}, cwd)]
     val = _expand(arg, env, cwd)
-    if val is None or val.startswith("~") or any(ch in val for ch in "*?["):
+    if val is None or val.startswith("~"):
         return ["?" + arg]
     if _DRIVE_ABS.match(val):
         val = val.replace("\\", "/")
@@ -2910,6 +2949,9 @@ def _resolve(arg: str, env: dict, cwd: str | None) -> list[str]:
         if cwd is None:
             return ["?" + arg]
         val = posixpath.join(cwd, val)
+    if any(ch in val for ch in "*?["):
+        hits = sorted(p.replace("\\", "/") for p in globmod.glob(val) if os.path.isfile(p))
+        return [posixpath.normpath(h) for h in hits] or ["?" + arg]
     return [posixpath.normpath(val)]
 
 
@@ -3262,7 +3304,7 @@ def checks_h(eid, ctx):
             # 풀 수 없는 읽기(`?…` — xargs·glob·정의 안 된 변수)가 module 사본 밖 timeline.md를 가리키면 JOB/timeline.md로 센다
             job_tl = [r for r in reads if r.endswith(f"/{key}/timeline.md")
                       or (r.startswith("?") and "timeline.md" in r and "module-skill/" not in r)]
-            raw = ctx.opened("setup-error.log")       # 로그 원문(SKILL.md:51·explore.md — e46 scope와 같은 기준)
+            raw = ctx.raw_log_opened("setup-error.log")   # 로그 원문(SKILL.md:51·explore.md — e46 scope와 같은 기준, 마스킹 사본 제외)
             ok = not missing and not android and not job_tl and not raw
             return ok, (f"read 중 안 읽음={missing}; Android 참고 자료={android}; module 뒤 JOB/timeline.md={job_tl}; "
                         f"로그 원문={raw}")
