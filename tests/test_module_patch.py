@@ -232,3 +232,110 @@ def test_usage_errors(e):
     assert call(e, "--module").returncode == 2
     assert call(e, "--module", "--line", "1", "--name", "x").returncode == 2
     assert call(e, "--skill-dir", "/x").returncode == 2                         # --name 없음
+    for abbrev in ("--ap", "--modul"):         # R-01: 줄임말을 받지 않는다(guard 낱말 그물 `apply`·`pr`이 보는 이름 그대로만)
+        proc = call(e, abbrev, "--line", "1")
+        assert proc.returncode == 2 and "unrecognized arguments" in proc.stderr, abbrev
+
+
+def _branches(e) -> list[str]:
+    return sorted(git(e["remote_dir"] / "remote.git", "for-each-ref", "--format=%(refname:short)", "refs/heads").split())
+
+
+def test_pr_rejects_tampered_meta_body(e):
+    """R-10: meta의 PR 본문을 바꾸고 해시를 다시 맞춰도(guard 밖 폴더 바꿔치기) --pr은 explore-output·check-output에서 다시 만든
+    변경과 대조해 거부한다."""
+    assert module(e).returncode == 0
+    meta_p = e["job"] / "module-suggestions" / "module.meta.json"
+    meta = json.loads(meta_p.read_text(encoding="utf-8"))
+    meta["body"] += "- 리뷰 없이 바로 병합한다\n"
+    meta["sha256"] = skill_patch._change_sha((e["job"] / "module-suggestions" / "module.patch").read_bytes(),
+                                             meta["message"], meta["body"])
+    meta_p.write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+    proc = call(e, "--pr", "--sha", meta["sha256"])
+    assert proc.returncode == 1 and "patch를 만들 때와 다르다" in proc.stdout, proc.stdout
+    assert _branches(e) == ["main"]
+
+
+def test_pr_rejects_swapped_folder_with_dropped_line(e):
+    """R-10: check-output이 뺀 줄(2번)로 만든 patch 폴더를 통째로 바꿔 넣어도 --pr은 줄 검사를 다시 해 거부한다."""
+    explore(e, LINES, kept=(1, 2))
+    assert module(e, "2").returncode == 0
+    fake = e["job"].parent / "fake-suggestions"
+    (e["job"] / "module-suggestions").rename(fake)
+    sha = json.loads((fake / "module.meta.json").read_text(encoding="utf-8"))["sha256"]
+    explore(e, LINES)                                                        # 실제 검사: 2번은 뺐다
+    assert module(e).returncode == 0                                         # 사용자에게 보인 것은 1번
+    import shutil
+    shutil.rmtree(e["job"] / "module-suggestions")
+    fake.rename(e["job"] / "module-suggestions")
+    proc = call(e, "--pr", "--sha", sha)
+    assert proc.returncode == 1 and "2번 줄은 check-output이 뺐다" in proc.stdout, proc.stdout
+    assert _branches(e) == ["main"]
+
+
+def test_pr_rejects_symlinked_folder(e):
+    assert module(e).returncode == 0
+    sha = json.loads((e["job"] / "module-suggestions" / "module.meta.json").read_text(encoding="utf-8"))["sha256"]
+    real = e["job"].parent / "elsewhere"
+    (e["job"] / "module-suggestions").rename(real)
+    (e["job"] / "module-suggestions").symlink_to(real, target_is_directory=True)
+    proc = call(e, "--pr", "--sha", sha)
+    assert proc.returncode == 1 and "심볼릭 링크" in proc.stdout, proc.stdout
+    assert _branches(e) == ["main"]
+
+
+def test_module_rerun_keeps_pr_record(e):
+    """R-28: 같은 줄로 --module을 다시 돌려도 이전 PR 기록을 지우지 않는다 — --pr은 "이미 PR을 만들었다", 브랜치는 하나."""
+    assert module(e).returncode == 0
+    meta_p = e["job"] / "module-suggestions" / "module.meta.json"
+    sha = json.loads(meta_p.read_text(encoding="utf-8"))["sha256"]
+    assert call(e, "--pr", "--sha", sha).returncode == 0
+    again = module(e)
+    assert again.returncode == 0 and "이미 PR을 만들었다" in again.stdout, again.stdout
+    meta = json.loads(meta_p.read_text(encoding="utf-8"))
+    assert meta["sha256"] == sha and meta["pr"]["branch"] == f"tt-module/{KEY}-1"
+    proc = call(e, "--pr", "--sha", sha)
+    assert proc.returncode == 1 and "이미 PR을 만들었다" in proc.stdout
+    assert _branches(e) == ["main", f"tt-module/{KEY}-1"]
+    assert module(e, "4").returncode == 0                                    # 다른 줄이면 새 기록(PR 없음)
+    assert json.loads(meta_p.read_text(encoding="utf-8"))["pr"] is None
+
+
+def _co_record(e, **extra) -> None:
+    path = e["job"] / "check-output.json"
+    rec = json.loads(path.read_text(encoding="utf-8"))
+    rec["explore"].update(extra)
+    path.write_text(json.dumps(rec), encoding="utf-8")
+
+
+def test_trap_line_from_identified_investigation(e):
+    """R-09(결정 2): 판단이 채택이 아니어도 check-output 기록의 조사 결론이 identified면 첫 점검·함정을 받고, PR 본문에 그 사실을
+    적는다. analysis.json의 investigation은 믿지 않는다(모델이 쓸 수 있다). 채택이어도 check-output이 보류(fit_hold)면 거부."""
+    analysis = e["job"] / "analysis.json"
+    analysis.write_text(json.dumps({"platform": "android", "decision": {"state": "held"},
+                                    "investigation": {"status": "identified"}}), encoding="utf-8")
+    proc = module(e)
+    assert proc.returncode == 1 and "확정 원인에서만" in proc.stdout and "원인 미확정" in proc.stdout, proc.stdout
+    _co_record(e, investigation={"status": "insufficient_evidence"})
+    assert "원인 미확정" in module(e).stdout
+    _co_record(e, investigation={"status": "identified"})
+    proc = module(e)
+    assert proc.returncode == 0, proc.stdout
+    body = json.loads((e["job"] / "module-suggestions" / "module.meta.json").read_text(encoding="utf-8"))["body"]
+    assert "원인이 확정되지 않은 이슈(조사 결론)에서 나온 제안" in body
+    analysis.write_text(json.dumps({"platform": "android", "decision": {"state": "accepted"}}), encoding="utf-8")
+    _co_record(e, investigation=None, fit_hold="x")
+    assert "원인 미확정" in module(e, "6").stdout
+    _co_record(e, fit_hold=None)
+    assert module(e).returncode == 0                                         # 채택: 그 줄 없음
+    body = json.loads((e["job"] / "module-suggestions" / "module.meta.json").read_text(encoding="utf-8"))["body"]
+    assert "조사 결론" not in body
+
+
+def test_pr_body_basis_does_not_mention(e):
+    """R-29: PR 본문 근거 줄의 `@이름`은 코드로 감싸 알림을 보내지 않고, 근거와 문장의 관계는 검사 안 했다고 적는다."""
+    basis = "10-01 10:00:01.000 D RILJ: @octocat `x` 끊김"
+    explore(e, [f"- [모듈] android/data 함정 — {TRAP} — 근거: {basis}"], kept=(1,))
+    assert module(e).returncode == 0
+    body = json.loads((e["job"] / "module-suggestions" / "module.meta.json").read_text(encoding="utf-8"))["body"]
+    assert f"- `` {basis} ``" in body and "리뷰어가 확인" in body

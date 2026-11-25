@@ -593,6 +593,25 @@ def test_guard_module_patch_pr_records_and_temp_clone():
     assert decision(bash(ws, f"git -C {wt} log --oneline -1", ws.base)) is None
 
 
+def test_guard_record_folder_swap_asks():
+    """R-10: 기록 폴더(`JOB/module-suggestions`·`JOB/skill-suggestions`·`WORK/.shown`)나 그 상위(JOB·WORK와 그 위)를 통째로
+    바꾸는 mv·rm -r·cp -r·rsync·tar -C·unzip -d·ln은 ask(폴더 안 파일 쓰기는 그대로 거부). 다른 곳·폴더 안 사본은 판정 없음."""
+    ws = shared()
+    job = ws.work / "MOCK-1"
+    for d in (job / "module-suggestions", job / "skill-suggestions", ws.work / ".shown", job, ws.work, ws.work.parent):
+        for cmd in (f"mv /tmp/x {d}", f"mv {d} /tmp/old", f"rm -rf {d}", f"rm -r -f {d}", f"cp -r /tmp/x {d}",
+                    f"cp -a /tmp/x/. {d}", f"rsync -a /tmp/x/ {d}/", f"tar -xf /tmp/x.tar -C {d}",
+                    f"unzip -o /tmp/x.zip -d {d}", f"ln -sfn /tmp/x {d}"):
+            out = bash(ws, cmd, ws.base)
+            assert decision(out) == "ask" and "기록 폴더" in out["permissionDecisionReason"], cmd
+    for cmd in (f"cp /tmp/x {job}/", f"cp /tmp/x {job / 'module-suggestions'}"):    # 대상 폴더에 파일 넣기도
+        assert decision(bash(ws, cmd, ws.base)) == "ask", cmd
+    for cmd in ("rm -rf /tmp/x", "mv /tmp/a /tmp/b", f"cp -r /tmp/x {job / 'skill-suggestions' / 'a'}",
+                f"rm -rf {job / 'skill-suggestions' / 'a'}", f"cp /tmp/x {ws.work}/", f"ls -R {job}",
+                f"rm -f {job / 'notes.txt'}", f"mkdir -p {job / 'skill-suggestions' / 'a'}"):
+        assert decision(bash(ws, cmd, ws.base)) is None, cmd
+
+
 def test_guard_module_eval_asks():
     """모듈 eval: `module_eval.py`는 자식 `claude -p`를 띄워 비용이 든다 — `--dry-run`·`--probe-restricted`까지 모든 호출이
     ask(낱말 그물: 이름 `module_eval` + 낱말 `module`, 규칙 7). `--module`이 없는 `--help`는 판정할 것이 없다."""
