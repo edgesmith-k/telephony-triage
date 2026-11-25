@@ -128,7 +128,8 @@ v1은 분석 전용이다. 확인 화면·must_show가 있는 흐름은 **`tt-oc
 
 0. 레포 사본(도입 담당자가 한 번 정하고 팀에 공지): 사내 GHE의 telephony-triage 레포를 **마켓플레이스 플러그인과 같은 반입 태그**로 읽기 전용 clone — `git clone --depth 1 --branch <반입 태그> <사내 tt 레포> <사본>`. 같은 판 확인: `diff -rq -x __pycache__ <사본>/plugin/scripts <설치된 plugin>/scripts`가 빈 출력. 갱신은 `git fetch --depth 1 origin tag <새 태그> && git checkout <새 태그>` 뒤 3.5. 사본은 고치지 않는다(`install`이 커맨드·`tt-guard.js`를 여기서 복사하고 `tt-oc`도 여기서 돈다).
 1. OpenCode 1.19.5 — 사내 경로가 없으면 npm 패키지 `opencode-ai` 버전 1.19.5를 전역 설치(`npm install -g`에 패키지 이름과 버전을 `이름@버전`으로).
-2. 관리 설정(관리자) — `opencode/managed.json.sample`을 `/etc/opencode/opencode.json`으로. 더 막는 키는 더해도 된다.
+2. 관리 설정(관리자) — `opencode/managed.json.sample`을 `/etc/opencode/opencode.json`으로. 더 막는 키는 더해도 된다. 3의 설치가
+   관리 설정 permission을 에이전트에 옮겨 적으므로, 사용자가 설치한 뒤 관리 설정을 바꾸면 사용자마다 `install --force`로 다시 설치한다.
 3. 사용자별 설치 폴더 — git 레포·플러그인·이슈 DB clone 밖. setup(config)이 먼저다(`install`이 `config.py check --roots`로 읽기 폴더를 정한다).
 
 ```sh
@@ -156,16 +157,19 @@ python3 tools/site_step.py runtime-check opencode --project <dest>
 ```
 
 - 프록시·사내 CA: `tt-oc`는 환경을 지우지 않고 opencode에 넘긴다(`HTTPS_PROXY`·`NO_PROXY`·`NODE_EXTRA_CA_CERTS` 등, 거부하는 것은 `OPENCODE_*` 설정 덮기뿐). curl과 같은 셸에서 실행한다 — opencode가 그 변수로 게이트웨이에 닿는지는 3.3 첫 실행에서 본다(닿지 않으면 `no-response`).
-- `tt-oc doctor` 행: `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만), warn `module-skills`·`read-roots`·`agent-permission`(이전 설치 — 다시 설치)·`gateway-key`(opencode.json `apiKey`의 `{env:…}` 변수가 없거나 빔)·`gateway-url`(baseURL이 `…/v1`로 끝나지 않음, 게이트웨이 경로가 원래 다르면 무시)·`first-timeout`(`TT_OC_FIRST_TIMEOUT`이 0 이상의 유한한 초가 아님 — 실행은 종료 2). fail이면 종료 2.
-- `agent-permission`이 warn("이전 설치")이거나 `opencode-config`가 ``permission["*"]가 첫 키가 아니다``로 실패하면
-  `tools/gen_opencode.py install … --force`로 다시 설치한다. 사용자 전역 OpenCode 설정(보통 `~/.config/opencode/opencode.json`)의
-  `permission`에 `edit`·`bash` 같은 키가 있으면, OpenCode 1.19.5는 설정을 합칠 때 설치가 넣은 `"*": "deny"`를 그 키들 뒤로 보낸다.
-  마지막으로 맞는 규칙이 이기므로 이전 설치는 스킬 문서 읽기를 포함한 허용이 모두 막히고, 전역에만 있는 허용(다른 MCP 도구,
-  전역 bash 패턴 등)은 이 프로젝트에서도 열린다. 지금 설치는 설치 permission을 에이전트(triage·tt-explore)에도 두고, 에이전트 규칙은
-  설정 규칙 뒤에 붙으므로 전역 설정을 고치지 않아도 설치 규칙이 이긴다(`opencode debug agent triage`로 확인).
+- `tt-oc doctor` 행: `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만)·`agent-permission`(이전 설치이거나 관리 설정이 설치 뒤 바뀜 — 다시 설치), warn `module-skills`·`read-roots`·`gateway-key`(opencode.json `apiKey`의 `{env:…}` 변수가 없거나 빔)·`gateway-url`(baseURL이 `…/v1`로 끝나지 않음, 게이트웨이 경로가 원래 다르면 무시)·`first-timeout`(`TT_OC_FIRST_TIMEOUT`이 0 이상의 유한한 초가 아님 — 실행은 종료 2). fail이면 종료 2.
+- `agent-permission`이 fail이면 `tools/gen_opencode.py install … --force`로 다시 설치한다. 설치는 설치 permission을 에이전트
+  (triage·tt-explore) frontmatter에도 둔다. OpenCode 1.19.5는 에이전트 규칙을 설정 규칙(사용자 전역·프로젝트·관리 설정을 합친 것)
+  뒤에 붙이므로, 사용자 전역 OpenCode 설정(보통 `~/.config/opencode/opencode.json`)의 `permission` 키 순서에 흔들리지 않는다.
+  그 대신 에이전트 규칙은 관리 설정의 deny도 이기므로, 설치가 그때의 관리 설정 permission을 합쳐 적고 그 값을 `tt-oc.json`에 남긴다.
+  doctor는 지금 관리 설정과 비교해, 관리자가 설치 뒤 관리 설정을 바꿨거나 그 기록이 없는 이전 설치면 fail로 낸다.
+  - 이전 설치에서 생기는 일(1.19.5 실험): 전역 `permission`에 `edit`·`bash`·`external_directory` 같은 키가 있으면 합칠 때 설치의
+    `"*": "deny"`가 그 키들 뒤로 가, **그 키에 설치가 넣은 허용**(플러그인 폴더 읽기, 스크립트 bash, 작업 폴더 쓰기)이 막힌다.
+    read·glob·list·task처럼 전역에 없는 키의 허용은 살아 있다. 전역 `permission`(또는 bash 같은 하위 객체)이 `"*"`로 시작하면
+    전역에만 있는 허용(다른 MCP 도구, 전역 bash 패턴)이 이 프로젝트에서도 열린다.
   - 다시 설치할 수 없어 전역 설정을 고친다면 사용자가 백업한 뒤 고른다. 전역 `permission` 맨 앞에 `"*"` 한 줄을 두면 합친 결과에서
     `"*"`가 맨 앞으로 오고 이 프로젝트에서는 설치한 `deny`가 그 값을 덮지만, 그 값은 **다른 OpenCode 프로젝트의 기본 동작이 된다**:
-    `"allow"`면 기본으로 묻던 것(작업 폴더 밖 접근, 같은 호출 반복, `.env` 읽기)까지 묻지 않고 허용하고, `"ask"`면 모두 묻는다.
+    `"allow"`면 기본으로 묻던 것(같은 호출 반복, `.env` 읽기 등)까지 묻지 않고 허용하고, `"ask"`면 모두 묻는다.
     또는 전역 `permission`의 키를 그 키가 필요한 프로젝트의 `opencode.json`으로 옮긴다.
 - `runtime-check opencode`: 위 + 관리 설정(없으면 warn) + OpenCode용 사내 확인 0 curl(실행 안 함). fail이면 종료 1.
 - 사내 확인 0(OpenCode)은 OpenAI 호환 모양이다: (a) 토큰 0 `GET <baseURL>/models`에 모델 ID가 있는지(정보 — 게이트웨이가 목록을 안 주면 404여도 된다. 설치 설정은 모델 ID를 `opencode.json` `models`에 고정한다), (b) 선택 `POST <baseURL>/chat/completions` 스트리밍 `tool_calls`(도구 강제), (c) 같은 요청의 자동 선택(`tool_choice: "auto"` — 실제 실행 모양, 도구 호출이 `content` 글로만 나오면 실패). 설치한 `opencode.json`의 baseURL·모델을 채워 보이고 키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다.

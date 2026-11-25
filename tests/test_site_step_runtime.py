@@ -146,7 +146,8 @@ def oc(tmp_path):
              for rel in ("opencode.json", ".opencode/plugins/tt-guard.js")}
     (proj / "tt-oc.json").write_text(json.dumps({
         "version": 1, "plugin_root": str(plug), "work_root": str(work), "model": "glm-x",
-        "integrity": {"files": files, "plugin_scripts": gen_opencode.scripts_digest(plug)}}), encoding="utf-8")
+        "integrity": {"files": files, "plugin_scripts": gen_opencode.scripts_digest(plug)},
+        "managed_permission": {}}), encoding="utf-8")     # 설치 때 관리 설정 permission(tt-oc agent-permission이 비교)
     bin_ = tmp_path / "bin"
     bin_.mkdir()
     stub = bin_ / "opencode"
@@ -183,8 +184,14 @@ def test_opencode_absent_gives_install_hint(oc):
 def test_opencode_all_ok_with_project_and_managed(oc):
     (oc["managed"] / "opencode.json").write_text(gen_opencode.MANAGED_SAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
     r = oc_run(oc, "--project", str(oc["proj"]))
+    assert r.returncode == 1 and rows_of(r.stdout)["agent-permission"][0] == "fail"     # 설치 뒤 관리 설정이 생겼다 → 다시 설치
+    meta = oc["proj"] / "tt-oc.json"
+    meta.write_text(json.dumps({**json.loads(meta.read_text(encoding="utf-8")), "managed_permission": json.loads(
+        gen_opencode.MANAGED_SAMPLE.read_text(encoding="utf-8"))["permission"]}), encoding="utf-8")   # 그 관리 설정으로 설치한 것
+    r = oc_run(oc, "--project", str(oc["proj"]))
     assert r.returncode == 0, r.stdout + r.stderr
     rows = rows_of(r.stdout)
+    assert "agent-permission" not in rows
     for check in ("installed-config", "env", "project-git", "integrity", "opencode-version", "opencode-config",
                   "config-doctor", "managed-config"):
         assert rows[check][0] == "ok", (check, rows.get(check))

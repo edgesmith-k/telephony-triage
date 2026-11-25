@@ -286,9 +286,10 @@ def roots(tmp_path):
     return tmp_path
 
 
-def _install(root: Path, *extra, dest="proj"):
+def _install(root: Path, *extra, dest="proj", work="work"):
     return run_gen("install", "--dest", str(root / dest), "--plugin-root", str(root / "plug"), "--work-root",
-                   str(root / "work"), "--gateway-url", "http://localhost:9/v1", "--model", "glm-x", *extra)
+                   str(root / work), "--gateway-url", "http://localhost:9/v1", "--model", "glm-x",
+                   "--managed-dir", str(root / "managed"), *extra)        # 시험 호스트의 관리 설정을 읽지 않게
 
 
 def test_install_renders_everything(roots):
@@ -307,7 +308,7 @@ def test_install_renders_everything(roots):
     integrity = meta.pop("integrity")
     meta.pop("opencode_bin", None)       # 이 호스트에 고정 버전 opencode가 있으면 남는다(test_install_records_pinned_opencode)
     assert meta == {"version": 1, "opencode": gen_opencode.OPENCODE_VERSION, "plugin_root": str(roots / "plug"), "work_root": str(roots / "work"),
-                    "issue_dbs": [str(roots / "dbA"), str(roots / "dbB")], "model": "glm-x"}
+                    "issue_dbs": [str(roots / "dbA"), str(roots / "dbB")], "model": "glm-x", "managed_permission": {}}
     # 설치 지문(리뷰 P1: guard 플러그인 삭제·adapter 수정을 tt-oc doctor가 찾는다): tt-oc.json 말고 설치한 모든 파일
     assert set(integrity["files"]) == {p.relative_to(proj).as_posix() for p in files if p.name != "tt-oc.json"}
     assert ".opencode/plugins/tt-guard.js" in integrity["files"] and "opencode.json" in integrity["files"]
@@ -341,6 +342,53 @@ def test_install_puts_install_permission_in_agents(roots):
     assert got["triage"]["bash"] == perm["bash"] and got["triage"]["webfetch"] == "deny"
     assert got["tt-explore"]["bash"] == own["bash"] and got["tt-explore"]["task"] == "deny"
     assert got["tt-explore"]["edit"] == {"*": "deny", f"{str(roots / 'work').lstrip('/')}/**/explore-output.md": "allow"}
+    for name, src in (("triage", AGENT), ("tt-explore", EXPLORE)):     # 관리 설정이 없으면 C-1 고치기 전과 바이트까지 같다
+        mine = yaml.safe_load(src.read_text(encoding="utf-8").split("---")[1])["permission"]
+        line = "permission: " + json.dumps({**perm, **mine}, ensure_ascii=False).replace(
+            "@@WORK_ROOT_REL@@", str(roots / "work").lstrip("/")) + "\n"
+        assert line in (proj / ".opencode" / "agents" / f"{name}.md").read_text(encoding="utf-8")
+
+
+MANAGED_DENIES = {"task": "deny", "bash": {"cat *": "deny"}, "read": {"*.log": "deny"}, "edit": "deny",
+                  "jira_get_issue": "deny"}
+
+
+def test_install_keeps_managed_denies_in_agents(roots):
+    """확인 리뷰 C-1: 에이전트 규칙은 관리 설정까지 합친 설정 규칙 뒤에 붙어 관리자 deny를 이긴다. 설치는 OpenCode처럼 관리 설정
+    permission(`opencode.json` 다음 `opencode.jsonc`)을 먼저 깊게 합치고, 에이전트 고유 키에도 관리 설정 deny를 남긴다.
+    그 값은 tt-oc.json `managed_permission`(doctor가 비교)."""
+    managed = roots / "managed"
+    managed.mkdir()
+    plug_dir = f"{roots / 'plug'}/**"
+    (managed / "opencode.json").write_text(json.dumps({"snapshot": False, "permission": MANAGED_DENIES}), encoding="utf-8")
+    (managed / "opencode.jsonc").write_text('{"permission": {"external_directory": {"%s": "deny"},}} // 관리자\n' % plug_dir,
+                                            encoding="utf-8")
+    r = _install(roots, "--jira-read-tool", "jira_get_issue")
+    assert r.returncode == 0, r.stderr
+    proj = roots / "proj"
+    got = {name: yaml.safe_load((proj / ".opencode" / "agents" / f"{name}.md").read_text(encoding="utf-8").split("---")[1])
+           ["permission"] for name in ("triage", "tt-explore")}
+    for name, perm in got.items():
+        assert perm["task"] == "deny" and perm["edit"] == "deny" and perm["jira_get_issue"] == "deny", name
+        assert perm["bash"]["cat *"] == "deny" and perm["read"]["*.log"] == "deny", name
+        assert perm["external_directory"][plug_dir] == "deny", name
+    assert got["tt-explore"]["bash"]["python3 *triage.py* window *"] == "allow"     # 에이전트 고유 허용은 그대로
+    meta = json.loads((proj / "tt-oc.json").read_text(encoding="utf-8"))
+    assert meta["managed_permission"] == {**MANAGED_DENIES, "external_directory": {plug_dir: "deny"}}
+
+
+def test_install_refuses_unreadable_managed_config_and_backslash_paths(roots):
+    """관리 설정을 읽지 못하면(깨진 JSON) 설치하지 않는다(관리자 deny가 빠진 설치를 만들지 않는다). 작업 루트 경로의 역슬래시는
+    에이전트 frontmatter YAML 문자열을 깨뜨리므로 거부한다(C-8 — 전에는 YAML traceback)."""
+    (roots / "managed").mkdir()
+    (roots / "managed" / "opencode.json").write_text("{broken", encoding="utf-8")
+    r = _install(roots)
+    assert r.returncode == 2 and "관리 설정" in r.stdout + r.stderr and "읽기 실패" in r.stdout + r.stderr
+    assert not (roots / "proj").exists()
+    (roots / "managed" / "opencode.json").unlink()
+    (roots / "w\\x").mkdir()
+    r = _install(roots, work="w\\x")
+    assert r.returncode == 2 and "Traceback" not in r.stderr and "쓸 수 없는 글자" in r.stdout + r.stderr
 
 
 def test_install_without_clone_drops_clone_rules(roots):

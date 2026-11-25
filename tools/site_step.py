@@ -1133,7 +1133,7 @@ def runtime_opencode(project: str | None, opencode: str, managed_dir: Path, env:
                      "detail": ("설정 불일치: " + ", ".join(wrong) + " — gen_opencode.py install --force") if wrong
                      else f"{proj / 'opencode.json'}: snapshot:false·share:disabled·autoupdate:false·허용 목록·task tt-explore만"})
         if oc:
-            rows += tt.preflight(oc, proj, meta, tt.child_env(meta))
+            rows += tt.preflight(oc, proj, meta, tt.child_env(meta), managed_dir)
     elif oc:
         rows.append(tt.version_row(oc, env)[0])
     rows.append(_managed_row(managed_dir))
