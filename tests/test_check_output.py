@@ -167,7 +167,9 @@ def test_deep_module_renders_lines_and_record(tmp_path, capsys):
     assert data == {"line": masking.mask_brief(text[i], 300), "evidence": "- 근거 원문 검사: 인용 2개 중 원문에 없음 0",
                     "quotes": 2, "fabricated": 0, "weak": 0, "raw": 0}
     rec = _rec(job)
-    assert set(rec) == {"mode", "at", "env", "output_sha256", "source", "quotes", "fabricated", "weak", "raw"}
+    # 반입 8 B1: 이 JOB의 events.json에는 규칙 경로가 없어 인용 줄 태그 대조를 건너뛰었다고 남는다(없음으로 적지 않는다)
+    assert set(rec) == {"mode", "at", "env", "output_sha256", "source", "quotes", "fabricated", "weak", "raw",
+                        "parser_unknown_tags_skipped"}
     assert rec["mode"] == "module" and rec["source"] == "module-skill/deep/timeline.md" and rec["quotes"] == 2
     assert set(rec["env"]) == {"runtime", "model", "model_defaults", "gateway", "label"}
     assert rec["output_sha256"] == _sha(job / "deep-output.md")
@@ -437,6 +439,7 @@ def test_skipped_keeps_script_written_line(tmp_path, capsys):
 @pytest.mark.parametrize("purpose, analyzer, explore_when", [
     ("deep", {"error": "analyzers.data.prefer: …", "when": "never"}, None),
     ("deep", {"skill": "mock-data-analyzer", "when": "never"}, None),
+    ("deep", {"skipped": "조사 모드", "when": "never"}, None),     # 조사 모드 5-1 건너뜀(반입 8): 결과 파일이 있어도 쓰지 않는다
     ("deep", "none", None),
     ("explore", None, "never"),
 ])
@@ -804,9 +807,13 @@ def test_recheck_keeps_earlier_fabricated_count(tmp_path, capsys):
 WIN_ROW = "15:10:01.900 p0 E hiddend carrier link lost on rmnet_data3 after reject"     # 타임라인에 없는 줄(버려진 태그)
 
 
-def _window(job: Path, n: int = 1, rows=(WIN_ROW,), record: bool = True) -> Path:
+def _window(job: Path, n: int = 1, rows=(WIN_ROW,), record: bool = True, last: str | None = None,
+            first: str | None = None) -> Path:
+    """구간 파일·기록. `last`(날짜 포함 ISO)면 window가 쓰는 머리 `- 줄 시각(날짜 포함, UTC): … ~ <last>`도(G-2, 게이트 4가 읽는다)."""
+    from triagelib import window
     path = job / f"window-{n}.md"
-    path.write_text("\n".join([f"# {KEY} 로그 구간 {n}", "", "- 중심: x", "", *rows, ""]), encoding="utf-8")
+    head = [f"{window.LINE_TS_HEAD}{first or last} ~ {last}"] if last else []
+    path.write_text("\n".join([f"# {KEY} 로그 구간 {n}", "", "- 중심: x", *head, "", *rows, ""]), encoding="utf-8")
     if record:
         rec = job / core.WINDOW_RECORD
         old = json.loads(rec.read_text(encoding="utf-8"))["windows"] if rec.is_file() else []

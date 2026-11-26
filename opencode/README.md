@@ -82,7 +82,10 @@ opencode/bin/tt-oc --project <dest> -s <세션> -- 2          # 질문에 답하
 - 셸 별칭(alias)은 `setsid`·`nohup`·포털 시작 스크립트에서 풀리지 않는다. 그렇게 띄울 때는 `<venv>/bin/python <레포>/opencode/bin/tt-oc …`처럼
   실제 경로를 쓴다(`.bashrc`의 `TT_OPENCODE`도 그 환경에서는 안 읽힐 수 있다 — install이 남긴 경로가 그때 쓰인다).
 - 사전 점검(버전 = `oc_version.OPENCODE_VERSION`, `snapshot:false`·bash 허용 목록 등 실제 설정, 설치 지문, 자동 지시 파일, `config.py doctor`)이 실패하면
-  시작하지 않는다.
+  시작하지 않는다. 설치는 설치 permission을 두 에이전트 frontmatter에도 둔다 — OpenCode 1.19.5는 에이전트 규칙을 설정 규칙 뒤에
+  붙이므로, 사용자 전역 OpenCode 설정의 permission 키가 합친 설정의 `"*": "deny"`를 뒤로 밀거나 전역에만 있는 허용을 더해도
+  설치 규칙이 이긴다. 에이전트 규칙은 관리 설정의 deny도 이기므로 설치가 그때의 관리 설정 permission을 합쳐 적는다. doctor
+  `agent-permission` 행은 관리 설정이 설치 뒤 바뀌었거나 그 전에 설치한 곳이면 fail이다 — `install --force`로 다시 설치하면 풀린다.
 - bash는 분석 스크립트(`python3 "<plugin>/scripts/<이름>.py" …`, 절대 경로)와 읽기 명령(ls·cat·head·tail·grep·find·git log 등)만
   돈다(`oc_adapter.py` 허용 목록 — 셸 펼침·파일 리디렉션·대입·스크립트 파일·`python3 -c`·중첩 `opencode`/`claude`는 거부).
   `TT_LOCK_OWNER=` 대입도 거부라 analyze 작업의 `db_pr`·`db_verify`는 lock owner를 작업 상태(`triage-state.json`)에서 읽는다(`dbpr/lock.py`). 생성 커맨드 안내(`gen_opencode.LOCK_NOTE`)가 접두를 붙이지 말라고 하고, 그래도 붙이면 거부 사유가 "접두만 빼고 같은 명령"을 알린다(`[telephony-triage] retry without TT_LOCK_OWNER=` — 에이전트 규칙 6에 적힌 예외, 다시 돌렸으면 tt-oc는 막힌 호출로 세지 않는다).
@@ -158,6 +161,8 @@ analyze의 탐색 분석(Step 5-2, 맞는 규칙이 없을 때 원인 가설을 
 - `task`는 `tt-explore`만 허용한다(사용자 결정 ⑧ "task 전역 거부"를 11/17에 좁혔다). 설정(`permission.task`)과 guard가 둘 다 막는다.
   `tt-oc doctor`와 관리 설정 점검은 글자가 아니라 효과로 본다(마지막으로 맞는 규칙이 이긴다): `tt-explore`만 allow이고 다른 이름은
   deny이거나, 모두 deny일 때만 통과하고 어느 쪽인지 행에 보인다.
+- 관리 설정을 바꾼 뒤에는 사용자마다 `gen_opencode.py install … --force`로 다시 설치한다(설치가 관리 설정 permission을 에이전트에
+  옮겨 적는다 — 다시 설치하기 전에는 `tt-oc doctor`의 `agent-permission`이 fail이다).
 - 관리 설정(`/etc/opencode`)으로 하위 에이전트를 아예 막으려면 `"task": "deny"` **문자열**로 둔다. 1.19.5 실험(관리 설정 폴더를 바꿔
   `debug config`·`debug agent`로 확인)에서 문자열은 프로젝트 설정을 덮었지만, 객체 `{"*": "deny"}`는 프로젝트 객체와 합쳐져
   `tt-explore` allow가 남았다. 막으면 메인 에이전트에 task 도구가 없어 같은 세션에서 탐색 분석을 한다. 예시(`managed.json.sample`)는

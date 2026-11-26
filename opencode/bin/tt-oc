@@ -6,7 +6,9 @@
   `OPENCODE_PERMISSION`이 설정 deny를, `OPENCODE_CONFIG_CONTENT`가 `snapshot:false`를 이겼다 — 계획 I x3b·x4).
 - 사전 점검(`doctor`): opencode 버전 = `PINNED`, 프로젝트 폴더(`gen_opencode.py install` 결과)가 git 레포 밖, `opencode debug config`의
   `snapshot:false`·`share:"disabled"`·`autoupdate:false`·`permission["*"]:"deny"`·`permission.task:{"*":"deny","tt-explore":"allow"}`
-  (또는 통째로 `"deny"`), `config.py doctor` 통과, guard가 쓰는 python(`TT_PYTHON` — 이 래퍼가 자기 python으로
+  (또는 통째로 `"deny"`), 설치가 에이전트(triage·tt-explore) frontmatter에 옮겨 적은 permission이 지금 관리 설정과 맞는지
+  (`agent-permission` — 설치 때 관리 설정과 다르거나 이전 설치면 fail, 다시 설치),
+  `config.py doctor` 통과, guard가 쓰는 python(`TT_PYTHON` — 이 래퍼가 자기 python으로
   채운다)과 자식 PATH의 python3이 `oc_adapter.py selftest`를 통과(`guard-python`·`script-python`).
   하나라도 실패하면 시작하지 않는다(종료 코드 2). 예외(warn, 시작함): doctor의 fail이 `module_skills` 행뿐이면 "모듈 문서 받기는
   실패할 수 있음"(B2 R22), `config.py check --roots`의 `read_roots`가 설치한 external_directory 허용 밖이면 다시 설치 안내(R21),
@@ -293,6 +295,27 @@ def config_problems(cfg: dict) -> list[str]:
     return out
 
 
+MANAGED_DIR = Path(OCV.managed_dir(sys.platform, os.environ))   # = gen_opencode.MANAGED_DIR(OpenCode가 읽는 관리 설정 폴더)
+
+
+def agent_permission_problem(meta: dict, managed_dir: Path) -> str | None:
+    """설치가 두 에이전트 frontmatter에 둔 설치 permission(gen_opencode `agent_permission`)이 지금도 맞는지. 에이전트 규칙은
+    관리 설정까지 합친 설정 규칙 뒤에 붙어 그것을 이기므로, 설치는 그때의 관리 설정 permission을 합쳐 쓰고 tt-oc.json
+    `managed_permission`에 남긴다. 지금 관리 설정과 다르면(또는 그 기록이 없는 이전 설치면) 다시 설치해야 한다."""
+    try:
+        now = OCV.managed_permission(managed_dir, json.loads)
+    except (OSError, ValueError) as exc:
+        return f"관리 설정({managed_dir}) 읽기 실패: {type(exc).__name__}: {str(exc)[:300]} — 관리자에게 알리고 고친 뒤"
+    if "managed_permission" not in meta:
+        return ("이전 설치: 에이전트(triage·tt-explore)에 설치 permission이 없다 — 전역 OpenCode 설정의 permission에 edit·bash 같은 "
+                "키가 있으면 그 키에 설치가 넣은 허용이 막히고, 전역 permission에 \"*\" 키가 있으면 그보다 뒤에 있는 전역 키의 "
+                "허용이 이 프로젝트에서도 열린다")
+    if meta["managed_permission"] != now:
+        return (f"관리 설정({managed_dir})의 permission·tools가 설치 뒤 바뀌었다 — 에이전트에 옮겨 적은 권한이 지금 관리 설정과 "
+                "다르다")
+    return None
+
+
 def version_row(oc: str, env: dict) -> tuple[dict, bool]:
     """(`opencode-version` 행, 실행했는지). 버전 = `PINNED`일 때만 ok. `tools/site_step.py runtime-check opencode`도 쓴다."""
     try:
@@ -386,7 +409,7 @@ def python_rows(proj: Path, meta: dict, env: dict) -> list[dict]:
     return rows
 
 
-def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
+def preflight(oc: str, proj: Path, meta: dict, env: dict, managed_dir: Path | None = None) -> list[dict]:
     """점검 행 [{check, status(ok|fail|warn|skip), detail}]. warn·skip은 막지 않는다(skip = 이 도구가 점검하지 않는 항목 — 통과
     표시가 아니다, 예: 내장 provider의 gateway-key). 앞 단계가 실패해도 할 수 있는 점검은 한다(실패로 건너뛴 것은 fail로 남긴다)."""
     rows = []
@@ -417,6 +440,9 @@ def preflight(oc: str, proj: Path, meta: dict, env: dict) -> list[dict]:
                               "고정한 바이너리는 직접 실행하지 않는다(tt-oc로만)")
     rows.append(ver_row)
     rows += python_rows(proj, meta, env)
+    agent_bad = agent_permission_problem(meta, managed_dir or MANAGED_DIR)
+    if agent_bad:
+        row("agent-permission", False, agent_bad + " — tools/gen_opencode.py install … --force로 다시 설치한다")
     if not ran:
         return rows + [{"check": "opencode-config", "status": "fail", "detail": "건너뜀(opencode 실행 실패)"}]
     try:
@@ -829,7 +855,7 @@ UNSAFE_PY_ENV = ("PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP", "PYTHONINSPECT", "
                  "PYTHONPYCACHEPREFIX")
 _OWNER_RE = re.compile(r"[0-9a-f]{32}")       # `Lock.acquire`의 uuid4().hex 그대로(7차 R6-P3-3)
 HINT_MAX = 3                                  # 명령 하나에 내는 owner 안내 줄 수 상한(lock 있는 작업 폴더가 많을 때)
-_JOB_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
+_JOB_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,99}")
 
 
 def _lookup_env(root: Path) -> dict:
@@ -1351,6 +1377,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--delete-session", action="store_true")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--job", help="publish: 게시할 작업 키(session.lock을 쥔 작업이 여럿일 때)")
+    ap.add_argument("--managed-dir", help=argparse.SUPPRESS)   # 시험용(기본 MANAGED_DIR = OpenCode가 읽는 관리 설정 폴더)
     ap.add_argument("action", nargs="?", choices=["doctor", "publish"])
     return ap
 
@@ -1393,7 +1420,7 @@ def main(argv=None) -> int:
     oc = opencode_choice(a.opencode, os.environ, meta)
     env = child_env(meta)
     env["TT_OPENCODE"] = oc        # 플러그인 스크립트(job_status 런타임 줄)가 보는 opencode도 같은 것
-    rows = preflight(oc, proj, meta, env)
+    rows = preflight(oc, proj, meta, env, Path(a.managed_dir) if a.managed_dir else None)
     failed = [r for r in rows if r["status"] == "fail"]    # warn 행(module-skills·read-roots)은 막지 않는다
     if a.action == "doctor":
         if "publish" in meta:         # 키가 있는 설치만(없으면 행 목록 그대로). preflight()에는 넣지 않는다(site_step이 쓴다)

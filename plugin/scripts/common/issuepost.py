@@ -97,6 +97,8 @@ def investigation_lines(inv: dict, top: dict | None = None, why: bool = True) ->
         out.append(INVESTIGATION_NOTE)
     if why and failed:
         out.append("  - 실패 이유: " + "; ".join(f"{g.get('name')} — {g.get('why')}" for g in failed))
+    if why and isinstance(inv.get("obs_far_h"), (int, float)):     # G-4: 단계 1 관측이 기준 시각과 멀다(실패 아님, 사람이 본다)
+        out.append(f"  - 관측이 기준 시각과 {inv['obs_far_h']:g}시간 떨어짐 — 같은 시험의 줄인지 확인")
     match = inv.get("top_match")      # 같다고 본 원인 ID(C-3b — 1위가 유형만이면 그 유형의 원인), 옛 기록은 true
     cause = match if isinstance(match, str) else (top or {}).get("cause")
     if ok and top:

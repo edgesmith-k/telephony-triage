@@ -34,7 +34,7 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 1. `--issue-file`이 없으면 config(`S/config.py show --keys work_dir,tracker.tools [--platform <p>]`)의 `get_issue`(있으면 `get_comments`)를 그 스키마대로 부른다. 비어 있으면 추측 말고 멈춘다: `S/config.py doctor --format markdown` 표를 그대로 붙이고 setup 매핑 안내, 연습은 `--dry-run --issue-file <yaml>`. hook이 원문을
    `JOB/issue_raw.json`에 두고 마스킹 요약만 보여준다(`saved_to` 없으면 응답을 그 경로에 저장하고 "격리 hook 미동작(S1 확인)"을 알린다. S1 확인 전엔 guard가 읽기마다 묻는다, 우회 금지). `--issue-file`은
    `--dry-run`·`--analysis-only` 전용.
-2. `S/triage.py run <KEY> --logs <…> [--platform <p>]` + 받은 옵션 그대로(analyzer 외). stdout(=`JOB/analysis.json`)과 `JOB/report.md`만 읽는다.
+2. `S/triage.py run <KEY> --logs <…> [--platform <p>]` + 받은 옵션 그대로. stdout(=`JOB/analysis.json`)과 `JOB/report.md`만 읽는다.
 3. `status: needs_input` → `question`·`options`를 보이고 **사용자 답**을 `--answer <kind>=<값>`으로 붙여 같은 명령을 재실행한다.
    `issue`는 1번 도구 재호출 뒤 `--answer` 없이, `logs`는 `--logs`를 붙여 재실행. `stopped`는 이유만.
 4. 종료 코드 1 → 키를 다시 묻는다.
@@ -49,9 +49,9 @@ description: Telephony 이슈(Android·oFono 등; data·call·network·sim·sms�
 - Step 5: `code.resolved` 파일에서 근거 문구 출력 위치·분기 조건을 찾는다. `code.moved`는
   "경로 변경"으로 알리고 Step 7에서 `add-code-ref`를 묻는다.
 - Step 5-1 `analyzer`·5-2 `explore`(있으면): `--no-…`·`never`면 생략, `--analyzer`·`--explore`·`always`면
-  실행, 아니면 토큰 추가를 알리고 질문을 그대로 보인다(답 전 explore·module·원문 열람 금지). 둘 다 물으면 "심층 분석과 탐색 분석을 할까요?" 한 질문, `investigate.mode`면 "조사할까요?" 한 번. 5-2면 `S/triage.py explore <KEY>`부터 → 5-1(`analyzer.skill`·`category`)은
-  `module-skills.md`를 읽고 `S/triage.py module <KEY> --for deep`(종료 2도 계속) → 5-2(`module_skills`면 `module`도).
-  준 파일(`timeline.md` 등)만 그 문서·`explore.md`대로 읽고 칸은 `check-output`이 report.md에 쓴다.
+  실행, 아니면 토큰 추가를 알리고 질문을 그대로 보인다(답 전 explore·module·원문 열람 금지). 둘 다 물으면 "심층 분석과 탐색 분석을 할까요?" 한 질문, `investigate.mode`면 "조사할까요?" 한 번. 5-2면 `S/triage.py explore <KEY>`부터(출력 `next`대로) → 5-1(`analyzer.skill`·`category`)은
+  `module-skills.md`를 읽고 `S/triage.py module <KEY> --for deep`(종료 2도 계속) → 5-2.
+  준 파일(`timeline.md` 등)만 그 문서·`explore.md`(끝까지)대로 읽고 칸은 `check-output`이 report.md에 쓴다.
 
 ### Step 6. 리포트
 

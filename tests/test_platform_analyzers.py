@@ -26,6 +26,7 @@ sys.path.insert(0, str(SCRIPTS))
 from runner import plugin_root, run, run_json, tmp, variant_db  # noqa: E402
 
 import platforms  # noqa: E402
+import triage as T  # noqa: E402
 from common import userconfig  # noqa: E402
 from platforms import session  # noqa: E402
 
@@ -219,8 +220,11 @@ def test_ofono_explore_reports_platform_refs():
     assert not analysis.get("candidates") and analysis["explore"]["reason"] == "no_candidate"
     env = {"TELEPHONY_TRIAGE_HOME": work / "home"}
     out = run_json("triage.py", ["explore", "MOCK-9001", "--out", work / "job", "--platform", "ofono"], root=root, env=env)
-    assert out["platform"] == "ofono" and out["refs"] == ["reference/platforms/ofono/log-guide.md"]
-    assert (root / "skills" / "telephony-triage" / out["refs"][0]).is_file()
+    # eval 73: 스킬 폴더 기준 상대 경로는 모델이 `skills/telephony-triage/`를 빠뜨려 못 읽었다 — 그대로 Read할 절대 경로
+    guide = (root / "skills" / "telephony-triage" / "reference" / "platforms" / "ofono" / "log-guide.md").resolve()
+    assert out["platform"] == "ofono" and out["refs"] == [guide.as_posix()] and Path(out["refs"][0]).is_file()
+    # eval 73-e: 문서 앞부분만 읽으면 refs 지시를 놓친다 — 출력 next가 refs 읽기를 먼저 알린다(모듈 문서 설정 없음이라 그것뿐)
+    assert out["next"] == T.REFS_NEXT
     # 작업 플랫폼은 analysis.json 기준: 선택(android 기본)과 달라도 그 작업의 refs
     again = run_json("triage.py", ["explore", "MOCK-9001", "--out", work / "job"], root=root, env=env)
     assert again == out

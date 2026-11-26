@@ -120,7 +120,7 @@ def write_meta(proj, plug, work, **extra):
     files = {rel: gen.hashlib.sha256((proj / rel).read_bytes()).hexdigest()
              for rel in ("opencode.json", ".opencode/plugins/tt-guard.js")}
     meta = {"version": 1, "plugin_root": str(plug), "work_root": str(work), "model": "glm-x",
-            "integrity": {"files": files, "plugin_scripts": gen.scripts_digest(plug)}, **extra}
+            "integrity": {"files": files, "plugin_scripts": gen.scripts_digest(plug)}, "managed_permission": {}, **extra}
     (proj / "tt-oc.json").write_text(json.dumps(meta), encoding="utf-8")
 
 
@@ -140,7 +140,8 @@ def events(e, evs):
 
 def tt(e, *args, extra_env=None, timeout=60, cwd=None):
     env = {**e["env"], **(extra_env or {})}
-    return subprocess.run([sys.executable, str(TTOC), "--opencode", str(e["stub"]), "--project", str(e["proj"]), *args],
+    return subprocess.run([sys.executable, str(TTOC), "--opencode", str(e["stub"]), "--project", str(e["proj"]),
+                           "--managed-dir", str(e["tmp"] / "managed"), *args],          # 시험 호스트의 관리 설정을 읽지 않게
                           env=env, capture_output=True, text=True, timeout=timeout, check=False, cwd=cwd)
 
 
@@ -368,6 +369,10 @@ def test_terminal_handoff_prints_owner_hint_not_a_filled_command(env):
         assert cmds == [cmd], cmds
         assert len(notes) == 1 and notes[0].startswith("주의: 터미널에서는 위 1번째 명령의 db_") and \
             f"앞에 TT_LOCK_OWNER={OWN} 를 붙인다 — 작업 루트의 session.lock을 쥔 작업 ABC-1의 owner" in notes[0], notes
+    _state(work, "VF-1+b2", OWN)          # 작업 키에 `+`(빌드 이름 — session_lock.JOB_KEY_RE)
+    _hold_lock(work, "VF-1+b2", OWN)
+    cmds, notes = _cmds_and_notes(_handoff(env, "python3 /p/scripts/db_pr.py snapshot --job VF-1+b2"))
+    assert len(notes) == 1 and "session.lock을 쥔 작업 VF-1+b2의 owner" in notes[0], notes
 
 
 def test_terminal_handoff_hint_only_when_the_lock_owner_matches(env):
@@ -749,6 +754,45 @@ def test_preflight_requires_bash_allow_list(env):
     assert code == 2 and 'permission.bash["*"]' in rows["opencode-config"]["detail"]
 
 
+def test_doctor_agent_permission_follows_managed_config(env):
+    """확인 리뷰 C-1: 설치는 에이전트 frontmatter에 설치 permission과 그때의 관리 설정 permission을 합쳐 적는다(에이전트 규칙은 관리
+    설정 deny까지 이긴다). 전역 키가 합친 설정의 `"*"` 앞에 와도 doctor는 막지 않는다. 관리 설정이 설치 뒤 바뀌었거나, 그
+    기록이 없는 이전 설치거나, 관리 설정을 읽지 못하면 agent-permission fail(다시 설치)."""
+    perm = CONFIG_OK["permission"]
+    env["cfg"].write_text(json.dumps({**CONFIG_OK, "permission": {"edit": "deny", "external_directory": {"*": "deny"}, **perm}}),
+                          encoding="utf-8")
+    code, rows = _doctor_rows(env)
+    assert code == 0 and rows["opencode-config"]["status"] == "ok" and "agent-permission" not in rows, rows
+    managed = env["tmp"] / "managed"
+    managed.mkdir()
+    (managed / "opencode.json").write_text(json.dumps({"permission": {"task": "deny"}}), encoding="utf-8")
+    code, rows = _doctor_rows(env)
+    assert code == 2 and rows["agent-permission"]["status"] == "fail"
+    assert "설치 뒤 바뀌었다" in rows["agent-permission"]["detail"] and "install … --force" in rows["agent-permission"]["detail"]
+    write_meta(env["proj"], env["plug"], env["work"], managed_permission={"task": "deny"})     # 그 관리 설정으로 다시 설치
+    assert _doctor_rows(env)[0] == 0
+    (managed / "opencode.jsonc").write_text('{"permission": {"bash": {"cat *": "deny"},}, // 관리자\n}', encoding="utf-8")
+    code, rows = _doctor_rows(env)         # jsonc도 opencode.json 뒤에 합친다(1.19.5 바이너리 순서)
+    assert code == 2 and "설치 뒤 바뀌었다" in rows["agent-permission"]["detail"]
+    (managed / "opencode.jsonc").write_text("{broken", encoding="utf-8")
+    code, rows = _doctor_rows(env)
+    assert code == 2 and "읽기 실패" in rows["agent-permission"]["detail"]
+    (managed / "opencode.jsonc").write_text('{"tools": {"bash": false}}', encoding="utf-8")    # D-1: 옛 tools 키의 false도 바뀜
+    code, rows = _doctor_rows(env)
+    assert code == 2 and "설치 뒤 바뀌었다" in rows["agent-permission"]["detail"]
+    write_meta(env["proj"], env["plug"], env["work"], managed_permission={"task": "deny", "bash": "deny"})
+    assert _doctor_rows(env)[0] == 0
+    (managed / "opencode.jsonc").write_text('{"permission": "deny"}', encoding="utf-8")      # D-3: 원인을 보인다
+    code, rows = _doctor_rows(env)
+    assert code == 2 and "객체 모양만" in rows["agent-permission"]["detail"]
+    (managed / "opencode.jsonc").unlink()
+    meta = json.loads((env["proj"] / "tt-oc.json").read_text(encoding="utf-8"))
+    del meta["managed_permission"]
+    (env["proj"] / "tt-oc.json").write_text(json.dumps(meta), encoding="utf-8")
+    code, rows = _doctor_rows(env)
+    assert code == 2 and "이전 설치" in rows["agent-permission"]["detail"]
+
+
 @pytest.mark.parametrize("evs,code,outcome", [
     ([ev("step_start"), tool("bash"), step("tool-calls")], 0, "no-final-text"),
     ([ev("step_start"), ev("text", text="   "), step()], 0, "no-final-text"),
@@ -984,7 +1028,7 @@ def test_finish_reason_length_step_limit_and_zero_tokens(env):
     r = tt(env, "--", "x")
     assert r.returncode == 1 and "outcome: length" in r.stdout and "finish: length" in r.stdout and "finish=length" in r.stdout
     agents = env["proj"] / ".opencode" / "agents"
-    agents.mkdir(parents=True)
+    agents.mkdir(parents=True, exist_ok=True)
     (agents / "triage.md").write_text("---\ndescription: x\nmode: primary\nsteps: 3\n---\nbody\n", encoding="utf-8")
     write_meta(env["proj"], env["plug"], env["work"])
     events(env, [*[e for _ in range(2) for e in (ev("step_start"), tool("bash"), step("tool-calls"))], *final("최대 스텝")])

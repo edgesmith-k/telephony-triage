@@ -128,7 +128,8 @@ v1은 분석 전용이다. 확인 화면·must_show가 있는 흐름은 **`tt-oc
 
 0. 레포 사본(도입 담당자가 한 번 정하고 팀에 공지): 사내 GHE의 telephony-triage 레포를 **마켓플레이스 플러그인과 같은 반입 태그**로 읽기 전용 clone — `git clone --depth 1 --branch <반입 태그> <사내 tt 레포> <사본>`. 같은 판 확인: `diff -rq -x __pycache__ <사본>/plugin/scripts <설치된 plugin>/scripts`가 빈 출력. 갱신은 `git fetch --depth 1 origin tag <새 태그> && git checkout <새 태그>` 뒤 3.5. 사본은 고치지 않는다(`install`이 커맨드·`tt-guard.js`를 여기서 복사하고 `tt-oc`도 여기서 돈다).
 1. OpenCode 1.19.5 — 사내 경로가 없으면 npm 패키지 `opencode-ai` 버전 1.19.5를 전역 설치(`npm install -g`에 패키지 이름과 버전을 `이름@버전`으로).
-2. 관리 설정(관리자) — `opencode/managed.json.sample`을 `/etc/opencode/opencode.json`으로. 더 막는 키는 더해도 된다.
+2. 관리 설정(관리자) — `opencode/managed.json.sample`을 `/etc/opencode/opencode.json`으로. 더 막는 키는 더해도 된다. 3의 설치가
+   관리 설정 permission을 에이전트에 옮겨 적으므로, 사용자가 설치한 뒤 관리 설정을 바꾸면 사용자마다 `install --force`로 다시 설치한다.
 3. 사용자별 설치 폴더 — git 레포·플러그인·이슈 DB clone 밖. setup(config)이 먼저다(`install`이 `config.py check --roots`로 읽기 폴더를 정한다).
 
 ```sh
@@ -156,7 +157,21 @@ python3 tools/site_step.py runtime-check opencode --project <dest>
 ```
 
 - 프록시·사내 CA: `tt-oc`는 환경을 지우지 않고 opencode에 넘긴다(`HTTPS_PROXY`·`NO_PROXY`·`NODE_EXTRA_CA_CERTS` 등, 거부하는 것은 `OPENCODE_*` 설정 덮기뿐). curl과 같은 셸에서 실행한다 — opencode가 그 변수로 게이트웨이에 닿는지는 3.3 첫 실행에서 본다(닿지 않으면 `no-response`).
-- `tt-oc doctor` 행: `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만), warn `module-skills`·`read-roots`·`gateway-key`(opencode.json `apiKey`의 `{env:…}` 변수가 없거나 빔)·`gateway-url`(baseURL이 `…/v1`로 끝나지 않음, 게이트웨이 경로가 원래 다르면 무시)·`first-timeout`(`TT_OC_FIRST_TIMEOUT`이 0 이상의 유한한 초가 아님 — 실행은 종료 2). fail이면 종료 2.
+- `tt-oc doctor` 행: `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만)·`agent-permission`(이전 설치이거나 관리 설정이 설치 뒤 바뀜 — 다시 설치), warn `module-skills`·`read-roots`·`gateway-key`(opencode.json `apiKey`의 `{env:…}` 변수가 없거나 빔)·`gateway-url`(baseURL이 `…/v1`로 끝나지 않음, 게이트웨이 경로가 원래 다르면 무시)·`first-timeout`(`TT_OC_FIRST_TIMEOUT`이 0 이상의 유한한 초가 아님 — 실행은 종료 2). fail이면 종료 2.
+- `agent-permission`이 fail이면 `tools/gen_opencode.py install … --force`로 다시 설치한다. 설치는 설치 permission을 에이전트
+  (triage·tt-explore) frontmatter에도 둔다. OpenCode 1.19.5는 에이전트 규칙을 설정 규칙(사용자 전역·프로젝트·관리 설정을 합친 것)
+  뒤에 붙이므로, 사용자 전역 OpenCode 설정(보통 `~/.config/opencode/opencode.json`)의 `permission` 키 순서에 흔들리지 않는다.
+  그 대신 에이전트 규칙은 관리 설정의 deny도 이기므로, 설치가 그때의 관리 설정 permission(옛 `tools` 키의 false는 deny로)을 합쳐
+  적고 그 값을 `tt-oc.json`에 남긴다. 관리 설정의 permission·tools는 객체 모양만 받는다(`"permission": "deny"` 같은 문자열이면 설치를 멈춘다).
+  doctor는 지금 관리 설정과 비교해, 관리자가 설치 뒤 관리 설정을 바꿨거나 그 기록이 없는 이전 설치면 fail로 낸다.
+  - 이전 설치에서 생기는 일(1.19.5 실험): 전역 `permission`에 `edit`·`bash`·`external_directory` 같은 키가 있으면 합칠 때 설치의
+    `"*": "deny"`가 그 키들 뒤로 가, **그 키에 설치가 넣은 허용**(플러그인 폴더 읽기, 스크립트 bash, 작업 폴더 쓰기)이 막힌다.
+    read·glob·list·task처럼 전역에 없는 키의 허용은 살아 있다. 전역 `permission`에 `"*"` 키가 있으면(맨 앞이 아니어도) 그보다
+    뒤에 있는 전역 키의 허용(다른 MCP 도구, 전역 bash 패턴)이 이 프로젝트에서도 열린다.
+  - 다시 설치할 수 없어 전역 설정을 고친다면 사용자가 백업한 뒤 고른다. 전역 `permission` 맨 앞에 `"*"` 한 줄을 두면 합친 결과에서
+    `"*"`가 맨 앞으로 오고 이 프로젝트에서는 설치한 `deny`가 그 값을 덮지만, 그 값은 **다른 OpenCode 프로젝트의 기본 동작이 된다**:
+    `"allow"`면 기본으로 묻던 것(작업 폴더 밖 접근, 같은 호출 반복, `.env` 읽기 등)까지 묻지 않고 허용하고, `"ask"`면 모두 묻는다.
+    또는 전역 `permission`의 키를 그 키가 필요한 프로젝트의 `opencode.json`으로 옮긴다.
 - `runtime-check opencode`: 위 + 관리 설정(없으면 warn) + OpenCode용 사내 확인 0 curl(실행 안 함). fail이면 종료 1.
 - 사내 확인 0(OpenCode)은 OpenAI 호환 모양이다: (a) 토큰 0 `GET <baseURL>/models`에 모델 ID가 있는지(정보 — 게이트웨이가 목록을 안 주면 404여도 된다. 설치 설정은 모델 ID를 `opencode.json` `models`에 고정한다), (b) 선택 `POST <baseURL>/chat/completions` 스트리밍 `tool_calls`(도구 강제), (c) 같은 요청의 자동 선택(`tool_choice: "auto"` — 실제 실행 모양, 도구 호출이 `content` 글로만 나오면 실패). 설치한 `opencode.json`의 baseURL·모델을 채워 보이고 키는 `$TT_GATEWAY_API_KEY` 이름만 쓴다.
 
@@ -171,7 +186,7 @@ opencode/bin/tt-oc --project <dest> --command tt-analyze -- <KEY> <마스킹된 
 
 - `--dry-run` 한 번으로 리포트와 확인 화면을 다 본다. lock owner는 환경 변수로 줄 수 없어(허용 목록이 대입을 거부) analyze 작업의 `db_pr`·`db_verify`가 작업 상태(`triage-state.json`)에서 읽는다. analyze 밖의 쓰기 흐름(`tt-record` 등)은 OpenCode에서 lock(`lock owner 불일치`)에서 멈춘다 — Claude Code에서 한다. tt-oc 옵션(`--delete-session`·`-s` 등)은 **`--` 앞에** 둔다 — 뒤에 두면 모델에게 가는 메시지가 된다.
 
-- 종료 0(끝남)이나 3(막힌 호출 — 사용자 차례). 1·2·124면 그대로 보고한다. `tt-analyze`·`tt-record`가 스크립트를 한 번도 돌리지 않고(화면 기록도 없이) 끝나면 `outcome: no-script-output`·종료 1이다 — 도구 호출을 글로 내는 게이트웨이를 의심하고 3.2 사내 확인 0 (c)를 본다. 결과 줄의 `finish`가 `length`면 `outcome: length`(출력 한도 16000에서 잘림), 에이전트 `steps` 한도(50)에 닿으면 `step-limit` — 둘 다 종료 1. 토큰이 0이면 `주의:` 줄(사내 확인 3).
+- 종료 0(끝남)이나 3(막힌 호출 — 사용자 차례). 1·2·124면 그대로 보고한다. `tt-analyze`·`tt-record`가 스크립트를 한 번도 돌리지 않고(화면 기록도 없이) 끝나면 `outcome: no-script-output`·종료 1이다 — 도구 호출을 글로 내는 게이트웨이를 의심하고 3.2 사내 확인 0 (c)를 본다. 결과 줄의 `finish`가 `length`면 `outcome: length`(출력 한도 16000에서 잘림), 에이전트 `steps` 한도(`triage` 100, `tt-explore` 120 — `opencode/agents/*.md`)에 닿으면 `step-limit` — 둘 다 종료 1. 토큰이 0이면 `주의:` 줄(사내 확인 3).
 - 래퍼가 표시 기록(report·must_show·근거 검사 줄)을 그대로 출력한다.
 - 막힌 호출은 `[telephony-triage]`·"run this exact command yourself: …"가 그대로 나오고, 모델이 다른 모양으로 재시도하지 않는다. 터미널로 넘기는 명령은 모델이 만든 그대로 `  │ ` 뒤에 나온다(제어 문자는 보이는 이스케이프). lock owner가 필요한 `db_pr`·`db_verify` 명령이 있으면 tt-oc가 `주의:` 줄로 붙일 `TT_LOCK_OWNER=<owner>`와 그 작업을 알린다(터미널에는 OpenCode 안의 작업 상태 대체가 없다). owner는 지금 `session.lock`을 쥔 작업의 것이 확인될 때만 알리고, 아니면 owner 위치를 알린다. 팀원이 할 일: 모델이 보인 `db_pr.py publish` 명령은 붙여 넣지 않는다. 열린 설치면 OpenCode를 닫고 `tt-oc --project <dest> publish`, 닫힌 설치면 Claude Code에서 등록한다. 그 밖의 `db_pr`·`db_verify` 명령은 읽은 뒤 `주의:` 줄의 `TT_LOCK_OWNER=` 접두를 붙여 터미널에서 실행한다.
 - 질문은 번호 선택지로 끝난다 → `tt-oc --project <dest> -s <세션> -- <번호>`. 마지막 이어가기에 붙인다: `tt-oc --project <dest> -s <세션> --delete-session -- <번호>`(이어가기가 없으면 첫 실행의 `--` 앞에).

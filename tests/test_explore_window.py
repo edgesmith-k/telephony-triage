@@ -62,6 +62,11 @@ def test_window_serves_dropped_tag_lines_in_timeline_form():
     assert len(rows) == 6 and HIDDEN_ROW in rows                                      # 시각(UTC)·슬롯·레벨·태그·메시지
     assert "05:33:05.000 - D RIL [TX] VIPC_SETUP_DATA, REQ, token=0x0de, len=24" in rows   # 타임라인과 같은 시각 변환
     assert rows == sorted(rows)
+    # N-4: 머리의 처음·끝은 첫 줄·마지막 줄의 날짜 포함 시각(게이트 4는 끝을 읽는다)
+    from triagelib import window
+    m = window.LINE_TS_RE.search(text)
+    assert m and (m.group(1), m.group(2)) == ("2026-09-20T" + rows[0][:12] + "Z", "2026-09-20T" + rows[-1][:12] + "Z"), text
+    assert m.group(1) != m.group(2)
     rec = json.loads((job / core.WINDOW_RECORD).read_text(encoding="utf-8"))["windows"]
     assert rec == [{"path": "window-1.md", "sha256": hashlib.sha256((job / "window-1.md").read_bytes()).hexdigest(),
                     "at": "2026-09-20T05:33:05.000Z", "lines": 6, "tags": []}]
@@ -114,7 +119,12 @@ def test_window_at_uses_time_answer_conversion_and_filters():
     assert rows and all("05:33:04.5" <= x[:12] <= "05:33:05.500" for x in rows) and HIDDEN_ROW in rows
     assert _window(job, "--at", AT, "--span", 60, "--lines", 3)["lines"] == 3          # 둘 다면 적은 쪽
     grep = _window(job, "--at", AT, "--grep", r"carrier link \w+")
-    assert grep["lines"] == 1 and HIDDEN_ROW in (job / grep["window"]).read_text(encoding="utf-8")
+    text = (job / grep["window"]).read_text(encoding="utf-8")
+    assert grep["lines"] == 1 and HIDDEN_ROW in text
+    # G-2: 구간 파일 머리에 고른 줄의 날짜 포함 처음·끝 시각(게이트 4가 읽는다), 줄 모양(인용 대조 대상)은 그대로
+    from triagelib import window
+    m = window.LINE_TS_RE.search(text)
+    assert m and m.group(1) == m.group(2) and m.group(2).startswith("2026-09-20T" + HIDDEN_ROW[:12]), text
     rec = json.loads((job / core.WINDOW_RECORD).read_text(encoding="utf-8"))["windows"]
     assert rec[-1]["grep"] == r"carrier link \w+" and rec[-2]["span"] == 60
 

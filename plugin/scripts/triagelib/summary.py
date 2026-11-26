@@ -33,12 +33,77 @@ SUMMARY_FILE, SUMMARY_RECORD = "summary.md", "summary.json"
 GROUPS_DEFAULT, GROUPS_TOP, BYTES_MAX, TAG_MAX, AFTER_DEFAULT = 60, 200, 12288, 8, 600
 
 
-def ref_of(spec: dict | None, fallback=None):
-    """확정 기준 시각 = 실패 스텝·기준 줄 시각 > 기준 줄 찾은 시각 > 코멘트 단서 시각(`clue_at` — 단서를 한 곳에서만 찾았을 때) >
-    발생 시각(이상 줄 절 `triage._anomaly`도 이것), 없으면 `fallback`."""
+def ref_from(spec: dict | None) -> tuple:
+    """확정 기준 시각과 출처(anchor·look_at·clue·around) = 실패 스텝·기준 줄 시각 > 기준 줄 찾은 시각 > 코멘트 단서 시각(`clue_at` —
+    단서를 한 곳에서만 찾았을 때) > 발생 시각. 없으면 (None, None). 요약·이상 줄 절·본 타임라인(`timeline_center`)이 같이 쓴다."""
     spec = spec if isinstance(spec, dict) else {}
-    return ((spec.get("anchor") or {}).get("fail") or (spec.get("look_at") or {}).get("ts") or spec.get("clue_at")
-            or spec.get("around") or fallback)
+    for src, ts in (("anchor", (spec.get("anchor") or {}).get("fail")), ("look_at", (spec.get("look_at") or {}).get("ts")),
+                    ("clue", spec.get("clue_at")), ("around", spec.get("around"))):
+        if ts:
+            return ts, src
+    return None, None
+
+
+def ref_of(spec: dict | None, fallback=None):
+    """확정 기준 시각(`ref_from`, 이상 줄 절 `triage._anomaly`도 이것), 없으면 `fallback`."""
+    return ref_from(spec)[0] or fallback
+
+
+def labeled(found: dict | None, spec: dict | None) -> dict | None:
+    """요약·이상 줄 재료의 기준 출처: 확정 기준이 코멘트 단서 시각이면 `ref_from: clue`(머리 `report._ref_note`가 "확정 아님"을
+    적는다). 다른 출처는 표시하지 않는다(이전과 같은 바이트)."""
+    if isinstance(found, dict) and found.get("ref") and ref_from(spec)[1] == "clue":
+        found["ref_from"] = "clue"
+    return found
+
+
+def _clue_with_time(spec: dict) -> bool:
+    """확정 기준이 코멘트 단서이고 발생 시각(`around`)도 있는데 둘이 다른 시각인지(같으면 발생 시각 하나로 본다)."""
+    clue, around = spec.get("clue_at"), spec.get("around")
+    if ref_from(spec)[1] != "clue" or not around:
+        return False
+    return logtime.normalize_ts(clue, None, None) != logtime.normalize_ts(around, None, None)
+
+
+def timeline_center(spec: dict | None) -> tuple[list[str], str | None]:
+    """본 타임라인(`report.select_rows`)이 줄을 고르는 중심과 머리 글(`- 줄 고른 기준:`). 요약·이상 줄 절과 같은 기준이다: 확정 기준
+    (`ref_from`) 하나, 없으면 증상 시각 후보(`guess_of`) 전부, 없으면 중심 없음(로그 맨 앞부터). 예외: 코멘트 단서와 입력한 발생
+    시각이 함께 있고 서로 다르면 둘 다 중심이다(단서가 실패와 무관한 시각이어도 발생 시각 둘레가 남게, 리뷰 I-1). 중심이 여럿이면
+    `select_rows`가 중심마다 번갈아 고른다. `triage._explore`와 `modulecmd._explore_inputs`(E1)가 같이 쓴다. 중심이 발생 시각
+    (`around` — 앵커가 있으면 그 실패 시각) 하나면 글은 None(이전과 같은 바이트). 표시 전용 — 후보·점수·판단에 쓰지 않는다."""
+    spec = spec if isinstance(spec, dict) else {}
+    ref, src = ref_from(spec)
+    if _clue_with_time(spec):
+        return [ref, spec["around"]], (f"발생 시각 {spec['around']}과 코멘트 단서 시각 {ref} (코멘트 단서는 확정 아님) 두 곳 — "
+                                       "두 시각 둘레에서 번갈아 골랐다")
+    if ref:
+        return [ref], (None if src == "around" or ref == spec.get("around") else
+                       f"코멘트 단서 시각 {ref} (코멘트 단서 기준, 확정 아님)" if src == "clue" else
+                       f"{'기준 줄' if src == 'look_at' else '실패 스텝'} 시각 {ref}")
+    guess = guess_of(spec)
+    if guess:
+        return guess, (f"증상 시각 후보 {len(guess)}개 {', '.join(guess)} (증상 시각 후보 기준, 스크립트 추정이라 확정 아님"
+                       + (". 후보 둘레에서 번갈아 골랐다)" if len(guess) > 1 else ")"))
+    return [], "없음 (실패 스텝·코멘트 단서·증상 시각 후보가 없어 로그 맨 앞부터 골랐다 — 실패 지점이 뒤에 있으면 빠졌을 수 있다)"
+
+
+def view_center(spec: dict | None) -> tuple:
+    """탐색 모듈 보기(`modulefilter`)의 중심 하나와 출처(머리 `중심: <시각> (<출처>)`) — `timeline_center`와 같은 기준. 모듈 보기는
+    중심을 하나만 받으므로 증상 시각 후보가 여럿이면 중심 없음으로 두고 출처에 그렇다고 적는다. 코멘트 단서와 다른 발생 시각이
+    있으면 발생 시각이 중심이고(이전과 같다) 출처에 단서 시각을 덧붙인다. 앵커·발생 시각만 있으면 이전과 같은 글."""
+    spec = spec if isinstance(spec, dict) else {}
+    ref, src = ref_from(spec)
+    if _clue_with_time(spec):
+        return spec["around"], f"발생 시각; 코멘트 단서 시각 {ref}도 따로 있음, 확정 아님"
+    if ref:
+        return (spec.get("around"), "발생 시각") if src == "clue" and spec.get("around") else (ref, {"anchor": "기준 줄" if (spec.get("anchor") or {}).get("source") == "look_at" else "실패 스텝",
+                   "look_at": "기준 줄", "clue": "코멘트 단서, 확정 아님", "around": "발생 시각"}[src])
+    guess = timeline_center(spec)[0]
+    if len(guess) == 1:
+        return guess[0], "증상 시각 후보, 스크립트 추정이라 확정 아님"
+    if guess:
+        return None, f"증상 시각 후보 {len(guess)}개 {', '.join(guess)} — 하나로 못 정해 중심 없음, 스크립트 추정이라 확정 아님"
+    return None, "없음 — 실패 스텝·코멘트 단서·증상 시각 후보가 없다"
 
 
 def guess_of(spec: dict | None, analysis: dict | None = None) -> list[str]:
@@ -173,8 +238,8 @@ def cmd_summary(args, defaults: dict) -> int:
             raise window._Stop(USAGE, "작업 디렉토리 이상", "요약 파일·기록이 링크다 — 따라가지 않는다")
         from . import modulecmd
         spec = window._load(job / "explore-input.json")
-        found = safe(job, ev, analysis, defaults, ref_of(spec, modulecmd._around(job, analysis)), cap_of(args.platform_cfg),
-                     guess=guess_of(spec, analysis), after_sec=after_of(args.platform_cfg))
+        found = labeled(safe(job, ev, analysis, defaults, ref_of(spec, modulecmd._around(job, analysis)), cap_of(args.platform_cfg),
+                             guess=guess_of(spec, analysis), after_sec=after_of(args.platform_cfg)), spec)
         if not found:
             raise window._Stop(CHECK_FAILED, "해당 없음", "마스킹 사본이 없거나 줄이 없다(또는 explore.summary_max_groups: 0)")
         text = write(job, args.key, found, bool(ev.get("mask_off")))

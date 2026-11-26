@@ -139,27 +139,7 @@ BRIDGE_FAILED = ("telephony-triage: OpenCode jira_bridge 처리 실패 — 원�
 # -- opencode.json의 MCP 서버 이름 ---------------------------------------------------------------------
 
 
-def _strip_jsonc(text: str) -> str:
-    """JSONC → JSON: 문자열 밖 `//`·`/* */` 주석과 `}`·`]` 앞 쉼표를 뺀다."""
-    out, i, n = [], 0, len(text)
-    while i < n:
-        c = text[i]
-        if c == '"':
-            j = i + 1
-            while j < n and text[j] != '"':
-                j += 2 if text[j] == "\\" else 1
-            out.append(text[i:j + 1])
-            i = j + 1
-        elif text.startswith("//", i):
-            while i < n and text[i] != "\n":
-                i += 1
-        elif text.startswith("/*", i):
-            end = text.find("*/", i + 2)
-            i = n if end < 0 else end + 2
-        else:
-            out.append(c)
-            i += 1
-    return re.sub(r",(\s*[}\]])", r"\1", "".join(out))
+_strip_jsonc = oc_version.strip_jsonc      # JSONC → JSON(관리 설정 읽기와 같은 함수 — oc_version 한 곳)
 
 
 def config_files(directory: str, env: dict | None = None) -> list[Path]:

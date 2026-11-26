@@ -231,7 +231,7 @@ def test_tag_cap_only_orders_within_rank():
     """2: 태그 상한은 같은 등급 안에서만 — 한 태그의 F 60줄이 다른 태그 W보다 먼저, E는 다른 태그 D보다 먼저."""
     from triagelib import window
     recs = sorted(_recs([("A", "F", 60), ("B", "W", 100), ("C", "E", 5), ("D", "D", 100)]), key=lambda r: r["ts"])
-    rows = window._pick_span(recs, "2026-11-20T10:01:00.000Z", 70)
+    rows = [line for _ts, line in window._pick_span(recs, "2026-11-20T10:01:00.000Z", 70)]
     assert sum(" F A " in r for r in rows) == 60 and sum(" E C " in r for r in rows) == 5
     assert not any(" D D " in r for r in rows)
     order = window.ranked([(3, 0.0, 0, "x", 1), (0, 9.0, 1, "y", 13), (0, 1.0, 2, "y", 1)], 12)

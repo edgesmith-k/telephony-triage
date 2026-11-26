@@ -91,7 +91,7 @@ tt-oc doctor   # 사전 점검. fail이 있으면 시작하지 않는다
    - Jira MCP 등록을 먼저 점검하고(없으면 거기서 멈춘다), clone 경로만 묻는다(GHE 아이디는 gh 로그인에서 읽고, 원격 URL은 팀 기본값 — 못 읽거나 없을 때만 묻는다. 타임존 등 나머지는 팀 기본값을 한 줄씩 보여 주기만). 그 뒤 Jira 도구 짝·git hook·스냅샷·gh를 확인하고 점검표(doctor)를 보여 준다.
 2. **점검표**: 모든 행이 `ok`면 끝. `warn`·`fail`은 그 행의 "다음" 칸대로(7절).
    - Claude Code: `/telephony-triage:status --doctor`
-   - OpenCode: `tt-oc doctor` — `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만), warn `module-skills`·`read-roots`·`gateway-key`·`gateway-url`. 점검표 행을 하나씩 보려면 `TT_RUNTIME=opencode python3 $S/config.py doctor --format markdown`(모델 호출 없음, `opencode_env`·`jira_gate` 포함).
+   - OpenCode: `tt-oc doctor` — `env`·`project-git`·`instructions`·`integrity`·`opencode-version`·`opencode-config`·`config-doctor`(개수만)·`agent-permission`, warn `module-skills`·`read-roots`·`gateway-key`·`gateway-url`. 점검표 행을 하나씩 보려면 `TT_RUNTIME=opencode python3 $S/config.py doctor --format markdown`(모델 호출 없음, `opencode_env`·`jira_gate` 포함).
 3. **이슈 DB clone**은 내 것이다. 도구는 그 브랜치도 파일도 바꾸지 않는다. 경로 바꾸기는 `docs/SITE_INSTALL.md` 7절.
 4. **모듈 스킬**: 팀이 모듈 스킬 레포를 켰으면 할 일이 없다. 심층·탐색 분석에 동의하면 그 분야 문서를 최신판으로 받아 읽는다(받기에 실패해도 분석은 끝난다). 모듈은 oFono·Android 각 data·sim·network·call·sms·ims·modem 7개다(팀 레포에 있는지는 MS-1 결과를 따른다). 문서는 증상별 첫 점검 표와 대체 근거(핵심 줄이 없을 때 볼 다른 층 줄)를 갖는다.
 5. **설치 스킬을 계속 쓰기(선택)**: 이미 쓰는 사내 분석 스킬을 분야별로 고른다.
@@ -118,6 +118,7 @@ tt-oc doctor   # 사전 점검. fail이 있으면 시작하지 않는다
    | 심층 분석 | `심층 분석 (모듈 스킬 ofono/data @a1b2c3d): …` — 모델 의견. 분류 점수에 쓰지 않는다 |
    | 탐색 분석 | `탐색 분석 (추정, timeline.md n/m줄): …` — 가설 1~3개. 추정이다 |
    | 근거 원문 검사 | `인용 n개 중 원문에 없음 k · 약함 m`(5절) |
+   | 파서 설정에 없는 태그 | `파서 설정에 없는 태그가 근거 인용에 쓰임(탐색): X` — 분석 근거로 쓰였는데 tags.yaml에 없는 태그. 넣을지는 사람이 정한다. 여러 이슈를 모아 보려면 `python3 <scripts 경로>/usage_stats.py --tags`(읽기 전용 표, 이슈 키 포함) |
    | 출처 | 모듈 문서 판본(`@sha7`)·설치 스킬 이름. 생략되면 `심층 분석 생략: <사유>` |
 
 4. **기록 여부**: "이 분류가 맞나요?"에 1위 / 다른 원인·유형 / 원인 미확정 / 기록 안 함. 새 원인·유형·시그니처는 내가 확인해야 들어간다.

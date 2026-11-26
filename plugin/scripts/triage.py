@@ -26,7 +26,8 @@
   로그 한 곳에서만 찾았으면 그 시각 `clue_at`). `run`은 타임라인을 만들지 않고 이전 `timeline.md`·입력 파일을 지운다 — 다만 탐색을 시작한
   뒤(`timeline.md`가 있던 작업) 다시 한 run이 새 입력 파일을 쓰면 끝에 같은 `explore`로 타임라인을 다시 만든다(출력은 run JSON 하나).
 - `triage.py explore <KEY> [--out <dir>]`: 사용자가 탐색 분석에 동의한 뒤(또는 `--explore`·`explore.when: always`) `JOB/explore-input.json`과
-  `events.json`으로 `JOB/timeline.md`(마스킹된 요약 타임라인, 줄 수 상한 기본 200)를 만들고 `report.md`의 탐색 분석 줄을 갱신한다.
+  `events.json`으로 `JOB/timeline.md`(마스킹된 요약 타임라인, 줄 수 상한 기본 200 — 넘치면 요약과 같은 기준 시각 둘레를 고른다,
+  `summary.timeline_center`)를 만들고 `report.md`의 탐색 분석 줄을 갱신한다.
   출력 `{timeline, lines, total}`. 작업 플랫폼이 기본(android)이 아니면 `platform`과 `refs`(그 플랫폼 탐색 지식 문서, 스킬 디렉토리 기준
   `reference/platforms/<p>/*.md`, 없으면 빈 목록)를 더한다(17-platforms §10). 종료 코드 1 = 해당 없음(입력 파일 없음), 2 = 사용 오류·
   `events.json` 없음. lock은 쓰지 않고 trace에는 `explore` 정보 행만 덧붙인다. 타임라인은 `masking.redact`로 한 번 더 가리고, 가린 것이 있으면 `mask_warnings`
@@ -182,6 +183,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--explore", action=argparse.BooleanOptionalAction, default=None,
                    help="스킬 --(no-)explore 그대로. --explore면 1위 C=1이어도 적합성 확인(explore.reason fit_check)을 연다"
                         "(explore.when: never면 열지 않는다). --no-explore면 explore.when: always여도 열지 않는다")
+    p.add_argument("--analyzer", action=argparse.BooleanOptionalAction, default=None,
+                   help="스킬 --(no-)analyzer 그대로. --analyzer면 조사 모드에서도 모듈 문서 심층 분석(5-1)을 낸다"
+                        "(없으면 조사 모드는 5-1을 건너뛰고 탐색 분석이 모듈 문서를 읽는다). --no-analyzer는 run 출력을 바꾸지 않는다")
     p = sub.add_parser("explore", parents=[common])
     p.add_argument("key", metavar="KEY")
     p.add_argument("--out", metavar="dir", help="`run --offline-db --out`의 JOB 디렉토리(없으면 <work_dir>/<KEY>)")
@@ -317,9 +321,9 @@ def _anomaly(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, ite
         return None
     analysis = analysis if isinstance(analysis, dict) else {}
     try:      # 표시 전용 — 사본 읽기·고르기가 실패해도 탐색 타임라인은 지금처럼 만든다
-        found = window.anomaly(job, events, analysis, defaults, summary.ref_of(spec), summary.after_of(cfg),
-                               _int_setting(cfg, "explore.anomaly_max_lines", 80, 400), shown_keys(items), recs,
-                               summary.guess_of(spec, analysis))
+        found = summary.labeled(window.anomaly(job, events, analysis, defaults, summary.ref_of(spec), summary.after_of(cfg),
+                                               _int_setting(cfg, "explore.anomaly_max_lines", 80, 400), shown_keys(items), recs,
+                                               summary.guess_of(spec, analysis)), spec)
     except Exception as exc:  # noqa: BLE001
         print(f"경고: 이상 줄 절을 만들지 못해 뺐다({type(exc).__name__})", file=sys.stderr)
         return None
@@ -334,8 +338,8 @@ def _summary(job: Path, cfg: dict, defaults: dict, spec: dict, events: dict, rec
     except (OSError, ValueError):
         return None
     analysis = analysis if isinstance(analysis, dict) else {}
-    return summary.safe(job, events, analysis, defaults, summary.ref_of(spec), summary.cap_of(cfg), recs, skipped,
-                        summary.guess_of(spec, analysis), summary.after_of(cfg))
+    return summary.labeled(summary.safe(job, events, analysis, defaults, summary.ref_of(spec), summary.cap_of(cfg), recs,
+                                        skipped, summary.guess_of(spec, analysis), summary.after_of(cfg)), spec)
 
 
 def _copy_records(job: Path, defaults: dict, events: dict):
@@ -365,7 +369,9 @@ def _explore(args, cfg: dict, job: Path, defaults: dict, emit: bool = True) -> i
     except (OSError, ValueError) as exc:
         print(f"탐색 입력을 읽지 못했다({exc}) — 이 키로 /telephony-triage:analyze를 다시 실행한다", file=sys.stderr)
         return USAGE
-    items, total = select_rows(merge_rows(events), spec.get("around"), limit)
+    from triagelib import summary
+    centers, basis = summary.timeline_center(spec)      # 요약·이상 줄 절과 같은 기준(`modulecmd._explore_inputs`도 이것)
+    items, total = select_rows(merge_rows(events), centers, limit)
     kept = len(items)
     # 이상 줄 절·전체 모양 요약(표시 전용)은 explore-input.json `anomaly`·`summary`에 남긴다 — `module`의 재계산(E1)·모듈 보기가
     # 같은 줄을 쓴다
@@ -378,7 +384,7 @@ def _explore(args, cfg: dict, job: Path, defaults: dict, emit: bool = True) -> i
         input_path.write_text(json.dumps(spec, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
     text = render_timeline(args.key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
                            spec.get("anchor"), spec.get("look_at"), head_notes(job, events, spec.get("around")),
-                           spec.get("anomaly"), spec.get("summary"))
+                           spec.get("anomaly"), spec.get("summary"), basis)
     # 마스킹 전 JOB이어도 남은 값은 가린다(B2-25). 마스킹 끔 DB의 events(`mask_off`)면 가리지 않는다(08-safety §8)
     text, redacted = (text, {}) if events.get("mask_off") else masking.redact(text, events.get("mask_allow") or [])
     (job / TIMELINE_FILE).write_text(text, encoding="utf-8", newline="\n")
@@ -395,11 +401,43 @@ def _explore(args, cfg: dict, job: Path, defaults: dict, emit: bool = True) -> i
         out.update(platform=platform, refs=_platform_refs(args, platform))
     if redacted:
         out["mask_warnings"] = redacted
+    # 출력 `next`(run과 같은 문자열, 할 일을 " / "로 잇는다): refs 읽기(eval 73-e) → 모듈 문서 받기(eval 77). 둘 다 없으면 키 없음
+    todo = [REFS_NEXT] if out.get("refs") else []
     if userconfig.module_skills(cfg) is not None:      # 5-2 모듈 문서를 받을 수 있다(B2-4). 없으면 출력이 이전과 같다
         out["module_skills"] = True
+        nxt = _module_next(args, job, platform)
+        if nxt:      # 받을 모듈 보기가 타임라인이다 — JOB/timeline.md를 읽을 파일처럼 내지 않는다(eval 77, 2/5 run이 그것을 읽음)
+            out.pop("timeline")
+        todo.append(nxt)
+    if any(todo):
+        out["next"] = " / ".join(t for t in todo if t)
     if emit:
         _emit(out)
     return OK
+
+
+REFS_NEXT = "먼저 출력 refs의 파일을 모두 읽는다(플랫폼 로그 안내, explore.md 읽는 것 5)"
+
+
+def _module_next(args, job: Path, platform: str) -> str | None:
+    """explore 출력 `next`(eval 77): 5-2 모듈 문서를 아직 받지 않았으면 받을 명령(인자까지). 5-1이 남아 있으면(analyzer가 never·
+    오류가 아니고 심층 기록 없음) 그 뒤라고 붙인다. 이미 받았으면(기록 `explore`) None."""
+    def load(name: str) -> dict:
+        try:
+            data = json.loads((job / name).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    rec = load("module-skill.json")
+    if rec.get("explore"):
+        return None
+    cmd = (f"S/triage.py module {args.key} --for explore" + ("" if platform == userconfig.TOP_PROFILE else f" --platform {platform}")
+           + (f" --out {args.out}" if args.out else ""))
+    ana = load("analysis.json").get("analyzer")
+    deep = isinstance(ana, dict) and not ana.get("error") and ana.get("when") != "never" and not rec.get("deep")
+    return (("5-1(심층 분석)을 하기로 했으면 먼저 끝낸 뒤 " if deep else "") + f"`{cmd}`"
+            + ("" if deep else "부터") + " — 출력 read의 파일을 그 순서로 빠짐없이 읽는다(마지막이 타임라인, JOB/timeline.md 대신 — module-skills.md 5-2)")
 
 
 def _job_platform(job: Path, selected: str) -> str:
@@ -415,14 +453,13 @@ def _job_platform(job: Path, selected: str) -> str:
 
 
 def _platform_refs(args, platform: str) -> list[str]:
-    """플러그인에 든 그 플랫폼의 탐색 지식 문서(스킬 디렉토리 기준 경로, 이름순). 없으면 빈 목록."""
+    """플러그인에 든 그 플랫폼의 탐색 지식 문서(절대 경로, 이름순 — 모델이 그대로 Read한다, eval 73). 없으면 빈 목록."""
     if not re.fullmatch(r"[a-z][a-z0-9_]*", platform):
         return []
     root = Path(args.plugin_root) if args.plugin_root else site_defaults.plugin_root()
-    folder = root.joinpath(*PLATFORM_REFS_DIR, platform)
-    skill = root.joinpath(*PLATFORM_REFS_DIR[:2])
+    folder = root.joinpath(*PLATFORM_REFS_DIR, platform).resolve()
     try:
-        return [p.relative_to(skill).as_posix() for p in sorted(folder.glob("*.md")) if p.is_file()]
+        return [p.as_posix() for p in sorted(folder.glob("*.md")) if p.is_file()]
     except OSError:
         return []
 

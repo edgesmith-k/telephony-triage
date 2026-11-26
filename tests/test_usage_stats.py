@@ -600,3 +600,34 @@ def test_help_is_a_summary_not_the_rulebook():
                           capture_output=True, text=True, encoding="utf-8")
     assert proc.returncode == 0 and len(proc.stdout) < 2200, len(proc.stdout)
     assert "team_stats.py" in proc.stdout and "contracts.md" in proc.stdout and "format 2" in proc.stdout
+
+
+def test_tags_aggregates_cited_tags_missing_from_parser_config(tmp_path, capsys):
+    """반입 8 B2: `--tags`는 작업마다 check-output 기록의 `parser_unknown_tags`(5-1·5-2)를 태그별로 모아 이슈 수·이슈 키·
+    uncollected_tags 겹침·규칙 제안·계획에 넣음을 센다. 대조를 건너뛴 작업은 따로 센다. 로그 원문은 내지 않는다(합성 기록)."""
+    def job(name, rec, logs=None, report="", ops=None):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "check-output.json").write_text(json.dumps(rec), encoding="utf-8")
+        (d / "analysis.json").write_text(json.dumps({"logs": logs or {}}), encoding="utf-8")
+        (d / "report.md").write_text(report, encoding="utf-8")
+        if ops is not None:
+            (d / "plan.json").write_text(json.dumps({"operations": ops}), encoding="utf-8")
+    job("MOCK-1", {"explore": {"parser_unknown_tags": ["datad", "hiddend"]}, "deep": {"parser_unknown_tags": ["datad"]}},
+        logs={"uncollected_tags": [{"tag": "datad", "lines": 3, "warn": 1}]},
+        report="  - 규칙 제안 (탐색): - [이슈 DB] add-parser-rule file=tags.yaml rule={tag: datad} — 근거: x\n",
+        ops=[{"op": "add-parser-rule", "file": "tags.yaml", "section": "tags", "rule": {"tag": "datad"}}])
+    job("MOCK-2", {"explore": {"parser_unknown_tags": ["datad"]}})
+    job("MOCK-3", {"explore": {"parser_unknown_tags_skipped": "tags.yaml을 읽지 못함"}})
+    (tmp_path / "_snapshot").mkdir()
+    t = usage_stats.tag_stats(tmp_path)
+    assert t["jobs"] == 3 and t["skipped"] == 1
+    assert t["tags"][0] == {"tag": "datad", "n": 2, "issues": ["MOCK-1", "MOCK-2"], "deep": 1, "explore": 2, "uncollected": 1,
+                            "proposed": 1, "adopted": 1}
+    assert [r["tag"] for r in t["tags"]] == ["datad", "hiddend"] and t["tags"][1]["n"] == 1
+    assert usage_stats.main(["--work-dir", str(tmp_path), "--tags", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["tags"] == t["tags"]
+    assert usage_stats.main(["--work-dir", str(tmp_path), "--tags"]) == 0
+    text = capsys.readouterr().out
+    assert "| datad | 2 | 1 | 2 | 1 | 1 | 1 | MOCK-1, MOCK-2 |" in text and "건너뛴 작업 1개" in text, text
+    assert usage_stats.main(["--work-dir", str(tmp_path), "--tags", "--transcripts"]) == 2

@@ -33,6 +33,7 @@ NOTE_LABEL = "제출자 참고(판단 근거·단서 아님): "     # analysis.j
 # ponytail: 포털 NOTE_MAX(2000자)와 맞춘 값 — 머리말은 세지 않는다. analysis.json 4KB 예산을 넘으면 fit이 먼저 200자, 다른 후보 근거를 빼기 전 80자로 줄이고 마지막에 표시로 바꾼다
 NOTE_MAX = 2000
 ASK_NOTE = "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL {step})"
+INVESTIGATE_SKIP = "조사 모드"      # analysis.json `analyzer.skipped`(5-1 건너뜀 사유 — 모듈 문서 출처일 때만)
 
 
 def _ask_note(when, step: str) -> dict:
@@ -1183,6 +1184,20 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         else:
             path.unlink(missing_ok=True)
 
+    def prior_forced_analyzer(self) -> bool:
+        """직전 `analysis.json`이 조사 모드인데 모듈 문서 5-1(`analyzer.category`)을 냈는가 — 조사 모드에서 그 모양은
+        `--analyzer`일 때만 나오니 그 실행이 `--analyzer`였다는 표시다."""
+        path = self.job / "analysis.json"
+        try:
+            if not stat.S_ISREG(os.lstat(path).st_mode):
+                return False
+            prev = json.loads(path.read_text(encoding="utf-8")) or {}
+            ana = prev.get("analyzer")
+            return bool((prev.get("investigate") or {}).get("mode")) and isinstance(ana, dict) and bool(ana.get("category")) \
+                and ana.get("when") != "never"      # 설정 never는 조사 모드에서도 category 모양이다(C-6)
+        except (OSError, ValueError, AttributeError):
+            return False
+
     def read_prior(self) -> dict | None:
         """재실행·답글 턴에 줄 이전 실행의 요약(`analysis.json prior`, 마스킹된 값만) — `drop_stale_records`가 지우기 전에 읽는다.
         top = 직전 실행 1위(state `job.runs`), looked = 이전 실행의 가린 기준 줄(state), hyps·none = `check-output`을 통과했고
@@ -1274,7 +1289,13 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         self.check_key()
         self.open_job()
         self.prior = self.read_prior()       # 이전 탐색 산출물을 지우기 전에 추린다
+        forced = self.prior_forced_analyzer()
         self.drop_stale_records()
+        if forced and self.explored and getattr(self.args, "analyzer", None) is None \
+                and getattr(self.args, "look_at_source", None) == "model":
+            # 탐색 중 다시 한 run(`--look-at-source model`, 하위 에이전트는 시작 플래그를 모른다)은 직전 조사 모드 실행의
+            # `--analyzer`를 이어받는다 — 입력 해시(args)보다 먼저 정해 캐시와 어긋나지 않는다. `--no-analyzer`면 이어받지 않는다
+            self.args.analyzer = True
         if not self.offline:
             self.lock()
             if self.mark_platform_answer():      # 새 lock(State.reset)이 지웠으면 다시 남긴다
@@ -1390,7 +1411,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         decision = _decision(candidates, anchor, match.get("eligibility"), self.clue_location((match.get("eligibility") or {}).get("via")))
         self.mark_not_a_bug(decision)
         near = self.near_causes(info, match, candidates, decision, (no_candidate or {}).get("search_hits"))
-        analyzer = self.analyzer(lead_first(decision, candidates))     # 심층 분석 카테고리: 채택 원인(없으면 1위)
+        analyzer = self.analyzer(lead_first(decision, candidates),     # 심층 분석 카테고리: 채택 원인(없으면 1위)
+                                 issuepost.investigate_mode({"candidates": candidates, "decision": decision})["mode"])
         explore = self.explore(lead_first(decision, candidates))     # 적합성 확인도 채택 원인 기준
         explore_input = self.explore_input(around, anchor) if explore and explore["when"] != "never" else None
         if explore_input is not None and partial:    # 탐색 입력: 부분 일치 앞 3개(키·없는 조건 id)·맞은 근거 시각(보조 중심)
@@ -1437,7 +1459,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                       "time_candidates": self.time_candidates},
         }
 
-    def analyzer(self, candidates: list[dict]) -> dict | None:
+    def analyzer(self, candidates: list[dict], investigate: bool = False) -> dict | None:
         # self.cfg = 선택 플랫폼의 config: android 밖 플랫폼은 platforms.<p>.analyzers만(android 것을 물려받지 않는다, 17 §10)
         if not candidates:
             return None
@@ -1450,6 +1472,10 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             when = conf.get("when", "ask")
             return {"skill": conf.get("skill"), "when": when, **_ask_note(when, "5-1")}
         if src["source"] == "module":
+            if investigate and src["when"] != "never" and not getattr(self.args, "analyzer", None):
+                # 조사 모드(반입 8 할 일 2): 5-1은 판단을 바꾸지 못하고 5-2가 모듈 문서(1위 유형 참고 문서 포함)를 읽는다.
+                # never와 같은 모양이라 질문·check-output·window가 5-1을 건너뛴다. `--analyzer`면 지금처럼 돈다
+                return {"skipped": INVESTIGATE_SKIP, "when": "never"}
             return {"category": cat, "when": src["when"], **_ask_note(src["when"], "5-1")}
         if src["source"] == "error":         # when: never → SKILL "never면 생략"이 5-1 질문을 건너뛴다
             return {"error": _clip(userconfig.deep_source_problem(self.cfg, cat) or "설정 오류", 120), "when": "never"}

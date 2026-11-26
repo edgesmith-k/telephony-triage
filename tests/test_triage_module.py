@@ -1065,3 +1065,101 @@ def test_explore_timeline_and_view_carry_flow_head(env):
     assert code == 0, err
     view = (job / "module-skill" / "explore" / "timeline.md").read_text(encoding="utf-8").split("\n")
     assert FLOW_HEAD in view and view.index(FLOW_HEAD) < next(i for i, x in enumerate(view) if x.startswith("- 형식:"))
+
+
+def test_explore_view_centers_on_comment_clue_without_time_input(env):
+    """시각 입력 없이 코멘트 단서(`clue_at`)만 있으면 모듈 보기 중심도 본 타임라인과 같은 단서 시각이다(`summary.view_center`) —
+    줄 상한(150)을 넘는 긴 보기에서 뒤쪽 실패 줄 둘레가 남고, 머리 출처에 "확정 아님"이 드러난다."""
+    env.url = mr.build(env.tmp / "remote2")
+    env.user({"module_skills": {"remote": env.url}})
+    events = [{"ts": f"2026-09-20T05:{27 + i * 2 // 60:02d}:{i * 2 % 60:02d}.000Z", "tag": "DCM-1",
+               "msg": "setup failed FINAL" if i == 280 else f"setup failed step {i}", "level": "E", "category_hint": "data"}
+              for i in range(300)]
+    job = env.make_job(events=events, platform="android", extra={"explore": {"reason": "cause_unconfirmed", "when": "ask"}})
+    fail = "2026-09-20T05:36:20.000Z"
+    (job / core.EXPLORE_INPUT_FILE).write_text(json.dumps({"around": None, "failed_step": None, "limit": 200, "anchor": None,
+                                                           "clue_at": fail}), encoding="utf-8")
+    assert env.call("explore", KEY, "--out", job, "--platform", "android")[0] == 0
+    code, out, err = env.module("explore", "--module", "android/data", platform="android")
+    assert code == 0 and out["timeline"]["view"] is True, err
+    view = (job / "module-skill" / "explore" / "timeline.md").read_text(encoding="utf-8")
+    assert "setup failed FINAL" in view                      # 고치기 전: 중심 없음 → 앞쪽 150줄만
+    assert f"중심: {fail} (코멘트 단서, 확정 아님)" in view
+
+
+# -- 조사 모드 5-1 건너뜀(반입 8 할 일 2): 1위 유형 참고 문서가 5-2 read 목록에 -----------------------------------------
+
+SKIPPED_51 = {"analyzer": {"skipped": "조사 모드", "when": "never"}}
+C0_CANDS = [{"type": "DATA-001", "cause": None, "score": 5, "confidence": "low", "category": "data", "C": 0, "evidence": []}]
+REF = "ofono/data/references/DATA-001.md"
+
+
+def test_explore_read_adds_top_type_reference_when_51_skipped(env):
+    job = env.make_job(candidates=C0_CANDS, explore=True, extra=SKIPPED_51)
+    code, out, err = env.module("explore", "--module", "ofono/data")
+    assert code == 0, err
+    ref = str(job / "module-skill" / "explore" / REF)
+    assert out["read"][-2:] == [ref, str(job / "timeline.md")]
+    assert (job / "module-skill" / "explore" / REF).read_bytes() == (mr.MOCK / REF).read_bytes()
+    assert f"module-skill/explore/{REF}" in [f["path"] for f in _explore_rec(job)["files"]]
+
+
+def test_explore_read_unchanged_when_51_not_skipped(env):
+    env.make_job(candidates=C0_CANDS, explore=True)
+    code, out, err = env.module("explore", "--module", "ofono/data")
+    assert code == 0, err
+    assert len(out["read"]) == 4 and not any("references" in r for r in out["read"])
+
+
+def test_explore_missing_reference_is_warned_not_silent(env):
+    """I-5: 1위 유형 참고 문서가 레포에 없으면 넣지 않고 그 사실을 경고로 알린다(리포트 줄은 "있으면 함께")."""
+    env.make_job(candidates=[{**C0_CANDS[0], "type": "DATA-002"}], explore=True, extra=SKIPPED_51)
+    code, out, err = env.module("explore", "--module", "ofono/data")
+    assert code == 0, err
+    assert not any("references" in r for r in out["read"])
+    assert "1위 유형 참고 문서 없음(ofono/data/references/DATA-002.md)" in err
+
+
+def test_explore_at_keeps_reference_in_read(env):
+    """`--at`(받은 사본으로 중심만 다시)도 같은 read 목록 — 기록의 파일에서 만든다."""
+    job = env.make_job(events=WITH_EVENTS, candidates=C0_CANDS, platform="android", explore=True, extra=SKIPPED_51)
+    assert env.module(*WITH_ARGS, platform="android")[0] == 0
+    code, out, err = env.module(*WITH_ARGS, "--at", "2026-09-20T05:32:08Z", platform="android")
+    assert code == 0, err
+    assert str(job / "module-skill" / "explore" / "android/data/references/DATA-001.md") in out["read"]
+
+
+# -- explore 출력 `next`: 5-2 모듈 문서 받기를 스크립트가 알린다(eval 77 — 5-1이 빠지면 모델이 module --for explore를 건너뜀) --
+
+def _explore_out(env):
+    code, out, err = env.call("explore", KEY, "--out", env.job, "--platform", "ofono")
+    assert code == 0, err
+    return out
+
+
+def test_explore_next_names_module_command_when_51_skipped(env):
+    env.make_job(candidates=C0_CANDS, explore=True, extra=SKIPPED_51)
+    out = _explore_out(env)
+    assert out["next"] == (triage.REFS_NEXT + " / " + f"`S/triage.py module {KEY} --for explore --platform ofono --out {env.job}`부터 — "
+                           "출력 read의 파일을 그 순서로 빠짐없이 읽는다(마지막이 타임라인, JOB/timeline.md 대신 — module-skills.md 5-2)")     # refs 읽기 → 모듈 문서 받기 순서
+    assert "timeline" not in out and out["lines"] == out["total"]      # 모듈 보기가 타임라인 — JOB/timeline.md를 읽을 파일로 내지 않는다
+
+
+def test_explore_next_keeps_51_first_when_deep_pending(env):
+    env.make_job(candidates=C0_CANDS, explore=True,
+                 extra={"analyzer": {"category": "data", "when": "ask"}})
+    out = _explore_out(env)
+    assert out["next"].startswith(triage.REFS_NEXT + " / 5-1(심층 분석)을 하기로 했으면 먼저 끝낸 뒤 `S/triage.py module ")
+    assert env.module()[0] == 0                       # 5-1 받음 → 남은 것은 5-2 모듈 문서뿐
+    assert _explore_out(env)["next"].startswith(triage.REFS_NEXT + f" / `S/triage.py module {KEY} --for explore")
+
+
+def test_explore_next_absent_when_already_fetched_or_no_remote(env):
+    env.make_job(candidates=C0_CANDS, explore=True, extra=SKIPPED_51)
+    assert env.module("explore", "--module", "ofono/data")[0] == 0
+    out = _explore_out(env)
+    assert out["next"] == triage.REFS_NEXT and out["timeline"] == "timeline.md"     # 모듈 문서는 받았다 — refs 읽기만, timeline 칸 그대로
+    env.make_job(candidates=C0_CANDS, platform="android", explore=True, extra=SKIPPED_51)
+    assert env.module("explore", "--module", "android/data", platform="android")[0] == 0
+    code, out, _ = env.call("explore", KEY, "--out", env.job)
+    assert code == 0 and "next" not in out and "refs" not in out          # android 기본: refs 없음·받음 → next 없음

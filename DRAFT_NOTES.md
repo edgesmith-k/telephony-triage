@@ -14,10 +14,10 @@
 - 테스트는 `tools/related_tests.py --run`(관련만). 전체는 도구가 full이라 할 때·반입 직전·요청 시.
 - 진행 중 판단은 Fable 결정 에이전트에게(10/06 사용자). 사용자 승인 대상(이슈 DB push, main 병합·태그 등 지시 없는 외부 동작)은 사용자에게.
 
-## 진행 상태 (11/19)
+## 진행 상태 (11/27)
 
-- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강·H 완료. 사내 마지막 반입 **import-20261117**(`46eadb4c`, 11/17). `import-20261119`(`a97053de`)는 push만 하고 반입 보류(11/19).
-- 다음 묶음: 분석 정확도 단계 3·4 병합 뒤(사용자 승인). 진행 기록은 사외 장부(레포 밖).
+- 모드: **사외 초안**. Phase D0·1~13·반입 전 보강·H 완료. 사내 마지막 반입 **import-20261117**(`46eadb4c`, 11/17). 그 뒤 묶음(1119·1123·1125 계열)은 반입 레포에만 있고, 사내는 **import-20261126을 새 계정에서 처음부터 설치**한다(11/27 예정).
+- 이번 묶음(1126): 조사 결론 검사 보강(인용이 가리키는 사본 줄 시각, `찾았는데 없음`의 관측 시간, 첫 어긋남 관측 순서), 조사 모드에서 5-1 건너뜀(`run --analyzer`로 되돌림), 본 타임라인·모듈 보기 중심, 근거 인용 태그 기록(`usage_stats.py --tags`), OpenCode 설치가 permission을 에이전트 파일에도 적음.
 - 모델 Sonnet 5.5 기준. `TODO(SITE)`: `tools/list_site_todos.py`. REVIEW-OPEN 0. 사내 시작 **"사내 설정 시작"**(결정 (o)).
 - 안내서(`docs/book/`)는 스냅샷, 정본은 `docs/TEAM_GUIDE.md`.
 
@@ -33,11 +33,13 @@
 
 ## 사내로 넘긴 것
 
-- **재반입 노트 (다음 묶음 = 사내 마지막 반입 import-20261117 `46eadb4c` 이후)**. 옛 노트(1115)는 `docs/history/reimport-notes.md`.
-  - #155 OpenCode 탐색 하위 에이전트(`tt-explore`): `install --force`(+ 선택 `--explore-model`), 관리 설정 task는 새 객체 또는 문자열 deny. `triage.md` 약 +450B.
-  - #156 기준값 도구(시험·평가 도구만). #157·#158 문제 파악(`--problem-only`, 새 흐름 — 기존 analyze 불변). #159 TC `Fail (사유)` 읽기(TC를 준 분석의 실패 스텝 읽기가 바뀜). #160 실행 권한.
-  - guard 바뀜(문제 파악 기록 파일 보호, `tt-explore` task만 허용): §8 규칙상 사내 eval 12개 전부지만 11/19 사용자 승인으로 생략(그 12개가 지나는 길 불변).
-  - 병합되면 함께 들어갈 것: #161 analyze 인자 설명, #162 시험 격리(사내 레포·HOME), #163 줄 읽기(선택 사내 설정 `vendor_ipc.slot` = S20), 단계 4 판단 상태(**포털 PR과 같이 설치**, 입력이 바뀌는 eval은 재측정 승인 필요).
+- **재반입 노트 (import-20261126 = 사내 마지막 반입 import-20261117 `46eadb4c` 이후 전부)**. 옛 노트(11/19)는 이 파일의 git 이력.
+  - OpenCode: 반입 뒤 `gen_opencode.py install --force`(설치 permission을 에이전트 파일에 적는다 — 안 하면 `tt-oc doctor`의 `agent-permission`이 fail). 관리 설정(`/etc/opencode`)을 바꾸면 사용자마다 다시 설치. 전역 설정에 `"*": "allow"`를 넣는 조치는 필요 없다.
+  - hook·guard·공통 규칙이 바뀜 → §8 규칙대로 **사내 eval 12개 전부**(`pending.json` `site`). 사외는 바뀐 흐름의 eval 20개를 다시 돌렸다(`offsite_results.json`의 note).
+  - 진행 중이던 작업: `module --for explore`가 "timeline.md가 맞지 않는다"로 멈추면 `explore`를 다시(타임라인 줄 고르는 기준이 바뀜). 옛 window 구간 파일은 조사 결론 검사에서 세지 않는다 — `window`를 다시 받는다.
+  - 조사 모드(1위 C=0·후보 없음)에서 5-1 출처가 모듈 문서면 5-1을 건너뛰고 5-2가 모듈 문서를 읽는다(`explore` 출력 `next`). 5-1도 하려면 `run --analyzer`. 사내 모듈 문서로 있음/없음을 한 번 비교한다. **포털 release와 같이 설치**(포털이 pin 때 이 인자를 아는지 읽는다).
+  - 사내에서 볼 값(경험값): `찾았는데 없음` 10초, 첫 어긋남 관측이 앞 단계보다 1시간 넘게 앞서면 실패(`OBS_BEFORE_MAX`), 마스킹 사본을 grep 없이 통째로 읽는지, 근거 인용 태그 표(`usage_stats.py --tags`)로 tags.yaml에 더할 태그.
+  - 수정 검증 작업 키에 빌드의 `+`를 받는다(`JOB_KEY_RE`) — 브랜치 이름에 `+`가 든 GHE 요청은 사외 미확인.
 - 재실행할 eval 수는 재반입 노트가 정한다(`pending.json` `site`, S-2; 사내 모델이 다르면 +7). 단계별 확인 항목·반입 뒤 후보(RF·R-36~47)는 history 11/13. S-7: usage_stats format 2·`--transcripts` 허용 여부. 시그니처 필드 선언은 결정 (v)대로.
 - 사내 IMS는 별도 APK(11/12): IMS 줄·규칙·문서는 AOSP 기준·소스만 — S-1에서 먼저.
 
