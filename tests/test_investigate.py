@@ -1422,6 +1422,6 @@ def test_5_held_c1_event_cause_must_be_compared_too(tmp_path, capsys):
         {"type": "DATA-009", "ref": True, "result": "held", "cause": "DATA-009-01"},      # 후보 목록에 없음
         {"type": "DATA-001", "ref": False, "result": "observed", "cause": "DATA-001-01"}]}
     (job / "analysis.json").write_text(json.dumps(analysis, ensure_ascii=False), encoding="utf-8")
-    data, _inv = _run(job, _out(extra=("후보 확인:", f"- DATA-001-01: 아님 — 찾았는데 없음: logs-masked 15:10:01 둘레")), capsys)
+    data, _inv = _run(job, _out(extra=("후보 확인:", "- DATA-001-01: 아님 — 찾았는데 없음: logs-masked 15:10:01 둘레")), capsys)
     assert output.CHECK_TOP_MISSING.format(causes="DATA-002-01") in data["format_warnings"], data
     assert not any("DATA-009-01" in w for w in data["format_warnings"]), data

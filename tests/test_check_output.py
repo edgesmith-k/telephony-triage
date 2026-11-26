@@ -1197,7 +1197,7 @@ def test_deep_refutation_report_line_unwritten_gives_no_next(tmp_path, capsys, m
     real = output._write_atomic
 
     def fail_pending(path, data):
-        if path.name == "report.md" and "- 탐색 분석 (추정): 미실행".encode("utf-8") in data:
+        if path.name == "report.md" and "- 탐색 분석 (추정): 미실행".encode() in data:
             raise OSError("disk full")
         real(path, data)
     monkeypatch.setattr(output, "_write_atomic", fail_pending)
