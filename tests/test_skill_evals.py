@@ -4483,12 +4483,13 @@ def test_fl81_new_cause_draft_shown_and_asked_before_stage(tmp_path):
 E86_LOOK = 'python3 /p/triage.py run MOCK-9086 --logs logs/data-disabled.log --analysis-only --explore --look-at "notifyDataEnabledChanged: enabled=false"'
 
 
-def _e86_lookup_row(tmp_path, turn1, turn2):
-    """eval 86 4번 행(no_repeat_lookup): 1회차 첫 run은 프롬프트 기준 줄을 담는다. turn1·turn2 = 그 뒤 run에 붙인 look-at 글."""
+def _e86_lookup_row(tmp_path, turn1, turn2, first=()):
+    """eval 86 4번 행(no_repeat_lookup): 1회차 첫 run은 프롬프트 기준 줄을 담는다. turn1·turn2 = 그 뒤 run에 붙인 look-at 글,
+    first = 모델이 첫 run에 스스로 더 붙인 look-at 글."""
     env_dir = _synthetic_env(tmp_path)
     run = run_dir(tmp_path)
     _write_artifacts(run)
-    items = [("tool", "b0", "Bash", {"command": E86_LOOK}, "ok", False)]
+    items = [("tool", "b0", "Bash", {"command": E86_LOOK + "".join(f' --look-at "{t}"' for t in first)}, "ok", False)]
     items += [("tool", f"b1{k}", "Bash", {"command": f'{E86_LOOK} --look-at-source model --look-at "{t}"'}, "ok", False)
               for k, t in enumerate(turn1)]
     items += [("result", "1회차 끝"), ("user", "SIM 1 로그는 더 구하지 못했어. 같은 로그로 한 번 더 봐줘"),
@@ -4505,6 +4506,13 @@ def test_e86_no_repeat_lookup_ignores_prompt_reference_line(tmp_path):
     assert _e86_lookup_row(tmp_path / "a", [], [])[0] is True
     assert _e86_lookup_row(tmp_path / "b", ["DSMGR-0 mIsDataEnabled=false"], ["DSMGR-0 mIsDataEnabled=false"])[0] is False
     assert _e86_lookup_row(tmp_path / "c", ["DSMGR-0 mIsDataEnabled=false"], ["DNC-0 onEvaluateNetworkRequests"])[0] is True
+
+
+def test_e86_no_repeat_lookup_reads_user_line_from_prompt(tmp_path):
+    """사용자 기준 줄은 프롬프트에서 읽는다(N4): 모델이 첫 run에 스스로 고른 줄을 함께 넣고 2회차에 되풀이하면 실패, 안 하면 통과."""
+    own = "DSMGR-0 mIsDataEnabled=false"
+    assert _e86_lookup_row(tmp_path / "a", [], [], first=[own])[0] is True
+    assert _e86_lookup_row(tmp_path / "b", [], [own], first=[own])[0] is False
 
 
 INV_Q = "조사할까요? (토큰 추가 사용)"

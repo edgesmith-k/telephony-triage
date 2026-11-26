@@ -3973,11 +3973,11 @@ def checks_ft(eid, ctx):
         return ok, f"2회차 triage run {len(reruns)}회, prior={json.dumps(prior, ensure_ascii=False)[:300]}"
 
     def no_repeat_lookup():
-        """1회차에 스스로 한 `--look-at` 조회를 2회차에서 되풀이하지 않았다. 사용자가 준 기준 줄(1회차 첫 run의 `--look-at`,
+        """1회차에 스스로 한 `--look-at` 조회를 2회차에서 되풀이하지 않았다. 사용자가 준 기준 줄(eval 프롬프트의 `--look-at "<…>"`,
         11/27 — 채택 경로)은 '같은 명령으로 재실행'에 그대로 실리므로 조회로 세지 않는다."""
         at = boundary()
-        runs = [(i, c) for i, c in bash(0, at) if _RUN_CMD.search(c)]
-        given = looks(runs[:1])
+        prompt = next(e for e in json.loads((HERE / "evals.json").read_text(encoding="utf-8"))["evals"] if e["id"] == 86)["prompt"]
+        given = set(re.findall(r'--look-at "([^"]+)"', prompt))
         first, second = looks(bash(0, at)) - given, looks(bash(at)) - given
         same = first & second
         return not same, (f"사용자 기준 줄 {sorted(given)[:1]} 제외; 1회차 look-at {sorted(first)[:3]}, 2회차 {sorted(second)[:3]}, "

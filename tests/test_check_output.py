@@ -563,6 +563,16 @@ def test_evidence_record_on_work_dir_job(tmp_path, capsys, monkeypatch):
     assert len(out) == 1 and out[0].start == 1 and out[0].lines == recs[1]["lines"]
 
 
+def test_evidence_record_path_absolute_for_relative_work_dir(tmp_path, capsys, monkeypatch):
+    """작업 폴더가 상대 경로여도 표시 기록의 path는 절대 경로다(hook이 다른 cwd에서 읽는다)."""
+    monkeypatch.chdir(tmp_path)
+    job = make_job(Path("work"))
+    (job / "deep-output.md").write_text(_deep_out([Q1]), encoding="utf-8")
+    assert check(job, out=False, capsys=capsys)[0] == 0
+    recs = [r for r in _shown(tmp_path / "work") if r["kind"] == "evidence"]
+    assert len(recs) == 1 and recs[0]["path"] == str((tmp_path / "work" / KEY / "report.md").absolute())
+
+
 def test_weak_only_records_head_line_and_out_job_records_nothing(tmp_path, capsys):
     work = tmp_path / "work"
     job = make_job(work)
@@ -1177,3 +1187,20 @@ def test_deep_refutation_with_explore_already_open_only_tells_next(tmp_path, cap
     code, data, err = check(job, capsys=capsys)
     assert code == 0 and data["next"] == output.REFUTED_NEXT.format(cause="DATA-001-01"), (data, err)
     assert (job / "analysis.json").read_bytes() == raw
+
+
+def test_deep_refutation_report_line_unwritten_gives_no_next(tmp_path, capsys, monkeypatch):
+    """늦은 열기에서 report.md 탐색 줄 쓰기가 실패하면(`explore_unwritten`) 탐색하라는 `next`를 내지 않는다(N1)."""
+    monkeypatch.delenv("TT_SCHEMA_CHECK")
+    job = _refute_job(tmp_path)
+    (job / "deep-output.md").write_text(_checks_out(f"- DATA-001-01: 아님 — {NOT_FOUND}"), encoding="utf-8")
+    real = output._write_atomic
+
+    def fail_pending(path, data):
+        if path.name == "report.md" and "- 탐색 분석 (추정): 미실행".encode("utf-8") in data:
+            raise OSError("disk full")
+        real(path, data)
+    monkeypatch.setattr(output, "_write_atomic", fail_pending)
+    code, data, err = check(job, capsys=capsys)
+    assert code == 0 and "next" not in data, (data, err)
+    assert _rec(job)["explore_unwritten"] == "report.md 탐색 분석 줄"

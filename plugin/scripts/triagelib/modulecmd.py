@@ -574,11 +574,7 @@ def _deep_summary(job: Path, key: str, cfg: dict, defaults: dict, analysis: dict
     """5-1 타임라인 머리의 전체 로그 모양 요약(기준 시각은 탐색과 같다 — explore-input.json이 없으면 발생 시각)과 `JOB/summary.md`를
     썼는지. explore-input.json에 같은 상한의 `summary`가 있으면 사본을 다시 읽지 않고 그것을 쓴다. 만들지 못하면 (None, False)."""
     from triagelib import summary
-    try:
-        # 채택이라 준비만 한 입력(`fit_later`, 5-2 안 열림)은 보지 않는다 — 이전과 같은 기준
-        spec = _load(job / EXPLORE_INPUT_FILE)[0] if (job / EXPLORE_INPUT_FILE).is_file() and analysis.get("explore") else None
-    except (OSError, ValueError):
-        spec = None
+    spec = summary.spec_of(job, analysis)
     cap = summary.cap_of(cfg)
     kept = spec.get("summary") if isinstance(spec, dict) else None
     found = (kept if isinstance(kept, dict) and kept.get("cap") == cap and kept.get("groups")

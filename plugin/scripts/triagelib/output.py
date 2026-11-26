@@ -244,7 +244,7 @@ def _obligation(args, job: Path, purpose: str, lines: list[str]) -> None:
     if args.out:
         return
     shown.record(job.parent, "triage", "evidence", job.name, key=f"evidence:{job.name}/{purpose}", lines=lines,
-                 path=str(job / "report.md"))
+                 path=str(job.absolute() / "report.md"))
 
 
 def _resolve_job(args, defaults: dict) -> Path:
@@ -1823,7 +1823,8 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
            **({"windows_excluded": win_bad} if win_bad else {}), **({"format_warnings": fmt} if fmt else {}),
            **({"investigation": inv["status"]} if inv else {}),
            **({"next": FORMAT_NEXT} if fmt and not args.recheck else {}),
-           **({"next": nxt} if refuted and (nxt := _refuted_next(job, analysis, refuted)) else {})})
+           **({"next": nxt} if refuted and "explore_unwritten" not in open_extra
+              and (nxt := _refuted_next(job, analysis, refuted)) else {})})
     return OK
 
 

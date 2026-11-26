@@ -228,6 +228,11 @@ def write(job: Path, key: str, found: dict, mask_off: bool) -> str:
     return text
 
 
+def spec_of(job: Path, analysis: dict):
+    """기준 시각을 읽을 explore-input.json. 5-2가 안 열렸으면(채택이라 준비만 한 `fit_later`) 보지 않는다 — 이전과 같은 기준."""
+    return window._load(job / "explore-input.json") if analysis.get("explore") else None
+
+
 def cmd_summary(args, defaults: dict) -> int:
     try:
         job = window._job(args, defaults)
@@ -237,7 +242,7 @@ def cmd_summary(args, defaults: dict) -> int:
         if any((job / x).is_symlink() for x in (SUMMARY_FILE, SUMMARY_RECORD)):
             raise window._Stop(USAGE, "작업 디렉토리 이상", "요약 파일·기록이 링크다 — 따라가지 않는다")
         from . import modulecmd
-        spec = window._load(job / "explore-input.json")
+        spec = spec_of(job, analysis)
         found = labeled(safe(job, ev, analysis, defaults, ref_of(spec, modulecmd._around(job, analysis)), cap_of(args.platform_cfg),
                              guess=guess_of(spec, analysis), after_sec=after_of(args.platform_cfg)), spec)
         if not found:
