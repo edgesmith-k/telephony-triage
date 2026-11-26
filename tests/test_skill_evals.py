@@ -4184,7 +4184,8 @@ def _eval_env(tmp_path, eid):
 def test_e76_fixture_candidate(tmp_path):
     info, run = _eval_env(tmp_path, 76)
     log = info["logs"][0]
-    run("run", "MOCK-9076", "--logs", log, "--analysis-only", "--platform", "ofono", "--code", "skip",
+    # 11/27: 1위 C=1 보류는 조사 모드라 모듈 문서 5-1을 run이 뺀다 — 5-1 경로는 --analyzer로만(eval 76 프롬프트도 같이 정할 것)
+    run("run", "MOCK-9076", "--logs", log, "--analysis-only", "--platform", "ofono", "--code", "skip", "--analyzer",
         "--issue-file", EVALS / "jira/MOCK-9076.yaml")
     job = Path(info["work_dir"]) / "MOCK-9076"
     a = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
@@ -4229,7 +4230,8 @@ def test_e78_fixture_two_candidates(tmp_path):
 @_needs_module
 def test_e79_fixture_auth(tmp_path):
     info, run = _eval_env(tmp_path, 79)
-    run("run", "MOCK-9041", "--logs", info["logs"][0], "--analysis-only", "--code", "skip",
+    # 11/27: 1위 C=1 보류는 조사 모드라 모듈 문서 5-1을 run이 뺀다 — 5-1 경로는 --analyzer로만(eval 79 프롬프트도 같이 정할 것)
+    run("run", "MOCK-9041", "--logs", info["logs"][0], "--analysis-only", "--code", "skip", "--analyzer",
         "--issue-file", EVALS / "jira/MOCK-9041.yaml")
     _code, out = run("module", "MOCK-9041", "--for", "deep", ok=(2,))
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))

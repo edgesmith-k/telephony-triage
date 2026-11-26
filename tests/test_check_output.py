@@ -1019,7 +1019,7 @@ def test_explore_format_warning_allows_one_recheck(tmp_path, capsys):
     assert code == 0 and "format_warnings" not in data and _rec(job, "explore")["format_recheck"] is True
     assert not any(t.startswith("  - 형식 경고") for t in (job / "report.md").read_text(encoding="utf-8").split("\n"))
     code, data, _ = check(job, "explore", capsys=capsys)                              # 세 번째는 평소처럼 막힌다
-    assert code == 2 and data["reason"] == "작업 없음"
+    assert code == 1 and data == {"reason": "이미 검사함", "next": core.NEXT_CHECK_NA}      # 가-6: 작업 없음(2)이 아니다
 
 
 def test_explore_chain_quote_only_time_led_cells():
@@ -1058,8 +1058,8 @@ def test_explore_chain_claim_number_and_flip_answer():
     assert warn(**{"첫 갈라짐": "단계 2", "메커니즘 재계산": mech + "예 — 재요청이 제때 나간다"}) == []
     assert warn(**{"첫 갈라짐": "2", "메커니즘 재계산": mech + "예|아니오"}) == ["가설 1: 메커니즘 재계산의 답이 틀 그대로(`예|아니오`) — 예나 아니오 하나만"]
     got = warn(**{"첫 갈라짐": "단계 2", "메커니즘 재계산": mech + "아니오 (간격이 달라도 같은 예외)"})
-    assert got == ["가설 1: 메커니즘 재계산이 '아니오'(고쳐도 결과가 안 뒤집힘)인데 가장 유력 — 재계산으로는 원인이 뒷받침되지 않음 — "
-                   "가장 유력을 다시 본다"]
+    assert got == ["가설 1: 메커니즘 재계산이 '아니오'(고쳐도 결과가 안 뒤집힘)인데 가장 유력 — 재계산으로 보면 그 값은 원인이 "
+                   "아니다. 값이 원인이면 가설을 고치고, 원인이 숫자 값이 아니면 처음부터 `해당 없음 — <이유>`가 맞다"]
     big = {**base["기대 체인"][0], "관측": "x" * 800}
     assert warn(**{"첫 갈라짐": "단계 2", "메커니즘 재계산": mech + "예", "기대 체인": [big]}) == [
         f"가설 1: 기대 체인 단계 2의 칸이 {core.FIELD_MAX_BYTES}바이트를 넘음 — 줄여 쓴다"]
@@ -1080,7 +1080,7 @@ def test_explore_recheck_failure_keeps_first_result(tmp_path, capsys):
     assert (job / "report.md").read_text(encoding="utf-8") == report_before
     rec = _rec(job, "explore")
     assert rec == {**rec_before, "format_recheck": True, "recheck_error": "출력 형식 불일치(칸)"}
-    assert check(job, "explore", capsys=capsys)[0] == 2                     # 다시 검사는 한 번뿐
+    assert check(job, "explore", capsys=capsys)[0] == 1                     # 다시 검사는 한 번뿐(가-6: 이미 검사함, 종료 1)
 
 
 def test_explore_old_format_report_unchanged_but_warning_line(tmp_path, capsys):

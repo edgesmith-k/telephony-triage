@@ -409,6 +409,12 @@ def _explore(args, cfg: dict, job: Path, defaults: dict, emit: bool = True) -> i
         if nxt:      # 받을 모듈 보기가 타임라인이다 — JOB/timeline.md를 읽을 파일처럼 내지 않는다(eval 77, 2/5 run이 그것을 읽음)
             out.pop("timeline")
         todo.append(nxt)
+    try:        # 가-3(1): 조사 결론 게이트는 check-output 때의 window 기록만 센다 — 조사 모드에서만 알린다(아니면 출력이 이전과 같다)
+        investigating = bool((json.loads((job / "analysis.json").read_text(encoding="utf-8")).get("investigate") or {}).get("mode"))
+    except (OSError, ValueError, AttributeError):
+        investigating = False
+    if investigating:
+        todo.append(INVESTIGATE_NEXT)
     if any(todo):
         out["next"] = " / ".join(t for t in todo if t)
     if emit:
@@ -417,6 +423,8 @@ def _explore(args, cfg: dict, job: Path, defaults: dict, emit: bool = True) -> i
 
 
 REFS_NEXT = "먼저 출력 refs의 파일을 모두 읽는다(플랫폼 로그 안내, explore.md 읽는 것 5)"
+INVESTIGATE_NEXT = ("조사 모드: 기준 시각 뒤 줄 인용이나 `window`는 check-output **전에** 한다(검사는 그때까지의 window만 센다 — "
+                    "검사 뒤에 본 것은 결론에 들어가지 않는다)")
 
 
 def _module_next(args, job: Path, platform: str) -> str | None:
