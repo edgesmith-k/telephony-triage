@@ -1011,6 +1011,15 @@ def head_notes(job, events: dict, around=None) -> list[str]:
     return flow_head(flow_brief(job, events, around)) + ipc_head(events)
 
 
+DEEP_HEAD_MAX = 3      # 5-1 후보 확인 머리 줄 수(후보 ≤3개, `modulecmd._top3`)
+
+
+def deep_head(checks: list | None) -> list[str]:
+    """탐색 타임라인·모듈 보기 머리의 5-1 후보별 판정(`explore-input.json` `deep_checks` — `triage.py explore`가 이번 실행
+    check-output 기록에서 옮긴 것, E1 재계산도 같은 값). 데이터이고 인용 대상이 아니다. 없으면 [](이전과 같은 바이트)."""
+    return [_clip(f"- 심층 분석 후보 확인(데이터): {c}", 240) for c in (checks or [])[:DEEP_HEAD_MAX]]
+
+
 def flow_head(brief: list[dict]) -> list[str]:
     """타임라인 머리 글머리표(데이터 — 근거 원문 검사는 행 문법 줄만 보므로 인용 대상이 아니다). 없으면 []."""
     out = []

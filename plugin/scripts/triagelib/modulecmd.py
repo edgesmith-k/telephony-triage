@@ -531,7 +531,7 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
     from triagelib import summary
     centers, basis = summary.timeline_center(spec)      # `triage._explore`와 같은 중심·머리
     items, total = report.select_rows(rows, centers, limit)
-    flows = report.head_notes(job, events, spec.get("around"))
+    flows = report.head_notes(job, events, spec.get("around")) + report.deep_head(spec.get("deep_checks"))
     text = report.render_timeline(key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
                                   spec.get("anchor"), spec.get("look_at"), flows, spec.get("anomaly"), spec.get("summary"),
                                   basis)
@@ -575,7 +575,8 @@ def _deep_summary(job: Path, key: str, cfg: dict, defaults: dict, analysis: dict
     썼는지. explore-input.json에 같은 상한의 `summary`가 있으면 사본을 다시 읽지 않고 그것을 쓴다. 만들지 못하면 (None, False)."""
     from triagelib import summary
     try:
-        spec = _load(job / EXPLORE_INPUT_FILE)[0] if (job / EXPLORE_INPUT_FILE).is_file() else None
+        # 채택이라 준비만 한 입력(`fit_later`, 5-2 안 열림)은 보지 않는다 — 이전과 같은 기준
+        spec = _load(job / EXPLORE_INPUT_FILE)[0] if (job / EXPLORE_INPUT_FILE).is_file() and analysis.get("explore") else None
     except (OSError, ValueError):
         spec = None
     cap = summary.cap_of(cfg)

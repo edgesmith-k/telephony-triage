@@ -812,3 +812,60 @@ def test_prior_unfit_not_carried_from_check_with_fabricated_quotes(tmp_path):
     assert "unfit" not in prior(1) and "unfit_reason" not in prior(1, "normal")
     assert prior(0)["unfit"] == "DATA-001-01 — 정상 종료"
     assert prior(0, "normal")["unfit_reason"] == "normal"
+
+
+# -- 5-1 반증 → 5-2 적합성 확인(11/27 C23) --------------------------------------------------------------------
+
+
+def test_adopted_without_flag_prepares_fit_check_only_unless_turned_off():
+    """채택 + 기본 ask(플래그·확인할 내용 없음)는 5-2를 열지 않고 연다면 쓸 값만 둔다(`fit_later` — 판단은 `explore` 한 곳).
+    `never`·`--no-explore`면 그것도 두지 않는다(끄는 쪽이 이긴다)."""
+    from types import SimpleNamespace
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    import importlib
+    triage = importlib.import_module("triage")
+    acc = {"state": "accepted"}
+    drv = SimpleNamespace(cfg={}, warnings=[], args=SimpleNamespace(explore=None), look_inputs=lambda: {"at": None, "note": None})
+    assert triage.Driver.explore(drv, [{"C": 1}], acc) is None and drv.fit_later == {"reason": "fit_check", "when": "ask",
+                                                                                      "note": ASK_NOTE}
+    drv.args.explore = False
+    assert triage.Driver.explore(drv, [{"C": 1}], acc) is None and drv.fit_later is None
+    drv.args.explore, drv.cfg = None, {"explore": {"when": "never"}}
+    assert triage.Driver.explore(drv, [{"C": 1}], acc) is None and drv.fit_later is None
+    drv.cfg = {}
+    assert triage.Driver.explore(drv, [{"C": 0}])["reason"] == "cause_unconfirmed" and drv.fit_later is None     # 조사 모드는 대상 아님
+
+
+def test_opened_fit_check_carries_deep_checks_into_timeline_and_survives_rerun():
+    """채택 run은 입력만 준비하고(`triage.py explore`는 해당 없음 1), check-output이 연 뒤(analysis.json `explore` — 여는 쪽은
+    test_check_output) `triage.py explore`는 5-1 후보 확인 기록을 타임라인 머리 데이터 줄로 싣는다(모듈 보기 E1 재계산도 같은 바이트).
+    탐색 중 다시 한 run(`--look-at-source model`)은 적합성 확인을 이어 가고(타임라인 다시 만듦, 지워진 5-1 줄은 없음),
+    `--no-explore`면 이어 가지 않는다."""
+    item = _padded()
+    out = tmp("tt-c23-") / "x"
+    first = _run(item, out, "--look-at", LOOK)
+    assert first["decision"]["state"] == "accepted" and "explore" not in first
+    spec = json.loads((out / "explore-input.json").read_text(encoding="utf-8"))
+    assert spec["fit_later"] == {"reason": "fit_check", "when": "ask", "note": ASK_NOTE}
+    assert run("triage.py", ["explore", item["key"], "--out", out]).returncode == 1 and not (out / "timeline.md").exists()
+    analysis = json.loads((out / "analysis.json").read_text(encoding="utf-8"))
+    (out / "analysis.json").write_text(json.dumps({**analysis, "explore": spec["fit_later"]}, ensure_ascii=False), encoding="utf-8")
+    checks = ["DATA-001-01 아님 — 찾았는데 없음: 데이터 꺼짐 줄", "DATA-001-02 모름"]
+    (out / "check-output.json").write_text(json.dumps({"deep": {"mode": "module", "checks": checks}}, ensure_ascii=False),
+                                           encoding="utf-8")
+    assert run_json("triage.py", ["explore", item["key"], "--out", out])["timeline"] == "timeline.md"
+    text = (out / "timeline.md").read_text(encoding="utf-8")
+    assert "".join(f"- 심층 분석 후보 확인(데이터): {c}\n" for c in checks) in text.split("- 줄: ")[0], text[:1500]
+    assert json.loads((out / "explore-input.json").read_text(encoding="utf-8"))["deep_checks"] == checks
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    from triagelib import modulecmd
+    events = json.loads((out / "events.json").read_text(encoding="utf-8"))
+    assert modulecmd._explore_inputs(out, item["key"], events, {}, AssertionError)["flows"][-2:] == [
+        f"- 심층 분석 후보 확인(데이터): {c}" for c in checks]           # E1: 같은 머리로 다시 그려 바이트가 맞는다
+
+    again = _run(item, out, "--look-at-source", "model", "--look-at", LOOK)
+    assert again["decision"]["state"] == "accepted" and again["explore"]["reason"] == "fit_check", again.get("explore")
+    assert (out / "timeline.md").is_file() and "심층 분석 후보 확인" not in (out / "timeline.md").read_text(encoding="utf-8")
+    assert _report_line(out, "- 탐색 분석").startswith("- 탐색 분석 (추정, timeline.md ")
+    off = _run(item, out, "--look-at-source", "model", "--look-at", LOOK, "--no-explore")
+    assert "explore" not in off and not (out / "timeline.md").exists() and not (out / "explore-input.json").exists()

@@ -782,8 +782,8 @@ def test_no_candidate_run_has_no_timeline_until_explore_subcommand_writes_it():
 def test_explore_subcommand_exit_codes():
     doc, items = _items()
     out = tmp("tt-triage-") / "x"
-    _accepted(items[0], doc, out)                  # 후보 채택 → 입력 파일 없음
-    assert not (out / "explore-input.json").exists()
+    _accepted(items[0], doc, out)                  # 후보 채택 → 입력만 준비(fit_later), 열리기 전엔 해당 없음
+    assert "fit_later" in json.loads((out / "explore-input.json").read_text(encoding="utf-8"))
     assert run("triage.py", ["explore", "x", "--out", out]).returncode == 1
     last = json.loads((out / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])     # 정보 행(F7 확장)
     assert {k: v for k, v in last.items() if k != "ts"} == {"step": "explore", "v": 2, "exit": 1}
@@ -822,8 +822,8 @@ def test_stale_timeline_is_removed_by_run():
     out.mkdir()
     (out / "timeline.md").write_text("old\n", encoding="utf-8")
     (out / "explore-input.json").write_text("{}", encoding="utf-8")
-    _accepted(items[0], doc, out)                  # 후보 채택이라 탐색 대상이 아니다
-    assert not (out / "timeline.md").exists() and not (out / "explore-input.json").exists()
+    _accepted(items[0], doc, out)                  # 후보 채택이라 탐색 대상이 아니다(입력은 새로 준비만 — fit_later)
+    assert not (out / "timeline.md").exists() and "fit_later" in json.loads((out / "explore-input.json").read_text(encoding="utf-8"))
 
 
 def _accepted(item: dict, doc: dict, out: Path) -> dict:
@@ -839,7 +839,9 @@ def test_confirmed_cause_has_no_explore_and_no_timeline():
     out = tmp("tt-triage-") / "x"
     analysis = _accepted(items[0], doc, out)
     assert analysis["candidates"][0]["C"] == 1 and analysis["investigate"] == {"mode": False}
-    assert "explore" not in analysis and not (out / "timeline.md").exists() and not (out / "explore-input.json").exists()
+    assert "explore" not in analysis and not (out / "timeline.md").exists()
+    # 입력만 준비한다 — 5-1이 채택 원인을 아님으로 보면 check-output이 이 값으로 연다
+    assert json.loads((out / "explore-input.json").read_text(encoding="utf-8"))["fit_later"]["reason"] == "fit_check"
     assert "탐색 분석" not in (out / "report.md").read_text(encoding="utf-8")
 
 

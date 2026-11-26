@@ -1101,10 +1101,14 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         if when not in EXPLORE_WHEN:
             self.warnings.append(f"explore.when 값이 잘못됐다({when}). ask로 본다")
             when = "ask"
+        self.fit_later = None
         if not issuepost.investigate_mode({"candidates": candidates, "decision": decision})["mode"]:
             # 확신 일치(채택)도 탐색을 묻지 않고 하는 세션이면 1위가 증상을 설명하는지 확인할 맥락을 준다. 그 밖은 이전과 같다(묻지 않음)
-            if when == "never" or self.args.explore is False or (
-                    when != "always" and not self.args.explore and not self.look_inputs()["note"]):
+            if when == "never" or self.args.explore is False:
+                return None
+            if when != "always" and not self.args.explore and not self.look_inputs()["note"]:
+                # 열지 않되 입력만 준비한다: 5-1 `후보 확인`이 채택 원인을 `아님`이라 하면 check-output이 이 값으로 연다
+                self.fit_later = {"reason": "fit_check", "when": when, **_ask_note(when, "5-2")}
                 return None
             reason = "fit_check"
         else:
@@ -1297,6 +1301,10 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             # 탐색 중 다시 한 run(`--look-at-source model`, 하위 에이전트는 시작 플래그를 모른다)은 직전 조사 모드 실행의
             # `--analyzer`를 이어받는다 — 입력 해시(args)보다 먼저 정해 캐시와 어긋나지 않는다. `--no-analyzer`면 이어받지 않는다
             self.args.analyzer = True
+        if self.explored and getattr(self.args, "explore", None) is None and getattr(self.args, "look_at_source", None) == "model":
+            # 탐색 중 다시 한 run은 탐색을 이어 간다(채택 결과면 적합성 확인) — 시작 플래그·check-output이 연 적합성 확인을
+            # 하위 에이전트가 모른다. `--no-explore`·`never`면 열지 않는다(`explore`)
+            self.args.explore = True
         if not self.offline:
             self.lock()
             if self.mark_platform_answer():      # 새 lock(State.reset)이 지웠으면 다시 남긴다
@@ -1415,7 +1423,10 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         analyzer = self.analyzer(lead_first(decision, candidates),     # 심층 분석 카테고리: 채택 원인(없으면 1위)
                                  issuepost.investigate_mode({"candidates": candidates, "decision": decision})["mode"])
         explore = self.explore(lead_first(decision, candidates), decision)     # 적합성 확인도 채택 원인 기준
-        explore_input = self.explore_input(around, anchor) if explore and explore["when"] != "never" else None
+        later = getattr(self, "fit_later", None)
+        explore_input = self.explore_input(around, anchor) if (explore and explore["when"] != "never") or later else None
+        if later:       # analysis.json `explore`는 없다 — 열기 전엔 `triage.py explore`가 거절한다
+            explore_input["fit_later"] = later
         if explore_input is not None and partial:    # 탐색 입력: 부분 일치 앞 3개(키·없는 조건 id)·맞은 근거 시각(보조 중심)
             explore_input["partial"] = [{"signature": p["signature"],
                                          "missing": [m.get("id") or m["desc"] for m in q.get("missing") or []]}
