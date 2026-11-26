@@ -1449,7 +1449,8 @@ def checks(eid: int, ctx: Ctx) -> list:
             o = ops("MOCK-9041")
             return o == [{"op": "append", "cause": "DATA-001-01"}] and analyzer_called()[0], json.dumps(o, ensure_ascii=False) + "; " + analyzer_called()[1]
         # 출력 형식 불일치(check-output 종료 1)는 분석 스킬 실패가 아니다 — 스스로 분석해 칸을 못 맞춘 run(B2 e41)
-        return [None, _report_check(ctx, "MOCK-9041", r"심층 분석 생략: (?!출력 형식 불일치)\S"), None, app, none_remote_lock]
+        return [None, _report_check(ctx, "MOCK-9041", r"심층 분석 생략: (?!출력 형식 불일치)\S"), None, app, none_remote_lock,
+                lambda: investigated(ctx, "MOCK-9041", "DATA-001-01")]
     if eid == 44:
         return [_report_check(ctx, "MOCK-9044", source_patterns=(r"^- 분류 후보:[^\n]*원인 미확인",)), None, None,
                 lambda: unresolved("MOCK-9044"), none_remote_lock]
@@ -1485,7 +1486,8 @@ def checks(eid: int, ctx: Ctx) -> list:
             return False, f"explore 호출(순번 {explored}) 앞에 '탐색 분석'+'할까요/실행할까/진행할까'나 '조사할까요?'가 든 질문 없음"
         return True, f"질문 순번={asked} < explore 호출 순번={explored}"
     if eid == 46:
-        return [asked_before_explore, lambda: scope("setup-error.log"), None, None, None, lambda: noplan("MOCK-9046")]
+        return [asked_before_explore, lambda: scope("setup-error.log"), None, None, None, lambda: noplan("MOCK-9046"),
+                lambda: explore_shown_before_adopt(ctx, "MOCK-9046")]
     if eid == 47:
         return [None, lambda: scope("e047.log"), None, lambda: unresolved("MOCK-9047"), None, none_remote_lock]
     if eid == 48:
@@ -1655,6 +1657,58 @@ def checks(eid: int, ctx: Ctx) -> list:
         return [searched, lambda: (bool(re.search(r"일치.*없|찾지 못|없습니다", answer())), "transcript의 '일치 없음' 표현"),
                 only_known, None, free_clone]
     return []
+
+
+def investigated(ctx, job: str, top: str):
+    """조사 모드(11/27: 1위 C=1이어도 스크립트가 채택하지 않으면): `triage.py explore` 전에 조사 질문("조사할까요?")을 했고, report.md에
+    조사 결론 줄(`issuepost.INVESTIGATION_PREFIX`)이 있으며, explore-output.md `후보 확인`에 맞았지만 채택 안 한 1위(`top`)의
+    판정(맞음|아님|모름)이 있다(check-output `CHECK_TOP_MISSING` 경고가 가리키는 칸). "탐색 분석 … 할까요?"(옛 질문)는 조사 질문이 아니다."""
+    from common import evidence, issuepost
+    order = ctx.explore_order()
+    if order is None:
+        raise _Manual("실행 기록(events.jsonl) 없음")
+    explored, asked, _ = order
+    seq = ctx.seq()
+    q = "" if asked is None else (seq[asked]["text"] if seq[asked]["kind"] == "text" else shown.ask_text(seq[asked]["input"]))
+    inv_q = bool(_INVESTIGATE_Q.search(q))
+    line = next((l for l in _read(ctx.work / job / "report.md").splitlines() if l.startswith(issuepost.INVESTIGATION_PREFIX)), "")
+    text = _read(ctx.work / job / "explore-output.md")
+    checks = (evidence.parse_explore(text) or {}).get(evidence.CHECK_FIELD) or [] if text else []
+    verdict = next((c["verdict"] for c in checks if c.get("cause") == top and c.get("verdict") != "?"), None)
+    ok = explored is not None and inv_q and bool(line) and verdict is not None
+    return ok, (f"explore 순번={explored}, 앞 질문={q[:60]!r}(조사 질문 {'맞음' if inv_q else '아님'}); 조사 결론 줄={line[:100]!r}; "
+                f"후보 확인 {top}={verdict}")
+
+
+# show_guard ADOPT_Q와 같은 기준(채점기는 hook을 import하지 않는다): 채택·분류 질문
+_ADOPT_Q = re.compile(r"채택|원인 미확정|기록하지 않음|[^\s>]+ > [^\s>]+ > ")
+_EXPLORE_HEAD = "- 탐색 분석 ("       # check-output --for explore가 쓴 report.md 줄 머리(생략·TODO 줄은 아니다)
+
+
+def explore_shown_before_adopt(ctx, job: str):
+    """마지막 `check-output --for explore`(생략 `--skipped` 아님) 뒤 첫 채택·분류 질문까지(질문 포함) 지금 report.md의 탐색 분석 줄(머리와
+    바로 뒤 `  - ` 줄 — show_guard `explore_lines`와 같은 묶음)이 모두 보였다(eval 46·73, 11/27 show_guard 6번). 질문이 없으면 수동."""
+    calls = [c for c in check_output_calls(ctx, "explore") if "--skipped" not in c[1]]
+    if not calls:
+        return False, "check-output --for explore 호출 없음"
+    rows = _read(ctx.work / job / "report.md").splitlines()
+    at = next((i for i, ln in enumerate(rows) if ln.startswith("- 탐색 분석")), None)
+    if at is None or not rows[at].startswith(_EXPLORE_HEAD) or "TODO(LLM)" in rows[at]:
+        return False, f"report.md 탐색 분석 줄이 검사한 줄이 아님: {(rows[at] if at is not None else '없음')[:80]!r}"
+    end = at + 1
+    while end < len(rows) and rows[end].startswith("  - "):
+        end += 1
+    lines = [ln.rstrip() for ln in rows[at:end]]
+    seq = ctx.seq()
+    start = calls[-1][0]
+    q = next((i for i in ctx._asks(start + 1, len(seq)) if shown.step7_question(seq[i]["input"])
+              or _ADOPT_Q.search(shown.ask_text(seq[i]["input"]) + " "
+                                 + json.dumps((seq[i]["input"] or {}).get("options") or [], ensure_ascii=False))), None)
+    if q is None:
+        raise _Manual(f"check-output(seq {start}) 뒤 채택·분류 질문 없음")
+    miss = shown.uncovered(lines, ctx.visible_between(start + 1, q + 1))
+    return not miss, (f"check-output seq {start} → 질문 seq {q}: 탐색 줄 {len(lines) - len(miss)}/{len(lines)}"
+                      + (f", 빠진 줄 예: {miss[0][:100]}" if miss else ""))
 
 
 def _analyzer_called(ctx):
@@ -1873,7 +1927,7 @@ def checks_w4(eid, ctx):
         got = asked(r"심층 분석|mock-data-analyzer")
         if got is None:
             raise _Manual("실행 기록(events.jsonl) 없음")
-        # 조사 모드(1위 C=0)면 SKILL.md는 5-1을 "조사할까요?" 한 질문으로 묻게 한다 — 그 질문도 심층 분석 질문이다(i8-1126-k).
+        # 조사 모드(스크립트가 원인을 채택하지 않음 — 1위 C=0·C=1 보류)면 SKILL.md는 5-1을 "조사할까요?" 한 질문으로 묻게 한다 — 그 질문도 심층 분석 질문이다(i8-1126-k).
         # 같은 질문을 글과 ask_user로 두 번 보이면 한 번(질문 줄 기준)
         inv = {re.sub(r"\s+", " ", m.group(0)) for t in ctx.visible() if t not in got
                for m in [re.search(r"조사할까요\?[^\n]*", t)] if m and _INVESTIGATE_Q.search(t)}
@@ -3803,7 +3857,8 @@ _LOOK_AT = re.compile(r"--look-at(?:=|\s+)(\"[^\"]*\"|'[^']*'|\S+)")
 
 
 def checks_ft(eid, ctx):
-    """1위 C=1(확신 일치)도 `--explore` 세션이면 적합성 확인(`explore.reason: fit_check`)을 한다(84 쉬운 사례 — 추가 조회 없이
+    """스크립트가 채택한 1위(사용자가 준 기준 줄 `--look-at`로 채택, 11/27 — 기준 없이 맞기만 한 1위는 보류라 조사 모드)도
+    `--explore` 세션이면 적합성 확인(`explore.reason: fit_check`)을 한다(84 쉬운 사례 — 추가 조회 없이
     같은 턴에 끝냄, 85 부적합 보류 — `가설 없음: …부적합…`·`다음 확인:`, 86 재실행 — `prior`를 받고 같은 조회·후보를 되풀이하지
     않음). 실행 기록이 없으면 `_Manual`(없음을 보는 항목도 통과로 세지 않는다)."""
     from common import evidence
@@ -3894,7 +3949,11 @@ def checks_ft(eid, ctx):
         return at
 
     def looks(calls):
-        return {m.group(1).strip("\"'") for _, c in calls if _RUN_CMD.search(c) for m in _LOOK_AT.finditer(c)}
+        # `bash()`의 명령은 공백 든 인용 글을 `""`로 지운 비교용이라(`shown.command_of`) look-at 글은 원래 명령에서 읽는다 —
+        # 지운 글로 읽으면 여러 낱말 기준 줄이 모두 ''로 같아진다(11/27 전: 두 회차에 아무 인용 조회만 있어도 '같은 조회')
+        s = need_seq()
+        raw = [_strip_heredocs(str(s[i]["input"].get("command", ""))) for i, c in calls if _RUN_CMD.search(c)]
+        return {m.group(1).strip("\"'") for c in raw for m in _LOOK_AT.finditer(c)}
 
     def held_first():
         """1회차: fit_check에서 1위를 부적합으로 보류했다(검사 통과한 출력이 `가설 없음`)."""
@@ -3914,10 +3973,15 @@ def checks_ft(eid, ctx):
         return ok, f"2회차 triage run {len(reruns)}회, prior={json.dumps(prior, ensure_ascii=False)[:300]}"
 
     def no_repeat_lookup():
+        """1회차에 스스로 한 `--look-at` 조회를 2회차에서 되풀이하지 않았다. 사용자가 준 기준 줄(1회차 첫 run의 `--look-at`,
+        11/27 — 채택 경로)은 '같은 명령으로 재실행'에 그대로 실리므로 조회로 세지 않는다."""
         at = boundary()
-        first, second = looks(bash(0, at)), looks(bash(at))
+        runs = [(i, c) for i, c in bash(0, at) if _RUN_CMD.search(c)]
+        given = looks(runs[:1])
+        first, second = looks(bash(0, at)) - given, looks(bash(at)) - given
         same = first & second
-        return not same, f"1회차 look-at {sorted(first)[:3]}, 2회차 {sorted(second)[:3]}, 같은 조회 {sorted(same)[:3]}"
+        return not same, (f"사용자 기준 줄 {sorted(given)[:1]} 제외; 1회차 look-at {sorted(first)[:3]}, 2회차 {sorted(second)[:3]}, "
+                          f"같은 조회 {sorted(same)[:3]}")
 
     def no_readopt():
         """2회차에 탐색을 다시 했으면 그 출력이 `가설 없음`이다(1위를 새 근거 없이 다시 고르지 않음). 가설을 세웠으면 수동 채점."""

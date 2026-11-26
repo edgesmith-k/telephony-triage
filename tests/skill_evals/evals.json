@@ -1,6 +1,6 @@
 {
   "skill_name": "telephony-triage",
-  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=병합 2(72 +1 뒤 병합해줘·75 +1 관문), H=모듈 스킬 레포·출력 검사 4(76~79), W9=setup 2(58 재점검 doctor 표·80 첫 사용자 setup), FL=성공 흐름 제안 3(81 새 원인 flow_step·82 set-flow-step·83 put-flow 문구 고치기), FT=적합성 확인·반복 금지 3(84~86: 84 확신 일치 짧은 판단·85 부적합 보류·86 재실행 prior), PB=문제 파악 18(87~102·104·109: --problem-only, 시드 DB, 기대값 `problem_expect`를 grade.py checks_pb가 problem.json과 대조 — 첫 유형·허용 밖 유형/단서 실패·회차 세 칸. 98~102는 리뷰어가 줄거리·기대값을 정함), PBH=문제 파악 처음 보는 세트 8(103·105~108·110~112: 지시문 작성자가 보지 않은 글타래 — 104·109는 지시문을 고칠 때 보아 PB로 옮김, 채점은 PB와 같음 — 지시문을 고칠 때 열지 않는다). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
+  "_comment": "eval 정의 완료(개수는 `evals` 배열 길이). batch 1=대표10, A=원칙·안전10, B=analyze11, C=수정·검증9, D=record5, E=10/04~05 기능 7(46~52), F=S6 증상 검색 2(53~54), J=Jira 결과 게시 2(61~62), P=플랫폼 분리 5(63~65·73·74), G=두 번째 트래커(GitHub Issues, 모의 MCP mock-github-issues) 2(66~67), U=사용 흐름 구분 3(68~70), K=분석 스킬 규칙 제안 1(71), M=병합 2(72 +1 뒤 병합해줘·75 +1 관문), H=모듈 스킬 레포·출력 검사 4(76~79), W9=setup 2(58 재점검 doctor 표·80 첫 사용자 setup), FL=성공 흐름 제안 3(81 새 원인 flow_step·82 set-flow-step·83 put-flow 문구 고치기), FT=적합성 확인·반복 금지 3(84~86: 84 채택된 1위 짧은 판단·85 부적합 보류·86 재실행 prior), PB=문제 파악 18(87~102·104·109: --problem-only, 시드 DB, 기대값 `problem_expect`를 grade.py checks_pb가 problem.json과 대조 — 첫 유형·허용 밖 유형/단서 실패·회차 세 칸. 98~102는 리뷰어가 줄거리·기대값을 정함), PBH=문제 파악 처음 보는 세트 8(103·105~108·110~112: 지시문 작성자가 보지 않은 글타래 — 104·109는 지시문을 고칠 때 보아 PB로 옮김, 채점은 PB와 같음 — 지시문을 고칠 때 열지 않는다). 정의 완료는 행동 평가 통과를 뜻하지 않는다. README.md와 DRAFT_NOTES.md 참조.",
   "evals": [
     {
       "id": 1,
@@ -1491,10 +1491,10 @@
     },
     {
       "id": 40,
-      "design": "data 1위 후보 → 분석 스킬 호출 여부를 먼저 묻고(기본 `ask`), 승인하면 호출. 분석 스킬이 다른 원인을 제시 → 리포트에 \"분석 스킬 의견\"으로 보여주고 Step 7 선택지에 추가, 분류 점수·후보 순서는 바뀌지 않는다. 사용자가 그 의견을 고르면 `decision: chose-other`. `--analyzer`면 묻지 않고 호출한다. B2: 모듈 스킬 레포가 있어도 `prefer: skill`이면 설치 스킬을 쓴다 — `triage.py module --for deep`이 설치 스킬 SKILL.md를 찾아 주고(받기 없음) 결과는 `deep-output.md` + `check-output`이 리포트 줄에 쓴다(근거 원문 검사는 events.json 기준)",
+      "design": "data 1위 후보 → 분석 스킬 호출 여부를 먼저 묻고(기본 `ask`), 승인하면 호출. 분석 스킬이 다른 원인을 제시 → 리포트에 \"분석 스킬 의견\"으로 보여주고 Step 7 선택지에 추가, 분류 점수·후보 순서는 바뀌지 않는다. 사용자가 그 의견을 고르면 `decision: chose-other`. `--analyzer`면 묻지 않고 호출한다. B2: 모듈 스킬 레포가 있어도 `prefer: skill`이면 설치 스킬을 쓴다 — `triage.py module --for deep`이 설치 스킬 SKILL.md를 찾아 주고(받기 없음) 결과는 `deep-output.md` + `check-output`이 리포트 줄에 쓴다(근거 원문 검사는 events.json 기준). 11/27: 채택된 1위에서 5-1만 묻는 흐름이라 기준 줄(`--look-at`, 1위 근거 줄)을 주고 시나리오 끝에 RILJ 꼬리 줄을 둔다 — 보류면 조사 모드라 질문이 '조사할까요?'(5-1과 5-2 함께)가 된다",
       "name": "analyzer-opinion-chose-other",
       "batch": 1,
-      "prompt": "MOCK-9040 로그 좀 봐줘, 로밍 중에 데이터가 안 된대. --dry-run 으로. 로그: logs/e040.log",
+      "prompt": "MOCK-9040 로그 좀 봐줘, 로밍 중에 데이터가 안 된대. --dry-run 으로. --look-at \"09-22 08:00:03.500 Data disallowed reasons: ROAMING_DISABLED\". 로그: logs/e040.log",
       "setup": {
         "jira": [
           "MOCK-9040"
@@ -1543,7 +1543,7 @@
     },
     {
       "id": 41,
-      "design": "분석 스킬이 실패하거나, 호출 질문에 \"아니오\"거나, `--no-analyzer` → \"심층 분석 생략\"을 적고 나머지 흐름을 그대로 진행한다",
+      "design": "분석 스킬이 실패하거나, 호출 질문에 \"아니오\"거나, `--no-analyzer` → \"심층 분석 생략\"을 적고 나머지 흐름을 그대로 진행한다. 11/27: 기준 줄 없이 규칙만 맞은 1위 C=1은 스크립트가 채택하지 않아(보류) 조사 모드다 — 질문은 '조사할까요?' 하나, '예'면 5-1(여기서는 실패) 뒤 5-2 탐색까지 하고 check-output이 조사 결론 줄을 붙인다. 탐색 출력 `후보 확인`에 맞았지만 채택 안 한 1위(DATA-001-01)를 대조한다",
       "batch": "B",
       "prompt": "MOCK-9041 분석해줘 --dry-run. 로그: logs/data-disabled.log",
       "setup": {
@@ -1559,7 +1559,7 @@
         "analyzer_fail": true
       },
       "user_replies": [
-        "심층 분석(mock-data-analyzer) 실행 여부를 물으면 **'예'**.",
+        "심층 분석(mock-data-analyzer) 실행 여부나 '조사할까요?'를 물으면 **'예'**.",
         "분류 제안에는 '예'.",
         "확인 화면에서는 '승인'.",
         "코드 경로를 물으면 '코드 분석 건너뛰기'를 고른다(규칙에 따로 적힌 경우 제외).",
@@ -1568,13 +1568,14 @@
         "리뷰어를 지정할지 물으면 '지정 안 함'을 고른다.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "분석 스킬 호출이 실패하면 '심층 분석 생략: <사유>'를 리포트에 적고 나머지 흐름(분류·계획·확인 화면)을 그대로 진행한다.",
+      "expected_output": "'조사할까요?' 한 번 → '예' → 분석 스킬 호출 실패 → '심층 분석 생략: <사유>' → 5-2 탐색(triage.py explore → explore-output.md, `후보 확인:`에 DATA-001-01 판정) → check-output --for explore가 조사 결론 줄을 붙임 → 나머지 흐름(분류·계획·확인 화면)을 그대로 진행한다.",
       "assertions": [
         "분석 스킬을 호출하기 전에 실행 여부를 물었다",
         "분석 스킬이 실패하자 리포트에 '심층 분석 생략'과 사유를 적었다",
         "실패 뒤에도 분류 확인·계획·확인 화면까지 진행했다",
         "계획이 append DATA-001-01이다",
-        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다"
+        "dry-run이라 원격 브랜치·PR이 없고 끝난 뒤 lock이 없다",
+        "'조사할까요?'를 탐색 전에 물었고 '예' 뒤 triage.py explore를 했으며, report.md에 조사 결론 줄이 있고 explore-output.md `후보 확인`에 1위 DATA-001-01의 판정(맞음|아님|모름)이 있다"
       ],
       "files": [],
       "name": "analyzer-fails-continue"
@@ -1766,7 +1767,8 @@
         "리포트 '탐색 분석 (추정)' 칸에 가설이 1~3개 있고 가설마다 로그로 확인(timeline.md 줄 인용)·반대 근거·다음 확인이 있다",
         "가설에 점수·확신도를 매기지 않았고 코드 분석을 건너뛰어 '코드 근거 없음'을 밝혔다",
         "Step 7 선택지가 새 유형 / 원인 미확정 / 기록하지 않음 그대로이고 가설로 op를 만들지 않았다",
-        "'기록하지 않음' 후 plan.json을 만들지 않았고 세션 lock을 풀었다"
+        "'기록하지 않음' 후 plan.json을 만들지 않았고 세션 lock을 풀었다",
+        "check-output --for explore 뒤 첫 채택·분류 질문 전에 report.md 탐색 분석 줄(머리와 하위 줄)을 글자 그대로 보였다"
       ],
       "files": []
     },
@@ -2661,17 +2663,17 @@
     },
     {
       "id": 71,
-      "design": "분석 스킬 결과에 `규칙 제안:`(`[이슈 DB]` 한 줄·`[스킬]` 한 줄)이 있으면 분류 확정 뒤 한 번 묻는다. 사용자가 `[스킬]` 줄만 고르면 계획에 넣지 않고, 5-1 Skill 결과의 스킬 디렉토리에서 대상 파일(references/DATA-001.md)을 읽어 사본을 쓰고 `S/skill_patch.py`로 담당자용 patch `JOB/skill-suggestions/<스킬 이름>.patch`(스킬 디렉토리 기준 unified diff, 마스킹)를 만들어 안내 줄과 파일별 +/− 줄 수를 보인다. 분석 스킬 디렉토리는 바꾸지 않는다(`skill-patch.md`, 16-existing-assets §16.5.1)",
+      "design": "분석 스킬 결과에 `규칙 제안:`(`[이슈 DB]` 한 줄·`[스킬]` 한 줄)이 있으면 분류 확정 뒤 한 번 묻는다. 사용자가 `[스킬]` 줄만 고르면 계획에 넣지 않고, 5-1 Skill 결과의 스킬 디렉토리에서 대상 파일(references/DATA-001.md)을 읽어 사본을 쓰고 `S/skill_patch.py`로 담당자용 patch `JOB/skill-suggestions/<스킬 이름>.patch`(스킬 디렉토리 기준 unified diff, 마스킹)를 만들어 안내 줄과 파일별 +/− 줄 수를 보인다. 분석 스킬 디렉토리는 바꾸지 않는다(`skill-patch.md`, 16-existing-assets §16.5.1). 11/27: 스크립트가 채택한 1위의 흐름이라 기준 줄(`--look-at`)을 주고 RILJ 꼬리 줄이 있는 로그(`fixtures/data-disabled-tail.log`)를 쓴다 — 기준 없이 규칙만 맞은 1위는 보류라 조사 모드(질문 '조사할까요?' 하나)가 된다",
       "name": "analyzer-skill-proposal-patch",
       "batch": "K",
-      "prompt": "MOCK-9071 분석해줘 --dry-run. 로그: logs/data-disabled.log",
+      "prompt": "MOCK-9071 분석해줘 --dry-run --look-at \"notifyDataEnabledChanged: enabled=false\". 로그: logs/data-disabled.log",
       "setup": {
         "jira": [
           "MOCK-9071"
         ],
         "logs": [
           {
-            "src": "tests/fixtures/logs/data-disabled.log",
+            "src": "tests/skill_evals/fixtures/data-disabled-tail.log",
             "as": "data-disabled.log"
           }
         ],
@@ -2890,10 +2892,10 @@
     },
     {
       "id": 76,
-      "design": "모듈 스킬 5-1(B1+B2): oFono data 후보(C0 case data-apn-auth-reject 로그, 변형 DB issue-db-ofono-modules), 템플릿 모듈 스킬 레포. 동의 뒤 `triage.py module --for deep`이 받은 사본(`read`)·deep-input.json·심층 타임라인(뷰)만 읽고 `deep-output.md` → `check-output --for deep`이 리포트 줄과 근거 원문 검사 줄을 쓴다. 관리 clone은 스크립트만 다룬다",
+      "design": "모듈 스킬 5-1(B1+B2): oFono data 후보(C0 case data-apn-auth-reject 로그, 변형 DB issue-db-ofono-modules), 템플릿 모듈 스킬 레포. 동의 뒤 `triage.py module --for deep`이 받은 사본(`read`)·deep-input.json·심층 타임라인(뷰)만 읽고 `deep-output.md` → `check-output --for deep`이 리포트 줄과 근거 원문 검사 줄을 쓴다. 관리 clone은 스크립트만 다룬다. 11/27: 채택된 1위의 모듈 문서 5-1이라 기준 줄(`--look-at`, CP 거절 줄)을 준다 — 보류(조사 모드)면 run이 모듈 문서 5-1을 뺀다(`analyzer.skipped`)",
       "name": "module-skills-deep-template",
       "batch": "H",
-      "prompt": "oFono 로그로 MOCK-9076 분석해줘. 데이터가 안 붙는대. 로그는 logs/source.log. 기록은 하지 말고 분석만",
+      "prompt": "oFono 로그로 MOCK-9076 분석해줘. 데이터가 안 붙는대. 로그는 logs/source.log. --look-at \"SETUP_DATA_CALL rsp: pdp fail cause=USER_AUTHENTICATION(29)\". 기록은 하지 말고 분석만",
       "setup": {
         "db": "issue-db-ofono-modules",
         "jira": [
@@ -3036,17 +3038,17 @@
     },
     {
       "id": 79,
-      "design": "모듈 스킬 받기 실패(B1 §5.5·B2-24): Android data-disabled.log, 기본 site(analyzers.data.skill 있음, prefer 없음), 없는 레포 주소. `module --for deep`이 종료 2 `인증`과 `next`를 내고 리포트 줄을 '받기 실패(인증)'으로 고친다. 실행자는 우회(git·gh·자격 증명·다시 시도)도, 설치 스킬로 몰래 바꾸기(SKILL.md 읽기·Skill 호출)도 하지 않고 분류를 이어 간다",
+      "design": "모듈 스킬 받기 실패(B1 §5.5·B2-24): Android data-disabled.log, 기본 site(analyzers.data.skill 있음, prefer 없음), 없는 레포 주소. `module --for deep`이 종료 2 `인증`과 `next`를 내고 리포트 줄을 '받기 실패(인증)'으로 고친다. 실행자는 우회(git·gh·자격 증명·다시 시도)도, 설치 스킬로 몰래 바꾸기(SKILL.md 읽기·Skill 호출)도 하지 않고 분류를 이어 간다. 11/27: 스크립트가 채택한 1위의 흐름이라 기준 줄(`--look-at`)을 주고 RILJ 꼬리 줄이 있는 로그(`fixtures/data-disabled-tail.log`)를 쓴다 — 기준 없이 규칙만 맞은 1위는 보류라 조사 모드(질문 '조사할까요?' 하나)가 된다",
       "name": "module-skills-fetch-auth-fail",
       "batch": "H",
-      "prompt": "MOCK-9041 분석해줘 --dry-run. 로그: logs/data-disabled.log",
+      "prompt": "MOCK-9041 분석해줘 --dry-run --look-at \"notifyDataEnabledChanged: enabled=false\". 로그: logs/data-disabled.log",
       "setup": {
         "jira": [
           "MOCK-9041"
         ],
         "logs": [
           {
-            "src": "tests/fixtures/logs/data-disabled.log",
+            "src": "tests/skill_evals/fixtures/data-disabled-tail.log",
             "as": "data-disabled.log"
           }
         ],
@@ -3230,15 +3232,15 @@
       "id": 84,
       "name": "fit-check-confirmed-short",
       "batch": "FT",
-      "design": "1위 C=1(확신 일치, DATA-001-01 Data disabled)인데 `--explore` 세션 — 스킬이 `triage.py run`에 `--explore`를 넘겨 `explore.reason: fit_check`를 받고, 묻지 않고 `triage.py explore` → 적합성 확인. 1위가 증상·시각·슬롯을 설명하고 모순이 없는 쉬운 사례라 추가 조회(`--look-at` 재실행·`db_search`) 없이 같은 턴에 가설 1 = 1위로 짧게 끝내고 `check-output` → Step 7(11/17 F-FIT, explore.md 종합 판단 5번)",
-      "prompt": "MOCK-9084 로그 분석해줘 --dry-run --explore. 데이터가 안 붙는대. 로그: logs/data-disabled.log",
+      "design": "1위 C=1(DATA-001-01 Data disabled)을 사용자가 준 기준 줄(`--look-at`)로 스크립트가 채택했는데 `--explore` 세션 — 스킬이 `triage.py run`에 `--explore`를 넘겨 `explore.reason: fit_check`를 받고, 묻지 않고 `triage.py explore` → 적합성 확인. 1위가 증상·시각·슬롯을 설명하고 모순이 없는 쉬운 사례라 추가 조회(`--look-at` 재실행·`db_search`) 없이 같은 턴에 가설 1 = 1위로 짧게 끝내고 `check-output` → Step 7(11/17 F-FIT, explore.md 종합 판단 5번). 11/27: 스크립트가 채택한 1위의 흐름이라 기준 줄(`--look-at`)을 주고 RILJ 꼬리 줄이 있는 로그(`fixtures/data-disabled-tail.log`)를 쓴다 — 기준 없이 규칙만 맞은 1위는 보류라 조사 모드(질문 '조사할까요?' 하나)가 된다",
+      "prompt": "MOCK-9084 로그 분석해줘 --dry-run --explore --look-at \"notifyDataEnabledChanged: enabled=false\". 데이터가 안 붙는대. 로그: logs/data-disabled.log",
       "setup": {
         "jira": [
           "MOCK-9084"
         ],
         "logs": [
           {
-            "src": "tests/fixtures/logs/data-disabled.log",
+            "src": "tests/skill_evals/fixtures/data-disabled-tail.log",
             "as": "data-disabled.log"
           }
         ]
@@ -3251,7 +3253,7 @@
         "확인 화면에서는 '승인'.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "triage.py run … --explore → analysis.json explore {reason: fit_check} → 묻지 않고 triage.py explore → timeline.md만 읽고 추가 조회 없이 가설 1 = DATA-001-01(데이터 꺼짐)로 explore-output.md → check-output 통과 → Step 7 1위 수락 → append {cause: DATA-001-01} 계획 → 확인 화면 → dry-run이라 원격·PR 없음, lock 없음.",
+      "expected_output": "triage.py run … --explore --look-at \"notifyDataEnabledChanged: enabled=false\" → analysis.json explore {reason: fit_check} → 묻지 않고 triage.py explore → timeline.md만 읽고 추가 조회 없이 가설 1 = DATA-001-01(데이터 꺼짐)로 explore-output.md → check-output 통과 → Step 7 1위 수락 → append {cause: DATA-001-01} 계획 → 확인 화면 → dry-run이라 원격·PR 없음, lock 없음.",
       "assertions": [
         "triage.py run에 --explore를 붙였고 analysis.json explore.reason이 fit_check다",
         "--explore라 탐색 실행 여부를 묻지 않고 triage.py explore를 실행했고 check-output --for explore가 통과했다",
@@ -3266,15 +3268,15 @@
       "id": 85,
       "name": "fit-check-unfit-hold",
       "batch": "FT",
-      "design": "1위 C=1(DATA-001-01, 근거 phone 0)인데 Jira는 슬롯 1만 안 되고 슬롯 0은 정상·데이터를 끈 적 없음 — `--explore` 세션의 적합성 확인에서 1위가 증상·슬롯을 설명하지 못하므로 새 근거 없이 `가설 없음: 1위 DATA-001-01 부적합 — <이유>`와 `다음 확인:`으로 보류한다(보류가 정상 결과, 토큰 절약을 이유로 확정하지 않음). 리포트 탐색 줄에 이유와 다음 확인이 있고 1위를 확정하지 않는다(11/17 F-FIT·F-END)",
-      "prompt": "MOCK-9085 분석해줘 --dry-run --explore. 로그: logs/data-disabled.log",
+      "design": "1위 C=1(DATA-001-01, 근거 phone 0)을 사용자가 준 기준 줄로 스크립트가 채택했는데 Jira는 슬롯 1만 안 되고 슬롯 0은 정상·데이터를 끈 적 없음 — `--explore` 세션의 적합성 확인에서 1위가 증상·슬롯을 설명하지 못하므로 새 근거 없이 `가설 없음: 1위 DATA-001-01 부적합 — <이유>`와 `다음 확인:`으로 보류한다(보류가 정상 결과, 토큰 절약을 이유로 확정하지 않음). 리포트 탐색 줄에 이유와 다음 확인이 있고 1위를 확정하지 않는다(11/17 F-FIT·F-END). 11/27: 스크립트가 채택한 1위의 흐름이라 기준 줄(`--look-at`)을 주고 RILJ 꼬리 줄이 있는 로그(`fixtures/data-disabled-tail.log`)를 쓴다 — 기준 없이 규칙만 맞은 1위는 보류라 조사 모드(질문 '조사할까요?' 하나)가 된다",
+      "prompt": "MOCK-9085 분석해줘 --dry-run --explore --look-at \"notifyDataEnabledChanged: enabled=false\". 로그: logs/data-disabled.log",
       "setup": {
         "jira": [
           "MOCK-9085"
         ],
         "logs": [
           {
-            "src": "tests/fixtures/logs/data-disabled.log",
+            "src": "tests/skill_evals/fixtures/data-disabled-tail.log",
             "as": "data-disabled.log"
           }
         ]
@@ -3287,7 +3289,7 @@
         "확인 화면에서는 '승인'.",
         "그 밖에 여기 없는 질문에는 가장 안전한(아무것도 바꾸지 않거나 추천으로 표시된) 선택지를 고르고, 그 사실을 transcript에 적는다."
       ],
-      "expected_output": "triage.py run … --explore → explore {reason: fit_check}, must_show 슬롯 불일치 → triage.py explore → explore-output.md `가설 없음: 1위 DATA-001-01 부적합 — 슬롯 0 근거·슬롯 1 증상` + `다음 확인: 슬롯 1 로그` → check-output 통과, 리포트 탐색 줄에 둘 다 → Step 7에서 1위를 확정하지 않고 unresolved {type: DATA-001} → 확인 화면 → dry-run이라 원격·PR 없음, lock 없음.",
+      "expected_output": "triage.py run … --explore --look-at \"notifyDataEnabledChanged: enabled=false\" → explore {reason: fit_check}, must_show 슬롯 불일치 → triage.py explore → explore-output.md `가설 없음: 1위 DATA-001-01 부적합 — 슬롯 0 근거·슬롯 1 증상` + `다음 확인: 슬롯 1 로그` → check-output 통과, 리포트 탐색 줄에 둘 다 → Step 7에서 1위를 확정하지 않고 unresolved {type: DATA-001} → 확인 화면 → dry-run이라 원격·PR 없음, lock 없음.",
       "assertions": [
         "triage.py run에 --explore를 붙였고 analysis.json explore.reason이 fit_check다",
         "탐색 출력이 `가설 없음:`(1위 부적합 이유)과 `다음 확인:`이고 check-output을 통과했으며 리포트 탐색 분석 줄에 둘 다 있다",
@@ -3300,15 +3302,15 @@
       "id": 86,
       "name": "rerun-prior-no-repeat",
       "batch": "FT",
-      "design": "eval 85와 같은 슬롯 불일치 사례를 분석 전용·`--explore`로 보고(1회차 부적합 보류), 사용자가 새 로그 없이 '같은 로그로 한 번 더' 하면 재실행한다. 재실행 analysis.json `prior`에 이전 판단(`가설 없음` 이유)이 실리고, 2회차는 1회차와 같은 `--look-at` 조회를 되풀이하지 않으며 1위 DATA-001-01을 새 근거 없이 다시 고르지 않는다(11/17 F-NOREPEAT)",
-      "prompt": "MOCK-9086 로그 분석만 해줘, 기록하지 마 --explore. 로그: logs/data-disabled.log",
+      "design": "eval 85와 같은 슬롯 불일치 사례를 분석 전용·`--explore`로 보고(1회차 부적합 보류), 사용자가 새 로그 없이 '같은 로그로 한 번 더' 하면 재실행한다. 재실행 analysis.json `prior`에 이전 판단(`가설 없음` 이유)이 실리고, 2회차는 1회차에 스스로 한 `--look-at` 조회(사용자가 준 기준 줄은 빼고)를 되풀이하지 않으며 1위 DATA-001-01을 새 근거 없이 다시 고르지 않는다(11/17 F-NOREPEAT). 11/27: 스크립트가 채택한 1위의 흐름이라 기준 줄(`--look-at`)을 주고 RILJ 꼬리 줄이 있는 로그(`fixtures/data-disabled-tail.log`)를 쓴다 — 기준 없이 규칙만 맞은 1위는 보류라 조사 모드(질문 '조사할까요?' 하나)가 된다",
+      "prompt": "MOCK-9086 로그 분석만 해줘, 기록하지 마 --explore --look-at \"notifyDataEnabledChanged: enabled=false\". 로그: logs/data-disabled.log",
       "setup": {
         "jira": [
           "MOCK-9086"
         ],
         "logs": [
           {
-            "src": "tests/fixtures/logs/data-disabled.log",
+            "src": "tests/skill_evals/fixtures/data-disabled-tail.log",
             "as": "data-disabled.log"
           }
         ]
@@ -3324,12 +3326,12 @@
       "followups": [
         "SIM 1 로그는 더 구하지 못했어. 같은 로그로 한 번 더 봐줘"
       ],
-      "expected_output": "1회차: triage.py run --analysis-only … --explore → fit_check → 탐색 `가설 없음: 1위 DATA-001-01 부적합 …`·`다음 확인` → check-output 통과 → 분석 전용 리포트. 후속 메시지 뒤 같은 명령으로 재실행 → analysis.json prior.none = 1회차 이유 → 같은 조회·후보를 되풀이하지 않고 이전 판단과 다음 확인(슬롯 1 로그)을 알린다. plan.json 없음, lock 없음.",
+      "expected_output": "1회차: triage.py run --analysis-only … --explore --look-at \"notifyDataEnabledChanged: enabled=false\" → fit_check → 탐색 `가설 없음: 1위 DATA-001-01 부적합 …`·`다음 확인` → check-output 통과 → 분석 전용 리포트. 후속 메시지 뒤 같은 명령으로 재실행 → analysis.json prior.none = 1회차 이유 → 같은 조회·후보를 되풀이하지 않고 이전 판단과 다음 확인(슬롯 1 로그)을 알린다. plan.json 없음, lock 없음.",
       "assertions": [
         "triage.py run에 --explore를 붙였고 analysis.json explore.reason이 fit_check다",
         "1회차 check-output 결과가 `가설 없음`(1위 부적합)과 `다음 확인`이다",
         "후속 메시지 뒤 triage.py run을 다시 했고 그 analysis.json prior에 이전 판단(가설 없음 이유·가설)이 있다",
-        "1회차에 쓴 --look-at 조회를 2회차에서 같은 글로 되풀이하지 않았다",
+        "1회차에 스스로 한 --look-at 조회(프롬프트의 기준 줄은 빼고)를 2회차에서 같은 글로 되풀이하지 않았다",
         "2회차에 1위 DATA-001-01을 새 근거 없이 다시 고르지 않았다(다시 탐색했으면 그 출력이 가설 없음이거나 새 근거가 있다)",
         "분석 전용이라 plan.json이 없고 끝난 뒤 lock이 없다"
       ],
