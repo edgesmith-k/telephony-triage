@@ -1358,3 +1358,18 @@ def test_post_reminds_explore_lines(tmp_path):
                   home=_post_home(tmp_path, rec))
     ctx = out["hookSpecificOutput"]["additionalContext"]
     assert "report.md 탐색 분석 줄 전부(3줄)" in ctx and "채택·분류 질문" in ctx
+
+
+
+def test_post_holds_explore_lines_while_recheck_is_open(tmp_path):
+    """리뷰 1127 9번: check-output이 형식 경고와 `next`(고쳐 한 번 다시 검사)를 냈으면 post 안내가 "같은 메시지 끝에 채택·분류
+    질문"을 시키지 않는다 — 다시 검사 뒤(`next` 없음)에는 그대로 안내한다."""
+    rec = _explore_rec(tmp_path)["c"][0]
+    warned = json.dumps({"line": EX_BLOCK[0], "format_warnings": ["가설 1: x"], "next": "고쳐 다시 검사"}, ensure_ascii=False)
+    out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": EX_CMD}, "tool_response": {"stdout": warned}},
+                  home=_post_home(tmp_path, rec))
+    assert out is None or "채택·분류 질문" not in out["hookSpecificOutput"]["additionalContext"], out
+    last = json.dumps({"line": EX_BLOCK[0], "format_warnings": ["가설 1: x"]}, ensure_ascii=False)
+    out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": EX_CMD}, "tool_response": {"stdout": last}},
+                  home=_post_home(tmp_path, rec))
+    assert "채택·분류 질문" in out["hookSpecificOutput"]["additionalContext"], out

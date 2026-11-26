@@ -1292,16 +1292,39 @@ def test_e77_rewriting_a_no_recompute_as_not_applicable_keeps_the_failure(tmp_pa
 # --- 11/27 도구 결함 가-1(재계산 규칙 하나)·가-2(정상 가설)·가-3(실패 뒤 흔적)·가-6(다시 부름) ----------------------------------
 
 def test_ga1_not_applicable_is_an_answer_and_warning_says_how(tmp_path, capsys):
-    """가-1: 머리에 retry 낱말만 있고 원인이 숫자 값이 아닌 가설은 `메커니즘 재계산: 해당 없음 — <이유>`로 경고 없이 끝난다(게이트 5도
-    통과 — 숫자 기대 없음). 칸이 없으면 경고가 쓰는 조건과 `해당 없음` 쓰는 법을 알려 준다. 낱말 없는 가설은 칸이 없어도 경고 없음."""
+    """가-1: 재계산 규칙은 게이트 5 조건 하나다 — 가장 이른 false 단계 `기대`에 숫자가 없으면 칸이 없어도·`해당 없음 — <이유>`도 경고
+    없이 통과한다(가설 머리의 retry 낱말은 보지 않는다, 리뷰 1127 2번 — 전에는 낱말만 보고 경고했다)."""
     head = "retry 뒤 APN 프로필 변환이 틀려 SETUP_DATA_CALL이 거절됨"
     data, inv = _run(_job(tmp_path / "na"), _out(head=head, extra=("메커니즘 재계산: 해당 없음 — 원인은 프로필 변환이다",)), capsys)
     assert "format_warnings" not in data and inv["status"] == "identified", (data, inv["gate"])
-    data, _inv = _run(_job(tmp_path / "none"), _out(head=head), capsys)
-    warn = next(w for w in data["format_warnings"] if "메커니즘 재계산:` 없음" in w)
-    assert "`메커니즘 재계산: 해당 없음 — <이유>`" in warn and "숫자 값" in warn, warn
-    data, _inv = _run(_job(tmp_path / "plain"), _out(head="APN 프로필 변환이 틀려 SETUP_DATA_CALL이 거절됨"), capsys)
-    assert not any("메커니즘" in w for w in data.get("format_warnings") or []), data
+    data, inv = _run(_job(tmp_path / "none"), _out(head=head), capsys)
+    assert "format_warnings" not in data and inv["status"] == "identified", (data, inv["gate"])
+
+
+def test_numeric_expectation_with_not_applicable_warns_and_recheck_can_fix(tmp_path, capsys):
+    """리뷰 1127 2번: 원인은 숫자 값이 아니어도 가장 이른 false 단계 `기대`에 `5초`가 있으면 게이트 5가 재계산을 요구한다. 그때
+    `해당 없음`·칸 없음은 형식 경고(쓸 일을 알려 줌)와 `next`(다시 검사 1회)를 받고, 숫자와 `예`로 고치면 통과한다 — 전에는 경고
+    없이 근거 부족으로 끝나 다시 검사할 길이 없었다."""
+    from triagelib import output
+    na = "메커니즘 재계산: 해당 없음 — 원인은 인증 실패 응답이지 시간 값이 아니다"
+    for name, extra in (("na", (na,)), ("none", ())):
+        job = _job(tmp_path / name)
+        data, inv = _run(job, _out(rows=NUM_ROWS, extra=extra), capsys)
+        assert _failed(inv) == ["숫자 메커니즘"], (name, inv["gate"])
+        warn = next(w for w in data["format_warnings"] if "단계 2 `기대`에 시간·횟수 숫자" in w)
+        assert output.MECH_RULE in warn and "다시 계산해 숫자와" in warn and data["next"] == output.FORMAT_NEXT, (name, warn)
+        _d, inv = _run(job, _out(rows=NUM_ROWS, extra=("메커니즘 재계산: 01.2-00.1 = 1.1초 → 고치면 결과가 뒤집히나: 예",)), capsys)
+        assert inv["status"] == "identified", (name, inv["gate"])
+
+
+def test_explicit_no_at_line_end_is_not_read_as_not_applicable(tmp_path, capsys):
+    """리뷰 1127 1번: `해당 없음`과 줄 끝 옛 꼴 답 `아니오`가 같이 있으면 `해당 없음`이 `아니오`를 지워 게이트 5를 통과했고 `mech_no`도
+    안 남았다. 명시적 답이 있으면 `해당 없음`으로 보지 않는다(형식 경고의 `아니오` 경고도 같다)."""
+    job = _job(tmp_path)
+    data, inv = _run(job, _out(extra=("메커니즘 재계산: 해당 없음 — 재시도 간격 30초로 다시 계산해도 같은 거절 → 아니오",)), capsys)
+    assert _failed(inv) == ["숫자 메커니즘"] and inv["gate"][4]["why"].startswith("재계산 답이 아니오"), inv["gate"]
+    assert _rec(job)["mech_no"] == inv["cause"]
+    assert any("'아니오'" in w for w in data["format_warnings"]), data
 
 
 def test_ga1_no_answer_warning_names_both_ways_and_the_carry(tmp_path, capsys):
@@ -1373,14 +1396,32 @@ def test_5_held_c1_top_must_be_compared_and_match_points_to_existing_cause(tmp_p
     """외부 설계 리뷰 1·5(11/27): 1위 C=1인데 채택 안 함(조사 모드 `채택 안 함`)이면 탐색이 그 1위 원인을 `후보 확인`으로 이번 실패와
     대조한다 — 없으면 형식 경고. `맞음`(근거 원문 확인)이면 조사 결론 머리에 "규칙 1위와 같음"이고 기록 안내는 새 원인이 아니라 그
     기존 원인. 대조하지 않은 채로 통과면 "관측된 규칙 일치"가 "원인은 맞았지만 채택 안 함"이라고 적는다."""
+    from triagelib import output
     top = dict(OK_KEYS["candidates"][0])            # C=1
     job = _job(tmp_path / "a", cands=[top])
     assert json.loads((job / "analysis.json").read_text(encoding="utf-8"))["investigate"] == {"mode": True, "reason": "채택 안 함"}
     data, inv = _run(job, _out(), capsys)
-    assert any(w.startswith("1위 규칙 DATA-001-01가 맞았지만") for w in data["format_warnings"]), data
+    assert output.CHECK_TOP_MISSING.format(causes="DATA-001-01") in data["format_warnings"], data
     assert any("원인은 맞았지만 채택 안 함" in r for r in _cause_rows(job))
     job = _job(tmp_path / "b", cands=[top])
     data, inv = _run(job, _out(extra=("후보 확인:", f"- DATA-001-01: 맞음 — {Q1}")), capsys)
     assert "format_warnings" not in data and inv["top_match"] == "DATA-001-01", (data, inv)
     rows = _cause_rows(job)
     assert rows[0].endswith("(규칙 1위 DATA-001-01와 같음)") and any("그 기존 원인(DATA-001-01)을 고른다" in r for r in rows), rows
+
+
+def test_5_held_c1_event_cause_must_be_compared_too(tmp_path, capsys):
+    """리뷰 1127 5번: 보류 사유가 코멘트 단서 미확인·ambiguous·ineligible이면 판단(`decision.events[]`)이 기준 사건에 붙인 원인이
+    1위가 아닐 수 있다 — 그 원인(후보 목록에 있을 때)도 `후보 확인`에서 대조하라고 경고한다. 후보 목록에 없는 원인은 요구하지 않는다."""
+    from triagelib import output
+    top, second = dict(OK_KEYS["candidates"][0]), {**OK_KEYS["candidates"][0], "type": "DATA-002", "cause": "DATA-002-01", "score": 0.5}
+    job = _job(tmp_path / "a", cands=[top, second])
+    analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    analysis["decision"] = {**HELD, "reason": "ambiguous", "events": [
+        {"type": "DATA-002", "ref": True, "result": "held", "cause": "DATA-002-01"},
+        {"type": "DATA-009", "ref": True, "result": "held", "cause": "DATA-009-01"},      # 후보 목록에 없음
+        {"type": "DATA-001", "ref": False, "result": "observed", "cause": "DATA-001-01"}]}
+    (job / "analysis.json").write_text(json.dumps(analysis, ensure_ascii=False), encoding="utf-8")
+    data, _inv = _run(job, _out(extra=("후보 확인:", f"- DATA-001-01: 아님 — 찾았는데 없음: logs-masked 15:10:01 둘레")), capsys)
+    assert output.CHECK_TOP_MISSING.format(causes="DATA-002-01") in data["format_warnings"], data
+    assert not any("DATA-009-01" in w for w in data["format_warnings"]), data

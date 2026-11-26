@@ -613,8 +613,9 @@ def test_flow_hint_set_flow_step_needs_top_evidence_near_stopped_step():
 
 def test_flow_hint_missing_step_window_is_wait_time_not_instance_life():
     """F-1(리뷰어 재현과 같은 모양): 연결 단계 `없음`이고 1분 뒤 다른 원인(비행기 모드)으로 끊긴 인스턴스에 그 원인을 걸지 않는다.
-    창 = 앞 단계(설정 만듦) 시각 ~ + log_end_sec(그 전에 끝 줄이 오면 끝 줄)."""
-    rows = _normal()[:3] + [_normal()[4], (60.0, "DN-1-C", DISCONNECT), (70.0, "Other", "tick")]
+    창 = 앞 단계(설정 만듦) 시각 ~ + log_end_sec(그 전에 끝 줄이 오면 끝 줄). 뒤 단계(망 검증) 줄은 없다 — 있으면 멈춘 단계가
+    아니라 제안을 내지 않는다(리뷰 1127 6번, 아래 `..._when_later_step_progressed`)."""
+    rows = _normal()[:3] + [(60.0, "DN-1-C", DISCONNECT), (70.0, "Other", "tick")]
     late, early = _top("DATA-002-01", "data", ts=(59.9, 60.0)), _top("DATA-002-01", "data", ts=(5.0,))
     for version in ("17", None):
         assert _hint(rows, ("data-setup",), version, top=late) == [], version
@@ -666,6 +667,16 @@ def test_flow_hint_put_flow_only_when_later_step_line_appeared():
     both = _check(worded[:-1] + _normal(tag="DN-2-C", t=40.0) + [(80.0, "Other", "tick")])
     assert [_sig(i) for i in both[0]["instances"]] == ["ok ok 없음 -", "ok ok ok ok"]
     assert [x for x in flow_section({"flows": both}, {"start": _ts(-1), "end": _ts(1)}, _ts(0), "16", {})[1] if "(흐름):" in x] == []
+
+
+def test_flow_hint_no_stopped_step_suggestion_when_later_step_progressed():
+    """리뷰 1127 6번: `없음`인데 뒤 단계가 진행된 인스턴스(줄을 찾지 못했을 뿐 멈춘 단계가 아님)에는 1위 근거가 창 안이어도
+    "이 단계가 멈춘 시각" 제안(set-flow-step·새 원인 초안)을 내지 않는다 — 버전이 다르면 문구 다름 후보(put-flow)로 넘어간다."""
+    worded = _normal()[:3] + [_normal()[4], TICK]
+    for top in (_top("DATA-001-01", "data", ts=(0.05,)), _top(None, "data", ts=(0.05,))):
+        assert _hint(worded, ("data-setup",), "17", top=top) == [], top
+        assert [x.split(" — ")[0] for x in _hint(worded, ("data-setup",), "16", top=top)] == [
+            "규칙 제안 (흐름): [이슈 DB] put-flow data/data-setup"], top
 
 
 def test_flow_hint_looks_at_every_deviating_instance_and_moves_that_block_first():

@@ -1420,8 +1420,8 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
         decision = _decision(candidates, anchor, match.get("eligibility"), self.clue_location((match.get("eligibility") or {}).get("via")))
         self.mark_not_a_bug(decision)
         near = self.near_causes(info, match, candidates, decision, (no_candidate or {}).get("search_hits"))
-        analyzer = self.analyzer(lead_first(decision, candidates),     # 심층 분석 카테고리: 채택 원인(없으면 1위)
-                                 issuepost.investigate_mode({"candidates": candidates, "decision": decision})["mode"])
+        investigating = issuepost.investigate_mode({"candidates": candidates, "decision": decision})["mode"]
+        analyzer = self.analyzer(lead_first(decision, candidates), investigating)     # 심층 분석 카테고리: 채택 원인(없으면 1위)
         explore = self.explore(lead_first(decision, candidates), decision)     # 적합성 확인도 채택 원인 기준
         later = getattr(self, "fit_later", None)
         explore_input = self.explore_input(around, anchor) if (explore and explore["when"] != "never") or later else None
@@ -1433,7 +1433,7 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
                                         for p, q in zip(partial, match["partial"])]
             explore_input["around_alt"] = sorted({h["ts"] for q in match["partial"][:len(partial)]
                                                   for h in q.get("hits") or []})[:3]
-        uncollected = [] if candidates and candidates[0]["C"] else \
+        uncollected = [] if not investigating else \
             [{"tag": _clip(u.get("tag"), 40), "lines": u.get("lines"), "warn": u.get("warn")}
              for u in events.get("uncollected_tags") or []][:3]
         for cand in candidates:
@@ -1484,9 +1484,11 @@ class Driver(AnchorMixin, CacheMixin, ReportMixin):
             when = conf.get("when", "ask")
             return {"skill": conf.get("skill"), "when": when, **_ask_note(when, "5-1")}
         if src["source"] == "module":
-            if investigate and src["when"] != "never" and not getattr(self.args, "analyzer", None):
+            explore_off = getattr(self.args, "explore", None) is False or userconfig.get(self.cfg, "explore.when", "ask") == "never"
+            if investigate and src["when"] != "never" and not getattr(self.args, "analyzer", None) and not explore_off:
                 # 조사 모드(반입 8 할 일 2): 5-1은 판단을 바꾸지 못하고 5-2가 모듈 문서(1위 유형 참고 문서 포함)를 읽는다.
-                # never와 같은 모양이라 질문·check-output·window가 5-1을 건너뛴다. `--analyzer`면 지금처럼 돈다
+                # never와 같은 모양이라 질문·check-output·window가 5-1을 건너뛴다. `--analyzer`면 지금처럼 돈다.
+                # 5-2가 꺼져 있으면(`never`·`--no-explore`) 빼지 않는다 — 1위를 이번 실패와 대조할 단계가 없어진다(리뷰 1127 4번)
                 return {"skipped": INVESTIGATE_SKIP, "when": "never"}
             return {"category": cat, "when": src["when"], **_ask_note(src["when"], "5-1")}
         if src["source"] == "error":         # when: never → SKILL "never면 생략"이 5-1 질문을 건너뛴다

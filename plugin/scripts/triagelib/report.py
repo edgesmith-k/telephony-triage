@@ -38,6 +38,7 @@ _PICK_LABEL = {"nearest": "발생 시각에 가장 가까운 것", "last": "기�
 # 앞까지가 결론이다(포털이 그 앞만 남긴다 — 그 앞에 Step 7을 쓰지 않는다)
 CONCLUSION_PREFIX = "- 결론: "
 RESOLUTION_PREFIX, RESOLUTION_CHECK = "- 해결책: ", "   해결책 검증: "
+FIX_STATUS_PREFIX = "- 수정 상태: "
 FIT_HOLD_CONCLUSION = "채택 후보 {cause}가 증상과 맞지 않아 보류(탐색 분석 참조). 다음: Step 7에서 보류를 고르거나 근거 로그 확인"
 FIT_HOLD_RESOLUTION, FIT_HOLD_CHECK = "- 해결책(1위 기준, 보류됨): ", "보류(1위 부적합)"
 # 정상 보류(`fit_hold_reason: normal`): 탐색 분석이 그 줄을 설계상 정상 동작으로 봤다 — 부적합 문구와 따로
@@ -820,6 +821,8 @@ def _flow_hint(rows: list, version, causes: dict, top: dict | None, log_end: flo
     for n, f, inst, first in devs:
         if not top or top.get("category") != f["flow"].split("/")[0] or not _near_stop(top.get("ts") or (), inst, first, log_end):
             continue
+        if inst.get("later_step") and inst["steps"][first]["verdict"] == "없음":     # 뒤 단계가 진행됨 — 멈춘 단계가 아니다(리뷰 1127 6번)
+            continue
         st = f["steps"][first]
         ref = f"{f['flow']}/{st['id']}"
         if top.get("cause"):
@@ -1526,7 +1529,7 @@ class ReportMixin:
                                 f"{outside['total']}건"))
             ana += [f"  - {_error_line(e)}" for e in outside["rows"][:3]]
         logs = r["logs"]
-        if logs.get("uncollected_tags"):       # 후보 없음·원인 미확인일 때만 core가 채운다
+        if logs.get("uncollected_tags"):       # 조사 모드(채택 안 함)일 때만 core가 채운다
             tags = ", ".join(f"{u['tag']} {u['lines']}줄(W/E {u['warn']})" for u in logs["uncollected_tags"])
             ana.append(add(11, "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): " + tags))
         in_range = {True: "발생 시각 포함", "partial": "일부만 포함", False: "로그 범위 밖",
@@ -1566,7 +1569,7 @@ class ReportMixin:
                 verified = "검증됨" if top.get("resolution_verification") == "verified" else "⚠ 미검증"
                 lead = NOT_A_BUG_RESOLUTION if not_a_bug_cause(dec, top["cause"]) else ""
                 nxt.append(f"{RESOLUTION_PREFIX}{lead}{top.get('resolution') or '-'}{RESOLUTION_CHECK}{verified}")
-                nxt.append(f"- 수정 상태: {top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
+                nxt.append(f"{FIX_STATUS_PREFIX}{top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
             if top.get("_version_mismatch"):
                 cause_l.append(f"- 다른 버전 원인 ({self.platform_label} {', '.join(top['_version_mismatch'])})")
             cause_l.append(f"- 기존 사례: Jira {top.get('issue_count') or 0}건 ({', '.join(top.get('issue_recent') or []) or '-'})")

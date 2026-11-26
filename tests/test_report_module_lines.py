@@ -365,6 +365,15 @@ def test_investigate_forced_by_analyzer_flag_runs_51():
     assert _deep_line(text) == core.DEEP_MODULE_PENDING.format(platform="android", category="data", key="MOCK-9051")
 
 
+def test_investigate_with_explore_off_keeps_51():
+    """리뷰 1127 4번: 5-2가 꺼져 있으면(`--no-explore`·`explore.when: never`) 조사 모드여도 5-1을 빼지 않는다 — 빼면 1위 규칙을
+    이번 실패와 대조하는 단계가 하나도 없다."""
+    for extra, user in ((("--no-explore",), REMOTE), ((), {**REMOTE, "explore": {"when": "never"}})):
+        analysis, text = _run_c0(user, *extra)
+        assert analysis["analyzer"] == {"category": "data", "when": "ask", "note": NOTE_51}, extra
+        assert _deep_line(text) == core.DEEP_MODULE_PENDING.format(platform="android", category="data", key="MOCK-9051")
+
+
 def test_investigate_registered_skill_source_still_runs_51():
     """출처가 등록 스킬(`prefer: skill`)이면 조사 모드여도 지금처럼 돈다."""
     user = {**REMOTE, "analyzers": {"data": {"skill": "mock-data-analyzer", "prefer": "skill"}}}

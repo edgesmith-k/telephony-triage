@@ -650,13 +650,17 @@ def mode_post(inp) -> dict | None:
     else:
         lo = start - shown.ANCHOR_SLACK
     found: dict[str, tuple] = {}
+    text = _response_text(inp.get("tool_response"))
+    # check-output이 형식 경고와 `next`(그 칸을 고쳐 한 번 다시 검사)를 냈으면 탐색 줄·채택 질문 안내는 다시 검사 뒤로 미룬다(리뷰 1127 9번)
+    recheck = '"format_warnings"' in text and '"next"' in text
     recs = [(t, r) for (t, _), r in zip(recs, with_explore([r for _, r in recs]))]
     for t, r in recs:
         if t < lo:
             continue
         kind = r.get("kind")
         if kind == "evidence" and str(r.get("key") or "").endswith("/explore") and r.get("lines"):
-            found[r["key"]] = ("check-output --for explore 결과", f"{EXPLORE_NAME} 전부({len(r['lines'])}줄)", "채택·분류 질문")
+            if not recheck:
+                found[r["key"]] = ("check-output --for explore 결과", f"{EXPLORE_NAME} 전부({len(r['lines'])}줄)", "채택·분류 질문")
             continue
         if kind in ("push", "post"):
             found[kind] = (KIND_NAME[kind], f"전문({len(shown.screen_lines(str(r.get('block') or '')))}줄)", "승인 질문")
@@ -669,7 +673,7 @@ def mode_post(inp) -> dict | None:
             found[kind] = (KIND_NAME[kind], f"출력 줄 전부({len(r['lines'])}줄)", "다음 질문")
     if not found:
         return None
-    saved = _persisted(inp.get("tool_response"), _response_text(inp.get("tool_response")))
+    saved = _persisted(inp.get("tool_response"), text)
     if saved is not None:       # 출력이 길어 파일로 남고 모델에는 일부만 보인다: 줄 수 대신 그 파일
         where = saved or "원래 명령의 출력 파일"
         parts = [f"{NOTE} — 이 출력({name})은 잘려 보였고 사용자에게도 안 보인다. 전문은 {where}에 있다 — 그 파일을 읽어 "

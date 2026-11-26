@@ -196,6 +196,7 @@ def test_unfit_top_holds_with_reason_and_next_check_then_rerun_carries_prior():
     out = tmp("tt-end-") / "x"
     assert _run(item, out, "--explore", *look)["explore"]["reason"] == "fit_check"
     assert run_json("triage.py", ["explore", item["key"], "--out", out])["timeline"] == "timeline.md"
+    assert _report_line(out, "- 수정 상태: ") is not None                    # 채택이라 run은 수정 상태 줄을 싣는다
     (out / "explore-output.md").write_text("가설 없음: 1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다\n"
                                            "다음 확인: 실패 시각 앞뒤 1분 radio 로그\n", encoding="utf-8")
     checked = run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", out])
@@ -207,6 +208,7 @@ def test_unfit_top_holds_with_reason_and_next_check_then_rerun_carries_prior():
     assert _report_line(out, "- 결론:") == ("- 결론: 채택 후보 DATA-001-01가 증상과 맞지 않아 보류(탐색 분석 참조). "
                                          "다음: Step 7에서 보류를 고르거나 근거 로그 확인")
     assert _report_line(out, "- 해결책(1위 기준, 보류됨): ").endswith("해결책 검증: 보류(1위 부적합)")
+    assert _report_line(out, "- 수정 상태: ") is None, "리뷰 1127 7번: run 때 보류·Jira 본문처럼 수정 상태 줄을 뺀다"
     assert "fit_hold_unwritten" not in json.loads((out / "check-output.json").read_text(encoding="utf-8"))["explore"]
     assert json.loads((out / "check-output.json").read_text(encoding="utf-8"))["explore"]["fit_hold"] == "DATA-001-01"
     assert json.loads((out / "analysis.json").read_text(encoding="utf-8"))["candidates"][0]["C"] == 1
@@ -869,3 +871,37 @@ def test_opened_fit_check_carries_deep_checks_into_timeline_and_survives_rerun()
     assert _report_line(out, "- 탐색 분석").startswith("- 탐색 분석 (추정, timeline.md ")
     off = _run(item, out, "--look-at-source", "model", "--look-at", LOOK, "--no-explore")
     assert "explore" not in off and not (out / "timeline.md").exists() and not (out / "explore-input.json").exists()
+
+
+def test_rerun_during_investigation_that_adopts_keeps_explore_as_fit_check():
+    """리뷰 1127 12번(추측 확인): 1위 C=1 보류(기준 없음) 조사 중에 모델이 코멘트에서 고른 줄로 다시 한 run(`--look-at-source
+    model`, 플래그 없음)이 채택으로 바뀌어도 탐색이 사라지지 않는다 — 적합성 확인으로 이어 가 타임라인을 다시 만들고
+    `check-output --for explore`가 `탐색 분석 해당 없음`으로 막히지 않는다(bcdd7a51 재실행 이어받기)."""
+    item = _padded()
+    out = tmp("tt-r12-") / "x"
+    first = _run(item, out)
+    assert first["decision"]["state"] == "held" and first["investigate"]["mode"], first["decision"]
+    assert first["explore"]["reason"] == "cause_unconfirmed"
+    assert run_json("triage.py", ["explore", item["key"], "--out", out])["timeline"] == "timeline.md"
+    again = _run(item, out, "--look-at-source", "model", "--look-at", LOOK)
+    assert again["decision"]["state"] == "accepted" and again["explore"]["reason"] == "fit_check", again.get("explore")
+    assert (out / "timeline.md").is_file()
+    (out / "explore-output.md").write_text("가설 없음: 1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다\n"
+                                           "다음 확인: 실패 시각 앞뒤 1분 radio 로그\n", encoding="utf-8")
+    checked = run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", out])
+    assert "가설 없음: 1위 DATA-001-01 부적합" in checked["line"], checked
+
+
+def test_uncollected_tags_shown_for_held_c1_investigation():
+    """리뷰 1127 11번: 수집 안 된 태그 정보(`logs.uncollected_tags`)는 조사 모드면 1위 C=1 보류에도 싣는다(조사 모드의 다른 이유
+    값과 같게). 채택이면 싣지 않는다(그대로)."""
+    item = _padded()
+    log = Path(item["logs"][0])
+    rows = log.read_text(encoding="utf-8").splitlines()
+    rows.insert(5, "09-20 14:30:05.000  1234  1244 W GsmCdmaConnection: probe")     # 수집된 pid의 tags.yaml 밖 태그
+    log.write_text("".join(r + "\n" for r in rows), encoding="utf-8")
+    held = _run(item, tmp("tt-unc-") / "x")
+    assert held["decision"]["state"] == "held" and held["investigate"]["mode"], held["decision"]
+    assert [u["tag"] for u in held["logs"].get("uncollected_tags") or []] == ["GsmCdmaConnection"], held["logs"]
+    adopted = _run(item, tmp("tt-unc-") / "y", "--look-at", LOOK)
+    assert adopted["decision"]["state"] == "accepted" and "uncollected_tags" not in adopted["logs"], adopted["logs"]

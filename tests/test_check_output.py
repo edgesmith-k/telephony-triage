@@ -978,7 +978,8 @@ def test_explore_chain_warnings(tmp_path, capsys):
         "not_earliest": (_explore_out([("망 인증 거절", [Q1])], _chain(CHAIN_FALSE2, "단계 3 — 연결 안 됨")),
                          "첫 갈라짐 단계 3 ≠ 표의 가장 이른 false 단계 2"),
         "timer": ("가설 1: 재시도 타이머가 늦게 풀림\n원인 층: 프레임워크\n" + _explore_out([("x", [Q1])],
-                  _chain(CHAIN_FALSE2, "단계 2"))[len("가설 1: x\n"):], "`메커니즘 재계산:` 없음"),
+                  _chain([CHAIN_FALSE2[0], (2, "5초 안에 SETUP 응답이 성공", Q1, "false")], "단계 2"))[len("가설 1: x\n"):],
+                  "`메커니즘 재계산:`이 없음"),
     }
     for name, (text, needle) in cases.items():
         job = make_job(tmp_path / name, "explore", "plain")
@@ -1059,7 +1060,7 @@ def test_explore_chain_claim_number_and_flip_answer():
     assert warn(**{"첫 갈라짐": "2", "메커니즘 재계산": mech + "예|아니오"}) == ["가설 1: 메커니즘 재계산의 답이 틀 그대로(`예|아니오`) — 예나 아니오 하나만"]
     got = warn(**{"첫 갈라짐": "단계 2", "메커니즘 재계산": mech + "아니오 (간격이 달라도 같은 예외)"})
     assert got == ["가설 1: 메커니즘 재계산이 '아니오'(고쳐도 결과가 안 뒤집힘)인데 가장 유력 — 재계산으로 보면 그 값은 원인이 "
-                   "아니다. 값이 원인이면 가설을 고치고, 원인이 숫자 값이 아니면 처음부터 `해당 없음 — <이유>`가 맞다"]
+                   "아니다. 값이 원인이면 가설을 고치고, 그 단계 `기대`에 시간·횟수 숫자가 없으면 처음부터 `해당 없음 — <이유>`가 맞다"]
     big = {**base["기대 체인"][0], "관측": "x" * 800}
     assert warn(**{"첫 갈라짐": "단계 2", "메커니즘 재계산": mech + "예", "기대 체인": [big]}) == [
         f"가설 1: 기대 체인 단계 2의 칸이 {core.FIELD_MAX_BYTES}바이트를 넘음 — 줄여 쓴다"]
