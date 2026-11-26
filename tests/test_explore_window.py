@@ -186,6 +186,17 @@ def test_flow_brief_orders_deviation_first_inside_window(tmp_path):
     assert HEAD_BAD in text and evidence.source_text(text)[0].count("\n") == 0       # 머리 줄은 근거 원문이 아니다
 
 
+def test_flow_brief_missing_step_with_later_step_says_later_appeared(tmp_path):
+    """없음 + later_step: 판정 값(벗어남·없음)은 그대로, 뒤 단계 줄이 나왔다는 것을 싣는다(리포트 흐름 절과 같은 사실)."""
+    doc = json.loads(json.dumps(FLOW))
+    doc["flows"][0]["steps"].append({"id": "up", "title": "연결됨", "suspect": "z"})
+    doc["flows"][0]["instances"][1].update(later_step="up")
+    (tmp_path / "flow.json").write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    [bad, _] = report.flow_brief(tmp_path, EVENTS, "2026-09-20T05:32:09Z")
+    assert bad["result"] == "벗어남" and bad["verdict"] == "없음" and bad["later"] == "연결됨"
+    assert report.flow_head([bad]) == [HEAD_BAD + ", 뒤 단계 연결됨 줄은 나옴"]
+
+
 def test_no_flow_file_keeps_timeline_bytes(tmp_path):
     assert report.flow_brief(tmp_path, EVENTS) == [] and report.flow_head([]) == []
     before = report.timeline(KEY, EVENTS, "2026-09-20T05:32:09Z", 200)

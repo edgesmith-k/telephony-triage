@@ -419,9 +419,10 @@ def test_e2e_no_logs_asks_before_lock_then_pending_resume_and_release():
     assert done["status"] == "ok" and done["platform"] == "ofono", proc.stderr
     assert done["notes"][0].startswith("이어 하는 작업의 플랫폼(oFono)")
     assert (owork / "session.lock").exists() and not (ws.work / "MOCK-1001").exists()
-    # explore·release는 --platform 없이도 KEY 작업이 있는 다른 work_dir를 찾는다(explore: 작업은 찾았고 후보가 있어 해당 없음 = 1)
+    # explore·release는 --platform 없이도 KEY 작업이 있는 다른 work_dir를 찾는다(explore: 작업을 찾았다. 1위가 보류라 조사 모드 —
+    # 탐색 입력이 있어 타임라인을 쓴다, 11/27. 작업을 못 찾았으면 종료 2)
     explore = ws.run("triage.py", ["explore", "MOCK-1001"])
-    assert explore.returncode == 1 and "해당 없음" in explore.stderr
+    assert explore.returncode == 0 and (owork / "MOCK-1001" / "timeline.md").is_file(), explore.stderr
     released = ws.json("triage.py", ["release", "MOCK-1001"])
     assert released["released"] is True and not (owork / "session.lock").exists()
 

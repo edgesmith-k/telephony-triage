@@ -11,3 +11,6 @@ entries:
   - {after: 1, tag: "DNC-{phone}", level: I, msg: "onEvaluateNetworkRequests: reason=ROAMING_STATE_CHANGED"}
   - {after: 0.5, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null"}
   - {after: 10, tag: "DNC-{phone}", level: W, msg: "Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, Data disallowed reasons: ROAMING_DISABLED, candidate profile=null"}
+  # 11/27: 자격 검사가 '없어야 할 줄'(RILJ 요청)을 확인할 수 있게 RILJ 줄과 꼬리(마지막 근거 뒤 60초 넘게)를 둔다 — 기준 줄과 함께 채택 경로
+  - {after: 30, tag: "RILJ", msg: "[0901]> GET_CURRENT_CALLS [PHONE0]"}
+  - {after: 60, tag: "RILJ", msg: "[0901]< GET_CURRENT_CALLS {} [PHONE0]"}

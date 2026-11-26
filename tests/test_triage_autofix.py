@@ -95,22 +95,28 @@ def test_given_time_still_wins_over_auto_scan():
 
 
 def test_confirmed_top_gets_fit_check_only_with_explore_flag_or_always():
-    item = _confirmed()
-    plain = _run(item, tmp("tt-fit-") / "a")
-    assert plain["candidates"][0]["C"] == 1 and "explore" not in plain          # --explore 없는 세션은 이전과 같다
-    no = _run(item, tmp("tt-fit-") / "n", "--no-explore")
+    # 11/27: "확신 일치"는 1위 C=1이 아니라 스크립트의 채택이다 — 기준 줄로 채택되게 한다(기준 없이 돈 같은 로그는 보류, 아래 끝)
+    item, look = _padded(), ("--look-at", LOOK)
+    plain = _run(item, tmp("tt-fit-") / "a", *look)
+    assert plain["decision"]["state"] == "accepted" and "explore" not in plain          # --explore 없는 세션은 이전과 같다
+    no = _run(item, tmp("tt-fit-") / "n", "--no-explore", *look)
     assert "explore" not in no
     out = tmp("tt-fit-") / "b"
-    flagged = _run(item, out, "--explore")
+    flagged = _run(item, out, "--explore", *look)
     assert flagged["explore"] == {"reason": "fit_check", "when": "ask", "note": ASK_NOTE}
     assert (out / "explore-input.json").is_file()
     assert _report_line(out, "- 탐색 분석").startswith("- 탐색 분석 (추정): 미실행")
-    always = _run(item, tmp("tt-fit-") / "c", root=plugin_root(explore={"when": "always"}))
+    always = _run(item, tmp("tt-fit-") / "c", *look, root=plugin_root(explore={"when": "always"}))
     assert always["explore"] == {"reason": "fit_check", "when": "always"}
-    never = _run(item, tmp("tt-fit-") / "d", "--explore", root=plugin_root(explore={"when": "never"}))
+    never = _run(item, tmp("tt-fit-") / "d", "--explore", *look, root=plugin_root(explore={"when": "never"}))
     assert "explore" not in never                                       # never면 플래그가 있어도 열지 않는다
+    # 1위 C=1인데 보류(기준 없음 no_reference) → 조사 모드: 기본 설정(ask)에서도 탐색을 묻는다(외부 설계 리뷰 1)
+    held = _run(_confirmed(), tmp("tt-fit-") / "h")
+    assert held["candidates"][0]["C"] == 1 and held["decision"]["state"] == "held"
+    assert held["explore"] == {"reason": "cause_unconfirmed", "when": "ask", "note": ASK_NOTE}
+    assert held["investigate"] == {"mode": True, "reason": "채택 안 함"}
     # FR-07(P5): 끄는 쪽이 이긴다 — --no-explore면 always여도 열지 않는다
-    off = _run(item, tmp("tt-fit-") / "g", "--no-explore", root=plugin_root(explore={"when": "always"}))
+    off = _run(item, tmp("tt-fit-") / "g", "--no-explore", *look, root=plugin_root(explore={"when": "always"}))
     assert "explore" not in off and not (tmp("tt-fit-") / "g" / "explore-input.json").exists()
     # 기존 두 사유는 플래그와 상관없이 그대로
     unresolved = _run(_unresolved(), tmp("tt-fit-") / "e", "--explore")
@@ -124,37 +130,39 @@ def test_cause_unconfirmed_reason_unchanged(tmp_path):
     triage = importlib.import_module("triage")
     no_note = lambda: {"at": None, "note": None}  # noqa: E731
     drv = SimpleNamespace(cfg={}, warnings=[], args=SimpleNamespace(explore=True), look_inputs=no_note)
+    acc = {"state": "accepted"}         # 11/27: fit_check 경로는 채택일 때(1위 C=1이어도 보류면 조사 모드 — cause_unconfirmed)
     assert triage.Driver.explore(drv, [{"C": 0}])["reason"] == "cause_unconfirmed"
     assert triage.Driver.explore(drv, [])["reason"] == "no_candidate"
-    assert triage.Driver.explore(drv, [{"C": 1}])["reason"] == "fit_check"
+    assert triage.Driver.explore(drv, [{"C": 1}], acc)["reason"] == "fit_check"
+    assert triage.Driver.explore(drv, [{"C": 1}], {"state": "held", "reason": "ambiguous"})["reason"] == "cause_unconfirmed"
     drv.args.explore = None
-    assert triage.Driver.explore(drv, [{"C": 1}]) is None
+    assert triage.Driver.explore(drv, [{"C": 1}], acc) is None
+    assert triage.Driver.explore(drv, [{"C": 1}], {"state": "held", "reason": "no_reference"})["reason"] == "cause_unconfirmed"
     always = SimpleNamespace(cfg={"explore": {"when": "always"}}, warnings=[], args=SimpleNamespace(explore=False),
                              look_inputs=no_note)
-    assert triage.Driver.explore(always, [{"C": 1}]) is None                       # --no-explore > always (P5)
+    assert triage.Driver.explore(always, [{"C": 1}], acc) is None                  # --no-explore > always (P5)
     assert triage.Driver.explore(always, [{"C": 0}])["reason"] == "cause_unconfirmed"   # 기존 두 사유는 그대로
     # 잘못된 explore.when은 C=1 경로에서도 먼저 경고하고 ask로 본다(조용히 꺼지지 않는다)
     bad = SimpleNamespace(cfg={"explore": {"when": "sometimes"}}, warnings=[], args=SimpleNamespace(explore=True),
                           look_inputs=no_note)
-    assert triage.Driver.explore(bad, [{"C": 1}])["reason"] == "fit_check"
+    assert triage.Driver.explore(bad, [{"C": 1}], acc)["reason"] == "fit_check"
     assert bad.warnings == ["explore.when 값이 잘못됐다(sometimes). ask로 본다"]
     # FR-16(P9): 확인할 내용(--look-note)이 있으면 플래그 없이도 fit_check를 연다 — never·--no-explore는 그래도 끈다
     note = lambda: {"at": None, "note": "재시도가 오는지"}  # noqa: E731
     asked = SimpleNamespace(cfg={}, warnings=[], args=SimpleNamespace(explore=None), look_inputs=note)
-    assert triage.Driver.explore(asked, [{"C": 1}])["reason"] == "fit_check"
+    assert triage.Driver.explore(asked, [{"C": 1}], acc)["reason"] == "fit_check"
     asked.args.explore = False
-    assert triage.Driver.explore(asked, [{"C": 1}]) is None
+    assert triage.Driver.explore(asked, [{"C": 1}], acc) is None
     asked.args.explore, asked.cfg = None, {"explore": {"when": "never"}}
-    assert triage.Driver.explore(asked, [{"C": 1}]) is None
+    assert triage.Driver.explore(asked, [{"C": 1}], acc) is None
 
 
 def test_no_explore_is_in_request_hash_so_always_fit_check_is_not_reused():
     """P5: --no-explore는 입력 해시(args)에 든다 — 없으면 always 설정에서 fit_check를 연 결과가 --no-explore 실행에 재사용됐다."""
     ws = Workspace(root=plugin_root(explore={"when": "always"}))
-    log = tmp("tt-fit-hash-") / "roaming.log"
-    log.write_bytes((REPO / "tests/fixtures/logs/data-roaming-disabled.log").read_bytes())
+    log = padded_log(REPO / "tests/fixtures/logs/data-roaming-disabled.log", tmp("tt-fit-hash-") / "roaming.log")    # 채택되게(11/27)
     args = ["run", "MOCK-9005", "--dry-run", "--issue-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
-            "--logs", log, "--code", "skip"]
+            "--logs", log, "--code", "skip", "--look-at", ROAMING_LOOK]
     first = ws.json("triage.py", args)
     assert first["status"] == "ok" and first["explore"]["reason"] == "fit_check", first
     off = ws.json("triage.py", [*args, "--no-explore"])
@@ -162,6 +170,11 @@ def test_no_explore_is_in_request_hash_so_always_fit_check_is_not_reused():
     again = ws.json("triage.py", args)                                   # 플래그 없음은 처음 해시 그대로
     assert again["explore"]["reason"] == "fit_check"
     ws.json("triage.py", ["release", "MOCK-9005"])
+
+
+# MOCK-9005 실패 줄(같은 줄이 10초 간격으로 두 번 — 시각으로 한 곳을 고른다, 단계 5 §8-5). 기준 줄이 있어야 1위가 채택된다
+ROAMING_LOOK = ("09-22 08:00:03.500  1234  1250 W DNC-1: Data evaluation: evaluation reason:ROAMING_ENABLED_CHANGED, "
+                "Data disallowed reasons: ROAMING_DISABLED, candidate profile=null")
 
 
 def test_fit_drops_prior_hyps_then_prior_when_only_top_is_left():
@@ -179,10 +192,11 @@ def test_fit_drops_prior_hyps_then_prior_when_only_top_is_left():
 
 
 def test_unfit_top_holds_with_reason_and_next_check_then_rerun_carries_prior():
-    item = _confirmed()
+    item, look = _padded(), ("--look-at", LOOK)        # 11/27: 적합성 확인은 채택일 때만(기준 없이 돈 C=1은 조사 모드)
     out = tmp("tt-end-") / "x"
-    _run(item, out, "--explore")
+    assert _run(item, out, "--explore", *look)["explore"]["reason"] == "fit_check"
     assert run_json("triage.py", ["explore", item["key"], "--out", out])["timeline"] == "timeline.md"
+    assert _report_line(out, "- 수정 상태: ") is not None                    # 채택이라 run은 수정 상태 줄을 싣는다
     (out / "explore-output.md").write_text("가설 없음: 1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다\n"
                                            "다음 확인: 실패 시각 앞뒤 1분 radio 로그\n", encoding="utf-8")
     checked = run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", out])
@@ -193,27 +207,28 @@ def test_unfit_top_holds_with_reason_and_next_check_then_rerun_carries_prior():
     # FR-02(P2): 보류면 결론·해결책 줄도 1위 확정·`검증됨`을 권하지 않는다(판정·후보 순위는 그대로)
     assert _report_line(out, "- 결론:") == ("- 결론: 채택 후보 DATA-001-01가 증상과 맞지 않아 보류(탐색 분석 참조). "
                                          "다음: Step 7에서 보류를 고르거나 근거 로그 확인")
-    # 발생 시각만이라 run이 이미 보류(실패 지점 없음) — 보류면 해결책 줄 자체가 없고, 없는 것은 못 고친 것이 아니다
-    assert _report_line(out, "- 해결책") is None
+    assert _report_line(out, "- 해결책(1위 기준, 보류됨): ").endswith("해결책 검증: 보류(1위 부적합)")
+    assert _report_line(out, "- 수정 상태: ") is None, "리뷰 1127 7번: run 때 보류·Jira 본문처럼 수정 상태 줄을 뺀다"
     assert "fit_hold_unwritten" not in json.loads((out / "check-output.json").read_text(encoding="utf-8"))["explore"]
     assert json.loads((out / "check-output.json").read_text(encoding="utf-8"))["explore"]["fit_hold"] == "DATA-001-01"
     assert json.loads((out / "analysis.json").read_text(encoding="utf-8"))["candidates"][0]["C"] == 1
 
-    again = _run(item, out, "--explore")                                  # 재실행(답글 턴): 이전 판단을 넘긴다
-    # RP-6: 가설 없음 보류도 unfit으로 넘긴다(같은 원인이 다시 채택되면 run이 보류한다 — 여기선 run이 이미 보류)
+    again = _run(item, out, "--explore", *look)                           # 재실행(답글 턴): 이전 판단을 넘긴다
+    # RP-6: 가설 없음 보류도 unfit으로 넘긴다(같은 원인이 다시 채택되면 run이 보류한다). 이 보류(held/fit_check)는 조사 모드가 아니다
+    assert (again["decision"]["reason"], again["investigate"]) == ("fit_check", {"mode": False}), again["decision"]
     assert again["prior"] == {"none": "1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다",
                               "unfit": "DATA-001-01 — 1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다"}, again.get("prior")
     assert not (out / "explore-output.md").exists()                      # 추린 뒤에 지웠다(drop_stale_records)
     # CP-2: 검사 기록은 지워졌어도 부적합 표시는 `적합`이라고 다시 적을 때까지 넘긴다 — 오프라인은 state가 없어 앞 실행
     # analysis.json의 prior.unfit을 읽는다(전에는 여기서 사라져 셋째 실행이 같은 원인을 경고 없이 다시 채택할 수 있었다).
     # 가설 없음 이유(none)는 검사 기록이 있을 때만 넘긴다(그대로)
-    third = _run(item, out, "--explore")
+    third = _run(item, out, "--explore", *look)
     assert third["prior"] == {"unfit": again["prior"]["unfit"]}, third.get("prior")
     # 코덱스 K06: 오프라인도 로그를 바꿔 다시 돌리면 옛 로그 때의 부적합 표시를 쓰지 않는다(앞 analysis.json 입력 해시와 비교)
     src = (LABELSET.parent / item["logs"][0]).resolve()
     changed = out.parent / ("changed-" + src.name)
     changed.write_bytes(src.read_bytes() + b"\n")
-    fourth = _run({**item, "logs": [str(changed), *item["logs"][1:]]}, out, "--explore")
+    fourth = _run({**item, "logs": [str(changed), *item["logs"][1:]]}, out, "--explore", *look)
     assert "unfit" not in (fourth.get("prior") or {}), fourth.get("prior")
 
 
@@ -222,9 +237,9 @@ def test_fit_hold_is_recorded_even_when_lines_cannot_be_rewritten_and_survives_r
     Jira 본문(계획 없음)은 보류다. ② 뒤 검사(형식 불일치 _fail)가 탐색 기록을 새로 써도 fit_hold는 이어받는다."""
     sys.path.insert(0, str(plugin_root() / "scripts"))
     import issue_post
-    item = _confirmed()
+    item = _padded()            # 11/27: 적합성 확인은 채택일 때만 — 기준 줄로 채택되게
     out = tmp("tt-hold-") / "x"
-    _run(item, out, "--explore")
+    assert _run(item, out, "--explore", "--look-at", LOOK)["explore"]["reason"] == "fit_check"
     run_json("triage.py", ["explore", item["key"], "--out", out])
     report = out / "report.md"
     pending = _report_line(out, "- 탐색 분석")
@@ -236,7 +251,7 @@ def test_fit_hold_is_recorded_even_when_lines_cannot_be_rewritten_and_survives_r
     assert proc.returncode == 0 and "경고: 1위 보류를 report.md 결론 줄에 쓰지 못했다" in proc.stderr, proc.stderr
     rec = json.loads((out / "check-output.json").read_text(encoding="utf-8"))["explore"]
     assert rec["fit_hold"] == "DATA-001-01" and rec["fit_hold_unwritten"] == ["결론 줄"], rec
-    assert _report_line(out, "- 해결책") is None       # 판단이 이미 보류라 해결책 줄이 없다(못 쓴 줄은 결론 줄만)
+    assert _report_line(out, "- 해결책(1위 기준, 보류됨): ").endswith("해결책 검증: 보류(1위 부적합)")     # 못 쓴 줄은 결론 줄만
     # 탐색 줄 재작성이 실패해 TODO가 남은 상황을 흉내 내고 다시 검사(형식 불일치 → _fail이 기록을 새로 쓴다)
     text = report.read_text(encoding="utf-8")
     report.write_text(text.replace(_report_line(out, "- 탐색 분석"), pending), encoding="utf-8")
@@ -248,7 +263,7 @@ def test_fit_hold_is_recorded_even_when_lines_cannot_be_rewritten_and_survives_r
     analysis = json.loads((out / "analysis.json").read_text(encoding="utf-8"))
     nxt = issue_post.classify(analysis, None, hold)["next"]
     assert hold == "DATA-001-01" and nxt[0] == "원인 미확정 — 추가 로그·재현 정보 필요", nxt
-    assert analysis["decision"]["state"] == "held"          # 단계 4: 기준 없이 돈 새 JOB은 이미 보류 — 해결책을 싣지 않는다
+    assert analysis["decision"]["state"] == "held"          # 적합성 보류(held/fit_check)로 바뀐 판단 — 해결책을 싣지 않는다
     assert nxt == ["원인 미확정 — 추가 로그·재현 정보 필요"], nxt
     old = {k: v for k, v in analysis.items() if k != "decision"}     # decision 없는 옛 JOB은 예전처럼 보류된 해결책
     nxt = issue_post.classify(old, None, hold)["next"]
@@ -345,7 +360,8 @@ def test_prior_survives_a_question_turn():
     args = ["run", "MOCK-9005", "--dry-run", "--issue-file", REPO / "tests/skill_evals/jira/MOCK-9005.yaml",
             "--logs", log, "--code", "skip", "--explore"]
     first = ws.json("triage.py", args)
-    assert first["status"] == "ok" and first["explore"]["reason"] == "fit_check", first
+    # 기준 없이 돈 1위 C=1은 보류 → 조사 모드(11/27) — 탐색 사유는 적합성 확인이 아니라 cause_unconfirmed
+    assert first["status"] == "ok" and first["explore"]["reason"] == "cause_unconfirmed", first
     job = ws.job_dir("MOCK-9005")
     ws.json("triage.py", ["explore", "MOCK-9005"])
     (job / "explore-output.md").write_text("가설 없음: 1위 부적합 — 증상 시각과 근거 시각이 다르다\n다음 확인: radio 로그\n",
@@ -798,3 +814,94 @@ def test_prior_unfit_not_carried_from_check_with_fabricated_quotes(tmp_path):
     assert "unfit" not in prior(1) and "unfit_reason" not in prior(1, "normal")
     assert prior(0)["unfit"] == "DATA-001-01 — 정상 종료"
     assert prior(0, "normal")["unfit_reason"] == "normal"
+
+
+# -- 5-1 반증 → 5-2 적합성 확인(11/27 C23) --------------------------------------------------------------------
+
+
+def test_adopted_without_flag_prepares_fit_check_only_unless_turned_off():
+    """채택 + 기본 ask(플래그·확인할 내용 없음)는 5-2를 열지 않고 연다면 쓸 값만 둔다(`fit_later` — 판단은 `explore` 한 곳).
+    `never`·`--no-explore`면 그것도 두지 않는다(끄는 쪽이 이긴다)."""
+    from types import SimpleNamespace
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    import importlib
+    triage = importlib.import_module("triage")
+    acc = {"state": "accepted"}
+    drv = SimpleNamespace(cfg={}, warnings=[], args=SimpleNamespace(explore=None), look_inputs=lambda: {"at": None, "note": None})
+    assert triage.Driver.explore(drv, [{"C": 1}], acc) is None and drv.fit_later == {"reason": "fit_check", "when": "ask",
+                                                                                      "note": ASK_NOTE}
+    drv.args.explore = False
+    assert triage.Driver.explore(drv, [{"C": 1}], acc) is None and drv.fit_later is None
+    drv.args.explore, drv.cfg = None, {"explore": {"when": "never"}}
+    assert triage.Driver.explore(drv, [{"C": 1}], acc) is None and drv.fit_later is None
+    drv.cfg = {}
+    assert triage.Driver.explore(drv, [{"C": 0}])["reason"] == "cause_unconfirmed" and drv.fit_later is None     # 조사 모드는 대상 아님
+
+
+def test_opened_fit_check_carries_deep_checks_into_timeline_and_survives_rerun():
+    """채택 run은 입력만 준비하고(`triage.py explore`는 해당 없음 1), check-output이 연 뒤(analysis.json `explore` — 여는 쪽은
+    test_check_output) `triage.py explore`는 5-1 후보 확인 기록을 타임라인 머리 데이터 줄로 싣는다(모듈 보기 E1 재계산도 같은 바이트).
+    탐색 중 다시 한 run(`--look-at-source model`)은 적합성 확인을 이어 가고(타임라인 다시 만듦, 지워진 5-1 줄은 없음),
+    `--no-explore`면 이어 가지 않는다."""
+    item = _padded()
+    out = tmp("tt-c23-") / "x"
+    first = _run(item, out, "--look-at", LOOK)
+    assert first["decision"]["state"] == "accepted" and "explore" not in first
+    spec = json.loads((out / "explore-input.json").read_text(encoding="utf-8"))
+    assert spec["fit_later"] == {"reason": "fit_check", "when": "ask", "note": ASK_NOTE}
+    assert run("triage.py", ["explore", item["key"], "--out", out]).returncode == 1 and not (out / "timeline.md").exists()
+    analysis = json.loads((out / "analysis.json").read_text(encoding="utf-8"))
+    (out / "analysis.json").write_text(json.dumps({**analysis, "explore": spec["fit_later"]}, ensure_ascii=False), encoding="utf-8")
+    checks = ["DATA-001-01 아님 — 찾았는데 없음: 데이터 꺼짐 줄", "DATA-001-02 모름"]
+    (out / "check-output.json").write_text(json.dumps({"deep": {"mode": "module", "checks": checks}}, ensure_ascii=False),
+                                           encoding="utf-8")
+    assert run_json("triage.py", ["explore", item["key"], "--out", out])["timeline"] == "timeline.md"
+    text = (out / "timeline.md").read_text(encoding="utf-8")
+    assert "".join(f"- 심층 분석 후보 확인(데이터): {c}\n" for c in checks) in text.split("- 줄: ")[0], text[:1500]
+    assert json.loads((out / "explore-input.json").read_text(encoding="utf-8"))["deep_checks"] == checks
+    sys.path.insert(0, str(plugin_root() / "scripts"))
+    from triagelib import modulecmd
+    events = json.loads((out / "events.json").read_text(encoding="utf-8"))
+    assert modulecmd._explore_inputs(out, item["key"], events, {}, AssertionError)["flows"][-2:] == [
+        f"- 심층 분석 후보 확인(데이터): {c}" for c in checks]           # E1: 같은 머리로 다시 그려 바이트가 맞는다
+
+    again = _run(item, out, "--look-at-source", "model", "--look-at", LOOK)
+    assert again["decision"]["state"] == "accepted" and again["explore"]["reason"] == "fit_check", again.get("explore")
+    assert (out / "timeline.md").is_file() and "심층 분석 후보 확인" not in (out / "timeline.md").read_text(encoding="utf-8")
+    assert _report_line(out, "- 탐색 분석").startswith("- 탐색 분석 (추정, timeline.md ")
+    off = _run(item, out, "--look-at-source", "model", "--look-at", LOOK, "--no-explore")
+    assert "explore" not in off and not (out / "timeline.md").exists() and not (out / "explore-input.json").exists()
+
+
+def test_rerun_during_investigation_that_adopts_keeps_explore_as_fit_check():
+    """리뷰 1127 12번(추측 확인): 1위 C=1 보류(기준 없음) 조사 중에 모델이 코멘트에서 고른 줄로 다시 한 run(`--look-at-source
+    model`, 플래그 없음)이 채택으로 바뀌어도 탐색이 사라지지 않는다 — 적합성 확인으로 이어 가 타임라인을 다시 만들고
+    `check-output --for explore`가 `탐색 분석 해당 없음`으로 막히지 않는다(bcdd7a51 재실행 이어받기)."""
+    item = _padded()
+    out = tmp("tt-r12-") / "x"
+    first = _run(item, out)
+    assert first["decision"]["state"] == "held" and first["investigate"]["mode"], first["decision"]
+    assert first["explore"]["reason"] == "cause_unconfirmed"
+    assert run_json("triage.py", ["explore", item["key"], "--out", out])["timeline"] == "timeline.md"
+    again = _run(item, out, "--look-at-source", "model", "--look-at", LOOK)
+    assert again["decision"]["state"] == "accepted" and again["explore"]["reason"] == "fit_check", again.get("explore")
+    assert (out / "timeline.md").is_file()
+    (out / "explore-output.md").write_text("가설 없음: 1위 DATA-001-01 부적합 — 증상 시각과 근거 시각이 다르다\n"
+                                           "다음 확인: 실패 시각 앞뒤 1분 radio 로그\n", encoding="utf-8")
+    checked = run_json("triage.py", ["check-output", item["key"], "--for", "explore", "--out", out])
+    assert "가설 없음: 1위 DATA-001-01 부적합" in checked["line"], checked
+
+
+def test_uncollected_tags_shown_for_held_c1_investigation():
+    """리뷰 1127 11번: 수집 안 된 태그 정보(`logs.uncollected_tags`)는 조사 모드면 1위 C=1 보류에도 싣는다(조사 모드의 다른 이유
+    값과 같게). 채택이면 싣지 않는다(그대로)."""
+    item = _padded()
+    log = Path(item["logs"][0])
+    rows = log.read_text(encoding="utf-8").splitlines()
+    rows.insert(5, "09-20 14:30:05.000  1234  1244 W GsmCdmaConnection: probe")     # 수집된 pid의 tags.yaml 밖 태그
+    log.write_text("".join(r + "\n" for r in rows), encoding="utf-8")
+    held = _run(item, tmp("tt-unc-") / "x")
+    assert held["decision"]["state"] == "held" and held["investigate"]["mode"], held["decision"]
+    assert [u["tag"] for u in held["logs"].get("uncollected_tags") or []] == ["GsmCdmaConnection"], held["logs"]
+    adopted = _run(item, tmp("tt-unc-") / "y", "--look-at", LOOK)
+    assert adopted["decision"]["state"] == "accepted" and "uncollected_tags" not in adopted["logs"], adopted["logs"]

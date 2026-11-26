@@ -563,6 +563,16 @@ def test_evidence_record_on_work_dir_job(tmp_path, capsys, monkeypatch):
     assert len(out) == 1 and out[0].start == 1 and out[0].lines == recs[1]["lines"]
 
 
+def test_evidence_record_path_absolute_for_relative_work_dir(tmp_path, capsys, monkeypatch):
+    """작업 폴더가 상대 경로여도 표시 기록의 path는 절대 경로다(hook이 다른 cwd에서 읽는다)."""
+    monkeypatch.chdir(tmp_path)
+    job = make_job(Path("work"))
+    (job / "deep-output.md").write_text(_deep_out([Q1]), encoding="utf-8")
+    assert check(job, out=False, capsys=capsys)[0] == 0
+    recs = [r for r in _shown(tmp_path / "work") if r["kind"] == "evidence"]
+    assert len(recs) == 1 and recs[0]["path"] == str((tmp_path / "work" / KEY / "report.md").absolute())
+
+
 def test_weak_only_records_head_line_and_out_job_records_nothing(tmp_path, capsys):
     work = tmp_path / "work"
     job = make_job(work)
@@ -978,7 +988,8 @@ def test_explore_chain_warnings(tmp_path, capsys):
         "not_earliest": (_explore_out([("망 인증 거절", [Q1])], _chain(CHAIN_FALSE2, "단계 3 — 연결 안 됨")),
                          "첫 갈라짐 단계 3 ≠ 표의 가장 이른 false 단계 2"),
         "timer": ("가설 1: 재시도 타이머가 늦게 풀림\n원인 층: 프레임워크\n" + _explore_out([("x", [Q1])],
-                  _chain(CHAIN_FALSE2, "단계 2"))[len("가설 1: x\n"):], "`메커니즘 재계산:` 없음"),
+                  _chain([CHAIN_FALSE2[0], (2, "5초 안에 SETUP 응답이 성공", Q1, "false")], "단계 2"))[len("가설 1: x\n"):],
+                  "`메커니즘 재계산:`이 없음"),
     }
     for name, (text, needle) in cases.items():
         job = make_job(tmp_path / name, "explore", "plain")
@@ -1019,7 +1030,7 @@ def test_explore_format_warning_allows_one_recheck(tmp_path, capsys):
     assert code == 0 and "format_warnings" not in data and _rec(job, "explore")["format_recheck"] is True
     assert not any(t.startswith("  - 형식 경고") for t in (job / "report.md").read_text(encoding="utf-8").split("\n"))
     code, data, _ = check(job, "explore", capsys=capsys)                              # 세 번째는 평소처럼 막힌다
-    assert code == 2 and data["reason"] == "작업 없음"
+    assert code == 1 and data == {"reason": "이미 검사함", "next": core.NEXT_CHECK_NA}      # 가-6: 작업 없음(2)이 아니다
 
 
 def test_explore_chain_quote_only_time_led_cells():
@@ -1058,8 +1069,8 @@ def test_explore_chain_claim_number_and_flip_answer():
     assert warn(**{"첫 갈라짐": "단계 2", "메커니즘 재계산": mech + "예 — 재요청이 제때 나간다"}) == []
     assert warn(**{"첫 갈라짐": "2", "메커니즘 재계산": mech + "예|아니오"}) == ["가설 1: 메커니즘 재계산의 답이 틀 그대로(`예|아니오`) — 예나 아니오 하나만"]
     got = warn(**{"첫 갈라짐": "단계 2", "메커니즘 재계산": mech + "아니오 (간격이 달라도 같은 예외)"})
-    assert got == ["가설 1: 메커니즘 재계산이 '아니오'(고쳐도 결과가 안 뒤집힘)인데 가장 유력 — 재계산으로는 원인이 뒷받침되지 않음 — "
-                   "가장 유력을 다시 본다"]
+    assert got == ["가설 1: 메커니즘 재계산이 '아니오'(고쳐도 결과가 안 뒤집힘)인데 가장 유력 — 재계산으로 보면 그 값은 원인이 "
+                   "아니다. 값이 원인이면 가설을 고치고, 그 단계 `기대`에 시간·횟수 숫자가 없으면 처음부터 `해당 없음 — <이유>`가 맞다"]
     big = {**base["기대 체인"][0], "관측": "x" * 800}
     assert warn(**{"첫 갈라짐": "단계 2", "메커니즘 재계산": mech + "예", "기대 체인": [big]}) == [
         f"가설 1: 기대 체인 단계 2의 칸이 {core.FIELD_MAX_BYTES}바이트를 넘음 — 줄여 쓴다"]
@@ -1080,7 +1091,7 @@ def test_explore_recheck_failure_keeps_first_result(tmp_path, capsys):
     assert (job / "report.md").read_text(encoding="utf-8") == report_before
     rec = _rec(job, "explore")
     assert rec == {**rec_before, "format_recheck": True, "recheck_error": "출력 형식 불일치(칸)"}
-    assert check(job, "explore", capsys=capsys)[0] == 2                     # 다시 검사는 한 번뿐
+    assert check(job, "explore", capsys=capsys)[0] == 1                     # 다시 검사는 한 번뿐(가-6: 이미 검사함, 종료 1)
 
 
 def test_explore_old_format_report_unchanged_but_warning_line(tmp_path, capsys):
@@ -1099,3 +1110,97 @@ def test_explore_old_format_report_unchanged_but_warning_line(tmp_path, capsys):
                      "  - 가설 2: APN 설정 오류 / 로그로 확인: " + Q2 + " / 코드로 추정: 코드 근거 없음 / 반대 근거: 없음 / "
                      "다음 확인: 망 측 거절 사유 로그",
                      "  - 근거 원문 검사: 인용 3개 중 원문에 없음 0", SUB]
+
+
+# --- 5-1 반증 → 5-2 적합성 확인(11/27 C23) ------------------------------------------------------------------
+
+FIT_LATER = {"reason": "fit_check", "when": "ask", "note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-2)"}
+NOT_FOUND = "찾았는데 없음: 데이터 꺼짐 줄을 타임라인 전체에서"
+
+
+def _refute_job(base: Path, decision=ACCEPTED, later=FIT_LATER, explore=None) -> Path:
+    """모듈 5-1 JOB: 판단(채택)·run이 준비한 탐색 입력(`fit_later` — 없으면 never·--no-explore로 run이 준비하지 않은 것)."""
+    job = make_job(base)
+    analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    analysis.update(decision=decision, explore=explore)
+    (job / "analysis.json").write_text(json.dumps(analysis, ensure_ascii=False), encoding="utf-8")
+    msj = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))
+    msj["deep"]["inputs"]["analysis.json"] = _sha(job / "analysis.json")
+    (job / "module-skill.json").write_text(json.dumps(msj, ensure_ascii=False), encoding="utf-8")
+    if later is not None:
+        (job / "explore-input.json").write_text(json.dumps({"limit": 200, "around": None, "fit_later": later}), encoding="utf-8")
+    return job
+
+
+def _checks_out(*items: str) -> str:
+    return "\n".join(["원인 층: 벤더 RIL(vrild) — 인증 거절", "원인 데몬: vrild", "근거:", f"- {Q1}", "반대 근거: 없음",
+                      "후보 확인:", *items, "규칙 제안:", "- 없음", ""])
+
+
+def test_deep_refutes_adopted_cause_opens_fit_check(tmp_path, capsys, monkeypatch):
+    """채택 원인을 5-1이 `아님`이라 하면(대체 원인 없음) 판단은 그대로 두고 run이 준비한 적합성 확인을 연다: analysis.json `explore`,
+    report.md 탐색 분석 줄(심층 분석 묶음 바로 뒤), 기록 `refuted`·`checks`, 출력 `next`(동의 질문 포함)."""
+    monkeypatch.delenv("TT_SCHEMA_CHECK")
+    job = _refute_job(tmp_path)
+    (job / "deep-output.md").write_text(_checks_out(f"- DATA-001-01: 아님 — {NOT_FOUND}", "- DATA-001-02: 모름"), encoding="utf-8")
+    code, data, err = check(job, capsys=capsys)
+    assert code == 0, err
+    analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    assert analysis["explore"] == FIT_LATER and analysis["decision"] == ACCEPTED       # 판단·counter는 그대로
+    assert data["next"] == (output.REFUTED_NEXT.format(cause="DATA-001-01") + output.REFUTED_ASK.format(key=KEY))
+    rows = (job / "report.md").read_text(encoding="utf-8").split("\n")
+    i = rows.index(SUB)
+    assert rows[i + 1] == core.EXPLORE_PENDING_LINE.format(key=KEY) and rows[i + 2] == "- 기타 후보: 없음"
+    rec = _rec(job)
+    assert rec["refuted"] == "DATA-001-01" and "explore_unwritten" not in rec
+    assert rec["checks"] == [f"DATA-001-01 아님 — {NOT_FOUND}", "DATA-001-02 모름"]
+    msj = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))
+    assert msj["deep"]["inputs"]["analysis.json"] == _sha(job / "analysis.json")    # 고친 analysis.json 해시로 옮겼다
+
+
+@pytest.mark.parametrize("case", ["never", "unknown", "right", "held", "fabricated"])
+def test_deep_refutation_does_not_open_fit_check(tmp_path, capsys, monkeypatch, case):
+    """끄는 쪽이 이긴다(run이 준비하지 않음 — never·--no-explore), `모름`·`맞음`, 채택이 아닌 판단, 근거 인용이 원문에 없는 `아님`은
+    열지 않는다(analysis.json 바이트 그대로, next 없음)."""
+    monkeypatch.delenv("TT_SCHEMA_CHECK")
+    job = _refute_job(tmp_path, decision={**ACCEPTED, "state": "held", "reason": "ambiguous", "selected": None}
+                      if case == "held" else ACCEPTED, later=None if case == "never" else FIT_LATER)
+    item = {"never": f"- DATA-001-01: 아님 — {NOT_FOUND}", "unknown": "- DATA-001-01: 모름", "right": f"- DATA-001-01: 맞음 — {Q1}",
+            "held": f"- DATA-001-01: 아님 — {NOT_FOUND}", "fabricated": f"- DATA-001-01: 아님 — {FAKE}"}[case]
+    (job / "deep-output.md").write_text(_checks_out(item), encoding="utf-8")
+    raw = (job / "analysis.json").read_bytes()
+    code, data, err = check(job, capsys=capsys)
+    assert code == 0 and "next" not in data, (data, err)
+    assert (job / "analysis.json").read_bytes() == raw
+    assert not any(r.startswith("- 탐색 분석") for r in (job / "report.md").read_text(encoding="utf-8").split("\n"))
+    assert _rec(job).get("refuted") == ("DATA-001-01" if case == "never" else None)     # never: 사실은 남긴다
+
+
+def test_deep_refutation_with_explore_already_open_only_tells_next(tmp_path, capsys, monkeypatch):
+    """5-2가 이미 열렸으면(`--explore` 적합성 확인·탐색 타임라인 있음) analysis.json을 다시 쓰지 않고 안내만 한다(동의 질문 없음)."""
+    monkeypatch.delenv("TT_SCHEMA_CHECK")
+    opened = {"reason": "fit_check", "when": "ask", "note": FIT_LATER["note"]}
+    job = _refute_job(tmp_path, later=None, explore=opened)
+    (job / "timeline.md").write_text("# t\n", encoding="utf-8")
+    (job / "deep-output.md").write_text(_checks_out(f"- DATA-001-01: 아님 — {NOT_FOUND}"), encoding="utf-8")
+    raw = (job / "analysis.json").read_bytes()
+    code, data, err = check(job, capsys=capsys)
+    assert code == 0 and data["next"] == output.REFUTED_NEXT.format(cause="DATA-001-01"), (data, err)
+    assert (job / "analysis.json").read_bytes() == raw
+
+
+def test_deep_refutation_report_line_unwritten_gives_no_next(tmp_path, capsys, monkeypatch):
+    """늦은 열기에서 report.md 탐색 줄 쓰기가 실패하면(`explore_unwritten`) 탐색하라는 `next`를 내지 않는다(N1)."""
+    monkeypatch.delenv("TT_SCHEMA_CHECK")
+    job = _refute_job(tmp_path)
+    (job / "deep-output.md").write_text(_checks_out(f"- DATA-001-01: 아님 — {NOT_FOUND}"), encoding="utf-8")
+    real = output._write_atomic
+
+    def fail_pending(path, data):
+        if path.name == "report.md" and "- 탐색 분석 (추정): 미실행".encode() in data:
+            raise OSError("disk full")
+        real(path, data)
+    monkeypatch.setattr(output, "_write_atomic", fail_pending)
+    code, data, err = check(job, capsys=capsys)
+    assert code == 0 and "next" not in data, (data, err)
+    assert _rec(job)["explore_unwritten"] == "report.md 탐색 분석 줄"

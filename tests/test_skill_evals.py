@@ -4180,11 +4180,61 @@ def _eval_env(tmp_path, eid):
     return info, run
 
 
+def _prompt_look(eid):
+    """eval 프롬프트의 `--look-at "<기준 줄>"`(실행자가 받은 옵션 그대로 run에 넘긴다)."""
+    m = re.search(r'--look-at "([^"]+)"', next(e for e in _entries() if e["id"] == eid)["prompt"])
+    return m.group(1) if m else None
+
+
+# 11/27 조사 모드 조건(스크립트가 원인을 채택하지 않으면 조사 모드): eval이 보려는 흐름이 준비 입력에서 그대로 나오는지 API 없이 본다.
+# 채택된 1위의 5-1·적합성 확인(40·71·76·79·84~86)은 프롬프트 기준 줄로 채택, 41은 기준 없이 맞기만 한 1위(보류 → 조사 모드, 5-1은 남음)
+@pytest.mark.parametrize("eid,platform,state,explore,analyzer", [
+    (40, None, "accepted", None, "skill"), (71, None, "accepted", None, "skill"), (76, "ofono", "accepted", None, "category"),
+    (79, None, "accepted", None, "category"), (84, None, "accepted", "fit_check", "skill"), (85, None, "accepted", "fit_check", "skill"),
+    (86, None, "accepted", "fit_check", "skill"), (41, None, "held", "cause_unconfirmed", "skill")])
+def test_eval_prep_decision_matches_intent(tmp_path, eid, platform, state, explore, analyzer):
+    e = next(x for x in _entries() if x["id"] == eid)
+    info, run = _eval_env(tmp_path, eid)
+    key = e["setup"]["jira"][0]
+    look = _prompt_look(eid)
+    assert (look is None) == (state == "held"), eid
+    args = ["run", key, "--logs", *info["logs"], "--analysis-only", "--answer", "code=skip", "--issue-file", EVALS / f"jira/{key}.yaml"]
+    args += (["--platform", platform] if platform else []) + (["--look-at", look] if look else [])
+    args += ["--explore"] if "--explore" in e["prompt"] else []
+    run(*args)
+    a = json.loads((Path(info["work_dir"]) / key / "analysis.json").read_text(encoding="utf-8"))
+    assert a["decision"]["state"] == state and a["candidates"][0]["C"] == 1, (eid, a["decision"])
+    assert (a.get("explore") or {}).get("reason") == explore, (eid, a.get("explore"))
+    assert a["investigate"]["mode"] is (state == "held"), (eid, a["investigate"])
+    assert analyzer in (a.get("analyzer") or {}) and not (a.get("analyzer") or {}).get("skipped"), (eid, a.get("analyzer"))
+
+
+def test_e86_fixture_unfit_hold_then_rerun_prior(tmp_path):
+    """eval 86 준비 입력(기준 줄로 채택): 1회차 fit_check → `가설 없음: 1위 … 부적합`으로 보류(held/fit_check) → 같은 명령 재실행에
+    prior가 실리고, 보류는 탐색 뒤 붙은 것이라 조사 모드가 아니며 다시 fit_check다(11/27 investigate_mode: held/fit_check 제외)."""
+    info, run = _eval_env(tmp_path, 86)
+    args = ["run", "MOCK-9086", "--logs", *info["logs"], "--analysis-only", "--explore", "--look-at", _prompt_look(86),
+            "--answer", "code=skip", "--issue-file", EVALS / "jira/MOCK-9086.yaml"]
+    run(*args)
+    job = Path(info["work_dir"]) / "MOCK-9086"
+    run("explore", "MOCK-9086")
+    (job / "explore-output.md").write_text("가설 없음: 1위 DATA-001-01 부적합 — 근거는 슬롯 0, 증상은 슬롯 1\n다음 확인: 슬롯 1 radio 로그\n",
+                                           encoding="utf-8")
+    _c, out = run("check-output", "MOCK-9086", "--for", "explore")
+    assert "가설 없음:" in out["line"] and "다음 확인:" in out["line"], out
+    run(*args)
+    a = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    assert a["prior"].get("none") or a["prior"].get("hyps"), a.get("prior")
+    assert a["decision"]["state"] == "held" and a["decision"]["reason"] == "fit_check", a["decision"]
+    assert a["investigate"] == {"mode": False} and a["explore"]["reason"] == "fit_check", (a["investigate"], a["explore"])
+
+
 @_needs_module
 def test_e76_fixture_candidate(tmp_path):
     info, run = _eval_env(tmp_path, 76)
     log = info["logs"][0]
-    run("run", "MOCK-9076", "--logs", log, "--analysis-only", "--platform", "ofono", "--code", "skip",
+    # 11/27: 1위 C=1 보류는 조사 모드라 모듈 문서 5-1을 run이 뺀다 — eval 76 프롬프트의 기준 줄(--look-at)로 채택된 1위의 5-1
+    run("run", "MOCK-9076", "--logs", log, "--analysis-only", "--platform", "ofono", "--code", "skip", "--look-at", _prompt_look(76),
         "--issue-file", EVALS / "jira/MOCK-9076.yaml")
     job = Path(info["work_dir"]) / "MOCK-9076"
     a = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
@@ -4229,7 +4279,8 @@ def test_e78_fixture_two_candidates(tmp_path):
 @_needs_module
 def test_e79_fixture_auth(tmp_path):
     info, run = _eval_env(tmp_path, 79)
-    run("run", "MOCK-9041", "--logs", info["logs"][0], "--analysis-only", "--code", "skip",
+    # 11/27: 1위 C=1 보류는 조사 모드라 모듈 문서 5-1을 run이 뺀다 — eval 79 프롬프트의 기준 줄(--look-at)로 채택된 1위의 5-1
+    run("run", "MOCK-9041", "--logs", info["logs"][0], "--analysis-only", "--code", "skip", "--look-at", _prompt_look(79),
         "--issue-file", EVALS / "jira/MOCK-9041.yaml")
     _code, out = run("module", "MOCK-9041", "--for", "deep", ok=(2,))
     sys.path.insert(0, str(REPO / "plugin" / "scripts"))
@@ -4425,3 +4476,99 @@ def test_fl81_new_cause_draft_shown_and_asked_before_stage(tmp_path):
     assert _fl_order(tmp_path / "h", 81, [report, FL_STEP7, write, listed, ask, stage])[0] is True
     with pytest.raises(grader._Manual):
         _fl_order(tmp_path / "g", 81, [report, draft, ask, stage])     # 분류 질문을 못 찾으면 시작점 0으로 세지 않고 수동
+
+
+# --- 11/27 조사 모드 조건·탐색 검사 게이트에 맞춘 채점 -------------------------------------------------------------
+
+E86_LOOK = 'python3 /p/triage.py run MOCK-9086 --logs logs/data-disabled.log --analysis-only --explore --look-at "notifyDataEnabledChanged: enabled=false"'
+
+
+def _e86_lookup_row(tmp_path, turn1, turn2, first=()):
+    """eval 86 4번 행(no_repeat_lookup): 1회차 첫 run은 프롬프트 기준 줄을 담는다. turn1·turn2 = 그 뒤 run에 붙인 look-at 글,
+    first = 모델이 첫 run에 스스로 더 붙인 look-at 글."""
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    items = [("tool", "b0", "Bash", {"command": E86_LOOK + "".join(f' --look-at "{t}"' for t in first)}, "ok", False)]
+    items += [("tool", f"b1{k}", "Bash", {"command": f'{E86_LOOK} --look-at-source model --look-at "{t}"'}, "ok", False)
+              for k, t in enumerate(turn1)]
+    items += [("result", "1회차 끝"), ("user", "SIM 1 로그는 더 구하지 못했어. 같은 로그로 한 번 더 봐줘"),
+              ("tool", "b2", "Bash", {"command": E86_LOOK}, "ok", False)]
+    items += [("tool", f"b3{k}", "Bash", {"command": f'{E86_LOOK} --look-at-source model --look-at "{t}"'}, "ok", False)
+              for k, t in enumerate(turn2)]
+    _seq_events(run, items)
+    return grader.checks(86, grader.Ctx(env_dir, run))[3]()
+
+
+def test_e86_no_repeat_lookup_ignores_prompt_reference_line(tmp_path):
+    """11/27: 86은 프롬프트 기준 줄(--look-at)로 채택되게 바꿨다 — 같은 명령 재실행에 실리는 그 줄은 되풀이 조회가 아니다(옛 채점은
+    이것을 실패로 셌다). 1회차에 스스로 한 조회를 2회차에 같은 글로 되풀이하면 여전히 실패."""
+    assert _e86_lookup_row(tmp_path / "a", [], [])[0] is True
+    assert _e86_lookup_row(tmp_path / "b", ["DSMGR-0 mIsDataEnabled=false"], ["DSMGR-0 mIsDataEnabled=false"])[0] is False
+    assert _e86_lookup_row(tmp_path / "c", ["DSMGR-0 mIsDataEnabled=false"], ["DNC-0 onEvaluateNetworkRequests"])[0] is True
+
+
+def test_e86_no_repeat_lookup_reads_user_line_from_prompt(tmp_path):
+    """사용자 기준 줄은 프롬프트에서 읽는다(N4): 모델이 첫 run에 스스로 고른 줄을 함께 넣고 2회차에 되풀이하면 실패, 안 하면 통과."""
+    own = "DSMGR-0 mIsDataEnabled=false"
+    assert _e86_lookup_row(tmp_path / "a", [], [], first=[own])[0] is True
+    assert _e86_lookup_row(tmp_path / "b", [], [own], first=[own])[0] is False
+
+
+INV_Q = "조사할까요? (토큰 추가 사용)"
+INV_LINE = "- 조사 결론 (LLM, 근거 부족): 데이터 설정 꺼짐 — 인용 확인 2/2"
+INV_OUT = ("가설 1: 사용자가 모바일 데이터를 껐다\n로그로 확인:\n- 09-20 14:30:03.000 DSMGR-0 notifyDataEnabledChanged: enabled=false\n"
+           "코드로 추정: 없음\n반대 근거: 없음\n다음 확인: 설정 화면\n후보 확인:\n{check}\n")
+
+
+def _e41_row(tmp_path, question, check, report_line=INV_LINE):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    job = tmp_path / "work" / "MOCK-9041"
+    job.mkdir(parents=True)
+    (job / "report.md").write_text(f"## MOCK-9041 분석\n- 판단: 원인 보류\n{report_line}\n", encoding="utf-8")
+    (job / "explore-output.md").write_text(INV_OUT.format(check=check), encoding="utf-8")
+    _seq_events(run, [("tool", "q1", "mcp__eval-approver__ask_user", {"question": question, "options": ["예", "아니오"]}, "예", False),
+                      ("tool", "e1", "Bash", {"command": "python3 /p/triage.py explore MOCK-9041"}, "ok", False)])
+    return grader.checks(41, grader.Ctx(env_dir, run))[5]()
+
+
+def test_e41_investigated_row(tmp_path):
+    """eval 41 6번 행(11/27 새 동작): 1위 C=1 보류 → '조사할까요?' → 탐색 → 조사 결론 줄, `후보 확인`에 1위 ID 판정.
+    옛 질문('심층 분석 … 할까요?'·'탐색 분석을 실행할까요?')·조사 결론 줄 없음·1위 대조 없음은 실패."""
+    good = "- DATA-001-01: 맞음 — 09-20 14:30:03.000 DSMGR-0 notifyDataEnabledChanged: enabled=false"
+    assert _e41_row(tmp_path / "a", INV_Q, good)[0] is True
+    assert _e41_row(tmp_path / "b", "탐색 분석을 실행할까요? (토큰 추가 사용)", good)[0] is False
+    assert _e41_row(tmp_path / "c", INV_Q, "- DATA-001-02: 아님 — 찾았는데 없음: 사본 전체")[0] is False
+    assert _e41_row(tmp_path / "d", INV_Q, good, report_line="- 탐색 분석 (추정, timeline.md 9/9줄): 가설 1 …")[0] is False
+
+
+E46_HEAD = "- 탐색 분석 (추정, timeline.md 8/8줄): 가설 1: APN 설정 누락 — SETUP_DATA_CALL이 MISSING_UNKNOWN_APN으로 거부됨"
+E46_SUB = "  - 반대 근거: 망 거부 줄 없음"
+E46_ADOPT = {"question": "탐색 가설 1을 채택할까요?", "options": ["채택", "보류", "채택하지 않음"]}
+
+
+def _e46_row(tmp_path, items, explore_line=E46_HEAD):
+    env_dir = _synthetic_env(tmp_path)
+    run = run_dir(tmp_path)
+    _write_artifacts(run)
+    job = tmp_path / "work" / "MOCK-9046"
+    job.mkdir(parents=True)
+    (job / "report.md").write_text(f"## MOCK-9046 분석\n{explore_line}\n{E46_SUB}\n- 다음 줄\n", encoding="utf-8")
+    check = ("tool", "c1", "Bash", {"command": "python3 /p/triage.py check-output MOCK-9046 --for explore"}, '{"status": "ok"}', False)
+    _seq_events(run, [check, *items])
+    return grader.checks(46, grader.Ctx(env_dir, run))[6]()
+
+
+def test_e46_explore_lines_shown_before_adopt_question(tmp_path):
+    """eval 46 7번 행(11/27 show_guard 6번이 고치려는 것, 46·73 i8 실패): 탐색 검사 뒤 첫 채택·분류 질문까지 report.md 탐색 분석 줄
+    (머리 + 하위 줄)을 글자 그대로 보였다. 한 줄 요약만 보이고 묻기·질문 뒤에 보이기는 실패, 질문이 없으면 수동."""
+    ask = ("tool", "q1", "mcp__eval-approver__ask_user", E46_ADOPT, "채택하지 않음", False)
+    shown_all = ("text", f"{E46_HEAD}\n{E46_SUB}")
+    assert _e46_row(tmp_path / "a", [shown_all, ask])[0] is True
+    assert _e46_row(tmp_path / "b", [("text", "탐색 가설 1: APN 설정 누락"), ask])[0] is False
+    assert _e46_row(tmp_path / "c", [ask, shown_all])[0] is False
+    assert _e46_row(tmp_path / "d", [shown_all, ask], explore_line="- 탐색 분석 생략: 사용자가 원하지 않음")[0] is False
+    with pytest.raises(grader._Manual):
+        _e46_row(tmp_path / "e", [shown_all])

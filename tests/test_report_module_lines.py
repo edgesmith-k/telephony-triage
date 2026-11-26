@@ -27,7 +27,7 @@ ON = {"name": "android", "enabled": ["android", "ofono"]}
 NO_ANALYZER_LINE = "- 심층 분석: 해당 없음(1위 카테고리에 분석 스킬 설정 없음)"
 
 
-def _run(analyzers: dict | None, user: dict | None = None) -> tuple[dict, str, Path]:
+def _run(analyzers: dict | None, user: dict | None = None, *extra) -> tuple[dict, str, Path]:
     over = {"platform": ON}
     if analyzers is not None:
         over["platforms"] = {"ofono": {"analyzers": analyzers}}
@@ -41,7 +41,7 @@ def _run(analyzers: dict | None, user: dict | None = None) -> tuple[dict, str, P
     meta.write_text(json.dumps({"key": "MOCK-9001", "occurred_at": "2026-09-20T05:32:10Z", "summary": "x",
                                 "platform_version": "2"}), encoding="utf-8")
     run_json("triage.py", ["run", "MOCK-9001", "--offline-db", variant_db("issue-db-ofono"), "--logs", LOGS / "journal-iso.log",
-                           "--issue-meta", meta, "--out", work / "job", "--platform", "ofono"],
+                           "--issue-meta", meta, "--out", work / "job", "--platform", "ofono", *extra],
              root=root, env={"TELEPHONY_TRIAGE_HOME": home})
     job = work / "job"
     return json.loads((job / "analysis.json").read_text(encoding="utf-8")), (job / "report.md").read_text(encoding="utf-8"), job
@@ -52,7 +52,10 @@ REMOTE = {"module_skills": {"remote": "file:///nonexistent/module-skills.git"}}
 
 
 def test_remote_gives_category_shape_and_pending_line():
+    # 이 로그는 1위 C=1이지만 기준 없이 돌아 보류 → 조사 모드(11/27)라 모듈 문서 5-1은 run이 뺀다. 모양은 --analyzer로 본다
     analysis, text, _ = _run(None, REMOTE)
+    assert analysis["investigate"] == {"mode": True, "reason": "채택 안 함"} and analysis["analyzer"]["when"] == "never"
+    analysis, text, _ = _run(None, REMOTE, "--analyzer")
     assert analysis["analyzer"] == {"category": "data", "when": "ask", "note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-1)"}
     line = core.DEEP_MODULE_PENDING.format(platform="ofono", category="data", key="MOCK-9001")
     assert line in text.split("\n") and "TODO(LLM)" in line
@@ -360,6 +363,15 @@ def test_investigate_forced_by_analyzer_flag_runs_51():
     analysis, text = _run_c0(REMOTE, "--analyzer")
     assert analysis["analyzer"] == {"category": "data", "when": "ask", "note": NOTE_51}
     assert _deep_line(text) == core.DEEP_MODULE_PENDING.format(platform="android", category="data", key="MOCK-9051")
+
+
+def test_investigate_with_explore_off_keeps_51():
+    """리뷰 1127 4번: 5-2가 꺼져 있으면(`--no-explore`·`explore.when: never`) 조사 모드여도 5-1을 빼지 않는다 — 빼면 1위 규칙을
+    이번 실패와 대조하는 단계가 하나도 없다."""
+    for extra, user in ((("--no-explore",), REMOTE), ((), {**REMOTE, "explore": {"when": "never"}})):
+        analysis, text = _run_c0(user, *extra)
+        assert analysis["analyzer"] == {"category": "data", "when": "ask", "note": NOTE_51}, extra
+        assert _deep_line(text) == core.DEEP_MODULE_PENDING.format(platform="android", category="data", key="MOCK-9051")
 
 
 def test_investigate_registered_skill_source_still_runs_51():

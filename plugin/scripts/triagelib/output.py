@@ -34,8 +34,8 @@ Claude가 쓴 `JOB/deep-output.md`·`JOB/explore-output.md`를 받아:
 기록 `JOB/check-output.json[purpose]`(스크립트만 쓴다, guard 규칙 12)와 trace `checked` 행(`core.trace_event`). 표시 의무: 작업 디렉토리 JOB이면 검사마다 `evidence` 기록
 (`.shown/log.jsonl`, 원문에 없는 인용이 있을 때만 줄이 있다 — 빈 줄은 앞 의무를 닫는다).
 
-출력은 JSON 한 줄(≤ 4KB). 종료 0 = 썼음(또는 `kept`), 1 = 형식·마스킹 실패(줄은 생략으로 고쳤다, `next`),
-2 = 사용 오류·설정 오류·작업 없음·작업 디렉토리 이상(`next`가 있으면 따른다, 없으면 멈춘다).
+출력은 JSON 한 줄(≤ 4KB). 종료 0 = 썼음(또는 `kept`), 1 = 형식·마스킹 실패(줄은 생략으로 고쳤다, `next`)·`이미 검사함`(이 purpose
+기록이 있고 고칠 줄이 없음 — 줄 그대로, `next`대로 계속, 가-6), 2 = 사용 오류·설정 오류·작업 없음·작업 디렉토리 이상(`next`가 있으면 따른다, 없으면 멈춘다).
 """
 
 from __future__ import annotations
@@ -61,10 +61,12 @@ from .core import (
     EVIDENCE_SUB,
     EXPLORE_INPUT_FILE,
     EXPLORE_MAX_BYTES,
+    EXPLORE_PENDING_LINE,
     EXPLORE_PREFIX,
     EXPLORE_SKIPPED,
     FIELD_MAX_BYTES,
     HYPS_MAX,
+    NEAR_MAX,
     NEXT_CHECK_FAILED,
     NEXT_CHECK_NA,
     OUTPUT_MAX_BYTES,
@@ -109,7 +111,7 @@ QUESTION_SKIPPED = " — 탐색 분석 생략이라 답하지 않음(근거 로�
 QUESTION_TAILS = (QUESTION_PENDING, QUESTION_DONE, QUESTION_DONE_NONE, QUESTION_SKIPPED)
 FAB_BEFORE = " · 앞 검사 원문에 없음 {n}(다시 검사해도 지우지 않음)"
 # 정상 가설(설계상 정상 동작, explore.md 종합 판단 0): 머리가 `정상`으로 시작한다. 근거 인용이 원문에 없으면 정상으로 보지 않는다
-NORMAL_RX = re.compile(r"^[`*\s]*정상(?:\s*\(|\s*[—–:-]|\s*$)")
+NORMAL_RX = re.compile(r"^[`*\s]*정상(?:\s*동작)?(?:\s*\(|\s*[—–:-]|\s*$)")     # `정상 동작 — …`도(틀은 `정상(설계상 정상 동작)`)
 NORMAL_BAD = " [정상 근거 없음]"
 TOP_FIT_NORMAL_HELD = " → {n}번 가설이 정상(설계상 정상 동작)이라 1위 {cause} 보류"
 NORMAL_HELD_SUB = "  - {n}번 가설이 정상(설계상 정상 동작, 근거 줄 원문 확인)이라 1위 {cause} 채택을 보류로 바꿨다"
@@ -133,7 +135,10 @@ FORMAT_NEXT = ("explore-output.md에서 형식 경고가 가리킨 칸만 고쳐
                "남아도 그대로 쓴다)")
 FORMAT_CLIP = 600
 RECHECK_KEPT = "첫 검사 결과 유지(다시 검사가 형식·마스킹 검사에서 실패해 리포트 줄을 바꾸지 않았다)"
-TIMER_RX = re.compile(r"타이머|timer|throttl|스로틀|재시도|retry|backoff|임계|threshold|카운터|counter|횟수", re.IGNORECASE)
+# 가-1: 재계산 칸을 쓰는 조건 하나 = 게이트 5 조건(explore.md 쓰는 것과 같은 말). 경고가 이 문장을 그대로 알려 준다
+MECH_RULE = ("첫 갈라짐(가장 이른 false) 단계의 `기대`에 시간·횟수 숫자(ms·초·회)가 있으면 그 값을 로그 값으로 다시 계산해 숫자와 "
+             "`→ 고치면 결과가 뒤집히나: 예|아니오`로 쓴다. 없으면 칸을 안 쓰거나 `메커니즘 재계산: 해당 없음 — <이유>`")
+NA_RX = re.compile(r"해당\s*없음")
 BOUNDARIES = ("AP 내부", "AP-CP 경계", "CP 내부", "CP-망 경계", "망", "환경", "모름")
 LAYER_ABBR = {"AP": "AP 내부", "CP": "CP 내부", "AP-CP": "AP-CP 경계", "CP-망": "CP-망 경계"}
 LAYER_ABBR_RX = re.compile(r"^(AP-CP|CP-망|AP|CP)\s*(?:\([^()]*\))?$")
@@ -144,6 +149,14 @@ CLAIM_STEP_RX = re.compile(r"^[\s`*]*(?:단계\s*#?\s*(\d+)|#?(\d+)\s*단계|#?(
 YES = r"예(?=(?:\s*(?:입니다|이다|임|요))?(?![가-힣]))"
 FLIP_RX = re.compile(rf"뒤집히나\s*[?？]?\s*[:：]?\s*[`*]*\s*(아니오|아니요|{YES})(\s*[|/]\s*(?:아니오|아니요|예))?")
 FLIP_TAIL_RX = re.compile(r"(아니오|아니요|(?<![가-힣])예)(?:\s*(?:입니다|이다|임|요))?[\s`*.)\]]*$")      # `뒤집히나`가 없는 옛 꼴: 끝의 답
+
+
+def _mech_na(mech: str):
+    """재계산 칸 → (`뒤집히나:` 답 match, `해당 없음`인가). 명시적 답(`뒤집히나:` 꼴이든 줄 끝 옛 꼴 `아니오`·`예`든)이 있으면 `해당 없음`이 아니다."""
+    flip = FLIP_RX.search(mech)
+    return flip, not (flip or FLIP_TAIL_RX.search(mech)) and bool(NA_RX.search(mech))
+
+
 # 분석 스킬 의견 `<원인 ID> — <근거>`의 앞 ID. 백틱·굵게로 감싸거나 조사(`ID와`)가 붙어도 잡고, 숫자가 더 붙은 것은 아니다
 OPINION_ID = re.compile(rf"\s*[`*]*({CAUSE_ID})(?!\d)")
 
@@ -231,7 +244,7 @@ def _obligation(args, job: Path, purpose: str, lines: list[str]) -> None:
     if args.out:
         return
     shown.record(job.parent, "triage", "evidence", job.name, key=f"evidence:{job.name}/{purpose}", lines=lines,
-                 path=str(job / "report.md"))
+                 path=str(job.absolute() / "report.md"))
 
 
 def _resolve_job(args, defaults: dict) -> Path:
@@ -473,8 +486,8 @@ def _parse(purpose: str, mode: str, text: str) -> dict | None:
 
 def _chain_warnings(fields: dict, investigating: bool = False) -> list[str]:
     """기대 체인 형식 경고(기계로 볼 수 있는 것만): 가장 유력(없으면 가설 1)에 표 없음, `일치` 칸을 못 읽음, `첫 갈라짐` 단계가 표의
-    가장 이른 false가 아님(없음·false 없는데 적음), `책임 경계` 값이 목록 밖, 타이머·재시도·임계값·횟수 낱말이 든 가설(정상 가설
-    아님)에 `메커니즘 재계산` 없음, 가장 유력의 메커니즘 재계산이 `아니오`. 조사 모드(`investigating`)면 게이트 3이 보는 칸도:
+    가장 이른 false가 아님(없음·false 없는데 적음), `책임 경계` 값이 목록 밖, 가장 이른 false 단계 `기대`에 시간·횟수 숫자가 있는
+    가설(정상 가설 아님)에 `메커니즘 재계산`이 없거나 `해당 없음`(게이트 5와 같은 조건), 가장 유력의 메커니즘 재계산이 `아니오`. 조사 모드(`investigating`)면 게이트 3이 보는 칸도:
     가장 유력에 false가 있는데 `책임 경계` 없음, 그 단계 `기대 주체`를 못 읽음(열·머리 행 없음)·목록 밖(R-07).
     `원인 층`은 선택 칸이고 기대는 게이트가 없어 보지 않는다(R-03 — 경고가 다시 검사를 늘 열었다)."""
     out = []
@@ -494,7 +507,7 @@ def _chain_warnings(fields: dict, investigating: bool = False) -> list[str]:
         elif first is not None and claim != first:
             out.append(f"가설 {n}: 첫 갈라짐 단계 {claim} ≠ 표의 가장 이른 false 단계 {first} — 가장 잘 설명하는 단계가 아니라 가장 이른 false")
         elif first is None and claim is not None and rows:
-            out.append(f"가설 {n}: 첫 갈라짐 단계 {claim}인데 표에 false 행이 없음")
+            out.append(f"가설 {n}: 첫 갈라짐 단계 {claim}인데 표에 false 행이 없음 — 정상 가설이면 `첫 갈라짐: 없음 — <이유>`")
         if h.get("책임 경계") is not None and _layer(h["책임 경계"]) is None:
             out.append(f"가설 {n}: `책임 경계`는 {' | '.join(BOUNDARIES)} 중 하나")
         elif investigating and k == picked and first is not None and h.get("책임 경계") is None:
@@ -506,15 +519,19 @@ def _chain_warnings(fields: dict, investigating: bool = False) -> list[str]:
         elif investigating and k == picked and row is not None and _layer(row["주체"]) is None:
             out.append(f"가설 {n}: 단계 {first} 기대 주체 `{_one(row['주체'])[:20]}`는 목록 밖 — {' | '.join(BOUNDARIES)} 중 하나")
         mech = h.get("메커니즘 재계산")
-        if not mech and TIMER_RX.search(h["가설"] or "") and not NORMAL_RX.match(h["가설"] or ""):
-            out.append(f"가설 {n}: 타이머·재시도·임계값·횟수 원인인데 `메커니즘 재계산:` 없음 — 로그 값으로 다시 계산하고 고치면 뒤집히나")
-        flip = FLIP_RX.search(mech or "")
+        normal = NORMAL_RX.match(h["가설"] or "")
+        flip, na = _mech_na(mech or "")
+        if row is not None and NUM_UNIT_RX.search(row["기대"] or "") and (not mech or na) and not normal:   # 게이트 5와 같은 조건(가-1)
+            out.append(f"가설 {n}: 단계 {first} `기대`에 시간·횟수 숫자가 있는데 `메커니즘 재계산:`이 "
+                       f"{'해당 없음' if mech else '없음'} — {MECH_RULE}")
         if flip and flip.group(2):
             out.append(f"가설 {n}: 메커니즘 재계산의 답이 틀 그대로(`예|아니오`) — 예나 아니오 하나만")
-        answer = None if flip and flip.group(2) else (flip or FLIP_TAIL_RX.search(mech or ""))
-        if k == picked and answer and answer.group(1) != "예":
-            out.append(f"가설 {n}: 메커니즘 재계산이 '아니오'(고쳐도 결과가 안 뒤집힘)인데 가장 유력 — 재계산으로는 원인이 뒷받침되지 "
-                       "않음 — 가장 유력을 다시 본다")
+        answer = None if (flip and flip.group(2)) or na else (flip or FLIP_TAIL_RX.search(mech or ""))
+        if k == picked and answer and answer.group(1) != "예" and not normal:
+            out.append(f"가설 {n}: 메커니즘 재계산이 '아니오'(고쳐도 결과가 안 뒤집힘)인데 가장 유력 — 재계산으로 보면 그 값은 원인이 "
+                       "아니다. 값이 원인이면 가설을 고치고, 그 단계 `기대`에 시간·횟수 숫자가 없으면 처음부터 `해당 없음 — <이유>`가 맞다"
+                       + (" — 조사 모드라 이 답은 다시 검사에서 지우거나 바꿔도 이어진다(`예`와 계산 숫자일 때만 새로 판정)"
+                          if investigating else ""))
         big = [r["단계"] for r in rows if any(_b(r[c]) > FIELD_MAX_BYTES for c in ("기대", "근거", "관측", "일치"))]
         if big:
             out.append(f"가설 {n}: 기대 체인 단계 {', '.join(map(str, big))}의 칸이 {FIELD_MAX_BYTES}바이트를 넘음 — 줄여 쓴다")
@@ -523,13 +540,26 @@ def _chain_warnings(fields: dict, investigating: bool = False) -> list[str]:
 
 CHECK_MISSING = ("`near_causes`(DB 원인 후보)가 있는데 `후보 확인:` 칸이 없음 — 끝에 후보마다 `- <ID>: 맞음|아님|모름 — <근거 줄 | "
                  "찾았는데 없음>`")
+CHECK_TOP_MISSING = ("맞았지만 채택하지 않은 규칙 원인({causes})이 `후보 확인:`에 없음 — 1위와, 판단이 기준 사건에 붙인 원인을 이번 실패와 "
+                     "대조한다. 끝에 원인마다 `- <ID>: 맞음|아님|모름 — <근거 줄 | 찾았는데 없음>`(이번 실패를 설명하나)")
 
 
 def _check_warnings(analysis: dict, fields: dict) -> list[str]:
     """조사 모드 DB 원인 후보 대조(반입 7 B-2) 형식 경고: analysis.json `near_causes`가 있는데 판정을 읽은 `후보 확인` 항목이 없다
-    (실패·게이트가 아니다 — 조사 결론 게이트는 가설 인용만 본다)."""
+    (실패·게이트가 아니다 — 조사 결론 게이트는 가설 인용만 본다). 1위 C=1 보류(`채택 안 함`)면 대조할 원인 = 1위 + 판단
+    `decision.events[]`에서 기준에 붙은(`ref`) 사건의 원인(후보 목록에 있을 때 — 코멘트 단서 미확인·ambiguous·ineligible 보류,
+    리뷰 1127 5번), `NEAR_MAX`개까지."""
     read = [c for c in fields.get(evidence.CHECK_FIELD) or [] if c["verdict"] != "?"]
-    return [CHECK_MISSING] if analysis.get("near_causes") and not read else []
+    if analysis.get("near_causes") and not read:
+        return [CHECK_MISSING]
+    cands = [c for c in analysis.get("candidates") or [] if isinstance(c, dict)]
+    if (analysis.get("investigate") or {}).get("reason") != "채택 안 함" or not cands or not cands[0].get("cause"):
+        return []
+    listed = {c.get("cause") for c in cands}
+    want = [cands[0]["cause"]] + [e.get("cause") for e in (analysis.get("decision") or {}).get("events") or []
+                                  if isinstance(e, dict) and e.get("ref") and e.get("cause") in listed]
+    miss = [c for c in dict.fromkeys(want) if not any(r["cause"] == c for r in read)][:NEAR_MAX]
+    return [CHECK_TOP_MISSING.format(causes=", ".join(miss))] if miss else []
 
 
 def _recheck_open(job: Path) -> bool:
@@ -558,6 +588,7 @@ SIDE_LABEL = {"cp": "CP", "net": "망"}
 INV_CAUSE_MAX, INV_WHY_MAX, INV_EXPECT_MAX = 120, 80, 80
 # eval 46: 재계산 '아니오'를 받은 같은 가설이 그 줄만 지워 다시 오면(숫자 기대가 없으면 재계산은 필수가 아니라 통과하던 것) 실패를 이어받는다
 MECH_NO_CARRIED = "앞 검사에서 이 가설의 재계산 답이 아니오 — 지우거나 예가 아닌 답으로 바꿈(가설을 고치거나 숫자와 예로 다시)"
+NORMAL_UNSEEN = "정상 가설인데 정상 근거 줄 미확인 — `로그로 확인`에 회복·no-op 줄을 원문 그대로"     # 가-2
 
 
 def _layer(value) -> str | None:
@@ -702,6 +733,10 @@ def _after_ref(job: Path, ok_quotes: list[str], events: dict | None, ref) -> tup
             unknown += 1
         elif (t := logtime.normalize_ts(m.group(2), None, None)) is not None and t > ref:
             return True, note
+    inp = (events or {}).get("input") or {}
+    end = logtime.normalize_ts(((events or {}).get("coverage") or {}).get("last_ts"), inp.get("tz"), inp.get("year"))
+    if end is not None and end <= ref:      # 가-3(2): 기준 뒤 줄이 로그에 없다 — 안 본 것이 아니다(통과는 아님)
+        return False, "로그가 기준 시각에서 끝남 — 실패 뒤 로그가 필요함(`다음 확인`에 뒤 로그 요청)" + note
     return False, ("기준 시각 뒤 줄 인용·구간 없음(실패 뒤를 보지 않음)" + note
                    + (f" — 구간 {unknown}개는 날짜 모름(옛 구간 파일 — window를 다시 받으면 됨)" if unknown else ""))
 
@@ -956,11 +991,12 @@ def _outer(events: dict | None, ok_quotes: list[str], layer: str | None, default
 
 def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: dict | None, defaults: dict | None = None,
                    platform: str | None = None, before: int = 0, texts: list[str] | None = None,
-                   after_sec: int = 600, mech_no: str | None = None) -> tuple[dict, list[str]]:
+                   after_sec: int = 600, mech_no: str | None = None, normal: bool = False) -> tuple[dict, list[str]]:
     """조사 결론 게이트 6개 → (analysis.json·check-output 기록 `investigation`, 형식 경고). 하나라도 실패면 insufficient_evidence.
     `mech_no` = 앞 검사에서 재계산 답이 '아니오'였던 가설 머리(같은 머리인데 이번에 재계산 줄이 없으면 그 실패를 이어받는다, eval 46).
     `before` = 앞 검사의 원문에 없는 인용 수(있으면 게이트 1 실패, R-03), `texts` = 마스킹 사본 글(`찾았는데 없음` 세기 — 없으면
-    셀 수 없어 게이트 2 실패), `after_sec` = `explore.after_sec`(`찾았는데 없음` 세는 구간 최소 길이, C-1)."""
+    셀 수 없어 게이트 2 실패), `after_sec` = `explore.after_sec`(`찾았는데 없음` 세는 구간 최소 길이, C-1), `normal` = 고른 가설이 정상이고
+    정상 근거 줄이 원문 확인(`_normal_flags`)."""
     hyps = fields.get("hyps") or []
     if not hyps:
         return {"status": "insufficient_evidence", "hyp": None, "cause": None, "layer": None, "first_divergence": None,
@@ -1011,19 +1047,26 @@ def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: 
             obs = f"단계 {first['단계']}: {obs}"
             warns.append(f"가설 {k + 1}: 가장 이른 false {obs} — 관측 줄을 시각부터 원문 그대로 쓰거나, 없음이면 `찾았는데 없음:`에 "
                          "찾은 낱말을 백틱으로(예: - `SETUP_DATA_CALL` 재요청 — logs-masked 15:10:02 뒤 grep)")
-    add("첫 어긋남", first is not None and claim == first["단계"] and not obs,
-        "기대 체인 표 없음" if not rows else "표에 false 단계 없음" if first is None
-        else obs or note if claim == first["단계"] else f"첫 갈라짐 {claim or '없음'} ≠ 가장 이른 false 단계 {first['단계']}")
     subject = _layer(first["주체"]) if first else None
-    add("책임 층", layer not in (None, "모름") and first is not None and subject == layer,
-        "책임 경계 칸 없음·목록 밖" if layer is None else "책임 경계 모름" if layer == "모름" else "첫 갈라짐 단계 없음"
-        if first is None else "기대 주체 칸 없음(옛 형식 표)" if not first["주체"] else ""
-        if subject == layer else f"책임 경계 {layer} ≠ 단계 {first['단계']} 기대 주체 {subject or _one(first['주체'])[:20]}")
+    if first is None and NORMAL_RX.match(h["가설"] or ""):
+        # 가-2: false 단계가 없는 정상 가설 — 첫 어긋남·책임 층은 해당 없음이고 정상 근거 줄(원문 확인)이 대신한다(R-16, 상태는
+        # 호출부가 근거 부족 그대로 둔다)
+        why = "해당 없음(정상 가설)" if normal else NORMAL_UNSEEN
+        add("첫 어긋남", normal, why)
+        add("책임 층", normal, why)
+    else:
+        add("첫 어긋남", first is not None and claim == first["단계"] and not obs,
+            "기대 체인 표 없음" if not rows else "표에 false 단계 없음" if first is None
+            else obs or note if claim == first["단계"] else f"첫 갈라짐 {claim or '없음'} ≠ 가장 이른 false 단계 {first['단계']}")
+        add("책임 층", layer not in (None, "모름") and first is not None and subject == layer,
+            "책임 경계 칸 없음·목록 밖" if layer is None else "책임 경계 모름" if layer == "모름" else "첫 갈라짐 단계 없음"
+            if first is None else "기대 주체 칸 없음(옛 형식 표)" if not first["주체"] else ""
+            if subject == layer else f"책임 경계 {layer} ≠ 단계 {first['단계']} 기대 주체 {subject or _one(first['주체'])[:20]}")
     ok_quotes = [q for q, v in zip(quotes, verdicts or []) if v == "ok"]
     add("실패 뒤 흔적", *_after_ref(job, ok_quotes, events, ref))
     mech = h.get("메커니즘 재계산") or ""
-    flip = FLIP_RX.search(mech)
-    answer = None if flip and flip.group(2) else (flip or FLIP_TAIL_RX.search(mech))
+    flip, na = _mech_na(mech)      # 가-1: `해당 없음 — <이유>`는 답(예/아니오)이 아니라 정식 답 "해당 없음"
+    answer = None if (flip and flip.group(2)) or na else (flip or FLIP_TAIL_RX.search(mech))
     reply = answer.group(1) if answer else None
     numeric = NUM_UNIT_RX.search((first or {}).get("기대") or "")     # R-17: 가장 이른 false 단계의 `기대` 칸만(가설 머리의 경과 시간은 아님)
     # 외부 리뷰 1125 지적 3: 명시적 `아니오`는 숫자 기대와 상관없이 실패, 숫자 기대면 계산 숫자와 명시적 `예`가 있어야 한다
@@ -1033,6 +1076,7 @@ def _investigation(job: Path, fields: dict, per_hyp, chain_v, sha: str, events: 
     why = ("재계산 답이 아니오(고쳐도 안 뒤집힘)" if reply in ("아니오", "아니요")
            else MECH_NO_CARRIED if carried else "" if not numeric
            else "숫자 기대인데 메커니즘 재계산 없음" if not mech.strip() else "재계산 답이 틀 그대로" if flip and flip.group(2)
+           else "숫자 기대인데 재계산이 해당 없음 — 기대의 숫자로 다시 계산(계산 숫자와 예)" if na
            else "재계산 답 없음(예/아니오)" if reply != "예" else "재계산에 계산 내용(숫자) 없음" if not re.search(r"\d", mech) else "")
     add("숫자 메커니즘", not why, why or ("" if numeric else "해당 없음(숫자 기대 없음)"))
     add("외부 근거", *_outer(events, ok_quotes, layer, defaults, platform))
@@ -1275,7 +1319,7 @@ def _question_tail(report: Path, tail: str) -> None:
 
 
 def _hold_lines(report: Path, cause: str, held: bool = False, normal: bool = False) -> list[str]:
-    """결론·해결책 줄을 보류로 고친다(탐색 줄과 달리 1위 확정·`검증됨`을 권하지 않게). 다시 불러도 같다(이미 고친 해결책 줄은 그대로).
+    """결론·해결책 줄을 보류로 고치고 수정 상태 줄을 뺀다(탐색 줄과 달리 1위 확정·`검증됨`을 권하지 않게). 다시 불러도 같다(이미 고친 해결책 줄은 그대로).
     판단이 이미 보류(`held`)면 리포트에 해결책 줄이 없다(report.py가 싣지 않는다) — 없어도 실패가 아니다.
     못 고친 줄 이름 목록(줄 없음·쓰기 실패)."""
     failed = []
@@ -1292,6 +1336,9 @@ def _hold_lines(report: Path, cause: str, held: bool = False, normal: bool = Fal
             failed.append("해결책 줄")
     elif not held and rep.current_line(report, rep.FIT_HOLD_RESOLUTION) is None:      # 이미 보류로 고친 줄이면 실패가 아니다
         failed.append("해결책 줄")
+    # 수정 상태 줄은 뺀다 — run 때 보류인 리포트·Jira 본문과 같게(채택하지 않은 원인의 수정 상태는 이 이슈의 답이 아니다, 리뷰 1127 7번)
+    if rep.current_line(report, rep.FIX_STATUS_PREFIX) is not None and not rep.rewrite_line(report, rep.FIX_STATUS_PREFIX, []):
+        failed.append("수정 상태 줄")
     return failed
 
 
@@ -1437,6 +1484,58 @@ def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, h
     return extra
 
 
+REFUTED_NEXT = "심층 분석이 채택 원인({cause})을 아님으로 봄 — 탐색 분석으로 적합성 확인"
+REFUTED_ASK = "(탐색 분석을 할지 묻고 — 답 전 원문 열람 금지 — 동의하면 triage.py explore {key}부터)"
+WARN_EXPLORE = "경고: analysis.json 탐색 분석(explore)을 열지 못했다({why})"
+CHECKS_CLIP = 200
+
+
+def _refuted(analysis: dict, checks: list, bad: set) -> str | None:
+    """5-1 `후보 확인`이 채택 원인(accepted `selected.cause`)을 `아님`이라 했으면 그 ID(근거 인용이 원문에 없는 항목은 빼고)."""
+    dec = analysis.get("decision") or {}
+    cause = (dec.get("selected") or {}).get("cause") if dec.get("state") == "accepted" else None
+    hit = any(c["cause"] == cause and c["verdict"] == "아님" and i not in bad for i, c in enumerate(checks))
+    return cause if cause and hit else None
+
+
+def _refuted_next(job: Path, analysis: dict, cause: str) -> str | None:
+    """5-2가 열려 있으면(`never` 아님) 적합성 확인 안내. 아직 타임라인 전이고 `ask`면 동의를 묻는 말을 붙인다. 안 열렸으면 None."""
+    when = (analysis.get("explore") or {}).get("when")
+    if when in (None, "never"):
+        return None
+    ask = when == "ask" and _kind(job / TIMELINE_FILE) != "file"
+    return REFUTED_NEXT.format(cause=cause) + (REFUTED_ASK.format(key=analysis.get("key") or job.name) if ask else "")
+
+
+def _open_fit_check(job: Path, analysis: dict, read_sha: str | None) -> tuple[dict, str | None, dict]:
+    """5-2가 안 열렸고 run이 준비해 뒀으면(`explore-input.json` `fit_later` — `driver.explore`가 `never`·`--no-explore`를 보고 둔 값)
+    analysis.json `explore`를 그 값으로 열고 report.md 심층 분석 줄 묶음 뒤에 탐색 분석 줄을 넣는다. 판단·점수·분류는 그대로다.
+    → (analysis, 그 sha, 기록에 더할 칸 — 못 열었으면 `explore_unwritten: <사유>`)."""
+    later = _load(job / EXPLORE_INPUT_FILE)
+    later = later.get("fit_later") if isinstance(later, dict) else None
+    if analysis.get("explore") or not isinstance(later, dict):
+        return analysis, read_sha, {}
+    result, extra = _save_analysis(job, {**analysis, "explore": later}, read_sha, "explore_unwritten", WARN_EXPLORE)
+    if result is None:
+        return analysis, read_sha, extra
+    report = job / "report.md"
+    rows = report.read_text(encoding="utf-8").split("\n") if _kind(report) == "file" else []
+    i = next((i for i, r in enumerate(rows) if r.startswith(DEEP_PREFIX)), None)
+    if i is not None:
+        i += 1
+        while i < len(rows) and rows[i].startswith("  - "):
+            i += 1
+        rows.insert(i, EXPLORE_PENDING_LINE.format(key=analysis.get("key") or job.name))
+        try:
+            _write_atomic(report, "\n".join(rows).encode("utf-8"))
+        except OSError:
+            i = None
+    if i is None:
+        print(WARN_REWRITE, file=sys.stderr)
+        extra = {**extra, "explore_unwritten": "report.md 탐색 분석 줄"}
+    return result, _read_analysis(job)[1], extra
+
+
 def _skipped(args, job: Path, purpose: str, env: dict) -> int:
     report, prefix = job / "report.md", PREFIX[purpose]
     reason = masking.mask_brief(args.skipped, 120)
@@ -1482,6 +1581,10 @@ def _preconditions(job: Path, purpose: str) -> tuple[dict, str | None, bool]:
     if not isinstance(analysis, dict):
         raise _Stop(USAGE, "작업 없음", NEXT_CHECK_NA, "analysis.json이 없다")
     recheck = bool(current) and "TODO(LLM)" not in current and purpose == "explore" and _recheck_open(job)
+    rec = _load(job / RECORD)
+    if current and "TODO(LLM)" not in current and not recheck and isinstance(rec, dict) and isinstance(rec.get(purpose), dict):
+        # 가-6: 이미 검사했다(다시 검사는 형식 경고 뒤 한 번뿐) — 멈출 일이 아니라 계속할 일이라 종료 1(해당 없음)
+        raise _Stop(CHECK_FAILED, "이미 검사함", NEXT_CHECK_NA, "이미 검사했다 — 다시 검사는 형식 경고 뒤 한 번뿐(쓴 줄은 그대로 둔다)")
     if not current or ("TODO(LLM)" not in current and not recheck):
         raise _Stop(USAGE, "작업 없음", NEXT_CHECK_NA, "고칠 줄이 없다(이미 쓴 줄은 그대로 둔다)")
     if purpose == "deep":
@@ -1632,7 +1735,8 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     inv, inv_warns = (_investigation(job, fields, per_hyp, chain_v, sha, events, getattr(args, "tt_defaults", None),
                                      analysis.get("platform"), before, copies,
                                      summary.after_of(getattr(args, "platform_cfg", None) or {}),
-                                     mech_before if isinstance(mech_before, str) else None) if investigating else (None, []))
+                                     mech_before if isinstance(mech_before, str) else None, normal1) if investigating
+                     else (None, []))
     mech_g = next((g for g in (inv or {}).get("gate") or [] if g["name"] == "숫자 메커니즘"), None)
     mech_no = inv["cause"] if mech_g and not mech_g["ok"] and mech_g["why"].startswith(("재계산 답이 아니오", MECH_NO_CARRIED[:12])) else None
     if inv and normal1:     # R-16: 가장 유력이 정상이고 정상 근거 줄이 원문 확인 — 원인 조사 대상 아님(상태는 근거 부족 그대로)
@@ -1676,6 +1780,14 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
                                      checks=fields.get(evidence.CHECK_FIELD) or [])
     else:
         dec_extra = {}
+    # 5-1이 채택 원인을 아님으로 봤다: 판단은 그대로 두고 5-2 적합성 확인을 연다(보류는 5-2 `1위 판단`만 한다)
+    refuted = _refuted(analysis, fields.get(evidence.CHECK_FIELD) or [], check_bad) if purpose == "deep" else None
+    open_extra = {}
+    if refuted:
+        analysis, read_sha = _read_analysis(job)     # 판단을 고쳐 썼으면 그 뒤 내용
+        analysis, read_sha, open_extra = _open_fit_check(job, analysis or {}, read_sha)
+    checks_kept = ([rep._clip(_check_one(c, i in check_bad), CHECKS_CLIP) for i, c in enumerate(fields.get(evidence.CHECK_FIELD) or [])
+                    if c["verdict"] != "?"] if purpose == "deep" else [])
     inv_extra = {}
     if inv:     # 조사 모드(run이 판정): 게이트 결과(위에서 계산) → analysis.json 먼저(포털이 읽는 기준), 그다음 report.md
         saved, inv_extra = _save_analysis(job, {**analysis, "investigation": inv}, read_sha, "investigation_unwritten",
@@ -1695,6 +1807,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
                            **({"top_fit": fields["top_fit"]["fit"] or "읽지 못함"} if fields.get("top_fit") else {}),
                            **({"top_fit_cause": fields["top_fit"]["cause"]} if (fields.get("top_fit") or {}).get("cause") else {}),
                            **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra, **inv_extra,
+                           **({"refuted": refuted} if refuted else {}), **open_extra, **({"checks": checks_kept} if checks_kept else {}),
                            **({"investigation": inv} if inv else {}), **({"mech_no": mech_no} if mech_no else {}),
                            **({"normal": [i + 1 for i, v in enumerate(normal_ok) if v]} if any(normal_ok) else {}),
                            **unknown, **({"rules": rules_kept} if rules_kept else {}), **({"rules_dropped": rules_dropped, "rules_dropped_why": rules_why} if rules_dropped else {}),
@@ -1709,7 +1822,9 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     _emit({"line": head, "evidence": sub.lstrip(), "quotes": n, **counts, **({"warning": warn} if warn else {}),
            **({"windows_excluded": win_bad} if win_bad else {}), **({"format_warnings": fmt} if fmt else {}),
            **({"investigation": inv["status"]} if inv else {}),
-           **({"next": FORMAT_NEXT} if fmt and not args.recheck else {})})
+           **({"next": FORMAT_NEXT} if fmt and not args.recheck else {}),
+           **({"next": nxt} if refuted and "explore_unwritten" not in open_extra
+              and (nxt := _refuted_next(job, analysis, refuted)) else {})})
     return OK
 
 

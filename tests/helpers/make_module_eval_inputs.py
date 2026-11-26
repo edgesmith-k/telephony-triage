@@ -251,7 +251,8 @@ def build_case(case_dir: Path, case: dict, db: Path, root: Path, tmp: Path, runn
         if top.get("cause") != expect["top_cause"] or top.get("C") != expect["C"] or not ok_cat:
             mismatch(f"{name}: 1위 {top.get('cause')} C={top.get('C')} category={cat} "
                      f"— 기대 {expect['top_cause']} C={expect['C']} category={want}")
-        if explore_input.exists():
+        if explore_input.exists() and (analysis.get("explore") or {}).get("reason") != "cause_unconfirmed":
+            # 1위 C=1이어도 보류면 조사 모드라 탐색 입력이 생긴다(11/27) — deep case는 그 밖의 탐색(적합성 확인 등)이 열리면 안 된다
             raise GenError(f"{name}: deep case인데 explore-input.json이 생겼다")
         explore_bytes = None
         # CLI만으로는 deep에 타임라인이 없다 → 같은 report.timeline 경로를 임시 입력으로 탄다

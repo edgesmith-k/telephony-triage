@@ -164,6 +164,21 @@ def test_summary_command_writes_quotable_file():
     assert "summary.md" in core.STALE_FILES and "summary.json" in core.STALE_FILES
 
 
+def test_summary_command_ignores_prepared_only_input():
+    """5-2가 안 열렸으면(analysis.json `explore` 없음) 준비만 한 입력(`fit_later`)의 기준 줄은 기준 시각에 쓰지 않는다(N3)."""
+    job = tmp("tt-summary-later-") / "j"
+    shutil.copytree(_job(), job)
+    analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    (job / "analysis.json").write_text(json.dumps({**analysis, "explore": None}, ensure_ascii=False), encoding="utf-8")
+    (job / core.EXPLORE_INPUT_FILE).unlink()
+    plain = run("triage.py", ["summary", KEY, "--out", job])
+    (job / core.EXPLORE_INPUT_FILE).write_text(json.dumps({"fit_later": {"reason": "fit_check", "when": "ask"},
+                                                           "look_at": {"ts": "2026-11-20T10:05:00.000Z"}}), encoding="utf-8")
+    later = run("triage.py", ["summary", KEY, "--out", job])
+    assert plain.returncode == later.returncode == 0, later.stderr
+    assert later.stdout == plain.stdout
+
+
 def test_summary_file_is_evidence_source_and_fake_still_caught(tmp_path, capsys):
     """check-output: summary.md(sha 맞음)의 줄은 타임라인에 없어도 근거로 통과, 지어낸 줄은 그대로 원문에 없음."""
     import test_check_output as tc

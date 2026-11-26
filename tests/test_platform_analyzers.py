@@ -224,7 +224,7 @@ def test_ofono_explore_reports_platform_refs():
     guide = (root / "skills" / "telephony-triage" / "reference" / "platforms" / "ofono" / "log-guide.md").resolve()
     assert out["platform"] == "ofono" and out["refs"] == [guide.as_posix()] and Path(out["refs"][0]).is_file()
     # eval 73-e: 문서 앞부분만 읽으면 refs 지시를 놓친다 — 출력 next가 refs 읽기를 먼저 알린다(모듈 문서 설정 없음이라 그것뿐)
-    assert out["next"] == T.REFS_NEXT
+    assert out["next"] == T.REFS_NEXT + " / " + T.INVESTIGATE_NEXT     # 조사 모드(후보 없음): window는 check-output 전에(가-3)
     # 작업 플랫폼은 analysis.json 기준: 선택(android 기본)과 달라도 그 작업의 refs
     again = run_json("triage.py", ["explore", "MOCK-9001", "--out", work / "job"], root=root, env=env)
     assert again == out
@@ -233,7 +233,7 @@ def test_ofono_explore_reports_platform_refs():
     data.pop("platform")
     (work / "job" / "analysis.json").write_text(json.dumps(data), encoding="utf-8")
     plain = run_json("triage.py", ["explore", "MOCK-9001", "--out", work / "job"], root=root, env=env)
-    assert set(plain) == {"timeline", "lines", "total"}
+    assert set(plain) == {"timeline", "lines", "total", "next"} and plain["next"] == T.INVESTIGATE_NEXT
 
 
 def test_ofono_with_remote_gives_module_category_shape():
@@ -247,7 +247,8 @@ def test_ofono_with_remote_gives_module_category_shape():
     meta.write_text(json.dumps({"key": "MOCK-9001", "occurred_at": "2026-09-20T05:32:10Z", "summary": "x",
                                 "platform_version": "2"}), encoding="utf-8")
     run_json("triage.py", ["run", "MOCK-9001", "--offline-db", variant_db("issue-db-ofono"), "--logs", LOGS / "journal-iso.log",
-                           "--issue-meta", meta, "--out", work / "job", "--platform", "ofono"], root=root,
+                           "--issue-meta", meta, "--out", work / "job", "--platform", "ofono",
+                           "--analyzer"], root=root,      # 1위 C=1 보류 → 조사 모드라 모듈 문서 5-1은 --analyzer일 때만(11/27)
              env={"TELEPHONY_TRIAGE_HOME": home})
     analysis = json.loads((work / "job" / "analysis.json").read_text(encoding="utf-8"))
     assert analysis["analyzer"] == {"category": "data", "when": "ask", "note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-1)"}

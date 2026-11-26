@@ -531,7 +531,7 @@ def _explore_inputs(job: Path, key: str, events: dict, inputs: dict, nojob) -> d
     from triagelib import summary
     centers, basis = summary.timeline_center(spec)      # `triage._explore`와 같은 중심·머리
     items, total = report.select_rows(rows, centers, limit)
-    flows = report.head_notes(job, events, spec.get("around"))
+    flows = report.head_notes(job, events, spec.get("around")) + report.deep_head(spec.get("deep_checks"))
     text = report.render_timeline(key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
                                   spec.get("anchor"), spec.get("look_at"), flows, spec.get("anomaly"), spec.get("summary"),
                                   basis)
@@ -574,10 +574,7 @@ def _deep_summary(job: Path, key: str, cfg: dict, defaults: dict, analysis: dict
     """5-1 타임라인 머리의 전체 로그 모양 요약(기준 시각은 탐색과 같다 — explore-input.json이 없으면 발생 시각)과 `JOB/summary.md`를
     썼는지. explore-input.json에 같은 상한의 `summary`가 있으면 사본을 다시 읽지 않고 그것을 쓴다. 만들지 못하면 (None, False)."""
     from triagelib import summary
-    try:
-        spec = _load(job / EXPLORE_INPUT_FILE)[0] if (job / EXPLORE_INPUT_FILE).is_file() else None
-    except (OSError, ValueError):
-        spec = None
+    spec = summary.spec_of(job, analysis)
     cap = summary.cap_of(cfg)
     kept = spec.get("summary") if isinstance(spec, dict) else None
     found = (kept if isinstance(kept, dict) and kept.get("cap") == cap and kept.get("groups")
@@ -758,7 +755,8 @@ def _hints(job: Path, cfg: dict, analysis: dict, by_cat: dict[str, str]) -> tupl
     found: list[tuple[str, str]] = []
     reason = (analysis.get("explore") or {}).get("reason")
     if reason in ("cause_unconfirmed", "fit_check") and cands and cands[0].get("type"):
-        found.append((str(cands[0]["type"]), (f"1위 유형 {cands[0]['type']}(원인 미확인)" if reason == "cause_unconfirmed"
+        found.append((str(cands[0]["type"]), (f"1위 유형 {cands[0]['type']}({'채택 안 함' if cands[0].get('C') else '원인 미확인'})"
+                                              if reason == "cause_unconfirmed"
                                               else f"채택 후보 유형 {cands[0]['type']}(적합성 확인)")))
     try:
         match = json.loads((job / "match.json").read_text("utf-8")) if (job / "match.json").is_file() else {}

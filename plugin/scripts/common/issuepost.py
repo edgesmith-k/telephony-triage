@@ -55,14 +55,17 @@ def normal_hold(analysis: dict, rec: dict | None = None) -> bool:
 
 
 def investigate_mode(analysis: dict) -> dict:
-    """조사 모드(11/25 A635) 판정 한 곳: 1위 후보가 없거나 1위 C=0(판정 불가 포함)이면 `{mode: true, reason: 후보 없음|1위 C=0}`,
-    아니면(1위 C=1·채택) `{mode: false}`. run이 analysis.json `investigate`로 쓰고, check-output·포털은 그 칸을 읽는다."""
+    """조사 모드(11/25 A635) 판정 한 곳: 스크립트가 원인을 채택하지 않았으면(`decision.state` ≠ accepted) `{mode: true, reason:
+    후보 없음|1위 C=0(판정 불가 포함)|채택 안 함(1위 C=1인데 자격 검사가 보류)}`. 채택이거나, check-output이 탐색 뒤 붙인 적합성 보류
+    (held/fit_check — 실행 시점엔 채택이었고 다시 run하면 `prior.unfit`이 이어 붙인다)면 `{mode: false}`. run이 analysis.json
+    `investigate`로 쓰고, check-output·포털은 그 칸을 읽는다."""
     cands = [c for c in (analysis or {}).get("candidates") or [] if isinstance(c, dict)]
+    dec = (analysis or {}).get("decision") or {}
+    if dec.get("state") == "accepted" or dec.get("reason") == "fit_check":
+        return {"mode": False}
     if not cands:
         return {"mode": True, "reason": "후보 없음"}
-    if ((analysis or {}).get("decision") or {}).get("state") == "accepted" or cands[0].get("C"):
-        return {"mode": False}
-    return {"mode": True, "reason": "1위 C=0"}
+    return {"mode": True, "reason": "채택 안 함" if cands[0].get("C") else "1위 C=0"}
 
 
 INVESTIGATION_PREFIX = "- 조사 결론 (LLM, "
@@ -106,8 +109,9 @@ def investigation_lines(inv: dict, top: dict | None = None, why: bool = True) ->
             out[0] += f" (규칙 1위 {cause}와 같음)"
         else:
             out.append(f"  - 관측된 규칙 일치: {top.get('category')} > {top.get('type')} > {cause or '원인 미확인'} — 규칙 1위"
-                       "(원인 일치 없음), 조사 결론과 같다고 확인되지 않음")
-    out.append("  - 규칙 판정은 보류 — 점수·분류·이슈 DB 기록은 그대로다. 이 원인으로 기록하려면 분류할 때 새 원인을 고른다" if ok else
+                       f"({'원인은 맞았지만 채택 안 함' if top.get('C') else '원인 일치 없음'}), 조사 결론과 같다고 확인되지 않음")
+    out.append(f"  - 규칙 판정은 보류 — 점수·분류·이슈 DB 기록은 그대로다. 이 원인으로 기록하려면 분류할 때 "
+               f"{f'그 기존 원인({cause})을' if cause and match else '새 원인을'} 고른다" if ok else
                "  - 근거가 모자라 결론으로 쓰지 않는다 — 원인은 보류 그대로. 실패한 검증을 보고 로그를 더 확인한다")
     return out
 

@@ -1274,3 +1274,102 @@ def test_post_reminds_evidence_output(tmp_path):
                   home=home)
     ctx = out["hookSpecificOutput"]["additionalContext"]
     assert "check-output 결과 줄(심층 분석·근거 원문 검사)" in ctx and "출력 줄 전부(1줄)" in ctx
+
+
+# --- 탐색 분석 줄(check-output --for explore) — 채택·분류 질문 전에 보인다(eval 46·73) ---------------------------------
+
+EX_CMD = "python3 /p/scripts/triage.py check-output MOCK-1 --for explore"
+EX_BLOCK = ["- 탐색 분석 (추정, timeline.md 4/4줄): 가설 1개 — 점수·분류·검증에 쓰지 않는다",
+            "  - 가설 1: 망이 APN 없음으로 거부 / 로그로 확인: DNC-0 setupDataCall fail MISSING_UNKNOWN_APN / 코드로 추정: 건너뜀"
+            " / 반대 근거: APN 목록 줄이 로그에 없음 / 다음 확인: APN 설정 확인",
+            "  - 근거 원문 검사: 인용 1개 중 원문에 없음 0"]
+EX_OUT = json.dumps({"line": EX_BLOCK[0], "evidence": EX_BLOCK[2][4:]}, ensure_ascii=False)
+ADOPT = {"question": "탐색 분석 가설 1(망이 APN 없음으로 거부)을 채택할까요?", "options": ["채택", "보류"]}
+EX_STEP7 = {"question": "어떻게 기록할까요?", "options": ["새 유형", "원인 미확정", "기록하지 않음"]}
+
+
+def _explore_rec(tmp_path, head_lines=EX_BLOCK, name="r"):
+    """report.md에 탐색 분석 줄을 쓰고 check-output 기록(스크립트처럼 lines는 지어낸 인용 줄뿐 — 여기선 빈 줄)을 돌려준다."""
+    rep = tmp_path / f"{name}.report.md"
+    rep.write_text("## MOCK-1 분석\n\n- 판단: 원인 보류\n" + "\n".join(head_lines) + "\n- 원인: TODO(LLM)\n", encoding="utf-8")
+    return {"c": [("triage", "evidence", {"key": "evidence:MOCK-1/explore", "lines": [], "path": str(rep)})]}
+
+
+def test_adopt_question_needs_explore_lines(tmp_path):
+    import show_guard
+    assert show_guard.EXPLORE_Q.search(ADOPT["question"])      # 채택 질문이 탐색 질문 꼴이라 예전에는 보지 않았다
+    rec = _explore_rec(tmp_path)
+    path = write(tmp_path, prompt("p"), bash("c", EX_CMD, EX_OUT), say("탐색 분석을 마쳤습니다. 가설 1은 APN 없음입니다."), extra=rec)
+    for q in (ADOPT, EX_STEP7, {"question": "DATA > DATA-009 > 새 원인으로 등록할까요?"}):
+        out = pre("pre-ask", path, ASK, q)
+        assert decision(out) == "deny", q
+        r = out["hookSpecificOutput"]["permissionDecisionReason"]
+        assert r.startswith(shown.MARKER + " evidence:MOCK-1/explore") and show_guard.EXPLORE_TODO in r
+        assert r.split("--- 붙일 줄 ---\n", 1)[1].splitlines() == EX_BLOCK
+    out = stop(path, ADOPT["question"])                          # 글로 물어도(질문 도구 없이) Stop이 되돌린다
+    assert out["decision"] == "block" and show_guard.EXPLORE_TODO in out["reason"]
+    # 보인 뒤에는 통과(같은 질문 본문에 넣어도)
+    ok = write(tmp_path, prompt("p"), bash("c", EX_CMD, EX_OUT), say("\n".join(EX_BLOCK)), name="ok.jsonl", extra=rec)
+    for q in (ADOPT, EX_STEP7):
+        assert pre("pre-ask", ok, ASK, q) is None
+    assert stop(ok, "\n".join(EX_BLOCK)) is None
+    assert pre("pre-ask", path, ASK, {**ADOPT, "question": "\n".join(EX_BLOCK) + "\n\n" + ADOPT["question"]}) is None
+
+
+def test_adopt_unblocks_after_lines_and_caps(tmp_path):
+    """거부된 질문 뒤 줄을 보이면 바로 풀리고, 보이지 못해도 MAX_BLOCKS에서 멈춘다(무한히 막지 않는다)."""
+    rec = _explore_rec(tmp_path)
+    denied = "PreToolUse:" + ASK + " hook error: " + shown.MARKER + " evidence:MOCK-1/explore — 거부됨"
+    fixed = write(tmp_path, prompt("p"), bash("c", EX_CMD, EX_OUT), call("d1", ASK, ADOPT, denied, error=True),
+                  say("\n".join(EX_BLOCK)), extra=rec)
+    assert pre("pre-ask", fixed, ASK, ADOPT) is None
+    capped = write(tmp_path, prompt("p"), bash("c", EX_CMD, EX_OUT), call("d1", ASK, ADOPT, denied, error=True), say("요약 1"),
+                   call("d2", ASK, ADOPT, denied, error=True), say("요약 2"), name="capped.jsonl", extra=rec)
+    out = pre("pre-ask", capped, ASK, ADOPT)
+    assert decision(out) is None and shown.CAPPED in out["systemMessage"]
+
+
+def test_no_explore_lines_no_block(tmp_path):
+    """탐색 생략·해당 없음·재실행(TODO)·기록 없음·report.md 못 읽음이면 막지 않는다."""
+    for i, lines in enumerate((["- 탐색 분석 생략: 사용자가 원하지 않음"], ["- 탐색 분석: 생략 (explore.when: never)"],
+                               ["- 탐색 분석 (추정, timeline.md): TODO(LLM)"], [])):
+        rec = _explore_rec(tmp_path, lines, name=f"s{i}")
+        path = write(tmp_path, prompt("p"), bash("c", EX_CMD, EX_OUT), say("끝"), name=f"s{i}.jsonl", extra=rec)
+        assert pre("pre-ask", path, ASK, ADOPT) is None, lines
+        assert stop(path, "끝") is None, lines
+    none = write(tmp_path, prompt("p"), bash("c", EX_CMD, EX_OUT), say("끝"), name="none.jsonl")
+    assert pre("pre-ask", none, ASK, ADOPT) is None
+    gone = {"c": [("triage", "evidence", {"key": "evidence:MOCK-1/explore", "lines": [], "path": str(tmp_path / "x.md")})]}
+    assert pre("pre-ask", write(tmp_path, prompt("p"), bash("c", EX_CMD, EX_OUT), say("끝"), name="gone.jsonl", extra=gone),
+               ASK, ADOPT) is None
+
+
+def test_explore_and_investigate_questions_not_blocked_by_explore_lines(tmp_path):
+    rec = _explore_rec(tmp_path)
+    path = write(tmp_path, prompt("p"), bash("c", EX_CMD, EX_OUT), say("탐색 분석을 마쳤습니다."), extra=rec)
+    for q in ("조사할까요?", "조사할까요? (심층 분석 뒤 탐색 분석, 토큰 추가 사용)", "탐색 분석을 실행할까요? (토큰 추가 사용)",
+              MODULE_Q["question"]):
+        assert pre("pre-ask", path, ASK, {"question": q}) is None, q
+
+
+def test_post_reminds_explore_lines(tmp_path):
+    rec = _explore_rec(tmp_path)["c"][0]
+    out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": EX_CMD}, "tool_response": {"stdout": EX_OUT}},
+                  home=_post_home(tmp_path, rec))
+    ctx = out["hookSpecificOutput"]["additionalContext"]
+    assert "report.md 탐색 분석 줄 전부(3줄)" in ctx and "채택·분류 질문" in ctx
+
+
+
+def test_post_holds_explore_lines_while_recheck_is_open(tmp_path):
+    """리뷰 1127 9번: check-output이 형식 경고와 `next`(고쳐 한 번 다시 검사)를 냈으면 post 안내가 "같은 메시지 끝에 채택·분류
+    질문"을 시키지 않는다 — 다시 검사 뒤(`next` 없음)에는 그대로 안내한다."""
+    rec = _explore_rec(tmp_path)["c"][0]
+    warned = json.dumps({"line": EX_BLOCK[0], "format_warnings": ["가설 1: x"], "next": "고쳐 다시 검사"}, ensure_ascii=False)
+    out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": EX_CMD}, "tool_response": {"stdout": warned}},
+                  home=_post_home(tmp_path, rec))
+    assert out is None or "채택·분류 질문" not in out["hookSpecificOutput"]["additionalContext"], out
+    last = json.dumps({"line": EX_BLOCK[0], "format_warnings": ["가설 1: x"]}, ensure_ascii=False)
+    out, _ = hook("post", {"tool_name": "Bash", "tool_input": {"command": EX_CMD}, "tool_response": {"stdout": last}},
+                  home=_post_home(tmp_path, rec))
+    assert "채택·분류 질문" in out["hookSpecificOutput"]["additionalContext"], out

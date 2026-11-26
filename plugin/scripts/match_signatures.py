@@ -193,7 +193,7 @@ def fix_judgement(cause: issuedb.Cause, sw: str | None, rules: list[dict], jira_
     fixed_in = [f for f in fix.get("fixed_in") or [] if isinstance(f, dict)]
     result = {"status": status, "judgement": None, "message": None, "sw": sw, "fixed_in": fixed_in}
     if status == "open":
-        result.update(judgement="unfixed", message=f"미수정 원인. 기존 Jira {jira_count}건")
+        result.update(judgement="unfixed", message=f"이슈 DB에 수정 기록 없음(이 빌드 판정 아님). 기존 Jira {jira_count}건")
         return result
     if status not in ("fixed", "fix-submitted"):
         return result  # wont-fix / not-a-bug: 수정 판단 대상이 아니다

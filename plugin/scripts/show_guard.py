@@ -19,8 +19,9 @@ transcript의 Bash 호출에 시각으로 고정하고(`shown.anchor`: tool_use 
 - `stop`(Stop): 이번 턴에 열린 의무(리포트는 턴을 넘어 열려 있어도, 단 마지막 메시지가 탐색·심층 분석 질문·모듈 문서 질문이면
   리포트는 보지 않는다)마다 보인 글 + `last_assistant_message`에 빠진 것이 있으면 `{"decision": "block", "reason"}`.
 - `pre-ask`(PreToolUse `AskUserQuestion|mcp__.*__ask_user`): 같은 판정에 질문 문구를 더해 빠지면 질문을 거부한다. 리포트는
-  Step 7 분류 질문일 때만 본다. check-output 결과 줄(`evidence` — 심층 분석 첫 줄·근거 원문 검사)은 탐색·심층 분석 질문·
-  모듈 문서 질문에는 보지 않는다(단 Step 7 질문이면 본다).
+  Step 7 분류 질문일 때만 본다. check-output 결과 줄(`evidence` — 심층 분석 첫 줄·근거 원문 검사, 탐색은 마지막 검사 뒤 지금
+  report.md의 탐색 분석 줄 `with_explore`)은 탐색·심층 분석 질문·모듈 문서 질문에는 보지 않는다(단 Step 7·채택 질문
+  `adopt_question`이면 본다).
 - `pre-bash`(PreToolUse Bash): 명령이 `db_pr`·`publish`(`guard.word_net`, 규칙 7과 같은 낱말 그물)면 해시가 같은 push 의무(해시가
   변수 — `--approved "$H"` — 면 마지막 stage 실행 뒤에 기록된 push 의무)를, `issue_post`·`approve`면 post 의무를 골라 의무 뒤 ~
   마지막 질문(또는 사용자 입력) 사이에 화면 전체가 보였는지 본다. 맞는 의무가 없으면 판정하지 않는다(스크립트의 해시 대조와 규칙 7
@@ -75,7 +76,15 @@ OBJ = {"push": "을", "post": "을", "report": "를", "draft": "를", "patch": "
 # 조사 질문은 괄호 꼬리(심층·탐색·토큰)가 있거나, 없으면 앞 낱말에 딸리지 않은 짧은 꼴(SKILL.md 문구, R-33) — "더 조사할까요?"는 아니다
 EXPLORE_Q = re.compile(r"(심층|탐색)\s*분석[^\n]*(할까요|실행할까|진행할까|\?)|모듈 문서[^\n]*(볼까요|바꿀까요)"
                        r"|조사할까요\?\s*\((?:심층|탐색|토큰)|(?<![가-힣]\s)(?<![가-힣])조사할까요\?")
-NOTE = "[telephony-triage] 표시 안내"
+# 채택·분류 질문(가설·1위 채택, `<Category> > <유형> > <원인>`, 원인 미확정·기록하지 않음 선택지): EXPLORE_Q 꼴을 담아도("탐색 분석
+# 가설을 채택할까요?") check-output 결과 줄을 본다(eval 46·73: 탐색 줄을 보이기 전에 채택을 물음)
+ADOPT_Q = re.compile(r"채택|원인 미확정|기록하지 않음|[^\s>]+ > [^\s>]+ > ")
+# check-output --for explore가 쓴 report.md 줄 머리(triagelib/core.py EXPLORE_PREFIX + ` (추정, …): `). 생략·해당 없음 줄
+# (`- 탐색 분석 생략:`·`- 탐색 분석: 생략`)과 run이 쓴 빈 줄(TODO(LLM) — 재실행으로 지워짐)은 아니다
+EXPLORE_HEAD = "- 탐색 분석 ("
+EXPLORE_NAME = "report.md 탐색 분석 줄"
+EXPLORE_TODO = "report.md의 탐색 분석 줄(아래 줄 전부)을 글자 그대로(고쳐 쓰지 말고) 먼저 보인 뒤 채택·분류를 다시 묻는다"
+NOTE ="[telephony-triage] 표시 안내"
 TRUNCATED = [False]      # 마지막 load_text가 끝부분만 읽었는가
 
 
@@ -280,11 +289,21 @@ def _deny_text(ob, why: str, todo: str, miss, retry: bool, unit: str = "줄") ->
     return "\n".join(lines + [f"빠진 {unit} 예:\n{_examples(miss)}", _block(ob)])
 
 
+def _is_explore(ob) -> bool:
+    return ob.kind == "evidence" and ob.key.endswith("/explore")
+
+
 def reason(ob, miss, *, deny: bool = False, retry: bool = False) -> str:
     """Stop 되돌림(deny=False)·질문 거부(deny=True) 문구."""
-    name = KIND_NAME[ob.kind]
+    name = EXPLORE_NAME if _is_explore(ob) else KIND_NAME[ob.kind]
     unit = "규칙" if ob.kind == "draft" else "줄"
     why = f"{name}{OBJ[ob.kind]} 요약했다(빠진 {unit} {len(miss)}/{ob.total})."
+    if _is_explore(ob):
+        if deny:
+            return _deny_text(ob, why, EXPLORE_TODO + " — 질문 본문 앞(또는 질문 바로 앞 글)에 넣고 질문을 다시 부른다.",
+                              miss, retry)
+        return (f"{shown.MARKER} {ob.key} {STOP_LEAD} {why} Bash 출력은 사용자에게 보이지 않는다.\n{EXPLORE_TODO}"
+                f"(질문이 있었으면 같은 메시지 끝에).\n빠진 줄 예:\n{_examples(miss)}\n{_block(ob)}")
     if deny:
         what = {"draft": "규칙마다 한 행(R1~R6 각각 상태, 통과가 아니면 사유)을",
                 "report": "아래 결정적 줄과 must_show를 글자 그대로(고쳐 쓰지 말고)",
@@ -325,8 +344,47 @@ def capped_message(obs) -> str:
 def obligations(seq, recs):
     """`shown.record_obligations`에서 전부 통과한 초안 표(`shown.draft_all_clear`)를 뺀 것: 그 표는 push 확인 화면의 "검증
     결과"로 갈음한다(승인 전 표시는 pre-bash·Stop이 화면으로 본다, 10/14 사용자 결정). fail·`fixture 없음` 등이 든 표는 그대로."""
-    return [ob for ob in shown.record_obligations(seq, recs)
+    return [ob for ob in shown.record_obligations(seq, with_explore(recs))
             if not (ob.kind == "draft" and shown.draft_all_clear(ob.rules))]
+
+
+def explore_lines(path) -> list[str] | None:
+    """report.md의 탐색 분석 줄(첫 `- 탐색 분석` 줄과 바로 뒤 `  - ` 줄 — `report.rewrite_line`이 고치는 묶음). check-output이 쓴
+    줄(EXPLORE_HEAD, TODO(LLM) 없음)이 아니면 [](생략·해당 없음·재실행), 못 읽으면 None."""
+    if not path:
+        return None
+    try:
+        rows = Path(str(path)).read_text(encoding="utf-8").split("\n")
+    except (OSError, UnicodeDecodeError, ValueError):
+        return None
+    at = next((i for i, ln in enumerate(rows) if ln.startswith("- 탐색 분석")), None)
+    if at is None or not rows[at].startswith(EXPLORE_HEAD) or "TODO(LLM)" in rows[at]:
+        return []
+    end = at + 1
+    while end < len(rows) and rows[end].startswith("  - "):
+        end += 1
+    return [ln.rstrip() for ln in rows[at:end]]
+
+
+def with_explore(recs) -> list[dict]:
+    """탐색 check-output 기록(`evidence:<작업>/explore` — 스크립트는 지어낸 인용 줄만 남긴다)의 lines를 키마다 **마지막 기록만**
+    지금 report.md 탐색 분석 줄로 바꾼다: 심층처럼 결과 줄 자체가 보일 의무가 된다(eval 46·73). 앞 기록은 그대로 두어 다시
+    검사하면 새 의무가 그 검사 뒤에 열린다. 생략·재실행이면 빈 줄(앞 의무를 닫기만), report.md를 못 읽으면 기록 그대로(fail-open)."""
+    last = {r.get("key"): i for i, r in enumerate(recs)
+            if r.get("kind") == "evidence" and str(r.get("key") or "").endswith("/explore")}
+    out = list(recs)
+    for i in last.values():
+        lines = explore_lines(recs[i].get("path"))
+        if lines is not None:
+            out[i] = {**recs[i], "lines": lines}
+    return out
+
+
+def adopt_question(tool_input) -> bool:
+    """Step 7 분류 질문이거나 채택·분류를 묻는 질문(ADOPT_Q, 질문 문구와 선택지)."""
+    opts = tool_input.get("options") if isinstance(tool_input, dict) else None
+    return shown.step7_question(tool_input) or bool(
+        ADOPT_Q.search(shown.ask_text(tool_input) + " " + json.dumps(opts or [], ensure_ascii=False)))
 
 
 def _checked(seq, obs, ts, *, report_ok=True, evidence_ok=True):
@@ -451,9 +509,9 @@ def mode_pre_ask(inp) -> dict | None:
     ask = shown.ask_text(tool_input)
     found = []
     # check-output 결과 줄은 Step 5 질문(심층 check-output 바로 뒤 5-2 모듈 질문)에는 보지 않는다 — Stop·다른 질문은
-    # 본다. Step 7 질문은 "심층 분석 … 할까요?"를 담아도 본다
+    # 본다. Step 7·채택 질문은 "심층 분석 … 할까요?"·"탐색 분석 가설을 채택할까요?"를 담아도 본다
     step7 = shown.step7_question(tool_input)
-    for ob in _checked(seq, obs, ts, report_ok=step7, evidence_ok=step7 or not EXPLORE_Q.search(ask)):
+    for ob in _checked(seq, obs, ts, report_ok=step7, evidence_ok=adopt_question(tool_input) or not EXPLORE_Q.search(ask)):
         miss = shown.missing(ob, shown.visible_between(seq, ob.start + 1) + [ask])
         if miss:
             found.append((ob, miss))
@@ -592,10 +650,18 @@ def mode_post(inp) -> dict | None:
     else:
         lo = start - shown.ANCHOR_SLACK
     found: dict[str, tuple] = {}
+    text = _response_text(inp.get("tool_response"))
+    # check-output이 형식 경고와 `next`(그 칸을 고쳐 한 번 다시 검사)를 냈으면 탐색 줄·채택 질문 안내는 다시 검사 뒤로 미룬다(리뷰 1127 9번)
+    recheck = '"format_warnings"' in text and '"next"' in text
+    recs = [(t, r) for (t, _), r in zip(recs, with_explore([r for _, r in recs]))]
     for t, r in recs:
         if t < lo:
             continue
         kind = r.get("kind")
+        if kind == "evidence" and str(r.get("key") or "").endswith("/explore") and r.get("lines"):
+            if not recheck:
+                found[r["key"]] = ("check-output --for explore 결과", f"{EXPLORE_NAME} 전부({len(r['lines'])}줄)", "채택·분류 질문")
+            continue
         if kind in ("push", "post"):
             found[kind] = (KIND_NAME[kind], f"전문({len(shown.screen_lines(str(r.get('block') or '')))}줄)", "승인 질문")
         elif kind == "draft" and r.get("rules") and not shown.draft_all_clear(r["rules"]):  # 전부 통과 표는 화면으로 갈음
@@ -607,7 +673,7 @@ def mode_post(inp) -> dict | None:
             found[kind] = (KIND_NAME[kind], f"출력 줄 전부({len(r['lines'])}줄)", "다음 질문")
     if not found:
         return None
-    saved = _persisted(inp.get("tool_response"), _response_text(inp.get("tool_response")))
+    saved = _persisted(inp.get("tool_response"), text)
     if saved is not None:       # 출력이 길어 파일로 남고 모델에는 일부만 보인다: 줄 수 대신 그 파일
         where = saved or "원래 명령의 출력 파일"
         parts = [f"{NOTE} — 이 출력({name})은 잘려 보였고 사용자에게도 안 보인다. 전문은 {where}에 있다 — 그 파일을 읽어 "

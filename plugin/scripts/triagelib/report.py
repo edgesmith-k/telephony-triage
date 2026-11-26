@@ -38,6 +38,7 @@ _PICK_LABEL = {"nearest": "발생 시각에 가장 가까운 것", "last": "기�
 # 앞까지가 결론이다(포털이 그 앞만 남긴다 — 그 앞에 Step 7을 쓰지 않는다)
 CONCLUSION_PREFIX = "- 결론: "
 RESOLUTION_PREFIX, RESOLUTION_CHECK = "- 해결책: ", "   해결책 검증: "
+FIX_STATUS_PREFIX = "- 수정 상태: "
 FIT_HOLD_CONCLUSION = "채택 후보 {cause}가 증상과 맞지 않아 보류(탐색 분석 참조). 다음: Step 7에서 보류를 고르거나 근거 로그 확인"
 FIT_HOLD_RESOLUTION, FIT_HOLD_CHECK = "- 해결책(1위 기준, 보류됨): ", "보류(1위 부적합)"
 # 정상 보류(`fit_hold_reason: normal`): 탐색 분석이 그 줄을 설계상 정상 동작으로 봤다 — 부적합 문구와 따로
@@ -770,10 +771,13 @@ def _secs(detail: str, fmt: str) -> str:
     return re.sub(r"뒤 로그 ([\d.]+)s", lambda m: fmt.format(m.group(1)), detail)
 
 
-def _step_words(title: str, s: dict, notes: list) -> str:
-    """report.md에 쓰는 단계 문구. `flow.json`·`analysis.json`의 판정 값(`값이상`·`없음`·`로그끝`·`-`)은 그대로 두고 읽는 글만 푼다."""
+def _step_words(title: str, s: dict, notes: list, later: str | None = None) -> str:
+    """report.md에 쓰는 단계 문구. `flow.json`·`analysis.json`의 판정 값(`값이상`·`없음`·`로그끝`·`-`)은 그대로 두고 읽는 글만 푼다.
+    `later`: `없음`인데 같은 흐름의 뒤 단계 줄이 나왔으면 그 단계 제목(멈춘 것이 아니라 줄 문구가 다르거나 빠졌을 수 있다)."""
     verdict, detail = s["verdict"], s["detail"]
-    if verdict == "값이상":
+    if verdict == "없음" and later:
+        text, why = f"{title} 줄을 로그에서 찾지 못함 — 뒤 단계({later})는 진행됨", ""
+    elif verdict == "값이상":
         text, why = f"{title}에서 이상한 값", re.sub(r" ×(\d+)$", r", \1번 반복", detail)
     elif verdict == "없음":
         text, why = f"{title} 줄이 로그에 없음", _secs(detail, "그 뒤로도 로그가 {}초 이어짐")
@@ -816,6 +820,8 @@ def _flow_hint(rows: list, version, causes: dict, top: dict | None, log_end: flo
             if first is not None and inst["steps"][first]["verdict"] in ("값이상", "없음")]
     for n, f, inst, first in devs:
         if not top or top.get("category") != f["flow"].split("/")[0] or not _near_stop(top.get("ts") or (), inst, first, log_end):
+            continue
+        if inst.get("later_step") and inst["steps"][first]["verdict"] == "없음":     # 뒤 단계가 진행됨 — 멈춘 단계가 아니다(리뷰 1127 6번)
             continue
         st = f["steps"][first]
         ref = f"{f['flow']}/{st['id']}"
@@ -913,12 +919,12 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
     if hint:
         rows.insert(0, rows.pop(hint[0]))
     for n, (_, _, _, f, inst, first) in enumerate(rows):
-        parts = []
+        parts, later = [], _later_title(f, inst, first)
         for st, s in zip(f["steps"], inst["steps"]):
             if s["verdict"] == "ok":
                 parts.append(f"{st['title']} 정상" + (f"(그 전에 이상한 값 {s['bad_count']}번)" if s["bad_count"] else ""))
                 continue
-            parts.append(_step_words(st["title"], s, inst["notes"]))
+            parts.append(_step_words(st["title"], s, inst["notes"], later))
             break
         ref = _ref_label(inst.get("line_ref"))
         text = (f"{f['title']} {inst['key']}" + (f" (같은 시작 줄이 {inst['restarts']}번 더 나옴)" if inst["restarts"] else "")
@@ -932,13 +938,21 @@ def flow_section(doc: dict, window: dict | None, around: str | None, version, ca
             st = f["steps"][first]
             hit = causes.get(f"{f['flow']}/{st['id']}") or []
             owned = (" / 이 단계에 등록된 원인: " + ", ".join(f"{c} {_clip(t, 30)}" for c, t in hit[:3])) if hit else ""
-            block.append("    " + _clip_bytes(f"→ 의심되는 곳: {st['suspect']}{owned}", 260))
+            if not later:      # 뒤 단계가 진행됐으면 멈춘 곳이 아니다: 의심되는 곳을 붙이지 않는다
+                block.append("    " + _clip_bytes(f"→ 의심되는 곳: {st['suspect']}{owned}", 260))
             if hint and n == 0:        # 근거 인스턴스 블록과 한 덩어리로 자리를 잡는다
                 block.append("    " + hint[1])
         if len("\n".join(lines + block + cut_line).encode("utf-8")) > FLOW_REPORT_MAX:    # 절 전체 ≤ 1,200 B: 넘치면 뒤 항목부터 뺀다
             break
         lines += block
     return analysis, lines + cut_line
+
+
+def _later_title(f: dict, inst: dict, first: int | None) -> str | None:
+    """첫 벗어난 단계가 `없음`이고 같은 흐름의 뒤 단계 줄이 나왔으면(`later_step`) 그 뒤 단계 제목, 아니면 None."""
+    if first is None or inst["steps"][first]["verdict"] != "없음":
+        return None
+    return next((s["title"] for s in f["steps"] if s["id"] == inst.get("later_step")), None)
 
 
 FLOW_BRIEF_MAX = FLOW_ANALYSIS_MAX     # 5-1·5-2 입력의 흐름 판정 요약 수(analysis.json flows[]와 같은 상한)
@@ -971,6 +985,8 @@ def flow_brief(job, events: dict, around: str | None = None) -> list[dict]:
                 prev = next((s.get("ts") for s in reversed(inst["steps"][:k]) if s.get("ts")), None)
                 item.update(result=FLOW_RESULT.get(step["verdict"], "판단 못 함"), step=step["id"], title=info.get("title"),
                             verdict=step["verdict"], at=step.get("ts") or prev or inst.get("start_ts"))
+                if later := _later_title(f, inst, k):
+                    item["later"] = later
             rows.append((item["result"] != "벗어남", abs((t - at0).total_seconds()) if at0 else 0.0, t, item, f.get("title")))
     rows.sort(key=lambda r: r[:3])
     return [{**item, "flow_title": title} for *_, item, title in rows[:FLOW_BRIEF_MAX]]
@@ -998,6 +1014,15 @@ def head_notes(job, events: dict, around=None) -> list[str]:
     return flow_head(flow_brief(job, events, around)) + ipc_head(events)
 
 
+DEEP_HEAD_MAX = 3      # 5-1 후보 확인 머리 줄 수(후보 ≤3개, `modulecmd._top3`)
+
+
+def deep_head(checks: list | None) -> list[str]:
+    """탐색 타임라인·모듈 보기 머리의 5-1 후보별 판정(`explore-input.json` `deep_checks` — `triage.py explore`가 이번 실행
+    check-output 기록에서 옮긴 것, E1 재계산도 같은 값). 데이터이고 인용 대상이 아니다. 없으면 [](이전과 같은 바이트)."""
+    return [_clip(f"- 심층 분석 후보 확인(데이터): {c}", 240) for c in (checks or [])[:DEEP_HEAD_MAX]]
+
+
 def flow_head(brief: list[dict]) -> list[str]:
     """타임라인 머리 글머리표(데이터 — 근거 원문 검사는 행 문법 줄만 보므로 인용 대상이 아니다). 없으면 []."""
     out = []
@@ -1005,7 +1030,7 @@ def flow_head(brief: list[dict]) -> list[str]:
         at = str(b.get("at") or "?")
         clock = at[11:23] if len(at) >= 23 and at[10] == "T" else at
         what = (f"첫 벗어난 단계 {b.get('title') or b.get('step')}({b.get('step')}) {b.get('verdict')} {clock}"
-                if b.get("step") else f"끝까지 정상(시작 {clock})")
+                if b.get("step") else f"끝까지 정상(시작 {clock})") + (f", 뒤 단계 {b['later']} 줄은 나옴" if b.get("later") else "")
         out.append(_clip(f"- 흐름 판정(스크립트 기대 순서, 데이터): {b.get('flow_title') or b['flow']}({b['flow']}) "
                          f"{b.get('key') or '-'}: {b['result']} — {what}", 240))
     return out
@@ -1504,7 +1529,7 @@ class ReportMixin:
                                 f"{outside['total']}건"))
             ana += [f"  - {_error_line(e)}" for e in outside["rows"][:3]]
         logs = r["logs"]
-        if logs.get("uncollected_tags"):       # 후보 없음·원인 미확인일 때만 core가 채운다
+        if logs.get("uncollected_tags"):       # 조사 모드(채택 안 함)일 때만 core가 채운다
             tags = ", ".join(f"{u['tag']} {u['lines']}줄(W/E {u['warn']})" for u in logs["uncollected_tags"])
             ana.append(add(11, "파서 규칙에 없는 태그 (수집 태그와 같은 프로세스, tags.yaml에 없어 이벤트로 추출 안 됨): " + tags))
         in_range = {True: "발생 시각 포함", "partial": "일부만 포함", False: "로그 범위 밖",
@@ -1538,14 +1563,13 @@ class ReportMixin:
                                      f"{code.get('tree_version') or '?'}) — 다른 트리는 --code로 지정"))
         top = cands[selected_rank(dec, cands) or 0] if cands else None     # 채택 원인(1위가 아닐 수 있다, 단계 5) 기준
         if top and top["cause"]:
-            if (dec or {}).get("state") == "held":
-                # 보류: 1위 해결책 줄을 싣지 않는다(모델이 읽는 글에 보류한 원인의 해결책을 두지 않는다 — Jira 본문도 해결책 없음)
-                nxt.append(f"- 수정 상태(1위 기준, 보류됨): {top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
-            else:
+            # 보류: 1위 해결책·수정 상태 줄을 싣지 않는다(모델이 읽는 글에 보류한 원인의 해결책을 두지 않는다 — Jira 본문도 해결책 없음.
+            # 채택하지 않은 원인의 수정 상태는 이 이슈의 답이 아니다 — "수정 안 됨"으로 읽힌다)
+            if (dec or {}).get("state") != "held":
                 verified = "검증됨" if top.get("resolution_verification") == "verified" else "⚠ 미검증"
                 lead = NOT_A_BUG_RESOLUTION if not_a_bug_cause(dec, top["cause"]) else ""
                 nxt.append(f"{RESOLUTION_PREFIX}{lead}{top.get('resolution') or '-'}{RESOLUTION_CHECK}{verified}")
-                nxt.append(f"- 수정 상태: {top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
+                nxt.append(f"{FIX_STATUS_PREFIX}{top.get('fix_status') or '-'} — {top.get('fix_message') or '-'}")
             if top.get("_version_mismatch"):
                 cause_l.append(f"- 다른 버전 원인 ({self.platform_label} {', '.join(top['_version_mismatch'])})")
             cause_l.append(f"- 기존 사례: Jira {top.get('issue_count') or 0}건 ({', '.join(top.get('issue_recent') or []) or '-'})")
