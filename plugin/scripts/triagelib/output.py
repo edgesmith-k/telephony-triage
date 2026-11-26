@@ -61,6 +61,7 @@ from .core import (
     EVIDENCE_SUB,
     EXPLORE_INPUT_FILE,
     EXPLORE_MAX_BYTES,
+    EXPLORE_PENDING_LINE,
     EXPLORE_PREFIX,
     EXPLORE_SKIPPED,
     FIELD_MAX_BYTES,
@@ -1468,6 +1469,58 @@ def _decision_update(args, job: Path, analysis: dict, read_sha: str | None, *, h
     return extra
 
 
+REFUTED_NEXT = "심층 분석이 채택 원인 {cause}를 아님으로 봄 — 탐색 분석으로 적합성 확인"
+REFUTED_ASK = "(탐색 분석을 할지 묻고 — 답 전 원문 열람 금지 — 동의하면 triage.py explore {key}부터)"
+WARN_EXPLORE = "경고: analysis.json 탐색 분석(explore)을 열지 못했다({why})"
+CHECKS_CLIP = 200
+
+
+def _refuted(analysis: dict, checks: list, bad: set) -> str | None:
+    """5-1 `후보 확인`이 채택 원인(accepted `selected.cause`)을 `아님`이라 했으면 그 ID(근거 인용이 원문에 없는 항목은 빼고)."""
+    dec = analysis.get("decision") or {}
+    cause = (dec.get("selected") or {}).get("cause") if dec.get("state") == "accepted" else None
+    hit = any(c["cause"] == cause and c["verdict"] == "아님" and i not in bad for i, c in enumerate(checks))
+    return cause if cause and hit else None
+
+
+def _refuted_next(job: Path, analysis: dict, cause: str) -> str | None:
+    """5-2가 열려 있으면(`never` 아님) 적합성 확인 안내. 아직 타임라인 전이고 `ask`면 동의를 묻는 말을 붙인다. 안 열렸으면 None."""
+    when = (analysis.get("explore") or {}).get("when")
+    if when in (None, "never"):
+        return None
+    ask = when == "ask" and _kind(job / TIMELINE_FILE) != "file"
+    return REFUTED_NEXT.format(cause=cause) + (REFUTED_ASK.format(key=analysis.get("key") or job.name) if ask else "")
+
+
+def _open_fit_check(job: Path, analysis: dict, read_sha: str | None) -> tuple[dict, str | None, dict]:
+    """5-2가 안 열렸고 run이 준비해 뒀으면(`explore-input.json` `fit_later` — `driver.explore`가 `never`·`--no-explore`를 보고 둔 값)
+    analysis.json `explore`를 그 값으로 열고 report.md 심층 분석 줄 묶음 뒤에 탐색 분석 줄을 넣는다. 판단·점수·분류는 그대로다.
+    → (analysis, 그 sha, 기록에 더할 칸 — 못 열었으면 `explore_unwritten: <사유>`)."""
+    later = _load(job / EXPLORE_INPUT_FILE)
+    later = later.get("fit_later") if isinstance(later, dict) else None
+    if analysis.get("explore") or not isinstance(later, dict):
+        return analysis, read_sha, {}
+    result, extra = _save_analysis(job, {**analysis, "explore": later}, read_sha, "explore_unwritten", WARN_EXPLORE)
+    if result is None:
+        return analysis, read_sha, extra
+    report = job / "report.md"
+    rows = report.read_text(encoding="utf-8").split("\n") if _kind(report) == "file" else []
+    i = next((i for i, r in enumerate(rows) if r.startswith(DEEP_PREFIX)), None)
+    if i is not None:
+        i += 1
+        while i < len(rows) and rows[i].startswith("  - "):
+            i += 1
+        rows.insert(i, EXPLORE_PENDING_LINE.format(key=analysis.get("key") or job.name))
+        try:
+            _write_atomic(report, "\n".join(rows).encode("utf-8"))
+        except OSError:
+            i = None
+    if i is None:
+        print(WARN_REWRITE, file=sys.stderr)
+        extra = {**extra, "explore_unwritten": "report.md 탐색 분석 줄"}
+    return result, _read_analysis(job)[1], extra
+
+
 def _skipped(args, job: Path, purpose: str, env: dict) -> int:
     report, prefix = job / "report.md", PREFIX[purpose]
     reason = masking.mask_brief(args.skipped, 120)
@@ -1712,6 +1765,14 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
                                      checks=fields.get(evidence.CHECK_FIELD) or [])
     else:
         dec_extra = {}
+    # 5-1이 채택 원인을 아님으로 봤다: 판단은 그대로 두고 5-2 적합성 확인을 연다(보류는 5-2 `1위 판단`만 한다)
+    refuted = _refuted(analysis, fields.get(evidence.CHECK_FIELD) or [], check_bad) if purpose == "deep" else None
+    open_extra = {}
+    if refuted:
+        analysis, read_sha = _read_analysis(job)     # 판단을 고쳐 썼으면 그 뒤 내용
+        analysis, read_sha, open_extra = _open_fit_check(job, analysis or {}, read_sha)
+    checks_kept = ([rep._clip(_check_one(c, i in check_bad), CHECKS_CLIP) for i, c in enumerate(fields.get(evidence.CHECK_FIELD) or [])
+                    if c["verdict"] != "?"] if purpose == "deep" else [])
     inv_extra = {}
     if inv:     # 조사 모드(run이 판정): 게이트 결과(위에서 계산) → analysis.json 먼저(포털이 읽는 기준), 그다음 report.md
         saved, inv_extra = _save_analysis(job, {**analysis, "investigation": inv}, read_sha, "investigation_unwritten",
@@ -1731,6 +1792,7 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
                            **({"top_fit": fields["top_fit"]["fit"] or "읽지 못함"} if fields.get("top_fit") else {}),
                            **({"top_fit_cause": fields["top_fit"]["cause"]} if (fields.get("top_fit") or {}).get("cause") else {}),
                            **({"fit_hold_unwritten": unwritten} if unwritten else {}), **dec_extra, **inv_extra,
+                           **({"refuted": refuted} if refuted else {}), **open_extra, **({"checks": checks_kept} if checks_kept else {}),
                            **({"investigation": inv} if inv else {}), **({"mech_no": mech_no} if mech_no else {}),
                            **({"normal": [i + 1 for i, v in enumerate(normal_ok) if v]} if any(normal_ok) else {}),
                            **unknown, **({"rules": rules_kept} if rules_kept else {}), **({"rules_dropped": rules_dropped, "rules_dropped_why": rules_why} if rules_dropped else {}),
@@ -1745,7 +1807,8 @@ def _check(args, job: Path, purpose: str, env: dict) -> int:
     _emit({"line": head, "evidence": sub.lstrip(), "quotes": n, **counts, **({"warning": warn} if warn else {}),
            **({"windows_excluded": win_bad} if win_bad else {}), **({"format_warnings": fmt} if fmt else {}),
            **({"investigation": inv["status"]} if inv else {}),
-           **({"next": FORMAT_NEXT} if fmt and not args.recheck else {})})
+           **({"next": FORMAT_NEXT} if fmt and not args.recheck else {}),
+           **({"next": nxt} if refuted and (nxt := _refuted_next(job, analysis, refuted)) else {})})
     return OK
 
 

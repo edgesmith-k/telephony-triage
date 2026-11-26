@@ -21,7 +21,9 @@
   `done`·`stopped`·`error`). db_pr의 `stage`·`publish`·`discard` 행과 explore·module·check-output의 정보 행(`explore`·`module`·
   `checked`, `v: 2`)도 같은 파일이다(contracts.md §3.2 작업 기록, usage_stats가 센다 — 정보 행은 세지 않는다).
 - `JOB/explore-input.json`: 후보 없음·원인 미확인(1위 C=0)이고 `explore.when`이 `never`가 아닐 때, 또는 1위 C=1이고 `--explore`·
-  `explore.when: always`·`--look-note`일 때(`explore.reason: fit_check`, 1위가 증상을 설명하는지 확인 — `never`·`--no-explore`면 아님)만. 탐색 분석 입력(마스킹된 값만:
+  `explore.when: always`·`--look-note`일 때(`explore.reason: fit_check`, 1위가 증상을 설명하는지 확인 — `never`·`--no-explore`면 아님)만.
+  채택인데 위가 아니면(`ask`) 입력만 준비하고 `fit_later`(연다면 쓸 `explore` 값)를 둔다 — 5-1이 채택 원인을 `아님`으로 보면
+  check-output이 연다. 탐색 분석 입력(마스킹된 값만:
   발생 시각·실패 스텝·앵커 머리·줄 수 상한 `explore.timeline_max_lines`, 시각 입력 없이 전체를 봤으면 `time_candidates`, 코멘트 단서를
   로그 한 곳에서만 찾았으면 그 시각 `clue_at`). `run`은 타임라인을 만들지 않고 이전 `timeline.md`·입력 파일을 지운다 — 다만 탐색을 시작한
   뒤(`timeline.md`가 있던 작업) 다시 한 run이 새 입력 파일을 쓰면 끝에 같은 `explore`로 타임라인을 다시 만든다(출력은 run JSON 하나).
@@ -134,7 +136,7 @@ from triagelib.core import (ANALYSIS_MAX, EXPLORE_DONE_LINE, EXPLORE_INPUT_FILE,
                             TIMELINE_FILE, Fail, NeedsInput, Runner, Stopped, _clip, _now, trace_event)
 from triagelib import pick  # noqa: E402
 from triagelib.driver import Driver  # noqa: E402
-from triagelib.report import (_unique_evidence, dumps, fit, flow_brief, flow_head, head_notes, schema_violation,  # noqa: E402,F401 — 테스트가 쓴다
+from triagelib.report import (_unique_evidence, deep_head, dumps, fit, flow_brief, flow_head, head_notes, schema_violation,  # noqa: E402,F401 — 테스트가 쓴다
                               merge_rows, render_timeline, select_rows, shown_keys, timeline)
 
 
@@ -352,6 +354,25 @@ def _copy_records(job: Path, defaults: dict, events: dict):
         return None, []
 
 
+def _deep_checks(job: Path) -> list | None:
+    """이번 실행 5-1 검사 기록(`check-output.json` deep `checks` — check-output이 가리고 검사해 report.md에 실은 후보별 판정)"""
+    try:
+        rec = (json.loads((job / "check-output.json").read_text(encoding="utf-8")) or {}).get("deep") or {}
+    except (OSError, ValueError, AttributeError):
+        return None
+    checks = rec.get("checks") if isinstance(rec, dict) else None
+    if not isinstance(checks, list):
+        return None
+    return [c for c in checks if isinstance(c, str)] or None
+
+
+def _job_explore(job: Path) -> dict | None:
+    try:
+        return (json.loads((job / "analysis.json").read_text(encoding="utf-8")) or {}).get("explore")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 def _explore(args, cfg: dict, job: Path, defaults: dict, emit: bool = True) -> int:
     input_path, events_path = job / EXPLORE_INPUT_FILE, job / "events.json"
     if not input_path.is_file():
@@ -369,6 +390,9 @@ def _explore(args, cfg: dict, job: Path, defaults: dict, emit: bool = True) -> i
     except (OSError, ValueError) as exc:
         print(f"탐색 입력을 읽지 못했다({exc}) — 이 키로 /telephony-triage:analyze를 다시 실행한다", file=sys.stderr)
         return USAGE
+    if spec.get("fit_later") and not _job_explore(job):     # 준비만 한 입력(채택) — check-output이 열기 전엔 해당 없음
+        print("탐색 분석 해당 없음: 채택 결과라 열리지 않았다(analysis.json explore 없음)", file=sys.stderr)
+        return CHECK_FAILED
     from triagelib import summary
     centers, basis = summary.timeline_center(spec)      # 요약·이상 줄 절과 같은 기준(`modulecmd._explore_inputs`도 이것)
     items, total = select_rows(merge_rows(events), centers, limit)
@@ -377,13 +401,15 @@ def _explore(args, cfg: dict, job: Path, defaults: dict, emit: bool = True) -> i
     # 같은 줄을 쓴다
     recs, skipped = _copy_records(job, defaults, events)      # 사본을 한 번만 읽는다
     found = {"anomaly": _anomaly(job, cfg, defaults, spec, events, items, recs) if recs else None,
-             "summary": _summary(job, cfg, defaults, spec, events, recs, skipped) if recs else None}
+             "summary": _summary(job, cfg, defaults, spec, events, recs, skipped) if recs else None,
+             "deep_checks": _deep_checks(job)}
     if any(found[k] != spec.get(k) for k in found):
         spec = {k: v for k, v in spec.items() if k not in found}
         spec.update({k: v for k, v in found.items() if v})
         input_path.write_text(json.dumps(spec, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
     text = render_timeline(args.key, events, items, total, spec.get("around"), limit, spec.get("failed_step"),
-                           spec.get("anchor"), spec.get("look_at"), head_notes(job, events, spec.get("around")),
+                           spec.get("anchor"), spec.get("look_at"),
+                           head_notes(job, events, spec.get("around")) + deep_head(spec.get("deep_checks")),
                            spec.get("anomaly"), spec.get("summary"), basis)
     # 마스킹 전 JOB이어도 남은 값은 가린다(B2-25). 마스킹 끔 DB의 events(`mask_off`)면 가리지 않는다(08-safety §8)
     text, redacted = (text, {}) if events.get("mask_off") else masking.redact(text, events.get("mask_allow") or [])

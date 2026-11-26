@@ -1099,3 +1099,80 @@ def test_explore_old_format_report_unchanged_but_warning_line(tmp_path, capsys):
                      "  - 가설 2: APN 설정 오류 / 로그로 확인: " + Q2 + " / 코드로 추정: 코드 근거 없음 / 반대 근거: 없음 / "
                      "다음 확인: 망 측 거절 사유 로그",
                      "  - 근거 원문 검사: 인용 3개 중 원문에 없음 0", SUB]
+
+
+# --- 5-1 반증 → 5-2 적합성 확인(11/27 C23) ------------------------------------------------------------------
+
+FIT_LATER = {"reason": "fit_check", "when": "ask", "note": "답 전 로그 원문 grep·sed·Read 금지 — report.md를 보이고 묻는다(SKILL 5-2)"}
+NOT_FOUND = "찾았는데 없음: 데이터 꺼짐 줄을 타임라인 전체에서"
+
+
+def _refute_job(base: Path, decision=ACCEPTED, later=FIT_LATER, explore=None) -> Path:
+    """모듈 5-1 JOB: 판단(채택)·run이 준비한 탐색 입력(`fit_later` — 없으면 never·--no-explore로 run이 준비하지 않은 것)."""
+    job = make_job(base)
+    analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    analysis.update(decision=decision, explore=explore)
+    (job / "analysis.json").write_text(json.dumps(analysis, ensure_ascii=False), encoding="utf-8")
+    msj = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))
+    msj["deep"]["inputs"]["analysis.json"] = _sha(job / "analysis.json")
+    (job / "module-skill.json").write_text(json.dumps(msj, ensure_ascii=False), encoding="utf-8")
+    if later is not None:
+        (job / "explore-input.json").write_text(json.dumps({"limit": 200, "around": None, "fit_later": later}), encoding="utf-8")
+    return job
+
+
+def _checks_out(*items: str) -> str:
+    return "\n".join(["원인 층: 벤더 RIL(vrild) — 인증 거절", "원인 데몬: vrild", "근거:", f"- {Q1}", "반대 근거: 없음",
+                      "후보 확인:", *items, "규칙 제안:", "- 없음", ""])
+
+
+def test_deep_refutes_adopted_cause_opens_fit_check(tmp_path, capsys, monkeypatch):
+    """채택 원인을 5-1이 `아님`이라 하면(대체 원인 없음) 판단은 그대로 두고 run이 준비한 적합성 확인을 연다: analysis.json `explore`,
+    report.md 탐색 분석 줄(심층 분석 묶음 바로 뒤), 기록 `refuted`·`checks`, 출력 `next`(동의 질문 포함)."""
+    monkeypatch.delenv("TT_SCHEMA_CHECK")
+    job = _refute_job(tmp_path)
+    (job / "deep-output.md").write_text(_checks_out(f"- DATA-001-01: 아님 — {NOT_FOUND}", "- DATA-001-02: 모름"), encoding="utf-8")
+    code, data, err = check(job, capsys=capsys)
+    assert code == 0, err
+    analysis = json.loads((job / "analysis.json").read_text(encoding="utf-8"))
+    assert analysis["explore"] == FIT_LATER and analysis["decision"] == ACCEPTED       # 판단·counter는 그대로
+    assert data["next"] == (output.REFUTED_NEXT.format(cause="DATA-001-01") + output.REFUTED_ASK.format(key=KEY))
+    rows = (job / "report.md").read_text(encoding="utf-8").split("\n")
+    i = rows.index(SUB)
+    assert rows[i + 1] == core.EXPLORE_PENDING_LINE.format(key=KEY) and rows[i + 2] == "- 기타 후보: 없음"
+    rec = _rec(job)
+    assert rec["refuted"] == "DATA-001-01" and "explore_unwritten" not in rec
+    assert rec["checks"] == [f"DATA-001-01 아님 — {NOT_FOUND}", "DATA-001-02 모름"]
+    msj = json.loads((job / "module-skill.json").read_text(encoding="utf-8"))
+    assert msj["deep"]["inputs"]["analysis.json"] == _sha(job / "analysis.json")    # 고친 analysis.json 해시로 옮겼다
+
+
+@pytest.mark.parametrize("case", ["never", "unknown", "right", "held", "fabricated"])
+def test_deep_refutation_does_not_open_fit_check(tmp_path, capsys, monkeypatch, case):
+    """끄는 쪽이 이긴다(run이 준비하지 않음 — never·--no-explore), `모름`·`맞음`, 채택이 아닌 판단, 근거 인용이 원문에 없는 `아님`은
+    열지 않는다(analysis.json 바이트 그대로, next 없음)."""
+    monkeypatch.delenv("TT_SCHEMA_CHECK")
+    job = _refute_job(tmp_path, decision={**ACCEPTED, "state": "held", "reason": "ambiguous", "selected": None}
+                      if case == "held" else ACCEPTED, later=None if case == "never" else FIT_LATER)
+    item = {"never": f"- DATA-001-01: 아님 — {NOT_FOUND}", "unknown": "- DATA-001-01: 모름", "right": f"- DATA-001-01: 맞음 — {Q1}",
+            "held": f"- DATA-001-01: 아님 — {NOT_FOUND}", "fabricated": f"- DATA-001-01: 아님 — {FAKE}"}[case]
+    (job / "deep-output.md").write_text(_checks_out(item), encoding="utf-8")
+    raw = (job / "analysis.json").read_bytes()
+    code, data, err = check(job, capsys=capsys)
+    assert code == 0 and "next" not in data, (data, err)
+    assert (job / "analysis.json").read_bytes() == raw
+    assert not any(r.startswith("- 탐색 분석") for r in (job / "report.md").read_text(encoding="utf-8").split("\n"))
+    assert _rec(job).get("refuted") == ("DATA-001-01" if case == "never" else None)     # never: 사실은 남긴다
+
+
+def test_deep_refutation_with_explore_already_open_only_tells_next(tmp_path, capsys, monkeypatch):
+    """5-2가 이미 열렸으면(`--explore` 적합성 확인·탐색 타임라인 있음) analysis.json을 다시 쓰지 않고 안내만 한다(동의 질문 없음)."""
+    monkeypatch.delenv("TT_SCHEMA_CHECK")
+    opened = {"reason": "fit_check", "when": "ask", "note": FIT_LATER["note"]}
+    job = _refute_job(tmp_path, later=None, explore=opened)
+    (job / "timeline.md").write_text("# t\n", encoding="utf-8")
+    (job / "deep-output.md").write_text(_checks_out(f"- DATA-001-01: 아님 — {NOT_FOUND}"), encoding="utf-8")
+    raw = (job / "analysis.json").read_bytes()
+    code, data, err = check(job, capsys=capsys)
+    assert code == 0 and data["next"] == output.REFUTED_NEXT.format(cause="DATA-001-01"), (data, err)
+    assert (job / "analysis.json").read_bytes() == raw
